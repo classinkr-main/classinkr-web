@@ -132,7 +132,7 @@ describe("buildWeeklyAdLeadReport", () => {
       previous: 8,
       deltaPct: 25,
     })
-    expect(report.version).toBe(2)
+    expect(report.version).toBe(3)
     expect(report.dataStatus).toBe("confirmed")
     expect(report.dailyLeads).toHaveLength(7)
     expect(report.dailyLeads.map((point) => point.leads)).toEqual([1, 2, 0, 0, 0, 3, 4])
@@ -206,5 +206,66 @@ describe("buildWeeklyAdLeadReport", () => {
     expect(report.dataCaveats).toEqual(
       expect.arrayContaining([expect.stringContaining("잠정 수치")]),
     )
+  })
+})
+
+describe("마지막 일일 보고 이후 유입", () => {
+  const intake = {
+    since: "2026-09-04T01:10:00.000Z",
+    until: "2026-09-07T00:20:00.000Z",
+    label: "09.04 10:10 - 09.07 09:20",
+    spansWeekend: true,
+    totalLeads: 7,
+    metaLeadAdsLeadCount: 5,
+    homepageLeadCount: 2,
+    unrespondedCount: 6,
+  }
+
+  it("주말을 품은 구간은 '주말 유입'으로 제목을 달고 숫자를 편다", () => {
+    const report = buildWeeklyAdLeadReport(makePerf(), {
+      generatedAt: "2026-09-07T00:20:00.000Z",
+      recentIntake: intake,
+    })
+
+    expect(report.version).toBe(3)
+    expect(report.recentIntake).toEqual(intake)
+    expect(report.markdown).toContain("## 주말 유입 (마지막 일일 보고 이후)")
+    expect(report.markdown).toContain("- 구간: 09.04 10:10 - 09.07 09:20 (KST)")
+    expect(report.markdown).toContain("- 전체 접수: 7건 — Meta 광고 5건 / 홈페이지 2건")
+    expect(report.markdown).toContain("- 미응대: 6건")
+  })
+
+  it("평일 구간이면 주말이라고 부르지 않는다", () => {
+    const report = buildWeeklyAdLeadReport(makePerf(), {
+      generatedAt: "2026-09-09T09:00:00.000Z",
+      recentIntake: { ...intake, spansWeekend: false },
+    })
+
+    expect(report.markdown).toContain("## 마지막 일일 보고 이후 유입")
+    expect(report.markdown).not.toContain("## 주말 유입")
+  })
+
+  it("리드 조회가 실패하면 주간 수치는 살리고 이 구간만 미측정으로 남긴다", () => {
+    const report = buildWeeklyAdLeadReport(makePerf(), {
+      generatedAt: "2026-09-07T00:20:00.000Z",
+      recentIntake: null,
+    })
+
+    expect(report.recentIntake).toBeNull()
+    expect(report.kpis.adLeads.value).not.toBeNull()
+    expect(report.markdown).toContain("- 리드 조회에 실패해 이 구간은 미측정입니다.")
+    expect(report.dataCaveats).toContain(
+      "리드 조회에 실패해 마지막 일일 보고 이후 유입은 미측정입니다."
+    )
+  })
+
+  it("옛 v2 저장본은 계약 가드를 통과하지 못한다 — 새 구간이 빠져 있으므로", () => {
+    const report = buildWeeklyAdLeadReport(makePerf(), {
+      generatedAt: "2026-09-07T00:20:00.000Z",
+      recentIntake: intake,
+    })
+
+    expect(isWeeklyAdLeadReport(report)).toBe(true)
+    expect(isWeeklyAdLeadReport({ ...report, version: 2 })).toBe(false)
   })
 })

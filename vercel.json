@@ -45,7 +45,7 @@
     },
     {
       "path": "/api/cron/sync-marketing-insights",
-      "schedule": "30 22 * * 0"
+      "schedule": "20 0 * * 1"
     }
   ]
 }

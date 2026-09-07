@@ -22,7 +22,7 @@ import { GET } from "@/app/api/admin/marketing/weekly-report/route"
 
 function report(until = "2026-08-23"): WeeklyAdLeadReport {
   return {
-    version: 2,
+    version: 3,
     title: "마케팅 광고 리드 주간 보고서",
     generatedAt: "2026-08-24T00:00:00.000Z",
     snapshotAt: "2026-08-23T21:00:00.000Z",
@@ -54,6 +54,7 @@ function report(until = "2026-08-23"): WeeklyAdLeadReport {
     weekendLeads: 0,
     weekendSharePct: 0,
     uncontactedLeads: 1,
+    recentIntake: null,
     campaigns: [],
     actions: ["다음 주 실행"],
     dataCaveats: ["USD 네이티브"],

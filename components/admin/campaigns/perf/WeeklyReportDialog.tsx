@@ -19,6 +19,7 @@ import type { PerfKpi } from "@/lib/marketing/perf"
 import type {
   WeeklyAdLeadCampaignRow,
   WeeklyAdLeadDailyPoint,
+  WeeklyAdLeadRecentIntake,
   WeeklyAdLeadReport,
 } from "@/lib/marketing/weekly-report"
 
@@ -146,6 +147,47 @@ function CompactMetric({
       </p>
       <p className="mt-1 text-[10px] font-medium tabular-nums text-[#615D59]">{detail}</p>
     </div>
+  )
+}
+
+/**
+ * 보고 주간이 끝난 뒤 지금까지의 라이브 유입. 주말에는 일일 카드가 나가지 않으므로
+ * 월요일 아침에는 이 띠가 주말 이틀의 유일한 보고다.
+ */
+function RecentIntakeBand({ intake }: { intake: WeeklyAdLeadRecentIntake | null }) {
+  if (!intake) {
+    return (
+      <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white px-4 py-3 sm:px-5">
+        <p className="text-[11px] font-semibold text-[#615D59]">마지막 일일 보고 이후 유입</p>
+        <p className="mt-1 text-[12px] text-[#A39E98]">리드 조회에 실패해 미측정입니다.</p>
+      </section>
+    )
+  }
+
+  return (
+    <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white px-4 py-3 sm:px-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <p className="text-[11px] font-semibold text-[#084734]">
+          {intake.spansWeekend ? "주말 유입" : "마지막 일일 보고 이후 유입"}
+        </p>
+        <p className="text-[10.5px] tabular-nums text-[#615D59]">{intake.label} KST</p>
+      </div>
+      <div className="mt-2 flex flex-wrap items-end gap-x-5 gap-y-2">
+        <p className="flex items-end gap-1">
+          <span className="text-[28px] font-semibold leading-none tabular-nums tracking-[-0.03em] text-[#111110]">
+            {count(intake.totalLeads)}
+          </span>
+          <span className="pb-0.5 text-[12px] font-medium text-[#615D59]">건 접수</span>
+        </p>
+        <p className="pb-0.5 text-[11.5px] tabular-nums text-[#615D59]">
+          Meta 광고 {count(intake.metaLeadAdsLeadCount)}건 · 홈페이지{" "}
+          {count(intake.homepageLeadCount)}건 · 미응대{" "}
+          <span className={intake.unrespondedCount > 0 ? "font-semibold text-[#B43E3E]" : ""}>
+            {count(intake.unrespondedCount)}건
+          </span>
+        </p>
+      </div>
+    </section>
   )
 }
 
@@ -669,6 +711,8 @@ export function WeeklyReportDialog() {
                         : ""}
                     </p>
                   </section>
+
+                  <RecentIntakeBand intake={response.report.recentIntake} />
 
                   <div className="grid gap-3 lg:grid-cols-[minmax(220px,0.72fr)_minmax(0,1.28fr)]">
                     <LeadHero kpi={response.report.kpis.adLeads} />

@@ -27,8 +27,29 @@ export interface WeeklyAdLeadDailyPoint {
   isWeekend: boolean
 }
 
+/**
+ * 보고 주간(월~일)과 별개로, **마지막 일일 보고 이후 지금까지** 들어온 리드.
+ * 주말에는 일일 카드가 나가지 않으므로(2026-09-07~) 월요일 아침 보고서에서는
+ * 이 구간이 곧 금 10:10 ~ 지금, 즉 아무도 보고하지 않은 주말 공백이 된다.
+ * 숫자는 일일 카드와 같은 정의로 센다 — lib/server/lead-morning-brief.ts.
+ */
+export interface WeeklyAdLeadRecentIntake {
+  /** 구간 시작 ISO — 마지막으로 발송된 일일 보고의 창 끝(평일 10:10 KST) */
+  since: string
+  /** 구간 끝 ISO — 보고서 생성 시각 */
+  until: string
+  /** 'MM.DD HH:mm - MM.DD HH:mm' (KST), 일일 카드 표기와 같은 형식 */
+  label: string
+  /** 구간이 토·일을 품는가. 월요일 아침 보고서에서 참이 된다. */
+  spansWeekend: boolean
+  totalLeads: number
+  metaLeadAdsLeadCount: number
+  homepageLeadCount: number
+  unrespondedCount: number
+}
+
 export interface WeeklyAdLeadReport {
-  version: 2
+  version: 3
   title: string
   generatedAt: string
   snapshotAt: string | null
@@ -55,6 +76,8 @@ export interface WeeklyAdLeadReport {
   weekendLeads: number | null
   weekendSharePct: number | null
   uncontactedLeads: number | null
+  /** 리드 조회에 실패하면 null — 주간 수치는 그대로 살린다. */
+  recentIntake: WeeklyAdLeadRecentIntake | null
   campaigns: WeeklyAdLeadCampaignRow[]
   actions: string[]
   dataCaveats: string[]
@@ -210,6 +233,27 @@ function buildActions(
   return actions.slice(0, 3)
 }
 
+/**
+ * 보고 주간 뒤에 붙는 라이브 구간의 제목. 주말을 품으면 "주말 유입"이라고 부른다 —
+ * 월요일 아침 보고서에서 이 줄이 곧 일일 카드가 쉰 이틀의 답이기 때문이다.
+ */
+function recentIntakeHeading(intake: WeeklyAdLeadRecentIntake | null): string {
+  if (intake?.spansWeekend) return "주말 유입 (마지막 일일 보고 이후)"
+  return "마지막 일일 보고 이후 유입"
+}
+
+function buildRecentIntakeLines(intake: WeeklyAdLeadRecentIntake | null): string[] {
+  if (!intake) {
+    return ["- 리드 조회에 실패해 이 구간은 미측정입니다."]
+  }
+
+  return [
+    `- 구간: ${intake.label} (KST)`,
+    `- 전체 접수: ${formatCount(intake.totalLeads)} — Meta 광고 ${formatCount(intake.metaLeadAdsLeadCount)} / 홈페이지 ${formatCount(intake.homepageLeadCount)}`,
+    `- 미응대: ${formatCount(intake.unrespondedCount)}`,
+  ]
+}
+
 function buildMarkdown(report: Omit<WeeklyAdLeadReport, "markdown">): string {
   const lines = [
     `# ${report.title}`,
@@ -241,6 +285,10 @@ function buildMarkdown(report: Omit<WeeklyAdLeadReport, "markdown">): string {
       : "요일별 광고 리드 미측정",
     `- 주말 리드: ${formatCount(report.weekendLeads)}${report.weekendSharePct == null ? "" : ` · 전체의 ${formatPct(report.weekendSharePct)}`}`,
     "",
+    `## ${recentIntakeHeading(report.recentIntake)}`,
+    "",
+    ...buildRecentIntakeLines(report.recentIntake),
+    "",
     "## 광고 퍼널",
     "",
     `- 노출 ${report.funnel.impressions.toLocaleString("ko-KR")}회 → 클릭 ${report.funnel.clicks.toLocaleString("ko-KR")}회 (CTR ${formatPct(report.funnel.ctrPct)})`,
@@ -271,7 +319,10 @@ function buildMarkdown(report: Omit<WeeklyAdLeadReport, "markdown">): string {
 
 export function buildWeeklyAdLeadReport(
   perf: MarketingPerfResponse,
-  { generatedAt }: { generatedAt: string },
+  {
+    generatedAt,
+    recentIntake = null,
+  }: { generatedAt: string; recentIntake?: WeeklyAdLeadRecentIntake | null },
 ): WeeklyAdLeadReport {
   const campaigns = perf.scoreboard
     .map((row): WeeklyAdLeadCampaignRow => ({
@@ -336,9 +387,12 @@ export function buildWeeklyAdLeadReport(
   if (campaigns.length === 0) {
     dataCaveats.push("기간 내 리드가 측정된 연결 캠페인이 없어 캠페인 순위를 표시하지 않습니다.")
   }
+  if (recentIntake == null) {
+    dataCaveats.push("리드 조회에 실패해 마지막 일일 보고 이후 유입은 미측정입니다.")
+  }
 
   const base: Omit<WeeklyAdLeadReport, "markdown"> = {
-    version: 2,
+    version: 3,
     title: "마케팅 광고 리드 주간 보고서",
     generatedAt,
     snapshotAt: perf.snapshotAt,
@@ -370,6 +424,7 @@ export function buildWeeklyAdLeadReport(
     weekendLeads,
     weekendSharePct,
     uncontactedLeads,
+    recentIntake,
     campaigns,
     actions: buildActions(perf, campaigns, dataStatus),
     dataCaveats,
@@ -382,7 +437,7 @@ export function isWeeklyAdLeadReport(value: unknown): value is WeeklyAdLeadRepor
   if (!value || typeof value !== "object") return false
   const report = value as Partial<WeeklyAdLeadReport>
   return (
-    report.version === 2 &&
+    report.version === 3 &&
     typeof report.title === "string" &&
     typeof report.generatedAt === "string" &&
     typeof report.markdown === "string" &&

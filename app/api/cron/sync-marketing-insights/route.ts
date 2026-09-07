@@ -1,5 +1,7 @@
 // GET /api/cron/sync-marketing-insights — 주간 마케팅 브리핑 생성 크론.
-// 스케줄: 일요일 22:30 UTC = 월요일 07:30 KST(vercel.json) — 주초 출근 전에 지난주 브리핑이 서 있게.
+// 스케줄: 월요일 00:20 UTC = 월요일 09:20 KST(vercel.json) — 주초 출근 직후에 지난주 브리핑이 서 있게.
+// 보고서에는 지난 완료 주간에 더해 '마지막 일일 보고 이후'(= 금 10:10 ~ 지금) 유입이 함께 실린다.
+// 일일 카드가 토·일에 나가지 않으므로, 이 줄이 주말 공백을 메우는 유일한 보고다.
 // 인증은 sync-meta-insights 와 동일(CRON_SECRET Bearer).
 
 import { NextRequest, NextResponse } from "next/server"

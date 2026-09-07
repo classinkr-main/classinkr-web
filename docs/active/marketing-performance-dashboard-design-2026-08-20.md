@@ -98,7 +98,14 @@ branch_insights 테이블 패턴 미러: id, scope(text, `weekly`), digest(입�
 
 - **입력**: KPI 4주 추이(주간 집계), 스코어보드 요약(캠페인별 상태·페이싱·CPL·리드), 이상 감지 결과 목록, 최근 수동 업데이트 로그(팀 활동 맥락).
 - **출력 스키마**: `{ headline, highlights[], next_actions[{title, why}] }` (액션 최대 3).
-- **크론**: `/api/cron/sync-marketing-insights` 주 1회(월 아침). digest 동일하면 재호출 없음. `?force=1` 수동 재생성 지원.
+- **크론**: `/api/cron/sync-marketing-insights` 주 1회 **월요일 09:20 KST**(`20 0 * * 1` UTC, 2026-09-07 변경 — 이전 07:30).
+  digest 동일하면 재호출 없음. `?force=1` 수동 재생성 지원.
+  - 같은 실행이 만드는 **주간 광고 리드 보고서**(v3)에는 지난 완료 주간에 더해
+    **마지막 일일 보고 이후 유입**(`recentIntake`)이 실린다. 일일 카드가 토·일에 나가지 않으므로
+    월요일 아침에는 이 구간이 곧 금 10:10 ~ 지금, 즉 주말 공백의 유일한 보고다.
+  - 그 숫자는 `lib/server/lead-morning-brief.ts`의 `summarizeLeadIntake`가 센다 — 일일 카드와
+    같은 소스·테스트 리드 규칙이라 두 보고의 합이 어긋나지 않는다. 리드 조회 실패 시 `null`로
+    강등하고 주간 수치는 살린다.
 - **표시**: 대시보드 AI 브리핑 카드. 검증 실패·미생성 시 규칙 기반 폴백 유지(빈 카드 금지).
 - **정직 가드(2026-08-20 확정)**: 숫자 sanity 경고가 **재시도 후에도 3건 이상이면 저장하지 않고** stale/error 로 강등한다 — 입력에 없는 숫자를 말하는 브리핑은 화면에 올리지 않는다. `callGemini`·`checkNumericalSanity` 는 branch 의 `InsightInput`/`InsightResult` 타입에 결합돼 있어 재사용 불가 → 같은 규약으로 마케팅 타입에 **미러**한다(모델 해석·responseSchema 강제·재시도 규약 동일).
 

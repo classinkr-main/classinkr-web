@@ -19,7 +19,7 @@ import { persistWeeklyAdLeadReport } from "@/lib/marketing/weekly-report-store"
 
 function report(): WeeklyAdLeadReport {
   return {
-    version: 2,
+    version: 3,
     title: "마케팅 광고 리드 주간 보고서",
     generatedAt: "2026-08-24T00:00:00.000Z",
     snapshotAt: null,
@@ -56,6 +56,7 @@ function report(): WeeklyAdLeadReport {
     weekendLeads: 0,
     weekendSharePct: null,
     uncontactedLeads: 0,
+    recentIntake: null,
     campaigns: [],
     actions: ["연결 점검"],
     dataCaveats: ["미측정"],
@@ -74,10 +75,10 @@ describe("persistWeeklyAdLeadReport", () => {
   it("완료 주간을 별도 weekly_report 스코프로 저장한다", async () => {
     const result = await persistWeeklyAdLeadReport()
 
-    expect(result).toMatchObject({ from: "fresh", report: { version: 2 } })
+    expect(result).toMatchObject({ from: "fresh", report: { version: 3 } })
     expect(mocks.findInsightByDigest).toHaveBeenCalledWith(
       "weekly_report",
-      "weekly-ad-lead-report:v2:2026-08-17:2026-08-23",
+      "weekly-ad-lead-report:v3:2026-08-17:2026-08-23",
       192,
     )
     expect(mocks.insertInsight).toHaveBeenCalledWith(
