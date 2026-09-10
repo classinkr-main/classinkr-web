@@ -14,7 +14,6 @@ import {
   ShieldCheck,
   History,
   LayoutGrid,
-  Settings2,
   Sparkles,
   CircleAlert,
   Copy,
@@ -35,6 +34,13 @@ import {
 } from "@/lib/admin-integrations/types"
 import { resolveNotificationPresentation } from "@/lib/notifications/presentation"
 import {
+  DEFAULT_NOTIFICATION_SCHEDULE,
+  formatKstHourLabel,
+  formatKstTimeLabel,
+  type LeadDailySchedule,
+  type NotificationSchedule,
+} from "@/lib/notifications/schedule"
+import {
   DEFAULT_NOTIFICATION_APPEARANCE,
   NOTIFICATION_CATEGORY_OPTIONS,
   NOTIFICATION_ICON_OPTIONS,
@@ -49,12 +55,29 @@ import {
 } from "@/lib/notifications/types"
 import { NOTIFICATION_TONE_STYLES } from "@/lib/notifications/ui"
 import type { SiteSettings } from "@/lib/site-settings-types"
+import {
+  WEBHOOK_SETTING_KEYS,
+  isWebhookEnabled,
+  type WebhookEnabledMap,
+  type WebhookSettingKey,
+} from "@/lib/webhook-settings"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useUrlState } from "@/lib/use-url-state"
 import { cn } from "@/lib/utils"
 
 type ToastState = { msg: string; type: "success" | "error" } | null
+
+interface WebhookConfigMeta {
+  configured: boolean
+  source: "db" | "env" | "not_configured"
+  enabled: boolean
+}
+
+type WebhookMetaMap = Partial<Record<WebhookSettingKey, WebhookConfigMeta>>
+
+/** GET /api/admin/settings 는 마스킹된 설정에 읽기 전용 요약을 얹어 내려준다. */
+type SettingsResponse = SiteSettings & { webhookMeta?: WebhookMetaMap }
 type WebhookStatus = "idle" | "testing" | "success" | "error"
 
 const IntegrationControlPanel = dynamic(
@@ -269,6 +292,84 @@ function ToggleRow({
   )
 }
 
+const NUMBER_SELECT_CLASS =
+  "rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-2 text-[13px] text-[#111110] outline-none transition-colors focus:border-[#111110]"
+
+function HourSelect({
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  value: number
+  onChange: (hour: number) => void
+  ariaLabel: string
+}) {
+  return (
+    <select
+      aria-label={ariaLabel}
+      value={value}
+      onChange={(event) => onChange(Number(event.target.value))}
+      className={NUMBER_SELECT_CLASS}
+    >
+      {Array.from({ length: 24 }, (_, hour) => (
+        <option key={hour} value={hour}>
+          {formatKstHourLabel(hour)}
+        </option>
+      ))}
+    </select>
+  )
+}
+
+function MinuteSelect({
+  value,
+  onChange,
+}: {
+  value: number
+  onChange: (minute: number) => void
+}) {
+  // 트리거는 시 단위라 분은 집계 창에만 쓰인다. 5분 눈금이면 충분하고,
+  // 60개 옵션은 "분까지 예약된다"는 오해를 부른다.
+  const options = Array.from({ length: 12 }, (_, index) => index * 5)
+  const values = options.includes(value) ? options : [...options, value].sort((a, b) => a - b)
+
+  return (
+    <select
+      aria-label="집계 마감 분"
+      value={value}
+      onChange={(event) => onChange(Number(event.target.value))}
+      className={NUMBER_SELECT_CLASS}
+    >
+      {values.map((minute) => (
+        <option key={minute} value={minute}>
+          {String(minute).padStart(2, "0")}분
+        </option>
+      ))}
+    </select>
+  )
+}
+
+function HourSelectField({
+  label,
+  hint,
+  value,
+  onChange,
+}: {
+  label: string
+  hint: string
+  value: number
+  onChange: (hour: number) => void
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/55">
+        {label}
+      </label>
+      <HourSelect ariaLabel={label} value={value} onChange={onChange} />
+      <p className="mt-1.5 text-[11px] text-[#1a1a1a]/38">{hint}</p>
+    </div>
+  )
+}
+
 function SelectField<T extends string>({
   value,
   onChange,
@@ -343,6 +444,65 @@ function AppearanceRow({
   )
 }
 
+const WEBHOOK_SOURCE_LABEL: Record<WebhookConfigMeta["source"], string> = {
+  db: "설정됨 · DB",
+  env: "설정됨 · env",
+  not_configured: "미설정",
+}
+
+/**
+ * 값은 마스킹돼 새로고침하면 항상 빈 칸이다. 그래서 "설정됨/미설정"과 출처를
+ * 칩으로 따로 보여준다 — 이게 없으면 스위치를 켜고 끄면서도 그 채널에 URL 이
+ * 있는지조차 화면에서 알 수 없다.
+ */
+function WebhookStateChip({ meta }: { meta?: WebhookConfigMeta }) {
+  if (!meta) return null
+
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
+        meta.configured
+          ? "bg-[#ECFDF5] text-[#084734]"
+          : "bg-[#f0f0ec] text-[#1a1a1a]/45"
+      )}
+    >
+      {WEBHOOK_SOURCE_LABEL[meta.source]}
+    </span>
+  )
+}
+
+function WebhookToggle({
+  label,
+  enabled,
+  onChange,
+}: {
+  label: string
+  enabled: boolean
+  onChange: (next: boolean) => void
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={enabled}
+      aria-label={`${label} 발송`}
+      onClick={() => onChange(!enabled)}
+      className={cn(
+        "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+        enabled ? "bg-[#111110]" : "bg-[#d8d8d4]"
+      )}
+    >
+      <span
+        className={cn(
+          "absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform",
+          enabled ? "translate-x-[18px]" : "translate-x-0.5"
+        )}
+      />
+    </button>
+  )
+}
+
 function WebhookRow({
   label,
   description,
@@ -350,6 +510,9 @@ function WebhookRow({
   value,
   onChange,
   webhookType,
+  enabled,
+  onEnabledChange,
+  meta,
 }: {
   label: string
   description: string
@@ -357,6 +520,9 @@ function WebhookRow({
   value: string
   onChange: (value: string) => void
   webhookType: string
+  enabled: boolean
+  onEnabledChange: (next: boolean) => void
+  meta?: WebhookConfigMeta
 }) {
   const [status, setStatus] = useState<WebhookStatus>("idle")
   const [statusMsg, setStatusMsg] = useState("")
@@ -394,7 +560,23 @@ function WebhookRow({
     <div className="border-b border-[#e8e8e4] py-5 last:border-0">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-medium text-[#111110]">{label}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[14px] font-medium text-[#111110]">{label}</p>
+            <WebhookStateChip meta={meta} />
+            {!enabled ? (
+              <span className="inline-flex shrink-0 items-center rounded-full bg-[#FEF3EE] px-2 py-0.5 text-[11px] font-medium text-[#B85C33]">
+                발송 꺼짐
+              </span>
+            ) : null}
+            <span className="ml-auto flex items-center gap-2">
+              <span className="text-[11px] text-[#1a1a1a]/40">발송</span>
+              <WebhookToggle
+                label={label}
+                enabled={enabled}
+                onChange={onEnabledChange}
+              />
+            </span>
+          </div>
           <p className="mb-3 mt-0.5 text-[12px] text-[#1a1a1a]/45">
             {description}
           </p>
@@ -438,8 +620,8 @@ function WebhookRow({
           </div>
           {!value && status === "idle" ? (
             <p className="mt-1.5 text-[11px] text-[#1a1a1a]/35">
-              Existing secrets stay hidden after reload. Entering a new URL will replace the
-              saved value.
+              저장된 주소는 새로고침 후 가려집니다. 새 주소를 입력하면 그 값으로 바뀌고,
+              빈 칸으로 저장하면 기존 값이 그대로 유지됩니다. 발송만 멈추려면 위 스위치를 끄세요.
             </p>
           ) : null}
           {statusMsg ? (
@@ -500,12 +682,12 @@ const NAV_ITEMS: Array<{
   desc: string
   icon: ReactNode
 }> = [
-  {
-    key: "general",
-    label: "일반",
-    desc: "사이트 기능과 공지 문구",
-    icon: <Settings2 className="w-4 h-4" />,
-  },
+  // "일반"(general) 탭은 노출에서 제외한다(2026-09-07) — cta·history 와 같은 처리.
+  // 이 탭의 6개 필드(데모 폼·블로그 섹션·배너 2종과 문구)는 공개 사이트에서 읽는
+  // 곳이 한 군데도 없다. 배너 컴포넌트 자체가 없고 공개용 settings API 도 없어서,
+  // 켜고 꺼도 홈페이지가 바뀌지 않는데 "즉시 반영" 배지가 붙어 있었다.
+  // 타입/SECTION_FIELDS/렌더 블록과 DB 컬럼은 유지 — ?tab=general 직접 진입과
+  // 나중에 배너를 실제로 구현할 때를 위해 남긴다.
   {
     key: "lead",
     label: "리드·폼",
@@ -734,6 +916,9 @@ const SITE_LINK_GROUPS: SiteLinkGroup[] = [
 
 const SITE_LINK_COUNT = SITE_LINK_GROUPS.reduce((count, group) => count + group.links.length, 0)
 
+// 일반 탭을 접었으므로 기본 진입은 실제로 값이 살아 있는 외부 연동이다.
+const DEFAULT_SETTINGS_TAB: SettingsTab = "integrations"
+
 function isIntegrationSection(value: string): value is IntegrationSection {
   return (ADMIN_INTEGRATION_SECTION_KEYS as readonly string[]).includes(value)
 }
@@ -752,19 +937,12 @@ const SECTION_FIELDS: Record<SettingsTab, SettingsKey[]> = {
   lead: [],
   cta: [],
   links: [],
-  integrations: [
-    "googleSheetWebhookUrl",
-    "leadWebhookUrl",
-    "channelTalkWebhookUrl",
-    "wecomOpsWebhookUrl",
-    "wecomOpsWebhookEnabled",
-    "wecomCsWebhookUrl",
-    "wecomLeadReportWebhookUrl",
-    "wecomCriticalWebhookUrl",
-    "kakaoAlimtalkWebhookUrl",
-    "emailWebhookUrl",
+  integrations: [...WEBHOOK_SETTING_KEYS, "webhookEnabled"],
+  notifications: [
+    "notificationDigestEmailList",
+    "notificationAppearance",
+    "notificationSchedule",
   ],
-  notifications: ["notificationDigestEmailList", "notificationAppearance"],
   security: [],
   members: [], // 읽기 전용 계정 디렉터리 — 편집 필드 없음(dirty 계산 제외)
   history: [],
@@ -899,7 +1077,7 @@ function SiteLinkRow({
 }
 
 export default function SettingsPage() {
-  const [tabParam, setTabParam] = useUrlState("tab", "general")
+  const [tabParam, setTabParam] = useUrlState("tab", DEFAULT_SETTINGS_TAB)
   const [integrationSectionParam, setIntegrationSectionParam] = useUrlState("section", "status")
   const [settings, setSettings] = useState<SiteSettings | null>(null)
   const [initialSettings, setInitialSettings] = useState<SiteSettings | null>(null)
@@ -911,12 +1089,13 @@ export default function SettingsPage() {
   const [integrationStatus, setIntegrationStatus] = useState<IntegrationStatusResponse | null>(null)
   const [integrationStatusLoading, setIntegrationStatusLoading] = useState(false)
   const [integrationStatusError, setIntegrationStatusError] = useState<string | null>(null)
+  const [webhookMeta, setWebhookMeta] = useState<WebhookMetaMap>({})
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
   const [currentOrigin, setCurrentOrigin] = useState("")
   // nav에서 숨긴 탭(cta/history)도 ?tab= 직접 진입은 보존한다 — 유효 탭 판정은 SECTION_FIELDS 키 기준.
   const activeTab = Object.prototype.hasOwnProperty.call(SECTION_FIELDS, tabParam)
     ? (tabParam as SettingsTab)
-    : "general"
+    : DEFAULT_SETTINGS_TAB
   const activeIntegrationSection = isIntegrationSection(integrationSectionParam)
     ? (integrationSectionParam as IntegrationSection)
     : "status"
@@ -940,13 +1119,13 @@ export default function SettingsPage() {
     setLoadError(null)
 
     try {
-      const data = await adminFetchJsonCached<SiteSettings>(
-        "/api/admin/settings",
-        undefined,
-        { ttlMs: 60_000 }
-      )
+      const { webhookMeta: meta, ...data } =
+        await adminFetchJsonCached<SettingsResponse>("/api/admin/settings", undefined, {
+          ttlMs: 60_000,
+        })
       setSettings(data)
       setInitialSettings(data)
+      setWebhookMeta(meta ?? {})
       setDigestInput(data.notificationDigestEmailList?.join("\n") ?? "")
       setLastSavedAt(null)
     } catch {
@@ -990,6 +1169,39 @@ export default function SettingsPage() {
     if (typeof window === "undefined") return
     setCurrentOrigin(window.location.origin)
   }, [])
+
+  const set = (patch: Partial<SiteSettings>) =>
+    setSettings((prev) => (prev ? { ...prev, ...patch } : prev))
+
+  const setWebhookEnabled = (key: WebhookSettingKey, enabled: boolean) => {
+    setSettings((prev) => {
+      if (!prev) return prev
+      const next: WebhookEnabledMap = { ...prev.webhookEnabled }
+      // 켜짐은 키를 지워서 표현한다 — 저장되는 건 "꺼둔 것"뿐이다.
+      if (enabled) delete next[key]
+      else next[key] = false
+      return { ...prev, webhookEnabled: next }
+    })
+  }
+
+  const webhookRowProps = (key: WebhookSettingKey) => ({
+    value: settings?.[key] ?? "",
+    onChange: (value: string) => set({ [key]: value } as Partial<SiteSettings>),
+    enabled: isWebhookEnabled(settings?.webhookEnabled, key),
+    onEnabledChange: (next: boolean) => setWebhookEnabled(key, next),
+    meta: webhookMeta[key],
+  })
+
+  const setLeadDailySchedule = (patch: Partial<LeadDailySchedule>) => {
+    setSettings((prev) => {
+      if (!prev) return prev
+      const schedule: NotificationSchedule = {
+        ...prev.notificationSchedule,
+        leadDaily: { ...prev.notificationSchedule.leadDaily, ...patch },
+      }
+      return { ...prev, notificationSchedule: schedule }
+    })
+  }
 
   const updateTypeStyle = (
     type: NotificationType,
@@ -1185,6 +1397,10 @@ export default function SettingsPage() {
     []
   )
 
+  const leadDaily =
+    settings?.notificationSchedule.leadDaily ??
+    DEFAULT_NOTIFICATION_SCHEDULE.leadDaily
+
   const sectionDirtyTotals =
     settings && initialSettings
       ? (Object.keys(SECTION_FIELDS) as SettingsTab[]).reduce((acc, section) => {
@@ -1212,6 +1428,9 @@ export default function SettingsPage() {
         throw new Error(data?.message ?? "설정 저장에 실패했습니다.")
       }
       showToast(data?.message ?? "설정이 저장되었습니다.")
+      // 서버가 다시 계산한 요약으로 칩을 갱신한다 — 방금 새로 넣은 URL 이
+      // "미설정"인 채로 남아 있으면 저장이 안 된 것처럼 보인다.
+      if (data?.webhookMeta) setWebhookMeta(data.webhookMeta as WebhookMetaMap)
       const savedSettings = { ...settings, notificationDigestEmailList: splitEmails(digestInput) }
       setInitialSettings(savedSettings as SiteSettings)
       setLastSavedAt(new Date())
@@ -1234,8 +1453,6 @@ export default function SettingsPage() {
     setDigestInput(initialSettings.notificationDigestEmailList?.join("\n") ?? "")
     showToast("저장 전 변경사항을 되돌렸습니다.")
   }
-
-  const set = (patch: Partial<SiteSettings>) => setSettings((prev) => (prev ? { ...prev, ...patch } : prev))
 
   if (loading) {
     return <div className="px-4 pt-8 text-[13px] text-[#1a1a1a]/30 sm:px-6 sm:pt-10 lg:px-8">불러오는 중...</div>
@@ -1450,59 +1667,6 @@ export default function SettingsPage() {
                 </div>
               </PanelCard>
 
-              {/* 편집 토글은 일반 탭 '사이트 기능'이 유일 정본(AS-2) — 여기서는 현재 상태만 읽기 전용으로
-                  보여주고 편집은 크로스링크로 보낸다. 이중 편집 UI 제거로 dirty 이중 계산도 함께 해소. */}
-              <PanelCard
-                title="현재 활성 설정"
-                description="리드 유입에 영향을 주는 사이트 기능 상태입니다. 편집은 일반 탭 한 곳에서 관리합니다."
-                badge="읽기 전용"
-              >
-                {[
-                  {
-                    key: "demoFormEnabled" as const,
-                    label: "데모 신청 폼",
-                    description: "홈페이지 데모 신청 버튼 및 모달 활성화",
-                    enabled: settings.demoFormEnabled,
-                  },
-                  {
-                    key: "blogSectionEnabled" as const,
-                    label: "블로그 섹션",
-                    description: "홈페이지 블로그 섹션 표시",
-                    enabled: settings.blogSectionEnabled,
-                  },
-                ].map((item) => (
-                  <div
-                    key={item.key}
-                    className="flex items-center justify-between gap-4 border-b border-[#e8e8e4] py-4 last:border-0"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-[14px] font-medium text-[#111110]">{item.label}</p>
-                      <p className="mt-0.5 text-[12px] text-[#1a1a1a]/45">{item.description}</p>
-                    </div>
-                    <span
-                      className={cn(
-                        "inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
-                        item.enabled ? "bg-[#ECFDF5] text-[#084734]" : "bg-[#f0f0ec] text-[#1a1a1a]/45"
-                      )}
-                    >
-                      {item.enabled ? "켜짐" : "꺼짐"}
-                    </span>
-                  </div>
-                ))}
-                <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3">
-                  <p className="text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                    두 기능의 켜기/끄기는 일반 탭의 &lsquo;사이트 기능&rsquo;에서 저장합니다.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("general")}
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[12px] font-medium text-[#1a1a1a]/60 transition-all hover:border-[#c8c8c4] hover:text-[#111110]"
-                  >
-                    <Settings2 className="h-3.5 w-3.5" />
-                    일반 탭에서 편집
-                  </button>
-                </div>
-              </PanelCard>
             </>
           )}
 
@@ -1710,80 +1874,136 @@ export default function SettingsPage() {
                   label="Google Sheet Webhook"
                   description="새 리드를 Google Sheets에 자동으로 기록합니다."
                   placeholder="https://script.google.com/macros/s/..."
-                  value={settings.googleSheetWebhookUrl ?? ""}
-                  onChange={(v) => set({ googleSheetWebhookUrl: v })}
                   webhookType="googleSheet"
+                  {...webhookRowProps("googleSheetWebhookUrl")}
                 />
                 <WebhookRow
                   label="범용 리드 Webhook"
                   description="Make, n8n, Zapier 등 자동화 플랫폼과 연동합니다."
                   placeholder="https://hook.make.com/..."
-                  value={settings.leadWebhookUrl ?? ""}
-                  onChange={(v) => set({ leadWebhookUrl: v })}
                   webhookType="lead"
+                  {...webhookRowProps("leadWebhookUrl")}
                 />
                 <WebhookRow
                   label="채널톡 Webhook"
                   description="새 리드를 채널톡 인박스로 전달합니다."
                   placeholder="https://talk.channel.io/hooks/..."
-                  value={settings.channelTalkWebhookUrl ?? ""}
-                  onChange={(v) => set({ channelTalkWebhookUrl: v })}
                   webhookType="channelTalk"
+                  {...webhookRowProps("channelTalkWebhookUrl")}
                 />
                 <WebhookRow
                   label="WeCom 운영 Webhook"
                   description="일반 경고 및 파트너 활동 알림에 사용됩니다."
                   placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."
-                  value={settings.wecomOpsWebhookUrl ?? ""}
-                  onChange={(v) => set({ wecomOpsWebhookUrl: v })}
                   webhookType="wecom"
+                  {...webhookRowProps("wecomOpsWebhookUrl")}
                 />
                 <WebhookRow
                   label="WeCom 리드 리포트 Webhook"
-                  description="매일 10:10 리드 카드와 주간·월간 리드 리포트에만 사용됩니다."
+                  description="알림 탭에서 정한 일일 카드와 주간·월간 리드 리포트에 사용됩니다."
                   placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."
-                  value={settings.wecomLeadReportWebhookUrl ?? ""}
-                  onChange={(v) => set({ wecomLeadReportWebhookUrl: v })}
                   webhookType="wecom"
+                  {...webhookRowProps("wecomLeadReportWebhookUrl")}
                 />
                 <WebhookRow
                   label="WeCom CS Webhook"
                   description="CS방 인바운드 리포트와 상담 관련 알림에 사용됩니다."
                   placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."
-                  value={settings.wecomCsWebhookUrl ?? ""}
-                  onChange={(v) => set({ wecomCsWebhookUrl: v })}
                   webhookType="wecom"
+                  {...webhookRowProps("wecomCsWebhookUrl")}
                 />
                 <WebhookRow
                   label="WeCom 긴급 Webhook"
                   description="인시던트 및 전달 실패 에스컬레이션 채널입니다."
                   placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."
-                  value={settings.wecomCriticalWebhookUrl ?? ""}
-                  onChange={(v) => set({ wecomCriticalWebhookUrl: v })}
                   webhookType="wecom"
+                  {...webhookRowProps("wecomCriticalWebhookUrl")}
                 />
                 <WebhookRow
                   label="트랜잭션 알림 Webhook (범용)"
                   description="확인서·리마인더 등을 외부 알림 제공자로 보내는 범용 웹훅입니다. 카카오 발송 API가 아닙니다 — 실제 카카오 알림톡 발송은 메시지 발송 허브(/admin/marketing, solapi)를 사용하세요."
                   placeholder="https://provider.example.com/notify/..."
-                  value={settings.kakaoAlimtalkWebhookUrl ?? ""}
-                  onChange={(v) => set({ kakaoAlimtalkWebhookUrl: v })}
                   webhookType="kakaoAlimtalk"
+                  {...webhookRowProps("kakaoAlimtalkWebhookUrl")}
                 />
-                <WebhookRow
-                  label="이메일 발송 Webhook"
-                  description="마케팅 이메일 발송에 사용됩니다. 미설정 시 시뮬레이션 모드로 동작합니다."
-                  placeholder="https://api.resend.com/..."
-                  value={settings.emailWebhookUrl ?? ""}
-                  onChange={(v) => set({ emailWebhookUrl: v })}
-                  webhookType="email"
-                />
+                <p className="py-4 text-[12px] text-[#1a1a1a]/45">
+                  이메일 알림 수신 주소는 알림 탭에서 관리합니다.
+                </p>
               </PanelCard>
             </IntegrationControlPanel>
           )}
 
           {activeTab === "notifications" && (
             <>
+              <PanelCard
+                title="발송 시간"
+                description="리드 아침 카드가 언제 나가고, 어디까지를 세는지 정합니다."
+                badge="저장 가능"
+              >
+                <div className="space-y-5 py-2">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <HourSelectField
+                      label="발송 시간대 (KST)"
+                      hint="이 시간대 안에서 카드가 나갑니다."
+                      value={leadDaily.deliveryHourKst}
+                      onChange={(hour) => setLeadDailySchedule({ deliveryHourKst: hour })}
+                    />
+                    <div>
+                      <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/55">
+                        집계 마감 시각 (KST)
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <HourSelect
+                          ariaLabel="집계 마감 시"
+                          value={leadDaily.windowEndHourKst}
+                          onChange={(hour) =>
+                            setLeadDailySchedule({ windowEndHourKst: hour })
+                          }
+                        />
+                        <span className="text-[13px] text-[#1a1a1a]/35">:</span>
+                        <MinuteSelect
+                          value={leadDaily.windowEndMinuteKst}
+                          onChange={(minute) =>
+                            setLeadDailySchedule({ windowEndMinuteKst: minute })
+                          }
+                        />
+                      </div>
+                      <p className="mt-1.5 text-[11px] text-[#1a1a1a]/38">
+                        카드가 세는 구간의 끝입니다. 어제 이 시각부터 오늘 이 시각까지가 한 장입니다.
+                      </p>
+                    </div>
+                  </div>
+
+                  <ToggleRow
+                    label="평일만 발송"
+                    description="토·일에는 일일 카드를 보내지 않습니다. 월요일 일일 카드는 직전 24시간을 집계합니다."
+                    checked={leadDaily.weekdaysOnly}
+                    onChange={(v) => setLeadDailySchedule({ weekdaysOnly: v })}
+                  />
+
+                  <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3">
+                    <p className="text-[12px] font-medium text-[#111110]">
+                      현재 설정: {formatKstTimeLabel(leadDaily.windowEndHourKst, leadDaily.windowEndMinuteKst)}까지
+                      집계해서 {formatKstHourLabel(leadDaily.deliveryHourKst)}대에 발송
+                    </p>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-[#1a1a1a]/45">
+                      발송 시간은 한 시간 단위로 예약합니다. 실제 도착은 {formatKstHourLabel(leadDaily.deliveryHourKst)} 정각부터
+                      약 한 시간 사이입니다. 저장하면 배포 없이 다음 발송부터 반영됩니다.
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-dashed border-[#e0e0dc] bg-white px-4 py-3">
+                    <p className="text-[12px] font-medium text-[#111110]">
+                      주간 · 월간 리드 리포트
+                    </p>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-[#1a1a1a]/45">
+                      주간은 목요일 13:00 KST, 월간은 매월 1일 09:00 KST에 나갑니다. 이 둘은 아직
+                      화면에서 변경할 수 없습니다.
+                    </p>
+                  </div>
+                </div>
+              </PanelCard>
+
               <PanelCard
                 title="알림 수신자"
                 description="긴급 알림 실패 시 이메일 폴백 수신 주소를 설정합니다."

@@ -3,8 +3,16 @@ import "server-only"
 import {
   DEFAULT_SITE_SETTINGS,
 } from "@/lib/db"
+import { mergeNotificationSchedule } from "@/lib/notifications/schedule"
 import { mergeNotificationAppearance } from "@/lib/notifications/types"
 import type { SiteSettings } from "@/lib/site-settings-types"
+import {
+  isWebhookEnabled,
+  normalizeWebhookEnabledMap,
+  WEBHOOK_SETTING_ENV_KEYS,
+  WEBHOOK_SETTING_KEYS,
+  type WebhookSettingKey,
+} from "@/lib/webhook-settings"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 export type { SiteSettings } from "@/lib/site-settings-types"
@@ -46,23 +54,15 @@ function parseDigestEmailEnv(raw?: string | null) {
 }
 
 function publicSettings(settings: SiteSettings): SiteSettings {
-  return {
-    ...settings,
-    googleSheetWebhookUrl: "",
-    leadWebhookUrl: "",
-    channelTalkWebhookUrl: "",
-    emailWebhookUrl: "",
-    wecomOpsWebhookUrl: "",
-    wecomCsWebhookUrl: "",
-    wecomLeadReportWebhookUrl: "",
-    wecomCriticalWebhookUrl: "",
-    kakaoAlimtalkWebhookUrl: "",
-  }
+  const masked = { ...settings }
+  for (const key of WEBHOOK_SETTING_KEYS) masked[key] = ""
+  return masked
 }
 
 function mergeResolvedSettings(settings: SiteSettings): SiteSettings {
-  const wecomOpsWebhookEnabled = settings.wecomOpsWebhookEnabled !== false
-
+  // 켜짐/꺼짐은 여기서 URL 을 지우지 않는다 — 지우면 "URL 없음"과 "꺼둠"이
+  // 연동 상태 화면에서 같은 모양이 된다. 발송 차단은 emit-event 의
+  // resolveWebhookTarget 과 각 직접 발송 경로에서 판정한다.
   return {
     ...DEFAULT_SITE_SETTINGS,
     ...settings,
@@ -78,11 +78,9 @@ function mergeResolvedSettings(settings: SiteSettings): SiteSettings {
     emailWebhookUrl:
       normalizeOptional(settings.emailWebhookUrl) ??
       normalizeOptional(process.env.EMAIL_WEBHOOK_URL),
-    wecomOpsWebhookEnabled,
-    wecomOpsWebhookUrl: wecomOpsWebhookEnabled
-      ? normalizeOptional(settings.wecomOpsWebhookUrl) ??
-        normalizeOptional(process.env.WECOM_OPS_WEBHOOK_URL)
-      : undefined,
+    wecomOpsWebhookUrl:
+      normalizeOptional(settings.wecomOpsWebhookUrl) ??
+      normalizeOptional(process.env.WECOM_OPS_WEBHOOK_URL),
     wecomCsWebhookUrl:
       normalizeOptional(settings.wecomCsWebhookUrl) ??
       normalizeOptional(process.env.WECOM_CS_WEBHOOK_URL),
@@ -100,6 +98,8 @@ function mergeResolvedSettings(settings: SiteSettings): SiteSettings {
         ? normalizeStringArray(settings.notificationDigestEmailList)
         : parseDigestEmailEnv(process.env.NOTIFICATION_DIGEST_EMAIL_LIST),
     notificationAppearance: mergeNotificationAppearance(settings.notificationAppearance),
+    webhookEnabled: normalizeWebhookEnabledMap(settings.webhookEnabled),
+    notificationSchedule: mergeNotificationSchedule(settings.notificationSchedule),
   }
 }
 
@@ -110,7 +110,11 @@ export async function getSettings(): Promise<SiteSettings> {
     .eq("id", "default")
     .single()
 
-  if (error || !data) return DEFAULT_SITE_SETTINGS
+  if (error) {
+    // 설정 장애를 기본값으로 바꾸면 꺼둔 웹훅이 다시 켜지고 그 결과가 캐시된다.
+    throw new Error(`[settings] read failed (${error.code ?? "unavailable"})`)
+  }
+  if (!data) throw new Error("[settings] default row is missing")
   return rowToLegacy(data)
 }
 
@@ -125,7 +129,7 @@ export async function getResolvedSettings(options?: {
     return resolvedSettingsCache.value
   }
 
-  const settings = await getSettings().catch(() => DEFAULT_SITE_SETTINGS)
+  const settings = await getSettings()
   const resolved = mergeResolvedSettings(settings)
 
   resolvedSettingsCache = {
@@ -147,10 +151,55 @@ export function clearResolvedSettingsCache() {
   resolvedSettingsCache = null
 }
 
+export type WebhookConfigSource = "db" | "env" | "not_configured"
+
+export interface WebhookConfigMeta {
+  configured: boolean
+  source: WebhookConfigSource
+  enabled: boolean
+}
+
+/**
+ * 웹훅별 "설정됨 / 어디서 왔는지 / 켜짐" 요약. 값 자체는 화면에 절대 내려보내지
+ * 않으므로(마스킹), 이게 없으면 운영자는 새로고침 후 빈 칸만 보고 뭐가 켜져
+ * 있는지 알 수 없다.
+ *
+ * source 판정 순서는 mergeResolvedSettings 의 실제 우선순위와 같아야 한다 —
+ * DB 값이 있으면 그게 쓰이고, 없을 때만 env 로 내려간다. 반대로 적으면
+ * "env" 라고 표시된 채 실제로는 DB 값이 나가는 상태가 된다.
+ */
+export async function getWebhookConfigMeta(): Promise<
+  Record<WebhookSettingKey, WebhookConfigMeta>
+> {
+  const stored = await getSettings()
+  const enabledMap = normalizeWebhookEnabledMap(stored.webhookEnabled)
+
+  return Object.fromEntries(
+    WEBHOOK_SETTING_KEYS.map((key) => {
+      const fromDb = normalizeOptional(stored[key])
+      const fromEnv = normalizeOptional(process.env[WEBHOOK_SETTING_ENV_KEYS[key]])
+      const source: WebhookConfigSource = fromDb
+        ? "db"
+        : fromEnv
+          ? "env"
+          : "not_configured"
+
+      return [
+        key,
+        {
+          configured: source !== "not_configured",
+          source,
+          enabled: isWebhookEnabled(enabledMap, key),
+        },
+      ]
+    })
+  ) as Record<WebhookSettingKey, WebhookConfigMeta>
+}
+
 export async function updateSettings(
   patch: Partial<SiteSettings>
 ): Promise<SiteSettings> {
-  const current = await getSettings().catch(() => DEFAULT_SITE_SETTINGS)
+  const current = await getSettings()
   const nextAppearance =
     patch.notificationAppearance !== undefined
       ? mergeNotificationAppearance(
@@ -177,8 +226,6 @@ export async function updateSettings(
       normalizeOptional(patch.emailWebhookUrl) ?? current.emailWebhookUrl,
     wecomOpsWebhookUrl:
       normalizeOptional(patch.wecomOpsWebhookUrl) ?? current.wecomOpsWebhookUrl,
-    wecomOpsWebhookEnabled:
-      patch.wecomOpsWebhookEnabled ?? current.wecomOpsWebhookEnabled,
     wecomCsWebhookUrl:
       normalizeOptional(patch.wecomCsWebhookUrl) ?? current.wecomCsWebhookUrl,
     wecomLeadReportWebhookUrl:
@@ -192,12 +239,26 @@ export async function updateSettings(
       current.kakaoAlimtalkWebhookUrl,
   }
 
+  // 웹훅 스위치와 스케줄은 patch 에 있을 때만 갈아끼운다. 설정 화면이 전체
+  // 객체를 PATCH 하므로, 없는 키를 기본값으로 되돌리면 다른 탭 저장이
+  // 이 둘을 조용히 초기화한다.
+  const nextWebhookEnabled =
+    patch.webhookEnabled !== undefined
+      ? normalizeWebhookEnabledMap(patch.webhookEnabled)
+      : current.webhookEnabled
+  const nextSchedule =
+    patch.notificationSchedule !== undefined
+      ? mergeNotificationSchedule(patch.notificationSchedule)
+      : current.notificationSchedule
+
   const next: SiteSettings = {
     ...current,
     ...patch,
     ...webhookValues,
     notificationDigestEmailList: nextDigestEmailList,
     notificationAppearance: nextAppearance,
+    webhookEnabled: nextWebhookEnabled,
+    notificationSchedule: nextSchedule,
   }
 
   const { data, error } = await sb()
@@ -216,13 +277,16 @@ export async function updateSettings(
         channel_talk_webhook_url: next.channelTalkWebhookUrl ?? null,
         email_webhook_url: next.emailWebhookUrl ?? null,
         wecom_ops_webhook_url: next.wecomOpsWebhookUrl ?? null,
-        wecom_ops_webhook_enabled: next.wecomOpsWebhookEnabled,
+        // 직전 배포로 돌아가도 운영 채널의 활성 상태를 보존한다.
+        wecom_ops_webhook_enabled: isWebhookEnabled(next.webhookEnabled, "wecomOpsWebhookUrl"),
         wecom_cs_webhook_url: next.wecomCsWebhookUrl ?? null,
         wecom_lead_report_webhook_url: next.wecomLeadReportWebhookUrl ?? null,
         wecom_critical_webhook_url: next.wecomCriticalWebhookUrl ?? null,
         kakao_alimtalk_webhook_url: next.kakaoAlimtalkWebhookUrl ?? null,
         notification_digest_email_list: next.notificationDigestEmailList,
         notification_appearance_json: next.notificationAppearance,
+        webhook_enabled_json: next.webhookEnabled,
+        notification_schedule_json: next.notificationSchedule,
       },
       { onConflict: "id" }
     )
@@ -258,7 +322,6 @@ function rowToLegacy(row: any): SiteSettings {
     channelTalkWebhookUrl: row.channel_talk_webhook_url ?? undefined,
     emailWebhookUrl: row.email_webhook_url ?? undefined,
     wecomOpsWebhookUrl: row.wecom_ops_webhook_url ?? undefined,
-    wecomOpsWebhookEnabled: row.wecom_ops_webhook_enabled !== false,
     wecomCsWebhookUrl: row.wecom_cs_webhook_url ?? undefined,
     wecomLeadReportWebhookUrl:
       row.wecom_lead_report_webhook_url ?? undefined,
@@ -270,5 +333,12 @@ function rowToLegacy(row: any): SiteSettings {
     notificationAppearance: mergeNotificationAppearance(
       row.notification_appearance_json
     ),
+    // 옛 boolean 컬럼은 마이그레이션이 JSONB 로 백필한 뒤에도 남겨둔다.
+    // 백필 전 배포가 잠깐 겹치는 구간에서 wecomOps 만 옛 컬럼으로 되읽는다.
+    webhookEnabled: normalizeWebhookEnabledMap(
+      row.webhook_enabled_json ??
+        (row.wecom_ops_webhook_enabled === false ? { wecomOpsWebhookUrl: false } : {})
+    ),
+    notificationSchedule: mergeNotificationSchedule(row.notification_schedule_json),
   }
 }

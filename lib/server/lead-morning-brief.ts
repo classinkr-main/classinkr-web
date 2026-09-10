@@ -3,12 +3,17 @@ import "server-only"
 import { getMetaAdInfo, isTestLead } from "@/lib/crm/lead-attribution"
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import {
+  DEFAULT_NOTIFICATION_SCHEDULE,
+  type LeadDailySchedule,
+} from "@/lib/notifications/schedule"
+import {
   claimLeadDigestRun,
   markLeadDigestRunFailed,
   markLeadDigestRunSent,
   type LeadDigestReportType,
 } from "@/lib/repositories/lead-digest-runs"
 import { getLeads, type LeadRecord } from "@/lib/repositories/leads"
+import { getResolvedSettings } from "@/lib/repositories/settings"
 
 // 아침 카드가 세는 유입 세 갈래. 세 갈래 사이에 겹침이 없어 합계가 곧 전체 접수다
 // ("Meta 광고 경유"는 홈페이지 유입의 부분집합이라 합계에 다시 더하지 않는다).
@@ -17,8 +22,15 @@ const REPORT_SOURCES = new Set(["meta_lead_ads", "contact_page", "demo_modal"])
 const DAILY_REPORT_TYPE: LeadDigestReportType = "daily"
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000
 const DAY_MS = 24 * 60 * 60 * 1000
-const REPORT_HOUR_KST = 10
-const REPORT_MINUTE_KST = 10
+// 발송 시각은 운영자가 설정 화면에서 바꾼다(lib/notifications/schedule.ts).
+// 기본값은 2026-09-07 이전 고정 상수(10:10 KST)와 같은 값이라, 스케줄을
+// 넘기지 않는 호출부는 예전 그대로 동작한다.
+const DEFAULT_SCHEDULE = DEFAULT_NOTIFICATION_SCHEDULE.leadDaily
+
+async function resolveLeadDailySchedule(): Promise<LeadDailySchedule> {
+  const settings = await getResolvedSettings()
+  return settings.notificationSchedule?.leadDaily ?? DEFAULT_SCHEDULE
+}
 
 export interface LeadMorningWindow {
   start: Date
@@ -83,17 +95,20 @@ export function isLeadMorningWeekend(now = new Date()) {
   return weekday === 0 || weekday === 6
 }
 
-export function getLeadMorningWindow(now = new Date()): LeadMorningWindow {
+export function getLeadMorningWindow(
+  now = new Date(),
+  schedule: LeadDailySchedule = DEFAULT_SCHEDULE
+): LeadMorningWindow {
   const shifted = new Date(now.getTime() + KST_OFFSET_MS)
   let endMs = kstWallClockToUtcMs(
     shifted.getUTCFullYear(),
     shifted.getUTCMonth(),
     shifted.getUTCDate(),
-    REPORT_HOUR_KST,
-    REPORT_MINUTE_KST
+    schedule.windowEndHourKst,
+    schedule.windowEndMinuteKst
   )
 
-  // 수동 실행이 10:10보다 이르면 아직 닫히지 않은 오늘 구간 대신 마지막 완료 구간을 쓴다.
+  // 수동 실행이 창 끝보다 이르면 아직 닫히지 않은 오늘 구간 대신 마지막 완료 구간을 쓴다.
   if (now.getTime() < endMs) endMs -= DAY_MS
 
   return {
@@ -107,8 +122,12 @@ export function getLeadMorningWindow(now = new Date()): LeadMorningWindow {
  * 주말 발송을 껐으므로 금 10:10 ~ 월 10:10 사이에는 금요일 값이 나온다 —
  * 이 시각부터 지금까지가 일일 카드가 한 번도 보고하지 않은 구간이다.
  */
-export function getLastSentLeadMorningWindowEnd(now = new Date()) {
-  let end = getLeadMorningWindow(now).end
+export function getLastSentLeadMorningWindowEnd(
+  now = new Date(),
+  schedule: LeadDailySchedule = DEFAULT_SCHEDULE
+) {
+  let end = getLeadMorningWindow(now, schedule).end
+  if (!schedule.weekdaysOnly) return end
   // 창 끝의 KST 요일이 곧 그 카드가 나갔어야 할 날이다. 주말이면 안 나갔으니 한 칸 더 뒤로.
   while (isLeadMorningWeekend(end)) {
     end = new Date(end.getTime() - DAY_MS)
@@ -238,14 +257,32 @@ function buildMessage(metrics: LeadMorningBriefMetrics) {
   ].join("\n")
 }
 
+/** 발송·실행 선점 없이 현재 한 창의 집계 범위와 대상 건수를 확인한다. */
+export async function previewLeadMorningBrief(
+  now = new Date(),
+  schedule: LeadDailySchedule = DEFAULT_SCHEDULE
+) {
+  const window = getLeadMorningWindow(now, schedule)
+  const metrics = buildMetrics(await getLeads(), window)
+  return {
+    windowStart: window.start.toISOString(),
+    windowEnd: window.end.toISOString(),
+    weekend: schedule.weekdaysOnly && isLeadMorningWeekend(now),
+    totalLeads: metrics.totalLeads,
+    maxDeliveries: 1,
+  }
+}
+
 export async function sendLeadMorningBrief(
-  now = new Date()
+  now = new Date(),
+  scheduleOverride?: LeadDailySchedule
 ): Promise<LeadMorningBriefResult> {
-  const window = getLeadMorningWindow(now)
+  const schedule = scheduleOverride ?? (await resolveLeadDailySchedule())
+  const window = getLeadMorningWindow(now, schedule)
 
   // 주말에는 실행 레코드도 남기지 않는다. 남기면 그 구간이 '발송됨'으로 굳어
   // 나중에 주말 발송을 되살리거나 수동으로 보낼 때 already_sent 로 막힌다.
-  if (isLeadMorningWeekend(now)) {
+  if (schedule.weekdaysOnly && isLeadMorningWeekend(now)) {
     return {
       status: "skipped",
       reason: "weekend",

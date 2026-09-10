@@ -7,31 +7,10 @@ import type {
   AdminIntegrationStatusResponse,
 } from "@/lib/admin-integrations/types"
 import type { SiteSettings } from "@/lib/site-settings-types"
+import type { WebhookSettingKey } from "@/lib/webhook-settings"
 
 type AdminIntegrationStatus = AdminIntegrationStatusItem
 
-type WebhookSettingKey =
-  | "googleSheetWebhookUrl"
-  | "leadWebhookUrl"
-  | "channelTalkWebhookUrl"
-  | "emailWebhookUrl"
-  | "wecomOpsWebhookUrl"
-  | "wecomCsWebhookUrl"
-  | "wecomLeadReportWebhookUrl"
-  | "wecomCriticalWebhookUrl"
-  | "kakaoAlimtalkWebhookUrl"
-
-const WEBHOOK_SETTING_ENV_KEYS = {
-  googleSheetWebhookUrl: "GOOGLE_SHEET_WEBHOOK_URL",
-  leadWebhookUrl: "LEAD_WEBHOOK_URL",
-  channelTalkWebhookUrl: "CHANNEL_TALK_WEBHOOK_URL",
-  emailWebhookUrl: "EMAIL_WEBHOOK_URL",
-  wecomOpsWebhookUrl: "WECOM_OPS_WEBHOOK_URL",
-  wecomCsWebhookUrl: "WECOM_CS_WEBHOOK_URL",
-  wecomLeadReportWebhookUrl: "WECOM_LEAD_REPORT_WEBHOOK_URL",
-  wecomCriticalWebhookUrl: "WECOM_CRITICAL_WEBHOOK_URL",
-  kakaoAlimtalkWebhookUrl: "KAKAO_ALIMTALK_WEBHOOK_URL",
-} as const satisfies Record<WebhookSettingKey, string>
 
 const ANALYTICS_PLACEHOLDER_IDS = new Set([
   "g-xxxxxxxxxx",
@@ -64,12 +43,18 @@ function sourceFromEnv(names: readonly string[]): AdminIntegrationSource {
   return hasAnyEnv(names) ? "env" : "not_configured"
 }
 
+/**
+ * env/DB 판정은 설정 화면과 같은 한 곳(getWebhookConfigMeta)에서 온다. 여기서
+ * 따로 판정하면 같은 페이지의 두 패널이 서로 다른 출처를 말하게 된다.
+ * 특히 순서가 중요하다 — DB 값이 있으면 그게 실제로 쓰이므로 env 를 먼저 보면 안 된다.
+ */
+type WebhookSourceMap = Record<WebhookSettingKey, AdminIntegrationSource>
+
 function sourceFromSetting(
-  settings: SiteSettings,
+  sources: WebhookSourceMap,
   key: WebhookSettingKey
 ): AdminIntegrationSource {
-  if (hasEnv(WEBHOOK_SETTING_ENV_KEYS[key])) return "env"
-  return hasSettingValue(settings, key) ? "db" : "not_configured"
+  return sources[key]
 }
 
 function sourceFromDigestList(settings: SiteSettings): AdminIntegrationSource {
@@ -158,7 +143,10 @@ function buildPageFormWebhookStatus(): AdminIntegrationStatus {
   }
 }
 
-function buildLeadWebhookStatus(settings: SiteSettings): AdminIntegrationStatus {
+function buildLeadWebhookStatus(
+  settings: SiteSettings,
+  sources: WebhookSourceMap
+): AdminIntegrationStatus {
   const settingKeys: WebhookSettingKey[] = [
     "googleSheetWebhookUrl",
     "leadWebhookUrl",
@@ -174,7 +162,7 @@ function buildLeadWebhookStatus(settings: SiteSettings): AdminIntegrationStatus 
     category: "lead",
     configured,
     source: combineSources(
-      ...settingKeys.map((key) => sourceFromSetting(settings, key))
+      ...settingKeys.map((key) => sourceFromSetting(sources, key))
     ),
     health: configuredCount === settingKeys.length ? "ok" : "warning",
     requiredKeys: [
@@ -185,7 +173,10 @@ function buildLeadWebhookStatus(settings: SiteSettings): AdminIntegrationStatus 
   }
 }
 
-function buildNotificationStatus(settings: SiteSettings): AdminIntegrationStatus {
+function buildNotificationStatus(
+  settings: SiteSettings,
+  sources: WebhookSourceMap
+): AdminIntegrationStatus {
   const webhookKeys: WebhookSettingKey[] = [
     "wecomOpsWebhookUrl",
     "wecomCsWebhookUrl",
@@ -205,7 +196,7 @@ function buildNotificationStatus(settings: SiteSettings): AdminIntegrationStatus
     category: "notification",
     configured,
     source: combineSources(
-      ...webhookKeys.map((key) => sourceFromSetting(settings, key)),
+      ...webhookKeys.map((key) => sourceFromSetting(sources, key)),
       sourceFromDigestList(settings)
     ),
     health: healthForPresence(configured, false),
@@ -221,7 +212,10 @@ function buildNotificationStatus(settings: SiteSettings): AdminIntegrationStatus
   }
 }
 
-function buildChannelTalkStatus(settings: SiteSettings): AdminIntegrationStatus {
+function buildChannelTalkStatus(
+  settings: SiteSettings,
+  sources: WebhookSourceMap
+): AdminIntegrationStatus {
   const hasOpenApiKey =
     hasAnyEnv(["CHANNEL_TALK_ACCESS", "CHANNEL_ACCESS_KEY"]) &&
     hasAnyEnv(["CHANNEL_TALK_ACCESS_SECRET", "CHANNEL_ACCESS_SECRET"])
@@ -257,7 +251,7 @@ function buildChannelTalkStatus(settings: SiteSettings): AdminIntegrationStatus 
         "NEXT_PUBLIC_CHANNEL_PLUGIN_KEY",
         "NEXT_PUBLIC_CHANNEL_TALK_PLUGIN_KEY",
       ]),
-      sourceFromSetting(settings, "channelTalkWebhookUrl")
+      sourceFromSetting(sources, "channelTalkWebhookUrl")
     ),
     health:
       hasOpenApiKey && (hasInboundWebhookAuth || hasWidgetKey || hasOutboundWebhook)
@@ -274,7 +268,10 @@ function buildChannelTalkStatus(settings: SiteSettings): AdminIntegrationStatus 
   }
 }
 
-function buildEmailStatus(settings: SiteSettings): AdminIntegrationStatus {
+function buildEmailStatus(
+  settings: SiteSettings,
+  sources: WebhookSourceMap
+): AdminIntegrationStatus {
   const hasResend = hasEnv("RESEND_API_KEY")
   const hasGmail = hasAllEnv(["GOOGLE_SERVICE_ACCOUNT_EMAIL", "GOOGLE_PRIVATE_KEY"])
   const hasWebhook = hasSettingValue(settings, "emailWebhookUrl")
@@ -292,7 +289,7 @@ function buildEmailStatus(settings: SiteSettings): AdminIntegrationStatus {
         "GOOGLE_SERVICE_ACCOUNT_EMAIL",
         "GOOGLE_PRIVATE_KEY",
       ]),
-      sourceFromSetting(settings, "emailWebhookUrl")
+      sourceFromSetting(sources, "emailWebhookUrl")
     ),
     health: hasResend || hasGmail ? "ok" : healthForPresence(configured, configured),
     requiredKeys: [
@@ -724,17 +721,25 @@ function buildPartnerPortalStatus(): AdminIntegrationStatus {
 }
 
 export async function getAdminIntegrationStatusResponse(): Promise<AdminIntegrationStatusResponse> {
-  const { getResolvedSettings } = await import("@/lib/repositories/settings")
-  const settings = await getResolvedSettings()
+  const { getResolvedSettings, getWebhookConfigMeta } = await import(
+    "@/lib/repositories/settings"
+  )
+  const [settings, webhookMeta] = await Promise.all([
+    getResolvedSettings(),
+    getWebhookConfigMeta(),
+  ])
+  const sources = Object.fromEntries(
+    Object.entries(webhookMeta).map(([key, meta]) => [key, meta.source])
+  ) as WebhookSourceMap
   const generatedAt = new Date().toISOString()
 
   const items = [
     buildSupabaseStatus(),
     buildPageFormWebhookStatus(),
-    buildLeadWebhookStatus(settings),
-    buildNotificationStatus(settings),
-    buildChannelTalkStatus(settings),
-    buildEmailStatus(settings),
+    buildLeadWebhookStatus(settings, sources),
+    buildNotificationStatus(settings, sources),
+    buildChannelTalkStatus(settings, sources),
+    buildEmailStatus(settings, sources),
     buildGoogleStatus(),
     buildBranchSheetsStatus(),
     buildGeminiStatus(),

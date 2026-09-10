@@ -1,4 +1,6 @@
+import type { NotificationSchedule } from "@/lib/notifications/schedule"
 import type { NotificationAppearanceSettings } from "@/lib/notifications/types"
+import type { WebhookEnabledMap } from "@/lib/webhook-settings"
 
 export type LeadStatus = "new" | "contacted" | "converted" | "closed"
 
@@ -48,11 +50,13 @@ export interface SiteSettings {
   channelTalkWebhookUrl?: string
   emailWebhookUrl?: string
   wecomOpsWebhookUrl?: string
-  wecomOpsWebhookEnabled: boolean
   wecomCsWebhookUrl?: string
   wecomLeadReportWebhookUrl?: string
   wecomCriticalWebhookUrl?: string
   kakaoAlimtalkWebhookUrl?: string
   notificationDigestEmailList: string[]
   notificationAppearance: NotificationAppearanceSettings
+  /** 웹훅별 켜짐/꺼짐. 키가 없으면 켜짐 — URL 은 남기고 발송만 멈춘다. */
+  webhookEnabled: WebhookEnabledMap
+  notificationSchedule: NotificationSchedule
 }

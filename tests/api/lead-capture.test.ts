@@ -13,6 +13,7 @@ async function loadLeadCapture(options?: {
     googleSheetWebhookUrl?: string
     leadWebhookUrl?: string
     channelTalkWebhookUrl?: string
+    webhookEnabled?: Record<string, boolean>
   }
 }) {
   vi.resetModules()
@@ -108,6 +109,21 @@ describe("submitLeadCapture duplicate handling", () => {
     expect(second.status).toBe(502)
     expect(saveLead).toHaveBeenCalledTimes(2)
     expect(postJson).toHaveBeenCalledTimes(2)
+  })
+
+  it("disabled lead webhooks do not deliver while the lead still saves", async () => {
+    const { submitLeadCapture, saveLead, postJson } = await loadLeadCapture({
+      settings: {
+        googleSheetWebhookUrl: "https://example.com/sheet",
+        leadWebhookUrl: "https://example.com/lead",
+        channelTalkWebhookUrl: "https://example.com/channel",
+        webhookEnabled: { googleSheetWebhookUrl: false, leadWebhookUrl: false, channelTalkWebhookUrl: false },
+      },
+    })
+    saveLead.mockResolvedValue({ id: "lead-disabled-channels" })
+    expect((await submitLeadCapture(baseLead)).status).toBe(200)
+    expect(saveLead).toHaveBeenCalledOnce()
+    expect(postJson).not.toHaveBeenCalled()
   })
 
   it("drops duplicates only after a lead has been accepted", async () => {

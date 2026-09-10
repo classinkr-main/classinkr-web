@@ -120,6 +120,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - `crm_customer_events`, private recording storage, future `crm_tasks`/attachments/transcripts, 외부 CRM write request 경계 기준
 - [active/docs-center-db-design.md](./active/docs-center-db-design.md)
   - 문서센터 DB, RLS, SEO 노출 정책, AI 청크 파이프라인
+- [active/admin-settings-webhook-toggles-and-schedule-2026-09-07.md](./active/admin-settings-webhook-toggles-and-schedule-2026-09-07.md)
+  - 웹훅 활성 스위치·일일 보고 발송 시간·DB 적용 순서와 발송 없는 검증 기준
 - [active/notification-architecture-plan.md](./active/notification-architecture-plan.md)
   - 알림 아키텍처 계획
 - [active/partner-portal-front-back-contract.md](./active/partner-portal-front-back-contract.md)
