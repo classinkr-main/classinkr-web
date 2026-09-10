@@ -50,7 +50,7 @@ function SortableTh({
       <button
         type="button"
         onClick={() => onSort(sortKeyValue)}
-        className={`inline-flex items-center gap-1 font-medium transition hover:text-[#111110] ${
+        className={`inline-flex min-h-11 min-w-11 items-center justify-center gap-1 font-medium transition hover:text-[#111110] md:min-h-0 md:min-w-0 ${
           active ? "text-[#111110]" : ""
         } ${align === "right" ? "flex-row-reverse" : ""}`}
       >
@@ -245,7 +245,7 @@ export default function PipelineTable({
         <button
           type="button"
           onClick={() => setLocalRetry((v) => v + 1)}
-          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-[#B43E3E] bg-white px-2.5 text-[11px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9]"
+          className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-md border border-[#B43E3E] bg-white px-2.5 text-[11px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9] md:h-8 md:min-h-0 md:min-w-0"
         >
           <RotateCcw className="h-3 w-3" aria-hidden="true" />
           다시 시도
@@ -268,7 +268,7 @@ export default function PipelineTable({
           <Link
             href={ledgerHref()}
             title={crossLinkNotice}
-            className="text-[11px] font-medium text-[#084734] underline-offset-2 hover:underline"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center text-[11px] font-medium text-[#084734] underline-offset-2 hover:underline md:min-h-0 md:min-w-0"
           >
             장부에서 열기 ↗
           </Link>
@@ -283,7 +283,7 @@ export default function PipelineTable({
               type="button"
               onClick={resetFilters}
               disabled={!filtersActive}
-              className="inline-flex h-7 items-center gap-1 rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[11px] font-medium text-[#111110]/65 transition hover:border-[#111110]/25 hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[11px] font-medium text-[#111110]/65 transition hover:border-[#111110]/25 hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40 md:h-7 md:min-h-0 md:min-w-0"
               title="필터 초기화"
             >
               <RotateCcw className="h-3 w-3" aria-hidden="true" />
@@ -301,7 +301,7 @@ export default function PipelineTable({
               value={query}
               onChange={(e) => { setQuery(e.target.value); setPage(1) }}
               placeholder="고객사, 매니저, 지역 검색"
-              className="h-8 w-full rounded-full border border-[rgba(0,0,0,0.08)] bg-white pl-9 pr-3 text-[12px] outline-none transition focus:border-[#111110]/30"
+              className="h-11 min-h-11 w-full rounded-full border border-[rgba(0,0,0,0.08)] bg-white pl-9 pr-3 text-[12px] outline-none transition focus:border-[#111110]/30 md:h-8 md:min-h-0"
             />
           </label>
           <MultiSelect
@@ -369,7 +369,7 @@ export default function PipelineTable({
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); onRowClick(r) }}
-                        className="truncate text-left font-medium text-[#111110] underline-offset-2 hover:underline"
+                        className="min-h-11 min-w-11 truncate text-left font-medium text-[#111110] underline-offset-2 hover:underline md:min-h-0 md:min-w-0"
                         title="세부 내역 로그 보기"
                       >
                         {r.customer}
@@ -380,7 +380,7 @@ export default function PipelineTable({
                     <Link
                       href={ledgerHref({ q: r.customer })}
                       onClick={(e) => e.stopPropagation()}
-                      className="shrink-0 text-[11px] font-medium text-[#084734] opacity-50 transition hover:opacity-100"
+                      className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center text-[11px] font-medium text-[#084734] opacity-50 transition hover:opacity-100 md:min-h-0 md:min-w-0"
                       title={crossLinkNotice ? `매출 장부에서 열기 · ${crossLinkNotice}` : "매출 장부에서 열기"}
                     >
                       ↗
@@ -402,7 +402,7 @@ export default function PipelineTable({
               <button
                 type="button"
                 onClick={onViewFullPipeline}
-                className="text-[11px] font-semibold text-[#084734] underline-offset-2 hover:underline"
+                className="inline-flex min-h-11 min-w-11 items-center justify-center text-[11px] font-semibold text-[#084734] underline-offset-2 hover:underline md:min-h-0 md:min-w-0"
               >
                 전체 파이프라인에서 보기 →
               </button>
@@ -418,8 +418,8 @@ export default function PipelineTable({
                 type="button"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={safePage === 1}
-                // 웨이브 7 — U5(터치 타깃). 모바일 h-10/w-10(40px) → 데스크톱 md:h-7/md:w-7 원복.
-                className="inline-flex h-10 min-h-10 w-10 min-w-10 items-center justify-center rounded-full border border-[rgba(0,0,0,0.08)] text-[#111110]/65 disabled:cursor-not-allowed disabled:opacity-35 md:h-7 md:min-h-0 md:w-7 md:min-w-0"
+                // 웨이브 7 — U5(터치 타깃). 모바일 44px → 데스크톱 md:h-7/md:w-7 원복.
+                className="inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center rounded-full border border-[rgba(0,0,0,0.08)] text-[#111110]/65 disabled:cursor-not-allowed disabled:opacity-35 md:h-7 md:min-h-0 md:w-7 md:min-w-0"
                 aria-label="이전 페이지"
                 title="이전 페이지"
               >
@@ -430,7 +430,7 @@ export default function PipelineTable({
                 type="button"
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={safePage === totalPages}
-                className="inline-flex h-10 min-h-10 w-10 min-w-10 items-center justify-center rounded-full border border-[rgba(0,0,0,0.08)] text-[#111110]/65 disabled:cursor-not-allowed disabled:opacity-35 md:h-7 md:min-h-0 md:w-7 md:min-w-0"
+                className="inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center rounded-full border border-[rgba(0,0,0,0.08)] text-[#111110]/65 disabled:cursor-not-allowed disabled:opacity-35 md:h-7 md:min-h-0 md:w-7 md:min-w-0"
                 aria-label="다음 페이지"
                 title="다음 페이지"
               >

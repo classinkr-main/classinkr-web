@@ -2,6 +2,7 @@
 
 import { useState, type Dispatch, type FormEvent, type SetStateAction } from "react"
 import { Loader2, Plus, Save, X } from "lucide-react"
+import { AdminMoneyInput, parseMoneyInput } from "@/components/admin/AdminMoneyInput"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import {
   DRAFT_CONFIDENCE_OPTIONS,
@@ -88,6 +89,13 @@ export function InputRailSection({
     setFeedbackForDraftId(editingDraft?.id ?? null)
     setFeedback(null)
   }
+
+  // 공용 금액 입력(숫자|null) ↔ 폼 버퍼(문자열) 어댑터 — 상위 상태·저장 payload 형태는 그대로 둔다
+  // (draftForm.amount/quantity는 계속 문자열이고 safeAmount가 파싱하는 계약 유지).
+  const pushAmount = (next: number | null) =>
+    setDraftForm((current) => ({ ...current, amount: next == null ? "" : String(next) }))
+  const pushQuantity = (next: number | null) =>
+    setDraftForm((current) => ({ ...current, quantity: next == null ? "" : String(next) }))
 
   const runSave = async (action: () => Promise<DraftSaveResult>) => {
     setFeedback(null)
@@ -356,14 +364,19 @@ export function InputRailSection({
                 {!weeklySplitActive && (
                   <label className="block text-[11px] font-bold text-[#615D59]">
                     금액
-                    <input
-                      value={draftForm.amount}
-                      onChange={(event) => setDraftForm((current) => ({ ...current, amount: event.target.value }))}
-                      inputMode="numeric"
-                      aria-invalid={draftAmountInvalid}
-                      className={`mt-1 h-9 w-full rounded-md border bg-[#FAFAF8] px-3 text-right text-[12px] font-semibold text-[#111110] outline-none focus:border-[#084734] ${
-                        draftAmountInvalid ? "border-[#B43E3E]" : "border-[rgba(0,0,0,0.08)]"
-                      }`}
+                    {/* 공용 금액 입력 — 천단위 콤마·한글 IME 안전(조합 종료 후 정규화)·비숫자 안내.
+                        버퍼는 계속 문자열(draftForm.amount)이라 여기서만 어댑트한다. onLiveChange가
+                        필요한 이유: 저장 버튼이 draftFormInvalid로 비활성이라, blur에만 커밋하면
+                        비활성 버튼 클릭이 blur를 못 일으켜 영영 저장할 수 없는 막다른 길이 된다. */}
+                    <AdminMoneyInput
+                      value={parseMoneyInput(draftForm.amount)}
+                      onCommit={pushAmount}
+                      onLiveChange={pushAmount}
+                      blurOnEnter={false}
+                      invalid={draftAmountInvalid}
+                      ariaLabel="금액"
+                      className="mt-1 w-full"
+                      fieldClassName="h-9"
                     />
                   </label>
                 )}
@@ -417,14 +430,16 @@ export function InputRailSection({
               {draftForm.operation === "quantity-change" && (
                 <label className="block text-[11px] font-bold text-[#615D59]">
                   예상 수량
-                  <input
-                    value={draftForm.quantity}
-                    onChange={(event) => setDraftForm((current) => ({ ...current, quantity: event.target.value }))}
-                    inputMode="numeric"
-                    aria-invalid={draftQuantityInvalid}
-                    className={`mt-1 h-9 w-full rounded-md border bg-[#FAFAF8] px-3 text-right text-[12px] font-semibold text-[#111110] outline-none focus:border-[#084734] ${
-                      draftQuantityInvalid ? "border-[#B43E3E]" : "border-[rgba(0,0,0,0.08)]"
-                    }`}
+                  {/* 수량은 금액이 아니라 개수 — 통화 prefix 없이 같은 입력 규칙(정수·IME 안전)만 쓴다. */}
+                  <AdminMoneyInput
+                    value={parseMoneyInput(draftForm.quantity)}
+                    onCommit={pushQuantity}
+                    onLiveChange={pushQuantity}
+                    blurOnEnter={false}
+                    invalid={draftQuantityInvalid}
+                    ariaLabel="예상 수량"
+                    className="mt-1 w-full"
+                    fieldClassName="h-9"
                   />
                 </label>
               )}

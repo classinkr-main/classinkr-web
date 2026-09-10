@@ -33,6 +33,23 @@ export {
 }
 export type { LeadSourceGroup, MetaAdInfo }
 
+// 보드의 순수 규칙(뷰 축·필터 축·컬럼 분배·시간 술어)은 lib/crm/leads-board-state.ts가 정본이다 —
+// 서버 집계(lib/admin/overview)가 같은 표를 봐야 해서 lib 쪽에 두고, 여기서는 다시 내보내
+// 기존 import 경로를 유지한다.
+export {
+  LEAD_FILTER_KEYS,
+  CONFIRMATION_GATE_EXEMPT_FILTERS,
+  toLocalDateKey,
+  toFollowUpTimestamp,
+  daysBetween,
+  hoursBetween,
+  isActiveLead,
+  isResponseTargetLead,
+  isUnrespondedLead,
+  isUnconfirmedLead,
+} from "@/lib/crm/leads-board-state"
+export type { LeadFilter } from "@/lib/crm/leads-board-state"
+
 // 리드 보드(/admin/crm/customers/leads)와 현황 액션 밴드(/admin/crm)가 같이 쓰는
 // 상수·계산 헬퍼·소형 UI. 리드 분류 규칙을 한 곳에서만 정의한다.
 
@@ -69,25 +86,6 @@ export function SourceGroupDot({ group, size = 7 }: { group: LeadSourceGroup; si
     />
   )
 }
-
-export type LeadFilter =
-  | LeadStatus
-  | "all"
-  | "unresponded"
-  | "unresponded_24h"
-  | "unresponded_48h"
-  | "unassigned"
-  | "unconfirmed"
-export const LEAD_FILTER_KEYS: LeadFilter[] = [
-  "all", "new", "contacted", "converted", "closed",
-  "unresponded", "unresponded_24h", "unresponded_48h", "unassigned", "unconfirmed",
-]
-
-// 이 필터들은 "응대·확인이 필요하다"는 게 관점 자체라 미확인 리드를 그대로 보여준다.
-// 그 외 필터(전체/신규/연락중/...)는 검토 전 리드를 숨겨 기본 화면을 깨끗하게 유지한다.
-export const CONFIRMATION_GATE_EXEMPT_FILTERS = new Set<LeadFilter>([
-  "unconfirmed", "unresponded", "unresponded_24h", "unresponded_48h",
-])
 
 export const LOG_TYPE_LABEL: Record<ContactLogType, string> = {
   call: "전화", sms: "문자", kakao: "카카오", email: "이메일",
@@ -140,49 +138,6 @@ export async function readAdminResponse<T>(response: Response, fallbackMessage: 
     throw new Error(data?.error || fallbackMessage)
   }
   return data as T
-}
-
-export function toLocalDateKey(value: string | Date) {
-  const date = value instanceof Date ? value : new Date(value)
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
-    .toISOString()
-    .slice(0, 10)
-}
-
-export function toFollowUpTimestamp(date: string) {
-  return `${date}T12:00:00.000Z`
-}
-
-export function daysBetween(from: string | Date, to: string | Date = new Date()) {
-  const fromDate = from instanceof Date ? from : new Date(from)
-  const toDate = to instanceof Date ? to : new Date(to)
-  const diff = toDate.getTime() - fromDate.getTime()
-  return Math.max(0, Math.floor(diff / 86_400_000))
-}
-
-export function isActiveLead(status: LeadStatus) {
-  return status !== "converted" && status !== "closed"
-}
-
-export function isResponseTargetLead(lead: LeadRecord) {
-  return RESPONSE_TARGET_SOURCES.has(lead.source)
-}
-
-export function isUnrespondedLead(lead: LeadRecord) {
-  return lead.status === "new" && isResponseTargetLead(lead)
-}
-
-// 공개 채널(문의·데모·뉴스레터·Meta 리드애즈 등)에서 들어와 아직 검토되지 않은 리드.
-// 어드민 수기 등록은 생성 시점에 confirmed_at이 채워져 항상 false.
-export function isUnconfirmedLead(lead: LeadRecord) {
-  return !lead.confirmed_at
-}
-
-export function hoursBetween(from: string | Date, to: string | Date = new Date()) {
-  const fromDate = from instanceof Date ? from : new Date(from)
-  const toDate = to instanceof Date ? to : new Date(to)
-  const diff = toDate.getTime() - fromDate.getTime()
-  return Math.max(0, Math.floor(diff / 3_600_000))
 }
 
 export function formatResponseAge(hours: number) {

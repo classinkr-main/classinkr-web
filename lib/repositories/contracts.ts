@@ -1,5 +1,6 @@
 "server-only";
 
+import { fetchAllSupabaseRows } from "@/lib/repositories/branch-hw";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type {
   Contract, ContractInsert, ContractUpdate,
@@ -176,4 +177,40 @@ export async function listContractVersions(contractId: string): Promise<Contract
     .order("version_number", { ascending: false });
   if (error) throw error;
   return data ?? [];
+}
+
+/**
+ * 계약 여러 건의 버전 이력을 한 번에 읽는다. 계약별 배열은 listContractVersions 와 같은
+ * 정렬(version_number 내림차순)이고, 버전이 없는 계약 id 는 키 자체가 없다.
+ * 키셋은 id 오름차순으로 읽으므로 정렬은 JS 에서 다시 세운다.
+ */
+export async function listContractVersionsByContractIds(
+  contractIds: string[]
+): Promise<Map<string, ContractVersion[]>> {
+  const grouped = new Map<string, ContractVersion[]>();
+  const ids = [...new Set(contractIds)];
+  if (ids.length === 0) return grouped;
+
+  const supabase = createSupabaseAdminClient();
+  const rows = await fetchAllSupabaseRows<ContractVersion>((afterId, limit) => {
+    let query = supabase
+      .from("contract_versions")
+      .select("*")
+      .in("contract_id", ids)
+      .order("id", { ascending: true })
+      .limit(limit);
+    if (afterId) query = query.gt("id", afterId);
+    return query;
+  });
+
+  for (const row of rows) {
+    const versions = grouped.get(row.contract_id);
+    if (versions) versions.push(row);
+    else grouped.set(row.contract_id, [row]);
+  }
+  for (const versions of grouped.values()) {
+    versions.sort((left, right) => right.version_number - left.version_number);
+  }
+
+  return grouped;
 }

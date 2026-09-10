@@ -36,6 +36,7 @@ export default function AdminRouteLoading() {
     <div
       role="status"
       aria-live="polite"
+      aria-busy="true"
       className="loading-soft-enter px-4 pt-6 pb-24 sm:px-6 sm:pt-8 lg:px-8 lg:pt-10"
     >
       <div className="overflow-hidden rounded-full bg-[#e8e8e4]">

@@ -14,6 +14,12 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  HARDWARE_INSTALL_OPTIONS,
+  buildInstallRequestItem,
+  formatHardwareKrw,
+  type HardwareInstallType,
+} from "@/lib/billing/hardware-catalog"
 import { Textarea } from "@/components/ui/textarea"
 import { DesiredDateCalendar } from "@/components/checkout/DesiredDateCalendar"
 import {
@@ -42,6 +48,12 @@ interface Props {
   summaryNote?: string
   /** 패널의 주문자 정보 입력값 — 모달이 열릴 때 초기값으로 프리필된다(모달에서 수정 가능). */
   initialContact?: { org?: string; name?: string; phone?: string; email?: string }
+  /**
+   * 설치가 따로 필요한 전자칠판 대수와 그 수량맵(하드웨어 신청만).
+   * 설치는 단품 가격에 포함되지 않아, 방식을 고르면 그만큼 합계가 늘어난다.
+   */
+  hardwareQuantities?: Record<string, number>
+  installUnitCount?: number
 }
 
 type FieldKey =
@@ -54,12 +66,11 @@ type FieldKey =
   | "desiredDate"
   | "consent"
 
-type InstallType = "stand" | "wall"
+type InstallType = HardwareInstallType
 
-const INSTALL_TYPE_OPTIONS: Array<{ value: InstallType; label: string; hint: string }> = [
-  { value: "stand", label: "스탠드형", hint: "이동식 스탠드 설치" },
-  { value: "wall", label: "벽걸이형", hint: "벽면 고정 설치" },
-]
+// 설치 방식·단가 정본은 lib/billing/hardware-catalog.ts 다. 여기서 다시 적으면
+// 화면이 말하는 금액과 서버가 청구하는 금액이 갈라진다.
+const INSTALL_TYPE_OPTIONS = HARDWARE_INSTALL_OPTIONS
 
 type FormState = {
   org: string
@@ -151,12 +162,32 @@ export function CheckoutRequestForm({
   summaryValue,
   summaryNote,
   initialContact,
+  hardwareQuantities,
+  installUnitCount = 0,
 }: Props) {
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [errors, setErrors] = useState<Partial<Record<FieldKey, string>>>({})
   const [formError, setFormError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [requestId, setRequestId] = useState<string | null>(null)
+
+  /**
+   * 선택한 설치 방식의 주문 라인. 설치가 필요 없는 구성(패키지만 담았거나 카메라만)
+   * 이면 null 이라 합계도 items 도 그대로다.
+   */
+  const installItem = useMemo(
+    () =>
+      kind === "hardware" && hardwareQuantities && installUnitCount > 0
+        ? buildInstallRequestItem(form.installType, hardwareQuantities)
+        : null,
+    [kind, hardwareQuantities, installUnitCount, form.installType]
+  )
+  const installTotalKrw = installItem ? installItem.unitAmount * installItem.qty : 0
+  /** 서버로 보내는 라인 = 패널이 준 구성 + (선택 시) 설치 라인. */
+  const submitItems = useMemo(
+    () => (installItem ? [...items, installItem] : items),
+    [items, installItem]
+  )
   // 더블클릭·엔터 연타로 두 번 나가지 않게 상태 갱신 전에 잠근다.
   const submitLock = useRef(false)
   // 제출 중 다이얼로그를 닫으면 요청 자체를 끊는다 — 늦게 온 응답이 새로 연 폼에
@@ -257,7 +288,7 @@ export function CheckoutRequestForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           kind,
-          items,
+          items: submitItems,
           org: form.org.trim(),
           name: form.name.trim(),
           phone: form.phone.trim(),
@@ -373,16 +404,41 @@ export function CheckoutRequestForm({
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex items-baseline justify-between gap-3 rounded-xl border border-black/[0.08] bg-[#F6F5F4] px-4 py-3">
-              <div>
-                <p className="text-[12px] text-[#615D59]">{summaryTitle}</p>
-                {summaryNote ? (
-                  <p className="mt-0.5 text-[11px] text-[#A39E98]">{summaryNote}</p>
-                ) : null}
+            <div className="rounded-xl border border-black/[0.08] bg-[#F6F5F4] px-4 py-3">
+              <div className="flex items-baseline justify-between gap-3">
+                <div>
+                  <p className="text-[12px] text-[#615D59]">{summaryTitle}</p>
+                  {summaryNote ? (
+                    <p className="mt-0.5 text-[11px] text-[#A39E98]">{summaryNote}</p>
+                  ) : null}
+                </div>
+                <p className="text-right text-[15px] font-semibold tabular-nums text-[#111110]">
+                  {summaryValue}
+                </p>
               </div>
-              <p className="text-right text-[15px] font-semibold tabular-nums text-[#111110]">
-                {summaryValue}
-              </p>
+
+              {/* 설치를 고르면 합계가 달라진다 — 그 변화를 이 자리에서 바로 보여준다. */}
+              {installItem ? (
+                <div className="mt-2.5 space-y-1.5 border-t border-black/[0.06] pt-2.5">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="text-[12px] text-[#615D59]">
+                      {installItem.name}
+                      <span className="ml-1.5 text-[#A39E98]">× {installItem.qty}</span>
+                    </p>
+                    <p className="text-right text-[13px] font-medium tabular-nums text-[#111110]">
+                      +{formatHardwareKrw(installTotalKrw)}
+                    </p>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="text-[12px] font-semibold text-[#111110]">신청 합계</p>
+                    <p className="text-right text-[15px] font-semibold tabular-nums text-[#111110]">
+                      {formatHardwareKrw(
+                        submitItems.reduce((total, line) => total + line.unitAmount * line.qty, 0)
+                      )}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <form
@@ -484,6 +540,11 @@ export function CheckoutRequestForm({
               {kind === "hardware" ? (
                 <div className="space-y-1.5">
                   <span className="text-[12px] font-medium text-[#44514A]">설치 유형</span>
+                  {installUnitCount > 0 ? (
+                    <p className="text-[11px] leading-relaxed text-[#7C8A83]">
+                      전자칠판 설치비는 단품 가격에 포함되어 있지 않습니다. 고르시면 합계에 더해집니다.
+                    </p>
+                  ) : null}
                   <div
                     role="radiogroup"
                     aria-label="설치 유형"
@@ -511,11 +572,16 @@ export function CheckoutRequestForm({
                               selected ? "text-[#084734]" : "text-[#111110]"
                             }`}
                           >
-                            {option.label}
+                            {option.name}
                           </span>
                           <span className="mt-0.5 block text-[11px] text-[#7C8A83]">
                             {option.hint}
                           </span>
+                          {installUnitCount > 0 ? (
+                            <span className="mt-1 block text-[11px] font-medium tabular-nums text-[#44514A]">
+                              +{formatHardwareKrw(option.priceKrw)} × {installUnitCount}대
+                            </span>
+                          ) : null}
                         </button>
                       )
                     })}

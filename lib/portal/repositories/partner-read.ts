@@ -22,6 +22,9 @@ import type {
 
 export type PortalReadMode = "v2" | "legacy";
 
+// deal당 ~13쿼리 팬아웃 상한 — 전용 리스트 쿼리로 대체 예정(실행 설계 T10 2단계, T8-B 인덱스 전제).
+const PORTAL_DETAIL_FANOUT_LIMIT = 20;
+
 export interface InventorySkuSummary {
   sku: string;
   product_name: string;
@@ -370,8 +373,10 @@ async function loadDetailsForOverview(
 export async function loadPortalOverview(
   context: PartnerAccountContext
 ): Promise<PortalOverviewPayload> {
-  const { mode: customerMode, customers } = await loadPartnerCustomers(context);
-  const { mode: dealMode, deals } = await loadPartnerDeals(context);
+  const [{ mode: customerMode, customers }, { mode: dealMode, deals }] = await Promise.all([
+    loadPartnerCustomers(context),
+    loadPartnerDeals(context),
+  ]);
   const mode = customerMode === "v2" && dealMode === "v2" ? "v2" : "legacy";
 
   const metrics = customers.reduce<PartnerOverviewMetrics>(
@@ -439,8 +444,14 @@ export async function loadPartnerCalendar(
     };
   }
 
+  // deal당 ~13쿼리 팬아웃 상한 — 전용 리스트 쿼리로 대체 예정(실행 설계 T10 2단계, T8-B 인덱스 전제).
+  const detailTargets = sortByDateDesc(deals, (deal) => deal.updated_at).slice(
+    0,
+    PORTAL_DETAIL_FANOUT_LIMIT
+  );
+
   const detailPayloads = await Promise.all(
-    deals.map(async (deal) => {
+    detailTargets.map(async (deal) => {
       try {
         const payload = await loadPartnerDealDetail(context, deal.id);
         return payload.deal;
@@ -499,8 +510,14 @@ export async function loadPartnerDocuments(
     };
   }
 
+  // deal당 ~13쿼리 팬아웃 상한 — 전용 리스트 쿼리로 대체 예정(실행 설계 T10 2단계, T8-B 인덱스 전제).
+  const detailTargets = sortByDateDesc(deals, (deal) => deal.updated_at).slice(
+    0,
+    PORTAL_DETAIL_FANOUT_LIMIT
+  );
+
   const detailPayloads = await Promise.all(
-    deals.map(async (deal) => {
+    detailTargets.map(async (deal) => {
       try {
         const payload = await loadPartnerDealDetail(context, deal.id);
         return payload.deal;

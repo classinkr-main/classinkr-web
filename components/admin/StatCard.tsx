@@ -26,6 +26,8 @@ export interface StatCardProps {
   sparkline?: React.ReactNode
   // 주면 카드 전체가 해당 경로로 이동하는 드릴다운 링크가 된다.
   href?: string
+  // 값 타이포 스케일 — "lg"=34px(숫자를 화면의 주어로), 생략 시 기존 28px 무손상.
+  valueSize?: "md" | "lg"
 }
 
 // 어드민 공용 KPI 카드 — 아이콘 + 라벨 + 값 + 보조설명 + 증감 배지.
@@ -42,6 +44,7 @@ export function StatCard({
   iconColor = "text-[#1a1a1a]/50",
   sparkline,
   href,
+  valueSize,
 }: StatCardProps) {
   return (
     <StatTile
@@ -55,6 +58,7 @@ export function StatCard({
       iconColor={iconColor}
       sparkline={sparkline}
       href={href}
+      valueSize={valueSize}
       lift
     />
   )

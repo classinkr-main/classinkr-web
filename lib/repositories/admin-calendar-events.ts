@@ -169,3 +169,24 @@ export async function deleteStoredCalendarEvent(id: string): Promise<boolean> {
   if (error) throw new Error(error.message)
   return (data ?? []).length > 0
 }
+
+/**
+ * 소스 연결 상태(/api/admin/calendar/health)용 전체 요약 — 전량 카운트 + 가장 최근 일정 날짜.
+ * 기간 조회와 달리 "이 소스에 입력이 존재하는가"라는 전시간 질문이라 range 를 받지 않는다.
+ */
+export async function summarizeStoredCalendarEvents(): Promise<{
+  count: number
+  lastDate: string | null
+}> {
+  const supabase = createSupabaseAdminClient()
+  const [countRes, latestRes] = await Promise.all([
+    supabase.from(TABLE).select("id", { count: "exact", head: true }),
+    supabase.from(TABLE).select("date").order("date", { ascending: false }).limit(1),
+  ])
+  if (countRes.error) throw new Error(countRes.error.message)
+  if (latestRes.error) throw new Error(latestRes.error.message)
+  return {
+    count: countRes.count ?? 0,
+    lastDate: (latestRes.data?.[0] as { date?: string } | undefined)?.date ?? null,
+  }
+}

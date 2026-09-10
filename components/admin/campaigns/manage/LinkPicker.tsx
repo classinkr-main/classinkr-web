@@ -50,6 +50,8 @@ export function LinkPicker({ campaignId, existingLinks, onLinked, onClose }: Lin
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState<string | null>(null) // `${refType}:${refId}`
+  // 후보 검색(2026-08-18) — 후보는 채널당 최근 200건 상한이라 목록이 길다. 라벨 부분일치.
+  const [query, setQuery] = useState("")
 
   const load = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
     setLoading(true)
@@ -143,8 +145,22 @@ export function LinkPicker({ campaignId, existingLinks, onLinked, onClose }: Lin
         </div>
       ) : (
         <div className="space-y-3">
+          <div>
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="후보 이름 검색"
+              aria-label="링크 후보 검색"
+              className="h-8 w-full rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[12px] text-[#111110] placeholder:text-[#A39E98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+            />
+            {/* 조용한 절단 금지 — 후보는 채널당 최근 200건까지만 조회된다(link-candidates .limit). */}
+            <p className="mt-1 text-[10.5px] text-[#A39E98]">채널당 최근 200건까지 표시됩니다.</p>
+          </div>
           {CAMPAIGN_REF_TYPES.map((refType) => {
-            const list = candidates ? candidates[GROUP_KEY[refType]] : []
+            const q = query.trim().toLowerCase()
+            const fullList = candidates ? candidates[GROUP_KEY[refType]] : []
+            const list = q ? fullList.filter((cand) => cand.label.toLowerCase().includes(q)) : fullList
             const label = CAMPAIGN_REF_TYPE_LABEL[refType]
             return (
               <div key={refType}>
@@ -152,7 +168,9 @@ export function LinkPicker({ campaignId, existingLinks, onLinked, onClose }: Lin
                   {label}
                 </p>
                 {list.length === 0 ? (
-                  <p className="text-[11px] text-[#A39E98]">연결 가능한 {label} 없음</p>
+                  <p className="text-[11px] text-[#A39E98]">
+                    {q && fullList.length > 0 ? `검색과 일치하는 ${label} 없음` : `연결 가능한 ${label} 없음`}
+                  </p>
                 ) : (
                   <div className="flex flex-col gap-1">
                     {list.map((cand) => {

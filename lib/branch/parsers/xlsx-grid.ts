@@ -1,4 +1,4 @@
-import ExcelJS from "exceljs"
+import type ExcelJS from "exceljs"
 
 import type { LedgerCell, LedgerGrid, LedgerWorkbook } from "@/lib/branch/parsers/hw-ledger"
 
@@ -31,8 +31,12 @@ function cellToLedger(value: ExcelJS.CellValue): LedgerCell {
 /**
  * Read an uploaded .xlsx buffer into a tab-name → 0-indexed grid map that the
  * per-lot ledger parser consumes. Column A maps to grid index 0.
+ *
+ * `exceljs`는 번들 크기가 커서(서버 콜드 스타트 비용) 함수 내부에서 동적
+ * import한다 — 이 파서가 실제로 호출될 때만 로드된다.
  */
 export async function workbookToLedger(data: ArrayBuffer | Buffer): Promise<LedgerWorkbook> {
+  const ExcelJS = (await import("exceljs")).default
   const wb = new ExcelJS.Workbook()
   // exceljs's `load` Buffer type differs from @types/node's generic Buffer; pin to its own param type.
   await wb.xlsx.load(data as unknown as Parameters<typeof wb.xlsx.load>[0])

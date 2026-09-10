@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
+const cacheMocks = vi.hoisted(() => ({
+  revalidateTag: vi.fn(),
+}))
+
+vi.mock("next/cache", () => ({
+  revalidateTag: cacheMocks.revalidateTag,
+}))
+
 import { shouldUseSupabaseLeads } from "@/lib/repositories/leads"
 
 describe("shouldUseSupabaseLeads", () => {
@@ -31,6 +39,7 @@ describe("saveLead", () => {
     }
     vi.restoreAllMocks()
     vi.resetModules()
+    cacheMocks.revalidateTag.mockClear()
   })
 
   it("retries dropping only the named column — 나머지 귀속 데이터는 지킨다", async () => {
@@ -64,9 +73,10 @@ describe("saveLead", () => {
         },
         error: null,
       })
-    const insert = vi.fn((_payload: Record<string, unknown>) => ({
-      select: () => ({ single }),
-    }))
+    const insert = vi.fn((payload: Record<string, unknown>) => {
+      void payload
+      return { select: () => ({ single }) }
+    })
     const from = vi.fn(() => ({ insert }))
 
     vi.doMock("@/lib/supabase/admin", () => ({
@@ -89,6 +99,10 @@ describe("saveLead", () => {
     })
 
     expect(saved.id).toBe("lead-1")
+    expect(cacheMocks.revalidateTag).toHaveBeenCalledWith("admin-leads-overview", { expire: 0 })
+    // 리드 쓰기는 crm-unified-customers.ts 소스 스냅샷의 입력이기도 하다 — SWR로 다음 읽기부터
+    // 재계산을 트리거한다(admin-performance-plan-2026-09-02.md §4.4의 "max" 컨벤션).
+    expect(cacheMocks.revalidateTag).toHaveBeenCalledWith("admin-crm-unified-snapshot", "max")
     expect(insert).toHaveBeenCalledTimes(2)
     expect(insert.mock.calls[0]?.[0]).toMatchObject({
       source_detail: "도입 상담",
@@ -144,9 +158,10 @@ describe("saveLead", () => {
         },
         error: null,
       })
-    const insert = vi.fn((_payload: Record<string, unknown>) => ({
-      select: () => ({ single }),
-    }))
+    const insert = vi.fn((payload: Record<string, unknown>) => {
+      void payload
+      return { select: () => ({ single }) }
+    })
     const from = vi.fn(() => ({ insert }))
 
     vi.doMock("@/lib/supabase/admin", () => ({
@@ -165,6 +180,10 @@ describe("saveLead", () => {
     })
 
     expect(saved.id).toBe("lead-2")
+    expect(cacheMocks.revalidateTag).toHaveBeenCalledWith("admin-leads-overview", { expire: 0 })
+    // 리드 쓰기는 crm-unified-customers.ts 소스 스냅샷의 입력이기도 하다 — SWR로 다음 읽기부터
+    // 재계산을 트리거한다(admin-performance-plan-2026-09-02.md §4.4의 "max" 컨벤션).
+    expect(cacheMocks.revalidateTag).toHaveBeenCalledWith("admin-crm-unified-snapshot", "max")
     expect(insert).toHaveBeenCalledTimes(3)
     // 2차 재시도는 선택 컬럼을 전부 덜어낸다 — 리드를 잃는 것보다 귀속을 잃는 게 낫다.
     expect(insert.mock.calls[2]?.[0]).not.toHaveProperty("anonymous_id")
@@ -184,9 +203,10 @@ describe("saveLead", () => {
         message: "permission denied for table leads",
       },
     })
-    const insert = vi.fn((_payload: Record<string, unknown>) => ({
-      select: () => ({ single }),
-    }))
+    const insert = vi.fn((payload: Record<string, unknown>) => {
+      void payload
+      return { select: () => ({ single }) }
+    })
     const from = vi.fn(() => ({ insert }))
 
     vi.doMock("@/lib/supabase/admin", () => ({
@@ -207,5 +227,6 @@ describe("saveLead", () => {
     ).rejects.toThrow("[leads] 저장 실패: permission denied for table leads")
 
     expect(insert).toHaveBeenCalledTimes(1)
+    expect(cacheMocks.revalidateTag).not.toHaveBeenCalled()
   })
 })

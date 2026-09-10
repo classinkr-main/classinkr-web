@@ -101,6 +101,14 @@ interface TrafficSummary {
   visitorStats: VisitorStats
   homepageFlow: HomepageFlow
   eventCounts: ClientEventCounts
+  /** 전환 지표의 정본 — 동의 게이트가 걸린 client_events 가 아니라 leads 에서 센다. */
+  leadConversions?: {
+    rangeDays: number
+    homepage: number
+    newsletter: number
+    total: number
+  }
+  leadConversionsUnavailable?: boolean
 }
 
 interface MarketingConversionStatus {
@@ -292,6 +300,8 @@ export default function TrafficPage() {
     useState<TrafficDetailTab>("conversions")
   const [visitorStats, setVisitorStats] = useState<VisitorStats | null>(null)
   const [homepageFlow, setHomepageFlow] = useState<HomepageFlow | null>(null)
+  const [leadConversions, setLeadConversions] = useState<TrafficSummary["leadConversions"] | null>(null)
+  const [leadConversionsUnavailable, setLeadConversionsUnavailable] = useState(false)
   const [eventCounts, setEventCounts] = useState<ClientEventCounts | null>(
     null
   )
@@ -299,6 +309,10 @@ export default function TrafficPage() {
     useState<MarketingConversionStatus | null>(null)
   const [generatedAt, setGeneratedAt] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  // 집계 실패 여부 — null 지표가 전부 0으로 렌더되면 "방문자 0명"과 구분되지 않는다
+  // (2026-08-18, 실패≠빈상태).
+  const [loadError, setLoadError] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -340,8 +354,11 @@ export default function TrafficPage() {
       setVisitorStats(summary?.visitorStats ?? null)
       setHomepageFlow(summary?.homepageFlow ?? null)
       setEventCounts(summary?.eventCounts ?? null)
+      setLeadConversions(summary?.leadConversions ?? null)
+      setLeadConversionsUnavailable(Boolean(summary?.leadConversionsUnavailable))
       setConversionStatus(status ?? null)
       setGeneratedAt(summary?.generatedAt ?? null)
+      setLoadError(summary === null)
       setLoading(false)
     }
 
@@ -349,7 +366,7 @@ export default function TrafficPage() {
     return () => {
       cancelled = true
     }
-  }, [range, rangeReady])
+  }, [range, rangeReady, reloadKey])
 
   const todayIndex =
     visitorStats?.daily.findIndex(
@@ -435,6 +452,18 @@ export default function TrafficPage() {
 
   return (
     <div className="px-4 pt-8 pb-16 sm:px-6 sm:pt-10 sm:pb-20 lg:px-8">
+      {loadError && !loading && (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] px-3 py-2 text-[13px] text-[#B43E3E]">
+          <span>트래픽 집계를 불러오지 못했습니다 — 아래 0으로 보이는 수치는 실측이 아닙니다.</span>
+          <button
+            type="button"
+            onClick={() => setReloadKey((key) => key + 1)}
+            className="rounded-md border border-[#F2B8B8] bg-white px-2 py-0.5 text-[12px] font-semibold text-[#B43E3E] transition-colors hover:bg-[#FCE9E9]"
+          >
+            다시 시도
+          </button>
+        </div>
+      )}
       <header className="mb-6 flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
         <div>
           <h1 className="text-[26px] font-bold tracking-[-0.035em] text-[#111110]">
@@ -659,11 +688,15 @@ export default function TrafficPage() {
         onTabChange={handleDetailTabChange}
         loading={loading}
         metrics={{
+          // CTA 클릭·자료 다운로드는 리드를 남기지 않는 행동이라 client_events 가 유일한 출처다
+          // (그래서 분석 동의한 방문자만 잡힌다 — 패널이 그 사실을 라벨로 밝힌다).
+          // 상담·구독 전환은 동의와 무관하게 leads 에 남으므로 그쪽을 정본으로 쓴다.
           cta: eventCountByName.get("click_cta") ?? 0,
-          demo: eventCountByName.get("submit_demo_request") ?? 0,
-          newsletter: eventCountByName.get("submit_newsletter") ?? 0,
+          demo: leadConversions?.homepage ?? 0,
+          newsletter: leadConversions?.newsletter ?? 0,
           download: eventCountByName.get("download_materials") ?? 0,
         }}
+        leadConversionsUnavailable={leadConversionsUnavailable}
         eventTotal={eventCounts?.total ?? 0}
         eventRows={eventCounts?.byEvent ?? []}
         buttonRows={eventCounts?.byButton ?? []}

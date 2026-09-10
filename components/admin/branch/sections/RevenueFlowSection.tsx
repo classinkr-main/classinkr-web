@@ -77,7 +77,7 @@ export default function RevenueFlowSection({
         </div>
         <Link
           href="/admin/branch/ledger"
-          className="inline-flex items-center gap-1 rounded-md border border-dashed border-[rgba(0,0,0,0.15)] bg-white px-2.5 py-1.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5]"
+          className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-md border border-dashed border-[rgba(0,0,0,0.15)] bg-white px-2.5 py-1.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] md:min-h-0 md:min-w-0"
         >
           수치 검수 →
         </Link>
@@ -116,8 +116,23 @@ export default function RevenueFlowSection({
           </div>
           {pipeline.loading && !pipeline.data ? (
             <LoadingPanel label="REV 주차 데이터를 불러오는 중" />
+          ) : pipeline.error && !pipeline.data ? (
+            <div role="alert" className="rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-[11px] font-semibold text-[#8F2C2C]">
+              REV 주차 데이터를 불러오지 못했습니다 · {pipeline.error}
+            </div>
+          ) : !pipeline.data ? (
+            <div role="status" className="rounded-lg bg-[#F6F5F4] p-4 text-[11px] text-[#615D59]">
+              표시할 REV 주차 데이터가 없습니다.
+            </div>
           ) : (
-            <RevWeekForecastChart data={weekProjection} monthGoal={monthGoal} />
+            <>
+              {pipeline.stale ? (
+                <div role="status" className="mb-2 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2 text-[10.5px] text-[#7A520F]">
+                  갱신 실패 — 저장된 데이터 표시 중
+                </div>
+              ) : null}
+              <RevWeekForecastChart data={weekProjection} monthGoal={monthGoal} />
+            </>
           )}
         </div>
       </div>

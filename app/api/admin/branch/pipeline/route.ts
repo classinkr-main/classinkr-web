@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { BRANCH_READ_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
-import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
-import { readRevDealsFromActiveImport } from "@/lib/repositories/sales-ledger-imports"
-import { listRevRevenue } from "@/lib/branch/computations/pipeline"
-import { fyOf, resolvePeriodDate } from "@/lib/branch/fiscal"
+import { readBranchPipelineRows } from "@/lib/branch/pipeline-rows"
+import { resolvePeriodDate } from "@/lib/branch/fiscal"
 
 type BranchTeam = "ALL" | "BD" | "MKT" | "CSM"
 type BranchPeriod = "M" | "Q" | "Y"
@@ -34,15 +32,15 @@ export async function GET(req: NextRequest) {
   const periodDate = period ? resolvePeriodDate(period, url.searchParams.get("month"), new Date()) : null
   if (period && !periodDate) return NextResponse.json({ error: "Invalid month query" }, { status: 400 })
   try {
-    const fy = fyOf(periodDate ?? new Date())
-    // listRevRevenue가 deal.raw(weeklyPayments/row)로 주차 프로젝션을 계산하므로
-    // 미러 폴백에서는 raw를 명시적으로 opt-in한다(branch-deals.ts 기본값은 raw 제외).
-    const deals = await readRevDealsFromActiveImport(fy, { team }) ?? await listBranchRevDeals({ team }, { withRaw: true })
-    const rows = listRevRevenue(deals, {
+    // 조립은 lib/branch/pipeline-rows의 공용 함수 하나만 쓴다 — 페이지 서버 프리페치
+    // (app/admin/branch/ledger/page.tsx)와 같은 원천이라 두 경로의 rows가 갈라지지 않는다.
+    const rows = await readBranchPipelineRows({
       team,
+      period,
+      periodDate,
       manager: url.searchParams.get("manager") ?? undefined,
       region: url.searchParams.get("region") ?? undefined,
-    }, period && periodDate ? { period, now: periodDate } : undefined)
+    })
     return adminCachedJson({ rows })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })

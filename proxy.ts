@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
 import { isAdminAuthBypassEnabled } from "@/lib/admin-env"
-import { updateSupabaseSession } from "@/lib/supabase/middleware"
+import { updateSupabaseSession, type VerifiedSupabaseUser } from "@/lib/supabase/middleware"
 import { getSupabaseBrowserEnv, hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 
 const ADMIN_LOGIN_PATH = "/admin/login"
@@ -95,8 +95,9 @@ async function hasLegacyAdminSession(request: NextRequest, allowedRoles: Readonl
   }
 }
 
-// 페이지 이동마다 Supabase auth + admin_profiles 왕복을 줄이기 위해
-// 통과한 세션 체크 결과를 짧게 캐시한다. (권한 회수 반영 지연 최대 60초)
+// 페이지 이동마다 admin_profiles 왕복을 줄이기 위해 통과한 세션 체크 결과를 짧게 캐시한다.
+// (관리자 권한 회수 반영 지연 최대 60초)
+// 토큰 검증 자체는 updateSupabaseSession()이 요청당 1회만 수행하고 그 결과를 여기로 넘긴다.
 const SUPABASE_ADMIN_SESSION_TTL_MS = 60_000
 const SUPABASE_ADMIN_SESSION_CACHE_MAX = 200
 const supabaseAdminSessionCache = new Map<string, number>()
@@ -114,8 +115,16 @@ function getSupabaseSessionCacheKey(request: NextRequest, allowedRoles: Readonly
   return `${[...allowedRoles].sort().join(",")}|${cookieKey}`
 }
 
-async function hasSupabaseAdminSession(request: NextRequest, allowedRoles: ReadonlySet<string>) {
+async function hasSupabaseAdminSession(
+  request: NextRequest,
+  allowedRoles: ReadonlySet<string>,
+  user: VerifiedSupabaseUser | null
+) {
   if (!hasSupabaseBrowserEnv()) return false
+
+  // 토큰 검증은 updateSupabaseSession()에서 이미 끝났다. 여기서 다시 getUser/getClaims를
+  // 부르지 않는다. 검증에 실패했거나 익명이면 관리자 세션도 없다.
+  if (!user) return false
 
   const cacheKey = getSupabaseSessionCacheKey(request, allowedRoles)
   if (!cacheKey) return false
@@ -123,7 +132,7 @@ async function hasSupabaseAdminSession(request: NextRequest, allowedRoles: Reado
   const cachedUntil = supabaseAdminSessionCache.get(cacheKey)
   if (cachedUntil && cachedUntil > Date.now()) return true
 
-  const allowed = await checkSupabaseAdminSession(request, allowedRoles)
+  const allowed = await checkSupabaseAdminProfile(request, allowedRoles, user)
   if (allowed) {
     if (supabaseAdminSessionCache.size >= SUPABASE_ADMIN_SESSION_CACHE_MAX) {
       supabaseAdminSessionCache.clear()
@@ -136,7 +145,11 @@ async function hasSupabaseAdminSession(request: NextRequest, allowedRoles: Reado
   return allowed
 }
 
-async function checkSupabaseAdminSession(request: NextRequest, allowedRoles: ReadonlySet<string>) {
+async function checkSupabaseAdminProfile(
+  request: NextRequest,
+  allowedRoles: ReadonlySet<string>,
+  user: VerifiedSupabaseUser
+) {
   const { url, publishableKey } = getSupabaseBrowserEnv()
   const supabase = createServerClient(url, publishableKey, {
     cookies: {
@@ -147,12 +160,7 @@ async function checkSupabaseAdminSession(request: NextRequest, allowedRoles: Rea
     },
   })
 
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
-  if (userError || !user) return false
-
+  // PostgREST 요청에는 쿠키에 들어 있는 액세스 토큰이 그대로 실린다(로컬 조회, 왕복 없음).
   const { data: profile, error: profileError } = await supabase
     .from("admin_profiles")
     .select("role, status")
@@ -183,7 +191,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next({ request })
   }
 
-  const response = await updateSupabaseSession(request)
+  const { response, user } = await updateSupabaseSession(request)
 
   if (!isProtectedAdminPath(request.nextUrl.pathname)) {
     return response
@@ -193,7 +201,7 @@ export async function proxy(request: NextRequest) {
 
   const allowedRoles = getAllowedAdminPageRoles(request.nextUrl.pathname)
   if (await hasLegacyAdminSession(request, allowedRoles)) return response
-  if (await hasSupabaseAdminSession(request, allowedRoles)) return response
+  if (await hasSupabaseAdminSession(request, allowedRoles, user)) return response
 
   return redirectToAdminLogin(request)
 }

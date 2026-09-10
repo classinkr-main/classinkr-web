@@ -72,6 +72,7 @@ interface PartnerAccountRow {
 }
 
 interface RevSheetRow {
+  id: string
   sheet_row: number
   customer_name: string
   status: string | null
@@ -81,12 +82,64 @@ interface RevSheetRow {
 }
 
 interface LinkRow {
+  id: string
   source_system: string
   source_object: string
   source_record_key: string
   target_type: string
   target_id: string
   status: string
+}
+
+const ACCOUNT_MASTER_PAGE_SIZE = 1_000
+const ACCOUNT_MASTER_MAX_ROWS_PER_SOURCE = 100_000
+const ACCOUNT_MASTER_QUERY_TIMEOUT_MS = 12_000
+
+interface AccountMasterPageResult<T> {
+  data: T[] | null
+  error: { message: string } | null
+}
+
+/**
+ * Account 360 합성은 목록 첫 화면이 아니라 원천 전체를 계산하는 읽기 모델이다. 고정 limit은
+ * 초과 행을 "존재하지 않음"으로 바꾸므로 id keyset으로 끝까지 읽는다. OFFSET이 없어 깊은
+ * 페이지도 인덱스 범위 조회이고, MAX_ROWS는 조용한 절단이 아니라 명시적 오류로 폭주만 막는다.
+ */
+export async function fetchAllAccountMasterRowsById<T extends { id: string }>(
+  fetchPage: (
+    afterId: string | null,
+    limit: number
+  ) => Promise<AccountMasterPageResult<T>>,
+  options: { label: string; pageSize?: number; maxRows?: number }
+): Promise<T[]> {
+  const pageSize = options.pageSize ?? ACCOUNT_MASTER_PAGE_SIZE
+  const maxRows = options.maxRows ?? ACCOUNT_MASTER_MAX_ROWS_PER_SOURCE
+  const rows: T[] = []
+  let afterId: string | null = null
+
+  while (true) {
+    const result = await fetchPage(afterId, pageSize)
+    if (result.error) {
+      throw new Error(`[account-master] ${options.label} 조회 실패: ${result.error.message}`)
+    }
+
+    const page = result.data ?? []
+    if (rows.length + page.length > maxRows) {
+      throw new Error(
+        `[account-master] ${options.label} 행이 안전 상한 ${maxRows.toLocaleString()}건을 초과했습니다.`
+      )
+    }
+    rows.push(...page)
+    if (page.length < pageSize) break
+
+    const nextCursor = page.at(-1)?.id ?? null
+    if (!nextCursor || nextCursor === afterId) {
+      throw new Error(`[account-master] ${options.label} keyset cursor가 전진하지 않았습니다.`)
+    }
+    afterId = nextCursor
+  }
+
+  return rows
 }
 
 function sumPayments(payments: Record<string, number> | null): number {
@@ -100,32 +153,88 @@ function sumPayments(payments: Record<string, number> | null): number {
 
 export async function getAccountMaster(): Promise<AccountMasterResult> {
   const sb = createSupabaseAdminClient()
+  const timeoutController = new AbortController()
+  const timeout = setTimeout(() => timeoutController.abort(), ACCOUNT_MASTER_QUERY_TIMEOUT_MS)
 
-  const [customersRes, partnersRes, revRes, linksRes] = await Promise.all([
-    sb.from("customers").select("id, partner_account_id, name, campus_name").limit(2000),
-    sb.from("partner_accounts").select("id, name").limit(2000),
-    sb
-      .from("branch_rev_deals")
-      .select("sheet_row, customer_name, status, first_payment, contract_target, monthly_payments")
-      .limit(1000),
-    sb
-      .from("crm_source_links")
-      .select("source_system, source_object, source_record_key, target_type, target_id, status")
-      .neq("status", "rejected")
-      .limit(5000),
-  ])
+  let customers: CustomerRow[]
+  let partners: PartnerAccountRow[]
+  let allRevRows: RevSheetRow[]
+  let links: LinkRow[]
 
-  if (customersRes.error) throw customersRes.error
-  if (partnersRes.error) throw partnersRes.error
-  if (revRes.error) throw revRes.error
-  if (linksRes.error) throw linksRes.error
+  try {
+    const sources = await Promise.all([
+      fetchAllAccountMasterRowsById(
+        async (afterId, limit) => {
+          let query = sb
+            .from("customers")
+            .select("id, partner_account_id, name, campus_name")
+            .order("id", { ascending: true })
+            .limit(limit)
+          if (afterId) query = query.gt("id", afterId)
+          const { data, error } = await query.abortSignal(timeoutController.signal)
+          return { data: (data ?? null) as CustomerRow[] | null, error }
+        },
+        { label: "customers" }
+      ),
+      fetchAllAccountMasterRowsById(
+        async (afterId, limit) => {
+          let query = sb
+            .from("partner_accounts")
+            .select("id, name")
+            .order("id", { ascending: true })
+            .limit(limit)
+          if (afterId) query = query.gt("id", afterId)
+          const { data, error } = await query.abortSignal(timeoutController.signal)
+          return { data: (data ?? null) as PartnerAccountRow[] | null, error }
+        },
+        { label: "partner_accounts" }
+      ),
+      fetchAllAccountMasterRowsById(
+        async (afterId, limit) => {
+          let query = sb
+            .from("branch_rev_deals")
+            .select(
+              "id, sheet_row, customer_name, status, first_payment, contract_target, monthly_payments"
+            )
+            .order("id", { ascending: true })
+            .limit(limit)
+          if (afterId) query = query.gt("id", afterId)
+          const { data, error } = await query.abortSignal(timeoutController.signal)
+          return { data: (data ?? null) as RevSheetRow[] | null, error }
+        },
+        { label: "branch_rev_deals" }
+      ),
+      fetchAllAccountMasterRowsById(
+        async (afterId, limit) => {
+          let query = sb
+            .from("crm_source_links")
+            .select(
+              "id, source_system, source_object, source_record_key, target_type, target_id, status"
+            )
+            .neq("status", "rejected")
+            .order("id", { ascending: true })
+            .limit(limit)
+          if (afterId) query = query.gt("id", afterId)
+          const { data, error } = await query.abortSignal(timeoutController.signal)
+          return { data: (data ?? null) as LinkRow[] | null, error }
+        },
+        { label: "crm_source_links" }
+      ),
+    ])
+    customers = sources[0]
+    partners = sources[1]
+    allRevRows = sources[2]
+    links = sources[3]
+  } catch (error) {
+    timeoutController.abort()
+    throw error
+  } finally {
+    clearTimeout(timeout)
+  }
 
-  const customers = (customersRes.data ?? []) as CustomerRow[]
-  const partners = (partnersRes.data ?? []) as PartnerAccountRow[]
-  const revRows = ((revRes.data ?? []) as RevSheetRow[]).filter(
+  const revRows = allRevRows.filter(
     (row) => !isInactiveSheetStatus(row.status) && !isPlaceholderCrmName(row.customer_name)
   )
-  const links = (linksRes.data ?? []) as LinkRow[]
 
   const partnerNameById = new Map(partners.map((p) => [p.id, p.name]))
 

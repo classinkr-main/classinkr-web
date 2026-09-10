@@ -113,8 +113,8 @@ async function gatherSms(
   }
 }
 
-/** 행사: 지표는 event-metrics(JSON), 라벨은 public_events. 두 소스를 각각 격리한다
- *  — 라벨 조회가 죽어도 deals/매출은 살리고, 그 반대도 마찬가지. */
+/** 행사: 지표는 event_metrics(Supabase, 2026-08-20 이전 완료), 라벨은 public_events.
+ *  두 소스를 각각 격리한다 — 라벨 조회가 죽어도 deals/매출은 살리고, 그 반대도 마찬가지. */
 async function gatherEvents(
   ids: Set<string>,
   sources: CampaignRollupSources,
@@ -122,7 +122,7 @@ async function gatherEvents(
 ): Promise<void> {
   if (ids.size === 0) return
   try {
-    const all = getAllEventMetrics()
+    const all = await getAllEventMetrics()
     for (const [eventId, m] of Object.entries(all)) {
       if (ids.has(eventId)) {
         sources.eventMetrics[eventId] = {

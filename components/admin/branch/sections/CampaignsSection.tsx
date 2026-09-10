@@ -2,12 +2,17 @@
 import type { BranchCampaignRow } from "../types"
 
 export default function CampaignsSection({ rows, loading, error }: { rows: BranchCampaignRow[] | null; loading: boolean; error: string | null }) {
-  if (error) return (
+  if (error && !rows) return (
     <div role="alert" className="rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-[12px] font-semibold text-[#8F2C2C]">
       {error}
     </div>
   )
-  if (loading || !rows) return <div className="h-32 animate-pulse rounded-xl bg-[#f0f0ec]" />
+  if (loading && !rows) return <div className="h-32 animate-pulse rounded-xl bg-[#f0f0ec]" />
+  if (!rows) return (
+    <div role="status" className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4 text-[12px] text-[#615D59]">
+      캠페인 원천 데이터가 없습니다.
+    </div>
+  )
   return (
     <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
       <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5">

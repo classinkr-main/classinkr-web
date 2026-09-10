@@ -1,7 +1,7 @@
 import "server-only"
 
 import { triggerOnSubmitRules } from "@/lib/automation-engine"
-import { classifyLeadOrigin } from "@/lib/crm/capture/origin"
+import { isSiteFormLead } from "@/lib/crm/capture/origin"
 import type { LeadPayload, LeadSource } from "@/lib/lead-types"
 import {
   type MarketingRequestMeta,
@@ -13,6 +13,7 @@ import { saveLead } from "@/lib/repositories/leads"
 import { upsertSubscriber } from "@/lib/repositories/marketing"
 import { getResolvedSettings } from "@/lib/repositories/settings"
 import { postJson } from "@/lib/server/post-json"
+import { isWebhookEnabled } from "@/lib/webhook-settings"
 import { setEventToken } from "@/lib/types/event-metrics"
 
 const VALID_SOURCES = new Set<LeadSource>([
@@ -373,15 +374,15 @@ export async function submitLeadCapture(
 
     const deliveryTasks: Promise<void>[] = []
 
-    if (settings.googleSheetWebhookUrl) {
+    if (settings.googleSheetWebhookUrl && isWebhookEnabled(settings.webhookEnabled, "googleSheetWebhookUrl")) {
       deliveryTasks.push(sendToGoogleSheet(body, settings.googleSheetWebhookUrl))
     }
 
-    if (settings.leadWebhookUrl) {
+    if (settings.leadWebhookUrl && isWebhookEnabled(settings.webhookEnabled, "leadWebhookUrl")) {
       deliveryTasks.push(sendToWebhook(body, settings.leadWebhookUrl))
     }
 
-    if (settings.channelTalkWebhookUrl) {
+    if (settings.channelTalkWebhookUrl && isWebhookEnabled(settings.webhookEnabled, "channelTalkWebhookUrl")) {
       deliveryTasks.push(sendToChannelTalk(body, settings.channelTalkWebhookUrl))
     }
 
@@ -491,8 +492,11 @@ export async function submitLeadCapture(
       }
 
       // 홈페이지 유입 자동 타임라인 이벤트 — 실패해도 리드 저장에 영향 없음(스펙 §D).
-      const hasAdClickId = Boolean(body.gclid || body.fbclid || body.msclkid || body.ttclid)
-      if (savedLeadId && classifyLeadOrigin(body.source, hasAdClickId) === "site") {
+      //
+      // 판정은 폼 출처(source) 하나로만 한다. 예전에는 광고 클릭 식별자가 있으면 건너뛰었는데,
+      // 그러면 광고를 타고 들어와 홈페이지 폼을 채운 문의가 CRM 타임라인에 한 줄도 안 남았다.
+      // 유료 트래픽이 대부분이라 사실상 홈페이지 문의 대부분이 사라지던 경로다(2026-09-01 실측).
+      if (savedLeadId && isSiteFormLead(body.source)) {
         void createCrmCustomerEvent({
           targetType: "lead",
           targetId: savedLeadId,

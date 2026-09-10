@@ -57,6 +57,12 @@ export interface EmailCampaign {
   recipientCount: number          // 실제 발송 수
   /** 이메일 열람 수 (추적 픽셀 기반) */
   openCount?: number
+  /** 링크 클릭 수 (/api/track/click 리다이렉트 기반, 2026-08-18) */
+  clickCount?: number
+  /** 발송 실패 수 — sent>0 이어도 부분 실패를 은폐하지 않는다(2026-08-18) */
+  failedCount?: number
+  /** 발송 오류 요약(최대 20건) — provider 배치 오류 메시지 */
+  sendErrors?: string[]
   /** [NOTE-3] 외부 이메일 서비스 캠페인 ID (Resend, Brevo 등) */
   externalId?: string
   createdAt: string
@@ -139,6 +145,8 @@ export interface NewsletterUnsubscribeRequest {
 /** 이메일 발송 요청 (관리자 → /api/admin/email/send) */
 export interface SendEmailRequest extends EmailComposerDraft {
   mode?: "campaign" | "test"
+  /** true면 10분 내 같은 제목 재발송 서버 가드(409)를 통과한다 */
+  force?: boolean
   testEmail?: string
   aiPersonalized?: PersonalizedEmailRecipient[]
   /** 직접 입력한 이메일 주소 목록 — 구독자 DB 밖의 수신자 */

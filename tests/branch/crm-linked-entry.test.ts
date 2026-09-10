@@ -42,6 +42,10 @@ function tableClient<T>(rows: T[]) {
     eq: () => builder,
     neq: () => builder,
     limit: () => builder,
+    // order()/range() — rev-account-coverage.ts가 crm_source_links·crm_match_aliases를
+    // fetchSupabasePages(id 전순서 커서)로 읽으면서 체인에 추가된 호출.
+    order: () => builder,
+    range: () => builder,
     then(resolve: (value: { data: T[]; error: null }) => void) {
       resolve({ data: rows, error: null })
     },

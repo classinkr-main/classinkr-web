@@ -8,6 +8,7 @@ import {
   getBusinessDateParts,
   toBusinessStorageDateTime,
 } from "@/lib/business-time"
+import { fetchAllSupabaseRows } from "@/lib/repositories/branch-hw"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 
@@ -46,6 +47,8 @@ const PARTNER_CHANNELS = ["reseller", "referral", "branch", "direct"] as const
 const DEAL_STAGES = ["discovery", "quoted", "contract_sent", "active", "closed_won", "closed_lost"] as const
 const DOCUMENT_KINDS = ["quote", "contract", "receipt"] as const
 const DOCUMENT_STATUSES = ["draft", "sent", "signed", "paid", "overdue", "archived"] as const
+// 미결 문서 판정 — DB 필터(.in)와 JS 필터가 같은 목록을 봐야 요약 두 경로가 어긋나지 않는다
+const PENDING_DOCUMENT_STATUSES: PartnerDocument["status"][] = ["draft", "sent", "overdue"]
 const DOCUMENT_DELIVERY_CHANNELS = ["pdf", "kakao", "link"] as const
 const DOCUMENT_DELIVERY_STATUSES = ["draft", "ready", "sent", "opened", "expired", "revoked", "failed"] as const
 const QUOTE_WORKFLOW_STATUSES = [
@@ -275,6 +278,52 @@ interface PartnerActivityLogRow {
   details: string | null
   next_action: string | null
   due_at: string | null
+  occurred_at: string
+}
+
+// ?view=summary 전용 투영 — 큐 요약이 실제로 읽는 컬럼만 담는다.
+interface PartnerQueuePartnerRow {
+  id: string
+  name: string
+  status: PartnerSummary["status"]
+  channel: PartnerSummary["channel"]
+  region: string | null
+  owner_name: string | null
+  account_manager_name: string | null
+}
+
+interface PartnerQueueDealRow {
+  id: string
+  partner_id: string
+  title: string
+  stage: PartnerDeal["stage"]
+  expected_close_at: string | null
+  contract_start_at: string | null
+  created_at: string
+}
+
+interface PartnerQueueDocumentRow {
+  id: string
+  partner_id: string
+  kind: PartnerDocument["kind"]
+  status: PartnerDocument["status"]
+}
+
+interface PartnerQueueCountRow {
+  id: string
+  partner_id: string
+}
+
+interface PartnerQueueScheduleRow {
+  id: string
+  partner_id: string
+  starts_at: string
+}
+
+interface PartnerQueueActivityRow {
+  id: string
+  partner_id: string
+  summary: string
   occurred_at: string
 }
 
@@ -1543,36 +1592,228 @@ function buildPartnerWorkspaceShell(workspace: PartnerWorkspace): PartnerWorkspa
   }
 }
 
-function buildPartnerQueueSummary(workspace: PartnerWorkspace): PartnerQueueSummary {
-  const latestActivity = workspace.activityLogs[0]
-  const overdueDocumentCount = workspace.documents.filter((document) => document.status === "overdue").length
-  const pendingSettlementCount = workspace.documents.filter((document) =>
-    document.kind === "receipt" && ["draft", "sent", "overdue"].includes(document.status)
-  ).length
-  const openIssueCount = workspace.issues.filter((issue) => issue.status !== "resolved").length
-  const openChecklistCount = workspace.checklists.filter((item) => item.todoStatus !== "done" && item.todoStatus !== "canceled").length
-  const mainDeal = getMainDeal(workspace.deals)
-  const riskScore = [overdueDocumentCount > 0, openIssueCount > 0, workspace.partner.status === "churn_risk"].filter(Boolean).length
+interface PartnerQueueFacts {
+  openChecklistCount: number
+  openIssueCount: number
+  overdueDocumentCount: number
+  pendingSettlementCount: number
+  latestActivitySummary?: string
+  latestActivityAt?: string
+}
+
+// 워크스페이스 전량 경로와 ?view=summary 축소 경로가 같은 조립을 쓰도록 분리한 꼬리
+function assemblePartnerQueueSummary(
+  partner: PartnerSummary,
+  mainDeal: PartnerDeal | undefined,
+  facts: PartnerQueueFacts
+): PartnerQueueSummary {
+  const riskScore = [
+    facts.overdueDocumentCount > 0,
+    facts.openIssueCount > 0,
+    partner.status === "churn_risk",
+  ].filter(Boolean).length
 
   return {
-    partnerId: workspace.partner.id,
-    partnerName: workspace.partner.name,
-    status: workspace.partner.status,
-    channel: workspace.partner.channel,
-    region: workspace.partner.region,
-    accountManager: workspace.partner.accountManager,
-    ownerName: workspace.partner.ownerName,
+    partnerId: partner.id,
+    partnerName: partner.name,
+    status: partner.status,
+    channel: partner.channel,
+    region: partner.region,
+    accountManager: partner.accountManager,
+    ownerName: partner.ownerName,
     mainDealStage: mainDeal?.stage,
     mainDealTitle: mainDeal?.title,
-    nextActionAt: workspace.partner.nextActionAt,
-    openChecklistCount,
-    openIssueCount,
-    overdueDocumentCount,
-    pendingSettlementCount,
-    latestActivitySummary: latestActivity?.summary,
-    latestActivityAt: latestActivity?.occurredAt,
+    nextActionAt: partner.nextActionAt,
+    openChecklistCount: facts.openChecklistCount,
+    openIssueCount: facts.openIssueCount,
+    overdueDocumentCount: facts.overdueDocumentCount,
+    pendingSettlementCount: facts.pendingSettlementCount,
+    latestActivitySummary: facts.latestActivitySummary,
+    latestActivityAt: facts.latestActivityAt,
     riskLevel: riskScore >= 2 ? "high" : riskScore === 1 ? "medium" : "low",
   }
+}
+
+function buildPartnerQueueSummary(workspace: PartnerWorkspace): PartnerQueueSummary {
+  const latestActivity = workspace.activityLogs[0]
+
+  return assemblePartnerQueueSummary(workspace.partner, getMainDeal(workspace.deals), {
+    openChecklistCount: workspace.checklists.filter(
+      (item) => item.todoStatus !== "done" && item.todoStatus !== "canceled"
+    ).length,
+    openIssueCount: workspace.issues.filter((issue) => issue.status !== "resolved").length,
+    overdueDocumentCount: workspace.documents.filter((document) => document.status === "overdue").length,
+    pendingSettlementCount: workspace.documents.filter(
+      (document) => document.kind === "receipt" && PENDING_DOCUMENT_STATUSES.includes(document.status)
+    ).length,
+    latestActivitySummary: latestActivity?.summary,
+    latestActivityAt: latestActivity?.occurredAt,
+  })
+}
+
+async function readPartnerQueueRows<T extends { id: string }>(
+  table: string,
+  buildQuery: (
+    afterId: string | null,
+    limit: number
+  ) => PromiseLike<{ data: unknown[] | null; error: { message?: string } | null }>
+): Promise<T[]> {
+  try {
+    // PostgREST 1000행 캡에 걸리면 뒤로 밀린 파트너의 카운트·최근 활동이 무음으로 사라진다
+    return await fetchAllSupabaseRows<T>(buildQuery)
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : (error as { message?: string } | null)?.message
+    throw new Error(`${table}: ${message ?? "조회 실패"}`)
+  }
+}
+
+// 큐 요약은 스칼라 17개만 쓴다 — 워크스페이스 11개 전량 쿼리(장문·jsonb 포함) 대신
+// 판정에 필요한 행만 좁혀 읽는다. 필터 값은 전부 NOT NULL + CHECK 컬럼이라
+// DB 조건과 normalize 후 JS 조건의 결과가 같다(20260727_partner_workspace_tables.sql).
+async function querySupabasePartnerQueueSummaries(): Promise<PartnerQueueSummary[]> {
+  const supabase = createSupabaseAdminClient()
+
+  const [partners, deals, documents, issues, checklists, schedule, activityLogs] = await Promise.all([
+    supabase
+      .from("partners")
+      .select("id, name, status, channel, region, owner_name, account_manager_name")
+      .is("archived_at", null)
+      .order("name", { ascending: true })
+      .then(({ data, error }) => {
+        if (error) throw new Error(`partners: ${error.message}`)
+        return (data ?? []) as PartnerQueuePartnerRow[]
+      }),
+    readPartnerQueueRows<PartnerQueueDealRow>("partner_deals", (afterId, limit) => {
+      let query = supabase
+        .from("partner_deals")
+        .select("id, partner_id, title, stage, expected_close_at, contract_start_at, created_at")
+      if (afterId) query = query.gt("id", afterId)
+      return query.order("id", { ascending: true }).limit(limit)
+    }),
+    readPartnerQueueRows<PartnerQueueDocumentRow>("partner_documents", (afterId, limit) => {
+      let query = supabase
+        .from("partner_documents")
+        .select("id, partner_id, kind, status")
+        .is("archived_at", null)
+        .in("status", PENDING_DOCUMENT_STATUSES)
+      if (afterId) query = query.gt("id", afterId)
+      return query.order("id", { ascending: true }).limit(limit)
+    }),
+    readPartnerQueueRows<PartnerQueueCountRow>("partner_ops_issues", (afterId, limit) => {
+      let query = supabase
+        .from("partner_ops_issues")
+        .select("id, partner_id")
+        .neq("status", "resolved")
+      if (afterId) query = query.gt("id", afterId)
+      return query.order("id", { ascending: true }).limit(limit)
+    }),
+    readPartnerQueueRows<PartnerQueueCountRow>("partner_ops_checklist_items", (afterId, limit) => {
+      let query = supabase
+        .from("partner_ops_checklist_items")
+        .select("id, partner_id")
+        .not("todo_status", "in", "(done,canceled)")
+      if (afterId) query = query.gt("id", afterId)
+      return query.order("id", { ascending: true }).limit(limit)
+    }),
+    readPartnerQueueRows<PartnerQueueScheduleRow>("partner_schedule_items", (afterId, limit) => {
+      let query = supabase
+        .from("partner_schedule_items")
+        .select("id, partner_id, starts_at")
+        .eq("status", "planned")
+      if (afterId) query = query.gt("id", afterId)
+      return query.order("id", { ascending: true }).limit(limit)
+    }),
+    readPartnerQueueRows<PartnerQueueActivityRow>("partner_activity_logs", (afterId, limit) => {
+      let query = supabase.from("partner_activity_logs").select("id, partner_id, summary, occurred_at")
+      if (afterId) query = query.gt("id", afterId)
+      return query.order("id", { ascending: true }).limit(limit)
+    }),
+  ])
+
+  // 전량 경로의 대표 거래 선정은 created_at 내림차순 입력에 의존한다(동점 시 입력 순서 유지)
+  const dealsByPartner = groupByPartner(
+    [...deals]
+      .sort((left, right) => right.created_at.localeCompare(left.created_at))
+      .map((deal) =>
+        normalizeDeal(deal.partner_id, {
+          id: deal.id,
+          partnerId: deal.partner_id,
+          title: deal.title,
+          stage: deal.stage,
+          expectedCloseAt: deal.expected_close_at ?? undefined,
+          contractStartAt: deal.contract_start_at ?? undefined,
+        })
+      )
+  )
+
+  const overdueDocumentCounts = new Map<string, number>()
+  const pendingSettlementCounts = new Map<string, number>()
+  for (const document of documents) {
+    if (document.status === "overdue") {
+      overdueDocumentCounts.set(document.partner_id, (overdueDocumentCounts.get(document.partner_id) ?? 0) + 1)
+    }
+    if (document.kind === "receipt") {
+      pendingSettlementCounts.set(
+        document.partner_id,
+        (pendingSettlementCounts.get(document.partner_id) ?? 0) + 1
+      )
+    }
+  }
+
+  const openIssueCounts = countRowsByPartner(issues)
+  const openChecklistCounts = countRowsByPartner(checklists)
+
+  // 전량 경로의 nextActionAt = 예정 일정 중 가장 이른 startsAt(포맷 후 사전순 최소)
+  const nextActionByPartner = new Map<string, string>()
+  for (const item of schedule) {
+    const startsAt = formatDateTime(item.starts_at) ?? item.starts_at
+    const current = nextActionByPartner.get(item.partner_id)
+    if (current === undefined || startsAt.localeCompare(current) < 0) {
+      nextActionByPartner.set(item.partner_id, startsAt)
+    }
+  }
+
+  const latestActivityByPartner = new Map<string, PartnerQueueActivityRow>()
+  for (const log of activityLogs) {
+    const current = latestActivityByPartner.get(log.partner_id)
+    if (!current || current.occurred_at.localeCompare(log.occurred_at) < 0) {
+      latestActivityByPartner.set(log.partner_id, log)
+    }
+  }
+
+  return partners.map((row) => {
+    const partner = normalizePartner({
+      id: row.id,
+      name: row.name,
+      status: row.status,
+      channel: row.channel,
+      region: row.region ?? "미지정",
+      ownerName: row.owner_name ?? "미지정",
+      accountManager: row.account_manager_name ?? "미지정",
+      nextActionAt: nextActionByPartner.get(row.id),
+    })
+    const latestRow = latestActivityByPartner.get(row.id)
+    const latestActivity = latestRow
+      ? normalizeActivityLog(row.id, { summary: latestRow.summary, occurredAt: latestRow.occurred_at })
+      : undefined
+
+    return assemblePartnerQueueSummary(partner, getMainDeal(dealsByPartner[row.id] ?? []), {
+      openChecklistCount: openChecklistCounts.get(row.id) ?? 0,
+      openIssueCount: openIssueCounts.get(row.id) ?? 0,
+      overdueDocumentCount: overdueDocumentCounts.get(row.id) ?? 0,
+      pendingSettlementCount: pendingSettlementCounts.get(row.id) ?? 0,
+      latestActivitySummary: latestActivity?.summary,
+      latestActivityAt: latestActivity?.occurredAt,
+    })
+  })
+}
+
+function countRowsByPartner(rows: PartnerQueueCountRow[]) {
+  return rows.reduce<Map<string, number>>((acc, row) => {
+    acc.set(row.partner_id, (acc.get(row.partner_id) ?? 0) + 1)
+    return acc
+  }, new Map())
 }
 
 async function createSupabasePartner(summary: PartnerSummaryInput) {
@@ -1989,12 +2230,32 @@ async function syncSupabasePrimaryContactFromPartnerSummary(
   if (contactInsertError) throw new Error(contactInsertError.message)
 }
 
+function localFallbackWarning(error: unknown) {
+  return error instanceof Error
+    ? `Supabase 조회 실패로 로컬 저장소 데이터로 대체했습니다: ${error.message}`
+    : "Supabase 조회 실패로 로컬 저장소 데이터로 대체했습니다."
+}
+
 export async function listPartnerWorkspaceSummariesData(): Promise<PartnerSummaryListResult> {
-  const result = await listPartnerWorkspacesData()
-  return {
-    summaries: result.workspaces.map(buildPartnerQueueSummary),
-    source: result.source,
-    warning: result.warning,
+  if (!hasPartnersSupabaseConfig()) {
+    const workspaces = await listLocalPartnerWorkspaces()
+    return {
+      summaries: workspaces.map(buildPartnerQueueSummary),
+      source: "local",
+      warning: "Supabase 환경변수가 없어 로컬 저장소 데이터로 표시 중입니다.",
+    }
+  }
+
+  try {
+    return { summaries: await querySupabasePartnerQueueSummaries(), source: "supabase" }
+  } catch (error) {
+    console.error("[partners-data] Supabase 파트너 요약 조회 실패 — 로컬 JSON 폴백:", error)
+    const workspaces = await listLocalPartnerWorkspaces()
+    return {
+      summaries: workspaces.map(buildPartnerQueueSummary),
+      source: "local",
+      warning: localFallbackWarning(error),
+    }
   }
 }
 
@@ -2025,9 +2286,7 @@ export async function listPartnerWorkspacesData(): Promise<PartnerListResult> {
     return {
       workspaces: await listLocalPartnerWorkspaces(),
       source: "local",
-      warning: error instanceof Error
-        ? `Supabase 조회 실패로 로컬 저장소 데이터로 대체했습니다: ${error.message}`
-        : "Supabase 조회 실패로 로컬 저장소 데이터로 대체했습니다.",
+      warning: localFallbackWarning(error),
     }
   }
 }
@@ -2052,9 +2311,7 @@ export async function getPartnerWorkspaceData(id: string): Promise<PartnerDetail
     return {
       workspace: await getLocalPartnerWorkspace(id) ?? null,
       source: "local",
-      warning: error instanceof Error
-        ? `Supabase 조회 실패로 로컬 저장소 데이터로 대체했습니다: ${error.message}`
-        : "Supabase 조회 실패로 로컬 저장소 데이터로 대체했습니다.",
+      warning: localFallbackWarning(error),
     }
   }
 }

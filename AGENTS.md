@@ -52,12 +52,32 @@ npm run build
 
 ## 배포 / Cron 안전 규칙
 
+- 상세 기준은 [운영 장애·Cron·Webhook 안전 지침](docs/active/operational-failure-handling-guidelines.md)과
+  [ADR-010](docs/adr/ADR-010-operational-failure-containment.md)을 따른다.
+- Vercel Cron 인증은 `Authorization: Bearer ${CRON_SECRET}` 하나만 사용한다. `x-vercel-cron`을
+  인증 또는 추가 실행 조건으로 사용하지 않는다.
 - Vercel 플랜은 명시 확인 전까지 Hobby 기준으로 본다.
 - `vercel.json`의 각 cron expression은 하루 1회 이하만 허용한다.
   - 금지 예: `*/5 * * * *`, `0 */6 * * *`, `0 9,18 * * *`
   - 허용 예: `15 0 * * *`, `0 4 * * 4`, `0 0 1 * *`
 - sub-daily 실행이 필요하면 `vercel.json`에 직접 추가하지 말고 외부 스케줄러, 큐, 또는 Vercel Pro 전환을 먼저 확정한다.
 - `vercel.json`을 수정한 뒤에는 반드시 `npm run check:vercel-crons`를 실행한다. `npm run build` 전에도 자동 실행된다.
+- 외부 발송 Cron은 새 활성화·인증 복구·장기 중단 후 재개 전에 backlog dry-run을 하고, 실행당 발송
+  상한·멱등 키·부분 성공 회귀 테스트를 갖춘다. 상한 초과 시 개별 과거분 발송을 중지한다.
+- `미응답누적`, `24시간 미응답`, `48시간 미응답` Webhook 알림은 폐기 상태다. CRM의 미응답
+  지표·필터는 유지하되 외부 발송으로 다시 연결하지 않는다. 리드 아침 공지는 유지한다.
+- Webhook URL과 token은 로그·문서·오류 응답에 남기지 않는다. 노출되면 해당 key를 회전한다.
+
+## 운영 장애 안전 규칙
+
+- Supabase 오류는 인증/JWT, timeout, unavailable, rate limit, schema mismatch를 구분한다.
+  Admin 인증은 fail closed로 유지하고 장애를 권한 없음으로 가장하거나 우회하지 않는다.
+- 읽기 오류의 빈 배열·`null`·404를 정상 캐시에 저장하지 않는다. 공개 읽기에는 식별 가능한 bounded
+  fallback을 허용할 수 있지만, 저장이 핵심인 쓰기 실패는 성공으로 응답하지 않는다.
+- 외부 API·LLM 호출 timeout은 route의 플랫폼 상한보다 짧게 두고, 연속 호출의 최악 시간 합을
+  `maxDuration` 안에 둔다. 유료 호출은 클라이언트 연타와 서버 중복 실행을 모두 막는다.
+- 브라우저 영속 캐시와 서버 캐시는 배포 또는 응답 schema 버전과 shape guard를 사용한다.
+- 운영 hotfix는 확인된 Production commit에서 관련 변경만 배포하고, 관련 없는 dirty 변경을 포함하지 않는다.
 
 ## UI 작업 시 필수 체크
 

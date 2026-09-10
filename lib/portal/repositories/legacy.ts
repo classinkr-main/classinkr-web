@@ -6,7 +6,7 @@ import {
 } from "@/lib/repositories/install-schedules";
 import { listPartners, getPartner } from "@/lib/repositories/partners";
 import { listQuotes, getQuote } from "@/lib/repositories/quotes";
-import { listContracts, listContractVersions } from "@/lib/repositories/contracts";
+import { listContracts, listContractVersionsByContractIds } from "@/lib/repositories/contracts";
 import { listReceipts } from "@/lib/repositories/receipts";
 import type {
   ActivityLog,
@@ -212,7 +212,6 @@ async function buildLegacyDealDetailPayload(partner: Partner): Promise<DealDetai
 
   const quoteDocuments: QuoteDocumentBundle[] = [];
   for (const quote of quotes) {
-    const quoteWithItems = await getQuote(quote.id);
     const version: QuoteDocumentVersion = {
       id: `legacy-quote-version-${quote.id}`,
       quote_document_id: quote.id,
@@ -250,13 +249,14 @@ async function buildLegacyDealDetailPayload(partner: Partner): Promise<DealDetai
       versions: [version],
       shares: [],
     });
-
-    void quoteWithItems;
   }
 
   const contractDocuments: ContractDocumentBundle[] = [];
+  const versionsByContractId = await listContractVersionsByContractIds(
+    contracts.map((contract) => contract.id)
+  );
   for (const contract of contracts) {
-    const versions = await listContractVersions(contract.id);
+    const versions = versionsByContractId.get(contract.id) ?? [];
     const mappedVersions: ContractDocumentVersion[] =
       versions.length > 0
         ? versions.map((version) => ({

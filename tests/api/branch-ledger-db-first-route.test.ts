@@ -8,16 +8,22 @@ function source(path: string) {
 
 describe("branch ledger DB-first route wiring", () => {
   it("loads DSH, KPI, and REV from active imports before using fallback in summary", () => {
+    // summary 라우트는 파싱·검증·캐시헤더만 담당하고 페이로드 조립은 lib/branch/summary-payload로
+    // 위임한다 — 페이지 서버 프리페치(app/admin/branch/page.tsx)가 같은 함수를 쓰기 위함이다.
     const route = source("app/api/admin/branch/summary/route.ts")
+    expect(route).toContain("buildBranchSummaryPayload")
+    expect(route).toContain('from "@/lib/branch/summary-payload"')
+
+    const payload = source("lib/branch/summary-payload.ts")
 
     // DSH/KPI 읽기는 lib/branch/read-dsh-kpi의 단일 규약 헬퍼를 경유한다(91fb6e57 미러 도입) —
-    // 라우트가 아니라 헬퍼가 액티브임포트→미러→라이브시트 사다리를 보장한다(아래 helper 단언).
-    expect(route).toContain("readDshPreferDb")
-    expect(route).toContain("readKpiBlocksPreferDb")
-    expect(route).toContain('from "@/lib/branch/read-dsh-kpi"')
+    // 조립 함수가 아니라 헬퍼가 액티브임포트→미러→라이브시트 사다리를 보장한다(아래 helper 단언).
+    expect(payload).toContain("readDshPreferDb")
+    expect(payload).toContain("readKpiBlocksPreferDb")
+    expect(payload).toContain('from "@/lib/branch/read-dsh-kpi"')
     // REV 읽기도 같은 방식으로 lib/branch/read-rev-deals 헬퍼를 경유한다.
-    expect(route).toContain("readRevDealsPreferActive")
-    expect(route).toContain('from "@/lib/branch/read-rev-deals"')
+    expect(payload).toContain("readRevDealsPreferActive")
+    expect(payload).toContain('from "@/lib/branch/read-rev-deals"')
 
     const revHelper = source("lib/branch/read-rev-deals.ts")
     expect(revHelper).toContain("readRevDealsFromActiveImport")
@@ -45,11 +51,16 @@ describe("branch ledger DB-first route wiring", () => {
   })
 
   it("loads REV from active imports before using branch_rev_deals fallback in pipeline route", () => {
+    // 라우트는 조립 사본을 갖지 않는다 — 페이지 서버 프리페치(app/admin/branch/ledger/page.tsx)와
+    // 같은 lib/branch/pipeline-rows를 쓰는 것이 rows 이중 원천을 막는 유일한 장치다.
     const route = source("app/api/admin/branch/pipeline/route.ts")
+    expect(route).toContain("readBranchPipelineRows")
+    expect(route).toContain('from "@/lib/branch/pipeline-rows"')
 
-    expect(route).toContain("readRevDealsFromActiveImport")
-    expect(route).toContain("await readRevDealsFromActiveImport(fy, { team }) ?? await listBranchRevDeals({ team }, { withRaw: true })")
-    expect(route).toContain("listRevRevenue(deals")
+    const rowsHelper = source("lib/branch/pipeline-rows.ts")
+    expect(rowsHelper).toContain("(await readRevDealsFromActiveImport(fy, { team })) ??")
+    expect(rowsHelper).toContain("(await listBranchRevDeals({ team }, { withRaw: true }))")
+    expect(rowsHelper).toContain("return listRevRevenue(")
   })
 
   it("maps active import rows back into existing DSH, KPI, and REV domain contracts", () => {

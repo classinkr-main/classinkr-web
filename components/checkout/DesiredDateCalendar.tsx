@@ -17,6 +17,7 @@ import {
   isSameMonth,
   shiftMonth,
   toIsoDate,
+  type DesiredDateRange,
   type YearMonth,
 } from "@/components/checkout/request-date"
 
@@ -28,6 +29,11 @@ interface Props {
   todayIso: string
   minIso: string
   maxIso: string
+  /**
+   * 범위 안이지만 개별로 선택 불가인 날짜(쇼룸 예약의 주말·공휴일·마감 등). 선택적
+   * prop 이라 안 넘기면(undefined) /checkout 의 기존 렌더링과 1픽셀도 다르지 않다.
+   */
+  disabledIsoDates?: ReadonlySet<string>
   /** 필드 에러 하이라이트 */
   invalid?: boolean
   labelledById?: string
@@ -47,11 +53,19 @@ export function DesiredDateCalendar({
   todayIso,
   minIso,
   maxIso,
+  disabledIsoDates,
   invalid = false,
   labelledById,
   describedById,
 }: Props) {
-  const range = useMemo(() => ({ minIso, maxIso }), [minIso, maxIso])
+  const range = useMemo<DesiredDateRange>(
+    () => ({ minIso, maxIso, disabledIsoDates }),
+    [minIso, maxIso, disabledIsoDates]
+  )
+  // value 가 막힌 날짜여도 fallback 은 항상 minIso 로 안전하다 — 아래 셀 렌더에서
+  // disabledIsoDates 로 막힌 날짜는 native disabled 가 아니라 aria-disabled 로만
+  // 표시해 포커스는 유지하므로(포커스는 허용, 선택만 차단 — 방침은 clampToRange 주석
+  // 참고) minIso 는 disabledIsoDates 에 들어 있어도 DOM 상 항상 포커스 가능하다.
   const initialFocus = value && isDesiredDateSelectable(value, range) ? value : minIso
 
   const [visibleMonth, setVisibleMonth] = useState<YearMonth>(() => getYearMonth(initialFocus))
@@ -191,6 +205,13 @@ export function DesiredDateCalendar({
           <div role="row" key={week[0].iso} className="grid grid-cols-7">
             {week.map((cell) => {
               const selectable = isDesiredDateSelectable(cell.iso, range)
+              // range(min/max)만 보고 disabledIsoDates 는 뺀 판정 — 이 칸이 native
+              // disabled 여야 하는지(범위 밖이라 구조적으로 선택 불가)를 가른다.
+              const inRange =
+                compareIsoDate(cell.iso, minIso) >= 0 && compareIsoDate(cell.iso, maxIso) <= 0
+              // 범위 안인데 disabledIsoDates 로 막힌 날짜만 aria-disabled 대상이다.
+              // 범위 밖(inRange=false)은 이미 native disabled 라 중복 표시하지 않는다.
+              const blockedByDisabledSet = inRange && !selectable
               const selected = value === cell.iso
               const isToday = cell.iso === todayIso
               const isFocusTarget = cell.iso === focusedIso
@@ -201,11 +222,22 @@ export function DesiredDateCalendar({
                     type="button"
                     data-iso={cell.iso}
                     tabIndex={isFocusTarget ? 0 : -1}
-                    disabled={!selectable}
+                    // 범위 밖만 native disabled 로 막는다. disabledIsoDates 로 막힌
+                    // (범위 안) 날짜는 aria-disabled 로만 알린다 — native disabled 를
+                    // 쓰면 그 버튼이 포커스를 받을 수 없어(.focus() 무시) 방향키로
+                    // 옮겨가다 막힌 날짜를 만나면 로빙 tabindex 가 거기서 끊긴다.
+                    // "포커스는 허용, 선택만 차단" 방침이라 이 둘을 분리했다.
+                    disabled={!inRange}
+                    aria-disabled={blockedByDisabledSet ? true : undefined}
                     aria-current={isToday ? "date" : undefined}
                     aria-label={formatDesiredDateLabel(cell.iso)}
                     onClick={() => {
                       setFocusedIso(cell.iso)
+                      // native disabled 가 아닌 막힌 날짜(disabledIsoDates)는 클릭 이벤트가
+                      // 그대로 들어온다 — 여기서 막는다. Enter/Space 로 활성화된 버튼도
+                      // 브라우저가 click 으로 바꿔 보내므로 이 한 곳으로 마우스·키보드
+                      // 선택을 동시에 막는다.
+                      if (!selectable) return
                       onChange(cell.iso)
                     }}
                     className={[

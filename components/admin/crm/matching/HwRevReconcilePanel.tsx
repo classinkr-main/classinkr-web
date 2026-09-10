@@ -4,6 +4,7 @@ import { useCallback, useState } from "react"
 import { ChevronDown, ChevronRight, PackageCheck } from "lucide-react"
 
 import { adminFetchJsonCached } from "@/lib/admin-client"
+import { CRM_CACHE_SWR_MS } from "@/lib/crm/client-cache"
 import { formatCNY, formatUSD } from "@/lib/crm/money-format"
 
 // server-only 리포(hw-rev-reconcile)는 import 금지 — 응답 shape 로컬 선언.
@@ -58,7 +59,12 @@ export default function HwRevReconcilePanel() {
     adminFetchJsonCached<ReconcileResponse>("/api/admin/crm/reconcile/hw-rev", undefined, {
       cacheKey: "/api/admin/crm/reconcile/hw-rev",
       ttlMs: 90_000,
-      staleWhileRevalidateMs: 5 * 60_000,
+      staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
+      onRevalidated: ({ data: fresh }) => {
+        if (!fresh) return
+        setData(fresh)
+        setFailed(false)
+      },
     })
       .then((d) => {
         setData(d)

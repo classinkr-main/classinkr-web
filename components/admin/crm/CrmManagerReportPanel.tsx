@@ -5,6 +5,7 @@ import Link from "next/link"
 import { AlertTriangle, Award, ExternalLink, RefreshCw, Users } from "lucide-react"
 
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
+import { CRM_CACHE_SWR_MS } from "@/lib/crm/client-cache"
 import type { CrmManagerReport, ManagerAttentionKind } from "@/lib/repositories/crm-manager-report"
 
 const REPORT_URL = "/api/admin/crm/manager-report"
@@ -48,7 +49,15 @@ export default function CrmManagerReportPanel() {
       const next = await adminFetchJsonCached<CrmManagerReport>(
         options?.force ? `${REPORT_URL}?force=1` : REPORT_URL,
         undefined,
-        { cacheKey: REPORT_URL, ttlMs: 120_000, staleWhileRevalidateMs: 5 * 60_000, force: options?.force }
+        {
+          cacheKey: REPORT_URL,
+          ttlMs: 120_000,
+          staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
+          force: options?.force,
+          onRevalidated: ({ data: fresh }) => {
+            if (fresh) setData(fresh)
+          },
+        }
       )
       setData(next)
     } catch (err) {

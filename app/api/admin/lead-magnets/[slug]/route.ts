@@ -2,7 +2,11 @@ import { revalidatePath } from "next/cache"
 import { type NextRequest, NextResponse } from "next/server"
 
 import { verifyAdmin } from "@/lib/admin-auth"
-import { deleteLeadMagnet, updateLeadMagnet } from "@/lib/repositories/lead-magnets"
+import {
+  deleteLeadMagnet,
+  isLeadMagnetStoreUnavailableError,
+  updateLeadMagnet,
+} from "@/lib/repositories/lead-magnets"
 
 interface RouteContext {
   params: Promise<{ slug: string }>
@@ -43,7 +47,7 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to update lead magnet" },
-      { status: 500 }
+      { status: isLeadMagnetStoreUnavailableError(error) ? 503 : 500 }
     )
   }
 }
@@ -63,7 +67,10 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
 
     revalidateLeadMagnetSurfaces(slug)
     return NextResponse.json({ ok: true })
-  } catch {
-    return NextResponse.json({ error: "Failed to delete lead magnet" }, { status: 500 })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to delete lead magnet" },
+      { status: isLeadMagnetStoreUnavailableError(error) ? 503 : 500 }
+    )
   }
 }

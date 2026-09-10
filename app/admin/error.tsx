@@ -21,6 +21,10 @@ export default function AdminError({
     >
       <div className="w-full max-w-md text-center">
         <div
+          role="alert"
+          aria-live="assertive"
+          aria-labelledby="admin-error-title"
+          aria-describedby="admin-error-description"
           className="rounded-2xl p-10 mx-auto"
           style={{
             backgroundColor: "#FFFFFF",
@@ -34,6 +38,7 @@ export default function AdminError({
             style={{ backgroundColor: "#ECFDF5" }}
           >
             <svg
+              aria-hidden="true"
               width="28"
               height="28"
               viewBox="0 0 24 24"
@@ -49,6 +54,7 @@ export default function AdminError({
             </svg>
           </div>
           <h1
+            id="admin-error-title"
             className="font-bold mb-3"
             style={{
               fontSize: "28px",
@@ -60,6 +66,7 @@ export default function AdminError({
             일시적인 오류가 발생했어요
           </h1>
           <p
+            id="admin-error-description"
             className="mb-8"
             style={{
               fontSize: "15px",
@@ -71,8 +78,9 @@ export default function AdminError({
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button
+              type="button"
               onClick={reset}
-              className="inline-flex items-center justify-center font-semibold transition-colors"
+              className="inline-flex min-h-11 items-center justify-center font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2"
               style={{
                 backgroundColor: "#084734",
                 color: "#ffffff",
@@ -86,8 +94,8 @@ export default function AdminError({
               다시 시도
             </button>
             <Link
-              href="/admin/overview"
-              className="inline-flex items-center justify-center font-semibold transition-colors"
+              href="/admin/calendar"
+              className="inline-flex min-h-11 items-center justify-center font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2"
               style={{
                 backgroundColor: "rgba(0,0,0,0.05)",
                 color: "#111110",
@@ -97,7 +105,7 @@ export default function AdminError({
                 textDecoration: "none",
               }}
             >
-              대시보드로
+              캘린더로
             </Link>
           </div>
         </div>

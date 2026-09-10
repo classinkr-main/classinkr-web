@@ -7,7 +7,7 @@ import { assignLanes, countLanes } from "@/lib/admin-calendar/layout"
 import { enumerateDates, getWeekday, type CalendarRange } from "@/lib/admin-calendar/range"
 
 import { EventBar, EventChip } from "./EventChip"
-import { getEventDotColor, getTypeStyle } from "./event-style"
+import { getEventDotColor } from "./event-style"
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"]
 
@@ -210,7 +210,6 @@ export function WeekTimeGrid({
                   .map((item) => {
                     const top = ((Math.max(item.startMinutes, GRID_START_HOUR * 60) - GRID_START_HOUR * 60) / GRID_MINUTES) * 100
                     const bottom = ((Math.min(item.endMinutes, GRID_END_HOUR * 60) - GRID_START_HOUR * 60) / GRID_MINUTES) * 100
-                    const style = getTypeStyle(item.event.type)
                     return (
                       <button
                         key={item.event.id}
@@ -222,10 +221,9 @@ export function WeekTimeGrid({
                           height: `${Math.max(bottom - top, 2.5)}%`,
                           left: `${(item.lane / item.laneCount) * 100}%`,
                           width: `${(1 / item.laneCount) * 100}%`,
-                          backgroundColor: `${getEventDotColor(item.event)}1F`,
                           borderLeftColor: getEventDotColor(item.event),
                         }}
-                        className={`absolute overflow-hidden border-l-[3px] px-1 py-0.5 text-left text-[10px] font-medium leading-tight ${style.color} hover:brightness-95`}
+                        className="absolute overflow-hidden rounded-r-[3px] border border-[#ecebe7] border-l-[3px] bg-white px-1 py-0.5 text-left text-[10px] font-medium leading-tight text-[#3a3733] transition-colors hover:bg-[#fafaf8]"
                       >
                         <span className="block truncate tabular-nums opacity-70">{item.event.time}</span>
                         <span className="block truncate">{item.event.title}</span>

@@ -1,4 +1,5 @@
 import "server-only"
+import { dispatchRenewalAlerts, type DispatchRenewalAlertsResult } from "@/lib/crm/renewal-alert-dispatch"
 
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import {
@@ -20,6 +21,8 @@ export interface ExternalCrmSyncChainResult {
   neoCustomerSnapshotsError?: string
   candidates?: GenerateExternalCrmLinkCandidatesResult
   candidatesError?: string
+  renewalAlerts?: DispatchRenewalAlertsResult
+  renewalAlertsError?: string
 }
 
 export async function notifyExternalCrmSyncOutcome(
@@ -116,6 +119,18 @@ export async function runExternalCrmSyncChain(
       ? candidateOutcome.error.message
       : String(candidateOutcome.error)
     console.error("[external-crm sync-chain] candidate generation failed", candidateOutcome.error)
+  }
+
+  // 재연락 알림은 스냅샷이 갱신된 뒤에만 낸다.
+  // 묵은 잔액·만료로 알림을 쏘면 이미 연장한 고객에게 "연장하세요"가 가고,
+  // 정작 소진된 고객은 조용하다. 순서가 곧 정확성이다.
+  if (result.neoCustomerSnapshots) {
+    try {
+      result.renewalAlerts = await dispatchRenewalAlerts()
+    } catch (alertError) {
+      result.renewalAlertsError = alertError instanceof Error ? alertError.message : String(alertError)
+      console.error("[external-crm sync-chain] renewal alert dispatch failed", alertError)
+    }
   }
 
   return result

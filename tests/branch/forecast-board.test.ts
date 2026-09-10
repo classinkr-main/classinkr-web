@@ -122,10 +122,12 @@ describe("buildForecastBoardModel — 카드 배치·확도 톤", () => {
 })
 
 describe("SalesLedgerWorkbench — 보드 렌즈 배선 규약(소스 스캔)", () => {
-  const workbenchSource = readFileSync(
-    join(process.cwd(), "components/admin/branch/SalesLedgerWorkbench.tsx"),
-    "utf8",
-  )
+  // 모듈-레벨 상수(LENSES 등)는 ledger/workbench-shared로 물리 이동(2026-08-28 분해) —
+  // 계약은 화면 단위로 유지해야 하므로 본체 + 분해 모듈을 합쳐 검사한다.
+  const workbenchSource = [
+    readFileSync(join(process.cwd(), "components/admin/branch/SalesLedgerWorkbench.tsx"), "utf8"),
+    readFileSync(join(process.cwd(), "components/admin/branch/ledger/workbench-shared.tsx"), "utf8"),
+  ].join("\n")
 
   it("LENSES에 board 렌즈가 있고 URL ?lens=board 복원을 허용한다", () => {
     expect(workbenchSource).toContain('{ id: "board", label: "보드"')

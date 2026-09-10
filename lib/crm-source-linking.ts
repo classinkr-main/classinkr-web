@@ -89,6 +89,44 @@ export function normalizeCrmOwnerName(value: string | null | undefined) {
     .replace(/[()（）\[\]{}·._-]/g, "")
 }
 
+// 고객 식별력이 없는 일반어 별칭은 어떤 원천에도 90% 후보를 만들면 안 된다.
+// 특히 과거 `class`/`classin` 별칭은 source.includes(alias) 역방향 비교와 결합해
+// 무관한 Neo 레코드 수백 건을 내부 테스트 계정으로 끌어올렸다.
+const UNSAFE_GENERIC_CRM_ALIASES = new Set([
+  "class",
+  "classin",
+  "클래스인",
+  "math",
+  "수학",
+  "english",
+  "영어",
+  "academy",
+  "school",
+  "edu",
+  "교육",
+])
+
+export function isUnsafeGenericCrmAlias(value: string | null | undefined) {
+  const normalized = normalizeCrmName(value)
+  return !normalized || UNSAFE_GENERIC_CRM_ALIASES.has(normalized)
+}
+
+/** 내부 테스트용 타깃은 운영 원천의 자동/수동 후보가 될 수 없다. */
+export function isUnsafeCrmTargetLabel(value: string | null | undefined) {
+  const compact = (value ?? "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[\s_./·-]+/g, "")
+  if (!compact) return false
+  return (
+    compact.includes("내부테스트") ||
+    compact.includes("internaltest") ||
+    compact.includes("클래스인테스트") ||
+    compact.includes("classintest") ||
+    /^(?:테스트|test)(?:딜|deal|고객|customer|계정|account)/.test(compact)
+  )
+}
+
 function translateCrmNameTokens(value: string) {
   return CRM_NAME_TOKEN_TRANSLATIONS.reduce((current, [pattern, replacement]) => {
     return current.replace(pattern, replacement)
@@ -151,16 +189,26 @@ export function scoreCrmEntityMatch(input: CrmEntityMatchInput): CrmEntityMatchS
 
   for (const alias of input.aliases ?? []) {
     const aliasVariants = getCrmNameVariants(alias.alias)
+    // 일반어 별칭은 정확 일치조차 고객을 식별하지 못한다. 2자 이하 별칭은 담당 범위가
+    // 있을 때의 정확 일치만 허용해 `alias.includes(source)` 광역 승격을 막는다.
+    if (isUnsafeGenericCrmAlias(alias.alias)) continue
     const canonicalVariants = getCrmNameVariants(alias.canonicalName ?? "")
     const sourceVariants = getCrmNameVariants(input.sourceName)
     const targetVariants = getCrmNameVariants(input.targetName)
-    const aliasMatchesSource = aliasVariants.some((aliasValue) =>
-      sourceVariants.some((source) => source === aliasValue || source.includes(aliasValue) || aliasValue.includes(source))
-    )
+    const aliasManager = normalizeCrmOwnerName(alias.managerName)
+    const aliasMatchesSource = aliasVariants.some((aliasValue) => {
+      const shortUnscoped = aliasValue.length < 3 && !aliasManager
+      if (shortUnscoped) return false
+      return sourceVariants.some(
+        (source) =>
+          source === aliasValue ||
+          (aliasValue.length >= 3 && source.includes(aliasValue)) ||
+          (source.length >= 3 && aliasValue.includes(source))
+      )
+    })
     const aliasTargetScoped =
       !alias.targetId ||
       (alias.targetType === input.targetType && alias.targetId === input.targetId)
-    const aliasManager = normalizeCrmOwnerName(alias.managerName)
     const aliasManagerScoped = !aliasManager || aliasManager === sourceOwner || aliasManager === targetOwner
     const canonicalMatchesTarget =
       canonicalVariants.length === 0 ||

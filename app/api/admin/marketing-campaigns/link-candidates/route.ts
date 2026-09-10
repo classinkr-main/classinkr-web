@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
-import { getAllCampaigns } from "@/lib/repositories/marketing"
 import { getAllEventsForAdmin } from "@/lib/repositories/public-events"
 import { getMetaCampaignDashboard } from "@/lib/meta/marketing"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { listCampaignLinkLabels } from "@/lib/repositories/marketing"
 import {
   emailCampaignLabel,
   eventLabel,
@@ -32,8 +32,13 @@ type SmsRow = { id: string | number; message?: string | null }
 
 async function safeEmailCandidates(): Promise<Candidate[]> {
   try {
-    const all = await getAllCampaigns()
-    return all.map((c) => ({ id: String(c.id), label: emailCampaignLabel(c) }))
+    // 라벨(subject)만 필요 — listCampaignLinkLabels()가 getAllCampaigns()와 같은
+    // USE_SUPABASE 모드 분기(JSON 폴백 포함)를 따르면서 좁은 select로 조회한다.
+    const campaigns = await listCampaignLinkLabels()
+    return campaigns.map((row) => ({
+      id: String(row.id),
+      label: emailCampaignLabel(row),
+    }))
   } catch {
     return []
   }

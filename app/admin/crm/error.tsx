@@ -17,18 +17,24 @@ export default function AdminCrmError({
 
   return (
     <div className="flex min-h-[50vh] items-center justify-center px-6">
-      <div className="w-full max-w-md rounded-2xl border border-[#F6D5C5] bg-[#FEF8F5] px-6 py-8 text-center">
-        <p className="text-[15px] font-bold text-[#111110]">화면을 그리는 중 문제가 발생했습니다.</p>
-        <p className="mt-1.5 text-[12px] text-[#1a1a1a]/55">
+      <div
+        role="alert"
+        aria-live="assertive"
+        aria-labelledby="admin-crm-error-title"
+        aria-describedby="admin-crm-error-description"
+        className="w-full max-w-md rounded-2xl border border-[#F6D5C5] bg-[#FEF8F5] px-6 py-8 text-center"
+      >
+        <p id="admin-crm-error-title" className="text-[15px] font-bold text-[#111110]">화면을 그리는 중 문제가 발생했습니다.</p>
+        <p id="admin-crm-error-description" className="mt-1.5 text-[12px] text-[#1a1a1a]/55">
           잠시 후 다시 시도해 주세요. 반복되면 관리자에게 알려주세요.
           {error.digest ? ` (오류 코드: ${error.digest})` : ""}
         </p>
         <button
           type="button"
           onClick={reset}
-          className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#084734] px-4 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+          className="mt-4 inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-[#084734] px-4 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2"
         >
-          <RefreshCw className="h-3.5 w-3.5" />
+          <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" />
           다시 시도
         </button>
       </div>

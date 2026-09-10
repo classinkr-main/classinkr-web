@@ -17,6 +17,7 @@ import { ContractsPanel } from "@/components/admin/documents/ContractsPanel"
 import { ReceiptsPanel } from "@/components/admin/documents/ReceiptsPanel"
 import type { QuickQuotePrefill } from "@/components/portal/quotes/QuickQuoteComposer"
 import type { StandardQuoteTemplateId } from "@/lib/standard-quote-template"
+import AdminTabs, { type AdminTabItem } from "@/components/admin/AdminTabs"
 
 type DocumentTab = "hardware" | "software" | "contracts" | "receipts"
 type HardwareQuoteQuickAction = "new" | StandardQuoteTemplateId
@@ -60,6 +61,14 @@ const DOCUMENT_TABS: DocumentTabItem[] = [
   // "공유 링크"(links) coming-soon 탭은 제거 — 열람수·발송 상태는 하드웨어 견적 행 단위로 이미 제공된다.
   // 구 딥링크(tab=links|shares)는 normalizeDocumentTab의 hardware 폴백이 흡수한다.
 ]
+
+// AdminTabs(underline) 소비용 매핑 — 라벨·설명(title)·아이콘 정의는 DOCUMENT_TABS가 단일 원천.
+const DOCUMENT_TAB_ITEMS: AdminTabItem<DocumentTab>[] = DOCUMENT_TABS.map((tab) => ({
+  value: tab.key,
+  label: tab.label,
+  title: tab.description,
+  icon: tab.icon,
+}))
 
 // href는 렌더에서 소비되지 않는 미사용 필드라 제거 — 북마크 호환은 stub 라우트(redirect)가 담당한다.
 // SW/HW 대표 버튼은 아래 QuoteCreateButtons가 직접 갖고, 드롭다운은 HW 세부 프리셋만 남긴다.
@@ -302,9 +311,6 @@ export default function QuotesPage() {
             <h1 className="text-lg font-bold tracking-[-0.02em] text-[#111110] sm:text-xl">
               견적·문서
             </h1>
-            <span className="hidden truncate text-[12px] text-[#1a1a1a]/45 sm:inline">
-              견적 · 계약 · 수납을 한 흐름으로
-            </span>
           </div>
           <div className="flex items-center gap-2">
             <a
@@ -318,29 +324,16 @@ export default function QuotesPage() {
           </div>
         </div>
 
-        <div className="admin-scroll-snap-x no-scrollbar -mb-px mt-3 flex gap-0.5 overflow-x-auto">
-          {DOCUMENT_TABS.map((tab) => {
-            const active = activeTab === tab.key
-
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => handleTabChange(tab.key)}
-                title={tab.description}
-                aria-current={active ? "page" : undefined}
-                className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 text-[13px] font-semibold transition-colors ${
-                  active
-                    ? "border-[#084734] text-[#111110]"
-                    : "border-transparent text-[#1a1a1a]/45 hover:text-[#111110]"
-                }`}
-              >
-                <span className={active ? "text-[#084734]" : "text-[#1a1a1a]/40"}>{tab.icon}</span>
-                {tab.label}
-              </button>
-            )
-          })}
-        </div>
+        {/* 밑줄형 탭 — 공용 AdminTabs(underline 변형)로 통일(2026-08-28 감사 [2]).
+            시각은 기존 밑줄 행 그대로, tablist 시맨틱·화살표 키 내비를 공용 계약으로 얻는다. */}
+        <AdminTabs
+          items={DOCUMENT_TAB_ITEMS}
+          value={activeTab}
+          onValueChange={handleTabChange}
+          label="견적·문서 보기"
+          variant="underline"
+          className="admin-scroll-snap-x no-scrollbar -mb-px mt-3"
+        />
       </div>
 
       <div className="px-0 py-0">

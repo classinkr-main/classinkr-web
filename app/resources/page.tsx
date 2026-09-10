@@ -7,7 +7,7 @@ import {
   getLeadMagnetCategoryLabel,
   getLeadMagnetItemCount,
   getLeadMagnetTierLabel,
-} from "@/lib/lead-magnets"
+} from "@/lib/lead-magnets-helpers"
 import { getPublishedLeadMagnets } from "@/lib/repositories/lead-magnets"
 
 export const revalidate = 3600

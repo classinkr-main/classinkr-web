@@ -49,7 +49,7 @@ function OutboundPeriodSection({
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-4">
         <div>
           <p className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">기간별 출고 집계</p>
-          <p className="mt-1 text-[12px] text-[#615D59]">확정 출고(샘플·수리 제외) 기준 기간 집계. 행을 열면 고객사별 출고·매출이 펼쳐지고, 고객사를 누르면 거래이력이 열립니다. 매출은 실판매(Sales) 기준이며 시트 재가져오기 후 반영됩니다. 분기는 회계연도(4월 시작~3월 종료) 기준입니다.</p>
+          <p className="mt-1 text-[12px] text-[#615D59]">확정 출고(샘플·수리 제외) 기준 기간 집계. 행을 열면 고객사별 출고·매출이 펼쳐지고, 고객사를 누르면 거래이력이 열립니다. 매출은 실판매(Sales) 기준이며 시트 재가져오기 후 반영됩니다. 분기·연은 회계연도(4월 시작~3월 종료) 기준입니다.</p>
         </div>
         <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5">
           {([["month", "월"], ["quarter", "분기"], ["year", "연"]] as const).map(([key, label]) => (

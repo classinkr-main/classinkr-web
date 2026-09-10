@@ -111,7 +111,6 @@ export function EventOriginMatrix({ className = "" }: { className?: string }) {
           </span>
           <div>
             <h2 className="text-[14px] font-semibold text-[#111110]">출신 × 성과</h2>
-            <p className="text-[11px] text-[#1a1a1a]/40">참석자 출신별 인원과 리드 전환율</p>
           </div>
         </div>
         <Link

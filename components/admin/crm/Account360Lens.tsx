@@ -5,6 +5,7 @@ import Link from "next/link"
 import { ArrowRight, ChevronDown, Layers } from "lucide-react"
 
 import { adminFetchJsonCached } from "@/lib/admin-client"
+import { CRM_CACHE_SWR_MS } from "@/lib/crm/client-cache"
 import { formatCNY } from "@/lib/crm/money-format"
 
 // Account 360 스파인 렌즈 — /api/admin/crm/account-master 읽기 뷰.
@@ -84,7 +85,12 @@ export default function Account360Lens() {
       adminFetchJsonCached<AccountMaster>(ENDPOINT, undefined, {
         cacheKey: ENDPOINT,
         ttlMs: 90_000,
-        staleWhileRevalidateMs: 5 * 60_000,
+        staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
+        onRevalidated: ({ data: fresh }) => {
+          if (!fresh) return
+          setData(fresh)
+          setFailed(false)
+        },
       })
         .then((d) => {
           setData(d)

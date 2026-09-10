@@ -2,7 +2,9 @@ import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
-export type LeadDigestReportType = "meta" | "homepage"
+// "daily" = Meta+홈페이지를 합친 현재의 한 장짜리 아침 카드.
+// "meta"/"homepage" 는 2026-09-07 이전 2장 체제의 과거 행에만 남는다.
+export type LeadDigestReportType = "meta" | "homepage" | "daily"
 export type LeadDigestRunStatus = "pending" | "sent" | "failed"
 
 export interface LeadDigestRunRecord {

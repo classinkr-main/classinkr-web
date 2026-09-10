@@ -11,8 +11,10 @@ import {
   deriveEventInsights,
   deriveLatestPatchNote,
   resolveUnrespondedSignal,
+  shouldUsePrefetchedSource,
   type OperationalAlertInput,
 } from "@/lib/admin/overview/insights"
+import { ADMIN_PREFETCH_FRESH_MS } from "@/lib/admin/prefetch-freshness"
 import type { LeadRecord } from "@/lib/site-settings-types"
 import type { BlogPost } from "@/lib/blog-types"
 import type { EmailCampaign } from "@/lib/marketing-types"
@@ -187,6 +189,46 @@ describe("aggregateLeads — 리드 확인 게이트", () => {
   })
 })
 
+describe("aggregateLeads — 홈페이지 유입 집계", () => {
+  // 타일이 "홈페이지 문의"라고 말하면서 실제로는 contact_page 한 소스만 셌다. 홈페이지에는
+  // 데모 모달(Hero·Comparison·FinalCTA 세 곳)과 리드마그넷 CTA도 붙어 있어, 그 폼으로 들어온
+  // 문의는 타일에서 조용히 사라졌다. 유입 그룹 매핑(getLeadSourceGroup)이 정본이다.
+  it("contact_page 뿐 아니라 홈페이지 그룹 전체를 센다", () => {
+    const leads = [
+      makeLead({ source: "contact_page" }),
+      makeLead({ source: "demo_modal" }),
+      makeLead({ source: "home_lead_magnet" }),
+      makeLead({ source: "meta_lead_ads" }),
+      makeLead({ source: "newsletter" }),
+    ]
+    const agg = aggregateLeads(leads, NOW)
+    expect(agg.homepageTotal).toBe(3)
+    expect(agg.homepageToday).toBe(3)
+    expect(agg.homepageThisWeek).toBe(3)
+  })
+
+  // 타일은 확인 게이트를 안 걸고(유입 수 관점), 타일을 눌러 착지하는 리드 보드는 건다.
+  // 그래서 "누적 4"라고 써 놓고 눌러 들어가면 3건만 나왔다. 타일이 게이트 밖 건수를
+  // 따로 들고 있어야 화면이 그 차이를 말할 수 있다.
+  it("게이트 밖(미확인) 홈페이지 유입 건수를 따로 낸다", () => {
+    const leads = [
+      makeLead({ source: "contact_page" }),
+      makeLead({ source: "contact_page", confirmed_at: undefined }),
+      makeLead({ source: "demo_modal", confirmed_at: undefined }),
+      makeLead({ source: "meta_lead_ads", confirmed_at: undefined }),
+    ]
+    const agg = aggregateLeads(leads, NOW)
+    expect(agg.homepageTotal).toBe(3)
+    expect(agg.homepageUnconfirmed).toBe(2)
+  })
+
+  it("홈페이지 유입이 없으면 0으로 떨어진다", () => {
+    const agg = aggregateLeads([makeLead({ source: "meta_lead_ads" })], NOW)
+    expect(agg.homepageTotal).toBe(0)
+    expect(agg.homepageUnconfirmed).toBe(0)
+  })
+})
+
 describe("aggregateLeads — 기간 버킷 (Date 주입)", () => {
   it("오늘/이번 주/지난주/이번 달/지난달 경계와 추이를 판정한다", () => {
     const leads = [
@@ -236,6 +278,40 @@ describe("aggregateLeads — 소스·지점·최근 리드", () => {
     expect(agg.recentLeads).toHaveLength(6)
     expect(agg.recentLeads[0].id).toBe("l-6")
     expect(agg.recentLeads[5].id).toBe("l-1")
+  })
+})
+
+describe("aggregateLeads — 홈페이지 유입 창", () => {
+  it("홈페이지 그룹 리드를 오늘·7일·누적으로 센다", () => {
+    const leads = [
+      makeLead({ source: "contact_page", timestamp: localIso(2026, 6, 15, 10) }), // 오늘
+      makeLead({ source: "demo_modal", timestamp: localIso(2026, 6, 15, 10) }), // 오늘(같은 그룹)
+      makeLead({ source: "contact_page", timestamp: localIso(2026, 6, 10, 10) }), // 7일 이내
+      makeLead({ source: "contact_page", timestamp: localIso(2026, 5, 1, 10) }), // 과거(누적만)
+      makeLead({ source: "meta_lead_ads", timestamp: localIso(2026, 6, 15, 10) }), // 다른 그룹 제외
+    ]
+    const agg = aggregateLeads(leads, NOW)
+    expect(agg.homepageToday).toBe(2)
+    expect(agg.homepageThisWeek).toBe(3)
+    expect(agg.homepageTotal).toBe(4)
+  })
+
+  it("유입 수 관점이라 확인 게이트와 무관하게 센다", () => {
+    const agg = aggregateLeads(
+      [makeLead({ source: "contact_page", confirmed_at: undefined })],
+      NOW
+    )
+    expect(agg.homepageToday).toBe(1)
+    expect(agg.homepageThisWeek).toBe(1)
+    expect(agg.homepageTotal).toBe(1)
+    expect(agg.homepageUnconfirmed).toBe(1)
+  })
+
+  it("잘못된 timestamp는 기간 창에서 제외되지만 누적에는 포함된다", () => {
+    const agg = aggregateLeads([makeLead({ source: "contact_page", timestamp: "not-a-date" })], NOW)
+    expect(agg.homepageToday).toBe(0)
+    expect(agg.homepageThisWeek).toBe(0)
+    expect(agg.homepageTotal).toBe(1)
   })
 })
 
@@ -422,6 +498,7 @@ describe("resolveUnrespondedSignal — 미응답 단일 정의 (W2-8)", () => {
       makeLead({ source: "newsletter" }), // 비대상 소스 제외
       makeLead({ source: "channel_talk" }), // 비대상 소스 제외
       makeLead({ source: "meta_lead_ads", status: "contacted" }), // new 아님 → 제외
+      makeLead({ source: "meta_lead_ads", email: "test@meta.com" }), // 테스트 리드 제외
     ]
     const signal = resolveUnrespondedSignal(null, leads, NOW)
     expect(signal).toEqual({ unrespondedCount: 2, unresponded24hCount: 0, basis: "client" })
@@ -496,7 +573,7 @@ describe("buildOperationalAlerts — tone·임계값·딥링크", () => {
   it("미응답 신호는 필터드 보드 딥링크로 직결된다 (bare /admin/crm 금지)", () => {
     const { alerts } = buildOperationalAlerts(alertInput({ unrespondedCount: 2, todayLeads: 1 }))
     expect(alerts[0].id).toBe("lead-followup")
-    expect(alerts[0].href).toBe("/admin/crm/customers/leads?filter=unresponded&focus=risk")
+    expect(alerts[0].href).toBe("/admin/crm/customers/leads?filter=unresponded_24h&focus=risk")
     expect(alerts[0].tone).toBe("warning")
   })
 
@@ -507,9 +584,10 @@ describe("buildOperationalAlerts — tone·임계값·딥링크", () => {
     expect(alerts[0].id).toBe("lead-followup")
     expect(alerts[0].tone).toBe("danger")
     // 산정 기준 캡션(응대 전·24h+·소스 기준)이 설명에 포함된다.
-    expect(alerts[0].description).toContain("응대 전 2건")
+    expect(alerts[0].description).toContain("신규 상태 2건")
     expect(alerts[0].description).toContain("24h+ 경과 1건")
     expect(alerts[0].description).toContain("데모·문의·Meta")
+    expect(alerts[0].description).toContain("테스트 제외")
   })
 
   it("후속 리스크 meta는 오늘 유입이 있으면 '오늘 유입 N건', 없으면 '이번 주 유입 N건'", () => {
@@ -590,5 +668,35 @@ describe("computePipelineCoverage", () => {
       computePipelineCoverage({ goal_cum: [100], revenue_cum: [120], revenue_trend_cum: [130] })
     ).toBeNull()
     expect(computePipelineCoverage({ goal_cum: [], revenue_cum: [], revenue_trend_cum: [] })).toBeNull()
+  })
+})
+
+// T3/T6(d) — OverviewClient의 "서버가 채워 준 소스는 페치를 건너뛴다" 판정을 뽑아낸 순수 헬퍼.
+// staleTimes.dynamic(180초)로 재사용된 RSC 프리페치가 있으므로, refreshKey === 0(첫 마운트)
+// 만으로는 부족하고 generatedAt이 신선해야(ADMIN_PREFETCH_FRESH_MS 이내) 페치를 건너뛴다.
+describe("shouldUsePrefetchedSource", () => {
+  const NOW = 1_800_000_000_000
+
+  it("첫 마운트(refreshKey===0) + 신선한 generatedAt이면 페치를 건너뛴다", () => {
+    expect(shouldUsePrefetchedSource(0, NOW, NOW)).toBe(true)
+    expect(shouldUsePrefetchedSource(0, NOW - ADMIN_PREFETCH_FRESH_MS, NOW)).toBe(true)
+  })
+
+  it("첫 마운트여도 generatedAt이 신선 기준을 넘기면 페치를 건너뛰지 않는다", () => {
+    expect(shouldUsePrefetchedSource(0, NOW - ADMIN_PREFETCH_FRESH_MS - 1, NOW)).toBe(false)
+    // staleTimes.dynamic 상한(180초)까지 재사용된 극단적인 경우도 마찬가지.
+    expect(shouldUsePrefetchedSource(0, NOW - 180_000, NOW)).toBe(false)
+  })
+
+  it("첫 마운트여도 generatedAt이 없으면(EMPTY_PREFETCH) 페치를 건너뛰지 않는다", () => {
+    expect(shouldUsePrefetchedSource(0, null, NOW)).toBe(false)
+    expect(shouldUsePrefetchedSource(0, undefined, NOW)).toBe(false)
+    expect(shouldUsePrefetchedSource(0, 0, NOW)).toBe(false)
+  })
+
+  it("재시도(refreshKey>0)는 generatedAt이 아무리 신선해도 항상 다시 받는다", () => {
+    // "다시 시도"가 같은 값을 되돌려주면 버튼이 거짓말이 된다 — OverviewClient의 기존 계약.
+    expect(shouldUsePrefetchedSource(1, NOW, NOW)).toBe(false)
+    expect(shouldUsePrefetchedSource(2, NOW, NOW)).toBe(false)
   })
 })

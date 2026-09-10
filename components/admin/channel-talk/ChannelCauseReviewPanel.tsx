@@ -565,14 +565,12 @@ export default function ChannelCauseReviewPanel({
             </div>
 
             {form.reviewState === "approved" && form.causeState === "confirmed" ? (
-              <div className={`mt-4 flex items-start gap-2 rounded-[8px] border px-3 py-2.5 text-[10.5px] leading-4 ${approvalReady ? "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]" : "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"}`}>
-                {approvalReady ? <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" /> : <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
-                <p>
-                  {approvalReady
-                    ? "확정 승인에 필요한 실제 원인과 근거 메시지가 준비됐습니다."
-                    : "승인된 확정 원인으로 저장하려면 실제 원인과 근거 메시지를 모두 지정해야 합니다."}
-                </p>
-              </div>
+              !approvalReady && (
+                <div className="mt-4 flex items-start gap-2 rounded-[8px] border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2.5 text-[10.5px] leading-4 text-[#7A520F]">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <p>승인된 확정 원인으로 저장하려면 실제 원인과 근거 메시지를 모두 지정해야 합니다.</p>
+                </div>
+              )
             ) : (
               <p className="mt-4 text-[10.5px] leading-4 text-[#A39E98]">
                 추정·미확인 사례는 판별 질문 보강에 참고할 수 있지만, 확정 답변 근거로 자동 사용하지 않습니다.

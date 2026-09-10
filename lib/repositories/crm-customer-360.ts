@@ -6,6 +6,12 @@ import {
   type NeoCrmCustomerEeoAccount,
   type NeoCrmCustomerMoneyItem,
 } from "@/lib/admin-crm-customers-neo"
+import { getCompassActivitiesByLeadIds, getCompassLeadsByPhoneKeys } from "@/lib/compass/bridge"
+import { compassLeadUrl, normalizePhoneKey } from "@/lib/compass/normalize"
+import {
+  toCompassTimelineEntries,
+  type CompassTimelineEntry,
+} from "@/lib/crm/compass-timeline"
 import { classifyLeadOrigin, type LeadOriginClass } from "@/lib/crm/capture/origin"
 import { deriveLeadRegionLabel } from "@/lib/crm/lead-message"
 import { buildLeadPriorityItem } from "@/lib/crm/priority"
@@ -94,6 +100,19 @@ export interface Customer360Risk {
   totalBalance: number | null
 }
 
+/**
+ * Compass(마케팅팀 앱) 활동 병합 결과.
+ * `down`은 "활동이 없다"가 아니라 "브리지가 끊겨 확인할 수 없다"는 뜻이다 — 화면은 둘을 구분한다.
+ */
+export interface Customer360Compass {
+  /** 전화 정규화 키로 매칭된 Compass 리드 id들 */
+  leadIds: number[]
+  /** 대표 리드 딥링크(매칭 리드가 하나도 없으면 null) */
+  href: string | null
+  entries: CompassTimelineEntry[]
+  down: boolean
+}
+
 export interface Customer360 {
   generatedAt: string
   key: string
@@ -115,6 +134,8 @@ export interface Customer360 {
   risk: Customer360Risk
   serviceRisk: ServiceRisk | null
   activity: ListCrmCustomerEventsResult
+  /** Compass 활동(콜·미팅·메모·재유입·단계 변경) — 기존 타임라인에 소스 라벨로 병합된다 */
+  compass: Customer360Compass
   tasks: ListCrmTasksResult
   deals: ListCrmDealsResult
   /** 수기 라벨(crm_customer_tags) — 드로어 온-오픈 별도 태그 fetch를 없애기 위한 additive 필드 */
@@ -328,6 +349,35 @@ export function computeCustomer360Risk(input: RiskInput): Customer360Risk {
   }
 }
 
+const EMPTY_COMPASS: Customer360Compass = { leadIds: [], href: null, entries: [], down: false }
+
+/**
+ * 전화 하나로 Compass 활동을 끌어온다: 전화 → normalizePhoneKey → compass_leads_v →
+ * compass_activities_v. 360은 단건 화면이라 추가 쿼리 2회를 허용한다.
+ * 전화가 없으면 조회 자체를 하지 않는다(추측 매칭 금지).
+ */
+async function loadCompassActivity(phone: string | null | undefined): Promise<Customer360Compass> {
+  const key = normalizePhoneKey(phone)
+  if (!key) return EMPTY_COMPASS
+
+  const leads = await getCompassLeadsByPhoneKeys([key])
+  if (leads.down) return { ...EMPTY_COMPASS, down: true }
+  const leadIds = leads.rows.map((row) => row.id)
+  if (leadIds.length === 0) return EMPTY_COMPASS
+
+  const activities = await getCompassActivitiesByLeadIds(leadIds)
+  if (activities.down) {
+    return { leadIds, href: compassLeadUrl(leadIds[0]), entries: [], down: true }
+  }
+
+  return {
+    leadIds,
+    href: compassLeadUrl(leadIds[0]),
+    entries: toCompassTimelineEntries(activities.rows),
+    down: false,
+  }
+}
+
 const EMPTY_MONEY: Customer360Money = {
   available: false,
   label: null,
@@ -468,14 +518,25 @@ export async function getCrmCustomer360(
 
   // 제품 매출 요약 — 고객명(header.name)을 계정키로 REV/HW 원장에 조인. 비핵심이라 실패해도
   // 드로어 전체를 막지 않게 unmatched 폴백으로 흡수하고 경고만 남긴다.
+  // Compass 활동은 전화 조인이라 contacts 가 정해진 뒤에야 갈 수 있다 — 같은 단계에서 병렬로 묶는다.
+  const [productSummaryResult, compassResult] = await Promise.allSettled([
+    found && header?.name
+      ? getCrmAccountProductSummary(header.name)
+      : Promise.resolve(EMPTY_CRM_ACCOUNT_PRODUCT_SUMMARY),
+    found ? loadCompassActivity(contacts?.phone) : Promise.resolve(EMPTY_COMPASS),
+  ])
+
   let productSummary: CrmAccountProductSummary = EMPTY_CRM_ACCOUNT_PRODUCT_SUMMARY
-  if (found && header?.name) {
-    try {
-      productSummary = await getCrmAccountProductSummary(header.name)
-    } catch {
-      warnings.push("제품 매출 요약을 불러오지 못했습니다.")
-    }
+  if (productSummaryResult.status === "fulfilled") {
+    productSummary = productSummaryResult.value
+  } else {
+    warnings.push("제품 매출 요약을 불러오지 못했습니다.")
   }
+
+  // Compass 조회 실패는 경고 대신 down 배지로 말한다 — 보조 원천 하나가
+  // health.ok(=warnings 없음) 의미를 뒤집지 않게 한다(태그와 같은 additive 원칙).
+  const compass: Customer360Compass =
+    compassResult.status === "fulfilled" ? compassResult.value : { ...EMPTY_COMPASS, down: true }
 
   return {
     generatedAt: now.toISOString(),
@@ -494,6 +555,7 @@ export async function getCrmCustomer360(
     risk,
     serviceRisk,
     activity,
+    compass,
     tasks,
     deals,
     tags,

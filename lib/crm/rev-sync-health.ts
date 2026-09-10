@@ -59,10 +59,14 @@ export interface RevSyncRevenueCny {
 }
 
 export interface RevSyncHygiene {
-  /** candidate 링크의 시트 행 키가 현 시트에 없음 — 행 이동/수정으로 고아가 된 후보 */
+  /** candidate 링크의 시트 행 키가 현 시트에 없음 — 현재 액션 수가 아니라 누적 이력 행 수 */
   orphanCandidates: number
-  /** status=stale로 은퇴한 링크 */
+  /** orphanCandidates에 포함된 고유 정규화 이름 수(구 API 응답에서는 없음). */
+  orphanCandidateNames?: number
+  /** status=stale로 은퇴한 누적 링크 행 수 */
   staleLinks: number
+  /** staleLinks에 포함된 고유 정규화 이름 수(구 API 응답에서는 없음). */
+  staleLinkNames?: number
 }
 
 // ── 연결(linked) 계정 → CRM 진입로 (호환성 기획 2026-07-18 P0-2) ────────────

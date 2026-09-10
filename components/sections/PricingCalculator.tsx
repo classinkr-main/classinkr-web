@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 
 import { Slider } from "@/components/ui/slider"
+import { getSoftwarePlan, type SoftwarePlanId } from "@/lib/billing/plans"
 
 type Quality = "SD" | "HD" | "FHD"
 type RecordingMode = "none" | "single" | "dual"
@@ -56,7 +57,22 @@ const RECORDING_RATE_CNY: Record<RecordingMode, number> = {
   dual: 4,
 }
 
-const SUBSCRIPTION_TIERS: Record<
+/**
+ * 가격 SSOT는 lib/billing/plans.ts. 이 시뮬레이터의 SUBSCRIPTION_TIERS에는 온스테이지 한도,
+ * 스토리지 한도처럼 plans.ts에 없는 시뮬레이터 전용 필드가 섞여 있어 플랜 객체를 통째로
+ * 재사용할 수 없다 — 단가(priceUsd, 월 기준)만 SSOT에서 파생하고 나머지 한도는 그대로 둔다.
+ * Enterprise는 selfServe: false라 getSelfServeSoftwarePlan(자기결제 플랜 전용)으로는 조회할
+ * 수 없으므로 getSoftwarePlan + 존재 검사로 읽는다.
+ */
+function requirePlanMonthlyUsd(planId: SoftwarePlanId): number {
+  const plan = getSoftwarePlan(planId)
+  if (!plan.monthly) {
+    throw new Error(`[PricingCalculator] "${planId}" 플랜에 월 단가가 없습니다`)
+  }
+  return plan.monthly.amount
+}
+
+export const SUBSCRIPTION_TIERS: Record<
   SubscriptionTier,
   {
     priceUsd: number
@@ -70,7 +86,7 @@ const SUBSCRIPTION_TIERS: Record<
   }
 > = {
   Standard: {
-    priceUsd: 99,
+    priceUsd: requirePlanMonthlyUsd("standard"),
     onStageMax: 6,
     courseMax: 50,
     lessonMaxMinutes: 240,
@@ -80,7 +96,7 @@ const SUBSCRIPTION_TIERS: Record<
     storagePerTeacherGb: 10,
   },
   Plus: {
-    priceUsd: 199,
+    priceUsd: requirePlanMonthlyUsd("plus"),
     onStageMax: 12,
     courseMax: 1000,
     lessonMaxMinutes: 720,
@@ -90,7 +106,7 @@ const SUBSCRIPTION_TIERS: Record<
     storagePerTeacherGb: 20,
   },
   Enterprise: {
-    priceUsd: 299,
+    priceUsd: requirePlanMonthlyUsd("enterprise"),
     onStageMax: 12,
     courseMax: 2000,
     lessonMaxMinutes: 1440,

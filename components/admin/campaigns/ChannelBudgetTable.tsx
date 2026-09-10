@@ -1,12 +1,14 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import { AlertCircle } from "lucide-react"
 import {
   AD_CHANNEL_COLOR,
   AD_CHANNEL_LABEL,
   AD_CHANNELS,
   type AdChannel,
 } from "@/lib/types/event-metrics"
+import { AdminMoneyInput } from "@/components/admin/AdminMoneyInput"
 import { KRW, pct, won } from "@/components/admin/campaigns/event-format"
 
 // Meta 라이브 집행은 계정 통화(대개 USD)라 KRW 포맷을 쓰지 않고 통화 코드 + 소수 2자리로 표기한다.
@@ -28,7 +30,11 @@ type ChannelBudgetInputRow = Omit<ChannelBudgetRow, "channel"> & { channel: stri
 export interface ChannelBudgetTableProps {
   rows: readonly ChannelBudgetInputRow[]
   budgets: Record<AdChannel, number>
-  onBudgetChange: (channel: AdChannel, amount: number) => void
+  /**
+   * 저장 위임. Promise 를 돌려주면 그 이행/거절로 행 단위 진행·성공·실패 표시를 만든다
+   * (void 를 돌려주는 호출부와도 호환 — 그 경우 표시는 즉시 "성공"으로 접힌다).
+   */
+  onBudgetChange: (channel: AdChannel, amount: number) => void | Promise<void>
   totalSpend: number
   totalRevenue: number
   overallRoi: number | null
@@ -38,54 +44,14 @@ export interface ChannelBudgetTableProps {
 
 const GRID = "grid grid-cols-[1.3fr_1.3fr_1fr_1fr_0.9fr_1fr] items-center gap-2"
 
-// 배정(예산) 인라인 입력 — blur(또는 Enter)에서만 커밋한다. 표시는 원시 정수(콤마 없음)로 편집 마찰을 줄인다.
-function BudgetInput({
-  channel,
-  value,
-  onCommit,
-}: {
-  channel: AdChannel
-  value: number
-  onCommit: (channel: AdChannel, amount: number) => void
-}) {
-  const [draft, setDraft] = useState(value > 0 ? String(value) : "")
-  // 커밋 후 상위가 새 예산을 되돌려주면(prop value 변경) 편집 초안을 canonical 값으로 재동기화한다.
-  // useEffect 대신 "prop 변경 시 렌더 중 state 조정" 패턴(react.dev) — 캐스케이딩 렌더를 피한다.
-  const [syncedValue, setSyncedValue] = useState(value)
-  if (value !== syncedValue) {
-    setSyncedValue(value)
-    setDraft(value > 0 ? String(value) : "")
-  }
+// 배정 저장의 행 단위 상태. 단일 슬롯이면 두 채널을 연속 저장할 때 먼저 끝난 응답이
+// 다른 행의 스피너를 풀고, 실패도 마지막 하나만 남아 "어느 채널이 실패했나"가 사라진다.
+type CommitPhase =
+  | { phase: "pending" }
+  | { phase: "saved" }
+  | { phase: "error"; message: string }
 
-  const commit = () => {
-    const trimmed = draft.trim()
-    const parsed = trimmed === "" ? 0 : Math.floor(Number(trimmed))
-    const safe = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
-    setDraft(safe > 0 ? String(safe) : "")
-    if (safe !== value) onCommit(channel, safe)
-  }
-
-  return (
-    <span className="inline-flex items-center gap-1 rounded-lg border border-[#e8e8e4] bg-[#fafaf8] px-2 py-1 focus-within:border-[#084734] focus-within:bg-white">
-      <span aria-hidden className="text-[11px] text-[#1a1a1a]/35">
-        ₩
-      </span>
-      <input
-        type="text"
-        inputMode="numeric"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value.replace(/[^0-9]/g, ""))}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") e.currentTarget.blur()
-        }}
-        placeholder="0"
-        aria-label={`${AD_CHANNEL_LABEL[channel]} 배정 예산`}
-        className="w-full min-w-0 bg-transparent text-right text-[12px] tabular-nums text-[#111110] outline-none placeholder:text-[#A39E98]"
-      />
-    </span>
-  )
-}
+const SAVED_MS = 1500
 
 export function ChannelBudgetTable({
   rows,
@@ -97,6 +63,52 @@ export function ChannelBudgetTable({
   metaLiveSpend,
   metaCurrency,
 }: ChannelBudgetTableProps) {
+  const [commitPhase, setCommitPhase] = useState<Partial<Record<AdChannel, CommitPhase>>>({})
+  // 채널별 순번 — 같은 채널을 빠르게 두 번 고치면 늦게 온 앞선 응답이 뒤늦게 스피너를 풀거나
+  // 이미 지난 실패를 다시 띄운다. usePerf(SummaryTab)의 seqRef 와 같은 규약.
+  const seqRef = useRef<Partial<Record<AdChannel, number>>>({})
+  const savedTimersRef = useRef<Partial<Record<AdChannel, ReturnType<typeof setTimeout>>>>({})
+
+  useEffect(() => {
+    const timers = savedTimersRef.current
+    return () => {
+      for (const timer of Object.values(timers)) if (timer) clearTimeout(timer)
+    }
+  }, [])
+
+  async function handleCommit(channel: AdChannel, amount: number | null) {
+    // allowNull={false} 라 null 은 오지 않지만, 계약상 "빈 값 = 미배정 = 0" 을 여기서도 못 박는다.
+    const next = amount ?? 0
+    const seq = (seqRef.current[channel] ?? 0) + 1
+    seqRef.current[channel] = seq
+    const savedTimer = savedTimersRef.current[channel]
+    if (savedTimer) clearTimeout(savedTimer)
+    setCommitPhase((prev) => ({ ...prev, [channel]: { phase: "pending" } }))
+    try {
+      // void 를 돌려주는 호출부도 그대로 받는다(그 경우 즉시 이행 → "저장됨" 표시).
+      await Promise.resolve(onBudgetChange(channel, next))
+      if (seqRef.current[channel] !== seq) return
+      setCommitPhase((prev) => ({ ...prev, [channel]: { phase: "saved" } }))
+      savedTimersRef.current[channel] = setTimeout(() => {
+        if (seqRef.current[channel] !== seq) return
+        setCommitPhase((prev) => {
+          const rest = { ...prev }
+          delete rest[channel]
+          return rest
+        })
+      }, SAVED_MS)
+    } catch (e) {
+      if (seqRef.current[channel] !== seq) return
+      // 실패는 상단 배너만으로는 "어느 채널인지"가 사라진다 — 만진 행에 그대로 붙인다.
+      // 호출부가 서버 정본을 다시 받아 입력칸을 되돌리므로, 되돌렸다는 사실도 함께 밝힌다.
+      const message = e instanceof Error ? e.message : "채널 예산 저장 실패"
+      setCommitPhase((prev) => ({
+        ...prev,
+        [channel]: { phase: "error", message: `${message} — 입력값은 저장 전 상태로 되돌렸습니다.` },
+      }))
+    }
+  }
+
   const rowByChannel = new Map<string, ChannelBudgetInputRow>()
   for (const r of rows) rowByChannel.set(r.channel, r)
 
@@ -143,43 +155,71 @@ export function ChannelBudgetTable({
 
           {/* rows */}
           <div className="divide-y divide-[#f0f0ec]">
-            {merged.map((row) => (
-              <div key={row.channel} className={`${GRID} px-3 py-2.5`}>
-                <span className="flex min-w-0 items-center gap-2">
-                  <span
-                    aria-hidden
-                    className="h-2.5 w-2.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: AD_CHANNEL_COLOR[row.channel] }}
-                  />
-                  <span className="truncate text-[12px] font-medium text-[#111110]">
-                    {AD_CHANNEL_LABEL[row.channel]}
-                  </span>
-                </span>
-                <span className="flex justify-end">
-                  <BudgetInput channel={row.channel} value={row.allocated} onCommit={onBudgetChange} />
-                </span>
-                <span className="text-right text-[12px] tabular-nums text-[#1a1a1a]/60">
-                  {won(row.spend)}
-                </span>
-                <span
-                  className={`text-right text-[12px] font-semibold tabular-nums ${
-                    row.remaining == null
-                      ? "text-[#A39E98]"
-                      : row.remaining < 0
-                        ? "text-[#B85C33]"
-                        : "text-[#084734]"
-                  }`}
-                >
-                  {row.remaining == null ? "—" : won(row.remaining)}
-                </span>
-                <span className="text-right text-[12px] tabular-nums text-[#1a1a1a]/60">
-                  {KRW.format(Math.round(row.leads))}
-                </span>
-                <span className="text-right text-[12px] tabular-nums text-[#111110]">
-                  {won(row.cpl)}
-                </span>
-              </div>
-            ))}
+            {merged.map((row) => {
+              const phase = commitPhase[row.channel]
+              const errorId = `channel-budget-error-${row.channel}`
+              return (
+                <div key={row.channel}>
+                  <div className={`${GRID} px-3 py-2.5`}>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span
+                        aria-hidden
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: AD_CHANNEL_COLOR[row.channel] }}
+                      />
+                      <span className="truncate text-[12px] font-medium text-[#111110]">
+                        {AD_CHANNEL_LABEL[row.channel]}
+                      </span>
+                    </span>
+                    <span className="flex justify-end">
+                      <AdminMoneyInput
+                        value={row.allocated}
+                        onCommit={(next) => void handleCommit(row.channel, next)}
+                        // 이 필드는 "미배정 = 0" 이 도메인 정의다(총계 잔여 계산이 그 전제 위에 있다).
+                        allowNull={false}
+                        prefix="₩"
+                        placeholder="0"
+                        ariaLabel={`${AD_CHANNEL_LABEL[row.channel]} 배정 예산`}
+                        ariaDescribedBy={phase?.phase === "error" ? errorId : undefined}
+                        pending={phase?.phase === "pending"}
+                        saved={phase?.phase === "saved"}
+                        invalid={phase?.phase === "error"}
+                      />
+                    </span>
+                    <span className="text-right text-[12px] tabular-nums text-[#1a1a1a]/60">
+                      {won(row.spend)}
+                    </span>
+                    <span
+                      className={`text-right text-[12px] font-semibold tabular-nums ${
+                        row.remaining == null
+                          ? "text-[#A39E98]"
+                          : row.remaining < 0
+                            ? "text-[#B85C33]"
+                            : "text-[#084734]"
+                      }`}
+                    >
+                      {row.remaining == null ? "—" : won(row.remaining)}
+                    </span>
+                    <span className="text-right text-[12px] tabular-nums text-[#1a1a1a]/60">
+                      {KRW.format(Math.round(row.leads))}
+                    </span>
+                    <span className="text-right text-[12px] tabular-nums text-[#111110]">
+                      {won(row.cpl)}
+                    </span>
+                  </div>
+                  {phase?.phase === "error" && (
+                    <p
+                      id={errorId}
+                      role="alert"
+                      className="flex items-center justify-end gap-1.5 px-3 pb-2 text-[11.5px] text-[#B43E3E]"
+                    >
+                      <AlertCircle aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                      {phase.message}
+                    </p>
+                  )}
+                </div>
+              )
+            })}
           </div>
 
           {/* totals */}

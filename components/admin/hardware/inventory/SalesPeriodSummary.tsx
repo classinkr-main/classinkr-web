@@ -31,7 +31,7 @@ function SalesPeriodSummary({ summary, onOpenDetail }: SalesPeriodSummaryProps) 
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-4">
         <div>
           <p className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">판매 · 설치</p>
-          <p className="mt-1 text-[12px] text-[#615D59]">확정 출고(샘플·수리 제외) 기준 · 매출은 실판매(USD) · 분기는 회계연도(4월 시작)</p>
+          <p className="mt-1 text-[12px] text-[#615D59]">확정 출고(샘플·수리 제외) 기준 · 매출은 실판매(USD) · 분기·연간은 회계연도(4월 시작)</p>
         </div>
         <button
           type="button"

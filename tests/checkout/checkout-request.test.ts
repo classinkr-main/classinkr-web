@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 /**
  * 결제창 무결제 도입 신청(POST /api/checkout/request) 백엔드.
@@ -6,6 +6,14 @@ import { afterEach, describe, expect, it, vi } from "vitest"
  */
 
 const OPS_WEBHOOK_URL = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=ops-room"
+
+/**
+ * 시계 고정 — desiredDate 검증은 KST 오늘(now) 기준 [내일, +365일] 창과 비교하는데,
+ * submitCheckoutRequest 는 now 주입 인자가 없어 실제 시계를 타면 아래 리터럴 픽스처
+ * 날짜가 언젠가 과거가 되어 파일 전체가 죽는다. setSystemTime 은 Date 만 모킹하므로
+ * 타이머·프로미스는 실제로 돈다. 명시적 now 를 넘기는 KST 경계 테스트에는 영향이 없다.
+ */
+const FIXED_NOW = new Date("2026-08-01T09:00:00+09:00")
 
 /** 하드웨어 라인은 실제 카탈로그 sku 여야 통과한다(서버가 SSOT 와 대조한다). */
 const VALID_PAYLOAD = {
@@ -25,7 +33,7 @@ const VALID_PAYLOAD = {
   email: "won@happy.co.kr",
   installType: "wall",
   address: "서울시 강남구 테헤란로 123, 4층",
-  desiredDate: "2026-08-10",
+  desiredDate: "2026-08-10", // FIXED_NOW(KST 8/1) 기준 +9일 — 검증 창 [내일, +365일] 안
   memo: "2층 교실 먼저 설치 희망",
   sourcePage: "/product/hw",
   consent: true,
@@ -182,7 +190,12 @@ function createDeferred() {
   }
 }
 
+beforeEach(() => {
+  vi.setSystemTime(FIXED_NOW)
+})
+
 afterEach(() => {
+  vi.useRealTimers()
   vi.restoreAllMocks()
   vi.resetModules()
 })
@@ -802,5 +815,53 @@ describe("WeCom ops 알림 본문", () => {
     expect(content).not.toContain("- 품목 10 (sw-item-10)")
     expect(content).toContain("- 외 4건")
     expect(content).toContain("합계: ₩14,000")
+  })
+})
+
+describe("설치 라인 서버 검증", () => {
+  /**
+   * 설치는 화면 카드가 아니라 신청 단계에서 고르는 방식이라 HARDWARE_CATALOG 밖에 있다.
+   * 서버는 getHardwareItem 으로 하드웨어 라인의 단가를 핀하는데, 설치 sku 가 거기서
+   * 안 잡히면 라인이 조용히 버려져 설치비가 0원으로 접수된다.
+   */
+  it("설치 라인을 카탈로그 단가로 핀해서 받는다", async () => {
+    const { normalizeCheckoutRequest } = await loadWithMockedNotifications()
+    const result = normalizeCheckoutRequest(
+      {
+        ...VALID_PAYLOAD,
+        items: [
+          { sku: "hw-board-86", name: '86" Classin 전자칠판', qty: 2, unitAmount: 6_300_000, currency: "KRW" },
+          { sku: "hw-install-wall", name: "벽걸이 설치", qty: 2, unitAmount: 500_000, currency: "KRW" },
+        ],
+      },
+      FIXED_NOW
+    )
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    const installLine = result.value.items.find((item) => item.sku === "hw-install-wall")
+    expect(installLine).toBeDefined()
+    expect(installLine?.unitAmount).toBe(500_000)
+    expect(installLine?.lineAmount).toBe(1_000_000)
+    // 630만원 × 2 + 설치 50만원 × 2
+    expect(result.value.totalAmount).toBe(13_600_000)
+  })
+
+  it("클라이언트가 설치 단가를 낮춰 보내도 카탈로그 값으로 되돌린다", async () => {
+    const { normalizeCheckoutRequest } = await loadWithMockedNotifications()
+    const result = normalizeCheckoutRequest(
+      {
+        ...VALID_PAYLOAD,
+        items: [
+          { sku: "hw-install-stand", name: "이동형 스탠드 설치", qty: 1, unitAmount: 1, currency: "KRW" },
+        ],
+      },
+      FIXED_NOW
+    )
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.items[0].unitAmount).toBe(500_000)
   })
 })

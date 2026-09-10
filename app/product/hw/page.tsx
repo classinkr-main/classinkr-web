@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { trackEvent } from "@/lib/analytics"
 import { BROCHURE_URL } from "@/lib/marketing-links"
 import { TESTIMONIALS } from "@/lib/testimonials"
+import { BOARD_SPEC_GROUPS } from "@/lib/hardware/board-specs"
 import { motion, useInView } from "framer-motion"
 import {
     ArrowRight, PenTool, Eye, Share2,
@@ -44,46 +45,9 @@ const stagger = (i: number) => ({
 })
 
 /* ── Spec data ───────────────────────────────────────────────────── */
-type SpecRow = { label: string; s110: string; s86: string; s75: string; s65: string }
-type SpecGroup = { category: string; rows: SpecRow[] }
-
-const specGroups: SpecGroup[] = [
-    {
-        category: "제품 사양",
-        rows: [
-            { label: "모델명", s110: "BS110A", s86: "BS86A", s75: "BS75A", s65: "BS65A" },
-            { label: "화면 크기", s110: '110"', s86: '86"', s75: '75"', s65: '65"' },
-            { label: "전체 길이", s110: "2,620.55mm", s86: "1,976.63mm", s75: "1,730.63mm", s65: "1,508.71mm" },
-            { label: "전체 높이", s110: "1,457.20mm", s86: "1,153.31mm", s75: "1,015.22mm", s65: "889.87mm" },
-            { label: "두께", s110: "110.00mm", s86: "95.50mm", s75: "95.50mm", s65: "94.79mm" },
-        ],
-    },
-    {
-        category: "터치 방식",
-        rows: [
-            { label: "터치 포인트", s110: "50점", s86: "50점", s75: "50점", s65: "50점" },
-            { label: "터치 기술", s110: "적외선 터치", s86: "적외선 터치", s75: "적외선 터치", s65: "적외선 터치" },
-            { label: "응답 속도", s110: "2ms", s86: "2ms", s75: "2ms", s65: "2ms" },
-            { label: "인식 범위", s110: "1.5mm", s86: "1.5mm", s75: "1.5mm", s65: "1.5mm" },
-            { label: "측면 제스처바", s110: "양측 제공", s86: "양측 제공", s75: "—", s65: "—" },
-        ],
-    },
-    {
-        category: "오디오",
-        rows: [
-            { label: "내장 마이크", s110: "—", s86: "8배열", s75: "8배열", s65: "8배열" },
-            { label: "스피커 채널", s110: "2.0", s86: "2.0", s75: "2.0", s65: "2.0" },
-            { label: "스피커 출력", s110: "2×15W", s86: "2×15W", s75: "2×15W", s65: "2×15W" },
-        ],
-    },
-    {
-        category: "부속품 (악세서리)",
-        rows: [
-            { label: "스탠드 (별도 옵션)", s110: "벽걸이 & 이동형", s86: "벽걸이 & 이동형", s75: "벽걸이 & 이동형", s65: "벽걸이 & 이동형" },
-            { label: "OPS 컴퓨터 모듈", s110: "기본 제공", s86: "기본 제공", s75: "기본 제공", s65: "기본 제공" },
-        ],
-    },
-]
+// 스펙 값은 lib/hardware/board-specs.ts 가 정본이다(규격서 → 문서 정본 → 이 모듈 순).
+// 페이지 안에 값을 다시 적으면 규격서 교정을 또 놓친다.
+const specGroups = BOARD_SPEC_GROUPS
 
 const lineupCards = [
     {

@@ -8,7 +8,7 @@
 // 정직 규칙: 예산 소진은 행사 KRW 광고비만(Meta USD·이메일·문자 제외) — 요약 카드가 ProjectBudgetCaveat 로 1회 명시.
 // DESIGN.md 팔레트만 사용.
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
   AlertCircle,
   Loader2,
@@ -21,6 +21,7 @@ import {
 
 import { adminFetch, adminFetchJson } from "@/lib/admin-client"
 import { useToast } from "@/components/ui/toast"
+import { useDialogFocus } from "@/components/admin/use-dialog-focus"
 import type {
   CampaignWithLinks,
   MarketingProject,
@@ -279,20 +280,22 @@ export default function ProjectDetailPanel({
     void load()
   }, [load])
 
-  // Escape: 편집 중이면 폼 드로어가 우선(자체 X 로 닫음) → 무시. 피커 열림 → 피커 닫기. 그 외 → 상세 닫기.
+  // 포커스 트랩·복귀·Escape(2026-08-18 a11y) — role=dialog 선언만 있고 포커스가 배경에 남던
+  // 문제를 공용 훅으로 마감한다. 자식 오버레이(폼 드로어·피커)가 열려 있는 동안은 훅을
+  // 비활성화해 자식의 키 처리에 양보한다(폼 드로어는 자체 useDialogFocus 보유).
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null)
+  useDialogFocus(!editing && !pickerOpen, onClose, closeButtonRef)
+
+  // Escape: 편집 중이면 폼 드로어가 우선(자체 훅으로 닫음) → 무시. 피커 열림 → 피커만 닫는다.
+  // 기본 케이스(상세 닫기)는 위 useDialogFocus가 담당한다.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key !== "Escape") return
-      if (editing) return
-      if (pickerOpen) {
-        setPickerOpen(false)
-        return
-      }
-      onClose()
+      if (e.key !== "Escape" || !pickerOpen) return
+      setPickerOpen(false)
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [editing, pickerOpen, onClose])
+  }, [pickerOpen])
 
   // 헤더·롤업은 fetch 전엔 리스트 요약으로 폴백해 빈 화면 깜빡임을 막는다.
   const head = data?.project ?? project
@@ -358,6 +361,7 @@ export default function ProjectDetailPanel({
                 {head.objective && <p className="mt-1 text-[12px] text-[#615D59]">{head.objective}</p>}
               </div>
               <button
+                ref={closeButtonRef}
                 type="button"
                 onClick={onClose}
                 aria-label="닫기"

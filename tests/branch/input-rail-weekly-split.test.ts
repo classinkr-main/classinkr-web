@@ -243,15 +243,24 @@ describe("InputRailSection — 주차 분해 그리드 UI 규약(소스 스캔)"
     expect(source).toContain("({ ...current, weeklyMode: false })")
   })
 
-  it("주차 5행 입력은 숫자만 허용(inputMode numeric + 숫자 외 제거) + W라벨·날짜 구간을 단다 — M9 공용 그리드", () => {
+  it("주차 5행 입력은 공용 금액 입력(숫자만·IME 안전)을 쓰고 W라벨·날짜 구간을 단다 — M9 공용 그리드", () => {
     // M9-1: 그리드 본체는 WeeklyAmountGrid로 이동 — UI 규약은 그 파일에서 검증한다.
     const grid = read(gridPath)
     expect(grid).toContain("FORECAST_WEEK_RANGE_LABELS.map((rangeLabel, index)")
-    expect(grid).toContain('event.target.value.replace(/[^\\d]/g, "")')
-    expect(grid).toContain('inputMode="numeric"')
-    expect(grid).toContain("aria-label={`W${index + 1} 금액`}")
+    // 숫자 강제는 AdminMoneyInput이 전담한다(조합 종료 후 정규화). 회귀 방지: 예전처럼 매 keystroke
+    // 마다 [^\d]를 지우면 한글 IME 조합이 통째로 삼켜져 입력이 빈 문자열이 된다 — 그 코드가 다시
+    // 들어오지 못하게 못 박는다.
+    expect(grid).toContain("<AdminMoneyInput")
+    expect(grid).not.toContain('replace(/[^\\d]/g, "")')
+    expect(grid).toContain("ariaLabel={`W${index + 1} 금액`}")
+    // 잠금 칸은 readOnly(포커스 유지) — disabled로 바꾸면 ↑/↓ 순회에서 확정 칸만 건너뛰어진다.
+    expect(grid).toContain("readOnly={locked}")
+    // 값·파생 UI 즉시 반영(월 합·확도 seg·저장 버튼) — blur 커밋만으로는 비활성 버튼이 mousedown을
+    // 삼켜 영영 활성화되지 않는 막다른 길이 생긴다.
+    expect(grid).toContain("onLiveChange={pushAmount}")
     // ↑/↓ 세로 이동(스프레드시트 감각) — Enter는 기존 form submit 계약 그대로 가로채지 않는다.
     expect(grid).toContain('event.key !== "ArrowDown" && event.key !== "ArrowUp"')
+    expect(grid).toContain("blurOnEnter={false}")
     // 레일은 공용 그리드를 rail variant로 소비한다 — 인라인 사본 재생성 금지(드리프트 차단).
     expect(source).toContain("<WeeklyAmountGrid")
     expect(source).toContain('variant="rail"')

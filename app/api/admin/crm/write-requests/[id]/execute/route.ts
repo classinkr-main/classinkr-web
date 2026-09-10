@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { revalidateTag } from "next/cache"
 
-import { requireVerifiedAdminContext } from "@/lib/admin-auth"
+import { STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { ADMIN_CRM_REVENUE_CACHE_TAG } from "@/lib/admin-crm-revenue"
 import { executeCrmWriteRequest } from "@/lib/external-crm/xiaoshouyi-write"
 
@@ -9,8 +9,9 @@ type RouteContext = {
   params: Promise<{ id: string }>
 }
 
+// 남의 CRM 에 실제로 쓰는 유일한 지점 — 되돌릴 수 없다. 관리자만.
 export async function POST(req: NextRequest, context: RouteContext) {
-  const admin = await requireVerifiedAdminContext(req)
+  const admin = await requireVerifiedAdminContext(req, STAFF_ADMIN_API_ROLES)
   if (admin instanceof NextResponse) return admin
 
   const { id } = await context.params

@@ -8,6 +8,10 @@
 // DESIGN.md 팔레트만 사용.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+
+import ShowMore, { useVisibleCount } from "@/components/admin/ui/ShowMore"
+
+const CAMPAIGN_LIST_STEP = 20
 import Link from "next/link"
 import { Activity, AlertCircle, ArrowLeft, Plus, RefreshCw, X } from "lucide-react"
 
@@ -54,6 +58,8 @@ export default function CampaignManageClient() {
   const [creating, setCreating] = useState(false)
   // 상태 필터 — 18건+ 목록에서 "진행만" 추리는 용도. 요약 카운트 칩이 토글이다.
   const [statusFilter, setStatusFilter] = useState<CampaignStatus | "all">("all")
+  // 이름 검색(2026-08-18) — Meta 동기화가 상위 50 미러를 만들면 목록이 곧 50+행이 된다.
+  const [query, setQuery] = useState("")
   // 상세 패널이 여는 캠페인(리스트 요약). null = 닫힘. onClose 는 memoized(상세의 load deps 안정).
   const [detail, setDetail] = useState<CampaignWithLinks | null>(null)
   const closeDetail = useCallback(() => setDetail(null), [])
@@ -95,9 +101,15 @@ export default function CampaignManageClient() {
   }, [campaigns])
 
   const visibleCampaigns = useMemo(
-    () => (statusFilter === "all" ? campaigns : campaigns.filter((c) => c.status === statusFilter)),
-    [campaigns, statusFilter],
+    () => {
+      const base = statusFilter === "all" ? campaigns : campaigns.filter((c) => c.status === statusFilter)
+      const q = query.trim().toLowerCase()
+      return q ? base.filter((c) => c.name.toLowerCase().includes(q)) : base
+    },
+    [campaigns, statusFilter, query],
   )
+  // 단계 렌더(2026-08-18) — 필터·검색이 total을 줄이면 훅이 스스로 클램프한다.
+  const listVisible = useVisibleCount(visibleCampaigns.length, CAMPAIGN_LIST_STEP)
 
   const handleSuccess = useCallback(
     async (message: string) => {
@@ -159,7 +171,7 @@ export default function CampaignManageClient() {
               캠페인 관리
             </h1>
             <p className="mt-1.5 text-[13px] text-[#615D59]">
-              채널별 실행(이메일·문자·행사·Meta)을 묶는 크로스채널 캠페인을 만들고 관리합니다.
+              이메일·문자·행사·Meta를 묶는 크로스채널 캠페인
             </p>
           </div>
 
@@ -314,9 +326,15 @@ export default function CampaignManageClient() {
           <CampaignManageEmpty onCreate={() => setCreating(true)} />
         ) : (
           <div className="space-y-1.5">
-            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pb-0.5">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 pb-0.5">
               <p className="text-[12px] text-[#615D59]">
                 캠페인 <span className="font-semibold tabular-nums text-[#111110]">{campaigns.length}</span>개
+                {query.trim() && (
+                  <>
+                    {" · 검색 "}
+                    <span className="font-semibold tabular-nums text-[#111110]">{visibleCampaigns.length}</span>건
+                  </>
+                )}
                 {statusFilter !== "all" && (
                   <>
                     {" · "}
@@ -331,6 +349,15 @@ export default function CampaignManageClient() {
                 )}
               </p>
               {/* 상태 카운트 = 필터 칩 — 숫자를 읽는 자리에서 바로 그 집합으로 좁힌다. */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="캠페인 이름 검색"
+                  aria-label="캠페인 이름 검색"
+                  className="h-7 w-40 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[12px] text-[#111110] placeholder:text-[#A39E98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+                />
               <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="상태 필터">
                 {STATUS_SUMMARY_ORDER.filter((s) => statusCounts[s] > 0).map((s) => (
                   <button
@@ -355,19 +382,33 @@ export default function CampaignManageClient() {
                   </button>
                 ))}
               </div>
+              </div>
             </div>
             {visibleCampaigns.length === 0 ? (
               <p className="rounded-xl border border-dashed border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] py-8 text-center text-[12.5px] text-[#A39E98]">
-                이 상태의 캠페인이 없습니다.
+                {query.trim() ? "검색과 일치하는 캠페인이 없습니다." : "이 상태의 캠페인이 없습니다."}
               </p>
             ) : (
-              visibleCampaigns.map((campaign) => (
-                <CampaignRow
-                  key={campaign.id}
-                  campaign={campaign}
-                  onOpen={() => setDetail(campaign)}
-                />
-              ))
+              <>
+                {visibleCampaigns.slice(0, listVisible.visible).map((campaign) => (
+                  <CampaignRow
+                    key={campaign.id}
+                    campaign={campaign}
+                    onOpen={() => setDetail(campaign)}
+                  />
+                ))}
+                {(listVisible.canMore || listVisible.canCollapse) && (
+                  <div className="flex justify-center pt-1.5">
+                    <ShowMore
+                      visible={listVisible.visible}
+                      total={visibleCampaigns.length}
+                      step={CAMPAIGN_LIST_STEP}
+                      onMore={listVisible.showMore}
+                      onCollapse={listVisible.canCollapse ? listVisible.collapse : undefined}
+                    />
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

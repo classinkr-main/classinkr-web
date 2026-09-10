@@ -1,10 +1,13 @@
 import "server-only"
 
+import { unstable_cache } from "next/cache"
 import { getBranchRevSourceRecordKey, isPlaceholderCrmName } from "@/lib/crm-source-linking"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
+import { getCompassRevenue } from "@/lib/compass/bridge"
 import type {
   AdminCrmRevenueSheetBreakdownRow,
+  AdminCrmRevenueSheetCompassCompare,
   AdminCrmRevenueSheetMonthPoint,
   AdminCrmRevenueSheetRow,
   AdminCrmRevenueSheetWorkspace,
@@ -130,6 +133,35 @@ function addMonth(
   map.set(month, current)
 }
 
+// M8 — rev-sheet "Compass 대조" 배지. 어드민이 실제로 데이터를 가진 달(monthlyPoints)만
+// Compass에 물어본다(전체 연혁을 다 끌어오지 않음). month 키는 두 쪽 모두 "YYYY-MM" 실측 확인됨
+// (2026-08-28, compass_revenue_v.month 표본 조회) — 별도 포맷 변환 없이 그대로 매칭한다.
+// down이면 compassAmount/diffAmount를 0으로 두고 down 플래그만 화면에 전달한다(무음 오염 금지).
+export async function getCompassRevenueCompare(
+  monthlyPoints: AdminCrmRevenueSheetMonthPoint[]
+): Promise<AdminCrmRevenueSheetCompassCompare> {
+  const months = monthlyPoints.map((point) => point.month)
+  const adminAmount = monthlyPoints.reduce((sum, point) => sum + point.scheduledAmount, 0)
+
+  if (months.length === 0) {
+    return { down: false, months, adminAmount, compassAmount: 0, diffAmount: 0 }
+  }
+
+  const result = await getCompassRevenue(months)
+  if (result.down) {
+    return { down: true, months, adminAmount, compassAmount: 0, diffAmount: 0 }
+  }
+
+  // 요청한 달 밖의(또는 month가 비어 있는) 행은 방어적으로 제외한다 — getCompassRevenue가
+  // 이미 .in("month", months)로 거르지만, 브리지 계약이 바뀌어도 합계가 조용히 부풀지 않게 한다.
+  const monthSet = new Set(months)
+  const compassAmount = result.rows.reduce((sum, row) => {
+    if (!row.month || !monthSet.has(row.month)) return sum
+    return sum + numberValue(row.amount)
+  }, 0)
+  return { down: false, months, adminAmount, compassAmount, diffAmount: compassAmount - adminAmount }
+}
+
 function getTargetLabel(
   link: CrmSourceLinkRow | null,
   labels: {
@@ -147,7 +179,7 @@ function getTargetLabel(
   return null
 }
 
-export async function getAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSheetWorkspace> {
+async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSheetWorkspace> {
   const sb = createSupabaseAdminClient()
   const warnings: string[] = []
   const currentMonth = getCurrentMonthKey()
@@ -309,6 +341,9 @@ export async function getAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenu
     return new Date(row.syncedAt).getTime() > new Date(latest).getTime() ? row.syncedAt : latest
   }, null)
 
+  const monthly = Array.from(monthMap.values()).sort((a, b) => a.month.localeCompare(b.month))
+  const compass = await getCompassRevenueCompare(monthly)
+
   return {
     generatedAt: new Date().toISOString(),
     currentMonth,
@@ -332,7 +367,26 @@ export async function getAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenu
     teams: Array.from(teamMap.values()).sort((a, b) => b.scheduledAmount - a.scheduledAmount),
     managers: Array.from(managerMap.values()).sort((a, b) => b.scheduledAmount - a.scheduledAmount).slice(0, 12),
     statuses: Array.from(statusMap.values()).sort((a, b) => b.scheduledAmount - a.scheduledAmount),
-    monthly: Array.from(monthMap.values()).sort((a, b) => a.month.localeCompare(b.month)),
+    monthly,
+    compass,
     warnings,
   }
+}
+
+export const ADMIN_CRM_REVENUE_SHEET_CACHE_TAG = "admin-crm-revenue-sheet"
+
+// REV 시트 전행(최대 QUERY_LIMIT) + 매칭 링크(×3) + 라벨 조회 3종을 매 호출 병렬 실행하는
+// 무거운 조립이라 60초 캐시한다. Compass 브리지 호출(getCompassRevenueCompare)도 down 플래그가
+// 결과(compass.down)에 그대로 담기므로 캐시 안에 포함해도 안전하다. cookies()/headers()는 읽지
+// 않고(admin service-role 클라이언트만 사용) 인자도 없어 unstable_cache에 안전하다.
+const getCachedAdminCrmRevenueSheetWorkspace = unstable_cache(
+  computeAdminCrmRevenueSheetWorkspace,
+  ["admin-crm-revenue-sheet"],
+  { revalidate: 60, tags: [ADMIN_CRM_REVENUE_SHEET_CACHE_TAG] }
+)
+
+// 함수 시그니처·이름 불변 유지: 소유 밖 호출부(app/api/admin/crm/revenue-sheet/route.ts)가
+// 이 이름으로 그대로 가져다 쓰므로, 캐시 배선은 내부 위임으로만 추가한다.
+export async function getAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSheetWorkspace> {
+  return getCachedAdminCrmRevenueSheetWorkspace()
 }

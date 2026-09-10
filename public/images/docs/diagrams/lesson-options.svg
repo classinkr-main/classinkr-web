@@ -1,0 +1,47 @@
+<svg width="1440" height="760" viewBox="0 0 1440 760" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="수업 생성 옵션 4종 비교: 수업 녹화, 현장 녹화, 온스테이지, 하이브리드 수업">
+<style>
+text{font-family:"Pretendard Variable",Pretendard,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+.h{font-size:28px;fill:#111110;font-weight:600}
+.s{font-size:20px;fill:#615D59}
+.box{fill:#FFF;stroke:rgba(0,0,0,0.08);stroke-width:1.5}
+.ln{fill:none;stroke:#31302E;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.la{fill:none;stroke:#084734;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.ah{fill:#084734}
+</style>
+<rect class="box" x="50" y="150" width="290" height="380" rx="16"/>
+<rect class="box" x="400" y="150" width="290" height="380" rx="16"/>
+<rect class="box" x="750" y="150" width="290" height="380" rx="16"/>
+<rect class="box" x="1100" y="150" width="290" height="380" rx="16"/>
+<rect class="ln" x="120" y="205" width="150" height="100" rx="10"/>
+<path class="ln" d="M155 268q20-28 40 0t40 0"/>
+<circle class="ah" cx="245" cy="228" r="7"/>
+<text class="h" x="195" y="430" text-anchor="middle">수업 녹화</text>
+<text class="s" x="195" y="466" text-anchor="middle">칠판·자료 화면을 남기는</text>
+<text class="s" x="195" y="494" text-anchor="middle">기본 복습용 녹화</text>
+<rect class="ln" x="480" y="215" width="100" height="80" rx="10"/>
+<path class="ln" d="M580 250l38-20v60l-38-20z"/>
+<circle class="ah" cx="502" cy="237" r="6"/>
+<text class="h" x="545" y="430" text-anchor="middle">현장 녹화</text>
+<text class="s" x="545" y="466" text-anchor="middle">교실 카메라·트래킹 뷰를</text>
+<text class="s" x="545" y="494" text-anchor="middle">별도로 함께 저장</text>
+<rect class="ln" x="820" y="200" width="150" height="115" rx="10"/>
+<rect class="ln" x="834" y="214" width="38" height="30" rx="6"/>
+<rect class="la" x="876" y="214" width="38" height="30" rx="6"/>
+<rect class="ln" x="918" y="214" width="38" height="30" rx="6"/>
+<text class="h" x="895" y="430" text-anchor="middle">온스테이지</text>
+<text class="s" x="895" y="466" text-anchor="middle">상단 고정 카메라 레이아웃</text>
+<text class="s" x="895" y="494" text-anchor="middle">1v0 · 1v6 표기</text>
+<rect class="ln" x="1160" y="210" width="85" height="64" rx="8"/>
+<path class="ln" d="M1178 246q12-16 24 0t24 0"/>
+<rect x="1215" y="245" width="85" height="64" rx="8" fill="#FFF" stroke="#31302E" stroke-width="3"/>
+<circle class="ln" cx="1257" cy="268" r="8"/>
+<path class="ln" d="M1244 292a13 13 0 0 1 26 0"/>
+<rect class="ln" x="1210" y="330" width="70" height="30" rx="15"/>
+<circle class="ah" cx="1263" cy="345" r="9"/>
+<text class="h" x="1245" y="430" text-anchor="middle">하이브리드 수업</text>
+<text class="s" x="1245" y="466" text-anchor="middle">학생이 칠판·현장 화면</text>
+<text class="s" x="1245" y="494" text-anchor="middle">중에서 뷰를 선택</text>
+<path class="ln" d="M70 555v16h600v-16" stroke-width="2.5"/>
+<path class="ln" d="M370 571v22" stroke-width="2.5"/>
+<text class="s" x="370" y="625" text-anchor="middle">두 녹화 뷰는 다시보기에서 선택해 볼 수 있어요</text>
+</svg>

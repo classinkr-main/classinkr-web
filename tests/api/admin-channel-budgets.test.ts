@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { sanitizeChannelBudgetPatch } from "@/app/api/admin/channel-budgets/route"
+import { sanitizeChannelBudgetPatch } from "@/lib/marketing/channel-budget-input"
 
 describe("sanitizeChannelBudgetPatch", () => {
   it("accepts a valid {channel, amount} patch", () => {

@@ -25,12 +25,28 @@ const DUPLICATE_SCAN_LIMIT = 5000
 const DUPLICATE_ACTION =
   "CRM runbook duplicate row preflight SQL로 전체 범위를 확인하고 중복 source row를 병합하거나 stale/rejected 처리"
 
+// external_crm_records 의 (source_system, object_api_key, external_id)는 UNIQUE 제약
+// external_crm_records_unique_source(20260610_external_crm_snapshots.sql)가 DB에서 강제하고,
+// Xiaoshouyi 동기화 upsert 도 같은 키를 onConflict 로 쓴다. 예전의 5,000행 페이지 스캔
+// (84K행 synced_at 정렬 5회 ≈ 6.7s + exact count 1회 ≈ 2.5s, preflight 당)은 중복을 찾을 수
+// 없어 결과가 항상 "통과"였다. 제약을 보증으로 보고하고 스캔은 내지 않는다.
+const EXTERNAL_CRM_RECORDS_UNIQUE_CONSTRAINT = "external_crm_records_unique_source"
+
 function formatSupabaseError(error: SupabaseErrorLike) {
   if (!error) return "unknown database error"
   const parts = [error.message, error.details, error.hint, error.code]
     .map((part) => part?.trim())
     .filter((part): part is string => Boolean(part))
   return parts.join(" · ") || "unknown database error"
+}
+
+function buildExternalCrmUniqueKeyCheck(): CrmDuplicatePreflightCheck {
+  return {
+    key: "external_crm_records_duplicate_keys",
+    label: "External CRM snapshot duplicate keys",
+    status: "ok",
+    detail: `UNIQUE 제약 ${EXTERNAL_CRM_RECORDS_UNIQUE_CONSTRAINT} (source_system, object_api_key, external_id)가 DB에서 중복을 차단 · 스캔 생략`,
+  }
 }
 
 function buildDuplicateCheck(input: {
@@ -93,8 +109,6 @@ function buildDuplicateCheck(input: {
 export async function getCrmDuplicatePreflightReport(): Promise<CrmDuplicatePreflightReport> {
   const sb = createSupabaseAdminClient()
   const [
-    externalRows,
-    externalCount,
     sourceCandidateRows,
     sourceCandidateCount,
     confirmedSourceRows,
@@ -104,21 +118,12 @@ export async function getCrmDuplicatePreflightReport(): Promise<CrmDuplicatePref
       maxRows: DUPLICATE_SCAN_LIMIT,
       fetchPage: (from, to) =>
         sb
-          .from("external_crm_records")
-          .select("source_system, object_api_key, external_id")
-          .order("synced_at", { ascending: false })
-          .range(from, to),
-    }),
-    sb
-      .from("external_crm_records")
-      .select("id", { count: "exact", head: true }),
-    fetchSupabasePages<Record<string, unknown>>({
-      maxRows: DUPLICATE_SCAN_LIMIT,
-      fetchPage: (from, to) =>
-        sb
           .from("crm_source_links")
-          .select("source_system, source_object, source_record_key, target_type, target_id")
+          .select("id, source_system, source_object, source_record_key, target_type, target_id")
           .order("updated_at", { ascending: false })
+          // updated_at 동률은 흔하다. id tie-breaker가 없으면 페이지 사이에서 같은 행이
+          // 재등장해 실제 DB 중복이 아닌 duplicate group을 만들 수 있다.
+          .order("id", { ascending: false })
           .range(from, to),
     }),
     sb
@@ -129,9 +134,10 @@ export async function getCrmDuplicatePreflightReport(): Promise<CrmDuplicatePref
       fetchPage: (from, to) =>
         sb
           .from("crm_source_links")
-          .select("source_system, source_object, source_record_key")
+          .select("id, source_system, source_object, source_record_key")
           .eq("status", "confirmed")
           .order("updated_at", { ascending: false })
+          .order("id", { ascending: false })
           .range(from, to),
     }),
     sb
@@ -141,14 +147,7 @@ export async function getCrmDuplicatePreflightReport(): Promise<CrmDuplicatePref
   ])
 
   const checks = [
-    buildDuplicateCheck({
-      key: "external_crm_records_duplicate_keys",
-      label: "External CRM snapshot duplicate keys",
-      error: externalRows.error ?? externalCount.error,
-      rows: externalRows.data,
-      count: externalCount.count,
-      fields: ["source_system", "object_api_key", "external_id"],
-    }),
+    buildExternalCrmUniqueKeyCheck(),
     buildDuplicateCheck({
       key: "crm_source_links_duplicate_candidates",
       label: "CRM source-link duplicate candidates",
@@ -175,6 +174,6 @@ export async function getCrmDuplicatePreflightReport(): Promise<CrmDuplicatePref
 
 export const getCachedCrmDuplicatePreflightReport = unstable_cache(
   getCrmDuplicatePreflightReport,
-  ["crm-duplicate-preflight"],
+  ["crm-duplicate-preflight-v2"],
   { revalidate: 300, tags: ["crm-duplicate-preflight"] },
 )

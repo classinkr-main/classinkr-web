@@ -21,6 +21,22 @@ import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import type { NotificationChannel } from "@/lib/notifications/types"
 import { submitLeadCapture } from "@/lib/server/lead-capture"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import {
+  EMAIL_REGEX,
+  MAX_EMAIL_LENGTH,
+  MAX_MEMO_LENGTH,
+  MAX_NAME_LENGTH,
+  MAX_ORG_LENGTH,
+  MAX_PHONE_LENGTH,
+  MAX_SOURCE_PAGE_LENGTH,
+  asRecord,
+  isPlausibleKoreanPhone,
+  isRealCalendarDate,
+  normalizeKoreanPhoneDigits,
+  normalizeMultilineText,
+  normalizeText,
+  shiftIsoDate,
+} from "@/lib/server/contact-field-validation"
 
 export const CHECKOUT_REQUEST_KINDS = ["hardware", "software"] as const
 export type CheckoutRequestKind = (typeof CHECKOUT_REQUEST_KINDS)[number]
@@ -58,18 +74,11 @@ const SOFTWARE_SKU_PREFIX = "sw-"
  */
 const MAX_SOFTWARE_UNIT_AMOUNT = 50_000_000
 
-const MAX_ORG_LENGTH = 200
+// 이 파일에만 있는 상한(품목 라인). 공통 연락처·메모 상한은 공용 모듈이 갖는다.
 const MAX_ADDRESS_LENGTH = 200
-const MAX_NAME_LENGTH = 200
-const MAX_PHONE_LENGTH = 40
-const MAX_EMAIL_LENGTH = 254
-const MAX_MEMO_LENGTH = 2000
-const MAX_SOURCE_PAGE_LENGTH = 500
 const MAX_ITEM_NAME_LENGTH = 200
 const MAX_SKU_LENGTH = 120
 
-// TLD 2자 이상 강제 — lead-capture 와 같은 기준(가짜 이메일 차단)
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/
 
 // WeCom 텍스트에 그대로 펼칠 품목 줄 수. 넘치면 "외 N건"으로 접는다.
@@ -144,25 +153,8 @@ export interface CheckoutRequestContext {
 
 /* ─── 정규화 · 검증 (순수) ─── */
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null
-  return value as Record<string, unknown>
-}
-
-function normalizeText(value: unknown, maxLength: number) {
-  if (typeof value !== "string") return null
-  const trimmed = value.replace(/\s+/g, " ").trim()
-  if (!trimmed) return null
-  return trimmed.slice(0, maxLength)
-}
-
-/** 줄바꿈을 보존해야 하는 자유 입력(메모)용. */
-function normalizeMultilineText(value: unknown, maxLength: number) {
-  if (typeof value !== "string") return null
-  const trimmed = value.trim()
-  if (!trimmed) return null
-  return trimmed.slice(0, maxLength)
-}
+// 이 모듈의 공개 API 로 이미 나가 있던 이름이라 재export 로 유지한다.
+export { normalizeKoreanPhoneDigits }
 
 function normalizeNumber(value: unknown) {
   if (typeof value === "number") return Number.isFinite(value) ? value : null
@@ -177,40 +169,6 @@ function roundAmount(amount: number, currency: CheckoutRequestCurrency) {
   // KRW 는 소수점이 없다. USD 는 센트까지.
   if (currency === "KRW") return Math.round(amount)
   return Math.round(amount * 100) / 100
-}
-
-/** 한국형 번호를 관대하게 판정 — +82/공백/하이픈 허용, 숫자 9~11자리면 통과. */
-export function normalizeKoreanPhoneDigits(value: string) {
-  let digits = value.replace(/\D/g, "")
-  if (digits.startsWith("0082")) digits = digits.slice(4)
-  if (digits.startsWith("82")) digits = `0${digits.slice(2)}`
-  return digits
-}
-
-function isPlausibleKoreanPhone(value: string) {
-  const digits = normalizeKoreanPhoneDigits(value)
-  return digits.length >= 9 && digits.length <= 11
-}
-
-/** 'YYYY-MM-DD' + N일. UTC 자정 기준으로만 계산해 서버 TZ 에 흔들리지 않는다. */
-function shiftIsoDate(iso: string, days: number) {
-  const [year, month, day] = iso.split("-").map(Number)
-  const shifted = new Date(Date.UTC(year, month - 1, day + days))
-  return [
-    shifted.getUTCFullYear().toString().padStart(4, "0"),
-    (shifted.getUTCMonth() + 1).toString().padStart(2, "0"),
-    shifted.getUTCDate().toString().padStart(2, "0"),
-  ].join("-")
-}
-
-function isRealCalendarDate(value: string) {
-  const [year, month, day] = value.split("-").map(Number)
-  const parsed = new Date(Date.UTC(year, month - 1, day))
-  return (
-    parsed.getUTCFullYear() === year &&
-    parsed.getUTCMonth() === month - 1 &&
-    parsed.getUTCDate() === day
-  )
 }
 
 /**

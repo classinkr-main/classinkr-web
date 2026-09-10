@@ -47,6 +47,14 @@ export interface AdminDocsArticleSummary {
   aiIssues: string[]
   contentLength: number
   stale: boolean
+  /** 마지막 신선도 기준일(검토일·수정일 중 더 최근) 이후 경과 일수. 판단 불가면 null. */
+  reviewAgeDays: number | null
+  /**
+   * docs_articles.updated_by 원본 문자열 — 목록의 `출처` 라벨이 여기서 갈린다.
+   * seed-docs / sync-channel-documents / seed-internal-canon 같은 자동 파이프라인 식별자이거나,
+   * 사람 편집자 이름(재시드로 덮으면 안 되는 행)이다. 라벨 매핑은 소비처(어드민 목록)가 한다.
+   */
+  updatedBy: string | null
   updatedAt: string | null
   publishedAt: string | null
   lastReviewedAt: string | null
@@ -158,6 +166,7 @@ interface DocsArticleRow {
   // content_markdown은 마이그레이션 미적용 폴백 경로에서만 채워진다.
   content_length?: number | null
   content_markdown?: string | null
+  updated_by?: string | null
   updated_at: string | null
   published_at: string | null
   last_reviewed_at: string | null
@@ -298,6 +307,8 @@ function createStaticContentResponse(warnings: string[] = []): AdminDocsContentR
         aiChunkCount: null,
         contentLength,
         ...aiState,
+        // 정적 폴백 경로에는 편집자 정보가 없다 — 목록은 `-`로 그린다(추측 금지).
+        updatedBy: null,
         updatedAt: article.updatedAt,
         publishedAt: null,
         lastReviewedAt: article.updatedAt,
@@ -337,10 +348,27 @@ function getDaysSince(value: string | null) {
   return Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24))
 }
 
+/**
+ * 문서 신선도 = 검토일·수정일 중 **더 최근** 시각 이후 경과 일수.
+ *
+ * 이전 구현은 `lastReviewedAt ?? updatedAt`이었다. 시드가 last_reviewed_at을 한 번 박아 두고
+ * 이후 갱신하지 않기 때문에, 어제 본문을 고친 문서도 옛 검토일에 가려 계속 "검토 주기 초과"로
+ * 찍혔다 — 프로덕션 실측(2026-08-26): published 136편 중 106편(78%)이 초과로 표시됐고,
+ * 그중 97편은 30일 이내에 실제로 수정된 문서였다. 전부 경고면 아무 신호도 아니라서,
+ * 둘 중 최신 시각을 기준으로 바꾼다(같은 실측에서 초과 106 → 27편).
+ */
+function getReviewAgeDays(lastReviewedAt: string | null, updatedAt: string | null) {
+  const ages = [getDaysSince(lastReviewedAt), getDaysSince(updatedAt)].filter(
+    (value): value is number => value !== null
+  )
+  if (ages.length === 0) return null
+  return Math.min(...ages)
+}
+
 function getArticleAiState(article: ArticleAiInput) {
   const chatbotIncluded =
     article.status === "published" && article.visibility !== "internal" && !article.noindex
-  const reviewAge = getDaysSince(article.lastReviewedAt ?? article.updatedAt)
+  const reviewAge = getReviewAgeDays(article.lastReviewedAt, article.updatedAt)
   const stale = article.status === "published" && reviewAge !== null && reviewAge > REVIEW_STALE_DAYS
   const aiIndexed = article.aiChunkCount !== null && article.aiChunkCount > 0
   const aiIssues: string[] = []
@@ -357,9 +385,10 @@ function getArticleAiState(article: ArticleAiInput) {
   if (chatbotIncluded && article.aiChunkCount !== null && article.aiChunkCount === 0) {
     aiIssues.push("AI 인덱스 없음")
   }
-  if (stale) {
-    aiIssues.push("검토 주기 초과")
-  }
+  // 검토 주기 초과는 여기서 aiIssues에 넣지 않는다. aiIssues는 목록 행에서 붉은 칩 줄로
+  // 그려지는데(app/admin/docs/page.tsx), "언젠가 한 번 다시 읽어야 한다"는 신호가 "챗봇이
+  // 이 문서를 제대로 못 읽는다"는 결함들과 같은 톤으로 섞이면서 거의 모든 행이 붉어졌다.
+  // 주기 초과는 stale·reviewAgeDays로 그대로 노출하고, 목록은 중립 텍스트로 표시한다.
 
   return {
     chatbotIncluded,
@@ -367,6 +396,7 @@ function getArticleAiState(article: ArticleAiInput) {
     aiReady: chatbotIncluded && aiIssues.length === 0,
     aiIssues,
     stale,
+    reviewAgeDays: reviewAge,
   }
 }
 
@@ -526,7 +556,7 @@ function buildChunkRows(
 // 리스트 공통 컬럼 — 본문(content_markdown)은 제외하고 생성 컬럼 content_length를 읽는다.
 // (리스트는 트림 길이 하나만 소비하는데 본문 전체를 내려받던 과다 페치 제거 — 감사 2026-07-23 §후속 1)
 const ARTICLE_LIST_BASE_COLUMNS =
-  "id, category_id, slug, title, description, status, visibility, noindex, doc_type, product_area, featured, order_index, tags, keywords, symptoms, chatbot_summary, updated_at, published_at, last_reviewed_at"
+  "id, category_id, slug, title, description, status, visibility, noindex, doc_type, product_area, featured, order_index, tags, keywords, symptoms, chatbot_summary, updated_by, updated_at, published_at, last_reviewed_at"
 
 // 배포 스큐 감지 — 마이그레이션(20260724_docs_articles_content_length) 미적용 DB에서
 // content_length select가 undefined_column(42703)으로 실패하는 경우.
@@ -688,6 +718,7 @@ export async function listAdminDocsContent(): Promise<AdminDocsContentResponse> 
           aiChunkCount,
           contentLength,
           ...aiState,
+          updatedBy: article.updated_by ?? null,
           updatedAt: article.updated_at,
           publishedAt: article.published_at,
           lastReviewedAt: article.last_reviewed_at,

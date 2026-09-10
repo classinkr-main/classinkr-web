@@ -191,3 +191,94 @@ describe("isAmbiguousRegionToken", () => {
     expect(isAmbiguousRegionToken(null)).toBe(false)
   })
 })
+
+describe("normalizeRegionLabel — 로마자 시군구", () => {
+  it.each([
+    // 실측(2026-08-28 프로덕션 leads.branch)에서 미매칭이던 값들
+    ["Suwon", "경기"],
+    ["Changwon", "경남"],
+    ["Cheongju", "충북"],
+    ["Uijeongbu", "경기"],
+    ["Icheon", "경기"],
+    ["Gwangmyeong", "경기"],
+    ["Siheung", "경기"],
+    ["Miryang", "경남"],
+    ["Gyeryong", "충남"],
+    // 영문 행정 접미사
+    ["Gwangjin District", "서울"],
+    ["Yeongdeungpo District", "서울"],
+    ["Suwon-si", "경기"],
+    ["Gangnam-gu", "서울"],
+    ["Ulleung-gun", "경북"],
+    // 로마자 표기 이형 — 영/용을 둘 다 Young으로 적는 관행
+    ["Youngin", "경기"],
+    ["Yongin", "경기"],
+    // 대소문자 무시
+    ["POHANG", "경북"],
+    ["gimhae", "경남"],
+  ])("%s → %s", (input, expected) => {
+    expect(normalizeRegionLabel(input)).toBe(expected)
+  })
+
+  it("모호 토큰은 로마자로 써도 매칭하지 않는다", () => {
+    for (const input of ["Jung", "Jung-gu", "Seo-gu", "Dong-gu", "Nam-gu", "Buk-gu", "Gangseo", "Goseong"]) {
+      expect(normalizeRegionLabel(input), input).toBeNull()
+    }
+  })
+
+  it("해외 지명은 계속 매칭되지 않는다", () => {
+    // 실측 유입값 — 캄보디아·우즈베키스탄·네팔·가나·미국
+    for (const input of ["Battambang", "Fergana", "Phidim", "Tema", "Detroit"]) {
+      expect(normalizeRegionLabel(input), input).toBeNull()
+    }
+  })
+
+  it("한글 표와 로마자 표가 같은 시군구를 같은 시도로 보낸다", () => {
+    const pairs: Array<[string, string]> = [
+      ["수원", "Suwon"],
+      ["창원", "Changwon"],
+      ["청주", "Cheongju"],
+      ["서귀포", "Seogwipo"],
+      ["해운대", "Haeundae"],
+      ["미추홀", "Michuhol"],
+      ["울릉", "Ulleung"],
+    ]
+    for (const [ko, roman] of pairs) {
+      expect(normalizeRegionLabel(roman), `${roman} vs ${ko}`).toBe(normalizeRegionLabel(ko))
+    }
+  })
+})
+
+describe("리드 유입 지역 정규화 수율 — 실측 회귀 고정", () => {
+  // 2026-08-28 프로덕션 leads.branch 자유텍스트(값 → 건수). 보강 전 수율 78.6%.
+  const LEAD_BRANCH: Record<string, number> = {
+    Seoul: 16, 서울: 8, 부산: 3, Incheon: 3, 광주광역시: 3, seoul: 3,
+    서울시: 2, Battambang: 2, Changwon: 2, 창원시: 2, Daejeon: 2, 인천: 2, 수원시: 2,
+    구리시: 1, 전주시: 1, "서울 금천구": 1, "울산 중구": 1, Youngin: 1, 김해시: 1,
+    "Gwangjin District": 1, Fergana: 1, 파주시: 1, 영주시: 1, Gwangmyeong: 1, Gyeryong: 1,
+    Uijeongbu: 1, 인천시: 1, "Yeongdeungpo District": 1, 천안시: 1, 대구시: 1, 성북구: 1,
+    하남시: 1, 포항: 1, Cheongju: 1, Icheon: 1, "경기도 성남": 1, 포항시: 1, 포천: 1,
+    Sejong: 1, "경기도 동탄구": 1, Busan: 1, 김포: 1, "인천/미추홀구": 1, 남구: 1, 파주: 1,
+    동구: 1, Phidim: 1, 대구: 1, Tema: 1, Miryang: 1, 창원: 1, 김해: 1, X: 1,
+    진주: 1, Suwon: 1, Ulsan: 1, Daegu: 1, 경기도: 1, 서울시강남구: 1, Detroit: 1,
+    Siheung: 1, 화성시: 1, 울산: 1, 강릉시: 1, 고양: 1, 강남구: 1,
+  }
+
+  it("지역 텍스트가 있는 103건 중 최소 94건을 시도로 접는다", () => {
+    let matched = 0
+    let total = 0
+    const unmatched: string[] = []
+    for (const [raw, count] of Object.entries(LEAD_BRANCH)) {
+      total += count
+      if (normalizeRegionLabel(raw)) matched += count
+      else unmatched.push(raw)
+    }
+
+    expect(total).toBe(103)
+    expect(matched).toBeGreaterThanOrEqual(94)
+    // 남는 것은 해외·모호·무효뿐이어야 한다 — 국내 지명이 여기 섞이면 표에 구멍이 있다는 뜻.
+    expect(new Set(unmatched)).toEqual(
+      new Set(["Battambang", "Fergana", "Phidim", "Tema", "Detroit", "남구", "동구", "X"])
+    )
+  })
+})

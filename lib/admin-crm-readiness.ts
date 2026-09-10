@@ -1,6 +1,7 @@
 import "server-only"
 
-import { getCrmDuplicatePreflightReport } from "@/lib/admin-crm-duplicate-preflight"
+import { unstable_cache } from "next/cache"
+import { getCachedCrmDuplicatePreflightReport } from "@/lib/admin-crm-duplicate-preflight"
 import { getCrmSchemaContractReadiness } from "@/lib/admin-crm-schema-contract"
 import { getXiaoshouyiSyncPreflight, getXiaoshouyiSyncSchemaReadiness } from "@/lib/external-crm/xiaoshouyi-sync"
 import { getXiaoshouyiWriteMetadataPreflight, getXiaoshouyiWriteSchemaReadiness } from "@/lib/external-crm/xiaoshouyi-write"
@@ -79,7 +80,7 @@ async function checkDatabaseShape(
   }
 }
 
-export async function getAdminCrmReadinessReport(): Promise<CrmReadinessReport> {
+async function computeAdminCrmReadinessReport(): Promise<CrmReadinessReport> {
   const sb = createSupabaseAdminClient()
 
   const [
@@ -98,7 +99,9 @@ export async function getAdminCrmReadinessReport(): Promise<CrmReadinessReport> 
     getXiaoshouyiSyncSchemaReadiness(),
     getXiaoshouyiWriteSchemaReadiness(),
     getCrmSchemaContractReadiness(),
-    getCrmDuplicatePreflightReport(),
+    // 최대 5천 행 x 3축 표본 스캔은 무겁고 5분 내 결과 의미가 바뀌지 않는다.
+    // CRM 홈과 준비도 화면이 같은 preflight를 연달아 다시 읽지 않게 공용 캐시를 쓴다.
+    getCachedCrmDuplicatePreflightReport(),
     checkDatabaseShape(
       "crm_source_links",
       "CRM source link schema",
@@ -285,4 +288,22 @@ export async function getAdminCrmReadinessReport(): Promise<CrmReadinessReport> 
     summary,
     checks,
   }
+}
+
+export const ADMIN_CRM_READINESS_CACHE_TAG = "admin-crm-readiness"
+
+// 스키마 shape probe 6종 + preflight 3종을 매 호출 병렬 실행하는 무거운 조립이라 60초 캐시한다.
+// 인자 없이 admin service-role 클라이언트만 쓰고 cookies()/headers()는 읽지 않는다(하위
+// preflight/schema-contract 모듈도 grep으로 확인). env 참조가 있다면 프로세스 수명 동안
+// 상수이므로 캐시 안에서 읽어도 안전하다.
+const getCachedAdminCrmReadinessReport = unstable_cache(
+  computeAdminCrmReadinessReport,
+  ["admin-crm-readiness"],
+  { revalidate: 60, tags: [ADMIN_CRM_READINESS_CACHE_TAG] }
+)
+
+// 함수 시그니처·이름 불변 유지: 소유 밖 호출부(app/api/admin/crm/readiness/route.ts)가
+// 이 이름으로 그대로 가져다 쓰므로, 캐시 배선은 내부 위임으로만 추가한다.
+export async function getAdminCrmReadinessReport(): Promise<CrmReadinessReport> {
+  return getCachedAdminCrmReadinessReport()
 }

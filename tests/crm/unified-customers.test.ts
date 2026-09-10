@@ -142,8 +142,20 @@ async function loadRepository(options?: {
   neoLinksFail?: boolean
   firstResponsesFail?: boolean
   engagements?: Record<string, ReturnType<typeof engagement>>
-  demoEvents?: Array<{ id: string; title: string; date: string; type: string }>
-  /** 반응 축·데모 캘린더(보조 신호) 동시 실패 시나리오 */
+  /** Compass 실측 데모 소스 — 전화 정규화 키로만 붙는다(이름 추측 없음) */
+  demoSource?: {
+    demos: Array<{
+      id: number
+      lead_id: number | null
+      day: string | null
+      status: string | null
+      owner: string | null
+      day_approx: boolean | null
+    }>
+    phoneKeysByCompassLeadId: Map<number, string[]>
+    down: boolean
+  }
+  /** 반응 축·Compass 데모(보조 신호) 동시 실패 시나리오 */
   activitySignalsFail?: boolean
 }) {
   vi.resetModules()
@@ -156,10 +168,12 @@ async function loadRepository(options?: {
       ? vi.fn().mockRejectedValue(new Error("lead activity unavailable"))
       : vi.fn().mockResolvedValue(options?.engagements ?? {}),
   }))
-  vi.doMock("@/lib/showroom-ics-calendar", () => ({
-    getShowroomCalendarEvents: options?.activitySignalsFail
-      ? vi.fn().mockRejectedValue(new Error("showroom calendar unavailable"))
-      : vi.fn().mockResolvedValue(options?.demoEvents ?? []),
+  vi.doMock("@/lib/crm/compass-demo-source", () => ({
+    loadCompassDemoSource: options?.activitySignalsFail
+      ? vi.fn().mockRejectedValue(new Error("compass bridge unavailable"))
+      : vi.fn().mockResolvedValue(
+          options?.demoSource ?? { demos: [], phoneKeysByCompassLeadId: new Map(), down: false }
+        ),
   }))
   vi.doMock("@/lib/portal/repositories/customers", () => ({
     listAllCustomerListItemsLite: options?.portalCustomersFail
@@ -583,7 +597,7 @@ describe("getCrmUnifiedCustomers", () => {
 
   // ── 결함 B 회귀: 홈 큐와 같은 반응 축·데모 신호 입력 ─────────────────────────
 
-  it("feeds engagement and showroom demo signals into row scores like the home queue", async () => {
+  it("feeds engagement and Compass demo signals into row scores like the home queue", async () => {
     const { getCrmUnifiedCustomers } = await loadRepository({
       leads: [
         lead({ id: "revisit", status: "contacted" }),
@@ -597,7 +611,14 @@ describe("getCrmUnifiedCustomers", () => {
           lastActivityAt: "2026-06-25T00:00:00.000Z",
         }),
       },
-      demoEvents: [{ id: "demo-1", title: "고객 acc-demo 데모", date: "2026-06-28", type: "showroom" }],
+      // neoCustomer 의 전화(010-1111-2222)와 같은 정규화 키에만 붙는다.
+      demoSource: {
+        demos: [
+          { id: 1, lead_id: 900, day: "2026-06-27", status: "booked", owner: "진소망", day_approx: false },
+        ],
+        phoneKeysByCompassLeadId: new Map([[900, ["01011112222"]]]),
+        down: false,
+      },
     })
 
     const result = await getCrmUnifiedCustomers({ now: NOW })
@@ -610,14 +631,14 @@ describe("getCrmUnifiedCustomers", () => {
     expect(revisit?.bucket).toBe("today")
     expect((revisit?.score ?? 0) > (plain?.score ?? 0)).toBe(true)
 
-    // 쇼룸 데모가 잡힌 계정은 다른 사유 없이도 today로 올라온다.
+    // Compass 실측 데모가 잡힌 계정은 다른 사유 없이도 today로 올라온다.
     expect(demoAccount?.bucket).toBe("today")
     expect(demoAccount?.nextActionLabel).toBe("데모")
     expect(demoAccount?.priorityReason).toContain("데모")
     expect(demoAccount?.statusLabel).toBe("관리 필요")
   })
 
-  it("silently degrades when auxiliary signal sources (activity·calendar) fail", async () => {
+  it("silently degrades when auxiliary signal sources (activity·Compass) fail", async () => {
     const { getCrmUnifiedCustomers } = await loadRepository({
       leads: [lead({ id: "1" })],
       accounts: [neoCustomer({ accountId: "acc-1" })],

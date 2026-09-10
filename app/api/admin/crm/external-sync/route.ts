@@ -12,6 +12,7 @@ import {
   hasFreshExternalCrmSyncData,
 } from "@/lib/external-crm/sync-result"
 import { getXiaoshouyiSyncRuntimePreflight } from "@/lib/external-crm/xiaoshouyi-sync"
+import { refreshCrmNeoCustomerSnapshotsFromExternalRecords } from "@/lib/repositories/crm-neo-customer-snapshots"
 
 // 읽기(GET preflight)는 CRM 스태프 롤 매트릭스, 쓰기(POST sync 트리거)는 기본롤 유지.
 export async function GET(req: NextRequest) {
@@ -28,6 +29,7 @@ export async function POST(req: NextRequest) {
   try {
     const startedAt = Date.now()
     let force = false
+    let refreshSnapshotsOnly = false
     let recentSyncTtlMs = 60_000
     const rawBody = await req.text()
     if (rawBody.trim()) {
@@ -52,10 +54,29 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: false, error: "recentSyncTtlMs는 유효한 숫자여야 합니다." }, { status: 400 })
       }
 
+      if (body.refreshSnapshotsOnly !== undefined && typeof body.refreshSnapshotsOnly !== "boolean") {
+        return NextResponse.json({ ok: false, error: "refreshSnapshotsOnly는 boolean이어야 합니다." }, { status: 400 })
+      }
+      refreshSnapshotsOnly = body.refreshSnapshotsOnly === true
       force = body.force === true
       if (typeof body.recentSyncTtlMs === "number") {
         recentSyncTtlMs = Math.min(Math.max(Math.trunc(body.recentSyncTtlMs), 0), 30 * 60_000)
       }
+    }
+
+    // 외부 동기화 없이 스냅샷만 다시 계산한다.
+    // 파생 로직(잔액 필드·과금 유형·소진 예상일)을 고쳤을 때, 동기화가 막혀 있어도
+    // external_crm_records 에 이미 있는 원본으로 읽기모델을 최신화하기 위한 경로다.
+    if (refreshSnapshotsOnly) {
+      const snapshots = await refreshCrmNeoCustomerSnapshotsFromExternalRecords()
+      revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, "max")
+      return NextResponse.json({
+        ok: true,
+        refreshSnapshotsOnly: true,
+        completedAt: new Date().toISOString(),
+        durationMs: Date.now() - startedAt,
+        neoCustomerSnapshots: snapshots,
+      })
     }
 
     const chain = await runExternalCrmSyncChain("manual", { force, recentSyncTtlMs })

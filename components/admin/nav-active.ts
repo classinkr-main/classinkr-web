@@ -3,8 +3,10 @@
 // (docs/active/cs-admin-console-ia-2026-07-27.md §5 "active 판정 공용화").
 //
 // React 상태·브라우저 API를 쓰지 않는 순수 모듈이므로 "use client" 불필요.
-// AdminSidebar에서 그대로 옮겨온 코드다 — 클로저로 읽던 pathname·searchParams·형제 목록만
-// 인자로 승격했고 판정 로직 자체는 한 줄도 바꾸지 않았다.
+// AdminSidebar에서 추출한 뒤 path 판정만 admin-nav-routes의 부모/자식 SSOT를 소비한다.
+// 쿼리·형제 양보 규칙은 그대로 유지한다.
+
+import { isAdminNavRouteMatch } from "./admin-nav-routes"
 
 /** next/navigation의 ReadonlyURLSearchParams와 URLSearchParams를 함께 받는 최소 인터페이스. */
 export interface NavSearchParamsLike {
@@ -45,7 +47,7 @@ export function queryMatches(query: string, searchParams: NavSearchParamsLike) {
 // (가이드 문서 /admin/docs vs 문서 보강 큐 /admin/docs?tab=gaps).
 export function isNavActive(href: string, { pathname, searchParams, siblings }: NavActiveContext) {
   const { path, query } = splitNavHref(href)
-  const onPath = pathname === path || pathname.startsWith(`${path}/`)
+  const onPath = isAdminNavRouteMatch(path, pathname)
   if (!onPath) return false
   if (query) return queryMatches(query, searchParams)
   return !siblings.some((item) => {

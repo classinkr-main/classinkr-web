@@ -61,14 +61,10 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
     // 필터·검색이 걸린 동안에는 갤러리를 감추고 리스트만 남겨 결과에 집중시킨다.
     const galleryPosts = useMemo(() => pickGalleryPosts(posts), [posts])
     const showGallery = !hasActiveFilters && galleryPosts.length >= 3
-    const galleryIds = useMemo(
-        () => new Set(showGallery ? galleryPosts.map((post) => post.id) : []),
-        [showGallery, galleryPosts],
-    )
-    const listPosts = useMemo(
-        () => filteredPosts.filter((post) => !galleryIds.has(post.id)),
-        [filteredPosts, galleryIds],
-    )
+    // 갤러리는 목록에서 글을 빼가지 않는다(중복 노출 허용). 승격 3건이 최신 글 전부일 때
+    // — featured가 0건이면 갤러리가 그대로 최신 3건이다 — 목록에서 빼면 "최신순" 목록이
+    // 3년 전 글로 시작해 정렬이 뒤집힌 것처럼 읽혔다. 목록은 항상 전체를 최신순 그대로 담는다.
+    const listPosts = filteredPosts
 
     const resetFilters = () => {
         setActiveCategory("전체")
@@ -258,15 +254,12 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                     </div>
                 </motion.div>
 
-                {/* 갤러리로 빠진 글이 있으므로 "총 N개"와 "아래 M개"를 나눠 말한다. */}
+                {/* 목록이 전체를 담으므로 카운트는 하나면 된다 — 갤러리는 그중 3건을 위로 승격한 것뿐이다. */}
                 <div className="flex items-center justify-between gap-3 pb-2 pt-4">
                     <span aria-live="polite" className="text-xs font-medium text-[#615D59]">
                         {normalizedQuery
                             ? `검색 결과 ${filteredPosts.length}개`
                             : `${activeCategory === "전체" ? "전체" : activeCategory} ${filteredPosts.length}개`}
-                        {showGallery && listPosts.length !== filteredPosts.length
-                            ? ` · 아래 목록 ${listPosts.length}개`
-                            : ""}
                     </span>
                     {hasActiveFilters ? (
                         <button

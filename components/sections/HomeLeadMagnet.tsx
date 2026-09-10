@@ -1,7 +1,8 @@
 import { ArrowRight, CheckCircle2, Clock3, FileCheck2 } from "lucide-react"
 
 import { TrackedLink } from "@/components/TrackedLink"
-import { getLeadMagnetBySlug, getLeadMagnetItemCount } from "@/lib/lead-magnets"
+import { getLeadMagnetBySlug } from "@/lib/lead-magnets"
+import { getLeadMagnetItemCount } from "@/lib/lead-magnets-helpers"
 
 const FEATURED_LEAD_MAGNET_SLUG = "academy-system-checklist"
 

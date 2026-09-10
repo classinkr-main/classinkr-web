@@ -4,6 +4,7 @@ export type SlashCommandId =
   | "image"
   | "quote"
   | "checklist"
+  | "path"
   | "callout"
   | "divider"
 
@@ -19,6 +20,57 @@ export interface DocsEditorHelp {
   term: string
   title: string
   description: string
+}
+
+/**
+ * 경로 표기 규약. 공개 렌더러(components/docs/DocsArticle.tsx PATH_STEP_PREFIX)는 스텝 문자열이
+ * 정확히 "경로: "로 시작할 때만 브레드크럼 칩으로 그리고, " > "로 나눈 뒤 [대괄호] 구간을 버튼으로 강조한다.
+ * 편집기 어포던스(슬래시 명령·툴바 버튼·문법 팁)는 전부 이 상수에서 예시를 만든다.
+ */
+export const PATH_STEP_PREFIX = "경로: "
+export const PATH_STEP_SEPARATOR = " > "
+export const PATH_STEP_EXAMPLE = `${PATH_STEP_PREFIX}대시보드${PATH_STEP_SEPARATOR}[설정]${PATH_STEP_SEPARATOR}[일반]`
+/** 파서가 스텝으로 잡는 불릿 한 줄 — 삽입 결과는 반드시 이 형태여야 한다. */
+export const PATH_STEP_MARKDOWN = `- ${PATH_STEP_EXAMPLE}`
+
+const STEP_LINE_WITH_PATH = /^(\s*(?:[-*]|\d+[.)])\s+)(경로:\s.*)$/
+const HTML_ENTITIES: Array<[RegExp, string]> = [
+  [/&lt;/g, "<"],
+  [/&gt;/g, ">"],
+  [/&quot;/g, '"'],
+  [/&#39;/g, "'"],
+  [/&amp;/g, "&"],
+]
+
+/**
+ * WYSIWYG 왕복이 망가뜨린 경로 스텝을 되살린다.
+ *
+ * 본문은 Tiptap이 직렬화하는데, 텍스트 노드가 tiptap-markdown escapeHTML → prosemirror-markdown esc
+ * 순서로 지나가면서 " > "가 " &gt; "로, "[설정]"이 "\[설정\]"으로 바뀐다. 마크다운으로는 여전히
+ * 올바르게 렌더되지만 content_json.sections를 만드는 파서는 원문을 정규식으로 읽기 때문에
+ * 칩 분리("` > `")와 버튼 강조("[]")가 깨진다 — 편집기에서 한 번 저장하면 그 문서의 경로 스텝이
+ * "대시보드 &gt; \[설정\]" 한 칩으로 뭉친다(실측, 미리보기 재현). 규약 사용처는 현재 56곳.
+ *
+ * 저장 마크다운 자체는 유효하므로 건드리지 않고, 파서에 넘기기 직전에 경로 스텝 줄만 되돌린다.
+ * 산문/링크/코드에는 손대지 않는다.
+ */
+export function restorePathStepMarkup(markdown: string) {
+  if (!markdown.includes(PATH_STEP_PREFIX.trimEnd())) return markdown
+
+  return markdown
+    .split("\n")
+    .map((line) => {
+      const match = line.match(STEP_LINE_WITH_PATH)
+      if (!match) return line
+
+      const restored = HTML_ENTITIES.reduce(
+        (value, [pattern, replacement]) => value.replace(pattern, replacement),
+        match[2]
+      ).replace(/\\([\\`*~[\]_])/g, "$1")
+
+      return `${match[1]}${restored}`
+    })
+    .join("\n")
 }
 
 export const SLASH_COMMANDS: SlashCommand[] = [
@@ -51,11 +103,21 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     markdown: "> 중요한 안내를 입력하세요.",
   },
   {
+    // 공개 문서에는 체크박스 문법이 없다. 목록 항목은 section.steps로 올라가 01, 02 번호가 붙는다.
     id: "checklist",
-    label: "체크리스트",
-    description: "운영자가 순서대로 확인할 항목을 만듭니다.",
-    aliases: ["check", "todo", "list", "체크", "체크리스트", "할일"],
-    markdown: "- [ ] 확인할 항목\n- [ ] 다음 항목",
+    label: "순서 목록",
+    description: "공개 문서에서 01, 02 번호가 붙는 실행 순서를 만듭니다.",
+    aliases: ["check", "todo", "list", "step", "체크", "체크리스트", "순서", "절차", "할일"],
+    markdown: "- 첫 번째로 할 일\n- 다음으로 할 일",
+  },
+  {
+    // 슬래시 메뉴는 질의가 비어 있을 때 앞에서 6개만 보여준다(RichMarkdownEditor slice(0, 6)).
+    // 경로 표기는 UI 어디에도 단서가 없던 규약이라 목록 안쪽(주의 박스 앞)에 둬서 "/"만 눌러도 보이게 한다.
+    id: "path",
+    label: "경로 안내",
+    description: "화면 이동 경로를 한 줄로 적으면 공개 문서에서 칩으로 보입니다.",
+    aliases: ["path", "route", "breadcrumb", "menu", "경로", "메뉴", "이동", "위치", "버튼"],
+    markdown: PATH_STEP_MARKDOWN,
   },
   {
     id: "callout",

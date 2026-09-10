@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 
 import { getPublicUserContext } from "@/lib/auth/public-user"
 import { ANONYMOUS_ID_COOKIE } from "@/lib/consent/consent"
+import { resolveLeadIdForAnonymousId } from "@/lib/identity/stitch"
 import { prepareMaterialDownload } from "@/lib/materials"
 import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import { isCrossOriginRequest } from "@/lib/server/same-origin"
@@ -37,6 +38,23 @@ function readAnonymousId(req: NextRequest, body: DownloadBody) {
 function normalizeEmail(value: string | null | undefined) {
   const email = value?.trim().toLowerCase()
   return email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null
+}
+
+/**
+ * 다운로드 행에 붙일 리드를 정한다.
+ *
+ * 예전에는 로그인 사용자의 user_profiles.lead_id 만 썼다. 그런데 그 값은 신원 결합이
+ * 이미 성공한 뒤에만 채워지므로, 게이트를 통과한 다운로드 대부분이 lead_id=null 로
+ * 적재됐다 — getLeadsActivitySummary 의 downloadCount 가 그 컬럼을 읽으므로 "자료를
+ * 받아간 리드"가 참여 신호에서 통째로 빠졌다. 익명 id 로도 한 번 더 찾는다.
+ *
+ * 이메일 게이트의 이메일로는 찾지 않는다 — 그 이메일은 미검증이고(아무나 타인의 주소를
+ * 적을 수 있다), lib/identity/stitch.ts 의 shouldAutoLinkEmail 이 같은 이유로 미검증
+ * 이메일 자동 연결을 금지한다. 그 규칙을 여기서만 깨면 남의 리드에 다운로드가 붙는다.
+ */
+async function resolveDownloadLeadId(profileLeadId: string | null, anonymousId: string | null) {
+  if (profileLeadId) return profileLeadId
+  return resolveLeadIdForAnonymousId(anonymousId)
 }
 
 export async function POST(req: NextRequest, { params }: RouteContext) {
@@ -80,14 +98,15 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   }
 
   try {
+    const anonymousId = readAnonymousId(req, body)
     const result = await prepareMaterialDownload({
       slug,
       email: requestEmail ?? userEmail,
-      anonymousId: readAnonymousId(req, body),
+      anonymousId,
       source: body.source ?? "materials_api",
       postSlug: body.postSlug ?? null,
       userId: userContext?.user.id ?? null,
-      leadId: userContext?.profile.lead_id ?? null,
+      leadId: await resolveDownloadLeadId(userContext?.profile.lead_id ?? null, anonymousId),
     })
 
     if (!result) {
@@ -133,13 +152,14 @@ export async function GET(req: NextRequest, context: RouteContext) {
     )
   }
 
+  const anonymousId = req.cookies.get(ANONYMOUS_ID_COOKIE)?.value ?? null
   const result = await prepareMaterialDownload({
     slug,
     email: userContext?.user.email ?? null,
-    anonymousId: req.cookies.get(ANONYMOUS_ID_COOKIE)?.value ?? null,
+    anonymousId,
     source: "materials_direct",
     userId: userContext?.user.id ?? null,
-    leadId: userContext?.profile.lead_id ?? null,
+    leadId: await resolveDownloadLeadId(userContext?.profile.lead_id ?? null, anonymousId),
   })
 
   if (!result) {

@@ -68,7 +68,10 @@
 
 레퍼런스가 일깨우는 가장 값싼 개선은 "새 기능"이 아니라 **이미 만든 것을 제자리에 놓는 것**이다.
 
-- **R1. 죽어있는 자동화 UI 마운트/정리.** 엔진·크론·API가 이미 도는데 관리 화면만 언마운트라 마케터가 규칙/템플릿을 만들 수 없다. 6개 컴포넌트(`AutomationRuleList/Detail/SlideOver`, `AutomationLogTable`, `TemplateCard`, `TemplateEditorDrawer`)를 메시지 탭 자동화 자리에 연결하거나, 안 쓸 거면 삭제해 죽은 코드를 없앤다. **가장 높은 ROI의 "정리".**
+- **R1. 죽어있는 자동화 UI 마운트/정리.** ✅ **해소(2026-08-18 확인).** 6개 컴포넌트 전원이
+  `tabs/AutomationTab.tsx`에 연결돼 메시지 탭 자동화 자리에 라이브로 마운트돼 있다.
+  단 SendCenter 리팩터로 구세대 컴포저 4개(`EmailComposer`·`ChannelStatusStrip`·
+  `AiCampaignComposer`·`LeadSegmentView`)가 새 고아가 됐고, 같은 날 삭제했다(import 0건 확인).
 - **R2. 메시지 탭 정직화 일관성 유지.** SMS/카카오 "대량 발송 준비 중" 게이트는 이미 정직하게 라벨돼 있음 — 레퍼런스처럼 "발송 목록+오픈/클릭률" 통합 테이블을 추가할 때도 미구현 채널을 실제처럼 보이게 만들지 말 것.
 - **R3. campaigns 탭 라벨·범위 정합.** 레퍼런스의 "캠페인 관리 / 광고 관리 / 메시지 발송" 3분할 관점으로 현재 4탭(요약/행사/Meta/메시지)의 명칭·경계를 재검토(예: `meta`→"광고", 통합 캠페인 목록 도입 시 `summary`와 역할 분리).
 - **R4. 흩어진 라우트의 "마케팅 워크스페이스" 관점 부여.** 물리적 통합(대공사)까진 아니어도, 사이드바 마케팅 그룹(campaigns/blog/lead-magnets/events/analytics/traffic)이 하나의 워크스페이스로 읽히도록 그룹 헤더·상호 딥링크 정리.

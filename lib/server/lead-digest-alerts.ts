@@ -1,5 +1,6 @@
 import "server-only"
 
+import { isTestLead } from "@/lib/crm/lead-attribution"
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import {
   getConversations,
@@ -51,7 +52,7 @@ interface PeriodRange {
 }
 
 function isTargetLead(lead: LeadRecord) {
-  return TARGET_SOURCES.has(lead.source)
+  return TARGET_SOURCES.has(lead.source) && !isTestLead(lead)
 }
 
 function getKstParts(date: Date) {

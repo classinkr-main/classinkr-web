@@ -29,7 +29,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "프로젝트를 찾을 수 없습니다." }, { status: 404 })
     }
     const campaigns = await listCampaignsByProject(id)
-    const eventAdSpend = eventAdSpendFromMetrics(getAllEventMetrics())
+    const eventAdSpend = eventAdSpendFromMetrics(await getAllEventMetrics())
     const rollup = computeProjectRollup(campaigns, { eventAdSpend, budget: project.budget })
     return NextResponse.json({ project, rollup, campaigns })
   } catch (err) {

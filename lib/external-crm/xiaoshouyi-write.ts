@@ -1,6 +1,13 @@
 import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import {
+  assertObjectApiKey,
+  fetchXiaoshouyi,
+  getAccessToken,
+  getXiaoshouyiConfig,
+  type XiaoshouyiConfig,
+} from "@/lib/external-crm/xiaoshouyi-request"
 
 export type CrmWriteOperation = "create" | "update" | "transfer_owner"
 export type CrmWriteRequestStatus = "draft" | "approved" | "sent" | "succeeded" | "failed" | "cancelled"
@@ -9,15 +16,6 @@ type CrmWriteRequestEventType = "created" | "approved" | "cancelled" | "sent" | 
 
 const MAX_WRITE_ATTEMPTS = 3
 const RETRY_DELAY_MINUTES = [5, 15]
-
-interface XiaoshouyiConfig {
-  baseUrl: string
-  accessToken?: string
-  clientId?: string
-  clientSecret?: string
-  username?: string
-  password?: string
-}
 
 interface CrmWriteRequestRow {
   id: string
@@ -122,8 +120,21 @@ const XIAOSHOUYI_WRITE_POLICIES: Record<string, XiaoshouyiWriteObjectPolicy> = {
   lead: {
     label: "리드",
     operations: new Set(["create", "update", "transfer_owner"]),
-    allowedFields: new Set(["leadName", "name", "company", "mobile", "phone", "email", "ownerId", "source", "remark"]),
-    requiredCreateFields: ["leadName"],
+    // 실제 lead 객체 스키마로 검증(2026-08-28, describe 337필드 + 생성 성공 실측).
+    // 옛 목록의 leadName/company/source/remark 는 존재하지 않는 필드였다 — 진짜 이름은
+    // name/companyName 이고 소스 계열은 Original_Source__c 등 커스텀이다.
+    allowedFields: new Set([
+      "name",
+      "companyName",
+      "mobile",
+      "phone",
+      "email",
+      "ownerId",
+      "entityType",
+      "dimDepart",
+      "territoryHighSeaId",
+    ]),
+    requiredCreateFields: ["name", "companyName", "entityType"],
     ownerTransferField: "ownerId",
   },
   opportunity: {
@@ -140,71 +151,33 @@ const XIAOSHOUYI_WRITE_POLICIES: Record<string, XiaoshouyiWriteObjectPolicy> = {
     requiredCreateFields: ["name"],
     ownerTransferField: "ownerId",
   },
+  activityrecord: {
+    label: "활동 기록",
+    // 추가만 하는 로그라 write-back 을 여기서 시작한다. update/delete 는 열지 않는다 —
+    // 우리가 만든 기록만 우리가 만들고, 남이 적은 기록은 건드리지 않는다.
+    operations: new Set(["create"]),
+    allowedFields: new Set([
+      "content",
+      "startTime",
+      "endTime",
+      "entityType",
+      "groupId",
+      "dimDepart",
+      "belongId",
+      "activityRecordFrom",
+      "activityRecordFrom_data",
+      "itemId",
+      "dbcRelation26",
+      "ownerId",
+    ]),
+    requiredCreateFields: ["content", "dbcRelation26"],
+  },
   ShroffAccount__c: {
     label: "EEO 계정",
     operations: new Set([]),
     allowedFields: new Set([]),
     readOnlyReason: "EEO 계정 상태 객체는 read-only snapshot으로만 다룹니다.",
   },
-}
-
-function readEnv(name: string) {
-  const value = process.env[name]?.trim()
-  return value && value.length > 0 ? value : null
-}
-
-function getXiaoshouyiConfig(): XiaoshouyiConfig | null {
-  const baseUrl =
-    readEnv("XIAOSHOUYI_BASE_URL") ??
-    readEnv("XIAOSHOUYI_API_BASE_URL") ??
-    readEnv("XIAOSHOUYI_API_URL") ??
-    readEnv("COMPANY_CRM_API_URL") ??
-    readEnv("CRM_API_URL")
-
-  if (!baseUrl) return null
-
-  return {
-    baseUrl: baseUrl.replace(/\/+$/, ""),
-    accessToken: readEnv("XIAOSHOUYI_ACCESS_TOKEN") ?? readEnv("XIAOSHOUYI_SERVICE_ACCESS_TOKEN") ?? undefined,
-    clientId: readEnv("XIAOSHOUYI_CLIENT_ID") ?? undefined,
-    clientSecret: readEnv("XIAOSHOUYI_CLIENT_SECRET") ?? undefined,
-    username: readEnv("XIAOSHOUYI_USERNAME") ?? readEnv("XIAOSHOUYI_SERVICE_USERNAME") ?? undefined,
-    password: readEnv("XIAOSHOUYI_PASSWORD") ?? readEnv("XIAOSHOUYI_SERVICE_PASSWORD") ?? undefined,
-  }
-}
-
-async function getAccessToken(config: XiaoshouyiConfig) {
-  if (config.accessToken) return config.accessToken
-  if (!config.clientId || !config.clientSecret || !config.username || !config.password) return null
-
-  const body = new URLSearchParams({
-    grant_type: "password",
-    client_id: config.clientId,
-    client_secret: config.clientSecret,
-    username: config.username,
-    password: config.password,
-  })
-
-  const response = await fetch(`${config.baseUrl}/oauth2/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-  })
-
-  if (!response.ok) {
-    throw new Error(`Xiaoshouyi token request failed: ${response.status}`)
-  }
-
-  const payload = (await response.json()) as { access_token?: unknown }
-  return typeof payload.access_token === "string" ? payload.access_token : null
-}
-
-function assertObjectApiKey(value: string) {
-  const trimmed = value.trim()
-  if (!/^[A-Za-z][A-Za-z0-9_]*(?:__c)?$/.test(trimmed)) {
-    throw new Error("Invalid Xiaoshouyi object API key")
-  }
-  return trimmed
 }
 
 function assertPayload(value: Record<string, unknown>) {
@@ -435,7 +408,7 @@ async function probeXiaoshouyiObjectFields(
   if (fields.length === 0) return toMetadataObjectStatus(objectApiKey, policy, { status: "skipped" })
 
   const query = `SELECT ${fields.join(",")} FROM ${objectApiKey} LIMIT 1`
-  const response = await fetch(`${config.baseUrl}${queryPath(query)}`, {
+  const response = await fetchXiaoshouyi(`${config.baseUrl}${queryPath(query)}`, {
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
@@ -869,7 +842,7 @@ export async function executeCrmWriteRequest(id: string, actorUserId?: string | 
 
     await validateWriteMetadataForObject(config, token, preview.objectApiKey)
 
-    const response = await fetch(`${config.baseUrl}${preview.urlPath}`, {
+    const response = await fetchXiaoshouyi(`${config.baseUrl}${preview.urlPath}`, {
       method: preview.method,
       headers: {
         Authorization: `Bearer ${token}`,

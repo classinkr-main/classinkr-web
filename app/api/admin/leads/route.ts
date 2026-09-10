@@ -1,6 +1,12 @@
 ﻿import { NextRequest, NextResponse } from "next/server"
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
+import { getCachedOverviewLeadSummary } from "@/lib/admin/overview/lead-summary-cache"
+import { normalizePhoneKey } from "@/lib/compass/normalize"
+import {
+  buildCompassDuplicateReport,
+  type CompassDuplicateReport,
+} from "@/lib/compass/overlay"
 import {
   getLeads,
   getDashboardLeads,
@@ -17,19 +23,23 @@ export async function GET(req: NextRequest) {
 
   try {
     // 스코프별로 화면에 쓰는 컬럼만 가져와 페이로드를 줄인다.
-    // - dashboard: overview/analytics 집계용(id·source·name·org·email·status·branch·created_at·confirmed_at)
+    // - overview: dashboard와 같은 서버 원본을 단 한 번 집계하고 KPI·최근 6건·30일 버킷만 반환
+    // - dashboard: 기존 overview/analytics 소비자용 전량 계약 — 하위호환을 위해 유지
     // - campaigns: 행사↔리드 귀속용(id·source·status·notes·created_at) — 귀속 해시가 notes를 요구한다
     // - marketing: 캠페인 허브 "광고 리드"용(트래킹 축·연락처·전환 상태) — campaigns의 상위집합
     // - 기본(무스코프): 전체 컬럼 — LeadsBoard(검색이 utm_* 필요)는 불변
     const scope = new URL(req.url).searchParams.get("scope")
-    const leads =
-      scope === "dashboard"
-        ? await getDashboardLeads()
-        : scope === "campaigns"
-          ? await getCampaignLeads()
-          : scope === "marketing"
-            ? await getMarketingLeads()
-            : await getLeads()
+    if (scope === "overview") {
+      return adminCachedJson({ overview: await getCachedOverviewLeadSummary() })
+    }
+
+    const leads = scope === "dashboard"
+      ? await getDashboardLeads()
+      : scope === "campaigns"
+        ? await getCampaignLeads()
+        : scope === "marketing"
+          ? await getMarketingLeads()
+          : await getLeads()
     return adminCachedJson({ leads })
   } catch (error) {
     console.error("[GET /api/admin/leads] error:", error)
@@ -53,6 +63,18 @@ function phoneDigits(value: string) {
 
 function leadStr(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined
+}
+
+// 첫 팔로업은 "YYYY-MM-DD"(등록 폼의 날짜 입력) 또는 ISO 문자열로 들어온다.
+// 날짜만 온 경우는 리드 보드의 팔로업 규약과 같은 정오(12:00 UTC)로 고정해 저장한다 —
+// 자정으로 두면 타임존에 따라 하루 밀려 "어제 예정"으로 보인다.
+// 선택 입력이므로 형식이 틀리면 행을 죽이지 않고 값만 버린다(연락처 검증과 다른 취급).
+function leadFollowUpAt(value: unknown): string | undefined {
+  const raw = leadStr(value)
+  if (!raw) return undefined
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T12:00:00.000Z` : raw
+  const at = new Date(iso)
+  return Number.isNaN(at.getTime()) ? undefined : at.toISOString()
 }
 
 // 단건/벌크 리드 등록 입력을 정규화한다. 식별자(학원명·이름·전화·이메일) 하나는 있어야 하고,
@@ -79,6 +101,9 @@ function normalizeLeadInput(raw: unknown): LeadCreateInput | null {
     message: leadStr(r.message) ?? leadStr(r.memo),
     branch: leadStr(r.branch) ?? leadStr(r.region),
     notes: leadStr(r.notes),
+    // 등록 폼이 첫 팔로업·담당자를 함께 보낸다. 파싱하지 않으면 저장소까지 값이 닿지 않는다.
+    assigned_to: leadStr(r.assigned_to),
+    follow_up_at: leadFollowUpAt(r.follow_up_at),
     source_detail: leadStr(r.source_detail) ?? "어드민 수기 등록",
     // 캠페인 허브 "광고 리드 가져오기"가 매체 표기(utm_medium=cpc·utm_campaign)를 실어 보낸다.
     // 여기서 떨어뜨리면 방금 가져온 리드가 광고/마케팅 렌즈와 캠페인 축 롤업 어디에도 안 잡힌다.
@@ -89,6 +114,33 @@ function normalizeLeadInput(raw: unknown): LeadCreateInput | null {
     utm_content: leadStr(r.utm_content),
     // 어드민이 직접 입력한 리드는 이미 검토된 것 — 공개 폼 확인 게이트 대상이 아니다.
     confirmed_at: new Date().toISOString(),
+  }
+}
+
+/**
+ * Compass(마케팅팀 앱) 교차 중복 조회.
+ *
+ * 우리 테이블 중복과 별개 축이다 — 우리 쪽에 없어도 마케팅팀이 이미 콜을 돌리고 있을 수 있다.
+ * **차단하지 않는다.** 등록은 그대로 진행하고 응답에 경고만 실어 화면이 알리게 한다.
+ * 브리지가 죽어도 등록을 막지 않는다. 대신 down으로 "확인 못 함"을 말한다 —
+ * "겹치는 리드 없음"과 같은 침묵으로 뭉개지 않는다.
+ */
+async function lookupCompassDuplicates(inputs: LeadCreateInput[]): Promise<CompassDuplicateReport> {
+  const none: CompassDuplicateReport = { first: null, count: 0, down: false }
+  const phoneKeys = Array.from(
+    new Set(inputs.map((lead) => normalizePhoneKey(lead.phone)).filter((key): key is string => Boolean(key)))
+  )
+  // 전화가 없으면 대조 축 자체가 없다 — 장애가 아니라 "해당 없음"이다.
+  if (phoneKeys.length === 0) return none
+  try {
+    // 동적 import — 전화 없는 등록(이메일만)에서는 브리지 모듈을 아예 로드하지 않는다.
+    const { getCompassLeadsByPhoneKeys } = await import("@/lib/compass/bridge")
+    const result = await getCompassLeadsByPhoneKeys(phoneKeys)
+    if (result.down) return { first: null, count: 0, down: true }
+    return buildCompassDuplicateReport(inputs, result.rows)
+  } catch (error) {
+    console.warn("[POST /api/admin/leads] compass duplicate lookup failed:", error)
+    return { first: null, count: 0, down: true }
   }
 }
 
@@ -119,10 +171,14 @@ export async function POST(req: NextRequest) {
 
     // 같은 전화(숫자만 비교)·같은 이메일(소문자 비교)이 이미 있으면 저장하지 않고 duplicates로
     // 센다 — 같은 시트를 두 번 붙여넣는 사고가 리드 보드를 복제 리드로 오염시키는 것을 막는다.
-    const existing = await findLeadsByContacts({
-      phones: inputs.map((lead) => lead.phone ?? "").filter(Boolean),
-      emails: inputs.map((lead) => lead.email ?? "").filter(Boolean),
-    })
+    // Compass 교차 조회는 이 검사와 직교하며 저장을 막지 않는다(경고만) — 두 조회를 함께 던진다.
+    const [existing, compassDuplicate] = await Promise.all([
+      findLeadsByContacts({
+        phones: inputs.map((lead) => lead.phone ?? "").filter(Boolean),
+        emails: inputs.map((lead) => lead.email ?? "").filter(Boolean),
+      }),
+      lookupCompassDuplicates(inputs),
+    ])
     const existingIdByPhone = new Map<string, string>()
     const existingIdByEmail = new Map<string, string>()
     for (const lead of existing) {
@@ -159,7 +215,13 @@ export async function POST(req: NextRequest) {
     // 단건 등록이 중복이면 조용히 0건 성공으로 넘기지 않고 409로 알린다 — 기존 리드로 안내한다.
     if (!isBulk && duplicates > 0) {
       return NextResponse.json(
-        { error: "이미 등록된 리드입니다(전화/이메일 일치).", existingId: firstExistingId },
+        {
+          error: "이미 등록된 리드입니다(전화/이메일 일치).",
+          existingId: firstExistingId,
+          // 우리 쪽 중복이면서 Compass에도 있는 경우에만 덧붙인다 — 할 말이 없으면
+          // 오류 응답의 모양을 바꾸지 않는다(기존 409 계약 보존).
+          ...(compassDuplicate.first ? { compassDuplicate: compassDuplicate.first } : {}),
+        },
         { status: 409 }
       )
     }
@@ -177,6 +239,12 @@ export async function POST(req: NextRequest) {
       duplicates,
       ids: createdLeads.map((lead) => lead.id),
       firstId: createdLeads[0]?.id ?? null,
+      // Compass 교차 중복 — 등록은 이미 됐고, 화면은 "마케팅팀이 이미 콜 중"을 알린다.
+      // 매칭이 없거나 브리지가 죽으면 null/0이며 등록 결과에는 영향이 없다.
+      compassDuplicate: compassDuplicate.first,
+      compassDuplicates: compassDuplicate.count,
+      // 대조 자체를 못 했으면 "겹치는 리드 없음"이라고 말하지 않는다.
+      compassDown: compassDuplicate.down,
     })
   } catch (error) {
     console.error("[POST /api/admin/leads] error:", error)

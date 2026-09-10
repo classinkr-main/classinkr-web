@@ -14,7 +14,7 @@ import {
   getLeadMagnetItemCount,
   getLeadMagnetPublicGateLabel,
   getLeadMagnetTierLabel,
-} from "@/lib/lead-magnets"
+} from "@/lib/lead-magnets-helpers"
 import {
   getLeadMagnetBySlugFromStore,
   getPublishedLeadMagnets,

@@ -14,7 +14,7 @@ import {
 // lib/admin-client의 adminFetch가 동일하게 수행한다).
 export { adminFetch } from "@/lib/admin-client"
 
-interface BranchJsonState<T> {
+export interface BranchJsonState<T> {
   key: string
   data: T | null
   error: string | null
@@ -36,6 +36,10 @@ const EMPTY_STATE = { data: null, error: null, loading: true, stale: false, stal
 
 // branch 새로고침·재동기화가 무효화해야 하는 캐시 스코프 — branch API 키 전체에 매칭된다.
 const BRANCH_API_CACHE_PREFIX = "/api/admin/branch"
+// KR Team의 읽기 전용 카드·차트는 15초 안에 실데이터/오류/stale 중 하나로 끝나야 한다.
+// 공통 admin 기본값(45초)을 그대로 쓰면 실패한 요청이 27초 뒤에도 스켈레톤으로 보일 수 있다.
+// 동기화·임포트 같은 장기 작업은 useBranchJson 경로가 아니라 별도 mutation API를 사용한다.
+const BRANCH_READ_TIMEOUT_MS = 15_000
 
 export function clearBranchRequestCache() {
   // 코덱스 감사 #2: 과거엔 무인자 전역 클리어라 branch 새로고침이 블로그·CRM 등 다른 어드민
@@ -61,7 +65,7 @@ export async function adminFetchJson<T>(url: string, init: AdminFetchInit = {}):
 // 예열·다른 화면(개요↔장부의 summary/kpi 등)과 캐시를 공유한다. refreshKey는 키가 아니라
 // force 재검증으로 매핑한다(useBranchJson 내부 주석 참조).
 function loadBranchJson<T>(url: string, force: boolean) {
-  return adminFetchJsonCachedWithMeta<T>(url, undefined, {
+  return adminFetchJsonCachedWithMeta<T>(url, { adminTimeoutMs: BRANCH_READ_TIMEOUT_MS }, {
     ttlMs: 60_000,
     force,
   })

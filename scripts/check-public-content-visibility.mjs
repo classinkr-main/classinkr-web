@@ -42,10 +42,12 @@ const [latestBlog, latestUpdateDoc] = await Promise.all([
   fetchLatestPublicUpdateDoc(),
 ])
 
+// readArtifacts 가 산출물 누락을 여기에 담으므로 호출보다 먼저 선언해야 한다 —
+// 아래에 두면 누락 시 TDZ 로 터져 "Missing build artifact: …" 대신 알 수 없는 크래시가 난다.
+const failures = []
+
 const aboutText = readArtifacts(REQUIRED_ARTIFACTS.about)
 const updatesText = readArtifacts(REQUIRED_ARTIFACTS.updates)
-
-const failures = []
 
 if (!latestBlog) {
   failures.push("No published blog post was found in Supabase.")

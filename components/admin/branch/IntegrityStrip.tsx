@@ -154,7 +154,7 @@ function IntegrityStripPanel({
         <button
           type="button"
           onClick={() => setRetryNonce((n) => n + 1)}
-          className="font-semibold text-[#111110] underline underline-offset-2"
+          className="inline-flex min-h-11 min-w-11 items-center justify-center font-semibold text-[#111110] underline underline-offset-2 md:min-h-0 md:min-w-0"
         >
           다시 시도
         </button>
@@ -169,7 +169,7 @@ function IntegrityStripPanel({
   // error가 하나라도 있으면 배지 톤을 캐논 Danger로 승격, 이슈 없음은 Success·Info,
   // warning만 있을 때는 기존 SyncStatusBar의 "임포트 지연" 앰버(캐논 Warning) 톤을 재사용.
   const tone = clean
-    ? { border: "border-[#BDEFD8]", bg: "bg-[#ECFDF5]", text: "text-[#084734]", dot: "bg-[#084734]" }
+    ? { border: "border-[#e8e8e4]", bg: "bg-[#FAFAF8]", text: "text-[#1a1a1a]/35", dot: "bg-[#A39E98]" }
     : errorCount > 0
     ? { border: "border-[#B43E3E]/25", bg: "bg-[#FCE9E9]", text: "text-[#8F2C2C]", dot: "bg-[#B43E3E]" }
     : { border: "border-[#ECD29C]", bg: "bg-[#FBF1E0]", text: "text-[#7A520F]", dot: "bg-[#A8741A]" }
@@ -191,16 +191,17 @@ function IntegrityStripPanel({
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className={`flex w-full items-center gap-1 px-2 py-0.5 text-left text-[10.5px] font-semibold ${tone.text}`}
+        title={clean ? `정합 이슈 없음 (규칙 ${data.ruleCount ?? 0}개 통과)` : undefined}
+        className={`flex min-h-11 w-full items-center gap-1 px-2 py-0.5 text-left text-[10.5px] font-semibold md:min-h-0 ${tone.text}`}
       >
         <span className={`h-[5px] w-[5px] shrink-0 rounded-full ${tone.dot}`} aria-hidden="true" />
-        <span className="min-w-0 truncate">
+        <span className={clean ? "sr-only" : "min-w-0 truncate"}>
           {clean
             ? <>정합 이슈 없음 (규칙 {data.ruleCount ?? 0}개 통과)</>
             : <>정합 이슈 {total}건 (경고{warnCount}·오류{errorCount})</>}
         </span>
         <ChevronDown
-          className={`ml-auto h-2.5 w-2.5 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
+          className={`ml-auto h-2.5 w-2.5 shrink-0 transition-transform ${expanded ? "rotate-180" : ""} ${clean ? "opacity-40" : ""}`}
           aria-hidden="true"
         />
       </button>
@@ -228,7 +229,7 @@ function IntegrityStripPanel({
               {typeof issue.sheetRow === "number" && (
                 <Link
                   href={ledgerHref(issue.sheetRow)}
-                  className={`shrink-0 font-semibold underline underline-offset-2 ${tone.text}`}
+                  className={`inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center font-semibold underline underline-offset-2 md:min-h-0 md:min-w-0 ${tone.text}`}
                 >
                   장부에서 열기 →
                 </Link>
@@ -243,7 +244,7 @@ function IntegrityStripPanel({
                 type="button"
                 onClick={() => setShowDetail((v) => !v)}
                 aria-expanded={showDetail}
-                className={`inline-flex items-center gap-1 text-[11.5px] font-bold underline underline-offset-2 ${tone.text}`}
+                className={`inline-flex min-h-11 min-w-11 items-center justify-center gap-1 text-[11.5px] font-bold underline underline-offset-2 md:min-h-0 md:min-w-0 ${tone.text}`}
               >
                 전체 규칙 상세 {showDetail ? "숨기기" : "보기"}
               </button>

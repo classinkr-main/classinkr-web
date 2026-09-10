@@ -1,11 +1,17 @@
 import "server-only"
 
+import { unstable_cache, revalidateTag } from "next/cache"
+import { shareInFlight } from "@/lib/server/share-in-flight"
+
 import {
   getCachedCrmDuplicatePreflightReport,
   getCrmDuplicatePreflightReport,
 } from "@/lib/admin-crm-duplicate-preflight"
 import { getNeoCrmTeamReport } from "@/lib/admin-crm-neo"
 import { getCrmSchemaContractReadiness } from "@/lib/admin-crm-schema-contract"
+import { ADMIN_CRM_OVERVIEW_CACHE_TAG } from "@/lib/admin/crm/cache-tags"
+import { EXTERNAL_CRM_SNAPSHOT_OBJECT_KEYS } from "@/lib/external-crm/latest-synced-at"
+import { getExternalCrmObjectSnapshotTotals } from "@/lib/external-crm/object-snapshot"
 import { getXiaoshouyiSyncPreflight, getXiaoshouyiSyncSchemaReadiness } from "@/lib/external-crm/xiaoshouyi-sync"
 import { getXiaoshouyiWriteSchemaReadiness } from "@/lib/external-crm/xiaoshouyi-write"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
@@ -105,8 +111,10 @@ export interface AdminCrmOverview {
     ok: boolean
     total: number
     confirmed: number
+    /** 저장된 status 원본 이력. 현재 actionable review 수가 아니다. */
     candidate: number
     rejected: number
+    /** 저장된 status 원본 이력. 현재 actionable review 수가 아니다. */
     stale: number
     error: string | null
   }
@@ -167,18 +175,6 @@ type SupabaseAdminClient = ReturnType<typeof createSupabaseAdminClient>
 
 const SOURCE_LINK_STATUSES = ["confirmed", "candidate", "rejected", "stale"] as const
 const WRITE_REQUEST_STATUSES = ["draft", "approved", "sent", "failed", "succeeded", "cancelled"] as const
-const EXTERNAL_CRM_OVERVIEW_OBJECTS = [
-  "User",
-  "account",
-  "contact",
-  "opportunity",
-  "ShroffAccount__c",
-  "Collection__c",
-  "SalesPerformance__c",
-  "CollectionPlan__c",
-  "FinancialInformation__c",
-  "ResourceInformation__c",
-] as const
 const BUSINESS_QUERY_LIMIT = 5000
 const RECENT_BUSINESS_LOG_LIMIT = 12
 const RECENT_ACTIVITY_DAYS = 7
@@ -188,11 +184,20 @@ const FREQUENT_ACTIVITY_SCAN_LIMIT = 2000
 const FREQUENT_CUSTOMER_LIMIT = 5
 const BUSINESS_SNAPSHOT_RPC = "admin_crm_business_overview"
 const BUSINESS_SNAPSHOT_MAX_AGE_SECONDS = 300
-// 라우트의 private max-age(30s)와 맞춘 서버 프로세스 캐시. CRM 홈과 검수 화면이
-// 거의 동시에 같은 무거운 10개 집계를 요청해도 한 번만 계산하고, 새로고침(force)은 우회한다.
-const ADMIN_CRM_OVERVIEW_CACHE_TTL_MS = 30_000
-let adminCrmOverviewCache: { cachedAt: number; value: AdminCrmOverview } | null = null
-let adminCrmOverviewInFlight: Promise<AdminCrmOverview> | null = null
+// Data Cache(unstable_cache, 120초). CRM 홈과 검수 화면이 거의 동시에 같은 무거운 10개
+// 집계를 요청해도 한 번만 계산하고, 새로고침(force)은 우회한다.
+//
+// 예전에는 인스턴스 모듈 메모(let 캐시 + in-flight promise)였다 — Vercel Fluid 인스턴스가
+// 콜드일 때마다(대부분의 실제 요청) 비어 있어 사실상 매번 콜드 비용을 물었다. unstable_cache는
+// 인스턴스 간 공유되고 Next 16에서 stale-while-revalidate라 콜드 인스턴스에서도 다른 인스턴스가
+// 최근에 데운 값을 즉시 돌려주고 백그라운드로만 재계산한다(node_modules/next/dist/server/web/
+// spec-extension/unstable-cache.js 확인). 동시 요청 중복 계산 방지(구 in-flight promise)는
+// unstable_cache가 대신하므로 별도 가드를 두지 않는다.
+//
+// 창을 클라이언트 TTL(CRM_CACHE_TTL_MS = 120초)·라우트 max-age와 같은 120초로 맞춘다.
+// CRM 홈은 force-dynamic RSC라 **탭에 들어올 때마다** 서버 프리페치가 이 집계를 부른다 —
+// 30초 창에서는 조금만 자리를 비워도 DB 왕복 30회를 다시 돌며 TTFB를 붙잡았다.
+// 대가는 최대 지연이 늘어나는 것뿐이고, 새로고침 버튼이 force로 우회한다.
 const BUSINESS_SNAPSHOT_MISSING_WARNING =
   `${BUSINESS_SNAPSHOT_RPC} 함수가 없어 라이브 집계로 대체했습니다. ` +
   "supabase/migrations/20260613_admin_crm_overview_snapshot.sql 적용이 필요합니다."
@@ -1072,28 +1077,14 @@ async function getWriteQueueCounts(sb: SupabaseAdminClient) {
 }
 
 async function getExternalSnapshotOverview(sb: SupabaseAdminClient): Promise<AdminCrmOverview["externalSnapshots"]> {
-  // P4: 개요는 객체별 합계·최댓값만 쓰므로 3×N 라운드트립을 4개 쿼리로 합친다(의미 동일).
-  const objectKeys = [...EXTERNAL_CRM_OVERVIEW_OBJECTS]
-  const [activeCountResult, staleCountResult, latestSyncedResult, latestRunResult] = await Promise.all([
-    sb
-      .from("external_crm_records")
-      .select("id", { count: "exact", head: true })
-      .eq("source_system", "xiaoshouyi")
-      .in("object_api_key", objectKeys)
-      .eq("is_stale", false),
-    sb
-      .from("external_crm_records")
-      .select("id", { count: "exact", head: true })
-      .eq("source_system", "xiaoshouyi")
-      .in("object_api_key", objectKeys)
-      .eq("is_stale", true),
-    sb
-      .from("external_crm_records")
-      .select("synced_at")
-      .eq("source_system", "xiaoshouyi")
-      .in("object_api_key", objectKeys)
-      .order("synced_at", { ascending: false })
-      .limit(1),
+  // 개요는 객체별 합계·최댓값만 쓴다. external_crm_records 를 세 번 훑던 집계(활성 head count ·
+  // stale head count · synced_at 정렬 — 합쳐 84K행 스캔 3회, ≈4.7s)를 집계 뷰 1회 읽기로 바꾸고,
+  // 뷰가 없으면 헬퍼가 이전과 같은 의미로 폴백한다. external_crm_sync_runs 조회는 그대로다.
+  const [totalsResult, latestRunResult] = await Promise.all([
+    getExternalCrmObjectSnapshotTotals(sb, {
+      sourceSystem: "xiaoshouyi",
+      objectApiKeys: EXTERNAL_CRM_SNAPSHOT_OBJECT_KEYS,
+    }),
     sb
       .from("external_crm_sync_runs")
       .select("status, object_api_key, finished_at, started_at, error")
@@ -1107,22 +1098,16 @@ async function getExternalSnapshotOverview(sb: SupabaseAdminClient): Promise<Adm
   const latestRunError = latestRun && typeof latestRun.error === "string" && latestRun.error.trim()
     ? latestRun.error.trim()
     : null
-  const firstCountError = firstError([
-    activeCountResult.error,
-    staleCountResult.error,
-    latestSyncedResult.error,
-    latestRunResult.error,
-  ])
-  const latestSyncedRow = latestSyncedResult.error ? null : latestSyncedResult.data?.[0]
+  const firstCountError = firstError([totalsResult.error, latestRunResult.error])
   const latestSyncedAt = maxDate([
     latestRun && typeof latestRun.finished_at === "string" ? latestRun.finished_at : null,
-    latestSyncedRow && typeof latestSyncedRow.synced_at === "string" ? latestSyncedRow.synced_at : null,
+    totalsResult.latestSyncedAt,
   ])
 
   return {
     ok: !firstCountError && !latestRunFailed,
-    recordCount: activeCountResult.error ? 0 : activeCountResult.count ?? 0,
-    staleCount: staleCountResult.error ? 0 : staleCountResult.count ?? 0,
+    recordCount: totalsResult.activeCount,
+    staleCount: totalsResult.staleCount,
     latestSyncedAt,
     latestRunStatus: latestRun && typeof latestRun.status === "string" ? latestRun.status : null,
     latestRunObject: latestRun && typeof latestRun.object_api_key === "string" ? latestRun.object_api_key : null,
@@ -1145,8 +1130,6 @@ function getOverallStatus(input: {
   externalSnapshotsOk: boolean
   writeQueueOk: boolean
   businessOk: boolean
-  sourceCandidates: number
-  sourceStale: number
   snapshotStale: number
   failedWrites: number
 }): AdminCrmOverviewStatus {
@@ -1161,8 +1144,6 @@ function getOverallStatus(input: {
   }
   if (
     !input.xiaoshouyiConfigured ||
-    input.sourceCandidates > 0 ||
-    input.sourceStale > 0 ||
     input.snapshotStale > 0 ||
     input.failedWrites > 0
   ) {
@@ -1301,8 +1282,6 @@ async function buildAdminCrmOverview(options: { force?: boolean } = {}): Promise
       externalSnapshotsOk: externalSnapshots.ok,
       writeQueueOk: writeQueue.ok,
       businessOk: business.ok,
-      sourceCandidates: sourceLinks.candidate,
-      sourceStale: sourceLinks.stale,
       snapshotStale: externalSnapshots.staleCount,
       failedWrites: writeQueue.failed,
     }),
@@ -1328,25 +1307,28 @@ async function buildAdminCrmOverview(options: { force?: boolean } = {}): Promise
   }
 }
 
+// buildAdminCrmOverview는 요청 무관 서비스 롤 클라이언트(createSupabaseAdminClient)만 쓰고
+// cookies()/headers()를 읽지 않는 순수 함수라 unstable_cache 안에서 안전하다(lib/admin-crm-
+// revenue.ts:1534, lib/admin/overview/os-summary.ts 동일 논리). 인자 없이 호출하는 이 캐시된
+// 경로는 options.force가 항상 undefined이므로 "비-force" 계산만 감싼다.
+// 같은 인스턴스의 동시 미스·재검증(hover FULL 프리페치 + API 예열, RSC 프리페치 + 라우트)은
+// shareInFlight 로 한 번만 계산한다 — unstable_cache 는 인스턴스 안 동시 호출을 합치지 않는다.
+const getCachedAdminCrmOverview = unstable_cache(() => shareInFlight("admin-crm-overview", () => buildAdminCrmOverview()), ["admin-crm-overview"], {
+  revalidate: 120,
+  tags: [ADMIN_CRM_OVERVIEW_CACHE_TAG],
+})
+
 export async function getAdminCrmOverview(options: { force?: boolean } = {}): Promise<AdminCrmOverview> {
   if (options.force) {
     const fresh = await buildAdminCrmOverview({ force: true })
-    adminCrmOverviewCache = { cachedAt: Date.now(), value: fresh }
+    // 새로고침 직후 다음 읽기는 반드시 새 값을 봐야 한다 — Data Cache에 fresh를 직접 채워
+    // 넣을 API는 없으므로, 태그를 즉시 하드 만료해 다음 getCachedAdminCrmOverview() 호출이
+    // 재계산하게 한다(leads.ts의 invalidateLeadReadCaches와 같은 컨벤션:
+    // revalidateTag(tag, { expire: 0 }) = 즉시 하드 만료, "max"는 SWR —
+    // docs/active/admin-performance-plan-2026-09-02.md §4.4).
+    revalidateTag(ADMIN_CRM_OVERVIEW_CACHE_TAG, { expire: 0 })
     return fresh
   }
 
-  const cached = adminCrmOverviewCache
-  if (cached && Date.now() - cached.cachedAt < ADMIN_CRM_OVERVIEW_CACHE_TTL_MS) return cached.value
-  if (adminCrmOverviewInFlight) return adminCrmOverviewInFlight
-
-  const request = buildAdminCrmOverview()
-    .then((value) => {
-      adminCrmOverviewCache = { cachedAt: Date.now(), value }
-      return value
-    })
-    .finally(() => {
-      adminCrmOverviewInFlight = null
-    })
-  adminCrmOverviewInFlight = request
-  return request
+  return getCachedAdminCrmOverview()
 }

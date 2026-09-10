@@ -3,7 +3,10 @@
 // 모든 함수는 입력→출력 순수 함수이며, 현재 시각이 필요한 함수는 Date를 주입받는다(테스트 안정성).
 // W2-3(OV4): C2 revenue-core SSOT 전환의 선행 정지작업 — 신호 정의를 한 곳에서 검증한다.
 
-import { hoursBetween, isUnconfirmedLead, isUnrespondedLead } from "@/components/admin/crm/leads/shared"
+// 순수 규칙은 lib/crm/leads-board-state 가 정본 — 서버 집계가 컴포넌트를 import 하지 않는다.
+import { getLeadSourceGroup } from "@/lib/crm/lead-attribution"
+import { hoursBetween, isUnconfirmedLead, isUnrespondedLead } from "@/lib/crm/leads-board-state"
+import { isPrefetchFresh } from "@/lib/admin/prefetch-freshness"
 import type { LeadRecord } from "@/lib/site-settings-types"
 import type { AdminIntegrationStatusResponse } from "@/lib/admin-integrations/types"
 import type { CalendarEvent } from "@/lib/calendar-data"
@@ -85,6 +88,16 @@ export function aggregateLeads(leads: LeadRecord[], now: Date = new Date()) {
   let lastMonthLeads = 0
   let convertedThisMonth = 0
   let convertedLastMonth = 0
+  // 홈페이지 유입 창 — 유입 수 관점이라 todayLeads처럼 확인 게이트를 적용하지 않는다.
+  // 모집단은 유입 그룹 매핑(getLeadSourceGroup)의 homepage 그룹 = 문의 폼 + 데모 모달 +
+  // 홈 리드마그넷·최종 CTA. 예전에는 contact_page 한 소스만 세서, 홈 Hero·Comparison·FinalCTA에
+  // 붙은 데모 모달로 들어온 문의가 타일에서 통째로 빠졌다.
+  let homepageToday = 0
+  let homepageThisWeek = 0
+  let homepageTotal = 0
+  // 그 중 확인 게이트 밖(미확인)인 건수. 타일을 눌러 착지하는 리드 보드는 게이트를 걸기 때문에,
+  // 이 수를 같이 들고 있어야 "타일은 4건인데 목록은 3건" 같은 침묵하는 차이를 화면이 말할 수 있다.
+  let homepageUnconfirmed = 0
   const sourceMap: Record<string, number> = {}
   const branchMap: Record<string, number> = {}
   const dayCount: Record<string, number> = {}
@@ -99,6 +112,12 @@ export function aggregateLeads(leads: LeadRecord[], now: Date = new Date()) {
       else if (l.status === "closed") closedLeads++
     }
 
+    const isHomepageLead = getLeadSourceGroup(l) === "homepage"
+    if (isHomepageLead) {
+      homepageTotal++
+      if (isUnconfirmedLead(l)) homepageUnconfirmed++
+    }
+
     const t = new Date(l.timestamp).getTime()
     if (!Number.isNaN(t)) {
       const key = new Date(t).toDateString()
@@ -106,6 +125,10 @@ export function aggregateLeads(leads: LeadRecord[], now: Date = new Date()) {
       if (key === todayStr) todayLeads++
       if (t >= weekAgoT) thisWeekLeads++
       else if (t >= twoWeeksAgoT) lastWeekLeads++
+      if (isHomepageLead) {
+        if (key === todayStr) homepageToday++
+        if (t >= weekAgoT) homepageThisWeek++
+      }
       if (t >= monthStartT) {
         thisMonthLeads++
         if (l.status === "converted") convertedThisMonth++
@@ -145,6 +168,10 @@ export function aggregateLeads(leads: LeadRecord[], now: Date = new Date()) {
     monthTrend: thisMonthLeads - lastMonthLeads,
     convertedThisMonth,
     convertedTrend: convertedThisMonth - convertedLastMonth,
+    homepageToday,
+    homepageThisWeek,
+    homepageTotal,
+    homepageUnconfirmed,
     pieData,
     recentLeads,
     dayCount,
@@ -157,7 +184,8 @@ export type LeadAggregates = ReturnType<typeof aggregateLeads>
 /* ─── 미응답 리드 신호 (단일 정의) ──────────────────────────── */
 
 // Overview에서 '미응답'을 표현하는 유일한 정의·유일한 산출 지점(W2-8).
-// 캐논 = action-kpis 라우트(getLeadActionStats): status=new AND source∈{데모·문의·Meta}
+// 캐논 = action-kpis 라우트(getLeadActionStats): 테스트가 아닌 운영 리드 중
+// status=new AND source∈{데모·문의·Meta}
 // (RESPONSE_TARGET_SOURCES). 응대 SLA 관점이라 리드 확인 게이트를 적용하지 않는다 —
 // 보드의 filter=unresponded(CONFIRMATION_GATE_EXEMPT_FILTERS)와 동일 기준.
 export interface UnrespondedSignal {
@@ -387,14 +415,14 @@ export function buildOperationalAlerts(input: OperationalAlertInput): {
       ? {
           id: "lead-followup",
           scope: "CRM",
-          title: "미응답 리드 후속 리스크",
-          description: `응대 전 ${unrespondedCount}건 · 24h+ 경과 ${unresponded24hCount}건 · 데모·문의·Meta 신규 인바운드 기준.`,
+          title: "신규 상태 리드 후속 리스크",
+          description: `신규 상태 ${unrespondedCount}건 · 24h+ 경과 ${unresponded24hCount}건 · 데모·문의·Meta 운영 리드 기준(테스트 제외).`,
           meta: todayLeads > 0 ? `오늘 유입 ${todayLeads}건` : `이번 주 유입 ${thisWeekLeads}건`,
           // 골든타임(24h) 초과가 있으면 타일과 같은 breach 판정으로 danger, 아니면 warning.
           tone: unresponded24hCount > 0 ? ("danger" as const) : ("warning" as const),
-          action: "미응답 보드",
+          action: "24h+ 신규 상태 보드",
           // 리스크 렌즈가 켜진 미응답 보드로 직결 — bare /admin/crm 착지 금지(신호→행동 무손실).
-          href: "/admin/crm/customers/leads?filter=unresponded&focus=risk",
+          href: "/admin/crm/customers/leads?filter=unresponded_24h&focus=risk",
           priority: 100,
         }
       : null,
@@ -516,4 +544,21 @@ export function computePipelineCoverage(series: BranchMonthlySeries | null | und
   const pipelineTotal = last(series.revenue_trend_cum) - confirmed
   const remaining = last(series.goal_cum) - confirmed
   return remaining > 0 ? pipelineTotal / remaining : null
+}
+
+/* ─── 서버 프리페치 재사용 판정(T3) ─────────────────────────── */
+
+// OverviewClient의 마운트 effect가 "서버가 채워 준 소스는 페치를 건너뛴다"를 결정하는 술어.
+// staleTimes.dynamic(180초)으로 클라이언트 라우터 캐시가 예전 RSC 응답(그 안의 initialData)을
+// 재사용할 수 있게 되면서, refreshKey === 0(첫 마운트)이라는 조건만으로는 "이 initialData가
+// 지금 만들어졌다"를 보장하지 못한다 — 재사용된 payload는 최대 180초 전 것일 수 있다.
+// 그래서 refreshKey === 0 이고 *또한* isPrefetchFresh(generatedAt)일 때만 페치를 건너뛴다.
+// 재시도(refreshKey > 0)는 오늘과 동일하게 무조건 다시 받는다("다시 시도"가 같은 값을
+// 되돌려주면 버튼이 거짓말이 된다 — 기존 주석과 동일한 이유).
+export function shouldUsePrefetchedSource(
+  refreshKey: number,
+  generatedAt: number | null | undefined,
+  now: number = Date.now()
+): boolean {
+  return refreshKey === 0 && isPrefetchFresh(generatedAt, now)
 }

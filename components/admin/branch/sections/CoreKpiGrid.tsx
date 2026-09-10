@@ -34,7 +34,7 @@ function StatCard({ icon, label, value, sub, tone = "neutral", link }: { icon: R
           <p className="mt-1 text-[24px] font-bold leading-[1.05] tracking-[-0.02em] text-[#111110]">{value}</p>
           <p className="mt-1 text-[11px] text-[#615D59]">{sub}</p>
           {link && (
-            <Link href={link.href} className="mt-1 inline-block text-[11px] font-semibold text-[#084734] underline-offset-2 hover:underline">
+            <Link href={link.href} className="mt-1 inline-flex min-h-11 min-w-11 items-center justify-center text-[11px] font-semibold text-[#084734] underline-offset-2 hover:underline md:min-h-0 md:min-w-0 md:justify-start">
               {link.label}
             </Link>
           )}
@@ -45,10 +45,15 @@ function StatCard({ icon, label, value, sub, tone = "neutral", link }: { icon: R
 }
 
 export default function CoreKpiGrid({ data, loading, error }: { data: BranchSummaryResponse | null; loading: boolean; error: string | null }) {
-  if (error) return <div className="rounded-2xl border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-[12px] text-[#B43E3E]">{error}</div>
-  if (loading || !data) return (
+  if (error && !data) return <div role="alert" className="rounded-2xl border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-[12px] text-[#B43E3E]">{error}</div>
+  if (loading && !data) return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
       {Array.from({length:5}).map((_,i) => <div key={i} className="h-[92px] animate-pulse rounded-xl bg-[#f0f0ec]"/>)}
+    </div>
+  )
+  if (!data) return (
+    <div role="status" className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4 text-[12px] text-[#615D59]">
+      표시할 KPI 데이터가 없습니다.
     </div>
   )
   return (

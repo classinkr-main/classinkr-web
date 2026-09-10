@@ -20,10 +20,35 @@ export interface CalendarRange {
   to: string
 }
 
-/** 담당자 뷰가 한 화면에 담는 일수. 2주 = 이번 주와 다음 주. */
-export const ASSIGNEE_VIEW_DAYS = 14
-/** 타임라인 뷰가 한 화면에 담는 주 수. */
+/** 담당자 뷰가 한 화면에 담는 일수. 1주 — 3b 디자인이 주 단위. */
+export const ASSIGNEE_VIEW_DAYS = 7
+/** 타임라인 뷰의 "넓게 보기" 범위가 담는 주 수. */
 export const TIMELINE_VIEW_WEEKS = 8
+
+/**
+ * 타임라인 뷰가 한 화면에 담는 범위. 8주 고정이던 것을 고를 수 있게 했다(2026-08-28).
+ *
+ * 고정 8주가 문제였다: 격자 폭이 같은데 56칸으로 쪼개면 하루가 22px라 단일 일정 막대에
+ * 글자가 한 자도 안 들어간다 — 기간 겹침을 보는 뷰가 바코드가 된다. 한 주면 175px,
+ * 한 달이면 40px로 막대가 막대답게 보인다.
+ *
+ * week·month 는 주 뷰·월 뷰와 "같은 모양"을 쓴다. 우연이 아니라 의도다 —
+ * calendar-prefetch.ts 가 모양으로 뷰를 되짚으므로, 같은 모양이면 인접 기간 예열이
+ * 공짜로 따라온다.
+ */
+export const TIMELINE_SPANS = ["week", "month", "wide"] as const
+export type TimelineSpan = (typeof TIMELINE_SPANS)[number]
+
+export const DEFAULT_TIMELINE_SPAN: TimelineSpan = "month"
+
+export function isTimelineSpan(value: unknown): value is TimelineSpan {
+  return typeof value === "string" && (TIMELINE_SPANS as readonly string[]).includes(value)
+}
+
+/** 뷰 기간 계산에 붙는 선택 인자. 지금은 타임라인 범위 하나뿐이다. */
+export interface ViewRangeOptions {
+  timelineSpan?: TimelineSpan
+}
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
@@ -110,14 +135,22 @@ export function enumerateDates(from: string, to: string): string[] {
  * 월/목록은 달 경계에 맞추고, 나머지는 주 경계(월요일)에 맞춘다 — 주 단위로 정렬돼야
  * 앞뒤로 넘겨도 열이 흔들리지 않는다.
  */
-export function getViewRange(view: CalendarViewId, anchor: string): CalendarRange {
+export function getViewRange(
+  view: CalendarViewId,
+  anchor: string,
+  options: ViewRangeOptions = {}
+): CalendarRange {
   switch (view) {
     case "week":
       return { from: startOfWeek(anchor), to: addDays(startOfWeek(anchor), 6) }
     case "assignee":
       return { from: startOfWeek(anchor), to: addDays(startOfWeek(anchor), ASSIGNEE_VIEW_DAYS - 1) }
-    case "timeline":
+    case "timeline": {
+      const span = options.timelineSpan ?? DEFAULT_TIMELINE_SPAN
+      if (span === "week") return { from: startOfWeek(anchor), to: addDays(startOfWeek(anchor), 6) }
+      if (span === "month") return { from: startOfMonth(anchor), to: endOfMonth(anchor) }
       return { from: startOfWeek(anchor), to: addDays(startOfWeek(anchor), TIMELINE_VIEW_WEEKS * 7 - 1) }
+    }
     case "month":
     case "agenda":
     default:
@@ -130,14 +163,24 @@ export function getViewRange(view: CalendarViewId, anchor: string): CalendarRang
  * 중복이 생기지 않는다(타임라인만 8주를 담되 4주씩 움직여 절반이 겹치게 둔다 —
  * 기간 기획은 앞뒤 맥락이 함께 보여야 하기 때문).
  */
-export function stepAnchor(view: CalendarViewId, anchor: string, direction: 1 | -1): string {
+export function stepAnchor(
+  view: CalendarViewId,
+  anchor: string,
+  direction: 1 | -1,
+  options: ViewRangeOptions = {}
+): string {
   switch (view) {
     case "week":
       return addDays(anchor, 7 * direction)
     case "assignee":
       return addDays(anchor, ASSIGNEE_VIEW_DAYS * direction)
-    case "timeline":
+    case "timeline": {
+      const span = options.timelineSpan ?? DEFAULT_TIMELINE_SPAN
+      if (span === "week") return addDays(anchor, 7 * direction)
+      if (span === "month") return addMonths(startOfMonth(anchor), direction)
+      // 넓게 보기만 절반(4주)씩 겹치며 전진한다 — 기간 기획은 앞뒤 맥락이 함께 보여야 한다.
       return addDays(anchor, (TIMELINE_VIEW_WEEKS / 2) * 7 * direction)
+    }
     case "month":
     case "agenda":
     default:
@@ -151,10 +194,16 @@ function formatKoreanDate(date: string, options: Intl.DateTimeFormatOptions): st
 }
 
 /** 툴바에 찍히는 기간 라벨. */
-export function formatRangeLabel(view: CalendarViewId, anchor: string): string {
-  const { from, to } = getViewRange(view, anchor)
+export function formatRangeLabel(
+  view: CalendarViewId,
+  anchor: string,
+  options: ViewRangeOptions = {}
+): string {
+  const { from, to } = getViewRange(view, anchor, options)
 
-  if (view === "month" || view === "agenda") {
+  // 달 경계에 정확히 맞는 기간은 "2026년 8월"이 날짜 범위보다 읽기 쉽다 —
+  // 타임라인의 월 범위도 같은 규칙을 탄다.
+  if (view === "month" || view === "agenda" || (from === startOfMonth(from) && to === endOfMonth(from))) {
     const [year, month] = from.split("-")
     return `${year}년 ${Number(month)}월`
   }

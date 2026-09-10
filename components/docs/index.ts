@@ -7,12 +7,6 @@ export type { DocsArticleCardProps } from "./DocsArticleCard"
 export { DocsPrintButton } from "./DocsPrintButton"
 export { DocsCategoryNav } from "./DocsCategoryNav"
 export type { DocsCategoryNavItem, DocsCategoryNavProps } from "./DocsCategoryNav"
-export { DocsCategoryCard } from "./DocsCategoryCard"
-export type { DocsCategoryCardProps } from "./DocsCategoryCard"
-export { DocsLandingShell } from "./DocsLandingShell"
-export type { DocsLandingShellProps } from "./DocsLandingShell"
-export { DocsSearchPanel } from "./DocsSearchPanel"
-export type { DocsSearchPanelProps } from "./DocsSearchPanel"
 export { DocsSidebar, DocsSidebarLayout, DocsTableOfContents } from "./DocsSidebarLayout"
 export type {
     DocsSidebarLayoutProps,
@@ -23,7 +17,6 @@ export type {
     DocsArticleSection,
     DocsArticleSummary,
     DocsCallout,
-    DocsCategory,
     DocsChecklistItem,
     DocsHref,
     DocsLink,

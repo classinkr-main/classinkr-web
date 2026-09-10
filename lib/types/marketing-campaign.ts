@@ -112,3 +112,27 @@ export interface ProjectRollup {
 export interface ProjectWithRollup extends MarketingProject {
   rollup: ProjectRollup
 }
+
+/* ─────────────────────────────────────────────────────────────
+   캠페인 업데이트 로그 — 우산 캠페인(marketing_campaigns)의 수동 진행상황 기록.
+   스코어보드 최근 1줄·통합 피드·상세 타임라인의 원천.
+   스키마: supabase/migrations/20260820_marketing_campaign_updates.sql
+   ───────────────────────────────────────────────────────────── */
+
+export type CampaignUpdateKind = "note" | "change" | "milestone"
+export const CAMPAIGN_UPDATE_KINDS: CampaignUpdateKind[] = ["note", "change", "milestone"]
+export const CAMPAIGN_UPDATE_KIND_LABEL: Record<CampaignUpdateKind, string> = {
+  note: "메모",
+  change: "변경",
+  milestone: "마일스톤",
+}
+
+export interface CampaignUpdate {
+  id: string
+  campaignId: string
+  campaignName?: string | null // 통합 피드 조회 시에만 조인
+  kind: CampaignUpdateKind
+  body: string
+  createdBy: string | null
+  createdAt: string
+}

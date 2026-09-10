@@ -130,8 +130,8 @@ export default function MessageComposeCard({
     <section className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
       <div className="flex flex-wrap items-center gap-2 border-b border-[#e8e8e4] px-4 py-3.5 sm:px-5">
         <h3 className="text-[14px] font-bold text-[#111110]">메시지</h3>
-        <span className="text-[11px] text-[#1a1a1a]/40">
-          이메일 기준 작성 — 변수는 발송 시 수신자별로 치환됩니다
+        <span className="text-[11px] text-[#1a1a1a]/40" title="변수는 발송 시 수신자별로 치환됩니다">
+          이메일 기준 · 변수 자동 치환
         </span>
       </div>
 
@@ -188,7 +188,6 @@ export default function MessageComposeCard({
         <div className="overflow-hidden rounded-xl border border-[#e8e8e4] bg-[#fafaf8]">
           <div className="flex flex-wrap items-center gap-2 border-b border-[#e8e8e4] px-3.5 py-2.5">
             <span className="text-[12px] font-semibold text-[#111110]">미리보기</span>
-            <span className="hidden text-[11px] text-[#1a1a1a]/40 sm:inline">실제 수신자 데이터로 치환</span>
 
             <div className="flex gap-1 rounded-lg border border-[#e8e8e4] bg-white p-0.5">
               {([
@@ -319,15 +318,6 @@ export default function MessageComposeCard({
               </div>
             )}
 
-            {previewChannel === "sms" && (
-              <div className="rounded-xl border border-dashed border-[#d8d7d0] bg-white px-4 py-4 text-[12px] leading-relaxed text-[#1a1a1a]/50">
-                <p className="font-semibold text-[#1a1a1a]/60">문자(SMS/LMS)는 운영 보류 중입니다</p>
-                <p className="mt-1">
-                  발신번호는 등록되어 있어 우선순위가 오르면 바로 활성화됩니다. 오픈 시 본문은 LMS
-                  기준으로 발송되며 예상 단가는 {SEND_UNIT_COST_KRW.lms}원/건입니다.
-                </p>
-              </div>
-            )}
           </div>
         </div>
       </div>

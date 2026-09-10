@@ -1,5 +1,6 @@
 // findConfirmedLeadNeoLink 단건 조회 가드 (360 드로어 'NEO 등록됨' 상태 소스).
 // (1) confirmed 행이 있으면 { targetId } — 조회 필터는 벌크 lookup과 동일 모양
+//     (source_system 포함, 인덱스 선두 컬럼)
 // (2) 행이 없으면 null (3) 빈 leadId는 DB 조회 없이 null (4) 조회 에러는 원인 메시지로 드러난다.
 import { afterEach, describe, expect, it, vi } from "vitest"
 
@@ -61,6 +62,7 @@ describe("findConfirmedLeadNeoLink", () => {
 
     expect(result).toEqual({ targetId: "neo-1" })
     expect(eqCalls).toEqual([
+      ["source_system", "lead"],
       ["source_object", "leads"],
       ["source_record_key", "lead-1"],
       ["target_type", "external_account"],

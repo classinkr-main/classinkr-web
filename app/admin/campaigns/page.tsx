@@ -6,7 +6,6 @@ import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { Activity, Mail, Plus, RefreshCw } from "lucide-react"
 import AdminTabs from "@/components/admin/AdminTabs"
-import { MarketingCrossLinks } from "@/components/admin/MarketingCrossLinks"
 import { ChartSkeleton } from "@/components/admin/viz"
 import type { ChannelEfficiencyRow } from "@/components/admin/campaigns/ChannelEfficiencyChart"
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
@@ -19,6 +18,7 @@ import {
   type MessagePrefill,
 } from "@/lib/message-prefill"
 import type { LeadRecord } from "@/lib/db"
+import type { PerfPeriodKey } from "@/lib/marketing/perf"
 import type { EventCategory, EventStatus, PublicEvent } from "@/lib/types/public-events"
 import {
   AD_CHANNEL_COLOR,
@@ -33,7 +33,6 @@ import type {
   CampaignAggregate,
   CampaignTab,
   EventLeadStats,
-  MarketingStatsData,
   MetaCampaignDashboard,
   MetaCampaignRow,
   MetaDatePreset,
@@ -71,6 +70,10 @@ const EventsTab = dynamic(() => import("@/components/admin/campaigns/tabs/Events
 })
 
 const SummaryTab = dynamic(() => import("@/components/admin/campaigns/tabs/SummaryTab"), {
+  loading: () => <ChartSkeleton className="h-[480px]" />,
+})
+
+const NewLeadsTab = dynamic(() => import("@/components/admin/campaigns/tabs/NewLeadsTab"), {
   loading: () => <ChartSkeleton className="h-[480px]" />,
 })
 
@@ -128,8 +131,11 @@ function assignEventLeads(
 // ─── sub-tabs ─────────────────────────────────────────────────────────────────
 
 const CAMPAIGN_TABS: Array<{ id: CampaignTab; label: string; sub: string }> = [
-  { id: "summary", label: "요약", sub: "성과 · 전환 · 채널 분포" },
-  { id: "events", label: "행사", sub: "행사별 퍼널 · 딜 전환" },
+  { id: "summary", label: "요약", sub: "퍼포먼스 KPI · 추이 · 캠페인 페이싱" },
+  // 신규 리드 = 전 소스 신규 유입 + 연락 체크. 광고 탭의 "광고 리드"(유료 유입 + 딜 전환)와
+  // 모집단도 액션도 다르다 — 여기는 처리 큐, 저기는 성과 대조다.
+  { id: "leads", label: "신규 리드", sub: "새로 들어온 리드 · 소스별 · 연락 체크" },
+  { id: "events", label: "행사", sub: "행사 성과 비교 · 행사별 퍼널 · 딜 전환" },
   // id는 딥링크(?tab=meta) 호환을 위해 "meta" 유지 — 라벨은 "광고"로 확장하되 sub에서 Meta만 라이브임을 정직하게 표기.
   { id: "meta", label: "광고", sub: "Meta 라이브 · 캠페인·채널 예산·성과" },
   // id는 기존 딥링크(?tab=email) 호환을 위해 "email" 유지 — 내용은 이메일·문자·카카오 발송 허브.
@@ -137,6 +143,10 @@ const CAMPAIGN_TABS: Array<{ id: CampaignTab; label: string; sub: string }> = [
 ]
 
 // ─── period filter ────────────────────────────────────────────────────────────
+
+// 요약(퍼포먼스 대시보드) 전용 기간 축 — perf API 의 PerfPeriodKey 를 그대로 쓴다.
+// events/meta 탭의 행사 기간 필터(Period: active/30d/90d/all)와는 별개 축(딥링크도 분리: ?perf=).
+const PERF_PERIOD_KEYS: readonly PerfPeriodKey[] = ["7d", "30d", "90d", "quarter"]
 
 function eventInPeriod(event: PublicEvent, period: Period): boolean {
   if (period === "all") return true
@@ -151,6 +161,10 @@ function eventInPeriod(event: PublicEvent, period: Period): boolean {
 
 export default function AdminCampaignsPage() {
   const router = useRouter()
+  // 기본 탭은 요약 — 마케팅의 홈 화면이다(2026-08-21).
+  // 2026-08-18 에는 광고(meta)가 기본이었는데, 그때는 요약 탭이 행사 중심이라 "지금 어떤가"를
+  // 답하지 못했다. 지금 요약은 광고비·리드·CPL·퍼널·캠페인을 같은 기간축으로 묶는 유일한
+  // 화면이라(perf 단일 응답) 처음 보는 화면이 되는 게 맞다. 딥링크(?tab=meta 등)는 그대로 동작한다.
   const [tabParam, setTabParam] = useUrlState("tab", "summary")
   // 고객 360 딥링크(?message_to=&message_name=) 수신자 프리필 — 마운트 시 1회 소모
   const [messagePrefill, setMessagePrefill] = useState<MessagePrefill | null>(null)
@@ -161,6 +175,15 @@ export default function AdminCampaignsPage() {
   const [error, setError] = useState<string | null>(null)
   const [period, setPeriod] = useState<Period>("all")
   const [editing, setEditing] = useState<PublicEvent | null>(null)
+  // 요약(퍼포먼스 대시보드) 기간 — 딥링크 ?perf= 로 보존. 토글 UI 는 SummaryTab 헤더 행이 그린다.
+  const [perfParam, setPerfParam] = useUrlState("perf", "30d")
+  const perfPeriod: PerfPeriodKey = (PERF_PERIOD_KEYS as readonly string[]).includes(perfParam)
+    ? (perfParam as PerfPeriodKey)
+    : "30d"
+  // 헤더 "동기화" → SummaryTab 내부 usePerf 가 캐시 우회 재조회하도록 nonce 로 전달하고,
+  // perf 로딩 상태는 스피너 표시용으로만 되받는다(fetch 소유는 SummaryTab).
+  const [perfRefreshNonce, setPerfRefreshNonce] = useState(0)
+  const [perfLoading, setPerfLoading] = useState(false)
   const [viewParam, setViewParam] = useUrlState("view", "list")
   const galleryView = viewParam === "gallery"
   const [eventSearch, setEventSearch] = useState("")
@@ -172,8 +195,6 @@ export default function AdminCampaignsPage() {
   const [metaError, setMetaError] = useState<string | null>(null)
   const [metaDatePreset, setMetaDatePreset] = useState<MetaDatePreset>("last_30d")
   const [metaUpdatingId, setMetaUpdatingId] = useState<string | null>(null)
-  const [emailStats, setEmailStats] = useState<MarketingStatsData | null>(null)
-  const [emailStatsError, setEmailStatsError] = useState<string | null>(null)
   // 광고 리드 섹션(광고 탭) 전용 데이터. 코어 리드(scope=campaigns)는 귀속 5컬럼뿐이라
   // 트래킹 축·연락처·전환 상태를 못 담는다 — 광고 탭에 들어올 때만 별도 스코프로 지연 조회한다.
   const [adLeads, setAdLeads] = useState<LeadRecord[]>([])
@@ -227,15 +248,22 @@ export default function AdminCampaignsPage() {
   }, [])
 
   // 코어(행사·리드·지표)는 소비하는 탭에 처음 진입할 때 1회만 조회한다(탭 무관 마운트 즉시 호출 제거).
-  // summary/events가 직접 소비하고, meta도 채널 예산·집행 대조(aggregate·channelEfficiencyData)가
-  // 코어 파생값이라 필요하다. email(메시지 허브)은 MarketingHub가 자체 fetch하므로 코어를 건드리지 않는다.
+  // events가 직접 소비하고, meta도 채널 예산·집행 대조(aggregate·channelEfficiencyData)가
+  // 코어 파생값이라 필요하다. summary(퍼포먼스 대시보드)는 perf 단일 엔드포인트만 쓰고,
+  // email(메시지 허브)은 MarketingHub가 자체 fetch하므로 둘 다 코어를 건드리지 않는다.
   // ref 1회 게이트: 기존 "마운트 시 1회 로드" 의미를 유지해 탭 전환마다 재조회·스켈레톤 깜빡임을 만들지 않는다.
   const coreLoadRequestedRef = useRef(false)
   useEffect(() => {
-    // message_to 프리필 딥링크는 첫 렌더가 summary여도 곧바로 email 탭으로 전환된다(아래 효과).
+    // message_to 프리필 딥링크는 첫 렌더가 어느 탭이어도 곧바로 email 탭으로 전환된다(아래 효과).
     // 그 한 사이클에서 코어 fetch가 새어나가지 않도록 URL의 프리필 파라미터도 함께 게이트한다.
     const pendingMessagePrefill = parseMessagePrefill(window.location.search) !== null
-    if (activeTab === "email" || pendingMessagePrefill) {
+    // 신규 리드 탭은 마케팅 스코프 리드 하나만 쓴다(아래 loadAdLeads) — 행사·성과 지표는 안 본다.
+    if (
+      activeTab === "email" ||
+      activeTab === "summary" ||
+      activeTab === "leads" ||
+      pendingMessagePrefill
+    ) {
       // 코어를 로드하지 않는 경로에서는 초기 loading=true를 내려
       // 헤더 동기화 버튼이 영구 비활성으로 잠기지 않게 한다.
       if (!coreLoadRequestedRef.current) setLoading(false)
@@ -298,32 +326,12 @@ export default function AdminCampaignsPage() {
     void loadMeta({ force: true })
   }, [loadMeta])
 
-  const loadEmailStats = useCallback(async () => {
-    try {
-      const data = await adminFetchJsonCached<MarketingStatsData>("/api/admin/marketing/stats", undefined, {
-        ttlMs: 60_000,
-        staleIfError: true,
-      })
-      setEmailStats(data)
-      setEmailStatsError(null)
-    } catch {
-      // 보조 지표라 화면은 강등해서 계속 쓰되, 무음 대신 실패를 표시한다(재시도 가능).
-      setEmailStatsError("이메일·구독자 지표를 불러오지 못했습니다.")
-    }
-  }, [])
-
   useEffect(() => {
-    if (activeTab === "summary" || activeTab === "meta") {
+    // Meta 라이브 대시보드는 광고 탭 전용 — 요약 탭은 perf 응답(스냅샷 축)만 쓴다.
+    if (activeTab === "meta") {
       loadMeta()
     }
   }, [activeTab, loadMeta])
-
-  useEffect(() => {
-    // 이메일 탭은 MarketingHub가 자체 데이터를 불러온다. 요약 탭 채널 카드용만 여기서 조회.
-    if (activeTab === "summary") {
-      void loadEmailStats()
-    }
-  }, [activeTab, loadEmailStats])
 
   const loadAdLeads = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
     setAdLeadsLoading(true)
@@ -347,6 +355,12 @@ export default function AdminCampaignsPage() {
     setAdLeads(updater)
   }, [])
 
+  // 신규 리드 탭의 "연락함" 체크(낙관적 갱신·롤백 포함) — 해당 1건만 교체한다.
+  // 전체 재조회로 처리하면 목록이 통째로 다시 그려져 스크롤과 더보기 위치가 날아간다.
+  const updateAdLead = useCallback((lead: LeadRecord) => {
+    setAdLeads((prev) => prev.map((row) => (row.id === lead.id ? lead : row)))
+  }, [])
+
   const refreshAdLeads = useCallback(() => {
     // 가져오기·전환은 리드 자체를 바꾼다 — 광고 리드 목록만 새로 받으면 요약 탭의
     // 퍼널·평균 CPL(코어 리드 파생)이 낡은 채 남으므로, 코어를 이미 로드했다면 함께 강제 갱신한다.
@@ -356,24 +370,28 @@ export default function AdminCampaignsPage() {
     ])
   }, [load, loadAdLeads])
 
-  // 광고 탭 첫 진입에만 조회한다 — 탭을 오갈 때마다 다시 부르면 목록이 깜빡이고,
-  // 전환으로 갱신해 둔 로컬 상태(status=converted)도 매번 되감긴다.
+  // 광고·신규 리드 탭 첫 진입에만 조회한다 — 탭을 오갈 때마다 다시 부르면 목록이 깜빡이고,
+  // 전환·연락 체크로 갱신해 둔 로컬 상태(status=converted/contacted)도 매번 되감긴다.
+  // 두 탭이 같은 marketing 스코프 배열을 공유하므로 한쪽에서 찍은 체크가 다른 쪽에도 반영된다.
   const adLeadsRequestedRef = useRef(false)
   useEffect(() => {
-    if (activeTab !== "meta" || adLeadsRequestedRef.current) return
+    if ((activeTab !== "meta" && activeTab !== "leads") || adLeadsRequestedRef.current) return
     adLeadsRequestedRef.current = true
     void loadAdLeads()
   }, [activeTab, loadAdLeads])
 
-  // 채널 예산(배정)은 광고 탭에서만 필요 — 지연 로드. 실패해도 0으로 유지(무크래시).
+  // 채널 예산(배정)은 광고 탭에서만 필요 — 지연 로드.
   const loadChannelBudgets = useCallback(async () => {
     try {
       const data = await adminFetchJson<{ budgets: Record<AdChannel, number> }>(
         "/api/admin/channel-budgets"
       )
       setChannelBudgets(data.budgets)
+      setBudgetError(null)
     } catch {
-      // 보조 데이터 — 조용히 실패, 기존 값(0) 유지
+      // 조용히 0을 확정값처럼 두면 "배정 0원"과 "조회 실패"가 구분되지 않는다 — 저장 실패와
+      // 같은 슬롯(예산표 옆 budgetError)에 표면화한다(2026-08-18, 실패≠빈상태).
+      setBudgetError("채널 예산을 불러오지 못했습니다 — 표시된 배정액(0원 포함)은 확정값이 아닙니다.")
     }
   }, [])
 
@@ -381,20 +399,34 @@ export default function AdminCampaignsPage() {
     if (activeTab === "meta") void loadChannelBudgets()
   }, [activeTab, loadChannelBudgets])
 
+  // 채널별 저장 순번 — 같은 채널을 빠르게 두 번 고치면 늦게 도착한 "앞선" 응답이 나중
+  // 응답을 덮어써 화면이 방금 지운 값으로 되돌아간다. usePerf(SummaryTab) 의 seqRef 와 같은
+  // 규약으로 그 채널의 마지막 요청 결과만 상태에 반영한다.
+  const channelBudgetSeqRef = useRef<Partial<Record<AdChannel, number>>>({})
+
   const handleChannelBudgetChange = useCallback(async (channel: AdChannel, amount: number) => {
+    const seq = (channelBudgetSeqRef.current[channel] ?? 0) + 1
+    channelBudgetSeqRef.current[channel] = seq
     try {
       const data = await adminFetchJson<{ budgets: Record<AdChannel, number> }>(
         "/api/admin/channel-budgets",
         { method: "PATCH", body: JSON.stringify({ channel, amount }) }
       )
+      if (channelBudgetSeqRef.current[channel] !== seq) return
       setChannelBudgets(data.budgets)
       setBudgetError(null)
     } catch (e) {
+      if (channelBudgetSeqRef.current[channel] !== seq) return
       // 에러는 사용자가 방금 만진 표(채널 예산) 옆에 떠야 한다 — Meta 대시보드 에러 슬롯에
       // 실으면 연동 장애로 오독되고 다음 loadMeta 가 지워버린다. 실패한 입력값이 저장된
       // 것처럼 남지 않게 서버 정본을 다시 받아 입력칸을 되돌린다.
-      setBudgetError(e instanceof Error ? e.message : "채널 예산 저장 실패")
+      const message = e instanceof Error ? e.message : "채널 예산 저장 실패"
+      setBudgetError(`${message} — 입력값은 저장 전 상태로 되돌렸습니다.`)
       void loadChannelBudgets()
+      // 상단 배너만으로는 "어느 채널이 실패했는지"가 사라진다 — 표가 만진 행에 인라인 에러를
+      // 붙일 수 있게 실패를 그대로 올려보낸다(ChannelBudgetTable 이 await 하고 잡으므로
+      // 미처리 거절이 되지 않는다).
+      throw e instanceof Error ? e : new Error(message)
     }
   }, [loadChannelBudgets])
 
@@ -557,21 +589,31 @@ export default function AdminCampaignsPage() {
     setMetricsMap((m) => ({ ...m, [saved.eventId]: saved }))
   }, [])
 
-  const showFilterRow = activeTab === "summary" || activeTab === "events"
+  // 행사 기간 토글(Period)은 코어 파생값(filtered)을 쓰는 events/meta 탭에만 건다 —
+  // 요약 탭은 자체 기간 축(PerfPeriodKey, SummaryTab 헤더 행의 토글)을 쓴다.
+  const showFilterRow = activeTab === "events" || activeTab === "meta"
   const refreshLoading =
     activeTab === "meta"
       ? metaLoading || adLeadsLoading
-      : activeTab === "summary"
-        ? loading || metaLoading
-        : loading
+      : activeTab === "leads"
+        ? adLeadsLoading
+        : activeTab === "summary"
+          ? perfLoading
+          : loading
   const refreshCurrent = useCallback(() => {
+    if (activeTab === "leads") {
+      // 신규 리드 탭은 마케팅 스코프 리드 하나만 본다 — 코어(행사·지표)까지 끌 필요가 없다.
+      void loadAdLeads({ force: true })
+      return
+    }
     if (activeTab === "meta") {
       // 광고 탭은 Meta 성과와 광고 리드가 나란히 놓이므로 헤더 동기화가 둘 다 새로 받는다.
       void Promise.all([loadMeta({ force: true }), loadAdLeads({ force: true })])
       return
     }
     if (activeTab === "summary") {
-      void Promise.all([load({ force: true }), loadMeta({ force: true })])
+      // 요약 탭 데이터는 SummaryTab 이 소유한다(usePerf) — nonce 로 캐시 우회 재조회를 지시한다.
+      setPerfRefreshNonce((nonce) => nonce + 1)
       return
     }
     void load({ force: true })
@@ -583,14 +625,9 @@ export default function AdminCampaignsPage() {
       <header className="border-b border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 pb-5 pt-6 sm:px-6 lg:px-9 lg:pt-8">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-[#615D59]">
-              <span>ADMIN</span>
-              <span className="opacity-50">›</span>
-              <span>그로스</span>
-              <span className="opacity-50">›</span>
-              <span>캠페인</span>
-            </div>
-            <h1 className="mt-2 text-[28px] font-bold leading-tight tracking-[-0.02em] text-[#111110] sm:text-[30px]">
+            {/* 브레드크럼 제거(2026-08-27 크롬 다이어트) — 사이드바가 '캠페인'을 활성으로
+                표시하고 바로 아래 h1 이 같은 말을 반복했다. 경로를 세 번 말할 이유가 없다. */}
+            <h1 className="text-[28px] font-bold leading-tight tracking-[-0.02em] text-[#111110] sm:text-[30px]">
               캠페인
             </h1>
           </div>
@@ -615,9 +652,36 @@ export default function AdminCampaignsPage() {
           </div>
         </div>
 
-        {showFilterRow && (
-          <div className="mt-5 flex flex-wrap items-center gap-2">
-            <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]" role="group" aria-label="기간 필터">
+      </header>
+
+      {/* Sub-tabs — branch admin 스타일. 기간 토글은 이 띠 안에 함께 둔다(2026-08-18) —
+          헤더에 떠 있으면 "모든 탭에 걸리는 전역 필터"라는 소속이 안 보이고, 표들이 이 기간에
+          조용히 종속된다. 같은 띠에 있으면 탭·기간이 한 묶음의 조회 조건으로 읽힌다. */}
+      <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-2 sm:px-4 lg:px-9">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <AdminTabs
+            className="-mb-px min-w-0 py-2"
+            label="캠페인 보기"
+            variant="subtle"
+            items={CAMPAIGN_TABS.map((tab) => ({
+              value: tab.id,
+              label: tab.label,
+              // 설명(sub)은 처음 한 번만 쓸모 있고 그 뒤로는 탭 띠를 2줄로 만드는 비용이다
+              // (2026-08-27 크롬 다이어트). 정보는 버리지 않고 title 로 내린다.
+              title: tab.sub,
+              icon:
+                tab.id === "meta" ? (
+                  <Activity className="h-3.5 w-3.5" />
+                ) : tab.id === "email" ? (
+                  <Mail className="h-3.5 w-3.5" />
+                ) : undefined,
+            }))}
+            value={activeTab}
+            onValueChange={setTabParam}
+            panelId="campaigns-tabpanel"
+          />
+          {showFilterRow && (
+            <div className="inline-flex shrink-0 rounded-lg border border-[rgba(0,0,0,0.08)] p-[3px] max-sm:mb-2" role="group" aria-label="기간 필터">
               {(["active", "30d", "90d", "all"] as Period[]).map((p) => (
                 <button
                   key={p}
@@ -632,38 +696,17 @@ export default function AdminCampaignsPage() {
                 </button>
               ))}
             </div>
-          </div>
-        )}
-      </header>
-
-      {/* Sub-tabs — branch admin 스타일 */}
-      <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-2 sm:px-4 lg:px-9">
-        <AdminTabs
-          className="-mb-px py-2"
-          label="캠페인 보기"
-          variant="subtle"
-          items={CAMPAIGN_TABS.map((tab) => ({
-            value: tab.id,
-            label: tab.label,
-            icon:
-              tab.id === "meta" ? (
-                <Activity className="h-3.5 w-3.5" />
-              ) : tab.id === "email" ? (
-                <Mail className="h-3.5 w-3.5" />
-              ) : undefined,
-          }))}
-          value={activeTab}
-          onValueChange={setTabParam}
-        />
+          )}
+        </div>
       </div>
 
-      {/* 마케팅 워크스페이스 크로스링크 — 형제 마케팅 표면으로 이동(사이드바 그룹 보조).
-          공개 행사는 헤더 "행사 관리" CTA로 이미 도달 가능하므로 여기선 제외(한 목적지 중복 라벨 방지). */}
-      <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 py-2.5 sm:px-6 lg:px-9">
-        <MarketingCrossLinks currentHref="/admin/campaigns" excludeHrefs={["/admin/events"]} />
-      </div>
-
-      {/* Tab content */}
+      {/* Tab content — 단일 tabpanel 컨테이너(2026-08-18 a11y). AdminTabs의 aria-controls가
+          이 컨테이너를 가리키고, 내용은 활성 탭에 따라 교체된다. */}
+      <div
+        id="campaigns-tabpanel"
+        role="tabpanel"
+        aria-label={`${CAMPAIGN_TABS.find((tab) => tab.id === activeTab)?.label ?? activeTab} 탭`}
+      >
       {activeTab === "email" ? (
         <EmailTab
           recipientPrefill={messagePrefill}
@@ -698,29 +741,31 @@ export default function AdminCampaignsPage() {
         />
       ) : (
         <div className="px-4 pt-6 sm:px-6 lg:px-9">
-          {error && (
-            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+          {/* 코어(행사·리드·지표) 로딩 에러는 그 데이터를 소비하는 행사 탭에서만 보인다 —
+              요약 탭은 perf 단일 소스라 이 에러와 무관하다(오귀속 방지). */}
+          {activeTab === "events" && error && (
+            <div className="mb-4 rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] px-4 py-3 text-[13px] text-[#B43E3E]">
               {error}
             </div>
           )}
 
       {activeTab === "summary" && (
         <SummaryTab
-          loading={loading}
-          events={events}
-          filtered={filtered}
-          perEventEcon={perEventEcon}
-          aggregate={aggregate}
-          channelEfficiencyData={channelEfficiencyData}
-          emailStats={emailStats}
-          emailStatsError={emailStatsError}
-          onRetryEmailStats={loadEmailStats}
-          metaDashboard={metaDashboard}
-          metaLoading={metaLoading}
-          metaError={metaError}
-          metaDatePreset={metaDatePreset}
-          onRefreshMeta={refreshMeta}
-          onGoToTab={setTabParam}
+          period={perfPeriod}
+          onPeriodChange={setPerfParam}
+          refreshNonce={perfRefreshNonce}
+          onLoadingChange={setPerfLoading}
+        />
+      )}
+
+      {activeTab === "leads" && (
+        // 광고 탭과 같은 marketing 스코프 배열을 그대로 넘긴다(자체 fetch 없음) —
+        // 이름·연락처·UTM·광고명이 다 필요한데 campaigns 스코프에는 그 컬럼이 없다.
+        <NewLeadsTab
+          leads={adLeads}
+          loading={adLeadsLoading}
+          error={adLeadsError}
+          onLeadUpdated={updateAdLead}
         />
       )}
 
@@ -752,6 +797,7 @@ export default function AdminCampaignsPage() {
       )}
         </div>
       )}
+      </div>
     </div>
   )
 }

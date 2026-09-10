@@ -27,6 +27,9 @@ interface InboundLotsData {
   lots: InboundLot[]
   latestLot: InboundLot | null
   totalQty: number
+  // 핵심 3종(86·75·T1) 밖의 품목(A1·OPS·케이블 등)까지 포함한 전 품목 입고 대수 —
+  // 헤더 집계에서 어떤 품목도 안 보이게 사라지지 않도록 병기한다.
+  totalQtyAll: number
   totalAmount: number
   hasAnyAmount: boolean
   totalCny: number
@@ -62,6 +65,9 @@ function InboundLotsSection({ inboundSearch, setInboundSearch, inboundLots }: In
             <div className="text-right">
               <p className="text-[11px] font-semibold text-[#615D59]">총 입고 <span className="font-normal text-[#A39E98]">(86·75·T1)</span></p>
               <p className="mt-0.5 text-[17px] font-bold tracking-[-0.02em] tabular-nums text-[#111110]">{formatNumber(inboundLots.totalQty)}대</p>
+              {inboundLots.totalQtyAll > inboundLots.totalQty && (
+                <p className="mt-0.5 text-[11.5px] font-semibold tabular-nums text-[#A39E98]">전 품목 {formatNumber(inboundLots.totalQtyAll)}대</p>
+              )}
             </div>
             <div className="text-right">
               <p className="text-[11px] font-semibold text-[#615D59]">총 매입액 <span className="font-normal text-[#A39E98]">(86·75·T1)</span></p>

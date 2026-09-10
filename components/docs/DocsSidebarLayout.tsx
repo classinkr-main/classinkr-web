@@ -33,7 +33,7 @@ export function DocsSidebar({ groups, title = "가이드", className }: DocsSide
                         <p className="text-sm font-bold text-[#111110]">{group.title}</p>
                         <div className="mt-2 space-y-1">
                             {group.links.map((link) => (
-                                <a
+                                <Link
                                     key={link.href}
                                     href={link.href}
                                     className={cn(
@@ -44,7 +44,7 @@ export function DocsSidebar({ groups, title = "가이드", className }: DocsSide
                                     )}
                                 >
                                     {link.title}
-                                </a>
+                                </Link>
                             ))}
                         </div>
                     </div>

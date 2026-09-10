@@ -15,12 +15,12 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { trackEvent } from "@/lib/analytics"
 import { collectLeadAttribution } from "@/lib/marketing-attribution"
+import type { LeadMagnet } from "@/lib/lead-magnets"
 import {
   getLeadMagnetItemCount,
   getLeadMagnetPublicGateLabel,
   getLeadMagnetTierLabel,
-  type LeadMagnet,
-} from "@/lib/lead-magnets"
+} from "@/lib/lead-magnets-helpers"
 import { MaterialDownloadError, requestMaterialDownload } from "@/lib/materials-client"
 
 interface Props {

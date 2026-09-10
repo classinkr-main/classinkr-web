@@ -153,7 +153,7 @@ export default async function DocsArticlePage({
       />
       <Link
         href={getDocCategoryPath(doc.category)}
-        className="mb-6 inline-flex origin-left items-center gap-2 text-sm font-medium text-[#1a1a1a]/45 transition-all duration-150 hover:text-[#084734] active:scale-[0.98]"
+        className="mb-6 inline-flex origin-left items-center gap-2 text-sm font-medium text-[#1a1a1a]/45 transition-all duration-150 hover:text-[#084734] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
       >
         <ArrowRight className="h-4 w-4 rotate-180" />
         {category.title}로 돌아가기
@@ -210,7 +210,7 @@ export default async function DocsArticlePage({
                         href={resource.href}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-block origin-left break-words text-[15px] font-bold text-[#084734] underline-offset-4 transition-transform duration-150 hover:underline active:scale-[0.98]"
+                        className="inline-block origin-left break-words text-[15px] font-bold text-[#084734] underline-offset-4 transition-transform duration-150 hover:underline active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
                       >
                         {resource.label}
                       </a>
@@ -246,7 +246,7 @@ export default async function DocsArticlePage({
               </p>
               <Link
                 href={contactHref}
-                className="mt-4 inline-flex origin-left items-center gap-2 rounded-full bg-[#084734] px-5 py-2.5 text-sm font-bold text-white transition-all duration-150 hover:bg-[#065c41] active:scale-[0.98]"
+                className="mt-4 inline-flex origin-left items-center gap-2 rounded-[6px] bg-[#084734] px-5 py-2.5 text-sm font-bold text-white transition-all duration-150 hover:bg-[#065c41] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
               >
                 상담 남기기
                 <ArrowRight className="h-4 w-4" />
@@ -275,7 +275,7 @@ export default async function DocsArticlePage({
                 </h2>
                 <Link
                   href="/docs/start"
-                  className="mt-3 inline-flex origin-left text-sm font-bold text-[#084734] underline-offset-4 transition-transform duration-150 hover:underline active:scale-[0.98]"
+                  className="mt-3 inline-flex origin-left text-sm font-bold text-[#084734] underline-offset-4 transition-transform duration-150 hover:underline active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
                 >
                   클래스인 시작하기 보기 →
                 </Link>
@@ -290,7 +290,7 @@ export default async function DocsArticlePage({
                 {prevDoc ? (
                   <Link
                     href={getDocPath(prevDoc)}
-                    className="group rounded-2xl border border-black/[0.08] bg-white px-5 py-4 transition-colors hover:border-[#084734]/30"
+                    className="group rounded-2xl border border-black/[0.08] bg-white px-5 py-4 transition-colors hover:border-[#084734]/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
                   >
                     <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#1a1a1a]/35">
                       ← 이전 문서
@@ -305,7 +305,7 @@ export default async function DocsArticlePage({
                 {nextDoc ? (
                   <Link
                     href={getDocPath(nextDoc)}
-                    className="group rounded-2xl border border-black/[0.08] bg-white px-5 py-4 text-right transition-colors hover:border-[#084734]/30"
+                    className="group rounded-2xl border border-black/[0.08] bg-white px-5 py-4 text-right transition-colors hover:border-[#084734]/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
                   >
                     <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#1a1a1a]/35">
                       다음 문서 →

@@ -227,7 +227,7 @@ export function SecurityPanel() {
             <p className="text-[13px] font-medium text-[#084734]">보안 처리 방식</p>
             <p className="mt-1 text-[12px] leading-relaxed text-[#084734]/70">
               입력한 비밀번호는 화면 상태에서만 사용하며 저장소나 로그에 남기지 않습니다. 현재 비밀번호를
-              다시 확인한 뒤 변경하고, 완료 시 전체 로그인 세션을 종료합니다.
+              다시 확인한 뒤 변경합니다.
             </p>
           </div>
         </div>

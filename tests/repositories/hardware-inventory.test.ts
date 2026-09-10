@@ -496,3 +496,22 @@ describe("importHardwareFromBranchSheets", () => {
     }
   })
 })
+
+describe("isDormantStockRow", () => {
+  it("marks zero-stock, zero-planned, zero-recent-outbound rows as dormant", async () => {
+    const { isDormantStockRow } = await loadRepository()
+    expect(isDormantStockRow({ warehouseStock: 0, plannedOut: 0, outbound30d: 0 })).toBe(true)
+  })
+
+  it("keeps rows with stock, planned quantity, or recent outbound as live signals", async () => {
+    const { isDormantStockRow } = await loadRepository()
+    expect(isDormantStockRow({ warehouseStock: 1, plannedOut: 0, outbound30d: 0 })).toBe(false)
+    expect(isDormantStockRow({ warehouseStock: 0, plannedOut: 4, outbound30d: 0 })).toBe(false)
+    expect(isDormantStockRow({ warehouseStock: 0, plannedOut: 0, outbound30d: 2 })).toBe(false)
+  })
+
+  it("treats negative warehouse stock as a real anomaly signal, never dormant", async () => {
+    const { isDormantStockRow } = await loadRepository()
+    expect(isDormantStockRow({ warehouseStock: -16, plannedOut: 0, outbound30d: 0 })).toBe(false)
+  })
+})

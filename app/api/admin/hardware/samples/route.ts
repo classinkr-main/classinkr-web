@@ -17,6 +17,7 @@ import {
   requireVerifiedAdminContext,
   verifyAdmin,
 } from "@/lib/admin-auth"
+import { adminCachedJson } from "@/lib/admin-api-response"
 import {
   listSampleUnitEvents,
   listSampleUnits,
@@ -27,7 +28,8 @@ import {
 
 // 샘플 유닛 트래커 — GET: 유닛 목록(+목록 프리뷰용 최신 이벤트) 또는 ?unit= 단일 유닛 타임라인.
 // POST: register(채번 등록) / event(대여·반환·전환·수리·정정·폐기·메모).
-// 트래커는 저장 직후 재조회하므로 캐시 없이 항상 신선하게 내려준다.
+// 저장 직후 재조회는 lib/admin-client.ts가 같은 리소스 스코프(/api/admin/hardware)의 GET을
+// 60초간 cache:"no-cache"로 우회시키므로, 표준 어드민 캐시 헤더를 달아도 신선도가 깨지지 않는다.
 
 export async function GET(req: NextRequest) {
   const err = await verifyAdmin(req, BRANCH_READ_ADMIN_API_ROLES)
@@ -37,10 +39,10 @@ export async function GET(req: NextRequest) {
     const unitId = req.nextUrl.searchParams.get("unit")?.trim()
     if (unitId) {
       const events = await listSampleUnitEvents(unitId)
-      return NextResponse.json({ events })
+      return adminCachedJson({ events })
     }
     const { units, latestEvents } = await listSampleUnits()
-    return NextResponse.json({ units, latestEvents })
+    return adminCachedJson({ units, latestEvents })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to read sample units"
     return NextResponse.json({ error: message }, { status: 500 })

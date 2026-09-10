@@ -115,7 +115,86 @@ function parseImageTitle(rawTitle: unknown) {
   return { title: cleanTitle || null, width }
 }
 
+/**
+ * 내재 크기가 없는 이미지(viewBox 만 있는 SVG 가 대표적)가 편집 영역에서 0×0 으로
+ * 접히는 것을 막는다.
+ *
+ * 리사이즈 노드뷰는 `<div display:flex>` 컨테이너 > `<div position:relative>` 래퍼 >
+ * `<img>` 구조를 만든다. 래퍼는 flex 자식이라 폭이 shrink-to-fit 인데, 내재 폭 없이
+ * 비율만 있는 이미지는 최대콘텐츠 기여가 0 이라 래퍼가 0 으로 접히고 이미지도 함께
+ * 사라진다(Chrome 실측). 편집자에게는 빈 자리로 보여 실수로 지우기 쉽다.
+ *
+ * 그래서 실제로 접혔을 때만 래퍼를 컨테이너 폭까지 늘려 비율대로 그린다. 폭이 정해진
+ * 이미지(리사이즈 결과 = img 인라인 style)는 건드리지 않아야 리사이즈 핸들이 이미지
+ * 모서리에 붙어 있으므로, img 의 style 변화를 관찰해 폴백을 되돌린다.
+ *
+ * @returns 정리 함수. 이미지가 없으면 null.
+ */
+function keepCollapsedImageVisible(container: HTMLElement): (() => void) | null {
+  const image = container.querySelector("img")
+  if (!image) return null
+
+  const syncWrapperWidth = () => {
+    const wrapper = image.parentElement
+    if (!wrapper) return
+    if (image.style.width) {
+      // 폭이 정해졌다 — 래퍼는 이미지 크기로 되돌린다(핸들이 이미지에 붙게).
+      wrapper.style.width = ""
+      return
+    }
+    // 폴백을 이미 적용했다면 다시 재지 않는다. 폴백 덕에 폭이 생겼으므로 진동한다.
+    if (wrapper.style.width) return
+    // 아직 문서에 붙기 전이거나 로드 전이면 폭이 0 인 게 정상이다 — 접힘으로 오판하면
+    // 정상 이미지까지 전폭으로 늘어난다. load 이벤트가 다시 부른다.
+    if (!image.isConnected) return
+    if (!image.complete || image.naturalWidth === 0) return
+    if (image.getBoundingClientRect().width > 0) return
+    wrapper.style.width = "100%"
+  }
+
+  // requestAnimationFrame 은 숨은 탭·숨은 패널에서 아예 발화하지 않는다(실측). 편집기는
+  // 탭 뒤에서 마운트될 수 있으므로 타이머로 미룬다.
+  let timer: number | null = null
+  const schedule = () => {
+    if (timer !== null) return
+    timer = window.setTimeout(() => {
+      timer = null
+      syncWrapperWidth()
+    }, 0)
+  }
+
+  image.addEventListener("load", schedule)
+  // 리사이즈 중·직후에는 노드뷰가 img 인라인 style 로 폭을 쓴다 — 그때 폴백을 되돌린다.
+  const styleObserver = new MutationObserver(schedule)
+  styleObserver.observe(image, { attributes: true, attributeFilter: ["style"] })
+  schedule()
+
+  return () => {
+    if (timer !== null) window.clearTimeout(timer)
+    image.removeEventListener("load", schedule)
+    styleObserver.disconnect()
+  }
+}
+
 const ResizableMarkdownImage = Image.extend({
+  addNodeView() {
+    const renderNodeView = this.parent?.()
+    if (!renderNodeView) return null
+
+    return (props) => {
+      const nodeView = renderNodeView(props)
+      const cleanup =
+        nodeView.dom instanceof HTMLElement ? keepCollapsedImageVisible(nodeView.dom) : null
+      if (!cleanup) return nodeView
+
+      const destroyNodeView = nodeView.destroy?.bind(nodeView)
+      nodeView.destroy = () => {
+        cleanup()
+        destroyNodeView?.()
+      }
+      return nodeView
+    }
+  },
   parseMarkdown: (token: MarkdownToken, helpers: MarkdownParseHelpers): MarkdownParseResult => {
     const { title, width } = parseImageTitle(token.title)
     return helpers.createNode("image", {

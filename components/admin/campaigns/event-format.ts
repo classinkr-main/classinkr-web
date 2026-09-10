@@ -1,6 +1,13 @@
 import type { EventStatus } from "@/lib/types/public-events"
 
 export const KRW = new Intl.NumberFormat("ko-KR")
+// 개수(정수) 포맷 — KRW 와 동일 로캘 규칙, 통화가 아닌 건수(리드 등)에 쓰는 이름으로 재노출.
+// perf/KpiStrip·tabs/SummaryTab·perf/DailyTrendSection·perf/CampaignScoreboard 4곳에 각자
+// 중복 선언돼 있던 것을 여기로 승격했다(2026-08-20).
+export const COUNT = KRW
+// 비율(소수 1자리) 포맷 — 정수 가정인 pct() 와 달리 소수를 보존한다. 호출부가 "%"를 직접 붙인다.
+// perf/KpiStrip·tabs/SummaryTab 2곳 중복 선언을 승격했다.
+export const PCT1 = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 1 })
 const KRW_CURRENCY = new Intl.NumberFormat("ko-KR", {
   style: "currency",
   currency: "KRW",

@@ -38,6 +38,8 @@ interface HardwareSearchPanelProps {
   setMovementsPage: Dispatch<SetStateAction<number>>
   confirmPlannedMovement: (movement: HardwareMovement, override?: { quantity?: number; occurredAt?: string }) => Promise<void>
   plannedConfirmLocked: boolean
+  // hardware.finalize 표시용 — 없으면 검색 결과의 원탭 확정을 비활성한다(강제는 서버 게이트).
+  canFinalize: boolean
   setCustomerDetail: Dispatch<SetStateAction<string | null>>
 }
 
@@ -55,6 +57,7 @@ function HardwareSearchPanel({
   setMovementsPage,
   confirmPlannedMovement,
   plannedConfirmLocked,
+  canFinalize,
   setCustomerDetail,
 }: HardwareSearchPanelProps) {
   return (
@@ -169,7 +172,8 @@ function HardwareSearchPanel({
                       quantity: movement.quantity,
                       occurredAt: todayKey(),
                     })}
-                    disabled={plannedConfirmLocked}
+                    disabled={plannedConfirmLocked || !canFinalize}
+                    title={canFinalize ? undefined : "출고 확정에는 확정 권한(hardware.finalize)이 필요합니다"}
                     className="mt-1.5 cursor-pointer rounded-md border border-[#084734] bg-white px-2 py-1 text-[10.5px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     출고 확정

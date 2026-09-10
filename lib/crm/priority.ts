@@ -4,11 +4,12 @@ import type { CrmTaskPriority, CrmTaskRecord, CrmTaskType } from "@/lib/reposito
 import { parseLeadSize, type LeadEngagement } from "@/lib/crm/lead-ranking"
 import { getMetaIntent, isTestLead } from "@/lib/crm/lead-attribution"
 import {
-  demoSignalLabel,
-  demoSignalLift,
-  findDemoSignal,
-  type DemoSignalIndex,
-} from "@/lib/crm/demo-signal"
+  EMPTY_COMPASS_DEMO_INDEX,
+  compassDemoLabel,
+  compassDemoLift,
+  findCompassDemoSignal,
+  type CompassDemoIndex,
+} from "@/lib/crm/compass-demo-signal"
 
 export type CrmPrioritySource = "lead" | "neo_account" | "task"
 export type CrmPrioritySeverity = "critical" | "high" | "medium" | "low"
@@ -19,6 +20,7 @@ export type CrmPriorityAction =
   | "follow_up_lead"
   | "recover_expired"
   | "renew_account"
+  | "recharge_account"
   | "reengage_account"
   | "watch_account"
   | "do_task"
@@ -49,7 +51,7 @@ export interface CrmPriorityItem {
 
 const RESPONSE_TARGET_SOURCES = new Set(["demo_modal", "contact_page", "meta_lead_ads"])
 /** 데모 색인이 없을 때 쓰는 빈 색인 — 호출부마다 null 분기를 두지 않기 위해. */
-const EMPTY_DEMO_INDEX: DemoSignalIndex = { byName: new Map(), unmatched: [], total: 0 }
+const EMPTY_DEMO_INDEX: CompassDemoIndex = EMPTY_COMPASS_DEMO_INDEX
 const DAY_MS = 24 * 60 * 60 * 1000
 const STALE_RECOVERY_EXPIRED_DAYS = 60
 /** 미응답이 "오늘 처리"에서 "관찰"로 내려가는 선(48h 봉우리 이후 경과일). */
@@ -133,8 +135,8 @@ function isResponseTargetLead(lead: LeadRecord) {
 export interface BuildLeadPriorityOptions {
   /** 참여 신호(연락 후 재방문·자료 수령·로그인). 없으면 반응 축을 건너뛴다. */
   engagement?: LeadEngagement | null
-  /** 쇼룸 캘린더에서 온 데모 일정 색인. 없으면 데모 신호를 건너뛴다. */
-  demoIndex?: DemoSignalIndex | null
+  /** Compass 실측 데모 색인(전화 정규화 키 기준). 없으면 데모 신호를 건너뛴다. */
+  demoIndex?: CompassDemoIndex | null
 }
 
 export function buildLeadPriorityItem(
@@ -253,10 +255,11 @@ export function buildLeadPriorityItem(
   }
 
   // ─ 데모 — 퍼널에서 매출에 가장 가까운 상태. 예정·당일은 무엇보다 우선한다.
-  const demo = findDemoSignal(options?.demoIndex ?? EMPTY_DEMO_INDEX, lead.org ?? lead.name)
+  // 매칭 키는 전화(정규화)다 — 이름 추측이 아니라 Compass 실측 데모와의 동등 비교.
+  const demo = findCompassDemoSignal(options?.demoIndex ?? EMPTY_DEMO_INDEX, lead.phone)
   if (demo) {
-    score += demoSignalLift(demo)
-    reason = demoSignalLabel(demo)
+    score += compassDemoLift(demo)
+    reason = compassDemoLabel(demo)
     action = "follow_up_lead"
     actionLabel = demo.phase === "recent" ? "데모 후속" : "데모"
     bucket = "today"
@@ -293,7 +296,7 @@ export function buildLeadPriorityItem(
 export function buildNeoAccountPriorityItem(
   account: NeoCrmCustomerRow,
   now = new Date(),
-  options?: { demoIndex?: DemoSignalIndex | null }
+  options?: { demoIndex?: CompassDemoIndex | null }
 ): CrmPriorityItem | null {
   const nowMs = now.getTime()
   const expiryDays = daysFromNow(account.expireAt, nowMs)
@@ -337,6 +340,21 @@ export function buildNeoAccountPriorityItem(
     reason = expiryDays === 0 ? "오늘 만료" : `${expiryDays}일 내 만료`
     score = 72 + Math.max(0, 30 - expiryDays)
     dueAt = account.expireAt
+  } else if (
+    // 재충전 임박: 잔액이 아직 남아 있을 때 잡는 유일한 선행 신호.
+    // 만료보다는 뒤, 휴면보다는 앞 — 아직 돈을 쓰고 있는 고객이라 회복 가능성이 가장 높다.
+    riskReasonCodes.has("recharge_due") &&
+    account.depletionInDays != null &&
+    Number(account.balance ?? 0) > 0
+  ) {
+    const daysLeft = account.depletionInDays
+    lane = "renewal"
+    action = "recharge_account"
+    actionLabel = "재충전 안내"
+    bucket = daysLeft <= 7 ? "today" : "renewal"
+    reason = `잔액 소진 D-${daysLeft}`
+    score = 70 + Math.max(0, 30 - daysLeft)
+    dueAt = account.lastClassAt ?? account.updatedAt ?? null
   } else if (inactiveDays != null && inactiveDays >= 30 && Number(account.balance ?? 0) > 0) {
     action = "reengage_account"
     actionLabel = "재활성"
@@ -377,15 +395,15 @@ export function buildNeoAccountPriorityItem(
 
   // 데모가 잡힌 고객은 만료·잔액과 무관하게 지금 챙겨야 한다 — 다른 사유가 없어도
   // 데모 하나만으로 작업대에 올린다.
-  const demo = findDemoSignal(options?.demoIndex ?? EMPTY_DEMO_INDEX, account.name)
+  const demo = findCompassDemoSignal(options?.demoIndex ?? EMPTY_DEMO_INDEX, account.phone)
   if (demo) {
     // 기존 고객의 데모는 단순 운영 신호가 아니라 추가 매출 기회로 본다.
     lane = "sales"
     action = action ?? "watch_account"
     actionLabel = demo.phase === "recent" ? "데모 후속" : "데모"
-    reason = demoSignalLabel(demo)
+    reason = compassDemoLabel(demo)
     bucket = "today"
-    score += demoSignalLift(demo)
+    score += compassDemoLift(demo)
     dueAt = demo.date
   }
 

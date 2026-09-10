@@ -23,6 +23,21 @@ export function classifyLeadOrigin(source: string | null | undefined, hasAdClick
   return "site"
 }
 
+/**
+ * 이 리드가 우리 공개 사이트의 폼에서 만들어졌는가.
+ *
+ * `classifyLeadOrigin`과 달리 광고 클릭 식별자(gclid·fbclid 등)를 보지 않는다. 클릭 식별자는
+ * "어느 경로로 사이트에 들어왔나"이지 "어느 폼을 채웠나"가 아니다 — 광고를 타고 들어와
+ * `/contact` 폼을 직접 채운 사람의 문의도 홈페이지 문의다. 설계 스펙 §D도 판정 기준을
+ * `lead.source` 하나로 규정한다(docs/superpowers/specs/2026-07-16-crm-structure-develop-design.md).
+ *
+ * 유입 성과 귀속(어느 광고가 이 리드를 데려왔나)은 utm·클릭 식별자 컬럼이 따로 들고 있으므로
+ * 이 판정에서 빠져도 잃는 정보가 없다.
+ */
+export function isSiteFormLead(source: string | null | undefined): boolean {
+  return classifyLeadOrigin(source, false) === "site"
+}
+
 export interface DeriveAttendeeOriginInput {
   /** 매칭된 대상 종류 (매칭 없으면 null) */
   matchedTargetType: CaptureTargetType | null

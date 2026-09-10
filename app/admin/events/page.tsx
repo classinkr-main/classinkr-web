@@ -10,6 +10,7 @@ import EventDateField from "@/components/admin/EventDateField"
 import { formatPublicEventSchedule } from "@/lib/public-event-dates"
 import type { PublicEvent, EventCategory, EventPublicationStatus, EventStatus } from "@/lib/types/public-events"
 import { EVENT_CATEGORIES } from "@/lib/types/public-events"
+import AdminErrorBanner from "@/components/admin/ui/AdminErrorBanner"
 
 function adminUpload(url: string, formData: FormData) {
   return fetch(url, {
@@ -224,8 +225,7 @@ export default function AdminEventsPage() {
     <div className="mx-auto max-w-5xl px-4 pt-6 pb-24 sm:px-6 sm:pt-8 lg:px-8 lg:pt-10 lg:pb-20">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-bold text-[#111110]">공개 행사 관리</h1>
-          <p className="text-[13px] text-[#1a1a1a]/40 mt-0.5">/events 페이지에 표시되는 행사를 등록·수정합니다.</p>
+          <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">공개 행사 관리</h1>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <Link
@@ -251,29 +251,18 @@ export default function AdminEventsPage() {
         </div>
       </div>
 
-      <div className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-4">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-[12px] font-semibold text-[#111110]">행사 에디터</p>
-            <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/42">
-              블로그 편집 화면처럼 포스터, 본문, 공개 상태, 미리보기를 한 화면에서 작성할 수 있습니다.
-            </p>
-          </div>
-          <button
-            onClick={() => router.push("/admin/events/new")}
-            className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] px-3 py-2 text-[12px] font-medium text-[#111110] transition-colors hover:bg-[#F6F5F4] md:w-auto"
-          >
-            에디터 바로 열기
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
+      <div className="mb-4 flex justify-end rounded-2xl border border-[#e8e8e4] bg-white px-4 py-3">
+        <button
+          onClick={() => router.push("/admin/events/new")}
+          title="블로그 편집 화면처럼 포스터, 본문, 공개 상태, 미리보기를 한 화면에서 작성할 수 있습니다."
+          className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] px-3 py-2 text-[12px] font-medium text-[#111110] transition-colors hover:bg-[#F6F5F4] md:w-auto"
+        >
+          에디터 바로 열기
+          <ArrowRight className="w-3.5 h-3.5" />
+        </button>
       </div>
 
-      {error && (
-        <div className="mb-4 px-4 py-3 bg-red-50 text-red-700 text-[13px] rounded-lg border border-red-200">
-          {error}
-        </div>
-      )}
+      {error && <AdminErrorBanner message={error} className="mb-4" />}
 
       {loading ? (
         <div className="py-16 text-center text-[13px] text-[#1a1a1a]/30">불러오는 중...</div>
@@ -384,11 +373,7 @@ export default function AdminEventsPage() {
             </div>
 
             <div className="max-h-[calc(100dvh-9rem)] space-y-4 overflow-y-auto px-4 py-5 sm:px-6">
-              {saveError && (
-                <div className="px-4 py-3 bg-red-50 text-red-700 text-[13px] rounded-lg border border-red-200">
-                  {saveError}
-                </div>
-              )}
+              {saveError && <AdminErrorBanner message={saveError} />}
 
               <div>
                 <label className="block text-[12px] font-medium text-[#1a1a1a]/50 mb-1.5">제목 *</label>

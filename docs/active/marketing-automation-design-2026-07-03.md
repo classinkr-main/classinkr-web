@@ -278,6 +278,11 @@ sequenceDiagram
 
 [20260604_lead_response_alert_states.sql](../../supabase/migrations/20260604_lead_response_alert_states.sql)는 `UNIQUE(scope, subject_id, alert_key)`로 "같은 알림을 매 스캔마다 반복 발송"을 막는다. 자동화 발송도 동일 패턴을 쓴다.
 
+> 2026-09-02: `lead_alert_states`를 사용하던 미응답 Webhook 런타임은 폐기됐다. 아래 내용은 unique
+> 멱등 제약의 역사적 참고일 뿐이며, 해당 알림을 다시 활성화하는 근거가 아니다. 새 외부 발송에는
+> [운영 장애·Cron·Webhook 안전 지침](operational-failure-handling-guidelines.md)의 backlog dry-run,
+> 실행당 상한과 circuit breaker를 함께 적용한다.
+
 ### 7.2 중복방지 키
 
 **멱등 키 = `rule_id + recipient(email/phone) + trigger_instance`**

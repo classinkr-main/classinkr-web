@@ -10,7 +10,7 @@
 import { ArrowLeftRight } from "lucide-react"
 import { useMemo } from "react"
 import type { ReactNode } from "react"
-import type { BranchDataSourceInfo, BranchDshBreakdownRow } from "../types"
+import type { BranchDshBreakdownRow } from "../types"
 import { formatMoney } from "@/lib/branch/ledger-format"
 import {
   deriveDshMonthlyPace,
@@ -23,7 +23,6 @@ import {
   formatDshThousands,
   type DshMonthPace,
 } from "./dsh-derive"
-import { dshSourceLabel } from "./DshNumericGrid"
 import { LoadingPanel } from "./shared"
 
 const FUTURE_TONE = "text-[#C9C5BF]"
@@ -103,10 +102,9 @@ const PACE_BLOCKS: Array<{ id: string; label: string; rows: PaceRowSpec[] }> = [
 interface DshMonthlyPaceProps {
   breakdown: BranchDshBreakdownRow[]
   loading?: boolean
-  dataSource?: BranchDataSourceInfo | null
 }
 
-export function DshMonthlyPace({ breakdown, loading = false, dataSource = null }: DshMonthlyPaceProps) {
+export function DshMonthlyPace({ breakdown, loading = false }: DshMonthlyPaceProps) {
   const now = useMemo(() => new Date(), [])
   const pace = useMemo(() => deriveDshMonthlyPace(breakdown, now), [breakdown, now])
 
@@ -146,10 +144,6 @@ export function DshMonthlyPace({ breakdown, loading = false, dataSource = null }
         <div>
           <p className="text-[13px] font-bold text-[#111110]">
             월별 페이스 <span className="font-semibold text-[#615D59]">(단위: 천)</span>
-          </p>
-          <p className="mt-0.5 text-[11px] text-[#615D59]">
-            시트 &lsquo;1. DSH&rsquo; 미러 · Team KR 전사 — 팀 필터와 무관 · 숫자가 정본
-            {dataSource && <> · 원천 {dshSourceLabel(dataSource)}</>}
           </p>
         </div>
         {annualSummary}

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { Check, Circle, Info, TriangleAlert } from "lucide-react"
+import { ChevronRight, Info, TriangleAlert } from "lucide-react"
 
 import type { DocsArticleSection, DocsChecklistItem } from "./types"
 import { cn } from "./utils"
@@ -28,32 +28,70 @@ function formatDashTitle(title: ReactNode) {
     )
 }
 
-function Checklist({ items }: { items: DocsChecklistItem[] }) {
+// step 문자열이 정확히 이 프리픽스로 시작하면 경로 스텝 — 브레드크럼 칩으로 그린다 (경로 표기 규약).
+const PATH_STEP_PREFIX = "경로: "
+
+function PathStepChips({ path }: { path: string }) {
+    const segments = path.split(" > ").map((segment) => segment.trim()).filter(Boolean)
+
     return (
-        <ul className="mt-5 divide-y divide-black/[0.08]">
-            {items.map((item, index) => (
-                <li key={index} className="flex gap-2.5 py-3 first:pt-0">
-                    <span
-                        className={cn(
-                            "mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
-                            item.checked
-                                ? "border-[#084734] bg-transparent text-[#084734]"
-                                : "border-black/[0.08] bg-transparent text-[#A39E98]"
-                        )}
-                    >
-                        {item.checked ? <Check aria-hidden className="h-2.5 w-2.5" /> : <Circle aria-hidden className="h-2 w-2 fill-current" />}
-                    </span>
-                    <span className="min-w-0">
-                        <span className="block break-keep text-[15px] font-bold leading-6 text-[#111110] [overflow-wrap:anywhere]">{item.label}</span>
-                        {item.description ? (
-                            <span className="mt-1 block break-keep text-sm leading-6 text-[#615D59] [overflow-wrap:anywhere]">
-                                {item.description}
-                            </span>
+        <span className="flex flex-wrap items-center gap-y-1.5">
+            {segments.map((segment, index) => {
+                const isButton = segment.startsWith("[") && segment.endsWith("]")
+                const label = isButton ? segment.slice(1, -1) : segment
+
+                return (
+                    <span key={index} className="flex items-center">
+                        {index > 0 ? (
+                            <ChevronRight aria-hidden className="mx-1 h-3 w-3 shrink-0 text-[#A39E98]" />
                         ) : null}
+                        <span
+                            className={cn(
+                                "inline-flex items-center rounded-[6px] border border-black/[0.08] bg-white px-2 py-0.5 text-[13px]",
+                                isButton ? "font-semibold text-[#084734]" : "font-medium text-[#31302E]"
+                            )}
+                        >
+                            {label}
+                        </span>
                     </span>
-                </li>
-            ))}
-        </ul>
+                )
+            })}
+        </span>
+    )
+}
+
+function StepList({ items }: { items: DocsChecklistItem[] }) {
+    return (
+        <ol className="mt-5 divide-y divide-black/[0.06]">
+            {items.map((item, index) => {
+                const pathValue =
+                    typeof item.label === "string" && item.label.startsWith(PATH_STEP_PREFIX)
+                        ? item.label.slice(PATH_STEP_PREFIX.length)
+                        : null
+
+                return (
+                    <li key={index} className="flex gap-2.5 py-4 first:pt-0 last:pb-0">
+                        <span className="w-6 shrink-0 text-[13px] font-semibold leading-[26px] tabular-nums text-[#A39E98]">
+                            {String(index + 1).padStart(2, "0")}
+                        </span>
+                        <span className="min-w-0">
+                            {pathValue ? (
+                                <PathStepChips path={pathValue} />
+                            ) : (
+                                <span className="block break-keep text-[15px] leading-[26px] text-[#31302E] [overflow-wrap:anywhere]">
+                                    {item.label}
+                                </span>
+                            )}
+                            {item.description ? (
+                                <span className="mt-1 block break-keep text-sm leading-6 text-[#615D59] [overflow-wrap:anywhere]">
+                                    {item.description}
+                                </span>
+                            ) : null}
+                        </span>
+                    </li>
+                )
+            })}
+        </ol>
     )
 }
 
@@ -109,7 +147,7 @@ export function DocsArticle({
                                 {section.body}
                             </div>
                         ) : null}
-                        {section.checklist ? <Checklist items={section.checklist} /> : null}
+                        {section.checklist ? <StepList items={section.checklist} /> : null}
                         {section.callout ? (
                             <div
                                 className={cn(

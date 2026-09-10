@@ -10,6 +10,13 @@ vi.mock("@/lib/supabase/admin", () => ({
   createSupabaseAdminClient: mocks.createSupabaseAdminClient,
 }))
 
+// listDocGapBacklog 가 60초 unstable_cache 로 감싸여서(2026-09-04) 실제 next/cache 를 그대로
+// 통과시키면 Next 런타임 밖(vitest)에서 "incrementalCache missing" Invariant 로 죽는다 —
+// 계산은 그대로 실행하되 캐시 자체는 통과시키는 스텁으로 대체한다.
+vi.mock("next/cache", () => ({
+  unstable_cache: (fn: (...args: unknown[]) => unknown) => fn,
+}))
+
 import { listDocGapBacklog } from "@/lib/chatbot/doc-gaps"
 
 function chain(result: { data: unknown; error: unknown }) {

@@ -1,7 +1,7 @@
 "use client"
 
 // 슈퍼 관리자 전용 탭 권한 편집기 — 스펙 docs/active/admin-tab-restructure-2026-07-29.md §5.4.
-// 미리보기는 반드시 admin-nav-access의 resolveNavAccess를 쓴다. 여기서 배치를 다시 계산하면
+// 미리보기는 반드시 admin-nav-access의 resolveAdminNavAccess를 쓴다. 여기서 배치를 다시 계산하면
 // 실제 사이드바와 어긋나고, 어긋난 미리보기는 이 기능 전체의 신뢰를 깎는다.
 import { useMemo, useRef, useState } from "react"
 import { Check, CircleAlert, Loader2, X } from "lucide-react"
@@ -11,7 +11,7 @@ import {
   NAV_PRESETS,
   isNavPresetKey,
   normalizeNavOverrides,
-  resolveNavAccess,
+  resolveAdminNavAccess,
   resolveNavPlacement,
   type NavAccessContext,
   type NavPlacement,
@@ -81,7 +81,7 @@ export default function MemberNavAccessDrawer({
     [targetRole, preset]
   )
 
-  const preview = useMemo(() => resolveNavAccess(ctx), [ctx])
+  const preview = useMemo(() => resolveAdminNavAccess(ctx), [ctx])
   const foldedCount = useMemo(
     () => preview.folded.reduce((sum, group) => sum + group.items.length, 0),
     [preview]

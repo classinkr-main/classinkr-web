@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { deleteLead, updateLead, type LeadStatus, type LeadRecord } from "@/lib/repositories/leads"
+import { hasContactLog } from "@/lib/repositories/contact-logs"
 
 const LEAD_STATUSES = new Set<LeadStatus>(["new", "contacted", "converted", "closed"])
 const STRING_OR_NULL_FIELDS = [
@@ -14,7 +15,6 @@ const STRING_OR_NULL_FIELDS = [
   "phone",
   "org",
   "follow_up_at",
-  "assigned_to",
   "utm_source",
   "utm_medium",
   "utm_campaign",
@@ -78,6 +78,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (sanitized.error) return NextResponse.json({ error: sanitized.error }, { status: 400 })
 
   try {
+    if (sanitized.patch?.status === "contacted" && !(await hasContactLog(id))) {
+      return NextResponse.json(
+        { error: "연락중 상태는 실제 연락 기록을 저장한 뒤에만 선택할 수 있습니다." },
+        { status: 409 }
+      )
+    }
     const updated = await updateLead(id, sanitized.patch ?? {})
     if (!updated) return NextResponse.json({ error: "리드를 찾을 수 없습니다." }, { status: 404 })
     return NextResponse.json({ lead: updated })

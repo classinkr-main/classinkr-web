@@ -1,4 +1,4 @@
-import { getPublishedPosts } from "@/lib/repositories/blog"
+import { getRecentPublishedPosts } from "@/lib/repositories/blog"
 import offices from "@/data/offices.json"
 import press from "@/data/press.json"
 import AboutPageClient from "./AboutPageClient"
@@ -6,8 +6,8 @@ import AboutPageClient from "./AboutPageClient"
 export const revalidate = 3600
 
 export default async function AboutPage() {
-  const posts = await getPublishedPosts().catch(() => [])
-  const recentPosts = posts.slice(0, 3).map((p) => ({
+  const posts = await getRecentPublishedPosts(3).catch(() => [])
+  const recentPosts = posts.map((p) => ({
     slug: p.slug,
     title: p.title,
     excerpt: p.excerpt,

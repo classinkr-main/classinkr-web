@@ -33,6 +33,21 @@ export interface MonthCell {
   weekday: number
 }
 
+/**
+ * 희망 날짜 선택 가능 범위.
+ *
+ * `disabledIsoDates` 는 min~max 범위 안이지만 개별로 선택 불가인 날짜 집합이다 — 쇼룸
+ * 예약(`/showroom`)의 주말·공휴일·마감된 날짜를 막는 데 쓴다. 선택적 필드라 안 넘기면
+ * (undefined) 기존 `/checkout` 호출부와 완전히 동일하게 동작한다 — 하위 호환을 위해
+ * 필드를 "추가"만 했다.
+ */
+export interface DesiredDateRange {
+  minIso: string
+  maxIso: string
+  /** 조회를 O(1)로 하기 위해 Set 을 받는다. 렌더마다 새 Set 을 만들지 않는 건 호출자 책임이다. */
+  disabledIsoDates?: ReadonlySet<string>
+}
+
 function pad2(value: number) {
   return value.toString().padStart(2, "0")
 }
@@ -109,15 +124,23 @@ export function compareIsoDate(a: string, b: string): number {
   return a < b ? -1 : 1
 }
 
-export function isDesiredDateSelectable(
-  iso: string,
-  range: { minIso: string; maxIso: string }
-): boolean {
+export function isDesiredDateSelectable(iso: string, range: DesiredDateRange): boolean {
   if (!isValidIsoDate(iso)) return false
-  return compareIsoDate(iso, range.minIso) >= 0 && compareIsoDate(iso, range.maxIso) <= 0
+  if (compareIsoDate(iso, range.minIso) < 0 || compareIsoDate(iso, range.maxIso) > 0) return false
+  // disabledIsoDates 를 안 넘기면(undefined) `?.has(...)` 가 undefined 를 돌려주고
+  // `!undefined` 는 true 이므로 위 범위 판정 결과가 그대로 나간다 — 기존 호출부(범위만
+  // 넘기던 /checkout)는 이 필드를 몰라도 동작이 1도 바뀌지 않는다.
+  return !range.disabledIsoDates?.has(iso)
 }
 
-/** 범위를 벗어난 날짜를 경계로 당긴다(키보드 이동이 범위 밖으로 나가지 않게). */
+/**
+ * 범위를 벗어난 날짜를 경계로 당긴다(키보드 이동이 범위 밖으로 나가지 않게).
+ *
+ * disabledIsoDates 는 일부러 보지 않는다 — 방향키로 옮긴 곳이 막힌 날짜라도 포커스는
+ * 거기로 가게 두고 선택(클릭/Enter/Space)만 막는 게 이 캘린더의 방침이다. 그래야 막힌
+ * 날짜가 줄줄이 이어져도(예: 주말 3연휴) 로빙 tabindex 가 건너뛸 대상 없이 계속 움직인다.
+ * 실제 선택 차단은 DesiredDateCalendar 의 렌더/onClick 이 isDesiredDateSelectable 로 한다.
+ */
 export function clampToRange(iso: string, range: { minIso: string; maxIso: string }): string {
   if (!isValidIsoDate(iso)) return range.minIso
   if (compareIsoDate(iso, range.minIso) < 0) return range.minIso

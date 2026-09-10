@@ -21,10 +21,7 @@ import type {
   CommercialOverviewPayload,
   CommercialOverviewStageCount,
 } from "@/lib/portal/overview-types";
-import {
-  listAllCustomerListItems,
-  listAllCustomerListItemsLite,
-} from "@/lib/portal/repositories/customers";
+import { listAllCustomerListItemsLite } from "@/lib/portal/repositories/customers";
 import { listDealListItems } from "@/lib/portal/repositories/deals";
 import {
   getLegacyCustomerDetail,
@@ -406,7 +403,9 @@ export async function getAdminPartnerPortalOverview(): Promise<PortalOverviewPay
     paymentResult,
     calendarResult,
   ] = await Promise.all([
-    listAllCustomerListItems(),
+    // metrics는 summary 스칼라만, 화면(PortalHome)은 customer의 id·name·campus_name·region_label만
+    // 읽는다 — insight/deal_previews를 만드는 decoration 3쿼리는 아무도 소비하지 않는다.
+    listAllCustomerListItemsLite(),
     listDealListItems(),
     supabase
       .from("activity_logs")

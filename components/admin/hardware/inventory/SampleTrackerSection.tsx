@@ -30,6 +30,14 @@ const FILTERS: Array<{ key: StatusFilter; label: string }> = [
 // 전체 목록은 명시적 펼침으로만 연다. 필터·정렬·행 클릭 기능은 그대로다.
 const COLLAPSED_ROW_LIMIT = 8
 
+// 장기 대여 에이징 밴드 — 대여중 유닛 전원이 장기(1~2년+)인 상태를 개별 "N일째"만으로는 조망할 수
+// 없어 밴드 요약·필터를 둔다. 밴드 선택 시 상태 필터는 대여중으로 고정된다(대여중에만 의미 있는 축).
+const AGING_BANDS: Array<{ key: string; label: string; minDays: number }> = [
+  { key: "d90", label: "90일+", minDays: 90 },
+  { key: "y1", label: "1년+", minDays: 365 },
+  { key: "y2", label: "2년+", minDays: 730 },
+]
+
 interface RegisterPlanLine {
   itemId: string
   productName: string
@@ -53,6 +61,7 @@ function locationQuantity(row: HardwareStockRow, location: string): number {
 
 function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOpenUnit, onChanged }: SampleTrackerSectionProps) {
   const [filter, setFilter] = useState<StatusFilter>("all")
+  const [agingMinDays, setAgingMinDays] = useState<number | null>(null)
   const [showAllRows, setShowAllRows] = useState(false)
   const [registering, setRegistering] = useState(false)
   const [registerError, setRegisterError] = useState<string | null>(null)
@@ -82,7 +91,10 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
 
   const filtered = useMemo(() => {
     if (!units) return []
-    const list = filter === "all" ? units : units.filter((unit) => unit.status === filter)
+    let list = filter === "all" ? units : units.filter((unit) => unit.status === filter)
+    if (agingMinDays != null) {
+      list = list.filter((unit) => unit.status === "loaned" && (loanElapsedDays(unit.loaned_at) ?? 0) >= agingMinDays)
+    }
     // 대여중(경과 오래된 순) → 사무실 → 나머지 — 행동이 필요한 유닛이 위로 온다.
     const statusRank: Record<SampleUnitStatus, number> = { loaned: 0, repair: 1, office: 2, converted: 3, retired: 4 }
     return list.slice().sort((a, b) => {
@@ -92,13 +104,40 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
       }
       return a.asset_code.localeCompare(b.asset_code, "ko")
     })
-  }, [units, filter])
+  }, [units, filter, agingMinDays])
 
   const counts = useMemo(() => {
     const map: Record<StatusFilter, number> = { all: units?.length ?? 0, office: 0, loaned: 0, repair: 0, converted: 0, retired: 0 }
     for (const unit of units ?? []) map[unit.status] += 1
     return map
   }, [units])
+
+  const agingCounts = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const band of AGING_BANDS) map[band.key] = 0
+    for (const unit of units ?? []) {
+      if (unit.status !== "loaned") continue
+      const elapsed = loanElapsedDays(unit.loaned_at) ?? 0
+      for (const band of AGING_BANDS) {
+        if (elapsed >= band.minDays) map[band.key] += 1
+      }
+    }
+    return map
+  }, [units])
+
+  const selectStatusFilter = (next: StatusFilter) => {
+    setFilter(next)
+    // 밴드는 대여중 전용 축 — 다른 상태로 옮기면 밴드를 해제해 빈 목록 혼란을 막는다.
+    if (next !== "loaned" && next !== "all") setAgingMinDays(null)
+  }
+
+  const toggleAgingBand = (minDays: number) => {
+    setAgingMinDays((current) => {
+      const next = current === minDays ? null : minDays
+      if (next != null) setFilter("loaned")
+      return next
+    })
+  }
 
   const registerMissing = async () => {
     if (!integrity || integrity.plan.length === 0 || registering) return
@@ -162,7 +201,7 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
         </p>
       )}
 
-      <div className="flex flex-wrap gap-1.5 px-5 py-3">
+      <div className="flex flex-wrap items-center gap-1.5 px-5 py-3">
         {FILTERS.map((entry) => {
           const active = filter === entry.key
           const count = counts[entry.key]
@@ -171,13 +210,36 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
             <button
               key={entry.key}
               type="button"
-              onClick={() => setFilter(entry.key)}
+              onClick={() => selectStatusFilter(entry.key)}
               aria-pressed={active}
               className={`inline-flex cursor-pointer items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 ${
                 active ? "bg-[#111110] text-white" : "bg-[#F6F5F4] text-[#615D59] hover:text-[#111110]"
               }`}
             >
               {entry.label}
+              <span className="tabular-nums">{formatNumber(count)}</span>
+            </button>
+          )
+        })}
+        {AGING_BANDS.some((band) => agingCounts[band.key] > 0) && (
+          <span className="mx-1 h-4 w-px bg-[rgba(0,0,0,0.08)]" aria-hidden />
+        )}
+        {AGING_BANDS.map((band) => {
+          const count = agingCounts[band.key]
+          const active = agingMinDays === band.minDays
+          if (count === 0 && !active) return null
+          return (
+            <button
+              key={band.key}
+              type="button"
+              onClick={() => toggleAgingBand(band.minDays)}
+              aria-pressed={active}
+              title={`대여 ${band.label} 경과 유닛만 보기 — 회수·전환 검토 대상`}
+              className={`inline-flex cursor-pointer items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 ${
+                active ? "bg-[#7A520F] text-white" : "bg-[#FBF1E0] text-[#7A520F] hover:bg-[#ECD29C]"
+              }`}
+            >
+              대여 {band.label}
               <span className="tabular-nums">{formatNumber(count)}</span>
             </button>
           )

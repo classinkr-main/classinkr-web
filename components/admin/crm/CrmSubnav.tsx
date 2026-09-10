@@ -1,8 +1,11 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
-import type { ReactNode } from "react"
+import { usePathname, useRouter } from "next/navigation"
+// PrefetchKind는 next/navigation이 재수출하지 않는 런타임 enum이라 내부 경로에서 직접
+// 가져온다(AdminSidebar.tsx와 같은 이유 — 값이 필요해 type-only import로는 안 된다).
+import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types"
+import { useCallback, useEffect, useRef, type ReactNode } from "react"
 import {
   Building2,
   CircleDollarSign,
@@ -14,7 +17,9 @@ import {
   Users,
 } from "lucide-react"
 
-import { warmAdminRequestCache } from "@/lib/admin-client"
+import { warmAdminRequestCacheQueued } from "@/lib/admin-client"
+import { CRM_CHILD_NAV } from "@/components/admin/admin-nav"
+import { NAV_WARMUP_REQUESTS } from "@/components/admin/AdminSidebar"
 
 type CrmSection = "home" | "customers" | "activity" | "deals" | "insights" | "sync"
 type DealsSub = "revenue" | "revSheet" | "orders" | "kpi"
@@ -36,36 +41,68 @@ const CUSTOMERS_SUBTABS = [
   { key: "unified", href: "/admin/crm/customers/unified", label: "통합", icon: <Users className="h-3.5 w-3.5" /> },
   { key: "leads", href: "/admin/crm/customers/leads", label: "리드", icon: <PhoneCall className="h-3.5 w-3.5" /> },
   { key: "accounts", href: "/admin/crm/customers/accounts", label: "원천 고객", icon: <Building2 className="h-3.5 w-3.5" /> },
-  { key: "map", href: "/admin/crm/customers/map", label: "지도 원천", icon: <MapPinned className="h-3.5 w-3.5" /> },
+  { key: "map", href: "/admin/crm/customers/map", label: "지도", icon: <MapPinned className="h-3.5 w-3.5" /> },
 ] satisfies Array<{ key: CustomersSub; href: string; label: string; icon: ReactNode }>
 
-const SUBTAB_WARMUP_REQUESTS: Record<string, string[]> = {
-  "/admin/crm/customers/unified": [
-    "/api/admin/crm/customers/unified?limit=100&offset=0",
-    "/api/admin/crm/owners",
-  ],
-  "/admin/crm/customers/leads": [
-    "/api/admin/leads",
-    "/api/admin/leads/activity-summary",
-  ],
-  "/admin/crm/customers/accounts": ["/api/admin/crm/customers-neo"],
-  "/admin/crm/customers/map": ["/api/admin/crm/map-source"],
-  "/admin/crm/deals": [
-    "/api/admin/crm/revenue?months=6",
-    "/api/admin/crm/readiness",
-  ],
-  "/admin/crm/deals/rev-sheet": ["/api/admin/crm/revenue-sheet"],
-  "/admin/crm/deals/orders": ["/api/portal/overview?shape=partner"],
-  "/admin/crm/deals/kpi": [
-    "/api/admin/crm/revenue?months=6",
-    "/api/portal/overview?shape=partner",
-  ],
+// 예열 표는 NAV_WARMUP_REQUESTS(SSOT) 하나다 — 여기 사본을 두던 시절에는 같은 URL이 두 파일에
+// 복제되고 사이드바 쪽 CRM 하위 키는 아무도 조회하지 않는 사문으로 남았다.
+// 항목이 {url, cacheKey} 형태일 수 있다(캐시 키가 URL과 다른 소비처) — warmAdminRequestCacheQueued가
+// 두 형태를 그대로 받아 소비 측 캐시 슬롯에 맞춰 데운다.
+function resolveSubtabWarmupEntries(href: string) {
+  const entry = NAV_WARMUP_REQUESTS[href]
+  return typeof entry === "function" ? entry() : entry ?? []
 }
 
-function warmSubtab(href: string) {
-  for (const url of SUBTAB_WARMUP_REQUESTS[href] ?? []) {
-    void warmAdminRequestCache(url, { ttlMs: 60_000 })
-  }
+// AdminSidebar(warmAdminTab/scheduleWarmAdminTab)와 같은 규약 — hover 180ms 디바운스 + href당
+// 1회 예열. admin-client의 inflight 중복 제거가 있어 이게 없어도 네트워크가 중복되지는 않지만,
+// 사이드바와 같은 규약으로 맞춰 마우스가 탭 여러 개를 훑고 지나갈 때의 타이머·핸들러 비용을
+// 줄인다(§7). 동시성 3 큐(warmAdminRequestCacheQueued)도 사이드바와 동일하게 사용한다.
+function useSubtabWarmup() {
+  const router = useRouter()
+  const warmedHrefs = useRef(new Set<string>())
+  const timerRef = useRef<number | null>(null)
+  // href당 30초 스로틀(T2, AdminSidebar의 fullPrefetchThrottleRef와 같은 규약) — Next가 신선한
+  // FULL 엔트리는 중복 요청을 스스로 스킵하므로 href당 1회로 막지 않고, hover 폭주만 막는다.
+  const fullPrefetchThrottleRef = useRef(new Map<string, number>())
+
+  const warm = useCallback((href: string) => {
+    // T2 — 이 화면들도 layout.tsx의 force-dynamic을 그대로 물려받는 dynamic 페이지다.
+    // hover 완료·focus·pointerdown·touchstart(=이동 의도) 시점에 FULL 프리페치를 태워
+    // 서버 왕복(그 화면의 RSC 프리페치 포함)을 클릭 이전으로 앞당긴다 — click은 이 화면에
+    // 별도 핸들러가 없어(<Link> 네비게이션이 곧장 처리) 여기서 걸러낼 대상이 없다.
+    const now = Date.now()
+    const last = fullPrefetchThrottleRef.current.get(href)
+    if (last === undefined || now - last >= 30_000) {
+      fullPrefetchThrottleRef.current.set(href, now)
+      try {
+        router.prefetch(href, { kind: PrefetchKind.FULL })
+      } catch {
+        // Prefetch is an optimization only.
+      }
+    }
+
+    if (warmedHrefs.current.has(href)) return
+    warmedHrefs.current.add(href)
+    warmAdminRequestCacheQueued(resolveSubtabWarmupEntries(href), { ttlMs: 60_000 })
+  }, [router])
+
+  const scheduleWarm = useCallback((href: string) => {
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current)
+    timerRef.current = window.setTimeout(() => {
+      warm(href)
+      timerRef.current = null
+    }, 180)
+  }, [warm])
+
+  const cancelWarm = useCallback(() => {
+    if (timerRef.current === null) return
+    window.clearTimeout(timerRef.current)
+    timerRef.current = null
+  }, [])
+
+  useEffect(() => () => cancelWarm(), [cancelWarm])
+
+  return { warm, scheduleWarm, cancelWarm }
 }
 
 function resolveSection(pathname: string | null): CrmSection | null {
@@ -122,18 +159,50 @@ function resolveDealsSub(pathname: string | null): DealsSub | null {
 
 export default function CrmSubnav({ active }: { active?: CrmSection } = {}) {
   const pathname = usePathname()
+  const { warm: warmSubtab, scheduleWarm: scheduleWarmSubtab, cancelWarm: cancelWarmSubtab } = useSubtabWarmup()
   const section = active ?? resolveSection(pathname)
   const dealsSub = section === "deals" ? resolveDealsSub(pathname) : null
   const customersSub = section === "customers" ? resolveCustomersSub(pathname) : null
   const showDealsSub = section === "deals"
   const showCustomersSub = section === "customers"
 
-  if (!showCustomersSub && !showDealsSub) return null
-
+  // 1차 탭은 조건부일 수 없다 — CRM 하위 9개 화면 중 5개(현황·기록·입력함·검수·인사이트)는
+  // 지금까지 사이드바 드릴인이 유일한 내비였고, 여기서 null 을 뱉으면 그 화면들의 내비가 0이 된다.
   return (
-    <div className="mb-4">
+    <div className="pt-3">
+      {/* 1차 — CRM 하위 5개. 정본은 admin-nav.ts(CRM_CHILD_NAV)라 ⌘K 팔레트와 같은 표를 본다. */}
+      <nav
+        aria-label="CRM 주요 메뉴"
+        className="no-scrollbar -mx-4 flex items-center gap-1 overflow-x-auto px-4 sm:mx-0 sm:px-0"
+      >
+        {CRM_CHILD_NAV.map((child) => {
+          const isActive = child.match(pathname ?? "")
+          return (
+            <Link
+              key={child.href}
+              href={child.href}
+              aria-current={isActive ? "page" : undefined}
+              onFocus={() => warmSubtab(child.href)}
+              onMouseEnter={() => scheduleWarmSubtab(child.href)}
+              onMouseLeave={cancelWarmSubtab}
+              onPointerDown={() => warmSubtab(child.href)}
+              onTouchStart={() => warmSubtab(child.href)}
+              className={`inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 text-[12.5px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734] sm:min-h-9 ${
+                isActive
+                  ? "bg-[#111110] text-white"
+                  : "text-[#1a1a1a]/55 hover:bg-[#f5f5f2] hover:text-[#111110]"
+              }`}
+            >
+              {child.label}
+            </Link>
+          )
+        })}
+      </nav>
       {showCustomersSub ? (
-        <div className="no-scrollbar -mx-4 mt-3 flex items-center gap-1.5 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+        <nav
+          aria-label="CRM 고객 메뉴"
+          className="no-scrollbar -mx-4 mt-1.5 flex items-center gap-1 overflow-x-auto px-4 sm:mx-0 sm:px-0"
+        >
           <span className="mr-1 hidden shrink-0 text-[11px] font-medium text-[#1a1a1a]/40 sm:inline">고객</span>
           {CUSTOMERS_SUBTABS.map((sub) => {
             const isActive = customersSub === sub.key
@@ -144,25 +213,30 @@ export default function CrmSubnav({ active }: { active?: CrmSection } = {}) {
                 href={sub.href}
                 aria-current={isActive ? "page" : undefined}
                 onFocus={() => warmSubtab(sub.href)}
-                onMouseEnter={() => warmSubtab(sub.href)}
+                onMouseEnter={() => scheduleWarmSubtab(sub.href)}
+                onMouseLeave={cancelWarmSubtab}
                 onPointerDown={() => warmSubtab(sub.href)}
                 onTouchStart={() => warmSubtab(sub.href)}
-                className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-colors ${
-                  isActive
-                    ? "border-[#111110] bg-[#111110] text-white"
-                    : "border-[#e8e8e4] bg-white text-[#1a1a1a]/70 hover:border-[#c8c8c4]"
+                className={`relative flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap px-2.5 pb-2.5 pt-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734] ${
+                  isActive ? "text-[#084734]" : "text-[#1a1a1a]/55 hover:text-[#111110]"
                 }`}
               >
-                <span className={isActive ? "text-white" : "text-[#1a1a1a]/40"}>{sub.icon}</span>
+                <span className={isActive ? "text-[#084734]" : "text-[#1a1a1a]/35"}>{sub.icon}</span>
                 {sub.label}
+                {isActive ? (
+                  <span aria-hidden className="absolute inset-x-1.5 bottom-0 h-[2px] rounded-full bg-[#084734]" />
+                ) : null}
               </Link>
             )
           })}
-        </div>
+        </nav>
       ) : null}
 
       {showDealsSub ? (
-        <div className="no-scrollbar -mx-4 mt-3 flex items-center gap-1.5 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+        <nav
+          aria-label="CRM 돈흐름 메뉴"
+          className="no-scrollbar -mx-4 mt-1.5 flex items-center gap-1 overflow-x-auto px-4 sm:mx-0 sm:px-0"
+        >
           <span className="mr-1 hidden shrink-0 text-[11px] font-medium text-[#1a1a1a]/40 sm:inline">돈흐름</span>
           {DEALS_SUBTABS.map((sub) => {
             const isActive = dealsSub === sub.key
@@ -173,21 +247,23 @@ export default function CrmSubnav({ active }: { active?: CrmSection } = {}) {
                 href={sub.href}
                 aria-current={isActive ? "page" : undefined}
                 onFocus={() => warmSubtab(sub.href)}
-                onMouseEnter={() => warmSubtab(sub.href)}
+                onMouseEnter={() => scheduleWarmSubtab(sub.href)}
+                onMouseLeave={cancelWarmSubtab}
                 onPointerDown={() => warmSubtab(sub.href)}
                 onTouchStart={() => warmSubtab(sub.href)}
-                className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-colors ${
-                  isActive
-                    ? "border-[#111110] bg-[#111110] text-white"
-                    : "border-[#e8e8e4] bg-white text-[#1a1a1a]/70 hover:border-[#c8c8c4]"
+                className={`relative flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap px-2.5 pb-2.5 pt-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734] ${
+                  isActive ? "text-[#084734]" : "text-[#1a1a1a]/55 hover:text-[#111110]"
                 }`}
               >
-                <span className={isActive ? "text-white" : "text-[#1a1a1a]/40"}>{sub.icon}</span>
+                <span className={isActive ? "text-[#084734]" : "text-[#1a1a1a]/35"}>{sub.icon}</span>
                 {sub.label}
+                {isActive ? (
+                  <span aria-hidden className="absolute inset-x-1.5 bottom-0 h-[2px] rounded-full bg-[#084734]" />
+                ) : null}
               </Link>
             )
           })}
-        </div>
+        </nav>
       ) : null}
     </div>
   )

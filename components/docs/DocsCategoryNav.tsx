@@ -47,7 +47,7 @@ export function DocsCategoryNav({ items, className }: DocsCategoryNavProps) {
               <span
                 className={cn(
                   "text-[11px] font-semibold leading-4",
-                  item.isActive ? "text-[#084734]" : "text-[#A39E98] group-hover:text-[#084734]"
+                  item.isActive ? "text-[#084734]" : "text-[#615D59] group-hover:text-[#084734]"
                 )}
               >
                 {item.meta}

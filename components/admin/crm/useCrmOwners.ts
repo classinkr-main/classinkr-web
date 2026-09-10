@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 
 import { adminFetchJsonCached } from "@/lib/admin-client"
+import { CRM_CACHE_SWR_MS, CRM_CACHE_TTL_MS } from "@/lib/crm/client-cache"
 
 export interface CrmOwnerOption {
   userId: string | null
@@ -85,8 +86,11 @@ export function useCrmOwners() {
     let mounted = true
     adminFetchJsonCached<CrmOwnersResponse>("/api/admin/crm/owners", undefined, {
       cacheKey: "/api/admin/crm/owners",
-      ttlMs: 120_000,
-      staleWhileRevalidateMs: 5 * 60_000,
+      ttlMs: CRM_CACHE_TTL_MS,
+      staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
+      onRevalidated: ({ data: fresh }) => {
+        if (mounted && fresh) setData(fresh)
+      },
     })
       .then((response) => {
         if (mounted) setData(response)

@@ -10,7 +10,7 @@
 
 import { ArrowLeftRight, ChevronDown, ChevronRight } from "lucide-react"
 import { useMemo, useState } from "react"
-import type { BranchDataSourceInfo, BranchDshRow } from "../types"
+import type { BranchDshRow } from "../types"
 import {
   buildDshTeamGrid,
   DSH_CELL,
@@ -26,7 +26,7 @@ import {
   type DshTeamGridMember,
   type DshTeamGridTeam,
 } from "./dsh-derive"
-import { dshSourceLabel, type DshGridView } from "./DshNumericGrid"
+import type { DshGridView } from "./DshNumericGrid"
 import { LoadingPanel } from "./shared"
 
 const VIEW_OPTIONS: Array<{ id: DshGridView; label: string }> = [
@@ -120,10 +120,9 @@ function annualRateCell(entry: { goal: DshNumbers | null; status: DshNumbers | n
 interface DshTeamGridProps {
   rows: BranchDshRow[]
   loading?: boolean
-  dataSource?: BranchDataSourceInfo | null
 }
 
-export function DshTeamGrid({ rows, loading = false, dataSource = null }: DshTeamGridProps) {
+export function DshTeamGrid({ rows, loading = false }: DshTeamGridProps) {
   // 기본 뷰는 Status — 상시 달성률(연간) 열이 목표 대비 판정을 이미 깔고 있어,
   // 팀별 검수에서 먼저 확인하는 건 실적 절대치다(Goal은 토글 한 번).
   const [view, setView] = useState<DshGridView>("status")
@@ -148,10 +147,6 @@ export function DshTeamGrid({ rows, loading = false, dataSource = null }: DshTea
         <div>
           <p className="text-[13px] font-bold text-[#111110]">
             팀 · 멤버 수치 <span className="font-semibold text-[#615D59]">(단위: 천 · 달성률 %)</span>
-          </p>
-          <p className="mt-0.5 text-[11px] text-[#615D59]">
-            시트 &lsquo;1. DSH&rsquo; 미러 · Team KR 전사 — 팀 필터와 무관 · 숫자가 정본
-            {dataSource && <> · 원천 {dshSourceLabel(dataSource)}</>}
           </p>
         </div>
         <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]" role="group" aria-label="팀 그리드 Goal/Status/Gap/Rate 보기 전환">

@@ -10,7 +10,8 @@ export async function GET(req: NextRequest) {
   try {
     const overview = await getAdminCrmOverview({ force: req.nextUrl.searchParams.has("force") })
     const response = NextResponse.json(overview)
-    response.headers.set("Cache-Control", "private, max-age=30, stale-while-revalidate=120")
+    // 서버 프로세스 캐시(ADMIN_CRM_OVERVIEW_CACHE_TTL_MS)·클라이언트 TTL(CRM_CACHE_TTL_MS)과 같은 120초.
+    response.headers.set("Cache-Control", "private, max-age=120, stale-while-revalidate=600")
     return response
   } catch (error) {
     console.error("[GET /api/admin/crm/overview]", error)

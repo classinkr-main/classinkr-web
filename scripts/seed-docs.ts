@@ -186,9 +186,12 @@ function sectionToMarkdown(section: DocSection) {
   const steps = section.steps?.map((step) => `- ${step}`).join("\n")
   const media = section.media
     ?.map((item) => {
-      const asset =
-        item.type === "image" ? `![${item.alt}](${item.src})` : `[${item.alt}](${item.src})`
-      return [asset, item.caption].filter(Boolean).join("\n")
+      // 캡션은 이미지 title로 내보낸다 — 어드민 파서(lib/admin/docs-markdown.ts)가
+      // 독립 이미지 줄을 section.media로 되돌릴 때 title에서 캡션을 읽는다.
+      const title = item.caption ? ` "${item.caption}"` : ""
+      return item.type === "image"
+        ? `![${item.alt}](${item.src}${title})`
+        : `[${item.alt}](${item.src}${title})`
     })
     .join("\n\n")
   return [`## ${section.heading}`, section.body, steps, media].filter(Boolean).join("\n\n")

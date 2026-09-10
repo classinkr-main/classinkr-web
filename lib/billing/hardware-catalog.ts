@@ -23,6 +23,12 @@ export interface HardwareCatalogItem {
   priceKrw: number
   /** 카드 하단 보조 문구(설치·할부 등). 없으면 미표기. */
   note?: string
+  /**
+   * 이 품목을 사면 설치 작업이 따로 필요한가. 전자칠판 단품이 그렇다 —
+   * **단품 가격에 설치비는 들어 있지 않다.** 패키지는 벽걸이 설치를 이미 품고 있어 false 다
+   * (lib/product-templates.ts 의 bundle 단가 계산이 근거: 630+120+50 만원).
+   */
+  requiresInstall?: boolean
   group: HardwareItemGroup
   /** 카드 썸네일 — /product/hw 가 쓰는 public 자산을 재사용한다. */
   image?: { src: string; alt: string }
@@ -35,8 +41,56 @@ export const HARDWARE_CURRENCY = "KRW" as const
 export const HARDWARE_QTY_MIN = 0
 export const HARDWARE_QTY_MAX = 99
 
-/** 전 품목 공통 안내(패키지 비고에서 승격). 합계 카드 하단에 노출한다. */
-export const HARDWARE_ORDER_NOTE = "설치 배송비 포함 · 12개월 할부 가능"
+/**
+ * 패키지 카드 전용 안내. 패키지는 벽걸이 설치를 가격에 포함한다.
+ * 문자열은 `public/l/omo1/index.html` 의 pkg-note 와 같은 값이어야 한다.
+ */
+export const HARDWARE_PACKAGE_NOTE = "설치 배송비 포함 · 12개월 할부 가능"
+
+/**
+ * 전 품목에 붙여도 되는 안내.
+ *
+ * 예전에는 위 패키지 문구를 그대로 합계 카드에 달아, 86" 단품만 담은 사람에게도
+ * "설치 배송비 포함"이라고 말했다. 견적 카탈로그(lib/product-templates.ts)는 같은 설치를
+ * 50만원으로 잡고 있어 실제 청구와 어긋났다.
+ */
+export const HARDWARE_ORDER_NOTE = "12개월 할부 가능"
+
+/** 설치가 필요한 구성일 때 합계 카드에 함께 붙이는 안내. */
+export const HARDWARE_INSTALL_NOTE =
+  "전자칠판 설치비는 별도입니다. 신청 단계에서 스탠드·벽걸이 중 선택하면 합계에 더해집니다."
+
+/** 전자칠판 1대당 설치비. 스탠드·벽걸이 모두 같은 금액이다. */
+export const HARDWARE_INSTALL_PRICE_KRW = 500_000
+
+export type HardwareInstallType = "stand" | "wall"
+
+export interface HardwareInstallOption {
+  /** 신청 계약(checkout_requests.install_type)에 실리는 값. */
+  value: HardwareInstallType
+  /** 주문 라인 sku. 서버가 getHardwareItem 으로 단가를 핀한다. */
+  sku: string
+  name: string
+  hint: string
+  priceKrw: number
+}
+
+export const HARDWARE_INSTALL_OPTIONS: readonly HardwareInstallOption[] = [
+  {
+    value: "stand",
+    sku: "hw-install-stand",
+    name: "이동형 스탠드 설치",
+    hint: "이동식 스탠드 거치",
+    priceKrw: HARDWARE_INSTALL_PRICE_KRW,
+  },
+  {
+    value: "wall",
+    sku: "hw-install-wall",
+    name: "벽걸이 설치",
+    hint: "벽면 고정 · 현장 설치비 포함",
+    priceKrw: HARDWARE_INSTALL_PRICE_KRW,
+  },
+] as const
 
 export const HARDWARE_CATALOG: readonly HardwareCatalogItem[] = [
   {
@@ -45,6 +99,7 @@ export const HARDWARE_CATALOG: readonly HardwareCatalogItem[] = [
     spec: "75-inch Interactive Display",
     description: "교실의 새로운 기준이 되는 대형 인터랙티브 보드.",
     priceKrw: 5_400_000,
+    requiresInstall: true,
     group: "single",
     image: {
       src: "/images/product/hw/spaces/space-s75-seminar.webp",
@@ -57,6 +112,7 @@ export const HARDWARE_CATALOG: readonly HardwareCatalogItem[] = [
     spec: "86-inch Flagship Display",
     description: "몰입형 수업과 시연에 최적화된 플래그십 디스플레이.",
     priceKrw: 6_300_000,
+    requiresInstall: true,
     group: "single",
     image: {
       src: "/images/product/hw/spaces/space-s86-classroom.webp",
@@ -82,7 +138,7 @@ export const HARDWARE_CATALOG: readonly HardwareCatalogItem[] = [
     description:
       '86" 전자칠판 + AI 카메라 + 벽걸이 + 자동 녹화 1년 이용권(약 1,200시간)',
     priceKrw: 8_300_000,
-    note: HARDWARE_ORDER_NOTE,
+    note: HARDWARE_PACKAGE_NOTE,
     group: "package",
     image: {
       src: "/images/product/hw/hero/hero-board-stand.webp",
@@ -91,9 +147,35 @@ export const HARDWARE_CATALOG: readonly HardwareCatalogItem[] = [
   },
 ] as const
 
-/** sku → 카탈로그 항목. 미등록 sku 는 null. */
+/**
+ * sku → 카탈로그 항목. 미등록 sku 는 null.
+ *
+ * 설치 라인(hw-install-*)도 함께 찾는다 — 서버(lib/checkout-requests.ts)가 이 함수로
+ * 하드웨어 라인의 단가를 카탈로그 값에 핀하기 때문에, 여기서 안 잡히면 설치 라인이
+ * 통째로 버려진다. 다만 화면 카드 목록(HARDWARE_CATALOG)에는 넣지 않는다 —
+ * 설치는 수량으로 담는 물건이 아니라 신청 단계에서 고르는 방식이다.
+ */
 export function getHardwareItem(sku: string): HardwareCatalogItem | null {
-  return HARDWARE_CATALOG.find((item) => item.sku === sku) ?? null
+  const catalogItem = HARDWARE_CATALOG.find((item) => item.sku === sku)
+  if (catalogItem) return catalogItem
+
+  const installOption = HARDWARE_INSTALL_OPTIONS.find((option) => option.sku === sku)
+  if (!installOption) return null
+
+  return {
+    sku: installOption.sku,
+    name: installOption.name,
+    spec: "Installation",
+    description: installOption.hint,
+    priceKrw: installOption.priceKrw,
+    group: "single",
+  }
+}
+
+/** value → 설치 옵션. 미등록 값은 null. */
+export function getHardwareInstallOption(value: unknown): HardwareInstallOption | null {
+  if (typeof value !== "string") return null
+  return HARDWARE_INSTALL_OPTIONS.find((option) => option.value === value) ?? null
 }
 
 /** sku → 수량 맵. 화면 상태의 형태이자 합계 계산의 입력. */
@@ -133,6 +215,27 @@ export function computeHardwareTotalKrw(quantities: HardwareQuantities): number 
   }, 0)
 }
 
+/**
+ * 설치가 따로 필요한 대수. 전자칠판 단품만 센다 —
+ * 패키지는 벽걸이 설치를 이미 포함하고 있어 다시 청구하면 이중 과금이다.
+ */
+export function countInstallRequiredUnits(quantities: HardwareQuantities): number {
+  return HARDWARE_CATALOG.reduce((total, item) => {
+    if (!item.requiresInstall) return total
+    return total + clampHardwareQty(quantities[item.sku] ?? 0)
+  }, 0)
+}
+
+/** 선택한 설치 방식의 합계(원). 설치가 필요 없는 구성이면 0. */
+export function computeInstallTotalKrw(
+  installType: unknown,
+  quantities: HardwareQuantities
+): number {
+  const option = getHardwareInstallOption(installType)
+  if (!option) return 0
+  return option.priceKrw * countInstallRequiredUnits(quantities)
+}
+
 /** 신청 계약(POST /api/checkout/request)의 items 라인. */
 export interface CheckoutRequestItem {
   sku: string
@@ -159,6 +262,29 @@ export function buildHardwareRequestItems(
     })
   }
   return items
+}
+
+/**
+ * 선택한 설치 방식 → 신청 items 의 설치 라인. 설치가 필요 없으면 null.
+ * 단가는 서버가 다시 카탈로그 값으로 핀하므로 여기 값은 화면 표기용이다.
+ */
+export function buildInstallRequestItem(
+  installType: unknown,
+  quantities: HardwareQuantities
+): CheckoutRequestItem | null {
+  const option = getHardwareInstallOption(installType)
+  if (!option) return null
+
+  const qty = countInstallRequiredUnits(quantities)
+  if (qty <= 0) return null
+
+  return {
+    sku: option.sku,
+    name: option.name,
+    qty,
+    unitAmount: option.priceKrw,
+    currency: HARDWARE_CURRENCY,
+  }
 }
 
 /** 원 단위 콤마 표기. "만원" 축약을 쓰지 않는다(합계 오독 방지). */

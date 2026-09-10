@@ -88,7 +88,7 @@
 - 우선순위 큐 룰스코어링 + 실 mutation(`lib/crm/priority.ts`)
 - 싱크 체이닝(sync → 후보 생성 → 알림)
 - NEO sync cron(01:00 UTC)
-- 리드 48h+ 미응답 알림 크론
+- Meta·홈페이지 리드 아침 공지 크론. 48h+ 미응답 Webhook 알림은 2026-09-02 폐기됨
 - 동의 기반 트래킹(P0 배너 + Consent Mode v2 + `cln_aid`)
 - `computeCustomerHealth` 기반 위험 고객 우선순위 큐
 
@@ -228,7 +228,8 @@ npm run build
 
 - 파트 가이드 7개 파일: `docs/active/playbook/01~06-*.md` + `README.md`
 - 품질 게이트 npm 스크립트: `lint`, `build`(pre/post 훅 포함), `test`(vitest, 130+ 테스트 파일), `typecheck`, `check:vercel-crons`, `check:public-content`, `check:alpha-db`, `sync:channel-docs` 등
-- Vercel cron 8개(`vercel.json`): automation / lead-response-alerts / lead-weekly-digest / lead-monthly-digest / sync-branch / sync-branch-insights / sync-external-crm / channel-talk-sync
+- 2026-07-03 당시 Vercel cron 8개(`vercel.json`) 실측 기록. 현재 등록 수·스케줄은 실제 Production
+  프로젝트와 현행 `vercel.json`을 다시 대조하며, `lead-response-alerts` route는 아침 공지만 담당한다.
 - `scripts/` 자동화 스크립트 44개 파일(`seed-docs.ts`, `embed-docs-chunks.ts`, `sync-channel-documents.ts` 포함)
 - 챗봇 golden-set vitest 게이트: `tests/chatbot/golden-set.test.ts` 외 챗봇 테스트 36종
 - 문서 재색인 훅: `app/api/admin/docs/articles/_reindex.ts`(캐논이 말하는 "서버측 reindex 훅"의 실물)

@@ -12,9 +12,10 @@ import { SegmentLandingPage, type SegmentLandingPageData } from "@/components/la
 import { JsonLd } from "@/components/seo/JsonLd"
 import { createBreadcrumbJsonLd, createPublicMetadata, createWebPageJsonLd } from "@/lib/seo"
 
-const contactHref = `/contact?topic=${encodeURIComponent("하드웨어/설치/AS")}&prefill=${encodeURIComponent(
-  "목동 쇼룸에서 대표 수업 자료로 Classin Board, EDB, 녹화 흐름을 확인하고 싶습니다."
-)}#contact-form`
+// 이 랜딩의 CTA 두 개는 모두 쇼룸 방문이 목적이다. 예전에는 문의 폼으로 보내면서
+// topic 을 "하드웨어/설치/AS" 로 붙였는데, 그러면 방문 의향이 AS 문의와 같은
+// source_detail 로 뭉개져 분리 집계가 안 됐다. 이제 쇼룸 예약 화면으로 직접 보낸다.
+const showroomHref = "/showroom"
 
 const page: SegmentLandingPageData = {
   segmentId: "hardware-classroom-buildout",
@@ -33,7 +34,7 @@ const page: SegmentLandingPageData = {
     },
     primaryCta: {
       label: "목동 쇼룸에서 대표 수업 시연하기",
-      href: contactHref,
+      href: showroomHref,
       ctaId: "segment_hw_showroom",
     },
     secondaryCta: {
@@ -153,7 +154,7 @@ const page: SegmentLandingPageData = {
       "전 교실을 한 번에 정하기 전에, 실제 수업 자료로 EDB·판서·녹화·복습을 확인하면 가격 비교가 운영 판단으로 바뀝니다.",
     primaryCta: {
       label: "쇼룸 상담 요청하기",
-      href: contactHref,
+      href: showroomHref,
       ctaId: "segment_hw_final_showroom",
     },
     secondaryCta: {

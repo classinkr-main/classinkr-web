@@ -220,7 +220,7 @@ export async function getLeadActivity(leadId: string): Promise<LeadActivity> {
 // 리드당 수십 행이 쌓이는 테이블은 한 번의 select 로 다 못 받으므로 range 페이징으로 훑고,
 // 그래도 끝이 안 보이면 상한에서 멈춘다(최신순이라 잘리는 쪽은 항상 오래된 활동).
 const BULK_PAGE_SIZE = 1000
-/** 행동 로그(이벤트·다운로드) 상한 — 리드당 수십 행까지 감안한 값. */
+/** 행동 로그(이벤트·다운로드)·로그인 신원 상한 — 리드당 수십 행까지 감안한 값. */
 const ACTIVITY_ROW_CAP = 20_000
 const CONTACT_LOG_ROW_CAP = 10_000
 
@@ -243,11 +243,17 @@ async function fetchPagedRows<T>(
 }
 
 /** 보조 신호 하나가 실패해도 보드 전체(정렬 포함)를 죽이지 않는다. */
-async function softly<T>(label: string, run: () => Promise<T>, fallback: T): Promise<T> {
+async function softly<T>(
+  label: string,
+  run: () => Promise<T>,
+  fallback: T,
+  onFailure?: () => void
+): Promise<T> {
   try {
     return await run()
   } catch (error) {
     console.warn(`[lead-activity] ${label} 집계 실패 — 해당 신호 없이 계속합니다:`, error)
+    onFailure?.()
     return fallback
   }
 }
@@ -258,25 +264,179 @@ function maxIso(a: string | null, b: string | null) {
   return a > b ? a : b
 }
 
+type SupabaseAdminClient = ReturnType<typeof createSupabaseAdminClient>
+
+const ACTIVITY_SUMMARY_RPC = "admin_lead_activity_summary"
+
+/**
+ * 활동 집계 창(일). RPC와 행 집계 폴백이 같은 값을 쓴다 — 두 경로가 다른 창을 보면
+ * 마이그레이션 적용 여부에 따라 보드 정렬이 달라지고, 그 차이는 화면에서 재현되지 않는다.
+ * 로그인 신원(user_profiles)은 활동이 아니라 사실이라 창을 걸지 않는다.
+ */
+const ACTIVITY_WINDOW_DAYS = 90
+const ACTIVITY_SUMMARY_TTL_MS = 45_000
+
+let activitySummaryCache: { at: number; value: Record<string, LeadActivityBadge> } | null = null
+let activitySummaryInFlight: Promise<Record<string, LeadActivityBadge>> | null = null
+// 무효화 시점 이전에 시작된 집계가 뒤늦게 캐시를 되채우는 걸 막는 세대 표식.
+let activitySummaryGeneration = 0
+
+/**
+ * 이 맵의 입력(연락 로그·다운로드·이벤트)을 쓰는 경로가 즉시 반영을 원하면 호출한다.
+ * lib/repositories/contact-logs.ts 의 연락 로그 쓰기가 이 경로로 들어온다.
+ */
+export function invalidateLeadsActivitySummary() {
+  activitySummaryGeneration += 1
+  activitySummaryCache = null
+  activitySummaryInFlight = null
+}
+
 /**
  * 리드 보드 전체에 한 번에 뿌릴 참여 신호 맵 — 정렬(자주·최근)의 입력이자 행 배지.
- * lead_id가 연결된 행만 모아 JS로 집계한다.
+ *
+ * CRM 홈 콜드에서는 우선순위 큐와 통합 스냅샷이 이 맵을 각각 독립으로 요구해 같은 집계가
+ * 두 번 돌았다. TTL 메모 + in-flight 공유로 그 두 번을 한 번으로 접는다. 값은 작은 집계
+ * 맵이고 호출부는 읽기만 하므로 복제 없이 그대로 공유한다.
  */
 export async function getLeadsActivitySummary(): Promise<Record<string, LeadActivityBadge>> {
+  const cached = activitySummaryCache
+  if (cached && Date.now() - cached.at < ACTIVITY_SUMMARY_TTL_MS) return cached.value
+  if (activitySummaryInFlight) return activitySummaryInFlight
+
+  const generation = activitySummaryGeneration
+  const request = loadLeadsActivitySummary()
+    .then(({ map, complete }) => {
+      // 신호 하나가 빠진 반쪽 집계는 캐시하지 않는다 — 일시적 실패가 45초간 굳는다.
+      // 집계 도중 쓰기가 들어온 경우도 마찬가지다(이미 낡은 값이라 반환만 한다).
+      if (complete && generation === activitySummaryGeneration) {
+        activitySummaryCache = { at: Date.now(), value: map }
+      }
+      return map
+    })
+    .finally(() => {
+      if (activitySummaryInFlight === request) activitySummaryInFlight = null
+    })
+  activitySummaryInFlight = request
+  return request
+}
+
+async function loadLeadsActivitySummary(): Promise<{
+  map: Record<string, LeadActivityBadge>
+  complete: boolean
+}> {
   const supabase = createSupabaseAdminClient()
+  const viaRpc = await loadActivitySummaryViaRpc(supabase)
+  if (viaRpc) return { map: viaRpc, complete: true }
+  return loadActivitySummaryFromRows(supabase)
+}
+
+interface RawBadge {
+  authenticated?: unknown
+  providers?: unknown
+  downloadCount?: unknown
+  eventCount?: unknown
+  contactLogCount?: unknown
+  lastActivityAt?: unknown
+  lastContactAt?: unknown
+}
+
+/** 마이그레이션 미적용 환경(배포 스큐) — 함수가 아직 없다. */
+function isMissingFunctionError(error: { code?: string | null; message?: string | null }) {
+  const code = error.code ?? ""
+  if (code === "PGRST202" || code === "42883") return true
+  const message = (error.message ?? "").toLowerCase()
+  return message.includes(ACTIVITY_SUMMARY_RPC) && /could not find|does not exist/.test(message)
+}
+
+function toIsoOrNull(value: unknown) {
+  return typeof value === "string" && value ? value : null
+}
+
+/**
+ * providers 순서 규약 — 사전순(코드포인트).
+ *
+ * 이 배열은 보드 배지 툴팁에서 그대로 join 되므로 순서가 곧 화면 문자열이다. RPC는
+ * array_agg(distinct ... order by provider), 폴백은 행 등장 순이라 그냥 두면 마이그
+ * 적용 여부에 따라 같은 리드가 "구글, 네이버"와 "네이버, 구글"로 갈렸다. 두 경로를
+ * 여기 하나로 모아 맞춘다. localeCompare 가 아니라 코드포인트 비교인 이유는 SQL 쪽
+ * 정렬(provider 는 소문자 ASCII 슬러그)과 규칙을 같게 두기 위해서다.
+ */
+function sortProviders(values: string[]) {
+  return values.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+}
+
+/**
+ * GROUP BY 한 번으로 끝나는 경로. 실패하면 null 을 돌려 행 집계 폴백으로 넘긴다 —
+ * 함수 부재(마이그 전)든 다른 오류든, 배지가 통째로 비는 것보다 느린 정답이 낫다.
+ */
+async function loadActivitySummaryViaRpc(
+  supabase: SupabaseAdminClient
+): Promise<Record<string, LeadActivityBadge> | null> {
+  const { data, error } = await supabase.rpc(ACTIVITY_SUMMARY_RPC, {
+    p_days: ACTIVITY_WINDOW_DAYS,
+  })
+
+  if (error) {
+    if (!isMissingFunctionError(error)) {
+      console.warn(`[lead-activity] ${ACTIVITY_SUMMARY_RPC} 실패 — 행 집계로 폴백합니다:`, error)
+    }
+    return null
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null
+
+  const map: Record<string, LeadActivityBadge> = {}
+  for (const [leadId, raw] of Object.entries(data as Record<string, unknown>)) {
+    if (!leadId || !raw || typeof raw !== "object") continue
+    const row = raw as RawBadge
+    map[leadId] = {
+      authenticated: row.authenticated === true,
+      providers: Array.isArray(row.providers)
+        ? sortProviders(
+            row.providers.filter((value): value is string => typeof value === "string" && !!value)
+          )
+        : [],
+      downloadCount: Number(row.downloadCount) || 0,
+      eventCount: Number(row.eventCount) || 0,
+      contactLogCount: Number(row.contactLogCount) || 0,
+      lastActivityAt: toIsoOrNull(row.lastActivityAt),
+      lastContactAt: toIsoOrNull(row.lastContactAt),
+    }
+  }
+  return map
+}
+
+/**
+ * RPC 미적용 환경 전용 폴백 — lead_id가 연결된 행만 모아 JS로 집계한다.
+ * 창(ACTIVITY_WINDOW_DAYS)은 RPC와 동일하게 걸어 두 경로의 산출물을 같게 유지한다.
+ */
+async function loadActivitySummaryFromRows(supabase: SupabaseAdminClient): Promise<{
+  map: Record<string, LeadActivityBadge>
+  complete: boolean
+}> {
+  const since = new Date(Date.now() - ACTIVITY_WINDOW_DAYS * 86_400_000).toISOString()
+  let complete = true
+  const markIncomplete = () => {
+    complete = false
+  }
 
   const [profiles, downloads, events, contactLogs] = await Promise.all([
+    // 이전에는 limit 없이 한 번만 select 해서 PostgREST 기본 상한(1000행)에 조용히 잘렸다.
+    // range 페이징은 정렬이 없으면 페이지 경계에서 행이 겹치거나 빠지므로 PK 순으로 고정한다.
     softly(
       "user_profiles",
-      async () => {
-        const { data, error } = await supabase
-          .from("user_profiles")
-          .select("lead_id, provider")
-          .not("lead_id", "is", null)
-        if (error) throw new Error(error.message)
-        return (data ?? []) as { lead_id: string; provider: string | null }[]
-      },
-      [] as { lead_id: string; provider: string | null }[]
+      async () =>
+        (await fetchPagedRows<{ lead_id: string; provider: string | null }>(
+          (from, to) =>
+            supabase
+              .from("user_profiles")
+              .select("lead_id, provider")
+              .not("lead_id", "is", null)
+              .order("id", { ascending: true })
+              .range(from, to),
+          ACTIVITY_ROW_CAP
+        )) ?? [],
+      [] as { lead_id: string; provider: string | null }[],
+      markIncomplete
     ),
     softly(
       "material_downloads",
@@ -287,11 +447,13 @@ export async function getLeadsActivitySummary(): Promise<Record<string, LeadActi
               .from("material_downloads")
               .select("lead_id, created_at")
               .not("lead_id", "is", null)
+              .gte("created_at", since)
               .order("created_at", { ascending: false })
               .range(from, to),
           ACTIVITY_ROW_CAP
         )) ?? [],
-      [] as { lead_id: string; created_at: string }[]
+      [] as { lead_id: string; created_at: string }[],
+      markIncomplete
     ),
     softly(
       "client_events",
@@ -302,11 +464,13 @@ export async function getLeadsActivitySummary(): Promise<Record<string, LeadActi
               .from("client_events")
               .select("lead_id, created_at")
               .not("lead_id", "is", null)
+              .gte("created_at", since)
               .order("created_at", { ascending: false })
               .range(from, to),
           ACTIVITY_ROW_CAP
         )) ?? [],
-      [] as { lead_id: string; created_at: string }[]
+      [] as { lead_id: string; created_at: string }[],
+      markIncomplete
     ),
     softly(
       "lead_contact_logs",
@@ -316,11 +480,13 @@ export async function getLeadsActivitySummary(): Promise<Record<string, LeadActi
             supabase
               .from("lead_contact_logs")
               .select("lead_id, contacted_at")
+              .gte("contacted_at", since)
               .order("contacted_at", { ascending: false })
               .range(from, to),
           CONTACT_LOG_ROW_CAP
         )) ?? [],
-      [] as { lead_id: string; contacted_at: string }[]
+      [] as { lead_id: string; contacted_at: string }[],
+      markIncomplete
     ),
   ])
 
@@ -361,5 +527,8 @@ export async function getLeadsActivitySummary(): Promise<Record<string, LeadActi
     entry.lastContactAt = maxIso(entry.lastContactAt, row.contacted_at)
   }
 
-  return map
+  // 행 등장 순으로 쌓인 providers 를 RPC 와 같은 사전순으로 맞춘다.
+  for (const entry of Object.values(map)) sortProviders(entry.providers)
+
+  return { map, complete }
 }

@@ -1,6 +1,6 @@
 # Docs Index
 
-기준 시점: 2026-08-07
+기준 시점: 2026-09-02
 문서 목적: 현재 저장소에서 무엇을 먼저 읽어야 하는지, 어떤 문서를 믿어야 하는지, 어떤 문서가 역사 기록인지 빠르게 구분한다.
 
 ## Admin OS 정본 우선순위
@@ -24,6 +24,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - **Admin OS 현재 운영 결정.** 관리자 역할·기능 권한, V2 정본, CRM 5작업면, 상태·삭제·공개 기준의 최우선 문서.
 - [active/admin-tab-restructure-2026-07-29.md](./active/admin-tab-restructure-2026-07-29.md)
   - **Admin UI 구조 정본.** 상시 탭과 기타 메뉴, 모바일 내비게이션, 경로별 화면 배치 기준.
+- [active/site-admin-separation-plan-2026-08-28.md](./active/site-admin-separation-plan-2026-08-28.md)
+  - **홈페이지·Admin 실행 경계 분리 계획.** 단일 저장소·DB를 유지하면서 레이아웃, 앱, Vercel, Cron·Webhook을 단계적으로 분리하는 실행 기준.
 - [active/cs-admin-console-ia-2026-07-27.md](./active/cs-admin-console-ia-2026-07-27.md)
   - **CS 영역 IA 정본.** CS 콘솔의 정보 구조, 작업 큐, 상세 화면 관계 기준.
 - [active/playbook/README.md](./active/playbook/README.md)
@@ -85,6 +87,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - 견적 작성/저장/발송/기록/응답/열람 기능축별 결손과 구현 우선순위
 - [active/software-checkout-revamp-plan.md](./active/software-checkout-revamp-plan.md)
   - /checkout 구독형/충전형 재정렬 실행안
+- [active/contact-showroom-store-develop-plan-2026-08-29.md](./active/contact-showroom-store-develop-plan-2026-08-29.md)
+  - **컨택·쇼룸 예약·구매 화면 실행 기준.** /contact 항목 재편, 신설 /showroom 예약(슬롯·스키마·가용성), /pricing 가격 페이지 승격과 가격 SSOT 단일화. 결제 활성화 이전 단계까지가 범위
 - [active/docs-center-db-design.md](./active/docs-center-db-design.md)
   - 공개 가이드/매뉴얼/도움말/문제 해결/업데이트 문서센터와 챗봇 지식 베이스 설계
 - [active/docs-center-content-guidelines.md](./active/docs-center-content-guidelines.md)
@@ -100,12 +104,24 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
 
 ## 3. Architecture
 
+- [active/site-admin-separation-plan-2026-08-28.md](./active/site-admin-separation-plan-2026-08-28.md)
+  - 홈페이지와 Admin의 레이아웃·앱·배포 경계, 공용 패키지, Cron·Webhook 이전 순서
+- [adr/ADR-009-site-admin-deployment-boundary.md](./adr/ADR-009-site-admin-deployment-boundary.md)
+  - 한 저장소·한 Supabase 정본을 유지하고 Site/Admin 실행·배포 경계를 단계적으로 분리하는 결정
+- [active/supabase-shared-db-consolidation-analysis-2026-09-02.md](./active/supabase-shared-db-consolidation-analysis-2026-09-02.md)
+  - Compass 마케팅 앱과 공유하는 Supabase DB의 동기화·스키마·거버넌스 감사, 도메인별 통폐합 판정과 4단계 로드맵
+- [active/admin-performance-plan-2026-09-02.md](./active/admin-performance-plan-2026-09-02.md)
+  - Admin 속도 가설 판정(인증 왕복·팬아웃·메모이제이션·플랜), 적용한 조치와 측정 방법, 운영 확인 목록
+- [active/admin-performance-round2-2026-09-04.md](./active/admin-performance-round2-2026-09-04.md)
+  - Admin 속도 2라운드: 탭 전환 RSC 왕복 제거(라우터 캐시·hover 전체 프리페치·시드 신선도)와 콜드 인스턴스 모듈 메모의 Data Cache 승격, 전후 실측
 - [active/architecture-schema-erd.md](./active/architecture-schema-erd.md)
   - 엔티티와 스키마 관점의 입구
 - [active/internal-crm-backend-operating-plan-2026-06-26.md](./active/internal-crm-backend-operating-plan-2026-06-26.md)
   - `crm_customer_events`, private recording storage, future `crm_tasks`/attachments/transcripts, 외부 CRM write request 경계 기준
 - [active/docs-center-db-design.md](./active/docs-center-db-design.md)
   - 문서센터 DB, RLS, SEO 노출 정책, AI 청크 파이프라인
+- [active/admin-settings-webhook-toggles-and-schedule-2026-09-07.md](./active/admin-settings-webhook-toggles-and-schedule-2026-09-07.md)
+  - 웹훅 활성 스위치·일일 보고 발송 시간·DB 적용 순서와 발송 없는 검증 기준
 - [active/notification-architecture-plan.md](./active/notification-architecture-plan.md)
   - 알림 아키텍처 계획
 - [active/partner-portal-front-back-contract.md](./active/partner-portal-front-back-contract.md)
@@ -114,6 +130,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - 챗봇 지식베이스, 질문 이벤트, FAQ 통계 스키마와 API 설계
 - [adr/README.md](./adr/README.md)
   - ADR 작성 규칙과 초기 백로그
+- [adr/ADR-010-operational-failure-containment.md](./adr/ADR-010-operational-failure-containment.md)
+  - **Cron 인증·복구 실행·Webhook·외부 의존성의 폭주와 유실 방지 결정.**
 
 ## 4. Domains
 
@@ -129,6 +147,11 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
 
 ## 5. Runbooks And Incidents
 
+- [active/operational-failure-handling-guidelines.md](./active/operational-failure-handling-guidelines.md)
+  - **운영 장애·Cron·Webhook 현재 지침.** 미응답 Webhook 폐기 상태, Cron 인증·백로그 상한,
+    비밀값, Supabase·외부 API·캐시·배포 장애의 공통 대응 기준.
+- [active/supabase-operational-recovery-hardening-plan-2026-09-01.md](./active/supabase-operational-recovery-hardening-plan-2026-09-01.md)
+  - **Supabase 운영 복구·하드닝 현재 실행 계획.** 2026-09-01 Admin 접속 장애의 인과관계, 즉시 복구, 실패 의미·캐시·권한·토큰 키·CRM 성능 개선의 독립 배포 순서와 종료 조건.
 - [active/cs-ops-standard-runbook-2026-08.md](./active/cs-ops-standard-runbook-2026-08.md)
   - CS 운영 데스크, 문서 보강 큐, 회귀 검수와 채널톡 실제 원인 검토 절차
 - [archive/repository-status-2026-06-08.md](./archive/repository-status-2026-06-08.md)

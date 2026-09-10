@@ -17,10 +17,19 @@ vi.mock("@/lib/admin-auth", () => ({
 
 vi.mock("@/lib/repositories/sales-ledger-imports", () => ({
   readRevDealsFromActiveImport,
+  SALES_LEDGER_IMPORTS_CACHE_TAG: "sales-ledger-imports",
 }))
 
 vi.mock("@/lib/repositories/branch-deals", () => ({
   listBranchRevDeals,
+  BRANCH_REV_DEALS_CACHE_TAG: "branch-rev-deals",
+}))
+
+// pipeline-rows.ts가 조립을 unstable_cache로 감싼다(2026-09-04) — 이 회귀 가드는 캐싱 자체가
+// 아니라 미러 폴백의 withRaw 인자 배선을 보므로, 실제 캐시 동작 없이 그대로 통과시킨다
+// (별도 회귀는 tests/branch/pipeline-rows-cache.test.ts가 고정).
+vi.mock("next/cache", () => ({
+  unstable_cache: (fn: (...args: unknown[]) => unknown) => fn,
 }))
 
 const MIRROR_DEAL = {

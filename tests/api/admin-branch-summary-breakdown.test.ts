@@ -100,6 +100,7 @@ function summaryRequest(query = "") {
 
 describe("GET /api/admin/branch/summary — dsh_breakdown", () => {
   afterEach(() => {
+    vi.useRealTimers()
     vi.clearAllMocks()
   })
 
@@ -129,6 +130,87 @@ describe("GET /api/admin/branch/summary — dsh_breakdown", () => {
     expect(json.deal_mix).toBeDefined()
     expect(json.data_sources).toBeDefined()
     expect("lastSync" in json).toBe(true)
+  })
+
+  it("projects only the next 8 combined timeline items for view=overview while keeping the default response intact", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-07-01T12:00:00Z"))
+    mockHappyPath()
+
+    const dealDates = ["2026-06-30", "2026-07-02", "2026-07-05", "2026-07-08", "2026-07-11", "2026-07-14"]
+    readRevDealsPreferActiveWithSource.mockResolvedValue({
+      deals: dealDates.map((date, index) => ({
+        id: `deal-${index}`,
+        sheet_row: index + 2,
+        customer_name: `고객 ${index}`,
+        branch_contact: null,
+        team: "BD",
+        manager: null,
+        deal_type: null,
+        status: null,
+        first_payment: date,
+        product_version: null,
+        region: null,
+        importance: null,
+        note: null,
+        contract_target: 1000 + index,
+        monthly_payments: {},
+        monthly_red: {},
+        raw: {},
+        synced_at: "2026-07-01T00:00:00Z",
+      })),
+      source: { kind: "mirror", asOf: null },
+    })
+    listCachedPublicEvents.mockResolvedValue(
+      ["2026-07-03", "2026-07-06", "2026-07-09", "2026-07-12"].map((date, index) => ({
+        startsAt: `${date}T09:00:00Z`,
+        title: `행사 ${index}`,
+        location: `지역 ${index}`,
+      })),
+    )
+    summarizeCampaigns.mockResolvedValue({
+      count_30d: 4,
+      avg_open_pct: 25,
+      recent: ["2026-07-04", "2026-07-07", "2026-07-10", "2026-07-13"].map((date, index) => ({
+        id: `campaign-${index}`,
+        subject: `캠페인 ${index}`,
+        sentAt: `${date}T08:00:00Z`,
+        recipientCount: 10,
+        openCount: 2,
+        openPct: 20,
+      })),
+    })
+
+    const { GET } = await import("@/app/api/admin/branch/summary/route")
+    const fullResponse = await GET(summaryRequest())
+    const overviewResponse = await GET(summaryRequest("?view=overview"))
+    const full = await fullResponse.json()
+    const overview = await overviewResponse.json()
+
+    expect(full.monthly_series.deals).toHaveLength(6)
+    expect(full.monthly_series.events).toHaveLength(4)
+    expect(full.monthly_series.campaigns).toHaveLength(4)
+    expect(overview.monthly_series.deals.map((row: { date: string }) => row.date)).toEqual([
+      "2026-07-02", "2026-07-05", "2026-07-08",
+    ])
+    expect(overview.monthly_series.events.map((row: { date: string }) => row.date)).toEqual([
+      "2026-07-03", "2026-07-06", "2026-07-09",
+    ])
+    expect(overview.monthly_series.campaigns.map((row: { date: string }) => row.date)).toEqual([
+      "2026-07-04T08:00:00Z", "2026-07-07T08:00:00Z",
+    ])
+    expect(
+      overview.monthly_series.deals.length
+      + overview.monthly_series.events.length
+      + overview.monthly_series.campaigns.length,
+    ).toBe(8)
+
+    // Projection은 전송량만 줄이고 신선도·오류·출처와 KPI 계약은 바꾸지 않는다.
+    expect(overview.data_sources).toEqual(full.data_sources)
+    expect(overview.lastSync).toBe(full.lastSync)
+    expect(overview.lastError).toBe(full.lastError)
+    expect(overview.revenue).toEqual(full.revenue)
+    expect(JSON.stringify(overview).length).toBeLessThan(JSON.stringify(full).length)
   })
 
   it("exposes the parser breakdown rows as dsh_breakdown when breakdown=1", async () => {
