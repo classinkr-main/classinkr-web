@@ -414,6 +414,27 @@ create index if not exists idx_leads_email_lower on public.leads (lower(email)) 
 | **P3** | | | | |
 | 30 | `crm.ad_plans` 브리지 뷰, `lead_demos ↔ public_events` 연결키, 정책 `TO` 절 보강, `automation` 크론 N+1, Compass BD 액션 게이트, `LeadDetailBody.tsx` 분해 | 각자 | S~M | §4 도메인 6·8, R16, R17, §6.5 |
 
+### 9.2.1 Admin 소유 항목 재검증 (2026-09-13)
+
+§9.2 큐는 2026-09-02 시점 스냅샷이다. 그 뒤 일부가 소진됐으므로 **큐를 그대로 백로그로 쓰면 중복 작업이 난다.** 아래는 Admin 소유 항목만 코드로 다시 확인한 결과다. Compass 소유 항목은 이 저장소에서 판정할 수 없어 제외했다.
+
+| # | 판정 | 근거 |
+|---|---|---|
+| 7 | **완료** | `lib/db/schema-contract.ts`에 브리지 뷰 7장 프로브 등재, 2026-08-28 마이그레이션도 등재됨 |
+| 12 | **완료** | `supabase/migrations/20260902_leads_dedupe_and_admin_hot_path_indexes.sql` |
+| 19 | **절반** | `lib/repositories/branch-sync.ts`에 `truncate` 없음(`delete` 전환 완료). 부분 유니크 인덱스는 없다 — `branch_sync_runs`의 인덱스는 `branch_sync_runs_recent_idx` 하나뿐(`supabase/migrations/20260427_branch_dashboard.sql`)이고 코드는 여전히 `status = "running"` 조회 기반 check-then-act다 |
+| 13 | 미착수 | `getCompassRevenueCompare`(`lib/admin-crm-revenue-sheet.ts`)는 기존 조회 함수다. 월별 로그·알림 승격 배선 없음 |
+| 14 | 미착수 | `team_directory_v`가 코드·마이그레이션 어디에도 없다 |
+| 15 | 미착수 | `lib/compass/overlay.ts`는 `neocrm_registered_at`을 읽어 표시만 한다. `crm_source_links` upsert 어댑터 없음 |
+| 17 | 미착수 | `docs/README.md` 색인에 브리지 정본 문서가 없다(이 분석 문서만 있다) |
+| 21 | 미착수 | `sync-meta-insights` 크론이 `vercel.json`에 남아 있다 |
+| 25 | 미착수 | `ALTER DEFAULT PRIVILEGES` 0건 |
+| 28 | **전제 불성립** | 아래 참조 |
+| 29 | 미착수 | `leads`의 anon INSERT에 CHECK 제약 없음 |
+| 5(Admin분) | 저장소 밖 | `push_neocrm.mjs`는 Compass 소유다 |
+
+**28번의 전제가 틀렸다.** "새 마이그레이션마다 프로브를 PR 체크로 강제"라고 적었으나, 이 저장소에는 **CI 워크플로가 하나도 없다**(`.github/` 디렉터리 자체가 없다). `check:db`는 `package.json`의 스크립트로만 존재하고 자동 실행 지점이 없어, 지금은 모든 게이트가 사람이 로컬에서 돌리는 것에만 의존한다. 28번은 프로브 추가 작업이 아니라 **CI 도입이 선행 과제**다. 이 항목은 §9.2 큐에 없던 것이므로 별건으로 다룬다.
+
 ### 9.3 통폐합 로드맵
 
 **1단계 위생·관측 (2주, P0 전부).** 아무 데이터도 옮기지 않는다. 무엇이 갈라지고 있는지를 먼저 숫자로 만든다. 산출물은 매출 diff·Meta 총액·NeoCRM 대사 수치 리포트 1장이다.

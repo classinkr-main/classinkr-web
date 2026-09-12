@@ -325,3 +325,19 @@ npm run build
 - External CRM 목표가 안정 트래픽에서 충족됐거나 측정 근거와 함께 후속 백로그로 분리됐다.
 - Advisor 각 항목에 검증된 keep/drop·fix/defer 결정이 있다.
 - 전체 품질 게이트와 Production smoke test가 통과했다.
+
+## 10. 진척 재검증 (2026-09-13)
+
+`lib`·`app`·`supabase` 전 범위를 코드로 확인한 결과다. §9 종료 조건은 아직 충족되지 않았으므로 이 문서는 `docs/active/`에 남는다.
+
+| PR | 판정 | 근거 |
+|---|---|---|
+| Wave 0 | 미확인 | 운영 기록이 이 저장소에 없다 |
+| PR 1 — 의존성 실패 분류 | **미구현** | `PGRST303`·`classifySupabase`·`SupabaseFailureKind` 전부 0건. `AGENTS.md`에 규칙으로는 성문화돼 있으나 실행 코드가 없다 |
+| PR 2 — 폴백·캐시·쓰기 진실성 | 부분 | 규칙은 성문화됨. 구현 범위는 화면별 확인 필요 |
+| PR 3 — DB 권한 하드닝 | **완료** | `supabase/migrations/20260902_security_definer_access_hardening.sql` |
+| PR 4 — 토큰 키 계약과 readiness | 미착수 | `SECURITY_TOKEN_SECRET`은 `lib/server/security-tokens.ts`에만 있고 전용 readiness 경로가 없다 |
+| PR 5 — 이벤트 outbox | **미구현** | 저장소 전체에 `outbox` 0건 |
+| PR 6 — External CRM·Advisor 성능 | 미착수 | 7일 증분 관측이 선행 조건 |
+
+**주의.** PR 1과 PR 5는 규칙 문서에 적혀 있다는 이유로 완료로 오인되기 쉽다. 두 항목 모두 실행 코드가 없다.
