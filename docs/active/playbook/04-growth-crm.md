@@ -90,7 +90,8 @@ npx vitest run tests/crm
 
 ## 5. 먼저 읽을 것
 
-0. CRM 탭 작업이면 [CRM 탭 품질 감사(2026-08-06)](../crm-tab-quality-audit-2026-08-06.md) —
+0. CRM 탭 작업이면 [CRM 탭 디벨롭 기획(2026-09-12)](../crm-tab-develop-plan-2026-09-12.md)의 개선 후보 ID와 Wave 순서를 먼저 확인하고,
+   [CRM 탭 품질 감사(2026-08-06)](../crm-tab-quality-audit-2026-08-06.md) —
    항목별 채점, 고친 결함, 90선에 못 미친 채 남긴 항목(큐 스코어링 비용, 필터 URL 소유권)
 1. `lib/server/lead-capture.ts`
 2. `lib/consent/consent.ts`, `lib/analytics.ts`, `app/api/track/event/route.ts`

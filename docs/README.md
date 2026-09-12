@@ -58,6 +58,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - 하드웨어 운영 허브 문서의 상위 인덱스
 - [active/erp-blueprint-2026-06-22.md](./active/erp-blueprint-2026-06-22.md)
   - 어드민 → 지사 운영 OS(ERP) 청사진 & 실행 로드맵(Account 360 스파인·귀속·노션 캘린더 라이브 연동·거버넌스 결정)
+- [active/crm-tab-develop-plan-2026-09-12.md](./active/crm-tab-develop-plan-2026-09-12.md)
+  - **CRM 탭 실행 로드맵.** 5작업면·돈흐름·데이터층의 현황 진단, 정책-코드 불일치 총괄, 개선 후보 ID(H/C/R/D)와 4 Wave 실행 순서, 사용자 결정 항목, 문서 정리 제안
 - [active/internal-crm-backend-operating-plan-2026-06-26.md](./active/internal-crm-backend-operating-plan-2026-06-26.md)
   - 자체 CRM 백엔드/운영 기준. 시트·OCRM·HQ CRM은 참고/동기화 원천으로 두고, Admin CRM의 고객 스파인·회의록·녹음·다음 액션 구조를 정의
 - [active/internal-cs-ai-bridge.md](./active/internal-cs-ai-bridge.md)
