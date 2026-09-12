@@ -17,6 +17,7 @@ import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import { CRM_CACHE_SWR_MS } from "@/lib/crm/client-cache"
 import type { CrmPriorityBucket, CrmPriorityItem, CrmPriorityLane } from "@/lib/crm/priority"
 import { TODAY_CALL_SLOTS, pickTodayCalls, type TodayCall, type TodayCallSlotKey } from "@/lib/crm/today-calls"
+import { kstDayStart } from "@/lib/crm/week-ahead"
 import { buildOwnerSelectOptions, useCrmOwners } from "./useCrmOwners"
 
 // 홈 우선순위 패널 = "오늘 전화할 N건" 카드. 숫자 타일·레인 탭·시점 탭을 걷어내고
@@ -114,15 +115,14 @@ function leadIdFromPriorityItem(item: CrmPriorityItem) {
   return item.source === "lead" && item.id.startsWith("lead:") ? item.id.slice("lead:".length) : null
 }
 
-function taskIdFromPriorityItem(item: CrmPriorityItem) {
-  return item.source === "task" && item.id.startsWith("task:") ? item.id.slice("task:".length) : null
-}
+const DAY_MS = 24 * 60 * 60 * 1000
+const KST_MORNING_OFFSET_MS = 9 * 60 * 60 * 1000
 
-function tomorrowMorningIso() {
-  const next = new Date()
-  next.setDate(next.getDate() + 1)
-  next.setHours(9, 0, 0, 0)
-  return next.toISOString()
+// 미루기 기본값: 내일 오전 9시(KST). 브라우저 로컬 시각이 아니라 서버 할 일 미루기
+// (lib/repositories/crm-tasks.ts defaultSnoozeUntil)와 같은 KST 규칙으로 고정한다 —
+// kstDayStart(내일 00:00 KST) + 9시간 = 내일 09:00 KST = 내일 00:00 UTC.
+function tomorrowMorningIso(nowMs = Date.now()) {
+  return new Date(kstDayStart(nowMs) + DAY_MS + KST_MORNING_OFFSET_MS).toISOString()
 }
 
 export default function CrmPriorityQueuePanel({
@@ -311,34 +311,6 @@ export default function CrmPriorityQueuePanel({
     [leadContactDraft, load]
   )
 
-  const handleTaskAction = useCallback(
-    async (item: CrmPriorityItem, action: "done" | "tomorrow") => {
-      const taskId = taskIdFromPriorityItem(item)
-      if (!taskId) return
-
-      setActingId(`${item.id}:${action}`)
-      setActionMessage(null)
-      setError(null)
-      try {
-        await adminFetchJsonCached<{ task: unknown }>(`/api/admin/crm/tasks/${encodeURIComponent(taskId)}`, {
-          method: "PATCH",
-          body: JSON.stringify(
-            action === "done"
-              ? { action: "complete", outcome: "우선순위 큐에서 완료 처리" }
-              : { action: "snooze" }
-          ),
-        })
-        setActionMessage(action === "done" ? "할 일을 완료 처리했습니다." : "할 일을 내일 오전으로 미뤘습니다.")
-        await load({ force: true })
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "할 일 처리에 실패했습니다.")
-      } finally {
-        setActingId(null)
-      }
-    },
-    [load]
-  )
-
   return (
     <section className={embedded ? "" : `rounded-xl border border-[#e8e8e4] bg-white p-4 ${compact ? "" : "mb-4"}`}>
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -492,6 +464,8 @@ export default function CrmPriorityQueuePanel({
                     <p className="text-[11px] text-[#1a1a1a]/35">{formatDate(item.dueAt ?? item.updatedAt)}</p>
                   </div>
                   <div className="flex flex-wrap items-start gap-1.5 lg:justify-end">
+                    {/* 큐는 source=customer(리드 + ClassIn 고객)로만 조회한다 — task 항목은 오지 않으므로
+                        할 일 액션 분기는 두지 않는다(할 일은 CrmWeekAheadPanel이 담당). */}
                     {item.source === "lead" ? (
                       <>
                         <button
@@ -533,27 +507,6 @@ export default function CrmPriorityQueuePanel({
                         >
                           <XCircle className="h-3 w-3" />
                           종료
-                        </button>
-                      </>
-                    ) : item.source === "task" ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => void handleTaskAction(item, "done")}
-                          disabled={actingId === `${item.id}:done` || actingId === `${item.id}:tomorrow`}
-                          className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[11px] font-semibold text-[#084734] transition-colors hover:border-[#084734] disabled:opacity-50"
-                        >
-                          <CheckCircle2 className="h-3 w-3" />
-                          완료
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleTaskAction(item, "tomorrow")}
-                          disabled={actingId === `${item.id}:done` || actingId === `${item.id}:tomorrow`}
-                          className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[11px] font-semibold text-[#1a1a1a]/60 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110] disabled:opacity-50"
-                        >
-                          <Clock3 className="h-3 w-3" />
-                          내일로
                         </button>
                       </>
                     ) : null}

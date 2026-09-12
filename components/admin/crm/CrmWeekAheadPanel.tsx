@@ -12,10 +12,12 @@ import {
   type WeekAheadBucket,
 } from "@/lib/crm/week-ahead"
 import type { CrmTaskRecord, ListCrmTasksResult } from "@/lib/repositories/crm-tasks"
-import { useCrmOwners } from "./useCrmOwners"
+import { buildOwnerSelectOptions, useCrmOwners } from "./useCrmOwners"
 
 const TTL_MS = 90_000
 const CURRENT_OWNER_VALUE = "__me"
+// 한 번에 불러오는 활성 할 일 상한(서버 최대 200). 넘치는 건수는 summary.total로 화면에 알린다.
+const FETCH_LIMIT = 100
 // 담당자 해석 관찰용 — useCrmOwners와 동일 URL·cacheKey·TTL(인플라이트 공유, 추가 네트워크 없음).
 const OWNERS_URL = "/api/admin/crm/owners"
 const OWNERS_TTL_MS = 120_000
@@ -58,7 +60,11 @@ export default function CrmWeekAheadPanel({
   refreshKey?: number
 }) {
   const [expanded, setExpanded] = useState(false)
-  const { currentOwner } = useCrmOwners()
+  const { owners: crmOwners, currentOwner } = useCrmOwners()
+  // 홈 큐(CrmPriorityQueuePanel)와 같은 디렉터리 기반 담당자 목록 — 할 일 응답에는 담당자 집계가
+  // 없으므로 건수 없이 이름·역할만 쓴다. 값(ownerKey)은 /api/admin/crm/tasks?owner= 가 그대로
+  // owner_key 필터로 받는다.
+  const ownerOptions = useMemo(() => buildOwnerSelectOptions(undefined, crmOwners), [crmOwners])
   // 담당자(__me) 해석 확정 게이트(감사 #9) — 해석 전 전체(owner 없음) 요청 + 해석 후 __me
   // 재요청의 이중 fetch를 제거한다. useCrmOwners는 실패 시에도 currentOwner=null만 유지해
   // 로딩/실패를 구분할 수 없으므로, 같은 cacheKey의 동일 요청을 직접 관찰해(성공·실패 무관)
@@ -92,7 +98,7 @@ export default function CrmWeekAheadPanel({
   const [actingId, setActingId] = useState<string | null>(null)
 
   const url = useMemo(() => {
-    const params = new URLSearchParams({ status: "active", limit: "100" })
+    const params = new URLSearchParams({ status: "active", limit: String(FETCH_LIMIT) })
     if (owner) params.set("owner", owner)
     return `/api/admin/crm/tasks?${params.toString()}`
   }, [owner])
@@ -207,6 +213,12 @@ export default function CrmWeekAheadPanel({
             >
               {currentOwner ? <option value={CURRENT_OWNER_VALUE}>내 담당</option> : null}
               <option value="">전체</option>
+              {ownerOptions.map((option) => (
+                <option key={option.ownerName} value={option.ownerName}>
+                  {option.label}
+                  {option.teamRoleLabel ? ` · ${option.teamRoleLabel}` : ""}
+                </option>
+              ))}
             </select>
           </label>
           <button
@@ -299,6 +311,14 @@ export default function CrmWeekAheadPanel({
                 ? `접기 · 상위 ${previewRows}건만`
                 : `+${budgeted.hiddenCount}건 더 보기 · 전체 ${budgeted.totalCount}건`}
             </button>
+          ) : null}
+
+          {/* 서버에서 잘린 건수 — 불러온 행보다 활성 할 일 총량(summary.total)이 크면 숨기지 않고 알린다. */}
+          {data && data.summary.total > data.rows.length ? (
+            <p className="text-[11px] text-[#615D59]">
+              이 밖에 {(data.summary.total - data.rows.length).toLocaleString("ko-KR")}건 더 있음 · 활성 할 일{" "}
+              {data.summary.total.toLocaleString("ko-KR")}건 중 상위 {data.rows.length.toLocaleString("ko-KR")}건만 표시
+            </p>
           ) : null}
         </div>
       )}

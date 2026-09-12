@@ -127,7 +127,10 @@ export async function getCrmManagerReport(
     supabase.from("crm_tasks").select("owner_key,owner_name_snapshot,status,due_at").in("status", ["open", "snoozed"]).limit(5000),
     supabase.from("crm_tasks").select("owner_key,owner_name_snapshot,status,due_at").eq("status", "done").gte("completed_at", windowStartIso).limit(5000),
     supabase.from("crm_deals").select("owner_key,owner_name_snapshot,next_task_id").eq("status", "open").limit(2000),
-    getCrmPriorityQueue({ limit: 40, now }),
+    // 의도적으로 source="all" — attentionFromQueueItem이 task 항목을 overdue_task(지연 할 일)로
+    // 매핑하므로 할 일을 빼면 매니저 리포트의 지연 항목이 사라진다. 홈 큐·인사이트의
+    // source="customer" 통일(H2)에서 제외한 유일한 호출자다.
+    getCrmPriorityQueue({ limit: 40, now, source: "all" }),
   ])
 
   const owners = new Map<string, ManagerOwnerRow>()

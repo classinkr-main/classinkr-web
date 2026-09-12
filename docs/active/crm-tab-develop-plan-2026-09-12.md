@@ -31,7 +31,7 @@ CRM 탭은 5작업면 IA, 우선순위 큐, 고객 360, 입력함, 매칭 인박
 ### 1.3 데이터 계층
 
 - 우선순위 큐: 소스 수집만 Data Cache 60s로 승격됐고(2026-09-04), 점수 계산·정렬·필터는 매 요청 메모리에서 재실행. `admin_crm_overview_snapshots` 마이그레이션은 있으나 코드 참조 0건.
-- 인사이트 "우선 연락"은 `source:"all"`(task 포함)로 큐를 호출해 홈 큐(task 제외)와 숫자가 다르다(`lib/crm/crm-insights.ts:86`).
+- 인사이트 "우선 연락"은 `source:"all"`(task 포함)로 큐를 호출해 홈 큐(task 제외)와 숫자가 다르다(`lib/repositories/crm-insights.ts:86`).
 - 3라운드 속도 계획에서 미승격으로 남은 CRM 경로: `crm/tasks`(3.3s 실측), `customers-neo`(60s 모듈 메모), `region-map`(단일 `.limit(5000)`), `account-master`.
 - 테스트: revenue 14테이블 조립·rev-sheet 워크스페이스·partners-data·write-requests·tasks 라우트에 테스트 0건. `crm-role-matrix.test.ts`는 24개 파일만 고정.
 
@@ -75,7 +75,7 @@ CRM 탭은 5작업면 IA, 우선순위 큐, 고객 360, 입력함, 매칭 인박
 | ID | 제목 | P | 규모 | 스키마 | 관련 파일 |
 |---|---|---|---|---|---|
 | H1 | 큐 `force` 서버 관통 (라우트가 `force`를 읽어 캐시 우회) | P0 | S | X | `app/api/admin/crm/home/priority-queue/route.ts`, `lib/repositories/crm-priority-queue.ts` |
-| H2 | 죽은 task 분기 제거 + 인사이트·매니저리포트 큐 호출을 `source:"customer"`로 통일 | P0 | S | X | `CrmPriorityQueuePanel.tsx`, `lib/crm/crm-insights.ts`, `crm-manager-report.ts` |
+| H2 | 죽은 task 분기 제거 + 인사이트·매니저리포트 큐 호출을 `source:"customer"`로 통일 | P0 | S | X | `CrmPriorityQueuePanel.tsx`, `lib/repositories/crm-insights.ts`, `lib/repositories/crm-manager-report.ts` |
 | H3 | 주간 패널 `summary.total` 노출 + 담당자 전체 옵션 | P0 | S | X | `CrmWeekAheadPanel.tsx` |
 | H4 | owner 필터 `?owner=` URL 반영, 큐·주간 담당자 선택 공유 | P3 | S | X | 두 패널, `CrmHomeClient.tsx` |
 | H5 | 쿼터·슬롯 분류를 문자열 매칭에서 `action` enum 기반으로 | P2 | M | X | `lib/crm/today-calls.ts`, `priority.ts` |

@@ -83,7 +83,9 @@ function buildCoverageHealth(coverage: {
 export async function getCrmInsights(): Promise<CrmInsights> {
   const generatedAt = new Date().toISOString()
   const [priorityResult, coverageResult, overviewResult] = await Promise.allSettled([
-    getCrmPriorityQueue({ limit: 12 }),
+    // 홈 "오늘 전화" 큐(CrmPriorityQueuePanel)와 같은 source="customer"(리드 + ClassIn 고객)로
+    // 센다 — 기본 "all"이면 할 일까지 섞여 "우선 연락" 숫자가 홈 큐와 달라진다(H2).
+    getCrmPriorityQueue({ limit: 12, source: "customer" }),
     getCrmSourceLinkCoverage(),
     getAdminCrmOverview(),
   ])

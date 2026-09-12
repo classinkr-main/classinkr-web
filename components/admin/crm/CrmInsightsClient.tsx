@@ -5,7 +5,7 @@ import Link from "next/link"
 import { AlertTriangle, CalendarClock, ChevronDown, ExternalLink, FileText, RefreshCw, ShieldCheck, TrendingUp } from "lucide-react"
 
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
-import { CRM_CACHE_SWR_MS } from "@/lib/crm/client-cache"
+import { CRM_CACHE_SWR_MS, CRM_CACHE_TTL_MS } from "@/lib/crm/client-cache"
 import type {
   CrmInsightListItem,
   CrmInsights,
@@ -161,10 +161,12 @@ export default function CrmInsightsClient() {
   // 그대로였다(빈 의존성 배열이라 effect가 다시 돌지 않는다). refreshKey로 함께 강제 재조회한다.
   useEffect(() => {
     let alive = true
+    // 캐시 창은 홈(CrmHomeClient)과 같은 SSOT(lib/crm/client-cache.ts)를 쓴다 — 같은 cacheKey를
+    // 다른 TTL/SWR로 부르면 한 엔트리의 keepUntil이 화면마다 달라진다(H8).
     adminFetchJsonCached<{ leads: LeadFunnelKpis }>("/api/admin/crm/action-kpis", undefined, {
       cacheKey: "/api/admin/crm/action-kpis",
-      ttlMs: 120_000,
-      staleWhileRevalidateMs: 300_000,
+      ttlMs: CRM_CACHE_TTL_MS,
+      staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
       force: secondaryRefreshKey > 0,
     })
       .then((d) => {
@@ -219,227 +221,227 @@ export default function CrmInsightsClient() {
   const businessUnavailable = hasUnavailableSource(data, "business")
 
   return (
-    <div className="min-h-screen bg-[#F6F5F4] px-4 py-5 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl">
-        <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">CRM 인사이트</h1>
-            <p className="mt-1 text-[13px] text-[#1a1a1a]/42">
-              리스크·기회를 운영 액션으로 묶어 봅니다.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              void load({ force: true })
-              setSecondaryRefreshKey((value) => value + 1)
-            }}
-            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] lg:w-auto"
-            disabled={refreshing}
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-            새로고침
-          </button>
+    // 바깥 패딩·배경은 app/admin/crm/layout.tsx가 책임진다 — 형제 클라이언트(홈·통합 고객)와
+    // 같은 래퍼만 두어 이중 패딩을 없앤다(H8).
+    <div className="mx-auto max-w-7xl">
+      <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">CRM 인사이트</h1>
+          <p className="mt-1 text-[13px] text-[#1a1a1a]/42">
+            리스크·기회를 운영 액션으로 묶어 봅니다.
+          </p>
         </div>
-
         <button
           type="button"
-          onClick={() => setReportOpen((value) => !value)}
-          className="mb-4 flex w-full items-center justify-between gap-2 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-2.5 transition-colors hover:bg-[#fafaf8]"
-          aria-expanded={reportOpen}
+          onClick={() => {
+            void load({ force: true })
+            setSecondaryRefreshKey((value) => value + 1)
+          }}
+          className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] lg:w-auto"
+          disabled={refreshing}
         >
-          <span className="flex items-center gap-2 text-[13px] font-bold text-[#111110]">
-            <FileText className="h-4 w-4 text-[#1a1a1a]/40" />
-            지사장 주간 점검 · 리포트
-          </span>
-          <ChevronDown
-            className={`h-4 w-4 shrink-0 text-[#1a1a1a]/35 transition-transform ${reportOpen ? "" : "-rotate-90"}`}
-          />
+          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+          새로고침
         </button>
-        {reportOpen ? <CrmManagerReportPanel /> : null}
+      </div>
 
-        {funnelStages.length > 0 && funnelStages[0].count > 0 ? (
-          <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-[15px] font-bold text-[#111110]">전환 퍼널 · 리드 파이프라인</h2>
-              <span className="text-[11px] text-[#1a1a1a]/35">신규 → 응대 → 전환</span>
-            </div>
-            <div className="space-y-2">
-              {funnelStages.map((stage, i) => {
-                const top = funnelStages[0].count || 1
-                const pctOfTotal = stage.count / top
-                const stepRate =
-                  i === 0 ? null : funnelStages[i - 1].count > 0 ? stage.count / funnelStages[i - 1].count : 0
-                return (
-                  <Link
-                    key={stage.label}
-                    href={stage.href}
-                    className="-mx-1 flex items-center gap-3 rounded-lg px-1 py-0.5 transition-colors hover:bg-[#fafaf8]"
-                  >
-                    <span className="w-14 shrink-0 text-[12px] font-semibold text-[#1a1a1a]/55">{stage.label}</span>
-                    <div className="h-7 flex-1 overflow-hidden rounded-lg bg-[#fafaf8]">
-                      <div
-                        className="flex h-full items-center rounded-lg px-2 text-[12px] font-bold text-white"
-                        style={{ width: `${Math.max(8, pctOfTotal * 100)}%`, backgroundColor: stage.color }}
-                      >
-                        {stage.count.toLocaleString("ko-KR")}
-                      </div>
-                    </div>
-                    <span className="w-24 shrink-0 text-right text-[11px] tabular-nums text-[#1a1a1a]/45">
-                      {Math.round(pctOfTotal * 100)}%
-                      {stepRate != null ? ` · 전환 ${Math.round(stepRate * 100)}%` : ""}
-                    </span>
-                  </Link>
-                )
-              })}
-            </div>
-            <p className="mt-2 text-[10px] text-[#1a1a1a]/35">리드 status 기준 · 신규 응대율과 전환율을 한눈에</p>
-          </section>
-        ) : null}
+      <button
+        type="button"
+        onClick={() => setReportOpen((value) => !value)}
+        className="mb-4 flex w-full items-center justify-between gap-2 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-2.5 transition-colors hover:bg-[#fafaf8]"
+        aria-expanded={reportOpen}
+      >
+        <span className="flex items-center gap-2 text-[13px] font-bold text-[#111110]">
+          <FileText className="h-4 w-4 text-[#1a1a1a]/40" />
+          지사장 주간 점검 · 리포트
+        </span>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-[#1a1a1a]/35 transition-transform ${reportOpen ? "" : "-rotate-90"}`}
+        />
+      </button>
+      {reportOpen ? <CrmManagerReportPanel /> : null}
 
-        {channels.length > 0 ? (
-          <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-[15px] font-bold text-[#111110]">채널별 전환율</h2>
-              <span className="text-[11px] text-[#1a1a1a]/35">유입 경로 · 전환 / 전체</span>
-            </div>
-            <div className="space-y-2">
-              {channels.map((ch) => (
+      {funnelStages.length > 0 && funnelStages[0].count > 0 ? (
+        <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-[15px] font-bold text-[#111110]">전환 퍼널 · 리드 파이프라인</h2>
+            <span className="text-[11px] text-[#1a1a1a]/35">신규 → 응대 → 전환</span>
+          </div>
+          <div className="space-y-2">
+            {funnelStages.map((stage, i) => {
+              const top = funnelStages[0].count || 1
+              const pctOfTotal = stage.count / top
+              const stepRate =
+                i === 0 ? null : funnelStages[i - 1].count > 0 ? stage.count / funnelStages[i - 1].count : 0
+              return (
                 <Link
-                  key={ch.source}
-                  href={`/admin/crm/customers/leads?source=${encodeURIComponent(ch.source)}`}
-                  className="-mx-1 flex items-center gap-3 rounded-md px-1 py-0.5 transition-colors hover:bg-[#fafaf8]"
+                  key={stage.label}
+                  href={stage.href}
+                  className="-mx-1 flex items-center gap-3 rounded-lg px-1 py-0.5 transition-colors hover:bg-[#fafaf8]"
                 >
-                  <span className="w-28 shrink-0 truncate text-[12px] font-semibold text-[#111110]" title={ch.source}>
-                    {ch.source}
-                  </span>
-                  <div className="h-6 flex-1 overflow-hidden rounded-md bg-[#fafaf8]">
+                  <span className="w-14 shrink-0 text-[12px] font-semibold text-[#1a1a1a]/55">{stage.label}</span>
+                  <div className="h-7 flex-1 overflow-hidden rounded-lg bg-[#fafaf8]">
                     <div
-                      className="h-full rounded-md bg-[#084734]"
-                      style={{ width: `${Math.max(2, ch.rate * 100)}%` }}
-                    />
+                      className="flex h-full items-center rounded-lg px-2 text-[12px] font-bold text-white"
+                      style={{ width: `${Math.max(8, pctOfTotal * 100)}%`, backgroundColor: stage.color }}
+                    >
+                      {stage.count.toLocaleString("ko-KR")}
+                    </div>
                   </div>
-                  <span className="w-28 shrink-0 text-right text-[11px] tabular-nums text-[#1a1a1a]/55">
-                    <b className="text-[#084734]">{Math.round(ch.rate * 100)}%</b> ·{" "}
-                    {ch.converted.toLocaleString("ko-KR")}/{ch.total.toLocaleString("ko-KR")}
+                  <span className="w-24 shrink-0 text-right text-[11px] tabular-nums text-[#1a1a1a]/45">
+                    {Math.round(pctOfTotal * 100)}%
+                    {stepRate != null ? ` · 전환 ${Math.round(stepRate * 100)}%` : ""}
                   </span>
                 </Link>
-              ))}
-            </div>
-            <p className="mt-2 text-[10px] text-[#1a1a1a]/35">전환율 = 전환 리드 / 전체 리드(채널별) · 건수 상위 8개</p>
-          </section>
-        ) : null}
-
-        {error ? (
-          <div className="mb-4 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] font-medium text-[#B85C33]">
-            {error}
+              )
+            })}
           </div>
-        ) : null}
-        {!error && partialWarnings.length > 0 ? (
-          <div className="mb-4 rounded-xl border border-[#F1E2B8] bg-[#FFF8E6] px-3 py-2 text-[12px] font-medium text-[#8D6C1F]">
-            일부 CRM 원천 확인이 제한됩니다. {partialWarnings[0]}
-          </div>
-        ) : null}
-        {!error && coverageState === "no_data" ? (
-          <div className="mb-4 rounded-xl border border-[#e8e8e4] bg-white px-3 py-2 text-[12px] font-medium text-[#1a1a1a]/55">
-            연결 데이터가 없어 동기화 정합성을 0%로 표시하지 않습니다.
-          </div>
-        ) : null}
-
-        <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-xl bg-[#fafaf8] p-3">
-              <p className="text-[11px] font-semibold text-[#1a1a1a]/35">우선 연락</p>
-              <p className="mt-1 text-2xl font-bold text-[#111110]">
-                {kpiValue({ data, loading, source: "priority", value: data?.kpis.priorityTotal })}
-              </p>
-              <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
-                {priorityUnavailable
-                  ? "우선 연락 확인 필요"
-                  : `긴급 ${formatCount(data?.kpis.criticalPriorityCount)}건`}
-              </p>
-            </div>
-            <div className="rounded-xl bg-[#fafaf8] p-3">
-              <p className="text-[11px] font-semibold text-[#1a1a1a]/35">미수 리스크</p>
-              <p className="mt-1 text-2xl font-bold text-[#B85C33]">
-                {kpiValue({ data, loading, source: "business", value: data?.kpis.paymentRiskCount })}
-              </p>
-              <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
-                {businessUnavailable ? "고객 DB 집계 확인 필요" : "돈흐름 확인 필요"}
-              </p>
-            </div>
-            <div className="rounded-xl bg-[#fafaf8] p-3">
-              <p className="text-[11px] font-semibold text-[#1a1a1a]/35">링크 확정률</p>
-              <p
-                className={`mt-1 text-2xl font-bold ${
-                  coverageState === "failed"
-                    ? "text-[#B85C33]"
-                    : coverageState === "no_data"
-                      ? "text-[#8D6C1F]"
-                      : "text-[#084734]"
-                }`}
-              >
-                {kpiValue({ data, loading, source: "coverage", value: data?.kpis.coveragePct, suffix: "%" })}
-              </p>
-              <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
-                {coverageState === "no_data"
-                  ? "연결 원천 없음"
-                  : coverageState === "failed"
-                    ? "정합성 확인 필요"
-                    : `검토 대기 ${formatCount(data?.kpis.needsReviewCount)}건`}
-              </p>
-            </div>
-            <div className="rounded-xl bg-[#fafaf8] p-3">
-              <p className="text-[11px] font-semibold text-[#1a1a1a]/35">이번 주 일정</p>
-              <p className="mt-1 text-2xl font-bold text-[#111110]">
-                {kpiValue({ data, loading, source: "business", value: data?.kpis.upcomingThisWeekCount })}
-              </p>
-              <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
-                {businessUnavailable ? "일정 집계 확인 필요" : "설치·방문 예정"}
-              </p>
-            </div>
-          </div>
+          <p className="mt-2 text-[10px] text-[#1a1a1a]/35">리드 status 기준 · 신규 응대율과 전환율을 한눈에</p>
         </section>
+      ) : null}
 
-        <div className="grid gap-4 lg:grid-cols-3">
-          <InsightList
-            title="리스크"
-            icon={<AlertTriangle className="h-4 w-4" />}
-            items={data?.risks ?? []}
-            emptyLabel="현재 표시할 주요 리스크가 없습니다."
-            loading={initialLoading}
-          />
-          <InsightList
-            title="기회"
-            icon={<TrendingUp className="h-4 w-4" />}
-            items={data?.opportunities ?? []}
-            emptyLabel="최근 오더나 접촉 기회가 없습니다."
-            loading={initialLoading}
-          />
-          <InsightList
-            title="운영"
-            icon={<ShieldCheck className="h-4 w-4" />}
-            items={data?.operations ?? []}
-            emptyLabel="운영 점검 항목이 없습니다."
-            loading={initialLoading}
-          />
-        </div>
-
-        {initialLoading ? (
-          <div className="mt-4 rounded-xl border border-[#e8e8e4] bg-white p-6 text-center text-[13px] text-[#1a1a1a]/40">
-            인사이트를 계산 중입니다...
+      {channels.length > 0 ? (
+        <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-[15px] font-bold text-[#111110]">채널별 전환율</h2>
+            <span className="text-[11px] text-[#1a1a1a]/35">유입 경로 · 전환 / 전체</span>
           </div>
-        ) : null}
+          <div className="space-y-2">
+            {channels.map((ch) => (
+              <Link
+                key={ch.source}
+                href={`/admin/crm/customers/leads?source=${encodeURIComponent(ch.source)}`}
+                className="-mx-1 flex items-center gap-3 rounded-md px-1 py-0.5 transition-colors hover:bg-[#fafaf8]"
+              >
+                <span className="w-28 shrink-0 truncate text-[12px] font-semibold text-[#111110]" title={ch.source}>
+                  {ch.source}
+                </span>
+                <div className="h-6 flex-1 overflow-hidden rounded-md bg-[#fafaf8]">
+                  <div
+                    className="h-full rounded-md bg-[#084734]"
+                    style={{ width: `${Math.max(2, ch.rate * 100)}%` }}
+                  />
+                </div>
+                <span className="w-28 shrink-0 text-right text-[11px] tabular-nums text-[#1a1a1a]/55">
+                  <b className="text-[#084734]">{Math.round(ch.rate * 100)}%</b> ·{" "}
+                  {ch.converted.toLocaleString("ko-KR")}/{ch.total.toLocaleString("ko-KR")}
+                </span>
+              </Link>
+            ))}
+          </div>
+          <p className="mt-2 text-[10px] text-[#1a1a1a]/35">전환율 = 전환 리드 / 전체 리드(채널별) · 건수 상위 8개</p>
+        </section>
+      ) : null}
 
-        <div className="mt-4 flex justify-end">
-          <Link
-            href="/admin/calendar"
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
-          >
-            <CalendarClock className="h-3.5 w-3.5" />
-            일정 보기
-          </Link>
+      {error ? (
+        <div className="mb-4 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] font-medium text-[#B85C33]">
+          {error}
         </div>
+      ) : null}
+      {!error && partialWarnings.length > 0 ? (
+        <div className="mb-4 rounded-xl border border-[#F1E2B8] bg-[#FFF8E6] px-3 py-2 text-[12px] font-medium text-[#8D6C1F]">
+          일부 CRM 원천 확인이 제한됩니다. {partialWarnings[0]}
+        </div>
+      ) : null}
+      {!error && coverageState === "no_data" ? (
+        <div className="mb-4 rounded-xl border border-[#e8e8e4] bg-white px-3 py-2 text-[12px] font-medium text-[#1a1a1a]/55">
+          연결 데이터가 없어 동기화 정합성을 0%로 표시하지 않습니다.
+        </div>
+      ) : null}
+
+      <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-xl bg-[#fafaf8] p-3">
+            <p className="text-[11px] font-semibold text-[#1a1a1a]/35">우선 연락</p>
+            <p className="mt-1 text-2xl font-bold text-[#111110]">
+              {kpiValue({ data, loading, source: "priority", value: data?.kpis.priorityTotal })}
+            </p>
+            <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
+              {priorityUnavailable
+                ? "우선 연락 확인 필요"
+                : `긴급 ${formatCount(data?.kpis.criticalPriorityCount)}건`}
+            </p>
+          </div>
+          <div className="rounded-xl bg-[#fafaf8] p-3">
+            <p className="text-[11px] font-semibold text-[#1a1a1a]/35">미수 리스크</p>
+            <p className="mt-1 text-2xl font-bold text-[#B85C33]">
+              {kpiValue({ data, loading, source: "business", value: data?.kpis.paymentRiskCount })}
+            </p>
+            <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
+              {businessUnavailable ? "고객 DB 집계 확인 필요" : "돈흐름 확인 필요"}
+            </p>
+          </div>
+          <div className="rounded-xl bg-[#fafaf8] p-3">
+            <p className="text-[11px] font-semibold text-[#1a1a1a]/35">링크 확정률</p>
+            <p
+              className={`mt-1 text-2xl font-bold ${
+                coverageState === "failed"
+                  ? "text-[#B85C33]"
+                  : coverageState === "no_data"
+                    ? "text-[#8D6C1F]"
+                    : "text-[#084734]"
+              }`}
+            >
+              {kpiValue({ data, loading, source: "coverage", value: data?.kpis.coveragePct, suffix: "%" })}
+            </p>
+            <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
+              {coverageState === "no_data"
+                ? "연결 원천 없음"
+                : coverageState === "failed"
+                  ? "정합성 확인 필요"
+                  : `검토 대기 ${formatCount(data?.kpis.needsReviewCount)}건`}
+            </p>
+          </div>
+          <div className="rounded-xl bg-[#fafaf8] p-3">
+            <p className="text-[11px] font-semibold text-[#1a1a1a]/35">이번 주 일정</p>
+            <p className="mt-1 text-2xl font-bold text-[#111110]">
+              {kpiValue({ data, loading, source: "business", value: data?.kpis.upcomingThisWeekCount })}
+            </p>
+            <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
+              {businessUnavailable ? "일정 집계 확인 필요" : "설치·방문 예정"}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <InsightList
+          title="리스크"
+          icon={<AlertTriangle className="h-4 w-4" />}
+          items={data?.risks ?? []}
+          emptyLabel="현재 표시할 주요 리스크가 없습니다."
+          loading={initialLoading}
+        />
+        <InsightList
+          title="기회"
+          icon={<TrendingUp className="h-4 w-4" />}
+          items={data?.opportunities ?? []}
+          emptyLabel="최근 오더나 접촉 기회가 없습니다."
+          loading={initialLoading}
+        />
+        <InsightList
+          title="운영"
+          icon={<ShieldCheck className="h-4 w-4" />}
+          items={data?.operations ?? []}
+          emptyLabel="운영 점검 항목이 없습니다."
+          loading={initialLoading}
+        />
+      </div>
+
+      {initialLoading ? (
+        <div className="mt-4 rounded-xl border border-[#e8e8e4] bg-white p-6 text-center text-[13px] text-[#1a1a1a]/40">
+          인사이트를 계산 중입니다...
+        </div>
+      ) : null}
+
+      <div className="mt-4 flex justify-end">
+        <Link
+          href="/admin/calendar"
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+        >
+          <CalendarClock className="h-3.5 w-3.5" />
+          일정 보기
+        </Link>
       </div>
     </div>
   )
