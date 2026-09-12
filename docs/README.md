@@ -114,6 +114,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - Compass 마케팅 앱과 Admin의 기능 단위 교차 적용 판정: 방향별 이식 후보, 소유권 분할, 중복 작업 절단 대상
 - [active/compass-admin-link-plan-2026-09-12.md](./active/compass-admin-link-plan-2026-09-12.md)
   - Admin과 Compass 마케팅 앱의 화면 연결 기획: 딥링크 계약 모듈, 사이드바·⌘K 외부 항목, 양쪽 로그인 복귀, 역방향 링크와 운영 상태 노출
+- [active/compass-admin-link-verification-2026-09-13.md](./active/compass-admin-link-verification-2026-09-13.md)
+  - 위 연결 기획의 양쪽 저장소 실측 검증: 진척 판정(링크 계층 0), 계약 원천 정정(stage 6개·/ads 쿼리·누락 라우트), 새 항목과 개정 실행 순서
 - [active/admin-performance-plan-2026-09-02.md](./active/admin-performance-plan-2026-09-02.md)
   - Admin 속도 가설 판정(인증 왕복·팬아웃·메모이제이션·플랜), 적용한 조치와 측정 방법, 운영 확인 목록
 - [active/admin-performance-round2-2026-09-04.md](./active/admin-performance-round2-2026-09-04.md)
