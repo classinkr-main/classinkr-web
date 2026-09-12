@@ -373,6 +373,10 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
   }
 }
 
+// 무효화 원천(D1): branch_rev_deals 동기화(app/api/admin/branch/sync — sources에 rev 포함 시)와
+// crm_source_links 변경(source-links bulk·manual·generate·[id])이 revalidateTag(tag, "max")로
+// stale 표시한다. 외부 CRM 동기화·write-request 실행은 이 조립의 입력(branch_rev_deals·
+// branch_rev_sheet 링크·라벨 3종)을 건드리지 않으므로 여기 태그를 걸지 않는다.
 export const ADMIN_CRM_REVENUE_SHEET_CACHE_TAG = "admin-crm-revenue-sheet"
 
 // REV 시트 전행(최대 QUERY_LIMIT) + 매칭 링크(×3) + 라벨 조회 3종을 매 호출 병렬 실행하는

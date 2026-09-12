@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { revalidateTag } from "next/cache"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { ADMIN_CRM_REVENUE_CACHE_TAG } from "@/lib/admin-crm-revenue"
+import { ADMIN_CRM_REVENUE_SHEET_CACHE_TAG } from "@/lib/admin-crm-revenue-sheet"
 import { runAll } from "@/lib/branch/sync/run-all"
 import { BRANCH_HW_CACHE_TAG } from "@/lib/repositories/branch-hw"
 import { BRANCH_REV_DEALS_CACHE_TAG } from "@/lib/repositories/branch-deals"
@@ -36,12 +37,22 @@ export async function POST(req: NextRequest) {
 
   if (result.ok) {
     const cacheTags = ["branch-dsh", "branch-kpi"]
-    if (effectiveSources.includes("rev")) cacheTags.push(BRANCH_REV_DEALS_CACHE_TAG, ADMIN_CRM_REVENUE_CACHE_TAG)
+    // REV 스냅샷(branch_rev_deals)이 바뀌면 lib/admin-crm-revenue-sheet.ts의 60초 캐시
+    // (ADMIN_CRM_REVENUE_SHEET_CACHE_TAG)도 함께 낡는다 — 매출 대시보드 태그와 같은 자리에 건다(D1).
+    if (effectiveSources.includes("rev")) {
+      cacheTags.push(BRANCH_REV_DEALS_CACHE_TAG, ADMIN_CRM_REVENUE_CACHE_TAG, ADMIN_CRM_REVENUE_SHEET_CACHE_TAG)
+    }
     if (effectiveSources.includes("hw")) cacheTags.push(BRANCH_HW_CACHE_TAG)
     for (const tag of cacheTags) {
       revalidateTag(tag, "max")
     }
     const crmLinks = effectiveSources.includes("rev") ? await runBranchRevLinkMaintenance() : undefined
+    if (crmLinks) {
+      // 링크 유지보수(재부착·후보 생성)는 crm_source_links를 위 무효화 이후에 다시 바꾼다.
+      // "max"(stale-first) 무효화라 중복 호출은 표시만 갱신할 뿐 비용이 없다.
+      revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, "max")
+      revalidateTag(ADMIN_CRM_REVENUE_SHEET_CACHE_TAG, "max")
+    }
     return NextResponse.json({ ...result, crmLinks }, { status: 200 })
   }
   if (result.skipped) {

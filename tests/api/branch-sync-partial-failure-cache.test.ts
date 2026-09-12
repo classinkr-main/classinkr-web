@@ -15,6 +15,7 @@ const revalidateTag = vi.fn()
 
 vi.mock("@/lib/admin-auth", () => ({ verifyAdmin }))
 vi.mock("@/lib/admin-crm-revenue", () => ({ ADMIN_CRM_REVENUE_CACHE_TAG: "admin-crm-revenue" }))
+vi.mock("@/lib/admin-crm-revenue-sheet", () => ({ ADMIN_CRM_REVENUE_SHEET_CACHE_TAG: "admin-crm-revenue-sheet" }))
 vi.mock("@/lib/branch/sync/run-all", () => ({ runAll }))
 vi.mock("@/lib/repositories/branch-hw", () => ({ BRANCH_HW_CACHE_TAG: "branch-hw" }))
 vi.mock("@/lib/repositories/branch-deals", () => ({ BRANCH_REV_DEALS_CACHE_TAG: "branch-rev-deals" }))
@@ -111,5 +112,37 @@ describe("POST /api/admin/branch/sync — 부분 실패 시 캐시 무효화 (�
     expect(revalidateTag).toHaveBeenCalledWith("branch-seg", "max")
     expect(revalidateTag).not.toHaveBeenCalledWith("branch-rev-deals", "max")
     expect(revalidateTag).not.toHaveBeenCalledWith("admin-crm-revenue", "max")
+    expect(revalidateTag).not.toHaveBeenCalledWith("admin-crm-revenue-sheet", "max")
+  })
+
+  // D1(crm-tab-develop-plan-2026-09-12 §4.4): REV 스냅샷(branch_rev_deals)은 lib/admin-crm-revenue-sheet.ts
+  // 60초 캐시의 입력이기도 하다 — rev 동기화 성공 시 ADMIN_CRM_REVENUE_SHEET_CACHE_TAG도 함께 무효화한다.
+  it("rev 동기화 성공 시 admin-crm-revenue와 함께 admin-crm-revenue-sheet 태그도 무효화한다 (D1)", async () => {
+    verifyAdmin.mockResolvedValue(null)
+    runAll.mockResolvedValue({ ok: true, rev: 5 })
+    runBranchRevLinkMaintenance.mockResolvedValue({ reattach: { reattached: 1 }, candidates: { inserted: 2 } })
+
+    const { POST } = await import("@/app/api/admin/branch/sync/route")
+    const response = await POST(syncRequest({ sources: ["rev"] }))
+
+    expect(response.status).toBe(200)
+    const tags = revalidateTag.mock.calls.map((call) => call[0])
+    expect(tags).toEqual(expect.arrayContaining(["branch-rev-deals", "admin-crm-revenue", "admin-crm-revenue-sheet"]))
+    // 링크 유지보수(재부착·후보 생성)가 crm_source_links를 다시 바꾼 뒤에도 한 번 더 stale 표시한다.
+    const maintenanceOrder = runBranchRevLinkMaintenance.mock.invocationCallOrder[0]
+    const sheetCallsAfterMaintenance = revalidateTag.mock.calls.filter(
+      (call, index) => call[0] === "admin-crm-revenue-sheet" && revalidateTag.mock.invocationCallOrder[index] > maintenanceOrder,
+    )
+    expect(sheetCallsAfterMaintenance).toHaveLength(1)
+  })
+
+  it("rev 동기화가 실패(ok=false)하면 admin-crm-revenue-sheet 태그를 건드리지 않는다 — 스냅샷이 안 바뀌었으므로", async () => {
+    verifyAdmin.mockResolvedValue(null)
+    runAll.mockResolvedValue({ ok: false, error: "rev: boom", rev: 0 })
+
+    const { POST } = await import("@/app/api/admin/branch/sync/route")
+    await POST(syncRequest({ sources: ["rev"] }))
+
+    expect(revalidateTag).not.toHaveBeenCalledWith("admin-crm-revenue-sheet", "max")
   })
 })

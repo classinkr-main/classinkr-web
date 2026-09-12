@@ -8,6 +8,7 @@ import {
   ADMIN_OS_SUMMARY_CACHE_TAG,
 } from "@/lib/admin/crm/cache-tags"
 import { ADMIN_CRM_REVENUE_CACHE_TAG } from "@/lib/admin-crm-revenue"
+import { ADMIN_CRM_REVENUE_SHEET_CACHE_TAG } from "@/lib/admin-crm-revenue-sheet"
 import {
   createManualBranchRevLinkCandidate,
   type CrmManualLinkTargetType,
@@ -45,6 +46,8 @@ export async function POST(req: NextRequest) {
     })
 
     revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, "max")
+    // REV 링크(branch_rev_sheet)가 바뀌면 lib/admin-crm-revenue-sheet.ts의 60초 캐시도 낡는다(D1).
+    revalidateTag(ADMIN_CRM_REVENUE_SHEET_CACHE_TAG, "max")
 
     revalidateTag(ADMIN_CRM_COVERAGE_CACHE_TAG, "max")
 
