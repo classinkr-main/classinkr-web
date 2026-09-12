@@ -3,7 +3,7 @@
 // ─── 리드 상세 드로어 ──────────────────────────────────────────
 // LeadsBoardClient.tsx 분해(2026-08-28)로 이동 — 로직 무변경.
 
-import { useCallback, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import {
   Activity, Bell, Building2, Calendar, Check, Clock, Download, ExternalLink,
@@ -95,6 +95,11 @@ export default function LeadDrawer({
   const [assignedTo, setAssignedTo] = useState(lead.assigned_to ?? "")
   const savedFollowUp = lead.follow_up_at ? lead.follow_up_at.slice(0, 10) : ""
   const [followUp, setFollowUp] = useState(savedFollowUp)
+  const [savingFollowUp, setSavingFollowUp] = useState(false)
+  const [followUpSaved, setFollowUpSaved] = useState(false)
+  // 저장을 시도한 값 — 부모(onFollowUpChange)는 실패를 toast로만 알리고 reject하지 않으므로,
+  // 성공 여부는 lead.follow_up_at(부모 상태)이 이 값으로 따라왔는지로 판정한다.
+  const attemptedFollowUpRef = useRef<string | null>(null)
   const [showLogForm, setShowLogForm] = useState(Boolean(initialContactForm))
   const [contactLogInitialType, setContactLogInitialType] = useState<ContactLogType>(initialContactType ?? "call")
   const [converting, setConverting] = useState(false)
@@ -148,15 +153,52 @@ export default function LeadDrawer({
 
   const linkedTokenInLead = parseEventToken(lead.notes).token ?? ""
   const dirty = notes !== initial.body || linkedEventId !== linkedTokenInLead
+  // 팔로업 미저장 — 즉시 저장이 실패한 상태(부모가 toast만 띄우고 reject하지 않음). 응답 대기 중은
+  // 요청이 이미 나갔으므로(언마운트돼도 부모가 결과를 반영) 미저장으로 치지 않는다.
+  const followUpUnsaved = !savingFollowUp && followUp !== savedFollowUp
 
-  // 닫기 공통 경로(Escape·백드롭·X) — onBlur 저장(담당자·팔로업)이 언마운트로 조용히
-  // 유실되지 않게 활성 입력을 먼저 blur로 흘려보내고, 저장 안 된 메모는 확인을 받는다.
+  // 팔로업 저장 규약(설계 §4): 이산값이라 유효한 날짜로 바뀌는 즉시 저장한다. blur는 어떤
+  // 경우에도 저장하지 않는다 — 닫기 경로의 강제 blur가 미완성 날짜를 null로 흘려보내던 사고의 원인.
+  const saveFollowUp = useCallback(
+    async (next: string) => {
+      if (next === savedFollowUp) return
+      attemptedFollowUpRef.current = next
+      setFollowUpSaved(false)
+      setSavingFollowUp(true)
+      try {
+        await onFollowUpChange(lead.id, next)
+      } finally {
+        setSavingFollowUp(false)
+      }
+    },
+    [lead.id, onFollowUpChange, savedFollowUp]
+  )
+
+  // 성공 판정 — 부모 상태(lead.follow_up_at)가 시도한 값으로 따라오면 "저장됨" 배지를 2초 띄운다.
+  useEffect(() => {
+    if (attemptedFollowUpRef.current === null || attemptedFollowUpRef.current !== savedFollowUp) return
+    attemptedFollowUpRef.current = null
+    setFollowUpSaved(true)
+    const timer = setTimeout(() => setFollowUpSaved(false), 2000)
+    return () => clearTimeout(timer)
+  }, [savedFollowUp])
+
+  // 닫기 공통 경로(Escape·백드롭·X) — blur로 저장을 흘려보내지 않는다(설계 §4). 저장되지 않은
+  // 값(메모·행사 연결·팔로업)이 있으면 조용히 버리지 않고 확인을 받는다; 취소하면 드로어에
+  // 남아 명시 저장 버튼으로 다시 저장할 수 있다.
   const guardedClose = useCallback(() => {
-    const active = document.activeElement
-    if (active instanceof HTMLElement) active.blur()
-    if (dirty && !window.confirm("저장하지 않은 메모·행사 연결이 있습니다. 닫으면 사라집니다. 닫을까요?")) return
+    const unsaved = [
+      dirty ? "메모·행사 연결" : null,
+      followUpUnsaved ? "팔로업 날짜" : null,
+    ].filter((item): item is string => Boolean(item))
+    if (
+      unsaved.length > 0 &&
+      !window.confirm(`저장하지 않은 ${unsaved.join("·")}이(가) 있습니다. 닫으면 사라집니다. 닫을까요?`)
+    ) {
+      return
+    }
     onClose()
-  }, [dirty, onClose])
+  }, [dirty, followUpUnsaved, onClose])
 
   // Escape·Tab 포커스 트랩·이전 포커스 복귀 — 등록 모달과 같은 다이얼로그 규약(useDialogFocus).
   const drawerCloseButtonRef = useRef<HTMLButtonElement | null>(null)
@@ -531,22 +573,60 @@ export default function LeadDrawer({
               <p className="text-[11px] font-semibold text-[#1a1a1a]/30 uppercase tracking-wide mb-2 flex items-center gap-1.5">
                 <Bell className="w-3 h-3" />다음 팔로업
               </p>
-              <input
-                type="date"
-                value={followUp}
-                aria-label="다음 팔로업 날짜"
-                onChange={(e) => setFollowUp(e.target.value)}
-                // native date 입력은 "2026-08-"처럼 미완성 상태에서 value로 ""를 돌려준다.
-                // 그걸 그대로 흘려보내면 PATCH가 follow_up_at을 null로 덮어 기존 팔로업이
-                // 무음으로 사라진다(닫기 경로의 강제 blur 때문에 닫을 때마다 재현됐다).
-                // badInput이 그 미완성 상태를 정확히 가리키고, 값이 그대로면 쓰기 자체를 생략한다.
-                onBlur={(event) => {
-                  if (event.currentTarget.validity.badInput) return
-                  if (followUp === savedFollowUp) return
-                  void onFollowUpChange(lead.id, followUp)
-                }}
-                className="w-full text-[13px] bg-[#fafaf8] border border-[#e8e8e4] rounded-xl px-3 py-2 outline-none focus:border-[#c8c8c4] focus:bg-white transition-all"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={followUp}
+                  aria-label="다음 팔로업 날짜"
+                  // native date 입력은 "2026-08-"처럼 미완성 상태에서 value로 ""를 돌려주고(badInput),
+                  // 연도를 타이핑하는 동안 "0002-08-15" 같은 중간값으로도 change를 낸다(min 미달 → rangeUnderflow).
+                  // 둘 다 사용자가 아직 고르는 중이므로 상태도 저장도 건드리지 않는다 — setState를 생략해야
+                  // React가 입력 중인 DOM 값을 이전 값으로 되돌리지 않는다. 완성된 유효 날짜(또는 명시적 비움)만
+                  // 상태에 반영하고 즉시 저장한다(이산값 규약). blur 저장은 없다.
+                  min="2000-01-01"
+                  onChange={(event) => {
+                    if (!event.currentTarget.validity.valid) return
+                    const next = event.currentTarget.value
+                    setFollowUp(next)
+                    void saveFollowUp(next)
+                  }}
+                  onKeyDown={(event) => {
+                    // 실패 뒤 같은 값을 다시 저장하려는 Enter — 값이 그대로면 saveFollowUp이 생략한다.
+                    if (event.key !== "Enter" || event.nativeEvent.isComposing) return
+                    event.preventDefault()
+                    if (!event.currentTarget.validity.valid) return
+                    void saveFollowUp(event.currentTarget.value)
+                  }}
+                  aria-describedby="lead-drawer-follow-up-status"
+                  className="min-w-0 flex-1 text-[13px] bg-[#fafaf8] border border-[#e8e8e4] rounded-xl px-3 py-2 outline-none focus:border-[#c8c8c4] focus:bg-white transition-all"
+                />
+                {savingFollowUp ? (
+                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-[#1a1a1a]/40" aria-hidden />
+                ) : followUpSaved ? (
+                  <Check className="h-3.5 w-3.5 shrink-0 text-[#084734]" aria-hidden />
+                ) : followUpUnsaved ? (
+                  // 즉시 저장이 실패한 값 — 버리지 않고 명시 저장 버튼으로 재시도한다.
+                  <button
+                    type="button"
+                    onClick={() => void saveFollowUp(followUp)}
+                    className="flex shrink-0 items-center gap-1.5 rounded-lg bg-[#111110] px-3 py-1.5 text-[12px] font-medium text-white transition-all hover:bg-[#1a1a1a]"
+                  >
+                    <Save className="h-3 w-3" />
+                    저장
+                  </button>
+                ) : null}
+              </div>
+              <p id="lead-drawer-follow-up-status" className="mt-1 text-[11px]" aria-live="polite">
+                {savingFollowUp ? (
+                  <span className="text-[#1a1a1a]/45">저장 중...</span>
+                ) : followUpSaved ? (
+                  <span className="text-[#084734]">저장됨</span>
+                ) : followUpUnsaved ? (
+                  <span className="text-[#B85C33]">저장되지 않았습니다 · 저장 버튼으로 다시 시도하세요</span>
+                ) : (
+                  <span className="text-[#1a1a1a]/35">날짜를 고르면 바로 저장됩니다</span>
+                )}
+              </p>
               {followUp && new Date(followUp) <= new Date() && (
                 <p className="text-[11px] text-[#7A520F] mt-1">⚠ 팔로업 날짜가 지났습니다</p>
               )}
@@ -698,6 +778,12 @@ export default function LeadDrawer({
               value={notes}
               aria-label="리드 메모"
               onChange={(e) => setNotes(e.target.value)}
+              // 자유 텍스트는 ⌘/Ctrl+Enter 또는 저장 버튼으로만 커밋한다(설계 §4). blur 저장 없음.
+              onKeyDown={(e) => {
+                if (e.key !== "Enter" || !(e.metaKey || e.ctrlKey) || e.nativeEvent.isComposing) return
+                e.preventDefault()
+                if (dirty && !savingNotes) void handleSaveNotes()
+              }}
               placeholder="담당자 메모를 입력하세요..."
               rows={3}
               className="w-full text-[13px] text-[#111110] placeholder:text-[#1a1a1a]/30 bg-[#fafaf8] border border-[#e8e8e4] rounded-xl px-3 py-2.5 resize-none outline-none focus:border-[#c8c8c4] focus:bg-white transition-all"

@@ -17,6 +17,7 @@ import Customer360DrawerSkeleton from "./Customer360DrawerSkeleton"
 import SavedViewButton from "./unified/SavedViewButton"
 import CustomerSearchPanel from "./unified/CustomerSearchPanel"
 import CustomerResultsSection from "./unified/CustomerResultsSection"
+import UnconfirmedToggle from "./unified/UnconfirmedToggle"
 import { SORT_DEFAULT_DIRECTION, sortRows, type SortKey, type SortState } from "./unified/sort"
 import {
   CACHE_TTL_MS,
@@ -55,6 +56,9 @@ export default function CrmUnifiedCustomersClient() {
   const [owner, setOwner] = useState("")
   const [savedView, setSavedView] = useState<SavedViewFilter>("all")
   const [tagFilter, setTagFilter] = useState("")
+  // 확인 게이트 우회 — 기본 false(미확인 리드 숨김 + 건수만 표시). 리드 보드의 includeUnconfirmed와 같은 이름·UX.
+  // URL에 싣지 않는 세션 한정 토글이며, 요청 URL(=캐시 키)에는 includeUnconfirmed=1로 실린다.
+  const [includeUnconfirmed, setIncludeUnconfirmed] = useState(false)
   // 정렬 상태 — null=추천순(서버 버킷→점수→시각 순서 그대로). 탐색용 일회성 상태라 URL·저장소에 영속하지 않는다.
   const [sort, setSort] = useState<SortState | null>(null)
   const [data, setData] = useState<CrmUnifiedCustomers | null>(null)
@@ -205,7 +209,16 @@ export default function CrmUnifiedCustomersClient() {
   const loadPage = useCallback(
     async (offset: number, options?: { force?: boolean; append?: boolean }) => {
       const append = Boolean(options?.append)
-      const url = listUrl({ query: deferredQuery, source, lifecycle, owner, view: savedView, tag: tagFilter, offset })
+      const url = listUrl({
+        query: deferredQuery,
+        source,
+        lifecycle,
+        owner,
+        view: savedView,
+        tag: tagFilter,
+        includeUnconfirmed,
+        offset,
+      })
       const cached = !append && !options?.force ? getCachedAdminJson<CrmUnifiedCustomers>(url, { cacheKey: url }) : null
       const requestId = ++requestSeq.current
 
@@ -245,7 +258,7 @@ export default function CrmUnifiedCustomersClient() {
         }
       }
     },
-    [deferredQuery, source, lifecycle, owner, savedView, tagFilter]
+    [deferredQuery, source, lifecycle, owner, savedView, tagFilter, includeUnconfirmed]
   )
 
   useEffect(() => {
@@ -352,7 +365,8 @@ export default function CrmUnifiedCustomersClient() {
     lifecycle !== "all" ||
     Boolean(owner) ||
     savedView !== "all" ||
-    Boolean(tagFilter)
+    Boolean(tagFilter) ||
+    includeUnconfirmed
 
   const resetFilters = useCallback(() => {
     setQuery("")
@@ -363,7 +377,10 @@ export default function CrmUnifiedCustomersClient() {
     setSavedView("all")
     syncViewParam("all")
     setTagFilter("")
+    setIncludeUnconfirmed(false)
   }, [persistOwner, syncViewParam])
+
+  const hiddenUnconfirmedCount = data?.summary.hiddenUnconfirmedCount ?? 0
 
   // 같은 키 재클릭=방향 토글, 다른 키=성격별 기본 방향으로 진입. 추천순 복귀는 전용 버튼만 담당한다.
   const toggleSort = useCallback((key: SortKey) => {
@@ -471,13 +488,21 @@ export default function CrmUnifiedCustomersClient() {
                   {data ? `${data.summary.total.toLocaleString("ko-KR")}건` : error ? "불러오지 못했습니다" : "불러오는 중"}
                 </span>
               </p>
-              <button
-                type="button"
-                onClick={exitQuickView}
-                className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#1a1a1a]/60 hover:bg-[#fafaf8]"
-              >
-                전체 보기 (검색·필터)
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                {/* 빠른 보기에서도 게이트로 숨긴 건수를 알리고 포함할 수 있어야 한다 — 검색 패널이 접혀 있으므로 여기서 노출. */}
+                <UnconfirmedToggle
+                  includeUnconfirmed={includeUnconfirmed}
+                  hiddenUnconfirmedCount={hiddenUnconfirmedCount}
+                  onToggle={() => setIncludeUnconfirmed((prev) => !prev)}
+                />
+                <button
+                  type="button"
+                  onClick={exitQuickView}
+                  className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#1a1a1a]/60 hover:bg-[#fafaf8]"
+                >
+                  전체 보기 (검색·필터)
+                </button>
+              </div>
             </div>
             {lingeringParts.length > 0 ? (
               // 잔존 필터 힌트 — 접힌 검색 패널의 필터가 이 뷰 결과를 좁히고 있음을 알린다.
@@ -515,6 +540,8 @@ export default function CrmUnifiedCustomersClient() {
             ownerOptions={ownerOptions}
             tagFilter={tagFilter}
             onTagFilterChange={setTagFilter}
+            includeUnconfirmed={includeUnconfirmed}
+            onIncludeUnconfirmedChange={setIncludeUnconfirmed}
             data={data}
             loading={loading}
           />

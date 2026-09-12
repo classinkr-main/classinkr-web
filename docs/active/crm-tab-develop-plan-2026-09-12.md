@@ -56,7 +56,7 @@ CRM 탭은 5작업면 IA, 우선순위 큐, 고객 360, 입력함, 매칭 인박
 | 2 | 플레이북 "숨긴 리드 건수 표시" | 통합 목록은 provisional 숨김 건수 미표시(리드 보드는 준수) | W1 |
 | 3 | 플레이북 "전량 조회 range" | `lib/repositories/crm-region-map.ts:51-60` 단일 `.limit(5000)` | W2 |
 | 4 | 플레이북 "잘린 항목 남은 건수" | 주간 패널 `limit=100`, `summary.total` 미사용 | W0 |
-| 5 | 리드 보드 설계 §4 "blur 저장 금지" | `LeadDrawer.tsx:152-156, 540-547` onBlur 저장 | W1 |
+| 5 | 리드 보드 설계 §4 "blur 저장 금지" | `leads/board/LeadDrawer.tsx:152-156, 540-547` onBlur 저장 | W1 |
 | 6 | 지도 계획 §6 배정표→자동 배정 근거 | `lead-assignment-policy.ts:157` 하드코딩 0 | W2 |
 | 7 | 되밀기 지침 §2-4 필수 필드 | 정책 `requiredCreateFields`가 describe 결과와 불일치 | W1 |
 | 8 | 운영결정 §3 파트너 표면은 Admin OS로 통합 | `deals/orders`·`deals/kpi`가 포털 컴포넌트를 URL만 바꿔 렌더 | W3(결정 필요) |
@@ -92,7 +92,7 @@ CRM 탭은 5작업면 IA, 우선순위 큐, 고객 360, 입력함, 매칭 인박
 | C3 | 리드·연락기록 소프트 삭제(취소·복구·감사) | P0 | M | **O** (`leads.deleted_at` 또는 `archived` 상태) | `leads.ts`, `leads/[id]/route.ts`, `LeadsBoardClient.tsx` |
 | C4 | 지역 배정표를 `automaticEvidenceReady`에 연결 | P1 | M | X | `lib/crm/lead-assignment-policy.ts`, `assignment-preview`, `bulk-assign` |
 | C5 | 지도 → 통합·원천 고객 지역 드릴다운(`region` 파라미터) | P1 | S | X | `map/CrmRegionMapPanel.tsx`, `NeoCrmCustomersClient.tsx`, unified route |
-| C6 | 드로어 저장 규약 정리(blur 저장 제거) | P1 | S | X | `leads/LeadDrawer.tsx` |
+| C6 | 드로어 저장 규약 정리(blur 저장 제거) | P1 | S | X | `leads/board/LeadDrawer.tsx` |
 | C7 | 전환 고객(`customer:`) 360·태그·할 일 지원 | P2 | M | 태그 `target_type` 확인 | `crm-customer-360.ts`, `crm-customer-tags.ts`, `Customer360Drawer.tsx` |
 | C8 | 보드 상태 변경 다중 경로(숫자키·카드 메뉴·DnD), 컬럼 20장 캡 문구 정정 | P2 | M | X | `leads/board/LeadsBoardView.tsx` |
 | C9 | customers-neo 서버 페이지네이션, region-map range 조회 | P2 | M | X | `customers-neo/route.ts`, `crm-region-map.ts` |

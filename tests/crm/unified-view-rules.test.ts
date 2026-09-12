@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  isUnconfirmedGatedInView,
   matchesSavedView,
+  rowHiddenByUnconfirmedGate,
   rowVisibleInView,
   type CrmUnifiedCustomerRow,
 } from "@/lib/crm/unified-view-rules"
@@ -161,5 +163,37 @@ describe("provisional(미확인 신규) 노출 규칙", () => {
   it("비-provisional은 기존 뷰 규칙 그대로", () => {
     expect(rowVisibleInView(leadRow({}), "all", new Set(), NOW)).toBe(true)
     expect(rowVisibleInView(leadRow({ lifecycle: "new_lead" }), "new_leads", new Set(), NOW)).toBe(true)
+  })
+})
+
+describe("확인 게이트 우회(includeUnconfirmed) — 플레이북 04 §3 \"숨긴 리드는 건수 표시 + 명시 포함\"", () => {
+  const row = leadRow({ provisional: true })
+
+  it("includeUnconfirmed=true면 게이트 뷰(all·new_leads)에서도 뷰 규칙만으로 보인다", () => {
+    expect(rowVisibleInView(row, "all", new Set(), NOW, true)).toBe(true)
+    expect(rowVisibleInView(row, "new_leads", new Set(), NOW, true)).toBe(true)
+    // 뷰 규칙 자체는 여전히 적용 — 점수 미달 미확인 리드는 우선 처리 뷰에 안 들어온다.
+    expect(rowVisibleInView(row, "priority", new Set(), NOW, true)).toBe(false)
+  })
+
+  it("기본값(false)은 기존 게이트 동작 그대로", () => {
+    expect(rowVisibleInView(row, "all", new Set(), NOW)).toBe(false)
+    expect(rowVisibleInView(row, "all", new Set(), NOW, false)).toBe(false)
+  })
+
+  it("isUnconfirmedGatedInView — 미확인 + 게이트 뷰일 때만", () => {
+    expect(isUnconfirmedGatedInView(row, "all")).toBe(true)
+    expect(isUnconfirmedGatedInView(row, "site_leads")).toBe(false)
+    expect(isUnconfirmedGatedInView(leadRow({}), "all")).toBe(false)
+  })
+
+  it("rowHiddenByUnconfirmedGate — 뷰 규칙은 통과하지만 게이트에만 걸린 행(= 토글 시 추가될 행)", () => {
+    expect(rowHiddenByUnconfirmedGate(row, "all", new Set(), NOW)).toBe(true)
+    expect(rowHiddenByUnconfirmedGate(row, "new_leads", new Set(), NOW)).toBe(true)
+    // 게이트 면제 뷰에서는 숨긴 게 아니다.
+    expect(rowHiddenByUnconfirmedGate(row, "unanswered", new Set(), NOW)).toBe(false)
+    // 뷰 규칙 자체에서 탈락한 행은 게이트가 숨긴 게 아니다(토글해도 안 나오므로 건수에 넣지 않는다).
+    expect(rowHiddenByUnconfirmedGate(row, "priority", new Set(), NOW)).toBe(false)
+    expect(rowHiddenByUnconfirmedGate(leadRow({}), "all", new Set(), NOW)).toBe(false)
   })
 })

@@ -504,6 +504,33 @@ describe("getCrmUnifiedCustomers", () => {
     expect(unanswered.rows.map((row) => row.key)).toEqual(["lead:site-unconfirmed"])
   })
 
+  it("reports hidden unconfirmed leads and includes them on demand (includeUnconfirmed)", async () => {
+    const { getCrmUnifiedCustomers } = await loadRepository({
+      leads: [
+        lead({ id: "site-unconfirmed", source: "demo_modal", confirmed_at: null, assigned_to: "미확인담당" }),
+        lead({ id: "site-confirmed", source: "contact_page", assigned_to: "김담당" }),
+      ],
+    })
+
+    const hidden = await getCrmUnifiedCustomers({ now: NOW })
+    expect(hidden.rows.map((row) => row.key)).toEqual(["lead:site-confirmed"])
+    expect(hidden.summary.hiddenUnconfirmedCount).toBe(1)
+
+    const included = await getCrmUnifiedCustomers({ includeUnconfirmed: true, now: NOW })
+    expect(new Set(included.rows.map((row) => row.key))).toEqual(
+      new Set(["lead:site-confirmed", "lead:site-unconfirmed"])
+    )
+    expect(included.summary.hiddenUnconfirmedCount).toBe(0)
+    expect(included.summary.total).toBe(hidden.summary.total + 1)
+    expect(included.owners.map((owner) => owner.ownerName)).toContain("미확인담당")
+    // 토글 on이면 세그먼트 칩 카운트도 같은 기준으로 센다(목록과 칩 숫자 정합).
+    expect(included.summary.viewCounts.site_leads).toBe(hidden.summary.viewCounts.site_leads)
+
+    // 면제 뷰에서는 숨긴 게 없다.
+    const unanswered = await getCrmUnifiedCustomers({ view: "unanswered", now: NOW })
+    expect(unanswered.summary.hiddenUnconfirmedCount).toBe(0)
+  })
+
   it("filters recent contacts and currently active Portal V2 deals", async () => {
     const { getCrmUnifiedCustomers } = await loadRepository({
       leads: [lead({ id: "recent" }), lead({ id: "stale" })],

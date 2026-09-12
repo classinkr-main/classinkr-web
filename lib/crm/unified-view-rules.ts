@@ -133,12 +133,36 @@ const PROVISIONAL_VISIBLE_VIEWS: ReadonlySet<CrmUnifiedSavedView> = new Set([
   "recent_contact",
 ])
 
+/**
+ * 확인 게이트 — 이 뷰에서 미확인 리드가 기본으로 숨겨지는가.
+ * 숨기는 뷰에서도 건수는 항상 내려주고 사용자가 `includeUnconfirmed`로 명시 포함할 수 있어야
+ * 한다(플레이북 04-growth-crm §3). 리드 보드의 CONFIRMATION_GATE_EXEMPT_FILTERS와 같은 역할.
+ */
+export function isUnconfirmedGatedInView(row: CrmUnifiedCustomerRow, view: CrmUnifiedSavedView) {
+  return row.provisional && !PROVISIONAL_VISIBLE_VIEWS.has(view)
+}
+
 export function rowVisibleInView(
+  row: CrmUnifiedCustomerRow,
+  view: CrmUnifiedSavedView,
+  ownerKeys: Set<string>,
+  nowMs: number,
+  // true면 확인 게이트를 우회해 미확인 리드도 뷰 규칙만으로 판정한다(리드 보드 "미확인 포함" 토글과 동일 UX).
+  includeUnconfirmed = false
+) {
+  if (!includeUnconfirmed && isUnconfirmedGatedInView(row, view)) return false
+  return matchesSavedView(row, view, ownerKeys, nowMs)
+}
+
+/**
+ * 게이트 때문에 숨겨진 미확인 리드 — 뷰 규칙은 통과하지만 확인 게이트에만 걸린 행.
+ * includeUnconfirmed=true로 다시 조회하면 정확히 이 행들이 목록에 추가된다.
+ */
+export function rowHiddenByUnconfirmedGate(
   row: CrmUnifiedCustomerRow,
   view: CrmUnifiedSavedView,
   ownerKeys: Set<string>,
   nowMs: number
 ) {
-  if (row.provisional && !PROVISIONAL_VISIBLE_VIEWS.has(view)) return false
-  return matchesSavedView(row, view, ownerKeys, nowMs)
+  return isUnconfirmedGatedInView(row, view) && matchesSavedView(row, view, ownerKeys, nowMs)
 }

@@ -51,6 +51,11 @@ function parseSavedView(value: string | null): CrmUnifiedSavedView {
   return "all"
 }
 
+// 리드 보드의 `unconfirmed=1`과 같은 의미 — 확인 게이트를 우회해 미확인 리드를 목록에 포함한다.
+function parseIncludeUnconfirmed(value: string | null) {
+  return value === "1" || value === "true"
+}
+
 function parseBoundedInt(value: string | null, fallback: number, min: number, max: number) {
   const parsed = Number(value ?? fallback)
   if (!Number.isFinite(parsed)) return fallback
@@ -79,6 +84,7 @@ export async function GET(req: NextRequest) {
       owner: isMine ? undefined : ownerParam,
       ownerKeys,
       tag: url.searchParams.get("tag") ?? undefined,
+      includeUnconfirmed: parseIncludeUnconfirmed(url.searchParams.get("includeUnconfirmed")),
       limit: parseBoundedInt(url.searchParams.get("limit"), 100, 1, 200),
       offset: parseBoundedInt(url.searchParams.get("offset"), 0, 0, 100_000),
     })

@@ -20,6 +20,7 @@ import { deriveLeadRegionLabel } from "@/lib/crm/lead-message"
 import { deriveCustomerRegion, REGION_UNSPECIFIED } from "@/lib/crm/region-label"
 import {
   daysUntil,
+  rowHiddenByUnconfirmedGate,
   rowMatchesOwner,
   rowVisibleInView,
   type CrmUnifiedCustomerRow,
@@ -83,6 +84,12 @@ export interface CrmUnifiedCustomersOptions {
   owner?: string
   ownerKeys?: string[]
   tag?: string
+  /**
+   * 확인 게이트 우회 — 기본(false)은 미확인(provisional) 리드를 일반 뷰에서 숨기고
+   * summary.hiddenUnconfirmedCount로 건수만 알린다. true면 그 행들을 목록에 포함한다
+   * (리드 보드 "미확인 포함" 토글과 같은 이름·UX).
+   */
+  includeUnconfirmed?: boolean
   limit?: number
   offset?: number
   now?: Date
@@ -114,6 +121,11 @@ export interface CrmUnifiedCustomers {
     ownerCount: number
     viewCounts: Record<string, number>
     availableTags: string[]
+    /**
+     * 현재 검색·필터·뷰 범위 안에서 확인 게이트 때문에 숨겨진 미확인 리드 수.
+     * includeUnconfirmed=true로 재조회하면 정확히 이 건수가 목록에 추가된다(토글 on이면 0).
+     */
+    hiddenUnconfirmedCount: number
   }
   // 활성 고객 건강도 분포 — 현재 검색/필터와 무관한 전역 집계(코크핏 도넛용).
   healthDistribution: CrmHealthDistribution
@@ -669,6 +681,7 @@ export async function getCrmUnifiedCustomers(
   const source = options.source ?? "all"
   const lifecycle = options.lifecycle ?? "all"
   const view = options.view ?? "all"
+  const includeUnconfirmed = options.includeUnconfirmed === true
 
   const nowMs = now.getTime()
   const baseRows = rows.filter((row) => {
@@ -680,12 +693,17 @@ export async function getCrmUnifiedCustomers(
     return true
   })
   // provisional 게이트 포함 가시성 규칙 — 일반 뷰에서는 미확인 리드가 자동 제외된다.
-  const filtered = baseRows.filter((row) => rowVisibleInView(row, view, ownerKeys, nowMs))
+  // 단 숨긴 건수는 항상 내려주고, includeUnconfirmed 토글이 켜지면 게이트를 우회한다.
+  const filtered = baseRows.filter((row) => rowVisibleInView(row, view, ownerKeys, nowMs, includeUnconfirmed))
+  const hiddenUnconfirmedCount = includeUnconfirmed
+    ? 0
+    : baseRows.filter((row) => rowHiddenByUnconfirmedGate(row, view, ownerKeys, nowMs)).length
   // 세그먼트 칩 카운트 — 현재 검색/담당 범위 안에서 각 세그먼트에 몇 건이 들어오는지.
+  // 토글이 켜지면 칩 숫자도 목록과 같은 기준(게이트 우회)으로 센다.
   const viewCounts = Object.fromEntries(
     CRM_SEGMENT_VIEWS.map((segment) => [
       segment,
-      baseRows.filter((row) => rowVisibleInView(row, segment, ownerKeys, nowMs)).length,
+      baseRows.filter((row) => rowVisibleInView(row, segment, ownerKeys, nowMs, includeUnconfirmed)).length,
     ])
   )
 
@@ -730,7 +748,8 @@ export async function getCrmUnifiedCustomers(
   const limit = clampInteger(options.limit, 100, 1, 2_000)
   const offset = clampInteger(options.offset, 0, 0, 100_000)
   // provisional 리드는 기본 뷰에 안 보이므로 담당자 카운트에서도 제외 — 배지·목록 정합.
-  const owners = buildOwnerOptions(rows.filter((row) => !row.provisional))
+  // 토글로 포함하면 담당자 카운트에도 같이 들어온다.
+  const owners = buildOwnerOptions(rows.filter((row) => includeUnconfirmed || !row.provisional))
   const pageRows = sorted.slice(offset, offset + limit)
   const nextOffset = offset + pageRows.length
   const { neoLatestSyncedAt, neoPartial } = snapshot
@@ -793,6 +812,7 @@ export async function getCrmUnifiedCustomers(
       ownerCount: owners.length,
       viewCounts,
       availableTags,
+      hiddenUnconfirmedCount,
     },
     healthDistribution,
     pagination: {

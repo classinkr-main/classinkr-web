@@ -39,6 +39,8 @@ export interface CrmUnifiedCustomers {
     ownerCount: number
     viewCounts?: Record<string, number>
     availableTags?: string[]
+    /** 확인 게이트로 숨긴 미확인 리드 수(서버 산출, 토글 on이면 0). 구 응답 호환으로 선택. */
+    hiddenUnconfirmedCount?: number
   }
   pagination: {
     limit: number
@@ -157,6 +159,8 @@ export function listUrl(input: {
   owner: string
   view: SavedViewFilter
   tag: string
+  /** 미확인 포함 토글 — URL(=클라이언트 캐시 키)에 실려 토글 상태별로 캐시가 분리된다. */
+  includeUnconfirmed?: boolean
   offset: number
 }) {
   const params = new URLSearchParams({ limit: String(PAGE_LIMIT), offset: String(input.offset) })
@@ -166,6 +170,7 @@ export function listUrl(input: {
   if (input.view !== "all") params.set("view", input.view)
   if (input.owner) params.set("owner", input.owner)
   if (input.tag) params.set("tag", input.tag)
+  if (input.includeUnconfirmed) params.set("includeUnconfirmed", "1")
   return `/api/admin/crm/customers/unified?${params.toString()}`
 }
 
