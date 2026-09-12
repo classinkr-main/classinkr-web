@@ -35,6 +35,7 @@ import {
   LeadActivityChip,
   PriorityCell,
   getLeadSourceSegment,
+  LeadLabelChips,
   priorityBreakdownTitle,
   priorityToneClass,
 } from "./shared"
@@ -222,6 +223,7 @@ export default function LeadsConsoleList({
                     <p className="mt-1 truncate text-[12px] text-[#1a1a1a]/50">
                       {lead.org ?? lead.phone ?? lead.email ?? "-"}
                     </p>
+                    <LeadLabelChips lead={lead} />
                     {priority && priority.reasons.length > 0 ? (
                       <p className="mt-0.5 truncate text-[11px] text-[#1a1a1a]/40">
                         {priority.reasons.join(" · ")}
@@ -465,7 +467,10 @@ export default function LeadsConsoleList({
                       <LeadActivityChip badge={activitySummary[lead.id]} />
                     </div>
                   </td>
-                  <td className="px-5 py-4 text-[#1a1a1a]/55">{lead.org ?? "—"}</td>
+                  <td className="px-5 py-4 text-[#1a1a1a]/55">
+                    {lead.org ?? "—"}
+                    <LeadLabelChips lead={lead} />
+                  </td>
                   <td className="px-5 py-4 whitespace-nowrap text-[#1a1a1a]/55">
                     {lead.assigned_to ? (
                       <span className="rounded-md bg-[#f0f0ec] px-2 py-0.5 text-[11px] font-medium text-[#1a1a1a]/55">

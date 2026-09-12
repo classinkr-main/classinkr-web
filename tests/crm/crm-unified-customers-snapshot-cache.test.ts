@@ -126,8 +126,13 @@ describe("crm-unified-customers 소스 스냅샷 캐시 배선", () => {
   it("unstable_cache(60초, admin-crm-unified-snapshot 태그)로 감싼다", async () => {
     await loadRepository()
 
-    expect(mocks.unstableCache).toHaveBeenCalledTimes(1)
-    const [fn, keyParts, options] = mocks.unstableCache.mock.calls[0]
+    // 이 모듈의 감싸기만 검증한다 — 모듈 그래프에 unstable_cache를 쓰는 다른 저장소가
+    // 들어와도(예: crm-tasks → admin-users 디렉터리 캐시) 호출 총량으로 깨지지 않게 태그로 고른다.
+    const call = mocks.unstableCache.mock.calls.find(
+      ([, keys]) => Array.isArray(keys) && keys.includes("admin-crm-unified-snapshot")
+    )
+    expect(call).toBeDefined()
+    const [fn, keyParts, options] = call!
     expect(typeof fn).toBe("function")
     expect(keyParts).toEqual(["admin-crm-unified-snapshot"])
     expect(options).toEqual({ revalidate: 60, tags: ["admin-crm-unified-snapshot"] })

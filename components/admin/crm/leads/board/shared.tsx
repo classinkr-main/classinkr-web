@@ -8,6 +8,7 @@ import type { LeadRecord } from "@/lib/repositories/leads"
 import type { LeadActivityBadge } from "@/lib/repositories/lead-activity"
 import type { LeadPriority } from "@/lib/crm/lead-ranking"
 import type { LeadAssignmentPolicyPreview } from "@/lib/crm/lead-assignment-policy"
+import { deriveLeadLabels } from "@/lib/crm/lead-labels"
 import { SOURCE_GROUP_LABEL, SOURCE_LABEL, getLeadSourceGroup } from "../shared"
 
 // 리드 보드 목록 무한스크롤 대체 — 초기 50건, "더보기"로 50건씩 확장(계획 문서 Phase W1).
@@ -168,6 +169,28 @@ export function LeadActivityChip({ badge }: { badge?: LeadActivityBadge }) {
           {badge.downloadCount}
         </span>
       )}
+    </span>
+  )
+}
+
+// 지역·과목·유형 칩 — 파생 규칙은 lib/crm/lead-labels(순수 함수·단위 테스트 대상)가 소유하고,
+// 보드는 결과만 그린다. 행 단위 호출이지만 정규식 몇 개짜리 순수 계산이라 렌더 비용은 무시 가능.
+export function LeadLabelChips({ lead }: { lead: LeadRecord }) {
+  const labels = deriveLeadLabels(lead)
+  const chips = [labels.region, labels.subjectLabel, labels.categoryLabel].filter(
+    (chip): chip is string => Boolean(chip)
+  )
+  if (chips.length === 0) return null
+  return (
+    <span className="mt-1 flex flex-wrap items-center gap-1">
+      {chips.map((chip) => (
+        <span
+          key={chip}
+          className="rounded-md bg-[#f0f0ec] px-1.5 py-0.5 text-[10px] font-medium text-[#1a1a1a]/55"
+        >
+          {chip}
+        </span>
+      ))}
     </span>
   )
 }

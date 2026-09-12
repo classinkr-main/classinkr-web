@@ -12,6 +12,7 @@ import {
   CRM_PRIORITY_BUCKET_LABELS,
   CRM_PRIORITY_LANE_LABELS,
   sortPriorityItems,
+  buildAccountOpenTaskDueMap,
   type CrmPriorityBucket,
   type CrmPriorityItem,
   type CrmPriorityLane,
@@ -21,6 +22,10 @@ import { classifyTodayCallSlot, isMetaLeadItem } from "@/lib/crm/today-calls"
 import { getLeads, onLeadsMutated, type LeadRecord } from "@/lib/repositories/leads"
 import { listCrmTasks, onCrmTasksMutated, type CrmTaskRecord } from "@/lib/repositories/crm-tasks"
 import { onContactLogsMutated } from "@/lib/repositories/contact-logs"
+import {
+  crmContactTargetKey,
+  getCrmCustomerContactMaps,
+} from "@/lib/repositories/crm-events"
 import { getLeadsActivitySummary, type LeadActivityBadge } from "@/lib/repositories/lead-activity"
 import {
   EMPTY_COMPASS_DEMO_SOURCE,
@@ -252,6 +257,8 @@ interface CrmPrioritySourceSnapshot {
   tasks: CrmTaskRecord[]
   tasksOk: boolean
   engagements: Record<string, LeadActivityBadge> | null
+  /** 자체 컨택 기록의 대상별 최근 시각. Data Cache(JSON) 경계라 Map 대신 평문 객체. */
+  latestContactByTarget: Record<string, string>
   /** Data Cache(JSON) 경계라 Map 대신 엔트리 배열 형태 — 읽는 쪽이 hydrateCompassDemoSource로 되돌린다. */
   demoSource: CompassDemoSourceJson
   warnings: string[]
@@ -305,12 +312,15 @@ async function loadSourceSnapshot(): Promise<CrmPrioritySourceSnapshot> {
   let neoAccountsOk = true
   let tasksOk = true
 
-  const [leadResult, neoResult, taskResult, engagementResult] = await Promise.allSettled([
-    getLeads(),
-    getNeoCrmCustomers(),
-    listCrmTasks({ status: "active", limit: 200 }),
-    getLeadsActivitySummary(),
-  ])
+  const [leadResult, neoResult, taskResult, engagementResult, contactMapsResult] =
+    await Promise.allSettled([
+      getLeads(),
+      getNeoCrmCustomers(),
+      listCrmTasks({ status: "active", limit: 200 }),
+      getLeadsActivitySummary(),
+      // 자체 컨택 신호 — 20페이지 초과 시 throw하는 함수라 반드시 allSettled로 감싼다.
+      getCrmCustomerContactMaps(),
+    ])
 
   let leads: LeadRecord[] = []
   if (leadResult.status === "fulfilled") {
@@ -323,6 +333,13 @@ async function loadSourceSnapshot(): Promise<CrmPrioritySourceSnapshot> {
   let neoRows: NeoCrmCustomerRow[] = []
   if (neoResult.status === "fulfilled" && neoResult.value.ok) {
     neoRows = neoResult.value.rows
+    // NEO 스냅샷 신선도 — 잔액·만료일이 오래된 채 티어를 매길 수 있으므로 화면에 알린다
+    // (통합 목록과 같은 문구).
+    if (neoResult.value.syncHealth?.isShroffAccountStale) {
+      warnings.push(
+        "외부 CRM 고객 동기화가 최신 상태가 아니어서 잔액·만료일·최근 수업 정보가 일부 누락될 수 있습니다."
+      )
+    }
   } else {
     neoAccountsOk = false
     warnings.push("동기화 고객 참고 데이터를 불러오지 못했습니다.")
@@ -347,6 +364,14 @@ async function loadSourceSnapshot(): Promise<CrmPrioritySourceSnapshot> {
     ...neoRows.map((row) => row.phone),
   ]).catch(() => ({ ...EMPTY_COMPASS_DEMO_SOURCE, down: true }))
 
+  // 자체 컨택 기록도 보조 신호 규약 — 실패하면 자체 신호 축만 조용히 빠진다(경고 없음).
+  // 통합 목록(crm-unified-customers)과 같은 키로 주입해 화면 간 점수가 갈리지 않게 한다.
+  // Data Cache(JSON) 경계라 Map이 아니라 평문 객체로 싣는다(2026-09-04 500 사고와 같은 이유).
+  const latestContactByTarget =
+    contactMapsResult.status === "fulfilled"
+      ? Object.fromEntries(contactMapsResult.value.latestContactByTarget)
+      : {}
+
   return {
     leads,
     leadsOk,
@@ -355,6 +380,7 @@ async function loadSourceSnapshot(): Promise<CrmPrioritySourceSnapshot> {
     tasks,
     tasksOk,
     engagements,
+    latestContactByTarget,
     // unstable_cache는 JSON으로 저장한다 — Map을 그대로 넣으면 적중 뒤 `.get`이 터진다(2026-09-04 500 사고).
     demoSource: serializeCompassDemoSource(demoSource),
     warnings,
@@ -382,8 +408,19 @@ export async function getCrmPriorityQueue(
     if (item) items.push(item)
   }
 
+  // 계정 열린 할 일 — 이미 로드한 활성 할 일 배열에서 계정별 가장 이른 due를 뽑는다.
+  const accountTaskDueMap = buildAccountOpenTaskDueMap(snapshot.tasks)
+
   for (const account of snapshot.neoRows) {
-    const item = buildNeoAccountPriorityItem(account, now, { demoIndex })
+    const item = buildNeoAccountPriorityItem(account, now, {
+      demoIndex,
+      ownSignals: {
+        lastContactAt:
+          snapshot.latestContactByTarget[crmContactTargetKey("neo_account", account.accountId)] ??
+          null,
+        openTaskDueAt: accountTaskDueMap.get(account.accountId) ?? null,
+      },
+    })
     if (item) items.push(item)
   }
 

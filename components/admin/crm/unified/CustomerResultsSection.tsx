@@ -60,7 +60,7 @@ export default function CustomerResultsSection({
           정렬 ·{" "}
           {sort
             ? `${SORT_LABELS[sort.key]} ${sort.direction === "asc" ? "오름차순" : "내림차순"}`
-            : "추천순 (기본)"}
+            : "우선순위순 (티어 → 돈 → 마감)"}
         </p>
         <div className="flex items-center gap-1.5">
           <button

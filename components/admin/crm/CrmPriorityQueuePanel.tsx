@@ -76,6 +76,14 @@ const SLOT_CHIP_CLASS: Record<TodayCallSlotKey, string> = {
   reengage: "bg-[#f0f0ec] text-[#31302E]",
 }
 
+// 티어 뱃지 — 정렬 1축을 그대로 시각화한다. p0만 채움(오늘 필수), 나머지는 아웃라인.
+const TIER_BADGE_CLASS: Record<CrmPriorityItem["tier"], string> = {
+  p0: "bg-[#B85C33] text-white",
+  p1: "border border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]",
+  p2: "border border-[#e8e8e4] bg-white text-[#1a1a1a]/55",
+  p3: "border border-[#e8e8e4] bg-white text-[#1a1a1a]/35",
+}
+
 function queueUrl(owner: string, limit: number) {
   // v=3: 레인·시점 파라미터를 제거한 "오늘 전화" 페이로드 — 이전 캐시와 섞이지 않게 버전 분리.
   const params = new URLSearchParams({ limit: String(limit), source: "customer", v: "3" })
@@ -464,6 +472,12 @@ export default function CrmPriorityQueuePanel({
                 >
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-1.5">
+                      {/* 티어 = 정렬 1축. 왜 이 순서인지가 뱃지 하나로 읽혀야 한다. */}
+                      <span
+                        className={`inline-flex h-[22px] shrink-0 items-center rounded-full px-2 text-[11px] font-bold ${TIER_BADGE_CLASS[item.tier]}`}
+                      >
+                        {item.tierLabel}
+                      </span>
                       <span className={`inline-flex h-[22px] shrink-0 items-center rounded-full px-2 text-[11px] font-semibold ${SLOT_CHIP_CLASS[call.slot]}`}>
                         {call.slotLabel}
                       </span>
@@ -474,6 +488,20 @@ export default function CrmPriorityQueuePanel({
                       {item.subtitle ? (
                         <span className="truncate text-[12px] text-[#1a1a1a]/45">{item.subtitle}</span>
                       ) : null}
+                      {/* 지역·과목·유형 라벨(엔진 파생, lib/crm/lead-labels) — 전화 전에 "어디의 무슨 학원인지"를
+                          카드에서 바로 읽게 한다. 최대 3개, 없으면 생략. */}
+                      {item.labels?.length ? (
+                        <span className="flex shrink-0 flex-wrap items-center gap-1">
+                          {item.labels.slice(0, 3).map((label) => (
+                            <span
+                              key={label}
+                              className="rounded-md bg-[#f0f0ec] px-1.5 py-0.5 text-[10px] font-medium text-[#1a1a1a]/55"
+                            >
+                              {label}
+                            </span>
+                          ))}
+                        </span>
+                      ) : null}
                       {call.groupedCount > 0 ? (
                         <span className="shrink-0 rounded-md bg-[#f0f0ec] px-1.5 py-0.5 text-[10px] font-semibold text-[#1a1a1a]/55">
                           같은 기관 +{call.groupedCount}건
@@ -482,9 +510,24 @@ export default function CrmPriorityQueuePanel({
                     </div>
                     {/* 왜 오늘 이 사람인가 — 점수 숫자 대신 근거 문장이 카드의 중심이다. */}
                     <p className="mt-1 text-[13px] font-semibold text-[#111110]">{item.reason}</p>
-                    <p className="mt-0.5 text-[11px] font-medium text-[#1a1a1a]/40">
-                      {item.actionLabel} · {item.statusLabel}
-                    </p>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-medium text-[#1a1a1a]/40">
+                      <span>
+                        {item.actionLabel} · {item.statusLabel}
+                      </span>
+                      {/* 돈이 티어 안의 정렬 축 — 금액이 있으면 그대로 보여준다. */}
+                      {item.moneyLabel ? (
+                        <span className="font-semibold tabular-nums text-[#084734]">{item.moneyLabel}</span>
+                      ) : null}
+                      {/* NEO 로그성 날짜(수업 기록) 파생 근거 — 본사 보고용이라 날짜 신뢰가 낮다. */}
+                      {item.trust === "low" ? (
+                        <span
+                          title="NEO CRM의 수업 기록 날짜에서 파생된 근거입니다 — 본사 보고용 기록이라 미기입·지연이 있을 수 있습니다."
+                          className="rounded-md bg-[#f0f0ec] px-1.5 py-0.5 text-[10px] font-semibold text-[#1a1a1a]/50"
+                        >
+                          NEO 기록 기준
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="lg:pt-0.5">
                     <p className="text-[11px] font-semibold text-[#1a1a1a]/35">담당·기준일</p>
@@ -747,15 +790,9 @@ export default function CrmPriorityQueuePanel({
       {data ? (
         <p className="mt-2 flex flex-wrap items-center gap-x-1.5 text-[11px] text-[#1a1a1a]/45">
           <span>
-            오늘 후보 <b className="font-semibold text-[#111110]">{totals.today.toLocaleString("ko-KR")}건</b>
+            오늘 필수(P0) <b className="font-semibold text-[#111110]">{totals.today.toLocaleString("ko-KR")}건</b>
             {" · "}신규 응대 {totals.slots.new_response.toLocaleString("ko-KR")} · 돈 임박{" "}
             {totals.slots.money.toLocaleString("ko-KR")} · 다시 움직임 {totals.slots.reengage.toLocaleString("ko-KR")}
-            {data.summary.laneCritical > 0 ? (
-              <>
-                {" · "}
-                <span className="font-semibold text-[#B85C33]">긴급 {data.summary.laneCritical.toLocaleString("ko-KR")}</span>
-              </>
-            ) : null}
           </span>
           <Link href="/admin/crm/customers/unified" className="font-semibold text-[#084734] underline-offset-2 hover:underline">
             전체는 고객DB에서 보기

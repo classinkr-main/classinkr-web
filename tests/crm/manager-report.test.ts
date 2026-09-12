@@ -25,6 +25,13 @@ function item(overrides: Partial<CrmPriorityItem>): CrmPriorityItem {
     dueAt: null,
     updatedAt: null,
     sourceKey: null,
+    // 티어 체계 기본값 — attentionFromQueueItem은 source/bucket/action/severity만 읽지만
+    // CrmPriorityItem 계약상 필수 필드다.
+    tier: "p1",
+    tierLabel: "이번 주",
+    moneyBand: "unknown",
+    moneyLabel: null,
+    trust: "high",
     ...overrides,
   }
 }

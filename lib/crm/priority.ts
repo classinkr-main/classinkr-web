@@ -10,11 +10,18 @@ import {
   findCompassDemoSignal,
   type CompassDemoIndex,
 } from "@/lib/crm/compass-demo-signal"
+import { formatCNY, formatUSD } from "@/lib/crm/money-format"
+import { deriveLeadLabels } from "@/lib/crm/lead-labels"
 
 export type CrmPrioritySource = "lead" | "neo_account" | "task"
 export type CrmPrioritySeverity = "critical" | "high" | "medium" | "low"
 export type CrmPriorityBucket = "today" | "renewal" | "stale_recovery" | "watch"
 export type CrmPriorityLane = "sales" | "renewal" | "customer_care"
+// 티어 — 화면과 정렬의 1축. 연속 점수(0~100)는 실효성이 없어 내부 타이브레이커로 강등하고,
+// "오늘 안 하면 잃는가"를 신뢰 신호(결제·만료·자체 기록)만으로 4단계로 판정한다.
+export type CrmPriorityTier = "p0" | "p1" | "p2" | "p3"
+// 머니 밴드 — 티어 안에서의 정렬 축. "같은 급이면 큰 돈부터".
+export type CrmMoneyBand = "high" | "mid" | "low" | "unknown"
 export type CrmPriorityAction =
   | "respond_lead"
   | "follow_up_lead"
@@ -47,6 +54,17 @@ export interface CrmPriorityItem {
   updatedAt: string | null
   /** 리드의 유입 소스 원문(예: meta_lead_ads) — 채널별 분리 표시용. 계정·할 일은 null. */
   sourceKey: string | null
+  /** 티어 — 정렬 1축. p0 오늘 필수 / p1 이번 주 / p2 기회 / p3 관찰. */
+  tier: CrmPriorityTier
+  tierLabel: string
+  /** 같은 티어 안의 정렬 축 — 큰 돈부터. */
+  moneyBand: CrmMoneyBand
+  /** 화면용 금액 표기(예: "잔액 ¥1.2만 · 오더 $3,069", "원생 300명+"). 없으면 null. */
+  moneyLabel: string | null
+  /** reason의 근거 신뢰. low = NEO 로그성 날짜(마지막 수업 등) 파생 — 화면에 구분 표시. */
+  trust: "high" | "low"
+  /** 표시용 라벨(지역·과목·유형 등, lib/crm/lead-labels 파생). 없는 소스는 생략. */
+  labels?: string[]
 }
 
 const RESPONSE_TARGET_SOURCES = new Set(["demo_modal", "contact_page", "meta_lead_ads"])
@@ -74,22 +92,41 @@ export const CRM_PRIORITY_LANE_LABELS: Record<CrmPriorityLane, string> = {
   customer_care: "고객관리",
 }
 
-const BUCKET_SORT_RANK: Record<CrmPriorityBucket, number> = {
-  today: 0,
-  renewal: 1,
-  watch: 2,
-  stale_recovery: 3,
+export const CRM_PRIORITY_TIER_LABELS: Record<CrmPriorityTier, string> = {
+  p0: "오늘 필수",
+  p1: "이번 주",
+  p2: "기회",
+  p3: "관찰",
 }
+
+export const TIER_SORT_RANK: Record<CrmPriorityTier, number> = { p0: 0, p1: 1, p2: 2, p3: 3 }
+const MONEY_SORT_RANK: Record<CrmMoneyBand, number> = { high: 0, mid: 1, low: 2, unknown: 3 }
+
+// 티어는 "더 급한 쪽"만 이긴다 — 신호 여러 개가 겹치면 가장 높은 티어가 남는다.
+function raiseTier(current: CrmPriorityTier, candidate: CrmPriorityTier): CrmPriorityTier {
+  return TIER_SORT_RANK[candidate] < TIER_SORT_RANK[current] ? candidate : current
+}
+
+// 티어가 정렬·표시의 1축이므로 severity(색·긴급 카운트)도 티어에서 파생한다.
+const TIER_SEVERITY: Record<CrmPriorityTier, CrmPrioritySeverity> = {
+  p0: "critical",
+  p1: "high",
+  p2: "medium",
+  p3: "low",
+}
+
+// 머니 밴드 임계값 — NEO 통화 규약(잔액 CNY·오더 USD, lib/crm/money-format.ts) 기준.
+// 사업 감각으로 조정 가능한 상수. 잔액은 남은 서비스(지킬 매출), 오더는 과거 지불 규모.
+const MONEY_HIGH_ORDER_USD = 3_000
+const MONEY_MID_ORDER_USD = 500
+const MONEY_HIGH_BALANCE_CNY = 10_000
+const MONEY_MID_BALANCE_CNY = 1_000
+
+// (버킷 정렬 랭크·score 기반 severity는 티어 체계로 대체 — 정렬은 sortPriorityItems,
+//  severity는 TIER_SEVERITY가 담당한다.)
 
 function clampScore(score: number) {
   return Math.max(0, Math.min(100, Math.round(score)))
-}
-
-function severityFromScore(score: number): CrmPrioritySeverity {
-  if (score >= 85) return "critical"
-  if (score >= 68) return "high"
-  if (score >= 42) return "medium"
-  return "low"
 }
 
 function parseTime(value: string | null | undefined) {
@@ -169,6 +206,9 @@ export function buildLeadPriorityItem(
   // 미래 팔로업(달력일 기준 내일 이후)이 잡힌 리드는 "예정" 상태 — 담당자가 이미
   // 날짜를 정한 건이므로 SLA 축이 "오늘 처리"로 되끌어올리면 안 된다.
   const hasScheduledFollowUp = followUpDays != null && followUpDays >= 1
+  // 티어 — 리드는 유입 시각·팔로업·데모·재방문 전부 자체 타임스탬프라 신뢰 高.
+  let tier: CrmPriorityTier = "p3"
+  let cooledLead = false
 
   if (isResponseTargetLead(lead)) {
     action = "respond_lead"
@@ -186,20 +226,23 @@ export function buildLeadPriorityItem(
         const daysPast = (ageHours - 48) / 24
         score += Math.max(4, Math.round(26 * Math.pow(0.5, daysPast / 3)))
         const days = Math.floor(ageHours / 24)
-        const cooled = daysPast > UNRESPONDED_COOLED_DAYS
-        reason = cooled ? `${days}일 미응답 · 식음` : "48시간 이상 미응답"
-        // 버킷 정렬이 점수보다 우선하므로(sortPriorityItems), 식은 건을 계속 "오늘 처리"에
-        // 두면 점수를 아무리 낮춰도 살아 있는 거래 위에 그대로 남는다. 라벨과 자리를 맞춘다 —
+        cooledLead = daysPast > UNRESPONDED_COOLED_DAYS
+        reason = cooledLead ? `${days}일 미응답 · 식음` : "48시간 이상 미응답"
         // 닷새 넘게 답 못 한 문의는 오늘의 할 일이 아니라 관찰 대상이다.
-        if (cooled) bucket = "watch"
+        if (cooledLead) bucket = "watch"
+        // 48h를 넘긴 미응답은 "오늘 필수"가 아니라 "이번 주" — SLA는 이미 깨졌고,
+        // 오늘 자리는 아직 살릴 수 있는 신선한 문의가 가져간다.
+        tier = raiseTier(tier, cooledLead ? "p3" : "p1")
       } else if (ageHours >= 24) {
         score += 26
         reason = "24시간 이상 미응답"
+        tier = raiseTier(tier, "p0")
       } else {
         // 24h 미만 +18 — 갓 들어온 문의가 규모·감도 보정 몇 점에 밀려 하루 늦은
         // 문의(+26) 아래로 뒤집히는 반전을 완화한다(SLA 위반이 여전히 위이되 격차 축소).
         score += 18
         reason = "신규 문의 응답 필요"
+        tier = raiseTier(tier, "p0")
       }
       dueAt = lead.timestamp
     }
@@ -212,14 +255,18 @@ export function buildLeadPriorityItem(
       score += Math.max(4, Math.round(28 * Math.pow(0.5, Math.max(0, overdue - 3) / 4)))
       reason = overdue > 7 ? `${overdue}일 지연된 팔로업 · 식음` : `${overdue}일 지연된 팔로업`
       bucket = "today"
+      // 오래 지연된 약속은 "오늘 필수" 자격을 잃는다 — 일주일 넘게 안 지킨 약속은 이번 주 감.
+      tier = raiseTier(tier, overdue > 7 ? "p1" : "p0")
     } else if (followUpDays === 0) {
       score += 26
       reason = "오늘 예정된 팔로업"
       bucket = "today"
+      tier = raiseTier(tier, "p0")
     } else if (followUpDays <= 2) {
       // 임박 예정 건은 소폭만 얹는다 — "오늘 처리"로 승격하지 않는다(예정은 예정일에).
       score += 12
       reason = followUpDays === 1 ? "내일 팔로업 예정" : `D-${followUpDays} 팔로업 예정`
+      tier = raiseTier(tier, "p1")
     }
   }
 
@@ -249,6 +296,8 @@ export function buildLeadPriorityItem(
       score += 16
       reason = "연락 후 재방문"
       if (bucket === "watch") bucket = "today"
+      // 재방문은 자체 행동 로그(서버 타임스탬프) — 죽은 듯하던 리드도 이번 주로 되살린다.
+      tier = raiseTier(tier, "p1")
     }
     if (engagement.downloadCount > 0) score += 8
     if (engagement.authenticated) score += 6
@@ -264,9 +313,43 @@ export function buildLeadPriorityItem(
     actionLabel = demo.phase === "recent" ? "데모 후속" : "데모"
     bucket = "today"
     dueAt = demo.date
+    // 데모 당일·내일은 오늘 필수, 이번 주 예정은 p1, 끝난 데모 후속은 기회.
+    const demoDays = daysFromNow(demo.date, nowMs)
+    tier = raiseTier(
+      tier,
+      demo.phase === "recent" ? "p2" : demoDays != null && demoDays <= 1 ? "p0" : "p1"
+    )
   }
 
   if (lead.phone) score += 4
+
+  // 신호가 하나도 없어도 살아 있는(식지 않은) 리드는 "기회"다 — 관찰은 식은 건만.
+  if (tier === "p3" && !cooledLead) tier = "p2"
+
+  // ─ 라벨(지역·과목·유형) — 상호명·폼 응답에서 파생. 교육 외(카페·스파 등) 추정 리드는
+  // 신규 응대 P0 자리를 차지하지 않게 기회로 상한을 건다(실측: 비교육 자영업 유입 존재).
+  const leadLabels = deriveLeadLabels(lead)
+  if (leadLabels.category === "non_education" && TIER_SORT_RANK[tier] < TIER_SORT_RANK.p2) {
+    tier = "p2"
+    reason = `${reason} · 교육 외 추정`
+  }
+
+  // ─ 머니 밴드 — 규모(원생 수)와 광고 의도로 추정. 리드는 금액 원천이 없어 보수적으로.
+  let moneyBand: CrmMoneyBand = "unknown"
+  let moneyLabel: string | null = null
+  if (size >= 300) {
+    moneyBand = "high"
+    moneyLabel = `원생 ${size.toLocaleString("ko-KR")}명+`
+  } else if (size >= 100) {
+    moneyBand = "mid"
+    moneyLabel = `원생 ${size.toLocaleString("ko-KR")}명+`
+  } else if (size > 0) {
+    moneyBand = "low"
+    moneyLabel = `원생 ${size.toLocaleString("ko-KR")}명`
+  } else if (lead.source === "meta_lead_ads" && getMetaIntent(lead)?.label === "장비 구매") {
+    moneyBand = "mid"
+    moneyLabel = "장비 구매 의도"
+  }
 
   const finalScore = clampScore(score)
   return {
@@ -278,7 +361,7 @@ export function buildLeadPriorityItem(
     ownerKeys: uniqueOwnerKeys([lead.assigned_to]),
     statusLabel: lead.status === "new" ? "신규 리드" : "접촉 중",
     score: finalScore,
-    severity: severityFromScore(finalScore),
+    severity: TIER_SEVERITY[tier],
     lane: "sales",
     laneLabel: CRM_PRIORITY_LANE_LABELS.sales,
     bucket,
@@ -290,18 +373,56 @@ export function buildLeadPriorityItem(
     dueAt,
     updatedAt: lead.follow_up_at ?? lead.timestamp,
     sourceKey: lead.source ?? null,
+    tier,
+    tierLabel: CRM_PRIORITY_TIER_LABELS[tier],
+    moneyBand,
+    moneyLabel,
+    // 리드의 근거는 전부 자체 데이터(유입 시각·팔로업·자체 캘린더·자체 행동 로그).
+    trust: "high",
+    labels: [leadLabels.region, leadLabels.subjectLabel, leadLabels.categoryLabel].filter(
+      (label): label is string => Boolean(label)
+    ),
   }
+}
+
+/**
+ * 계정의 자체 CRM 신호 — 외부 NEO 로그 대신 신뢰할 수 있는 우리 팀 기록.
+ * 원천: crm_customer_events(마지막 자체 컨택), crm_tasks(계정 예정 작업).
+ * 순수 모듈 규약상 저장소 호출은 못 하므로 소비처(홈 큐·통합 목록)가 주입한다.
+ */
+/** 계정별 열린(open/snoozed) 할 일 중 가장 이른 due_at — 자체 예정 작업 축의 입력. */
+export function buildAccountOpenTaskDueMap(tasks: CrmTaskRecord[]) {
+  const map = new Map<string, string>()
+  for (const task of tasks) {
+    if (task.targetType !== "neo_account" || !task.targetId) continue
+    if (task.status !== "open" && task.status !== "snoozed") continue
+    if (!task.dueAt) continue
+    const current = map.get(task.targetId)
+    if (!current || task.dueAt < current) map.set(task.targetId, task.dueAt)
+  }
+  return map
+}
+
+export interface AccountOwnSignals {
+  /** 마지막 자체 컨택 시각(메모·콜·문자·회의록·리드로그 미러). */
+  lastContactAt?: string | null
+  /** 열린(open/snoozed) 계정 할 일 중 가장 이른 due_at. */
+  openTaskDueAt?: string | null
 }
 
 export function buildNeoAccountPriorityItem(
   account: NeoCrmCustomerRow,
   now = new Date(),
-  options?: { demoIndex?: CompassDemoIndex | null }
+  options?: { demoIndex?: CompassDemoIndex | null; ownSignals?: AccountOwnSignals | null }
 ): CrmPriorityItem | null {
   const nowMs = now.getTime()
   const expiryDays = daysFromNow(account.expireAt, nowMs)
   const inactiveDays = account.lastClassAt ? Math.floor((nowMs - (parseTime(account.lastClassAt) ?? nowMs)) / DAY_MS) : null
   const riskReasonCodes = new Set(account.riskReasons?.map((reason) => reason.code).filter(Boolean))
+  const own = options?.ownSignals ?? null
+  const ownContactMs = parseTime(own?.lastContactAt ?? null)
+  const ownContactDays = ownContactMs != null ? Math.floor((nowMs - ownContactMs) / DAY_MS) : null
+  const openTaskDueDays = daysFromNow(own?.openTaskDueAt ?? null, nowMs)
 
   let action: CrmPriorityAction | null = null
   let actionLabel = ""
@@ -310,6 +431,9 @@ export function buildNeoAccountPriorityItem(
   let dueAt: string | null = null
   let bucket: CrmPriorityBucket = "watch"
   let lane: CrmPriorityLane = "customer_care"
+  let tier: CrmPriorityTier = "p3"
+  // 신뢰 — 만료·잔액·주문(결제 시스템 데이터)과 자체 기록은 高, NEO 수업 날짜 파생은 低.
+  let trust: "high" | "low" = "high"
 
   if (expiryDays != null && expiryDays < 0) {
     lane = "renewal"
@@ -320,16 +444,17 @@ export function buildNeoAccountPriorityItem(
     if (bucket === "stale_recovery") {
       reason = `${expiredDays}일 전 만료 · 장기 회복`
       score = 44 + Math.min(16, Math.floor((expiredDays - STALE_RECOVERY_EXPIRED_DAYS) / 14))
+      tier = "p3"
     } else {
-      // 리드의 미응답과 같은 원리 — 이전에는 `82 + min(10, 경과일)` 이라 오래 만료될수록
-      // 점수가 올라, 두 달 전에 죽은 계정이 사흘 뒤 만료되는(아직 살릴 수 있는) 계정과
-      // 동점이 됐다. 회복 골든타임(2주)에서 봉우리를 찍고 장기 회복 진입선까지 감쇠한다.
+      // 회복 골든타임(2주)에서 봉우리를 찍고 장기 회복 진입선까지 감쇠한다.
       const pastGolden = Math.max(0, expiredDays - EXPIRED_GOLDEN_DAYS)
       score = Math.max(48, 88 * Math.pow(0.5, pastGolden / EXPIRED_HALF_LIFE_DAYS))
       reason =
         pastGolden > EXPIRED_HALF_LIFE_DAYS / 2
           ? `${expiredDays}일 전 만료 · 식음`
           : `${expiredDays}일 전 만료`
+      // 골든타임(만료 후 2주) 안은 이번 주에 살려야 한다. 지나면 기회로 강등.
+      tier = expiredDays <= EXPIRED_GOLDEN_DAYS ? "p1" : "p2"
     }
     dueAt = account.expireAt
   } else if (expiryDays != null && expiryDays <= 30) {
@@ -340,6 +465,8 @@ export function buildNeoAccountPriorityItem(
     reason = expiryDays === 0 ? "오늘 만료" : `${expiryDays}일 내 만료`
     score = 72 + Math.max(0, 30 - expiryDays)
     dueAt = account.expireAt
+    // 만료일은 결제 시스템 데이터 — 놓치면 손실이 확정되는 유일한 시계다.
+    tier = expiryDays <= 3 ? "p0" : expiryDays <= 14 ? "p1" : "p2"
   } else if (
     // 재충전 임박: 잔액이 아직 남아 있을 때 잡는 유일한 선행 신호.
     // 만료보다는 뒤, 휴면보다는 앞 — 아직 돈을 쓰고 있는 고객이라 회복 가능성이 가장 높다.
@@ -355,13 +482,19 @@ export function buildNeoAccountPriorityItem(
     reason = `잔액 소진 D-${daysLeft}`
     score = 70 + Math.max(0, 30 - daysLeft)
     dueAt = account.lastClassAt ?? account.updatedAt ?? null
+    // 잔액 소진도 결제 시스템 파생 신호다 — 만료와 같은 시계로 티어를 매긴다.
+    tier = daysLeft <= 3 ? "p0" : daysLeft <= 14 ? "p1" : "p2"
   } else if (inactiveDays != null && inactiveDays >= 30 && Number(account.balance ?? 0) > 0) {
     action = "reengage_account"
     actionLabel = "재활성"
     bucket = "watch"
+    // NEO 수업 날짜 단독 근거 — 본사 보고용 기록이라 미기입·지연이 흔해 신뢰가 낮다.
+    // 티어를 올리지 않고(기회 고정) 화면에 저신뢰 표시를 남긴다. 점수 상한도 만료 점검 수준.
     reason = `${inactiveDays}일 수업 없음 · 잔액 보유`
-    score = 60 + Math.min(24, Math.floor((inactiveDays - 30) / 3))
-    dueAt = account.lastClassAt
+    score = 48 + Math.min(7, Math.floor((inactiveDays - 30) / 10))
+    dueAt = account.expireAt
+    tier = "p2"
+    trust = "low"
   } else if (Number(account.balance ?? 0) > 0 && expiryDays != null && expiryDays <= 60) {
     action = "watch_account"
     actionLabel = "만료 점검"
@@ -369,28 +502,45 @@ export function buildNeoAccountPriorityItem(
     reason = `${expiryDays}일 내 만료 예정`
     score = 48
     dueAt = account.expireAt
+    tier = "p2"
   } else if (
     riskReasonCodes.has("depleted_balance") ||
     (account.balance != null && Number(account.balance) <= 0)
   ) {
-    // 잔액 소진이 곧 충전 수요는 아니다 — 수강권을 다 쓰고 떠난 휴면 고객까지
-    // 일괄 70점으로 올리면 큐가 인플레이션된다. 최근에도 수업을 돌리던(45일 내)
-    // 계정만 진짜 충전 후보로 올리고, 수업 신호가 없거나 끊긴 계정은 관찰로 내린다.
-    const hasRecentClass = inactiveDays != null && inactiveDays <= 45
-    if (hasRecentClass) {
+    // 잔액 소진이 곧 충전 수요는 아니다. "지금도 살아 있는 고객인가"의 근거를
+    // 신뢰 순서로 본다: ① 자체 컨택 45일 내(신뢰 高) ② NEO 수업 45일 내(신뢰 低)
+    // ③ 둘 다 없으면 휴면 관찰. NEO 결측은 "수업 없음"과 다르므로 문구를 가른다.
+    const ownAlive = ownContactDays != null && ownContactDays <= 45
+    const neoAlive = inactiveDays != null && inactiveDays <= 45
+    if (ownAlive) {
       action = "renew_account"
       actionLabel = "충전 안내"
       bucket = "today"
-      reason = "충전 잔액 소진"
+      reason = `충전 잔액 소진 · ${ownContactDays === 0 ? "오늘" : `${ownContactDays}일 전`} 컨택`
       score = account.riskLevel === "urgent" ? 82 : 70
+      tier = "p1"
+    } else if (neoAlive) {
+      action = "renew_account"
+      actionLabel = "충전 안내"
+      bucket = "today"
+      reason = "충전 잔액 소진 · NEO 수업 기록 기준"
+      score = 62
+      tier = "p2"
+      trust = "low"
     } else {
       action = "watch_account"
       actionLabel = "휴면 점검"
       bucket = "watch"
-      reason = "잔액 소진 · 최근 수업 없음"
+      reason =
+        inactiveDays == null
+          ? "잔액 소진 · 수업 기록 없음(NEO 미기입 가능)"
+          : "잔액 소진 · 최근 수업 없음"
       score = 38
+      tier = "p3"
+      trust = "low"
     }
-    dueAt = account.updatedAt ?? account.lastClassAt ?? null
+    // 동기화 시계(updatedAt)는 정렬을 흔들 뿐 업무 시각이 아니다 — 만료일만 쓴다.
+    dueAt = account.expireAt ?? null
   }
 
   // 데모가 잡힌 고객은 만료·잔액과 무관하게 지금 챙겨야 한다 — 다른 사유가 없어도
@@ -405,12 +555,58 @@ export function buildNeoAccountPriorityItem(
     bucket = "today"
     score += compassDemoLift(demo)
     dueAt = demo.date
+    const demoDays = daysFromNow(demo.date, nowMs)
+    tier = raiseTier(
+      tier,
+      demo.phase === "recent" ? "p2" : demoDays != null && demoDays <= 1 ? "p0" : "p1"
+    )
+    trust = "high"
+  }
+
+  // ─ 자체 예정 작업(crm_tasks) — 리드의 follow_up_at 과 대칭 규칙.
+  // 오늘·지연 due 는 오늘 필수로 올리고, 미래 due 는 "이미 잡아둔 건"이라 강등한다.
+  if (openTaskDueDays != null && action) {
+    if (openTaskDueDays <= 0) {
+      tier = raiseTier(tier, "p0")
+      reason = `${reason} · ${openTaskDueDays < 0 ? "지연된 예정 작업" : "오늘 예정 작업"}`
+      trust = "high"
+    } else if (expiryDays == null || expiryDays > 3) {
+      // 만료 임박(D-3)은 예정 작업이 있어도 강등하지 않는다 — 돈 손실이 확정되는 시계라서.
+      if (TIER_SORT_RANK[tier] < TIER_SORT_RANK.p2) tier = "p2"
+      reason = `${reason} · D-${openTaskDueDays} 예정 작업 있음`
+    }
+  }
+
+  // ─ 중복 전화 방지 — 최근 3일 내 자체 컨택했으면 오늘 필수에서 한 단계 내린다
+  // (만료 D-3 이내는 예외 — 컨택했더라도 마감은 마감이다).
+  if (
+    tier === "p0" &&
+    ownContactDays != null &&
+    ownContactDays <= 3 &&
+    (expiryDays == null || expiryDays > 3)
+  ) {
+    tier = "p1"
+    reason = `${reason} · ${ownContactDays === 0 ? "오늘" : `${ownContactDays}일 전`} 컨택함`
   }
 
   if (!action) return null
 
   if (Number(account.orderAmount) > 0) score += 4
   if (Number(account.balance ?? 0) > 0) score += 3
+
+  // ─ 머니 밴드 — 잔액(CNY, 지킬 매출)과 오더(USD, 지불 규모) 중 큰 쪽.
+  const orderUsd = Number(account.orderAmount) || 0
+  const balanceCny = account.balance != null ? Number(account.balance) || 0 : null
+  let moneyBand: CrmMoneyBand
+  if (orderUsd >= MONEY_HIGH_ORDER_USD || (balanceCny ?? 0) >= MONEY_HIGH_BALANCE_CNY) moneyBand = "high"
+  else if (orderUsd >= MONEY_MID_ORDER_USD || (balanceCny ?? 0) >= MONEY_MID_BALANCE_CNY) moneyBand = "mid"
+  else if (orderUsd > 0 || (balanceCny != null && balanceCny > 0)) moneyBand = "low"
+  else if (balanceCny == null && orderUsd <= 0) moneyBand = "unknown"
+  else moneyBand = "low"
+  const moneyParts: string[] = []
+  if (balanceCny != null && balanceCny > 0) moneyParts.push(`잔액 ${formatCNY(balanceCny)}`)
+  if (orderUsd > 0) moneyParts.push(`오더 ${formatUSD(orderUsd)}`)
+  const moneyLabel = moneyParts.length > 0 ? moneyParts.join(" · ") : null
 
   const finalScore = clampScore(score)
   return {
@@ -422,7 +618,7 @@ export function buildNeoAccountPriorityItem(
     ownerKeys: uniqueOwnerKeys([account.ownerName, account.ownerId]),
     statusLabel: "기존 고객",
     score: finalScore,
-    severity: severityFromScore(finalScore),
+    severity: TIER_SEVERITY[tier],
     lane,
     laneLabel: CRM_PRIORITY_LANE_LABELS[lane],
     bucket,
@@ -434,6 +630,12 @@ export function buildNeoAccountPriorityItem(
     dueAt,
     updatedAt: account.updatedAt ?? account.lastClassAt ?? account.expireAt,
     sourceKey: null,
+    tier,
+    tierLabel: CRM_PRIORITY_TIER_LABELS[tier],
+    moneyBand,
+    moneyLabel,
+    trust,
+    labels: account.regionLabel ? [account.regionLabel] : [],
   }
 }
 
@@ -494,6 +696,8 @@ export function buildTaskPriorityItem(task: CrmTaskRecord, now = new Date()): Cr
   let score = TASK_PRIORITY_BASE_SCORE[task.priority]
   let bucket: CrmPriorityBucket = "watch"
   let reason = "예정된 할 일"
+  // 할 일은 전부 자체 기록(서버 타임스탬프) — 마감 기준으로 티어를 정한다.
+  let tier: CrmPriorityTier = "p2"
 
   const dueDays = daysFromNow(effectiveDue, nowMs)
   if (dueDays != null) {
@@ -501,19 +705,24 @@ export function buildTaskPriorityItem(task: CrmTaskRecord, now = new Date()): Cr
       bucket = "today"
       score += Math.min(14, Math.abs(dueDays) * 2 + 6)
       reason = `${Math.abs(dueDays)}일 지연된 할 일`
+      tier = Math.abs(dueDays) > 7 ? "p1" : "p0"
     } else if (dueDays === 0) {
       bucket = "today"
       score += 8
       reason = "오늘 마감"
+      tier = "p0"
     } else if (dueDays <= 2) {
       score += 3
       reason = `${dueDays}일 뒤 예정`
+      tier = "p1"
     } else {
       reason = `${dueDays}일 뒤 예정`
+      tier = "p2"
     }
   } else if (task.priority === "urgent" || task.priority === "high") {
     bucket = "today"
     reason = "마감일 없는 중요 할 일"
+    tier = "p1"
   }
 
   const taskLabel = TASK_TYPE_ACTION_LABELS[task.taskType]
@@ -528,7 +737,7 @@ export function buildTaskPriorityItem(task: CrmTaskRecord, now = new Date()): Cr
     ownerKeys: uniqueOwnerKeys([task.ownerKey, task.ownerNameSnapshot]),
     statusLabel: task.status === "snoozed" ? "미룬 할 일" : "할 일",
     score: finalScore,
-    severity: severityFromScore(finalScore),
+    severity: TIER_SEVERITY[tier],
     lane,
     laneLabel: CRM_PRIORITY_LANE_LABELS[lane],
     bucket,
@@ -540,16 +749,26 @@ export function buildTaskPriorityItem(task: CrmTaskRecord, now = new Date()): Cr
     dueAt: effectiveDue,
     updatedAt: task.updatedAt,
     sourceKey: null,
+    tier,
+    tierLabel: CRM_PRIORITY_TIER_LABELS[tier],
+    moneyBand: "unknown",
+    moneyLabel: null,
+    trust: "high",
   }
 }
 
+// 정렬 캐논 — 티어(오늘 필수→관찰) → 돈(큰 돈부터) → 마감(빠른 순) → 점수(내부 타이브레이커).
+// 연속 점수는 더 이상 1축이 아니다: 같은 티어·같은 돈 급에서만 미세 순서를 정한다.
 export function sortPriorityItems(items: CrmPriorityItem[]) {
   return [...items].sort((a, b) => {
-    const bucketDelta = BUCKET_SORT_RANK[a.bucket] - BUCKET_SORT_RANK[b.bucket]
-    if (bucketDelta !== 0) return bucketDelta
+    const tierDelta = TIER_SORT_RANK[a.tier] - TIER_SORT_RANK[b.tier]
+    if (tierDelta !== 0) return tierDelta
+    const moneyDelta = MONEY_SORT_RANK[a.moneyBand] - MONEY_SORT_RANK[b.moneyBand]
+    if (moneyDelta !== 0) return moneyDelta
+    const aTime = parseTime(a.dueAt) ?? Number.MAX_SAFE_INTEGER
+    const bTime = parseTime(b.dueAt) ?? Number.MAX_SAFE_INTEGER
+    if (aTime !== bTime) return aTime - bTime
     if (b.score !== a.score) return b.score - a.score
-    const bTime = parseTime(b.dueAt ?? b.updatedAt) ?? 0
-    const aTime = parseTime(a.dueAt ?? a.updatedAt) ?? 0
-    return aTime - bTime
+    return (parseTime(a.updatedAt) ?? 0) - (parseTime(b.updatedAt) ?? 0)
   })
 }

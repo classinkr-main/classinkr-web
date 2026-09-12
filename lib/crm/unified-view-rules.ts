@@ -3,7 +3,13 @@
 // lib/repositories/crm-unified-customers.ts(서버 저장소)가 담당하고, 이 모듈은
 // "어떤 행이 어떤 저장 뷰에 보이는가"라는 규칙만 소유한다(단위 테스트 대상).
 
-import type { CrmPriorityBucket, CrmPrioritySource } from "@/lib/crm/priority"
+import type {
+  CrmMoneyBand,
+  CrmPriorityBucket,
+  CrmPrioritySource,
+  CrmPriorityTier,
+} from "@/lib/crm/priority"
+import type { SalesStage } from "@/lib/crm/sales-stage"
 
 // "customer" = 리드 전환(convert-v2)이 만드는 portal customers 테이블의 앱 고객.
 export type CrmUnifiedCustomerSource = CrmPrioritySource | "customer"
@@ -38,6 +44,15 @@ export interface CrmUnifiedCustomerRow {
   ownerKeys: string[]
   lifecycle: CrmUnifiedLifecycle
   statusLabel: string
+  /**
+   * 영업 단계(lib/crm/sales-stage 파생) — 입력 강제 없이 기존 기록(상태·컨택·만료·잔액·딜)에서
+   * 행 생성 시 판정해 저장한다. 라벨 문자열에서 재파생하지 않는다(파생 모듈이 SSOT).
+   */
+  stage: SalesStage | null
+  stageLabel: string | null
+  /** 과목·유형 라벨(lib/crm/lead-labels 파생) — 리드 전용, 그 외 소스는 null. */
+  subjectLabel: string | null
+  categoryLabel: string | null
   nextActionLabel: string
   priorityReason: string
   score: number
@@ -47,6 +62,18 @@ export interface CrmUnifiedCustomerRow {
    * 정렬 시 "watch"로 취급한다. 라벨 문자열에서 재파생하지 않는다(엔진 판단이 SSOT).
    */
   bucket: CrmPriorityBucket | null
+  /**
+   * 우선순위 엔진의 티어 판단 그대로(p0 오늘 필수 → p3 관찰). 엔진 미적용 행(전환 고객)·
+   * 엔진이 null을 준 행은 null이며 정렬 시 "p3"으로 취급한다.
+   */
+  tier: CrmPriorityTier | null
+  /** 엔진 reason의 근거 신뢰(low = NEO 로그성 날짜 파생). 엔진 미적용 행은 null. */
+  trust: "high" | "low" | null
+  /**
+   * 티어 안의 정렬 축 — 큰 돈부터. 행에 이미 있는 moneyState/moneyLabel(표기용)과 별개로
+   * 정렬 전용으로 저장한다. 엔진 미적용 행은 null(정렬 시 "unknown" 취급).
+   */
+  moneyBand: CrmMoneyBand | null
   moneyLabel: string | null
   /** moneyLabel이 null("-")일 때의 사유 구분 — 표기는 UI가 결정한다. */
   moneyState: CrmUnifiedMoneyState
@@ -92,7 +119,9 @@ export function matchesSavedView(
   nowMs: number
 ) {
   if (view === "all") return true
-  if (view === "priority") return row.score >= 68
+  // "우선 처리" = 엔진 티어 p0(오늘 필수)·p1(이번 주). 연속 점수 임계(구 score>=68)는
+  // 티어 체계에서 정렬 타이브레이커로 강등됐으므로 뷰 정의도 티어를 따른다.
+  if (view === "priority") return row.tier === "p0" || row.tier === "p1"
   if (view === "new_leads") return row.lifecycle === "new_lead"
   if (view === "needs_care") return row.source === "neo_account" && row.lifecycle === "account_risk"
   if (view === "my_owner") return ownerKeys.size > 0 && rowMatchesOwner(row, ownerKeys)

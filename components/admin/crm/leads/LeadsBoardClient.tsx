@@ -85,6 +85,7 @@ import {
   type BoardColumnKey,
   type LeadsView,
 } from "@/lib/crm/leads-board-state"
+import { deriveLeadLabels } from "@/lib/crm/lead-labels"
 import { CompassBridgeDownNote } from "@/components/admin/compass/CompassLeadChip"
 import { useCompassOverlay } from "@/components/admin/compass/use-compass-overlay"
 import LeadsBoardView from "./LeadsBoardView"
@@ -1234,17 +1235,22 @@ export default function LeadsBoardClient() {
       showToast("내보낼 리드가 없습니다.", "error")
       return
     }
-    const headers = ["이름", "기관", "전화", "이메일", "상태", "유입 그룹", "세부 유입", "리드마그넷", "담당자", "등록일", "팔로업", "점수", "메모"]
+    // 지역·과목·유형은 화면 칩과 같은 파생(lib/crm/lead-labels) — 시트 쪽 수작업 분류를 대체한다.
+    const headers = ["이름", "기관", "지역", "과목", "유형", "전화", "이메일", "상태", "유입 그룹", "세부 유입", "리드마그넷", "담당자", "등록일", "팔로업", "점수", "메모"]
     const escapeCsv = (value: unknown) => {
       const text = value == null ? "" : String(value)
       return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
     }
     const lines = [headers.join(",")]
     for (const lead of filtered) {
+      const labels = deriveLeadLabels(lead)
       lines.push(
         [
           lead.name,
           lead.org,
+          labels.region,
+          labels.subjectLabel,
+          labels.categoryLabel,
           lead.phone,
           lead.email,
           STATUS_LABEL[lead.status],

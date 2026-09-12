@@ -20,10 +20,18 @@ function leadRow(partial: Partial<CrmUnifiedCustomerRow>): CrmUnifiedCustomerRow
     ownerKeys: [],
     lifecycle: "new_lead",
     statusLabel: "신규 리드",
+    // 단계·과목·유형 라벨은 뷰 매칭 규칙과 무관 — 기본 null(파생 재료 없음).
+    stage: null,
+    stageLabel: null,
+    subjectLabel: null,
+    categoryLabel: null,
     nextActionLabel: "첫 응답",
     priorityReason: "-",
     score: 40,
     bucket: null,
+    tier: null,
+    trust: null,
+    moneyBand: null,
     moneyLabel: null,
     moneyState: "none",
     href: "#",
@@ -62,9 +70,13 @@ describe("기존 저장 뷰 회귀 (규칙 모듈 분리 전 동작 보존)", ()
     expect(matchesSavedView(neoRow({}), "all", new Set(), NOW)).toBe(true)
   })
 
-  it("priority — score 68 이상만", () => {
-    expect(matchesSavedView(leadRow({ score: 68 }), "priority", new Set(), NOW)).toBe(true)
-    expect(matchesSavedView(leadRow({ score: 67 }), "priority", new Set(), NOW)).toBe(false)
+  it("priority — 엔진 티어 p0(오늘 필수)·p1(이번 주)만 (점수 임계 아님)", () => {
+    expect(matchesSavedView(leadRow({ tier: "p0" }), "priority", new Set(), NOW)).toBe(true)
+    expect(matchesSavedView(leadRow({ tier: "p1" }), "priority", new Set(), NOW)).toBe(true)
+    expect(matchesSavedView(leadRow({ tier: "p2" }), "priority", new Set(), NOW)).toBe(false)
+    expect(matchesSavedView(leadRow({ tier: "p3" }), "priority", new Set(), NOW)).toBe(false)
+    // 점수가 아무리 높아도 티어가 없으면(엔진 미적용 행) 우선 처리가 아니다.
+    expect(matchesSavedView(leadRow({ tier: null, score: 99 }), "priority", new Set(), NOW)).toBe(false)
   })
 
   it("new_leads — lifecycle new_lead만", () => {

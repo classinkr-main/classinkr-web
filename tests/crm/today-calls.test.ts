@@ -24,6 +24,13 @@ function makeItem(overrides: Partial<CrmPriorityItem> & { id: string }): CrmPrio
     dueAt: null,
     updatedAt: null,
     sourceKey: overrides.source === "neo_account" || overrides.source === "task" ? null : "demo_modal",
+    // 티어 체계 기본값 — 슬롯 내 정렬(compareWithinSlot)과 totals.today가 티어를 읽는다.
+    // 기본 p0(오늘 필수)·money unknown이면 같은 티어 안에서 점수순이라 기존 기대가 유지된다.
+    tier: "p0",
+    tierLabel: "오늘 필수",
+    moneyBand: "unknown",
+    moneyLabel: null,
+    trust: "high",
     ...overrides,
   }
 }
@@ -114,10 +121,10 @@ describe("pickTodayCalls", () => {
     expect(calls.every((call) => call.slot === "new_response")).toBe(true)
   })
 
-  it("오늘 버킷이 관찰 버킷보다 먼저 선다", () => {
+  it("티어가 점수보다 먼저다 — p0(오늘 필수)가 고점수 p3(관찰)보다 위에 선다", () => {
     const items = [
-      makeItem({ id: "watch-high", score: 95, bucket: "watch", subtitle: "관찰기관" }),
-      makeItem({ id: "today-low", score: 58, bucket: "today", subtitle: "오늘기관" }),
+      makeItem({ id: "watch-high", score: 95, tier: "p3", tierLabel: "관찰", bucket: "watch", subtitle: "관찰기관" }),
+      makeItem({ id: "today-low", score: 58, tier: "p0", bucket: "today", subtitle: "오늘기관" }),
     ]
     const { calls } = pickTodayCalls(items, { limit: 2 })
     expect(calls[0]?.item.id).toBe("today-low")
