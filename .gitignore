@@ -26,7 +26,8 @@
 # misc
 .DS_Store
 *.pem
-.claude/
+.claude/*
+!.claude/agents/
 .git_backup*/
 classin_secret/
 
