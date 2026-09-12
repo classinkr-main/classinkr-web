@@ -110,6 +110,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - 한 저장소·한 Supabase 정본을 유지하고 Site/Admin 실행·배포 경계를 단계적으로 분리하는 결정
 - [active/supabase-shared-db-consolidation-analysis-2026-09-02.md](./active/supabase-shared-db-consolidation-analysis-2026-09-02.md)
   - Compass 마케팅 앱과 공유하는 Supabase DB의 동기화·스키마·거버넌스 감사, 도메인별 통폐합 판정과 4단계 로드맵
+- [active/compass-admin-link-plan-2026-09-12.md](./active/compass-admin-link-plan-2026-09-12.md)
+  - Admin과 Compass 마케팅 앱의 화면 연결 기획: 딥링크 계약 모듈, 사이드바·⌘K 외부 항목, 양쪽 로그인 복귀, 역방향 링크와 운영 상태 노출
 - [active/admin-performance-plan-2026-09-02.md](./active/admin-performance-plan-2026-09-02.md)
   - Admin 속도 가설 판정(인증 왕복·팬아웃·메모이제이션·플랜), 적용한 조치와 측정 방법, 운영 확인 목록
 - [active/admin-performance-round2-2026-09-04.md](./active/admin-performance-round2-2026-09-04.md)
