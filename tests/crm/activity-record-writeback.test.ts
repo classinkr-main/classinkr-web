@@ -64,9 +64,13 @@ describe("buildActivityRecordPayload", () => {
     expect(result).toEqual({ ok: false, reason: "missing_account" })
   })
 
-  it("담당자를 모르면 ownerId 를 지어내지 않는다", () => {
-    const result = buildActivityRecordPayload(input({ externalOwnerId: null }))
-    expect(result.ok && "ownerId" in result.payload).toBe(false)
+  // ownerId 는 describe 필수(되밀기 지침 §2-4·§5). 비우면 자동 주입돼 실행 계정 소유로 쌓이므로
+  // 지어내지도, 실행 계정에 맡기지도 않는다 — 모르면 만들지 않는다.
+  it("담당자를 모르면 만들지 않는다 — 실행 계정 소유로 자동 주입되는 것을 막는다", () => {
+    expect(buildActivityRecordPayload(input({ externalOwnerId: null }))).toEqual({
+      ok: false,
+      reason: "missing_owner",
+    })
   })
 
   it("시각이 깨졌으면 보내지 않는다", () => {

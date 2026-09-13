@@ -465,7 +465,8 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
   )
 
   const createManualCandidate = useCallback(
-    async (sourceKey: string, target: ManualLinkTargetOption) => {
+    async (row: CrmMatchingRow, target: ManualLinkTargetOption) => {
+      const sourceKey = row.sourceRecordKey
       setCreatingManualKey(`${sourceKey}:${target.targetType}:${target.targetId}`)
       setError(null)
       try {
@@ -473,6 +474,10 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
           method: "POST",
           body: JSON.stringify({
             sourceRecordKey: sourceKey,
+            // 수동 연결은 REV 시트 외에 리드·Neo CRM 원천도 받는다(R4). 서버는 키로도 소스를
+            // 알아내지만, 어느 원천인지 클라이언트가 아는 값을 함께 보내 추측을 줄인다.
+            sourceSystem: row.sourceSystem,
+            sourceObject: row.sourceObject,
             targetType: target.targetType,
             targetId: target.targetId,
           }),
@@ -584,14 +589,20 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
         </div>
       )
     }
-    if (row.linkId && row.linkStatus === "confirmed") {
+    // 확정·제외 모두 "되돌리기" 는 재검수(stale)로 보낸다. 제외된 쌍은 후보 재생성이 건너뛰므로
+    // (기존 쌍 제외) 여기서 되돌리지 않으면 오클릭이 영구 고정된다(감사 §4.3).
+    if (row.linkId && (row.linkStatus === "confirmed" || row.linkStatus === "rejected")) {
       return (
         <button
           type="button"
           onClick={() => void updateSourceLink(row.linkId as string, "stale")}
           disabled={pendingLinkIds.has(row.linkId as string)}
           className="inline-flex h-11 items-center gap-1 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-2 text-[11px] font-semibold text-[#7A520F] transition-colors hover:bg-[#ECD29C] disabled:opacity-50"
-          title="확정을 되돌리고 재검수로 보냅니다"
+          title={
+            row.linkStatus === "rejected"
+              ? "제외를 되돌리고 재검수로 보냅니다"
+              : "확정을 되돌리고 재검수로 보냅니다"
+          }
         >
           {pendingLinkIds.has(row.linkId as string) ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -641,7 +652,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
           <button
             key={createKey}
             type="button"
-            onClick={() => void createManualCandidate(row.sourceRecordKey, target)}
+            onClick={() => void createManualCandidate(row, target)}
             disabled={creatingManualKey === createKey}
             className="flex w-full items-center justify-between gap-2 rounded-lg border border-[#e8e8e4] px-2 py-1.5 text-left text-[11px] text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
           >
@@ -908,7 +919,8 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
         ) : (
           visibleRows.map((row) => {
             const selectable = row.linkId !== null && (row.linkStatus === "candidate" || row.linkStatus === "stale")
-            const isManualOpen = row.sourceSystem === "branch_rev_sheet" && row.linkStatus !== "confirmed"
+            // 수동 연결은 세 소스 모두 연다(R4) — 확정된 행만 닫는다.
+            const isManualOpen = row.linkStatus !== "confirmed"
             return (
               <div key={row.key} className="rounded-xl border border-[#e8e8e4] bg-white p-3">
                 <div className="flex flex-wrap items-center gap-1.5">
@@ -1017,7 +1029,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
             ) : (
               visibleRows.map((row) => {
                 const selectable = row.linkId !== null && (row.linkStatus === "candidate" || row.linkStatus === "stale")
-                const isManualOpen = row.sourceSystem === "branch_rev_sheet" && row.linkStatus !== "confirmed"
+                const isManualOpen = row.linkStatus !== "confirmed"
                 return (
                   <tr key={row.key} className="align-top">
                     <td className="py-4 pr-3">

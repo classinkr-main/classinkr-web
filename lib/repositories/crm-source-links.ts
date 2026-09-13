@@ -1562,15 +1562,160 @@ export async function previewAllCrmLinkCandidates(): Promise<PreviewAllCrmLinkCa
   return { branchRev, leads, xiaoshouyi }
 }
 
+export type CrmManualLinkSourceSystem = CandidateInsert["source_system"]
+
+/**
+ * 수동 연결의 원천 한 건. 세 소스(REV 시트·리드·Neo CRM)가 같은 모양으로 접힌다 —
+ * 점수 계산에 쓰는 이름·담당과, 후보 생성기가 남기는 것과 같은 모양의 metadata 바탕.
+ * (인박스 행 표시와 별칭 학습이 metadata 의 source_label·source_owner 같은 키를 읽는다.)
+ */
+interface ManualLinkSource {
+  sourceSystem: CrmManualLinkSourceSystem
+  sourceObject: string
+  sourceRecordKey: string
+  name: string
+  owner: string | null
+  metadata: Record<string, unknown>
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * 원천 키만으로 소스 시스템을 알아낸다. 라우트가 sourceSystem 을 넘기지 않는 동안의 안전망 —
+ * 1) 같은 키의 링크 행이 있으면 그 source_system/source_object 를 믿고,
+ * 2) 없으면 키 모양으로 가른다(REV `rev:<row>:…` / 리드 uuid / Neo CRM 숫자 id).
+ */
+async function resolveManualLinkSourceSystem(
+  sourceRecordKey: string
+): Promise<{ sourceSystem: CrmManualLinkSourceSystem; sourceObject: string | null } | null> {
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("crm_source_links")
+    .select("source_system, source_object")
+    .eq("source_record_key", sourceRecordKey)
+    .limit(1)
+  if (error) throw error
+
+  const linked = (data ?? [])[0] as { source_system: string; source_object: string } | undefined
+  if (
+    linked &&
+    (linked.source_system === "branch_rev_sheet" || linked.source_system === "lead" || linked.source_system === "xiaoshouyi")
+  ) {
+    return { sourceSystem: linked.source_system, sourceObject: linked.source_object }
+  }
+
+  if (sourceRecordKey.startsWith("rev:")) return { sourceSystem: "branch_rev_sheet", sourceObject: "branch_rev_deals" }
+  if (UUID_PATTERN.test(sourceRecordKey)) return { sourceSystem: "lead", sourceObject: "leads" }
+  if (/^\d+$/.test(sourceRecordKey)) return { sourceSystem: "xiaoshouyi", sourceObject: null }
+  return null
+}
+
+async function findManualLinkSource(input: {
+  sourceRecordKey: string
+  sourceSystem?: CrmManualLinkSourceSystem
+  sourceObject?: string
+}): Promise<ManualLinkSource | null> {
+  const resolved = input.sourceSystem
+    ? { sourceSystem: input.sourceSystem, sourceObject: input.sourceObject ?? null }
+    : await resolveManualLinkSourceSystem(input.sourceRecordKey)
+  if (!resolved) return null
+
+  const sb = createSupabaseAdminClient()
+
+  if (resolved.sourceSystem === "branch_rev_sheet") {
+    const source = await findBranchRevSourceByKey(input.sourceRecordKey)
+    if (!source) return null
+    return {
+      sourceSystem: "branch_rev_sheet",
+      sourceObject: "branch_rev_deals",
+      sourceRecordKey: input.sourceRecordKey,
+      name: source.customer_name,
+      owner: source.manager ?? source.team,
+      metadata: {
+        sheet_row: source.sheet_row,
+        source_customer_name: source.customer_name,
+        source_owner: [source.team, source.manager].filter(Boolean).join(" · ") || null,
+        source_status: source.status,
+        source_priority: "branch_rev_sheet_supporting",
+      },
+    }
+  }
+
+  if (resolved.sourceSystem === "lead") {
+    const { data, error } = await sb
+      .from("leads")
+      .select("id, name, org, phone, email, status, assigned_to, created_at")
+      .eq("id", input.sourceRecordKey)
+      .maybeSingle()
+    if (error) throw error
+    if (!data) return null
+    const lead = data as LeadCandidateSource
+    const sourceLabel = getLeadSourceLabel(lead)
+    return {
+      sourceSystem: "lead",
+      sourceObject: "leads",
+      sourceRecordKey: lead.id,
+      name: sourceLabel,
+      owner: lead.assigned_to,
+      metadata: {
+        source_label: sourceLabel,
+        lead_name: lead.name,
+        lead_org: lead.org,
+        source_owner: lead.assigned_to,
+        source_status: lead.status,
+        source_created_at: lead.created_at,
+        phone: lead.phone,
+        email: lead.email,
+        source_priority: "lead_intake_high",
+      },
+    }
+  }
+
+  // Neo CRM: source_record_key 는 external_id, source_object 는 object_api_key.
+  // 객체를 모르면 external_id 만으로 찾는다 — Neo CRM id 는 객체 간에 겹치지 않는다.
+  let query = sb
+    .from("external_crm_records")
+    .select(EXTERNAL_CRM_RECORD_SELECT)
+    .eq("source_system", "xiaoshouyi")
+    .eq("external_id", input.sourceRecordKey)
+  if (resolved.sourceObject) query = query.eq("object_api_key", resolved.sourceObject)
+  const { data, error } = await query.limit(1)
+  if (error) throw error
+  const record = ((data ?? []) as ExternalCrmRecordSource[])[0]
+  if (!record) return null
+  const sourceLabel = getExternalCrmRecordLabel(record)
+  return {
+    sourceSystem: "xiaoshouyi",
+    sourceObject: record.object_api_key,
+    sourceRecordKey: record.external_id,
+    name: sourceLabel,
+    owner: record.owner_name,
+    metadata: {
+      source_label: sourceLabel,
+      external_id: record.external_id,
+      object_api_key: record.object_api_key,
+      owner_name: record.owner_name,
+      source_status: record.status,
+      source_amount: record.amount,
+      occurred_at: record.occurred_at,
+      synced_at: record.synced_at,
+      source_priority: "xiaoshouyi_crm_primary",
+    },
+  }
+}
+
 export async function searchManualCrmLinkTargets(
   query: string,
-  sourceRecordKey?: string
+  sourceRecordKey?: string,
+  options: { sourceSystem?: CrmManualLinkSourceSystem; sourceObject?: string } = {}
 ): Promise<CrmManualLinkTargetOption[]> {
   const normalizedQuery = normalizeCrmName(query)
   if (normalizedQuery.length < 2) return []
 
   const sb = createSupabaseAdminClient()
-  const [partnerAccountsResult, customersResult, dealsResult, source, aliases] = await Promise.all([
+  // 원천을 먼저 알아야 그 소스의 별칭 사전으로 점수를 매길 수 있다. 못 찾으면 검색어만으로 점수를 낸다.
+  const source = sourceRecordKey ? await findManualLinkSource({ sourceRecordKey, ...options }) : null
+  const [partnerAccountsResult, customersResult, dealsResult, aliases] = await Promise.all([
     sb
       .from("partner_accounts")
       .select("id, name, status, owner_name")
@@ -1583,17 +1728,16 @@ export async function searchManualCrmLinkTargets(
       .from("deals")
       .select("id, customer_id, partner_account_id, title, deal_code")
       .limit(2000),
-    sourceRecordKey ? findBranchRevSourceByKey(sourceRecordKey) : Promise.resolve(null),
-    getCrmMatchAliases("branch_rev_sheet"),
+    getCrmMatchAliases(source?.sourceSystem ?? "branch_rev_sheet"),
   ])
 
   if (partnerAccountsResult.error) throw partnerAccountsResult.error
   if (customersResult.error) throw customersResult.error
   if (dealsResult.error) throw dealsResult.error
 
-  const sourceName = source?.customer_name ?? query
-  const sourceOwner = source ? source.manager ?? source.team : null
-  const options: CrmManualLinkTargetOption[] = [
+  const sourceName = source?.name ?? query
+  const sourceOwner = source?.owner ?? null
+  const scoredOptions: CrmManualLinkTargetOption[] = [
     ...((partnerAccountsResult.data ?? []) as PartnerAccountCandidateTarget[]).map((account) => {
       const label = buildSourceTargetLabel(account)
       const match = scoreSourceTargetMatch({
@@ -1653,7 +1797,7 @@ export async function searchManualCrmLinkTargets(
     }),
   ]
 
-  return options
+  return scoredOptions
     .filter((option) => {
       const normalizedLabel = normalizeCrmName(option.label)
       return (
@@ -1666,26 +1810,34 @@ export async function searchManualCrmLinkTargets(
     .slice(0, MAX_MANUAL_SEARCH_RESULTS)
 }
 
-export async function createManualBranchRevLinkCandidate(input: {
+/**
+ * 수동 후보 한 건. REV 시트뿐 아니라 리드·Neo CRM 원천도 받는다(R4).
+ * `sourceSystem` 을 안 넘기면 키로 알아낸다(resolveManualLinkSourceSystem) — 라우트가
+ * body 의 sourceSystem/sourceObject 를 넘기게 되면 그 값이 우선한다.
+ * 같은 쌍의 행이 이미 있으면(제외·재검수 포함) upsert 로 candidate 로 되살린다.
+ */
+export async function createManualCrmLinkCandidate(input: {
   sourceRecordKey: string
   targetType: CrmManualLinkTargetType
   targetId: string
+  sourceSystem?: CrmManualLinkSourceSystem
+  sourceObject?: string
 }) {
   const sb = createSupabaseAdminClient()
-  const source = await findBranchRevSourceByKey(input.sourceRecordKey)
-  if (!source) throw new Error("REV source row not found")
+  const source = await findManualLinkSource(input)
+  if (!source) throw new Error("CRM source record not found")
 
   const { data: confirmedLinks, error: confirmedError } = await sb
     .from("crm_source_links")
     .select("id")
-    .eq("source_system", "branch_rev_sheet")
-    .eq("source_object", "branch_rev_deals")
-    .eq("source_record_key", input.sourceRecordKey)
+    .eq("source_system", source.sourceSystem)
+    .eq("source_object", source.sourceObject)
+    .eq("source_record_key", source.sourceRecordKey)
     .eq("status", "confirmed")
     .limit(1)
 
   if (confirmedError) throw confirmedError
-  if ((confirmedLinks ?? []).length > 0) throw new Error("REV source already has a confirmed link")
+  if ((confirmedLinks ?? []).length > 0) throw new Error("CRM source already has a confirmed link")
 
   const targetResult =
     input.targetType === "partner_account"
@@ -1707,10 +1859,10 @@ export async function createManualBranchRevLinkCandidate(input: {
 
   const target = targetResult.data as CustomerCandidateTarget | PartnerAccountCandidateTarget | DealCandidateTarget
   const targetLabel = buildSourceTargetLabel(target)
-  const aliases = await getCrmMatchAliases("branch_rev_sheet")
+  const aliases = await getCrmMatchAliases(source.sourceSystem)
   const match = scoreSourceTargetMatch({
-    sourceName: source.customer_name,
-    sourceOwner: source.manager ?? source.team,
+    sourceName: source.name,
+    sourceOwner: source.owner,
     targetType: input.targetType,
     targetId: input.targetId,
     targetLabel,
@@ -1718,24 +1870,20 @@ export async function createManualBranchRevLinkCandidate(input: {
     aliases,
   })
   const row: CandidateInsert = {
-    source_system: "branch_rev_sheet",
-    source_object: "branch_rev_deals",
-    source_record_key: input.sourceRecordKey,
-    normalized_name: normalizeCrmName(source.customer_name),
+    source_system: source.sourceSystem,
+    source_object: source.sourceObject,
+    source_record_key: source.sourceRecordKey,
+    normalized_name: normalizeCrmName(source.name),
     target_type: input.targetType,
     target_id: input.targetId,
     confidence: Number(match.score.toFixed(4)),
     status: "candidate",
     metadata: {
+      ...source.metadata,
       manual: true,
-      sheet_row: source.sheet_row,
-      source_customer_name: source.customer_name,
-      source_owner: [source.team, source.manager].filter(Boolean).join(" · ") || null,
-      source_status: source.status,
       target_label: targetLabel,
       match_evidence: match.evidence,
       match_strategy: match.strategy,
-      source_priority: "branch_rev_sheet_supporting",
     },
   }
 
@@ -1749,6 +1897,20 @@ export async function createManualBranchRevLinkCandidate(input: {
 
   if (error) throw error
   return data
+}
+
+/**
+ * @deprecated 이름과 달리 이제 세 소스를 모두 받는다. `manual/route.ts` 가 이 이름으로 부르고 있어
+ * 남겨 둔다 — 라우트는 `createManualCrmLinkCandidate` 로 갈아타고 body 의 sourceSystem/sourceObject 를 넘길 것.
+ */
+export async function createManualBranchRevLinkCandidate(input: {
+  sourceRecordKey: string
+  targetType: CrmManualLinkTargetType
+  targetId: string
+  sourceSystem?: CrmManualLinkSourceSystem
+  sourceObject?: string
+}) {
+  return createManualCrmLinkCandidate(input)
 }
 
 export interface ConfirmedLeadConversionLink {
