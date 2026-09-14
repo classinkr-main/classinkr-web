@@ -143,10 +143,11 @@ API:
 
 `20260626_*_ledger` · `20260626_*_workflow_guards` · `20260627_*_snapshots` · `20260628_*_lot` · `20260628_*_costing` · `20260629_*_partial_confirm` · `20260630_*_sheet_import_merge`(추가형 머지 RPC·라이브 적용, 플래그 off). 적용은 Supabase Management API query 엔드포인트로 수행(운영 메모 별도).
 
-**미적용 (2026-09-14)**: `20260914_hardware_confirm_planned_v3.sql` — v3 확정 함수 **추가만**(v2·레거시 유지, 데이터 변경 없음).
-적용 전에는 앱이 v2 로 폴백해 로트 미지정 예정 출고 확정이 계속 실패하며, 그때 화면에 "DB v3 가 적용되지
-않았다"는 사유를 보여준다. 운영 프로젝트는 서울 이관 후 `pxbrsbovoobowpfarxmn` 이다
-(`docs/active/supabase-korea-migration-status.md`).
+**적용 완료 (2026-09-14)**: `20260914_hardware_confirm_planned_v3.sql` — v3 확정 함수 **추가만**(v2·레거시 유지, 데이터 변경 없음).
+운영 프로젝트 `pxbrsbovoobowpfarxmn`(서울, `docs/active/supabase-korea-migration-status.md`)에 적용하고 PostgREST
+스키마를 다시 읽혔다. 검증: 권한은 service_role 만, 앱 경로(PostgREST)가 v3 에 도달해 존재하지 않는 예정 번호를
+표준 문구("배송 예정 기록을 찾을 수 없습니다.")로 거절, 호출 전후 원장 385건·admin_manual 0건으로 변화 없음.
+적용 시점 대기 중인 예정 출고는 33건 59대(전부 `lot_no` NULL)였다 — 이제 홈에서 단건·딜·선택 일괄로 확정할 수 있다.
 
 ---
 
