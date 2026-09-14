@@ -24,6 +24,23 @@ describe("buildReinflowIndex", () => {
     expect(index.get("b")).toBe("repeat_contact")
   })
 
+  // 2026-09-14 E2(normalizePhoneKey = Compass normPhone 등가)의 정정 효과를 고정한다. 옛 키는 '+82 010-…'·'0082-010-…' 를
+  // '001012345678', '10-…' 를 '1012345678' 로 만들어 '010-…' 와 다른 사람으로 갈랐다 — 캠페인 허브 신규 리드 탭의
+  // 재유입 수가 이런 쌍에서 늘어나는 것은 의도한 정정이다.
+  it.each([
+    ["+82 010-1234-5678", "010-1234-5678"],
+    ["0082-010-1234-5678", "010-1234-5678"],
+    ["10-1234-5678", "010-1234-5678"],
+  ])("국가번호 뒤 0 유지·앞 0 탈락 표기 %j 와 %j 는 같은 연락처 — 나중 리드가 재유입", (earlier, later) => {
+    const index = buildReinflowIndex([
+      lead({ id: "first", phone: earlier, timestamp: "2026-09-01T00:00:00Z" }),
+      lead({ id: "again", phone: later, timestamp: "2026-09-10T00:00:00Z" }),
+    ])
+    expect(index.has("first")).toBe(false)
+    expect(index.get("again")).toBe("repeat_contact")
+    expect(countReinflow([{ id: "first" }, { id: "again" }], index)).toBe(1)
+  })
+
   it("이메일만 겹쳐도 재유입 — 대소문자·공백은 무시한다", () => {
     const index = buildReinflowIndex([
       lead({ id: "a", email: "Lee@Example.com", timestamp: "2026-08-01T00:00:00Z" }),

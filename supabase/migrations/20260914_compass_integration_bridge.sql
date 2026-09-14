@@ -161,7 +161,7 @@ begin
     execute 'grant select on public.compass_lead_contact_v to service_role';
     execute $comment$
       comment on view public.compass_lead_contact_v is
-        'Compass crm.lead_contact_facts_v 읽기 전용 브리지 — 리드별 연락 시도·연결 시각과 최신 유입 뒤 부재중·문자 수. 기계 작성자(Claude·BD시트·시트 동기화)와 자동 메모는 연결에서 제외된 값.'
+        'Compass crm.lead_contact_facts_v 읽기 전용 브리지 — 리드별 연락 시도·연결 시각과 최신 유입 뒤 부재중·문자 수. 기계 작성자(Claude·BD시트·시트 동기화·시트·시스템·system)의 note 와 자동 메모는 연결에서 제외된 값(작성자 없는 note 는 사람 기록).'
     $comment$;
     raise notice 'compass_lead_contact_v: created from crm.lead_contact_facts_v';
   else

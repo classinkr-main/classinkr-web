@@ -5,7 +5,7 @@
 - 근거: Compass 감사 R6(리드·CRM 연동, 설계 B 권고) · R2/R3/R5 · D-borrow-crm(전화 키 진리표)
 - 짝 문서: [supabase-shared-db-consolidation-analysis-2026-09-02.md](./supabase-shared-db-consolidation-analysis-2026-09-02.md)(통폐합 판정),
   [neocrm-writeback-guide-2026-09-07.md](./neocrm-writeback-guide-2026-09-07.md)(NEO 되밀기),
-  [../superpowers/specs/2026-09-14-lead-contact-compass-sync-design.md](../superpowers/specs/2026-09-14-lead-contact-compass-sync-design.md)(연락 상태 매시간 반영 — 작업 중)
+  [../superpowers/specs/2026-09-14-lead-contact-compass-sync-design.md](../superpowers/specs/2026-09-14-lead-contact-compass-sync-design.md)(MKT 연락 반영 — `home_v4.42` 로 병합됨, 이 브랜치에 병합)
 
 ## 0. 한 줄 요약
 
@@ -21,7 +21,7 @@
 | # | 커밋 | 무엇 | 행동 변화 |
 |---|---|---|---|
 | E1 | `5453e679` | `supabase/migrations/20260914_compass_integration_bridge.sql` — `norm_phone_key` 함수·표현식 인덱스 3개, `compass_lead_refs_v`·`compass_lead_contact_v`(crm 객체 있을 때만), 역브리지 `home_owner_directory_v`·`home_neo_accounts_v`·`home_site_leads_v`·`home_channel_contacts_v`. `lib/db/schema-contract.ts` 에 뷰 6개 warning 프로브 | 적용 전까지 없음. `check:db` 에 warning 6건이 뜬다(차단 아님) |
-| E2 | `099c7d7f` | `lib/compass/normalize.ts` `normalizePhoneKey` 를 `normPhone` 등가로 | 원문 전화 `+82 010-…`·`0082-010-…`·`10-…`(앞 0 탈락)이 이제 Compass 리드와 조인된다. 저장값 기준 결과는 불변(테스트가 "옛 규칙과 다른 입력은 4개뿐" 고정) |
+| E2 | `099c7d7f` | `lib/compass/normalize.ts` `normalizePhoneKey` 를 `normPhone` 등가로 | 원문 전화 `+82 010-…`·`0082-010-…`·`10-…`(앞 0 탈락)이 이제 Compass 리드와 조인된다. 저장값 기준 결과는 불변(테스트가 "옛 규칙과 다른 입력은 4개뿐" 고정). **어드민 끼리의 재유입 수도 오를 수 있다(정정)**: `lib/crm/lead-reinflow.ts` 가 같은 키로 어드민 리드끼리 묶으므로, 캠페인 허브 신규 리드 탭(`NewLeadsTab`)의 재유입 수가 `+82 010-…`/`0082-010-…`/`10-…` 와 `010-…` 로 따로 들어온 같은 번호 쌍에서 늘어난다 — 옛 키가 둘을 다른 사람으로 가르던 것을 바로잡은 결과다(`tests/compass/lead-reinflow.test.ts` 고정) |
 | E3 | `1d57e3ee` | `lib/compass/paginate.ts`(신규) + `bridge.ts` 기간 조회 4개(`getCompassAdsDaily`·`getCompassAdsetsDaily`·`getCompassDemos`·`getCompassCalEvents`) 페이지네이션, `truncated = count > rows` | PostgREST max-rows(1000) 조용한 절단 방지. 광고 라우트 절단 판정이 `>= 3000` 근사 → 실제 값 |
 | E3 | `97774597` | `lib/crm/compass-demo-source.ts` 데모 역조회 — 전화 전량 청크 조회 → 데모 리드 id PK 조회 1회(`getCompassLeadPhoneKeysByIds`) | 데모 색인 결과 동일, 조회량 감소 |
 | E4 | `fbf5eaa0` | `lib/crm/compass-timeline.ts` — sms·memo·action·alimtalk 표시, `system` 은 본문이 `폼 답변\n` 로 시작할 때만 "폼 답변" | 고객 360 타임라인에 빠지던 활동이 보인다. 기존 종류의 필터 축은 불변 |
@@ -29,7 +29,7 @@
 | E5 | `339878d1` | 오늘 유입 카드 — Compass 리드를 `created_at` **또는** `last_inflow_at` 이 기간 안인 것으로 읽고 신규/재유입을 가른다(`lib/compass/inflow-window.ts` 신규) | Compass 신규 리드가 오늘 유입에 잡힌다(예전엔 재유입만). "신규 N · 재유입 k" 표시 |
 | E6 | `fb1a0131` | `lib/external-crm/xiaoshouyi-write.ts` lead **create** 닫기(§3) | 이 저장소 쓰기 큐로 NEO lead 를 만들 수 없다. 수정·담당 이전은 열려 있다 |
 
-손대지 않은 것(다른 세션 작업 중): `lib/compass/lead-contact-sync.ts`, `lib/server/lead-contact-compass-sync.ts`,
+손대지 않은 것(다른 세션 소유 — `home_v4.42` 로 병합됨): `lib/compass/lead-contact-sync.ts`, `lib/server/lead-contact-compass-sync.ts`,
 `app/api/cron/dispatch/[slot]/route.ts`, `lib/compass/overlay.ts`, `lib/repositories/leads.ts`, 챗봇.
 `lib/crm/capture/matching.ts` 의 같은 이름 `normalizePhoneKey`(붙여넣기 내부 중복용, 국가번호 미처리)도 그대로다 — 이름 충돌만 인지.
 
@@ -78,33 +78,41 @@ select table_name, grantee, privilege_type from information_schema.role_table_gr
   `select status, count(*) from public.crm_write_requests where object_api_key = 'lead' and operation = 'create' group by 1`
 - 다시 열어야 하면 `lead.operations` 에 `create` 를 되돌리고 `closedOperationReasons` 를 지운다. 그 전에 Compass 푸시와 같은 NEO 중복 사전 검사를 이쪽에도 둔다.
 
-## 4. `lead-contact-compass-sync` 세션을 위한 정렬 메모
+## 4. 병합된 MKT 연락 반영(`lead-contact-compass-sync`)과의 정렬 메모
 
-설계 문서(2026-09-14 매시간 반영)는 그대로 유효하다. 아래는 이번 변경과 어긋나지 않게 맞출 점이다. **결정은 그 세션 몫**이고, 여기서는 사실과 권고만 적는다.
+그 작업(설계 `2026-09-14-lead-contact-compass-sync-design.md`, 코드 `lib/compass/lead-contact-sync.ts`·`lib/server/lead-contact-compass-sync.ts`)은
+`home_v4.42` 로 병합됐고 이 브랜치에도 병합했다. 아래는 사실과 나중에 고를 수 있는 선택지다. **그 코드를 지금 바꾸라는 지시가 아니다** — 결정은 그 작업 소유자 몫이다.
 
-### 4-1. "사람 손 활동"에서 기계 기록을 뺀다
+### 4-1. "사람 손 활동" — 기계 작성자와 작성자 없음(null)
 
-설계 §3 은 `kind ∈ {call, sms, meeting, note, memo, stage_change}` 를 사람 손으로 본다. 그런데 **기계가 쓰는 `note` 가 있다** —
-BD 설명회 적재는 신규 리드마다 actor `BD시트` note 를, 시트 크론은 시트 메모를 actor 없는 note 로·closed 전파를 actor `시트 동기화` note 로,
-백필 스크립트는 actor `Claude` 로, 일회성 시트 백필·중복 병합 스크립트는 actor `시트` 로 남긴다. 이 note 들만 있는 리드가 `contacted` 로 잘못 넘어간다.
+두 저장소의 계약은 이제 같다(2026-09-14 후속 수정으로 Compass 쪽을 병합된 동기화에 맞췄다).
 
-Compass 의 단일 정의(Compass `lib/leadContact.ts`, 활동 별칭 `a`)는 다음과 같다. 아래는 Compass 통합 브랜치 파일과 글자 그대로다 — 최종 리뷰에서 기계 작성자에 `시트` 가 추가됐다(명세 초안의 3개 목록은 낡았다).
+- **기계 작성자** = `Claude`·`BD시트`·`시트 동기화`·`시트`·`시스템`·`system`. 병합된 동기화의 `COMPASS_AUTOMATED_ACTORS` 와 같은 목록이다.
+  BD 설명회 적재는 신규 리드마다 `BD시트` note 를, 시트 크론은 closed 전파를 `시트 동기화` note 로, 백필·웹훅은 `Claude` 로,
+  일회성 시트 백필·중복 병합 스크립트는 `시트` note(`…설명회에도 신청 — 중복 리드 #N 병합`)를 남긴다. 이 note 만 있는 리드는 연락이 아니다.
+- **작성자가 비어 있는(null) 기록은 사람이다.** 시트 크론은 사람이 리드 시트에 적은 콜 메모를 actor 없이 `kind='note'` 로 옮긴다 —
+  시트 시절에 실제로 통화한 기록이다. actor 없는 `부재중` 콜은 연결이 아니라 시도로만 잡힌다(본문으로 거른다).
+- 초안(명세 §4-1 첫 판)의 "null = 기계"·3개 목록은 폐기됐다. 그 판대로라면 병합 메모(`시트`)가 연락으로 잡히고 시트 시절 콜 메모가 빠졌다.
+
+Compass `lib/leadContact.ts` 조각(활동 별칭 `a`) — Compass `scripts/schema.sql` 의 `crm.lead_contact_facts_v` 가 글자 그대로 쓴다.
 
 ```sql
--- HUMAN_ACTOR(a) — actor 가 null 인 기록도 기계로 본다
-(a.actor is not null and a.actor not in ('Claude','BD시트','시트 동기화','시트'))
+-- HUMAN_ACTOR(a) — 작성자 없음(시트 시절 사람 기록) 포함
+(a.actor is null or a.actor not in ('Claude','BD시트','시트 동기화','시트','시스템','system'))
 -- ATTEMPT(a) — 부재중 콜도 시도. 알림톡은 자동이라 제외
 (a.kind in ('call','sms'))
 -- CONNECTED(a) — 연결된 콜(부재중·재통화 예약 제외) · 미팅 · 사람이 쓴 자동 머리 아닌 메모
-((a.kind = 'call' and coalesce(a.body,'') !~ '^(부재중|재통화)') or a.kind = 'meeting' or (a.kind = 'note' and (a.actor is not null and a.actor not in ('Claude','BD시트','시트 동기화','시트')) and coalesce(a.body,'') !~ '^(데모 일정|고객관리 이관 취소|종료 처리|종료 취소|BD인계 취소)'))
+((a.kind = 'call' and coalesce(a.body,'') !~ '^(부재중|재통화)') or a.kind = 'meeting' or (a.kind = 'note' and (a.actor is null or a.actor not in ('Claude','BD시트','시트 동기화','시트','시스템','system')) and coalesce(a.body,'') !~ '^(데모 일정|고객관리 이관 취소|종료 처리|종료 취소|BD인계 취소)'))
 -- MISSED_ATTEMPT(a)
 (a.kind = 'call' and coalesce(a.body,'') ~ '^(부재중|재통화)')
 ```
 
-### 4-2. 판정은 `compass_lead_contact_v` 를 읽는다 (권고)
+### 4-2. `compass_lead_contact_v` 와 병합된 동기화의 관계
 
-활동 `kind`·`body` 를 어드민에서 다시 해석하면 Compass 와 정의가 또 갈라진다(Compass 안에서도 이미 4벌이었다 — R6 G9).
-§2 적용 뒤에는 `public.compass_lead_contact_v`(리드당 1행)를 읽는다.
+병합된 동기화는 활동을 직접 읽는다: 매칭 행 단계가 전부 `new` 인 Compass 리드만 골라 `getCompassActivitySignals`(`compass_activities_v` 에서
+`lead_id·kind·actor`, lead id 100개 덩어리 × 1000행 페이지)로 읽고, `humanTouchedCompassLeadIds` 가
+`kind ∈ {call, sms, meeting, note, memo, stage_change}` + 기계 작성자 아님으로 판정한다. §2 적용 뒤에 생기는 `public.compass_lead_contact_v`(리드당 1행)는
+같은 질문에 Compass 가 정의한 답을 준다.
 
 | 컬럼 | 뜻 |
 |---|---|
@@ -114,14 +122,25 @@ Compass 의 단일 정의(Compass `lib/leadContact.ts`, 활동 별칭 `a`)는 �
 | `first_connected_at`·`last_connected_at` | CONNECTED 최초·최근 |
 | `missed_since_inflow`·`sms_since_inflow` | 최신 유입 뒤 부재중 콜·문자 수 |
 
-설계 §3 표에 대응시키면(제안): `contacted` = 매칭 행 중 하나라도 `stage ≠ new`, 또는 `first_attempt_at`·`first_connected_at` 중 하나가 not null.
-뷰에 없는 kind: `stage_change` 는 `stage ≠ new` 가 덮는다. `memo`·`action`(고객관리 메모·액션)만 있고 단계가 `new` 인 리드가 있는지는
-확인하지 않았다 — 필요하면 `compass_leads_v.care_stage is not null` 을 `contacted` 조건에 더한다.
-설계 §6 "재유입" 러프함을 줄이고 싶으면 `last_attempt_at >= latest_inflow_at or last_connected_at >= latest_inflow_at` 로 "최신 유입 뒤 연락"만 셀 수 있다.
+**같은 점**: 기계 작성자 목록과 null 규칙(4-1). 대응시키면 동기화의 "사람 손 활동 있음" ≈ `first_attempt_at is not null or first_connected_at is not null`.
 
-**뷰가 아직 없을 때(§2 이전)**: `compass_activities_v` 는 `actor`·`body` 를 내보내므로 4-1 조건을 걸 수는 있다. 다만 PostgREST 필터로는
-`coalesce(body,'')` 의미(본문 null 인 사람 메모 포함)를 글자 그대로 옮기기 어렵다. 뷰 존재를 확인해 쓰고, 없으면 `bridge_down` 처럼 이번 실행을 건너뛰는 편이 정의가 갈라지지 않는다.
-PostgREST 로 페이지를 끝까지 읽어야 하면 `lib/compass/paginate.ts` `fetchCompassPages`(E3)를 재사용한다 — 루프를 새로 쓰지 않는다.
+**다른 점**(바꾸기 전에 볼 것 — 오늘 결과가 달라지는 건수는 재지 않았다):
+
+| 경우 | 병합된 동기화 | `compass_lead_contact_v` |
+|---|---|---|
+| 기계 작성자의 `call`·`sms` | 제외(작성자 필터를 모든 kind 에 건다) | 시도로 센다(ATTEMPT 는 작성자를 보지 않는다) |
+| 기계 작성자의 `meeting` | 제외 | 연결로 센다 |
+| 자동 머리 note(`데모 일정`·`종료 처리`·`종료 취소` 등)를 사람이 씀 | 사람 손 | 연결 아님. 대개 단계 이동이 함께라 `stage ≠ new` 가 덮지만, `종료 취소`·`고객관리 이관 취소`·`BD인계 취소` 로 `new` 에 돌아온 리드는 갈린다 |
+| `memo`·`action`(고객관리)·`stage_change` | `memo`·`stage_change` 는 사람 손, `action` 은 아님 | 셋 다 없다. `stage_change` 는 `stage ≠ new` 가 덮고, `memo`·`action` 은 `compass_leads_v.care_stage is not null` 로 보탤 수 있다 |
+| 작성자 앞뒤 공백 | `trim()` 뒤 비교 | 글자 그대로 비교 |
+
+**나중에 줄일 수 있는 것**(§2 적용·Compass 배포 뒤, 위 차이를 받아들이기로 정한 경우):
+
+- `getCompassActivitySignals` 의 손 페이지 루프 + `humanTouchedCompassLeadIds` + `COMPASS_AUTOMATED_ACTORS` 사본을
+  `compass_lead_contact_v` 를 `lead_id in (…)` 로 읽는 조회 하나로 바꿀 수 있다. 결과가 리드당 1행이라 행 상한·페이지 문제가 없고,
+  기계 작성자 목록의 원본이 Compass `lib/leadContact.ts` 하나로 준다(지금은 두 저장소에 사본이 있고 글자를 손으로 맞춘다).
+- 설계 §6 "재유입" 러프함은 `last_attempt_at >= latest_inflow_at or last_connected_at >= latest_inflow_at`("최신 유입 뒤 연락")로 좁힐 수 있다.
+- 뷰가 없을 때(§2 이전·Compass 미배포)는 지금 경로가 유일하다. 바꾼 뒤에는 뷰 부재를 `bridge_down` 으로 다뤄 이번 실행을 건너뛰는 편이 정의가 갈라지지 않는다.
 
 ### 4-3. 원문 전화에는 `norm_phone_key` 를 쓴다
 
@@ -140,11 +159,11 @@ R6 B-3 매칭 순서: ① `compass_lead_refs_v`(`system = 'home_lead'`, `externa
 ③ `norm_phone_key` 폴백. 지금 `home_lead` ref 는 0건이고(Compass 문의 인박스 이후에 생김) `meta_leadgen` ref 는 Compass 웹훅이 앞으로 쓴다.
 그러니 이번 구현은 전화 키만으로 충분하되, 매칭 입력을 "후보 Compass lead id 목록"으로 받아 두면 링크를 끼우기 쉽다.
 
-### 4-5. 병합 때 겹칠 수 있는 곳
+### 4-5. 병합 결과
 
-- `tests/compass/overlay.test.ts` — E4(`796a6b5f`)가 기대 라벨 한 줄(옛 라벨 → 새 라벨)을 바꿨다. `overlay.ts` 의 대표 행 규칙을 내보내며 이 테스트를 고치면 그 줄에서 충돌한다.
-- `lib/compass/bridge.ts` — E3·E5 가 기간 조회 5개 본문과 `getCompassLeadPhoneKeysByIds` 를 바꾸거나 더했다. 활동 kind 필터 조회는 새 함수로 더하면 겹치지 않는다.
-- `COMPASS_STAGE_LABEL` 값이 바뀌었다(quote=미팅, lost=종료). 판정은 키(`lost`)로 하므로 영향 없음, 표시·감사 문구에서만 차이.
+- `home_v4.42`(MKT 연락 반영 포함)를 이 브랜치에 충돌 없이 병합했다. `lib/compass/bridge.ts`·`lib/db/schema-contract.ts` 는 양쪽 변경이 자동 병합됐고,
+  병합 트리에서 typecheck·관련 vitest 가 통과했다.
+- `COMPASS_STAGE_LABEL` 값이 바뀌었다(quote=미팅, lost=종료). 동기화 판정은 키(`lost`)로 하므로 영향 없음, 표시·감사 문구에서만 차이.
 
 ## 5. 이번에 하지 않은 것 / 미확인
 
