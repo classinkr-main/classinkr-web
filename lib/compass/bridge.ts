@@ -16,7 +16,7 @@ import "server-only"
 import { createHash } from "node:crypto"
 
 import { compassInflowWindowFilter } from "@/lib/compass/inflow-window"
-import { fetchCompassPages } from "@/lib/compass/paginate"
+import { fetchSupabasePages } from "@/lib/supabase/pagination"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 export { normalizePhoneKey, compassLeadUrl } from "@/lib/compass/normalize"
@@ -349,7 +349,7 @@ export async function getCompassLeadPhoneKeysByIds(
  *  lib/compass/inflow-window.ts compassInflowInWindow. 채널로 거르지 않는다 — 인바운드 제외(Compass mktLeadCond)는
  *  소비 쪽 lib/marketing/intake-feed.ts 가 isCompassMarketingChannel 로 한다(채널 없음을 포함하는 조건이라
  *  PostgREST not.in 한 줄로는 null 이 빠진다).
- *  페이지네이션(lib/compass/paginate.ts) + truncated = count > rows — 예전 .limit(500) 은 호출부가
+ *  페이지네이션(lib/supabase/pagination.ts) + truncated = count > rows — 예전 .limit(500) 은 호출부가
  *  rows.length >= 500 으로 절단을 짐작해야 했다. 정렬 키는 PK id(유일).
  *  60초 메모(down은 10초). toIso는 호출부(app/api/admin/marketing/intake-today)가 매 요청
  *  "지금"으로 새로 만드는 값이라 초·밀리초까지 캐시 키에 넣으면 사실상 항상 미스한다 —
@@ -368,19 +368,20 @@ export async function getCompassLeadsByInflowRange(
         const sb = createSupabaseAdminClient()
         // 잘못된 ISO 는 여기서 던진다 → 아래 catch 가 down 으로 바꾼다(필터 구문에 원문을 끼우지 않는다).
         const inflowFilter = compassInflowWindowFilter(fromIso, toIso)
-        const paged = await fetchCompassPages<CompassLeadRow>(
-          ({ from, to, withCount }) =>
+        const paged = await fetchSupabasePages<CompassLeadRow>({
+          // 어제 00:00~지금 유입은 수십 건 규모(crm.leads 전체 898행, 2026-09-14) — 폭주 방지 상한만.
+          maxRows: 2000,
+          concurrent: true,
+          fetchPage: (from, to) =>
             sb
               .from("compass_leads_v")
-              .select("*", withCount ? { count: "exact" } : undefined)
+              .select("*", from === 0 ? { count: "exact" } : undefined)
               .or(inflowFilter)
               .order("id", { ascending: true })
               .range(from, to),
-          // 어제 00:00~지금 유입은 수십 건 규모(crm.leads 전체 898행, 2026-09-14) — 폭주 방지 상한만.
-          { maxRows: 2000 },
-        )
+        })
         if (paged.error != null) return downResult(paged.error)
-        return { ...ok(paged.rows), truncated: paged.truncated }
+        return { ...ok(paged.data), truncated: paged.truncated }
       },
       { ttlMs: TTL_MS, downTtlMs: TTL_DOWN_MS, isDown: isCompassResultDown, copy: copyCompassResult },
     )
@@ -477,22 +478,23 @@ export async function getCompassAdsDaily(
       cacheKey,
       async () => {
         const sb = createSupabaseAdminClient()
-        // PostgREST max-rows(1000)에서 최신 일자가 조용히 잘리던 것을 막는다(lib/compass/paginate.ts).
+        // PostgREST max-rows(1000)에서 최신 일자가 조용히 잘리던 것을 막는다(lib/supabase/pagination.ts).
         // 정렬 키는 유일해야 한다 — crm.meta_ad_daily PK (day, ad_id).
-        const paged = await fetchCompassPages<CompassAdDailyRow>(
-          ({ from, to, withCount }) =>
+        const paged = await fetchSupabasePages<CompassAdDailyRow>({
+          maxRows: 3000,
+          concurrent: true,
+          fetchPage: (from, to) =>
             sb
               .from("compass_ads_v")
-              .select("*", withCount ? { count: "exact" } : undefined)
+              .select("*", from === 0 ? { count: "exact" } : undefined)
               .gte("day", fromDay)
               .lte("day", toDay)
               .order("day", { ascending: true })
               .order("ad_id", { ascending: true })
               .range(from, to),
-          { maxRows: 3000 },
-        )
+        })
         if (paged.error != null) return downResult(paged.error)
-        return { ...ok(paged.rows), truncated: paged.truncated }
+        return { ...ok(paged.data), truncated: paged.truncated }
       },
       { ttlMs: TTL_MS, downTtlMs: TTL_DOWN_MS, isDown: isCompassResultDown, copy: copyCompassResult },
     )
@@ -513,20 +515,21 @@ export async function getCompassAdsetsDaily(
       async () => {
         const sb = createSupabaseAdminClient()
         // 정렬 키는 유일해야 한다 — crm.ad_adset_daily PK (day, adset_id).
-        const paged = await fetchCompassPages<CompassAdsetDailyRow>(
-          ({ from, to, withCount }) =>
+        const paged = await fetchSupabasePages<CompassAdsetDailyRow>({
+          maxRows: 3000,
+          concurrent: true,
+          fetchPage: (from, to) =>
             sb
               .from("compass_adsets_v")
-              .select("*", withCount ? { count: "exact" } : undefined)
+              .select("*", from === 0 ? { count: "exact" } : undefined)
               .gte("day", fromDay)
               .lte("day", toDay)
               .order("day", { ascending: true })
               .order("adset_id", { ascending: true })
               .range(from, to),
-          { maxRows: 3000 },
-        )
+        })
         if (paged.error != null) return downResult(paged.error)
-        return { ...ok(paged.rows), truncated: paged.truncated }
+        return { ...ok(paged.data), truncated: paged.truncated }
       },
       { ttlMs: TTL_MS, downTtlMs: TTL_DOWN_MS, isDown: isCompassResultDown, copy: copyCompassResult },
     )
@@ -548,20 +551,21 @@ export async function getCompassDemos(
       async () => {
         const sb = createSupabaseAdminClient()
         // 예전에는 limit 없이 읽어 max-rows 에서 조용히 잘렸다. 정렬 키 (day, id) — id 는 PK.
-        const paged = await fetchCompassPages<CompassDemoRow>(
-          ({ from, to, withCount }) =>
+        const paged = await fetchSupabasePages<CompassDemoRow>({
+          maxRows: 5000,
+          concurrent: true,
+          fetchPage: (from, to) =>
             sb
               .from("compass_demos_v")
-              .select("*", withCount ? { count: "exact" } : undefined)
+              .select("*", from === 0 ? { count: "exact" } : undefined)
               .gte("day", fromDay)
               .lte("day", toDay)
               .order("day", { ascending: true })
               .order("id", { ascending: true })
               .range(from, to),
-          { maxRows: 5000 },
-        )
+        })
         if (paged.error != null) return downResult(paged.error)
-        return { ...ok(paged.rows), truncated: paged.truncated }
+        return { ...ok(paged.data), truncated: paged.truncated }
       },
       { ttlMs: TTL_MS, downTtlMs: TTL_DOWN_MS, isDown: isCompassResultDown, copy: copyCompassResult },
     )
@@ -583,20 +587,21 @@ export async function getCompassCalEvents(
       async () => {
         const sb = createSupabaseAdminClient()
         // 예전에는 limit 없이 읽어 max-rows 에서 조용히 잘렸다. 정렬 키 (day, key) — key 는 PK.
-        const paged = await fetchCompassPages<CompassCalEventRow>(
-          ({ from, to, withCount }) =>
+        const paged = await fetchSupabasePages<CompassCalEventRow>({
+          maxRows: 5000,
+          concurrent: true,
+          fetchPage: (from, to) =>
             sb
               .from("compass_cal_events_v")
-              .select("*", withCount ? { count: "exact" } : undefined)
+              .select("*", from === 0 ? { count: "exact" } : undefined)
               .gte("day", fromDay)
               .lte("day", toDay)
               .order("day", { ascending: true })
               .order("key", { ascending: true })
               .range(from, to),
-          { maxRows: 5000 },
-        )
+        })
         if (paged.error != null) return downResult(paged.error)
-        return { ...ok(paged.rows), truncated: paged.truncated }
+        return { ...ok(paged.data), truncated: paged.truncated }
       },
       { ttlMs: TTL_MS, downTtlMs: TTL_DOWN_MS, isDown: isCompassResultDown, copy: copyCompassResult },
     )

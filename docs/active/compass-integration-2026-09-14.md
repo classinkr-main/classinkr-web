@@ -22,7 +22,7 @@
 |---|---|---|---|
 | E1 | `5453e679` | `supabase/migrations/20260914_compass_integration_bridge.sql` — `norm_phone_key` 함수·표현식 인덱스 3개, `compass_lead_refs_v`·`compass_lead_contact_v`(crm 객체 있을 때만), 역브리지 `home_owner_directory_v`·`home_neo_accounts_v`·`home_site_leads_v`·`home_channel_contacts_v`. `lib/db/schema-contract.ts` 에 뷰 6개 warning 프로브 | 적용 전까지 없음. `check:db` 에 warning 6건이 뜬다(차단 아님) |
 | E2 | `099c7d7f` | `lib/compass/normalize.ts` `normalizePhoneKey` 를 `normPhone` 등가로 | 원문 전화 `+82 010-…`·`0082-010-…`·`10-…`(앞 0 탈락)이 이제 Compass 리드와 조인된다. 저장값 기준 결과는 불변(테스트가 "옛 규칙과 다른 입력은 4개뿐" 고정). **어드민 끼리의 재유입 수도 오를 수 있다(정정)**: `lib/crm/lead-reinflow.ts` 가 같은 키로 어드민 리드끼리 묶으므로, 캠페인 허브 신규 리드 탭(`NewLeadsTab`)의 재유입 수가 `+82 010-…`/`0082-010-…`/`10-…` 와 `010-…` 로 따로 들어온 같은 번호 쌍에서 늘어난다 — 옛 키가 둘을 다른 사람으로 가르던 것을 바로잡은 결과다(`tests/compass/lead-reinflow.test.ts` 고정) |
-| E3 | `1d57e3ee` | `lib/compass/paginate.ts`(신규) + `bridge.ts` 기간 조회 4개(`getCompassAdsDaily`·`getCompassAdsetsDaily`·`getCompassDemos`·`getCompassCalEvents`) 페이지네이션, `truncated = count > rows` | PostgREST max-rows(1000) 조용한 절단 방지. 광고 라우트 절단 판정이 `>= 3000` 근사 → 실제 값 |
+| E3 | `1d57e3ee` | `bridge.ts` 기간 조회 4개(`getCompassAdsDaily`·`getCompassAdsetsDaily`·`getCompassDemos`·`getCompassCalEvents`) 페이지네이션, `truncated = count > rows`. 후속 수정: 브리지 전용 사본 `lib/compass/paginate.ts` 를 지우고 공용 `lib/supabase/pagination.ts` `fetchSupabasePages` 로 합쳤다(`concurrent: true`) — 공용 헬퍼가 count 를 알면서도 짧은 페이지(서버 클램프)에서 멈추고 `truncated=false` 를 내던 것도 같이 고쳤다 | PostgREST max-rows(1000) 조용한 절단 방지. 광고 라우트 절단 판정이 `>= 3000` 근사 → 실제 값. 공용 헬퍼를 쓰는 다른 호출부(첫 페이지에 count 를 청하는 곳)는 클램프된 짧은 페이지 뒤를 이어 읽고, 조회 중 행이 줄면 `truncated=true` 가 된다. count 없이 쓰는 곳은 그대로(짧은 페이지 = 끝) |
 | E3 | `97774597` | `lib/crm/compass-demo-source.ts` 데모 역조회 — 전화 전량 청크 조회 → 데모 리드 id PK 조회 1회(`getCompassLeadPhoneKeysByIds`) | 데모 색인 결과 동일, 조회량 감소 |
 | E4 | `fbf5eaa0` | `lib/crm/compass-timeline.ts` — sms·memo·action·alimtalk 표시, `system` 은 본문이 `폼 답변\n` 로 시작할 때만 "폼 답변" | 고객 360 타임라인에 빠지던 활동이 보인다. 기존 종류의 필터 축은 불변 |
 | E4 | `796a6b5f` | `COMPASS_STAGE_LABEL` 을 Compass `lib/stages.ts` 정본으로(new=유입, quote=미팅, lost=종료) | 리드 보드 Compass 칩·등록 중복 경고의 단계 글자 |
@@ -136,6 +136,8 @@ Compass `lib/leadContact.ts` 조각(활동 별칭 `a`) — Compass `scripts/sche
 
 **나중에 줄일 수 있는 것**(§2 적용·Compass 배포 뒤, 위 차이를 받아들이기로 정한 경우):
 
+- `getCompassActivitySignals` 의 손 페이지 루프(짧은 페이지 = 끝 — 공용 `fetchSupabasePages` 가 count 없이 쓰일 때와 같은 규칙)는
+  뷰로 바꾸지 않더라도 공용 헬퍼로 옮길 수 있다(이번에는 그 함수·테스트를 건드리지 않았다).
 - `getCompassActivitySignals` 의 손 페이지 루프 + `humanTouchedCompassLeadIds` + `COMPASS_AUTOMATED_ACTORS` 사본을
   `compass_lead_contact_v` 를 `lead_id in (…)` 로 읽는 조회 하나로 바꿀 수 있다. 결과가 리드당 1행이라 행 상한·페이지 문제가 없고,
   기계 작성자 목록의 원본이 Compass `lib/leadContact.ts` 하나로 준다(지금은 두 저장소에 사본이 있고 글자를 손으로 맞춘다).
