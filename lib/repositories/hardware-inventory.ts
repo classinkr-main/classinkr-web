@@ -593,6 +593,149 @@ function lotFifoRank(lot: string): number | null {
   return hMatch ? Number(hMatch[1]) : null
 }
 
+/** FIFO 정렬 — 가장 먼저 소진될 로트가 앞. FY < H1 < … < H숫자 < 그 밖(C1·Sample 등, 처음 본 날짜순). */
+function compareLotsFifo(
+  a: { lot: string; firstSeen: number },
+  b: { lot: string; firstSeen: number }
+): number {
+  const aRank = lotFifoRank(a.lot)
+  const bRank = lotFifoRank(b.lot)
+  if (aRank != null && bRank != null && aRank !== bRank) return aRank - bRank
+  if (aRank != null && bRank == null) return -1
+  if (aRank == null && bRank != null) return 1
+  if (a.firstSeen !== b.firstSeen) return a.firstSeen - b.firstSeen
+  return a.lot.localeCompare(b.lot, "ko")
+}
+
+/** 이동 1건이 로트 잔량에 주는 변화 — 입고/반납(+) · 출고(예정 포함, −) · 보정(방향대로) · 이동/수리(0). */
+function lotDeltaOf(movement: Pick<HardwareMovement, "movement_type" | "quantity" | "from_location" | "to_location">): number {
+  if (movement.movement_type === "inbound" || movement.movement_type === "return") return movement.quantity
+  if (movement.movement_type === "outbound") return -movement.quantity
+  if (movement.movement_type === "adjust") {
+    return movement.from_location && !movement.to_location ? -movement.quantity : movement.quantity
+  }
+  return 0
+}
+
+/** 양수 로트를 FIFO 순서대로 need 만큼 소진한다. 소진하지 못한 나머지를 돌려준다. */
+function drainLotsFifo(lots: ResolvedHardwareLot[], need: number): number {
+  let remaining = need
+  for (const lot of lots) {
+    if (remaining <= 0) break
+    if (lot.quantity <= 0) continue
+    const take = Math.min(remaining, lot.quantity)
+    lot.quantity -= take
+    remaining -= take
+  }
+  return remaining
+}
+
+export type HardwareLotLedgerMovement = Pick<
+  HardwareMovement,
+  | "lot_no"
+  | "source"
+  | "reference_no"
+  | "movement_type"
+  | "quantity"
+  | "from_location"
+  | "to_location"
+  | "occurred_at"
+  | "created_at"
+>
+
+export interface ResolvedHardwareLot {
+  lot: string
+  quantity: number
+  firstSeen: number
+}
+
+export interface ResolvedHardwareLotBalances {
+  /** 양수 잔량 로트만, FIFO 순서(가장 먼저 소진될 로트가 앞). */
+  lots: ResolvedHardwareLot[]
+  /** 흡수할 양수 로트가 없어 남은 초과 출고 — "원장 점검 필요" 신호. */
+  unabsorbedOverdraw: number
+  /** 차감할 로트가 없어 남은 로트 미기록 감소분(출고·음수 보정). */
+  unattributedReduction: number
+}
+
+/**
+ * 로트 잔량 정본 해석기 — 화면 표시(computeHardwareStockRow)와 새 출고 자동 배정
+ * (allocateOutboundLots)이 **반드시 이 함수 하나**를 쓴다. 둘이 따로 계산하면 화면이 보여준
+ * 로트와 실제로 찍히는 로트가 갈라진다.
+ *
+ * ── 왜 단순 합산이 아닌가 (2026-09-14 운영 실측) ───────────────────────────────
+ * 예전에는 로트 키가 있는 이동만 로트별로 합산하고 음수는 숨겼다. 그 결과 운영 화면이 실물에
+ * 없는 옛 로트를 재고로 보여줬다 — STD1 에 H4 1·H5 10·H6 3, T1 에 H6 6. 실제 재고는 전부
+ * H8·C1 물량이다(운영자 확인). 원인은 시트 원장의 두 가지 기록 습관이다.
+ *
+ *  1. **로트를 넘는 출고.** 설치 기록에 그 시점의 "현행 세대" 이름을 붙이는 경우가 많아,
+ *     STD1 은 H8 입고 19대에 H8 출고가 27대로 기록돼 H8 이 −8 이 됐다. 그 8대는 실제로는
+ *     선반에 남아 있던 옛 로트에서 나간 것이다. 음수를 숨기면 그 사실이 사라지고, 옛 로트는
+ *     한 대도 줄지 않은 채 남는다.
+ *  2. **로트 없는 출고·보정.** 배송 예정 출고와 현재고 보정 다수가 로트 키 없이 들어온다.
+ *     합산에서 빠지니 로트 잔량은 줄지 않는다.
+ *
+ * ── 해석 규칙 (순서 무관 · 결정적) ───────────────────────────────────────────────
+ *  ① 로트 키가 있는 이동을 로트별로 합산한다.
+ *  ② 음수가 된 로트의 초과분은 FIFO(가장 오래된 양수 로트부터)로 흡수한다 — 기록된 로트가
+ *     아니라 실제로 나간 물량의 출처를 복원한다.
+ *  ③ 로트 없는 감소분(출고·음수 보정)도 FIFO 로 차감한다 — 새 출고 자동 배정과 같은 규약이다.
+ *
+ * 날짜 순서로 재생하지 않는 이유: 시트 원장은 입고일보다 설치일이 앞서는 행이 흔하고(H6 입고
+ * 2025-11-03 이전에 H6 출고 4건), occurred_at 이 빈 행도 있으며 created_at 은 임포트 시각
+ * 하나로 뭉쳐 있다. 순서에 기대면 결과가 데이터 노이즈에 흔들린다.
+ *
+ * 운영 교차검증(2026-09-14): 해석 결과가 T1(판촉) H8 10 = 가용 10, 75" IFP H8 1 = 가용 1,
+ * S1 C1 1 = 가용 1 로 정확히 맞고, 전 품목에서 H8 이전 로트가 사라졌다.
+ * 로트 없는 **증가분**(보정+)은 어느 로트인지 알 수 없어 로트에 넣지 않는다 — 로트 합계가
+ * 가용 재고보다 작게 나오는 품목(OPS·케이블 등)은 그 미기록분이다.
+ */
+export function resolveHardwareLotBalances(
+  movements: readonly HardwareLotLedgerMovement[]
+): ResolvedHardwareLotBalances {
+  const byLot = new Map<string, ResolvedHardwareLot>()
+  let unlottedReduction = 0
+
+  for (const movement of movements) {
+    const delta = lotDeltaOf(movement)
+    if (delta === 0) continue
+
+    const lot = movementLotKey(movement)
+    if (!lot) {
+      // 로트를 알 수 없는 증가분은 귀속시킬 곳이 없다 — 감소분만 FIFO 로 차감한다(규칙 ③).
+      if (delta < 0) unlottedReduction += -delta
+      continue
+    }
+
+    const current = byLot.get(lot) ?? { lot, quantity: 0, firstSeen: Number.POSITIVE_INFINITY }
+    current.quantity += delta
+    const seenAt = movementDate(movement)
+    if (seenAt > 0 && seenAt < current.firstSeen) current.firstSeen = seenAt
+    byLot.set(lot, current)
+  }
+
+  const ordered = Array.from(byLot.values()).sort(compareLotsFifo)
+
+  // 규칙 ②: 초과 출고를 모아 음수 로트는 0 으로 되돌리고, 그만큼 오래된 양수 로트에서 흡수한다.
+  let overdraw = 0
+  for (const lot of ordered) {
+    if (lot.quantity < 0) {
+      overdraw += -lot.quantity
+      lot.quantity = 0
+    }
+  }
+  const unabsorbedOverdraw = drainLotsFifo(ordered, overdraw)
+
+  // 규칙 ③
+  const unattributedReduction = drainLotsFifo(ordered, unlottedReduction)
+
+  return {
+    lots: ordered.filter((lot) => lot.quantity > 0),
+    unabsorbedOverdraw,
+    unattributedReduction,
+  }
+}
+
 function splitMoney(value: number | null | undefined, quantity: number, totalQuantity: number) {
   if (value == null) return null
   if (!Number.isFinite(value) || totalQuantity <= 0) return null
@@ -703,54 +846,26 @@ async function allocateOutboundLots(input: {
     return query
   })
 
-  const balances = new Map<string, { lotNo: string; quantity: number; firstSeen: number }>()
-  for (const movement of data) {
-    if (excluded.has(movement.id)) continue
-    const lotNo = movementLotKey(movement)
-    if (!lotNo) continue
+  // 화면(computeHardwareStockRow)과 같은 해석기로 잔량을 낸다 — 따로 합산하면 화면에 없는 옛 로트
+  // (예: STD1 H4·H5)가 새 출고에 자동으로 찍힌다(2026-09-14 운영 실측으로 재현).
+  const lots = resolveHardwareLotBalances(data.filter((movement) => !excluded.has(movement.id))).lots
+    .map((lot) => ({ lotNo: lot.lot, quantity: lot.quantity }))
 
-    let delta = 0
-    if (movement.movement_type === "inbound" || movement.movement_type === "return") {
-      delta = movement.quantity
-    } else if (movement.movement_type === "outbound") {
-      delta = -movement.quantity
-    } else if (movement.movement_type === "adjust") {
-      delta = movement.from_location && !movement.to_location ? -movement.quantity : movement.quantity
-    }
-    if (delta === 0) continue
-
-    const current = balances.get(lotNo) ?? { lotNo, quantity: 0, firstSeen: Number.POSITIVE_INFINITY }
-    current.quantity += delta
-    const seenAt = movementDate(movement)
-    if (seenAt > 0 && seenAt < current.firstSeen) current.firstSeen = seenAt
-    balances.set(lotNo, current)
-  }
-
-  const lots = Array.from(balances.values())
-    .filter((row) => row.quantity > 0)
-    .sort((a, b) => {
-      const aRank = lotFifoRank(a.lotNo)
-      const bRank = lotFifoRank(b.lotNo)
-      if (aRank != null && bRank != null && aRank !== bRank) return aRank - bRank
-      if (aRank != null && bRank == null) return -1
-      if (aRank == null && bRank != null) return 1
-      if (a.firstSeen !== b.firstSeen) return a.firstSeen - b.firstSeen
-      return a.lotNo.localeCompare(b.lotNo, "ko")
-    })
-
+  // 운영자가 로트를 **지정**했으면 그 로트 잔량을 검사한다 — 특정 로트를 골랐다는 명시적 판단이라,
+  // 기록과 어긋나면 알려주는 편이 맞다. 지정을 비우면 아래 자동 배정으로 가며 그쪽은 막히지 않는다.
   if (explicitLotNo) {
     const explicit = lots.find((lot) => lot.lotNo === explicitLotNo)
     const available = explicit?.quantity ?? 0
     if (available < input.quantity) {
       throw new Error(
-        `${input.productName} ${explicitLotNo} lot 재고가 부족합니다. 요청 ${input.quantity}대, 가능 ${available}대입니다.`
+        `${input.productName} ${explicitLotNo} lot 재고가 부족합니다. 요청 ${input.quantity}대, 가능 ${available}대입니다. 로트 지정을 비우면 자동 배정됩니다.`
       )
     }
     return [{ lotNo: explicitLotNo, quantity: input.quantity, autoAssigned: false }]
   }
 
   let remaining = input.quantity
-  const allocations: Array<{ lotNo: string; quantity: number; autoAssigned: boolean }> = []
+  const allocations: Array<{ lotNo: string | null; quantity: number; autoAssigned: boolean }> = []
   for (const lot of lots) {
     if (remaining <= 0) break
     const quantity = Math.min(remaining, lot.quantity)
@@ -758,11 +873,14 @@ async function allocateOutboundLots(input: {
     remaining -= quantity
   }
 
+  // 정책(운영자 결정 2026-09-14): **로트가 모자라도 출고를 막지 않는다.** 해석 가능한 만큼 FIFO 로
+  // 배정하고 나머지는 로트 미지정(lot_no NULL) 한 줄로 기록한다.
+  // 예전에는 여기서 throw 했다. 그런데 운영 원장은 로트 기록이 부분적이라(시트 임포트 385건 전부
+  // lot_no NULL, OPS·A1·D2·케이블은 로트 기록이 아예 없음) 실제 출고를 원장에 남길 방법이 없었다.
+  // 로트는 추적 메타데이터이고, 출고 자체를 기록하지 못하게 막는 것이 더 큰 손실이다.
+  // 나중에 로트가 확인되면 이 줄을 수정해 로트를 채우면 되고, 로트 해석기가 그 사이를 흡수한다.
   if (remaining > 0) {
-    const available = input.quantity - remaining
-    throw new Error(
-      `${input.productName} lot 재고가 부족합니다. 요청 ${input.quantity}대, 자동 배정 가능 ${available}대입니다.`
-    )
+    allocations.push({ lotNo: null, quantity: remaining, autoAssigned: true })
   }
 
   return allocations
@@ -873,6 +991,55 @@ export async function createHardwareMovement(input: CreateHardwareMovementInput)
   return movement
 }
 
+function isMissingRpcError(error: { code?: string; message?: string }, rpcName: string) {
+  return (
+    error.code === "PGRST202" ||
+    new RegExp(`${rpcName}|schema cache|function`, "i").test(error.message ?? "")
+  )
+}
+
+/**
+ * 확정할 예정 행의 로트 배정을 앱에서 계산한다 — v3 RPC 로 넘길 값.
+ *
+ * 로트 규칙을 SQL 에 두 번째로 구현하지 않기 위해서다(v2 는 lot_no 칸만 봐서, lot_no 가 전부 NULL 인
+ * 운영 원장에서 확정이 전부 실패했다). 예정 행이 없거나 확정 대상이 아니면 빈 배정을 돌려준다 —
+ * 그 경우 v3 가 표준 오류 문구("찾을 수 없습니다" 등)로 거절하므로 검증을 여기서 중복하지 않는다.
+ */
+async function planConfirmLotAllocations(
+  id: string,
+  confirmQty: number | null
+): Promise<Array<{ lotNo: string | null; quantity: number }>> {
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("hardware_movements")
+    .select("id,item_id,product_name,quantity,lot_no,movement_type,status,voided_at")
+    .eq("id", id)
+    .maybeSingle()
+  if (error) throw error
+
+  const planned = data as Pick<
+    HardwareMovement,
+    "id" | "item_id" | "product_name" | "quantity" | "lot_no" | "movement_type" | "status" | "voided_at"
+  > | null
+  if (!planned || planned.voided_at || planned.movement_type !== "outbound" || !isPlannedStatus(planned.status)) {
+    return []
+  }
+
+  const effectiveQty = Math.min(confirmQty ?? planned.quantity, planned.quantity)
+  if (!Number.isFinite(effectiveQty) || effectiveQty <= 0) return []
+
+  // 확정되는 예정 행 자신은 잔량 계산에서 뺀다 — 로트 없는 예정 출고는 해석기에서 FIFO 로 로트를
+  // 예약하므로, 빼지 않으면 자기가 잡아 둔 로트를 자기가 못 쓰는 셈이 된다.
+  const allocations = await allocateOutboundLots({
+    itemId: planned.item_id,
+    productName: planned.product_name,
+    quantity: effectiveQty,
+    explicitLotNo: planned.lot_no,
+    excludeMovementIds: [planned.id],
+  })
+  return allocations.map(({ lotNo, quantity }) => ({ lotNo, quantity }))
+}
+
 export async function confirmPlannedHardwareMovement(
   id: string,
   input: { occurredAt?: string | null; actor?: string | null; confirmQty?: number | null }
@@ -885,16 +1052,36 @@ export async function confirmPlannedHardwareMovement(
     confirm_qty: input.confirmQty ?? null,
   }
 
+  // v3: 로트 배정은 앱이 계산해 넘기고, 로트가 모자라면 나머지를 로트 미지정으로 기록한다.
+  const lotAllocations = await planConfirmLotAllocations(id, input.confirmQty ?? null)
+  const v3 = await sb.rpc("confirm_hardware_planned_movement_v3", {
+    ...args,
+    lot_allocations: lotAllocations.map((allocation) => ({ lot_no: allocation.lotNo, quantity: allocation.quantity })),
+  })
+  if (!v3.error) {
+    revalidateTag(HARDWARE_INVENTORY_CACHE_TAG, "max")
+    return v3.data as HardwareMovement
+  }
+  if (!isMissingRpcError(v3.error, "confirm_hardware_planned_movement_v3")) throw v3.error
+
+  // v3 마이그레이션(20260914_hardware_confirm_planned_v3.sql)이 아직 없으면 v2 로 떨어진다 — 배포와
+  // 마이그레이션 적용 순서를 분리하기 위해서다. 이 경로는 예전과 똑같이 동작하므로 더 나빠지지 않는다.
   const v2 = await sb.rpc("confirm_hardware_planned_movement_v2", args)
   if (!v2.error) {
     revalidateTag(HARDWARE_INVENTORY_CACHE_TAG, "max")
     return v2.data as HardwareMovement
   }
 
-  const missingRpc =
-    v2.error.code === "PGRST202" ||
-    /confirm_hardware_planned_movement_v2|schema cache|function/i.test(v2.error.message)
-  if (!missingRpc) throw v2.error
+  if (!isMissingRpcError(v2.error, "confirm_hardware_planned_movement_v2")) {
+    // v2 는 lot_no 칸만 봐서 로트 미지정 예정 출고를 전부 거절한다. 운영자가 이유를 알 수 있게
+    // "무엇이 빠졌는지"를 문구로 드러낸다 — 원문만 보이면 재고가 정말 없는 것으로 오해한다.
+    if (/lot 재고가 부족/.test(v2.error.message ?? "")) {
+      throw new Error(
+        `확정 기능 업데이트(DB v3)가 아직 적용되지 않아 로트 미지정 출고를 확정할 수 없습니다. 관리자에게 적용을 요청하세요. (원래 오류: ${v2.error.message})`
+      )
+    }
+    throw v2.error
+  }
 
   const legacy = await sb.rpc("confirm_hardware_planned_movement", args)
   if (legacy.error) throw legacy.error
@@ -1623,7 +1810,6 @@ export interface HardwareStockRowComputeInput {
 export function computeHardwareStockRow(input: HardwareStockRowComputeInput): HardwareStockRow {
   const { item, itemMovements, cutoff30dMs } = input
   const locationBalances = new Map<string, number>()
-  const lotBalances = new Map<string, number>()
   let plannedOut = 0
   let outbound30d = 0
 
@@ -1631,20 +1817,6 @@ export function computeHardwareStockRow(input: HardwareStockRowComputeInput): Ha
     const qty = movement.quantity
     const occurredTime = movementDate(movement)
     const destinationKind = classifyDestination(movement.to_location)
-
-    const lotKey = movementLotKey(movement)
-    if (lotKey) {
-      // lot 잔량 = 입고/반납(+) − 출고(예정 포함, −). 이동/수리는 lot 보존(0).
-      let lotDelta = 0
-      if (movement.movement_type === "inbound" || movement.movement_type === "return") {
-        lotDelta = qty
-      } else if (movement.movement_type === "outbound") {
-        lotDelta = -qty
-      } else if (movement.movement_type === "adjust") {
-        lotDelta = movement.from_location && !movement.to_location ? -qty : qty
-      }
-      if (lotDelta !== 0) lotBalances.set(lotKey, (lotBalances.get(lotKey) ?? 0) + lotDelta)
-    }
 
     if (movement.movement_type === "inbound") {
       applyLocationDelta(locationBalances, movement.to_location ?? DEFAULT_STOCK_LOCATION, qty)
@@ -1690,9 +1862,10 @@ export function computeHardwareStockRow(input: HardwareStockRowComputeInput): Ha
       if (b.location === DEFAULT_STOCK_LOCATION) return 1
       return Math.abs(b.quantity) - Math.abs(a.quantity)
     })
-  const lotRows = Array.from(lotBalances.entries())
-    .filter(([, quantity]) => quantity > 0)
-    .map(([lot, quantity]) => ({ lot, quantity }))
+  // lot 잔량은 새 출고 자동 배정과 같은 해석기로 낸다(resolveHardwareLotBalances 주석 참조).
+  // 표시 순서는 기존 계약대로 수량 내림차순이다.
+  const lotRows = resolveHardwareLotBalances(itemMovements)
+    .lots.map(({ lot, quantity }) => ({ lot, quantity }))
     .sort((a, b) => b.quantity - a.quantity)
 
   return {
@@ -1844,9 +2017,12 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
 
 // 대시보드 = 전체 ledger 집계 비용. 쓰기 6경로가 HARDWARE_INVENTORY_CACHE_TAG로 즉시 무효화하므로
 // 수정은 바로 반영되고, Date.now() 기반 30일 창의 시간 드리프트만 revalidate 상한(120s)으로 제한.
+// 키 버전(v2, 2026-09-14): lot 잔량 해석 규칙이 바뀌었다(resolveHardwareLotBalances). 키를 그대로
+// 두면 배포 직후에도 Data Cache 가 옛 규칙으로 계산한 대시보드(실물에 없는 H4·H5·H6 재고)를
+// SWR 로 먼저 돌려주고, 재검증이 끝날 때까지 화면이 틀린 로트를 계속 보여준다.
 const getHardwareDashboardCached = unstable_cache(
   () => getHardwareDashboardUncached(),
-  ["hardware-dashboard"],
+  ["hardware-dashboard-v2"],
   { tags: [HARDWARE_INVENTORY_CACHE_TAG], revalidate: 120 }
 )
 
