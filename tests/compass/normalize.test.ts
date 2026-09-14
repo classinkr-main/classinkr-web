@@ -5,8 +5,10 @@ import { describe, expect, it } from "vitest"
 
 import {
   COMPASS_CARE_STAGE_LABEL,
+  COMPASS_INBOUND_CHANNELS,
   COMPASS_STAGE_LABEL,
   compassLeadUrl,
+  isCompassMarketingChannel,
   normalizePhoneKey,
 } from "@/lib/compass/normalize"
 
@@ -170,5 +172,28 @@ describe("compass label vocabularies", () => {
 describe("compassLeadUrl", () => {
   it("builds the ?open= deep link (라이브 확인된 파라미터)", () => {
     expect(compassLeadUrl(771)).toBe("https://mkt.classin.co.kr/leads?open=771")
+  })
+})
+
+describe("Compass 인바운드 채널 — mktLeadCond 등가", () => {
+  it("인바운드 목록은 Compass lib/taxonomy/defs.ts CHANNELS(group='inbound')와 같다", () => {
+    expect([...COMPASS_INBOUND_CHANNELS]).toEqual(["channeltalk", "direct", "walkin", "referral"])
+  })
+
+  it.each([
+    ["channeltalk", false],
+    ["direct", false],
+    ["walkin", false],
+    ["referral", false],
+    ["sms", true],
+    ["email", true],
+    ["", true],
+    [null, true],
+    [undefined, true],
+    // SQL coalesce(channel,'') <> all(...) 는 값을 다듬지 않는다 — 같게 둔다.
+    [" walkin", true],
+    ["Walkin", true],
+  ] as Array<[string | null | undefined, boolean]>)("channel %j → 마케팅 %j", (channel, expected) => {
+    expect(isCompassMarketingChannel(channel)).toBe(expected)
   })
 })

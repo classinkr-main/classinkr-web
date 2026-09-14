@@ -26,7 +26,7 @@
 | E3 | `97774597` | `lib/crm/compass-demo-source.ts` 데모 역조회 — 전화 전량 청크 조회 → 데모 리드 id PK 조회 1회(`getCompassLeadPhoneKeysByIds`) | 데모 색인 결과 동일, 조회량 감소 |
 | E4 | `fbf5eaa0` | `lib/crm/compass-timeline.ts` — sms·memo·action·alimtalk 표시, `system` 은 본문이 `폼 답변\n` 로 시작할 때만 "폼 답변" | 고객 360 타임라인에 빠지던 활동이 보인다. 기존 종류의 필터 축은 불변 |
 | E4 | `796a6b5f` | `COMPASS_STAGE_LABEL` 을 Compass `lib/stages.ts` 정본으로(new=유입, quote=미팅, lost=종료) | 리드 보드 Compass 칩·등록 중복 경고의 단계 글자 |
-| E5 | `339878d1` | 오늘 유입 카드 — Compass 리드를 `created_at` **또는** `last_inflow_at` 이 기간 안인 것으로 읽고 신규/재유입을 가른다(`lib/compass/inflow-window.ts` 신규) | Compass 신규 리드가 오늘 유입에 잡힌다(예전엔 재유입만). "신규 N · 재유입 k" 표시 |
+| E5 | `339878d1` | 오늘 유입 카드 — Compass 리드를 `created_at` **또는** `last_inflow_at` 이 기간 안인 것으로 읽고 신규/재유입을 가른다(`lib/compass/inflow-window.ts` 신규) | Compass 신규 리드가 오늘 유입에 잡힌다(예전엔 재유입만). "신규 N · 재유입 k" 표시. 후속 수정: Compass 인바운드 채널(`channeltalk`·`direct`·`walkin`·`referral`)은 세지 않는다 — Compass 대시보드 "오늘"의 `mktLeadCond`(`coalesce(channel,'') <> all(…)`)와 같은 규칙(`lib/compass/normalize.ts` `isCompassMarketingChannel`). 이게 없으면 Compass 에 수동 등록한 워크인·채널톡 리드가 어드민 카드에만 +1 됐다 |
 | E6 | `fb1a0131` | `lib/external-crm/xiaoshouyi-write.ts` lead **create** 닫기(§3) | 이 저장소 쓰기 큐로 NEO lead 를 만들 수 없다. 수정·담당 이전은 열려 있다 |
 
 손대지 않은 것(다른 세션 소유 — `home_v4.42` 로 병합됨): `lib/compass/lead-contact-sync.ts`, `lib/server/lead-contact-compass-sync.ts`,

@@ -346,7 +346,9 @@ export async function getCompassLeadPhoneKeysByIds(
 /** 기간 내 유입 리드 — 라이브 인테이크 피드용. **생성(created_at) 또는 최신 재유입(last_inflow_at)** 이
  *  기간 안인 리드(2026-09-14 R2 F12 — 예전엔 last_inflow_at 만 봐서 Compass 신규 리드가 전부 빠지고
  *  재유입만 잡혔다. Compass 는 신규 insert 때 last_inflow_at 을 비워 둔다). 신규/재유입 판정은
- *  lib/compass/inflow-window.ts compassInflowInWindow.
+ *  lib/compass/inflow-window.ts compassInflowInWindow. 채널로 거르지 않는다 — 인바운드 제외(Compass mktLeadCond)는
+ *  소비 쪽 lib/marketing/intake-feed.ts 가 isCompassMarketingChannel 로 한다(채널 없음을 포함하는 조건이라
+ *  PostgREST not.in 한 줄로는 null 이 빠진다).
  *  페이지네이션(lib/compass/paginate.ts) + truncated = count > rows — 예전 .limit(500) 은 호출부가
  *  rows.length >= 500 으로 절단을 짐작해야 했다. 정렬 키는 PK id(유일).
  *  60초 메모(down은 10초). toIso는 호출부(app/api/admin/marketing/intake-today)가 매 요청

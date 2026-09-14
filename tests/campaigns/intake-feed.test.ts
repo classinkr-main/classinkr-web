@@ -286,6 +286,43 @@ describe("buildIntakeFeed", () => {
     expect(result.yesterdayCount).toBe(1)
   })
 
+  it("Compass 인바운드(채널톡·다이렉트·워크인·소개) 리드는 세지 않는다 — Compass 마케팅 유입(mktLeadCond)과 같은 규칙", () => {
+    const result = buildIntakeFeed({
+      adminLeads: [],
+      compassLeads: [
+        compassNew({ id: 901, phone_key: "01010200001", channel: "walkin" }),
+        compassNew({ id: 902, phone_key: "01010200002", channel: "channeltalk" }),
+        compassNew({ id: 903, phone_key: "01010200003", channel: "direct" }),
+        compass({ id: 904, phone_key: "01010200004", channel: "referral" }), // 재유입이어도 인바운드면 제외
+        compassNew({ id: 905, phone_key: "01010200005", channel: "referral", created_at: "2026-08-27T02:00:00.000Z" }), // 어제
+        // 마케팅: 채널 없음(메타 리드)·빈 값·프로모션(sms·email)
+        compassNew({ id: 911, phone_key: "01010200011", channel: null }),
+        compassNew({ id: 912, phone_key: "01010200012", channel: "" }),
+        compassNew({ id: 913, phone_key: "01010200013", channel: "sms" }),
+        compass({ id: 914, phone_key: "01010200014", channel: "email" }),
+        compassNew({ id: 915, phone_key: "01010200015" }), // channel 필드 없음
+      ],
+      windows,
+      maxItems: 20,
+    })
+    expect(result.items.map((item) => item.key).sort()).toEqual(["c:911", "c:912", "c:913", "c:914", "c:915"])
+    expect(result.todayCount).toBe(5)
+    expect(result.todayReinflowCount).toBe(1)
+    expect(result.yesterdayCount).toBe(0)
+    expect(result.delta).toBe(5)
+  })
+
+  it("인바운드 Compass 리드와 같은 전화의 어드민 리드는 어드민 원천 1건으로 남는다(접히지 않고, 사라지지도 않는다)", () => {
+    const result = buildIntakeFeed({
+      adminLeads: [lead({ id: "lead-walkin", phone: "010-1020-0100" })],
+      compassLeads: [compassNew({ id: 920, phone_key: "01010200100", channel: "walkin" })],
+      windows,
+    })
+    expect(result.todayCount).toBe(1)
+    expect(result.overlapCount).toBe(0)
+    expect(result.items[0]).toMatchObject({ key: "a:lead-walkin", origins: ["admin"], compassLeadId: null, reinflow: false })
+  })
+
   it("깨진 타임스탬프는 창에 넣지 않는다(0 시각으로 오늘에 끌려들어오지 않게)", () => {
     const result = buildIntakeFeed({
       adminLeads: [lead({ phone: "01011110000", timestamp: "not-a-date" })],

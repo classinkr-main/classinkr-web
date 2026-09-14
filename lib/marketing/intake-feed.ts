@@ -11,10 +11,13 @@
 //  - 시각 축은 KST(lib/business-time.ts) 단일 기준.
 //  - Compass 리드는 생성(created_at) 또는 최신 재유입(last_inflow_at)이 창 안이면 센다(2026-09-14 R2 F12 —
 //    예전엔 last_inflow_at 만 봐서 Compass 신규가 빠지고 재유입만 셌다). 재유입은 표시로 구분한다.
+//  - Compass 인바운드 경로(채널톡·다이렉트·워크인·소개)는 세지 않는다 — Compass 대시보드 "오늘"이 마케팅 유입만
+//    세는 규칙(mktLeadCond)과 같게(2026-09-14 후속 수정). 수동 등록된 워크인이 어드민 카드에만 +1 되던 불일치를 막는다.
+//    어드민 public.leads 에는 이 규칙을 걸지 않는다(웹사이트 문의라 Compass 채널 어휘가 없다).
 
 import { toBusinessStorageDateTime, getBusinessDateParts } from "@/lib/business-time"
 import { compassInflowInWindow, type CompassInflowEvent } from "@/lib/compass/inflow-window"
-import { normalizePhoneKey } from "@/lib/compass/normalize"
+import { isCompassMarketingChannel, normalizePhoneKey } from "@/lib/compass/normalize"
 import { getMetaAdInfo, isTestLead } from "@/lib/crm/lead-attribution"
 import { shiftDays } from "@/lib/marketing/perf"
 import type { LeadRecord } from "@/lib/repositories/leads"
@@ -195,7 +198,7 @@ function displayKey(bucket: Bucket): string {
 export interface BuildIntakeFeedInput {
   /** 어드민 리드 전량. null 이면 조회 실패(미측정) — 0 건과 구분한다. */
   adminLeads: readonly LeadRecord[] | null
-  /** Compass 리드(어제 00:00 이후 생성 또는 재유입). null 이면 브리지 다운(미측정). */
+  /** Compass 리드(어제 00:00 이후 생성 또는 재유입). null 이면 브리지 다운(미측정). 인바운드 채널은 여기서 거른다. */
   compassLeads: readonly CompassIntakeLead[] | null
   windows: IntakeWindows
   /** Compass meta_ad_id → 광고명. 없으면 채널 라벨로 대체한다. */
@@ -244,6 +247,9 @@ export function buildIntakeFeed({
   }
 
   for (const lead of compassLeads ?? []) {
+    // 인바운드(고객이 먼저 온) Compass 리드는 마케팅 유입이 아니다 — Compass mktLeadCond 와 같은 규칙.
+    // 같은 전화의 어드민 리드가 있으면 그 리드는 어드민 원천으로 그대로 센다(접기 상대만 없어진다).
+    if (!isCompassMarketingChannel(lead.channel)) continue
     // 오늘·어제 창을 따로 판정한다 — 어제 생성되고 오늘 재유입한 리드는 어제엔 신규, 오늘엔 재유입으로
     // 양쪽에 1건씩 잡힌다(어드민 리드와 달리 한 행이 두 번 유입할 수 있다).
     const perWindow: Array<[Map<string, Bucket>, CompassInflowEvent | null]> = [

@@ -14,7 +14,8 @@ import type { IntakeFeedItem, IntakeFeedResult } from "@/lib/marketing/intake-fe
 //  - 원천 하나가 죽으면 남은 쪽 숫자를 "전체"라고 부르지 않는다 — "미집계" 배지를 단다.
 //  - 비교는 "어제 같은 시각까지" 창이다. 어제 하루 전체와 견주면 오전엔 늘 급감으로 보인다.
 //  - Compass 리드는 신규(오늘 생성)와 재유입(이미 있던 리드가 오늘 다시 들어옴)을 함께 센다 — 합계 아래
-//    "신규 N · 재유입 k"로 가르고, 피드 줄에는 재유입 배지를 단다(2026-09-14 R2 F12).
+//    "신규 N · 재유입 k"로 가르고, 피드 줄에는 재유입 배지를 단다(2026-09-14 R2 F12). 인바운드 채널
+//    (채널톡·다이렉트·워크인·소개)은 Compass 대시보드처럼 마케팅 유입에서 뺀다.
 
 const TTL_MS = 20_000
 
@@ -161,7 +162,7 @@ export function TodayIntakeCard({ refreshNonce }: { refreshNonce: number }) {
       <div className="mb-3">
         <h2 className="text-[14px] font-semibold text-[#111110]">오늘 유입</h2>
         <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
-          KST 오늘 00:00~지금 · 어드민 리드 + Compass(신규·재유입), 전화 기준 중복 접음
+          KST 오늘 00:00~지금 · 어드민 리드 + Compass 마케팅 리드(신규·재유입, 인바운드 제외), 전화 기준 중복 접음
         </p>
       </div>
 
