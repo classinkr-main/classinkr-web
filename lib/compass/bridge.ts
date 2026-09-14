@@ -15,6 +15,7 @@ import "server-only"
 
 import { createHash } from "node:crypto"
 
+import { compassInflowWindowFilter } from "@/lib/compass/inflow-window"
 import { fetchCompassPages } from "@/lib/compass/paginate"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
@@ -342,7 +343,12 @@ export async function getCompassLeadPhoneKeysByIds(
   }
 }
 
-/** 기간 내 리드 — 라이브 인테이크 피드·재유입 카운트용(last_inflow_at 기준).
+/** 기간 내 유입 리드 — 라이브 인테이크 피드용. **생성(created_at) 또는 최신 재유입(last_inflow_at)** 이
+ *  기간 안인 리드(2026-09-14 R2 F12 — 예전엔 last_inflow_at 만 봐서 Compass 신규 리드가 전부 빠지고
+ *  재유입만 잡혔다. Compass 는 신규 insert 때 last_inflow_at 을 비워 둔다). 신규/재유입 판정은
+ *  lib/compass/inflow-window.ts compassInflowInWindow.
+ *  페이지네이션(lib/compass/paginate.ts) + truncated = count > rows — 예전 .limit(500) 은 호출부가
+ *  rows.length >= 500 으로 절단을 짐작해야 했다. 정렬 키는 PK id(유일).
  *  60초 메모(down은 10초). toIso는 호출부(app/api/admin/marketing/intake-today)가 매 요청
  *  "지금"으로 새로 만드는 값이라 초·밀리초까지 캐시 키에 넣으면 사실상 항상 미스한다 —
  *  그래서 캐시 키만 fromIso/toIso를 분 단위로 잘라 만들고, 실제 쿼리는 원래 정밀도 그대로
@@ -352,22 +358,27 @@ export async function getCompassLeadsByInflowRange(
   fromIso: string,
   toIso?: string,
 ): Promise<CompassResult<CompassLeadRow>> {
-  const cacheKey = `leads:inflow:${truncateIsoToMinute(fromIso)}:${toIso ? truncateIsoToMinute(toIso) : ""}`
+  const cacheKey = `leads:inflowOrCreated:${truncateIsoToMinute(fromIso)}:${toIso ? truncateIsoToMinute(toIso) : ""}`
   try {
     return await memoize(
       cacheKey,
       async () => {
         const sb = createSupabaseAdminClient()
-        let query = sb
-          .from("compass_leads_v")
-          .select("*")
-          .gte("last_inflow_at", fromIso)
-          .order("last_inflow_at", { ascending: false })
-          .limit(500)
-        if (toIso) query = query.lte("last_inflow_at", toIso)
-        const { data, error } = await query
-        if (error) return downResult(error)
-        return ok((data ?? []) as CompassLeadRow[])
+        // 잘못된 ISO 는 여기서 던진다 → 아래 catch 가 down 으로 바꾼다(필터 구문에 원문을 끼우지 않는다).
+        const inflowFilter = compassInflowWindowFilter(fromIso, toIso)
+        const paged = await fetchCompassPages<CompassLeadRow>(
+          ({ from, to, withCount }) =>
+            sb
+              .from("compass_leads_v")
+              .select("*", withCount ? { count: "exact" } : undefined)
+              .or(inflowFilter)
+              .order("id", { ascending: true })
+              .range(from, to),
+          // 어제 00:00~지금 유입은 수십 건 규모(crm.leads 전체 898행, 2026-09-14) — 폭주 방지 상한만.
+          { maxRows: 2000 },
+        )
+        if (paged.error != null) return downResult(paged.error)
+        return { ...ok(paged.rows), truncated: paged.truncated }
       },
       { ttlMs: TTL_MS, downTtlMs: TTL_DOWN_MS, isDown: isCompassResultDown, copy: copyCompassResult },
     )

@@ -9,8 +9,11 @@
 //  - 한 원천이 죽으면 그 원천만 미측정으로 표기한다. 남은 쪽 숫자를 "전체"라고 부르지 않는다.
 //  - 어제 비교는 "어제 같은 시각까지" 창이다. 어제 하루 전체와 견주면 오전에는 항상 급감으로 보인다.
 //  - 시각 축은 KST(lib/business-time.ts) 단일 기준.
+//  - Compass 리드는 생성(created_at) 또는 최신 재유입(last_inflow_at)이 창 안이면 센다(2026-09-14 R2 F12 —
+//    예전엔 last_inflow_at 만 봐서 Compass 신규가 빠지고 재유입만 셌다). 재유입은 표시로 구분한다.
 
 import { toBusinessStorageDateTime, getBusinessDateParts } from "@/lib/business-time"
+import { compassInflowInWindow, type CompassInflowEvent } from "@/lib/compass/inflow-window"
 import { normalizePhoneKey } from "@/lib/compass/normalize"
 import { getMetaAdInfo, isTestLead } from "@/lib/crm/lead-attribution"
 import { shiftDays } from "@/lib/marketing/perf"
@@ -65,6 +68,9 @@ export interface CompassIntakeLead {
   meta_ad_id: string | null
   channel?: string | null
   platform?: string | null
+  /** 생성 시각 — Compass 는 신규 insert 때 last_inflow_at 을 비워 둔다. 신규 유입의 시각은 이것뿐이다. */
+  created_at: string | null
+  /** 최신 재유입 시각(재유입이 없으면 null). */
   last_inflow_at: string | null
 }
 
@@ -87,11 +93,19 @@ export interface IntakeFeedItem {
   /** 어느 원천에서 왔는지. 2개면 두 원천이 같은 사람을 잡았다는 뜻. */
   origins: IntakeOrigin[]
   compassLeadId: number | null
+  /**
+   * 재유입인가 — 이 창에서 Compass 가 "이미 있던 리드의 재유입"으로 기록했다(생성은 창 밖, 최신 재유입이 창 안).
+   * 두 원천이 접힌 항목은 어느 한쪽이라도 재유입이면 true — 적어도 한 시스템이 이미 아는 사람이다.
+   * 어드민 public.leads 는 재제출마다 행을 새로 만들어 이 판정에 넣지 않는다(lib/crm/lead-reinflow.ts 는 별도 축).
+   */
+  reinflow: boolean
 }
 
 export interface IntakeFeedResult {
-  /** 오늘 00:00 KST~지금, 중복 접은 뒤 건수. */
+  /** 오늘 00:00 KST~지금, 중복 접은 뒤 건수(신규 + 재유입). */
   todayCount: number
+  /** todayCount 중 재유입(IntakeFeedItem.reinflow) 건수. 나머지가 신규다. Compass 미측정이면 0 — compassMeasured 로 가린다. */
+  todayReinflowCount: number
   /** 어제 00:00 KST~같은 시각, 중복 접은 뒤 건수. */
   yesterdayCount: number
   /** todayCount − yesterdayCount. 두 원천이 모두 미측정이면 null. */
@@ -103,8 +117,8 @@ export interface IntakeFeedResult {
   adminMeasured: boolean
   compassMeasured: boolean
   /**
-   * Compass 조회가 행 상한에 닿았는지. 브리지는 last_inflow_at 내림차순으로 자르므로
-   * 잘리면 "어제 이른 시각"부터 사라진다 — 어제 카운트가 과소집계돼 델타가 부풀려진다.
+   * Compass 조회가 행 상한에 닿았는지(브리지 truncated = count > 받은 행). 잘리면 오늘·어제 건수가 모두
+   * 과소집계될 수 있다 — 건수와 어제 비교를 둘 다 믿으면 안 된다.
    */
   compassTruncated: boolean
   windows: IntakeWindows
@@ -123,6 +137,8 @@ interface Bucket {
   compassLeadId: number | null
   /** 표시 키 산출용 — 이 버킷에 기여한 첫 어드민 리드 id. */
   adminLeadId: string | null
+  /** 기여한 Compass 유입 중 하나라도 재유입이면 true. */
+  reinflow: boolean
 }
 
 function timeOf(value: string | null | undefined): number | null {
@@ -163,6 +179,7 @@ function foldInto(map: Map<string, Bucket>, foldKey: string, atMs: number, at: s
     origins: new Set<IntakeOrigin>(),
     compassLeadId: null,
     adminLeadId: null,
+    reinflow: false,
   }
   map.set(foldKey, created)
   return created
@@ -178,7 +195,7 @@ function displayKey(bucket: Bucket): string {
 export interface BuildIntakeFeedInput {
   /** 어드민 리드 전량. null 이면 조회 실패(미측정) — 0 건과 구분한다. */
   adminLeads: readonly LeadRecord[] | null
-  /** Compass 리드(어제 00:00 이후). null 이면 브리지 다운(미측정). */
+  /** Compass 리드(어제 00:00 이후 생성 또는 재유입). null 이면 브리지 다운(미측정). */
   compassLeads: readonly CompassIntakeLead[] | null
   windows: IntakeWindows
   /** Compass meta_ad_id → 광고명. 없으면 채널 라벨로 대체한다. */
@@ -227,24 +244,28 @@ export function buildIntakeFeed({
   }
 
   for (const lead of compassLeads ?? []) {
-    const ms = timeOf(lead.last_inflow_at)
-    if (ms == null || !lead.last_inflow_at) continue
-    const inToday = ms >= todayFrom && ms <= todayTo
-    const inYesterday = ms >= yFrom && ms <= yTo
-    if (!inToday && !inYesterday) continue
-
-    // 뷰의 phone_key 는 이미 정규화된 값이지만 한 번 더 통과시킨다 — 규칙이 어긋나면
-    // 두 원천이 조용히 안 접히는 쪽으로 실패하므로(중복 노출), 여기서 같은 함수로 고정한다.
-    const phoneKey = normalizePhoneKey(lead.phone_key)
-    const key = phoneKey ? `p:${phoneKey}` : `c:${lead.id}`
-    const bucket = foldInto(inToday ? today : yesterday, key, ms, lead.last_inflow_at)
-    bucket.origins.add("compass")
-    if (bucket.compassLeadId == null) bucket.compassLeadId = lead.id
-    fill(bucket, "name", clean(lead.name))
-    fill(bucket, "org", clean(lead.academy))
-    fill(bucket, "region", clean(lead.region))
-    const adName = lead.meta_ad_id ? adNameById?.get(lead.meta_ad_id) : undefined
-    fill(bucket, "adName", clean(adName) ?? clean(lead.channel) ?? clean(lead.platform))
+    // 오늘·어제 창을 따로 판정한다 — 어제 생성되고 오늘 재유입한 리드는 어제엔 신규, 오늘엔 재유입으로
+    // 양쪽에 1건씩 잡힌다(어드민 리드와 달리 한 행이 두 번 유입할 수 있다).
+    const perWindow: Array<[Map<string, Bucket>, CompassInflowEvent | null]> = [
+      [today, compassInflowInWindow(lead, todayFrom, todayTo)],
+      [yesterday, compassInflowInWindow(lead, yFrom, yTo)],
+    ]
+    for (const [map, event] of perWindow) {
+      if (!event) continue
+      // 뷰의 phone_key 는 이미 정규화된 값이지만 한 번 더 통과시킨다 — 규칙이 어긋나면
+      // 두 원천이 조용히 안 접히는 쪽으로 실패하므로(중복 노출), 여기서 같은 함수로 고정한다.
+      const phoneKey = normalizePhoneKey(lead.phone_key)
+      const key = phoneKey ? `p:${phoneKey}` : `c:${lead.id}`
+      const bucket = foldInto(map, key, event.atMs, event.at)
+      bucket.origins.add("compass")
+      if (bucket.compassLeadId == null) bucket.compassLeadId = lead.id
+      if (event.kind === "reinflow") bucket.reinflow = true
+      fill(bucket, "name", clean(lead.name))
+      fill(bucket, "org", clean(lead.academy))
+      fill(bucket, "region", clean(lead.region))
+      const adName = lead.meta_ad_id ? adNameById?.get(lead.meta_ad_id) : undefined
+      fill(bucket, "adName", clean(adName) ?? clean(lead.channel) ?? clean(lead.platform))
+    }
   }
 
   const adminMeasured = adminLeads != null
@@ -265,13 +286,19 @@ export function buildIntakeFeed({
       // 표시 순서를 고정한다(Set 삽입 순서에 화면이 흔들리지 않게).
       origins: (["admin", "compass"] as const).filter((origin) => bucket.origins.has(origin)),
       compassLeadId: bucket.compassLeadId,
+      reinflow: bucket.reinflow,
     }))
 
   let overlapCount = 0
-  for (const bucket of today.values()) if (bucket.origins.size > 1) overlapCount += 1
+  let todayReinflowCount = 0
+  for (const bucket of today.values()) {
+    if (bucket.origins.size > 1) overlapCount += 1
+    if (bucket.reinflow) todayReinflowCount += 1
+  }
 
   return {
     todayCount: today.size,
+    todayReinflowCount,
     yesterdayCount: yesterday.size,
     // 양쪽 다 미측정이면 0−0=0 이 아니라 "비교 불가"다.
     delta: measured ? today.size - yesterday.size : null,
