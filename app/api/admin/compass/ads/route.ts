@@ -26,13 +26,6 @@ const PERIOD_KEYS: readonly PerfPeriodKey[] = ["7d", "30d", "90d", "quarter"]
 /** 스코어보드와 같은 14일 창. */
 const SPARKLINE_DAYS = 14
 
-/**
- * 브리지 getCompassAdsDaily 의 .limit() 값 사본. PostgREST 는 상한을 넘는 행을 오류 없이
- * 잘라 주므로(플레이북 "전량 조회" 규칙), 정확히 이 수만큼 왔다면 잘렸을 수 있다고 본다.
- * 브리지를 고쳐 총계를 받아오기 전까지는 이 근사가 유일한 감지 수단이다.
- */
-const BRIDGE_ROW_LIMIT = 3000
-
 export interface CompassAdsResponse extends Partial<CompassCreativeAggregate> {
   period: { key: PerfPeriodKey; since: string; until: string }
   /** true 면 브리지 조회 실패 — 수치가 아니라 연결 상태를 표시해야 한다. */
@@ -48,7 +41,7 @@ async function loadCompassAds(periodKey: PerfPeriodKey): Promise<CompassAdsRespo
   const sparklineSince = shiftDays(period.until, -(SPARKLINE_DAYS - 1))
   const loadedSince = sparklineSince < period.since ? sparklineSince : period.since
 
-  const { rows, down, error } = await getCompassAdsDaily(loadedSince, period.until)
+  const { rows, down, error, truncated } = await getCompassAdsDaily(loadedSince, period.until)
   const envelope = { key: period.key, since: period.since, until: period.until }
   if (down) return { period: envelope, down: true, error }
 
@@ -61,7 +54,9 @@ async function loadCompassAds(periodKey: PerfPeriodKey): Promise<CompassAdsRespo
   return {
     period: envelope,
     down: false,
-    truncated: rows.length >= BRIDGE_ROW_LIMIT,
+    // 브리지가 페이지를 끝까지 넘기고 총 행수(count)와 비교해 판정한다(2026-09-14). 예전의
+    // rows.length >= 3000 근사는 PostgREST max-rows(1000) 절단을 잡지 못했다.
+    truncated: truncated === true,
     ...aggregate,
   }
 }
