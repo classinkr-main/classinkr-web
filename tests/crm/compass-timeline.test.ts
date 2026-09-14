@@ -21,7 +21,7 @@ function activity(overrides: Partial<CompassActivityLike> & { id: number }): Com
 }
 
 describe("toCompassTimelineEntries", () => {
-  it("system(폼 답변 제외)·빈 종류·모르는 종류는 빼고 나머지 9종을 올린다", () => {
+  it("system(폼 답변 제외)·빈 종류·모르는 종류는 빼고 나머지 10종을 올린다", () => {
     const entries = toCompassTimelineEntries([
       activity({ id: 1, kind: "call" }),
       activity({ id: 2, kind: "note" }),
@@ -35,12 +35,14 @@ describe("toCompassTimelineEntries", () => {
       activity({ id: 10, kind: "memo", body: "원장님 다음 주 복귀" }),
       activity({ id: 11, kind: "action", body: "견적서 발송 (기한 09/16 10:00)" }),
       activity({ id: 12, kind: "alimtalk", body: "1영업일 내 연락 안내 발송 · 카카오 알림톡", actor: "Claude" }),
+      activity({ id: 13, kind: "import", body: "3/2 원장님 통화 — 다음 달 재연락", actor: null }),
     ])
 
     expect(entries.map((entry) => entry.kind).sort()).toEqual([
       "action",
       "alimtalk",
       "call",
+      "import",
       "inflow",
       "meeting",
       "memo",
@@ -60,6 +62,16 @@ describe("toCompassTimelineEntries", () => {
       ]).map((entry) => [entry.kind, entry.kindLabel])
     )
     expect(labels).toEqual({ sms: "문자", memo: "메모", action: "액션", alimtalk: "알림톡" })
+  })
+
+  it("import(첫 시트 임포트 메모)는 '시트' 로 올리고 본문·작성자 없음을 그대로 둔다", () => {
+    const [entry] = toCompassTimelineEntries([
+      activity({ id: 1, kind: "import", body: "3/2 원장님 통화 — 다음 달 재연락\n3/9 부재중", actor: null }),
+    ])
+    expect(entry.kindLabel).toBe("시트")
+    expect(entry.body).toBe("3/2 원장님 통화 — 다음 달 재연락\n3/9 부재중")
+    expect(entry.actor).toBeNull()
+    expect(compassActivityKindLabel("import", null)).toBe("시트")
   })
 
   it("기존 종류 라벨은 그대로다", () => {
@@ -137,6 +149,7 @@ describe("compassTimelineGroup", () => {
   it("메모·회의록·유입 축에 눕히고 나머지는 other", () => {
     expect(compassTimelineGroup("note")).toBe("memo")
     expect(compassTimelineGroup("memo")).toBe("memo")
+    expect(compassTimelineGroup("import")).toBe("memo")
     expect(compassTimelineGroup("meeting")).toBe("meeting")
     expect(compassTimelineGroup("inflow")).toBe("inflow")
     expect(compassTimelineGroup("system")).toBe("inflow")

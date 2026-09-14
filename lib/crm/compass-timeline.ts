@@ -7,6 +7,8 @@
  *    노이즈가 아니다(2026-09-14, Compass lib/metaLeadForm.ts FORM_ANSWERS_PREFIX 와 같은 머리).
  *  - 사전에 없는 종류는 조용히 버린다. 그래서 Compass 가 새로 쓰기 시작한 sms(문자 퀵기록)·memo·action
  *    (고객관리 컴포저)·alimtalk(웹훅 자동 발송)이 타임라인에서 빠져 있었다(Compass 감사 R3 T10 ③).
+ *    import(첫 시트 임포트가 옮긴 시트 메모 — 과거 통화 내용)도 같은 이유로 빠져 있어, Compass 앱 이전
+ *    이력이 360 에 하나도 안 보였다(2026-09-14 후속 수정으로 '시트' 로 올린다).
  *  - `actor`는 표시용 문자열일 뿐이다. Compass는 공용 비밀번호로 쓰는 앱이라 actor가
  *    누구인지 증명하지 못한다 — 어드민 계정과 매핑하지 않는다.
  *  - 병합은 시간 역순(최신 우선) 한 축뿐이다. 우리 기록과 Compass 기록을 섞되
@@ -38,6 +40,8 @@ export const COMPASS_ACTIVITY_KIND_LABEL: Record<string, string> = {
   alimtalk: "알림톡",
   inflow: "재유입",
   stage_change: "단계 변경",
+  // 첫 시트 임포트(Compass scripts/import_sheet.mjs)가 리드마다 한 건 남긴 시트 메모 묶음. Compass 라벨 그대로.
+  import: "시트",
 }
 
 /** Compass 폼 답변 본문 머리 — Compass lib/metaLeadForm.ts FORM_ANSWERS_PREFIX(kind='system', "폼 답변\n질문: 답…"). */
@@ -71,6 +75,8 @@ export type CompassTimelineGroup = "memo" | "meeting" | "inflow" | "other"
 const COMPASS_KIND_GROUP: Record<string, CompassTimelineGroup> = {
   note: "memo",
   memo: "memo",
+  // 시트 메모 칸을 옮긴 글 — 사람이 적은 메모라 note 와 같은 축(Compass 도 기록으로 친다).
+  import: "memo",
   meeting: "meeting",
   inflow: "inflow",
   // 폼 답변 — system 중 올라오는 것은 이것뿐이다(유입 때 고객이 적은 답).
