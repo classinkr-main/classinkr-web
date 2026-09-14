@@ -58,6 +58,12 @@ import {
   type TrackingDimension,
 } from "@/lib/crm/lead-attribution"
 import {
+  buildStatusUndoPlan,
+  describeStatusUndo,
+  type LeadStatusChange,
+  type LeadStatusUndoRequest,
+} from "@/lib/crm/lead-status-undo"
+import {
   LEAD_SORT_OPTIONS,
   calcLeadPriority,
   getEngagement,
@@ -149,7 +155,11 @@ export default function LeadsBoardClient() {
   const [logsLoading, setLogsLoading] = useState(false)
   const [activity, setActivity] = useState<LeadActivity | null>(null)
   const [activityLoading, setActivityLoading] = useState(false)
-  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
+  const [toast, setToast] = useState<{
+    msg: string
+    type: "success" | "error"
+    action?: { label: string; onClick: () => void }
+  } | null>(null)
   // CRM 전환 직후 동선 — 딜/고객 딥링크 패널 (토스트와 달리 닫기 전까지 유지).
   const [convertResult, setConvertResult] = useState<ConvertResultState | null>(null)
   const [events, setEvents] = useState<PublicEvent[]>([])
@@ -231,10 +241,18 @@ export default function LeadsBoardClient() {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
   }, [])
 
-  const showToast = (msg: string, type: "success" | "error" = "success") => {
-    setToast({ msg, type })
+  // options.action: 메시지 옆 되돌리기 등 텍스트 버튼. 토스트가 사라지면(타이머 만료 또는
+  // 다음 showToast 호출) toast state가 통째로 null/교체되므로 액션도 함께 사라진다 —
+  // 별도 정리 타이머가 필요 없다. options.durationMs: 되돌리기 토스트는 8초로 늘려
+  // 클릭할 시간을 더 준다(기본 3초 유지).
+  const showToast = (
+    msg: string,
+    type: "success" | "error" = "success",
+    options?: { action?: { label: string; onClick: () => void }; durationMs?: number }
+  ) => {
+    setToast({ msg, type, action: options?.action })
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
-    toastTimerRef.current = setTimeout(() => setToast(null), 3000)
+    toastTimerRef.current = setTimeout(() => setToast(null), options?.durationMs ?? 3000)
   }
 
   const fetchLeads = useCallback(async (options?: { force?: boolean }) => {
@@ -459,17 +477,51 @@ export default function LeadsBoardClient() {
     return data
   }
 
+  // 반환값(성공 여부)은 아래 되돌리기 액션이 handleStatus를 silent로 재귀 호출해 같은
+  // PATCH 경로를 재사용할 때만 쓴다 — onStatusChange={handleStatus}처럼 반환값을 보지
+  // 않는 기존 호출부는 그대로 동작한다(대상 시그니처가 void라 Promise<boolean> 반환도
+  // 대입 가능).
   const handleStatus = async (id: string, status: LeadStatus, options?: { silent?: boolean }) => {
+    // 되돌리기 액션이 그대로 쓸 값 — 성공 후 leads가 서버 응답으로 덮이기 전에 미리 챙겨 둔다.
+    const previousStatus = leads.find((lead) => lead.id === id)?.status
     setStatusUpdatingIds((prev) => new Set(prev).add(id))
     try {
       const res = await adminFetch(`/api/admin/leads/${id}`, { method: "PATCH", body: JSON.stringify({ status }) })
       // 서버 응답 리드를 그대로 반영한다 — 상태 전이 때 서버가 함께 채우는 confirmed_at을
-      // 버리면 "미확인" 배지·수신함 카운트가 새로고침 전까지 어긋난다.
+      // 버리면 "미확인" 배지·수신함 카운트가 새로고침 전까지 어긋난다. 되돌리기로 status만
+      // 원상복구해도 이 confirmed_at은 지워지지 않는다 — "검토했다"는 사실은 그대로 남는다
+      // (app/api/admin/leads/[id]/route.ts는 status가 "new"로 돌아갈 때 confirmed_at을
+      // 지우는 경로를 두지 않았다. 확인 처리 자체를 되돌리는 것은 대상 밖 — 아래 handleConfirmMany 참고).
       const data = await readAdminResponse<{ lead: LeadRecord }>(res, "상태를 변경하지 못했습니다.")
       setLeads((prev) => prev.map((l) => (l.id === id ? data.lead : l)))
-      if (!options?.silent) showToast(`"${STATUS_LABEL[status]}" 상태로 변경했습니다.`)
+      if (!options?.silent) {
+        const undoPlan = previousStatus
+          ? buildStatusUndoPlan([{ id, previous: previousStatus, next: status }])
+          : []
+        showToast(
+          `"${STATUS_LABEL[status]}" 상태로 변경했습니다.`,
+          "success",
+          undoPlan.length > 0
+            ? {
+                action: {
+                  label: describeStatusUndo(undoPlan, STATUS_LABEL),
+                  onClick: () => {
+                    // silent — 복원 자체는 조용히 처리하고, 성공/실패에 따라 이 토스트가
+                    // 새 토스트로 알린다(handleStatus 내부의 실패 토스트는 그대로 씀).
+                    void handleStatus(id, undoPlan[0].status, { silent: true }).then((ok) => {
+                      if (ok) showToast("되돌렸습니다.")
+                    })
+                  },
+                },
+                durationMs: 8000,
+              }
+            : undefined
+        )
+      }
+      return true
     } catch (err) {
       showToast(err instanceof Error ? err.message : "상태를 변경하지 못했습니다.", "error")
+      return false
     } finally {
       setStatusUpdatingIds((prev) => {
         const next = new Set(prev)
@@ -622,7 +674,8 @@ export default function LeadsBoardClient() {
   const handleConfirmMany = async (ids: string[]) => {
     const uniqueIds = Array.from(new Set(ids)).filter(Boolean)
     if (uniqueIds.length === 0) return
-    // 다건은 실행 전에 묻는다 — "전체 확인"은 수백 건이 한 번에 승격될 수 있고 되돌리기가 없다.
+    // 다건은 실행 전에 묻는다 — "전체 확인"은 수백 건이 한 번에 승격될 수 있고 되돌리기는
+    // 상태 변경에만 있다(confirmed_at은 서버가 되돌리기를 지원하지 않는다 — 아래 handleStatus 참고).
     if (uniqueIds.length > 1 && !confirm(`${uniqueIds.length}건을 모두 확인 처리할까요? 확인된 리드는 기본 목록에 합류합니다.`)) return
 
     setConfirmingIds((prev) => {
@@ -655,6 +708,39 @@ export default function LeadsBoardClient() {
     }
   }
 
+  // 벌크 되돌리기 실행 — 대상마다 복원할 status가 다를 수 있다(되돌리기 전 상태가
+  // 제각각이던 리드들을 이번 벌크 변경으로 한 상태에 몰아준 경우). status별로 묶어
+  // patchLeadsInChunks를 그대로 재사용한다 — 벌크 변경과 같은 청크·동시성 규칙을 쓰기
+  // 위함이지 새 PATCH 로직이 아니다. 실패한 되돌리기 재시도는 제공하지 않는다(원래
+  // 값으로 다시 상태를 바꾸면 되므로 사용자가 보드에서 직접 재조작할 수 있다).
+  const runBulkStatusUndo = async (plan: LeadStatusUndoRequest[]) => {
+    if (plan.length === 0) return
+    const idsByStatus = new Map<LeadStatus, string[]>()
+    for (const entry of plan) {
+      const idsForStatus = idsByStatus.get(entry.status) ?? []
+      idsForStatus.push(entry.id)
+      idsByStatus.set(entry.status, idsForStatus)
+    }
+    const results = await Promise.all(
+      Array.from(idsByStatus.entries()).map(([status, idsForStatus]) =>
+        patchLeadsInChunks(idsForStatus, { status }, "상태를 되돌리지 못했습니다.")
+      )
+    )
+    const succeededCount = results.reduce((sum, result) => sum + result.succeeded.length, 0)
+    const failedCount = results.reduce((sum, result) => sum + result.failedCount, 0)
+    const firstError = results.find((result) => result.firstError)?.firstError ?? null
+    if (failedCount > 0) {
+      showToast(
+        succeededCount > 0
+          ? `${succeededCount}건 되돌림, ${failedCount}건 실패: ${firstError?.message ?? ""}`
+          : firstError?.message ?? "상태를 되돌리지 못했습니다.",
+        "error"
+      )
+      return
+    }
+    showToast("되돌렸습니다.")
+  }
+
   // 벌크 상태 변경 — 선택한 신규 리드를 "연락중"으로 넘기거나 선택 전체를 "종료"로 정리한다.
   const handleBulkStatus = async (ids: string[], status: LeadStatus) => {
     const uniqueIds = Array.from(new Set(ids)).filter(Boolean)
@@ -664,6 +750,9 @@ export default function LeadsBoardClient() {
       !confirm(`${uniqueIds.length}건을 "종료" 상태로 변경할까요? 활성 파이프라인에서 빠집니다.`)
     )
       return
+    // 되돌리기 계획은 PATCH 전 상태 기준이라, 청크 PATCH가 leads를 서버 응답으로 덮기
+    // 전에 미리 스냅샷해 둔다.
+    const previousStatusById = new Map(leads.map((lead) => [lead.id, lead.status]))
     setBulkWorking(true)
     try {
       const { succeeded, failedCount, firstError } = await patchLeadsInChunks(
@@ -671,16 +760,32 @@ export default function LeadsBoardClient() {
         { status },
         "상태를 변경하지 못했습니다."
       )
+      // 실패한 건은 애초에 상태가 안 바뀌었으니 되돌릴 계획에서 뺀다.
+      const changes: LeadStatusChange[] = []
+      for (const lead of succeeded) {
+        const previous = previousStatusById.get(lead.id)
+        if (previous) changes.push({ id: lead.id, previous, next: status })
+      }
+      const undoPlan = buildStatusUndoPlan(changes)
+      const undoAction =
+        undoPlan.length > 0
+          ? { label: describeStatusUndo(undoPlan, STATUS_LABEL), onClick: () => void runBulkStatusUndo(undoPlan) }
+          : undefined
       if (failedCount > 0) {
         showToast(
           succeeded.length > 0
             ? `${succeeded.length}건 변경, ${failedCount}건 실패: ${firstError?.message ?? ""}`
             : firstError?.message ?? "상태를 변경하지 못했습니다.",
-          "error"
+          "error",
+          undoAction ? { action: undoAction, durationMs: 8000 } : undefined
         )
         return
       }
-      showToast(`${succeeded.length}건을 "${STATUS_LABEL[status]}" 상태로 변경했습니다.`)
+      showToast(
+        `${succeeded.length}건을 "${STATUS_LABEL[status]}" 상태로 변경했습니다.`,
+        "success",
+        undoAction ? { action: undoAction, durationMs: 8000 } : undefined
+      )
     } finally {
       setBulkWorking(false)
     }
@@ -1891,7 +1996,9 @@ export default function LeadsBoardClient() {
         </div>
       )}
 
-      {toast && <Toast msg={toast.msg} type={toast.type} raised={Boolean(convertResult)} />}
+      {toast && (
+        <Toast msg={toast.msg} type={toast.type} raised={Boolean(convertResult)} action={toast.action} />
+      )}
     </div>
   )
 }

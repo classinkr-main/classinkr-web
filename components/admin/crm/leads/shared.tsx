@@ -185,7 +185,19 @@ export function CopyButton({ value }: { value: string }) {
 
 // ─── 토스트 ────────────────────────────────────────────────────
 // raised: 전환 완료 패널 등 우하단 고정 패널이 떠 있을 때 그 위로 올려 겹침을 피한다.
-export function Toast({ msg, type, raised = false }: { msg: string; type: "success" | "error"; raised?: boolean }) {
+// action: 메시지 옆에 붙는 텍스트 버튼(예: 상태 변경 되돌리기) — optional이라 action을
+// 넘기지 않는 기존 호출부(CrmHomeClient, ActivityQuickForm 등)는 그대로 동작한다.
+export function Toast({
+  msg,
+  type,
+  raised = false,
+  action,
+}: {
+  msg: string
+  type: "success" | "error"
+  raised?: boolean
+  action?: { label: string; onClick: () => void }
+}) {
   return (
     <div
       role="status"
@@ -194,7 +206,16 @@ export function Toast({ msg, type, raised = false }: { msg: string; type: "succe
         raised ? "bottom-28" : "bottom-6"
       } ${type === "success" ? "bg-[#111110] text-white" : "bg-[#B85C33] text-white"}`}
     >
-      {msg}
+      <span>{msg}</span>
+      {action ? (
+        <button
+          type="button"
+          onClick={action.onClick}
+          className="shrink-0 text-white underline underline-offset-2 decoration-white/50 hover:decoration-white"
+        >
+          {action.label}
+        </button>
+      ) : null}
     </div>
   )
 }
