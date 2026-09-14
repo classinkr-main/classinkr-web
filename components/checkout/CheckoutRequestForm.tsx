@@ -31,6 +31,7 @@ import {
 } from "@/components/checkout/request-date"
 import type { CheckoutRequestItem } from "@/lib/billing/hardware-catalog"
 import { trackEvent } from "@/lib/analytics"
+import { collectLeadAttribution } from "@/lib/marketing-attribution"
 
 export type CheckoutRequestKind = "hardware" | "software"
 
@@ -299,6 +300,9 @@ export function CheckoutRequestForm({
           desiredDate: form.desiredDate,
           ...(memo ? { memo } : {}),
           sourcePage,
+          // 광고 유입 귀속 — 이 폼은 /api/lead 를 안 거치므로 보내지 않으면 서버가
+          // 알 방법이 없다. 리드 미러링이 이걸 그대로 이어받는다.
+          attribution: collectLeadAttribution(),
           consent: true,
         }),
       })

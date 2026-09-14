@@ -19,6 +19,10 @@ import { getBusinessDateParts } from "@/lib/business-time"
 import { HARDWARE_CURRENCY, getHardwareItem } from "@/lib/billing/hardware-catalog"
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import type { NotificationChannel } from "@/lib/notifications/types"
+import {
+  sanitizeLeadAttribution,
+  type LeadAttributionPayload,
+} from "@/lib/lead-attribution-payload"
 import { submitLeadCapture } from "@/lib/server/lead-capture"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import {
@@ -135,6 +139,12 @@ export interface NormalizedCheckoutRequest {
   desiredDate: string
   memo: string | null
   sourcePage: string | null
+  /**
+   * 광고 유입 귀속. 이 경로는 /api/lead 를 안 거쳐 buildLeadPayload 의 정규화를 못 타므로
+   * 여기서 들고 다니다 리드 미러링에 그대로 넘긴다 — 안 넘기면 광고를 타고 들어온
+   * 도입신청이 통째로 '출처 미상' 리드가 된다.
+   */
+  attribution: LeadAttributionPayload
 }
 
 export type CheckoutRequestValidation =
@@ -358,6 +368,7 @@ export function normalizeCheckoutRequest(
       desiredDate,
       memo: normalizeMultilineText(body.memo, MAX_MEMO_LENGTH),
       sourcePage: normalizeText(body.sourcePage, MAX_SOURCE_PAGE_LENGTH),
+      attribution: sanitizeLeadAttribution(body),
     },
   }
 }
@@ -585,7 +596,9 @@ async function mirrorToLeadQueue(
       // 도입 신청 동의는 연락 목적 — 마케팅 수신 동의로 승격하지 않는다.
       marketingConsent: false,
       sourceDetail: `checkout_request:${request.kind}`,
-      currentPage: request.sourcePage ?? undefined,
+      // 귀속이 먼저 — currentPage 는 귀속에 없을 때의 폴백이다(수집기가 준 값이 더 정확하다).
+      ...request.attribution,
+      currentPage: request.attribution.currentPage ?? request.sourcePage ?? undefined,
     },
     { suppressLeadCreatedNotification: true }
   )

@@ -39,6 +39,53 @@
 
 ---
 
+## 0.5 유입 트래킹 감사 (2026-09-14)
+
+광고 클릭 → 랜딩 → 폼 제출 → `leads` 저장까지 **모든 진입 경로**를 코드로 따라가 귀속이
+살아남는지 확인했다. 채널 연동과 별개로, 새는 경로가 있으면 어떤 채널을 붙여도 성과가 안 보인다.
+
+### 결과
+
+| 진입 경로 | 감사 전 | 조치 |
+|---|---|---|
+| `/contact` · 데모 모달 · 행사 신청 (`submitLead`) | ✅ 전 필드 | — |
+| 자료 다운로드 폼 (`ResourceDownloadForm`) | ✅ 전 필드 | — |
+| 뉴스레터 · 블로그 리드마그넷 | ✅ 문자열만 | `naverAd` 추가 |
+| 정적 랜딩 6종 (`/l/*`) | ⚠️ `n_*` 없음 | 공용 `/l/attribution.js` 로 통일 |
+| **정적 랜딩 → 본사이트 이탈** | ❌ **귀속 증발** | **localStorage 영속화 추가** |
+| **도입신청** (`checkout-requests`) | ❌ **귀속 0** | 클라이언트 전송 + 서버 전달 |
+| **쇼룸 예약** (`showroom/bookings`) | ❌ **귀속 0** | 클라이언트 전송 + 서버 전달 |
+| 소프트웨어 결제 주문 메타 | ⚠️ 문자열 전용 | `naverAd` 추가 |
+| Meta 리드애즈 웹훅 · 페이지 웹훅 | ✅ | — |
+
+### 가장 컸던 구멍 — 랜딩 이탈
+
+정적 랜딩(`/l/*`)은 React 번들을 안 쓰므로 `lib/marketing-attribution.ts` 의 localStorage
+영속화가 돌지 않았다. 그래서:
+
+```
+광고 클릭 → /l/enterprise?gclid=X&utm_source=google
+         → 사용자가 '문의하기'를 눌러 /contact 로 이동
+         → /contact 의 collectLeadAttribution() 은 URL 에도 localStorage 에도 아무것도 못 찾는다
+         → 그 리드는 출처 미상
+```
+
+랜딩 6종 전부가 `/contact`·`/resources`·`/checkout` 링크를 달고 있어서, **랜딩에서 바로 폼을
+채우지 않은 사람의 귀속이 통째로 증발**했다. 채널과 무관한 손실이다(Google·Meta도 똑같이 잃었다).
+
+`public/l/attribution.js` 가 React 쪽과 **같은 저장 키·같은 값 형태**로 남기고, 본사이트가
+이어받는다. 병합 저장이라 파라미터 없는 재방문이 기존 값을 지우지 않는다.
+Playwright 로 랜딩 → `/contact` → 파라미터 없는 랜딩 재방문 3단계를 실측 확인했다.
+
+### 두 번째 — 미러링 경로의 귀속 0
+
+도입신청·쇼룸 예약은 자기 API 를 거쳐 리드를 **미러링**하므로 `/api/lead` 의 `buildLeadPayload`
+정규화를 타지 않는다. 각자 조립하다 보니 실제로는 `currentPage` 하나만 넘기고 있었다.
+`lib/lead-attribution-payload.ts` 의 `sanitizeLeadAttribution()` 을 공용 정규화기로 두어,
+새 미러링 경로가 생겨도 이 함수만 부르면 되게 했다.
+
+---
+
 ## 1. 현재 상태 (실측)
 
 ### 1.1 채널별 연동 등급

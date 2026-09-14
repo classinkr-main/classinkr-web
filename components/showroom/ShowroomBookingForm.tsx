@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { trackEvent } from "@/lib/analytics"
+import { collectLeadAttribution } from "@/lib/marketing-attribution"
 import {
   toDisabledIsoDates,
   type ShowroomDayAvailability,
@@ -389,6 +390,8 @@ export function ShowroomBookingForm({ interests }: Props) {
           interests: form.interests,
           ...(memo ? { memo } : {}),
           sourcePage: "/showroom",
+          // 광고 유입 귀속 — 도입신청 폼과 같은 이유로 여기서 보낸다.
+          attribution: collectLeadAttribution(),
           consent: true,
         }),
       })

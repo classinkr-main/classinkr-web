@@ -34,6 +34,10 @@ import {
   normalizeMultilineText,
   normalizeText,
 } from "@/lib/server/contact-field-validation"
+import {
+  sanitizeLeadAttribution,
+  type LeadAttributionPayload,
+} from "@/lib/lead-attribution-payload"
 import { submitLeadCapture } from "@/lib/server/lead-capture"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import {
@@ -85,6 +89,11 @@ export interface NormalizedShowroomBooking {
   interests: string[]
   memo: string | null
   sourcePage: string | null
+  /**
+   * 광고 유입 귀속. 이 경로도 /api/lead 를 안 거치므로(도입신청과 같은 구조) 여기서 들고
+   * 다니다 리드 미러링에 넘긴다 — 안 넘기면 광고로 들어온 방문 예약이 '출처 미상'이 된다.
+   */
+  attribution: LeadAttributionPayload
 }
 
 export type ShowroomBookingValidation =
@@ -159,6 +168,7 @@ export function normalizeShowroomBooking(raw: unknown): ShowroomBookingValidatio
       interests: normalizeInterests(body.interests),
       memo: normalizeMultilineText(body.memo, MAX_MEMO_LENGTH),
       sourcePage: normalizeText(body.sourcePage, MAX_SOURCE_PAGE_LENGTH),
+      attribution: sanitizeLeadAttribution(body),
     },
   }
 }
@@ -339,7 +349,9 @@ async function mirrorToLeadQueue(
       // 방문 예약 동의는 연락 목적 — 마케팅 수신 동의로 승격하지 않는다.
       marketingConsent: false,
       sourceDetail: "showroom_booking",
-      currentPage: booking.sourcePage ?? undefined,
+      // 귀속이 먼저 — currentPage 는 귀속에 없을 때의 폴백이다.
+      ...booking.attribution,
+      currentPage: booking.attribution.currentPage ?? booking.sourcePage ?? undefined,
     },
     { suppressLeadCreatedNotification: true }
   )
