@@ -10,6 +10,8 @@ import {
   Building2,
   CircleDollarSign,
   FileSpreadsheet,
+  Inbox,
+  LineChart,
   MapPinned,
   PhoneCall,
   Target,
@@ -24,6 +26,7 @@ import { NAV_WARMUP_REQUESTS } from "@/components/admin/AdminSidebar"
 type CrmSection = "home" | "customers" | "activity" | "deals" | "insights" | "sync"
 type DealsSub = "revenue" | "revSheet" | "orders" | "kpi"
 type CustomersSub = "unified" | "leads" | "accounts" | "map"
+type ReviewSub = "matching" | "insights" | "revSheet"
 
 // 상단 primary 탭은 글로벌 사이드바(AdminSidebar)의 CRM 확장으로 이전됨.
 // CrmSubnav는 컨텍스트 sub-tab(고객·돈흐름 내부)만 본문 상단에 렌더한다.
@@ -43,6 +46,18 @@ const CUSTOMERS_SUBTABS = [
   { key: "accounts", href: "/admin/crm/customers/accounts", label: "원천 고객", icon: <Building2 className="h-3.5 w-3.5" /> },
   { key: "map", href: "/admin/crm/customers/map", label: "지도", icon: <MapPinned className="h-3.5 w-3.5" /> },
 ] satisfies Array<{ key: CustomersSub; href: string; label: string; icon: ReactNode }>
+
+// 검수 섹션 보조 탭(2026-09-07 감사 #9) — admin-nav.ts(CRM_CHILD_NAV, 오케스트레이터 소유)의
+// "검수" 1차 탭은 매칭·인사이트·매출시트 3개 라우트를 하나로 묶어 활성 판정하지만
+// (match: matching|insights|deals/rev-sheet), 정작 그 탭을 눌러 도착하는 /admin/crm/matching
+// 에는 나머지 둘로 가는 하위 탭 바가 없었다 — 인사이트가 상단 내비에서 발견되지 않는다는
+// 지적이 그래서였다. 라우트는 이미 존재하므로 여기 서브탭만 추가한다(1차 탭·admin-nav.ts는
+// 손대지 않음).
+const REVIEW_SUBTABS = [
+  { key: "matching", href: "/admin/crm/matching", label: "매칭 인박스", icon: <Inbox className="h-3.5 w-3.5" /> },
+  { key: "insights", href: "/admin/crm/insights", label: "인사이트", icon: <LineChart className="h-3.5 w-3.5" /> },
+  { key: "revSheet", href: "/admin/crm/deals/rev-sheet", label: "매출시트", icon: <FileSpreadsheet className="h-3.5 w-3.5" /> },
+] satisfies Array<{ key: ReviewSub; href: string; label: string; icon: ReactNode }>
 
 // 예열 표는 NAV_WARMUP_REQUESTS(SSOT) 하나다 — 여기 사본을 두던 시절에는 같은 URL이 두 파일에
 // 복제되고 사이드바 쪽 CRM 하위 키는 아무도 조회하지 않는 사문으로 남았다.
@@ -157,11 +172,24 @@ function resolveDealsSub(pathname: string | null): DealsSub | null {
   return null
 }
 
+// resolveSection의 "sync"(=/admin/crm/matching)·"insights" 두 섹션 안에서만 쓴다 — deals
+// 섹션이 rev-sheet를 자기 서브탭(위 resolveDealsSub)으로도 갖는 이중 소속은 그대로 둔다
+// (매출 화면들끼리의 좌우 이동과 "검수 백오피스" 진입로는 서로 다른 목적).
+function resolveReviewSub(pathname: string | null): ReviewSub | null {
+  if (!pathname) return null
+  if (pathname.startsWith("/admin/crm/matching")) return "matching"
+  if (pathname.startsWith("/admin/crm/insights")) return "insights"
+  if (pathname.startsWith("/admin/crm/deals/rev-sheet")) return "revSheet"
+  return null
+}
+
 export default function CrmSubnav({ active }: { active?: CrmSection } = {}) {
   const pathname = usePathname()
   const { warm: warmSubtab, scheduleWarm: scheduleWarmSubtab, cancelWarm: cancelWarmSubtab } = useSubtabWarmup()
   const section = active ?? resolveSection(pathname)
   const dealsSub = section === "deals" ? resolveDealsSub(pathname) : null
+  const showReviewSub = section === "sync" || section === "insights"
+  const reviewSub = showReviewSub ? resolveReviewSub(pathname) : null
   const customersSub = section === "customers" ? resolveCustomersSub(pathname) : null
   const showDealsSub = section === "deals"
   const showCustomersSub = section === "customers"
@@ -240,6 +268,40 @@ export default function CrmSubnav({ active }: { active?: CrmSection } = {}) {
           <span className="mr-1 hidden shrink-0 text-[11px] font-medium text-[#1a1a1a]/40 sm:inline">돈흐름</span>
           {DEALS_SUBTABS.map((sub) => {
             const isActive = dealsSub === sub.key
+
+            return (
+              <Link
+                key={sub.key}
+                href={sub.href}
+                aria-current={isActive ? "page" : undefined}
+                onFocus={() => warmSubtab(sub.href)}
+                onMouseEnter={() => scheduleWarmSubtab(sub.href)}
+                onMouseLeave={cancelWarmSubtab}
+                onPointerDown={() => warmSubtab(sub.href)}
+                onTouchStart={() => warmSubtab(sub.href)}
+                className={`relative flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap px-2.5 pb-2.5 pt-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734] ${
+                  isActive ? "text-[#084734]" : "text-[#1a1a1a]/55 hover:text-[#111110]"
+                }`}
+              >
+                <span className={isActive ? "text-[#084734]" : "text-[#1a1a1a]/35"}>{sub.icon}</span>
+                {sub.label}
+                {isActive ? (
+                  <span aria-hidden className="absolute inset-x-1.5 bottom-0 h-[2px] rounded-full bg-[#084734]" />
+                ) : null}
+              </Link>
+            )
+          })}
+        </nav>
+      ) : null}
+
+      {showReviewSub ? (
+        <nav
+          aria-label="CRM 검수 메뉴"
+          className="no-scrollbar -mx-4 mt-1.5 flex items-center gap-1 overflow-x-auto px-4 sm:mx-0 sm:px-0"
+        >
+          <span className="mr-1 hidden shrink-0 text-[11px] font-medium text-[#1a1a1a]/40 sm:inline">검수</span>
+          {REVIEW_SUBTABS.map((sub) => {
+            const isActive = reviewSub === sub.key
 
             return (
               <Link

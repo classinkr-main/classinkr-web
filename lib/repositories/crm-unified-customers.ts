@@ -3,7 +3,6 @@ import "server-only"
 import { unstable_cache, revalidateTag } from "next/cache"
 import { shareInFlight } from "@/lib/server/share-in-flight"
 
-import { getNeoCrmCustomers } from "@/lib/admin-crm-customers-neo"
 import { ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG } from "@/lib/admin/crm/cache-tags"
 import {
   CRM_PRIORITY_BUCKET_LABELS,
@@ -14,8 +13,7 @@ import {
 } from "@/lib/crm/priority"
 import { classifyLeadOrigin } from "@/lib/crm/capture/origin"
 import { isTestLead } from "@/lib/crm/lead-attribution"
-import { EMPTY_COMPASS_DEMO_SOURCE, buildCompassDemoIndex } from "@/lib/crm/compass-demo-signal"
-import { loadCompassDemoSource } from "@/lib/crm/compass-demo-source"
+import { buildCompassDemoIndex, hydrateCompassDemoSource } from "@/lib/crm/compass-demo-signal"
 import { deriveLeadRegionLabel } from "@/lib/crm/lead-message"
 import { deriveCustomerRegion, REGION_UNSPECIFIED } from "@/lib/crm/region-label"
 import {
@@ -29,7 +27,6 @@ import {
   type CrmUnifiedMoneyState,
   type CrmUnifiedSavedView,
 } from "@/lib/crm/unified-view-rules"
-import { getLeadsActivitySummary } from "@/lib/repositories/lead-activity"
 import { listAllCustomerListItemsLite } from "@/lib/portal/repositories/customers"
 import type { CustomerListItem } from "@/lib/portal/types"
 import {
@@ -37,12 +34,16 @@ import {
   getCrmCustomerContactMaps,
 } from "@/lib/repositories/crm-events"
 import {
+  listConfirmedLeadNeoAccountLinks,
   listConfirmedLeadCustomerLinks,
   listConfirmedLeadNeoLinkLeadIds,
 } from "@/lib/repositories/crm-source-links"
-import { getLeads, type LeadRecord } from "@/lib/repositories/leads"
+import type { LeadRecord } from "@/lib/repositories/leads"
 import { computeCustomerHealth, type CustomerHealthBand } from "@/lib/crm/customer-health"
 import { getAllCustomerTagsMap } from "./crm-customer-tags"
+// 리드·NEO 고객·참여 신호·Compass 데모 원본 수집은 우선순위 큐(crm-priority-queue.ts)와
+// 공유한다(2026-09-07 감사 #7) — 아래 loadSourceSnapshot 참고.
+import { getCrmCoreSourceSnapshot, type CrmCoreSourceSnapshot } from "@/lib/repositories/crm-shared-source-snapshot"
 
 // 뷰 규칙(타입+순수 매칭 함수)의 SSOT는 lib/crm/unified-view-rules.ts — 매칭 함수는 그 모듈에서
 // 직접 import한다(여기서는 재수출하지 않음: provisional 게이트 없는 matchesSavedView를 repo 경유로
@@ -436,48 +437,48 @@ async function getSourceSnapshot(now: Date, bypassCache: boolean): Promise<CrmUn
   }
 }
 
+// core(leads·NEO·참여신호·데모)가 shareInFlight 실패 등으로 거부되는 극단적인 경우의
+// 안전한 빈 스냅샷 — 이 화면이 500 대신 "전부 실패" 상태로 서게 한다.
+const EMPTY_CORE_SNAPSHOT: CrmCoreSourceSnapshot = {
+  leads: [],
+  leadsOk: false,
+  neoRows: [],
+  neoAccountsOk: false,
+  neoLatestSyncedAt: null,
+  neoIsShroffAccountStale: true,
+  engagements: null,
+  demoSource: { demos: [], phoneKeysByCompassLeadId: [], down: true },
+  complete: false,
+}
+
 // 소스 수집 + 행 조립 + 전환 중복 접기까지의 "필터 이전" 단계. 행의 우선순위 점수는
 // 이 시점의 now로 계산되어 캐시 TTL 동안(≤60초) 고정된다 — 뷰 매칭·건강도 등
 // now 민감 판정은 getCrmUnifiedCustomers가 요청 시각으로 다시 수행한다.
 async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> {
   const warnings: string[] = []
-  let leadsOk = true
-  let neoAccountsOk = true
   let portalCustomersOk = true
   let rows: CrmUnifiedCustomerRow[] = []
 
-  const [
-    leadResult,
-    neoResult,
-    portalCustomersResult,
-    convertedLinksResult,
-    neoLinksResult,
-    contactMapsResult,
-    engagementResult,
-  ] = await Promise.allSettled([
-    getLeads(),
-    getNeoCrmCustomers(),
-    listAllCustomerListItemsLite(),
-    listConfirmedLeadCustomerLinks(),
-    listConfirmedLeadNeoLinkLeadIds(),
-    getCrmCustomerContactMaps(),
-    getLeadsActivitySummary(),
-  ])
+  // leads·NEO 고객·참여 신호·Compass 데모는 우선순위 큐(crm-priority-queue.ts)와 공유하는
+  // 원본 스냅샷(getCrmCoreSourceSnapshot)에서 가져온다(2026-09-07 감사 #7) — 이 넷을 독립
+  // Promise.allSettled로 모으던 걸 걷어냈다. 이 화면만 필요한 나머지 소스(전환 고객·전환
+  // 링크·NEO 등록 링크·컨택 맵)는 그대로 이 자리에서 병렬 수집한다.
+  const [coreResult, portalCustomersResult, convertedLinksResult, neoLinksResult, contactMapsResult] =
+    await Promise.allSettled([
+      getCrmCoreSourceSnapshot(),
+      listAllCustomerListItemsLite(),
+      listConfirmedLeadCustomerLinks(),
+      listConfirmedLeadNeoLinkLeadIds(),
+      getCrmCustomerContactMaps(),
+    ])
 
-  // 반응 축(연락 후 재방문·자료·로그인)과 데모 신호 — 홈 큐(crm-priority-queue)와 같은 규약으로
-  // 같은 리드가 화면마다 다른 점수를 갖지 않게 한다. 보조 지표라 실패해도 경고 없이 조용히
-  // 생략하고(축만 빠짐), 6개 본 소스의 complete 판정에도 넣지 않는다 — 외부 원천의 일시
-  // 장애가 60초 캐시를 무력화해 전체 재조립을 반복하게 만들지 않기 위해서다.
-  const engagements = engagementResult.status === "fulfilled" ? engagementResult.value : null
+  const core = coreResult.status === "fulfilled" ? coreResult.value : EMPTY_CORE_SNAPSHOT
+  const { leadsOk, neoAccountsOk, engagements } = core
 
-  // Compass 실측 데모 — 조인 키가 우리 쪽 전화라 위 수집 결과를 입력으로 받는다(순차 1회).
-  const snapshotLeads = leadResult.status === "fulfilled" ? leadResult.value : []
-  const snapshotNeoRows = neoResult.status === "fulfilled" && neoResult.value.ok ? neoResult.value.rows : []
-  const demoSource = await loadCompassDemoSource([
-    ...snapshotLeads.map((lead) => lead.phone),
-    ...snapshotNeoRows.map((row) => row.phone),
-  ]).catch(() => ({ ...EMPTY_COMPASS_DEMO_SOURCE, down: true }))
-  const demoIndex = buildCompassDemoIndex(demoSource, now)
+  // Compass 실측 데모 — core가 이미 JSON 안전 형태(CompassDemoSourceJson)로 들고 있으니
+  // 여기서 hydrate해 이번 now로 데모 인덱스를 만든다(인덱스 자체는 캐시에 다시 넣지 않는다 —
+  // 아래에서 만드는 행의 score/bucket에만 반영되고, 그 행이 이 함수의 캐시 대상이다).
+  const demoIndex = buildCompassDemoIndex(hydrateCompassDemoSource(core.demoSource), now)
 
   // 신규 뷰 파생 입력 — 실패해도 목록 자체는 유지(해당 뷰만 부정확)하고 빈 컬렉션 폴백.
   if (neoLinksResult.status === "rejected") {
@@ -496,8 +497,8 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
       ? contactMapsResult.value.latestContactByTarget
       : new Map<string, string>()
 
-  if (leadResult.status === "fulfilled") {
-    for (const lead of leadResult.value) {
+  if (leadsOk) {
+    for (const lead of core.leads) {
       const priority = buildLeadPriorityItem(lead, now, {
         engagement: engagements?.[lead.id] ?? null,
         demoIndex,
@@ -541,12 +542,11 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
       })
     }
   } else {
-    leadsOk = false
     warnings.push("리드 목록을 불러오지 못했습니다.")
   }
 
-  if (neoResult.status === "fulfilled" && neoResult.value.ok) {
-    for (const account of neoResult.value.rows) {
+  if (neoAccountsOk) {
+    for (const account of core.neoRows) {
       const priority = buildNeoAccountPriorityItem(account, now, { demoIndex })
       const balanceLabel = formatCNY(account.balance)
       const orderLabel = formatUSD(account.orderAmount)
@@ -587,11 +587,10 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
       })
     }
 
-    if (neoResult.value.syncHealth.isShroffAccountStale) {
+    if (core.neoIsShroffAccountStale) {
       warnings.push("외부 CRM 고객 동기화가 최신 상태가 아니어서 잔액·만료일·최근 수업 정보가 일부 누락될 수 있습니다.")
     }
   } else {
-    neoAccountsOk = false
     warnings.push("외부 CRM 고객 동기화 목록을 불러오지 못했습니다.")
   }
 
@@ -637,18 +636,61 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
     })
   }
 
-  const neoOk = neoResult.status === "fulfilled" && neoResult.value.ok
+  // 리드→NEO 계정 확정 링크 접기(2026-09-07 감사 #2 P1) — 리드가 360 드로어에서 NEO CRM
+  // 계정으로 수동 등록 확정되면 같은 사람이 리드 행과 neo_account 행 두 번으로 보였다.
+  // neoLinkedLeadIds(위, 배지용 Set)는 target_type을 external_account+external_lead로
+  // 합쳐서 세므로(lib/repositories/crm-source-links.ts:1929-1963의 주석 참고) 그대로 폴드
+  // 키로 쓰면 안 된다 — external_lead의 target_id는 계정이 아니라 CRM 리드 레코드 id라
+  // neo_account 행의 accountId 네임스페이스와 다르다. 폴드는 external_account 링크만으로
+  // 해야 하며, 그 지도를 listConfirmedLeadNeoAccountLinks가 한 번의 페이지네이션 스캔으로
+  // 돌려준다 — 실패하면 이번 스냅샷은 폴드를 건너뛴다(customer 폴드와 같은 원칙:
+  // 중복 표시가 행 소실보다 안전).
+  let neoAccountIdByLeadId = new Map<string, string>()
+  if (neoLinkedLeadIds.size > 0) {
+    try {
+      // 배지 붙은 리드마다 단건 조회를 Promise.all 로 돌리면 수백 개의 동시 쿼리가 된다 —
+      // 2026-09-04 프로덕션 REST 504 폭주(113건)의 조건이 바로 그것이었다. 한 번의
+      // 페이지네이션 스캔으로 leadId→accountId 지도를 통째로 받아 그 안에서 좁힌다.
+      const allLinks = await listConfirmedLeadNeoAccountLinks()
+      for (const leadId of neoLinkedLeadIds) {
+        const targetId = allLinks.get(leadId)
+        if (targetId) neoAccountIdByLeadId.set(leadId, targetId)
+      }
+    } catch {
+      warnings.push("리드-계정 등록 링크를 불러오지 못해 등록 고객이 리드와 중복 표시될 수 있습니다.")
+      neoAccountIdByLeadId = new Map()
+    }
+  }
+  if (neoAccountIdByLeadId.size > 0) {
+    const neoRowByAccountId = new Map(
+      rows
+        .filter((row) => row.source === "neo_account")
+        .map((row) => [row.key.slice("neo:".length), row])
+    )
+    rows = rows.filter((row) => {
+      if (row.source !== "lead") return true
+      const accountId = neoAccountIdByLeadId.get(row.key.slice("lead:".length))
+      const neoRow = accountId ? neoRowByAccountId.get(accountId) : undefined
+      if (!neoRow) return true
+      if (!neoRow.ownerName && row.ownerName) neoRow.ownerName = row.ownerName
+      neoRow.ownerKeys = [...new Set([...neoRow.ownerKeys, ...row.ownerKeys])]
+      if (!neoRow.contact && row.contact) neoRow.contact = row.contact
+      neoRow.lastContactAt = latestIso(neoRow.lastContactAt, row.lastContactAt)
+      return false
+    })
+  }
+
   return {
     rows,
     warnings,
     leadsOk,
     neoAccountsOk,
     portalCustomersOk,
-    neoLatestSyncedAt: neoOk ? neoResult.value.latestSyncedAt : null,
-    neoPartial: neoOk ? neoResult.value.syncHealth.isShroffAccountStale : !neoAccountsOk,
+    neoLatestSyncedAt: core.neoLatestSyncedAt,
+    neoPartial: neoAccountsOk ? core.neoIsShroffAccountStale : true,
     complete:
-      leadResult.status === "fulfilled" &&
-      neoOk &&
+      leadsOk &&
+      neoAccountsOk &&
       portalCustomersResult.status === "fulfilled" &&
       convertedLinksResult.status === "fulfilled" &&
       neoLinksResult.status === "fulfilled" &&

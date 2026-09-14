@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { revalidateTag } from "next/cache"
 
 import { verifyAdmin } from "@/lib/admin-auth"
 import {
@@ -6,6 +7,7 @@ import {
   isShowroomBookingStatus,
   updateShowroomBookingStatus,
 } from "@/lib/repositories/showroom-bookings"
+import { SHOWROOM_BOOKINGS_LIST_CACHE_TAG } from "../_cache"
 
 const MAX_ASSIGNED_TO_LENGTH = 100
 
@@ -56,6 +58,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     const updated = await updateShowroomBookingStatus(id, { status: raw.status, assignedTo })
     if (!updated) return NextResponse.json({ error: "not found" }, { status: 404 })
+    // admin-performance-round3-2026-09-10.md §3.3 — 담당자가 상태를 바꾼 직후 같은 화면이
+    // 목록을 다시 그린다. {expire:0}으로 다음 조회가 반드시 새 상태를 보게 한다.
+    revalidateTag(SHOWROOM_BOOKINGS_LIST_CACHE_TAG, { expire: 0 })
     return NextResponse.json(updated)
   } catch (error) {
     return NextResponse.json(

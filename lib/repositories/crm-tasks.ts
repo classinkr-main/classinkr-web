@@ -1,6 +1,11 @@
 import "server-only"
 
+import { unstable_cache, revalidateTag } from "next/cache"
+
+import { ADMIN_CRM_TASKS_CACHE_TAG } from "@/lib/admin/crm/cache-tags"
 import { findAdminCrmOwner, listAdminUserDirectory } from "@/lib/repositories/admin-users"
+import { assertJsonSafeInDev } from "@/lib/server/json-safe"
+import { shareInFlightByArgs } from "@/lib/server/share-in-flight"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import type {
   CrmTask,
@@ -192,16 +197,6 @@ export function isCrmTasksNotReadyError(error: unknown): error is Error {
   return error instanceof Error && error.message.includes("CRM task DB 마이그레이션")
 }
 
-function emptyTasksResult(limit: number, offset: number, message: string | null): ListCrmTasksResult {
-  return {
-    generatedAt: new Date().toISOString(),
-    health: { ok: !message, message },
-    summary: { total: 0, returned: 0, open: 0, overdue: 0, dueToday: 0, snoozed: 0, done: 0 },
-    pagination: { limit, offset, returned: 0, total: 0, hasMore: false, nextOffset: null },
-    rows: [],
-  }
-}
-
 export function toCrmTaskRecord(row: CrmTask): CrmTaskRecord {
   return {
     id: row.id,
@@ -266,10 +261,46 @@ function summarize(rows: CrmTaskRecord[], total: number, now: Date) {
   }
 }
 
-export async function listCrmTasks(options: ListCrmTasksOptions = {}): Promise<ListCrmTasksResult> {
-  const limit = clampInteger(options.limit, 50, 1, 200)
-  const offset = clampInteger(options.offset, 0, 0, 100_000)
-  const now = options.now ?? new Date()
+// listCrmTasks의 캐시 키가 되는 정규화된 필터 — options.now는 제외한다(아래 설명).
+// 반드시 매번 같은 키 순서로 리터럴을 만든다 — shareInFlightByArgs/unstable_cache 둘 다
+// JSON.stringify로 인자를 직렬화해 키를 만들므로, 키 순서가 흔들리면 같은 필터가 다른
+// 캐시 엔트리로 갈라진다.
+interface CrmTasksCacheParams {
+  q: string
+  status: CrmTaskStatus | "active" | "all"
+  ownerKeys: string[] | null
+  taskType: CrmTaskType | "all"
+  targetType: CrmTaskTargetType | "all"
+  targetId: string | null
+  dueBefore: string | null
+  limit: number
+  offset: number
+}
+
+function normalizeListCrmTasksParams(options: ListCrmTasksOptions): CrmTasksCacheParams {
+  return {
+    q: safeSearch(options.q),
+    status: options.status ?? "active",
+    // 정렬해서 담아야 담당자 배열 순서만 다른 같은 요청이 별도 캐시 엔트리로 갈라지지 않는다.
+    ownerKeys: options.ownerKeys && options.ownerKeys.length > 0 ? [...options.ownerKeys].sort() : null,
+    taskType: options.taskType ?? "all",
+    targetType: options.targetType ?? "all",
+    targetId: options.targetId ?? null,
+    dueBefore: nullableIso(options.dueBefore) ?? null,
+    limit: clampInteger(options.limit, 50, 1, 200),
+    offset: clampInteger(options.offset, 0, 0, 100_000),
+  }
+}
+
+interface CrmTasksPage {
+  rows: CrmTaskRecord[]
+  total: number
+  health: { ok: boolean; message: string | null }
+}
+
+// DB 조회만 담당 — now에 의존하지 않는다(now는 summarize에서만 쓰인다, 아래 listCrmTasks 참고).
+// 그래서 이 결과는 캐시 가능하고, 캐시된 rows를 호출자의 now로 다시 요약해도 정확하다.
+async function fetchCrmTasksPage(params: CrmTasksCacheParams): Promise<CrmTasksPage> {
   const supabase = createSupabaseAdminClient()
 
   let query = supabase
@@ -277,57 +308,80 @@ export async function listCrmTasks(options: ListCrmTasksOptions = {}): Promise<L
     .select("*", { count: "exact" })
     .order("due_at", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: false })
-    .range(offset, offset + limit - 1)
+    .range(params.offset, params.offset + params.limit - 1)
 
-  if (options.status === "active") {
+  if (params.status === "active") {
     query = query.in("status", ["open", "snoozed"])
-  } else if (options.status && options.status !== "all") {
-    query = query.eq("status", options.status)
+  } else if (params.status !== "all") {
+    query = query.eq("status", params.status)
   }
-  if (options.ownerKeys && options.ownerKeys.length > 0) {
-    query = query.in("owner_key", options.ownerKeys)
+  if (params.ownerKeys && params.ownerKeys.length > 0) {
+    query = query.in("owner_key", params.ownerKeys)
   }
-  if (options.taskType && options.taskType !== "all") {
-    query = query.eq("task_type", options.taskType)
+  if (params.taskType !== "all") {
+    query = query.eq("task_type", params.taskType)
   }
-  if (options.targetType && options.targetType !== "all") {
-    query = query.eq("target_type", options.targetType)
+  if (params.targetType !== "all") {
+    query = query.eq("target_type", params.targetType)
   }
-  if (options.targetId) {
-    query = query.eq("target_id", options.targetId)
+  if (params.targetId) {
+    query = query.eq("target_id", params.targetId)
   }
-  if (options.dueBefore) {
-    const dueBefore = nullableIso(options.dueBefore)
-    if (dueBefore) query = query.lte("due_at", dueBefore)
+  if (params.dueBefore) {
+    query = query.lte("due_at", params.dueBefore)
   }
-
-  const search = safeSearch(options.q)
-  if (search) {
+  if (params.q) {
     query = query.or(
-      `title.ilike.%${search}%,detail.ilike.%${search}%,target_label.ilike.%${search}%,owner_name_snapshot.ilike.%${search}%`
+      `title.ilike.%${params.q}%,detail.ilike.%${params.q}%,target_label.ilike.%${params.q}%,owner_name_snapshot.ilike.%${params.q}%`
     )
   }
 
   const { data, error, count } = await query
   if (error) {
     if (isMissingCrmTasksTableError(error)) {
-      return emptyTasksResult(limit, offset, NOT_READY_MESSAGE)
+      return { rows: [], total: 0, health: { ok: false, message: NOT_READY_MESSAGE } }
     }
     throw new Error(`[crm-tasks] 조회 실패: ${error.message}`)
   }
 
   const rows = ((data ?? []) as CrmTask[]).map(toCrmTaskRecord)
+  return { rows, total: count ?? rows.length, health: { ok: true, message: null } }
+}
+
+// 2026-09-10 3라운드(§3.3) — 이전엔 캐시가 아예 없어(2라운드 실측 3.3초) 매 조회가 항상
+// crm_tasks를 다시 읽었다. 같은 인스턴스 안 동시 미스는 shareInFlightByArgs로 합치고
+// (필터별로 별도 in-flight 키), Data Cache 결과는 assertJsonSafeInDev로 JSON 안전성을
+// dev·test에서 검사한다.
+const sharedFetchCrmTasksPage = shareInFlightByArgs("admin-crm-tasks", fetchCrmTasksPage)
+
+const getCachedCrmTasksPage = unstable_cache(
+  async (params: CrmTasksCacheParams) =>
+    assertJsonSafeInDev("admin-crm-tasks", await sharedFetchCrmTasksPage(params)),
+  ["admin-crm-tasks-v1"],
+  // 이 테이블의 유일한 쓰기 경로(createCrmTask·applyTaskUpdate, 아래)가 둘 다 이 태그를
+  // revalidateTag(tag, "max")로 건다 — 무효화가 전량 커버되므로 TTL을 5분으로 올린다
+  // (Phase 4 규칙: 무효화가 확실한 엔트리부터 TTL을 5~10분으로).
+  { revalidate: 300, tags: [ADMIN_CRM_TASKS_CACHE_TAG] }
+)
+
+export async function listCrmTasks(options: ListCrmTasksOptions = {}): Promise<ListCrmTasksResult> {
+  const now = options.now ?? new Date()
+  const params = normalizeListCrmTasksParams(options)
+  const page = await getCachedCrmTasksPage(params)
+  const { rows, total, health } = page
   const returned = rows.length
-  const total = count ?? returned
-  const nextOffset = offset + returned
+  const nextOffset = params.offset + returned
 
   return {
     generatedAt: new Date().toISOString(),
-    health: { ok: true, message: null },
+    health,
+    // now는 캐시 키에서 제외했으므로(위 CrmTasksCacheParams) 캐시된 rows를 호출자의 now로
+    // 매번 다시 요약한다 — overdue/dueToday 같은 now-민감 파생값이 캐시 TTL을 넘어 굳지 않는다.
+    // crm-customer-360.ts처럼 자기 now를 넘기는 호출부도 이 경로로 정확한 값을 받는다.
     summary: summarize(rows, total, now),
     pagination: {
-      limit,
-      offset,
+      limit: params.limit,
+      offset: params.offset,
       returned,
       total,
       hasMore: nextOffset < total,
@@ -372,6 +426,8 @@ export async function createCrmTask(input: CrmTaskCreateInput): Promise<CrmTaskR
     throw new Error(`[crm-tasks] 저장 실패: ${error.message}`)
   }
   notifyCrmTasksMutated()
+  // listCrmTasks의 Data Cache(§3.3, ADMIN_CRM_TASKS_CACHE_TAG)도 여기서 함께 무효화한다.
+  revalidateTag(ADMIN_CRM_TASKS_CACHE_TAG, "max")
   return toCrmTaskRecord(data as CrmTask)
 }
 
@@ -396,7 +452,8 @@ export async function listActiveTasksForDealByType(
   return ((data ?? []) as CrmTask[]).map(toCrmTaskRecord)
 }
 
-// 완료·미루기·취소·재개·재배정·편집이 전부 이 한 곳을 지난다 — 무효화도 여기 한 번만 건다.
+// 완료·미루기·취소·재개·재배정·편집이 전부 이 한 곳을 지난다 — 무효화도 여기 한 번만 건다
+// (인스턴스 내 구독자용 notifyCrmTasksMutated + Data Cache용 revalidateTag 둘 다).
 async function applyTaskUpdate(id: string, patch: CrmTaskUpdate): Promise<CrmTaskRecord | null> {
   const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase.from("crm_tasks").update(patch).eq("id", id).select("*").maybeSingle()
@@ -404,7 +461,10 @@ async function applyTaskUpdate(id: string, patch: CrmTaskUpdate): Promise<CrmTas
     if (isMissingCrmTasksTableError(error)) throw new Error(NOT_READY_MESSAGE)
     throw new Error(`[crm-tasks] 수정 실패: ${error.message}`)
   }
-  if (data) notifyCrmTasksMutated()
+  if (data) {
+    notifyCrmTasksMutated()
+    revalidateTag(ADMIN_CRM_TASKS_CACHE_TAG, "max")
+  }
   return data ? toCrmTaskRecord(data as CrmTask) : null
 }
 

@@ -3,10 +3,15 @@ import path from "path"
 
 import { atomicWriteJsonSync } from "@/lib/atomic-write"
 import {
+  DEFAULT_NOTIFICATION_SCHEDULE,
+  mergeNotificationSchedule,
+} from "@/lib/notifications/schedule"
+import {
   DEFAULT_NOTIFICATION_APPEARANCE,
   mergeNotificationAppearance,
 } from "@/lib/notifications/types"
 import type { LeadRecord, SiteSettings } from "@/lib/site-settings-types"
+import { normalizeWebhookEnabledMap } from "@/lib/webhook-settings"
 
 export type { LeadRecord, LeadStatus, SiteSettings } from "@/lib/site-settings-types"
 
@@ -35,13 +40,14 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   channelTalkWebhookUrl: undefined,
   emailWebhookUrl: undefined,
   wecomOpsWebhookUrl: undefined,
-  wecomOpsWebhookEnabled: true,
   wecomCsWebhookUrl: undefined,
   wecomLeadReportWebhookUrl: undefined,
   wecomCriticalWebhookUrl: undefined,
   kakaoAlimtalkWebhookUrl: undefined,
   notificationDigestEmailList: [],
   notificationAppearance: DEFAULT_NOTIFICATION_APPEARANCE,
+  webhookEnabled: {},
+  notificationSchedule: DEFAULT_NOTIFICATION_SCHEDULE,
 }
 
 function normalizeStringArray(values: unknown): string[] {
@@ -63,13 +69,14 @@ function normalizeSettings(raw?: Partial<SiteSettings>): SiteSettings {
     channelTalkWebhookUrl: raw?.channelTalkWebhookUrl?.trim() || undefined,
     emailWebhookUrl: raw?.emailWebhookUrl?.trim() || undefined,
     wecomOpsWebhookUrl: raw?.wecomOpsWebhookUrl?.trim() || undefined,
-    wecomOpsWebhookEnabled: raw?.wecomOpsWebhookEnabled !== false,
     wecomCsWebhookUrl: raw?.wecomCsWebhookUrl?.trim() || undefined,
     wecomLeadReportWebhookUrl: raw?.wecomLeadReportWebhookUrl?.trim() || undefined,
     wecomCriticalWebhookUrl: raw?.wecomCriticalWebhookUrl?.trim() || undefined,
     kakaoAlimtalkWebhookUrl: raw?.kakaoAlimtalkWebhookUrl?.trim() || undefined,
     notificationDigestEmailList: normalizeStringArray(raw?.notificationDigestEmailList),
     notificationAppearance: mergeNotificationAppearance(raw?.notificationAppearance),
+    webhookEnabled: normalizeWebhookEnabledMap(raw?.webhookEnabled),
+    notificationSchedule: mergeNotificationSchedule(raw?.notificationSchedule),
   }
 }
 

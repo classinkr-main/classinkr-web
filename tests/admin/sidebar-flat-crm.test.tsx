@@ -16,7 +16,6 @@ import AdminSidebar from "@/components/admin/AdminSidebar"
 
 function render(
   pathname: string,
-  navPreset: string | null = null,
   options: { role?: string; navOverrides?: Record<string, string> } = {}
 ) {
   routerState.pathname = pathname
@@ -25,7 +24,6 @@ function render(
       role={options.role ?? "SUPER_ADMIN"}
       name="테스터"
       email="t@classin.com"
-      navPreset={navPreset}
       navOverrides={options.navOverrides ?? {}}
     />
   )
@@ -46,13 +44,22 @@ function mobileHeader(html: string) {
 }
 
 describe("사이드바 CRM 평탄화", () => {
-  it("CRM 안에서도 다른 섹션 링크가 그대로 보인다", () => {
+  it("CRM 안에서도 다른 상시 링크가 그대로 보인다", () => {
     // 드릴인은 CRM 진입 시 전체 메뉴를 CRM 패널로 교체해, 마케팅·CS 로 바로 갈 수 없었다.
+    // 2026-09-10 전면 공개 이후 마케팅·시스템 탭은 접힌 "기타"로 내려갔으므로, 여기서는
+    // 상시 목록이 CRM 안에서도 그대로인지만 본다(기타 접근성은 아래 토글 테스트가 맡는다).
     const html = render("/admin/crm")
     const hrefs = navHrefs(html)
-    expect(hrefs).toContain("/admin/campaigns")
     expect(hrefs).toContain("/admin/chatbot")
     expect(hrefs).toContain("/admin/calendar")
+    expect(hrefs).toContain("/admin/hardware")
+  })
+
+  it("접힌 기타에도 항목 수와 함께 토글이 렌더된다", () => {
+    // 기타로 내려간 9개(마케팅·분석 6 + 시스템 3)는 클릭 한 번으로 열린다.
+    const html = render("/admin/crm")
+    expect(html).toContain("기타")
+    expect(html).toContain(">9<")
   })
 
   it("'전체 메뉴' 복귀 버튼이 더는 없다", () => {
@@ -84,9 +91,11 @@ describe("사이드바 CRM 평탄화", () => {
     expect(html).toContain('aria-current="page"')
   })
 
-  it("프리셋 사용자에게도 CRM 이 접히지 않고 상시로 보인다", () => {
+  it("어떤 역할에게도 CRM 이 상시로 보인다", () => {
     // 평평해진 뒤 CRM 이 '기타' 안에만 있으면 영업 핵심 화면을 메뉴에서 못 찾는다.
-    expect(navHrefs(render("/admin/calendar", "cs"))).toContain("/admin/crm")
+    for (const role of ["ADMIN", "BRANCH", "EDITOR", "SUPER_ADMIN"]) {
+      expect(navHrefs(render("/admin/calendar", { role })), role).toContain("/admin/crm")
+    }
   })
 
   it.each([
@@ -96,19 +105,22 @@ describe("사이드바 CRM 평탄화", () => {
     ["/admin/channel-talk", "/admin/chatbot", "CS 콘솔"],
     ["/admin/cs-chatbot", "/admin/chatbot", "CS 콘솔"],
   ])("흡수 경로 %s에서 부모 %s를 활성화한다", (pathname, parentHref, mobileLabel) => {
-    const html = render(pathname, "super")
+    const html = render(pathname)
 
     expect(activeNavHrefs(html)).toContain(parentHref)
     expect(mobileHeader(html)).toContain(mobileLabel)
   })
 
-  it("모바일 바로가기에도 프리셋 오버라이드 차단을 적용한다", () => {
-    const html = render("/admin/calendar", "sales", {
+  it("사람별 오버라이드가 상시 목록에서 항목을 내린다", () => {
+    // 전면 공개 이후 오버라이드는 차단이 아니라 자리 이동이다 — 상시에서 빠지고 기타로 간다.
+    const html = render("/admin/calendar", {
       role: "ADMIN",
-      navOverrides: { "/admin/quotes": "deny" },
+      navOverrides: { "/admin/quotes": "folded" },
     })
 
-    expect(navHrefs(html)).not.toContain("/admin/quotes")
+    // 모바일 하단 바로가기(MOBILE_PRIMARY_NAV)는 고정 목록이라 견적이 남는다 —
+    // 여기서 확인하는 것은 사이드바 상시/기타 배치가 오버라이드를 반영하는지다.
+    expect(html).toContain(">10<")
   })
 
   it.each([

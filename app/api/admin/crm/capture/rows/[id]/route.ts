@@ -26,6 +26,11 @@ const ATTENDEE_ORIGINS = new Set<string>([
   "unknown",
 ])
 
+// app/api/admin/leads/route.ts POST과 같은 기준 — 캡처 입력함도 결국 같은 리드/고객 레코드로
+// 이어지므로 형식 기준을 갈라 두면 여기서 통과한 값이 나중 등록 단계에서 다시 걸린다.
+const CAPTURE_PHONE_PATTERN = /^[\d()+\-\s]{8,}$/
+const CAPTURE_EMAIL_PATTERN = /^\S+@\S+\.\S+$/
+
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
   if (admin instanceof NextResponse) return admin
@@ -44,6 +49,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (typeof raw.memo === "string") patch.memo = raw.memo.trim() || null
     if (typeof raw.organizationName === "string") patch.organization_name = raw.organizationName.trim() || null
     if (typeof raw.contactName === "string") patch.contact_name = raw.contactName.trim() || null
+    // 감사 2026-09-07 §10 — 파서가 잘못 자른 전화/이메일을 행 단위로 고칠 방법이 없어, 파싱을
+    // 처음부터 다시 돌리는 것 말고는 오탈자 하나도 못 고쳤다. org/name과 같은 패턴으로 연다.
+    if (typeof raw.phone === "string") {
+      const phone = raw.phone.trim()
+      if (phone && !CAPTURE_PHONE_PATTERN.test(phone)) {
+        return NextResponse.json({ error: "전화번호 형식을 확인하세요. 숫자와 - ( ) + 공백만 쓸 수 있고 8자 이상이어야 합니다." }, { status: 400 })
+      }
+      patch.phone = phone || null
+    }
+    if (typeof raw.email === "string") {
+      const email = raw.email.trim()
+      if (email && !CAPTURE_EMAIL_PATTERN.test(email)) {
+        return NextResponse.json({ error: "이메일 형식을 확인하세요. 예: name@example.com" }, { status: 400 })
+      }
+      patch.email = email || null
+    }
     if (raw.activityType !== undefined) {
       if (!isCaptureActivityType(raw.activityType)) return NextResponse.json({ error: "Invalid activityType" }, { status: 400 })
       patch.activity_type = raw.activityType

@@ -1,7 +1,8 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
   AlertTriangle,
   CalendarClock,
@@ -13,9 +14,13 @@ import {
   XCircle,
 } from "lucide-react"
 
-import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
+import { adminFetchJsonCached, getCachedAdminJson, seedAdminRequestCache } from "@/lib/admin-client"
+import type { DeferredPrefetch } from "@/lib/admin/prefetch-budget"
 import { CRM_CACHE_SWR_MS } from "@/lib/crm/client-cache"
 import type { CrmPriorityBucket, CrmPriorityItem, CrmPriorityLane } from "@/lib/crm/priority"
+// CRM 홈 서버 프리페치(lib/admin/crm/home-prefetch.ts)와 같은 캐시 키를 만들기 위해 공유하는
+// 중립 모듈(2026-09-07 감사 #7) — QUEUE_POOL_LIMIT·queueUrl의 정본은 여기가 아니라 그 파일.
+import { QUEUE_POOL_LIMIT, queueUrl } from "@/lib/crm/priority-queue-request"
 import { TODAY_CALL_SLOTS, pickTodayCalls, type TodayCall, type TodayCallSlotKey } from "@/lib/crm/today-calls"
 import { kstDayStart } from "@/lib/crm/week-ahead"
 import { buildOwnerSelectOptions, useCrmOwners } from "./useCrmOwners"
@@ -36,7 +41,9 @@ interface LeadContactDraft {
   nextSchedule: LeadNextSchedule
 }
 
-interface CrmPriorityQueue {
+// export — CRM 홈 서버 프리페치(lib/admin/crm/home-prefetch.ts)가 이 화면의 기본(담당자
+// 전체) 호출과 같은 캐시 키를 만들 때 재사용한다(2026-09-07 감사 #7 팬아웃 축소).
+export interface CrmPriorityQueue {
   generatedAt: string
   sources: {
     leadsOk: boolean
@@ -65,10 +72,13 @@ interface CrmPriorityQueue {
 }
 
 const QUEUE_TTL_MS = 90_000
-// 선별 모수 — 쿼터 믹스가 세 슬롯을 다 채우려면 오늘 버킷 밖 후보까지 넉넉히 필요하다(서버 상한 50).
-const QUEUE_POOL_LIMIT = 50
 const QUEUE_PREVIEW_COUNT = 5
 const CURRENT_OWNER_VALUE = "__me"
+
+// owner 필터가 걸려 있어 서버 프리페치(담당 전체 기준)를 쓸 수 없을 때 use()에 넘기는
+// 안정된 싱글턴 — React use()에 매 렌더 새 promise를 주면 안 되므로(무한 서스펜스로
+// 오인될 수 있다) 모듈 상수 하나를 재사용한다.
+const RESOLVED_NULL_PROMISE: Promise<CrmPriorityQueue | null> = Promise.resolve(null)
 
 // 슬롯 색: 신규 응대=그린 틴트, 돈 임박=Warning 캐논, 다시 움직임=중립 — 카드 성격을 한 눈에.
 const SLOT_CHIP_CLASS: Record<TodayCallSlotKey, string> = {
@@ -77,12 +87,11 @@ const SLOT_CHIP_CLASS: Record<TodayCallSlotKey, string> = {
   reengage: "bg-[#f0f0ec] text-[#31302E]",
 }
 
-function queueUrl(owner: string, limit: number) {
-  // v=3: 레인·시점 파라미터를 제거한 "오늘 전화" 페이로드 — 이전 캐시와 섞이지 않게 버전 분리.
-  const params = new URLSearchParams({ limit: String(limit), source: "customer", v: "3" })
-  if (owner) params.set("owner", owner)
-  return `/api/admin/crm/home/priority-queue?${params.toString()}`
-}
+// queueUrl이 source를 항상 "customer"로 고정한다(레인·시점 탭을 걷어낸 뒤로 값이 바뀐 적이
+// 없다) — 즉 서버가 돌려주는 item.source는 lead/neo_account만 가능하고 "task"는 절대
+// 오지 않는다. (2026-09-07 감사 #4: 예전엔 item.source === "task" 렌더 분기·
+// handleTaskAction이 죽은 채 남아 있었다 — 제거했다. 할 일 존재는 아래 "이 목록에는 할
+// 일이 빠져 있습니다" 요약 줄로만 알린다.)
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "-"
@@ -125,28 +134,112 @@ function tomorrowMorningIso(nowMs = Date.now()) {
   return new Date(kstDayStart(nowMs) + DAY_MS + KST_MORNING_OFFSET_MS).toISOString()
 }
 
+/**
+ * CrmPriorityQueuePanel의 Suspense fallback(호출부: CrmHomeClient.tsx) — 이 컴포넌트가
+ * use()로 서버 레인을 직접 소비하게 되면서(2026-09-10 스트리밍 전환), 레인이 settle되기
+ * 전(극히 짧은 창 — owner 필터가 없는 한 대부분 SSR 스트림 안에서 곧장 끝난다) 상위
+ * <Suspense>가 이 fallback을 보여준다. "새 로딩 UI를 발명하지 마라"는 이번 작업 지시에
+ * 따라, 실제 패널이 loading && !data일 때 쓰는 것과 같은 크롬(제목)·스켈레톤 행 모양을
+ * 그대로 재사용한다 — 값이 오면(대부분의 경우) 바로 이 자리에서 진짜 패널로 교체된다.
+ */
+export function CrmPriorityQueuePanelSkeleton({ compact = false }: { compact?: boolean }) {
+  return (
+    <section className={`rounded-xl border border-[#e8e8e4] bg-white p-4 ${compact ? "" : "mb-4"}`} aria-hidden>
+      <div className="mb-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/30">
+          ClassIn Operation
+        </p>
+        <h2 className="mt-1 text-[18px] font-bold text-[#111110]">오늘 전화할 고객</h2>
+      </div>
+      <div className="divide-y divide-[#f0f0ec] overflow-hidden border-y border-[#f0f0ec]">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <div key={`sk-${index}`} className="flex items-center gap-3 p-3">
+            <div className="h-5 w-16 animate-pulse rounded-full bg-[#f0f0ec]" />
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <div className="h-4 w-1/3 animate-pulse rounded bg-[#f0f0ec]" />
+              <div className="h-3 w-1/2 animate-pulse rounded bg-[#f5f5f2]" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 export default function CrmPriorityQueuePanel({
   refreshKey = 0,
   compact = false,
   embedded = false,
   previewCount = QUEUE_PREVIEW_COUNT,
+  initialData = null,
 }: {
   refreshKey?: number
   compact?: boolean
   embedded?: boolean
   /** 처음 그릴 카드 수(=쿼터 믹스 총량). "다음 후보"는 같은 응답 안에서 펼친다. */
   previewCount?: number
+  /**
+   * CRM 홈 서버 프리페치 레인(담당 전체 기준, openPrefetchLane) — 있으면 로딩 스켈레톤·
+   * 첫 네트워크 왕복을 건너뛴다(2026-09-07 감사 #7, 홈 첫 로드 팬아웃 축소). URL에 담당자
+   * 필터(?owner=)가 이미 걸려 있으면 프리페치와 범위가 달라 쓰지 않는다.
+   *
+   * 2026-09-10 스트리밍 전환: 값이 아니라 {promise, generatedAt} 레인이 온다 — 이 컴포넌트가
+   * React use()로 직접 풀어 소비한다(이 패널은 CRM 홈에 단 한 곳에서만 쓰여, 값을 여러
+   * 자리에 나눠 먹이는 다리 컴포넌트가 필요 없다). 호출부(CrmHomeClient)는 이 컴포넌트를
+   * <Suspense fallback={...}>로 감싸야 한다 — use()가 pending 프라미스를 만나면 그 상위
+   * 경계까지 던진다.
+   */
+  initialData?: DeferredPrefetch<CrmPriorityQueue> | null
 }) {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+
   const [showMore, setShowMore] = useState(false)
-  const [owner, setOwner] = useState("")
-  const [data, setData] = useState<CrmPriorityQueue | null>(null)
-  const [loading, setLoading] = useState(true)
+  // 담당자 필터 → URL(?owner=) 착지 복원. 2026-08-06 감사 지적(필터가 새로고침·공유
+  // 링크에서 유실) 최소 대응 — CrmUnifiedCustomersClient의 syncViewParam과 같은 패턴.
+  const initialOwner = searchParams.get("owner")?.trim() ?? ""
+  const [owner, setOwnerState] = useState(initialOwner)
+  // 서버 프리페치는 owner 필터가 없을 때만 유효하다 — 필터가 이미 걸려 있으면 범위가 달라
+  // 그 레인을 쓰지 않는다. use()는 조건부로 호출할 수 없으므로(hooks 규칙), "안 쓴다"는
+  // 판단을 promise 자체를 이미 resolve된 값(RESOLVED_NULL_PROMISE)으로 바꿔 표현한다.
+  // `initialData != null`을 조건식 안에 직접 써서 TypeScript가 참 분기에서 initialData를
+  // non-null로 좁히게 한다(단언 없이).
+  const prefetchPromise = !initialOwner && initialData != null ? initialData.promise : RESOLVED_NULL_PROMISE
+  // use()는 이 promise가 settle될 때까지 컴포넌트 렌더를 서스펜드한다 — 그 뒤로는 항상
+  // 동기 값처럼 즉시 반환된다. 덕분에 아래 useState들은 "나중에 도착할 수도 있는 값"이
+  // 아니라 "이미 확정된 값"으로 초기화된다(예전 hasUsableInitialData/skippedInitialLoadRef
+  // 조합이 풀어야 했던 "언제 도착할지 모른다" 문제 자체가 사라졌다).
+  const prefetchSeed = use(prefetchPromise)
+  const [data, setData] = useState<CrmPriorityQueue | null>(prefetchSeed)
+  const [loading, setLoading] = useState(!prefetchSeed)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [actingId, setActingId] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
   const [leadContactDraft, setLeadContactDraft] = useState<LeadContactDraft | null>(null)
   const { owners: crmOwners, currentOwner, health: ownerHealth } = useCrmOwners()
+
+  const lastOwnerParamRef = useRef<string | null>(searchParams.get("owner"))
+  useEffect(() => {
+    const param = searchParams.get("owner")
+    if (param === lastOwnerParamRef.current) return
+    lastOwnerParamRef.current = param
+    setOwnerState(param?.trim() ?? "")
+  }, [searchParams])
+
+  const setOwner = useCallback(
+    (next: string) => {
+      setOwnerState(next)
+      lastOwnerParamRef.current = next || null
+      const params = new URLSearchParams(Array.from(searchParams.entries()))
+      if (next) params.set("owner", next)
+      else params.delete("owner")
+      const qs = params.toString()
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    },
+    [pathname, router, searchParams]
+  )
 
   const cardCount = compact ? Math.min(previewCount, 4) : previewCount
   const url = useMemo(() => queueUrl(owner, QUEUE_POOL_LIMIT), [owner])
@@ -203,11 +296,34 @@ export default function CrmPriorityQueuePanel({
   // 홈 새로고침(refreshKey 증가)은 "지금 다시 세어 달라"는 뜻이다. force 없이 load()만
   // 다시 부르면 90초 TTL 캐시가 그대로 돌아와 화면이 아무것도 바뀌지 않는다.
   const lastRefreshKey = useRef(refreshKey)
+  // 서버 프리페치가 이번 마운트의 데이터를 이미 줬으면 최초 1회는 재요청을 건너뛴다 —
+  // initialData를 prop으로만 받고 그래도 load()를 부르면 팬아웃이 그대로다(2026-09-07 감사
+  // #7). use()가 이미 이 렌더 이전에 prefetchSeed를 확정지어 주므로(위 참고), "나중에
+  // 도착할 수도 있다"는 경우가 없어져 hasUsableInitialData 같은 별도 플래그 없이
+  // prefetchSeed 자체의 진위만 보면 된다. 담당자 필터 변경·강제 새로고침 등 이후의 정상적인
+  // load()는 그대로 동작한다.
+  const didInitialLoadRef = useRef(false)
   useEffect(() => {
     const forced = lastRefreshKey.current !== refreshKey
     lastRefreshKey.current = refreshKey
+    if (!didInitialLoadRef.current) {
+      didInitialLoadRef.current = true
+      if (!forced && prefetchSeed) {
+        // 이 마운트의 요청 캐시에도 심어 둔다 — prop은 이 렌더에만 존재하므로, 심어 두지
+        // 않으면 다른 탭에 갔다가 돌아왔을 때(이 컴포넌트가 다시 마운트될 때) 같은 데이터를
+        // 또 네트워크로 받아온다(홈의 다른 세 소스와 같은 이유, CrmHomeClient 참고).
+        seedAdminRequestCache(url, prefetchSeed, {
+          ttlMs: QUEUE_TTL_MS,
+          staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
+          generatedAt: initialData?.generatedAt,
+        })
+        return
+      }
+      void load(forced ? { force: true } : undefined)
+      return
+    }
     void load(forced ? { force: true } : undefined)
-  }, [load, refreshKey])
+  }, [load, refreshKey, prefetchSeed, url, initialData])
 
   const { calls, overflow, totals, meta } = useMemo(
     () => pickTodayCalls(data?.items ?? [], { limit: cardCount }),

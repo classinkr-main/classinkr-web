@@ -13,6 +13,7 @@ import { saveLead } from "@/lib/repositories/leads"
 import { upsertSubscriber } from "@/lib/repositories/marketing"
 import { getResolvedSettings } from "@/lib/repositories/settings"
 import { postJson } from "@/lib/server/post-json"
+import { isWebhookEnabled } from "@/lib/webhook-settings"
 import { setEventToken } from "@/lib/types/event-metrics"
 
 const VALID_SOURCES = new Set<LeadSource>([
@@ -373,15 +374,15 @@ export async function submitLeadCapture(
 
     const deliveryTasks: Promise<void>[] = []
 
-    if (settings.googleSheetWebhookUrl) {
+    if (settings.googleSheetWebhookUrl && isWebhookEnabled(settings.webhookEnabled, "googleSheetWebhookUrl")) {
       deliveryTasks.push(sendToGoogleSheet(body, settings.googleSheetWebhookUrl))
     }
 
-    if (settings.leadWebhookUrl) {
+    if (settings.leadWebhookUrl && isWebhookEnabled(settings.webhookEnabled, "leadWebhookUrl")) {
       deliveryTasks.push(sendToWebhook(body, settings.leadWebhookUrl))
     }
 
-    if (settings.channelTalkWebhookUrl) {
+    if (settings.channelTalkWebhookUrl && isWebhookEnabled(settings.webhookEnabled, "channelTalkWebhookUrl")) {
       deliveryTasks.push(sendToChannelTalk(body, settings.channelTalkWebhookUrl))
     }
 

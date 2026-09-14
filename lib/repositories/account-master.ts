@@ -1,11 +1,16 @@
 import "server-only"
 
+import { unstable_cache } from "next/cache"
+
+import { ADMIN_CRM_ACCOUNT_MASTER_CACHE_TAG } from "@/lib/admin/crm/cache-tags"
 import { normalizedAccountKey } from "@/lib/branch/account-key"
 import {
   getBranchRevSourceRecordKey,
   isInactiveSheetStatus,
   isPlaceholderCrmName,
 } from "@/lib/crm-source-linking"
+import { assertJsonSafeInDev } from "@/lib/server/json-safe"
+import { shareInFlight } from "@/lib/server/share-in-flight"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 // ── Account 360 스파인 읽기 뷰 (TS 합성) ─────────────────────────────────────
@@ -151,7 +156,7 @@ function sumPayments(payments: Record<string, number> | null): number {
   return sum
 }
 
-export async function getAccountMaster(): Promise<AccountMasterResult> {
+async function computeAccountMaster(): Promise<AccountMasterResult> {
   const sb = createSupabaseAdminClient()
   const timeoutController = new AbortController()
   const timeout = setTimeout(() => timeoutController.abort(), ACCOUNT_MASTER_QUERY_TIMEOUT_MS)
@@ -371,4 +376,30 @@ export async function getAccountMaster(): Promise<AccountMasterResult> {
       unmatchedRevenueCNY,
     },
   }
+}
+
+// 2026-09-10 3라운드(§3.3) — 이 화면은 이전엔 캐시가 아예 없어 매 조회가 4개 원천을 keyset
+// 페이지네이션으로 전량 재수집했다(최대 100,000행 x 4테이블, 12초 타임아웃). unstable_cache로
+// 승격한다.
+//
+// 무효화는 부분적이다 — crm_source_links 확정/해제 쓰기(lib/repositories/crm-source-links.ts의
+// updateCrmSourceLinkStatus·createManualBranchRevLinkCandidate·upsertConfirmedLeadCustomerLink·
+// reattachBranchRevConfirmedLinks, lib/repositories/crm-naver-map.ts의 confirmCrmNaverMapLink)만
+// 이 태그를 revalidateTag(tag, "max")로 건다. customers·partner_accounts·branch_rev_deals
+// 원본 행 자체의 추가/수정(고객 DB·지사 소유 파일)은 무효화 경로가 없다 — 그래서 TTL을
+// 이전과 같은 "캐시 없음"에 가장 가까운 60초로 보수적으로 잡는다(Phase 4 규칙: 무효화가
+// 불완전한 엔트리는 TTL을 올리지 않는다).
+const getCachedAccountMaster = unstable_cache(
+  async () => {
+    const value = await shareInFlight(ADMIN_CRM_ACCOUNT_MASTER_CACHE_TAG, computeAccountMaster)
+    // unstable_cache는 JSON 직렬화 경계다 — 이 결과는 문자열/숫자/배열뿐이라 통과해야 정상이고,
+    // dev·test에서 위반 시 즉시 던져 잡는다(2026-09-04 우선순위 큐 500 사고 재발 방지).
+    return assertJsonSafeInDev("admin-crm-account-master", value)
+  },
+  ["admin-crm-account-master-v1"],
+  { revalidate: 60, tags: [ADMIN_CRM_ACCOUNT_MASTER_CACHE_TAG] }
+)
+
+export async function getAccountMaster(): Promise<AccountMasterResult> {
+  return getCachedAccountMaster()
 }

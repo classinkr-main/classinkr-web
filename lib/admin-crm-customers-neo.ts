@@ -1,9 +1,14 @@
 import "server-only"
 
+import { unstable_cache, revalidateTag } from "next/cache"
+
+import { ADMIN_CRM_NEO_CUSTOMERS_CACHE_TAG } from "@/lib/admin/crm/cache-tags"
 import { deriveCustomerRegion, regionCandidatesFromPayload } from "@/lib/crm/region-label"
 import { readEeoBalance } from "@/lib/crm/eeo-account-fields"
 import { getXiaoshouyiOwnerNameMap, resolveOwnerName } from "@/lib/external-crm/owner-names"
 import { listCrmNeoCustomerSnapshots } from "@/lib/repositories/crm-neo-customer-snapshots"
+import { assertJsonSafeInDev } from "@/lib/server/json-safe"
+import { shareInFlight } from "@/lib/server/share-in-flight"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 export interface NeoCrmCustomerRow {
@@ -129,17 +134,52 @@ function payloadExpireAt(payload: Record<string, unknown> | null): string | null
   )
 }
 
-let neoCustomersCache: { at: number; value: NeoCrmCustomerList } | null = null
-const NEO_CUSTOMERS_CACHE_TTL_MS = 60_000
+// 2026-09-10 3라운드(§3.2 1순위) — 이전엔 여기 process-local `let neoCustomersCache`(60초)였다.
+// 개요·통합고객·os-summary 3화면이 공유하는 하위 소스인데, 어드민은 하루 수십 방문이라 Vercel
+// Fluid 인스턴스가 콜드일 때마다 처음부터 재계산됐다(사실상 캐시 무의미). unstable_cache(Data
+// Cache)로 올려 인스턴스 간 공유되게 한다. 실패 결과(ok:false)는 저장하지 않는다 — 성공 값만
+// 캐시에 쓰는 unstable_cache 성질을 그대로 쓰려고 실패 시 던져서 write를 건너뛴다(아래
+// NeoCrmCustomersNotOkError, crm-unified-customers.ts의 IncompleteCrmUnifiedSnapshotError와 동일 기법).
+class NeoCrmCustomersNotOkError extends Error {
+  constructor(readonly value: NeoCrmCustomerList) {
+    super("neo crm customers snapshot not ok; skip Data Cache write")
+  }
+}
 
-// 60초 인메모리 캐시. 실제 화면 데이터는 crm_neo_customer_snapshots에서 읽는다.
-// 외부 CRM 원본 스냅샷 재조립은 sync-chain refresh 단계에서만 수행한다.
+const getCachedNeoCrmCustomers = unstable_cache(
+  async () => {
+    // 같은 콜드 인스턴스에서 여러 소비자(라우트 직접 호출 + crm-shared-source-snapshot.ts +
+    // os-summary.ts)가 동시에 미스하면 소스 재조립을 중복 실행한다 — shareInFlight로 한 번만.
+    const value = await shareInFlight(ADMIN_CRM_NEO_CUSTOMERS_CACHE_TAG, computeNeoCrmCustomers)
+    if (!value.ok) throw new NeoCrmCustomersNotOkError(value)
+    // unstable_cache는 JSON 직렬화 경계다 — Map/Set/Date를 그대로 캐시에 넣으면 적중 뒤 깨진다
+    // (2026-09-04 우선순위 큐 500 사고). 이 값은 문자열/숫자/배열/평범한 객체뿐이라 통과해야
+    // 정상이며, dev·test에서 위반 시 즉시 던져 원인을 여기서 잡는다.
+    return assertJsonSafeInDev("admin-crm-neo-customers", value)
+  },
+  ["admin-crm-neo-customers-v1"],
+  // TTL은 이전 process-local 캐시와 같은 60초로 유지한다 — 무효화(아래 invalidateNeoCrmCustomersCache)가
+  // 수동 동기화(app/api/admin/crm/external-sync/route.ts) 경로만 덮고 크론 경로
+  // (app/api/cron/sync-external-crm/route.ts → lib/external-crm/sync-chain.ts)는 못 덮는다 —
+  // 그 두 파일은 이 작업의 소유 밖(cron/webhooks는 platform-data 소유)이라 배선하지 못했다.
+  // 완전한 무효화 커버리지가 아니므로 Phase 4 규칙대로 TTL을 5~10분으로 올리지 않는다.
+  { revalidate: 60, tags: [ADMIN_CRM_NEO_CUSTOMERS_CACHE_TAG] }
+)
+
 export async function getNeoCrmCustomers(): Promise<NeoCrmCustomerList> {
-  const cached = neoCustomersCache
-  if (cached && Date.now() - cached.at < NEO_CUSTOMERS_CACHE_TTL_MS) return cached.value
-  const value = await computeNeoCrmCustomers()
-  if (value.ok) neoCustomersCache = { at: Date.now(), value }
-  return value
+  try {
+    return await getCachedNeoCrmCustomers()
+  } catch (error) {
+    if (error instanceof NeoCrmCustomersNotOkError) return error.value
+    throw error
+  }
+}
+
+// crm_neo_customer_snapshots 재계산 직후 호출한다 — 현재 유일한 호출부는
+// app/api/admin/crm/external-sync/route.ts(수동 동기화). revalidateTag(tag, "max")로 걸어
+// 이번 재계산 결과를 다음 읽기가 즉시 보게 한다("max" = 이미 나간 stale 응답도 더 안 씀).
+export function invalidateNeoCrmCustomersCache() {
+  revalidateTag(ADMIN_CRM_NEO_CUSTOMERS_CACHE_TAG, "max")
 }
 
 async function computeNeoCrmCustomers(): Promise<NeoCrmCustomerList> {
@@ -173,6 +213,121 @@ async function computeNeoCrmCustomers(): Promise<NeoCrmCustomerList> {
       riskConfidence: row.riskConfidence,
       freshnessLabel: row.freshnessLabel,
     })),
+  }
+}
+
+// ── /api/admin/crm/customers-neo 목록 응답 전용 다이어트(2026-09-07 감사 #8) ──────────
+// 이 라우트가 rows를 무페이징으로 통째 내려보내 444KB였다. 유일한 소비처
+// (components/admin/crm/NeoCrmCustomersClient.tsx)는 accountId·name·ownerId·ownerName·
+// phone·balance·expireAt·lastClassAt·uid·orderAmount·orderCount만 렌더한다 — riskLevel·
+// riskReasons·riskConfidence·freshnessLabel·depletionInDays·regionLabel·createdAt·updatedAt는
+// 이 화면에서 전혀 안 쓰인다(단, riskLevel·riskReasons·depletionInDays는 lib/crm/priority.ts의
+// 우선순위 엔진이 쓰므로 getNeoCrmCustomers()의 내부 반환 타입 자체는 그대로 둔다 — 여기서는
+// HTTP 응답 전용으로만 얇힌다).
+export type NeoCrmCustomerListRow = Pick<
+  NeoCrmCustomerRow,
+  | "accountId"
+  | "name"
+  | "ownerId"
+  | "ownerName"
+  | "phone"
+  | "balance"
+  | "expireAt"
+  | "lastClassAt"
+  | "uid"
+  | "orderAmount"
+  | "orderCount"
+>
+
+export function toNeoCrmCustomerListRow(row: NeoCrmCustomerRow): NeoCrmCustomerListRow {
+  return {
+    accountId: row.accountId,
+    name: row.name,
+    ownerId: row.ownerId,
+    ownerName: row.ownerName,
+    phone: row.phone,
+    balance: row.balance,
+    expireAt: row.expireAt,
+    lastClassAt: row.lastClassAt,
+    uid: row.uid,
+    orderAmount: row.orderAmount,
+    orderCount: row.orderCount,
+  }
+}
+
+export interface NeoCrmCustomerListPagination {
+  /** limit 쿼리를 안 준 기본 호출은 null(전량 반환 — 화면 검색이 전량 메모리를 전제). */
+  limit: number | null
+  offset: number
+  returned: number
+  total: number
+  hasMore: boolean
+}
+
+export interface NeoCrmCustomerListResponse {
+  ok: boolean
+  error: string | null
+  latestSyncedAt: string | null
+  generatedAt: string
+  syncHealth: NeoCrmCustomerList["syncHealth"]
+  summary: NeoCrmCustomerList["summary"]
+  owners: NeoCrmCustomerOwnerOption[]
+  rows: NeoCrmCustomerListRow[]
+  pagination: NeoCrmCustomerListPagination
+}
+
+export interface NeoCrmCustomerListQuery {
+  /** "summary"면 rows를 아예 비운다 — KPI 타일 등 행이 필요 없는 소비처용. */
+  scope?: "summary" | "full"
+  /** 쿼리스트링 원문을 그대로 받는다(라우트가 숫자 변환 없이 넘겨도 되게). */
+  limit?: string | number | null
+  offset?: string | number | null
+}
+
+const NEO_CUSTOMER_LIST_MAX_LIMIT = 5_000
+
+function parsePositiveInt(value: string | number | null | undefined): number | null {
+  if (value == null) return null
+  const numeric = typeof value === "number" ? value : Number(value)
+  if (!Number.isFinite(numeric)) return null
+  return Math.floor(numeric)
+}
+
+/**
+ * 목록 라우트 전용 응답 조립 — 필드 다이어트(위) + 옵트인 스코프/페이징.
+ * limit을 안 주면 기존과 동일하게 전량을 돌려준다 — 화면의 클라이언트 검색·정렬이 전량
+ * 메모리를 전제하므로 기본 동작을 바꾸지 않는다(계약 유지). limit/offset은 향후 다른
+ * 소비처(가벼운 미리보기 등)를 위해 도입만 해 둔다.
+ */
+export function buildNeoCrmCustomerListResponse(
+  list: NeoCrmCustomerList,
+  query: NeoCrmCustomerListQuery = {}
+): NeoCrmCustomerListResponse {
+  const allRows = query.scope === "summary" ? [] : list.rows.map(toNeoCrmCustomerListRow)
+  const offset = Math.max(0, parsePositiveInt(query.offset) ?? 0)
+  const requestedLimit = parsePositiveInt(query.limit)
+  const hasLimit = requestedLimit != null
+  const limit = hasLimit
+    ? Math.max(1, Math.min(requestedLimit, NEO_CUSTOMER_LIST_MAX_LIMIT))
+    : allRows.length
+  const rows = hasLimit || offset > 0 ? allRows.slice(offset, offset + limit) : allRows
+
+  return {
+    ok: list.ok,
+    error: list.error,
+    latestSyncedAt: list.latestSyncedAt,
+    generatedAt: list.generatedAt,
+    syncHealth: list.syncHealth,
+    summary: list.summary,
+    owners: list.owners,
+    rows,
+    pagination: {
+      limit: hasLimit ? limit : null,
+      offset,
+      returned: rows.length,
+      total: allRows.length,
+      hasMore: offset + rows.length < allRows.length,
+    },
   }
 }
 

@@ -289,6 +289,38 @@ class LeadQueryError extends Error {
   }
 }
 
+/**
+ * 감사 2026-09-07 §7 — 등록 API가 조회 후 삽입(findLeadsByContacts → Promise.allSettled(saveLead))
+ * 하는 사이 동시 요청이 끼어들면 같은 연락처가 두 번 저장될 수 있다. DB 유니크 제약
+ * (supabase/migrations/20260910_leads_contact_unique.sql, 적용은 별도)이 나중에 막아 주면,
+ * 이 클래스로 "그 제약에 걸려 막힌 것"과 "진짜 저장 실패"를 구분해 호출부가 duplicates로
+ * 셀 수 있게 한다. 마이그레이션이 아직 없는 환경에서는 이 경로 자체가 발생하지 않는다.
+ */
+export class LeadDuplicateError extends Error {
+  constructor(message = "이미 등록된 리드입니다(전화/이메일 일치).") {
+    super(message);
+    this.name = "LeadDuplicateError";
+  }
+}
+
+/** Postgres 유니크 제약 위반(23505)인지 — leads 연락처 유니크 인덱스가 걸렸을 때만 해당한다. */
+function isUniqueViolation(error: SupabaseColumnError): boolean {
+  return error.code === "23505";
+}
+
+/**
+ * 감사 2026-09-07 §8 — leads/[id], crm/deals-lite/[id], crm/tasks/[id]에는 동시 편집을 검증할
+ * version/updated_at 비교가 전혀 없어 "마지막 쓰기가 이긴다"(먼저 저장한 사람의 변경이 조용히
+ * 사라짐). bulk-assign만 snapshotToken+expectedVersions로 재검증한다(CRM 유일의 낙관적 잠금).
+ * 이 에러는 leads/[id] PATCH가 그 최소 버전을 갖추도록 updateLead()의 낙관적 잠금 실패를 나타낸다.
+ */
+export class LeadVersionConflictError extends Error {
+  constructor(message = "다른 곳에서 먼저 이 리드를 수정했습니다. 새로고침 후 다시 시도해 주세요.") {
+    super(message);
+    this.name = "LeadVersionConflictError";
+  }
+}
+
 const LEAD_ROWS_MEMO_TTL_MS = 30_000;
 
 /**
@@ -483,6 +515,49 @@ export async function getMarketingLeads(): Promise<LeadRecord[]> {
   }
 }
 
+/**
+ * 리드 보드(감사 2026-09-07 §5, 279.6KB/전 컬럼) 전용 조회 — `*` 대신 이 화면이 실제로 쓰는
+ * 컬럼만 가져와 페이로드를 줄인다. anonymous_id·last_inflow_at은 components/admin/crm/leads/**
+ * 전수 grep(2026-09-10)으로 렌더링·검색·정렬 어디에도 안 쓰이는 걸 확인한 내부 트래킹 컬럼이라
+ * 뺀다 — 두 컬럼 다 별도 API(activity-summary·재유입 판정)가 자기 쿼리로 직접 읽으므로 이 응답에
+ * 실려 갈 필요가 없다.
+ *
+ * 행(row)은 줄이지 않는다 — 이 화면은 "전량이 필요한 화면"으로 이미 문서화돼 있고
+ * (아래 fetchAllLeadRows 주석, tests/repositories/leads-pagination.test.ts), 기본 기간 창을
+ * 넣으면 칸반의 전환·종료 열이 실제보다 적게 보이는 눈에 띄는 회귀가 된다 — dev 서버로 화면을
+ * 확인할 수 없는 상태에서 되돌릴 근거 없이 감행하지 않는다.
+ * updated_at은 뺄 목록에 넣지 않는다 — leads/[id] PATCH의 낙관적 잠금(동시 편집 충돌 감지)이
+ * 클라이언트가 들고 있던 이 값을 그대로 비교 기준으로 쓴다.
+ * confirmed_at 폴백은 마케팅 조회와 같은 이유(마이그레이션 전 배포 창 보호)로 그대로 따른다.
+ */
+const BOARD_LEAD_COLUMNS = [
+  "id", "source", "name", "org", "role", "size", "email", "phone", "message",
+  "status", "branch", "notes", "source_detail", "lead_magnet", "follow_up_at",
+  "assigned_to", "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
+  "gclid", "fbclid", "msclkid", "ttclid", "landing_page", "current_page", "referrer",
+  "created_at", "updated_at", "confirmed_at",
+].join(", ");
+
+const BOARD_LEAD_COLUMNS_WITHOUT_CONFIRMED = BOARD_LEAD_COLUMNS.replace(", confirmed_at", "");
+
+export async function getBoardLeads(): Promise<LeadRecord[]> {
+  if (!USE_SUPABASE) {
+    const { getLeads: jsonGetLeads } = await import("@/lib/db");
+    return jsonGetLeads();
+  }
+
+  try {
+    const rows = await fetchAllLeadRows(BOARD_LEAD_COLUMNS, "보드 조회");
+    return rows.map(supabaseToLegacy);
+  } catch (error) {
+    if (!(error instanceof LeadQueryError) || !isMissingLeadColumn(error.supabaseError, "confirmed_at")) {
+      throw error;
+    }
+    const fallback = await fetchAllLeadRows(BOARD_LEAD_COLUMNS_WITHOUT_CONFIRMED, "보드 조회");
+    return fallback.map(supabaseToLegacy);
+  }
+}
+
 export async function getLeadById(id: string): Promise<LeadRecord | null> {
   if (!USE_SUPABASE) {
     const { getLeads: jsonGetLeads } = await import("@/lib/db");
@@ -627,6 +702,10 @@ export async function saveLead(
     .single();
 
   if (error) {
+    // 감사 §7 — 유니크 제약 위반은 컬럼 누락과 무관하니 재시도 없이 곧장 구분해 던진다.
+    if (isUniqueViolation(error)) {
+      throw new LeadDuplicateError();
+    }
     if (isMissingOptionalLeadColumn(error)) {
       console.warn(
         "[leads] optional lead columns are missing; retrying without the named columns:",
@@ -642,6 +721,9 @@ export async function saveLead(
 
       if (!fallback.error) {
         return returnAfterLeadMutation(supabaseToLegacy(fallback.data as Lead));
+      }
+      if (isUniqueViolation(fallback.error)) {
+        throw new LeadDuplicateError();
       }
 
       // 2차 재시도 — 여러 컬럼이 한꺼번에 없으면(마이그레이션 여러 개 미적용) 오류가
@@ -660,6 +742,9 @@ export async function saveLead(
           .single();
 
         if (bare.error) {
+          if (isUniqueViolation(bare.error)) {
+            throw new LeadDuplicateError();
+          }
           throw new Error(`[leads] 저장 실패: ${bare.error.message}`);
         }
 
@@ -679,7 +764,14 @@ export async function saveLead(
 
 export async function updateLead(
   id: string,
-  patch: Partial<LeadRecord>
+  patch: Partial<LeadRecord>,
+  /**
+   * 감사 §8 — 지정하면 낙관적 잠금을 건다: 저장 시점에 DB의 updated_at이 이 값과 다르면
+   * (그사이 다른 곳에서 먼저 저장했다는 뜻) LeadVersionConflictError를 던지고 이 쓰기는
+   * 반영하지 않는다. 생략(undefined)하면 기존 동작 그대로 무조건 덮어쓴다 — 기존 호출부
+   * (assignLeads 등)는 한 줄도 안 바뀐다.
+   */
+  options?: { expectedUpdatedAt?: string | null }
 ): Promise<LeadRecord | null> {
   if (!USE_SUPABASE) {
     const { updateLead: jsonUpdateLead } = await import("@/lib/db");
@@ -715,12 +807,19 @@ export async function updateLead(
   if (patch.referrer !== undefined) update.referrer = patch.referrer;
   if (patch.confirmed_at !== undefined) update.confirmed_at = patch.confirmed_at;
 
-  const { data, error } = await supabase
-    .from("leads")
-    .update(update)
-    .eq("id", id)
-    .select()
-    .single();
+  // null/undefined를 걸러낸 뒤의 문자열 버전에만 이후 로직이 반응한다 — options! 같은
+  // 비-null 단언 없이 하나의 지역 변수로 좁혀서 쓴다.
+  const expectedUpdatedAt: string | null =
+    options?.expectedUpdatedAt !== undefined && options.expectedUpdatedAt !== null
+      ? options.expectedUpdatedAt
+      : null;
+  const hasVersionGuard = expectedUpdatedAt !== null;
+
+  // 버전 조건이 있으면 WHERE에 같이 걸어 "읽고 나서 쓰는" 사이 창을 없앤다 — 조건까지 포함한
+  // 단일 UPDATE라 DB가 원자적으로 판정한다(select→compare→update 순서에는 그 자체로 레이스가 있다).
+  let query = supabase.from("leads").update(update).eq("id", id);
+  if (expectedUpdatedAt !== null) query = query.eq("updated_at", expectedUpdatedAt);
+  const { data, error } = await query.select().single();
 
   if (error && isMissingLeadColumn(error, "confirmed_at") && update.confirmed_at !== undefined) {
     const fallbackUpdate = { ...update };
@@ -731,21 +830,32 @@ export async function updateLead(
       return existing ? { ...existing, confirmed_at: patch.confirmed_at ?? undefined } : null;
     }
 
-    const fallback = await supabase
-      .from("leads")
-      .update(fallbackUpdate)
-      .eq("id", id)
-      .select()
-      .single();
+    let fallbackQuery = supabase.from("leads").update(fallbackUpdate).eq("id", id);
+    if (expectedUpdatedAt !== null) fallbackQuery = fallbackQuery.eq("updated_at", expectedUpdatedAt);
+    const fallback = await fallbackQuery.select().single();
 
-    if (fallback.error || !fallback.data) return null;
+    if (fallback.error) {
+      if (hasVersionGuard && !(await getLeadById(id))) return null;
+      if (hasVersionGuard) throw new LeadVersionConflictError();
+      return null;
+    }
+    if (!fallback.data) return null;
     return returnAfterLeadMutation({
       ...supabaseToLegacy(fallback.data as Lead),
       confirmed_at: patch.confirmed_at ?? undefined,
     });
   }
 
-  if (error || !data) return null;
+  if (error) {
+    // 버전 조건을 걸었을 때만 "충돌 vs 진짜 없음"을 가린다 — 조건이 없으면 0행은 항상
+    // "그런 id 없음"이라 기존 계약(404) 그대로 null을 반환한다.
+    if (hasVersionGuard) {
+      const stillExists = await getLeadById(id);
+      if (stillExists) throw new LeadVersionConflictError();
+    }
+    return null;
+  }
+  if (!data) return null;
   return returnAfterLeadMutation(supabaseToLegacy(data as Lead));
 }
 

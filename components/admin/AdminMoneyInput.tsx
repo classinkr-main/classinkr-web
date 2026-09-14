@@ -37,16 +37,42 @@ function countDigits(text: string): number {
   return count
 }
 
+/** 선행 빼기표(유니코드 대시류 포함) — 붙여넣기 경로에서 실제로 들어온다. */
+const LEADING_MINUS = /^\s*[-−–—]/
+
 /**
- * 표시용 천단위 구분 — 숫자 외 문자를 걷어내고 선행 0을 정리한 뒤 3자리마다 콤마를 넣는다.
- * 빈 입력은 빈 문자열(placeholder 가 드러나야 하므로 "0" 을 지어내지 않는다).
+ * 표시용 천단위 구분 — 숫자 외 문자를 걷어내고 선행 0을 정리한 뒤 3자리마다 콤마를 넣되,
+ * **선행 부호는 보존한다.** 빈 입력은 빈 문자열(placeholder 가 드러나야 하므로 "0" 을 지어내지 않는다).
+ *
+ * 예전에는 부호를 통째로 지웠다. 그 결과 "-100000"을 치면 draft 가 즉시 "100,000"(양수)이
+ * 되고, commit 이 그 부호 없는 draft 를 파싱해 parseMoneyInput 의 0 클램프에 닿지 못했다 —
+ * 감액 의도가 반대 부호의 증액으로 조용히 저장되는 사고다(2026-09-07 감사 P1).
+ * 부호를 남겨 두면 사용자는 자기가 친 것을 그대로 보고, 저장 시점에 0 으로 클램프되며,
+ * 그 이유는 moneyInputHint 가 문구로 알린다.
+ *
+ * 선행일 때만 부호로 본다 — "5-000"은 음수가 아니라 오타이므로 5,000 이 맞다.
  */
 export function formatWithCommas(raw: string): string {
+  const negative = LEADING_MINUS.test(raw)
   const digits = extractIntegerDigits(raw)
-  if (digits === "") return ""
+  // 부호만 남은 중간 상태("-")도 그대로 둔다 — 다음 키 입력이 음수로 이어져야 한다.
+  if (digits === "") return negative ? "-" : ""
   // 선행 0 제거 — "007" → "7". 전부 0이면 마지막 한 자리는 남긴다("000" → "0").
   const normalized = digits.replace(/^0+(?=\d)/, "")
-  return normalized.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+  const body = normalized.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+  return negative ? `-${body}` : body
+}
+
+/**
+ * 입력 문자열에 대해 화면에 띄울 안내 문구. 없으면 빈 문자열.
+ *
+ * 음수와 "숫자 아닌 문자"를 갈라 놓는 이유 — 음수는 부호가 화면에 **남아 있는데** 저장만
+ * 0 이 되므로, "숫자만 입력할 수 있습니다"로 뭉개면 왜 값이 달라졌는지 알 수 없다.
+ */
+export function moneyInputHint(raw: string): string {
+  if (LEADING_MINUS.test(raw)) return "음수는 0 으로 저장됩니다"
+  // 우리가 넣은 콤마는 사용자의 "비숫자 입력"이 아니므로 판정에서 뺀다.
+  return /[^0-9]/.test(raw.replace(/,/g, "")) ? "숫자만 입력할 수 있습니다" : ""
 }
 
 /** 값 계약상 "매우 큰 수"의 상한 — 이보다 크면 부동소수 정밀도가 깨져 표시와 저장이 갈라진다. */
@@ -73,6 +99,24 @@ export function parseMoneyInput(raw: string): number | null {
   const parsed = Number(digits)
   if (!Number.isFinite(parsed)) return null
   return Math.min(MAX_MONEY, Math.max(0, Math.floor(parsed)))
+}
+
+/**
+ * 상위가 내려준 canonical 값으로 초안을 덮어써야 하는가.
+ *
+ * 되먹임 호스트 때문에 필요하다 — 장부 주차 그리드·입력 레일은 onLiveChange 로 올린 값을
+ * 그대로 value 로 되돌려준다(`value={parseMoneyInput(weekly[i])}` · `onLiveChange={pushAmount}`).
+ * 음수 초안 "-" 는 계약대로 0 을 올리고, 상위는 그 0 을 되돌려준다. 그 0 으로 초안을 무조건
+ * 갈아엎으면 사용자가 방금 친 부호가 한 키만에 "0" 으로 바뀌고, 이어지는 숫자가 다시 양수로
+ * 쌓여 결국 -5000 이 5000 으로 저장된다 — 부호를 보존하는 것만으로는 못 막는 두 번째 구멍.
+ *
+ * 그래서 "초안이 이미 그 값을 뜻하는가"로 판정한다. 뜻이 같으면 표현은 사용자 것이고
+ * (편집 중인 부호·자릿수), 상위가 진짜 다른 값을 내려줄 때만 다시 그린다.
+ */
+export function shouldResyncDraft(draft: string, incoming: number | null, allowNull: boolean): boolean {
+  const own = parseMoneyInput(draft)
+  const normalized = own == null && !allowNull ? 0 : own
+  return incoming !== normalized
 }
 
 /** prop 값 → 편집 초안 문자열. allowNull=false 인 필드의 0 은 placeholder 가 대신 보여준다. */
@@ -181,7 +225,8 @@ export function AdminMoneyInput({
   const [syncedValue, setSyncedValue] = useState(value)
   if (value !== syncedValue) {
     setSyncedValue(value)
-    setDraft(toDraft(value, allowNull))
+    // 뜻이 같으면 표현은 건드리지 않는다 — 되먹임 호스트가 편집 중인 부호를 지우지 못하게.
+    if (shouldResyncDraft(draft, value, allowNull)) setDraft(toDraft(value, allowNull))
   }
 
   // 편집이 일어날 때마다 증가 — 포맷 결과가 직전 초안과 같아도(예: 한글 한 글자를 걸러내
@@ -189,6 +234,8 @@ export function AdminMoneyInput({
   // 값 자체는 화면에 쓰이지 않으므로 setter 만 꺼내 쓴다.
   const [, setEditNonce] = useState(0)
   const [hintVisible, setHintVisible] = useState(false)
+  // 문구 자체를 상태로 든다 — 판정은 moneyInputHint(순수 함수)가 하고 여기서는 보여주기만 한다.
+  const [hintText, setHintText] = useState("")
   const [hintSeq, setHintSeq] = useState(0)
 
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -231,14 +278,16 @@ export function AdminMoneyInput({
   /** raw 문자열을 포맷해 초안에 반영하고, 캐럿과 비숫자 힌트를 함께 처리한다. */
   function applyRaw(raw: string, caret: number) {
     caretDigitsFromEndRef.current = countDigits(raw.slice(caret))
-    // 우리가 넣은 콤마는 사용자의 "비숫자 입력"이 아니므로 판정에서 뺀다.
-    const droppedNonDigit = /[^0-9]/.test(raw.replace(/,/g, ""))
-    if (droppedNonDigit) {
+    const hint = moneyInputHint(raw)
+    if (hint) {
+      setHintText(hint)
       setHintVisible(true)
       setHintSeq((seq) => seq + 1)
     } else if (hintVisible) {
       setHintVisible(false)
     }
+    // 부호는 draft 에 남는다 — 사용자는 자기가 친 것을 보고, 저장은 commit 의
+    // parseMoneyInput 이 0 으로 클램프한다(위 formatWithCommas 주석 참조).
     const formatted = formatWithCommas(raw)
     setDraft(formatted)
     setEditNonce((nonce) => nonce + 1)
@@ -346,7 +395,7 @@ export function AdminMoneyInput({
       {/* 항상 렌더된 라이브 리전 — 나중에 삽입된 영역은 스크린리더가 읽지 않는 경우가 있다.
           내용이 없으면 라인박스가 생기지 않아 높이 0 이므로 표 레이아웃을 밀지 않는다. */}
       <span role="status" aria-live="polite" className="text-right text-[11px] leading-tight text-[#B85C33]">
-        {hintVisible ? "숫자만 입력할 수 있습니다" : ""}
+        {hintVisible ? hintText : ""}
       </span>
     </span>
   )

@@ -3,7 +3,7 @@ import "server-only"
 import { unstable_cache, revalidateTag } from "next/cache"
 import { shareInFlight } from "@/lib/server/share-in-flight"
 
-import { getNeoCrmCustomers, type NeoCrmCustomerRow } from "@/lib/admin-crm-customers-neo"
+import type { NeoCrmCustomerRow } from "@/lib/admin-crm-customers-neo"
 import { ADMIN_CRM_PRIORITY_QUEUE_SNAPSHOT_CACHE_TAG } from "@/lib/admin/crm/cache-tags"
 import {
   buildLeadPriorityItem,
@@ -18,18 +18,14 @@ import {
   type CrmPrioritySource,
 } from "@/lib/crm/priority"
 import { classifyTodayCallSlot, isMetaLeadItem } from "@/lib/crm/today-calls"
-import { getLeads, onLeadsMutated, type LeadRecord } from "@/lib/repositories/leads"
+import { onLeadsMutated, type LeadRecord } from "@/lib/repositories/leads"
 import { listCrmTasks, onCrmTasksMutated, type CrmTaskRecord } from "@/lib/repositories/crm-tasks"
 import { onContactLogsMutated } from "@/lib/repositories/contact-logs"
-import { getLeadsActivitySummary, type LeadActivityBadge } from "@/lib/repositories/lead-activity"
-import {
-  EMPTY_COMPASS_DEMO_SOURCE,
-  buildCompassDemoIndex,
-  hydrateCompassDemoSource,
-  serializeCompassDemoSource,
-  type CompassDemoSourceJson,
-} from "@/lib/crm/compass-demo-signal"
-import { loadCompassDemoSource } from "@/lib/crm/compass-demo-source"
+import type { LeadActivityBadge } from "@/lib/repositories/lead-activity"
+import { buildCompassDemoIndex, hydrateCompassDemoSource, type CompassDemoSourceJson } from "@/lib/crm/compass-demo-signal"
+// 리드·NEO 고객·참여 신호·Compass 데모 원본 수집은 통합 고객DB(crm-unified-customers.ts)와
+// 공유한다(2026-09-07 감사 #7) — 아래 loadSourceSnapshot 참고.
+import { getCrmCoreSourceSnapshot, type CrmCoreSourceSnapshot } from "@/lib/repositories/crm-shared-source-snapshot"
 
 /**
  * "customer" 는 리드 + ClassIn 고객을 한 묶음으로 보는 가상 소스다.
@@ -251,6 +247,11 @@ export function selectVisiblePriorityItems(
 //   캐시 저장 여부를 이 파일이 더 이상 직접 결정하지 않으므로(unstable_cache가 대신함)
 //   제거했다. 남는 차이는 "완전히 빈 캐시에 두 요청이 동시에 도착하는" 드문 경합에서
 //   중복 계산이 한 번 더 일어날 수 있다는 것뿐이고, 하루 수십 건 트래픽에서는 감수할 만하다.
+// - 2026-09-07 감사 #7: leads·NEO·참여신호·데모 네 소스는 이제 이 파일이 직접 모으지 않고
+//   crm-shared-source-snapshot.ts의 getCrmCoreSourceSnapshot()에 위임한다 — 통합 고객DB
+//   (crm-unified-customers.ts)가 같은 함수를 자기 unstable_cache 콜백 안에서 불러 쓴다.
+//   이 파일의 unstable_cache 배선(태그·키·60초 TTL·complete 게이트)은 전혀 바뀌지 않았다 —
+//   달라진 건 콜백 내부에서 원본을 어디서 가져오는지뿐이다(할 일은 여전히 이 파일 전용).
 interface CrmPrioritySourceSnapshot {
   leads: LeadRecord[]
   leadsOk: boolean
@@ -306,34 +307,38 @@ async function getSourceSnapshot(bypassCache: boolean): Promise<CrmPrioritySourc
   }
 }
 
+// core(leads·NEO·참여신호·데모)가 shareInFlight 실패 등으로 거부되는 극단적인 경우의
+// 안전한 빈 스냅샷 — 이 큐가 500 대신 "전부 실패" 상태로 서게 한다.
+const EMPTY_CORE_SNAPSHOT: CrmCoreSourceSnapshot = {
+  leads: [],
+  leadsOk: false,
+  neoRows: [],
+  neoAccountsOk: false,
+  neoLatestSyncedAt: null,
+  neoIsShroffAccountStale: true,
+  engagements: null,
+  demoSource: { demos: [], phoneKeysByCompassLeadId: [], down: true },
+  complete: false,
+}
+
 async function loadSourceSnapshot(): Promise<CrmPrioritySourceSnapshot> {
   const warnings: string[] = []
-  let leadsOk = true
-  let neoAccountsOk = true
   let tasksOk = true
 
-  const [leadResult, neoResult, taskResult, engagementResult] = await Promise.allSettled([
-    getLeads(),
-    getNeoCrmCustomers(),
+  // leads·NEO 고객·참여 신호·Compass 데모는 통합 고객DB(crm-unified-customers.ts)와 공유하는
+  // 원본 스냅샷(getCrmCoreSourceSnapshot)에서 가져온다(2026-09-07 감사 #7) — 이 넷을 독립
+  // Promise.allSettled로 모으던 걸 걷어냈다. 이 큐만 필요한 할 일(tasks)은 그대로 별도 수집.
+  const [coreResult, taskResult] = await Promise.allSettled([
+    getCrmCoreSourceSnapshot(),
     listCrmTasks({ status: "active", limit: 200 }),
-    getLeadsActivitySummary(),
   ])
 
-  let leads: LeadRecord[] = []
-  if (leadResult.status === "fulfilled") {
-    leads = leadResult.value
-  } else {
-    leadsOk = false
-    warnings.push("리드 우선순위를 불러오지 못했습니다.")
-  }
-
-  let neoRows: NeoCrmCustomerRow[] = []
-  if (neoResult.status === "fulfilled" && neoResult.value.ok) {
-    neoRows = neoResult.value.rows
-  } else {
-    neoAccountsOk = false
-    warnings.push("동기화 고객 참고 데이터를 불러오지 못했습니다.")
-  }
+  const core = coreResult.status === "fulfilled" ? coreResult.value : EMPTY_CORE_SNAPSHOT
+  const { leads, leadsOk, neoRows, neoAccountsOk, engagements } = core
+  // 참여 신호·데모 실측은 우선순위를 더 정확하게 만들 뿐 없어도 큐는 서야 한다 — core 안에서
+  // 이미 조용히 빈 값으로 빠지므로(보조 지표) 여기서 별도 경고를 추가하지 않는다.
+  if (!leadsOk) warnings.push("리드 우선순위를 불러오지 못했습니다.")
+  if (!neoAccountsOk) warnings.push("동기화 고객 참고 데이터를 불러오지 못했습니다.")
 
   let tasks: CrmTaskRecord[] = []
   if (taskResult.status === "fulfilled" && taskResult.value.health.ok) {
@@ -343,17 +348,6 @@ async function loadSourceSnapshot(): Promise<CrmPrioritySourceSnapshot> {
     warnings.push("CRM 할 일을 불러오지 못했습니다.")
   }
 
-  // 참여 신호·데모 실측은 우선순위를 더 정확하게 만들 뿐 없어도 큐는 서야 한다 —
-  // 실패하면 조용히 빈 값으로 빠지고 경고도 띄우지 않는다(보조 지표).
-  const engagements = engagementResult.status === "fulfilled" ? engagementResult.value : null
-
-  // Compass 데모 조인은 우리 쪽 전화 목록을 입력으로 받으므로 위 수집 뒤에 한 번 더 간다.
-  // 기간에 데모가 없으면 전화 조회 없이 끝난다(loadCompassDemoSource 참고).
-  const demoSource = await loadCompassDemoSource([
-    ...leads.map((lead) => lead.phone),
-    ...neoRows.map((row) => row.phone),
-  ]).catch(() => ({ ...EMPTY_COMPASS_DEMO_SOURCE, down: true }))
-
   return {
     leads,
     leadsOk,
@@ -362,8 +356,9 @@ async function loadSourceSnapshot(): Promise<CrmPrioritySourceSnapshot> {
     tasks,
     tasksOk,
     engagements,
+    // core가 이미 JSON 안전 형태(CompassDemoSourceJson)로 반환한다 — 여기서 다시 접지 않는다.
     // unstable_cache는 JSON으로 저장한다 — Map을 그대로 넣으면 적중 뒤 `.get`이 터진다(2026-09-04 500 사고).
-    demoSource: serializeCompassDemoSource(demoSource),
+    demoSource: core.demoSource,
     warnings,
     complete: leadsOk && neoAccountsOk && tasksOk,
   }

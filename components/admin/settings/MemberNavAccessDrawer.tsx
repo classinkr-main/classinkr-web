@@ -1,6 +1,11 @@
 "use client"
 
-// 슈퍼 관리자 전용 탭 권한 편집기 — 스펙 docs/active/admin-tab-restructure-2026-07-29.md §5.4.
+// 사람별 사이드바 배치 편집기.
+//
+// 2026-09-10 전면 공개 전환 이후 이 화면은 "권한"을 다루지 않는다 — 모든 매니저가 같은 목록을
+// 보고, 여기서 정하는 것은 그 사람 사이드바에서 항목이 상시(상단)와 기타 중 어디에 앉는지뿐이다.
+// 차단(deny)과 프리셋 선택은 제거됐다(admin-nav-access.ts 상단 주석 참조).
+//
 // 미리보기는 반드시 admin-nav-access의 resolveAdminNavAccess를 쓴다. 여기서 배치를 다시 계산하면
 // 실제 사이드바와 어긋나고, 어긋난 미리보기는 이 기능 전체의 신뢰를 깎는다.
 import { useMemo, useRef, useState } from "react"
@@ -8,14 +13,11 @@ import { Check, CircleAlert, Loader2, X } from "lucide-react"
 
 import { ADMIN_NAV, ADMIN_NAV_CATEGORY_META } from "@/components/admin/admin-nav"
 import {
-  NAV_PRESETS,
-  isNavPresetKey,
   normalizeNavOverrides,
   resolveAdminNavAccess,
   resolveNavPlacement,
   type NavAccessContext,
   type NavPlacement,
-  type NavPresetKey,
 } from "@/components/admin/admin-nav-access"
 import { useDialogFocus } from "@/components/admin/use-dialog-focus"
 import { adminFetchJson } from "@/lib/admin-client"
@@ -23,15 +25,13 @@ import { adminFetchJson } from "@/lib/admin-client"
 const PLACEMENTS: Array<{ value: NavPlacement; label: string }> = [
   { value: "primary", label: "상시" },
   { value: "folded", label: "기타" },
-  { value: "deny", label: "차단" },
 ]
 
-// 선택된 배치별 톤 — DESIGN.md 운영 상태 스케일(Danger/Success)을 그대로 쓴다.
+// 선택된 배치별 톤 — DESIGN.md 운영 상태 스케일(Success)을 그대로 쓴다.
 // "기타"는 상태 신호가 아니라 중립 선택이라 뉴트럴 톤을 쓴다.
 const PLACEMENT_ACTIVE_TONE: Record<NavPlacement, string> = {
   primary: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]",
   folded: "border-[rgba(0,0,0,0.14)] bg-white text-[#111110]",
-  deny: "border-[#F2B8B8] bg-[#FCE9E9] text-[#B43E3E]",
 }
 
 type SaveState = { status: "idle" | "saving" | "saved" } | { status: "error"; message: string }
@@ -40,29 +40,21 @@ interface MemberNavAccessDrawerProps {
   userId: string
   displayName: string
   targetRole: string
-  initialPreset: string | null
   initialOverrides: Record<string, string>
   onClose: () => void
-  onSaved: (navPreset: string | null, navOverrides: Record<string, NavPlacement>) => void
+  onSaved: (navOverrides: Record<string, NavPlacement>) => void
 }
 
 export default function MemberNavAccessDrawer({
   userId,
   displayName,
   targetRole,
-  initialPreset,
   initialOverrides,
   onClose,
   onSaved,
 }: MemberNavAccessDrawerProps) {
-  // SUPER_ADMIN 대상은 resolveNavPlacement가 오버라이드 조회 전에 이미 배치를 확정해
-  // 반환한다(admin-nav-access.ts) — 즉 이 사람에게 오버라이드를 걸어도 실제로는 무시된다.
-  // 편집 UI를 열어두면 "저장했는데 왜 안 바뀌지"만 만들기 때문에 아예 전부 잠근다.
-  const locked = targetRole === "SUPER_ADMIN"
-
-  const [preset, setPreset] = useState<NavPresetKey | null>(
-    isNavPresetKey(initialPreset) ? initialPreset : null
-  )
+  // 전면 공개 이후 오버라이드는 역할과 무관하게 똑같이 적용된다 — SUPER_ADMIN 이라고 무시되지
+  // 않으므로 예전의 전체 잠금(locked)은 사라졌다.
   const [overrides, setOverrides] = useState<Record<string, NavPlacement>>(() =>
     normalizeNavOverrides(initialOverrides)
   )
@@ -72,13 +64,13 @@ export default function MemberNavAccessDrawer({
   useDialogFocus(userId, onClose, closeButtonRef)
 
   const ctx = useMemo<NavAccessContext>(
-    () => ({ role: targetRole, preset, overrides }),
-    [targetRole, preset, overrides]
+    () => ({ role: targetRole, overrides }),
+    [targetRole, overrides]
   )
-  // 프리셋만 적용했을 때의 배치 — "예외" 뱃지·오버라이드 정리(setPlacement) 판정 기준.
-  const presetOnly = useMemo<NavAccessContext>(
-    () => ({ role: targetRole, preset, overrides: {} }),
-    [targetRole, preset]
+  // 전원 공통 기본 배치 — "예외" 뱃지·오버라이드 정리(setPlacement) 판정 기준.
+  const defaultOnly = useMemo<NavAccessContext>(
+    () => ({ role: targetRole, overrides: {} }),
+    [targetRole]
   )
 
   const preview = useMemo(() => resolveAdminNavAccess(ctx), [ctx])
@@ -95,17 +87,16 @@ export default function MemberNavAccessDrawer({
     () =>
       ADMIN_NAV.map((item) => {
         const current = resolveNavPlacement(item.href, ctx)
-        const base = resolveNavPlacement(item.href, presetOnly)
+        const base = resolveNavPlacement(item.href, defaultOnly)
         return { item, current, isException: current !== base }
       }),
-    [ctx, presetOnly]
+    [ctx, defaultOnly]
   )
   const exceptionCount = useMemo(() => rows.filter((row) => row.isException).length, [rows])
 
-  // 프리셋 기본값과 같아지면 오버라이드를 지운다 — 불필요한 예외가 쌓이면 읽기 어려워진다.
+  // 공통 기본값과 같아지면 오버라이드를 지운다 — 불필요한 예외가 쌓이면 읽기 어려워진다.
   const setPlacement = (href: string, next: NavPlacement) => {
-    if (locked) return
-    const base = resolveNavPlacement(href, presetOnly)
+    const base = resolveNavPlacement(href, defaultOnly)
     setOverrides((prev) => {
       const draft = { ...prev }
       if (next === base) delete draft[href]
@@ -115,17 +106,17 @@ export default function MemberNavAccessDrawer({
   }
 
   const handleSave = async () => {
-    if (locked) return
     setSave({ status: "saving" })
     try {
       // PATCH는 두 컬럼을 함께 덮어쓴다(app/api/admin/users/route.ts) — 하나만 보내면
-      // 나머지가 null/{}로 밀린다. 그래서 preset/overrides를 항상 같이 보낸다.
+      // 나머지가 null/{}로 밀린다. 프리셋은 더 이상 화면을 가르지 않으므로 항상 null 로
+      // 밀어 레거시 값을 정리한다.
       await adminFetchJson("/api/admin/users", {
         method: "PATCH",
-        body: JSON.stringify({ userId, navPreset: preset, navOverrides: overrides }),
+        body: JSON.stringify({ userId, navPreset: null, navOverrides: overrides }),
       })
       setSave({ status: "saved" })
-      onSaved(preset, overrides)
+      onSaved(overrides)
     } catch (error) {
       setSave({
         status: "error",
@@ -151,11 +142,9 @@ export default function MemberNavAccessDrawer({
         {/* 헤더 */}
         <div className="flex items-start justify-between gap-3 border-b border-[#e8e8e4] px-5 py-4">
           <div className="min-w-0">
-            <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[#615D59]">탭 권한</p>
+            <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[#615D59]">사이드바 배치</p>
             <h2 className="mt-0.5 truncate text-[15px] font-semibold text-[#111110]">{displayName}</h2>
-            <p className="mt-1 text-[12px] text-[#1a1a1a]/45">
-              {locked ? "최고 관리자는 항상 전체 메뉴를 봅니다" : `예외 ${exceptionCount}개`}
-            </p>
+            <p className="mt-1 text-[12px] text-[#1a1a1a]/45">기본과 다른 항목 {exceptionCount}개</p>
           </div>
           <button
             type="button"
@@ -168,28 +157,12 @@ export default function MemberNavAccessDrawer({
           </button>
         </div>
 
-        {/* 프리셋 */}
-        <div className="border-b border-[#e8e8e4] px-5 py-4">
-          <label htmlFor="nav-access-preset" className="mb-1.5 block text-[11px] font-medium text-[#615D59]">
-            프리셋
-          </label>
-          <select
-            id="nav-access-preset"
-            value={preset ?? ""}
-            disabled={locked}
-            onChange={(event) => {
-              const value = event.target.value
-              setPreset(value === "" ? null : (value as NavPresetKey))
-            }}
-            className="w-full rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-[13px] focus:border-[#084734] focus:outline-none focus:ring-1 focus:ring-[#084734] disabled:cursor-not-allowed disabled:bg-[#fafaf8] disabled:text-[#1a1a1a]/40"
-          >
-            <option value="">미배정 (기존 동작 유지)</option>
-            {(Object.keys(NAV_PRESETS) as NavPresetKey[]).map((key) => (
-              <option key={key} value={key}>
-                {NAV_PRESETS[key].label}
-              </option>
-            ))}
-          </select>
+        {/* 안내 — 이 화면이 더 이상 접근을 통제하지 않는다는 것을 분명히 한다. */}
+        <div className="border-b border-[#e8e8e4] px-5 py-3">
+          <p className="text-[12px] leading-relaxed text-[#1a1a1a]/55">
+            모든 매니저가 같은 메뉴를 봅니다. 여기서는 이 사람 사이드바에서 각 항목이 상단(상시)과
+            기타 중 어디에 앉을지만 정합니다. 실제 데이터 권한은 각 화면의 서버 검사가 정합니다.
+          </p>
         </div>
 
         {/* 탭 목록 — 3-way 토글 */}
@@ -217,7 +190,6 @@ export default function MemberNavAccessDrawer({
                         key={placement.value}
                         type="button"
                         aria-pressed={active}
-                        disabled={locked}
                         onClick={() => setPlacement(item.href, placement.value)}
                         className={`rounded-md border px-2.5 py-1 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                           active
@@ -281,7 +253,7 @@ export default function MemberNavAccessDrawer({
             <button
               type="button"
               onClick={handleSave}
-              disabled={locked || saving}
+              disabled={saving}
               className="rounded-lg bg-[#084734] px-5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-[#065c41] disabled:opacity-40"
             >
               {saving ? "저장 중..." : "저장"}

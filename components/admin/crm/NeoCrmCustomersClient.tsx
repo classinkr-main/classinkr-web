@@ -26,12 +26,13 @@ import {
 
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { formatCNY, formatUSD } from "@/lib/crm/money-format"
+import { formatAgeHours } from "@/lib/crm/sync-freshness"
 import { CRM_EVENT_SOURCE_TYPES, eventSourceIcon, eventSourceLabel } from "./event-source-meta"
 import type {
   NeoCrmCustomerDetail,
-  NeoCrmCustomerList,
+  NeoCrmCustomerListResponse,
+  NeoCrmCustomerListRow,
   NeoCrmCustomerMoneyItem,
-  NeoCrmCustomerRow,
 } from "@/lib/admin-crm-customers-neo"
 import type { CrmCustomerEventRecord, ListCrmCustomerEventsResult } from "@/lib/repositories/crm-events"
 import AdminErrorBanner from "@/components/admin/ui/AdminErrorBanner"
@@ -75,12 +76,8 @@ function formatDateTime(value: string | null | undefined) {
   }).format(date)
 }
 
-function formatAgeHours(value: number | null | undefined) {
-  if (value == null) return "확인 불가"
-  if (value < 1) return "1시간 이내"
-  if (value < 48) return `${Math.round(value)}시간 전`
-  return `${Math.round(value / 24)}일 전`
-}
+// formatAgeHours는 lib/crm/sync-freshness.ts SSOT — CRM 홈 배지(CrmOperationsDashboard·
+// CrmTeamKpiBoard)와 같은 상대시간 문구를 쓴다(2026-09-07 감사 #1).
 
 function daysUntil(value: string | null | undefined) {
   if (!value) return null
@@ -680,7 +677,7 @@ export default function NeoCrmCustomersClient() {
   const deepLinkedAccountId = searchParams.get("account")?.trim() ?? ""
   // ?expiring=1 딥링크 — Overview 리뉴얼 타일에서 '만료 임박만' 필터가 켜진 채 착지한다.
   const deepLinkedExpiring = searchParams.get("expiring") === "1"
-  const [data, setData] = useState<NeoCrmCustomerList | null>(null)
+  const [data, setData] = useState<NeoCrmCustomerListResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState("")
@@ -695,7 +692,7 @@ export default function NeoCrmCustomersClient() {
     setLoading(true)
     setError(null)
     try {
-      const next = await adminFetchJsonCached<NeoCrmCustomerList>(`/api/admin/crm/customers-neo`, undefined, {
+      const next = await adminFetchJsonCached<NeoCrmCustomerListResponse>(`/api/admin/crm/customers-neo`, undefined, {
         ttlMs: 60_000,
         force: options?.force,
       })
@@ -804,7 +801,11 @@ export default function NeoCrmCustomersClient() {
           <p className="text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Customer Sync · 외부 CRM</p>
           <h1 className="mt-2 text-2xl font-bold tracking-[-0.02em] text-[#111110]">고객 원천 데이터</h1>
           <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/45">
-            외부 CRM 동기화 참고자료 — ClassIn 고객 DB 보조 원천
+            외부 CRM 동기화 참고자료 — ClassIn 고객 DB 보조 원천. 검색·등록 확정·기록은{" "}
+            <Link href="/admin/crm/customers/unified" className="font-semibold text-[#084734] underline-offset-2 hover:underline">
+              통합 고객DB
+            </Link>
+            에서, 이 화면은 잔액·만료·오더 등 외부 CRM 원본 수치를 확인할 때만 씁니다.
           </p>
           <p className="mt-1 text-[11px] text-[#1a1a1a]/35">
             잔액·만료 원천 sync {formatDateTime(syncHealth?.shroffAccountSyncedAt)}
@@ -929,7 +930,7 @@ export default function NeoCrmCustomersClient() {
           <EmptyCustomers hasFilters={hasActiveFilters} onReset={resetFilters} />
         ) : (
           <div className="divide-y divide-[#f0f0ec]">
-            {visibleRows.map((row: NeoCrmCustomerRow) => (
+            {visibleRows.map((row: NeoCrmCustomerListRow) => (
               <button
                 key={`m-${row.accountId}`}
                 type="button"
@@ -998,7 +999,7 @@ export default function NeoCrmCustomersClient() {
                 </td>
               </tr>
             ) : (
-              visibleRows.map((row: NeoCrmCustomerRow) => (
+              visibleRows.map((row: NeoCrmCustomerListRow) => (
                 <tr
                   key={row.accountId}
                   onClick={() => setSelectedAccountId(row.accountId)}

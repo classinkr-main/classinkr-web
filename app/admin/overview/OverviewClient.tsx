@@ -1,6 +1,16 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import {
+  use,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  Suspense,
+  type Dispatch,
+  type SetStateAction,
+} from "react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import {
@@ -53,11 +63,14 @@ import {
   formatDateShort,
   formatDateTime,
   resolveUnrespondedSignal,
-  shouldUsePrefetchedSource,
   SOURCE_LABEL,
   type BranchMonthlySeries,
   type OverviewSignalTone,
 } from "@/lib/admin/overview/insights"
+// 스트리밍 전환(2026-09-10 2라운드)으로 "refreshKey===0이면서 fresh한가"를 판정하던
+// shouldUsePrefetchedSource 대신, 소스별 레인(openPrefetchLane)의 generatedAt을 그 레인이
+// 실제로 settle된 시점에 직접 판정한다 — 아래 PrefetchSourceBridge 참고.
+import { isPrefetchFresh } from "@/lib/admin/prefetch-freshness"
 import type { AdminIntegrationStatusResponse } from "@/lib/admin-integrations/types"
 import type { CalendarEvent } from "@/lib/calendar-data"
 import type { BlogPostStatus } from "@/lib/blog-types"
@@ -81,6 +94,17 @@ async function fetchJson<T>(url: string, { fresh = false }: { fresh?: boolean } 
   }
 }
 
+// 뷰포트 밖 위젯(Instagram 채널 지표 카드)의 fetch 시점을 메인 스레드가 한가할 때까지
+// 미룬다 — 첫 화면 콜드 순간의 동시 요청 수를 줄이기 위한 지연 로드(감사 P2). Safari에는
+// requestIdleCallback이 없어 setTimeout으로 대체한다.
+function scheduleIdle(task: () => void) {
+  if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(task, { timeout: 2000 })
+  } else {
+    setTimeout(task, 200)
+  }
+}
+
 type OverviewSourceKey = "leads" | "visitor" | "chatbot" | "branch" | "leadActions" | "os"
 type OverviewSourceState = "loading" | "ready" | "error"
 
@@ -93,27 +117,74 @@ const INITIAL_SOURCE_STATES: Record<OverviewSourceKey, OverviewSourceState> = {
   os: "loading",
 }
 
-// 재시도/갱신 경로에서 "서버 프리페치 없음"을 뜻하는 값 — 전 소스가 다시 페치된다.
-const EMPTY_PREFETCH: OverviewInitialData = {
-  leadOverview: null,
-  visitorStats: null,
-  leadActionKpis: null,
-  osSummary: null,
-  generatedAt: 0,
+/**
+ * 소스 하나를 조용히(로딩 플래시 없이) 다시 페치해 최종 상태만 반영한다 — 사용자가 누른
+ * "다시 시도"(retrySource)와 달리 이 함수는 호출 전에 sourceStates를 "loading"으로 되돌리지
+ * 않는다: 호출 시점에 화면엔 이미 값(스테일이든, 애초에 loading 상태였든)이 있으므로 여기서
+ * loading으로 되돌리면 오히려 화면이 깜빡인다. 두 경로에서 쓴다 —
+ *  1) PrefetchSourceBridge: 서버 레인이 null로 끝나면(권한 없음·실패·15초 ceiling) 지금까지
+ *     해오던 클라이언트 폴백 페치.
+ *  2) 재시도 이펙트(fresh=true): "전체 다시 시도" 버튼 — retrySource와 달리 이쪽은 이미
+ *     INITIAL_SOURCE_STATES로 리셋된 뒤라 역시 loading 플래시가 필요 없다.
+ * 컴포넌트 바깥의 모듈 스코프 함수인 이유: useCallback으로 감싸면 T가 useCallback의 시그니처
+ * (T extends Function)를 한 번 더 거치며 제네릭 추론이 약해질 위험이 있다 — 평범한 최상위
+ * 제네릭 함수는 그 위험이 없고, setSourceStates(useState 세터)·unmountedRef(ref 객체)는
+ * 원래 항상 안정적이라 인자로 그냥 넘겨도 참조 안정성 문제가 없다.
+ */
+async function loadSourceQuiet<T>(
+  key: OverviewSourceKey,
+  url: string,
+  apply: (data: T) => void,
+  setSourceStates: Dispatch<SetStateAction<Record<OverviewSourceKey, OverviewSourceState>>>,
+  unmountedRef: { current: boolean },
+  fresh = false
+) {
+  const data = await fetchJson<T>(url, { fresh })
+  if (unmountedRef.current) return
+  if (data === null) {
+    setSourceStates((current) => ({ ...current, [key]: "error" }))
+    return
+  }
+  apply(data)
+  setSourceStates((current) => ({ ...current, [key]: "ready" }))
 }
 
-// 서버가 이미 채워 보낸 소스는 처음부터 ready로 시작한다 — 실데이터를 들고 있으면서
-// 스켈레톤을 한 프레임 그리는 깜빡임을 없앤다. 나머지는 기존대로 loading.
-function seededSourceStates(
-  initialData: OverviewInitialData
-): Record<OverviewSourceKey, OverviewSourceState> {
-  return {
-    ...INITIAL_SOURCE_STATES,
-    ...(initialData.leadOverview ? { leads: "ready" as const } : {}),
-    ...(initialData.visitorStats ? { visitor: "ready" as const } : {}),
-    ...(initialData.leadActionKpis ? { leadActions: "ready" as const } : {}),
-    ...(initialData.osSummary ? { os: "ready" as const } : {}),
-  }
+/**
+ * 소스 하나의 openPrefetchLane 결과(promise)를 React use()로 풀어, 그 결과를 부모
+ * (OverviewClient)의 기존 top-level state로 옮기기만 하는 다리 컴포넌트 — 화면에는
+ * 아무것도 그리지 않는다(return null).
+ *
+ * 왜 "화면에 보이는 타일"이 각자 use()를 걸지 않고 안 보이는 다리를 따로 두는가:
+ * leadOverview 하나만 해도 이 화면 안에서 인바운드·흐름 지표 3타일·차트·파이·퍼널까지
+ * 6곳 넘게 재사용된다(osSummary도 5~7개 타일이 같은 레인을 본다). 재사용되는 모든 자리에
+ * 각자 use()를 걸면 retrySource("leads") 같은 단일 소스 재시도가 그중 한 자리만 갱신하고
+ * 나머지는 낡은 값을 들고 있게 된다 — top-level state 하나를 여러 타일이 같이 읽는 지금
+ * 구조가 재시도의 "모든 자리가 함께 갱신된다"는 보장을 지키는 유일하게 단순한 방법이다.
+ * 대신 이 다리를 소스마다 독립된 형제 <Suspense>로 감싸면(아래 OverviewClient의 return
+ * 최상단 참고) "느린 소스가 다른 소스나 화면 전체를 막지 않는다"는 이번 작업의 핵심 요건은
+ * 그대로 만족한다 — 여섯 개 다리가 서로 완전히 독립적으로 settle되고, 그중 아무것도 페이지
+ * 첫 렌더(SSR 스트림)를 기다리게 하지 않는다.
+ *
+ * fallback=null인 이유: 화면에 보이는 로딩 표시는 지금처럼 sourceStates 초기값
+ * (INITIAL_SOURCE_STATES="loading")이 이미 그린다 — 이 다리가 뭔가 그리면 이중 스켈레톤이
+ * 된다. 다리가 resolve된 뒤에도 여전히 null을 반환한다 — 실제 표시는 부모 state 갱신에
+ * 뒤따르는 재렌더가 담당한다.
+ */
+function PrefetchSourceBridge<T>({
+  promise,
+  onSettled,
+}: {
+  promise: Promise<T | null>
+  onSettled: (value: T | null) => void
+}) {
+  const value = use(promise)
+  useEffect(() => {
+    onSettled(value)
+    // value는 promise가 한 번 settle되면 그 뒤로 항상 같은 참조/원시값이다(React가 이미
+    // resolve된 thenable의 결과를 캐시한다) — onSettled는 각 소스의 seedX 콜백으로,
+    // 호출부에서 useCallback으로 참조를 고정해 이 effect가 불필요하게 재실행되지 않는다.
+  }, [value, onSettled])
+  return null
 }
 
 const SOURCE_STATE_LABEL: Record<OverviewSourceKey, string> = {
@@ -342,12 +413,7 @@ interface VisitorStatsPayload {
 }
 
 export default function OverviewClient({ initialData }: { initialData: OverviewInitialData }) {
-  // 서버 프리페치는 첫 로드 한 번만 쓴다 — 이후 재시도/갱신은 기존 클라이언트 경로 그대로.
-  // ref로 잡아 두면 effect 의존성이 refreshKey 하나로 유지된다(프롭은 렌더 간 안정적).
-  const initialDataRef = useRef(initialData)
-  const [leadOverview, setLeadOverview] = useState<OverviewLeadSummary | null>(
-    initialData.leadOverview
-  )
+  const [leadOverview, setLeadOverview] = useState<OverviewLeadSummary | null>(null)
   const [subscriberCount, setSubscriberCount] = useState(0)
   const [blogOverview, setBlogOverview] = useState<AdminBlogOverviewSummary | null>(null)
   const [campaigns, setCampaigns] = useState<EmailCampaign[]>([])
@@ -357,101 +423,214 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
   const [patchNotes, setPatchNotes] = useState<PatchNote[]>([])
   const [instagramDashboard, setInstagramDashboard] = useState<InstagramOverviewDashboard | null>(null)
   const [branchSummary, setBranchSummary] = useState<BranchSummaryPayload | null>(null)
-  const [leadActionKpis, setLeadActionKpis] = useState<LeadActionKpisPayload | null>(
-    initialData.leadActionKpis
-  )
-  const [osSummary, setOsSummary] = useState<OsSummaryPayload | null>(initialData.osSummary)
-  const [visitorStats, setVisitorStats] = useState<VisitorStatsPayload | null>(
-    initialData.visitorStats
-  )
+  const [leadActionKpis, setLeadActionKpis] = useState<LeadActionKpisPayload | null>(null)
+  const [osSummary, setOsSummary] = useState<OsSummaryPayload | null>(null)
+  const [visitorStats, setVisitorStats] = useState<VisitorStatsPayload | null>(null)
   const [chatbotStats, setChatbotStats] = useState<ChatbotStatsPayload | null>(null)
-  const [sourceStates, setSourceStates] = useState<Record<OverviewSourceKey, OverviewSourceState>>(
-    () => seededSourceStates(initialData)
-  )
+  // 여섯 소스 모두 처음엔 "loading"으로 시작한다 — 스트리밍 전환 전에는 initialData가
+  // 이미 동기 값이라 seededSourceStates로 ready를 앞당겼지만, 이제 initialData.X는
+  // {promise, generatedAt}이라 settle되기 전까지는 알 수 없다. 아래 PrefetchSourceBridge가
+  // 소스별로 독립 Suspense 안에서 resolve되는 즉시 해당 키만 "ready"/"error"로 올린다.
+  const [sourceStates, setSourceStates] =
+    useState<Record<OverviewSourceKey, OverviewSourceState>>(INITIAL_SOURCE_STATES)
   const [refreshKey, setRefreshKey] = useState(0)
   const [loading, setLoading] = useState(true)
   const [chartRange, setChartRange] = useState<7 | 30>(7)
   const [alertsExpanded, setAlertsExpanded] = useState(false)
 
+  // loadSourceQuiet의 안전판 — 언마운트 뒤 도착하는 레인/폴백 페치 결과가 setState를
+  // 부르지 않게 한다(15초 ceiling까지 살아있는 레인이 있어, 사용자가 이미 다른 탭으로
+  // 이동한 뒤 settle될 수 있다).
+  const unmountedRef = useRef(false)
+  useEffect(
+    () => () => {
+      unmountedRef.current = true
+    },
+    []
+  )
+
+  // ─── 소스별 프리페치 시드 콜백 — PrefetchSourceBridge(아래 return 참고)가 promise를
+  // use()로 푼 뒤 이 콜백들로 값을 넘긴다. 값이 있으면 즉시 반영하고(스테일이면 조용히
+  // 백그라운드 재검증까지), null이면(권한 없음·실패·15초 ceiling) 지금까지처럼 클라이언트
+  // 폴백 페치를 곧장 튼다 — "이중 페치 금지" 계약은 "신선하면 아무것도 더 안 부른다"로
+  // 지킨다.
+  const seedLeadOverview = useCallback(
+    (value: OverviewLeadSummary | null) => {
+      if (value !== null) {
+        setLeadOverview(value)
+        setSourceStates((current) => ({ ...current, leads: "ready" }))
+        if (isPrefetchFresh(initialData.leadOverview.generatedAt)) return
+      }
+      void loadSourceQuiet<AdminLeadsOverviewResponse>(
+        "leads",
+        "/api/admin/leads?scope=overview",
+        (data) => setLeadOverview(data.overview),
+        setSourceStates,
+        unmountedRef
+      )
+    },
+    [initialData.leadOverview.generatedAt]
+  )
+  const seedVisitorStats = useCallback(
+    (value: VisitorStatsPayload | null) => {
+      if (value !== null) {
+        setVisitorStats(value)
+        setSourceStates((current) => ({ ...current, visitor: "ready" }))
+        if (isPrefetchFresh(initialData.visitorStats.generatedAt)) return
+      }
+      void loadSourceQuiet<VisitorStatsPayload>(
+        "visitor",
+        "/api/admin/visitor-stats?range=7",
+        setVisitorStats,
+        setSourceStates,
+        unmountedRef
+      )
+    },
+    [initialData.visitorStats.generatedAt]
+  )
+  const seedChatbotStats = useCallback(
+    (value: ChatbotStatsPayload | null) => {
+      // 마운트 이펙트·retrySource("chatbot")과 같은 오늘-6일 산식(localDateOnly).
+      const chatbotFrom = new Date()
+      chatbotFrom.setDate(chatbotFrom.getDate() - 6)
+      const url = `/api/admin/chatbot/stats?from=${localDateOnly(chatbotFrom)}`
+      if (value !== null) {
+        setChatbotStats(value)
+        setSourceStates((current) => ({ ...current, chatbot: "ready" }))
+        if (isPrefetchFresh(initialData.chatbotStats.generatedAt)) return
+      }
+      void loadSourceQuiet<ChatbotStatsPayload>("chatbot", url, setChatbotStats, setSourceStates, unmountedRef)
+    },
+    [initialData.chatbotStats.generatedAt]
+  )
+  const seedBranchSummary = useCallback(
+    (value: BranchSummaryPayload | null) => {
+      if (value !== null) {
+        setBranchSummary(value)
+        setSourceStates((current) => ({ ...current, branch: "ready" }))
+        if (isPrefetchFresh(initialData.branchSummary.generatedAt)) return
+      }
+      void loadSourceQuiet<BranchSummaryPayload>(
+        "branch",
+        "/api/admin/branch/summary?team=ALL&period=Y",
+        setBranchSummary,
+        setSourceStates,
+        unmountedRef
+      )
+    },
+    [initialData.branchSummary.generatedAt]
+  )
+  const seedOsSummary = useCallback(
+    (value: OsSummaryPayload | null) => {
+      if (value !== null) {
+        setOsSummary(value)
+        setSourceStates((current) => ({ ...current, os: "ready" }))
+        if (isPrefetchFresh(initialData.osSummary.generatedAt)) return
+      }
+      void loadSourceQuiet<OsSummaryPayload>(
+        "os",
+        "/api/admin/os-summary?contract=v3",
+        setOsSummary,
+        setSourceStates,
+        unmountedRef
+      )
+    },
+    [initialData.osSummary.generatedAt]
+  )
+  const seedLeadActionKpis = useCallback(
+    (value: LeadActionKpisPayload | null) => {
+      if (value !== null) {
+        setLeadActionKpis(value)
+        setSourceStates((current) => ({ ...current, leadActions: "ready" }))
+        if (isPrefetchFresh(initialData.leadActionKpis.generatedAt)) return
+      }
+      void loadSourceQuiet<{ leads: LeadActionKpisPayload }>(
+        "leadActions",
+        "/api/admin/crm/action-kpis",
+        (data) => setLeadActionKpis(data.leads),
+        setSourceStates,
+        unmountedRef
+      )
+    },
+    [initialData.leadActionKpis.generatedAt]
+  )
+
   useEffect(() => {
     let cancelled = false
     const fresh = refreshKey > 0
 
-    const loadSource = async <T,>(
-      key: OverviewSourceKey,
-      url: string,
-      apply: (data: T) => void
-    ) => {
-      const data = await fetchJson<T>(url, { fresh })
-      if (cancelled) return
-      if (data === null) {
-        setSourceStates((current) => ({ ...current, [key]: "error" }))
-        return
-      }
-      apply(data)
-      setSourceStates((current) => ({ ...current, [key]: "ready" }))
-    }
-
-    // 화면에 스켈레톤 없이 바로 보여줄 시드 — "첫 마운트에 initialData가 있었는가"만 본다
-    // (신선도 무관). 재시도(refreshKey↑)는 오늘과 동일하게 EMPTY — "다시 시도"를 눌렀는데
-    // sourceStates가 곧장 ready로 되돌아가면 버튼이 거짓말이 된다.
-    const seedForDisplay = refreshKey === 0 ? initialDataRef.current : EMPTY_PREFETCH
-    // 서버가 채워 준 소스의 페치를 건너뛸지는 신선도까지 함께 본다(T3). staleTimes.dynamic
-    // (180초)로 클라이언트 라우터 캐시가 예전 RSC 응답을 재사용할 수 있어, refreshKey === 0
-    // (첫 마운트)이라도 initialData가 최대 180초 전 값일 수 있다 —
-    // shouldUsePrefetchedSource(lib/admin/overview/insights.ts)가 generatedAt까지 함께
-    // 본다. 신선하지 않으면 화면은 여전히 seedForDisplay로 즉시 그리되(스켈레톤 없음),
-    // 아래 소스별 페치는 전부 정상 수행돼 최신 여부를 SWR 캐시/네트워크가 결정한다.
-    const prefetched = shouldUsePrefetchedSource(refreshKey, initialDataRef.current.generatedAt)
-      ? initialDataRef.current
-      : EMPTY_PREFETCH
-
     const load = async () => {
       setLoading(true)
-      setSourceStates(seededSourceStates(seedForDisplay))
-
-      // Instagram은 외부 Meta API라 느리거나 미설정일 수 있으므로
-      // 핵심 대시보드 로딩을 막지 않도록 분리해서 로드한다.
-      void fetchJson<InstagramOverviewDashboard>(
-        "/api/admin/meta/instagram?datePreset=last_30d&limit=25",
-        { fresh }
-      ).then((instagramData) => {
-        if (!cancelled) setInstagramDashboard(instagramData ?? null)
-      })
-
-      // 운영 OS 요약 스트립도 외부 시트/CRM 합성이라 느릴 수 있으므로
-      // 핵심 대시보드와 분리해 비차단으로 로드한다. (읽기 전용)
-      void loadSource<BranchSummaryPayload>(
-        "branch",
-        "/api/admin/branch/summary?team=ALL&period=Y",
-        setBranchSummary
-      )
-      if (!prefetched.leadActionKpis) {
-        void loadSource<{ leads: LeadActionKpisPayload }>(
+      // 재시도("전체 다시 시도", refreshKey>0)만 여섯 소스를 강제로 다시 조회한다 — 최초
+      // 마운트(refreshKey===0)는 위 PrefetchSourceBridge 6개가 각자 독립적으로 담당하므로
+      // 여기서 손대지 않는다(이미 loading으로 시작했거나 브리지가 이미 ready로 올렸다).
+      if (fresh) {
+        setSourceStates(INITIAL_SOURCE_STATES)
+        void loadSourceQuiet<BranchSummaryPayload>(
+          "branch",
+          "/api/admin/branch/summary?team=ALL&period=Y",
+          setBranchSummary,
+          setSourceStates,
+          unmountedRef,
+          true
+        )
+        void loadSourceQuiet<{ leads: LeadActionKpisPayload }>(
           "leadActions",
           "/api/admin/crm/action-kpis",
-          (data) => setLeadActionKpis(data.leads)
+          (data) => setLeadActionKpis(data.leads),
+          setSourceStates,
+          unmountedRef,
+          true
+        )
+        void loadSourceQuiet<OsSummaryPayload>(
+          "os",
+          "/api/admin/os-summary?contract=v3",
+          setOsSummary,
+          setSourceStates,
+          unmountedRef,
+          true
+        )
+        void loadSourceQuiet<VisitorStatsPayload>(
+          "visitor",
+          "/api/admin/visitor-stats?range=7",
+          setVisitorStats,
+          setSourceStates,
+          unmountedRef,
+          true
+        )
+        const chatbotFrom = new Date()
+        chatbotFrom.setDate(chatbotFrom.getDate() - 6)
+        void loadSourceQuiet<ChatbotStatsPayload>(
+          "chatbot",
+          `/api/admin/chatbot/stats?from=${localDateOnly(chatbotFrom)}`,
+          setChatbotStats,
+          setSourceStates,
+          unmountedRef,
+          true
         )
       }
-      // v3는 소스별 health와 current/actionable 링크 확정률을 포함한다. 쿼리 버전으로
-      // 구 클라이언트 session cache(raw 링크 이력 기반)를 분리한다.
-      if (!prefetched.osSummary) {
-        void loadSource<OsSummaryPayload>("os", "/api/admin/os-summary?contract=v3", setOsSummary)
-      }
-      if (!prefetched.visitorStats) {
-        void loadSource<VisitorStatsPayload>("visitor", "/api/admin/visitor-stats?range=7", setVisitorStats)
-      }
-      // 챗봇 문의 요약 — 무파라미터 stats URL(사이드바 warmup 캐시 키)은 기본 30일 창이라
-      // 인바운드 스트립의 7일 창과 어긋난다 → from을 명시해 별도 키로 조회한다(오늘 포함 7일).
-      const chatbotFrom = new Date()
-      chatbotFrom.setDate(chatbotFrom.getDate() - 6)
-      void loadSource<ChatbotStatsPayload>(
-        "chatbot",
-        `/api/admin/chatbot/stats?from=${localDateOnly(chatbotFrom)}`,
-        setChatbotStats
-      )
 
-      // 대시보드는 앞으로 7일치 일정만 쓰므로 전체 일정 대신 해당 월만 요청한다.
+      // Instagram은 외부 Meta API 합성이라(자체 300초 서버 캐시가 있어도, lib/meta/marketing.ts)
+      // "채널 지표" 맨 아래 카드 하나에만 쓰는 뷰포트 밖 위젯이다 — 마운트 즉시 다른 13개 소스와
+      // 같은 틱에 쏘면 콜드 순간 동시 요청 수만 늘린다(감사 P2, 첫 화면 팬아웃 축소).
+      // requestIdleCallback으로 메인 스레드가 비는 시점까지만 미루고(최대 2초, Safari는
+      // requestIdleCallback이 없어 setTimeout으로 대체), 핵심 대시보드 완성 시점은 건드리지
+      // 않는다 — 실패해도 이 위젯 하나만 "연결 필요"로 격리된다(다른 카드는 영향 없음).
+      scheduleIdle(() => {
+        if (cancelled) return
+        void fetchJson<InstagramOverviewDashboard>(
+          "/api/admin/meta/instagram?datePreset=last_30d&limit=25",
+          { fresh }
+        ).then((instagramData) => {
+          if (!cancelled) setInstagramDashboard(instagramData ?? null)
+        })
+      })
+
+      // branch/leadActions/os/visitor/chatbot의 최초 마운트 조회는 위 fresh 분기(재시도
+      // 전용) 또는 각 PrefetchSourceBridge의 seedX 콜백이 이미 전담했다 — 예전엔 여기서
+      // "!prefetched.X"로 한 번 더 걸러 클라이언트 폴백을 틀지 말지 판단했지만, 그 판단이
+      // 이제 seedX 콜백 내부(isPrefetchFresh 체크)로 옮겨갔다. 대시보드는 앞으로 7일치
+      // 일정만 쓰므로 전체 일정 대신 해당 월만 요청한다.
       const now = new Date()
       const weekLater = new Date(now)
       weekLater.setDate(now.getDate() + 7)
@@ -470,9 +649,12 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
         bugsData,
         patchNotesData,
       ] = await Promise.all([
-        prefetched.leadOverview
-          ? Promise.resolve<AdminLeadsOverviewResponse | null>(null)
-          : fetchJson<AdminLeadsOverviewResponse>("/api/admin/leads?scope=overview", { fresh }),
+        // leadOverview는 최초 마운트(fresh=false)에는 seedLeadOverview가 전담한다(레인이
+        // null이면 그쪽에서 이미 자기 몫의 클라이언트 폴백을 튼다) — 여기서 또 부르면
+        // 이중 페치가 된다. 재시도(fresh=true)에서만 이 Promise.all의 일원으로 강제 조회한다.
+        fresh
+          ? fetchJson<AdminLeadsOverviewResponse>("/api/admin/leads?scope=overview", { fresh })
+          : Promise.resolve<AdminLeadsOverviewResponse | null>(null),
         fetchJson<{ subscribers: unknown[]; total: number }>("/api/admin/subscribers?count=1", { fresh }),
         fetchJson<{ overview: AdminBlogOverviewSummary }>("/api/admin/blog?scope=overview", { fresh }),
         // summary 스코프 — 캠페인 HTML 본문(body)은 이 화면에서 읽지 않는다(T5-B). URL은
@@ -499,7 +681,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
 
       if (cancelled) return
 
-      if (!prefetched.leadOverview) {
+      if (fresh) {
         setLeadOverview(leadsData?.overview ?? null)
         setSourceStates((current) => ({ ...current, leads: leadsData?.overview ? "ready" : "error" }))
       }
@@ -675,8 +857,99 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
   const osSourceError = (key: OsSummarySourceKey) => osSummary?.sources?.[key]?.error ?? undefined
   const retryOverview = () => setRefreshKey((current) => current + 1)
 
+  // 위젯 단위 재시도 — retryOverview("전체 다시 시도")는 14개 소스를 전부 force로 다시 부르는
+  // 넓은 폴백으로 상단 배너에만 남겨 두고, 개별 KPI 카드의 "다시 시도"는 실패한 소스 하나만
+  // 다시 부른다(감사 P2 — 지금까지는 카드 하나가 실패해도 무관한 나머지 소스까지 함께 강제
+  // 재요청했다). os 서브타일(리뉴얼·매칭·HW·블로그·행사) 다섯 개는 /api/admin/os-summary
+  // 응답 하나의 필드라 네트워크 단위로 더 쪼갤 수 없다 — 그 다섯 카드는 os 전체를 다시
+  // 부르되, leads·visitor·chatbot·branch·leadActions 등 무관한 키는 건드리지 않는 것이
+  // 이 API 형태에서 가능한 최소 단위다.
+  const retrySource = useCallback((key: OverviewSourceKey) => {
+    setSourceStates((current) => ({ ...current, [key]: "loading" }))
+    switch (key) {
+      case "leads":
+        void fetchJson<AdminLeadsOverviewResponse>("/api/admin/leads?scope=overview", { fresh: true }).then(
+          (data) => {
+            setLeadOverview(data?.overview ?? null)
+            setSourceStates((current) => ({ ...current, leads: data?.overview ? "ready" : "error" }))
+          }
+        )
+        return
+      case "visitor":
+        void fetchJson<VisitorStatsPayload>("/api/admin/visitor-stats?range=7", { fresh: true }).then((data) => {
+          setVisitorStats(data)
+          setSourceStates((current) => ({ ...current, visitor: data ? "ready" : "error" }))
+        })
+        return
+      case "chatbot": {
+        // 마운트 이펙트의 챗봇 fetch와 같은 오늘-6일 산식(localDateOnly) — 다른 값을 쓰면
+        // 재시도가 다른 캐시 슬롯을 데워 인바운드 스트립과 어긋난 숫자를 보여줄 수 있다.
+        const chatbotFrom = new Date()
+        chatbotFrom.setDate(chatbotFrom.getDate() - 6)
+        void fetchJson<ChatbotStatsPayload>(
+          `/api/admin/chatbot/stats?from=${localDateOnly(chatbotFrom)}`,
+          { fresh: true }
+        ).then((data) => {
+          setChatbotStats(data)
+          setSourceStates((current) => ({ ...current, chatbot: data ? "ready" : "error" }))
+        })
+        return
+      }
+      case "branch":
+        void fetchJson<BranchSummaryPayload>("/api/admin/branch/summary?team=ALL&period=Y", { fresh: true }).then(
+          (data) => {
+            setBranchSummary(data)
+            setSourceStates((current) => ({ ...current, branch: data ? "ready" : "error" }))
+          }
+        )
+        return
+      case "leadActions":
+        void fetchJson<{ leads: LeadActionKpisPayload }>("/api/admin/crm/action-kpis", { fresh: true }).then(
+          (data) => {
+            setLeadActionKpis(data?.leads ?? null)
+            setSourceStates((current) => ({ ...current, leadActions: data ? "ready" : "error" }))
+          }
+        )
+        return
+      case "os":
+        void fetchJson<OsSummaryPayload>("/api/admin/os-summary?contract=v3", { fresh: true }).then((data) => {
+          setOsSummary(data)
+          setSourceStates((current) => ({ ...current, os: data ? "ready" : "error" }))
+        })
+        return
+    }
+  }, [])
+
   return (
     <div className="relative overflow-hidden px-4 pt-6 pb-16 sm:px-6 sm:pt-8 lg:px-8 lg:pb-20 [&_a]:min-h-11 [&_button]:min-h-11 [&_a]:focus-visible:outline-none [&_a]:focus-visible:ring-2 [&_a]:focus-visible:ring-[#084734] [&_a]:focus-visible:ring-offset-2 [&_button]:focus-visible:outline-none [&_button]:focus-visible:ring-2 [&_button]:focus-visible:ring-[#084734] [&_button]:focus-visible:ring-offset-2">
+      {/* 소스별 독립 Suspense 경계 — 서버가 openPrefetchLane으로 연 6개 레인을 각각
+          형제 <Suspense>로 감싼다(화면 전체를 하나로 감싸면 가장 느린 소스가 전체를 막아
+          스트리밍 이점이 사라진다 — 이번 작업의 핵심 요건). 각 다리(PrefetchSourceBridge)는
+          화면에 아무것도 그리지 않고 결과를 위 seedX 콜백을 통해 top-level state로 옮기기만
+          한다. refreshKey>0(재시도) 이후에는 렌더하지 않는다 — 그 뒤로는 위 giant effect가
+          fresh=true 분기로 직접 클라이언트에서 강제 재조회한다. */}
+      {refreshKey === 0 ? (
+        <>
+          <Suspense fallback={null}>
+            <PrefetchSourceBridge promise={initialData.leadOverview.promise} onSettled={seedLeadOverview} />
+          </Suspense>
+          <Suspense fallback={null}>
+            <PrefetchSourceBridge promise={initialData.visitorStats.promise} onSettled={seedVisitorStats} />
+          </Suspense>
+          <Suspense fallback={null}>
+            <PrefetchSourceBridge promise={initialData.chatbotStats.promise} onSettled={seedChatbotStats} />
+          </Suspense>
+          <Suspense fallback={null}>
+            <PrefetchSourceBridge promise={initialData.branchSummary.promise} onSettled={seedBranchSummary} />
+          </Suspense>
+          <Suspense fallback={null}>
+            <PrefetchSourceBridge promise={initialData.osSummary.promise} onSettled={seedOsSummary} />
+          </Suspense>
+          <Suspense fallback={null}>
+            <PrefetchSourceBridge promise={initialData.leadActionKpis.promise} onSettled={seedLeadActionKpis} />
+          </Suspense>
+        </>
+      ) : null}
       {/* 헤더 — eyebrow·소개문은 제거(사이드바가 위치를, 섹션이 내용을 이미 말한다).
           확보한 공간은 숫자에게 주고, 우측은 상시 바로가기만 남긴다. */}
       <div className="relative mb-6 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -751,7 +1024,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
                 href="/admin/traffic"
               />
             ) : sourceStates.visitor === "error" ? (
-              <KpiUnavailable label="방문 지표" onRetry={retryOverview} />
+              <KpiUnavailable label="방문 지표" onRetry={() => retrySource("visitor")} />
             ) : (
               <KpiSkeleton />
             )}
@@ -760,7 +1033,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
             {sourceStates.leads === "loading" ? (
               <KpiSkeleton />
             ) : sourceStates.leads === "error" ? (
-              <KpiUnavailable label="문의 지표" onRetry={retryOverview} />
+              <KpiUnavailable label="문의 지표" onRetry={() => retrySource("leads")} />
             ) : (
               <StatCard
                 icon={<Inbox className="h-4 w-4" />}
@@ -792,7 +1065,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
                 href="/admin/chatbot"
               />
             ) : sourceStates.chatbot === "error" ? (
-              <KpiUnavailable label="챗봇 지표" onRetry={retryOverview} />
+              <KpiUnavailable label="챗봇 지표" onRetry={() => retrySource("chatbot")} />
             ) : (
               <KpiSkeleton />
             )}
@@ -829,7 +1102,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
                 href="/admin/crm/customers/leads?filter=unresponded_24h&focus=risk"
               />
             ) : sourceStates.leadActions === "error" && sourceStates.leads === "error" ? (
-              <KpiUnavailable label="CRM 후속 지표" onRetry={retryOverview} />
+              <KpiUnavailable label="CRM 후속 지표" onRetry={() => retrySource("leadActions")} />
             ) : (
               <KpiSkeleton />
             )}
@@ -843,10 +1116,14 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
                 sub="예상 파이프 ÷ 잔여목표 (≥2.0x 권장)"
                 tone={pipelineCoverage != null && pipelineCoverage < 2.0 ? "danger" : "neutral"}
                 valueSize="lg"
-                href="/admin/branch/ledger"
+                // 이 카드는 /api/admin/branch/summary?period=Y(연간) 값으로 계산된다 — 쿼리 없이
+                // 착지하면 장부 페이지 기본값(period=Q)이 열려 방금 본 숫자와 다른 화면이 뜬다
+                // (components/admin/branch/ledger/workbench-shared.tsx의 period 기본값 확인,
+                // 그 파일은 이 작업 소유 밖이라 읽기만 했다).
+                href="/admin/branch/ledger?period=Y"
               />
             ) : sourceStates.branch === "error" ? (
-              <KpiUnavailable label="매출 지표" onRetry={retryOverview} />
+              <KpiUnavailable label="매출 지표" onRetry={() => retrySource("branch")} />
             ) : (
               <KpiSkeleton />
             )}
@@ -864,7 +1141,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
                 href="/admin/crm/customers/accounts?expiring=1"
               />
             ) : osSourceState("renewal") === "error" ? (
-              <KpiUnavailable label="리뉴얼 지표" detail={osSourceError("renewal")} onRetry={retryOverview} />
+              <KpiUnavailable label="리뉴얼 지표" detail={osSourceError("renewal")} onRetry={() => retrySource("os")} />
             ) : (
               <KpiSkeleton />
             )}
@@ -885,7 +1162,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
                 href="/admin/crm/matching"
               />
             ) : osSourceState("matching") === "error" ? (
-              <KpiUnavailable label="매칭 지표" detail={osSourceError("matching")} onRetry={retryOverview} />
+              <KpiUnavailable label="매칭 지표" detail={osSourceError("matching")} onRetry={() => retrySource("os")} />
             ) : (
               <KpiSkeleton />
             )}
@@ -907,7 +1184,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
                 href="/admin/hardware"
               />
             ) : osSourceState("hw") === "error" ? (
-              <KpiUnavailable label="하드웨어 지표" detail={osSourceError("hw")} onRetry={retryOverview} />
+              <KpiUnavailable label="하드웨어 지표" detail={osSourceError("hw")} onRetry={() => retrySource("os")} />
             ) : (
               <KpiSkeleton />
             )}
@@ -927,7 +1204,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
                   <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
                 </Link>
               ) : (
-                <OsDetailUnavailable label="블로그" detail={osSourceError("content")} onRetry={retryOverview} />
+                <OsDetailUnavailable label="블로그" detail={osSourceError("content")} onRetry={() => retrySource("os")} />
               )}
               {osSourceState("events") === "ready" && osSummary?.events.count != null ? (
                 <Link
@@ -938,7 +1215,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
                   <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
                 </Link>
               ) : (
-                <OsDetailUnavailable label="행사" detail={osSourceError("events")} onRetry={retryOverview} />
+                <OsDetailUnavailable label="행사" detail={osSourceError("events")} onRetry={() => retrySource("os")} />
               )}
             </div>
           </div>
@@ -1026,7 +1303,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
           <h2 id="overview-flow-heading" className="text-[14px] font-semibold text-[#111110]">흐름 지표</h2>
         </div>
         {sourceStates.leads === "error" ? (
-          <KpiUnavailable label="리드 흐름" onRetry={retryOverview} />
+          <KpiUnavailable label="리드 흐름" onRetry={() => retrySource("leads")} />
         ) : sourceStates.leads === "loading" ? (
           <div className={KPI_STRIP_CLASS}>
             {Array.from({ length: 5 }).map((_, i) => (
@@ -1081,7 +1358,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
                   href="/admin/traffic"
                 />
               ) : sourceStates.visitor === "error" ? (
-                <KpiUnavailable label="방문 지표" onRetry={retryOverview} />
+                <KpiUnavailable label="방문 지표" onRetry={() => retrySource("visitor")} />
               ) : (
                 <KpiSkeleton />
               )}
@@ -1094,10 +1371,13 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
                   value={`${Math.round(branchSummary.revenue.pacing_pct)}%`}
                   sub={`확정 ${fmtCny(branchSummary.revenue.confirmed)} / 목표 ${fmtCny(branchSummary.revenue.goal)} · CNY`}
                   sparkline={sparkRevenue.length ? <Sparkline data={sparkRevenue} /> : undefined}
-                  href="/admin/branch/ledger"
+                  // period=Y 없이 착지하면 장부 페이지 기본값(period=Q)이 열려 방금 본 연간
+                  // 페이싱%과 다른 숫자가 뜬다 — 이 카드가 소비하는 branchSummary 자체가
+                  // ?period=Y 호출 결과다.
+                  href="/admin/branch/ledger?period=Y"
                 />
               ) : sourceStates.branch === "error" ? (
-                <KpiUnavailable label="매출 지표" onRetry={retryOverview} />
+                <KpiUnavailable label="매출 지표" onRetry={() => retrySource("branch")} />
               ) : (
                 <KpiSkeleton />
               )}
@@ -1145,7 +1425,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
             <Skeleton className="h-[180px]" />
           ) : sourceStates.leads === "error" ? (
             <div className="h-[180px]">
-              <KpiUnavailable label="문의 추이" onRetry={retryOverview} />
+              <KpiUnavailable label="문의 추이" onRetry={() => retrySource("leads")} />
             </div>
           ) : chartTotal === 0 ? (
             <div className="flex h-[180px] flex-col items-center justify-center rounded-xl border border-dashed border-[#ecece8] bg-[#fafaf8]">
@@ -1170,7 +1450,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
             <Skeleton className="h-[180px]" />
           ) : sourceStates.leads === "error" ? (
             <div className="h-[180px]">
-              <KpiUnavailable label="유입 경로" onRetry={retryOverview} />
+              <KpiUnavailable label="유입 경로" onRetry={() => retrySource("leads")} />
             </div>
           ) : pieData.length === 0 ? (
             <div className="flex items-center justify-center h-[180px] text-[12px] text-[#1a1a1a]/30">데이터 없음</div>
@@ -1215,7 +1495,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
           </div>
         ) : sourceStates.leads === "error" ? (
           <div className="p-4 sm:p-6">
-            <KpiUnavailable label="세일즈 퍼널" onRetry={retryOverview} />
+            <KpiUnavailable label="세일즈 퍼널" onRetry={() => retrySource("leads")} />
           </div>
         ) : recentLeads.length === 0 ? (
             <div className="p-4 sm:p-6">

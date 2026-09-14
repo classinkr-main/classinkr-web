@@ -134,6 +134,9 @@ async function loadRepository(options?: {
   portalCustomers?: ReturnType<typeof portalCustomer>[]
   convertedLinks?: Record<string, string>
   neoLinkedLeadIds?: string[]
+  /** 리드id → NEO 계정id — listConfirmedLeadNeoAccountLinks(벌크 지도) 모의. 없으면 빈 지도. */
+  neoAccountLinks?: Record<string, string>
+  neoAccountLinkFail?: boolean
   firstResponses?: Record<string, string>
   recentContacts?: Record<string, string>
   staleExternalCrm?: boolean
@@ -187,6 +190,11 @@ async function loadRepository(options?: {
     listConfirmedLeadNeoLinkLeadIds: options?.neoLinksFail
       ? vi.fn().mockRejectedValue(new Error("neo links unavailable"))
       : vi.fn().mockResolvedValue(new Set(options?.neoLinkedLeadIds ?? [])),
+    // 벌크 지도 한 번으로 받는다 — 배지 리드마다 단건 조회하면 동시 쿼리 폭주가 된다
+    // (2026-09-04 프로덕션 REST 504 113건의 조건). 실제 구현과 같은 신호로 모의한다.
+    listConfirmedLeadNeoAccountLinks: options?.neoAccountLinkFail
+      ? vi.fn().mockRejectedValue(new Error("neo account link unavailable"))
+      : vi.fn().mockResolvedValue(new Map(Object.entries(options?.neoAccountLinks ?? {}))),
   }))
   vi.doMock("@/lib/repositories/crm-events", () => ({
     crmContactTargetKey: (targetType: string, targetId: string) => `${targetType}:${targetId}`,
@@ -430,6 +438,87 @@ describe("getCrmUnifiedCustomers", () => {
 
     const result = await getCrmUnifiedCustomers({ now: NOW })
     expect(result.rows.map((row) => row.key)).toContain("lead:converted-lead")
+  })
+
+  // ── 감사 #2 회귀: 리드→NEO 계정 확정 링크 폴드 ────────────────────────────
+  it("collapses a lead confirmed-linked to a NEO account into that neo_account row", async () => {
+    const { getCrmUnifiedCustomers } = await loadRepository({
+      leads: [
+        lead({ id: "registered-lead", status: "contacted", assigned_to: "김담당" }),
+        lead({ id: "other-lead" }),
+      ],
+      accounts: [neoCustomer({ accountId: "acc-1", ownerName: "박담당" })],
+      // 배지 집합(neoLinkedLeadIds)엔 있지만 실제 계정 링크는 벌크 지도로 별도 확인.
+      neoLinkedLeadIds: ["registered-lead"],
+      neoAccountLinks: { "registered-lead": "acc-1" },
+    })
+
+    const result = await getCrmUnifiedCustomers({ now: NOW })
+    const keys = result.rows.map((row) => row.key)
+
+    expect(keys).not.toContain("lead:registered-lead")
+    expect(keys).toContain("lead:other-lead")
+    const neoRow = result.rows.find((row) => row.key === "neo:acc-1")
+    // 계정에 이미 담당자가 있으면 승계하지 않는다(customer 폴드와 같은 우선순위) — 대신
+    // 리드의 담당 키·연락처는 합류한다.
+    expect(neoRow?.ownerName).toBe("박담당")
+    expect(neoRow?.ownerKeys).toContain("김담당")
+    // 중복 폴드 없음 — 유일 키.
+    expect(new Set(keys).size).toBe(keys.length)
+  })
+
+  it("keeps the lead row separate when the NEO link is only a badge (external_lead, not external_account)", async () => {
+    // neoLinkedLeadIds엔 있어도 벌크 지도(target_type=external_account만)가
+    // null을 주는 흔한 경우 — external_lead 링크는 계정 폴드 대상이 아니다.
+    const { getCrmUnifiedCustomers } = await loadRepository({
+      leads: [lead({ id: "badge-only-lead" })],
+      accounts: [neoCustomer({ accountId: "acc-1" })],
+      neoLinkedLeadIds: ["badge-only-lead"],
+    })
+
+    const result = await getCrmUnifiedCustomers({ now: NOW })
+    const keys = result.rows.map((row) => row.key)
+
+    expect(keys).toContain("lead:badge-only-lead")
+    expect(keys).toContain("neo:acc-1")
+    expect(result.rows.find((row) => row.key === "lead:badge-only-lead")?.crmRegistered).toBe(true)
+  })
+
+  it("keeps duplicate rows instead of dropping leads when the NEO account link lookup fails", async () => {
+    const { getCrmUnifiedCustomers } = await loadRepository({
+      leads: [lead({ id: "registered-lead" })],
+      accounts: [neoCustomer({ accountId: "acc-1" })],
+      neoLinkedLeadIds: ["registered-lead"],
+      neoAccountLinkFail: true,
+    })
+
+    const result = await getCrmUnifiedCustomers({ now: NOW })
+    expect(new Set(result.rows.map((row) => row.key))).toEqual(
+      new Set(["lead:registered-lead", "neo:acc-1"])
+    )
+    expect(result.sources.warnings.join(" ")).toContain("계정 등록 링크")
+  })
+
+  // ── 감사 #2 회귀: 행 유일성 — 폴드가 몇 겹으로 겹쳐도 같은 고객이 두 번 나오지 않는다.
+  it("never returns duplicate row keys across lead/customer/neo-account folds", async () => {
+    const { getCrmUnifiedCustomers } = await loadRepository({
+      leads: [
+        lead({ id: "to-customer", status: "converted" }),
+        lead({ id: "to-neo" }),
+        lead({ id: "plain-lead" }),
+      ],
+      accounts: [neoCustomer({ accountId: "acc-1" }), neoCustomer({ accountId: "acc-2" })],
+      portalCustomers: [portalCustomer({ id: "cust-1" })],
+      convertedLinks: { "to-customer": "cust-1" },
+      neoLinkedLeadIds: ["to-neo"],
+      neoAccountLinks: { "to-neo": "acc-1" },
+    })
+
+    const result = await getCrmUnifiedCustomers({ now: NOW })
+    const keys = result.rows.map((row) => row.key)
+
+    expect(new Set(keys).size).toBe(keys.length)
+    expect(new Set(keys)).toEqual(new Set(["customer:cust-1", "neo:acc-1", "neo:acc-2", "lead:plain-lead"]))
   })
 
   it("degrades gracefully when the portal customer source fails", async () => {

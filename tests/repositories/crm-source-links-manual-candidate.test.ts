@@ -4,6 +4,12 @@
 // (3) 소스 시스템을 안 넘겨도 키 모양(uuid → 리드, 숫자 → Neo CRM, rev: → REV)으로 알아낸다.
 import { afterEach, describe, expect, it, vi } from "vitest"
 
+// 저장소가 링크 변경 뒤 account-master Data Cache 태그를 무효화한다(next/cache 는 요청 컨텍스트 밖에서 throw).
+vi.mock("next/cache", () => ({
+  revalidateTag: vi.fn(),
+  unstable_cache: (fn: (...args: unknown[]) => unknown) => fn,
+}))
+
 type Row = Record<string, unknown>
 
 interface Recorded {

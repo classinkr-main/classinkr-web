@@ -8,12 +8,13 @@ import {
   type CompassDuplicateReport,
 } from "@/lib/compass/overlay"
 import {
-  getLeads,
+  getBoardLeads,
   getDashboardLeads,
   getCampaignLeads,
   getMarketingLeads,
   findLeadsByContacts,
   saveLead,
+  LeadDuplicateError,
   type LeadRecord,
 } from "@/lib/repositories/leads"
 
@@ -27,7 +28,11 @@ export async function GET(req: NextRequest) {
     // - dashboard: 기존 overview/analytics 소비자용 전량 계약 — 하위호환을 위해 유지
     // - campaigns: 행사↔리드 귀속용(id·source·status·notes·created_at) — 귀속 해시가 notes를 요구한다
     // - marketing: 캠페인 허브 "광고 리드"용(트래킹 축·연락처·전환 상태) — campaigns의 상위집합
-    // - 기본(무스코프): 전체 컬럼 — LeadsBoard(검색이 utm_* 필요)는 불변
+    // - 기본(무스코프): LeadsBoardClient 전용. 감사 2026-09-07 §5(279.6KB/전 컬럼)에 대응해
+    //   getLeads()의 `*` 대신 getBoardLeads()로 안 쓰는 두 트래킹 컬럼만 덜어낸다(행은 그대로 —
+    //   이유는 lib/repositories/leads.ts의 getBoardLeads 주석 참조). 이 경로의 응답 모양
+    //   ({ leads: LeadRecord[] })은 그대로이므로 scope= 소비자·AdminSidebar의 캐시 예열
+    //   키("/api/admin/leads" 그대로)는 영향받지 않는다.
     const scope = new URL(req.url).searchParams.get("scope")
     if (scope === "overview") {
       return adminCachedJson({ overview: await getCachedOverviewLeadSummary() })
@@ -39,7 +44,7 @@ export async function GET(req: NextRequest) {
         ? await getCampaignLeads()
         : scope === "marketing"
           ? await getMarketingLeads()
-          : await getLeads()
+          : await getBoardLeads()
     return adminCachedJson({ leads })
   } catch (error) {
     console.error("[GET /api/admin/leads] error:", error)
@@ -231,12 +236,21 @@ export async function POST(req: NextRequest) {
       .filter((result): result is PromiseFulfilledResult<LeadRecord> => result.status === "fulfilled")
       .map((result) => result.value)
     const created = createdLeads.length
+    // 감사 §7 — 조회 후 삽입 사이의 동시 등록 레이스는 사전 중복검사(findLeadsByContacts)를
+    // 통과한 뒤에도 일어날 수 있다. DB 유니크 제약(마이그레이션 적용 후)이 막아 주면 saveLead가
+    // LeadDuplicateError로 구분해 던지므로, 그 건은 failed가 아니라 duplicates로 센다 —
+    // 그래야 "저장 실패"가 아니라 "이미 등록됨"으로 정확히 보고된다.
+    const raceDuplicates = results.filter(
+      (result): result is PromiseRejectedResult =>
+        result.status === "rejected" && result.reason instanceof LeadDuplicateError
+    ).length
+    const failed = results.length - created - raceDuplicates
     return NextResponse.json({
       created,
-      failed: results.length - created,
+      failed,
       total: rawList.length,
       invalid,
-      duplicates,
+      duplicates: duplicates + raceDuplicates,
       ids: createdLeads.map((lead) => lead.id),
       firstId: createdLeads[0]?.id ?? null,
       // Compass 교차 중복 — 등록은 이미 됐고, 화면은 "마케팅팀이 이미 콜 중"을 알린다.

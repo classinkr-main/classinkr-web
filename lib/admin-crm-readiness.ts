@@ -292,6 +292,24 @@ async function computeAdminCrmReadinessReport(): Promise<CrmReadinessReport> {
 
 export const ADMIN_CRM_READINESS_CACHE_TAG = "admin-crm-readiness"
 
+// 2026-09-10 3라운드(§3.4) 조사 결과 — 이 태그를 무효화해야 할 앱 내부 쓰기 경로는 없다.
+// checks 구성 요소를 전부 추적한 결론:
+//  - syncSchema/writeSchema/schemaContract/sourceLinks/sourcePriorities/matchAliases/
+//    queryCatalog/branchRev 8종은 전부 "테이블·컬럼이 조회 가능한가"만 보는 스키마 shape
+//    probe다(select(...).limit(1)). 바뀌려면 마이그레이션(DDL)이 필요한데, 마이그레이션은
+//    운영자가 Supabase에 직접 적용하지 이 앱의 API 쓰기 경로를 거치지 않는다.
+//  - syncPreflight/writeMetadata는 env 값(프로세스 수명 동안 상수)과 Xiaoshouyi 쪽 라이브
+//    메타데이터 probe다 — 우리 쓰기가 아니라 그쪽 시스템 상태에 달려 있고, 매 계산마다
+//    다시 물어보므로 캐시 무효화로 해결할 문제가 아니다.
+//  - duplicatePreflight(getCachedCrmDuplicatePreflightReport)만 우리 DB 데이터(crm_source_links·
+//    leads·xiaoshouyi 레코드)를 스캔한다. 하지만 이건 이미 자기 태그("crm-duplicate-preflight",
+//    lib/admin-crm-duplicate-preflight.ts)로 독립 캐시돼 있고, 그 태그도 무효화하는 곳이
+//    없다 — 5,000행 표본 스캔이라 "5분 내 결과 의미가 바뀌지 않는다"는 것이 그 파일 자체의
+//    설계 근거다. 이 readiness 캐시가 매번 그 함수를 다시 부르더라도 결과는 최대 300초까지만
+//    묵어 있으므로 여기서 별도로 체이닝할 필요가 없다.
+// 결론: 무효화 배선 없음이 정확한 상태다(readiness는 env·스키마 파생). TTL도 그래서 이전과
+// 같은 60초로 유지한다 — Phase 4 규칙(무효화 없는 엔트리는 TTL을 올리지 않는다)을 그대로 적용.
+//
 // 스키마 shape probe 6종 + preflight 3종을 매 호출 병렬 실행하는 무거운 조립이라 60초 캐시한다.
 // 인자 없이 admin service-role 클라이언트만 쓰고 cookies()/headers()는 읽지 않는다(하위
 // preflight/schema-contract 모듈도 grep으로 확인). env 참조가 있다면 프로세스 수명 동안

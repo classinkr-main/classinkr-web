@@ -84,7 +84,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
   const [taskDue, setTaskDue] = useState("")
   const [dealTitle, setDealTitle] = useState("")
   const [dealStage, setDealStage] = useState<CrmDealStage>("consult")
-  const [dealAmount, setDealAmount] = useState("")
+  const [dealAmount, setDealAmount] = useState<number | null>(null)
   const [activityTab, setActivityTab] = useState<C360ActivityTab>("timeline")
   const [activitySource, setActivitySource] = useState<C360ActivitySource>("all")
   const [eventsExpanded, setEventsExpanded] = useState(false)
@@ -196,7 +196,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
     setTaskDue("")
     setDealTitle("")
     setDealStage("consult")
-    setDealAmount("")
+    setDealAmount(null)
     setActivityTab("timeline")
     setActivitySource("all")
     setEventsExpanded(false)
@@ -289,7 +289,10 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
   const entityId = data?.entityId ?? (customerKey ? customerKey.slice(customerKey.indexOf(":") + 1) : "")
 
   const refetch = useCallback(async () => {
-    if (url) clearAdminRequestCache()
+    // 감사#1: 인자 없는 clearAdminRequestCache()는 GLOBAL_CACHE_SCOPE("*")로 어드민 전역 캐시를
+    // 비운다 — 메모 1건 저장이 하드웨어·장부 등 무관한 탭까지 리로드시키는 원인이었다.
+    // 이 드로어가 실제로 무효화해야 하는 건 지금 열려 있는 고객의 360 캐시뿐이므로 url로 좁힌다.
+    if (url) clearAdminRequestCache(url)
     await load({ force: true, expanded: eventsExpanded })
   }, [load, url, eventsExpanded])
 
@@ -426,12 +429,12 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
           targetType,
           targetId: entityId,
           targetLabel: displayName,
-          expectedAmount: dealAmount ? Number(dealAmount.replace(/[^\d.-]/g, "")) : undefined,
+          expectedAmount: dealAmount ?? undefined,
           assignToMe: true,
         }),
       })
       setDealTitle("")
-      setDealAmount("")
+      setDealAmount(null)
       setDealStage("consult")
       setDealFormOpen(false)
       setSavedMsg("딜을 추가했어요")
@@ -455,6 +458,28 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
         await refetch()
       } catch (err) {
         setError(err instanceof Error ? err.message : "딜 단계 변경에 실패했습니다.")
+      } finally {
+        setActingId(null)
+      }
+    },
+    [refetch]
+  )
+
+  // 감사 2026-09-07 §2 — 생성된 딜의 예상금액을 어떤 화면에서도 못 고치던 결함 수리.
+  // 서버는 이미 지원한다(app/api/admin/crm/deals-lite/[id]/route.ts의 action:"update").
+  // 단계 변경과 같은 actingId(`deal:${dealId}`)를 공유해 같은 딜의 동시 편집을 자연히 직렬화한다.
+  const handleDealAmountChange = useCallback(
+    async (dealId: string, amount: number | null) => {
+      setActingId(`deal:${dealId}`)
+      setError(null)
+      try {
+        await adminFetchJson(`/api/admin/crm/deals-lite/${encodeURIComponent(dealId)}`, {
+          method: "PATCH",
+          body: JSON.stringify({ action: "update", expectedAmount: amount }),
+        })
+        await refetch()
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "딜 예상금액 변경에 실패했습니다.")
       } finally {
         setActingId(null)
       }
@@ -633,7 +658,9 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
 
   const handleAddTag = useCallback(async () => {
     const clean = tagInput.trim()
-    if (!clean || !customerKey) return
+    // url은 customerKey와 함께 나오는 파생값이라 !customerKey 만으로는 TS가 string으로 좁혀
+    // 주지 않는다 — !url도 같이 걸어 아래에서 non-null 단언 없이 clearAdminRequestCache(url)을 쓴다.
+    if (!clean || !customerKey || !url) return
     setTagBusy(true)
     try {
       const result = await adminFetchJson<{ tags: string[] }>(
@@ -643,18 +670,21 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
       setTags(result.tags ?? [])
       setTagInput("")
       // 태그가 360 페이로드에 동승하므로, 캐시를 비워 재오픈 시 편집 전 태그가 되살아나지 않게 한다.
-      clearAdminRequestCache()
+      // 감사#1: 전역 스코프 대신 이 고객의 360 캐시(url)만 좁혀서 지운다 — 다른 탭 캐시는 보존.
+      clearAdminRequestCache(url)
       setSavedMsg("라벨을 추가했어요")
     } catch (err) {
       setError(err instanceof Error ? err.message : "라벨 추가에 실패했습니다.")
     } finally {
       setTagBusy(false)
     }
-  }, [tagInput, customerKey])
+  }, [tagInput, customerKey, url])
 
   const handleRemoveTag = useCallback(
     async (tag: string) => {
-      if (!customerKey) return
+      // url은 customerKey와 함께 나오는 파생값이라 !customerKey 만으로는 TS가 string으로
+      // 좁혀 주지 않는다 — !url도 같이 걸어 non-null 단언 없이 clearAdminRequestCache(url)을 쓴다.
+      if (!customerKey || !url) return
       setTagBusy(true)
       try {
         const result = await adminFetchJson<{ tags: string[] }>(
@@ -663,7 +693,8 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
         )
         setTags(result.tags ?? [])
         // 태그가 360 페이로드에 동승하므로, 캐시를 비워 재오픈 시 편집 전 태그가 되살아나지 않게 한다.
-        clearAdminRequestCache()
+        // 감사#1: 전역 스코프 대신 이 고객의 360 캐시(url)만 좁혀서 지운다 — 다른 탭 캐시는 보존.
+        clearAdminRequestCache(url)
         setSavedMsg("라벨을 지웠어요")
       } catch (err) {
         setError(err instanceof Error ? err.message : "라벨 삭제에 실패했습니다.")
@@ -671,7 +702,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
         setTagBusy(false)
       }
     },
-    [customerKey]
+    [customerKey, url]
   )
 
   // 다가오는 일정 — 기한 있는 열린 할 일 중 오늘 이후만, 가까운 순. (전체 할 일은 아래 목록.)
@@ -1009,7 +1040,10 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                 aria-label="새 고객 라벨"
                 onChange={(event) => setTagInput(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter") {
+                  // 감사 2026-09-07 §12 — isComposing 없이 Enter만 보면, 한글 조합을 막 끝내고
+                  // (또는 후보 선택으로) 누른 Enter까지 태그 제출로 잡아 미완성 값을 보낸다.
+                  // AdminMoneyInput과 같은 가드(e.nativeEvent.isComposing)를 그대로 쓴다.
+                  if (event.key === "Enter" && !event.nativeEvent.isComposing) {
                     event.preventDefault()
                     void handleAddTag()
                   }
@@ -1184,6 +1218,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
               onDealStageChange={setDealStage}
               onAddDeal={() => void handleAddDeal()}
               onDealStage={(dealId, stage) => void handleDealStage(dealId, stage)}
+              onDealAmountCommit={(dealId, amount) => void handleDealAmountChange(dealId, amount)}
             />
           ) : null}
 

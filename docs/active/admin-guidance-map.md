@@ -10,7 +10,7 @@
 
 1. 저장소 공통 규칙: [AGENTS.md](../../AGENTS.md)
 2. Admin 역할·권한·데이터·상태 정책: [Admin OS 운영 결정](admin-os-operating-decisions-2026-07-11.md)
-3. 현재 탭 배치·프리셋: [어드민 탭 재구성 스펙](admin-tab-restructure-2026-07-29.md)
+3. 현재 탭 배치: [어드민 탭 재구성 스펙](admin-tab-restructure-2026-07-29.md) — 단 §5 권한 모델(프리셋별 차등 노출)은 2026-09-10 전면 공개 전환으로 폐기됐다. 배치 정본은 `components/admin/admin-nav-access.ts`의 `DEFAULT_PRIMARY_HREFS`다.
 4. 홈페이지·Admin 실행/배포 경계 변경: [홈페이지·Admin 실행 경계 분리 계획](site-admin-separation-plan-2026-08-28.md)
 5. 도메인 세부 기준: 아래 [작업 라우팅](#4-작업-라우팅)의 해당 문서와 스킬
 6. 현재 동작 확인: 실제 코드와 검증 결과
@@ -26,16 +26,23 @@
 | 관심사 | 코드 SSOT |
 | --- | --- |
 | 탭 목록·표시명·기본 역할 | `components/admin/admin-nav.ts` |
-| 프리셋·상시/기타/차단 배치 | `components/admin/admin-nav-access.ts` |
+| 상시/기타 배치·사람별 예외 | `components/admin/admin-nav-access.ts` |
 | active 판정 | `components/admin/nav-active.ts` |
 | 인증 컨텍스트·API 역할 묶음·capability | `lib/admin-auth.ts`, `lib/admin-capabilities.ts` |
 | 클라이언트 요청·캐시 | `lib/admin-client.ts` |
 | 관리자 API 응답 | `lib/admin-api-response.ts` |
 | 관리자 계정 조회 | `lib/repositories/admin-users.ts` |
 
-`admin_profiles.nav_preset`과 `nav_overrides`는 업무 표면 배치용 UX 설정이다. 사이드바나
-커맨드 팔레트에서 보이지 않는 것만으로 데이터 접근이 차단되지는 않는다. 실제 보안 경계는 각
-API의 `verifyAdmin()` 또는 `requireVerifiedAdminContext()` 역할 검사와 필요한 capability 검사다.
+사이드바는 2026-09-10부터 **전원 동일**하다. 모든 관리자가 같은 17개 탭을 보고, 배치만
+`DEFAULT_PRIMARY_HREFS`가 정한다 — 상시 8개(홈 + 고객·매출), 접힌 "기타" 9개(마케팅·분석 +
+시스템). 역할로 항목을 거르지 않으며 "차단(deny)" 배치는 타입에서 제거됐다.
+
+`admin_profiles.nav_overrides`는 그 두 자리를 사람별로 바꾸는 취향 설정으로만 남는다.
+`nav_preset` 컬럼은 레거시다 — 값은 검증만 하고 화면을 가르지 않는다.
+
+실제 보안 경계는 각 API의 `verifyAdmin()` 또는 `requireVerifiedAdminContext()` 역할 검사와
+필요한 capability 검사다. 탭이 보인다고 데이터가 열리는 것이 아니며, 권한이 없는 역할은
+화면에 들어가도 API가 403으로 막는다.
 
 ## 3. 계정과 권한
 

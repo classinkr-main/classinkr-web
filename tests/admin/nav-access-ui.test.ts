@@ -50,26 +50,22 @@ describe("AdminSidebar — 상시/기타 2단 구조", () => {
 // (레이아웃은 서버에서 세션을 확정해 넘기는 얇은 RSC가 됐다 — 아래 두 번째 describe)
 const shell = readFileSync(join(process.cwd(), "components/admin/AdminShell.tsx"), "utf8")
 
-describe("AdminShell — 차단 탭 라우트 가드", () => {
-  it("blocks rendering when the current path resolves to deny", () => {
-    expect(shell).toContain("resolveAdminNavParentHref(")
-    expect(shell).toContain("resolveAdminNavAccess(")
-    expect(shell).toContain("getAccessibleAdminNavItems(")
+describe("AdminShell — 전면 공개 이후", () => {
+  // 2026-09-10: 어떤 탭도 deny 되지 않으므로 "차단 탭 직접 진입" 가드와 차단 화면을 걷어냈다.
+  // 이 테스트들이 그 결정을 고정한다 — 되살리려면 admin-nav-access.ts 부터 바꿔야 한다.
+  it("차단 화면과 그 계산을 남겨두지 않는다", () => {
+    expect(shell).not.toContain("접근 권한이 없습니다")
+    expect(shell).not.toContain("resolveAdminNavParentHref(")
+    expect(shell).not.toContain("getAccessibleAdminNavItems(")
   })
 
-  it("passes the same session access context to the command palette", () => {
+  it("팔레트에 세션 오버라이드를 그대로 넘긴다", () => {
     expect(shell).toContain("<AdminCommandPaletteLauncher")
-    expect(shell).toContain("navPreset={session.navPreset}")
     expect(shell).toContain("navOverrides={session.navOverrides}")
   })
 
-  it("explains the block instead of silently redirecting", () => {
-    // 조용한 리다이렉트는 "왜 튕겼지"를 남긴다 — 문구로 알린다.
-    expect(shell).toContain("접근 권한이 없습니다")
-  })
-
-  it("states plainly that this is a surface guard, not a security boundary", () => {
-    expect(shell).toContain("보안 경계가 아니다")
+  it("보안 경계는 여전히 서버 가드라는 것을 주석으로 남긴다", () => {
+    expect(shell).toContain("보안 경계")
   })
 })
 
@@ -101,11 +97,14 @@ describe("MemberNavAccessDrawer", () => {
     expect(drawer).toContain('from "@/components/admin/admin-nav-access"')
   })
 
-  it("locks every row when the target is a SUPER_ADMIN", () => {
-    expect(drawer).toContain('targetRole === "SUPER_ADMIN"')
+  it("차단(deny) 선택지를 제공하지 않는다", () => {
+    // 배치는 상시/기타 두 자리뿐이다. 세 번째 선택지가 돌아오면 전면 공개가 깨진다.
+    expect(drawer).not.toContain('label: "차단"')
+    expect(drawer).toContain('label: "상시"')
+    expect(drawer).toContain('label: "기타"')
   })
 
-  it("marks rows that differ from the preset as 예외", () => {
+  it("기본과 다른 행을 예외로 표시한다", () => {
     expect(drawer).toContain("예외")
   })
 

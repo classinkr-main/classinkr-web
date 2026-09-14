@@ -1,6 +1,10 @@
 import "server-only"
 
 import { getResolvedSettings } from "@/lib/repositories/settings"
+import {
+  isWebhookEnabled,
+  type WebhookSettingKey,
+} from "@/lib/webhook-settings"
 import { postJson } from "@/lib/server/post-json"
 import { sendInternalNotification, wrapNotificationHtml } from "@/lib/email"
 import { resolveNotificationPresentation } from "@/lib/notifications/presentation"
@@ -478,41 +482,59 @@ function buildExternalPayload(
   }
 }
 
-function getWebhookUrl(
+export const WEBHOOK_DISABLED_REASON = "관리자가 끈 채널입니다."
+const WEBHOOK_NOT_CONFIGURED_REASON = "Notification channel is not configured."
+
+/**
+ * 목적지별 정본 키. 미설정·비활성이어도 다른 용도의 방으로 우회하지 않는다.
+ */
+function webhookKeysForChannel(
+  channel: Exclude<NotificationChannel, "in_app">,
+  severity: NotificationSeverity
+): WebhookSettingKey[] {
+  switch (channel) {
+    case "wecom_webhook":
+      return severity === "critical"
+        ? ["wecomCriticalWebhookUrl"]
+        : ["wecomOpsWebhookUrl"]
+    case "wecom_cs_webhook":
+      return ["wecomCsWebhookUrl"]
+    case "wecom_lead_report_webhook":
+      return ["wecomLeadReportWebhookUrl"]
+    case "channel_talk_webhook":
+      return ["channelTalkWebhookUrl"]
+    case "kakao_alimtalk":
+      return ["kakaoAlimtalkWebhookUrl"]
+    case "email":
+      return ["emailWebhookUrl"]
+    default:
+      return []
+  }
+}
+
+type WebhookTarget =
+  | { url: string; reason?: undefined }
+  | { url?: undefined; reason: string }
+
+/**
+ * 끄기는 폴백으로 새지 않는다 — 정본 채널이 꺼져 있으면 거기서 멈춘다.
+ * 새게 두면 운영 방을 껐을 때 일상 알림이 통째로 긴급 방으로 쏟아진다.
+ * URL 유무보다 먼저 활성 상태를 판정해 비활성 사유도 보존한다.
+ */
+function resolveWebhookTarget(
   channel: Exclude<NotificationChannel, "in_app">,
   severity: NotificationSeverity,
   settings: Awaited<ReturnType<typeof getResolvedSettings>>
-) {
-  if (channel === "wecom_webhook") {
-    if (severity === "critical") {
-      return settings.wecomCriticalWebhookUrl ?? settings.wecomOpsWebhookUrl
+): WebhookTarget {
+  for (const key of webhookKeysForChannel(channel, severity)) {
+    if (!isWebhookEnabled(settings.webhookEnabled, key)) {
+      return { url: undefined, reason: WEBHOOK_DISABLED_REASON }
     }
-    return settings.wecomOpsWebhookEnabled === false
-      ? undefined
-      : settings.wecomOpsWebhookUrl ?? settings.wecomCriticalWebhookUrl
+    const url = settings[key]?.trim()
+    if (url) return { url }
   }
 
-  if (channel === "wecom_cs_webhook") {
-    return settings.wecomCsWebhookUrl
-  }
-
-  if (channel === "wecom_lead_report_webhook") {
-    return settings.wecomLeadReportWebhookUrl
-  }
-
-  if (channel === "channel_talk_webhook") {
-    return settings.channelTalkWebhookUrl
-  }
-
-  if (channel === "kakao_alimtalk") {
-    return settings.kakaoAlimtalkWebhookUrl
-  }
-
-  if (channel === "email") {
-    return settings.emailWebhookUrl
-  }
-
-  return undefined
+  return { url: undefined, reason: WEBHOOK_NOT_CONFIGURED_REASON }
 }
 
 async function deliverEmailChannel(
@@ -589,22 +611,24 @@ async function deliverWebhookChannel(
   const severity = input.severity ?? "info"
   const settings = await getResolvedSettings()
   const payload = buildExternalPayload(channel, input)
-  const url = getWebhookUrl(channel, severity, settings)
+  const target = resolveWebhookTarget(channel, severity, settings)
 
-  if (!url) {
+  if (!target.url) {
     await createDeliveryLog({
       eventId,
       channel,
       status: "skipped",
       requestPayload: payload,
-      errorMessage: "Notification channel is not configured.",
+      errorMessage: target.reason,
     })
     return {
       channel,
       status: "skipped",
-      errorMessage: "Notification channel is not configured.",
+      errorMessage: target.reason,
     } satisfies NotificationDeliveryResult
   }
+
+  const url = target.url
 
   try {
     const response = await postJson(url, payload)

@@ -95,9 +95,22 @@ ADMIN_BASE_URL=https://<도메인> ADMIN_COOKIE='<cookie>' npm run measure:admin
 
 콜드 열이 이미 웜 열에 가까우면 Phase 2~4의 우선순위가 내려가고, 여전히 벌어져 있으면 계획대로 간다. **측정은 한 번에 한 패스, 병렬 금지** — Compass가 같은 DB를 쓰고 2026-09-04에 REST 504가 113건 터졌다(2라운드 §4.4).
 
-### Phase 1 — DB 스냅샷을 stale-first로 (P0)
+### Phase 1 — DB 스냅샷을 stale-first로 (P0) — **구현 완료 (2026-09-10, hom_v4)**
 
-바꿀 계약:
+구현물:
+- `supabase/migrations/20260910_admin_crm_overview_stale_first.sql` — **작성만, 미적용.**
+  기존 2인자 함수를 DROP 하고 `p_hard_max_age_seconds`(기본 3600)를 더한 3인자로 재생성한다.
+  오버로드를 만들지 않은 이유는 PostgREST 가 인자 이름으로 후보를 고르기 때문이다(같은 이름
+  함수가 둘이면 양쪽 다 PGRST203 으로 죽는다 — `feedback_postgrest_overload_ambiguity` 사고).
+- `lib/admin-crm-overview.ts` — 하드 안전핀 전달, stale 응답 시 `after()` 로 강제 갱신 예약
+  (`scheduleAdminCrmOverviewRefresh`, 60초 쿨다운), 그리고 **마이그레이션 미적용 DB 를 위한
+  2인자 재시도**. 이 재시도가 없으면 배포~적용 사이에 개요가 매번 live 쿼리로 떨어져 오히려
+  느려진다.
+- `tests/admin-crm/overview-stale-first.test.ts` — 위 계약 9건 고정.
+
+운영자 조치: `supabase/migrations/20260910_admin_crm_overview_stale_first.sql` 적용 + `npm run check:db`.
+
+바꾼 계약:
 
 1. 스냅샷 행이 존재하면 **항상 즉시 반환**하고, 신선도는 `stale` 플래그와 `refreshedAt`으로 사실만 표기한다.
 2. 동기 재계산은 두 경우로 한정한다 — 스냅샷이 한 번도 만들어진 적 없을 때, 그리고 새 파라미터 `p_hard_max_age_seconds`(예: 3600초)를 넘겼을 때. 무한 stale을 막는 안전핀이다.
@@ -109,7 +122,11 @@ ADMIN_BASE_URL=https://<도메인> ADMIN_COOKIE='<cookie>' npm run measure:admin
 - 검증: `supabase/migrations/YYYYMMDD_*.sql` 1장, `npm run check:db`, 관련 vitest
 - 실패 모드: 스냅샷 인프라 부재는 이미 `isMissingSnapshotInfraError`로 폴백 경로가 있다 — 그 경로를 깨지 않는다
 
-### Phase 2 — 남은 모듈 메모 승격 (P1)
+### Phase 2 — 남은 모듈 메모 승격 (P1) — 일부 진행
+
+2026-09-10 병렬 라운드에서 Overview·CRM 코어 에이전트가 인접 작업을 했다. 남은 항목은 아래 표
+그대로이며, `admin-crm-customers-neo`(3화면 공유)가 여전히 1순위다.
+
 
 §3.2의 4건. 우선순위는 `admin-crm-customers-neo`가 먼저다(3화면 공유).
 
@@ -163,7 +180,52 @@ npx vitest run --dir tests
 
 Phase 1이 DB 계약을 건드리므로 `npm run check:db`를 함께 돌린다.
 
-## 7. 완료 판정
+## 7. 병행 라운드와의 관계 (2026-09-10 추가)
+
+이 계획은 같은 날 진행된 "어드민 전면 개편"(사이드바 전면 공개 + 5영역 병렬 속도 작업)과
+겹친다. 그 라운드에서 이미 끝난 것과 이 문서가 계속 소유하는 것을 갈라 둔다.
+
+| 이 문서의 항목 | 상태 |
+|---|---|
+| Phase 1 DB 스냅샷 stale-first | **완료**(위 §4 Phase 1) |
+| Phase 2 모듈 메모 승격 4건 | **완료** — admin-crm-customers-neo · marketing/intake-today · weekly-report · messaging/status |
+| Phase 3 무캐시 조회 라우트 | **완료 10건** — crm/tasks·region-map·account-master·customers-neo · notifications · hardware/samples · cs-chat/metrics · showroom-bookings · receipts · docs |
+| Phase 4 무효화 공백 | **부분 완료** — public_events→캘린더, campaign-updates·event-metrics→마케팅 perf 배선. readiness·homepage-flow 는 앱 내부 쓰기 경로가 없음을 확인하고 코드에 기록(가짜 배선 대신) |
+| Phase 4 TTL 상향 | **1건만** — crm/tasks 60초→5분(무효화가 두 지점 모두 덮인 유일한 케이스). 나머지는 보류 |
+| §3.5 클라이언트 지속 캐시 | **부분** — 고정 키 4개만 승격(hardware · calendar:source-health · messaging/status · marketing-intake-today). 지사는 team×period 카디널리티 때문에 보류 |
+| §3.3 `crm/customers-neo` 무캐시·전량 | 응답 필드 19→11 + `scope`/`limit`/`offset` 도입으로 완화 |
+| §5 Phase 5 Meta Graph 직접 조회 | Overview 쪽은 `requestIdleCallback` 지연으로 첫 화면에서 분리. 미러 전환은 여전히 조사 단계 |
+| §5 Phase 5 Overview 재방문 RSC 1건 | 미해결 — 원인 미확인 그대로 |
+| §5 Phase 5 화면당 fan-out | Overview 14 → 7~8(서버 프리페치 6소스 편입 + Instagram 지연) |
+| §3.2 모듈 메모 4건 | 미완 — `admin-crm-customers-neo` 우선 |
+| §3.4 무효화 공백 3종 | 미완 |
+| §3.5 클라이언트 지속 캐시 스코프 2개 | 미완 |
+
+### 스트리밍 전환 — 완료 (2026-09-10 2차 웨이브)
+
+`openPrefetchLane`(즉시 반환 + Suspense 스트리밍)을 5개 page.tsx 전부에 적용했다. 이제
+저장소 어디에서도 `settleWithinBudget` 를 호출하지 않는다(주석에만 이력으로 남음).
+
+| 페이지 | 소스별 Suspense 경계 |
+|---|---|
+| `/admin/overview` | 8 |
+| `/admin/crm` | 6 (+ 우선순위 큐 2) |
+| `/admin/branch` · `/admin/branch/ledger` · `/admin/hardware` | 각 1(하위 소스가 없음) |
+
+**실측(dev 3903, warm, curl 5회 중앙값)**: 첫 바이트가 전 페이지 25~42ms 로 떨어졌다.
+전환 전에는 콜드·재검증 창에서 1,217~1,291ms 에 고정돼 있었다. 장부가 가장 선명한 증거다 —
+첫 바이트 26ms / 전체 완료 898ms 로, 느린 소스가 응답 **앞**에서 **뒤**로 옮겨졌다.
+
+**측정 주의**: `scripts/measure-admin-api.mjs` 는 `res.arrayBuffer()` 까지 기다리므로
+**전체 완료 시간**을 잰다. 스트리밍 효과는 그 도구로 보이지 않는다 —
+`curl -w '%{time_starttransfer}'` 로 첫 바이트를 따로 재야 한다.
+
+부수 효과로 CRM 홈의 `OVERVIEW_PREFETCH_BUDGET_MS=700`(같은 문제의 임시 완화책)이
+불필요해져 제거됐다. 계약 파일이 `server-only` 라 5개 클라이언트 컴포넌트가
+`{promise, generatedAt}` 모양을 각자 다시 선언한다 — 구조적 호환이라 페이지 경계에서
+타입 검사가 어긋남을 잡는다.
+
+## 8. 완료 판정
 
 1. `measure:admin`의 콜드 열이 웜 열에 근접한다(Phase 0 베이스라인 대비).
 2. `pg_stat_statements` 상위에서 `admin_crm_business_overview`가 사라지거나 콜당 블록이 크게 줄어든다.

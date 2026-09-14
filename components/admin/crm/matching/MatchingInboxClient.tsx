@@ -613,6 +613,27 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
         </button>
       )
     }
+    // 감사 2026-09-07 §6 — confirmed에는 "되돌리기"가 있는데 rejected는 이 분기가 없어
+    // "-"로만 표시됐다. updateCrmSourceLinkStatus의 stale 분기는 현재 상태를 가리지 않으므로
+    // (lib/repositories/crm-source-links.ts:2233-2242) 서버 변경 없이 같은 액션을 재사용한다.
+    if (row.linkId && row.linkStatus === "rejected") {
+      return (
+        <button
+          type="button"
+          onClick={() => void updateSourceLink(row.linkId as string, "stale")}
+          disabled={pendingLinkIds.has(row.linkId as string)}
+          className="inline-flex h-11 items-center gap-1 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-2 text-[11px] font-semibold text-[#7A520F] transition-colors hover:bg-[#ECD29C] disabled:opacity-50"
+          title="제외를 되돌리고 재검수로 보냅니다"
+        >
+          {pendingLinkIds.has(row.linkId as string) ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <RotateCcw className="h-3.5 w-3.5" />
+          )}
+          되돌리기
+        </button>
+      )
+    }
     return <span className="text-[11px] text-[#1a1a1a]/30">-</span>
   }
 

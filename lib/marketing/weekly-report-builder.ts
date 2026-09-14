@@ -10,6 +10,7 @@ import {
   type WeeklyAdLeadReport,
 } from "@/lib/marketing/weekly-report"
 import { getLeads } from "@/lib/repositories/leads"
+import { getResolvedSettings } from "@/lib/repositories/settings"
 import {
   formatLeadBriefKstDateTime,
   getLastSentLeadMorningWindowEnd,
@@ -34,7 +35,10 @@ function spansWeekend(since: Date, until: Date) {
  */
 async function buildRecentIntake(now: Date): Promise<WeeklyAdLeadRecentIntake | null> {
   try {
-    const since = getLastSentLeadMorningWindowEnd(now)
+    // 일일 카드의 창 끝과 같은 스케줄을 써야 한다. 여기만 고정 시각으로 두면
+    // 운영자가 발송 시각을 바꾼 순간 주간 보고서의 '주말 유입'이 조용히 어긋난다.
+    const { notificationSchedule } = await getResolvedSettings()
+    const since = getLastSentLeadMorningWindowEnd(now, notificationSchedule?.leadDaily)
     if (since.getTime() >= now.getTime()) return null
 
     return {

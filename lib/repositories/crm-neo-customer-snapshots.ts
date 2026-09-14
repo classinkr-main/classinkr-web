@@ -11,6 +11,7 @@ import {
   resolveOwnerName,
 } from "@/lib/external-crm/owner-names"
 import { normalizeRegionLabel } from "@/lib/regions/korea-regions"
+import { CRM_SYNC_STALE_AFTER_HOURS, hoursSinceIso } from "@/lib/crm/sync-freshness"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import type {
   CrmNeoCustomerSnapshot,
@@ -26,7 +27,9 @@ const FINANCIAL_OBJECT_API_KEY = "FinancialInformation__c"
 const REFRESH_SCAN_LIMIT = 20_000
 const LIST_LIMIT = 10_000
 const UPSERT_CHUNK_SIZE = 500
-const CUSTOMER_SYNC_FRESHNESS_HOURS = 24
+// SSOT는 lib/crm/sync-freshness.ts — CRM 홈 배지(클라이언트)도 같은 임계값을 쓴다
+// (2026-09-07 감사 #1). 이 파일 안 이름은 유지해 아래 호출부 diff를 최소화한다.
+const CUSTOMER_SYNC_FRESHNESS_HOURS = CRM_SYNC_STALE_AFTER_HOURS
 
 export const CRM_NEO_CUSTOMER_SNAPSHOTS_NOT_READY_MESSAGE =
   "CRM NEO 고객 스냅샷 DB 마이그레이션이 아직 적용되지 않았습니다."
@@ -238,15 +241,8 @@ function uniquePush(target: string[], value: string | null | undefined) {
   if (value && !target.includes(value)) target.push(value)
 }
 
-function hoursSince(value: string | null, nowMs = Date.now()) {
-  if (!value) return null
-  const timestamp = new Date(value).getTime()
-  if (Number.isNaN(timestamp)) return null
-  return Math.max(0, (nowMs - timestamp) / (60 * 60 * 1000))
-}
-
 function buildSyncHealth(shroffAccountSyncedAt: string | null) {
-  const shroffAccountAgeHours = hoursSince(shroffAccountSyncedAt)
+  const shroffAccountAgeHours = hoursSinceIso(shroffAccountSyncedAt)
   return {
     shroffAccountSyncedAt,
     shroffAccountAgeHours,

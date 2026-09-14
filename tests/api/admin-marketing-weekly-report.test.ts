@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   getLatestInsight: vi.fn(),
   assembleWeeklyAdLeadReport: vi.fn(),
   kstToday: vi.fn(),
+  revalidateTag: vi.fn(),
 }))
 
 vi.mock("@/lib/admin-auth", () => ({ verifyAdmin: mocks.verifyAdmin }))
@@ -17,6 +18,14 @@ vi.mock("@/lib/marketing/weekly-report-builder", () => ({
   assembleWeeklyAdLeadReport: mocks.assembleWeeklyAdLeadReport,
 }))
 vi.mock("@/lib/marketing/perf-assemble", () => ({ kstToday: mocks.kstToday }))
+// admin-performance-round3-2026-09-10.md §3.2 — "live" 경로가 route-local Map 대신
+// unstable_cache를 쓰므로, 다른 unstable_cache 배선 회귀 가드(compass-ads 등)와 동일하게
+// next/cache를 통과 함수로 목킹한다(실제 Data Cache는 Next 서버 런타임 밖인 vitest에서
+// 동작을 보장하지 않는다).
+vi.mock("next/cache", () => ({
+  unstable_cache: (fn: (...args: unknown[]) => unknown) => fn,
+  revalidateTag: mocks.revalidateTag,
+}))
 
 import { GET } from "@/app/api/admin/marketing/weekly-report/route"
 
@@ -98,6 +107,8 @@ describe("GET /api/admin/marketing/weekly-report", () => {
 
     expect(body.source).toBe("live")
     expect(mocks.assembleWeeklyAdLeadReport).toHaveBeenCalledOnce()
+    // fresh=1이 아니므로 캐시 태그를 건드리지 않는다(자연 미스로 재계산했을 뿐).
+    expect(mocks.revalidateTag).not.toHaveBeenCalled()
   })
 
   it("fresh=1은 저장본을 건너뛰고 즉시 재생성한다", async () => {
@@ -110,6 +121,12 @@ describe("GET /api/admin/marketing/weekly-report", () => {
     expect(body.source).toBe("live")
     expect(mocks.getLatestInsight).not.toHaveBeenCalled()
     expect(mocks.assembleWeeklyAdLeadReport).toHaveBeenCalledOnce()
+    // admin-performance-round3-2026-09-10.md §3.2 — live 캐시 태그를 {expire:0}으로
+    // 하드 만료시킨 뒤 재계산한다(perf 라우트와 동일 패턴).
+    expect(mocks.revalidateTag).toHaveBeenCalledTimes(1)
+    const [tag, profile] = mocks.revalidateTag.mock.calls[0]
+    expect(typeof tag).toBe("string")
+    expect(profile).toEqual({ expire: 0 })
   })
 
   it("관리자 인증 실패 응답을 그대로 반환한다", async () => {

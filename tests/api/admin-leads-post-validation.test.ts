@@ -31,6 +31,10 @@ vi.mock("@/lib/repositories/leads", () => ({
   getMarketingLeads: vi.fn(),
   findLeadsByContacts,
   saveLead,
+  // 감사 §7 — route.ts가 `instanceof LeadDuplicateError`로 레이스 중복을 가려낸다. 이 스위트의
+  // saveLead는 전부 성공(resolve)하므로 실제로 안 쓰이지만, import가 undefined면 향후 실패
+  // 시나리오를 추가할 때 곧장 TypeError로 죽는다.
+  LeadDuplicateError: class LeadDuplicateError extends Error {},
 }))
 
 function postRequest(body: unknown) {
@@ -149,6 +153,34 @@ describe("POST /api/admin/leads — 형식 검증·중복 방지 집계", () => 
     expect(body.error).toContain("유효한 리드가 없습니다")
     expect(saveLead).not.toHaveBeenCalled()
     expect(findLeadsByContacts).not.toHaveBeenCalled()
+  })
+
+  // 감사 §7 — 사전 중복검사(findLeadsByContacts)를 통과한 뒤에도 동시 등록 레이스로 DB
+  // 유니크 제약(마이그레이션 적용 후)에 걸릴 수 있다. saveLead가 LeadDuplicateError로 던지면
+  // "저장 실패"가 아니라 "이미 등록됨"으로 집계돼야 한다.
+  it("saveLead가 LeadDuplicateError로 거부하면 failed가 아니라 duplicates로 집계한다", async () => {
+    const { LeadDuplicateError } = await import("@/lib/repositories/leads")
+    let sequence = 0
+    saveLead.mockImplementation(async (lead: Record<string, unknown>) => {
+      if (lead.phone === "010-9999-8888") throw new LeadDuplicateError()
+      return { ...lead, id: `lead-${++sequence}`, status: "new" }
+    })
+
+    const response = await callPost({
+      leads: [
+        { name: "정상", phone: "010-1234-5678" },
+        { name: "레이스 중복", phone: "010-9999-8888" },
+      ],
+    })
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      created: 1,
+      failed: 0,
+      duplicates: 1,
+      total: 2,
+      invalid: 0,
+    })
   })
 
   it("벌크 500행 초과는 400으로 거절한다", async () => {

@@ -1,10 +1,18 @@
 import "server-only"
 
+import { revalidateTag, unstable_cache } from "next/cache"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { shareInFlight, shareInFlightByArgs } from "@/lib/server/share-in-flight"
 
 // 샘플 개체(유닛) 트래킹 저장소 — 원장(hardware_movements)은 수량의 진실로 유지하고,
 // 유닛은 그 위의 생애 레이어다. movement 연결은 soft 참조(movement_ref)만 둔다
 // (시트 가져오기가 원장을 교체하므로 FK 금지 — supabase/migrations/20260727_hardware_sample_tracking.sql).
+//
+// admin-performance-round3-2026-09-10.md §3.3 — 이 저장소는 app/api/admin/hardware/
+// samples/route.ts 전용이고(다른 소비처 없음), GET 경로에 캐시가 전혀 없어 콜드 1.1초였다.
+// 쓰기(등록/이벤트기록)는 저장 직후 같은 화면에서 바로 재조회하므로({expire:0} — 아래
+// registerSampleUnits/recordSampleUnitEvents) 다음 조회가 반드시 새 값을 보게 한다.
+export const HARDWARE_SAMPLES_CACHE_TAG = "hardware-samples"
 
 export const SAMPLE_UNIT_STATUSES = ["office", "loaned", "repair", "converted", "retired"] as const
 export type SampleUnitStatus = (typeof SAMPLE_UNIT_STATUSES)[number]
@@ -96,7 +104,7 @@ function nextSeqFromCodes(codes: string[], prefix: string): number {
   return max + 1
 }
 
-export async function listSampleUnits(): Promise<{
+async function listSampleUnitsUncached(): Promise<{
   units: HardwareSampleUnit[]
   latestEvents: Record<string, HardwareSampleEvent>
 }> {
@@ -124,7 +132,7 @@ export async function listSampleUnits(): Promise<{
   return { units: (unitsRes.data ?? []) as HardwareSampleUnit[], latestEvents }
 }
 
-export async function listSampleUnitEvents(unitId: string): Promise<HardwareSampleEvent[]> {
+async function listSampleUnitEventsUncached(unitId: string): Promise<HardwareSampleEvent[]> {
   const sb = createSupabaseAdminClient()
   const { data, error } = await sb
     .from("hardware_sample_events")
@@ -136,6 +144,23 @@ export async function listSampleUnitEvents(unitId: string): Promise<HardwareSamp
   if (error) throw error
   return (data ?? []) as HardwareSampleEvent[]
 }
+
+// 목록(units+latestEvents)은 인자가 없어 shareInFlight, 유닛별 타임라인은 unitId가 캐시
+// 키에 들어가야 하므로 shareInFlightByArgs를 쓴다. 둘 다 콜드 인스턴스의 동시 미스를
+// 합치고 dev·test에서 JSON 안전성을 검사한다. 60초는 이 저장소가 쓰이는 다른 admin
+// 목록 캐시(compass-ads·branch-kpi 등)와 같은 기본값이고, 쓰기 쪽이 {expire:0}으로 즉시
+// 하드 만료하므로 "아무 일도 없을 때의 상한"일 뿐이다.
+export const listSampleUnits = unstable_cache(
+  () => shareInFlight("hardware-samples-list-v1", listSampleUnitsUncached),
+  ["hardware-samples-list-v1"],
+  { revalidate: 60, tags: [HARDWARE_SAMPLES_CACHE_TAG] }
+)
+
+export const listSampleUnitEvents = unstable_cache(
+  shareInFlightByArgs("hardware-samples-events-v1", listSampleUnitEventsUncached),
+  ["hardware-samples-events-v1"],
+  { revalidate: 60, tags: [HARDWARE_SAMPLES_CACHE_TAG] }
+)
 
 // 유닛 등록(채번) — 배정(창고→사무실) 저장·백필 초기 등록에서 쓴다. status=loaned로 바로
 // 등록하면(백필: 이미 나가있는 샘플) assign 이벤트의 도착지가 고객으로 남는다.
@@ -187,6 +212,10 @@ export async function registerSampleUnits(input: RegisterSampleUnitsInput): Prom
       }))
       const eventsRes = await sb.from("hardware_sample_events").insert(events)
       if (eventsRes.error) throw eventsRes.error
+      // 등록 화면은 저장 직후 같은 탭에서 목록을 다시 그린다 — {expire:0}으로 다음 조회가
+      // 반드시 새로 채번된 유닛을 보게 한다("max"면 SWR이라 방금 등록한 유닛이 한 번 더
+      // 안 보일 수 있다).
+      revalidateTag(HARDWARE_SAMPLES_CACHE_TAG, { expire: 0 })
       return units
     }
     if (inserted.error.code !== "23505") throw inserted.error
@@ -258,6 +287,10 @@ export async function recordSampleUnitEvents(input: RecordSampleEventInput): Pro
   }))
   const eventsRes = await sb.from("hardware_sample_events").insert(events)
   if (eventsRes.error) throw eventsRes.error
+  // 이벤트는 memo 등 상태 무변 케이스를 포함해 이 지점 이후 항상 기록된 것이므로, 아래
+  // 패치 분기와 무관하게 여기서 한 번만 무효화한다. {expire:0}인 이유는 registerSampleUnits와
+  // 같다 — 저장 직후 같은 탭이 목록/타임라인을 다시 그린다.
+  revalidateTag(HARDWARE_SAMPLES_CACHE_TAG, { expire: 0 })
 
   // 상태 반영 — memo는 상태 무변, adjust는 전달된 필드만 패치.
   const patch: Record<string, unknown> = {}

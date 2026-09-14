@@ -91,60 +91,6 @@ function loadNavSource(): { path: string; source: string } {
   )
 }
 
-// `const ALL_STAFF: SidebarRole[] = ["SUPER_ADMIN", ...]` 형태의 롤 상수를 수집한다.
-function parseRoleConstants(source: string): Map<string, string[]> {
-  const constants = new Map<string, string[]>()
-  const constRe = /const\s+([A-Z][A-Z0-9_]*)\s*(?::[^=\n]+)?=\s*\[([^\]]*)\]/g
-  for (const match of source.matchAll(constRe)) {
-    const entries = match[2]
-      .split(",")
-      .map((token) => token.trim())
-      .filter(Boolean)
-    const roles = entries
-      .map((token) => token.match(/^["']([^"']+)["']$/)?.[1])
-      .filter((role): role is string => Boolean(role))
-    if (roles.length > 0 && roles.length === entries.length) {
-      constants.set(match[1], roles)
-    }
-  }
-  return constants
-}
-
-function expandRoleTokens(raw: string, constants: Map<string, string[]>): string[] {
-  return raw
-    .split(",")
-    .map((token) => token.trim())
-    .filter(Boolean)
-    .flatMap((token) => {
-      const spread = token.match(/^\.\.\.([A-Za-z_]\w*)$/)
-      if (spread) {
-        const resolved = constants.get(spread[1])
-        if (!resolved) {
-          throw new Error(`Unresolved role constant spread: ${token}`)
-        }
-        return resolved
-      }
-      const quoted = token.match(/^["']([^"']+)["']$/)
-      if (quoted) return [quoted[1]]
-      throw new Error(`Unrecognized role token in CRM nav item: ${token}`)
-    })
-}
-
-// nav 정의에서 /admin/crm 항목의 roles 배열을 정적으로 추출한다.
-function parseCrmNavRoles(source: string): string[] {
-  const constants = parseRoleConstants(source)
-  const objects = source.match(/\{[^{}]*?href:\s*"\/admin\/crm"[^{}]*?\}/g) ?? []
-  const withRoles = objects.filter((object) => /roles:\s*\[/.test(object))
-  if (withRoles.length !== 1) {
-    throw new Error(
-      `Expected exactly one /admin/crm nav item with roles, found ${withRoles.length}`
-    )
-  }
-  const rolesMatch = withRoles[0].match(/roles:\s*\[([^\]]*)\]/)
-  if (!rolesMatch) throw new Error("Failed to extract roles array from CRM nav item")
-  return expandRoleTokens(rolesMatch[1], constants)
-}
-
 describe("CRM domain API role matrix (single source: CRM_STAFF_ADMIN_API_ROLES)", () => {
   for (const route of CRM_DOMAIN_ROUTES) {
     it(`${route} authorizes via requireVerifiedAdminContext + CRM_STAFF_ADMIN_API_ROLES`, () => {
@@ -218,38 +164,33 @@ describe("CRM mixed routes: GET relaxed to CRM matrix, writes keep default roles
   }
 })
 
-describe("CRM nav exposure vs API role matrix parity", () => {
-  const { path, source } = loadNavSource()
-  const navRoles = parseCrmNavRoles(source)
+describe("CRM nav exposure vs API role matrix (2026-09-10 전면 공개 이후)", () => {
   const apiRoles = [...CRM_STAFF_ADMIN_API_ROLES]
 
-  // 사이드바가 CRM을 보여주지만 API가 전부 거부하는 롤 — 알려진 기존 gap.
-  // EDITOR/VIEWER는 감사 범위(BRANCH) 밖이라 여기서 화이트리스트로 명시 추적한다.
-  // 이 목록을 줄이는 방향(=API 허용 또는 nav 숨김)만 허용된다.
-  const KNOWN_NAV_ONLY_ROLES = ["EDITOR", "VIEWER"]
+  // 사이드바는 더 이상 역할로 항목을 거르지 않는다(components/admin/admin-nav.ts —
+  // 항목별 roles 필드 제거). 따라서 "nav 노출 롤 ⊆ API 허용 롤" 이라는 옛 등식은 성립하지
+  // 않는다. 그 자리를 대신하는 계약은 두 가지다.
+  //  1. 진짜 경계인 API 역할 묶음은 그대로 유지된다(위 describe 가 라우트별로 강제한다).
+  //  2. 정본 운영 역할 3종은 전부 API 가 허용해야 한다 — 그래야 "메뉴에 보이는데 403" 이
+  //     레거시 역할(EDITOR/VIEWER)에만 남고 실제 매니저에게는 생기지 않는다.
+  const CANONICAL_OPERATING_ROLES = ["SUPER_ADMIN", "ADMIN", "BRANCH"]
 
-  it(`exposes CRM nav to BRANCH (${path})`, () => {
-    expect(navRoles).toContain("BRANCH")
+  it("사이드바가 CRM 을 역할로 거르지 않는다", () => {
+    const { source } = loadNavSource()
+    // ADMIN_NAV 항목과 CRM_CHILD_NAV 의 "현황" 항목 둘 다 잡힌다 — 어느 쪽도 roles 를 갖지 않아야 한다.
+    const crmItems = source.match(/\{[^{}]*?href:\s*"\/admin\/crm"[^{}]*?\}/g) ?? []
+    expect(crmItems.length).toBeGreaterThan(0)
+    for (const item of crmItems) expect(item, item).not.toMatch(/roles:/)
+  })
+
+  it("정본 운영 역할 3종은 전부 CRM API 가 허용한다", () => {
+    for (const role of CANONICAL_OPERATING_ROLES) {
+      expect(apiRoles, `CRM 탭은 전원에게 보이는데 API 가 ${role} 를 거부한다`).toContain(role)
+    }
   })
 
   it("allows BRANCH in CRM_STAFF_ADMIN_API_ROLES", () => {
     expect(apiRoles).toContain("BRANCH")
-  })
-
-  it("every API-allowed role can reach the CRM nav item", () => {
-    for (const role of apiRoles) {
-      expect(navRoles, `API allows ${role} but CRM nav hides it`).toContain(role)
-    }
-  })
-
-  it("every nav-exposed role is API-allowed (except the documented legacy gap)", () => {
-    const unexpected = navRoles.filter(
-      (role) => !apiRoles.includes(role as (typeof apiRoles)[number]) && !KNOWN_NAV_ONLY_ROLES.includes(role)
-    )
-    expect(
-      unexpected,
-      `CRM nav exposes roles the API matrix rejects: ${unexpected.join(", ")}`
-    ).toEqual([])
   })
 })
 

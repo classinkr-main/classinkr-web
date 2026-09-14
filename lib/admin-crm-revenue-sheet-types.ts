@@ -79,6 +79,21 @@ export interface AdminCrmRevenueSheetCompassCompare {
   diffAmount: number
 }
 
+// 품질 감사 2026-09-10 — #1(P0, 이중 진실): 매출 장부 콕핏/입력 레일에서 저장→적용까지 마친
+// 수기 입력·정정(branch_sales_ledger_entries, entry_status='active')은 branch_rev_deals(구글
+// REV 시트 동기화 산물)를 건드리지 않는다 — 이 화면(REV 시트 기반)은 그 건들을 구조적으로 볼
+// 방법이 없다. 서버 병합(두 서로 다른 식별자 체계를 매칭)은 오매칭·이중계상 위험이 커 이번
+// 범위에서는 하지 않고, 대신 "이 화면 밖에 반영 안 된 장부 매출이 N건 있다"를 셈해 눈에 띄게
+// 알린다 — 화면이 최신이라고 오인하지 않도록.
+export interface AdminCrmRevenueSheetManualLedgerGap {
+  /** 미반영 건수. */
+  count: number
+  /** 미반영 건 금액 합(원 단위). */
+  amount: number
+  /** 가장 최근 적용 시각 — count가 0이면 null. */
+  latestAppliedAt: string | null
+}
+
 export interface AdminCrmRevenueSheetWorkspace {
   generatedAt: string
   currentMonth: string
@@ -89,5 +104,6 @@ export interface AdminCrmRevenueSheetWorkspace {
   statuses: AdminCrmRevenueSheetBreakdownRow[]
   monthly: AdminCrmRevenueSheetMonthPoint[]
   compass: AdminCrmRevenueSheetCompassCompare
+  manualLedgerGap: AdminCrmRevenueSheetManualLedgerGap
   warnings: string[]
 }

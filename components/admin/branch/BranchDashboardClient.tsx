@@ -2,7 +2,7 @@
 import dynamic from "next/dynamic"
 import { useSearchParams } from "next/navigation"
 import type { KeyboardEvent } from "react"
-import { useState, useCallback, useEffect, useMemo, useRef } from "react"
+import { useState, useCallback, useEffect, useMemo, useRef, use } from "react"
 import { AlertTriangle, CalendarDays, ChevronLeft, RefreshCw } from "lucide-react"
 import SyncStatusBar from "./SyncStatusBar"
 import type { DealModalDeal } from "./sections/DealModal"
@@ -144,11 +144,23 @@ const BranchAiInsights = dynamic(() => import("./sections/BranchAiInsights"), {
   loading: () => <div className="h-96 animate-pulse rounded-xl bg-[#f0f0ec]" />,
 })
 
-/** 페이지 서버 프리페치가 내려주는 첫 화면 summary 응답 + 그 응답이 대응하는 요청 URL. */
+/**
+ * 페이지 서버 프리페치가 내려주는 첫 화면 summary 레인 + 그 레인이 대응하는 요청 URL.
+ *
+ * 횡단 인프라 개편(2026-09-10 스트리밍 전환) — data(동기 값)가 promise로 바뀌었다. page.tsx가
+ * openPrefetchLane(lib/admin/prefetch-budget.ts)으로 이 레인을 열고 await하지 않는다(TTFB
+ * 0ms) — url·generatedAt은 호출 시점에 이미 알려진 동기 필드라 그대로 두고, 실제 무거운 값
+ * (data)만 promise 뒤에 남긴다. 아래에서 시드 후보가 URL과 일치할 때만(summarySeedCandidate)
+ * React use()로 이 promise를 풀어, 딥링크·필터 변경처럼 시드가 애초에 안 맞는 경우까지
+ * 불필요하게 이 컴포넌트를 멈추지 않는다.
+ *
+ * lib/admin/prefetch-budget.ts의 DeferredPrefetch<T>와 모양은 같지만 그 타입을 import하지
+ * 않고 다시 선언한다 — 그 모듈은 "server-only"라 이 "use client" 파일이 타입 전용이라도
+ * 참조하지 않는다(이 저장소 기존 관례 — types.ts류의 순수 데이터 타입만 클라이언트가 쓴다).
+ */
 export interface BranchSummaryPrefetch {
   url: string
-  data: BranchSummaryResponse
-  /** 이 프리페치가 서버에서 만들어진 시각(ms epoch) — isPrefetchFresh 판정용(T3). */
+  promise: Promise<BranchSummaryResponse | null>
   generatedAt: number
 }
 
@@ -374,15 +386,30 @@ export default function BranchDashboardClient({
   // 키가 한 번이라도 벗어나면 시드는 폐기되어 다시 살아나지 않는다 — 이후는 전부 기존 페치 경로.
   const summaryStateKey = `${refreshKey}:${summaryUrl}`
   const [summarySeedLive, setSummarySeedLive] = useState(initialData != null)
-  const summarySeed =
+  // 시드 후보 — URL(팀/기간/월/탭 파생)이 프리페치가 만든 URL과 정확히 일치할 때만 후보로
+  // 삼는다. 아직 promise를 풀지 않은 단계라 딥링크·필터 변경(=애초에 안 맞는 경우)이면 아래
+  // use()를 전혀 호출하지 않아 레인이 안 끝났어도 이 컴포넌트를 멈추지 않는다.
+  const summarySeedCandidate =
     summarySeedLive && initialData && `0:${initialData.url}` === summaryStateKey
       ? initialData
       : null
+  // 횡단 인프라 개편(2026-09-10 스트리밍 전환) — summarySeedCandidate가 있을 때만 React
+  // use()로 promise를 푼다(조건부 호출은 use()에 한해 허용된 패턴). 후보가 없으면 이 줄 자체가
+  // 실행되지 않으므로 절대 불필요하게 suspend하지 않는다 — 후보가 있는 첫 렌더(기본 조합
+  // 콜드 진입)에서만 부모의 <Suspense>가 settle을 대신 기다린다.
+  const summarySeedResolved = summarySeedCandidate ? use(summarySeedCandidate.promise) : null
   useEffect(() => {
-    if (summarySeedLive && summarySeed == null) setSummarySeedLive(false)
-  }, [summarySeedLive, summarySeed])
+    if (summarySeedLive && summarySeedCandidate == null) setSummarySeedLive(false)
+  }, [summarySeedLive, summarySeedCandidate])
+  // promise가 null로 settle되면(비인증·역할 부족·ceilingMs 초과) 시드 없음과 동일하게 취급 —
+  // 아래 useBranchJson이 기존 클라이언트 페치 경로를 그대로 탄다.
+  const summarySeed =
+    summarySeedCandidate && summarySeedResolved != null
+      ? { url: summarySeedCandidate.url, data: summarySeedResolved, generatedAt: summarySeedCandidate.generatedAt }
+      : null
   // T3 — staleTimes.dynamic(180초)로 재사용된 RSC 프리페치는 summarySeed가 있어도 최대
-  // 180초 전 값일 수 있다. summarySeed는(스켈레톤 방지를 위해) 신선도와 무관하게 계속 첫
+  // 180초 전 값일 수 있다(generatedAt은 레인을 연 시각이지 값이 도착한 시각이 아니지만 기존
+  // 규약과 동일하게 다룬다). summarySeed는(스켈레톤 방지를 위해) 신선도와 무관하게 계속 첫
   // 렌더 값으로 쓰되, useBranchJson의 실제 요청은 신선할 때만 건너뛴다 — 오래됐으면 페치가
   // 그대로 돌아 캐시/네트워크가 최신 여부를 정하고, 응답이 도착하면 아래 병합이 그쪽으로 넘어간다.
   const summarySeedFresh = summarySeed != null && isPrefetchFresh(summarySeed.generatedAt)
@@ -418,6 +445,10 @@ export default function BranchDashboardClient({
   const lastSync = summary.data?.lastSync ?? null
   const lastError = syncError ?? summary.error ?? summary.data?.lastError ?? null
   const sheetModifiedAt = summary.data?.sheetModifiedAt ?? null
+  // 품질 감사 2026-09-10 — #2: summary GET 자체가 실패한 경우(summary.error)는 SyncStatusBar가
+  // lastError로 이미 앰버/빨강 배지를 낸다 — sheetFreshnessError는 "요청은 성공했지만 Drive
+  // 신선도 조회만 실패"한 좁은 경우에만 세운다(무관한 배지 중복 방지).
+  const sheetFreshnessError = !summary.error && summary.data?.sheetFreshnessError === true
   const dataSources = summary.data?.data_sources ?? null
   // 품질 웨이브 3 — 항목 1. summary GET이 실패해 오래된 캐시로 조용히 대체됐을 때만 세팅 —
   // lastError(완전 실패, 데이터 자체 없음)가 있으면 그쪽이 더 시급하므로 staleSince는 무시.
@@ -577,6 +608,7 @@ export default function BranchDashboardClient({
           syncEnabled={canRunAdminOperations}
           staleSince={summaryStaleSince}
           crmSync={crmSync}
+          sheetFreshnessError={sheetFreshnessError}
         />
 
         <div className="mt-6">

@@ -492,6 +492,107 @@ export function useLedgerDraftQueue() {
 
   }, [drafts, loadDrafts, queueMode])
 
+  // 일괄 체크(2026-09-14) — 3단계(초안→체크→적용)는 그대로, 한 건씩 누르던 체크를 묶는다.
+  // 단건 PATCH를 순서대로 보낸다(서버 계약·잠금 판정 무변경). 실패 건은 행 에러로 남기고 나머지는 진행.
+  const checkDrafts = useCallback(async (ids: string[]) => {
+    let done = 0
+    let failed = 0
+    for (const id of ids) {
+      if (queueMode !== "server" || id.startsWith("local-")) {
+        updateLocalDrafts((items) => items.map((draft) =>
+          draft.id === id && draft.status === "draft" ? { ...draft, status: "checked", updatedAt: new Date().toISOString() } : draft,
+        ))
+        done += 1
+        continue
+      }
+      try {
+        const data = await adminFetchJson<LedgerDraftResponse>(`/api/admin/branch/ledger-drafts/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: "checked" }),
+        })
+        if (!data.draft) throw new Error(data.error ?? "초안 수정 응답이 비어 있습니다.")
+        const next = data.draft
+        setDrafts((items) => items.map((draft) => (draft.id === id ? next : draft)))
+        clearRecordError(id)
+        done += 1
+      } catch (error) {
+        failed += 1
+        if (isDraftRecordError(error)) setRecordError(id)
+      }
+    }
+    setQueueError(failed > 0 ? `일괄 체크 중 ${failed}건이 실패했습니다 — 해당 행에서 다시 시도하세요.` : null)
+    return { done, failed }
+  }, [clearRecordError, queueMode, setRecordError, updateLocalDrafts])
+
+  // 일괄 적용 — 체크된 서버 초안만 순서대로 적용하고 마지막에 한 번 다시 읽는다. 로컬 임시 초안은
+  // DB 장부에 적용할 수 없으므로 건너뛴다(단건 applyDraft와 같은 규칙).
+  const applyDrafts = useCallback(async (ids: string[]) => {
+    if (queueMode !== "server") {
+      setQueueError("로컬 임시 초안은 DB 장부에 적용할 수 없습니다. 서버 큐가 복구된 뒤 다시 적용하세요.")
+      return { done: 0, failed: ids.length }
+    }
+    let done = 0
+    let failed = 0
+    for (const id of ids) {
+      if (id.startsWith("local-")) continue
+      try {
+        const data = await adminFetchJson<LedgerDraftResponse>(`/api/admin/branch/ledger-drafts/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          body: JSON.stringify({ action: "apply" }),
+        })
+        if (!data.draft) throw new Error(data.error ?? "초안 적용 응답이 비어 있습니다.")
+        const next = data.draft
+        setDrafts((items) => items.map((draft) => (draft.id === id ? next : draft)))
+        done += 1
+      } catch {
+        failed += 1
+      }
+    }
+    await loadDrafts()
+    setQueueError(failed > 0 ? `일괄 적용 중 ${failed}건이 DB 장부에 반영되지 않았습니다 — 해당 행에서 다시 적용하세요.` : null)
+    return { done, failed }
+  }, [loadDrafts, queueMode])
+
+  // 품질 감사 2026-09-10 — #8: 이전엔 DraftQueue 어떤 동작도 초안을 "cancelled"로 전이시키지
+  // 않았다(DB CHECK 제약엔 있는 상태인데 도달 경로가 없었음) — 취소는 삭제(하드 DELETE, 감사
+  // 추적 없음)로만 가능했다. status=cancelled로의 PATCH는 백엔드가 이미 지원한다
+  // (updateBranchSalesLedgerDraft가 "applied"만 막는다, DB CHECK도 cancelled를 유효 상태로 이미
+  // 허용) — toggleDraft와 동일한 패턴으로 액션만 추가한다(로컬 폴백 포함).
+  const cancelDraft = useCallback(async (id: string) => {
+    const current = drafts.find((draft) => draft.id === id)
+    if (!current || current.status === "applied" || current.status === "cancelled") return
+
+    if (queueMode === "server" && !id.startsWith("local-")) {
+      try {
+        const data = await adminFetchJson<LedgerDraftResponse>(`/api/admin/branch/ledger-drafts/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: "cancelled" }),
+        })
+        if (!data.draft) throw new Error(data.error ?? "초안 취소 응답이 비어 있습니다.")
+        // non-null 단언 대신 로컬 상수로 좁혀서 클로저 안 재단언(toggleDraft의 data.draft! 관례를
+        // 따르지 않는다 — 이 영역 non-null 단언 건수를 늘리지 말라는 지침, updateDraft의
+        // nextDraft 관례를 그대로 따른다).
+        const nextDraft = data.draft
+        setDrafts((items) => items.map((draft) => (draft.id === id ? nextDraft : draft)))
+        setQueueError(null)
+        clearRecordError(id)
+        return
+      } catch (error) {
+        if (isDraftRecordError(error)) {
+          setRecordError(id)
+          return
+        }
+        setQueueMode("local")
+        setQueueError(`서버 초안 취소에 실패했습니다(네트워크/서버 오류) — 재연결 후 다시 시도하세요. ${errorMessage(error)}`)
+        return
+      }
+    }
+
+    updateLocalDrafts((items) => items.map((draft) =>
+      draft.id === id ? { ...draft, status: "cancelled" as DraftStatus, updatedAt: new Date().toISOString() } : draft,
+    ))
+  }, [clearRecordError, drafts, queueMode, setRecordError, updateLocalDrafts])
+
   const deleteDraft = useCallback(async (id: string) => {
     if (queueMode === "server" && !id.startsWith("local-")) {
       try {
@@ -558,6 +659,9 @@ export function useLedgerDraftQueue() {
     updateDraft,
     toggleDraft,
     applyDraft,
+    checkDrafts,
+    applyDrafts,
+    cancelDraft,
     deleteDraft,
     reverseEntry,
     reloadDrafts: loadDrafts,

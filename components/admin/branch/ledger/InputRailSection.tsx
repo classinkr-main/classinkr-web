@@ -38,6 +38,9 @@ interface InputRailSectionProps {
   selectedDraftOperation: { id: DraftOperation; label: string; description: string }
   monthOptions: Array<{ value: string; label: string; current: boolean }>
   selectedMonth: string
+  // 품질 감사 2026-09-10 — #7: CockpitEditor와 동일 이유(담당자 자유 텍스트 오탈자가 집계를
+  // 조용히 쪼갬) — datalist로 기존 표기를 추천만 하고 자유 입력(신규 담당자 온보딩)은 유지한다.
+  managerOptions: string[]
   draftAmountInvalid: boolean
   draftQuantityInvalid: boolean
   draftFormInvalid: boolean
@@ -68,6 +71,7 @@ export function InputRailSection({
   selectedDraftOperation,
   monthOptions,
   selectedMonth,
+  managerOptions,
   draftAmountInvalid,
   draftQuantityInvalid,
   draftFormInvalid,
@@ -206,8 +210,14 @@ export function InputRailSection({
                   <input
                     value={draftForm.manager}
                     onChange={(event) => setDraftForm((current) => ({ ...current, manager: event.target.value }))}
+                    list="input-rail-manager-options"
+                    autoComplete="off"
                     className="mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-3 text-[12px] font-semibold text-[#111110] outline-none focus:border-[#084734]"
                   />
+                  {/* datalist는 자유 입력을 막지 않는다 — 기존 표기를 추천해 오탈자 분산만 줄인다. */}
+                  <datalist id="input-rail-manager-options">
+                    {managerOptions.map((name) => <option key={name} value={name} />)}
+                  </datalist>
                 </label>
                 <label className="block text-[11px] font-bold text-[#615D59]">
                   팀

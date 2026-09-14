@@ -1,7 +1,7 @@
 "use client"
 
 import dynamic from "next/dynamic"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { ChevronDown } from "lucide-react"
 import { useBranchJson } from "./client-api"
@@ -125,25 +125,7 @@ function IntegrityStripPanel({
   canRunAdminOperations: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
-  const [showDetail, setShowDetail] = useState(false)
-  // 품질 웨이브 3 — 항목 2. 재시도 버튼이 눌리면 nonce를 올려 캐시 키(url 기반)를 바꿔
-  // useBranchJson이 새 네트워크 요청을 쏘게 한다 — refreshKey(부모 전역 새로고침)는
-  // 건드리지 않고 이 스트립만 독립적으로 재시도한다.
-  const [retryNonce, setRetryNonce] = useState(0)
-  const dataUrl = retryNonce > 0
-    ? `/api/admin/branch/data-quality?retry=${retryNonce}`
-    : "/api/admin/branch/data-quality"
-  const { data, error, loading } = useBranchJson<DataQualityResponse>(dataUrl, refreshKey)
-
-  // info는 참고용 각주라 배지 카운트·펼침 목록에서 제외한다 — 실제 조치가 필요한
-  // warn/error만 "이슈"로 센다(예: DQ-11 SEG status==goal 지역 안내).
-  const actionable = useMemo(
-    () => (data?.issues ?? []).filter((issue) => issue.severity !== "info"),
-    [data],
-  )
-  const warnCount = actionable.filter((issue) => issue.severity === "warn").length
-  const errorCount = actionable.filter((issue) => issue.severity === "error").length
-  const total = actionable.length
+  const { data, error, loading, actionable, warnCount, errorCount, total, retry } = useIntegrityData(refreshKey)
 
   // 이전엔 실패를 null로 위장해 "이슈 없음"과 "체크 자체가 안 됨"이 구분되지 않았다
   // (품질 웨이브 3 — 항목 2). 이제 뉴트럴 톤 한 줄 + 재시도로 구분한다.
@@ -153,7 +135,7 @@ function IntegrityStripPanel({
         <span>정합 체크 불가 — 재시도</span>
         <button
           type="button"
-          onClick={() => setRetryNonce((n) => n + 1)}
+          onClick={retry}
           className="inline-flex min-h-11 min-w-11 items-center justify-center font-semibold text-[#111110] underline underline-offset-2 md:min-h-0 md:min-w-0"
         >
           다시 시도
@@ -173,17 +155,6 @@ function IntegrityStripPanel({
     : errorCount > 0
     ? { border: "border-[#B43E3E]/25", bg: "bg-[#FCE9E9]", text: "text-[#8F2C2C]", dot: "bg-[#B43E3E]" }
     : { border: "border-[#ECD29C]", bg: "bg-[#FBF1E0]", text: "text-[#7A520F]", dot: "bg-[#A8741A]" }
-
-  // DataQualityPanel(구 AI 탭 상세)에 그대로 내려줄 데이터 — 이 시점엔 data가 확정돼 있고
-  // 위에서 error가 있으면 이미 return null 했으므로 error는 항상 null.
-  const detailData = {
-    issues: data.issues ?? [],
-    checkedAt: data.checkedAt,
-    ruleCount: data.ruleCount,
-    sourceCounts: data.sourceCounts,
-    error: null,
-    loading,
-  }
 
   return (
     <div className={`rounded-xl border ${tone.border} ${tone.bg}`}>
@@ -207,52 +178,111 @@ function IntegrityStripPanel({
       </button>
 
       {expanded && (
-        <div className="space-y-1.5 border-t border-black/5 px-3.5 py-2.5">
-          {actionable.length === 0 && (
-            <p className="text-[11.5px] text-[#615D59]">조치가 필요한 이슈가 없습니다.</p>
-          )}
-          {actionable.map((issue, index) => (
-            <div
-              key={`${issue.id}-${index}`}
-              className="flex flex-wrap items-center gap-2 text-[12px] text-[#111110]/80"
-            >
-              <span
-                className={`shrink-0 rounded-md border bg-white px-1.5 py-0.5 font-mono text-[10.5px] font-bold ${
-                  issue.severity === "error"
-                    ? "border-[#B43E3E]/25 text-[#B43E3E]"
-                    : "border-[#ECD29C] text-[#A8741A]"
-                }`}
-              >
-                {issue.id}
-              </span>
-              <span className="min-w-0 flex-1">{issue.message}</span>
-              {typeof issue.sheetRow === "number" && (
-                <Link
-                  href={ledgerHref(issue.sheetRow)}
-                  className={`inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center font-semibold underline underline-offset-2 md:min-h-0 md:min-w-0 ${tone.text}`}
-                >
-                  장부에서 열기 →
-                </Link>
-              )}
-            </div>
-          ))}
+        <IntegrityDetail
+          data={data}
+          loading={loading}
+          actionable={actionable}
+          toneText={tone.text}
+          canRunAdminOperations={canRunAdminOperations}
+        />
+      )}
+    </div>
+  )
+}
 
-          {/* 상세(구 DataQualityPanel)는 admin 전용 — 요약 배지·이슈 목록은 게이팅 없음. */}
-          {canRunAdminOperations && (
-            <div className={actionable.length > 0 ? "mt-1.5 border-t border-black/5 pt-2.5" : ""}>
-              <button
-                type="button"
-                onClick={() => setShowDetail((v) => !v)}
-                aria-expanded={showDetail}
-                className={`inline-flex min-h-11 min-w-11 items-center justify-center gap-1 text-[11.5px] font-bold underline underline-offset-2 md:min-h-0 md:min-w-0 ${tone.text}`}
-              >
-                전체 규칙 상세 {showDetail ? "숨기기" : "보기"}
-              </button>
-              {showDetail && (
-                <div className="mt-2.5">
-                  <DataQualityPanel mode="ops" data={detailData} />
-                </div>
-              )}
+// data-quality 조회 + 조치 대상 집계 — 스트립 단독 사용과 장부 상태 줄(LedgerStatusRail)이 공유한다.
+// enabled=false면 요청하지 않는다(상태 줄이 뷰포트·유휴 뒤에 켠다).
+export function useIntegrityData(refreshKey: number, options: { enabled?: boolean } = {}) {
+  // 품질 웨이브 3 — 항목 2. 재시도 버튼이 눌리면 nonce를 올려 캐시 키(url 기반)를 바꿔
+  // useBranchJson이 새 네트워크 요청을 쏘게 한다 — refreshKey(부모 전역 새로고침)는
+  // 건드리지 않고 이 요청만 독립적으로 재시도한다.
+  const [retryNonce, setRetryNonce] = useState(0)
+  const dataUrl = retryNonce > 0
+    ? `/api/admin/branch/data-quality?retry=${retryNonce}`
+    : "/api/admin/branch/data-quality"
+  const { data, error, loading } = useBranchJson<DataQualityResponse>(dataUrl, refreshKey, { enabled: options.enabled ?? true })
+
+  // info는 참고용 각주라 배지 카운트·펼침 목록에서 제외한다 — 실제 조치가 필요한
+  // warn/error만 "이슈"로 센다(예: DQ-11 SEG status==goal 지역 안내).
+  const actionable = useMemo(
+    () => (data?.issues ?? []).filter((issue) => issue.severity !== "info"),
+    [data],
+  )
+  const warnCount = actionable.filter((issue) => issue.severity === "warn").length
+  const errorCount = actionable.filter((issue) => issue.severity === "error").length
+  const retry = useCallback(() => setRetryNonce((n) => n + 1), [])
+  return { data, error, loading, actionable, warnCount, errorCount, total: actionable.length, retry }
+}
+
+export function IntegrityDetail({
+  data,
+  loading,
+  actionable,
+  toneText,
+  canRunAdminOperations,
+}: {
+  data: DataQualityResponse
+  loading: boolean
+  actionable: DqIssue[]
+  toneText: string
+  canRunAdminOperations: boolean
+}) {
+  const [showDetail, setShowDetail] = useState(false)
+  // DataQualityPanel(구 AI 탭 상세)에 그대로 내려줄 데이터 — 상세는 data가 확정된 뒤에만 열린다.
+  const detailData = {
+    issues: data.issues ?? [],
+    checkedAt: data.checkedAt,
+    ruleCount: data.ruleCount,
+    sourceCounts: data.sourceCounts,
+    error: null,
+    loading,
+  }
+
+  return (
+    <div className="space-y-1.5 border-t border-black/5 px-3.5 py-2.5">
+      {actionable.length === 0 && (
+        <p className="text-[11.5px] text-[#615D59]">조치가 필요한 이슈가 없습니다.</p>
+      )}
+      {actionable.map((issue, index) => (
+        <div
+          key={`${issue.id}-${index}`}
+          className="flex flex-wrap items-center gap-2 text-[12px] text-[#111110]/80"
+        >
+          <span
+            className={`shrink-0 rounded-md border bg-white px-1.5 py-0.5 font-mono text-[10.5px] font-bold ${
+              issue.severity === "error"
+                ? "border-[#B43E3E]/25 text-[#B43E3E]"
+                : "border-[#ECD29C] text-[#A8741A]"
+            }`}
+          >
+            {issue.id}
+          </span>
+          <span className="min-w-0 flex-1">{issue.message}</span>
+          {typeof issue.sheetRow === "number" && (
+            <Link
+              href={ledgerHref(issue.sheetRow)}
+              className={`inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center font-semibold underline underline-offset-2 md:min-h-0 md:min-w-0 ${toneText}`}
+            >
+              장부에서 열기 →
+            </Link>
+          )}
+        </div>
+      ))}
+
+      {/* 상세(구 DataQualityPanel)는 admin 전용 — 요약 배지·이슈 목록은 게이팅 없음. */}
+      {canRunAdminOperations && (
+        <div className={actionable.length > 0 ? "mt-1.5 border-t border-black/5 pt-2.5" : ""}>
+          <button
+            type="button"
+            onClick={() => setShowDetail((v) => !v)}
+            aria-expanded={showDetail}
+            className={`inline-flex min-h-11 min-w-11 items-center justify-center gap-1 text-[11.5px] font-bold underline underline-offset-2 md:min-h-0 md:min-w-0 ${toneText}`}
+          >
+            전체 규칙 상세 {showDetail ? "숨기기" : "보기"}
+          </button>
+          {showDetail && (
+            <div className="mt-2.5">
+              <DataQualityPanel mode="ops" data={detailData} />
             </div>
           )}
         </div>

@@ -6,8 +6,10 @@
 // (adminMeasured/compassMeasured). 실패를 0 으로 포장하지 않는다.
 
 import { NextRequest, NextResponse } from "next/server"
+import { revalidateTag, unstable_cache } from "next/cache"
 
 import { verifyAdmin } from "@/lib/admin-auth"
+import { shareInFlight } from "@/lib/server/share-in-flight"
 import { getCompassAdsDaily, getCompassLeadsByInflowRange } from "@/lib/compass/bridge"
 import {
   buildIntakeFeed,
@@ -27,10 +29,6 @@ const MAX_ITEMS = 8
  * 카운트가 과소집계돼 델타가 부풀려진다 — 카드가 그 사실을 표시할 수 있게 넘긴다.
  */
 const COMPASS_LEAD_ROW_LIMIT = 500
-
-// 라이브 카드라 메모는 짧게 — perf(45초)와 달리 "지금 들어온 리드"가 핵심이다.
-const MEMO_TTL_MS = 20_000
-let memo: { at: number; promise: Promise<IntakeFeedResult> } | null = null
 
 async function loadIntakeToday(): Promise<IntakeFeedResult> {
   const windows = resolveIntakeWindows()
@@ -60,15 +58,25 @@ async function loadIntakeToday(): Promise<IntakeFeedResult> {
   })
 }
 
-function getIntakeToday(fresh: boolean): Promise<IntakeFeedResult> {
-  if (!fresh && memo && Date.now() - memo.at < MEMO_TTL_MS) return memo.promise
-  const promise = loadIntakeToday()
-  memo = { at: Date.now(), promise }
-  promise.catch(() => {
-    if (memo?.promise === promise) memo = null
-  })
-  return promise
-}
+// admin-performance-round3-2026-09-10.md §3.2 — route-local Map(memo)은 Vercel Fluid 콜드
+// 인스턴스마다 비어 있어 "재방문인데도 1.8초"가 됐다(하루 수십 방문 = 인스턴스가 거의 항상
+// 콜드). unstable_cache(Data Cache)로 옮겨 인스턴스 간 공유한다.
+//
+// 라이브 카드라 TTL은 옛 MEMO_TTL_MS와 같은 20초로 그대로 둔다 — perf(60초)와 달리 "지금
+// 들어온 리드"가 핵심이라 짧게 유지해야 한다. 무효화 배선은 없다: 원천은 leads 테이블(공개
+// 폼 제출)과 Compass 브리지(외부 시스템)인데, 리드 생성은 공개 웹사이트에서 초 단위로
+// 일어나는 고빈도 쓰기라 여기에 revalidateTag를 걸면 캐시가 사실상 항상 미스로 돌아간다
+// (lib/admin-homepage-flow.ts의 client_events와 같은 이유). 그래서 TTL만이 신선도 수단이고,
+// Phase 4 원칙(무효화 없으면 TTL을 올리지 않는다)에 따라 20초를 유지한다.
+const INTAKE_TODAY_CACHE_TAG = "marketing-intake-today"
+
+const getCachedIntakeToday = unstable_cache(
+  // 인자가 없는 조회이므로 shareInFlight(콜드 인스턴스의 동시 미스를 한 번만 계산 + dev·test
+  // JSON 안전성 검사)만으로 충분하다.
+  () => shareInFlight("marketing-intake-today-v1", loadIntakeToday),
+  ["marketing-intake-today-v1"],
+  { revalidate: 20, tags: [INTAKE_TODAY_CACHE_TAG] }
+)
 
 export async function GET(req: NextRequest) {
   const authError = await verifyAdmin(req)
@@ -76,7 +84,11 @@ export async function GET(req: NextRequest) {
 
   try {
     const fresh = req.nextUrl.searchParams.get("fresh") === "1"
-    return NextResponse.json(await getIntakeToday(fresh))
+    // fresh=1: 태그를 먼저 하드 만료시킨 뒤(perf/compass-ads 라우트와 동일 패턴) 캐시된
+    // 함수를 불러 재계산 + 재적재한다.
+    if (fresh) revalidateTag(INTAKE_TODAY_CACHE_TAG, { expire: 0 })
+    // JSON 안전성 검사는 shareInFlight 내부에서 이미 수행한다(중복 검사 불필요).
+    return NextResponse.json(await getCachedIntakeToday())
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "오늘 유입 집계 실패" },

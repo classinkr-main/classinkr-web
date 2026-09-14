@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 const VERCEL_CONFIG = "vercel.json";
@@ -60,9 +60,32 @@ function expandCronField(field, min, max, label) {
   return values;
 }
 
+/**
+ * cron path -> route file. 동적 세그먼트(`[slot]`)를 쓰는 라우트는 vercel.json 에
+ * 구체값(`/api/cron/dispatch/07`)으로 등록되므로, 리터럴 디렉터리가 없으면
+ * 같은 자리의 `[param]` 디렉터리로 내려간다. 이걸 안 하면 슬롯 크론이
+ * 전부 "missing route file" 로 잡힌다.
+ */
 function routeFileForCronPath(cronPath) {
-  const cleanPath = cronPath.replace(/^\/+/, "");
-  return path.join("app", `${cleanPath}`, "route.ts");
+  const segments = cronPath.replace(/^\/+/, "").split("/").filter(Boolean);
+  let current = "app";
+
+  for (const segment of segments) {
+    const literal = path.join(current, segment);
+    if (existsSync(literal)) {
+      current = literal;
+      continue;
+    }
+
+    const dynamic = readdirSync(current, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && /^\[.+\]$/.test(entry.name))
+      .map((entry) => entry.name);
+
+    if (dynamic.length !== 1) return path.join(current, segment, "route.ts");
+    current = path.join(current, dynamic[0]);
+  }
+
+  return path.join(current, "route.ts");
 }
 
 function main() {

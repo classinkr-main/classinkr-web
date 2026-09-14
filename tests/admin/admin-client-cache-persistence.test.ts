@@ -287,3 +287,138 @@ describe("generatedAt 기반 시드 신선도(T4)", () => {
     expect(client.getCachedAdminJson(CRM_URL, { allowExpired: true })).toEqual({ v: "aged-seed" })
   })
 })
+
+// 횡단 인프라 감사(2026-09-10) — clearAdminRequestCache의 prefix가 필수 인자로 바뀌었다
+// (예전엔 생략하면 조용히 전역 클리어였다). ADMIN_CACHE_SCOPE_ALL을 명시해야만 그 동작을
+// 재현할 수 있다는 것과, 그 동작 자체(두 계층 다 비움)는 그대로라는 것을 고정한다.
+describe("ADMIN_CACHE_SCOPE_ALL — 명시적 전역 클리어", () => {
+  it("문자열 그대로 '*'다 — clearCacheScopes/markAdminMutation의 GLOBAL_CACHE_SCOPE와 같은 값", () => {
+    expect(client.ADMIN_CACHE_SCOPE_ALL).toBe("*")
+  })
+
+  it("ADMIN_CACHE_SCOPE_ALL을 넘기면 스코프와 무관하게 두 계층(localStorage·sessionStorage) 모두 비운다", () => {
+    client.seedAdminRequestCache(CRM_URL, { v: 1 }, { ttlMs: 120_000 }) // localStorage(CRM 스코프)
+    client.seedAdminRequestCache(OTHER_URL, { v: 2 }, { ttlMs: 120_000 }) // sessionStorage
+
+    client.clearAdminRequestCache(client.ADMIN_CACHE_SCOPE_ALL)
+
+    expect(client.getCachedAdminJson(CRM_URL, { allowExpired: true })).toBeNull()
+    expect(client.getCachedAdminJson(OTHER_URL, { allowExpired: true })).toBeNull()
+    expect(localStore.getItem(storageKey(CRM_URL))).toBeNull()
+    expect(sessionStore.getItem(storageKey(OTHER_URL))).toBeNull()
+  })
+
+  // clearAdminSessionStorage(로그아웃 경로)가 내부적으로 ADMIN_CACHE_SCOPE_ALL을 여전히 명시
+  // 전달하는지는 "무효화" describe 블록의 "로그아웃 정리가 두 계층을 모두 비운다"가 행동으로
+  // 이미 고정한다(두 계층이 다 비면 전역 스코프로 호출된 것과 동치) — vi.spyOn으로 내부 호출을
+  // 가로채는 시도는 ESM 라이브 바인딩 때문에 같은 모듈 안의 직접 호출을 못 잡아 오탐만 낸다.
+})
+
+// 클라이언트 캐시·번들 규약 점검(2026-09-10, admin-performance-round3 §3.5) — 하드웨어·
+// 캘린더 연동상태·마케팅 상태/오늘 유입 4곳을 localStorage로 승격했다. "무작정 넓히지
+// 않는다"는 판단의 절반은 코드가 아니라 승격 **안 한** 스코프가 실제로 session에 남는지로
+// 검증해야 한다 — 그래서 양성(새 스코프)과 음성(의도적으로 뺀 지사·캘린더 일정조회) 케이스를
+// 함께 고정한다.
+describe("지속 캐시 스코프 확장 — 하드웨어/캘린더/마케팅(2026-09-10)", () => {
+  const HARDWARE_URL = "/api/admin/hardware"
+  const MESSAGING_STATUS_URL = "/api/admin/messaging/status"
+  const CALENDAR_HEALTH_URL = "/api/admin/calendar/health"
+  const CALENDAR_HEALTH_CACHE_KEY = "calendar:source-health"
+  const MARKETING_INTAKE_URL = "/api/admin/marketing/intake-today"
+  const MARKETING_INTAKE_CACHE_KEY = "marketing-intake-today"
+  // 의도적으로 스코프에 넣지 않은 것들 — team×period 조합이라 로컬 풀을 잠식할 수 있는 지사,
+  // 그리고 날짜 구간마다 키가 달라지는 캘린더 "일정" 조회(연동 상태와는 다른 엔드포인트).
+  const BRANCH_SUMMARY_URL = "/api/admin/branch/summary?team=ALL&period=M"
+  const CALENDAR_EVENTS_URL = "/api/admin/calendar/events?from=2026-09-01&to=2026-09-30"
+
+  it("하드웨어 대시보드는 localStorage로 승격된다", () => {
+    client.seedAdminRequestCache(HARDWARE_URL, { items: [] }, { ttlMs: 45_000 })
+
+    expect(localStore.getItem(storageKey(HARDWARE_URL))).not.toBeNull()
+    expect(sessionStore.getItem(storageKey(HARDWARE_URL))).toBeNull()
+  })
+
+  it("메시징 발송 상태는 localStorage로 승격된다", () => {
+    client.seedAdminRequestCache(MESSAGING_STATUS_URL, { ok: true }, { ttlMs: 45_000 })
+
+    expect(localStore.getItem(storageKey(MESSAGING_STATUS_URL))).not.toBeNull()
+  })
+
+  it("캘린더 연동 상태(커스텀 cacheKey)는 localStorage로 승격된다", () => {
+    client.seedAdminRequestCache(
+      CALENDAR_HEALTH_URL,
+      { sources: [] },
+      { cacheKey: CALENDAR_HEALTH_CACHE_KEY, ttlMs: 300_000 }
+    )
+
+    // 실제 저장 키는 URL이 아니라 커스텀 cacheKey를 기준으로 만들어진다 — 승격 판정도
+    // 그 값을 봐야 한다(resolvePersistTier가 URL이 아니라 최종 cacheKey를 받는 이유).
+    expect(localStore.getItem(storageKey(CALENDAR_HEALTH_CACHE_KEY))).not.toBeNull()
+    expect(
+      client.getCachedAdminJson(CALENDAR_HEALTH_URL, { cacheKey: CALENDAR_HEALTH_CACHE_KEY })
+    ).toEqual({ sources: [] })
+  })
+
+  it("마케팅 '오늘의 유입'(커스텀 cacheKey)은 localStorage로 승격된다", () => {
+    client.seedAdminRequestCache(
+      MARKETING_INTAKE_URL,
+      { count: 3 },
+      { cacheKey: MARKETING_INTAKE_CACHE_KEY, ttlMs: 45_000 }
+    )
+
+    expect(localStore.getItem(storageKey(MARKETING_INTAKE_CACHE_KEY))).not.toBeNull()
+  })
+
+  it("지사(team×period 조합형)는 의도적으로 승격하지 않는다 — sessionStorage에 남는다", () => {
+    client.seedAdminRequestCache(BRANCH_SUMMARY_URL, { data: {} }, { ttlMs: 60_000 })
+
+    expect(sessionStore.getItem(storageKey(BRANCH_SUMMARY_URL))).not.toBeNull()
+    expect(localStore.getItem(storageKey(BRANCH_SUMMARY_URL))).toBeNull()
+  })
+
+  it("캘린더 '일정' 조회(날짜 구간형)는 의도적으로 승격하지 않는다 — sessionStorage에 남는다", () => {
+    client.seedAdminRequestCache(CALENDAR_EVENTS_URL, [], { ttlMs: 300_000 })
+
+    expect(sessionStore.getItem(storageKey(CALENDAR_EVENTS_URL))).not.toBeNull()
+    expect(localStore.getItem(storageKey(CALENDAR_EVENTS_URL))).toBeNull()
+  })
+
+  it("프루너(엔트리별 keepUntil)는 새 스코프에도 그대로 적용된다", () => {
+    client.seedAdminRequestCache(
+      HARDWARE_URL,
+      { items: [1] },
+      { ttlMs: 45_000, staleWhileRevalidateMs: 600_000 }
+    )
+
+    vi.advanceTimersByTime(6 * 60_000)
+    runScheduledPrune()
+
+    // 10분급 창을 요청했으므로 6분 뒤에도 살아 있어야 한다 — CRM 스코프 전용 로직이
+    // 아니라 tier 전체에 적용되는 프루너 규칙임을 확인.
+    expect(client.getCachedAdminJson(HARDWARE_URL, { allowExpired: true })).toEqual({ items: [1] })
+  })
+
+  it("배포 토큰 shape guard는 새 스코프에도 그대로 적용된다 — 이전 배포 엔트리를 읽지 않는다", () => {
+    const savedAt = Date.now()
+    localStore.setItem(
+      `${CACHE_PREFIX}previous:GET:${HARDWARE_URL}`,
+      JSON.stringify({ data: { legacyShape: true }, expiresAt: savedAt + 45_000, savedAt })
+    )
+
+    expect(client.getCachedAdminJson(HARDWARE_URL, { allowExpired: true })).toBeNull()
+  })
+
+  it("로그아웃 정리는 새 스코프의 localStorage 엔트리도 비운다", () => {
+    client.seedAdminRequestCache(HARDWARE_URL, { items: [] }, { ttlMs: 45_000 })
+    client.seedAdminRequestCache(
+      CALENDAR_HEALTH_URL,
+      { sources: [] },
+      { cacheKey: CALENDAR_HEALTH_CACHE_KEY, ttlMs: 300_000 }
+    )
+
+    client.clearAdminSessionStorage()
+
+    expect(localStore.getItem(storageKey(HARDWARE_URL))).toBeNull()
+    expect(localStore.getItem(storageKey(CALENDAR_HEALTH_CACHE_KEY))).toBeNull()
+  })
+})

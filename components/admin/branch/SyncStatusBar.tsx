@@ -18,6 +18,9 @@ interface SyncStatusBarProps {
   /** 품질 웨이브 3 — 항목 1. summary GET 요청이 실패해 오래된 캐시로 조용히 대체된 경우
    *  그 캐시가 저장된 시각(ms epoch). null/undefined면 정상(최신 데이터 또는 실패 없음). */
   staleSince?: number | null
+  /** 품질 감사 2026-09-10 — #2. true면 Drive 시트 신선도 조회 자체가 실패했다는 뜻 —
+   *  sheetModifiedAt=null이 "시트에 값 없음"과 구분되지 않던 무음 실패를 명시적으로 알린다. */
+  sheetFreshnessError?: boolean
   /** CRM 싱크 칩(B안 — 시안 rev-crm-sync-visual-2026-07-18) — 옵션. 데이터는 부모가
    *  /api/admin/crm/coverage 응답을 buildCrmSyncSummary로 접어 1회 전달한다(자체 fetch 없음).
    *  미전달(장부 등 다른 사용처)이면 칩 미표시 — 장부는 A안 스트립이 있어 중복 방지. */
@@ -50,7 +53,7 @@ function sourceLabel(source: BranchDataSourceInfo, now: number): string {
   return "라이브 시트"
 }
 
-export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, dataSources, onRefresh, syncEnabled = true, staleSince = null, crmSync = null }: SyncStatusBarProps) {
+export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, dataSources, onRefresh, syncEnabled = true, staleSince = null, crmSync = null, sheetFreshnessError = false }: SyncStatusBarProps) {
   const [busy, setBusy] = useState(false)
   // Tick once a minute so relative timestamps stay current without a refetch.
   // visibility-aware(코덱스 감사 #15): 백그라운드 탭에서는 멈추고 복귀 즉시 1회 따라잡는다.
@@ -75,16 +78,21 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
   // importStale/sheetAhead보다는 우선한다 — 이번 요청이 실제로 실패했다는 신호가 더 시급하다.
   const staleRefresh = !lastError && staleSince != null
 
+  // 품질 감사 2026-09-10 — #2: sheetFreshnessError는 sheetAhead와 배타적이지 않게 둔다
+  // (sheetModifiedAt이 null이면 isSheetAheadOfSync가 항상 false라 실제로는 겹치지 않지만,
+  // 판정 순서 자체를 "확인 실패"가 "확인해보니 앞섬"보다 먼저 오게 해 무음 실패를 우선 드러낸다).
   const tone = lastError
     ? { border: "border-[#F2B8B8]", bg: "bg-[#FCE9E9]" }
     : staleRefresh
       ? { border: "border-[#ECD29C]", bg: "bg-[#FBF1E0]" }
       : importStale
         ? { border: "border-[#ECD29C]", bg: "bg-[#FBF1E0]" }
-        : sheetAhead
-          // 품질 웨이브 4 — 항목 5: Tailwind 기본 amber-* → 캐논 Warning hex(DESIGN.md §2) 통일.
+        : sheetFreshnessError
           ? { border: "border-[#ECD29C]", bg: "bg-[#FBF1E0]" }
-          : { border: "border-[#e8e8e4]", bg: "bg-white" }
+          : sheetAhead
+            // 품질 웨이브 4 — 항목 5: Tailwind 기본 amber-* → 캐논 Warning hex(DESIGN.md §2) 통일.
+            ? { border: "border-[#ECD29C]", bg: "bg-[#FBF1E0]" }
+            : { border: "border-[#e8e8e4]", bg: "bg-white" }
 
   return (
     <div className={`sticky top-0 z-30 border-b ${tone.border} ${tone.bg} px-4 py-3 text-[12px]`}>
@@ -97,9 +105,11 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
                 ? <AlertTriangle className="h-4 w-4 text-[#A8741A]" />
                 : importStale
                   ? <AlertTriangle className="h-4 w-4 text-[#A8741A]" />
-                  : sheetAhead
-                    ? <Clock className="h-4 w-4 text-[#A8741A]" />
-                    : <CheckCircle2 className="h-4 w-4 text-[#084734]" />}
+                  : sheetFreshnessError
+                    ? <AlertTriangle className="h-4 w-4 text-[#A8741A]" />
+                    : sheetAhead
+                      ? <Clock className="h-4 w-4 text-[#A8741A]" />
+                      : <CheckCircle2 className="h-4 w-4 text-[#084734]" />}
             <span className="text-[#1a1a1a]/75">
               {lastError
                 ? lastError
@@ -107,9 +117,11 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
                   ? `갱신 실패 — ${relativeTime(new Date(staleSince as number).toISOString(), now)} 데이터 표시 중`
                   : importStale
                     ? "임포트가 시트 동기화보다 오래됨 — 장부에서 재동기화 필요"
-                    : sheetAhead
-                      ? `시트가 ${relativeTime(sheetModifiedAt!, now)} 수정 — DB는 ${relativeTime(lastSync!, now)} 동기화`
-                      : `동기화 ${lastSync ? relativeTime(lastSync, now) : "없음"}`}
+                    : sheetFreshnessError
+                      ? `동기화 ${lastSync ? relativeTime(lastSync, now) : "없음"} — 시트 신선도 확인 실패`
+                      : sheetAhead
+                        ? `시트가 ${relativeTime(sheetModifiedAt!, now)} 수정 — DB는 ${relativeTime(lastSync!, now)} 동기화`
+                        : `동기화 ${lastSync ? relativeTime(lastSync, now) : "없음"}`}
             </span>
             {importStale && (
               <a
@@ -119,7 +131,17 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
                 장부에서 재동기화 →
               </a>
             )}
-            {!importStale && sheetAhead && (
+            {/* 품질 감사 2026-09-10 — #2: "확인 실패"(원인 불명)와 "확인해보니 시트가 더 새로움"
+                (구체적 사실)을 다른 문구로 구분한다 — 실패를 조용히 "정상"처럼 보이게 하지 않는다. */}
+            {!importStale && sheetFreshnessError && (
+              <span
+                className="ml-2 rounded-full bg-[#FBF1E0] px-2 py-0.5 text-[10.5px] font-semibold text-[#7A520F]"
+                title="Google Drive에서 시트 수정 시각을 가져오지 못했습니다(권한/네트워크). 시트가 DB보다 앞서 있어도 이 경고가 뜨지 않을 수 있습니다."
+              >
+                시트 신선도 확인 불가
+              </span>
+            )}
+            {!importStale && !sheetFreshnessError && sheetAhead && (
               <span className="ml-2 rounded-full bg-[#FBF1E0] px-2 py-0.5 text-[10.5px] font-semibold text-[#7A520F]">
                 시트가 더 새로움
               </span>

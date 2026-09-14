@@ -7,7 +7,6 @@ import { usePathname } from "next/navigation"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import {
     ArrowRight,
-    Bot,
     Check,
     Copy,
     ExternalLink,
@@ -22,6 +21,7 @@ import {
     X,
 } from "lucide-react"
 
+import { ClassInAIIcon } from "@/components/ui/ClassInAIIcon"
 import { cn } from "@/lib/utils"
 import {
     buildChannelTalkMemberId,
@@ -251,23 +251,29 @@ function AssistantMeta({ message }: { message: ChatMessage }) {
         message.showHandoffCTA ? "상담 권장" : null,
     ].filter((label): label is string => Boolean(label))
 
-    if (labels.length === 0) return null
-
     return (
-        <div className="mb-2 flex flex-wrap gap-1.5">
-            {labels.map((label) => (
-                <span
-                    key={label}
-                    className={cn(
-                        "inline-flex h-6 items-center rounded-full border px-2.5 text-[11px] font-bold",
-                        label === "상담 권장"
-                            ? "border-[#084734]/10 bg-[#ECFDF5]/80 text-[#084734]"
-                            : "border-black/[0.06] bg-white/70 text-[#615D59]"
-                    )}
-                >
-                    {label}
-                </span>
-            ))}
+        <div className="mb-2 flex items-center justify-between gap-2 border-b border-[#084734]/[0.08] pb-1.5">
+            <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#084734]">
+                <ClassInAIIcon size={13} variant="brand" />
+                <span>Classin AI</span>
+            </div>
+            {labels.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                    {labels.map((label) => (
+                        <span
+                            key={label}
+                            className={cn(
+                                "inline-flex h-5 items-center rounded-full border px-2 text-[10px] font-bold",
+                                label === "상담 권장"
+                                    ? "border-[#084734]/15 bg-[#ECFDF5] text-[#084734]"
+                                    : "border-black/[0.06] bg-white/70 text-[#615D59]"
+                            )}
+                        >
+                            {label}
+                        </span>
+                    ))}
+                </div>
+            ) : null}
         </div>
     )
 }
@@ -1261,7 +1267,7 @@ export function FloatingChatbot() {
                                         ) : (
                                             <>
                                                 <span className="absolute inset-1 rounded-[10px] bg-[#ECFDF5]/80" aria-hidden />
-                                                <Bot className="relative h-5 w-5 text-[#084734]" />
+                                                <ClassInAIIcon size={22} variant="brand" className="relative text-[#084734]" />
                                             </>
                                         )}
                                         {/* 생각 중/스트리밍 중일 때 초록 펄스 링 렌더링 */}
@@ -1373,27 +1379,35 @@ export function FloatingChatbot() {
                                                                     </div>
                                                                 ) : null}
                                                                 {(message.suggestedQuestions?.length ?? 0) > 0 ? (
-                                                                    <div className="mt-3 grid gap-2">
-                                                                        {message.suggestedQuestions?.slice(0, getSuggestionLimit(message)).map((question, index) => (
-                                                                            <motion.button
-                                                                                key={question}
-                                                                                type="button"
-                                                                                disabled={isSending}
-                                                                                onClick={() => sendQuestion(question)}
-                                                                                initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
-                                                                                animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
-                                                                                transition={{
-                                                                                    duration: shouldReduceMotion ? 0.01 : 0.24,
-                                                                                    ease: EASING_SOFT_ENTER,
-                                                                                    delay: shouldReduceMotion ? 0 : index * 0.06,
-                                                                                }}
-                                                                                whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
-                                                                                className="flex w-full items-center justify-between gap-2 whitespace-normal break-keep rounded-[12px] border border-[#084734]/15 bg-white/60 px-3.5 py-2.5 text-left text-[12px] font-semibold leading-5 text-[#084734] shadow-[inset_0_1px_0_rgba(255,255,255,0.60)] transition-colors hover:border-[#084734]/30 hover:bg-[#ECFDF5]/90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
-                                                                            >
-                                                                                <span>{question}</span>
-                                                                                <ArrowRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                                                                            </motion.button>
-                                                                        ))}
+                                                                    <div className="mt-3 space-y-2">
+                                                                        {message.id === "welcome" ? (
+                                                                            <div className="flex items-center gap-1.5 px-0.5 text-[11px] font-bold text-[#615D59]">
+                                                                                <span className="h-1.5 w-1.5 rounded-full bg-[#084734]" />
+                                                                                추천 질문으로 바로 시작하기
+                                                                            </div>
+                                                                        ) : null}
+                                                                        <div className="grid gap-2">
+                                                                            {message.suggestedQuestions?.slice(0, getSuggestionLimit(message)).map((question, index) => (
+                                                                                <motion.button
+                                                                                    key={question}
+                                                                                    type="button"
+                                                                                    disabled={isSending}
+                                                                                    onClick={() => sendQuestion(question)}
+                                                                                    initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
+                                                                                    animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+                                                                                    transition={{
+                                                                                        duration: shouldReduceMotion ? 0.01 : 0.24,
+                                                                                        ease: EASING_SOFT_ENTER,
+                                                                                        delay: shouldReduceMotion ? 0 : index * 0.06,
+                                                                                    }}
+                                                                                    whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
+                                                                                    className="group flex w-full items-center justify-between gap-2 whitespace-normal break-keep rounded-[12px] border border-[#084734]/15 bg-white/75 px-3.5 py-2.5 text-left text-[12px] font-semibold leading-5 text-[#084734] shadow-[inset_0_1px_0_rgba(255,255,255,0.70),0_2px_8px_rgba(8,71,52,0.04)] transition-all hover:border-[#084734]/30 hover:bg-[#ECFDF5] hover:shadow-[0_4px_12px_rgba(8,71,52,0.08)] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
+                                                                                >
+                                                                                    <span>{question}</span>
+                                                                                    <ArrowRight className="h-3.5 w-3.5 shrink-0 text-[#084734]/70 transition-transform group-hover:translate-x-0.5" aria-hidden />
+                                                                                </motion.button>
+                                                                            ))}
+                                                                        </div>
                                                                     </div>
                                                                 ) : null}
                                                                 {message.answerEventId || message.showHandoffCTA ? (
@@ -1505,7 +1519,7 @@ export function FloatingChatbot() {
                 {!isOpen && !shouldReduceMotion ? (
                     <motion.span
                         aria-hidden
-                        className="pointer-events-none absolute inset-0 rounded-full bg-[#A7F3D0]/25 blur-lg"
+                        className="pointer-events-none absolute -inset-1 rounded-full bg-[#10B981]/25 blur-md"
                         initial={{ scale: 0.96, opacity: 0.38 }}
                         animate={CHATBOT_MOTION.ambient}
                         transition={{ duration: CHATBOT_MOTION.ambient.duration, repeat: Infinity, repeatDelay: CHATBOT_MOTION.ambient.repeatDelay, ease: "easeOut" }}
@@ -1514,37 +1528,82 @@ export function FloatingChatbot() {
                 <motion.button
                     ref={triggerRef}
                     type="button"
-                    whileHover={shouldReduceMotion ? undefined : { scale: 1.04 }}
+                    whileHover={shouldReduceMotion ? undefined : { scale: 1.05 }}
                     whileTap={m(CHATBOT_MOTION.tap, shouldReduceMotion)}
                     onClick={() => {
                         openSourceRef.current = "button"
                         setIsOpen((current) => !current)
                     }}
-                    className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-[#084734]/15 bg-[#ECFDF5]/85 text-[#084734] shadow-none backdrop-blur-xl transition-colors hover:border-[#084734]/20 hover:bg-[#DDF8ED]/90 focus:outline-none focus:ring-4 focus:ring-[#084734]/20 md:h-16 md:w-16"
+                    className={cn(
+                        "relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-[#084734]/25 md:h-16 md:w-16",
+                        isOpen
+                            ? "border border-black/[0.08] bg-white text-[#111110] shadow-[0_12px_28px_rgba(0,0,0,0.12),0_4px_10px_rgba(0,0,0,0.04)] hover:bg-[#F6F5F4]"
+                            : "border border-white/20 bg-[linear-gradient(135deg,#084734_0%,#0C5A42_100%)] text-white shadow-[0_16px_36px_rgba(8,71,52,0.30),0_4px_12px_rgba(0,0,0,0.08),inset_0_1px_1px_rgba(255,255,255,0.35)] hover:bg-[linear-gradient(135deg,#063E2D_0%,#0A503A_100%)] hover:shadow-[0_20px_42px_rgba(8,71,52,0.38),0_6px_16px_rgba(0,0,0,0.12)]"
+                    )}
                     aria-label={isOpen ? "챗봇 닫기" : "챗봇 열기"}
                     aria-expanded={isOpen}
                     aria-controls="classin-chatbot-dialog"
                 >
                     <span
                         aria-hidden
-                        className="pointer-events-none absolute inset-px rounded-full bg-white/20"
+                        className="pointer-events-none absolute inset-px rounded-full bg-white/10"
                     />
-                    {isOpen ? (
-                        <X className="relative h-6 w-6" />
-                    ) : isDeepConsultation ? (
-                        <>
-                            <Image
-                                src={DEEP_CONSULTATION_ICON_SRC}
-                                alt=""
-                                fill
-                                className="object-cover"
-                                sizes="64px"
-                                aria-hidden
-                            />
-                            <span className="absolute inset-0 bg-[#084734]/20 mix-blend-multiply" aria-hidden />
-                        </>
-                    ) : (
-                        <MessageCircle className="relative h-6 w-6" />
+                    <AnimatePresence mode="wait" initial={false}>
+                        {isOpen ? (
+                            <motion.div
+                                key="close-icon"
+                                initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, rotate: -90, scale: 0.8 }}
+                                animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, rotate: 0, scale: 1 }}
+                                exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, rotate: 90, scale: 0.8 }}
+                                transition={{ duration: 0.18, ease: "easeOut" }}
+                                className="flex items-center justify-center"
+                            >
+                                <X className="h-6 w-6 text-[#111110]" />
+                            </motion.div>
+                        ) : isDeepConsultation ? (
+                            <motion.div
+                                key="deep-consult-icon"
+                                initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.8 }}
+                                animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1 }}
+                                exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.8 }}
+                                transition={{ duration: 0.18, ease: "easeOut" }}
+                                className="relative h-full w-full"
+                            >
+                                <Image
+                                    src={DEEP_CONSULTATION_ICON_SRC}
+                                    alt=""
+                                    fill
+                                    className="object-cover"
+                                    sizes="64px"
+                                    aria-hidden
+                                />
+                                <span className="absolute inset-0 bg-[#084734]/20 mix-blend-multiply" aria-hidden />
+                            </motion.div>
+                        ) : (
+                            <motion.div
+                                key="ai-icon"
+                                initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, rotate: 90, scale: 0.8 }}
+                                animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, rotate: 0, scale: 1 }}
+                                exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, rotate: -90, scale: 0.8 }}
+                                transition={{ duration: 0.18, ease: "easeOut" }}
+                                className="relative flex items-center justify-center"
+                            >
+                                <ClassInAIIcon size={28} variant="white" className="relative drop-shadow-[0_2px_4px_rgba(0,0,0,0.15)] md:h-8 md:w-8" />
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
+                    {/* 실시간 상담 대기 상태 인디케이터 (Live Status Dot) */}
+                    {!isOpen && (
+                        <span
+                            aria-hidden
+                            className="pointer-events-none absolute right-2 top-2 flex h-2.5 w-2.5 md:right-2.5 md:top-2.5"
+                        >
+                            {!shouldReduceMotion && (
+                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#6EE7B7] opacity-75 duration-1000" />
+                            )}
+                            <span className="relative inline-flex h-2.5 w-2.5 rounded-full border-2 border-[#084734] bg-[#34D399]" />
+                        </span>
                     )}
                 </motion.button>
             </div>

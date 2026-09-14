@@ -143,10 +143,49 @@ describe("getHardwareDashboard payload (T5-A)", () => {
     expect(dashboard).not.toHaveProperty("plannedMovements")
     // movements 자체는 무효 제외 최신순 그대로 — 클라이언트가 여기서 부분집합을 파생한다.
     expect(dashboard.movements.map((movement) => movement.id)).toEqual(["mv-2", "mv-1", "mv-3"])
+    // 감사(2026-09-07 #7): 2000건 캡 아래에서는 movementsTotal이 movements.length와 같아야
+    // 한다 — "캡에 걸려 잘렸다"는 신호가 실제로 안 걸린 경우까지 오탐하면 안 된다.
+    expect(dashboard.movementsTotal).toBe(dashboard.movements.length)
 
     expect(dashboard.items).toEqual([
       { id: "item-1", name: "86\" IFP", category: "전자칠판", reorder_point: 2, lead_time_days: 14, source_aliases: ["86 IFP"] },
     ])
+  })
+
+  it("flags sheet_import rows whose money columns were recovered from raw (#1 corruption detection)", async () => {
+    // 감사(2026-09-07 #1): replace_hardware_sheet_import RPC가 구버전이면 amount_usd/importer
+    // 컬럼이 비고 raw JSON에만 남는다 — importCosting.recoveredFromRawCount가 이 상태를 센다.
+    // admin_manual 행(mv-1, 위 BIG_RAW 픽스처)은 대상이 아니다 — 실제 부패는 sheet_import RPC
+    // 산출물에서만 생기므로 다른 소스는 오탐 없이 제외해야 한다.
+    const sheetImportRecovered = movementRow({
+      id: "mv-4",
+      source: "sheet_import",
+      amount_usd: null,
+      importer: null,
+      raw: { amount_usd: 500, importer: "classin" },
+    })
+    const sheetImportHealthy = movementRow({
+      id: "mv-5",
+      source: "sheet_import",
+      amount_usd: 700,
+      importer: "classin",
+      raw: { amount_usd: 700, importer: "classin" },
+    })
+    MOVEMENT_ROWS.push(sheetImportRecovered, sheetImportHealthy)
+    try {
+      const { getHardwareDashboard } = await loadRepository()
+      const dashboard = await getHardwareDashboard()
+
+      expect(dashboard.importCosting).toEqual({ recoveredFromRawCount: 1 })
+      // 복구는 일어나되(컬럼에 값이 채워짐), 응답 raw는 여전히 crmLink만 남긴다(T5-A 계약 불변).
+      const recovered = dashboard.movements.find((movement) => movement.id === "mv-4")
+      expect(recovered?.amount_usd).toBe(500)
+      expect(recovered?.importer).toBe("classin")
+      expect(recovered?.raw).toBeNull()
+    } finally {
+      MOVEMENT_ROWS.pop()
+      MOVEMENT_ROWS.pop()
+    }
   })
 
   it("selects explicit ledger columns without the six unread fields", async () => {

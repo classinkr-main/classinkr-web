@@ -37,7 +37,7 @@
 
 - 운영 계정과 프로필의 정본은 Supabase `admin_profiles`다. `ADMIN_USERS`와 `ADMIN_PASSWORD`는 로컬 개발 또는 전환기 레거시 인증 폴백이며 운영 권한 원장으로 사용하지 않는다.
 - 정규 역할은 `SUPER_ADMIN`, `ADMIN`, `BRANCH`다. `EDITOR`, `VIEWER`, `PARTNER`는 기존 데이터와 세션을 위한 레거시 호환 값이며 새 권한 모델의 기준으로 확장하지 않는다.
-- `nav_preset`과 `nav_overrides`는 사이드바의 상시/기타/숨김 배치를 정하는 UX 설정이다. 보안 경계가 아니다. 실제 접근은 각 `app/api/admin/*` 라우트의 role/capability 검사로 강제한다.
+- 사이드바는 전원 동일하다(2026-09-10 전면 공개). 배치 정본은 `admin-nav-access.ts`의 `DEFAULT_PRIMARY_HREFS`이고, `nav_overrides`는 상시/기타 자리를 사람별로 바꾸는 취향 설정이다(`nav_preset`은 레거시). 어느 쪽도 보안 경계가 아니다 — 실제 접근은 각 `app/api/admin/*` 라우트의 role/capability 검사로 강제한다.
 - 어드민 API는 `verifyAdmin()` 또는 `requireVerifiedAdminContext()`로 인증·역할을 확인하고, 필요한 동작은 capability까지 검사한다. 데이터 접근은 `createSupabaseAdminClient()`를 사용한다.
 
 ### 데이터·마이그레이션

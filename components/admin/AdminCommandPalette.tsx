@@ -12,7 +12,6 @@ import {
 } from "./admin-nav"
 import {
   getAccessibleAdminNavItems,
-  isNavPresetKey,
   normalizeNavOverrides,
   resolveAdminNavAccess,
   type NavAccessContext,
@@ -31,7 +30,6 @@ export interface AdminCommand {
 
 export interface AdminCommandPaletteAccessProps {
   role: string
-  navPreset: string | null
   navOverrides: Record<string, string>
 }
 
@@ -118,7 +116,7 @@ function buildAdminCommands(items: readonly AdminNavItem[]): AdminCommand[] {
 /** 정적 전체 인벤토리 — 문서/회귀 테스트용. 실제 UI는 사용자별 resolveAdminCommands를 쓴다. */
 export const ADMIN_COMMANDS: AdminCommand[] = buildAdminCommands(ADMIN_NAV)
 
-/** 사이드바와 같은 역할 → 프리셋 → 오버라이드 해석을 거친 사용자별 명령 목록. */
+/** 사이드바와 같은 배치 해석(전원 공통 기본 + 사람별 오버라이드)을 거친 명령 목록. */
 export function resolveAdminCommands(ctx: NavAccessContext): AdminCommand[] {
   return buildAdminCommands(getAccessibleAdminNavItems(resolveAdminNavAccess(ctx)))
 }
@@ -127,7 +125,6 @@ export default function AdminCommandPalette({
   open,
   onClose,
   role,
-  navPreset,
   navOverrides,
 }: AdminCommandPaletteProps) {
   const router = useRouter()
@@ -138,10 +135,9 @@ export default function AdminCommandPalette({
     () =>
       resolveAdminCommands({
         role,
-        preset: isNavPresetKey(navPreset) ? navPreset : null,
         overrides: normalizeNavOverrides(navOverrides),
       }),
-    [role, navPreset, navOverrides]
+    [role, navOverrides]
   )
 
   const filtered = useMemo(() => {

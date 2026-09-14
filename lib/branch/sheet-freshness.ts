@@ -18,3 +18,29 @@ export function isSheetAheadOfSync(
   if (Number.isNaN(modifiedTime) || Number.isNaN(syncTime)) return false
   return modifiedTime - syncTime > SHEET_AHEAD_WARN_MS
 }
+
+// 품질 감사 2026-09-10 — #2(data_trust 핵심): getSheetModifiedTime(google-sheets.ts)가 재시도
+// 후에도 실패하면 이제 던진다(예전엔 permission/network 실패를 null로 삼켜 "정상인데 값 없음"과
+// "확인 자체가 실패함"이 구분되지 않았다 — 그 결과 위 isSheetAheadOfSync가 null 입력에 무조건
+// false를 반환해 "시트가 더 새로움" 경고가 조용히 꺼졌다). summary-payload.ts의 readSheetFreshness가
+// dash/hw 두 Drive 조회를 Promise.allSettled로 모은 뒤 이 순수 함수에 넘겨 판정한다 — async/캐시와
+// 분리해 여기서 직접 단위 테스트한다(tests/branch/sheet-freshness.test.ts).
+export interface SheetFreshnessResult {
+  modifiedTime: string | null
+  /** true면 dash/hw 중 최소 하나의 Drive 조회가 재시도 후에도 실패했다는 뜻 —
+   *  modifiedTime이 null이어도 "시트에 값이 없다"가 아니라 "확인 못 했다"로 승격해야 한다. */
+  failed: boolean
+}
+
+export function resolveSheetFreshnessFromSettled(
+  dash: PromiseSettledResult<string | null>,
+  hw: PromiseSettledResult<string | null>,
+): SheetFreshnessResult {
+  const candidates = [dash, hw]
+    .map((result) => (result.status === "fulfilled" ? result.value : null))
+    .filter((t): t is string => Boolean(t))
+  return {
+    modifiedTime: candidates.length === 0 ? null : candidates.sort().pop() ?? null,
+    failed: dash.status === "rejected" || hw.status === "rejected",
+  }
+}

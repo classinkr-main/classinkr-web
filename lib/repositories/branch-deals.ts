@@ -73,29 +73,31 @@ function normalizeDealRow(deal: BranchRevDealListRow): BranchRevDeal {
 
 const BRANCH_REV_DEALS_PAGE_SIZE = 1000
 
+async function fetchBranchRevDeals(team: string, withRaw: boolean): Promise<BranchRevDeal[]> {
+  const sb = createSupabaseAdminClient()
+  const columns = withRaw ? BRANCH_REV_DEAL_LIST_COLUMNS_WITH_RAW : BRANCH_REV_DEAL_LIST_COLUMNS
+  // PostgREST는 요청당 기본 1000행에서 조용히 절단한다 — REV 시트(BD/MKT/CSM 미러)가
+  // 1000행을 넘기면 매출·파이프라인이 실제보다 낮게 잡힌다. 결정적 order(id) + range로
+  // 짧은 페이지가 나올 때까지 이어 읽는다(안정 페이징에 유니크 정렬 필수).
+  const rows: BranchRevDealListRow[] = []
+  for (let from = 0; ; from += BRANCH_REV_DEALS_PAGE_SIZE) {
+    let q = sb
+      .from("branch_rev_deals")
+      .select(columns)
+      .order("id", { ascending: true })
+      .range(from, from + BRANCH_REV_DEALS_PAGE_SIZE - 1)
+    if (team !== "ALL") q = q.eq("team", team)
+    const { data, error } = await q
+    if (error) throw error
+    const page = (data ?? []) as unknown as BranchRevDealListRow[]
+    rows.push(...page)
+    if (page.length < BRANCH_REV_DEALS_PAGE_SIZE) break
+  }
+  return rows.map(normalizeDealRow)
+}
+
 const listCachedBranchRevDeals = unstable_cache(
-  async (team: string, withRaw: boolean): Promise<BranchRevDeal[]> => {
-    const sb = createSupabaseAdminClient()
-    const columns = withRaw ? BRANCH_REV_DEAL_LIST_COLUMNS_WITH_RAW : BRANCH_REV_DEAL_LIST_COLUMNS
-    // PostgREST는 요청당 기본 1000행에서 조용히 절단한다 — REV 시트(BD/MKT/CSM 미러)가
-    // 1000행을 넘기면 매출·파이프라인이 실제보다 낮게 잡힌다. 결정적 order(id) + range로
-    // 짧은 페이지가 나올 때까지 이어 읽는다(안정 페이징에 유니크 정렬 필수).
-    const rows: BranchRevDealListRow[] = []
-    for (let from = 0; ; from += BRANCH_REV_DEALS_PAGE_SIZE) {
-      let q = sb
-        .from("branch_rev_deals")
-        .select(columns)
-        .order("id", { ascending: true })
-        .range(from, from + BRANCH_REV_DEALS_PAGE_SIZE - 1)
-      if (team !== "ALL") q = q.eq("team", team)
-      const { data, error } = await q
-      if (error) throw error
-      const page = (data ?? []) as unknown as BranchRevDealListRow[]
-      rows.push(...page)
-      if (page.length < BRANCH_REV_DEALS_PAGE_SIZE) break
-    }
-    return rows.map(normalizeDealRow)
-  },
+  fetchBranchRevDeals,
   [BRANCH_REV_DEALS_CACHE_TAG],
   { revalidate: BRANCH_REV_DEALS_REVALIDATE_SECONDS, tags: [BRANCH_REV_DEALS_CACHE_TAG] },
 )
@@ -110,6 +112,14 @@ export async function listBranchRevDeals(
   opts?: { withRaw?: boolean },
 ): Promise<BranchRevDeal[]> {
   return listCachedBranchRevDeals(filter?.team && filter.team !== "ALL" ? filter.team : "ALL", opts?.withRaw ?? false)
+}
+
+// 캐시를 거치지 않는 전량 읽기 — 미러를 스냅샷으로 굳히는 쓰기 경로(REV DB 임포트 캡처) 전용.
+// replaceBranchRevDeals의 revalidateTag(…, "max")는 stale-while-revalidate라, 동기화 직후
+// 같은 요청에서 listBranchRevDeals를 부르면 동기화 이전 미러가 돌아올 수 있다. 화면 읽기는
+// 계속 캐시판을 쓴다.
+export async function listBranchRevDealsFresh(opts?: { withRaw?: boolean }): Promise<BranchRevDeal[]> {
+  return fetchBranchRevDeals("ALL", opts?.withRaw ?? false)
 }
 
 export async function getBranchRevDeal(id: string): Promise<BranchRevDeal | null> {
