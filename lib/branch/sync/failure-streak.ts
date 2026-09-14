@@ -86,7 +86,8 @@ export function shouldAlertSyncFailureStreak(failedDays: number): boolean {
   return failedDays >= 2 && (failedDays - 2) % 3 === 0
 }
 
-function isPermissionError(error: string | null): boolean {
+// 권한·공유 끊김 계열(재시도·재동기화로 안 풀리고 사람이 시트를 다시 공유해야 하는 오류).
+export function isPermissionError(error: string | null): boolean {
   if (!error) return false
   const text = error.toLowerCase()
   return text.includes("does not have permission") || text.includes("permission_denied") || text.includes("403")

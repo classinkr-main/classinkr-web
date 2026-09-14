@@ -14,6 +14,7 @@ import { confirmedMonthAmount } from "@/lib/branch/computations/rev-confirmed"
 import { listMembersByTeam } from "@/lib/branch/computations/pacing"
 import { summarizeCampaigns } from "@/lib/branch/computations/campaigns"
 import { getRecentSyncRuns } from "@/lib/repositories/branch-sync"
+import { computeSyncFailureStreak, isPermissionError, type SyncSourceKey } from "@/lib/branch/sync/failure-streak"
 import { listCachedPublicEvents } from "@/lib/repositories/public-events"
 
 export type BranchSummaryTeam = "ALL" | "BD" | "MKT" | "CSM"
@@ -225,6 +226,19 @@ const readSheetFreshness = unstable_cache(async () => {
   return candidates.sort().pop() ?? null
 }, ["branch-sheet-freshness"], { revalidate: 60, tags: ["branch-sheet-freshness"] })
 
+function buildSyncHealth(runs: Awaited<ReturnType<typeof getRecentSyncRuns>>) {
+  const pick = (source: SyncSourceKey) => {
+    const streak = computeSyncFailureStreak(runs, source)
+    return {
+      failedDays: streak.failedDays,
+      lastSuccessAt: streak.lastSuccessAt,
+      permissionDenied: streak.failedDays > 0 && isPermissionError(streak.lastError),
+      truncated: streak.truncated,
+    }
+  }
+  return { rev: pick("rev"), hw: pick("hw") }
+}
+
 export interface BranchSummaryPayloadQuery {
   team: BranchSummaryTeam
   period: BranchSummaryPeriod
@@ -271,6 +285,10 @@ export async function buildBranchSummaryPayload(query: BranchSummaryPayloadQuery
     return t >= currentDate.getTime() && t <= currentDate.getTime() + 30*86400_000
   })
   const lastRun = runs[0]
+  // 소스별 동기화 건강 상태 — lastSync는 "마지막 런" 시각이라 실패한 런도 "방금"으로 보인다.
+  // 크론 알림과 같은 판정(computeSyncFailureStreak)으로 마지막 성공·연속 실패 일수를 싣는다.
+  // 최근 60런(캐시)이면 하루 1회 크론 + 재시도로 두 달을 덮고, 넘치면 truncated로 드러난다.
+  const syncHealth = buildSyncHealth(await getRecentSyncRuns(60))
   // 임포트 폴백만 활성 런의 캡처 시각(source.asOf)을 쓴다. 미러/라이브 폴백의 asOf는
   // 이미 계산된 lastSync/sheetModifiedAt을 재사용한다(같은 값을 다시 조회하는 왕복 없음).
   const lastSync = lastRun?.finished_at ?? lastRun?.started_at ?? null
@@ -469,6 +487,7 @@ export async function buildBranchSummaryPayload(query: BranchSummaryPayloadQuery
       deals: timelines.deals,
       campaigns: timelines.campaigns,
     },
+    sync_health: syncHealth,
     deal_mix: dealMix,
     // 장부 DSH 수치 그리드 원천 — 파서 breakdown(DshBreakdownRow[])을 그대로 노출한다.
     // 팀 필터와 무관한 Team KR 전사 수치(시트 '1. DSH'의 Goal/Status × Software/Hardware

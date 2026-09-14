@@ -52,6 +52,7 @@ import { ledgerRowHasColor } from "@/lib/branch/computations/revenue-core"
 import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
 import { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
 import { isSheetAheadOfSync } from "@/lib/branch/sheet-freshness"
+import SyncHealthBanner from "./ledger/SyncHealthBanner"
 import { isPrefetchFresh } from "@/lib/admin/prefetch-freshness"
 // ledger/ 섹션 파일들이 워크벤치를 단일 진입점으로 import — 포매터 SSOT는 lib/branch/ledger-format
 export { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
@@ -2482,6 +2483,10 @@ export default function SalesLedgerWorkbench({
   const appliedDraftTotal = additiveAppliedDraftRows.reduce((sum, row) => sum + row.revenue, 0)
   const ledgerConfirmed = (revenue?.confirmed ?? 0) + appliedDraftTotal
   const ledgerDelta = ledgerConfirmed - (revenue?.confirmed ?? 0)
+  // 장부 입력(초안·적용)이 한 건도 없으면 "장부 가감"·"입력 큐" 타일은 항상 0이다 — 접어서 목표·확정·Gap만
+  // 남긴다(건수는 원천 스트립의 "입력 큐·내부 원장"에 그대로 있다). 입력이 생기면 자동으로 다시 보인다.
+  const showLedgerInputTiles =
+    openDrafts.length > 0 || additiveAppliedDraftRows.length > 0 || replacementAppliedDraftRows.length > 0
   const periodLabel = period === "M" ? formatMonthLabel(selectedMonth) : period === "Q" ? "현재 분기" : fyLabel
   // 파이프라인 탭 딥링크(품질 웨이브 3, 항목 9 → 웨이브 6, 항목 4) — 지금 보고 있는 team/period
   // 컨텍스트를 동봉해 "KPI 보기" 클릭 후에도 같은 팀/기간을 유지한다. q(검색어)·mgr(담당자 필터)도
@@ -2700,6 +2705,8 @@ export default function SalesLedgerWorkbench({
         {/* CRM 싱크 스트립(A안) — 정합 체크(시트 자체 품질)의 형제 축: "시트가 CRM과 이어져
             있는가". 표시 레이어 전용, fail-soft(로딩 미렌더·실패 시 조용한 한 줄). */}
         <CrmSyncStrip coverage={{ data: crmCoverage.data, loading: crmCoverage.loading, error: crmCoverage.error }} />
+        {/* 동기화가 끊겼을 때만 뜨는 한 줄 — 며칠째·무엇 기준·어떻게 푸나(정상이면 렌더 없음). */}
+        <SyncHealthBanner health={summary.data?.sync_health?.rev} now={sourceStripNow} />
         <aside className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-1 self-start">
           <div className="inline-flex flex-wrap gap-1 self-start rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-1" role="tablist" aria-label="장부 렌즈 전환">
@@ -2737,9 +2744,12 @@ export default function SalesLedgerWorkbench({
               원천
             </span>
             <span>
-              sync{" "}
-              <span className="font-semibold text-[#111110]" title={formatDateTime(summary.data?.lastSync)}>
-                {relativeTimeFromNow(summary.data?.lastSync, sourceStripNow)}
+              마지막 성공{" "}
+              <span
+                className="font-semibold text-[#111110]"
+                title={`마지막 성공 ${formatDateTime(summary.data?.sync_health?.rev.lastSuccessAt ?? summary.data?.lastSync)} · 마지막 시도 ${formatDateTime(summary.data?.lastSync)}`}
+              >
+                {relativeTimeFromNow(summary.data?.sync_health?.rev.lastSuccessAt ?? summary.data?.lastSync, sourceStripNow)}
               </span>
             </span>
             <span>
@@ -2793,7 +2803,7 @@ export default function SalesLedgerWorkbench({
         </aside>
 
         <section className="min-w-0 space-y-5">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <div className={`grid gap-3 ${showLedgerInputTiles ? "sm:grid-cols-2 xl:grid-cols-5" : "sm:grid-cols-3"}`}>
             <MetricTile
               label="목표"
               value={summaryPending ? "–" : formatMoney(revenue?.goal)}
@@ -2825,7 +2835,8 @@ export default function SalesLedgerWorkbench({
                 )
               }
             />
-            <MetricTile
+            {showLedgerInputTiles && (
+              <MetricTile
               label="장부 가감"
               value={summaryPending ? "–" : `${ledgerDelta >= 0 ? "+" : ""}${formatMoney(ledgerDelta)}`}
               hint={
@@ -2836,6 +2847,7 @@ export default function SalesLedgerWorkbench({
               tone={ledgerDelta >= 0 ? "text-[#084734]" : "text-[#A8741A]"}
               icon={<Send className="h-3.5 w-3.5" />}
             />
+            )}
             <MetricTile
               label="Gap"
               value={summaryPending ? "–" : formatMoney(gap)}
@@ -2843,6 +2855,7 @@ export default function SalesLedgerWorkbench({
               tone={gap >= 0 ? "text-[#084734]" : "text-[#B43E3E]"}
               icon={gap >= 0 ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
             />
+            {showLedgerInputTiles && (
             <MetricTile
               label="입력 큐"
               value={queueLoading && drafts.length === 0 ? "–" : formatMoney(draftTotal)}
@@ -2850,6 +2863,7 @@ export default function SalesLedgerWorkbench({
               tone="text-[#A8741A]"
               icon={<Pencil className="h-3.5 w-3.5" />}
             />
+            )}
           </div>
 
           <div

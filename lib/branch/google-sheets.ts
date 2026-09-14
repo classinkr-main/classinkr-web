@@ -1,13 +1,19 @@
 import "server-only"
 import { sheets, drive } from "@/lib/google"
+import { isRetryableGoogleError } from "./google-retry"
 
 const RETRY_DELAYS_MS = [200, 800, 2000]
 
+// 403(공유 끊김)·404 같은 오류는 재시도해도 같으므로 즉시 던진다 — 백오프 3초가 매 요청에
+// 붙어 summary·data-quality가 4~5초 걸리던 원인(2026-09-14 실측). 문구는 호출부 호환을 위해 유지.
 async function withRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
   let lastErr: unknown
   for (const delay of [0, ...RETRY_DELAYS_MS]) {
     if (delay) await new Promise((r) => setTimeout(r, delay))
-    try { return await fn() } catch (e) { lastErr = e }
+    try { return await fn() } catch (e) {
+      lastErr = e
+      if (!isRetryableGoogleError(e)) break
+    }
   }
   throw new Error(`[branch/sheets] ${label} failed after retries: ${String(lastErr)}`)
 }
