@@ -133,7 +133,8 @@ export const ADMIN_NAV: AdminNavItem[] = [
 
   // 마케팅·분석 — 캠페인·콘텐츠·리드 + 웹/비즈니스 분석
   // 메시지 발송 허브(이메일·문자·카카오, /admin/marketing)는 캠페인의 "메시지" 탭으로 흡수 — 라우트는 redirect 유지.
-  { href: "/admin/campaigns", label: "캠페인", icon: Megaphone, roles: [...STAFF_ADMIN, "BRANCH"], section: "marketing", category: "growth", keywords: "캠페인 이메일 campaign email 메시지 발송 문자 sms 카카오 kakao 알림톡 솔라피 solapi" },
+  // (2026-09-14) 라벨 "캠페인" → "마케팅": 허브가 한눈에·상세·데이터 3층의 마케팅 홈이 됐다. 라우트는 그대로(N3 보류).
+  { href: "/admin/campaigns", label: "마케팅", icon: Megaphone, roles: [...STAFF_ADMIN, "BRANCH"], section: "marketing", category: "growth", keywords: "마케팅 marketing 한눈에 대시보드 dashboard 캠페인 이메일 campaign email 메시지 발송 문자 sms 카카오 kakao 알림톡 솔라피 solapi 광고비 리드 cpl 퍼널" },
   // 크로스채널 캠페인 관리 — 이메일·문자·행사·Meta 실행을 하나의 캠페인 개체로 묶고 롤업(D1).
   { href: "/admin/campaigns/manage", label: "캠페인 관리", icon: Layers, roles: [...STAFF_ADMIN, "BRANCH"], section: "marketing", category: "growth", keywords: "캠페인 관리 크로스채널 통합 롤업 연결 campaign manage cross-channel rollup" },
   // 마케팅 프로젝트 — 여러 캠페인을 묶는 상위 개체. 멤버 캠페인 롤업 + 예산 소진(D3).

@@ -99,6 +99,7 @@ export function StatTile({
   accent,
   iconColor,
   sparkline,
+  footer,
   href,
   lift,
   compact,
@@ -123,6 +124,9 @@ export function StatTile({
   // KPI 카드 아래 미니 추이. <Sparkline/>을 next/dynamic으로 감싼 노드를 슬롯으로 받는다
   // (StatTile 자체는 Recharts-free 유지).
   sparkline?: ReactNode
+  // 스파크라인 아래 보조 슬롯 — 값의 "구성"을 말하는 작은 막대·범례(예: 리드의 소스 분해).
+  // 값 자체가 아니라 값을 읽는 맥락이므로 hint 보다 아래, 스파크라인 다음에 둔다.
+  footer?: ReactNode
   // 주면 카드 전체가 해당 경로로 이동하는 드릴다운 링크가 된다.
   href?: string
   // true면 href 유무와 무관하게 hover-lift+shadow 카드 스타일(구 StatCard 시각) 적용.
@@ -133,13 +137,17 @@ export function StatTile({
   compact?: boolean
   // 값 타이포 스케일 옵트인. "lg"=34px — '숫자를 화면의 주어로' 스트립(overview 상단)용.
   // 생략 시 28px. "lg"=34px — 대표 숫자 스트립(overview 상단·campaigns KPI)이 옵트인한다.
+  // "xl"=44px — 화면에 4개 이하만 두는 히어로 숫자(마케팅 한눈에 층). 등폭 숫자를 쓰지 않는다:
+  // 큰 크기에서 tabular-nums 는 자간이 벌어져 보이고, 히어로는 열 정렬이 필요 없다.
   // compact 와 무관하게 동작한다.
-  valueSize?: "md" | "lg"
+  valueSize?: "md" | "lg" | "xl"
   // 박스 처리(기본 "card" — 기존 시각과 완전 동일):
   //   card = 흰 배경 + rounded-2xl 테두리(기존 flat/lift 그대로)
   //   soft = 테두리 없는 rounded-xl 틴트 배경(bg-[#fafaf8]) — 구 CRM MeasureTile류 소형 지표 박스
   //   bare = 박스 없이 border-t 구분선만(장식 없는 위계, designPrinciples §7) — 구 CRM MetricCard(deals/rev-sheet/matching 3중복)류 그리드 내부 슬롯
-  variant?: "card" | "soft" | "bare"
+  //   plain = 박스도 구분선도 없음 — 호출부가 패널 하나 안에 타일 여럿을 세로선으로 나눠 놓을 때
+  //           (마케팅 한눈에 히어로 4칸). 카드 4개 대신 패널 1개로 박스 수를 줄이는 용도.
+  variant?: "card" | "soft" | "bare" | "plain"
   // 아이콘 배치(기본 "badge" — 기존 시각과 완전 동일):
   //   badge = 색 배지 안 아이콘이 별도 행(기존 그대로)
   //   inline = 아이콘이 라벨과 같은 행에 저대비로 붙는 헤더(구 CRM MeasureTile/quick-stats 헤더 패턴)
@@ -204,9 +212,11 @@ export function StatTile({
         className={
           // 값 크기는 밀도(compact)와 분리한다 — compact 는 패딩·라벨만 좁히고, 숫자 크기는
           // valueSize 가 정한다. 그래야 "빽빽한 카드에 큰 대표 숫자"가 성립한다.
-          valueSize === "lg"
-            ? "text-[34px] font-bold leading-none tracking-[-0.03em] tabular-nums text-[#111110]"
-            : "text-[28px] font-bold leading-none tracking-[-0.03em] tabular-nums text-[#111110]"
+          valueSize === "xl"
+            ? "text-[44px] font-bold leading-none tracking-[-0.03em] text-[#111110]"
+            : valueSize === "lg"
+              ? "text-[34px] font-bold leading-none tracking-[-0.03em] tabular-nums text-[#111110]"
+              : "text-[28px] font-bold leading-none tracking-[-0.03em] tabular-nums text-[#111110]"
         }
       >
         {value}
@@ -216,6 +226,7 @@ export function StatTile({
       )}
       {resolvedTrend?.label && <p className="mt-0.5 text-[11px] text-[#1a1a1a]/30">{resolvedTrend.label}</p>}
       {sparkline && <div className="mt-3 -mb-1">{sparkline}</div>}
+      {footer && <div className="mt-3">{footer}</div>}
     </>
   )
 
@@ -226,9 +237,20 @@ export function StatTile({
   // soft/bare는 href일 때만 hover 어포던스를 붙인다(정적 지표 슬롯에 불필요한 인터랙션 신호 금지).
   const softClass = `rounded-xl bg-[#fafaf8] ${softPad}${href ? " transition-colors hover:bg-white" : ""}`
   const bareClass = `border-t border-[#f0f0ec] pt-4${href ? " transition-opacity hover:opacity-70" : ""}`
+  const plainClass = href ? "transition-opacity hover:opacity-70" : ""
 
   const innerClass =
-    variant === "bare" ? bareClass : variant === "soft" ? softClass : href ? liftClass : lift ? liftClass : flatClass
+    variant === "plain"
+      ? plainClass
+      : variant === "bare"
+        ? bareClass
+        : variant === "soft"
+          ? softClass
+          : href
+            ? liftClass
+            : lift
+              ? liftClass
+              : flatClass
   const cardClass = href ? `block ${innerClass}` : innerClass
 
   if (href) {

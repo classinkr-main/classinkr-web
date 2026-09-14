@@ -2,7 +2,7 @@
 
 // 캠페인 허브 "신규 리드" 탭 — 새로 들어온 리드를 날짜로 잘라 보고, 연락 여부를 체크한다.
 //
-// 광고 탭의 AdLeadsPanel 과 역할이 다르다(중복 아님):
+// 같은 데이터 층의 AdLeadsPanel(광고 리드 섹션)과 역할이 다르다(중복 아님):
 //  - AdLeadsPanel = **Meta 광고 리드 + 딜 전환**. 광고비·CPL 옆에서 유료 유입 모집단을 보고,
 //    액션은 CRM 고객·거래 전환(비가역)이다.
 //  - 이 탭 = **전 소스 신규 유입 + 연락 체크**. 메타·구글·홈페이지·자료실을 가리지 않고
@@ -92,9 +92,11 @@ export interface NewLeadsTabProps {
   error?: string | null
   /** 체크 성공/롤백을 상위 리드 배열에 반영한다(전량 재조회 없이 해당 건만 교체). */
   onLeadUpdated: (lead: LeadRecord) => void
+  /** 데이터 층 섹션 안에 놓일 때 — 섹션 껍데기가 제목을 그리므로 자체 헤더를 숨긴다. */
+  embedded?: boolean
 }
 
-export default function NewLeadsTab({ leads, loading, error }: NewLeadsTabProps) {
+export default function NewLeadsTab({ leads, loading, error, embedded = false }: NewLeadsTabProps) {
   // ─── 필터 상태(전부 URL 보존) ────────────────────────────────
   const [rangeParam, setRangeParam] = useUrlState("nlRange", "30d")
   const [fromParam, setFromParam] = useUrlState("nlFrom", "")
@@ -218,13 +220,15 @@ export default function NewLeadsTab({ leads, loading, error }: NewLeadsTabProps)
   }, [inRange, range.since, range.until, today])
 
   return (
-    <section className="mt-1">
-      <header className="mb-4">
-        <h2 className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">신규 리드</h2>
-        <p className="mt-1 text-[12px] leading-[1.6] text-[#615D59]">
-          전 소스 신규 유입 — 액션은 연락 체크. 유료 성과는 광고 탭.
-        </p>
-      </header>
+    <section className={embedded ? "" : "mt-1"}>
+      {!embedded && (
+        <header className="mb-4">
+          <h2 className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">신규 리드</h2>
+          <p className="mt-1 text-[12px] leading-[1.6] text-[#615D59]">
+            전 소스 신규 유입 — 액션은 연락 체크. 유료 성과는 상세 › 캠페인, 광고 리드 전환은 아래 광고 리드 섹션.
+          </p>
+        </header>
+      )}
 
       {/* 상단 수치 — 채움 없이 테두리·구분선만. 값은 tabular-nums 로 자릿수를 고정해
           세 칸의 숫자 밑동이 같은 자리에서 시작하게 한다. */}

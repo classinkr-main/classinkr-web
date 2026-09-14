@@ -1,7 +1,7 @@
 # 마케팅 탭 대시보드 재구성 기획 (2026-09-14)
 
-상태: 제안(가안) — 코드 변경 없음, §6 결정 뒤 착수
-범위: `/admin/campaigns` 허브 전체(`/admin/marketing`이 이 화면으로 리다이렉트된다) — 요약·신규 리드·행사·광고·메시지 5탭, `components/admin/campaigns/**`, `lib/marketing/**`, Overview의 `MarketingPerfStrip`, 사이드바 "마케팅·분석" 그룹의 라벨
+상태: 현재 기준 마케팅 허브 실행 로드맵 — Wave 0~2 + N1·N2·G10·G11 구현 완료(2026-09-14, §10), N3·N5 보류
+범위: `/admin/campaigns` 허브 전체(`/admin/marketing`이 이 화면으로 리다이렉트된다) — 재구성 전 요약·신규 리드·행사·광고·메시지 5탭 → 한눈에·상세·데이터·메시지 4탭(§10), `components/admin/campaigns/**`, `lib/marketing/**`, Overview의 `MarketingPerfStrip`, 사이드바 "마케팅·분석" 그룹의 라벨
 정책 상위 문서: [Admin OS 운영 결정](admin-os-operating-decisions-2026-07-11.md) › [어드민 탭 재구성](admin-tab-restructure-2026-07-29.md) › [그로스 플레이북](playbook/04-growth-crm.md) › [마케팅 퍼포먼스 대시보드 설계](marketing-performance-dashboard-design-2026-08-20.md)
 외부 시스템: Compass(`mkt.classin.co.kr`, `classinkr-main/crm`) — 마케팅팀의 상세 작업면. 어드민은 브리지 뷰 7장(`supabase/migrations/20260828_compass_bridge_views.sql`)을 읽기 전용으로만 쓴다.
 시안: [mockups/marketing-tab-glance-2026-09-14.html](mockups/marketing-tab-glance-2026-09-14.html) — "한눈에" 층 실물 비율 시안 + 상세·데이터 층 와이어. 수치는 전부 샘플이다.
@@ -194,9 +194,11 @@
 
 Wave 0만으로도 "판정이 맨 위, 숫자 4개가 한 줄, 퍼널이 가로" 세 가지가 바뀌어 체감이 크다. Wave 2는 컴포넌트 이동이 대부분이지만 `page.tsx`가 탭 id로 데이터 로딩을 게이트하므로(`activeTab === "meta"` 등) 로더 재배선을 함께 해야 한다.
 
-## 6. 사용자 결정이 필요한 항목
+## 6. 사용자 결정 항목 — 2026-09-14 확정
 
-| # | 질문 | 권장 |
+"진행" 지시로 권장안 전부를 채택했다. 아래 표의 권장 열이 곧 결정이다.
+
+| # | 질문 | 권장(= 결정) |
 |---|---|---|
 | 1 | 탭 명칭 — "한눈에 · 상세 · 데이터" vs "요약 · 분석 · 목록" | 전자(요청 표현 그대로, 층위가 이름에 드러난다) |
 | 2 | 메시지 탭 — 4번째 탭 유지 vs `/admin/messages` 분리 | 유지. `?tab=email`·`message_to=` 프리필(고객 360)·⌘K "이메일 자동화"가 걸려 있다 |
@@ -228,6 +230,21 @@ npx vitest run tests/campaigns
 - 채택되면 [마케팅 퍼포먼스 대시보드 설계](marketing-performance-dashboard-design-2026-08-20.md) Phase 2의 "위→아래" 목록은 이 문서 §3.3으로 대체된다고 그 문서 상단에 표기한다. Phase 1(데이터 스파인)·Phase 3(AI 레이어)은 그대로 유효하다.
 - [캠페인·마케팅 IA 디벨롭 분석](campaign-marketing-ia-develop-analysis-2026-07-23.md)의 R3(탭 명칭·경계)·R4(워크스페이스 관점)는 이 문서 N1·N2로 흡수한다.
 - [어드민 탭 재구성](admin-tab-restructure-2026-07-29.md) §4의 "캠페인 — 메타 광고를 기본 탭으로"는 코드(2026-08-21 요약 기본)와 어긋난다. 이 문서 채택과 무관하게 정정한다.
+
+## 10. 진척 기록
+
+### 2026-09-14 — Wave 0·1·2 + N1·N2·G10·G11 구현
+
+- **탭 재편(N1)**: `lib/marketing/hub-tabs.ts`가 탭·섹션·레거시 매핑의 순수 정본. 옛 `?tab=leads|events|meta`는 `data#new-leads`·`detail#events`·`detail#campaigns`로 착지하고 URL을 새 id로 정정한다. `CampaignTab` 타입은 `tabs/types.ts`에서 재수출.
+- **한눈에(G1~G9)**: `SummaryTab`을 밴드 순서로 재조립(판정 → 히어로 4 → 추이·지금 → 가로 퍼널·Top 3 → Compass → 각주). `BriefingCard`는 전폭 밴드(상태 점 규칙 `lib/marketing/verdict.ts`), `KpiStrip`은 4칸 단일 패널(`StatTile` `valueSize="xl"`·`variant="plain"`·`footer` 슬롯 신설), 소스 분해·추이 스택의 접기 규칙은 `lib/marketing/source-fold.ts`. `DailyTrendSection`은 이중축을 버리고 2단 소형 다중(syncId). `FunnelCard layout="horizontal"`, `CampaignScoreboard compact`, `TodayIntakeCard variant="hero"`, `MetricDefinitionsDrawer` 신설. `CompassPipelineBand`는 `components/admin/compass/`로 이동(CRM 홈 import 갱신, 타입은 `crm/home/shared.tsx`에서 재수출).
+- **상세(D1~D6)**: `tabs/DetailTab.tsx` — 섹션 내비(`SectionNav`·`HubSection`·`useScrollToHash`), 스코어보드 전체 + `MetaPerformanceCharts`, `CreativeCplCard` + `creative/AiCreativeSuggestSection`, 세로 퍼널 + `ChannelMixCard`(신설, 예산 집행률 타일 포함), `events/EventPerformanceSection`, `EmailPerformanceCard`(신설, `/api/admin/email` 재사용).
+- **데이터(T1~T8)**: `tabs/DataTab.tsx` — `NewLeadsTab`(embedded), `AdLeadsPanel`, `meta/MetaCampaignPanel`(+Meta CSV), `ChannelBudgetTable`·`EventMetricsQuickTable`·`events/EventListSection`(행사 CSV·행사 관리 링크), `UpdatesFeed`, `WeeklyReportSection`(다이얼로그와 본문 공유 — `perf/weekly-report-view.tsx`). `MetaTab.tsx`·`EventsTab.tsx`는 삭제.
+- **G10 서버 프리페치**: `app/admin/campaigns/page.tsx`는 서버 셸이 되어 `?tab`이 한눈에일 때 `lib/admin/marketing/glance-prefetch.ts`(perf·insights·intake, 1.2초 예산, BRANCH_READ 역할)를 첫 HTML에 싣는다. 클라이언트 본체는 `components/admin/campaigns/CampaignsHubClient.tsx`. 오늘 유입 로더는 `lib/marketing/intake-today.ts`로 승격(라우트와 공유).
+- **G11 "이번 달"**: `PerfPeriodKey`에 `month`(MTD, 전월 1~N일 비교) 추가. `PERF_PERIOD_KEYS/LABEL/BADGE`·`isPerfPeriodKey`가 SSOT — perf·compass/ads 라우트, 탭 띠 토글, 배지가 이를 읽는다. `prevBasisLabel`은 key로 전월/전분기 문구를 가른다.
+- **N2**: 사이드바 라벨 "캠페인" → "마케팅"(keywords 확장). 라우트 스왑(N3)·Analytics 통합(N5)은 미착수.
+- **링크 갱신**: `KpiStrip`·`WeeklyReport` 링크는 `campaignHubHref()`로 상세/데이터 섹션에 착지. 사이드바 예열은 한눈에 층 넷(perf·insights·intake·Compass 파이프라인)으로 교체.
+- **검증**: `npm run typecheck`·`npx eslint app components lib --max-warnings=0`·`npx vitest run --dir tests`(524 파일·4,076개) 통과. 신규 테스트: `tests/campaigns/{hub-tabs,verdict,source-fold,glance-render}.test.ts(x)`, `perf.test.ts` month 케이스, `tests/admin/nav-warmup-contract.test.ts` 예열 목록 갱신.
+- **남은 것**: 실서비스 화면 눈검수(1280·390)는 배포 후 운영자 로그인으로 한다 — 이 환경은 Supabase에 닿지 않아 실데이터 렌더를 못 봤다. 시안(`mockups/marketing-tab-glance-2026-09-14.html`)과 정적 렌더 테스트로 대신했다.
 
 ## 9. 근거 (조사 원문 위치)
 

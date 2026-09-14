@@ -177,7 +177,21 @@ function DisclosureChevron({ open }: { open: boolean }) {
   )
 }
 
-export function CampaignScoreboard({ rows }: { rows: PerfScoreboardRow[] }) {
+export function CampaignScoreboard({
+  rows,
+  compact = false,
+  limit = 3,
+  moreHref,
+}: {
+  rows: PerfScoreboardRow[]
+  /**
+   * 한눈에 층용 축약 — 활성 상위 limit 행만 보이고 휴면 접힘 토글 대신 "전체 → 상세" 링크를 둔다.
+   * 판정 규칙(활성/휴면·정렬)은 전체 표와 같은 splitScoreboardByActivity 를 그대로 쓴다.
+   */
+  compact?: boolean
+  limit?: number
+  moreHref?: string
+}) {
   const [showDormant, setShowDormant] = useState(false)
   // 활동 기준 2그룹(판정 규칙은 splitScoreboardByActivity 참조) — 몇 달 전 중단된 캠페인이
   // 목록을 채워 실제로 돌아가는 캠페인을 파묻는 것을 막는다. 각 그룹은 리드 내림차순 정렬.
@@ -187,19 +201,32 @@ export function CampaignScoreboard({ rows }: { rows: PerfScoreboardRow[] }) {
   // 전부 휴면이면 접을 게 아니라 그냥 다 보여준다 — 빈 표는 만들지 않는다.
   const allDormant = active.length === 0 && dormant.length > 0
   const primaryRows = allDormant ? dormant : active
+  const visibleRows = compact ? primaryRows.slice(0, limit) : primaryRows
 
   return (
     // 판단이 걸린 표라 참조용 카드보다 한 단 앞에 세운다 — 보더 대비 한 단(#e8e8e4→#c8c8c4)과
     // 그림자 1단까지만. 색으로 위계를 만들지는 않는다(채움 없음).
     <section
       className="rounded-2xl border border-[#c8c8c4] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] sm:p-5"
-      aria-label="캠페인 스코어보드"
+      aria-label={compact ? "캠페인 Top 3" : "캠페인 스코어보드"}
     >
-      <div className="mb-3">
-        <h2 className="text-[14px] font-semibold text-[#111110]">캠페인 스코어보드</h2>
-        <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
-          리드·CPL Meta 링크 귀속 · 14일 스파크라인
-        </p>
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 className="text-[14px] font-semibold text-[#111110]">
+            {compact ? `캠페인 Top ${limit} · 리드순` : "캠페인 스코어보드"}
+          </h2>
+          <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
+            리드·CPL Meta 링크 귀속 · 집행률은 통화가 맞을 때만 · 14일 스파크라인
+          </p>
+        </div>
+        {compact && moreHref && rows.length > 0 && (
+          <Link
+            href={moreHref}
+            className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#084734] hover:underline"
+          >
+            전체 {COUNT.format(rows.length)}개 스코어보드 → 상세
+          </Link>
+        )}
       </div>
 
       {rows.length === 0 ? (
@@ -237,11 +264,18 @@ export function CampaignScoreboard({ rows }: { rows: PerfScoreboardRow[] }) {
             )}
 
             <div className="divide-y divide-[#f0f0ec]">
-              {primaryRows.map((row) => (
+              {visibleRows.map((row) => (
                 <ScoreboardRow key={row.campaignId} row={row} />
               ))}
 
-              {!allDormant && dormant.length > 0 && (
+              {compact && (
+                <p className="pt-2.5 text-[11px] tabular-nums text-[#A39E98]">
+                  진행 {COUNT.format(active.length)} · 휴면 {COUNT.format(dormant.length)}
+                  {" — "}휴면 캠페인과 전체 목록은 상세에서 접힘으로 봅니다.
+                </p>
+              )}
+
+              {!compact && !allDormant && dormant.length > 0 && (
                 <div>
                   <button
                     type="button"

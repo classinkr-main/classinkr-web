@@ -4,7 +4,8 @@
 import type { EventEconomics, EventFunnel, EventMetrics, AdChannel } from "@/lib/types/event-metrics"
 import type { PublicEvent } from "@/lib/types/public-events"
 
-export type CampaignTab = "summary" | "leads" | "events" | "meta" | "email"
+// 탭 id 정본은 lib/marketing/hub-tabs(순수 모듈) — 여기서는 호환용 재수출만 한다(2026-09-14).
+export type { CampaignTab } from "@/lib/marketing/hub-tabs"
 
 export type MetaDatePreset = "last_7d" | "last_30d" | "last_90d" | "this_month"
 

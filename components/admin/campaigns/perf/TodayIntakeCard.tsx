@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react"
 import { Skeleton } from "@/components/admin/viz"
 import { COUNT } from "@/components/admin/campaigns/event-format"
-import { adminFetchJsonCached } from "@/lib/admin-client"
+import { adminFetchJsonCached, seedAdminRequestCache } from "@/lib/admin-client"
 import type { IntakeFeedItem, IntakeFeedResult } from "@/lib/marketing/intake-feed"
 
 // 오늘 유입 — 어드민 public.leads 와 Compass 리드를 전화 키로 접은 라이브 카운트 + 실명 피드.
@@ -15,6 +15,8 @@ import type { IntakeFeedItem, IntakeFeedResult } from "@/lib/marketing/intake-fe
 //  - 비교는 "어제 같은 시각까지" 창이다. 어제 하루 전체와 견주면 오전엔 늘 급감으로 보인다.
 
 const TTL_MS = 20_000
+export const INTAKE_TODAY_URL = "/api/admin/marketing/intake-today"
+export const INTAKE_TODAY_CACHE_KEY = "marketing-intake-today"
 
 const KST_HHMM = new Intl.DateTimeFormat("ko-KR", {
   hour: "2-digit",
@@ -36,8 +38,24 @@ function formatKstTime(iso: string): string {
  * 프로미스 콜백 안으로만 두면 규칙이 요구하는 모양(외부 시스템 구독 → 콜백에서 갱신)이 되고,
  * 정리 함수의 ignore 플래그가 레이스도 함께 막는다(늦게 온 응답이 최신을 덮지 않는다).
  */
-function useIntakeToday(refreshNonce: number) {
-  const [data, setData] = useState<IntakeFeedResult | null>(null)
+function useIntakeToday(
+  refreshNonce: number,
+  initialData?: IntakeFeedResult | null,
+  initialGeneratedAt?: number
+) {
+  // 서버 프리페치 시드 — 상태 지연 초기화(첫 렌더 1회) 안에서 캐시에 심어, 첫 effect 의 조회가
+  // 네트워크 대신 캐시를 읽게 한다. 렌더 본문에서 ref 를 읽는 대신 초기화 함수를 쓰는 이유는
+  // react-hooks/refs 규칙(렌더 중 ref 접근 금지) 때문이다.
+  const [data, setData] = useState<IntakeFeedResult | null>(() => {
+    if (initialData) {
+      seedAdminRequestCache(INTAKE_TODAY_URL, initialData, {
+        cacheKey: INTAKE_TODAY_CACHE_KEY,
+        ttlMs: TTL_MS,
+        generatedAt: initialGeneratedAt,
+      })
+    }
+    return initialData ?? null
+  })
   const [error, setError] = useState<string | null>(null)
   /** 수동 재시도 카운터 — 값이 바뀌면 effect 가 다시 돈다. */
   const [retryNonce, setRetryNonce] = useState(0)
@@ -49,10 +67,10 @@ function useIntakeToday(refreshNonce: number) {
     startedRef.current = true
     let ignore = false
 
-    const url = `/api/admin/marketing/intake-today${fresh ? "?fresh=1" : ""}`
+    const url = `${INTAKE_TODAY_URL}${fresh ? "?fresh=1" : ""}`
     adminFetchJsonCached<IntakeFeedResult>(url, undefined, {
       ttlMs: TTL_MS,
-      cacheKey: "marketing-intake-today",
+      cacheKey: INTAKE_TODAY_CACHE_KEY,
       force: fresh,
       staleIfError: !fresh,
     })
@@ -125,8 +143,31 @@ function FeedRow({ item }: { item: IntakeFeedItem }) {
   )
 }
 
-export function TodayIntakeCard({ refreshNonce }: { refreshNonce: number }) {
-  const { data, error, retry } = useIntakeToday(refreshNonce)
+export function TodayIntakeCard({
+  refreshNonce,
+  variant = "card",
+  maxItems,
+  footer,
+  initialData,
+  initialGeneratedAt,
+}: {
+  refreshNonce: number
+  /** 서버 프리페치(한눈에 층) — 있으면 스켈레톤 없이 시작한다. */
+  initialData?: IntakeFeedResult | null
+  initialGeneratedAt?: number
+  /**
+   * hero(한눈에 층): 눈높이 우측의 "지금" 카드 — 값 44px, 눈썹 라벨, 최근 maxItems 건.
+   * card(기본): 구 레일용 34px 카드. 데이터·정직 규칙은 두 변형이 동일하다.
+   */
+  variant?: "card" | "hero"
+  /** 피드 최대 행수 — 생략하면 API 가 준 만큼(최대 8). */
+  maxItems?: number
+  /** 카드 발치 슬롯 — 한눈에 층은 "이 기간 미컨택 광고 리드 N → 신규 리드 큐" 링크를 둔다. */
+  footer?: React.ReactNode
+}) {
+  const { data, error, retry } = useIntakeToday(refreshNonce, initialData, initialGeneratedAt)
+  const hero = variant === "hero"
+  const items = data ? (maxItems != null ? data.items.slice(0, maxItems) : data.items) : []
 
   const badges: string[] = []
   if (data) {
@@ -139,12 +180,20 @@ export function TodayIntakeCard({ refreshNonce }: { refreshNonce: number }) {
 
   return (
     <section
-      className="rounded-2xl border border-[#f0f0ec] bg-[#fdfdfc] p-4 sm:p-5"
+      className={
+        hero
+          ? "flex h-full flex-col rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-5"
+          : "rounded-2xl border border-[#f0f0ec] bg-[#fdfdfc] p-4 sm:p-5"
+      }
       aria-label="오늘 유입"
     >
       <div className="mb-3">
-        <h2 className="text-[14px] font-semibold text-[#111110]">오늘 유입</h2>
-        <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
+        {hero ? (
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#A39E98]">지금 · 오늘 유입</p>
+        ) : (
+          <h2 className="text-[14px] font-semibold text-[#111110]">오늘 유입</h2>
+        )}
+        <p className={hero ? "sr-only" : "mt-0.5 text-[11px] text-[#1a1a1a]/40"}>
           KST 오늘 00:00~지금 · 어드민 리드 + Compass, 전화 기준 중복 접음
         </p>
       </div>
@@ -170,8 +219,15 @@ export function TodayIntakeCard({ refreshNonce }: { refreshNonce: number }) {
         )
       ) : (
         <>
-          <div className="flex items-end justify-between gap-3">
-            <p className="text-[34px] font-bold leading-none tracking-[-0.03em] tabular-nums text-[#111110]">
+          <div className={hero ? "flex flex-col gap-1.5" : "flex items-end justify-between gap-3"}>
+            {/* 히어로는 44px·등폭 숫자 없음(큰 숫자에 tabular 는 자간이 벌어져 보인다). */}
+            <p
+              className={
+                hero
+                  ? "text-[44px] font-bold leading-none tracking-[-0.03em] text-[#111110]"
+                  : "text-[34px] font-bold leading-none tracking-[-0.03em] tabular-nums text-[#111110]"
+              }
+            >
               {COUNT.format(data.todayCount)}
             </p>
             <DeltaLine delta={data.delta} />
@@ -190,22 +246,28 @@ export function TodayIntakeCard({ refreshNonce }: { refreshNonce: number }) {
             </div>
           )}
 
-          {data.items.length === 0 ? (
+          {items.length === 0 ? (
             <p className="mt-3 border-t border-[#f0f0ec] pt-3 text-[11.5px] text-[#A39E98]">
               오늘 아직 유입이 없습니다.
             </p>
           ) : (
             <ul className="mt-3 divide-y divide-[#f0f0ec] border-t border-[#f0f0ec] pt-1">
-              {data.items.map((item) => (
+              {items.map((item) => (
                 <FeedRow key={item.key} item={item} />
               ))}
             </ul>
+          )}
+          {hero && data.items.length > items.length && (
+            <p className="mt-1 text-[10.5px] tabular-nums text-[#A39E98]">
+              오늘 {COUNT.format(data.todayCount)}건 중 최근 {COUNT.format(items.length)}건
+            </p>
           )}
 
           {/* 재조회 실패는 화면을 비우지 않고 밝히기만 한다(직전 값 유지). */}
           {error && <p className="mt-2 text-[11px] text-[#1a1a1a]/45">{error}</p>}
         </>
       )}
+      {footer && <div className={hero ? "mt-auto pt-3" : "mt-3"}>{footer}</div>}
     </section>
   )
 }
