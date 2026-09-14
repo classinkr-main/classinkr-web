@@ -39,6 +39,12 @@ const CreativeCplCard = dynamic(
   () => import("@/components/admin/campaigns/perf/CreativeCplCard").then((m) => m.CreativeCplCard),
   { ssr: false, loading: () => <ChartSkeleton className="h-[300px]" /> }
 )
+// 광고세트별 성과(Compass 브리지) — 소재 카드 바로 아래 마운트. Recharts 는 안 쓰지만
+// 자기 엔드포인트를 직접 fetch 하는 client-only 카드라 소재 카드와 같은 청크 규약을 따른다.
+const AdsetPerfCard = dynamic(
+  () => import("@/components/admin/campaigns/perf/AdsetPerfCard").then((m) => m.AdsetPerfCard),
+  { ssr: false, loading: () => <ChartSkeleton className="h-[260px]" /> }
+)
 
 /* ─── usePerf — perf 응답 fetch + 기간 레이스 가드 ────────────────────────────── */
 
@@ -412,6 +418,8 @@ function PerfSkeleton() {
       <ChartSkeleton className="h-[280px]" />
       {/* 소재별 CPL 자리 — 콜드로드에서 이 카드만큼 레이아웃이 밀리지 않게 높이를 예약한다. */}
       <ChartSkeleton className="h-[300px]" />
+      {/* 광고세트별 성과 자리 — 소재 카드 바로 아래 마운트되므로 같은 이유로 예약한다. */}
+      <ChartSkeleton className="h-[260px]" />
       <div className="grid gap-4 lg:grid-cols-2">
         <ChartSkeleton className="h-[260px]" />
         <ChartSkeleton className="h-[260px]" />
@@ -607,6 +615,14 @@ export default function SummaryTab({
                   (Compass 브리지는 perf 조립과 원천이 달라 한 응답에 섞지 않는다). */}
               <div className="order-6">
                 <CreativeCplCard period={period} refreshNonce={refreshNonce} />
+              </div>
+              {/* 광고세트별 성과 — 소재별 CPL 바로 아래. order 값은 위 CreativeCplCard 와
+                  똑같이 6이다(새 번호를 끼워 넣으려면 스코어보드~퍼널 사이 order 를 전부
+                  한 칸씩 밀어야 한다) — 같은 order 는 소스 순서로 동률을 깨므로, DOM 에서
+                  바로 다음에 두면 좁은 화면 통짜 스택과 xl 좌측 컬럼 스택 양쪽에서 항상
+                  이 카드 바로 아래에 온다. */}
+              <div className="order-6">
+                <AdsetPerfCard period={period} refreshNonce={refreshNonce} />
               </div>
             </div>
 
