@@ -20,9 +20,10 @@ interface UpdateCall {
   affected: number
 }
 
-function fakeLeadsTable(initial: FakeLeadRow[], options: { failUpdate?: boolean } = {}) {
+function fakeLeadsTable(initial: FakeLeadRow[], options: { failUpdateCall?: number } = {}) {
   const rows = initial.map((row) => ({ ...row }))
   const updates: UpdateCall[] = []
+  let updateCalls = 0
 
   const from = vi.fn(() => {
     let mode: "select" | "update" = "select"
@@ -67,7 +68,8 @@ function fakeLeadsTable(initial: FakeLeadRow[], options: { failUpdate?: boolean 
         })
       },
       then(resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) {
-        if (options.failUpdate) {
+        updateCalls += 1
+        if (options.failUpdateCall === updateCalls) {
           return Promise.resolve({ data: null, error: { message: "update denied" } }).then(resolve, reject)
         }
         const matched = rows.filter((row) => filters.every((filter) => filter(row)))
@@ -95,6 +97,7 @@ function lead(partial: Partial<FakeLeadRow> & { id: string }): FakeLeadRow {
   }
 }
 
+const NOW = new Date("2026-09-14T10:00:00.000Z")
 const revalidateTag = vi.fn()
 
 async function loadRepository(table: ReturnType<typeof fakeLeadsTable>) {
@@ -139,6 +142,15 @@ describe("리드 상태 MKT 반영 저장소", () => {
         { id: "contacted-with-phone", phone: "010-1234-5678", status: "contacted" },
       ])
     })
+
+    it("페이지 경계에서 같은 행이 두 번 와도 한 번만 돌려준다", async () => {
+      const table = fakeLeadsTable([lead({ id: "dup" }), lead({ id: "dup" }), lead({ id: "other" })])
+      const repo = await loadRepository(table)
+
+      const leads = await repo.getLeadsForCompassContactSync()
+
+      expect(leads.map((row) => row.id)).toEqual(["dup", "other"])
+    })
   })
 
   describe("applyCompassLeadStatusSync", () => {
@@ -150,9 +162,9 @@ describe("리드 상태 MKT 반영 저장소", () => {
       ])
       const repo = await loadRepository(table)
 
-      const result = await repo.applyCompassLeadStatusSync({ contactedIds: ["a", "b", "c"], closedIds: [] })
+      const result = await repo.applyCompassLeadStatusSync({ contactedIds: ["a", "b", "c"], closedIds: [] }, { now: NOW })
 
-      expect(result).toEqual({ contacted: ["a"], closed: [] })
+      expect(result).toMatchObject({ contacted: ["a"], closed: [], stoppedEarly: false })
       expect(table.rows.map((row) => [row.id, row.status])).toEqual([
         ["a", "contacted"],
         ["b", "converted"],
@@ -160,22 +172,25 @@ describe("리드 상태 MKT 반영 저장소", () => {
       ])
     })
 
-    it("종료는 신규·연락함 행만 바꾸고 전환·종료 행은 건드리지 않는다", async () => {
+    it("종료는 신규·연락함 행만 바꾸고, 바뀌기 전 상태를 DB가 실제로 바꾼 기준으로 싣는다", async () => {
       const table = fakeLeadsTable([
         lead({ id: "n" }),
-        lead({ id: "k", status: "contacted" }),
+        lead({ id: "k", status: "contacted", confirmed_at: "2026-08-01T00:00:00.000Z" }),
         lead({ id: "v", status: "converted" }),
         lead({ id: "x", status: "closed", confirmed_at: "2026-08-01T00:00:00.000Z" }),
       ])
       const repo = await loadRepository(table)
 
-      const result = await repo.applyCompassLeadStatusSync({ contactedIds: [], closedIds: ["n", "k", "v", "x"] })
+      const result = await repo.applyCompassLeadStatusSync({ contactedIds: [], closedIds: ["n", "k", "v", "x"] }, { now: NOW })
 
-      expect(result).toEqual({ contacted: [], closed: ["n", "k"] })
+      expect(result.closed).toEqual([
+        { id: "n", from: "new" },
+        { id: "k", from: "contacted" },
+      ])
       expect(table.rows.map((row) => row.status)).toEqual(["closed", "closed", "converted", "closed"])
     })
 
-    it("바뀐 행에만 확인 도장을 찍고, 이미 찍힌 도장은 보존한다", async () => {
+    it("바뀐 행 중 도장이 비어 있던 행에만 도장을 찍고, 찍은 id·시각을 돌려준다", async () => {
       const table = fakeLeadsTable([
         lead({ id: "fresh" }),
         lead({ id: "stamped", confirmed_at: "2026-08-01T00:00:00.000Z" }),
@@ -183,11 +198,10 @@ describe("리드 상태 MKT 반영 저장소", () => {
       ])
       const repo = await loadRepository(table)
 
-      await repo.applyCompassLeadStatusSync(
-        { contactedIds: ["fresh", "stamped"], closedIds: [] },
-        new Date("2026-09-14T10:00:00.000Z")
-      )
+      const result = await repo.applyCompassLeadStatusSync({ contactedIds: ["fresh", "stamped"], closedIds: [] }, { now: NOW })
 
+      expect(result).toMatchObject({ stamped: ["fresh"], confirmedAt: "2026-09-14T10:00:00.000Z" })
+      expect([...result.contacted].sort()).toEqual(["fresh", "stamped"])
       expect(table.rows.map((row) => [row.id, row.confirmed_at])).toEqual([
         ["fresh", "2026-09-14T10:00:00.000Z"],
         ["stamped", "2026-08-01T00:00:00.000Z"],
@@ -195,18 +209,70 @@ describe("리드 상태 MKT 반영 저장소", () => {
       ])
     })
 
+    it("상태와 도장은 한 UPDATE 로 함께 바뀐다 — 중간에 실패해도 도장 빠진 연락함 행이 남지 않는다", async () => {
+      // 1번째 UPDATE(상태+도장)는 성공, 2번째(도장이 이미 있던 행의 상태만)에서 실패
+      const table = fakeLeadsTable([lead({ id: "a" }), lead({ id: "b", confirmed_at: "2026-08-01T00:00:00.000Z" })], {
+        failUpdateCall: 2,
+      })
+      const repo = await loadRepository(table)
+
+      const error = await repo
+        .applyCompassLeadStatusSync({ contactedIds: ["a", "b"], closedIds: [] }, { now: NOW })
+        .catch((reason: unknown) => reason)
+
+      expect(error).toBeInstanceOf(repo.CompassLeadStatusSyncError)
+      expect((error as InstanceType<typeof repo.CompassLeadStatusSyncError>).partial).toMatchObject({
+        contacted: ["a"],
+        stamped: ["a"],
+      })
+      expect(table.rows.filter((row) => row.status === "contacted" && row.confirmed_at === null)).toEqual([])
+      expect(revalidateTag).toHaveBeenCalled()
+    })
+
+    it("중간 덩어리에서 실패하면 그때까지 실제로 바뀐 행을 담아 던진다 — 감사 기록의 근거다", async () => {
+      const initial = Array.from({ length: 150 }, (_, index) => lead({ id: `lead-${index}` }))
+      // 덩어리당 UPDATE 2번(상태+도장 / 상태만) — 3번째 호출이 둘째 덩어리의 첫 UPDATE다.
+      const table = fakeLeadsTable(initial, { failUpdateCall: 3 })
+      const repo = await loadRepository(table)
+
+      const error = await repo
+        .applyCompassLeadStatusSync({ contactedIds: initial.map((row) => row.id), closedIds: [] }, { now: NOW })
+        .catch((reason: unknown) => reason)
+
+      expect(error).toBeInstanceOf(repo.CompassLeadStatusSyncError)
+      expect((error as Error).message).toMatch(/update denied/)
+      const partial = (error as InstanceType<typeof repo.CompassLeadStatusSyncError>).partial
+      expect(partial.contacted).toHaveLength(100)
+      expect(table.rows.filter((row) => row.status === "contacted")).toHaveLength(100)
+    })
+
+    it("shouldContinue 가 false 면 다음 덩어리를 시작하지 않고 멈춘다", async () => {
+      const initial = Array.from({ length: 250 }, (_, index) => lead({ id: `lead-${index}` }))
+      const table = fakeLeadsTable(initial)
+      const repo = await loadRepository(table)
+      let checks = 0
+
+      const result = await repo.applyCompassLeadStatusSync(
+        { contactedIds: initial.map((row) => row.id), closedIds: [] },
+        { now: NOW, shouldContinue: () => ++checks <= 1 }
+      )
+
+      expect(result.stoppedEarly).toBe(true)
+      expect(result.contacted).toHaveLength(100)
+      expect(table.rows.filter((row) => row.status === "contacted")).toHaveLength(100)
+    })
+
     it("바뀐 행이 있을 때만 리드 캐시를 무효화한다", async () => {
       const table = fakeLeadsTable([lead({ id: "a", status: "converted" })])
       const repo = await loadRepository(table)
 
-      await repo.applyCompassLeadStatusSync({ contactedIds: ["a"], closedIds: [] })
+      await repo.applyCompassLeadStatusSync({ contactedIds: ["a"], closedIds: [] }, { now: NOW })
       expect(revalidateTag).not.toHaveBeenCalled()
-      expect(table.updates.some((call) => "confirmed_at" in call.values)).toBe(false)
 
       const changedTable = fakeLeadsTable([lead({ id: "b" })])
       vi.resetModules()
       const changedRepo = await loadRepository(changedTable)
-      await changedRepo.applyCompassLeadStatusSync({ contactedIds: ["b"], closedIds: [] })
+      await changedRepo.applyCompassLeadStatusSync({ contactedIds: ["b"], closedIds: [] }, { now: NOW })
       expect(revalidateTag).toHaveBeenCalled()
     })
 
@@ -215,25 +281,16 @@ describe("리드 상태 MKT 반영 저장소", () => {
       const table = fakeLeadsTable(initial)
       const repo = await loadRepository(table)
 
-      const result = await repo.applyCompassLeadStatusSync({
-        contactedIds: initial.map((row) => row.id),
-        closedIds: [],
-      })
+      const result = await repo.applyCompassLeadStatusSync(
+        { contactedIds: initial.map((row) => row.id), closedIds: [] },
+        { now: NOW }
+      )
 
       expect(result.contacted).toHaveLength(250)
-      const idChunkSizes = table.updates
-        .filter((call) => call.values.status === "contacted")
+      const stampChunkSizes = table.updates
+        .filter((call) => "confirmed_at" in call.values)
         .map((call) => (call.inFilters.find(([column]) => column === "id")?.[1] ?? []).length)
-      expect(idChunkSizes).toEqual([100, 100, 50])
-    })
-
-    it("쓰기 실패는 성공으로 삼키지 않고 던진다", async () => {
-      const table = fakeLeadsTable([lead({ id: "a" })], { failUpdate: true })
-      const repo = await loadRepository(table)
-
-      await expect(repo.applyCompassLeadStatusSync({ contactedIds: ["a"], closedIds: [] })).rejects.toThrow(
-        /update denied/
-      )
+      expect(stampChunkSizes).toEqual([100, 100, 50])
     })
 
     it("JSON 폴백 모드에서는 아무것도 바꾸지 않는다 — Compass 가 없는 로컬 픽스처다", async () => {
@@ -241,9 +298,9 @@ describe("리드 상태 MKT 반영 저장소", () => {
       const table = fakeLeadsTable([lead({ id: "a" })])
       const repo = await loadRepository(table)
 
-      const result = await repo.applyCompassLeadStatusSync({ contactedIds: ["a"], closedIds: [] })
+      const result = await repo.applyCompassLeadStatusSync({ contactedIds: ["a"], closedIds: [] }, { now: NOW })
 
-      expect(result).toEqual({ contacted: [], closed: [] })
+      expect(result).toMatchObject({ contacted: [], closed: [], stamped: [] })
       expect(table.from).not.toHaveBeenCalled()
     })
   })

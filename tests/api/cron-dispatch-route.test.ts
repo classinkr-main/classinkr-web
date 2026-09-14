@@ -174,6 +174,27 @@ describe("시간 슬롯 크론 디스패처", () => {
       )
     })
 
+    it("같은 슬롯의 잡이 오래 걸렸으면 60초 상한에서 남은 시간만큼만 예산을 준다", async () => {
+      process.env.CRON_SECRET = "test-cron-secret"
+      vi.useFakeTimers()
+      const start = new Date("2026-09-14T02:00:00.000Z").getTime()
+      vi.setSystemTime(start)
+      try {
+        const { GET, sendLeadMorningBrief, syncLeadContactFromCompassWithinBudget } = await loadRoute()
+        sendLeadMorningBrief.mockImplementationOnce(async () => {
+          vi.setSystemTime(start + 50_000)
+          return { status: "sent", eventId: "event-daily", totalLeads: 4 }
+        })
+
+        await GET(request("02"), context("02"))
+
+        // 60초 − 경과 50초 − 응답 여유 5초 = 5초
+        expect(syncLeadContactFromCompassWithinBudget).toHaveBeenCalledWith({ budgetMs: 5_000, dryRun: false })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
     it("반영이 끊기거나 실패해도 슬롯 ok·상태코드는 잡 결과만 따른다", async () => {
       process.env.CRON_SECRET = "test-cron-secret"
       const { GET, syncLeadContactFromCompassWithinBudget } = await loadRoute()

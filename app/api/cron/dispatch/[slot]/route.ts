@@ -34,14 +34,25 @@ export const maxDuration = 60
  * 아침 카드를 60초 상한에서 밀어내지 않기 위해서다. 그 결과는 슬롯 ok 에 섞지 않는다.
  */
 
-/** MKT 연락 반영 예산 — 같은 슬롯의 잡이 먼저 쓰고 남은 maxDuration 안에서 끝나야 한다. */
+/** MKT 연락 반영 예산 상한 — 실측(운영 dry run)은 0.5초 안팎이다. */
 const LEAD_CONTACT_SYNC_BUDGET_MS = 20_000
+/** 응답 직렬화·전송에 남겨 두는 여유 */
+const RESPONSE_MARGIN_MS = 5_000
+
+/** 같은 슬롯의 잡이 먼저 쓰고 남은 maxDuration 안에서만 예산을 준다. */
+function leadContactSyncBudgetMs(requestStartedAt: number): number {
+  const remaining = maxDuration * 1_000 - (Date.now() - requestStartedAt) - RESPONSE_MARGIN_MS
+  return Math.max(0, Math.min(LEAD_CONTACT_SYNC_BUDGET_MS, remaining))
+}
 
 type LeadContactSyncOutcome = LeadContactSyncReport | { status: "failed"; dryRun: boolean; error: string }
 
-async function runLeadContactSync(dryRun: boolean): Promise<LeadContactSyncOutcome> {
+async function runLeadContactSync(dryRun: boolean, requestStartedAt: number): Promise<LeadContactSyncOutcome> {
   try {
-    const report = await syncLeadContactFromCompassWithinBudget({ budgetMs: LEAD_CONTACT_SYNC_BUDGET_MS, dryRun })
+    const report = await syncLeadContactFromCompassWithinBudget({
+      budgetMs: leadContactSyncBudgetMs(requestStartedAt),
+      dryRun,
+    })
     console.info("[cron/dispatch] leadContactSync", {
       status: report.status,
       dryRun: report.dryRun,
@@ -88,6 +99,7 @@ export async function GET(
   request: NextRequest,
   context: { params: Promise<{ slot: string }> }
 ) {
+  const requestStartedAt = Date.now()
   const cronSecret = process.env.CRON_SECRET
   if (!cronSecret) {
     return NextResponse.json(
@@ -126,7 +138,7 @@ export async function GET(
       const preview = due.length
         ? await previewLeadMorningBrief(new Date(), notificationSchedule.leadDaily)
         : null
-      const leadContactSync = await runLeadContactSync(true)
+      const leadContactSync = await runLeadContactSync(true, requestStartedAt)
       return NextResponse.json({ ok: true, dryRun: true, slot, kstHour, due, preview, ran: [], leadContactSync })
     } catch {
       return NextResponse.json({ ok: false, error: "Report preview unavailable." }, { status: 503 })
@@ -140,7 +152,7 @@ export async function GET(
     ran.push(await JOB_RUNNERS[job](notificationSchedule[job]))
   }
 
-  const leadContactSync = await runLeadContactSync(false)
+  const leadContactSync = await runLeadContactSync(false, requestStartedAt)
 
   const ok = ran.every((result) => result.status !== "failed")
 

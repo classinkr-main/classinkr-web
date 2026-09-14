@@ -570,7 +570,11 @@ export async function getLeadsForCompassContactSync(): Promise<
 
   const rows = await fetchAllLeadRows("id, phone, status", "MKT 연락 반영 대상 조회");
   const targets: Array<{ id: string; phone: string; status: LeadRecord["status"] }> = [];
+  // offset 페이지 사이에 새 리드가 끼면 경계 행이 두 번 올 수 있다 — 판정 건수가 부풀지 않게 접는다.
+  const seen = new Set<string>();
   for (const row of rows) {
+    if (seen.has(row.id)) continue;
+    seen.add(row.id);
     if (row.status !== "new" && row.status !== "contacted") continue;
     if (!row.phone?.trim()) continue;
     targets.push({ id: row.id, phone: row.phone, status: row.status });
@@ -913,6 +917,28 @@ export async function assignLeads(
 /** in(...) 한 번에 싣는 리드 id 수 — UUID 100개 ≈ 3.8KB, PostgREST URL 길이 상한 대비. */
 const LEAD_ID_UPDATE_CHUNK = 100;
 
+export interface CompassLeadStatusSyncResult {
+  contacted: string[];
+  /** from = DB가 실제로 바꾼 전이의 출발 상태(계획 시점 값이 아니다) */
+  closed: Array<{ id: string; from: "new" | "contacted" }>;
+  /** 이번 반영으로 confirmed_at이 새로 찍힌 id — 복구 때 null로 되돌릴 대상 */
+  stamped: string[];
+  confirmedAt: string;
+  /** shouldContinue가 false를 돌려 남은 덩어리를 시작하지 않았다 */
+  stoppedEarly: boolean;
+}
+
+/** 반영 도중 실패. partial은 실패 전까지 DB가 실제로 바꾼 행이다 — 감사 기록·복구의 근거. */
+export class CompassLeadStatusSyncError extends Error {
+  readonly partial: CompassLeadStatusSyncResult;
+
+  constructor(message: string, partial: CompassLeadStatusSyncResult) {
+    super(message);
+    this.name = "CompassLeadStatusSyncError";
+    this.partial = partial;
+  }
+}
+
 /**
  * MKT(Compass) 처리 결과를 리드 상태에 반영한다 — lib/server/lead-contact-compass-sync 전용.
  *
@@ -920,16 +946,28 @@ const LEAD_ID_UPDATE_CHUNK = 100;
  *  * 사전조건을 WHERE에 건다 — 연락함은 status='new'인 행만, 종료는 status가 new·contacted인 행만.
  *    판정과 쓰기 사이에 사람이 전환·종료했으면 그 행은 조용히 빠진다(돌려주는 id에 없다).
  *  * 단건 PATCH의 "연락중은 연락 기록 저장 뒤에만" 규칙은 걸지 않는다 — 근거가 MKT 활동 기록에 있다.
- *  * 확인 도장은 바뀐 행 중 비어 있는 행에만 찍는다(PATCH가 new를 벗어날 때 찍는 규칙과 같다).
+ *  * 확인 도장은 PATCH가 new를 벗어날 때 찍는 규칙과 같다. 도장이 빈 행은 상태와 도장을 한 UPDATE로
+ *    바꿔서, 중간에 실패해도 "상태만 바뀌고 도장이 빈" 행(보드 미확인 칸에 갇히는 행)이 생기지 않는다.
+ *  * 중간 실패는 CompassLeadStatusSyncError(partial)로 던진다. shouldContinue가 false면 다음 덩어리를
+ *    시작하지 않고 멈춘다(크론 예산 마감).
  * JSON 폴백 모드(로컬 픽스처)에서는 아무것도 하지 않는다.
  */
 export async function applyCompassLeadStatusSync(
   input: { contactedIds: readonly string[]; closedIds: readonly string[] },
-  now: Date = new Date()
-): Promise<{ contacted: string[]; closed: string[] }> {
-  if (!USE_SUPABASE) return { contacted: [], closed: [] };
+  options: { now?: Date; shouldContinue?: () => boolean } = {}
+): Promise<CompassLeadStatusSyncResult> {
+  const result: CompassLeadStatusSyncResult = {
+    contacted: [],
+    closed: [],
+    stamped: [],
+    confirmedAt: (options.now ?? new Date()).toISOString(),
+    stoppedEarly: false,
+  };
+  if (!USE_SUPABASE) return result;
 
   const supabase = createSupabaseAdminClient();
+  const shouldContinue = options.shouldContinue ?? (() => true);
+  let stampSupported = true;
 
   const chunksOf = (ids: readonly string[]) => {
     const unique = Array.from(new Set(ids.filter(Boolean)));
@@ -940,46 +978,66 @@ export async function applyCompassLeadStatusSync(
     return chunks;
   };
 
-  // 바뀐 id는 덩어리마다 바로 쌓는다 — 중간 덩어리에서 실패해도 이미 바뀐 행을 캐시 무효화가 안다.
-  const contacted: string[] = [];
-  const closed: string[] = [];
-  const updateStatusWhere = async (
-    ids: readonly string[],
-    status: "contacted" | "closed",
-    fromStatuses: LeadRecord["status"][],
-    changed: string[]
-  ) => {
-    for (const chunk of chunksOf(ids)) {
-      const { data, error } = await supabase
-        .from("leads")
-        .update({ status })
-        .in("id", chunk)
-        .in("status", fromStatuses)
-        .select("id");
-      if (error) throw new Error(`[leads] MKT 상태 반영(${status}) 실패: ${error.message}`);
-      for (const row of (data ?? []) as Array<{ id: string }>) changed.push(row.id);
+  // 바뀐 행은 UPDATE마다 바로 기록한다 — 다음 UPDATE가 실패해도 partial에 빠지지 않는다.
+  const record = (rows: unknown, to: "contacted" | "closed", from: "new" | "contacted", stamped: boolean) => {
+    for (const { id } of (rows ?? []) as Array<{ id: string }>) {
+      if (to === "contacted") result.contacted.push(id);
+      else result.closed.push({ id, from });
+      if (stamped) result.stamped.push(id);
     }
   };
 
-  try {
-    await updateStatusWhere(input.contactedIds, "contacted", ["new"], contacted);
-    await updateStatusWhere(input.closedIds, "closed", ["new", "contacted"], closed);
-    const confirmedAt = now.toISOString();
-    for (const chunk of chunksOf([...contacted, ...closed])) {
-      const { error } = await supabase
+  // 새 상태는 from 조건에 걸리지 않으므로 두 번째 UPDATE가 첫 번째에서 바뀐 행을 다시 잡지 않는다.
+  const moveChunk = async (chunk: string[], to: "contacted" | "closed", from: "new" | "contacted") => {
+    if (stampSupported) {
+      const stampedMove = await supabase
         .from("leads")
-        .update({ confirmed_at: confirmedAt })
+        .update({ status: to, confirmed_at: result.confirmedAt })
         .in("id", chunk)
-        .is("confirmed_at", null);
-      if (error && !isMissingLeadColumn(error, "confirmed_at")) {
-        throw new Error(`[leads] MKT 상태 반영 확인 도장 실패: ${error.message}`);
+        .eq("status", from)
+        .is("confirmed_at", null)
+        .select("id");
+      if (stampedMove.error && isMissingLeadColumn(stampedMove.error, "confirmed_at")) {
+        stampSupported = false;
+      } else if (stampedMove.error) {
+        throw new Error(`[leads] MKT 상태 반영(${from}→${to}) 실패: ${stampedMove.error.message}`);
+      } else {
+        record(stampedMove.data, to, from, true);
       }
     }
+    const plainMove = await supabase
+      .from("leads")
+      .update({ status: to })
+      .in("id", chunk)
+      .eq("status", from)
+      .select("id");
+    if (plainMove.error) throw new Error(`[leads] MKT 상태 반영(${from}→${to}) 실패: ${plainMove.error.message}`);
+    record(plainMove.data, to, from, false);
+  };
+
+  const steps: Array<{ ids: readonly string[]; to: "contacted" | "closed"; from: "new" | "contacted" }> = [
+    { ids: input.contactedIds, to: "contacted", from: "new" },
+    { ids: input.closedIds, to: "closed", from: "new" },
+    { ids: input.closedIds, to: "closed", from: "contacted" },
+  ];
+
+  try {
+    steps: for (const step of steps) {
+      for (const chunk of chunksOf(step.ids)) {
+        if (!shouldContinue()) {
+          result.stoppedEarly = true;
+          break steps;
+        }
+        await moveChunk(chunk, step.to, step.from);
+      }
+    }
+  } catch (error) {
+    throw new CompassLeadStatusSyncError(error instanceof Error ? error.message : String(error), result);
   } finally {
-    // 중간에 실패해도 이미 바뀐 행이 있으면 다음 읽기가 옛 상태를 보지 않게 한다.
-    if (contacted.length > 0 || closed.length > 0) invalidateLeadReadCaches();
+    // 중간에 실패·중단해도 이미 바뀐 행이 있으면 다음 읽기가 옛 상태를 보지 않게 한다.
+    if (result.contacted.length > 0 || result.closed.length > 0) invalidateLeadReadCaches();
   }
-  return { contacted, closed };
+  return result;
 }
 
 interface GuardedLeadAssignmentParams {

@@ -9,17 +9,48 @@
 
 import { normalizePhoneKey } from "@/lib/compass/normalize"
 import { pickRepresentativeCompassRow, type CompassOverlaySource } from "@/lib/compass/overlay"
-import type { LeadRecord } from "@/lib/repositories/leads"
+import type { LeadStatus } from "@/lib/supabase/database.types"
 
 /** 사람이 남긴 Compass 활동 kind. 알림톡(alimtalk)·시스템(system)·유입(inflow)·임포트(import)는 연락이 아니다. */
 export const COMPASS_HUMAN_ACTIVITY_KINDS = ["call", "sms", "meeting", "note", "memo", "stage_change"] as const
+
+/**
+ * 사람이 아닌 작성자 — kind 가 note 여도 연락이 아니다. 설명회 명단 동기화가 신규 리드를 만들며 남기는
+ * 'BD시트' 메모, 시트 백필·중복 병합 스크립트의 '시트'·'Claude' 메모가 여기 해당한다(Compass 코드 실측).
+ * 작성자가 비어 있는(null) 기록은 시트 시절 콜 메모를 옮겨 온 행이라 사람 기록으로 둔다.
+ */
+export const COMPASS_AUTOMATED_ACTORS: ReadonlySet<string> = new Set(["Claude", "BD시트", "시트", "시스템", "system"])
+
+/** 이보다 짧은 전화 키는 매칭하지 않는다 — '0' 같은 잘못된 번호끼리 붙는 것을 막는다(지역번호 포함 최소 9자리). */
+const MIN_PHONE_KEY_LENGTH = 9
 
 export type LeadStatusFromCompass = "contacted" | "closed"
 
 export interface CompassSyncLead {
   id: string
   phone?: string | null
-  status: LeadRecord["status"]
+  status: LeadStatus
+}
+
+/** 활동 판정에 필요한 최소 필드 — 본문은 싣지 않는다. */
+export interface CompassActivitySignal {
+  lead_id: number
+  kind: string | null
+  actor: string | null
+}
+
+const HUMAN_KINDS: ReadonlySet<string> = new Set(COMPASS_HUMAN_ACTIVITY_KINDS)
+
+/** 사람 손 활동(사람 kind + 자동 작성자 아님)이 한 건이라도 있는 Compass lead id. */
+export function humanTouchedCompassLeadIds(activities: readonly CompassActivitySignal[]): Set<number> {
+  const touched = new Set<number>()
+  for (const activity of activities) {
+    if (!activity.kind || !HUMAN_KINDS.has(activity.kind)) continue
+    const actor = activity.actor?.trim()
+    if (actor && COMPASS_AUTOMATED_ACTORS.has(actor)) continue
+    touched.add(activity.lead_id)
+  }
+  return touched
 }
 
 export interface CompassLeadStatusSyncPlan {
@@ -66,7 +97,7 @@ function groupByPhoneKey(rows: readonly CompassOverlaySource[]): Map<string, Com
   const groups = new Map<string, CompassOverlaySource[]>()
   for (const row of rows) {
     const key = row.phone_key?.trim()
-    if (!key) continue
+    if (!key || key.length < MIN_PHONE_KEY_LENGTH) continue
     const group = groups.get(key)
     if (group) group.push(row)
     else groups.set(key, [row])
@@ -79,7 +110,7 @@ function matchedGroup(
   groups: Map<string, CompassOverlaySource[]>
 ): CompassOverlaySource[] | undefined {
   const key = normalizePhoneKey(lead.phone)
-  return key ? groups.get(key) : undefined
+  return key && key.length >= MIN_PHONE_KEY_LENGTH ? groups.get(key) : undefined
 }
 
 /** 어드민 리드 전체에 판정을 돌려 바꿀 목록을 만든다. */

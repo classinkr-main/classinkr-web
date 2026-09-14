@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-// getCompassHumanActivityLeadIds — 리드 상태 자동 반영이 쓰는 "사람 손 활동이 있는 Compass 리드" 조회.
+// getCompassActivitySignals — 리드 상태 자동 반영이 쓰는 Compass 활동 신호(lead_id·kind·actor) 조회.
 // @/lib/supabase/admin 만 목으로 세우고 브리지 구현을 그대로 통과시킨다(bridge-memo.test.ts 와 같은 층위).
 
 type Page = { data: unknown; error: unknown }
@@ -13,7 +13,7 @@ vi.mock("@/lib/supabase/admin", () => ({
   createSupabaseAdminClient: () => ({ from: fromMock }),
 }))
 
-import { getCompassHumanActivityLeadIds } from "@/lib/compass/bridge"
+import { getCompassActivitySignals } from "@/lib/compass/bridge"
 
 function installChain() {
   fromMock = vi.fn((table: string) => {
@@ -46,44 +46,59 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-const KINDS = ["call", "sms"] as const
+const KINDS = ["call", "note"] as const
 
-describe("getCompassHumanActivityLeadIds", () => {
+describe("getCompassActivitySignals", () => {
   it("입력 id가 없으면 조회하지 않는다", async () => {
     installChain()
-    const result = await getCompassHumanActivityLeadIds([], KINDS)
+    const result = await getCompassActivitySignals([], KINDS)
     expect(result).toEqual({ rows: [], down: false })
     expect(fromMock).not.toHaveBeenCalled()
   })
 
-  it("lead_id 만 읽고 kind 를 서버에서 거르며, 중복 없는 정렬된 id 를 돌려준다", async () => {
+  it("lead_id·kind·actor 만 읽고(본문 미전송) kind 를 서버에서 거른다", async () => {
     installChain()
-    pages = [{ data: [{ lead_id: 5 }, { lead_id: 2 }, { lead_id: 5 }], error: null }]
+    pages = [
+      {
+        data: [
+          { lead_id: 5, kind: "call", actor: "황찬우" },
+          { lead_id: 2, kind: "note", actor: "BD시트" },
+        ],
+        error: null,
+      },
+    ]
 
-    const result = await getCompassHumanActivityLeadIds([5, 2, 9, 2], KINDS)
+    const result = await getCompassActivitySignals([5, 2, 9, 2], KINDS)
 
-    expect(result).toEqual({ rows: [2, 5], down: false })
+    expect(result).toEqual({
+      rows: [
+        { lead_id: 5, kind: "call", actor: "황찬우" },
+        { lead_id: 2, kind: "note", actor: "BD시트" },
+      ],
+      down: false,
+    })
     expect(calls).toHaveLength(1)
     expect(calls[0].from).toEqual(["compass_activities_v"])
-    expect(calls[0].select).toEqual(["lead_id"])
+    expect(calls[0].select).toEqual(["lead_id, kind, actor"])
     expect(calls[0].in).toEqual([
       ["lead_id", [2, 5, 9]],
-      ["kind", ["call", "sms"]],
+      ["kind", ["call", "note"]],
     ])
     expect(calls[0].range).toEqual([0, 999])
   })
 
   it("페이지가 가득 차면 다음 페이지를 이어서 읽는다 — 행 상한에서 조용히 잘리지 않는다", async () => {
     installChain()
-    const full = Array.from({ length: 1000 }, () => ({ lead_id: 1 }))
+    const full = Array.from({ length: 1000 }, () => ({ lead_id: 1, kind: "note", actor: "BD시트" }))
     pages = [
       { data: full, error: null },
-      { data: [{ lead_id: 3 }], error: null },
+      { data: [{ lead_id: 1, kind: "call", actor: "진소망" }], error: null },
     ]
 
-    const result = await getCompassHumanActivityLeadIds([1, 3], KINDS)
+    const result = await getCompassActivitySignals([1], KINDS)
 
-    expect(result.rows).toEqual([1, 3])
+    expect(result.rows).toHaveLength(1001)
+    expect(result.rows.at(-1)).toEqual({ lead_id: 1, kind: "call", actor: "진소망" })
     expect(calls.map((call) => call.range)).toEqual([
       [0, 999],
       [1000, 1999],
@@ -95,7 +110,7 @@ describe("getCompassHumanActivityLeadIds", () => {
     installChain()
     const ids = Array.from({ length: 250 }, (_, index) => index + 1)
 
-    await getCompassHumanActivityLeadIds(ids, KINDS)
+    await getCompassActivitySignals(ids, KINDS)
 
     const chunks = calls.map((call) => (call.in[0] as [string, number[]])[1])
     expect(chunks.map((chunk) => chunk.length)).toEqual([100, 100, 50])
@@ -105,7 +120,7 @@ describe("getCompassHumanActivityLeadIds", () => {
     installChain()
     pages = [{ data: null, error: { message: "relation does not exist" } }]
 
-    const result = await getCompassHumanActivityLeadIds([1], KINDS)
+    const result = await getCompassActivitySignals([1], KINDS)
 
     expect(result).toMatchObject({ rows: [], down: true, error: "relation does not exist" })
   })
@@ -115,7 +130,7 @@ describe("getCompassHumanActivityLeadIds", () => {
       throw new Error("network down")
     })
 
-    const result = await getCompassHumanActivityLeadIds([1], KINDS)
+    const result = await getCompassActivitySignals([1], KINDS)
 
     expect(result).toMatchObject({ rows: [], down: true, error: "network down" })
   })

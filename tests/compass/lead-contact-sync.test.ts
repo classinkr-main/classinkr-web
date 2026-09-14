@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  COMPASS_AUTOMATED_ACTORS,
   COMPASS_HUMAN_ACTIVITY_KINDS,
   compassLeadIdsNeedingActivityCheck,
   decideLeadStatusFromCompass,
+  humanTouchedCompassLeadIds,
   planCompassLeadStatusSync,
 } from "@/lib/compass/lead-contact-sync"
 import type { CompassOverlaySource } from "@/lib/compass/overlay"
@@ -85,7 +87,51 @@ describe("COMPASS_HUMAN_ACTIVITY_KINDS", () => {
   })
 })
 
+describe("humanTouchedCompassLeadIds", () => {
+  it("사람 손 kind 의 활동이 있는 Compass 리드 id 를 모은다", () => {
+    const touched = humanTouchedCompassLeadIds([
+      { lead_id: 1, kind: "call", actor: "황찬우" },
+      { lead_id: 2, kind: "alimtalk", actor: null },
+      { lead_id: 3, kind: "system", actor: null },
+    ])
+    expect([...touched]).toEqual([1])
+  })
+
+  it("자동 기록 작성자(설명회 시트 동기화·백필 스크립트)의 활동은 연락으로 치지 않는다", () => {
+    const touched = humanTouchedCompassLeadIds([
+      { lead_id: 1, kind: "note", actor: "BD시트" },
+      { lead_id: 2, kind: "note", actor: "Claude" },
+      { lead_id: 3, kind: "note", actor: "시트" },
+      { lead_id: 4, kind: "note", actor: " 시스템 " },
+    ])
+    expect(touched.size).toBe(0)
+    expect([...COMPASS_AUTOMATED_ACTORS].sort()).toEqual(["BD시트", "Claude", "system", "시스템", "시트"].sort())
+  })
+
+  it("작성자가 비어 있는 기록은 사람 기록으로 둔다 — 시트 시절 콜 메모를 옮겨 온 행이다", () => {
+    const touched = humanTouchedCompassLeadIds([{ lead_id: 7, kind: "note", actor: null }])
+    expect([...touched]).toEqual([7])
+  })
+
+  it("같은 리드에 자동 기록과 사람 기록이 섞여 있으면 연락함이다", () => {
+    const touched = humanTouchedCompassLeadIds([
+      { lead_id: 5, kind: "note", actor: "BD시트" },
+      { lead_id: 5, kind: "call", actor: "진소망" },
+    ])
+    expect([...touched]).toEqual([5])
+  })
+})
+
 describe("planCompassLeadStatusSync", () => {
+  it("9자리 미만 전화 키는 매칭하지 않는다 — '0' 같은 잘못된 번호끼리 붙지 않게", () => {
+    const plan = planCompassLeadStatusSync(
+      [{ id: "junk", phone: "0", status: "new" }],
+      [row({ id: 1, phone_key: "0", stage: "demo" })],
+      NONE
+    )
+    expect(plan).toMatchObject({ scanned: 1, matched: 0, contacted: [], closed: [] })
+  })
+
   it("전화 표기가 달라도 같은 정규화 키로 매칭한다", () => {
     const plan = planCompassLeadStatusSync(
       [{ id: "a", phone: "+82 10-1234-5678", status: "new" }],
