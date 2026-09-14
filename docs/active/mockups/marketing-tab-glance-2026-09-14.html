@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>마케팅 탭 한눈에 시안</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  /* 라이트 단일 테마 — 어드민(DESIGN.md)이 라이트 전용이라 시안도 라이트로 고정한다.
+     배경·글자색을 전부 명시해 호스트 테마와 무관하게 같은 화면이 나온다. */
+  :root{
+    --ground:#FAFAF8; --panel:#FFFFFF; --strip:#F6F5F4; --line:#E8E8E4; --grid:#F0F0EC;
+    --ink:#111110; --sub:#615D59; --muted:#A39E98;
+    --green:#084734; --green-hover:#065C41; --green-surface:#ECFDF5; --green-line:#BDEFD8;
+    --danger:#B85C33; --danger-tint:#FEF3EE; --danger-line:#F6D5C5;
+    --warn:#A8741A; --warn-tint:#FBF1E0; --warn-line:#ECD29C;
+    --bar-muted:#D6D3CC; --warm-gray:#84827A;
+    --src-meta:#378ADD; --src-home:#1D9E75; --src-res:#BA7517; --src-other:#B5B1AA;
+    --font:"Inter",-apple-system,system-ui,"Segoe UI",Helvetica,Arial,sans-serif;
+    --shadow-card:rgba(0,0,0,0.04) 0 4px 18px, rgba(0,0,0,0.027) 0 2px 7.8px, rgba(0,0,0,0.02) 0 0.8px 2.9px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--ground); color:var(--ink); font-family:var(--font); font-size:13px; line-height:1.5;
+    -webkit-font-smoothing:antialiased; padding-block:28px 64px; padding-inline:clamp(16px,3vw,40px);
+  }
+  a{color:inherit}
+  button{font:inherit; color:inherit; background:none; border:0; padding:0; cursor:pointer}
+  :is(a,button,summary):focus-visible{outline:2px solid var(--green); outline-offset:2px; border-radius:6px}
+  .wrap{max-width:1320px; margin:0 auto; display:flex; flex-direction:column; gap:28px}
+
+  /* ── 시안 안내 ── */
+  .intro{display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:12px 24px}
+  .intro h1{font-size:22px; font-weight:700; letter-spacing:-0.02em; margin:0; text-wrap:balance}
+  .intro p{margin:4px 0 0; color:var(--sub); max-width:64ch}
+  .eyebrow{font-size:10px; font-weight:600; letter-spacing:0.18em; text-transform:uppercase; color:var(--muted)}
+  .sample{display:inline-flex; align-items:center; gap:6px; font-size:11px; color:var(--warn); border:1px solid var(--warn-line); border-radius:6px; padding:3px 8px; background:var(--panel)}
+  .sample::before{content:""; width:6px; height:6px; border-radius:50%; background:var(--warn)}
+
+  /* ── 어드민 프레임 ── */
+  .frame{background:var(--panel); border:1px solid var(--line); border-radius:16px; overflow:hidden; box-shadow:var(--shadow-card)}
+  .adm-header{display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding:26px 32px 18px; background:var(--ground); border-bottom:1px solid var(--line)}
+  .adm-header h2{margin:0; font-size:30px; font-weight:700; letter-spacing:-0.02em; line-height:1.15}
+  .adm-header .sub{color:var(--muted); font-size:12px; margin-top:4px}
+  .btn{display:inline-flex; align-items:center; gap:6px; border-radius:6px; padding:7px 12px; font-size:12px; font-weight:700; border:1px solid var(--line); background:var(--panel); white-space:nowrap}
+  .btn.primary{background:var(--green); color:#fff; border-color:var(--green)}
+  .btn.primary:hover{background:var(--green-hover)}
+  .btn svg{width:13px; height:13px}
+  .tabbar{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 16px; padding:8px 20px; background:var(--strip); border-bottom:1px solid var(--line)}
+  .tabs{display:inline-flex; gap:4px; align-items:center; padding:0 4px}
+  .tab{display:inline-flex; align-items:center; gap:7px; min-height:40px; padding:0 14px; border-radius:8px; font-size:13px; font-weight:600; color:rgba(26,26,26,0.55)}
+  .tab.on{background:var(--ink); color:#fff}
+  .tab .tier{font-size:10px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:rgba(26,26,26,0.35)}
+  .tab.on .tier{color:rgba(255,255,255,0.55)}
+  .tabs .sep{width:1px; height:22px; background:var(--line); margin:0 6px}
+  .tab svg{width:13px; height:13px}
+  .tools{display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px}
+  .period{display:inline-flex; border:1px solid var(--line); border-radius:8px; padding:3px; background:transparent}
+  .period button{padding:5px 11px; border-radius:6px; font-size:12px; font-weight:600; color:var(--sub)}
+  .period button.on{background:var(--panel); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,0.06)}
+  .snap{font-size:11px; color:rgba(26,26,26,0.45); font-variant-numeric:tabular-nums}
+  .glance{padding:20px 32px 28px; display:flex; flex-direction:column; gap:16px}
+
+  /* 밴드 공통 · 주석 마커 */
+  .band{position:relative}
+  .mark{position:absolute; top:-11px; left:-11px; z-index:2; width:22px; height:22px; border-radius:50%; background:var(--green); color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 3px var(--panel)}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:12px}
+  .card.quiet{background:#FDFDFC; border-color:var(--grid)}
+  .sec-title{font-size:14px; font-weight:600; margin:0}
+  .sec-sub{font-size:11px; color:rgba(26,26,26,0.4); margin:2px 0 0}
+  .sec-head{display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap}
+  .more{font-size:12px; font-weight:600; color:var(--green); text-decoration:none; display:inline-flex; align-items:center; gap:4px; white-space:nowrap}
+  .more:hover{text-decoration:underline}
+  .chip{display:inline-flex; align-items:center; gap:5px; border-radius:999px; padding:2px 8px; font-size:10.5px; font-weight:500; border:1px solid var(--line); color:rgba(26,26,26,0.5); white-space:nowrap}
+  .chip.alert{border-color:var(--danger-line); color:var(--danger); font-weight:600}
+  .chip.brand{border-color:var(--green-line); color:var(--green); font-weight:600}
+  .caption{font-size:11px; color:var(--muted)}
+
+  /* ① 판정 */
+  .verdict{border:1px solid var(--green-line); border-radius:12px; padding:18px 22px 16px; background:var(--panel); box-shadow:0 1px 3px rgba(8,71,52,0.06); display:grid; grid-template-columns:minmax(0,1.5fr) minmax(280px,1fr); gap:16px 32px}
+  .verdict-top{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+  .status{display:inline-flex; align-items:center; gap:7px; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--warn)}
+  .status::before{content:""; width:9px; height:9px; border-radius:50%; background:var(--warn); box-shadow:0 0 0 3px var(--warn-tint)}
+  .verdict h3{margin:10px 0 0; font-size:22px; font-weight:600; line-height:1.3; letter-spacing:-0.012em; text-wrap:balance; overflow-wrap:anywhere}
+  .verdict-meta{display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; align-items:center}
+  .verdict-meta .src{font-size:11px; color:rgba(26,26,26,0.45); font-variant-numeric:tabular-nums; margin-right:4px}
+  .actions{margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:10px; border-left:1px solid var(--grid); padding-left:24px}
+  .actions li{display:flex; gap:10px; align-items:flex-start}
+  .actions .n{flex:none; width:20px; height:20px; border-radius:50%; border:1px solid var(--green-line); color:var(--green); font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; margin-top:1px}
+  .actions b{display:block; font-size:12.5px; font-weight:600; line-height:1.35}
+  .actions span{display:block; font-size:11px; color:rgba(26,26,26,0.45); margin-top:2px}
+
+  /* ② 히어로 4칸 (한 패널, bare 타일) */
+  .hero{padding:6px 22px; display:grid; grid-template-columns:repeat(4,minmax(0,1fr))}
+  .tile{position:relative; padding:16px 22px 16px 0; margin-right:22px; border-right:1px solid var(--grid); display:flex; flex-direction:column; gap:6px; min-width:0}
+  .tile:last-child{border-right:0; margin-right:0}
+  .tile .label{display:flex; align-items:center; gap:6px; font-size:11px; font-weight:500; color:var(--sub)}
+  .tile .label svg{width:13px; height:13px; color:var(--muted)}
+  .tile .value{font-size:44px; font-weight:700; letter-spacing:-0.03em; line-height:1; margin-top:4px; overflow-wrap:anywhere}
+  .tile.brand .value{color:var(--green)}
+  .tile .value small{font-size:18px; font-weight:600; letter-spacing:-0.01em; color:var(--sub); margin-left:2px}
+  .delta{display:inline-flex; align-items:center; gap:6px; font-size:12px; color:rgba(26,26,26,0.45)}
+  .delta b{display:inline-flex; align-items:center; gap:2px; font-weight:600; font-variant-numeric:tabular-nums}
+  .delta b.up{color:var(--green)} .delta b.down{color:var(--danger)} .delta b.flat{color:var(--sub)}
+  .delta svg{width:11px; height:11px}
+  .spark{height:30px; width:100%; display:block; margin-top:6px}
+  .srcbar{display:flex; gap:2px; height:6px; border-radius:3px; overflow:hidden; margin-top:8px}
+  .srcbar i{display:block; height:100%}
+  .srclegend{display:flex; flex-wrap:wrap; gap:4px 10px; font-size:10.5px; color:var(--sub); margin-top:6px; font-variant-numeric:tabular-nums}
+  .srclegend i{display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:4px; vertical-align:0}
+
+  /* ④ 추이 + ⑤ 지금 */
+  .row-2{display:grid; grid-template-columns:minmax(0,2fr) minmax(300px,1fr); gap:16px}
+  .trend{padding:18px 20px 14px}
+  .legend{display:flex; flex-wrap:wrap; gap:6px 14px; font-size:11px; color:var(--sub); font-variant-numeric:tabular-nums; margin-top:10px}
+  .legend i{display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:5px; vertical-align:-0.5px}
+  .chart{position:relative; margin-top:8px}
+  .chart svg{display:block; width:100%; height:auto; overflow:visible}
+  .chart text{font-family:var(--font); font-size:10.5px; fill:rgba(26,26,26,0.45)}
+  .chart .ylab{fill:rgba(26,26,26,0.4); font-size:10px}
+  .chart .rowlab{font-size:10px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; fill:var(--muted)}
+  .tip{position:absolute; pointer-events:none; background:var(--ink); color:#fff; border-radius:10px; padding:8px 10px; font-size:11.5px; line-height:1.45; min-width:150px; box-shadow:0 8px 24px rgba(0,0,0,0.18); display:none; z-index:3; font-variant-numeric:tabular-nums}
+  .tip b{display:block; font-weight:600; margin-bottom:3px}
+  .tip .r{display:flex; justify-content:space-between; gap:12px; opacity:0.9}
+  .tip i{display:inline-block; width:7px; height:7px; border-radius:2px; margin-right:5px}
+  details.tbl{margin-top:10px}
+  details.tbl summary{font-size:11px; color:var(--sub); cursor:pointer; list-style:none; display:inline-flex; align-items:center; gap:4px}
+  details.tbl summary::before{content:"▸"; font-size:10px}
+  details.tbl[open] summary::before{content:"▾"}
+  .tbl-scroll{overflow-x:auto; margin-top:8px}
+  table{border-collapse:collapse; font-size:11.5px; font-variant-numeric:tabular-nums; min-width:520px}
+  th,td{text-align:right; padding:4px 8px; border-bottom:1px solid var(--grid); white-space:nowrap}
+  th{font-weight:500; color:var(--sub)} th:first-child,td:first-child{text-align:left}
+
+  .now{padding:18px 20px; display:flex; flex-direction:column; gap:8px}
+  .now .value{font-size:44px; font-weight:700; letter-spacing:-0.03em; line-height:1; margin-top:2px}
+  .feed{list-style:none; margin:8px 0 0; padding:0; border-top:1px solid var(--grid)}
+  .feed li{display:grid; grid-template-columns:44px minmax(0,1fr) auto; gap:10px; align-items:center; padding:7px 0; border-bottom:1px solid var(--grid); font-size:12px}
+  .feed .t{color:var(--muted); font-variant-numeric:tabular-nums; font-size:11px}
+  .feed .who{min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .feed .who span{color:var(--sub)}
+  .feed .s{display:inline-flex; align-items:center; gap:5px; font-size:11px; color:var(--sub)}
+  .feed .s i{width:7px; height:7px; border-radius:50%; display:inline-block}
+  .now-foot{display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:4px; font-size:12px; flex-wrap:wrap}
+  .now-foot .warnline{color:var(--danger); font-weight:600}
+
+  /* ⑥ 퍼널 + ⑦ Top 3 */
+  .funnel{padding:18px 20px 16px}
+  .steps{display:flex; align-items:stretch; gap:0; margin-top:14px}
+  .step{flex:1 1 0; min-width:0; padding:0 6px}
+  .step .l{font-size:10px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted)}
+  .step .v{font-size:22px; font-weight:600; letter-spacing:-0.02em; line-height:1.1; margin-top:4px; font-variant-numeric:tabular-nums}
+  .step .track{height:6px; border-radius:3px; background:var(--grid); margin-top:10px; overflow:hidden}
+  .step .track i{display:block; height:100%; border-radius:3px}
+  .rate{flex:0 0 auto; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding:0 8px 2px; gap:2px; font-size:11px; font-weight:600; color:var(--sub); font-variant-numeric:tabular-nums}
+  .rate svg{width:12px; height:12px; color:var(--muted)}
+  .rate.alert{color:var(--danger)}
+  .top3{padding:18px 20px 12px}
+  .t3{list-style:none; margin:10px 0 0; padding:0}
+  .t3 li{display:grid; grid-template-columns:minmax(0,1fr) 150px 64px 84px 110px; gap:16px; align-items:center; padding:10px 8px 10px 10px; border-top:1px solid var(--grid); border-left:2px solid transparent}
+  .t3 li.flag{border-left-color:var(--danger)}
+  .t3 .name{font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .t3 .name small{font-weight:500; color:rgba(26,26,26,0.4); font-size:10.5px; margin-left:6px}
+  .t3 .upd{font-size:11px; color:rgba(26,26,26,0.45); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px}
+  .t3 .num{font-size:13px; font-weight:500; font-variant-numeric:tabular-nums; text-align:right}
+  .t3 .num.big{font-weight:600}
+  .pace .track{position:relative; height:6px; border-radius:3px; background:var(--grid); overflow:hidden}
+  .pace .track i{display:block; height:100%; background:var(--green); border-radius:3px}
+  .pace .track em{position:absolute; top:0; width:1px; height:100%; background:rgba(17,17,16,0.45)}
+  .pace small{display:block; font-size:10.5px; color:rgba(26,26,26,0.45); margin-top:4px; font-variant-numeric:tabular-nums; white-space:nowrap}
+  .t3 .hd{border-top:0; padding-top:0; padding-bottom:4px; font-size:10px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted)}
+  .t3 .hd .num{font-size:10px; font-weight:600; color:var(--muted)}
+  .t3-foot{display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 10px 0; border-top:1px solid var(--grid); flex-wrap:wrap}
+
+  /* ⑧ Compass */
+  .compass{padding:14px 20px; display:grid; grid-template-columns:auto repeat(3,minmax(0,1fr)); gap:12px 24px; align-items:center}
+  .compass .k{display:flex; align-items:center; justify-content:space-between; gap:12px; border-left:1px solid var(--grid); padding-left:18px; text-decoration:none}
+  .compass .k .l{font-size:11px; font-weight:500; color:var(--sub)} .compass .k .l small{display:block; font-size:10.5px; color:var(--muted); margin-top:1px}
+  .compass .k .v{font-size:26px; font-weight:700; letter-spacing:-0.03em; color:var(--green); display:inline-flex; align-items:center; gap:4px}
+  .compass .k .v svg{width:13px; height:13px; color:rgba(26,26,26,0.3)}
+  .compass .lead{font-size:11px; color:var(--sub); max-width:150px}
+  .compass .lead b{display:block; font-size:10px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted); margin-bottom:2px}
+  .footnote{display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; font-size:11px; color:var(--muted)}
+
+  /* ── 시안 읽기 + 와이어 ── */
+  .notes{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:10px 28px; margin:0; padding:0; list-style:none}
+  .notes li{display:flex; gap:10px; align-items:flex-start; font-size:12.5px; color:var(--sub); line-height:1.5}
+  .notes li b{color:var(--ink); font-weight:600}
+  .notes .mk{flex:none; width:22px; height:22px; border-radius:50%; background:var(--green); color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; margin-top:1px}
+  .wires{display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:16px}
+  .wire{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px 20px}
+  .wire h4{margin:0; font-size:14px; font-weight:600; display:flex; align-items:baseline; gap:8px}
+  .wire h4 .tier{font-size:10px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted)}
+  .wire p{margin:4px 0 12px; font-size:11.5px; color:var(--sub)}
+  .subnav{display:flex; flex-wrap:wrap; gap:2px; border-bottom:1px solid var(--line); margin-bottom:12px}
+  .subnav span{font-size:12px; font-weight:600; padding:6px 10px; border-bottom:2px solid transparent; color:rgba(26,26,26,0.45)}
+  .subnav span.on{color:var(--ink); border-bottom-color:var(--green)}
+  .blocks{display:flex; flex-direction:column; gap:8px}
+  .blk{background:var(--strip); border-radius:8px; padding:10px 12px; display:flex; justify-content:space-between; gap:12px; align-items:baseline}
+  .blk b{font-size:12px; font-weight:600}
+  .blk span{font-size:11px; color:var(--muted); text-align:right}
+  .blk.tall{min-height:64px}
+  .keep{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px 20px; display:grid; grid-template-columns:auto 1fr; gap:6px 24px; align-items:start}
+  .keep h4{margin:0; font-size:13px; font-weight:600}
+  .keep p{margin:0; font-size:11.5px; color:var(--sub)}
+  .keep ul{margin:0; padding:0; list-style:none; display:flex; flex-wrap:wrap; gap:6px 18px; font-size:12px}
+  .keep li{display:inline-flex; gap:6px; align-items:baseline}
+  .keep li span{color:var(--muted); font-size:11px}
+
+  @media (max-width:1100px){
+    .t3 li{grid-template-columns:minmax(0,1fr) 120px 56px 76px 96px; gap:10px}
+  }
+  @media (max-width:960px){
+    .hero{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .tile:nth-child(2){border-right:0; margin-right:0}
+    .tile:nth-child(-n+2){border-bottom:1px solid var(--grid)}
+    .row-2{grid-template-columns:1fr}
+    .verdict{grid-template-columns:1fr}
+    .actions{border-left:0; padding-left:0; border-top:1px solid var(--grid); padding-top:12px}
+    .compass{grid-template-columns:1fr 1fr}
+    .compass .lead{grid-column:1 / -1; max-width:none}
+    .compass .k{border-left:0; padding-left:0}
+  }
+  @media (max-width:700px){
+    .adm-header,.glance{padding-inline:16px}
+    .adm-header h2{font-size:26px}
+    .tile .value,.now .value{font-size:38px}
+    .steps{flex-direction:column; gap:10px}
+    .rate{flex-direction:row; justify-content:flex-start; padding:0 6px}
+    .rate svg{transform:rotate(90deg)}
+    .t3 li{grid-template-columns:minmax(0,1fr) 56px 72px; gap:8px}
+    .t3 li .pace,.t3 li .sparkcell,.t3 .hd .pace,.t3 .hd .sparkcell{display:none}
+    .compass{grid-template-columns:1fr}
+  }
+  @media (prefers-reduced-motion:reduce){ *{transition:none !important} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="intro">
+    <div>
+      <div class="eyebrow">/admin/campaigns · 한눈에 층 · 2026-09-14 시안</div>
+      <h1>마케팅 탭 한눈에 시안</h1>
+      <p>허브를 <b>한눈에 → 상세 → 데이터</b> 세 층으로 재편했을 때 첫 탭이 이렇게 보인다는 실물 비율 시안. 판정 한 문장, 핵심 숫자 4개, 지금(오늘 유입), 추이·퍼널·Top 3만 남기고 나머지는 상세·데이터 층과 Compass로 보낸다. 초록 번호는 아래 "시안 읽기"와 짝이다.</p>
+    </div>
+    <span class="sample">샘플 수치 — 실제 집계 아님</span>
+  </header>
+
+  <!-- ═══════════ 어드민 프레임: 한눈에 층 ═══════════ -->
+  <section class="frame" aria-label="한눈에 층 시안">
+    <div class="adm-header">
+      <div>
+        <h2>마케팅</h2>
+        <div class="sub">사이드바 라벨도 "캠페인" → "마케팅"(N2). 라우트는 그대로.</div>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end">
+        <button class="btn" type="button" id="btn-sync"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>동기화</button>
+        <button class="btn primary" type="button" id="btn-weekly"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg>주간 보고서</button>
+      </div>
+    </div>
+
+    <div class="tabbar">
+      <div class="tabs" role="tablist" aria-label="마케팅 보기">
+        <button class="tab on" role="tab" aria-selected="true" type="button"><span class="tier">1</span>한눈에</button>
+        <button class="tab" role="tab" aria-selected="false" type="button"><span class="tier">2</span>상세</button>
+        <button class="tab" role="tab" aria-selected="false" type="button"><span class="tier">3</span>데이터</button>
+        <span class="sep" aria-hidden="true"></span>
+        <button class="tab" role="tab" aria-selected="false" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>메시지</button>
+      </div>
+      <div class="tools">
+        <div class="period" role="group" aria-label="집계 기간">
+          <button type="button">7일</button><button type="button" class="on" aria-pressed="true">30일</button><button type="button">90일</button><button type="button">분기</button><button type="button">이번 달</button>
+        </div>
+        <span class="snap">08.16 – 09.14 · 스냅샷 09.14 06:10 · Meta 09.13까지</span>
+      </div>
+    </div>
+
+    <div class="glance">
+
+      <!-- ① 판정 밴드 -->
+      <section class="band verdict" aria-label="판정">
+        <span class="mark" aria-hidden="true">1</span>
+        <div>
+          <div class="verdict-top">
+            <span class="status">주의 · 이상 신호 1건</span>
+            <span class="chip alert">CTR 급락 1</span>
+            <span class="chip">최근 30일</span>
+          </div>
+          <h3>리드 187건, 이전 30일 대비 +12% · CPL $43.4로 5% 개선 — 「가을 설명회 9월」 소재의 최근 7일 CTR이 30일 평균의 58%로 떨어져 점검이 필요합니다.</h3>
+          <div class="verdict-meta">
+            <span class="src">AI 브리핑 · 09.14 09:20 생성 · 숫자 검증 통과</span>
+            <span class="chip brand">다시 생성</span>
+          </div>
+        </div>
+        <ol class="actions" aria-label="추천 액션">
+          <li><span class="n">1</span><div><b>「가을 설명회 9월」 소재 교체 검토</b><span>7일 CTR 1.1% &lt; 30일 CTR 1.9%</span></div></li>
+          <li><span class="n">2</span><div><b>미컨택 광고 리드 23건 연락</b><span>리드→컨택 79% · 데이터 › 신규 리드 큐</span></div></li>
+          <li><span class="n">3</span><div><b>진행 캠페인 2개에 업데이트 기록 남기기</b><span>30일 내 기록 없는 진행 캠페인 2개</span></div></li>
+        </ol>
+      </section>
+
+      <!-- ② 히어로 4칸 -->
+      <section class="band card hero" aria-label="핵심 지표">
+        <span class="mark" aria-hidden="true">2</span>
+        <div class="tile brand">
+          <div class="label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.9-3.3 3.4-5 6.5-5s5.6 1.7 6.5 5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/><path d="M18 15c2 .6 3.2 2 3.7 5"/></svg>리드 · 전 소스</div>
+          <div class="value">187</div>
+          <div class="delta"><b class="up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M8 7h9v9"/></svg>+12%</b>이전 30일 167건</div>
+          <svg class="spark" id="spark-leads" role="img" aria-label="리드 14일 추이"></svg>
+          <span class="mark" style="left:-11px; top:auto; bottom:38px" aria-hidden="true">3</span>
+          <div class="srcbar" aria-hidden="true"><i style="width:60%; background:var(--src-meta)"></i><i style="width:22%; background:var(--src-home)"></i><i style="width:12%; background:var(--src-res)"></i><i style="width:6%; background:var(--src-other)"></i></div>
+          <div class="srclegend"><span><i style="background:var(--src-meta)"></i>메타 112</span><span><i style="background:var(--src-home)"></i>홈페이지 41</span><span><i style="background:var(--src-res)"></i>자료실 22</span><span><i style="background:var(--src-other)"></i>기타 12</span></div>
+        </div>
+        <div class="tile">
+          <div class="label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M16 15h2"/></svg>광고비 · Meta USD</div>
+          <div class="value">$4,860</div>
+          <div class="delta"><b class="flat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14"/></svg>+6%</b>원화 환산 없음</div>
+          <svg class="spark" id="spark-spend" role="img" aria-label="광고비 14일 추이"></svg>
+          <div class="caption">일자 스냅샷 합 · 계정 통화 그대로</div>
+        </div>
+        <div class="tile">
+          <div class="label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/></svg>CPL 실측 · USD</div>
+          <div class="value">$43.4</div>
+          <div class="delta"><b class="up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 7 7 17"/><path d="M16 17H7V8"/></svg>−5%</b>이전 30일 $45.7</div>
+          <div class="spark" style="display:flex; align-items:flex-end; color:var(--muted); font-size:10.5px">광고비 ÷ 광고 리드 112</div>
+          <div class="caption">일자 추이 없음 · 분모 정의 불일치</div>
+        </div>
+        <div class="tile">
+          <div class="label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17 9 11l4 4 8-8"/><path d="M14 7h7v7"/></svg>리드 전환율</div>
+          <div class="value">8.9<small>%</small></div>
+          <div class="delta"><b class="up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M8 7h9v9"/></svg>+15%</b>이전 30일 7.7%</div>
+          <div class="spark" style="display:flex; align-items:flex-end; color:var(--muted); font-size:10.5px">광고 리드 112 중 전환 10</div>
+          <div class="caption">누적 비율 · 일자 추이 없음</div>
+        </div>
+      </section>
+
+      <!-- ④ 추이 + ⑤ 지금 -->
+      <div class="row-2">
+        <section class="band card trend" aria-label="일자별 추이">
+          <span class="mark" aria-hidden="true">4</span>
+          <div class="sec-head">
+            <div>
+              <h4 class="sec-title">일자별 추이</h4>
+              <p class="sec-sub">위 리드(소스별, 리드DB) · 아래 광고비(Meta 스냅샷) · 같은 날짜축</p>
+            </div>
+            <div class="period" role="group" aria-label="추이 보기">
+              <button type="button" class="on" aria-pressed="true">소스별 리드</button><button type="button">캠페인별 리드</button>
+            </div>
+          </div>
+          <div class="legend" id="trend-legend"></div>
+          <div class="chart" id="trend-chart">
+            <svg id="trend-svg" role="img" aria-label="최근 30일 소스별 일자 리드와 광고비"></svg>
+            <div class="tip" id="trend-tip"></div>
+          </div>
+          <details class="tbl">
+            <summary>표로 보기</summary>
+            <div class="tbl-scroll"><table id="trend-table"></table></div>
+          </details>
+        </section>
+
+        <section class="band card now" aria-label="지금">
+          <span class="mark" aria-hidden="true">5</span>
+          <div class="sec-head">
+            <div>
+              <div class="eyebrow">지금 · 오늘 유입</div>
+              <div class="value">6</div>
+            </div>
+            <span class="chip">리드DB + Compass · 중복 1 접음</span>
+          </div>
+          <div class="delta"><b class="up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M8 7h9v9"/></svg>+2</b>어제 같은 시각까지 4건</div>
+          <ul class="feed" aria-label="최근 유입 5건">
+            <li><span class="t">11:42</span><span class="who">김○○ <span>· 대치 ○○수학</span></span><span class="s"><i style="background:var(--src-meta)"></i>메타</span></li>
+            <li><span class="t">11:05</span><span class="who">박○○ <span>· 분당 ○○영어</span></span><span class="s"><i style="background:var(--src-home)"></i>홈페이지</span></li>
+            <li><span class="t">10:31</span><span class="who">이○○ <span>· 일산 ○○학원</span></span><span class="s"><i style="background:var(--src-meta)"></i>메타</span></li>
+            <li><span class="t">09:58</span><span class="who">최○○ <span>· 수원 ○○에듀</span></span><span class="s"><i style="background:var(--src-res)"></i>자료실</span></li>
+            <li><span class="t">09:12</span><span class="who">정○○ <span>· 부산 ○○아카데미</span></span><span class="s"><i style="background:var(--src-meta)"></i>메타</span></li>
+          </ul>
+          <div class="now-foot">
+            <span class="warnline">미컨택 광고 리드 23건</span>
+            <a class="more" href="#wire-data">신규 리드 큐 → 데이터</a>
+          </div>
+        </section>
+      </div>
+
+      <!-- ⑥ 퍼널 -->
+      <section class="band card quiet funnel" aria-label="광고 퍼널">
+        <span class="mark" aria-hidden="true">6</span>
+        <div class="sec-head">
+          <div>
+            <h4 class="sec-title">광고 퍼널</h4>
+            <p class="sec-sub">노출·클릭 Meta 스냅샷 · 리드부터 리드DB(광고 리드 112)</p>
+          </div>
+          <a class="more" href="#wire-detail">세로 퍼널 · 채널 믹스 → 상세</a>
+        </div>
+        <div class="steps" id="funnel"></div>
+      </section>
+
+      <!-- ⑦ Top 3 -->
+      <section class="band card top3" aria-label="캠페인 Top 3">
+        <span class="mark" aria-hidden="true">7</span>
+        <div class="sec-head">
+          <div>
+            <h4 class="sec-title">캠페인 Top 3 · 리드순</h4>
+            <p class="sec-sub">링크된 Meta 캠페인 귀속 리드 · 집행률은 통화가 맞을 때만</p>
+          </div>
+        </div>
+        <ul class="t3">
+          <li class="hd" aria-hidden="true"><span>캠페인 · 최근 업데이트</span><span class="pace">페이싱</span><span class="num">리드</span><span class="num">CPL</span><span class="sparkcell num">14일</span></li>
+          <li>
+            <div><div class="name">SW 온라인 프로덕트<small>진행중</small></div><div class="upd">변경 · 타깃 연령 35–54로 좁힘 · 3일 전 · 민지</div></div>
+            <div class="pace"><div class="track"><i style="width:61%"></i><em style="left:58%"></em></div><small>집행 61% · 기간 58% · USD</small></div>
+            <div class="num big">64</div>
+            <div class="num">$38.2</div>
+            <svg class="sparkcell" data-spark="1" width="100%" height="26" role="img" aria-label="14일 리드 추이"></svg>
+          </li>
+          <li class="flag">
+            <div><div class="name">가을 설명회 9월<small>진행중</small></div><div class="upd"><span class="chip alert" style="margin-right:6px">CTR 급락</span>메모 · 2차 소재 A/B 시작 · 6일 전 · 서연</div></div>
+            <div class="pace"><div class="track"><i style="width:58%"></i><em style="left:55%"></em></div><small>집행 58% · 기간 55% · USD</small></div>
+            <div class="num big">31</div>
+            <div class="num">$52.9</div>
+            <svg class="sparkcell" data-spark="2" width="100%" height="26" role="img" aria-label="14일 리드 추이"></svg>
+          </li>
+          <li>
+            <div><div class="name">HW 전자칠판 오프라인<small>진행중</small></div><div class="upd">업데이트 기록 없음</div></div>
+            <div class="pace"><small style="margin-top:0">기간·예산 미설정</small></div>
+            <div class="num big">17</div>
+            <div class="num">$61.0</div>
+            <svg class="sparkcell" data-spark="3" width="100%" height="26" role="img" aria-label="14일 리드 추이"></svg>
+          </li>
+        </ul>
+        <div class="t3-foot">
+          <span class="caption">진행 4 · 휴면 14 — 휴면 캠페인은 상세에서 접힘으로</span>
+          <a class="more" href="#wire-detail">전체 18개 스코어보드 → 상세</a>
+        </div>
+      </section>
+
+      <!-- ⑧ Compass -->
+      <section class="band card quiet compass" aria-label="Compass 파이프라인">
+        <span class="mark" aria-hidden="true">8</span>
+        <div class="lead"><b>Compass 파이프라인</b>리드 단위 작업은 mkt.classin.co.kr에서. 여기서는 세 숫자만.</div>
+        <a class="k" href="https://mkt.classin.co.kr/leads?stage=demo" target="_blank" rel="noopener noreferrer"><span class="l">오늘 데모<small>Compass 데모 일정</small></span><span class="v">3<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M8 7h9v9"/></svg></span></a>
+        <a class="k" href="https://mkt.classin.co.kr/leads?sort=next_action_at" target="_blank" rel="noopener noreferrer"><span class="l">다음 액션 임박<small>48시간 이내</small></span><span class="v">11<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M8 7h9v9"/></svg></span></a>
+        <a class="k" href="https://mkt.classin.co.kr/leads?stage=bd" target="_blank" rel="noopener noreferrer"><span class="l">BD인계 진행<small>수금 대기</small></span><span class="v">7<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M8 7h9v9"/></svg></span></a>
+      </section>
+
+      <div class="footnote band">
+        <span class="mark" aria-hidden="true" style="position:static; display:inline-flex; vertical-align:middle; margin-right:8px; box-shadow:none">9</span>
+        <span style="flex:1">리드 = 리드DB 전 소스(테스트 제외) · 광고비·CPL = Meta USD 네이티브 · 전환율 = 광고 리드 중 전환 · 오늘 유입 = 리드DB + Compass 전화 키 접기. 미측정은 —, 0은 실측 0.</span>
+        <a class="more" href="#notes">이 화면의 숫자 정의 전문 →</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 시안 읽기 ═══════════ -->
+  <section id="notes">
+    <div class="eyebrow" style="margin-bottom:10px">시안 읽기 — 번호는 화면의 초록 마커</div>
+    <ol class="notes">
+      <li><span class="mk">1</span><div><b>판정 밴드가 맨 위, 전폭.</b> 지금은 우측 레일 두 번째 자리인 브리핑 카드를 첫 줄로 올린다. 상태 점(정상·주의·경고) + 헤드라인 22px + 이상 배지 + 액션 3개 가로. 원천은 지금의 AI/규칙 브리핑 그대로.</div></li>
+      <li><span class="mk">2</span><div><b>히어로 4칸 44px, 패널 하나.</b> 리드(전 소스) · 광고비 · CPL · 전환율 — Overview 스트립과 같은 4개, 같은 순서. 카드 4개가 아니라 구분선으로 나눈 패널 1개라 박스가 줄어든다. 예산 집행률(KRW 수기)은 상세로.</div></li>
+      <li><span class="mk">3</span><div><b>소스 분해 바.</b> 전 소스 리드 안에서 광고 리드가 얼마인지 한 줄로. "광고 리드" 타일을 따로 두지 않아도 CPL 분모(112)가 여기서 읽힌다.</div></li>
+      <li><span class="mk">4</span><div><b>추이는 2단, 이중축 없음.</b> 리드 소스 스택(상위 4 + 기타)을 위에, 광고비를 아래에 같은 날짜축으로. 마우스를 올리면 그날의 소스별 건수와 광고비가 한 툴팁에 뜬다. 표로 보기 제공.</div></li>
+      <li><span class="mk">5</span><div><b>"지금"은 기간과 무관한 축.</b> 오늘 유입 44px + 어제 같은 시각 대비 + 최근 5건 + 미컨택 수. 마케팅팀이 하루에 가장 자주 보는 숫자라 눈높이 우측에 둔다.</div></li>
+      <li><span class="mk">6</span><div><b>가로 퍼널 5단.</b> 단계 사이 전환율만 적고, 문제 구간(리드→컨택 0 등)에만 신호색. 세로 퍼널 원본과 채널 믹스는 상세 층.</div></li>
+      <li><span class="mk">7</span><div><b>Top 3 캠페인.</b> 굵은 글씨는 캠페인명뿐. 페이싱 바(집행률 + 기간 경과 선), 리드, CPL, 14일 스파크라인, 이상 행에만 좌측 2px 스트립. 전체 18개와 휴면 캠페인은 상세 스코어보드.</div></li>
+      <li><span class="mk">8</span><div><b>Compass 3칸은 참조.</b> 오늘 데모 · 다음 액션 임박 · BD인계 — CRM 홈 밴드를 그대로 재사용하고 새 탭 딥링크로 보낸다. 콜·케어·소재 히스토리·과정지표 KPI는 어드민에 만들지 않는다.</div></li>
+      <li><span class="mk">9</span><div><b>각주는 한 줄 + 정의 드로어.</b> 카드마다 붙던 정직 각주를 화면 아래 한 줄로 모으고, 전문은 "숫자 정의" 드로어로. 미측정 "—"·미수집 배지는 지금처럼 값 자리에 남긴다.</div></li>
+    </ol>
+  </section>
+
+  <!-- ═══════════ 상세 · 데이터 와이어 ═══════════ -->
+  <section>
+    <div class="eyebrow" style="margin-bottom:10px">2·3층 와이어 — 기존 컴포넌트를 옮겨 담는다(신규 화면 없음)</div>
+    <div class="wires">
+      <div class="wire" id="wire-detail">
+        <h4><span class="tier">2</span>상세 <span class="tier">왜 그런가, 어디서</span></h4>
+        <p>차트 위주. 섹션 내비는 스티키. 기간은 탭 띠의 토글 하나를 따른다.</p>
+        <div class="subnav"><span class="on">캠페인</span><span>소재</span><span>퍼널·채널</span><span>행사</span><span>메시지</span></div>
+        <div class="blocks">
+          <div class="blk tall"><b>캠페인 스코어보드 전체</b><span>CampaignScoreboard · 활성/휴면 접힘 · 이상 배지</span></div>
+          <div class="blk tall"><b>Meta 성과 차트</b><span>MetaPerformanceCharts</span></div>
+          <div class="blk"><b>소재별 CPL Top/Bottom</b><span>CreativeCplCard(Compass 브리지)</span></div>
+          <div class="blk"><b>AI 소재 제안</b><span>AiCreativeSuggestSection</span></div>
+          <div class="blk"><b>세로 퍼널 + 채널 믹스(읽기) + 예산 집행률</b><span>FunnelCard · channelMix</span></div>
+          <div class="blk"><b>행사 성과 비교 · 캘린더 타임라인</b><span>EventsTab 차트</span></div>
+          <div class="blk"><b>이메일 캠페인 오픈율 요약</b><span>HistoryTab 데이터 · 클릭률 미수집은 표기 안 함</span></div>
+        </div>
+      </div>
+      <div class="wire" id="wire-data">
+        <h4><span class="tier">3</span>데이터 <span class="tier">목록 · 입력 · 내보내기</span></h4>
+        <p>표·폼·CSV만. Meta 재개/중지, 리드 전환, 예산 저장 같은 쓰기 액션은 이 층에서만.</p>
+        <div class="subnav"><span class="on">신규 리드</span><span>광고 리드</span><span>Meta 캠페인</span><span>예산·성과 입력</span><span>업데이트 로그</span><span>주간 보고서</span></div>
+        <div class="blocks">
+          <div class="blk tall"><b>신규 리드 큐</b><span>NewLeadsTab · 연락 체크 · Compass 칩 · ?tab=leads 매핑</span></div>
+          <div class="blk tall"><b>광고 리드 · 가져오기 · 전환</b><span>AdLeadsPanel · AdLeadImportDialog</span></div>
+          <div class="blk"><b>Meta 캠페인 라이브 표 · 재개/중지</b><span>MetaCampaignPanel</span></div>
+          <div class="blk"><b>채널 예산 · 행사 성과 입력</b><span>ChannelBudgetTable · MetricsEditor</span></div>
+          <div class="blk"><b>업데이트 로그 + 작성 폼</b><span>UpdatesFeed</span></div>
+          <div class="blk"><b>주간 보고서 · 복사 · 다운로드</b><span>WeeklyReportDialog 본문을 섹션으로</span></div>
+          <div class="blk"><b>CSV 내보내기</b><span>CampaignExportButton</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="keep">
+    <div>
+      <h4>mkt.classin.co.kr에 두는 것</h4>
+      <p>어드민은 딥링크로만 연결한다.</p>
+    </div>
+    <ul>
+      <li>리드 콜 · 고객관리 · BD인계 <span>/leads · /leads/care</span></li>
+      <li>광고 히스토리 · 별칭 · 크리에이티브 <span>/ads</span></li>
+      <li>과정지표 KPI(사람별) <span>/kpi</span></li>
+      <li>미션 보드 <span>/tasks</span></li>
+      <li>월·분기 Meta 파이프라인 대시보드 <span>/dashboard</span></li>
+    </ul>
+  </section>
+
+</div>
+
+<script>
+(function(){
+  // ── 샘플 데이터(고정 시드) — 히어로 합계(187 · $4,860)와 정확히 맞춘다 ──
+  var DAYS = 30;
+  var start = new Date(Date.UTC(2026, 7, 16)); // 08.16 ~ 09.14
+  var seed = 20260914;
+  function rnd(){ seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; }
+  var dates = [], wk = [];
+  for (var i = 0; i < DAYS; i++){ var d = new Date(start.getTime() + i * 864e5); dates.push(d); var dow = d.getUTCDay(); wk.push(dow === 0 || dow === 6); }
+  function series(total, base, weekendMul){
+    var raw = [], sum = 0;
+    for (var i = 0; i < DAYS; i++){ var v = base * (0.55 + rnd() * 0.9) * (wk[i] ? weekendMul : 1) * (1 + i / DAYS * 0.35); raw.push(v); sum += v; }
+    var out = raw.map(function(v){ return Math.floor(v / sum * total); });
+    var rem = total - out.reduce(function(a, b){ return a + b; }, 0);
+    var order = raw.map(function(v, i){ return [v / sum * total - out[i], i]; }).sort(function(a, b){ return b[0] - a[0]; });
+    for (var k = 0; k < rem; k++) out[order[k][1]] += 1;
+    return out;
+  }
+  var groups = [
+    { key: "meta", label: "메타", color: "var(--src-meta)", total: 112, data: series(112, 4, 0.55) },
+    { key: "home", label: "홈페이지", color: "var(--src-home)", total: 41, data: series(41, 1.4, 0.6) },
+    { key: "res", label: "자료실", color: "var(--src-res)", total: 22, data: series(22, 0.8, 0.5) },
+    { key: "other", label: "기타", color: "var(--src-other)", total: 12, data: series(12, 0.4, 0.7) }
+  ];
+  var spendRaw = [], spendSum = 0;
+  for (var i = 0; i < DAYS; i++){ var s = 140 + rnd() * 90 - (wk[i] ? 35 : 0) + i * 1.2; spendRaw.push(s); spendSum += s; }
+  var spend = spendRaw.map(function(v){ return Math.round(v / spendSum * 4860 * 10) / 10; });
+  // 마지막 날은 Meta 스냅샷이 아직 안 들어온 날(09.14) — 광고비 미수집. 0으로 지어내지 않고 비운다.
+  spend[DAYS - 1] = null;
+  var totalLeads = dates.map(function(_, i){ return groups.reduce(function(a, g){ return a + g.data[i]; }, 0); });
+  function md(d){ return (d.getUTCMonth() + 1) + "/" + d.getUTCDate(); }
+  function fmtUsd(v){ return v == null ? "—" : "$" + v.toLocaleString("en-US", { maximumFractionDigits: 0 }); }
+
+  // ── 범례(기간 합계 병기 = 직접 라벨) ──
+  var lg = document.getElementById("trend-legend");
+  lg.innerHTML = groups.map(function(g){ return '<span><i style="background:' + g.color + '"></i>' + g.label + ' ' + g.total + '</span>'; }).join("") +
+    '<span><i style="background:var(--bar-muted)"></i>광고비 USD $4,860</span>';
+
+  // ── 추이 차트: 2단 소형 다중, x축 공유 ──
+  var chartEl = document.getElementById("trend-chart"), svg = document.getElementById("trend-svg"), tip = document.getElementById("trend-tip");
+  var NS = "http://www.w3.org/2000/svg";
+  function el(name, attrs, parent){ var e = document.createElementNS(NS, name); for (var k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+  function topRounded(x, y, w, h, r){ r = Math.min(r, w / 2, h); return "M" + x + " " + (y + h) + "V" + (y + r) + "a" + r + " " + r + " 0 0 1 " + r + " -" + r + "H" + (x + w - r) + "a" + r + " " + r + " 0 0 1 " + r + " " + r + "V" + (y + h) + "Z"; }
+  var hitRects = [];
+  function draw(){
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    var W = Math.max(320, chartEl.clientWidth), padL = 34, padR = 8, gap = 32;
+    var H1 = 150, H2 = 78, top = 20, H = top + H1 + gap + H2 + 24;
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H); svg.setAttribute("height", H);
+    var plotW = W - padL - padR, slot = plotW / DAYS, bw = Math.max(4, Math.min(18, slot * 0.62));
+    // 리드 스택
+    var maxL = Math.max.apply(null, totalLeads), yMax = Math.ceil(maxL / 4) * 4;
+    var y1 = function(v){ return top + H1 - v / yMax * H1; };
+    el("text", { x: padL, y: top - 9, "class": "rowlab" }, svg).textContent = "리드 · 일";
+    for (var t = 0; t <= yMax; t += yMax / 4){
+      el("line", { x1: padL, x2: W - padR, y1: y1(t), y2: y1(t), stroke: "var(--grid)" }, svg);
+      el("text", { x: padL - 6, y: y1(t) + 3.5, "text-anchor": "end", "class": "ylab" }, svg).textContent = t;
+    }
+    for (var i = 0; i < DAYS; i++){
+      var x = padL + i * slot + (slot - bw) / 2, acc = 0, segs = [];
+      groups.forEach(function(g){ if (g.data[i] > 0) segs.push(g); });
+      segs.forEach(function(g, si){
+        var h = g.data[i] / yMax * H1, yb = y1(acc) - (si > 0 ? 2 : 0), yt = yb - h + (si > 0 ? 2 : 0);
+        var isTop = si === segs.length - 1, hh = Math.max(1, yb - yt);
+        if (isTop) el("path", { d: topRounded(x, yt, bw, hh, 3), fill: g.color }, svg);
+        else el("rect", { x: x, y: yt, width: bw, height: hh, fill: g.color }, svg);
+        acc += g.data[i];
+      });
+    }
+    // 광고비
+    var top2 = top + H1 + gap, vals = spend.filter(function(v){ return v != null; });
+    var maxS = Math.max.apply(null, vals), sMax = Math.ceil(maxS / 50) * 50;
+    var y2 = function(v){ return top2 + H2 - v / sMax * H2; };
+    el("text", { x: padL, y: top2 - 9, "class": "rowlab" }, svg).textContent = "광고비 · USD";
+    [0, sMax / 2, sMax].forEach(function(t){
+      el("line", { x1: padL, x2: W - padR, y1: y2(t), y2: y2(t), stroke: "var(--grid)" }, svg);
+      el("text", { x: padL - 6, y: y2(t) + 3.5, "text-anchor": "end", "class": "ylab" }, svg).textContent = t;
+    });
+    for (var j = 0; j < DAYS; j++){
+      var xs = padL + j * slot + (slot - bw) / 2;
+      if (spend[j] == null){ el("text", { x: xs + bw / 2, y: y2(0) - 4, "text-anchor": "middle", "class": "ylab" }, svg).textContent = "—"; continue; }
+      el("path", { d: topRounded(xs, y2(spend[j]), bw, Math.max(1, y2(0) - y2(spend[j])), 3), fill: "var(--bar-muted)" }, svg);
+    }
+    // 공유 x축
+    var axisY = top2 + H2 + 16, step = W < 640 ? 7 : 5;
+    for (var k = 0; k < DAYS; k += step){
+      el("text", { x: padL + k * slot + slot / 2, y: axisY, "text-anchor": "middle" }, svg).textContent = md(dates[k]);
+    }
+    el("text", { x: padL + (DAYS - 1) * slot + slot / 2, y: axisY, "text-anchor": "middle" }, svg).textContent = md(dates[DAYS - 1]);
+    // 호버 히트 영역(마크보다 넓게)
+    hitRects = [];
+    for (var m = 0; m < DAYS; m++){
+      var r = el("rect", { x: padL + m * slot, y: top, width: slot, height: H1 + gap + H2, fill: "transparent" }, svg);
+      r.setAttribute("data-i", m); hitRects.push(r);
+    }
+    var cursor = el("line", { x1: 0, x2: 0, y1: top, y2: top2 + H2, stroke: "var(--line)", "stroke-width": 1, style: "display:none" }, svg);
+    svg.onmousemove = function(ev){
+      var rect = svg.getBoundingClientRect(), px = (ev.clientX - rect.left) * (W / rect.width);
+      var i = Math.max(0, Math.min(DAYS - 1, Math.floor((px - padL) / slot)));
+      var cx = padL + i * slot + slot / 2;
+      cursor.setAttribute("x1", cx); cursor.setAttribute("x2", cx); cursor.style.display = "";
+      var rows = groups.map(function(g){ return '<div class="r"><span><i style="background:' + g.color + '"></i>' + g.label + '</span><span>' + g.data[i] + '</span></div>'; }).join("");
+      tip.innerHTML = '<b>' + md(dates[i]) + (wk[i] ? ' (주말)' : '') + ' · 리드 ' + totalLeads[i] + '건</b>' + rows +
+        '<div class="r" style="margin-top:4px; border-top:1px solid rgba(255,255,255,0.15); padding-top:4px"><span><i style="background:var(--bar-muted)"></i>광고비</span><span>' + (spend[i] == null ? "미수집" : fmtUsd(spend[i])) + '</span></div>';
+      tip.style.display = "block";
+      var left = (cx / W) * rect.width + 14; if (left + 170 > rect.width) left = (cx / W) * rect.width - 184;
+      tip.style.left = left + "px"; tip.style.top = Math.max(0, (ev.clientY - rect.top) - 40) + "px";
+    };
+    svg.onmouseleave = function(){ tip.style.display = "none"; cursor.style.display = "none"; };
+  }
+  draw();
+  var rt; window.addEventListener("resize", function(){ clearTimeout(rt); rt = setTimeout(draw, 120); });
+
+  // 표로 보기
+  var tb = document.getElementById("trend-table");
+  tb.innerHTML = '<thead><tr><th>날짜</th>' + groups.map(function(g){ return '<th>' + g.label + '</th>'; }).join("") + '<th>리드 합</th><th>광고비 USD</th></tr></thead><tbody>' +
+    dates.map(function(d, i){ return '<tr><td>' + md(d) + (wk[i] ? ' 주말' : '') + '</td>' + groups.map(function(g){ return '<td>' + g.data[i] + '</td>'; }).join("") + '<td>' + totalLeads[i] + '</td><td>' + fmtUsd(spend[i]) + '</td></tr>'; }).join("") + '</tbody>';
+
+  // ── 스파크라인(14일) — 영역 12% + 선 1.5 + 끝점 강조 ──
+  function spark(node, data, color, opts){
+    opts = opts || {};
+    var W = 200, H = opts.h || 30, pad = 3, max = Math.max.apply(null, data.concat([1])), n = data.length;
+    node.setAttribute("viewBox", "0 0 " + W + " " + H); node.setAttribute("preserveAspectRatio", "none");
+    var pts = data.map(function(v, i){ return [pad + i / (n - 1) * (W - pad * 2), H - pad - v / max * (H - pad * 2)]; });
+    var line = pts.map(function(p, i){ return (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1); }).join("");
+    el("path", { d: line + "L" + pts[n - 1][0].toFixed(1) + " " + (H - pad) + "L" + pts[0][0].toFixed(1) + " " + (H - pad) + "Z", fill: color, "fill-opacity": 0.12 }, node);
+    el("path", { d: line, fill: "none", stroke: color, "stroke-width": 1.5, "vector-effect": "non-scaling-stroke", "stroke-linejoin": "round" }, node);
+    var last = pts[n - 1];
+    el("circle", { cx: last[0], cy: last[1], r: 2.4, fill: color, "vector-effect": "non-scaling-stroke" }, node);
+  }
+  var last14 = totalLeads.slice(-14), last14s = spend.slice(-14).map(function(v){ return v == null ? 0 : v; });
+  spark(document.getElementById("spark-leads"), last14, "#084734");
+  spark(document.getElementById("spark-spend"), last14s.slice(0, 13), "#84827A");
+  var camp = { 1: [3,5,4,6,5,7,4,6,5,8,6,7,5,6], 2: [4,3,3,2,3,2,2,3,1,2,2,1,2,1], 3: [1,0,2,1,1,0,2,1,1,2,1,0,1,2] };
+  Array.prototype.forEach.call(document.querySelectorAll("svg[data-spark]"), function(n){ spark(n, camp[n.getAttribute("data-spark")], "#084734", { h: 26 }); });
+
+  // ── 가로 퍼널 ──
+  var steps = [
+    { l: "노출", v: 412300, c: "#A39E98" }, { l: "클릭", v: 6810, c: "#111110" }, { l: "리드", v: 112, c: "#A8741A" }, { l: "컨택", v: 89, c: "#084734" }, { l: "전환", v: 10, c: "#B85C33" }
+  ];
+  var fn = document.getElementById("funnel"), base = steps[0].v, html = "";
+  steps.forEach(function(s, i){
+    if (i > 0){
+      var prev = steps[i - 1].v, rate = prev > 0 ? (s.v / prev * 100) : null, alert = i === 3 && s.v === 0 && prev > 0;
+      var txt = rate == null ? "—" : rate < 1 ? rate.toFixed(2) + "%" : rate < 10 ? rate.toFixed(1) + "%" : Math.round(rate) + "%";
+      html += '<div class="rate' + (alert ? ' alert' : '') + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg><span>' + txt + '</span></div>';
+    }
+    var w = Math.max(2, s.v / base * 100);
+    html += '<div class="step"><div class="l">' + s.l + '</div><div class="v">' + s.v.toLocaleString("ko-KR") + '</div><div class="track"><i style="width:' + w + '%; background:' + s.c + '"></i></div></div>';
+  });
+  fn.innerHTML = html;
+})();
+</script>
+</body>
+</html>
