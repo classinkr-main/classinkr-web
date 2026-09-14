@@ -11,6 +11,7 @@ import { CheckCircle2, Loader2, Pencil, RefreshCw, RotateCcw, Search, Send, Tras
 
 import { matchesTokens, tokenize } from "../search-tokens"
 import { useDialogFocus } from "../../use-dialog-focus"
+import { planBulkApply, planBulkCheck } from "./draft-bulk-plan"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import {
   DRAFT_STATUS_LABELS,
@@ -127,6 +128,8 @@ export function DraftQueue({
   onCancel,
   onDelete,
   onReverse,
+  onBulkCheck,
+  onBulkApply,
 }: {
   drafts: LedgerDraft[]
   mode: DraftQueueMode
@@ -147,6 +150,9 @@ export function DraftQueue({
   onCancel: (id: string) => void | Promise<void>
   onDelete: (id: string) => void | Promise<void>
   onReverse: (id: string, reason?: string) => Promise<unknown> | void
+  // 일괄 체크·적용(2026-09-14) — 지금 보이는 목록 기준. 3단계는 그대로이고 누르는 횟수만 줄인다.
+  onBulkCheck?: (ids: string[]) => Promise<{ done: number; failed: number }>
+  onBulkApply?: (ids: string[]) => Promise<{ done: number; failed: number }>
 }) {
   const modeLabel = mode === "server" ? "서버 큐" : "로컬 fallback"
   const [query, setQuery] = useState("")
@@ -154,6 +160,33 @@ export function DraftQueue({
   const visibleDrafts = useMemo(() => {
     return drafts.filter((draft) => draftMatchesFilter(draft, statusFilter)).filter((draft) => draftMatchesQuery(draft, query))
   }, [drafts, query, statusFilter])
+  const bulkCheckPlan = useMemo(() => planBulkCheck(visibleDrafts), [visibleDrafts])
+  const bulkApplyPlan = useMemo(() => planBulkApply(visibleDrafts), [visibleDrafts])
+  // 일괄 적용은 DB 장부에 기록하는 동작이라 한 번 더 확인한다(단건 적용 다이얼로그와 같은 원칙, 인라인).
+  const [bulkApplyConfirm, setBulkApplyConfirm] = useState(false)
+  const [bulkBusy, setBulkBusy] = useState<"check" | "apply" | null>(null)
+  const [bulkResult, setBulkResult] = useState<string | null>(null)
+  const runBulkCheck = async () => {
+    if (!onBulkCheck || bulkCheckPlan.count === 0) return
+    setBulkBusy("check")
+    try {
+      const result = await onBulkCheck(bulkCheckPlan.ids)
+      setBulkResult(`체크 ${result.done}건${result.failed ? ` · 실패 ${result.failed}건` : ""}`)
+    } finally {
+      setBulkBusy(null)
+    }
+  }
+  const runBulkApply = async () => {
+    if (!onBulkApply || bulkApplyPlan.count === 0) return
+    setBulkBusy("apply")
+    try {
+      const result = await onBulkApply(bulkApplyPlan.ids)
+      setBulkResult(`적용 ${result.done}건${result.failed ? ` · 실패 ${result.failed}건` : ""}`)
+    } finally {
+      setBulkBusy(null)
+      setBulkApplyConfirm(false)
+    }
+  }
   // "적용"은 큐에서 유일하게 비가역인 동작(DB 장부에 실제로 기록) — 확인 다이얼로그를 거친다.
   const [confirmApplyDraft, setConfirmApplyDraft] = useState<LedgerDraft | null>(null)
   const [applyingId, setApplyingId] = useState<string | null>(null)
@@ -372,6 +405,58 @@ export function DraftQueue({
             {visibleDrafts.length}/{drafts.length}건
           </span>
         </div>
+        {(onBulkCheck || onBulkApply) && (bulkCheckPlan.count > 0 || bulkApplyPlan.count > 0 || bulkResult) && (
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-[rgba(0,0,0,0.08)] pt-2">
+            {onBulkCheck && bulkCheckPlan.count > 0 && (
+              <button
+                type="button"
+                onClick={() => void runBulkCheck()}
+                disabled={bulkBusy !== null}
+                className="inline-flex min-h-11 items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[10.5px] font-bold text-[#111110] transition hover:bg-[#F6F5F4] disabled:cursor-not-allowed disabled:opacity-50 md:min-h-7"
+              >
+                {bulkBusy === "check" ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+                보이는 초안 {bulkCheckPlan.count}건 체크
+              </button>
+            )}
+            {onBulkApply && bulkApplyPlan.count > 0 && !bulkApplyConfirm && (
+              <button
+                type="button"
+                onClick={() => setBulkApplyConfirm(true)}
+                disabled={bulkBusy !== null}
+                className="inline-flex min-h-11 items-center gap-1 rounded-md border border-[#084734] bg-white px-2 text-[10.5px] font-bold text-[#084734] transition hover:bg-[#F6F5F4] disabled:cursor-not-allowed disabled:opacity-50 md:min-h-7"
+              >
+                <Send className="h-3 w-3" />
+                체크된 {bulkApplyPlan.count}건 적용
+              </button>
+            )}
+            {bulkApplyConfirm && (
+              <span role="alert" className="flex flex-wrap items-center gap-1.5 text-[10.5px] font-bold text-[#111110]">
+                {bulkApplyPlan.count}건 · {formatMoney(bulkApplyPlan.total)}을 DB 장부에 적용합니다
+                {bulkApplyPlan.skippedLocal > 0 ? ` (로컬 임시 ${bulkApplyPlan.skippedLocal}건 제외)` : ""}
+                <button
+                  type="button"
+                  onClick={() => void runBulkApply()}
+                  disabled={bulkBusy !== null}
+                  className="inline-flex min-h-11 items-center gap-1 rounded-md bg-[#084734] px-2 text-white transition hover:bg-[#065c41] disabled:opacity-50 md:min-h-7"
+                >
+                  {bulkBusy === "apply" ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                  적용
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBulkApplyConfirm(false)}
+                  disabled={bulkBusy === "apply"}
+                  className="inline-flex min-h-11 items-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[#615D59] md:min-h-7"
+                >
+                  취소
+                </button>
+              </span>
+            )}
+            {bulkResult && !bulkApplyConfirm && (
+              <span className="text-[10.5px] font-semibold text-[#615D59]">{bulkResult}</span>
+            )}
+          </div>
+        )}
       </div>
       {visibleDrafts.length === 0 && (
         <div className="rounded-lg border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-4 text-[12px] leading-relaxed text-[#615D59]">

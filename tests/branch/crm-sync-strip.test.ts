@@ -60,25 +60,27 @@ describe("CrmSyncStrip — 낮음 상태 렌더 규약", () => {
     expect(source.toUpperCase()).not.toContain("1E5DA8")
   })
 
-  it("장부 워크벤치에서 IntegrityStrip 바로 아래에 렌더된다", () => {
+  // 2026-09-14 상태 줄 통합 — 장부는 정합 스트립·CRM 싱크 스트립·동기화 배너를 각각 쌓지 않고
+  // LedgerStatusRail 한 줄(칸 하나씩, 누른 칸만 펼침)로 렌더한다. 이 스트립은 KR Team 등 단독
+  // 사용처를 위해 남고, 펼침 상세(CrmSyncDetail)는 상태 줄과 공유한다.
+  it("장부 워크벤치는 두 스트립 대신 상단 상태 줄 하나를 렌더한다", () => {
     const source = readFileSync(workbenchPath, "utf8")
-    const integrityAt = source.indexOf("<IntegrityStrip refreshKey={refreshKey} />")
-    // 라운드 4 최적화: 워크벤치가 커버리지를 주입한다(<CrmSyncStrip coverage={…} /> —
-    // 이중 GET 제거). 위치 규약은 프리픽스 매칭으로 유지한다.
-    const stripAt = source.indexOf("<CrmSyncStrip ")
-    expect(integrityAt).toBeGreaterThan(-1)
-    expect(stripAt).toBeGreaterThan(integrityAt)
-    // 두 스트립 사이에 다른 섹션이 끼지 않는다(형제 인접 — 주석만 허용).
-    const between = source.slice(integrityAt, stripAt)
-    expect(between).not.toContain("<aside")
-    expect(between).not.toContain("<section")
+    const railAt = source.indexOf("<LedgerStatusRail")
+    const lensAsideAt = source.indexOf("<aside", railAt)
+    expect(railAt).toBeGreaterThan(-1)
+    expect(lensAsideAt).toBeGreaterThan(railAt) // 렌즈 탭보다 위(검수 화면 상단 고정)
+    expect(source).not.toContain("<IntegrityStrip ")
+    expect(source).not.toContain("<CrmSyncStrip ")
   })
 
-  it("장부 워크벤치는 커버리지를 주입해 스트립 자체 fetch를 생략시킨다(이중 GET 제거)", () => {
+  it("장부 워크벤치는 커버리지를 상태 줄에 주입해 CRM 칸 자체 fetch를 만들지 않는다(이중 GET 제거)", () => {
     const source = readFileSync(workbenchPath, "utf8")
-    expect(source).toContain("<CrmSyncStrip coverage={{ data: crmCoverage.data, loading: crmCoverage.loading, error: crmCoverage.error }} />")
+    expect(source).toContain("crmCoverage={{ data: crmCoverage.data, loading: crmCoverage.loading, error: crmCoverage.error }}")
+    const rail = readFileSync(join(process.cwd(), "components/admin/branch/ledger/LedgerStatusRail.tsx"), "utf8")
+    expect(rail).not.toContain("/api/admin/crm/coverage")
+    expect(rail).toContain("CrmSyncDetail")
+    // 스트립 단독 사용처의 주입 모드 계약은 그대로 유지된다.
     const strip = readFileSync(stripPath, "utf8")
-    // 주입 모드에서는 effect가 자체 fetch를 건너뛴다.
     expect(strip).toContain("if (injected) return")
   })
 })

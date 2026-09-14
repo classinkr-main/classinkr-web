@@ -122,7 +122,7 @@ export function MatrixToneLegend() {
       <span>· 잠금=시트확정/장부반영</span>
       <span className="hidden lg:inline">· 합산 셀 주황=확도 혼합 포함</span>
       {/* 13인치(lg~xl) 랩탑에서도 단축키 힌트가 보이도록 xl→lg 하향. 편집 진입 시엔 팝오버가 셀 인근 힌트를 재노출한다. */}
-      <span className="hidden text-[#A39E98] lg:inline">· Enter 편집 · Tab 이동 · Ctrl+D 아래 복사 · Ctrl+V 엑셀 붙여넣기 · Esc 취소</span>
+      <span className="hidden text-[#A39E98] lg:inline">· Enter 편집 · Tab 이동 · Ctrl+D 아래 복사 · Ctrl+V 엑셀 붙여넣기 · E/H/C 확도(예정·고확도·확정) · Esc 취소</span>
     </span>
   )
 }
@@ -176,7 +176,7 @@ const RevMatrixEditPopover = memo(function RevMatrixEditPopover({
       </div>
       {/* 편집 진입 시 셀 인근 단축키 힌트 — 치트시트가 안 보이는 좁은 화면에서도 조작법이 손끝에 남게. */}
       <p className="px-1 pb-0.5 text-left text-[9px] font-semibold leading-none text-[#A39E98]">
-        Enter 저장 · Tab 다음 칸 · Esc 취소
+        Enter 저장 · Tab 다음 칸 · Esc 취소 · E/H/C 확도
       </p>
       {warning && (
         <p className="max-w-[168px] whitespace-normal rounded bg-[#FBF1E0] px-1.5 py-1 text-left text-[9px] font-bold leading-snug text-[#7A520F]">

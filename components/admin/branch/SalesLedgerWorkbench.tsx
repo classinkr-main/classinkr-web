@@ -52,7 +52,7 @@ import { ledgerRowHasColor } from "@/lib/branch/computations/revenue-core"
 import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
 import { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
 import { isSheetAheadOfSync } from "@/lib/branch/sheet-freshness"
-import SyncHealthBanner from "./ledger/SyncHealthBanner"
+import LedgerStatusRail from "./ledger/LedgerStatusRail"
 import { isPrefetchFresh } from "@/lib/admin/prefetch-freshness"
 // ledger/ 섹션 파일들이 워크벤치를 단일 진입점으로 import — 포매터 SSOT는 lib/branch/ledger-format
 export { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
@@ -105,8 +105,7 @@ const ForecastBoard = dynamic(() => import("./ledger/ForecastBoard").then((m) =>
 })
 import { RevAuxAnalysisSection } from "./ledger/RevAuxAnalysisSection"
 import { RevMobileList } from "./ledger/RevMobileList"
-import IntegrityStrip from "./IntegrityStrip"
-import CrmSyncStrip, { type CrmCoverageResponse } from "./CrmSyncStrip"
+import { type CrmCoverageResponse } from "./CrmSyncStrip"
 import MultiSelect from "./MultiSelect"
 // 입력 레일·콕핏 2-pane(~1,350줄)은 기본 화면(REV 렌즈 + 접힌 레일)에서 렌더되지 않는다 —
 // DSH/보드/큐와 동일 관례(ssr:false + LoadingPanel)로 지연 로드해 첫 로드 번들에서 청크를 뺀다.
@@ -194,6 +193,14 @@ const RevMatrixSkeletonRow = () => (
     <td colSpan={99} className="h-7 animate-pulse bg-[#f6f5f4]" />
   </tr>
 )
+// 푸터는 <tbody> 밖 <table> 직속(<tfoot>)이라 <tr>만 두면 하이드레이션 에러가 난다 — tfoot으로 감싼다.
+const RevMatrixFooterSkeleton = () => (
+  <tfoot aria-hidden="true">
+    <tr>
+      <td colSpan={99} className="h-9 animate-pulse bg-[#f6f5f4]" />
+    </tr>
+  </tfoot>
+)
 const CrmLinkedBadge = dynamic(() => import("./ledger/RevMatrix").then((m) => m.CrmLinkedBadge), { ssr: false, loading: () => null })
 const MatrixToneLegend = dynamic(() => import("./ledger/RevMatrix").then((m) => m.MatrixToneLegend), { ssr: false, loading: () => null })
 const NeedsLinkBadge = dynamic(() => import("./ledger/RevMatrix").then((m) => m.NeedsLinkBadge), { ssr: false, loading: () => null })
@@ -207,7 +214,7 @@ const RevMatrixDealRow = dynamic(() => import("./ledger/RevMatrix").then((m) => 
 })
 const RevMatrixFooter = dynamic(() => import("./ledger/RevMatrix").then((m) => m.RevMatrixFooter), {
   ssr: false,
-  loading: RevMatrixSkeletonRow,
+  loading: RevMatrixFooterSkeleton,
 })
 const RevMatrixGroupRow = dynamic(() => import("./ledger/RevMatrix").then((m) => m.RevMatrixGroupRow), {
   ssr: false,
@@ -516,6 +523,8 @@ export default function SalesLedgerWorkbench({
     updateDraft,
     toggleDraft,
     applyDraft,
+    checkDrafts,
+    applyDrafts,
     cancelDraft,
     deleteDraft,
     reverseEntry,
@@ -1074,7 +1083,7 @@ export default function SalesLedgerWorkbench({
   // 우세 확정 링크 target을 계정키로 매핑한다. href 규칙은 rev-sync-health SSOT
   // (revLinkedTargetHref) — deal target은 상세 라우트가 없어 null(링크 미렌더).
   // needsLink와 동일하게 로딩/실패 중엔 링크를 걸지 않는다(기본 없음 = 오표기 없음).
-  // 전체 응답 타입(CrmCoverageResponse)으로 받아 CrmSyncStrip(A안 스트립)에도 주입한다 —
+  // 전체 응답 타입(CrmCoverageResponse)으로 받아 상태 줄(LedgerStatusRail)의 CRM 칸에도 주입한다 —
   // 스트립 자체 fetch를 생략시켜 같은 화면에서 커버리지 GET이 한 번만 나간다.
   const crmCoverage = useBranchJson<CrmCoverageResponse>("/api/admin/crm/coverage", refreshKey)
   const crmLinkedTargetByKey = useMemo(() => {
@@ -2748,13 +2757,16 @@ export default function SalesLedgerWorkbench({
       </header>
 
       <main className="space-y-5 px-4 pt-5 sm:px-6 lg:px-9">
-        {/* 정합성 배지 — KR Team 개요와 동일 컴포넌트(데이터품질 이슈 요약). 검수 화면이 원 소비처라 상단 고정. */}
-        <IntegrityStrip refreshKey={refreshKey} />
-        {/* CRM 싱크 스트립(A안) — 정합 체크(시트 자체 품질)의 형제 축: "시트가 CRM과 이어져
-            있는가". 표시 레이어 전용, fail-soft(로딩 미렌더·실패 시 조용한 한 줄). */}
-        <CrmSyncStrip coverage={{ data: crmCoverage.data, loading: crmCoverage.loading, error: crmCoverage.error }} />
-        {/* 동기화가 끊겼을 때만 뜨는 한 줄 — 며칠째·무엇 기준·어떻게 푸나(정상이면 렌더 없음). */}
-        <SyncHealthBanner health={summary.data?.sync_health?.rev} now={sourceStripNow} />
+        {/* 상태 한 줄(2026-09-14) — 동기화·정합 체크·CRM 연결을 칸 하나씩, 누른 칸만 아래로 펼친다.
+            예전엔 정합 스트립·CRM 싱크 스트립·동기화 배너가 각자 한 줄씩 쌓여 표보다 먼저 세 줄을 읽어야 했다. */}
+        <LedgerStatusRail
+          syncHealth={summary.data?.sync_health?.rev}
+          lastSyncAttemptLabel={relativeTimeFromNow(summary.data?.lastSync, sourceStripNow)}
+          now={sourceStripNow}
+          crmCoverage={{ data: crmCoverage.data, loading: crmCoverage.loading, error: crmCoverage.error }}
+          refreshKey={refreshKey}
+          canRunAdminOperations={canRunAdminOperations}
+        />
         <aside className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-1 self-start">
           <div className="inline-flex flex-wrap gap-1 self-start rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-1" role="tablist" aria-label="장부 렌즈 전환">
@@ -4313,6 +4325,8 @@ export default function SalesLedgerWorkbench({
                 onCancel={cancelDraft}
                 onDelete={deleteDraft}
                 onReverse={handleReverseEntry}
+                onBulkCheck={checkDrafts}
+                onBulkApply={applyDrafts}
               />
             </div>
           </section>

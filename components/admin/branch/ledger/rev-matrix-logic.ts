@@ -15,6 +15,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
+import { confidenceFromShortcut } from "./confidence-shortcuts"
+
 import {
   draftConfidenceFromMetadata,
   isDraftConfidence,
@@ -561,6 +563,14 @@ export function useMatrixEditor({
   // 방향키는 캐럿 이동(기본 동작) — stopPropagation 없이 통과시킨다.
   const onEditingKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>, coord: MatrixCellCoord) => {
+      // E/H/C = 확도 선택(팝오버 클릭과 같은 명시 선택 — 다음 빈 셀 기본값으로도 기억). 금액 버퍼는
+      // 숫자만 받으므로 문자 키와 겹치지 않는다. 한글 자판·조합 중 판정은 confidence-shortcuts.ts.
+      const shortcut = confidenceFromShortcut({ code: event.code, ctrlKey: event.ctrlKey, metaKey: event.metaKey, altKey: event.altKey, isComposing: event.nativeEvent.isComposing })
+      if (shortcut) {
+        event.preventDefault()
+        pickEditConfidence(shortcut)
+        return
+      }
       if (event.key === "Enter") {
         event.preventDefault()
         commitBuffer(coord, editConfidenceRef.current)
@@ -580,7 +590,7 @@ export function useMatrixEditor({
         cancelEdit()
       }
     },
-    [cancelEdit, commitBuffer, moveWithinRowOrNext],
+    [cancelEdit, commitBuffer, moveWithinRowOrNext, pickEditConfidence],
   )
 
   // 셀렉트(비편집) keydown. 방향키=이동, Enter/F2/숫자=편집 진입, Ctrl/Cmd+D=위 값 채우기.
@@ -598,6 +608,15 @@ export function useMatrixEditor({
             return
           }
         }
+        return
+      }
+      // 선택 중 E/H/C = 그 칸 금액은 그대로 두고 확도만 바꾼다(시트에서 글자색만 바꾸는 동작).
+      // 빈 칸은 바꿀 금액이 없고, 같은 확도면 초안을 만들지 않는다 — 결과는 기존과 같은 검토 초안 1건.
+      const shortcut = confidenceFromShortcut({ code: event.code, ctrlKey: event.ctrlKey, metaKey: event.metaKey, altKey: event.altKey, isComposing: event.nativeEvent.isComposing })
+      if (shortcut) {
+        event.preventDefault()
+        const value = cellValue(coord)
+        if (value > 0 && shortcut !== cellConfidence(coord)) onCommitCell(coord.rowId, coord.month, value, shortcut, coord.week)
         return
       }
       if (event.key === "ArrowRight") {

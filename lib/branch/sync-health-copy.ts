@@ -1,6 +1,6 @@
 import { getBusinessDateParts } from "@/lib/business-time"
 
-// 장부 상단 동기화 상태 한 줄의 문구 — 순수 함수(SyncHealthBanner가 쓴다).
+// 장부 상단 동기화 상태 한 줄의 문구 — 순수 함수(장부 상태 줄 LedgerStatusRail의 동기화 칸이 쓴다).
 // summary.sync_health.rev(마지막 성공·연속 실패 일수·권한 오류)를 사람이 바로 행동할 수 있는
 // 세 조각(무엇이·무엇 기준·어떻게 푸나)으로 바꾼다. 정상이면 null — 배너를 아예 그리지 않는다.
 
