@@ -297,6 +297,51 @@ export async function getCompassLeadsByPhoneKeys(
   }
 }
 
+/** getCompassLeadPhoneKeysByIds 행 — 조인에 필요한 두 컬럼만(이름·학원 등 PII 는 읽지 않는다). */
+export interface CompassLeadPhoneKeyRow {
+  id: number
+  phone_key: string | null
+}
+
+/** id in(...) 한 번에 싣는 수 — 결과 행도 id 당 1행이라 max-rows(1000) 아래로 유지된다. */
+const LEAD_ID_CHUNK = 200
+
+/** Compass 리드 id → phone_key 역조회 — 데모 소스(lib/crm/compass-demo-source.ts)용.
+ *  데모가 가리키는 리드(수십 건)만 PK 로 찾는다. 예전에는 우리 리드·NEO 고객 전화 전부를 400개씩
+ *  phone_key 로 조회했다(뷰 정규식 스캔 × 청크 수, 전화 키 수천 개가 쿼리스트링에 실림 — R5 X8·B1).
+ *  60초 메모(down은 10초) — id 집합(정렬·중복 제거)이 키다. 한 청크라도 실패하면 down. */
+export async function getCompassLeadPhoneKeysByIds(
+  leadIds: number[],
+): Promise<CompassResult<CompassLeadPhoneKeyRow>> {
+  const ids = [...new Set(leadIds)].filter((id) => Number.isInteger(id)).sort((a, b) => a - b)
+  if (ids.length === 0) return ok([])
+  const cacheKey = `leads:ids:${foldLongKey(ids.join(","))}`
+  try {
+    return await memoize(
+      cacheKey,
+      async () => {
+        const sb = createSupabaseAdminClient()
+        const chunks: number[][] = []
+        for (let index = 0; index < ids.length; index += LEAD_ID_CHUNK) {
+          chunks.push(ids.slice(index, index + LEAD_ID_CHUNK))
+        }
+        const results = await Promise.all(
+          chunks.map((chunk) => sb.from("compass_leads_v").select("id,phone_key").in("id", chunk)),
+        )
+        const rows: CompassLeadPhoneKeyRow[] = []
+        for (const { data, error } of results) {
+          if (error) return downResult<CompassLeadPhoneKeyRow>(error)
+          rows.push(...((data ?? []) as CompassLeadPhoneKeyRow[]))
+        }
+        return ok(rows)
+      },
+      { ttlMs: TTL_MS, downTtlMs: TTL_DOWN_MS, isDown: isCompassResultDown, copy: copyCompassResult },
+    )
+  } catch (error) {
+    return downResult(error)
+  }
+}
+
 /** 기간 내 리드 — 라이브 인테이크 피드·재유입 카운트용(last_inflow_at 기준).
  *  60초 메모(down은 10초). toIso는 호출부(app/api/admin/marketing/intake-today)가 매 요청
  *  "지금"으로 새로 만드는 값이라 초·밀리초까지 캐시 키에 넣으면 사실상 항상 미스한다 —
