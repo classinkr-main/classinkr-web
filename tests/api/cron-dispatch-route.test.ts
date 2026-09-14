@@ -3,7 +3,17 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { mergeNotificationSchedule } from "@/lib/notifications/schedule"
 
-async function loadRoute(leadDaily?: Record<string, unknown>) {
+const SYNC_OK = {
+  status: "ok",
+  dryRun: false,
+  scanned: 3,
+  matched: 3,
+  toContacted: 2,
+  toClosed: 1,
+  applied: { contacted: 2, closed: 1 },
+}
+
+async function loadRoute(leadDaily?: Record<string, unknown>, options: { settingsError?: Error } = {}) {
   vi.resetModules()
 
   const sendLeadMorningBrief = vi
@@ -11,17 +21,21 @@ async function loadRoute(leadDaily?: Record<string, unknown>) {
     .mockResolvedValue({ status: "sent", eventId: "event-daily", totalLeads: 4 })
 
   const previewLeadMorningBrief = vi.fn().mockResolvedValue({ totalLeads: 4, maxDeliveries: 1 })
+  const syncLeadContactFromCompassWithinBudget = vi.fn().mockResolvedValue(SYNC_OK)
   vi.doMock("@/lib/server/lead-morning-brief", () => ({ sendLeadMorningBrief, previewLeadMorningBrief }))
+  vi.doMock("@/lib/server/lead-contact-compass-sync", () => ({ syncLeadContactFromCompassWithinBudget }))
   vi.doMock("@/lib/repositories/settings", () => ({
-    getResolvedSettings: vi.fn().mockResolvedValue({
-      notificationSchedule: mergeNotificationSchedule(
-        leadDaily ? { leadDaily } : undefined
-      ),
-    }),
+    getResolvedSettings: options.settingsError
+      ? vi.fn().mockRejectedValue(options.settingsError)
+      : vi.fn().mockResolvedValue({
+          notificationSchedule: mergeNotificationSchedule(
+            leadDaily ? { leadDaily } : undefined
+          ),
+        }),
   }))
 
   const { GET } = await import("@/app/api/cron/dispatch/[slot]/route")
-  return { GET, sendLeadMorningBrief, previewLeadMorningBrief }
+  return { GET, sendLeadMorningBrief, previewLeadMorningBrief, syncLeadContactFromCompassWithinBudget }
 }
 
 function request(slot: string, secret = "test-cron-secret") {
@@ -132,5 +146,74 @@ describe("시간 슬롯 크론 디스패처", () => {
     expect(body.ok).toBe(false)
     expect(body.ran[0]).toMatchObject({ job: "leadDaily", status: "failed" })
     expect(body.ran[0].error).toBe("Lead daily report failed.")
+  })
+
+  describe("MKT(Compass) 리드 연락 반영", () => {
+    it("잡이 없는 슬롯에서도 매시간 돌고, 결과를 응답에 싣는다", async () => {
+      process.env.CRON_SECRET = "test-cron-secret"
+      const { GET, syncLeadContactFromCompassWithinBudget } = await loadRoute()
+
+      const response = await GET(request("05"), context("05"))
+      const body = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(syncLeadContactFromCompassWithinBudget).toHaveBeenCalledWith({ budgetMs: 20_000, dryRun: false })
+      expect(body).toMatchObject({ ok: true, ran: [], leadContactSync: SYNC_OK })
+    })
+
+    it("같은 슬롯의 예약 잡(아침 카드)이 끝난 뒤에 돈다 — 느려져도 아침 카드를 굶기지 않는다", async () => {
+      process.env.CRON_SECRET = "test-cron-secret"
+      const { GET, sendLeadMorningBrief, syncLeadContactFromCompassWithinBudget } = await loadRoute()
+
+      await GET(request("02"), context("02"))
+
+      expect(sendLeadMorningBrief).toHaveBeenCalledTimes(1)
+      expect(syncLeadContactFromCompassWithinBudget).toHaveBeenCalledTimes(1)
+      expect(sendLeadMorningBrief.mock.invocationCallOrder[0]).toBeLessThan(
+        syncLeadContactFromCompassWithinBudget.mock.invocationCallOrder[0]
+      )
+    })
+
+    it("반영이 끊기거나 실패해도 슬롯 ok·상태코드는 잡 결과만 따른다", async () => {
+      process.env.CRON_SECRET = "test-cron-secret"
+      const { GET, syncLeadContactFromCompassWithinBudget } = await loadRoute()
+      syncLeadContactFromCompassWithinBudget.mockResolvedValueOnce({ ...SYNC_OK, status: "bridge_down" })
+
+      const down = await GET(request("02"), context("02"))
+      expect(down.status).toBe(200)
+      expect(await down.json()).toMatchObject({ ok: true, leadContactSync: { status: "bridge_down" } })
+
+      syncLeadContactFromCompassWithinBudget.mockRejectedValueOnce(new Error("boom"))
+      const thrown = await GET(request("05"), context("05"))
+      expect(thrown.status).toBe(200)
+      expect(await thrown.json()).toMatchObject({
+        ok: true,
+        leadContactSync: { status: "failed", error: "Lead contact sync failed." },
+      })
+    })
+
+    it("dryRun 이면 반영도 미리보기로만 돌린다", async () => {
+      process.env.CRON_SECRET = "test-cron-secret"
+      const { GET, syncLeadContactFromCompassWithinBudget } = await loadRoute()
+      syncLeadContactFromCompassWithinBudget.mockResolvedValueOnce({ ...SYNC_OK, dryRun: true, applied: { contacted: 0, closed: 0 } })
+
+      const response = await GET(request("05?dryRun=true"), context("05"))
+      const body = await response.json()
+
+      expect(syncLeadContactFromCompassWithinBudget).toHaveBeenCalledWith({ budgetMs: 20_000, dryRun: true })
+      expect(body).toMatchObject({ dryRun: true, leadContactSync: { dryRun: true, toContacted: 2, toClosed: 1 } })
+    })
+
+    it("알림 설정을 못 읽는 503 에서는 반영도 건너뛴다", async () => {
+      process.env.CRON_SECRET = "test-cron-secret"
+      const { GET, syncLeadContactFromCompassWithinBudget } = await loadRoute(undefined, {
+        settingsError: new Error("settings down"),
+      })
+
+      const response = await GET(request("02"), context("02"))
+
+      expect(response.status).toBe(503)
+      expect(syncLeadContactFromCompassWithinBudget).not.toHaveBeenCalled()
+    })
   })
 })

@@ -558,6 +558,26 @@ export async function getBoardLeads(): Promise<LeadRecord[]> {
   }
 }
 
+/**
+ * MKT(Compass) 처리 결과 반영 대상 — 전화가 있는 신규·연락함 리드의 id·전화·상태만.
+ * 판정은 lib/compass/lead-contact-sync, 실행은 lib/server/lead-contact-compass-sync.
+ * JSON 폴백 모드(로컬 픽스처)는 반영하지 않으므로 대상도 없다.
+ */
+export async function getLeadsForCompassContactSync(): Promise<
+  Array<{ id: string; phone: string; status: LeadRecord["status"] }>
+> {
+  if (!USE_SUPABASE) return [];
+
+  const rows = await fetchAllLeadRows("id, phone, status", "MKT 연락 반영 대상 조회");
+  const targets: Array<{ id: string; phone: string; status: LeadRecord["status"] }> = [];
+  for (const row of rows) {
+    if (row.status !== "new" && row.status !== "contacted") continue;
+    if (!row.phone?.trim()) continue;
+    targets.push({ id: row.id, phone: row.phone, status: row.status });
+  }
+  return targets;
+}
+
 export async function getLeadById(id: string): Promise<LeadRecord | null> {
   if (!USE_SUPABASE) {
     const { getLeads: jsonGetLeads } = await import("@/lib/db");
@@ -888,6 +908,78 @@ export async function assignLeads(
   if (error) throw new Error(`[leads] 일괄 담당자 배정 실패: ${error.message}`);
   const updated = ((data ?? []) as Lead[]).map(supabaseToLegacy);
   return updated.length > 0 ? returnAfterLeadMutation(updated) : [];
+}
+
+/** in(...) 한 번에 싣는 리드 id 수 — UUID 100개 ≈ 3.8KB, PostgREST URL 길이 상한 대비. */
+const LEAD_ID_UPDATE_CHUNK = 100;
+
+/**
+ * MKT(Compass) 처리 결과를 리드 상태에 반영한다 — lib/server/lead-contact-compass-sync 전용.
+ *
+ * 위 assignLeads 주석의 "상태·확인 도장은 단건 라우트 검증을 우회하지 않는다" 원칙의 좁은 예외다.
+ *  * 사전조건을 WHERE에 건다 — 연락함은 status='new'인 행만, 종료는 status가 new·contacted인 행만.
+ *    판정과 쓰기 사이에 사람이 전환·종료했으면 그 행은 조용히 빠진다(돌려주는 id에 없다).
+ *  * 단건 PATCH의 "연락중은 연락 기록 저장 뒤에만" 규칙은 걸지 않는다 — 근거가 MKT 활동 기록에 있다.
+ *  * 확인 도장은 바뀐 행 중 비어 있는 행에만 찍는다(PATCH가 new를 벗어날 때 찍는 규칙과 같다).
+ * JSON 폴백 모드(로컬 픽스처)에서는 아무것도 하지 않는다.
+ */
+export async function applyCompassLeadStatusSync(
+  input: { contactedIds: readonly string[]; closedIds: readonly string[] },
+  now: Date = new Date()
+): Promise<{ contacted: string[]; closed: string[] }> {
+  if (!USE_SUPABASE) return { contacted: [], closed: [] };
+
+  const supabase = createSupabaseAdminClient();
+
+  const chunksOf = (ids: readonly string[]) => {
+    const unique = Array.from(new Set(ids.filter(Boolean)));
+    const chunks: string[][] = [];
+    for (let index = 0; index < unique.length; index += LEAD_ID_UPDATE_CHUNK) {
+      chunks.push(unique.slice(index, index + LEAD_ID_UPDATE_CHUNK));
+    }
+    return chunks;
+  };
+
+  // 바뀐 id는 덩어리마다 바로 쌓는다 — 중간 덩어리에서 실패해도 이미 바뀐 행을 캐시 무효화가 안다.
+  const contacted: string[] = [];
+  const closed: string[] = [];
+  const updateStatusWhere = async (
+    ids: readonly string[],
+    status: "contacted" | "closed",
+    fromStatuses: LeadRecord["status"][],
+    changed: string[]
+  ) => {
+    for (const chunk of chunksOf(ids)) {
+      const { data, error } = await supabase
+        .from("leads")
+        .update({ status })
+        .in("id", chunk)
+        .in("status", fromStatuses)
+        .select("id");
+      if (error) throw new Error(`[leads] MKT 상태 반영(${status}) 실패: ${error.message}`);
+      for (const row of (data ?? []) as Array<{ id: string }>) changed.push(row.id);
+    }
+  };
+
+  try {
+    await updateStatusWhere(input.contactedIds, "contacted", ["new"], contacted);
+    await updateStatusWhere(input.closedIds, "closed", ["new", "contacted"], closed);
+    const confirmedAt = now.toISOString();
+    for (const chunk of chunksOf([...contacted, ...closed])) {
+      const { error } = await supabase
+        .from("leads")
+        .update({ confirmed_at: confirmedAt })
+        .in("id", chunk)
+        .is("confirmed_at", null);
+      if (error && !isMissingLeadColumn(error, "confirmed_at")) {
+        throw new Error(`[leads] MKT 상태 반영 확인 도장 실패: ${error.message}`);
+      }
+    }
+  } finally {
+    // 중간에 실패해도 이미 바뀐 행이 있으면 다음 읽기가 옛 상태를 보지 않게 한다.
+    if (contacted.length > 0 || closed.length > 0) invalidateLeadReadCaches();
+  }
+  return { contacted, closed };
 }
 
 interface GuardedLeadAssignmentParams {

@@ -264,10 +264,10 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     kind: "table",
     table: "compass_leads_v",
     label: "Compass 리드 브리지 뷰(상태·재유입·NeoCRM 표식·담당 3역할)",
-    columns: ["id", "phone_key", "email_key", "stage", "owner", "team", "created_at"],
+    columns: ["id", "phone_key", "email_key", "stage", "owner", "team", "created_at", "updated_at", "last_inflow_at"],
     migration: "supabase/migrations/20260828_compass_bridge_views.sql",
     impact:
-      "Compass 리드 오버레이(app/api/admin/compass/leads-overlay)와 전화번호 대조가 깨지고, isCompassBridgeDown() 감지로 관련 화면이 'Compass 연결 끊김' 배지로 강등된다.",
+      "Compass 리드 오버레이(app/api/admin/compass/leads-overlay)와 전화번호 대조가 깨지고, isCompassBridgeDown() 감지로 관련 화면이 'Compass 연결 끊김' 배지로 강등된다. 리드 상태 MKT 반영(lib/server/lead-contact-compass-sync)도 매 슬롯 bridge_down 으로 건너뛴다.",
   },
   {
     kind: "table",
@@ -275,7 +275,8 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     label: "Compass 활동 타임라인 브리지 뷰",
     columns: ["id", "lead_id", "kind", "body", "created_at"],
     migration: "supabase/migrations/20260828_compass_bridge_views.sql",
-    impact: "고객 360(lib/repositories/crm-customer-360.ts) 병합 타임라인에서 Compass 쪽 활동 기록이 빠진다.",
+    impact:
+      "고객 360(lib/repositories/crm-customer-360.ts) 병합 타임라인에서 Compass 쪽 활동 기록이 빠지고, 리드 상태 MKT 반영(lib/server/lead-contact-compass-sync)이 매 슬롯 bridge_down 으로 건너뛴다.",
   },
   {
     kind: "table",

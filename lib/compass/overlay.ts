@@ -103,11 +103,29 @@ function recencyOf(row: CompassOverlaySource): number {
 }
 
 /**
+ * 대표 행 규칙 — 최근성(last_inflow_at → updated_at → created_at) 내림차순, 동률이면 id가 큰 쪽.
+ * 칩(buildCompassOverlayMap)과 상태 자동 반영(lib/compass/lead-contact-sync)이 같은 행을 보게
+ * 하는 단일 규칙이다 — 둘이 다른 행을 고르면 칩은 "데모"인데 리드는 "종료"로 가는 일이 생긴다.
+ */
+function isMoreRepresentative(candidate: CompassOverlaySource, current: CompassOverlaySource): boolean {
+  const delta = recencyOf(candidate) - recencyOf(current)
+  return delta > 0 || (delta === 0 && candidate.id > current.id)
+}
+
+/** 같은 전화 키로 묶인 Compass 행들 중 대표 1건. 비어 있으면 null. */
+export function pickRepresentativeCompassRow<T extends CompassOverlaySource>(rows: readonly T[]): T | null {
+  let best: T | null = null
+  for (const row of rows) {
+    if (!best || isMoreRepresentative(row, best)) best = row
+  }
+  return best
+}
+
+/**
  * phone_key → 대표 1건 맵.
  *
  * 한 학원이 같은 번호로 여러 번 유입되면 Compass에도 리드가 여러 건 쌓인다. 임의로 고르면
- * 새로고침마다 칩이 바뀌므로 규칙을 고정한다 — 최근성(last_inflow_at → updated_at →
- * created_at) 내림차순, 동률이면 id가 큰 쪽(나중에 만들어진 행).
+ * 새로고침마다 칩이 바뀌므로 규칙을 고정한다(isMoreRepresentative).
  */
 export function buildCompassOverlayMap(rows: CompassOverlaySource[]): CompassOverlayMap {
   const best = new Map<string, CompassOverlaySource>()
@@ -115,12 +133,7 @@ export function buildCompassOverlayMap(rows: CompassOverlaySource[]): CompassOve
     const key = row.phone_key?.trim()
     if (!key) continue
     const current = best.get(key)
-    if (!current) {
-      best.set(key, row)
-      continue
-    }
-    const delta = recencyOf(row) - recencyOf(current)
-    if (delta > 0 || (delta === 0 && row.id > current.id)) best.set(key, row)
+    if (!current || isMoreRepresentative(row, current)) best.set(key, row)
   }
 
   const overlay: CompassOverlayMap = {}
