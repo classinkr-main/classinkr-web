@@ -58,6 +58,11 @@ Compass(`mkt.classin.co.kr`, `classinkr-main/crm`)도 같은 CRM에 같은 계�
 정책: `lib/external-crm/xiaoshouyi-write.ts`의 `XIAOSHOUYI_WRITE_POLICIES.lead`
 (2026-08-28에 describe 337필드 + 생성 성공으로 실측 검증됨).
 
+> **2026-09-14부터 이 큐로 lead를 생성하지 않는다.** `create` 는 `리드 생성은 Compass 단일 경로` 로
+> 거절된다(수정·담당 이전은 열려 있다). NEO lead 작성자는 Compass 하나다 — 푸시 전 중복 검사가 Compass에만 있고,
+> 이 큐로 만든 lead(특히 `mobile`)는 그 검사가 찾지 못한다. 아래 표는 Compass 푸시와 공유하는 필드 계약으로 남긴다.
+> 경위: [compass-integration-2026-09-14.md](./compass-integration-2026-09-14.md) §3
+
 | 필드 | 값 | 비고 |
 | --- | --- | --- |
 | `name` | 담당자명 | **필수** |
