@@ -86,17 +86,17 @@ select table_name, grantee, privilege_type from information_schema.role_table_gr
 
 설계 §3 은 `kind ∈ {call, sms, meeting, note, memo, stage_change}` 를 사람 손으로 본다. 그런데 **기계가 쓰는 `note` 가 있다** —
 BD 설명회 적재는 신규 리드마다 actor `BD시트` note 를, 시트 크론은 시트 메모를 actor 없는 note 로·closed 전파를 actor `시트 동기화` note 로,
-백필 스크립트는 actor `Claude` 로 남긴다. 이 note 들만 있는 리드가 `contacted` 로 잘못 넘어간다.
+백필 스크립트는 actor `Claude` 로, 일회성 시트 백필·중복 병합 스크립트는 actor `시트` 로 남긴다. 이 note 들만 있는 리드가 `contacted` 로 잘못 넘어간다.
 
-Compass 의 단일 정의(Compass `lib/leadContact.ts`, 활동 별칭 `a`)는 다음과 같다. 아래는 **명세 글자 그대로**이며, Compass 병합 뒤 실제 파일과 다시 대조한다.
+Compass 의 단일 정의(Compass `lib/leadContact.ts`, 활동 별칭 `a`)는 다음과 같다. 아래는 Compass 통합 브랜치 파일과 글자 그대로다 — 최종 리뷰에서 기계 작성자에 `시트` 가 추가됐다(명세 초안의 3개 목록은 낡았다).
 
 ```sql
 -- HUMAN_ACTOR(a) — actor 가 null 인 기록도 기계로 본다
-(a.actor is not null and a.actor not in ('Claude','BD시트','시트 동기화'))
+(a.actor is not null and a.actor not in ('Claude','BD시트','시트 동기화','시트'))
 -- ATTEMPT(a) — 부재중 콜도 시도. 알림톡은 자동이라 제외
 (a.kind in ('call','sms'))
 -- CONNECTED(a) — 연결된 콜(부재중·재통화 예약 제외) · 미팅 · 사람이 쓴 자동 머리 아닌 메모
-((a.kind = 'call' and coalesce(a.body,'') !~ '^(부재중|재통화)') or a.kind = 'meeting' or (a.kind = 'note' and (a.actor is not null and a.actor not in ('Claude','BD시트','시트 동기화')) and coalesce(a.body,'') !~ '^(데모 일정|고객관리 이관 취소|종료 처리|종료 취소|BD인계 취소)'))
+((a.kind = 'call' and coalesce(a.body,'') !~ '^(부재중|재통화)') or a.kind = 'meeting' or (a.kind = 'note' and (a.actor is not null and a.actor not in ('Claude','BD시트','시트 동기화','시트')) and coalesce(a.body,'') !~ '^(데모 일정|고객관리 이관 취소|종료 처리|종료 취소|BD인계 취소)'))
 -- MISSED_ATTEMPT(a)
 (a.kind = 'call' and coalesce(a.body,'') ~ '^(부재중|재통화)')
 ```
