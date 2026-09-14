@@ -20,7 +20,7 @@ function makeRollup(overrides: Partial<CampaignRollup> = {}): CampaignRollup {
     metaSpend: null,
     metaCurrency: null,
     metaLeads: 12,
-    linkedCounts: { email: 2, sms: 1, event: 1, meta: 1 },
+    linkedCounts: { email: 2, sms: 1, event: 1, meta: 1, google: 0, naver: 0 },
     ...overrides,
   }
 }
@@ -81,7 +81,7 @@ describe("CampaignRollupCard — 빈 채널 약화", () => {
   it("연결 0 건 채널은 0 의 나열 대신 '연결 없음'만 말한다", () => {
     const html = renderToStaticMarkup(
       <CampaignRollupCard
-        rollup={makeRollup({ linkedCounts: { email: 2, sms: 0, event: 0, meta: 0 } })}
+        rollup={makeRollup({ linkedCounts: { email: 2, sms: 0, event: 0, meta: 0, google: 0, naver: 0 } })}
       />,
     )
     expect(html).toContain("연결 없음")
@@ -93,7 +93,7 @@ describe("CampaignRollupCard — 빈 채널 약화", () => {
   it("빈 채널 타일은 점선·뉴트럴로 물러나고 '0건' 배지를 달지 않는다", () => {
     const html = renderToStaticMarkup(
       <CampaignRollupCard
-        rollup={makeRollup({ linkedCounts: { email: 2, sms: 0, event: 0, meta: 0 } })}
+        rollup={makeRollup({ linkedCounts: { email: 2, sms: 0, event: 0, meta: 0, google: 0, naver: 0 } })}
       />,
     )
     expect(html).toContain("border-dashed")
@@ -104,7 +104,7 @@ describe("CampaignRollupCard — 빈 채널 약화", () => {
   it("채널은 0 건이어도 목록에서 사라지지 않는다(정직: 숨김 아님)", () => {
     const html = renderToStaticMarkup(
       <CampaignRollupCard
-        rollup={makeRollup({ linkedCounts: { email: 0, sms: 0, event: 0, meta: 0 } })}
+        rollup={makeRollup({ linkedCounts: { email: 0, sms: 0, event: 0, meta: 0, google: 0, naver: 0 } })}
       />,
     )
     for (const label of ["이메일", "문자", "행사", "Meta 광고"]) {

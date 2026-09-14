@@ -138,6 +138,12 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // 리드 중복 탐지 + 어드민 핫패스 인덱스(2026-09-02). 인덱스 전용 마이그레이션이라
   // 프로브의 한계는 SCHEMA_PROBES 쪽 주석 참고.
   "supabase/migrations/20260902_leads_dedupe_and_admin_hot_path_indexes.sql",
+  // 광고 채널 확장 — Google Ads·네이버 검색광고(2026-09-14). 파일명 사전순(= 적용 순서).
+  // ad_channel_daily 가 먼저여야 한다: 나머지 둘은 그 테이블을 참조하지 않지만, 크론이
+  // 먼저 돌아 스냅샷이 쌓여 있어야 화면이 빈 채널을 "미측정"이 아니라 "집행 없음"으로 읽는다.
+  "supabase/migrations/20260914_ad_channel_daily.sql",
+  "supabase/migrations/20260914_campaign_links_ad_channels.sql",
+  "supabase/migrations/20260914_leads_naver_attribution.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -239,6 +245,52 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     migration: "supabase/migrations/20260820_meta_insights_daily.sql",
     impact:
       "크론(/api/cron/sync-meta-insights)과 백필 스크립트(scripts/backfill-meta-insights.mjs)의 upsert 가 실패해 일자별 스냅샷이 쌓이지 않는다(조회 함수는 아직 라우트에 연결되지 않았다).",
+  },
+  // ── 광고 채널 확장(2026-09-14) ────────────────────────────────────────
+  // Meta 와 같은 계열의 일자 스냅샷 두 벌. 미적용이면 크론이 upsert 에서 죽고, 화면은
+  // 해당 채널을 "미측정"으로 떨어뜨린다(0 으로 포장하지 않으므로 조용한 오답은 없다).
+  {
+    kind: "table",
+    table: "google_ads_daily",
+    label: "Google Ads 캠페인 일자별 성과 스냅샷",
+    // synced_at 은 감사용이라 제외 — meta_insights_daily 프로브와 같은 규약.
+    columns: ["date", "campaign_id", "campaign_name", "spend", "impressions", "clicks", "conversions", "currency"],
+    migration: "supabase/migrations/20260914_ad_channel_daily.sql",
+    impact:
+      "크론(/api/cron/sync-google-ads)의 upsert 가 실패해 Google 집행이 쌓이지 않는다 — /admin/campaigns 채널 스트립의 Google 칸이 계속 '미측정'으로 남는다.",
+  },
+  {
+    kind: "table",
+    table: "naver_ads_daily",
+    label: "네이버 검색광고 캠페인 일자별 성과 스냅샷",
+    columns: ["date", "campaign_id", "campaign_name", "spend", "impressions", "clicks", "conversions", "currency"],
+    migration: "supabase/migrations/20260914_ad_channel_daily.sql",
+    impact:
+      "크론(/api/cron/sync-naver-ads)의 upsert 가 실패해 네이버 집행이 쌓이지 않는다 — /admin/campaigns 채널 스트립의 네이버 칸이 계속 '미측정'으로 남는다.",
+  },
+  {
+    kind: "table",
+    table: "campaign_links",
+    label: "우산 캠페인 ↔ 광고 채널 링크(ref_type CHECK 확장) — CHECK 자체는 이 프로브로 확인 불가",
+    // CHECK 제약의 허용 집합은 REST 로 확인할 방법이 없다(pg_constraint 접근 불가).
+    // 컬럼이 살아있는지만 보고, 실제 확장 여부는 google_campaign 링크를 한 건 저장해 보면 안다.
+    // 그래서 severity 는 warning — 이 프로브의 "ok" 가 CHECK 확장을 보장하지 않는다.
+    columns: ["id", "campaign_id", "ref_type", "ref_id"],
+    migration: "supabase/migrations/20260914_campaign_links_ad_channels.sql",
+    severity: "warning",
+    impact:
+      "미적용이면 Google·네이버 캠페인 링크 저장이 23514(check violation)로 거부된다. 링크 피커에서 두 채널만 실패하고 나머지는 정상이라 눈에 잘 안 띈다.",
+  },
+  {
+    kind: "table",
+    table: "leads",
+    label: "네이버 검색광고 유입 파라미터 컬럼(naver_ad)",
+    columns: ["id", "naver_ad"],
+    migration: "supabase/migrations/20260914_leads_naver_attribution.sql",
+    // 리드 저장은 이 컬럼을 선택 컬럼으로 다뤄(OPTIONAL_LEAD_INSERT_COLUMNS) 미적용에도 죽지 않는다.
+    // 다만 네이버 유입 표식이 통째로 유실되므로 소급 복구가 불가능하다 — warning 이 아니라 blocker.
+    impact:
+      "네이버 광고를 타고 들어온 리드의 n_* 파라미터가 저장되지 않는다. 리드 저장 자체는 성공하지만(선택 컬럼) 그 기간 유입은 사후에 네이버로 귀속시킬 방법이 없다.",
   },
   // ── 어드민 담당자 ↔ NEO 연결(2026-08-28) ──────────────────────────────
   // 이 마이그레이션은 UPDATE 10건뿐인 데이터 백필이다 — neo_owner_id 컬럼 자체는

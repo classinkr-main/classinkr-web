@@ -1,12 +1,41 @@
 # 광고 채널 확장 — Google Ads · 네이버 검색광고 연동 설계
 
-- 상태: **설계 (미구현)**. 2026-09-14 코드 전수 조사 기준.
+- 상태: **코드 구현 완료 · 자격증명 발급과 마이그레이션 적용 대기** (2026-09-14).
+  아래 §6 실행 순서의 **2·3·5·6·7·8·9번이 코드로 들어갔다.** 남은 것은 사람이 해야 하는 일뿐이다 —
+  0(Google 전환 라벨), 1(네이버 API 라이선스), 4(Google Cloud Reporting 등급), 그리고
+  `supabase/migrations/20260914_*.sql` 3건 적용.
+  자격증명이 없으면 크론은 503으로 조용히 서고 화면은 해당 채널을 **미연동**으로 표기한다 —
+  없는 데이터를 0으로 포장하지 않는다.
 - 소유: 마케팅/그로스/CRM 파트 ([playbook/04-growth-crm.md](playbook/04-growth-crm.md))
 - 관련 정본: [DESIGN.md](../../DESIGN.md) §2 제3자 채널 식별색, [campaign-entity-d1-d3-plan-2026-07-24.md](campaign-entity-d1-d3-plan-2026-07-24.md), [lead-funnel-consent-auth-scoring-plan-2026-06-14.md](lead-funnel-consent-auth-scoring-plan-2026-06-14.md) WS1-4·6
 
 **목표:** 지금 Meta 하나만 실데이터로 도는 마케팅 성과 파이프라인에 Google Ads와 네이버 검색광고를 **같은 등급의 원천**으로 붙인다. 채널 enum·색·예산칸은 이미 7종이 다 있으므로, 없는 것은 **① 집행 데이터 수집(광고 플랫폼 → 우리 DB)** 과 **② 유입 귀속(그 광고가 데려온 리드 식별)** 두 축이다.
 
 **정직 규칙(기존과 동일):** 통화가 다른 집행(Meta USD · Google 계정통화 · 네이버 KRW)은 한 칸에 합산하지 않는다. 측정 없는 채널은 0이 아니라 null(`—`). 이 규칙은 채널이 늘어도 완화하지 않는다.
+
+---
+
+## 0. 구현 산출물 (2026-09-14)
+
+| 층 | 파일 |
+|---|---|
+| 마이그레이션 | `supabase/migrations/20260914_ad_channel_daily.sql` (google_ads_daily · naver_ads_daily)<br>`20260914_leads_naver_attribution.sql` (leads.naver_ad JSONB)<br>`20260914_campaign_links_ad_channels.sql` (ref_type CHECK 확장) |
+| API 클라이언트 | `lib/naver/searchad.ts` (HMAC 서명 · /stats)<br>`lib/google/ads.ts` (OAuth refresh · GAQL · cost_micros) |
+| 저장소 | `lib/repositories/naver-ads-daily.ts` · `lib/repositories/google-ads-daily.ts` |
+| 크론 | `/api/cron/sync-naver-ads` (05 21, trailing 3일)<br>`/api/cron/sync-google-ads` (35 20, trailing 7일) |
+| 중립 집계 | `lib/marketing/ad-insights.ts` — 세 채널을 한 형태로 접는다 |
+| 커버리지 판정 | `lib/marketing/channel-coverage.ts` — 실제 설정값으로 3축 상태를 낸다 |
+| perf 계약 | `lib/marketing/perf.ts` `channelLive[]` · `channelMix[].liveSpend` · 스코어보드 `channels`/`channelSpend` |
+| 네이버 귀속 | `lib/naver-ad-params.ts` (n_* SSOT) → `marketing-attribution` → `leads.naver_ad` → `lead-attribution` |
+| 전환 추적 | `components/NaverAnalyticsScript.tsx` (wcs.trans) · `lib/analytics.ts` `trackNaverConversion` · CSP 3줄 |
+| 화면 | `ChannelLiveStrip` · `ChannelCoverageMatrix` (요약탭), 스코어보드 채널 칩 |
+| 테스트 | `tests/marketing/ad-channel-clients.test.ts` · `ad-insights.test.ts` · `tests/crm/naver-ad-attribution.test.ts` · `tests/campaigns/channel-{live-strip,coverage-matrix}.test.tsx` |
+
+**설계에서 바뀐 것 하나** — 네이버 일자 집계를 `/stat-reports`(대용량 보고서)가 아니라
+`/stats`로 받는다. 보고서는 **헤더 없는 TSV**라 컬럼 순서로 읽어야 하는데, 순서가 바뀌면
+광고비가 클릭수 자리로 조용히 밀린다. `/stats`는 JSON에 필드명이 붙어 오므로 그 사고가
+구조적으로 불가능하고, 요청이 틀리면 400으로 시끄럽게 죽는다. 호출 수는 (일수 × 캠페인 청크)로
+늘지만 trailing 3일 × 수십 캠페인이면 문제가 되지 않는다.
 
 ---
 

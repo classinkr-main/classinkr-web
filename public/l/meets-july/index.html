@@ -2018,6 +2018,23 @@
         utmContent: getUrlParam('utm_content'),
         gclid: getUrlParam('gclid'),
         fbclid: getUrlParam('fbclid'),
+        // 네이버 검색광고는 클릭ID 한 값이 아니라 n_* 묶음으로 온다.
+        // 키 목록 정본은 lib/naver-ad-params.ts — 이 정적 랜딩은 번들을 못 쓰므로 복제하되,
+        // 서버(parseNaverAd)가 목록 밖 키를 버리므로 여기 목록이 늘어져도 안전하다.
+        naverAd: (function () {
+          var keys = ['n_media', 'n_query', 'n_rank', 'n_ad_group', 'n_ad',
+                      'n_keyword_id', 'n_keyword', 'n_campaign_type', 'n_contract', 'n_ad_type'];
+          var out = {};
+          var found = false;
+          for (var i = 0; i < keys.length; i++) {
+            var v = getUrlParam(keys[i]);
+            if (!v) continue;
+            out[keys[i]] = v;
+            found = true;
+          }
+          // 값이 하나도 없으면 null — 빈 객체는 '네이버 유입'으로 잘못 읽힌다.
+          return found ? out : null;
+        })(),
         landingPage: window.location.pathname + window.location.search,
         referrer: document.referrer || null
       };

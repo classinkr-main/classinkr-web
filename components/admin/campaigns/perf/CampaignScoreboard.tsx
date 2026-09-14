@@ -15,6 +15,7 @@ import {
 } from "@/lib/types/marketing-campaign"
 import { ANOMALY_KIND_LABEL, ANOMALY_THRESHOLDS, type AnomalyKind } from "@/lib/marketing/anomaly"
 import { splitScoreboardByActivity, type Pacing, type PerfScoreboardRow } from "@/lib/marketing/perf"
+import { AD_CHANNEL_COLOR, AD_CHANNEL_LABEL } from "@/lib/types/event-metrics"
 
 // 캠페인 스코어보드 — 우산 캠페인별 [이름+최근 업데이트 / 페이싱 / 리드 / CPL / 14일 스파크라인].
 // 리드·CPL 은 링크된 Meta 캠페인 귀속 축(응답 계약 주석 참조) — KPI 의 리드와 정의가 다르다.
@@ -125,6 +126,29 @@ function ScoreboardRow({ row, muted = false }: { row: PerfScoreboardRow; muted?:
         )}
         {/* 이상 신호 — 규칙 감지(lib/marketing/anomaly.ts)가 걸린 종류만. 파스텔 채움 없이
             danger 토큰 아웃라인 칩으로만 표시한다(넓은 면적 채색 지양). */}
+        {/* 링크된 라이브 채널 — 오른쪽 리드·CPL 칸은 Meta 축 그대로라(주간 보고서가 그 정의에
+            의존한다) Google·네이버 집행은 여기 통화를 달고 따로 선다. Meta 는 이미 오른쪽에
+            숫자로 서 있으므로 칩에서 뺀다 — 같은 값을 한 행에 두 번 쓰지 않는다. */}
+        {row.channelSpend.some((entry) => entry.channel !== "meta") && (
+          <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1">
+            {row.channelSpend
+              .filter((entry) => entry.channel !== "meta")
+              .map((entry) => (
+                <span
+                  key={entry.channel}
+                  className="inline-flex items-center gap-1.5 text-[11px] tabular-nums text-[#615D59]"
+                >
+                  <span
+                    aria-hidden
+                    className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: AD_CHANNEL_COLOR[entry.channel] }}
+                  />
+                  {AD_CHANNEL_LABEL[entry.channel]}{" "}
+                  {entry.spend != null && entry.currency ? money(entry.spend, entry.currency) : "—"}
+                </span>
+              ))}
+          </div>
+        )}
         {row.anomalies.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
             {row.anomalies.map((kind) => (

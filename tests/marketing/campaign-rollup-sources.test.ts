@@ -31,6 +31,7 @@ vi.mock("@/lib/meta/marketing", () => ({
 }))
 
 import { gatherRollupSources } from "@/lib/marketing/campaign-rollup-sources"
+import { emptyCampaignLinkLabels } from "@/lib/marketing/campaign-labels"
 
 type Result = { data: unknown[] | null; error: unknown }
 
@@ -153,7 +154,7 @@ describe("배치 규약 (N+1 금지)", () => {
     expect(fromCalls).toEqual([])
     expect(mocks.getMetaCampaignDashboard).not.toHaveBeenCalled()
     expect(sources).toEqual({ emailCampaigns: {}, smsCampaigns: {}, eventMetrics: {}, metaCampaigns: {} })
-    expect(labels).toEqual({ email_campaign: {}, sms_campaign: {}, event: {}, meta_campaign: {} })
+    expect(labels).toEqual(emptyCampaignLinkLabels())
   })
 })
 

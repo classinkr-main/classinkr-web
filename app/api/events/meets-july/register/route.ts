@@ -25,6 +25,7 @@ import { formatMeetsCityLabel, getMeetsCity } from "@/lib/meets/july-2026"
 import { submitLeadCapture } from "@/lib/server/lead-capture"
 import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import { isCrossOriginRequest } from "@/lib/server/same-origin"
+import { parseNaverAd } from "@/lib/naver-ad-params"
 
 export const runtime = "nodejs"
 
@@ -127,6 +128,9 @@ export async function POST(req: NextRequest) {
       fbclid: optionalString(body.fbclid, FIELD_LIMITS.clickId),
       landingPage: optionalString(body.landingPage, FIELD_LIMITS.url),
       referrer: optionalString(body.referrer, FIELD_LIMITS.url),
+      // 네이버 n_* 묶음 — 목록 밖 키 제거·길이 제한은 parseNaverAd 가 한다(다른 필드의
+      // optionalString 과 같은 역할). 값이 하나도 없으면 null.
+      naverAd: parseNaverAd(body.naverAd ?? body.naver_ad),
     }
 
     const submittedAt = new Date()
@@ -193,6 +197,7 @@ export async function POST(req: NextRequest) {
           landingPage: attribution.landingPage,
           currentPage: attribution.landingPage,
           referrer: attribution.referrer,
+          naverAd: attribution.naverAd ?? undefined,
         },
         {
           deferTask: (task) => after(task),

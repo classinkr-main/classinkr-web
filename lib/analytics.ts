@@ -2,6 +2,8 @@ import {
   GOOGLE_ADS_DEMO_CONVERSION_LABEL,
   GOOGLE_ADS_ID,
   KAKAO_PIXEL_ID,
+  NAVER_LEAD_CONVERSION_TYPE,
+  NAVER_WCS_ID,
 } from "@/lib/analytics-config"
 import { currentChoice, getAnonymousId } from "@/lib/consent/consent"
 
@@ -58,6 +60,13 @@ declare global {
     ) => void
     kakaoPixel?: (pixelId: string) => KakaoPixelClient
     dataLayer?: Array<Record<string, unknown>>
+    /** 네이버 프리미엄 로그분석(wcslog.js). trans 는 신 스크립트의 전환 발화다. */
+    wcs?: {
+      inflow: (domain?: string) => void
+      trans?: (payload: Record<string, string>) => void
+    }
+    wcs_do?: (payload?: Record<string, string>) => void
+    wcs_add?: Record<string, string>
   }
 }
 
@@ -239,6 +248,12 @@ export const trackEvent = (eventName: EventNames, params?: AnalyticsParams) => {
     }
   }
 
+  // 네이버 전환(wcs.trans) — 마케팅 동의가 있을 때만. 리드 제출만 전환으로 본다:
+  // CTA 클릭·자료 조회까지 보내면 네이버 쪽 전환이 부풀어 입찰 최적화가 망가진다.
+  if (consent.marketing && (eventName === "submit_demo_request" || eventName === "submit_newsletter")) {
+    trackNaverConversion()
+  }
+
   if (!consent.marketing || !window.kakaoPixel || !KAKAO_PIXEL_ID) return
 
   const kakaoPixel = window.kakaoPixel(KAKAO_PIXEL_ID)
@@ -258,6 +273,24 @@ export const trackEvent = (eventName: EventNames, params?: AnalyticsParams) => {
     default:
       break
   }
+}
+
+/**
+ * 네이버 광고 전환 발화 — **신 스크립트(wcs.trans) 전용**.
+ *
+ * 구 스크립트(wcs.cnv)를 같이 쓰면 같은 전환 유형의 구 전환이 네이버 쪽에서 영구 필터링된다.
+ * 이 저장소에 cnv 호출이 생기면 회귀다.
+ *
+ * 값(value)은 보내지 않는다 — 리드는 금액이 없고, 0 을 보내면 네이버 리포트에서
+ * "매출 0원 전환"으로 집계된다.
+ */
+export const trackNaverConversion = (type: string | null = NAVER_LEAD_CONVERSION_TYPE) => {
+  if (typeof window === "undefined") return
+  // 유형이 없으면 보내지 않는다 — 지어낸 유형은 네이버 쪽 집계를 오염시킨다.
+  if (!type || !NAVER_WCS_ID) return
+  const trans = window.wcs?.trans
+  if (typeof trans !== "function") return
+  trans({ type })
 }
 
 /**

@@ -33,7 +33,7 @@ describe("computeCampaignRollup (크로스채널 캠페인 롤업 순수함수)"
       metaSpend: null,
       metaCurrency: null,
       metaLeads: 0,
-      linkedCounts: { email: 0, sms: 0, event: 0, meta: 0 },
+      linkedCounts: { email: 0, sms: 0, event: 0, meta: 0, google: 0, naver: 0 },
     })
   })
 
@@ -147,7 +147,7 @@ describe("computeCampaignRollup (크로스채널 캠페인 롤업 순수함수)"
     expect(rollup.metaSpend).toBeNull()
     expect(rollup.metaCurrency).toBeNull()
     expect(rollup.metaLeads).toBe(0)
-    expect(rollup.linkedCounts).toEqual({ email: 1, sms: 1, event: 1, meta: 1 })
+    expect(rollup.linkedCounts).toEqual({ email: 1, sms: 1, event: 1, meta: 1, google: 0, naver: 0 })
   })
 
   it("전 채널 혼합 링크 → 채널별 독립 집계(간섭 없음)", () => {
@@ -174,7 +174,7 @@ describe("computeCampaignRollup (크로스채널 캠페인 롤업 순수함수)"
       metaSpend: 300,
       metaCurrency: "USD",
       metaLeads: 60,
-      linkedCounts: { email: 1, sms: 1, event: 1, meta: 1 },
+      linkedCounts: { email: 1, sms: 1, event: 1, meta: 1, google: 0, naver: 0 },
     })
   })
 

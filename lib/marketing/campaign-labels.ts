@@ -74,7 +74,20 @@ export function metaObjectiveLabel(value: string | null | undefined): string | n
 export type CampaignLinkLabels = Record<CampaignRefType, Record<string, string>>
 
 export function emptyCampaignLinkLabels(): CampaignLinkLabels {
-  return { email_campaign: {}, sms_campaign: {}, event: {}, meta_campaign: {} }
+  return {
+    email_campaign: {},
+    sms_campaign: {},
+    event: {},
+    meta_campaign: {},
+    google_campaign: {},
+    naver_campaign: {},
+  }
+}
+
+/** Google Ads·네이버 캠페인 라벨 — 일자 스냅샷에 campaign_name 이 같이 저장돼 있다.
+ *  이름이 비면 raw id 로 폴백한다(라벨을 지어내지 않는다 — CampaignLink.label 규약). */
+export function adCampaignLabel(row: { campaignId: string; campaignName: string | null }): string {
+  return row.campaignName?.trim() || row.campaignId
 }
 
 /**

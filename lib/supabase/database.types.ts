@@ -9,6 +9,8 @@
 
 /* ─── Enum Types ─── */
 
+import type { NaverAdAttribution } from "@/lib/naver-ad-params";
+
 export type AdminRole = "SUPER_ADMIN" | "ADMIN" | "EDITOR" | "VIEWER" | "PARTNER" | "BRANCH";
 export type AdminStatus = "INVITED" | "ACTIVE" | "SUSPENDED";
 export type AdminCrmTeamRole = "branch_director" | "manager" | "admin" | "ops";
@@ -113,6 +115,9 @@ export interface Lead {
   landing_page: string | null;
   current_page: string | null;
   referrer: string | null;
+  // 네이버 검색광고 유입 파라미터(n_*) 묶음. 키 목록·정규화는 lib/naver-ad-params.ts 가 정본.
+  // NULL = 네이버 광고 유입이 아님(빈 객체를 저장하지 않는다).
+  naver_ad: NaverAdAttribution | null;
   user_id: string | null;
   // 리드 제출 시점의 익명 식별자(cln_aid). 제출 전후의 client_events·material_downloads를
   // 이 리드에 귀속하는 결합 키 — lib/server/lead-identity-stitch.ts 참조.

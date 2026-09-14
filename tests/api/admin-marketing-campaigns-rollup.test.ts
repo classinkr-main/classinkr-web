@@ -118,7 +118,7 @@ describe("GET /api/admin/marketing-campaigns", () => {
       metaSpend: 120.5,
       metaCurrency: "USD", // Meta 는 계정 통화 네이티브 — KRW 로 접지 않는다
       metaLeads: 7,
-      linkedCounts: { email: 1, sms: 0, event: 0, meta: 1 },
+      linkedCounts: { email: 1, sms: 0, event: 0, meta: 1, google: 0, naver: 0 },
     })
     expect(c2.rollup).toMatchObject({
       emailRecipients: 1200,
@@ -126,14 +126,14 @@ describe("GET /api/admin/marketing-campaigns", () => {
       metaSpend: null, // Meta 링크 없음 → 0 이 아니라 null
       metaCurrency: null,
       metaLeads: 0,
-      linkedCounts: { email: 1, sms: 1, event: 0, meta: 0 },
+      linkedCounts: { email: 1, sms: 1, event: 0, meta: 0, google: 0, naver: 0 },
     })
     // 링크 0건 캠페인도 rollup 을 받는다(UI 가 "연결 없음"을 그릴 수 있도록).
     expect(c3.rollup).toMatchObject({
       emailRecipients: 0,
       eventRevenue: null,
       metaSpend: null,
-      linkedCounts: { email: 0, sms: 0, event: 0, meta: 0 },
+      linkedCounts: { email: 0, sms: 0, event: 0, meta: 0, google: 0, naver: 0 },
     })
   })
 

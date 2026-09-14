@@ -42,6 +42,7 @@ import {
 import { getLeads, type LeadRecord } from "@/lib/repositories/leads"
 import { computeCustomerHealth, type CustomerHealthBand } from "@/lib/crm/customer-health"
 import { getAllCustomerTagsMap } from "./crm-customer-tags"
+import { hasAdClickId } from "@/lib/crm/lead-attribution";
 
 // 뷰 규칙(타입+순수 매칭 함수)의 SSOT는 lib/crm/unified-view-rules.ts — 매칭 함수는 그 모듈에서
 // 직접 import한다(여기서는 재수출하지 않음: provisional 게이트 없는 matchesSavedView를 repo 경유로
@@ -490,7 +491,7 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
         engagement: engagements?.[lead.id] ?? null,
         demoIndex,
       })
-      const hasAdClickId = Boolean(lead.gclid || lead.fbclid || lead.msclkid || lead.ttclid)
+      const adClickId = hasAdClickId(lead)
       rows.push({
         key: `lead:${lead.id}`,
         tags: [],
@@ -514,7 +515,7 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
         updatedAt: lead.follow_up_at ?? lead.timestamp,
         expireAt: null,
         balance: null,
-        origin: classifyLeadOrigin(lead.source, hasAdClickId),
+        origin: classifyLeadOrigin(lead.source, adClickId),
         crmRegistered: neoLinkedLeadIds.has(lead.id),
         // 미확인 신규 리드도 행은 만들되 처리 큐 뷰(site_leads/unanswered)에서만 노출된다.
         provisional: !shouldIncludeLeadInUnifiedCustomers(lead),

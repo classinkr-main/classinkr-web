@@ -30,6 +30,7 @@ const FAKE_PERF = {
   funnel: { impressions: 100, clicks: 10, adLeads: 8, contacted: 4, convertedLeads: 2 },
   leadDailyBySource: {},
   channelMix: [],
+  channelLive: [],
   updatesFeed: [],
 }
 

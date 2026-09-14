@@ -5,11 +5,15 @@ import { getMetaCampaignDashboard } from "@/lib/meta/marketing"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { listCampaignLinkLabels } from "@/lib/repositories/marketing"
 import {
+  adCampaignLabel,
   emailCampaignLabel,
   eventLabel,
   metaCampaignLabel,
   smsCampaignLabel,
 } from "@/lib/marketing/campaign-labels"
+import { kstToday } from "@/lib/marketing/perf-assemble"
+import { getGoogleAdsDailyRange } from "@/lib/repositories/google-ads-daily"
+import { getNaverAdsDailyRange } from "@/lib/repositories/naver-ads-daily"
 
 /**
  * GET /api/admin/marketing-campaigns/link-candidates
@@ -79,16 +83,50 @@ async function safeMetaCandidates(): Promise<Candidate[]> {
   }
 }
 
+/**
+ * Google·네이버 후보는 **일자 스냅샷에서** 뽑는다 — 플랫폼 API 를 다시 부르지 않는 이유는
+ * 링크 대상이 "우리가 실제로 수집한 캠페인"이어야 하기 때문이다. API 에만 있고 스냅샷에
+ * 없는 캠페인을 링크하면 롤업이 영원히 빈 칸으로 남는다.
+ * 최근 90일에 집행이 있던 것만 — 그보다 오래된 캠페인은 새로 링크할 일이 없다.
+ */
+const AD_CANDIDATE_DAYS = 90
+
+async function safeAdCandidates(
+  load: (since: string, until: string) => Promise<{ campaignId: string; campaignName: string | null }[]>
+): Promise<Candidate[]> {
+  try {
+    const rows = await load(kstToday(-AD_CANDIDATE_DAYS), kstToday(0))
+    // 일자 행이라 캠페인당 여러 건이다 — id 로 접고 이름은 마지막 값(최신)을 쓴다.
+    const byId = new Map(rows.map((row) => [row.campaignId, row]))
+    return Array.from(byId.values())
+      .map((row) => ({ id: row.campaignId, label: adCampaignLabel(row) }))
+      .sort((a, b) => a.label.localeCompare(b.label, "ko"))
+  } catch {
+    // 미연동·마이그 미적용 → 빈 목록(라우트 전체는 계속 200).
+    return []
+  }
+}
+
 export async function GET(req: NextRequest) {
   const authError = await verifyAdmin(req)
   if (authError) return authError
 
-  const [emailCampaigns, smsCampaigns, events, metaCampaigns] = await Promise.all([
-    safeEmailCandidates(),
-    safeSmsCandidates(),
-    safeEventCandidates(),
-    safeMetaCandidates(),
-  ])
+  const [emailCampaigns, smsCampaigns, events, metaCampaigns, googleCampaigns, naverCampaigns] =
+    await Promise.all([
+      safeEmailCandidates(),
+      safeSmsCandidates(),
+      safeEventCandidates(),
+      safeMetaCandidates(),
+      safeAdCandidates(getGoogleAdsDailyRange),
+      safeAdCandidates(getNaverAdsDailyRange),
+    ])
 
-  return NextResponse.json({ emailCampaigns, smsCampaigns, events, metaCampaigns })
+  return NextResponse.json({
+    emailCampaigns,
+    smsCampaigns,
+    events,
+    metaCampaigns,
+    googleCampaigns,
+    naverCampaigns,
+  })
 }

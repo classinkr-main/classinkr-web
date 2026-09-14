@@ -10,6 +10,8 @@ import type {
   BriefingCardProps,
   BriefingContent,
 } from "@/components/admin/campaigns/perf/BriefingCard"
+import { ChannelCoverageMatrix } from "@/components/admin/campaigns/perf/ChannelCoverageMatrix"
+import { ChannelLiveStrip } from "@/components/admin/campaigns/perf/ChannelLiveStrip"
 import { FunnelCard } from "@/components/admin/campaigns/perf/FunnelCard"
 import { KpiStrip } from "@/components/admin/campaigns/perf/KpiStrip"
 import { TodayIntakeCard } from "@/components/admin/campaigns/perf/TodayIntakeCard"
@@ -20,6 +22,7 @@ import { COUNT, PCT1, money } from "@/components/admin/campaigns/event-format"
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { ANOMALY_KIND_LABEL, type AnomalyFlag, type AnomalyKind } from "@/lib/marketing/anomaly"
 import type { MarketingPerfResponse, PerfPeriodKey } from "@/lib/marketing/perf"
+import { AD_CHANNELS } from "@/lib/types/event-metrics"
 
 // "요약" 탭 = 마케팅 퍼포먼스 대시보드.
 // 데이터는 perf 단일 엔드포인트(/api/admin/marketing/perf) 하나만 쓴다 — 행사·리드 코어
@@ -497,6 +500,9 @@ export default function SummaryTab({
 
   // Meta 스냅샷 축 실측 여부 — 퍼널의 노출·클릭 0 강등을 표시층에서 구분하기 위한 신호.
   const metaMeasured = data != null && data.kpis.spendUsd.value != null && data.snapshotAt != null
+  // 라이브 연동 채널을 뺀 나머지 — 수기 입력만 있는 채널 수(카카오·YouTube·오프라인·기타).
+  // AD_CHANNELS 에서 파생해 채널이 늘 때 이 숫자가 자동으로 맞는다.
+  const manualChannelCount = AD_CHANNELS.length - (data?.channelLive.length ?? 0)
 
   return (
     <div className="space-y-5">
@@ -588,6 +594,16 @@ export default function SummaryTab({
                   period={data.period}
                   adLeads={data.funnel.adLeads}
                 />
+              </div>
+              {/* 채널별 집행 — KPI 스트립의 spendUsd 는 Meta 축 한 줄이라, 채널이 셋이 되면
+                  그 칸만 보고는 어디에 얼마를 썼는지 알 수 없다. 바로 아래 붙여 같이 읽히게 한다.
+                  커버리지 매트릭스는 접어 둔다 — 매일 볼 표가 아니라 "어디가 비었나"를 물을 때 여는 표다. */}
+              <div className="order-2 flex flex-col gap-3 xl:order-none">
+                <ChannelLiveStrip
+                  channels={data.channelLive}
+                  manualChannelCount={manualChannelCount}
+                />
+                <ChannelCoverageMatrix channels={data.channelLive} />
               </div>
               <div className="order-4">
                 <DailyTrendSection

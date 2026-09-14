@@ -12,6 +12,7 @@ import { ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG } from "@/lib/admin/crm/cache-tags
 import { summarizeLeadResponseStatus } from "@/lib/crm/lead-response-status";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Lead, LeadInsert, LeadUpdate } from "@/lib/supabase/database.types";
+import { parseNaverAd, type NaverAdAttribution } from "@/lib/naver-ad-params";
 
 // 기존 타입 re-export (호환성)
 export type { LeadStatus } from "@/lib/supabase/database.types";
@@ -63,6 +64,8 @@ const OPTIONAL_LEAD_INSERT_COLUMNS = [
   "referrer",
   "confirmed_at",
   "anonymous_id",
+  // 20260914 마이그레이션. 미적용 환경에서도 리드 저장이 통째로 죽지 않게 선택 컬럼으로 다룬다.
+  "naver_ad",
   // 마이그레이션 미적용 환경에서도 리드 저장이 통째로 죽지 않게 선택 컬럼으로 다룬다.
   "last_inflow_at",
 ] as const satisfies readonly (keyof LeadInsertWithInflow)[];
@@ -145,6 +148,9 @@ export interface LeadRecord {
   confirmed_at?: string;
   // 제출 시점의 익명 식별자(cln_aid) — 사이트 활동 귀속의 결합 키.
   anonymous_id?: string;
+  // 네이버 검색광고 유입 파라미터(n_*). undefined = 미조회이거나 네이버 유입이 아님.
+  // 키 목록·정규화는 lib/naver-ad-params.ts 가 정본.
+  naver_ad?: NaverAdAttribution;
   // 마지막 유입 시각(재유입 축, 20260828 마이그레이션). 저장 경로가 행을 병합하지 않으므로
   // 지금은 생성 시각과 같다 — 재유입 판정은 lib/crm/lead-reinflow가 연락처 중복으로 도출한다.
   last_inflow_at?: string;
@@ -258,6 +264,8 @@ function supabaseToLegacy(row: LeadRowWithInflow): LeadRecord {
     referrer: row.referrer ?? undefined,
     confirmed_at: row.confirmed_at ?? undefined,
     anonymous_id: row.anonymous_id ?? undefined,
+    // JSONB 라 무엇이든 들어올 수 있다 — 목록 밖 키는 parseNaverAd 가 버린다.
+    naver_ad: parseNaverAd(row.naver_ad) ?? undefined,
     // 스코프 조회(대시보드·마케팅)는 이 컬럼을 select하지 않는다 — 그때는 undefined다.
     last_inflow_at: row.last_inflow_at ?? undefined,
   };
@@ -459,6 +467,7 @@ const MARKETING_LEAD_COLUMNS = [
   "branch", "notes", "source_detail", "lead_magnet", "follow_up_at", "assigned_to",
   "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
   "gclid", "fbclid", "msclkid", "ttclid", "landing_page", "current_page",
+  "naver_ad",
   "created_at", "confirmed_at",
 ].join(", ");
 
@@ -614,6 +623,8 @@ export async function saveLead(
     // 어드민 수기 등록(app/api/admin/leads)만 생성 시점에 confirmed_at을 명시적으로 채운다.
     confirmed_at: lead.confirmed_at ?? null,
     anonymous_id: lead.anonymous_id ?? null,
+    // 빈 객체는 저장하지 않는다 — NULL 이어야 "네이버 유입이 아님"으로 읽힌다.
+    naver_ad: parseNaverAd(lead.naver_ad),
     // 재유입 축의 시작점. 마이그레이션 백필은 기존 행만 채웠으므로 여기서 안 넣으면
     // 신규 행은 전부 NULL로 남아 컬럼이 죽는다. 자체 저장 경로는 같은 연락처가 다시 와도
     // 행을 새로 만들기 때문에(병합 없음) 최초값 = 생성 시각이 맞다.

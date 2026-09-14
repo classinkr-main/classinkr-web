@@ -62,6 +62,9 @@ const CHANNEL_ICON: Record<CampaignRefType, ReactNode> = {
   sms_campaign: <MessageSquare className="h-3.5 w-3.5" />,
   event: <CalendarDays className="h-3.5 w-3.5" />,
   meta_campaign: <Target className="h-3.5 w-3.5" />,
+  // 광고 채널 셋은 같은 성격(유료 집행)이라 같은 아이콘을 쓴다 — 구분은 라벨이 한다.
+  google_campaign: <Target className="h-3.5 w-3.5" />,
+  naver_campaign: <Target className="h-3.5 w-3.5" />,
 }
 
 /* ── 롤업 카드(순수·프레젠테이션·테스트 대상) ─────────────────── */
@@ -265,8 +268,12 @@ export default function CampaignDetailPanel({
       sms_campaign: [],
       event: [],
       meta_campaign: [],
+      google_campaign: [],
+      naver_campaign: [],
     }
-    for (const l of links) g[l.refType].push(l)
+    // refType 은 DB CHECK 로 좁혀져 있지만, 배포 순서상 새 값이 먼저 들어올 수 있다 —
+    // 모르는 값이 오면 무시한다(런타임 크래시보다 한 줄 누락이 낫다).
+    for (const l of links) g[l.refType]?.push(l)
     return g
   }, [links])
 
