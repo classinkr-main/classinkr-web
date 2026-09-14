@@ -138,6 +138,8 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // 리드 중복 탐지 + 어드민 핫패스 인덱스(2026-09-02). 인덱스 전용 마이그레이션이라
   // 프로브의 한계는 SCHEMA_PROBES 쪽 주석 참고.
   "supabase/migrations/20260902_leads_dedupe_and_admin_hot_path_indexes.sql",
+  // 재유입 병합 전화 정규화 키(2026-09-14) — Compass phone_key 규칙을 public.leads 생성 컬럼으로 이식.
+  "supabase/migrations/20260914_leads_phone_key.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -395,6 +397,19 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     severity: "warning",
     impact:
       "idx_crm_tasks_status_completed_at이 없어도 기능은 정상이나, /api/admin/crm/manager-report의 기간 내 완료 집계가 done 누적 전체 스캔이 되고 그 비용은 시간이 지날수록 커진다.",
+  },
+  // ── 재유입 병합 전화 정규화 키(2026-09-14) ──────────────────────────────
+  // phone_key가 없어도 findLeadsByContacts()가 원문/숫자만 비교 폴백으로 계속 동작하므로
+  // (기능은 안 죽는다) severity는 warning — 다만 그 폴백은 서식이 다른 같은 번호를 놓친다.
+  {
+    kind: "table",
+    table: "leads",
+    label: "재유입 병합 전화 정규화 키(phone_key, 생성 컬럼) + 마지막 유입 시각",
+    columns: ["id", "phone_key", "last_inflow_at"],
+    migration: "supabase/migrations/20260914_leads_phone_key.sql",
+    severity: "warning",
+    impact:
+      "없으면 재유입 병합이 원문/숫자만 비교 폴백으로 동작해 서식이 다른 같은 번호를 못 잡는다.",
   },
 ]
 
