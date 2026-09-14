@@ -49,7 +49,7 @@ Platform은 `lib/server/*`, `app/api/*`, `tests/*` 전체를 소유하지 않는
   [ADR-010](../../adr/ADR-010-operational-failure-containment.md)을 따른다.
 - Vercel cron은 `Authorization: Bearer ${CRON_SECRET}`만 검증한다. `x-vercel-cron`은 Vercel의
   전송 계약이 아니므로 인증 또는 추가 실행 조건으로 사용하지 않는다.
-- Vercel 플랜은 명시 확인 전 Hobby로 보고 각 `vercel.json` cron은 하루 1회 이하로 둔다. sub-daily 작업은 외부 스케줄러나 플랜 결정을 먼저 한다.
+- Vercel 플랜은 Pro다(2026-09-14 확인). `vercel.json` cron 식은 UTC로 적고, 경로당 항목 하나·하루 288회(5분 간격) 이하·전체 40개 이하로 둔다. 주기를 올릴 때는 외부 API 한도, 하루 1회를 전제로 한 실패 알림·중복 방지 코드, 실행 잠금 시간을 함께 확인한다.
 - 외부 발송 cron은 at-least-once 실행을 가정하고 멱등 키, backlog dry-run, lookback·실행당 발송량
   상한, 부분 성공 테스트와 circuit breaker를 갖춘다. 인증 수리·장기 중단 후 첫 실행에 과거분을
   자동으로 전량 재생하지 않는다.
