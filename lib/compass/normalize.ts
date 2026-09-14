@@ -1,12 +1,38 @@
 // Compass 브리지 공용 순수 유틸 — 클라이언트/서버 양쪽에서 안전.
-// normalizePhoneKey는 compass_leads_v 뷰의 phone_key SQL 표현식과 규칙이 일치해야 한다
-// (supabase/migrations/20260828_compass_bridge_views.sql).
+//
+// normalizePhoneKey 는 Compass lib/format.ts normPhone(전화 저장 정본)과 같은 결과를 내야 한다
+// (2026-09-14). SQL 쪽 등가 함수는 public.norm_phone_key
+// (supabase/migrations/20260914_compass_integration_bridge.sql)이고, 진리표 픽스처를 공유한다
+// (tests/compass/normalize.test.ts).
+//
+// 왜 compass_leads_v 의 phone_key 식(숫자만 → ^0082→82 → ^82→0, 이하 K식)을 그대로 쓰지 않나:
+// K식은 Compass 가 저장한 값(이미 normPhone 을 거친 값)에서는 normPhone 과 결과가 같다. 그래서
+// 뷰의 phone_key 는 바꾸지 않아도 된다. 하지만 어드민이 가진 **원문 전화**에 K식을 쓰면
+// "+82 010-…"·"0082-010-…"(국가번호 뒤 국내 0 이 남은 형태)은 001012345678 이 되고,
+// "10-1234-5678"(시트·엑셀이 앞 0 을 떨어뜨린 형태)은 1012345678 이 되어 조인에서 빠진다
+// (Compass 감사 D-borrow-crm.md 전화 키 진리표 결론 2). normPhone 규칙은 이 셋만 01012345678 로
+// 모으고, 나머지 입력에서는 K식과 결과가 같다 — 기존 매칭은 그대로, 누락만 준다.
+//
+// 이름이 같은 lib/crm/capture/matching.ts normalizePhoneKey 는 규칙이 다르다(숫자 9자리 이상만,
+// 국가번호 처리 없음). 붙여넣기 인박스 내부 중복 판정용이라 이번에 바꾸지 않았다.
 
-/** 전화 정규화 키: 숫자만 → 0082/82 국가코드를 0으로. 빈 결과는 null. */
+/**
+ * 전화 조인 키(= Compass normPhone). 숫자만 남긴 뒤
+ *  - 빈 값 → null
+ *  - 0082·82 국가번호 → 벗기고, 국내 0 이 없으면 붙인다(8210… → 010…, 82010… → 010…)
+ *  - 국가번호 없이 10 으로 시작하는 10자리 이상 → 앞 0 을 되살린다(1012345678 → 01012345678)
+ *  - 그 밖(국내 표기·다른 나라 국가번호 008613…·8613…) → 그대로
+ * 내선·두 번호가 한 칸에 붙은 입력은 숫자가 이어 붙는다 — 입력 정리의 몫이다(Compass 와 같게 틀림).
+ */
 export function normalizePhoneKey(raw: string | null | undefined): string | null {
   if (!raw) return null
-  const digits = raw.replace(/[^0-9]/g, "").replace(/^0082/, "82").replace(/^82/, "0")
-  return digits.length > 0 ? digits : null
+  const digits = raw.replace(/[^0-9]/g, "")
+  if (digits === "") return null
+  const withDomesticZero = (rest: string) => (rest.startsWith("0") ? rest : `0${rest}`)
+  if (digits.startsWith("0082")) return withDomesticZero(digits.slice(4))
+  if (digits.startsWith("82")) return withDomesticZero(digits.slice(2))
+  if (digits.startsWith("10") && digits.length >= 10) return `0${digits}`
+  return digits
 }
 
 /** Compass 리드 상세 딥링크 — 어드민 카드의 "Compass에서 열기". */
