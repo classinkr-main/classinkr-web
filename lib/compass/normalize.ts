@@ -40,16 +40,23 @@ export function compassLeadUrl(leadId: number): string {
   return `https://mkt.classin.co.kr/leads?open=${leadId}`
 }
 
-/** Compass 콜 단계 한글 라벨 — crm.stages 실측(2026-08-28). UI의 부재중/재통화는 파생 표시라 여기 없음. */
+/**
+ * Compass 퍼널 단계 한글 라벨 — 정본은 Compass lib/stages.ts STAGE_LABEL(2026-09-14 결정 K11).
+ * 예전 값은 crm.stages.label 실측(2026-08-28: 신규유입·견적·이탈)이었는데, Compass 화면은 그 테이블을
+ * 읽지 않고 lib/stages.ts 를 쓴다 — 같은 키가 브리지 너머에서 다른 뜻으로 읽혔다(Compass 감사 R3 T3:
+ * quote 는 "견적"이 아니라 고객관리 미팅 진행, lost 는 "이탈"이 아니라 종료).
+ * contact·consult 는 crm.stages 에만 남은 옛 키라(Compass STAGE_ORDER 에 없음) 옛 라벨을 둔다.
+ * UI의 부재중/재통화는 파생 표시라 여기 없음. 사전 동기화 검사: tests/compass/normalize.test.ts.
+ */
 export const COMPASS_STAGE_LABEL: Record<string, string> = {
-  new: "신규유입",
+  new: "유입",
   contact: "컨택",
   consult: "상담",
   demo: "데모",
-  quote: "견적",
+  quote: "미팅",
   bd: "BD인계",
   won: "결제",
-  lost: "이탈",
+  lost: "종료",
 }
 
 /** 케어 사다리 한글 라벨 — crm.leads.care_stage 실측 어휘(member/leader/ceo/paid/closed). */

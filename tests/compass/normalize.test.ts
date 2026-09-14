@@ -130,11 +130,34 @@ describe("normalizePhoneKey — Compass normPhone 등가 진리표", () => {
   })
 })
 
+/**
+ * Compass lib/stages.ts STAGE_LABEL 사본 — 통합 기준 integrate/2026-09-14 @ 18135ce (결정 K11).
+ * Compass 쪽 라벨이 바뀌면 이 사본과 lib/compass/normalize.ts 를 같이 고친다.
+ */
+const COMPASS_STAGES_TS_LABEL: Record<string, string> = {
+  new: "유입",
+  demo: "데모",
+  quote: "미팅",
+  won: "결제",
+  bd: "BD인계",
+  lost: "종료",
+}
+
 describe("compass label vocabularies", () => {
   it("covers the live crm.stages keys (2026-08-28 실측)", () => {
     for (const key of ["new", "contact", "consult", "demo", "quote", "bd", "won", "lost"]) {
       expect(COMPASS_STAGE_LABEL[key]).toBeTruthy()
     }
+  })
+
+  it("Compass 단계 라벨은 Compass lib/stages.ts 정본과 같다(K11: quote=미팅, lost=종료)", () => {
+    for (const [key, label] of Object.entries(COMPASS_STAGES_TS_LABEL)) {
+      expect(COMPASS_STAGE_LABEL[key]).toBe(label)
+    }
+    // crm.stages.label·옛 어드민 사전의 라벨이 되돌아오지 않게
+    expect(Object.values(COMPASS_STAGE_LABEL)).not.toContain("견적")
+    expect(Object.values(COMPASS_STAGE_LABEL)).not.toContain("이탈")
+    expect(Object.values(COMPASS_STAGE_LABEL)).not.toContain("신규유입")
   })
 
   it("covers the live care_stage keys", () => {
