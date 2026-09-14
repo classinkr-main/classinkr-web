@@ -48,7 +48,9 @@ function AlertsOutboundSections({
 }: AlertsOutboundSectionsProps) {
   const [mutedOpen, setMutedOpen] = useState(false)
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+    // id: 홈 요약 밴드(SummaryBand)의 "부족·주문 검토" 칸은 표(재고 상세)로 스크롤하지만,
+    // 알림 카드 쪽 소비처를 위해 이 묶음에도 앵커를 심어 둔다(감사 2026-09-14, 홈 가시성 개편).
+    <div id="hardware-section-alerts" className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <section className="min-w-0 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
         <SectionHeader
           title="알림"

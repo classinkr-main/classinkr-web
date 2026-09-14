@@ -38,7 +38,9 @@ function StockLevelsSection({
   prepareQuickEntry,
 }: StockLevelsSectionProps) {
   return (
-    <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+    // id: 홈 요약 밴드(SummaryBand)의 "창고/가용/부족·주문 검토" 칸이 앵커 스크롤로 여기를
+    // 가리킨다(감사 2026-09-14, 홈 가시성 개편).
+    <section id="hardware-section-stock" className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
       <SectionHeader
         title="현재 재고"
         description="창고 = 실물 재고 · 가용 = 창고 − 예정. 최소재고와 최근 출고량을 같이 보고 주문 시점을 판단합니다."
@@ -90,7 +92,11 @@ function StockLevelsSection({
                           {row.category ?? "미분류"} · 최소 {row.reorderPoint}대 · 리드타임 {row.leadTimeDays}일
                         </p>
                         {row.lotBalances.length > 0 && (
-                          <div className="mt-1.5 flex flex-wrap gap-1">
+                          // 라벨 프리픽스("로트")로 창고/가용 숫자 옆 이 칩들이 무엇인지 즉시
+                          // 알 수 있게 한다(요청사항 ③.4 — H8·C1처럼 실물과 맞는 lot이 내려오기
+                          // 시작한 지금, 라벨 없이 뜬 칩만으로는 처음 보는 사람이 의미를 추측해야 했다).
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                            <span className="text-[10px] font-bold uppercase tracking-[0.05em] text-[#A39E98]">로트</span>
                             {row.lotBalances.slice(0, 5).map((lot) => (
                               <span key={lot.lot} className={`rounded bg-[#F6F5F4] px-1.5 py-0.5 text-[11px] font-semibold text-[#31302E] ${MONO_META_CLASS}`}>
                                 {formatLotLabel(lot.lot) ?? lot.lot} {formatNumber(lot.quantity)}

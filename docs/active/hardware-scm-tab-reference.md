@@ -27,7 +27,7 @@
 
 | 탭 | 정체성 | 구성 |
 | --- | --- | --- |
-| **홈** | 현황 + 예상 출고 워크플로 | 핵심 KPI 4 · **예상 출고 큐**(등록·부분/전체 확정) · 재고 위치 맵 · 현재 재고(lot 칩) · 알림 |
+| **홈** | 현황 + 예상 출고 워크플로 | **요약 밴드 5칸**(창고·가용·예정 대기·부족/주문 검토·시트 이관 신선도) · 이관 경고 · **예상 출고 큐**(등록·부분/전체/**선택 일괄** 확정) · 품목 카드·현재 재고(lot 칩) · 판매 요약 · 검색 · 위치 맵 · 샘플 · 알림 · 스냅샷 복원 |
 | **입출고** | 기록 진입 | 액션 런처(8 프리셋) + 최근 기록 6건 → 실제 입력은 슬라이드오버 |
 | **내역** | 전체 원장 | 유형·제품 칩 필터 · lot/금액 표시 · 행별 수정·취소 |
 
@@ -74,11 +74,28 @@
 
 - **등록**: 배송 예정 movement 생성 → 가용에서 차감, 홈 큐에 표시.
 - **확정**: 예정 → 실제 출고로 **전환(convert)**. 출고일 선택. **부분 수량 확정** 지원 — 출고 N대 생성 + 잔여(전체−N)는 예정 유지.
+- **선택 일괄 확정(2026-09-14)**: 행·딜 체크박스(Shift 범위 선택), 빠른 선택("전체 N건"·"30일+ 미확정"·해제),
+  하단 작업 바의 공통 확정일로 **순차** 확정한다. 순차인 이유 — 각 확정이 로트 잔량을 바꾸므로 다음 건의
+  배정이 앞 건을 반영해야 하고, 건별 권한 검사(`hardware.finalize`)·감사 로그가 그대로 남는다. 실패 건은
+  사유를 행에 남기고 선택에 남겨 재시도한다.
+- **로트가 모자라도 확정을 막지 않는다(운영자 결정 2026-09-14).** 해석 가능한 만큼 FIFO 로 배정하고
+  나머지는 로트 미지정(`lot_no` NULL) 한 줄로 기록한다. 로트 기록이 전혀 없는 품목(OPS·케이블 등)도 출고를
+  남길 수 있다. 운영자가 로트를 **직접 지정**한 경우만 그 로트 잔량을 검사한다.
 
 ### 3-4. lot(물류 번호) 추적
 
-- lot 키 = 수기 `lot_no`, 시트행은 `reference_no`(물류No) 폴백.
-- lot 잔량 = 입고/반납(+) − 출고(예정 포함, −); 이동·수리는 lot 보존. 현재 재고 표에 lot 칩으로 노출.
+- lot 키 = 수기 `lot_no`, 시트행은 `reference_no`(물류No) 폴백. 운영 원장(시트 임포트)은 `lot_no` 가 비어
+  있고 로트는 `reference_no` 에만 있다(2026-09-14 실측 385건 전부).
+- **lot 잔량 정본 = `resolveHardwareLotBalances`**(`lib/repositories/hardware-inventory.ts`). 화면 표시와
+  새 출고 자동 배정·예정 확정 배정이 **모두 이 함수 하나**를 쓴다. 규칙(순서 무관·결정적):
+  1. 로트 키가 있는 이동을 로트별로 합산한다 — 입고/반납(+) · 출고(예정 포함, −) · 보정(방향대로) · 이동/수리(0).
+  2. **음수가 된 로트의 초과분은 FIFO(가장 오래된 양수 로트부터)로 흡수**한다. 설치 기록에 현행 세대 이름을
+     붙여 로트를 넘겨 출고한 물량(예: STD1 H8 입고 19 · 출고 28)은 실제로 옛 로트에서 나간 것이다.
+  3. **로트 없는 감소분(출고·음수 보정)도 FIFO 로 차감**한다. 로트 없는 증가분은 귀속시키지 않는다.
+- FIFO 순서: `FY` < `H숫자` < 그 밖(`C1`·`Sample` 등, 처음 본 날짜순).
+- 예전 규칙(단순 합산 + 음수 숨김)은 실물에 없는 옛 로트를 재고로 보여줬다(STD1 H4·H5·H6, T1 H6 —
+  운영자 확인: 실제는 H8·C1 뿐). 날짜순 재생을 쓰지 않는 이유는 시트 원장에 출고일이 입고일보다 앞서는
+  행이 흔하기 때문이다.
 
 ### 3-5. 기록 수정·취소
 
@@ -99,7 +116,7 @@
 
 `hardware_movements` 주요 컬럼: `item_id, product_name, movement_type(inbound|outbound|return|transfer|repair|adjust), quantity, occurred_at, from_location, to_location, owner, status, reference_no, memo, serials[], lot_no, unit_price, amount_usd, amount_cny, storage_location, importer, source(admin_manual|sheet_import), import_run_id, raw, voided_*, converted_from/to_movement_id`.
 
-RPC: `confirm_hardware_planned_movement(uuid,text,date,int)`(부분 확정) · `replace_hardware_sheet_import` · `restore_hardware_sheet_import_snapshot`.
+RPC: `confirm_hardware_planned_movement_v3(uuid,text,date,int,jsonb)`(**앱이 계산한 로트 배정을 받아 기록**, 로트 미지정 허용) → `confirm_hardware_planned_movement_v2`(SQL 내부 FIFO, `lot_no` 만 봄) → 레거시 `confirm_hardware_planned_movement` 순으로 앱이 폴백 · `replace_hardware_sheet_import` · `restore_hardware_sheet_import_snapshot`.
 
 API:
 - `GET /api/admin/hardware` — 대시보드(items/stock/movements/recentOutbound/plannedMovements/alerts/totals/importRun)
@@ -125,6 +142,11 @@ API:
 ## 6. 마이그레이션 (라이브 적용 완료)
 
 `20260626_*_ledger` · `20260626_*_workflow_guards` · `20260627_*_snapshots` · `20260628_*_lot` · `20260628_*_costing` · `20260629_*_partial_confirm` · `20260630_*_sheet_import_merge`(추가형 머지 RPC·라이브 적용, 플래그 off). 적용은 Supabase Management API query 엔드포인트로 수행(운영 메모 별도).
+
+**미적용 (2026-09-14)**: `20260914_hardware_confirm_planned_v3.sql` — v3 확정 함수 **추가만**(v2·레거시 유지, 데이터 변경 없음).
+적용 전에는 앱이 v2 로 폴백해 로트 미지정 예정 출고 확정이 계속 실패하며, 그때 화면에 "DB v3 가 적용되지
+않았다"는 사유를 보여준다. 운영 프로젝트는 서울 이관 후 `pxbrsbovoobowpfarxmn` 이다
+(`docs/active/supabase-korea-migration-status.md`).
 
 ---
 

@@ -548,6 +548,86 @@ export function previewFifoLots(lots: HardwareStockRow["lotBalances"], quantity:
   return { plan, shortage: remaining }
 }
 
+// 예정 출고 행의 확정 수량 — 사용자가 수량 입력을 손대지 않았으면 전량, 손댔으면 1~원래 수량
+// 사이로 clamp한 값이다. 행 표시(PlannedOutboundPanel 단건)와 일괄 확정 합계·요청 페이로드가
+// 같은 규칙을 쓰도록 단일 함수로 뽑았다(감사 2026-09-14 — 일괄 체크 추가 전엔 이 clamp 식이
+// 컴포넌트 안에 인라인으로만 있어 새 소비처마다 복붙될 뻔했다).
+export function resolveConfirmQuantity(
+  movement: Pick<HardwareMovement, "id" | "quantity">,
+  confirmQtys: Record<string, string>
+): number {
+  const raw = confirmQtys[movement.id]
+  if (raw == null || raw === "") return movement.quantity
+  return Math.max(1, Math.min(movement.quantity, Math.floor(Number(raw) || movement.quantity)))
+}
+
+// 예정일로부터 dangerDays 이상 지난 예정 출고 id 목록 — 홈 "30일+ 미확정 선택" 퀵 액션 전용
+// (감사 2026-09-14, 일괄 체크). 딜(그룹) 단위가 아니라 개별 확정 대상(HardwareMovement.id)
+// 단위로 판정한다 — 그룹 키 자체가 고객+담당자+예정일+lot 조합이라 그룹의 date는 구성원 전체가
+// 공유하는 값이므로, 개별 판정과 기존 그룹 판정(plannedStaleGroupCount)은 항상 같은 결과를 낸다.
+export function collectStalePlannedMovementIds(
+  movements: Array<Pick<HardwareMovement, "id" | "occurred_at">>,
+  dangerDays: number
+): string[] {
+  return movements
+    .filter((movement) => (elapsedDaysSince(movement.occurred_at) ?? 0) >= dangerDays)
+    .map((movement) => movement.id)
+}
+
+// Shift+클릭 범위 선택(감사 2026-09-14, 일괄 체크) — 마지막으로 클릭한 체크박스(anchor)와 이번
+// 클릭 대상(target) 사이를 화면에 보이는 순서(orderedIds, 현재 페이지 기준) 그대로 포함해서
+// 돌려준다. 어느 한쪽이라도 목록에 없으면(페이지 이동 등으로 앵커가 화면에서 사라진 경우) 대상
+// 하나만 돌려줘 — 예측 불가능한 범위가 잡히는 대신 안전하게 단일 선택으로 내려간다.
+export function shiftSelectRange(orderedIds: string[], anchorId: string, targetId: string): string[] {
+  const anchorIndex = orderedIds.indexOf(anchorId)
+  const targetIndex = orderedIds.indexOf(targetId)
+  if (anchorIndex === -1 || targetIndex === -1) return [targetId]
+  const [start, end] = anchorIndex <= targetIndex ? [anchorIndex, targetIndex] : [targetIndex, anchorIndex]
+  return orderedIds.slice(start, end + 1)
+}
+
+// 예정 출고 행의 FIFO 로트 미리보기 판정(감사 2026-09-14) — 신정책(로트가 모자라도 확정을 막지
+// 않고 나머지를 "로트 미지정"으로 기록)에 맞춰 예전의 "부족"(막힘 인상) 문구를 없애고, 상태를
+// 종류별로 나눠 순수 데이터로 돌려준다. 색·문구 렌더링은 호출부(PlannedOutboundPanel) 담당 —
+// 이 함수는 판정만 하고 톤은 모른다(호출부가 kind별로 Success/Warning 톤을 고른다).
+export type PlannedFifoPreview =
+  // 이미 lot이 지정된 행 — FIFO 계산 자체가 필요 없다.
+  | { kind: "assigned"; label: string }
+  // 이 품목의 재고 행(stockRow)을 못 찾음 — 드문 데이터 불일치, 계산 불가.
+  | { kind: "unavailable" }
+  // 이 품목은 애초에 lot 잔량 기록이 없다(OPS·케이블 등 lot 미운영 품목) — "부족"이 아니라
+  // 애초에 추적 대상이 아니라는 뜻이라 별도 케이스로 구분한다.
+  | { kind: "no-lot-records" }
+  // 정상 FIFO 계산 — matchedText는 실제 배정될 lot·수량 문자열, unassignedQty는 lot으로 못
+  // 채워 "로트 미지정"으로 기록될 나머지 수량(0이면 전량 lot 배정됨).
+  | { kind: "fifo"; matchedText: string; unassignedQty: number }
+
+export function resolvePlannedFifoPreview(
+  movement: Pick<HardwareMovement, "lot_no">,
+  stockRow: HardwareStockRow | undefined,
+  quantity: number
+): PlannedFifoPreview {
+  if (movement.lot_no) return { kind: "assigned", label: formatLotLabel(movement.lot_no) ?? movement.lot_no }
+  if (!stockRow) return { kind: "unavailable" }
+  if (stockRow.lotBalances.length === 0) return { kind: "no-lot-records" }
+  const { plan, shortage } = previewFifoLots(stockRow.lotBalances, quantity)
+  const matchedText = plan.map((lot) => `${formatLotLabel(lot.lot) ?? lot.lot} ${formatNumber(lot.quantity)}대`).join(" · ")
+  return { kind: "fifo", matchedText, unassignedQty: shortage }
+}
+
+// 일괄 체크(감사 2026-09-14) 실행 결과·진행률 타입 — PlannedOutboundPanel(선택 UI 소유)과
+// HardwareInventoryClient(네트워크 실행·refresh 소유) 둘 다 이 계약을 알아야 해서 shared에 둔다
+// (이 파일 맨 위 주석의 "부모↔자식 순환 import 제거" 원칙과 동일한 이유).
+export interface PlannedSelectionConfirmResult {
+  successIds: string[]
+  failedIds: string[]
+}
+
+export interface PlannedSelectionConfirmProgress {
+  index: number
+  total: number
+}
+
 export function formatNumber(value: number) {
   return new Intl.NumberFormat("ko-KR").format(value)
 }

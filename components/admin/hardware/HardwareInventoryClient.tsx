@@ -43,6 +43,8 @@ import {
   outboundSaleType,
   periodKey,
   previewFifoLots,
+  type PlannedSelectionConfirmProgress,
+  type PlannedSelectionConfirmResult,
   PRODUCT_FILTER_OPTIONS,
   quickCartLineKey,
   SALE_TYPE_META,
@@ -624,6 +626,12 @@ export default function HardwareInventoryClient({
   const [historySort, setHistorySort] = useState<"desc" | "asc">("desc")
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const [confirmingGroupKey, setConfirmingGroupKey] = useState<string | null>(null)
+  // 일괄 체크(감사 2026-09-14) 진행률 — null이면 유휴, 값이 있으면 "N/M 확정 중"이 패널 하단
+  // 고정 바에 표시된다. confirmingId·confirmingGroupKey와 같은 층위의 잠금 신호라
+  // plannedConfirmLocked에도 합류시킨다(아래).
+  const [selectionConfirmProgress, setSelectionConfirmProgress] = useState<PlannedSelectionConfirmProgress | null>(null)
+  // 예정 출고 일괄 체크 선택 개수 — 선택 중엔 "빠른 기록" 떠 있는 버튼을 내린다(하단 작업 바를 가림).
+  const [plannedSelectionCount, setPlannedSelectionCount] = useState(0)
   const [plannedConfirmResults, setPlannedConfirmResults] = useState<Record<string, { ok: boolean; message: string }>>({})
   const [confirmDates, setConfirmDates] = useState<Record<string, string>>({})
   const [voidingId, setVoidingId] = useState<string | null>(null)
@@ -671,7 +679,10 @@ export default function HardwareInventoryClient({
   // 상세 모드 진입 직전의 출고 세그먼트(sale/planned/sample)를 기억해 빠른 기록 복귀 시 복원한다.
   const detailReturnPresetRef = useRef<string | null>(null)
   const reduceMotion = useReducedMotion()
-  const plannedConfirmLocked = busy != null || confirmingId != null || confirmingGroupKey != null
+  // 일괄 체크 실행 중(selectionConfirmProgress != null)에도 다른 확정 경로(단건·그룹·체크박스
+  // 조작)를 전부 잠근다(요청사항 ①.7) — 순차 실행 중간에 다른 확정이 끼어들면 FIFO 배정이
+  // 로트 잔량을 놓고 경쟁해 예측 불가능해진다.
+  const plannedConfirmLocked = busy != null || confirmingId != null || confirmingGroupKey != null || selectionConfirmProgress != null
   // quickCartSaving(busy === "movement")은 구조 분해(#6)로 QuickRecordSheet.tsx가 자체 계산한다 —
   // 그 시트만 쓰던 파생값이라 여기 남겨두면 미사용 변수가 된다.
 
@@ -2529,6 +2540,63 @@ export default function HardwareInventoryClient({
     }
   }, [plannedConfirmLocked, readPlannedConfirmInput, confirmPlannedMovementRequest, refresh])
 
+  // 일괄 체크(감사 2026-09-14) — PlannedOutboundPanel이 여러 딜을 가로질러 고른 예정 출고를
+  // 한 번에 확정하는 전용 핸들러. confirmPlannedGroup의 루프 패턴(성공/실패 집계 →
+  // plannedConfirmResults → 알림 → 성공이 있으면 refresh() 한 번)을 그대로 따르되, 대상이
+  // 한 딜(group.items)이 아니라 패널이 골라 넘긴 임의의 movement 배열이라는 점만 다르다.
+  // 새 API를 만들지 않고 confirmPlannedMovementRequest를 순차(for await)로 재사용한다 — 각
+  // 확정이 로트 잔량을 바꾸므로 다음 건의 FIFO 배정이 앞 건을 반영해야 하고, 서버 권한 검사
+  // (hardware.finalize)와 건별 감사 로그도 그대로 유지된다(병렬 실행 시 이 순서 보장이 깨진다).
+  // 수량은 호출부가 이미 확정 수량 입력(confirmQtys)을 반영해 넘기고, 확정일은 패널의 공통
+  // 입력(bulkConfirmDate) 하나를 전체에 적용한다.
+  const confirmPlannedSelection = useCallback(
+    async (
+      entries: Array<{ movement: HardwareMovement; quantity: number }>,
+      occurredAt: string
+    ): Promise<PlannedSelectionConfirmResult> => {
+      if (entries.length === 0 || plannedConfirmLocked) return { successIds: [], failedIds: [] }
+      setNotice(null)
+      setError(null)
+      const nextResults: Record<string, { ok: boolean; message: string }> = {}
+      const successIds: string[] = []
+      const failedIds: string[] = []
+      setSelectionConfirmProgress({ index: 0, total: entries.length })
+      try {
+        for (let i = 0; i < entries.length; i += 1) {
+          const { movement, quantity } = entries[i]
+          // 몇 번째 건을 처리 중인지 매 반복마다 갱신 — 패널 하단 바의 "N / M 확정 중" 표시가
+          // 이 값을 그대로 읽는다(요청사항 ①.5 진행 표시).
+          setSelectionConfirmProgress({ index: i + 1, total: entries.length })
+          try {
+            const qty = await confirmPlannedMovementRequest(movement, { quantity, occurredAt })
+            successIds.push(movement.id)
+            nextResults[movement.id] = { ok: true, message: `${formatNumber(qty)}대 확정 완료` }
+          } catch (err) {
+            // 한 건 실패가 전체를 멈추지 않는다 — 사유를 그 행에 남기고 다음 건을 계속 진행한다.
+            failedIds.push(movement.id)
+            nextResults[movement.id] = {
+              ok: false,
+              message: err instanceof Error ? err.message : "출고 확정에 실패했습니다.",
+            }
+          }
+        }
+        // plannedConfirmResults는 단건·그룹 확정과 공유하는 같은 맵이다 — 행 아래 결과 문구
+        // 렌더링(PlannedOutboundPanel)을 새로 만들지 않고 그대로 재사용한다.
+        setPlannedConfirmResults((current) => ({ ...current, ...nextResults }))
+        setNotice(
+          failedIds.length > 0
+            ? `선택 출고 확정: ${formatNumber(successIds.length)}건 성공, ${formatNumber(failedIds.length)}건 실패`
+            : `선택한 예정 출고 ${formatNumber(successIds.length)}건을 모두 확정했습니다.`
+        )
+        if (successIds.length > 0) await refresh()
+      } finally {
+        setSelectionConfirmProgress(null)
+      }
+      return { successIds, failedIds }
+    },
+    [plannedConfirmLocked, confirmPlannedMovementRequest, refresh]
+  )
+
   const voidMovement = useCallback((movement: HardwareMovement) => {
     if (movement.voided_at) return
     setVoidReason("")
@@ -3354,6 +3422,9 @@ export default function HardwareInventoryClient({
               confirmingId={confirmingId}
               confirmingGroupKey={confirmingGroupKey}
               confirmPlannedGroup={confirmPlannedGroup}
+              confirmPlannedSelection={confirmPlannedSelection}
+              selectionConfirmProgress={selectionConfirmProgress}
+              onPlannedSelectionCountChange={setPlannedSelectionCount}
               locationMap={locationMap}
               locationMapExpanded={locationMapExpanded}
               setLocationMapExpanded={setLocationMapExpanded}
@@ -3595,7 +3666,9 @@ export default function HardwareInventoryClient({
         reduceMotion={reduceMotion}
       />
 
-      {!sheetOpen && !pendingMovement && !voidTarget && !detailId && !customerDetail && !sampleUnitSheetId && (
+      {/* 예정 출고를 선택 중이면 숨긴다 — 이 버튼(fixed bottom-6 right-6)이 하단 일괄 작업 바의
+          "선택 확정" 버튼을 덮는다(1440px 실측). 선택 중엔 그 바가 이 화면의 주 작업면이다. */}
+      {!sheetOpen && !pendingMovement && !voidTarget && !detailId && !customerDetail && !sampleUnitSheetId && plannedSelectionCount === 0 && (
         <button
           type="button"
           onClick={openFreshSheet}
