@@ -112,4 +112,19 @@ describe("POST /api/admin/branch/sync — 부분 실패 시 캐시 무효화 (�
     expect(revalidateTag).not.toHaveBeenCalledWith("branch-rev-deals", "max")
     expect(revalidateTag).not.toHaveBeenCalledWith("admin-crm-revenue", "max")
   })
+
+  // P0(2026-09-11) — runAll이 revOk를 싣게 되면서 "rev는 성공, hw만 실패"를 구분할 수 있다.
+  // 그 경우 rev가 이미 DB(미러·DSH·KPI)에 반영됐으므로 rev 계열 태그도 무효화해야 한다.
+  it("revOk=true + hw 실패면 rev 계열(branch-rev-deals·admin-crm-revenue·branch-dsh·branch-kpi)도 무효화한다", async () => {
+    verifyAdmin.mockResolvedValue(null)
+    runAll.mockResolvedValue({ ok: false, error: "hw: boom", rev: 385, revOk: true, hw: undefined })
+
+    const { POST } = await import("@/app/api/admin/branch/sync/route")
+    const response = await POST(syncRequest())
+
+    expect(response.status).toBe(500)
+    const tags = revalidateTag.mock.calls.map((call) => call[0])
+    expect(tags).toEqual(expect.arrayContaining(["branch-rev-deals", "admin-crm-revenue", "branch-dsh", "branch-kpi"]))
+    expect(tags).not.toContain("branch-hw")
+  })
 })

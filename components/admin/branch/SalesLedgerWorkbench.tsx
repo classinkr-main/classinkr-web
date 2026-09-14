@@ -21,7 +21,6 @@ import {
   Gauge,
   LayoutList,
   ListChecks,
-  Loader2,
   Pencil,
   RefreshCw,
   RotateCcw,
@@ -347,7 +346,6 @@ import type {
   LedgerPipelinePrefetch,
   RailView,
   RevDbImportInfo,
-  RevDbImportResponse,
   RevForecastFilter,
   RevManagerSummary,
   RevOriginFilter,
@@ -371,6 +369,15 @@ export type { LedgerPipelinePrefetch, PeriodComparisonChip, RevManagerSummary } 
 
 // initialPipeline이 없으면(비인증·역할 부족·프리페치 실패) 이 화면은 지금까지와 100% 동일하게
 // 마운트 후 클라이언트 페치로만 채워진다.
+// POST /api/admin/branch/sync 응답 중 이 화면이 읽는 부분 — lib/branch/sync/run-all.ts RunAllResult 미러.
+// 서버가 동기화 직후 REV 장부 임포트를 재캡처하고 그 결과를 싣는다(액티브 임포트가 없으면 inactive).
+type BranchSyncResponse = {
+  revImport?:
+    | { status: "inactive" }
+    | { status: "captured" | "unchanged"; runId: string; capturedAt: string; lineCount: number }
+  revImportError?: string
+}
+
 export default function SalesLedgerWorkbench({
   initialPipeline = null,
 }: {
@@ -609,15 +616,8 @@ export default function SalesLedgerWorkbench({
   // 서버(GET db-import)로 확정한다. 서버 응답이 도착하면 그 값이 항상 이긴다.
   const [dbImportInfo, setDbImportInfo] = useState<RevDbImportInfo | null>(null)
   const [dbSourceServerState, setDbSourceServerState] = useState<"unknown" | "active" | "inactive">("unknown")
-  const [dbImportBusy, setDbImportBusy] = useState(false)
   const [dbImportNotice, setDbImportNotice] = useState<string | null>(null)
   const [dbImportError, setDbImportError] = useState<string | null>(null)
-  // captureDbImport(deps [])에서 직전 액티브 run을 비교하기 위한 미러 — dedupe 응답이
-  // "기존 run 재활성화"(다른 run으로 전환)인지 "완전 동일"인지 구분하는 데 쓴다.
-  const dbImportRunIdRef = useRef<string | null>(null)
-  useEffect(() => {
-    dbImportRunIdRef.current = dbImportInfo?.runId ?? null
-  }, [dbImportInfo])
   useEffect(() => {
     setDbImportInfo(loadStoredRevDbImport())
     let cancelled = false
@@ -661,41 +661,28 @@ export default function SalesLedgerWorkbench({
       ? "시트 미러"
       : "미확인"
 
-  // DB 재동기화: 시트 미러(branch_rev_deals)를 버전드 임포트로 재캡처하고 그 run을 활성화한다.
-  // 서버가 checksum dedupe를 하므로 변경이 없으면 기존 run을 돌려준다(deduped=true) —
-  // 단, dedupe여도 매치된 run이 직전 액티브 run과 다르면 액티브 소스가 전환된 것이므로
-  // runChanged=true로 알려 호출부가 refetch하게 한다(과거 상태로 되돌린 시트 재캡처 케이스).
-  // 에러는 던지지 않고 Source 바 인라인(dbImportError)으로만 표면화한다 — 시트 동기화 성공을
-  // 가리지 않기 위해서다.
-  const captureDbImport = useCallback(async (): Promise<(RevDbImportResponse & { runChanged: boolean }) | null> => {
-    setDbImportBusy(true)
+  // 장부 임포트 재캡처는 서버가 동기화 직후에 한다(runAll → recaptureActiveRevImport, 2026-09-11).
+  // 예전엔 이 화면의 새로고침과 'DB 재동기화' 버튼만 재캡처해서 크론·KR Team 동기화 뒤에도
+  // 액티브 임포트가 옛 시점에 멈춰 있었다. 여기서는 동기화 응답의 결과만 Source 바에 옮긴다.
+  const applySyncRevImport = useCallback((result: BranchSyncResponse | null) => {
     setDbImportNotice(null)
     setDbImportError(null)
-    try {
-      const result = await adminFetchJson<RevDbImportResponse>("/api/admin/branch/ledger/db-import", {
-        method: "POST",
-      })
-      const prevRunId = dbImportRunIdRef.current
-      const runSwitched = prevRunId != null && prevRunId !== result.runId
-      const runChanged = prevRunId == null || runSwitched
-      const info = { runId: result.runId, capturedAt: result.capturedAt }
-      setDbImportInfo(info)
-      setDbSourceServerState("active")
-      storeRevDbImport(info)
-      setDbImportNotice(
-        !result.deduped
-          ? `새 run 캡처됨 · 행 ${result.lineCount.toLocaleString("ko-KR")}건`
-          : runSwitched
-            ? "재동기화 완료 — 기존 run 재활성화(데이터 전환)"
-            : "재동기화 완료 — 변경 없음(run 유지)",
-      )
-      return { ...result, runChanged }
-    } catch (error) {
-      setDbImportError(errorMessage(error))
-      return null
-    } finally {
-      setDbImportBusy(false)
+    if (!result) return
+    if (result.revImportError) {
+      setDbImportError(result.revImportError)
+      return
     }
+    const revImport = result.revImport
+    if (!revImport || revImport.status === "inactive") return
+    const info = { runId: revImport.runId, capturedAt: revImport.capturedAt }
+    setDbImportInfo(info)
+    setDbSourceServerState("active")
+    storeRevDbImport(info)
+    setDbImportNotice(
+      revImport.status === "captured"
+        ? `새 run 캡처됨 · 행 ${revImport.lineCount.toLocaleString("ko-KR")}건`
+        : "시트 변경 없음 — run 유지",
+    )
   }, [])
 
   // 필터 상태 URL 동기화 — 새로고침/링크 공유 시 렌즈·월·검색·필터·정렬이 유지된다.
@@ -2244,16 +2231,11 @@ export default function SalesLedgerWorkbench({
     setRefreshing(true)
     try {
       if (canRunAdminOperations) {
-        await adminFetchJson("/api/admin/branch/sync", {
+        const result = await adminFetchJson<BranchSyncResponse>("/api/admin/branch/sync", {
           method: "POST",
           body: JSON.stringify({ sources: ["rev"] }),
         })
-        // 동기화 함정 해소: 액티브 소스가 DB 임포트 run이면 시트 미러만 갱신해서는 아무것도
-        // 안 바뀐 것처럼 보인다. 시트 동기화 성공 후 재캡처(POST db-import)를 이어 붙인다.
-        // 결과/에러는 Source 바 인라인(dbImportNotice/dbImportError)으로 표면화된다.
-        if (dbNativeActive) {
-          await captureDbImport()
-        }
+        applySyncRevImport(result)
       }
     } catch (error) {
       setSyncError(error instanceof Error ? error.message : String(error))
@@ -2262,18 +2244,7 @@ export default function SalesLedgerWorkbench({
       setRefreshKey((value) => value + 1)
       setRefreshing(false)
     }
-  }, [canRunAdminOperations, captureDbImport, dbNativeActive])
-
-  // Source 바의 명시적 'DB 재동기화' — 시트 동기화 없이 미러 → DB 임포트 재캡처만 수행.
-  // 새 run이 잡혔거나(비 dedupe) 액티브 run이 전환됐을 때(runChanged) 데이터 훅을 다시 읽는다.
-  // 완전 동일(deduped + 같은 run)이면 화면 그대로가 정답이라 refetch를 생략한다.
-  const onDbResync = useCallback(async () => {
-    const result = await captureDbImport()
-    if (result && (!result.deduped || result.runChanged)) {
-      clearBranchRequestCache()
-      setRefreshKey((value) => value + 1)
-    }
-  }, [captureDbImport])
+  }, [applySyncRevImport, canRunAdminOperations])
 
   const buildDraftInput = useCallback((kind: DraftKind, base?: LedgerDraft | null): LedgerDraftInput => {
     const sourceSnapshot = kind === "edit-row" && selectedRow ? {
@@ -2801,18 +2772,6 @@ export default function SalesLedgerWorkbench({
                       ? "시트 미러 (DB 임포트 비활성)"
                       : "미확인 (시트 폴백 가능)"}
               </span>
-              {canRunAdminOperations && (
-                <button
-                  type="button"
-                  onClick={() => void onDbResync()}
-                  disabled={dbImportBusy || refreshing}
-                  title="시트 미러를 버전드 DB 임포트로 재캡처하고 그 run을 활성화합니다 (변경 없으면 기존 run 유지)"
-                  className="inline-flex h-6 items-center gap-1 rounded-md border border-[#BDEFD8] bg-[#ECFDF5] px-2 text-[10.5px] font-bold text-[#084734] transition hover:bg-[#D1FAE5] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#084734]"
-                >
-                  {dbImportBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Database className="h-3 w-3" />}
-                  DB 재동기화
-                </button>
-              )}
             </span>
             {(queueError || ledgerHealth?.ok === false) && (
               <span className="rounded border border-[#ECD29C] bg-[#FBF1E0] px-1.5 py-0.5 text-[10px] font-semibold text-[#7A520F]">
@@ -2827,7 +2786,7 @@ export default function SalesLedgerWorkbench({
                     : "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]"
                 }`}
               >
-                {dbImportError ? `⚠ DB 재동기화 실패: ${dbImportError}` : dbImportNotice}
+                {dbImportError ? `⚠ 장부 임포트 재캡처 실패 — 이전 캡처 표시 중: ${dbImportError}` : dbImportNotice}
               </span>
             )}
           </div>
