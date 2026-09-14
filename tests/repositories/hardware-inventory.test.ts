@@ -128,8 +128,8 @@ async function loadRepository() {
     createSupabaseAdminClient: vi.fn(() => client),
   }))
 
-  const module = await import("@/lib/repositories/hardware-inventory")
-  return { ...module, client }
+  const repositoryModule = await import("@/lib/repositories/hardware-inventory")
+  return { ...repositoryModule, client }
 }
 
 describe("importHardwareFromBranchSheets", () => {
@@ -551,6 +551,112 @@ describe("importHardwareFromBranchSheets", () => {
       if (prev === undefined) delete process.env.HARDWARE_SHEET_ADDITIVE_MERGE
       else process.env.HARDWARE_SHEET_ADDITIVE_MERGE = prev
     }
+  })
+})
+
+// 2026-09-14 운영 실측: 재고현황의 출고 블록은 출고 시트를 물류No 열별로 합산하면서 진행 상태를 가리지 않는다
+// (75" IFP H8 출고 10 = 설치 완료 5 + 배송 예정 5). 원장은 예정 출고를 창고에서 빼지 않고 가용에서 빼므로,
+// 시트 현재고에 그대로 맞추면 로트가 적힌 예정분이 두 번 빠진다.
+describe("buildHardwareSheetImportRows — 재고현황 보정 목표", () => {
+  const ITEMS = new Map([["75 IFP", { id: "item-75" }]])
+  const inboundRow = {
+    id: "in-1", logistics_no: "H8", inbound_date: "2026-03-19", product: "75 IFP", quantity: 10,
+    unit_price: null, amount: null, serials: [], storage: "창고", importer: "클래스인", remarks: null,
+    raw: { values: ["H8"] }, synced_at: "2026-09-14T08:00:00.000Z",
+  }
+  const outboundRow = (overrides: Record<string, unknown>) => ({
+    id: `out-${Math.random().toString(36).slice(2)}`, logistics_no: "H8", outbound_date: "2026-04-01", owner: "Han",
+    product: "75 IFP", quantity: 1, revenue: null, destination: "학원A", serials: [], progress: "설치 완료",
+    type: "Sales", remarks: null, raw: { values: [] }, synced_at: "2026-09-14T08:00:00.000Z",
+    ...overrides,
+  })
+  // 시트 재고현황: H8 입고 10 · 출고 10(완료 5 + 예정 5) → 현재고 0. 로트 없는 예정 3대는 어느 열에도 안 잡힌다.
+  const stockRow = {
+    id: "stock-1", product: "75 IFP", category: "전자칠판", quantity: 0, synced_at: "2026-09-14T08:00:00.000Z",
+    raw: { source: "재고현황", inbound_total: 10, outbound_total: 10, by_logistics: { H8: { inbound: 10, outbound: 10, stock: 0 } } },
+  }
+  const source = {
+    inbound: [inboundRow],
+    outbound: [
+      outboundRow({ quantity: 5 }),
+      outboundRow({ quantity: 5, progress: "배송 예정", outbound_date: null }),
+      outboundRow({ quantity: 3, progress: "배송 예정", outbound_date: null, logistics_no: null }),
+    ],
+    stock: [stockRow],
+  }
+
+  it("adds planned rows the stock sheet already subtracted back to the warehouse target", async () => {
+    const { buildHardwareSheetImportRows } = await loadRepository()
+
+    const { rows, skipped } = buildHardwareSheetImportRows(source, ITEMS)
+
+    // 원장 창고 계산 = 입고 10 − 완료 5 = 5, 목표 = 시트 현재고 0 + 로트 지정 예정 5 = 5 → 보정 행이 필요 없다.
+    expect(skipped).toBe(0)
+    expect(rows.filter((row) => row.movement_type === "adjust")).toEqual([])
+  })
+
+  it("keeps available stock at the sheet's truth instead of subtracting lot-assigned planned units twice", async () => {
+    const { buildHardwareSheetImportRows, computeHardwareStockRow } = await loadRepository()
+    const { rows } = buildHardwareSheetImportRows(source, ITEMS)
+
+    const stockRowResult = computeHardwareStockRow({
+      item: { id: "item-75", name: "75 IFP", category: "전자칠판", reorder_point: 0, lead_time_days: 14 },
+      itemMovements: rows.map((row, index) => ({
+        ...row,
+        id: `cand-${index}`,
+        lot_no: null,
+        amount_cny: null,
+        storage_location: row.storage_location ?? null,
+        importer: null,
+        source: "sheet_import" as const,
+        created_at: "2026-09-14T09:00:00.000Z",
+        voided_at: null,
+        converted_from_movement_id: null,
+        converted_to_movement_id: null,
+      })),
+      cutoff30dMs: Date.parse("2026-08-15T00:00:00.000Z"),
+    })
+
+    // 실물: H8 5대가 아직 창고에 있고(예정 5 미출고), 예정 합계 8(로트 5 + 미지정 3) → 가용 −3.
+    // 예전 규칙(목표 = 현재고 0)이면 창고 0 · 가용 −8 로 로트 지정 예정 5대가 두 번 빠졌다.
+    expect(stockRowResult.warehouseStock).toBe(5)
+    expect(stockRowResult.plannedOut).toBe(8)
+    expect(stockRowResult.availableStock).toBe(-3)
+  })
+
+  it("records the add-back on the reconciliation row when the sheet total still differs", async () => {
+    const { buildHardwareSheetImportRows } = await loadRepository()
+
+    const { rows } = buildHardwareSheetImportRows(
+      { ...source, stock: [{ ...stockRow, quantity: 2, raw: { ...stockRow.raw, by_logistics: { H8: { inbound: 12, outbound: 10, stock: 2 } } } }] },
+      ITEMS
+    )
+
+    const adjust = rows.find((row) => row.movement_type === "adjust")
+    expect(adjust).toMatchObject({ quantity: 2, to_location: "창고", from_location: null })
+    expect(adjust?.memo).toBe("재고현황 현재고 2대 + 로트 지정 배송 예정 5대 기준 보정")
+    expect(adjust?.raw).toMatchObject({
+      official_quantity: 2,
+      planned_counted_by_sheet: 5,
+      target_warehouse_quantity: 7,
+      calculated_warehouse_quantity: 5,
+      adjustment_delta: 2,
+    })
+  })
+
+  it("does not add back planned rows whose 물류No is not a 재고현황 lot column", async () => {
+    const { buildHardwareSheetImportRows } = await loadRepository()
+
+    const { rows } = buildHardwareSheetImportRows(
+      {
+        ...source,
+        outbound: [outboundRow({ quantity: 5 }), outboundRow({ quantity: 4, progress: "배송 예정", logistics_no: "기타" })],
+      },
+      ITEMS
+    )
+
+    // 창고 계산 5, 목표 = 현재고 0 + 0 → −5 보정. "기타" 예정 행은 시트 재고현황이 안 뺀 수량이다.
+    expect(rows.find((row) => row.movement_type === "adjust")).toMatchObject({ quantity: 5, from_location: "창고", to_location: null })
   })
 })
 

@@ -388,6 +388,40 @@ describe("computeHardwareStockRow — 30일 출고 추세·재주문점", () => 
     expect(row.availableStock).toBe(-5)
     expect(row.daysUntilStockout).toBe(0)
   })
+
+  // 2026-09-14: 배송 예정은 가용에서 이미 빠진다 — 추세에도 넣으면 재주문점이 같은 수요를 두 번 반영한다.
+  it("keeps planned outbound out of the 30-day trend while still subtracting it from available stock", async () => {
+    const compute = await loadEngine()
+    const row = compute({
+      item: ITEM,
+      itemMovements: [
+        movement({ movement_type: "inbound", quantity: 10, to_location: "창고", occurred_at: "2026-08-20" }),
+        movement({ movement_type: "outbound", quantity: 2, from_location: "창고", to_location: "고객", status: "설치 완료", occurred_at: "2026-09-05" }),
+        movement({ movement_type: "outbound", quantity: 6, from_location: "창고", to_location: "고객", status: "배송 예정", occurred_at: "2026-09-08" }),
+      ],
+      cutoff30dMs: CUTOFF_30D,
+    })
+    expect(row.plannedOut).toBe(6)
+    expect(row.availableStock).toBe(2)
+    expect(row.outbound30d).toBe(2)
+  })
+
+  // 2026-09-14 드라이런: 날짜 없는 시트 행이 created_at(임포트 시각)으로 폴백해 86" IFP 30일 출고가 9 → 93 으로 부풀었다.
+  it("does not treat undated sheet rows as recent outbound just because they were imported recently", async () => {
+    const compute = await loadEngine()
+    const importedAt = "2026-09-09T12:00:00.000Z"
+    const row = compute({
+      item: ITEM,
+      itemMovements: [
+        movement({ movement_type: "outbound", quantity: 4, from_location: "창고", to_location: "고객", status: "설치 완료", occurred_at: null, source: "sheet_import", created_at: importedAt }),
+        movement({ movement_type: "outbound", quantity: 3, from_location: "창고", to_location: "고객", status: "출고", occurred_at: null, source: "admin_manual", created_at: importedAt }),
+      ],
+      cutoff30dMs: CUTOFF_30D,
+    })
+    // 창고 잔량에서는 둘 다 빠지고, 추세에는 기록 시각이 실제인 수기 기록만 들어간다.
+    expect(row.warehouseStock).toBe(-7)
+    expect(row.outbound30d).toBe(3)
+  })
 })
 
 describe("computeHardwareStockRow — low/orderRecommended, including promoted-line exclusion", () => {

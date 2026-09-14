@@ -1,11 +1,14 @@
 import type { CellFormat, FormattedCell } from "@/lib/branch/google-sheets"
 import { FISCAL_MONTH_ORDER } from "@/lib/branch/fiscal"
 
+// 입고·출고 탭은 행 끝을 열어 둔다 — 고정 500행이면 시트가 넘치는 순간 가장 최근 행부터 에러 없이
+// 잘린다(2026-09-14 실측: 출고 409행, 37일에 94행 증가 → 약 한 달 뒤 500행 도달).
+// 재고현황은 로트 열(C2·C3…)이 오른쪽으로 늘어나므로 열을 넉넉히 잡는다. 격자보다 넓은 범위는 API가 잘라 준다.
 export const HW_RANGES = {
   sales:    "판매대시보드!A1:Z100",
-  stock:    "재고현황!A1:Z200",
-  inbound:  "'2.입고 현황'!A1:Z500",
-  outbound: "'3.출고 현황'!A1:Z500",
+  stock:    "재고현황!A1:AZ300",
+  inbound:  "'2.입고 현황'!A1:Z",
+  outbound: "'3.출고 현황'!A1:Z",
 } as const
 
 const s = (v: unknown) => { if (v == null) return null; const t = String(v).trim(); return t.length ? t : null }
@@ -120,7 +123,8 @@ export function parseStock(grid: FormattedCell[][]): HwStockParsed[] {
     return { col, label: s(logisticsHeader[col]?.value) ?? `col_${col + 1}` }
   }).filter((entry) => entry.label)
 
-  type StockAccumulator = { category: string | null; total: number; byLogistics: Record<string, number> }
+  // total = 로트 열 합(정본), sheetTotal = 시트 "합계" 셀 값(없으면 total과 같음) — 둘이 다르면 raw에 남긴다.
+  type StockAccumulator = { category: string | null; total: number; sheetTotal: number; byLogistics: Record<string, number> }
   const inbound = new Map<string, StockAccumulator>()
   const outbound = new Map<string, StockAccumulator>()
   const ensure = (map: Map<string, StockAccumulator>, product: string, category: string | null) => {
@@ -129,17 +133,24 @@ export function parseStock(grid: FormattedCell[][]): HwStockParsed[] {
       if (!current.category && category) current.category = category
       return current
     }
-    const next: StockAccumulator = { category, total: 0, byLogistics: {} }
+    const next: StockAccumulator = { category, total: 0, sheetTotal: 0, byLogistics: {} }
     map.set(product, next)
     return next
   }
-  const sectionTotal = (row: FormattedCell[]) => {
-    if (totalCol >= 0) {
-      const total = n(row[totalCol]?.value)
-      if (total != null) return total
+  const sheetTotalCell = (row: FormattedCell[]) => (totalCol >= 0 ? n(row[totalCol]?.value) : null)
+  const lotColumnsTotal = (row: FormattedCell[]) => {
+    let seen = false
+    let sum = 0
+    for (const entry of logisticsCols) {
+      const value = n(row[entry.col]?.value)
+      if (value == null) continue
+      seen = true
+      sum += value
     }
-    return logisticsCols.reduce((sum, entry) => sum + (n(row[entry.col]?.value) ?? 0), 0)
+    return seen ? sum : null
   }
+  // 재고 현황 블록(OPS "사무실 보유" 같은 행)은 로트 열에 글자가 들어 있어 합계 셀이 유일한 수치다.
+  const sectionTotal = (row: FormattedCell[]) => sheetTotalCell(row) ?? lotColumnsTotal(row) ?? 0
 
   let mode: "inbound" | "outbound" | "stock" | null = null
   for (let r = 0; r < grid.length; r++) {
@@ -155,7 +166,13 @@ export function parseStock(grid: FormattedCell[][]): HwStockParsed[] {
 
     if (mode === "inbound" || mode === "outbound") {
       const acc = ensure(mode === "inbound" ? inbound : outbound, product, category)
-      acc.total += sectionTotal(row)
+      // 입고·출고 블록은 로트 열이 정본이다. "합계"는 시트 수식이라 새 로트 열을 붙일 때 범위를 안 늘리면
+      // 조용히 틀린다(2026-09-14 실측: 86" IFP 입고 합계 344 ≠ 로트 열 합 359 — C2 15대가 합계에서 빠짐).
+      const lotTotal = lotColumnsTotal(row)
+      const sheetTotal = sheetTotalCell(row)
+      const rowTotal = lotTotal ?? sheetTotal ?? 0
+      acc.total += rowTotal
+      acc.sheetTotal += sheetTotal ?? rowTotal
       for (const entry of logisticsCols) {
         acc.byLogistics[entry.label] = (acc.byLogistics[entry.label] ?? 0) + (n(row[entry.col]?.value) ?? 0)
       }
@@ -178,6 +195,10 @@ export function parseStock(grid: FormattedCell[][]): HwStockParsed[] {
       const outboundQty = outRow?.byLogistics[label] ?? 0
       byLogistics[label] = { inbound: inboundQty, outbound: outboundQty, stock: inboundQty - outboundQty }
     }
+    const inboundSheetTotal = inRow?.sheetTotal ?? 0
+    const outboundSheetTotal = outRow?.sheetTotal ?? 0
+    const totalMismatch =
+      inboundSheetTotal !== (inRow?.total ?? 0) || outboundSheetTotal !== (outRow?.total ?? 0)
     out.push({
       product,
       category: inRow?.category ?? outRow?.category ?? null,
@@ -187,6 +208,10 @@ export function parseStock(grid: FormattedCell[][]): HwStockParsed[] {
         inbound_total: inRow?.total ?? 0,
         outbound_total: outRow?.total ?? 0,
         by_logistics: byLogistics,
+        // 시트 합계 수식이 로트 열과 어긋난 사실 — 수치는 로트 열 합을 썼다. 시트 쪽 수식 수정이 필요하다는 신호.
+        ...(totalMismatch
+          ? { sheet_total_mismatch: { inbound_sheet_total: inboundSheetTotal, outbound_sheet_total: outboundSheetTotal } }
+          : {}),
       },
     })
   }

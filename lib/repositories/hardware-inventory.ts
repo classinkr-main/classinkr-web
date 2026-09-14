@@ -5,7 +5,15 @@ import { revalidateTag, unstable_cache } from "next/cache"
 
 import { isPromotedProduct } from "@/lib/hardware/product"
 import { normalizedAccountKey } from "@/lib/branch/account-key"
-import { fetchAllSupabaseRows, listFreshHwInbound, listFreshHwOutbound, listFreshHwStock } from "@/lib/repositories/branch-hw"
+import {
+  fetchAllSupabaseRows,
+  listFreshHwInbound,
+  listFreshHwOutbound,
+  listFreshHwStock,
+  type HwInbound,
+  type HwOutbound,
+  type HwStock,
+} from "@/lib/repositories/branch-hw"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 export const HARDWARE_INVENTORY_CACHE_TAG = "hardware-inventory"
@@ -1495,132 +1503,7 @@ export async function importHardwareFromBranchSheets(
     }
 
     const itemsByName = await ensureHardwareItems(productInputs)
-    const rows: ImportMovementRow[] = []
-    let skipped = 0
-
-    inbound.forEach((row) => {
-      const product = normalizeProductName(row.product)
-      const item = itemsByName.get(product)
-      if (!item || !Number.isFinite(row.quantity) || row.quantity <= 0) {
-        skipped += 1
-        return
-      }
-
-      rows.push({
-        item_id: item.id,
-        product_name: product,
-        movement_type: "inbound",
-        quantity: row.quantity,
-        occurred_at: row.inbound_date,
-        from_location: normalizeLocationName(row.importer),
-        to_location: normalizeLocationName(row.storage) ?? DEFAULT_STOCK_LOCATION,
-        owner: cleanString(row.importer),
-        status: "입고",
-        reference_no: cleanString(row.logistics_no),
-        memo: cleanString(row.remarks),
-        storage_location: cleanString(row.storage),
-        serials: row.serials ?? [],
-        // Inbound cost is imported in USD (hardware is sourced in USD); the parser
-        // already stripped any currency symbol so the number is currency-agnostic.
-        unit_price: row.unit_price,
-        amount_usd: row.amount,
-        source_table: "branch_hw_inbound",
-        source_key: "",
-        source_digest: "",
-        raw: row.raw ?? {},
-      })
-    })
-
-    outbound.forEach((row) => {
-      const product = normalizeProductName(row.product)
-      const item = itemsByName.get(product)
-      if (!item || !Number.isFinite(row.quantity) || row.quantity <= 0) {
-        skipped += 1
-        return
-      }
-
-      const sampleLike = isSampleLikeText(row.type, row.remarks, row.destination, row.progress)
-      rows.push({
-        item_id: item.id,
-        product_name: product,
-        movement_type: "outbound",
-        quantity: row.quantity,
-        occurred_at: row.outbound_date,
-        from_location: DEFAULT_STOCK_LOCATION,
-        to_location: sampleLike
-          ? DEFAULT_SAMPLE_LOCATION
-          : normalizeLocationName(row.destination) ?? DEFAULT_CUSTOMER_LOCATION,
-        owner: cleanString(row.owner),
-        status: sampleLike ? cleanString(row.progress) ?? "샘플/대여" : cleanString(row.progress) ?? "출고",
-        reference_no: cleanString(row.logistics_no),
-        memo: [row.type, row.remarks].map(cleanString).filter(Boolean).join(" · ") || null,
-        serials: row.serials ?? [],
-        // Outbound revenue lives in branch_hw_outbound (매출 USD col). unit_price is
-        // an inbound-cost concept, so it stays null; amount_usd carries the sale revenue
-        // (mirrors how inbound sets amount_usd from the 입고 sheet amount).
-        unit_price: null,
-        amount_usd: row.revenue ?? null,
-        source_table: "branch_hw_outbound",
-        source_key: "",
-        source_digest: "",
-        raw: row.raw ?? {},
-      })
-    })
-
-    const warehouseBalances = getImportWarehouseBalances(rows)
-    // 재고현황은 제품별 총량표다. 같은 정규화 제품이 여러 행이면 마지막 공식 수치를 사용해
-    // 제품당 하나의 보정 행만 만든다(product-only source_key 충돌 방지).
-    const officialByProduct = new Map<string, { item: { id: string }; quantity: number; raw: unknown }>()
-    for (const row of stock) {
-      const product = normalizeProductName(row.product)
-      let item = itemsByName.get(product)
-      if (!item) {
-        const stockItem = await ensureHardwareItems([{ name: product, category: row.category }])
-        item = stockItem.get(product)
-        if (item) itemsByName.set(product, item)
-      }
-      if (!item || !Number.isFinite(row.quantity)) {
-        skipped += 1
-        continue
-      }
-      officialByProduct.set(product, { item, quantity: row.quantity, raw: row.raw })
-    }
-    for (const [product, info] of officialByProduct) {
-      const currentWarehouseStock = warehouseBalances.get(product) ?? 0
-      const adjustmentDelta = info.quantity - currentWarehouseStock
-      if (adjustmentDelta === 0) continue
-      const adjustmentQuantity = Math.abs(adjustmentDelta)
-
-      rows.push({
-        item_id: info.item.id,
-        product_name: product,
-        movement_type: "adjust",
-        quantity: adjustmentQuantity,
-        occurred_at: null,
-        from_location: adjustmentDelta < 0 ? DEFAULT_STOCK_LOCATION : null,
-        to_location: adjustmentDelta > 0 ? DEFAULT_STOCK_LOCATION : null,
-        owner: null,
-        status: "현재고 보정",
-        reference_no: null,
-        memo: `재고현황 현재고 ${info.quantity}대 기준 보정`,
-        serials: [],
-        unit_price: null,
-        amount_usd: null,
-        source_table: "branch_hw_stock",
-        source_key: "",
-        source_digest: "",
-        raw: {
-          source: "branch_hw_stock_reconciliation",
-          stock_row: info.raw ?? {},
-          official_quantity: info.quantity,
-          calculated_warehouse_quantity: currentWarehouseStock,
-          adjustment_delta: adjustmentDelta,
-        },
-      })
-      warehouseBalances.set(product, info.quantity)
-    }
-
-    assignSheetImportIdentity(rows)
+    const { rows, skipped } = buildHardwareSheetImportRows({ inbound, outbound, stock }, itemsByName)
 
     const previousSheetMovements = await listCurrentSheetImportMovements()
     const snapshot = await createHardwareSheetImportSnapshot({
@@ -1681,6 +1564,169 @@ export async function importHardwareFromBranchSheets(
     }).catch(() => undefined)
     throw error
   }
+}
+
+// 재고현황 행이 가진 로트 열 이름(물류No) — 파서가 raw.by_logistics 에 로트별 입출고를 싣는다.
+// "재고 현황" 블록 행(OPS 등)은 raw 가 셀 배열이라 로트 열이 없다.
+function stockSheetLotLabels(raw: unknown): Set<string> {
+  if (!isRecord(raw) || !isRecord(raw.by_logistics)) return new Set()
+  return new Set(Object.keys(raw.by_logistics))
+}
+
+/**
+ * 시트 미러(입고·출고·재고현황) → 원장 후보 행. DB 를 건드리지 않는 순수 함수라 임포트·드라이런·테스트가
+ * 같은 규칙을 쓴다. itemsByName 에 없는 제품 행은 건너뛰고 skipped 로 센다.
+ */
+export function buildHardwareSheetImportRows(
+  source: { inbound: readonly HwInbound[]; outbound: readonly HwOutbound[]; stock: readonly HwStock[] },
+  itemsByName: ReadonlyMap<string, Pick<HardwareItem, "id">>
+): { rows: ImportMovementRow[]; skipped: number } {
+  const { inbound, outbound, stock } = source
+  const rows: ImportMovementRow[] = []
+  let skipped = 0
+
+  inbound.forEach((row) => {
+    const product = normalizeProductName(row.product)
+    const item = itemsByName.get(product)
+    if (!item || !Number.isFinite(row.quantity) || row.quantity <= 0) {
+      skipped += 1
+      return
+    }
+
+    rows.push({
+      item_id: item.id,
+      product_name: product,
+      movement_type: "inbound",
+      quantity: row.quantity,
+      occurred_at: row.inbound_date,
+      from_location: normalizeLocationName(row.importer),
+      to_location: normalizeLocationName(row.storage) ?? DEFAULT_STOCK_LOCATION,
+      owner: cleanString(row.importer),
+      status: "입고",
+      reference_no: cleanString(row.logistics_no),
+      memo: cleanString(row.remarks),
+      storage_location: cleanString(row.storage),
+      serials: row.serials ?? [],
+      // Inbound cost is imported in USD (hardware is sourced in USD); the parser
+      // already stripped any currency symbol so the number is currency-agnostic.
+      unit_price: row.unit_price,
+      amount_usd: row.amount,
+      source_table: "branch_hw_inbound",
+      source_key: "",
+      source_digest: "",
+      raw: row.raw ?? {},
+    })
+  })
+
+  outbound.forEach((row) => {
+    const product = normalizeProductName(row.product)
+    const item = itemsByName.get(product)
+    if (!item || !Number.isFinite(row.quantity) || row.quantity <= 0) {
+      skipped += 1
+      return
+    }
+
+    const sampleLike = isSampleLikeText(row.type, row.remarks, row.destination, row.progress)
+    rows.push({
+      item_id: item.id,
+      product_name: product,
+      movement_type: "outbound",
+      quantity: row.quantity,
+      occurred_at: row.outbound_date,
+      from_location: DEFAULT_STOCK_LOCATION,
+      to_location: sampleLike
+        ? DEFAULT_SAMPLE_LOCATION
+        : normalizeLocationName(row.destination) ?? DEFAULT_CUSTOMER_LOCATION,
+      owner: cleanString(row.owner),
+      status: sampleLike ? cleanString(row.progress) ?? "샘플/대여" : cleanString(row.progress) ?? "출고",
+      reference_no: cleanString(row.logistics_no),
+      memo: [row.type, row.remarks].map(cleanString).filter(Boolean).join(" · ") || null,
+      serials: row.serials ?? [],
+      // Outbound revenue lives in branch_hw_outbound (매출 USD col). unit_price is
+      // an inbound-cost concept, so it stays null; amount_usd carries the sale revenue
+      // (mirrors how inbound sets amount_usd from the 입고 sheet amount).
+      unit_price: null,
+      amount_usd: row.revenue ?? null,
+      source_table: "branch_hw_outbound",
+      source_key: "",
+      source_digest: "",
+      raw: row.raw ?? {},
+    })
+  })
+
+  const warehouseBalances = getImportWarehouseBalances(rows)
+  // 재고현황은 제품별 총량표다. 같은 정규화 제품이 여러 행이면 마지막 공식 수치를 사용해
+  // 제품당 하나의 보정 행만 만든다(product-only source_key 충돌 방지).
+  const officialByProduct = new Map<string, { item: Pick<HardwareItem, "id">; quantity: number; raw: unknown }>()
+  for (const row of stock) {
+    const product = normalizeProductName(row.product)
+    const item = itemsByName.get(product)
+    if (!item || !Number.isFinite(row.quantity)) {
+      skipped += 1
+      continue
+    }
+    officialByProduct.set(product, { item, quantity: row.quantity, raw: row.raw })
+  }
+  for (const [product, info] of officialByProduct) {
+    const currentWarehouseStock = warehouseBalances.get(product) ?? 0
+    // 재고현황 출고 블록은 출고 시트를 물류No(로트) 열별로 합산하면서 진행 상태를 가리지 않는다 — 로트가 적힌
+    // "배송 예정" 행도 이미 빠진 수치다(2026-09-14 운영 실측: 75" IFP H8 출고 10 = 설치 완료 5 + 배송 예정 5,
+    // 같은 형태 6개 로트·16대). 원장의 창고 잔량은 예정 출고를 빼지 않고 가용에서 따로 빼므로, 시트 현재고에
+    // 그대로 맞추면 그 예정분이 두 번 빠진다. 보정 목표 = 시트 현재고 + 시트가 이미 뺀 로트 지정 예정 수량.
+    const lotLabels = stockSheetLotLabels(info.raw)
+    const plannedCountedBySheet = lotLabels.size
+      ? rows.reduce(
+          (sum, row) =>
+            row.product_name === product &&
+            row.movement_type === "outbound" &&
+            isPlannedStatus(row.status) &&
+            row.reference_no != null &&
+            lotLabels.has(row.reference_no)
+              ? sum + row.quantity
+              : sum,
+          0
+        )
+      : 0
+    const targetWarehouseStock = info.quantity + plannedCountedBySheet
+    const adjustmentDelta = targetWarehouseStock - currentWarehouseStock
+    if (adjustmentDelta === 0) continue
+    const adjustmentQuantity = Math.abs(adjustmentDelta)
+
+    rows.push({
+      item_id: info.item.id,
+      product_name: product,
+      movement_type: "adjust",
+      quantity: adjustmentQuantity,
+      occurred_at: null,
+      from_location: adjustmentDelta < 0 ? DEFAULT_STOCK_LOCATION : null,
+      to_location: adjustmentDelta > 0 ? DEFAULT_STOCK_LOCATION : null,
+      owner: null,
+      status: "현재고 보정",
+      reference_no: null,
+      memo: plannedCountedBySheet
+        ? `재고현황 현재고 ${info.quantity}대 + 로트 지정 배송 예정 ${plannedCountedBySheet}대 기준 보정`
+        : `재고현황 현재고 ${info.quantity}대 기준 보정`,
+      serials: [],
+      unit_price: null,
+      amount_usd: null,
+      source_table: "branch_hw_stock",
+      source_key: "",
+      source_digest: "",
+      raw: {
+        source: "branch_hw_stock_reconciliation",
+        stock_row: info.raw ?? {},
+        official_quantity: info.quantity,
+        planned_counted_by_sheet: plannedCountedBySheet,
+        target_warehouse_quantity: targetWarehouseStock,
+        calculated_warehouse_quantity: currentWarehouseStock,
+        adjustment_delta: adjustmentDelta,
+      },
+    })
+    warehouseBalances.set(product, targetWarehouseStock)
+  }
+
+  assignSheetImportIdentity(rows)
+  return { rows, skipped }
 }
 
 export interface HardwareSheetImportSnapshotSummary {
@@ -1791,6 +1837,19 @@ function toItemView(item: HardwareItem): HardwareItemView {
   }
 }
 
+// 30일 출고 추세에 쓰는 시각. 날짜 없는 시트 행은 created_at(=임포트 실행 시각)으로 폴백하면 가져올
+// 때마다 전부 "방금 나간 출고"가 된다(2026-09-14 드라이런: 86" IFP 30일 출고 9 → 93) — 추세에서 뺀다.
+// 손으로 남긴 기록은 created_at 이 실제 기록 시각이라 폴백을 유지한다.
+function outboundTrendTime(movement: Pick<HardwareMovementLedgerRow, "occurred_at" | "created_at" | "source">): number | null {
+  if (movement.occurred_at) {
+    const time = new Date(movement.occurred_at).getTime()
+    return Number.isFinite(time) ? time : null
+  }
+  if (movement.source === "sheet_import") return null
+  const time = new Date(movement.created_at).getTime()
+  return Number.isFinite(time) ? time : null
+}
+
 export interface HardwareStockRowComputeInput {
   item: Pick<HardwareItem, "id" | "name" | "category" | "reorder_point" | "lead_time_days">
   // 이 품목(item_id)에 속한 취소되지 않은(voided_at null) 이동만 — 호출부(getHardwareDashboardUncached)가
@@ -1804,9 +1863,9 @@ export interface HardwareStockRowComputeInput {
 
 // 재고 산식 엔진 — 위치별/lot별 잔량, 30일 출고 추세, 재주문점을 한 품목 단위로 계산하는 순수 함수.
 // 감사(2026-09-07 #3): getHardwareDashboardUncached의 .map() 콜백에 인라인으로만 있어 실측 테스트가
-// 0건이었다. 로직은 그대로 옮겼다(동작 변경 없음) — 재사용하는 모듈 스코프 헬퍼(classifyDestination·
-// movementLotKey·applyLocationDelta·movementDate·isPlannedStatus·isPromotedProduct)와 위치 상수는
-// 이 파일 안이라 그대로 참조한다.
+// 0건이었다. 재사용하는 모듈 스코프 헬퍼(classifyDestination·resolveHardwareLotBalances·applyLocationDelta·
+// outboundTrendTime·isPlannedStatus·isPromotedProduct)와 위치 상수는 이 파일 안이라 그대로 참조한다.
+// 2026-09-14: 30일 출고 추세를 실제 출고만·날짜 있는 시트 행만 세도록 바꿨다(outboundTrendTime 주석).
 export function computeHardwareStockRow(input: HardwareStockRowComputeInput): HardwareStockRow {
   const { item, itemMovements, cutoff30dMs } = input
   const locationBalances = new Map<string, number>()
@@ -1815,20 +1874,28 @@ export function computeHardwareStockRow(input: HardwareStockRowComputeInput): Ha
 
   for (const movement of itemMovements) {
     const qty = movement.quantity
-    const occurredTime = movementDate(movement)
-    const destinationKind = classifyDestination(movement.to_location)
 
     if (movement.movement_type === "inbound") {
       applyLocationDelta(locationBalances, movement.to_location ?? DEFAULT_STOCK_LOCATION, qty)
     } else if (movement.movement_type === "outbound") {
       if (isPlannedStatus(movement.status)) {
+        // 배송 예정은 가용에서 빠질 뿐 30일 출고 추세에는 넣지 않는다 — 넣으면 같은 수요가
+        // 가용(예정 차감)과 재주문점(추세) 양쪽에 두 번 반영된다.
         plannedOut += qty
       } else {
         applyLocationDelta(locationBalances, movement.from_location ?? DEFAULT_STOCK_LOCATION, -qty)
         applyLocationDelta(locationBalances, movement.to_location ?? DEFAULT_CUSTOMER_LOCATION, qty)
-      }
-      if (occurredTime >= cutoff30dMs && destinationKind !== "sample" && destinationKind !== "office" && destinationKind !== "repair") {
-        outbound30d += qty
+        const trendTime = outboundTrendTime(movement)
+        const destinationKind = classifyDestination(movement.to_location)
+        if (
+          trendTime != null &&
+          trendTime >= cutoff30dMs &&
+          destinationKind !== "sample" &&
+          destinationKind !== "office" &&
+          destinationKind !== "repair"
+        ) {
+          outbound30d += qty
+        }
       }
     } else if (movement.movement_type === "return") {
       applyLocationDelta(locationBalances, movement.from_location, -qty)
