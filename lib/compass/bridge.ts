@@ -358,6 +358,52 @@ export async function getCompassActivitiesByLeadIds(
   }
 }
 
+/** lead_id in(...) 한 번에 싣는 id 수 — PostgREST URL 길이 상한 대비. */
+const ACTIVITY_LEAD_ID_CHUNK = 100
+/** range 한 페이지 크기 — PostgREST 기본 행 상한(1000)과 같게 두고, 가득 차면 다음 페이지를 읽는다. */
+const ACTIVITY_PAGE_SIZE = 1000
+
+export interface CompassActivitySignalRow {
+  lead_id: number
+  kind: string | null
+  actor: string | null
+}
+
+/** 주어진 kind 의 활동 신호(lead_id·kind·actor) — 리드 상태 자동 반영(lib/server/lead-contact-compass-sync)용.
+ *  본문은 읽지 않는다. 사람 기록인지(자동 작성자 제외)는 lib/compass/lead-contact-sync 가 판정한다.
+ *  행 상한에서 조용히 잘리면 "활동 없음"으로 오판하므로 페이지를 끝까지 넘긴다. 크론 전용이라
+ *  메모이제이션하지 않는다 — 매시간 한 번 도는 조회라 직전 결과를 재사용할 이득이 없다. */
+export async function getCompassActivitySignals(
+  leadIds: number[],
+  kinds: readonly string[],
+): Promise<CompassResult<CompassActivitySignalRow>> {
+  const ids = [...new Set(leadIds)].filter((id) => Number.isInteger(id)).sort((a, b) => a - b)
+  if (ids.length === 0 || kinds.length === 0) return ok([])
+  try {
+    const sb = createSupabaseAdminClient()
+    const rows: CompassActivitySignalRow[] = []
+    for (let index = 0; index < ids.length; index += ACTIVITY_LEAD_ID_CHUNK) {
+      const chunk = ids.slice(index, index + ACTIVITY_LEAD_ID_CHUNK)
+      for (let from = 0; ; from += ACTIVITY_PAGE_SIZE) {
+        const { data, error } = await sb
+          .from("compass_activities_v")
+          .select("lead_id, kind, actor")
+          .in("lead_id", chunk)
+          .in("kind", [...kinds])
+          .order("id", { ascending: true })
+          .range(from, from + ACTIVITY_PAGE_SIZE - 1)
+        if (error) return downResult(error)
+        const page = (data ?? []) as CompassActivitySignalRow[]
+        rows.push(...page)
+        if (page.length < ACTIVITY_PAGE_SIZE) break
+      }
+    }
+    return ok(rows)
+  } catch (error) {
+    return downResult(error)
+  }
+}
+
 /** 소재 단위 일별 성과(크리에이티브 포함) — Summary/광고 탭 소재 CPL 카드용.
  *  60초 메모(down은 10초) — (fromDay, toDay) 범위 문자열이 그대로 키다. */
 export async function getCompassAdsDaily(
