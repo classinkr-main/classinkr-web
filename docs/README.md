@@ -147,6 +147,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
 
 ## 5. Runbooks And Incidents
 
+- [active/supabase-korea-migration-status.md](./active/supabase-korea-migration-status.md)
+  - 2026-09-14 한국 리전 이관 결과, 현재 운영 프로젝트, 원본 쓰기 차단 및 후속 배포 주의점.
 - [active/operational-failure-handling-guidelines.md](./active/operational-failure-handling-guidelines.md)
   - **운영 장애·Cron·Webhook 현재 지침.** 미응답 Webhook 폐기 상태, Cron 인증·백로그 상한,
     비밀값, Supabase·외부 API·캐시·배포 장애의 공통 대응 기준.
