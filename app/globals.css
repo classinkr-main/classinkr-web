@@ -168,6 +168,47 @@
   --route-enter-duration: 140ms;
 }
 
+.admin-nav-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 60;
+  pointer-events: none;
+  background: #084734;
+  transform-origin: left;
+  transform: scaleX(0);
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+
+.admin-nav-progress.on {
+  opacity: 1;
+  animation: admin-nav-progress-run 8s ease-out forwards;
+}
+
+@keyframes admin-nav-progress-run {
+  0% {
+    transform: scaleX(0);
+  }
+  100% {
+    transform: scaleX(0.85);
+  }
+}
+
+/* 모션 축소 환경: 애니메이션 없이 켜졌을 때만 고정 폭으로 표시한다(.on 없이 보이면 안 된다). */
+@media (prefers-reduced-motion: reduce) {
+  .admin-nav-progress,
+  .admin-nav-progress.on {
+    animation: none !important;
+    transition: none !important;
+  }
+  .admin-nav-progress.on {
+    transform: scaleX(0.6);
+  }
+}
+
 .route-transition-public {
   --route-enter-y: 12px;
   --route-enter-duration: 260ms;

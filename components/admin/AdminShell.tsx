@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation"
 
 import AdminSidebar from "@/components/admin/AdminSidebar"
 import AdminCommandPaletteLauncher from "@/components/admin/AdminCommandPaletteLauncher"
+import AdminNavProgress from "@/components/admin/AdminNavProgress"
 import { ADMIN_NAV } from "@/components/admin/admin-nav"
 import {
   getAccessibleAdminNavItems,
@@ -346,6 +347,7 @@ export default function AdminShell({
           </div>
         </aside>
       )}
+      <AdminNavProgress />
       <main className="min-w-0 flex-1 overflow-x-hidden pt-16 pb-24 lg:overflow-y-auto lg:overscroll-contain lg:pt-0 lg:pb-0">
         <div className="mx-auto w-full max-w-[1680px]">
           <RouteTransition tone="admin">

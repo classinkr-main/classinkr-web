@@ -49,6 +49,7 @@ export default function CrmWeekAheadPanel({
   embedded = false,
   previewRows = WEEK_AHEAD_PREVIEW_ROWS,
   refreshKey = 0,
+  softRefreshKey = 0,
 }: {
   compact?: boolean
   embedded?: boolean
@@ -56,6 +57,8 @@ export default function CrmWeekAheadPanel({
   previewRows?: number
   /** 값이 바뀌면 캐시를 건너뛰고 다시 조회한다(홈 새로고침 연동). */
   refreshKey?: number
+  /** 값이 바뀌면 force 없이 다시 조회한다 — TTL 이 지난 경우에만 네트워크를 탄다(홈 자동 갱신). */
+  softRefreshKey?: number
 }) {
   const [expanded, setExpanded] = useState(false)
   const { currentOwner } = useCrmOwners()
@@ -149,6 +152,15 @@ export default function CrmWeekAheadPanel({
     lastRefreshKey.current = refreshKey
     void load(forced ? { force: true } : undefined)
   }, [load, ownersSettled, refreshKey])
+
+  // 백그라운드 자동 갱신 — force 없이 load(): 캐시가 신선하면 네트워크 없이 끝난다.
+  const lastSoftRefreshKey = useRef(softRefreshKey)
+  useEffect(() => {
+    if (!ownersSettled) return
+    if (lastSoftRefreshKey.current === softRefreshKey) return
+    lastSoftRefreshKey.current = softRefreshKey
+    void load()
+  }, [load, ownersSettled, softRefreshKey])
 
   const groups = useMemo(() => {
     const nowMs = Date.now()

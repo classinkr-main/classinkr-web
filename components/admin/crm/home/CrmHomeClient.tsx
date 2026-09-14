@@ -6,6 +6,7 @@ import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { RefreshCw, Calendar, ExternalLink, NotebookPen, Search, UserPlus } from "lucide-react"
 import { adminFetchJsonCached, getCachedAdminJson, seedAdminRequestCache } from "@/lib/admin-client"
+import { useVisibleInterval } from "@/components/admin/branch/use-visible-interval"
 import { Button } from "@/components/ui/button"
 import CrmCoverageStrip from "@/components/admin/crm/CrmCoverageStrip"
 import CrmPriorityQueuePanel from "@/components/admin/crm/CrmPriorityQueuePanel"
@@ -99,6 +100,8 @@ export default function CrmHomeClient({ initialData }: { initialData?: CrmHomeIn
   const [branchKpisError, setBranchKpisError] = useState<string | null>(null)
   const [branchKpiMonth, setBranchKpiMonth] = useState(() => getKstMonthKey(new Date()))
   const [neoCrmRefreshKey, setNeoCrmRefreshKey] = useState(0)
+  // 백그라운드 자동 갱신용 키 — 패널은 이 값이 바뀌면 force 없이 load()만 다시 부른다(TTL 존중).
+  const [softRefreshKey, setSoftRefreshKey] = useState(0)
 
   // 언마운트 후 setState(경고) 방지 + 토스트가 연달아 뜰 때 이전 타이머가 새 토스트를 지우지 않게.
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -256,13 +259,28 @@ export default function CrmHomeClient({ initialData }: { initialData?: CrmHomeIn
   const branchKpisVisible = reportOpen && reportTab === "team"
   const pageRefreshing = leadKpisLoading || crmOverviewLoading || (branchKpisVisible && branchKpisLoading)
 
-  const refreshAll = useCallback(() => {
-    void fetchLeadKpis({ force: true })
-    void fetchCrmOverview({ force: true })
-    void fetchCompassPipeline({ force: true })
-    if (reportOpen && reportTab === "team") void fetchBranchKpis({ force: true })
-    setNeoCrmRefreshKey((current) => current + 1)
-  }, [fetchLeadKpis, fetchCrmOverview, fetchCompassPipeline, fetchBranchKpis, reportOpen, reportTab])
+  // 수동 새로고침(버튼)은 force 로 클라이언트·서버 캐시를 모두 건너뛴다. 백그라운드 갱신은
+  // force 없이 같은 fetcher 를 불러 TTL(2분)이 지난 것만 실제로 다시 받는다 — 탭을 열어 둔
+  // 사람 수만큼 서버 재계산이 매분 늘어나는 것을 막는다. NeoCRM 패널(외부 CRM 호출)은
+  // 수동 새로고침에만 반응한다.
+  const refreshAll = useCallback(
+    (options?: { background?: boolean }) => {
+      const force = !options?.background
+      void fetchLeadKpis({ force })
+      void fetchCrmOverview({ force })
+      void fetchCompassPipeline({ force })
+      if (reportOpen && reportTab === "team") void fetchBranchKpis({ force })
+      if (force) setNeoCrmRefreshKey((current) => current + 1)
+      else setSoftRefreshKey((current) => current + 1)
+    },
+    [fetchLeadKpis, fetchCrmOverview, fetchCompassPipeline, fetchBranchKpis, reportOpen, reportTab]
+  )
+
+  // Compass AutoRefresh 이식 — 탭이 보일 때만 60초마다 조용히 갱신한다(숨김 탭은 멈추고,
+  // 복귀 시 즉시 1회). 우선순위 큐처럼 켜 두고 보는 화면이 손으로 새로고침하지 않아도 따라온다.
+  useVisibleInterval(() => {
+    if (!pageRefreshing) refreshAll({ background: true })
+  }, 60_000)
 
   // 기록 입력은 /activity의 단일 컴포저가 소유한다. 홈 우측 레일과 기록 화면에 같은 폼을
   // 중복 노출하면 우선순위 큐가 좁아지고 사용자는 저장 위치를 다시 판단해야 한다.
@@ -321,7 +339,7 @@ export default function CrmHomeClient({ initialData }: { initialData?: CrmHomeIn
           <Button
             variant="outline"
             size="sm"
-            onClick={refreshAll}
+            onClick={() => refreshAll()}
             disabled={pageRefreshing}
             // 옆의 수제 h-9 버튼들과 높이·radius·글자크기 정렬(size=sm 기본 h-8·13px 오버라이드).
             className="h-9 gap-1.5 rounded-lg text-[12px]"
@@ -349,7 +367,7 @@ export default function CrmHomeClient({ initialData }: { initialData?: CrmHomeIn
       />
 
       {/* 리드 요약 다음에 오늘의 행동 큐를 붙여 숫자 확인 → 처리 흐름을 한 축으로 만든다. */}
-      <CrmPriorityQueuePanel refreshKey={neoCrmRefreshKey} />
+      <CrmPriorityQueuePanel refreshKey={neoCrmRefreshKey} softRefreshKey={softRefreshKey} />
 
       {/* 결과 지표는 행동 큐 뒤의 참고 밴드로 둔다. */}
       <CrmCockpitHero
@@ -416,7 +434,7 @@ export default function CrmHomeClient({ initialData }: { initialData?: CrmHomeIn
       {/* 주간 조망 밴드 — 우측 aside에서 본문으로 이동(H4: 우측 열은 액션 레일 전용) · 기능 보존 */}
       <div className="mb-4 grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {/* 이번 주 할 일 — 주간 일정·버킷 조망 */}
-        <CrmWeekAheadPanel compact refreshKey={neoCrmRefreshKey} />
+        <CrmWeekAheadPanel compact refreshKey={neoCrmRefreshKey} softRefreshKey={softRefreshKey} />
 
         {/* 설치·방문 일정 — upcomingThisWeek(install|visit) 상위 3건 */}
         <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
