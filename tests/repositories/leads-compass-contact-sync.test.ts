@@ -20,7 +20,10 @@ interface UpdateCall {
   affected: number
 }
 
-function fakeLeadsTable(initial: FakeLeadRow[], options: { failUpdateCall?: number } = {}) {
+function fakeLeadsTable(
+  initial: FakeLeadRow[],
+  options: { failUpdateCall?: number; failError?: { message: string; code?: string } } = {}
+) {
   const rows = initial.map((row) => ({ ...row }))
   const updates: UpdateCall[] = []
   let updateCalls = 0
@@ -70,7 +73,8 @@ function fakeLeadsTable(initial: FakeLeadRow[], options: { failUpdateCall?: numb
       then(resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) {
         updateCalls += 1
         if (options.failUpdateCall === updateCalls) {
-          return Promise.resolve({ data: null, error: { message: "update denied" } }).then(resolve, reject)
+          const error = options.failError ?? { message: "update denied" }
+          return Promise.resolve({ data: null, error }).then(resolve, reject)
         }
         const matched = rows.filter((row) => filters.every((filter) => filter(row)))
         for (const row of matched) Object.assign(row, values)
@@ -227,6 +231,31 @@ describe("리드 상태 MKT 반영 저장소", () => {
       })
       expect(table.rows.filter((row) => row.status === "contacted" && row.confirmed_at === null)).toEqual([])
       expect(revalidateTag).toHaveBeenCalled()
+    })
+
+    it("확인 도장 컬럼이 없을 때(PGRST204)만 상태만 바꾸는 폴백으로 내려간다", async () => {
+      const table = fakeLeadsTable([lead({ id: "a" })], {
+        failUpdateCall: 1,
+        failError: { code: "PGRST204", message: "Could not find the 'confirmed_at' column of 'leads' in the schema cache" },
+      })
+      const repo = await loadRepository(table)
+
+      const result = await repo.applyCompassLeadStatusSync({ contactedIds: ["a"], closedIds: [] }, { now: NOW })
+
+      expect(result).toMatchObject({ contacted: ["a"], stamped: [] })
+    })
+
+    it("확인 도장 이름이 들어간 다른 오류(제약 위반 등)는 폴백하지 않고 던진다 — 도장 없는 상태 변경을 막는다", async () => {
+      const table = fakeLeadsTable([lead({ id: "a" })], {
+        failUpdateCall: 1,
+        failError: { code: "23514", message: 'new row violates check constraint "leads_confirmed_at_check"' },
+      })
+      const repo = await loadRepository(table)
+
+      await expect(
+        repo.applyCompassLeadStatusSync({ contactedIds: ["a"], closedIds: [] }, { now: NOW })
+      ).rejects.toBeInstanceOf(repo.CompassLeadStatusSyncError)
+      expect(table.rows[0].status).toBe("new")
     })
 
     it("중간 덩어리에서 실패하면 그때까지 실제로 바뀐 행을 담아 던진다 — 감사 기록의 근거다", async () => {

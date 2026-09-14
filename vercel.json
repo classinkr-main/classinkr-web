@@ -16,6 +16,10 @@
       "schedule": "0 0 1 * *"
     },
     {
+      "path": "/api/cron/lead-contact-sync",
+      "schedule": "50 0,1,4,6,8 * * 1-5"
+    },
+    {
       "path": "/api/cron/sync-branch",
       "schedule": "0 8 * * *"
     },

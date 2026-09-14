@@ -267,7 +267,7 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     columns: ["id", "phone_key", "email_key", "stage", "owner", "team", "created_at", "updated_at", "last_inflow_at"],
     migration: "supabase/migrations/20260828_compass_bridge_views.sql",
     impact:
-      "Compass 리드 오버레이(app/api/admin/compass/leads-overlay)와 전화번호 대조가 깨지고, isCompassBridgeDown() 감지로 관련 화면이 'Compass 연결 끊김' 배지로 강등된다. 리드 상태 MKT 반영(lib/server/lead-contact-compass-sync)도 매 슬롯 bridge_down 으로 건너뛴다.",
+      "Compass 리드 오버레이(app/api/admin/compass/leads-overlay)와 전화번호 대조가 깨지고, isCompassBridgeDown() 감지로 관련 화면이 'Compass 연결 끊김' 배지로 강등된다. 리드 상태 MKT 반영(app/api/cron/lead-contact-sync)도 실행마다 bridge_down 으로 건너뛴다.",
   },
   {
     kind: "table",
@@ -276,7 +276,7 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     columns: ["id", "lead_id", "kind", "body", "created_at"],
     migration: "supabase/migrations/20260828_compass_bridge_views.sql",
     impact:
-      "고객 360(lib/repositories/crm-customer-360.ts) 병합 타임라인에서 Compass 쪽 활동 기록이 빠지고, 리드 상태 MKT 반영(lib/server/lead-contact-compass-sync)이 매 슬롯 bridge_down 으로 건너뛴다.",
+      "고객 360(lib/repositories/crm-customer-360.ts) 병합 타임라인에서 Compass 쪽 활동 기록이 빠지고, 리드 상태 MKT 반영(app/api/cron/lead-contact-sync)이 실행마다 bridge_down 으로 건너뛴다.",
   },
   {
     kind: "table",

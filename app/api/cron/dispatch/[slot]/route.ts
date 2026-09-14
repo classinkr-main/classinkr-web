@@ -7,10 +7,6 @@ import {
   type LeadDailySchedule,
 } from "@/lib/notifications/schedule"
 import { getResolvedSettings } from "@/lib/repositories/settings"
-import {
-  syncLeadContactFromCompassWithinBudget,
-  type LeadContactSyncReport,
-} from "@/lib/server/lead-contact-compass-sync"
 import { previewLeadMorningBrief, sendLeadMorningBrief } from "@/lib/server/lead-morning-brief"
 
 export const maxDuration = 60
@@ -28,44 +24,7 @@ export const maxDuration = 60
  *
  * 중복 발송은 각 잡이 자기 원장으로 막는다. 아침 카드는 lead_digest_runs 의
  * 창(window) 단위 claim 이라 같은 슬롯이 재시도돼도 한 번만 나간다.
- *
- * 매 슬롯은 예약 잡이 끝난 뒤 리드 연락 상태를 MKT(Compass) 처리 결과에 맞춘다
- * (lib/server/lead-contact-compass-sync). 잡 뒤에 두는 건 브리지 조회가 느려져도
- * 아침 카드를 60초 상한에서 밀어내지 않기 위해서다. 그 결과는 슬롯 ok 에 섞지 않는다.
  */
-
-/** MKT 연락 반영 예산 상한 — 실측(운영 dry run)은 0.5초 안팎이다. */
-const LEAD_CONTACT_SYNC_BUDGET_MS = 20_000
-/** 응답 직렬화·전송에 남겨 두는 여유 */
-const RESPONSE_MARGIN_MS = 5_000
-
-/** 같은 슬롯의 잡이 먼저 쓰고 남은 maxDuration 안에서만 예산을 준다. */
-function leadContactSyncBudgetMs(requestStartedAt: number): number {
-  const remaining = maxDuration * 1_000 - (Date.now() - requestStartedAt) - RESPONSE_MARGIN_MS
-  return Math.max(0, Math.min(LEAD_CONTACT_SYNC_BUDGET_MS, remaining))
-}
-
-type LeadContactSyncOutcome = LeadContactSyncReport | { status: "failed"; dryRun: boolean; error: string }
-
-async function runLeadContactSync(dryRun: boolean, requestStartedAt: number): Promise<LeadContactSyncOutcome> {
-  try {
-    const report = await syncLeadContactFromCompassWithinBudget({
-      budgetMs: leadContactSyncBudgetMs(requestStartedAt),
-      dryRun,
-    })
-    console.info("[cron/dispatch] leadContactSync", {
-      status: report.status,
-      dryRun: report.dryRun,
-      toContacted: report.toContacted,
-      toClosed: report.toClosed,
-      applied: report.applied,
-    })
-    return report
-  } catch (error) {
-    console.error("[cron/dispatch] leadContactSync failed:", error instanceof Error ? error.name : "Error")
-    return { status: "failed", dryRun, error: "Lead contact sync failed." }
-  }
-}
 
 interface JobRunResult {
   job: NotificationScheduleJobKey
@@ -99,7 +58,6 @@ export async function GET(
   request: NextRequest,
   context: { params: Promise<{ slot: string }> }
 ) {
-  const requestStartedAt = Date.now()
   const cronSecret = process.env.CRON_SECRET
   if (!cronSecret) {
     return NextResponse.json(
@@ -138,8 +96,7 @@ export async function GET(
       const preview = due.length
         ? await previewLeadMorningBrief(new Date(), notificationSchedule.leadDaily)
         : null
-      const leadContactSync = await runLeadContactSync(true, requestStartedAt)
-      return NextResponse.json({ ok: true, dryRun: true, slot, kstHour, due, preview, ran: [], leadContactSync })
+      return NextResponse.json({ ok: true, dryRun: true, slot, kstHour, due, preview, ran: [] })
     } catch {
       return NextResponse.json({ ok: false, error: "Report preview unavailable." }, { status: 503 })
     }
@@ -152,9 +109,7 @@ export async function GET(
     ran.push(await JOB_RUNNERS[job](notificationSchedule[job]))
   }
 
-  const leadContactSync = await runLeadContactSync(false, requestStartedAt)
-
   const ok = ran.every((result) => result.status !== "failed")
 
-  return NextResponse.json({ ok, slot, kstHour, ran, leadContactSync }, { status: ok ? 200 : 500 })
+  return NextResponse.json({ ok, slot, kstHour, ran }, { status: ok ? 200 : 500 })
 }

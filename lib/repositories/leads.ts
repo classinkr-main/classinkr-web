@@ -997,7 +997,12 @@ export async function applyCompassLeadStatusSync(
         .eq("status", from)
         .is("confirmed_at", null)
         .select("id");
-      if (stampedMove.error && isMissingLeadColumn(stampedMove.error, "confirmed_at")) {
+      // 폴백은 "컬럼이 없다"는 오류 코드일 때만 — 이름만 겹치는 다른 오류(제약 위반 등)에 내려가면
+      // 남은 덩어리가 도장 없이 상태만 바뀐다.
+      const missingStampColumn =
+        (stampedMove.error?.code === "PGRST204" || stampedMove.error?.code === "42703") &&
+        isMissingLeadColumn(stampedMove.error, "confirmed_at");
+      if (missingStampColumn) {
         stampSupported = false;
       } else if (stampedMove.error) {
         throw new Error(`[leads] MKT 상태 반영(${from}→${to}) 실패: ${stampedMove.error.message}`);

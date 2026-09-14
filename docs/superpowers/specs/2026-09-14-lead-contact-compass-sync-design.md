@@ -1,7 +1,11 @@
-# 리드 연락 상태 — MKT(Compass) 매시간 반영 설계
+# 리드 연락 상태 — MKT(Compass) 자동 반영 설계
 
 - 작성: 2026-09-14
-- 상태: 설계 승인(2026-09-14). 사용자 결정 = "매시간 자동 반영" + "이탈 리드는 종료로 반영"
+- 상태: 설계 승인(2026-09-14).
+- 사용자 결정 (모두 2026-09-14)
+  - 자동 반영
+  - 이탈 리드는 종료로 반영
+  - Vercel Pro 전환 뒤에는 전용 크론으로 옮기고, 근무 시간 기준 하루 최대 5번 돌린다
 - 성격: **러프한 연동**. 콜 기록을 복제하지 않고, 리드 상태 한 칸만 MKT 처리 결과에 맞춘다.
 - 쓰기 범위: 어드민 `public.leads` 만. Compass(`crm` 스키마)에는 아무것도 쓰지 않는다.
 
@@ -74,7 +78,7 @@ MKT팀은 리드를 Compass에서 처리한다. 어드민은 그 결과를 모�
 | 리드 읽기 | `lib/repositories/leads.ts` | `status ∈ {new, contacted}` 이고 전화가 있는 리드의 `id·phone·status` 만 읽고, 페이지 경계 중복은 접는다 |
 | 리드 쓰기 | `lib/repositories/leads.ts` | 아래 **쓰기 세부** 참고 |
 | 오케스트레이터 | `lib/server/lead-contact-compass-sync.ts` (신규) | 리드 읽기 → 전화 키 300개씩 `compass_leads_v` 조회 → 어드민 `new` 리드 중 매칭 행 단계가 전부 `new` 인 경우만 활동 조회(나머지는 단계만으로 판정이 끝남) → 판정 → `dryRun` 이면 건수만 반환, 아니면 쓰기 마감 안에서 적용하고 `audit_logs` 에 1행 기록 |
-| 실행 자리 | `app/api/cron/dispatch/[slot]/route.ts` | 매 슬롯(하루 24회)마다 **예약 잡(아침 카드)이 끝난 뒤** 실행한다. 예산은 `min(20초, 60초 − 요청 경과 − 5초)`. 결과는 응답의 `leadContactSync` 필드로 내보낸다 |
+| 실행 자리 | `app/api/cron/lead-contact-sync/route.ts` (신규 전용 크론) | `vercel.json` 한 줄로 **평일 KST 09:50·10:50·13:50·15:50·17:50** 에 돈다(`50 0,1,4,6,8 * * 1-5`, UTC). 예산 45초, maxDuration 60초 |
 
 **쓰기 세부** (`applyCompassLeadStatusSync`)
 - 조건부 UPDATE 만 쓴다. `contacted` 는 `status = new` 인 행만, `closed` 는 `status = new`·`status = contacted` 를 각각 따로 바꾼다. 그래서 반환하는 "종료 전 상태"가 계획 시점 값이 아니라 DB가 실제로 바꾼 전이다.
@@ -84,11 +88,15 @@ MKT팀은 리드를 Compass에서 처리한다. 어드민은 그 결과를 모�
 - JSON 폴백 모드에서는 아무것도 하지 않는다.
 
 **실행 자리 세부**
-- 잡 뒤에 두는 이유: 브리지 조회가 느려져도 아침 카드가 60초 상한 안에서 밀려나지 않는다. 대신 아침 카드는 직전 슬롯(최대 약 1시간 전)에 반영된 상태를 본다.
-- `?dryRun=true` 경로는 지금처럼 아침 카드 미리보기를 돌려주고, 동기화 예상 건수(`toContacted`·`toClosed`)를 함께 싣는다. 이 경로에서는 쓰지 않는다.
-- 동기화 결과는 슬롯 응답의 `ok` 에 반영하지 않는다. MKT 연결이 한 시간 끊겼다고 슬롯이 500이 되면 아침 카드 모니터링 신호가 흐려진다.
-- 알림 설정 조회 실패(기존 503 조기 반환)가 나면 동기화도 건너뛴다. 드문 경우이고 다음 슬롯이 따라잡는다.
-- `vercel.json` 은 바꾸지 않는다. 기존 24 슬롯을 그대로 쓴다.
+- **처음 설계와 바뀐 점**: 처음에는 매시간 도는 dispatch 슬롯(아침 카드와 같은 경로)에 얹었다. Vercel 팀이 Pro 로 바뀌어 하루 여러 번 도는 크론을 분 단위로 정확히 둘 수 있게 됐고, 사용자 결정에 따라 전용 크론으로 분리했다. dispatch 라우트는 건드리지 않는다.
+- **시각**
+  - 운영 아침 카드는 평일 11:00 KST 발송이다(`site_settings.notification_schedule_json`). 10:50 실행 덕분에 카드 숫자가 최신 상태로 나간다.
+  - 09:50 은 하루 시작, 13:50·15:50 은 오후, 17:50 은 퇴근 전이다.
+  - UTC 0~8시는 KST 9~17시와 같은 날짜라, 요일 필터 `1-5` 가 KST 평일과 그대로 맞는다.
+- **확인**: `?dryRun=true` 는 판정 건수만 돌려주고 쓰지 않는다.
+- **응답 코드**: 크론 대시보드에서 문제가 보이도록 나눈다 — 정상 200, `bridge_down` 503, `failed` 500, `timeout` 504. 예상 못 한 예외는 500 에 일반 문구만 싣는다.
+- **빌드 선행 조건**: `scripts/check-vercel-crons.mjs`(prebuild)가 표현식당 하루 1회 초과를 막는다. 크론 정리 작업(별도 세션)이 Pro 기준으로 가드와 AGENTS.md 크론 규칙을 바꾼 뒤에 병합한다.
+- **계약 테스트**: `tests/api/cron-lead-contact-sync-route.test.ts` 가 vercel.json 을 읽어 사용자 결정을 고정한다. 경로당 1개, UTC 0~8시, 평일, 하루 5회 이하인지 본다.
 
 **감사 기록**
 - `audit_logs` 에 `action = "lead.status.compass_sync"`, `target_type = "lead"` 로 남긴다.
@@ -113,7 +121,7 @@ MKT팀은 리드를 Compass에서 처리한다. 어드민은 그 결과를 모�
 - **재오픈 안 함**: MKT가 이탈 리드를 다시 살려도 어드민 `closed` 는 그대로 둔다.
 - **MKT 판단 우선**: 어드민에서 직접 연락함으로 둔 리드도 MKT 대표 행이 이탈이면 `closed` 로 간다. 현재 어드민 연락 기록은 0건이다.
 - **이탈 사유는 보지 않는다**: Compass 이탈 사유가 보류(`hold`)여도 단계가 `lost` 면 `closed` 로 간다.
-- **매칭·지연**: 전화 키로만 매칭한다. 반영은 최대 약 1시간 늦고, Hobby 트리거 오차(±59분)가 더해질 수 있다.
+- **매칭·지연**: 전화 키로만 매칭한다. 근무 시간에는 최대 약 3시간 늦게 반영된다(10:50→13:50). 금요일 17:50 이후 처리분은 월요일 09:50 에 반영된다. 주말에는 돌지 않는다.
 - **수동 규칙은 그대로**: 단건 PATCH 의 "연락중은 연락 기록 저장 뒤에만" 규칙은 유지한다. 자동 반영만 예외인데, 근거가 MKT 활동 기록에 있기 때문이다. `assignLeads` 주석의 "상태 필드 벌크 변경 금지" 원칙에 대해서도, 사전조건을 WHERE 에 거는 좁은 예외라는 점을 코드 주석으로 밝힌다.
 
 ## 7. 따라서 맞춰지는 숫자
@@ -140,11 +148,11 @@ MKT팀은 리드를 Compass에서 처리한다. 어드민은 그 결과를 모�
   - 정상 → 조건부 적용 호출과 audit 1회(도장 포함)
   - 부분 실패·마감 중단 → 바뀐 행 audit
   - 마감 지남 → 쓰기 시작 안 함. 예산 초과 뒤 늦게 끝난 조회도 쓰지 않음
-- **dispatch 라우트** (`tests/api/cron-dispatch-route.test.ts` 확장)
-  - 동기화가 throw 하거나 끊겨도 잡 실행과 `ok` 가 그대로다
-  - 잡이 오래 걸리면 남은 시간만큼만 예산을 준다
-  - 응답에 `leadContactSync` 가 포함된다
-  - `dryRun=true` 에서 쓰기가 없다
+- **전용 크론 라우트** (`tests/api/cron-lead-contact-sync-route.test.ts`)
+  - Bearer 인증: 없거나 틀리면 401 이고 반영하지 않는다
+  - 정상 200, `dryRun=true` 는 쓰지 않는다
+  - 상태별 응답 코드(503·500·504)와 예외 시 일반 문구
+  - vercel.json 일정 계약(평일 근무 시간, 하루 5회 이하)
 - **게이트**: `npm run typecheck` → `npx eslint app components lib --max-warnings=0` → `npm run build`, 그리고 관련 vitest.
 - **로컬에서 프로덕션 쓰기 검증은 하지 않는다.** 되돌리기 어렵기 때문에 배포 후 `dryRun` 으로 확인한다.
 
@@ -152,8 +160,10 @@ MKT팀은 리드를 Compass에서 처리한다. 어드민은 그 결과를 모�
 
 배포 전 기준값: 2026-09-14 최종 코드로 운영 데이터 dry run(쓰기·감사 기록 호출 차단)을 돌린 결과는 대상 366 · 매칭 352 · 연락함 273 · 종료 78 · 0.48초였다.
 
-1. `GET /api/cron/dispatch/<slot>?dryRun=true` 를 `Authorization: Bearer ${CRON_SECRET}` 로 호출한다. `leadContactSync.toContacted`·`toClosed` 가 기준값과 비슷한 규모인지 본다. 유입이 늘어난 만큼은 차이가 난다.
-2. 다음 정시 슬롯이 지나면 읽기 전용 프로브로 리드 상태 분포를 다시 잰다.
+1. **첫 예약 실행 전에** `GET /api/cron/lead-contact-sync?dryRun=true` 를 `Authorization: Bearer ${CRON_SECRET}` 로 호출한다. `toContacted`·`toClosed` 가 기준값과 비슷한 규모인지 본다. 유입이 늘어난 만큼은 차이가 난다.
+2. 다음 예약 시각이 지나면 두 가지를 확인한다.
+   - Vercel 크론 대시보드에 200 이 찍혔는지
+   - 읽기 전용 프로브로 잰 리드 상태 분포
 3. 되돌려야 하면 `audit_logs`(`action = lead.status.compass_sync`)의 `payload` 로 SQL 복구한다.
    - `contacted` 의 id 는 `new` 로 되돌린다.
    - `closed` 의 id 는 각 항목의 `from` 으로 되돌린다.

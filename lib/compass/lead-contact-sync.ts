@@ -16,10 +16,18 @@ export const COMPASS_HUMAN_ACTIVITY_KINDS = ["call", "sms", "meeting", "note", "
 
 /**
  * 사람이 아닌 작성자 — kind 가 note 여도 연락이 아니다. 설명회 명단 동기화가 신규 리드를 만들며 남기는
- * 'BD시트' 메모, 시트 백필·중복 병합 스크립트의 '시트'·'Claude' 메모가 여기 해당한다(Compass 코드 실측).
- * 작성자가 비어 있는(null) 기록은 시트 시절 콜 메모를 옮겨 온 행이라 사람 기록으로 둔다.
+ * 'BD시트' 메모, 시트 크론의 종료 전파 '시트 동기화' 메모, 시트 백필·중복 병합 스크립트의 '시트'·'Claude'
+ * 메모가 여기 해당한다(Compass 코드 실측). 작성자가 비어 있는(null) 기록은 시트 시절 콜 메모를 옮겨 온
+ * 행이라 사람 기록으로 둔다.
  */
-export const COMPASS_AUTOMATED_ACTORS: ReadonlySet<string> = new Set(["Claude", "BD시트", "시트", "시스템", "system"])
+export const COMPASS_AUTOMATED_ACTORS: ReadonlySet<string> = new Set([
+  "Claude",
+  "BD시트",
+  "시트",
+  "시트 동기화",
+  "시스템",
+  "system",
+])
 
 /** 이보다 짧은 전화 키는 매칭하지 않는다 — '0' 같은 잘못된 번호끼리 붙는 것을 막는다(지역번호 포함 최소 9자리). */
 const MIN_PHONE_KEY_LENGTH = 9
@@ -105,12 +113,28 @@ function groupByPhoneKey(rows: readonly CompassOverlaySource[]): Map<string, Com
   return groups
 }
 
+/** 매칭에 쓸 수 있는 전화 키 — 정규화 후 9자리 미만이면 null. */
+function lookupKeyOf(lead: Pick<CompassSyncLead, "phone">): string | null {
+  const key = normalizePhoneKey(lead.phone)
+  return key && key.length >= MIN_PHONE_KEY_LENGTH ? key : null
+}
+
+/** Compass 에 조회할 전화 키(중복 없음). 매칭에 못 쓰는 짧은 키로 조회해 행 상한을 채우지 않게 한다. */
+export function compassLookupPhoneKeys<T extends Pick<CompassSyncLead, "phone">>(leads: readonly T[]): string[] {
+  const keys = new Set<string>()
+  for (const lead of leads) {
+    const key = lookupKeyOf(lead)
+    if (key) keys.add(key)
+  }
+  return [...keys]
+}
+
 function matchedGroup(
   lead: Pick<CompassSyncLead, "phone">,
   groups: Map<string, CompassOverlaySource[]>
 ): CompassOverlaySource[] | undefined {
-  const key = normalizePhoneKey(lead.phone)
-  return key && key.length >= MIN_PHONE_KEY_LENGTH ? groups.get(key) : undefined
+  const key = lookupKeyOf(lead)
+  return key ? groups.get(key) : undefined
 }
 
 /** 어드민 리드 전체에 판정을 돌려 바꿀 목록을 만든다. */

@@ -4,6 +4,7 @@ import {
   COMPASS_AUTOMATED_ACTORS,
   COMPASS_HUMAN_ACTIVITY_KINDS,
   compassLeadIdsNeedingActivityCheck,
+  compassLookupPhoneKeys,
   decideLeadStatusFromCompass,
   humanTouchedCompassLeadIds,
   planCompassLeadStatusSync,
@@ -103,9 +104,12 @@ describe("humanTouchedCompassLeadIds", () => {
       { lead_id: 2, kind: "note", actor: "Claude" },
       { lead_id: 3, kind: "note", actor: "시트" },
       { lead_id: 4, kind: "note", actor: " 시스템 " },
+      { lead_id: 5, kind: "note", actor: "시트 동기화" },
     ])
     expect(touched.size).toBe(0)
-    expect([...COMPASS_AUTOMATED_ACTORS].sort()).toEqual(["BD시트", "Claude", "system", "시스템", "시트"].sort())
+    expect([...COMPASS_AUTOMATED_ACTORS].sort()).toEqual(
+      ["BD시트", "Claude", "system", "시스템", "시트", "시트 동기화"].sort()
+    )
   })
 
   it("작성자가 비어 있는 기록은 사람 기록으로 둔다 — 시트 시절 콜 메모를 옮겨 온 행이다", () => {
@@ -168,6 +172,19 @@ describe("planCompassLeadStatusSync", () => {
       { id: "was-contacted", from: "contacted" },
     ])
     expect(plan.contacted).toEqual([])
+  })
+})
+
+describe("compassLookupPhoneKeys", () => {
+  it("매칭에 쓸 수 있는 키만 중복 없이 뽑는다 — 9자리 미만 키로 Compass 를 조회하지 않는다", () => {
+    expect(
+      compassLookupPhoneKeys([
+        { id: "a", phone: "010-1234-5678", status: "new" },
+        { id: "b", phone: "+82 10-1234-5678", status: "contacted" },
+        { id: "c", phone: "0", status: "new" },
+        { id: "d", phone: null, status: "new" },
+      ])
+    ).toEqual(["01012345678"])
   })
 })
 

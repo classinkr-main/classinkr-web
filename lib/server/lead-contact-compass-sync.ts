@@ -1,14 +1,14 @@
 // 리드 상태 MKT(Compass) 매시간 반영 — 조회 → 판정 → 조건부 반영 → 감사 기록.
 // 설계: docs/superpowers/specs/2026-09-14-lead-contact-compass-sync-design.md
 //
-// 실행 자리는 app/api/cron/dispatch/[slot] 이다(매 슬롯, 예약 잡이 끝난 뒤).
+// 실행 자리는 전용 크론 app/api/cron/lead-contact-sync 다(평일 근무 시간 하루 5회, vercel.json).
 //  * 쓰기 범위는 public.leads 뿐이다. Compass 는 브리지 뷰로 읽기만 한다.
 //  * 브리지 조회가 하나라도 끊기거나 행 상한에 닿으면 이번 실행 전체를 건너뛴다 — 반쪽 결과로
-//    판정하면 처리된 리드를 흘려보내거나(누락) 대표 행이 바뀌어 잘못 종료한다. 다음 슬롯이 따라잡는다.
+//    판정하면 처리된 리드를 흘려보내거나(누락) 대표 행이 바뀌어 잘못 종료한다. 다음 실행이 따라잡는다.
 //  * 쓰기는 마감 시각(writeDeadlineAt) 전에만 시작하고 덩어리 사이에서도 멈춘다 — 크론 응답이
 //    나간 뒤에 쓰기가 시작되면 결과가 보고되지도, 캐시 무효화가 반영되지도 않는다.
 //  * 실제로 바뀐 행은 성공·실패·중단과 무관하게 감사 기록에 남긴다(복구의 근거).
-//  * 절대 던지지 않는다 — 크론 슬롯의 다른 잡(아침 카드)을 막으면 안 된다.
+//  * 절대 던지지 않는다 — 실패는 보고서의 status 로 알리고, 응답 코드는 라우트가 정한다.
 
 import "server-only"
 
@@ -17,10 +17,10 @@ import { getCompassActivitySignals, getCompassLeadsByPhoneKeys } from "@/lib/com
 import {
   COMPASS_HUMAN_ACTIVITY_KINDS,
   compassLeadIdsNeedingActivityCheck,
+  compassLookupPhoneKeys,
   humanTouchedCompassLeadIds,
   planCompassLeadStatusSync,
 } from "@/lib/compass/lead-contact-sync"
-import { normalizePhoneKey } from "@/lib/compass/normalize"
 import type { CompassOverlaySource } from "@/lib/compass/overlay"
 import {
   applyCompassLeadStatusSync,
@@ -105,9 +105,7 @@ export async function syncLeadContactFromCompass(
   }
   if (leads.length === 0) return emptyReport(dryRun, "ok")
 
-  const keys = Array.from(
-    new Set(leads.map((lead) => normalizePhoneKey(lead.phone)).filter((key): key is string => Boolean(key)))
-  )
+  const keys = compassLookupPhoneKeys(leads)
   const compassRows: CompassOverlaySource[] = []
   for (let index = 0; index < keys.length; index += PHONE_KEY_CHUNK) {
     const result = await getCompassLeadsByPhoneKeys(keys.slice(index, index + PHONE_KEY_CHUNK))
@@ -141,7 +139,7 @@ export async function syncLeadContactFromCompass(
   }
   if (dryRun || (plan.contacted.length === 0 && plan.closed.length === 0)) return report
   if (Date.now() >= writeDeadlineAt) {
-    return { ...report, status: "timeout", error: "쓰기 마감이 지나 이번 슬롯은 반영하지 않음" }
+    return { ...report, status: "timeout", error: "쓰기 마감이 지나 이번 실행은 반영하지 않음" }
   }
 
   let result: CompassLeadStatusSyncResult
@@ -167,7 +165,7 @@ export async function syncLeadContactFromCompass(
   await recordAudit(result)
   report.applied = { contacted: result.contacted.length, closed: result.closed.length }
   if (result.stoppedEarly) {
-    return { ...report, status: "timeout", error: "쓰기 마감으로 남은 덩어리를 다음 슬롯에 넘김" }
+    return { ...report, status: "timeout", error: "쓰기 마감으로 남은 덩어리를 다음 실행에 넘김" }
   }
   return report
 }
