@@ -17,6 +17,7 @@ import SalesPeriodSummary from "./SalesPeriodSummary"
 import SampleTrackerSection from "./SampleTrackerSection"
 import SnapshotRestorePanel from "./SnapshotRestorePanel"
 import StockLevelsSection from "./StockLevelsSection"
+import SummaryBand from "./SummaryBand"
 import type { HardwareDashboard, HardwareSectionKey } from "./shared"
 
 interface HomeTabPanelProps {
@@ -59,6 +60,11 @@ interface HomeTabPanelProps {
   confirmingId: ComponentProps<typeof PlannedOutboundPanel>["confirmingId"]
   confirmingGroupKey: ComponentProps<typeof PlannedOutboundPanel>["confirmingGroupKey"]
   confirmPlannedGroup: ComponentProps<typeof PlannedOutboundPanel>["confirmPlannedGroup"]
+  // 일괄 체크(감사 2026-09-14) — PlannedOutboundPanel의 선택 확정 실행기·진행률. 부모
+  // (HardwareInventoryClient)가 소유하고 이 파일은 그대로 통과시키기만 한다(다른 prop과 동일 원칙).
+  confirmPlannedSelection: ComponentProps<typeof PlannedOutboundPanel>["confirmPlannedSelection"]
+  selectionConfirmProgress: ComponentProps<typeof PlannedOutboundPanel>["selectionConfirmProgress"]
+  onPlannedSelectionCountChange: ComponentProps<typeof PlannedOutboundPanel>["onSelectionCountChange"]
   locationMap: ComponentProps<typeof LocationMapSection>["locationMap"]
   locationMapExpanded: ComponentProps<typeof LocationMapSection>["locationMapExpanded"]
   setLocationMapExpanded: ComponentProps<typeof LocationMapSection>["setLocationMapExpanded"]
@@ -120,6 +126,9 @@ export default function HomeTabPanel({
   confirmingId,
   confirmingGroupKey,
   confirmPlannedGroup,
+  confirmPlannedSelection,
+  selectionConfirmProgress,
+  onPlannedSelectionCountChange,
   locationMap,
   locationMapExpanded,
   setLocationMapExpanded,
@@ -151,11 +160,57 @@ export default function HomeTabPanel({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
     >
-    {/* 위계: 이관 신선도 → 현황 요약(카드·판매) → 검색 → 대기 작업(예상 출고) → 재고 상세(위치·표) → 샘플 → 알림·로그.
-        예상 출고는 확정을 기다리는 할 일이라 재고 상세보다 위, 샘플 트래커는 참조 성격이라 아래에 둔다. */}
+    {/* 위계(개편 2026-09-14, 홈 가시성 — 요청사항 ③.3): 요약 밴드 → 이관 신선도(경고) →
+        예정 출고(오늘 할 일) → 재고 현황(카드+표, 품목·로트) → 판매 요약 → 검색 → 위치 → 샘플 →
+        알림·로그 → 스냅샷 복원.
+        예전 순서(검색 → 예정 출고 → 위치 → 재고표)에서 예정 출고를 맨 위로, 재고 카드/표를
+        판매 요약보다 위로, 검색을 아래로 옮겼다 — "할 일(확정 대기)"과 "지금 재고"를 화면
+        상단에서 먼저 보여주고, 검색·위치·샘플처럼 필요할 때 찾아 쓰는 도구성 섹션은 아래로
+        내린다는 원칙(요청사항 본문)을 그대로 따른 것이다. CategoryCardsSection(4축 카드)은
+        지시문에 명시된 8단계에는 없지만 "재고 현황(품목·로트)"의 요약판이라 StockLevelsSection
+        (표)과 한 묶음으로 바로 위에 둔다.
+        이 순서를 소스 문자열로 고정한 기존 테스트는 없다(2026-09-14 확인, tests/hardware·
+        tests/admin 전수 검색 — HomeTabPanel·PlannedOutboundPanel을 참조하는 테스트 자체가
+        없었다) — 그래서 별도 테스트 갱신 없이 순서만 바꿨다. 되돌리기는 사고 대응용 안전망이라
+        기존처럼 맨 끝에 접어 둔다(#4). */}
+    <SummaryBand data={data} plannedMovementQuantity={plannedMovementQuantity} plannedStaleGroupCount={plannedStaleGroupCount} />
+
     <ImportFreshnessStrip importRun={data?.importRun ?? null} importCosting={data?.importCosting} />
 
+    <PlannedOutboundPanel
+      data={data}
+      plannedMovementQuantity={plannedMovementQuantity}
+      plannedStaleGroupCount={plannedStaleGroupCount}
+      canFinalize={canFinalize}
+      startPlannedEntry={startPlannedEntry}
+      plannedConfirmLocked={plannedConfirmLocked}
+      plannedPagination={plannedPagination}
+      setPlannedPage={setPlannedPage}
+      confirmQtys={confirmQtys}
+      setConfirmQtys={setConfirmQtys}
+      plannedConfirmResults={plannedConfirmResults}
+      confirmDates={confirmDates}
+      setConfirmDates={setConfirmDates}
+      editMovement={editMovement}
+      confirmingId={confirmingId}
+      confirmingGroupKey={confirmingGroupKey}
+      confirmPlannedGroup={confirmPlannedGroup}
+      confirmPlannedMovement={confirmPlannedMovement}
+      confirmPlannedSelection={confirmPlannedSelection}
+      selectionConfirmProgress={selectionConfirmProgress}
+      onSelectionCountChange={onPlannedSelectionCountChange}
+    />
+
     <CategoryCardsSection categoryCards={categoryCards.cards} etcSummary={categoryCards.etcSummary} />
+
+    <StockLevelsSection
+      openSections={openSections}
+      toggleSection={toggleSection}
+      data={data}
+      stockPagination={stockPagination}
+      setStockPage={setStockPage}
+      prepareQuickEntry={prepareQuickEntry}
+    />
 
     <SalesPeriodSummary summary={salesPeriodSummary} onOpenDetail={openOutboundDetail} />
 
@@ -177,40 +232,10 @@ export default function HomeTabPanel({
       setCustomerDetail={setCustomerDetail}
     />
 
-    <PlannedOutboundPanel
-      data={data}
-      plannedMovementQuantity={plannedMovementQuantity}
-      plannedStaleGroupCount={plannedStaleGroupCount}
-      canFinalize={canFinalize}
-      startPlannedEntry={startPlannedEntry}
-      plannedConfirmLocked={plannedConfirmLocked}
-      plannedPagination={plannedPagination}
-      setPlannedPage={setPlannedPage}
-      confirmQtys={confirmQtys}
-      setConfirmQtys={setConfirmQtys}
-      plannedConfirmResults={plannedConfirmResults}
-      confirmDates={confirmDates}
-      setConfirmDates={setConfirmDates}
-      editMovement={editMovement}
-      confirmingId={confirmingId}
-      confirmingGroupKey={confirmingGroupKey}
-      confirmPlannedGroup={confirmPlannedGroup}
-      confirmPlannedMovement={confirmPlannedMovement}
-    />
-
     <LocationMapSection
       locationMap={locationMap}
       locationMapExpanded={locationMapExpanded}
       setLocationMapExpanded={setLocationMapExpanded}
-      prepareQuickEntry={prepareQuickEntry}
-    />
-
-    <StockLevelsSection
-      openSections={openSections}
-      toggleSection={toggleSection}
-      data={data}
-      stockPagination={stockPagination}
-      setStockPage={setStockPage}
       prepareQuickEntry={prepareQuickEntry}
     />
 
@@ -236,7 +261,7 @@ export default function HomeTabPanel({
       setDetailId={setDetailId}
     />
 
-    {/* 되돌리기는 사고 대응용 안전망이라 일상 확인 흐름(요약·검색·대기 작업) 아래, 맨 끝에 접어 둔다(#4). */}
+    {/* 되돌리기는 사고 대응용 안전망이라 일상 확인 흐름(요약·예정 출고·재고) 아래, 맨 끝에 접어 둔다(#4). */}
     <SnapshotRestorePanel canFinalize={canFinalize} onRestored={refresh} />
     </motion.div>
   )

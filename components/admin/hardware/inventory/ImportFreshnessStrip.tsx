@@ -25,6 +25,32 @@ function daysBetweenKeys(from: string, to: string): number {
   return Math.max(0, Math.round((end - start) / 86400000))
 }
 
+// "none"(이관 기록 자체가 없음)은 danger/warning과 다르게 다룬다 — 신규 설치 등 아직 한 번도
+// 이관하지 않은 상태라 "악화"가 아니라 "시작 전"이라, 이 화면(스트립)은 계속 중립 톤으로 보여준다.
+export type ImportFreshnessLevel = "none" | "ok" | "warning" | "danger"
+
+export interface ImportFreshnessJudgement {
+  level: ImportFreshnessLevel
+  failed: boolean
+  finishedKey: string | null
+  daysAgo: number | null
+}
+
+// 이관 신선도 판정 — 홈 요약 밴드(SummaryBand)가 이 스트립과 다른 임계값으로 따로 판단하면
+// 두 곳이 어긋난 신호를 보여줄 수 있다(예: 스트립은 "정상"인데 요약 밴드는 "경고"). 감사
+// (2026-09-14, 홈 가시성 개편)로 판정 로직을 이 순수 함수 하나로 뽑아 두 소비처가 같은 임계값
+// (FRESH_MAX_DAYS·STALE_MAX_DAYS)과 같은 결과를 쓰게 한다 — 임계를 새로 발명하지 않는다.
+export function judgeImportFreshness(importRun: HardwareDashboard["importRun"]): ImportFreshnessJudgement {
+  if (!importRun) return { level: "none", failed: false, finishedKey: null, daysAgo: null }
+  const failed = importRun.status !== "success"
+  const finishedKey = kstDateKey(importRun.finished_at ?? importRun.started_at)
+  const todayKst = getBusinessDateParts().date
+  const daysAgo = finishedKey ? daysBetweenKeys(finishedKey, todayKst) : null
+  const level: ImportFreshnessLevel =
+    failed || (daysAgo != null && daysAgo > STALE_MAX_DAYS) ? "danger" : daysAgo != null && daysAgo > FRESH_MAX_DAYS ? "warning" : "ok"
+  return { level, failed, finishedKey, daysAgo }
+}
+
 interface ImportFreshnessStripProps {
   importRun: HardwareDashboard["importRun"]
   // 감사(2026-09-07 #1) — 시트 이관 금액 컬럼이 raw 백업에서 복구된 행 수. optional은 구버전
@@ -59,7 +85,8 @@ function ImportFreshnessStrip({ importRun, importCosting }: ImportFreshnessStrip
   if (!importRun) {
     return (
       <>
-        <section className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white px-4 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+        {/* id: 홈 요약 밴드의 "이관 신선도" 칸이 앵커 스크롤로 여기를 가리킨다(감사 2026-09-14). */}
+        <section id="hardware-section-freshness" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white px-4 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
           <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[#A39E98]" />
           <p className="text-[12px] font-semibold text-[#615D59]">
             시트 이관 기록이 없습니다 · 상단 &lsquo;싱크·백업 후 가져오기&rsquo; 또는 업로드로 시작하세요
@@ -70,12 +97,7 @@ function ImportFreshnessStrip({ importRun, importCosting }: ImportFreshnessStrip
     )
   }
 
-  const failed = importRun.status !== "success"
-  const finishedKey = kstDateKey(importRun.finished_at ?? importRun.started_at)
-  const todayKst = getBusinessDateParts().date
-  const daysAgo = finishedKey ? daysBetweenKeys(finishedKey, todayKst) : null
-  const level: "danger" | "warning" | "ok" =
-    failed || (daysAgo != null && daysAgo > STALE_MAX_DAYS) ? "danger" : daysAgo != null && daysAgo > FRESH_MAX_DAYS ? "warning" : "ok"
+  const { level, failed, finishedKey, daysAgo } = judgeImportFreshness(importRun)
 
   const toneClass =
     level === "danger"
@@ -89,6 +111,7 @@ function ImportFreshnessStrip({ importRun, importCosting }: ImportFreshnessStrip
   return (
     <>
       <section
+        id="hardware-section-freshness"
         data-testid="hardware-import-freshness"
         className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-4 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)] ${toneClass}`}
       >
