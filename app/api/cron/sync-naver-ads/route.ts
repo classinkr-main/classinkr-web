@@ -32,17 +32,21 @@ export async function GET(req: NextRequest) {
   const until = kstToday(0)
 
   try {
-    const { rows, failedDates, campaignCount } = await fetchNaverAdsDaily({ since, until })
+    const { rows, failedDates, campaignCount, truncated } = await fetchNaverAdsDaily({
+      since,
+      until,
+    })
     const upserted = await upsertNaverAdsDaily(rows)
-    // 부분 실패를 ok:true 안에 숨기지 않는다 — failedDates 가 비어야 완전 동기화다.
+    // 부분 실패·절단을 ok:true 안에 숨기지 않는다 — 둘 다 없어야 완전 동기화다.
     return NextResponse.json({
-      ok: failedDates.length === 0,
+      ok: failedDates.length === 0 && !truncated,
       since,
       until,
       campaignCount,
       fetched: rows.length,
       upserted,
       failedDates,
+      truncated,
     })
   } catch (error) {
     if (error instanceof NaverAdConfigError) {

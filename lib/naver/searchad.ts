@@ -21,7 +21,13 @@ import { createHmac } from "node:crypto"
  * 틀린 수치가 화면에 그대로 뜨는 종류의 실패다.
  * /stats 는 JSON 에 필드명(impCnt·clkCnt·salesAmt·ccnt)이 붙어 오므로 그 사고가 구조적으로
  * 불가능하고, 요청이 틀리면 400 으로 **시끄럽게** 죽는다. 호출 수는 (일수 × 캠페인 청크)로
- * 늘지만 trailing 7일 × 수십 캠페인이면 10여 회라 문제가 되지 않는다.
+ * 늘지만 trailing 3일 × 수십 캠페인이면 몇 회라 문제가 되지 않는다.
+ *
+ * 요청 인코딩 — 공개된 동작 예제와 대조해 확인했다(2026-09-14):
+ *   ids       반복 파라미터  ids=cmp-1&ids=cmp-2   (콤마 조인이 아니다)
+ *   fields    JSON 배열 **문자열**  '["impCnt","clkCnt",…]'
+ *   timeRange JSON 객체 **문자열**  '{"since":"…","until":"…"}'
+ * 셋 다 문자열이 아니라 배열/객체로 보내면 "잘못된 파라미터 형식" 400 이 난다.
  */
 
 export class NaverAdConfigError extends Error {}
@@ -30,6 +36,21 @@ const BASE_URL = "https://api.searchad.naver.com"
 
 /** /stats 의 ids 상한 — 초과하면 요청이 거부된다. 넉넉히 잡아 청크로 나눈다. */
 const STATS_ID_CHUNK = 100
+
+/**
+ * 한 번에 조회할 최대 일수. 네이버 timeRange 자체 상한도 92일이라 그 값에 맞췄다.
+ *
+ * 하루씩 부르는 이유(= timeIncrement 를 안 쓰는 이유): /stats 에 timeIncrement 파라미터가
+ * 있어 한 번에 일자별 분해를 받을 수도 있지만, **그 응답 행의 일자 필드명을 확인하지 못했다.**
+ * 잘못 읽으면 수치가 엉뚱한 날짜에 붙는데 그건 조용히 틀리는 종류의 사고다.
+ * 지금 방식은 "그 날짜를 달라고 해서 받은 것"이라 일자가 구조적으로 맞는다 —
+ * trailing 3일이면 호출 3회라 비용도 문제가 안 된다.
+ * 백필처럼 호출 수가 실제로 문제가 되면 그때 timeIncrement 응답을 실계정으로 확인하고 바꾼다.
+ *
+ * 그래서 이 상수는 "호출 수 폭주 가드"로 쓴다 — 실수로 1년 범위를 넣으면 365 × 캠페인청크
+ * 만큼 조용히 때리는 대신 여기서 잘라내고 호출부에 알린다.
+ */
+export const STATS_MAX_RANGE_DAYS = 92
 
 /** 조회할 지표 — 네이버 필드명 그대로. 이름으로 읽으므로 순서 의존이 없다. */
 const STATS_FIELDS = ["impCnt", "clkCnt", "salesAmt", "ccnt"] as const
@@ -229,7 +250,13 @@ export async function fetchNaverAdsDaily({
 }: {
   since: string
   until: string
-}): Promise<{ rows: NaverAdsDailyRow[]; failedDates: string[]; campaignCount: number }> {
+}): Promise<{
+  rows: NaverAdsDailyRow[]
+  failedDates: string[]
+  campaignCount: number
+  /** 요청 범위가 STATS_MAX_RANGE_DAYS 를 넘어 잘렸다 — 호출부가 반드시 드러내야 한다. */
+  truncated: boolean
+}> {
   const creds = readCredentials()
   const campaigns = await fetchNaverCampaigns()
   const nameById = new Map(campaigns.map((c) => [c.id, c.name]))
@@ -237,13 +264,29 @@ export async function fetchNaverAdsDaily({
     campaigns.map((c) => c.id),
     STATS_ID_CHUNK
   )
-  if (idChunks.length === 0) return { rows: [], failedDates: [], campaignCount: 0 }
+  if (idChunks.length === 0) {
+    return { rows: [], failedDates: [], campaignCount: 0, truncated: false }
+  }
+
+  // 범위가 상한을 넘으면 **최근 쪽을 남긴다** — 오래된 날짜를 버리는 게 덜 아프다
+  // (최근 일자는 아직 정정 중이라 다시 읽어야 하고, 오래된 건 이미 확정돼 있다).
+  const allDates = enumerateDates(since, until)
+  const truncated = allDates.length > STATS_MAX_RANGE_DAYS
+  const dates = truncated ? allDates.slice(-STATS_MAX_RANGE_DAYS) : allDates
+  if (truncated) {
+    console.warn("[naver-searchad] 조회 범위 상한 초과 — 최근 구간만 조회한다", {
+      since,
+      until,
+      requestedDays: allDates.length,
+      cappedTo: STATS_MAX_RANGE_DAYS,
+    })
+  }
 
   const fieldsParam = JSON.stringify(STATS_FIELDS)
   const rows: NaverAdsDailyRow[] = []
   const failedDates: string[] = []
 
-  for (const date of enumerateDates(since, until)) {
+  for (const date of dates) {
     try {
       for (const ids of idChunks) {
         const query: Array<[string, string]> = ids.map((id) => ["ids", id] as [string, string])
@@ -261,5 +304,5 @@ export async function fetchNaverAdsDaily({
 
   for (const row of rows) row.campaignName = nameById.get(row.campaignId) ?? null
 
-  return { rows, failedDates, campaignCount: campaigns.length }
+  return { rows, failedDates, campaignCount: campaigns.length, truncated }
 }
