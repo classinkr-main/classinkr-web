@@ -138,6 +138,8 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // 리드 중복 탐지 + 어드민 핫패스 인덱스(2026-09-02). 인덱스 전용 마이그레이션이라
   // 프로브의 한계는 SCHEMA_PROBES 쪽 주석 참고.
   "supabase/migrations/20260902_leads_dedupe_and_admin_hot_path_indexes.sql",
+  // Compass 연동 브리지 2차(2026-09-14) — 전화 키 함수 + 링크/연락 뷰 + 역브리지 뷰.
+  "supabase/migrations/20260914_compass_integration_bridge.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -395,6 +397,67 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     severity: "warning",
     impact:
       "idx_crm_tasks_status_completed_at이 없어도 기능은 정상이나, /api/admin/crm/manager-report의 기간 내 완료 집계가 done 누적 전체 스캔이 되고 그 비용은 시간이 지날수록 커진다.",
+  },
+  // ── Compass 연동 브리지 2차(2026-09-14) ─────────────────────────────────
+  // 전부 warning — 아직 소비 코드가 어드민에 없고, Compass(lib/homeBridge.ts)는 뷰가 없으면
+  // available:false 로 조용히 비켜 간다. compass_lead_* 두 뷰는 Compass 배포(crm.lead_refs·
+  // crm.lead_contact_facts_v 생성) 뒤 이 마이그레이션을 재실행해야 생긴다(to_regclass 가드).
+  // norm_phone_key() 는 역브리지 뷰가 호출하므로 뷰 프로브가 함수 존재까지 함께 증명한다.
+  {
+    kind: "table",
+    table: "compass_lead_refs_v",
+    label: "Compass 시스템 간 링크 브리지 뷰(crm.lead_refs)",
+    columns: ["lead_id", "system", "external_id", "matched_by", "created_at"],
+    migration: "supabase/migrations/20260914_compass_integration_bridge.sql",
+    severity: "warning",
+    impact:
+      "홈페이지 리드·leadgen·채널톡 대화가 어느 Compass 리드에 붙었는지 id 로 알 수 없어 전화 키 폴백 매칭만 남는다. Compass 배포 뒤 재실행이 필요하다.",
+  },
+  {
+    kind: "table",
+    table: "compass_lead_contact_v",
+    label: "Compass 리드별 연락 사실 브리지 뷰(crm.lead_contact_facts_v)",
+    columns: ["lead_id", "latest_inflow_at", "first_attempt_at", "first_connected_at", "missed_since_inflow", "sms_since_inflow"],
+    migration: "supabase/migrations/20260914_compass_integration_bridge.sql",
+    severity: "warning",
+    impact:
+      "어드민이 Compass 와 같은 '연락함' 정의를 읽을 수 없어 활동 body 를 따로 해석해야 한다. Compass 배포 뒤 재실행이 필요하다.",
+  },
+  {
+    kind: "table",
+    table: "home_owner_directory_v",
+    label: "담당자 디렉터리 역브리지 뷰(admin_profiles → Compass)",
+    columns: ["display_name", "crm_owner_key", "crm_owner_aliases", "neo_owner_id", "crm_sort_order"],
+    migration: "supabase/migrations/20260914_compass_integration_bridge.sql",
+    severity: "warning",
+    impact: "Compass 가 담당자 ↔ NEO owner 매핑을 어드민 원본에서 읽지 못하고 자체 상수를 계속 쓴다.",
+  },
+  {
+    kind: "table",
+    table: "home_neo_accounts_v",
+    label: "NEO 고객 요약 역브리지 뷰(crm_neo_customer_snapshots → Compass)",
+    columns: ["source_system", "account_id", "owner_name", "phone_key", "expire_at", "risk_level"],
+    migration: "supabase/migrations/20260914_compass_integration_bridge.sql",
+    severity: "warning",
+    impact: "Compass 네오CRM 푸시 전 '이미 NEO 고객' 검사와 리드 상세 NEO 패널이 비활성으로 남는다.",
+  },
+  {
+    kind: "table",
+    table: "home_site_leads_v",
+    label: "홈페이지 문의 집계 역브리지 뷰(leads → Compass, PII 제외)",
+    columns: ["phone_key", "n", "last_at", "last_inflow_at", "last_source", "last_status"],
+    migration: "supabase/migrations/20260914_compass_integration_bridge.sql",
+    severity: "warning",
+    impact: "Compass 리드 상세에 '홈페이지 문의 N건'이 표시되지 않는다.",
+  },
+  {
+    kind: "table",
+    table: "home_channel_contacts_v",
+    label: "채널톡 상담 집계 역브리지 뷰(channel_conversations → Compass, 본문 제외)",
+    columns: ["phone_key", "conversations", "messages", "last_message_at", "matched_home_lead"],
+    migration: "supabase/migrations/20260914_compass_integration_bridge.sql",
+    severity: "warning",
+    impact: "Compass 리드 상세에 '채널톡 N건'이 표시되지 않는다.",
   },
 ]
 
