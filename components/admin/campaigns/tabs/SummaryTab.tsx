@@ -10,6 +10,7 @@ import type {
   BriefingCardProps,
   BriefingContent,
 } from "@/components/admin/campaigns/perf/BriefingCard"
+import { AttributionFunnelCard } from "@/components/admin/campaigns/perf/AttributionFunnelCard"
 import { ChannelCoverageMatrix } from "@/components/admin/campaigns/perf/ChannelCoverageMatrix"
 import { ChannelLiveStrip } from "@/components/admin/campaigns/perf/ChannelLiveStrip"
 import { FunnelCard } from "@/components/admin/campaigns/perf/FunnelCard"
@@ -647,6 +648,15 @@ export default function SummaryTab({
               </div>
               <div className="order-7">
                 <FunnelCard funnel={data.funnel} metaMeasured={metaMeasured} />
+              </div>
+              {/* 귀속 폭포 — 퍼널 카드 바로 아래. 둘 다 '퍼널'이지만 축이 다르다:
+                  위는 리드가 고객이 되는 과정, 여기는 리드에 출처를 붙일 수 있는가.
+                  떨어뜨려 놓으면 같은 걸 두 번 그린 것처럼 읽힌다. */}
+              <div className="order-7">
+                <AttributionFunnelCard
+                  funnel={data.attributionFunnel}
+                  leadsMeasured={data.kpis.leads.value != null}
+                />
               </div>
               <div className="order-8">
                 <UpdatesFeed

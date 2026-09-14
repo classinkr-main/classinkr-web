@@ -90,6 +90,7 @@ function makePerf(overrides: Partial<MarketingPerfResponse> = {}): MarketingPerf
     ],
     channelMix: [],
     channelLive: [],
+    attributionFunnel: { stages: [], byChannel: [], endToEndPct: null },
     updatesFeed: [],
     ...overrides,
   }

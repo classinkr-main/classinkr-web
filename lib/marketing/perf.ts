@@ -5,6 +5,7 @@
 
 import { getLeadSourceGroup, isTestLead, type LeadSourceGroup } from "@/lib/crm/lead-attribution"
 import type { ChannelSpendSummary, LiveAdChannel } from "@/lib/marketing/ad-insights"
+import type { AttributionFunnel } from "@/lib/marketing/attribution-funnel"
 import type { LeadRecord } from "@/lib/repositories/leads"
 import { AD_CHANNELS, type AdChannel } from "@/lib/types/event-metrics"
 import type { CampaignUpdate } from "@/lib/types/marketing-campaign"
@@ -402,6 +403,12 @@ export interface MarketingPerfResponse {
    * 판정은 mergeSameCurrency 가 하고, 화면이 그 결과로만 합계 칸을 채운다.
    */
   channelLive: PerfChannelLive[]
+  /**
+   * 귀속 폭포 — 이 기간 리드가 "어느 광고가 데려왔나"까지 가는 길에서 어디서 끊기는지.
+   * 위 funnel(광고 리드의 단계 전환)과 다른 축이다: 저쪽은 "리드가 고객이 되는 과정",
+   * 이쪽은 "리드에 출처를 붙일 수 있는가". 둘을 같은 카드에 섞으면 안 된다.
+   */
+  attributionFunnel: AttributionFunnel
   updatesFeed: CampaignUpdate[]
 }
 

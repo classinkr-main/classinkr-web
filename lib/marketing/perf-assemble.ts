@@ -31,6 +31,7 @@ import {
   type AdInsightRow,
   type LiveAdChannel,
 } from "@/lib/marketing/ad-insights"
+import { buildAttributionFunnel } from "@/lib/marketing/attribution-funnel"
 import { detectAnomalies } from "@/lib/marketing/anomaly"
 import { anomalyLoadSince, buildAnomalyCampaignInputs } from "@/lib/marketing/anomaly-input"
 import { isNaverAdConfigured } from "@/lib/naver/searchad"
@@ -513,6 +514,10 @@ export async function assembleMarketingPerf(
     leadDailyBySource: aggregateLeadDailyBySource(currentLeadDaily),
     channelMix,
     channelLive,
+    // currentLeads 는 이미 이 기간으로 잘렸고 테스트 리드도 빠져 있다 — 폭포는 기간 필터를
+    // 하지 않으므로(테스트 리드만 다시 거른다) 그대로 넘긴다.
+    // 소스 실패(leads === null)면 빈 배열이라 전 단계 0 · 비율 null 로 정직하게 떨어진다.
+    attributionFunnel: buildAttributionFunnel(currentLeads),
     updatesFeed,
   }
 }

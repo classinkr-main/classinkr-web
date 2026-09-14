@@ -31,6 +31,7 @@ const FAKE_PERF = {
   leadDailyBySource: {},
   channelMix: [],
   channelLive: [],
+  attributionFunnel: { stages: [], byChannel: [], endToEndPct: null },
   updatesFeed: [],
 }
 
