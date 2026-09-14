@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { checkCronAuth } from "@/lib/server/cron-auth"
 import { runAll } from "@/lib/branch/sync/run-all"
 import { runBranchRevLinkMaintenance } from "@/lib/repositories/crm-source-links"
 
@@ -9,9 +10,9 @@ export async function GET(req: NextRequest) {
   // 본문 실행 전에 전부 401 로 잘렸다. 이 라우트만으로도 인과가 두 번 확인된다:
   // 게이트 추가(2026-06-24) 직후 정지 → 게이트 없는 배포(07-02) 에서 매일 부활 →
   // 재추가(07-07) 직후 다시 정지. 되살리지 말 것. (2026-08-28)
-  const expected = process.env.CRON_SECRET
-  const auth = req.headers.get("authorization") ?? ""
-  if (!expected || auth !== `Bearer ${expected}`) {
+  // 비교는 lib/server/cron-auth 의 timing-safe 헬퍼로 한다.
+  const authResult = checkCronAuth(req)
+  if (authResult !== "ok") {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 })
   }
   const result = await runAll({ trigger: "cron" })

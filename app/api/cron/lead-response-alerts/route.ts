@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { checkCronAuth } from "@/lib/server/cron-auth"
 
 import { sendLeadMorningBrief } from "@/lib/server/lead-morning-brief"
 import { scanLeadResponseAlerts } from "@/lib/server/lead-response-alerts"
@@ -6,17 +7,16 @@ import { scanLeadResponseAlerts } from "@/lib/server/lead-response-alerts"
 export async function GET(request: NextRequest) {
   // 인증은 아래 CRON_SECRET Bearer 하나뿐이다 — Vercel 이 크론에 붙이는 건 그 헤더이지
   // x-vercel-cron 이 아니다. 근거는 app/api/cron/sync-branch/route.ts 주석 참조. (2026-08-28)
+  // 비교는 lib/server/cron-auth 의 timing-safe 헬퍼로 한다.
 
-  const cronSecret = process.env.CRON_SECRET
-  if (!cronSecret) {
+  const authResult = checkCronAuth(request)
+  if (authResult === "missing_secret") {
     return NextResponse.json(
       { error: "CRON_SECRET 환경변수가 설정되지 않았습니다." },
       { status: 401 }
     )
   }
-
-  const authHeader = request.headers.get("authorization")
-  if (authHeader !== `Bearer ${cronSecret}`) {
+  if (authResult !== "ok") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
