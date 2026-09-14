@@ -688,11 +688,24 @@ function SelectedWeekBars({ weeks }: { weeks: RevWeekPoint[] }) {
 }
 
 
-/** 페이지 서버 프리페치가 내려주는 첫 화면 파이프라인 응답 + 그 응답이 대응하는 요청 URL. */
+/**
+ * 페이지 서버 프리페치가 내려주는 첫 화면 파이프라인 레인 + 그 레인이 대응하는 요청 URL.
+ *
+ * 횡단 인프라 개편(2026-09-10 스트리밍 전환) — data(동기 값)가 promise로 바뀌었다. page.tsx가
+ * openPrefetchLane(lib/admin/prefetch-budget.ts)으로 이 레인을 열고 await하지 않는다(TTFB
+ * 0ms) — url·generatedAt은 호출 시점에 이미 알려진 동기 필드라 그대로 두고, 실제 무거운 값
+ * (rows)만 promise 뒤에 남긴다. SalesLedgerWorkbench가 pipelineSeedCandidate(URL이 일치할
+ * 때만)에서만 React use()로 이 promise를 풀어, 딥링크·필터 변경처럼 시드가 애초에 안 맞는
+ * 경우까지 불필요하게 멈추지 않는다.
+ *
+ * lib/admin/prefetch-budget.ts의 DeferredPrefetch<T>와 모양은 같지만 그 타입을 import하지
+ * 않고 다시 선언한다 — 그 모듈은 "server-only"라 이 "use client" 파일이 타입 전용이라도
+ * 참조하지 않는다(이 저장소 기존 관례).
+ */
 export interface LedgerPipelinePrefetch {
   url: string
-  data: BranchPipelineResponse
-  /** 이 프리페치가 서버에서 만들어진 시각(ms epoch) — isPrefetchFresh 판정용(T3). */
+  promise: Promise<BranchPipelineResponse | null>
+  /** 이 프리페치 레인이 열린 시각(ms epoch) — isPrefetchFresh 판정용(T3). */
   generatedAt: number
 }
 

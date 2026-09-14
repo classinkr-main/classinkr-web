@@ -2,7 +2,7 @@
 
 import { memo } from "react"
 import type { Dispatch, ReactNode, SetStateAction } from "react"
-import { ChevronDown, ChevronRight, Clock3 } from "lucide-react"
+import { ChevronDown, ChevronRight, Clock3, X } from "lucide-react"
 
 import type { AdminListPaginationResult } from "@/lib/admin-list-pagination"
 import {
@@ -43,6 +43,10 @@ interface HistoryLogSectionProps {
   toggleLogGroup: (key: string) => void
   renderMovementRow: (movement: HardwareMovement, nested?: boolean) => ReactNode
   setMovementsPage: Dispatch<SetStateAction<number>>
+  // 검색/필터가 활성 상태인지 — 0건이 "데이터 없음"인지 "필터 때문"인지 빈 상태 문구가 구분하려면
+  // 이 컴포넌트가 직접 받는 필터 신호가 필요하다(HistoryTabPanel이 이미 소유한 hasHistoryFilter 전달).
+  hasActiveFilter?: boolean
+  onResetFilters?: () => void
 }
 
 function HistoryLogSection({
@@ -57,6 +61,8 @@ function HistoryLogSection({
   toggleLogGroup,
   renderMovementRow,
   setMovementsPage,
+  hasActiveFilter = false,
+  onResetFilters,
 }: HistoryLogSectionProps) {
   return (
     <section className="overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
@@ -165,7 +171,21 @@ function HistoryLogSection({
             )
           })}
           {logGroupsPagination.totalItems === 0 && (
-            <p className="px-5 py-10 text-center text-[13px] text-[#615D59]">입출고 기록이 없습니다.</p>
+            <div className="flex flex-col items-center gap-3 px-5 py-10 text-center">
+              <p className="text-[13px] text-[#615D59]">
+                {hasActiveFilter ? "검색·필터 조건에 맞는 입출고 기록이 없습니다." : "입출고 기록이 없습니다."}
+              </p>
+              {hasActiveFilter && onResetFilters ? (
+                <button
+                  type="button"
+                  onClick={onResetFilters}
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  필터 초기화
+                </button>
+              ) : null}
+            </div>
           )}
         </div>
       </div>

@@ -38,7 +38,6 @@ import { resolveCrmRouteLabel } from "./crm-route-labels"
 // resolveAdminNavAccess를 호출해야 사이드바·모바일·팔레트·권한 미리보기가 어긋나지 않는다.
 import {
   getAccessibleAdminNavItems,
-  isNavPresetKey,
   normalizeNavOverrides,
   resolveAdminNavAccess,
 } from "./admin-nav-access"
@@ -106,14 +105,17 @@ export const NAV_WARMUP_REQUESTS: Record<string, WarmupEntry[] | (() => WarmupEn
     "/api/admin/settings/integrations/status",
     "/api/admin/bugs",
     "/api/admin/patch-notes?limit=1&summary=1",
-    // 아래 다섯은 OverviewClient.tsx의 인바운드/운영 OS 스트립이 마운트 즉시(코어 Promise.all과
-    // 별개로) 부르는 URL — 지금까지 예열 목록에 없어 첫 진입마다 무조건 콜드 페치였다.
-    // visitor-stats·os-summary는 leads?scope=overview와 같은 이유로 RSC 프리페치가 이미
-    // 계산한다(prefetch.ts, CLICK_SKIP_WARMUP_URLS 참조). branch/summary(연간)·chatbot/stats·
-    // meta/instagram은 "외부 API라 느릴 수 있어 핵심 대시보드와 분리 로드"(OverviewClient 주석)라
-    // RSC 예산 밖이다 — click에서도 그대로 예열한다.
+    // 아래 여섯은 OverviewClient.tsx의 인바운드/운영 OS 스트립이 마운트 즉시(코어 Promise.all과
+    // 별개로) 부르는 URL — 예열 목록에 없으면 첫 진입마다 콜드 페치가 된다.
+    // (2026-09-10) crm/action-kpis 가 빠져 있어 Overview 진입 때마다 콜드였다 — 서버 프리페치가
+    // 계산하긴 하지만 예산 초과·미인증이면 클라이언트가 그대로 부른다. 그 폴백을 데운다.
+    // (2026-09-10) branch/summary(연간)·chatbot/stats 는 이제 RSC 프리페치가 함께 계산한다
+    // (lib/admin/overview/prefetch.ts) — visitor-stats·os-summary 와 같은 이유로 click 예열만
+    // 건너뛴다(CLICK_SKIP_WARMUP_URLS). hover/focus 예열은 폴백 값을 위해 유지한다.
+    // meta/instagram 만 여전히 RSC 예산 밖이다("외부 API라 핵심 대시보드와 분리 로드").
     "/api/admin/visitor-stats?range=7",
     "/api/admin/os-summary?contract=v3",
+    "/api/admin/crm/action-kpis",
     "/api/admin/branch/summary?team=ALL&period=Y",
     overviewChatbotStatsUrl(),
     "/api/admin/meta/instagram?datePreset=last_30d&limit=25",
@@ -331,8 +333,9 @@ export const NAV_WARMUP_REQUESTS: Record<string, WarmupEntry[] | (() => WarmupEn
   // 회원 관리는 Settings "회원" 탭으로 흡수됐지만, 그 패널은 ?tab=members 일 때만 렌더된다 —
   // 기본 진입(general)에서 /api/admin/users는 호출되지 않으므로 데우지 않는다.
   "/admin/settings": ["/api/admin/settings"],
-  // 기본 탭 roadmap. bugs·patch-notes는 각 탭 컴포넌트가 렌더될 때만 부른다.
-  "/admin/dev": ["/api/admin/roadmap"],
+  // 기본 탭 bugs(2026-09-11, 로드맵·공개 기준·데이터 품질·시스템 구조·배포 이력 탭 제거).
+  // patch-notes는 탭 컴포넌트가 렌더될 때만 부른다.
+  "/admin/dev": ["/api/admin/bugs"],
 }
 
 // RSC 프리페치가 이미 같은 데이터를 그 화면 자신의 서버 컴포넌트(app/admin/**\/page.tsx)에서
@@ -345,10 +348,14 @@ export const NAV_WARMUP_REQUESTS: Record<string, WarmupEntry[] | (() => WarmupEn
 // 전역 판단하면 RSC가 없는 화면에서도 잘못 건너뛴다.
 const CLICK_SKIP_WARMUP_URLS: Record<string, string[]> = {
   // lib/admin/overview/prefetch.ts → prefetchOverviewInitialData
+  // (2026-09-10) 프리페치가 6소스로 늘었다 — action-kpis·branch/summary·chatbot/stats 가
+  // 합류했으므로 click 예열에서 함께 빼야 서버 이중 계산이 생기지 않는다.
   "/admin/overview": [
     "/api/admin/leads?scope=overview",
     "/api/admin/visitor-stats?range=7",
     "/api/admin/os-summary?contract=v3",
+    "/api/admin/crm/action-kpis",
+    "/api/admin/branch/summary?team=ALL&period=Y",
   ],
   // lib/admin/crm/home-prefetch.ts → prefetchCrmHomeInitialData
   "/admin/crm": ["/api/admin/crm/action-kpis", "/api/admin/crm/overview"],
@@ -385,7 +392,6 @@ interface Props {
   role: string
   name: string
   email: string
-  navPreset: string | null
   navOverrides: Record<string, string>
 }
 
@@ -400,7 +406,7 @@ export default function AdminSidebar(props: Props) {
   )
 }
 
-function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Props) {
+function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -489,16 +495,16 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
 
   const normalizedRole = normalizeAdminRole(role)
   // 상시/기타 배치는 반드시 resolveAdminNavAccess를 통해서만 계산한다 — 사이드바가 자체 계산을
-  // 하면 나중에 권한 설정 화면의 미리보기와 어긋난다. preset이 없으면(마이그레이션 미적용·
-  // 프리셋 미배정) resolveNavPlacement가 전부 "primary"로 돌려줘 오늘과 동일한 화면을 보장한다.
-  const navAccess = useMemo(() => {
-    const preset = isNavPresetKey(navPreset) ? navPreset : null
-    return resolveAdminNavAccess({
-      role: normalizedRole,
-      preset,
-      overrides: normalizeNavOverrides(navOverrides),
-    })
-  }, [normalizedRole, navPreset, navOverrides])
+  // 하면 권한 설정 화면의 미리보기와 어긋난다. 2026-09-10 전면 공개 이후 목록 자체는 전원
+  // 동일하고, 사람별 오버라이드만 항목의 상시/기타 자리를 옮긴다.
+  const navAccess = useMemo(
+    () =>
+      resolveAdminNavAccess({
+        role: normalizedRole,
+        overrides: normalizeNavOverrides(navOverrides),
+      }),
+    [normalizedRole, navOverrides]
+  )
   const accessibleNav = useMemo(() => getAccessibleAdminNavItems(navAccess), [navAccess])
   const isNavActive = (href: string) =>
     matchNavActive(href, { pathname, searchParams, siblings: accessibleNav })

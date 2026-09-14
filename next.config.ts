@@ -161,6 +161,40 @@ const nextConfig: NextConfig = {
       dynamic: 180,
     },
   },
+  // 클라이언트 캐시·번들 규약 점검(2026-09-10) — recharts가 어드민 청크에 중복된다는 실측
+  // 후보안. **의도적으로 비활성 상태(주석)로 남긴다** — npm run build 금지(.next 경합, 이
+  // 세션의 제약)로 (a) 이 저장소의 실제 프로덕션 빌드가 webpack인지(Turbopack이면 이 훅
+  // 자체가 무시된다), (b) config.optimization.splitChunks.cacheGroups가 이 시점에 정말
+  // 존재해 안전하게 병합되는지 확인할 방법이 없다. 잘못되면 공개 사이트 전체 빌드가
+  // 깨지는데, 지금은 그 실패를 다음 `npm run build`가 아니면 아무도 못 잡는다.
+  //
+  // 실측 근거(코드만으로 확인, 두 세션 교차 확인):
+  //  - `.next/static/chunks/*.js` 중 recharts/ResponsiveContainer 시그니처를 포함하는 파일이
+  //    288,520 bytes(≈282KB) 동일 크기로 5개(overview·crm·branch/ledger·traffic·공개 홈),
+  //    MD5는 전부 달라 각자 독립적으로 재번들된 사본임을 확인(횡단 인프라 감사 2026-09-10).
+  //  - 같은 방식으로 별도 확인(클라이언트 캐시·번들 규약 점검) — 76,870 bytes(≈75KB, BarChart
+  //    단독 조합으로 추정) 크기의 chunk가 6개 더 있고, CRM(2개)·traffic·branch/ledger+analytics
+  //    (공유)·공개 홈·overview에 각각 걸려 있다 — 같은 원인(라우트 경계를 넘는 코드 스플리팅
+  //    공유가 기본 webpack 설정에서 일어나지 않음)이 서로 다른 recharts 하위 조합에서도
+  //    반복된다는 2차 증거.
+  //  - `optimizePackageImports`에 recharts를 추가하는 것은 이미 무의미하다 — Next 16.2.4가
+  //    기본 목록에 포함하고 있음을 node_modules/next/dist/server/config.js에서 직접 확인함.
+  //
+  // 적용 후보(오케스트레이터가 최종 `npm run build`를 돌릴 때 시도 — 성공하면 위 11개
+  // 청크가 recharts-vendor 계열 1~2개로 합쳐지는지 react-loadable-manifest.json으로 검증):
+  //
+  // webpack(config, { isServer }) {
+  //   if (!isServer) {
+  //     config.optimization.splitChunks.cacheGroups.rechartsVendor = {
+  //       test: /[\\/]node_modules[\\/](recharts|d3-[^/]+|react-smooth|victory-vendor|decimal\.js-light|internmap|delaunator|robust-predicates)[\\/]/,
+  //       name: "recharts-vendor",
+  //       chunks: "all",
+  //       priority: 30,
+  //       reuseExistingChunk: true,
+  //     }
+  //   }
+  //   return config
+  // },
   async headers() {
     return [
       {

@@ -5,9 +5,10 @@ import { describe, expect, it } from "vitest"
 
 import { ADMIN_NAV } from "@/components/admin/admin-nav"
 import {
+  DEFAULT_PRIMARY_HREFS,
   getAccessibleAdminNavItems,
-  NAV_PRESETS,
   resolveAdminNavAccess,
+  normalizeNavOverrides,
   resolveNavAccess,
   resolveNavPlacement,
   type NavAccessContext,
@@ -60,7 +61,7 @@ describe("admin nav — 기타 범주 메타", () => {
 
   // resolveNavAccess(Task 2)는 ADMIN_NAV 선언 순서를 그대로 상시 목록 순서로 쓴다.
   // 따라서 사이드바 순서는 이 배열 순서로만 표현된다 — 렌더에서 다시 정렬하지 않는다.
-  it("declares the 6 primary candidates in sidebar order, 캘린더 first", () => {
+  it("declares the sidebar order used by DEFAULT_PRIMARY_HREFS", () => {
     // CS 진입점 단일화(2026-08-18): 가이드 문서·내부 CS 상시 후보가 CS 콘솔 하나로 흡수됐다.
     // CS 콘솔은 고객·매출 범주라 그 블록 끝(하드웨어 재고 뒤)에 선언된다 — 선언이 범주 연속
     // 블록이어야 상시 범주 묶음(primaryGroups)이 재정렬 없는 분할로 남는다.
@@ -104,150 +105,109 @@ describe("admin nav — 기타 범주 메타", () => {
 
 const ctx = (over: Partial<NavAccessContext> = {}): NavAccessContext => ({
   role: "ADMIN",
-  preset: "staff",
   overrides: {},
   ...over,
 })
 
-describe("resolveNavPlacement", () => {
-  it("falls back to legacy role behaviour when no preset is assigned", () => {
-    // preset=null이면 오늘과 완전히 동일해야 한다 — 배포 시점 무변화가 이 설계의 안전장치다.
-    expect(resolveNavPlacement("/admin/settings", ctx({ preset: null }))).toBe("primary")
-    expect(resolveNavPlacement("/admin/crm", ctx({ preset: null }))).toBe("primary")
+/** 전면 공개 전환 이후 배치가 역할·프리셋과 무관함을 확인할 때 쓰는 표본. */
+const EVERY_ROLE = ["SUPER_ADMIN", "ADMIN", "BRANCH", "EDITOR", "VIEWER", "PARTNER"] as const
+const EVERY_LEGACY_PRESET = ["staff", "sales", "marketing", "cs", "lead", "branch", "super"] as const
+
+describe("resolveNavPlacement — 전원 공통 배치", () => {
+  it("상시 8개는 DEFAULT_PRIMARY_HREFS 그대로다", () => {
+    for (const href of DEFAULT_PRIMARY_HREFS) {
+      expect(resolveNavPlacement(href, ctx()), href).toBe("primary")
+    }
+    expect(DEFAULT_PRIMARY_HREFS).toHaveLength(8)
   })
 
-  it("denies MOON_ONLY tabs for every non-super preset", () => {
-    for (const preset of ["staff", "sales", "marketing", "cs", "lead", "branch"] as const) {
-      expect(resolveNavPlacement("/admin/settings", ctx({ preset })), preset).toBe("deny")
-      expect(resolveNavPlacement("/admin/overview", ctx({ preset })), preset).toBe("deny")
+  it("나머지는 전부 기타로 접힌다", () => {
+    const rest = ADMIN_NAV.map((item) => item.href).filter(
+      (href) => !DEFAULT_PRIMARY_HREFS.includes(href)
+    )
+    expect(rest).toHaveLength(9)
+    for (const href of rest) {
+      expect(resolveNavPlacement(href, ctx()), href).toBe("folded")
     }
   })
 
-  it("keeps the CS console open and primary for every preset (2026-08-18 진입점 단일화)", () => {
-    // 가이드 문서·내부 CS의 nav 항목이 콘솔로 흡수됐다 — 콘솔이 유일한 CS 진입점이므로
-    // 어떤 프리셋도 차단하지 않고, "전원 상시"(구 가이드 문서 자리)를 승계한다.
-    for (const preset of ["staff", "sales", "marketing", "cs", "lead", "branch", "super"] as const) {
-      expect(resolveNavPlacement("/admin/chatbot", ctx({ preset })), preset).toBe("primary")
+  // 이 테스트가 "모든 매니저가 같은 사이드바를 본다"를 고정한다.
+  // 역할·레거시 프리셋 어떤 조합에서도 배치가 흔들리면 안 된다.
+  it("역할·레거시 프리셋과 무관하게 같은 배치를 낸다", () => {
+    for (const item of ADMIN_NAV) {
+      const expected = resolveNavPlacement(item.href, ctx())
+      for (const role of EVERY_ROLE) {
+        for (const preset of EVERY_LEGACY_PRESET) {
+          expect(
+            resolveNavPlacement(item.href, ctx({ role, preset })),
+            `${item.href} / ${role} / ${preset}`
+          ).toBe(expected)
+        }
+      }
     }
   })
 
-  it("restricts 매출 장부 to lead/branch and Analytics to lead", () => {
-    expect(resolveNavPlacement("/admin/branch/ledger", ctx({ preset: "lead" }))).toBe("folded")
-    expect(resolveNavPlacement("/admin/branch/ledger", ctx({ preset: "marketing" }))).toBe("deny")
-    expect(resolveNavPlacement("/admin/analytics", ctx({ preset: "lead" }))).toBe("folded")
-    expect(resolveNavPlacement("/admin/analytics", ctx({ preset: "branch" }))).toBe("deny")
+  it("사람별 오버라이드는 상시↔기타 두 자리만 옮긴다", () => {
+    expect(resolveNavPlacement("/admin/analytics", ctx({ overrides: { "/admin/analytics": "primary" } }))).toBe("primary")
+    expect(resolveNavPlacement("/admin/crm", ctx({ overrides: { "/admin/crm": "folded" } }))).toBe("folded")
   })
+})
 
-  it("promotes 매출 장부 to primary for the branch preset that declares it", () => {
-    expect(resolveNavPlacement("/admin/branch/ledger", ctx({ preset: "branch" }))).toBe("primary")
-  })
-
-  it("folds every OPEN tab the preset did not promote", () => {
-    expect(resolveNavPlacement("/admin/calendar", ctx({ preset: "cs" }))).toBe("primary")
-    expect(resolveNavPlacement("/admin/hardware", ctx({ preset: "cs" }))).toBe("folded")
-  })
-
-  it("lets an override promote, demote, or grant access", () => {
-    const granted = ctx({ preset: "marketing", overrides: { "/admin/branch/ledger": "folded" } })
-    expect(resolveNavPlacement("/admin/branch/ledger", granted)).toBe("folded")
-
-    const promoted = ctx({ preset: "cs", overrides: { "/admin/hardware": "primary" } })
-    expect(resolveNavPlacement("/admin/hardware", promoted)).toBe("primary")
-
-    const revoked = ctx({ preset: "lead", overrides: { "/admin/analytics": "deny" } })
-    expect(resolveNavPlacement("/admin/analytics", revoked)).toBe("deny")
-  })
-
-  it("never denies SUPER_ADMIN, even with a deny override", () => {
-    // 슈퍼 관리자가 자기 설정 화면을 잠그면 복구 경로가 없다.
-    // 단 배치(상시/기타)까지 무시하지는 않는다 — 문준혁도 접힌 사이드바를 본다.
-    const locked = ctx({
-      role: "SUPER_ADMIN",
-      preset: "staff",
-      overrides: { "/admin/settings": "deny" },
+describe("normalizeNavOverrides — 레거시 deny 처리", () => {
+  // 전면 공개 전에 저장된 {"/admin/settings":"deny"} 같은 값이 DB에 남아 있다.
+  // 그냥 버리면 숨겨 뒀던 항목이 상시로 튀어오르고, 남겨두면 전환이 무의미해진다.
+  it("deny 를 folded 로 강등한다 — 버리지도, 차단하지도 않는다", () => {
+    const normalized = normalizeNavOverrides({
+      "/admin/settings": "deny",
+      "/admin/analytics": "primary",
+      "/admin/없는탭": "deny",
+      "/admin/crm": "이상한값",
     })
-    expect(resolveNavPlacement("/admin/settings", locked)).not.toBe("deny")
+    expect(normalized).toEqual({
+      "/admin/settings": "folded",
+      "/admin/analytics": "primary",
+    })
+  })
+
+  it("deny 오버라이드가 있어도 항목이 사라지지 않는다", () => {
+    // 레거시 DB 값을 그대로 흉내 낸다 — 타입에서는 "deny" 가 사라졌으므로 정규화 입구로 넣는다.
+    const legacyOverrides = normalizeNavOverrides({ "/admin/settings": "deny" })
+    const access = resolveAdminNavAccess(ctx({ overrides: legacyOverrides }))
+    const hrefs = getAccessibleAdminNavItems(access).map((item) => item.href)
+    expect(hrefs).toContain("/admin/settings")
+    expect(access.folded.flatMap((group) => group.items).map((item) => item.href)).toContain(
+      "/admin/settings"
+    )
   })
 })
 
 describe("resolveNavAccess", () => {
-  it("splits the cs preset into 4 primary items in declaration order", () => {
-    // 내부 CS 상시가 콘솔로 흡수돼 cs 프리셋 상시는 캘린더·견적·CS 콘솔이고,
-    // 사이드바 평탄화(CRM 드릴인 제거)로 CRM 이 전 프리셋 상시에 합류했다.
-    const { primary } = resolveNavAccess(ctx({ preset: "cs" }))
-    expect(primary.map((item) => item.href)).toEqual([
-      "/admin/calendar",
-      "/admin/crm",
-      "/admin/quotes",
-      "/admin/chatbot",
-    ])
-  })
-
-  it("folds the reachable rest and hides the denied ones", () => {
-    const { folded } = resolveNavAccess(ctx({ preset: "cs" }))
-    const foldedHrefs = folded.flatMap((group) => group.items.map((item) => item.href))
-    // CRM 은 상시로 올라가 더는 접히지 않는다.
-    expect(foldedHrefs).not.toContain("/admin/crm")
-    expect(foldedHrefs).toContain("/admin/hardware")
-    expect(foldedHrefs).not.toContain("/admin/settings")
-    expect(foldedHrefs).not.toContain("/admin/branch/ledger")
-  })
-
-  it("orders folded groups 고객·매출 → 마케팅·분석 → 시스템 and drops empty ones", () => {
-    const { folded } = resolveNavAccess(ctx({ preset: "cs" }))
-    // cs 프리셋에서 시스템 범주 항목(overview·ops·settings·dev)은 전부 차단이라
-    // 시스템 그룹은 비어 사라진다.
-    expect(folded.map((group) => group.category)).toEqual(["customer", "growth"])
-    expect(folded.every((group) => group.items.length > 0)).toBe(true)
-  })
-
-  it("gives super 8 primary and 9 folded", () => {
-    // CS 진입점 단일화로 상시 7 → 6(CS 콘솔), 여기에 CRM 상시 합류로 7,
-    // Overview 상시 승격(2026-09-04)으로 8. 전체 17 = 8 + 9.
-    const { primary, folded } = resolveNavAccess(ctx({ role: "SUPER_ADMIN", preset: "super" }))
+  it("상시 8 / 기타 9 로 나눈다", () => {
+    const { primary, folded } = resolveNavAccess(ctx())
     expect(primary).toHaveLength(8)
     expect(folded.flatMap((group) => group.items)).toHaveLength(9)
   })
 
-  it("puts Overview first in super's primary list", () => {
-    // 선언 순서(ADMIN_NAV 맨 앞 + home 범주)만으로는 부족하다 — NAV_PRESETS.super.primary 에
-    // 없으면 folded 로 떨어져 사이드바 첫 항목이 캘린더가 된다. 이 테스트가 그 회귀를 막는다.
-    const access = resolveNavAccess(ctx({ role: "SUPER_ADMIN", preset: "super" }))
+  it("Overview 가 상시 첫 항목이고 home 이 첫 그룹이다", () => {
+    const access = resolveNavAccess(ctx())
     expect(access.primary[0]?.href).toBe("/admin/overview")
     expect(access.primaryGroups[0]?.category).toBe("home")
-    expect(access.folded.flatMap((group) => group.items).map((item) => item.href)).not.toContain(
-      "/admin/overview"
-    )
   })
 
-  // 상시 범주 묶음(2026-08-18) — 소제목 렌더는 이 두 필드가 SSOT다.
-  it("partitions primary into category groups without reordering", () => {
-    const access = resolveNavAccess(ctx({ role: "SUPER_ADMIN", preset: "super" }))
+  it("상시를 재정렬 없이 범주로 분할한다 — 홈 + 고객·매출", () => {
+    const access = resolveNavAccess(ctx())
     expect(access.primaryGroups.flatMap((group) => group.items)).toEqual(access.primary)
-    expect(access.primaryGroups.map((group) => group.category)).toEqual([
-      "home",
-      "customer",
-      "growth",
-    ])
+    expect(access.primaryGroups.map((group) => group.category)).toEqual(["home", "customer"])
   })
 
-  it("shows primary headers only for 2+ groups and 4+ items", () => {
-    // staff(2항목)·cs(3항목)는 평면 — 항목보다 헤더가 많아지는 걸 막는다(§4.1).
-    expect(resolveNavAccess(ctx({ preset: "staff" })).showPrimaryHeaders).toBe(false)
-    expect(resolveNavAccess(ctx({ preset: "cs" })).showPrimaryHeaders).toBe(false)
-    // sales는 4항목이지만 전부 고객·매출 한 범주라 소제목이 무의미하다 — 평면.
-    expect(resolveNavAccess(ctx({ preset: "sales" })).showPrimaryHeaders).toBe(false)
-    // super·lead(6항목·2범주)는 소제목을 켠다.
-    expect(resolveNavAccess(ctx({ role: "SUPER_ADMIN", preset: "super" })).showPrimaryHeaders).toBe(true)
-    expect(resolveNavAccess(ctx({ preset: "lead" })).showPrimaryHeaders).toBe(true)
-    // 프리셋 미배정(레거시)은 전 항목 상시 — 17항목 3범주라 소제목이 켜진다.
-    expect(resolveNavAccess(ctx({ preset: null })).showPrimaryHeaders).toBe(true)
+  it("기타를 마케팅·분석 → 시스템 순서로 묶는다", () => {
+    const { folded } = resolveNavAccess(ctx())
+    expect(folded.map((group) => group.category)).toEqual(["growth", "system"])
+    expect(folded.every((group) => group.items.length > 0)).toBe(true)
   })
 
-  it("declares a primary set for every preset key", () => {
-    for (const key of Object.keys(NAV_PRESETS)) {
-      expect(NAV_PRESETS[key as keyof typeof NAV_PRESETS].primary.length, key).toBeGreaterThan(0)
-    }
+  it("상시 소제목을 켠다 — 8항목 2범주", () => {
+    expect(resolveNavAccess(ctx()).showPrimaryHeaders).toBe(true)
   })
 })
 
@@ -255,15 +215,19 @@ describe("resolveAdminNavAccess", () => {
   const hrefs = (over: Partial<NavAccessContext> = {}) =>
     getAccessibleAdminNavItems(resolveAdminNavAccess(ctx(over))).map((item) => item.href)
 
-  it("applies role visibility before preset placement", () => {
-    expect(hrefs({ role: "EDITOR", preset: null })).not.toContain("/admin/settings")
-    expect(hrefs({ role: "SUPER_ADMIN", preset: null })).toContain("/admin/settings")
+  // 전면 공개의 핵심 계약 — 어떤 역할도 항목을 잃지 않는다.
+  it("모든 역할이 17개 탭 전부에 도달한다", () => {
+    for (const role of EVERY_ROLE) {
+      expect(hrefs({ role }), role).toHaveLength(ADMIN_NAV.length)
+      expect(hrefs({ role }), role).toContain("/admin/settings")
+      expect(hrefs({ role }), role).toContain("/admin/overview")
+      expect(hrefs({ role }), role).toContain("/admin/dev")
+    }
   })
 
-  it("normalizes legacy role casing and overrides", () => {
-    expect(hrefs({ role: "admin", overrides: { "/admin/chatbot": "deny" } })).not.toContain(
-      "/admin/chatbot"
-    )
+  it("레거시 소문자 role 도 같은 결과를 낸다", () => {
+    expect(hrefs({ role: "admin" })).toEqual(hrefs({ role: "ADMIN" }))
+    expect(hrefs({ role: "branch" })).toEqual(hrefs({ role: "BRANCH" }))
   })
 })
 

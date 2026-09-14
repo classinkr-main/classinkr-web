@@ -10,6 +10,7 @@ import {
   formatDate,
   formatNumber,
   PaginationControls,
+  QuickMoveButton,
   SectionHeader,
   type HardwareAlert,
   type HardwareMovement,
@@ -26,6 +27,12 @@ interface AlertsOutboundSectionsProps {
   mutedAlerts: HardwareAlert[]
   outboundPagination: AdminListPaginationResult<HardwareMovement>
   setOutboundPage: Dispatch<SetStateAction<number>>
+  // 감사(2026-09-11) — 알림 카드에 판매/예정/입고 원탭 액션을 붙이는 데 쓴다(StockLevelsSection과
+  // 동일한 QuickMoveButton 재사용). alert.itemId를 그대로 넘긴다.
+  prepareQuickEntry: (itemId: string, presetKey: string) => void
+  // "나간 기록" 행 클릭 → 상세 시트(MovementDetailSheet)를 연다. 내역 탭 HistoryLogSection과
+  // 같은 role="button"+onClick+onKeyDown 패턴(이 파일 하단).
+  setDetailId: Dispatch<SetStateAction<string | null>>
 }
 
 function AlertsOutboundSections({
@@ -36,6 +43,8 @@ function AlertsOutboundSections({
   mutedAlerts,
   outboundPagination,
   setOutboundPage,
+  prepareQuickEntry,
+  setDetailId,
 }: AlertsOutboundSectionsProps) {
   const [mutedOpen, setMutedOpen] = useState(false)
   return (
@@ -58,8 +67,19 @@ function AlertsOutboundSections({
               ) : (
                 alertsPagination.pageItems.map((alert) => (
                   <div key={alert.id} className={`rounded-lg border px-3 py-2.5 ${ALERT_TONE[alert.severity]}`}>
-                    <p className="text-[12px] font-bold">{alert.product} · {alert.title}</p>
-                    <p className="mt-1 text-[11px] opacity-95">{alert.detail}</p>
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-[12px] font-bold">{alert.product} · {alert.title}</p>
+                        <p className="mt-1 text-[11px] opacity-95">{alert.detail}</p>
+                      </div>
+                      {/* 원탭 조치 — StockLevelsSection 재고행과 같은 QuickMoveButton 재사용. bg-white로
+                          알림 톤 배경(빨강/주황/그린 옅은 배경) 위에서도 버튼 hover 색이 또렷하게 남는다. */}
+                      <div className="inline-flex shrink-0 rounded-md border border-[rgba(0,0,0,0.08)] bg-white p-0.5">
+                        <QuickMoveButton kind="sale" bare product={alert.product} onClick={() => prepareQuickEntry(alert.itemId, "sale")} />
+                        <QuickMoveButton kind="planned" bare product={alert.product} onClick={() => prepareQuickEntry(alert.itemId, "planned")} />
+                        <QuickMoveButton kind="inbound" bare product={alert.product} onClick={() => prepareQuickEntry(alert.itemId, "inbound")} />
+                      </div>
+                    </div>
                   </div>
                 ))
               )}
@@ -117,7 +137,19 @@ function AlertsOutboundSections({
                 <p className="px-5 py-8 text-center text-[13px] text-[#615D59]">출고 기록이 없습니다.</p>
               ) : (
                 outboundPagination.pageItems.map((movement) => (
-                  <div key={movement.id} className="grid gap-3 px-5 py-3 md:grid-cols-[1.1fr_1fr_120px] md:items-center">
+                  <div
+                    key={movement.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setDetailId(movement.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault()
+                        setDetailId(movement.id)
+                      }
+                    }}
+                    className="grid cursor-pointer gap-3 px-5 py-3 transition hover:bg-[#FAFAF8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 md:grid-cols-[1.1fr_1fr_120px] md:items-center"
+                  >
                     <div className="min-w-0">
                       <p title={movement.to_location ?? "도착지 미정"} className="truncate text-[13px] font-bold text-[#111110]">{movement.to_location ?? "도착지 미정"}</p>
                       <p className="mt-1 text-[11px] text-[#615D59]">

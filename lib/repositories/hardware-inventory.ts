@@ -170,6 +170,9 @@ export interface HardwareStockRow {
 export interface HardwareAlert {
   id: string
   severity: "critical" | "warning" | "info"
+  // 알림이 가리키는 품목의 id — 알림 카드의 원탭 조치(QuickMoveButton)가 prepareQuickEntry로
+  // 바로 시트를 여는 데 쓴다. id(`${prefix}-${itemId}`)에서 역파싱하지 않고 필드로 직접 싣는다.
+  itemId: string
   product: string
   title: string
   detail: string
@@ -189,6 +192,10 @@ export interface HardwareDashboard {
   // 최신순 상위 2000행(정렬·voided 제외는 여기서 끝난 상태). 최근 출고·예정 큐는 이 배열의
   // 부분집합이라 따로 싣지 않는다 — 클라이언트가 movement_type·planned로 그대로 파생한다(T5-A).
   movements: HardwareMovementView[]
+  // 감사(2026-09-07 #7) — 무효 아닌(voided_at null) 전체 이동 건수. movements.length가 이 값보다
+  // 작으면 2000건 캡에 걸려 잘린 상태 — 화면에서 감지 가능하게 하고, 그 너머는
+  // getHardwareMovementsPage로 명시적으로 더 불러올 수 있다.
+  movementsTotal: number
   alerts: HardwareAlert[]
   totals: {
     warehouseStock: number
@@ -207,6 +214,13 @@ export interface HardwareDashboard {
     rows_skipped: number | null
     error: string | null
   } | null
+  // 감사(2026-09-07 #1): replace_hardware_sheet_import RPC가 구버전(20260630 마이그레이션 미적용)이면
+  // amount_usd/amount_cny/unit_price/importer 컬럼을 못 채우고 recoverMoneyFromRaw가 raw JSON에서
+  // 조용히 복구한다. recoveredFromRawCount > 0이면 그 상태가 지금도 살아 있다는 뜻 — 화면에 노출해
+  // "괜찮아 보이지만 실은 raw 백업으로 버티는 중"을 감지 가능하게 만든다(마이그 적용 전 0이 될 수 없다).
+  importCosting: {
+    recoveredFromRawCount: number
+  }
 }
 
 export interface HardwareSheetImportResult {
@@ -223,6 +237,12 @@ const DEFAULT_REPAIR_LOCATION = "수리"
 const DEFAULT_CUSTOMER_LOCATION = "고객"
 const DEFAULT_SAMPLE_LOCATION = "샘플"
 const TREND_WINDOW_DAYS = 30
+// 기본 대시보드 응답에 싣는 최신 이동 건수 상한. 기존 계약(T5-A) 그대로 — 홈 요약·검색·입출고
+// 탭 등 기존 소비처가 이 배열 전체를 집계에 쓰므로 기본값 자체는 줄이지 않는다(#7 감사 메모 참고).
+// 그 너머는 getHardwareMovementsPage로 명시적으로 페이지를 요청해야 한다.
+const HARDWARE_MOVEMENTS_DEFAULT_LIMIT = 2000
+// 명시적 페이지 요청(getHardwareMovementsPage) 1회당 상한 — 남용 방지.
+const HARDWARE_MOVEMENTS_MAX_PAGE_LIMIT = 2000
 
 function cleanString(value: unknown): string | null {
   if (value == null) return null
@@ -381,10 +401,42 @@ function recoverMoneyFromRaw<T extends Pick<HardwareMovement, "raw" | "amount_us
   })
 }
 
+// 감사(2026-09-07 #1) — recoverMoneyFromRaw는 건드리지 않는다(동작 변경 없음). 이 함수는 같은
+// 조건을 "감지"만 별도로 한다: 시트 이관(sheet_import) 행인데 대시보드용 컬럼이 비어 있어
+// raw JSON에서 실제로 값을 끌어왔는지. admin_manual 행은 처음부터 컬럼에 값이 들어가므로
+// 이 신호와 무관하다(recoverMoneyFromRaw가 아무것도 안 바꾸는 no-op 케이스).
+function isMoneyRecoveredFromRaw(
+  row: Pick<HardwareMovement, "raw" | "amount_usd" | "amount_cny" | "unit_price" | "importer" | "source">
+): boolean {
+  if (row.source !== "sheet_import") return false
+  const raw = isRecord(row.raw) ? row.raw : {}
+  const rawHasNum = (key: string) => {
+    const value = raw[key]
+    return typeof value === "number" && Number.isFinite(value)
+  }
+  const rawHasStr = (key: string) => {
+    const value = raw[key]
+    return typeof value === "string" && value.trim().length > 0
+  }
+  return (
+    (row.amount_usd == null && rawHasNum("amount_usd")) ||
+    (row.amount_cny == null && rawHasNum("amount_cny")) ||
+    (row.unit_price == null && rawHasNum("unit_price")) ||
+    (row.importer == null && rawHasStr("importer"))
+  )
+}
+
 // 시트 임포트 경로는 listCurrentSheetImportMovements가 따로 전량(select "*")을 읽으므로 무관하다.
-async function listAllHardwareMovements(): Promise<HardwareMovementLedgerRow[]> {
+async function listAllHardwareMovements(): Promise<{
+  rows: HardwareMovementLedgerRow[]
+  moneyRecoveredFromRawCount: number
+}> {
   const rows = await listAll<HardwareMovementLedgerRow>("hardware_movements", HARDWARE_MOVEMENT_LEDGER_COLUMNS)
-  return recoverMoneyFromRaw(rows)
+  // recoveredFromRawCount는 병합 전(raw 컬럼 원본) 기준으로 세야 한다 — recoverMoneyFromRaw가
+  // 이미 병합한 뒤에는 "컬럼이 비어 있었는지"를 되돌릴 수 없다(값이 있으면 원래 컬럼인지 복구인지
+  // 구분 불가).
+  const moneyRecoveredFromRawCount = rows.reduce((count, row) => count + (isMoneyRecoveredFromRaw(row) ? 1 : 0), 0)
+  return { rows: recoverMoneyFromRaw(rows), moneyRecoveredFromRawCount }
 }
 
 export interface HardwareCustomerLink {
@@ -1444,6 +1496,76 @@ export async function importHardwareFromBranchSheets(
   }
 }
 
+export interface HardwareSheetImportSnapshotSummary {
+  id: string
+  importRunId: string
+  createdAt: string
+  createdBy: string | null
+  checksum: string
+  // 스냅샷 생성 시점에 이미 계산해 둔 카운트(row_counts, createHardwareSheetImportSnapshot 참고) —
+  // previous_sheet_movements 원본 배열(품목당 이동 전체를 담아 큼)을 다시 읽지 않고도
+  // "복원하면 몇 건으로 되돌아가는지"를 목록에서 바로 보여줄 수 있다.
+  previousMovementCount: number
+  candidateMovementCount: number
+}
+
+// 감사(2026-09-07 #4): restore_hardware_sheet_import_snapshot RPC(20260701_hardware_restore_
+// snapshot_guard.sql — previous_sheet_movements가 비어 있으면 fail-closed로 거부)는 있는데
+// UI/API 어디에도 연결돼 있지 않았다. 이 함수가 화면에 노출할 스냅샷 목록을 만든다(최신순).
+export async function listHardwareSheetImportSnapshots(limit = 10): Promise<HardwareSheetImportSnapshotSummary[]> {
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("hardware_sheet_import_snapshots")
+    .select("id,import_run_id,created_at,created_by,checksum,row_counts")
+    .order("created_at", { ascending: false })
+    .limit(limit)
+  if (error) throw error
+
+  return ((data ?? []) as Array<{
+    id: string
+    import_run_id: string
+    created_at: string
+    created_by: string | null
+    checksum: string
+    row_counts: unknown
+  }>).map((row) => {
+    const counts = isRecord(row.row_counts) ? row.row_counts : {}
+    const readCount = (key: string) => (typeof counts[key] === "number" ? (counts[key] as number) : 0)
+    return {
+      id: row.id,
+      importRunId: row.import_run_id,
+      createdAt: row.created_at,
+      createdBy: row.created_by,
+      checksum: row.checksum,
+      previousMovementCount: readCount("previous_sheet_movements"),
+      candidateMovementCount: readCount("candidate_movements"),
+    }
+  })
+}
+
+export interface HardwareSheetImportRestoreResult {
+  restoredCount: number
+}
+
+// 실행하면 되돌릴 수 없다 — 현재 sheet_import 원장을 전부 지우고 스냅샷 시점으로 교체한다
+// (restore_hardware_sheet_import_snapshot RPC, security definer). 호출부(API 라우트)가
+// hardware.finalize capability를 요구하고 감사 로그를 남겨야 한다 — 이 함수 자체는 그 게이트를
+// 강제하지 않으므로(레포지토리 계층은 항상 호출부의 권한 검증에 의존) 단독 호출 금지.
+export async function restoreHardwareSheetImportSnapshot(
+  snapshotId: string,
+  actor: string | null
+): Promise<HardwareSheetImportRestoreResult> {
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb.rpc("restore_hardware_sheet_import_snapshot", {
+    snapshot_id: snapshotId,
+    actor: actor ?? null,
+  })
+  if (error) throw error
+
+  revalidateTag(HARDWARE_INVENTORY_CACHE_TAG, "max")
+  return { restoredCount: typeof data === "number" ? data : 0 }
+}
+
 function applyLocationDelta(map: Map<string, number>, location: string | null | undefined, delta: number) {
   const key = normalizeLocationName(location)
   if (!key) return
@@ -1482,12 +1604,126 @@ function toItemView(item: HardwareItem): HardwareItemView {
   }
 }
 
+export interface HardwareStockRowComputeInput {
+  item: Pick<HardwareItem, "id" | "name" | "category" | "reorder_point" | "lead_time_days">
+  // 이 품목(item_id)에 속한 취소되지 않은(voided_at null) 이동만 — 호출부(getHardwareDashboardUncached)가
+  // 이미 item_id별로 버킷팅해서 넘긴다. 순서는 무관(합산·최신값 비교만 하고 상태를 안 들고 다닌다).
+  itemMovements: readonly HardwareMovementLedgerRow[]
+  // Date.now() - 30일(ms) — 호출부가 한 번만 계산해 모든 품목에 같은 시각 기준을 적용한다.
+  // 이 함수 안에서 다시 Date.now()를 부르면 같은 배치 안에서도 품목마다 경계가 미세하게 어긋나고,
+  // 테스트가 벽시계에 의존하게 된다.
+  cutoff30dMs: number
+}
+
+// 재고 산식 엔진 — 위치별/lot별 잔량, 30일 출고 추세, 재주문점을 한 품목 단위로 계산하는 순수 함수.
+// 감사(2026-09-07 #3): getHardwareDashboardUncached의 .map() 콜백에 인라인으로만 있어 실측 테스트가
+// 0건이었다. 로직은 그대로 옮겼다(동작 변경 없음) — 재사용하는 모듈 스코프 헬퍼(classifyDestination·
+// movementLotKey·applyLocationDelta·movementDate·isPlannedStatus·isPromotedProduct)와 위치 상수는
+// 이 파일 안이라 그대로 참조한다.
+export function computeHardwareStockRow(input: HardwareStockRowComputeInput): HardwareStockRow {
+  const { item, itemMovements, cutoff30dMs } = input
+  const locationBalances = new Map<string, number>()
+  const lotBalances = new Map<string, number>()
+  let plannedOut = 0
+  let outbound30d = 0
+
+  for (const movement of itemMovements) {
+    const qty = movement.quantity
+    const occurredTime = movementDate(movement)
+    const destinationKind = classifyDestination(movement.to_location)
+
+    const lotKey = movementLotKey(movement)
+    if (lotKey) {
+      // lot 잔량 = 입고/반납(+) − 출고(예정 포함, −). 이동/수리는 lot 보존(0).
+      let lotDelta = 0
+      if (movement.movement_type === "inbound" || movement.movement_type === "return") {
+        lotDelta = qty
+      } else if (movement.movement_type === "outbound") {
+        lotDelta = -qty
+      } else if (movement.movement_type === "adjust") {
+        lotDelta = movement.from_location && !movement.to_location ? -qty : qty
+      }
+      if (lotDelta !== 0) lotBalances.set(lotKey, (lotBalances.get(lotKey) ?? 0) + lotDelta)
+    }
+
+    if (movement.movement_type === "inbound") {
+      applyLocationDelta(locationBalances, movement.to_location ?? DEFAULT_STOCK_LOCATION, qty)
+    } else if (movement.movement_type === "outbound") {
+      if (isPlannedStatus(movement.status)) {
+        plannedOut += qty
+      } else {
+        applyLocationDelta(locationBalances, movement.from_location ?? DEFAULT_STOCK_LOCATION, -qty)
+        applyLocationDelta(locationBalances, movement.to_location ?? DEFAULT_CUSTOMER_LOCATION, qty)
+      }
+      if (occurredTime >= cutoff30dMs && destinationKind !== "sample" && destinationKind !== "office" && destinationKind !== "repair") {
+        outbound30d += qty
+      }
+    } else if (movement.movement_type === "return") {
+      applyLocationDelta(locationBalances, movement.from_location, -qty)
+      applyLocationDelta(locationBalances, movement.to_location ?? DEFAULT_STOCK_LOCATION, qty)
+    } else if (movement.movement_type === "transfer") {
+      applyLocationDelta(locationBalances, movement.from_location ?? DEFAULT_STOCK_LOCATION, -qty)
+      applyLocationDelta(locationBalances, movement.to_location, qty)
+    } else if (movement.movement_type === "repair") {
+      applyLocationDelta(locationBalances, movement.from_location ?? DEFAULT_STOCK_LOCATION, -qty)
+      applyLocationDelta(locationBalances, movement.to_location ?? DEFAULT_REPAIR_LOCATION, qty)
+    } else if (movement.movement_type === "adjust") {
+      if (movement.from_location && !movement.to_location) {
+        applyLocationDelta(locationBalances, movement.from_location, -qty)
+      } else {
+        applyLocationDelta(locationBalances, movement.to_location ?? DEFAULT_STOCK_LOCATION, qty)
+      }
+    }
+  }
+
+  const warehouseStock = locationBalances.get(DEFAULT_STOCK_LOCATION) ?? 0
+  const availableStock = warehouseStock - plannedOut
+  const weeklyOutboundAvg = outbound30d > 0 ? outbound30d / TREND_WINDOW_DAYS * 7 : 0
+  const trendOrderPoint = Math.ceil((weeklyOutboundAvg * item.lead_time_days / 7) + item.reorder_point)
+  const dailyAvg = outbound30d > 0 ? outbound30d / TREND_WINDOW_DAYS : 0
+  const daysUntilStockout = dailyAvg > 0 ? Math.max(0, Math.floor(availableStock / dailyAvg)) : null
+  const locationRows = Array.from(locationBalances.entries())
+    .filter(([, quantity]) => quantity !== 0)
+    .map(([location, quantity]) => ({ location, quantity }))
+    .sort((a, b) => {
+      if (a.location === DEFAULT_STOCK_LOCATION) return -1
+      if (b.location === DEFAULT_STOCK_LOCATION) return 1
+      return Math.abs(b.quantity) - Math.abs(a.quantity)
+    })
+  const lotRows = Array.from(lotBalances.entries())
+    .filter(([, quantity]) => quantity > 0)
+    .map(([lot, quantity]) => ({ lot, quantity }))
+    .sort((a, b) => b.quantity - a.quantity)
+
+  return {
+    itemId: item.id,
+    product: item.name,
+    category: item.category,
+    reorderPoint: item.reorder_point,
+    leadTimeDays: item.lead_time_days,
+    warehouseStock,
+    plannedOut,
+    availableStock,
+    outbound30d,
+    weeklyOutboundAvg,
+    trendOrderPoint,
+    daysUntilStockout,
+    // 판촉(promoted) 라인엔 재주문 개념이 없다 — 부족/주문검토 축에서 제외하고,
+    // 음수·이상치는 알림 빌더의 "원장 점검 필요"로 따로 올린다(운영 결정 2026-08-19).
+    low: !isPromotedProduct(item.name) && availableStock <= item.reorder_point,
+    orderRecommended: !isPromotedProduct(item.name) && availableStock <= trendOrderPoint,
+    locationBalances: locationRows,
+    lotBalances: lotRows,
+  }
+}
+
 async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
-  const [items, movements, importRun] = await Promise.all([
+  const [items, movementsResult, importRun] = await Promise.all([
     listHardwareItems(),
     listAllHardwareMovements(),
     getLatestImportRun(),
   ])
+  const { rows: movements, moneyRecoveredFromRawCount } = movementsResult
   const activeMovements = movements.filter((movement) => !movement.voided_at)
   const cutoff30d = Date.now() - TREND_WINDOW_DAYS * 24 * 60 * 60 * 1000
 
@@ -1504,102 +1740,15 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
 
   const rows = items
     .filter((item) => item.active)
-    .map((item): HardwareStockRow => {
-      const itemMovements = movementsByItem.get(item.id) ?? []
-      const locationBalances = new Map<string, number>()
-      const lotBalances = new Map<string, number>()
-      let plannedOut = 0
-      let outbound30d = 0
-
-      for (const movement of itemMovements) {
-        const qty = movement.quantity
-        const occurredTime = movementDate(movement)
-        const destinationKind = classifyDestination(movement.to_location)
-
-        const lotKey = movementLotKey(movement)
-        if (lotKey) {
-          // lot 잔량 = 입고/반납(+) − 출고(예정 포함, −). 이동/수리는 lot 보존(0).
-          let lotDelta = 0
-          if (movement.movement_type === "inbound" || movement.movement_type === "return") {
-            lotDelta = qty
-          } else if (movement.movement_type === "outbound") {
-            lotDelta = -qty
-          } else if (movement.movement_type === "adjust") {
-            lotDelta = movement.from_location && !movement.to_location ? -qty : qty
-          }
-          if (lotDelta !== 0) lotBalances.set(lotKey, (lotBalances.get(lotKey) ?? 0) + lotDelta)
-        }
-
-        if (movement.movement_type === "inbound") {
-          applyLocationDelta(locationBalances, movement.to_location ?? DEFAULT_STOCK_LOCATION, qty)
-        } else if (movement.movement_type === "outbound") {
-          if (isPlannedStatus(movement.status)) {
-            plannedOut += qty
-          } else {
-            applyLocationDelta(locationBalances, movement.from_location ?? DEFAULT_STOCK_LOCATION, -qty)
-            applyLocationDelta(locationBalances, movement.to_location ?? DEFAULT_CUSTOMER_LOCATION, qty)
-          }
-          if (occurredTime >= cutoff30d && destinationKind !== "sample" && destinationKind !== "office" && destinationKind !== "repair") {
-            outbound30d += qty
-          }
-        } else if (movement.movement_type === "return") {
-          applyLocationDelta(locationBalances, movement.from_location, -qty)
-          applyLocationDelta(locationBalances, movement.to_location ?? DEFAULT_STOCK_LOCATION, qty)
-        } else if (movement.movement_type === "transfer") {
-          applyLocationDelta(locationBalances, movement.from_location ?? DEFAULT_STOCK_LOCATION, -qty)
-          applyLocationDelta(locationBalances, movement.to_location, qty)
-        } else if (movement.movement_type === "repair") {
-          applyLocationDelta(locationBalances, movement.from_location ?? DEFAULT_STOCK_LOCATION, -qty)
-          applyLocationDelta(locationBalances, movement.to_location ?? DEFAULT_REPAIR_LOCATION, qty)
-        } else if (movement.movement_type === "adjust") {
-          if (movement.from_location && !movement.to_location) {
-            applyLocationDelta(locationBalances, movement.from_location, -qty)
-          } else {
-            applyLocationDelta(locationBalances, movement.to_location ?? DEFAULT_STOCK_LOCATION, qty)
-          }
-        }
-      }
-
-      const warehouseStock = locationBalances.get(DEFAULT_STOCK_LOCATION) ?? 0
-      const availableStock = warehouseStock - plannedOut
-      const weeklyOutboundAvg = outbound30d > 0 ? outbound30d / TREND_WINDOW_DAYS * 7 : 0
-      const trendOrderPoint = Math.ceil((weeklyOutboundAvg * item.lead_time_days / 7) + item.reorder_point)
-      const dailyAvg = outbound30d > 0 ? outbound30d / TREND_WINDOW_DAYS : 0
-      const daysUntilStockout = dailyAvg > 0 ? Math.max(0, Math.floor(availableStock / dailyAvg)) : null
-      const locationRows = Array.from(locationBalances.entries())
-        .filter(([, quantity]) => quantity !== 0)
-        .map(([location, quantity]) => ({ location, quantity }))
-        .sort((a, b) => {
-          if (a.location === DEFAULT_STOCK_LOCATION) return -1
-          if (b.location === DEFAULT_STOCK_LOCATION) return 1
-          return Math.abs(b.quantity) - Math.abs(a.quantity)
-        })
-      const lotRows = Array.from(lotBalances.entries())
-        .filter(([, quantity]) => quantity > 0)
-        .map(([lot, quantity]) => ({ lot, quantity }))
-        .sort((a, b) => b.quantity - a.quantity)
-
-      return {
-        itemId: item.id,
-        product: item.name,
-        category: item.category,
-        reorderPoint: item.reorder_point,
-        leadTimeDays: item.lead_time_days,
-        warehouseStock,
-        plannedOut,
-        availableStock,
-        outbound30d,
-        weeklyOutboundAvg,
-        trendOrderPoint,
-        daysUntilStockout,
-        // 판촉(promoted) 라인엔 재주문 개념이 없다 — 부족/주문검토 축에서 제외하고,
-        // 음수·이상치는 알림 빌더의 "원장 점검 필요"로 따로 올린다(운영 결정 2026-08-19).
-        low: !isPromotedProduct(item.name) && availableStock <= item.reorder_point,
-        orderRecommended: !isPromotedProduct(item.name) && availableStock <= trendOrderPoint,
-        locationBalances: locationRows,
-        lotBalances: lotRows,
-      }
-    })
+    .map((item): HardwareStockRow =>
+      // 재고 산식 엔진(위치·lot 잔량·30일 추세·재주문점)은 computeHardwareStockRow로 추출했다
+      // (감사 2026-09-07 #3) — 로직은 그대로, 여기서는 품목별 이동 버킷과 30일 경계만 넘긴다.
+      computeHardwareStockRow({
+        item,
+        itemMovements: movementsByItem.get(item.id) ?? [],
+        cutoff30dMs: cutoff30d,
+      })
+    )
     .sort((a, b) => {
       if (a.low !== b.low) return a.low ? -1 : 1
       if (a.orderRecommended !== b.orderRecommended) return a.orderRecommended ? -1 : 1
@@ -1609,11 +1758,14 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
   // 최근 출고(30건)·예정 큐는 이 배열의 부분집합이라 여기서 만들지 않는다 — 클라이언트가
   // 같은 순서·같은 판정으로 파생한다. 예정 큐는 확정을 기다리는 할 일 목록이라 상한이
   // 따로 없고, 2000건 캡만 그 상한 역할을 한다.
-  const movementRows = activeMovements
-    .slice()
-    .sort((a, b) => movementDate(b) - movementDate(a))
-    .slice(0, 2000)
-    .map(toMovementView)
+  //
+  // 감사(2026-09-07 #7): 2000건 캡 너머는 지금까지 화면에서 아예 닿을 방법이 없었다(무페이징
+  // 통짜 응답 + 클라이언트는 받은 배열만 자름). movementsTotal을 실어 "전체 대비 몇 건을
+  // 보고 있는지"를 감지 가능하게 하고, getHardwareMovementsPage(아래)가 그 너머를 페이지로
+  // 읽어올 수 있게 한다. 기본 응답(이 함수)은 그대로 최신 2000건 — 기존 소비처(홈 요약·검색·
+  // 입출고 탭 등)가 이 배열 전체를 집계에 쓰므로 기본값을 줄이면 그 집계들이 조용히 틀어진다.
+  const sortedActiveMovements = activeMovements.slice().sort((a, b) => movementDate(b) - movementDate(a))
+  const movementRows = sortedActiveMovements.slice(0, HARDWARE_MOVEMENTS_DEFAULT_LIMIT).map(toMovementView)
 
   const alerts: HardwareAlert[] = []
   for (const row of rows) {
@@ -1623,6 +1775,7 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
       alerts.push({
         id: `check-${row.itemId}`,
         severity: "critical",
+        itemId: row.itemId,
         product: row.product,
         title: "원장 점검 필요",
         detail: `창고 ${row.warehouseStock}대 · 가용 ${row.availableStock}대 — ${
@@ -1633,6 +1786,7 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
       alerts.push({
         id: `low-${row.itemId}`,
         severity: "critical",
+        itemId: row.itemId,
         product: row.product,
         title: "최소재고 미만",
         detail: `가용 ${row.availableStock}대 / 최소 ${row.reorderPoint}대`,
@@ -1642,6 +1796,7 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
       alerts.push({
         id: `order-${row.itemId}`,
         severity: "warning",
+        itemId: row.itemId,
         product: row.product,
         title: "주문 검토 시점",
         detail: `최근 30일 출고 ${row.outbound30d}대, 권장 주문 기준 ${row.trendOrderPoint}대`,
@@ -1651,6 +1806,7 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
       alerts.push({
         id: `planned-${row.itemId}`,
         severity: "info",
+        itemId: row.itemId,
         product: row.product,
         title: "배송 예정 반영",
         detail: `배송 예정 ${row.plannedOut}대가 가용 재고에서 차감됩니다.`,
@@ -1671,6 +1827,7 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
     items: items.map(toItemView),
     stock: rows,
     movements: movementRows,
+    movementsTotal: sortedActiveMovements.length,
     alerts: [...activeAlerts, ...mutedAlerts],
     totals: {
       warehouseStock: rows.reduce((sum, row) => sum + row.warehouseStock, 0),
@@ -1681,6 +1838,7 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
       orderRecommended: rows.filter((row) => row.orderRecommended).length,
     },
     importRun,
+    importCosting: { recoveredFromRawCount: moneyRecoveredFromRawCount },
   }
 }
 
@@ -1694,6 +1852,42 @@ const getHardwareDashboardCached = unstable_cache(
 
 export function getHardwareDashboard(): Promise<HardwareDashboard> {
   return getHardwareDashboardCached()
+}
+
+export interface HardwareMovementsPage {
+  movements: HardwareMovementView[]
+  movementsTotal: number
+}
+
+// 감사(2026-09-07 #7) — 기본 대시보드(getHardwareDashboard)는 최신 2000건까지만 싣는다(기존
+// 소비처의 집계가 그 배열 전체에 의존해 기본값은 그대로 둔다, 위 HARDWARE_MOVEMENTS_DEFAULT_LIMIT
+// 주석 참고). 2000건보다 오래된 이동은 지금까지 화면에서 닿을 방법이 전혀 없었다 — 이 함수가
+// 그 간극을 메운다: offset/limit으로 명시적 페이지를 읽어온다(내역 탭 "더 불러오기" 전용).
+// 대시보드처럼 stock·alerts·totals를 다시 계산하지 않는다 — 이동 목록만 필요할 때 그 무거운
+// 재계산을 또 하지 않기 위함이다.
+async function getHardwareMovementsPageUncached(offset: number, limit: number): Promise<HardwareMovementsPage> {
+  const { rows: movements } = await listAllHardwareMovements()
+  const activeMovements = movements.filter((movement) => !movement.voided_at)
+  const sorted = activeMovements.slice().sort((a, b) => movementDate(b) - movementDate(a))
+  const safeOffset = Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0
+  const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), HARDWARE_MOVEMENTS_MAX_PAGE_LIMIT) : HARDWARE_MOVEMENTS_MAX_PAGE_LIMIT
+  return {
+    movements: sorted.slice(safeOffset, safeOffset + safeLimit).map(toMovementView),
+    movementsTotal: sorted.length,
+  }
+}
+
+// 대시보드와 같은 태그로 무효화한다 — 쓰기 6경로가 즉시 갱신하고, 그 사이 반복 페이지 요청은
+// 캐시가 받는다(짧은 revalidate로 30일 창 같은 시간 드리프트 걱정은 없음 — 이 함수는 시간 창을
+// 계산하지 않는다).
+const getHardwareMovementsPageCached = unstable_cache(
+  (offset: number, limit: number) => getHardwareMovementsPageUncached(offset, limit),
+  ["hardware-movements-page"],
+  { tags: [HARDWARE_INVENTORY_CACHE_TAG], revalidate: 120 }
+)
+
+export function getHardwareMovementsPage(offset: number, limit: number): Promise<HardwareMovementsPage> {
+  return getHardwareMovementsPageCached(offset, limit)
 }
 
 export interface InboundUnitPriceBasis {

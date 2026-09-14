@@ -3,6 +3,8 @@ import { revalidateTag } from "next/cache"
 
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext, verifyAdmin } from "@/lib/admin-auth"
 import { ADMIN_CRM_REVENUE_CACHE_TAG } from "@/lib/admin-crm-revenue"
+import { invalidateNeoCrmCustomersCache } from "@/lib/admin-crm-customers-neo"
+import { invalidateCrmRegionMapCache } from "@/lib/repositories/crm-region-map"
 import {
   notifyExternalCrmSyncOutcome,
   runExternalCrmSyncChain,
@@ -70,6 +72,10 @@ export async function POST(req: NextRequest) {
     if (refreshSnapshotsOnly) {
       const snapshots = await refreshCrmNeoCustomerSnapshotsFromExternalRecords()
       revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, "max")
+      // NEO 고객 스냅샷(crm_neo_customer_snapshots)을 다시 계산했다 — admin-crm-customers-neo.ts의
+      // Data Cache와 region-map의 "고객" 레이어(region_label 원천)가 이 값을 물고 있다(§3.2·§3.3).
+      invalidateNeoCrmCustomersCache()
+      invalidateCrmRegionMapCache()
       return NextResponse.json({
         ok: true,
         refreshSnapshotsOnly: true,
@@ -92,6 +98,12 @@ export async function POST(req: NextRequest) {
     }
     if (hasFreshExternalCrmSyncData(chain.sync)) {
       revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, "max")
+    }
+    // chain.neoCustomerSnapshots는 체인 내부에서 refreshCrmNeoCustomerSnapshotsFromExternalRecords가
+    // 성공했을 때만 채워진다(lib/external-crm/sync-chain.ts) — 그때만 무효화한다.
+    if (chain.neoCustomerSnapshots) {
+      invalidateNeoCrmCustomersCache()
+      invalidateCrmRegionMapCache()
     }
     after(() => notifyExternalCrmSyncOutcome(chain, "manual"))
     return NextResponse.json(result, { status: getExternalCrmSyncHttpStatus(chain.sync) })

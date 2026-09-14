@@ -91,7 +91,6 @@ describe("admin command palette access parity", () => {
   const commandsFor = (overrides: Partial<NavAccessContext> = {}) =>
     resolveAdminCommands({
       role: "ADMIN",
-      preset: "staff",
       overrides: {},
       ...overrides,
     })
@@ -104,21 +103,25 @@ describe("admin command palette access parity", () => {
   })
 
   it("inherits Analytics access for traffic", () => {
-    expect(hrefsFor()).not.toContain("/admin/traffic")
-    expect(hrefsFor({ preset: "lead" })).toContain("/admin/traffic")
+    // 전면 공개(2026-09-10) 이후 Analytics 는 전원에게 열려 있으므로 흡수된 트래픽 명령도 항상 뜬다.
+    expect(hrefsFor()).toContain("/admin/traffic")
   })
 
-  it("removes every absorbed CS command when its console parent is denied", () => {
-    const hrefs = hrefsFor({ overrides: { "/admin/chatbot": "deny" } })
+  it("기타로 접힌 항목도 ⌘K 에서는 그대로 찾을 수 있다", () => {
+    // 접힘은 사이드바 배치일 뿐 접근 제한이 아니다 — 팔레트는 배치와 무관하게 전부 노출한다.
+    const hrefs = hrefsFor({ overrides: { "/admin/chatbot": "folded" } })
 
-    expect(hrefs).not.toContain("/admin/chatbot")
-    expect(hrefs).not.toContain("/admin/docs")
-    expect(hrefs).not.toContain("/admin/channel-talk")
-    expect(hrefs).not.toContain("/admin/cs-chatbot")
+    expect(hrefs).toContain("/admin/chatbot")
+    expect(hrefs).toContain("/admin/docs")
+    expect(hrefs).toContain("/admin/channel-talk")
+    expect(hrefs).toContain("/admin/cs-chatbot")
   })
 
-  it("applies role visibility before exposing commands", () => {
-    expect(hrefsFor({ role: "EDITOR", preset: null })).not.toContain("/admin/settings")
-    expect(hrefsFor({ role: "SUPER_ADMIN", preset: null })).toContain("/admin/settings")
+  it("모든 역할이 같은 명령 목록을 받는다", () => {
+    for (const role of ["EDITOR", "VIEWER", "BRANCH", "ADMIN", "SUPER_ADMIN"]) {
+      expect(hrefsFor({ role }), role).toContain("/admin/settings")
+      expect(hrefsFor({ role }), role).toContain("/admin/overview")
+    }
+    expect(hrefsFor({ role: "EDITOR" })).toEqual(hrefsFor({ role: "SUPER_ADMIN" }))
   })
 })

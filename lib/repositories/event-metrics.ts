@@ -4,7 +4,9 @@
 // RLS admin-only(deny-all) — 반드시 admin 클라이언트로만 접근.
 
 import "server-only"
+import { revalidateTag } from "next/cache"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { MARKETING_PERF_CACHE_TAG } from "@/lib/repositories/marketing"
 import {
   DEFAULT_EVENT_METRICS,
   type EventMetrics,
@@ -69,10 +71,19 @@ export async function saveEventMetrics(
       { onConflict: "event_id" }
     )
   if (error) throw new Error(`[event-metrics] 저장 실패: ${error.message}`)
+  // admin-performance-round3-2026-09-10.md §3.4 — perf 조립(lib/marketing/perf-assemble.ts)이
+  // getAllEventMetrics로 channelSpend/eventAdSpend를 계산해 MARKETING_PERF_CACHE_TAG로
+  // 캐시하는데, 이 저장이 그 태그를 무효화하지 않아 행사 광고비·매출 수기 입력이 최대 60초
+  // 동안 perf 대시보드에 반영되지 않던 공백이었다. 저장 직후 이 화면(이벤트 메트릭 편집)
+  // 자체는 응답값을 그대로 반영하고, perf 대시보드는 별도 화면이라 "max"(SWR)면 충분하다
+  // — marketing-campaigns.ts·channel-budgets.ts 등 이 태그의 다른 쓰기 경로와 같은 톤.
+  revalidateTag(MARKETING_PERF_CACHE_TAG, "max")
   return merged
 }
 
 export async function deleteEventMetrics(eventId: string): Promise<void> {
   const { error } = await sb().from("event_metrics").delete().eq("event_id", eventId)
   if (error) throw new Error(`[event-metrics] 삭제 실패: ${error.message}`)
+  // 위와 동일 — 삭제도 perf 조립의 입력을 바꾼다(현재 호출부 없음, 향후 대비).
+  revalidateTag(MARKETING_PERF_CACHE_TAG, "max")
 }

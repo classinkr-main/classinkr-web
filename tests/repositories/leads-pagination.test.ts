@@ -141,4 +141,27 @@ describe("getLeads pagination", () => {
     expect(calls[0]?.columns).not.toBe("*")
     expect(calls.map((call) => call.from)).toEqual([0, 1000])
   })
+
+  // 감사 2026-09-07 §5 — 리드 보드가 `*`(전 컬럼) 대신 안 쓰는 트래킹 컬럼만 덜어낸 조회를
+  // 쓰는지 확인한다. 행 수는 절대 줄이지 않는다 — 이 화면은 전량이 필요한 화면이다.
+  it("보드 조회는 전 컬럼(*) 대신 안 쓰는 트래킹 컬럼만 뺀 목록을 요청하고, 행은 그대로 전량 모은다", async () => {
+    vi.resetModules()
+    process.env.USE_SUPABASE_LEADS = "true"
+    const { calls } = mockSupabaseLeads(1_600)
+
+    const { getBoardLeads } = await import("@/lib/repositories/leads")
+    const leads = await getBoardLeads()
+
+    expect(leads).toHaveLength(1_600)
+    expect(calls[0]?.columns).not.toBe("*")
+    // 검색·표시에 쓰는 필드는 그대로 남아야 한다(감사 #5 — utm_* 검색, 낙관적 잠금용 updated_at).
+    expect(calls[0]?.columns).toContain("utm_source")
+    expect(calls[0]?.columns).toContain("message")
+    expect(calls[0]?.columns).toContain("updated_at")
+    expect(calls[0]?.columns).toContain("confirmed_at")
+    // 보드 화면 어디서도 쓰지 않는 내부 트래킹 컬럼만 뺀다.
+    expect(calls[0]?.columns).not.toContain("anonymous_id")
+    expect(calls[0]?.columns).not.toContain("last_inflow_at")
+    expect(calls.map((call) => call.from)).toEqual([0, 1000])
+  })
 })

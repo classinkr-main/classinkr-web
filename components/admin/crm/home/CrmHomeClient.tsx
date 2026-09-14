@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, use, Suspense } from "react"
 import Link from "next/link"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
@@ -8,12 +8,16 @@ import { RefreshCw, Calendar, ExternalLink, NotebookPen, Search, UserPlus } from
 import { adminFetchJsonCached, getCachedAdminJson, seedAdminRequestCache } from "@/lib/admin-client"
 import { Button } from "@/components/ui/button"
 import CrmCoverageStrip from "@/components/admin/crm/CrmCoverageStrip"
-import CrmPriorityQueuePanel from "@/components/admin/crm/CrmPriorityQueuePanel"
+import CrmPriorityQueuePanel, {
+  CrmPriorityQueuePanelSkeleton,
+} from "@/components/admin/crm/CrmPriorityQueuePanel"
 import CrmWeekAheadPanel from "@/components/admin/crm/CrmWeekAheadPanel"
 import CrmCustomerPicker from "@/components/admin/crm/CrmCustomerPicker"
 import Customer360DrawerSkeleton from "@/components/admin/crm/Customer360DrawerSkeleton"
 import type { CrmHomeInitialData } from "@/lib/admin/crm/home-prefetch"
+import type { DeferredPrefetch } from "@/lib/admin/prefetch-budget"
 import { CRM_CACHE_SWR_MS, CRM_CACHE_TTL_MS } from "@/lib/crm/client-cache"
+import type { CrmPriorityQueue } from "@/lib/repositories/crm-priority-queue"
 import { getRecentCustomers, type RecentCustomer } from "@/lib/crm/recent-customers"
 import { Toast } from "@/components/admin/crm/leads/shared"
 import LeadSummaryPanel from "@/components/admin/crm/home/LeadSummaryPanel"
@@ -62,18 +66,63 @@ function getKstMonthKey(date: Date) {
   return `${kst.getUTCFullYear()}-${String(kst.getUTCMonth() + 1).padStart(2, "0")}`
 }
 
+// 프리페치 자체가 없을 때(미인증·역할 부족 — prefetchCrmHomeInitialData가 null을 돌려줌)
+// 아래 세 다리에게 "레인 없음"을 표현하는 안정된 싱글턴. React use()는 매 렌더 새 promise를
+// 주면 무한 서스펜스로 보일 수 있으므로, 모듈 스코프 상수 하나를 항상 재사용한다.
+const RESOLVED_NULL_PROMISE: Promise<null> = Promise.resolve(null)
+
+/**
+ * 소스 하나의 openPrefetchLane 결과(promise)를 React use()로 풀어, 부모(CrmHomeClient)의
+ * 기존 top-level state·기존 fetchXXX 함수로 넘기기만 하는 다리 컴포넌트 — 화면에는
+ * 아무것도 그리지 않는다(return null).
+ *
+ * Overview(app/admin/overview/OverviewClient.tsx)의 같은 이름 컴포넌트와 목적은 같지만 이
+ * 파일은 부품이 훨씬 단순하다(leadActionKpis·overview·compassPipeline 각각 이 화면에 단
+ * 한 번씩만 쓰인다) — 그래도 다리 패턴을 그대로 쓰는 이유: 이 화면은 이미
+ * seedAdminRequestCache(요청 캐시에 심기)와 fetchXXX({force?})의 hasCached 판정에 강하게
+ * 의존한다. "화면에 보이는 패널이 직접 use()를 부른다" 대신 "다리가 값을 받아 기존
+ * fetchXXX 파이프라인에 그대로 흘려보낸다"로 통일하면, 캐시 시딩·로딩 플래그·에러 상태·
+ * 강제 새로고침(refreshAll) 전부 기존 코드 그대로 재사용할 수 있다.
+ */
+function PrefetchSourceBridge<T>({
+  promise,
+  onSettled,
+}: {
+  promise: Promise<T | null>
+  onSettled: (value: T | null) => void
+}) {
+  const value = use(promise)
+  useEffect(() => {
+    onSettled(value)
+  }, [value, onSettled])
+  return null
+}
+
 // ─── 메인 화면 ─────────────────────────────────────────────────
-export default function CrmHomeClient({ initialData }: { initialData?: CrmHomeInitialData | null }) {
+export default function CrmHomeClient({
+  initialData,
+  initialPriorityQueue,
+}: {
+  initialData?: CrmHomeInitialData | null
+  /**
+   * 우선순위 큐(담당 전체 기준) 서버 프리페치 — home-prefetch.ts의 CrmHomeInitialData와
+   * 별도 prop인 이유는 lib/admin/crm/priority-queue-prefetch.ts 상단 주석 참고. 2026-09-10
+   * 스트리밍 전환으로 값이 아니라 레인({promise, generatedAt})이 온다 — CrmPriorityQueuePanel
+   * 이 이 promise를 직접 React use()로 푼다(패널이 화면에 한 곳뿐이라 다리 컴포넌트 없이
+   * 패널 자신이 소비하는 쪽이 더 단순하다).
+   */
+  initialPriorityQueue?: DeferredPrefetch<CrmPriorityQueue> | null
+}) {
   const router = useRouter()
-  // 서버 프리페치가 있으면 첫 렌더부터 값이 있다(스켈레톤 없음). 없으면 지금까지처럼
-  // null + 로딩으로 시작해 마운트 효과가 클라이언트 페치를 돈다.
-  const [leadKpis, setLeadKpis] = useState<LeadActionKpis | null>(initialData?.leadActionKpis ?? null)
-  const [leadKpisLoading, setLeadKpisLoading] = useState(!initialData?.leadActionKpis)
+  // 스트리밍 전환(2026-09-10 2라운드) — initialData.X는 이제 동기 값이 아니라
+  // {promise, generatedAt}이라 마운트 시점엔 알 수 없다. 첫 렌더는 항상 null/loading으로
+  // 시작하고, 아래 PrefetchSourceBridge 세 개가 각자 독립 Suspense 안에서 resolve되는 대로
+  // seedLeadKpis 등을 통해 기존 fetchXXX 파이프라인(캐시 시딩 + hasCached 판정)에 흘려보낸다.
+  const [leadKpis, setLeadKpis] = useState<LeadActionKpis | null>(null)
+  const [leadKpisLoading, setLeadKpisLoading] = useState(true)
   const [leadKpisError, setLeadKpisError] = useState<string | null>(null)
-  const [compassPipeline, setCompassPipeline] = useState<CompassPipelineKpis | null>(
-    initialData?.compassPipeline ?? null
-  )
-  const [compassPipelineLoading, setCompassPipelineLoading] = useState(!initialData?.compassPipeline)
+  const [compassPipeline, setCompassPipeline] = useState<CompassPipelineKpis | null>(null)
+  const [compassPipelineLoading, setCompassPipelineLoading] = useState(true)
   const [compassPipelineError, setCompassPipelineError] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
@@ -89,8 +138,8 @@ export default function CrmHomeClient({ initialData }: { initialData?: CrmHomeIn
   useEffect(() => {
     setRecentCustomers(getRecentCustomers())
   }, [drawerTarget])
-  const [crmOverview, setCrmOverview] = useState<AdminCrmOverview | null>(initialData?.overview ?? null)
-  const [crmOverviewLoading, setCrmOverviewLoading] = useState(!initialData?.overview)
+  const [crmOverview, setCrmOverview] = useState<AdminCrmOverview | null>(null)
+  const [crmOverviewLoading, setCrmOverviewLoading] = useState(true)
   const [crmOverviewError, setCrmOverviewError] = useState<string | null>(null)
   const [branchKpis, setBranchKpis] = useState<BranchKpiResponse | null>(null)
   // 팀 KPI는 기본 접힘인 리포트의 '팀 KPI' 탭에서만 쓴다. 첫 화면에서 미리 요청하면
@@ -225,36 +274,57 @@ export default function CrmHomeClient({ initialData }: { initialData?: CrmHomeIn
     }
   }, [])
 
-  // 서버가 만들어 준 첫 화면 데이터를 클라이언트 캐시에도 심는다.
-  // prop은 이 회차 렌더에만 존재하므로, 심어 두지 않으면 다른 탭에 갔다 돌아왔을 때
-  // 같은 데이터를 다시 네트워크로 받아온다. 아래 페치 효과보다 먼저 선언해야
-  // (효과는 선언 순서대로 실행) 그 회차의 요청이 캐시 적중으로 끝난다.
-  useEffect(() => {
-    if (!initialData) return
-    // generatedAt(T3/T4) — 이 프리페치가 서버에서 실제로 만들어진 시각을 시드의 savedAt으로
-    // 넘긴다. staleTimes.dynamic(180초)로 재사용된 RSC 응답이면 이 값이 과거라, 아래 seed의
-    // ttlMs를 이미 넘겨 "만료됐지만 SWR 창 안"으로 떨어진다 — fetchXXX가 그 상태를 즉시
-    // 서빙(스켈레톤 없음)하면서도 백그라운드로 진짜 재검증을 돈다(lib/admin-client.ts 참조).
-    const seed = {
-      ttlMs: CRM_HOME_TTL_MS,
-      staleWhileRevalidateMs: CRM_HOME_STALE_WHILE_REVALIDATE_MS,
-      generatedAt: initialData.generatedAt,
-    }
-    // 라우트 응답과 **같은 shape**으로 심는다 — action-kpis는 { leads } 로 감싸 내려온다.
-    if (initialData.leadActionKpis) {
-      seedAdminRequestCache(CRM_ACTION_KPIS_URL, { leads: initialData.leadActionKpis }, seed)
-    }
-    if (initialData.overview) seedAdminRequestCache(CRM_OVERVIEW_URL, initialData.overview, seed)
-    if (initialData.compassPipeline) {
-      seedAdminRequestCache(CRM_COMPASS_PIPELINE_URL, initialData.compassPipeline, seed)
-    }
-  }, [initialData])
-
-  useEffect(() => {
-    void fetchLeadKpis()
-    void fetchCrmOverview()
-    void fetchCompassPipeline()
-  }, [fetchLeadKpis, fetchCrmOverview, fetchCompassPipeline])
+  // ─── 소스별 프리페치 시드 콜백(2026-09-10 스트리밍 전환) ─────────────────────────
+  // 아래 PrefetchSourceBridge(각각 독립 <Suspense> 안, return 참고)가 openPrefetchLane
+  // promise를 use()로 푼 뒤 이 콜백들로 값을 넘긴다. 값이 있으면 라우트 응답과 같은
+  // shape으로 요청 캐시에 먼저 심는다(action-kpis는 { leads }로 감싸 내려온다) — 그다음
+  // 부르는 fetchXXX가 이 캐시를 hasCached=true로 읽어 실제 네트워크 왕복 없이 곧장
+  // ready 상태로 끝난다(예전 "동기 시드 후 무조건 fetchXXX" 패턴과 동일한 효과, 시드
+  // 시점만 promise resolve 이후로 미뤄졌다). 값이 없으면(권한 없음·실패·15초 ceiling)
+  // fetchXXX가 캐시 미스로 실제 네트워크를 타 지금까지의 폴백 경로를 그대로 재현한다.
+  const seedLeadKpis = useCallback(
+    (value: LeadActionKpis | null) => {
+      if (value !== null) {
+        seedAdminRequestCache(
+          CRM_ACTION_KPIS_URL,
+          { leads: value },
+          {
+            ttlMs: CRM_HOME_TTL_MS,
+            staleWhileRevalidateMs: CRM_HOME_STALE_WHILE_REVALIDATE_MS,
+            generatedAt: initialData?.leadActionKpis.generatedAt,
+          }
+        )
+      }
+      void fetchLeadKpis()
+    },
+    [fetchLeadKpis, initialData?.leadActionKpis.generatedAt]
+  )
+  const seedCrmOverview = useCallback(
+    (value: AdminCrmOverview | null) => {
+      if (value !== null) {
+        seedAdminRequestCache(CRM_OVERVIEW_URL, value, {
+          ttlMs: CRM_HOME_TTL_MS,
+          staleWhileRevalidateMs: CRM_HOME_STALE_WHILE_REVALIDATE_MS,
+          generatedAt: initialData?.overview.generatedAt,
+        })
+      }
+      void fetchCrmOverview()
+    },
+    [fetchCrmOverview, initialData?.overview.generatedAt]
+  )
+  const seedCompassPipeline = useCallback(
+    (value: CompassPipelineKpis | null) => {
+      if (value !== null) {
+        seedAdminRequestCache(CRM_COMPASS_PIPELINE_URL, value, {
+          ttlMs: CRM_HOME_TTL_MS,
+          staleWhileRevalidateMs: CRM_HOME_STALE_WHILE_REVALIDATE_MS,
+          generatedAt: initialData?.compassPipeline.generatedAt,
+        })
+      }
+      void fetchCompassPipeline()
+    },
+    [fetchCompassPipeline, initialData?.compassPipeline.generatedAt]
+  )
 
   useEffect(() => {
     if (!reportOpen || reportTab !== "team") return
@@ -285,6 +355,30 @@ export default function CrmHomeClient({ initialData }: { initialData?: CrmHomeIn
 
   return (
     <div>
+      {/* 소스별 독립 Suspense 경계 — 서버가 openPrefetchLane으로 연 세 레인을 각각 형제
+          <Suspense>로 감싼다(화면 전체를 하나로 감싸면 overview의 DB 왕복 30회가 리드 KPI·
+          Compass 밴드까지 함께 막는다 — 이번 작업의 핵심 요건). 각 다리는 화면에 아무것도
+          그리지 않고 결과를 위 seedX 콜백을 통해 기존 fetchXXX 파이프라인으로 흘려보낸다.
+          프리페치 자체가 없으면(미인증 등) initialData가 null이라 RESOLVED_NULL_PROMISE로
+          대체한다 — use()에 매 렌더 새 promise를 주면 안 되므로 모듈 상수를 재사용한다. */}
+      <Suspense fallback={null}>
+        <PrefetchSourceBridge
+          promise={initialData?.leadActionKpis.promise ?? RESOLVED_NULL_PROMISE}
+          onSettled={seedLeadKpis}
+        />
+      </Suspense>
+      <Suspense fallback={null}>
+        <PrefetchSourceBridge
+          promise={initialData?.overview.promise ?? RESOLVED_NULL_PROMISE}
+          onSettled={seedCrmOverview}
+        />
+      </Suspense>
+      <Suspense fallback={null}>
+        <PrefetchSourceBridge
+          promise={initialData?.compassPipeline.promise ?? RESOLVED_NULL_PROMISE}
+          onSettled={seedCompassPipeline}
+        />
+      </Suspense>
       {/* 헤더 — 타이틀만. 액션은 아래 sticky 빠른 실행 바로 이동(H2) */}
       <div className="mb-4">
         <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">CRM 홈</h1>
@@ -356,8 +450,12 @@ export default function CrmHomeClient({ initialData }: { initialData?: CrmHomeIn
         onRetry={() => void fetchCompassPipeline({ force: true })}
       />
 
-      {/* 리드 요약 다음에 오늘의 행동 큐를 붙여 숫자 확인 → 처리 흐름을 한 축으로 만든다. */}
-      <CrmPriorityQueuePanel refreshKey={neoCrmRefreshKey} />
+      {/* 리드 요약 다음에 오늘의 행동 큐를 붙여 숫자 확인 → 처리 흐름을 한 축으로 만든다.
+          CrmPriorityQueuePanel이 initialData(레인)를 React use()로 직접 소비하므로 이 자리가
+          그 Suspense 경계다 — fallback은 패널 자신의 로딩 크롬을 재사용한 스켈레톤. */}
+      <Suspense fallback={<CrmPriorityQueuePanelSkeleton />}>
+        <CrmPriorityQueuePanel refreshKey={neoCrmRefreshKey} initialData={initialPriorityQueue ?? null} />
+      </Suspense>
 
       {/* 결과 지표는 행동 큐 뒤의 참고 밴드로 둔다. */}
       <CrmCockpitHero

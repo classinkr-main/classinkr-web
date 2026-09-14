@@ -6,6 +6,8 @@ import Link from "next/link"
 import { AnimatePresence, motion } from "framer-motion"
 import { Clock3, Settings2, Users, X } from "lucide-react"
 
+import { CopyButton } from "@/components/admin/crm/leads/shared"
+
 import {
   formatLotLabel,
   formatNumber,
@@ -14,6 +16,12 @@ import {
   MOVEMENT_TONE,
   type HardwareMovement,
 } from "./shared"
+
+// 값이 길어 truncate될 수 있는(시리얼 목록·보관 장소 등 자유 텍스트) detailFacts 항목만
+// 복사 버튼을 붙인다 — 날짜·수량처럼 짧고 자명한 값까지 도배하지 않는다.
+function isCopyableFact(label: string): boolean {
+  return label.startsWith("시리얼") || label === "보관 장소"
+}
 
 interface MovementDetailSheetProps {
   detailMovement: HardwareMovement | null
@@ -106,12 +114,22 @@ function MovementDetailSheet({
 
             <div className="flex flex-col gap-4 p-5">
               <div className="grid grid-cols-2 gap-2.5">
-                {detailFacts.map((fact) => (
-                  <div key={fact.label} className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-3 py-2.5">
-                    <p className="text-[11px] font-semibold text-[#615D59]">{fact.label}</p>
-                    <p className="mt-0.5 text-[13px] font-bold text-[#111110]">{fact.value}</p>
-                  </div>
-                ))}
+                {detailFacts.map((fact) => {
+                  const copyable = fact.value !== "-" && isCopyableFact(fact.label)
+                  return (
+                    <div key={fact.label} className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-3 py-2.5">
+                      <p className="text-[11px] font-semibold text-[#615D59]">{fact.label}</p>
+                      {copyable ? (
+                        <div className="mt-0.5 flex items-center gap-1">
+                          <p className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#111110]">{fact.value}</p>
+                          <CopyButton value={fact.value} />
+                        </div>
+                      ) : (
+                        <p className="mt-0.5 text-[13px] font-bold text-[#111110]">{fact.value}</p>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
 
               {detailMovement.memo?.trim() ? (
@@ -135,9 +153,12 @@ function MovementDetailSheet({
                   {detailCrm.reference || detailCrm.href ? (
                     <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-3">
                       {detailCrm.reference ? (
-                        <p className="min-w-0 truncate text-[12px] text-[#31302E]">
-                          참조 <span className="font-bold text-[#111110]">{detailCrm.reference}</span>
-                        </p>
+                        <div className="flex min-w-0 items-center gap-1">
+                          <p className="min-w-0 truncate text-[12px] text-[#31302E]">
+                            참조 <span className="font-bold text-[#111110]">{detailCrm.reference}</span>
+                          </p>
+                          <CopyButton value={detailCrm.reference} />
+                        </div>
                       ) : null}
                       {detailCrm.href ? (
                         <Link

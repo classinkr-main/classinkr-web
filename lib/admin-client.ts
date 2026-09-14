@@ -41,7 +41,64 @@ const MAX_CACHE_RETENTION_MS = 30 * 60_000
 // localStorage로 승격하는 스코프. CRM 작업면은 탭 전환·브라우저 재시작을 넘어 즉시
 // 그려야 해서 여기 둔다. 지속성의 상한은 인증 수명(admin_session 쿠키 7일)이고,
 // 로그아웃·인증 실패는 clearAdminSessionStorage → clearAdminRequestCache로 함께 비운다.
-const LOCAL_PERSIST_SCOPES = ["/api/admin/crm", "/api/admin/leads"] as const
+//
+// 확장 감사(2026-09-10, admin-performance-round3 §3.5) — 지사·마케팅·하드웨어·캘린더 4곳이
+// sessionStorage까지만이라 브라우저 재시작마다 콜드 스켈레톤을 본다는 지적에 대한 판단.
+// **무작정 4곳을 다 넣지 않았다** — 이 배열은 "문자열이 캐시 키에 포함되면 승격"이라는
+// 부분일치 규칙이고, 승격 계층(local)은 CRM/leads와 한 풀(ADMIN_LOCAL_CACHE_LIMIT=60,
+// LRU by savedAt)을 공유한다. 화면이 자체적으로 team×period처럼 조합형 쿼리 캐시 키를
+// 쓰면, 그 조합 수만큼 슬롯을 잠식해 CRM/leads가 먼저 밀려난다(프루너는 스코프를 모르고
+// 저장 시각만 본다) — 옛 "SWR 10분을 5분에 자르던" 사고와는 다른 종류지만 같은 계열의
+// 용량 사고다. 그래서 화면 단위가 아니라 **엔드포인트 단위**로 판단했다(실제 소비처 코드를
+// grep으로 추적):
+//  - `/api/admin/hardware`  — 하드웨어 홈 대시보드. 소비처(HardwareInventoryClient.load)가
+//    캐시 키를 URL 그대로 쓰고 쿼리 파라미터가 없다 = 슬롯 1개 고정. 콜드 스켈레톤 체감이
+//    가장 큰 화면(5,481줄 컴포넌트)이라 이득 대비 비용이 가장 좋다. 단, 기본 GET 응답은
+//    movements 최대 2,000행을 그대로 포함한다(app/api/admin/hardware/route.ts 주석 —
+//    "기본 페이로드 자체는 줄이지 않았다") — MAX_SESSION_CACHE_CHARS(350KB)를 넘기면
+//    writePersistedCache가 조용히 저장을 건너뛴다(기존 가드, 안전하지만 이 스코프 추가의
+//    실효를 응답 크기에 의존하게 만든다 — npm run build 금지로 실측 못 했다. 하드웨어 팀이
+//    기본 페이로드의 movements를 트림하면 그때 완전히 실현된다).
+//  - `calendar:source-health` — 캘린더 연동 상태(app/admin/calendar/page.tsx, 커스텀
+//    cacheKey). 응답이 작고 슬롯 1개 고정, "재시작 직후 연동 끊김을 바로 보여준다"는 이득이
+//    또렷하다. **캘린더 일정 조회(`buildAdminCalendarUrl` — from/to 쿼리)는 일부러 넣지
+//    않았다** — 날짜 구간마다 캐시 키가 달라 조합이 사실상 무한하고, 재시작 후 기본 뷰가
+//    "이번 달"로 돌아가면 예전 방문 구간 캐시는 애초에 다시 읽히지도 않아 이득이 없다.
+//  - `/api/admin/messaging/status` — round3 §3.2가 지목한 재방문 지연(모듈 메모조차 없어
+//    ~1.8초급) 엔드포인트. URL 자체가 캐시 키라 슬롯 1개 고정.
+//  - `marketing-intake-today` — "오늘의 유입" 카드(TodayIntakeCard, 커스텀 cacheKey) 슬롯
+//    1개 고정. 날짜가 바뀌어도 SWR 백그라운드 갱신이 곧바로 교체하므로 자정 직후 잠깐의
+//    stale 표시는 무해하다.
+//  - **지사(`/api/admin/branch`)는 통째로 넣지 않았다** — BranchDashboardClient·
+//    SalesLedgerWorkbench가 team(4종)×period(3종)×화면(summary/kpi/pipeline/heatmap/hw)으로
+//    쿼리 문자열 캐시 키를 만든다. 사용자 한 명이 한 세션에서 팀·기간 토글만 몇 번 눌러도
+//    수십 개 슬롯이 생겨 로컬 풀을 지사 혼자 잠식할 수 있다 — 화면 소유(장부/지사 에이전트)가
+//    "기본 조합(ALL팀·이번 달)만 고정 키로 캐시"하듯 좁혀야 안전하게 넣을 수 있어 위임 대상.
+//  - **마케팅의 나머지 엔드포인트(캠페인별 스코어보드·`compass-ads:${period}` 등)도 넣지
+//    않았다** — 캠페인 id·크리에이티브 단위로 캐시 키가 늘어날 수 있어(EventOriginMatrix·
+//    CampaignManageClient·LinkPicker), 그 파일 소유 에이전트가 실제 카디널리티 상한을
+//    확인해야 안전하게 판단할 수 있다.
+//
+// 세 함정 장치가 새 스코프에도 자동으로 닿는지 확인했다(코드로 추적, tests/admin/
+// admin-client-cache-persistence.test.ts에 고정):
+//  1) 프루너(pruneStorageTier)는 스코프를 모르고 ADMIN_REQUEST_CACHE_PREFIX로 시작하는
+//     모든 저장 키를 훑어 retentionDeadline(엔트리별 keepUntil)만 본다 — 어떤 URL이 local로
+//     승격됐는지와 무관하게 그대로 적용된다.
+//  2) 배포 토큰 shape guard(getSessionCacheKey의 ADMIN_CACHE_BUILD)는 지속 계층 선택보다
+//     먼저 키에 섞이므로 local이든 session이든 동일하게 적용된다.
+//  3) 로그아웃 정리(clearAdminSessionStorage → clearAdminRequestCache(ADMIN_CACHE_SCOPE_ALL))는
+//     PERSIST_TIERS 전체(session+local)를 prefix만으로 비운다 — 스코프 목록 자체를 참조하지
+//     않아 새 항목을 추가로 등록할 필요가 없다.
+// ADMIN_LOCAL_CACHE_LIMIT(60)은 그대로 뒀다 — 이번에 늘린 4개는 전부 조합 없는 고정 키라
+// 최악의 경우도 슬롯 +4일 뿐, 기존 CRM/leads 예산을 실질적으로 잠식하지 않는다.
+const LOCAL_PERSIST_SCOPES = [
+  "/api/admin/crm",
+  "/api/admin/leads",
+  "/api/admin/hardware",
+  "calendar:source-health",
+  "/api/admin/messaging/status",
+  "marketing-intake-today",
+] as const
 
 // 품질 웨이브 4 — 항목 3. 응답이 영원히 오지 않는 요청(네트워크 끊김·서버 행)을 방지하는
 // 클라이언트 타임아웃. 대부분의 어드민 요청은 45s면 충분하지만, 외부 동기화·가져오기·
@@ -462,14 +519,29 @@ function readAdminCache<T>(cacheKey: string, allowExpired = false): AdminCacheEn
 }
 
 /**
+ * clearAdminRequestCache(ADMIN_CACHE_SCOPE_ALL)로 전역 클리어를 요청할 때만 쓰는 값.
+ *
+ * 횡단 인프라 감사(2026-09-10) — 예전 시그니처는 `prefix?: string`라 인자를 깜빡 빠뜨린
+ * 호출이 조용히 전역 무효화(GLOBAL_CACHE_SCOPE="*")가 됐다. 실제로 components/admin/crm/
+ * Customer360Drawer.tsx에 "감사#1: 인자 없는 clearAdminRequestCache()는 전역 캐시를 날린다"는
+ * 주석까지 붙어 호출부가 스스로 조심하고 있었다 — 그 방어를 호출부의 기억력이 아니라 타입
+ * 시스템으로 옮긴다. prefix를 필수로 바꾸고, "정말 전역을 지운다"는 의도는 이 상수를 명시
+ * 전달해야만 표현되게 한다(다른 문자열과 섞이지 않도록 실제 값은 내부 GLOBAL_CACHE_SCOPE와
+ * 동일하게 유지). 실수로 인자를 빠뜨리면 컴파일이 깨진다 — 런타임까지 갈 필요가 없다.
+ */
+export const ADMIN_CACHE_SCOPE_ALL = GLOBAL_CACHE_SCOPE
+
+/**
  * 어드민 요청 캐시 무효화.
- * - 무인자: 전역 클리어(기존 동작 그대로 — 로그아웃·전체 리셋용).
- * - prefix(예: "/api/admin/branch"): 그 prefix가 포함된 캐시 키만 지우고, 같은 스코프의
+ * - scope === ADMIN_CACHE_SCOPE_ALL: 전역 클리어(로그아웃·전체 리셋 전용 — clearAdminSessionStorage
+ *   내부에서만 명시적으로 쓴다. 다른 호출부가 이 상수를 넘기고 있다면 정말 전역을 지울
+ *   의도인지 다시 확인할 것).
+ * - 그 외 문자열(예: "/api/admin/branch"): 그 prefix가 포함된 캐시 키만 지우고, 같은 스코프의
  *   브라우저 HTTP 캐시 우회(60초)도 그 prefix에만 건다 — branch 새로고침이 다른 어드민
  *   탭 캐시까지 날리지 않게 한다(감사 #13).
  */
-export function clearAdminRequestCache(prefix?: string) {
-  const scopes = prefix ? [prefix] : [GLOBAL_CACHE_SCOPE]
+export function clearAdminRequestCache(scope: string) {
+  const scopes = [scope]
   clearCacheScopes(scopes)
   markAdminMutation(scopes)
 }
@@ -481,7 +553,7 @@ export function clearAdminSessionStorage() {
     sessionStorage.removeItem(key)
   })
 
-  clearAdminRequestCache()
+  clearAdminRequestCache(ADMIN_CACHE_SCOPE_ALL)
 }
 
 export function getAdminToken() {
@@ -853,28 +925,73 @@ export interface AdminWarmQueueItem {
 
 const WARM_QUEUE_CONCURRENCY = 3
 
+interface WarmQueueEntry extends AdminWarmQueueItem {
+  options: AdminFetchCacheOptions
+}
+
+// 전역 큐 + 활성 워커 카운터 — 호출 하나가 아니라 프로세스(탭) 전체가 동시성 3을 공유한다.
+//
+// 횡단 인프라 감사(2026-09-10): 예전 구현은 warmAdminRequestCacheQueued 호출마다 자기만의
+// cursor/워커 3개를 새로 띄웠다. 사이드바에서 탭 A를 hover(180ms 디바운스 후 큐 5개 투입) →
+// 곧이어 탭 B를 hover하면(A가 아직 다 안 돌았어도) 큐가 또 하나 생겨 워커 3개가 추가로
+// 뜬다 — 실제 동시 in-flight 예열 요청이 3이 아니라 호출 횟수 × 3까지 쌓일 수 있었다.
+// 주석이 말하는 "같은 틱에 몰아치지 않는다"는 목표가 호출 하나 안에서만 지켜지고 사이드바를
+// 훑듯이 여러 탭을 빠르게 hover하는 실제 사용 패턴에서는 지켜지지 않았던 것 — 그 폭주가
+// 정작 사용자가 클릭한 탭의 진짜 네비게이션 요청과 대역폭을 다툴 수 있다. 큐와 워커를
+// 모듈 전역으로 옮기고, 새 호출은 워커를 새로 띄우지 않고 기존(또는 방금 다 돈) 워커가
+// 없을 때만 보충한다 — 여러 번의 warmAdminRequestCacheQueued 호출이 하나의 큐를 나눠 쓰며
+// 전체 동시성이 항상 3 이하로 유지된다. 먼저 투입된 항목이 FIFO로 먼저 처리되므로, 먼저
+// hover한 탭의 예열이 나중 탭보다 우선순위를 유지한다.
+const warmQueue: WarmQueueEntry[] = []
+let activeWarmWorkers = 0
+
+function pumpWarmQueue() {
+  while (activeWarmWorkers < WARM_QUEUE_CONCURRENCY && warmQueue.length > 0) {
+    const entry = warmQueue.shift()
+    if (!entry) break
+    const { url, cacheKey, options } = entry
+    activeWarmWorkers++
+    void warmAdminRequestCache(url, cacheKey ? { ...options, cacheKey } : options).finally(() => {
+      activeWarmWorkers--
+      pumpWarmQueue()
+    })
+  }
+}
+
 /**
  * warmAdminTab(AdminSidebar)·warmSubtab(CrmSubnav)처럼 탭 하나가 URL 여러 개를 한 번에
- * 예열할 때, 동시성을 3으로 제한해 같은 틱에 몰아치지 않게 한다. 각 항목은 그대로
+ * 예열할 때, 동시성을 3으로 제한해 같은 틱에 몰아치지 않게 한다 — 이 제한은 이 호출 하나가
+ * 아니라 모듈 전체가 공유한다(warmQueue 주석 참조), 그래야 사이드바를 훑듯 여러 탭을 빠르게
+ * hover해도 실제 동시 in-flight 예열 요청이 3을 넘지 않는다. 각 항목은 그대로
  * warmAdminRequestCache로 위임하므로 document.hidden/saveData 스킵·실패 삼킴("Prefetch is
  * an optimization only")은 항목별로 동일하게 적용된다 — 여기서는 순서·동시성만 관리한다.
  * fire-and-forget이라 반환값은 없다(호출부는 await하지 않는다).
+ *
+ * 중복 예열 가드(클라이언트 캐시 규약 점검, 2026-09-10) — 같은 캐시 키(URL 또는 커스텀
+ * cacheKey)가 이미 진행 중(inflightRequests)이거나 큐에 대기 중이면 다시 넣지 않는다.
+ * adminFetchJsonCachedInternal의 inflight/캐시 적중 경로가 중복 "네트워크 요청" 자체는
+ * 이미 막아 주지만, 큐에 그대로 밀어 넣으면 워커 슬롯(3개뿐)을 하나 잡아먹고 같은 응답을
+ * 또 기다리게 된다 — 그동안 정말 새로운 URL의 예열이 그만큼 늦어진다. 사이드바를 훑듯
+ * 탭을 오가면 같은 URL이 여러 warm 표(메인 사이드바 + CrmSubnav 등)에 반복 등장하는 실제
+ * 패턴이라, 슬롯 낭비가 드문 일이 아니다. 이미 캐시에 신선하게 적중해 있는 URL까지는
+ * 걸러내지 않는다 — 그 경로는 이미 거의 공짜(동기 캐시 히트)라 TTL 재계산까지 복제할
+ * 이유가 없다.
  */
 export function warmAdminRequestCacheQueued(
   items: Array<string | AdminWarmQueueItem>,
   options: AdminFetchCacheOptions = {}
 ) {
-  const queue = items.map((item) => (typeof item === "string" ? { url: item } : item))
-  let cursor = 0
+  for (const item of items) {
+    const normalized = typeof item === "string" ? { url: item } : item
+    const dedupeKey = getAdminRequestCacheKey(normalized.url, undefined, normalized.cacheKey)
 
-  const runNext = async (): Promise<void> => {
-    const index = cursor++
-    if (index >= queue.length) return
-    const { url, cacheKey } = queue[index]
-    await warmAdminRequestCache(url, cacheKey ? { ...options, cacheKey } : options)
-    return runNext()
+    if (inflightRequests.has(dedupeKey)) continue
+    const alreadyQueued = warmQueue.some(
+      (queued) => getAdminRequestCacheKey(queued.url, undefined, queued.cacheKey) === dedupeKey
+    )
+    if (alreadyQueued) continue
+
+    warmQueue.push({ ...normalized, options })
   }
-
-  const workerCount = Math.min(WARM_QUEUE_CONCURRENCY, queue.length)
-  for (let i = 0; i < workerCount; i++) void runNext()
+  pumpWarmQueue()
 }

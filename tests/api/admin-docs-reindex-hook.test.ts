@@ -41,8 +41,14 @@ vi.mock("@/lib/repositories/docs-articles", () => ({
   bulkPatchDocsArticles,
 }))
 
+// admin-performance-round3-2026-09-10.md §3.3 — _revalidate.ts가 이제 revalidateTag도
+// 부르고(어드민 문서 목록 캐시 태그 무효화), 그 태그를 정의하는 _admin-list-cache.ts가
+// 모듈 스코프에서 unstable_cache도 부른다. 둘 다 제공해야 reindex 훅 라우트 임포트 체인이
+// 깨지지 않는다.
 vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
+  revalidateTag: vi.fn(),
+  unstable_cache: (fn: (...args: unknown[]) => unknown) => fn,
 }))
 
 function articleDetail(overrides: Record<string, unknown> = {}) {

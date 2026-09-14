@@ -48,10 +48,15 @@ export function WeeklyCloseSection({
                     <div>
                       <p className="flex items-center gap-2 text-[13px] font-bold text-[#111110]">
                         <CalendarDays className="h-4 w-4 text-[#084734]" />
-                        주간 마감 (Weekly Close)
+                        주간 스냅샷 비교 (Weekly Snapshot)
                       </p>
+                      {/* 품질 감사 2026-09-10 — #3: "주간 마감(Weekly Close)"이라는 옛 이름이 기간을
+                          실제로 잠그는(shell 확정) 기능처럼 들렸지만, 이 섹션은 스냅샷 캡처+비교일 뿐
+                          매트릭스 셀 잠금(RevMatrix isMatrixCellLocked)과 무관하다 — 이름을 실제
+                          동작에 맞춰 정정한다(로직·API·저장 스키마는 무변경, 표시 문구만 수정). */}
                       <p className="mt-0.5 text-[11px] leading-relaxed text-[#615D59]">
                         스냅샷 두 개를 {formatMonthLabel(selectedMonth)} 기준으로 비교 — 신규/증액/감액/소멸과 확도 전환을 수치로 봅니다.
+                        셀을 잠그지 않는 비교 도구입니다.
                       </p>
                     </div>
                     <button

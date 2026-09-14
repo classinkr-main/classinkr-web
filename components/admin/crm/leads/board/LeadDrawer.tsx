@@ -576,6 +576,9 @@ export default function LeadDrawer({
                   initialType={contactLogInitialType}
                   onSave={handleSaveLog}
                   onCancel={() => setShowLogForm(false)}
+                  // app/api/admin/leads/[id]/logs/route.ts가 status==="new"인 리드에만 저장 시점에
+                  // confirmed_at을 채운다 — 그 조건과 정확히 맞춰야 경고가 과다·과소 노출되지 않는다.
+                  willAutoConfirm={lead.status === "new" && unconfirmed}
                 />
               </div>
             )}

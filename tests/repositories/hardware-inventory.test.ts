@@ -88,11 +88,20 @@ function tableClient(table: string) {
   }
 }
 
+// 감사(2026-09-07 #5): merge_hardware_sheet_import RPC는 숫자가 아니라 jsonb 객체
+// {inserted,updated,tombstoned,revived}를 반환한다(20260630_hardware_sheet_import_merge.sql).
+// 기본값(null)은 기존 테스트가 기대하는 "rows.length" 동작을 그대로 유지하고, additive merge
+// cutover 검증 테스트만 이 값을 실제 RPC 응답 모양으로 덮어써 그 분기(mergeCounts 파싱)를 본다.
+let mockRpcResponseData: unknown = null
+
 function supabaseClient() {
   return {
     from: vi.fn((table: string) => tableClient(table)),
     rpc: vi.fn((fn: string, args: Record<string, unknown>) => {
       operations.push({ method: "rpc", fn, args })
+      if (mockRpcResponseData != null) {
+        return Promise.resolve({ data: mockRpcResponseData, error: null })
+      }
       const rows = Array.isArray(args.rows) ? args.rows : []
       return Promise.resolve({ data: rows.length, error: null })
     }),
@@ -141,6 +150,7 @@ describe("importHardwareFromBranchSheets", () => {
       },
     ]
     snapshotInsertError = null
+    mockRpcResponseData = null
     const inboundRows = [
       {
         id: "inbound-1",
@@ -490,6 +500,53 @@ describe("importHardwareFromBranchSheets", () => {
       await importHardwareFromBranchSheets({ actor: "admin@example.com" })
       expect(operations.some((op) => op.method === "rpc" && op.fn === "merge_hardware_sheet_import")).toBe(true)
       expect(operations.some((op) => op.method === "rpc" && op.fn === "replace_hardware_sheet_import")).toBe(false)
+    } finally {
+      if (prev === undefined) delete process.env.HARDWARE_SHEET_ADDITIVE_MERGE
+      else process.env.HARDWARE_SHEET_ADDITIVE_MERGE = prev
+    }
+  })
+
+  // 감사(2026-09-07 #5) cutover 준비 — 위 테스트는 "merge RPC가 불렸는지"만 본다. merge_hardware_
+  // sheet_import는 숫자가 아니라 jsonb 객체 {inserted,updated,tombstoned,revived}를 반환하는데
+  // (20260630_hardware_sheet_import_merge.sql), 그 실제 응답 모양으로 mergeCounts 파싱·imported
+  // 집계·import_runs.raw 기록까지 실측한 테스트가 없었다 — 플래그를 켜기 전 이 경로부터 검증한다.
+  it("parses the merge RPC's {inserted,updated,tombstoned,revived} object response correctly (additive merge cutover prep)", async () => {
+    const prev = process.env.HARDWARE_SHEET_ADDITIVE_MERGE
+    process.env.HARDWARE_SHEET_ADDITIVE_MERGE = "1"
+    mockRpcResponseData = { inserted: 3, updated: 2, tombstoned: 1, revived: 4 }
+    try {
+      const { importHardwareFromBranchSheets } = await loadRepository()
+
+      const result = await importHardwareFromBranchSheets({ actor: "admin@example.com" })
+
+      // imported = inserted + updated(실제로 반영된 행) — tombstoned·revived는 카운트에서 제외.
+      expect(result.imported).toBe(5)
+
+      const runUpdate = operations.find(
+        (op) => op.table === "hardware_import_runs" && op.method === "update"
+      )?.payload as Record<string, unknown>
+      expect(runUpdate).toMatchObject({ status: "success", rows_imported: 5 })
+      expect(runUpdate.raw).toMatchObject({
+        mode: "additive_merge",
+        merge: { inserted: 3, updated: 2, tombstoned: 1, revived: 4 },
+      })
+    } finally {
+      if (prev === undefined) delete process.env.HARDWARE_SHEET_ADDITIVE_MERGE
+      else process.env.HARDWARE_SHEET_ADDITIVE_MERGE = prev
+    }
+  })
+
+  it("does not misparse a merge response of exactly zero counts as 'no object returned'", async () => {
+    // {inserted:0,updated:0,...}는 truthy 객체이지만 낱값은 전부 falsy — mergeCounts 판정이
+    // "data && typeof data === 'object'"가 아니라 실수로 값 자체의 truthiness를 본다면
+    // 이 케이스에서 조용히 rows.length로 되돌아가 버린다(가짜 성공 카운트).
+    const prev = process.env.HARDWARE_SHEET_ADDITIVE_MERGE
+    process.env.HARDWARE_SHEET_ADDITIVE_MERGE = "1"
+    mockRpcResponseData = { inserted: 0, updated: 0, tombstoned: 0, revived: 0 }
+    try {
+      const { importHardwareFromBranchSheets } = await loadRepository()
+      const result = await importHardwareFromBranchSheets({ actor: "admin@example.com" })
+      expect(result.imported).toBe(0)
     } finally {
       if (prev === undefined) delete process.env.HARDWARE_SHEET_ADDITIVE_MERGE
       else process.env.HARDWARE_SHEET_ADDITIVE_MERGE = prev

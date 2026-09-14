@@ -2,6 +2,7 @@ import "server-only"
 
 import { unstable_cache } from "next/cache"
 import { envSheetId, getSheetModifiedTime } from "@/lib/branch/google-sheets"
+import { resolveSheetFreshnessFromSettled, type SheetFreshnessResult } from "@/lib/branch/sheet-freshness"
 import { dedupeDshByKind } from "@/lib/branch/dsh-dedupe"
 import type { DshBreakdownRow } from "@/lib/branch/parsers/dsh"
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
@@ -216,14 +217,23 @@ const readKpi = async (fy: number) => (await readKpiBlocksPreferDb(fy)).fy
 // Freshness hint — newest modifiedTime across both source sheets.
 // 60s revalidate keeps Drive API call rate well under any quota concern
 // while still surfacing edits within a minute.
-const readSheetFreshness = unstable_cache(async () => {
-  const [dash, hw] = await Promise.all([
+//
+// 품질 감사 2026-09-10 — #2: getSheetModifiedTime가 이제 재시도 후에도 실패하면 던진다
+// (google-sheets.ts 주석 참고). Promise.allSettled로 받아 "정상인데 값 없음"과 "조회 자체가
+// 실패함"을 failed 플래그로 구분한다 — 반환 타입이 string|null에서 객체로 바뀌었으므로
+// JSON 직렬화 가능 값만(unstable_cache 제약) 유지한 채 모양만 넓혔다. 순수 결정 로직
+// (resolveSheetFreshnessFromSettled)은 lib/branch/sheet-freshness.ts로 옮겨 async/캐시 없이
+// 직접 단위 테스트한다(품질 감사 #5 — 이 영역 대다수 테스트가 렌더 없는 소스 스캔이라 "진짜"
+// 실행 검증이 부족하다는 지적에 대응) — isSheetAheadOfSync와 같은 파일에 둬 관련 순수 판정을
+// 한곳에 모은다.
+const readSheetFreshness = unstable_cache(async (): Promise<SheetFreshnessResult> => {
+  const [dash, hw] = await Promise.allSettled([
     getSheetModifiedTime(envSheetId("dashboard")),
     getSheetModifiedTime(envSheetId("hardware")),
   ])
-  const candidates = [dash, hw].filter((t): t is string => Boolean(t))
-  if (candidates.length === 0) return null
-  return candidates.sort().pop() ?? null
+  if (dash.status === "rejected") console.error("[branch/summary] dashboard 시트 신선도 조회 실패:", dash.reason)
+  if (hw.status === "rejected") console.error("[branch/summary] hardware 시트 신선도 조회 실패:", hw.reason)
+  return resolveSheetFreshnessFromSettled(dash, hw)
 }, ["branch-sheet-freshness"], { revalidate: 60, tags: ["branch-sheet-freshness"] })
 
 function buildSyncHealth(runs: Awaited<ReturnType<typeof getRecentSyncRuns>>) {
@@ -253,10 +263,9 @@ export interface BranchSummaryPayloadQuery {
   /**
    * Google Drive 신선도 조회(readSheetFreshness)를 건너뛴다. 라우트는 항상 false —
    * 응답 계약을 그대로 유지한다. 서버 프리페치(app/admin/branch/page.tsx)만 true를 주는데,
-   * 이 값은 sheetModifiedAt(그리고 DSH 원천이 'live'일 때만 쓰이는 data_sources.dsh.asOf)
-   * 하나에만 쓰이고 shape은 그대로이며(둘 다 이미 nullable), null은 Drive 조회 실패 때와
-   * 동일하게 "알 수 없음"으로 fail-soft 처리되는 기존 값이다 — Drive 왕복 2회를 HTML TTFB에
-   * 얹지 않는 편이 낫다.
+   * 건너뛴 경우 sheetModifiedAt(그리고 DSH 원천이 'live'일 때만 쓰이는 data_sources.dsh.asOf)은
+   * null, sheetFreshnessError는 false로 채운다 — "조회를 안 함"은 "조회했는데 실패함"과 달라
+   * 실패 배지를 오발생시키지 않는다. Drive 왕복 2회를 HTML TTFB에 얹지 않는 편이 낫다.
    */
   skipSheetFreshness?: boolean
 }
@@ -270,10 +279,11 @@ export interface BranchSummaryPayloadQuery {
  */
 export async function buildBranchSummaryPayload(query: BranchSummaryPayloadQuery) {
   const { team, period, periodDate, includeBreakdown, overviewView, now: currentDate, skipSheetFreshness = false } = query
-  const [dshResult, kpi, revResult, campaigns, runs, events, sheetModifiedAt] = await Promise.all([
+  const [dshResult, kpi, revResult, campaigns, runs, events, sheetFreshness] = await Promise.all([
     readDshWithSource(fyOf(periodDate)), readKpi(fyOf(periodDate)), readRevDealsPreferActiveWithSource(fyOf(periodDate), { team }), summarizeCampaigns(currentDate), getRecentSyncRuns(3), listCachedPublicEvents(),
-    skipSheetFreshness ? Promise.resolve(null) : readSheetFreshness(),
+    skipSheetFreshness ? Promise.resolve<SheetFreshnessResult>({ modifiedTime: null, failed: false }) : readSheetFreshness(),
   ])
+  const sheetModifiedAt = sheetFreshness.modifiedTime
   const dsh = dshResult.dsh
   const deals = revResult.deals
   const teamMembers = new Set(listMembersByTeam(dsh, team))
@@ -476,6 +486,11 @@ export async function buildBranchSummaryPayload(query: BranchSummaryPayloadQuery
     lastSync,
     lastError: lastRun?.status === "failed" ? lastRun.error ?? "동기화 실패" : null,
     sheetModifiedAt,
+    // 품질 감사 2026-09-10 — #2: sheetModifiedAt이 null인 이유가 "시트에 값이 없음"인지
+    // "Drive 조회 자체가 실패함"인지 화면이 구분할 수 있게 승격한 플래그. SyncStatusBar/
+    // SalesLedgerWorkbench가 이 값이 true면 "시트가 더 새로움" 판정과 별개로 "신선도 확인
+    // 불가" 배지를 낸다 — 실패를 무음으로 정상처럼 보이게 하지 않는다.
+    sheetFreshnessError: sheetFreshness.failed,
     data_sources,
     monthly_series: {
       months,

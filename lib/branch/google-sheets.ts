@@ -83,16 +83,19 @@ export function isBlueText(fg: CellFormat | null | undefined): boolean {
 // Drive API gives us the sheet's last-edited timestamp without re-reading any
 // values. We surface this in the dashboard so the user can tell whether the
 // DB they're looking at lags behind the spreadsheet.
+//
+// 품질 감사 2026-09-10 — #2(data_trust 핵심): 예전엔 permission/network 실패를 여기서
+// 전부 null로 삼켰다 — "정상인데 값이 없음"과 "확인 자체가 실패함"이 구분되지 않아,
+// lib/branch/sheet-freshness.ts의 isSheetAheadOfSync가 null 입력에 무조건 false를 반환해
+// "시트가 더 새로움" 앰버 배지가 조용히 꺼졌다(REV 동기화가 30일 멈췄던 사고와 같은 실패 모드).
+// 이제 재시도(withRetry, 이 파일의 다른 Sheets 호출과 동일 정책)까지 실패하면 예외를 던진다 —
+// 호출부(lib/branch/summary-payload.ts의 readSheetFreshness)가 Promise.allSettled로 받아
+// "값 없음"과 "조회 실패"를 명시적으로 구분해 sheetFreshnessError 플래그로 승격한다.
 export async function getSheetModifiedTime(spreadsheetId: string): Promise<string | null> {
-  try {
+  return withRetry(async () => {
     const res = await drive.files.get({ fileId: spreadsheetId, fields: "modifiedTime" })
     return res.data.modifiedTime ?? null
-  } catch {
-    // Drive permission or network failure — caller treats null as "unknown"
-    // and falls back to lastSync alone, so the dashboard never breaks because
-    // of this freshness check.
-    return null
-  }
+  }, `drive.files.get(${spreadsheetId})`)
 }
 
 export function envSheetId(kind: "dashboard" | "hardware"): string {

@@ -7,6 +7,7 @@ import { useMemo, type ReactNode } from "react"
 import { BarChart3, Building2, CircleDollarSign, ReceiptText } from "lucide-react"
 import { StatTile } from "@/components/admin/viz"
 import { formatCNY } from "@/lib/crm/money-format"
+import { getSyncFreshness } from "@/lib/crm/sync-freshness"
 import {
   aggregateBranchKpi,
   BRANCH_KPI_DEFS,
@@ -123,9 +124,13 @@ export default function CrmTeamKpiBoard({
   month: string
 }) {
   // 콜드 로드 — '...' 텍스트 대신 타일 값 크기 스켈레톤(CRM-5).
-  const loadingValue = loading && !overview ? <ValueSkeleton className="h-5 w-16" /> : null
+  const pending = loading && !overview
+  const loadingValue = pending ? <ValueSkeleton className="h-5 w-16" /> : null
   const neoCrm = overview?.neoCrm ?? null
   const neoKpis = neoCrm?.kpis
+  // Sync 배지가 항상 초록(정상) 톤이라 동기화가 멈춰도 표정이 안 바뀌었다(2026-09-07 감사
+  // P0) — lib/crm/sync-freshness.ts SSOT로 24시간 초과 시 amber로 전환.
+  const neoSyncFreshness = getSyncFreshness(neoCrm?.latestSyncedAt ?? null)
   const members = useMemo(() => branchKpis?.members ?? [], [branchKpis])
 
   const teamRows = useMemo(() => {
@@ -168,8 +173,13 @@ export default function CrmTeamKpiBoard({
             {month} · 외부 CRM 동기화 완료량 기준
           </p>
         </div>
-        <span className="inline-flex h-8 items-center rounded-full bg-[#ECFDF5] px-3 text-[12px] font-semibold text-[#084734]">
+        <span
+          className={`inline-flex h-8 items-center gap-1 rounded-full px-3 text-[12px] font-semibold ${
+            !pending && neoSyncFreshness.stale ? "bg-[#FBF1E0] text-[#7A520F]" : "bg-[#ECFDF5] text-[#084734]"
+          }`}
+        >
           Sync {formatOverviewDate(neoCrm?.latestSyncedAt)}
+          {!pending ? <span className="opacity-70">· {neoSyncFreshness.relativeLabel}</span> : null}
         </span>
       </div>
 

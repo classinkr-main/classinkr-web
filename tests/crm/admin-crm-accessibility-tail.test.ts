@@ -98,11 +98,15 @@ describe("Customer 360 drawer accessibility contract", () => {
       "새 할 일 유형",
       "새 할 일 기한",
       "새 딜 제목",
-      "새 딜 예상 금액",
+      // "새 딜 예상 금액"은 감사 2026-09-07 §11로 공용 AdminMoneyInput(components/admin/
+      // AdminMoneyInput.tsx)에 넘어갔다 — 그 컴포넌트가 받은 ariaLabel prop을 내부에서
+      // aria-label로 렌더한다(실측: tests/crm/drawer-deals-section.test.tsx). 이 파일은
+      // 소스 텍스트 grep이라 prop 표기(ariaLabel=)와 네이티브 속성 표기(aria-label=) 둘 다 인정한다.
       "새 딜 단계",
     ]) {
       expect(customer360).toContain(`aria-label="${label}"`)
     }
+    expect(customer360).toContain('ariaLabel="새 딜 예상 금액"')
     expect(customer360).toContain("const contentId = useId()")
     expect(customer360).toContain("aria-controls={contentId}")
   })

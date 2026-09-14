@@ -295,6 +295,24 @@ export default function CaptureInboxClient({ initialEventId = "" }: { initialEve
     }
   }, [])
 
+  // 감사 2026-09-07 §10 — 파서가 잘못 자른 전화/이메일을 고치려면 배치를 통째로 다시 파싱하는
+  // 수밖에 없었다(행 단위 교정 UI 없음). PATCH는 이미 phone/email을 받으므로 화면만 연다.
+  const setRowContact = useCallback(async (row: CaptureRow, field: "phone" | "email", value: string) => {
+    const next = value.trim() || null
+    const prevValue = row[field]
+    if (next === prevValue) return
+    setRows((r) => r.map((x) => (x.id === row.id ? { ...x, [field]: next } : x)))
+    try {
+      await adminFetchJson(`/api/admin/crm/capture/rows/${row.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ [field]: next }),
+      })
+    } catch (e) {
+      setRows((r) => r.map((x) => (x.id === row.id ? { ...x, [field]: prevValue } : x)))
+      setError(e instanceof Error ? e.message : `${field === "phone" ? "전화" : "이메일"} 저장에 실패했습니다.`)
+    }
+  }, [])
+
   const setAllSelected = useCallback(
     async (next: boolean) => {
       const targets = visibleRows.filter((r) => r.matchStatus !== "duplicate_in_batch")
@@ -735,8 +753,29 @@ export default function CaptureInboxClient({ initialEventId = "" }: { initialEve
                             )}
                           </td>
                           <td className="px-3 py-2.5 text-[#1a1a1a]/60">
-                            <p>{row.phone ?? "—"}</p>
-                            {row.email && <p className="text-[11px] text-[#1a1a1a]/40">{row.email}</p>}
+                            {/* 감사 §10 — 정적 텍스트 대신 인라인 교정 입력. blur 시에만 커밋해
+                                (AdminMoneyInput과 같은 이유) 타이핑 중 재렌더로 조합이 끊기지 않는다.
+                                key를 서버값에 걸어 다른 배치/새로고침으로 값이 바뀌면 초안을 다시 맞춘다. */}
+                            <input
+                              key={`${row.id}-phone-${row.phone ?? ""}`}
+                              type="text"
+                              defaultValue={row.phone ?? ""}
+                              disabled={disabled}
+                              placeholder="전화"
+                              aria-label={`${row.organizationName ?? row.contactName ?? row.rowIndex + 1 + "행"} 전화 교정`}
+                              onBlur={(e) => void setRowContact(row, "phone", e.target.value)}
+                              className="w-full rounded-md border border-transparent bg-transparent px-1 py-0.5 text-[12px] outline-none transition-colors hover:border-[#e8e8e4] focus:border-[#111110]/30 focus:bg-white disabled:opacity-40"
+                            />
+                            <input
+                              key={`${row.id}-email-${row.email ?? ""}`}
+                              type="text"
+                              defaultValue={row.email ?? ""}
+                              disabled={disabled}
+                              placeholder="이메일"
+                              aria-label={`${row.organizationName ?? row.contactName ?? row.rowIndex + 1 + "행"} 이메일 교정`}
+                              onBlur={(e) => void setRowContact(row, "email", e.target.value)}
+                              className="mt-0.5 w-full rounded-md border border-transparent bg-transparent px-1 py-0.5 text-[11px] text-[#1a1a1a]/40 outline-none transition-colors hover:border-[#e8e8e4] focus:border-[#111110]/30 focus:bg-white focus:text-[#1a1a1a]/70 disabled:opacity-40"
+                            />
                           </td>
                           <td className="px-3 py-2.5">
                             <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${meta.tone}`}>

@@ -8,11 +8,17 @@ import { getCompassRevenue } from "@/lib/compass/bridge"
 import type {
   AdminCrmRevenueSheetBreakdownRow,
   AdminCrmRevenueSheetCompassCompare,
+  AdminCrmRevenueSheetManualLedgerGap,
   AdminCrmRevenueSheetMonthPoint,
   AdminCrmRevenueSheetRow,
   AdminCrmRevenueSheetWorkspace,
   RevenueSheetLinkStatus,
 } from "@/lib/admin-crm-revenue-sheet-types"
+
+interface BranchSalesLedgerEntryAmountRow {
+  amount: number | string | null
+  applied_at: string | null
+}
 
 interface BranchRevDealRow {
   id: string
@@ -179,12 +185,27 @@ function getTargetLabel(
   return null
 }
 
+// 품질 감사 2026-09-10 — #1(P0, 이중 진실): 순수 집계 함수로 분리해 단위 테스트 가능하게 한다
+// (tests/branch/crm-revenue-sheet-manual-ledger-gap.test.ts). applied_at 오름차순이 아니어도
+// 안전하도록 매번 Date 비교로 최댓값을 찾는다 — 빈 배열이면 count/amount 0, latestAppliedAt null.
+export function computeManualLedgerGap(rows: BranchSalesLedgerEntryAmountRow[]): AdminCrmRevenueSheetManualLedgerGap {
+  return {
+    count: rows.length,
+    amount: rows.reduce((sum, row) => sum + numberValue(row.amount), 0),
+    latestAppliedAt: rows.reduce<string | null>((latest, row) => {
+      if (!row.applied_at) return latest
+      if (!latest) return row.applied_at
+      return new Date(row.applied_at).getTime() > new Date(latest).getTime() ? row.applied_at : latest
+    }, null),
+  }
+}
+
 async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSheetWorkspace> {
   const sb = createSupabaseAdminClient()
   const warnings: string[] = []
   const currentMonth = getCurrentMonthKey()
 
-  const [sheetResult, linksResult, accountsResult, customersResult, dealsResult] = await Promise.all([
+  const [sheetResult, linksResult, accountsResult, customersResult, dealsResult, manualLedgerResult] = await Promise.all([
     sb
       .from("branch_rev_deals")
       .select(
@@ -202,6 +223,14 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
     sb.from("partner_accounts").select("id, name").limit(2000),
     sb.from("customers").select("id, name, campus_name").limit(2000),
     sb.from("deals").select("id, deal_code, title").limit(2000),
+    // 품질 감사 2026-09-10 — #1: 장부 콕핏/입력 레일에서 적용까지 마친 수기 입력·정정은
+    // branch_rev_deals(REV 시트 동기화 산물)를 절대 건드리지 않는다 — 이 화면은 그 매출을
+    // 구조적으로 볼 수 없다. 서버 병합(row 단위 매칭) 대신 규모만 세어 배지로 알린다.
+    sb
+      .from("branch_sales_ledger_entries")
+      .select("amount, applied_at")
+      .eq("entry_status", "active")
+      .limit(QUERY_LIMIT),
   ])
 
   if (sheetResult.error) throw sheetResult.error
@@ -209,6 +238,19 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
   if (accountsResult.error) warnings.push(`파트너 계정 라벨을 읽지 못했습니다: ${accountsResult.error.message}`)
   if (customersResult.error) warnings.push(`고객 라벨을 읽지 못했습니다: ${customersResult.error.message}`)
   if (dealsResult.error) warnings.push(`거래 라벨을 읽지 못했습니다: ${dealsResult.error.message}`)
+  // 내부 원장 테이블 자체가 아직 없는 환경(마이그 미적용)도 있을 수 있다 — 그 경우도 "미반영
+  // 0건"이 아니라 "확인 불가"로 다뤄야 하므로 별도 경고를 남기고 gap 카운트는 0으로 fail-soft한다.
+  if (manualLedgerResult.error) {
+    warnings.push(`장부 내부 원장(수기 입력) 반영 여부를 확인하지 못했습니다: ${manualLedgerResult.error.message}`)
+  }
+  if ((manualLedgerResult.data?.length ?? 0) >= QUERY_LIMIT) {
+    warnings.push(
+      `장부 내부 원장(수기 입력)이 ${QUERY_LIMIT.toLocaleString("ko-KR")}건 이상입니다 — 미반영 배지 수치가 과소집계일 수 있습니다.`
+    )
+  }
+  const manualLedgerGap: AdminCrmRevenueSheetManualLedgerGap = manualLedgerResult.error
+    ? { count: 0, amount: 0, latestAppliedAt: null }
+    : computeManualLedgerGap((manualLedgerResult.data ?? []) as BranchSalesLedgerEntryAmountRow[])
 
   // 상한에 정확히 닿았다면 그 뒤가 잘렸을 수 있다. 형제 모듈(admin-crm-revenue)은 같은 위험을
   // getQueryLimitWarning으로 알리는데 여기만 조용히 잘라, 요약·팀별 집계가 소리 없이 과소 집계된다.
@@ -369,6 +411,7 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
     statuses: Array.from(statusMap.values()).sort((a, b) => b.scheduledAmount - a.scheduledAmount),
     monthly,
     compass,
+    manualLedgerGap,
     warnings,
   }
 }

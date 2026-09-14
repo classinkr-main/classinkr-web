@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Fragment, use, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -95,7 +95,7 @@ const DshTeamGrid = dynamic(() => import("./ledger/DshTeamGrid").then((m) => m.D
 })
 const WeeklyCloseSection = dynamic(() => import("./ledger/WeeklyCloseSection").then((m) => m.WeeklyCloseSection), {
   ssr: false,
-  loading: () => <LoadingPanel label="주간 마감 데이터를 불러오는 중" />,
+  loading: () => <LoadingPanel label="주간 스냅샷 데이터를 불러오는 중" />,
 })
 // 주차 Forecast 보드(렌즈 "board", Board-1b 이식) — 기본 렌즈(REV) 첫 로드에 불필요한 서브트리라
 // DSH 렌즈와 동일 관례(ssr:false + LoadingPanel)로 지연 로드한다.
@@ -131,11 +131,14 @@ const DraftQueue = dynamic(() => import("./ledger/DraftQueue").then((m) => m.Dra
   ssr: false,
   loading: () => <LoadingPanel label="체크 큐를 불러오는 중" />,
 })
-// REV 다중월 매트릭스 클러스터(순수 로직 + 인라인 편집 인프라 + 행/셀/푸터)는 ledger/RevMatrix로
-// 물리 이동(웨이브 7 2단 F5 — 기계적 분할, 로직 무변경).
+// REV 다중월 매트릭스 클러스터 — 품질 감사 2026-09-10 #2: 순수 로직/타입/useMatrixEditor는
+// ledger/rev-matrix-logic.ts(JSX 없음)에서 "정적" import한다 — 이 값들은 훅·useMemo 안에서
+// 매 렌더 동기적으로 필요해 dynamic() 대상이 될 수 없다. 행/셀/푸터/팝오버 JSX(2,000줄 이상,
+// 아이콘·프레젠테이션 포함)만 ledger/RevMatrix에서 next/dynamic으로 지연 로드해, 기본 렌즈(REV)
+// 진입 시에도 이 무거운 컴포넌트 트리가 메인 청크를 가르지 않게 한다(다른 렌즈들과 동일 관례).
 import {
   buildMatrixPastePlan,
-  CrmLinkedBadge,
+  buildMatrixPendingByCell,
   dominantCellConfidence,
   EMPTY_BUCKET,
   findOpenNewRowDuplicate,
@@ -152,16 +155,9 @@ import {
   MATRIX_MONTH_W,
   MATRIX_PRODUCT_W,
   MATRIX_WEEK_W,
-  MatrixToneLegend,
-  NeedsLinkBadge,
   pendingCellAmount,
   railDedupTarget,
   resolveDraftEditTargetRow,
-  RevMatrixCategoryRow,
-  RevMatrixDealRow,
-  RevMatrixFooter,
-  RevMatrixGroupRow,
-  RevMatrixPasteDialog,
   storeMatrixConfidence,
   useMatrixEditor,
   weeklyEditLockMask,
@@ -170,12 +166,10 @@ import {
   type MatrixDensity,
   type MatrixPastePlan,
   type RevMatrixColumn,
-} from "./ledger/RevMatrix"
-// buildMatrixPendingByCell은 아래 재수출(export {...} from)에도 있지만 재수출은 로컬 바인딩을
-// 만들지 않는다 — pendingByCell memo가 직접 호출하므로 별도 import가 필요하다.
-import { buildMatrixPendingByCell } from "./ledger/RevMatrix"
+} from "./ledger/rev-matrix-logic"
 // 회귀 테스트(tests/branch/ledger-cell-dedup·ledger-cell-relock·rail-lock-precheck)가 이 모듈
-// 경로에서 import하는 기존 표면 유지용 재수출.
+// 경로에서 import하는 기존 표면 유지용 재수출 — rev-matrix-logic이 진짜 소유 모듈이라 여기서
+// 재수출해도(export ... from) 정적 import 그래프에 RevMatrix.tsx(JSX)를 끌어들이지 않는다.
 export {
   buildMatrixPendingByCell,
   computeWeekCellStates,
@@ -189,8 +183,40 @@ export {
   pendingCellAmount,
   railDedupTarget,
   resolveDraftEditTargetRow,
-} from "./ledger/RevMatrix"
-export type { MatrixCellCoord, MatrixPendingDraft } from "./ledger/RevMatrix"
+} from "./ledger/rev-matrix-logic"
+export type { MatrixCellCoord, MatrixPendingDraft } from "./ledger/rev-matrix-logic"
+// 행/셀/푸터/팝오버/붙여넣기 다이얼로그 JSX만 지연 로드(ssr:false — DSH/콕핏/큐와 동일 관례).
+// 로딩 스켈레톤: 뱃지 3종(CrmLinkedBadge·NeedsLinkBadge·MatrixToneLegend)은 작고 없어도 레이아웃이
+// 깨지지 않아 null. 행/푸터 4종은 <tbody> 안에 렌더되므로 <tr><td colSpan={99}>만 valid HTML로
+// 유지하면서 펄스 플레이스홀더를 준다(colSpan=99는 실제 열 수로 자동 클램프돼 안전).
+const RevMatrixSkeletonRow = () => (
+  <tr aria-hidden="true">
+    <td colSpan={99} className="h-7 animate-pulse bg-[#f6f5f4]" />
+  </tr>
+)
+const CrmLinkedBadge = dynamic(() => import("./ledger/RevMatrix").then((m) => m.CrmLinkedBadge), { ssr: false, loading: () => null })
+const MatrixToneLegend = dynamic(() => import("./ledger/RevMatrix").then((m) => m.MatrixToneLegend), { ssr: false, loading: () => null })
+const NeedsLinkBadge = dynamic(() => import("./ledger/RevMatrix").then((m) => m.NeedsLinkBadge), { ssr: false, loading: () => null })
+const RevMatrixCategoryRow = dynamic(() => import("./ledger/RevMatrix").then((m) => m.RevMatrixCategoryRow), {
+  ssr: false,
+  loading: RevMatrixSkeletonRow,
+})
+const RevMatrixDealRow = dynamic(() => import("./ledger/RevMatrix").then((m) => m.RevMatrixDealRow), {
+  ssr: false,
+  loading: RevMatrixSkeletonRow,
+})
+const RevMatrixFooter = dynamic(() => import("./ledger/RevMatrix").then((m) => m.RevMatrixFooter), {
+  ssr: false,
+  loading: RevMatrixSkeletonRow,
+})
+const RevMatrixGroupRow = dynamic(() => import("./ledger/RevMatrix").then((m) => m.RevMatrixGroupRow), {
+  ssr: false,
+  loading: RevMatrixSkeletonRow,
+})
+const RevMatrixPasteDialog = dynamic(() => import("./ledger/RevMatrix").then((m) => m.RevMatrixPasteDialog), {
+  ssr: false,
+  loading: () => null,
+})
 import {
   buildRevWeekProjection,
   defaultDraftWeeklyConfidence,
@@ -490,6 +516,7 @@ export default function SalesLedgerWorkbench({
     updateDraft,
     toggleDraft,
     applyDraft,
+    cancelDraft,
     deleteDraft,
     reverseEntry,
     reloadDrafts,
@@ -966,15 +993,29 @@ export default function SalesLedgerWorkbench({
       initialPipeline != null &&
       pipelineUrlForSearchParams(searchParams.toString(), defaultMonthRef.current) === initialPipeline.url,
   )
-  const pipelineSeed =
+  // 시드 후보 — 아직 promise를 풀지 않은 단계. 딥링크·필터 변경(=애초에 안 맞는 경우)이면
+  // 아래 use()를 전혀 호출하지 않는다.
+  const pipelineSeedCandidate =
     pipelineSeedLive && initialPipeline && `0:${initialPipeline.url}` === pipelineStateKey
       ? initialPipeline
       : null
+  // 횡단 인프라 개편(2026-09-10 스트리밍 전환) — pipelineSeedCandidate가 있을 때만 React
+  // use()로 promise를 푼다(조건부 호출은 use()에 한해 허용된 패턴). 후보가 없으면 이 줄
+  // 자체가 실행되지 않으므로 절대 불필요하게 suspend하지 않는다 — 후보가 있는 첫 렌더(기본
+  // 조합 콜드 진입)에서만 부모의 <Suspense>가 settle을 대신 기다린다.
+  const pipelineSeedResolved = pipelineSeedCandidate ? use(pipelineSeedCandidate.promise) : null
   useEffect(() => {
-    if (pipelineSeedLive && pipelineSeed == null) setPipelineSeedLive(false)
-  }, [pipelineSeedLive, pipelineSeed])
+    if (pipelineSeedLive && pipelineSeedCandidate == null) setPipelineSeedLive(false)
+  }, [pipelineSeedLive, pipelineSeedCandidate])
+  // promise가 null로 settle되면(비인증·역할 부족·ceilingMs 초과) 시드 없음과 동일하게 취급 —
+  // 아래 useBranchJson이 기존 클라이언트 페치 경로를 그대로 탄다.
+  const pipelineSeed =
+    pipelineSeedCandidate && pipelineSeedResolved != null
+      ? { url: pipelineSeedCandidate.url, data: pipelineSeedResolved, generatedAt: pipelineSeedCandidate.generatedAt }
+      : null
   // T3 — staleTimes.dynamic(180초)로 재사용된 RSC 프리페치는 pipelineSeed가 있어도 최대
-  // 180초 전 값일 수 있다. pipelineSeed는(스켈레톤 방지를 위해) 신선도와 무관하게 계속 첫
+  // 180초 전 값일 수 있다(generatedAt은 레인을 연 시각이지 값이 도착한 시각이 아니지만 기존
+  // 규약과 동일하게 다룬다). pipelineSeed는(스켈레톤 방지를 위해) 신선도와 무관하게 계속 첫
   // 렌더 값으로 쓰되, useBranchJson의 실제 요청은 신선할 때만 건너뛴다 — 오래됐으면 페치가
   // 그대로 돌아 캐시/네트워크가 최신 여부를 정하고, 응답이 도착하면 아래 병합이 그쪽으로 넘어간다.
   const pipelineSeedFresh = pipelineSeed != null && isPrefetchFresh(pipelineSeed.generatedAt)
@@ -1895,6 +1936,12 @@ export default function SalesLedgerWorkbench({
         // 초안이 생긴 게 아니라는 사실을 알려 중복 생성 오인을 막는다(웨이브 7 2단, I4 항목 3).
         if (result.dedupedRecent && !usedLocalFallback && !options?.silent) {
           pushMatrixToast({ kind: "info", text: DRAFT_DEDUPED_RECENT_NOTICE })
+        } else if (!usedLocalFallback && !options?.silent) {
+          // 품질 감사 2026-09-10 — #4: 셀 커밋은 항상 "검토 초안"만 만든다(draft → checked → apply
+          // 2단 게이트를 거쳐야 장부·리포트·CRM 화면에 반영). 이전엔 성공 시 토스트가 전혀 없어
+          // 앰버 점(셀 인라인 표시)을 못 보고 지나치면 "저장됨=반영됨"으로 오인하기 쉬웠다.
+          // pushMatrixToast는 동일 문구를 dedupe하므로 연속 입력에서도 토스트가 쌓이지 않는다.
+          pushMatrixToast({ kind: "info", text: "초안 저장됨 — 체크 큐에서 체크 → 적용해야 장부에 반영됩니다." })
         }
         return !usedLocalFallback
       })
@@ -2580,6 +2627,7 @@ export default function SalesLedgerWorkbench({
     selectedDraftOperation,
     monthOptions,
     selectedMonth,
+    managerOptions,
     draftAmountInvalid,
     draftQuantityInvalid,
     draftFormInvalid,
@@ -2614,7 +2662,7 @@ export default function SalesLedgerWorkbench({
               매출 장부
             </h1>
             <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-[#615D59]">
-              만지는 화면. 시트 수치 검수·장부 입력·주간 마감을 담당합니다. 차트·시각화는 KR Team으로 옮겨졌고, 여기는 수치가 정본입니다.
+              만지는 화면. 시트 수치 검수·장부 입력·주간 스냅샷 비교를 담당합니다. 차트·시각화는 KR Team으로 옮겨졌고, 여기는 수치가 정본입니다.
               {" "}통화 ¥ — 본사 보고 기준 · 단위 표기가 있는 그리드·매트릭스 셀은 호버(또는 title)로 반올림 전 원값을 확인할 수 있습니다.
             </p>
           </div>
@@ -2758,10 +2806,23 @@ export default function SalesLedgerWorkbench({
                 {relativeTimeFromNow(summary.data?.sheetModifiedAt, sourceStripNow)}
               </span>
             </span>
+            {/* 품질 감사 2026-09-10 — #2(data_trust 핵심): sheetModifiedAt=null이 "시트에 값
+                없음"인지 "Drive 조회 자체가 실패"했는지 구분한다. 예전엔 permission/network 실패가
+                null로 삼켜져 isSheetAheadOfSync가 무조건 false를 반환, 아래 "시트가 더 새로움"
+                경고가 조용히 꺼졌다(REV 동기화 30일 정지 사고와 동일 실패 모드) — 이제 실패 자체를
+                별도 배지로 눈에 띄게 낸다. */}
+            {!summary.error && summary.data?.sheetFreshnessError && (
+              <span
+                className="rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[10.5px] font-semibold text-[#7A520F]"
+                title="Google Drive에서 시트 수정 시각을 가져오지 못했습니다(권한/네트워크). 시트가 DB보다 앞서 있어도 이 경고가 뜨지 않을 수 있습니다."
+              >
+                시트 신선도 확인 불가
+              </span>
+            )}
             {/* 스테일 경고 공유화(품질 웨이브 4 — 항목 4) — SyncStatusBar와 같은 순수 판정
                 (lib/branch/sheet-freshness.ts)을 여기서도 써서 "시트수정"이 "sync"보다 눈에 띄게
                 앞서 있으면 동일 경고를 낸다(2026-07-16 사고 재발 감지력이 이 화면에도 있어야 한다). */}
-            {!summary.error && isSheetAheadOfSync(summary.data?.sheetModifiedAt, summary.data?.lastSync) && (
+            {!summary.error && !summary.data?.sheetFreshnessError && isSheetAheadOfSync(summary.data?.sheetModifiedAt, summary.data?.lastSync) && (
               <span className="rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[10.5px] font-semibold text-[#7A520F]">
                 시트가 더 새로움 — 동기화 필요
               </span>
@@ -2976,6 +3037,24 @@ export default function SalesLedgerWorkbench({
                         <ChevronRight className="h-3.5 w-3.5" />
                       </button>
                     </div>
+                    {/* 품질 감사 2026-09-10 — #9: 화살표만 있으면 몇 달 전을 보려면 3~6번 클릭해야
+                        한다(같은 화면의 CockpitEditor monthOptions <select>와 비대칭이었다) — FY 12개월
+                        중 직접 선택할 수 있는 드롭다운을 추가한다. 화살표는 그대로 둔다(연속 탐색 유지,
+                        기존 aria-label/disabled 회귀 없음) — 이 select는 원격 이동 전용 보조 수단. */}
+                    <label className="sr-only" htmlFor="rev-matrix-month-jump">회계월 직접 선택</label>
+                    <select
+                      id="rev-matrix-month-jump"
+                      value={selectedMonth}
+                      onChange={(event) => setSelectedMonth(event.target.value)}
+                      title="회계월 직접 선택"
+                      className="h-7 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-1.5 text-[11px] font-bold text-[#111110] outline-none"
+                    >
+                      {monthOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}{option.current ? " · 현재" : ""}
+                        </option>
+                      ))}
+                    </select>
                     {selectedMonth !== ymKeyUtc(new Date()) && (
                       <button
                         type="button"
@@ -3714,6 +3793,7 @@ export default function SalesLedgerWorkbench({
                   draftForm={draftForm}
                   setDraftForm={setDraftForm}
                   monthOptions={monthOptions}
+                  managerOptions={managerOptions}
                   draftFormInvalid={draftFormInvalid}
                   draftSaving={draftSaving}
                   canCreateEditDraft={canCreateEditDraft}
@@ -4230,6 +4310,7 @@ export default function SalesLedgerWorkbench({
                 onEdit={editDraft}
                 onToggle={toggleDraft}
                 onApply={applyDraft}
+                onCancel={cancelDraft}
                 onDelete={deleteDraft}
                 onReverse={handleReverseEntry}
               />

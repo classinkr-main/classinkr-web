@@ -3,7 +3,7 @@
 // ClassIn 고객 DB(통합 고객) 본체 — URL·캐시·드로어 상태와 저장 보기 로직만 소유하고,
 // 검색 패널·결과 테이블·행 시각 요소·정렬은 components/admin/crm/unified/* 로 분해했다(2026-08-28).
 
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type MouseEvent } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react"
 import dynamic from "next/dynamic"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { AlertTriangle, ChevronRight, Filter, RefreshCw, UserPlus } from "lucide-react"
@@ -47,9 +47,19 @@ const LeadRegisterModal = dynamic(() => import("./LeadRegisterModal"), {
   loading: () => <div className="fixed inset-0 z-50 bg-black/20" aria-hidden />,
 })
 
+// 검색 디바운스 — ⌘K 팔레트(CrmCommandPalette.tsx)와 같은 200ms 고정 지연 규약(2026-09-07
+// 감사 #6). useDeferredValue는 React 스케줄러 사정에 따라 지연 폭이 들쭉날쭉해 타이핑 중
+// 서버 왕복 수를 안정적으로 줄이지 못한다 — 고정 타이머로 바꾼다. 레이스 가드는 아래
+// requestSeq(기존 loadPage 계약)가 이미 맡고 있어 그대로 둔다.
+const SEARCH_DEBOUNCE_MS = 200
+
 export default function CrmUnifiedCustomersClient() {
   const [query, setQuery] = useState("")
-  const deferredQuery = useDeferredValue(query)
+  const [debouncedQuery, setDebouncedQuery] = useState("")
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedQuery(query), SEARCH_DEBOUNCE_MS)
+    return () => clearTimeout(handle)
+  }, [query])
   const [source, setSource] = useState<SourceFilter>("all")
   const [lifecycle, setLifecycle] = useState<LifecycleFilter>("all")
   const [owner, setOwner] = useState("")
@@ -205,7 +215,7 @@ export default function CrmUnifiedCustomersClient() {
   const loadPage = useCallback(
     async (offset: number, options?: { force?: boolean; append?: boolean }) => {
       const append = Boolean(options?.append)
-      const url = listUrl({ query: deferredQuery, source, lifecycle, owner, view: savedView, tag: tagFilter, offset })
+      const url = listUrl({ query: debouncedQuery, source, lifecycle, owner, view: savedView, tag: tagFilter, offset })
       const cached = !append && !options?.force ? getCachedAdminJson<CrmUnifiedCustomers>(url, { cacheKey: url }) : null
       const requestId = ++requestSeq.current
 
@@ -245,7 +255,7 @@ export default function CrmUnifiedCustomersClient() {
         }
       }
     },
-    [deferredQuery, source, lifecycle, owner, savedView, tagFilter]
+    [debouncedQuery, source, lifecycle, owner, savedView, tagFilter]
   )
 
   useEffect(() => {

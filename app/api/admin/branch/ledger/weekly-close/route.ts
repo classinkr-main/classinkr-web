@@ -49,12 +49,12 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     if (isMissingTableError(error)) {
       return NextResponse.json(
-        { error: "주간 마감 스냅샷 테이블이 아직 준비되지 않았습니다. sales_ledger_db_native_import 마이그레이션을 적용하세요." },
+        { error: "주간 스냅샷 테이블이 아직 준비되지 않았습니다. sales_ledger_db_native_import 마이그레이션을 적용하세요." },
         { status: 503 },
       )
     }
     console.error("[GET /api/admin/branch/ledger/weekly-close]", error)
-    return NextResponse.json({ error: "주간 마감 데이터를 불러오지 못했습니다." }, { status: 500 })
+    return NextResponse.json({ error: "주간 스냅샷 데이터를 불러오지 못했습니다." }, { status: 500 })
   }
 }
 
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     if (isMissingTableError(error)) {
       return NextResponse.json(
-        { error: "주간 마감 스냅샷 테이블이 아직 준비되지 않았습니다. sales_ledger_db_native_import 마이그레이션을 적용하세요." },
+        { error: "주간 스냅샷 테이블이 아직 준비되지 않았습니다. sales_ledger_db_native_import 마이그레이션을 적용하세요." },
         { status: 503 },
       )
     }

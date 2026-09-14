@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 import { StatTile } from "@/components/admin/viz"
 import { formatCNY, formatKRWAbbrev } from "@/lib/crm/money-format"
+import { getSyncFreshness } from "@/lib/crm/sync-freshness"
 import {
   CustomerLogIcon,
   formatLogAmount,
@@ -69,6 +70,12 @@ export default function CrmOperationsDashboard({
   const logs = overview?.business.customerLogs.recent ?? []
   const businessWarning = error ?? overview?.business.error ?? overview?.business.warning ?? null
   const neoSyncWarning = neoCrm?.error ?? overview?.externalSnapshots.error ?? null
+  // Sync 배지 신선도(2026-09-07 감사 P0) — 위 neoSyncWarning은 API가 명시적 error를 실었을
+  // 때만 뜬다. 동기화가 조용히 멈추면(에러 없이 그냥 안 돎) 지금까지는 날짜만 중립 톤으로
+  // 보여 정상처럼 읽혔다. lib/crm/sync-freshness.ts(SSOT, crm-neo-customer-snapshots.ts의
+  // 24시간 임계와 동일)로 24시간 넘은 동기화를 amber로 바꾸고 상대시간을 덧붙인다.
+  const neoSyncStamp = neoCrm?.latestSyncedAt ?? overview?.externalSnapshots.latestSyncedAt ?? null
+  const neoSyncFreshness = getSyncFreshness(neoSyncStamp)
   // 콜드 로드 — '...' 텍스트 대신 자리 크기별 스켈레톤(CRM-5). loadingText는 문자열 보간(hint) 전용.
   const pending = loading && !overview
   const loadingValue = pending ? <ValueSkeleton /> : null
@@ -86,8 +93,16 @@ export default function CrmOperationsDashboard({
               <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Customer Revenue Scope</p>
               <h2 className="mt-1 text-[18px] font-bold text-[#111110]">고객 돈흐름 우선순위</h2>
             </div>
-            <span className="inline-flex h-9 items-center rounded-lg bg-white px-3 text-[12px] font-semibold text-[#1a1a1a]/50">
-              Sync {formatOverviewDate(neoCrm?.latestSyncedAt ?? overview?.externalSnapshots.latestSyncedAt)}
+            <span
+              className={`inline-flex h-9 items-center gap-1 rounded-lg px-3 text-[12px] font-semibold ${
+                !pending && neoSyncFreshness.stale
+                  ? "bg-[#FBF1E0] text-[#7A520F]"
+                  : "bg-white text-[#1a1a1a]/50"
+              }`}
+            >
+              Sync {formatOverviewDate(neoSyncStamp)}
+              {/* 콜드 로드 중엔 아직 신선도를 판정할 데이터가 없다 — 확인 불가로 amber 오탐 금지. */}
+              {!pending ? <span className="opacity-70">· {neoSyncFreshness.relativeLabel}</span> : null}
             </span>
             <Link
               href="/admin/crm/deals"

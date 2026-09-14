@@ -553,9 +553,48 @@ export async function getLeadFirstResponseMap(): Promise<Map<string, string>> {
   return (await getCrmCustomerContactMaps()).firstResponseByLead
 }
 
+// 감사 2026-09-07 §4 — 더블클릭·네트워크 재시도로 같은 기록이 두 번 쌓이는 사고 방지 창.
+// ActivityQuickForm 등 수기 입력 경로는 source_id가 없어(getOrCreateCrmCustomerEventBySource의
+// 대상이 아니다) 이 함수가 무조건 INSERT였다 — 클라이언트 동기 ref 잠금과는 별개로, 서버도
+// 짧은 창 안의 완전 동일 내용 삽입을 막아야 한다(다음 액션 태스크 자동 생성까지 함께 중복되므로).
+const DUPLICATE_EVENT_WINDOW_MS = 10_000
+
+/**
+ * 방금 같은 대상·같은 내용으로 만들어진 기록이 있는지 짧은 창 안에서만 확인한다.
+ * target_type·source_type·title·target_id·body가 전부 일치해야 중복으로 본다 — 우연히 같은
+ * 제목의 서로 다른 메모가 오탐으로 막히지 않게 조건을 좁게 잡았다. 조회 자체가 실패하면
+ * (컬럼 부재 등) 막지 않고 그냥 진행한다 — 중복 방지가 저장 자체를 깨뜨리면 안 된다.
+ */
+async function findRecentDuplicateEvent(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  insert: CrmCustomerEventInsert
+) {
+  const since = new Date(Date.now() - DUPLICATE_EVENT_WINDOW_MS).toISOString()
+  let query = supabase
+    .from("crm_customer_events")
+    .select("*")
+    .eq("target_type", insert.target_type)
+    .eq("source_type", insert.source_type)
+    .eq("title", insert.title)
+    .gte("created_at", since)
+  query = insert.target_id ? query.eq("target_id", insert.target_id) : query.is("target_id", null)
+  query = insert.body ? query.eq("body", insert.body) : query.is("body", null)
+
+  const { data, error } = await query.order("created_at", { ascending: false }).limit(1).maybeSingle()
+  if (error || !data) return null
+  return data as CrmCustomerEvent
+}
+
 export async function createCrmCustomerEvent(input: CrmCustomerEventCreateInput) {
   const supabase = createSupabaseAdminClient()
   const insert = buildCrmCustomerEventInsert(input)
+
+  const duplicate = await findRecentDuplicateEvent(supabase, insert)
+  if (duplicate) {
+    const [existing] = await recordsWithSignedUrls([duplicate])
+    return existing
+  }
+
   const { data, error } = await supabase
     .from("crm_customer_events")
     .insert(insert)

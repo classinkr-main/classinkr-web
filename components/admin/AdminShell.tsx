@@ -1,19 +1,10 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 
 import AdminSidebar from "@/components/admin/AdminSidebar"
 import AdminCommandPaletteLauncher from "@/components/admin/AdminCommandPaletteLauncher"
-import { ADMIN_NAV } from "@/components/admin/admin-nav"
-import {
-  getAccessibleAdminNavItems,
-  isNavPresetKey,
-  normalizeNavOverrides,
-  resolveAdminNavAccess,
-} from "@/components/admin/admin-nav-access"
-import { resolveAdminNavParentHref } from "@/components/admin/admin-nav-routes"
 import { RouteTransition } from "@/components/transitions/RouteTransition"
 import type { AdminShellSession } from "@/lib/admin-auth"
 import { clearAdminSessionStorage } from "@/lib/admin-client"
@@ -302,31 +293,11 @@ export default function AdminShell({
     }
   }, [initialSession, isLoginPage, router])
 
-  // 차단된 탭에 URL을 직접 쳐서 들어온 경우를 막는다.
-  //
-  // ⚠️ 이것은 업무 표면 가드이지 보안 경계가 아니다. 셸 세션이 서버(RSC)에서 오더라도
-  // 이 컴포넌트는 여전히 클라이언트라 우회 가능하다. 실제 데이터 차단은 각 API의
-  // requireVerifiedAdminContext 롤 목록이 담당한다(스펙 §5.5).
-  const blocked = (() => {
-    if (!session || isLoginPage) return false
-    const preset = isNavPresetKey(session.navPreset) ? session.navPreset : null
-
-    // 직접 하위 경로뿐 아니라 사이드바 부모에 흡수된 독립 라우트(events·traffic·CS 계열)도
-    // admin-nav-routes SSOT에서 부모를 찾아 동일한 접근 판정을 상속한다.
-    const target = resolveAdminNavParentHref(
-      pathname,
-      ADMIN_NAV.map((item) => item.href)
-    )
-    if (!target) return false
-
-    const access = resolveAdminNavAccess({
-      role: session.role,
-      preset,
-      overrides: normalizeNavOverrides(session.navOverrides),
-    })
-
-    return !getAccessibleAdminNavItems(access).some((item) => item.href === target)
-  })()
+  // 2026-09-10 전면 공개 전환으로 "차단된 탭 직접 진입" 가드가 사라졌다.
+  // 어떤 항목도 deny 되지 않으므로(admin-nav-access.ts) 이 계산은 항상 false 였고,
+  // 매 네비게이션마다 ADMIN_NAV 를 훑는 비용과 도달 불가능한 차단 화면만 남아 있었다.
+  // 실제 데이터 차단은 예나 지금이나 각 API 의 requireVerifiedAdminContext 역할 검사와
+  // capability 가 담당한다 — 셸은 클라이언트라 애초에 보안 경계가 될 수 없었다.
 
   if (isLoginPage) return <>{children}</>
 
@@ -337,7 +308,6 @@ export default function AdminShell({
           role={session.role}
           name={session.name}
           email={session.email}
-          navPreset={session.navPreset}
           navOverrides={session.navOverrides}
         />
       ) : (
@@ -360,31 +330,13 @@ export default function AdminShell({
       <main className="min-w-0 flex-1 overflow-x-hidden pt-16 pb-24 lg:overflow-y-auto lg:overscroll-contain lg:pt-0 lg:pb-0">
         <div className="mx-auto w-full max-w-[1680px]">
           <RouteTransition tone="admin">
-            {blocked ? (
-              <div className="flex min-h-[60vh] items-center justify-center px-6">
-                <div className="max-w-sm text-center">
-                  <p className="text-[15px] font-semibold text-[#111110]">접근 권한이 없습니다</p>
-                  <p className="mt-1 text-[13px] text-[#1a1a1a]/45">
-                    이 화면은 현재 계정에 배정되지 않았습니다. 필요하면 최고 관리자에게 요청하세요.
-                  </p>
-                  <Link
-                    href="/admin/calendar"
-                    className="mt-4 inline-block rounded-lg bg-[#111110] px-4 py-2 text-[13px] font-medium text-white"
-                  >
-                    캘린더로 이동
-                  </Link>
-                </div>
-              </div>
-            ) : (
-              children
-            )}
+            {children}
           </RouteTransition>
         </div>
       </main>
       {session ? (
         <AdminCommandPaletteLauncher
           role={session.role}
-          navPreset={session.navPreset}
           navOverrides={session.navOverrides}
         />
       ) : null}

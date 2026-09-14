@@ -7,7 +7,7 @@
 // ledger-entry-reverse-action)가 이 파일을 소스 스캔한다.
 
 import { useMemo, useRef, useState } from "react"
-import { CheckCircle2, Loader2, Pencil, RefreshCw, RotateCcw, Search, Send, Trash2 } from "lucide-react"
+import { CheckCircle2, Loader2, Pencil, RefreshCw, RotateCcw, Search, Send, Trash2, XCircle } from "lucide-react"
 
 import { matchesTokens, tokenize } from "../search-tokens"
 import { useDialogFocus } from "../../use-dialog-focus"
@@ -36,6 +36,9 @@ export const DRAFT_STATUS_FILTERS: Array<{ id: DraftStatusFilter; label: string 
   { id: "draft", label: DRAFT_STATUS_LABELS.draft },
   { id: "checked", label: DRAFT_STATUS_LABELS.checked },
   { id: "applied", label: DRAFT_STATUS_LABELS.applied },
+  // 품질 감사 2026-09-10 — #8: 취소 액션(아래 onCancel)이 새로 생기면서 cancelled 상태에
+  // 실제로 도달하는 초안이 생긴다 — "전체" 필터에만 숨어 있지 않게 전용 칩을 둔다.
+  { id: "cancelled", label: DRAFT_STATUS_LABELS.cancelled },
   { id: "all", label: "전체" },
 ]
 
@@ -121,6 +124,7 @@ export function DraftQueue({
   onEdit,
   onToggle,
   onApply,
+  onCancel,
   onDelete,
   onReverse,
 }: {
@@ -138,6 +142,9 @@ export function DraftQueue({
   onEdit: (draft: LedgerDraft) => void
   onToggle: (id: string) => void | Promise<void>
   onApply: (id: string) => void | Promise<void>
+  // 품질 감사 2026-09-10 — #8: draft/checked → cancelled 전이. 삭제(onDelete, 하드 DELETE·감사
+  // 추적 없음)와 달리 행이 DB에 그대로 남는다 — "취소했다"는 사실 자체가 감사 대상일 때 이걸 쓴다.
+  onCancel: (id: string) => void | Promise<void>
   onDelete: (id: string) => void | Promise<void>
   onReverse: (id: string, reason?: string) => Promise<unknown> | void
 }) {
@@ -194,12 +201,20 @@ export function DraftQueue({
   }
   // 체크토글·삭제 in-flight 표시 — InputRailSection의 draftSaving+Loader2 패턴 재사용.
   // 한 초안에 동시에 한 동작만(토글 중 삭제 클릭 등 이중 요청 방지) 진행되게 버튼도 함께 잠근다.
-  const [rowActionBusy, setRowActionBusy] = useState<{ id: string; action: "toggle" | "delete" } | null>(null)
+  const [rowActionBusy, setRowActionBusy] = useState<{ id: string; action: "toggle" | "cancel" | "delete" } | null>(null)
   const isRowBusy = (id: string) => rowActionBusy?.id === id || applyingId === id || reversingId === id
   const runToggle = async (id: string) => {
     setRowActionBusy({ id, action: "toggle" })
     try {
       await onToggle(id)
+    } finally {
+      setRowActionBusy(null)
+    }
+  }
+  const runCancel = async (id: string) => {
+    setRowActionBusy({ id, action: "cancel" })
+    try {
+      await onCancel(id)
     } finally {
       setRowActionBusy(null)
     }
@@ -212,6 +227,17 @@ export function DraftQueue({
       setRowActionBusy(null)
     }
   }
+  // 품질 감사 2026-09-10 — #8: "취소"는 삭제(하드 DELETE)와 달리 되돌리기 확인 다이얼로그와 같은
+  // 셸을 재사용한다(danger 아닌 warning 톤) — 사유 입력은 없다(DB에 취소 사유 컬럼 없음, buildUpdate
+  // 참고). draft/checked에서만 활성화(아래 버튼 disabled 조건).
+  const [confirmCancelDraft, setConfirmCancelDraft] = useState<LedgerDraft | null>(null)
+  const confirmCancelCancelRef = useRef<HTMLButtonElement | null>(null)
+  const confirmCancelDraftId = confirmCancelDraft?.id ?? null
+  const confirmAndCancel = async (id: string) => {
+    await runCancel(id)
+    setConfirmCancelDraft(null)
+  }
+  const cancellingConfirmed = confirmCancelDraft != null && rowActionBusy?.id === confirmCancelDraft.id && rowActionBusy.action === "cancel"
   // 확인 다이얼로그의 "삭제" 클릭 → 기존 runDelete(rowActionBusy 추적) 그대로 실행 후 다이얼로그를 닫는다.
   const confirmAndDelete = async (id: string) => {
     await runDelete(id)
@@ -246,6 +272,14 @@ export function DraftQueue({
       setConfirmDeleteDraft(null)
     },
     confirmDeleteCancelRef
+  )
+  useDialogFocus(
+    confirmCancelDraftId,
+    () => {
+      if (cancellingConfirmed) return
+      setConfirmCancelDraft(null)
+    },
+    confirmCancelCancelRef
   )
 
   if (loading && drafts.length === 0) {
@@ -433,6 +467,23 @@ export function DraftQueue({
               >
                 {reversingId === draft.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
               </button>
+              {/* 품질 감사 2026-09-10 — #8: draft/checked 전용 "취소" — 삭제(하드 DELETE)와 달리 행이
+                  DB에 cancelled로 남아 감사 추적이 보존된다. applied/cancelled는 대상이 아니다
+                  (applied는 되돌리기, cancelled는 이미 최종 상태). */}
+              <button
+                type="button"
+                onClick={() => setConfirmCancelDraft(draft)}
+                disabled={draft.status === "applied" || draft.status === "cancelled" || isRowBusy(draft.id)}
+                className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] text-[#615D59] transition hover:bg-[#F6F5F4] disabled:cursor-not-allowed disabled:opacity-35"
+                aria-label={`${draft.customer || "초안"} 취소`}
+                title="초안 취소(감사 기록 보존)"
+              >
+                {rowActionBusy?.id === draft.id && rowActionBusy.action === "cancel" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <XCircle className="h-4 w-4" />
+                )}
+              </button>
               <button
                 type="button"
                 onClick={() => setConfirmDeleteDraft(draft)}
@@ -601,6 +652,49 @@ export function DraftQueue({
             >
               {deletingConfirmed ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
               삭제
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    {/* 취소 확인 다이얼로그(품질 감사 2026-09-10 — #8) — 삭제 확인과 동일 셸, danger 아닌 warning
+        톤(되돌리기 다이얼로그와 동일 배색) — 행이 사라지지 않고 cancelled로 남는다는 차이를
+        문구로 명시한다. */}
+    {confirmCancelDraft && (
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="초안 취소 확인"
+        className="fixed inset-0 z-[60] flex items-end justify-center bg-[#111110]/40 p-4 sm:items-center"
+      >
+        <div className="flex w-full max-w-sm flex-col overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_24px_70px_rgba(17,17,16,0.22)]">
+          <div className="border-b border-[rgba(0,0,0,0.08)] px-4 py-3">
+            <p className="text-[13px] font-bold text-[#111110]">초안 취소 확인</p>
+            <p className="mt-1 text-[11px] leading-relaxed text-[#615D59]">
+              {confirmCancelDraft.customer || "초안"} · {formatMonthLabel(confirmCancelDraft.month)} · {formatMoney(confirmCancelDraft.amount)}
+            </p>
+          </div>
+          <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#FBF1E0] px-4 py-3 text-[11.5px] font-semibold leading-relaxed text-[#7A520F]">
+            취소하면 체크·적용 대상에서 빠집니다. 삭제와 달리 기록은 감사용으로 남습니다.
+          </div>
+          <div className="flex items-center justify-end gap-2 bg-[#FAFAF8] px-4 py-3">
+            <button
+              ref={confirmCancelCancelRef}
+              type="button"
+              onClick={() => setConfirmCancelDraft(null)}
+              disabled={cancellingConfirmed}
+              className="inline-flex h-9 items-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              닫기
+            </button>
+            <button
+              type="button"
+              onClick={() => void confirmAndCancel(confirmCancelDraft.id)}
+              disabled={cancellingConfirmed}
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-3 text-[12px] font-bold text-[#7A520F] transition hover:bg-[#F5E4C3] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              {cancellingConfirmed ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
+              초안 취소
             </button>
           </div>
         </div>

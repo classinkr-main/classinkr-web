@@ -6,8 +6,8 @@ import { isDateString } from "@/lib/admin-calendar/range"
 import {
   SHOWROOM_BOOKING_STATUSES,
   isShowroomBookingStatus,
-  listShowroomBookings,
 } from "@/lib/repositories/showroom-bookings"
+import { getCachedShowroomBookings } from "./_cache"
 
 /**
  * GET /api/admin/showroom-bookings — 쇼룸 예약 접수 목록
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
     }
 
     return adminCachedJson(
-      await listShowroomBookings({
+      await getCachedShowroomBookings({
         from: from ?? undefined,
         to: to ?? undefined,
         status: status ?? undefined,

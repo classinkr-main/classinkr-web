@@ -16,6 +16,13 @@
  *
  * 클라이언트 컴포넌트(OverviewClient 등)와 서버 프리페치 모듈(overview/prefetch.ts 등)
  * 양쪽에서 import하므로 "server-only"를 두지 않는다 — 값 계산만 하는 순수 함수다.
+ *
+ * 횡단 인프라 감사(2026-09-10) 점검 결과: staleTimes.dynamic(180초)과 이 10초는 여전히
+ * 올바르게 분리돼 있다 — 값을 바꿀 근거를 찾지 못했다(180초는 "스켈레톤 없이 재사용 가능한
+ * 상한", 10초는 "마운트 페치를 생략해도 되는 상한"으로 질문 자체가 다르다). lib/admin/
+ * prefetch-budget.ts의 openPrefetchLane(신규 스트리밍 계약)이 돌려주는 generatedAt도 같은
+ * 규약(T3/T4 — "그 값이 실제로 계산/개시된 시각")을 따르므로, 스트리밍으로 전환한 소스도
+ * 이 함수로 그대로 판정할 수 있다 — 이 모듈을 바꿀 필요는 없었다.
  */
 export const ADMIN_PREFETCH_FRESH_MS = 10_000
 
