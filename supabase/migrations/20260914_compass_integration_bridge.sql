@@ -18,7 +18,8 @@
 --      Compass 저장값에서는 normPhone 과 같지만, 원문에 쓰면 "+82 010…"·"0082-010…"·"10-…"
 --      (앞 0 탈락) 형태가 조인에서 빠진다(Compass 감사 D-borrow-crm.md 전화 키 진리표 결론 2).
 --      표현식 인덱스가 같은 함수를 공유하도록 함수로 둔다. 적용 시 아래 자기검증 블록이 진리표
---      픽스처로 PG 실행 결과를 확인하고, 어긋나면 예외로 중단한다.
+--      픽스처로 PG 실행 결과를 확인하고, 어긋나면 예외로 중단한다. 역브리지 뷰·인덱스는 키가
+--      9자리 이상일 때만 조인에 쓴다(자리표시 번호 차단 — 어드민 동기화 MIN_PHONE_KEY_LENGTH 와 같은 경계).
 --   B) Compass → 어드민: compass_lead_refs_v(시스템 간 링크), compass_lead_contact_v(리드별 연락 사실 —
 --      "연락함" 정의의 단일 원천. 기계 작성자·자동 메모 제외 규칙은 Compass lib/leadContact.ts).
 --   C) 어드민 → Compass(역브리지): home_owner_directory_v, home_neo_accounts_v, home_site_leads_v,
@@ -63,7 +64,9 @@ $$;
 comment on function public.norm_phone_key(text) is
   'Compass lib/format.ts normPhone 의 SQL 등가 — 원문 전화 → Compass crm.leads.phone_key 조인 키. 규칙을 바꾸면 Compass normPhone 과 함께 바꿀 것(자기검증 픽스처: 20260914_compass_integration_bridge.sql).';
 
--- 자기검증: Compass normPhone 진리표(D-borrow-crm.md) + normPhone 주석의 실사례.
+-- 자기검증: Compass normPhone 진리표(D-borrow-crm.md) + normPhone 주석이 설명하는 형태(국가번호 뒤 앞 0 탈락·
+-- 국가번호 뒤 0 유지·국내 11자리). 그 형태의 번호는 실번호를 옮기지 않고 합성 번호(010-0000-xxxx, 가입자
+-- 번호로 쓰지 않는 국번 0000)로 둔다 — 적용 실패 시 예외 문구에도 찍히기 때문이다.
 -- 픽스처는 tests/db/compass-integration-bridge-migration.test.ts 가 같은 값으로 JS normPhone 과 대조한다.
 do $$
 declare
@@ -85,11 +88,11 @@ begin
       ('010-1234-5678 / 02-795-6720', '01012345678027956720'),
       ('+82 010-1234-5678', '01012345678'),
       ('0082-010-1234-5678', '01012345678'),
-      ('0082-1091948713', '01091948713'),
-      ('0082-01091948713', '01091948713'),
+      ('0082-1000001234', '01000001234'),
+      ('0082-01000001234', '01000001234'),
       ('10-1234-5678', '01012345678'),
       ('1012345678', '01012345678'),
-      ('01091948713', '01091948713'),
+      ('01000001234', '01000001234'),
       ('+86 138 0013 8000', '8613800138000'),
       ('008613800138000', '008613800138000'),
       ('없음', null),
@@ -104,14 +107,21 @@ begin
   end loop;
 end $$;
 
--- 조인용 표현식 인덱스. 뷰의 where(phone is not null)가 부분 인덱스 조건을 함의해야 플래너가 쓴다.
+-- 조인 가능한 키만 조인한다: 정규화 키가 9자리 미만(지역번호 포함 최소 길이 미달 — '0'·'000'·'-' 같은
+-- 자리표시 번호)이면 전화 키로 붙이지 않는다. 어드민 동기화 lib/compass/lead-contact-sync.ts 의
+-- MIN_PHONE_KEY_LENGTH(9)와 같은 경계다 — 자리표시 번호끼리 서로 다른 사람을 한 키로 묶지 않게 한다.
+-- 조인용 표현식 인덱스. 뷰의 where(phone is not null + 길이 가드)가 부분 인덱스 조건을 함의해야 플래너가 쓴다.
 create index if not exists leads_norm_phone_key_idx
-  on public.leads (public.norm_phone_key(phone)) where phone is not null;
+  on public.leads (public.norm_phone_key(phone))
+  where phone is not null and length(public.norm_phone_key(phone)) >= 9;
 create index if not exists channel_conversations_norm_phone_key_idx
-  on public.channel_conversations (public.norm_phone_key(phone)) where phone is not null;
--- home_neo_accounts_v 는 전화 없는 고객도 목록에 남기므로 부분 인덱스가 아니다.
+  on public.channel_conversations (public.norm_phone_key(phone))
+  where phone is not null and length(public.norm_phone_key(phone)) >= 9;
+-- home_neo_accounts_v 는 전화 없는(또는 조인 불가 전화) 고객도 목록에 남기고 phone_key 만 null 로 둔다.
+-- 그래서 부분 인덱스가 아니라 뷰의 phone_key 식(case) 그대로의 표현식 인덱스다 — phone_key = $1 이 이 인덱스를 쓴다.
 create index if not exists crm_neo_customer_snapshots_norm_phone_key_idx
-  on public.crm_neo_customer_snapshots (public.norm_phone_key(phone));
+  on public.crm_neo_customer_snapshots
+  ((case when length(public.norm_phone_key(phone)) >= 9 then public.norm_phone_key(phone) end));
 
 -- ─── B) Compass → 어드민 (crm 객체가 있을 때만) ─────────────────────────────
 -- 1) 시스템 간 링크 — 한 외부 레코드(홈페이지 리드·leadgen·채널톡 대화)는 Compass 리드 하나에만 붙는다.
@@ -183,7 +193,7 @@ select
   s.account_name,
   s.owner_id,
   s.owner_name,
-  public.norm_phone_key(s.phone) as phone_key,
+  case when length(public.norm_phone_key(s.phone)) >= 9 then public.norm_phone_key(s.phone) end as phone_key,
   s.region_label,
   s.has_eeo,
   s.billing_mode,
@@ -198,7 +208,7 @@ select
 from public.crm_neo_customer_snapshots s;
 
 -- 5) 홈페이지 문의 — phone_key 당 1행 집계. public.leads 는 정규화 기준 중복이 남아 있어
---    행 단위로 내보내면 phone_key 가 유일하지 않다. 광고 리드 원본(meta_lead_ads)은 Compass 가 가진다.
+--    행 단위로 내보내면 phone_key 가 유일하지 않다. 조인 불가 키(9자리 미만)는 집계하지 않는다. 광고 리드 원본(meta_lead_ads)은 Compass 가 가진다.
 --    name·org·email·phone·message·notes·anonymous_id·user_id·클릭 id 는 제외.
 create or replace view public.home_site_leads_v as
 select
@@ -210,10 +220,12 @@ select
   (array_agg(l.status order by l.created_at desc, l.id desc))[1] as last_status
 from public.leads l
 where l.phone is not null
+  and length(public.norm_phone_key(l.phone)) >= 9
   and l.source is distinct from 'meta_lead_ads'
 group by 1;
 
 -- 6) 채널톡 상담 — phone_key 당 1행 집계. 채널톡 동기화는 숫자만 저장(예 8210…)하므로 함수로 010… 복원.
+--    조인 불가 키(9자리 미만)는 집계하지 않는다.
 --    transcript·last_message_text·first_question·name·email·phone 은 제외.
 create or replace view public.home_channel_contacts_v as
 select
@@ -224,6 +236,7 @@ select
   bool_or(c.matched_lead_id is not null) as matched_home_lead
 from public.channel_conversations c
 where c.phone is not null
+  and length(public.norm_phone_key(c.phone)) >= 9
 group by 1;
 
 -- 권한: service_role만 SELECT. Supabase 기본권한이 부여한 공개 접근은 명시 회수.
@@ -242,7 +255,7 @@ grant select on public.home_owner_directory_v,
 comment on view public.home_owner_directory_v is
   '어드민 admin_profiles → Compass 역브리지 — 담당자 표시명·CRM owner 키·별칭·NEO owner id. Compass 가 담당자 매핑 원본으로 읽는다.';
 comment on view public.home_neo_accounts_v is
-  '어드민 crm_neo_customer_snapshots → Compass 역브리지 — NEO 고객 요약. phone_key=norm_phone_key(phone), 원문 전화 제외.';
+  '어드민 crm_neo_customer_snapshots → Compass 역브리지 — NEO 고객 요약. phone_key=norm_phone_key(phone)(9자리 미만이면 null — 조인 불가), 원문 전화 제외.';
 comment on view public.home_site_leads_v is
   '어드민 public.leads → Compass 역브리지 — phone_key 당 문의 건수·최근 시각·최근 출처·상태. 이름·기관·이메일·메시지 제외, meta_lead_ads 제외.';
 comment on view public.home_channel_contacts_v is

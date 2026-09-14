@@ -128,8 +128,11 @@ PostgREST 로 페이지를 끝까지 읽어야 하면 `lib/compass/paginate.ts` 
 - TS 에서 매칭하면 `lib/compass/normalize.ts` `normalizePhoneKey` 가 E2 로 이미 `normPhone` 등가다. 설계 §3 "`compass_leads_v.phone_key` 와 같은 식"은
   이제 "같은 결과(Compass 저장값 기준)"로 읽는다. **옛 K식(`^0082→82→^82→0`)을 원문 `public.leads.phone` 에 복사해 쓰지 않는다** —
   `+82 010…`·`0082-010…`·`10-…` 가 빠진다(R6 G7).
-- SQL(RPC·뷰)에서 매칭하면 `public.norm_phone_key(l.phone)` 을 쓴다. `public.leads(public.norm_phone_key(phone)) where phone is not null` 표현식 인덱스가 있다 —
-  조건에 `phone is not null` 을 같이 걸어야 플래너가 부분 인덱스를 쓴다.
+- SQL(RPC·뷰)에서 매칭하면 `public.norm_phone_key(l.phone)` 을 쓴다. `public.leads(public.norm_phone_key(phone)) where phone is not null and length(public.norm_phone_key(phone)) >= 9`
+  표현식 인덱스가 있다 — 조건에 `phone is not null` 과 길이 가드를 같이 걸어야 플래너가 부분 인덱스를 쓴다.
+- **조인 가능 키만 붙인다**: 정규화 키가 9자리 미만(`'0'`·`'000'`·`'-'` 같은 자리표시 번호, `1588-…` 대표번호)이면 전화 키로 매칭하지 않는다.
+  병합된 동기화 `lib/compass/lead-contact-sync.ts` 의 `MIN_PHONE_KEY_LENGTH`(9)와 같은 경계이고, 역브리지 뷰 3개·표현식 인덱스 3개가 같은 가드를 건다
+  (`home_neo_accounts_v` 는 행을 남기고 `phone_key` 만 null).
 
 ### 4-4. 링크 우선, 전화 키 폴백 (이후)
 

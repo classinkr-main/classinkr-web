@@ -154,6 +154,20 @@ const FIXTURES: Array<[string | null, string | null]> = (() => {
   )
 })()
 
+/** 어드민 동기화(lib/compass/lead-contact-sync.ts)의 매칭 최소 키 길이 — 소스에서 읽어 경계를 맞춘다(export 되지 않은 상수). */
+const MIN_PHONE_KEY_LENGTH = (() => {
+  const source = readFileSync(join(process.cwd(), "lib/compass/lead-contact-sync.ts"), "utf8")
+  const match = source.match(/const MIN_PHONE_KEY_LENGTH = (\d+)/)
+  if (!match) throw new Error("MIN_PHONE_KEY_LENGTH not found in lib/compass/lead-contact-sync.ts")
+  return Number(match[1])
+})()
+
+/** 뷰·인덱스의 조인 가능 키 가드를 옮긴 JS 에뮬레이션 — 9자리 미만 키는 null(어느 phone_key 와도 같지 않다). */
+function sqlJoinablePhoneKey(p: string | null): string | null {
+  const key = sqlNormPhoneKey(p)
+  return key !== null && key.length >= 9 ? key : null
+}
+
 // ─── 테스트 ────────────────────────────────────────────────────────────────
 
 describe("20260914 Compass 연동 브리지 — 적용 순서·안전장치", () => {
@@ -231,20 +245,69 @@ describe("public.norm_phone_key — Compass normPhone 등가", () => {
     expect(sqlNormPhoneKey(expected)).toBe(expected)
   })
 
-  it("세 테이블에 같은 함수로 표현식 인덱스를 둔다", () => {
+  it("세 테이블에 같은 함수로 표현식 인덱스를 둔다 — 뷰의 조건·식과 글자가 같아야 플래너가 쓴다", () => {
     expect(code).toMatch(
-      /create index if not exists leads_norm_phone_key_idx\s+on public\.leads \(public\.norm_phone_key\(phone\)\) where phone is not null;/
+      /create index if not exists leads_norm_phone_key_idx\s+on public\.leads \(public\.norm_phone_key\(phone\)\)\s+where phone is not null and length\(public\.norm_phone_key\(phone\)\) >= 9;/
     )
     expect(code).toMatch(
-      /create index if not exists channel_conversations_norm_phone_key_idx\s+on public\.channel_conversations \(public\.norm_phone_key\(phone\)\) where phone is not null;/
+      /create index if not exists channel_conversations_norm_phone_key_idx\s+on public\.channel_conversations \(public\.norm_phone_key\(phone\)\)\s+where phone is not null and length\(public\.norm_phone_key\(phone\)\) >= 9;/
     )
+    // NEO 스냅샷은 행을 거르지 않고 phone_key 만 null 로 두므로, 뷰의 case 식 그대로를 인덱스 식으로 둔다.
     expect(code).toMatch(
-      /create index if not exists crm_neo_customer_snapshots_norm_phone_key_idx\s+on public\.crm_neo_customer_snapshots \(public\.norm_phone_key\(phone\)\);/
+      /create index if not exists crm_neo_customer_snapshots_norm_phone_key_idx\s+on public\.crm_neo_customer_snapshots\s+\(\(case when length\(public\.norm_phone_key\(phone\)\) >= 9 then public\.norm_phone_key\(phone\) end\)\);/
     )
+  })
+
+  it("휴대폰 픽스처는 합성 번호다 — 가입자 번호로 쓰지 않는 국번(0000–1999)만 쓴다", () => {
+    const mobiles = FIXTURES.flatMap(([, expected]) => (expected && /^010\d{8}$/.test(expected) ? [expected] : []))
+    expect(mobiles.length).toBeGreaterThan(0)
+    for (const mobile of mobiles) expect(Number(mobile.slice(3, 7)), mobile).toBeLessThan(2000)
   })
 
   it("EXECUTE 를 회수하지 않는다 — 인덱스 식이 쓰기 역할 권한으로 평가된다", () => {
     expect(code).not.toMatch(/revoke[^;]*function public\.norm_phone_key/i)
+  })
+})
+
+describe("조인 가능 키 가드 — 자리표시 번호는 전화 키로 붙지 않는다", () => {
+  const guards = [...code.matchAll(/length\(public\.norm_phone_key\((?:\w\.)?phone\)\) >= (\d+)/g)]
+
+  it("가드 경계는 어드민 동기화 MIN_PHONE_KEY_LENGTH 와 같다", () => {
+    expect(MIN_PHONE_KEY_LENGTH).toBe(9)
+    expect(guards.length).toBeGreaterThanOrEqual(6)
+    for (const guard of guards) expect(Number(guard[1]), guard[0]).toBe(MIN_PHONE_KEY_LENGTH)
+  })
+
+  it("전화 키를 내보내는 역브리지 뷰는 모두 가드를 건다", () => {
+    const keyed = views.filter((parsed) => parsed.columns.includes("phone_key"))
+    expect(keyed.map((parsed) => parsed.name).sort()).toEqual(
+      ["home_channel_contacts_v", "home_neo_accounts_v", "home_site_leads_v"].sort()
+    )
+    for (const parsed of keyed) {
+      const start = code.indexOf(`create or replace view public.${parsed.name}`)
+      const body = code.slice(start, code.indexOf(";", start))
+      expect(body, parsed.name).toMatch(/length\(public\.norm_phone_key\(\w\.phone\)\) >= 9/)
+    }
+  })
+
+  it("전화 키 표현식 인덱스는 모두 가드를 건다", () => {
+    const indexes = [...code.matchAll(/create index if not exists (\w+_norm_phone_key_idx)([^;]*);/g)]
+    expect(indexes.map((m) => m[1]).sort()).toEqual(
+      ["channel_conversations_norm_phone_key_idx", "crm_neo_customer_snapshots_norm_phone_key_idx", "leads_norm_phone_key_idx"].sort()
+    )
+    for (const [, name, body] of indexes) expect(body, name).toContain("length(public.norm_phone_key(phone)) >= 9")
+  })
+
+  it.each([
+    ["0", null],
+    ["000-0000", null],
+    ["-", null],
+    ["1588-1234", null],
+    ["82-0", null],
+    ["02-795-6720", "027956720"],
+    ["+82 10-1234-5678", "01012345678"],
+  ] as Array<[string, string | null]>)("%j → 조인 키 %j", (input, expected) => {
+    expect(sqlJoinablePhoneKey(input)).toBe(expected)
   })
 })
 
@@ -305,11 +368,13 @@ describe("뷰 컬럼 계약(SPEC §4-4)", () => {
 
   it("집계 뷰는 phone_key 당 1행이고, 부분 인덱스를 쓸 수 있게 phone is not null 로 거른다", () => {
     const siteLeads = code.slice(code.indexOf("create or replace view public.home_site_leads_v"))
-    expect(siteLeads).toMatch(/where l\.phone is not null\s+and l\.source is distinct from 'meta_lead_ads'\s+group by 1;/)
+    expect(siteLeads).toMatch(
+      /where l\.phone is not null\s+and length\(public\.norm_phone_key\(l\.phone\)\) >= 9\s+and l\.source is distinct from 'meta_lead_ads'\s+group by 1;/
+    )
     expect(siteLeads).toContain("(array_agg(l.source order by l.created_at desc, l.id desc))[1] as last_source")
     expect(siteLeads).toContain("(array_agg(l.status order by l.created_at desc, l.id desc))[1] as last_status")
     const channel = code.slice(code.indexOf("create or replace view public.home_channel_contacts_v"))
-    expect(channel).toMatch(/where c\.phone is not null\s+group by 1;/)
+    expect(channel).toMatch(/where c\.phone is not null\s+and length\(public\.norm_phone_key\(c\.phone\)\) >= 9\s+group by 1;/)
   })
 })
 
@@ -334,7 +399,9 @@ describe("역브리지 PII 최소화", () => {
     for (const parsed of views) {
       for (const item of parsed.items) {
         if (!/\bphone\b/.test(item.replace(/phone_key/g, ""))) continue
-        expect(item, parsed.name).toMatch(/^public\.norm_phone_key\(\w\.phone\) as phone_key$/)
+        expect(item, parsed.name).toMatch(
+          /^(?:public\.norm_phone_key\((\w)\.phone\)|case when length\(public\.norm_phone_key\((\w)\.phone\)\) >= 9 then public\.norm_phone_key\(\2\.phone\) end) as phone_key$/
+        )
       }
     }
   })
