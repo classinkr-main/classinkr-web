@@ -6,6 +6,8 @@
   `supabase/migrations/20260914_*.sql` 3건 적용.
   자격증명이 없으면 크론은 503으로 조용히 서고 화면은 해당 채널을 **미연동**으로 표기한다 —
   없는 데이터를 0으로 포장하지 않는다.
+- **활성화 절차와 단계별 확인법은 [활성화 런북](ad-channel-activation-runbook-2026-09-14.md)에 따로 있다.**
+  이 문서는 "왜 이렇게 만들었나", 런북은 "켜고 나서 켜졌는지 어떻게 아나".
 - 소유: 마케팅/그로스/CRM 파트 ([playbook/04-growth-crm.md](playbook/04-growth-crm.md))
 - 관련 정본: [DESIGN.md](../../DESIGN.md) §2 제3자 채널 식별색, [campaign-entity-d1-d3-plan-2026-07-24.md](campaign-entity-d1-d3-plan-2026-07-24.md), [lead-funnel-consent-auth-scoring-plan-2026-06-14.md](lead-funnel-consent-auth-scoring-plan-2026-06-14.md) WS1-4·6
 
