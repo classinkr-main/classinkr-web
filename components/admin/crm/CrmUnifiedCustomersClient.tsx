@@ -78,6 +78,45 @@ interface RefreshFailure {
   retryAppend: boolean
 }
 
+// 라이브 리전 문구 — 상태 우선순위를 진행 중 > 완료 순으로 고정한 순수 함수라 RTL 없이도
+// 실제 입력·출력으로 검증할 수 있다(2026-09-12 리뷰 #1: refreshFailure를 놓치고 실패
+// 직후에도 성공 문구 "N명 결과를 불러왔습니다"를 읽어주던 결함). error·refreshFailure는
+// 각자의 CrmNoticeBanner(role=alert/status)가 스스로 통지하므로 여기서는 성공 문구만
+// 억제해 상충하는 두 안내가 동시에 읽히지 않게 한다.
+export function describeUnifiedListStatus(input: {
+  refreshing: boolean
+  loadingMore: boolean
+  loading: boolean
+  error: string | null
+  refreshFailure: unknown
+  totalCount: number | null
+}): string {
+  if (input.refreshing) return "통합 고객 목록을 새로고치는 중입니다."
+  if (input.loadingMore) return "다음 고객 목록을 불러오는 중입니다."
+  if (input.loading) return "통합 고객 목록을 불러오는 중입니다."
+  if (input.error || input.refreshFailure) return ""
+  if (input.totalCount == null) return ""
+  return `통합 고객 ${input.totalCount.toLocaleString("ko-KR")}명 결과를 불러왔습니다.`
+}
+
+// 실패 분류의 질의 키 — offset만 다른 재요청(다음/이전 페이지·새로고침 재시도)은 "같은 질의"로
+// 보고, 검색어·필터가 바뀐 뒤의 재요청은 "다른 질의"로 가른다(2026-09-12 리뷰 #2: 필터를
+// 바꾼 직후 요청이 실패하면 무관한 이전 필터 결과가 약한 경고만 띄운 채 그대로 남던 결함).
+export function queryKeyFromUrl(url: string): string {
+  const [path, qs = ""] = url.split("?")
+  const params = new URLSearchParams(qs)
+  params.delete("offset")
+  params.sort()
+  return `${path}?${params.toString()}`
+}
+
+// 화면에 남아 있는 데이터가 지금 실패한 요청과 같은 질의에서 온 것인지 — 같을 때만 "갱신
+// 실패"(warning, 이전 결과 유지)로 보내고, 다르면 "조회 실패"(danger)로 보내며 무관한
+// 데이터를 비운다.
+export function isSameLoadQuery(lastQueryKey: string | null, requestUrl: string): boolean {
+  return lastQueryKey !== null && lastQueryKey === queryKeyFromUrl(requestUrl)
+}
+
 export default function CrmUnifiedCustomersClient() {
   const [query, setQuery] = useState("")
   const [debouncedQuery, setDebouncedQuery] = useState("")
@@ -105,8 +144,11 @@ export default function CrmUnifiedCustomersClient() {
   const [leadModalOpen, setLeadModalOpen] = useState(false)
   const requestSeq = useRef(0)
   // loadPage 콜백이 "지금 화면에 결과가 있는가"를 deps 없이 읽기 위한 거울 — 실패를 danger(조회
-  // 실패)로 띄울지 warning(갱신 실패·이전 결과 표시 중)으로 띄울지 가른다.
+  // 실패)로 띄울지 warning(갱신 실패·이전 결과 표시 중)으로 띄울지 가른다. 데이터 유무만으로는
+  // 부족하다 — 검색어·필터를 바꾼 뒤 실패하면 화면엔 무관한 이전 질의 결과가 남는다.
+  // lastLoadedQueryKeyRef 로 "그 데이터가 지금 요청과 같은 질의인가"까지 함께 본다.
   const hasDataRef = useRef(false)
+  const lastLoadedQueryKeyRef = useRef<string | null>(null)
   useEffect(() => {
     hasDataRef.current = data != null
   }, [data])
@@ -266,6 +308,7 @@ export default function CrmUnifiedCustomersClient() {
       if (cached) {
         setData(cached)
         hasDataRef.current = true
+        lastLoadedQueryKeyRef.current = queryKeyFromUrl(url)
       }
 
       setLoading(!append && !cached)
@@ -297,6 +340,8 @@ export default function CrmUnifiedCustomersClient() {
               }
               if (!fresh) return
               setData((current) => mergePage(current, fresh, append))
+              hasDataRef.current = true
+              lastLoadedQueryKeyRef.current = queryKeyFromUrl(url)
               setRefreshFailure(null)
             },
           }
@@ -304,6 +349,7 @@ export default function CrmUnifiedCustomersClient() {
         if (requestId !== requestSeq.current) return
         setData((current) => mergePage(current, result.data, append))
         hasDataRef.current = true
+        lastLoadedQueryKeyRef.current = queryKeyFromUrl(url)
         if (result.stale && result.staleReason === "error") {
           // staleIfError 폴백 — 네트워크로 새로 받은 게 아니라 만료 캐시다. 성공처럼 두지 않는다.
           failRefresh(result.staleError)
@@ -312,10 +358,15 @@ export default function CrmUnifiedCustomersClient() {
         }
       } catch (err) {
         if (requestId !== requestSeq.current) return
-        if (hasDataRef.current) {
-          // 화면에 이전 결과가 남아 있다 — 목록을 지우지 않고 '갱신 실패'로 구분해 알린다.
+        // 화면에 남은 데이터가 "지금 실패한 이 질의"에서 온 것일 때만 갱신 실패(warning)로
+        // 묶어 이전 결과를 유지한다. 검색어·필터를 바꾼 뒤의 실패는 무관한 이전 질의 결과이므로
+        // 조회 실패(danger)로 보내고 화면도 비운다.
+        if (hasDataRef.current && isSameLoadQuery(lastLoadedQueryKeyRef.current, url)) {
           failRefresh(err)
         } else {
+          setRefreshFailure(null)
+          setData(null)
+          hasDataRef.current = false
           setError(describeLoadError(err))
         }
       } finally {
@@ -469,23 +520,20 @@ export default function CrmUnifiedCustomersClient() {
       className="mx-auto max-w-7xl [&_a]:min-h-11 [&_a]:focus-visible:outline-none [&_a]:focus-visible:ring-2 [&_a]:focus-visible:ring-[#084734] [&_a]:focus-visible:ring-offset-2 [&_button]:min-h-11 [&_button]:focus-visible:outline-none [&_button]:focus-visible:ring-2 [&_button]:focus-visible:ring-[#084734] [&_button]:focus-visible:ring-offset-2 [&_input:not([type=checkbox]):not([type=file])]:min-h-11 [&_input:not([type=checkbox]):not([type=file])]:focus-visible:outline-none [&_input:not([type=checkbox]):not([type=file])]:focus-visible:ring-2 [&_input:not([type=checkbox]):not([type=file])]:focus-visible:ring-[#084734] [&_select]:min-h-11 [&_select]:focus-visible:outline-none [&_select]:focus-visible:ring-2 [&_select]:focus-visible:ring-[#084734] lg:[&_a]:min-h-6 lg:[&_button]:min-h-6 lg:[&_input:not([type=checkbox]):not([type=file])]:min-h-0 lg:[&_select]:min-h-0"
       aria-busy={loading || loadingMore || refreshing}
     >
-        {/* 항상 마운트된 live region 두 개 — 진행/완료(polite)와 조회 실패(assertive)를 분리한다.
-            배너가 마운트와 동시에 문구를 싣는 것만으로는 일부 SR이 놓치므로 실패 문구는 여기서도 낸다. */}
+        {/* 항상 마운트된 sr-only 진행 상태 live region(polite) — 로딩·새로고침·완료만 담당한다.
+            조회 실패(danger)·갱신 실패(warning)는 아래 CrmNoticeBanner가 새로 마운트되며
+            role=alert/role=status로 스스로 통지하므로, 여기서는 성공 문구만 억제해 상충하는
+            두 안내가 동시에 읽히지 않게 한다(과거엔 실패 중에도 성공 문구를 읽었고, 별도 상시
+            role=alert div가 CrmNoticeBanner와 같은 문구를 중복으로 읽었다 — 2026-09-12 리뷰). */}
         <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-          {refreshing
-            ? "통합 고객 목록을 새로고치는 중입니다."
-            : loadingMore
-              ? "다음 고객 목록을 불러오는 중입니다."
-              : loading
-                ? "통합 고객 목록을 불러오는 중입니다."
-                : error
-                  ? ""
-                  : data
-                    ? `통합 고객 ${data.summary.total.toLocaleString("ko-KR")}명 결과를 불러왔습니다.`
-                    : ""}
-        </div>
-        <div className="sr-only" role="alert" aria-atomic="true">
-          {error && !loading && !refreshing ? `조회 실패: ${error}` : ""}
+          {describeUnifiedListStatus({
+            refreshing,
+            loadingMore,
+            loading,
+            error,
+            refreshFailure,
+            totalCount: data?.summary.total ?? null,
+          })}
         </div>
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
