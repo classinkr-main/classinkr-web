@@ -11,14 +11,14 @@ import AlertsOutboundSections from "./AlertsOutboundSections"
 import CategoryCardsSection from "./CategoryCardsSection"
 import HardwareSearchPanel from "./HardwareSearchPanel"
 import ImportFreshnessStrip from "./ImportFreshnessStrip"
-import LocationMapSection from "./LocationMapSection"
+import OfficeSamplePoolSection from "./OfficeSamplePoolSection"
 import PlannedOutboundPanel from "./PlannedOutboundPanel"
 import SalesPeriodSummary from "./SalesPeriodSummary"
 import SampleTrackerSection from "./SampleTrackerSection"
 import SnapshotRestorePanel from "./SnapshotRestorePanel"
 import StockLevelsSection from "./StockLevelsSection"
 import SummaryBand from "./SummaryBand"
-import type { HardwareDashboard, HardwareSectionKey } from "./shared"
+import { todayKey, type HardwareDashboard, type HardwareSectionKey } from "./shared"
 
 interface HomeTabPanelProps {
   activePanelId: string
@@ -65,9 +65,6 @@ interface HomeTabPanelProps {
   confirmPlannedSelection: ComponentProps<typeof PlannedOutboundPanel>["confirmPlannedSelection"]
   selectionConfirmProgress: ComponentProps<typeof PlannedOutboundPanel>["selectionConfirmProgress"]
   onPlannedSelectionCountChange: ComponentProps<typeof PlannedOutboundPanel>["onSelectionCountChange"]
-  locationMap: ComponentProps<typeof LocationMapSection>["locationMap"]
-  locationMapExpanded: ComponentProps<typeof LocationMapSection>["locationMapExpanded"]
-  setLocationMapExpanded: ComponentProps<typeof LocationMapSection>["setLocationMapExpanded"]
   openSections: Record<HardwareSectionKey, boolean>
   toggleSection: ComponentProps<typeof StockLevelsSection>["toggleSection"]
   stockPagination: ComponentProps<typeof StockLevelsSection>["stockPagination"]
@@ -129,9 +126,6 @@ export default function HomeTabPanel({
   confirmPlannedSelection,
   selectionConfirmProgress,
   onPlannedSelectionCountChange,
-  locationMap,
-  locationMapExpanded,
-  setLocationMapExpanded,
   openSections,
   toggleSection,
   stockPagination,
@@ -232,11 +226,20 @@ export default function HomeTabPanel({
       setCustomerDetail={setCustomerDetail}
     />
 
-    <LocationMapSection
-      locationMap={locationMap}
-      locationMapExpanded={locationMapExpanded}
-      setLocationMapExpanded={setLocationMapExpanded}
-      prepareQuickEntry={prepareQuickEntry}
+    {/* 사무실·샘플 재고 풀(2026-09-15) — 예전 "재고 위치 맵" 자리. 위치 맵의 남은/나간 샘플은 원장 위치 잔량이었는데,
+        사무실·샘플은 유닛(관리번호)이 정본이라는 운영자 결정에 따라 창고·가용과 함께 유닛 기준 사무실 가용·전시·대여를
+        한 표로 보여 준다. 대여·반납은 기존 빠른 기록의 샘플 프리셋으로 연다(원장 기록 + 유닛 선택). */}
+    <OfficeSamplePoolSection
+      stockRows={data?.stock ?? null}
+      sampleUnits={sampleUnits}
+      sampleUnitsLoading={sampleUnitsLoading}
+      sampleUnitsError={sampleUnitsError}
+      canWrite
+      todayKey={todayKey()}
+      onLoan={(_productName, _availableUnitIds, itemId) => prepareQuickEntry(itemId ?? "", "sample")}
+      onReturn={(_productName, itemId) => prepareQuickEntry(itemId ?? "", "sampleReturn")}
+      onOpenUnit={setSampleUnitSheetId}
+      onUnitsChanged={loadSampleUnits}
     />
 
     <SampleTrackerSection

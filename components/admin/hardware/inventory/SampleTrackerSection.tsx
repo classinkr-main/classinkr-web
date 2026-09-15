@@ -3,6 +3,7 @@
 import { memo, useMemo, useState } from "react"
 import { ChevronDown, ChevronRight, PackagePlus } from "lucide-react"
 
+import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
 import { adminFetchJson } from "@/lib/admin-client"
 import {
   formatNumber,
@@ -21,6 +22,7 @@ const FILTERS: Array<{ key: StatusFilter; label: string }> = [
   { key: "all", label: "전체" },
   { key: "loaned", label: "대여중" },
   { key: "office", label: "사무실" },
+  { key: "showroom", label: "전시·사내 사용" },
   { key: "repair", label: "수리" },
   { key: "converted", label: "판매 전환" },
   { key: "retired", label: "폐기" },
@@ -65,6 +67,10 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
   const [showAllRows, setShowAllRows] = useState(false)
   const [registering, setRegistering] = useState(false)
   const [registerError, setRegisterError] = useState<string | null>(null)
+  // 원장 잔량 백필은 확인을 거친다(2026-09-15). 사무실·샘플 재고는 유닛이 정본이고 원장 수치는 시트 기록을
+  // 따른 추정이다 — "클래스인" 보관분이 사무실로 정규화되면서 원장 사무실 잔량이 28대 늘었는데, 그중 상당수는
+  // 이미 샘플로 나간 물량이라 한 번에 등록하면 실물 없는 유닛이 생긴다.
+  const [registerConfirmOpen, setRegisterConfirmOpen] = useState(false)
 
   // 정합 대조 — 원장 위치 잔량(사무실/샘플) vs 등록 유닛 수. 양수 diff = 미등록(원클릭 등록 대상),
   // 음수 diff = 유닛이 원장보다 많음(수동 정리 필요, 배지로만 알림).
@@ -76,7 +82,10 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
       const officeExpected = Math.max(0, locationQuantity(row, "사무실"))
       const loanedExpected = Math.max(0, locationQuantity(row, "샘플"))
       if (officeExpected === 0 && loanedExpected === 0) continue
-      const officeActual = units.filter((unit) => unit.product_name === row.product && unit.status === "office").length
+      // 전시·사내 사용 유닛도 사무실에 있는 물량이다 — 빼고 세면 전시 대수만큼 "원장 차이 등록"을 제안해 실물 없는 유닛을 만든다.
+      const officeActual = units.filter(
+        (unit) => unit.product_name === row.product && (unit.status === "office" || unit.status === "showroom")
+      ).length
       const loanedActual = units.filter((unit) => unit.product_name === row.product && unit.status === "loaned").length
       const officeDiff = officeExpected - officeActual
       const loanedDiff = loanedExpected - loanedActual
@@ -96,7 +105,7 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
       list = list.filter((unit) => unit.status === "loaned" && (loanElapsedDays(unit.loaned_at) ?? 0) >= agingMinDays)
     }
     // 대여중(경과 오래된 순) → 사무실 → 나머지 — 행동이 필요한 유닛이 위로 온다.
-    const statusRank: Record<SampleUnitStatus, number> = { loaned: 0, repair: 1, office: 2, converted: 3, retired: 4 }
+    const statusRank: Record<SampleUnitStatus, number> = { loaned: 0, repair: 1, office: 2, showroom: 3, converted: 4, retired: 5 }
     return list.slice().sort((a, b) => {
       if (statusRank[a.status] !== statusRank[b.status]) return statusRank[a.status] - statusRank[b.status]
       if (a.status === "loaned" && b.status === "loaned") {
@@ -107,7 +116,7 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
   }, [units, filter, agingMinDays])
 
   const counts = useMemo(() => {
-    const map: Record<StatusFilter, number> = { all: units?.length ?? 0, office: 0, loaned: 0, repair: 0, converted: 0, retired: 0 }
+    const map: Record<StatusFilter, number> = { all: units?.length ?? 0, office: 0, showroom: 0, loaned: 0, repair: 0, converted: 0, retired: 0 }
     for (const unit of units ?? []) map[unit.status] += 1
     return map
   }, [units])
@@ -163,6 +172,7 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
       setRegisterError(err instanceof Error ? err.message : "등록에 실패했습니다.")
     } finally {
       setRegistering(false)
+      setRegisterConfirmOpen(false)
     }
   }
 
@@ -184,16 +194,43 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
           {integrity && integrity.missingCount > 0 && (
             <button
               type="button"
-              onClick={() => void registerMissing()}
+              onClick={() => setRegisterConfirmOpen(true)}
               disabled={registering}
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-[#084734] px-3 py-2 text-[12px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:opacity-60"
+              title="원장 잔량과 등록 유닛 수의 차이입니다 — 등록 전에 품목별 수량을 확인합니다"
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-[#084734] bg-white px-3 py-2 text-[12px] font-bold text-[#084734] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:opacity-60"
             >
               <PackagePlus className={`h-3.5 w-3.5 ${registering ? "animate-pulse" : ""}`} />
-              {registering ? "등록 중" : `미등록 ${formatNumber(integrity.missingCount)}대 등록`}
+              {registering ? "등록 중" : `원장 차이 ${formatNumber(integrity.missingCount)}대 확인`}
             </button>
           )}
         </div>
       </div>
+
+      <DeleteConfirmDialog
+        open={registerConfirmOpen}
+        onClose={() => setRegisterConfirmOpen(false)}
+        onConfirm={() => void registerMissing()}
+        loading={registering}
+        destructive={false}
+        title="원장 차이만큼 유닛 등록"
+        description={
+          <>
+            원장 위치 잔량이 등록된 유닛보다 많은 품목입니다. 원장 수치는 시트 기록을 따른 추정이라, 실물을 확인한 수량만
+            등록하세요.
+            <span className="mt-2 block space-y-0.5 font-mono text-[12px] text-[#615D59]">
+              {(integrity?.plan ?? []).map((line) => (
+                <span key={`${line.productName}-${line.status}`} className="block">
+                  {line.productName} · {line.status === "office" ? "사무실" : "대여중"} {formatNumber(line.count)}대
+                </span>
+              ))}
+            </span>
+          </>
+        }
+        confirmLabel="모두 등록"
+        confirmLoadingLabel="등록 중…"
+        cancelLabel="취소"
+        irreversibleNote="등록한 유닛은 폐기 처리로만 정리할 수 있습니다."
+      />
 
       {(error || registerError) && (
         <p className="border-b border-[rgba(0,0,0,0.06)] bg-[#FCE9E9] px-5 py-2.5 text-[12px] font-semibold text-[#8F2C2C]">

@@ -262,12 +262,20 @@ function normalizeProductName(value: string) {
   return value.replace(/\s+/g, " ").trim()
 }
 
+// 클래스인 본사(사무실·쇼룸) 보관분은 사무실 재고다(운영자 결정 2026-09-15). 시트 보관처에는 "클래스인"으로
+// 적힌다. 영문 "ClassIn"은 아래 수리 규칙보다 먼저 판정해야 한다.
+const OFFICE_LOCATION_PATTERN = /사무실|office|클래스인|class\s*in/i
+// 수리 위치는 수리를 뜻하는 표기에만 맞춘다. 예전 /수리|a\/?s/ 는 단어 안의 "as"(ClassIn·Master)와
+// 고객사 이름("대치수리학원"·"수리논술")까지 수리 위치로 보냈다.
+const REPAIR_LOCATION_PATTERN =
+  /repair|a\/s|(?:^|[^a-z])as(?:\s*센터)?(?:$|[^a-z])|수리(?!\s*(?:학원|논술|영역|수학|과학|탐구|교육|아카데미))/i
+
 function normalizeLocationName(value: unknown): string | null {
   const text = cleanString(value)
   if (!text) return null
   if (/샘플|대여|데모|demo|sample/i.test(text)) return DEFAULT_SAMPLE_LOCATION
-  if (/수리|a\/?s|as센터|repair/i.test(text)) return DEFAULT_REPAIR_LOCATION
-  if (/사무실|office/i.test(text)) return "사무실"
+  if (OFFICE_LOCATION_PATTERN.test(text)) return "사무실"
+  if (REPAIR_LOCATION_PATTERN.test(text)) return DEFAULT_REPAIR_LOCATION
   if (/창고|warehouse/i.test(text)) return DEFAULT_STOCK_LOCATION
   // FPL(풀필먼트) 위탁 창고 — 판매 가능한 창고 풀에 속한다(2026-08 운영 확정: 인천 더조은).
   // 시트에는 사이트명이 그대로 적히므로 창고로 정규화하고, 원문은 storage_location·raw에 보존한다.
@@ -1599,7 +1607,8 @@ export function buildHardwareSheetImportRows(
       movement_type: "inbound",
       quantity: row.quantity,
       occurred_at: row.inbound_date,
-      from_location: normalizeLocationName(row.importer),
+      // 수입자는 회사명이지 재고 위치가 아니다 — 위치 정규화를 태우면 "클래스인"이 사무실로 읽힌다.
+      from_location: cleanString(row.importer),
       to_location: normalizeLocationName(row.storage) ?? DEFAULT_STOCK_LOCATION,
       owner: cleanString(row.importer),
       status: "입고",
@@ -2089,7 +2098,8 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
 // SWR 로 먼저 돌려주고, 재검증이 끝날 때까지 화면이 틀린 로트를 계속 보여준다.
 const getHardwareDashboardCached = unstable_cache(
   () => getHardwareDashboardUncached(),
-  ["hardware-dashboard-v2"],
+  // v3(2026-09-15): 위치 정규화 변경("클래스인"→사무실, 수리 오탐 제거) — 옛 규칙 결과를 SWR 로 먼저 주지 않게 키를 올린다.
+  ["hardware-dashboard-v3"],
   { tags: [HARDWARE_INVENTORY_CACHE_TAG], revalidate: 120 }
 )
 

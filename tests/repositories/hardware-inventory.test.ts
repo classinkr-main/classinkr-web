@@ -554,6 +554,70 @@ describe("importHardwareFromBranchSheets", () => {
   })
 })
 
+// 2026-09-15 운영자 결정: 시트 보관처 "클래스인"(본사 사무실·쇼룸)은 사무실 재고다. 예전 수리 규칙
+// /수리|a\/?s/ 는 "ClassIn" 의 as 와 "대치수리학원" 같은 고객사 이름까지 수리 위치로 보냈다.
+describe("위치 정규화 — 클래스인은 사무실, 수리는 수리 표기만", () => {
+  const ITEMS = new Map([["S1", { id: "item-s1" }], ["86 IFP", { id: "item-86" }]])
+  const baseInbound = {
+    id: "in-office", logistics_no: "C1", inbound_date: "2026-07-15", product: "S1", quantity: 1,
+    unit_price: null, amount: null, serials: [], storage: "클래스인", importer: "ClassIn", remarks: null,
+    raw: { values: [] }, synced_at: "2026-09-15T00:00:00.000Z",
+  }
+  const baseOutbound = {
+    id: "out-1", logistics_no: "H8", outbound_date: "2026-09-01", owner: "Han", product: "86 IFP", quantity: 2,
+    revenue: null, destination: "대치수리학원", serials: [], progress: "설치 완료", type: "Sales", remarks: null,
+    raw: { values: [] }, synced_at: "2026-09-15T00:00:00.000Z",
+  }
+
+  it("imports 클래스인 storage into the office location and keeps the importer as a plain company name", async () => {
+    const { buildHardwareSheetImportRows } = await loadRepository()
+
+    const { rows } = buildHardwareSheetImportRows({ inbound: [baseInbound], outbound: [], stock: [] }, ITEMS)
+
+    expect(rows[0]).toMatchObject({ to_location: "사무실", storage_location: "클래스인", from_location: "ClassIn" })
+  })
+
+  it("does not send customers whose names contain 수리 or as to the repair location", async () => {
+    const { buildHardwareSheetImportRows } = await loadRepository()
+
+    const { rows } = buildHardwareSheetImportRows(
+      { inbound: [], outbound: [baseOutbound, { ...baseOutbound, id: "out-2", destination: "Master Academy" }], stock: [] },
+      ITEMS
+    )
+
+    expect(rows.map((row) => row.to_location)).toEqual(["대치수리학원", "Master Academy"])
+  })
+
+  it("balances office and repair transfers under the normalized location keys", async () => {
+    const { computeHardwareStockRow } = await loadRepository()
+    const movement = (overrides: Record<string, unknown>) => ({
+      id: `m-${Math.random().toString(36).slice(2)}`, item_id: "item-86", product_name: "86 IFP", quantity: 1,
+      occurred_at: "2026-09-10", from_location: null, to_location: null, owner: null, status: null, reference_no: null,
+      memo: null, serials: [], lot_no: null, unit_price: null, amount_usd: null, amount_cny: null, storage_location: null,
+      importer: null, source: "admin_manual" as const, raw: {}, created_at: "2026-09-10T00:00:00.000Z", voided_at: null,
+      converted_from_movement_id: null, converted_to_movement_id: null,
+      movement_type: "inbound" as const,
+      ...overrides,
+    })
+
+    const row = computeHardwareStockRow({
+      item: { id: "item-86", name: "86 IFP", category: "전자칠판", reorder_point: 0, lead_time_days: 14 },
+      itemMovements: [
+        movement({ movement_type: "inbound", quantity: 5, to_location: "창고" }),
+        movement({ movement_type: "transfer", quantity: 2, from_location: "창고", to_location: "ClassIn 본사" }),
+        movement({ movement_type: "transfer", quantity: 1, from_location: "창고", to_location: "A/S 센터" }),
+      ],
+      cutoff30dMs: Date.parse("2026-08-15T00:00:00.000Z"),
+    })
+
+    expect(row.locationBalances).toEqual([
+      { location: "창고", quantity: 2 },
+      { location: "사무실", quantity: 2 },
+      { location: "수리", quantity: 1 },
+    ])
+  })
+})
+
 // 2026-09-14 운영 실측: 재고현황의 출고 블록은 출고 시트를 물류No 열별로 합산하면서 진행 상태를 가리지 않는다
 // (75" IFP H8 출고 10 = 설치 완료 5 + 배송 예정 5). 원장은 예정 출고를 창고에서 빼지 않고 가용에서 빼므로,
 // 시트 현재고에 그대로 맞추면 로트가 적힌 예정분이 두 번 빠진다.

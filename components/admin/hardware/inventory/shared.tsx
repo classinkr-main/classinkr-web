@@ -359,9 +359,22 @@ export function outboundSaleType(movement: HardwareMovement): OutboundSaleType |
 // 샘플 유닛 트래킹 (개체 단위) — 서버 저장소(lib/repositories/hardware-samples)와 필드 규약 동일.
 // 클라이언트 섹션·시트·부모가 함께 쓰는 타입/라벨만 여기 둔다(server-only 모듈 import 금지).
 
-export type SampleUnitStatus = "office" | "loaned" | "repair" | "converted" | "retired"
+// showroom(전시·사내 사용) = 사무실이 보유하지만 가용이 아닌 유닛(쇼룸·KC인증 등). 운영자 결정 2026-09-15.
+// DB 는 supabase/migrations/20260915_hardware_sample_showroom_status.sql 적용 뒤에 이 값을 받는다.
+export type SampleUnitStatus = "office" | "showroom" | "loaned" | "repair" | "converted" | "retired"
 
-export type SampleEventType = "assign" | "loan" | "return" | "repair" | "convert" | "adjust" | "memo" | "retire"
+// showcase = 사무실 보관 → 전시, store = 전시·수리 → 사무실 보관.
+export type SampleEventType =
+  | "assign"
+  | "loan"
+  | "return"
+  | "showcase"
+  | "store"
+  | "repair"
+  | "convert"
+  | "adjust"
+  | "memo"
+  | "retire"
 
 export interface HardwareSampleUnit {
   id: string
@@ -395,6 +408,8 @@ export interface HardwareSampleEvent {
 
 export const SAMPLE_STATUS_META: Record<SampleUnitStatus, { label: string; tone: string }> = {
   office: { label: "사무실", tone: "bg-[#F6F5F4] text-[#31302E]" },
+  // 사무실 보관(가용)과 한눈에 갈리도록 채움 대신 외곽선으로 구분한다(파스텔 채움 지양).
+  showroom: { label: "전시·사내 사용", tone: "bg-white text-[#31302E] ring-1 ring-inset ring-[rgba(0,0,0,0.16)]" },
   loaned: { label: "대여중", tone: "bg-[#FCE9E9] text-[#B43E3E]" },
   repair: { label: "수리", tone: "bg-[#FBF1E0] text-[#A8741A]" },
   converted: { label: "판매 전환", tone: "bg-[#ECFDF5] text-[#084734]" },
@@ -405,6 +420,8 @@ export const SAMPLE_EVENT_META: Record<SampleEventType, { label: string; dot: st
   assign: { label: "등록·배정", dot: "#084734" },
   loan: { label: "대여", dot: "#B43E3E" },
   return: { label: "반환", dot: "#084734" },
+  showcase: { label: "전시로", dot: "#615D59" },
+  store: { label: "사무실 보관으로", dot: "#084734" },
   repair: { label: "수리", dot: "#A8741A" },
   convert: { label: "판매 전환", dot: "#084734" },
   adjust: { label: "정정", dot: "#615D59" },
@@ -454,8 +471,10 @@ export function periodKey(date: string, granularity: PeriodGranularity): { key: 
   return { key: date.slice(0, 7), label: `${year}년 ${month}월` }
 }
 
+// 오늘(로컬 자정 기준) YYYY-MM-DD. 예전 UTC 슬라이스는 KST 00~09시에 전날을 돌려줘 입고일·처리일 기본값이
+// 하루 밀리고 "오늘"·"어제" 칩이 같은 날짜가 됐다(2026-09-15 조사).
 export function todayKey() {
-  return new Date().toISOString().slice(0, 10)
+  return dateKeyOf(new Date())
 }
 
 // 어제(로컬 자정 기준) YYYY-MM-DD — 처리일 퀵칩용. UTC 슬라이스가 아니라 로컬 날짜로 계산해 KST 새벽에도 어제가 정확하다.

@@ -69,6 +69,7 @@ import {
   type QuickCartSaveSummary,
   type SampleSource,
 } from "./inventory/shared"
+import { judgeImportFreshness } from "./inventory/ImportFreshnessStrip"
 
 interface HardwareCrmOrderCandidatesResponse {
   candidates: HardwareCrmOrderCandidate[]
@@ -163,62 +164,16 @@ const DEFAULT_OPEN_SECTIONS: Record<HardwareSectionKey, boolean> = {
   alerts: true,
 }
 
-// 재고 위치 맵 — 칠판(장비) 기준 핵심 상태만 노출한다. 표시 요소(사용자 지정):
-//   창고     = 판매용 재고(warehouseStock)
-//   가용     = 창고 − 배송 예정(availableStock)
-//   예정     = 배송 예정 차감분(plannedOut)
-//   남은 샘플 = 사무실 보관 중인 샘플 재고(locationBalances "사무실")
-//   나간 샘플 = 대여·데모로 나가 있는 샘플(locationBalances "샘플")
-// 샘플 총량 = 남은(사무실) + 나간. 사무실=샘플 보관소라는 실무 모델(사용자 확인)에 따라 파생.
-const BOARD_ELEMENTS = [
-  { key: "warehouse", label: "창고", desc: "판매용 재고", tone: "#31302E" },
-  { key: "available", label: "가용", desc: "창고 − 예정", tone: "#084734" },
-  { key: "planned", label: "예정", desc: "배송 예정(차감분)", tone: "#A8741A" },
-  { key: "sampleStock", label: "남은 샘플", desc: "사무실 보관", tone: "#615D59" },
-  { key: "sampleOut", label: "나간 샘플", desc: "대여·데모 중", tone: "#B43E3E" },
-] as const
-
 function locationQuantity(row: HardwareStockRow, location: string): number {
   if (location === "창고") return row.warehouseStock
   if (location === "배송 예정") return row.plannedOut
   return row.locationBalances.find((balance) => balance.location === location)?.quantity ?? 0
 }
 
-// 칠판 기준 위치별 수량.
-function boardValue(row: HardwareStockRow, key: (typeof BOARD_ELEMENTS)[number]["key"]): number {
-  if (key === "warehouse") return row.warehouseStock
-  if (key === "available") return row.availableStock
-  if (key === "planned") return row.plannedOut
-  if (key === "sampleStock") return locationQuantity(row, "사무실")
-  return locationQuantity(row, "샘플") // sampleOut
-}
-
-// 재고 위치 맵에서 숨길 품목(내부 코드/비주력 — 사용자 지정). 품목명 정확 일치, 대소문자 무시.
-const LOCATION_MAP_HIDDEN_PRODUCTS = new Set(["A1", "B1", "D2"])
-
-// 위치 맵 기본 노출(펼침) 품목 순서(사용자 지정): 86" → 75" → T1 → T1(promo) → STD1 → STD1(promo).
-// 여기 해당하면 rank(0~5), 아니면 null → "상세보기"로 접히는 나머지(65"/110"/S1/OPS/액세서리 등).
-function featuredRank(product: string): number | null {
-  const promo = isPromotedProduct(product)
-  if (/86["”]?\s*IFP/i.test(product) && !promo) return 0
-  if (/75["”]?\s*IFP/i.test(product) && !promo) return 1
-  if (/\bT1\b/i.test(product) && !promo) return 2
-  if (/\bT1\b/i.test(product) && promo) return 3
-  if (/\bSTD1\b/i.test(product) && !promo) return 4
-  if (/\bSTD1\b/i.test(product) && promo) return 5
-  return null
-}
-
 // "총 입고" 상단 집계 대상 품목(사용자 지정): 86"/75" 전자칠판 + T1 (프로모 변형 포함).
 // lot별 상세 목록은 전 품목 그대로 두고, 헤더 총계(대수·매입액)만 이 3종으로 좁힌다.
 const isInboundTallyProduct = (product: string) =>
   /86["”]?\s*IFP/i.test(product) || /75["”]?\s*IFP/i.test(product) || /\bT1\b/i.test(product)
-
-// 전자칠판 인치 수(예: 110" IFP → 110). 접힘("상세보기") 영역에서 보드끼리 먼저 배치하는 데 쓴다.
-function boardInch(product: string): number | null {
-  const match = /(\d{2,3})\s*["”]?\s*IFP/i.exec(product)
-  return match ? Number(match[1]) : null
-}
 
 // 빠른 기록 기본 선택 품목 = 86" IFP(비프로모, 최빈 라인업). 없으면 첫 품목으로 폴백.
 function defaultEntryItemId(items: HardwareItem[]): string {
@@ -505,6 +460,8 @@ const SampleUnitSheet = dynamic(() => import("@/components/admin/hardware/invent
 // 빠른 기록 시트 — 5,481줄 중 가장 큰 단일 블록(1,481줄)을 별도 파일로 뺐다(감사 2026-09-07 #6).
 // 열리기 전까지(sheetOpen=false) 마운트되지 않으므로 위 오버레이 3종과 같은 관례로 null 로딩.
 const QuickRecordSheet = dynamic(() => import("@/components/admin/hardware/inventory/QuickRecordSheet"), { loading: () => null })
+// 한 화면 입고표(시안 A, 2026-09-15) — 새 입고는 전부 이 시트로 연다. 기존 입고 기록 수정은 빠른 기록 시트(단건) 그대로.
+const InboundSheet = dynamic(() => import("@/components/admin/hardware/inventory/InboundSheet"), { loading: () => null })
 
 // 탭 본문 코드 스플릿(#6) — 홈/입출고/내역은 activeTab이 바뀔 때만 필요하고, InboundLotsSection·
 // OutboundPeriodSection·HistoryLogSection의 지연 로드는 각 탭 파일이 스스로 소유한다(이 파일은
@@ -636,6 +593,8 @@ export default function HardwareInventoryClient({
   const [confirmDates, setConfirmDates] = useState<Record<string, string>>({})
   const [voidingId, setVoidingId] = useState<string | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
+  // 한 화면 입고표 — product 는 품목 id(행 퀵버튼에서 연 경우) 또는 null.
+  const [inboundSheet, setInboundSheet] = useState<{ open: boolean; product: string | null }>({ open: false, product: null })
   // 시트 모드 — "single": 빠른 단건 기록, "batch": 작업건(다품목) 구성. 단건과 대량이
   // 한 폼에 섞여 있던 15섹션 구조를 업무 단위로 가른다. 수정(editingId)은 항상 single.
   const [sheetMode, setSheetMode] = useState<"single" | "batch">("single")
@@ -672,7 +631,6 @@ export default function HardwareInventoryClient({
   const [filtersExpanded, setFiltersExpanded] = useState(false)
   const [detailId, setDetailId] = useState<string | null>(null)
   const [customerDetail, setCustomerDetail] = useState<string | null>(null)
-  const [locationMapExpanded, setLocationMapExpanded] = useState(false)
   const sheetPanelRef = useRef<HTMLElement>(null)
   const detailPanelRef = useRef<HTMLElement>(null)
   const ledgerFileRef = useRef<HTMLInputElement>(null)
@@ -1672,70 +1630,16 @@ export default function HardwareInventoryClient({
     return { cards, etcSummary }
   }, [data?.stock])
 
-  const locationMap = useMemo(() => {
-    const allRows = data?.stock ?? []
-    // 숨김 품목(A1/B1/D2) 제외.
-    const visible = allRows.filter((row) => !LOCATION_MAP_HIDDEN_PRODUCTS.has(row.product.trim().toUpperCase()))
-    // 기본 노출(펼침) = featuredRank 순(86→75→T1→T1promo→STD1→STD1promo). 나머지(65"/110"/S1/OPS/액세서리)는
-    // "상세보기"로 접힘 — 원본 재고 정렬 순서 유지.
-    const featured = visible
-      .map((row) => ({ row, rank: featuredRank(row.product) }))
-      .filter((entry): entry is { row: HardwareStockRow; rank: number } => entry.rank != null)
-      .sort((a, b) => a.rank - b.rank)
-      .map((entry) => entry.row)
-    // 접힘 영역: 보드(65"/110" 등)를 먼저(인치 큰 순), 그 외(액세서리 등)는 원본 순서 유지.
-    const rest = visible
-      .filter((row) => featuredRank(row.product) == null)
-      .map((row, index) => ({ row, index, inch: boardInch(row.product) }))
-      .sort((a, b) => {
-        const aBoard = a.inch != null ? 0 : 1
-        const bBoard = b.inch != null ? 0 : 1
-        if (aBoard !== bBoard) return aBoard - bBoard
-        if (a.inch != null && b.inch != null && a.inch !== b.inch) return b.inch - a.inch
-        return a.index - b.index
-      })
-      .map((entry) => entry.row)
-
-    // 위치별 총량 = 노출 대상(펼침+접힘 전체) 중 비판촉 합산 — 판촉 음수(원장 이상)가 총량을
-    // 오염시키지 않게 카드와 같은 기준으로 분리하고, 판촉분은 별도 한 줄로 병기한다(2026-08-19 결정).
-    const nonPromoted = visible.filter((row) => !isPromotedProduct(row.product))
-    const totals: Record<string, number> = {}
-    for (const el of BOARD_ELEMENTS) {
-      totals[el.key] = nonPromoted.reduce((sum, row) => sum + boardValue(row, el.key), 0)
-    }
-    const promotedWarehouse = visible
-      .filter((row) => isPromotedProduct(row.product))
-      .reduce((sum, row) => sum + row.warehouseStock, 0)
-    const hasPromotedRows = visible.some((row) => isPromotedProduct(row.product))
-    const maxTotal = Math.max(1, ...BOARD_ELEMENTS.map((el) => totals[el.key]))
-    const locationTotals = BOARD_ELEMENTS.map((el) => ({
-      name: el.label,
-      desc: el.desc,
-      quantity: totals[el.key],
-      tone: el.tone,
-      pct: totals[el.key] > 0 ? `${Math.max(4, Math.round((totals[el.key] / maxTotal) * 100))}%` : "0%",
-    }))
-
-    const toRow = (row: HardwareStockRow) => {
-      const cells = BOARD_ELEMENTS.map((el) => ({ label: el.label, qty: boardValue(row, el.key), tone: el.tone }))
-      const rowMax = Math.max(1, ...cells.map((cell) => cell.qty))
-      return {
-        itemId: row.itemId,
-        product: row.product,
-        sampleTotal: locationQuantity(row, "사무실") + locationQuantity(row, "샘플"),
-        cells: cells.map((cell) => ({
-          ...cell,
-          pct: cell.qty > 0 ? `${Math.max(12, Math.round((cell.qty / rowMax) * 100))}%` : "0%",
-        })),
-      }
-    }
-    return {
-      locationTotals,
-      promotedWarehouse: hasPromotedRows ? promotedWarehouse : null,
-      featuredRows: featured.map(toRow),
-      restRows: rest.map(toRow),
-    }
-  }, [data?.stock])
+  // 입고표의 주요 품목 슬롯·"품목 추가" 목록을 활성 품목으로 좁힌다 — 대시보드 items 에는 비활성 품목도 섞여 있고
+  // active 필드가 없어서, 재고 행이 있는 품목(= 활성)을 기준으로 삼는다.
+  const inboundActiveItemIds = useMemo(() => (data?.stock ?? []).map((row) => row.itemId), [data?.stock])
+  // 새 물량번호 추천은 원장 입고 이력으로 만든다 — 시트 이관이 밀려 있으면 그 뒤에 들어온 물량(예: 9/8 C2)이 원장에 없어
+  // 이미 쓰인 번호를 추천한다(2026-09-15 실측). 신선도 판정은 홈 스트립과 같은 함수(judgeImportFreshness)를 쓴다.
+  const inboundLotStaleNote = useMemo(() => {
+    const freshness = judgeImportFreshness(data?.importRun ?? null)
+    if (freshness.level === "ok" || freshness.level === "none" || freshness.daysAgo == null) return null
+    return `시트 이관이 ${formatNumber(freshness.daysAgo)}일 전이라 그 뒤에 들어온 물량번호가 추천에 빠져 있을 수 있어요. 시트의 최신 번호를 확인하세요.`
+  }, [data?.importRun])
 
   const inboundLots = useMemo(() => {
     const inbound = (data?.movements ?? []).filter((movement) => movement.movement_type === "inbound" && !movement.voided_at)
@@ -2274,8 +2178,13 @@ export default function HardwareInventoryClient({
   // 상세 5종(반환·샘플 배정·수리·조정)은 sheetView "detail"에서만 노출한다.
   const selectMovementAxis = (axis: "inbound" | "outbound") => {
     if (axis === "inbound") {
-      // 입고는 lot 단위 다품목이 실무 기본 — 여러 품목을 담아 한 번에 저장하는 장바구니(작업건) 흐름으로 연다.
-      if (!editingId) setSheetMode("batch")
+      // 새 입고는 한 화면 입고표로 넘긴다(2026-09-15). 바구니는 닫아도 유지되므로 담아 둔 출고 줄은 사라지지 않는다.
+      // 기존 기록 수정(editingId)은 이 시트에서 단건으로 계속한다.
+      if (!editingId) {
+        setSheetOpen(false)
+        openInboundSheet(selectedItemId || null)
+        return
+      }
       applyPreset("inbound")
       return
     }
@@ -2359,9 +2268,18 @@ export default function HardwareInventoryClient({
     })
   }, [resetSheetDraft, reduceMotion])
 
+  const openInboundSheet = useCallback((itemId?: string | null) => {
+    setInboundSheet({ open: true, product: itemId || null })
+  }, [])
+
   const prepareQuickEntry = useCallback((itemId: string, presetKey: string) => {
+    // 새 입고는 한 화면 입고표로 연다 — 재고 표·알림·검색의 "입고" 퀵버튼이 모두 여기를 거친다.
+    if (presetKey === "inbound") {
+      openInboundSheet(itemId)
+      return
+    }
     openSheet(presetKey, itemId)
-  }, [openSheet])
+  }, [openInboundSheet, openSheet])
 
   const rememberOwner = (value: string) => {
     const trimmed = value.trim()
@@ -2649,7 +2567,11 @@ export default function HardwareInventoryClient({
 
   // 입출고 탭의 하위 토글(입고|출고)에 맞는 프리셋으로 연다 — 입고 보던 중 '빠른 기록'이 sale로 열리는 불일치 해소.
   const openFreshSheet = () => {
-    openSheet(activeTab === "entry" && entrySub === "inbound" ? "inbound" : "sale")
+    if (activeTab === "entry" && entrySub === "inbound") {
+      openInboundSheet()
+      return
+    }
+    openSheet("sale")
   }
 
   const adjustQuantity = (delta: number) => {
@@ -3425,9 +3347,6 @@ export default function HardwareInventoryClient({
               confirmPlannedSelection={confirmPlannedSelection}
               selectionConfirmProgress={selectionConfirmProgress}
               onPlannedSelectionCountChange={setPlannedSelectionCount}
-              locationMap={locationMap}
-              locationMapExpanded={locationMapExpanded}
-              setLocationMapExpanded={setLocationMapExpanded}
               openSections={openSections}
               toggleSection={toggleSection}
               stockPagination={stockPagination}
@@ -3666,9 +3585,34 @@ export default function HardwareInventoryClient({
         reduceMotion={reduceMotion}
       />
 
+      {inboundSheet.open && (
+        <InboundSheet
+          open={inboundSheet.open}
+          onClose={() => setInboundSheet({ open: false, product: null })}
+          initialProduct={inboundSheet.product}
+          items={data?.items ?? []}
+          movements={data?.movements ?? []}
+          activeItemIds={inboundActiveItemIds}
+          lotStaleNote={inboundLotStaleNote}
+          // VIEWER 는 저장 시 서버가 403 으로 막는다 — 대시보드에 편집 권한 플래그가 없어 입력 UI 는 열어 둔다(빠른 기록과 같은 관례).
+          canWrite
+          owner={owner.trim() || data?.viewer?.name || null}
+          onSaved={(result) => {
+            const sampleNote =
+              result.registeredSampleUnits > 0 ? ` · 사무실 샘플 유닛 ${formatNumber(result.registeredSampleUnits)}대 등록` : ""
+            const failNote = result.failedLines > 0 ? ` · ${formatNumber(result.failedLines)}줄은 시트에 남아 있습니다` : ""
+            setNotice(
+              `${result.lot} 입고 ${formatNumber(result.savedLines)}줄 ${formatNumber(result.savedUnits)}대를 저장했습니다${sampleNote}${failNote}.`
+            )
+            void refresh()
+            if (result.registeredSampleUnits > 0) void loadSampleUnits()
+          }}
+        />
+      )}
+
       {/* 예정 출고를 선택 중이면 숨긴다 — 이 버튼(fixed bottom-6 right-6)이 하단 일괄 작업 바의
           "선택 확정" 버튼을 덮는다(1440px 실측). 선택 중엔 그 바가 이 화면의 주 작업면이다. */}
-      {!sheetOpen && !pendingMovement && !voidTarget && !detailId && !customerDetail && !sampleUnitSheetId && plannedSelectionCount === 0 && (
+      {!sheetOpen && !inboundSheet.open && !pendingMovement && !voidTarget && !detailId && !customerDetail && !sampleUnitSheetId && plannedSelectionCount === 0 && (
         <button
           type="button"
           onClick={openFreshSheet}
