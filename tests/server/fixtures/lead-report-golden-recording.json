@@ -1,0 +1,1350 @@
+{
+  "weekly-normal": {
+    "report": {
+      "version": 3,
+      "title": "마케팅 광고 리드 주간 보고서",
+      "generatedAt": "2026-08-17T00:30:00.000Z",
+      "snapshotAt": "2026-08-17T00:10:00.000Z",
+      "metaDataThrough": "2026-08-16",
+      "dataStatus": "confirmed",
+      "summary": "광고 리드 10건으로 직전 주보다 25% 증가했습니다. 주말 리드는 7건입니다. 4건이 아직 미접촉 상태입니다.",
+      "period": {
+        "since": "2026-08-10",
+        "until": "2026-08-16",
+        "prevSince": "2026-08-03",
+        "prevUntil": "2026-08-09"
+      },
+      "kpis": {
+        "spendUsd": {
+          "value": 210,
+          "previous": 140,
+          "deltaPct": 50,
+          "currency": "USD"
+        },
+        "adLeads": {
+          "value": 10,
+          "previous": 8,
+          "deltaPct": 25
+        },
+        "cplUsd": {
+          "value": 21,
+          "previous": 17.5,
+          "deltaPct": 20,
+          "currency": "USD"
+        },
+        "conversionRate": {
+          "value": 20,
+          "previous": 12.5,
+          "deltaPct": 60
+        }
+      },
+      "funnel": {
+        "impressions": 10000,
+        "clicks": 200,
+        "ctrPct": 2,
+        "adLeads": 10,
+        "contacted": 6,
+        "contactRatePct": 60,
+        "convertedLeads": 2
+      },
+      "dailyLeads": [
+        {
+          "date": "2026-08-10",
+          "leads": 1,
+          "isWeekend": false
+        },
+        {
+          "date": "2026-08-11",
+          "leads": 2,
+          "isWeekend": false
+        },
+        {
+          "date": "2026-08-12",
+          "leads": 0,
+          "isWeekend": false
+        },
+        {
+          "date": "2026-08-13",
+          "leads": 0,
+          "isWeekend": false
+        },
+        {
+          "date": "2026-08-14",
+          "leads": 0,
+          "isWeekend": false
+        },
+        {
+          "date": "2026-08-15",
+          "leads": 3,
+          "isWeekend": true
+        },
+        {
+          "date": "2026-08-16",
+          "leads": 4,
+          "isWeekend": true
+        }
+      ],
+      "weekendLeads": 7,
+      "weekendSharePct": 70,
+      "uncontactedLeads": 4,
+      "recentIntake": {
+        "since": "2026-08-14T01:10:00.000Z",
+        "until": "2026-08-17T00:30:00.000Z",
+        "label": "08.14 10:10 - 08.17 09:30",
+        "spansWeekend": true,
+        "totalLeads": 5,
+        "metaLeadAdsLeadCount": 3,
+        "homepageLeadCount": 2,
+        "unrespondedCount": 4
+      },
+      "campaigns": [
+        {
+          "campaignId": "a",
+          "name": "신규 원장 | 리드젠",
+          "status": "active",
+          "leads": 6,
+          "spendUsd": 120,
+          "cplUsd": 20,
+          "anomalies": [
+            "cpl_spike"
+          ]
+        },
+        {
+          "campaignId": "b",
+          "name": "리타겟팅",
+          "status": "active",
+          "leads": 4,
+          "spendUsd": 90,
+          "cplUsd": 22.5,
+          "anomalies": []
+        }
+      ],
+      "actions": [
+        "미접촉 광고 리드 4건을 우선 배정하고 후속 접촉합니다.",
+        "CPL이 직전 주보다 20% 상승해 소재·타겟·예산 배분을 점검합니다.",
+        "이상 신호가 있는 캠페인 「신규 원장 | 리드젠」을 확인합니다."
+      ],
+      "dataCaveats": [
+        "Meta 광고비와 CPL은 계정 통화인 USD 네이티브이며 KRW 수기 예산과 합산하지 않습니다.",
+        "광고 리드는 CRM의 meta_lead_ads 유입, 캠페인별 리드는 Meta 플랫폼 귀속값이라 서로 다를 수 있습니다."
+      ],
+      "markdown": "# 마케팅 광고 리드 주간 보고서\n\n- 보고 기간: 2026-08-10 ~ 2026-08-16 (KST, 월~일)\n- 비교 기간: 2026-08-03 ~ 2026-08-09\n- 데이터 상태: 확정\n- Meta 집계 완료일: 2026-08-16\n- 생성 시각: 2026-08-17T00:30:00.000Z\n- Meta 스냅샷: 2026-08-17T00:10:00.000Z\n\n## 핵심 성과\n\n광고 리드 10건으로 직전 주보다 25% 증가했습니다. 주말 리드는 7건입니다. 4건이 아직 미접촉 상태입니다.\n\n| 지표 | 이번 주 | 직전 주 | 변화 |\n| --- | ---: | ---: | ---: |\n| Meta 광고비 (USD) | $210.00 | $140.00 | 직전 주 대비 +50% |\n| 광고 리드 (CRM) | 10건 | 8건 | 직전 주 대비 +25% |\n| CPL (USD) | $21.00 | $17.50 | 직전 주 대비 +20% |\n| 광고 리드 전환율 | 20% | 12.5% | 직전 주 대비 +60% |\n\n## 요일별 광고 리드\n\n2026-08-10 1건 · 2026-08-11 2건 · 2026-08-12 0건 · 2026-08-13 0건 · 2026-08-14 0건 · 2026-08-15 3건 (주말) · 2026-08-16 4건 (주말)\n- 주말 리드: 7건 · 전체의 70%\n\n## 주말 유입 (마지막 일일 보고 이후)\n\n- 구간: 08.14 10:10 - 08.17 09:30 (KST)\n- 전체 접수: 5건 — Meta 광고 3건 / 홈페이지 2건\n- 미응대: 4건\n\n## 광고 퍼널\n\n- 노출 10,000회 → 클릭 200회 (CTR 2%)\n- 광고 리드 10건 → 접촉 6건 (접촉률 60%) → 전환 2건\n\n## 캠페인 성과\n\n| 캠페인 | Meta 리드 | 광고비 (USD) | CPL (USD) | 이상 신호 |\n| --- | ---: | ---: | ---: | --- |\n| 신규 원장 \\| 리드젠 | 6 | $120.00 | $20.00 | cpl_spike |\n| 리타겟팅 | 4 | $90.00 | $22.50 | 없음 |\n\n## 다음 주 액션\n\n1. 미접촉 광고 리드 4건을 우선 배정하고 후속 접촉합니다.\n2. CPL이 직전 주보다 20% 상승해 소재·타겟·예산 배분을 점검합니다.\n3. 이상 신호가 있는 캠페인 「신규 원장 | 리드젠」을 확인합니다.\n\n## 데이터 기준\n\n- Meta 광고비와 CPL은 계정 통화인 USD 네이티브이며 KRW 수기 예산과 합산하지 않습니다.\n- 광고 리드는 CRM의 meta_lead_ads 유입, 캠페인별 리드는 Meta 플랫폼 귀속값이라 서로 다를 수 있습니다."
+    }
+  },
+  "weekly-zero": {
+    "report": {
+      "version": 3,
+      "title": "마케팅 광고 리드 주간 보고서",
+      "generatedAt": "2026-08-17T00:30:00.000Z",
+      "snapshotAt": "2026-08-17T00:10:00.000Z",
+      "metaDataThrough": "2026-08-16",
+      "dataStatus": "confirmed",
+      "summary": "광고 리드 0건으로 직전 주보다 100% 감소했습니다. 주말 리드는 0건입니다. 모든 광고 리드가 접촉 단계에 들어갔습니다.",
+      "period": {
+        "since": "2026-08-10",
+        "until": "2026-08-16",
+        "prevSince": "2026-08-03",
+        "prevUntil": "2026-08-09"
+      },
+      "kpis": {
+        "spendUsd": {
+          "value": 210,
+          "previous": 140,
+          "deltaPct": 50,
+          "currency": "USD"
+        },
+        "adLeads": {
+          "value": 0,
+          "previous": 8,
+          "deltaPct": -100
+        },
+        "cplUsd": {
+          "value": null,
+          "previous": 17.5,
+          "deltaPct": null,
+          "currency": "USD"
+        },
+        "conversionRate": {
+          "value": null,
+          "previous": 12.5,
+          "deltaPct": null
+        }
+      },
+      "funnel": {
+        "impressions": 10000,
+        "clicks": 200,
+        "ctrPct": 2,
+        "adLeads": 0,
+        "contacted": 0,
+        "contactRatePct": null,
+        "convertedLeads": 0
+      },
+      "dailyLeads": [
+        {
+          "date": "2026-08-10",
+          "leads": 0,
+          "isWeekend": false
+        },
+        {
+          "date": "2026-08-11",
+          "leads": 0,
+          "isWeekend": false
+        },
+        {
+          "date": "2026-08-12",
+          "leads": 0,
+          "isWeekend": false
+        },
+        {
+          "date": "2026-08-13",
+          "leads": 0,
+          "isWeekend": false
+        },
+        {
+          "date": "2026-08-14",
+          "leads": 0,
+          "isWeekend": false
+        },
+        {
+          "date": "2026-08-15",
+          "leads": 0,
+          "isWeekend": true
+        },
+        {
+          "date": "2026-08-16",
+          "leads": 0,
+          "isWeekend": true
+        }
+      ],
+      "weekendLeads": 0,
+      "weekendSharePct": null,
+      "uncontactedLeads": 0,
+      "recentIntake": {
+        "since": "2026-08-14T01:10:00.000Z",
+        "until": "2026-08-17T00:30:00.000Z",
+        "label": "08.14 10:10 - 08.17 09:30",
+        "spansWeekend": true,
+        "totalLeads": 2,
+        "metaLeadAdsLeadCount": 0,
+        "homepageLeadCount": 2,
+        "unrespondedCount": 2
+      },
+      "campaigns": [
+        {
+          "campaignId": "a",
+          "name": "신규 원장 | 리드젠",
+          "status": "active",
+          "leads": 0,
+          "spendUsd": 120,
+          "cplUsd": null,
+          "anomalies": []
+        }
+      ],
+      "actions": [
+        "Meta 리드폼 상태와 CRM 유입 연결을 점검해 광고 리드 0건의 원인을 확인합니다."
+      ],
+      "dataCaveats": [
+        "Meta 광고비와 CPL은 계정 통화인 USD 네이티브이며 KRW 수기 예산과 합산하지 않습니다.",
+        "광고 리드는 CRM의 meta_lead_ads 유입, 캠페인별 리드는 Meta 플랫폼 귀속값이라 서로 다를 수 있습니다."
+      ],
+      "markdown": "# 마케팅 광고 리드 주간 보고서\n\n- 보고 기간: 2026-08-10 ~ 2026-08-16 (KST, 월~일)\n- 비교 기간: 2026-08-03 ~ 2026-08-09\n- 데이터 상태: 확정\n- Meta 집계 완료일: 2026-08-16\n- 생성 시각: 2026-08-17T00:30:00.000Z\n- Meta 스냅샷: 2026-08-17T00:10:00.000Z\n\n## 핵심 성과\n\n광고 리드 0건으로 직전 주보다 100% 감소했습니다. 주말 리드는 0건입니다. 모든 광고 리드가 접촉 단계에 들어갔습니다.\n\n| 지표 | 이번 주 | 직전 주 | 변화 |\n| --- | ---: | ---: | ---: |\n| Meta 광고비 (USD) | $210.00 | $140.00 | 직전 주 대비 +50% |\n| 광고 리드 (CRM) | 0건 | 8건 | 직전 주 대비 -100% |\n| CPL (USD) | 미측정 | $17.50 | 직전 주 대비 미산정 |\n| 광고 리드 전환율 | 미산정 | 12.5% | 직전 주 대비 미산정 |\n\n## 요일별 광고 리드\n\n2026-08-10 0건 · 2026-08-11 0건 · 2026-08-12 0건 · 2026-08-13 0건 · 2026-08-14 0건 · 2026-08-15 0건 (주말) · 2026-08-16 0건 (주말)\n- 주말 리드: 0건\n\n## 주말 유입 (마지막 일일 보고 이후)\n\n- 구간: 08.14 10:10 - 08.17 09:30 (KST)\n- 전체 접수: 2건 — Meta 광고 0건 / 홈페이지 2건\n- 미응대: 2건\n\n## 광고 퍼널\n\n- 노출 10,000회 → 클릭 200회 (CTR 2%)\n- 광고 리드 0건 → 접촉 0건 (접촉률 미산정) → 전환 0건\n\n## 캠페인 성과\n\n| 캠페인 | Meta 리드 | 광고비 (USD) | CPL (USD) | 이상 신호 |\n| --- | ---: | ---: | ---: | --- |\n| 신규 원장 \\| 리드젠 | 0 | $120.00 | 미측정 | 없음 |\n\n## 다음 주 액션\n\n1. Meta 리드폼 상태와 CRM 유입 연결을 점검해 광고 리드 0건의 원인을 확인합니다.\n\n## 데이터 기준\n\n- Meta 광고비와 CPL은 계정 통화인 USD 네이티브이며 KRW 수기 예산과 합산하지 않습니다.\n- 광고 리드는 CRM의 meta_lead_ads 유입, 캠페인별 리드는 Meta 플랫폼 귀속값이라 서로 다를 수 있습니다."
+    }
+  },
+  "weekly-crm-failed": {
+    "report": {
+      "version": 3,
+      "title": "마케팅 광고 리드 주간 보고서",
+      "generatedAt": "2026-08-17T00:30:00.000Z",
+      "snapshotAt": "2026-08-17T00:10:00.000Z",
+      "metaDataThrough": "2026-08-16",
+      "dataStatus": "provisional",
+      "summary": "CRM 광고 리드 데이터를 확인하지 못했습니다. 원천 연결 상태를 먼저 점검해야 합니다.",
+      "period": {
+        "since": "2026-08-10",
+        "until": "2026-08-16",
+        "prevSince": "2026-08-03",
+        "prevUntil": "2026-08-09"
+      },
+      "kpis": {
+        "spendUsd": {
+          "value": 210,
+          "previous": 140,
+          "deltaPct": 50,
+          "currency": "USD"
+        },
+        "adLeads": {
+          "value": null,
+          "previous": null,
+          "deltaPct": null
+        },
+        "cplUsd": {
+          "value": 21,
+          "previous": 17.5,
+          "deltaPct": 20,
+          "currency": "USD"
+        },
+        "conversionRate": {
+          "value": null,
+          "previous": null,
+          "deltaPct": null
+        }
+      },
+      "funnel": {
+        "impressions": 10000,
+        "clicks": 200,
+        "ctrPct": 2,
+        "adLeads": 10,
+        "contacted": 6,
+        "contactRatePct": 60,
+        "convertedLeads": 2
+      },
+      "dailyLeads": [],
+      "weekendLeads": null,
+      "weekendSharePct": null,
+      "uncontactedLeads": null,
+      "recentIntake": null,
+      "campaigns": [
+        {
+          "campaignId": "a",
+          "name": "신규 원장 | 리드젠",
+          "status": "active",
+          "leads": 6,
+          "spendUsd": 120,
+          "cplUsd": 20,
+          "anomalies": [
+            "cpl_spike"
+          ]
+        },
+        {
+          "campaignId": "b",
+          "name": "리타겟팅",
+          "status": "active",
+          "leads": 4,
+          "spendUsd": 90,
+          "cplUsd": 22.5,
+          "anomalies": []
+        }
+      ],
+      "actions": [
+        "미접촉 광고 리드 4건을 우선 배정하고 후속 접촉합니다.",
+        "Meta 일별 데이터가 보고 종료일까지 집계됐는지 확인한 뒤 보고서를 확정합니다.",
+        "CPL이 직전 주보다 20% 상승해 소재·타겟·예산 배분을 점검합니다."
+      ],
+      "dataCaveats": [
+        "Meta 광고비와 CPL은 계정 통화인 USD 네이티브이며 KRW 수기 예산과 합산하지 않습니다.",
+        "광고 리드는 CRM의 meta_lead_ads 유입, 캠페인별 리드는 Meta 플랫폼 귀속값이라 서로 다를 수 있습니다.",
+        "CRM 리드 조회에 실패해 광고 리드·전환율이 미측정입니다.",
+        "리드 조회에 실패해 마지막 일일 보고 이후 유입은 미측정입니다."
+      ],
+      "markdown": "# 마케팅 광고 리드 주간 보고서\n\n- 보고 기간: 2026-08-10 ~ 2026-08-16 (KST, 월~일)\n- 비교 기간: 2026-08-03 ~ 2026-08-09\n- 데이터 상태: 잠정\n- Meta 집계 완료일: 2026-08-16\n- 생성 시각: 2026-08-17T00:30:00.000Z\n- Meta 스냅샷: 2026-08-17T00:10:00.000Z\n\n## 핵심 성과\n\nCRM 광고 리드 데이터를 확인하지 못했습니다. 원천 연결 상태를 먼저 점검해야 합니다.\n\n| 지표 | 이번 주 | 직전 주 | 변화 |\n| --- | ---: | ---: | ---: |\n| Meta 광고비 (USD) | $210.00 | $140.00 | 직전 주 대비 +50% |\n| 광고 리드 (CRM) | 미측정 | 미측정 | 직전 주 대비 미산정 |\n| CPL (USD) | $21.00 | $17.50 | 직전 주 대비 +20% |\n| 광고 리드 전환율 | 미산정 | 미산정 | 직전 주 대비 미산정 |\n\n## 요일별 광고 리드\n\n요일별 광고 리드 미측정\n- 주말 리드: 미측정\n\n## 마지막 일일 보고 이후 유입\n\n- 리드 조회에 실패해 이 구간은 미측정입니다.\n\n## 광고 퍼널\n\n- 노출 10,000회 → 클릭 200회 (CTR 2%)\n- 광고 리드 10건 → 접촉 6건 (접촉률 60%) → 전환 2건\n\n## 캠페인 성과\n\n| 캠페인 | Meta 리드 | 광고비 (USD) | CPL (USD) | 이상 신호 |\n| --- | ---: | ---: | ---: | --- |\n| 신규 원장 \\| 리드젠 | 6 | $120.00 | $20.00 | cpl_spike |\n| 리타겟팅 | 4 | $90.00 | $22.50 | 없음 |\n\n## 다음 주 액션\n\n1. 미접촉 광고 리드 4건을 우선 배정하고 후속 접촉합니다.\n2. Meta 일별 데이터가 보고 종료일까지 집계됐는지 확인한 뒤 보고서를 확정합니다.\n3. CPL이 직전 주보다 20% 상승해 소재·타겟·예산 배분을 점검합니다.\n\n## 데이터 기준\n\n- Meta 광고비와 CPL은 계정 통화인 USD 네이티브이며 KRW 수기 예산과 합산하지 않습니다.\n- 광고 리드는 CRM의 meta_lead_ads 유입, 캠페인별 리드는 Meta 플랫폼 귀속값이라 서로 다를 수 있습니다.\n- CRM 리드 조회에 실패해 광고 리드·전환율이 미측정입니다.\n- 리드 조회에 실패해 마지막 일일 보고 이후 유입은 미측정입니다."
+    }
+  },
+  "weekly-zero-provisional": {
+    "report": {
+      "version": 3,
+      "title": "마케팅 광고 리드 주간 보고서",
+      "generatedAt": "2026-08-17T00:30:00.000Z",
+      "snapshotAt": "2026-08-17T00:10:00.000Z",
+      "metaDataThrough": "2026-08-15",
+      "dataStatus": "provisional",
+      "summary": "광고 리드 0건으로 직전 주보다 100% 감소했습니다. 주말 리드는 0건입니다. 모든 광고 리드가 접촉 단계에 들어갔습니다.",
+      "period": {
+        "since": "2026-08-10",
+        "until": "2026-08-16",
+        "prevSince": "2026-08-03",
+        "prevUntil": "2026-08-09"
+      },
+      "kpis": {
+        "spendUsd": {
+          "value": 210,
+          "previous": 140,
+          "deltaPct": 50,
+          "currency": "USD"
+        },
+        "adLeads": {
+          "value": 0,
+          "previous": 8,
+          "deltaPct": -100
+        },
+        "cplUsd": {
+          "value": 30,
+          "previous": 17.5,
+          "deltaPct": 71,
+          "currency": "USD"
+        },
+        "conversionRate": {
+          "value": null,
+          "previous": 12.5,
+          "deltaPct": null
+        }
+      },
+      "funnel": {
+        "impressions": 10000,
+        "clicks": 200,
+        "ctrPct": 2,
+        "adLeads": 0,
+        "contacted": 0,
+        "contactRatePct": null,
+        "convertedLeads": 0
+      },
+      "dailyLeads": [
+        {
+          "date": "2026-08-10",
+          "leads": 0,
+          "isWeekend": false
+        },
+        {
+          "date": "2026-08-11",
+          "leads": 0,
+          "isWeekend": false
+        },
+        {
+          "date": "2026-08-12",
+          "leads": 0,
+          "isWeekend": false
+        },
+        {
+          "date": "2026-08-13",
+          "leads": 0,
+          "isWeekend": false
+        },
+        {
+          "date": "2026-08-14",
+          "leads": 0,
+          "isWeekend": false
+        },
+        {
+          "date": "2026-08-15",
+          "leads": 0,
+          "isWeekend": true
+        },
+        {
+          "date": "2026-08-16",
+          "leads": 0,
+          "isWeekend": true
+        }
+      ],
+      "weekendLeads": 0,
+      "weekendSharePct": null,
+      "uncontactedLeads": 0,
+      "recentIntake": {
+        "since": "2026-08-14T01:10:00.000Z",
+        "until": "2026-08-17T00:30:00.000Z",
+        "label": "08.14 10:10 - 08.17 09:30",
+        "spansWeekend": true,
+        "totalLeads": 5,
+        "metaLeadAdsLeadCount": 3,
+        "homepageLeadCount": 2,
+        "unrespondedCount": 4
+      },
+      "campaigns": [
+        {
+          "campaignId": "a",
+          "name": "신규 원장 | 리드젠",
+          "status": "active",
+          "leads": 0,
+          "spendUsd": 120,
+          "cplUsd": null,
+          "anomalies": [
+            "spend_no_leads"
+          ]
+        }
+      ],
+      "actions": [
+        "Meta 일별 데이터가 보고 종료일까지 집계됐는지 확인한 뒤 보고서를 확정합니다.",
+        "Meta 리드폼 상태와 CRM 유입 연결을 점검해 광고 리드 0건의 원인을 확인합니다.",
+        "CPL이 직전 주보다 71% 상승해 소재·타겟·예산 배분을 점검합니다."
+      ],
+      "dataCaveats": [
+        "Meta 광고비와 CPL은 계정 통화인 USD 네이티브이며 KRW 수기 예산과 합산하지 않습니다.",
+        "광고 리드는 CRM의 meta_lead_ads 유입, 캠페인별 리드는 Meta 플랫폼 귀속값이라 서로 다를 수 있습니다.",
+        "Meta 일별 데이터가 보고 종료일(2026-08-16)까지 확인되지 않아 이 보고서는 잠정 수치입니다."
+      ],
+      "markdown": "# 마케팅 광고 리드 주간 보고서\n\n- 보고 기간: 2026-08-10 ~ 2026-08-16 (KST, 월~일)\n- 비교 기간: 2026-08-03 ~ 2026-08-09\n- 데이터 상태: 잠정\n- Meta 집계 완료일: 2026-08-15\n- 생성 시각: 2026-08-17T00:30:00.000Z\n- Meta 스냅샷: 2026-08-17T00:10:00.000Z\n\n## 핵심 성과\n\n광고 리드 0건으로 직전 주보다 100% 감소했습니다. 주말 리드는 0건입니다. 모든 광고 리드가 접촉 단계에 들어갔습니다.\n\n| 지표 | 이번 주 | 직전 주 | 변화 |\n| --- | ---: | ---: | ---: |\n| Meta 광고비 (USD) | $210.00 | $140.00 | 직전 주 대비 +50% |\n| 광고 리드 (CRM) | 0건 | 8건 | 직전 주 대비 -100% |\n| CPL (USD) | $30.00 | $17.50 | 직전 주 대비 +71% |\n| 광고 리드 전환율 | 미산정 | 12.5% | 직전 주 대비 미산정 |\n\n## 요일별 광고 리드\n\n2026-08-10 0건 · 2026-08-11 0건 · 2026-08-12 0건 · 2026-08-13 0건 · 2026-08-14 0건 · 2026-08-15 0건 (주말) · 2026-08-16 0건 (주말)\n- 주말 리드: 0건\n\n## 주말 유입 (마지막 일일 보고 이후)\n\n- 구간: 08.14 10:10 - 08.17 09:30 (KST)\n- 전체 접수: 5건 — Meta 광고 3건 / 홈페이지 2건\n- 미응대: 4건\n\n## 광고 퍼널\n\n- 노출 10,000회 → 클릭 200회 (CTR 2%)\n- 광고 리드 0건 → 접촉 0건 (접촉률 미산정) → 전환 0건\n\n## 캠페인 성과\n\n| 캠페인 | Meta 리드 | 광고비 (USD) | CPL (USD) | 이상 신호 |\n| --- | ---: | ---: | ---: | --- |\n| 신규 원장 \\| 리드젠 | 0 | $120.00 | 미측정 | spend_no_leads |\n\n## 다음 주 액션\n\n1. Meta 일별 데이터가 보고 종료일까지 집계됐는지 확인한 뒤 보고서를 확정합니다.\n2. Meta 리드폼 상태와 CRM 유입 연결을 점검해 광고 리드 0건의 원인을 확인합니다.\n3. CPL이 직전 주보다 71% 상승해 소재·타겟·예산 배분을 점검합니다.\n\n## 데이터 기준\n\n- Meta 광고비와 CPL은 계정 통화인 USD 네이티브이며 KRW 수기 예산과 합산하지 않습니다.\n- 광고 리드는 CRM의 meta_lead_ads 유입, 캠페인별 리드는 Meta 플랫폼 귀속값이라 서로 다를 수 있습니다.\n- Meta 일별 데이터가 보고 종료일(2026-08-16)까지 확인되지 않아 이 보고서는 잠정 수치입니다."
+    }
+  },
+  "weekly-assemble-normal": {
+    "report": {
+      "version": 3,
+      "title": "마케팅 광고 리드 주간 보고서",
+      "generatedAt": "2026-08-17T00:30:00.000Z",
+      "snapshotAt": "2026-08-17T00:10:00.000Z",
+      "metaDataThrough": "2026-08-16",
+      "dataStatus": "confirmed",
+      "summary": "광고 리드 10건으로 직전 주보다 25% 증가했습니다. 주말 리드는 7건입니다. 4건이 아직 미접촉 상태입니다.",
+      "period": {
+        "since": "2026-08-10",
+        "until": "2026-08-16",
+        "prevSince": "2026-08-03",
+        "prevUntil": "2026-08-09"
+      },
+      "kpis": {
+        "spendUsd": {
+          "value": 210,
+          "previous": 140,
+          "deltaPct": 50,
+          "currency": "USD"
+        },
+        "adLeads": {
+          "value": 10,
+          "previous": 8,
+          "deltaPct": 25
+        },
+        "cplUsd": {
+          "value": 21,
+          "previous": 17.5,
+          "deltaPct": 20,
+          "currency": "USD"
+        },
+        "conversionRate": {
+          "value": 20,
+          "previous": 12.5,
+          "deltaPct": 60
+        }
+      },
+      "funnel": {
+        "impressions": 10000,
+        "clicks": 200,
+        "ctrPct": 2,
+        "adLeads": 10,
+        "contacted": 6,
+        "contactRatePct": 60,
+        "convertedLeads": 2
+      },
+      "dailyLeads": [
+        {
+          "date": "2026-08-10",
+          "leads": 1,
+          "isWeekend": false
+        },
+        {
+          "date": "2026-08-11",
+          "leads": 2,
+          "isWeekend": false
+        },
+        {
+          "date": "2026-08-12",
+          "leads": 0,
+          "isWeekend": false
+        },
+        {
+          "date": "2026-08-13",
+          "leads": 0,
+          "isWeekend": false
+        },
+        {
+          "date": "2026-08-14",
+          "leads": 0,
+          "isWeekend": false
+        },
+        {
+          "date": "2026-08-15",
+          "leads": 3,
+          "isWeekend": true
+        },
+        {
+          "date": "2026-08-16",
+          "leads": 4,
+          "isWeekend": true
+        }
+      ],
+      "weekendLeads": 7,
+      "weekendSharePct": 70,
+      "uncontactedLeads": 4,
+      "recentIntake": {
+        "since": "2026-08-14T01:10:00.000Z",
+        "until": "2026-08-17T00:30:00.000Z",
+        "label": "08.14 10:10 - 08.17 09:30",
+        "spansWeekend": true,
+        "totalLeads": 3,
+        "metaLeadAdsLeadCount": 2,
+        "homepageLeadCount": 1,
+        "unrespondedCount": 2
+      },
+      "campaigns": [
+        {
+          "campaignId": "a",
+          "name": "신규 원장 | 리드젠",
+          "status": "active",
+          "leads": 6,
+          "spendUsd": 120,
+          "cplUsd": 20,
+          "anomalies": [
+            "cpl_spike"
+          ]
+        },
+        {
+          "campaignId": "b",
+          "name": "리타겟팅",
+          "status": "active",
+          "leads": 4,
+          "spendUsd": 90,
+          "cplUsd": 22.5,
+          "anomalies": []
+        }
+      ],
+      "actions": [
+        "미접촉 광고 리드 4건을 우선 배정하고 후속 접촉합니다.",
+        "CPL이 직전 주보다 20% 상승해 소재·타겟·예산 배분을 점검합니다.",
+        "이상 신호가 있는 캠페인 「신규 원장 | 리드젠」을 확인합니다."
+      ],
+      "dataCaveats": [
+        "Meta 광고비와 CPL은 계정 통화인 USD 네이티브이며 KRW 수기 예산과 합산하지 않습니다.",
+        "광고 리드는 CRM의 meta_lead_ads 유입, 캠페인별 리드는 Meta 플랫폼 귀속값이라 서로 다를 수 있습니다."
+      ],
+      "markdown": "# 마케팅 광고 리드 주간 보고서\n\n- 보고 기간: 2026-08-10 ~ 2026-08-16 (KST, 월~일)\n- 비교 기간: 2026-08-03 ~ 2026-08-09\n- 데이터 상태: 확정\n- Meta 집계 완료일: 2026-08-16\n- 생성 시각: 2026-08-17T00:30:00.000Z\n- Meta 스냅샷: 2026-08-17T00:10:00.000Z\n\n## 핵심 성과\n\n광고 리드 10건으로 직전 주보다 25% 증가했습니다. 주말 리드는 7건입니다. 4건이 아직 미접촉 상태입니다.\n\n| 지표 | 이번 주 | 직전 주 | 변화 |\n| --- | ---: | ---: | ---: |\n| Meta 광고비 (USD) | $210.00 | $140.00 | 직전 주 대비 +50% |\n| 광고 리드 (CRM) | 10건 | 8건 | 직전 주 대비 +25% |\n| CPL (USD) | $21.00 | $17.50 | 직전 주 대비 +20% |\n| 광고 리드 전환율 | 20% | 12.5% | 직전 주 대비 +60% |\n\n## 요일별 광고 리드\n\n2026-08-10 1건 · 2026-08-11 2건 · 2026-08-12 0건 · 2026-08-13 0건 · 2026-08-14 0건 · 2026-08-15 3건 (주말) · 2026-08-16 4건 (주말)\n- 주말 리드: 7건 · 전체의 70%\n\n## 주말 유입 (마지막 일일 보고 이후)\n\n- 구간: 08.14 10:10 - 08.17 09:30 (KST)\n- 전체 접수: 3건 — Meta 광고 2건 / 홈페이지 1건\n- 미응대: 2건\n\n## 광고 퍼널\n\n- 노출 10,000회 → 클릭 200회 (CTR 2%)\n- 광고 리드 10건 → 접촉 6건 (접촉률 60%) → 전환 2건\n\n## 캠페인 성과\n\n| 캠페인 | Meta 리드 | 광고비 (USD) | CPL (USD) | 이상 신호 |\n| --- | ---: | ---: | ---: | --- |\n| 신규 원장 \\| 리드젠 | 6 | $120.00 | $20.00 | cpl_spike |\n| 리타겟팅 | 4 | $90.00 | $22.50 | 없음 |\n\n## 다음 주 액션\n\n1. 미접촉 광고 리드 4건을 우선 배정하고 후속 접촉합니다.\n2. CPL이 직전 주보다 20% 상승해 소재·타겟·예산 배분을 점검합니다.\n3. 이상 신호가 있는 캠페인 「신규 원장 | 리드젠」을 확인합니다.\n\n## 데이터 기준\n\n- Meta 광고비와 CPL은 계정 통화인 USD 네이티브이며 KRW 수기 예산과 합산하지 않습니다.\n- 광고 리드는 CRM의 meta_lead_ads 유입, 캠페인별 리드는 Meta 플랫폼 귀속값이라 서로 다를 수 있습니다."
+    }
+  },
+  "weekly-assemble-zero": {
+    "report": {
+      "version": 3,
+      "title": "마케팅 광고 리드 주간 보고서",
+      "generatedAt": "2026-08-17T00:30:00.000Z",
+      "snapshotAt": "2026-08-17T00:10:00.000Z",
+      "metaDataThrough": "2026-08-16",
+      "dataStatus": "confirmed",
+      "summary": "광고 리드 0건으로 직전 주보다 100% 감소했습니다. 주말 리드는 0건입니다. 모든 광고 리드가 접촉 단계에 들어갔습니다.",
+      "period": {
+        "since": "2026-08-10",
+        "until": "2026-08-16",
+        "prevSince": "2026-08-03",
+        "prevUntil": "2026-08-09"
+      },
+      "kpis": {
+        "spendUsd": {
+          "value": 210,
+          "previous": 140,
+          "deltaPct": 50,
+          "currency": "USD"
+        },
+        "adLeads": {
+          "value": 0,
+          "previous": 8,
+          "deltaPct": -100
+        },
+        "cplUsd": {
+          "value": null,
+          "previous": 17.5,
+          "deltaPct": null,
+          "currency": "USD"
+        },
+        "conversionRate": {
+          "value": null,
+          "previous": 12.5,
+          "deltaPct": null
+        }
+      },
+      "funnel": {
+        "impressions": 10000,
+        "clicks": 200,
+        "ctrPct": 2,
+        "adLeads": 0,
+        "contacted": 0,
+        "contactRatePct": null,
+        "convertedLeads": 0
+      },
+      "dailyLeads": [
+        {
+          "date": "2026-08-10",
+          "leads": 0,
+          "isWeekend": false
+        },
+        {
+          "date": "2026-08-11",
+          "leads": 0,
+          "isWeekend": false
+        },
+        {
+          "date": "2026-08-12",
+          "leads": 0,
+          "isWeekend": false
+        },
+        {
+          "date": "2026-08-13",
+          "leads": 0,
+          "isWeekend": false
+        },
+        {
+          "date": "2026-08-14",
+          "leads": 0,
+          "isWeekend": false
+        },
+        {
+          "date": "2026-08-15",
+          "leads": 0,
+          "isWeekend": true
+        },
+        {
+          "date": "2026-08-16",
+          "leads": 0,
+          "isWeekend": true
+        }
+      ],
+      "weekendLeads": 0,
+      "weekendSharePct": null,
+      "uncontactedLeads": 0,
+      "recentIntake": {
+        "since": "2026-08-14T01:10:00.000Z",
+        "until": "2026-08-17T00:30:00.000Z",
+        "label": "08.14 10:10 - 08.17 09:30",
+        "spansWeekend": true,
+        "totalLeads": 1,
+        "metaLeadAdsLeadCount": 0,
+        "homepageLeadCount": 1,
+        "unrespondedCount": 1
+      },
+      "campaigns": [
+        {
+          "campaignId": "a",
+          "name": "신규 원장 | 리드젠",
+          "status": "active",
+          "leads": 0,
+          "spendUsd": 120,
+          "cplUsd": null,
+          "anomalies": []
+        }
+      ],
+      "actions": [
+        "Meta 리드폼 상태와 CRM 유입 연결을 점검해 광고 리드 0건의 원인을 확인합니다."
+      ],
+      "dataCaveats": [
+        "Meta 광고비와 CPL은 계정 통화인 USD 네이티브이며 KRW 수기 예산과 합산하지 않습니다.",
+        "광고 리드는 CRM의 meta_lead_ads 유입, 캠페인별 리드는 Meta 플랫폼 귀속값이라 서로 다를 수 있습니다."
+      ],
+      "markdown": "# 마케팅 광고 리드 주간 보고서\n\n- 보고 기간: 2026-08-10 ~ 2026-08-16 (KST, 월~일)\n- 비교 기간: 2026-08-03 ~ 2026-08-09\n- 데이터 상태: 확정\n- Meta 집계 완료일: 2026-08-16\n- 생성 시각: 2026-08-17T00:30:00.000Z\n- Meta 스냅샷: 2026-08-17T00:10:00.000Z\n\n## 핵심 성과\n\n광고 리드 0건으로 직전 주보다 100% 감소했습니다. 주말 리드는 0건입니다. 모든 광고 리드가 접촉 단계에 들어갔습니다.\n\n| 지표 | 이번 주 | 직전 주 | 변화 |\n| --- | ---: | ---: | ---: |\n| Meta 광고비 (USD) | $210.00 | $140.00 | 직전 주 대비 +50% |\n| 광고 리드 (CRM) | 0건 | 8건 | 직전 주 대비 -100% |\n| CPL (USD) | 미측정 | $17.50 | 직전 주 대비 미산정 |\n| 광고 리드 전환율 | 미산정 | 12.5% | 직전 주 대비 미산정 |\n\n## 요일별 광고 리드\n\n2026-08-10 0건 · 2026-08-11 0건 · 2026-08-12 0건 · 2026-08-13 0건 · 2026-08-14 0건 · 2026-08-15 0건 (주말) · 2026-08-16 0건 (주말)\n- 주말 리드: 0건\n\n## 주말 유입 (마지막 일일 보고 이후)\n\n- 구간: 08.14 10:10 - 08.17 09:30 (KST)\n- 전체 접수: 1건 — Meta 광고 0건 / 홈페이지 1건\n- 미응대: 1건\n\n## 광고 퍼널\n\n- 노출 10,000회 → 클릭 200회 (CTR 2%)\n- 광고 리드 0건 → 접촉 0건 (접촉률 미산정) → 전환 0건\n\n## 캠페인 성과\n\n| 캠페인 | Meta 리드 | 광고비 (USD) | CPL (USD) | 이상 신호 |\n| --- | ---: | ---: | ---: | --- |\n| 신규 원장 \\| 리드젠 | 0 | $120.00 | 미측정 | 없음 |\n\n## 다음 주 액션\n\n1. Meta 리드폼 상태와 CRM 유입 연결을 점검해 광고 리드 0건의 원인을 확인합니다.\n\n## 데이터 기준\n\n- Meta 광고비와 CPL은 계정 통화인 USD 네이티브이며 KRW 수기 예산과 합산하지 않습니다.\n- 광고 리드는 CRM의 meta_lead_ads 유입, 캠페인별 리드는 Meta 플랫폼 귀속값이라 서로 다를 수 있습니다."
+    }
+  },
+  "morning-weekday": {
+    "result": {
+      "status": "sent",
+      "runId": "run-daily",
+      "eventId": "event-1",
+      "windowStart": "2026-08-06T01:10:00.000Z",
+      "windowEnd": "2026-08-07T01:10:00.000Z",
+      "periodLabel": "08.06 10:10 - 08.07 10:10",
+      "totalLeads": 5,
+      "metaLeadAdsLeadCount": 3,
+      "topCampaignLabel": "여름 캠페인",
+      "topCampaignCount": 2,
+      "homepageLeadCount": 2,
+      "contactPageLeadCount": 1,
+      "demoModalLeadCount": 1,
+      "metaAttributedWebsiteLeadCount": 1,
+      "unrespondedCount": 3,
+      "contactedCount": 1,
+      "convertedCount": 1
+    },
+    "events": [
+      {
+        "eventType": "lead.digest.daily",
+        "notificationType": "digest",
+        "categoryTag": "lead",
+        "scopeTag": "org_admin",
+        "severity": "info",
+        "title": "리드 일일 리포트",
+        "message": "08.06 10:10 - 08.07 10:10 전체 접수 5건\nMeta 광고 리드 3건 (주요 캠페인 여름 캠페인 2건)\n홈페이지 2건 — 문의 1건 / 데모 신청 1건 / Meta 광고 경유 1건\n미응대 3건 / 상담 진행 1건 / 전환 1건",
+        "routeUrl": "/admin/crm/customers/leads",
+        "source": "lead",
+        "sourceId": "digest:daily:2026-08-07T01:10:00.000Z",
+        "payload": {
+          "period": "daily",
+          "periodLabel": "08.06 10:10 - 08.07 10:10",
+          "totalLeads": 5,
+          "metaLeadAdsLeadCount": 3,
+          "topCampaignLabel": "여름 캠페인",
+          "topCampaignCount": 2,
+          "homepageLeadCount": 2,
+          "contactPageLeadCount": 1,
+          "demoModalLeadCount": 1,
+          "metaAttributedWebsiteLeadCount": 1,
+          "unrespondedCount": 3,
+          "contactedCount": 1,
+          "convertedCount": 1,
+          "rangeStart": "2026-08-06T01:10:00.000Z",
+          "rangeEnd": "2026-08-07T01:10:00.000Z"
+        }
+      }
+    ],
+    "posts": [
+      {
+        "url": "https://example.invalid/wecom/lead-report",
+        "body": {
+          "msgtype": "template_card",
+          "template_card": {
+            "card_type": "text_notice",
+            "source": {
+              "desc": "Classin CRM",
+              "desc_color": 3
+            },
+            "main_title": {
+              "title": "리드 일일 리포트",
+              "desc": "08.06 10:10 - 08.07 10:10"
+            },
+            "emphasis_content": {
+              "title": "5",
+              "desc": "전체 접수"
+            },
+            "sub_title_text": "미응대 3개 / 상담 진행 1개 / 전환 1개",
+            "horizontal_content_list": [
+              {
+                "keyname": "Meta 광고 리드",
+                "value": "3개"
+              },
+              {
+                "keyname": "주요 캠페인",
+                "value": "여름 캠페인"
+              },
+              {
+                "keyname": "홈페이지 문의",
+                "value": "1개"
+              },
+              {
+                "keyname": "홈페이지 데모 신청",
+                "value": "1개"
+              },
+              {
+                "keyname": "홈페이지 Meta 경유",
+                "value": "1개"
+              }
+            ],
+            "jump_list": [
+              {
+                "type": 1,
+                "title": "리드 보드 보기",
+                "url": "https://classin.co.kr/admin/crm/customers/leads"
+              }
+            ],
+            "card_action": {
+              "type": 1,
+              "url": "https://classin.co.kr/admin/crm/customers/leads"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "morning-no-meta": {
+    "result": {
+      "status": "sent",
+      "runId": "run-daily",
+      "eventId": "event-1",
+      "windowStart": "2026-08-06T01:10:00.000Z",
+      "windowEnd": "2026-08-07T01:10:00.000Z",
+      "periodLabel": "08.06 10:10 - 08.07 10:10",
+      "totalLeads": 2,
+      "metaLeadAdsLeadCount": 0,
+      "topCampaignLabel": "없음",
+      "topCampaignCount": 0,
+      "homepageLeadCount": 2,
+      "contactPageLeadCount": 1,
+      "demoModalLeadCount": 1,
+      "metaAttributedWebsiteLeadCount": 1,
+      "unrespondedCount": 1,
+      "contactedCount": 0,
+      "convertedCount": 1
+    },
+    "events": [
+      {
+        "eventType": "lead.digest.daily",
+        "notificationType": "digest",
+        "categoryTag": "lead",
+        "scopeTag": "org_admin",
+        "severity": "info",
+        "title": "리드 일일 리포트",
+        "message": "08.06 10:10 - 08.07 10:10 전체 접수 2건\nMeta 광고 리드 0건 (주요 캠페인 없음 0건)\n홈페이지 2건 — 문의 1건 / 데모 신청 1건 / Meta 광고 경유 1건\n미응대 1건 / 상담 진행 0건 / 전환 1건",
+        "routeUrl": "/admin/crm/customers/leads",
+        "source": "lead",
+        "sourceId": "digest:daily:2026-08-07T01:10:00.000Z",
+        "payload": {
+          "period": "daily",
+          "periodLabel": "08.06 10:10 - 08.07 10:10",
+          "totalLeads": 2,
+          "metaLeadAdsLeadCount": 0,
+          "topCampaignLabel": "없음",
+          "topCampaignCount": 0,
+          "homepageLeadCount": 2,
+          "contactPageLeadCount": 1,
+          "demoModalLeadCount": 1,
+          "metaAttributedWebsiteLeadCount": 1,
+          "unrespondedCount": 1,
+          "contactedCount": 0,
+          "convertedCount": 1,
+          "rangeStart": "2026-08-06T01:10:00.000Z",
+          "rangeEnd": "2026-08-07T01:10:00.000Z"
+        }
+      }
+    ],
+    "posts": [
+      {
+        "url": "https://example.invalid/wecom/lead-report",
+        "body": {
+          "msgtype": "template_card",
+          "template_card": {
+            "card_type": "text_notice",
+            "source": {
+              "desc": "Classin CRM",
+              "desc_color": 3
+            },
+            "main_title": {
+              "title": "리드 일일 리포트",
+              "desc": "08.06 10:10 - 08.07 10:10"
+            },
+            "emphasis_content": {
+              "title": "2",
+              "desc": "전체 접수"
+            },
+            "sub_title_text": "미응대 1개 / 상담 진행 0개 / 전환 1개",
+            "horizontal_content_list": [
+              {
+                "keyname": "Meta 광고 리드",
+                "value": "0개"
+              },
+              {
+                "keyname": "주요 캠페인",
+                "value": "없음"
+              },
+              {
+                "keyname": "홈페이지 문의",
+                "value": "1개"
+              },
+              {
+                "keyname": "홈페이지 데모 신청",
+                "value": "1개"
+              },
+              {
+                "keyname": "홈페이지 Meta 경유",
+                "value": "1개"
+              }
+            ],
+            "jump_list": [
+              {
+                "type": 1,
+                "title": "리드 보드 보기",
+                "url": "https://classin.co.kr/admin/crm/customers/leads"
+              }
+            ],
+            "card_action": {
+              "type": 1,
+              "url": "https://classin.co.kr/admin/crm/customers/leads"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "morning-weekend": {
+    "result": {
+      "status": "skipped",
+      "reason": "weekend",
+      "windowStart": "2026-08-07T01:10:00.000Z",
+      "windowEnd": "2026-08-08T01:10:00.000Z"
+    },
+    "events": [],
+    "posts": []
+  },
+  "digest-weekly": {
+    "result": {
+      "period": "weekly",
+      "periodLabel": "2026.08.03 - 2026.08.09",
+      "previousPeriodLabel": "2026.07.27 - 2026.08.02",
+      "totalLeads": 5,
+      "totalInboundCount": 5,
+      "previousTotalLeads": 2,
+      "deltaLeads": 3,
+      "contactPageLeadCount": 1,
+      "demoModalLeadCount": 1,
+      "metaLeadAdsLeadCount": 3,
+      "contactedCount": 1,
+      "convertedCount": 1,
+      "closedCount": 1,
+      "unrespondedCount": 2,
+      "over24h": 2,
+      "over48h": 2,
+      "unassignedCount": 3,
+      "channelTalkInquiryCount": 0,
+      "channelTalkOpenCount": 0,
+      "channelTalkMatchedLeadCount": 0,
+      "chatbotHandoffCount": 3,
+      "chatbotHandoffSentCount": 2,
+      "topSourceLabel": "Meta 광고",
+      "topSourceCount": 3,
+      "eventId": "event-1"
+    },
+    "events": [
+      {
+        "eventType": "lead.digest.weekly",
+        "notificationType": "digest",
+        "categoryTag": "lead",
+        "scopeTag": "org_admin",
+        "severity": "info",
+        "title": "주간 리드 리포트",
+        "message": "2026.08.03 - 2026.08.09 유효 인바운드 5개\n홈페이지 문의 1개 / 데모 신청 1개 / Meta 3개\n채널톡 문의 0개 / 열린 상담 0개 / CRM 매칭 0개\n챗봇→채널톡 넘김 2개 / 전체 3개\n전주 대비 +3개\n미응답 2개 / 24시간 초과 2개 / 48시간 초과 2개\n상담 진행 1개 / 전환 1개 / 종료 1개\n주요 경로: Meta 광고 (3개)",
+        "routeUrl": "/admin/crm",
+        "source": "lead",
+        "sourceId": "digest:weekly:2026-08-02T15:00:00.000Z",
+        "payload": {
+          "period": "weekly",
+          "periodLabel": "2026.08.03 - 2026.08.09",
+          "previousPeriodLabel": "2026.07.27 - 2026.08.02",
+          "totalLeads": 5,
+          "totalInboundCount": 5,
+          "previousTotalLeads": 2,
+          "deltaLeads": 3,
+          "contactPageLeadCount": 1,
+          "demoModalLeadCount": 1,
+          "metaLeadAdsLeadCount": 3,
+          "contactedCount": 1,
+          "convertedCount": 1,
+          "closedCount": 1,
+          "unrespondedCount": 2,
+          "over24h": 2,
+          "over48h": 2,
+          "unassignedCount": 3,
+          "channelTalkInquiryCount": 0,
+          "channelTalkOpenCount": 0,
+          "channelTalkMatchedLeadCount": 0,
+          "chatbotHandoffCount": 3,
+          "chatbotHandoffSentCount": 2,
+          "topSourceLabel": "Meta 광고",
+          "topSourceCount": 3,
+          "previousLabel": "전주 대비",
+          "rangeStart": "2026-08-02T15:00:00.000Z",
+          "rangeEnd": "2026-08-09T15:00:00.000Z",
+          "previousRangeStart": "2026-07-26T15:00:00.000Z",
+          "previousRangeEnd": "2026-08-02T15:00:00.000Z"
+        }
+      }
+    ],
+    "posts": [
+      {
+        "url": "https://example.invalid/wecom/lead-report",
+        "body": {
+          "msgtype": "template_card",
+          "template_card": {
+            "card_type": "text_notice",
+            "source": {
+              "desc": "Classin CRM",
+              "desc_color": 3
+            },
+            "main_title": {
+              "title": "주간 리드 리포트",
+              "desc": "2026.08.03 - 2026.08.09"
+            },
+            "emphasis_content": {
+              "title": "5",
+              "desc": "신규 리드"
+            },
+            "sub_title_text": "전주 대비 +3개 / 미응답 2개",
+            "horizontal_content_list": [
+              {
+                "keyname": "홈페이지 문의",
+                "value": "1개"
+              },
+              {
+                "keyname": "데모 신청",
+                "value": "1개"
+              },
+              {
+                "keyname": "Meta 광고",
+                "value": "3개"
+              },
+              {
+                "keyname": "채널톡 문의",
+                "value": "0개"
+              },
+              {
+                "keyname": "챗봇→채널톡",
+                "value": "2개 / 3개"
+              },
+              {
+                "keyname": "전환",
+                "value": "1개"
+              }
+            ],
+            "jump_list": [
+              {
+                "type": 1,
+                "title": "CRM 보기",
+                "url": "https://classin.co.kr/admin/crm"
+              }
+            ],
+            "card_action": {
+              "type": 1,
+              "url": "https://classin.co.kr/admin/crm"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "digest-weekly-no-meta": {
+    "result": {
+      "period": "weekly",
+      "periodLabel": "2026.08.03 - 2026.08.09",
+      "previousPeriodLabel": "2026.07.27 - 2026.08.02",
+      "totalLeads": 2,
+      "totalInboundCount": 2,
+      "previousTotalLeads": 1,
+      "deltaLeads": 1,
+      "contactPageLeadCount": 1,
+      "demoModalLeadCount": 1,
+      "metaLeadAdsLeadCount": 0,
+      "contactedCount": 0,
+      "convertedCount": 1,
+      "closedCount": 0,
+      "unrespondedCount": 1,
+      "over24h": 1,
+      "over48h": 1,
+      "unassignedCount": 1,
+      "channelTalkInquiryCount": 0,
+      "channelTalkOpenCount": 0,
+      "channelTalkMatchedLeadCount": 0,
+      "chatbotHandoffCount": 3,
+      "chatbotHandoffSentCount": 2,
+      "topSourceLabel": "홈페이지 문의",
+      "topSourceCount": 1,
+      "eventId": "event-1"
+    },
+    "events": [
+      {
+        "eventType": "lead.digest.weekly",
+        "notificationType": "digest",
+        "categoryTag": "lead",
+        "scopeTag": "org_admin",
+        "severity": "info",
+        "title": "주간 리드 리포트",
+        "message": "2026.08.03 - 2026.08.09 유효 인바운드 2개\n홈페이지 문의 1개 / 데모 신청 1개 / Meta 0개\n채널톡 문의 0개 / 열린 상담 0개 / CRM 매칭 0개\n챗봇→채널톡 넘김 2개 / 전체 3개\n전주 대비 +1개\n미응답 1개 / 24시간 초과 1개 / 48시간 초과 1개\n상담 진행 0개 / 전환 1개 / 종료 0개\n주요 경로: 홈페이지 문의 (1개)",
+        "routeUrl": "/admin/crm",
+        "source": "lead",
+        "sourceId": "digest:weekly:2026-08-02T15:00:00.000Z",
+        "payload": {
+          "period": "weekly",
+          "periodLabel": "2026.08.03 - 2026.08.09",
+          "previousPeriodLabel": "2026.07.27 - 2026.08.02",
+          "totalLeads": 2,
+          "totalInboundCount": 2,
+          "previousTotalLeads": 1,
+          "deltaLeads": 1,
+          "contactPageLeadCount": 1,
+          "demoModalLeadCount": 1,
+          "metaLeadAdsLeadCount": 0,
+          "contactedCount": 0,
+          "convertedCount": 1,
+          "closedCount": 0,
+          "unrespondedCount": 1,
+          "over24h": 1,
+          "over48h": 1,
+          "unassignedCount": 1,
+          "channelTalkInquiryCount": 0,
+          "channelTalkOpenCount": 0,
+          "channelTalkMatchedLeadCount": 0,
+          "chatbotHandoffCount": 3,
+          "chatbotHandoffSentCount": 2,
+          "topSourceLabel": "홈페이지 문의",
+          "topSourceCount": 1,
+          "previousLabel": "전주 대비",
+          "rangeStart": "2026-08-02T15:00:00.000Z",
+          "rangeEnd": "2026-08-09T15:00:00.000Z",
+          "previousRangeStart": "2026-07-26T15:00:00.000Z",
+          "previousRangeEnd": "2026-08-02T15:00:00.000Z"
+        }
+      }
+    ],
+    "posts": [
+      {
+        "url": "https://example.invalid/wecom/lead-report",
+        "body": {
+          "msgtype": "template_card",
+          "template_card": {
+            "card_type": "text_notice",
+            "source": {
+              "desc": "Classin CRM",
+              "desc_color": 3
+            },
+            "main_title": {
+              "title": "주간 리드 리포트",
+              "desc": "2026.08.03 - 2026.08.09"
+            },
+            "emphasis_content": {
+              "title": "2",
+              "desc": "신규 리드"
+            },
+            "sub_title_text": "전주 대비 +1개 / 미응답 1개",
+            "horizontal_content_list": [
+              {
+                "keyname": "홈페이지 문의",
+                "value": "1개"
+              },
+              {
+                "keyname": "데모 신청",
+                "value": "1개"
+              },
+              {
+                "keyname": "Meta 광고",
+                "value": "0개"
+              },
+              {
+                "keyname": "채널톡 문의",
+                "value": "0개"
+              },
+              {
+                "keyname": "챗봇→채널톡",
+                "value": "2개 / 3개"
+              },
+              {
+                "keyname": "전환",
+                "value": "1개"
+              }
+            ],
+            "jump_list": [
+              {
+                "type": 1,
+                "title": "CRM 보기",
+                "url": "https://classin.co.kr/admin/crm"
+              }
+            ],
+            "card_action": {
+              "type": 1,
+              "url": "https://classin.co.kr/admin/crm"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "digest-monthly": {
+    "result": {
+      "period": "monthly",
+      "periodLabel": "2026.08.01 - 2026.08.31",
+      "previousPeriodLabel": "2026.07.01 - 2026.07.31",
+      "totalLeads": 6,
+      "totalInboundCount": 6,
+      "previousTotalLeads": 3,
+      "deltaLeads": 3,
+      "contactPageLeadCount": 1,
+      "demoModalLeadCount": 1,
+      "metaLeadAdsLeadCount": 4,
+      "contactedCount": 1,
+      "convertedCount": 1,
+      "closedCount": 1,
+      "unrespondedCount": 3,
+      "over24h": 3,
+      "over48h": 3,
+      "unassignedCount": 4,
+      "channelTalkInquiryCount": 0,
+      "channelTalkOpenCount": 0,
+      "channelTalkMatchedLeadCount": 0,
+      "chatbotHandoffCount": 3,
+      "chatbotHandoffSentCount": 2,
+      "topSourceLabel": "Meta 광고",
+      "topSourceCount": 4,
+      "eventId": "event-1"
+    },
+    "events": [
+      {
+        "eventType": "lead.digest.monthly",
+        "notificationType": "digest",
+        "categoryTag": "lead",
+        "scopeTag": "org_admin",
+        "severity": "info",
+        "title": "월간 리드 리포트",
+        "message": "2026.08.01 - 2026.08.31 유효 인바운드 6개\n홈페이지 문의 1개 / 데모 신청 1개 / Meta 4개\n채널톡 문의 0개 / 열린 상담 0개 / CRM 매칭 0개\n챗봇→채널톡 넘김 2개 / 전체 3개\n전월 대비 +3개\n미응답 3개 / 24시간 초과 3개 / 48시간 초과 3개\n상담 진행 1개 / 전환 1개 / 종료 1개\n주요 경로: Meta 광고 (4개)",
+        "routeUrl": "/admin/crm",
+        "source": "lead",
+        "sourceId": "digest:monthly:2026-07-31T15:00:00.000Z",
+        "payload": {
+          "period": "monthly",
+          "periodLabel": "2026.08.01 - 2026.08.31",
+          "previousPeriodLabel": "2026.07.01 - 2026.07.31",
+          "totalLeads": 6,
+          "totalInboundCount": 6,
+          "previousTotalLeads": 3,
+          "deltaLeads": 3,
+          "contactPageLeadCount": 1,
+          "demoModalLeadCount": 1,
+          "metaLeadAdsLeadCount": 4,
+          "contactedCount": 1,
+          "convertedCount": 1,
+          "closedCount": 1,
+          "unrespondedCount": 3,
+          "over24h": 3,
+          "over48h": 3,
+          "unassignedCount": 4,
+          "channelTalkInquiryCount": 0,
+          "channelTalkOpenCount": 0,
+          "channelTalkMatchedLeadCount": 0,
+          "chatbotHandoffCount": 3,
+          "chatbotHandoffSentCount": 2,
+          "topSourceLabel": "Meta 광고",
+          "topSourceCount": 4,
+          "previousLabel": "전월 대비",
+          "rangeStart": "2026-07-31T15:00:00.000Z",
+          "rangeEnd": "2026-08-31T15:00:00.000Z",
+          "previousRangeStart": "2026-06-30T15:00:00.000Z",
+          "previousRangeEnd": "2026-07-31T15:00:00.000Z"
+        }
+      }
+    ],
+    "posts": [
+      {
+        "url": "https://example.invalid/wecom/lead-report",
+        "body": {
+          "msgtype": "template_card",
+          "template_card": {
+            "card_type": "text_notice",
+            "source": {
+              "desc": "Classin CRM",
+              "desc_color": 3
+            },
+            "main_title": {
+              "title": "월간 리드 리포트",
+              "desc": "2026.08.01 - 2026.08.31"
+            },
+            "emphasis_content": {
+              "title": "6",
+              "desc": "신규 리드"
+            },
+            "sub_title_text": "전월 대비 +3개 / 미응답 3개",
+            "horizontal_content_list": [
+              {
+                "keyname": "홈페이지 문의",
+                "value": "1개"
+              },
+              {
+                "keyname": "데모 신청",
+                "value": "1개"
+              },
+              {
+                "keyname": "Meta 광고",
+                "value": "4개"
+              },
+              {
+                "keyname": "채널톡 문의",
+                "value": "0개"
+              },
+              {
+                "keyname": "챗봇→채널톡",
+                "value": "2개 / 3개"
+              },
+              {
+                "keyname": "전환",
+                "value": "1개"
+              }
+            ],
+            "jump_list": [
+              {
+                "type": 1,
+                "title": "CRM 보기",
+                "url": "https://classin.co.kr/admin/crm"
+              }
+            ],
+            "card_action": {
+              "type": 1,
+              "url": "https://classin.co.kr/admin/crm"
+            }
+          }
+        }
+      }
+    ]
+  }
+}
