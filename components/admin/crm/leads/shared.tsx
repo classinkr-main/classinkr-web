@@ -1,11 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import { Check, Copy } from "lucide-react"
+import { Check, Copy, X } from "lucide-react"
 
 import type { LeadRecord, LeadStatus } from "@/lib/repositories/leads"
 import type { ContactLogResult, ContactLogType } from "@/lib/repositories/contact-logs"
 import { getLeadMagnetIntentScore, getLeadMagnetTitle } from "@/lib/lead-magnets"
+import { STATUS_TONE_CLASS, STATUS_TONE_TEXT_STRONG_CLASS } from "@/lib/crm/status-tone"
 import {
   RESPONSE_TARGET_SOURCES,
   SOURCE_GROUP_DOT,
@@ -185,16 +186,55 @@ export function CopyButton({ value }: { value: string }) {
 
 // ─── 토스트 ────────────────────────────────────────────────────
 // raised: 전환 완료 패널 등 우하단 고정 패널이 떠 있을 때 그 위로 올려 겹침을 피한다.
-export function Toast({ msg, type, raised = false }: { msg: string; type: "success" | "error"; raised?: boolean }) {
+// type==="error" 는 role="alert"(즉시 통지) + status-tone danger 로 성공과 다른 톤을 갖는다.
+// onDismiss(X 버튼)·action(재시도·되돌리기)은 선택 — 넘기지 않으면 기존 호출과 같은 모양이다.
+// 자동 소멸 여부는 소비처가 정한다(실패 토스트는 닫기 전까지 남기는 것을 권장).
+export function Toast({
+  msg,
+  type,
+  raised = false,
+  onDismiss,
+  action,
+}: {
+  msg: string
+  type: "success" | "error"
+  raised?: boolean
+  onDismiss?: () => void
+  action?: { label: string; onClick: () => void }
+}) {
+  const isError = type === "error"
+  const live = isError ? { role: "alert" as const } : { role: "status" as const, "aria-live": "polite" as const }
   return (
     <div
-      role="status"
-      aria-live="polite"
+      {...live}
       className={`fixed right-6 z-[70] flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-xl text-[13px] font-medium ${
         raised ? "bottom-28" : "bottom-6"
-      } ${type === "success" ? "bg-[#111110] text-white" : "bg-[#B85C33] text-white"}`}
+      } ${isError ? `border ${STATUS_TONE_CLASS.danger}` : "bg-[#111110] text-white"}`}
     >
-      {msg}
+      <span className="min-w-0">{msg}</span>
+      {action ? (
+        <button
+          type="button"
+          onClick={action.onClick}
+          className={`inline-flex min-h-11 shrink-0 items-center rounded-lg px-2 font-semibold underline underline-offset-2 sm:min-h-0 sm:h-7 ${
+            isError ? STATUS_TONE_TEXT_STRONG_CLASS.danger : "text-white"
+          }`}
+        >
+          {action.label}
+        </button>
+      ) : null}
+      {onDismiss ? (
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="알림 닫기"
+          className={`inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg transition-colors sm:min-h-0 sm:min-w-0 sm:h-7 sm:w-7 ${
+            isError ? "hover:bg-white/60" : "hover:bg-white/15"
+          }`}
+        >
+          <X className="h-3.5 w-3.5" aria-hidden />
+        </button>
+      ) : null}
     </div>
   )
 }
