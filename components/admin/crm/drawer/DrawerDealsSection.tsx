@@ -5,9 +5,21 @@
 
 import { Briefcase, Plus } from "lucide-react"
 import { AdminMoneyInput } from "@/components/admin/AdminMoneyInput"
+import SaveStateCaption, { type SaveState } from "@/components/admin/crm/SaveStateCaption"
+import { STATUS_TONE_CLASS } from "@/lib/crm/status-tone"
 import type { Customer360 } from "@/lib/repositories/crm-customer-360"
 import type { CrmDealStage } from "@/lib/repositories/crm-deals"
 import { DEAL_STAGE_LABEL, DEAL_STAGE_OPTIONS, formatAmount, formatDay, SectionTitle } from "./shared"
+
+/** 딜 행 인라인 저장 상태(c360-03/08) — 단계·금액 변경의 저장 중/저장됨/실패를 행 옆에 표시한다. */
+export interface DealRowSaveState {
+  state: SaveState
+  onRetry?: () => void
+}
+
+export function dealSaveCaptionId(dealId: string): string {
+  return `c360-deal-save-${dealId}`
+}
 
 export default function DrawerDealsSection({
   data,
@@ -23,6 +35,7 @@ export default function DrawerDealsSection({
   onAddDeal,
   onDealStage,
   onDealAmountCommit,
+  dealSave = {},
 }: {
   data: Customer360
   actingId: string | null
@@ -38,6 +51,8 @@ export default function DrawerDealsSection({
   onDealStage: (dealId: string, stage: CrmDealStage) => void
   /** 감사 2026-09-07 §2 — 생성된 딜의 예상금액을 어떤 화면에서도 못 고치던 것을 인라인 편집으로 연다. */
   onDealAmountCommit: (dealId: string, amount: number | null) => void
+  /** 딜 id → 인라인 저장 상태. 없으면 idle(캡션 영역만 유지). */
+  dealSave?: Record<string, DealRowSaveState>
 }) {
   return (
     <section id="c360-deal" className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
@@ -55,9 +70,9 @@ export default function DrawerDealsSection({
                 <span
                   className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                     deal.status === "won"
-                      ? "bg-[#ECFDF5] text-[#084734]"
+                      ? STATUS_TONE_CLASS.ok
                       : deal.status === "lost"
-                        ? "bg-[#FEF3EE] text-[#B85C33]"
+                        ? STATUS_TONE_CLASS.danger
                         : "bg-white text-[#1a1a1a]/55"
                   }`}
                 >
@@ -88,6 +103,8 @@ export default function DrawerDealsSection({
                     value={deal.stage}
                     onChange={(event) => onDealStage(deal.id, event.target.value as CrmDealStage)}
                     disabled={actingId === `deal:${deal.id}`}
+                    aria-busy={actingId === `deal:${deal.id}` ? true : undefined}
+                    aria-describedby={dealSaveCaptionId(deal.id)}
                     className="h-7 shrink-0 rounded-lg border border-[#e8e8e4] bg-white px-1.5 text-[11px] font-semibold text-[#111110] outline-none disabled:opacity-50"
                     aria-label="딜 단계"
                   >
@@ -99,6 +116,16 @@ export default function DrawerDealsSection({
                   </select>
                 ) : null}
               </div>
+              {deal.status === "open" ? (
+                // 항상 마운트된 aria-live 캡션 — 단계/금액 저장의 진행·실패를 행 안에서 알린다(실패는 재시도 포함).
+                <SaveStateCaption
+                  id={dealSaveCaptionId(deal.id)}
+                  state={dealSave[deal.id]?.state ?? "idle"}
+                  failedText="변경이 저장되지 않았습니다 (이전 값으로 되돌림)"
+                  onRetry={dealSave[deal.id]?.onRetry}
+                  className="mt-1"
+                />
+              ) : null}
             </div>
           ))
         )}
@@ -140,6 +167,7 @@ export default function DrawerDealsSection({
               type="button"
               onClick={onAddDeal}
               disabled={!dealTitle.trim() || actingId === "deal"}
+              aria-busy={actingId === "deal" ? true : undefined}
               className="inline-flex h-9 items-center justify-center gap-1 rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
             >
               <Plus className="h-3.5 w-3.5" />

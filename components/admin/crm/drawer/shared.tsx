@@ -9,6 +9,7 @@ import {
   COMPASS_TIMELINE_SOURCE_LABEL,
   type CompassTimelineEntry,
 } from "@/lib/crm/compass-timeline"
+import { STATUS_TONE_CLASS } from "@/lib/crm/status-tone"
 import type { CrmDealStage } from "@/lib/repositories/crm-deals"
 import type { CrmTaskType } from "@/lib/repositories/crm-tasks"
 
@@ -43,10 +44,12 @@ export const SERVICE_RISK_LABEL: Record<string, string> = {
   normal: "정상",
 }
 
+// 상태색은 lib/crm/status-tone.ts 한 곳에서 온다(c360-07). urgent→danger, soon/watch→warning.
+// '주시(watch)'가 성공 녹색으로 그려지던 것을 경고 톤으로 바로잡았다. normal은 중립(무신호).
 export const SERVICE_RISK_CLASS: Record<string, string> = {
-  urgent: "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]",
-  soon: "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]",
-  watch: "border-[#D7EBDD] bg-[#ECFDF5] text-[#084734]",
+  urgent: STATUS_TONE_CLASS.danger,
+  soon: STATUS_TONE_CLASS.warning,
+  watch: STATUS_TONE_CLASS.warning,
   normal: "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/55",
 }
 
@@ -121,6 +124,14 @@ export function formatDay(value: string | null | undefined) {
   return new Intl.DateTimeFormat("ko-KR", { year: "2-digit", month: "2-digit", day: "2-digit" }).format(date)
 }
 
+// 기준 시각 캡션용 HH:MM(24시간). 값이 없거나 깨졌으면 "—"(확인 불가)로 그린다 — 빈 값을 시각처럼 꾸미지 않는다.
+export function formatClock(value: string | null | undefined): string {
+  if (!value) return "—"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return "—"
+  return new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false }).format(date)
+}
+
 export function formatAmount(value: number | null | undefined) {
   if (value == null || !Number.isFinite(value)) return "-"
   return new Intl.NumberFormat("ko-KR").format(value)
@@ -184,9 +195,24 @@ export function CollapsibleSection({
   )
 }
 
-export function SectionTitle({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+// id/tabIndex=-1 을 주면 행이 사라진 뒤 포커스를 되돌릴 자리(UX 규약 7)로 쓸 수 있다.
+export function SectionTitle({
+  icon,
+  children,
+  id,
+  focusable = false,
+}: {
+  icon: React.ReactNode
+  children: React.ReactNode
+  id?: string
+  focusable?: boolean
+}) {
   return (
-    <h3 className="mb-2 flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.08em] text-[#1a1a1a]/45">
+    <h3
+      id={id}
+      tabIndex={focusable ? -1 : undefined}
+      className="mb-2 flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.08em] text-[#1a1a1a]/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2"
+    >
       {icon}
       {children}
     </h3>

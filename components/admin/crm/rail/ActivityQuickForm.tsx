@@ -10,6 +10,7 @@ import { useEffect, useId, useRef, useState } from "react"
 import { CheckCircle2, ChevronDown, Loader2, Paperclip } from "lucide-react"
 
 import { adminFetch } from "@/lib/admin-client"
+import { STATUS_TONE_CLASS } from "@/lib/crm/status-tone"
 import { Toast } from "@/components/admin/crm/leads/shared"
 import CrmCustomerPicker from "@/components/admin/crm/CrmCustomerPicker"
 import { useCrmOwners } from "@/components/admin/crm/useCrmOwners"
@@ -47,8 +48,33 @@ export interface ActivityQuickFormProps {
   bodyFieldId?: string
   /** 저장 성공 후 콜백(타임라인 refresh 등). tasksCreated = 함께 생성된 할 일 수 */
   onSaved?: (result: { tasksCreated: number }) => void
-  /** 본문/제목이 비어있지 않게 되거나 다시 비면 통지(드로어 닫기 dirty 가드용) */
+  /** 작성 중 여부(isActivityFormDirty)가 플립될 때 통지(드로어 닫기 dirty 가드용) */
   onDirtyChange?: (dirty: boolean) => void
+}
+
+/** 닫기 가드가 보는 '작성 중' 판정 — 제출 허용 집합 + 상세 서술 필드. 순수 함수(테스트 고정용). */
+export function isActivityFormDirty(fields: {
+  body: string
+  title: string
+  summary: string
+  nextActionTitle: string
+  decisions: string
+  blockers: string
+  attendees: string
+  meetingPurpose: string
+  recordingName: string | null
+}): boolean {
+  return (
+    fields.body.trim().length > 0 ||
+    fields.title.trim().length > 0 ||
+    fields.summary.trim().length > 0 ||
+    fields.nextActionTitle.trim().length > 0 ||
+    fields.decisions.trim().length > 0 ||
+    fields.blockers.trim().length > 0 ||
+    fields.attendees.trim().length > 0 ||
+    fields.meetingPurpose.trim().length > 0 ||
+    Boolean(fields.recordingName)
+  )
 }
 
 export default function ActivityQuickForm({
@@ -129,8 +155,20 @@ export default function ActivityQuickForm({
     return () => window.clearTimeout(timer)
   }, [toast])
 
-  // dirty 통지 — 본문/제목 비어있음 여부가 바뀔 때만 부모에 알린다(닫기 가드용).
-  const isDirty = body.trim().length > 0 || title.trim().length > 0
+  // dirty 통지 — 닫기 가드용. c360-05: 제출을 허용하는 필드 집합(제목·요약·본문·다음 액션·녹음파일)과
+  // '+상세'에서 적는 서술 필드(참석자·미팅 목적·결정·리스크)까지 포함한다. 본문/제목만 보면
+  // 회의 참석자·다음 액션을 적다가 드로어를 닫아도 확인 없이 사라졌다.
+  const isDirty = isActivityFormDirty({
+    body,
+    title,
+    summary,
+    nextActionTitle,
+    decisions,
+    blockers,
+    attendees,
+    meetingPurpose,
+    recordingName,
+  })
   const onDirtyChangeRef = useRef(onDirtyChange)
   useEffect(() => {
     onDirtyChangeRef.current = onDirtyChange
@@ -267,7 +305,7 @@ export default function ActivityQuickForm({
 
   const ownerHealthNotice =
     ownerHealth?.ok === false && ownerHealth.message ? (
-      <div className="rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] text-[#B85C33]">
+      <div className={`rounded-xl border px-3 py-2 text-[12px] ${STATUS_TONE_CLASS.danger}`}>
         {ownerHealth.message}
       </div>
     ) : null

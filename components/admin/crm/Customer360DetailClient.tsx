@@ -1,8 +1,8 @@
 "use client"
 
-import { useCallback, useMemo } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { ArrowLeft, Briefcase, ClipboardList, Coins, ExternalLink, LayoutDashboard, ListChecks } from "lucide-react"
 
 import type { Customer360 } from "@/lib/repositories/crm-customer-360"
@@ -14,7 +14,8 @@ import Customer360DetailOverview from "./Customer360DetailOverview"
 import Customer360DetailTasks from "./Customer360DetailTasks"
 import { SEVERITY_CLASS, SEVERITY_LABEL } from "./Customer360DetailShared"
 
-type TabKey = "overview" | "money" | "deals" | "activity" | "tasks"
+export type Customer360DetailTab = "overview" | "money" | "deals" | "activity" | "tasks"
+type TabKey = Customer360DetailTab
 
 const TABS: Array<{ key: TabKey; label: string; icon: React.ReactNode; count?: (data: Customer360) => number }> = [
   { key: "overview", label: "개요", icon: <LayoutDashboard className="h-3.5 w-3.5" /> },
@@ -36,29 +37,53 @@ function isTabKey(value: string | null): value is TabKey {
   return value != null && TAB_KEYS.has(value as TabKey)
 }
 
+/** `?tab=` 값 → 탭 키. 모르는 값·없음은 개요. */
+export function resolveDetailTab(param: string | null): TabKey {
+  return isTabKey(param) ? param : "overview"
+}
+
+/**
+ * 탭 전환 뒤의 검색 문자열 — 개요는 `tab`을 지우고 나머지는 set. 다른 파라미터는 보존한다.
+ * 순수 함수라 테스트로 고정한다(c360-01).
+ */
+export function detailTabSearch(currentSearch: string, tab: TabKey): string {
+  const params = new URLSearchParams(currentSearch.startsWith("?") ? currentSearch.slice(1) : currentSearch)
+  if (tab === "overview") params.delete("tab")
+  else params.set("tab", tab)
+  const qs = params.toString()
+  return qs ? `?${qs}` : ""
+}
+
 interface Props {
   data: Customer360
   customerKey: string
 }
 
 export default function Customer360DetailClient({ data, customerKey }: Props) {
-  const router = useRouter()
-  const pathname = usePathname()
   const searchParams = useSearchParams()
-
   const tabParam = searchParams.get("tab")
-  const activeTab: TabKey = isTabKey(tabParam) ? tabParam : "overview"
 
-  const selectTab = useCallback(
-    (tab: TabKey) => {
-      const params = new URLSearchParams(Array.from(searchParams.entries()))
-      if (tab === "overview") params.delete("tab")
-      else params.set("tab", tab)
-      const qs = params.toString()
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
-    },
-    [router, pathname, searchParams]
-  )
+  // c360-01 — 탭은 로컬 state가 정본이다. 이전엔 useSearchParams에서만 파생되고 router.replace로만
+  // 바뀌어서, 동적 렌더인 /admin 아래에서는 탭 클릭마다 서버가 page.tsx를 재실행해 360 전체
+  // (이벤트 50·딜 200·Compass 2회·REV/HW 스캔)를 다시 조립했다. body는 이미 받은 data prop만 쓰므로
+  // 서버 재조회는 불필요하다 — 클릭은 state를 즉시 바꾸고 URL 동기화는 history.replaceState로 뒤따른다.
+  const [activeTab, setActiveTab] = useState<TabKey>(() => resolveDetailTab(tabParam))
+
+  // popstate(뒤로/앞으로)·외부 링크로 검색 파라미터가 바뀌면 state를 따라 맞춘다.
+  // selectTab이 바꾼 URL은 이미 같은 값이라 no-op.
+  useEffect(() => {
+    setActiveTab(resolveDetailTab(tabParam))
+  }, [tabParam])
+
+  const selectTab = useCallback((tab: TabKey) => {
+    setActiveTab(tab)
+    if (typeof window === "undefined") return
+    const search = detailTabSearch(window.location.search, tab)
+    const next = `${window.location.pathname}${search}${window.location.hash}`
+    if (next === `${window.location.pathname}${window.location.search}${window.location.hash}`) return
+    // Next App Router는 history.replaceState를 가로채 useSearchParams와 동기화하되 서버 요청은 내지 않는다.
+    window.history.replaceState(null, "", next)
+  }, [])
 
   const header = data.header
   const displayName = header?.name ?? "고객"
@@ -133,8 +158,12 @@ export default function Customer360DetailClient({ data, customerKey }: Props) {
         </div>
       ) : null}
 
-      {/* 탭 */}
-      <div className="no-scrollbar mb-5 -mx-4 flex gap-1 overflow-x-auto border-b border-[#e8e8e4] px-4 sm:mx-0 sm:px-0">
+      {/* 탭 — 로컬 전환(서버 재요청 없음). role=tablist/aria-selected로 현재 탭을 보조기술에도 알린다. */}
+      <div
+        role="tablist"
+        aria-label="고객 360 상세 탭"
+        className="no-scrollbar mb-5 -mx-4 flex gap-1 overflow-x-auto border-b border-[#e8e8e4] px-4 sm:mx-0 sm:px-0"
+      >
         {TABS.map((tab) => {
           const isActive = activeTab === tab.key
           const count = tab.count?.(data)
@@ -142,8 +171,11 @@ export default function Customer360DetailClient({ data, customerKey }: Props) {
             <button
               key={tab.key}
               type="button"
+              role="tab"
+              aria-selected={isActive}
+              aria-controls="c360-detail-tabpanel"
               onClick={() => selectTab(tab.key)}
-              className={`-mb-px inline-flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2.5 text-[13px] font-semibold transition-colors ${
+              className={`-mb-px inline-flex min-h-11 shrink-0 items-center gap-1.5 border-b-2 px-3 py-2.5 text-[13px] font-semibold transition-colors sm:min-h-0 ${
                 isActive
                   ? "border-[#084734] text-[#111110]"
                   : "border-transparent text-[#1a1a1a]/45 hover:text-[#111110]"
@@ -165,7 +197,9 @@ export default function Customer360DetailClient({ data, customerKey }: Props) {
         })}
       </div>
 
-      {body}
+      <div id="c360-detail-tabpanel" role="tabpanel">
+        {body}
+      </div>
     </div>
   )
 }

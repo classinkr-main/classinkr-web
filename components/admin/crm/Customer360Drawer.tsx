@@ -2,6 +2,13 @@
 
 // 고객 360 드로어 본체 — 데이터 로더·mutation·닫기 게이트·파생값을 소유하고,
 // 섹션 본문(연락처·활동·할일·딜·머니)과 공용 아톰은 components/admin/crm/drawer/* 로 분해했다(2026-08-28).
+//
+// 2026-09-15 c360 라운드:
+//  - 로더는 세대 카운터(loadSeqRef)로 늦게 온 이전 고객 응답을 버린다(c360-02). 캐시 창은
+//    lib/crm/client-cache SSOT, SWR 갱신은 onRevalidated로 화면에 반영한다(c360-06).
+//  - 쓰기는 성공 응답 레코드로 로컬을 먼저 바꾸고(drawer/c360-local-patch) 재검증은 force 없이
+//    백그라운드로 흘린다(c360-03). 실패는 하단 고정 CrmNoticeBanner + 딜 행 인라인 캡션(c360-08).
+//  - 닫기 가드는 컴포저뿐 아니라 할 일/딜/라벨 입력까지 본다(c360-05).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
@@ -25,6 +32,9 @@ import {
 } from "lucide-react"
 
 import { adminFetchJson, adminFetchJsonCached, clearAdminRequestCache } from "@/lib/admin-client"
+import { CRM_CACHE_SWR_MS, CRM_CACHE_TTL_MS } from "@/lib/crm/client-cache"
+import { runOptimistic } from "@/lib/crm/optimistic-update"
+import { STATUS_TONE_TEXT_CLASS } from "@/lib/crm/status-tone"
 import {
   CRM_CURRENCY_BADGE,
   formatCNY,
@@ -34,6 +44,9 @@ import {
 } from "@/lib/crm/money-format"
 import { pushRecentCustomer } from "@/lib/crm/recent-customers"
 import { mergeCompassTimeline } from "@/lib/crm/compass-timeline"
+import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
+import CrmNoticeBanner from "./CrmNoticeBanner"
+import { SECONDARY_TEXT_CLASS } from "./home/shared"
 import CrmCustomerFlags from "./CrmCustomerFlags"
 import CrmContactValue from "./CrmContactValue"
 import CrmCustomerPicker from "./CrmCustomerPicker"
@@ -44,7 +57,7 @@ import DrawerActivitySection, {
   type C360ActivityTab,
 } from "./drawer/DrawerActivitySection"
 import DrawerTasksSection from "./drawer/DrawerTasksSection"
-import DrawerDealsSection from "./drawer/DrawerDealsSection"
+import DrawerDealsSection, { type DealRowSaveState } from "./drawer/DrawerDealsSection"
 import DrawerMoneySection from "./drawer/DrawerMoneySection"
 import {
   C360_SECTION_DOM_ORDER,
@@ -52,10 +65,22 @@ import {
   CollapsibleSection,
   SectionTitle,
   dueRelativeLabel,
+  formatClock,
   formatDay,
   monthDayParts,
   sumAmounts,
 } from "./drawer/shared"
+import {
+  TASKS_SECTION_HEADING_ID,
+  applyC360Overrides,
+  nextTaskIdAfterRemoval,
+  patchDealRow,
+  pruneC360Overrides,
+  removeTaskRow,
+  restoreTaskRow,
+  taskCompleteButtonId,
+  type C360LocalOverride,
+} from "./drawer/c360-local-patch"
 import { useDialogFocus } from "@/components/admin/use-dialog-focus"
 import { deriveCustomerFlags } from "@/lib/crm/customer-flags"
 import { LEAD_BADGE_TONE_CLASSES } from "@/lib/crm/lead-badges"
@@ -63,21 +88,100 @@ import { computeCustomerHealth, HEALTH_BAND_STYLE } from "@/lib/crm/customer-hea
 import { buildCustomerNextActionRecommendation } from "@/lib/crm/customer-next-action"
 import type { CsMotion } from "@/lib/crm/cs-motions"
 import type { Customer360 } from "@/lib/repositories/crm-customer-360"
-import type { CrmDealStage } from "@/lib/repositories/crm-deals"
-import type { CrmTaskType } from "@/lib/repositories/crm-tasks"
+import type { CrmDealRecord, CrmDealStage } from "@/lib/repositories/crm-deals"
+import type { CrmTaskRecord, CrmTaskType } from "@/lib/repositories/crm-tasks"
 
 interface Props {
   customerKey: string | null
   name?: string | null
   onClose: () => void
-  /** 컴포저 작성 중 여부 통지 — 부모의 URL 기반 닫기 경로(뒤로가기)가 같은 dirty 가드를 공유하게 한다. */
+  /** 작성 중 여부 통지 — 부모의 URL 기반 닫기 경로(뒤로가기)가 같은 dirty 가드를 공유하게 한다. */
   onDirtyChange?: (dirty: boolean) => void
+}
+
+/**
+ * 하단 고정 알림. `key`로 출처를 구분해, 새 시도가 같은 출처의 이전 실패만 걷어내게 한다.
+ *  - load: 360 조회 실패(danger) · mutation: 쓰기 실패(danger) · revalidate: SWR 갱신 실패(warning, 표시 값은 유지).
+ */
+interface DrawerNotice {
+  key: "load" | "mutation" | "revalidate"
+  tone: "danger" | "warning"
+  title: string
+  message: string
+  retry?: () => void
+}
+
+/** 저장됨 캡션이 idle로 돌아가기까지. */
+const DEAL_SAVED_RESET_MS = 2_200
+
+function toErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback
+}
+
+/**
+ * 닫기 가드가 보는 '작성 중' — 컴포저 + 열린 할 일/딜 빠른 추가 폼의 입력 + 라벨 입력(c360-05).
+ * 순수 함수(테스트 고정용).
+ */
+export function isDrawerFormDirty(input: {
+  composerDirty: boolean
+  taskFormOpen: boolean
+  taskTitle: string
+  taskDue: string
+  dealFormOpen: boolean
+  dealTitle: string
+  dealAmount: number | null
+  tagInput: string
+}): boolean {
+  if (input.composerDirty) return true
+  if (input.taskFormOpen && (input.taskTitle.trim().length > 0 || input.taskDue.length > 0)) return true
+  if (input.dealFormOpen && (input.dealTitle.trim().length > 0 || input.dealAmount != null)) return true
+  return input.tagInput.trim().length > 0
+}
+
+/**
+ * 고객 요약 한 문장 — LLM 아님. 위치·단계·위험·만료·잔액 신호를 규칙으로 합성한다(Derived).
+ * c360-04: NEO money.totalBalance는 선불 '충전 잔액'이다(lib/crm/service-risk.ts는 같은 값의 소진(<=0)을
+ * 위험으로 본다). '미수 잔액'으로 적으면 담당자가 수금 독촉을 하게 되므로 의미를 바로 적는다.
+ */
+export function buildDerivedSummary(data: Customer360, targetType: "lead" | "neo_account"): string | null {
+  const header = data.header
+  if (!data.found || !header) return null
+  const money = data.money
+  const segs: string[] = []
+  if (header.region) segs.push(`${header.region} 소재`)
+  if (targetType === "neo_account") segs.push("고객")
+  else segs.push(`${header.statusLabel ?? "리드"} 단계`)
+  if (header.ownerName) segs.push(`담당 ${header.ownerName}`)
+  if (data.risk?.severity === "critical") segs.push("이탈 위험 긴급")
+  else if (data.risk?.severity === "high") segs.push("이탈 위험 높음")
+  if (data.serviceRisk && (data.serviceRisk.level === "urgent" || data.serviceRisk.level === "soon"))
+    segs.push("계약 만료 임박")
+  if ((money?.totalBalance ?? 0) > 0) segs.push(`충전 잔액 ${formatCNY(money?.totalBalance ?? null)}`)
+  if (header.priorityReason) segs.push(header.priorityReason)
+  return segs.length > 0 ? segs.join(" · ") : null
+}
+
+/**
+ * 건강도 산식 입력(c360-04). hasOutstanding은 null — 충전 잔액(긍정 신호)을 미수로 읽어 12점을 깎던 것을
+ * 멈춘다(헤더 배지의 outstanding=null 처리와 정합). 같은 통화의 확정 미수 원천이 360 페이로드에 없다.
+ * 소진(depleted_balance)·재충전(recharge_due) 신호의 건강도 승격은 별도 변경으로 분리한다.
+ */
+export function buildDrawerHealthInput(data: Customer360, daysToExpire: number | null) {
+  return {
+    riskSeverity: data.risk?.severity ?? null,
+    serviceLevel: data.serviceRisk?.level ?? null,
+    hasOutstanding: null,
+    daysToExpire,
+    lastContactDays: null,
+  }
 }
 
 export default function Customer360Drawer({ customerKey, name, onClose, onDirtyChange }: Props) {
   const [data, setData] = useState<Customer360 | null>(null)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  // 백그라운드 재검증(쓰기 뒤 재조회·SWR 갱신) 진행 중 — 스켈레톤·새로고침 비활성과 분리해 캡션에만 쓴다.
+  const [syncing, setSyncing] = useState(false)
+  const [notice, setNotice] = useState<DrawerNotice | null>(null)
   const [actingId, setActingId] = useState<string | null>(null)
   const [taskTitle, setTaskTitle] = useState("")
   const [taskType, setTaskType] = useState<CrmTaskType>("call")
@@ -96,8 +200,12 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
   const [dealFormOpen, setDealFormOpen] = useState(false)
   const [taskFormOpen, setTaskFormOpen] = useState(false)
   const [activeSection, setActiveSection] = useState<string>("c360-summary")
-  // 고정 컴포저 작성 중 여부 — 닫기 가드용(ActivityQuickForm onDirtyChange가 플립 시점에만 통지).
+  // 고정 컴포저 작성 중 여부 — ActivityQuickForm onDirtyChange가 플립 시점에만 통지.
   const [composerDirty, setComposerDirty] = useState(false)
+  // 닫기 확인(작성 중 입력이 있을 때) — window.confirm 대신 공용 다이얼로그.
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
+  // 딜 행 인라인 저장 상태(단계·금액).
+  const [dealSave, setDealSave] = useState<Record<string, DealRowSaveState>>({})
   // 'NEO 등록됨' 수동 연결 패널 — 홈페이지 유입(site) 리드 전용.
   const [neoLinkOpen, setNeoLinkOpen] = useState(false)
   const [neoLinkBusy, setNeoLinkBusy] = useState(false)
@@ -107,6 +215,16 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
   const router = useRouter()
   const bodyRef = useRef<HTMLDivElement>(null)
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
+  // 요청 세대 — load()/loadMoreEvents() 진입마다 올리고, 응답 뒤 세대가 바뀌었으면 결과를 버린다(c360-02).
+  const loadSeqRef = useRef(0)
+  // 방금 반영한 로컬 변경(C360_OVERRIDE_MS 창) — 재검증 응답 위에 덧씌운다. 명시 새로고침이 비운다.
+  const overridesRef = useRef<C360LocalOverride[]>([])
+  // 낙관 갱신 스냅샷용 최신 data — 핸들러 클로저가 낡은 data를 잡지 않게.
+  const dataRef = useRef<Customer360 | null>(null)
+  useEffect(() => {
+    dataRef.current = data
+  }, [data])
+  const dealSavedTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
   // dirty 통지는 ref 경유 — 부모가 인라인 함수를 넘겨도 콜백 재생성/재구독 루프가 없게.
   const onDirtyChangeRef = useRef(onDirtyChange)
@@ -115,8 +233,22 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
   })
   const handleComposerDirtyChange = useCallback((dirty: boolean) => {
     setComposerDirty(dirty)
-    onDirtyChangeRef.current?.(dirty)
   }, [])
+
+  // c360-05 — 닫기 가드는 컴포저·할 일/딜 빠른 추가 폼·라벨 입력을 모두 본다. 부모(뒤로가기 가드)에도 같은 값을 통지.
+  const anyDirty = isDrawerFormDirty({
+    composerDirty,
+    taskFormOpen,
+    taskTitle,
+    taskDue,
+    dealFormOpen,
+    dealTitle,
+    dealAmount,
+    tagInput,
+  })
+  useEffect(() => {
+    onDirtyChangeRef.current?.(anyDirty)
+  }, [anyDirty])
 
   const url = customerKey ? `/api/admin/crm/customers/${encodeURIComponent(customerKey)}/360` : null
 
@@ -135,12 +267,15 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
     root.scrollTo({ top: Math.max(0, top), behavior: "smooth" })
   }, [])
 
-  // 닫기 게이트 — 컴포저에 작성 중인 기록이 있으면 확인 후 닫는다.
+  // 닫기 게이트 — 작성 중인 입력이 있으면 '계속 작성 / 버리고 닫기'를 묻는다.
   // 배경 클릭·ESC·스와이프·닫기 버튼 등 모든 닫기 경로가 이 게이트를 지난다.
   const requestClose = useCallback(() => {
-    if (composerDirty && !window.confirm("작성 중인 기록이 있습니다. 닫을까요?")) return
+    if (anyDirty) {
+      setCloseConfirmOpen(true)
+      return
+    }
     onClose()
-  }, [composerDirty, onClose])
+  }, [anyDirty, onClose])
 
   // 모바일 스와이프-닫기 — 오른쪽으로 충분히 밀면 닫는다(수평 제스처만).
   const onTouchStart = useCallback((event: React.TouchEvent) => {
@@ -161,11 +296,22 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
     [requestClose]
   )
 
+  // 재시도 클로저가 최신 load를 잡도록 ref 경유(useCallback 자기 참조 회피).
+  const loadRef = useRef<(options?: { force?: boolean; expanded?: boolean; background?: boolean }) => Promise<void>>(
+    async () => undefined
+  )
+
   const load = useCallback(
-    async (options?: { force?: boolean; expanded?: boolean }) => {
+    async (options?: { force?: boolean; expanded?: boolean; background?: boolean }) => {
       if (!url) return
-      setLoading(true)
-      setError(null)
+      // 세대 가드 — 이 호출보다 나중에 시작된 load/loadMoreEvents가 있으면 이 응답은 버린다.
+      const seq = ++loadSeqRef.current
+      const isLive = () => seq === loadSeqRef.current
+      if (options?.background) setSyncing(true)
+      else {
+        setLoading(true)
+        setNotice((prev) => (prev && prev.key !== "mutation" ? null : prev))
+      }
       // expanded일 때는 '전체 활동 보기'로 펼친 50건을 유지하도록 같은 URL/캐시키로 재조회한다.
       const base = options?.expanded ? `${url}?eventsLimit=50` : url
       const cacheKey = options?.expanded ? `${url}:all` : url
@@ -173,24 +319,63 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
       try {
         const next = await adminFetchJsonCached<Customer360>(fetchUrl, undefined, {
           cacheKey,
-          ttlMs: 15_000,
-          staleWhileRevalidateMs: 60_000,
+          ttlMs: CRM_CACHE_TTL_MS,
+          staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
           force: options?.force,
+          // SWR 고속 경로로 낡은 캐시를 먼저 그린 회차 — 백그라운드 갱신 결과를 화면에 반영한다(c360-06).
+          onRevalidated: ({ data: fresh, error }) => {
+            if (!isLive()) return
+            if (fresh) {
+              setData(applyC360Overrides(fresh, overridesRef.current, Date.now()))
+              setNotice((prev) => (prev?.key === "revalidate" ? null : prev))
+              return
+            }
+            if (error !== undefined) {
+              setNotice({
+                key: "revalidate",
+                tone: "warning",
+                title: "최신 정보를 받지 못했습니다",
+                message: `${toErrorMessage(error, "네트워크 오류")} · 표시 중인 값은 마지막 조회 시각 기준입니다.`,
+                retry: () => void loadRef.current({ expanded: options?.expanded, background: true }),
+              })
+            }
+          },
         })
-        setData(next)
+        if (!isLive()) return
+        setData(applyC360Overrides(next, overridesRef.current, Date.now()))
       } catch (err) {
-        setError(err instanceof Error ? err.message : "고객 정보를 불러오지 못했습니다.")
+        if (!isLive()) return
+        setNotice({
+          key: "load",
+          tone: "danger",
+          title: "고객 정보를 불러오지 못했습니다",
+          message: toErrorMessage(err, "네트워크 오류"),
+          retry: () => void loadRef.current(options),
+        })
       } finally {
-        setLoading(false)
+        if (isLive()) {
+          setLoading(false)
+          setSyncing(false)
+        }
       }
     },
     [url]
   )
+  useEffect(() => {
+    loadRef.current = load
+  }, [load])
 
   useEffect(() => {
     // 고객이 바뀌면 이전 고객의 데이터/폼 입력이 새 드로어에 잔존하지 않게 초기화한다.
+    // 세대를 올려 이전 고객의 inflight 응답이 새 고객 화면·쓰기 대상을 덮어쓰지 못하게 한다(c360-02).
+    loadSeqRef.current += 1
+    overridesRef.current = []
     setData(null)
-    setError(null)
+    setNotice(null)
+    setLoading(false)
+    setSyncing(false)
+    setDealSave({})
+    setCloseConfirmOpen(false)
     setTaskTitle("")
     setTaskType("call")
     setTaskDue("")
@@ -202,7 +387,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
     setEventsExpanded(false)
     setDealFormOpen(false)
     setTaskFormOpen(false)
-    // 고객 전환 시 컴포저는 새 대상으로 리마운트되므로 dirty 가드도 초기화(부모에도 통지).
+    // 고객 전환 시 컴포저는 새 대상으로 리마운트되므로 dirty 가드도 초기화(anyDirty 효과가 부모에 통지).
     handleComposerDirtyChange(false)
     // NEO 연결 패널도 이전 고객의 입력·에러가 남지 않게 닫는다.
     setNeoLinkOpen(false)
@@ -216,11 +401,21 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
     if (customerKey) void load()
   }, [customerKey, load, handleComposerDirtyChange])
 
+  // 언마운트 시 '저장됨' 캡션 타이머 정리.
+  useEffect(() => {
+    const timers = dealSavedTimersRef.current
+    return () => {
+      timers.forEach((timer) => clearTimeout(timer))
+      timers.clear()
+    }
+  }, [])
+
   // Escape 닫기 + Tab 포커스 트랩 + 이전 포커스 복귀를 공용 훅에 위임한다.
   // 직접 만든 ESC 리스너에는 트랩이 없어, aria-modal="true"를 선언해 놓고도 Tab이 백드롭 뒤
   // 배경 페이지 컨트롤로 새어 나갔다. 훅은 focusRef의 role="dialog" 조상을 트랩 범위로 잡는다.
+  // 닫기 확인 다이얼로그(포털)가 열린 동안은 트랩·ESC를 내려놓는다 — 두 다이얼로그가 포커스를 뺏고 되뺏지 않게.
   const closeButtonRef = useRef<HTMLButtonElement | null>(null)
-  useDialogFocus(customerKey, requestClose, closeButtonRef)
+  useDialogFocus(closeConfirmOpen ? null : customerKey, requestClose, closeButtonRef)
 
   // 배경 스크롤 잠금 — 드로어는 fixed라 배경 목록이 그대로 스크롤된다. 백드롭 위에서 휠·스와이프하면
   // 뒤 목록이 드로어 밑에서 밀려나가고, 닫았을 때 원래 자리가 아닌 곳에 서 있게 된다.
@@ -288,20 +483,62 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
   const targetType = data?.source ?? (customerKey?.startsWith("neo:") ? "neo_account" : "lead")
   const entityId = data?.entityId ?? (customerKey ? customerKey.slice(customerKey.indexOf(":") + 1) : "")
 
+  // 쓰기 뒤 재검증 — 이 고객의 360 캐시만 비우고(감사#1: 전역 아님) force 없이 백그라운드로 다시 받는다.
+  // clearAdminRequestCache가 같은 prefix의 브라우저 HTTP 캐시 우회(60초)도 걸어 주므로 force는 불필요하다.
+  // 화면은 이미 로컬 patch로 바뀌어 있고, 응답은 overridesRef 창 안의 로컬 변경 위에 덧씌워진다.
+  const revalidate = useCallback(() => {
+    if (!url) return
+    clearAdminRequestCache(url)
+    void load({ expanded: eventsExpanded, background: true })
+  }, [url, load, eventsExpanded])
+
+  // 명시 새로고침(헤더 버튼) — 유일한 force 재조회. 로컬 덧씌우기도 버리고 서버 값을 그대로 믿는다.
   const refetch = useCallback(async () => {
-    // 감사#1: 인자 없는 clearAdminRequestCache()는 GLOBAL_CACHE_SCOPE("*")로 어드민 전역 캐시를
-    // 비운다 — 메모 1건 저장이 하드웨어·장부 등 무관한 탭까지 리로드시키는 원인이었다.
-    // 이 드로어가 실제로 무효화해야 하는 건 지금 열려 있는 고객의 360 캐시뿐이므로 url로 좁힌다.
     if (url) clearAdminRequestCache(url)
+    overridesRef.current = []
     await load({ force: true, expanded: eventsExpanded })
   }, [load, url, eventsExpanded])
+
+  // 로컬 patch 한 건을 화면과 덧씌우기 목록에 동시에 반영한다.
+  const applyLocal = useCallback((item: C360LocalOverride) => {
+    overridesRef.current = [...pruneC360Overrides(overridesRef.current, Date.now()), item]
+    setData((prev) => (prev ? applyC360Overrides(prev, [item], Date.now()) : prev))
+  }, [])
+
+  const failMutation = useCallback((title: string, error: unknown, retry?: () => void, note?: string) => {
+    const cause = toErrorMessage(error, "네트워크 오류")
+    setNotice({ key: "mutation", tone: "danger", title, message: note ? `${cause} · ${note}` : cause, retry })
+  }, [])
+  const clearMutationNotice = useCallback(() => {
+    setNotice((prev) => (prev?.key === "mutation" ? null : prev))
+  }, [])
+
+  const setDealSaveState = useCallback((dealId: string, next: DealRowSaveState) => {
+    setDealSave((prev) => ({ ...prev, [dealId]: next }))
+  }, [])
+  const markDealSaved = useCallback(
+    (dealId: string) => {
+      setDealSaveState(dealId, { state: "saved" })
+      const timers = dealSavedTimersRef.current
+      const existing = timers.get(dealId)
+      if (existing) clearTimeout(existing)
+      timers.set(
+        dealId,
+        setTimeout(() => {
+          timers.delete(dealId)
+          setDealSave((prev) => (prev[dealId]?.state === "saved" ? { ...prev, [dealId]: { state: "idle" } } : prev))
+        }, DEAL_SAVED_RESET_MS)
+      )
+    },
+    [setDealSaveState]
+  )
 
   // NEO 등록 액션·발송허브 딥링크용 파생값 — 등록 액션은 홈페이지 유입(site) 리드에만 노출.
   const contactPhone = data?.contacts?.phone ?? null
   const isSiteLead = Boolean(data?.found) && targetType === "lead" && data?.origin === "site"
   const crmRegistered = data?.crmRegistered ?? false
 
-  // 리드 → NEO 계정 수동 등록 확정. 성공 시 360 재조회로 pill('정식 리드')로 전환된다.
+  // 리드 → NEO 계정 수동 등록 확정. 성공 응답 즉시 pill('정식 리드')로 바꾸고 360은 백그라운드 재검증.
   const submitNeoLink = useCallback(
     async (pick: { targetId: string; targetLabel: string }) => {
       if (targetType !== "lead" || !entityId) return
@@ -312,11 +549,12 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
           method: "POST",
           body: JSON.stringify({ leadId: entityId, neoAccountId: pick.targetId, name: pick.targetLabel }),
         })
+        setData((prev) => (prev ? { ...prev, crmRegistered: true, neoAccountId: pick.targetId } : prev))
         setSavedMsg("정식 리드로 전환되었습니다")
         setNeoLinkOpen(false)
         setNeoPickerLabel("")
         setNeoPickerId("")
-        await refetch()
+        revalidate()
       } catch (err) {
         // 실패 시 피커 선택을 되돌린다 — '연결됨' 표시가 에러 문구와 모순되지 않게.
         setNeoPickerLabel("")
@@ -327,7 +565,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
         setNeoLinkBusy(false)
       }
     },
-    [targetType, entityId, refetch]
+    [targetType, entityId, revalidate]
   )
 
   // 컴포저로 포커스 — 구 인라인 메모 폼을 대체한 CTA(헤더 '활동 기록'·추천 '메모 남기기').
@@ -337,91 +575,114 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
     document.getElementById(COMPOSER_BODY_ID)?.focus()
   }, [])
 
-  const handleAddTask = useCallback(async () => {
+  // ---- 쓰기(mutation) — 성공 응답 레코드로 로컬을 먼저 바꾸고 재검증은 백그라운드(c360-03).
+  // 재시도 클로저가 자기 자신을 참조하므로 useCallback 대신 일반 함수로 둔다(자식에는 이미 인라인 래퍼로 넘긴다).
+
+  async function createTaskLocally(body: Record<string, unknown>): Promise<CrmTaskRecord | null> {
+    const result = await adminFetchJson<{ task?: CrmTaskRecord }>("/api/admin/crm/tasks", {
+      method: "POST",
+      body: JSON.stringify(body),
+    })
+    const task = result?.task ?? null
+    if (task) applyLocal({ kind: "task_added", id: task.id, at: Date.now(), record: task })
+    return task
+  }
+
+  async function handleAddTask() {
     const title = taskTitle.trim()
     if (!title || !customerKey) return
     setActingId("task")
-    setError(null)
+    clearMutationNotice()
     try {
-      await adminFetchJson("/api/admin/crm/tasks", {
-        method: "POST",
-        body: JSON.stringify({
-          title,
-          taskType,
-          targetType,
-          targetId: entityId,
-          targetLabel: displayName,
-          dueAt: taskDue ? new Date(taskDue).toISOString() : undefined,
-          assignToMe: true,
-        }),
+      await createTaskLocally({
+        title,
+        taskType,
+        targetType,
+        targetId: entityId,
+        targetLabel: displayName,
+        dueAt: taskDue ? new Date(taskDue).toISOString() : undefined,
+        assignToMe: true,
       })
       setTaskTitle("")
       setTaskDue("")
       setTaskFormOpen(false)
       setSavedMsg("할 일을 추가했어요")
-      await refetch()
+      revalidate()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "할 일 저장에 실패했습니다.")
+      failMutation("할 일을 저장하지 못했습니다", err, () => void handleAddTask(), "입력은 그대로 남아 있습니다.")
     } finally {
       setActingId(null)
     }
-  }, [taskTitle, taskType, customerKey, targetType, entityId, displayName, taskDue, refetch])
+  }
 
-  const handleCsMotion = useCallback(
-    async (motion: CsMotion) => {
-      if (!customerKey) return
-      setActingId(`cs:${motion.key}`)
-      setError(null)
-      try {
-        await adminFetchJson("/api/admin/crm/tasks", {
-          method: "POST",
-          body: JSON.stringify({
-            title: motion.title,
-            taskType: motion.taskType,
-            targetType,
-            targetId: entityId,
-            targetLabel: displayName,
-            assignToMe: true,
-          }),
-        })
-        setSavedMsg("CS 할 일을 만들었어요")
-        await refetch()
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "CS 할 일 생성에 실패했습니다.")
-      } finally {
-        setActingId(null)
-      }
-    },
-    [customerKey, targetType, entityId, displayName, refetch]
-  )
+  async function handleCsMotion(motion: CsMotion) {
+    if (!customerKey) return
+    setActingId(`cs:${motion.key}`)
+    clearMutationNotice()
+    try {
+      await createTaskLocally({
+        title: motion.title,
+        taskType: motion.taskType,
+        targetType,
+        targetId: entityId,
+        targetLabel: displayName,
+        assignToMe: true,
+      })
+      setSavedMsg("CS 할 일을 만들었어요")
+      revalidate()
+    } catch (err) {
+      failMutation("CS 할 일을 만들지 못했습니다", err, () => void handleCsMotion(motion))
+    } finally {
+      setActingId(null)
+    }
+  }
 
-  const handleCompleteTask = useCallback(
-    async (taskId: string) => {
-      setActingId(`task:${taskId}`)
-      setError(null)
-      try {
-        await adminFetchJson(`/api/admin/crm/tasks/${encodeURIComponent(taskId)}`, {
+  // 완료 — 행을 먼저 지우고(낙관) 포커스를 다음 행 첫 액션 또는 섹션 heading으로 옮긴다. 실패하면 제자리에 되돌린다.
+  async function handleCompleteTask(taskId: string) {
+    const current = dataRef.current
+    const index = current ? current.tasks.rows.findIndex((row) => row.id === taskId) : -1
+    const record = current && index >= 0 ? current.tasks.rows[index] : null
+    const focusNextId = current ? nextTaskIdAfterRemoval(current.tasks.rows, taskId) : null
+    setActingId(`task:${taskId}`)
+    clearMutationNotice()
+    const result = await runOptimistic<{ record: CrmTaskRecord | null; index: number }>({
+      snapshot: () => ({ record, index }),
+      apply: () => {
+        setData((prev) => (prev ? removeTaskRow(prev, taskId) : prev))
+        if (typeof window !== "undefined") {
+          window.requestAnimationFrame(() => {
+            document.getElementById(focusNextId ? taskCompleteButtonId(focusNextId) : TASKS_SECTION_HEADING_ID)?.focus()
+          })
+        }
+      },
+      commit: () =>
+        adminFetchJson(`/api/admin/crm/tasks/${encodeURIComponent(taskId)}`, {
           method: "PATCH",
           body: JSON.stringify({ action: "complete", outcome: "고객 360에서 완료" }),
-        })
-        setSavedMsg("할 일을 완료했어요")
-        await refetch()
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "할 일 완료에 실패했습니다.")
-      } finally {
-        setActingId(null)
-      }
-    },
-    [refetch]
-  )
+        }),
+      rollback: (saved) => {
+        if (!saved.record) return
+        const restored = saved.record
+        setData((prev) => (prev ? restoreTaskRow(prev, restored, saved.index) : prev))
+      },
+      onError: (err) =>
+        failMutation("할 일을 완료하지 못했습니다", err, () => void handleCompleteTask(taskId), "목록에 되돌려 놓았습니다."),
+    })
+    setActingId(null)
+    if (result.ok) {
+      overridesRef.current = [...pruneC360Overrides(overridesRef.current, Date.now()), { kind: "task_removed", id: taskId, at: Date.now() }]
+      setSavedMsg("할 일을 완료했어요")
+      revalidate()
+    }
+  }
 
-  const handleAddDeal = useCallback(async () => {
+  async function handleAddDeal() {
     const title = dealTitle.trim()
     if (!title || !customerKey) return
     setActingId("deal")
-    setError(null)
+    clearMutationNotice()
     try {
-      await adminFetchJson("/api/admin/crm/deals-lite", {
+      const result = await adminFetchJson<{ deal?: CrmDealRecord }>("/api/admin/crm/deals-lite", {
         method: "POST",
         body: JSON.stringify({
           title,
@@ -433,59 +694,76 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
           assignToMe: true,
         }),
       })
+      const deal = result?.deal ?? null
+      if (deal) applyLocal({ kind: "deal_added", id: deal.id, at: Date.now(), record: deal })
       setDealTitle("")
       setDealAmount(null)
       setDealStage("consult")
       setDealFormOpen(false)
       setSavedMsg("딜을 추가했어요")
-      await refetch()
+      revalidate()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "딜 저장에 실패했습니다.")
+      failMutation("딜을 저장하지 못했습니다", err, () => void handleAddDeal(), "입력은 그대로 남아 있습니다.")
     } finally {
       setActingId(null)
     }
-  }, [dealTitle, dealStage, dealAmount, customerKey, targetType, entityId, displayName, refetch])
+  }
 
-  const handleDealStage = useCallback(
-    async (dealId: string, stage: CrmDealStage) => {
-      setActingId(`deal:${dealId}`)
-      setError(null)
-      try {
-        await adminFetchJson(`/api/admin/crm/deals-lite/${encodeURIComponent(dealId)}`, {
-          method: "PATCH",
-          body: JSON.stringify({ action: "stage", stage }),
-        })
-        await refetch()
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "딜 단계 변경에 실패했습니다.")
-      } finally {
-        setActingId(null)
-      }
-    },
-    [refetch]
-  )
+  // 딜 행 patch(단계·금액) 공통 — 낙관 반영 → PATCH → 응답 레코드로 확정, 실패 시 이전 행으로 복원 + 인라인 실패 캡션.
+  async function patchDeal(
+    dealId: string,
+    body: Record<string, unknown>,
+    optimistic: Partial<CrmDealRecord>,
+    failTitle: string,
+    retry: () => void
+  ) {
+    const previous = dataRef.current?.deals.rows.find((row) => row.id === dealId) ?? null
+    if (!previous) return
+    setActingId(`deal:${dealId}`)
+    clearMutationNotice()
+    setDealSaveState(dealId, { state: "saving" })
+    const result = await runOptimistic<CrmDealRecord>({
+      snapshot: () => previous,
+      apply: () => setData((prev) => (prev ? patchDealRow(prev, dealId, optimistic) : prev)),
+      commit: async () => {
+        const response = await adminFetchJson<{ deal?: CrmDealRecord }>(
+          `/api/admin/crm/deals-lite/${encodeURIComponent(dealId)}`,
+          { method: "PATCH", body: JSON.stringify(body) }
+        )
+        // 서버가 확정한 행(status·updatedAt 포함)으로 덮고, 재검증 창 동안 같은 patch를 유지한다.
+        applyLocal({ kind: "deal_patched", id: dealId, at: Date.now(), patch: response?.deal ?? optimistic })
+      },
+      rollback: (saved) => setData((prev) => (prev ? patchDealRow(prev, dealId, saved) : prev)),
+      onError: (err) => {
+        setDealSaveState(dealId, { state: "failed", onRetry: retry })
+        failMutation(failTitle, err, retry, "이전 값으로 되돌려 놓았습니다.")
+      },
+    })
+    setActingId(null)
+    if (result.ok) {
+      markDealSaved(dealId)
+      revalidate()
+    }
+  }
+
+  async function handleDealStage(dealId: string, stage: CrmDealStage) {
+    await patchDeal(dealId, { action: "stage", stage }, { stage }, "딜 단계를 변경하지 못했습니다", () =>
+      void handleDealStage(dealId, stage)
+    )
+  }
 
   // 감사 2026-09-07 §2 — 생성된 딜의 예상금액을 어떤 화면에서도 못 고치던 결함 수리.
   // 서버는 이미 지원한다(app/api/admin/crm/deals-lite/[id]/route.ts의 action:"update").
   // 단계 변경과 같은 actingId(`deal:${dealId}`)를 공유해 같은 딜의 동시 편집을 자연히 직렬화한다.
-  const handleDealAmountChange = useCallback(
-    async (dealId: string, amount: number | null) => {
-      setActingId(`deal:${dealId}`)
-      setError(null)
-      try {
-        await adminFetchJson(`/api/admin/crm/deals-lite/${encodeURIComponent(dealId)}`, {
-          method: "PATCH",
-          body: JSON.stringify({ action: "update", expectedAmount: amount }),
-        })
-        await refetch()
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "딜 예상금액 변경에 실패했습니다.")
-      } finally {
-        setActingId(null)
-      }
-    },
-    [refetch]
-  )
+  async function handleDealAmountChange(dealId: string, amount: number | null) {
+    await patchDeal(
+      dealId,
+      { action: "update", expectedAmount: amount },
+      { expectedAmount: amount },
+      "딜 예상금액을 변경하지 못했습니다",
+      () => void handleDealAmountChange(dealId, amount)
+    )
+  }
 
   const money = data?.money
   const moneyVisible = useMemo(() => money?.available ?? false, [money])
@@ -573,22 +851,8 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
     })
   }, [data, header])
 
-  // 고객 요약 — LLM 아님. 위치·단계·위험·만료·미수 신호를 규칙으로 합성한 한 문장(Derived).
-  const derivedSummary = useMemo(() => {
-    if (!data?.found || !header) return null
-    const segs: string[] = []
-    if (header.region) segs.push(`${header.region} 소재`)
-    if (targetType === "neo_account") segs.push("고객")
-    else segs.push(`${header.statusLabel ?? "리드"} 단계`)
-    if (header.ownerName) segs.push(`담당 ${header.ownerName}`)
-    if (data.risk?.severity === "critical") segs.push("이탈 위험 긴급")
-    else if (data.risk?.severity === "high") segs.push("이탈 위험 높음")
-    if (data.serviceRisk && (data.serviceRisk.level === "urgent" || data.serviceRisk.level === "soon"))
-      segs.push("계약 만료 임박")
-    if ((money?.totalBalance ?? 0) > 0) segs.push(`미수 잔액 ${formatCNY(money?.totalBalance ?? null)}`)
-    if (header.priorityReason) segs.push(header.priorityReason)
-    return segs.length > 0 ? segs.join(" · ") : null
-  }, [data, header, targetType, money])
+  // 고객 요약 — LLM 아님. 규칙 합성(buildDerivedSummary, c360-04 참조).
+  const derivedSummary = useMemo(() => (data ? buildDerivedSummary(data, targetType) : null), [data, targetType])
 
   // 최근접 만료까지 일수 — 건강도 산식 입력.
   const daysToExpire = useMemo(() => {
@@ -602,66 +866,78 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
   // 고객 건강도 — 규칙 기반 단일 점수(lib/crm/customer-health SSOT). 헤더 배지로 노출.
   const health = useMemo(() => {
     if (!data?.found) return null
-    return computeCustomerHealth({
-      riskSeverity: data.risk?.severity ?? null,
-      serviceLevel: data.serviceRisk?.level ?? null,
-      hasOutstanding: (money?.totalBalance ?? 0) > 0,
-      daysToExpire,
-      lastContactDays: null,
-    })
-  }, [data, money, daysToExpire])
+    return computeCustomerHealth(buildDrawerHealthInput(data, daysToExpire))
+  }, [data, daysToExpire])
 
-  const handleRunRecommendation = useCallback(async () => {
+  async function handleRunRecommendation() {
     if (!recommendation || !customerKey) return
     setActingId("rec")
-    setError(null)
+    clearMutationNotice()
     try {
-      await adminFetchJson("/api/admin/crm/tasks", {
-        method: "POST",
-        body: JSON.stringify({
-          title: recommendation.title,
-          taskType: recommendation.taskType,
-          targetType,
-          targetId: entityId,
-          targetLabel: displayName,
-          assignToMe: true,
-        }),
+      await createTaskLocally({
+        title: recommendation.title,
+        taskType: recommendation.taskType,
+        targetType,
+        targetId: entityId,
+        targetLabel: displayName,
+        assignToMe: true,
       })
       setSavedMsg("추천 할 일을 만들었어요")
-      await refetch()
+      revalidate()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "추천 실행에 실패했습니다.")
+      failMutation("추천 할 일을 만들지 못했습니다", err, () => void handleRunRecommendation())
     } finally {
       setActingId(null)
     }
-  }, [recommendation, customerKey, targetType, entityId, displayName, refetch])
+  }
 
   const loadMoreEvents = useCallback(async () => {
     if (!url) return
     // 성공한 뒤에만 펼침으로 표시한다. 요청 전에 켜 두면 실패했을 때 목록은 그대로인데
     // "전체 활동 보기" 버튼(!eventsExpanded 조건)만 사라져, 잘린 목록에 재시도 수단 없이 갇힌다.
+    // 세대 가드(c360-02): 이 사이 고객이 바뀌거나 새 load가 시작되면 이 응답은 버린다.
+    const seq = ++loadSeqRef.current
+    const isLive = () => seq === loadSeqRef.current
     setEventsLoading(true)
-    setError(null)
+    setNotice((prev) => (prev?.key === "load" ? null : prev))
     try {
       const next = await adminFetchJsonCached<Customer360>(`${url}?eventsLimit=50`, undefined, {
         cacheKey: `${url}:all`,
-        ttlMs: 15_000,
+        ttlMs: CRM_CACHE_TTL_MS,
+        staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
+        onRevalidated: ({ data: fresh }) => {
+          if (!isLive() || !fresh) return
+          setData(applyC360Overrides(fresh, overridesRef.current, Date.now()))
+        },
       })
-      setData(next)
+      if (!isLive()) return
+      setData(applyC360Overrides(next, overridesRef.current, Date.now()))
       setEventsExpanded(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "전체 활동을 불러오지 못했습니다.")
+      if (!isLive()) return
+      setNotice({
+        key: "load",
+        tone: "danger",
+        title: "전체 활동을 불러오지 못했습니다",
+        message: toErrorMessage(err, "네트워크 오류"),
+        retry: () => void loadMoreEventsRef.current(),
+      })
     } finally {
-      setEventsLoading(false)
+      if (isLive()) setEventsLoading(false)
     }
   }, [url])
+  const loadMoreEventsRef = useRef(loadMoreEvents)
+  useEffect(() => {
+    loadMoreEventsRef.current = loadMoreEvents
+  }, [loadMoreEvents])
 
-  const handleAddTag = useCallback(async () => {
+  async function handleAddTag() {
     const clean = tagInput.trim()
     // url은 customerKey와 함께 나오는 파생값이라 !customerKey 만으로는 TS가 string으로 좁혀
     // 주지 않는다 — !url도 같이 걸어 아래에서 non-null 단언 없이 clearAdminRequestCache(url)을 쓴다.
     if (!clean || !customerKey || !url) return
     setTagBusy(true)
+    clearMutationNotice()
     try {
       const result = await adminFetchJson<{ tags: string[] }>(
         `/api/admin/crm/customers/${encodeURIComponent(customerKey)}/tags`,
@@ -674,36 +950,34 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
       clearAdminRequestCache(url)
       setSavedMsg("라벨을 추가했어요")
     } catch (err) {
-      setError(err instanceof Error ? err.message : "라벨 추가에 실패했습니다.")
+      failMutation("라벨을 추가하지 못했습니다", err, () => void handleAddTag(), "입력은 그대로 남아 있습니다.")
     } finally {
       setTagBusy(false)
     }
-  }, [tagInput, customerKey, url])
+  }
 
-  const handleRemoveTag = useCallback(
-    async (tag: string) => {
-      // url은 customerKey와 함께 나오는 파생값이라 !customerKey 만으로는 TS가 string으로
-      // 좁혀 주지 않는다 — !url도 같이 걸어 non-null 단언 없이 clearAdminRequestCache(url)을 쓴다.
-      if (!customerKey || !url) return
-      setTagBusy(true)
-      try {
-        const result = await adminFetchJson<{ tags: string[] }>(
-          `/api/admin/crm/customers/${encodeURIComponent(customerKey)}/tags?tag=${encodeURIComponent(tag)}`,
-          { method: "DELETE" }
-        )
-        setTags(result.tags ?? [])
-        // 태그가 360 페이로드에 동승하므로, 캐시를 비워 재오픈 시 편집 전 태그가 되살아나지 않게 한다.
-        // 감사#1: 전역 스코프 대신 이 고객의 360 캐시(url)만 좁혀서 지운다 — 다른 탭 캐시는 보존.
-        clearAdminRequestCache(url)
-        setSavedMsg("라벨을 지웠어요")
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "라벨 삭제에 실패했습니다.")
-      } finally {
-        setTagBusy(false)
-      }
-    },
-    [customerKey, url]
-  )
+  async function handleRemoveTag(tag: string) {
+    // url은 customerKey와 함께 나오는 파생값이라 !customerKey 만으로는 TS가 string으로
+    // 좁혀 주지 않는다 — !url도 같이 걸어 non-null 단언 없이 clearAdminRequestCache(url)을 쓴다.
+    if (!customerKey || !url) return
+    setTagBusy(true)
+    clearMutationNotice()
+    try {
+      const result = await adminFetchJson<{ tags: string[] }>(
+        `/api/admin/crm/customers/${encodeURIComponent(customerKey)}/tags?tag=${encodeURIComponent(tag)}`,
+        { method: "DELETE" }
+      )
+      setTags(result.tags ?? [])
+      // 태그가 360 페이로드에 동승하므로, 캐시를 비워 재오픈 시 편집 전 태그가 되살아나지 않게 한다.
+      // 감사#1: 전역 스코프 대신 이 고객의 360 캐시(url)만 좁혀서 지운다 — 다른 탭 캐시는 보존.
+      clearAdminRequestCache(url)
+      setSavedMsg("라벨을 지웠어요")
+    } catch (err) {
+      failMutation("라벨을 지우지 못했습니다", err, () => void handleRemoveTag(tag))
+    } finally {
+      setTagBusy(false)
+    }
+  }
 
   // 다가오는 일정 — 기한 있는 열린 할 일 중 오늘 이후만, 가까운 순. (전체 할 일은 아래 목록.)
   const upcomingTasks = useMemo(() => {
@@ -716,6 +990,11 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
       .sort((a, b) => new Date(a.dueAt as string).getTime() - new Date(b.dueAt as string).getTime())
       .slice(0, 4)
   }, [data])
+
+  // 기준 시각 캡션(UX 규약 4) — 서버가 360을 조립한 시각. 갱신 중/갱신 지연을 함께 적는다.
+  const basisCaption = data
+    ? `${syncing ? "갱신 중 · " : notice?.key === "revalidate" ? "갱신 지연 · " : ""}조회 ${formatClock(data.generatedAt)} 기준 · NEO·원장·Compass 합성`
+    : null
 
   if (!customerKey) return null
 
@@ -738,7 +1017,9 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
               ? `${displayName} 고객의 활동을 더 불러오는 중입니다.`
               : tagBusy || neoLinkBusy || actingId !== null
                 ? `${displayName} 고객 정보를 저장하는 중입니다.`
-                : ""}
+                : syncing
+                  ? `${displayName} 고객 정보를 최신으로 갱신하는 중입니다.`
+                  : ""}
         </div>
         {/* 모바일 스와이프-닫기 힌트 — 왼쪽 그랩바(전체 화면 덮는 패널의 탭-투-클로즈 대체) */}
         <button
@@ -770,7 +1051,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                     backgroundColor: HEALTH_BAND_STYLE[health.band].bg,
                     borderColor: HEALTH_BAND_STYLE[health.band].bd,
                   }}
-                  title="규칙 기반 건강도 점수(0~100) — 리스크·서비스 위험·미수·만료 신호 합성"
+                  title="규칙 기반 건강도 점수(0~100) — 리스크·서비스 위험·만료 신호 합성 (충전 잔액은 감점하지 않음)"
                 >
                   건강도 {health.score} · {health.label}
                 </span>
@@ -794,12 +1075,17 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                 {header?.priorityReason ? ` · ${header.priorityReason}` : ""}
               </span>
             </div>
+            {/* 기준 시각·출처 캡션(UX 규약 4) — 항상 마운트된 aria-live 영역이라 '갱신 중 → 조회 HH:MM' 전이가 통지된다. */}
+            <p className={`mt-0.5 text-[11px] ${SECONDARY_TEXT_CLASS}`} role="status" aria-live="polite" data-testid="c360-basis-caption">
+              {basisCaption ?? (loading ? "불러오는 중…" : "")}
+            </p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
               onClick={() => void refetch()}
               disabled={loading}
+              aria-busy={loading ? true : undefined}
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2]"
               aria-label={loading ? "고객 정보 새로고침 중" : "고객 정보 새로고침"}
             >
@@ -911,7 +1197,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
               />
               {neoLinkBusy ? <p className="mt-1.5 text-[11px] text-[#1a1a1a]/45">연결 중...</p> : null}
               {neoLinkError ? (
-                <p className="mt-1.5 text-[11px] font-medium text-[#B85C33]">{neoLinkError}</p>
+                <p role="alert" className={`mt-1.5 text-[11px] font-medium ${STATUS_TONE_TEXT_CLASS.danger}`}>{neoLinkError}</p>
               ) : null}
             </div>
           ) : null}
@@ -977,25 +1263,18 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
           </section>
         ) : null}
 
-        {savedMsg ? (
-          // 2.2초 뒤 사라지는 토스트라 시각적으로 놓치면 끝이다 — 보조기술에도 결과를 알린다.
-          <div role="status" aria-live="polite" className="pointer-events-none absolute bottom-4 left-1/2 z-20 -translate-x-1/2">
+        {/* 2.2초 뒤 사라지는 토스트라 시각적으로 놓치면 끝이다 — 항상 마운트된 aria-live 영역으로 보조기술에도 알린다. */}
+        <div role="status" aria-live="polite" className="pointer-events-none absolute bottom-4 left-1/2 z-20 -translate-x-1/2">
+          {savedMsg ? (
             <div className="flex items-center gap-1.5 rounded-full bg-[#084734] px-3.5 py-2 text-[12px] font-semibold text-white shadow-lg">
               <CheckCircle2 className="h-3.5 w-3.5" />
               {savedMsg}
             </div>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
 
         {/* body */}
         <div ref={bodyRef} className="flex-1 space-y-3 overflow-y-auto bg-[#f5f5f2] p-4">
-          {error ? (
-            <div role="alert" className="flex items-start gap-2 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] font-medium text-[#B85C33]">
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>{error}</span>
-            </div>
-          ) : null}
-
           {data?.health.warnings.length ? (
             <div className="flex items-start gap-2 rounded-xl border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2 text-[12px] text-[#7A520F]">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -1028,7 +1307,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                     type="button"
                     onClick={() => void handleRemoveTag(tag)}
                     disabled={tagBusy}
-                    className="text-[#1a1a1a]/35 transition-colors hover:text-[#B85C33] disabled:opacity-50"
+                    className="text-[#1a1a1a]/35 transition-colors hover:text-[#B43E3E] disabled:opacity-50"
                     aria-label={`${tag} 라벨 삭제`}
                   >
                     <X className="h-3 w-3" />
@@ -1219,6 +1498,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
               onAddDeal={() => void handleAddDeal()}
               onDealStage={(dealId, stage) => void handleDealStage(dealId, stage)}
               onDealAmountCommit={(dealId, amount) => void handleDealAmountChange(dealId, amount)}
+              dealSave={dealSave}
             />
           ) : null}
 
@@ -1251,7 +1531,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                   <p className="text-[15px] font-bold text-[#111110]">{formatCrmMoney(ltv)}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">잔액 합계</p>
+                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">충전 잔액 합계 · NEO 선불</p>
                   <p className="text-[15px] font-bold text-[#111110]">{formatCNY(money?.totalBalance ?? null)}</p>
                 </div>
                 <div>
@@ -1307,7 +1587,35 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
             </div>
           ) : null}
         </div>
+
+        {/* 하단 고정 알림(c360-08) — 실패는 danger·role=alert·닫기·재시도, 자동 소멸 없음. 갱신 지연은 warning으로 분리. */}
+        {notice ? (
+          <div className="shrink-0 border-t border-[#e8e8e4] bg-white px-3 py-2">
+            <CrmNoticeBanner
+              tone={notice.tone}
+              title={notice.title}
+              message={notice.message}
+              action={notice.retry ? { label: "다시 시도", onClick: notice.retry, pending: actingId !== null || loading || syncing } : undefined}
+              onDismiss={() => setNotice(null)}
+            />
+          </div>
+        ) : null}
       </div>
+
+      {/* 닫기 확인(c360-05) — 작성 중인 기록·할 일·딜·라벨 입력이 있을 때만. */}
+      <DeleteConfirmDialog
+        open={closeConfirmOpen}
+        onClose={() => setCloseConfirmOpen(false)}
+        onConfirm={() => {
+          setCloseConfirmOpen(false)
+          onClose()
+        }}
+        title="작성 중인 내용이 있습니다"
+        description={`${displayName} 드로어를 닫으면 작성 중인 기록·할 일·딜·라벨 입력이 사라집니다.`}
+        confirmLabel="버리고 닫기"
+        cancelLabel="계속 작성"
+        destructive={false}
+      />
     </div>
   )
 }

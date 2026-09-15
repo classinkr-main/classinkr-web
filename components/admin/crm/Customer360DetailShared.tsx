@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react"
 
+import { STATUS_TONE_CLASS } from "@/lib/crm/status-tone"
 import type { Customer360Severity } from "@/lib/repositories/crm-customer-360"
 
 // 자세히 보기(360 디테일) 전용 공용 헬퍼·라벨·소프트 프리미티브.
@@ -81,10 +82,12 @@ export const SEVERITY_LABEL: Record<Customer360Severity, string> = {
   low: "안정",
 }
 
+// 상태색은 lib/crm/status-tone.ts 한 곳에서 온다(c360-07). critical→danger, high/medium→warning.
+// '주의(medium)'가 성공 녹색으로 그려지던 것을 경고 톤으로 바로잡았다. low는 중립(무신호).
 export const SEVERITY_CLASS: Record<Customer360Severity, string> = {
-  critical: "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]",
-  high: "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]",
-  medium: "border-[#D7EBDD] bg-[#ECFDF5] text-[#084734]",
+  critical: STATUS_TONE_CLASS.danger,
+  high: STATUS_TONE_CLASS.warning,
+  medium: STATUS_TONE_CLASS.warning,
   low: "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/55",
 }
 
@@ -96,9 +99,9 @@ export const SERVICE_RISK_LABEL: Record<string, string> = {
 }
 
 export const SERVICE_RISK_CLASS: Record<string, string> = {
-  urgent: "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]",
-  soon: "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]",
-  watch: "border-[#D7EBDD] bg-[#ECFDF5] text-[#084734]",
+  urgent: STATUS_TONE_CLASS.danger,
+  soon: STATUS_TONE_CLASS.warning,
+  watch: STATUS_TONE_CLASS.warning,
   normal: "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/55",
 }
 
@@ -155,11 +158,12 @@ export const TASK_PRIORITY_LABEL: Record<string, string> = {
   urgent: "긴급",
 }
 
+// 우선순위 칩은 보더 없는 채움만 쓴다 — 토큰 클래스의 border-[…]는 `border` 두께가 없어 무해하다.
 export const TASK_PRIORITY_CLASS: Record<string, string> = {
   low: "bg-[#f0f0ec] text-[#1a1a1a]/55",
   normal: "bg-[#fafaf8] text-[#1a1a1a]/55",
-  high: "bg-[#FBF1E0] text-[#7A520F]",
-  urgent: "bg-[#FEF3EE] text-[#B85C33]",
+  high: STATUS_TONE_CLASS.warning,
+  urgent: STATUS_TONE_CLASS.danger,
 }
 
 export const TASK_STATUS_LABEL: Record<string, string> = {
