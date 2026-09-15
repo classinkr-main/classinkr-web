@@ -322,8 +322,13 @@ export default function CrmPriorityQueuePanel({
   const [leadContactDraft, setLeadContactDraft] = useState<LeadContactDraft | null>(null)
   // 작성 중 입력을 버리기 전 확인('계속 작성 / 버리고 닫기'). onDiscard가 실제 전환을 수행한다.
   const [discardPrompt, setDiscardPrompt] = useState<{ itemId: string; onDiscard: () => void } | null>(null)
-  // '종료' 인라인 확인 행이 열린 카드.
+  // '종료' 인라인 확인 행이 열린 카드. 같은 카드의 '연락 결과' 초안과는 상호 배타다(둘 다 열리면
+  // 어떤 처리가 진행 중인지 알 수 없고 Escape가 서로 다른 폼만 닫는다) — 한쪽을 열면 다른 쪽을 닫는다.
   const [closeConfirmId, setCloseConfirmId] = useState<string | null>(null)
+  // 연락 기록(POST)은 남았지만 다음 일정 PATCH만 실패해 카드를 되살린 건 — 서버 스냅샷이 아직
+  // 옛 상태를 돌려줄 수 있어, 카드에 "기록은 저장됨" 표식을 얹어 같은 결과를 다시 저장하지 않게 한다.
+  // 값은 저장 시각. 일정 재시도 성공·다른 처리로 카드가 빠지거나 헤더 새로고침(force)이면 지운다.
+  const [contactLoggedAt, setContactLoggedAt] = useState<Map<string, string>>(() => new Map())
   const { owners: crmOwners, currentOwner, health: ownerHealth } = useCrmOwners()
 
   const suppressedRef = useRef(new Map<string, number>())
@@ -390,7 +395,11 @@ export default function CrmPriorityQueuePanel({
       // 도착한 값만 반영한다(force 없음: 서버 스냅샷 SWR을 그대로 탄다).
       const background = Boolean(options?.background) && !force
 
-      if (force) suppressedRef.current.clear()
+      if (force) {
+        suppressedRef.current.clear()
+        // 서버가 전량 재수집하므로 "기록은 저장됨" 표식도 서버 값에 맡긴다.
+        setContactLoggedAt((current) => (current.size === 0 ? current : new Map()))
+      }
       if (!background) {
         const cached = getCachedAdminJson<CrmPriorityQueue>(url, { cacheKey: url })
         if (cached && !force) setData(withoutSuppressed(cached))
@@ -499,6 +508,17 @@ export default function CrmPriorityQueuePanel({
   const requestFocus = useCallback((itemId: string | null) => {
     setFocusRequest((prev) => ({ itemId, seq: (prev?.seq ?? 0) + 1 }))
   }, [])
+  const markContactLogged = useCallback((itemId: string, at: string) => {
+    setContactLoggedAt((current) => new Map(current).set(itemId, at))
+  }, [])
+  const clearContactLogged = useCallback((itemId: string) => {
+    setContactLoggedAt((current) => {
+      if (!current.has(itemId)) return current
+      const next = new Map(current)
+      next.delete(itemId)
+      return next
+    })
+  }, [])
 
   const showNotice = useCallback((next: QueueNotice) => {
     if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current)
@@ -538,6 +558,19 @@ export default function CrmPriorityQueuePanel({
       guardDraft(() => {
         setDiscardPrompt(null)
         setLeadContactDraft(next)
+        // 같은 카드에 '종료' 확인이 열려 있으면 닫는다(두 폼 상호 배타).
+        if (next) setCloseConfirmId((current) => (current === next.itemId ? null : current))
+      })
+    },
+    [guardDraft]
+  )
+  // '종료' 확인 행 토글 — 같은 카드의 연락 결과 초안은 닫는다(dirty면 guardDraft가 먼저 묻는다).
+  const toggleCloseConfirm = useCallback(
+    (itemId: string) => {
+      guardDraft(() => {
+        setDiscardPrompt(null)
+        setLeadContactDraft((current) => (current?.itemId === itemId ? null : current))
+        setCloseConfirmId((current) => (current === itemId ? null : itemId))
       })
     },
     [guardDraft]
@@ -596,6 +629,7 @@ export default function CrmPriorityQueuePanel({
           setData((prev) => removeQueueItem(prev, item.id))
           setLeadContactDraft((current) => (current?.itemId === item.id ? null : current))
           setDiscardPrompt(null)
+          clearContactLogged(item.id)
         },
         commit: () =>
           adminFetchJsonCached<{ lead: unknown }>(`/api/admin/leads/${encodeURIComponent(leadId)}`, {
@@ -652,7 +686,7 @@ export default function CrmPriorityQueuePanel({
       requestFocus(nextFocusId)
       void load({ background: true })
     },
-    [announce, cardCount, data, load, requestFocus, showMore, showNotice, suppress, undoLeadPatch, unsuppress]
+    [announce, cardCount, clearContactLogged, data, load, requestFocus, showMore, showNotice, suppress, undoLeadPatch, unsuppress]
   )
 
   // 연락 기록은 남았는데 일정 PATCH만 실패한 경우의 재시도 — 로그를 다시 만들지 않는다.
@@ -669,6 +703,7 @@ export default function CrmPriorityQueuePanel({
         })
         suppress(item.id)
         setData((prev) => removeQueueItem(prev, item.id))
+        clearContactLogged(item.id)
         const message = `'${item.title}' 다음 일정을 반영했습니다.`
         showNotice({ tone: "success", message })
         announce(message)
@@ -682,7 +717,7 @@ export default function CrmPriorityQueuePanel({
         setActingId(null)
       }
     },
-    [announce, load, showNotice, suppress]
+    [announce, clearContactLogged, load, showNotice, suppress]
   )
 
   const saveLeadContactResult = useCallback(
@@ -747,10 +782,13 @@ export default function CrmPriorityQueuePanel({
         onError: (err) => {
           const detail = errorDetail(err)
           if (logSaved) {
-            setError({
-              message: `연락 기록·상태는 저장됐지만 다음 일정 반영에 실패했습니다(${detail}). 일정만 다시 시도하거나 리드 보드에서 확인하세요.`,
-              retry: () => void retryFollowUpPatch(item, patch),
-            })
+            const message = `연락 기록·상태는 저장됐지만 다음 일정 반영에 실패했습니다(${detail}). 일정만 다시 시도하거나 리드 보드에서 확인하세요.`
+            setError({ message, retry: () => void retryFollowUpPatch(item, patch) })
+            announce(message)
+            // 되살린 카드는 로그 저장 전 원본이다(상태·근거 문구가 옛 값). 방금 남긴 기록을 다시
+            // 입력하지 않도록 카드에 표식을 얹고, 서버 반영분(상태·reason)은 백그라운드 재검증으로 당긴다.
+            markContactLogged(item.id, new Date().toISOString())
+            void load({ background: true })
           } else {
             setError({
               message: `연락 기록을 저장하지 못했습니다(${detail}). 입력은 그대로 두었으니 다시 시도하세요.`,
@@ -770,7 +808,7 @@ export default function CrmPriorityQueuePanel({
       requestFocus(nextFocusId)
       void load({ background: true })
     },
-    [announce, cardCount, data, leadContactDraft, load, requestFocus, retryFollowUpPatch, showMore, showNotice, suppress, unsuppress]
+    [announce, cardCount, data, leadContactDraft, load, markContactLogged, requestFocus, retryFollowUpPatch, showMore, showNotice, suppress, unsuppress]
   )
 
   const isActing = (item: CrmPriorityItem) => actingId?.startsWith(`${item.id}:`) === true
@@ -915,6 +953,7 @@ export default function CrmPriorityQueuePanel({
               const closeOpen = closeConfirmId === item.id
               const draftFormId = `queue-contact-${item.id}`
               const closeFormId = `queue-close-${item.id}`
+              const loggedAt = contactLoggedAt.get(item.id)
               return (
                 <div
                   key={item.id}
@@ -948,6 +987,15 @@ export default function CrmPriorityQueuePanel({
                     <p className={`mt-0.5 text-[11px] font-medium ${SECONDARY_TEXT_CLASS}`}>
                       {item.actionLabel} · {item.statusLabel}
                     </p>
+                    {/* 기록은 남았는데 일정만 못 바꾼 카드 — 미처리 카드처럼 보여 같은 결과를 다시 저장하지 않게 한다. */}
+                    {loggedAt ? (
+                      <p
+                        className={`mt-1 inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-semibold ${STATUS_TONE_CLASS.warning}`}
+                      >
+                        <CheckCircle2 className="h-3 w-3" aria-hidden />
+                        연락 기록 저장됨 {formatDate(loggedAt)} · 다음 일정만 미반영
+                      </p>
+                    ) : null}
                   </div>
                   <div className="lg:pt-0.5">
                     <p className={`text-[11px] font-semibold ${SECONDARY_TEXT_CLASS}`}>담당·기준일</p>
@@ -967,7 +1015,8 @@ export default function CrmPriorityQueuePanel({
                               changeDraft(draftOpen ? null : { itemId: item.id, ...DEFAULT_DRAFT })
                             }
                             aria-expanded={draftOpen}
-                            aria-controls={draftFormId}
+                            // 접혀 있을 때는 form이 DOM에 없어 존재하지 않는 id를 가리키게 된다 — 열려 있을 때만 연결한다.
+                            aria-controls={draftOpen ? draftFormId : undefined}
                             disabled={acting}
                             aria-busy={acting || undefined}
                             className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[11px] font-semibold text-[#084734] transition-colors hover:border-[#084734] disabled:opacity-50"
@@ -1002,11 +1051,10 @@ export default function CrmPriorityQueuePanel({
                           if (node) closeTriggerRefs.current.set(item.id, node)
                           else closeTriggerRefs.current.delete(item.id)
                         }}
-                        onClick={() =>
-                          guardDraft(() => setCloseConfirmId((current) => (current === item.id ? null : item.id)))
-                        }
+                        onClick={() => toggleCloseConfirm(item.id)}
                         aria-expanded={closeOpen}
-                        aria-controls={closeFormId}
+                        // 접혀 있을 때는 form이 DOM에 없어 존재하지 않는 id를 가리키게 된다 — 열려 있을 때만 연결한다.
+                        aria-controls={closeOpen ? closeFormId : undefined}
                         disabled={acting}
                         aria-busy={acting || undefined}
                         // hover 색은 status-tone Danger 토큰(#B43E3E/#F2B8B8)과 같은 값 — Tailwind 정적 스캔용 리터럴.
@@ -1167,7 +1215,10 @@ export default function CrmPriorityQueuePanel({
                           aria-label="작성 중인 연락 결과"
                           className={`mt-2 flex flex-wrap items-center gap-3 rounded-xl border px-3 py-2 text-[12px] ${STATUS_TONE_CLASS.warning}`}
                         >
-                          <span className="min-w-0 flex-1">작성 중인 연락 결과가 있습니다. 버리고 닫을까요?</span>
+                          {/* 어느 카드의 초안인지 밝힌다 — 다른 카드의 버튼에서 이 프롬프트가 뜰 수 있다(guardDraft). */}
+                          <span className="min-w-0 flex-1">
+                            &lsquo;{item.title}&rsquo; 카드에 작성 중인 연락 결과가 있습니다. 버리고 닫을까요?
+                          </span>
                           <button
                             type="button"
                             autoFocus
@@ -1181,6 +1232,8 @@ export default function CrmPriorityQueuePanel({
                             onClick={() => {
                               const proceed = discardPrompt.onDiscard
                               setDiscardPrompt(null)
+                              // '버리고 닫기'는 초안을 실제로 버린다 — 다른 카드의 처리로 넘어가는 경우에도 남기지 않는다.
+                              setLeadContactDraft(null)
                               proceed()
                             }}
                             className={`inline-flex min-h-11 items-center rounded-lg px-2.5 font-semibold underline underline-offset-2 sm:h-7 sm:min-h-0 ${STATUS_TONE_TEXT_STRONG_CLASS.warning}`}

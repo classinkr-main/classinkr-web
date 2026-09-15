@@ -158,11 +158,14 @@ describe("CrmPriorityQueuePanel 데이터 뷰(prerender)", () => {
     }
   })
 
-  it("'종료'는 인라인 확인 폼과 aria-controls/aria-expanded로 연결되고, 다른 버튼과 gap-3으로 분리된다", async () => {
+  it("'종료'·'연락 결과' 트리거는 aria-expanded를 갖고, 폼이 접혀 있을 때는 존재하지 않는 id를 가리키지 않는다", async () => {
     const html = await render(makeQueue([makeLead("a")]))
-    expect(html).toContain('aria-controls="queue-close-lead:a"')
-    expect(html).toContain('aria-controls="queue-contact-lead:a"')
-    expect(html).toMatch(/<button[^>]*aria-expanded="false"[^>]*aria-controls="queue-close-lead:a"/)
+    // 접힘 상태에서는 폼이 DOM에 없어 aria-controls가 없는 id를 가리키게 된다 — 열렸을 때만
+    // 연결한다(CrmPriorityQueuePanel.tsx:1019·1057, closeOpen/draftOpen ? formId : undefined).
+    expect(html).not.toContain('aria-controls="queue-close-lead:a"')
+    expect(html).not.toContain('aria-controls="queue-contact-lead:a"')
+    expect(html).toMatch(/연락 결과<\/button>/)
+    expect(html).toMatch(/종료<\/button>/)
     expect(html).toContain('class="flex flex-wrap items-start gap-3 lg:justify-end"')
     // 확인 전에는 폼이 없고 window.confirm도 쓰지 않는다
     expect(html).not.toContain("리드를 종료합니다")

@@ -371,42 +371,86 @@ export default function CrmWeekAheadPanel({
     [groups, expanded, previewRows]
   )
 
-  // 되돌리기: 완료 → reopen. 미루기 → reopen + 이전 기한 복원(기한이 없던 할 일은 서버 update가
-  // null을 받지 않아 기한이 내일로 남는다 — 문구로 알린다).
-  const undoTaskAction = useCallback(
-    async (task: CrmTaskRecord, action: "complete" | "snooze") => {
+  // 미루기 되돌리기 2단계 — 기한 복원(update dueAt)만. reopen은 이미 서버에 반영·화면에 그려진 뒤라
+  // 여기서 실패해도 행은 "다시 열림 + 기한 내일"인 서버 상태 그대로 두고, 기한만 좁게 재시도한다.
+  // (reopenCrmTask는 due_at을 건드리지 않아 이 PATCH가 실제로 필요하다.)
+  const restoreTaskDueAt = useCallback(
+    async (task: CrmTaskRecord, reopened: CrmTaskRecord) => {
+      if (!task.dueAt) return
       const taskUrl = `/api/admin/crm/tasks/${encodeURIComponent(task.id)}`
-      setUndoPending(true)
+      setActingId(`${task.id}:restore-due`)
+      setError(null)
       try {
-        await adminFetchJson(taskUrl, { method: "PATCH", body: JSON.stringify({ action: "reopen" }) })
-        let restored: CrmTaskRecord = { ...task, status: "open", snoozedUntil: null, completedAt: null, completedBy: null }
-        if (action === "snooze" && task.dueAt) {
-          await adminFetchJson(taskUrl, { method: "PATCH", body: JSON.stringify({ action: "update", dueAt: task.dueAt }) })
-        } else if (action === "snooze") {
-          restored = { ...restored, dueAt: tomorrowMorningIso() }
-        }
-        clearOverride(task.id)
-        setData((prev) => restoreTaskRow(prev, restored))
-        const message =
-          action === "complete"
-            ? `'${task.title}' 완료를 되돌렸습니다 — 다시 열린 할 일입니다.`
-            : task.dueAt
-              ? `'${task.title}' 미루기를 되돌렸습니다 — 기한 ${formatDateTime(task.dueAt)}로 복원.`
-              : `'${task.title}' 미루기를 되돌렸습니다 — 기한은 내일 오전 9시로 남습니다(원래 기한 없음).`
+        await adminFetchJson(taskUrl, { method: "PATCH", body: JSON.stringify({ action: "update", dueAt: task.dueAt }) })
+        setData((prev) => restoreTaskRow(prev, { ...reopened, dueAt: task.dueAt }))
+        const message = `'${task.title}' 미루기를 되돌렸습니다 — 기한 ${formatDateTime(task.dueAt)}로 복원.`
         showNotice({ tone: "success", message })
         announce(message)
         requestFocus(task.id)
         void load({ background: true })
       } catch (err) {
+        // 부분 실패: 행은 다시 열렸지만 기한은 내일로 남아 있다 — 성공과 섞지 않고 범위를 밝힌다.
+        const message = `'${task.title}' 할 일은 다시 열었지만 기한 복원에 실패했습니다(${errorDetail(err)}). 기한이 내일 오전 9시로 남아 있습니다 — 기한만 다시 시도하거나 할 일 화면에서 고치세요.`
+        setError({ message, retry: () => void restoreTaskDueAt(task, reopened) })
+        announce(message)
+      } finally {
+        setActingId(null)
+      }
+    },
+    [announce, load, requestFocus, showNotice]
+  )
+
+  // 되돌리기: 완료 → reopen. 미루기 → reopen 뒤 이전 기한 복원(restoreTaskDueAt, 별도 단계).
+  // reopen이 성공하면 그 즉시 로컬 상태를 서버와 맞추고(override 해제 + 행 복원), 두 번째 PATCH의
+  // 실패는 부분 실패로 따로 다룬다 — 한 try에 묶으면 두 번째만 실패했을 때 화면(미룬 일)과 서버(open)가
+  // 어긋난 채 override TTL까지 남는다. 기한이 없던 할 일은 서버 update가 null을 받지 않아 기한이
+  // 내일로 남는다 — 문구로 알린다.
+  const undoTaskAction = useCallback(
+    async (task: CrmTaskRecord, action: "complete" | "snooze") => {
+      const taskUrl = `/api/admin/crm/tasks/${encodeURIComponent(task.id)}`
+      setUndoPending(true)
+      setError(null)
+      try {
+        await adminFetchJson(taskUrl, { method: "PATCH", body: JSON.stringify({ action: "reopen" }) })
+      } catch (err) {
+        setUndoPending(false)
         setError({
           message: `되돌리기에 실패했습니다(${errorDetail(err)}). 할 일 화면에서 상태를 확인하세요.`,
           retry: () => void undoTaskAction(task, action),
         })
-      } finally {
-        setUndoPending(false)
+        return
       }
+      // reopen 반영: 서버는 status/snoozed_until/completed_*만 되돌린다. 미루기였다면 due_at은
+      // 아직 미룬 값(낙관 패치에 쓴 내일 09:00)이다.
+      const snoozedDueAt = overridesRef.current.get(task.id)?.patch?.dueAt ?? tomorrowMorningIso()
+      const reopened: CrmTaskRecord = {
+        ...task,
+        status: "open",
+        snoozedUntil: null,
+        completedAt: null,
+        completedBy: null,
+        dueAt: action === "snooze" ? snoozedDueAt : task.dueAt,
+      }
+      clearOverride(task.id)
+      setData((prev) => restoreTaskRow(prev, reopened))
+      // 되돌리기 버튼이 달린 성공 배너는 소비됐다 — 다음 단계 결과(성공/부분 실패)가 대신한다.
+      setNotice(null)
+      setUndoPending(false)
+
+      if (action === "snooze" && task.dueAt) {
+        await restoreTaskDueAt(task, reopened)
+        return
+      }
+      const message =
+        action === "complete"
+          ? `'${task.title}' 완료를 되돌렸습니다 — 다시 열린 할 일입니다.`
+          : `'${task.title}' 미루기를 되돌렸습니다 — 기한은 내일 오전 9시로 남습니다(원래 기한 없음).`
+      showNotice({ tone: "success", message })
+      announce(message)
+      requestFocus(task.id)
+      void load({ background: true })
     },
-    [announce, clearOverride, load, requestFocus, showNotice]
+    [announce, clearOverride, load, requestFocus, restoreTaskDueAt, showNotice]
   )
 
   const handleAction = useCallback(
@@ -607,7 +651,8 @@ export default function CrmWeekAheadPanel({
                 </p>
                 <div className="space-y-1.5">
                   {tasks.map((task) => {
-                    const acting = actingId === `${task.id}:complete` || actingId === `${task.id}:snooze`
+                    // complete·snooze·restore-due(되돌리기 2단계) 모두 같은 행의 연타를 막는다.
+                    const acting = actingId?.startsWith(`${task.id}:`) === true
                     return (
                       <div
                         key={task.id}
