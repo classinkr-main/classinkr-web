@@ -99,7 +99,13 @@ interface XiaoshouyiWriteObjectPolicy {
   allowedFields: ReadonlySet<string>
   requiredCreateFields?: readonly string[]
   ownerTransferField?: string
+  /** 객체 전체를 닫는다(모든 작업 거절, 메타데이터 점검에서 read_only). */
   readOnlyReason?: string
+  /**
+   * 작업 하나만 닫고 그 이유를 남긴다. operations 에서 뺀 작업에 붙인다 — 이유가 없으면
+   * "…작업을 허용하지 않습니다" 로만 보여서 왜 닫혔는지, 어디로 가야 하는지가 코드 밖으로 안 나간다.
+   */
+  closedOperationReasons?: Partial<Record<CrmWriteOperation, string>>
 }
 
 const XIAOSHOUYI_WRITE_POLICIES: Record<string, XiaoshouyiWriteObjectPolicy> = {
@@ -119,7 +125,13 @@ const XIAOSHOUYI_WRITE_POLICIES: Record<string, XiaoshouyiWriteObjectPolicy> = {
   },
   lead: {
     label: "리드",
-    operations: new Set(["create", "update", "transfer_owner"]),
+    // 생성은 닫았다(2026-09-14). NEO lead 의 작성자는 Compass 하나다 — 푸시 전 NEO 중복 검사가
+    // Compass(scripts/push_neocrm.mjs)에만 있고, 이 큐로 만든 lead(특히 mobile)는 그 검사(phone SOQL)가
+    // 찾지 못해 이중 등록이 된다. 닫을 때 lead create 를 부르는 UI·코드 호출부는 0건이었다
+    // (연락 기록 되밀기는 activityrecord 만 쓴다). 수정·담당 이전은 열어 둔다.
+    // 근거: docs/active/compass-integration-2026-09-14.md
+    operations: new Set(["update", "transfer_owner"]),
+    closedOperationReasons: { create: "리드 생성은 Compass 단일 경로" },
     // 실제 lead 객체 스키마로 검증(2026-08-28, describe 337필드 + 생성 성공 실측).
     // 옛 목록의 leadName/company/source/remark 는 존재하지 않는 필드였다 — 진짜 이름은
     // name/companyName 이고 소스 계열은 Original_Source__c 등 커스텀이다.
@@ -134,6 +146,8 @@ const XIAOSHOUYI_WRITE_POLICIES: Record<string, XiaoshouyiWriteObjectPolicy> = {
       "dimDepart",
       "territoryHighSeaId",
     ]),
+    // 생성은 닫혔지만 실측한 생성 계약은 남긴다 — Compass 푸시가 같은 필수 필드를 쓰고, 닫힘을 다시
+    // 풀 때 재실측하지 않게.
     requiredCreateFields: ["name", "companyName", "entityType"],
     ownerTransferField: "ownerId",
   },
@@ -217,6 +231,8 @@ function validateWritePayload(input: {
   payload: Record<string, unknown>
 }) {
   if (input.policy.readOnlyReason) throw new Error(input.policy.readOnlyReason)
+  const closedReason = input.policy.closedOperationReasons?.[input.operation]
+  if (closedReason) throw new Error(closedReason)
   if (!input.policy.operations.has(input.operation)) {
     throw new Error(`${input.policy.label} 객체는 ${input.operation} 작업을 허용하지 않습니다.`)
   }

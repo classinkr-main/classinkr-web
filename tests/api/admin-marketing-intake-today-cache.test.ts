@@ -84,6 +84,31 @@ describe("GET /api/admin/marketing/intake-today — unstable_cache 배선", () =
     expect(profile).toEqual({ expire: 0 })
   })
 
+  it("Compass 절단 판정은 브리지 truncated 를 그대로 쓴다 — 행 수(예전 500 사본)로 짐작하지 않는다", async () => {
+    vi.resetModules()
+    const rows = Array.from({ length: 500 }, (_, index) => ({
+      id: index + 1,
+      academy: null,
+      name: null,
+      phone_key: null,
+      region: null,
+      meta_ad_id: null,
+      created_at: "2020-01-01T00:00:00.000Z",
+      last_inflow_at: null,
+    }))
+    mocks.getCompassLeadsByInflowRange.mockResolvedValue({ rows, down: false, truncated: false })
+    const { GET } = await import("@/app/api/admin/marketing/intake-today/route")
+    const notTruncated = await (await GET(req())).json()
+    expect(notTruncated.compassTruncated).toBe(false)
+
+    vi.resetModules()
+    mocks.getCompassLeadsByInflowRange.mockResolvedValue({ rows: [], down: false, truncated: true })
+    const { GET: GET2 } = await import("@/app/api/admin/marketing/intake-today/route")
+    const truncated = await (await GET2(req())).json()
+    expect(truncated.compassTruncated).toBe(true)
+    expect(typeof truncated.todayReinflowCount).toBe("number")
+  })
+
   it("관리자 인증 실패 응답을 그대로 반환하고 원천을 조회하지 않는다", async () => {
     vi.resetModules()
     mocks.verifyAdmin.mockResolvedValue(new Response(null, { status: 403 }))

@@ -22,19 +22,12 @@ import { getMarketingLeads, type LeadRecord } from "@/lib/repositories/leads"
 /** 피드에 이름을 띄울 최대 행수 — 카드가 스크롤 없이 담는 높이. */
 const MAX_ITEMS = 8
 
-/**
- * 브리지 getCompassLeadsByInflowRange 의 .limit() 값 사본. PostgREST 는 상한 초과분을 오류
- * 없이 잘라 주므로(플레이북 "전량 조회" 규칙) 정확히 이 수만큼 왔으면 잘렸다고 본다.
- * 브리지는 last_inflow_at 내림차순이라 잘리면 어제 이른 시각부터 사라지고, 그러면 어제
- * 카운트가 과소집계돼 델타가 부풀려진다 — 카드가 그 사실을 표시할 수 있게 넘긴다.
- */
-const COMPASS_LEAD_ROW_LIMIT = 500
-
 async function loadIntakeToday(): Promise<IntakeFeedResult> {
   const windows = resolveIntakeWindows()
 
   const [adminLeads, compass, adNames] = await Promise.all([
     getMarketingLeads().catch((): LeadRecord[] | null => null),
+    // 어제 00:00 이후 생성 또는 재유입한 Compass 리드(브리지가 created_at·last_inflow_at 을 OR 로 읽는다).
     getCompassLeadsByInflowRange(windows.yesterdayStartIso, windows.nowIso),
     // 광고명 매핑은 어제~오늘 2일치만 읽는다 — 지금 유입되는 리드의 광고는 지금 집행 중이다.
     // 여기서 넓게 읽으면 라이브 카드 한 장 때문에 소재 뷰를 통째로 훑게 된다.
@@ -53,7 +46,8 @@ async function loadIntakeToday(): Promise<IntakeFeedResult> {
     compassLeads: compass.down ? null : (compass.rows as CompassIntakeLead[]),
     windows,
     adNameById,
-    compassTruncated: !compass.down && compass.rows.length >= COMPASS_LEAD_ROW_LIMIT,
+    // 브리지가 페이지네이션 후 count > 받은 행으로 판정한다(예전 .limit(500) 사본 비교는 없앴다).
+    compassTruncated: !compass.down && compass.truncated === true,
     maxItems: MAX_ITEMS,
   })
 }
@@ -73,8 +67,9 @@ const INTAKE_TODAY_CACHE_TAG = "marketing-intake-today"
 const getCachedIntakeToday = unstable_cache(
   // 인자가 없는 조회이므로 shareInFlight(콜드 인스턴스의 동시 미스를 한 번만 계산 + dev·test
   // JSON 안전성 검사)만으로 충분하다.
-  () => shareInFlight("marketing-intake-today-v1", loadIntakeToday),
-  ["marketing-intake-today-v1"],
+  // v2(2026-09-14): 응답에 reinflow·todayReinflowCount 가 붙고 Compass 신규가 들어온다 — 옛 모양 캐시를 재사용하지 않게.
+  () => shareInFlight("marketing-intake-today-v2", loadIntakeToday),
+  ["marketing-intake-today-v2"],
   { revalidate: 20, tags: [INTAKE_TODAY_CACHE_TAG] }
 )
 

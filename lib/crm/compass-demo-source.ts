@@ -6,12 +6,15 @@
  *
  * 비용 규약:
  *  - 기간 안에 데모가 0건이면 전화 조회 자체를 하지 않는다(대부분의 요청이 여기서 끝난다).
- *  - 전화키는 URL 길이 한계 때문에 청크로 나눠 조회한다.
+ *  - 역조회(2026-09-14): 데모가 가리키는 Compass 리드 id(수십 건)로 phone_key 를 PK 조회 1회에
+ *    받고, 우리 전화 키 집합과의 교집합만 남긴다. 예전에는 우리 리드·NEO 고객 전화 전부를
+ *    400개씩 phone_key 로 조회했다(청크마다 뷰 정규식 스캔, 전화 키 수천 개가 쿼리스트링에 실림).
+ *    결과(phoneKeysByCompassLeadId 의 데모 리드 항목)는 같다.
  *  - 호출부(홈 큐·통합 고객)는 이미 소스 스냅샷을 60초 캐시한다 — 여기서 또 캐시하지 않는다.
  */
 import "server-only"
 
-import { getCompassDemos, getCompassLeadsByPhoneKeys } from "@/lib/compass/bridge"
+import { getCompassDemos, getCompassLeadPhoneKeysByIds } from "@/lib/compass/bridge"
 import { normalizePhoneKey } from "@/lib/compass/normalize"
 import {
   EMPTY_COMPASS_DEMO_SOURCE,
@@ -22,18 +25,10 @@ import {
 /** 조회 창 — 최근 완료(14일) 판정에 여유를 두고, 예정은 넉넉히 앞을 본다. */
 const LOOKBACK_DAYS = 60
 const LOOKAHEAD_DAYS = 365
-/** `.in()` 한 번에 넣는 전화키 수. PostgREST GET 쿼리스트링 길이 한계를 넘지 않게. */
-const PHONE_KEY_CHUNK = 400
 
 function toDayString(ms: number) {
   const date = new Date(ms)
   return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 10)
-}
-
-function chunk<T>(values: T[], size: number): T[][] {
-  const out: T[][] = []
-  for (let i = 0; i < values.length; i += size) out.push(values.slice(i, i + size))
-  return out
 }
 
 /**
@@ -60,26 +55,38 @@ export async function loadCompassDemoSource(
     day_approx: row.day_approx,
   }))
 
-  const keys = [...new Set(phones.map((phone) => normalizePhoneKey(phone)).filter((key): key is string => Boolean(key)))]
-  if (demos.length === 0 || keys.length === 0) {
+  const keys = new Set(phones.map((phone) => normalizePhoneKey(phone)).filter((key): key is string => Boolean(key)))
+  const demoLeadIds = [...new Set(demos.map((demo) => demo.lead_id).filter((id): id is number => id != null))]
+  // 데모가 없거나(대부분의 요청) 리드에 붙은 데모가 없거나 우리 쪽 전화가 없으면 조회하지 않는다.
+  if (demoLeadIds.length === 0 || keys.size === 0) {
     return { demos, phoneKeysByCompassLeadId: new Map(), down: false }
   }
 
-  const chunks = await Promise.all(chunk(keys, PHONE_KEY_CHUNK).map((part) => getCompassLeadsByPhoneKeys(part)))
-  const down = chunks.some((result) => result.down)
+  const leads = await getCompassLeadPhoneKeysByIds(demoLeadIds)
+  return {
+    demos,
+    phoneKeysByCompassLeadId: phoneKeysForOurLeads(leads.rows, keys),
+    down: leads.down,
+  }
+}
 
+/**
+ * Compass 리드(id·phone_key) 중 우리 전화 키 집합에 있는 것만 lead_id → 키 목록으로 모은다. 순수 함수.
+ * 교집합만 남기는 이유: 스냅샷(JSON 캐시)에 우리와 무관한 Compass 고객의 전화 키를 싣지 않는다.
+ */
+export function phoneKeysForOurLeads(
+  leads: ReadonlyArray<{ id: number; phone_key: string | null }>,
+  ourKeys: ReadonlySet<string>
+): Map<number, string[]> {
   const phoneKeysByCompassLeadId = new Map<number, string[]>()
-  for (const result of chunks) {
-    for (const lead of result.rows) {
-      if (!lead.phone_key) continue
-      const existing = phoneKeysByCompassLeadId.get(lead.id)
-      if (existing) {
-        if (!existing.includes(lead.phone_key)) existing.push(lead.phone_key)
-      } else {
-        phoneKeysByCompassLeadId.set(lead.id, [lead.phone_key])
-      }
+  for (const lead of leads) {
+    if (!lead.phone_key || !ourKeys.has(lead.phone_key)) continue
+    const existing = phoneKeysByCompassLeadId.get(lead.id)
+    if (existing) {
+      if (!existing.includes(lead.phone_key)) existing.push(lead.phone_key)
+    } else {
+      phoneKeysByCompassLeadId.set(lead.id, [lead.phone_key])
     }
   }
-
-  return { demos, phoneKeysByCompassLeadId, down }
+  return phoneKeysByCompassLeadId
 }

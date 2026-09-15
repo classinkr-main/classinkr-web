@@ -13,6 +13,9 @@ import type { IntakeFeedItem, IntakeFeedResult } from "@/lib/marketing/intake-fe
 //  - 두 원천이 같은 사람을 잡으면 1건이다. 접힌 건수는 배지로 밝힌다(합계가 덧셈이 아닌 이유).
 //  - 원천 하나가 죽으면 남은 쪽 숫자를 "전체"라고 부르지 않는다 — "미집계" 배지를 단다.
 //  - 비교는 "어제 같은 시각까지" 창이다. 어제 하루 전체와 견주면 오전엔 늘 급감으로 보인다.
+//  - Compass 리드는 신규(오늘 생성)와 재유입(이미 있던 리드가 오늘 다시 들어옴)을 함께 센다 — 합계 아래
+//    "신규 N · 재유입 k"로 가르고, 피드 줄에는 재유입 배지를 단다(2026-09-14 R2 F12). 인바운드 채널
+//    (채널톡·다이렉트·워크인·소개)은 Compass 대시보드처럼 마케팅 유입에서 뺀다.
 
 const TTL_MS = 20_000
 
@@ -104,6 +107,19 @@ function OriginMark({ origins }: { origins: IntakeFeedItem["origins"] }) {
   )
 }
 
+function ReinflowMark({ reinflow }: { reinflow: boolean }) {
+  // 신규가 기본이라 재유입만 표시한다(단일 원천 배지를 안 다는 OriginMark 와 같은 이유).
+  if (!reinflow) return null
+  return (
+    <span
+      className="shrink-0 rounded border border-[#ECD29C] bg-[#FBF1E0] px-1 py-px text-[9.5px] font-medium text-[#7A520F]"
+      title="Compass 에 이미 있던 리드가 다시 들어왔습니다"
+    >
+      재유입
+    </span>
+  )
+}
+
 function FeedRow({ item }: { item: IntakeFeedItem }) {
   const who = item.org ?? item.name ?? "이름 미상"
   const sub = [item.org && item.name ? item.name : null, item.region, item.adName]
@@ -117,6 +133,7 @@ function FeedRow({ item }: { item: IntakeFeedItem }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <p className="truncate text-[12.5px] font-medium text-[#111110]">{who}</p>
+          <ReinflowMark reinflow={item.reinflow === true} />
           <OriginMark origins={item.origins} />
         </div>
         {sub && <p className="mt-0.5 truncate text-[11px] text-[#1a1a1a]/45">{sub}</p>}
@@ -133,8 +150,8 @@ export function TodayIntakeCard({ refreshNonce }: { refreshNonce: number }) {
     if (data.overlapCount > 0) badges.push(`중복 접음 ${data.overlapCount}`)
     if (!data.adminMeasured) badges.push("어드민 리드 미집계")
     if (!data.compassMeasured) badges.push("Compass 미집계")
-    // 잘리면 어제 이른 시각부터 사라져 델타가 부풀려진다 — 비교 자체를 못 믿는다고 밝힌다.
-    if (data.compassTruncated) badges.push("Compass 조회 상한 — 어제 비교 부정확")
+    // 브리지가 상한에서 잘랐다(count > 받은 행) — 오늘·어제 건수 둘 다 모자랄 수 있다고 밝힌다.
+    if (data.compassTruncated) badges.push("Compass 조회 상한 — 건수·어제 비교 부정확")
   }
 
   return (
@@ -145,7 +162,7 @@ export function TodayIntakeCard({ refreshNonce }: { refreshNonce: number }) {
       <div className="mb-3">
         <h2 className="text-[14px] font-semibold text-[#111110]">오늘 유입</h2>
         <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
-          KST 오늘 00:00~지금 · 어드민 리드 + Compass, 전화 기준 중복 접음
+          KST 오늘 00:00~지금 · 어드민 리드 + Compass 마케팅 리드(신규·재유입, 인바운드 제외), 전화 기준 중복 접음
         </p>
       </div>
 
@@ -176,6 +193,14 @@ export function TodayIntakeCard({ refreshNonce }: { refreshNonce: number }) {
             </p>
             <DeltaLine delta={data.delta} />
           </div>
+
+          {/* 신규/재유입 구분 — 재유입 판정은 Compass 기록에서만 나온다. Compass 미집계면 가르지 않는다(0 으로 포장 금지). */}
+          {data.compassMeasured && data.todayCount > 0 && (
+            <p className="mt-1.5 text-[11px] tabular-nums text-[#1a1a1a]/45">
+              신규 {COUNT.format(data.todayCount - (data.todayReinflowCount ?? 0))} · 재유입{" "}
+              {COUNT.format(data.todayReinflowCount ?? 0)}
+            </p>
+          )}
 
           {badges.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">

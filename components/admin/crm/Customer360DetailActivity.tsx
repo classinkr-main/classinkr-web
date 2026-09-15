@@ -6,8 +6,10 @@ import { ArrowUpRight, CheckCircle2, Circle } from "lucide-react"
 import { Panel, TableEmpty } from "@/components/admin/viz"
 import {
   COMPASS_TIMELINE_SOURCE_LABEL,
+  compassTimelineGroup,
   mergeCompassTimeline,
   type CompassTimelineEntry,
+  type CompassTimelineGroup,
 } from "@/lib/crm/compass-timeline"
 import type { Customer360Compass } from "@/lib/repositories/crm-customer-360"
 import type { CrmCustomerEventRecord, ListCrmCustomerEventsResult } from "@/lib/repositories/crm-events"
@@ -29,18 +31,18 @@ const FILTERS: Array<{ key: ActivityFilter; label: string }> = [
   { key: "calls_etc", label: "통화·기타" },
 ]
 
-/** Compass 활동 종류를 이 화면의 필터 축에 눕힌다(종류를 새로 만들지 않는다). */
-const COMPASS_KIND_FILTER: Record<string, ActivityFilter> = {
-  note: "memo",
+/** Compass 활동 묶음(lib/crm/compass-timeline.ts)을 이 화면의 필터 축에 눕힌다(종류를 새로 만들지 않는다).
+ *  memo·note·시트(import) → 메모, meeting → 회의록, inflow·폼 답변 → CS·웹유입, 콜·문자·액션·알림톡·단계 변경 → 통화·기타. */
+const COMPASS_GROUP_FILTER: Record<CompassTimelineGroup, ActivityFilter> = {
+  memo: "memo",
   meeting: "meeting",
   inflow: "cs_inflow",
-  call: "calls_etc",
-  stage_change: "calls_etc",
+  other: "calls_etc",
 }
 
 function compassMatchesFilter(entry: CompassTimelineEntry, filter: ActivityFilter): boolean {
   if (filter === "all") return true
-  return COMPASS_KIND_FILTER[entry.kind] === filter
+  return COMPASS_GROUP_FILTER[compassTimelineGroup(entry.kind)] === filter
 }
 
 function matchesFilter(event: CrmCustomerEventRecord, filter: ActivityFilter): boolean {

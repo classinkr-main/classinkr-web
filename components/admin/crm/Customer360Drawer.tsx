@@ -33,7 +33,7 @@ import {
   type CrmMoney,
 } from "@/lib/crm/money-format"
 import { pushRecentCustomer } from "@/lib/crm/recent-customers"
-import { mergeCompassTimeline } from "@/lib/crm/compass-timeline"
+import { compassTimelineGroup, mergeCompassTimeline } from "@/lib/crm/compass-timeline"
 import CrmCustomerFlags from "./CrmCustomerFlags"
 import CrmContactValue from "./CrmContactValue"
 import CrmCustomerPicker from "./CrmCustomerPicker"
@@ -552,8 +552,9 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
   const visibleCompass = useMemo(() => {
     const entries = data?.compass.entries ?? []
     if (activityTab === "feed") return []
-    if (activitySource === "manual_note") return entries.filter((entry) => entry.kind === "note")
-    if (activitySource === "meeting_minutes") return entries.filter((entry) => entry.kind === "meeting")
+    // 메모 = Compass note·memo(고객관리 메모), 회의록 = meeting — lib/crm/compass-timeline.ts 묶음.
+    if (activitySource === "manual_note") return entries.filter((entry) => compassTimelineGroup(entry.kind) === "memo")
+    if (activitySource === "meeting_minutes") return entries.filter((entry) => compassTimelineGroup(entry.kind) === "meeting")
     return entries
   }, [activityTab, activitySource, data])
 

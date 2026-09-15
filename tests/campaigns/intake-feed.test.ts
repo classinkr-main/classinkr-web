@@ -21,6 +21,7 @@ function lead(over: Partial<LeadRecord> = {}): LeadRecord {
   }
 }
 
+/** 기본값은 오래전에 생성돼 오늘 재유입한 Compass 리드(2026-09-14 이전 테스트가 전제한 모양). */
 function compass(over: Partial<CompassIntakeLead> = {}): CompassIntakeLead {
   return {
     id: (seq += 1),
@@ -29,9 +30,15 @@ function compass(over: Partial<CompassIntakeLead> = {}): CompassIntakeLead {
     phone_key: null,
     region: "서울",
     meta_ad_id: null,
+    created_at: "2026-07-01T00:00:00.000Z",
     last_inflow_at: "2026-08-28T04:00:00.000Z",
     ...over,
   }
+}
+
+/** 오늘 생성된 Compass 신규 리드 — Compass 는 신규 insert 때 last_inflow_at 을 비워 둔다. */
+function compassNew(over: Partial<CompassIntakeLead> = {}): CompassIntakeLead {
+  return compass({ created_at: "2026-08-28T03:00:00.000Z", last_inflow_at: null, ...over })
 }
 
 describe("resolveIntakeWindows", () => {
@@ -199,10 +206,130 @@ describe("buildIntakeFeed", () => {
     expect(result.compassTruncated).toBe(true)
   })
 
+  it("F12 회귀: Compass 신규 리드(last_inflow_at null)를 오늘 유입으로 센다 — 재유입 표시 없음", () => {
+    const result = buildIntakeFeed({
+      adminLeads: [],
+      compassLeads: [compassNew({ id: 501, phone_key: "01044440000" })],
+      windows,
+    })
+    expect(result.todayCount).toBe(1)
+    expect(result.todayReinflowCount).toBe(0)
+    expect(result.items).toHaveLength(1)
+    expect(result.items[0]).toMatchObject({ key: "c:501", at: "2026-08-28T03:00:00.000Z", reinflow: false })
+  })
+
+  it("신규와 재유입을 함께 세고 재유입을 구분한다", () => {
+    const result = buildIntakeFeed({
+      adminLeads: [lead({ phone: "01055550000" })],
+      compassLeads: [
+        compassNew({ id: 601, phone_key: "01066660000" }),
+        compass({ id: 602, phone_key: "01077770000", last_inflow_at: "2026-08-28T05:00:00.000Z" }),
+      ],
+      windows,
+    })
+    expect(result.todayCount).toBe(3)
+    expect(result.todayReinflowCount).toBe(1)
+    const byKey = new Map(result.items.map((item) => [item.key, item]))
+    expect(byKey.get("c:601")?.reinflow).toBe(false)
+    expect(byKey.get("c:602")?.reinflow).toBe(true)
+    expect(byKey.get("c:602")?.at).toBe("2026-08-28T05:00:00.000Z")
+    expect([...byKey.values()].filter((item) => item.key.startsWith("a:")).every((item) => !item.reinflow)).toBe(true)
+  })
+
+  it("어제 생성되고 오늘 재유입한 리드는 어제엔 신규, 오늘엔 재유입으로 각각 1건", () => {
+    const result = buildIntakeFeed({
+      adminLeads: [],
+      compassLeads: [
+        compass({ id: 701, phone_key: "01088880000", created_at: "2026-08-27T02:00:00.000Z", last_inflow_at: "2026-08-28T02:00:00.000Z" }),
+      ],
+      windows,
+    })
+    expect(result.todayCount).toBe(1)
+    expect(result.yesterdayCount).toBe(1)
+    expect(result.todayReinflowCount).toBe(1)
+    expect(result.delta).toBe(0)
+  })
+
+  it("오늘 생성 뒤 오늘 다시 들어온 리드는 신규 1건 — 최초 유입 시각", () => {
+    const result = buildIntakeFeed({
+      adminLeads: [],
+      compassLeads: [compass({ id: 801, created_at: "2026-08-28T01:00:00.000Z", last_inflow_at: "2026-08-28T05:00:00.000Z" })],
+      windows,
+    })
+    expect(result.todayCount).toBe(1)
+    expect(result.todayReinflowCount).toBe(0)
+    expect(result.items[0]).toMatchObject({ at: "2026-08-28T01:00:00.000Z", reinflow: false })
+  })
+
+  it("어드민 신규와 Compass 재유입이 같은 전화면 1건으로 접고 재유입으로 표시한다", () => {
+    const result = buildIntakeFeed({
+      adminLeads: [lead({ phone: "010-9999-0000", timestamp: "2026-08-28T04:30:00.000Z" })],
+      compassLeads: [compass({ phone_key: "01099990000", last_inflow_at: "2026-08-28T04:00:00.000Z" })],
+      windows,
+    })
+    expect(result.todayCount).toBe(1)
+    expect(result.overlapCount).toBe(1)
+    expect(result.todayReinflowCount).toBe(1)
+    expect(result.items[0]).toMatchObject({ origins: ["admin", "compass"], reinflow: true, at: "2026-08-28T04:00:00.000Z" })
+  })
+
+  it("Compass 어제 신규도 어제 같은 시각 창으로 비교한다", () => {
+    const result = buildIntakeFeed({
+      adminLeads: [],
+      compassLeads: [
+        compassNew({ phone_key: "01012120000", created_at: "2026-08-27T03:00:00.000Z" }), // 어제 12:00 KST
+        compassNew({ phone_key: "01013130000", created_at: "2026-08-27T08:00:00.000Z" }), // 어제 17:00 KST — 창 밖
+      ],
+      windows,
+    })
+    expect(result.todayCount).toBe(0)
+    expect(result.yesterdayCount).toBe(1)
+  })
+
+  it("Compass 인바운드(채널톡·다이렉트·워크인·소개) 리드는 세지 않는다 — Compass 마케팅 유입(mktLeadCond)과 같은 규칙", () => {
+    const result = buildIntakeFeed({
+      adminLeads: [],
+      compassLeads: [
+        compassNew({ id: 901, phone_key: "01010200001", channel: "walkin" }),
+        compassNew({ id: 902, phone_key: "01010200002", channel: "channeltalk" }),
+        compassNew({ id: 903, phone_key: "01010200003", channel: "direct" }),
+        compass({ id: 904, phone_key: "01010200004", channel: "referral" }), // 재유입이어도 인바운드면 제외
+        compassNew({ id: 905, phone_key: "01010200005", channel: "referral", created_at: "2026-08-27T02:00:00.000Z" }), // 어제
+        // 마케팅: 채널 없음(메타 리드)·빈 값·프로모션(sms·email)
+        compassNew({ id: 911, phone_key: "01010200011", channel: null }),
+        compassNew({ id: 912, phone_key: "01010200012", channel: "" }),
+        compassNew({ id: 913, phone_key: "01010200013", channel: "sms" }),
+        compass({ id: 914, phone_key: "01010200014", channel: "email" }),
+        compassNew({ id: 915, phone_key: "01010200015" }), // channel 필드 없음
+      ],
+      windows,
+      maxItems: 20,
+    })
+    expect(result.items.map((item) => item.key).sort()).toEqual(["c:911", "c:912", "c:913", "c:914", "c:915"])
+    expect(result.todayCount).toBe(5)
+    expect(result.todayReinflowCount).toBe(1)
+    expect(result.yesterdayCount).toBe(0)
+    expect(result.delta).toBe(5)
+  })
+
+  it("인바운드 Compass 리드와 같은 전화의 어드민 리드는 어드민 원천 1건으로 남는다(접히지 않고, 사라지지도 않는다)", () => {
+    const result = buildIntakeFeed({
+      adminLeads: [lead({ id: "lead-walkin", phone: "010-1020-0100" })],
+      compassLeads: [compassNew({ id: 920, phone_key: "01010200100", channel: "walkin" })],
+      windows,
+    })
+    expect(result.todayCount).toBe(1)
+    expect(result.overlapCount).toBe(0)
+    expect(result.items[0]).toMatchObject({ key: "a:lead-walkin", origins: ["admin"], compassLeadId: null, reinflow: false })
+  })
+
   it("깨진 타임스탬프는 창에 넣지 않는다(0 시각으로 오늘에 끌려들어오지 않게)", () => {
     const result = buildIntakeFeed({
       adminLeads: [lead({ phone: "01011110000", timestamp: "not-a-date" })],
-      compassLeads: [compass({ phone_key: "01022220000", last_inflow_at: null })],
+      compassLeads: [
+        compass({ phone_key: "01022220000", last_inflow_at: null }),
+        compass({ phone_key: "01033330000", created_at: "not-a-date", last_inflow_at: null }),
+      ],
       windows,
     })
     expect(result.todayCount).toBe(0)
