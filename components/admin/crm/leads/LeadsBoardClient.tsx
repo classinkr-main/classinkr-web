@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 import LeadRegisterModal from "@/components/admin/crm/LeadRegisterModal"
 import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
+import CrmNoticeBanner, { type CrmNoticeTone } from "@/components/admin/crm/CrmNoticeBanner"
 import LeadTrackingPanel from "@/components/admin/crm/leads/LeadTrackingPanel"
 import { useCrmOwners } from "@/components/admin/crm/useCrmOwners"
 import { useVisibleCount } from "@/components/admin/ui/ShowMore"
@@ -106,6 +107,69 @@ import {
   type LeadLens,
 } from "./board/shared"
 
+// ─── 벌크 요청 공통기 ──────────────────────────────────────────
+// 8건씩 끊어 보낸다. 수백 건을 한 번에 발사하면 브라우저 연결 한도와 서버가 같이 밀리고,
+// 부분 실패 시 어디까지 갔는지도 알기 어렵다. PATCH(확인·상태)와 DELETE가 같은 동시성 정책을
+// 쓰도록 여기 한 곳에 둔다. 실패한 id 목록(failedIds)을 함께 돌려줘 "실패 항목만 다시 선택"이
+// 같은 벌크 작업을 처음부터 반복하지 않게 한다.
+export const BULK_CHUNK_SIZE = 8
+
+export async function runInChunks<T>(
+  ids: string[],
+  fn: (id: string) => Promise<T>,
+  options?: { chunkSize?: number; fallbackMessage?: string }
+): Promise<{ succeeded: T[]; failedIds: string[]; firstError: Error | null }> {
+  const chunkSize = Math.max(1, options?.chunkSize ?? BULK_CHUNK_SIZE)
+  const fallbackMessage = options?.fallbackMessage ?? "요청을 처리하지 못했습니다."
+  const succeeded: T[] = []
+  const failedIds: string[] = []
+  let firstError: Error | null = null
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const chunk = ids.slice(i, i + chunkSize)
+    const settled = await Promise.allSettled(chunk.map((id) => fn(id)))
+    settled.forEach((result, index) => {
+      if (result.status === "fulfilled") {
+        succeeded.push(result.value)
+        return
+      }
+      failedIds.push(chunk[index])
+      if (!firstError) firstError = result.reason instanceof Error ? result.reason : new Error(fallbackMessage)
+    })
+  }
+  return { succeeded, failedIds, firstError }
+}
+
+// 드로어 선택을 URL(?lead=)에 반영한다 — closeSelectedLead(파라미터 삭제)와 짝. 이미 같은 값이면
+// 바꾸지 않아(false) 딥링크 진입 회차에 replaceState가 중복으로 나가지 않는다.
+export function applySelectedLeadParam(url: URL, selectedId: string | null): boolean {
+  if (!selectedId) return false
+  if (url.searchParams.get("lead") === selectedId) return false
+  url.searchParams.set("lead", selectedId)
+  return true
+}
+
+// 확인 다이얼로그용 대상 요약 — 최대 5건의 표시 이름을 나열하고 나머지는 건수로 접는다.
+export function summarizeLeadNames(leads: LeadRecord[], ids: string[], max = 5): string {
+  const byId = new Map(leads.map((lead) => [lead.id, lead]))
+  const names = ids.slice(0, max).map((id) => `"${getLeadDisplayName(byId.get(id))}"`)
+  const rest = ids.length - names.length
+  return rest > 0 ? `${names.join(", ")} 외 ${rest}건` : names.join(", ")
+}
+
+type BoardToast = {
+  msg: string
+  type: "success" | "error"
+  action?: { label: string; onClick: () => void }
+}
+
+// 목록 상단 고정 배너 — 벌크 부분 실패처럼 토스트 3초로는 읽고 대응할 수 없는 결과를 닫기 전까지 남긴다.
+type BulkNotice = {
+  tone: CrmNoticeTone
+  title: string
+  message: string
+  failedIds?: string[]
+}
+
 // ─── 리드 보드 ─────────────────────────────────────────────────
 // 현황(/admin/crm)에서 추출한 리드 관리 보드 전체. ?filter=·?focus=risk 딥링크 지원.
 export default function LeadsBoardClient() {
@@ -160,7 +224,12 @@ export default function LeadsBoardClient() {
   const [logsLoading, setLogsLoading] = useState(false)
   const [activity, setActivity] = useState<LeadActivity | null>(null)
   const [activityLoading, setActivityLoading] = useState(false)
-  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
+  const [toast, setToast] = useState<BoardToast | null>(null)
+  // 벌크 작업 부분 실패 배너(목록 상단, 닫기 전까지 유지) — 실패 id를 들고 있어 재선택이 가능하다.
+  const [bulkNotice, setBulkNotice] = useState<BulkNotice | null>(null)
+  // 연락 기록 저장은 됐지만 리드 상태 동기화가 실패한 경우의 경고 — 저장 성공 토스트와 분리해
+  // 낮은 강도(warning)로 병기한다(leads-04). 드로어(z-50) 위에 보이도록 고정 배치한다.
+  const [syncWarning, setSyncWarning] = useState<string | null>(null)
   // CRM 전환 직후 동선 — 딜/고객 딥링크 패널 (토스트와 달리 닫기 전까지 유지).
   const [convertResult, setConvertResult] = useState<ConvertResultState | null>(null)
   const [events, setEvents] = useState<PublicEvent[]>([])
@@ -187,7 +256,22 @@ export default function LeadsBoardClient() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null)
   const [dismissedDeepLinkedLeadId, setDismissedDeepLinkedLeadId] = useState<string | null>(null)
+  // 감사 2026-09-07 §3 후속 — 하드 삭제만 브라우저 confirm()에 남아 있었다. 확인·전환과 같은
+  // 요청 상태 패턴으로 공용 확인 다이얼로그를 거친다(대상 이름·영향 범위·비가역 경고 표시).
+  const [deleteLeadsRequest, setDeleteLeadsRequest] = useState<{ ids: string[]; successMessage?: string } | null>(null)
+  const [deleteLeadsBusy, setDeleteLeadsBusy] = useState(false)
+  // 벌크 "종료"·"배정"도 같은 요청 상태 패턴 — window.confirm 을 이 화면에서 완전히 걷는다(UX 규약 1).
+  const [closeLeadsRequest, setCloseLeadsRequest] = useState<{ ids: string[] } | null>(null)
+  const [bulkAssignRequest, setBulkAssignRequest] = useState<{
+    ids: string[]
+    ownerKey: string
+    preview: LeadAssignmentPreviewResponse | undefined
+    ownerLabel: string
+    profileText: string
+  } | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
+  // 행·카드가 사라지는 처리(삭제) 뒤 포커스를 목록 섹션으로 옮긴다(UX 규약 7).
+  const listSectionRef = useRef<HTMLDivElement>(null)
   const { owners: crmOwners, health: crmOwnerHealth } = useCrmOwners()
   // Compass(마케팅팀 앱) 콜 상태 병기 — 읽기 전용 오버레이. 우리 리드 상태는 건드리지 않는다.
   const compass = useCompassOverlay(leads)
@@ -249,10 +333,24 @@ export default function LeadsBoardClient() {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
   }, [])
 
-  const showToast = (msg: string, type: "success" | "error" = "success") => {
-    setToast({ msg, type })
+  // 성공은 3초 뒤 자동으로 걷고, 실패는 원인을 읽고 닫을 때까지 남긴다(UX 규약 3 — 실패는 자동
+  // 소멸하지 않는다). 둘 다 X 닫기를 갖고, action(재시도·되돌리기)은 선택.
+  const showToast = (
+    msg: string,
+    type: "success" | "error" = "success",
+    options?: { action?: BoardToast["action"] }
+  ) => {
+    setToast({ msg, type, action: options?.action })
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
-    toastTimerRef.current = setTimeout(() => setToast(null), 3000)
+    toastTimerRef.current = null
+    if (type === "success") {
+      toastTimerRef.current = setTimeout(() => setToast(null), 3000)
+    }
+  }
+  const dismissToast = () => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = null
+    setToast(null)
   }
 
   const fetchLeads = useCallback(async (options?: { force?: boolean }) => {
@@ -363,6 +461,19 @@ export default function LeadsBoardClient() {
     url.searchParams.delete("action")
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`)
   }, [deepLinkedLeadId])
+
+  // closeSelectedLead와 짝 — 행 클릭으로 연 드로어도 ?lead= 에 남겨 새로고침·링크 공유·뒤로가기
+  // 복귀에서 같은 리드가 다시 열리게 한다. 딥링크로 들어온 회차(이미 ?lead=같은 id)는 헬퍼가
+  // false를 돌려 replaceState를 중복으로 부르지 않는다. 딥링크와 다른 리드를 클릭했으면 그
+  // 딥링크는 소비된 것으로 표시해, 위 딥링크 effect가 원래 리드로 되돌리지 않게 한다.
+  const selectedId = selected?.id ?? null
+  useEffect(() => {
+    if (!selectedId) return
+    if (deepLinkedLeadId && selectedId !== deepLinkedLeadId) setDismissedDeepLinkedLeadId(deepLinkedLeadId)
+    const url = new URL(window.location.href)
+    if (!applySelectedLeadParam(url, selectedId)) return
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`)
+  }, [selectedId, deepLinkedLeadId])
 
   // 검색어만 300ms 눌러서 URL에 반영한다 — 나머지 축은 클릭 단위라 즉시 반영해도 되지만,
   // 검색은 키 입력마다 replaceState를 불러 타이핑 중 히스토리 API를 초당 수십 번 두드렸다.
@@ -568,7 +679,10 @@ export default function LeadsBoardClient() {
         setLeads((prev) => prev.map((lead) => (lead.id === selected.id ? next : lead)))
         setSelected(next)
       }
-      showToast(data.warning ?? "연락 기록이 저장되었습니다.", data.warning ? "error" : undefined)
+      // 저장 성공과 상태 동기화 경고를 분리한다 — 경고를 실패 톤 토스트로 내면 "저장 실패"로
+      // 오인해 같은 기록을 다시 넣는다(leads-04). 저장은 성공 토스트, 경고는 warning 배너.
+      showToast("연락 기록이 저장되었습니다.")
+      setSyncWarning(data.warning ? `상태 동기화 실패: ${data.warning}` : null)
     } catch (err) {
       const error = err instanceof Error ? err : new Error("연락 기록을 저장하지 못했습니다.")
       showToast(error.message, "error")
@@ -624,32 +738,52 @@ export default function LeadsBoardClient() {
     }
   }
 
-  // 벌크 PATCH 공통기 — 8건씩 끊어 보낸다. 수백 건을 한 번에 발사하면 브라우저 연결 한도와
-  // 서버가 같이 밀리고, 부분 실패 시 어디까지 갔는지도 알기 어렵다. 성공 행은 서버 응답
+  // 벌크 PATCH 공통기 — 동시성 정책은 runInChunks(파일 상단) 한 곳. 성공 행은 서버 응답
   // 리드로 병합한다(낙관적 덮어쓰기 금지 — confirmed_at 등 서버 산출 필드 보존).
   const patchLeadsInChunks = async (ids: string[], body: Record<string, unknown>, fallbackMessage: string) => {
-    const succeeded: LeadRecord[] = []
-    let firstError: Error | null = null
-    const CHUNK = 8
-    for (let i = 0; i < ids.length; i += CHUNK) {
-      const chunk = ids.slice(i, i + CHUNK)
-      const settled = await Promise.allSettled(
-        chunk.map(async (id) => {
-          const res = await adminFetch(`/api/admin/leads/${id}`, { method: "PATCH", body: JSON.stringify(body) })
-          const data = await readAdminResponse<{ lead: LeadRecord }>(res, fallbackMessage)
-          return data.lead
-        })
-      )
-      for (const result of settled) {
-        if (result.status === "fulfilled") succeeded.push(result.value)
-        else if (!firstError) firstError = result.reason instanceof Error ? result.reason : new Error(fallbackMessage)
-      }
-    }
+    const { succeeded, failedIds, firstError } = await runInChunks(
+      ids,
+      async (id) => {
+        const res = await adminFetch(`/api/admin/leads/${id}`, { method: "PATCH", body: JSON.stringify(body) })
+        const data = await readAdminResponse<{ lead: LeadRecord }>(res, fallbackMessage)
+        return data.lead
+      },
+      { fallbackMessage }
+    )
     if (succeeded.length > 0) {
       const merged = new Map(succeeded.map((lead) => [lead.id, lead]))
       setLeads((prev) => prev.map((lead) => merged.get(lead.id) ?? lead))
     }
-    return { succeeded, failedCount: ids.length - succeeded.length, firstError }
+    return { succeeded, failedIds, failedCount: failedIds.length, firstError }
+  }
+
+  // 벌크 부분 실패 → 목록 상단 고정 배너. 토스트 3초로는 원인을 읽고 어떤 리드가 실패했는지
+  // 확인할 수 없었다(leads-02). '실패 항목만 다시 선택'으로 같은 작업을 실패분에만 반복한다.
+  const reportBulkFailure = (
+    verb: string,
+    succeededCount: number,
+    failedIds: string[],
+    firstError: Error | null,
+    fallbackMessage: string
+  ) => {
+    const reason = firstError?.message ?? fallbackMessage
+    setBulkNotice({
+      tone: "danger",
+      title: succeededCount > 0 ? `일부 리드를 ${verb}하지 못했습니다` : `리드를 ${verb}하지 못했습니다`,
+      message:
+        succeededCount > 0
+          ? `${succeededCount}건 ${verb}, ${failedIds.length}건 실패 · ${reason}`
+          : `${failedIds.length}건 실패 · ${reason}`,
+      failedIds,
+    })
+  }
+
+  const reselectFailedLeads = () => {
+    if (!bulkNotice?.failedIds?.length) return
+    const failed = new Set(bulkNotice.failedIds)
+    setSelectedLeadIds(new Set(leads.filter((lead) => failed.has(lead.id)).map((lead) => lead.id)))
+    setView("console")
+    setBulkNotice(null)
   }
 
   // "확인" 실행기 — 공개 채널 리드를 기본 리드 화면으로 승격한다. 단건(드로어) · 다건(수신함
@@ -666,18 +800,13 @@ export default function LeadsBoardClient() {
       return next
     })
     try {
-      const { succeeded, failedCount, firstError } = await patchLeadsInChunks(
+      const { succeeded, failedIds, firstError } = await patchLeadsInChunks(
         uniqueIds,
         { confirmed: true },
         "리드를 확인 처리하지 못했습니다."
       )
-      if (failedCount > 0) {
-        showToast(
-          succeeded.length > 0
-            ? `${succeeded.length}건 확인, ${failedCount}건 실패: ${firstError?.message ?? ""}`
-            : firstError?.message ?? "리드를 확인 처리하지 못했습니다.",
-          "error"
-        )
+      if (failedIds.length > 0) {
+        reportBulkFailure("확인 처리", succeeded.length, failedIds, firstError, "리드를 확인 처리하지 못했습니다.")
         return
       }
       showToast(`${succeeded.length}건 확인 처리했습니다.`)
@@ -729,28 +858,19 @@ export default function LeadsBoardClient() {
   }
 
   // 벌크 상태 변경 — 선택한 신규 리드를 "연락중"으로 넘기거나 선택 전체를 "종료"로 정리한다.
+  // "종료"는 활성 파이프라인에서 빠지는 단계 전환이라 requestBulkStatus 의 확인 다이얼로그를 거친다.
   const handleBulkStatus = async (ids: string[], status: LeadStatus) => {
     const uniqueIds = Array.from(new Set(ids)).filter(Boolean)
     if (uniqueIds.length === 0) return
-    if (
-      status === "closed" &&
-      !confirm(`${uniqueIds.length}건을 "종료" 상태로 변경할까요? 활성 파이프라인에서 빠집니다.`)
-    )
-      return
     setBulkWorking(true)
     try {
-      const { succeeded, failedCount, firstError } = await patchLeadsInChunks(
+      const { succeeded, failedIds, firstError } = await patchLeadsInChunks(
         uniqueIds,
         { status },
         "상태를 변경하지 못했습니다."
       )
-      if (failedCount > 0) {
-        showToast(
-          succeeded.length > 0
-            ? `${succeeded.length}건 변경, ${failedCount}건 실패: ${firstError?.message ?? ""}`
-            : firstError?.message ?? "상태를 변경하지 못했습니다.",
-          "error"
-        )
+      if (failedIds.length > 0) {
+        reportBulkFailure("변경", succeeded.length, failedIds, firstError, "상태를 변경하지 못했습니다.")
         return
       }
       showToast(`${succeeded.length}건을 "${STATUS_LABEL[status]}" 상태로 변경했습니다.`)
@@ -783,13 +903,24 @@ export default function LeadsBoardClient() {
       const selectedIds = new Set(uniqueIds)
       const profile = buildLeadAssignmentProfile(leads.filter((lead) => selectedIds.has(lead.id)))
       const ownerLabel = crmOwners.find((owner) => owner.ownerKey === ownerKey)?.displayName ?? ownerKey
-      if (
-        !confirm(
-          `${uniqueIds.length}건을 "${ownerLabel}" 담당자에게 배정할까요?\n${formatLeadAssignmentProfile(profile)}`
-        )
-      )
-        return
+      // 배정 확인은 공용 다이얼로그로 — 실행은 runBulkAssignRequest 가 이어받는다.
+      setBulkAssignRequest({
+        ids: uniqueIds,
+        ownerKey,
+        preview,
+        ownerLabel,
+        profileText: formatLeadAssignmentProfile(profile),
+      })
+      return
     }
+    await runBulkAssign(uniqueIds, ownerKey, preview)
+  }
+
+  const runBulkAssign = async (
+    uniqueIds: string[],
+    ownerKey: string | null,
+    preview: LeadAssignmentPreviewResponse | undefined
+  ) => {
     setBulkWorking(true)
     try {
       const data = await applyLeadAssignment(uniqueIds, ownerKey, preview)
@@ -804,24 +935,26 @@ export default function LeadsBoardClient() {
           : `${data.updated}건의 담당자 배정을 해제했습니다.`
       )
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "담당자를 저장하지 못했습니다.", "error")
+      // 서버 한 번의 UPDATE라 전량 실패다 — 선택은 그대로 남아 있으니 배너에서 바로 재시도할 수 있다.
+      reportBulkFailure(
+        "배정",
+        0,
+        uniqueIds,
+        err instanceof Error ? err : null,
+        "담당자를 저장하지 못했습니다."
+      )
     } finally {
       setBulkWorking(false)
     }
   }
 
-  const handleDeleteMany = async (
-    ids: string[],
-    options?: { confirmMessage?: string; successMessage?: string }
-  ) => {
+  // 삭제 실행기 — 단건(행·드로어)·다건(벌크 바) 공용. 실제 실행은 항상 requestDeleteMany가 띄우는
+  // 확인 다이얼로그를 거친 뒤에만 호출된다(이 함수 자체는 confirm을 갖지 않는다). DELETE도
+  // PATCH와 같은 runInChunks(8건) 정책을 쓴다 — 전량 동시 발사로 연결을 밀어내지 않는다.
+  // 소프트 삭제·복구(C3)는 기획안 §6 결정5 대기 항목이라 여기 넣지 않는다.
+  const handleDeleteMany = async (ids: string[], options?: { successMessage?: string }) => {
     const uniqueIds = Array.from(new Set(ids)).filter(Boolean)
     if (uniqueIds.length === 0) return
-
-    const confirmMessage =
-      options?.confirmMessage ??
-      `${uniqueIds.length}개 리드를 완전히 삭제할까요? 실수/스팸 리드 정리용이며 되돌릴 수 없습니다.`
-
-    if (!confirm(confirmMessage)) return
 
     setDeletingIds((prev) => {
       const next = new Set(prev)
@@ -830,18 +963,15 @@ export default function LeadsBoardClient() {
     })
 
     try {
-      const results = await Promise.allSettled(
-        uniqueIds.map(async (id) => {
+      const { succeeded: deletedIds, failedIds, firstError } = await runInChunks(
+        uniqueIds,
+        async (id) => {
           const res = await adminFetch(`/api/admin/leads/${id}`, { method: "DELETE" })
           await readAdminResponse<{ ok: true }>(res, "리드를 삭제하지 못했습니다.")
           return id
-        })
+        },
+        { fallbackMessage: "리드를 삭제하지 못했습니다." }
       )
-      const deletedIds = results
-        .filter((result): result is PromiseFulfilledResult<string> => result.status === "fulfilled")
-        .map((result) => result.value)
-      const failed = results.find((result): result is PromiseRejectedResult => result.status === "rejected")
-      const failedCount = uniqueIds.length - deletedIds.length
 
       if (deletedIds.length > 0) {
         const deletedIdSet = new Set(deletedIds)
@@ -852,14 +982,12 @@ export default function LeadsBoardClient() {
           deletedIds.forEach((id) => next.delete(id))
           return next
         })
+        // 행이 사라졌으니 포커스를 목록 섹션으로 옮긴다 — 사라진 버튼에 남은 포커스는 body로 떨어진다.
+        listSectionRef.current?.focus({ preventScroll: true })
       }
 
-      if (failedCount > 0) {
-        const message = failed?.reason instanceof Error ? failed.reason.message : "리드를 삭제하지 못했습니다."
-        showToast(
-          deletedIds.length > 0 ? `${deletedIds.length}개 삭제, ${failedCount}개 실패: ${message}` : message,
-          "error"
-        )
+      if (failedIds.length > 0) {
+        reportBulkFailure("삭제", deletedIds.length, failedIds, firstError, "리드를 삭제하지 못했습니다.")
         return
       }
 
@@ -873,12 +1001,50 @@ export default function LeadsBoardClient() {
     }
   }
 
-  const handleDelete = async (id: string) => {
-    const lead = leads.find((item) => item.id === id)
-    await handleDeleteMany([id], {
-      confirmMessage: `"${getLeadDisplayName(lead)}" 리드를 완전히 삭제할까요? 연락 기록도 함께 정리되며 되돌릴 수 없습니다.`,
-      successMessage: "리드가 삭제되었습니다.",
-    })
+  const requestBulkStatus = (ids: string[], status: LeadStatus) => {
+    const uniqueIds = Array.from(new Set(ids)).filter(Boolean)
+    if (uniqueIds.length === 0) return
+    if (status === "closed") {
+      setCloseLeadsRequest({ ids: uniqueIds })
+      return
+    }
+    void handleBulkStatus(uniqueIds, status)
+  }
+
+  const runCloseLeadsRequest = async () => {
+    if (!closeLeadsRequest || bulkWorking) return
+    const ids = closeLeadsRequest.ids
+    setCloseLeadsRequest(null)
+    await handleBulkStatus(ids, "closed")
+  }
+
+  const runBulkAssignRequest = async () => {
+    if (!bulkAssignRequest || bulkWorking) return
+    const request = bulkAssignRequest
+    setBulkAssignRequest(null)
+    await runBulkAssign(request.ids, request.ownerKey, request.preview)
+  }
+
+  // 삭제 진입점 — 행 액션·드로어·벌크 바 전부 여기를 거친다. 다이얼로그의 onConfirm이 실제 실행.
+  const requestDeleteMany = (ids: string[], options?: { successMessage?: string }) => {
+    const uniqueIds = Array.from(new Set(ids)).filter(Boolean)
+    if (uniqueIds.length === 0) return
+    setDeleteLeadsRequest({ ids: uniqueIds, successMessage: options?.successMessage })
+  }
+
+  const runDeleteLeadsRequest = async () => {
+    if (!deleteLeadsRequest || deleteLeadsBusy) return
+    setDeleteLeadsBusy(true)
+    try {
+      await handleDeleteMany(deleteLeadsRequest.ids, { successMessage: deleteLeadsRequest.successMessage })
+    } finally {
+      setDeleteLeadsBusy(false)
+      setDeleteLeadsRequest(null)
+    }
+  }
+
+  const handleDelete = (id: string) => {
+    requestDeleteMany([id], { successMessage: "리드가 삭제되었습니다." })
   }
 
   const deferredSearch = useDeferredValue(searchQuery)
@@ -1778,6 +1944,24 @@ export default function LeadsBoardClient() {
         )}
       </div>
 
+      {/* 목록 섹션 — 삭제 등으로 행이 사라진 뒤 포커스 착지점(tabIndex=-1). */}
+      <div ref={listSectionRef} tabIndex={-1} aria-label="리드 목록" className="outline-none">
+      {/* 벌크 부분 실패 배너 — 닫기 전까지 남고, 실패한 리드만 다시 선택해 재시도할 수 있다. */}
+      {bulkNotice ? (
+        <CrmNoticeBanner
+          tone={bulkNotice.tone}
+          title={bulkNotice.title}
+          message={bulkNotice.message}
+          className="mb-4"
+          action={
+            bulkNotice.failedIds && bulkNotice.failedIds.length > 0
+              ? { label: "실패 항목만 다시 선택", onClick: reselectFailedLeads, pending: bulkWorking || deletingIds.size > 0 }
+              : undefined
+          }
+          onDismiss={() => setBulkNotice(null)}
+        />
+      ) : null}
+
       {view === "console" && selectedLeadIds.size > 0 && (
         <LeadsBulkBar
           selectedFilteredCount={selectedFilteredCount}
@@ -1803,8 +1987,8 @@ export default function LeadsBoardClient() {
           onOwnerKeyChange={setBulkOwnerKey}
           onAssign={() => void handleBulkAssign(Array.from(selectedLeadIds), bulkOwnerKey)}
           onUnassign={() => void handleBulkAssign(Array.from(selectedLeadIds), null)}
-          onCloseSelected={() => void handleBulkStatus(Array.from(selectedLeadIds), "closed")}
-          onDeleteSelected={() => void handleDeleteMany(Array.from(selectedLeadIds))}
+          onCloseSelected={() => requestBulkStatus(Array.from(selectedLeadIds), "closed")}
+          onDeleteSelected={() => requestDeleteMany(Array.from(selectedLeadIds))}
           onSelectSafeTargets={(safeLeadIds) => setSelectedLeadIds(new Set(safeLeadIds))}
         />
       )}
@@ -1871,6 +2055,7 @@ export default function LeadsBoardClient() {
           compassOverlay={compass.overlay}
         />
       )}
+      </div>
 
       {/* 드로어 */}
       {selected && (
@@ -2000,8 +2185,88 @@ export default function LeadsBoardClient() {
         confirmLoadingLabel="전환 중..."
         irreversibleNote="되돌릴 수 없습니다 — 전환 후에는 리드로 되돌릴 수 없습니다."
       />
+      <DeleteConfirmDialog
+        open={deleteLeadsRequest !== null}
+        onClose={() => {
+          if (!deleteLeadsBusy) setDeleteLeadsRequest(null)
+        }}
+        onConfirm={() => void runDeleteLeadsRequest()}
+        loading={deleteLeadsBusy}
+        title={deleteLeadsRequest && deleteLeadsRequest.ids.length > 1 ? "리드 여러 건 삭제" : "리드 삭제"}
+        description={
+          deleteLeadsRequest
+            ? deleteLeadsRequest.ids.length > 1
+              ? `${deleteLeadsRequest.ids.length}건을 완전히 삭제할까요? 대상: ${summarizeLeadNames(leads, deleteLeadsRequest.ids)}. 실수·스팸 리드 정리용입니다.`
+              : `${summarizeLeadNames(leads, deleteLeadsRequest.ids)} 리드를 완전히 삭제할까요?`
+            : "이 리드를 완전히 삭제할까요?"
+        }
+        confirmLabel={deleteLeadsRequest && deleteLeadsRequest.ids.length > 1 ? `${deleteLeadsRequest.ids.length}건 삭제` : "삭제"}
+        confirmLoadingLabel="삭제 중..."
+        irreversibleNote="연락 기록도 함께 삭제되며 되돌릴 수 없습니다."
+      />
+      <DeleteConfirmDialog
+        open={closeLeadsRequest !== null}
+        onClose={() => setCloseLeadsRequest(null)}
+        onConfirm={() => void runCloseLeadsRequest()}
+        loading={bulkWorking}
+        destructive={false}
+        title="리드 종료 처리"
+        description={
+          closeLeadsRequest
+            ? `${closeLeadsRequest.ids.length}건을 "종료" 상태로 변경할까요? 대상: ${summarizeLeadNames(leads, closeLeadsRequest.ids)}. 활성 파이프라인에서 빠집니다.`
+            : "선택한 리드를 종료 상태로 변경할까요?"
+        }
+        confirmLabel="종료 처리"
+        confirmLoadingLabel="처리 중..."
+      />
+      <DeleteConfirmDialog
+        open={bulkAssignRequest !== null}
+        onClose={() => setBulkAssignRequest(null)}
+        onConfirm={() => void runBulkAssignRequest()}
+        loading={bulkWorking}
+        destructive={false}
+        title="담당자 일괄 배정"
+        description={
+          bulkAssignRequest ? (
+            <>
+              {bulkAssignRequest.ids.length}건을 &ldquo;{bulkAssignRequest.ownerLabel}&rdquo; 담당자에게 배정할까요?
+              <span className="mt-2 block whitespace-pre-line">{bulkAssignRequest.profileText}</span>
+            </>
+          ) : (
+            "선택한 리드를 배정할까요?"
+          )
+        }
+        confirmLabel="배정"
+        confirmLoadingLabel="배정 중..."
+      />
 
-      {toast && <Toast msg={toast.msg} type={toast.type} raised={Boolean(convertResult)} />}
+      {/* 연락 기록 저장 성공 + 상태 동기화 경고 병기(leads-04) — 드로어 위(z-70), warning 톤, 닫기 전까지 유지. */}
+      {syncWarning ? (
+        <CrmNoticeBanner
+          tone="warning"
+          title="연락 기록은 저장되었습니다"
+          message={syncWarning}
+          className={`fixed left-4 right-4 z-[70] shadow-xl sm:left-auto sm:right-6 sm:w-[360px] ${
+            toast ? (convertResult ? "bottom-44" : "bottom-24") : convertResult ? "bottom-28" : "bottom-6"
+          }`}
+          onDismiss={() => setSyncWarning(null)}
+        />
+      ) : null}
+
+      {/* 항상 마운트된 라이브 리전 — 성공 토스트(role=status)는 뜨는 순간 노드가 생겨 첫 알림을
+          스크린리더가 놓칠 수 있다. 텍스트만 갈아끼워 통지한다(실패는 Toast 자체가 role=alert). */}
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {toast?.type === "success" ? toast.msg : ""}
+      </div>
+      {toast && (
+        <Toast
+          msg={toast.msg}
+          type={toast.type}
+          raised={Boolean(convertResult)}
+          action={toast.action}
+          onDismiss={dismissToast}
+        />
+      )}
     </div>
   )
 }
