@@ -6,13 +6,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react"
 import dynamic from "next/dynamic"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { AlertTriangle, ChevronRight, Filter, RefreshCw, UserPlus } from "lucide-react"
+import { ChevronRight, Filter, RefreshCw, UserPlus } from "lucide-react"
 
-import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
+import { adminFetchJsonCachedWithMeta, getCachedAdminJson } from "@/lib/admin-client"
 import { CRM_CACHE_SWR_MS } from "@/lib/crm/client-cache"
 import type { CrmUnifiedCustomerRow } from "@/lib/repositories/crm-unified-customers"
 import { buildOwnerSelectOptions, useCrmOwners } from "./useCrmOwners"
 import Account360Lens from "./Account360Lens"
+import CrmNoticeBanner from "./CrmNoticeBanner"
 import Customer360DrawerSkeleton from "./Customer360DrawerSkeleton"
 import SavedViewButton from "./unified/SavedViewButton"
 import CustomerSearchPanel from "./unified/CustomerSearchPanel"
@@ -54,6 +55,29 @@ const LeadRegisterModal = dynamic(() => import("./LeadRegisterModal"), {
 // requestSeq(기존 loadPage 계약)가 이미 맡고 있어 그대로 둔다.
 const SEARCH_DEBOUNCE_MS = 200
 
+const LOAD_FAILURE_FALLBACK_MESSAGE = "통합 고객 목록을 불러오지 못했습니다."
+
+function describeLoadError(error: unknown) {
+  return error instanceof Error && error.message ? error.message : LOAD_FAILURE_FALLBACK_MESSAGE
+}
+
+// 갱신 실패 배너의 기준 시각 — 화면에 남아 있는 결과가 언제 것인지 명시한다(UX 규약 4).
+function formatShownAt(iso: string | null | undefined) {
+  if (!iso) return null
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return null
+  return date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })
+}
+
+// 갱신 실패(이전 결과 표시 중) — 목록 자체를 못 불러온 `error`(danger)와 구분되는 warning 상태.
+// staleIfError 폴백·백그라운드 재검증 실패·다음 페이지 실패가 모두 여기로 모인다.
+// 재시도는 항상 force(no-store·staleIfError 없음)로 나간다 — 같은 만료 캐시를 다시 받는 헛돌기를 막는다.
+interface RefreshFailure {
+  message: string
+  retryOffset: number
+  retryAppend: boolean
+}
+
 export default function CrmUnifiedCustomersClient() {
   const [query, setQuery] = useState("")
   const [debouncedQuery, setDebouncedQuery] = useState("")
@@ -76,9 +100,16 @@ export default function CrmUnifiedCustomersClient() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [refreshFailure, setRefreshFailure] = useState<RefreshFailure | null>(null)
   const [drawer, setDrawer] = useState<{ key: string; name: string } | null>(null)
   const [leadModalOpen, setLeadModalOpen] = useState(false)
   const requestSeq = useRef(0)
+  // loadPage 콜백이 "지금 화면에 결과가 있는가"를 deps 없이 읽기 위한 거울 — 실패를 danger(조회
+  // 실패)로 띄울지 warning(갱신 실패·이전 결과 표시 중)으로 띄울지 가른다.
+  const hasDataRef = useRef(false)
+  useEffect(() => {
+    hasDataRef.current = data != null
+  }, [data])
   // 드로어 컴포저 dirty — 뒤로가기(?account= 소실) 닫기 경로가 드로어 내부 닫기 가드와
   // 같은 확인을 거치게 한다(가드 없이는 뒤로가기가 작성 중 기록을 무음 폐기).
   const drawerDirtyRef = useRef(false)
@@ -232,14 +263,20 @@ export default function CrmUnifiedCustomersClient() {
       const cached = !append && !options?.force ? getCachedAdminJson<CrmUnifiedCustomers>(url, { cacheKey: url }) : null
       const requestId = ++requestSeq.current
 
-      if (cached) setData(cached)
+      if (cached) {
+        setData(cached)
+        hasDataRef.current = true
+      }
 
       setLoading(!append && !cached)
       setLoadingMore(append)
       setRefreshing(Boolean(options?.force))
       setError(null)
+      const failRefresh = (cause: unknown) => {
+        setRefreshFailure({ message: describeLoadError(cause), retryOffset: offset, retryAppend: append })
+      }
       try {
-        const next = await adminFetchJsonCached<CrmUnifiedCustomers>(
+        const result = await adminFetchJsonCachedWithMeta<CrmUnifiedCustomers>(
           options?.force ? `${url}&force=1` : url,
           undefined,
           {
@@ -247,19 +284,40 @@ export default function CrmUnifiedCustomersClient() {
             ttlMs: CACHE_TTL_MS,
             staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
             force: options?.force,
+            // 새로고침(force)은 실패를 만료 캐시로 대체하지 않고 throw 한다 — '방금 새로고침했으니
+            // 최신'이라는 오인을 막는다. 일반 로드는 폴백을 허용하되 아래 staleReason으로 드러낸다.
+            staleIfError: !options?.force,
             // 배경 갱신도 포그라운드와 같은 병합 규칙을 탄다 — 더 늦게 시작한 요청이
             // 이미 화면을 갈아치웠다면(필터 변경·다음 페이지) 이 결과는 버린다.
-            onRevalidated: ({ data: fresh }) => {
-              if (!fresh || requestId !== requestSeq.current) return
+            onRevalidated: ({ data: fresh, error: revalidateError }) => {
+              if (requestId !== requestSeq.current) return
+              if (revalidateError !== undefined) {
+                failRefresh(revalidateError)
+                return
+              }
+              if (!fresh) return
               setData((current) => mergePage(current, fresh, append))
+              setRefreshFailure(null)
             },
           }
         )
         if (requestId !== requestSeq.current) return
-        setData((current) => mergePage(current, next, append))
+        setData((current) => mergePage(current, result.data, append))
+        hasDataRef.current = true
+        if (result.stale && result.staleReason === "error") {
+          // staleIfError 폴백 — 네트워크로 새로 받은 게 아니라 만료 캐시다. 성공처럼 두지 않는다.
+          failRefresh(result.staleError)
+        } else if (!result.stale) {
+          setRefreshFailure(null)
+        }
       } catch (err) {
         if (requestId !== requestSeq.current) return
-        setError(err instanceof Error ? err.message : "통합 고객 목록을 불러오지 못했습니다.")
+        if (hasDataRef.current) {
+          // 화면에 이전 결과가 남아 있다 — 목록을 지우지 않고 '갱신 실패'로 구분해 알린다.
+          failRefresh(err)
+        } else {
+          setError(describeLoadError(err))
+        }
       } finally {
         if (requestId === requestSeq.current) {
           setLoading(false)
@@ -411,6 +469,8 @@ export default function CrmUnifiedCustomersClient() {
       className="mx-auto max-w-7xl [&_a]:min-h-11 [&_a]:focus-visible:outline-none [&_a]:focus-visible:ring-2 [&_a]:focus-visible:ring-[#084734] [&_a]:focus-visible:ring-offset-2 [&_button]:min-h-11 [&_button]:focus-visible:outline-none [&_button]:focus-visible:ring-2 [&_button]:focus-visible:ring-[#084734] [&_button]:focus-visible:ring-offset-2 [&_input:not([type=checkbox]):not([type=file])]:min-h-11 [&_input:not([type=checkbox]):not([type=file])]:focus-visible:outline-none [&_input:not([type=checkbox]):not([type=file])]:focus-visible:ring-2 [&_input:not([type=checkbox]):not([type=file])]:focus-visible:ring-[#084734] [&_select]:min-h-11 [&_select]:focus-visible:outline-none [&_select]:focus-visible:ring-2 [&_select]:focus-visible:ring-[#084734] lg:[&_a]:min-h-6 lg:[&_button]:min-h-6 lg:[&_input:not([type=checkbox]):not([type=file])]:min-h-0 lg:[&_select]:min-h-0"
       aria-busy={loading || loadingMore || refreshing}
     >
+        {/* 항상 마운트된 live region 두 개 — 진행/완료(polite)와 조회 실패(assertive)를 분리한다.
+            배너가 마운트와 동시에 문구를 싣는 것만으로는 일부 SR이 놓치므로 실패 문구는 여기서도 낸다. */}
         <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
           {refreshing
             ? "통합 고객 목록을 새로고치는 중입니다."
@@ -419,10 +479,13 @@ export default function CrmUnifiedCustomersClient() {
               : loading
                 ? "통합 고객 목록을 불러오는 중입니다."
                 : error
-                  ? "통합 고객 목록을 불러오지 못했습니다."
+                  ? ""
                   : data
                     ? `통합 고객 ${data.summary.total.toLocaleString("ko-KR")}명 결과를 불러왔습니다.`
                     : ""}
+        </div>
+        <div className="sr-only" role="alert" aria-atomic="true">
+          {error && !loading && !refreshing ? `조회 실패: ${error}` : ""}
         </div>
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -440,8 +503,9 @@ export default function CrmUnifiedCustomersClient() {
             <button
               type="button"
               onClick={() => void loadPage(0, { force: true })}
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:cursor-not-allowed disabled:opacity-60"
               disabled={refreshing}
+              aria-busy={refreshing || undefined}
             >
               <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
               새로고침
@@ -557,44 +621,50 @@ export default function CrmUnifiedCustomersClient() {
           />
         )}
 
+        {/* 조회 실패(danger) · 갱신 실패/부분 데이터/담당자 매핑(warning) — 톤은 status-tone SSOT.
+            목록 자체를 못 불러온 것과 '이전 결과가 남아 있는 갱신 실패'·참고 경고를 색과 role로 가른다. */}
         {error ? (
-          <div
-            className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] font-medium text-[#B85C33]"
-            role="alert"
-            aria-live="assertive"
-          >
-            <span>{error}</span>
-            <button
-              type="button"
-              onClick={() => void loadPage(0, { force: true })}
-              disabled={loading || refreshing}
-              className="inline-flex items-center justify-center rounded-lg border border-[#F6D5C5] bg-white px-3 text-[12px] font-bold text-[#B85C33] transition-colors hover:bg-[#FEF3EE] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              다시 시도
-            </button>
-          </div>
+          <CrmNoticeBanner
+            tone="danger"
+            className="mb-4"
+            title="조회 실패"
+            message={error}
+            action={{ label: "다시 시도", onClick: () => void loadPage(0, { force: true }), pending: loading || refreshing }}
+            onDismiss={() => setError(null)}
+          />
+        ) : null}
+
+        {refreshFailure ? (
+          <CrmNoticeBanner
+            tone="warning"
+            className="mb-4"
+            title="갱신 실패 — 이전 결과 표시 중"
+            message={
+              <>
+                {refreshFailure.message}
+                {formatShownAt(data?.generatedAt) ? ` · 표시 중인 목록은 ${formatShownAt(data?.generatedAt)} 기준` : null}
+              </>
+            }
+            action={{
+              label: "다시 시도",
+              onClick: () => void loadPage(refreshFailure.retryOffset, { force: true, append: refreshFailure.retryAppend }),
+              pending: loading || loadingMore || refreshing,
+            }}
+            onDismiss={() => setRefreshFailure(null)}
+          />
         ) : null}
 
         {data?.sources.warnings.length ? (
-          <div
-            className="mb-4 flex items-start gap-2 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] text-[#B85C33]"
-            role="status"
-            aria-live="polite"
-          >
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>{data.sources.warnings.join(" ")}</span>
-          </div>
+          <CrmNoticeBanner
+            tone="warning"
+            className="mb-4"
+            title="일부 원천 참고 지연"
+            message={data.sources.warnings.join(" ")}
+          />
         ) : null}
 
         {ownerHealth?.ok === false && ownerHealth.message ? (
-          <div
-            className="mb-4 flex items-start gap-2 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] text-[#B85C33]"
-            role="status"
-            aria-live="polite"
-          >
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>{ownerHealth.message}</span>
-          </div>
+          <CrmNoticeBanner tone="warning" className="mb-4" title="담당자 매핑 참고" message={ownerHealth.message} />
         ) : null}
 
         <CustomerResultsSection

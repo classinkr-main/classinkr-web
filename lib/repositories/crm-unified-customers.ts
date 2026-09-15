@@ -94,6 +94,13 @@ export interface CrmUnifiedCustomersOptions {
   limit?: number
   offset?: number
   now?: Date
+  /**
+   * 새로고침(?force=1) — 소스 스냅샷 Data Cache(unstable_cache 60초)를 읽지 않고 신선하게
+   * 재수집한 뒤 태그를 즉시 하드 만료한다. 홈 우선순위 큐(getCrmPriorityQueue({ force }))와
+   * 같은 계약(Wave 0 H1). 클라이언트 '새로고침'·리드 등록 직후 재조회가 등록 전 스냅샷을
+   * 최대 60초 돌려받던 결함(C1)을 막는다.
+   */
+  bypassCache?: boolean
 }
 
 export interface CrmUnifiedCustomers {
@@ -160,10 +167,12 @@ function formatCNY(value: number | null | undefined) {
   return `¥${amount.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}`
 }
 
+// 전환 고객(자체 DB) 계약·미수 — 같은 열의 ¥잔액·$오더와 나란히 놓이므로 통화 기호(₩)를
+// 라벨 안에 포함한다(UX 규약 4). "원" 접미사만으로는 외부 CRM 값과 원화가 구분되지 않았다.
 function formatKRW(value: number | null | undefined) {
   const amount = Number(value ?? 0)
   if (!amount) return null
-  return `${Math.round(amount).toLocaleString("ko-KR")}원`
+  return `₩${Math.round(amount).toLocaleString("ko-KR")}`
 }
 
 function leadName(lead: LeadRecord) {
@@ -384,7 +393,8 @@ function computeHealthDistribution(
 // - 모든 소스가 성공했을 때만 저장(NEO의 `if (value.ok)`와 동일 원칙) — 부분 실패
 //   스냅샷을 60초 고정하지 않고 다음 요청이 즉시 재시도한다. unstable_cache는 throw한
 //   호출을 캐시에 쓰지 않으므로(성공 값만 저장), incomplete면 여기서 던져 이 성질을 지킨다.
-// - options.now가 주어진 호출(테스트·고정 시각)은 캐시를 읽지도 쓰지도 않는다.
+// - options.now가 주어진 호출(테스트·고정 시각)과 options.bypassCache(새로고침 ?force=1) 호출은
+//   캐시를 읽지도 쓰지도 않는다. bypassCache는 재수집 뒤 태그를 즉시 하드 만료한다.
 // - 리드 쓰기(lib/repositories/leads.ts의 invalidateLeadReadCaches)와 소스 링크 확정/해제/
 //   생성 라우트(app/api/admin/crm/source-links/*)가 이 태그를 revalidateTag(tag, "max")로
 //   건다 — 쓰기 직후 다음 읽기가 SWR로 재계산을 트리거한다.
@@ -702,7 +712,14 @@ export async function getCrmUnifiedCustomers(
   options: CrmUnifiedCustomersOptions = {}
 ): Promise<CrmUnifiedCustomers> {
   const now = options.now ?? new Date()
-  const snapshot = await getSourceSnapshot(now, options.now != null)
+  const bypassCache = options.bypassCache === true
+  const snapshot = await getSourceSnapshot(now, options.now != null || bypassCache)
+  if (bypassCache) {
+    // 새로고침 직후 다음 일반 읽기(다른 인스턴스 포함)가 낡은 스냅샷을 돌려주지 않게 태그를
+    // 즉시 하드 만료한다({ expire: 0 } = 즉시 만료, "max" = SWR) — 우선순위 큐 force 계약과 동일.
+    // 실패한 재수집 결과가 캐시에 쓰이는 일은 없다(force 경로는 unstable_cache를 거치지 않는다).
+    revalidateTag(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, { expire: 0 })
+  }
   const { leadsOk, neoAccountsOk, portalCustomersOk } = snapshot
   const warnings = [...snapshot.warnings]
 
@@ -876,9 +893,11 @@ export async function getCrmUnifiedCustomers(
 // computeHealthDistribution을 그대로 재사용해 getCrmUnifiedCustomers().healthDistribution과
 // 동일한 값을 낸다.
 export async function getCrmUnifiedHealthDistribution(
-  options: { now?: Date } = {}
+  options: { now?: Date; bypassCache?: boolean } = {}
 ): Promise<CrmHealthDistribution> {
   const now = options.now ?? new Date()
-  const snapshot = await getSourceSnapshot(now, options.now != null)
+  const bypassCache = options.bypassCache === true
+  const snapshot = await getSourceSnapshot(now, options.now != null || bypassCache)
+  if (bypassCache) revalidateTag(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, { expire: 0 })
   return computeHealthDistribution(snapshot.rows, now.getTime())
 }
