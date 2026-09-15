@@ -138,6 +138,11 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // 리드 중복 탐지 + 어드민 핫패스 인덱스(2026-09-02). 인덱스 전용 마이그레이션이라
   // 프로브의 한계는 SCHEMA_PROBES 쪽 주석 참고.
   "supabase/migrations/20260902_leads_dedupe_and_admin_hot_path_indexes.sql",
+  // 하드웨어 배송 예정 확정 v3(2026-09-14, 운영 적용 완료). 쓰기 RPC라 카탈로그로만 확인한다.
+  // 같은 줄기의 20260915_hardware_sample_showroom_status.sql 은 check 제약 값만 넓히는 변경이라
+  // REST·카탈로그 RPC 프로브로 확인할 방법이 없어 계약에 넣지 않는다 — 적용 확인은
+  // docs/active/hardware-scm-tab-reference.md §6 의 제약 조회로 한다.
+  "supabase/migrations/20260914_hardware_confirm_planned_v3.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -396,6 +401,18 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     severity: "warning",
     impact:
       "idx_crm_tasks_status_completed_at이 없어도 기능은 정상이나, /api/admin/crm/manager-report의 기간 내 완료 집계가 done 누적 전체 스캔이 되고 그 비용은 시간이 지날수록 커진다.",
+  },
+  // ── 하드웨어 배송 예정 확정 v3(2026-09-14) ─────────────────────────────
+  // 예정 행을 FOR UPDATE 로 잠그고 출고를 기록하는 쓰기 함수라 실행 프로브를 금지하고 pg_proc·권한만 본다.
+  {
+    kind: "rpc",
+    functionName: "confirm_hardware_planned_movement_v3",
+    label: "하드웨어 배송 예정 확정 v3(앱 계산 로트 배정·로트 미지정 허용) RPC",
+    catalogIdentityTypes: "uuid, text, date, integer, jsonb",
+    serviceRoleOnly: true,
+    migration: "supabase/migrations/20260914_hardware_confirm_planned_v3.sql",
+    impact:
+      "앱이 v2로 폴백하는데, v2는 lot_no 칸에서만 로트를 찾아 lot_no가 빈 예정 출고(운영 원장 전부)를 확정하지 못한다.",
   },
 ]
 

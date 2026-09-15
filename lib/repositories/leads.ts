@@ -292,9 +292,11 @@ class LeadQueryError extends Error {
 /**
  * 감사 2026-09-07 §7 — 등록 API가 조회 후 삽입(findLeadsByContacts → Promise.allSettled(saveLead))
  * 하는 사이 동시 요청이 끼어들면 같은 연락처가 두 번 저장될 수 있다. DB 유니크 제약
- * (supabase/migrations/20260910_leads_contact_unique.sql, 적용은 별도)이 나중에 막아 주면,
+ * (supabase/migrations/20260910_leads_contact_unique_dedupe.sql)이 나중에 막아 주면,
  * 이 클래스로 "그 제약에 걸려 막힌 것"과 "진짜 저장 실패"를 구분해 호출부가 duplicates로
  * 셀 수 있게 한다. 마이그레이션이 아직 없는 환경에서는 이 경로 자체가 발생하지 않는다.
+ * ⚠️ 그 마이그레이션은 적용 보류다(2026-09-15) — 공개 리드 재제출까지 23505로 막아 Meta 웹훅 리드가
+ * DB에서 빠진다. docs/active/db-migration-runbook.md "적용 보류 중인 마이그레이션" 참고.
  */
 export class LeadDuplicateError extends Error {
   constructor(message = "이미 등록된 리드입니다(전화/이메일 일치).") {

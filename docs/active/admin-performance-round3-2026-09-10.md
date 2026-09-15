@@ -98,7 +98,7 @@ ADMIN_BASE_URL=https://<도메인> ADMIN_COOKIE='<cookie>' npm run measure:admin
 ### Phase 1 — DB 스냅샷을 stale-first로 (P0) — **구현 완료 (2026-09-10, hom_v4)**
 
 구현물:
-- `supabase/migrations/20260910_admin_crm_overview_stale_first.sql` — **작성만, 미적용.**
+- `supabase/migrations/20260910_admin_crm_overview_stale_first.sql` — **운영 적용 확인(2026-09-15 카탈로그 조회: `admin_crm_business_overview(p_max_age_seconds, p_force, p_hard_max_age_seconds)` 3인자만 존재).**
   기존 2인자 함수를 DROP 하고 `p_hard_max_age_seconds`(기본 3600)를 더한 3인자로 재생성한다.
   오버로드를 만들지 않은 이유는 PostgREST 가 인자 이름으로 후보를 고르기 때문이다(같은 이름
   함수가 둘이면 양쪽 다 PGRST203 으로 죽는다 — `feedback_postgrest_overload_ambiguity` 사고).
@@ -108,7 +108,7 @@ ADMIN_BASE_URL=https://<도메인> ADMIN_COOKIE='<cookie>' npm run measure:admin
   느려진다.
 - `tests/admin-crm/overview-stale-first.test.ts` — 위 계약 9건 고정.
 
-운영자 조치: `supabase/migrations/20260910_admin_crm_overview_stale_first.sql` 적용 + `npm run check:db`.
+운영자 조치: ~~`supabase/migrations/20260910_admin_crm_overview_stale_first.sql` 적용~~ 적용됨(위 확인). 같은 날짜의 `20260910_leads_contact_unique_dedupe.sql`은 **적용 보류**다 — [DB 마이그레이션 런북 §적용 보류](./db-migration-runbook.md#적용-보류-중인-마이그레이션).
 
 바꾼 계약:
 
