@@ -18,8 +18,8 @@ describe("LeadDrawer 저장 규약", () => {
     expect(source).not.toContain(".blur()")
   })
 
-  it("이산값(담당 select·팔로업 date)은 onChange 즉시 저장한다", () => {
-    expect(source).toContain("void onAssignedToChange(lead.id, next).catch(() => setAssignedTo(previous))")
+  it("팔로업 date 는 완성 값이면 onChange 즉시 저장하고, 담당 select 는 화살표 탐색이 끝난 뒤(ASSIGNED_TO_COMMIT_DELAY_MS) 커밋한다", () => {
+    expect(source).toContain("}, ASSIGNED_TO_COMMIT_DELAY_MS)")
     expect(source).toContain("void saveFollowUp(next)")
     // 미완성 날짜(badInput)·연도 타이핑 중간값(min 미달)은 저장하지 않는다.
     expect(source).toContain('min="2000-01-01"')
@@ -32,7 +32,7 @@ describe("LeadDrawer 저장 규약", () => {
   })
 
   it("닫기 시 미저장 값(메모·팔로업)이 있으면 확인을 받고, 실패한 팔로업은 명시 저장 버튼으로 재시도한다", () => {
-    expect(source).toContain('followUpUnsaved ? "팔로업 날짜" : null')
+    expect(source).toContain("listUnsavedDrawerFields({ notesDirty: dirty, ownerUnsaved, followUpUnsaved })")
     expect(source).toContain("닫으면 사라집니다. 닫을까요?")
     expect(source).toContain("onClick={() => void saveFollowUp(followUp)}")
     expect(source).toContain("저장되지 않았습니다 · 저장 버튼으로 다시 시도하세요")

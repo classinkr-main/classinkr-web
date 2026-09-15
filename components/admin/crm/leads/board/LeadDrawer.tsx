@@ -11,7 +11,10 @@ import {
   Plus, Save, ShieldCheck, Tag, Trash2, UserPlus, Users, X,
 } from "lucide-react"
 import LeadMessageCard from "@/components/admin/crm/LeadMessageCard"
+import SaveStateCaption, { type SaveState } from "@/components/admin/crm/SaveStateCaption"
+import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
 import { useDialogFocus } from "@/components/admin/use-dialog-focus"
+import { STATUS_TONE_TEXT_CLASS } from "@/lib/crm/status-tone"
 import type { CrmOwnerOption } from "@/components/admin/crm/useCrmOwners"
 import type { LeadActivity } from "@/lib/repositories/lead-activity"
 import type { LeadRecord, LeadStatus } from "@/lib/repositories/leads"
@@ -39,6 +42,19 @@ import {
 } from "../shared"
 import { ACTIVITY_EVENT_LABEL, formatActivityTime, providerLabel } from "./shared"
 import ContactLogForm from "./ContactLogForm"
+import {
+  ASSIGNED_TO_COMMIT_DELAY_MS,
+  createLatestRequestGuard,
+  listUnsavedDrawerFields,
+  nextLogIdAfterRemoval,
+  resolveStatusButtonAction,
+} from "./lead-drawer-save"
+
+// 부모(LeadsBoardClient.handleStatus)는 실패를 toast 로만 알리고 reject 하지 않는다. 성공은 lead.status
+// (부모 상태)가 시도한 값으로 따라왔는지로 판정하는데, 부모의 setLeads → selected 동기화 effect 를 거쳐
+// 한 렌더 뒤에 도착하므로 응답이 끝난 직후 잠깐은 옛 값이 보인다. 그 사이를 실패로 오판하지 않도록 유예한다.
+const STATUS_SETTLE_GRACE_MS = 200
+const SAVED_BADGE_MS = 2000
 
 export default function LeadDrawer({
   lead,
@@ -73,7 +89,7 @@ export default function LeadDrawer({
   crmOwners: CrmOwnerOption[]
   crmOwnerHealth: { ok: boolean; message: string | null } | null
   onClose: () => void
-  onStatusChange: (id: string, status: LeadStatus) => void
+  onStatusChange: (id: string, status: LeadStatus) => Promise<void> | void
   onNotesChange: (id: string, notes: string) => Promise<void>
   onFollowUpChange: (id: string, date: string) => Promise<void>
   onAssignedToChange: (id: string, name: string) => Promise<void>
@@ -93,6 +109,33 @@ export default function LeadDrawer({
   const [savingNotes, setSavingNotes] = useState(false)
   const [notesSaved, setNotesSaved] = useState(false)
   const [assignedTo, setAssignedTo] = useState(lead.assigned_to ?? "")
+  const savedOwner = lead.assigned_to ?? ""
+  // 담당자 저장 상태(leads-01·leads-08). change 는 로컬 값만 바꾸고, 커밋은 짧은 대기 뒤 마지막 값만 나간다.
+  // 부모(onAssignedToChange)는 실패를 reject 하므로 3단(saving/saved/failed)을 직접 판정하되, 세대 토큰으로
+  // "이 select 가 마지막으로 보낸 요청"의 결과만 반영한다 — 늦은 실패가 최신 성공값을 덮지 않는다.
+  const [ownerSave, setOwnerSave] = useState<SaveState>("idle")
+  const ownerGuardRef = useRef(createLatestRequestGuard())
+  const ownerCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const ownerSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingOwnerRef = useRef<string | null>(null)
+  const ownerInFlightRef = useRef(false)
+  const onAssignedToChangeRef = useRef(onAssignedToChange)
+  onAssignedToChangeRef.current = onAssignedToChange
+  // 상태 버튼 저장 상태(leads-01). 부모 handleStatus 는 reject 하지 않으므로 팔로업과 같은 "부모 상태가 따라왔는가"
+  // 판정을 쓴다. target 은 지금 저장 중이거나 마지막으로 실패한 대상 상태.
+  const [statusSave, setStatusSave] = useState<{ target: LeadStatus | null; state: SaveState }>({
+    target: null,
+    state: "idle",
+  })
+  const [statusSettled, setStatusSettled] = useState(0)
+  const statusGuardRef = useRef(createLatestRequestGuard())
+  // "종료" 단계 이탈 확인(UX 규약 1) — 부모의 벌크 종료와 같은 확인 다이얼로그를 드로어 안에서 연다.
+  const [closeStatusRequest, setCloseStatusRequest] = useState(false)
+  // 연락 기록 삭제 확인(leads-07). 물리 삭제라 되돌리기가 없으므로 다이얼로그로 막는다.
+  const [deleteLogRequest, setDeleteLogRequest] = useState<ContactLogRecord | null>(null)
+  const [deletingLog, setDeletingLog] = useState(false)
+  const logDeleteButtonRefs = useRef(new Map<string, HTMLButtonElement>())
+  const logsHeadingRef = useRef<HTMLParagraphElement | null>(null)
   const savedFollowUp = lead.follow_up_at ? lead.follow_up_at.slice(0, 10) : ""
   const [followUp, setFollowUp] = useState(savedFollowUp)
   const [savingFollowUp, setSavingFollowUp] = useState(false)
@@ -183,14 +226,125 @@ export default function LeadDrawer({
     return () => clearTimeout(timer)
   }, [savedFollowUp])
 
+  // ── 상태 버튼 저장(leads-01) ─────────────────────────────────────────
+  const commitStatus = useCallback(
+    async (target: LeadStatus) => {
+      const token = statusGuardRef.current.begin()
+      setStatusSave({ target, state: "saving" })
+      try {
+        await onStatusChange(lead.id, target)
+      } catch {
+        // 부모가 toast 로 알린다. 아래 settle 판정이 failed 로 떨어진다.
+      }
+      if (!statusGuardRef.current.isLatest(token)) return
+      setStatusSettled((n) => n + 1)
+    },
+    [lead.id, onStatusChange]
+  )
+
+  // settle 판정 — 요청이 끝난 뒤 lead.status 가 시도한 값이면 저장됨, 유예 시간 안에도 안 따라오면 실패.
+  useEffect(() => {
+    if (statusSettled === 0 || statusSave.state !== "saving" || !statusSave.target) return
+    const target = statusSave.target
+    if (lead.status === target) {
+      setStatusSave({ target, state: "saved" })
+      const timer = setTimeout(() => setStatusSave({ target: null, state: "idle" }), SAVED_BADGE_MS)
+      return () => clearTimeout(timer)
+    }
+    const timer = setTimeout(() => setStatusSave({ target, state: "failed" }), STATUS_SETTLE_GRACE_MS)
+    return () => clearTimeout(timer)
+  }, [statusSettled, statusSave.state, statusSave.target, lead.status])
+
+  // ── 담당자 저장(leads-01·leads-08) ───────────────────────────────────
+  const clearOwnerCommitTimer = () => {
+    if (ownerCommitTimerRef.current) {
+      clearTimeout(ownerCommitTimerRef.current)
+      ownerCommitTimerRef.current = null
+    }
+  }
+
+  const commitOwner = useCallback(
+    async (next: string) => {
+      clearOwnerCommitTimer()
+      pendingOwnerRef.current = null
+      if (ownerSavedTimerRef.current) {
+        clearTimeout(ownerSavedTimerRef.current)
+        ownerSavedTimerRef.current = null
+      }
+      if (next === savedOwner) {
+        // 저장된 값으로 되돌아온 선택 — 서버에 쓸 게 없다. 이전 실패 표시만 지운다.
+        setOwnerSave("idle")
+        return
+      }
+      const token = ownerGuardRef.current.begin()
+      ownerInFlightRef.current = true
+      setOwnerSave("saving")
+      try {
+        await onAssignedToChangeRef.current(lead.id, next)
+        if (!ownerGuardRef.current.isLatest(token)) return
+        ownerInFlightRef.current = false
+        setOwnerSave("saved")
+        ownerSavedTimerRef.current = setTimeout(() => setOwnerSave("idle"), SAVED_BADGE_MS)
+      } catch {
+        // 부모가 toast 로 원인을 알린다. 최신 요청이 아니면(그 뒤 다른 값이 나갔으면) 아무것도 되돌리지 않는다.
+        if (!ownerGuardRef.current.isLatest(token)) return
+        ownerInFlightRef.current = false
+        // 선택값은 유지하고 실패 캡션 + 다시 시도로 남긴다 — 조용히 이전 값으로 되돌리지 않는다.
+        setOwnerSave("failed")
+      }
+    },
+    [lead.id, savedOwner]
+  )
+
+  // change 는 로컬 값만 바꾼다. 키보드 화살표로 옵션을 훑는 동안 change 가 연달아 나도 마지막 값만
+  // ASSIGNED_TO_COMMIT_DELAY_MS 뒤에 커밋된다. Enter 는 즉시 커밋(명시 확정). blur 저장은 없다(설계 §4).
+  const scheduleOwnerCommit = (next: string) => {
+    setAssignedTo(next)
+    pendingOwnerRef.current = next
+    clearOwnerCommitTimer()
+    ownerCommitTimerRef.current = setTimeout(() => {
+      ownerCommitTimerRef.current = null
+      const pending = pendingOwnerRef.current
+      if (pending !== null) void commitOwner(pending)
+    }, ASSIGNED_TO_COMMIT_DELAY_MS)
+  }
+
+  const flushOwnerCommit = () => {
+    const pending = pendingOwnerRef.current
+    if (pending === null) return
+    void commitOwner(pending)
+  }
+
+  // 언마운트(닫기·다른 리드 선택) 시 대기 중인 담당자 값을 잃지 않는다 — 요청은 부모가 끝까지 처리한다.
+  useEffect(() => {
+    const leadId = lead.id
+    return () => {
+      clearOwnerCommitTimer()
+      if (ownerSavedTimerRef.current) clearTimeout(ownerSavedTimerRef.current)
+      const pending = pendingOwnerRef.current
+      pendingOwnerRef.current = null
+      if (pending !== null) void onAssignedToChangeRef.current(leadId, pending).catch(() => undefined)
+    }
+  }, [lead.id])
+
+  // 서버 정본(lead.assigned_to)이 바뀌었는데 이 select 가 아무것도 보내는 중이 아니면 그 값으로 맞춘다.
+  useEffect(() => {
+    if (ownerInFlightRef.current || pendingOwnerRef.current !== null) return
+    setAssignedTo(savedOwner)
+  }, [savedOwner])
+
+  const ownerUnsaved = ownerSave === "failed"
+
+  // 드로어 위에 확인 다이얼로그가 떠 있는 동안은 Escape·백드롭이 드로어까지 닫지 않는다.
+  const overlayOpenRef = useRef(false)
+  overlayOpenRef.current = closeStatusRequest || deleteLogRequest !== null
+
   // 닫기 공통 경로(Escape·백드롭·X) — blur로 저장을 흘려보내지 않는다(설계 §4). 저장되지 않은
-  // 값(메모·행사 연결·팔로업)이 있으면 조용히 버리지 않고 확인을 받는다; 취소하면 드로어에
+  // 값(메모·행사 연결·담당자·팔로업)이 있으면 조용히 버리지 않고 확인을 받는다; 취소하면 드로어에
   // 남아 명시 저장 버튼으로 다시 저장할 수 있다.
   const guardedClose = useCallback(() => {
-    const unsaved = [
-      dirty ? "메모·행사 연결" : null,
-      followUpUnsaved ? "팔로업 날짜" : null,
-    ].filter((item): item is string => Boolean(item))
+    if (overlayOpenRef.current) return
+    const unsaved = listUnsavedDrawerFields({ notesDirty: dirty, ownerUnsaved, followUpUnsaved })
     if (
       unsaved.length > 0 &&
       !window.confirm(`저장하지 않은 ${unsaved.join("·")}이(가) 있습니다. 닫으면 사라집니다. 닫을까요?`)
@@ -198,7 +352,31 @@ export default function LeadDrawer({
       return
     }
     onClose()
-  }, [dirty, followUpUnsaved, onClose])
+  }, [dirty, ownerUnsaved, followUpUnsaved, onClose])
+
+  // ── 연락 기록 삭제 확인(leads-07) ────────────────────────────────────
+  const runDeleteLogRequest = async () => {
+    if (!deleteLogRequest || deletingLog) return
+    const target = deleteLogRequest
+    const nextFocusId = nextLogIdAfterRemoval(logs.map((log) => log.id), target.id)
+    setDeletingLog(true)
+    try {
+      await onDeleteLog(target.id)
+    } finally {
+      setDeletingLog(false)
+      setDeleteLogRequest(null)
+    }
+    // 카드가 사라진 뒤 포커스를 다음 기록의 삭제 버튼, 없으면 섹션 heading 으로 옮긴다(UX 규약 7).
+    // 다이얼로그가 닫히며 원래 트리거(이미 사라진 X)로 포커스를 돌리려 하므로 한 프레임 뒤에 잡는다.
+    window.setTimeout(() => {
+      // 삭제가 실패해(부모가 toast 로 알림) 기록이 남아 있으면 그 삭제 버튼으로 돌아간다.
+      const own = logDeleteButtonRefs.current.get(target.id)
+      const nextButton = nextFocusId ? logDeleteButtonRefs.current.get(nextFocusId) : null
+      const focusTarget = own?.isConnected ? own : nextButton?.isConnected ? nextButton : null
+      if (focusTarget) focusTarget.focus()
+      else logsHeadingRef.current?.focus()
+    }, 0)
+  }
 
   // Escape·Tab 포커스 트랩·이전 포커스 복귀 — 등록 모달과 같은 다이얼로그 규약(useDialogFocus).
   const drawerCloseButtonRef = useRef<HTMLButtonElement | null>(null)
@@ -506,34 +684,71 @@ export default function LeadDrawer({
             {/* 상태 변경 */}
             <div>
               <p className="text-[11px] font-semibold text-[#1a1a1a]/30 uppercase tracking-wide mb-2">상태</p>
-              <div className="grid grid-cols-2 gap-2">
-                {(Object.keys(STATUS_LABEL) as LeadStatus[]).map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => {
-                      if (s === "contacted" && lead.status === "new") {
-                        setShowLogForm(true)
-                        return
+              <div className="grid grid-cols-2 gap-2" role="group" aria-label="리드 상태" aria-describedby="lead-drawer-status-save">
+                {(Object.keys(STATUS_LABEL) as LeadStatus[]).map((s) => {
+                  const action = resolveStatusButtonAction(s, lead.status)
+                  const statusBusy = statusSave.state === "saving"
+                  const thisSaving = statusBusy && statusSave.target === s
+                  const thisConverting = action === "convert" && converting
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={async () => {
+                        if (action === "noop" || statusBusy || converting) return
+                        if (action === "contact-log") {
+                          setShowLogForm(true)
+                          return
+                        }
+                        if (action === "convert") {
+                          // 전환은 convert-v2(고객·딜 생성)로만 — 부모 확인 다이얼로그를 거친다(leads-03).
+                          setConverting(true)
+                          try {
+                            await onConvert(lead)
+                          } finally {
+                            setConverting(false)
+                          }
+                          return
+                        }
+                        if (action === "confirm-close") {
+                          setCloseStatusRequest(true)
+                          return
+                        }
+                        void commitStatus(s)
+                      }}
+                      title={
+                        action === "contact-log"
+                          ? "연락 기록을 저장하면 자동으로 연락중 상태가 됩니다."
+                          : action === "convert"
+                            ? "고객·거래 등록 절차로 전환합니다."
+                            : undefined
                       }
-                      onStatusChange(lead.id, s)
-                    }}
-                    title={
-                      s === "contacted" && lead.status === "new"
-                        ? "연락 기록을 저장하면 자동으로 연락중 상태가 됩니다."
-                        : undefined
-                    }
-                    aria-pressed={lead.status === s}
-                    className={`py-2 px-3 rounded-xl text-[12px] font-medium border transition-all ${
-                      lead.status === s
-                        ? `${STATUS_COLOR[s]} border-current`
-                        : "border-[#e8e8e4] text-[#1a1a1a]/40 hover:border-[#c8c8c4] hover:text-[#1a1a1a]/70"
-                    }`}
-                  >
-                    {STATUS_LABEL[s]}
-                  </button>
-                ))}
+                      aria-pressed={lead.status === s}
+                      aria-busy={thisSaving || thisConverting ? true : undefined}
+                      disabled={statusBusy || converting}
+                      className={`inline-flex min-h-11 items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-[12px] font-medium border transition-all disabled:cursor-not-allowed sm:min-h-0 ${
+                        lead.status === s
+                          ? `${STATUS_COLOR[s]} border-current`
+                          : "border-[#e8e8e4] text-[#615D59] hover:border-[#c8c8c4] hover:text-[#31302E] disabled:opacity-60"
+                      }`}
+                    >
+                      {thisSaving || thisConverting ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : null}
+                      {STATUS_LABEL[s]}
+                    </button>
+                  )
+                })}
               </div>
+              <SaveStateCaption
+                id="lead-drawer-status-save"
+                className="mt-1.5"
+                state={statusSave.state}
+                failedText={
+                  statusSave.target
+                    ? `"${STATUS_LABEL[statusSave.target]}" 상태를 저장하지 못했습니다`
+                    : "상태를 저장하지 못했습니다"
+                }
+                onRetry={statusSave.target ? () => void commitStatus(statusSave.target as LeadStatus) : undefined}
+              />
             </div>
 
             {/* 담당자 */}
@@ -542,12 +757,14 @@ export default function LeadDrawer({
               <select
                 value={assignedTo}
                 aria-label="리드 담당자"
+                aria-describedby="lead-drawer-owner-save"
+                aria-busy={ownerSave === "saving" ? true : undefined}
                 disabled={crmOwnerHealth?.ok !== true || crmOwners.length === 0}
-                onChange={(event) => {
-                  const previous = assignedTo
-                  const next = event.target.value
-                  setAssignedTo(next)
-                  void onAssignedToChange(lead.id, next).catch(() => setAssignedTo(previous))
+                // change 는 로컬 값만 — 화살표로 목록을 훑는 동안 서버 배정이 나가지 않는다(leads-08).
+                onChange={(event) => scheduleOwnerCommit(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" || event.nativeEvent.isComposing) return
+                  flushOwnerCommit()
                 }}
                 className="h-11 w-full rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-3 text-[13px] text-[#111110] outline-none transition-all focus:border-[#084734] focus:bg-white focus:ring-2 focus:ring-[#084734]/15 disabled:cursor-not-allowed disabled:opacity-55"
               >
@@ -561,8 +778,16 @@ export default function LeadDrawer({
                   </option>
                 ))}
               </select>
+              <SaveStateCaption
+                id="lead-drawer-owner-save"
+                className="mt-1.5"
+                state={ownerSave}
+                idleText={crmOwnerHealth?.ok === true && crmOwners.length > 0 ? "고르면 잠시 뒤 저장됩니다 · Enter로 바로 저장" : undefined}
+                failedText="담당자를 저장하지 못했습니다"
+                onRetry={() => void commitOwner(assignedTo)}
+              />
               {crmOwnerHealth?.ok !== true ? (
-                <p className="mt-1.5 text-[11px] leading-relaxed text-[#B85C33]">
+                <p className={`mt-1.5 text-[11px] leading-relaxed ${STATUS_TONE_TEXT_CLASS.danger}`}>
                   {crmOwnerHealth?.message ?? "담당자 정본 명단을 확인하는 중입니다."}
                 </p>
               ) : null}
@@ -616,17 +841,13 @@ export default function LeadDrawer({
                   </button>
                 ) : null}
               </div>
-              <p id="lead-drawer-follow-up-status" className="mt-1 text-[11px]" aria-live="polite">
-                {savingFollowUp ? (
-                  <span className="text-[#1a1a1a]/45">저장 중...</span>
-                ) : followUpSaved ? (
-                  <span className="text-[#084734]">저장됨</span>
-                ) : followUpUnsaved ? (
-                  <span className="text-[#B85C33]">저장되지 않았습니다 · 저장 버튼으로 다시 시도하세요</span>
-                ) : (
-                  <span className="text-[#1a1a1a]/35">날짜를 고르면 바로 저장됩니다</span>
-                )}
-              </p>
+              <SaveStateCaption
+                id="lead-drawer-follow-up-status"
+                className="mt-1"
+                state={savingFollowUp ? "saving" : followUpSaved ? "saved" : followUpUnsaved ? "failed" : "idle"}
+                idleText="날짜를 고르면 바로 저장됩니다"
+                failedText="저장되지 않았습니다 · 저장 버튼으로 다시 시도하세요"
+              />
               {followUp && new Date(followUp) <= new Date() && (
                 <p className="text-[11px] text-[#7A520F] mt-1">⚠ 팔로업 날짜가 지났습니다</p>
               )}
@@ -636,7 +857,11 @@ export default function LeadDrawer({
           {/* 연락 로그 */}
           <div className="px-6 py-4 border-b border-[#e8e8e4]">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-[11px] font-semibold text-[#1a1a1a]/30 uppercase tracking-wide">
+              <p
+                ref={logsHeadingRef}
+                tabIndex={-1}
+                className="text-[11px] font-semibold text-[#1a1a1a]/30 uppercase tracking-wide outline-none"
+              >
                 연락 기록 {logs.length > 0 && <span className="text-[#084734]">({logs.length})</span>}
               </p>
               <button
@@ -697,12 +922,18 @@ export default function LeadDrawer({
                       )}
                     </div>
                     <button
+                      ref={(node) => {
+                        if (node) logDeleteButtonRefs.current.set(log.id, node)
+                        else logDeleteButtonRefs.current.delete(log.id)
+                      }}
                       type="button"
-                      onClick={() => onDeleteLog(log.id)}
+                      // 확인 없이 물리 삭제되던 경로(leads-07) — 다이얼로그를 거친다.
+                      onClick={() => setDeleteLogRequest(log)}
+                      disabled={deletingLog}
                       aria-label={`${formatActivityTime(log.contacted_at)} 연락 기록 삭제`}
-                      className="shrink-0 p-1 text-[#1a1a1a]/25 opacity-100 transition-all hover:text-[#B85C33] sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                      className={"ml-3 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg p-1 text-[#615D59] opacity-100 transition-all disabled:opacity-40 sm:ml-0 sm:min-h-0 sm:min-w-0 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 hover:text-[#B43E3E]"}
                     >
-                      <X className="w-3 h-3" />
+                      <X className="w-3 h-3" aria-hidden />
                     </button>
                   </div>
                 ))}
@@ -808,7 +1039,7 @@ export default function LeadDrawer({
           <button
             type="button"
             onClick={() => onDelete(lead.id)}
-            className="flex items-center gap-2 text-[12px] text-[#B85C33] hover:text-[#9A4A27] transition-colors"
+            className={`flex min-h-11 items-center gap-2 text-[12px] transition-colors hover:underline sm:min-h-0 ${STATUS_TONE_TEXT_CLASS.danger}`}
           >
             <Trash2 className="w-3.5 h-3.5" />이 리드 삭제
           </button>
@@ -854,6 +1085,58 @@ export default function LeadDrawer({
           </div>
         </div>
       </div>
+
+      {/* "종료" 단계 이탈 확인 — 부모의 벌크 종료(requestBulkStatus)와 같은 다이얼로그 규약. */}
+      <DeleteConfirmDialog
+        open={closeStatusRequest}
+        onClose={() => setCloseStatusRequest(false)}
+        onConfirm={() => {
+          setCloseStatusRequest(false)
+          void commitStatus("closed")
+        }}
+        loading={statusSave.state === "saving"}
+        destructive={false}
+        title="리드를 종료할까요?"
+        description={
+          <>
+            &ldquo;{getLeadDisplayName(lead)}&rdquo; 리드를 <strong>종료</strong> 상태로 바꿉니다. 활성 파이프라인·팔로업 큐에서
+            빠지며, 필요하면 나중에 상태 버튼으로 다시 열 수 있습니다.
+          </>
+        }
+        confirmLabel="종료로 변경"
+        confirmLoadingLabel="변경 중..."
+      />
+
+      {/* 연락 기록 삭제 확인(leads-07) — 물리 삭제라 되돌리기가 없다. */}
+      <DeleteConfirmDialog
+        open={deleteLogRequest !== null}
+        onClose={() => {
+          if (!deletingLog) setDeleteLogRequest(null)
+        }}
+        onConfirm={() => void runDeleteLogRequest()}
+        loading={deletingLog}
+        title="이 연락 기록을 삭제할까요?"
+        description={
+          deleteLogRequest ? (
+            <>
+              {formatActivityTime(deleteLogRequest.contacted_at)} · {LOG_TYPE_LABEL[deleteLogRequest.type]}
+              {deleteLogRequest.result ? ` — ${LOG_RESULT_LABEL[deleteLogRequest.result]}` : ""}
+              {deleteLogRequest.contacted_by ? ` · ${deleteLogRequest.contacted_by}` : ""}
+              {deleteLogRequest.notes ? (
+                <>
+                  <br />
+                  <span className="text-[#615D59]">
+                    {deleteLogRequest.notes.length > 80 ? `${deleteLogRequest.notes.slice(0, 80)}…` : deleteLogRequest.notes}
+                  </span>
+                </>
+              ) : null}
+            </>
+          ) : null
+        }
+        irreversibleNote="되돌릴 수 없습니다 — 삭제된 연락 기록은 복구되지 않습니다."
+        confirmLabel="삭제"
+        confirmLoadingLabel="삭제 중..."
+      />
     </>
   )
 }
