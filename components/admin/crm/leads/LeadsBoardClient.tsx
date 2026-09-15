@@ -262,6 +262,11 @@ export default function LeadsBoardClient() {
   const [deleteLeadsBusy, setDeleteLeadsBusy] = useState(false)
   // 벌크 "종료"·"배정"도 같은 요청 상태 패턴 — window.confirm 을 이 화면에서 완전히 걷는다(UX 규약 1).
   const [closeLeadsRequest, setCloseLeadsRequest] = useState<{ ids: string[] } | null>(null)
+  // 종료·배정 확인 다이얼로그 전용 busy — bulkWorking과 분리한다. onConfirm이 요청 상태를
+  // finally에서만 비워 처리가 끝날 때까지 다이얼로그가 열려 있고, 그 사이 loading이 실제로
+  // 화면에 보인다(리뷰 발견 2 — 예전엔 onConfirm이 즉시 request를 null로 비워 다이얼로그가
+  // bulkWorking(true)이 찍히기 전에 닫혀 loading이 보일 기회가 없었다).
+  const [closeLeadsBusy, setCloseLeadsBusy] = useState(false)
   const [bulkAssignRequest, setBulkAssignRequest] = useState<{
     ids: string[]
     ownerKey: string
@@ -269,9 +274,14 @@ export default function LeadsBoardClient() {
     ownerLabel: string
     profileText: string
   } | null>(null)
+  const [bulkAssignBusy, setBulkAssignBusy] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
   // 행·카드가 사라지는 처리(삭제) 뒤 포커스를 목록 섹션으로 옮긴다(UX 규약 7).
   const listSectionRef = useRef<HTMLDivElement>(null)
+  // 우하단 고정 스택(전환 완료 패널·토스트) 실측용 — syncWarning 배너를 bottom-44/28/24/6 같은
+  // 추정치가 아니라 실제 렌더된 상단 좌표 위에 얹기 위해 각 패널의 DOM 노드를 잡는다(리뷰 발견 3).
+  const convertResultPanelRef = useRef<HTMLDivElement>(null)
+  const toastMeasureRef = useRef<HTMLDivElement>(null)
   const { owners: crmOwners, health: crmOwnerHealth } = useCrmOwners()
   // Compass(마케팅팀 앱) 콜 상태 병기 — 읽기 전용 오버레이. 우리 리드 상태는 건드리지 않는다.
   const compass = useCompassOverlay(leads)
@@ -332,6 +342,39 @@ export default function LeadsBoardClient() {
   useEffect(() => () => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
   }, [])
+
+  // syncWarning 배너의 세로 오프셋 — bottom-44/28/24/6 네 값 중 하나를 토스트·전환 패널의
+  // "있음/없음" 조합만으로 고르면, 토스트가 action 버튼·긴 메시지로 여러 줄이 되거나 전환
+  // 패널 높이가 늘어날 때 두 고정 패널이 겹칠 수 있었다(리뷰 발견 3). 실제 렌더된 두 패널의
+  // 상단 좌표를 재서 그 위에 얹는 값으로 대체한다.
+  const [syncWarningOffsetPx, setSyncWarningOffsetPx] = useState(24)
+  useEffect(() => {
+    if (!syncWarning) return
+    const GAP_PX = 12
+    const FALLBACK_PX = 24
+    const measure = () => {
+      const tops: number[] = []
+      const toastEl = toastMeasureRef.current?.firstElementChild as HTMLElement | null
+      if (toastEl) tops.push(toastEl.getBoundingClientRect().top)
+      if (convertResultPanelRef.current) tops.push(convertResultPanelRef.current.getBoundingClientRect().top)
+      if (tops.length === 0) {
+        setSyncWarningOffsetPx(FALLBACK_PX)
+        return
+      }
+      setSyncWarningOffsetPx(Math.max(FALLBACK_PX, window.innerHeight - Math.min(...tops) + GAP_PX))
+    }
+    measure()
+    const observedEls = [toastMeasureRef.current?.firstElementChild, convertResultPanelRef.current].filter(
+      (el): el is HTMLElement => Boolean(el)
+    )
+    const observer = new ResizeObserver(measure)
+    observedEls.forEach((el) => observer.observe(el))
+    window.addEventListener("resize", measure)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener("resize", measure)
+    }
+  }, [syncWarning, toast, convertResult])
 
   // 성공은 3초 뒤 자동으로 걷고, 실패는 원인을 읽고 닫을 때까지 남긴다(UX 규약 3 — 실패는 자동
   // 소멸하지 않는다). 둘 다 X 닫기를 갖고, action(재시도·되돌리기)은 선택.
@@ -682,7 +725,9 @@ export default function LeadsBoardClient() {
       // 저장 성공과 상태 동기화 경고를 분리한다 — 경고를 실패 톤 토스트로 내면 "저장 실패"로
       // 오인해 같은 기록을 다시 넣는다(leads-04). 저장은 성공 토스트, 경고는 warning 배너.
       showToast("연락 기록이 저장되었습니다.")
-      setSyncWarning(data.warning ? `상태 동기화 실패: ${data.warning}` : null)
+      // 새 경고가 있을 때만 갱신한다 — 이번 저장에 경고가 없다고 해서 아직 사용자가 닫지 않은
+      // 이전 경고를 조용히 지우지 않는다(UX 규약 3: 실패·경고는 자동 소멸하지 않는다. 리뷰 발견 4).
+      if (data.warning) setSyncWarning(`상태 동기화 실패: ${data.warning}`)
     } catch (err) {
       const error = err instanceof Error ? err : new Error("연락 기록을 저장하지 못했습니다.")
       showToast(error.message, "error")
@@ -976,7 +1021,15 @@ export default function LeadsBoardClient() {
       if (deletedIds.length > 0) {
         const deletedIdSet = new Set(deletedIds)
         setLeads((prev) => prev.filter((lead) => !deletedIdSet.has(lead.id)))
-        setSelected((prev) => (prev && deletedIdSet.has(prev.id) ? null : prev))
+        // 드로어가 보여주던 리드가 삭제 대상에 포함되면 closeSelectedLead()로 닫는다 — 그냥
+        // setSelected(null)만 하면 closeSelectedLead의 url.searchParams.delete("lead")를 타지
+        // 않아 이미 삭제된 리드를 가리키는 ?lead= 가 주소창에 남는다(리뷰 발견 1). selected가
+        // (드물게) 이 클로저와 어긋나는 경우를 대비해 함수형 폴백도 유지한다.
+        if (selected && deletedIdSet.has(selected.id)) {
+          closeSelectedLead()
+        } else {
+          setSelected((prev) => (prev && deletedIdSet.has(prev.id) ? null : prev))
+        }
         setSelectedLeadIds((prev) => {
           const next = new Set(prev)
           deletedIds.forEach((id) => next.delete(id))
@@ -1012,17 +1065,28 @@ export default function LeadsBoardClient() {
   }
 
   const runCloseLeadsRequest = async () => {
-    if (!closeLeadsRequest || bulkWorking) return
-    const ids = closeLeadsRequest.ids
-    setCloseLeadsRequest(null)
-    await handleBulkStatus(ids, "closed")
+    if (!closeLeadsRequest || closeLeadsBusy) return
+    setCloseLeadsBusy(true)
+    try {
+      await handleBulkStatus(closeLeadsRequest.ids, "closed")
+    } finally {
+      // 삭제 플로우와 동일하게 finally에서만 요청을 비운다 — 다이얼로그가 처리가 끝날 때까지
+      // 열려 있어야 그 사이의 loading={closeLeadsBusy}이 실제로 화면에 보인다(리뷰 발견 2).
+      setCloseLeadsBusy(false)
+      setCloseLeadsRequest(null)
+    }
   }
 
   const runBulkAssignRequest = async () => {
-    if (!bulkAssignRequest || bulkWorking) return
+    if (!bulkAssignRequest || bulkAssignBusy) return
     const request = bulkAssignRequest
-    setBulkAssignRequest(null)
-    await runBulkAssign(request.ids, request.ownerKey, request.preview)
+    setBulkAssignBusy(true)
+    try {
+      await runBulkAssign(request.ids, request.ownerKey, request.preview)
+    } finally {
+      setBulkAssignBusy(false)
+      setBulkAssignRequest(null)
+    }
   }
 
   // 삭제 진입점 — 행 액션·드로어·벌크 바 전부 여기를 거친다. 다이얼로그의 onConfirm이 실제 실행.
@@ -2095,7 +2159,10 @@ export default function LeadsBoardClient() {
 
       {/* 전환 완료 패널 — 생성/재사용된 딜·고객으로 바로 이동 */}
       {convertResult && (
-        <div className="fixed bottom-6 right-6 z-[60] w-[320px] rounded-xl border border-black/[0.08] bg-white p-4 shadow-xl">
+        <div
+          ref={convertResultPanelRef}
+          className="fixed bottom-6 right-6 z-[60] w-[320px] rounded-xl border border-black/[0.08] bg-white p-4 shadow-xl"
+        >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="text-[13px] font-semibold text-[#1a1a1a]">
@@ -2206,9 +2273,11 @@ export default function LeadsBoardClient() {
       />
       <DeleteConfirmDialog
         open={closeLeadsRequest !== null}
-        onClose={() => setCloseLeadsRequest(null)}
+        onClose={() => {
+          if (!closeLeadsBusy) setCloseLeadsRequest(null)
+        }}
         onConfirm={() => void runCloseLeadsRequest()}
-        loading={bulkWorking}
+        loading={closeLeadsBusy}
         destructive={false}
         title="리드 종료 처리"
         description={
@@ -2221,9 +2290,11 @@ export default function LeadsBoardClient() {
       />
       <DeleteConfirmDialog
         open={bulkAssignRequest !== null}
-        onClose={() => setBulkAssignRequest(null)}
+        onClose={() => {
+          if (!bulkAssignBusy) setBulkAssignRequest(null)
+        }}
         onConfirm={() => void runBulkAssignRequest()}
-        loading={bulkWorking}
+        loading={bulkAssignBusy}
         destructive={false}
         title="담당자 일괄 배정"
         description={
@@ -2240,17 +2311,22 @@ export default function LeadsBoardClient() {
         confirmLoadingLabel="배정 중..."
       />
 
-      {/* 연락 기록 저장 성공 + 상태 동기화 경고 병기(leads-04) — 드로어 위(z-70), warning 톤, 닫기 전까지 유지. */}
+      {/* 연락 기록 저장 성공 + 상태 동기화 경고 병기(leads-04) — 드로어 위(z-70), warning 톤, 닫기 전까지 유지.
+          위치는 bottom-44/28/24/6 추정치가 아니라 toastMeasureRef·convertResultPanelRef로 실측한
+          syncWarningOffsetPx — 토스트·전환 패널이 길어져도 겹치지 않는다(리뷰 발견 3). */}
       {syncWarning ? (
-        <CrmNoticeBanner
-          tone="warning"
-          title="연락 기록은 저장되었습니다"
-          message={syncWarning}
-          className={`fixed left-4 right-4 z-[70] shadow-xl sm:left-auto sm:right-6 sm:w-[360px] ${
-            toast ? (convertResult ? "bottom-44" : "bottom-24") : convertResult ? "bottom-28" : "bottom-6"
-          }`}
-          onDismiss={() => setSyncWarning(null)}
-        />
+        <div
+          className="fixed left-4 right-4 z-[70] sm:left-auto sm:right-6 sm:w-[360px]"
+          style={{ bottom: syncWarningOffsetPx }}
+        >
+          <CrmNoticeBanner
+            tone="warning"
+            title="연락 기록은 저장되었습니다"
+            message={syncWarning}
+            className="shadow-xl"
+            onDismiss={() => setSyncWarning(null)}
+          />
+        </div>
       ) : null}
 
       {/* 항상 마운트된 라이브 리전 — 성공 토스트(role=status)는 뜨는 순간 노드가 생겨 첫 알림을
@@ -2259,13 +2335,15 @@ export default function LeadsBoardClient() {
         {toast?.type === "success" ? toast.msg : ""}
       </div>
       {toast && (
-        <Toast
-          msg={toast.msg}
-          type={toast.type}
-          raised={Boolean(convertResult)}
-          action={toast.action}
-          onDismiss={dismissToast}
-        />
+        <div ref={toastMeasureRef}>
+          <Toast
+            msg={toast.msg}
+            type={toast.type}
+            raised={Boolean(convertResult)}
+            action={toast.action}
+            onDismiss={dismissToast}
+          />
+        </div>
       )}
     </div>
   )
