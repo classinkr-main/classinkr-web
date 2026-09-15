@@ -101,15 +101,21 @@ interface Props {
 
 /**
  * 하단 고정 알림. `key`로 출처를 구분해, 새 시도가 같은 출처의 이전 실패만 걷어내게 한다.
- *  - load: 360 조회 실패(danger) · mutation: 쓰기 실패(danger) · revalidate: SWR 갱신 실패(warning, 표시 값은 유지).
+ *  - load: 360 조회 실패(danger) · mutation: 쓰기 실패(danger) · revalidate: SWR 갱신 실패(warning, 표시 값은 유지)
+ *  - task-undo: 할 일 완료 성공 + 8초 되돌리기(success, UX 규약 3 — 비가역 전이).
  */
 interface DrawerNotice {
-  key: "load" | "mutation" | "revalidate"
-  tone: "danger" | "warning"
+  key: "load" | "mutation" | "revalidate" | "task-undo"
+  tone: "danger" | "warning" | "success"
   title: string
   message: string
   retry?: () => void
+  /** 8초 되돌리기 창 안에서만 채운다 — retry와 동시에 쓰지 않는다. */
+  undo?: () => void
 }
+
+/** 비가역 전이(할 일 완료) 되돌리기 창(UX 규약 3) — CrmWeekAheadPanel.WEEK_AHEAD_UNDO_WINDOW_MS와 같은 값. */
+const TASK_UNDO_WINDOW_MS = 8_000
 
 /** 저장됨 캡션이 idle로 돌아가기까지. */
 const DEAL_SAVED_RESET_MS = 2_200
@@ -206,6 +212,8 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
   // 딜 행 인라인 저장 상태(단계·금액).
   const [dealSave, setDealSave] = useState<Record<string, DealRowSaveState>>({})
+  // 할 일 완료 되돌리기(UX 규약 3) 진행 중 — 버튼 연타 방지.
+  const [taskUndoPending, setTaskUndoPending] = useState(false)
   // 'NEO 등록됨' 수동 연결 패널 — 홈페이지 유입(site) 리드 전용.
   const [neoLinkOpen, setNeoLinkOpen] = useState(false)
   const [neoLinkBusy, setNeoLinkBusy] = useState(false)
@@ -225,6 +233,17 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
     dataRef.current = data
   }, [data])
   const dealSavedTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  // [blocker] 최신 customerKey — mutation 핸들러 클로저가 await 이후에도 여전히 '지금 화면에 떠 있는
+  // 고객'을 향해 쓰는지 확인한다. loadSeqRef는 mutation 성공 뒤 revalidate()도 올려, 같은 고객에
+  // 대한 동시 mutation끼리도 서로를 오탐(false-positive)으로 버리게 되므로 여기서는 쓰지 않고
+  // customerKey identity로만 세대를 가른다 — 고객 전환에만 반응하고 배경 재검증에는 반응하지 않는다.
+  const customerKeyRef = useRef(customerKey)
+  useEffect(() => {
+    customerKeyRef.current = customerKey
+  })
+  const isSameCustomer = useCallback((key: string | null) => customerKeyRef.current === key, [])
+  // 할 일 완료 되돌리기(UX 규약 3) 배너의 8초 타이머 — showTaskUndoNotice 참조.
+  const taskUndoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // dirty 통지는 ref 경유 — 부모가 인라인 함수를 넘겨도 콜백 재생성/재구독 루프가 없게.
   const onDirtyChangeRef = useRef(onDirtyChange)
@@ -310,7 +329,8 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
       if (options?.background) setSyncing(true)
       else {
         setLoading(true)
-        setNotice((prev) => (prev && prev.key !== "mutation" ? null : prev))
+        // mutation 실패 배너·완료 되돌리기 배너(task-undo)는 명시 새로고침으로도 조건 없이 걷지 않는다.
+        setNotice((prev) => (prev && prev.key !== "mutation" && prev.key !== "task-undo" ? null : prev))
       }
       // expanded일 때는 '전체 활동 보기'로 펼친 50건을 유지하도록 같은 URL/캐시키로 재조회한다.
       const base = options?.expanded ? `${url}?eventsLimit=50` : url
@@ -331,13 +351,19 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
               return
             }
             if (error !== undefined) {
-              setNotice({
-                key: "revalidate",
-                tone: "warning",
-                title: "최신 정보를 받지 못했습니다",
-                message: `${toErrorMessage(error, "네트워크 오류")} · 표시 중인 값은 마지막 조회 시각 기준입니다.`,
-                retry: () => void loadRef.current({ expanded: options?.expanded, background: true }),
-              })
+              // [major] 방금 뜬 mutation 실패 배너(재시도 액션 포함)를 이 배경 갱신 지연 경고가
+              // 덮어쓰지 않는다 — 313행의 foreground 가드와 같은 보호.
+              setNotice((prev) =>
+                prev?.key === "mutation" || prev?.key === "task-undo"
+                  ? prev
+                  : {
+                      key: "revalidate",
+                      tone: "warning",
+                      title: "최신 정보를 받지 못했습니다",
+                      message: `${toErrorMessage(error, "네트워크 오류")} · 표시 중인 값은 마지막 조회 시각 기준입니다.`,
+                      retry: () => void loadRef.current({ expanded: options?.expanded, background: true }),
+                    }
+              )
             }
           },
         })
@@ -345,12 +371,29 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
         setData(applyC360Overrides(next, overridesRef.current, Date.now()))
       } catch (err) {
         if (!isLive()) return
-        setNotice({
-          key: "load",
-          tone: "danger",
-          title: "고객 정보를 불러오지 못했습니다",
-          message: toErrorMessage(err, "네트워크 오류"),
-          retry: () => void loadRef.current(options),
+        // [major] adminFetchJsonCachedInternal은 캐시가 비어 있으면(clearAdminRequestCache 직후인
+        // revalidate() 재조회가 그렇다) stale-serve 경로(onRevalidated)를 타지 않고 곧장 이 catch로
+        // 온다. background(=revalidate() 경유)면 방금 성공한 mutation을 실패로 오인하게 만드는
+        // 무거운 danger '고객 정보를 불러오지 못했습니다' 대신, load()의 onRevalidated 실패와 같은
+        // 톤(warning/revalidate)으로 낮춘다. 두 분기 모두 mutation·task-undo 배너는 덮어쓰지 않는다.
+        setNotice((prev) => {
+          if (prev?.key === "mutation" || prev?.key === "task-undo") return prev
+          if (options?.background) {
+            return {
+              key: "revalidate",
+              tone: "warning",
+              title: "최신 정보를 받지 못했습니다",
+              message: `${toErrorMessage(err, "네트워크 오류")} · 표시 중인 값은 마지막 조회 시각 기준입니다.`,
+              retry: () => void loadRef.current(options),
+            }
+          }
+          return {
+            key: "load",
+            tone: "danger",
+            title: "고객 정보를 불러오지 못했습니다",
+            message: toErrorMessage(err, "네트워크 오류"),
+            retry: () => void loadRef.current(options),
+          }
         })
       } finally {
         if (isLive()) {
@@ -410,12 +453,38 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
     }
   }, [])
 
+  // 언마운트 시 할 일 완료 되돌리기 타이머 정리.
+  useEffect(
+    () => () => {
+      if (taskUndoTimerRef.current) clearTimeout(taskUndoTimerRef.current)
+    },
+    []
+  )
+
   // Escape 닫기 + Tab 포커스 트랩 + 이전 포커스 복귀를 공용 훅에 위임한다.
   // 직접 만든 ESC 리스너에는 트랩이 없어, aria-modal="true"를 선언해 놓고도 Tab이 백드롭 뒤
   // 배경 페이지 컨트롤로 새어 나갔다. 훅은 focusRef의 role="dialog" 조상을 트랩 범위로 잡는다.
   // 닫기 확인 다이얼로그(포털)가 열린 동안은 트랩·ESC를 내려놓는다 — 두 다이얼로그가 포커스를 뺏고 되뺏지 않게.
   const closeButtonRef = useRef<HTMLButtonElement | null>(null)
   useDialogFocus(closeConfirmOpen ? null : customerKey, requestClose, closeButtonRef)
+
+  // [minor] 닫기 확인을 '계속 작성'으로 취소하면 위 훅의 openKey가 null→customerKey로 되돌아가며
+  // 두 번째 effect(포커스 이동)가 다시 실행돼 focusRef(닫기 X 버튼)로 포커스를 강제 이동시킨다.
+  // use-dialog-focus.ts는 다른 다이얼로그 다수가 함께 쓰는 공용 훅이라 시그니처를 바꾸지 않고,
+  // 이 컴포넌트 안에서 확인 다이얼로그가 열리기 직전의 포커스를 잡아 뒀다가 취소 시 되돌린다.
+  // 이 effect는 useDialogFocus 호출 다음에 선언돼 있어(같은 컴포넌트의 훅은 선언 순서대로 effect가
+  // 실행된다) 훅의 강제 포커스 이동 뒤에 실행되어 그 결과를 덮어쓴다. Radix Dialog 자체의 비동기
+  // onCloseAutoFocus와의 경쟁까지는 여기서 보장하지 못한다(리뷰 확신도 중간 — 실기기 확인 필요).
+  const preConfirmFocusRef = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    if (closeConfirmOpen) {
+      preConfirmFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      return
+    }
+    const target = preConfirmFocusRef.current
+    preConfirmFocusRef.current = null
+    if (target && document.contains(target)) target.focus()
+  }, [closeConfirmOpen])
 
   // 배경 스크롤 잠금 — 드로어는 fixed라 배경 목록이 그대로 스크롤된다. 백드롭 위에서 휠·스와이프하면
   // 뒤 목록이 드로어 밑에서 밀려나가고, 닫았을 때 원래 자리가 아닌 곳에 서 있게 된다.
@@ -500,10 +569,15 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
   }, [load, url, eventsExpanded])
 
   // 로컬 patch 한 건을 화면과 덧씌우기 목록에 동시에 반영한다.
-  const applyLocal = useCallback((item: C360LocalOverride) => {
+  // [blocker] forKey — 이 patch를 만든 mutation이 시작된 customerKey. 호출 시점에 이미 다른
+  // 고객으로 전환돼 있으면(await 도중 전환) overridesRef에도 쌓지 않고 setData도 건너뛴다 —
+  // 그러지 않으면 이 override가 120초(C360_OVERRIDE_MS) 동안 새 고객 화면 위에 남아 배경
+  // 재검증마다 이전 고객의 레코드를 계속 재덧씌운다.
+  const applyLocal = useCallback((item: C360LocalOverride, forKey: string | null) => {
+    if (!isSameCustomer(forKey)) return
     overridesRef.current = [...pruneC360Overrides(overridesRef.current, Date.now()), item]
     setData((prev) => (prev ? applyC360Overrides(prev, [item], Date.now()) : prev))
-  }, [])
+  }, [isSameCustomer])
 
   const failMutation = useCallback((title: string, error: unknown, retry?: () => void, note?: string) => {
     const cause = toErrorMessage(error, "네트워크 오류")
@@ -542,6 +616,9 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
   const submitNeoLink = useCallback(
     async (pick: { targetId: string; targetLabel: string }) => {
       if (targetType !== "lead" || !entityId) return
+      // [blocker와 같은 근본 원인] await 도중 다른 고객으로 전환되면 이 setData가 새 고객의 crmRegistered를
+      // 잘못 뒤집을 수 있다 — 나머지 mutation 경로와 같은 방식으로 시작 시점 customerKey를 캡처해 지킨다.
+      const mutationKey = customerKey
       setNeoLinkBusy(true)
       setNeoLinkError(null)
       try {
@@ -549,6 +626,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
           method: "POST",
           body: JSON.stringify({ leadId: entityId, neoAccountId: pick.targetId, name: pick.targetLabel }),
         })
+        if (!isSameCustomer(mutationKey)) return
         setData((prev) => (prev ? { ...prev, crmRegistered: true, neoAccountId: pick.targetId } : prev))
         setSavedMsg("정식 리드로 전환되었습니다")
         setNeoLinkOpen(false)
@@ -556,16 +634,18 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
         setNeoPickerId("")
         revalidate()
       } catch (err) {
+        if (!isSameCustomer(mutationKey)) return
         // 실패 시 피커 선택을 되돌린다 — '연결됨' 표시가 에러 문구와 모순되지 않게.
         setNeoPickerLabel("")
         setNeoPickerId("")
         // 409(이미 다른 타깃으로 확정)는 API가 원인 메시지를 담아 돌려준다 — 그대로 노출.
         setNeoLinkError(err instanceof Error ? err.message : "NEO 등록 연결에 실패했습니다.")
       } finally {
+        // busy 플래그는 화면 공용 상태라 고객이 바뀌었어도 항상 걷는다(actingId와 같은 원칙).
         setNeoLinkBusy(false)
       }
     },
-    [targetType, entityId, revalidate]
+    [targetType, entityId, revalidate, customerKey, isSameCustomer]
   )
 
   // 컴포저로 포커스 — 구 인라인 메모 폼을 대체한 CTA(헤더 '활동 기록'·추천 '메모 남기기').
@@ -578,37 +658,46 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
   // ---- 쓰기(mutation) — 성공 응답 레코드로 로컬을 먼저 바꾸고 재검증은 백그라운드(c360-03).
   // 재시도 클로저가 자기 자신을 참조하므로 useCallback 대신 일반 함수로 둔다(자식에는 이미 인라인 래퍼로 넘긴다).
 
-  async function createTaskLocally(body: Record<string, unknown>): Promise<CrmTaskRecord | null> {
+  // forKey — 호출한 핸들러가 시작 시점에 캡처한 customerKey. applyLocal에 그대로 넘겨 세대를 확인한다.
+  async function createTaskLocally(body: Record<string, unknown>, forKey: string | null): Promise<CrmTaskRecord | null> {
     const result = await adminFetchJson<{ task?: CrmTaskRecord }>("/api/admin/crm/tasks", {
       method: "POST",
       body: JSON.stringify(body),
     })
     const task = result?.task ?? null
-    if (task) applyLocal({ kind: "task_added", id: task.id, at: Date.now(), record: task })
+    if (task) applyLocal({ kind: "task_added", id: task.id, at: Date.now(), record: task }, forKey)
     return task
   }
 
   async function handleAddTask() {
     const title = taskTitle.trim()
     if (!title || !customerKey) return
+    const mutationKey = customerKey
     setActingId("task")
     clearMutationNotice()
     try {
-      await createTaskLocally({
-        title,
-        taskType,
-        targetType,
-        targetId: entityId,
-        targetLabel: displayName,
-        dueAt: taskDue ? new Date(taskDue).toISOString() : undefined,
-        assignToMe: true,
-      })
+      await createTaskLocally(
+        {
+          title,
+          taskType,
+          targetType,
+          targetId: entityId,
+          targetLabel: displayName,
+          dueAt: taskDue ? new Date(taskDue).toISOString() : undefined,
+          assignToMe: true,
+        },
+        mutationKey
+      )
+      // [blocker] await 도중 다른 고객으로 전환됐으면 폼 리셋·토스트·재검증 모두 이 화면(새 고객)의
+      // 몫이 아니다 — revalidate()도 이 핸들러 클로저에 묶인 옛 url을 다시 살려 화면을 덮어쓸 수 있다.
+      if (!isSameCustomer(mutationKey)) return
       setTaskTitle("")
       setTaskDue("")
       setTaskFormOpen(false)
       setSavedMsg("할 일을 추가했어요")
       revalidate()
     } catch (err) {
+      if (!isSameCustomer(mutationKey)) return
       failMutation("할 일을 저장하지 못했습니다", err, () => void handleAddTask(), "입력은 그대로 남아 있습니다.")
     } finally {
       setActingId(null)
@@ -617,28 +706,88 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
 
   async function handleCsMotion(motion: CsMotion) {
     if (!customerKey) return
+    const mutationKey = customerKey
     setActingId(`cs:${motion.key}`)
     clearMutationNotice()
     try {
-      await createTaskLocally({
-        title: motion.title,
-        taskType: motion.taskType,
-        targetType,
-        targetId: entityId,
-        targetLabel: displayName,
-        assignToMe: true,
-      })
+      await createTaskLocally(
+        {
+          title: motion.title,
+          taskType: motion.taskType,
+          targetType,
+          targetId: entityId,
+          targetLabel: displayName,
+          assignToMe: true,
+        },
+        mutationKey
+      )
+      if (!isSameCustomer(mutationKey)) return
       setSavedMsg("CS 할 일을 만들었어요")
       revalidate()
     } catch (err) {
+      if (!isSameCustomer(mutationKey)) return
       failMutation("CS 할 일을 만들지 못했습니다", err, () => void handleCsMotion(motion))
     } finally {
       setActingId(null)
     }
   }
 
+  // 완료 되돌리기 — reopen PATCH 뒤 override를 걷고 서버가 돌려준(또는 스냅샷) 행으로 복원한다.
+  // [blocker] mutationKey — 이 완료가 시작된 고객. await 이후 다른 고객으로 전환됐으면 되돌린
+  // 행을 그 화면에 얹지 않는다(서버 쪽 reopen 자체는 그대로 반영된다 — 다음 조회 때 보인다).
+  async function undoCompleteTask(
+    taskId: string,
+    fallback: CrmTaskRecord | null,
+    index: number,
+    mutationKey: string | null
+  ) {
+    setTaskUndoPending(true)
+    try {
+      const result = await adminFetchJson<{ task?: CrmTaskRecord }>(
+        `/api/admin/crm/tasks/${encodeURIComponent(taskId)}`,
+        { method: "PATCH", body: JSON.stringify({ action: "reopen" }) }
+      )
+      setTaskUndoPending(false)
+      overridesRef.current = overridesRef.current.filter((item) => !(item.kind === "task_removed" && item.id === taskId))
+      if (!isSameCustomer(mutationKey)) return
+      const reopened = result?.task ?? fallback
+      if (reopened) setData((prev) => (prev ? restoreTaskRow(prev, reopened, index) : prev))
+      setNotice((prev) => (prev?.key === "task-undo" ? null : prev))
+      setSavedMsg("완료를 되돌렸어요")
+      revalidate()
+    } catch (err) {
+      setTaskUndoPending(false)
+      if (!isSameCustomer(mutationKey)) return
+      failMutation("완료를 되돌리지 못했습니다", err, () => void undoCompleteTask(taskId, fallback, index, mutationKey))
+    }
+  }
+
+  // 성공 배너 + 8초 되돌리기(UX 규약 3 — 비가역 전이). CrmWeekAheadPanel.undoTaskAction과 같은 패턴:
+  // 창이 지나면 되돌리기 버튼만 거두고 문구는 다음 알림이 대체하거나 닫을 때까지 남긴다.
+  function showTaskUndoNotice(taskId: string, record: CrmTaskRecord | null, index: number, mutationKey: string | null) {
+    if (!record) {
+      setSavedMsg("할 일을 완료했어요")
+      return
+    }
+    if (taskUndoTimerRef.current) clearTimeout(taskUndoTimerRef.current)
+    const next: DrawerNotice = {
+      key: "task-undo",
+      tone: "success",
+      title: "할 일을 완료했어요",
+      message: `'${record.title}' — 8초 안에 되돌릴 수 있습니다.`,
+      undo: () => void undoCompleteTask(taskId, record, index, mutationKey),
+    }
+    setNotice(next)
+    taskUndoTimerRef.current = setTimeout(() => {
+      setNotice((current) => (current === next ? { ...current, undo: undefined } : current))
+    }, TASK_UNDO_WINDOW_MS)
+  }
+
   // 완료 — 행을 먼저 지우고(낙관) 포커스를 다음 행 첫 액션 또는 섹션 heading으로 옮긴다. 실패하면 제자리에 되돌린다.
   async function handleCompleteTask(taskId: string) {
+    // [blocker] await 이후 rollback·성공 후속(override·되돌리기 배너·revalidate)이 다른 고객으로
+    // 전환된 화면에 적용되지 않도록 시작 시점의 customerKey를 캡처해 끝까지 들고 다닌다.
+    const mutationKey = customerKey
     const current = dataRef.current
     const index = current ? current.tasks.rows.findIndex((row) => row.id === taskId) : -1
     const record = current && index >= 0 ? current.tasks.rows[index] : null
@@ -661,17 +810,20 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
           body: JSON.stringify({ action: "complete", outcome: "고객 360에서 완료" }),
         }),
       rollback: (saved) => {
-        if (!saved.record) return
+        if (!isSameCustomer(mutationKey) || !saved.record) return
         const restored = saved.record
         setData((prev) => (prev ? restoreTaskRow(prev, restored, saved.index) : prev))
       },
-      onError: (err) =>
-        failMutation("할 일을 완료하지 못했습니다", err, () => void handleCompleteTask(taskId), "목록에 되돌려 놓았습니다."),
+      onError: (err) => {
+        if (!isSameCustomer(mutationKey)) return
+        failMutation("할 일을 완료하지 못했습니다", err, () => void handleCompleteTask(taskId), "목록에 되돌려 놓았습니다.")
+      },
     })
     setActingId(null)
     if (result.ok) {
+      if (!isSameCustomer(mutationKey)) return
       overridesRef.current = [...pruneC360Overrides(overridesRef.current, Date.now()), { kind: "task_removed", id: taskId, at: Date.now() }]
-      setSavedMsg("할 일을 완료했어요")
+      showTaskUndoNotice(taskId, record, index, mutationKey)
       revalidate()
     }
   }
@@ -679,6 +831,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
   async function handleAddDeal() {
     const title = dealTitle.trim()
     if (!title || !customerKey) return
+    const mutationKey = customerKey
     setActingId("deal")
     clearMutationNotice()
     try {
@@ -695,7 +848,10 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
         }),
       })
       const deal = result?.deal ?? null
-      if (deal) applyLocal({ kind: "deal_added", id: deal.id, at: Date.now(), record: deal })
+      if (deal) applyLocal({ kind: "deal_added", id: deal.id, at: Date.now(), record: deal }, mutationKey)
+      // [blocker] await 도중 다른 고객으로 전환됐으면 폼 리셋·토스트·revalidate() 모두 건너뛴다 —
+      // revalidate()도 이 클로저에 묶인 옛 url을 되살려 화면 전체를 옛 고객 데이터로 덮어쓸 수 있다.
+      if (!isSameCustomer(mutationKey)) return
       setDealTitle("")
       setDealAmount(null)
       setDealStage("consult")
@@ -703,6 +859,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
       setSavedMsg("딜을 추가했어요")
       revalidate()
     } catch (err) {
+      if (!isSameCustomer(mutationKey)) return
       failMutation("딜을 저장하지 못했습니다", err, () => void handleAddDeal(), "입력은 그대로 남아 있습니다.")
     } finally {
       setActingId(null)
@@ -710,13 +867,18 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
   }
 
   // 딜 행 patch(단계·금액) 공통 — 낙관 반영 → PATCH → 응답 레코드로 확정, 실패 시 이전 행으로 복원 + 인라인 실패 캡션.
+  // pickConfirmed — [major] 서버 응답 레코드 전체를 override로 저장하면(예전 코드) 120초 창 동안 이
+  // 딜의 다른 필드(담당자·제목 등, 다른 경로로 바뀌었을 수 있는)를 배경 재검증이 계속 되돌려 버린다.
+  // 이 액션이 실제로 파생시키는 필드만 호출부가 좁게 골라 optimistic 위에 병합한다.
   async function patchDeal(
     dealId: string,
     body: Record<string, unknown>,
     optimistic: Partial<CrmDealRecord>,
     failTitle: string,
-    retry: () => void
+    retry: () => void,
+    pickConfirmed?: (deal: CrmDealRecord) => Partial<CrmDealRecord>
   ) {
+    const mutationKey = customerKey
     const previous = dataRef.current?.deals.rows.find((row) => row.id === dealId) ?? null
     if (!previous) return
     setActingId(`deal:${dealId}`)
@@ -730,25 +892,37 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
           `/api/admin/crm/deals-lite/${encodeURIComponent(dealId)}`,
           { method: "PATCH", body: JSON.stringify(body) }
         )
-        // 서버가 확정한 행(status·updatedAt 포함)으로 덮고, 재검증 창 동안 같은 patch를 유지한다.
-        applyLocal({ kind: "deal_patched", id: dealId, at: Date.now(), patch: response?.deal ?? optimistic })
+        const patch = response?.deal ? { ...optimistic, ...(pickConfirmed?.(response.deal) ?? {}) } : optimistic
+        applyLocal({ kind: "deal_patched", id: dealId, at: Date.now(), patch }, mutationKey)
       },
-      rollback: (saved) => setData((prev) => (prev ? patchDealRow(prev, dealId, saved) : prev)),
+      rollback: (saved) => {
+        if (!isSameCustomer(mutationKey)) return
+        setData((prev) => (prev ? patchDealRow(prev, dealId, saved) : prev))
+      },
       onError: (err) => {
+        if (!isSameCustomer(mutationKey)) return
         setDealSaveState(dealId, { state: "failed", onRetry: retry })
         failMutation(failTitle, err, retry, "이전 값으로 되돌려 놓았습니다.")
       },
     })
     setActingId(null)
     if (result.ok) {
+      if (!isSameCustomer(mutationKey)) return
       markDealSaved(dealId)
       revalidate()
     }
   }
 
   async function handleDealStage(dealId: string, stage: CrmDealStage) {
-    await patchDeal(dealId, { action: "stage", stage }, { stage }, "딜 단계를 변경하지 못했습니다", () =>
-      void handleDealStage(dealId, stage)
+    await patchDeal(
+      dealId,
+      { action: "stage", stage },
+      { stage },
+      "딜 단계를 변경하지 못했습니다",
+      () => void handleDealStage(dealId, stage),
+      // setCrmDealStage(app/api/.../deals-lite/[id]/route.ts)는 stage로부터 status·closedAt·closedBy를
+      // 서버에서 파생한다 — optimistic({stage})이 예측 못하는 이 세 필드만 응답에서 좁게 가져온다.
+      (deal) => ({ status: deal.status, closedAt: deal.closedAt, closedBy: deal.closedBy })
     )
   }
 
@@ -871,20 +1045,26 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
 
   async function handleRunRecommendation() {
     if (!recommendation || !customerKey) return
+    const mutationKey = customerKey
     setActingId("rec")
     clearMutationNotice()
     try {
-      await createTaskLocally({
-        title: recommendation.title,
-        taskType: recommendation.taskType,
-        targetType,
-        targetId: entityId,
-        targetLabel: displayName,
-        assignToMe: true,
-      })
+      await createTaskLocally(
+        {
+          title: recommendation.title,
+          taskType: recommendation.taskType,
+          targetType,
+          targetId: entityId,
+          targetLabel: displayName,
+          assignToMe: true,
+        },
+        mutationKey
+      )
+      if (!isSameCustomer(mutationKey)) return
       setSavedMsg("추천 할 일을 만들었어요")
       revalidate()
     } catch (err) {
+      if (!isSameCustomer(mutationKey)) return
       failMutation("추천 할 일을 만들지 못했습니다", err, () => void handleRunRecommendation())
     } finally {
       setActingId(null)
@@ -936,6 +1116,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
     // url은 customerKey와 함께 나오는 파생값이라 !customerKey 만으로는 TS가 string으로 좁혀
     // 주지 않는다 — !url도 같이 걸어 아래에서 non-null 단언 없이 clearAdminRequestCache(url)을 쓴다.
     if (!clean || !customerKey || !url) return
+    const mutationKey = customerKey
     setTagBusy(true)
     clearMutationNotice()
     try {
@@ -943,13 +1124,17 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
         `/api/admin/crm/customers/${encodeURIComponent(customerKey)}/tags`,
         { method: "POST", body: JSON.stringify({ tag: clean }) }
       )
-      setTags(result.tags ?? [])
-      setTagInput("")
       // 태그가 360 페이로드에 동승하므로, 캐시를 비워 재오픈 시 편집 전 태그가 되살아나지 않게 한다.
       // 감사#1: 전역 스코프 대신 이 고객의 360 캐시(url)만 좁혀서 지운다 — 다른 탭 캐시는 보존.
       clearAdminRequestCache(url)
+      // [blocker와 같은 근본 원인] await 도중 다른 고객으로 전환되면 이 setTags가 새 고객 화면에
+      // 옛 고객의 라벨 목록을 얹는다 — 나머지 mutation 경로와 같은 가드.
+      if (!isSameCustomer(mutationKey)) return
+      setTags(result.tags ?? [])
+      setTagInput("")
       setSavedMsg("라벨을 추가했어요")
     } catch (err) {
+      if (!isSameCustomer(mutationKey)) return
       failMutation("라벨을 추가하지 못했습니다", err, () => void handleAddTag(), "입력은 그대로 남아 있습니다.")
     } finally {
       setTagBusy(false)
@@ -960,6 +1145,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
     // url은 customerKey와 함께 나오는 파생값이라 !customerKey 만으로는 TS가 string으로
     // 좁혀 주지 않는다 — !url도 같이 걸어 non-null 단언 없이 clearAdminRequestCache(url)을 쓴다.
     if (!customerKey || !url) return
+    const mutationKey = customerKey
     setTagBusy(true)
     clearMutationNotice()
     try {
@@ -967,12 +1153,14 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
         `/api/admin/crm/customers/${encodeURIComponent(customerKey)}/tags?tag=${encodeURIComponent(tag)}`,
         { method: "DELETE" }
       )
-      setTags(result.tags ?? [])
       // 태그가 360 페이로드에 동승하므로, 캐시를 비워 재오픈 시 편집 전 태그가 되살아나지 않게 한다.
       // 감사#1: 전역 스코프 대신 이 고객의 360 캐시(url)만 좁혀서 지운다 — 다른 탭 캐시는 보존.
       clearAdminRequestCache(url)
+      if (!isSameCustomer(mutationKey)) return
+      setTags(result.tags ?? [])
       setSavedMsg("라벨을 지웠어요")
     } catch (err) {
+      if (!isSameCustomer(mutationKey)) return
       failMutation("라벨을 지우지 못했습니다", err, () => void handleRemoveTag(tag))
     } finally {
       setTagBusy(false)
@@ -1303,6 +1491,9 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                   className="inline-flex items-center gap-1 rounded-full border border-[#e8e8e4] bg-[#fafaf8] px-2.5 py-1 text-[12px] font-medium text-[#111110]"
                 >
                   {tag}
+                  {/* hover:text-[#B43E3E] === STATUS_TONE.danger.text(lib/crm/status-tone.ts) — Tailwind
+                      정적 스캔 때문에 hover: variant는 리터럴이어야 한다(동적 템플릿 불가). STATUS_TONE.danger.text가
+                      바뀌면 이 리터럴도 같이 고친다(같은 패턴: LeadDrawer.tsx, CrmPriorityQueuePanel.tsx). */}
                   <button
                     type="button"
                     onClick={() => void handleRemoveTag(tag)}
@@ -1588,14 +1779,21 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
           ) : null}
         </div>
 
-        {/* 하단 고정 알림(c360-08) — 실패는 danger·role=alert·닫기·재시도, 자동 소멸 없음. 갱신 지연은 warning으로 분리. */}
+        {/* 하단 고정 알림(c360-08) — 실패는 danger·role=alert·닫기·재시도, 자동 소멸 없음. 갱신 지연은 warning으로 분리.
+            task-undo(성공)는 8초 되돌리기 액션을 실는다(UX 규약 3). */}
         {notice ? (
           <div className="shrink-0 border-t border-[#e8e8e4] bg-white px-3 py-2">
             <CrmNoticeBanner
               tone={notice.tone}
               title={notice.title}
               message={notice.message}
-              action={notice.retry ? { label: "다시 시도", onClick: notice.retry, pending: actingId !== null || loading || syncing } : undefined}
+              action={
+                notice.undo
+                  ? { label: "되돌리기", onClick: notice.undo, pending: taskUndoPending }
+                  : notice.retry
+                    ? { label: "다시 시도", onClick: notice.retry, pending: actingId !== null || loading || syncing }
+                    : undefined
+              }
               onDismiss={() => setNotice(null)}
             />
           </div>
