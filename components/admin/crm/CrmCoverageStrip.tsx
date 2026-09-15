@@ -8,6 +8,7 @@ import { adminFetchJsonCached } from "@/lib/admin-client"
 import { CRM_CACHE_SWR_MS } from "@/lib/crm/client-cache"
 import { coverageTone, COVERAGE_TONE_CLASS } from "@/lib/crm/coverage"
 import { formatCNY } from "@/lib/crm/money-format"
+import { INTERACTIVE_TEXT_CLASS, SECONDARY_TEXT_CLASS } from "@/components/admin/crm/home/shared"
 
 type CoverageHealthState = "ready" | "partial" | "no_data"
 // server-only 모듈(rev-account-coverage)은 import 금지 — shape만 로컬 선언.
@@ -134,21 +135,21 @@ export default function CrmCoverageStrip() {
           Sync
         </span>
         <span className="text-[13px] font-semibold text-[#111110]">링크 정합성</span>
-        <span className="rounded-full bg-[#f0f0ec] px-2 py-0.5 text-[11px] font-medium text-[#1a1a1a]/55">
+        <span className={`rounded-full bg-[#f0f0ec] px-2 py-0.5 text-[11px] font-medium ${SECONDARY_TEXT_CLASS}`}>
           {data?.health?.label ?? copy.label}
         </span>
 
         {showMetrics ? (
-          <span className="flex items-center gap-1.5 text-[12px] text-[#1a1a1a]/45">
-            <span className="text-[#1a1a1a]/20">·</span>
+          <span className={`flex items-center gap-1.5 text-[12px] ${SECONDARY_TEXT_CLASS}`}>
+            <span className="text-[#1a1a1a]/20" aria-hidden>·</span>
             링크 확정률 <b className={`font-semibold ${COVERAGE_TONE_CLASS[tone]}`}>{pctLabel}</b>
-            <span className="text-[#1a1a1a]/20">·</span>
-            확정 <b className="font-semibold text-[#1a1a1a]/70">{valueLabel(data?.linked, state, fmt)}</b>
-            <span className="text-[#1a1a1a]/20">·</span>
-            검토 <b className="font-semibold text-[#1a1a1a]/70">{valueLabel(data?.needsReview, state, fmt)}</b>
+            <span className="text-[#1a1a1a]/20" aria-hidden>·</span>
+            확정 <b className={`font-semibold ${INTERACTIVE_TEXT_CLASS}`}>{valueLabel(data?.linked, state, fmt)}</b>
+            <span className="text-[#1a1a1a]/20" aria-hidden>·</span>
+            검토 <b className={`font-semibold ${INTERACTIVE_TEXT_CLASS}`}>{valueLabel(data?.needsReview, state, fmt)}</b>
           </span>
         ) : (
-          <span className="text-[12px] text-[#1a1a1a]/42">{copy.detail}</span>
+          <span className={`text-[12px] ${SECONDARY_TEXT_CLASS}`}>{copy.detail}</span>
         )}
 
         {/* 실패는 새로고침 강요 없이 스트립 자체에서 복구 — 매칭 인박스 칩과 동일 스타일. */}
@@ -163,18 +164,18 @@ export default function CrmCoverageStrip() {
         ) : null}
 
         {showRev && rev ? (
-          <span className="flex flex-wrap items-center gap-1.5 text-[12px] text-[#1a1a1a]/45">
-            <span className="mx-0.5 h-3.5 w-px bg-[#e8e8e4]" />
+          <span className={`flex flex-wrap items-center gap-1.5 text-[12px] ${SECONDARY_TEXT_CLASS}`}>
+            <span className="mx-0.5 h-3.5 w-px bg-[#e8e8e4]" aria-hidden />
             매출 커버리지{" "}
             <b className={`font-semibold ${COVERAGE_TONE_CLASS[revTone]}`}>{rev.revenue.coveragePct}%</b>
             {unlinkedCount > 0 ? (
               <>
-                <span className="text-[#1a1a1a]/20">·</span>
+                <span className="text-[#1a1a1a]/20" aria-hidden>·</span>
                 미연결 계정{" "}
-                <b className="font-semibold text-[#1a1a1a]/70">{fmt(unlinkedCount)}곳</b>
-                <span className="text-[#1a1a1a]/20">·</span>
+                <b className={`font-semibold ${INTERACTIVE_TEXT_CLASS}`}>{fmt(unlinkedCount)}곳</b>
+                <span className="text-[#1a1a1a]/20" aria-hidden>·</span>
                 미연결 매출{" "}
-                <b className="font-semibold text-[#1a1a1a]/70">{formatCNY(unlinkedRevenue)}</b>
+                <b className={`font-semibold ${INTERACTIVE_TEXT_CLASS}`}>{formatCNY(unlinkedRevenue)}</b>
                 <Link
                   href="/admin/crm/matching"
                   className="inline-flex items-center gap-0.5 rounded-full bg-[#f0f0ec] px-2 py-0.5 text-[11px] font-semibold text-[#111110] transition-colors hover:bg-[#e8e8e4]"
