@@ -119,6 +119,11 @@ export default function LeadDrawer({
   const ownerSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingOwnerRef = useRef<string | null>(null)
   const ownerInFlightRef = useRef(false)
+  // 사용자가 마지막으로 확정한 담당자 값 — 서버에 쓸 게 없어(원래 값으로 되돌림) 요청을 보내지 않은
+  // 경우에도 이 값을 최종 의도로 남긴다. 그래야 그 사이 무효화된 이전 요청의 지연 성공이 "서버 정본
+  // 동기화" effect 를 통해 select 를 되돌리지 못한다(리뷰 발견 #2). savedOwner 가 이 값을 따라오면
+  // (요청이든 무효화든 결말이 나면) 지워 이후의 정상적인 정본 동기화를 막지 않는다.
+  const lastOwnerIntentRef = useRef<string | null>(null)
   const onAssignedToChangeRef = useRef(onAssignedToChange)
   onAssignedToChangeRef.current = onAssignedToChange
   // 상태 버튼 저장 상태(leads-01). 부모 handleStatus 는 reject 하지 않으므로 팔로업과 같은 "부모 상태가 따라왔는가"
@@ -127,10 +132,21 @@ export default function LeadDrawer({
     target: null,
     state: "idle",
   })
-  const [statusSettled, setStatusSettled] = useState(0)
   const statusGuardRef = useRef(createLatestRequestGuard())
+  const statusSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // 정본(lead.status) 최신값 — commitStatus 는 그레이스 대기 뒤 이 값으로 판정한다(리뷰 발견 #1: 전역
+  // 증가 카운터를 "이번 요청이 끝났는가"의 대용으로 쓰면, 같은 드로어에서 두 번째 이후 상태 변경마다
+  // 실제 응답이 오기 전에도 effect 가 재실행돼 settle 판정이 새는 레이스가 있었다. 판정을 effect 가
+  // 아니라 commitStatus 호출 자신의 토큰 안에서 인라인으로 끝내 이 클래스의 레이스를 원천 차단한다).
+  const leadStatusRef = useRef(lead.status)
+  useEffect(() => {
+    leadStatusRef.current = lead.status
+  }, [lead.status])
   // "종료" 단계 이탈 확인(UX 규약 1) — 부모의 벌크 종료와 같은 확인 다이얼로그를 드로어 안에서 연다.
   const [closeStatusRequest, setCloseStatusRequest] = useState(false)
+  // 전환된 리드를 다른 상태로 되돌리는 확인(리뷰 발견 #4) — 부모 전환 다이얼로그의 "되돌릴 수 없습니다"
+  // 문구와 실제 동작을 맞춘다. 값은 확인 뒤 커밋할 대상 상태.
+  const [revertStatusRequest, setRevertStatusRequest] = useState<LeadStatus | null>(null)
   // 연락 기록 삭제 확인(leads-07). 물리 삭제라 되돌리기가 없으므로 다이얼로그로 막는다.
   const [deleteLogRequest, setDeleteLogRequest] = useState<ContactLogRecord | null>(null)
   const [deletingLog, setDeletingLog] = useState(false)
@@ -149,6 +165,10 @@ export default function LeadDrawer({
   const [confirming, setConfirming] = useState(false)
   const score = calcScore(lead)
   const unconfirmed = isUnconfirmedLead(lead)
+  // 상태 PATCH 진행 중 — 상태 그리드뿐 아니라 푸터의 전환 버튼도 이 동안은 막아야 한다(리뷰 발견 #3:
+  // 상태 PATCH가 아직 끝나기 전에 전환(convert-v2)을 동시에 걸면 두 응답의 도착 순서에 따라 최종
+  // 상태가 달라질 수 있다).
+  const statusBusy = statusSave.state === "saving"
   const unrespondedHours = isUnrespondedLead(lead) ? hoursBetween(lead.timestamp) : null
   const metaAdInfo = getMetaAdInfo(lead)
   const regionLabel = deriveLeadRegionLabel(lead)
@@ -227,8 +247,14 @@ export default function LeadDrawer({
   }, [savedFollowUp])
 
   // ── 상태 버튼 저장(leads-01) ─────────────────────────────────────────
+  // settle 판정을 effect 로 미루지 않고 이 호출 자신의 토큰 안에서 끝낸다 — 이렇게 해야 같은 드로어에서
+  // 잇달아 커밋해도 "이번 호출이 끝났는가"가 다른 호출의 재렌더에 새지 않는다(리뷰 발견 #1).
   const commitStatus = useCallback(
     async (target: LeadStatus) => {
+      if (statusSavedTimerRef.current) {
+        clearTimeout(statusSavedTimerRef.current)
+        statusSavedTimerRef.current = null
+      }
       const token = statusGuardRef.current.begin()
       setStatusSave({ target, state: "saving" })
       try {
@@ -237,23 +263,28 @@ export default function LeadDrawer({
         // 부모가 toast 로 알린다. 아래 settle 판정이 failed 로 떨어진다.
       }
       if (!statusGuardRef.current.isLatest(token)) return
-      setStatusSettled((n) => n + 1)
+      // 부모의 setLeads → selected 동기화 effect 를 거쳐 한 렌더 뒤에 lead.status 가 도착하므로 잠깐 기다린다.
+      await new Promise<void>((resolve) => setTimeout(resolve, STATUS_SETTLE_GRACE_MS))
+      if (!statusGuardRef.current.isLatest(token)) return
+      if (leadStatusRef.current === target) {
+        setStatusSave({ target, state: "saved" })
+        statusSavedTimerRef.current = setTimeout(() => {
+          statusSavedTimerRef.current = null
+          if (statusGuardRef.current.isLatest(token)) setStatusSave({ target: null, state: "idle" })
+        }, SAVED_BADGE_MS)
+      } else {
+        setStatusSave({ target, state: "failed" })
+      }
     },
     [lead.id, onStatusChange]
   )
 
-  // settle 판정 — 요청이 끝난 뒤 lead.status 가 시도한 값이면 저장됨, 유예 시간 안에도 안 따라오면 실패.
+  // 언마운트(닫기·다른 리드 선택) 시 대기 중인 "저장됨" 배지 타이머를 남기지 않는다.
   useEffect(() => {
-    if (statusSettled === 0 || statusSave.state !== "saving" || !statusSave.target) return
-    const target = statusSave.target
-    if (lead.status === target) {
-      setStatusSave({ target, state: "saved" })
-      const timer = setTimeout(() => setStatusSave({ target: null, state: "idle" }), SAVED_BADGE_MS)
-      return () => clearTimeout(timer)
+    return () => {
+      if (statusSavedTimerRef.current) clearTimeout(statusSavedTimerRef.current)
     }
-    const timer = setTimeout(() => setStatusSave({ target, state: "failed" }), STATUS_SETTLE_GRACE_MS)
-    return () => clearTimeout(timer)
-  }, [statusSettled, statusSave.state, statusSave.target, lead.status])
+  }, [])
 
   // ── 담당자 저장(leads-01·leads-08) ───────────────────────────────────
   const clearOwnerCommitTimer = () => {
@@ -267,12 +298,17 @@ export default function LeadDrawer({
     async (next: string) => {
       clearOwnerCommitTimer()
       pendingOwnerRef.current = null
+      lastOwnerIntentRef.current = next
       if (ownerSavedTimerRef.current) {
         clearTimeout(ownerSavedTimerRef.current)
         ownerSavedTimerRef.current = null
       }
       if (next === savedOwner) {
-        // 저장된 값으로 되돌아온 선택 — 서버에 쓸 게 없다. 이전 실패 표시만 지운다.
+        // 저장된 값으로 되돌아온 선택 — 서버에 쓸 게 없다. 이전 실패 표시만 지운다. 이전에 나간 커밋이
+        // 아직 응답 대기 중이었다면 토큰을 무효화해(begin) 그 늦은 성공이 이 되돌림을 덮어쓰지 못하게
+        // 하고, in-flight 표시도 직접 해제한다 — 그 콜백은 이제 최신이 아니므로 스스로 해제하지 않는다.
+        ownerGuardRef.current.begin()
+        ownerInFlightRef.current = false
         setOwnerSave("idle")
         return
       }
@@ -328,8 +364,12 @@ export default function LeadDrawer({
   }, [lead.id])
 
   // 서버 정본(lead.assigned_to)이 바뀌었는데 이 select 가 아무것도 보내는 중이 아니면 그 값으로 맞춘다.
+  // 단, 사용자가 마지막으로 확정한 값과 다르면 반영하지 않는다 — 무효화된 이전 요청의 지연 성공이
+  // 정본을 사용자가 원치 않는 값으로 바꿔놨더라도 화면까지 그 값으로 스냅백하지 않는다(리뷰 발견 #2).
   useEffect(() => {
     if (ownerInFlightRef.current || pendingOwnerRef.current !== null) return
+    if (lastOwnerIntentRef.current !== null && lastOwnerIntentRef.current !== savedOwner) return
+    lastOwnerIntentRef.current = null
     setAssignedTo(savedOwner)
   }, [savedOwner])
 
@@ -337,7 +377,8 @@ export default function LeadDrawer({
 
   // 드로어 위에 확인 다이얼로그가 떠 있는 동안은 Escape·백드롭이 드로어까지 닫지 않는다.
   const overlayOpenRef = useRef(false)
-  overlayOpenRef.current = closeStatusRequest || deleteLogRequest !== null
+  const overlayOpen = closeStatusRequest || deleteLogRequest !== null || revertStatusRequest !== null
+  overlayOpenRef.current = overlayOpen
 
   // 닫기 공통 경로(Escape·백드롭·X) — blur로 저장을 흘려보내지 않는다(설계 §4). 저장되지 않은
   // 값(메모·행사 연결·담당자·팔로업)이 있으면 조용히 버리지 않고 확인을 받는다; 취소하면 드로어에
@@ -380,7 +421,18 @@ export default function LeadDrawer({
 
   // Escape·Tab 포커스 트랩·이전 포커스 복귀 — 등록 모달과 같은 다이얼로그 규약(useDialogFocus).
   const drawerCloseButtonRef = useRef<HTMLButtonElement | null>(null)
-  useDialogFocus(lead.id, guardedClose, drawerCloseButtonRef)
+  // useDialogFocus 는 focusRef.current 에서 가장 가까운 role="dialog" 조상을 찾아 그 안에서만 Tab을
+  // 가둔다(components/admin/use-dialog-focus.ts, 이번 라운드 수정 대상 아님). 종료 확인·연락 기록 삭제
+  // 확인처럼 드로어 안에 Radix 다이얼로그가 겹쳐 뜨는 동안에는 그 다이얼로그가 자기 자신의 포커스
+  // 트랩을 갖고 있으므로(별도 포털), 드로어의 트랩이 같은 Tab 입력을 두고 경쟁하며 포커스를 드로어
+  // 컨테이너로 강제로 되돌릴 위험이 있다(리뷰 발견 #6). 훅을 고치지 않고, 오버레이가 열려 있는 동안만
+  // 훅에 넘기는 참조를 비워(closest 가 null 이 되게) Tab 처리를 완전히 건너뛰게 한다 — Escape 는
+  // onClose(guardedClose)가 overlayOpenRef 로 이미 막으므로 영향 없다.
+  const dialogFocusRef = useRef<HTMLButtonElement | null>(null)
+  useEffect(() => {
+    dialogFocusRef.current = overlayOpen ? null : drawerCloseButtonRef.current
+  }, [overlayOpen])
+  useDialogFocus(lead.id, guardedClose, dialogFocusRef)
 
   const handleSaveNotes = async () => {
     setSavingNotes(true)
@@ -687,7 +739,6 @@ export default function LeadDrawer({
               <div className="grid grid-cols-2 gap-2" role="group" aria-label="리드 상태" aria-describedby="lead-drawer-status-save">
                 {(Object.keys(STATUS_LABEL) as LeadStatus[]).map((s) => {
                   const action = resolveStatusButtonAction(s, lead.status)
-                  const statusBusy = statusSave.state === "saving"
                   const thisSaving = statusBusy && statusSave.target === s
                   const thisConverting = action === "convert" && converting
                   return (
@@ -714,6 +765,12 @@ export default function LeadDrawer({
                           setCloseStatusRequest(true)
                           return
                         }
+                        if (action === "confirm-revert") {
+                          // 전환된 리드를 되돌리는 경로 — 부모 다이얼로그의 "되돌릴 수 없습니다" 문구와
+                          // 어긋나지 않게 여기서도 확인을 받는다(리뷰 발견 #4).
+                          setRevertStatusRequest(s)
+                          return
+                        }
                         void commitStatus(s)
                       }}
                       title={
@@ -721,7 +778,9 @@ export default function LeadDrawer({
                           ? "연락 기록을 저장하면 자동으로 연락중 상태가 됩니다."
                           : action === "convert"
                             ? "고객·거래 등록 절차로 전환합니다."
-                            : undefined
+                            : action === "confirm-revert"
+                              ? "전환된 리드입니다 — 되돌리려면 확인이 필요합니다."
+                              : undefined
                       }
                       aria-pressed={lead.status === s}
                       aria-busy={thisSaving || thisConverting ? true : undefined}
@@ -931,7 +990,12 @@ export default function LeadDrawer({
                       onClick={() => setDeleteLogRequest(log)}
                       disabled={deletingLog}
                       aria-label={`${formatActivityTime(log.contacted_at)} 연락 기록 삭제`}
-                      className={"ml-3 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg p-1 text-[#615D59] opacity-100 transition-all disabled:opacity-40 sm:ml-0 sm:min-h-0 sm:min-w-0 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 hover:text-[#B43E3E]"}
+                      // hover 색은 status-tone.ts(danger)에서 가져온다 — 리터럴로 새로 적으면(리뷰 발견
+                      // #5) 그 값이 바뀔 때 여기만 구버전으로 남는다. status-tone.ts는 이번 라운드
+                      // 수정 대상이 아니라 별도 hover 토큰을 추가하지 못했지만, 동일한
+                      // "hover:text-[#B43E3E]" 리터럴이 Customer360Drawer.tsx에 이미 있어 Tailwind
+                      // 정적 스캔은 그대로 동작한다.
+                      className={`ml-3 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg p-1 text-[#615D59] opacity-100 transition-all disabled:opacity-40 sm:ml-0 sm:min-h-0 sm:min-w-0 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 hover:${STATUS_TONE_TEXT_CLASS.danger}`}
                     >
                       <X className="w-3 h-3" aria-hidden />
                     </button>
@@ -1075,7 +1139,9 @@ export default function LeadDrawer({
                     setConverting(false)
                   }
                 }}
-                disabled={converting}
+                // 상태 PATCH가 아직 응답 대기 중일 때 전환을 동시에 걸면 두 요청의 도착 순서에 따라
+                // 최종 상태가 달라질 수 있다 — 상태 그리드와 같은 조건으로 막는다(리뷰 발견 #3).
+                disabled={converting || statusBusy}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium border border-[#084734] text-[#084734] hover:bg-[#084734] hover:text-white disabled:opacity-40 transition-all"
               >
                 {converting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
@@ -1104,6 +1170,32 @@ export default function LeadDrawer({
           </>
         }
         confirmLabel="종료로 변경"
+        confirmLoadingLabel="변경 중..."
+      />
+
+      {/* 전환된 리드를 되돌리는 확인(리뷰 발견 #4) — 고객·딜은 이미 생성돼 있어 상태만 되돌아간다. */}
+      <DeleteConfirmDialog
+        open={revertStatusRequest !== null}
+        onClose={() => {
+          if (statusSave.state !== "saving") setRevertStatusRequest(null)
+        }}
+        onConfirm={() => {
+          const target = revertStatusRequest
+          setRevertStatusRequest(null)
+          if (target) void commitStatus(target)
+        }}
+        loading={statusSave.state === "saving"}
+        destructive={false}
+        title="전환된 리드를 되돌릴까요?"
+        description={
+          <>
+            &ldquo;{getLeadDisplayName(lead)}&rdquo; 리드는 이미 <strong>전환</strong>되어 고객·거래가 생성돼 있습니다.
+            상태만 {revertStatusRequest ? `"${STATUS_LABEL[revertStatusRequest]}"` : "다른 상태"}로 되돌리며, 생성된
+            고객·거래 기록은 그대로 남아 자동으로 삭제되지 않습니다.
+          </>
+        }
+        irreversibleNote="전환 자체(고객·거래 생성)는 되돌릴 수 없습니다 — 상태만 바뀝니다."
+        confirmLabel={revertStatusRequest ? `"${STATUS_LABEL[revertStatusRequest]}"로 변경` : "상태 변경"}
         confirmLoadingLabel="변경 중..."
       />
 

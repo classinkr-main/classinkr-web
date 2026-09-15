@@ -8,11 +8,18 @@
  */
 import type { LeadStatus } from "@/lib/repositories/leads"
 
-export type StatusButtonAction = "noop" | "contact-log" | "convert" | "confirm-close" | "patch"
+export type StatusButtonAction = "noop" | "contact-log" | "convert" | "confirm-close" | "confirm-revert" | "patch"
 
-/** 상태 그리드 버튼 클릭이 실제로 해야 할 일. 현재 상태를 다시 누르면 아무것도 하지 않는다. */
+/**
+ * 상태 그리드 버튼 클릭이 실제로 해야 할 일. 현재 상태를 다시 누르면 아무것도 하지 않는다.
+ *
+ * 리뷰 발견(2026-09-15, minor): current가 "converted"일 때 target이 "closed"가 아닌 다른 상태로
+ * 나가는 경로가 확인 없는 plain PATCH("patch")로 새 있었다 — 부모 전환 다이얼로그의 "전환 후에는
+ * 리드로 되돌릴 수 없습니다" 문구와 모순. converted에서 나가는 모든 경로(자기 자신 제외)는 확인을 거친다.
+ */
 export function resolveStatusButtonAction(target: LeadStatus, current: LeadStatus): StatusButtonAction {
   if (target === current) return "noop"
+  if (current === "converted") return "confirm-revert"
   // 전환은 고객·딜을 만드는 convert-v2 플로우(부모 확인 다이얼로그)로만 — status PATCH 우회 금지.
   if (target === "converted") return "convert"
   if (target === "contacted" && current === "new") return "contact-log"
