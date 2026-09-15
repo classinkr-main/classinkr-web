@@ -250,6 +250,30 @@ home_v4.42(9/10 어드민 개편 중심)를 병합했다. 이 브랜치는 Wave 
 - §3-9: 4.42가 `admin-nav-access.ts`의 `deny` 배치 자체를 없애 전 탭 상시 노출로 바뀌었다. 탭 재구성 문서 §14(CRM 상시)는 이 상위 결정에 흡수됨을 기록했다.
 - 4.42가 추가한 CRM UX: 딜 예상금액 인라인 편집, 입력함 행별 전화·이메일 수정, 활동 폼 중복 제출 이중 잠금. 이후 UX 라운드의 발견은 이 상태를 기준으로 재검증한다.
 
+### UX 라운드 1 — 2026-09-15 완료 (디자인·사용성·편의성 집중)
+
+기획안 밖 별도 라운드로, 4개 화면 단위(현황 홈·리드 콘솔/보드·통합 고객·고객 360)를 입출력 속도·가시성·클릭 경로 및 취소 안전성·모바일 접근성 4개 렌즈로 감사하고, 확정 40건을 구현했다. 공용 패턴 6종(`lib/crm/status-tone.ts`, `lib/crm/optimistic-update.ts`, `CrmNoticeBanner`, `SaveStateCaption`, `home/shared.tsx` 대비·터치 상수, `leads/shared.tsx` Toast 확장)을 먼저 만들고 6개 클러스터(홈 큐·홈 셸·리드 보드·리드 드로어·통합 목록·고객 360)로 병렬 구현한 뒤, 클러스터마다 적대적 코드 리뷰를 거쳐 발견을 전량 반영했다.
+
+핵심 반영 사항:
+
+- 리드·할 일 처리가 서버 전량 재조회 대신 낙관 갱신 + 8초 되돌리기로 바뀌었다(H6 겸 해결). 종료·완료 같은 비가역 동작은 인라인 확인 폼으로, `window.confirm`은 CRM 4개 클러스터에서 전부 제거했다.
+- 실패·부분 실패·갱신 지연이 "0건"·"없음"과 시각적으로 구분된다. 코크핏 히어로가 처음으로 `overview` 상태 메타(부분 실패·스냅샷 시각)를 읽는다.
+- 통합 목록·고객 360 드로어에 요청 세대 가드를 넣어, 빠른 전환 중 이전 고객·이전 질의의 응답이 화면에 섞이지 않는다. 고객 360에서는 이 문제가 리뷰 blocker였다(전환 중 로컬 patch 유출).
+- 고객 360 딜 단계 변경의 낙관 갱신 override가 서버 응답 전체가 아니라 파생 필드만 반영하도록 좁혔다(다른 경로로 바뀐 담당자·제목을 되돌리던 결함).
+- 통화 혼동 방지 문구 정정(리드 요약 실패 시 "0건" 노출, NEO 잔액이 "미수"와 "충전 잔액"으로 반대 해석되던 것 등).
+- 고객 찾기 픽커가 combobox/listbox 접근성 계약을 갖췄고, 디바운스 중 오래된 검색 결과를 Enter로 선택하던 blocker를 없앴다.
+- 모바일 44px 터치 타깃, WCAG AA 대비(`SECONDARY_TEXT_CLASS`/`INTERACTIVE_TEXT_CLASS`)로 홈·리드·통합 목록의 정보 텍스트를 통일.
+
+검증: `npm run typecheck`·`npx eslint app components lib --max-warnings=0`·`npm run build` 통과, `npx vitest run` 598 파일 / 4,544 케이스 통과.
+
+후속으로 남긴 것(다음 라운드 대상):
+
+- 남은 6개 화면 단위(원천 고객·지도, 기록, 입력함, 검수, 돈흐름·인사이트, 공통 셸)는 이번 라운드에서 감사하지 않았다.
+- `lib/repositories/crm-priority-queue.ts`의 `invalidateCrmPrioritySourceSnapshot()`가 정의만 되고 리드·할 일 쓰기 경로에서 호출되지 않아, force 없는 재조회는 최대 60초 낡은 스냅샷을 돌려줄 수 있다(120초 suppress 창으로 화면상 가려짐).
+- `app/api/admin/crm/tasks/[id]/route.ts`의 `update` 액션이 `dueAt: null`을 받지 않아, 기한 없던 할 일의 "내일로" 되돌리기가 기한을 정확히 지우지 못한다.
+- `lib/admin-client.ts`의 `invalidationScopesForUrl`이 리드 PATCH 하나로 CRM 집계 캐시 전체(overview·action-kpis·compass·coverage·owners·tasks·health)를 지운다 — 범위가 넓다.
+- `components/admin/crm/unified/shared.ts`의 `customerSourceTone()`이 여전히 팔레트 밖 리터럴(#B85C33 계열)을 쓴다. 소비처(`CustomerSearchPanel.tsx`)가 이번 라운드 클러스터 밖이라 그대로 두었다.
+
 ## 11. 근거 요약 (영역별 조사 결과 원문 위치)
 
 이 문서의 파일:라인 근거는 2026-09-12 코드 기준이다. 후속 작업 시 각 항목의 파일을 다시 열어 현재 상태를 재확인한 뒤 착수한다. 감사 문서(2026-08-06) §4에서 미해결로 남았던 3건의 현재 상태: 큐 스코어링 비용 = 부분 해결(소스 수집만 캐시) → H7, 필터 URL 소유권 = 사용처가 홈 1곳으로 줄어 선행 조건 해소 → H4, 죽은 task 분기 = 미해결 → H2. 입력함 열 매핑·매칭 제외 되돌리기·통합 목록 offset·customers-neo 1만 행 = 전부 미해결 → R2·R4·C1·C9.
