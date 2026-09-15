@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { notifyBranchSyncFailureStreaks } from "@/lib/branch/sync/failure-alert"
 import { runAll } from "@/lib/branch/sync/run-all"
 import { runBranchRevLinkMaintenance } from "@/lib/repositories/crm-source-links"
 
@@ -16,5 +17,15 @@ export async function GET(req: NextRequest) {
   }
   const result = await runAll({ trigger: "cron" })
   const crmLinks = result.ok ? await runBranchRevLinkMaintenance() : undefined
-  return NextResponse.json({ ...result, crmLinks })
+  // 연속 실패 알림은 하루 1회 도는 이 크론에서만 판정한다(수동 재시도마다 판정하면 같은 날 중복 발송).
+  // 알림 경로의 오류가 동기화 응답을 500으로 바꾸지 않게 가둔다.
+  let failureAlerts: Awaited<ReturnType<typeof notifyBranchSyncFailureStreaks>> | undefined
+  if (!result.ok && !result.skipped) {
+    try {
+      failureAlerts = await notifyBranchSyncFailureStreaks()
+    } catch (error) {
+      console.error("[cron/sync-branch] failure streak check failed", error)
+    }
+  }
+  return NextResponse.json({ ...result, crmLinks, ...(failureAlerts ? { failureAlerts } : {}) })
 }

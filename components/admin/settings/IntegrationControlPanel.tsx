@@ -3,7 +3,6 @@
 import type { ReactNode } from "react"
 import {
   Activity,
-  AlertTriangle,
   ExternalLink,
   KeyRound,
   Loader2,
@@ -696,41 +695,6 @@ function ConnectorFeaturePanel({ items }: { items: AdminIntegrationStatusItem[] 
   )
 }
 
-function IntegrationOpsNotice() {
-  return (
-    <PanelCard
-      title="운영 스케줄 경고"
-      description="Settings에서는 cron을 직접 수정하지 않고, 배포 설정 리스크만 노출합니다."
-      badge="Hobby 기준 확인"
-    >
-      <div className="grid gap-3 md:grid-cols-2">
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
-            <div>
-              <p className="text-[13px] font-semibold text-amber-900">/api/cron/sync-branch</p>
-              <p className="mt-1 text-[12px] leading-relaxed text-amber-800">
-                현재 vercel.json 기준 하루 3회 등록되어 있어 Hobby 기준 확인이 필요합니다.
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
-            <div>
-              <p className="text-[13px] font-semibold text-amber-900">/api/cron/sync-external-crm</p>
-              <p className="mt-1 text-[12px] leading-relaxed text-amber-800">
-                현재 vercel.json 기준 하루 4회 등록되어 있어 외부 스케줄러 또는 Pro 전환 판단이 필요합니다.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </PanelCard>
-  )
-}
-
 export function IntegrationControlPanel({
   active,
   onChange,
@@ -771,7 +735,6 @@ export function IntegrationControlPanel({
             error={error}
             onRefresh={onRefresh}
           />
-          <IntegrationOpsNotice />
         </>
       ) : null}
 

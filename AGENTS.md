@@ -56,11 +56,11 @@ npm run build
   [ADR-010](docs/adr/ADR-010-operational-failure-containment.md)을 따른다.
 - Vercel Cron 인증은 `Authorization: Bearer ${CRON_SECRET}` 하나만 사용한다. `x-vercel-cron`을
   인증 또는 추가 실행 조건으로 사용하지 않는다.
-- Vercel 플랜은 명시 확인 전까지 Hobby 기준으로 본다.
-- `vercel.json`의 각 cron expression은 하루 1회 이하만 허용한다.
-  - 금지 예: `*/5 * * * *`, `0 */6 * * *`, `0 9,18 * * *`
-  - 허용 예: `15 0 * * *`, `0 4 * * 4`, `0 0 1 * *`
-- sub-daily 실행이 필요하면 `vercel.json`에 직접 추가하지 말고 외부 스케줄러, 큐, 또는 Vercel Pro 전환을 먼저 확정한다.
+- Vercel 플랜은 Pro다(2026-09-14 API 확인). 크론은 분 단위 정시에 실행된다.
+- `vercel.json` cron 식은 UTC로 적는다. 경로마다 항목은 하나만 두고, 하루 288회(5분 간격) 이하로 둔다. 전체 항목은 40개 이하로 유지한다.
+  - 허용 예: `0 0,4,8 * * *`(KST 09·13·17시), `*/5 * * * *`, `50 0,1,4,6,8 * * 1-5`
+  - 금지 예: `* * * * *`(하루 1,440회), 같은 경로를 여러 항목으로 나누기
+- 주기를 올릴 때는 외부 API 한도, 하루 1회를 전제로 한 실패 알림·중복 방지 코드, 실행 잠금 시간을 함께 확인한다.
 - `vercel.json`을 수정한 뒤에는 반드시 `npm run check:vercel-crons`를 실행한다. `npm run build` 전에도 자동 실행된다.
 - 외부 발송 Cron은 새 활성화·인증 복구·장기 중단 후 재개 전에 backlog dry-run을 하고, 실행당 발송
   상한·멱등 키·부분 성공 회귀 테스트를 갖춘다. 상한 초과 시 개별 과거분 발송을 중지한다.

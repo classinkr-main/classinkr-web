@@ -21,6 +21,7 @@ import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import type {
   AdminCrmRevenueSheetBreakdownRow,
   AdminCrmRevenueSheetCompassCompare,
+  AdminCrmRevenueSheetManualLedgerGap,
   AdminCrmRevenueSheetRow,
   AdminCrmRevenueSheetWorkspace,
   RevenueSheetLinkStatus,
@@ -159,6 +160,24 @@ function MetricCard({ label, value, hint }: { label: string; value: ReactNode; h
 function ValueSkeleton({ className = "h-6 w-24" }: { className?: string }) {
   return (
     <span aria-hidden className={`inline-block animate-pulse rounded-md bg-[#f0f0ec] align-middle ${className}`} />
+  )
+}
+
+// 품질 감사 2026-09-10 — #1(P0): 장부 수기 입력·정정이 이 화면에 반영되지 않는 이중 진실을
+// 운영자가 항상 인지하게 하는 배지. 위 warnings 배너(데이터 조회 실패 등)와 톤은 같은 amber
+// 계열이지만 문구·아이콘(AlertCircle)을 분리해 "조회 실패"와 "구조적 미반영"을 혼동하지 않게 한다.
+function ManualLedgerGapBanner({ gap }: { gap: AdminCrmRevenueSheetManualLedgerGap }) {
+  return (
+    <div role="status" className="mb-6 flex flex-wrap items-center gap-2 border-l-2 border-amber-200 bg-amber-50/60 px-3 py-2 text-[13px] text-amber-800">
+      <AlertCircle className="h-4 w-4 shrink-0" />
+      <span>
+        장부 수기 입력·정정 <strong className="font-bold">{formatNumber(gap.count)}건</strong>({formatCny(gap.amount)})이
+        이 화면에 반영되지 않았습니다 — 최근 적용 {formatDate(gap.latestAppliedAt)}.
+      </span>
+      <Link href="/admin/branch/ledger" className="ml-auto inline-flex items-center gap-1 font-semibold underline underline-offset-2 hover:text-amber-900">
+        장부에서 확인 <ArrowRight className="h-3.5 w-3.5" />
+      </Link>
+    </div>
   )
 }
 
@@ -374,6 +393,12 @@ export default function AdminCrmRevenueSheetPage() {
           </div>
         </div>
       ) : null}
+
+      {/* 품질 감사 2026-09-10 — #1(P0, 이중 진실): 이 화면은 branch_rev_deals(REV 시트 동기화)만
+          본다 — 장부 콕핏/입력 레일에서 저장→적용까지 마친 수기 입력·정정(branch_sales_ledger_
+          entries)은 여기 절대 반영되지 않는다(서버 병합은 오매칭 위험이 커 이번 범위에서 보류,
+          scratchpad 보고서 참고). 화면이 "최신"으로 오인되지 않도록 항상 눈에 띄는 배지로 알린다. */}
+      {data && data.manualLedgerGap.count > 0 ? <ManualLedgerGapBanner gap={data.manualLedgerGap} /> : null}
 
       <section className="mb-8 grid gap-8 border-y border-[#f0f0ec] py-6 md:grid-cols-2 xl:grid-cols-5">
         {/* '확정' 두 의미 구분(CRM-6): 여기 '확정'=시트 확정 표시(¥) — 코크핏 '인식 매출'(딜리버리 인식 ₩)과 다른 기준 */}

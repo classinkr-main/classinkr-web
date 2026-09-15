@@ -6,7 +6,7 @@ import { revalidateTag, unstable_cache } from "next/cache"
 
 import { normalizedAccountKey } from "@/lib/branch/account-key"
 import { confirmedMonthAmount } from "@/lib/branch/computations/rev-confirmed"
-import { listBranchRevDeals, type BranchRevDeal } from "@/lib/repositories/branch-deals"
+import { listBranchRevDealsFresh, type BranchRevDeal } from "@/lib/repositories/branch-deals"
 import { SALES_LEDGER_IMPORTS_CACHE_TAG } from "@/lib/repositories/sales-ledger-imports"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
@@ -144,7 +144,15 @@ export async function activateRevImportRun(runId: string, fiscalYear: number, ac
   const { error } = await supabase
     .from("sales_ledger_active_sources")
     .upsert(
-      { tab_key: "rev", fiscal_year: fiscalYear, import_run_id: runId, activated_by: actor },
+      // activated_at은 테이블 기본값(now())이 INSERT 때만 먹는다 — 명시하지 않으면 run을 갈아
+      // 끼워도 최초 활성화 시각이 남는다(실측: 8/28 run인데 7/3로 표시).
+      {
+        tab_key: "rev",
+        fiscal_year: fiscalYear,
+        import_run_id: runId,
+        activated_by: actor,
+        activated_at: new Date().toISOString(),
+      },
       { onConflict: "tab_key,fiscal_year" },
     )
   if (error) throw new Error(`[rev-import] active source 전환 실패: ${error.message}`)
@@ -216,7 +224,8 @@ export async function captureRevDbImport(actor: string, options?: { activate?: b
   const fiscalYear = fiscalYearOf(now)
 
   // raw(원본 84칸 row) 보존이 이 마이그레이션의 충실도 핵심(파일 상단 주석 참조) — opt-in 필수.
-  const deals = await listBranchRevDeals(undefined, { withRaw: true })
+  // 캐시판(listBranchRevDeals)은 동기화 직후 SWR로 이전 미러를 줄 수 있어 스냅샷에는 직독판을 쓴다.
+  const deals = await listBranchRevDealsFresh({ withRaw: true })
   if (deals.length === 0) {
     throw new Error("임포트할 REV 행이 없습니다. 시트 동기화 후 다시 시도하세요.")
   }
@@ -349,5 +358,25 @@ export async function captureRevDbImport(actor: string, options?: { activate?: b
       .update({ status: "failed", error: message.slice(0, 500), finished_at: new Date().toISOString() })
       .eq("id", runId)
     throw error
+  }
+}
+
+export type RevImportRecaptureResult =
+  | { status: "inactive" }
+  | { status: "captured" | "unchanged"; runId: string; capturedAt: string; lineCount: number }
+
+// 시트 동기화 성공 직후 호출하는 자동 재캡처(P0, 2026-09-11). 액티브 REV 임포트가 있을 때만
+// 캡처한다 — 없으면(시트 미러 모드) 아무것도 하지 않는다. 여기서 새로 활성화하면 시트 모드로
+// 운영 중인 배포가 조용히 DB-native로 뒤집힌다. 활성 여부는 캐시(60초) 대신 직접 조회한다.
+// 캡처 실패는 던진다 — 호출부(runAll)가 동기화 성공은 유지한 채 경고로 싣는다.
+export async function recaptureActiveRevImport(actor: string): Promise<RevImportRecaptureResult> {
+  const status = await lookupActiveRevImportStatus(fiscalYearOf(new Date()))
+  if (!status.active) return { status: "inactive" }
+  const result = await captureRevDbImport(actor)
+  return {
+    status: result.deduped && result.runId === status.runId ? "unchanged" : "captured",
+    runId: result.runId,
+    capturedAt: result.capturedAt,
+    lineCount: result.lineCount,
   }
 }

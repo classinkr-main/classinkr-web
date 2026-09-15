@@ -1,5 +1,8 @@
 import "server-only"
 
+import { revalidateTag } from "next/cache"
+
+import { ADMIN_CRM_ACCOUNT_MASTER_CACHE_TAG } from "@/lib/admin/crm/cache-tags"
 import {
   getBranchRevSourceRecordKey,
   isInactiveSheetStatus,
@@ -1748,6 +1751,8 @@ export async function createManualBranchRevLinkCandidate(input: {
     .single()
 
   if (error) throw error
+  // status는 "candidate"지만 account-master의 unmatched.hasCandidate가 이 존재 자체를 본다(§3.3).
+  revalidateTag(ADMIN_CRM_ACCOUNT_MASTER_CACHE_TAG, "max")
   return data
 }
 
@@ -1890,6 +1895,9 @@ export async function upsertConfirmedLeadCustomerLink(input: {
     },
     input.actorUserId
   )
+  // 리드→고객 확정 링크(source_system=lead, target_type=customer)는 account-master의
+  // leadCount·sources 집계 입력이다(§3.3).
+  revalidateTag(ADMIN_CRM_ACCOUNT_MASTER_CACHE_TAG, "max")
   return data
 }
 
@@ -1960,6 +1968,59 @@ export async function listConfirmedLeadNeoLinkLeadIds(): Promise<Set<string>> {
     if (rows.length < LEAD_NEO_LINK_PAGE_SIZE) break
   }
   return ids
+}
+
+/**
+ * 리드 → NEO **계정** 확정 링크 전체를 한 번에 읽어 leadId → targetId 로 돌려준다.
+ *
+ * 통합 고객DB 의 "리드 행 + neo_account 행 중복 접기"(crm-unified-customers.ts)가 쓴다.
+ * 그 폴드는 처음에 배지 붙은 리드마다 findConfirmedLeadNeoLink 를 Promise.all 로 돌렸는데,
+ * 배지 리드가 수백이면 수백 개의 동시 쿼리가 된다 — 2026-09-04 프로덕션에서 REST 504 가
+ * 113건 터진 조건이 정확히 그 동시 쿼리 폭주였다. 그래서 단건 반복 대신 한 번의
+ * 페이지네이션 스캔으로 바꾼다.
+ *
+ * listConfirmedLeadNeoLinkLeadIds 와 달리 target_type 을 external_account 하나로 좁힌다.
+ * external_lead 의 target_id 는 계정 id 가 아니라 CRM 리드 레코드 id 라 neo_account 행의
+ * accountId 네임스페이스와 다르고, 그대로 폴드 키로 쓰면 엉뚱한 행이 사라진다.
+ *
+ * source_system 술어는 결과를 바꾸지 않지만(leads 링크의 유일한 소스 시스템)
+ * crm_source_links_source_idx(source_system, source_object, status)의 선두 컬럼이라
+ * 빠지면 인덱스를 못 타고 전 테이블을 훑는다.
+ */
+export async function listConfirmedLeadNeoAccountLinks(): Promise<Map<string, string>> {
+  const sb = createSupabaseAdminClient()
+  const byLeadId = new Map<string, string>()
+
+  // PostgREST 기본 1000행 절단 방어 — listConfirmedLeadNeoLinkLeadIds 와 같은 규약.
+  for (let page = 0; ; page += 1) {
+    if (page >= LEAD_NEO_LINK_MAX_PAGES) {
+      throw new Error(
+        `crm_source_links lead→neo 계정 링크 조회가 ${LEAD_NEO_LINK_MAX_PAGES}페이지(${LEAD_NEO_LINK_MAX_PAGES * LEAD_NEO_LINK_PAGE_SIZE}행)를 초과했습니다 — 페이지 상한을 재검토하세요.`
+      )
+    }
+    const from = page * LEAD_NEO_LINK_PAGE_SIZE
+    const { data, error } = await sb
+      .from("crm_source_links")
+      .select("source_record_key, target_id")
+      .eq("source_system", "lead")
+      .eq("source_object", "leads")
+      .eq("target_type", "external_account")
+      .eq("status", "confirmed")
+      .order("id", { ascending: true })
+      .range(from, from + LEAD_NEO_LINK_PAGE_SIZE - 1)
+
+    if (error) throw new Error(`crm_source_links lead→neo 계정 링크 조회 실패: ${error.message}`)
+
+    const rows = (data ?? []) as Array<{ source_record_key: string | null; target_id: string | null }>
+    for (const row of rows) {
+      const leadId = row.source_record_key ? String(row.source_record_key) : ""
+      const targetId = row.target_id ? String(row.target_id) : ""
+      if (leadId && targetId) byLeadId.set(leadId, targetId)
+    }
+    if (rows.length < LEAD_NEO_LINK_PAGE_SIZE) break
+  }
+
+  return byLeadId
 }
 
 /**
@@ -2227,6 +2288,9 @@ export async function updateCrmSourceLinkStatus(
 
     if (staleError) throw staleError
     await tryLearnAliasFromConfirmedLink(link as ConfirmedSourceLinkAliasSeed, actorUserId)
+    // 새로 확정된 링크가 customer/partner_account를 가리키면 account-master 합성(§3.3)의
+    // 입력이 바뀐다 — target_type을 모르는 이 시점에서는 보수적으로 항상 무효화한다.
+    revalidateTag(ADMIN_CRM_ACCOUNT_MASTER_CACHE_TAG, "max")
     return data
   }
 
@@ -2239,6 +2303,8 @@ export async function updateCrmSourceLinkStatus(
     .single()
 
   if (error) throw error
+  // 확정 해제(reject/stale)도 account-master의 confirmed-link 집합을 바꾼다.
+  revalidateTag(ADMIN_CRM_ACCOUNT_MASTER_CACHE_TAG, "max")
   return data
 }
 
@@ -2448,6 +2514,9 @@ export async function reattachBranchRevConfirmedLinks(): Promise<ReattachBranchR
     if (!moveError) reattached += 1
   }
 
+  // REV 시트 동기화 후 실행되는 유지보수라 확정 링크의 target_id/record_key가 이동하거나
+  // 고아가 stale로 빠질 수 있다 — account-master 합성 입력이 바뀔 때만 무효화한다.
+  if (reattached > 0 || staled > 0) revalidateTag(ADMIN_CRM_ACCOUNT_MASTER_CACHE_TAG, "max")
   return { checkedConfirmedLinks: links.length, reattached, staled }
 }
 

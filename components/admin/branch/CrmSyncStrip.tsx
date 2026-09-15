@@ -41,7 +41,7 @@ interface CrmSyncStripProps {
 }
 
 // 응답 → 스트립 상태 접기 — 자체 fetch 성공 경로와 부모 주입 경로가 같은 판정을 공유한다.
-function stripStateFromResponse(response: CrmCoverageResponse | null): StripState {
+export function stripStateFromResponse(response: CrmCoverageResponse | null): StripState {
   const rev = response?.revAccounts ?? null
   const summary = buildCrmSyncSummary(rev)
   if (rev && summary) return { status: "ready", rev, summary }
@@ -97,7 +97,7 @@ function Meter({
   )
 }
 
-type StripState =
+export type StripState =
   | { status: "loading" }
   | { status: "unavailable" }
   | { status: "empty" }
@@ -150,11 +150,6 @@ export default function CrmSyncStrip({ coverage }: CrmSyncStripProps = {}) {
 
   const { rev, summary } = state
   const tone = CRM_SYNC_TONE[summary.health]
-  const accountPct = summary.accountTotal > 0 ? (summary.accountConnected / summary.accountTotal) * 100 : 0
-  const rowLinkedPct = summary.rows.matchable > 0 ? (summary.rows.linked / summary.rows.matchable) * 100 : 0
-  const rowReviewPct = summary.rows.matchable > 0 ? (summary.rows.review / summary.rows.matchable) * 100 : 0
-  const revenuePct = summary.revenueTotal > 0 ? (summary.revenueLinked / summary.revenueTotal) * 100 : 0
-  const topUnlinked = rev.topUnlinked.slice(0, TOP_UNLINKED_DISPLAY)
 
   return (
     <div className={`rounded-xl border ${tone.border} ${tone.bg}`}>
@@ -175,111 +170,122 @@ export default function CrmSyncStrip({ coverage }: CrmSyncStripProps = {}) {
         />
       </button>
 
-      {expanded && (
-        <div className="border-t border-black/5 bg-white/60 px-3.5 py-3">
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1.35fr)]">
-            <div className="space-y-3">
-              <Meter
-                label="계정 연결"
-                value={`${summary.accountConnected} / ${summary.accountTotal} (${summary.accountPctLabel})`}
-                segments={[{ pct: accountPct, className: "bg-[#084734]" }]}
-              />
-              <Meter
-                label={`행 연결 (매칭 대상 ${summary.rows.matchable.toLocaleString("ko-KR")}행)`}
-                value={`확정 ${summary.rows.linked} · 검토 ${summary.rows.review} · 미연결 ${summary.rows.unlinked}`}
-                segments={[
-                  { pct: rowLinkedPct, className: "bg-[#084734]" },
-                  { pct: rowReviewPct, className: "bg-[#A8741A]" },
-                ]}
-              />
-              <Meter
-                label="매출 커버리지 (¥)"
-                value={`${summary.revenueLinked.toLocaleString("ko-KR")} / ${summary.revenueTotal.toLocaleString("ko-KR")} (${formatRevSyncPct(revenuePct)})`}
-                segments={[{ pct: revenuePct, className: "bg-[#084734]" }]}
-              />
+      {expanded && <CrmSyncDetail rev={rev} summary={summary} />}
+    </div>
+  )
+}
 
-              <p className="border-t border-dashed border-[rgba(0,0,0,0.08)] pt-2.5 text-[11.5px] text-[#615D59]">
-                연결 이력: 과거 후보{" "}
-                <b className="font-bold tabular-nums text-[#111110]">{summary.hygiene.orphanCandidates}</b>행
-                {summary.hygiene.orphanCandidateNames != null
-                  ? `(${summary.hygiene.orphanCandidateNames}개 이름)`
-                  : ""}
-                {" · "}은퇴 링크{" "}
-                <b className="font-bold tabular-nums text-[#111110]">{summary.hygiene.staleLinks}</b>행
-                {summary.hygiene.staleLinkNames != null
-                  ? `(${summary.hygiene.staleLinkNames}개 이름)`
-                  : ""}
-                {" — "}누적 기록, 자동 재생성 대상 아님
-              </p>
-              <p className="text-[10.5px] text-[#615D59]">
-                기준: {summary.asOf ? formatAsOf(summary.asOf) : "시각 미확인"} 동기화 · 플레이스홀더{" "}
-                {summary.placeholderRows.toLocaleString("ko-KR")}행({cny(summary.placeholderRevenue)}) 매칭 제외
-              </p>
-            </div>
+// 펼침 상세(미터·미연결 상위·링크) — 스트립 단독 사용(이 파일)과 장부 상태 줄(LedgerStatusRail)이 공유한다.
+export function CrmSyncDetail({ rev, summary }: { rev: RevSyncCoverageView; summary: CrmSyncSummary }) {
+  const accountPct = summary.accountTotal > 0 ? (summary.accountConnected / summary.accountTotal) * 100 : 0
+  const rowLinkedPct = summary.rows.matchable > 0 ? (summary.rows.linked / summary.rows.matchable) * 100 : 0
+  const rowReviewPct = summary.rows.matchable > 0 ? (summary.rows.review / summary.rows.matchable) * 100 : 0
+  const revenuePct = summary.revenueTotal > 0 ? (summary.revenueLinked / summary.revenueTotal) * 100 : 0
+  const topUnlinked = rev.topUnlinked.slice(0, TOP_UNLINKED_DISPLAY)
 
-            <div>
-              {topUnlinked.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse text-[12px]">
-                    <thead>
-                      <tr className="border-b border-[rgba(0,0,0,0.08)] text-left text-[10.5px] font-bold text-[#615D59]">
-                        <th className="px-2 py-1.5 font-bold">미연결 상위 (매출 큰 순)</th>
-                        <th className="px-2 py-1.5 font-bold">담당</th>
-                        <th className="px-2 py-1.5 text-right font-bold">매출(¥)</th>
-                        <th className="px-2 py-1.5" aria-label="매칭 이동" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {topUnlinked.map((account) => (
-                        <tr key={account.accountKey} className="border-b border-[rgba(0,0,0,0.08)] last:border-b-0">
-                          <td className="whitespace-nowrap px-2 py-1.5 font-bold text-[#111110]">{account.name}</td>
-                          <td className="whitespace-nowrap px-2 py-1.5 text-[#615D59]">{account.manager ?? "—"}</td>
-                          <td className="whitespace-nowrap px-2 py-1.5 text-right font-semibold tabular-nums text-[#111110]">
-                            {Math.round(account.unlinkedRevenue).toLocaleString("ko-KR")}
-                          </td>
-                          <td className="whitespace-nowrap px-2 py-1.5 text-right">
-                            <Link
-                              href={`/admin/crm/matching?name=${encodeURIComponent(account.name)}`}
-                              className="text-[11px] font-bold text-[#084734] underline-offset-2 hover:underline"
-                            >
-                              매칭 →
-                            </Link>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="px-2 py-1.5 text-[12px] text-[#615D59]">미연결 매출 계정이 없습니다.</p>
-              )}
+  return (
+    <div className="border-t border-black/5 bg-white/60 px-3.5 py-3">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1.35fr)]">
+        <div className="space-y-3">
+          <Meter
+            label="계정 연결"
+            value={`${summary.accountConnected} / ${summary.accountTotal} (${summary.accountPctLabel})`}
+            segments={[{ pct: accountPct, className: "bg-[#084734]" }]}
+          />
+          <Meter
+            label={`행 연결 (매칭 대상 ${summary.rows.matchable.toLocaleString("ko-KR")}행)`}
+            value={`확정 ${summary.rows.linked} · 검토 ${summary.rows.review} · 미연결 ${summary.rows.unlinked}`}
+            segments={[
+              { pct: rowLinkedPct, className: "bg-[#084734]" },
+              { pct: rowReviewPct, className: "bg-[#A8741A]" },
+            ]}
+          />
+          <Meter
+            label="매출 커버리지 (¥)"
+            value={`${summary.revenueLinked.toLocaleString("ko-KR")} / ${summary.revenueTotal.toLocaleString("ko-KR")} (${formatRevSyncPct(revenuePct)})`}
+            segments={[{ pct: revenuePct, className: "bg-[#084734]" }]}
+          />
 
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Link
-                  href="/admin/crm/matching"
-                  className="inline-flex items-center rounded-lg bg-[#084734] px-3 py-1.5 text-[11.5px] font-bold text-white transition hover:bg-[#065c41]"
-                >
-                  매칭 인박스 열기 →
-                </Link>
-                <Link
-                  href="/admin/crm/deals/rev-sheet"
-                  className="inline-flex items-center rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 py-1.5 text-[11.5px] font-bold text-[#111110] transition hover:bg-[#F6F5F4]"
-                >
-                  매출시트 READ 표면 →
-                </Link>
-              </div>
-            </div>
-          </div>
-
-          {/* 정직성 원칙 — 금액 "불일치" 대조는 1차 제외: 현재 확정 링크가 전부 금액 필드 없는
-              고객 타깃이라 대조 가능한 쌍이 0건이고, 통화도 시트 CNY/내부 KRW/XSY 비정규 3원
-              체제라 자동 환산 비교는 오보 위험이 크다. 딜 타깃 링크 확보 후 2단계에서 도입. */}
-          <p className="mt-3 border-t border-black/5 pt-2.5 text-[11px] text-[#615D59]">
-            금액 불일치 대조는 아직 제공하지 않음 — 대조 가능한 확정 링크 쌍이 0건(전부 금액 없는 고객 타깃)이고,
-            통화 3원 체제(시트 ¥ / 내부 ₩ / Xiaoshouyi 비정규)라 자동 환산 비교는 오보 위험이 있습니다.
+          <p className="border-t border-dashed border-[rgba(0,0,0,0.08)] pt-2.5 text-[11.5px] text-[#615D59]">
+            연결 이력: 과거 후보{" "}
+            <b className="font-bold tabular-nums text-[#111110]">{summary.hygiene.orphanCandidates}</b>행
+            {summary.hygiene.orphanCandidateNames != null
+              ? `(${summary.hygiene.orphanCandidateNames}개 이름)`
+              : ""}
+            {" · "}은퇴 링크{" "}
+            <b className="font-bold tabular-nums text-[#111110]">{summary.hygiene.staleLinks}</b>행
+            {summary.hygiene.staleLinkNames != null
+              ? `(${summary.hygiene.staleLinkNames}개 이름)`
+              : ""}
+            {" — "}누적 기록, 자동 재생성 대상 아님
+          </p>
+          <p className="text-[10.5px] text-[#615D59]">
+            기준: {summary.asOf ? formatAsOf(summary.asOf) : "시각 미확인"} 동기화 · 플레이스홀더{" "}
+            {summary.placeholderRows.toLocaleString("ko-KR")}행({cny(summary.placeholderRevenue)}) 매칭 제외
           </p>
         </div>
-      )}
+
+        <div>
+          {topUnlinked.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-[12px]">
+                <thead>
+                  <tr className="border-b border-[rgba(0,0,0,0.08)] text-left text-[10.5px] font-bold text-[#615D59]">
+                    <th className="px-2 py-1.5 font-bold">미연결 상위 (매출 큰 순)</th>
+                    <th className="px-2 py-1.5 font-bold">담당</th>
+                    <th className="px-2 py-1.5 text-right font-bold">매출(¥)</th>
+                    <th className="px-2 py-1.5" aria-label="매칭 이동" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {topUnlinked.map((account) => (
+                    <tr key={account.accountKey} className="border-b border-[rgba(0,0,0,0.08)] last:border-b-0">
+                      <td className="whitespace-nowrap px-2 py-1.5 font-bold text-[#111110]">{account.name}</td>
+                      <td className="whitespace-nowrap px-2 py-1.5 text-[#615D59]">{account.manager ?? "—"}</td>
+                      <td className="whitespace-nowrap px-2 py-1.5 text-right font-semibold tabular-nums text-[#111110]">
+                        {Math.round(account.unlinkedRevenue).toLocaleString("ko-KR")}
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-1.5 text-right">
+                        <Link
+                          href={`/admin/crm/matching?name=${encodeURIComponent(account.name)}`}
+                          className="text-[11px] font-bold text-[#084734] underline-offset-2 hover:underline"
+                        >
+                          매칭 →
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="px-2 py-1.5 text-[12px] text-[#615D59]">미연결 매출 계정이 없습니다.</p>
+          )}
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link
+              href="/admin/crm/matching"
+              className="inline-flex items-center rounded-lg bg-[#084734] px-3 py-1.5 text-[11.5px] font-bold text-white transition hover:bg-[#065c41]"
+            >
+              매칭 인박스 열기 →
+            </Link>
+            <Link
+              href="/admin/crm/deals/rev-sheet"
+              className="inline-flex items-center rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 py-1.5 text-[11.5px] font-bold text-[#111110] transition hover:bg-[#F6F5F4]"
+            >
+              매출시트 READ 표면 →
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* 정직성 원칙 — 금액 "불일치" 대조는 1차 제외: 현재 확정 링크가 전부 금액 필드 없는
+          고객 타깃이라 대조 가능한 쌍이 0건이고, 통화도 시트 CNY/내부 KRW/XSY 비정규 3원
+          체제라 자동 환산 비교는 오보 위험이 크다. 딜 타깃 링크 확보 후 2단계에서 도입. */}
+      <p className="mt-3 border-t border-black/5 pt-2.5 text-[11px] text-[#615D59]">
+        금액 불일치 대조는 아직 제공하지 않음 — 대조 가능한 확정 링크 쌍이 0건(전부 금액 없는 고객 타깃)이고,
+        통화 3원 체제(시트 ¥ / 내부 ₩ / Xiaoshouyi 비정규)라 자동 환산 비교는 오보 위험이 있습니다.
+      </p>
     </div>
   )
 }

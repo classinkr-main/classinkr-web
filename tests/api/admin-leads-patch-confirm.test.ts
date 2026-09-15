@@ -15,6 +15,9 @@ vi.mock("@/lib/admin-auth", () => ({
 vi.mock("@/lib/repositories/leads", () => ({
   updateLead,
   deleteLead,
+  // 감사 §8 — route.ts가 `instanceof LeadVersionConflictError`로 낙관적 잠금 충돌을 가려낸다.
+  // import가 undefined면 catch 블록에서 instanceof가 TypeError로 죽는다.
+  LeadVersionConflictError: class LeadVersionConflictError extends Error {},
 }))
 vi.mock("@/lib/repositories/contact-logs", () => ({ hasContactLog }))
 
@@ -132,5 +135,36 @@ describe("PATCH /api/admin/leads/[id] — 연락 체크와 확인 도장", () =>
     updateLead.mockResolvedValueOnce(null)
     const res = await callPatch({ status: "contacted" })
     expect(res.status).toBe(404)
+  })
+
+  // 감사 §8 — leads/[id]에 동시 편집 충돌 검증이 전혀 없었다(최소 요구사항: updated_at 비교).
+  describe("낙관적 잠금(expectedUpdatedAt)", () => {
+    it("본문의 expectedUpdatedAt을 updateLead의 세 번째 인자로 그대로 전달한다", async () => {
+      await callPatch({ notes: "메모", expectedUpdatedAt: "2026-09-01T00:00:00.000Z" })
+      expect(updateLead).toHaveBeenCalledWith(
+        "lead-1",
+        expect.objectContaining({ notes: "메모" }),
+        { expectedUpdatedAt: "2026-09-01T00:00:00.000Z" }
+      )
+    })
+
+    it("expectedUpdatedAt이 없는 기존 호출은 undefined로 넘어가 무조건 덮어쓰기 그대로다", async () => {
+      await callPatch({ notes: "메모" })
+      expect(updateLead).toHaveBeenCalledWith(
+        "lead-1",
+        expect.objectContaining({ notes: "메모" }),
+        { expectedUpdatedAt: undefined }
+      )
+    })
+
+    it("updateLead가 LeadVersionConflictError를 던지면 409를 반환한다", async () => {
+      const { LeadVersionConflictError } = await import("@/lib/repositories/leads")
+      updateLead.mockRejectedValueOnce(new LeadVersionConflictError("다른 곳에서 먼저 수정했습니다."))
+
+      const res = await callPatch({ notes: "메모", expectedUpdatedAt: "2026-09-01T00:00:00.000Z" })
+
+      expect(res.status).toBe(409)
+      await expect(res.json()).resolves.toEqual({ error: "다른 곳에서 먼저 수정했습니다." })
+    })
   })
 })

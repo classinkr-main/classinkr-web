@@ -32,6 +32,13 @@ export async function POST(req: NextRequest) {
     if (!result.ok && effectiveSources.includes("hw") && result.hw) {
       revalidateTag(BRANCH_HW_CACHE_TAG, "max")
     }
+    // (c) 2026-09-11 — runAll이 revOk를 싣는다. hw만 실패한 부분 실패에서도 rev는 이미 미러·
+    // DSH·KPI에 반영됐으므로 rev 계열 태그를 무효화한다(위 (a)의 "rev 구분 불가" 한계 해소).
+    if (!result.ok && result.revOk) {
+      for (const tag of ["branch-dsh", "branch-kpi", BRANCH_REV_DEALS_CACHE_TAG, ADMIN_CRM_REVENUE_CACHE_TAG]) {
+        revalidateTag(tag, "max")
+      }
+    }
   }
 
   if (result.ok) {

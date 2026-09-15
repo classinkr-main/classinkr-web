@@ -1,6 +1,8 @@
 import "server-only"
 
+import { revalidateTag, unstable_cache } from "next/cache"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { shareInFlightByArgs } from "@/lib/server/share-in-flight"
 import type {
   NotificationCategory,
   NotificationChannel,
@@ -15,6 +17,18 @@ import type {
 } from "@/lib/notifications/types"
 
 const sb = () => createSupabaseAdminClient()
+
+/**
+ * admin-performance-round3-2026-09-10.md §3.3 — 사이드바 벨(모든 어드민 페이지가
+ * ?countOnly=1로 부르는 GET /api/admin/notifications)이 콜드 1,207ms였다. 캐시가 전혀
+ * 없어 매 네비게이션마다 Supabase count 왕복 2~3회(수신자 셀렉터당 1회)를 다시 태웠다.
+ *
+ * 수신자별로 태그를 쪼개지 않고 전역 단일 태그로 둔다 — 알림은 admin_role 브로드캐스트로도
+ * 생성되므로(예: 전체 ADMIN 롤 앞) 특정 유저 스코프로 좁히면 "내 알림은 그대로인데 캐시가
+ * 안 깨진다" 케이스가 생긴다. 전역 무효화는 쓰기 빈도가 낮아(사람이 벨을 클릭하거나 시스템이
+ * 알림을 만들 때뿐) 과도한 미스를 만들지 않는다 — marketing-perf 등 기존 태그들과 같은 절충.
+ */
+export const ADMIN_NOTIFICATIONS_CACHE_TAG = "admin-notifications"
 
 interface CreateNotificationEventInput {
   eventType: string
@@ -186,6 +200,9 @@ export async function createInAppNotifications(
     throw new Error(`[notifications] create notifications failed: ${error.message}`)
   }
 
+  // 새 알림은 시스템/다른 관리자의 행동으로 생성되는 경우가 대부분이라(크론·리드 이벤트 등)
+  // 이 요청을 보낸 주체가 직접 다음 화면에서 확인하는 게 아니다 — "max"(SWR)로 충분하다.
+  revalidateTag(ADMIN_NOTIFICATIONS_CACHE_TAG, "max")
   return (data ?? []).map((row) => rowToNotification(row))
 }
 
@@ -208,7 +225,7 @@ export async function createDeliveryLog(input: DeliveryLogInput) {
   }
 }
 
-export async function listNotificationsForRecipients(
+async function listNotificationsForRecipientsUncached(
   selectors: NotificationRecipientTarget[],
   options?: { limit?: number }
 ) {
@@ -241,7 +258,7 @@ export async function listNotificationsForRecipients(
     .map((row) => rowToNotification(row))
 }
 
-export async function countUnreadNotificationsForRecipients(
+async function countUnreadNotificationsForRecipientsUncached(
   selectors: NotificationRecipientTarget[]
 ) {
   if (!selectors.length) return 0
@@ -275,6 +292,27 @@ export async function countUnreadNotificationsForRecipients(
   return counts.reduce((total, count) => total + count, 0)
 }
 
+// 사이드바 벨은 모든 어드민 페이지 진입마다 부른다 — TTL은 30초로 짧게 잡아 "방금 읽음
+// 처리했는데 아직 안 지워짐" 체감을 줄인다(쓰기 경로가 아래에서 {expire:0}으로 즉시 하드
+// 만료하므로 이 TTL은 "아무 일도 없을 때의 상한"일 뿐). shareInFlightByArgs가 콜드
+// 인스턴스의 동시 미스를 합치고(dev·test에서 JSON 안전성도 함께 검사) selectors 배열은
+// getAdminRecipientSelectors가 admin.role/userId로부터 매번 같은 내용으로 재구성하므로
+// JSON 키가 안정적이다.
+export const listNotificationsForRecipients = unstable_cache(
+  shareInFlightByArgs("admin-notifications-list-v1", listNotificationsForRecipientsUncached),
+  ["admin-notifications-list-v1"],
+  { revalidate: 30, tags: [ADMIN_NOTIFICATIONS_CACHE_TAG] }
+)
+
+export const countUnreadNotificationsForRecipients = unstable_cache(
+  shareInFlightByArgs(
+    "admin-notifications-count-v1",
+    countUnreadNotificationsForRecipientsUncached
+  ),
+  ["admin-notifications-count-v1"],
+  { revalidate: 30, tags: [ADMIN_NOTIFICATIONS_CACHE_TAG] }
+)
+
 export async function markAllNotificationsReadForRecipients(
   selectors: NotificationRecipientTarget[]
 ) {
@@ -293,6 +331,10 @@ export async function markAllNotificationsReadForRecipients(
     throw new Error(`[notifications] mark all read failed: ${error.message}`)
   }
 
+  // 관리자 본인이 벨을 클릭해 방금 일으킨 쓰기다 — 다음 조회(같은 요청 직후의 재조회 포함)가
+  // 반드시 0을 보도록 {expire:0}으로 즉시 하드 만료한다("max"면 SWR이라 배경 재검증이 끝나기
+  // 전까지 옛 카운트가 한 번 더 보일 수 있다 — leads.ts의 invalidateLeadReadCaches와 같은 톤).
+  revalidateTag(ADMIN_NOTIFICATIONS_CACHE_TAG, { expire: 0 })
   return ids.length
 }
 
@@ -318,6 +360,8 @@ export async function deleteNotificationForRecipients(
     throw new Error(`[notifications] delete failed: ${deleteError.message}`)
   }
 
+  // 관리자 본인의 즉시 조작 — 위 markAllNotificationsReadForRecipients와 같은 이유로 하드 만료.
+  revalidateTag(ADMIN_NOTIFICATIONS_CACHE_TAG, { expire: 0 })
   return true
 }
 
@@ -350,5 +394,7 @@ export async function markNotificationReadForRecipients(
     )
   }
 
+  // 관리자 본인의 즉시 조작 — 위 markAllNotificationsReadForRecipients와 같은 이유로 하드 만료.
+  revalidateTag(ADMIN_NOTIFICATIONS_CACHE_TAG, { expire: 0 })
   return rowToNotification(updated)
 }

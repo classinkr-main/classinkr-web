@@ -53,6 +53,12 @@ const getCachedRecentSyncRuns = unstable_cache(
 export async function getRecentSyncRuns(limit = 10): Promise<SyncRun[]> {
   return getCachedRecentSyncRuns(limit)
 }
+
+// 캐시를 거치지 않는 최근 런 조회 — 방금 끝난 런까지 포함해야 하는 판정(연속 실패 알림) 전용.
+// finishSyncRun의 revalidateTag(…, "max")는 SWR이라 캐시판은 직전 런을 빠뜨릴 수 있다.
+export async function listRecentSyncRunsFresh(limit = 60): Promise<SyncRun[]> {
+  return fetchRecentSyncRuns(limit)
+}
 export async function isAnyRunning(): Promise<boolean> {
   const sb = createSupabaseAdminClient()
   const cutoff = new Date(Date.now() - 10 * 60_000).toISOString()

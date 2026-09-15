@@ -85,4 +85,23 @@ describe("admin settings integration organization", () => {
     expect(html).toContain("확인 1")
     expect(html).toContain("미설정 1")
   })
+
+  // 2026-09-14 Vercel Pro 전환 — "하루 3회/4회 등록, Hobby 기준 확인" 카드는 사실과 달라 지웠다.
+  it("does not show the outdated Hobby cron warning card", () => {
+    const html = renderToStaticMarkup(
+      <IntegrationControlPanel
+        active="status"
+        onChange={() => undefined}
+        status={status}
+        loading={false}
+        error={null}
+        onRefresh={() => undefined}
+      >
+        <div>webhook settings</div>
+      </IntegrationControlPanel>
+    )
+
+    expect(html).not.toContain("운영 스케줄 경고")
+    expect(html).not.toContain("Hobby 기준 확인")
+  })
 })

@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
-import { listAdminDocsContent } from "@/lib/admin-docs"
+import { getCachedAdminDocsContent } from "./_admin-list-cache"
 
 export async function GET(req: NextRequest) {
   const authError = await verifyAdmin(req)
   if (authError) return authError
 
   try {
-    const result = await listAdminDocsContent()
+    const result = await getCachedAdminDocsContent()
     return adminCachedJson(result)
   } catch (error) {
     console.error("[GET /api/admin/docs] error:", error)

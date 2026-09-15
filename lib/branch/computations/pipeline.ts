@@ -92,6 +92,29 @@ function weeklyPaymentsFromRaw(deal: BranchRevDeal): Record<string, number[]> {
   return weekly
 }
 
+// 품질 감사 2026-09-10 — #1(페이로드 다이어트): /api/admin/branch/pipeline 172.6KB의 상당 비중은
+// 이 함수가 만드는 4개 월별 맵(monthlyPayments/monthlyConfirmed/monthlyHighConfidence/monthlyRed)이
+// 매출 없는 달까지 0/false로 꽉 채워 직렬화되는 데서 온다 — 임포트 원천(sales-ledger-imports.ts)이
+// 매출 없는 달에도 false를 명시적으로 채워 넣는다. 소비 시맨틱은 전부 "누락 키 = 0/false"와
+// 동일하다(mapNumberValue: 누락 키 → 0, row.monthlyRed?.[month]: 누락 키 → falsy — shared.tsx/
+// RevMatrix 소스로 실측 확인). 그래서 이 마지막 직렬화 경계에서만 0/false 키를 걷어낸다 — 위쪽
+// 집계(revenueFromRev 등)는 원본 d.monthly_payments를 그대로 쓰므로 이 트리밍과 무관하다.
+export function sparseNumberMap(map: Record<string, number> | null | undefined): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const [key, value] of Object.entries(map ?? {})) {
+    if (value) out[key] = value
+  }
+  return out
+}
+
+export function sparseBooleanMap(map: Record<string, boolean> | null | undefined): Record<string, boolean> {
+  const out: Record<string, boolean> = {}
+  for (const [key, value] of Object.entries(map ?? {})) {
+    if (value) out[key] = true
+  }
+  return out
+}
+
 function inScope(ym: string, scope: RevenuePeriod, now: Date): boolean {
   const fy = fyOf(now)
   const m = Number(ym.slice(5, 7))
@@ -163,10 +186,10 @@ export function listRevRevenue(
       firstPayment: d.first_payment,
       contractTarget: Number(d.contract_target ?? 0),
       revenue: revenueFromRev(d, scope?.period, scope?.now),
-      monthlyPayments: d.monthly_payments ?? {},
-      monthlyConfirmed: d.monthly_confirmed ?? {},
-      monthlyHighConfidence: d.monthly_high_conf ?? {},
-      monthlyRed: d.monthly_red ?? {},
+      monthlyPayments: sparseNumberMap(d.monthly_payments),
+      monthlyConfirmed: sparseNumberMap(d.monthly_confirmed),
+      monthlyHighConfidence: sparseNumberMap(d.monthly_high_conf),
+      monthlyRed: sparseBooleanMap(d.monthly_red),
       weeklyPayments: weeklyPaymentsFromRaw(d),
     }))
     .sort((a, b) => b.revenue - a.revenue || a.customer.localeCompare(b.customer))

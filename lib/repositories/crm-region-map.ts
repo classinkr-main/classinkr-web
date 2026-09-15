@@ -1,5 +1,8 @@
 import "server-only"
 
+import { unstable_cache, revalidateTag } from "next/cache"
+
+import { ADMIN_CRM_REGION_MAP_CACHE_TAG } from "@/lib/admin/crm/cache-tags"
 import { NAVER_MAP_SOURCE_OBJECT, NAVER_MAP_SOURCE_SYSTEM } from "@/lib/crm/naver-map-source"
 import {
   emptyRegionTally,
@@ -8,6 +11,8 @@ import {
   type CrmRegionLayer,
 } from "@/lib/crm/region-map-summary"
 import { KOREA_PROVINCE_LABELS } from "@/lib/regions/korea-regions"
+import { assertJsonSafeInDev } from "@/lib/server/json-safe"
+import { shareInFlight } from "@/lib/server/share-in-flight"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 /**
@@ -38,11 +43,7 @@ export interface CrmRegionMap {
   layers: CrmRegionLayer[]
 }
 
-const CACHE_TTL_MS = 60_000
 const ROW_LIMIT = 5_000
-
-let cache: { savedAt: number; value: CrmRegionMap } | null = null
-let inFlight: Promise<CrmRegionMap> | null = null
 
 async function buildCrmRegionMap(): Promise<CrmRegionMap> {
   const sb = createSupabaseAdminClient()
@@ -101,21 +102,41 @@ async function buildCrmRegionMap(): Promise<CrmRegionMap> {
   }
 }
 
+// 2026-09-10 3라운드(§3.3) — 이전엔 module-level `let cache`+`inFlight`로 손으로 구현한
+// 60초 캐시+동시요청 합치기였다. 뜻은 같지만 process-local이라 Vercel Fluid 인스턴스마다
+// 따로 논다 — unstable_cache(Data Cache)로 옮겨 인스턴스 간 공유되게 하고, 동시요청 합치기는
+// shareInFlight로 대체한다(태그 상수를 그대로 in-flight 키로 쓴다 — 인자가 없는 계산이라
+// crm-unified-customers.ts와 같은 관례).
+const getCachedCrmRegionMap = unstable_cache(
+  async () => {
+    const value = await shareInFlight(ADMIN_CRM_REGION_MAP_CACHE_TAG, buildCrmRegionMap)
+    // unstable_cache는 JSON 직렬화 경계다 — 이 값은 문자열/숫자/배열뿐이라 통과해야 정상이고,
+    // dev·test에서 위반 시 즉시 던져 잡는다(2026-09-04 우선순위 큐 500 사고 재발 방지).
+    return assertJsonSafeInDev("admin-crm-region-map", value)
+  },
+  ["admin-crm-region-map-v1"],
+  // 무효화는 부분적이다(§3.4 보고서 참고 — naver-map 재수집만 이 태그를 건드린다) —
+  // REV 시트·리드 쓰기가 못 건드리는 동안은 TTL을 이전과 같은 60초로 유지한다.
+  { revalidate: 60, tags: [ADMIN_CRM_REGION_MAP_CACHE_TAG] }
+)
+
 export async function getCrmRegionMap(options: { force?: boolean } = {}): Promise<CrmRegionMap> {
   if (options.force) {
-    cache = null
-    inFlight = null
+    // 강제 새로고침 — 이번 응답은 캐시를 우회해 즉시 최신값을 만들고, 태그도 같이 무효화해
+    // 다른 인스턴스의 다음 조회도 새로 계산하게 한다(우회만 하면 이번 응답 이후에도 다른
+    // 인스턴스는 옛 Data Cache를 계속 본다).
+    revalidateTag(ADMIN_CRM_REGION_MAP_CACHE_TAG, "max")
+    return buildCrmRegionMap()
   }
-  if (cache && Date.now() - cache.savedAt < CACHE_TTL_MS) return cache.value
-  if (inFlight) return inFlight
+  return getCachedCrmRegionMap()
+}
 
-  const request = buildCrmRegionMap()
-  inFlight = request
-  try {
-    const value = await request
-    cache = { savedAt: Date.now(), value }
-    return value
-  } finally {
-    if (inFlight === request) inFlight = null
-  }
+// 지역 분포에 영향을 주는 원천이 바뀌면 호출한다. 현재 실제로 거는 곳은
+// lib/repositories/crm-naver-map.ts의 importCrmNaverMapSource(지도 장소 재수집 —
+// region_label을 다시 채운다)와 app/api/admin/crm/external-sync/route.ts(NEO 고객
+// region_label 재계산)뿐이다. branch_rev_deals.region(REV 시트 동기화)과 leads.branch
+// (리드 쓰기)는 각각 branch·leads 소유 파일이라 이번 라운드에서 배선하지 못했다 — 그 두
+// 경로는 TTL(60초)만으로 신선도를 맞춘다.
+export function invalidateCrmRegionMapCache() {
+  revalidateTag(ADMIN_CRM_REGION_MAP_CACHE_TAG, "max")
 }

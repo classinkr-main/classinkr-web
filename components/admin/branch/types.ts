@@ -119,6 +119,16 @@ export interface BranchDataSources {
   dsh: BranchDataSourceInfo
 }
 
+export interface BranchSyncHealth {
+  /** 마지막 성공 이후 실패가 있었던 KST 날짜 수. 0이면 정상. */
+  failedDays: number
+  lastSuccessAt: string | null
+  /** 최근 실패가 공유 끊김·권한 계열 — 재동기화로 안 풀리고 시트 재공유가 필요하다. */
+  permissionDenied: boolean
+  /** 조회한 기록 안에 성공이 없었다 — 실제 연속 실패는 더 길 수 있다. */
+  truncated: boolean
+}
+
 export interface BranchSummaryResponse {
   team: Team
   period: Period
@@ -132,9 +142,17 @@ export interface BranchSummaryResponse {
   dsh_breakdown?: BranchDshBreakdownRow[]
   dsh_rows?: BranchDshRow[]
   monthly_series: BranchMonthlySeries
+  /** 소스별 동기화 건강 상태(2026-09-14). lastSync는 실패한 런도 포함한 "마지막 런" 시각이라
+   *  이 값으로 "마지막 성공"과 "며칠째 실패"를 따로 보여준다. 구버전 응답은 undefined. */
+  sync_health?: { rev: BranchSyncHealth; hw: BranchSyncHealth }
   lastSync: string | null
   lastError: string | null
   sheetModifiedAt: string | null
+  /** 품질 감사 2026-09-10 — #2: true면 sheetModifiedAt=null이 "시트에 값 없음"이 아니라
+   *  "Drive 신선도 조회 자체가 실패함"이라는 뜻 — SyncStatusBar/SalesLedgerWorkbench가 이 값을
+   *  구분해 무음으로 정상처럼 보이지 않게 명시적 배지를 낸다. 구버전 응답(필드 없음)은 undefined
+   *  → 실패 아님으로 취급(하위호환, fail-soft 기본값 유지). */
+  sheetFreshnessError?: boolean
   data_sources?: BranchDataSources
 }
 

@@ -3,7 +3,9 @@
 // RLS admin-only — admin 클라이언트 전용.
 
 import "server-only"
+import { revalidateTag } from "next/cache"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { MARKETING_PERF_CACHE_TAG } from "@/lib/repositories/marketing"
 import type { CampaignUpdate, CampaignUpdateKind } from "@/lib/types/marketing-campaign"
 
 const sb = () => createSupabaseAdminClient()
@@ -84,6 +86,13 @@ export async function createCampaignUpdate(input: {
     .select()
     .single()
   if (error) throw new Error(`[campaign-updates] 생성 실패: ${error.message}`)
+  // admin-performance-round3-2026-09-10.md §3.4 — perf 조립(lib/marketing/perf-assemble.ts)이
+  // listRecentUpdates/latestUpdatesByCampaign로 이 테이블을 읽어 MARKETING_PERF_CACHE_TAG로
+  // 캐시하는데, 이 쓰기가 그 태그를 무효화하지 않아 새 업데이트 로그가 최대 60초 동안 perf
+  // 대시보드 피드에 나타나지 않던 공백이었다. marketing-campaigns.ts의 캠페인 CRUD와 같은
+  // 톤("max" — SWR, 이 쓰기의 주체가 다음 화면에서 바로 확인하지 않아도 되는 로그 기록이므로
+  // 하드 만료까지는 필요 없다).
+  revalidateTag(MARKETING_PERF_CACHE_TAG, "max")
   return rowToUpdate(data)
 }
 
@@ -94,4 +103,6 @@ export async function deleteCampaignUpdate(campaignId: string, updateId: string)
     .eq("id", updateId)
     .eq("campaign_id", campaignId) // 경로 캠페인 소속 검증 (removeLink 패턴)
   if (error) throw new Error(`[campaign-updates] 삭제 실패: ${error.message}`)
+  // 위와 동일 — 삭제도 perf 피드 입력을 바꾸므로 무효화한다.
+  revalidateTag(MARKETING_PERF_CACHE_TAG, "max")
 }

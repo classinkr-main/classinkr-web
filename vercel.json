@@ -1,6 +1,6 @@
 {
   "regions": [
-    "sin1"
+    "icn1"
   ],
   "crons": [
     {
@@ -14,6 +14,10 @@
     {
       "path": "/api/cron/lead-monthly-digest",
       "schedule": "0 0 1 * *"
+    },
+    {
+      "path": "/api/cron/lead-contact-sync",
+      "schedule": "50 0,1,4,6,8 * * 1-5"
     },
     {
       "path": "/api/cron/sync-branch",

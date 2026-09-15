@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
-import { deleteLead, updateLead, type LeadStatus, type LeadRecord } from "@/lib/repositories/leads"
+import {
+  deleteLead,
+  updateLead,
+  LeadVersionConflictError,
+  type LeadStatus,
+  type LeadRecord,
+} from "@/lib/repositories/leads"
 import { hasContactLog } from "@/lib/repositories/contact-logs"
 
 const LEAD_STATUSES = new Set<LeadStatus>(["new", "contacted", "converted", "closed"])
@@ -68,6 +74,17 @@ function sanitizeLeadPatch(raw: unknown): { patch?: Partial<LeadRecord>; error?:
   return { patch: patch as Partial<LeadRecord> }
 }
 
+// 감사 §8 — leads/[id]에는 동시 편집 검증이 전혀 없어 마지막 저장이 무조건 이겼다(bulk-assign만
+// snapshotToken으로 재검증하는 CRM 유일의 낙관적 잠금이었다). 클라이언트가 자신이 읽었던 시점의
+// updated_at을 함께 보내면 그 값으로 낙관적 잠금을 건다 — 안 보내면(기존 호출부 전부) 이전과
+// 100% 동일하게 무조건 덮어쓴다.
+function readExpectedUpdatedAt(raw: Record<string, unknown>): string | null | undefined {
+  const value = raw.expectedUpdatedAt
+  if (value === undefined) return undefined
+  if (value === null) return null
+  return typeof value === "string" ? value : undefined
+}
+
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
   if (admin instanceof NextResponse) return admin
@@ -76,6 +93,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const body = await req.json().catch(() => null)
   const sanitized = sanitizeLeadPatch(body)
   if (sanitized.error) return NextResponse.json({ error: sanitized.error }, { status: 400 })
+  const expectedUpdatedAt = isRecord(body) ? readExpectedUpdatedAt(body) : undefined
 
   try {
     if (sanitized.patch?.status === "contacted" && !(await hasContactLog(id))) {
@@ -84,10 +102,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         { status: 409 }
       )
     }
-    const updated = await updateLead(id, sanitized.patch ?? {})
+    const updated = await updateLead(id, sanitized.patch ?? {}, { expectedUpdatedAt })
     if (!updated) return NextResponse.json({ error: "리드를 찾을 수 없습니다." }, { status: 404 })
     return NextResponse.json({ lead: updated })
   } catch (error) {
+    if (error instanceof LeadVersionConflictError) {
+      return NextResponse.json({ error: error.message }, { status: 409 })
+    }
     console.error(`[PATCH /api/admin/leads/${id}] error:`, error)
     return NextResponse.json({ error: "리드를 수정하지 못했습니다." }, { status: 500 })
   }

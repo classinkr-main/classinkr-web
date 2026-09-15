@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react"
 import { Building2, Check, CircleAlert, Info, Loader2, PanelsTopLeft, ShieldCheck, UserRound } from "lucide-react"
 
-import { NAV_PRESETS, isNavPresetKey, type NavPlacement } from "@/components/admin/admin-nav-access"
+import { type NavPlacement } from "@/components/admin/admin-nav-access"
 import MemberNavAccessDrawer from "@/components/admin/settings/MemberNavAccessDrawer"
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 
@@ -137,9 +137,11 @@ function UserSection({
                         className="inline-flex items-center gap-1.5 rounded-md bg-[rgba(0,0,0,0.05)] px-3 py-1.5 text-[11px] font-medium text-[#111110] transition-colors hover:bg-[rgba(0,0,0,0.08)]"
                       >
                         <PanelsTopLeft className="h-3.5 w-3.5 text-[#1a1a1a]/45" />
-                        탭 권한
+                        사이드바 배치
                         <span className="text-[#1a1a1a]/40">
-                          {isNavPresetKey(user.navPreset) ? NAV_PRESETS[user.navPreset].label : "미배정"}
+                          {Object.keys(user.navOverrides ?? {}).length > 0
+                            ? `개인 ${Object.keys(user.navOverrides ?? {}).length}`
+                            : "기본"}
                         </span>
                       </button>
                     </div>
@@ -287,15 +289,17 @@ export function MembersPanel() {
     }
   }
 
-  // 드로어가 성공 응답으로 직접 반환한 preset/overrides로 로컬 목록을 갱신한다 — 재조회 없이
-  // "탭 권한" 버튼의 현재 프리셋 라벨이 바로 최신화된다(handleCapabilityToggle과 동일한 패턴).
+  // 드로어가 성공 응답으로 직접 반환한 overrides로 로컬 목록을 갱신한다 — 재조회 없이
+  // "사이드바 배치" 버튼의 예외 개수가 바로 최신화된다(handleCapabilityToggle과 동일한 패턴).
+  // 프리셋은 드로어가 항상 null로 밀므로 여기서도 함께 비운다(레거시 값 정리).
   const handleNavAccessSaved = (
     targetUserId: string,
-    navPreset: string | null,
     navOverrides: Record<string, NavPlacement>
   ) => {
     const updateUsers = (users: AdminUser[]) =>
-      users.map((item) => (item.userId === targetUserId ? { ...item, navPreset, navOverrides } : item))
+      users.map((item) =>
+        item.userId === targetUserId ? { ...item, navPreset: null, navOverrides } : item
+      )
 
     setDirectory((previous) =>
       previous
@@ -393,14 +397,13 @@ export function MembersPanel() {
           userId={navTarget.userId}
           displayName={navTarget.displayName}
           targetRole={String(navTarget.role)}
-          initialPreset={navTarget.navPreset ?? null}
           initialOverrides={navTarget.navOverrides ?? {}}
           onClose={() => setNavTarget(null)}
-          onSaved={(navPreset, navOverrides) => {
+          onSaved={(navOverrides) => {
             // navTarget.userId는 위 조건에서 이미 string으로 좁혀졌지만, 클로저 안에서
             // TS가 그 좁힘을 유지하지 못해 로컬 상수로 다시 고정한다.
             const targetUserId = navTarget.userId as string
-            handleNavAccessSaved(targetUserId, navPreset, navOverrides)
+            handleNavAccessSaved(targetUserId, navOverrides)
           }}
         />
       ) : null}

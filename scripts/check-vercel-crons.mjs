@@ -2,7 +2,10 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 const VERCEL_CONFIG = "vercel.json";
-const MAX_DAILY_RUNS_PER_CRON = 1;
+// Vercel Pro(2026-09-14 전환)는 크론을 분 단위로 정시에 돌린다. 저장소 정책은 경로당 항목 하나,
+// 경로당 하루 288회(5분 간격) 이하, 전체 40개 이하다 — AGENTS.md "배포 / Cron 안전 규칙".
+const MAX_RUNS_PER_DAY_PER_PATH = 288;
+const MAX_CRON_ENTRIES = 40;
 
 function fail(message) {
   throw new Error(message);
@@ -96,7 +99,11 @@ function main() {
   }
 
   const failures = [];
-  const dailyRunsByPath = new Map();
+  const entriesByPath = new Map();
+
+  if (crons.length > MAX_CRON_ENTRIES) {
+    failures.push(`${VERCEL_CONFIG} has ${crons.length} cron entries; the limit is ${MAX_CRON_ENTRIES}`);
+  }
 
   for (const cron of crons) {
     const cronPath = cron?.path;
@@ -106,6 +113,8 @@ function main() {
       failures.push(`Invalid cron path: ${JSON.stringify(cronPath)}`);
       continue;
     }
+
+    entriesByPath.set(cronPath, (entriesByPath.get(cronPath) ?? 0) + 1);
 
     if (typeof schedule !== "string") {
       failures.push(`${cronPath}: missing string schedule`);
@@ -123,17 +132,12 @@ function main() {
       const hours = expandCronField(fields[1], 0, 23, `${cronPath} hour`);
       const runsPerMatchingDay = minutes.size * hours.size;
 
-      if (runsPerMatchingDay > MAX_DAILY_RUNS_PER_CRON) {
+      if (runsPerMatchingDay > MAX_RUNS_PER_DAY_PER_PATH) {
         failures.push(
-          `${cronPath}: "${schedule}" can run ${runsPerMatchingDay} times on a matching day; ` +
-            "Vercel Hobby deployments require each cron expression to be daily-or-less"
+          `${cronPath}: "${schedule}" runs ${runsPerMatchingDay} times on a matching day; ` +
+            `the limit is ${MAX_RUNS_PER_DAY_PER_PATH} (every 5 minutes)`
         );
       }
-
-      dailyRunsByPath.set(
-        cronPath,
-        (dailyRunsByPath.get(cronPath) ?? 0) + runsPerMatchingDay
-      );
     } catch (error) {
       failures.push(`${cronPath}: ${error.message}`);
     }
@@ -144,12 +148,9 @@ function main() {
     }
   }
 
-  for (const [cronPath, runsPerMatchingDay] of dailyRunsByPath.entries()) {
-    if (runsPerMatchingDay > MAX_DAILY_RUNS_PER_CRON) {
-      failures.push(
-        `${cronPath}: configured ${runsPerMatchingDay} total runs on a matching day across duplicate entries; ` +
-          "use one daily-or-less cron entry per path, or move sub-daily scheduling outside vercel.json"
-      );
+  for (const [cronPath, entryCount] of entriesByPath.entries()) {
+    if (entryCount > 1) {
+      failures.push(`${cronPath}: appears in ${entryCount} cron entries; keep exactly one entry per path`);
     }
   }
 
@@ -158,7 +159,10 @@ function main() {
     for (const failure of failures) {
       console.error(`- ${failure}`);
     }
-    console.error("\nUse one explicit minute and one explicit hour per cron expression, e.g. \"15 0 * * *\".");
+    console.error(
+      `\nWrite schedules in UTC, one entry per path, at most ${MAX_RUNS_PER_DAY_PER_PATH} runs a day ` +
+        `and at most ${MAX_CRON_ENTRIES} entries, e.g. "0 0,4,8 * * *" (09:00/13:00/17:00 KST).`
+    );
     process.exit(1);
   }
 

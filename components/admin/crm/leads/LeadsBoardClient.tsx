@@ -16,6 +16,7 @@ import {
   Columns3, List as ListIcon,
 } from "lucide-react"
 import LeadRegisterModal from "@/components/admin/crm/LeadRegisterModal"
+import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
 import LeadTrackingPanel from "@/components/admin/crm/leads/LeadTrackingPanel"
 import { useCrmOwners } from "@/components/admin/crm/useCrmOwners"
 import { useVisibleCount } from "@/components/admin/ui/ShowMore"
@@ -169,6 +170,13 @@ export default function LeadsBoardClient() {
   const [confirmingIds, setConfirmingIds] = useState<Set<string>>(() => new Set())
   const [statusUpdatingIds, setStatusUpdatingIds] = useState<Set<string>>(() => new Set())
   const [convertingIds, setConvertingIds] = useState<Set<string>>(() => new Set())
+  // 감사 2026-09-07 §3 — 리드 '확인'·'전환'은 confirmed_at을 되돌릴 API 없이 즉시 찍거나
+  // 고객·거래 레코드를 만드는 비가역 동작인데 UI 경고가 없었다(단건 확인은 length>1 분기라 항상
+  // 우회). 공용 확인 다이얼로그(components/admin/DeleteConfirmDialog)로 모든 진입점을 통일한다.
+  const [confirmLeadsRequest, setConfirmLeadsRequest] = useState<{ ids: string[] } | null>(null)
+  const [confirmLeadsBusy, setConfirmLeadsBusy] = useState(false)
+  const [convertLeadRequest, setConvertLeadRequest] = useState<LeadRecord | null>(null)
+  const [convertLeadBusy, setConvertLeadBusy] = useState(false)
   const [bulkWorking, setBulkWorking] = useState(false)
   const [bulkAssignOpen, setBulkAssignOpen] = useState(false)
   const [bulkOwnerKey, setBulkOwnerKey] = useState("")
@@ -470,10 +478,19 @@ export default function LeadsBoardClient() {
     return data
   }
 
+  // 감사 2026-09-07 §8 — leads/[id]는 동시 편집 충돌 검증이 전혀 없어 마지막 저장이 무조건
+  // 이겼다. 이 화면이 알고 있는 리드의 updated_at을 함께 보내 서버 낙관적 잠금을 태운다 —
+  // 그사이 다른 사람이 먼저 저장했으면 서버가 409로 알려준다(row 단위 비교라 다른 필드를
+  // 고쳤어도 걸릴 수 있음 — 그 리드를 새로고침해야 한다는 정확한 신호다).
+  const getExpectedUpdatedAt = (id: string) => leads.find((lead) => lead.id === id)?.updated_at ?? null
+
   const handleStatus = async (id: string, status: LeadStatus, options?: { silent?: boolean }) => {
     setStatusUpdatingIds((prev) => new Set(prev).add(id))
     try {
-      const res = await adminFetch(`/api/admin/leads/${id}`, { method: "PATCH", body: JSON.stringify({ status }) })
+      const res = await adminFetch(`/api/admin/leads/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status, expectedUpdatedAt: getExpectedUpdatedAt(id) }),
+      })
       // 서버 응답 리드를 그대로 반영한다 — 상태 전이 때 서버가 함께 채우는 confirmed_at을
       // 버리면 "미확인" 배지·수신함 카운트가 새로고침 전까지 어긋난다.
       const data = await readAdminResponse<{ lead: LeadRecord }>(res, "상태를 변경하지 못했습니다.")
@@ -492,7 +509,10 @@ export default function LeadsBoardClient() {
 
   const handleNotes = async (id: string, notes: string) => {
     try {
-      const res = await adminFetch(`/api/admin/leads/${id}`, { method: "PATCH", body: JSON.stringify({ notes }) })
+      const res = await adminFetch(`/api/admin/leads/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ notes, expectedUpdatedAt: getExpectedUpdatedAt(id) }),
+      })
       await readAdminResponse(res, "메모를 저장하지 못했습니다.")
       setLeads((prev) => prev.map((l) => l.id === id ? { ...l, notes } : l))
     } catch (err) {
@@ -505,7 +525,10 @@ export default function LeadsBoardClient() {
   const handleFollowUp = async (id: string, date: string) => {
     const follow_up_at = date ? toFollowUpTimestamp(date) : null
     try {
-      const res = await adminFetch(`/api/admin/leads/${id}`, { method: "PATCH", body: JSON.stringify({ follow_up_at }) })
+      const res = await adminFetch(`/api/admin/leads/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ follow_up_at, expectedUpdatedAt: getExpectedUpdatedAt(id) }),
+      })
       await readAdminResponse(res, "팔로업 일정을 저장하지 못했습니다.")
       setLeads((prev) => prev.map((l) => l.id === id ? { ...l, follow_up_at: follow_up_at ?? undefined } : l))
     } catch (err) {
@@ -629,12 +652,13 @@ export default function LeadsBoardClient() {
     return { succeeded, failedCount: ids.length - succeeded.length, firstError }
   }
 
-  // "확인" — 공개 채널 리드를 기본 리드 화면으로 승격한다. 단건(드로어) · 다건(수신함 배너·벌크 바) 공용.
+  // "확인" 실행기 — 공개 채널 리드를 기본 리드 화면으로 승격한다. 단건(드로어) · 다건(수신함
+  // 배너·벌크 바) 공용. 감사 2026-09-07 §3 — 되돌릴 API가 없는 비가역 동작이라 실제 실행은
+  // 항상 requestConfirmMany가 띄우는 확인 다이얼로그를 거친 뒤에만 호출된다(이 함수 자체는
+  // 더 이상 window.confirm을 갖지 않는다 — 단건이 length>1 분기를 우회하던 버그의 근본 원인).
   const handleConfirmMany = async (ids: string[]) => {
     const uniqueIds = Array.from(new Set(ids)).filter(Boolean)
     if (uniqueIds.length === 0) return
-    // 다건은 실행 전에 묻는다 — "전체 확인"은 수백 건이 한 번에 승격될 수 있고 되돌리기가 없다.
-    if (uniqueIds.length > 1 && !confirm(`${uniqueIds.length}건을 모두 확인 처리할까요? 확인된 리드는 기본 목록에 합류합니다.`)) return
 
     setConfirmingIds((prev) => {
       const next = new Set(prev)
@@ -663,6 +687,44 @@ export default function LeadsBoardClient() {
         uniqueIds.forEach((id) => next.delete(id))
         return next
       })
+    }
+  }
+
+  // "확인" 진입점 — 단건(드로어)·다건(수신함 "모두 확인"·벌크 바) 전부 여기를 거친다.
+  // 다이얼로그의 onConfirm이 실제 handleConfirmMany를 호출한다.
+  const requestConfirmMany = (ids: string[]) => {
+    const uniqueIds = Array.from(new Set(ids)).filter(Boolean)
+    if (uniqueIds.length === 0) return
+    setConfirmLeadsRequest({ ids: uniqueIds })
+  }
+
+  const runConfirmLeadsRequest = async () => {
+    if (!confirmLeadsRequest) return
+    setConfirmLeadsBusy(true)
+    try {
+      await handleConfirmMany(confirmLeadsRequest.ids)
+    } finally {
+      setConfirmLeadsBusy(false)
+      setConfirmLeadsRequest(null)
+    }
+  }
+
+  // "고객·거래 등록" 진입점 — LeadsConsoleList·LeadDrawer 공용. 전환은 되돌릴 수 없어(리드로
+  // 되돌리는 API 없음) 매번 확인 다이얼로그를 띄운다(감사 2026-09-07 §3 — 기존에는 경고가 전혀 없었다).
+  const requestConvert = (lead: LeadRecord) => {
+    if (convertingIds.has(lead.id)) return
+    setConvertLeadRequest(lead)
+  }
+
+  const runConvertLeadRequest = async () => {
+    if (!convertLeadRequest) return
+    const lead = convertLeadRequest
+    setConvertLeadBusy(true)
+    try {
+      await handleConvert(lead)
+    } finally {
+      setConvertLeadBusy(false)
+      setConvertLeadRequest(null)
     }
   }
 
@@ -1476,7 +1538,7 @@ export default function LeadsBoardClient() {
           unconfirmedLeads={unconfirmedLeads}
           confirmingIds={confirmingIds}
           onShowAll={() => setFilter("unconfirmed")}
-          onConfirmMany={(ids) => void handleConfirmMany(ids)}
+          onConfirmMany={(ids) => requestConfirmMany(ids)}
           onSelect={setSelected}
         />
       )}
@@ -1736,7 +1798,7 @@ export default function LeadsBoardClient() {
           selectedAssignmentProfile={selectedAssignmentProfile}
           onSelectAllFiltered={() => handleToggleFilteredSelection(true)}
           onClearSelection={() => setSelectedLeadIds(new Set())}
-          onConfirmSelectedUnconfirmed={() => void handleConfirmMany(selectedUnconfirmedIds)}
+          onConfirmSelectedUnconfirmed={() => requestConfirmMany(selectedUnconfirmedIds)}
           onToggleAssignOpen={() => setBulkAssignOpen((open) => !open)}
           onOwnerKeyChange={setBulkOwnerKey}
           onAssign={() => void handleBulkAssign(Array.from(selectedLeadIds), bulkOwnerKey)}
@@ -1778,7 +1840,7 @@ export default function LeadsBoardClient() {
           onToggleLeadSelection={handleToggleLeadSelection}
           onToggleVisibleSelection={handleToggleVisibleSelection}
           onDelete={(id) => void handleDelete(id)}
-          onConvert={(lead) => void handleConvert(lead)}
+          onConvert={(lead) => requestConvert(lead)}
           onContactAction={(lead, type) => {
             setContactDraft({ leadId: lead.id, type })
             setSelected(lead)
@@ -1835,8 +1897,8 @@ export default function LeadsBoardClient() {
           onDelete={handleDelete}
           onAddLog={handleAddLog}
           onDeleteLog={handleDeleteLog}
-          onConvert={handleConvert}
-          onConfirm={(lead) => handleConfirmMany([lead.id])}
+          onConvert={async (lead) => { requestConvert(lead) }}
+          onConfirm={async (lead) => { requestConfirmMany([lead.id]) }}
         />
       )}
 
@@ -1903,6 +1965,41 @@ export default function LeadsBoardClient() {
           </div>
         </div>
       )}
+
+      {/* 감사 2026-09-07 §3 — 리드 확인·전환은 되돌릴 수 없다. 단건·다건 모든 진입점을
+          공용 확인 다이얼로그로 통일한다. */}
+      <DeleteConfirmDialog
+        open={confirmLeadsRequest !== null}
+        onClose={() => setConfirmLeadsRequest(null)}
+        onConfirm={() => void runConfirmLeadsRequest()}
+        loading={confirmLeadsBusy}
+        destructive={false}
+        title="리드 확인 처리"
+        description={
+          confirmLeadsRequest && confirmLeadsRequest.ids.length > 1
+            ? `${confirmLeadsRequest.ids.length}건을 모두 확인 처리할까요? 확인된 리드는 기본 목록에 합류합니다.`
+            : "이 리드를 확인 처리할까요? 확인된 리드는 기본 목록에 합류합니다."
+        }
+        confirmLabel="확인 처리"
+        confirmLoadingLabel="처리 중..."
+        irreversibleNote="되돌릴 수 없습니다 — 확인 처리를 취소하는 기능은 없습니다."
+      />
+      <DeleteConfirmDialog
+        open={convertLeadRequest !== null}
+        onClose={() => setConvertLeadRequest(null)}
+        onConfirm={() => void runConvertLeadRequest()}
+        loading={convertLeadBusy}
+        destructive={false}
+        title="고객·거래 등록"
+        description={
+          convertLeadRequest
+            ? `"${getLeadDisplayName(convertLeadRequest)}" 리드를 고객·거래로 전환할까요?`
+            : "이 리드를 고객·거래로 전환할까요?"
+        }
+        confirmLabel="전환"
+        confirmLoadingLabel="전환 중..."
+        irreversibleNote="되돌릴 수 없습니다 — 전환 후에는 리드로 되돌릴 수 없습니다."
+      />
 
       {toast && <Toast msg={toast.msg} type={toast.type} raised={Boolean(convertResult)} />}
     </div>

@@ -21,12 +21,16 @@ vi.mock("@/lib/admin/overview/lead-summary-cache", () => ({
 }))
 
 vi.mock("@/lib/repositories/leads", () => ({
-  getLeads: vi.fn(),
+  getBoardLeads: vi.fn(),
   getDashboardLeads: vi.fn(),
   getCampaignLeads: vi.fn(),
   getMarketingLeads: vi.fn(),
   findLeadsByContacts,
   saveLead,
+  // 감사 §7 — route.ts가 `instanceof LeadDuplicateError`로 레이스 중복을 가려낸다. 이 스위트는
+  // saveLead를 직접 제어하므로 실제로 이 타입을 던지진 않지만, import 자체가 undefined면
+  // instanceof가 TypeError로 죽는다.
+  LeadDuplicateError: class LeadDuplicateError extends Error {},
 }))
 
 vi.mock("@/lib/compass/bridge", () => ({ getCompassLeadsByPhoneKeys }))

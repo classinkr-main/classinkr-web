@@ -25,9 +25,9 @@ import {
  * EDITOR / VIEWER / PARTNER는 기존 프로필·세션을 깨지 않기 위한 nav 호환 값이며,
  * 신규 권한 모델의 역할 단계로 취급하지 않는다.
  *
- * 이 roles 필드는 nav 소비자가 적용하는 UX 가시성 메타데이터다. 실제 데이터·동작 권한은
- * 각 API의 관리자 가드와 capability 검사에서 강제해야 한다. 사이드바·모바일·커맨드 팔레트가
- * 함께 소비하지만 클라이언트 UI 메타데이터이므로 보안 경계로 간주하면 안 된다.
+ * 이 타입은 이제 CS 콘솔 가로 메뉴(cs/CsConsoleNav)와 세션 role 정규화에만 쓰인다.
+ * 사이드바 항목별 roles 필드는 2026-09-10 전면 공개 전환으로 제거됐다 — 모든 매니저가 같은
+ * 목록을 본다. 실제 데이터·동작 권한은 각 API의 관리자 가드와 capability 검사가 강제한다.
  */
 export type AdminRole = "SUPER_ADMIN" | "ADMIN" | "EDITOR" | "VIEWER" | "BRANCH" | "PARTNER"
 export type AdminNavSection = "home" | "sales" | "marketing" | "cs" | "system"
@@ -38,7 +38,6 @@ export interface AdminNavItem {
   href: string
   label: string
   icon: LucideIcon
-  roles: AdminRole[]
   section: AdminNavSection
   badge?: string
   /** 커맨드 팔레트 검색어 — 공백 구분, 한/영 병기 */
@@ -62,8 +61,8 @@ export const ADMIN_NAV_CATEGORY_META: Record<AdminNavCategory, { label: string }
 
 export const ADMIN_NAV_CATEGORIES = Object.keys(ADMIN_NAV_CATEGORY_META) as AdminNavCategory[]
 
-const ALL_STAFF: AdminRole[]    = ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER"]
-// CS 콘솔 가로 메뉴(cs/CsConsoleNav)도 같은 롤 묶음을 써야 사이드바와 가시성이 어긋나지 않는다.
+// CS 콘솔 가로 메뉴(cs/CsConsoleNav)가 쓰는 롤 묶음. 사이드바는 더 이상 롤로 항목을 거르지
+// 않지만(전면 공개), 콘솔 안쪽 가로 메뉴는 기존 가시성을 그대로 유지한다.
 export const STAFF_ADMIN: AdminRole[]  = ["SUPER_ADMIN", "ADMIN"]
 export const STAFF_EDITOR: AdminRole[] = ["SUPER_ADMIN", "ADMIN", "EDITOR"]
 
@@ -104,22 +103,24 @@ export function normalizeAdminRole(role: string): AdminRole {
 // section 필드는 계속 팔레트 그룹 라벨용이다.
 // (2026-09-01 Overview 최상단 고정 — 사이드바 정렬 요청) Overview 전용 "home" 범주를 신설해
 // ADMIN_NAV_CATEGORY_META 맨 앞에 두고 선언도 배열 맨 앞으로 옮겼다. groupNavByCategory가 범주
-// 선언 순서로 그룹을 내보내므로, 상시 목록이든 기타(super 프리셋에서 Overview가 접히는 경우)든
-// Overview의 그룹이 항상 첫 그룹으로 렌더된다. 프리셋별 상시/기타/차단 배치(NAV_PRESETS·
-// MOON_ONLY_HREFS)는 그대로다 — 이번 변경은 노출 여부가 아니라 순서만 바꾼다.
+// 선언 순서로 그룹을 내보내므로 Overview의 그룹이 항상 첫 그룹으로 렌더된다.
+// (2026-09-10 전면 공개) 항목별 roles 필드를 제거했다 — 모든 매니저가 같은 목록을 본다.
+// 배치만 남는다: 앞의 두 범주(홈 + 고객·매출) 8개가 상시, 뒤의 두 범주(마케팅·분석 + 시스템)
+// 9개가 접힌 "기타"다. 그 경계는 admin-nav-access.ts의 DEFAULT_PRIMARY_HREFS가 정본이며,
+// **이 배열의 선언 순서를 바꾸면 그 경계도 함께 흔들린다** — 범주 연속 블록을 깨지 말 것.
 export const ADMIN_NAV: AdminNavItem[] = [
-  { href: "/admin/overview", label: "Overview", icon: LayoutDashboard, roles: [...ALL_STAFF, "BRANCH"], section: "home", category: "home", keywords: "홈 대시보드 overview home" },
+  { href: "/admin/overview", label: "Overview", icon: LayoutDashboard, section: "home", category: "home", keywords: "홈 대시보드 overview home" },
 
-  { href: "/admin/calendar", label: "캘린더", icon: CalendarDays, roles: [...ALL_STAFF, "BRANCH"], section: "sales", category: "customer", keywords: "캘린더 일정 calendar schedule 행사 이벤트 event 웨비나 공개 행사" },
+  { href: "/admin/calendar", label: "캘린더", icon: CalendarDays, section: "sales", category: "customer", keywords: "캘린더 일정 calendar schedule 행사 이벤트 event 웨비나 공개 행사" },
 
   // 영업·매출 — 성과(KR Team)·검수(매출 장부)·파이프라인(CRM)·산출물(견적)·재고(하드웨어)
   // (2026-07-18 재정렬) KR Team·매출 장부를 섹션 상단으로 — 사이드바 탭 우선순위 요청 반영.
-  { href: "/admin/branch", label: "KR Team", icon: Building2, roles: [...STAFF_ADMIN, "BRANCH"], section: "sales", category: "customer", keywords: "지사 브랜치 branch kr team 매출 성과" },
-  { href: "/admin/branch/ledger", label: "매출 장부", icon: ReceiptText, roles: [...STAFF_ADMIN, "BRANCH"], section: "sales", badge: "MVP", category: "customer", maturity: "wip", keywords: "매출 장부 ledger rev dsh kpi 수치 검수 sales 콕핏" },
-  { href: "/admin/crm", label: "CRM", icon: Users, roles: [...ALL_STAFF, "BRANCH"], section: "sales", category: "customer", keywords: "crm 한국팀 매출 korea" },
-  { href: "/admin/quotes", label: "견적·문서", icon: FileText, roles: [...STAFF_ADMIN, "BRANCH"], section: "sales", category: "customer", keywords: "견적 계약 영수증 quote contract receipt" },
+  { href: "/admin/branch", label: "KR Team", icon: Building2, section: "sales", category: "customer", keywords: "지사 브랜치 branch kr team 매출 성과" },
+  { href: "/admin/branch/ledger", label: "매출 장부", icon: ReceiptText, section: "sales", badge: "MVP", category: "customer", maturity: "wip", keywords: "매출 장부 ledger rev dsh kpi 수치 검수 sales 콕핏" },
+  { href: "/admin/crm", label: "CRM", icon: Users, section: "sales", category: "customer", keywords: "crm 한국팀 매출 korea" },
+  { href: "/admin/quotes", label: "견적·문서", icon: FileText, section: "sales", category: "customer", keywords: "견적 계약 영수증 quote contract receipt" },
   // 하드웨어 재고는 견적서 산출물과 바로 이어지는 재고 검증 표면이라 견적·문서 바로 아래에 둔다(2026-07-18 재배치, 이전엔 system 섹션).
-  { href: "/admin/hardware", label: "하드웨어 재고", icon: PackageCheck, roles: [...STAFF_ADMIN, "BRANCH"], section: "sales", category: "customer", keywords: "하드웨어 재고 입고 출고 hardware inventory stock ops" },
+  { href: "/admin/hardware", label: "하드웨어 재고", icon: PackageCheck, section: "sales", category: "customer", keywords: "하드웨어 재고 입고 출고 hardware inventory stock ops" },
 
   // CS 콘솔 — 고객 지원 진입점 단일화(2026-08-18). 사이드바의 CS 항목은 이것 하나다.
   // 가이드 문서(/admin/docs)·내부 CS(/admin/cs-chatbot)는 콘솔 가로 메뉴
@@ -129,28 +130,28 @@ export const ADMIN_NAV: AdminNavItem[] = [
   // (AdminCommandPalette의 PALETTE_CHILD_COMMANDS)로 두 화면을 계속 노출한다.
   // /admin/chatbot은 외부(고객)·내부(사내) 두 축을 잇는 콘솔의 첫 화면이라 진입점으로 삼는다.
   // category가 customer인 이유 — CS는 일상 고객 지원 업무면이지 시스템 관리면이 아니다.
-  { href: "/admin/chatbot", label: "CS 콘솔", icon: Bot, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", category: "customer", keywords: "cs 콘솔 고객 지원 챗봇 운영 지표 골든셋 품질 평가 알파 준비도 chatbot ops console 채널톡 상담 문의 채팅 channel talk chat inbox 보강 큐 미해결 gaps 질문 패턴 가이드 문서 docs guide faq 추천질문 카테고리 리디렉트 내부 cs 상담 도우미 대기열 본사 확인 운영 도구 internal support assistant" },
+  { href: "/admin/chatbot", label: "CS 콘솔", icon: Bot, section: "cs", category: "customer", keywords: "cs 콘솔 고객 지원 챗봇 운영 지표 골든셋 품질 평가 알파 준비도 chatbot ops console 채널톡 상담 문의 채팅 channel talk chat inbox 보강 큐 미해결 gaps 질문 패턴 가이드 문서 docs guide faq 추천질문 카테고리 리디렉트 내부 cs 상담 도우미 대기열 본사 확인 운영 도구 internal support assistant" },
 
   // 마케팅·분석 — 캠페인·콘텐츠·리드 + 웹/비즈니스 분석
   // 메시지 발송 허브(이메일·문자·카카오, /admin/marketing)는 캠페인의 "메시지" 탭으로 흡수 — 라우트는 redirect 유지.
-  { href: "/admin/campaigns", label: "캠페인", icon: Megaphone, roles: [...STAFF_ADMIN, "BRANCH"], section: "marketing", category: "growth", keywords: "캠페인 이메일 campaign email 메시지 발송 문자 sms 카카오 kakao 알림톡 솔라피 solapi" },
+  { href: "/admin/campaigns", label: "캠페인", icon: Megaphone, section: "marketing", category: "growth", keywords: "캠페인 이메일 campaign email 메시지 발송 문자 sms 카카오 kakao 알림톡 솔라피 solapi" },
   // 크로스채널 캠페인 관리 — 이메일·문자·행사·Meta 실행을 하나의 캠페인 개체로 묶고 롤업(D1).
-  { href: "/admin/campaigns/manage", label: "캠페인 관리", icon: Layers, roles: [...STAFF_ADMIN, "BRANCH"], section: "marketing", category: "growth", keywords: "캠페인 관리 크로스채널 통합 롤업 연결 campaign manage cross-channel rollup" },
+  { href: "/admin/campaigns/manage", label: "캠페인 관리", icon: Layers, section: "marketing", category: "growth", keywords: "캠페인 관리 크로스채널 통합 롤업 연결 campaign manage cross-channel rollup" },
   // 마케팅 프로젝트 — 여러 캠페인을 묶는 상위 개체. 멤버 캠페인 롤업 + 예산 소진(D3).
-  { href: "/admin/campaigns/projects", label: "마케팅 프로젝트", icon: FolderKanban, roles: [...STAFF_ADMIN, "BRANCH"], section: "marketing", category: "growth", keywords: "마케팅 프로젝트 캠페인 묶음 롤업 예산 소진 project rollup budget" },
-  { href: "/admin/blog", label: "콘텐츠", icon: FileText, roles: [...STAFF_EDITOR, "BRANCH"], section: "marketing", category: "growth", keywords: "블로그 콘텐츠 blog content" },
-  { href: "/admin/lead-magnets", label: "자료 퍼널", icon: Magnet, roles: [...STAFF_EDITOR, "BRANCH"], section: "marketing", category: "growth", keywords: "자료 퍼널 리드마그넷 material funnel download lead magnet" },
+  { href: "/admin/campaigns/projects", label: "마케팅 프로젝트", icon: FolderKanban, section: "marketing", category: "growth", keywords: "마케팅 프로젝트 캠페인 묶음 롤업 예산 소진 project rollup budget" },
+  { href: "/admin/blog", label: "콘텐츠", icon: FileText, section: "marketing", category: "growth", keywords: "블로그 콘텐츠 blog content" },
+  { href: "/admin/lead-magnets", label: "자료 퍼널", icon: Magnet, section: "marketing", category: "growth", keywords: "자료 퍼널 리드마그넷 material funnel download lead magnet" },
   // (2026-07-29 탭 재구성) 공개 행사(/admin/events)는 캘린더 항목으로 흡수됐다 —
   // 캘린더는 이미 source: "event"로 공개 행사를 그리고 있어 화면 병합이 아니라 nav 항목만 내린 것이다.
   // 방문자/트래픽(/admin/traffic)은 nav에서만 내렸다. 화면·라우트는 독립 유지하며 Analytics가 링크한다.
-  { href: "/admin/analytics", label: "Analytics", icon: BarChart2, roles: [...ALL_STAFF, "BRANCH"], section: "marketing", category: "growth", keywords: "analytics 분석 통계 방문자 트래픽 traffic 추적 pixel 계측 홈페이지 흐름" },
+  { href: "/admin/analytics", label: "Analytics", icon: BarChart2, section: "marketing", category: "growth", keywords: "analytics 분석 통계 방문자 트래픽 traffic 추적 pixel 계측 홈페이지 흐름" },
 
   // 운영·시스템 — Overview는 맨 위 "home" 범주로 옮겨졌다(2026-09-01, 배열 상단 주석 참조).
-  { href: "/admin/ops", label: "운영 상태", icon: Activity, roles: [...STAFF_ADMIN, "BRANCH"], section: "system", category: "system", keywords: "ops health 상태 통합 크론 cron automation" },
+  { href: "/admin/ops", label: "운영 상태", icon: Activity, section: "system", category: "system", keywords: "ops health 상태 통합 크론 cron automation" },
   // 회원 관리는 Settings "회원" 탭(?tab=members)으로 흡수됨 — /admin/users는 그 탭으로 redirect 스텁.
   // ⌘K 검색어(회원·사용자·권한)를 Settings 항목 keywords에 병합해 검색성 보존.
-  { href: "/admin/settings", label: "설정", icon: Settings, roles: STAFF_ADMIN, section: "system", category: "system", keywords: "설정 settings 환경 회원 사용자 users 권한 계정" },
-  { href: "/admin/dev", label: "개발 도구", icon: Code2, roles: STAFF_ADMIN, section: "system", category: "system", keywords: "개발 dev 버그 패치노트 roadmap" },
+  { href: "/admin/settings", label: "설정", icon: Settings, section: "system", category: "system", keywords: "설정 settings 환경 회원 사용자 users 권한 계정" },
+  { href: "/admin/dev", label: "개발 도구", icon: Code2, section: "system", category: "system", keywords: "개발 dev 버그 패치노트" },
 ]
 
 // 섹션 부제(description)는 사이드바에서 미렌더 — 팔레트 그룹 라벨과 코드 문서용으로만 유지.

@@ -1,6 +1,7 @@
 import "server-only"
 
 import { unstable_cache, revalidateTag } from "next/cache"
+import { after } from "next/server"
 import { shareInFlight } from "@/lib/server/share-in-flight"
 
 import {
@@ -184,6 +185,16 @@ const FREQUENT_ACTIVITY_SCAN_LIMIT = 2000
 const FREQUENT_CUSTOMER_LIMIT = 5
 const BUSINESS_SNAPSHOT_RPC = "admin_crm_business_overview"
 const BUSINESS_SNAPSHOT_MAX_AGE_SECONDS = 300
+
+/**
+ * 스냅샷을 "낡았어도 그대로 준다"의 안전핀(속도 3라운드 §3.1).
+ *
+ * 20260910_admin_crm_overview_stale_first.sql 이 조회 경로에서 동기 재계산을 걷어냈다 —
+ * 이제 스냅샷 행이 있으면 dirty 여도 즉시 반환하고, 낡음은 stale 플래그로만 표기한다.
+ * 그 대가로 갱신이 한 번도 안 돌면 무한히 낡을 수 있어, 이 값을 넘으면 그때만 조회가
+ * 재계산을 기다린다. 평상시 갱신은 scheduleAdminCrmOverviewRefresh 가 응답 뒤에 돌린다.
+ */
+const BUSINESS_SNAPSHOT_HARD_MAX_AGE_SECONDS = 3600
 // Data Cache(unstable_cache, 120초). CRM 홈과 검수 화면이 거의 동시에 같은 무거운 10개
 // 집계를 요청해도 한 번만 계산하고, 새로고침(force)은 우회한다.
 //
@@ -560,10 +571,23 @@ async function getBusinessOverview(
   let snapshotFailure: string | null = null
 
   try {
-    const { data, error } = await sb.rpc(BUSINESS_SNAPSHOT_RPC, {
+    // 배포와 마이그레이션 적용 순서를 분리한다.
+    // 20260910_admin_crm_overview_stale_first.sql 이 아직 안 올라간 DB 에는 2인자 함수만
+    // 있고, PostgREST 는 인자 "이름"으로 후보를 고르므로 세 번째 이름을 보내면
+    // PGRST202("함수 없음")로 떨어진다. 그대로 두면 마이그레이션 전까지 CRM 개요가 매번
+    // live 쿼리로 폴백해 **지금보다 느려진다** — 그래서 한 번만 2인자로 재시도한다.
+    // 마이그레이션이 올라가면 첫 호출이 곧바로 성공해 재시도는 사라진다.
+    let { data, error } = await sb.rpc(BUSINESS_SNAPSHOT_RPC, {
       p_max_age_seconds: BUSINESS_SNAPSHOT_MAX_AGE_SECONDS,
       p_force: options.force ?? false,
+      p_hard_max_age_seconds: BUSINESS_SNAPSHOT_HARD_MAX_AGE_SECONDS,
     })
+    if (error && isMissingSnapshotInfraError(error)) {
+      ;({ data, error } = await sb.rpc(BUSINESS_SNAPSHOT_RPC, {
+        p_max_age_seconds: BUSINESS_SNAPSHOT_MAX_AGE_SECONDS,
+        p_force: options.force ?? false,
+      }))
+    }
     if (error) {
       snapshotFailure = isMissingSnapshotInfraError(error)
         ? BUSINESS_SNAPSHOT_MISSING_WARNING
@@ -1318,6 +1342,44 @@ const getCachedAdminCrmOverview = unstable_cache(() => shareInFlight("admin-crm-
   tags: [ADMIN_CRM_OVERVIEW_CACHE_TAG],
 })
 
+/**
+ * 마지막으로 백그라운드 갱신을 예약한 시각(프로세스 로컬).
+ *
+ * getCachedAdminCrmOverview 는 결과를 120초 캐시하므로, 스냅샷이 낡은 동안에는 캐시된
+ * payload 의 stale=true 가 그대로 반복 관측된다. 가드가 없으면 그 120초 동안 모든 요청이
+ * 각자 강제 갱신을 예약해 같은 무거운 집계를 줄줄이 태운다(DB 쪽 advisory lock 이 동시
+ * 실행은 막지만, 순차로 이어지는 것까지는 못 막는다).
+ */
+let lastOverviewRefreshScheduledAt = 0
+const OVERVIEW_REFRESH_COOLDOWN_MS = 60_000
+
+/**
+ * 낡은 스냅샷을 응답 뒤에 갱신한다 — 조회는 기다리지 않는다(속도 3라운드 §4 Phase 1-3).
+ *
+ * after() 는 요청 스코프에서만 유효하다. 스크립트·테스트·워커처럼 요청 밖에서 이 함수를
+ * 부르는 경로가 있으므로 실패를 삼키고 조용히 건너뛴다 — 갱신은 다음 요청이 다시 맡는다.
+ */
+function scheduleAdminCrmOverviewRefresh() {
+  const now = Date.now()
+  if (now - lastOverviewRefreshScheduledAt < OVERVIEW_REFRESH_COOLDOWN_MS) return
+  lastOverviewRefreshScheduledAt = now
+
+  try {
+    after(async () => {
+      try {
+        await buildAdminCrmOverview({ force: true })
+        // 새 스냅샷이 다음 읽기에 보이도록 태그를 즉시 하드 만료한다(force 경로와 동일 규약).
+        revalidateTag(ADMIN_CRM_OVERVIEW_CACHE_TAG, { expire: 0 })
+      } catch (error) {
+        console.error("[admin-crm-overview] 백그라운드 스냅샷 갱신 실패", error)
+      }
+    })
+  } catch {
+    // 요청 스코프 밖 — 다음 요청이 다시 예약한다.
+    lastOverviewRefreshScheduledAt = 0
+  }
+}
+
 export async function getAdminCrmOverview(options: { force?: boolean } = {}): Promise<AdminCrmOverview> {
   if (options.force) {
     const fresh = await buildAdminCrmOverview({ force: true })
@@ -1330,5 +1392,13 @@ export async function getAdminCrmOverview(options: { force?: boolean } = {}): Pr
     return fresh
   }
 
-  return getCachedAdminCrmOverview()
+  const overview = await getCachedAdminCrmOverview()
+
+  // DB 스냅샷이 낡았다고 표기돼 왔다면 응답 뒤에 갱신을 예약한다. 조회는 이미 끝났고,
+  // 이 요청의 사용자는 낡은 값을 "N분 전 기준"으로 본다(business.snapshot.refreshedAt).
+  if (overview.business.snapshot?.source === "db_snapshot" && overview.business.snapshot.stale) {
+    scheduleAdminCrmOverviewRefresh()
+  }
+
+  return overview
 }

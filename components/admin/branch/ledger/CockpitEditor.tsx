@@ -47,6 +47,11 @@ interface CockpitEditorProps {
   draftForm: DraftForm
   setDraftForm: Dispatch<SetStateAction<DraftForm>>
   monthOptions: Array<{ value: string; label: string; current: boolean }>
+  // 품질 감사 2026-09-10 — #7: 담당자가 자유 텍스트라 표기 오탈자(예: "Wangchan"/"wangchan"/
+  // "이왕찬")가 같은 사람을 담당자별 집계에서 조용히 쪼갠다. 강제 선택(select)으로 바꾸면 시트에서
+  // 아직 온보딩 안 된 신규 담당자 입력이 막히므로, datalist로 기존 표기를 추천만 하고 자유 입력은
+  // 유지한다. 부모(SalesLedgerWorkbench)가 이미 필터용으로 계산해 둔 managerOptions를 그대로 받는다.
+  managerOptions: string[]
   draftFormInvalid: boolean
   draftSaving: boolean
   canCreateEditDraft: boolean
@@ -70,6 +75,7 @@ export function CockpitEditor({
   draftForm,
   setDraftForm,
   monthOptions,
+  managerOptions,
   draftFormInvalid,
   draftSaving,
   canCreateEditDraft,
@@ -218,8 +224,14 @@ export function CockpitEditor({
             <input
               value={draftForm.manager}
               onChange={(event) => setDraftForm((current) => ({ ...current, manager: event.target.value }))}
+              list="cockpit-manager-options"
+              autoComplete="off"
               className="mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-3 text-[12px] font-semibold text-[#111110] outline-none focus:border-[#084734]"
             />
+            {/* datalist는 자유 입력을 막지 않는다 — 기존 표기를 추천해 오탈자 분산만 줄인다. */}
+            <datalist id="cockpit-manager-options">
+              {managerOptions.map((name) => <option key={name} value={name} />)}
+            </datalist>
           </label>
           <label className={fieldLabel}>
             팀

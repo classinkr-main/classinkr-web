@@ -4,9 +4,31 @@ import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/ad
 import { matchCaptureRows } from "@/lib/crm/capture/matching"
 import { parseTabularGrid, parseUnstructuredLines, type ColumnMap } from "@/lib/crm/capture/parsers"
 import { getCaptureBatchWithRows, replaceCaptureRows } from "@/lib/crm/capture/repository"
-import { getCrmUnifiedCustomers } from "@/lib/repositories/crm-unified-customers"
+import { getCrmUnifiedCustomers, type CrmUnifiedCustomerRow } from "@/lib/repositories/crm-unified-customers"
 
 export const dynamic = "force-dynamic"
+
+// 감사 2026-09-07 §9 — getCrmUnifiedCustomers 자신의 주석("내부 일괄 매칭은 전체 고객 집합을
+// 읽어야 한다")과 달리 limit이 함수 내부에서 2,000으로 clamp된다(lib/repositories/
+// crm-unified-customers.ts:771, clampInteger(options.limit, 100, 1, 2_000)) — 그 파일은
+// CRM 코어 소유라 이 저장소에서는 읽기만 허용된다. limit 인자를 아무리 키워도 소용없으므로,
+// 이 라우트가 소유한 곳에서 offset 페이지를 이어 붙여 우회한다. 기반 스냅샷은 60초
+// unstable_cache라 페이지를 여러 번 불러도 매번 leads/neo-accounts/portal을 다시 읽지 않는다.
+const UNIFIED_CUSTOMER_PAGE_LIMIT = 2_000
+// 페이지가 끝나지 않는 버그(예: nextOffset 계산 오류)로 무한 루프에 빠지지 않게 하는 안전판.
+// 실제 고객 수보다 훨씬 큰 상한이라 정상 케이스에서는 절대 걸리지 않는다.
+const UNIFIED_CUSTOMER_MAX_ROWS = 50_000
+
+async function getAllUnifiedCustomersForMatching(): Promise<CrmUnifiedCustomerRow[]> {
+  const all: CrmUnifiedCustomerRow[] = []
+  let offset: number | null = 0
+  while (offset !== null && all.length < UNIFIED_CUSTOMER_MAX_ROWS) {
+    const page = await getCrmUnifiedCustomers({ limit: UNIFIED_CUSTOMER_PAGE_LIMIT, offset })
+    all.push(...page.rows)
+    offset = page.pagination.hasMore ? page.pagination.nextOffset : null
+  }
+  return all
+}
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
@@ -44,8 +66,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "한 번에 최대 2,000행까지 분석할 수 있습니다." }, { status: 413 })
     }
 
-    const customers = await getCrmUnifiedCustomers({ limit: 2000 })
-    const matched = matchCaptureRows(parsed, customers.rows)
+    const customerRows = await getAllUnifiedCustomersForMatching()
+    const matched = matchCaptureRows(parsed, customerRows)
     const rows = await replaceCaptureRows(batch, matched)
 
     const refreshed = await getCaptureBatchWithRows(id)

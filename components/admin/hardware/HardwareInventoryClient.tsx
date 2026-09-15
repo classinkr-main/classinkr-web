@@ -2,67 +2,55 @@
 
 import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from "react"
 import dynamic from "next/dynamic"
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
+import { use, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
+import { AnimatePresence, useReducedMotion } from "framer-motion"
 import {
-  ArrowDownToLine,
-  ArrowRightLeft,
-  ArrowUpFromLine,
   Camera,
-  ChevronDown,
   ChevronRight,
   Clock3,
   FileSpreadsheet,
-  Filter,
-  Minus,
   Monitor,
   Plus,
   Projector,
   RefreshCw,
-  RotateCcw,
-  Save,
-  Search,
-  Settings2,
-  ShoppingCart,
-  Trash2,
   UploadCloud,
-  Users,
-  Wrench,
-  X,
   type LucideIcon,
 } from "lucide-react"
 
 import { adminFetch, adminFetchJson, adminFetchJsonCached, clearAdminRequestCache } from "@/lib/admin-client"
 import { paginateAdminList } from "@/lib/admin-list-pagination"
 import { isPrefetchFresh } from "@/lib/admin/prefetch-freshness"
-import CategoryCardsSection from "@/components/admin/hardware/inventory/CategoryCardsSection"
-import ImportFreshnessStrip from "@/components/admin/hardware/inventory/ImportFreshnessStrip"
-import SalesPeriodSummary from "@/components/admin/hardware/inventory/SalesPeriodSummary"
-import HardwareSearchPanel from "@/components/admin/hardware/inventory/HardwareSearchPanel"
-import LocationMapSection from "@/components/admin/hardware/inventory/LocationMapSection"
-import PlannedOutboundPanel from "@/components/admin/hardware/inventory/PlannedOutboundPanel"
-import StockLevelsSection from "@/components/admin/hardware/inventory/StockLevelsSection"
-import AlertsOutboundSections from "@/components/admin/hardware/inventory/AlertsOutboundSections"
-import SampleTrackerSection from "@/components/admin/hardware/inventory/SampleTrackerSection"
 import {
+  customerLabel,
+  DETAIL_PRESET_KEYS,
   elapsedDaysSince,
+  ENTRY_PRESETS,
   formatCurrency,
   formatDate,
   formatLotLabel,
   formatNumber,
   hardwareCardGroup,
   isCoreIfpProduct,
+  isDraftPlanned,
   isPlannedMovement,
   isPromotedProduct,
+  isSampleOutbound,
   lotFifoRank,
+  matchesProductFilter,
   MOVEMENT_LABEL,
   MOVEMENT_TONE,
+  normalizeHardwareText,
   outboundSaleType,
   periodKey,
   previewFifoLots,
+  type PlannedSelectionConfirmProgress,
+  type PlannedSelectionConfirmResult,
+  PRODUCT_FILTER_OPTIONS,
+  quickCartLineKey,
   SALE_TYPE_META,
+  SectionLoadingFallback,
+  shouldSkipCrmConfirmation,
   todayKey,
-  UNSPECIFIED_CUSTOMER,
   type HardwareCardGroup,
   type HardwareCrmOrderCandidate,
   type HardwareDashboard,
@@ -78,7 +66,10 @@ import {
   type OutboundSaleType,
   type PeriodGranularity,
   type ProductFilterKey,
+  type QuickCartSaveSummary,
+  type SampleSource,
 } from "./inventory/shared"
+import { judgeImportFreshness } from "./inventory/ImportFreshnessStrip"
 
 interface HardwareCrmOrderCandidatesResponse {
   candidates: HardwareCrmOrderCandidate[]
@@ -101,13 +92,9 @@ interface HardwareMovementBatchResponse {
   summary: { success: number; failed: number; created?: number }
 }
 
-interface QuickCartSaveSummary {
-  success: number
-  failed: number
-  savedQuantity: number
-  failedQuantity: number
-}
-
+// QuickCartSaveSummary·ENTRY_PRESETS·DETAIL_PRESET_KEYS·presetTone·SAMPLE_SOURCE_OPTIONS·
+// SampleSource는 구조 분해(#6)로 inventory/shared.tsx로 옮겼다(QuickRecordSheet 전용 상수는
+// LOCATION_OPTIONS·QUICK_QUANTITIES처럼 그 파일에서 직접 정의 — 아래 shared import 참고).
 interface HardwareKitPreset {
   key: string
   label: string
@@ -119,52 +106,6 @@ interface HardwareKitPreset {
     match: (row: HardwareStockRow) => boolean
   }>
 }
-
-const ENTRY_PRESETS: Array<{
-  key: string
-  movementType: HardwareMovementType
-  label: string
-  description: string
-  icon: LucideIcon
-  from: string
-  to: string
-  status: string
-}> = [
-  // sale/planned의 to는 비워 둔다 — "고객" 리터럴이 그대로 저장되면 고객사 집계가 "고객(미지정)"으로 뭉개진다.
-  // 도착 입력은 최근 고객사 datalist + 출고 필수 검증으로 실명 입력을 유도한다.
-  // 샘플 모델(사용자 확정): 샘플 총량 = 사무실(남은 샘플) + 샘플(나간 샘플).
-  //   샘플 배정(창고→사무실)으로 판매 재고를 샘플 재고로 전환 → 샘플 대여(사무실→샘플, 없으면 창고→샘플)로 내보냄 →
-  //   샘플 반환(샘플→사무실)으로 회수. return은 repository에서 from −qty / to +qty라 위치 조합만으로 표현된다.
-  { key: "sale", movementType: "outbound", label: "판매 출고", description: "고객 판매 완료", icon: ArrowUpFromLine, from: "창고", to: "", status: "출고" },
-  { key: "planned", movementType: "outbound", label: "배송 예정", description: "가용에서 미리 차감", icon: Clock3, from: "창고", to: "", status: "배송 예정" },
-  { key: "sample", movementType: "outbound", label: "샘플 대여", description: "사무실 샘플을 대여·데모로 반출", icon: ArrowUpFromLine, from: "사무실", to: "샘플", status: "샘플/대여" },
-  { key: "sampleReturn", movementType: "return", label: "샘플 반환", description: "대여 샘플을 사무실로 회수", icon: RotateCcw, from: "샘플", to: "사무실", status: "샘플 반환" },
-  { key: "sampleAssign", movementType: "transfer", label: "샘플 배정", description: "창고 재고를 샘플로 전환", icon: ArrowRightLeft, from: "창고", to: "사무실", status: "샘플 배정" },
-  { key: "inbound", movementType: "inbound", label: "입고", description: "창고 재고 증가", icon: ArrowDownToLine, from: "", to: "창고", status: "입고" },
-  { key: "return", movementType: "return", label: "고객 반납", description: "고객·현장에서 창고 회수", icon: RotateCcw, from: "고객", to: "창고", status: "반납" },
-  { key: "repair", movementType: "repair", label: "수리", description: "예외 상태 처리", icon: Wrench, from: "창고", to: "수리", status: "수리중" },
-  { key: "adjust", movementType: "adjust", label: "실사 조정", description: "창고 수량 보정", icon: Settings2, from: "", to: "창고", status: "재고 조정" },
-]
-
-// 빠른 기록 2축(입고|출고) 밖의 예외 처리 — 상세 모드(sheetView "detail")에서만 노출하는 5종.
-// 이 키들은 상세 프리셋 그리드로만 진입하고, 큐(배치)는 지원하지 않는다.
-const DETAIL_PRESET_KEYS = new Set(["sampleReturn", "sampleAssign", "return", "repair", "adjust"])
-
-// 시트 헤더 배지 톤 — 저장될 기록이 원장에서 받을 배지(MOVEMENT_TONE·SALE_TYPE_META)와 같은 어휘.
-// 예정=Warning, 샘플=중립, 그 외는 movementType 톤.
-function presetTone(presetKey: string, movementType: HardwareMovementType): string {
-  if (presetKey === "planned") return "bg-[#FBF1E0] text-[#A8741A]"
-  if (presetKey === "sample") return "bg-[#F6F5F4] text-[#615D59]"
-  return MOVEMENT_TONE[movementType]
-}
-
-// 샘플 대여 출처 선택지 — 기본은 사무실(남은 샘플). 사무실 재고가 없어 창고에서 바로 내보내는 실무도 있어 창고 허용.
-const SAMPLE_SOURCE_OPTIONS = ["사무실", "창고"] as const
-type SampleSource = (typeof SAMPLE_SOURCE_OPTIONS)[number]
-
-const LOCATION_OPTIONS = ["고객", "창고", "샘플", "사무실", "수리"] as const
-
-const QUICK_QUANTITIES = [1, 2, 5, 10]
 
 const STOCK_PAGE_SIZE = 8
 const OUTBOUND_PAGE_SIZE = 6
@@ -179,13 +120,22 @@ export type HardwareDashboardResponse = Omit<HardwareDashboard, "recentOutbound"
 
 /**
  * 페이지 서버 프리페치(app/admin/hardware/page.tsx)가 내려주는 첫 화면 wrapper.
- * generatedAt은 이 프리페치가 서버에서 만들어진 시각(ms epoch) — isPrefetchFresh 판정용(T3).
- * HardwareDashboardResponse 자체(=/api/admin/hardware 응답과 같은 shape)에 얹지 않고 따로
- * 감싼 이유: 그 타입은 실제 API 응답 shape을 그대로 미러링해야 하는데, generatedAt은 그
- * 응답이 아니라 "이 프리페치 호출"에만 속하는 메타데이터라서다.
+ * generatedAt은 이 프리페치가 서버에서 만들어진(=레인이 열린) 시각(ms epoch) — isPrefetchFresh
+ * 판정용(T3). HardwareDashboardResponse 자체(=/api/admin/hardware 응답과 같은 shape)에 얹지
+ * 않고 따로 감싼 이유: 그 타입은 실제 API 응답 shape을 그대로 미러링해야 하는데, generatedAt은
+ * 그 응답이 아니라 "이 프리페치 호출"에만 속하는 메타데이터라서다.
+ *
+ * 횡단 인프라 개편(2026-09-10 스트리밍 전환) — data(동기 값)가 promise로 바뀌었다. page.tsx가
+ * openPrefetchLane(lib/admin/prefetch-budget.ts)으로 이 레인을 열고 await하지 않는다 — 이
+ * 컴포넌트가 아래에서 React use()로 직접 풀어야 값을 얻는다. 모양은 그 모듈의
+ * DeferredPrefetch<T>와 동일하지만 타입을 그대로 import하지 않고 여기 다시 선언한다 —
+ * lib/admin/prefetch-budget.ts는 "server-only"라 이 "use client" 파일이 (타입 전용이라도)
+ * 그 모듈을 직접 참조하지 않게 하려는 것이다(이 저장소의 기존 관례 — types.ts류의 순수
+ * 데이터 타입만 클라이언트 파일이 가져다 쓰고, server-only 표시가 있는 lib 모듈은 값이든
+ * 타입이든 그대로 참조하지 않는다).
  */
 export interface HardwareDashboardPrefetch {
-  data: HardwareDashboardResponse
+  promise: Promise<HardwareDashboardResponse | null>
   generatedAt: number
 }
 
@@ -214,62 +164,16 @@ const DEFAULT_OPEN_SECTIONS: Record<HardwareSectionKey, boolean> = {
   alerts: true,
 }
 
-// 재고 위치 맵 — 칠판(장비) 기준 핵심 상태만 노출한다. 표시 요소(사용자 지정):
-//   창고     = 판매용 재고(warehouseStock)
-//   가용     = 창고 − 배송 예정(availableStock)
-//   예정     = 배송 예정 차감분(plannedOut)
-//   남은 샘플 = 사무실 보관 중인 샘플 재고(locationBalances "사무실")
-//   나간 샘플 = 대여·데모로 나가 있는 샘플(locationBalances "샘플")
-// 샘플 총량 = 남은(사무실) + 나간. 사무실=샘플 보관소라는 실무 모델(사용자 확인)에 따라 파생.
-const BOARD_ELEMENTS = [
-  { key: "warehouse", label: "창고", desc: "판매용 재고", tone: "#31302E" },
-  { key: "available", label: "가용", desc: "창고 − 예정", tone: "#084734" },
-  { key: "planned", label: "예정", desc: "배송 예정(차감분)", tone: "#A8741A" },
-  { key: "sampleStock", label: "남은 샘플", desc: "사무실 보관", tone: "#615D59" },
-  { key: "sampleOut", label: "나간 샘플", desc: "대여·데모 중", tone: "#B43E3E" },
-] as const
-
 function locationQuantity(row: HardwareStockRow, location: string): number {
   if (location === "창고") return row.warehouseStock
   if (location === "배송 예정") return row.plannedOut
   return row.locationBalances.find((balance) => balance.location === location)?.quantity ?? 0
 }
 
-// 칠판 기준 위치별 수량.
-function boardValue(row: HardwareStockRow, key: (typeof BOARD_ELEMENTS)[number]["key"]): number {
-  if (key === "warehouse") return row.warehouseStock
-  if (key === "available") return row.availableStock
-  if (key === "planned") return row.plannedOut
-  if (key === "sampleStock") return locationQuantity(row, "사무실")
-  return locationQuantity(row, "샘플") // sampleOut
-}
-
-// 재고 위치 맵에서 숨길 품목(내부 코드/비주력 — 사용자 지정). 품목명 정확 일치, 대소문자 무시.
-const LOCATION_MAP_HIDDEN_PRODUCTS = new Set(["A1", "B1", "D2"])
-
-// 위치 맵 기본 노출(펼침) 품목 순서(사용자 지정): 86" → 75" → T1 → T1(promo) → STD1 → STD1(promo).
-// 여기 해당하면 rank(0~5), 아니면 null → "상세보기"로 접히는 나머지(65"/110"/S1/OPS/액세서리 등).
-function featuredRank(product: string): number | null {
-  const promo = isPromotedProduct(product)
-  if (/86["”]?\s*IFP/i.test(product) && !promo) return 0
-  if (/75["”]?\s*IFP/i.test(product) && !promo) return 1
-  if (/\bT1\b/i.test(product) && !promo) return 2
-  if (/\bT1\b/i.test(product) && promo) return 3
-  if (/\bSTD1\b/i.test(product) && !promo) return 4
-  if (/\bSTD1\b/i.test(product) && promo) return 5
-  return null
-}
-
 // "총 입고" 상단 집계 대상 품목(사용자 지정): 86"/75" 전자칠판 + T1 (프로모 변형 포함).
 // lot별 상세 목록은 전 품목 그대로 두고, 헤더 총계(대수·매입액)만 이 3종으로 좁힌다.
 const isInboundTallyProduct = (product: string) =>
   /86["”]?\s*IFP/i.test(product) || /75["”]?\s*IFP/i.test(product) || /\bT1\b/i.test(product)
-
-// 전자칠판 인치 수(예: 110" IFP → 110). 접힘("상세보기") 영역에서 보드끼리 먼저 배치하는 데 쓴다.
-function boardInch(product: string): number | null {
-  const match = /(\d{2,3})\s*["”]?\s*IFP/i.exec(product)
-  return match ? Number(match[1]) : null
-}
 
 // 빠른 기록 기본 선택 품목 = 86" IFP(비프로모, 최빈 라인업). 없으면 첫 품목으로 폴백.
 function defaultEntryItemId(items: HardwareItem[]): string {
@@ -302,14 +206,8 @@ function shortProductName(name: string): string {
     .trim()
 }
 
-// 출고 도착지를 고객 라벨로 환원한다. 일반 위치(고객/창고/샘플/사무실/수리)는 "고객(미지정)"으로 묶는다.
-const GENERIC_LOCATIONS = new Set<string>(["고객", "창고", "샘플", "사무실", "수리", "외부/고객"])
-
-export function customerLabel(value: string | null | undefined): string {
-  const text = (value ?? "").trim()
-  if (!text || GENERIC_LOCATIONS.has(text)) return UNSPECIFIED_CUSTOMER
-  return text
-}
+// customerLabel(+GENERIC_LOCATIONS)은 구조 분해(#6)로 inventory/shared.tsx로 옮겼다 —
+// QuickRecordSheet(직전 기록 복제 미리보기)도 직접 참조해서다. 판정 로직은 그대로.
 
 // reference_no "deal:{dealId}(:line:{lineId})" → 딜 오더 딥링크. 그 외 형식은 내부 링크를 만들 수 없다.
 function crmHrefFromReference(reference: string | null): string | null {
@@ -344,48 +242,16 @@ export function extractCrmLink(movement: HardwareMovement): { label: string; ref
   return null
 }
 
-// 어제(로컬 자정 기준) YYYY-MM-DD — 처리일 퀵칩용. UTC 슬라이스가 아니라 로컬 날짜로 계산해 KST 새벽에도 어제가 정확하다.
-function yesterdayKey() {
-  const now = new Date()
-  const local = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
-  const month = String(local.getMonth() + 1).padStart(2, "0")
-  const day = String(local.getDate()).padStart(2, "0")
-  return `${local.getFullYear()}-${month}-${day}`
-}
-
-function dateKeyOf(date: Date): string {
-  const month = String(date.getMonth() + 1).padStart(2, "0")
-  const day = String(date.getDate()).padStart(2, "0")
-  return `${date.getFullYear()}-${month}-${day}`
-}
-
-// 내역 탭 기간 퀵칩 — 로컬 자정 기준으로 이번 달/지난 달/최근 30일 범위를 계산한다.
-type HistoryDateRangeKey = "thisMonth" | "lastMonth" | "last30"
-
-function historyDateRange(key: HistoryDateRangeKey): { from: string; to: string } {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = now.getMonth()
-  if (key === "thisMonth") {
-    return { from: dateKeyOf(new Date(year, month, 1)), to: dateKeyOf(now) }
-  }
-  if (key === "lastMonth") {
-    return { from: dateKeyOf(new Date(year, month - 1, 1)), to: dateKeyOf(new Date(year, month, 0)) }
-  }
-  return { from: dateKeyOf(new Date(year, month, now.getDate() - 29)), to: dateKeyOf(now) }
-}
+// yesterdayKey·historyDateRange(+HistoryDateRangeKey)는 구조 분해(#6)로 inventory/shared.tsx로
+// 옮겼다 — 각각 QuickRecordSheet·HistoryTabPanel 전용이라 이 오케스트레이터에는 더 필요 없다.
 
 // 빠른 기록 반복 입력 기억 — 담당자·"저장 후 시트 유지" 토글을 세션을 넘어 기억한다.
 // SSR 프리렌더 중에는 window가 없으므로 항상 가드하고, storage 접근 불가 환경에선 조용히 비활성화한다.
 const QUICK_RECORD_OWNER_KEY = "hw.quickRecord.owner"
 const QUICK_RECORD_STAY_OPEN_KEY = "hw.quickRecord.stayOpen"
 
-// 시트 공용 클래스 토큰 — 15회 이상 반복되던 인풋/라벨 클래스의 드리프트 방지.
-// 타이포 위계: 섹션 제목(13px bold #111110) > 필드 라벨(12px semibold #615D59) > 보조(11px #A39E98).
-const SHEET_INPUT_CLASS =
-  "mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
-const SHEET_LABEL_CLASS = "text-[12px] font-semibold text-[#615D59]"
-const SHEET_SECTION_TITLE_CLASS = "text-[13px] font-bold text-[#111110]"
+// 시트 공용 클래스 토큰(SHEET_INPUT_CLASS 등)·LOCATION_OPTIONS·QUICK_QUANTITIES는 구조 분해(#6)로
+// QuickRecordSheet.tsx로 이전했다 — 그 시트에서만 쓰여 이 오케스트레이터에는 더 필요 없다.
 
 function readLocalString(key: string): string {
   if (typeof window === "undefined") return ""
@@ -429,18 +295,8 @@ export function movementLot(movement: HardwareMovement): string | null {
   return null
 }
 
-// 클라이언트 드래프트의 예정 여부 — 신규 UI(isPlanned 세그먼트/토글)가 우선하고, 값이 없으면
-// (키트·붙여넣기·직전 복제·레거시 드래프트) status 정규식으로 하위호환 폴백한다.
-function isDraftPlanned(draft: HardwareMovementDraft): boolean {
-  return draft.isPlanned ?? /예정|예약|대기/.test(draft.status)
-}
-
-// 샘플 대여 라인 판별 — status 문자열(가변)이 아니라 경로/프리셋 기반 안정 신호로 고정한다.
-// 샘플 프리셋의 도착지는 항상 "샘플"(ENTRY_PRESETS의 to)이라, 실제↔예정 토글이나 status 편집으로
-// 문자열이 바뀌어도 이 판별은 흔들리지 않는다. 샘플은 실제/예정 개념이 없는 사무실→샘플 경로다.
-function isSampleOutbound(draft: HardwareMovementDraft): boolean {
-  return draft.movementType === "outbound" && draft.toLocation.trim() === "샘플"
-}
+// isDraftPlanned·isSampleOutbound는 구조 분해(#6)로 inventory/shared.tsx로 옮겼다(QuickRecordSheet도
+// 직접 참조해서다) — 아래 deriveStatus는 이제 shared에서 import해 쓴다. 판정 로직 자체는 그대로.
 
 // 서버 전송 직전 status 파생 — 출고 라인만 실제/예정으로 status를 정규화한다.
 //   샘플(toLocation "샘플")   → "샘플/대여" 보존(실제/예정 파생을 적용하지 않음)
@@ -488,21 +344,9 @@ function parseOptionalNumber(value: string): number | null {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
 }
 
-// 상세내역 "제품" 필터 — 실데이터에 액세서리(OPS/POE/케이블/터치펜 등)까지 섞여 칩이 20개 가까이
-// 늘어났다. 자주 찾는 핵심 라인업만 고정 5종으로 좁히고, 나머지는 검색으로 찾도록 한다.
-// (110"/65"/S1/액세서리 등은 후순위 — 칩에서 제외.)
-const PRODUCT_FILTER_OPTIONS: Array<{ key: Exclude<ProductFilterKey, "">; label: string; test: (product: string) => boolean }> = [
-  { key: "ifp86", label: '86" IFP', test: (product) => isCoreIfpProduct(product, "86") },
-  { key: "ifp75", label: '75" IFP', test: (product) => isCoreIfpProduct(product, "75") },
-  { key: "t1", label: "T1", test: (product) => /^T1$/i.test(product.trim()) },
-  { key: "std1", label: "STD1", test: (product) => /^STD1$/i.test(product.trim()) },
-  { key: "promotion", label: "프로모션", test: (product) => /\(promoted\)/i.test(product) },
-]
-
-function matchesProductFilter(product: string, filter: ProductFilterKey): boolean {
-  if (!filter) return true
-  return PRODUCT_FILTER_OPTIONS.find((option) => option.key === filter)?.test(product) ?? false
-}
+// 상세내역 "제품" 필터 정의(PRODUCT_FILTER_OPTIONS)·판정(matchesProductFilter)은 탭 구조 분해(#6)로
+// components/admin/hardware/inventory/shared.tsx로 옮겼다 — HistoryTabPanel과 이 파일의
+// activeHistoryFilterChips 메모가 같은 정의를 참조해야 해서다. 값·동작은 그대로, import만 재사용.
 
 // "제품 빠른 선택" 칩 추천 순위.
 // 상단 추천(아래 순서대로) → 기타(110"/DT1/S1) → 그 외 제품은 칩에서 숨김(품목 드롭다운으로 선택 가능).
@@ -563,33 +407,9 @@ const HARDWARE_KIT_PRESETS: HardwareKitPreset[] = [
   },
 ]
 
-function normalizeHardwareText(value: string) {
-  return value.toLowerCase().replace(/\s+/g, "").replace(/[^\p{L}\p{N}]+/gu, "")
-}
-
-function quickCartLineKey(draft: HardwareMovementDraft) {
-  return [
-    draft.itemId ?? normalizeHardwareText(draft.productName),
-    draft.movementType,
-    draft.occurredAt,
-    draft.fromLocation,
-    draft.toLocation,
-    draft.owner,
-    draft.status,
-    // 실제/예정은 status가 같아도 별개 라인 — 병합되면 예정 토글이 서로를 덮어쓴다.
-    isDraftPlanned(draft) ? "planned" : "actual",
-    draft.referenceNo,
-    draft.memo,
-    draft.lotNo,
-    draft.unitPrice ?? "",
-    draft.amountUsd ?? "",
-    draft.amountCny ?? "",
-    draft.storageLocation,
-    draft.importer,
-    draft.serials.join("\u0001"),
-  ].join("\u0000")
-}
-
+// normalizeHardwareText·quickCartLineKey는 구조 분해(#6)로 inventory/shared.tsx로 옮겼다 —
+// QuickRecordSheet가 카트 라인 렌더에서 quickCartLineKey를 직접 참조해서다. 아래는 shared에서
+// import해 그대로 쓴다(라인 식별 키 포맷 불변 — 같은 구분자 사용).
 function mergeQuickCartDrafts(current: HardwareMovementDraft[], incoming: HardwareMovementDraft[]) {
   const next = [...current]
   for (const draft of incoming) {
@@ -637,25 +457,24 @@ const VoidConfirmModal = dynamic(() => import("@/components/admin/hardware/inven
 const MovementDetailSheet = dynamic(() => import("@/components/admin/hardware/inventory/MovementDetailSheet"), { loading: () => null })
 const CustomerHistorySheet = dynamic(() => import("@/components/admin/hardware/inventory/CustomerHistorySheet"), { loading: () => null })
 const SampleUnitSheet = dynamic(() => import("@/components/admin/hardware/inventory/SampleUnitSheet"), { loading: () => null })
+// 빠른 기록 시트 — 5,481줄 중 가장 큰 단일 블록(1,481줄)을 별도 파일로 뺐다(감사 2026-09-07 #6).
+// 열리기 전까지(sheetOpen=false) 마운트되지 않으므로 위 오버레이 3종과 같은 관례로 null 로딩.
+const QuickRecordSheet = dynamic(() => import("@/components/admin/hardware/inventory/QuickRecordSheet"), { loading: () => null })
+// 한 화면 입고표(시안 A, 2026-09-15) — 새 입고는 전부 이 시트로 연다. 기존 입고 기록 수정은 빠른 기록 시트(단건) 그대로.
+const InboundSheet = dynamic(() => import("@/components/admin/hardware/inventory/InboundSheet"), { loading: () => null })
 
-// 비기본 탭 섹션 코드 스플릿 — 입고/출고 집계(entry)·상세 내역(history)은 첫 페인트("home" 탭)에
-// 없으므로 지연 로드한다. 세 섹션 모두 내부 useState가 없는 프레젠테이션 컴포넌트(검색어·페이지 등
-// 상태는 전부 부모 소유)라 지연 마운트로 잃는 폼 상태가 없다. ssr:false + 가벼운 스켈레톤은
-// 장부 워크벤치의 검증된 관례를 따른다.
-const SectionLoadingFallback = () => (
-  <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white px-5 py-10 text-center text-[12px] font-semibold text-[#A39E98]">
-    섹션을 불러오는 중…
-  </section>
-)
-const InboundLotsSection = dynamic(() => import("@/components/admin/hardware/inventory/InboundLotsSection"), {
+// 탭 본문 코드 스플릿(#6) — 홈/입출고/내역은 activeTab이 바뀔 때만 필요하고, InboundLotsSection·
+// OutboundPeriodSection·HistoryLogSection의 지연 로드는 각 탭 파일이 스스로 소유한다(이 파일은
+// 더 이상 그 하위 섹션들을 직접 import하지 않는다). ssr:false + 스켈레톤은 기존 관례 그대로.
+const HomeTabPanel = dynamic(() => import("@/components/admin/hardware/inventory/HomeTabPanel"), {
   ssr: false,
   loading: () => <SectionLoadingFallback />,
 })
-const OutboundPeriodSection = dynamic(() => import("@/components/admin/hardware/inventory/OutboundPeriodSection"), {
+const EntryTabPanel = dynamic(() => import("@/components/admin/hardware/inventory/EntryTabPanel"), {
   ssr: false,
   loading: () => <SectionLoadingFallback />,
 })
-const HistoryLogSection = dynamic(() => import("@/components/admin/hardware/inventory/HistoryLogSection"), {
+const HistoryTabPanel = dynamic(() => import("@/components/admin/hardware/inventory/HistoryTabPanel"), {
   ssr: false,
   loading: () => <SectionLoadingFallback />,
 })
@@ -683,19 +502,24 @@ function presetKeyForMovement(movement: HardwareMovement): string {
 }
 
 // initialData = 페이지(app/admin/hardware/page.tsx)가 GET /api/admin/hardware와 같은 검증·
-// 같은 lib 함수로 서버에서 미리 만든 첫 화면 응답. 있으면(신선도와 무관하게) 마운트 즉시
-// 그 값으로 그린다 — 없으면(비인증·역할 부족·프리페치 실패) 지금까지와 동일하게 마운트 후
-// load()가 채운다. 왕복을 실제로 건너뛸지는 아래 skipInitialLoadRef가 신선도까지 본다(T3).
+// 같은 lib 함수로 서버에서 연 프리페치 레인(promise, 아직 settle 여부 불명). 이 컴포넌트
+// 전체가 아래 use()로 그 promise를 풀 때까지 부모(page.tsx)의 <Suspense>가 대신 대기한다 —
+// settle 결과가 있으면(신선도와 무관하게) 그 값으로 그리고, 없으면(비인증·역할 부족·프리페치
+// 실패·ceilingMs 초과) 지금까지와 동일하게 마운트 후 load()가 채운다. 왕복을 실제로 건너뛸지는
+// 아래 skipInitialLoadRef가 신선도까지 본다(T3). initialData 자체가 없을 때(prop 생략 — 예:
+// 프리페치 없이 이 컴포넌트를 단독 렌더하는 호출부)는 use()를 아예 부르지 않아 그런 호출부를
+// Suspense 없이도 그대로 지원한다.
 export default function HardwareInventoryClient({
-  initialData = null,
+  initialData,
 }: {
   initialData?: HardwareDashboardPrefetch | null
 }) {
+  const prefetched = initialData ? use(initialData.promise) : null
   const formRef = useRef<HTMLFormElement | null>(null)
   const [data, setData] = useState<HardwareDashboard | null>(() =>
-    initialData ? withDerivedMovementViews(initialData.data) : null
+    prefetched ? withDerivedMovementViews(prefetched) : null
   )
-  const [loading, setLoading] = useState(initialData == null)
+  const [loading, setLoading] = useState(prefetched == null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -715,7 +539,7 @@ export default function HardwareInventoryClient({
   const [movementType, setMovementType] = useState<HardwareMovementType>("outbound")
   // load()가 첫 응답에서 하는 기본 품목 선택(defaultEntryItemId)을 프리페치 경로에서도 동일하게 건다.
   const [selectedItemId, setSelectedItemId] = useState(() =>
-    initialData ? defaultEntryItemId(initialData.data.items) : ""
+    prefetched ? defaultEntryItemId(prefetched.items) : ""
   )
   const [customProduct, setCustomProduct] = useState("")
   const [quantity, setQuantity] = useState("1")
@@ -759,10 +583,18 @@ export default function HardwareInventoryClient({
   const [historySort, setHistorySort] = useState<"desc" | "asc">("desc")
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const [confirmingGroupKey, setConfirmingGroupKey] = useState<string | null>(null)
+  // 일괄 체크(감사 2026-09-14) 진행률 — null이면 유휴, 값이 있으면 "N/M 확정 중"이 패널 하단
+  // 고정 바에 표시된다. confirmingId·confirmingGroupKey와 같은 층위의 잠금 신호라
+  // plannedConfirmLocked에도 합류시킨다(아래).
+  const [selectionConfirmProgress, setSelectionConfirmProgress] = useState<PlannedSelectionConfirmProgress | null>(null)
+  // 예정 출고 일괄 체크 선택 개수 — 선택 중엔 "빠른 기록" 떠 있는 버튼을 내린다(하단 작업 바를 가림).
+  const [plannedSelectionCount, setPlannedSelectionCount] = useState(0)
   const [plannedConfirmResults, setPlannedConfirmResults] = useState<Record<string, { ok: boolean; message: string }>>({})
   const [confirmDates, setConfirmDates] = useState<Record<string, string>>({})
   const [voidingId, setVoidingId] = useState<string | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
+  // 한 화면 입고표 — product 는 품목 id(행 퀵버튼에서 연 경우) 또는 null.
+  const [inboundSheet, setInboundSheet] = useState<{ open: boolean; product: string | null }>({ open: false, product: null })
   // 시트 모드 — "single": 빠른 단건 기록, "batch": 작업건(다품목) 구성. 단건과 대량이
   // 한 폼에 섞여 있던 15섹션 구조를 업무 단위로 가른다. 수정(editingId)은 항상 single.
   const [sheetMode, setSheetMode] = useState<"single" | "batch">("single")
@@ -799,53 +631,127 @@ export default function HardwareInventoryClient({
   const [filtersExpanded, setFiltersExpanded] = useState(false)
   const [detailId, setDetailId] = useState<string | null>(null)
   const [customerDetail, setCustomerDetail] = useState<string | null>(null)
-  const [locationMapExpanded, setLocationMapExpanded] = useState(false)
   const sheetPanelRef = useRef<HTMLElement>(null)
   const detailPanelRef = useRef<HTMLElement>(null)
   const ledgerFileRef = useRef<HTMLInputElement>(null)
   // 상세 모드 진입 직전의 출고 세그먼트(sale/planned/sample)를 기억해 빠른 기록 복귀 시 복원한다.
   const detailReturnPresetRef = useRef<string | null>(null)
   const reduceMotion = useReducedMotion()
-  const plannedConfirmLocked = busy != null || confirmingId != null || confirmingGroupKey != null
-  const quickCartSaving = busy === "movement"
+  // 일괄 체크 실행 중(selectionConfirmProgress != null)에도 다른 확정 경로(단건·그룹·체크박스
+  // 조작)를 전부 잠근다(요청사항 ①.7) — 순차 실행 중간에 다른 확정이 끼어들면 FIFO 배정이
+  // 로트 잔량을 놓고 경쟁해 예측 불가능해진다.
+  const plannedConfirmLocked = busy != null || confirmingId != null || confirmingGroupKey != null || selectionConfirmProgress != null
+  // quickCartSaving(busy === "movement")은 구조 분해(#6)로 QuickRecordSheet.tsx가 자체 계산한다 —
+  // 그 시트만 쓰던 파생값이라 여기 남겨두면 미사용 변수가 된다.
 
-  // URL 상태 동기화(탭·고객만 최소로) — 장부 워크벤치와 같은 window 기반 접근.
-  // useSearchParams는 Suspense 경계를 요구해 피하고, 마운트 시 한 번 읽은 뒤(urlReady 전에는
-  // 쓰지 않음) 변경마다 replaceState로 반영해 링크 공유가 가능하다(히스토리 오염 없음).
-  // 계약: ?tab=home|entry|history (생략=home), &customer=<고객명> → 내역 탭 고객 필터 프리필
-  // + 거래이력 슬라이드오버 오픈(tab 생략 시 history로 간주).
-  // 왕복 충실성: customer는 슬라이드오버가 열린 상태만 기록한다(필터만 건 상태를 customer로
-  // 쓰면 새로고침 시 슬라이드오버가 원치 않게 열린다). customer 기록 시 tab은 home이어도
-  // 항상 명시해, 홈 탭에서 연 슬라이드오버 링크가 내역 탭으로 착지하지 않게 한다.
+  // URL 상태 동기화 — 장부 워크벤치와 같은 window 기반 접근(useSearchParams는 Suspense 경계를
+  // 요구해 피한다). 마운트 시 한 번 읽고(urlReady 전에는 쓰지 않음) 변경마다 replaceState로
+  // 반영해 링크 공유가 가능하다(히스토리 오염 없음).
+  //
+  // 감사(2026-09-07 #10): 예전엔 tab·customer 두 값만 왕복해 내역 탭 필터 8종(검색·유형·상태·
+  // 취소포함·판매유형·제품·물류No·기간)이 새로고침·공유에서 전부 유실됐다. 아래로 전부 왕복한다.
+  // 계약: ?tab=home|entry|history(생략=home)
+  //   &customer=<고객명>  → 고객 필터 프리필 + 거래이력 슬라이드오버 오픈(왕복 충실성: 슬라이드오버가
+  //                          "열린" 상태만 이 키로 기록 — 필터만 건 상태까지 여기 실으면 새로고침 시
+  //                          슬라이드오버가 원치 않게 열린다)
+  //   &custFilter=<고객명> → 슬라이드오버 없이 고객 필터만(목록 드롭다운에서 고른 경우)
+  //   &q=<검색어> &type=<유형> &status=<상태> &voided=1 &saleType=<유형> &product=<필터키>
+  //   &lot=<물류No> &from=<YYYY-MM-DD> &to=<YYYY-MM-DD> &sort=asc(기본 desc는 생략)
+  //   &hq=<홈 탭 통합검색어> — 내역 탭 q와 별개 상태(hardwareSearch)라 키를 분리한다(감사 2026-09-11).
+  // 값이 기본값이면 파라미터 자체를 쓰지 않는다 — URL을 깨끗하게 유지하고, 필터를 하나도 안 걸었을
+  // 때는 예전과 동일하게 ?tab=history 정도로 짧다.
+  const HISTORY_TYPE_URL_VALUES = new Set(["all", "sample", "inbound", "outbound", "return", "transfer", "repair", "adjust"])
+  const HISTORY_STATUS_URL_VALUES = new Set(["all", "done", "planned"])
+  const SALE_TYPE_URL_VALUES = new Set(["sales", "sample", "promotion", "as"])
+  const PRODUCT_FILTER_URL_VALUES = new Set<string>(PRODUCT_FILTER_OPTIONS.map((option) => option.key))
+  const DATE_PARAM_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+
   const [urlReady, setUrlReady] = useState(false)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const tab = params.get("tab")
     const customer = (params.get("customer") ?? "").trim()
+    const custFilterOnly = (params.get("custFilter") ?? "").trim()
     if (tab === "home" || tab === "entry" || tab === "history") setActiveTab(tab)
-    else if (customer) setActiveTab("history")
+    else if (customer || custFilterOnly) setActiveTab("history")
     if (customer) {
       setCustomerFilter(customer)
       setCustomerDetail(customer)
+    } else if (custFilterOnly) {
+      setCustomerFilter(custFilterOnly)
     }
+
+    const type = params.get("type")
+    if (type && HISTORY_TYPE_URL_VALUES.has(type)) setHistoryType(type as typeof historyType)
+    const status = params.get("status")
+    if (status && HISTORY_STATUS_URL_VALUES.has(status)) setHistoryStatus(status as typeof historyStatus)
+    if (params.get("voided") === "1") setIncludeVoided(true)
+    const saleType = params.get("saleType")
+    if (saleType && SALE_TYPE_URL_VALUES.has(saleType)) setSaleTypeFilter(saleType as typeof saleTypeFilter)
+    const product = params.get("product")
+    if (product && PRODUCT_FILTER_URL_VALUES.has(product)) setProductFilter(product as typeof productFilter)
+    const lot = params.get("lot")
+    if (lot) setLotFilter(lot)
+    const from = params.get("from")
+    if (from && DATE_PARAM_PATTERN.test(from)) setHistoryDateFrom(from)
+    const to = params.get("to")
+    if (to && DATE_PARAM_PATTERN.test(to)) setHistoryDateTo(to)
+    if (params.get("sort") === "asc") setHistorySort("asc")
+    const q = params.get("q")
+    if (q) setSearch(q)
+    const hq = params.get("hq")
+    if (hq) setHardwareSearch(hq)
+
     setUrlReady(true)
+    // 마운트 1회 전용 — 의도적으로 의존성 없음(urlReady 판정용 useEffect 관례, 아래 쓰기 effect와 동일).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
     if (!urlReady) return
     const params = new URLSearchParams()
     const customer = (customerDetail ?? "").trim()
+    const filterOnlyCustomer = (customerFilter ?? "").trim()
     if (customer) {
       params.set("tab", activeTab)
       params.set("customer", customer)
-    } else if (activeTab !== "home") {
-      params.set("tab", activeTab)
+    } else {
+      if (activeTab !== "home") params.set("tab", activeTab)
+      if (filterOnlyCustomer) params.set("custFilter", filterOnlyCustomer)
     }
-    const search = params.toString()
-    const nextUrl = `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`
+    if (search.trim()) params.set("q", search.trim())
+    if (hardwareSearch.trim()) params.set("hq", hardwareSearch.trim())
+    if (historyType !== "all") params.set("type", historyType)
+    if (historyStatus !== "all") params.set("status", historyStatus)
+    if (includeVoided) params.set("voided", "1")
+    if (saleTypeFilter) params.set("saleType", saleTypeFilter)
+    if (productFilter) params.set("product", productFilter)
+    if (lotFilter) params.set("lot", lotFilter)
+    if (historyDateFrom) params.set("from", historyDateFrom)
+    if (historyDateTo) params.set("to", historyDateTo)
+    if (historySort === "asc") params.set("sort", "asc")
+
+    const queryString = params.toString()
+    const nextUrl = `${window.location.pathname}${queryString ? `?${queryString}` : ""}${window.location.hash}`
     const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
     if (nextUrl !== currentUrl) window.history.replaceState(null, "", nextUrl)
-  }, [urlReady, activeTab, customerDetail])
+  }, [
+    urlReady,
+    activeTab,
+    customerDetail,
+    customerFilter,
+    search,
+    hardwareSearch,
+    historyType,
+    historyStatus,
+    includeVoided,
+    saleTypeFilter,
+    productFilter,
+    lotFilter,
+    historyDateFrom,
+    historyDateTo,
+    historySort,
+  ])
 
   const requestCloseSheet = useCallback(() => {
     if (busy === "movement") return
@@ -915,14 +821,13 @@ export default function HardwareInventoryClient({
 
   // 서버 프리페치가 첫 화면을 이미 채웠고 *또한* 아직 신선할 때만 마운트 1회 왕복을
   // 건너뛴다(T3) — staleTimes.dynamic(180초)로 재사용된 RSC 프리페치는 initialData가
-  // 있어도 최대 180초 전 값일 수 있다. 신선하지 않으면 위 data state는 여전히
-  // initialData로 채워 스켈레톤 없이 그리되(위 useState 초기값), 아래 load()가 정상
-  // 수행돼 캐시/네트워크가 최신 여부를 정한다(load 내부는 loading && !data로 게이트되므로
-  // 이미 data가 있으면 스피너만 돌고 스켈레톤은 뜨지 않는다). 이후 새로고침·저장 후
-  // 재조회(refresh)는 그대로 load({ force: true })를 탄다.
-  const skipInitialLoadRef = useRef(
-    initialData != null && isPrefetchFresh(initialData.generatedAt)
-  )
+  // 있어도 최대 180초 전 값일 수 있다. generatedAt은 레인을 연 시각(initialData, promise
+  // 밖의 동기 필드)이지 값이 실제로 도착한 시각이 아니지만, 기존 T3 규약과 동일하게 다룬다.
+  // 신선하지 않으면 위 data state는 여전히 prefetched로 채워 스켈레톤 없이 그리되(위 useState
+  // 초기값), 아래 load()가 정상 수행돼 캐시/네트워크가 최신 여부를 정한다(load 내부는
+  // loading && !data로 게이트되므로 이미 data가 있으면 스피너만 돌고 스켈레톤은 뜨지 않는다).
+  // 이후 새로고침·저장 후 재조회(refresh)는 그대로 load({ force: true })를 탄다.
+  const skipInitialLoadRef = useRef(prefetched != null && isPrefetchFresh(initialData?.generatedAt))
   useEffect(() => {
     if (skipInitialLoadRef.current) {
       skipInitialLoadRef.current = false
@@ -938,6 +843,42 @@ export default function HardwareInventoryClient({
     clearAdminRequestCache("/api/admin/hardware")
     await load({ force: true })
   }, [load])
+
+  // 감사(2026-09-07 #7) — 기본 응답은 최신 2000건까지만 싣는다. 그 너머(더 오래된 이동)는
+  // 지금까지 화면에서 닿을 방법이 전혀 없었다 — 내역 탭의 "더 불러오기"가 이 왕복으로 다음
+  // 페이지를 받아 이미 있는 movements 뒤에 이어 붙인다(둘 다 최신순 정렬이라 재정렬 불필요).
+  // 캐시(adminFetchJsonCached)를 쓰지 않는다 — 오프셋이 매번 달라 같은 URL로 재사용될 일이 없다.
+  const [loadingMoreHistory, setLoadingMoreHistory] = useState(false)
+  const [loadMoreHistoryError, setLoadMoreHistoryError] = useState<string | null>(null)
+  const loadMoreHistory = useCallback(async () => {
+    if (loadingMoreHistory) return
+    setLoadingMoreHistory(true)
+    setLoadMoreHistoryError(null)
+    try {
+      const offset = data?.movements.length ?? 0
+      const page = await adminFetchJson<{ movements: HardwareMovement[]; movementsTotal: number }>(
+        `/api/admin/hardware?movementsOffset=${offset}&movementsLimit=1000`
+      )
+      setData((current) => {
+        if (!current) return current
+        // id 중복 방지 — 그 사이 새 기록이 생겨 오프셋이 살짝 밀려도 같은 행을 두 번 넣지 않는다.
+        const seen = new Set(current.movements.map((movement) => movement.id))
+        const appended = page.movements.filter((movement) => !seen.has(movement.id))
+        const mergedMovements = [...current.movements, ...appended]
+        return {
+          ...current,
+          movements: mergedMovements,
+          movementsTotal: page.movementsTotal,
+          recentOutbound: mergedMovements.filter((movement) => movement.movement_type === "outbound").slice(0, RECENT_OUTBOUND_LIMIT),
+          plannedMovements: mergedMovements.filter((movement) => movement.movement_type === "outbound").filter(isPlannedMovement),
+        }
+      })
+    } catch (err) {
+      setLoadMoreHistoryError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLoadingMoreHistory(false)
+    }
+  }, [data?.movements.length, loadingMoreHistory])
 
   // 샘플 유닛 트래커 — 대시보드와 별도 수명주기(작은 테이블, 캐시 없음). 부모가 소유해야
   // 입출고 시트(대여 유닛 선택)와 홈 섹션·상세 시트가 같은 데이터를 본다.
@@ -1335,6 +1276,12 @@ export default function HardwareInventoryClient({
     const todayIntent = /오늘|today/i.test(rawQuery)
     const oldLotIntent = /오래|FIFO|선입|first/i.test(rawQuery)
     const myIntent = /내 담당|담당/i.test(rawQuery)
+    // "내 담당"은 담당자가 배정된 모든 건이 아니라 로그인한 관리자 본인 건만 — viewer.name과
+    // movement.owner를 비교한다(공백·대소문자 차이는 관용). 이름을 모르면(레거시 세션 등)
+    // 아무 것도 매칭하지 않는다 — 예전 버그(담당자 있는 모든 건 표시)로 되돌아가지 않기 위함.
+    const viewerName = (data?.viewer?.name ?? "").trim().toLowerCase()
+    const isMine = (owner: string | null | undefined) =>
+      viewerName.length > 0 && (owner ?? "").trim().toLowerCase() === viewerName
 
     const matchesText = (...values: Array<string | null | undefined>) =>
       values.some((value) => value && normalizeHardwareText(value).includes(normalized))
@@ -1376,7 +1323,7 @@ export default function HardwareInventoryClient({
     const planned = (data?.plannedMovements ?? [])
       .filter((movement) => {
         if (todayIntent) return movement.occurred_at?.slice(0, 10) === today
-        if (myIntent) return Boolean(movement.owner)
+        if (myIntent) return isMine(movement.owner)
         if (!normalized) return false
         return matchesText(movement.product_name, movement.to_location, movement.owner, movement.reference_no, movement.status, movementLot(movement))
       })
@@ -1406,7 +1353,7 @@ export default function HardwareInventoryClient({
         .sort((a, b) => (b.planned + b.outbound) - (a.planned + a.outbound))
         .slice(0, 5),
     }
-  }, [data?.items, data?.movements, data?.plannedMovements, data?.stock, deferredHardwareSearch])
+  }, [data?.items, data?.movements, data?.plannedMovements, data?.stock, data?.viewer?.name, deferredHardwareSearch])
 
   const lotOptions = useMemo(() => {
     const lots = new Set<string>()
@@ -1683,70 +1630,16 @@ export default function HardwareInventoryClient({
     return { cards, etcSummary }
   }, [data?.stock])
 
-  const locationMap = useMemo(() => {
-    const allRows = data?.stock ?? []
-    // 숨김 품목(A1/B1/D2) 제외.
-    const visible = allRows.filter((row) => !LOCATION_MAP_HIDDEN_PRODUCTS.has(row.product.trim().toUpperCase()))
-    // 기본 노출(펼침) = featuredRank 순(86→75→T1→T1promo→STD1→STD1promo). 나머지(65"/110"/S1/OPS/액세서리)는
-    // "상세보기"로 접힘 — 원본 재고 정렬 순서 유지.
-    const featured = visible
-      .map((row) => ({ row, rank: featuredRank(row.product) }))
-      .filter((entry): entry is { row: HardwareStockRow; rank: number } => entry.rank != null)
-      .sort((a, b) => a.rank - b.rank)
-      .map((entry) => entry.row)
-    // 접힘 영역: 보드(65"/110" 등)를 먼저(인치 큰 순), 그 외(액세서리 등)는 원본 순서 유지.
-    const rest = visible
-      .filter((row) => featuredRank(row.product) == null)
-      .map((row, index) => ({ row, index, inch: boardInch(row.product) }))
-      .sort((a, b) => {
-        const aBoard = a.inch != null ? 0 : 1
-        const bBoard = b.inch != null ? 0 : 1
-        if (aBoard !== bBoard) return aBoard - bBoard
-        if (a.inch != null && b.inch != null && a.inch !== b.inch) return b.inch - a.inch
-        return a.index - b.index
-      })
-      .map((entry) => entry.row)
-
-    // 위치별 총량 = 노출 대상(펼침+접힘 전체) 중 비판촉 합산 — 판촉 음수(원장 이상)가 총량을
-    // 오염시키지 않게 카드와 같은 기준으로 분리하고, 판촉분은 별도 한 줄로 병기한다(2026-08-19 결정).
-    const nonPromoted = visible.filter((row) => !isPromotedProduct(row.product))
-    const totals: Record<string, number> = {}
-    for (const el of BOARD_ELEMENTS) {
-      totals[el.key] = nonPromoted.reduce((sum, row) => sum + boardValue(row, el.key), 0)
-    }
-    const promotedWarehouse = visible
-      .filter((row) => isPromotedProduct(row.product))
-      .reduce((sum, row) => sum + row.warehouseStock, 0)
-    const hasPromotedRows = visible.some((row) => isPromotedProduct(row.product))
-    const maxTotal = Math.max(1, ...BOARD_ELEMENTS.map((el) => totals[el.key]))
-    const locationTotals = BOARD_ELEMENTS.map((el) => ({
-      name: el.label,
-      desc: el.desc,
-      quantity: totals[el.key],
-      tone: el.tone,
-      pct: totals[el.key] > 0 ? `${Math.max(4, Math.round((totals[el.key] / maxTotal) * 100))}%` : "0%",
-    }))
-
-    const toRow = (row: HardwareStockRow) => {
-      const cells = BOARD_ELEMENTS.map((el) => ({ label: el.label, qty: boardValue(row, el.key), tone: el.tone }))
-      const rowMax = Math.max(1, ...cells.map((cell) => cell.qty))
-      return {
-        itemId: row.itemId,
-        product: row.product,
-        sampleTotal: locationQuantity(row, "사무실") + locationQuantity(row, "샘플"),
-        cells: cells.map((cell) => ({
-          ...cell,
-          pct: cell.qty > 0 ? `${Math.max(12, Math.round((cell.qty / rowMax) * 100))}%` : "0%",
-        })),
-      }
-    }
-    return {
-      locationTotals,
-      promotedWarehouse: hasPromotedRows ? promotedWarehouse : null,
-      featuredRows: featured.map(toRow),
-      restRows: rest.map(toRow),
-    }
-  }, [data?.stock])
+  // 입고표의 주요 품목 슬롯·"품목 추가" 목록을 활성 품목으로 좁힌다 — 대시보드 items 에는 비활성 품목도 섞여 있고
+  // active 필드가 없어서, 재고 행이 있는 품목(= 활성)을 기준으로 삼는다.
+  const inboundActiveItemIds = useMemo(() => (data?.stock ?? []).map((row) => row.itemId), [data?.stock])
+  // 새 물량번호 추천은 원장 입고 이력으로 만든다 — 시트 이관이 밀려 있으면 그 뒤에 들어온 물량(예: 9/8 C2)이 원장에 없어
+  // 이미 쓰인 번호를 추천한다(2026-09-15 실측). 신선도 판정은 홈 스트립과 같은 함수(judgeImportFreshness)를 쓴다.
+  const inboundLotStaleNote = useMemo(() => {
+    const freshness = judgeImportFreshness(data?.importRun ?? null)
+    if (freshness.level === "ok" || freshness.level === "none" || freshness.daysAgo == null) return null
+    return `시트 이관이 ${formatNumber(freshness.daysAgo)}일 전이라 그 뒤에 들어온 물량번호가 추천에 빠져 있을 수 있어요. 시트의 최신 번호를 확인하세요.`
+  }, [data?.importRun])
 
   const inboundLots = useMemo(() => {
     const inbound = (data?.movements ?? []).filter((movement) => movement.movement_type === "inbound" && !movement.voided_at)
@@ -2285,8 +2178,13 @@ export default function HardwareInventoryClient({
   // 상세 5종(반환·샘플 배정·수리·조정)은 sheetView "detail"에서만 노출한다.
   const selectMovementAxis = (axis: "inbound" | "outbound") => {
     if (axis === "inbound") {
-      // 입고는 lot 단위 다품목이 실무 기본 — 여러 품목을 담아 한 번에 저장하는 장바구니(작업건) 흐름으로 연다.
-      if (!editingId) setSheetMode("batch")
+      // 새 입고는 한 화면 입고표로 넘긴다(2026-09-15). 바구니는 닫아도 유지되므로 담아 둔 출고 줄은 사라지지 않는다.
+      // 기존 기록 수정(editingId)은 이 시트에서 단건으로 계속한다.
+      if (!editingId) {
+        setSheetOpen(false)
+        openInboundSheet(selectedItemId || null)
+        return
+      }
       applyPreset("inbound")
       return
     }
@@ -2370,9 +2268,18 @@ export default function HardwareInventoryClient({
     })
   }, [resetSheetDraft, reduceMotion])
 
+  const openInboundSheet = useCallback((itemId?: string | null) => {
+    setInboundSheet({ open: true, product: itemId || null })
+  }, [])
+
   const prepareQuickEntry = useCallback((itemId: string, presetKey: string) => {
+    // 새 입고는 한 화면 입고표로 연다 — 재고 표·알림·검색의 "입고" 퀵버튼이 모두 여기를 거친다.
+    if (presetKey === "inbound") {
+      openInboundSheet(itemId)
+      return
+    }
     openSheet(presetKey, itemId)
-  }, [openSheet])
+  }, [openInboundSheet, openSheet])
 
   const rememberOwner = (value: string) => {
     const trimmed = value.trim()
@@ -2551,6 +2458,63 @@ export default function HardwareInventoryClient({
     }
   }, [plannedConfirmLocked, readPlannedConfirmInput, confirmPlannedMovementRequest, refresh])
 
+  // 일괄 체크(감사 2026-09-14) — PlannedOutboundPanel이 여러 딜을 가로질러 고른 예정 출고를
+  // 한 번에 확정하는 전용 핸들러. confirmPlannedGroup의 루프 패턴(성공/실패 집계 →
+  // plannedConfirmResults → 알림 → 성공이 있으면 refresh() 한 번)을 그대로 따르되, 대상이
+  // 한 딜(group.items)이 아니라 패널이 골라 넘긴 임의의 movement 배열이라는 점만 다르다.
+  // 새 API를 만들지 않고 confirmPlannedMovementRequest를 순차(for await)로 재사용한다 — 각
+  // 확정이 로트 잔량을 바꾸므로 다음 건의 FIFO 배정이 앞 건을 반영해야 하고, 서버 권한 검사
+  // (hardware.finalize)와 건별 감사 로그도 그대로 유지된다(병렬 실행 시 이 순서 보장이 깨진다).
+  // 수량은 호출부가 이미 확정 수량 입력(confirmQtys)을 반영해 넘기고, 확정일은 패널의 공통
+  // 입력(bulkConfirmDate) 하나를 전체에 적용한다.
+  const confirmPlannedSelection = useCallback(
+    async (
+      entries: Array<{ movement: HardwareMovement; quantity: number }>,
+      occurredAt: string
+    ): Promise<PlannedSelectionConfirmResult> => {
+      if (entries.length === 0 || plannedConfirmLocked) return { successIds: [], failedIds: [] }
+      setNotice(null)
+      setError(null)
+      const nextResults: Record<string, { ok: boolean; message: string }> = {}
+      const successIds: string[] = []
+      const failedIds: string[] = []
+      setSelectionConfirmProgress({ index: 0, total: entries.length })
+      try {
+        for (let i = 0; i < entries.length; i += 1) {
+          const { movement, quantity } = entries[i]
+          // 몇 번째 건을 처리 중인지 매 반복마다 갱신 — 패널 하단 바의 "N / M 확정 중" 표시가
+          // 이 값을 그대로 읽는다(요청사항 ①.5 진행 표시).
+          setSelectionConfirmProgress({ index: i + 1, total: entries.length })
+          try {
+            const qty = await confirmPlannedMovementRequest(movement, { quantity, occurredAt })
+            successIds.push(movement.id)
+            nextResults[movement.id] = { ok: true, message: `${formatNumber(qty)}대 확정 완료` }
+          } catch (err) {
+            // 한 건 실패가 전체를 멈추지 않는다 — 사유를 그 행에 남기고 다음 건을 계속 진행한다.
+            failedIds.push(movement.id)
+            nextResults[movement.id] = {
+              ok: false,
+              message: err instanceof Error ? err.message : "출고 확정에 실패했습니다.",
+            }
+          }
+        }
+        // plannedConfirmResults는 단건·그룹 확정과 공유하는 같은 맵이다 — 행 아래 결과 문구
+        // 렌더링(PlannedOutboundPanel)을 새로 만들지 않고 그대로 재사용한다.
+        setPlannedConfirmResults((current) => ({ ...current, ...nextResults }))
+        setNotice(
+          failedIds.length > 0
+            ? `선택 출고 확정: ${formatNumber(successIds.length)}건 성공, ${formatNumber(failedIds.length)}건 실패`
+            : `선택한 예정 출고 ${formatNumber(successIds.length)}건을 모두 확정했습니다.`
+        )
+        if (successIds.length > 0) await refresh()
+      } finally {
+        setSelectionConfirmProgress(null)
+      }
+      return { successIds, failedIds }
+    },
+    [plannedConfirmLocked, confirmPlannedMovementRequest, refresh]
+  )
+
   const voidMovement = useCallback((movement: HardwareMovement) => {
     if (movement.voided_at) return
     setVoidReason("")
@@ -2603,7 +2567,11 @@ export default function HardwareInventoryClient({
 
   // 입출고 탭의 하위 토글(입고|출고)에 맞는 프리셋으로 연다 — 입고 보던 중 '빠른 기록'이 sale로 열리는 불일치 해소.
   const openFreshSheet = () => {
-    openSheet(activeTab === "entry" && entrySub === "inbound" ? "inbound" : "sale")
+    if (activeTab === "entry" && entrySub === "inbound") {
+      openInboundSheet()
+      return
+    }
+    openSheet("sale")
   }
 
   const adjustQuantity = (delta: number) => {
@@ -2894,8 +2862,13 @@ export default function HardwareInventoryClient({
     }
   }
 
+  // 감사(2026-09-07 #8): 가장 흔한 트랜잭션(실제 판매 출고 1건)마다 CRM 확인 모달이 강제로
+  // 끼어들었다(실측 클릭 3 + 키 10 + 대기 2) — 매칭 후보도 경고도 없는, CRM에 없는 오프라인
+  // 판매에서도 예외 없이 떴다. 이제 후보를 먼저 조회하고, 보여줄 것(후보 또는 경고)이 하나라도
+  // 있을 때만 모달을 연다 — 후보가 있으면 지금까지처럼 반드시 사용자 확인을 거친다(자동 링크·
+  // 무음 저장 없음). 조회 자체가 실패하면 안전한 쪽으로: 모달을 열어 에러를 보여주고 사용자가
+  // "연동 없이 기록"으로 계속 진행할 수 있게 한다(조용한 실패로 CRM 링크를 놓치지 않게).
   const openCrmConfirmation = async (draft: HardwareMovementDraft) => {
-    setPendingMovement(draft)
     setCrmCandidates([])
     setCrmWarnings([])
     setCrmError(null)
@@ -2914,11 +2887,18 @@ export default function HardwareInventoryClient({
       )
       setCrmCandidates(result.candidates)
       setCrmWarnings(result.warnings ?? [])
+      if (shouldSkipCrmConfirmation(result.candidates, result.warnings ?? [])) {
+        setCrmLoading(false)
+        await createMovementFromDraft(draft, null)
+        return
+      }
       setSelectedCrmCandidateId(result.candidates[0]?.id ?? null)
       setCrmAutoReflect(result.candidates.length > 0)
+      setPendingMovement(draft)
     } catch (err) {
       setCrmError(err instanceof Error ? err.message : String(err))
       setCrmAutoReflect(false)
+      setPendingMovement(draft)
     } finally {
       setCrmLoading(false)
     }
@@ -3327,24 +3307,14 @@ export default function HardwareInventoryClient({
         ) : (
           <>
             {activeTab === "home" && (
-            <motion.div
-              id={activePanelId}
-              role="tabpanel"
-              aria-labelledby={activeTabId}
-              className="space-y-5"
-              initial={reduceMotion ? false : { opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
-            >
-            {/* 위계: 이관 신선도 → 현황 요약(카드·판매) → 검색 → 대기 작업(예상 출고) → 재고 상세(위치·표) → 샘플 → 알림·로그.
-                예상 출고는 확정을 기다리는 할 일이라 재고 상세보다 위, 샘플 트래커는 참조 성격이라 아래에 둔다. */}
-            <ImportFreshnessStrip importRun={data?.importRun ?? null} />
-
-            <CategoryCardsSection categoryCards={categoryCards.cards} etcSummary={categoryCards.etcSummary} />
-
-            <SalesPeriodSummary summary={salesPeriodSummary} onOpenDetail={openOutboundDetail} />
-
-            <HardwareSearchPanel
+            <HomeTabPanel
+              activePanelId={activePanelId}
+              activeTabId={activeTabId}
+              reduceMotion={reduceMotion}
+              data={data}
+              categoryCards={categoryCards}
+              salesPeriodSummary={salesPeriodSummary}
+              openOutboundDetail={openOutboundDetail}
               hardwareSearch={hardwareSearch}
               setHardwareSearch={setHardwareSearch}
               hardwareSearchResults={hardwareSearchResults}
@@ -3360,15 +3330,9 @@ export default function HardwareInventoryClient({
               plannedConfirmLocked={plannedConfirmLocked}
               canFinalize={canFinalize}
               setCustomerDetail={setCustomerDetail}
-            />
-
-            <PlannedOutboundPanel
-              data={data}
               plannedMovementQuantity={plannedMovementQuantity}
               plannedStaleGroupCount={plannedStaleGroupCount}
-              canFinalize={canFinalize}
               startPlannedEntry={startPlannedEntry}
-              plannedConfirmLocked={plannedConfirmLocked}
               plannedPagination={plannedPagination}
               setPlannedPage={setPlannedPage}
               confirmQtys={confirmQtys}
@@ -3380,2028 +3344,214 @@ export default function HardwareInventoryClient({
               confirmingId={confirmingId}
               confirmingGroupKey={confirmingGroupKey}
               confirmPlannedGroup={confirmPlannedGroup}
-              confirmPlannedMovement={confirmPlannedMovement}
-            />
-
-            <LocationMapSection
-              locationMap={locationMap}
-              locationMapExpanded={locationMapExpanded}
-              setLocationMapExpanded={setLocationMapExpanded}
-              prepareQuickEntry={prepareQuickEntry}
-            />
-
-            <StockLevelsSection
+              confirmPlannedSelection={confirmPlannedSelection}
+              selectionConfirmProgress={selectionConfirmProgress}
+              onPlannedSelectionCountChange={setPlannedSelectionCount}
               openSections={openSections}
               toggleSection={toggleSection}
-              data={data}
               stockPagination={stockPagination}
               setStockPage={setStockPage}
-              prepareQuickEntry={prepareQuickEntry}
-            />
-
-            <SampleTrackerSection
-              units={sampleUnits}
-              latestEvents={sampleLatestEvents}
-              loading={sampleUnitsLoading}
-              error={sampleUnitsError}
-              stock={data?.stock ?? null}
-              onOpenUnit={setSampleUnitSheetId}
-              onChanged={loadSampleUnits}
-            />
-
-            <AlertsOutboundSections
-              openSections={openSections}
-              toggleSection={toggleSection}
+              sampleUnits={sampleUnits}
+              sampleLatestEvents={sampleLatestEvents}
+              sampleUnitsLoading={sampleUnitsLoading}
+              sampleUnitsError={sampleUnitsError}
+              setSampleUnitSheetId={setSampleUnitSheetId}
+              loadSampleUnits={loadSampleUnits}
               alertsPagination={alertsPagination}
               setAlertsPage={setAlertsPage}
               mutedAlerts={mutedAlerts}
               outboundPagination={outboundPagination}
               setOutboundPage={setOutboundPage}
+              setDetailId={setDetailId}
+              refresh={refresh}
             />
-            </motion.div>
             )}
 
             {activeTab === "entry" && (
-            <motion.div
-              id={activePanelId}
-              role="tabpanel"
-              aria-labelledby={activeTabId}
-              className="space-y-5"
-              initial={reduceMotion ? false : { opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
-            >
-              {/* 뷰 전환 줄 — 카드 없이 세그먼트+CTA만. 콘텐츠 카드(물량·집계)가 시각적 주인공이 되도록 한다. */}
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-0.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]" role="tablist" aria-label="입출고 보기">
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={entrySub === "inbound"}
-                    onClick={() => setEntrySub("inbound")}
-                    className={`cursor-pointer rounded-md px-3.5 py-2 text-[12px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 ${
-                      entrySub === "inbound" ? "bg-[#ECFDF5] text-[#084734]" : "text-[#615D59] hover:text-[#111110]"
-                    }`}
-                  >
-                    입고 · 물량번호
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={entrySub === "outbound"}
-                    onClick={() => setEntrySub("outbound")}
-                    className={`cursor-pointer rounded-md px-3.5 py-2 text-[12px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 ${
-                      entrySub === "outbound" ? "bg-[#ECFDF5] text-[#084734]" : "text-[#615D59] hover:text-[#111110]"
-                    }`}
-                  >
-                    출고 · 기간 집계
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={openFreshSheet}
-                  className="inline-flex items-center gap-1.5 cursor-pointer rounded-md bg-[#084734] px-3 py-2 text-[12px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  빠른 기록
-                </button>
-              </div>
-
-              {entrySub === "inbound" && (
-                <InboundLotsSection inboundSearch={inboundSearch} setInboundSearch={setInboundSearch} inboundLots={inboundLots} />
-              )}
-
-              {entrySub === "outbound" && (
-                <OutboundPeriodSection
-                  outboundBuckets={outboundBuckets}
-                  outPeriod={outPeriod}
-                  setOutPeriod={setOutPeriod}
-                  openPeriods={openPeriods}
-                  setOpenPeriods={setOpenPeriods}
-                  setCustomerDetail={setCustomerDetail}
-                />
-              )}
-
-              <div className="flex justify-end">
-                <button type="button" onClick={() => setActiveTab("history")} className="-mx-2 cursor-pointer rounded px-2 py-1 text-[11px] font-bold text-[#084734] transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40">
-                  전체 내역 →
-                </button>
-              </div>
-            </motion.div>
+            <EntryTabPanel
+              activePanelId={activePanelId}
+              activeTabId={activeTabId}
+              reduceMotion={reduceMotion}
+              entrySub={entrySub}
+              setEntrySub={setEntrySub}
+              openFreshSheet={openFreshSheet}
+              inboundSearch={inboundSearch}
+              setInboundSearch={setInboundSearch}
+              inboundLots={inboundLots}
+              outboundBuckets={outboundBuckets}
+              outPeriod={outPeriod}
+              setOutPeriod={setOutPeriod}
+              openPeriods={openPeriods}
+              setOpenPeriods={setOpenPeriods}
+              setCustomerDetail={setCustomerDetail}
+              setActiveTab={setActiveTab}
+            />
             )}
 
             <AnimatePresence>
             {sheetOpen && (
-              <motion.div
-                key="quick-sheet"
-                className="fixed inset-0 z-40 flex justify-end bg-black/35 backdrop-blur-[2px]"
-                onClick={requestCloseSheet}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: reduceMotion ? 0 : 0.16 }}
-              >
-                <motion.aside
-                  ref={sheetPanelRef}
-                  role="dialog"
-                  aria-modal="true"
-                  aria-label="빠른 기록"
-                  onKeyDown={trapTab}
-                  onClick={(event) => event.stopPropagation()}
-                  className="flex h-full w-full flex-col overflow-y-auto border-l border-[rgba(0,0,0,0.08)] bg-white shadow-[-8px_0_24px_rgba(0,0,0,0.05)] sm:max-w-xl"
-                  initial={reduceMotion ? { opacity: 0 } : { x: "100%" }}
-                  animate={reduceMotion ? { opacity: 1 } : { x: 0 }}
-                  exit={reduceMotion ? { opacity: 0 } : { x: "100%" }}
-                  transition={{ duration: reduceMotion ? 0 : 0.22, ease: [0.2, 0, 0, 1] }}
-                >
-                  <div className="sticky top-0 z-10 border-b border-[rgba(0,0,0,0.08)] bg-white px-5 pb-3 pt-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">
-                          {editingId ? "기록 수정" : "빠른 기록"}
-                        </p>
-                        {/* 유형 배지 + 중립 경로 — 저장될 기록의 원장 배지 색을 미리 보여준다. */}
-                        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-[#615D59]">
-                          <span className={`inline-flex rounded-full px-2 py-0.5 text-[10.5px] font-bold ${presetTone(activePresetKey, movementType)}`}>
-                            {activePreset.label}
-                          </span>
-                          <span>{activePreset.from || "—"} → {activePreset.to || "고객사 입력"}</span>
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={requestCloseSheet}
-                        aria-label="닫기"
-                        className="flex h-10 w-10 items-center justify-center cursor-pointer rounded-md text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 sm:h-8 sm:w-8"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                    {!editingId && sheetView === "quick" && (
-                      <div className="mt-3 inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5" role="tablist" aria-label="기록 모드">
-                        {([["batch", "작업건 구성"], ["single", "단건 기록"]] as const).map(([mode, label]) => (
-                          <button
-                            key={mode}
-                            type="button"
-                            role="tab"
-                            aria-selected={sheetMode === mode}
-                            onClick={() => setSheetMode(mode)}
-                            className={`cursor-pointer rounded-md px-3.5 py-1.5 text-[12px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 ${
-                              sheetMode === mode ? "bg-white text-[#084734] shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : "text-[#615D59] hover:text-[#111110]"
-                            }`}
-                          >
-                            {label}
-                            {mode === "batch" && quickCart.length > 0 ? (
-                              <span className="ml-1.5 rounded-full bg-[#ECFDF5] px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-[#084734]">
-                                {formatNumber(quickCart.length)}
-                              </span>
-                            ) : null}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {/* 상세 모드에는 모드 탭이 없어 바구니가 화면에서 사라진다 — 유실 오인을 막기 위해 대기 배지만 노출한다. */}
-                    {sheetView === "detail" && quickCart.length > 0 && (
-                      <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-2.5 py-1 text-[11px] font-semibold text-[#615D59]">
-                        <ShoppingCart className="h-3.5 w-3.5 text-[#084734]" />
-                        대기 중인 바구니 {formatNumber(quickCartTotals.count)}건 · {formatNumber(quickCartTotals.quantity)}대
-                      </div>
-                    )}
-                  </div>
-                  <form
-                    ref={formRef}
-                    onSubmit={(event) => void submitMovement(event)}
-                    onKeyDown={(event) => {
-                      // 작업건 모드에서 텍스트 input의 Enter가 암묵 폼 제출(단건 저장)을 오발사하지 않도록 차단.
-                      // 버튼/textarea의 Enter는 그대로 — 키보드 사용자의 담기·저장 활성화를 막지 않는다.
-                      if (event.key === "Enter" && sheetMode === "batch" && event.target instanceof HTMLInputElement) {
-                        event.preventDefault()
-                      }
-                    }}
-                    className="flex flex-1 flex-col"
-                  >
-                    <div className="flex-1 space-y-4 p-5">
-                    {error && (
-                      <div role="alert" className="rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] px-3 py-2 text-[12px] font-semibold text-[#8F2C2C]">
-                        {error}
-                      </div>
-                    )}
-                    {notice && (
-                      <div role="status" className="rounded-lg border border-[#BDEFD8] bg-[#ECFDF5] px-3 py-2 text-[12px] font-semibold text-[#084734]">
-                        {notice}
-                      </div>
-                    )}
-                    {/* 저장 대기 바구니 배너 — 경쟁 박스 대신 border-bottom 구분 한 줄(HW-5). */}
-                    {sheetView === "quick" && sheetMode === "single" && quickCart.length > 0 && !editingId && (
-                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[rgba(0,0,0,0.08)] pb-3">
-                        <span className="text-[12px] font-semibold text-[#615D59]">
-                          저장 대기 바구니 {formatNumber(quickCart.length)}건 · {formatNumber(quickCartTotals.quantity)}대
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setSheetMode("batch")}
-                          className="cursor-pointer rounded-md px-2 py-1 text-[12px] font-bold text-[#084734] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
-                        >
-                          작업건 모드에서 보기 →
-                        </button>
-                      </div>
-                    )}
-                    {editingId ? (
-                      // 수정 중에는 프리셋 전환을 막는다 — 유형 변경은 기록 취소 후 재작성이 안전하다.
-                      <div className="flex items-center gap-2 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-3 py-2.5">
-                        <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold ${MOVEMENT_TONE[movementType]}`}>
-                          {MOVEMENT_LABEL[movementType]}
-                        </span>
-                        <span className="text-[12px] font-semibold text-[#615D59]">
-                          {activePreset.label} — 유형은 수정할 수 없습니다
-                        </span>
-                      </div>
-                    ) : sheetView === "detail" ? (
-                    // 상세 모드 — 빠른 2축 밖의 예외 처리 5종. 항상 단건, 큐 비활성.
-                    <div className="space-y-2.5">
-                      <button
-                        type="button"
-                        onClick={exitDetailView}
-                        className="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-1 py-0.5 text-[12px] font-bold text-[#084734] transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
-                      >
-                        ← 빠른 기록으로 돌아가기
-                      </button>
-                      <p className="text-[11px] font-semibold text-[#615D59]">
-                        반환·샘플 배정·수리·조정 — 자주 쓰지 않는 예외 처리입니다. 한 건씩 저장하세요.
-                      </p>
-                      <div className="grid grid-cols-1 gap-2 min-[360px]:grid-cols-2">
-                        {ENTRY_PRESETS.filter((option) => DETAIL_PRESET_KEYS.has(option.key)).map((option) => {
-                          const Icon = option.icon
-                          const active = activePresetKey === option.key
-                          return (
-                            <button
-                              key={option.key}
-                              type="button"
-                              aria-pressed={active}
-                              onClick={() => applyPreset(option.key)}
-                              className={`cursor-pointer rounded-lg border px-3 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.99] motion-reduce:active:scale-100 ${
-                                active
-                                  ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
-                                  : "border-[rgba(0,0,0,0.08)] bg-white text-[#31302E] hover:bg-[#F6F5F4]"
-                              }`}
-                            >
-                              <span className="flex items-center gap-2 text-[12px] font-bold">
-                                <Icon className="h-3.5 w-3.5" />
-                                {option.label}
-                              </span>
-                              <span className="mt-1 block text-[11px] text-[#615D59]">{option.description}</span>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                    ) : (
-                    // 빠른 기록 2축 — 입고 | 출고. 출고는 하위 실제|예정|샘플 세그먼트.
-                    <div className="space-y-2.5">
-                      <div className="grid grid-cols-2 gap-1.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-1" role="tablist" aria-label="입출고 유형">
-                        {([["outbound", "출고", ArrowUpFromLine], ["inbound", "입고", ArrowDownToLine]] as const).map(([axis, label, Icon]) => {
-                          const active = axis === "inbound" ? movementType === "inbound" : movementType === "outbound"
-                          // 활성 톤 = 원장 배지 색(출고 Danger·입고 Success) — 방향 오입력을 색으로도 잡는다.
-                          const activeTone = axis === "inbound" ? "bg-[#ECFDF5] text-[#084734]" : "bg-[#FCE9E9] text-[#B43E3E]"
-                          return (
-                            <button
-                              key={axis}
-                              type="button"
-                              role="tab"
-                              aria-selected={active}
-                              onClick={() => selectMovementAxis(axis)}
-                              className={`inline-flex min-h-[42px] cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 text-[13px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 ${
-                                active ? `${activeTone} shadow-[0_1px_2px_rgba(0,0,0,0.06)]` : "text-[#615D59] hover:text-[#111110]"
-                              }`}
-                            >
-                              <Icon className="h-4 w-4" />
-                              {label}
-                            </button>
-                          )
-                        })}
-                      </div>
-                      {movementType === "outbound" && (
-                        // 경쟁 박스 대신 세그먼트+저대비 캡션 한 줄 — 앰버 틴트는 실제 경고에만 남긴다(HW-5).
-                        <div className="space-y-2">
-                          <div className="grid grid-cols-3 gap-1.5" role="tablist" aria-label="출고 방식">
-                            {([
-                              // 활성 톤 = 저장 후 원장 배지 색(실제 Danger·예정 Warning·샘플 중립)과 같은 어휘.
-                              ["actual", "실제", "즉시 재고 반영", "border-[#F2B8B8] bg-[#FCE9E9] text-[#B43E3E]"],
-                              ["planned", "예정", "가용에서 미리 차감", "border-[#ECD29C] bg-[#FBF1E0] text-[#A8741A]"],
-                              ["sample", "샘플", "사무실·창고 반출", "border-[rgba(0,0,0,0.16)] bg-[#F6F5F4] text-[#31302E]"],
-                            ] as const).map(([mode, label, hint, activeTone]) => {
-                              const active = outboundMode === mode
-                              return (
-                                <button
-                                  key={mode}
-                                  type="button"
-                                  role="tab"
-                                  aria-selected={active}
-                                  onClick={() => selectOutboundMode(mode)}
-                                  className={`flex min-h-[46px] cursor-pointer flex-col items-center justify-center gap-0.5 rounded-md border px-2 py-1.5 text-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-[0.98] motion-reduce:active:scale-100 ${
-                                    active ? activeTone : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#615D59] hover:bg-white"
-                                  }`}
-                                >
-                                  <span className="text-[12px] font-bold">{label}</span>
-                                  <span className={`text-[10px] leading-tight ${active ? "opacity-80" : "text-[#A39E98]"}`}>{hint}</span>
-                                </button>
-                              )
-                            })}
-                          </div>
-                          <p className="px-0.5 text-[11px] font-semibold text-[#615D59]">
-                            {outboundMode === "actual"
-                              ? "실제 출고는 즉시 재고에 반영되고, 판매 건이면 저장 시 CRM 오더 확인이 뜹니다."
-                              : outboundMode === "planned"
-                                ? "예정은 가용(창고 − 예정)에서만 미리 차감합니다. 확정은 홈 › 예상 출고에서 하세요."
-                                : "샘플 대여는 사무실·창고에서 반출되며 CRM 연동 없이 저장됩니다."}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                    )}
-
-                    {/* 입고 공유 헤더 — 물량번호(lot)·입고일은 한 lot의 모든 품목이 공유한다. 상단 고정 노출. */}
-                    {inboundBatchLayout && (
-                      <div className="sticky top-0 z-[5] -mx-5 border-y border-[#BDEFD8] bg-[#ECFDF5] px-5 py-3">
-                        <p className="flex items-center gap-1.5 text-[12px] font-bold text-[#084734]">
-                          <ArrowDownToLine className="h-3.5 w-3.5" />
-                          입고 lot 공유 정보
-                        </p>
-                        <div className="mt-2 grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
-                          <label className="block">
-                            <span className="text-[12px] font-semibold text-[#31302E]">물량번호 (lot)</span>
-                            <input
-                              value={lotNo}
-                              onChange={(event) => setLotNo(event.target.value)}
-                              placeholder="신규 lot — 예: H9"
-                              list="hardware-lot-options"
-                              className="mt-1 h-10 w-full rounded-md border border-[#BDEFD8] bg-white px-3 text-[13px] font-semibold text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
-                            />
-                            <div className="mt-1.5 flex flex-wrap gap-1">
-                              <button
-                                type="button"
-                                onClick={() => setLotNo(nextLotSuggestion)}
-                                className="min-h-[32px] cursor-pointer rounded border border-[#BDEFD8] bg-white px-2 py-1 text-[11px] font-bold text-[#084734] transition hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100"
-                              >
-                                {nextLotSuggestion} 적용
-                              </button>
-                            </div>
-                          </label>
-                          <div>
-                            <span className="text-[12px] font-semibold text-[#31302E]">입고일</span>
-                            <input
-                              type="date"
-                              aria-label="입고일"
-                              value={occurredAt}
-                              onChange={(event) => setOccurredAt(event.target.value)}
-                              className="mt-1 h-10 w-full rounded-md border border-[#BDEFD8] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
-                            />
-                            <div className="mt-1.5 grid grid-cols-2 gap-1">
-                              {([
-                                { label: "오늘", value: todayKey() },
-                                { label: "어제", value: yesterdayKey() },
-                              ] as const).map((chip) => (
-                                <button
-                                  key={chip.label}
-                                  type="button"
-                                  aria-pressed={occurredAt === chip.value}
-                                  onClick={() => setOccurredAt(chip.value)}
-                                  className={`min-h-[32px] cursor-pointer rounded border px-1.5 py-1 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
-                                    occurredAt === chip.value
-                                      ? "border-[#084734] bg-white text-[#084734]"
-                                      : "border-[#BDEFD8] bg-white/60 text-[#615D59] hover:bg-white"
-                                  }`}
-                                >
-                                  {chip.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {sheetView === "quick" && sheetMode === "single" && !editingId && lastManualMovement && (
-                      <button
-                        type="button"
-                        onClick={duplicateLastMovement}
-                        className="flex w-full items-center justify-between gap-2 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2.5 text-left transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.99] motion-reduce:active:scale-100"
-                      >
-                        <span className="flex min-w-0 items-center gap-2">
-                          <RotateCcw className="h-3.5 w-3.5 shrink-0 text-[#084734]" />
-                          <span className="min-w-0">
-                            <span className="block text-[12px] font-bold text-[#111110]">직전 기록 복제</span>
-                            <span className="mt-0.5 block truncate text-[11px] text-[#615D59]">
-                              {lastManualMovement.product_name} · {MOVEMENT_LABEL[lastManualMovement.movement_type]} {formatNumber(lastManualMovement.quantity)}대
-                              {lastManualMovement.to_location ? ` · ${customerLabel(lastManualMovement.to_location)}` : ""}
-                            </span>
-                          </span>
-                        </span>
-                        <span className="shrink-0 text-[11px] font-bold text-[#084734]">복제 →</span>
-                      </button>
-                    )}
-
-                    {sheetMode === "batch" && !editingId && !quickCartEnabled && (
-                      <p className="border-b border-[rgba(0,0,0,0.08)] pb-3 text-[12px] font-semibold text-[#615D59]">
-                        반납·샘플 반환·샘플 배정·수리·조정은 배치 담기를 지원하지 않습니다 — 단건 기록 모드로 저장하세요.
-                      </p>
-                    )}
-                    {sheetMode === "batch" && quickCartEnabled && !inboundBatchLayout && (
-                      <div className="space-y-3 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-3">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <p className={SHEET_SECTION_TITLE_CLASS}>작업건 빠른 구성</p>
-                            <p className="mt-0.5 text-[11px] text-[#A39E98]">
-                              세트·견적 라인을 바구니에 담고 한 번에 저장합니다.
-                            </p>
-                          </div>
-                          <div className="inline-flex items-center gap-1.5">
-                            <span className="text-[11px] font-semibold text-[#615D59]">세트 배수</span>
-                            <div className="grid h-9 grid-cols-[36px_40px_36px] overflow-hidden rounded-md border border-[rgba(0,0,0,0.08)] bg-white">
-                              <button
-                                type="button"
-                                onClick={() => setKitMultiplier((current) => Math.max(1, current - 1))}
-                                aria-label="세트 배수 줄이기"
-                                className="flex cursor-pointer items-center justify-center text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100"
-                              >
-                                <Minus className="h-3.5 w-3.5" />
-                              </button>
-                              <span className="flex items-center justify-center border-x border-[rgba(0,0,0,0.08)] text-[13px] font-bold tabular-nums text-[#111110]">
-                                x{formatNumber(cartSetMultiplier)}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => setKitMultiplier((current) => Math.min(99, current + 1))}
-                                aria-label="세트 배수 늘리기"
-                                className="flex cursor-pointer items-center justify-center text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100"
-                              >
-                                <Plus className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          {kitPresetSummaries.map((preset) => {
-                            const Icon = preset.icon
-                            const unavailable = preset.missing.length > 0
-                            const shortage = preset.lines.reduce((total, line) => total + line.shortage, 0)
-                            return (
-                              <button
-                                key={preset.key}
-                                type="button"
-                                onClick={() => addKitPresetToCart(preset.key)}
-                                disabled={busy != null || unavailable}
-                                className="cursor-pointer rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2.5 text-left transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.99] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                <span className="flex items-center gap-2 text-[12px] font-bold text-[#111110]">
-                                  <Icon className="h-3.5 w-3.5 text-[#084734]" />
-                                  {preset.label}
-                                </span>
-                                <span className="mt-1 block text-[11px] text-[#615D59]">{preset.description}</span>
-                                <span className={`mt-1 block text-[11px] font-bold ${shortage > 0 ? "text-[#A8741A]" : "text-[#084734]"}`}>
-                                  {unavailable
-                                    ? "품목 미매칭"
-                                    : shortage > 0
-                                      ? `예상 부족 ${formatNumber(shortage)}대`
-                                      : "가용 재고 확인"}
-                                </span>
-                              </button>
-                            )
-                          })}
-                        </div>
-
-                        <div className="grid gap-2">
-                          <label className="block">
-                            <span className={SHEET_LABEL_CLASS}>견적/CRM 라인 붙여넣기</span>
-                            <textarea
-                              value={quotePasteText}
-                              onChange={(event) => setQuotePasteText(event.target.value)}
-                              rows={3}
-                              placeholder={'예: 86" IFP x 2\nT1 2대\nSTD1, 2'}
-                              className="mt-1 w-full resize-none rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[12px] text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            onClick={importQuoteLinesToCart}
-                            disabled={busy != null || !quotePasteText.trim()}
-                            className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-md border border-[#084734] bg-white px-3 text-[12px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            <FileSpreadsheet className="h-3.5 w-3.5" />
-                            견적 라인 담기
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {inboundBatchLayout && (
-                      <div className="flex items-center justify-between gap-2 pt-1">
-                        <p className={`inline-flex items-center gap-1.5 ${SHEET_SECTION_TITLE_CLASS}`}>
-                          <Plus className="h-3.5 w-3.5 text-[#084734]" />
-                          품목 추가
-                        </p>
-                        <p className="text-[11px] font-semibold text-[#615D59]">
-                          담으면 lot·입고일은 유지됩니다
-                        </p>
-                      </div>
-                    )}
-                    <div className={customProduct.trim() ? "opacity-90" : undefined}>
-                      <span className={SHEET_LABEL_CLASS}>품목</span>
-                      {(quickPickGroups.featured.length > 0 || quickPickGroups.etc.length > 0) && (
-                        <div role="group" aria-label="제품 빠른 선택" className="mt-1.5 flex flex-wrap gap-1.5">
-                          {[...quickPickGroups.featured, ...quickPickGroups.etc].map((row) => {
-                            const chipActive = selectedItemId === row.itemId && !customProduct.trim()
-                            return (
-                              <button
-                                key={row.itemId}
-                                type="button"
-                                aria-pressed={chipActive}
-                                onClick={() => {
-                                  setSelectedItemId(row.itemId)
-                                  setCustomProduct("")
-                                }}
-                                className={`min-h-[36px] cursor-pointer rounded-full border px-2.5 py-1.5 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
-                                  chipActive
-                                    ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
-                                    : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
-                                }`}
-                              >
-                                {row.product} · 가용 {formatNumber(row.availableStock)}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      )}
-                      <select
-                        value={selectedItemId}
-                        onChange={(event) => {
-                          setSelectedItemId(event.target.value)
-                          setCustomProduct("")
-                        }}
-                        aria-label="전체 품목에서 선택"
-                        disabled={Boolean(customProduct.trim())}
-                        className="mt-2 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] font-semibold text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {(data?.items ?? []).map((item) => (
-                          <option key={item.id} value={item.id}>{item.name}</option>
-                        ))}
-                      </select>
-                      <div className="mt-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const visible = showCustomInput || Boolean(customProduct.trim())
-                            if (visible) {
-                              // 접기 = 직접 입력 취소 — 목록 선택으로 복귀.
-                              setShowCustomInput(false)
-                              setCustomProduct("")
-                            } else {
-                              setShowCustomInput(true)
-                            }
-                          }}
-                          aria-expanded={showCustomInput || Boolean(customProduct.trim())}
-                          className="cursor-pointer rounded-md text-[12px] font-bold text-[#084734] transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
-                        >
-                          {showCustomInput || customProduct.trim() ? "− 직접 입력 취소" : "+ 목록에 없는 품목 직접 입력"}
-                        </button>
-                        {(showCustomInput || Boolean(customProduct.trim())) && (
-                          <>
-                            <input
-                              value={customProduct}
-                              onChange={(event) => setCustomProduct(event.target.value)}
-                              placeholder="예: OPS 케이블"
-                              className={SHEET_INPUT_CLASS}
-                            />
-                            {customProduct.trim() ? (
-                              <p className="mt-1 text-[11px] font-semibold text-[#084734]">직접 입력 사용 중 — 위 목록 선택은 무시됩니다.</p>
-                            ) : null}
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className={`grid grid-cols-1 gap-3 ${inboundBatchLayout ? "" : "min-[400px]:grid-cols-2"}`}>
-                      {inboundBatchLayout ? (
-                      <div>
-                        <span id="hardware-quantity-label" className={SHEET_LABEL_CLASS}>수량</span>
-                        {/* 입고 작업건 — 스테퍼 + 퀵칩을 한 줄로 압축. */}
-                        <div className="mt-1 flex items-center gap-2">
-                          <div className="grid h-9 w-[104px] shrink-0 grid-cols-[30px_minmax(0,1fr)_30px] rounded-md border border-[rgba(0,0,0,0.08)] bg-white">
-                            <button
-                              type="button"
-                              onClick={() => adjustQuantity(-1)}
-                              className="flex cursor-pointer items-center justify-center text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100"
-                              aria-label="수량 줄이기"
-                            >
-                              <Minus className="h-3.5 w-3.5" />
-                            </button>
-                            <input
-                              type="number"
-                              min={1}
-                              inputMode="numeric"
-                              aria-labelledby="hardware-quantity-label"
-                              value={quantity}
-                              onChange={(event) => setQuantity(event.target.value)}
-                              className="h-full w-full border-x border-[rgba(0,0,0,0.08)] px-1 text-center text-[13px] font-bold text-[#111110] outline-none"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => adjustQuantity(1)}
-                              className="flex cursor-pointer items-center justify-center text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100"
-                              aria-label="수량 늘리기"
-                            >
-                              <Plus className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                          <div className="grid flex-1 grid-cols-4 gap-1">
-                            {QUICK_QUANTITIES.map((nextQuantity) => (
-                              <button
-                                key={nextQuantity}
-                                type="button"
-                                aria-pressed={Number(quantity) === nextQuantity}
-                                onClick={() => setQuantity(String(nextQuantity))}
-                                className={`h-9 cursor-pointer rounded border text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
-                                  Number(quantity) === nextQuantity
-                                    ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
-                                    : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#615D59] hover:bg-white"
-                                }`}
-                              >
-                                {nextQuantity}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                      ) : (
-                      <div>
-                        <span id="hardware-quantity-label" className={SHEET_LABEL_CLASS}>수량</span>
-                        <div className="mt-1 grid h-11 grid-cols-[44px_minmax(0,1fr)_44px] rounded-md border border-[rgba(0,0,0,0.08)] bg-white sm:h-10 sm:grid-cols-[38px_minmax(0,1fr)_38px]">
-                          <button
-                            type="button"
-                            onClick={() => adjustQuantity(-1)}
-                            className="flex cursor-pointer items-center justify-center text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100"
-                            aria-label="수량 줄이기"
-                          >
-                            <Minus className="h-3.5 w-3.5" />
-                          </button>
-                          <input
-                            type="number"
-                            min={1}
-                            inputMode="numeric"
-                            aria-labelledby="hardware-quantity-label"
-                            value={quantity}
-                            onChange={(event) => setQuantity(event.target.value)}
-                            className="h-full w-full border-x border-[rgba(0,0,0,0.08)] px-2 text-center text-[14px] font-bold text-[#111110] outline-none"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => adjustQuantity(1)}
-                            className="flex cursor-pointer items-center justify-center text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100"
-                            aria-label="수량 늘리기"
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                        <div className="mt-1.5 grid grid-cols-4 gap-1">
-                          {QUICK_QUANTITIES.map((nextQuantity) => (
-                            <button
-                              key={nextQuantity}
-                              type="button"
-                              aria-pressed={Number(quantity) === nextQuantity}
-                              onClick={() => setQuantity(String(nextQuantity))}
-                              className={`min-h-[36px] cursor-pointer rounded border px-1.5 py-1 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
-                                Number(quantity) === nextQuantity
-                                  ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
-                                  : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#615D59] hover:bg-white"
-                              }`}
-                            >
-                              {nextQuantity}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      )}
-                      {/* 입고 작업건에서는 처리일을 상단 공유 헤더로 올렸으므로 여기서는 숨긴다(중복 방지). */}
-                      {!inboundBatchLayout && (
-                      <div>
-                        <span id="hardware-date-label" className={SHEET_LABEL_CLASS}>처리일</span>
-                        <input
-                          type="date"
-                          aria-labelledby="hardware-date-label"
-                          value={occurredAt}
-                          onChange={(event) => setOccurredAt(event.target.value)}
-                          className={SHEET_INPUT_CLASS}
-                        />
-                        <div className="mt-1.5 grid grid-cols-2 gap-1">
-                          {([
-                            { label: "오늘", value: todayKey() },
-                            { label: "어제", value: yesterdayKey() },
-                          ] as const).map((chip) => (
-                            <button
-                              key={chip.label}
-                              type="button"
-                              aria-pressed={occurredAt === chip.value}
-                              onClick={() => setOccurredAt(chip.value)}
-                              className={`min-h-[36px] cursor-pointer rounded border px-1.5 py-1 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
-                                occurredAt === chip.value
-                                  ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
-                                  : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#615D59] hover:bg-white"
-                              }`}
-                            >
-                              {chip.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      )}
-                    </div>
-                    {/* 인라인 담기 — 품목·수량 바로 아래에 눈에 띄게. 저장은 리스트 근처/스티키 바에서. */}
-                    {inboundBatchLayout && (
-                      <button
-                        type="button"
-                        onClick={addDraftToQuickCart}
-                        disabled={!quickCartEnabled || busy != null || (!customProduct.trim() && !selectedItem)}
-                        className="inline-flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-[#084734] bg-white px-3 text-[13px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.99] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <Plus className="h-4 w-4" />
-                        이 품목 담기
-                      </button>
-                    )}
-                    {activePresetKey === "sample" && !editingId && (
-                      // 다른 폼 필드와 같은 평면(무박스) — 필드 그룹에 경쟁 보더를 두지 않는다(HW-5).
-                      <div>
-                        <span className={SHEET_LABEL_CLASS}>샘플 출처</span>
-                        <div className="mt-1.5 grid grid-cols-2 gap-1.5">
-                          {SAMPLE_SOURCE_OPTIONS.map((source) => (
-                            <button
-                              key={source}
-                              type="button"
-                              aria-pressed={sampleSource === source}
-                              onClick={() => applySampleSource(source)}
-                              className={`min-h-[38px] cursor-pointer rounded-md border px-2 py-1.5 text-[12px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-[0.98] motion-reduce:active:scale-100 ${
-                                sampleSource === source
-                                  ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
-                                  : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#615D59] hover:bg-white"
-                              }`}
-                            >
-                              {source === "사무실" ? "사무실 (남은 샘플)" : "창고 (판매 재고)"}
-                            </button>
-                          ))}
-                        </div>
-                        <p className="mt-1.5 text-[11px] text-[#A39E98]">
-                          기본은 사무실 보관 샘플. 사무실 재고가 없으면 창고에서 바로 반출합니다.
-                        </p>
-                      </div>
-                    )}
-                    {/* 샘플 유닛 트래커 연계 — 대여: 고객사 + 나갈 유닛 선택 / 반환: 돌아올 유닛 선택.
-                        원장 저장 시 loan/return 이벤트가 유닛 타임라인에 함께 남는다. */}
-                    {activePresetKey === "sample" && !editingId && (
-                      <div className="space-y-3">
-                        <label className="block">
-                          <span className={SHEET_LABEL_CLASS}>대여 고객사</span>
-                          <input
-                            value={sampleCustomer}
-                            onChange={(event) => setSampleCustomer(event.target.value)}
-                            placeholder="예: 남명학원 — 트래커에 유닛 행방으로 기록됩니다"
-                            list="hardware-customer-options"
-                            className={SHEET_INPUT_CLASS}
-                          />
-                        </label>
-                        {sampleSource === "사무실" && (
-                          <div>
-                            <span className={SHEET_LABEL_CLASS}>
-                              나갈 유닛 선택 ({formatNumber(sampleUnitSelection.length)}/{formatNumber(sampleLoanNeed)})
-                            </span>
-                            {sampleLoanPool.length === 0 ? (
-                              <p className="mt-1.5 text-[11px] text-[#A39E98]">
-                                등록된 사무실 유닛이 없어 저장 시 관리번호가 자동 발급됩니다.
-                              </p>
-                            ) : (
-                              <>
-                                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                                  {sampleLoanPool.map((unit) => {
-                                    const selected = sampleUnitSelection.includes(unit.id)
-                                    return (
-                                      <button
-                                        key={unit.id}
-                                        type="button"
-                                        aria-pressed={selected}
-                                        onClick={() => toggleSampleUnit(unit.id, sampleLoanNeed)}
-                                        className={`cursor-pointer rounded-md border px-2 py-1 text-[11.5px] font-bold tabular-nums transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 ${
-                                          selected
-                                            ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
-                                            : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#615D59] hover:bg-white"
-                                        }`}
-                                      >
-                                        {unit.asset_code}
-                                      </button>
-                                    )
-                                  })}
-                                </div>
-                                {draftQuantityNumber > sampleLoanPool.length && (
-                                  <p className="mt-1.5 text-[11px] text-[#A39E98]">
-                                    부족분 {formatNumber(draftQuantityNumber - sampleLoanPool.length)}대는 저장 시 자동 발급됩니다.
-                                  </p>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        )}
-                        {sampleSource === "창고" && (
-                          <p className="text-[11px] text-[#A39E98]">
-                            창고 반출은 저장 시 유닛 {formatNumber(Math.max(1, draftQuantityNumber))}대가 자동 발급되어 대여중으로 등록됩니다.
-                          </p>
-                        )}
-                      </div>
-                    )}
-                    {activePresetKey === "sampleReturn" && !editingId && (
-                      <div>
-                        <span className={SHEET_LABEL_CLASS}>
-                          반환 유닛 선택 ({formatNumber(sampleUnitSelection.length)}/{formatNumber(sampleReturnNeed)})
-                        </span>
-                        {sampleReturnPool.length === 0 ? (
-                          <p className="mt-1.5 text-[11px] text-[#A39E98]">
-                            이 품목의 대여중 유닛이 없습니다 — 트래커 미등록 반환은 원장에만 기록됩니다.
-                          </p>
-                        ) : (
-                          <div className="mt-1.5 flex flex-wrap gap-1.5">
-                            {sampleReturnPool.map((unit) => {
-                              const selected = sampleUnitSelection.includes(unit.id)
-                              return (
-                                <button
-                                  key={unit.id}
-                                  type="button"
-                                  aria-pressed={selected}
-                                  onClick={() => toggleSampleUnit(unit.id, sampleReturnNeed)}
-                                  title={unit.current_customer ?? undefined}
-                                  className={`cursor-pointer rounded-md border px-2 py-1 text-[11.5px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 ${
-                                    selected
-                                      ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
-                                      : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#615D59] hover:bg-white"
-                                  }`}
-                                >
-                                  <span className="tabular-nums">{unit.asset_code}</span>
-                                  <span className="ml-1 font-semibold text-[#A39E98]">{unit.current_customer ?? "미상"}</span>
-                                </button>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {availabilityWarning && (
-                      <div className="rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2 text-[11px] font-bold text-[#7A520F]">
-                        {availabilityWarning}
-                      </div>
-                    )}
-
-                    {/* 입고 작업건은 출발(공급처)·도착(창고)이 고정이라 항목 자체를 숨긴다 — 프리셋 기본값(→창고)이 그대로 적용된다. */}
-                    {!inboundBatchLayout && (
-                    <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
-                      <label className="block">
-                        <span className={SHEET_LABEL_CLASS}>출발</span>
-                        <input
-                          value={fromLocation}
-                          onChange={(event) => setFromLocation(event.target.value)}
-                          placeholder="창고"
-                          list="hardware-location-options"
-                          className={SHEET_INPUT_CLASS}
-                        />
-                      </label>
-                      <label className="block">
-                        <span className={SHEET_LABEL_CLASS}>
-                          {isCustomerDestination ? "도착 (고객사)" : "도착"}
-                        </span>
-                        <input
-                          value={toLocation}
-                          onChange={(event) => setToLocation(event.target.value)}
-                          placeholder={isCustomerDestination ? "고객사명 — 예: 남명학원" : "창고/샘플/사무실"}
-                          list={isCustomerDestination ? "hardware-customer-options" : "hardware-location-options"}
-                          className={SHEET_INPUT_CLASS}
-                        />
-                      </label>
-                    </div>
-                    )}
-
-                    {/* 상세 모드는 상태가 핵심 필드(수리중·재고 조정 등) — 자유 텍스트로 앞면에 노출. */}
-                    {sheetView === "detail" && !editingId && (
-                      <label className="block">
-                        <span className={SHEET_LABEL_CLASS}>상태</span>
-                        <input
-                          value={status}
-                          onChange={(event) => setStatus(event.target.value)}
-                          placeholder="예: 수리중 · 재고 조정 · 반납"
-                          className={SHEET_INPUT_CLASS}
-                        />
-                      </label>
-                    )}
-
-                    {movementType === "inbound" && !inboundBatchLayout && (
-                      <label className="block">
-                        <span className={SHEET_LABEL_CLASS}>물량번호 (lot)</span>
-                        <input
-                          value={lotNo}
-                          onChange={(event) => setLotNo(event.target.value)}
-                          placeholder="신규 lot — 예: H9"
-                          list="hardware-lot-options"
-                          className={SHEET_INPUT_CLASS}
-                        />
-                      </label>
-                    )}
-                    {/* 입고 lot 도우미 — 그린 틴트 박스 대신 접이식+border-bottom 구분(HW-5). 틴트는 상태 의미에만. */}
-                    {movementType === "inbound" && !editingId && !inboundBatchLayout && (
-                      <details className="border-b border-[rgba(0,0,0,0.08)] pb-3">
-                        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-md py-1 text-[12px] font-bold text-[#31302E] transition hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40">
-                          <span>입고 lot 도우미 — 다음 lot 적용 · 이전 구성 복사</span>
-                          <ChevronDown className="h-3.5 w-3.5 text-[#A39E98]" />
-                        </summary>
-                        <p className="mt-1 text-[11px] font-semibold text-[#615D59]">
-                          lot·입고일·수입자·보관 장소를 공유해 여러 품목을 담습니다.
-                        </p>
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setLotNo(nextLotSuggestion)}
-                            className="inline-flex h-8 cursor-pointer items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100"
-                          >
-                            {nextLotSuggestion} 적용
-                          </button>
-                          <button
-                            type="button"
-                            onClick={copyLatestInboundLotToCart}
-                            className="inline-flex h-8 cursor-pointer items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100"
-                          >
-                            이전 구성 복사
-                          </button>
-                        </div>
-                      </details>
-                    )}
-                    {fifoPreview && (
-                      <div className={`rounded-lg border px-3 py-2 text-[11px] font-semibold ${
-                        fifoPreview.shortage > 0
-                          ? "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
-                          : "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]"
-                      }`}>
-                        <span className="font-bold">FIFO 자동 배정</span>{" "}
-                        {fifoPreview.plan.length > 0
-                          ? fifoPreview.plan.map((lot) => `${formatLotLabel(lot.lot) ?? lot.lot} ${formatNumber(lot.quantity)}대`).join(" · ")
-                          : "배정 가능한 lot 없음"}
-                        {fifoPreview.shortage > 0 ? ` · 부족 ${formatNumber(fifoPreview.shortage)}대` : ""}
-                      </div>
-                    )}
-
-                    {movementType === "inbound" && inboundBatchLayout && (
-                      // 입고 작업건 — 단가·매입액·시리얼·보관·수입자는 접이식으로 내려 기본은 간결하게.
-                      <details className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8]">
-                        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-[12px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40">
-                          <span>추가 정보 — 단가 · 매입액(USD·CNY) · 시리얼 · 보관 · 수입자</span>
-                          <span className="flex items-center gap-1.5">
-                            {(unitPrice.trim() ? 1 : 0) + (amountUsd.trim() ? 1 : 0) + (amountCny.trim() ? 1 : 0) + (serialsText.trim() ? 1 : 0) + (storageLocation.trim() ? 1 : 0) + (importer.trim() ? 1 : 0) > 0 ? (
-                              <span className="rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[10.5px] font-bold tabular-nums text-[#084734]">
-                                {(unitPrice.trim() ? 1 : 0) + (amountUsd.trim() ? 1 : 0) + (amountCny.trim() ? 1 : 0) + (serialsText.trim() ? 1 : 0) + (storageLocation.trim() ? 1 : 0) + (importer.trim() ? 1 : 0)}
-                              </span>
-                            ) : null}
-                            <ChevronDown className="h-3.5 w-3.5 text-[#A39E98]" />
-                          </span>
-                        </summary>
-                        <div className="space-y-3 border-t border-[rgba(0,0,0,0.06)] p-3">
-                          {inboundDraftWarnings.length > 0 && (
-                            <div className="rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2 text-[11px] font-bold text-[#7A520F]">
-                              {inboundDraftWarnings.join(" · ")}
-                            </div>
-                          )}
-                          <div className="grid grid-cols-2 gap-3">
-                            <label className="block">
-                              <span className="text-[11px] font-bold text-[#615D59]">단가 (USD)</span>
-                              <input
-                                type="number"
-                                min={0}
-                                step="0.01"
-                                inputMode="decimal"
-                                value={unitPrice}
-                                onChange={(event) => setUnitPrice(event.target.value)}
-                                className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
-                              />
-                            </label>
-                            <label className="block">
-                              <span className="text-[11px] font-bold text-[#615D59]">금액 (USD)</span>
-                              <input
-                                type="number"
-                                min={0}
-                                step="0.01"
-                                inputMode="decimal"
-                                value={amountUsd}
-                                onChange={(event) => setAmountUsd(event.target.value)}
-                                className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
-                              />
-                            </label>
-                          </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <label className="block">
-                              <span className="text-[11px] font-bold text-[#615D59]">금액 (CNY)</span>
-                              <input
-                                type="number"
-                                min={0}
-                                step="0.01"
-                                inputMode="decimal"
-                                value={amountCny}
-                                onChange={(event) => setAmountCny(event.target.value)}
-                                className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
-                              />
-                            </label>
-                            <label className="block">
-                              <span className="text-[11px] font-bold text-[#615D59]">보관 장소</span>
-                              <input
-                                value={storageLocation}
-                                onChange={(event) => setStorageLocation(event.target.value)}
-                                list="hardware-location-options"
-                                placeholder="창고"
-                                className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#615D59] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
-                              />
-                            </label>
-                          </div>
-                          <label className="block">
-                            <span className="text-[11px] font-bold text-[#615D59]">수입자</span>
-                            <input
-                              value={importer}
-                              onChange={(event) => setImporter(event.target.value)}
-                              placeholder="예: Classin"
-                              className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#615D59] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
-                            />
-                          </label>
-                          <label className="block">
-                            <span className="text-[11px] font-bold text-[#615D59]">시리얼 번호 (쉼표·공백 구분)</span>
-                            <input
-                              value={serialsText}
-                              onChange={(event) => setSerialsText(event.target.value)}
-                              placeholder="예: SN001, SN002"
-                              className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#615D59] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
-                            />
-                          </label>
-                        </div>
-                      </details>
-                    )}
-
-                    {movementType === "inbound" && !inboundBatchLayout && (
-                      <div className="space-y-3 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-3">
-                        <p className="text-[11px] font-bold text-[#615D59]">입고 상세 (시트 필드)</p>
-                        {inboundDraftWarnings.length > 0 && (
-                          <div className="rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2 text-[11px] font-bold text-[#7A520F]">
-                            {inboundDraftWarnings.join(" · ")}
-                          </div>
-                        )}
-                        <div className="grid grid-cols-2 gap-3">
-                          <label className="block">
-                            <span className="text-[11px] font-bold text-[#615D59]">단가 (USD)</span>
-                            <input
-                              type="number"
-                              min={0}
-                              step="0.01"
-                              inputMode="decimal"
-                              value={unitPrice}
-                              onChange={(event) => setUnitPrice(event.target.value)}
-                              className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
-                            />
-                          </label>
-                          <label className="block">
-                            <span className="text-[11px] font-bold text-[#615D59]">금액 (USD)</span>
-                            <input
-                              type="number"
-                              min={0}
-                              step="0.01"
-                              inputMode="decimal"
-                              value={amountUsd}
-                              onChange={(event) => setAmountUsd(event.target.value)}
-                              className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
-                            />
-                          </label>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <label className="block">
-                            <span className="text-[11px] font-bold text-[#615D59]">금액 (CNY)</span>
-                            <input
-                              type="number"
-                              min={0}
-                              step="0.01"
-                              inputMode="decimal"
-                              value={amountCny}
-                              onChange={(event) => setAmountCny(event.target.value)}
-                              className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
-                            />
-                          </label>
-                          <label className="block">
-                            <span className="text-[11px] font-bold text-[#615D59]">보관 장소</span>
-                            <input
-                              value={storageLocation}
-                              onChange={(event) => setStorageLocation(event.target.value)}
-                              list="hardware-location-options"
-                              placeholder="창고"
-                              className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#615D59] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
-                            />
-                          </label>
-                        </div>
-                        <label className="block">
-                          <span className="text-[11px] font-bold text-[#615D59]">수입자</span>
-                          <input
-                            value={importer}
-                            onChange={(event) => setImporter(event.target.value)}
-                            placeholder="예: Classin"
-                            className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#615D59] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
-                          />
-                        </label>
-                        <label className="block">
-                          <span className="text-[11px] font-bold text-[#615D59]">시리얼 번호 (쉼표·공백 구분)</span>
-                          <input
-                            value={serialsText}
-                            onChange={(event) => setSerialsText(event.target.value)}
-                            placeholder="예: SN001, SN002"
-                            className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#615D59] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
-                          />
-                        </label>
-                      </div>
-                    )}
-
-                    {/* 출고 매출(USD) 수동 캡처 — money-mesh §2.2(운영 결정: 입력 통화 USD).
-                        inbound 상세 블록과 동형. 대사 뷰(v_hardware_rev_matches)가 SUM(amount_usd)를
-                        병기 집계하므로 입력만 열면 자동 반영된다. 샘플 대여는 매출이 아니라 제외,
-                        작업건(배치) 경로는 범위 밖 — 단건 기록·수정에서만 노출. */}
-                    {movementType === "outbound" && outboundMode !== "sample" && sheetMode === "single" && (
-                      <div className="space-y-3 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-3">
-                        <p className="text-[11px] font-bold text-[#615D59]">판매 금액 (시트 필드)</p>
-                        <label className="block">
-                          <span className="text-[11px] font-bold text-[#615D59]">금액 (USD)</span>
-                          <input
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            inputMode="decimal"
-                            value={amountUsd}
-                            onChange={(event) => setAmountUsd(event.target.value)}
-                            placeholder="예: 12000"
-                            className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
-                          />
-                        </label>
-                        <p className="text-[11px] leading-relaxed text-[#A39E98]">
-                          달러(USD) 금액만 입력 — ¥(CNY)와 혼동 금지. 참고 병기 전용이며 REV 장부 매출(¥ SSOT)에는 합산되지 않습니다.
-                        </p>
-                      </div>
-                    )}
-
-                    {/* 자주 안 만지는 필드는 접어 둔다 — 담당자는 기억값 프리필, 상태는 프리셋이 채우고,
-                        출고 lot은 FIFO 자동 배정이 기본이라 수동 지정만 여기로. */}
-                    <details className="rounded-lg border border-[rgba(0,0,0,0.08)]">
-                      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-[12px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40">
-                        <span>추가 정보 — 담당자 · 상태 · 참조 · 메모{movementType === "outbound" ? " · lot 수동 지정" : ""}</span>
-                        <span className="flex items-center gap-1.5">
-                          {owner.trim() ? (
-                            <span className="rounded-full bg-[#F6F5F4] px-2 py-0.5 text-[10.5px] font-bold text-[#615D59]">{owner.trim()}</span>
-                          ) : null}
-                          {(referenceNo.trim() ? 1 : 0) + (memo.trim() ? 1 : 0) + (movementType === "outbound" && lotNo.trim() ? 1 : 0) > 0 ? (
-                            <span className="rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[10.5px] font-bold tabular-nums text-[#084734]">
-                              {(referenceNo.trim() ? 1 : 0) + (memo.trim() ? 1 : 0) + (movementType === "outbound" && lotNo.trim() ? 1 : 0)}
-                            </span>
-                          ) : null}
-                          <ChevronDown className="h-3.5 w-3.5 text-[#A39E98]" />
-                        </span>
-                      </summary>
-                      <div className="space-y-3 border-t border-[rgba(0,0,0,0.06)] p-3">
-                        {/* 상세 모드(신규)에서는 상태를 앞면 필드로 이미 노출하므로 여기서는 중복 렌더하지 않는다. */}
-                        <div className={`grid grid-cols-1 gap-3 ${sheetView === "detail" && !editingId ? "" : "min-[400px]:grid-cols-2"}`}>
-                          <label className="block">
-                            <span className={SHEET_LABEL_CLASS}>담당자</span>
-                            <input
-                              value={owner}
-                              onChange={(event) => setOwner(event.target.value)}
-                              placeholder="자동 기억됨"
-                              className={SHEET_INPUT_CLASS}
-                            />
-                          </label>
-                          {!(sheetView === "detail" && !editingId) && (
-                            <label className="block">
-                              <span className={SHEET_LABEL_CLASS}>상태</span>
-                              <input
-                                value={status}
-                                onChange={(event) => setStatus(event.target.value)}
-                                className={SHEET_INPUT_CLASS}
-                              />
-                            </label>
-                          )}
-                        </div>
-                        {movementType === "outbound" && (
-                          <label className="block">
-                            <span className={SHEET_LABEL_CLASS}>물량번호 (lot) 수동 지정</span>
-                            <input
-                              value={lotNo}
-                              onChange={(event) => setLotNo(event.target.value)}
-                              placeholder="비우면 FIFO 자동 배정"
-                              list="hardware-lot-options"
-                              className={SHEET_INPUT_CLASS}
-                            />
-                          </label>
-                        )}
-                        <label className="block">
-                          <span className={SHEET_LABEL_CLASS}>참조 번호</span>
-                          <input
-                            value={referenceNo}
-                            onChange={(event) => setReferenceNo(event.target.value)}
-                            placeholder="내부 번호 또는 CRM 참조"
-                            className={SHEET_INPUT_CLASS}
-                          />
-                        </label>
-                        <label className="block">
-                          <span className={SHEET_LABEL_CLASS}>메모</span>
-                          <textarea
-                            value={memo}
-                            onChange={(event) => setMemo(event.target.value)}
-                            rows={3}
-                            className="mt-1 w-full resize-none rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[13px] text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
-                          />
-                        </label>
-                      </div>
-                    </details>
-
-                    <datalist id="hardware-location-options">
-                      {LOCATION_OPTIONS.map((location) => (
-                        <option key={location} value={location} />
-                      ))}
-                    </datalist>
-
-                    <datalist id="hardware-lot-options">
-                      {lotOptions.map((lot) => (
-                        <option key={lot} value={lot} />
-                      ))}
-                    </datalist>
-
-                    <datalist id="hardware-customer-options">
-                      {historyCustomers.map((customer) => (
-                        <option key={customer} value={customer} />
-                      ))}
-                    </datalist>
-
-                    {/* 입력 미리보기 — 박스 대신 border-top 구분으로 위→아래 단일 스캔 흐름 유지(HW-5). */}
-                    {(sheetMode === "single" || Boolean(editingId)) && (
-                      <div className="border-t border-[rgba(0,0,0,0.08)] pt-3">
-                        <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#615D59]">입력 미리보기</p>
-                        <p className="mt-1 text-[13px] font-bold text-[#111110]">
-                          {customProduct.trim() || selectedItem?.name || "품목 선택"} · {activePreset.label} · {formatNumber(Number(quantity) || 0)}대
-                        </p>
-                        <p className="mt-1 text-[11px] font-semibold text-[#615D59]">
-                          {fromLocation || "-"} → {toLocation || (isCustomerDestination ? "고객사 미입력" : "-")} · {status || "상태 미정"}
-                          {owner.trim() ? ` · ${owner.trim()}` : ""}
-                        </p>
-                      </div>
-                    )}
-
-                    {sheetMode === "batch" && !editingId && (
-                      <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white">
-                        <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.06)] px-3 py-2.5">
-                          <span className={`inline-flex items-center gap-1.5 ${SHEET_SECTION_TITLE_CLASS}`}>
-                            <ShoppingCart className="h-3.5 w-3.5 text-[#084734]" />
-                            {inboundBatchLayout ? "담은 품목" : "기록 바구니"}
-                          </span>
-                          <span className="flex items-center gap-2">
-                            <span className="text-[11px] font-semibold tabular-nums text-[#615D59]">
-                              {formatNumber(quickCartTotals.count)}건 · {formatNumber(quickCartTotals.quantity)}대
-                            </span>
-                            {quickCart.length > 0 && (
-                              <button
-                                type="button"
-                                onClick={clearQuickCart}
-                                disabled={quickCartSaving}
-                                className="cursor-pointer rounded-md px-2 py-1 text-[11px] font-bold text-[#A39E98] transition hover:bg-[#F6F5F4] hover:text-[#B43E3E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 disabled:pointer-events-none disabled:opacity-40"
-                              >
-                                비우기
-                              </button>
-                            )}
-                          </span>
-                        </div>
-                        {quickCart.length === 0 ? (
-                          <p className="px-3 py-3 text-[12px] leading-relaxed text-[#615D59]">
-                            {quickCartSaveSummary && quickCartSaveSummary.failed === 0
-                              ? `저장 완료: ${formatNumber(quickCartSaveSummary.success)}건 · ${formatNumber(quickCartSaveSummary.savedQuantity)}대`
-                              : inboundBatchLayout
-                                ? "위에서 품목을 담아 한 번에 저장하세요. 담은 품목이 여기 쌓입니다."
-                                : "키트·견적 라인 또는 하단 '현재 입력 담기'로 품목을 모아 한 번에 저장합니다."}
-                          </p>
-                        ) : (
-                          <div className="max-h-56 divide-y divide-[rgba(0,0,0,0.06)] overflow-y-auto">
-                            {quickCartSaveSummary && quickCartSaveSummary.failed > 0 && (
-                              <div className="bg-[#FBF1E0] px-3 py-2 text-[11px] font-bold text-[#7A520F]">
-                                저장 {formatNumber(quickCartSaveSummary.success)}건 성공 · 실패 {formatNumber(quickCartSaveSummary.failed)}건은 삭제 후 다시 담거나 재시도
-                              </div>
-                            )}
-                            {quickCart.map((draft, index) => {
-                              const cartFifoPreview = previewFifoForDraft(draft)
-                              const lineError = quickCartLineErrors[quickCartLineKey(draft)]
-                              const linePlanned = isDraftPlanned(draft)
-                              const lineSample = isSampleOutbound(draft)
-                              // 샘플 대여는 실제/예정 개념이 없다 — 판매·예정 출고 라인에만 토글을 노출한다.
-                              const isOutboundLine = draft.movementType === "outbound" && !lineSample
-                              return (
-                                <div key={`${draft.productName}-${index}`} className={`grid grid-cols-[1fr_auto] items-center gap-2 px-3 py-2 ${lineError ? "bg-[#FCE9E9]/50" : ""}`}>
-                                  <div className="min-w-0">
-                                    <p className="truncate text-[12px] font-bold text-[#111110]">{draft.productName}</p>
-                                    <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-[#615D59]">
-                                      <span>{MOVEMENT_LABEL[draft.movementType]} · {formatNumber(draft.quantity)}대 · {draft.toLocation || "-"}</span>
-                                      <span className={`inline-flex rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-                                        lineSample
-                                          ? "bg-[#F6F5F4] text-[#615D59]"
-                                          : linePlanned
-                                            ? "bg-[#FBF1E0] text-[#A8741A]"
-                                            : "bg-[#F6F5F4] text-[#31302E]"
-                                      }`}>
-                                        {draft.status || MOVEMENT_LABEL[draft.movementType]}
-                                      </span>
-                                      {lineSample && (
-                                        // 샘플 대여는 실제/예정이 없으므로 토글 대신 정적 "샘플" pill만 표시한다.
-                                        <span className="inline-flex rounded-full bg-[#F6F5F4] px-1.5 py-0.5 text-[10px] font-bold text-[#615D59]">
-                                          샘플
-                                        </span>
-                                      )}
-                                      {isOutboundLine && (
-                                        // 라인별 실제|예정 토글 — draft.isPlanned를 뒤집어 status를 즉시 파생한다.
-                                        <span className="inline-flex overflow-hidden rounded-full border border-[rgba(0,0,0,0.08)]" role="group" aria-label="출고 방식">
-                                          {([["actual", "실제"], ["planned", "예정"]] as const).map(([mode, label]) => {
-                                            const modeActive = mode === "planned" ? linePlanned : !linePlanned
-                                            return (
-                                              <button
-                                                key={mode}
-                                                type="button"
-                                                aria-pressed={modeActive}
-                                                disabled={quickCartSaving}
-                                                onClick={() => {
-                                                  if (modeActive) return
-                                                  toggleQuickCartLinePlanned(index)
-                                                }}
-                                                className={`flex min-h-[40px] cursor-pointer items-center px-2.5 py-0.5 text-[10px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 disabled:pointer-events-none disabled:opacity-40 sm:min-h-[28px] ${
-                                                  modeActive
-                                                    ? mode === "planned"
-                                                      ? "bg-[#FBF1E0] text-[#A8741A]"
-                                                      : "bg-[#ECFDF5] text-[#084734]"
-                                                    : "bg-white text-[#A39E98] hover:text-[#31302E]"
-                                                }`}
-                                              >
-                                                {label}
-                                              </button>
-                                            )
-                                          })}
-                                        </span>
-                                      )}
-                                    </p>
-                                    {lineError && (
-                                      <p className="mt-1 text-[11px] font-bold text-[#8F2C2C]">{lineError}</p>
-                                    )}
-                                    {cartFifoPreview && (
-                                      <p className={`mt-1 text-[11px] font-bold ${
-                                        cartFifoPreview.shortage > 0 ? "text-[#7A520F]" : "text-[#084734]"
-                                      }`}>
-                                        FIFO 예상: {cartFifoPreview.plan.length > 0
-                                          ? cartFifoPreview.plan.map((lot) => `${formatLotLabel(lot.lot) ?? lot.lot} ${formatNumber(lot.quantity)}대`).join(" · ")
-                                          : "배정 없음"}
-                                        {cartFifoPreview.shortage > 0 ? ` · 부족 ${formatNumber(cartFifoPreview.shortage)}대` : ""}
-                                      </p>
-                                    )}
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => removeQuickCartItem(index)}
-                                    disabled={quickCartSaving}
-                                    aria-label={`${draft.productName} 바구니에서 삭제`}
-                                    className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-md text-[#A39E98] transition hover:bg-[#F6F5F4] hover:text-[#B43E3E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-40 sm:h-8 sm:w-8"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </button>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        )}
-                        {quickCart.some((draft) => draft.movementType === "outbound" && !isDraftPlanned(draft) && !isSampleOutbound(draft)) && (
-                          <div className="border-t border-[rgba(0,0,0,0.06)] bg-[#FBF1E0] px-3 py-2 text-[11px] font-bold text-[#7A520F]">
-                            완료 출고 배치 저장은 CRM 오더 연동·매출 금액 없이 저장됩니다 — 연동이 필요한 판매 건은 단건 기록으로 저장하세요.
-                          </div>
-                        )}
-                        {/* 리스트 근처 저장 CTA — 담은 품목이 있을 때 리스트 하단에 크게 노출(스티키 바와 별개). */}
-                        {inboundBatchLayout && quickCart.length > 0 && (
-                          <div className="border-t border-[rgba(0,0,0,0.06)] p-3">
-                            <button
-                              type="button"
-                              onClick={() => void submitQuickCart()}
-                              disabled={busy != null}
-                              className="inline-flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-md bg-[#084734] px-3 text-[13px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              <Save className="h-4 w-4" />
-                              {busy === "movement"
-                                ? "저장 중"
-                                : quickCartSaveSummary?.failed
-                                  ? "실패 항목 재시도"
-                                  : `${formatNumber(quickCartTotals.count)}건 · ${formatNumber(quickCartTotals.quantity)}대 저장`}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* 보조 도구 — 세트 담기·견적 붙여넣기·이전 lot 구성 복사. 기본 접힘, 파워유저만 펼침. */}
-                    {inboundBatchLayout && (
-                      <details className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4]">
-                        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-[12px] font-bold text-[#31302E] transition hover:bg-[#EDEBEA] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40">
-                          <span className="inline-flex items-center gap-1.5">
-                            <FileSpreadsheet className="h-3.5 w-3.5 text-[#615D59]" />
-                            빠른 담기 — 세트 · 견적 붙여넣기 · 이전 구성 복사
-                          </span>
-                          <ChevronDown className="h-3.5 w-3.5 text-[#A39E98]" />
-                        </summary>
-                        <div className="space-y-3 border-t border-[rgba(0,0,0,0.06)] p-3">
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <p className="text-[11px] text-[#615D59]">세트·견적 라인을 담고, 직전 lot 구성을 그대로 복사합니다.</p>
-                            <div className="inline-flex items-center gap-1.5">
-                              <span className="text-[11px] font-semibold text-[#615D59]">세트 배수</span>
-                              <div className="grid h-9 grid-cols-[36px_40px_36px] overflow-hidden rounded-md border border-[rgba(0,0,0,0.08)] bg-white">
-                                <button
-                                  type="button"
-                                  onClick={() => setKitMultiplier((current) => Math.max(1, current - 1))}
-                                  aria-label="세트 배수 줄이기"
-                                  className="flex cursor-pointer items-center justify-center text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100"
-                                >
-                                  <Minus className="h-3.5 w-3.5" />
-                                </button>
-                                <span className="flex items-center justify-center border-x border-[rgba(0,0,0,0.08)] text-[13px] font-bold tabular-nums text-[#111110]">
-                                  x{formatNumber(cartSetMultiplier)}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => setKitMultiplier((current) => Math.min(99, current + 1))}
-                                  aria-label="세트 배수 늘리기"
-                                  className="flex cursor-pointer items-center justify-center text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100"
-                                >
-                                  <Plus className="h-3.5 w-3.5" />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="grid gap-2 sm:grid-cols-2">
-                            {kitPresetSummaries.map((preset) => {
-                              const Icon = preset.icon
-                              const unavailable = preset.missing.length > 0
-                              const shortage = preset.lines.reduce((total, line) => total + line.shortage, 0)
-                              return (
-                                <button
-                                  key={preset.key}
-                                  type="button"
-                                  onClick={() => addKitPresetToCart(preset.key)}
-                                  disabled={busy != null || unavailable}
-                                  className="cursor-pointer rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2.5 text-left transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.99] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                  <span className="flex items-center gap-2 text-[12px] font-bold text-[#111110]">
-                                    <Icon className="h-3.5 w-3.5 text-[#084734]" />
-                                    {preset.label}
-                                  </span>
-                                  <span className="mt-1 block text-[11px] text-[#615D59]">{preset.description}</span>
-                                  <span className={`mt-1 block text-[11px] font-bold ${shortage > 0 ? "text-[#A8741A]" : "text-[#084734]"}`}>
-                                    {unavailable
-                                      ? "품목 미매칭"
-                                      : shortage > 0
-                                        ? `예상 부족 ${formatNumber(shortage)}대`
-                                        : "가용 재고 확인"}
-                                  </span>
-                                </button>
-                              )
-                            })}
-                          </div>
-                          <div className="grid gap-2">
-                            <label className="block">
-                              <span className={SHEET_LABEL_CLASS}>견적/CRM 라인 붙여넣기</span>
-                              <textarea
-                                value={quotePasteText}
-                                onChange={(event) => setQuotePasteText(event.target.value)}
-                                rows={3}
-                                placeholder={'예: 86" IFP x 2\nT1 2대\nSTD1, 2'}
-                                className="mt-1 w-full resize-none rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[12px] text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
-                              />
-                            </label>
-                            <button
-                              type="button"
-                              onClick={importQuoteLinesToCart}
-                              disabled={busy != null || !quotePasteText.trim()}
-                              className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-md border border-[#084734] bg-white px-3 text-[12px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              <FileSpreadsheet className="h-3.5 w-3.5" />
-                              견적 라인 담기
-                            </button>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={copyLatestInboundLotToCart}
-                            className="inline-flex h-9 w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-[#BDEFD8] bg-white px-3 text-[12px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100"
-                          >
-                            <RotateCcw className="h-3.5 w-3.5" />
-                            이전 구성 복사
-                          </button>
-                        </div>
-                      </details>
-                    )}
-
-                    {/* 상세 처리 도달 경로 — 빠른 2축 밖의 반환·샘플 배정·수리·조정을 같은 시트 상세 모드로 연다. */}
-                    {sheetView === "quick" && !editingId && (
-                      <button
-                        type="button"
-                        onClick={enterDetailView}
-                        className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left text-[12px] font-semibold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#31302E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
-                      >
-                        <span className="inline-flex items-center gap-1.5">
-                          <Settings2 className="h-3.5 w-3.5 text-[#A39E98]" />
-                          다른 처리 — 반환 · 샘플 배정 · 수리 · 조정
-                        </span>
-                        <span className="shrink-0 font-bold text-[#084734]">→</span>
-                      </button>
-                    )}
-                    </div>
-
-                    {/* sticky 액션바 — 화면당 solid green CTA는 정확히 하나. */}
-                    <div className="sticky bottom-0 z-10 border-t border-[rgba(0,0,0,0.08)] bg-white px-5 py-3">
-                      {sheetMode === "batch" && !editingId ? (
-                        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
-                          <button
-                            type="button"
-                            onClick={addDraftToQuickCart}
-                            disabled={!quickCartEnabled || busy != null || (!customProduct.trim() && !selectedItem)}
-                            className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-md bg-[rgba(0,0,0,0.05)] px-3 text-[12px] font-bold text-[#31302E] transition hover:bg-[rgba(0,0,0,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 sm:h-10"
-                          >
-                            <Plus className="h-4 w-4" />
-                            {inboundBatchLayout ? "이 품목 담기" : "현재 입력 담기"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void submitQuickCart()}
-                            disabled={quickCart.length === 0 || busy != null}
-                            className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-md bg-[#084734] px-3 text-[13px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 sm:h-10"
-                          >
-                            <Save className="h-4 w-4" />
-                            {busy === "movement"
-                              ? "저장 중"
-                              : quickCartSaveSummary?.failed
-                                ? "실패 항목 재시도"
-                                : `바구니 ${formatNumber(quickCartTotals.count)}건 · ${formatNumber(quickCartTotals.quantity)}대 저장`}
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-3">
-                          {!editingId && (
-                            <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[12px] font-semibold text-[#615D59]">
-                              <input
-                                type="checkbox"
-                                checked={stayOpenAfterSave}
-                                onChange={toggleStayOpenAfterSave}
-                                className="h-4 w-4 cursor-pointer rounded-[3px] accent-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
-                              />
-                              저장 후 계속
-                            </label>
-                          )}
-                          <button
-                            type="submit"
-                            disabled={busy != null || (!customProduct.trim() && !selectedItem)}
-                            className="inline-flex h-11 flex-1 items-center justify-center gap-2 cursor-pointer rounded-md bg-[#084734] px-4 text-[13px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60 sm:h-10"
-                          >
-                            <Save className="h-4 w-4" />
-                            {busy === "movement" ? "저장 중" : editingId ? "수정 저장" : "기록 저장"}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </form>
-                </motion.aside>
-              </motion.div>
+              <QuickRecordSheet
+                formRef={formRef}
+                sheetPanelRef={sheetPanelRef}
+                reduceMotion={reduceMotion}
+                editingId={editingId}
+                activePresetKey={activePresetKey}
+                movementType={movementType}
+                sheetMode={sheetMode}
+                setSheetMode={setSheetMode}
+                sheetView={sheetView}
+                quickCart={quickCart}
+                quickCartTotals={quickCartTotals}
+                quickCartLineErrors={quickCartLineErrors}
+                quickCartSaveSummary={quickCartSaveSummary}
+                busy={busy}
+                crmLoading={crmLoading}
+                error={error}
+                notice={notice}
+                data={data}
+                customProduct={customProduct}
+                setCustomProduct={setCustomProduct}
+                showCustomInput={showCustomInput}
+                setShowCustomInput={setShowCustomInput}
+                selectedItemId={selectedItemId}
+                setSelectedItemId={setSelectedItemId}
+                selectedItem={selectedItem}
+                activePreset={activePreset}
+                isCustomerDestination={isCustomerDestination}
+                outboundMode={outboundMode}
+                quickPickGroups={quickPickGroups}
+                setKitMultiplier={setKitMultiplier}
+                cartSetMultiplier={cartSetMultiplier}
+                kitPresetSummaries={kitPresetSummaries}
+                quotePasteText={quotePasteText}
+                setQuotePasteText={setQuotePasteText}
+                inboundBatchLayout={inboundBatchLayout}
+                quickCartEnabled={quickCartEnabled}
+                lotNo={lotNo}
+                setLotNo={setLotNo}
+                occurredAt={occurredAt}
+                setOccurredAt={setOccurredAt}
+                nextLotSuggestion={nextLotSuggestion}
+                lastManualMovement={lastManualMovement}
+                quantity={quantity}
+                setQuantity={setQuantity}
+                fromLocation={fromLocation}
+                setFromLocation={setFromLocation}
+                toLocation={toLocation}
+                setToLocation={setToLocation}
+                sampleSource={sampleSource}
+                sampleCustomer={sampleCustomer}
+                setSampleCustomer={setSampleCustomer}
+                sampleUnitSelection={sampleUnitSelection}
+                sampleLoanNeed={sampleLoanNeed}
+                sampleLoanPool={sampleLoanPool}
+                draftQuantityNumber={draftQuantityNumber}
+                sampleReturnNeed={sampleReturnNeed}
+                sampleReturnPool={sampleReturnPool}
+                availabilityWarning={availabilityWarning}
+                status={status}
+                setStatus={setStatus}
+                fifoPreview={fifoPreview}
+                inboundDraftWarnings={inboundDraftWarnings}
+                unitPrice={unitPrice}
+                setUnitPrice={setUnitPrice}
+                amountUsd={amountUsd}
+                setAmountUsd={setAmountUsd}
+                amountCny={amountCny}
+                setAmountCny={setAmountCny}
+                storageLocation={storageLocation}
+                setStorageLocation={setStorageLocation}
+                importer={importer}
+                setImporter={setImporter}
+                serialsText={serialsText}
+                setSerialsText={setSerialsText}
+                owner={owner}
+                setOwner={setOwner}
+                referenceNo={referenceNo}
+                setReferenceNo={setReferenceNo}
+                memo={memo}
+                setMemo={setMemo}
+                lotOptions={lotOptions}
+                historyCustomers={historyCustomers}
+                stayOpenAfterSave={stayOpenAfterSave}
+                requestCloseSheet={requestCloseSheet}
+                submitMovement={submitMovement}
+                trapTab={trapTab}
+                applyPreset={applyPreset}
+                exitDetailView={exitDetailView}
+                enterDetailView={enterDetailView}
+                duplicateLastMovement={duplicateLastMovement}
+                selectMovementAxis={selectMovementAxis}
+                selectOutboundMode={selectOutboundMode}
+                adjustQuantity={adjustQuantity}
+                applySampleSource={applySampleSource}
+                toggleSampleUnit={toggleSampleUnit}
+                addDraftToQuickCart={addDraftToQuickCart}
+                addKitPresetToCart={addKitPresetToCart}
+                importQuoteLinesToCart={importQuoteLinesToCart}
+                copyLatestInboundLotToCart={copyLatestInboundLotToCart}
+                toggleQuickCartLinePlanned={toggleQuickCartLinePlanned}
+                removeQuickCartItem={removeQuickCartItem}
+                clearQuickCart={clearQuickCart}
+                submitQuickCart={submitQuickCart}
+                previewFifoForDraft={previewFifoForDraft}
+                toggleStayOpenAfterSave={toggleStayOpenAfterSave}
+              />
             )}
             </AnimatePresence>
 
             {activeTab === "history" && (
-            <motion.div
-              id={activePanelId}
-              role="tabpanel"
-              aria-labelledby={activeTabId}
-              className="space-y-5"
-              initial={reduceMotion ? false : { opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
-            >
-                <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <label className="relative block min-w-[240px] flex-1 sm:max-w-[440px]">
-                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A39E98]" />
-                      <input
-                        value={search}
-                        onChange={(event) => {
-                          setSearch(event.target.value)
-                          setMovementsPage(1)
-                        }}
-                        aria-label="하드웨어 원장 검색"
-                        placeholder="품목·고객사·물량번호·담당자·특이사항 검색"
-                        className="h-10 w-full rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] pl-9 pr-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
-                      />
-                    </label>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setFiltersExpanded((current) => !current)}
-                        aria-expanded={filtersExpanded}
-                        className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-2 text-[12px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 ${
-                          filtersExpanded
-                            ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
-                            : "border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:bg-[#F6F5F4]"
-                        }`}
-                      >
-                        <Settings2 className="h-3.5 w-3.5" />
-                        상세 필터
-                        {advancedHistoryFilterCount > 0 && (
-                          <span className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#084734] px-1 text-[10px] font-bold text-white">
-                            {advancedHistoryFilterCount}
-                          </span>
-                        )}
-                        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${filtersExpanded ? "rotate-180" : ""}`} />
-                      </button>
-                      {hasHistoryFilter && (
-                        <button
-                          type="button"
-                          onClick={resetHistoryFilters}
-                          className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4]"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                          전체 초기화
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  {hasHistoryFilter ? (
-                    <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-[rgba(0,0,0,0.06)] pt-3">
-                      <span className="text-[11px] font-bold text-[#615D59]">적용된 필터</span>
-                      {activeHistoryFilterChips.map((chip) => (
-                        <button
-                          key={chip.key}
-                          type="button"
-                          onClick={chip.onRemove}
-                          className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-[#BDEFD8] bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-bold text-[#084734] transition hover:bg-[#d6f7e7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45"
-                        >
-                          {chip.label}
-                          <X className="h-3 w-3" />
-                        </button>
-                      ))}
-                      <span className="ml-auto text-[11px] font-semibold text-[#615D59]">
-                        필터 후 {formatNumber(filteredMovements.length)}건 / 전체 {formatNumber(data?.movements.length ?? 0)}건
-                      </span>
-                    </div>
-                  ) : null}
-                  <div className="mt-3.5 flex flex-wrap items-center gap-2">
-                    <span className="inline-flex w-12 shrink-0 items-center gap-1.5 text-[12px] font-bold text-[#111110]">
-                      <Filter className="h-3.5 w-3.5 text-[#615D59]" />
-                      유형
-                    </span>
-                    {(["all", "inbound", "outbound", "sample", "return", "transfer", "repair", "adjust"] as const).map((type) => {
-                      const active = historyType === type
-                      return (
-                        <button
-                          key={type}
-                          type="button"
-                          onClick={() => {
-                            setHistoryType(type)
-                            setMovementsPage(1)
-                          }}
-                          className={`cursor-pointer rounded-full border px-2.5 py-1.5 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
-                            active
-                              ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
-                              : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
-                          }`}
-                        >
-                          {type === "all" ? "전체" : type === "sample" ? "샘플" : MOVEMENT_LABEL[type]}
-                        </button>
-                      )
-                    })}
-                    <span className="ml-auto inline-flex items-center gap-1.5">
-                      {(["desc", "asc"] as const).map((order) => {
-                        const active = historySort === order
-                        return (
-                          <button
-                            key={order}
-                            type="button"
-                            onClick={() => {
-                              setHistorySort(order)
-                              setMovementsPage(1)
-                            }}
-                            className={`cursor-pointer rounded-full border px-2.5 py-1.5 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
-                              active
-                                ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
-                                : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
-                            }`}
-                          >
-                            {order === "desc" ? "최신순" : "오래된순"}
-                          </button>
-                        )
-                      })}
-                    </span>
-                  </div>
-                  {filtersExpanded && (
-                  <>
-                  <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                    <span className="w-12 shrink-0 text-[12px] font-bold text-[#111110]">상태</span>
-                    {(
-                      [
-                        { key: "all", label: "전체" },
-                        { key: "done", label: "완료" },
-                        { key: "planned", label: "배송 예정" },
-                      ] as const
-                    ).map((option) => {
-                      const active = historyStatus === option.key
-                      return (
-                        <button
-                          key={option.key}
-                          type="button"
-                          onClick={() => {
-                            setHistoryStatus(option.key)
-                            setMovementsPage(1)
-                          }}
-                          className={`cursor-pointer rounded-full border px-2.5 py-1.5 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
-                            active
-                              ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
-                              : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
-                          }`}
-                        >
-                          {option.label}
-                        </button>
-                      )
-                    })}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIncludeVoided((current) => !current)
-                        setMovementsPage(1)
-                      }}
-                      aria-pressed={includeVoided}
-                      className={`cursor-pointer rounded-full border px-2.5 py-1.5 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
-                        includeVoided
-                          ? "border-[#B43E3E] bg-[#FCE9E9] text-[#B43E3E]"
-                          : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
-                      }`}
-                    >
-                      취소 포함
-                    </button>
-                  </div>
-                  <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                    <span className="w-12 shrink-0 text-[12px] font-bold text-[#111110]">판매유형</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSaleTypeFilter("")
-                        setMovementsPage(1)
-                      }}
-                      className={`cursor-pointer rounded-full border px-2.5 py-1.5 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
-                        saleTypeFilter === ""
-                          ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
-                          : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
-                      }`}
-                    >
-                      전체
-                    </button>
-                    {(Object.keys(SALE_TYPE_META) as OutboundSaleType[]).map((type) => {
-                      const active = saleTypeFilter === type
-                      return (
-                        <button
-                          key={type}
-                          type="button"
-                          onClick={() => {
-                            setSaleTypeFilter(active ? "" : type)
-                            setMovementsPage(1)
-                          }}
-                          className={`cursor-pointer rounded-full border px-2.5 py-1.5 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
-                            active
-                              ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
-                              : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
-                          }`}
-                        >
-                          {SALE_TYPE_META[type].label}
-                        </button>
-                      )
-                    })}
-                  </div>
-                  <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                    <span className="w-12 shrink-0 text-[12px] font-bold text-[#111110]">기간</span>
-                    {(
-                      [
-                        { key: "thisMonth", label: "이번 달" },
-                        { key: "lastMonth", label: "지난 달" },
-                        { key: "last30", label: "최근 30일" },
-                      ] as const
-                    ).map((option) => {
-                      const range = historyDateRange(option.key)
-                      const active = historyDateFrom === range.from && historyDateTo === range.to
-                      return (
-                        <button
-                          key={option.key}
-                          type="button"
-                          onClick={() => {
-                            setHistoryDateFrom(range.from)
-                            setHistoryDateTo(range.to)
-                            setMovementsPage(1)
-                          }}
-                          className={`cursor-pointer rounded-full border px-2.5 py-1.5 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
-                            active
-                              ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
-                              : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
-                          }`}
-                        >
-                          {option.label}
-                        </button>
-                      )
-                    })}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setHistoryDateFrom("")
-                        setHistoryDateTo("")
-                        setMovementsPage(1)
-                      }}
-                      className={`cursor-pointer rounded-full border px-2.5 py-1.5 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
-                        historyDateFrom === "" && historyDateTo === ""
-                          ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
-                          : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
-                      }`}
-                    >
-                      전체
-                    </button>
-                    <label className="flex items-center gap-1.5 text-[11px] font-semibold text-[#615D59]">
-                      시작
-                      <input
-                        type="date"
-                        value={historyDateFrom}
-                        max={historyDateTo || undefined}
-                        onChange={(event) => {
-                          setHistoryDateFrom(event.target.value)
-                          setMovementsPage(1)
-                        }}
-                        aria-label="기간 시작일"
-                        className="h-8 rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 text-[11px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
-                      />
-                    </label>
-                    <label className="flex items-center gap-1.5 text-[11px] font-semibold text-[#615D59]">
-                      종료
-                      <input
-                        type="date"
-                        value={historyDateTo}
-                        min={historyDateFrom || undefined}
-                        onChange={(event) => {
-                          setHistoryDateTo(event.target.value)
-                          setMovementsPage(1)
-                        }}
-                        aria-label="기간 종료일"
-                        className="h-8 rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 text-[11px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
-                      />
-                    </label>
-                  </div>
-                  {(data?.stock ?? []).length > 0 ? (
-                    <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                      <span className="w-12 shrink-0 text-[12px] font-bold text-[#111110]">제품</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setProductFilter("")
-                          setMovementsPage(1)
-                        }}
-                        className={`cursor-pointer rounded-full border px-2.5 py-1.5 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
-                          productFilter === ""
-                            ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
-                            : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
-                        }`}
-                      >
-                        전체
-                      </button>
-                      {PRODUCT_FILTER_OPTIONS.map((option) => {
-                        const active = productFilter === option.key
-                        return (
-                          <button
-                            key={option.key}
-                            type="button"
-                            onClick={() => {
-                              setProductFilter(active ? "" : option.key)
-                              setMovementsPage(1)
-                            }}
-                            className={`cursor-pointer rounded-full border px-2.5 py-1.5 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
-                              active
-                                ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
-                                : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
-                            }`}
-                          >
-                            {option.label}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  ) : null}
-                  {historyLots.length > 0 ? (
-                    <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                      <span className="shrink-0 text-[12px] font-bold text-[#111110]">물류No</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setLotFilter("")
-                          setMovementsPage(1)
-                        }}
-                        className={`cursor-pointer rounded-full border px-2.5 py-1.5 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
-                          lotFilter === ""
-                            ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
-                            : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
-                        }`}
-                      >
-                        전체
-                      </button>
-                      {historyLots.map((lot) => {
-                        const active = lotFilter === lot
-                        return (
-                          <button
-                            key={lot}
-                            type="button"
-                            onClick={() => {
-                              setLotFilter(active ? "" : lot)
-                              setMovementsPage(1)
-                            }}
-                            className={`cursor-pointer rounded-full border px-2.5 py-1.5 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
-                              active
-                                ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
-                                : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
-                            }`}
-                          >
-                            {formatLotLabel(lot) ?? lot}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  ) : null}
-                  {historyCustomers.length > 0 ? (
-                    <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                      <span className="w-12 shrink-0 text-[12px] font-bold text-[#111110]">고객사</span>
-                      <div className="relative">
-                        <select
-                          value={customerFilter}
-                          onChange={(event) => {
-                            setCustomerFilter(event.target.value)
-                            setMovementsPage(1)
-                          }}
-                          aria-label="고객사 필터"
-                          className={`h-8 w-full min-w-[180px] max-w-[240px] cursor-pointer appearance-none rounded-full border pl-3 pr-8 text-[11px] font-bold outline-none transition focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15 ${
-                            customerFilter ? "border-[#084734] bg-[#ECFDF5] text-[#084734]" : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E]"
-                          }`}
-                        >
-                          <option value="">전체 고객사 ({formatNumber(historyCustomers.length)})</option>
-                          {historyCustomers.map((customer) => (
-                            <option key={customer} value={customer}>
-                              {customer}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown className={`pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 ${customerFilter ? "text-[#084734]" : "text-[#615D59]"}`} />
-                      </div>
-                      {customerFilter ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => setCustomerDetail(customerFilter)}
-                            className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-[#BDEFD8] bg-[#ECFDF5] px-2.5 py-1.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#d6f7e7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100"
-                          >
-                            <Users className="h-3 w-3" />
-                            거래이력
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCustomerFilter("")
-                              setMovementsPage(1)
-                            }}
-                            className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-1.5 text-[11px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100"
-                          >
-                            <X className="h-3 w-3" />
-                            해제
-                          </button>
-                        </>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  </>
-                  )}
-                </section>
-
-                <HistoryLogSection
-                  filteredMovements={filteredMovements}
-                  logGroups={logGroups}
-                  pageLogGroupKeys={pageLogGroupKeys}
-                  toggleAllPageLogGroups={toggleAllPageLogGroups}
-                  allPageGroupsExpanded={allPageGroupsExpanded}
-                  logGroupsPagination={logGroupsPagination}
-                  expandedLogGroups={expandedLogGroups}
-                  setDetailId={setDetailId}
-                  toggleLogGroup={toggleLogGroup}
-                  renderMovementRow={renderMovementRow}
-                  setMovementsPage={setMovementsPage}
-                />
-            </motion.div>
+            <HistoryTabPanel
+              activePanelId={activePanelId}
+              activeTabId={activeTabId}
+              reduceMotion={reduceMotion}
+              data={data}
+              search={search}
+              setSearch={setSearch}
+              setMovementsPage={setMovementsPage}
+              filtersExpanded={filtersExpanded}
+              setFiltersExpanded={setFiltersExpanded}
+              advancedHistoryFilterCount={advancedHistoryFilterCount}
+              hasHistoryFilter={hasHistoryFilter}
+              resetHistoryFilters={resetHistoryFilters}
+              activeHistoryFilterChips={activeHistoryFilterChips}
+              filteredMovements={filteredMovements}
+              historyType={historyType}
+              setHistoryType={setHistoryType}
+              historySort={historySort}
+              setHistorySort={setHistorySort}
+              historyStatus={historyStatus}
+              setHistoryStatus={setHistoryStatus}
+              includeVoided={includeVoided}
+              setIncludeVoided={setIncludeVoided}
+              saleTypeFilter={saleTypeFilter}
+              setSaleTypeFilter={setSaleTypeFilter}
+              productFilter={productFilter}
+              setProductFilter={setProductFilter}
+              historyDateFrom={historyDateFrom}
+              setHistoryDateFrom={setHistoryDateFrom}
+              historyDateTo={historyDateTo}
+              setHistoryDateTo={setHistoryDateTo}
+              historyLots={historyLots}
+              lotFilter={lotFilter}
+              setLotFilter={setLotFilter}
+              historyCustomers={historyCustomers}
+              customerFilter={customerFilter}
+              setCustomerFilter={setCustomerFilter}
+              setCustomerDetail={setCustomerDetail}
+              logGroups={logGroups}
+              pageLogGroupKeys={pageLogGroupKeys}
+              toggleAllPageLogGroups={toggleAllPageLogGroups}
+              allPageGroupsExpanded={allPageGroupsExpanded}
+              logGroupsPagination={logGroupsPagination}
+              expandedLogGroups={expandedLogGroups}
+              setDetailId={setDetailId}
+              toggleLogGroup={toggleLogGroup}
+              renderMovementRow={renderMovementRow}
+              loadingMoreHistory={loadingMoreHistory}
+              loadMoreHistoryError={loadMoreHistoryError}
+              loadMoreHistory={loadMoreHistory}
+            />
             )}
           </>
         )}
@@ -5435,7 +3585,34 @@ export default function HardwareInventoryClient({
         reduceMotion={reduceMotion}
       />
 
-      {!sheetOpen && !pendingMovement && !voidTarget && !detailId && !customerDetail && !sampleUnitSheetId && (
+      {inboundSheet.open && (
+        <InboundSheet
+          open={inboundSheet.open}
+          onClose={() => setInboundSheet({ open: false, product: null })}
+          initialProduct={inboundSheet.product}
+          items={data?.items ?? []}
+          movements={data?.movements ?? []}
+          activeItemIds={inboundActiveItemIds}
+          lotStaleNote={inboundLotStaleNote}
+          // VIEWER 는 저장 시 서버가 403 으로 막는다 — 대시보드에 편집 권한 플래그가 없어 입력 UI 는 열어 둔다(빠른 기록과 같은 관례).
+          canWrite
+          owner={owner.trim() || data?.viewer?.name || null}
+          onSaved={(result) => {
+            const sampleNote =
+              result.registeredSampleUnits > 0 ? ` · 사무실 샘플 유닛 ${formatNumber(result.registeredSampleUnits)}대 등록` : ""
+            const failNote = result.failedLines > 0 ? ` · ${formatNumber(result.failedLines)}줄은 시트에 남아 있습니다` : ""
+            setNotice(
+              `${result.lot} 입고 ${formatNumber(result.savedLines)}줄 ${formatNumber(result.savedUnits)}대를 저장했습니다${sampleNote}${failNote}.`
+            )
+            void refresh()
+            if (result.registeredSampleUnits > 0) void loadSampleUnits()
+          }}
+        />
+      )}
+
+      {/* 예정 출고를 선택 중이면 숨긴다 — 이 버튼(fixed bottom-6 right-6)이 하단 일괄 작업 바의
+          "선택 확정" 버튼을 덮는다(1440px 실측). 선택 중엔 그 바가 이 화면의 주 작업면이다. */}
+      {!sheetOpen && !inboundSheet.open && !pendingMovement && !voidTarget && !detailId && !customerDetail && !sampleUnitSheetId && plannedSelectionCount === 0 && (
         <button
           type="button"
           onClick={openFreshSheet}

@@ -175,6 +175,12 @@ system     운영 상태 · 설정 · 개발 도구
 
 ## 5. 권한 모델
 
+> **폐기 (2026-09-10).** 이 절의 프리셋별 차등 노출(`NAV_PRESETS`·`MOON_ONLY_HREFS`·
+> `RESTRICTED_HREFS`·차단 배치)은 전면 공개 전환으로 코드에서 제거됐다. 사이드바는 전원
+> 동일하며, 배치 정본은 `components/admin/admin-nav-access.ts`의 `DEFAULT_PRIMARY_HREFS`다.
+> 이 절은 그때의 결정 기록으로만 남긴다 — 현재 동작의 근거로 쓰지 말 것.
+> 전환 이유는 `admin-nav-access.ts` 상단 주석에 있다.
+
 운영 정본 역할은 `SUPER_ADMIN`·`ADMIN`·`BRANCH` 3종이다. `EDITOR`·`VIEWER`·`PARTNER`는
 기존 프로필·세션과 nav 표시를 깨지 않기 위한 레거시 호환 값이며, 새 역할 단계로 확장하지 않는다.
 프리셋은 역할을 대체하지 않고 사이드바 배치만 개인화한다.
@@ -329,6 +335,9 @@ COMMENT ON COLUMN public.admin_profiles.nav_overrides IS
 ## 7. 첫 화면 전환
 
 `app/admin/page.tsx`의 `redirect("/admin/overview")` → `redirect("/admin/calendar")`.
+
+> **번복 (2026-09-10).** 전면 공개로 Overview가 전원에게 열리면서 첫 화면은 다시
+> `/admin/overview`가 됐다. 로그인 리다이렉트와 `/admin` 루트가 같은 경로를 쓴다.
 
 전원 캘린더가 첫 화면이다. `SUPER_ADMIN`도 동일하며, Overview는 기타 › 시스템에서 접근한다.
 사람별 첫 화면 분기는 하지 않는다 — 이 파일은 세션을 모르는 서버 컴포넌트이고,

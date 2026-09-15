@@ -15,20 +15,27 @@ import {
   type HardwareSampleEvent,
   type HardwareSampleUnit,
   type SampleEventType,
+  type SampleUnitStatus,
 } from "./shared"
 
 // 유닛 액션 폼 — 상태별 허용 전이는 서버(recordSampleUnitEvents)가 최종 가드하고,
 // 여기서는 현재 상태에서 말이 되는 버튼만 노출한다.
-type SheetAction = "loan" | "return" | "convert" | "repair" | "adjust" | "retire"
+type SheetAction = "loan" | "return" | "showcase" | "store" | "convert" | "repair" | "adjust" | "retire"
 
+// 출발 상태는 lib/repositories/hardware-samples.ts 의 SAMPLE_EVENT_TRANSITIONS 와 같게 둔다(2026-09-15 전시 상태 추가).
+// 전시 중인 유닛은 바로 대여하지 않는다 — 사무실 보관으로 옮긴 뒤 대여한다(서버도 같은 규칙으로 막는다).
 const ACTION_META: Record<SheetAction, { label: string; from: HardwareSampleUnit["status"][] }> = {
   loan: { label: "대여", from: ["office", "repair"] },
   return: { label: "반환", from: ["loaned"] },
-  convert: { label: "판매 전환", from: ["loaned", "office"] },
-  repair: { label: "수리", from: ["office", "loaned"] },
-  adjust: { label: "정정", from: ["office", "loaned", "repair", "converted", "retired"] },
-  retire: { label: "폐기", from: ["office", "loaned", "repair"] },
+  showcase: { label: "전시로", from: ["office"] },
+  store: { label: "사무실 보관으로", from: ["showroom", "repair"] },
+  convert: { label: "판매 전환", from: ["loaned", "office", "showroom"] },
+  repair: { label: "수리", from: ["office", "loaned", "showroom"] },
+  adjust: { label: "정정", from: ["office", "showroom", "loaned", "repair", "converted", "retired"] },
+  retire: { label: "폐기", from: ["office", "loaned", "repair", "showroom"] },
 }
+
+const NEXT_STATUS_OPTIONS = Object.keys(SAMPLE_STATUS_META) as SampleUnitStatus[]
 
 const INPUT_CLASS =
   "h-9 w-full rounded-md border border-[rgba(0,0,0,0.1)] bg-white px-2.5 text-[12.5px] font-semibold text-[#111110] outline-none transition focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/20"
@@ -49,6 +56,8 @@ function SampleUnitSheet({ unit, onClose, onChanged, reduceMotion }: SampleUnitS
   const [expectedReturnAt, setExpectedReturnAt] = useState("")
   const [serialNo, setSerialNo] = useState("")
   const [actionMemo, setActionMemo] = useState("")
+  // 정정에서 상태까지 바로잡을 때만 채운다("" = 상태 그대로). 서버는 이때 메모를 필수로 받는다.
+  const [nextStatus, setNextStatus] = useState<SampleUnitStatus | "">("")
   const [memoDraft, setMemoDraft] = useState("")
   const [busy, setBusy] = useState<"action" | "memo" | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -77,6 +86,7 @@ function SampleUnitSheet({ unit, onClose, onChanged, reduceMotion }: SampleUnitS
     setExpectedReturnAt("")
     setSerialNo("")
     setActionMemo("")
+    setNextStatus("")
     setMemoDraft("")
     setActionError(null)
     if (unitId) void loadEvents()
@@ -100,6 +110,7 @@ function SampleUnitSheet({ unit, onClose, onChanged, reduceMotion }: SampleUnitS
         setExpectedReturnAt("")
         setSerialNo("")
         setActionMemo("")
+        setNextStatus("")
       }
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "저장에 실패했습니다.")
@@ -119,6 +130,7 @@ function SampleUnitSheet({ unit, onClose, onChanged, reduceMotion }: SampleUnitS
         memo: actionMemo.trim() || undefined,
         expectedReturnAt: action === "loan" && expectedReturnAt ? expectedReturnAt : undefined,
         serialNo: action === "adjust" && serialNo.trim() ? serialNo.trim() : undefined,
+        nextStatus: action === "adjust" && nextStatus && nextStatus !== unit?.status ? nextStatus : undefined,
       },
       "action"
     )
@@ -271,9 +283,28 @@ function SampleUnitSheet({ unit, onClose, onChanged, reduceMotion }: SampleUnitS
                           <input value={serialNo} onChange={(event) => setSerialNo(event.target.value)} placeholder="실사 시 기입" className={INPUT_CLASS} />
                         </label>
                       )}
+                      {action === "adjust" && (
+                        <label className="col-span-2 block">
+                          <span className="mb-1 block text-[11px] font-bold text-[#615D59]">상태 바로잡기</span>
+                          <select
+                            value={nextStatus}
+                            onChange={(event) => setNextStatus(event.target.value as SampleUnitStatus | "")}
+                            className={INPUT_CLASS}
+                          >
+                            <option value="">상태 그대로 ({SAMPLE_STATUS_META[unit.status].label})</option>
+                            {NEXT_STATUS_OPTIONS.filter((status) => status !== unit.status).map((status) => (
+                              <option key={status} value={status}>
+                                {SAMPLE_STATUS_META[status].label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
                     </div>
                     <label className="block">
-                      <span className="mb-1 block text-[11px] font-bold text-[#615D59]">메모 (선택)</span>
+                      <span className="mb-1 block text-[11px] font-bold text-[#615D59]">
+                        {action === "adjust" && nextStatus ? "메모 (필수 — 실사 근거)" : "메모 (선택)"}
+                      </span>
                       <input
                         value={actionMemo}
                         onChange={(event) => setActionMemo(event.target.value)}
@@ -293,7 +324,11 @@ function SampleUnitSheet({ unit, onClose, onChanged, reduceMotion }: SampleUnitS
                       <button
                         type="button"
                         onClick={submitAction}
-                        disabled={busy != null || (action === "loan" && !customer.trim())}
+                        disabled={
+                          busy != null ||
+                          (action === "loan" && !customer.trim()) ||
+                          (action === "adjust" && Boolean(nextStatus) && !actionMemo.trim())
+                        }
                         className="cursor-pointer rounded-md bg-[#084734] px-3.5 py-1.5 text-[12px] font-bold text-white transition hover:bg-[#065c41] disabled:pointer-events-none disabled:opacity-60"
                       >
                         {busy === "action" ? "저장 중" : `${ACTION_META[action].label} 저장`}

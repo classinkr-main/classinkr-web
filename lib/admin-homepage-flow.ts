@@ -2,6 +2,7 @@ import "server-only"
 
 import { unstable_cache } from "next/cache"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { shareInFlightByArgs } from "@/lib/server/share-in-flight"
 
 export type HomepageFlowRangeDays = 7 | 14 | 30 | 90
 
@@ -345,8 +346,20 @@ export const ADMIN_HOMEPAGE_FLOW_CACHE_TAG = "admin-homepage-flow"
 // client_events를 매 호출 최대 10만 행 스캔하는 무거운 집계라 60초 캐시한다.
 // rangeDays는 함수 인자로 남겨 unstable_cache 키에 자동 포함시킨다(range별 캐시 분기).
 // 이 함수는 cookies()/headers()를 읽지 않고 요청 무관 admin 클라이언트만 쓰므로 캐시에 안전하다.
+//
+// 무효화 배선 없음(admin-performance-round3-2026-09-10.md §3.4 조사 결과) — 이 조립이 읽는
+// client_events 는 app/api/track/event/route.ts(공개 페이지뷰·이탈), lib/materials.ts(자료
+// 다운로드), lib/seminars/record-view.ts(세미나 조회) 세 곳에서만 쓰는데, 셋 다 익명 방문자가
+// 아무 페이지에서나 아무 때나 발화시키는 사이트 전체 최고빈도 공개 엔드포인트다. 여기에
+// revalidateTag를 걸면 페이지뷰 1건마다 이 태그가 하드 무효화되어 캐시가 사실상 항상 미스로
+// 돌아간다 — 승격의 목적(콜드 인스턴스 재계산 제거)을 정반대로 뒤집는다. 따라서 TTL(60초)이
+// 유일한 신선도 수단이며, Phase 4 원칙("무효화 없는 엔트리는 TTL을 올리지 않는다")에 따라
+// 이 값을 그대로 둔다. shareInFlightByArgs만 새로 얹어 같은 인스턴스의 동시 미스를 합치고
+// (이전에는 unstable_cache만 있어 콜드 인스턴스에 동시 요청이 겹치면 10만 행 스캔이 중복
+// 실행됐다), JSON 안전성을 dev·test에서 검사한다(assertJsonSafeInDev는 shareInFlight 내부에서
+// 자동 적용).
 const getCachedAdminHomepageFlow = unstable_cache(
-  fetchAdminHomepageFlow,
+  shareInFlightByArgs("admin-homepage-flow-v1", fetchAdminHomepageFlow),
   ["admin-homepage-flow"],
   { revalidate: 60, tags: [ADMIN_HOMEPAGE_FLOW_CACHE_TAG] }
 )

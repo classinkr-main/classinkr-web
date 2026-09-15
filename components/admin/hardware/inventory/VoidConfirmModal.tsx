@@ -43,36 +43,43 @@ export default function VoidConfirmModal({
             {voidTarget.product_name} · {MOVEMENT_LABEL[voidTarget.movement_type]} {formatNumber(voidTarget.quantity)}대를 취소합니다. 되돌릴 수 없습니다.
           </p>
         </div>
-        <div className="px-5 py-4">
-          <label className="block">
-            <span className="text-[11px] font-bold text-[#615D59]">취소 사유 (선택)</span>
-            <input
-              value={voidReason}
-              onChange={(event) => setVoidReason(event.target.value)}
-              autoFocus
-              placeholder="예: 중복 입력"
-              className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
-            />
-          </label>
-        </div>
-        <div className="flex flex-col-reverse gap-2 border-t border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-5 py-4 sm:flex-row sm:justify-end">
-          <button
-            type="button"
-            onClick={() => setVoidTarget(null)}
-            disabled={voidingId != null}
-            className="inline-flex h-10 cursor-pointer items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-4 text-[13px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            닫기
-          </button>
-          <button
-            type="button"
-            onClick={() => void confirmVoid()}
-            disabled={voidingId != null}
-            className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md bg-[#B43E3E] px-4 text-[13px] font-bold text-white shadow-sm transition hover:bg-[#9A3434] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B43E3E]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {voidingId != null ? "취소 중" : "기록 취소"}
-          </button>
-        </div>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (voidingId != null) return
+            void confirmVoid()
+          }}
+        >
+          <div className="px-5 py-4">
+            <label className="block">
+              <span className="text-[11px] font-bold text-[#615D59]">취소 사유 (선택)</span>
+              <input
+                value={voidReason}
+                onChange={(event) => setVoidReason(event.target.value)}
+                autoFocus
+                placeholder="예: 중복 입력"
+                className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
+              />
+            </label>
+          </div>
+          <div className="flex flex-col-reverse gap-2 border-t border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-5 py-4 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={() => setVoidTarget(null)}
+              disabled={voidingId != null}
+              className="inline-flex h-10 cursor-pointer items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-4 text-[13px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              닫기
+            </button>
+            <button
+              type="submit"
+              disabled={voidingId != null}
+              className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md bg-[#B43E3E] px-4 text-[13px] font-bold text-white shadow-sm transition hover:bg-[#9A3434] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B43E3E]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {voidingId != null ? "취소 중" : "기록 취소"}
+            </button>
+          </div>
+        </form>
       </section>
     </div>
   )

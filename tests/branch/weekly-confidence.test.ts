@@ -367,7 +367,10 @@ describe("ForecastBoard / DraftQueue — exact 카드 톤·확도 도트 배선(
 // 라운드 4 최적화 — 주차 셀 팝오버 기본 확도의 슬롯 우선 규약 + pending 요약 동봉.
 describe("matrixCellConfidence — 주차 슬롯 우선(소스 스캔)", () => {
   it("pending 요약(buildMatrixPendingByCell)에 weeklyConfidence가 동봉된다", () => {
-    const matrix = read("components/admin/branch/ledger/RevMatrix.tsx")
+    // 품질 감사 2026-09-10 — #2(번들 다이어트): buildMatrixPendingByCell은 순수 함수라
+    // ledger/rev-matrix-logic.ts로 물리 이동했다(RevMatrix.tsx는 JSX 컴포넌트만 남기고
+    // next/dynamic 지연 로드 — 로직 무변경, 스캔 대상 파일만 갱신).
+    const matrix = read("components/admin/branch/ledger/rev-matrix-logic.ts")
     const summary = sliceBetween(matrix, "export function buildMatrixPendingByCell", "function parseMatrixAmountResult")
     expect(summary).toContain("weeklyConfidence: weeklyConfidenceFromMetadata(draft.metadata)")
   })

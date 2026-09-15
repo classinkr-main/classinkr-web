@@ -38,7 +38,7 @@ Admin Core는 `/admin`의 셸·로그인·공통 내비와 관리자 인증/권�
 
 ### 내비 배치와 보안 경계
 
-`nav_preset`과 `nav_overrides`는 `admin-nav-access.ts`가 해석하는 내비게이션 배치 정보다. 항목을 상시, 기타, 숨김으로 보이게 할 뿐 API 접근권한을 부여하지 않는다. 페이지에서 항목이 숨겨져도 API는 반드시 role/capability를 독립적으로 검증해야 한다.
+사이드바는 2026-09-10부터 전원 동일하다. `admin-nav-access.ts`의 `DEFAULT_PRIMARY_HREFS`가 상시 8개와 접힌 기타 9개를 정하고, `nav_overrides`가 사람별로 그 자리만 바꾼다(`nav_preset`은 레거시 컬럼). 항목을 숨기는 기능은 없어졌고 어떤 배치도 API 접근권한을 부여하지 않는다 — API는 반드시 role/capability를 독립적으로 검증해야 한다.
 
 ## 4. 공통 구현 규약
 
@@ -67,7 +67,7 @@ npm run build
 - 새 admin route의 가드와 role/capability 검사
 - 어드민 API에 `createSupabaseServerClient()`가 유입되지 않았는지 확인
 - `admin_profiles` role/capabilities와 UI 표시가 일치하는지 확인
-- `nav_preset`으로 숨긴 API를 직접 호출해도 서버 권한이 강제되는지 확인
+- 사이드바에 보이는 탭이라도 권한 없는 역할이 API를 직접 호출하면 서버가 막는지 확인
 - 스키마 변경 시 대응 migration 존재 확인
 
 ## 7. 먼저 읽을 것

@@ -49,9 +49,15 @@ describe("getChatbotStats cache wiring", () => {
     disableSupabaseEnv()
     await loadService()
 
-    expect(unstableCacheCalls).toHaveLength(1)
-    expect(unstableCacheCalls[0].keyParts).toEqual(["chatbot-stats-v1"])
-    expect(unstableCacheCalls[0].options).toEqual({ revalidate: 60, tags: ["chatbot-stats"] })
+    // 호출 "개수"가 아니라 chatbot-stats 엔트리 자체를 검사한다.
+    // 예전에는 toHaveLength(1)로 고정했는데, service.ts 의 import 그래프에 다른 모듈의
+    // unstable_cache 가 하나라도 들어오면(2026-09-10 알림 라우트 승격이 실제로 그랬다)
+    // 배선이 멀쩡한데도 깨졌다 — 남의 캐시 추가를 이 파일의 회귀로 오진하게 만드는 계약이다.
+    const chatbotStats = unstableCacheCalls.filter((call) =>
+      call.keyParts.includes("chatbot-stats-v1")
+    )
+    expect(chatbotStats).toHaveLength(1)
+    expect(chatbotStats[0].options).toEqual({ revalidate: 60, tags: ["chatbot-stats"] })
   })
 
   it("passes normalized from/to strings into the cached computation", async () => {

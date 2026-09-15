@@ -19,12 +19,12 @@ export const CHATBOT_MOTION = {
         duration: 0.16,
         ease: CHATBOT_EASING.sharpExit,
     },
-    // 다이얼로그 표면 스프링 피드백
+    // 다이얼로그 표면 스프링 피드백 (Linear / Apple 스타일의 탄력적이고 빠른 안착)
     surfaceSpring: {
         type: "spring" as const,
-        stiffness: 380,
-        damping: 32,
-        mass: 0.9,
+        stiffness: 340,
+        damping: 28,
+        mass: 0.85,
     },
     // 미세 인터랙션 (호버, 전환 등)
     micro: {
@@ -46,7 +46,13 @@ export const CHATBOT_MOTION = {
         opacity: [0.38, 0] as number[],
         duration: 3.8,
         repeatDelay: 1.2,
-    }
+    },
+    // 로딩 쉬머 물결 애니메이션
+    shimmer: {
+        duration: 1.8,
+        repeat: Infinity,
+        ease: "easeInOut" as const,
+    },
 } as const
 
 /**

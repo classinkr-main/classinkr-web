@@ -96,6 +96,10 @@ export default function ActivityQuickForm({
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const { owners: crmOwners, health: ownerHealth } = useCrmOwners()
   const ownerListId = useId()
+  // 감사 2026-09-07 §4 — saving은 리렌더가 커밋된 뒤에야 버튼을 비활성화한다. 저장 버튼을
+  // 빠르게 두 번 누르면 두 클릭 모두 saving=false를 보고 같은 기록을 두 번 만든다
+  // (CaptureInboxClient의 analyzeInFlightRef와 같은 패턴 — 동기 ref로 먼저 잠근다).
+  const submitInFlightRef = useRef(false)
 
   // 딥링크/부모가 대상을 지정하면 폼 대상을 1회 프리셋한다(같은 대상 재지정은 무시).
   // 범위 해제(고객 스코프 → 전체)도 같은 축으로 처리해야 한다. /activity?targetId=A 에서
@@ -162,9 +166,14 @@ export default function ActivityQuickForm({
   }
 
   const handleSubmit = async () => {
+    // 동기 ref 잠금 — state(saving) 갱신이 반영되기 전의 두 번째 클릭을 여기서 막는다.
+    if (submitInFlightRef.current) return
+    submitInFlightRef.current = true
+
     const file = fileInputRef.current?.files?.[0] ?? null
     if (!title.trim() && !summary.trim() && !body.trim() && !nextActionTitle.trim() && !file) {
       setToast({ msg: "제목, 요약, 메모, 다음 액션 또는 녹음파일 중 하나는 필요합니다.", type: "error" })
+      submitInFlightRef.current = false
       return
     }
 
@@ -205,6 +214,7 @@ export default function ActivityQuickForm({
     } catch (err) {
       setToast({ msg: err instanceof Error ? err.message : "CRM 기록 저장에 실패했습니다.", type: "error" })
     } finally {
+      submitInFlightRef.current = false
       setSaving(false)
     }
   }

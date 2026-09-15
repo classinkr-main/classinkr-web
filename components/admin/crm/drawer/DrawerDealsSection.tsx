@@ -4,6 +4,7 @@
 // Customer360Drawer.tsx 분해(2026-08-28)로 이동 — 로직 무변경.
 
 import { Briefcase, Plus } from "lucide-react"
+import { AdminMoneyInput } from "@/components/admin/AdminMoneyInput"
 import type { Customer360 } from "@/lib/repositories/crm-customer-360"
 import type { CrmDealStage } from "@/lib/repositories/crm-deals"
 import { DEAL_STAGE_LABEL, DEAL_STAGE_OPTIONS, formatAmount, formatDay, SectionTitle } from "./shared"
@@ -21,6 +22,7 @@ export default function DrawerDealsSection({
   onDealStageChange,
   onAddDeal,
   onDealStage,
+  onDealAmountCommit,
 }: {
   data: Customer360
   actingId: string | null
@@ -28,12 +30,14 @@ export default function DrawerDealsSection({
   onDealFormOpenChange: (open: boolean) => void
   dealTitle: string
   onDealTitleChange: (value: string) => void
-  dealAmount: string
-  onDealAmountChange: (value: string) => void
+  dealAmount: number | null
+  onDealAmountChange: (value: number | null) => void
   dealStage: CrmDealStage
   onDealStageChange: (value: CrmDealStage) => void
   onAddDeal: () => void
   onDealStage: (dealId: string, stage: CrmDealStage) => void
+  /** 감사 2026-09-07 §2 — 생성된 딜의 예상금액을 어떤 화면에서도 못 고치던 것을 인라인 편집으로 연다. */
+  onDealAmountCommit: (dealId: string, amount: number | null) => void
 }) {
   return (
     <section id="c360-deal" className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
@@ -61,16 +65,30 @@ export default function DrawerDealsSection({
                 </span>
               </div>
               <div className="mt-1 flex items-center justify-between gap-2">
-                <p className="text-[11px] text-[#1a1a1a]/45">
-                  {deal.expectedAmount != null ? `${formatAmount(deal.expectedAmount)} · ` : ""}
-                  {deal.expectedCloseAt ? `예상 ${formatDay(deal.expectedCloseAt)}` : "종료일 미정"}
-                </p>
+                <div className="flex min-w-0 items-center gap-1 text-[11px] text-[#1a1a1a]/45">
+                  {deal.status === "open" ? (
+                    // 감사 2026-09-07 §2 — 생성 후 금액을 고칠 UI가 어디에도 없었다. open 딜만
+                    // 인라인 편집을 연다(종료된 딜의 확정 금액은 실적 기록이라 그대로 둔다).
+                    <AdminMoneyInput
+                      value={deal.expectedAmount}
+                      onCommit={(next) => onDealAmountCommit(deal.id, next)}
+                      ariaLabel={`${deal.title} 예상금액`}
+                      prefix="₩"
+                      placeholder="예상금액"
+                      disabled={actingId === `deal:${deal.id}`}
+                      fieldClassName="h-7"
+                    />
+                  ) : (
+                    deal.expectedAmount != null && <span>{formatAmount(deal.expectedAmount)} · </span>
+                  )}
+                  <span>{deal.expectedCloseAt ? `예상 ${formatDay(deal.expectedCloseAt)}` : "종료일 미정"}</span>
+                </div>
                 {deal.status === "open" ? (
                   <select
                     value={deal.stage}
                     onChange={(event) => onDealStage(deal.id, event.target.value as CrmDealStage)}
                     disabled={actingId === `deal:${deal.id}`}
-                    className="h-7 rounded-lg border border-[#e8e8e4] bg-white px-1.5 text-[11px] font-semibold text-[#111110] outline-none disabled:opacity-50"
+                    className="h-7 shrink-0 rounded-lg border border-[#e8e8e4] bg-white px-1.5 text-[11px] font-semibold text-[#111110] outline-none disabled:opacity-50"
                     aria-label="딜 단계"
                   >
                     {DEAL_STAGE_OPTIONS.map((option) => (
@@ -96,13 +114,15 @@ export default function DrawerDealsSection({
               autoFocus
               className="h-9 min-w-[140px] flex-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
             />
-            <input
+            {/* 감사 2026-09-07 §11 — Number(value.replace(/[^\d.-]/g,"")) 직접 파싱이 한글 입력을
+                0으로, 음수도 그대로 통과시켰다. 공용 AdminMoneyInput(IME 안전·음수 클램프)로 교체. */}
+            <AdminMoneyInput
               value={dealAmount}
-              aria-label="새 딜 예상 금액"
-              onChange={(event) => onDealAmountChange(event.target.value)}
-              inputMode="numeric"
+              onCommit={onDealAmountChange}
+              ariaLabel="새 딜 예상 금액"
+              prefix="₩"
               placeholder="예상금액"
-              className="h-9 w-24 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
+              fieldClassName="h-9 w-24"
             />
             <select
               value={dealStage}

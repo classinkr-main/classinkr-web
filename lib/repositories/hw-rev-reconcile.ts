@@ -2,6 +2,7 @@ import "server-only"
 
 import { normalizedAccountKey } from "@/lib/branch/account-key"
 import { isInactiveSheetStatus, isPlaceholderCrmName } from "@/lib/crm-source-linking"
+import { fetchAllSupabaseRows } from "@/lib/repositories/branch-hw"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 // ── 하드웨어 출고 ↔ REV 매출 대사 (존재성 대사 v1) ──────────────────────────
@@ -20,6 +21,9 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 // hw_only 판정의 "실출고" 근거에서 planned는 제외한다.
 
 interface HwOutboundRow {
+  // 감사(2026-09-07 #9): fetchAllSupabaseRows의 id 키셋 페이지네이션에 필요 — 응답 소비 로직은
+  // id를 읽지 않는다(전량 스캔용 커서일 뿐).
+  id: string
   logistics_no: string | null
   outbound_date: string | null
   product: string | null
@@ -31,6 +35,7 @@ interface HwOutboundRow {
 }
 
 interface RevSheetRow {
+  id: string
   customer_name: string
   status: string | null
   deal_type: string | null
@@ -96,6 +101,14 @@ interface MonthMatchOverlay {
 
 // v_hardware_rev_matches(계정×월 존재성 뷰)에서 월 그레인 신호를 읽는다.
 // 뷰가 없으면(마이그레이션 미적용) null — 호출자는 계정 그레인으로 폴백.
+//
+// 감사(2026-09-07 #9) 메모: 이 .limit(10000)은 fetchAllSupabaseRows(id 키셋)로 못 바꿨다 —
+// 이 뷰는 account_key×period_month GROUP BY 집계라 안정적인 행 id 자체가 없다(20260710_hw_rev_
+// reconcile_matches.sql 참고). 행 수는 원장 트랜잭션이 아니라 "계정 수 × 활동 월 수"라 실거래보다
+// 훨씬 낮은 카디널리티지만, 이미 PostgREST 기본 캡(1000)의 10배로 올려 둔 값이라 그 나름의 상한은
+// 있다 — 데이터가 이보다 커지면(대체로 계정 수천 × 월 수십 규모가 되어야) 조용히 잘릴 수 있다.
+// 정식 해소는 뷰에 안정적 정렬 키를 추가하거나(예: account_key, period_month 복합 키셋) DB
+// 마이그레이션이 필요해 이 세션 범위 밖이다.
 async function fetchMonthMatchOverlay(
   sb: ReturnType<typeof createSupabaseAdminClient>,
 ): Promise<Map<string, MonthMatchOverlay> | null> {
@@ -129,20 +142,31 @@ async function fetchMonthMatchOverlay(
 export async function getHwRevReconcile(): Promise<HwRevReconcileResult> {
   const sb = createSupabaseAdminClient()
 
-  const [hwRes, revRes, monthOverlay] = await Promise.all([
-    sb
-      .from("branch_hw_outbound")
-      .select("logistics_no, outbound_date, product, quantity, revenue, destination, progress, type")
-      .limit(3000),
-    sb
-      .from("branch_rev_deals")
-      .select("customer_name, status, deal_type, monthly_payments")
-      .limit(1000),
+  // 감사(2026-09-07 #9): 무보호 .limit(3000)/.limit(1000)은 PostgREST 캡을 넘는 순간 에러 없이
+  // 잘려 대사가 조용히 틀어진다 — branch-hw.ts 주석이 이미 경고한 교훈과 같은 함정이다. 두 테이블
+  // 모두 id 키셋으로 전량을 읽는다(fetchAllSupabaseRows, branch-hw.ts와 hardware-inventory.ts가
+  // 공유하는 헬퍼). 순서는 무관 — 아래에서 Map으로 재집계하므로 읽기 순서가 결과에 영향 없다.
+  const [hwRows, revRows, monthOverlay] = await Promise.all([
+    fetchAllSupabaseRows<HwOutboundRow>((afterId, limit) => {
+      let query = sb
+        .from("branch_hw_outbound")
+        .select("id, logistics_no, outbound_date, product, quantity, revenue, destination, progress, type")
+        .order("id", { ascending: true })
+        .limit(limit)
+      if (afterId) query = query.gt("id", afterId)
+      return query
+    }),
+    fetchAllSupabaseRows<RevSheetRow>((afterId, limit) => {
+      let query = sb
+        .from("branch_rev_deals")
+        .select("id, customer_name, status, deal_type, monthly_payments")
+        .order("id", { ascending: true })
+        .limit(limit)
+      if (afterId) query = query.gt("id", afterId)
+      return query
+    }),
     fetchMonthMatchOverlay(sb),
   ])
-
-  if (hwRes.error) throw hwRes.error
-  if (revRes.error) throw revRes.error
 
   interface HwAgg {
     name: string
@@ -156,7 +180,7 @@ export async function getHwRevReconcile(): Promise<HwRevReconcileResult> {
   const hwByKey = new Map<string, HwAgg>()
   let hwUnattributableRows = 0
 
-  for (const row of (hwRes.data ?? []) as HwOutboundRow[]) {
+  for (const row of hwRows) {
     const destination = (row.destination ?? "").trim()
     if (!destination) {
       hwUnattributableRows += 1
@@ -194,7 +218,7 @@ export async function getHwRevReconcile(): Promise<HwRevReconcileResult> {
     dealTypes: Set<string>
   }
   const revByKey = new Map<string, RevAgg>()
-  for (const row of (revRes.data ?? []) as RevSheetRow[]) {
+  for (const row of revRows) {
     if (isInactiveSheetStatus(row.status) || isPlaceholderCrmName(row.customer_name)) continue
     const key = normalizedAccountKey(row.customer_name)
     const agg = revByKey.get(key) ?? { name: row.customer_name, revCNY: 0, rows: 0, dealTypes: new Set<string>() }

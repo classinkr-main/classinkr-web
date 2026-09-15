@@ -1,7 +1,12 @@
 import "server-only"
 
 import { createHash } from "node:crypto"
+import { revalidateTag } from "next/cache"
 
+import {
+  ADMIN_CRM_ACCOUNT_MASTER_CACHE_TAG,
+  ADMIN_CRM_REGION_MAP_CACHE_TAG,
+} from "@/lib/admin/crm/cache-tags"
 import {
   NAVER_MAP_SOURCE_OBJECT,
   NAVER_MAP_SOURCE_SYSTEM,
@@ -435,6 +440,8 @@ export async function confirmCrmNaverMapLink(input: ConfirmCrmNaverMapLinkInput)
     .single()
   if (linkError) throw linkError
   invalidateCrmNaverMapSourceCache()
+  // 확정 링크가 customer/partner_account를 가리킬 수 있어 account-master 합성(§3.3)의 입력이다.
+  revalidateTag(ADMIN_CRM_ACCOUNT_MASTER_CACHE_TAG, "max")
   return link
 }
 
@@ -644,6 +651,9 @@ export async function importCrmNaverMapSource(input: ImportCrmNaverMapInput): Pr
     if (finishError) throw finishError
 
     invalidateCrmNaverMapSourceCache()
+    // 새 지도 장소 payload가 region_label을 다시 채운다 — CRM 지역 지도의 "타깃" 레이어
+    // 원천(lib/repositories/crm-region-map.ts)이므로 같이 무효화한다(§3.3).
+    revalidateTag(ADMIN_CRM_REGION_MAP_CACHE_TAG, "max")
 
     return {
       runId,

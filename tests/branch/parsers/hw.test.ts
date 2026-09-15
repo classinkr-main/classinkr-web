@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { parseInbound, parseOutbound, parseStock, parseSalesMonthly } from "@/lib/branch/parsers/hw"
+import { HW_RANGES, parseInbound, parseOutbound, parseStock, parseSalesMonthly } from "@/lib/branch/parsers/hw"
 import type { FormattedCell } from "@/lib/branch/google-sheets"
 
 const c = (value: unknown, bg: FormattedCell["bg"] = null): FormattedCell => ({ value: value as string | number | null, bg })
@@ -106,6 +106,43 @@ describe("hw parsers", () => {
       by_logistics: { H8: { inbound: 35, outbound: 23, stock: 12 } },
     })
   })
+  // 2026-09-14 운영 실측: 새 로트 열(C2)을 붙였는데 입고 "합계" 수식 범위가 안 늘어나 86" IFP 입고 합계가
+  // 344(로트 열 합 359)로 남았다 → 현재고가 30이 아니라 15로 싱크됐다.
+  it("stock trusts lot columns over a stale 합계 formula and records the mismatch", () => {
+    const grid: FormattedCell[][] = [
+      [c("입출고"), c("제품명"), c("분류"), c("물류No."), c(""), c(""), c("합계")],
+      [c(""), c(""), c(""), c("H8"), c("C1"), c("C2")],
+      [c("입고 현황"), c('86" IFP'), c("전자칠판"), c(35), c(40), c(15), c(75)],
+      [],
+      [c("출고 현황"), c('86" IFP'), c("전자칠판"), c(35), c(25), c(0), c(60)],
+    ]
+    const row = parseStock(grid).find((entry) => entry.product === '86" IFP')
+    expect(row?.quantity).toBe(30)
+    expect(row?.raw).toMatchObject({
+      inbound_total: 90,
+      outbound_total: 60,
+      by_logistics: { C1: { stock: 15 }, C2: { inbound: 15, outbound: 0, stock: 15 } },
+      sheet_total_mismatch: { inbound_sheet_total: 75, outbound_sheet_total: 60 },
+    })
+  })
+
+  it("stock does not flag a mismatch when 합계 agrees with the lot columns", () => {
+    const grid: FormattedCell[][] = [
+      [c("입출고"), c("제품명"), c("분류"), c("물류No."), c(""), c("합계")],
+      [c(""), c(""), c(""), c("H8"), c("C1")],
+      [c("입고 현황"), c("T1"), c("카메라"), c(10), c(40), c(50)],
+      [c("출고 현황"), c("T1"), c("카메라"), c(10), c(5), c(15)],
+    ]
+    const row = parseStock(grid).find((entry) => entry.product === "T1")
+    expect(row?.quantity).toBe(35)
+    expect(row?.raw).not.toHaveProperty("sheet_total_mismatch")
+  })
+
+  it("reads the inbound/outbound tabs without a fixed row cap so new rows past 500 still sync", () => {
+    expect(HW_RANGES.inbound).toMatch(/!A1:Z$/)
+    expect(HW_RANGES.outbound).toMatch(/!A1:Z$/)
+  })
+
   it("salesMonthly maps FY months", () => {
     const grid: FormattedCell[][] = [
       Array(13).fill(c("")),
