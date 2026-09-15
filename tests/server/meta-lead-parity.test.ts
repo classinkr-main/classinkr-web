@@ -209,6 +209,20 @@ describe("classifyParityDifference — 설명 분류 표", () => {
       expected: "fields_line_allowlist",
     },
     {
+      title: "fields= 답변 값에 줄바꿈 — 이어진 줄까지 fields 꼬리로 떼고 비교",
+      column: "message",
+      admin: "Meta Lead Ads\nleadgen_id=1\npage_id=p\nform_id=f\nfields=full_name: 김합성 / 문의내용: 첫줄\n둘째줄",
+      mirror: "Meta Lead Ads\nleadgen_id=1\npage_id=p\nform_id=f\nfields=full_name: 김합성",
+      expected: "fields_line_allowlist",
+    },
+    {
+      title: "fields= 꼬리가 여러 줄이어도 앞 줄이 다르면 설명 안 됨",
+      column: "message",
+      admin: "Meta Lead Ads\nleadgen_id=1\npage_id=p\nform_id=f\nad=A\nfields=문의내용: 첫줄\n둘째줄",
+      mirror: "Meta Lead Ads\nleadgen_id=1\npage_id=p\nform_id=f\nad=B\nfields=full_name: 김합성",
+      expected: "unexplained",
+    },
+    {
       title: "message 의 다른 줄이 다르면 설명 안 됨",
       column: "message",
       admin: "Meta Lead Ads\nleadgen_id=1\npage_id=p\nform_id=f\nad=A\nfields=x: 1",
@@ -249,6 +263,12 @@ describe("message 파싱", () => {
     expect(parsed.hasFieldsLine).toBe(true)
     expect([...parsed.keys]).toEqual(["full_name", "주소"])
     expect(parseMessageFieldKeys("Meta Lead Ads\nleadgen_id=1").hasFieldsLine).toBe(false)
+  })
+
+  it("fields= 꼬리가 여러 줄(답변 값의 줄바꿈)이어도 뒤 줄의 키까지 읽는다", () => {
+    const parsed = parseMessageFieldKeys("Meta Lead Ads\nleadgen_id=1\nfields=full_name: 김합성 / 문의내용: 첫줄\n둘째줄 / 주소: 서울시 합성구")
+    expect(parsed.hasFieldsLine).toBe(true)
+    expect([...parsed.keys]).toEqual(["full_name", "문의내용", "주소"])
   })
 })
 
@@ -330,17 +350,19 @@ function scenario() {
   return { leads, submissions, refs, compassLeads, receipts, failures }
 }
 
-function setupDb(overrides: { cutover?: Row; errors?: Record<string, FakeError> } = {}) {
+function setupDb(
+  overrides: { cutover?: Row; errors?: Record<string, FakeError>; extra?: { leads?: Row[]; receipts?: Row[]; failures?: Row[] } } = {}
+) {
   const data = scenario()
   const db = createFakeMirrorDb({
     tables: {
       meta_leadgen_cutover: [cutoverRow(overrides.cutover)],
-      leads: data.leads,
+      leads: [...data.leads, ...(overrides.extra?.leads ?? [])],
       compass_meta_submissions_v: data.submissions,
       compass_lead_refs_v: data.refs,
       compass_leads_v: data.compassLeads,
-      meta_leadgen_receipts: data.receipts,
-      [COMPASS_META_LEADGEN_FAILURES_VIEW]: data.failures,
+      meta_leadgen_receipts: [...data.receipts, ...(overrides.extra?.receipts ?? [])],
+      [COMPASS_META_LEADGEN_FAILURES_VIEW]: [...data.failures, ...(overrides.extra?.failures ?? [])],
     },
     errors: overrides.errors,
   })
@@ -370,6 +392,15 @@ describe("buildMetaLeadParityReport", () => {
       admin_retry_duplicate_rows: 1, // 4001
       admin_contactless_shells: 2, // 4003(키 목록 밖), 4004(Graph 실패)
       admin_rows_without_leadgen: 1,
+    })
+    // 시나리오 행은 모두 2시간보다 오래됐다 → 런북 V3 창 게이트 숫자도 같다
+    expect(report.gate).toEqual({
+      settleMinutes: 120,
+      from: SHADOW_SINCE,
+      to: iso(-120),
+      admin_only: 2,
+      admin_only_in_compass_failures: 1,
+      receipts_not_in_compass: 1,
     })
 
     const fields = report.fields
@@ -413,6 +444,41 @@ describe("buildMetaLeadParityReport", () => {
       ["eq", "source", "meta_lead_ads"],
       ["gte", "created_at", new Date(Date.parse(SHADOW_SINCE) - 24 * 60 * MIN).toISOString()],
     ])
+  })
+
+  it("게이트 G2·G3 은 런북 V3 창 끝(지금 − 2시간)으로 센다 — 15분 창에만 보이는 일시 누락은 게이트에 안 잡힌다", async () => {
+    const shell = identity("김합성", "01000000001", null)
+    setupDb({
+      extra: {
+        leads: [
+          // Compass 일시 실패(실패 보관), 매시 재처리 전 — 1시간 전
+          adminRow("8001", shell, iso(-60)),
+          // 대표 행은 창 시작 전, 재시도 행은 창 안 — V3 는 창 안 행이 있으면 센다
+          adminRow("8002", shell, new Date(Date.parse(SHADOW_SINCE) - 10 * MIN).toISOString()),
+          adminRow("8002", shell, iso(-6 * 60)),
+        ],
+        receipts: [receipt("8001", iso(-61))],
+        failures: [{ leadgen_id: "8001", lead_specific: false, first_seen_at: iso(-61), last_seen_at: iso(-61), attempts: 1 }],
+      },
+    })
+
+    const report = await buildMetaLeadParityReport()
+
+    expect(report.categories).toMatchObject({ admin_only: 3, admin_only_in_compass_failures: 2, receipts_not_in_compass: 2 }) // +8001
+    expect(report.gate).toEqual({
+      settleMinutes: 120,
+      from: SHADOW_SINCE,
+      to: iso(-120),
+      admin_only: 3, // 4008·4009·8002
+      admin_only_in_compass_failures: 1, // 4008
+      receipts_not_in_compass: 1, // 5003
+    })
+
+    // 2시간이 더 지나 재처리가 못 채웠으면 게이트에도 잡힌다
+    vi.setSystemTime(new Date(NOW + 120 * MIN))
+    __resetMetaLeadgenCutoverCacheForTests()
+    const later = await buildMetaLeadParityReport()
+    expect(later.gate).toMatchObject({ to: iso(0), admin_only: 4, admin_only_in_compass_failures: 2, receipts_not_in_compass: 2 })
   })
 
   it("shadow_since 가 없으면 days 창(1–45 로 자름)", async () => {

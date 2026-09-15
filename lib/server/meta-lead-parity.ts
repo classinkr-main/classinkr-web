@@ -18,6 +18,11 @@ import "server-only"
 //   compass_not_in_receipts(G4 — 증인이 못 본 것) · admin_retry_duplicate_rows · admin_contactless_shells
 //   (대표 행에 이름·전화·이메일이 모두 없음) · admin_rows_without_leadgen.
 //
+// 게이트(gate): categories 는 정착 여유 15분 창이라 Compass 가 매시 재처리로 곧 채울 리드가 잠깐 admin_only·
+//   receipts_not_in_compass 로 보인다. 런북 V3 은 창 끝이 지금 − 2시간이다. 두 도구가 같은 게이트에서 다른 숫자를
+//   내지 않도록 V3 과 같은 창 끝(120분)으로 센 G2·G3 숫자를 gate 에 따로 싣는다 — **게이트 판정은 gate 를 본다**.
+//   어드민 쪽은 V3 처럼 창 안에 행이 하나라도 있는 leadgen 이다(대표 행이 아니라).
+//
 // 필드 동등성(both 이면서 제출 행이 있는 leadgen):
 //   미러와 **같은 조립**(buildMetaLeadMirrorPayload — 합성 field_data → 어드민 웹훅 빌더)으로 미러 행을 만들어 대표 행과
 //   컬럼마다 비교한다. 컬럼 = name, org, role, size, branch, email, phone, source_detail, utm_source/medium/campaign/
@@ -55,6 +60,8 @@ export const PARITY_DEFAULT_DAYS = 7
 export const PARITY_MAX_DAYS = 45
 /** 창 끝 — 두 경로가 저장을 끝낼 여유(설계 B §4-3 3-b 15분) */
 export const PARITY_SETTLE_MINUTES = 15
+/** 게이트 G2·G3 창 끝 — 런북 V3(50-runbook-checks.sql) `now() - interval '2 hours'` 와 같다 */
+export const PARITY_GATE_SETTLE_MINUTES = 120
 /** "있는가" 판정을 창보다 앞으로 넓히는 폭 */
 export const PARITY_MEMBERSHIP_MARGIN_MS = 24 * 60 * 60_000
 export const PARITY_SCAN_MAX_ROWS = 20_000
@@ -97,7 +104,11 @@ export const PARITY_EXPLANATIONS = [
 export type ParityExplanation = (typeof PARITY_EXPLANATIONS)[number]
 
 const LEADGEN_LINE = /(?:^|\n)leadgen_id=([0-9]+)/
-const FIELDS_LINE = /(?:^|\n)fields=([^\n]*)/
+/**
+ * fields= 는 buildMetaMessage 의 **마지막 줄**이고 답변 값 안의 줄바꿈은 그대로 남는다 → 첫 `fields=` 줄부터 message 끝까지가
+ * fields 꼬리다(뒤따르는 줄은 앞 답변 값의 이어진 줄).
+ */
+const FIELDS_TAIL = /(?:^|\n)fields=([\s\S]*)$/
 const REGION_KEYS = ["city", "region", "province", "지역", "도시"]
 const ADDRESS_KEYS = ["address", "주소"]
 const REINFLOW_OUTCOMES = new Set(["reinflow", "original"])
@@ -125,6 +136,20 @@ export interface MetaLeadParityReport {
   window: { from: string; to: string; days: number; settleMinutes: number; shadowSince: string | null } | null
   /** 뷰·표를 읽었는가 — false 인 쪽에 기대는 분류는 믿을 수 없다 */
   sources: { adminLeads: boolean; submissions: boolean; refs: boolean; receipts: boolean; failures: boolean; compassLeads: boolean }
+  /**
+   * 게이트 G2·G3 숫자 — 런북 V3 과 같은 창 [window.from, 지금 − 120분). categories 의 같은 이름 숫자(15분 창)와
+   * 다를 수 있다. 창을 정하지 못했으면 null.
+   */
+  gate: {
+    settleMinutes: number
+    from: string
+    to: string
+    /** G2 목표 0 */
+    admin_only: number
+    admin_only_in_compass_failures: number
+    /** G3 목표 0 */
+    receipts_not_in_compass: number
+  } | null
   /** 모든 출처를 끝까지 읽었다(오류·스캔 상한 없음) */
   complete: boolean
   totals: { adminLeadgens: number; adminRows: number; compassLeadgens: number; receipts: number }
@@ -202,13 +227,13 @@ export function parseLeadgenIdFromMessage(message: unknown): string | null {
 }
 
 /**
- * message 의 fields= 줄에서 키만 뽑는다(buildMetaMessage 형식 `fields=키: 값 / 키: 값`).
+ * message 의 fields= 꼬리(여러 줄일 수 있다)에서 키만 뽑는다(buildMetaMessage 형식 `fields=키: 값 / 키: 값`).
  * 값에 " / " 가 들어 있으면 그 뒤 조각이 키처럼 보일 수 있다 — 키 존재 판정용이라 허용한다.
  */
 export function parseMessageFieldKeys(message: unknown): { hasFieldsLine: boolean; keys: Set<string> } {
   const keys = new Set<string>()
   if (typeof message !== "string") return { hasFieldsLine: false, keys }
-  const line = message.match(FIELDS_LINE)?.[1]
+  const line = message.match(FIELDS_TAIL)?.[1]
   if (line == null) return { hasFieldsLine: false, keys }
   for (const part of line.split(" / ")) {
     const separator = part.indexOf(": ")
@@ -218,12 +243,11 @@ export function parseMessageFieldKeys(message: unknown): { hasFieldsLine: boolea
   return { hasFieldsLine: true, keys }
 }
 
-function stripFieldsLine(message: string | null): string | null {
+/** fields= 꼬리를 message 끝까지 떼어 낸다(답변 값의 이어진 줄까지) */
+function stripFieldsTail(message: string | null): string | null {
   if (message == null) return null
-  return message
-    .split("\n")
-    .filter((line) => !line.startsWith("fields="))
-    .join("\n")
+  const match = FIELDS_TAIL.exec(message)
+  return match ? message.slice(0, match.index) : message
 }
 
 /** 비교용 정규화 — 앞뒤 공백·빈 값 null, 이메일 소문자 */
@@ -271,7 +295,7 @@ export function classifyParityDifference(
   }
 
   if (column === "message") {
-    if (stripFieldsLine(admin) === stripFieldsLine(mirror)) return "fields_line_allowlist"
+    if (stripFieldsTail(admin) === stripFieldsTail(mirror)) return "fields_line_allowlist"
     return "unexplained"
   }
 
@@ -293,6 +317,7 @@ export function emptyMetaLeadParityReport(nowIso: string): MetaLeadParityReport 
     generatedAt: nowIso,
     mode: null,
     window: null,
+    gate: null,
     sources: { adminLeads: false, submissions: false, refs: false, receipts: false, failures: false, compassLeads: false },
     complete: false,
     totals: { adminLeadgens: 0, adminRows: 0, compassLeadgens: 0, receipts: 0 },
@@ -525,7 +550,17 @@ async function fillParityReport(report: MetaLeadParityReport, nowMs: number, opt
     settleMinutes,
     shadowSince,
   }
-  if (fromMs >= toMs) {
+  const gateToMs = nowMs - PARITY_GATE_SETTLE_MINUTES * 60_000
+  const gate: NonNullable<MetaLeadParityReport["gate"]> = {
+    settleMinutes: PARITY_GATE_SETTLE_MINUTES,
+    from: new Date(fromMs).toISOString(),
+    to: new Date(gateToMs).toISOString(),
+    admin_only: 0,
+    admin_only_in_compass_failures: 0,
+    receipts_not_in_compass: 0,
+  }
+  report.gate = gate
+  if (fromMs >= Math.max(toMs, gateToMs)) {
     report.complete = cutoverOk
     return
   }
@@ -643,11 +678,13 @@ async function fillParityReport(report: MetaLeadParityReport, nowMs: number, opt
 
   const receiptsAll = new Set<string>()
   const receiptsWindow = new Set<string>()
+  const receiptsGate = new Set<string>()
   for (const row of receiptScan.rows) {
     const leadgenId = text(row.leadgen_id)
     if (!leadgenId) continue
     receiptsAll.add(leadgenId)
     if (inWindow(row.first_received_at, fromMs, toMs)) receiptsWindow.add(leadgenId)
+    if (inWindow(row.first_received_at, fromMs, gateToMs)) receiptsGate.add(leadgenId)
   }
   report.totals.receipts = receiptsWindow.size
 
@@ -667,9 +704,21 @@ async function fillParityReport(report: MetaLeadParityReport, nowMs: number, opt
     if (!compassAll.has(leadgenId)) report.categories.receipts_not_in_compass += 1
   }
 
-  // admin_only 중 Compass 실패 보관에 있는 것
+  // 게이트(V3 창 끝) — 어드민은 창 안에 행이 하나라도 있는 leadgen
+  const gateAdminOnly: string[] = []
+  for (const [leadgenId, rows] of adminGroups) {
+    if (compassAll.has(leadgenId)) continue
+    if (rows.some((row) => inWindow(row.created_at, fromMs, gateToMs))) gateAdminOnly.push(leadgenId)
+  }
+  gate.admin_only = gateAdminOnly.length
+  for (const leadgenId of receiptsGate) {
+    if (!compassAll.has(leadgenId)) gate.receipts_not_in_compass += 1
+  }
+
+  // admin_only(15분 창·게이트 창) 중 Compass 실패 보관에 있는 것
   let failuresOk = true
-  for (const ids of chunk(adminOnly.sort(), PARITY_ID_CHUNK)) {
+  const inFailures = new Set<string>()
+  for (const ids of chunk([...new Set([...adminOnly, ...gateAdminOnly])].sort(), PARITY_ID_CHUNK)) {
     const result = await timed(COMPASS_META_LEADGEN_FAILURES_VIEW, (signal) =>
       sb.from(COMPASS_META_LEADGEN_FAILURES_VIEW).select("leadgen_id").in("leadgen_id", ids).abortSignal(signal)
     )
@@ -678,9 +727,13 @@ async function fillParityReport(report: MetaLeadParityReport, nowMs: number, opt
       report.errors.push(shortError(`${COMPASS_META_LEADGEN_FAILURES_VIEW} 읽기 실패`, result.error))
       break
     }
-    const found = new Set(((result.data ?? []) as Array<{ leadgen_id?: unknown }>).map((row) => text(row.leadgen_id)))
-    report.categories.admin_only_in_compass_failures += ids.filter((id) => found.has(id)).length
+    for (const row of (result.data ?? []) as Array<{ leadgen_id?: unknown }>) {
+      const leadgenId = text(row.leadgen_id)
+      if (leadgenId) inFailures.add(leadgenId)
+    }
   }
+  report.categories.admin_only_in_compass_failures = adminOnly.filter((id) => inFailures.has(id)).length
+  gate.admin_only_in_compass_failures = gateAdminOnly.filter((id) => inFailures.has(id)).length
   report.sources.failures = failuresOk
 
   // ── 필드 동등성 ──
