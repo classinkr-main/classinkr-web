@@ -182,6 +182,19 @@ export function buildDrawerHealthInput(data: Customer360, daysToExpire: number |
   }
 }
 
+// [major, 2026-09-15 리뷰] patchDeal이 override로 저장할 patch를 좁히는 순수 로직. pickConfirmed가
+// 없으면 optimistic만 쓰고(딜 금액 변경 등 서버가 되돌려줄 파생 필드가 없는 경우), 있으면 그 필드만
+// optimistic 위에 병합한다 — 서버 응답 레코드 전체(담당자·제목 등, 다른 경로로 바뀔 수 있는 필드)를
+// 그대로 override에 담으면 배경 재검증(C360_OVERRIDE_MS 창)이 그 필드들을 계속 되돌려 버린다.
+export function resolveDealPatch(
+  optimistic: Partial<CrmDealRecord>,
+  confirmedDeal: CrmDealRecord | undefined,
+  pickConfirmed?: (deal: CrmDealRecord) => Partial<CrmDealRecord>
+): Partial<CrmDealRecord> {
+  if (!confirmedDeal) return optimistic
+  return { ...optimistic, ...(pickConfirmed?.(confirmedDeal) ?? {}) }
+}
+
 export default function Customer360Drawer({ customerKey, name, onClose, onDirtyChange }: Props) {
   const [data, setData] = useState<Customer360 | null>(null)
   const [loading, setLoading] = useState(false)
@@ -892,7 +905,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
           `/api/admin/crm/deals-lite/${encodeURIComponent(dealId)}`,
           { method: "PATCH", body: JSON.stringify(body) }
         )
-        const patch = response?.deal ? { ...optimistic, ...(pickConfirmed?.(response.deal) ?? {}) } : optimistic
+        const patch = resolveDealPatch(optimistic, response?.deal, pickConfirmed)
         applyLocal({ kind: "deal_patched", id: dealId, at: Date.now(), patch }, mutationKey)
       },
       rollback: (saved) => {

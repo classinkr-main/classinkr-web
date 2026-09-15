@@ -9,10 +9,12 @@ import Customer360Drawer, {
   buildDerivedSummary,
   buildDrawerHealthInput,
   isDrawerFormDirty,
+  resolveDealPatch,
 } from "@/components/admin/crm/Customer360Drawer"
 import { isActivityFormDirty } from "@/components/admin/crm/rail/ActivityQuickForm"
 import { computeCustomerHealth } from "@/lib/crm/customer-health"
 import type { Customer360 } from "@/lib/repositories/crm-customer-360"
+import type { CrmDealRecord } from "@/lib/repositories/crm-deals"
 
 function make360(overrides: Partial<Customer360> = {}): Customer360 {
   return {
@@ -116,6 +118,58 @@ describe("c360-05 닫기 가드 dirty 집합", () => {
       expect(isActivityFormDirty({ ...empty, [key]: "   " })).toBe(false)
     }
     expect(isActivityFormDirty({ ...empty, recordingName: "call.m4a" })).toBe(true)
+  })
+})
+
+function makeConfirmedDeal(overrides: Partial<CrmDealRecord> = {}): CrmDealRecord {
+  return {
+    id: "d1",
+    targetType: "lead",
+    targetId: "lead-1",
+    targetLabel: "테스트 학원",
+    ownerKey: "other-owner", // 다른 경로로 이미 바뀐 값 — override에 새지 않아야 한다.
+    ownerNameSnapshot: "다른 담당",
+    title: "다른 담당이 방금 고친 제목",
+    stage: "decision",
+    status: "won",
+    expectedAmount: 9_999_999,
+    expectedCloseAt: null,
+    nextTaskId: null,
+    quoteRef: null,
+    orderRef: null,
+    riskNote: null,
+    createdBy: null,
+    closedAt: "2026-09-15T00:00:00.000Z",
+    closedBy: "kim",
+    createdAt: "2026-09-10T00:00:00.000Z",
+    updatedAt: "2026-09-15T00:00:00.000Z",
+    ...overrides,
+  }
+}
+
+describe("resolveDealPatch — [major, 2026-09-15] override에 서버 응답 전체를 담지 않는다", () => {
+  it("pickConfirmed가 없으면(예: 금액 변경) optimistic만 쓰고 서버 레코드의 다른 필드는 섞이지 않는다", () => {
+    const patch = resolveDealPatch({ expectedAmount: 500_000 }, makeConfirmedDeal())
+    expect(patch).toEqual({ expectedAmount: 500_000 })
+    expect(patch).not.toHaveProperty("ownerKey")
+    expect(patch).not.toHaveProperty("title")
+  })
+
+  it("pickConfirmed가 있으면(예: 단계 변경) 그 필드만 optimistic 위에 병합하고 담당자·제목은 새지 않는다", () => {
+    const patch = resolveDealPatch(
+      { stage: "won" },
+      makeConfirmedDeal(),
+      (deal) => ({ status: deal.status, closedAt: deal.closedAt, closedBy: deal.closedBy })
+    )
+    expect(patch).toEqual({ stage: "won", status: "won", closedAt: "2026-09-15T00:00:00.000Z", closedBy: "kim" })
+    expect(patch).not.toHaveProperty("ownerKey")
+    expect(patch).not.toHaveProperty("ownerNameSnapshot")
+    expect(patch).not.toHaveProperty("title")
+    expect(patch).not.toHaveProperty("expectedAmount")
+  })
+
+  it("서버 응답이 없으면(요청 실패 등) optimistic 그대로 돌려준다", () => {
+    expect(resolveDealPatch({ stage: "won" }, undefined)).toEqual({ stage: "won" })
   })
 })
 
