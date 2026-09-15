@@ -4,7 +4,7 @@
 // 2026-09-15(home-01): overview 상태 메타(business.ok·neoCrm.ok·snapshot)를 읽어 부분 실패를
 // '—'로, 스냅샷·갱신 지연을 캡션·칩으로 드러낸다. 실패를 "$0"·"¥0"으로 그리지 않는다.
 
-import type { ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 import Link from "next/link"
 import { AlertCircle, BarChart3, CircleDollarSign, RefreshCw, TrendingUp } from "lucide-react"
 import CrmNoticeBanner from "@/components/admin/crm/CrmNoticeBanner"
@@ -23,6 +23,9 @@ import {
 
 const BUSINESS_FALLBACK_ERROR = "자체 집계(매출·미수)를 불러오지 못했습니다."
 const NEO_FALLBACK_ERROR = "Neo CRM 팀 리포트를 불러오지 못했습니다."
+
+type DismissedBanners = { all: boolean; business: boolean; neo: boolean }
+const NONE_DISMISSED: DismissedBanners = { all: false, business: false, neo: false }
 
 // 코크핏 KPI 히어로 — 흩어진 핵심 지표를 상단 한 밴드로 합성(B 코크핏 이식). snapshot 필드만 재배치(추가 fetch 0).
 // 통화 3종이 인접하므로 카드마다 통화 칩을 강제: 인식매출·미수=₩(자체집계), 오더=$(USD), 동기화=¥(CNY).
@@ -60,11 +63,22 @@ export default function CrmCockpitHero({
   const isSnapshot = snapshot?.source === "db_snapshot"
   const stale = Boolean(snapshot?.stale)
 
+  // 실패 배너 닫기(UX 규약 3: 재시도 + 닫기) — 원천별로 닫고, 재조회가 시작되면(loading=true) 다시 연다.
+  // 이전 렌더의 loading 을 state 로 기억해 렌더 중에 되돌리는 React 공식 패턴(effect 없이 1회 재렌더).
+  const [dismissed, setDismissed] = useState<DismissedBanners>(NONE_DISMISSED)
+  const [prevLoading, setPrevLoading] = useState(loading)
+  if (loading !== prevLoading) {
+    setPrevLoading(loading)
+    if (loading) setDismissed(NONE_DISMISSED)
+  }
+  const dismiss = (key: keyof DismissedBanners) => setDismissed((prev) => ({ ...prev, [key]: true }))
+
   const riskCount = kpis?.paymentRiskCount ?? 0
   // 실패로 0이 된 값은 위험 판정에 쓰지 않는다(카드 4 강조 색은 ready 일 때만).
   const hasRisk = businessState === "ready" && (riskCount > 0 || (revenue?.outstandingAmount ?? 0) > 0)
 
-  if (error && !overview) {
+  const totalFailure = Boolean(error) && !overview
+  if (totalFailure && !dismissed.all) {
     return (
       <CrmNoticeBanner
         tone="danger"
@@ -72,6 +86,7 @@ export default function CrmCockpitHero({
         title="매출·수금 현황을 확인하지 못했습니다"
         message={`${error} · 의사결정용 수치를 0으로 대체하지 않았습니다.`}
         action={{ label: "다시 확인", onClick: onRetry, pending: loading }}
+        onDismiss={() => dismiss("all")}
       />
     )
   }
@@ -85,9 +100,12 @@ export default function CrmCockpitHero({
     <div className="mb-4">
       {/* 기준 시각·출처 캡션(UX 규약 4) — 우선순위 큐의 `기준 {generatedAt}` 캡션과 같은 포맷. */}
       <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
-        <span className={SECONDARY_TEXT_CLASS}>
+        <span className={totalFailure ? STATUS_TONE_TEXT_CLASS.danger : SECONDARY_TEXT_CLASS}>
           {pending ? (
             <ValueSkeleton className="h-3 w-28" />
+          ) : totalFailure ? (
+            // 전체 실패 배너를 닫은 뒤 — 기준 시각을 '-'로 그리지 않고 실패임을 캡션에 남긴다.
+            <>기준 시각 확인 불가 · 불러오기 실패</>
           ) : (
             <>
               기준 {formatOverviewDate(overview?.generatedAt)} · {isSnapshot ? "스냅샷" : "실시간"}
@@ -95,14 +113,19 @@ export default function CrmCockpitHero({
             </>
           )}
         </span>
-        {stale ? (
+        {/* 항상 마운트된 SR 상태 영역(UX 규약 7) — 갱신 지연·실패 전환을 텍스트 교체로 통지한다.
+            (role=status 는 새로 삽입된 노드를 건너뛰는 SR 구현이 있어 칩 자체를 조건부 마운트하지 않는다.) */}
+        <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+          {pending ? "" : totalFailure ? "매출·수금 현황을 불러오지 못했습니다." : stale ? "스냅샷 갱신이 지연되고 있습니다." : ""}
+        </span>
+        {stale || totalFailure ? (
           <span
-            role="status"
-            aria-live="polite"
-            data-tone="warning"
-            className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10.5px] font-semibold ${STATUS_TONE_CLASS.warning}`}
+            data-tone={totalFailure ? "danger" : "warning"}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10.5px] font-semibold ${
+              totalFailure ? STATUS_TONE_CLASS.danger : STATUS_TONE_CLASS.warning
+            }`}
           >
-            갱신 지연
+            {totalFailure ? "확인 불가" : "갱신 지연"}
             <button
               type="button"
               onClick={onRetry}
@@ -111,7 +134,7 @@ export default function CrmCockpitHero({
               className="inline-flex items-center gap-0.5 underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} aria-hidden />
-              새로고침
+              {totalFailure ? "다시 확인" : "새로고침"}
             </button>
           </span>
         ) : null}
@@ -244,22 +267,24 @@ export default function CrmCockpitHero({
       </div>
 
       {/* 부분 실패 배너 — 카드마다 role=alert 를 반복하지 않고 원천별로 한 번만 통지·재시도(UX 규약 3). */}
-      {businessError ? (
+      {businessError && !dismissed.business ? (
         <CrmNoticeBanner
           tone="danger"
           className="mt-2"
           title="자체 집계(인식 매출·미수)를 확인하지 못했습니다"
           message={`${businessError} · 카드 1·4의 값은 0이 아니라 확인 불가입니다.`}
           action={{ label: "다시 확인", onClick: onRetry, pending: loading }}
+          onDismiss={() => dismiss("business")}
         />
       ) : null}
-      {neoError ? (
+      {neoError && !dismissed.neo ? (
         <CrmNoticeBanner
           tone="danger"
           className="mt-2"
           title="Neo CRM 팀 리포트를 확인하지 못했습니다"
           message={`${neoError} · 오더·동기화 매출 카드의 값은 0이 아니라 확인 불가입니다.`}
           action={{ label: "다시 확인", onClick: onRetry, pending: loading }}
+          onDismiss={() => dismiss("neo")}
         />
       ) : null}
     </div>

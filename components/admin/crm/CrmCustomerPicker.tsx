@@ -69,6 +69,9 @@ export default function CrmCustomerPicker({ label, linkedId, onPick, onFreeText,
   const [recents, setRecents] = useState<PickerRow[]>([])
   const [loading, setLoading] = useState(false)
   const [searchFailed, setSearchFailed] = useState(false)
+  // rows 가 어느 검색어에 대해 확정(fetch 완료)된 것인지 — 입력이 바뀐 뒤 220ms 디바운스·fetch 가 끝나기 전에는
+  // 이전 검색어의 결과라서, 화면·SR 상태·Enter 선택 어디에도 노출하지 않는다(review: 오래된 후보 선택 방지).
+  const [committedTerm, setCommittedTerm] = useState<string | null>(null)
   const [retryKey, setRetryKey] = useState(0)
   // '다시 시도' 한 회차만 캐시를 건너뛴다 — 그 뒤의 일반 검색은 다시 TTL/SWR 캐시를 탄다(UX 규약 2).
   const forceNextRef = useRef(false)
@@ -108,6 +111,7 @@ export default function CrmCustomerPicker({ label, linkedId, onPick, onFreeText,
         })
         if (current === reqId.current) {
           setRows((data.rows ?? []).filter((row): row is PickerRow => row.source !== "customer"))
+          setCommittedTerm(term)
           setSearchFailed(false)
         }
       } catch {
@@ -115,6 +119,7 @@ export default function CrmCustomerPicker({ label, linkedId, onPick, onFreeText,
         // 실제로는 있는 고객을 자유 텍스트로 새로 만들게 만든다(중복·미연결 레코드).
         if (current === reqId.current) {
           setRows([])
+          setCommittedTerm(term)
           setSearchFailed(true)
         }
       } finally {
@@ -132,8 +137,12 @@ export default function CrmCustomerPicker({ label, linkedId, onPick, onFreeText,
     [onPick]
   )
 
+  const term = label.trim()
+  // 현재 입력에 대해 확정된 결과만 후보로 쓴다 — 디바운스 중에는 이전 검색어의 rows 를 비운 것으로 취급해
+  // 빠른 타이핑 뒤 Enter 가 화면 문자열과 무관한 고객을 고르지 못하게 한다. 최근 목록은 로컬 저장이라 항상 유효.
+  const resolvedRows = committedTerm === term ? rows : []
   // 최근 목록은 소스 무관하게 쌓이므로, 소스 제한 시 검색 결과와 함께 여기서 거른다.
-  const pool = label.trim() ? rows : dedupe([...recents, ...rows])
+  const pool = term ? resolvedRows : dedupe([...recents, ...resolvedRows])
   const suggestions = sources ? pool.filter((row) => row.source === sources) : pool
   // active 는 파생 클램프 — suggestions 가 줄어도 effect 없이 안전 범위 유지(팔레트와 동일).
   const activeIndex = suggestions.length === 0 ? 0 : Math.min(active, suggestions.length - 1)
@@ -200,7 +209,8 @@ export default function CrmCustomerPicker({ label, linkedId, onPick, onFreeText,
           aria-controls={listId}
           aria-autocomplete="list"
           aria-activedescendant={activeId}
-          aria-label="고객/리드 검색"
+          // aria-labelledby 가 있으면 accname 규칙상 aria-label 은 무시되므로 둘 중 하나만 낸다.
+          aria-label={labelledBy ? undefined : "고객/리드 검색"}
           aria-labelledby={labelledBy}
           autoComplete="off"
           value={label}

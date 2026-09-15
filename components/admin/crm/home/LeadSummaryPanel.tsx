@@ -4,6 +4,7 @@
 // 2026-09-15(home-05): 타일 큰 값과 힌트 줄이 같은 3분기(metricValue)를 쓴다 — 실패 상태에서
 // '48h 이상 0건' 같은 0 이 새어 나오지 않는다.
 
+import { useState } from "react"
 import Link from "next/link"
 import { AlertCircle, ExternalLink, PhoneCall, Target, UserPlus } from "lucide-react"
 import { StatTile } from "@/components/admin/viz"
@@ -25,6 +26,15 @@ export default function LeadSummaryPanel({
 }) {
   const state = resolveMetricState({ loading, hasData: Boolean(leadKpis) })
   const failed = state === "unavailable"
+
+  // 실패 배너 닫기(UX 규약 3: 재시도 + 닫기) — 재조회가 시작되면(loading=true) 다시 연다.
+  // 이전 렌더의 loading 을 state 로 기억해 렌더 중에 되돌리는 React 공식 패턴(effect 없이 1회 재렌더).
+  const [dismissed, setDismissed] = useState(false)
+  const [prevLoading, setPrevLoading] = useState(loading)
+  if (loading !== prevLoading) {
+    setPrevLoading(loading)
+    if (loading) setDismissed(false)
+  }
 
   const valueOrSkeleton = (value: number | null | undefined, tone?: string) =>
     metricValue(
@@ -64,13 +74,14 @@ export default function LeadSummaryPanel({
         </Link>
       </div>
 
-      {failed ? (
+      {failed && !dismissed ? (
         <CrmNoticeBanner
           tone="danger"
           className="mb-3"
           title="리드 현황을 확인하지 못했습니다"
           message={`${error ?? "응답이 없습니다."} · 아래 숫자는 0이 아니라 확인 불가 상태입니다.`}
           action={{ label: "다시 확인", onClick: onRetry, pending: loading }}
+          onDismiss={() => setDismissed(true)}
         />
       ) : null}
 

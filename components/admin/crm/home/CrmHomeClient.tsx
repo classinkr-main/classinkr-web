@@ -360,9 +360,10 @@ export default function CrmHomeClient({
   }, [])
 
   return (
-    // home-07: 모바일(<sm)에서 하위 패널(큐·주간·바로 가기)의 행 액션 버튼·링크를 44px 터치 타깃으로
-    // 키운다 — 패널 내부 클래스를 건드리지 않고 루트 한 곳에서 강제한다(Customer360Drawer 패턴).
-    <div className={MOBILE_TOUCH_TARGET_CLASS}>
+    // home-07 → review: MOBILE_TOUCH_TARGET_CLASS 를 루트에 걸면 같은 트리의 CrmCoverageStrip 한 줄 스트립·
+    // CrmCustomerPicker 의 입력 안 '지우기'(h-5 absolute) 버튼까지 44px 로 부풀어 레이아웃이 깨진다.
+    // 실제로 행 액션이 있는 컨테이너(빠른 실행 바·큐·최근/자주 접촉 칩 줄·주간 조망·바로 가기)에만 개별 스코프한다.
+    <div>
       {/* 소스별 독립 Suspense 경계 — 서버가 openPrefetchLane으로 연 세 레인을 각각 형제
           <Suspense>로 감싼다(화면 전체를 하나로 감싸면 overview의 DB 왕복 30회가 리드 KPI·
           Compass 밴드까지 함께 막는다 — 이번 작업의 핵심 요건). 각 다리는 화면에 아무것도
@@ -400,7 +401,7 @@ export default function CrmHomeClient({
           lg+에서 sticky(admin main이 스크롤 컨테이너라 body overflow-x 함정 무관).
           <lg는 body 스크롤 + overflow-x:hidden으로 sticky가 깨지는 저장소 함정이 있어 일반 플로우 폴백. */}
       <div className="-mx-4 mb-4 px-4 py-2 sm:-mx-6 sm:px-6 lg:sticky lg:top-0 lg:z-40 lg:-mx-8 lg:border-b lg:border-[#e8e8e4] lg:bg-[#FAFAF8]/92 lg:px-8 lg:backdrop-blur">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className={`flex flex-wrap items-center gap-2 ${MOBILE_TOUCH_TARGET_CLASS}`}>
           <button
             type="button"
             onClick={() => setLeadModalOpen(true)}
@@ -461,9 +462,11 @@ export default function CrmHomeClient({
       {/* 리드 요약 다음에 오늘의 행동 큐를 붙여 숫자 확인 → 처리 흐름을 한 축으로 만든다.
           CrmPriorityQueuePanel이 initialData(레인)를 React use()로 직접 소비하므로 이 자리가
           그 Suspense 경계다 — fallback은 패널 자신의 로딩 크롬을 재사용한 스켈레톤. */}
-      <Suspense fallback={<CrmPriorityQueuePanelSkeleton />}>
-        <CrmPriorityQueuePanel refreshKey={neoCrmRefreshKey} initialData={initialPriorityQueue ?? null} />
-      </Suspense>
+      <div className={MOBILE_TOUCH_TARGET_CLASS}>
+        <Suspense fallback={<CrmPriorityQueuePanelSkeleton />}>
+          <CrmPriorityQueuePanel refreshKey={neoCrmRefreshKey} initialData={initialPriorityQueue ?? null} />
+        </Suspense>
+      </div>
 
       {/* 결과 지표는 행동 큐 뒤의 참고 밴드로 둔다. */}
       <CrmCockpitHero
@@ -494,7 +497,7 @@ export default function CrmHomeClient({
           }}
         />
         {recentCustomers.length > 0 ? (
-          <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-[#f0f0ec] pt-2.5">
+          <div className={`mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-[#f0f0ec] pt-2.5 ${MOBILE_TOUCH_TARGET_CLASS}`}>
             <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#1a1a1a]/30">최근 본 고객</span>
             {recentCustomers.slice(0, 6).map((rc) => (
               <button
@@ -511,7 +514,7 @@ export default function CrmHomeClient({
         ) : null}
 
         {(crmOverview?.business.frequentCustomers.length ?? 0) > 0 ? (
-          <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-[#f0f0ec] pt-2.5">
+          <div className={`mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-[#f0f0ec] pt-2.5 ${MOBILE_TOUCH_TARGET_CLASS}`}>
             <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#1a1a1a]/30">자주 접촉 · 14일</span>
             {crmOverview?.business.frequentCustomers.map((customer) => (
               <Link
@@ -531,7 +534,7 @@ export default function CrmHomeClient({
       </section>
 
       {/* 주간 조망 밴드 — 우측 aside에서 본문으로 이동(H4: 우측 열은 액션 레일 전용) · 기능 보존 */}
-      <div className="mb-4 grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className={`mb-4 grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3 ${MOBILE_TOUCH_TARGET_CLASS}`}>
         {/* 이번 주 할 일 — 주간 일정·버킷 조망 */}
         <CrmWeekAheadPanel compact refreshKey={neoCrmRefreshKey} />
 
@@ -622,7 +625,7 @@ export default function CrmHomeClient({
 
       {/* 바로 가기 — 상단 sticky 바의 보조 링크와 하단 '심화 보기'로 갈려 있던 딥링크를 한 줄로 모았다.
           (주요 화면 이동은 사이드바 CRM 확장이 담당 — 여기는 보조 경로) */}
-      <div className="mb-4 flex flex-wrap items-center gap-2 text-[12px]">
+      <div className={`mb-4 flex flex-wrap items-center gap-2 text-[12px] ${MOBILE_TOUCH_TARGET_CLASS}`}>
         <span className={SECONDARY_TEXT_CLASS}>바로 가기</span>
         {[
           { href: "/admin/crm/customers/leads", label: "리드" },

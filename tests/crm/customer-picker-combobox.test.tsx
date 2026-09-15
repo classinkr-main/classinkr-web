@@ -18,7 +18,8 @@ describe("CrmCustomerPicker 콤보박스", () => {
     expect(html).toContain('role="combobox"')
     expect(html).toContain('aria-expanded="false"')
     expect(html).toContain('aria-autocomplete="list"')
-    expect(html).toContain('aria-label="고객/리드 검색"')
+    // labelledBy 가 있으면 접근성 트리 계산 규칙상 aria-label 은 무시되므로 내지 않는다(리뷰 발견 c360/home-shell 6).
+    expect(html).not.toContain('aria-label="고객/리드 검색"')
     expect(html).toContain('aria-labelledby="crm-home-customer-search-heading"')
     const controls = html.match(/aria-controls="([^"]+)"/)?.[1]
     expect(controls).toBeTruthy()
