@@ -2,6 +2,7 @@
 
 - 작성: 2026-09-14
 - 상태: 코드 커밋 완료, **마이그레이션은 아직 어느 DB 에도 적용하지 않음**
+- 병합: 2026-09-15 main 에 병합·푸시(운영 배포 전). 병합 트리 게이트(typecheck·eslint·vitest·build)와 Vercel Preview 통과. `meta-single-receiver` 는 진행 중이라 포함하지 않았다.
 - 근거: Compass 감사 R6(리드·CRM 연동, 설계 B 권고) · R2/R3/R5 · D-borrow-crm(전화 키 진리표)
 - 짝 문서: [supabase-shared-db-consolidation-analysis-2026-09-02.md](./supabase-shared-db-consolidation-analysis-2026-09-02.md)(통폐합 판정),
   [neocrm-writeback-guide-2026-09-07.md](./neocrm-writeback-guide-2026-09-07.md)(NEO 되밀기),
@@ -74,7 +75,7 @@ select table_name, grantee, privilege_type from information_schema.role_table_gr
   `createCrmWriteRequest` 의 코드 호출부는 연락 기록 되밀기(`lib/crm/activity-record-writeback.ts`, `activityrecord`)뿐이고,
   딜 화면(`app/admin/crm/deals/page.tsx`)은 승인·취소·재시도·실행·메타데이터 점검만 한다. 남은 입구는 본문으로 객체를 받는
   범용 `POST /api/admin/crm/write-requests` 라서 정책(`validateWritePayload`)에서 닫았다 — 미리보기·큐 적재·실행이 같은 사유로 거절된다.
-- **이미 쌓인 요청**: 닫기 전에 만들어진 lead create 요청이 있다면, 실행 시 NEO 호출 없이 `failed`(같은 사유)로 끝난다. 배포 전에 규모를 본다.
+- **이미 쌓인 요청**: 닫기 전에 만들어진 lead create 요청이 있다면, 실행 시 NEO 호출 없이 `failed`(같은 사유)로 끝난다. 배포 전에 규모를 본다. 2026-09-15 운영(서울) 확인: `crm_write_requests` 전체 0행 — 닫기로 실패할 대기 요청은 없다.
   `select status, count(*) from public.crm_write_requests where object_api_key = 'lead' and operation = 'create' group by 1`
 - 다시 열어야 하면 `lead.operations` 에 `create` 를 되돌리고 `closedOperationReasons` 를 지운다. 그 전에 Compass 푸시와 같은 NEO 중복 사전 검사를 이쪽에도 둔다.
 
