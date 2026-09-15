@@ -11,8 +11,14 @@ import "server-only"
 //     않는다(field_data 에 값이 하나도 없는 응답도 실패로 본다).
 //  ③ submitLeadCapture(buildLeadCapturePayload(증인, 상세)) — 어드민 웹훅과 같은 빌더·같은 부수효과.
 //     400 이 이메일 형식 때문이면(이메일만 빼면 조립되면) 이메일을 비워 한 번 더 부른다.
-//  ④ meta_lead_fallback_finish(id, inserted·deduped·failed, leadId, 오류).
-//     - 저장 성공(stored) → inserted · 60초 중복으로 저장 안 함(stored=false) → deduped · 그 밖 → failed(지수 대기).
+//  ④ meta_lead_fallback_finish(id, inserted·failed, leadId, 오류).
+//     - 저장 성공(stored) → inserted · 그 밖 → failed(지수 대기 10·20·40…분).
+//     - **60초 중복으로 저장 안 함(ok·stored=false)도 failed(capture_deduped)다 — deduped 로 닫지 않는다.**
+//       선점은 leadgen 마다 하나이고 같은 leadgen 의 재선점은 15분 이상 떨어지므로, 폴백 안에서 60초 키
+//       (source·ad_name·이메일/전화)가 부딪히는 상대는 늘 **다른 leadgen**(같은 사람의 다른 제출)이다.
+//       deduped → 원장 skipped 로 닫으면 그 제출은 Compass 에도 public.leads 에도 없는데 at_risk·admin_only_saved·
+//       V5 MISSING 어디에도 안 잡힌다. failed 로 두면 10분 뒤 재시도가 60초 창 밖에서 저장한다(웹훅과 같은 leadgen 당 1행).
+//       SQL finish 는 'deduped' 를 여전히 받지만(검증된 SQL 원문 유지) 폴백은 보내지 않는다.
 //     - finish 가 not_pending 인데 이번에 행을 만들었으면 원장이 다른 행을 가리키는지 보고, 그렇다면 같은 leadgen 이
 //       public.leads 에 2행일 수 있으니 경보한다(건강 H4 와 같은 뜻).
 //
@@ -63,7 +69,8 @@ const LEADGEN_ID_PATTERN = /^[0-9]+$/
 
 // ─── 공개 타입 ───────────────────────────────────────────────────────────────
 
-export type MetaLeadFallbackOutcome = "inserted" | "deduped" | "failed"
+/** 폴백이 finish 에 보내는 결과. SQL 은 'deduped' 도 받지만 폴백은 쓰지 않는다(머리 주석 ④) */
+export type MetaLeadFallbackOutcome = "inserted" | "failed"
 
 /** failed 의 원인 분류(finish p_error 의 앞머리) */
 export type MetaLeadFallbackFailureReason =
@@ -71,6 +78,8 @@ export type MetaLeadFallbackFailureReason =
   | "detail_empty"
   | "capture_rejected"
   | "capture_not_stored"
+  /** 60초 중복 키 충돌(ok·stored=false) — 폴백 안에서는 늘 다른 leadgen 과의 충돌이라 재시도한다 */
+  | "capture_deduped"
   | "capture_error"
 
 export interface RunMetaLeadFallbackOptions {
@@ -88,7 +97,6 @@ export interface MetaLeadFallbackRunResult {
   dryRun: boolean
   claimed: number
   inserted: number
-  deduped: number
   failed: number
   /** 이메일 형식 오류로 이메일을 비우고 저장한 수 */
   emailDropped: number
@@ -193,14 +201,20 @@ export function isEmailOnlyRejection(payload: Record<string, unknown>): boolean 
   }
 }
 
-/** submitLeadCapture 결과 → finish 결과 */
+/**
+ * submitLeadCapture 결과 → finish 결과.
+ * ok·stored=false(60초 중복)는 failed(capture_deduped) — 폴백 안에서는 다른 leadgen 과의 충돌이므로 닫지 않고
+ * 지수 대기 뒤 다시 저장한다(머리 주석 ④).
+ */
 export function classifyMetaLeadFallbackCapture(
   result: LeadSubmissionResult
-): { outcome: "inserted"; leadId: string } | { outcome: "deduped" } | { outcome: "failed"; reason: MetaLeadFallbackFailureReason; error: string } {
+): { outcome: "inserted"; leadId: string } | { outcome: "failed"; reason: MetaLeadFallbackFailureReason; error: string } {
   const body = result.body
   if (result.status < 400 && body.ok) {
     if (body.stored && typeof body.leadId === "string" && body.leadId) return { outcome: "inserted", leadId: body.leadId }
-    if (!body.stored) return { outcome: "deduped" }
+    if (!body.stored) {
+      return { outcome: "failed", reason: "capture_deduped", error: "60초 중복 키 충돌(다른 leadgen) — 창이 지난 뒤 재시도" }
+    }
     return { outcome: "failed", reason: "capture_error", error: "저장됐다고 했지만 leadId 없음" }
   }
   const message = body.ok ? "" : body.error
@@ -271,7 +285,6 @@ function emptyResult(dryRun: boolean): MetaLeadFallbackRunResult {
     dryRun,
     claimed: 0,
     inserted: 0,
-    deduped: 0,
     failed: 0,
     emailDropped: 0,
     deferred: 0,
@@ -289,7 +302,6 @@ function emptyResult(dryRun: boolean): MetaLeadFallbackRunResult {
 
 type ItemResult =
   | { outcome: "inserted"; leadId: string; emailDropped: boolean }
-  | { outcome: "deduped"; emailDropped: boolean }
   | { outcome: "failed"; reason: MetaLeadFallbackFailureReason; error: string }
 
 async function captureClaim(claim: MetaLeadFallbackClaim, detailTimeoutMs: number): Promise<ItemResult> {
@@ -318,7 +330,6 @@ async function captureClaim(claim: MetaLeadFallbackClaim, detailTimeoutMs: numbe
 
   const classified = classifyMetaLeadFallbackCapture(result)
   if (classified.outcome === "inserted") return { ...classified, emailDropped }
-  if (classified.outcome === "deduped") return { ...classified, emailDropped }
   return classified
 }
 
@@ -408,13 +419,10 @@ export async function runMetaLeadFallback(options: RunMetaLeadFallbackOptions = 
     if (item.outcome === "failed") {
       report.failed += 1
       report.failureReasons[item.reason] = (report.failureReasons[item.reason] ?? 0) + 1
-    } else if (item.outcome === "inserted") {
+    } else {
       report.inserted += 1
       if (item.emailDropped) report.emailDropped += 1
       if (report.insertedRows.length < FALLBACK_ID_CAP) report.insertedRows.push({ leadgenId: claim.leadgenId, leadId: item.leadId })
-    } else {
-      report.deduped += 1
-      if (item.emailDropped) report.emailDropped += 1
     }
 
     const finished = await finishClaim(
@@ -493,7 +501,6 @@ export function metaLeadFallbackCounts(report: MetaLeadFallbackRunResult): Recor
   const counts: Record<string, number> = {
     claimed: report.claimed,
     inserted: report.inserted,
-    deduped: report.deduped,
     failed: report.failed,
     emailDropped: report.emailDropped,
     deferred: report.deferred,

@@ -98,7 +98,7 @@ function setup(input: SetupInput = {}) {
         input.finish
           ? input.finish(args ?? {})
           : {
-              data: args?.p_result === "inserted" ? "inserted" : args?.p_result === "deduped" ? "skipped" : "fallback_failed",
+              data: args?.p_result === "inserted" ? "inserted" : "fallback_failed",
               error: null,
             },
       ...(input.rpc ?? {}),
@@ -174,9 +174,13 @@ describe("순수 판정", () => {
     expect(isEmailOnlyRejection({ source: "unknown_source", email: "not-an-email" })).toBe(false)
   })
 
-  it("submitLeadCapture 결과 → inserted·deduped·failed", () => {
+  it("submitLeadCapture 결과 → inserted·failed — 60초 중복(stored=false)도 failed(capture_deduped), deduped 로 닫지 않는다", () => {
     expect(classifyMetaLeadFallbackCapture(stored("lead-1") as never)).toEqual({ outcome: "inserted", leadId: "lead-1" })
-    expect(classifyMetaLeadFallbackCapture({ status: 200, body: { ok: true, stored: false, warnings: [] } })).toEqual({ outcome: "deduped" })
+    expect(classifyMetaLeadFallbackCapture({ status: 200, body: { ok: true, stored: false, warnings: [] } })).toEqual({
+      outcome: "failed",
+      reason: "capture_deduped",
+      error: "60초 중복 키 충돌(다른 leadgen) — 창이 지난 뒤 재시도",
+    })
     expect(classifyMetaLeadFallbackCapture({ status: 502, body: { ok: false, error: "저장 실패" } })).toMatchObject({
       outcome: "failed",
       reason: "capture_not_stored",
@@ -207,7 +211,7 @@ describe("runMetaLeadFallback", () => {
     expect(rpcCalls(db.calls, META_LEAD_FALLBACK_FINISH_RPC)).toHaveLength(0)
   })
 
-  it("결과 3종 — 저장 inserted(leadId), 60초 중복 deduped, 저장 실패 failed", async () => {
+  it("결과 — 저장 inserted(leadId), 60초 중복은 failed(capture_deduped, 재시도), 저장 실패 failed", async () => {
     const db = setup({ claims: [claimRow("2001"), claimRow("2002"), claimRow("2003")] })
     hoisted.submitLeadCapture.mockImplementation(async (payload: { message?: string }) => {
       if (payload.message?.includes("leadgen_id=2001")) return stored("00000000-0000-4000-8000-000000002001")
@@ -221,9 +225,8 @@ describe("runMetaLeadFallback", () => {
       status: "ok",
       claimed: 3,
       inserted: 1,
-      deduped: 1,
-      failed: 1,
-      failureReasons: { capture_not_stored: 1 },
+      failed: 2,
+      failureReasons: { capture_deduped: 1, capture_not_stored: 1 },
       insertedRows: [{ leadgenId: "2001", leadId: "00000000-0000-4000-8000-000000002001" }],
       notPending: 0,
       alerted: false,
@@ -231,7 +234,12 @@ describe("runMetaLeadFallback", () => {
     const finishes = finishArgs(db).sort((a, b) => String(a.p_leadgen_id).localeCompare(String(b.p_leadgen_id)))
     expect(finishes).toEqual([
       { p_leadgen_id: "2001", p_result: "inserted", p_public_lead_id: "00000000-0000-4000-8000-000000002001", p_error: null },
-      { p_leadgen_id: "2002", p_result: "deduped", p_public_lead_id: null, p_error: null },
+      {
+        p_leadgen_id: "2002",
+        p_result: "failed",
+        p_public_lead_id: null,
+        p_error: "capture_deduped: 60초 중복 키 충돌(다른 leadgen) — 창이 지난 뒤 재시도",
+      },
       {
         p_leadgen_id: "2003",
         p_result: "failed",
@@ -239,6 +247,7 @@ describe("runMetaLeadFallback", () => {
         p_error: "capture_not_stored: submitLeadCapture 502: 상담 요청을 어드민에 저장하지 못했습니다.",
       },
     ])
+    expect(finishArgs(db).some((args) => args.p_result === "deduped")).toBe(false)
     expect(hoisted.emitNotificationEvent).not.toHaveBeenCalled()
   })
 
@@ -385,7 +394,7 @@ describe("runMetaLeadFallback", () => {
     for (const value of PII_VALUES) expect(serialized).not.toContain(value)
   })
 
-  it("not_pending 이어도 행을 만들지 않았으면(failed·deduped) 경보하지 않는다", async () => {
+  it("not_pending 이어도 행을 만들지 않았으면(failed·60초 중복) 경보하지 않는다", async () => {
     setup({ claims: [claimRow("2001"), claimRow("2002")], finish: () => ({ data: "not_pending", error: null }) })
     hoisted.submitLeadCapture.mockImplementation(async (payload: { message?: string }) =>
       payload.message?.includes("leadgen_id=2001")
@@ -519,7 +528,6 @@ describe("metaLeadFallbackStep · 모드와 무관하게 돈다", () => {
       counts: {
         claimed: 1,
         inserted: 0,
-        deduped: 0,
         failed: 1,
         emailDropped: 0,
         deferred: 0,
