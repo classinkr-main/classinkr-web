@@ -95,7 +95,7 @@ describe("summarizeCompassEntry", () => {
   it("없는 신호는 만들어 내지 않는다", () => {
     const bare = buildCompassOverlayMap([row({ id: 5, stage: "new" })])["01012345678"]
     expect(summarizeCompassEntry(bare).details).toEqual([])
-    expect(summarizeCompassEntry(bare).primary).toBe("Compass 신규유입")
+    expect(summarizeCompassEntry(bare).primary).toBe("Compass 유입") // K11 — Compass lib/stages.ts 라벨(2026-09-14)
   })
 
   it("단계가 bd면 BD 담당을 중복해서 말하지 않는다", () => {
