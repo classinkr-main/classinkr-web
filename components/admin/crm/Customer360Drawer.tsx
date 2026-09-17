@@ -56,6 +56,7 @@ import {
   monthDayParts,
   sumAmounts,
 } from "./drawer/shared"
+import { C360_OVERRIDE_TTL_MS, applyC360Overrides, type C360Override } from "./drawer/c360-local-patch"
 import { useDialogFocus } from "@/components/admin/use-dialog-focus"
 import { deriveCustomerFlags } from "@/lib/crm/customer-flags"
 import { LEAD_BADGE_TONE_CLASSES } from "@/lib/crm/lead-badges"
@@ -63,7 +64,7 @@ import { computeCustomerHealth, HEALTH_BAND_STYLE } from "@/lib/crm/customer-hea
 import { buildCustomerNextActionRecommendation } from "@/lib/crm/customer-next-action"
 import type { CsMotion } from "@/lib/crm/cs-motions"
 import type { Customer360 } from "@/lib/repositories/crm-customer-360"
-import type { CrmDealStage } from "@/lib/repositories/crm-deals"
+import type { CrmDealRecord, CrmDealStage } from "@/lib/repositories/crm-deals"
 import type { CrmTaskType } from "@/lib/repositories/crm-tasks"
 
 interface Props {
@@ -75,7 +76,8 @@ interface Props {
 }
 
 export default function Customer360Drawer({ customerKey, name, onClose, onDirtyChange }: Props) {
-  const [data, setData] = useState<Customer360 | null>(null)
+  const [payload, setPayload] = useState<Customer360 | null>(null)
+  const [dealOverrides, setDealOverrides] = useState<C360Override[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [actingId, setActingId] = useState<string | null>(null)
@@ -117,6 +119,10 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
     setComposerDirty(dirty)
     onDirtyChangeRef.current?.(dirty)
   }, [])
+
+  // 화면이 읽는 값은 서버 페이로드에 방금 쓴 딜 보정을 얹은 것이다. 보정을 payload 에 직접
+  // 녹이지 않고 여기서 겹치므로, 재조회가 아직 옛 행을 주더라도 한 번 쓴 값이 되돌아 보이지 않는다.
+  const data = useMemo(() => applyC360Overrides(payload, dealOverrides), [payload, dealOverrides])
 
   const url = customerKey ? `/api/admin/crm/customers/${encodeURIComponent(customerKey)}/360` : null
 
@@ -177,7 +183,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
           staleWhileRevalidateMs: 60_000,
           force: options?.force,
         })
-        setData(next)
+        setPayload(next)
       } catch (err) {
         setError(err instanceof Error ? err.message : "고객 정보를 불러오지 못했습니다.")
       } finally {
@@ -189,7 +195,9 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
 
   useEffect(() => {
     // 고객이 바뀌면 이전 고객의 데이터/폼 입력이 새 드로어에 잔존하지 않게 초기화한다.
-    setData(null)
+    setPayload(null)
+    // 이전 고객의 딜 보정도 함께 버린다 — 딜 id 는 고객별이라 남아도 맞을 일이 없다.
+    setDealOverrides([])
     setError(null)
     setTaskTitle("")
     setTaskType("call")
@@ -446,23 +454,57 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
     }
   }, [dealTitle, dealStage, dealAmount, customerKey, targetType, entityId, displayName, refetch])
 
+  // 딜 PATCH 공통 경로 — 성공한 mutation 을 짧은 로컬 보정으로 남긴 뒤 360 을 다시 읽는다.
+  // optimistic 은 이 화면이 요청한 값, pickConfirmed 는 서버가 파생해 돌려준 값 중 이 mutation
+  // 소관인 필드만 고르는 콜백이다. 응답 레코드 전체를 보정으로 저장하면, 그사이 다른 사람이 바꾼
+  // 담당자·제목까지 보정 창 동안 옛 값으로 되돌려 놓는다.
+  const patchDeal = useCallback(
+    async (
+      dealId: string,
+      body: Record<string, unknown>,
+      optimistic: Partial<CrmDealRecord>,
+      pickConfirmed?: (deal: CrmDealRecord) => Partial<CrmDealRecord>
+    ) => {
+      const response = await adminFetchJson<{ deal: CrmDealRecord }>(
+        `/api/admin/crm/deals-lite/${encodeURIComponent(dealId)}`,
+        { method: "PATCH", body: JSON.stringify(body) }
+      )
+      const patch = { ...optimistic, ...(pickConfirmed?.(response.deal) ?? {}) }
+      const at = Date.now()
+      setDealOverrides((prev) => {
+        // 창을 지난 보정은 여기서 버린다 — 함께 겹치면 만료된 값이 새 기록 시각을 얻어 되살아난다.
+        const live = prev.filter((item) => at - item.at <= C360_OVERRIDE_TTL_MS)
+        // 같은 딜의 살아 있는 보정은 버리지 않고 겹친다 — 금액을 고친 뒤 단계를 바꾸면 둘 다 살아야 한다.
+        const previous = live.find((item) => item.dealId === dealId)
+        return [
+          ...live.filter((item) => item.dealId !== dealId),
+          { kind: "deal_patched", dealId, patch: { ...previous?.patch, ...patch }, at },
+        ]
+      })
+      await refetch()
+    },
+    [refetch]
+  )
+
   const handleDealStage = useCallback(
     async (dealId: string, stage: CrmDealStage) => {
       setActingId(`deal:${dealId}`)
       setError(null)
       try {
-        await adminFetchJson(`/api/admin/crm/deals-lite/${encodeURIComponent(dealId)}`, {
-          method: "PATCH",
-          body: JSON.stringify({ action: "stage", stage }),
-        })
-        await refetch()
+        // status·closedAt·closedBy 는 setCrmDealStage 가 단계에서 서버에서 파생한다 — 그 셋만
+        // 응답에서 확정값으로 받아 쓴다(나머지 필드는 이 mutation 소관이 아니라 손대지 않는다).
+        await patchDeal(dealId, { action: "stage", stage }, { stage }, (deal) => ({
+          status: deal.status,
+          closedAt: deal.closedAt,
+          closedBy: deal.closedBy,
+        }))
       } catch (err) {
         setError(err instanceof Error ? err.message : "딜 단계 변경에 실패했습니다.")
       } finally {
         setActingId(null)
       }
     },
-    [refetch]
+    [patchDeal]
   )
 
   // 감사 2026-09-07 §2 — 생성된 딜의 예상금액을 어떤 화면에서도 못 고치던 결함 수리.
@@ -473,18 +515,15 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
       setActingId(`deal:${dealId}`)
       setError(null)
       try {
-        await adminFetchJson(`/api/admin/crm/deals-lite/${encodeURIComponent(dealId)}`, {
-          method: "PATCH",
-          body: JSON.stringify({ action: "update", expectedAmount: amount }),
-        })
-        await refetch()
+        // 금액은 서버가 파생하는 값이 아니라 보낸 값 그대로다 — 확정값을 따로 고를 것이 없다.
+        await patchDeal(dealId, { action: "update", expectedAmount: amount }, { expectedAmount: amount })
       } catch (err) {
         setError(err instanceof Error ? err.message : "딜 예상금액 변경에 실패했습니다.")
       } finally {
         setActingId(null)
       }
     },
-    [refetch]
+    [patchDeal]
   )
 
   const money = data?.money
@@ -648,7 +687,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
         cacheKey: `${url}:all`,
         ttlMs: 15_000,
       })
-      setData(next)
+      setPayload(next)
       setEventsExpanded(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : "전체 활동을 불러오지 못했습니다.")
