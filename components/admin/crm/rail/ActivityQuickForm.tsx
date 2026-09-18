@@ -6,13 +6,25 @@
 // variant: full(기본 카드) | compact(레일 장착) | composer(한 줄 컴포저 — 기록 탭 상단·360 드로어 pin).
 // 세 변형 모두 같은 상태·검증·필드 조각을 공유한다(필드 스택 SSOT).
 
-import { useEffect, useId, useRef, useState } from "react"
-import { CheckCircle2, ChevronDown, Loader2, Paperclip } from "lucide-react"
+import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react"
+import { Building2, CheckCircle2, ChevronDown, Loader2, Paperclip, PhoneCall } from "lucide-react"
 
 import { adminFetch } from "@/lib/admin-client"
-import { STATUS_TONE_CLASS } from "@/lib/crm/status-tone"
+import {
+  ACTIVITY_TEMPLATES,
+  activityTemplatePrefill,
+  applyActivityTemplate,
+  type ActivityTemplate,
+} from "@/lib/crm/activity-templates"
+import { entityIdFromCustomerKey, getRecentCustomers, type RecentCustomer } from "@/lib/crm/recent-customers"
+import { STATUS_TONE_CLASS, STATUS_TONE_TEXT_STRONG_CLASS } from "@/lib/crm/status-tone"
 import { Toast } from "@/components/admin/crm/leads/shared"
-import CrmCustomerPicker from "@/components/admin/crm/CrmCustomerPicker"
+import CrmCustomerPicker, { type CustomerPickValue } from "@/components/admin/crm/CrmCustomerPicker"
+import {
+  INTERACTIVE_TEXT_CLASS,
+  MOBILE_TOUCH_TARGET_CLASS,
+  SECONDARY_TEXT_CLASS,
+} from "@/components/admin/crm/home/shared"
 import { useCrmOwners } from "@/components/admin/crm/useCrmOwners"
 import {
   EVENTS_URL,
@@ -77,6 +89,67 @@ export function isActivityFormDirty(fields: {
   )
 }
 
+/** 미연결 경고 블록이 보여 주는 최근 고객 수 상한(기획 §11.2 A3). */
+export const UNLINKED_RECENT_LIMIT = 5
+
+export type ActivitySubmitGate = "save" | "warn_unlinked"
+
+/**
+ * 저장 게이트(A3) — 고객이 연결되지 않은 채 저장을 누르면 조용히 미연결로 저장하지 않고 경고를 띄운다.
+ * lockTarget(드로어처럼 부모가 대상을 고정한 컨텍스트)이나 "미연결로 저장"을 명시적으로 누른 뒤(allowUnlinked)에만
+ * 그대로 저장한다. 순수 함수(테스트 고정용).
+ */
+export function resolveActivitySubmitGate(input: {
+  targetId: string
+  lockTarget: boolean
+  allowUnlinked: boolean
+}): ActivitySubmitGate {
+  if (input.targetId.trim()) return "save"
+  if (input.lockTarget || input.allowUnlinked) return "save"
+  return "warn_unlinked"
+}
+
+/** 최근 고객 항목 → 피커와 같은 선택값(targetType/targetId/targetLabel). */
+export function recentCustomerToPick(recent: RecentCustomer): CustomerPickValue {
+  return { targetType: recent.source, targetId: entityIdFromCustomerKey(recent.key), targetLabel: recent.name }
+}
+
+/** 경고 블록에 올릴 최근 고객 — 상한을 넘기지 않고, 이름이 없는 항목은 거른다. 순수 함수. */
+export function recentCustomersForUnlinkedWarning(recents: RecentCustomer[]): RecentCustomer[] {
+  return recents.filter((recent) => recent.key && recent.name.trim()).slice(0, UNLINKED_RECENT_LIMIT)
+}
+
+/**
+ * 인라인 확인 블록(템플릿 덮어쓰기·미연결 경고)의 공통 닫힘 규칙 — 바깥 클릭(mousedown)·Esc 에 닫힌다.
+ * 열리는 클릭의 mousedown 은 리스너 등록 전에 이미 지나갔으므로 열자마자 닫히지 않는다.
+ */
+function useDismissOnOutside(ref: RefObject<HTMLElement | null>, active: boolean, onDismiss: () => void) {
+  const onDismissRef = useRef(onDismiss)
+  useEffect(() => {
+    onDismissRef.current = onDismiss
+  })
+  useEffect(() => {
+    if (!active) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return
+      event.stopPropagation()
+      onDismissRef.current()
+    }
+    const onMouseDown = (event: MouseEvent) => {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (ref.current && ref.current.contains(target)) return
+      onDismissRef.current()
+    }
+    document.addEventListener("keydown", onKeyDown, true)
+    document.addEventListener("mousedown", onMouseDown)
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, true)
+      document.removeEventListener("mousedown", onMouseDown)
+    }
+  }, [active, ref])
+}
+
 export default function ActivityQuickForm({
   compact = false,
   variant,
@@ -118,8 +191,17 @@ export default function ActivityQuickForm({
   const [recordingName, setRecordingName] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
+  // A2 — 템플릿 칩. pendingTemplate = 본문이 이미 있어 덮어쓰기 확인을 기다리는 템플릿,
+  // appliedTemplateId = 마지막으로 적용한 템플릿(칩 aria-pressed·다음 액션 제안 캡션용).
+  const [pendingTemplate, setPendingTemplate] = useState<ActivityTemplate | null>(null)
+  const [appliedTemplateId, setAppliedTemplateId] = useState<string | null>(null)
+  // A3 — 고객 미연결 저장 경고. null 이면 닫힘, 열리면 그 시점의 최근 고객 목록을 들고 있다.
+  const [unlinkedWarning, setUnlinkedWarning] = useState<{ recents: RecentCustomer[] } | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const templateConfirmRef = useRef<HTMLDivElement | null>(null)
+  const templateConfirmButtonRef = useRef<HTMLButtonElement | null>(null)
+  const unlinkedWarningRef = useRef<HTMLDivElement | null>(null)
   const { owners: crmOwners, health: ownerHealth } = useCrmOwners()
   const ownerListId = useId()
   // 감사 2026-09-07 §4 — saving은 리렌더가 커밋된 뒤에야 버튼을 비활성화한다. 저장 버튼을
@@ -200,13 +282,54 @@ export default function ActivityQuickForm({
     setTags("")
     setShowAdvanced(false)
     setRecordingName(null)
+    setPendingTemplate(null)
+    setAppliedTemplateId(null)
+    setUnlinkedWarning(null)
     if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
-  const handleSubmit = async () => {
+  // 인라인 확인 블록 닫힘 규칙(바깥 클릭·Esc) — 둘 다 저장하지 않고 닫기만 한다.
+  useDismissOnOutside(templateConfirmRef, pendingTemplate != null, () => setPendingTemplate(null))
+  useDismissOnOutside(unlinkedWarningRef, unlinkedWarning != null, () => setUnlinkedWarning(null))
+
+  // 열리면 포커스를 블록으로 옮긴다 — 키보드 사용자가 Esc·확인 버튼에 바로 닿고, role=alert 낭독과도 맞물린다.
+  useEffect(() => {
+    if (pendingTemplate) templateConfirmButtonRef.current?.focus()
+  }, [pendingTemplate])
+  useEffect(() => {
+    if (unlinkedWarning) unlinkedWarningRef.current?.focus()
+  }, [unlinkedWarning])
+
+  const applyTemplate = (template: ActivityTemplate) => {
+    const prefill = activityTemplatePrefill(template)
+    setMode(prefill.mode)
+    setBody(prefill.body)
+    setSentiment(prefill.sentiment)
+    setShowAdvanced(false)
+    setAppliedTemplateId(template.id)
+    setPendingTemplate(null)
+  }
+
+  const handleTemplateClick = (template: ActivityTemplate) => {
+    const result = applyActivityTemplate(template, { body })
+    if (result.needsConfirm) {
+      // 본문이 있으면 덮어쓰지 않는다 — 인라인 확인(확인/취소)을 거친 뒤에만 applyTemplate.
+      setPendingTemplate(template)
+      return
+    }
+    applyTemplate(template)
+  }
+
+  const handleSubmit = async (options?: { targetOverride?: CustomerPickValue; allowUnlinked?: boolean }) => {
     // 동기 ref 잠금 — state(saving) 갱신이 반영되기 전의 두 번째 클릭을 여기서 막는다.
     if (submitInFlightRef.current) return
     submitInFlightRef.current = true
+
+    // 최근 고객 칩으로 방금 연결한 대상은 state 반영을 기다리지 않고 override 로 바로 쓴다.
+    const override = options?.targetOverride ?? null
+    const effectiveTargetType: TargetType = override?.targetType ?? targetType
+    const effectiveTargetId = override?.targetId ?? targetId
+    const effectiveTargetLabel = override?.targetLabel ?? targetLabel
 
     const file = fileInputRef.current?.files?.[0] ?? null
     if (!title.trim() && !summary.trim() && !body.trim() && !nextActionTitle.trim() && !file) {
@@ -215,11 +338,24 @@ export default function ActivityQuickForm({
       return
     }
 
+    // A3 — 고객 미연결이면 저장하지 않고 경고 블록을 연다(최근 고객 원클릭·"미연결로 저장" 명시 확인).
+    const gate = resolveActivitySubmitGate({
+      targetId: effectiveTargetId,
+      lockTarget,
+      allowUnlinked: options?.allowUnlinked === true,
+    })
+    if (gate === "warn_unlinked") {
+      setUnlinkedWarning({ recents: recentCustomersForUnlinkedWarning(getRecentCustomers()) })
+      submitInFlightRef.current = false
+      return
+    }
+    setUnlinkedWarning(null)
+
     const formData = new FormData()
     formData.append("sourceType", mode)
-    formData.append("targetType", targetType)
-    appendFormValue(formData, "targetLabel", targetLabel)
-    appendFormValue(formData, "targetId", targetId)
+    formData.append("targetType", effectiveTargetType)
+    appendFormValue(formData, "targetLabel", effectiveTargetLabel)
+    appendFormValue(formData, "targetId", effectiveTargetId)
     appendFormValue(formData, "title", title)
     appendFormValue(formData, "occurredAt", localInputToIso(occurredAt))
     appendFormValue(formData, "ownerName", ownerName)
@@ -329,6 +465,148 @@ export default function ActivityQuickForm({
       }}
     />
   )
+
+  // ⌘/Ctrl+Enter 저장 — 본문 textarea 에서. 조합 입력(한글 IME) 중의 Enter 는 무시한다. 저장 게이트(A3)는 같은 handleSubmit 을 탄다.
+  const onBodyKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey) || event.nativeEvent.isComposing) return
+    event.preventDefault()
+    void handleSubmit()
+  }
+
+  const appliedTemplate = appliedTemplateId
+    ? (ACTIVITY_TEMPLATES.find((template) => template.id === appliedTemplateId) ?? null)
+    : null
+  const nextActionHint =
+    appliedTemplate?.nextActionHint && !nextActionTitle.trim() ? appliedTemplate.nextActionHint : null
+
+  // A2 — 템플릿 칩 행(텍스트 버튼·44px 터치 타깃·포커스 링) + 덮어쓰기 확인 + 다음 액션 제안 캡션.
+  const templateChipRow = (
+    <div data-testid="activity-template-row">
+      <div className={`flex flex-wrap items-center gap-x-0.5 gap-y-0.5 ${MOBILE_TOUCH_TARGET_CLASS}`} role="group" aria-label="기록 템플릿">
+        <span className={`mr-1 text-[11px] font-semibold ${SECONDARY_TEXT_CLASS}`}>템플릿</span>
+        {ACTIVITY_TEMPLATES.map((template) => {
+          const active = appliedTemplateId === template.id
+          return (
+            <button
+              key={template.id}
+              type="button"
+              aria-pressed={active}
+              onClick={() => handleTemplateClick(template)}
+              className={`inline-flex h-8 items-center rounded-md px-2 text-[12px] font-semibold transition-colors hover:text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-1 ${
+                active ? "text-[#084734] underline underline-offset-4" : INTERACTIVE_TEXT_CLASS
+              }`}
+            >
+              {template.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {pendingTemplate ? (
+        <div
+          ref={templateConfirmRef}
+          role="group"
+          aria-label="템플릿 덮어쓰기 확인"
+          data-testid="activity-template-confirm"
+          className={`mt-1.5 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-[12px] ${STATUS_TONE_CLASS.warning} ${MOBILE_TOUCH_TARGET_CLASS}`}
+        >
+          <span role="status" className="min-w-0 flex-1">
+            <strong className={`font-bold ${STATUS_TONE_TEXT_STRONG_CLASS.warning}`}>본문을 바꿀까요?</strong>{" "}
+            ‘{pendingTemplate.label}’ 템플릿이 지금 적힌 본문을 대체합니다.
+          </span>
+          <button
+            ref={templateConfirmButtonRef}
+            type="button"
+            onClick={() => applyTemplate(pendingTemplate)}
+            className={`inline-flex h-8 items-center rounded-md border border-current bg-white px-2.5 text-[12px] font-semibold ${STATUS_TONE_TEXT_STRONG_CLASS.warning} transition-colors hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]`}
+          >
+            확인
+          </button>
+          <button
+            type="button"
+            onClick={() => setPendingTemplate(null)}
+            className={`inline-flex h-8 items-center rounded-md px-2 text-[12px] font-semibold ${INTERACTIVE_TEXT_CLASS} hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]`}
+          >
+            취소
+          </button>
+        </div>
+      ) : null}
+
+      {nextActionHint ? (
+        <p className={`mt-1 flex flex-wrap items-center gap-1 text-[11px] ${SECONDARY_TEXT_CLASS} ${MOBILE_TOUCH_TARGET_CLASS}`}>
+          다음 액션 제안: <span className="font-semibold text-[#111110]">{nextActionHint}</span>
+          <button
+            type="button"
+            onClick={() => {
+              setNextActionTitle(nextActionHint)
+              setShowAdvanced(true)
+            }}
+            className={`inline-flex h-6 items-center rounded px-1 font-semibold underline underline-offset-2 ${INTERACTIVE_TEXT_CLASS} hover:text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]`}
+          >
+            다음 액션으로 넣기
+          </button>
+        </p>
+      ) : null}
+    </div>
+  )
+
+  // A3 — 고객 미연결 경고 블록. role=alert 로 낭독, 최근 고객 원클릭(연결 후 바로 저장), "미연결로 저장"은 명시 확인.
+  const unlinkedWarningBlock = unlinkedWarning ? (
+    <div
+      ref={unlinkedWarningRef}
+      role="alert"
+      tabIndex={-1}
+      data-testid="activity-unlinked-warning"
+      className={`rounded-xl border px-3 py-2.5 outline-none focus-visible:ring-2 focus-visible:ring-[#084734] ${STATUS_TONE_CLASS.warning} ${MOBILE_TOUCH_TARGET_CLASS}`}
+    >
+      <p className={`text-[12px] font-bold ${STATUS_TONE_TEXT_STRONG_CLASS.warning}`}>연결된 고객이 없습니다</p>
+      <p className="mt-0.5 text-[11px]">고객을 연결해야 360 타임라인에 붙습니다. 최근 고객을 고르면 연결하고 바로 저장합니다.</p>
+      {unlinkedWarning.recents.length > 0 ? (
+        <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="최근 고객">
+          {unlinkedWarning.recents.map((recent) => (
+            <button
+              key={recent.key}
+              type="button"
+              onClick={() => {
+                const pick = recentCustomerToPick(recent)
+                setTargetType(pick.targetType)
+                setTargetId(pick.targetId)
+                setTargetLabel(pick.targetLabel)
+                setUnlinkedWarning(null)
+                void handleSubmit({ targetOverride: pick })
+              }}
+              className="inline-flex h-8 max-w-full items-center gap-1.5 rounded-md border border-[#ECD29C] bg-white px-2.5 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+            >
+              <span className={SECONDARY_TEXT_CLASS} aria-hidden>
+                {recent.source === "lead" ? <PhoneCall className="h-3 w-3" /> : <Building2 className="h-3 w-3" />}
+              </span>
+              <span className="truncate">{recent.name}</span>
+              <span className={`text-[10px] font-medium ${SECONDARY_TEXT_CLASS}`}>{recent.sourceLabel}</span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-2 text-[11px]">최근 고객 없음 · 위 검색으로 연결</p>
+      )}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => void handleSubmit({ allowUnlinked: true })}
+          disabled={saving}
+          className={`inline-flex h-8 items-center rounded-md border border-current bg-white px-2.5 text-[12px] font-semibold ${STATUS_TONE_TEXT_STRONG_CLASS.warning} transition-colors hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] disabled:opacity-45`}
+        >
+          미연결로 저장
+        </button>
+        <button
+          type="button"
+          onClick={() => setUnlinkedWarning(null)}
+          className={`inline-flex h-8 items-center rounded-md px-2 text-[12px] font-semibold ${INTERACTIVE_TEXT_CLASS} hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]`}
+        >
+          취소
+        </button>
+      </div>
+    </div>
+  ) : null
 
   const recordingField = showField("recording") ? (
     <label className="text-[11px] font-semibold text-[#1a1a1a]/45">
@@ -575,6 +853,8 @@ export default function ActivityQuickForm({
             })}
           </div>
 
+          <div className="mt-1.5">{templateChipRow}</div>
+
           <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start">
             {!lockTarget ? (
               // 컴포저에는 보이는 라벨이 없어 sr-only 라벨로 접근 가능한 이름을 준다.
@@ -587,6 +867,7 @@ export default function ActivityQuickForm({
               id={bodyFieldId}
               value={body}
               onChange={(event) => setBody(event.target.value)}
+              onKeyDown={onBodyKeyDown}
               rows={2}
               placeholder={targetLabel ? `${targetLabel} 기록 남기기` : "무슨 일이 있었나요? (본문만 적어도 저장됩니다)"}
               className="min-w-0 flex-1 resize-none rounded-lg border border-[#e8e8e4] bg-[#fafaf8] px-3 py-2 text-[13px] font-medium leading-5 text-[#111110] outline-none placeholder:text-[#1a1a1a]/30 focus:border-[#084734]"
@@ -605,9 +886,11 @@ export default function ActivityQuickForm({
           {/* 녹음 모드: 파일 입력을 컴포저 줄 바로 아래 인라인 노출(상세 토글 없이 첨부 가능) */}
           {recordingField ? <div className="mt-2 grid">{recordingField}</div> : null}
 
+          {unlinkedWarningBlock ? <div className="mt-2">{unlinkedWarningBlock}</div> : null}
+
           <div className="mt-1.5 flex items-center justify-between gap-2">
             <p className="text-[11px] text-[#1a1a1a]/35">
-              {targetId ? "고객 360 타임라인에 연결됩니다." : "고객 미선택 시 미연결 기록으로 저장됩니다."}
+              {targetId ? "고객 360 타임라인에 연결됩니다." : "고객을 고르지 않으면 저장 전에 확인합니다. ⌘/Ctrl+Enter 저장"}
             </p>
             <button
               type="button"
@@ -706,6 +989,8 @@ export default function ActivityQuickForm({
         </div>
       )}
 
+      <div className="mt-2">{templateChipRow}</div>
+
       <div className={isCompact ? "mt-3 grid gap-2.5" : "mt-4 grid gap-3"}>
         {ownerDatalist}
         {ownerHealthNotice}
@@ -735,7 +1020,7 @@ export default function ActivityQuickForm({
           <p className="text-[11px] text-[#1a1a1a]/40">연결된 대상에 기록이 저장되어 고객 360 타임라인에 바로 표시됩니다.</p>
         ) : (
           <p className="text-[11px] text-[#1a1a1a]/40">
-            고객을 선택하면 360 타임라인에 연결됩니다. 직접 입력하면 미연결 기록으로 저장됩니다.
+            고객을 선택하면 360 타임라인에 연결됩니다. 고르지 않으면 저장 전에 확인합니다.
           </p>
         )}
 
@@ -754,6 +1039,7 @@ export default function ActivityQuickForm({
               id={bodyFieldId}
               value={body}
               onChange={(event) => setBody(event.target.value)}
+              onKeyDown={onBodyKeyDown}
               rows={isCompact ? 3 : 5}
               placeholder="회의록, 카톡 요약, 통화 메모를 그대로 붙여넣기"
               className="mt-1 w-full resize-none rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[13px] font-medium leading-5 text-[#111110] outline-none placeholder:text-[#1a1a1a]/25 focus:border-[#084734]"
@@ -773,6 +1059,8 @@ export default function ActivityQuickForm({
         ) : null}
 
         {advancedFieldStack}
+
+        {unlinkedWarningBlock}
 
         <div className="flex gap-2 pt-1">
           <button
