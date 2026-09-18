@@ -1,11 +1,12 @@
 "use client"
 
-// CRM 기록 표면 — 좌: 컴포저(ActivityQuickForm composer)+필터+타임라인, 우: CrmActionRail(hideForm·hideRecent — 오늘 할 일).
+// CRM 기록 표면 — 좌: 컴포저(ActivityQuickForm composer)+필터+타임라인, 우: 이번 주 요약(A5)+CrmActionRail(hideForm·hideRecent — 오늘 할 일).
 // 기록 생성 폼 SSOT는 rail/ActivityQuickForm — 이 파일은 폼을 직접 들고 있지 않는다.
+// 캐시 창(TTL·SWR)은 lib/crm/client-cache.ts SSOT 를 쓴다(P2) — 이 파일에 로컬 TTL 상수를 두지 않는다.
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import {
   AlertTriangle,
   ArrowLeft,
@@ -18,10 +19,15 @@ import {
   UserRound,
 } from "lucide-react"
 
-import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
+import { adminFetchJsonCachedWithMeta, getCachedAdminJson } from "@/lib/admin-client"
+import { CRM_CACHE_SWR_MS, CRM_CACHE_TTL_MS } from "@/lib/crm/client-cache"
+import { isActivityWeekSummaryPartial, summarizeActivityWeek } from "@/lib/crm/activity-week-summary"
 import Pager from "@/components/admin/ui/Pager"
+import FreshnessCaption from "./FreshnessCaption"
+import { ActivityWeekSummaryView, useWeekOpenTasks } from "./activity/ActivityWeekSummary"
 import CrmActionRail from "./rail/CrmActionRail"
 import ActivityQuickForm from "./rail/ActivityQuickForm"
+import { activityDeepLink } from "./rail/rail-utils"
 import CrmEventRow from "./CrmEventRow"
 import {
   EVENTS_URL,
@@ -40,7 +46,6 @@ import {
   type TargetType,
 } from "./rail/activity-contract"
 
-const CACHE_TTL_MS = 30_000
 const PAGE_LIMIT = 50
 type ActivityScope = "work" | "all"
 const AUTOMATED_EVENT_SOURCES = new Set<SourceType>(["site_inflow", "external_crm", "sheet"])
@@ -115,7 +120,14 @@ function CrmActivityClientInner() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // 신선도 캡션(P2): 화면에 있는 데이터를 받은 시각 · 백그라운드 재검증 중 · 마지막 갱신 실패 여부.
+  const [receivedAt, setReceivedAt] = useState<number | null>(null)
+  const [revalidating, setRevalidating] = useState(false)
+  const [staleReason, setStaleReason] = useState<"error" | null>(null)
+  // 이번 주 요약(A5)의 기준 시각 — 렌더마다 흔들리지 않게 상태로 잡고 강제 새로고침 때만 갱신한다.
+  const [nowMs, setNowMs] = useState(() => Date.now())
   const requestSeq = useRef(0)
+  const router = useRouter()
 
   const searchParams = useSearchParams()
   const focusTargetId = (searchParams.get("targetId") ?? "").trim()
@@ -157,20 +169,53 @@ function CrmActivityClientInner() {
       setError(null)
 
       try {
-        const next = await adminFetchJsonCached<CrmEventsResponse>(
+        const result = await adminFetchJsonCachedWithMeta<CrmEventsResponse>(
           options?.force ? `${url}&force=1` : url,
           undefined,
           {
             cacheKey: url,
-            ttlMs: CACHE_TTL_MS,
-            staleWhileRevalidateMs: 2 * 60_000,
+            ttlMs: CRM_CACHE_TTL_MS,
+            staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
             force: options?.force,
+            // 새로고침(force)은 실패를 만료 캐시로 대체하지 않고 throw 한다 — "방금 새로고침했으니
+            // 최신"이라는 오인을 막는다. 일반 로드는 폴백을 허용하되 staleReason 으로 드러낸다.
+            staleIfError: !options?.force,
+            // SWR 고속 경로의 백그라운드 갱신 결과 — 더 늦게 시작한 요청이 화면을 갈아치웠으면 버린다.
+            onRevalidated: ({ data: fresh, error: revalidateError }) => {
+              if (requestId !== requestSeq.current) return
+              setRevalidating(false)
+              if (revalidateError !== undefined) {
+                setStaleReason("error")
+                return
+              }
+              if (!fresh) return
+              setData((current) => mergePage(current, fresh, append))
+              setReceivedAt(Date.now())
+              setStaleReason(null)
+            },
           }
         )
         if (requestId !== requestSeq.current) return
-        setData((current) => mergePage(current, next, append))
+        setData((current) => mergePage(current, result.data, append))
+        if (!result.stale) {
+          setReceivedAt(Date.now())
+          setStaleReason(null)
+          setRevalidating(false)
+        } else {
+          setReceivedAt(result.staleSince ?? null)
+          if (result.staleReason === "error") {
+            // staleIfError 폴백 — 네트워크로 새로 받은 게 아니라 만료 캐시다. 성공처럼 두지 않는다.
+            setStaleReason("error")
+            setRevalidating(false)
+          } else {
+            setStaleReason(null)
+            setRevalidating(true)
+          }
+        }
       } catch (err) {
         if (requestId !== requestSeq.current) return
+        setRevalidating(false)
+        if (cached) setStaleReason("error")
         setError(err instanceof Error ? err.message : "CRM 기록을 불러오지 못했습니다.")
       } finally {
         if (requestId === requestSeq.current) {
@@ -187,9 +232,55 @@ function CrmActivityClientInner() {
     void loadEvents(0)
   }, [loadEvents])
 
-  const handleRailSaved = useCallback(() => {
+  const weekTasks = useWeekOpenTasks(nowMs)
+  const reloadWeekTasks = weekTasks.reload
+
+  const forceReload = useCallback(() => {
+    const at = Date.now()
+    setNowMs(at)
+    reloadWeekTasks(true, at)
     void loadEvents(0, { force: true })
-  }, [loadEvents])
+  }, [loadEvents, reloadWeekTasks])
+
+  const handleRailSaved = useCallback(() => {
+    forceReload()
+  }, [forceReload])
+
+  // 이번 주 요약(A5) — 현재 필터로 불러온 목록 기준. 페이지가 더 있으면 하한값으로 표기한다.
+  const weekSummary = useMemo(
+    () => (data ? summarizeActivityWeek(data.rows, { nowMs, weekStartsOn: 1 }) : null),
+    [data, nowMs]
+  )
+  const weekSummaryPartial = useMemo(
+    () => Boolean(data && weekSummary && isActivityWeekSummaryPartial(data.rows, weekSummary, data.pagination.hasMore)),
+    [data, weekSummary]
+  )
+
+  const handleFilterUnlinked = useCallback(() => {
+    setFilterTarget((current) => (current === "unknown" ? "all" : "unknown"))
+  }, [])
+
+  // 기록 화면에는 360 드로어가 없다 — 할 일의 대상 고객으로 스코프된 타임라인(기존 딥링크)으로 연다.
+  const handleOpenTask = useCallback(
+    (_id: string, task: { targetId: string | null; targetType: string; targetLabel: string | null }) => {
+      if (!task.targetId) return
+      router.push(
+        activityDeepLink({ targetId: task.targetId, targetType: task.targetType, targetLabel: task.targetLabel })
+      )
+    },
+    [router]
+  )
+
+  const weekSummaryViewProps = {
+    summary: weekSummary,
+    partial: weekSummaryPartial,
+    tasks: weekTasks.state,
+    nowMs,
+    onRetryTasks: () => reloadWeekTasks(true),
+    onFilterUnlinked: handleFilterUnlinked,
+    unlinkedFilterActive: filterTarget === "unknown",
+    onOpenTask: handleOpenTask,
+  }
 
   return (
     <div className="space-y-5">
@@ -202,7 +293,7 @@ function CrmActivityClientInner() {
         </div>
         <button
           type="button"
-          onClick={() => void loadEvents(0, { force: true })}
+          onClick={forceReload}
           disabled={refreshing}
           className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:text-[#1a1a1a]/30"
         >
@@ -235,10 +326,11 @@ function CrmActivityClientInner() {
         </div>
       ) : null}
 
-      {/* 좌: 컴포저+필터+타임라인(minmax(0,1fr)) · 우: 액션 레일(독립 스크롤, hideForm — 입력면은 본문 컴포저 하나).
-          모바일은 컴포저 → 필터 → 타임라인 → 레일 순 스택(컴포저가 첫 인터랙션 블록). */}
+      {/* 좌: 컴포저+필터+타임라인(minmax(0,1fr), 2행 span) · 우: 이번 주 요약(1행) + 액션 레일(2행, 독립 스크롤, hideForm).
+          모바일은 컴포저 → 필터 → 신선도 캡션 → 이번 주 요약(접힌 details) → 타임라인 → 레일 순 스택.
+          요약 View 는 두 자리에 그리지만 할 일 fetch(useWeekOpenTasks)는 위에서 한 번만 한다. */}
       <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="min-w-0 space-y-4 xl:col-start-1 xl:row-start-1">
+        <div className="min-w-0 space-y-4 xl:col-start-1 xl:row-span-2 xl:row-start-1">
           <ActivityQuickForm
             variant="composer"
             defaultTargetType={focusTargetType}
@@ -371,6 +463,31 @@ function CrmActivityClientInner() {
               </details>
             ) : null}
           </section>
+
+          {/* 신선도 캡션(P2) — 필터 바로 아래, 목록 위. 목록을 아직 못 받았으면 기준 시각이 없으므로 생략. */}
+          {data || receivedAt !== null ? (
+            <FreshnessCaption
+              generatedAt={data?.generatedAt ?? null}
+              receivedAt={receivedAt}
+              refreshing={refreshing || revalidating}
+              staleReason={staleReason}
+              onRefresh={forceReload}
+              className="px-1"
+            />
+          ) : null}
+
+          {/* 모바일(<xl): 목록 위에 접힌 이번 주 요약. 데스크톱은 우측 열의 카드가 대신한다. */}
+          <details className="rounded-2xl border border-[#e8e8e4] bg-white xl:hidden">
+            <summary className="flex cursor-pointer select-none items-center justify-between gap-2 px-4 py-3 text-[13px] font-bold text-[#111110]">
+              <span>이번 주 요약</span>
+              <span className="text-[11px] font-semibold tabular-nums text-[#615D59]">
+                {weekSummary ? `${weekSummary.weekLabel} · ${weekSummary.total.toLocaleString("ko-KR")}건` : "—"}
+              </span>
+            </summary>
+            <div className="border-t border-[#e8e8e4] px-4 pb-4 pt-3">
+              <ActivityWeekSummaryView {...weekSummaryViewProps} frame="plain" />
+            </div>
+          </details>
 
           {error ? (
             <div className="flex items-start gap-2 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] text-[#B85C33]">
@@ -505,6 +622,12 @@ function CrmActivityClientInner() {
           </section>
         </div>
 
+        <ActivityWeekSummaryView
+          {...weekSummaryViewProps}
+          frame="card"
+          className="hidden xl:col-start-2 xl:row-start-1 xl:block"
+        />
+
         <CrmActionRail
           hideForm
           hideRecent
@@ -512,7 +635,7 @@ function CrmActivityClientInner() {
           defaultTargetId={focusTargetId || undefined}
           customerName={focusLabel || undefined}
           onActivitySaved={handleRailSaved}
-          className="xl:col-start-2 xl:row-start-1"
+          className="xl:col-start-2 xl:row-start-2"
         />
       </section>
     </div>
