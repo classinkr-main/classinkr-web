@@ -103,7 +103,7 @@ export default function Customer360DetailClient({ data, customerKey }: Props) {
   const body = useMemo(() => {
     switch (activeTab) {
       case "money":
-        return <Customer360DetailMoney money={data.money} />
+        return <Customer360DetailMoney money={data.money} deals={data.deals} />
       case "deals":
         return <Customer360DetailDeals deals={data.deals} />
       case "activity":
