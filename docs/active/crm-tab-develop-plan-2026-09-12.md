@@ -274,6 +274,30 @@ home_v4.42(9/10 어드민 개편 중심)를 병합했다. 이 브랜치는 Wave 
 - `lib/admin-client.ts`의 `invalidationScopesForUrl`이 리드 PATCH 하나로 CRM 집계 캐시 전체(overview·action-kpis·compass·coverage·owners·tasks·health)를 지운다 — 범위가 넓다.
 - `components/admin/crm/unified/shared.ts`의 `customerSourceTone()`이 여전히 팔레트 밖 리터럴(#B85C33 계열)을 쓴다. 소비처(`CustomerSearchPanel.tsx`)가 이번 라운드 클러스터 밖이라 그대로 두었다.
 
+### §11 1단계 — 2026-09-18 완료 (M1·M3·A2·A3·A5·T2·T3·P2)
+
+§11.5의 1단계 8개 항목을 스키마 변경 없이 구현했다. 공용 조각 2종(`components/admin/crm/FreshnessCaption.tsx` 신선도 캡션, `components/admin/crm/ScoreKind.tsx` 점수 3종 정의 SSOT)을 먼저 커밋한 뒤, 파일 소유권을 겹치지 않게 나눈 5개 클러스터(360 매출 / 기록 컴포저 / 기록 화면 / 인사이트·360 개요 / 통합·리드 목록)로 병렬 구현하고 클러스터별로 커밋했다.
+
+핵심 반영 사항:
+
+- M1·M3: 고객 360 매출 탭이 $/¥/¥/¥ 타일 나열 대신 USD·CNY·KRW 그룹(통화 배지·출처 칩)으로 바뀌고 "통화별 합계 · 서로 더하지 않음" 캡션을 상시 표시한다. 빈 통화는 숨기지 않고 "해당 없음"으로 둔다. `lib/crm/money-timeline.ts`가 NEO 오더·수금·딜을 하나의 타임라인(월 그룹, kind 텍스트 라벨, 통화별 포맷, 상태 점+텍스트, 20행+더 보기)으로 병합한다. 기존 4개 원천 목록은 접이식으로 유지. `Customer360DetailClient`가 `deals`를 매출 탭에 전달한다.
+- A2·A3: `lib/crm/activity-templates.ts` 템플릿 6종 칩이 모드·본문·감정을 프리필하고, 본문이 있으면 인라인 확인(바깥 클릭·Esc 취소)을 거친다. 고객 미선택 저장은 더 이상 조용히 미연결로 저장되지 않고 `role=alert` 경고 + 최근 고객 5명 원클릭 연결 + "미연결로 저장" 명시 확인을 요구한다. ⌘/Ctrl+Enter 저장 추가(IME 조합 중 무시). `lockTarget`(드로어)에서는 게이트를 건너뛴다.
+- A5: 기록 화면 우측(xl)·모바일 접힘 요약 패널 — 이번 주(월 00:00 KST) 건수·콜/회의·위험 신호·미연결(클릭 시 대상 필터) + `/api/admin/crm/tasks?status=open&dueBefore=<이번 주 일요일>` 미완 8건. 집계는 현재 필터·불러온 페이지 기준이며 다음 페이지가 이번 주에 걸치면 "(더 있음)"으로 하한값임을 표기한다.
+- T2·T3: `getCrmUnifiedHealthDistribution`이 한 번 순회로 `byOwner`(미배정 맨 뒤)를 함께 집계하고 라우트가 `byOwner`·`generatedAt`을 내려준다. 인사이트에 담당별 안전/주의/위험 수평 스택바(범례·직접 건수·2px 간격·툴팁)와 접이식 점수 3종 정의표를 추가했다. 360 개요의 "점수" 타일은 "우선순위" 라벨로 바뀌고 기존 고객에는 "건강도" 타일이 생겼다. 리드 보드·드로어의 `★82`는 "리드 점수 82"로 바뀌었다.
+- P2: 기록·통합 고객·리드 보드의 로컬 TTL 리터럴(30/60/90초)을 전부 제거하고 `lib/crm/client-cache.ts`의 `CRM_CACHE_TTL_MS`/`CRM_CACHE_SWR_MS`만 쓴다(`tests/crm/crm-cache-ttl-ssot.test.ts`가 unified/leads 범위를 grep으로 고정). 세 목록 상단에 같은 위치·같은 문구의 신선도 캡션(기준 HH:MM · 갱신 N초 전 · 갱신 중 · 갱신 실패)을 두고, 헤더의 별도 새로고침 버튼은 캡션 버튼으로 일원화했다.
+
+검증: `npm run typecheck` 통과, 변경 파일 `eslint --max-warnings=0` 통과(저장소 전체 `npm run lint`의 오류 6건은 이번 변경과 무관한 `scripts/`·`tests/repositories/hardware-*` 기존 항목), `npx vitest run` 608 파일 / 4,633 케이스 통과, `npm run build` 통과.
+
+후속으로 남긴 것:
+
+- M3 타임라인에 HW 출고가 없다 — `Customer360Money`에 출고 데이터가 없어 M2(품목·수량 읽기 모델)를 선행해야 한다. NEO 상태 문자열의 톤 매핑은 어휘 기반 보수 휴리스틱이라 실제 상태 값 목록 확인 후 `resolveMoneyStatusTone`을 정확한 매핑으로 바꾼다.
+- 리드 보드는 `/api/admin/leads` 응답에 `generatedAt`이 없어 캡션의 "기준 HH:MM"이 생략된다. 통합 고객 화면은 신선한 캐시 적중 시 `adminFetchJsonCachedWithMeta`가 저장 시각을 주지 않아 "갱신 N초 전"이 최대 TTL만큼 낙관적이다 — `lib/admin-client.ts`가 fresh 적중의 `savedAt`을 실어주면 해소된다.
+- 인사이트 담당별 분포 행에서 통합 고객 화면으로 가는 링크는 생략했다. 통합 화면이 `?owner=` 딥링크를 받지 않아(담당 필터가 로컬 state) 착지해도 필터가 걸리지 않기 때문이다.
+- 360 개요의 건강도는 드로어 헤더와 같은 입력(`buildDrawerHealthInput`)이라 통합 목록·도넛의 `rowHealthBand` 입력 매핑과 다르다 — 기존 드로어와 같은 불일치이며 통일하지 않았다.
+- unified/leads 밖에 남은 TTL 사본: `CrmInsightsClient.tsx`(90초 — 이번에 담당별 분포 조회는 SSOT로 했으나 도넛 쪽 상수는 남음), `CrmNaverMapSourceClient.tsx`(60초), `CrmSubnav.tsx` warm(60초). P2 후속에서 정리한다.
+- 기록 화면 요약의 "다음 액션 미완"은 `listCrmTasks`가 `due_at <= dueBefore`로 거르므로 기한 없는 할 일은 보이지 않는다(헤더에 "이번 주 마감 N건"으로 명시). 할 일 클릭은 기록 화면에 360 드로어가 없어 대상별 타임라인 딥링크로 이동한다.
+- DOM 테스트 환경(jsdom/@testing-library)이 없어 컴포저·캡션의 클릭 상호작용은 순수 함수 분리 + `renderToStaticMarkup` + 소스 계약 테스트로 고정했다. jsdom 도입 결정이 나면 같은 파일에 클릭 케이스를 추가한다.
+
 ## 11. 2026-09-17 우선순위 재정의 — "기존보다 편리·정확·편의 기능"
 
 운영자가 정한 네 가지 우선순위와, 코드에서 확인한 현재 공백, 그에 대응하는 작업 항목이다. 이 절은 Wave 1 이후의 판단 기준이며 §4의 ID보다 우선한다. 목업은 [고객별 매출·기록·세그먼트 목업](https://claude.ai/artifact/SXDZ9UDHuC6qmQEjKVu7hy)과 [우선순위 큐 3방향 목업](https://claude.ai/artifact/2c61KxVoNus84UhfECsQHM)에 있다.
