@@ -7,6 +7,7 @@ import type { LeadRecord, LeadStatus } from "@/lib/repositories/leads"
 import type { ContactLogResult, ContactLogType } from "@/lib/repositories/contact-logs"
 import { getLeadMagnetIntentScore, getLeadMagnetTitle } from "@/lib/lead-magnets"
 import { STATUS_TONE_CLASS, STATUS_TONE_TEXT_STRONG_CLASS } from "@/lib/crm/status-tone"
+import { ScoreKindLabel } from "../ScoreKind"
 import {
   RESPONSE_TARGET_SOURCES,
   SOURCE_GROUP_DOT,
@@ -121,15 +122,10 @@ export function calcScore(lead: LeadRecord): number {
   return Math.min(s, 100)
 }
 
+// 리드 점수는 항상 "리드 점수 82"처럼 어떤 점수인지 이름을 붙여 그린다(T3) — 숫자만 두면 건강도·우선순위와
+// 구분되지 않는다. 이름·정의는 components/admin/crm/ScoreKind.tsx 가 SSOT.
 export function ScoreBadge({ score }: { score: number }) {
-  const color = score >= 70 ? "text-[#084734]/70"
-    : score >= 40 ? "text-[#1a1a1a]/40"
-    : "text-[#1a1a1a]/25"
-  return (
-    <span className={`text-[10px] font-medium tabular-nums ${color}`}>
-      ★{score}
-    </span>
-  )
+  return <ScoreKindLabel kind="lead" value={score} className="text-[10.5px]" />
 }
 
 // ─── 인증 헬퍼 ─────────────────────────────────────────────────

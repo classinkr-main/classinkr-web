@@ -30,11 +30,13 @@ beforeEach(() => {
 })
 
 describe("리드 보드 골격 (SSR)", () => {
-  it("헤더의 세 액션이 모두 남아 있다", () => {
+  it("헤더의 두 액션과 목록 위 신선도 캡션(새로고침 포함)이 남아 있다", () => {
     const html = render()
     expect(html).toContain("리드 등록")
     expect(html).toContain("CSV")
+    // P2: 새로고침은 헤더가 아니라 목록 위 FreshnessCaption 의 버튼 하나다.
     expect(html).toContain("새로고침")
+    expect(html).toContain('data-freshness="fresh"')
   })
 
   it("모아보기 렌즈 2종이 남아 있다", () => {

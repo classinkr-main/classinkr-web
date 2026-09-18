@@ -1,9 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { Clock, Flame } from "lucide-react"
+import { Clock } from "lucide-react"
 
 import { CompassLeadChip } from "@/components/admin/compass/CompassLeadChip"
+import { ScoreKindLabel } from "@/components/admin/crm/ScoreKind"
 import { normalizePhoneKey } from "@/lib/compass/normalize"
 import type { CompassOverlayEntry, CompassOverlayMap } from "@/lib/compass/overlay"
 import type { LeadRecord } from "@/lib/repositories/leads"
@@ -78,13 +79,13 @@ function LeadCard({
         <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-[#111110]">
           {lead.name ?? lead.org ?? "이름 없음"}
         </span>
+        {/* 점수는 이름과 함께(T3) — 70 이상은 배경만 살짝 띄우고 색은 라벨·값이 스스로 말한다. */}
         <span
-          className={`inline-flex shrink-0 items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${
-            score >= 70 ? "bg-[#ECFDF5] text-[#084734]" : "bg-[#f0f0ec] text-[#1a1a1a]/60"
+          className={`inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[11px] ${
+            score >= 70 ? "bg-[#ECFDF5]" : "bg-[#f0f0ec]"
           }`}
         >
-          <Flame className="h-2.5 w-2.5" />
-          {score}
+          <ScoreKindLabel kind="lead" value={score} />
         </span>
       </div>
       {lead.org && lead.name ? (

@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback, useDeferredValue, useMemo, useRef } f
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import {
-  RefreshCw, X,
+  X,
   Building2,
   UserPlus, ExternalLink,
   Search, Check,
@@ -18,12 +18,13 @@ import {
 import LeadRegisterModal from "@/components/admin/crm/LeadRegisterModal"
 import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
 import CrmNoticeBanner, { type CrmNoticeTone } from "@/components/admin/crm/CrmNoticeBanner"
+import FreshnessCaption from "@/components/admin/crm/FreshnessCaption"
 import LeadTrackingPanel from "@/components/admin/crm/leads/LeadTrackingPanel"
 import { useCrmOwners } from "@/components/admin/crm/useCrmOwners"
 import { useVisibleCount } from "@/components/admin/ui/ShowMore"
 
 import { adminFetch, adminFetchJsonCached, adminFetchJsonCachedWithMeta } from "@/lib/admin-client"
-import { Button } from "@/components/ui/button"
+import { CRM_CACHE_SWR_MS, CRM_CACHE_TTL_MS } from "@/lib/crm/client-cache"
 import type { LeadActivity, LeadActivityBadge } from "@/lib/repositories/lead-activity"
 import type { LeadRecord, LeadStatus } from "@/lib/repositories/leads"
 import type { ContactLogRecord, ContactLogType, ContactLogResult } from "@/lib/repositories/contact-logs"
@@ -96,8 +97,6 @@ import LeadsConsoleList from "./board/LeadsConsoleList"
 import { PipelineRiskPanel, StageOwnerPanels, UnconfirmedInbox } from "./board/LeadsConsolePanels"
 import {
   LEAD_BOARD_LIST_STEP,
-  LEADS_CACHE_SWR_MS,
-  LEADS_CACHE_TTL_MS,
   LENS_OPTIONS,
   NOW_TICK_MS,
   isLeadLens,
@@ -255,6 +254,8 @@ export default function LeadsBoardClient() {
   // 목록 로드 실패를 빈 목록과 구분한다 — 장애 중에 "등록된 리드가 없습니다"로 오인되면 안 된다.
   const [loadError, setLoadError] = useState<string | null>(null)
   const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null)
+  // SWR 고속 경로로 옛 목록을 먼저 그린 뒤 배경 갱신이 도는 중 — 신선도 캡션이 "갱신 중"으로 표시한다(P2).
+  const [revalidating, setRevalidating] = useState(false)
   const [dismissedDeepLinkedLeadId, setDismissedDeepLinkedLeadId] = useState<string | null>(null)
   // 감사 2026-09-07 §3 후속 — 하드 삭제만 브라우저 confirm()에 남아 있었다. 확인·전환과 같은
   // 요청 상태 패턴으로 공용 확인 다이얼로그를 거친다(대상 이름·영향 범위·비가역 경고 표시).
@@ -303,7 +304,7 @@ export default function LeadsBoardClient() {
     let cancelled = false
     void (async () => {
       try {
-        const data = await adminFetchJsonCached<PublicEvent[]>("/api/admin/events", undefined, { ttlMs: 60_000 })
+        const data = await adminFetchJsonCached<PublicEvent[]>("/api/admin/events", undefined, { ttlMs: CRM_CACHE_TTL_MS })
         if (!cancelled) setEvents(Array.isArray(data) ? data : [])
       } catch {
         /* noop — 행사 연결 UI는 events 없어도 동작 */
@@ -320,7 +321,7 @@ export default function LeadsBoardClient() {
         const data = await adminFetchJsonCached<{ summary: Record<string, LeadActivityBadge> }>(
           "/api/admin/leads/activity-summary",
           undefined,
-          { ttlMs: 60_000 }
+          { ttlMs: CRM_CACHE_TTL_MS }
         )
         if (!cancelled) setActivitySummary(data?.summary ?? {})
       } catch {
@@ -402,15 +403,16 @@ export default function LeadsBoardClient() {
       // WithMeta를 쓰는 이유: staleIfError 폴백(갱신 실패 → 예전 캐시)이 조용히 성공처럼
       // 보이면 안 된다. 실패로 대체된 경우에만 배너를 띄우고, 갱신 시각도 실제 저장 시각으로 적는다.
       const result = await adminFetchJsonCachedWithMeta<{ leads: LeadRecord[] }>("/api/admin/leads", undefined, {
-        ttlMs: LEADS_CACHE_TTL_MS,
+        ttlMs: CRM_CACHE_TTL_MS,
         force: options?.force,
         persist: false,
-        staleWhileRevalidateMs: LEADS_CACHE_SWR_MS,
+        staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
         // SWR 고속 경로로 옛 목록을 먼저 그린 회차는 여기로 갱신 결과가 온다. 이 화면은
         // 마운트 시 1회만 로드하므로 이 콜백이 없으면 갱신분이 화면에 도달하지 못하고
-        // 세션 내내 최대 TTL+SWR(150초)만큼 옛 목록이 남는다.
+        // 세션 내내 최대 TTL+SWR 창만큼 옛 목록이 남는다.
         onRevalidated: ({ data, error }) => {
           if (!mountedRef.current) return
+          setRevalidating(false)
           if (error || !data) {
             setLoadError("리드 목록을 새로 받지 못했습니다.")
             return
@@ -423,7 +425,9 @@ export default function LeadsBoardClient() {
       setLeads(result.data.leads)
       setLoadError(result.staleReason === "error" ? "리드 목록을 새로 받지 못했습니다." : null)
       setLastLoadedAt(result.staleSince === null ? new Date() : new Date(result.staleSince))
+      setRevalidating(result.staleReason === "revalidate")
     } catch (err) {
+      setRevalidating(false)
       const message = err instanceof Error ? err.message : "리드를 불러오지 못했습니다."
       setLoadError(message)
       showToast(message, "error")
@@ -1600,7 +1604,7 @@ export default function LeadsBoardClient() {
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">리드</h1>
-          {/* 뷰 축은 제목 아래 — 액션 줄에 섞으면 CSV·새로고침과 같은 무게가 된다.
+          {/* 뷰 축은 제목 아래 — 액션 줄에 섞으면 CSV·리드 등록과 같은 무게가 된다.
               전환은 어떤 상태도 리셋하지 않고, 같은 filter 를 뷰마다 다르게 해석할 뿐이다. */}
           <div className="mt-3 flex flex-wrap items-center gap-2">
           <div
@@ -1652,12 +1656,7 @@ export default function LeadsBoardClient() {
           </div>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-          {/* 지금 보는 숫자가 언제 것인지 — 캐시본/이전 로드와 혼동하지 않게 갱신 시각을 남긴다. */}
-          {lastLoadedAt ? (
-            <span className="text-[11px] tabular-nums text-[#1a1a1a]/40">
-              {lastLoadedAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 갱신
-            </span>
-          ) : null}
+          {/* 갱신 시각·새로고침은 목록 위 신선도 캡션(FreshnessCaption)으로 옮겼다(P2) — 같은 동작을 두 곳에 두지 않는다. */}
           <button
             type="button"
             onClick={() => setLeadModalOpen(true)}
@@ -1676,15 +1675,6 @@ export default function LeadsBoardClient() {
             <Download className="h-3.5 w-3.5" />
             CSV
           </button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void fetchLeads({ force: true })}
-            disabled={loading}
-            className="h-9 flex-1 gap-1.5 rounded-lg text-[12px] sm:flex-none"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />새로고침
-          </Button>
         </div>
       </div>
 
@@ -2010,6 +2000,15 @@ export default function LeadsBoardClient() {
 
       {/* 목록 섹션 — 삭제 등으로 행이 사라진 뒤 포커스 착지점(tabIndex=-1). */}
       <div ref={listSectionRef} tabIndex={-1} aria-label="리드 목록" className="outline-none">
+      {/* 신선도 캡션 — 필터 아래·목록 위에서 "갱신 N초 전"(P2). /api/admin/leads 는 generatedAt 이 없어 받은 시각만 적는다.
+          강제 재조회(force)는 이 버튼이 유일하다. */}
+      <FreshnessCaption
+        className="mb-2 px-0.5"
+        receivedAt={lastLoadedAt?.getTime() ?? null}
+        refreshing={loading || revalidating}
+        staleReason={loadError && leads.length > 0 ? "error" : null}
+        onRefresh={() => void fetchLeads({ force: true })}
+      />
       {/* 벌크 부분 실패 배너 — 닫기 전까지 남고, 실패한 리드만 다시 선택해 재시도할 수 있다. */}
       {bulkNotice ? (
         <CrmNoticeBanner

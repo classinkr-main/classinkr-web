@@ -6,14 +6,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react"
 import dynamic from "next/dynamic"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { ChevronRight, Filter, RefreshCw, UserPlus } from "lucide-react"
+import { ChevronRight, Filter, UserPlus } from "lucide-react"
 
 import { adminFetchJsonCachedWithMeta, getCachedAdminJson } from "@/lib/admin-client"
-import { CRM_CACHE_SWR_MS } from "@/lib/crm/client-cache"
+import { CRM_CACHE_SWR_MS, CRM_CACHE_TTL_MS } from "@/lib/crm/client-cache"
 import type { CrmUnifiedCustomerRow } from "@/lib/repositories/crm-unified-customers"
 import { buildOwnerSelectOptions, useCrmOwners } from "./useCrmOwners"
 import Account360Lens from "./Account360Lens"
 import CrmNoticeBanner from "./CrmNoticeBanner"
+import FreshnessCaption from "./FreshnessCaption"
 import Customer360DrawerSkeleton from "./Customer360DrawerSkeleton"
 import SavedViewButton from "./unified/SavedViewButton"
 import CustomerSearchPanel from "./unified/CustomerSearchPanel"
@@ -21,7 +22,6 @@ import CustomerResultsSection from "./unified/CustomerResultsSection"
 import UnconfirmedToggle from "./unified/UnconfirmedToggle"
 import { SORT_DEFAULT_DIRECTION, sortRows, type SortKey, type SortState } from "./unified/sort"
 import {
-  CACHE_TTL_MS,
   CURRENT_OWNER_VALUE,
   OWNER_STORAGE_KEY,
   PRIMARY_SAVED_VIEW_FILTERS,
@@ -138,6 +138,10 @@ export default function CrmUnifiedCustomersClient() {
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  // 신선도 캡션(P2)용 — 화면의 결과를 받은 시각(SWR 폴백이면 그 캐시가 저장된 시각)과 배경 재검증 진행 여부.
+  // 신선한 캐시 적중은 헬퍼가 저장 시각을 주지 않아 읽은 시각으로 적는다(최대 TTL 만큼 낙관적).
+  const [receivedAt, setReceivedAt] = useState<number | null>(null)
+  const [revalidating, setRevalidating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [refreshFailure, setRefreshFailure] = useState<RefreshFailure | null>(null)
   const [drawer, setDrawer] = useState<{ key: string; name: string } | null>(null)
@@ -324,7 +328,7 @@ export default function CrmUnifiedCustomersClient() {
           undefined,
           {
             cacheKey: url,
-            ttlMs: CACHE_TTL_MS,
+            ttlMs: CRM_CACHE_TTL_MS,
             staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
             force: options?.force,
             // 새로고침(force)은 실패를 만료 캐시로 대체하지 않고 throw 한다 — '방금 새로고침했으니
@@ -334,6 +338,7 @@ export default function CrmUnifiedCustomersClient() {
             // 이미 화면을 갈아치웠다면(필터 변경·다음 페이지) 이 결과는 버린다.
             onRevalidated: ({ data: fresh, error: revalidateError }) => {
               if (requestId !== requestSeq.current) return
+              setRevalidating(false)
               if (revalidateError !== undefined) {
                 failRefresh(revalidateError)
                 return
@@ -342,6 +347,7 @@ export default function CrmUnifiedCustomersClient() {
               setData((current) => mergePage(current, fresh, append))
               hasDataRef.current = true
               lastLoadedQueryKeyRef.current = queryKeyFromUrl(url)
+              setReceivedAt(Date.now())
               setRefreshFailure(null)
             },
           }
@@ -350,6 +356,8 @@ export default function CrmUnifiedCustomersClient() {
         setData((current) => mergePage(current, result.data, append))
         hasDataRef.current = true
         lastLoadedQueryKeyRef.current = queryKeyFromUrl(url)
+        setReceivedAt(result.stale ? result.staleSince ?? Date.now() : Date.now())
+        setRevalidating(result.stale && result.staleReason === "revalidate")
         if (result.stale && result.staleReason === "error") {
           // staleIfError 폴백 — 네트워크로 새로 받은 게 아니라 만료 캐시다. 성공처럼 두지 않는다.
           failRefresh(result.staleError)
@@ -358,6 +366,7 @@ export default function CrmUnifiedCustomersClient() {
         }
       } catch (err) {
         if (requestId !== requestSeq.current) return
+        setRevalidating(false)
         // 화면에 남은 데이터가 "지금 실패한 이 질의"에서 온 것일 때만 갱신 실패(warning)로
         // 묶어 이전 결과를 유지한다. 검색어·필터를 바꾼 뒤의 실패는 무관한 이전 질의 결과이므로
         // 조회 실패(danger)로 보내고 화면도 비운다.
@@ -548,16 +557,7 @@ export default function CrmUnifiedCustomersClient() {
               <UserPlus className="h-3.5 w-3.5" />
               리드 등록
             </button>
-            <button
-              type="button"
-              onClick={() => void loadPage(0, { force: true })}
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={refreshing}
-              aria-busy={refreshing || undefined}
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-              새로고침
-            </button>
+            {/* 새로고침은 목록 위 신선도 캡션(FreshnessCaption)의 버튼 하나로 모았다(P2) — 같은 동작을 두 곳에 두지 않는다. */}
           </div>
         </div>
 
@@ -714,6 +714,16 @@ export default function CrmUnifiedCustomersClient() {
         {ownerHealth?.ok === false && ownerHealth.message ? (
           <CrmNoticeBanner tone="warning" className="mb-4" title="담당자 매핑 참고" message={ownerHealth.message} />
         ) : null}
+
+        {/* 신선도 캡션 — 필터 아래·표 위에서 "기준 HH:MM · 갱신 N초 전"(P2). 강제 재조회(force)는 이 버튼이 유일하다. */}
+        <FreshnessCaption
+          className="mb-2 px-0.5"
+          generatedAt={data?.generatedAt}
+          receivedAt={receivedAt}
+          refreshing={refreshing || revalidating}
+          staleReason={refreshFailure ? "error" : null}
+          onRefresh={() => void loadPage(0, { force: true })}
+        />
 
         <CustomerResultsSection
           data={data}

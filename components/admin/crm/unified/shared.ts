@@ -132,7 +132,8 @@ const PRIMARY_SAVED_VIEW_KEYS = new Set<SavedViewFilter>([
 export const PRIMARY_SAVED_VIEW_FILTERS = SAVED_VIEW_FILTERS.filter((filter) => PRIMARY_SAVED_VIEW_KEYS.has(filter.key))
 export const SECONDARY_SAVED_VIEW_FILTERS = SAVED_VIEW_FILTERS.filter((filter) => !PRIMARY_SAVED_VIEW_KEYS.has(filter.key))
 
-export const CACHE_TTL_MS = 90_000
+// 캐시 TTL·SWR 창은 lib/crm/client-cache.ts(CRM_CACHE_TTL_MS · CRM_CACHE_SWR_MS)가 SSOT다 —
+// 여기 사본(예전 90초)을 두지 않는다(2026-09-17 우선순위 P2, tests/crm/crm-cache-ttl-ssot.test.ts).
 // 데스크톱 한 화면에 100행을 붙이면 초기 DOM과 스크린리더 탐색 비용이 과도하다.
 // 50행 단위로 맞춰 필터/상세 전환 반응성을 우선한다.
 export const PAGE_LIMIT = 50

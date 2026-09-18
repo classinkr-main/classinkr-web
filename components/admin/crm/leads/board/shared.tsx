@@ -16,11 +16,10 @@ export const LEAD_BOARD_LIST_STEP = 50
 // 담당자 패널에 그리는 행 상한. 넘치는 인원·건수는 각주로 드러낸다(조용히 자르지 않는다).
 export const OWNER_ROW_CAP = 6
 
-// 리드 목록 캐시 — CrmSubnav의 hover 예열(warmAdminRequestCache, ttl 60s)과 같은 캐시 키를
-// 쓰므로 TTL을 0으로 두면 예열이 100% 헛돈다. persist는 계속 false: 리드 전량 페이로드가
-// sessionStorage 쿼터를 위협하므로 메모리 캐시만 쓴다.
-export const LEADS_CACHE_TTL_MS = 30_000
-export const LEADS_CACHE_SWR_MS = 120_000
+// 리드 목록 캐시 창은 lib/crm/client-cache.ts(CRM_CACHE_TTL_MS · CRM_CACHE_SWR_MS)가 SSOT다 —
+// 예전 로컬 값(30초/120초)은 걷어냈다(P2). CrmSubnav의 hover 예열과 같은 캐시 키를 쓰므로 TTL을
+// 0으로 두면 예열이 100% 헛돈다는 제약은 그대로다. persist는 계속 false: 리드 전량 페이로드가
+// sessionStorage 쿼터를 위협하므로 메모리 캐시만 쓴다(LeadsBoardClient.fetchLeads).
 
 // now 틱 주기. 틱 한 번이 전 리드 우선순위 재계산 + 필터·정렬 + 보드 재렌더를 부르므로
 // 1분은 비싸다. 우선순위 감쇠가 최대 5분 늦게 반영되는 건 감수한 트레이드오프.

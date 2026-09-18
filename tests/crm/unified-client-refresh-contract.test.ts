@@ -60,9 +60,13 @@ describe("CrmUnifiedCustomersClient 갱신 실패 신호 계약", () => {
     expect(clientSource).not.toContain("AlertTriangle")
   })
 
-  it("재시도는 force 로 나가고 새로고침 버튼은 요청 중 aria-busy 다", () => {
+  it("재시도는 force 로 나가고, 강제 재조회 버튼은 신선도 캡션 하나뿐이다(요청·재검증 중 비활성)", () => {
     expect(clientSource).toContain("{ force: true, append: refreshFailure.retryAppend }")
-    expect(clientSource).toContain("aria-busy={refreshing || undefined}")
+    // P2: 헤더의 별도 새로고침 버튼은 걷어내고 FreshnessCaption 의 onRefresh 로 모았다.
+    expect(clientSource).toContain("onRefresh={() => void loadPage(0, { force: true })}")
+    expect(clientSource).toContain("refreshing={refreshing || revalidating}")
+    expect(clientSource).toContain('staleReason={refreshFailure ? "error" : null}')
+    expect(clientSource).not.toContain("RefreshCw")
   })
 
   it("성공/실패 announce가 겹치지 않도록 상시 live region은 하나만 마운트한다 (2026-09-12 리뷰 #3)", () => {
