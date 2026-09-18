@@ -77,6 +77,26 @@ export interface CrmHealthDistribution {
   risk: number
 }
 
+// 담당자 한 명의 건강도 분포(T2 담당별 스택바). ownerId는 행의 ownerKeys 중 표시 이름이 아닌
+// 키(NEO ownerId, 소문자 정규화)이며 없으면 null. 담당 없는 고객은 ownerId null ·
+// ownerName CRM_HEALTH_UNASSIGNED_OWNER_LABEL 한 행으로 모은다.
+export interface CrmHealthDistributionOwnerRow {
+  ownerId: string | null
+  ownerName: string
+  total: number
+  safe: number
+  watch: number
+  risk: number
+}
+
+// getCrmUnifiedHealthDistribution()이 돌려주는 확장형 — 상위 4개 키는 CrmHealthDistribution과 동일
+// (하위 호환), byOwner는 total 내림차순·동률은 이름 ko 정렬·미배정은 항상 맨 뒤.
+export interface CrmHealthDistributionWithOwners extends CrmHealthDistribution {
+  byOwner: CrmHealthDistributionOwnerRow[]
+}
+
+export const CRM_HEALTH_UNASSIGNED_OWNER_LABEL = "미배정"
+
 export interface CrmUnifiedCustomersOptions {
   q?: string
   source?: CrmUnifiedCustomerSource | "all"
@@ -359,19 +379,51 @@ function rowHealthBand(row: CrmUnifiedCustomerRow, nowMs: number): CustomerHealt
 // healthDistribution 필드와 getCrmUnifiedHealthDistribution() 경량 경로가 공유하는 단일 산식.
 // 태그 부착 여부와 무관(rowHealthBand는 tags를 보지 않음)하므로 태그 없는 스냅샷 원본 rows에
 // 바로 적용해도 의미 동일.
-function computeHealthDistribution(
+// 전체 합계와 담당별 합계를 같은 순회 한 번에 모은다(추가 쿼리·재순회 없음). 담당 묶음 키는
+// buildOwnerOptions와 같은 ownerName 기준(정규화)이라 통합 목록의 담당 카운트와 같은 이름으로 묶인다.
+function collectHealthDistribution(
   rows: CrmUnifiedCustomerRow[],
   nowMs: number
-): CrmHealthDistribution {
-  return rows.reduce<CrmHealthDistribution>(
-    (acc, row) => {
-      if (row.source !== "neo_account") return acc
-      acc.total += 1
-      acc[rowHealthBand(row, nowMs)] += 1
-      return acc
-    },
-    { total: 0, safe: 0, watch: 0, risk: 0 }
-  )
+): CrmHealthDistributionWithOwners {
+  const totals: CrmHealthDistribution = { total: 0, safe: 0, watch: 0, risk: 0 }
+  const byOwnerKey = new Map<string, CrmHealthDistributionOwnerRow>()
+  for (const row of rows) {
+    if (row.source !== "neo_account") continue
+    const band = rowHealthBand(row, nowMs)
+    totals.total += 1
+    totals[band] += 1
+
+    const ownerName = row.ownerName?.trim() ?? ""
+    const groupKey = normalize(ownerName)
+    let bucket = byOwnerKey.get(groupKey)
+    if (!bucket) {
+      bucket = {
+        ownerId: groupKey ? ((row.ownerKeys ?? []).find((key) => key !== groupKey) ?? null) : null,
+        ownerName: ownerName || CRM_HEALTH_UNASSIGNED_OWNER_LABEL,
+        total: 0,
+        safe: 0,
+        watch: 0,
+        risk: 0,
+      }
+      byOwnerKey.set(groupKey, bucket)
+    }
+    bucket.total += 1
+    bucket[band] += 1
+  }
+  const byOwner = Array.from(byOwnerKey.entries())
+    .sort(([aKey, a], [bKey, b]) => {
+      // 미배정("" 키)은 건수와 무관하게 맨 뒤.
+      if (!aKey !== !bKey) return aKey ? -1 : 1
+      return b.total - a.total || a.ownerName.localeCompare(b.ownerName, "ko")
+    })
+    .map(([, bucket]) => bucket)
+  return { ...totals, byOwner }
+}
+
+// getCrmUnifiedCustomers().healthDistribution 용 — 기존 4개 키만 돌려 응답 형태를 바꾸지 않는다.
+function computeHealthDistribution(rows: CrmUnifiedCustomerRow[], nowMs: number): CrmHealthDistribution {
+  const { total, safe, watch, risk } = collectHealthDistribution(rows, nowMs)
+  return { total, safe, watch, risk }
 }
 
 // ── 소스 스냅샷 Data Cache (7-23 감사 3-A 서버 메모이제이션 → 콜드 인스턴스 대응 승격) ──
@@ -890,14 +942,14 @@ export async function getCrmUnifiedCustomers(
 // health-distribution 라우트 전용 최소 경로 — 소스 스냅샷(unstable_cache 60초, Data Cache)만
 // 태우고, 도넛 숫자와 무관한 후처리(태그 부착·필터·세그먼트별 viewCounts 8회 재순회·
 // sortPriorityItems 전량 정렬·오너 집계)는 전부 건너뛴다. 카운트 산식은
-// computeHealthDistribution을 그대로 재사용해 getCrmUnifiedCustomers().healthDistribution과
-// 동일한 값을 낸다.
+// collectHealthDistribution을 그대로 재사용해 상위 4개 키가 getCrmUnifiedCustomers().healthDistribution과
+// 동일한 값을 내고, 같은 순회에서 모은 담당별 분포(byOwner)를 덧붙인다(T2).
 export async function getCrmUnifiedHealthDistribution(
   options: { now?: Date; bypassCache?: boolean } = {}
-): Promise<CrmHealthDistribution> {
+): Promise<CrmHealthDistributionWithOwners> {
   const now = options.now ?? new Date()
   const bypassCache = options.bypassCache === true
   const snapshot = await getSourceSnapshot(now, options.now != null || bypassCache)
   if (bypassCache) revalidateTag(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, { expire: 0 })
-  return computeHealthDistribution(snapshot.rows, now.getTime())
+  return collectHealthDistribution(snapshot.rows, now.getTime())
 }

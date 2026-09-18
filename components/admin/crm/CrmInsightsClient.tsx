@@ -4,18 +4,184 @@ import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { AlertTriangle, CalendarClock, ChevronDown, ExternalLink, FileText, RefreshCw, ShieldCheck, TrendingUp } from "lucide-react"
 
+import { EmptyState } from "@/components/admin/viz"
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import { CRM_CACHE_SWR_MS, CRM_CACHE_TTL_MS } from "@/lib/crm/client-cache"
+import type { CustomerHealthBand } from "@/lib/crm/customer-health"
 import type {
   CrmInsightListItem,
   CrmInsights,
   CrmInsightSourceKey,
   CrmInsightTone,
 } from "@/lib/repositories/crm-insights"
+import type {
+  CrmHealthDistributionOwnerRow,
+  CrmHealthDistributionWithOwners,
+} from "@/lib/repositories/crm-unified-customers"
 import CrmManagerReportPanel from "./CrmManagerReportPanel"
+import { ScoreKindTable } from "./ScoreKind"
 
 const INSIGHTS_URL = "/api/admin/crm/insights"
 const CACHE_TTL_MS = 90_000
+// 코크핏 도넛(CrmHealthDonut)과 같은 cacheKey — 같은 키는 같은 TTL/SWR(SSOT)로만 부른다(H8).
+const HEALTH_DISTRIBUTION_URL = "/api/admin/crm/health-distribution"
+
+interface HealthDistributionResponse {
+  distribution: CrmHealthDistributionWithOwners
+  generatedAt: string
+}
+
+// 건강도 밴드 상태색(DESIGN.md 운영 상태 스케일). 상태색은 항상 텍스트 라벨과 함께 쓴다 —
+// 범례는 색+텍스트, 세그먼트는 건수 직접 표기, 좁으면 title로 보강.
+const HEALTH_BANDS: ReadonlyArray<{
+  key: CustomerHealthBand
+  label: string
+  bg: string
+  fg: string
+  border: string
+}> = [
+  { key: "safe", label: "안전", bg: "#084734", fg: "#FFFFFF", border: "#084734" },
+  { key: "watch", label: "주의", bg: "#ECD29C", fg: "#7A520F", border: "#7A520F" },
+  { key: "risk", label: "위험", bg: "#F2B8B8", fg: "#8F2C2C", border: "#8F2C2C" },
+]
+
+function formatClock(iso: string | null | undefined) {
+  if (!iso) return null
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return null
+  return date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false })
+}
+
+/**
+ * 담당별 건강도 스택바(T2). 담당 한 줄 = 안전/주의/위험 순서의 수평 스택, 막대 길이는 담당 중 최대
+ * 건수 대비, 세그먼트 폭은 그 담당 안의 비율. 담당 클릭 링크는 두지 않는다 — 통합 고객 화면이
+ * ?owner= 딥링크를 받지 않아(view=my_owner만) 링크가 착지해도 필터가 걸리지 않는다.
+ */
+export function CrmHealthByOwnerSection({
+  distribution,
+  generatedAt,
+  loading,
+}: {
+  distribution: CrmHealthDistributionWithOwners | null
+  generatedAt: string | null
+  loading: boolean
+}) {
+  const rows: CrmHealthDistributionOwnerRow[] = distribution?.byOwner ?? []
+  const maxTotal = rows.reduce((max, row) => Math.max(max, row.total), 0)
+  const clock = formatClock(generatedAt)
+
+  return (
+    <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4" aria-labelledby="crm-health-by-owner-title">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 id="crm-health-by-owner-title" className="text-[15px] font-bold text-[#111110]">
+            담당별 건강도
+          </h2>
+          <p className="mt-0.5 text-[11px] text-[#615D59]">
+            활성 고객(NEO) 건강도 밴드 · 담당자별 건수
+            {distribution ? (
+              <>
+                {" · 전체 "}
+                <span className="tabular-nums">{distribution.total.toLocaleString("ko-KR")}</span>건
+              </>
+            ) : null}
+            {clock ? ` · 기준 ${clock}` : ""}
+          </p>
+        </div>
+        <ul className="flex flex-wrap items-center gap-x-3 gap-y-1" aria-label="범례">
+          {HEALTH_BANDS.map((band) => (
+            <li key={band.key} className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#31302E]">
+              <span
+                aria-hidden="true"
+                className="inline-block h-2.5 w-2.5 rounded-[3px] border"
+                style={{ backgroundColor: band.bg, borderColor: band.border }}
+              />
+              {band.label}
+              {distribution ? (
+                <span className="font-normal tabular-nums text-[#615D59]">
+                  {distribution[band.key].toLocaleString("ko-KR")}
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {rows.length > 0 ? (
+        <ol className="space-y-2" data-testid="crm-health-by-owner-rows">
+          {rows.map((row) => {
+            const widthPct = maxTotal > 0 ? (row.total / maxTotal) * 100 : 0
+            const summary = HEALTH_BANDS.map((band) => `${band.label} ${row[band.key].toLocaleString("ko-KR")}건`).join(" · ")
+            return (
+              <li
+                key={row.ownerId ?? `name:${row.ownerName}`}
+                className="flex items-center gap-3"
+                data-owner-id={row.ownerId ?? undefined}
+              >
+                <span className="w-24 shrink-0 truncate text-[12px] font-semibold text-[#111110]" title={row.ownerName}>
+                  {row.ownerName}
+                </span>
+                <div className="h-7 flex-1 rounded-lg bg-[#F6F5F4]">
+                  <div
+                    className="flex h-full gap-[2px]"
+                    style={{ width: `${Math.max(widthPct, 4)}%` }}
+                    role="img"
+                    aria-label={`${row.ownerName} · ${summary} · 합계 ${row.total.toLocaleString("ko-KR")}건`}
+                  >
+                    {HEALTH_BANDS.map((band) => {
+                      const count = row[band.key]
+                      if (count <= 0) return null
+                      const label = `${band.label} ${count.toLocaleString("ko-KR")}건`
+                      return (
+                        <span
+                          key={band.key}
+                          data-band={band.key}
+                          title={label}
+                          className="flex min-w-0 items-center justify-center overflow-hidden rounded-[4px] border px-1 text-[11px] font-bold tabular-nums"
+                          style={{ flex: `${count} 1 0%`, backgroundColor: band.bg, color: band.fg, borderColor: band.border }}
+                        >
+                          <span className="truncate">{count.toLocaleString("ko-KR")}</span>
+                        </span>
+                      )
+                    })}
+                  </div>
+                </div>
+                <span className="w-12 shrink-0 text-right text-[12px] font-semibold tabular-nums text-[#31302E]">
+                  {row.total.toLocaleString("ko-KR")}
+                </span>
+              </li>
+            )
+          })}
+        </ol>
+      ) : loading && !distribution ? (
+        <div className="rounded-xl bg-[#fafaf8] px-3 py-6 text-center text-[13px] text-[#1a1a1a]/40">계산 중입니다...</div>
+      ) : (
+        <EmptyState title="담당자별 건강도를 표시할 활성 고객이 없습니다." description="NEO 활성 고객이 동기화되면 담당자별 안전·주의·위험 건수가 여기에 쌓입니다." />
+      )}
+      <p className="mt-2 text-[10px] text-[#1a1a1a]/35">
+        건강도 = 100 감점식(75 이상 안전 · 55 이상 주의 · 그 아래 위험) · 막대 길이는 담당 중 최다 건수 대비 · 금액 합산 없음
+      </p>
+    </section>
+  )
+}
+
+/** 점수 3종 정의(T3) — 건강도 차트 바로 아래, 접을 수 있고 기본 열림. */
+export function CrmScoreKindDefinitionsSection() {
+  return (
+    <details open className="group mb-4 rounded-2xl border border-[#e8e8e4] bg-white">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-[13px] font-bold text-[#111110] [&::-webkit-details-marker]:hidden">
+        <span>점수 3종 정의</span>
+        <ChevronDown className="h-4 w-4 shrink-0 text-[#1a1a1a]/35 transition-transform group-open:rotate-0 -rotate-90" />
+      </summary>
+      <div className="border-t border-[#e8e8e4] px-4 pb-4 pt-3">
+        <p className="mb-2 text-[11px] text-[#615D59]">
+          건강도·리드 점수·우선순위는 서로 다른 산식이다. 화면의 숫자 옆에는 항상 어떤 점수인지 붙인다.
+        </p>
+        <ScoreKindTable />
+      </div>
+    </details>
+  )
+}
 
 function toneClass(tone: CrmInsightTone) {
   if (tone === "risk") return "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]"
@@ -117,6 +283,8 @@ export default function CrmInsightsClient() {
   const [error, setError] = useState<string | null>(null)
   const [leadKpis, setLeadKpis] = useState<LeadFunnelKpis | null>(null)
   const [channels, setChannels] = useState<LeadChannelStat[]>([])
+  const [healthDistribution, setHealthDistribution] = useState<HealthDistributionResponse | null>(null)
+  const [healthLoading, setHealthLoading] = useState(true)
   /** 새로고침이 퍼널·채널 블록까지 닿게 하는 키(0이면 첫 로드 — 캐시 사용). */
   const [secondaryRefreshKey, setSecondaryRefreshKey] = useState(0)
   // 주간 리포트(narrative)는 보고성 — 기본 접힘으로 스캔 지표(퍼널·채널·KPI)를 먼저.
@@ -191,6 +359,31 @@ export default function CrmInsightsClient() {
         if (alive) setChannels(d?.channels ?? [])
       })
       .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [secondaryRefreshKey])
+
+  // 담당별 건강도(T2) — 코크핏 도넛과 같은 라우트·cacheKey·TTL/SWR(SSOT). 새로고침 키를 공유한다.
+  useEffect(() => {
+    let alive = true
+    setHealthLoading(true)
+    adminFetchJsonCached<HealthDistributionResponse>(HEALTH_DISTRIBUTION_URL, undefined, {
+      cacheKey: HEALTH_DISTRIBUTION_URL,
+      ttlMs: CRM_CACHE_TTL_MS,
+      staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
+      force: secondaryRefreshKey > 0,
+      onRevalidated: ({ data: fresh }) => {
+        if (alive && fresh) setHealthDistribution(fresh)
+      },
+    })
+      .then((d) => {
+        if (alive) setHealthDistribution(d ?? null)
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (alive) setHealthLoading(false)
+      })
     return () => {
       alive = false
     }
@@ -332,6 +525,13 @@ export default function CrmInsightsClient() {
           <p className="mt-2 text-[10px] text-[#1a1a1a]/35">전환율 = 전환 리드 / 전체 리드(채널별) · 건수 상위 8개</p>
         </section>
       ) : null}
+
+      <CrmHealthByOwnerSection
+        distribution={healthDistribution?.distribution ?? null}
+        generatedAt={healthDistribution?.generatedAt ?? null}
+        loading={healthLoading}
+      />
+      <CrmScoreKindDefinitionsSection />
 
       {error ? (
         <div className="mb-4 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] font-medium text-[#B85C33]">
