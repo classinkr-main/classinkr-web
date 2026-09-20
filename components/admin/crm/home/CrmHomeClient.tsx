@@ -457,6 +457,7 @@ export default function CrmHomeClient({
         loading={compassPipelineLoading}
         error={compassPipelineError}
         onRetry={() => void fetchCompassPipeline({ force: true })}
+        refreshKey={neoCrmRefreshKey}
       />
 
       {/* 리드 요약 다음에 오늘의 행동 큐를 붙여 숫자 확인 → 처리 흐름을 한 축으로 만든다.
