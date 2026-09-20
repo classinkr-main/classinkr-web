@@ -18,7 +18,7 @@
 import "server-only"
 
 import { getBusinessDateParts } from "@/lib/business-time"
-import { getKoreaHolidayEvents } from "@/lib/korea-holidays"
+import { loadKoreaHolidayDates } from "@/lib/korea-holiday-dates"
 import { getShowroomCalendarEvents } from "@/lib/showroom-ics-calendar"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import {
@@ -44,44 +44,6 @@ export interface ShowroomAvailabilityResult {
   minIso: string
   maxIso: string
   days: ShowroomDayAvailability[]
-}
-
-function monthsInRange(fromIso: string, toIso: string): Array<{ year: number; month: number }> {
-  const months: Array<{ year: number; month: number }> = []
-  const seen = new Set<string>()
-
-  let cursor = fromIso
-  let guard = 0
-  while (compareIsoDate(cursor, toIso) <= 0 && guard < MAX_RANGE_DAYS + 2) {
-    guard += 1
-    const key = cursor.slice(0, 7)
-    if (!seen.has(key)) {
-      seen.add(key)
-      const [year, month] = key.split("-").map(Number)
-      months.push({ year, month })
-    }
-    cursor = addIsoDays(cursor, 1)
-  }
-
-  return months
-}
-
-/** 공휴일 날짜 집합. 원천이 비면 빈 집합 — 화면을 막지 않는다. */
-async function loadHolidayDates(fromIso: string, toIso: string): Promise<Set<string>> {
-  const holidays = new Set<string>()
-
-  const results = await Promise.allSettled(
-    monthsInRange(fromIso, toIso).map((month) => getKoreaHolidayEvents(month))
-  )
-
-  for (const result of results) {
-    if (result.status !== "fulfilled") continue
-    for (const event of result.value) {
-      if (event.date) holidays.add(event.date)
-    }
-  }
-
-  return holidays
 }
 
 /** 쇼룸 구글 캘린더(ICS) 일정 → 점유 구간. 읽기 전용 원천이라 실패해도 넘어간다. */
@@ -167,7 +129,7 @@ export async function getShowroomAvailability(
   // 공휴일을 아직 모르는 상태로 예약 창을 잡으면 최소 날짜가 공휴일에 걸릴 수 있다.
   // 넉넉한 창으로 공휴일을 먼저 읽고, 그 값으로 실제 창을 다시 잡는다.
   const probe = getShowroomBookingRange(todayIso)
-  const holidayDates = await loadHolidayDates(todayIso, probe.maxIso)
+  const holidayDates = await loadKoreaHolidayDates(todayIso, probe.maxIso)
   const range = getShowroomBookingRange(todayIso, holidayDates)
 
   const requestedFrom = options.fromIso && isValidIsoDate(options.fromIso) ? options.fromIso : range.minIso

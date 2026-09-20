@@ -17,17 +17,20 @@ import { Label } from "@/components/ui/label"
 import {
   HARDWARE_INSTALL_OPTIONS,
   buildInstallRequestItem,
+  computeInstallSubtotalKrw,
   formatHardwareKrw,
   type HardwareInstallType,
 } from "@/lib/billing/hardware-catalog"
 import { Textarea } from "@/components/ui/textarea"
 import { DesiredDateCalendar } from "@/components/checkout/DesiredDateCalendar"
+import { useBlockedDesiredDates } from "@/components/checkout/desired-date-blocks"
 import {
   formatDesiredDateLabel,
   getKstToday,
   getMaxDesiredDate,
   getMinDesiredDate,
   isDesiredDateSelectable,
+  type DesiredDateRange,
 } from "@/components/checkout/request-date"
 import type { CheckoutRequestItem } from "@/lib/billing/hardware-catalog"
 import { trackEvent } from "@/lib/analytics"
@@ -115,7 +118,7 @@ function isFieldKey(value: unknown): value is FieldKey {
 
 function validate(
   form: FormState,
-  range: { minIso: string; maxIso: string },
+  range: DesiredDateRange,
   requireAddress: boolean
 ) {
   const errors: Partial<Record<FieldKey, string>> = {}
@@ -182,7 +185,20 @@ export function CheckoutRequestForm({
         : null,
     [kind, hardwareQuantities, installUnitCount, form.installType]
   )
-  const installTotalKrw = installItem ? installItem.unitAmount * installItem.qty : 0
+  /**
+   * 설치 방식을 고르기 전에도 확정된 설치비. 패널 사이드바가 이 값을 이미 합계에 넣어
+   * 보여주므로, 모달이 방식 선택 전까지 더 낮은 숫자를 말하면 같은 화면이 두 금액을
+   * 말하게 된다. 라디오는 금액이 아니라 방식을 고르는 자리다.
+   */
+  const installSubtotalKrw = useMemo(
+    () =>
+      kind === "hardware" && hardwareQuantities ? computeInstallSubtotalKrw(hardwareQuantities) : 0,
+    [kind, hardwareQuantities]
+  )
+  const itemsSubtotalKrw = useMemo(
+    () => items.reduce((total, line) => total + line.unitAmount * line.qty, 0),
+    [items]
+  )
   /** 서버로 보내는 라인 = 패널이 준 구성 + (선택 시) 설치 라인. */
   const submitItems = useMemo(
     () => (installItem ? [...items, installItem] : items),
@@ -201,6 +217,11 @@ export function CheckoutRequestForm({
     () => ({ minIso: getMinDesiredDate(todayIso), maxIso: getMaxDesiredDate(todayIso) }),
     [todayIso]
   )
+  /**
+   * 주말·공휴일은 설치도 상담도 나가지 않는 날이다. 고를 수 있게 두면 "실제 일정은 담당자와
+   * 조율합니다" 한 줄에 기대어 재조율 통화가 기본값이 된다.
+   */
+  const blockedIsoDates = useBlockedDesiredDates(range)
 
   // 닫았다 다시 열면 깨끗한 상태에서 시작한다. 진행 중인 제출은 함께 끊는다.
   // 열릴 때는 패널의 주문자 정보를 초기값으로 프리필한다(이중 입력 제거).
@@ -260,6 +281,7 @@ export function CheckoutRequestForm({
     const submitRange = {
       minIso: getMinDesiredDate(submitToday),
       maxIso: getMaxDesiredDate(submitToday),
+      disabledIsoDates: blockedIsoDates,
     }
 
     const nextErrors = validate(form, submitRange, kind === "hardware")
@@ -385,6 +407,15 @@ export function CheckoutRequestForm({
                 <dt className="text-[#615D59]">{summaryTitle}</dt>
                 <dd className="font-medium text-[#111110]">{summaryValue}</dd>
               </div>
+              {installSubtotalKrw > 0 ? (
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-[#615D59]">신청 합계</dt>
+                  <dd className="font-semibold tabular-nums text-[#111110]">
+                    {formatHardwareKrw(itemsSubtotalKrw + installSubtotalKrw)}
+                    <span className="ml-1.5 text-[11px] font-normal text-[#A39E98]">부가세 별도</span>
+                  </dd>
+                </div>
+              ) : null}
             </dl>
 
             <Button
@@ -417,27 +448,29 @@ export function CheckoutRequestForm({
                 </p>
               </div>
 
-              {/* 설치를 고르면 합계가 달라진다 — 그 변화를 이 자리에서 바로 보여준다. */}
-              {installItem ? (
+              {/* 설치비는 방식과 무관하게 확정돼 있다 — 고르기 전부터 같은 금액을 말한다. */}
+              {installSubtotalKrw > 0 ? (
                 <div className="mt-2.5 space-y-1.5 border-t border-black/[0.06] pt-2.5">
                   <div className="flex items-baseline justify-between gap-3">
                     <p className="text-[12px] text-[#615D59]">
-                      {installItem.name}
-                      <span className="ml-1.5 text-[#A39E98]">× {installItem.qty}</span>
+                      {installItem ? installItem.name : "전자칠판 설치"}
+                      <span className="ml-1.5 text-[#A39E98]">× {installUnitCount}대</span>
                     </p>
                     <p className="text-right text-[13px] font-medium tabular-nums text-[#111110]">
-                      +{formatHardwareKrw(installTotalKrw)}
+                      +{formatHardwareKrw(installSubtotalKrw)}
                     </p>
                   </div>
                   <div className="flex items-baseline justify-between gap-3">
                     <p className="text-[12px] font-semibold text-[#111110]">신청 합계</p>
                     <p className="text-right text-[15px] font-semibold tabular-nums text-[#111110]">
-                      {formatHardwareKrw(
-                        submitItems.reduce((total, line) => total + line.unitAmount * line.qty, 0)
-                      )}
+                      {formatHardwareKrw(itemsSubtotalKrw + installSubtotalKrw)}
                     </p>
                   </div>
                 </div>
+              ) : null}
+
+              {kind === "hardware" ? (
+                <p className="mt-2 text-[11px] text-[#A39E98]">부가세 별도</p>
               ) : null}
             </div>
 
@@ -631,12 +664,14 @@ export function CheckoutRequestForm({
                   todayIso={todayIso}
                   minIso={range.minIso}
                   maxIso={range.maxIso}
+                  disabledIsoDates={blockedIsoDates}
                   invalid={Boolean(errors.desiredDate)}
                   labelledById="request-date-label"
                   describedById="request-date-hint"
                 />
                 <p id="request-date-hint" className="text-[11px] text-[#A39E98]">
-                  설치·상담 희망일을 내일 이후로 골라주세요. 실제 일정은 담당자와 조율합니다.
+                  설치·상담 희망일을 내일 이후로 골라주세요. 주말·공휴일은 제외되며, 실제 일정은
+                  담당자와 조율합니다.
                 </p>
                 {errors.desiredDate ? (
                   <p className="text-[11px] text-[#B43E3E]">{errors.desiredDate}</p>

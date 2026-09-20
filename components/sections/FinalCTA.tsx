@@ -4,7 +4,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { DemoModal } from "./DemoModal"
 import { TrackedLink } from "@/components/TrackedLink"
-import { ArrowRight, CalendarDays, FileCheck2, Newspaper } from "lucide-react"
+import { ArrowRight, CalendarDays, FileCheck2, MapPin, Newspaper } from "lucide-react"
 
 export function FinalCTA() {
     return (
@@ -40,14 +40,16 @@ export function FinalCTA() {
                         </Button>
                     </DemoModal>
 
+                    {/* 포지셔닝 정본이 "가장 강한 CTA"로 두는 경로다. 리드마그넷은 히어로에도
+                        같은 자산이 걸려 있어 아래 탐색 줄로 내린다. */}
                     <TrackedLink
-                        href="/resources/academy-system-checklist#download"
-                        ctaId="final_lead_magnet"
-                        tracking={{ source: "home_final_cta", lead_magnet: "academy-system-checklist" }}
+                        href="/showroom"
+                        ctaId="final_showroom"
+                        tracking={{ source: "home_final_cta" }}
                         className="inline-flex h-16 w-full items-center justify-center rounded-full border border-white/20 bg-white/5 px-10 text-lg font-semibold text-white shadow-xl backdrop-blur-md transition-all hover:scale-105 hover:bg-white/10 sm:w-auto"
                     >
-                        <FileCheck2 className="mr-2 h-5 w-5" />
-                        먼저 운영 누수 진단하기
+                        <MapPin className="mr-2 h-5 w-5" />
+                        목동 쇼룸에서 직접 보기
                     </TrackedLink>
                 </div>
 
@@ -57,6 +59,15 @@ export function FinalCTA() {
 
                 {/* 아직 상담이 이르다면 — 콘텐츠 탐색 경로 */}
                 <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-8">
+                    <TrackedLink
+                        href="/resources/academy-system-checklist#download"
+                        ctaId="final_lead_magnet"
+                        tracking={{ source: "home_final_cta", lead_magnet: "academy-system-checklist" }}
+                        className="inline-flex items-center gap-1.5 text-sm font-semibold text-white/50 transition-colors hover:text-[#6EE7B7]"
+                    >
+                        <FileCheck2 className="h-4 w-4" />
+                        먼저 운영 누수 진단하기
+                    </TrackedLink>
                     <Link
                         href="/events"
                         prefetch={false}

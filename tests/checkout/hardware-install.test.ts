@@ -8,6 +8,7 @@ import {
   buildHardwareRequestItems,
   buildInstallRequestItem,
   computeHardwareTotalKrw,
+  computeInstallSubtotalKrw,
   computeInstallTotalKrw,
   countInstallRequiredUnits,
   createEmptyHardwareQuantities,
@@ -158,5 +159,58 @@ describe("견적 카탈로그와의 정합", () => {
 
     expect(stand?.unit_price).toBe(HARDWARE_INSTALL_PRICE_KRW)
     expect(wall?.unit_price).toBe(HARDWARE_INSTALL_PRICE_KRW)
+  })
+})
+
+describe("장바구니 합계와 신청 합계가 같은 금액을 말한다", () => {
+  /**
+   * 설치 라디오는 신청 모달에만 있다. 그래서 장바구니 사이드바가 설치비를 빼고 계산하면
+   * 같은 화면이 두 금액을 말하게 된다 — 86" 1대를 담은 사람이 사이드바에서 본 합계가
+   * 실제 신청 합계보다 대당 단가만큼 적었다.
+   */
+  it("설치 방식을 고르기 전에도 설치비가 확정된다", () => {
+    const quantities = { ...createEmptyHardwareQuantities(), "hw-board-86": 1 }
+
+    // 방식을 고르지 않은 상태의 computeInstallTotalKrw 는 0 이지만,
+    // 금액 자체는 담은 구성만으로 정해져 있다.
+    expect(computeInstallTotalKrw("", quantities)).toBe(0)
+    expect(computeInstallSubtotalKrw(quantities)).toBe(HARDWARE_INSTALL_PRICE_KRW)
+  })
+
+  it("어느 방식을 골라도 사이드바가 말한 금액과 같다", () => {
+    const quantities = { ...createEmptyHardwareQuantities(), "hw-board-86": 2 }
+    const sidebar = computeInstallSubtotalKrw(quantities)
+
+    for (const option of HARDWARE_INSTALL_OPTIONS) {
+      expect(computeInstallTotalKrw(option.value, quantities)).toBe(sidebar)
+    }
+  })
+
+  it("설치가 필요 없는 구성은 0 이다 — 패키지는 벽걸이를 이미 포함한다", () => {
+    const packageOnly = { ...createEmptyHardwareQuantities(), "hw-package-ai-studio": 3 }
+    const cameraOnly = { ...createEmptyHardwareQuantities(), "hw-camera-t1": 2 }
+
+    expect(computeInstallSubtotalKrw(packageOnly)).toBe(0)
+    expect(computeInstallSubtotalKrw(cameraOnly)).toBe(0)
+  })
+
+  it("전자칠판 대수에 비례한다", () => {
+    const quantities = {
+      ...createEmptyHardwareQuantities(),
+      "hw-board-75": 2,
+      "hw-board-86": 1,
+      "hw-camera-t1": 4,
+    }
+
+    expect(countInstallRequiredUnits(quantities)).toBe(3)
+    expect(computeInstallSubtotalKrw(quantities)).toBe(HARDWARE_INSTALL_PRICE_KRW * 3)
+  })
+
+  it("사이드바 합계 = 구성 합계 + 설치비", () => {
+    const quantities = { ...createEmptyHardwareQuantities(), "hw-board-86": 1 }
+    const grandTotal = computeHardwareTotalKrw(quantities) + computeInstallSubtotalKrw(quantities)
+
+    expect(computeHardwareTotalKrw(quantities)).toBe(6_300_000)
+    expect(grandTotal).toBe(6_800_000)
   })
 })

@@ -56,9 +56,13 @@ export const HARDWARE_PACKAGE_NOTE = "설치 배송비 포함 · 12개월 할부
  */
 export const HARDWARE_ORDER_NOTE = "12개월 할부 가능"
 
-/** 설치가 필요한 구성일 때 합계 카드에 함께 붙이는 안내. */
+/**
+ * 설치가 필요한 구성일 때 합계 카드에 함께 붙이는 안내.
+ * 스탠드·벽걸이 단가가 같아 합계는 신청 전에 이미 확정된다 — 신청 단계에서 고르는 것은
+ * 금액이 아니라 설치 방식이다.
+ */
 export const HARDWARE_INSTALL_NOTE =
-  "전자칠판 설치비는 별도입니다. 신청 단계에서 스탠드·벽걸이 중 선택하면 합계에 더해집니다."
+  "전자칠판 설치비가 합계에 포함되어 있습니다. 스탠드·벽걸이는 단가가 같아, 신청 단계에서는 방식만 고르면 됩니다."
 
 /** 전자칠판 1대당 설치비. 스탠드·벽걸이 모두 같은 금액이다. */
 export const HARDWARE_INSTALL_PRICE_KRW = 500_000
@@ -224,6 +228,16 @@ export function countInstallRequiredUnits(quantities: HardwareQuantities): numbe
     if (!item.requiresInstall) return total
     return total + clampHardwareQty(quantities[item.sku] ?? 0)
   }, 0)
+}
+
+/**
+ * 설치 방식을 고르기 전에도 확정되는 설치비 합계(원).
+ *
+ * 스탠드·벽걸이 단가가 같으므로 "무엇을 담았는가"만으로 금액이 정해진다. 장바구니 합계가
+ * 이 값을 빼고 계산되면 화면이 말하는 금액과 실제 신청 합계가 대당 단가만큼 갈라진다.
+ */
+export function computeInstallSubtotalKrw(quantities: HardwareQuantities): number {
+  return HARDWARE_INSTALL_PRICE_KRW * countInstallRequiredUnits(quantities)
 }
 
 /** 선택한 설치 방식의 합계(원). 설치가 필요 없는 구성이면 0. */
