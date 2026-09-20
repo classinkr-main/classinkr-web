@@ -15,6 +15,7 @@ import SaveStateCaption, { type SaveState } from "@/components/admin/crm/SaveSta
 import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
 import { useDialogFocus } from "@/components/admin/use-dialog-focus"
 import { STATUS_TONE_TEXT_CLASS } from "@/lib/crm/status-tone"
+import { INTERACTIVE_TEXT_CLASS, MOBILE_TOUCH_TARGET_CLASS, SECONDARY_TEXT_CLASS } from "@/components/admin/crm/home/shared"
 import type { CrmOwnerOption } from "@/components/admin/crm/useCrmOwners"
 import type { LeadActivity } from "@/lib/repositories/lead-activity"
 import type { LeadRecord, LeadStatus } from "@/lib/repositories/leads"
@@ -22,6 +23,7 @@ import type { ContactLogRecord, ContactLogType, ContactLogResult } from "@/lib/r
 import type { PublicEvent } from "@/lib/types/public-events"
 import { parseEventToken, setEventToken } from "@/lib/types/event-metrics"
 import { deriveLeadRegionLabel } from "@/lib/crm/lead-message"
+import { FOLLOW_UP_PRESETS, describeFollowUpDate, resolveFollowUpPreset } from "@/lib/crm/follow-up-presets"
 import {
   STATUS_LABEL,
   STATUS_COLOR,
@@ -44,10 +46,15 @@ import { ACTIVITY_EVENT_LABEL, formatActivityTime, providerLabel } from "./share
 import ContactLogForm from "./ContactLogForm"
 import {
   ASSIGNED_TO_COMMIT_DELAY_MS,
+  RECENT_ASSIGNEES_MAX_SHOWN,
+  RECENT_ASSIGNEES_STORAGE_KEY,
   createLatestRequestGuard,
+  isRecentAssigneeEntry,
   listUnsavedDrawerFields,
   nextLogIdAfterRemoval,
+  pushRecentAssignee,
   resolveStatusButtonAction,
+  type RecentAssigneeEntry,
 } from "./lead-drawer-save"
 
 // 부모(LeadsBoardClient.handleStatus)는 실패를 toast 로만 알리고 reject 하지 않는다. 성공은 lead.status
@@ -67,6 +74,7 @@ export default function LeadDrawer({
   initialContactType,
   crmOwners,
   crmOwnerHealth,
+  currentOwner = null,
   onClose,
   onStatusChange,
   onNotesChange,
@@ -88,6 +96,12 @@ export default function LeadDrawer({
   initialContactType?: ContactLogType
   crmOwners: CrmOwnerOption[]
   crmOwnerHealth: { ok: boolean; message: string | null } | null
+  /**
+   * "나" 빠른 배정 칩용 — useCrmOwners()의 currentOwner를 그대로 넘긴다(Q4). 부모가 아직 넘기지 않으면
+   * (호출부 배선은 이번 라운드 소유 파일 밖) undefined/null로 남고, 그때는 "나" 칩을 생략한다 —
+   * crmOwners 목록 자체에는 "이게 나"를 가리키는 필드가 없어 이 값 없이는 판정할 수 없다.
+   */
+  currentOwner?: CrmOwnerOption | null
   onClose: () => void
   onStatusChange: (id: string, status: LeadStatus) => Promise<void> | void
   onNotesChange: (id: string, notes: string) => Promise<void>
@@ -126,6 +140,38 @@ export default function LeadDrawer({
   const lastOwnerIntentRef = useRef<string | null>(null)
   const onAssignedToChangeRef = useRef(onAssignedToChange)
   onAssignedToChangeRef.current = onAssignedToChange
+  // 빠른 배정 최근 목록(Q4) — 브라우저 전역 localStorage(리드별 아님, recent-customers.ts와 같은 패턴).
+  // SSR/최초 렌더는 빈 배열로 시작해(하이드레이션 불일치 없음) 마운트 뒤 이펙트에서 채운다.
+  const [recentAssignees, setRecentAssignees] = useState<RecentAssigneeEntry[]>([])
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      const raw = window.localStorage.getItem(RECENT_ASSIGNEES_STORAGE_KEY)
+      const parsed: unknown = raw ? JSON.parse(raw) : []
+      if (Array.isArray(parsed)) setRecentAssignees(parsed.filter(isRecentAssigneeEntry))
+    } catch {
+      // localStorage 불가(프라이빗 모드·차단) — 최근 배정 칩 없이 진행한다.
+    }
+  }, [])
+  // 배정 성공 시 앞에 추가 · 중복 제거 · 최대 5 저장(표시는 렌더에서 3으로 자른다). best-effort라
+  // localStorage 실패는 화면 상태(recentAssignees)만 건드리지 않고 조용히 넘어간다.
+  const rememberRecentAssignee = useCallback(
+    (ownerKey: string) => {
+      if (typeof window === "undefined" || !ownerKey) return
+      const displayName = crmOwners.find((owner) => owner.ownerKey === ownerKey)?.displayName ?? ownerKey
+      try {
+        const raw = window.localStorage.getItem(RECENT_ASSIGNEES_STORAGE_KEY)
+        const parsed: unknown = raw ? JSON.parse(raw) : []
+        const existing = Array.isArray(parsed) ? parsed.filter(isRecentAssigneeEntry) : []
+        const next = pushRecentAssignee(existing, { ownerKey, displayName })
+        window.localStorage.setItem(RECENT_ASSIGNEES_STORAGE_KEY, JSON.stringify(next))
+        setRecentAssignees(next)
+      } catch {
+        // localStorage 불가 — 이번 배정은 이미 서버에 저장됐으니 최근 목록만 못 남긴다.
+      }
+    },
+    [crmOwners]
+  )
   // 상태 버튼 저장 상태(leads-01). 부모 handleStatus 는 reject 하지 않으므로 팔로업과 같은 "부모 상태가 따라왔는가"
   // 판정을 쓴다. target 은 지금 저장 중이거나 마지막으로 실패한 대상 상태.
   const [statusSave, setStatusSave] = useState<{ target: LeadStatus | null; state: SaveState }>({
@@ -159,6 +205,10 @@ export default function LeadDrawer({
   // 저장을 시도한 값 — 부모(onFollowUpChange)는 실패를 toast로만 알리고 reject하지 않으므로,
   // 성공 여부는 lead.follow_up_at(부모 상태)이 이 값으로 따라왔는지로 판정한다.
   const attemptedFollowUpRef = useRef<string | null>(null)
+  // 중복 제출 잠금(Q1) — 프리셋 칩 연타로 같은 저장이 겹치지 않는다. savingFollowUp(state)는 클릭
+  // 핸들러가 읽는 시점에 아직 이전 렌더의 값일 수 있어(리액트 배치) 동기 판정에는 ref를 쓴다
+  // (commitOwner의 ownerInFlightRef, ContactLogForm의 saveInFlightRef와 같은 규약).
+  const followUpInFlightRef = useRef(false)
   const [showLogForm, setShowLogForm] = useState(Boolean(initialContactForm))
   const [contactLogInitialType, setContactLogInitialType] = useState<ContactLogType>(initialContactType ?? "call")
   const [converting, setConverting] = useState(false)
@@ -172,6 +222,25 @@ export default function LeadDrawer({
   const unrespondedHours = isUnrespondedLead(lead) ? hoursBetween(lead.timestamp) : null
   const metaAdInfo = getMetaAdInfo(lead)
   const regionLabel = deriveLeadRegionLabel(lead)
+
+  // 빠른 배정 칩(Q4) — "나"(currentOwner, 부모가 아직 안 넘겼으면 생략) + 최근 배정(최대 3, "나"와
+  // 같은 대상은 중복 표시하지 않는다). 담당자 정본이 불안정하거나(health) 후보가 없으면 select와
+  // 같은 조건으로 통째로 숨긴다 — 실패가 뻔한 배정을 제안하지 않는다.
+  const quickAssignOptions = useMemo(() => {
+    if (crmOwnerHealth?.ok !== true || crmOwners.length === 0) return []
+    const options: { key: string; ownerKey: string; label: string }[] = []
+    const meKey = currentOwner?.ownerKey || null
+    if (meKey) {
+      const meLabel = currentOwner?.displayName?.trim() || meKey
+      options.push({ key: "me", ownerKey: meKey, label: `나 · ${meLabel}` })
+    }
+    for (const entry of recentAssignees) {
+      if (entry.ownerKey === meKey) continue
+      if (options.length >= (meKey ? 1 : 0) + RECENT_ASSIGNEES_MAX_SHOWN) break
+      options.push({ key: `recent:${entry.ownerKey}`, ownerKey: entry.ownerKey, label: entry.displayName })
+    }
+    return options
+  }, [crmOwnerHealth, crmOwners.length, currentOwner, recentAssignees])
   const attributionItems = [
     { label: "Source Detail", value: lead.source_detail },
     // 구버전 Meta 리드는 utm_term/content가 비어 광고가 안 보였다 — 파서 값으로 항상 노출.
@@ -222,19 +291,33 @@ export default function LeadDrawer({
 
   // 팔로업 저장 규약(설계 §4): 이산값이라 유효한 날짜로 바뀌는 즉시 저장한다. blur는 어떤
   // 경우에도 저장하지 않는다 — 닫기 경로의 강제 blur가 미완성 날짜를 null로 흘려보내던 사고의 원인.
+  // date input·프리셋 칩·"지우기"·ContactLogForm 제안 칩이 전부 이 한 함수로만 커밋한다(같은 저장 경로).
   const saveFollowUp = useCallback(
     async (next: string) => {
       if (next === savedFollowUp) return
+      if (followUpInFlightRef.current) return
+      followUpInFlightRef.current = true
       attemptedFollowUpRef.current = next
       setFollowUpSaved(false)
       setSavingFollowUp(true)
       try {
         await onFollowUpChange(lead.id, next)
       } finally {
+        followUpInFlightRef.current = false
         setSavingFollowUp(false)
       }
     },
     [lead.id, onFollowUpChange, savedFollowUp]
+  )
+
+  // 프리셋 칩("오늘"·"내일"·"3일 뒤"·"다음 주 월") + "지우기" 클릭 — date input의 onChange와 동일하게
+  // 로컬 값을 즉시 반영하고 같은 saveFollowUp 경로로 커밋한다(Q1).
+  const applyFollowUpPreset = useCallback(
+    (next: string) => {
+      setFollowUp(next)
+      void saveFollowUp(next)
+    },
+    [saveFollowUp]
   )
 
   // 성공 판정 — 부모 상태(lead.follow_up_at)가 시도한 값으로 따라오면 "저장됨" 배지를 2초 띄운다.
@@ -321,6 +404,9 @@ export default function LeadDrawer({
         ownerInFlightRef.current = false
         setOwnerSave("saved")
         ownerSavedTimerRef.current = setTimeout(() => setOwnerSave("idle"), SAVED_BADGE_MS)
+        // 배정 성공 — 다음에 또 빠르게 고를 수 있게 최근 배정 목록에 남긴다(Q4). "미배정"(next==="")은
+        // 사람이 아니므로 남기지 않는다.
+        if (next) rememberRecentAssignee(next)
       } catch {
         // 부모가 toast 로 원인을 알린다. 최신 요청이 아니면(그 뒤 다른 값이 나갔으면) 아무것도 되돌리지 않는다.
         if (!ownerGuardRef.current.isLatest(token)) return
@@ -329,7 +415,7 @@ export default function LeadDrawer({
         setOwnerSave("failed")
       }
     },
-    [lead.id, savedOwner]
+    [lead.id, savedOwner, rememberRecentAssignee]
   )
 
   // change 는 로컬 값만 바꾼다. 키보드 화살표로 옵션을 훑는 동안 change 가 연달아 나도 마지막 값만
@@ -349,6 +435,16 @@ export default function LeadDrawer({
     const pending = pendingOwnerRef.current
     if (pending === null) return
     void commitOwner(pending)
+  }
+
+  // "나"·최근 배정 칩(Q4) — select의 400ms 지연을 건너뛰고 세대 토큰 규약(commitOwner)을 그대로 재사용해
+  // 즉시 커밋한다. commitOwner 자신이 맨 먼저 대기 중인 select 지연 커밋(타이머·pendingOwnerRef)을
+  // 지우므로 여기서 다시 지울 필요는 없다. ownerInFlightRef 만 앞단에서 확인해 칩 연타로 같은 배정이
+  // 겹쳐 나가지 않게 한다(중복 제출 잠금).
+  const applyQuickAssign = (next: string) => {
+    if (ownerInFlightRef.current) return
+    setAssignedTo(next)
+    void commitOwner(next)
   }
 
   // 언마운트(닫기·다른 리드 선택) 시 대기 중인 담당자 값을 잃지 않는다 — 요청은 부모가 끝까지 처리한다.
@@ -452,10 +548,17 @@ export default function LeadDrawer({
     }
   }
 
+  // 폼을 닫는 시점은 ContactLogForm 이 스스로 결정한다(Q1) — 부재중/재통화라 팔로업 제안 칩을
+  // 보여줘야 하면 onCancel(= 폼 닫기)을 최대 8초 미루고, 그 외에는 저장 직후 바로 닫는다(기존과 동일한
+  // 체감). 여기서 무조건 닫아버리면 제안 칩이 뜰 새도 없이 사라진다.
   const handleSaveLog = async (entry: Parameters<typeof onAddLog>[0]) => {
     await onAddLog(entry)
-    setShowLogForm(false)
   }
+
+  // setShowLogForm은 항상 안정적이지만 이 콜백을 인라인 화살표로 넘기면 LeadDrawer가 리렌더될 때마다
+  // (예: 메모 입력) 새 함수 참조가 나가 ContactLogForm의 제안 칩 8초 타이머 이펙트가 매번 재시작된다
+  // (그 이펙트가 onCancel을 의존성으로 물고 있다) — useCallback으로 참조를 고정해 그 재시작을 막는다.
+  const closeContactLogForm = useCallback(() => setShowLogForm(false), [])
 
   const initials = (lead.name ?? lead.email ?? "?")[0]?.toUpperCase()
 
@@ -813,6 +916,32 @@ export default function LeadDrawer({
             {/* 담당자 */}
             <div>
               <p className="text-[11px] font-semibold text-[#1a1a1a]/30 uppercase tracking-wide mb-2">담당자</p>
+              {quickAssignOptions.length > 0 && (
+                <div
+                  role="group"
+                  aria-label="빠른 배정"
+                  className={`mb-2 flex flex-wrap gap-1.5 ${MOBILE_TOUCH_TARGET_CLASS}`}
+                >
+                  {quickAssignOptions.map((option) => {
+                    const pressed = assignedTo === option.ownerKey
+                    return (
+                      <button
+                        key={option.key}
+                        type="button"
+                        onClick={() => applyQuickAssign(option.ownerKey)}
+                        aria-pressed={pressed}
+                        className={`inline-flex items-center rounded-full border px-3 py-1.5 text-[12px] font-medium transition-all ${
+                          pressed
+                            ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                            : `border-[#e8e8e4] ${SECONDARY_TEXT_CLASS} hover:border-[#c8c8c4] hover:${INTERACTIVE_TEXT_CLASS}`
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
               <select
                 value={assignedTo}
                 aria-label="리드 담당자"
@@ -856,7 +985,46 @@ export default function LeadDrawer({
             <div>
               <p className="text-[11px] font-semibold text-[#1a1a1a]/30 uppercase tracking-wide mb-2 flex items-center gap-1.5">
                 <Bell className="w-3 h-3" />다음 팔로업
+                {followUp && (
+                  <span className="normal-case font-medium text-[#084734]">
+                    · {describeFollowUpDate(followUp, Date.now())}
+                  </span>
+                )}
               </p>
+              <div
+                role="group"
+                aria-label="팔로업 빠른 설정"
+                className={`mb-2 flex flex-wrap gap-1.5 ${MOBILE_TOUCH_TARGET_CLASS}`}
+              >
+                {FOLLOW_UP_PRESETS.map((preset) => {
+                  const dateKey = resolveFollowUpPreset(preset.id, Date.now())
+                  const pressed = followUp === dateKey
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => applyFollowUpPreset(dateKey)}
+                      aria-pressed={pressed}
+                      className={`inline-flex items-center rounded-full border px-3 py-1.5 text-[12px] font-medium transition-all ${
+                        pressed
+                          ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                          : `border-[#e8e8e4] ${SECONDARY_TEXT_CLASS} hover:border-[#c8c8c4] hover:${INTERACTIVE_TEXT_CLASS}`
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  )
+                })}
+                {followUp && (
+                  <button
+                    type="button"
+                    onClick={() => applyFollowUpPreset("")}
+                    className={`inline-flex items-center rounded-full border border-[#e8e8e4] px-3 py-1.5 text-[12px] font-medium ${SECONDARY_TEXT_CLASS} transition-all hover:border-[#c8c8c4] hover:${INTERACTIVE_TEXT_CLASS}`}
+                  >
+                    지우기
+                  </button>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 <input
                   type="date"
@@ -939,10 +1107,14 @@ export default function LeadDrawer({
                   key={contactLogInitialType}
                   initialType={contactLogInitialType}
                   onSave={handleSaveLog}
-                  onCancel={() => setShowLogForm(false)}
+                  onCancel={closeContactLogForm}
                   // app/api/admin/leads/[id]/logs/route.ts가 status==="new"인 리드에만 저장 시점에
                   // confirmed_at을 채운다 — 그 조건과 정확히 맞춰야 경고가 과다·과소 노출되지 않는다.
                   willAutoConfirm={lead.status === "new" && unconfirmed}
+                  // 부재중/재통화 저장 성공 뒤 제안 칩(Q1) — "이미 그 날짜"인지 판정할 기준은 서버 정본
+                  // (savedFollowUp)이다. 클릭 시 date input·프리셋 칩과 같은 saveFollowUp 경로로 커밋한다.
+                  currentFollowUpDate={savedFollowUp}
+                  onSuggestFollowUp={applyFollowUpPreset}
                 />
               </div>
             )}

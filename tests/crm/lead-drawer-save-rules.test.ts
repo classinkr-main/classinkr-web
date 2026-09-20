@@ -5,9 +5,12 @@ import { describe, expect, it } from "vitest"
 
 import {
   ASSIGNED_TO_COMMIT_DELAY_MS,
+  RECENT_ASSIGNEES_MAX_STORED,
   createLatestRequestGuard,
+  isRecentAssigneeEntry,
   listUnsavedDrawerFields,
   nextLogIdAfterRemoval,
+  pushRecentAssignee,
   resolveStatusButtonAction,
 } from "@/components/admin/crm/leads/board/lead-drawer-save"
 
@@ -76,5 +79,59 @@ describe("nextLogIdAfterRemoval (leads-07 포커스 이동)", () => {
     expect(nextLogIdAfterRemoval(["a", "b", "c"], "c")).toBe("b")
     expect(nextLogIdAfterRemoval(["a"], "a")).toBeNull()
     expect(nextLogIdAfterRemoval(["a", "b"], "zzz")).toBeNull()
+  })
+})
+
+describe("pushRecentAssignee (Q4 빠른 배정 최근 목록)", () => {
+  it("새 항목을 맨 앞에 추가한다", () => {
+    const result = pushRecentAssignee([{ ownerKey: "owner-a", displayName: "김담당" }], {
+      ownerKey: "owner-b",
+      displayName: "이담당",
+    })
+    expect(result).toEqual([
+      { ownerKey: "owner-b", displayName: "이담당" },
+      { ownerKey: "owner-a", displayName: "김담당" },
+    ])
+  })
+
+  it("같은 담당(ownerKey)이 이미 있으면 중복 제거하고 맨 앞으로 옮긴다", () => {
+    const result = pushRecentAssignee(
+      [
+        { ownerKey: "owner-a", displayName: "김담당" },
+        { ownerKey: "owner-b", displayName: "이담당" },
+      ],
+      { ownerKey: "owner-b", displayName: "이담당(개명)" }
+    )
+    expect(result).toEqual([
+      { ownerKey: "owner-b", displayName: "이담당(개명)" },
+      { ownerKey: "owner-a", displayName: "김담당" },
+    ])
+  })
+
+  it(`최대 ${RECENT_ASSIGNEES_MAX_STORED}명까지만 저장한다`, () => {
+    const existing = Array.from({ length: RECENT_ASSIGNEES_MAX_STORED }, (_, i) => ({
+      ownerKey: `owner-${i}`,
+      displayName: `담당${i}`,
+    }))
+    const result = pushRecentAssignee(existing, { ownerKey: "owner-new", displayName: "새 담당" })
+    expect(result).toHaveLength(RECENT_ASSIGNEES_MAX_STORED)
+    expect(result[0]).toEqual({ ownerKey: "owner-new", displayName: "새 담당" })
+    expect(result.at(-1)).toEqual(existing.at(-2)) // 가장 오래된(마지막) 항목이 밀려 빠진다
+  })
+
+  it("ownerKey가 빈 문자열이면 추가하지 않는다(미배정을 최근 목록에 남기지 않는다)", () => {
+    const existing = [{ ownerKey: "owner-a", displayName: "김담당" }]
+    expect(pushRecentAssignee(existing, { ownerKey: "", displayName: "" })).toEqual(existing)
+  })
+})
+
+describe("isRecentAssigneeEntry (localStorage 역직렬화 가드)", () => {
+  it("ownerKey·displayName이 모두 있는 비어있지 않은 문자열일 때만 참", () => {
+    expect(isRecentAssigneeEntry({ ownerKey: "owner-a", displayName: "김담당" })).toBe(true)
+    expect(isRecentAssigneeEntry({ ownerKey: "", displayName: "김담당" })).toBe(false)
+    expect(isRecentAssigneeEntry({ ownerKey: "owner-a" })).toBe(false)
+    expect(isRecentAssigneeEntry(null)).toBe(false)
+    expect(isRecentAssigneeEntry("owner-a")).toBe(false)
+    expect(isRecentAssigneeEntry(42)).toBe(false)
   })
 })

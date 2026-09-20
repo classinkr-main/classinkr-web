@@ -84,7 +84,10 @@ describe("LeadDrawer 렌더 (SSR)", () => {
   it("상태 버튼 4개가 모두 있고 현재 상태만 aria-pressed=true 이며, 모바일 터치 타깃(min-h-11)을 갖는다", () => {
     const html = render()
     expect(html).toContain('aria-pressed="true"')
-    expect(html.match(/aria-pressed="false"/g)?.length).toBe(3)
+    // 상태 버튼 3개(현재 상태 제외) + 팔로업 프리셋 칩 4개(Q1, 이 픽스처는 follow_up_at이 없어 전부
+    // 미선택) = 7. 빠른 배정 칩(Q4)은 이 SSR 픽스처에 currentOwner가 없고 최근 배정도 없어(마운트
+    // 이펙트 미실행) 행 자체가 렌더되지 않는다.
+    expect(html.match(/aria-pressed="false"/g)?.length).toBe(7)
     expect(html).toContain('role="group" aria-label="리드 상태"')
     expect(html).toContain("min-h-11 items-center justify-center gap-1.5 py-2 px-3 rounded-xl")
     // 전환 버튼은 status PATCH 가 아니라 convert-v2 절차임을 title 로 드러낸다.

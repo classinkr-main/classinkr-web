@@ -71,3 +71,45 @@ export function nextLogIdAfterRemoval(ids: readonly string[], removedId: string)
   if (index === -1) return null
   return ids[index + 1] ?? ids[index - 1] ?? null
 }
+
+// ─── 빠른 배정 — 최근 배정 목록(Q4) ───────────────────────────────────
+// 브라우저 전역(리드별이 아니라) localStorage 목록 — recent-customers.ts와 같은 패턴이다.
+// 이 파일은 순수 데이터 규칙만 갖는다; 실제 localStorage 읽기/쓰기(try/catch, SSR 가드)는
+// LeadDrawer.tsx가 한다.
+
+export const RECENT_ASSIGNEES_STORAGE_KEY = "classin_crm_recent_assignees"
+/** localStorage에 남기는 상한. */
+export const RECENT_ASSIGNEES_MAX_STORED = 5
+/** 칩 행에 보여주는 상한. */
+export const RECENT_ASSIGNEES_MAX_SHOWN = 3
+
+export interface RecentAssigneeEntry {
+  ownerKey: string
+  displayName: string
+}
+
+/** localStorage에서 읽은 임의의 JSON 값이 최근 배정 항목 모양인지 — 손상된 값을 조용히 걸러낸다. */
+export function isRecentAssigneeEntry(value: unknown): value is RecentAssigneeEntry {
+  if (!value || typeof value !== "object") return false
+  const candidate = value as Record<string, unknown>
+  return (
+    typeof candidate.ownerKey === "string" &&
+    candidate.ownerKey.length > 0 &&
+    typeof candidate.displayName === "string" &&
+    candidate.displayName.length > 0
+  )
+}
+
+/**
+ * 배정 성공 시 앞에 추가 · 같은 담당(ownerKey) 중복 제거 · 최대 RECENT_ASSIGNEES_MAX_STORED 저장.
+ * 표시용 3명 자르기는 호출부(LeadDrawer)가 한다 — 저장 상한과 표시 상한을 분리해, 화면에 보이는
+ * 3명 중 하나를 배정 해제해도 나머지 저장된 항목이 곧바로 다음 칩으로 올라오게 한다.
+ */
+export function pushRecentAssignee(
+  existing: readonly RecentAssigneeEntry[],
+  entry: RecentAssigneeEntry
+): RecentAssigneeEntry[] {
+  if (!entry.ownerKey) return [...existing]
+  const deduped = existing.filter((item) => item.ownerKey !== entry.ownerKey)
+  return [entry, ...deduped].slice(0, RECENT_ASSIGNEES_MAX_STORED)
+}

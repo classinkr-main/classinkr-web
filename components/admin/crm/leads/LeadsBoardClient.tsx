@@ -298,7 +298,7 @@ export default function LeadsBoardClient() {
   // 추정치가 아니라 실제 렌더된 상단 좌표 위에 얹기 위해 각 패널의 DOM 노드를 잡는다(리뷰 발견 3).
   const convertResultPanelRef = useRef<HTMLDivElement>(null)
   const toastMeasureRef = useRef<HTMLDivElement>(null)
-  const { owners: crmOwners, health: crmOwnerHealth } = useCrmOwners()
+  const { owners: crmOwners, health: crmOwnerHealth, currentOwner: crmCurrentOwner } = useCrmOwners()
   // Compass(마케팅팀 앱) 콜 상태 병기 — 읽기 전용 오버레이. 우리 리드 상태는 건드리지 않는다.
   const compass = useCompassOverlay(leads)
 
@@ -2252,6 +2252,7 @@ export default function LeadsBoardClient() {
           initialContactType={contactDraft?.leadId === selected.id ? contactDraft.type : undefined}
           crmOwners={crmOwners}
           crmOwnerHealth={crmOwnerHealth}
+          currentOwner={crmCurrentOwner}
           onClose={closeSelectedLead}
           onStatusChange={handleStatus}
           onNotesChange={handleNotes}
