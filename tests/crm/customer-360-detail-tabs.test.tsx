@@ -7,6 +7,8 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => searchParamsRef.current,
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
   usePathname: () => "/admin/crm/customers/lead%3Alead-1",
+  // Customer360DetailTasks(§13 Q2)가 태스크 탭에서 대상을 해석하는 데 쓴다.
+  useParams: () => ({ key: "lead:lead-1" }),
 }))
 
 import Customer360DetailClient, {

@@ -109,7 +109,7 @@ export default function Customer360DetailClient({ data, customerKey }: Props) {
       case "activity":
         return <Customer360DetailActivity activity={data.activity} compass={data.compass} />
       case "tasks":
-        return <Customer360DetailTasks tasks={data.tasks} />
+        return <Customer360DetailTasks tasks={data.tasks} customerKey={data.key} targetLabel={data.header?.name ?? null} />
       case "overview":
       default:
         return <Customer360DetailOverview data={data} />

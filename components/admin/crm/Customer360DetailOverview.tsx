@@ -17,6 +17,7 @@ import {
 import { MiniFunnel, Panel, StatTile, type FunnelStage } from "@/components/admin/viz"
 import CrmContactValue from "@/components/admin/crm/CrmContactValue"
 import { buildDrawerHealthInput } from "@/components/admin/crm/Customer360Drawer"
+import CustomerTagChips from "@/components/admin/crm/CustomerTagChips"
 import LeadMessageCard from "@/components/admin/crm/LeadMessageCard"
 import { ScoreKindLabel } from "@/components/admin/crm/ScoreKind"
 import { computeCustomerHealth } from "@/lib/crm/customer-health"
@@ -241,6 +242,11 @@ export default function Customer360DetailOverview({ data }: { data: Customer360 
           />
         </div>
       </section>
+
+      {/* 태그 — 수기 라벨(crm_customer_tags). 자동 파생 신호(리스크·건강도)와 별개다(§13 Q3). */}
+      <Panel title="태그" description="수기 라벨 — 제안 칩 원클릭 또는 직접 입력, 자동 플래그와 별개">
+        <CustomerTagChips key={data.key} customerKey={data.key} initialTags={data.tags} />
+      </Panel>
 
       {/* 세일즈 퍼널 */}
       {showFunnel ? (
