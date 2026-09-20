@@ -516,6 +516,8 @@ export default function HardwareInventoryClient({
 }) {
   const prefetched = initialData ? use(initialData.promise) : null
   const formRef = useRef<HTMLFormElement | null>(null)
+  // 재조회 순번 — 겹친 재검증에서 늦게 온 옛 응답을 버린다(load 참고).
+  const loadSeqRef = useRef(0)
   const [data, setData] = useState<HardwareDashboard | null>(() =>
     prefetched ? withDerivedMovementViews(prefetched) : null
   )
@@ -799,6 +801,10 @@ export default function HardwareInventoryClient({
   }, [sheetOpen])
 
   const load = useCallback(async (options: { force?: boolean } = {}) => {
+    // 저장 후 재검증을 기다리지 않게 되면서(applySavedMovements) 재조회가 겹칠 수 있다.
+    // 늦게 도착한 옛 응답이 새 응답을 덮어쓰면 방금 저장한 줄이 화면에서 사라져 보인다 — 순번으로 막는다.
+    const seq = loadSeqRef.current + 1
+    loadSeqRef.current = seq
     setLoading(true)
     setError(null)
     try {
@@ -810,12 +816,14 @@ export default function HardwareInventoryClient({
           force: options.force,
         })
       )
+      if (seq !== loadSeqRef.current) return
       setData(next)
       setSelectedItemId((current) => current || defaultEntryItemId(next.items))
     } catch (err) {
+      if (seq !== loadSeqRef.current) return
       setError(err instanceof Error ? err.message : String(err))
     } finally {
-      setLoading(false)
+      if (seq === loadSeqRef.current) setLoading(false)
     }
   }, [])
 
@@ -843,6 +851,35 @@ export default function HardwareInventoryClient({
     clearAdminRequestCache("/api/admin/hardware")
     await load({ force: true })
   }, [load])
+
+  /**
+   * 저장 직후 화면 — 서버가 돌려준 **원장 줄만** 즉시 끼워 넣는다.
+   *
+   * 재고·가용·알림 같은 파생 숫자는 손대지 않는다. 그 계산은 서버(computeHardwareStockRow)가 정본이고,
+   * 화면에서 흉내 내면 가용이 틀린다. 숫자는 이어지는 재검증(void refresh)이 도착할 때 한 번에 바뀐다.
+   * 정렬 키는 서버와 같다(occurred_at ?? created_at 내림차순) — 어제 날짜로 적은 기록이 맨 위로 튀지 않게.
+   */
+  const applySavedMovements = useCallback((saved: readonly HardwareMovement[]) => {
+    const rows = saved.filter((movement): movement is HardwareMovement => Boolean(movement?.id))
+    if (rows.length === 0) return
+    setData((current) => {
+      if (!current) return current
+      const seen = new Set(current.movements.map((movement) => movement.id))
+      const appended = rows.filter((movement) => !seen.has(movement.id))
+      if (appended.length === 0) return current
+      const sortKey = (movement: HardwareMovement) => {
+        const time = new Date(movement.occurred_at ?? movement.created_at).getTime()
+        return Number.isFinite(time) ? time : 0
+      }
+      const movements = [...appended, ...current.movements].sort((a, b) => sortKey(b) - sortKey(a))
+      return withDerivedMovementViews({
+        ...current,
+        movements,
+        // 서버가 세는 전체 건수 — 값이 없으면 지어내지 않는다("N건 중 M건" 표기가 틀어진다).
+        movementsTotal: current.movementsTotal == null ? current.movementsTotal : current.movementsTotal + appended.length,
+      })
+    })
+  }, [])
 
   // 감사(2026-09-07 #7) — 기본 응답은 최신 2000건까지만 싣는다. 그 너머(더 오래된 이동)는
   // 지금까지 화면에서 닿을 방법이 전혀 없었다 — 내역 탭의 "더 불러오기"가 이 왕복으로 다음
@@ -2853,7 +2890,8 @@ export default function HardwareInventoryClient({
       }
       if (result.summary.success > 0) {
         rememberOwner(owner)
-        await refresh()
+        applySavedMovements(result.movements ?? [])
+        void refresh()
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -2999,7 +3037,7 @@ export default function HardwareInventoryClient({
       // status 파생·isPlanned 제거를 전송 직전에 적용한다.
       const serverDraft = toServerDraft(draft)
 
-      const saveResult = await adminFetchJson<{ movement?: HardwareMovement }>("/api/admin/hardware/movements", {
+      const saveResult = await adminFetchJson<{ movement?: HardwareMovement; movements?: HardwareMovement[] }>("/api/admin/hardware/movements", {
         method: "POST",
         body: JSON.stringify({
           ...serverDraft,
@@ -3018,6 +3056,7 @@ export default function HardwareInventoryClient({
             : undefined,
         }),
       })
+      applySavedMovements(saveResult?.movements ?? (saveResult?.movement ? [saveResult.movement] : []))
       // 성공 노티스에 경로(출발→도착)를 병기해 방금 기록한 이동을 즉시 확인할 수 있게 한다.
       const routeHint = `${draft.fromLocation || "-"} → ${draft.toLocation || (draft.movementType === "outbound" ? "고객" : "-")}`
       setNotice(
@@ -3051,7 +3090,9 @@ export default function HardwareInventoryClient({
           )
         }
       }
-      await refresh()
+      // 재검증은 기다리지 않는다 — 연속 기록에서 다음 건을 바로 받기 위해서다(감사 2026-09-20).
+      // 방금 저장한 줄은 위에서 이미 원장에 들어갔고, 파생 숫자만 이 응답이 오면 바뀐다.
+      void refresh()
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       setError(message)

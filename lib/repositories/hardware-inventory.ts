@@ -562,6 +562,67 @@ async function ensureHardwareItems(
   return new Map((data ?? []).map((item) => [item.name, item as HardwareItem]))
 }
 
+interface CrmDuplicateCandidateRow {
+  status: string | null
+}
+
+/** CRM 오더 중복 규칙 — 단건 저장과 배치 저장이 같은 판정·같은 문구를 쓴다. */
+function assertNoDuplicateCrmMovement(
+  existingRows: ReadonlyArray<CrmDuplicateCandidateRow>,
+  status: string | null | undefined
+) {
+  if (existingRows.length === 0) return
+
+  const creatingPlanned = isPlannedStatus(status)
+  const existingPlanned = existingRows.find((row) => isPlannedStatus(row.status))
+  const existingActual = existingRows.find((row) => !isPlannedStatus(row.status))
+
+  if (creatingPlanned && existingRows.length > 0) {
+    throw new Error("이미 같은 CRM 오더가 배송 예정 또는 출고 기록으로 반영되어 있습니다.")
+  }
+  if (!creatingPlanned && existingActual) {
+    throw new Error("이미 같은 CRM 오더가 실제 출고로 반영되어 있습니다.")
+  }
+  if (!creatingPlanned && existingPlanned) {
+    throw new Error("같은 CRM 오더의 배송 예정이 이미 있습니다. 예정 목록에서 출고 완료 처리하세요.")
+  }
+}
+
+function crmDuplicateKey(referenceNo: string, productName: string) {
+  return `${referenceNo}\u0000${productName}`
+}
+
+/**
+ * 배치 저장용 CRM 중복 후보 — 참조번호를 한 번에 읽는다.
+ *
+ * 줄마다 왕복하던 검사(ensureNoDuplicateCrmMovement)와 같은 조건(admin_manual · 미취소 ·
+ * 참조번호 + 품목 일치)이고, 판정은 assertNoDuplicateCrmMovement 하나가 한다.
+ */
+async function loadAdminCrmMovementRows(referenceNos: readonly string[]) {
+  const byKey = new Map<string, CrmDuplicateCandidateRow[]>()
+  if (referenceNos.length === 0) return byKey
+
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("hardware_movements")
+    .select("status,reference_no,product_name")
+    .eq("source", "admin_manual")
+    .in("reference_no", referenceNos as string[])
+    .is("voided_at", null)
+  if (error) throw error
+
+  for (const row of (data ?? []) as Array<{ status: string | null; reference_no: string | null; product_name: string | null }>) {
+    const reference = cleanString(row.reference_no)
+    const product = cleanString(row.product_name)
+    if (!reference || !product) continue
+    const key = crmDuplicateKey(reference, product)
+    const bucket = byKey.get(key)
+    if (bucket) bucket.push({ status: row.status })
+    else byKey.set(key, [{ status: row.status }])
+  }
+  return byKey
+}
+
 async function ensureNoDuplicateCrmMovement(input: {
   productName: string
   referenceNo?: string | null
@@ -580,27 +641,7 @@ async function ensureNoDuplicateCrmMovement(input: {
     .limit(5)
   if (error) throw error
 
-  const existingRows = (data ?? []) as Array<{
-    id: string
-    status: string | null
-    voided_at: string | null
-    converted_to_movement_id: string | null
-  }>
-  if (existingRows.length === 0) return
-
-  const creatingPlanned = isPlannedStatus(input.status)
-  const existingPlanned = existingRows.find((row) => isPlannedStatus(row.status))
-  const existingActual = existingRows.find((row) => !isPlannedStatus(row.status))
-
-  if (creatingPlanned && existingRows.length > 0) {
-    throw new Error("이미 같은 CRM 오더가 배송 예정 또는 출고 기록으로 반영되어 있습니다.")
-  }
-  if (!creatingPlanned && existingActual) {
-    throw new Error("이미 같은 CRM 오더가 실제 출고로 반영되어 있습니다.")
-  }
-  if (!creatingPlanned && existingPlanned) {
-    throw new Error("같은 CRM 오더의 배송 예정이 이미 있습니다. 예정 목록에서 출고 완료 처리하세요.")
-  }
+  assertNoDuplicateCrmMovement((data ?? []) as CrmDuplicateCandidateRow[], input.status)
 }
 
 function lotFifoRank(lot: string): number | null {
@@ -839,33 +880,34 @@ async function insertHardwareMovementRows(rows: HardwareMovementInsertRow[]): Pr
   return (data ?? []) as HardwareMovement[]
 }
 
-async function allocateOutboundLots(input: {
-  itemId: string
-  productName: string
-  quantity: number
-  explicitLotNo?: string | null
-  excludeMovementIds?: string[]
-}): Promise<Array<{ lotNo: string | null; quantity: number; autoAssigned: boolean }>> {
-  const explicitLotNo = cleanString(input.explicitLotNo)
-  const excluded = new Set(input.excludeMovementIds ?? [])
+/** 품목 1개의 유효 원장 행 — 로트 잔량 계산 입력. 품목당 이동이 1000행을 넘으면 잔량이 조용히
+ *  틀어지므로 id 키셋으로 전량 읽는다. */
+async function loadItemLotLedgerRows(itemId: string): Promise<HardwareMovement[]> {
   const sb = createSupabaseAdminClient()
-  // 품목당 이동이 1000행을 넘으면 lot 잔량이 조용히 틀어진다 — id 키셋으로 전량 읽는다.
-  const data = await fetchAllSupabaseRows<HardwareMovement>((afterId, limit) => {
+  return fetchAllSupabaseRows<HardwareMovement>((afterId, limit) => {
     let query = sb
       .from("hardware_movements")
       .select("*")
-      .eq("item_id", input.itemId)
+      .eq("item_id", itemId)
       .is("voided_at", null)
       .order("id", { ascending: true })
       .limit(limit)
     if (afterId) query = query.gt("id", afterId)
     return query
   })
+}
 
-  // 화면(computeHardwareStockRow)과 같은 해석기로 잔량을 낸다 — 따로 합산하면 화면에 없는 옛 로트
-  // (예: STD1 H4·H5)가 새 출고에 자동으로 찍힌다(2026-09-14 운영 실측으로 재현).
-  const lots = resolveHardwareLotBalances(data.filter((movement) => !excluded.has(movement.id))).lots
-    .map((lot) => ({ lotNo: lot.lot, quantity: lot.quantity }))
+/**
+ * 잔량에서 배정만 계산하는 순수 부분.
+ *
+ * 배치 저장(createHardwareMovementsBatch)이 품목 원장을 줄마다 다시 읽지 않고 한 번만 읽어
+ * 재사용하려고 갈라냈다. 규칙은 그대로다 — 잔량 자체는 항상 resolveHardwareLotBalances 하나가 낸다.
+ */
+function allocateLotsFromBalances(
+  lots: ReadonlyArray<{ lotNo: string; quantity: number }>,
+  input: { productName: string; quantity: number; explicitLotNo?: string | null }
+): Array<{ lotNo: string | null; quantity: number; autoAssigned: boolean }> {
+  const explicitLotNo = cleanString(input.explicitLotNo)
 
   // 운영자가 로트를 **지정**했으면 그 로트 잔량을 검사한다 — 특정 로트를 골랐다는 명시적 판단이라,
   // 기록과 어긋나면 알려주는 편이 맞다. 지정을 비우면 아래 자동 배정으로 가며 그쪽은 막히지 않는다.
@@ -902,23 +944,38 @@ async function allocateOutboundLots(input: {
   return allocations
 }
 
-async function buildMovementInsertRows(
+async function allocateOutboundLots(input: {
+  itemId: string
+  productName: string
+  quantity: number
+  explicitLotNo?: string | null
+  excludeMovementIds?: string[]
+}): Promise<Array<{ lotNo: string | null; quantity: number; autoAssigned: boolean }>> {
+  const excluded = new Set(input.excludeMovementIds ?? [])
+  const rows = await loadItemLotLedgerRows(input.itemId)
+
+  // 화면(computeHardwareStockRow)과 같은 해석기로 잔량을 낸다 — 따로 합산하면 화면에 없는 옛 로트
+  // (예: STD1 H4·H5)가 새 출고에 자동으로 찍힌다(2026-09-14 운영 실측으로 재현).
+  const lots = resolveHardwareLotBalances(rows.filter((movement) => !excluded.has(movement.id))).lots
+    .map((lot) => ({ lotNo: lot.lot, quantity: lot.quantity }))
+
+  return allocateLotsFromBalances(lots, input)
+}
+
+/** 실제 출고만 FIFO 자동 배정을 탄다 — 예정 출고·입고·반납은 입력한 로트를 그대로 쓴다. */
+function movementNeedsLotAllocation(input: Pick<CreateHardwareMovementInput, "movementType" | "status">) {
+  return input.movementType === "outbound" && !isPlannedStatus(input.status)
+}
+
+/** 배정이 정해진 뒤의 순수 행 생성 — 배치 저장은 메모리 배정으로 같은 행을 만든다. */
+function buildMovementInsertRowsFromAllocations(
   input: CreateHardwareMovementInput,
   itemId: string,
   productName: string,
-  options: { excludeMovementIds?: string[]; convertedFromMovementId?: string } = {}
-): Promise<HardwareMovementInsertRow[]> {
+  allocations: Array<{ lotNo: string | null; quantity: number; autoAssigned: boolean }>,
+  options: { convertedFromMovementId?: string } = {}
+): HardwareMovementInsertRow[] {
   const serials = input.serials ?? []
-  const allocations =
-    input.movementType === "outbound" && !isPlannedStatus(input.status)
-      ? await allocateOutboundLots({
-          itemId,
-          productName,
-          quantity: input.quantity,
-          explicitLotNo: input.lotNo,
-          excludeMovementIds: options.excludeMovementIds,
-        })
-      : [{ lotNo: cleanString(input.lotNo), quantity: input.quantity, autoAssigned: false }]
 
   let serialOffset = 0
   return allocations.map((allocation, allocationIndex) => {
@@ -938,6 +995,25 @@ async function buildMovementInsertRows(
       convertedFromMovementId: options.convertedFromMovementId,
     })
   })
+}
+
+async function buildMovementInsertRows(
+  input: CreateHardwareMovementInput,
+  itemId: string,
+  productName: string,
+  options: { excludeMovementIds?: string[]; convertedFromMovementId?: string } = {}
+): Promise<HardwareMovementInsertRow[]> {
+  const allocations = movementNeedsLotAllocation(input)
+    ? await allocateOutboundLots({
+        itemId,
+        productName,
+        quantity: input.quantity,
+        explicitLotNo: input.lotNo,
+        excludeMovementIds: options.excludeMovementIds,
+      })
+    : [{ lotNo: cleanString(input.lotNo), quantity: input.quantity, autoAssigned: false }]
+
+  return buildMovementInsertRowsFromAllocations(input, itemId, productName, allocations, options)
 }
 
 async function resolveHardwareMovementTarget(input: CreateHardwareMovementInput) {
@@ -1005,6 +1081,195 @@ export async function createHardwareMovement(input: CreateHardwareMovementInput)
   const movement = inserted[0]
   if (!movement) throw new Error("하드웨어 입출고 기록을 만들 수 없습니다.")
   return movement
+}
+
+/** 줄별 실패 문구 — Supabase 오류는 Error 가 아니라 { message } 객체로 던져진다. */
+function batchLineErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (error && typeof error === "object" && "message" in error) {
+    const message = (error as { message?: unknown }).message
+    if (typeof message === "string" && message.trim()) return message
+  }
+  return "저장에 실패했습니다."
+}
+
+export interface HardwareMovementBatchLineResult {
+  ok: boolean
+  movements: HardwareMovement[]
+  error: string | null
+}
+
+/** 저장 전 행을 로트 해석기 입력으로 보는 투영 — 앞 줄이 만든 행을 뒤 줄 잔량에 반영할 때 쓴다. */
+function insertRowAsLotLedgerMovement(
+  row: HardwareMovementInsertRow,
+  createdAt: string
+): HardwareLotLedgerMovement {
+  return {
+    lot_no: row.lot_no,
+    source: row.source,
+    reference_no: row.reference_no,
+    movement_type: row.movement_type,
+    quantity: row.quantity,
+    from_location: row.from_location,
+    to_location: row.to_location,
+    occurred_at: row.occurred_at,
+    created_at: createdAt,
+  }
+}
+
+/**
+ * 바구니·입고표 한 번 저장 = 왕복 한 번.
+ *
+ * 예전에는 라우트가 줄마다 createHardwareMovementRows 를 불러 줄 하나에 품목 해결 + CRM 중복 검사 +
+ * (실제 출고면) 품목 원장 전량 스캔 + INSERT + 캐시 무효화가 따로 돌았다(입고표 20줄 = INSERT 20회,
+ * 캐시 무효화 20회). 여기서는 줄별 실패 격리(라우트의 207 계약)를 유지한 채 공통 작업을 한 번씩만 한다.
+ *
+ * 로트 배정은 줄 단위 저장과 **같은 결과**여야 한다. 그래서 품목 원장을 한 번 읽고, 앞 줄이 만든 행을
+ * 그 뒤에 이어 붙여 같은 해석기(resolveHardwareLotBalances)로 잔량을 다시 낸다 — 줄마다 DB 를 다시
+ * 읽던 것과 입력이 같다. 규칙을 두 번째로 구현하지 않는다.
+ */
+export async function createHardwareMovementsBatch(
+  inputs: CreateHardwareMovementInput[]
+): Promise<HardwareMovementBatchLineResult[]> {
+  if (inputs.length === 0) return []
+  if (inputs.length > 50) throw new Error("한 번에 저장할 수 있는 하드웨어 기록은 최대 50건입니다.")
+
+  const results: HardwareMovementBatchLineResult[] = inputs.map(() => ({ ok: false, movements: [], error: null }))
+
+  // 0) 모양 검증은 품목을 만들기 전에 — 실패할 줄의 이름으로 품목이 생기지 않게 한다.
+  type PreparedLine = { ok: true; productName: string } | { ok: false; error: string }
+  const prepared: PreparedLine[] = inputs.map((input) => {
+    const productName = normalizeProductName(input.productName)
+    if (!productName) return { ok: false, error: "제품명은 필수입니다." }
+    if (!HARDWARE_MOVEMENT_TYPES.includes(input.movementType)) {
+      return { ok: false, error: "입출고 유형이 올바르지 않습니다." }
+    }
+    if (!Number.isInteger(input.quantity) || input.quantity <= 0) {
+      return { ok: false, error: "수량은 1 이상 정수여야 합니다." }
+    }
+    return { ok: true, productName }
+  })
+
+  // 1) 품목 — 이름으로 만들어야 하는 줄을 모아 한 번에.
+  const missingNames = new Set<string>()
+  for (const [index, input] of inputs.entries()) {
+    const line = prepared[index]
+    if (!line.ok || input.itemId) continue
+    missingNames.add(line.productName)
+  }
+  const items = missingNames.size > 0
+    ? await ensureHardwareItems(Array.from(missingNames, (name) => ({ name })))
+    : new Map<string, HardwareItem>()
+
+  // 2) CRM 중복 후보 — 참조번호를 모아 한 번에.
+  const references = Array.from(new Set(
+    inputs
+      .map((input) => cleanString(input.referenceNo))
+      .filter((reference): reference is string => Boolean(reference && isCrmReference(reference)))
+  ))
+  const crmRowsByKey = await loadAdminCrmMovementRows(references)
+
+  // 3) 품목 원장 — 자동 배정이 필요한 품목만, 품목당 한 번.
+  const ledgerByItem = new Map<string, HardwareLotLedgerMovement[]>()
+  const pendingByItem = new Map<string, HardwareLotLedgerMovement[]>()
+  const pendingCreatedAt = new Date().toISOString()
+
+  const rowsToInsert: HardwareMovementInsertRow[] = []
+  const spans: Array<{ index: number; start: number; count: number }> = []
+
+  for (const [index, input] of inputs.entries()) {
+    const line = prepared[index]
+    if (!line.ok) {
+      results[index] = { ok: false, movements: [], error: line.error }
+      continue
+    }
+
+    try {
+      const productName = line.productName
+      const itemId = input.itemId ?? items.get(productName)?.id
+      if (!itemId) throw new Error("하드웨어 품목을 만들 수 없습니다.")
+
+      const referenceNo = cleanString(input.referenceNo)
+      const crmKey = referenceNo && isCrmReference(referenceNo) ? crmDuplicateKey(referenceNo, productName) : null
+      if (crmKey) assertNoDuplicateCrmMovement(crmRowsByKey.get(crmKey) ?? [], input.status)
+
+      let allocations: Array<{ lotNo: string | null; quantity: number; autoAssigned: boolean }>
+      if (movementNeedsLotAllocation(input)) {
+        let ledger = ledgerByItem.get(itemId)
+        if (!ledger) {
+          ledger = await loadItemLotLedgerRows(itemId)
+          ledgerByItem.set(itemId, ledger)
+        }
+        const lots = resolveHardwareLotBalances([...ledger, ...(pendingByItem.get(itemId) ?? [])]).lots
+          .map((lot) => ({ lotNo: lot.lot, quantity: lot.quantity }))
+        allocations = allocateLotsFromBalances(lots, {
+          productName,
+          quantity: input.quantity,
+          explicitLotNo: input.lotNo,
+        })
+      } else {
+        allocations = [{ lotNo: cleanString(input.lotNo), quantity: input.quantity, autoAssigned: false }]
+      }
+
+      const rows = buildMovementInsertRowsFromAllocations(input, itemId, productName, allocations)
+
+      // 앞 줄이 만든 행을 뒤 줄의 잔량·중복 판정에 반영한다 — 줄 단위 저장에서 먼저 INSERT 된 행이
+      // 다음 줄 조회에 보이던 것과 같다.
+      const pending = pendingByItem.get(itemId) ?? []
+      pending.push(...rows.map((row) => insertRowAsLotLedgerMovement(row, pendingCreatedAt)))
+      pendingByItem.set(itemId, pending)
+      if (crmKey) {
+        const bucket = crmRowsByKey.get(crmKey) ?? []
+        bucket.push({ status: cleanString(input.status) })
+        crmRowsByKey.set(crmKey, bucket)
+      }
+
+      spans.push({ index, start: rowsToInsert.length, count: rows.length })
+      rowsToInsert.push(...rows)
+    } catch (error) {
+      results[index] = { ok: false, movements: [], error: batchLineErrorMessage(error) }
+    }
+  }
+
+  if (rowsToInsert.length === 0) return results
+
+  let inserted: HardwareMovement[] | null = null
+  let insertError: unknown = null
+  try {
+    inserted = await insertHardwareMovementRows(rowsToInsert)
+  } catch (error) {
+    insertError = error
+  }
+
+  if (inserted && inserted.length === rowsToInsert.length) {
+    // INSERT … RETURNING 은 보낸 순서를 지킨다 — 줄마다 자기 행만 돌려받는다.
+    for (const span of spans) {
+      results[span.index] = {
+        ok: true,
+        movements: inserted.slice(span.start, span.start + span.count),
+        error: null,
+      }
+    }
+  } else if (inserted) {
+    // 개수가 어긋나면 어느 행이 어느 줄 것인지 확신할 수 없다. 저장은 됐으니 성공으로 두되 행은 비운다
+    // (화면은 곧 이어지는 재검증으로 원장을 다시 받는다). 다시 INSERT 하면 중복이 된다.
+    for (const span of spans) {
+      results[span.index] = { ok: true, movements: [], error: null }
+    }
+  } else {
+    // 한 번에 못 넣었다 — 부분 저장 계약을 지키려고 줄 단위로 다시 시도한다(실패 경로에서만).
+    for (const span of spans) {
+      try {
+        const rows = rowsToInsert.slice(span.start, span.start + span.count)
+        results[span.index] = { ok: true, movements: await insertHardwareMovementRows(rows), error: null }
+      } catch (error) {
+        results[span.index] = { ok: false, movements: [], error: batchLineErrorMessage(error ?? insertError) }
+      }
+    }
+  }
+
+  if (results.some((result) => result.ok)) revalidateTag(HARDWARE_INVENTORY_CACHE_TAG, "max")
+  return results
 }
 
 function isMissingRpcError(error: { code?: string; message?: string }, rpcName: string) {
