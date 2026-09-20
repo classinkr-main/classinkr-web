@@ -2,7 +2,7 @@
 
 기준 시점: 2026-09-15
 대상: `/admin/hardware` → [components/admin/hardware/HardwareInventoryClient.tsx](../../components/admin/hardware/HardwareInventoryClient.tsx)
-관련: [UX 계획·작업내역](./hardware-admin-ux-plan.md) · [hardware-ops 개념 문서](../hardware-ops/README.md) · [시트 해석](../hardware-ops/sheet-interpretation.md) · [DESIGN.md](../../DESIGN.md) · [DB 마이그레이션 런북](./db-migration-runbook.md)
+관련: [UX 계획·작업내역](./hardware-admin-ux-plan.md) · [입력 가속 기획](./hardware-input-speed-plan-2026-09-20.md) · [hardware-ops 개념 문서](../hardware-ops/README.md) · [시트 해석](../hardware-ops/sheet-interpretation.md) · [DESIGN.md](../../DESIGN.md) · [DB 마이그레이션 런북](./db-migration-runbook.md)
 
 이 문서는 하드웨어 재고 화면을 **공급망(SCM) 운영 콘솔**로 보고 정체성·UI·기능을 한곳에 고정한다. "지금 무엇이고, 어떻게 생겼고, 무엇을 하는가"의 단일 기준이다. 운영자가 할 일은 §8에 순서대로 모았다.
 
@@ -329,5 +329,6 @@ cutover 런북(코드 배포 후, 순서 중요)
 - 이중 계상 정책(§8-6) 구현: 교체 RPC 마이그레이션 + 결과 표시
 - 사무실 보관 유닛을 시트 가져오기 창고 보정에서 빼기(§3-8, 유닛 정리 후)
 - cutover 실행(§7 런북 2~5)
+- 입력 가속(대기·타건 제거): [입력 가속 기획](./hardware-input-speed-plan-2026-09-20.md) — P0 저장 후 낙관 반영·배치 저장 1왕복
 - 읽기 경로 최적화(투영/캐시), 스냅샷 retention
 - 제품 사진 칩 승격, 출고 매출(revenue) 필드, 잔여 디자인 정규화(전 입력 2px 포커스 링·타입/라디우스 통일·헤더 단일화)
