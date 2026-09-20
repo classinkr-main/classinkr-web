@@ -2345,10 +2345,12 @@ export default function HardwareInventoryClient({
    * 입력하는 중에는 잡지 않는다(수정 키 조합·한글 조합 포함) — 화면을 보고 있을 때만 동작한다.
    */
   useEffect(() => {
-    const overlayOpen =
+    const busyWithAnotherSurface =
       sheetOpen || inboundSheet.open || pendingMovement != null || voidTarget != null ||
-      detailId != null || customerDetail != null || sampleUnitSheetId != null
-    if (overlayOpen) return
+      detailId != null || customerDetail != null || sampleUnitSheetId != null ||
+      // 예정 출고를 고르는 중에는 하단 작업 바가 그 화면의 주 작업면이다 — FAB 와 같은 기준으로 물러난다.
+      plannedSelectionCount > 0
+    if (busyWithAnotherSurface) return
 
     const onKey = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey || event.isComposing || event.defaultPrevented) return
@@ -2374,6 +2376,7 @@ export default function HardwareInventoryClient({
     detailId,
     customerDetail,
     sampleUnitSheetId,
+    plannedSelectionCount,
     openInboundSheet,
     openSheet,
   ])
