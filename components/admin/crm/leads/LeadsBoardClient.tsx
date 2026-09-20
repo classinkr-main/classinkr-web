@@ -22,6 +22,7 @@ import FreshnessCaption from "@/components/admin/crm/FreshnessCaption"
 import LeadTrackingPanel from "@/components/admin/crm/leads/LeadTrackingPanel"
 import { useCrmOwners } from "@/components/admin/crm/useCrmOwners"
 import { useVisibleCount } from "@/components/admin/ui/ShowMore"
+import { MOBILE_TOUCH_TARGET_CLASS } from "@/components/admin/crm/home/shared"
 
 import { adminFetch, adminFetchJsonCached, adminFetchJsonCachedWithMeta } from "@/lib/admin-client"
 import { CRM_CACHE_SWR_MS, CRM_CACHE_TTL_MS } from "@/lib/crm/client-cache"
@@ -70,11 +71,20 @@ import {
   calcLeadPriority,
   getEngagement,
   isLeadSortKey,
+  matchesLeadSearch,
   sortLeads,
   tokenizeLeadSearch,
   type LeadPriority,
   type LeadSortKey,
 } from "@/lib/crm/lead-ranking"
+import {
+  LEAD_SEGMENTS,
+  LEAD_SEGMENT_PARAM,
+  countLeadSegments,
+  matchesLeadSegment,
+  readLeadSegmentParam,
+  type LeadSegmentId,
+} from "@/lib/crm/lead-segments"
 import {
   buildLeadAssignmentProfile,
   formatLeadAssignmentProfile,
@@ -217,6 +227,11 @@ export default function LeadsBoardClient() {
     const raw = searchParams.get("group")
     return raw && (SOURCE_GROUP_ORDER as readonly string[]).includes(raw) ? (raw as LeadSourceGroup) : "all"
   })
+  // 세그먼트 칩(S1, Compass 정리 라운드 2026-09-20) — 메타 광고/인계/기존/고객을 한 번에 고른다.
+  // 유입 칩과 직교 AND. 뷰 전환·다른 필터 변경에도 보존한다(설계 규약 "전환은 상태를 리셋하지 않는다").
+  const [segment, setSegment] = useState<LeadSegmentId>(() =>
+    readLeadSegmentParam(searchParams.get(LEAD_SEGMENT_PARAM))
+  )
   const [selected, setSelected] = useState<LeadRecord | null>(null)
   const [contactDraft, setContactDraft] = useState<{ leadId: string; type: ContactLogType } | null>(null)
   const [logs, setLogs] = useState<ContactLogRecord[]>([])
@@ -291,6 +306,9 @@ export default function LeadsBoardClient() {
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
       if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return
+      // IME 조합 중(한글·중국어·일본어 입력) 발생한 키 이벤트는 무시 — 조합 완성 키가 "/"로
+      // 잡히는 조합기에서 검색창으로 포커스가 튀며 입력 중이던 글자를 끊지 않게 한다.
+      if (event.isComposing) return
       const target = event.target as HTMLElement | null
       if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return
       event.preventDefault()
@@ -544,9 +562,10 @@ export default function LeadsBoardClient() {
     apply("filter", filter, "all")
     apply("q", urlSearchQuery.trim(), "")
     apply("group", sourceGroup, "all")
+    apply(LEAD_SEGMENT_PARAM, segment, "all")
     apply("unconfirmed", includeUnconfirmed ? "1" : "0", "0")
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`)
-  }, [view, lens, sortKey, filter, urlSearchQuery, sourceGroup, includeUnconfirmed])
+  }, [view, lens, sortKey, filter, urlSearchQuery, sourceGroup, segment, includeUnconfirmed])
 
   // 렌즈나 축이 바뀌면 이전 축의 트래킹 선택은 의미를 잃는다 — 조용히 남겨두면 빈 목록이 된다.
   useEffect(() => {
@@ -1161,6 +1180,8 @@ export default function LeadsBoardClient() {
     leadMagnetOptions,
     sourceGroupChips,
     sourceChipTotal,
+    segmentCounts,
+    segmentBlockedByCompassDown,
     filtered,
     filteredIds,
     overdueFollowUps,
@@ -1203,8 +1224,19 @@ export default function LeadsBoardClient() {
       new Set(lensLeads.map((lead) => lead.lead_magnet?.trim()).filter(Boolean) as string[])
     ).sort((a, b) => a.localeCompare(b, "ko"))
     const searchTokens = tokenizeLeadSearch(deferredSearch)
+    // Compass 매칭 리드는 학원명·담당명도 검색 대상에 포함한다(S2, 2026-09-20 Compass 정리
+    // 라운드). 공유 규칙(matchesLeadScopeFilters)은 리드 레코드 필드만 보므로, 그 축은 아래
+    // scopeCriteria에서 끄고(searchTokens: []) matchesSearch로 별도 AND 한다 — 칩·트래킹·
+    // 미확인·목록 전부 같은 판정을 봐야 카운트와 목록이 어긋나지 않는다(유입 칩과 같은 원칙).
+    const compassSearchTerms = (lead: LeadRecord): Array<string | null> => {
+      const entry = compass.down ? undefined : compass.lookup(lead)
+      return entry ? [entry.academy, entry.name] : []
+    }
+    const matchesSearch = (lead: LeadRecord) =>
+      matchesLeadSearch(lead, searchTokens, { extraTerms: compassSearchTerms(lead) })
     // 상태와 직교하는 범위 축 한 벌. 유입 칩·트래킹 롤업·미확인 수신함이 같은 판정을 본다
-    // (규칙 정본: lib/crm/leads-board-state.matchesLeadScopeFilters).
+    // (규칙 정본: lib/crm/leads-board-state.matchesLeadScopeFilters). 검색은 matchesSearch가
+    // Compass 확장까지 대신하므로 searchTokens는 항상 빈 배열로 넘긴다.
     const scopeCriteria: LeadScopeCriteria = {
       sourceGroup,
       sourceDetail: sourceDetailFilter,
@@ -1212,10 +1244,19 @@ export default function LeadsBoardClient() {
       leadMagnet: leadMagnetFilter,
       trackingDimension,
       trackingKey,
-      searchTokens,
+      searchTokens: [],
     }
-    // 수신함·게이트 배지가 세는 모집단 — 지금 화면이 보고 있는 범위 그대로.
-    const unconfirmedLeads = selectScopedUnconfirmedLeads(lensLeads, scopeCriteria)
+    // 세그먼트 판정(S1) — Compass가 끊겼는데 지금 고른 세그먼트가 Compass 필요 축(인계·기존)
+    // 이면 무음으로 0건을 만들지 않고 필터를 통과시킨다(전체로 표시). 캡션이 이유를 알린다.
+    const segmentBlockedByCompassDown =
+      Boolean(LEAD_SEGMENTS.find((item) => item.id === segment)?.needsCompass) && compass.down
+    const matchesSegmentFor = (lead: LeadRecord) =>
+      segmentBlockedByCompassDown ||
+      matchesLeadSegment(lead, segment, { overlay: compass.lookup(lead), compassDown: compass.down })
+    // 수신함·게이트 배지가 세는 모집단 — 지금 화면이 보고 있는 범위 그대로(검색·세그먼트 포함).
+    const unconfirmedLeads = selectScopedUnconfirmedLeads(lensLeads, scopeCriteria).filter(
+      (lead) => matchesSearch(lead) && matchesSegmentFor(lead)
+    )
     // 상태별 필터 술어 — 목록·필터 카드 카운트가 같은 판정을 공유한다(카운트≠목록 어긋남 방지).
     const matchesStatusFilter = (lead: LeadRecord, key: LeadFilter) => {
       if (key === "all") return true
@@ -1226,10 +1267,10 @@ export default function LeadsBoardClient() {
       if (key === "unassigned") return isActiveLead(lead.status) && !lead.assigned_to?.trim()
       return lead.status === key
     }
-    // 상태 외 필터(유입·세부유입·채널·마그넷·트래킹·검색) 술어 — 필터 카드·유입 칩 카운트가
-    // "그 카드를 눌렀을 때 실제로 보게 될 건수"를 보여주기 위해 공유한다.
+    // 상태 외 필터(유입·세부유입·채널·마그넷·트래킹·검색·세그먼트) 술어 — 필터 카드·유입 칩
+    // 카운트가 "그 카드를 눌렀을 때 실제로 보게 될 건수"를 보여주기 위해 공유한다.
     const matchesSubFilters = (lead: LeadRecord, options?: { skipSourceGroup?: boolean }) =>
-      matchesLeadScopeFilters(lead, scopeCriteria, options)
+      matchesLeadScopeFilters(lead, scopeCriteria, options) && matchesSearch(lead) && matchesSegmentFor(lead)
     // 상태/SLA 필터까지만 적용한 중간 집합 — 아래 유입·검색 필터는 이 집합 위에서 돈다.
     const statusFiltered = lensLeads.filter((lead) => {
       // 응대 SLA 큐·미확인 큐가 아니면 검토 전 리드는 기본 화면에서 숨긴다("미확인 포함"으로 해제).
@@ -1250,10 +1291,20 @@ export default function LeadsBoardClient() {
       .map((group) => ({ group, label: SOURCE_GROUP_LABEL[group], count: sourceGroupCounts.get(group) ?? 0 }))
       // 현재 상태 뷰에 존재하는 묶음만 노출하되, 이미 선택한 그룹은 0건이어도 남겨 해제할 수 있게 한다.
       .filter((chip) => chip.count > 0 || chip.group === sourceGroup)
-    // 트래킹 롤업이 보는 집합 — 렌즈+상태+유입+검색까지. 롤업 행을 고르면 여기서 한 겹 더 좁힌다.
-    // (트래킹 키 자체는 제외 — 롤업 표가 키별 건수를 보여주는 모집단이므로.)
-    const trackingScopeLeads = statusFiltered.filter((lead) =>
-      matchesLeadScopeFilters(lead, scopeCriteria, { skipTracking: true })
+    // 세그먼트 칩 카운트(S1) — "세그먼트만 뺀 나머지 필터"를 통과한 모집단 기준(유입 칩의
+    // skipSourceGroup과 같은 원리). countLeadSegments가 Compass 끊김이면 인계·기존을
+    // null(연결 끊김)로 셈해 화면이 "0건"과 "모름"을 구분하게 한다.
+    const segmentScope = statusFiltered.filter(
+      (lead) => matchesLeadScopeFilters(lead, scopeCriteria) && matchesSearch(lead)
+    )
+    const segmentCounts = countLeadSegments(segmentScope, (lead) => compass.lookup(lead), compass.down)
+    // 트래킹 롤업이 보는 집합 — 렌즈+상태+유입+검색+세그먼트까지. 롤업 행을 고르면 여기서 한 겹 더
+    // 좁힌다.(트래킹 키 자체는 제외 — 롤업 표가 키별 건수를 보여주는 모집단이므로.)
+    const trackingScopeLeads = statusFiltered.filter(
+      (lead) =>
+        matchesLeadScopeFilters(lead, scopeCriteria, { skipTracking: true }) &&
+        matchesSearch(lead) &&
+        matchesSegmentFor(lead)
     )
     const filtered = sortLeads(
       trackingKey
@@ -1376,6 +1427,8 @@ export default function LeadsBoardClient() {
       leadMagnetOptions,
       sourceGroupChips,
       sourceChipTotal,
+      segmentCounts,
+      segmentBlockedByCompassDown,
       filtered,
       filteredIds,
       overdueFollowUps,
@@ -1408,6 +1461,8 @@ export default function LeadsBoardClient() {
     sourceDetailFilter,
     channelSource,
     leadMagnetFilter,
+    segment,
+    compass,
     deferredSearch,
     nowMs,
   ])
@@ -1434,6 +1489,7 @@ export default function LeadsBoardClient() {
     sourceDetailFilter,
     channelSource,
     leadMagnetFilter,
+    segment,
     searchQuery,
     collapseLeads,
   ])
@@ -1774,6 +1830,57 @@ export default function LeadsBoardClient() {
         />
       )}
 
+      {/* 세그먼트 칩(S1, Compass 정리 라운드 2026-09-20) — 필터 카드 위, 검색·다른 필터와 AND.
+          "메타 광고/인계/기존/고객"을 한 번에 고른다. 인계·기존은 Compass 오버레이가 있어야
+          판정되므로 끊기면 칩을 비활성 + "연결 끊김"으로 낮춘다(0건으로 보이면 안 된다).
+          ?segment= 딥링크로 진입하면 해당 칩이 눌린 채로 열린다. */}
+      <div
+        id="lead-segment-chips"
+        role="group"
+        aria-label="리드 세그먼트"
+        className={`mb-3 flex flex-wrap items-center gap-1.5 ${MOBILE_TOUCH_TARGET_CLASS}`}
+      >
+        {LEAD_SEGMENTS.map((item) => {
+          const active = segment === item.id
+          const compassBlocked = item.needsCompass && compass.down
+          const compassLoading = item.needsCompass && !compass.down && compass.loading
+          const count = segmentCounts[item.id]
+          return (
+            <button
+              key={item.id}
+              type="button"
+              disabled={compassBlocked}
+              onClick={() => setSegment(active ? "all" : item.id)}
+              aria-pressed={active}
+              title={item.hint}
+              className={`inline-flex h-[30px] items-center gap-1.5 rounded-full border px-3 text-[12px] font-medium transition-colors ${
+                compassBlocked
+                  ? "cursor-not-allowed border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/30"
+                  : active
+                    ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                    : "border-[#e8e8e4] bg-white text-[#111110] hover:border-[#c8c8c4]"
+              }`}
+            >
+              {item.shortLabel}
+              {compassBlocked ? (
+                <span className="text-[11px]">연결 끊김</span>
+              ) : compassLoading ? (
+                <span aria-hidden className="inline-block h-3 w-5 animate-pulse rounded bg-[#f0f0ec]" />
+              ) : (
+                <span className={`tabular-nums ${active ? "text-[#084734]/70" : "text-[#1a1a1a]/40"}`}>
+                  {count ?? 0}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+      {segmentBlockedByCompassDown ? (
+        <p role="status" className="mb-3 text-[12px] text-[#7A520F]">
+          Compass 연결이 끊겨 인계·기존 리드를 가릴 수 없습니다 — 전체로 표시
+        </p>
+      ) : null}
+
       {/* 필터 카운트 카드 — 숫자로 들어가는 단일 창구 */}
       <div
         className={
@@ -1970,10 +2077,16 @@ export default function LeadsBoardClient() {
           leadMagnetFilter !== "all" ||
           channelSource ||
           trackingKey ||
+          segment !== "all" ||
           searchQuery.trim()) && (
           <div className="mt-3 flex items-center justify-between gap-3 text-[12px] text-[#1a1a1a]/45">
             <span>
-              현재 조건 {filtered.length}건
+              {/* S2 — 검색 중에는 "검색 N건"으로, 아니면 "현재 조건 N건"으로. 세그먼트가
+                  기존 캡션에 합쳐지므로 별도 캡션을 새로 만들지 않는다. */}
+              {searchQuery.trim() ? `검색 ${filtered.length}건` : `현재 조건 ${filtered.length}건`}
+              {segment !== "all"
+                ? ` · 세그먼트 ‘${LEAD_SEGMENTS.find((item) => item.id === segment)?.shortLabel ?? segment}’`
+                : ""}
               {sourceGroup !== "all" ? ` · 유입 ‘${SOURCE_GROUP_LABEL[sourceGroup]}’` : ""}
               {channelSource ? ` · 채널 ‘${channelSource}’` : ""}
               {trackingKey
@@ -1989,6 +2102,7 @@ export default function LeadsBoardClient() {
                 setLeadMagnetFilter("all")
                 setChannelSource("")
                 setTrackingKey(null)
+                setSegment("all")
               }}
               className="font-medium text-[#084734] hover:text-[#065c41]"
             >
@@ -2103,6 +2217,7 @@ export default function LeadsBoardClient() {
             setLeadMagnetFilter("all")
             setChannelSource("")
             setTrackingKey(null)
+            setSegment("all")
           }}
         />
       ) : (
