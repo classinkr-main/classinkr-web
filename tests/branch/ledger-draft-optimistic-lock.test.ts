@@ -174,7 +174,8 @@ describe("onCommitCell — 매트릭스 셀 커밋의 충돌/재사용/검증 �
   const fnBody = () => sliceFn(
     workbenchSource(),
     "const onCommitCell = useCallback",
-    "[createDraft, lens, pendingByCell, period, pushMatrixToast, rowById, team, updateDraft]",
+    // 라운드 4(P0-1): 입력 조립이 buildCellDraftInput으로 분리되면서 onCommitCell 의존성이 줄었다.
+    "[buildCellDraftInput, createDraft, pushMatrixToast, updateDraft]",
   )
 
   it("conflict면 로컬 폴백 문구가 아니라 DRAFT_CONFLICT_MESSAGE 토스트를 띄우고 false를 반환한다", () => {

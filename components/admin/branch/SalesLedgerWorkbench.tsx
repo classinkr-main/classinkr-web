@@ -526,6 +526,7 @@ export default function SalesLedgerWorkbench({
     applyDraft,
     checkDrafts,
     applyDrafts,
+    persistDraftsBatch,
     cancelDraft,
     deleteDraft,
     reverseEntry,
@@ -1823,7 +1824,11 @@ export default function SalesLedgerWorkbench({
     [pendingByCell, rowById],
   )
 
-  // 셀 커밋 1건 = createDraft 1건. buildDraftInput의 metadata 키·단위 규약을 그대로 따른다.
+  // 셀 커밋 입력 빌더(입력 속도 라운드 4 — docs/active/sales-ledger-input-speed-plan-2026-09-20.md P0-1·P0-2).
+  // 단건 셀 커밋(onCommitCell)과 붙여넣기 배치(confirmMatrixPaste → persistDraftsBatch)가 같은 초안
+  // 입력을 만들도록 onCommitCell 본문에서 분리했다 — 셀당 초안 1건·같은 셀 재편집은 PATCH·주차 병합·
+  // 자가 체크 규약이 두 경로에서 문자 그대로 같아야 한다. buildDraftInput(레일)의 metadata 키·단위
+  // 규약을 그대로 따른다.
   // kind: sourceDealId 있으면 edit-row(항상 있음, 시트 딜행), 없으면 new-row.
   // operation: 기존 금액 있으면 amount-change, 없던 칸이면 forecast-add.
   //   - 월 셀: 기준 = 그 달 표시 금액. 주차 셀: 기준 = 그 주차 표시 금액(월 기준과 동일 분기 규약).
@@ -1831,20 +1836,28 @@ export default function SalesLedgerWorkbench({
   // 주차 병합: explicit 주차가 있는 행의 주차 셀 편집은 나머지 주차를 보존해 metadata.weekly(5칸)로
   // 싣고 amount=주차 합으로 재기재한다 — 단일 주차 값이 그 달 전체를 대체해 다른 주차가 소멸하던 버그 방지.
   // (inferred/월합계만 행은 보존할 실주차가 없어 기존 단일 주차 대체 규약 유지 — 팝오버/큐에서 경고.)
-  // 반환값: 서버에 실제로 반영됐으면 true, 로컬 폴백(장부 적용 불가)이면 false — 붙여넣기 루프가
-  // 이 값을 모아 "N건 생성 · M건 실패" 요약 토스트를 만든다(SL-2 실패 집계, 항목 4).
-  // options.silent=true면 개별 실패 토스트를 억제한다(붙여넣기 루프처럼 상위에서 집계 토스트를 낼 때).
-  const onCommitCell = useCallback(
+  //
+  // 자가 체크(P0-2, 결정 D1(a)): 매트릭스 셀 커밋은 시트 행을 눈으로 보며 치는 동작이라 별도 검수
+  // 이득이 작다 — 저장 시점에 status:"checked"로 올려 3단(입력→체크→적용)을 2단으로 줄인다. 2단
+  // 게이트를 없앤 게 아니라 체크 시점을 입력 시점으로 당긴 것: 적용은 그대로 큐의 명시적 액션이고,
+  // 서버가 checked_by=작성자를 기록해 큐가 "자가 체크" 배지(ledger/self-check.ts)로 남의 체크와
+  // 구분한다. 자가 체크된 초안을 같은 셀에서 다시 고치면 PATCH에도 status:"checked"가 실려 서버가
+  // 잠금 해제→갱신→재체크를 한 요청 안에서 처리한다(남이 체크한 초안이면 409 reason=checked-by-other,
+  // 큐 행 배지로 안내). 레일 폼(buildDraftInput)은 시트에 없는 행을 만드는 동작이라 3단을 유지한다.
+  //
+  // 반환: null이면 행 없음. existingId는 같은 셀(월/주차)에 이미 대기 중(draft|checked)인 초안 id —
+  // sourceDealId+month에 DB 유일성이 없어, 재편집 때마다 새 초안을 만들면 둘 다 적용됐을 때 같은 셀
+  // 매출이 이중 계상된다(P0). 호출부는 있으면 updateDraft(PATCH), 없으면 createDraft(POST)로 나눈다.
+  const buildCellDraftInput = useCallback(
     (
       rowId: string,
       month: string,
       amount: number,
       confidence: DraftConfidence,
       week?: number,
-      options?: { silent?: boolean },
-    ): Promise<boolean> => {
+    ): { input: LedgerDraftInput; existingId: string | null } | null => {
       const row = rowById.get(rowId)
-      if (!row) return Promise.resolve(false)
+      if (!row) return null
       const sourceDealId = row.sourceDealId ?? (row.ledgerOrigin === "sheet" ? row.id : undefined)
       const kind: DraftKind = sourceDealId ? "edit-row" : "new-row"
       const weekToken = week != null ? `w${week + 1}` : "month"
@@ -1896,6 +1909,8 @@ export default function SalesLedgerWorkbench({
         month,
         amount: draftAmount,
         note: "",
+        // 자가 체크(P0-2) — 위 빌더 주석 참조. 서버가 checked_by=작성자를 함께 기록한다.
+        status: "checked",
         metadata: {
           source: "sales-ledger-workbench",
           origin: "rev-matrix-cell",
@@ -1917,15 +1932,32 @@ export default function SalesLedgerWorkbench({
           sourceDealId: sourceDealId ?? null,
         },
       }
-      // 같은 셀(월/주차)에 이미 대기 중(draft|checked)인 초안이 있으면 새 초안을 POST하지 않고
-      // 그 초안을 PATCH한다 — sourceDealId+month에 DB 유일성이 없어, 재편집 때마다 새 초안을 만들면
-      // 둘 다 적용됐을 때 같은 셀 매출이 이중 계상된다(P0). 상태 전이(draft/checked/applied)는 건드리지
-      // 않는다 — 이 input에는 status 필드가 없어 PATCH가 금액/메타데이터만 갱신한다.
       const existingId = lookupMatrixPending(pendingByCell, { rowId, month, week })?.id ?? null
-      const persist = existingId ? updateDraft(existingId, input) : createDraft(input)
+      return { input, existingId }
+    },
+    [lens, pendingByCell, period, rowById, team],
+  )
+
+  // 셀 커밋 1건 = 초안 1건(POST; 같은 셀에 대기 초안이 있으면 그 초안을 PATCH). 입력 조립은 위
+  // buildCellDraftInput — 붙여넣기 배치(confirmMatrixPaste)와 공유한다.
+  // 반환값: 서버에 실제로 반영됐으면 true, 로컬 폴백(장부 적용 불가)이면 false — 상위 집계용.
+  // options.silent=true면 개별 실패 토스트를 억제한다(상위에서 집계 토스트를 낼 때).
+  const onCommitCell = useCallback(
+    (
+      rowId: string,
+      month: string,
+      amount: number,
+      confidence: DraftConfidence,
+      week?: number,
+      options?: { silent?: boolean },
+    ): Promise<boolean> => {
+      const built = buildCellDraftInput(rowId, month, amount, confidence, week)
+      if (!built) return Promise.resolve(false)
+      const persist = built.existingId ? updateDraft(built.existingId, built.input) : createDraft(built.input)
       return persist.then((result) => {
-        // 낙관적 잠금 충돌(웨이브 7 2단, I4): 이번 수정은 반영되지 않았고, 해당 초안은 훅이 서버
-        // 현재본으로 이미 새로고침했다(로컬 낙관 반영 없음) — 로컬 폴백과는 다른 문구로 정확히 알린다.
+        // 낙관적 잠금 충돌(웨이브 7 2단, I4) 또는 남이 체크한 초안(checked-by-other): 이번 수정은 반영되지
+        // 않았고, 해당 초안은 훅이 서버 현재본으로 이미 새로고침했다(로컬 낙관 반영 없음). 구체 사유는
+        // 큐 행 배지(recordErrors)에 있다 — 토스트는 공통 충돌 문구로 정확히 "반영 안 됨"만 알린다.
         if (result.conflict) {
           if (!options?.silent) pushMatrixToast({ kind: "error", text: DRAFT_CONFLICT_MESSAGE })
           return false
@@ -1951,16 +1983,15 @@ export default function SalesLedgerWorkbench({
         if (result.dedupedRecent && !usedLocalFallback && !options?.silent) {
           pushMatrixToast({ kind: "info", text: DRAFT_DEDUPED_RECENT_NOTICE })
         } else if (!usedLocalFallback && !options?.silent) {
-          // 품질 감사 2026-09-10 — #4: 셀 커밋은 항상 "검토 초안"만 만든다(draft → checked → apply
-          // 2단 게이트를 거쳐야 장부·리포트·CRM 화면에 반영). 이전엔 성공 시 토스트가 전혀 없어
-          // 앰버 점(셀 인라인 표시)을 못 보고 지나치면 "저장됨=반영됨"으로 오인하기 쉬웠다.
+          // 자가 체크(라운드 4 P0-2): 셀 커밋은 저장 시점에 체크까지 끝난다 — 남은 단계는 큐의 "적용"
+          // 하나뿐임을 토스트가 정확히 말해야 "저장됨=반영됨" 오인도, "체크하러 가야 하나" 헛걸음도 없다.
           // pushMatrixToast는 동일 문구를 dedupe하므로 연속 입력에서도 토스트가 쌓이지 않는다.
-          pushMatrixToast({ kind: "info", text: "초안 저장됨 — 체크 큐에서 체크 → 적용해야 장부에 반영됩니다." })
+          pushMatrixToast({ kind: "info", text: "자가 체크로 저장됨 — 체크 큐에서 적용해야 장부에 반영됩니다." })
         }
         return !usedLocalFallback
       })
     },
-    [createDraft, lens, pendingByCell, period, pushMatrixToast, rowById, team, updateDraft],
+    [buildCellDraftInput, createDraft, pushMatrixToast, updateDraft],
   )
 
   const onMatrixAmountClamped = useCallback(() => {
@@ -2019,29 +2050,62 @@ export default function SalesLedgerWorkbench({
     [matrixEditor.editing, matrixEditor.selected, matrixMonths, pushMatrixToast, visibleDealRows, editRowOverrideMonths],
   )
 
-  // 프리뷰 확인 → 셀 편집과 동일한 onCommitCell 경로로만 커밋(셀당 검토 초안 1건, 2단 게이트 유지).
-  // 붙여넣기 커밋 루프: 셀당 onCommitCell(silent) → 결과를 모아 성공/실패 건수를 한 번에 요약한다.
-  // 이전엔 셀마다 개별 실패 토스트가 fire-and-forget으로 날아와 단일 슬롯 토스트를 서로 덮어썼다
-  // (항목 4) — 이제 개별 토스트는 억제하고 전체 완료 후 "N건 생성 · M건 실패" 하나만 띄운다.
+  // 프리뷰 확인 → 셀 편집과 같은 입력 빌더(buildCellDraftInput)로 초안 입력을 만들어 배치 1회(200건
+  // 청크)로 저장한다(입력 속도 라운드 4 P0-1). 이전엔 셀당 onCommitCell → 요청 1건이라 붙여넣기 상한
+  // 600칸이 곧 동시 요청 600건이었다. 셀당 초안 1건·같은 셀 대기 초안은 갱신(existingId)·자가 체크는
+  // 단건 경로와 문자 그대로 같은 규약이다(빌더 공유). 결과는 항목별로 돌아오므로 성공/충돌/거부/로컬
+  // 폴백을 나눠 한 번의 집계 토스트로 요약한다 — 부분 실패를 전체 성공으로 뭉개지 않는다.
   const confirmMatrixPaste = useCallback(async () => {
     if (!pastePlan) return
     storeMatrixConfidence(pasteConfidence)
     const applyCells = pastePlan.cells.filter((cell) => cell.status === "apply")
     setPastePlan(null)
     if (applyCells.length === 0) return
-    const results = await Promise.all(
-      applyCells.map((cell) => onCommitCell(cell.rowId, cell.month, cell.next, pasteConfidence, undefined, { silent: true })),
-    )
-    const committed = results.filter(Boolean).length
-    const failed = results.length - committed
+    const items: Array<{ id?: string; input: LedgerDraftInput }> = []
+    let missingRows = 0
+    for (const cell of applyCells) {
+      const built = buildCellDraftInput(cell.rowId, cell.month, cell.next, pasteConfidence)
+      if (!built) {
+        missingRows += 1
+        continue
+      }
+      items.push(built.existingId ? { id: built.existingId, input: built.input } : { input: built.input })
+    }
+    const results = items.length > 0 ? await persistDraftsBatch(items) : []
+    let committed = 0
+    let conflicts = 0
+    let rejected = 0
+    let localOnly = 0
+    let failed = missingRows
+    for (const result of results) {
+      if (result.conflict) conflicts += 1
+      else if (result.validationMessage) rejected += 1
+      else if (result.draft && result.draft.id.startsWith("local-")) localOnly += 1
+      else if (result.draft) committed += 1
+      else failed += 1
+    }
+    const problems = conflicts + rejected + localOnly + failed
+    const fmt = (value: number) => value.toLocaleString("ko-KR")
+    if (problems === 0) {
+      pushMatrixToast({
+        kind: "info",
+        text: `자가 체크 초안 ${fmt(committed)}건 저장 — 체크 큐에서 적용하면 장부에 반영됩니다.`,
+      })
+      return
+    }
+    const detail = [
+      conflicts > 0 ? `충돌 ${fmt(conflicts)}` : null,
+      rejected > 0 ? `거부 ${fmt(rejected)}` : null,
+      localOnly > 0 ? `로컬 임시 ${fmt(localOnly)}(장부 적용 불가)` : null,
+      failed > 0 ? `실패 ${fmt(failed)}` : null,
+    ]
+      .filter((part): part is string => part !== null)
+      .join(" · ")
     pushMatrixToast({
-      kind: failed > 0 ? "error" : "info",
-      text:
-        failed > 0
-          ? `${committed.toLocaleString("ko-KR")}건 생성 · ${failed.toLocaleString("ko-KR")}건 실패 — 실패분은 로컬 임시 저장(장부 적용 불가), 서버 재연결 후 다시 붙여넣으세요.`
-          : `검토 초안 ${committed.toLocaleString("ko-KR")}건 생성 — 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다.`,
+      kind: "error",
+      text: `${fmt(committed)}건 저장 · ${fmt(problems)}건 미반영(${detail}) — 미반영 셀은 체크 큐 행 배지를 확인한 뒤 다시 붙여넣으세요.`,
     })
-  }, [onCommitCell, pasteConfidence, pastePlan, pushMatrixToast])
+  }, [buildCellDraftInput, pasteConfidence, pastePlan, persistDraftsBatch, pushMatrixToast])
 
   const toggleRevMonth = useCallback((month: string) => {
     setExpandedRevMonths((prev) => {

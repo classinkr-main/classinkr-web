@@ -12,6 +12,7 @@ import { CheckCircle2, Loader2, Pencil, RefreshCw, RotateCcw, Search, Send, Tras
 import { matchesTokens, tokenize } from "../search-tokens"
 import { useDialogFocus } from "../../use-dialog-focus"
 import { planBulkApply, planBulkCheck } from "./draft-bulk-plan"
+import { isSelfCheckedDraft, SELF_CHECK_BADGE_LABEL, SELF_CHECK_BADGE_TITLE } from "./self-check"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import {
   DRAFT_STATUS_LABELS,
@@ -471,6 +472,16 @@ export function DraftQueue({
                 <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${draftStatusMeta(draft.status, reversedDraftIds.has(draft.id)).className}`}>
                   {draftStatusMeta(draft.status, reversedDraftIds.has(draft.id)).label}
                 </span>
+                {/* 자가 체크(입력 속도 라운드 4 P0-2): 매트릭스 셀 커밋은 저장 시점에 체크까지 끝난다 —
+                    남(검수자)의 체크와 구분되게 created_by===checked_by 파생 배지를 상태 배지 옆에 단다. */}
+                {isSelfCheckedDraft(draft) && (
+                  <span
+                    title={SELF_CHECK_BADGE_TITLE}
+                    className="rounded-full border border-[#BDEFD8] bg-white px-2 py-0.5 text-[10px] font-bold text-[#084734]"
+                  >
+                    {SELF_CHECK_BADGE_LABEL}
+                  </span>
+                )}
                 <span className="rounded-full border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 py-0.5 text-[10px] font-bold text-[#615D59]">
                   {draft.kind === "edit-row" ? "수정" : "신규 입력"}
                 </span>
