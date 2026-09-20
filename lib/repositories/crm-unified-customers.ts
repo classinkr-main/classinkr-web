@@ -66,6 +66,9 @@ export const CRM_SEGMENT_VIEWS = [
   "site_leads",
   "unanswered",
   "expiring",
+  // 2026-09-20 Compass 정리 라운드 S4 — meta_leads/registered_leads 저장 뷰 칩 건수.
+  "meta_leads",
+  "registered_leads",
 ] as const
 export type CrmUnifiedSourceStatusKey = "classin_leads" | "app_customers" | "external_crm" | "sheets"
 

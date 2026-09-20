@@ -593,6 +593,34 @@ describe("getCrmUnifiedCustomers", () => {
     expect(unanswered.rows.map((row) => row.key)).toEqual(["lead:site-unconfirmed"])
   })
 
+  it("wires meta_leads/registered_leads saved views and their viewCounts (2026-09-20 S4)", async () => {
+    const { getCrmUnifiedCustomers } = await loadRepository({
+      leads: [
+        // AD_LEAD_SOURCES(lib/crm/capture/origin.ts)의 meta_lead_ads → origin "ad".
+        lead({ id: "ad-lead", source: "meta_lead_ads" }),
+        lead({ id: "site-registered", source: "contact_page" }),
+        lead({ id: "team-lead", source: "admin_manual" }),
+      ],
+      neoLinkedLeadIds: ["site-registered"],
+    })
+
+    const all = await getCrmUnifiedCustomers({ now: NOW })
+    expect(all.rows.find((row) => row.key === "lead:ad-lead")).toMatchObject({ origin: "ad", crmRegistered: false })
+    expect(all.rows.find((row) => row.key === "lead:site-registered")).toMatchObject({
+      origin: "site",
+      crmRegistered: true,
+    })
+    // viewCounts에 새 키가 존재하고, 다른 세그먼트 키는 그대로 이번 순회에서 함께 계산된다.
+    expect(all.summary.viewCounts.meta_leads).toBe(1)
+    expect(all.summary.viewCounts.registered_leads).toBe(1)
+
+    const metaLeads = await getCrmUnifiedCustomers({ view: "meta_leads", now: NOW })
+    expect(metaLeads.rows.map((row) => row.key)).toEqual(["lead:ad-lead"])
+
+    const registeredLeads = await getCrmUnifiedCustomers({ view: "registered_leads", now: NOW })
+    expect(registeredLeads.rows.map((row) => row.key)).toEqual(["lead:site-registered"])
+  })
+
   it("reports hidden unconfirmed leads and includes them on demand (includeUnconfirmed)", async () => {
     const { getCrmUnifiedCustomers } = await loadRepository({
       leads: [

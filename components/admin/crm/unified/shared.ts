@@ -118,6 +118,9 @@ export const SAVED_VIEW_FILTERS: Array<{
   { key: "unanswered", label: "미응답", description: "첫 응답 전 리드 (24h 초과 위험)" },
   { key: "dormant", label: "30일+ 미접촉", description: "마지막 활동 30일 초과" },
   { key: "expiring", label: "만료 임박", description: "만료 14일 이내(지난 것 포함)" },
+  // 2026-09-20 Compass 정리 라운드 S4 — 세그먼트 딥링크(커맨드 팔레트·홈 타일)가 착지하는 저장 뷰.
+  { key: "meta_leads", label: "메타 광고 리드", description: "광고 클릭·Meta 리드 광고 유입" },
+  { key: "registered_leads", label: "NEO 등록 리드", description: "NEO CRM 에 등록 확정된 리드" },
 ]
 
 const PRIMARY_SAVED_VIEW_KEYS = new Set<SavedViewFilter>([

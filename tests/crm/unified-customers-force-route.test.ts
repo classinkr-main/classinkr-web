@@ -75,6 +75,22 @@ describe("GET /api/admin/crm/customers/unified force 관통 (unified-01)", () =>
     expect(response.headers.get("Cache-Control")).toBe("private, max-age=30, stale-while-revalidate=120")
   })
 
+  it("§13 S4 — ?view=meta_leads · registered_leads 는 화이트리스트를 통과해 서버 필터로 넘어간다", async () => {
+    const { GET } = await loadRoute()
+
+    await GET(new NextRequest("https://classin.kr/api/admin/crm/customers/unified?view=meta_leads"))
+    expect(mocks.getCrmUnifiedCustomers).toHaveBeenLastCalledWith(expect.objectContaining({ view: "meta_leads" }))
+
+    await GET(new NextRequest("https://classin.kr/api/admin/crm/customers/unified?view=registered_leads"))
+    expect(mocks.getCrmUnifiedCustomers).toHaveBeenLastCalledWith(
+      expect.objectContaining({ view: "registered_leads" })
+    )
+
+    // 모르는 값은 여전히 all 로 접는다.
+    await GET(new NextRequest("https://classin.kr/api/admin/crm/customers/unified?view=nope"))
+    expect(mocks.getCrmUnifiedCustomers).toHaveBeenLastCalledWith(expect.objectContaining({ view: "all" }))
+  })
+
   it("리포지토리 실패는 500 + 한국어 고정 문구로 내려 배너가 그대로 띄울 수 있다 (unified-10)", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined)
     mocks.getCrmUnifiedCustomers.mockRejectedValueOnce(new Error("boom"))

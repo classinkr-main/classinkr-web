@@ -44,7 +44,9 @@ function parseSavedView(value: string | null): CrmUnifiedSavedView {
     value === "hot_lead" ||
     value === "upsell" ||
     value === "site_leads" ||
-    value === "unanswered"
+    value === "unanswered" ||
+    value === "meta_leads" ||
+    value === "registered_leads"
   ) {
     return value
   }

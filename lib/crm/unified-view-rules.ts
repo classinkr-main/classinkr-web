@@ -26,6 +26,8 @@ export type CrmUnifiedSavedView =
   | "upsell"
   | "site_leads"
   | "unanswered"
+  | "meta_leads"
+  | "registered_leads"
 
 export interface CrmUnifiedCustomerRow {
   key: string
@@ -123,6 +125,10 @@ export function matchesSavedView(
   if (view === "site_leads") return row.source === "lead" && row.origin === "site" && !row.crmRegistered
   // 응답 SLA 대상 & 팀 첫 기록 없음.
   if (view === "unanswered") return row.source === "lead" && row.slaTarget && !row.firstResponseAt
+  // 메타 광고 리드 — 유입 출처가 광고(ad)인 리드(2026-09-20 Compass 정리 라운드 S4).
+  if (view === "meta_leads") return row.source === "lead" && row.origin === "ad"
+  // NEO 등록 리드 — crm_source_links로 외부 CRM 등록이 확정된 리드.
+  if (view === "registered_leads") return row.source === "lead" && row.crmRegistered
   return true
 }
 

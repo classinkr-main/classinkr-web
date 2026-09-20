@@ -144,6 +144,24 @@ describe("unanswered 뷰", () => {
   })
 })
 
+describe("meta_leads / registered_leads 저장 뷰 (2026-09-20 Compass 정리 라운드 S4)", () => {
+  it("meta_leads — 리드 + 광고(ad) 유입만 매칭", () => {
+    expect(matchesSavedView(leadRow({ origin: "ad" }), "meta_leads", new Set(), NOW)).toBe(true)
+    expect(matchesSavedView(leadRow({ origin: "site" }), "meta_leads", new Set(), NOW)).toBe(false)
+    expect(matchesSavedView(leadRow({ origin: "team" }), "meta_leads", new Set(), NOW)).toBe(false)
+    expect(matchesSavedView(leadRow({ origin: null }), "meta_leads", new Set(), NOW)).toBe(false)
+    // neo_account는 origin 개념이 없는 소스 — source 게이트가 우선 차단한다.
+    expect(matchesSavedView(neoRow({ origin: "ad" }), "meta_leads", new Set(), NOW)).toBe(false)
+  })
+
+  it("registered_leads — 리드 + NEO(crmRegistered) 확정만 매칭", () => {
+    expect(matchesSavedView(leadRow({ crmRegistered: true }), "registered_leads", new Set(), NOW)).toBe(true)
+    expect(matchesSavedView(leadRow({ crmRegistered: false }), "registered_leads", new Set(), NOW)).toBe(false)
+    // neo_account는 소스 게이트로 차단 — crmRegistered가 true여도 이 뷰엔 안 잡힌다.
+    expect(matchesSavedView(neoRow({ crmRegistered: true }), "registered_leads", new Set(), NOW)).toBe(false)
+  })
+})
+
 describe("provisional(미확인 신규) 노출 규칙", () => {
   it("처리 큐와 실제 컨택이 있는 최근 컨택 뷰에서만 보인다", () => {
     const row = leadRow({ provisional: true })
