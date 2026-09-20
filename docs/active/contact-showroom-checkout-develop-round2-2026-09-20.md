@@ -119,7 +119,9 @@
 
 S9는 **운영 리스크**다. 의도된 "덜 막는" 방침 자체는 타당하지만(원천 하나가 늦다고 화면을 닫으면 멀쩡한 리드를 잃는다), 그 방침이 **자격 미설정이라는 상시 상태**에도 똑같이 적용되면 연휴에 예약을 받는다.
 
-**(c) 마이그레이션 적용 여부를 확인할 수단이 없다.** `supabase/migrations/20260829_showroom_bookings.sql`이 [db-migration-runbook.md](./db-migration-runbook.md)에도 `scripts/check-db-schema.ts`에도 없다. 테이블이 없는 환경이면 DB 예약 조회가 throw → 가용성 500 → S7과 합쳐져 **폼 전체 사용 불가**가 된다.
+**(c) 마이그레이션 적용 확인은 쇼룸만 되어 있다.** *(2026-09-20 구현 중 정정 — 최초 진단이 틀렸다.)* `20260829_showroom_bookings.sql`은 [lib/db/schema-contract.ts](../../lib/db/schema-contract.ts)에 테이블 프로브가 이미 있어 `npm run check:db`가 적용 여부를 확인한다. 실측 당시 `scripts/check-db-schema.ts`만 grep 해 놓친 것이다 — 계약은 스크립트가 아니라 `lib/db/schema-contract.ts`에 있다.
+
+**실제 공백은 `checkout_requests` 쪽이었다.** 도입 신청 3개 마이그레이션이 계약에 아예 없어, 테이블이 없는 환경에서도 `check:db`가 통과했다. 어드민 접수 큐가 두 접수를 한 화면에서 다루면서 둘의 적용 여부가 같은 화면의 가용성을 결정하므로 같은 수준으로 맞춘다. 쇼룸 쪽은 RLS deny-all 을 확인하는 anon 프로브가 없어 그것만 보탠다.
 
 ### 3-3. 구매 신청 — 금액이 단계마다 다르고, 접수 이후가 비어 있다
 
@@ -191,7 +193,7 @@ Phase D  UX 심화          — 캘린더 접근성·상태 표시, 문의 화�
 | # | 작업 | 등급 |
 |---|---|---|
 | B1 | **접수 큐 어드민 화면** — 쇼룸 예약·도입 신청 두 접수를 보고 상태를 올리는 화면. 위치는 §8 D9 결정 | P0 |
-| B2 | **마이그레이션 적용 확인 수단** — `showroom_bookings`를 `scripts/check-db-schema.ts`와 [db-migration-runbook.md](./db-migration-runbook.md)에 등재 | P0 |
+| B2 | **마이그레이션 계약 공백 마감** — `checkout_requests` 3종을 [lib/db/schema-contract.ts](../../lib/db/schema-contract.ts)에 등재하고, 두 접수 테이블에 RLS deny-all anon 프로브를 건다 | P0 |
 | B3 | **고객 확인 경로** — 접수 확인 발송 또는 접수번호 조회. 범위는 §8 D10 결정 | P1 |
 | B4 | **가용성 에러 시 재시도** — 폼이 영구 비활성으로 잠기지 않게 | P1 |
 | B5 | **원천 degradation 신호** — 공휴일·ICS 원천이 비었을 때 화면과 운영 알림에 드러낸다 | P1 |

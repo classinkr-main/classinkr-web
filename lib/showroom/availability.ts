@@ -19,7 +19,11 @@ import "server-only"
 
 import { getBusinessDateParts } from "@/lib/business-time"
 import { loadKoreaHolidayDates } from "@/lib/korea-holiday-dates"
-import { getShowroomCalendarEvents } from "@/lib/showroom-ics-calendar"
+import { hasKoreaHolidayCredentials } from "@/lib/korea-holidays"
+import {
+  getShowroomCalendarEvents,
+  hasShowroomCalendarSource,
+} from "@/lib/showroom-ics-calendar"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import {
   addIsoDays,
@@ -38,12 +42,25 @@ const MAX_RANGE_DAYS = 62
 /** 슬롯을 잡고 있다고 보는 예약 상태. 취소·노쇼는 자리를 비운다. */
 const BLOCKING_STATUSES = ["requested", "confirmed"] as const
 
+/**
+ * 원천이 설정돼 있는지. 실패 흡수 방침("덜 막는다") 자체는 유지하되, 설정이 아예 없는
+ * **상시 상태**를 화면이 조용히 넘기지 않게 한다 — 두 값이 모두 false 면 달력은
+ * "평일 전부 열림"을 그럴듯하게 보여준다.
+ */
+export interface ShowroomAvailabilitySources {
+  /** false 면 공휴일이 선택 가능일로 열린다. */
+  holidays: boolean
+  /** false 면 구글 캘린더의 기존 일정이 점유로 잡히지 않는다. */
+  showroomCalendar: boolean
+}
+
 export interface ShowroomAvailabilityResult {
   /** KST 오늘. 화면이 '오늘' 표식에 쓴다. */
   todayIso: string
   minIso: string
   maxIso: string
   days: ShowroomDayAvailability[]
+  sources: ShowroomAvailabilitySources
 }
 
 /** 쇼룸 구글 캘린더(ICS) 일정 → 점유 구간. 읽기 전용 원천이라 실패해도 넘어간다. */
@@ -125,6 +142,20 @@ export async function getShowroomAvailability(
   options: GetAvailabilityOptions = {}
 ): Promise<ShowroomAvailabilityResult> {
   const todayIso = getBusinessDateParts(options.now ?? new Date()).date
+  const sources: ShowroomAvailabilitySources = {
+    holidays: hasKoreaHolidayCredentials(),
+    showroomCalendar: hasShowroomCalendarSource(),
+  }
+  if (!sources.holidays) {
+    console.warn(
+      "[showroom-availability] 공휴일 원천 자격이 없어 공휴일이 예약 가능일로 열립니다 — GOOGLE_SERVICE_ACCOUNT_EMAIL/GOOGLE_PRIVATE_KEY 확인 필요"
+    )
+  }
+  if (!sources.showroomCalendar) {
+    console.warn(
+      "[showroom-availability] SHOWROOM_CALENDAR_ICS_URL 미설정 — 구글 캘린더의 기존 일정이 점유로 잡히지 않습니다"
+    )
+  }
 
   // 공휴일을 아직 모르는 상태로 예약 창을 잡으면 최소 날짜가 공휴일에 걸릴 수 있다.
   // 넉넉한 창으로 공휴일을 먼저 읽고, 그 값으로 실제 창을 다시 잡는다.
@@ -141,7 +172,7 @@ export async function getShowroomAvailability(
   const toIso = compareIsoDate(requestedTo, cappedTo) > 0 ? cappedTo : requestedTo
 
   if (compareIsoDate(fromIso, toIso) > 0) {
-    return { todayIso, minIso: range.minIso, maxIso: range.maxIso, days: [] }
+    return { todayIso, minIso: range.minIso, maxIso: range.maxIso, days: [], sources }
   }
 
   const [icsBusy, bookingBusy] = await Promise.all([
@@ -153,6 +184,7 @@ export async function getShowroomAvailability(
     todayIso,
     minIso: range.minIso,
     maxIso: range.maxIso,
+    sources,
     days: buildShowroomAvailability({
       todayIso,
       fromIso,

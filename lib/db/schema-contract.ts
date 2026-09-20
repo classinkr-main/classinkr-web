@@ -127,6 +127,10 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   "supabase/migrations/20260827_guarded_lead_assignment.sql",
   // 기존 20260818 마이그레이션이 적용됐는데 RPC만 빠진 live DB를 전방향으로 복구한다.
   "supabase/migrations/20260827_repair_increment_campaign_click_count.sql",
+  // 결제 없는 도입 신청 접수(2026-07-27). 본체 + 설치 주소 + 설치 유형 순으로 적용된다.
+  "supabase/migrations/20260727_checkout_requests.sql",
+  "supabase/migrations/20260727_checkout_requests_address.sql",
+  "supabase/migrations/20260727_checkout_requests_install_type.sql",
   // Compass(마케팅팀 앱) crm 스키마 연결 + NEO 소진 예보 + 지역 배정 + 쇼룸 예약(2026-08-28~29).
   // 파일명 사전순(= 적용 순서).
   "supabase/migrations/20260828_admin_neo_owner_link.sql",
@@ -476,6 +480,49 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     migration: "supabase/migrations/20260914_hardware_confirm_planned_v3.sql",
     impact:
       "앱이 v2로 폴백하는데, v2는 lot_no 칸에서만 로트를 찾아 lot_no가 빈 예정 출고(운영 원장 전부)를 확정하지 못한다.",
+  },
+  // ── 결제 없는 도입 신청 접수(2026-07-27) ────────────────────────────────
+  // 쇼룸 예약(위)은 테이블 프로브가 있었는데 같은 성격의 checkout_requests 는 계약에
+  // 아예 없었다 — 어드민 접수 큐가 두 접수를 같은 화면에서 다루게 되면서 둘의 적용
+  // 여부가 한 화면의 가용성을 결정하므로 같은 수준으로 맞춘다.
+  {
+    kind: "table",
+    table: "checkout_requests",
+    label: "결제 없는 도입 신청 접수 저장소",
+    columns: ["id", "kind", "items", "total_amount", "org", "name", "phone", "status", "lead_id"],
+    migration: "supabase/migrations/20260727_checkout_requests.sql",
+    impact:
+      "결제창의 주문 신청이 저장되지 않아 500 으로 끊긴다(lib/checkout-requests.ts 는 저장 실패만 500 으로 올린다).",
+  },
+  {
+    kind: "table",
+    table: "checkout_requests",
+    label: "도입 신청 설치·배송 주소 컬럼",
+    columns: ["address"],
+    migration: "supabase/migrations/20260727_checkout_requests_address.sql",
+    impact: "하드웨어 신청이 주소를 필수로 보내는데 컬럼이 없어 insert 가 42703 으로 실패한다.",
+  },
+  {
+    kind: "table",
+    table: "checkout_requests",
+    label: "도입 신청 설치 유형 컬럼(스탠드/벽걸이)",
+    columns: ["install_type"],
+    migration: "supabase/migrations/20260727_checkout_requests_install_type.sql",
+    impact: "설치 방식이 기록되지 않아 담당자가 현장 준비물을 알 수 없다.",
+  },
+  {
+    kind: "anon",
+    table: "checkout_requests",
+    label: "도입 신청 접수 anon 차단(RLS deny-all)",
+    migration: "supabase/migrations/20260727_checkout_requests.sql",
+    impact: "신청자 연락처·설치 주소·주문 금액이 anon 키로 읽힌다.",
+  },
+  {
+    kind: "anon",
+    table: "showroom_bookings",
+    label: "쇼룸 예약 접수 anon 차단(RLS deny-all)",
+    migration: "supabase/migrations/20260829_showroom_bookings.sql",
+    impact: "방문자 이름·연락처·방문 일정이 anon 키로 읽힌다.",
   },
 ]
 

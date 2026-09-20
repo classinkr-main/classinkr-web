@@ -36,6 +36,15 @@ function getIcsUrl(): string | null {
   return url && url.length > 0 ? url : null
 }
 
+/**
+ * 쇼룸 구글 캘린더(ICS) 원천이 설정돼 있는지.
+ *
+ * 미설정이면 기존 일정이 하나도 점유로 잡히지 않아 "평일 전부 열림"이 그럴듯하게 표시된다.
+ */
+export function hasShowroomCalendarSource(): boolean {
+  return getIcsUrl() !== null
+}
+
 // ─── ICS 파싱 ──────────────────────────────────────────────────────────────────
 
 // ICS 행 접기(folding) 해제: CRLF/LF + 공백·탭(접기 문자 포함)을 모두 제거

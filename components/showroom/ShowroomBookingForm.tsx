@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { AlertCircle, CalendarCheck, Check, Loader2 } from "lucide-react"
 
@@ -42,6 +42,8 @@ interface Availability {
   maxIso: string
   days: ShowroomDayAvailability[]
   slotDurationMinutes: number
+  /** 원천 설정 상태. 구버전 응답을 대비해 선택 필드로 둔다. */
+  sources?: { holidays?: boolean; showroomCalendar?: boolean }
 }
 
 const EMPTY_DAYS: ShowroomDayAvailability[] = []
@@ -254,22 +256,30 @@ export function ShowroomBookingForm({ interests }: Props) {
   const submitLock = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
 
+  /**
+   * 가용성 조회. 마운트와 "다시 불러오기" 둘 다 이 경로를 쓴다.
+   *
+   * 실패 시 폼 전체가 잠기는데(제출 버튼이 ready 를 요구한다) 재시도 수단이 없으면
+   * 사용자는 페이지를 직접 새로고침하는 수밖에 없었다. 잠그는 것 자체는 유지한다 —
+   * 가용성을 모르는 채 접수를 받으면 확정된 방문 위에 덧예약이 난다.
+   */
+  const reloadAvailability = useCallback(async (signal?: AbortSignal) => {
+    setAvailabilityStatus("loading")
+    const next = await fetchAvailability(signal)
+    if (signal?.aborted) return
+    if (!next) {
+      setAvailabilityStatus("error")
+      return
+    }
+    setAvailability(next)
+    setAvailabilityStatus("ready")
+  }, [])
+
   useEffect(() => {
     const controller = new AbortController()
-
-    void (async () => {
-      const next = await fetchAvailability(controller.signal)
-      if (controller.signal.aborted) return
-      if (!next) {
-        setAvailabilityStatus("error")
-        return
-      }
-      setAvailability(next)
-      setAvailabilityStatus("ready")
-    })()
-
+    void reloadAvailability(controller.signal)
     return () => controller.abort()
-  }, [])
+  }, [reloadAvailability])
 
   // 언마운트 중 진행 중인 제출을 끊는다 — 늦게 온 응답이 사라진 폼을 갱신하지 않게.
   useEffect(() => {
@@ -556,6 +566,13 @@ export function ShowroomBookingForm({ interests }: Props) {
                 </Link>
                 로 남겨주시면 담당자가 일정을 잡아드립니다.
               </p>
+              <button
+                type="button"
+                onClick={() => void reloadAvailability()}
+                className="mt-3 inline-flex min-h-11 items-center justify-center rounded-[6px] border border-[#084734] px-4 text-[13px] font-semibold text-[#084734] transition-colors hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+              >
+                다시 불러오기
+              </button>
             </div>
           ) : (
             <>
@@ -574,6 +591,14 @@ export function ShowroomBookingForm({ interests }: Props) {
                 평일만 운영하며, 담당자 배정과 자료 준비를 위해 최소 2영업일 전부터 예약을
                 받습니다. 회색 날짜는 휴무이거나 이미 마감된 날입니다.
               </p>
+              {/* 공휴일 원천이 꺼져 있으면 달력이 연휴를 열어 둔다. 요청형이라 담당자가
+                  확정 단계에서 거를 수 있지만, 화면이 아는 척하지는 않는다. */}
+              {availability?.sources?.holidays === false ? (
+                <p className="text-[11px] text-[#A8741A]">
+                  공휴일은 자동 반영되지 않습니다. 연휴에 걸친 날짜를 고르셨다면 담당자가 확인
+                  단계에서 함께 조정해 드립니다.
+                </p>
+              ) : null}
             </>
           )}
 

@@ -36,6 +36,16 @@ const MAX_RESULTS = 100
 /** 실패해도 캘린더가 비지 않도록 공유하는 빈 결과(fallback) */
 const EMPTY: CalendarEvent[] = []
 
+/**
+ * 공휴일 원천이 설정돼 있는지.
+ *
+ * 자격이 없으면 조회가 조용히 빈 배열로 떨어져 **공휴일이 선택 가능일로 열린다**.
+ * 일시 장애와 달리 이건 상시 상태라, 이 값을 읽는 화면은 "반영되지 않았다"를 드러낸다.
+ */
+export function hasKoreaHolidayCredentials(): boolean {
+  return hasServiceAccount()
+}
+
 function hasServiceAccount(): boolean {
   return Boolean(
     process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim() && process.env.GOOGLE_PRIVATE_KEY?.trim()
