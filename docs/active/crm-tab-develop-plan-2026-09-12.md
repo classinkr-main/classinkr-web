@@ -357,6 +357,41 @@ home_v4.42(9/10 어드민 개편 중심)를 병합했다. 이 브랜치는 Wave 
 2. 다음(읽기 모델·프리페치): M2·M4·A1·A4·T1·T4·P1·P3
 3. 결정 후(스키마): A6·T5·T6
 
+## 13. 2026-09-20 Compass 정리 라운드 — 시각·대시보드·작업, 칩 입력, 세그먼트 필터·검색
+
+방향(사용자 지시): 이 라운드는 Compass(mkt.classin.co.kr, 마케팅팀 외부 CRM)의 내용을 **정리해 보여주는 시각·대시보드·작업 큐**에 치중한다. 입력은 **칩(버튼) 한 번으로도** 추가되게 하고, **메타 광고 리드 / 인계 리드 / 기존 리드 / 고객** 같은 필터와 검색이 빠르게 되게 한다. 구현은 하위 모델 서브에이전트를 적극 쓴다.
+
+### 13.1 조사 요약 (2026-09-20 코드 기준)
+
+- Compass 브리지(`lib/compass/bridge.ts`)는 리드(48필드)·활동·광고 일간·광고세트·데모·캘린더·매출·다음 액션·BD인계 건수를 읽을 수 있지만, CRM 화면에 나오는 것은 홈 밴드의 숫자 3개(오늘 데모·다음 액션 임박·BD인계 진행)와 리드 보드의 오버레이 칩뿐이다. 단계(new/contact/consult/demo/quote/bd/won/lost) 분포, 케어 사다리, 유입 플랫폼, 담당별 진행, 이탈 사유, 다음 액션 **목록**은 전부 미노출.
+- 리드 보드 필터 축은 상태(10)·유입 그룹(7)·렌즈(전체/마케팅)·정렬·검색·미확인 토글이며 URL 은 `filter·group·lens·sort·q·unconfirmed·view·lead` 를 쓴다. 검색은 전량 로드 후 클라 순수 함수(`lib/crm/lead-ranking.ts` tokenizeLeadSearch/matchesLeadSearch, 300ms 디바운스)이고 Compass 오버레이는 `useCompassOverlay`(전화 키 POST 배치)로 리드별 단계·BD 담당·NeoCRM 등록을 준다. "메타 광고 / 인계 / 기존 / 고객" 을 한 줄로 고르는 축은 없다.
+- 입력 표면: 리드 상태(칩 4)·연락 채널/결과(칩)·기록 모드/템플릿(칩)은 이미 칩이다. 팔로업 날짜는 date input, 할 일은 폼 없이 API 만, 태그는 **UI 자체가 없다**(POST/DELETE `/api/admin/crm/customers/[key]/tags` 만 존재). 담당 배정은 select(400ms 지연 커밋). 외부 CRM(NeoCRM) 쓰기는 큐 정책만 있고 호출자가 없으므로 이번 칩은 전부 로컬(Supabase) 대상이다.
+
+### 13.2 항목
+
+공용 계약 2종을 먼저 커밋한다: `lib/crm/lead-segments.ts`(세그먼트 SSOT — 정의·판정·카운트·딥링크), `lib/compass/summary-contract.ts`(Compass 요약 응답 타입·기간·퍼널 순서·상한).
+
+| ID | 항목 | 규모 | 파일 |
+|---|---|---|---|
+| S1 | 리드 보드 상단 **세그먼트 칩**(전체·메타 광고·인계·기존·고객) + 건수, `?segment=` URL, Compass 끊김이면 인계·기존 칩은 "연결 끊김"으로 비활성(0 아님) | M | `leads/LeadsBoardClient.tsx`, `leads/board/*` |
+| S2 | 검색 강화: `/` 단축키로 검색창 포커스, Compass 매칭 리드는 Compass 학원명·이름도 검색 대상, 결과 건수 캡션, 세그먼트와 AND | S | 위와 동일 + `lib/crm/lead-ranking.ts` 검색 haystack 확장 |
+| S3 | 커맨드 팔레트에 세그먼트 이동 명령 4개("메타 광고 리드 보기" 등) | S | `CrmCommandPalette.tsx` |
+| S4 | 통합 고객 저장 뷰 2개 추가: "메타 광고 리드"(origin=ad) · "NEO 등록 리드"(crmRegistered) — 서버 viewCounts 포함 | S | `lib/crm/unified-view-rules.ts`, `unified/shared.ts`, 저장소 viewCounts |
+| D1 | **Compass 요약 API** `GET /api/admin/crm/compass-summary?period=7d|30d|90d`: 브리지에 range 페이지네이션 슬라이스 조회(금액 컬럼 제외, 상한 5,000 → truncated) 추가, 기간 내 유입·플랫폼·단계 누적 퍼널·이탈·NeoCRM 등록·결제·케어 사다리·담당별·이탈 사유·다음 액션 목록·BD인계·오늘 데모를 한 응답으로 | M | `lib/compass/bridge.ts`(추가만), 신규 `lib/compass/summary.ts`, 신규 라우트 |
+| D2 | 홈 **Compass 밴드 확장**: 기존 숫자 3개 유지 + 기간 칩 + 단계 퍼널(MiniFunnel) + 유입 플랫폼(메타/기타) 막대 + **다음 액션 임박 목록**(담당·학원·액션·D-시간·새 탭 딥링크) + 세그먼트 타일 4개(메타 광고 유입·BD인계 진행·NeoCRM 등록·결제 → 리드 보드 `?segment=` 링크). down 이면 전부 걷어내고 "연결 끊김" 한 줄 | M | `home/CompassPipelineBand.tsx`, `home/CrmHomeClient.tsx`(props 배선만) |
+| D3 | 인사이트 **Compass 파이프라인 섹션**: 기간 칩, 담당별 표(콜·데모·BD·결제·이탈), 케어 사다리 막대, 유입 플랫폼, 이탈 사유 상위 5 | M | `CrmInsightsClient.tsx` |
+| Q1 | 리드 드로어 **팔로업 칩**(오늘·내일·3일 뒤·다음 주 월·지우기) 즉시 저장 + 연락 결과가 부재중/재통화면 저장 직후 "팔로업 내일/3일 뒤" 제안 칩 | S | `leads/board/LeadDrawer.tsx`, `ContactLogForm.tsx` |
+| Q2 | 고객 360 **할 일 칩**(내일 재통화·이번 주 견적 발송·다음 주 데모 준비·재계약 논의) 낙관 추가 + 되돌리기 | S | `Customer360DetailTasks.tsx` |
+| Q3 | 고객 360 **태그 칩**: 제안 태그(재계약·데모 요청·VIP·이탈 위험·하드웨어) 원클릭 추가, 직접 입력, × 제거 — 태그 UI 최초 도입 | S | `Customer360DetailOverview.tsx` |
+| Q4 | 리드 드로어 **빠른 배정 칩**(최근 배정 3명 · 나) | S | `leads/board/LeadDrawer.tsx` |
+
+세그먼트 정의(SSOT `lib/crm/lead-segments.ts`): 메타 광고 = source 그룹 meta 또는 fbclid/Meta UTM · 인계 = Compass 단계 bd 또는 BD 담당 지정(결제·이탈 제외) · 기존 = Compass 전화 키 매칭 또는 NeoCRM 등록 · 고객 = converted 또는 Compass won. 한 리드가 여러 세그먼트에 속할 수 있다.
+
+### 13.3 실행
+
+1. 계약 2종 커밋 → 6개 클러스터 병렬(S1+S2 / S3+S4 / D1 / D2 / D3 / Q1–Q4) → 클러스터별 게이트·커밋 → 전체 게이트 → §10 기록.
+2. 후속 후보: Compass 활동 타임라인을 고객 360 기록 탭에 병합(브리지 `getCompassActivitiesByLeadIds` 준비됨), 광고세트 성과는 캠페인 허브(`/admin/campaigns`)가 정본이라 CRM 에 중복하지 않는다.
+
 ## 12. 근거 요약 (영역별 조사 결과 원문 위치)
 
 이 문서의 파일:라인 근거는 2026-09-12 코드 기준이다. 후속 작업 시 각 항목의 파일을 다시 열어 현재 상태를 재확인한 뒤 착수한다. 감사 문서(2026-08-06) §4에서 미해결로 남았던 3건의 현재 상태: 큐 스코어링 비용 = 부분 해결(소스 수집만 캐시) → H7, 필터 URL 소유권 = 사용처가 홈 1곳으로 줄어 선행 조건 해소 → H4, 죽은 task 분기 = 미해결 → H2. 입력함 열 매핑·매칭 제외 되돌리기·통합 목록 offset·customers-neo 1만 행 = 전부 미해결 → R2·R4·C1·C9.
