@@ -18,11 +18,11 @@ import type {
   CrmHealthDistributionOwnerRow,
   CrmHealthDistributionWithOwners,
 } from "@/lib/repositories/crm-unified-customers"
+import CompassPipelineSection from "./insights/CompassPipelineSection"
 import CrmManagerReportPanel from "./CrmManagerReportPanel"
 import { ScoreKindTable } from "./ScoreKind"
 
 const INSIGHTS_URL = "/api/admin/crm/insights"
-const CACHE_TTL_MS = 90_000
 // 코크핏 도넛(CrmHealthDonut)과 같은 cacheKey — 같은 키는 같은 TTL/SWR(SSOT)로만 부른다(H8).
 const HEALTH_DISTRIBUTION_URL = "/api/admin/crm/health-distribution"
 
@@ -303,7 +303,7 @@ export default function CrmInsightsClient() {
         undefined,
         {
           cacheKey: INSIGHTS_URL,
-          ttlMs: CACHE_TTL_MS,
+          ttlMs: CRM_CACHE_TTL_MS,
           staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
           force: options?.force,
           onRevalidated: ({ data: fresh }) => {
@@ -531,6 +531,7 @@ export default function CrmInsightsClient() {
         generatedAt={healthDistribution?.generatedAt ?? null}
         loading={healthLoading}
       />
+      <CompassPipelineSection />
       <CrmScoreKindDefinitionsSection />
 
       {error ? (
