@@ -105,6 +105,7 @@ const ForecastBoard = dynamic(() => import("./ledger/ForecastBoard").then((m) =>
 })
 import { RevAuxAnalysisSection } from "./ledger/RevAuxAnalysisSection"
 import { RevMobileList } from "./ledger/RevMobileList"
+import { buildCustomerOptions } from "./ledger/customer-suggest"
 import { type CrmCoverageResponse } from "./CrmSyncStrip"
 import MultiSelect from "./MultiSelect"
 // 입력 레일·콕핏 2-pane(~1,350줄)은 기본 화면(REV 렌즈 + 접힌 레일)에서 렌더되지 않는다 —
@@ -1247,6 +1248,10 @@ export default function SalesLedgerWorkbench({
     return Array.from(new Set(rows.map((row) => row.manager).filter((value): value is string => Boolean(value))))
       .sort((a, b) => a.localeCompare(b, "ko"))
   }, [rows])
+
+  // 매출 장부 입력 속도 라운드 4(2026-09-20, P0-3): 레일 고객/계정 datalist 후보 — managerOptions와
+  // 동일한 모집단(rows = 시트 행 + 적용 초안 행)에서 유일·정렬(customer-suggest.buildCustomerOptions).
+  const customerOptions = useMemo(() => buildCustomerOptions(rows), [rows])
 
   const regionOptions = useMemo(() => {
     return Array.from(new Set(rows.map((row) => row.region).filter((value): value is string => Boolean(value))))
@@ -2637,6 +2642,7 @@ export default function SalesLedgerWorkbench({
     monthOptions,
     selectedMonth,
     managerOptions,
+    customerOptions,
     draftAmountInvalid,
     draftQuantityInvalid,
     draftFormInvalid,

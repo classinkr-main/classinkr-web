@@ -27,6 +27,7 @@ import {
   type LedgerDraft,
   type RevProductCategory,
 } from "./shared"
+import { findCustomerSpellingMatch } from "./customer-suggest"
 import { WeeklyAmountGrid } from "./WeeklyAmountGrid"
 import { TEAMS } from "../types"
 
@@ -41,6 +42,10 @@ interface InputRailSectionProps {
   // 품질 감사 2026-09-10 — #7: CockpitEditor와 동일 이유(담당자 자유 텍스트 오탈자가 집계를
   // 조용히 쪼갬) — datalist로 기존 표기를 추천만 하고 자유 입력(신규 담당자 온보딩)은 유지한다.
   managerOptions: string[]
+  // 매출 장부 입력 속도 라운드 4(2026-09-20, P0-3): 집계 키인 고객명도 자유 텍스트라 표기 흔들림
+  // ("OO학원"/"OO 학원")이 정규화 키(normalizedAccountKey)는 같은데 새 행으로 갈라져 집계를
+  // 쪼갠다. managerOptions와 동일 이유로 datalist는 추천만 하고 자유 입력(신규 고객)은 막지 않는다.
+  customerOptions: string[]
   draftAmountInvalid: boolean
   draftQuantityInvalid: boolean
   draftFormInvalid: boolean
@@ -72,6 +77,7 @@ export function InputRailSection({
   monthOptions,
   selectedMonth,
   managerOptions,
+  customerOptions,
   draftAmountInvalid,
   draftQuantityInvalid,
   draftFormInvalid,
@@ -133,6 +139,10 @@ export function InputRailSection({
   // 저장·new-row 초안 편집은 대응 매트릭스 행이 없어 부모 쪽에서 항상 false로 내려온다. 여기서는
   // 그대로 소비만 한다(중복 판정 없음).
   const blockedByLock = targetCellLocked
+
+  // 표기만 다른 기존 고객 후보 추천(라운드 4 P0-3) — 저장을 막지 않는 인라인 경고 + 원클릭
+  // 맞추기에만 쓴다. draftFormInvalid 등 저장 버튼 활성 조건은 그대로 둔다.
+  const customerSpellingMatch = findCustomerSpellingMatch(draftForm.customer, customerOptions)
 
   // form 래핑으로 Enter 제출 — 편집 중이면 그 초안 갱신, 아니면 primaryDraftKind로 저장.
   // 실제 버튼 클릭도 동일 코드 경로를 타 두 번 저장되지 않는다(submit 버튼은 onClick 없음).
@@ -201,9 +211,34 @@ export function InputRailSection({
                 <input
                   value={draftForm.customer}
                   onChange={(event) => setDraftForm((current) => ({ ...current, customer: event.target.value }))}
+                  list="input-rail-customer-options"
+                  autoComplete="off"
                   className="mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-3 text-[12px] font-semibold text-[#111110] outline-none focus:border-[#084734]"
                 />
+                {/* datalist는 자유 입력을 막지 않는다 — 기존 표기를 추천해 표기 흔들림(집계 쪼갬)만 줄인다. */}
+                <datalist id="input-rail-customer-options">
+                  {customerOptions.map((name) => <option key={name} value={name} />)}
+                </datalist>
               </label>
+              {/* 라운드 4 P0-3: 정규화 키(normalizedAccountKey)는 같은데 표기만 다른 기존 행이 있으면
+                  알려준다 — role="status"(alert 아님)로 저장은 막지 않고 원클릭으로만 표기를 맞춘다. */}
+              {customerSpellingMatch && (
+                <p
+                  role="status"
+                  className="flex flex-wrap items-center gap-2 rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2 text-[11px] font-semibold leading-relaxed text-[#7A520F]"
+                >
+                  <span>
+                    기존 행 &quot;{customerSpellingMatch.canonical}&quot;과 같은 계정으로 보입니다 — 표기를 맞추면 같은 행으로 집계됩니다
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setDraftForm((current) => ({ ...current, customer: customerSpellingMatch.canonical }))}
+                    className="shrink-0 rounded-md border border-[#ECD29C] bg-white px-2 py-1 text-[10.5px] font-bold text-[#7A520F] transition hover:bg-[#FBF1E0]"
+                  >
+                    그 표기로 맞추기
+                  </button>
+                </p>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <label className="block text-[11px] font-bold text-[#615D59]">
                   담당자
