@@ -1127,6 +1127,10 @@ function insertRowAsLotLedgerMovement(
  * 로트 배정은 줄 단위 저장과 **같은 결과**여야 한다. 그래서 품목 원장을 한 번 읽고, 앞 줄이 만든 행을
  * 그 뒤에 이어 붙여 같은 해석기(resolveHardwareLotBalances)로 잔량을 다시 낸다 — 줄마다 DB 를 다시
  * 읽던 것과 입력이 같다. 규칙을 두 번째로 구현하지 않는다.
+ *
+ * 줄별 실패는 결과 배열에 담고, **공통 준비(품목 upsert · CRM 중복 조회)가 실패하면 던진다** —
+ * 그 실패는 모든 줄에 똑같이 영향을 주므로, 같은 오류를 줄 수만큼 돌려주는 것보다 한 번 분명히
+ * 말하는 편이 낫다(호출부는 그 오류 문구를 그대로 보여 주고 입력은 그대로 남는다).
  */
 export async function createHardwareMovementsBatch(
   inputs: CreateHardwareMovementInput[]

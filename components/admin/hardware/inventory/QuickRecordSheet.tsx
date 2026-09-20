@@ -57,8 +57,11 @@ const LOCATION_OPTIONS = ["고객", "창고", "샘플", "사무실", "수리"] a
 const QUICK_QUANTITIES = [1, 2, 5, 10]
 // 15회 이상 반복되던 인풋/라벨 클래스의 드리프트 방지.
 // 타이포 위계: 섹션 제목(13px bold #111110) > 필드 라벨(12px semibold #615D59) > 보조(11px #A39E98).
-const SHEET_INPUT_CLASS =
-  "mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
+// 콤보박스(고객사)는 바깥 래퍼가 여백을 갖고 안쪽 input 은 여백이 없어야 한다 — 드롭다운이
+// 그 래퍼 기준으로 뜨기 때문이다. 두 토큰의 값이 갈라지지 않게 한쪽에서 합성한다.
+const SHEET_FIELD_INPUT_CLASS =
+  "h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
+const SHEET_INPUT_CLASS = `mt-1 ${SHEET_FIELD_INPUT_CLASS}`
 const SHEET_LABEL_CLASS = "text-[12px] font-semibold text-[#615D59]"
 const SHEET_SECTION_TITLE_CLASS = "text-[13px] font-bold text-[#111110]"
 
@@ -976,7 +979,7 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                         원장 저장 시 loan/return 이벤트가 유닛 타임라인에 함께 남는다. */}
                     {activePresetKey === "sample" && !editingId && (
                       <div className="space-y-3">
-                        <div className="block">
+                        <div>
                           <span className={SHEET_LABEL_CLASS}>대여 고객사</span>
                           <div className="mt-1">
                             <CustomerPicker
@@ -985,7 +988,7 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                               options={historyCustomers}
                               ariaLabel="대여 고객사"
                               placeholder="예: 남명학원 — 트래커에 유닛 행방으로 기록됩니다"
-                              className={SHEET_INPUT_CLASS.replace("mt-1 ", "")}
+                              className={SHEET_FIELD_INPUT_CLASS}
                             />
                           </div>
                         </div>
@@ -1090,7 +1093,7 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                           className={SHEET_INPUT_CLASS}
                         />
                       </label>
-                      <div className="block">
+                      <div>
                         <span className={SHEET_LABEL_CLASS} id="hardware-destination-label">
                           {isCustomerDestination ? "도착 (고객사)" : "도착"}
                         </span>
@@ -1103,7 +1106,7 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                               options={historyCustomers}
                               ariaLabel="도착 고객사"
                               placeholder="고객사명 — 예: 남명학원"
-                              className={SHEET_INPUT_CLASS.replace("mt-1 ", "")}
+                              className={SHEET_FIELD_INPUT_CLASS}
                             />
                           </div>
                         ) : (
@@ -1468,7 +1471,6 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                         <option key={lot} value={lot} />
                       ))}
                     </datalist>
-
 
                     {/* 입력 미리보기 — 박스 대신 border-top 구분으로 위→아래 단일 스캔 흐름 유지(HW-5). */}
                     {(sheetMode === "single" || Boolean(editingId)) && (
