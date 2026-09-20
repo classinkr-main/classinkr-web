@@ -21,6 +21,13 @@ import { adminFetch, adminFetchJson, adminFetchJsonCached, clearAdminRequestCach
 import { paginateAdminList } from "@/lib/admin-list-pagination"
 import { isPrefetchFresh } from "@/lib/admin/prefetch-freshness"
 import {
+  clearStoredDraft,
+  QUICK_CART_DRAFT_KEY,
+  QUICK_CART_DRAFT_VERSION,
+  readStoredQuickCartDrafts,
+  writeStoredDraft,
+} from "./inventory/draft-storage"
+import {
   customerLabel,
   DETAIL_PRESET_KEYS,
   elapsedDaysSince,
@@ -250,6 +257,9 @@ export function extractCrmLink(movement: HardwareMovement): { label: string; ref
 // SSR 프리렌더 중에는 window가 없으므로 항상 가드하고, storage 접근 불가 환경에선 조용히 비활성화한다.
 const QUICK_RECORD_OWNER_KEY = "hw.quickRecord.owner"
 const QUICK_RECORD_STAY_OPEN_KEY = "hw.quickRecord.stayOpen"
+// 저장 대기 바구니 — 새로고침·탭 폐기로 담아 둔 작업건을 잃지 않게 한다(입력 가속 P3-1).
+// 입고표와 달리 조용히 되살린다: 시트가 "저장 대기 바구니 N건"으로 이미 보여 주기 때문에
+// 사람이 모르는 상태가 생기지 않는다. 키·스키마 검사는 draft-storage 가 가진다.
 
 // 시트 공용 클래스 토큰(SHEET_INPUT_CLASS 등)·LOCATION_OPTIONS·QUICK_QUANTITIES는 구조 분해(#6)로
 // QuickRecordSheet.tsx로 이전했다 — 그 시트에서만 쓰여 이 오케스트레이터에는 더 필요 없다.
@@ -528,6 +538,8 @@ export default function HardwareInventoryClient({
   const [notice, setNotice] = useState<string | null>(null)
   const [pendingMovement, setPendingMovement] = useState<HardwareMovementDraft | null>(null)
   const [quickCart, setQuickCart] = useState<HardwareMovementDraft[]>([])
+  // 보관된 바구니를 읽었는지 — 읽기 전에는 자동 보관이 저장분을 지우지 않게 한다(효과 실행 순서).
+  const quickCartRestoredRef = useRef(false)
   const [quickCartLineErrors, setQuickCartLineErrors] = useState<Record<string, string>>({})
   const [quickCartSaveSummary, setQuickCartSaveSummary] = useState<QuickCartSaveSummary | null>(null)
   const [quotePasteText, setQuotePasteText] = useState("")
@@ -855,6 +867,14 @@ export default function HardwareInventoryClient({
     await load({ force: true })
   }, [load])
 
+  // 바구니 자동 보관 — 담을 때마다 남기고, 저장·비우기로 비면 지운다.
+  // 원장이 아니라 작성 중 입력이고, 24시간이 지나면 읽지 않는다(draft-storage 규칙).
+  useEffect(() => {
+    if (!quickCartRestoredRef.current) return
+    if (quickCart.length === 0) clearStoredDraft(QUICK_CART_DRAFT_KEY)
+    else writeStoredDraft(QUICK_CART_DRAFT_KEY, QUICK_CART_DRAFT_VERSION, quickCart)
+  }, [quickCart])
+
   /**
    * 저장 직후 화면 — 서버가 돌려준 **원장 줄만** 즉시 끼워 넣는다.
    *
@@ -964,10 +984,14 @@ export default function HardwareInventoryClient({
   )
 
   // 반복 입력 기억 복원 — 하이드레이션 불일치를 피하려고 마운트 후 1회만 읽는다.
+  // 저장 대기 바구니도 같은 자리에서 되살린다(시트가 "저장 대기 N건"으로 보여 주므로 조용히 되살려도 된다).
   useEffect(() => {
     const savedOwner = readLocalString(QUICK_RECORD_OWNER_KEY)
     if (savedOwner) setOwner((current) => current || savedOwner)
     if (readLocalString(QUICK_RECORD_STAY_OPEN_KEY) === "1") setStayOpenAfterSave(true)
+    const savedCart = readStoredQuickCartDrafts()
+    quickCartRestoredRef.current = true
+    if (savedCart.length > 0) setQuickCart(savedCart)
   }, [])
 
   // 검증 에러는 폼 상단에 뜬다 — 하단 저장 버튼을 누른 사용자에게 보이도록 시트를 위로 스크롤.

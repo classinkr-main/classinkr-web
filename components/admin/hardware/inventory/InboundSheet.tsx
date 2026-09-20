@@ -53,6 +53,7 @@ import {
   type InboundLotChoice,
   type InboundSavedLine,
 } from "./inbound-sheet-model"
+import { clearStoredDraft, readStoredDraft, writeStoredDraft } from "./draft-storage"
 import { formatCurrency, formatNumber, MONO_META_CLASS, type HardwareItem, type HardwareMovement } from "./shared"
 
 export interface InboundSheetSavedResult {
@@ -97,6 +98,11 @@ interface MovementBatchResponse {
 type LotMode = "new" | "existing" | "custom"
 
 type PickerOption = { kind: "item"; item: HardwareItem } | { kind: "new"; name: string }
+
+// 작성 중 입고표 보관 — 새로고침·탭 폐기로 한 물량을 다시 치지 않게 한다(입력 가속 P3-1).
+// 조용히 되살리지 않는다: 어제 쓰다 만 물량번호가 오늘 저장으로 새면 원장이 틀어진다. 배너로 사람이 고른다.
+const INBOUND_DRAFT_KEY = "hw.inboundSheet.draft"
+const INBOUND_DRAFT_VERSION = 1
 
 const RECENT_LOT_LIMIT = 6
 const RECENT_LOT_LIMIT_PHONE = 3
@@ -298,6 +304,40 @@ function InboundSheetPanel({
     [defaultStorage, importer, lot, occurredAt, owner, rows]
   )
   const validation = useMemo(() => validateInboundDraft(draft), [draft])
+
+  // ---- 작성 중 입력 보관 ----
+  // 수량을 적은 줄이 하나라도 있으면 "쓰던 중"으로 본다. 빈 표는 저장하지도, 보관된 초안을 지우지도
+  // 않는다 — 시트를 열자마자 빈 상태가 전날 초안을 덮어쓰면 복구할 것이 사라진다.
+  const draftHasContent = rows.some((row) => row.quantity.trim() !== "") && Boolean(lot.trim())
+  const [restorable, setRestorable] = useState(() => {
+    const saved = readStoredDraft<InboundDraft>(INBOUND_DRAFT_KEY, INBOUND_DRAFT_VERSION)
+    if (!saved || !Array.isArray(saved.rows)) return null
+    const filled = saved.rows.filter((row) => typeof row?.quantity === "string" && row.quantity.trim() !== "")
+    if (filled.length === 0) return null
+    return { ...saved, rows: saved.rows }
+  })
+
+  useEffect(() => {
+    if (!draftHasContent) return
+    writeStoredDraft(INBOUND_DRAFT_KEY, INBOUND_DRAFT_VERSION, draft)
+  }, [draft, draftHasContent])
+
+  const restoreDraft = () => {
+    if (!restorable) return
+    setLotMode("custom")
+    setCustomLot(restorable.lot)
+    setOccurredAt(restorable.occurredAt)
+    setImporter(restorable.importer)
+    setDefaultStorage(restorable.defaultStorage)
+    setRows(restorable.rows)
+    setRestorable(null)
+    setNotice(`작성 중이던 ${restorable.lot} 입고표를 되살렸습니다. 수량을 확인하고 저장하세요.`)
+  }
+
+  const discardRestorable = () => {
+    clearStoredDraft(INBOUND_DRAFT_KEY)
+    setRestorable(null)
+  }
   const summary = useMemo(() => summarizeInboundDraft(draft), [draft])
   const pastePreview = useMemo(() => (pasteText.trim() ? parseInboundPaste(pasteText, itemNames) : null), [itemNames, pasteText])
 
@@ -571,6 +611,8 @@ function InboundSheetPanel({
           ? await registerOfficeSampleUnits(officeLines, lotValue, draft.occurredAt)
           : { registered: 0, failure: null }
 
+      // 저장된 줄은 원장에 있다 — 보관 초안은 여기서 지운다(부분 실패면 남은 줄이 다시 보관된다).
+      clearStoredDraft(INBOUND_DRAFT_KEY)
       setSavedLots((current) => [
         ...current,
         { lot: lotValue, firstDate: draft.occurredAt, lastDate: draft.occurredAt, totalQuantity: outcome.savedUnits, productCount: outcome.savedLines.length },
@@ -760,6 +802,24 @@ function InboundSheetPanel({
 
         <div className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAF8]">
           <fieldset disabled={saving} className="m-0 min-w-0 space-y-5 border-0 px-4 py-4 sm:px-5">
+            {restorable ? (
+              // 조용히 되살리지 않는다 — 어제 쓰다 만 물량번호가 오늘 저장으로 새면 원장이 틀어진다.
+              <div role="status" className="border-l-2 border-[#A8741A] bg-white py-2 pl-3 pr-2">
+                <p className="text-[12.5px] font-semibold text-[#111110]">
+                  작성 중이던 입고표가 있습니다 — <span className={MONO_META_CLASS}>{restorable.lot || "물량번호 없음"}</span>{" "}
+                  {formatNumber(restorable.rows.filter((row) => row.quantity.trim() !== "").length)}줄
+                </p>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  <button type="button" onClick={restoreDraft} className={GHOST_BUTTON_CLASS}>
+                    이어서 작성
+                  </button>
+                  <button type="button" onClick={discardRestorable} className={GHOST_BUTTON_CLASS}>
+                    새로 시작
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
             {doneBanner ? (
               <div role="status" className="border-l-2 border-[#084734] bg-white py-2 pl-3 pr-2">
                 <p className="text-[12.5px] font-semibold text-[#111110]">
