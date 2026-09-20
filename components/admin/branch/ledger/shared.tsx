@@ -62,6 +62,11 @@ export interface LedgerDraft {
   metadata?: Record<string, unknown>
   createdAt: string
   updatedAt: string
+  // 라운드 4(P0-1·P0-2) — 서버 JSON에는 이미 실려 오던 필드인데 클라 타입에 없었다. 작성자·
+  // 체크자 표시(자가 체크 배지 = createdBy === checkedBy)와 배치 API 409 문구 분기에 쓴다.
+  createdBy?: string | null
+  checkedBy?: string | null
+  checkedAt?: string | null
 }
 
 export type LedgerRevenueRow = BranchPipelineRow & {

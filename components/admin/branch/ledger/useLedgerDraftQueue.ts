@@ -57,6 +57,11 @@ export interface LedgerDraftInput {
   amount: number
   note: string
   metadata?: Record<string, unknown>
+  // 라운드 4(P0-2 자가 체크) — 매트릭스 셀 커밋처럼 입력자=체크자인 저장 경로가 생성 즉시
+  // "checked"로 올리고 싶을 때 싣는다. 생략하면 서버가 기존처럼 draft로 만든다(하위호환).
+  // 로컬 폴백(makeLocalDraft)은 적용 불가라 이 값과 무관하게 항상 draft로 강제하고,
+  // 재전송 입력(localDraftToInput)도 이 필드를 싣지 않는다(재전송은 항상 draft로 열린다).
+  status?: "draft" | "checked"
 }
 
 interface LedgerDraftsResponse {
@@ -77,6 +82,9 @@ interface LedgerDraftResponse {
   // 새 리소스가 만들어진 게 아니므로 클라가 "직전 동일 초안 재사용됨"을 안내한다.
   dedupedRecent?: boolean
   error?: string
+  // 라운드 4(P0-1) — 단건 PATCH(action=update)도 배치 API와 같은 409 변형을 돌려준다: 다른
+  // 사용자가 이미 체크한 초안을 수정하려 한 경우, 일반 낙관적 잠금 충돌과 문구를 구분한다.
+  reason?: "checked-by-other"
 }
 
 // 웨이브 7 2단(I4): createDraft/updateDraft 공통 반환 — draft만으로는 409 낙관적 잠금 충돌
@@ -89,12 +97,64 @@ export interface DraftMutationResult {
   dedupedRecent?: boolean
   /** 서버 검증 거부(400) 문구 그대로 — 큐 강등·로컬 폴백 없이 호출부가 이 문구만 노출한다. */
   validationMessage?: string
+  /** 라운드 4(P0-1) — persistDraftsBatch 전용: 서버가 응답은 했으나 이 항목만 실패했음
+      (404 레코드 소실, 503/500 등). validationMessage(400 — 입력 자체가 거부됨)·
+      conflict(409 — 낙관적 잠금 충돌)와 원인이 달라 별도 필드로 구분한다 — 로컬 폴백·큐 강등은
+      하지 않는다(서버가 응답했으므로 재시도 여부는 호출부 몫). */
+  error?: string
 }
 
 export interface LedgerEntryResponse {
   entry?: LedgerEntry
   error?: string
 }
+
+// 라운드 4(P0-1) — 서버 배치 API 요청/응답 계약(서버 에이전트와 공유, 계약 문서:
+// docs/active/sales-ledger-input-speed-plan-2026-09-20.md §4 P0-1). 이 파일 밖에서 쓰이지
+// 않으므로 export하지 않는다 — checkDrafts/applyDrafts(PATCH batch)·persistDraftsBatch(POST batch)만
+// 이 shape을 소비한다. 다른 응답 타입들과 같은 관례(전 필드 optional + 런타임 status/ok 분기)로
+// 느슨하게 받는다 — 서버 응답은 성공/실패 분기가 있는 판별 유니온이지만 신뢰 경계를 넘어오는
+// 값이라 TS 유니온으로 좁히지 않고 런타임 분기로만 처리한다.
+interface LedgerBatchWriteRequestItem {
+  op: "create" | "update"
+  id?: string
+  input: LedgerDraftInput
+  expectedUpdatedAt?: string
+}
+
+interface LedgerBatchWriteResult {
+  index: number
+  ok: boolean
+  status: number
+  draft?: LedgerDraft
+  dedupedRecent?: boolean
+  error?: string
+  reason?: "checked-by-other"
+}
+
+interface LedgerBatchWriteResponse {
+  results?: LedgerBatchWriteResult[]
+  error?: string
+}
+
+interface LedgerBatchActionResult {
+  id: string
+  ok: boolean
+  status: number
+  draft?: LedgerDraft
+  error?: string
+}
+
+interface LedgerBatchActionResponse {
+  results?: LedgerBatchActionResult[]
+  error?: string
+}
+
+// 서버 배치 엔드포인트(POST/PATCH .../ledger-drafts/batch)가 한 요청에서 받는 최대 건수. 매트릭스
+// 붙여넣기·일괄 체크/적용이 이보다 많은 건을 모으면 이 크기로 나눠 순차 전송한다 — 청크 하나가
+// 실패(네트워크/타임아웃)하면 이후 청크는 보내지 않는 계약을 persistDraftsBatch/checkDrafts/
+// applyDrafts가 공유한다(부분 성공을 전체 성공으로 숨기지 않는다).
+export const LEDGER_DRAFT_BATCH_LIMIT = 200
 
 const DRAFT_STORAGE_KEY = "classin:sales-ledger-drafts:v1"
 
@@ -395,7 +455,13 @@ export function useLedgerDraftQueue() {
           // 없음 — 큐의 다른 초안 작업은 계속 서버 모드로 진행된다).
           const serverDraft = data.draft
           setDrafts((items) => items.map((draft) => (draft.id === id ? serverDraft : draft)))
-          setRecordError(id, DRAFT_CONFLICT_MESSAGE)
+          // 라운드 4(P0-1) — 다른 사용자가 이미 체크한 초안을 수정하려 한 경우 서버가 원인이 다른
+          // 문구(reason)를 함께 내려준다. 일반 낙관적 잠금 충돌과 표시를 구분해 혼선을 줄인다.
+          if (data.reason === "checked-by-other") {
+            setRecordError(id, data.error ?? DRAFT_CONFLICT_MESSAGE)
+          } else {
+            setRecordError(id, DRAFT_CONFLICT_MESSAGE)
+          }
           return { draft: null, conflict: true }
         }
         if (response.status === 400) {
@@ -492,11 +558,15 @@ export function useLedgerDraftQueue() {
 
   }, [drafts, loadDrafts, queueMode])
 
-  // 일괄 체크(2026-09-14) — 3단계(초안→체크→적용)는 그대로, 한 건씩 누르던 체크를 묶는다.
-  // 단건 PATCH를 순서대로 보낸다(서버 계약·잠금 판정 무변경). 실패 건은 행 에러로 남기고 나머지는 진행.
+  // 일괄 체크(2026-09-14 최초 구현 → 라운드 4 P0-1: 단건 PATCH 순차 전송을 배치 API로 교체).
+  // 3단계(초안→체크→적용) 자체는 그대로다. 로컬 id·비서버 모드는 기존 로컬 처리 그대로(서버에
+  // 실을 것이 없다) — 서버 id만 모아 LEDGER_DRAFT_BATCH_LIMIT건씩 PATCH batch
+  // { action: "check", ids }로 순차 전송한다(100건 기준 100왕복 → 1왕복). 실패 건은 행 에러로
+  // 남기고 나머지는 진행하는 기존 계약은 그대로 유지한다.
   const checkDrafts = useCallback(async (ids: string[]) => {
     let done = 0
     let failed = 0
+    const serverIds: string[] = []
     for (const id of ids) {
       if (queueMode !== "server" || id.startsWith("local-")) {
         updateLocalDrafts((items) => items.map((draft) =>
@@ -505,27 +575,46 @@ export function useLedgerDraftQueue() {
         done += 1
         continue
       }
+      serverIds.push(id)
+    }
+
+    for (let start = 0; start < serverIds.length; start += LEDGER_DRAFT_BATCH_LIMIT) {
+      const chunk = serverIds.slice(start, start + LEDGER_DRAFT_BATCH_LIMIT)
       try {
-        const data = await adminFetchJson<LedgerDraftResponse>(`/api/admin/branch/ledger-drafts/${encodeURIComponent(id)}`, {
+        const data = await adminFetchJson<LedgerBatchActionResponse>("/api/admin/branch/ledger-drafts/batch", {
           method: "PATCH",
-          body: JSON.stringify({ status: "checked" }),
+          body: JSON.stringify({ action: "check", ids: chunk }),
         })
-        if (!data.draft) throw new Error(data.error ?? "초안 수정 응답이 비어 있습니다.")
-        const next = data.draft
-        setDrafts((items) => items.map((draft) => (draft.id === id ? next : draft)))
-        clearRecordError(id)
-        done += 1
-      } catch (error) {
-        failed += 1
-        if (isDraftRecordError(error)) setRecordError(id)
+        // chunk가 최대 200건이라 find의 O(n²)이 무시할 수준이다 — Map 빌드용 튜플 추론 모호성
+        // ([id, result] 배열 리터럴이 tuple로 좁혀진다는 보장이 없다)을 피해 그냥 찾는다.
+        for (const id of chunk) {
+          const result = data.results?.find((entry) => entry.id === id)
+          if (result?.ok && result.draft) {
+            const next = result.draft
+            setDrafts((items) => items.map((draft) => (draft.id === id ? next : draft)))
+            clearRecordError(id)
+            done += 1
+            continue
+          }
+          failed += 1
+          if (result?.status === 404) setRecordError(id)
+        }
+      } catch {
+        // 청크 요청 자체 실패(네트워크/타임아웃) — 기존 checkDrafts도 5xx/네트워크에서 큐를
+        // 강등하지 않았다(그 계약 그대로 유지). 이 청크 전부 실패로 집계하고 이후 청크는
+        // 보내지 않는다(부분 성공을 전체 성공으로 숨기지 않는다).
+        failed += chunk.length
+        break
       }
     }
+
     setQueueError(failed > 0 ? `일괄 체크 중 ${failed}건이 실패했습니다 — 해당 행에서 다시 시도하세요.` : null)
     return { done, failed }
   }, [clearRecordError, queueMode, setRecordError, updateLocalDrafts])
 
-  // 일괄 적용 — 체크된 서버 초안만 순서대로 적용하고 마지막에 한 번 다시 읽는다. 로컬 임시 초안은
-  // DB 장부에 적용할 수 없으므로 건너뛴다(단건 applyDraft와 같은 규칙).
+  // 일괄 적용(2026-09-14 최초 구현 → 라운드 4 P0-1: 배치 API로 교체) — 체크된 서버 초안만 모아
+  // 적용하고 마지막에 한 번 다시 읽는다. 로컬 임시 초안은 DB 장부에 적용할 수 없으므로 건너뛴다
+  // (단건 applyDraft와 같은 규칙).
   const applyDrafts = useCallback(async (ids: string[]) => {
     if (queueMode !== "server") {
       setQueueError("로컬 임시 초안은 DB 장부에 적용할 수 없습니다. 서버 큐가 복구된 뒤 다시 적용하세요.")
@@ -533,19 +622,29 @@ export function useLedgerDraftQueue() {
     }
     let done = 0
     let failed = 0
-    for (const id of ids) {
-      if (id.startsWith("local-")) continue
+    const serverIds = ids.filter((id) => !id.startsWith("local-"))
+
+    for (let start = 0; start < serverIds.length; start += LEDGER_DRAFT_BATCH_LIMIT) {
+      const chunk = serverIds.slice(start, start + LEDGER_DRAFT_BATCH_LIMIT)
       try {
-        const data = await adminFetchJson<LedgerDraftResponse>(`/api/admin/branch/ledger-drafts/${encodeURIComponent(id)}`, {
+        const data = await adminFetchJson<LedgerBatchActionResponse>("/api/admin/branch/ledger-drafts/batch", {
           method: "PATCH",
-          body: JSON.stringify({ action: "apply" }),
+          body: JSON.stringify({ action: "apply", ids: chunk }),
         })
-        if (!data.draft) throw new Error(data.error ?? "초안 적용 응답이 비어 있습니다.")
-        const next = data.draft
-        setDrafts((items) => items.map((draft) => (draft.id === id ? next : draft)))
-        done += 1
+        for (const id of chunk) {
+          const result = data.results?.find((entry) => entry.id === id)
+          if (result?.ok && result.draft) {
+            const next = result.draft
+            setDrafts((items) => items.map((draft) => (draft.id === id ? next : draft)))
+            done += 1
+            continue
+          }
+          failed += 1
+        }
       } catch {
-        failed += 1
+        // 청크 요청 자체 실패 — checkDrafts와 동일 계약(큐 강등 없음, 이후 청크 중단).
+        failed += chunk.length
+        break
       }
     }
     await loadDrafts()
@@ -645,6 +744,144 @@ export function useLedgerDraftQueue() {
     return reversed
   }, [queueMode])
 
+  // 라운드 4(P0-1) — 매트릭스 붙여넣기 커밋처럼 여러 건을 한 번에 저장할 때 단건 POST/PATCH로
+  // 건별 왕복하는 대신 배치 API 하나로 묶는다(계약: docs/active/
+  // sales-ledger-input-speed-plan-2026-09-20.md §4 P0-1). 반환은 items와 같은 길이·순서 —
+  // 호출부가 인덱스로 원래 셀에 결과를 되꽂을 수 있어야 하므로 로컬/서버 두 분기 모두 이 계약을
+  // 지킨다(어떤 경로로도 슬롯을 비워두지 않는다).
+  const persistDraftsBatch = useCallback(async (
+    items: Array<{ id?: string; input: LedgerDraftInput }>,
+  ): Promise<DraftMutationResult[]> => {
+    const results: DraftMutationResult[] = new Array(items.length)
+
+    if (queueMode !== "server") {
+      // 비서버 모드 — createDraft/updateDraft의 로컬 분기와 동일한 규약을 각 항목에 반복한다.
+      items.forEach((item, index) => {
+        if (!item.id) {
+          const localDraft = makeLocalDraft(item.input)
+          updateLocalDrafts((current) => [localDraft, ...current])
+          results[index] = { draft: localDraft }
+          return
+        }
+        let updated: LedgerDraft | null = null
+        updateLocalDrafts((current) => current.map((draft) => {
+          if (draft.id !== item.id) return draft
+          updated = applyDraftInput(draft, item.input)
+          return updated
+        }))
+        results[index] = { draft: updated }
+      })
+      return results
+    }
+
+    // local-* update 항목은 서버로 보내지 않는다(updateDraft의 !id.startsWith("local-") 게이트와
+    // 동일 계약) — 로컬 갱신으로 바로 처리하고, 나머지 인덱스만 배치 전송 대상에 담는다.
+    const serverIndices: number[] = []
+    items.forEach((item, index) => {
+      if (item.id && item.id.startsWith("local-")) {
+        let updated: LedgerDraft | null = null
+        updateLocalDrafts((current) => current.map((draft) => {
+          if (draft.id !== item.id) return draft
+          updated = applyDraftInput(draft, item.input)
+          return updated
+        }))
+        results[index] = { draft: updated }
+        return
+      }
+      serverIndices.push(index)
+    })
+
+    for (let start = 0; start < serverIndices.length; start += LEDGER_DRAFT_BATCH_LIMIT) {
+      const chunkIndices = serverIndices.slice(start, start + LEDGER_DRAFT_BATCH_LIMIT)
+      // 낙관적 잠금(웨이브 7 2단 I4)과 동일 원천 — draftsRef.current에서 그 id의 updatedAt.
+      const requestItems: LedgerBatchWriteRequestItem[] = chunkIndices.map((itemIndex) => {
+        const item = items[itemIndex]
+        if (!item.id) return { op: "create", input: item.input }
+        const expectedUpdatedAt = draftsRef.current.find((draft) => draft.id === item.id)?.updatedAt
+        return { op: "update", id: item.id, input: item.input, expectedUpdatedAt }
+      })
+
+      try {
+        const response = await adminFetch("/api/admin/branch/ledger-drafts/batch", {
+          method: "POST",
+          body: JSON.stringify({ items: requestItems }),
+        })
+        const data = (await response.json().catch(() => null)) as LedgerBatchWriteResponse | null
+        if (!response.ok || !data?.results) {
+          throw new Error(data?.error ?? (`${response.status} ${response.statusText}`.trim() || "일괄 저장 요청에 실패했습니다."))
+        }
+
+        // 청크가 응답했다는 사실만으로 setQueueError(null)을 하지 않는다 — 항목 실패가 섞여 있을
+        // 수 있어(부분 성공) 기존 queueError를 그대로 둔다.
+        for (const result of data.results) {
+          const itemIndex = chunkIndices[result.index]
+          if (itemIndex === undefined) continue
+          const item = items[itemIndex]
+
+          if (result.ok && result.draft) {
+            const nextDraft = result.draft
+            if (item.id) {
+              setDrafts((current) => current.map((draft) => (draft.id === item.id ? nextDraft : draft)))
+            } else {
+              setDrafts((current) => [nextDraft, ...current.filter((draft) => draft.id !== nextDraft.id)].slice(0, 50))
+            }
+            clearRecordError(nextDraft.id)
+            results[itemIndex] = { draft: nextDraft, dedupedRecent: result.dedupedRecent === true }
+            continue
+          }
+
+          if (result.status === 400) {
+            results[itemIndex] = { draft: null, validationMessage: result.error ?? "저장 요청이 거부되었습니다." }
+            continue
+          }
+          if (result.status === 409 && result.draft) {
+            const serverDraft = result.draft
+            const targetId = item.id ?? serverDraft.id
+            setDrafts((current) => current.map((draft) => (draft.id === targetId ? serverDraft : draft)))
+            setRecordError(targetId, result.reason === "checked-by-other" ? (result.error ?? DRAFT_CONFLICT_MESSAGE) : DRAFT_CONFLICT_MESSAGE)
+            results[itemIndex] = { draft: null, conflict: true }
+            continue
+          }
+          if (result.status === 404) {
+            if (item.id) setRecordError(item.id)
+            results[itemIndex] = { draft: null, error: result.error ?? "Draft not found" }
+            continue
+          }
+          // 503/500 등 — 서버가 응답은 했으니 로컬 폴백·큐 강등 없이 이 항목만 실패로 남긴다.
+          results[itemIndex] = { draft: null, error: result.error ?? "요청에 실패했습니다." }
+        }
+
+        // 서버가 보낸 결과 배열이 요청보다 짧아 매칭되지 않은 슬롯이 남으면(계약 위반 방어),
+        // undefined를 반환값에 흘리지 않고 일반 실패로 채운다.
+        for (const itemIndex of chunkIndices) {
+          if (results[itemIndex] === undefined) {
+            results[itemIndex] = { draft: null, error: "일괄 저장 응답이 비어 있습니다." }
+          }
+        }
+      } catch (error) {
+        // 청크 요청 자체 실패(네트워크/타임아웃/비-2xx 봉투) — 단건 createDraft/updateDraft의
+        // catch와 같은 규약: create 항목은 로컬 폴백을 만들고, update 항목은 낙관 편집 없이
+        // 실패만 반환한다. 이 청크와 이후 청크는 전부 로컬 규약으로 마무리하고 더 이상 서버로
+        // 보내지 않는다(부분 성공을 전체 성공으로 숨기지 않는다).
+        setQueueMode("local")
+        setQueueError(`서버 저장에 실패해 로컬 큐에 임시 저장했습니다. ${errorMessage(error)}`)
+        for (const itemIndex of serverIndices.slice(start)) {
+          const item = items[itemIndex]
+          if (!item.id) {
+            const localDraft = makeLocalDraft(item.input)
+            updateLocalDrafts((current) => [localDraft, ...current])
+            results[itemIndex] = { draft: localDraft }
+          } else {
+            results[itemIndex] = { draft: null }
+          }
+        }
+        break
+      }
+    }
+
+    return results
+  }, [clearRecordError, queueMode, setRecordError, updateLocalDrafts])
+
   return {
     drafts,
     ledgerEntries,
@@ -664,6 +901,7 @@ export function useLedgerDraftQueue() {
     cancelDraft,
     deleteDraft,
     reverseEntry,
+    persistDraftsBatch,
     reloadDrafts: loadDrafts,
   }
 }
