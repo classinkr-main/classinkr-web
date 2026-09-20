@@ -364,7 +364,8 @@ export function InputRailSection({
                           weeklyConfidence: defaultDraftWeeklyConfidence(option.id),
                         }))}
                         aria-pressed={pressed}
-                        className={`min-h-8 rounded-md px-2 py-1 text-[11px] font-bold transition ${
+                        // UX 감사 2026-09-20: 확도 3버튼 최소 타깃을 앱 전역 관행(min-h-11 md:min-h-9)에 맞춘다.
+                        className={`min-h-11 md:min-h-9 rounded-md px-2 py-1 text-[11px] font-bold transition ${
                           pressed
                             ? `${CONFIDENCE_TOKENS[option.id].bgClass} text-white`
                             : "border border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:text-[#111110]"

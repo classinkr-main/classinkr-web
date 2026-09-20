@@ -152,7 +152,10 @@ const RevMatrixEditPopover = memo(function RevMatrixEditPopover({
       className="absolute left-0 top-full z-40 mt-0.5 flex flex-col gap-0.5 rounded-md border border-[rgba(0,0,0,0.12)] bg-white p-0.5 shadow-lg"
       onMouseDown={(event) => event.preventDefault()} // input 포커스 유지(blur 커밋 방지)
     >
-      <div className="flex items-center gap-0.5">
+      {/* UX 감사 2026-09-20: 가장 많이 쓰는 이 팝오버가 6종 크기 중 가장 작았다(버튼 높이 ≈14px,
+          WCAG 2.5.8 최소 24px의 58%) — 라벨 자연폭 + min-w로 키우고, 색만으로 상태를 전하지
+          않도록 radiogroup/radio 시맨틱을 더한다. */}
+      <div className="flex items-center gap-0.5" role="radiogroup" aria-label="확도">
         {DRAFT_CONFIDENCE_OPTIONS.map((option) => {
           const activeColor = CONFIDENCE_TOKENS[option.id].color
           const active = option.id === confidence
@@ -160,9 +163,11 @@ const RevMatrixEditPopover = memo(function RevMatrixEditPopover({
             <button
               key={option.id}
               type="button"
+              role="radio"
+              aria-checked={active}
               title={`확도: ${option.label}`}
               onClick={() => onPickConfidence(option.id)}
-              className="rounded px-1.5 py-0.5 text-[10px] font-bold leading-none transition"
+              className="min-w-[40px] rounded-md px-2.5 py-1.5 text-[11px] font-bold leading-none transition"
               style={
                 active
                   ? { backgroundColor: activeColor, color: "#FFFFFF" }
@@ -272,8 +277,11 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
             actions!.commitBuffer({ rowId: rowId!, month: month! }, editConfidence)
             actions!.cancelEdit()
           }}
-          aria-label={`${formatMonthLabel(month!)} 금액(원 단위)`}
-          className="h-6 w-full bg-transparent px-1 text-right text-[11px] font-bold tabular-nums text-[#111110] outline-none"
+          aria-label={`${formatMonthLabel(month!)} 금액(원 단위) · 확도 ${confidenceLabel(editConfidence)}`}
+          // UX 감사 2026-09-20: 편집 중 확도를 바꿔도 input이 무색이라 "골랐는데 확인할 길이 없다" —
+          // 테두리를 현재 확도색으로 즉시 반영한다(색만으로 답하지 않도록 aria-label도 함께 보강).
+          className="h-6 w-full rounded-sm border-2 bg-transparent px-1 text-right text-[11px] font-bold tabular-nums text-[#111110] outline-none"
+          style={{ borderColor: CONFIDENCE_TOKENS[editConfidence].color }}
         />
         <RevMatrixEditPopover confidence={editConfidence} onPickConfidence={actions!.setEditConfidence} />
       </td>
@@ -291,9 +299,7 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
       : periodHighlighted
         ? "border-l-2 border-l-[#084734]/25"
         : "border-l border-[#F2F1EE]"
-  } ${bg} ${interactive && editable ? "cursor-cell" : ""} ${selected ? "ring-2 ring-inset ring-[#084734]/40" : ""} ${
-    pending ? "shadow-[inset_0_-2px_0_0_#A8741A]" : ""
-  } focus-visible:outline-none`
+  } ${bg} ${interactive && editable ? "cursor-cell" : ""} ${selected ? "ring-2 ring-inset ring-[#084734]/40" : ""} focus-visible:outline-none`
 
   const interactiveHandlers = interactive
     ? {
@@ -326,20 +332,27 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
       title={title}
       aria-label={interactive ? title : undefined}
       className={cellClassName}
-      style={{ width: MATRIX_MONTH_W, minWidth: MATRIX_MONTH_W, maxWidth: MATRIX_MONTH_W }}
+      style={{
+        width: MATRIX_MONTH_W,
+        minWidth: MATRIX_MONTH_W,
+        maxWidth: MATRIX_MONTH_W,
+        // 미검수 밑줄도 확도별 색 — 확도 무관 앰버 고정(UX 감사 2026-09-20)이던 것을 CONFIDENCE_TOKENS로.
+        ...(pending ? { boxShadow: `inset 0 -2px 0 0 ${CONFIDENCE_TOKENS[pending.confidence].color}` } : {}),
+      }}
       {...interactiveHandlers}
     >
       {pending && (
         <span
           aria-hidden
-          className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-[#A8741A]"
+          className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full"
+          style={{ backgroundColor: CONFIDENCE_TOKENS[pending.confidence].color }}
         />
       )}
       {bucket.total > 0 ? (
         <span
           className={`inline-flex items-center justify-end gap-0.5 leading-none ${
             bucket.total < 10000 ? "text-[10px] opacity-75" : "text-[11px]"
-          } ${pending ? "font-bold text-[#7A520F]" : MATRIX_TONE[tone]}`}
+          } ${pending ? `font-bold ${CONFIDENCE_TOKENS[pending.confidence].textStrongClass}` : MATRIX_TONE[tone]}`}
         >
           {locked && <Lock className="h-2.5 w-2.5 shrink-0 text-[#A39E98]" aria-label={lockLabel} />}
           {mismatch && !locked && <AlertTriangle className="h-2.5 w-2.5 shrink-0" />}
@@ -429,8 +442,10 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
             actions!.commitBuffer({ rowId: rowId!, month: month!, week: weekIndex }, editConfidence)
             actions!.cancelEdit()
           }}
-          aria-label={`${formatMonthLabel(month!)} W${weekIndex + 1} 금액(원 단위)`}
-          className="h-6 w-full bg-transparent px-1 text-right text-[11.5px] font-bold tabular-nums text-[#111110] outline-none"
+          aria-label={`${formatMonthLabel(month!)} W${weekIndex + 1} 금액(원 단위) · 확도 ${confidenceLabel(editConfidence)}`}
+          // UX 감사 2026-09-20: 월 셀과 동일 — 편집 중 확도 변경이 즉시 테두리색으로 보이게 한다.
+          className="h-6 w-full rounded-sm border-2 bg-transparent px-1 text-right text-[11.5px] font-bold tabular-nums text-[#111110] outline-none"
+          style={{ borderColor: CONFIDENCE_TOKENS[editConfidence].color }}
         />
         <RevMatrixEditPopover
           confidence={editConfidence}
@@ -441,11 +456,15 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
     )
   }
 
+  // 미검수 표시(점·텍스트·밑줄)는 확도별 색 — 주차 슬롯(metadata.weeklyConfidence)이 있으면 그 값을
+  // 우선한다(월 우세 확도로 뭉개면 같은 달 안 다른 주차의 확도가 묻힌다 — UX 감사 2026-09-20).
+  const pendingConfidence = pending ? pending.weeklyConfidence?.[weekIndex] ?? pending.confidence : null
+
   const cellClassName = `relative px-1.5 text-right align-middle tabular-nums ${
     periodHighlighted ? "border-l-2 border-l-[#084734]/25" : "border-l border-[#F2F1EE]"
   } ${bgClass} ${
     interactive && editable ? "cursor-cell" : ""
-  } ${selected ? "ring-2 ring-inset ring-[#084734]/40" : ""} ${pending ? "shadow-[inset_0_-2px_0_0_#A8741A]" : ""} focus-visible:outline-none`
+  } ${selected ? "ring-2 ring-inset ring-[#084734]/40" : ""} focus-visible:outline-none`
 
   const interactiveHandlers = interactive
     ? {
@@ -478,17 +497,28 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
       title={title}
       aria-label={interactive ? title : undefined}
       className={cellClassName}
-      style={{ width: MATRIX_WEEK_W, minWidth: MATRIX_WEEK_W, maxWidth: MATRIX_WEEK_W }}
+      style={{
+        width: MATRIX_WEEK_W,
+        minWidth: MATRIX_WEEK_W,
+        maxWidth: MATRIX_WEEK_W,
+        ...(pendingConfidence ? { boxShadow: `inset 0 -2px 0 0 ${CONFIDENCE_TOKENS[pendingConfidence].color}` } : {}),
+      }}
       {...interactiveHandlers}
     >
-      {pending && <span aria-hidden className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-[#A8741A]" />}
+      {pendingConfidence && (
+        <span
+          aria-hidden
+          className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full"
+          style={{ backgroundColor: CONFIDENCE_TOKENS[pendingConfidence].color }}
+        />
+      )}
       {/* 1만 미만(원시 위안) 값은 저대비·소형으로 강등 — 월 셀(RevMatrixMonthCell)과 동일 규약(SL-7). */}
       <span
         className={`inline-flex items-center gap-0.5 leading-none tabular-nums ${
           display > 0 && display < 10000 ? "text-[10px] opacity-75" : "text-[11.5px]"
         } ${
-          pending
-            ? "font-bold text-[#7A520F]"
+          pendingConfidence
+            ? `font-bold ${CONFIDENCE_TOKENS[pendingConfidence].textStrongClass}`
             : display > 0
               ? isMonthOnly
                 ? "font-semibold text-[#7A520F]"
@@ -881,7 +911,8 @@ export function RevMatrixPasteDialog({
                     type="button"
                     aria-pressed={active}
                     onClick={() => onPickConfidence(option.id)}
-                    className="rounded-md px-2.5 py-1 text-[11px] font-bold transition"
+                    // UX 감사 2026-09-20: 최소 타깃(WCAG 2.5.8 24px) 확보 — 색·로직은 그대로.
+                    className="min-h-9 rounded-md px-3 py-1.5 text-[11px] font-bold transition"
                     style={
                       active
                         ? { backgroundColor: activeColor, color: "#FFFFFF" }
