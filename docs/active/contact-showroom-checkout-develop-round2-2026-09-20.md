@@ -3,6 +3,8 @@
 기준 시점: 2026-09-20
 문서 목적: [1차 실행 기획(2026-08-29)](./contact-showroom-store-develop-plan-2026-08-29.md)이 만든 것을 실측해, **만들어졌지만 닿지 않는 것**과 **접수는 되지만 처리되지 않는 것**을 닫는다. 결제 활성화는 이 문서의 범위 밖이며, 1차와 동일하게 "결제 이전 단계"까지를 대상으로 한다.
 
+시각 요약: [contact-showroom-checkout-funnel-2026-09-20.html](./mockups/contact-showroom-checkout-funnel-2026-09-20.html) — 진입 경로 지도, 금액 불일치 대조, 실행 순서를 한 장으로. 이 문서가 정본이고 시안은 요약이다.
+
 관련 문서
 
 - [contact-showroom-store-develop-plan-2026-08-29.md](./contact-showroom-store-develop-plan-2026-08-29.md) — 1차 기획. 진단 번호와 D1~D8 결정의 정본
