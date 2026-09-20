@@ -138,6 +138,11 @@ export interface BranchSalesLedgerDraftCreateInput {
   currency?: string | null
   note?: string | null
   metadata?: Record<string, unknown> | null
+  /**
+   * 라운드4(P0-2) — 매트릭스 셀 저장 시 "자가 체크"로 바로 만들려면 "checked"를 넘긴다.
+   * 생략하면 기존과 동일하게 "draft"로 저장된다(하위호환).
+   */
+  status?: "draft" | "checked"
 }
 
 export interface BranchSalesLedgerDraftUpdateInput {
@@ -170,6 +175,12 @@ export type UpdateBranchSalesLedgerDraftResult =
   | { outcome: "not-found" }
   /** 낙관적 잠금(웨이브7 I4) 충돌 — expectedUpdatedAt이 DB의 실제 updated_at과 달랐다. */
   | { outcome: "conflict"; draft: BranchSalesLedgerDraft }
+  /**
+   * 라운드4(P0-2) — 내용 변경과 함께 status:"checked"를 다시 보냈는데, 현재 이미 checked인
+   * 행을 "본인이 아닌 다른 사람"이 체크해 둔 상태였다. 다른 사람의 체크를 조용히 무효화하지
+   * 않기 위해 아무것도 수정하지 않고 현재 행을 그대로 돌려준다.
+   */
+  | { outcome: "checked-by-other"; draft: BranchSalesLedgerDraft }
 
 export interface UpdateBranchSalesLedgerDraftOptions {
   /**
@@ -353,9 +364,10 @@ function toEntry(row: BranchSalesLedgerEntryRow): BranchSalesLedgerEntry {
 }
 
 function buildInsert(input: BranchSalesLedgerDraftCreateInput, actor: string) {
-  return {
+  const status: BranchSalesLedgerDraftStatus = input.status ?? "draft"
+  const insert: Record<string, unknown> = {
     kind: input.kind,
-    status: "draft" satisfies BranchSalesLedgerDraftStatus,
+    status,
     source_deal_id: compactString(input.sourceDealId),
     source_sheet_row: nullableInteger(input.sourceSheetRow),
     source_snapshot: input.sourceSnapshot ?? {},
@@ -370,6 +382,21 @@ function buildInsert(input: BranchSalesLedgerDraftCreateInput, actor: string) {
     created_by: actor,
     updated_by: actor,
   }
+
+  // 라운드4(P0-2) — 매트릭스 자가 체크: 생성 시점에 바로 checked로 올리는 입력이면 체크
+  // 필드도 함께 기록한다(buildUpdate의 checked 전이와 같은 필드 — checked_by/checked_at).
+  // "자가 체크" 배지는 created_by === checked_by로 파생하므로 새 컬럼이 필요 없다.
+  // INSERT에는 checked 행 잠금 트리거(prevent_branch_sales_ledger_applied_draft_mutation,
+  // 20260630)가 걸리지 않는다 — 그 트리거는 UPDATE/DELETE에서 OLD 행을 참조해 판단하므로
+  // INSERT는 애초에 대상이 아니다. checked/applied 전이에 amount>0을 강제하는 CHECK
+  // 제약(20260718)도 POST/배치 파서가 amount<=0을 이미 400으로 거부한 뒤에만 이 함수에
+  // 도달하므로 충돌하지 않는다.
+  if (status === "checked") {
+    insert.checked_by = actor
+    insert.checked_at = new Date().toISOString()
+  }
+
+  return insert
 }
 
 function buildUpdate(input: BranchSalesLedgerDraftUpdateInput, actor: string) {
@@ -548,17 +575,21 @@ export async function createBranchSalesLedgerDraft(
 }
 
 /**
+ * updateBranchSalesLedgerDraft의 실제 단일 UPDATE 실행부(낙관적 잠금 포함) — 자가 체크 재편집
+ * 분기(아래 updateBranchSalesLedgerDraft 본문)와 "draft 상태에서 바로 checked로" 가는 기존
+ * 경로가 모두 이 함수로 수렴한다.
+ *
  * 낙관적 잠금(웨이브7 I4): options.expectedUpdatedAt이 주어지면 compare-and-swap으로 수정한다
  * (.eq("updated_at", expectedUpdatedAt)를 update 필터에 추가) — DB의 실제 updated_at과 다르면
  * 이 UPDATE는 0행에 매치되고, 원인이 "낙관적 잠금 충돌"인지 "찾을 수 없음/적용됨"인지 구분하기
  * 위해 현재 행을 다시 읽어 반환한다. expectedUpdatedAt을 생략하면 기존 무조건 덮어쓰기 동작과
  * 동일(하위호환) — draft 상태에서만 의미 있다(checked 이후는 트리거가 내용 변경 자체를 막는다).
  */
-export async function updateBranchSalesLedgerDraft(
+async function performUpdate(
   id: string,
   input: BranchSalesLedgerDraftUpdateInput,
   actor: string,
-  options: UpdateBranchSalesLedgerDraftOptions = {},
+  options: UpdateBranchSalesLedgerDraftOptions,
 ): Promise<UpdateBranchSalesLedgerDraftResult> {
   const supabase = createSupabaseAdminClient()
   let query = supabase
@@ -596,6 +627,85 @@ export async function updateBranchSalesLedgerDraft(
   }
 
   return { outcome: "not-found" }
+}
+
+/**
+ * 라운드4(P0-2) — 매트릭스에서 자가 체크(checked)된 초안을 같은 셀에서 다시 고치면 클라는
+ * {...내용, status:"checked"}로 PATCH한다. checked 행의 내용 변경은 DB 트리거
+ * (prevent_branch_sales_ledger_applied_draft_mutation, 20260630)가 그대로 막으므로, 그럴 때만
+ * 먼저 draft로 잠금을 해제한 뒤 본 UPDATE(내용 + checked 재전이)를 이어간다.
+ *
+ * status만 바꾸는 기존 토글 경로(체크 큐의 "체크 완료" 버튼 — 본문이 {status:"checked"}뿐인
+ * PATCH)는 이 분기에 들어오면 안 된다: 그 경로는 애초에 현재 status가 draft이므로 트리거를
+ * 그대로 통과하고, 잠금 해제 왕복을 태울 이유가 없다. 그래서 "input에 status 외의 키가
+ * 하나라도 있을 때만" 이 분기에 진입한다.
+ */
+export async function updateBranchSalesLedgerDraft(
+  id: string,
+  input: BranchSalesLedgerDraftUpdateInput,
+  actor: string,
+  options: UpdateBranchSalesLedgerDraftOptions = {},
+): Promise<UpdateBranchSalesLedgerDraftResult> {
+  const hasContentChange = Object.keys(input).some((key) => key !== "status")
+
+  if (input.status === "checked" && hasContentChange) {
+    const current = await fetchBranchSalesLedgerDraftById(id)
+
+    if (current && current.status === "checked") {
+      // 다른 사람이 이미 체크해 둔 행이면 그 체크를 조용히 무효화하지 않는다 — 아무것도
+      // 고치지 않고 현재 행을 그대로 돌려줘 클라가 "체크 큐에서 해제 후 수정" 흐름으로
+      // 안내하게 한다. checkedBy가 비어 있으면(레거시 데이터 등) 본인 체크와 동일하게 취급.
+      if (current.checkedBy && current.checkedBy !== actor) {
+        return { outcome: "checked-by-other", draft: current }
+      }
+
+      const supabase = createSupabaseAdminClient()
+      let unlockQuery = supabase
+        .from("branch_sales_ledger_drafts")
+        .update({ status: "draft", checked_by: null, checked_at: null, updated_by: actor })
+        .eq("id", id)
+        .eq("status", "checked")
+
+      if (options.expectedUpdatedAt) {
+        unlockQuery = unlockQuery.eq("updated_at", options.expectedUpdatedAt)
+      }
+
+      const { data: unlockedRow, error: unlockError } = await unlockQuery.select("*").maybeSingle()
+
+      if (unlockError) {
+        if (isMissingDraftsTableError(unlockError)) throw new Error(NOT_READY_MESSAGE)
+        throw new Error(`[branch-sales-ledger-drafts] 체크 해제 실패: ${unlockError.message}`)
+      }
+
+      if (!unlockedRow) {
+        // 방금 읽은 current가 checked였는데 이 UPDATE가 0행이면, 그 사이 다른 요청이 상태를
+        // 바꿨다는 뜻이다(레이스) — 기존 낙관적 잠금 규약과 동일하게 판정한다.
+        if (options.expectedUpdatedAt) {
+          const currentAfterRace = await fetchBranchSalesLedgerDraftById(id)
+          if (currentAfterRace && currentAfterRace.status !== "applied") {
+            return { outcome: "conflict", draft: currentAfterRace }
+          }
+        }
+        return { outcome: "not-found" }
+      }
+
+      // 잠금 해제 UPDATE 자체도 updated_at을 갱신시키므로(update_updated_at 트리거), 본
+      // UPDATE의 CAS 기준은 클라가 보낸 원래 expectedUpdatedAt이 아니라 이 방금 갱신된 값이어야
+      // 한다 — 옵션이 애초에 주어졌을 때만(무조건 덮어쓰기 요청이었다면 계속 무조건 덮어쓴다).
+      const unlockedUpdatedAt = (unlockedRow as BranchSalesLedgerDraftRow).updated_at
+      return performUpdate(
+        id,
+        input,
+        actor,
+        options.expectedUpdatedAt ? { expectedUpdatedAt: unlockedUpdatedAt } : {},
+      )
+    }
+    // current가 없으면(존재하지 않는 id) 아래 기존 흐름으로 넘어가 결국 not-found로 수렴하고,
+    // current.status가 draft(등 checked가 아닌 상태)면 트리거가 어차피 통과시키므로 기존 단일
+    // UPDATE 흐름을 그대로 탄다.
+  }
+
+  return performUpdate(id, input, actor, options)
 }
 
 export async function applyBranchSalesLedgerDraft(

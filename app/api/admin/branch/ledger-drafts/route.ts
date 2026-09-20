@@ -2,20 +2,17 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { BRANCH_READ_ADMIN_API_ROLES, CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
+import { isLedgerDraftBodyError, parseLedgerDraftCreateBody } from "@/lib/branch/ledger-draft-body"
 import {
-  BRANCH_SALES_LEDGER_DRAFT_KINDS,
   BRANCH_SALES_LEDGER_DRAFT_STATUSES,
   createBranchSalesLedgerDraft,
   isBranchSalesLedgerDraftsNotReadyError,
   listBranchSalesLedgerDrafts,
   listBranchSalesLedgerEntries,
-  type BranchSalesLedgerDraftKind,
   type BranchSalesLedgerDraftStatus,
 } from "@/lib/repositories/branch-sales-ledger-drafts"
 
-const KINDS = new Set<string>(BRANCH_SALES_LEDGER_DRAFT_KINDS)
 const STATUSES = new Set<string>(BRANCH_SALES_LEDGER_DRAFT_STATUSES)
-const MONTH_RE = /^\d{4}-\d{2}$/
 
 function adminActorName(admin: { name?: string; userId?: string; role: string }) {
   return admin.name?.trim() || admin.userId || admin.role
@@ -25,28 +22,6 @@ function parseBoundedInt(value: string | null, fallback: number, min: number, ma
   const parsed = Number(value ?? fallback)
   if (!Number.isFinite(parsed)) return fallback
   return Math.max(min, Math.min(Math.floor(parsed), max))
-}
-
-function optionalString(value: unknown) {
-  if (value == null) return undefined
-  return typeof value === "string" ? value : null
-}
-
-function optionalRecord(value: unknown) {
-  if (value == null) return undefined
-  return typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null
-}
-
-function optionalInteger(value: unknown) {
-  if (value == null || value === "") return undefined
-  const numeric = Number(value)
-  return Number.isFinite(numeric) ? Math.floor(numeric) : null
-}
-
-function requiredAmount(value: unknown) {
-  if (value == null || value === "") return null
-  const numeric = Number(value)
-  return Number.isFinite(numeric) ? numeric : null
 }
 
 function notReadyResponse(error: unknown) {
@@ -110,45 +85,15 @@ export async function POST(req: NextRequest) {
     }
 
     const raw = body as Record<string, unknown>
-    const kind = typeof raw.kind === "string" && KINDS.has(raw.kind) ? (raw.kind as BranchSalesLedgerDraftKind) : null
-    const customer = typeof raw.customer === "string" ? raw.customer.trim() : ""
-    const month = typeof raw.month === "string" && MONTH_RE.test(raw.month) ? raw.month : null
-    const amount = requiredAmount(raw.amount)
-    const metadata = optionalRecord(raw.metadata)
-    const sourceSheetRow = optionalInteger(raw.sourceSheetRow)
-    const sourceSnapshot = optionalRecord(raw.sourceSnapshot)
-
-    if (!kind) return NextResponse.json({ error: "Invalid draft kind" }, { status: 400 })
-    if (!customer) return NextResponse.json({ error: "고객/계정명은 필수입니다." }, { status: 400 })
-    if (!month) return NextResponse.json({ error: "월은 YYYY-MM 형식이어야 합니다." }, { status: 400 })
-    if (amount == null) return NextResponse.json({ error: "금액은 숫자여야 합니다." }, { status: 400 })
-    // 웨이브7(I5): 감액은 amount를 음수/0으로 넣는 게 아니라 장부 가감(반전 후 재적용)으로
-    // 표현한다 — admin API를 통한 인간 입력은 항상 양수만 받는다(시스템 자동 제안의 0원
-    // 플레이스홀더는 repository를 직접 호출해 이 경로를 거치지 않는다).
-    if (amount <= 0) {
-      return NextResponse.json(
-        { error: "감액은 장부 가감으로 처리하세요. 금액은 0보다 커야 합니다." },
-        { status: 400 },
-      )
+    // 라운드4(P0-1) — 검증 순서·문구는 lib/branch/ledger-draft-body.ts로 옮겨졌고, 배치 라우트
+    // (app/api/admin/branch/ledger-drafts/batch)도 같은 파서를 쓴다. 응답은 기존과 바이트 단위로
+    // 동일하다(tests/api/branch-ledger-drafts-route.test.ts 회귀 보호).
+    const parsed = parseLedgerDraftCreateBody(raw)
+    if (isLedgerDraftBodyError(parsed)) {
+      return NextResponse.json({ error: parsed.error }, { status: parsed.status })
     }
-    if (metadata === null) return NextResponse.json({ error: "metadata must be an object" }, { status: 400 })
-    if (sourceSheetRow === null) return NextResponse.json({ error: "sourceSheetRow must be a number" }, { status: 400 })
-    if (sourceSnapshot === null) return NextResponse.json({ error: "sourceSnapshot must be an object" }, { status: 400 })
 
-    const { draft, dedupedRecent } = await createBranchSalesLedgerDraft({
-      kind,
-      sourceDealId: optionalString(raw.sourceDealId),
-      sourceSheetRow,
-      sourceSnapshot,
-      customer,
-      manager: optionalString(raw.manager),
-      team: optionalString(raw.team),
-      month,
-      amount,
-      currency: optionalString(raw.currency),
-      note: optionalString(raw.note),
-      metadata,
-    }, actor)
+    const { draft, dedupedRecent } = await createBranchSalesLedgerDraft(parsed, actor)
 
     // dedupedRecent=true: 직전 60초 내 동일 입력의 열린 초안을 그대로 돌려준 것(더블클릭/더블탭
     // 방어, 웨이브7 I1) — 새 리소스를 만들지 않았으므로 201이 아니라 200으로 응답한다.
