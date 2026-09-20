@@ -239,6 +239,7 @@ const CRM_ROUTE_HANDLER_MATRIX: Record<string, Partial<Record<HttpMethod, Handle
   "capture/batches/route.ts": { GET: CRM_STAFF, POST: CRM_STAFF },
   "capture/rows/[id]/route.ts": { PATCH: CRM_STAFF },
   "compass-pipeline/route.ts": { GET: CRM_STAFF },
+  "compass-summary/route.ts": { GET: CRM_STAFF },
   "coverage/route.ts": { GET: CRM_STAFF },
   "customers-neo/[accountId]/route.ts": { GET: CRM_STAFF },
   "customers-neo/route.ts": { GET: CRM_STAFF },
@@ -284,9 +285,9 @@ const CRM_ROUTE_HANDLER_MATRIX: Record<string, Partial<Record<HttpMethod, Handle
 }
 
 // 매트릭스 합계 — 라우트가 늘거나 역할이 바뀌면 여기와 기획 문서(D3)를 함께 갱신한다.
-const EXPECTED_HANDLER_TOTAL = 64
+const EXPECTED_HANDLER_TOTAL = 65
 const EXPECTED_ROLE_DISTRIBUTION: Record<RoleSpec, number> = {
-  CRM_STAFF_ADMIN_API_ROLES: 58,
+  CRM_STAFF_ADMIN_API_ROLES: 59,
   STAFF_ADMIN_API_ROLES: 3,
   DEFAULT_BY_METHOD: 3,
 }
