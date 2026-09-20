@@ -1,6 +1,6 @@
 # 매출 장부 입력 속도·편의 기획 (라운드 4)
 
-상태: 실행 대기 기획
+상태: 1단계 P0 구현 완료(2026-09-20), P1·P2 실행 대기
 범위: `/admin/branch/ledger`의 입력 경로 — REV 매트릭스 셀 편집, 빠른 작업 레일(입력/수정), 체크 큐
 목표: **1단계** 구글 시트를 원천으로 유지한 채 어드민 입력의 클릭·왕복·오타를 줄인다 →
 **2단계** 어드민을 매출 입력 정본으로 올리고 시트 입력을 중단한다.
@@ -118,6 +118,29 @@ API가 `amount <= 0`을 거부한다
 ## 4. 1단계 — 시트 병행, 입력 속도 개선
 
 가치·위험 순. 각 항목은 독립 커밋 단위다.
+
+### 구현 상태 (2026-09-20)
+
+| 항목 | 상태 | 근거 파일 | 검증 |
+| --- | --- | --- | --- |
+| P0-1 초안 배치 API | **완료** | `app/api/admin/branch/ledger-drafts/batch/route.ts`, `lib/branch/ledger-draft-body.ts`(단건·배치 공용 파서), `components/admin/branch/ledger/useLedgerDraftQueue.ts`(`checkDrafts`/`applyDrafts`/`persistDraftsBatch`, 200건 청크) | `tests/api/branch-ledger-drafts-batch-route.test.ts`, `tests/branch/ledger-draft-batch.test.ts` |
+| P0-2 자가 체크 | **완료 — 결정 D1(a) 채택** | 저장소 `buildInsert`(status=checked → `checked_by`/`checked_at`), `updateBranchSalesLedgerDraft`(자가 체크 재편집: 잠금 해제→갱신→재체크, 남의 체크는 409 `checked-by-other`), 워크벤치 `buildCellDraftInput`(매트릭스 셀 커밋만 `status:"checked"`), `ledger/self-check.ts` + 큐 배지 | `tests/repositories/branch-sales-ledger-drafts.test.ts`(자가 체크 5건), `tests/branch/ledger-self-check.test.ts` |
+| P0-3 고객/계정 자동완성 | **완료** | `components/admin/branch/ledger/customer-suggest.ts`, `InputRailSection.tsx`(datalist + 표기 흔들림 경고·원클릭 맞추기) | `tests/branch/customer-suggest.test.ts` |
+| P1-4 ~ P2-10 | 대기 | — | — |
+
+구현하며 확정된 세부 규약:
+
+- 배치 응답은 요청 shape가 유효하면 항상 200이고, 항목별 `status`(400/404/409/503/500)와
+  `summary{total,succeeded,failed}`로 부분 실패를 드러낸다. 클라이언트는 청크 요청 자체가 실패한
+  경우에만 단건과 같은 로컬 폴백 규약을 타고, 항목 실패는 로컬 폴백·큐 강등 없이 그 항목만 실패로 남긴다.
+- 자가 체크 재편집 시 클라이언트는 `{...내용, status:"checked"}`를 보내고, 서버가 DB 트리거(checked
+  행 내용 변경 금지)를 피해 한 요청 안에서 잠금 해제→갱신→재체크를 처리한다. `checked_by`가 다른
+  사람이면 아무것도 바꾸지 않는다 — 검수자의 체크를 조용히 무효화하지 않기 위해서다.
+- 붙여넣기 커밋은 셀 커밋과 같은 입력 빌더를 쓰므로 셀당 초안 1건·재편집은 갱신·자가 체크 규약이
+  두 경로에서 동일하다.
+- 알려진 한계: 큐 카드의 "편집" 버튼은 여전히 checked 초안을 열지 않는다(자가 체크 초안도 동일).
+  자가 체크 초안의 수정은 매트릭스 같은 셀에서 다시 치는 경로로 하고, 큐에서 고치려면 체크를 해제한다.
+  이 제약을 풀지는 P1-6(실행 취소)과 함께 다음 라운드에서 본다.
 
 ### P0-1. 초안 배치 API
 
