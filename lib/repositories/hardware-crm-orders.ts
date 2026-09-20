@@ -28,6 +28,8 @@ export interface HardwareCrmOrderCandidate {
 export interface HardwareCrmOrderCandidateInput {
   productName?: string | null
   quantity?: number | null
+  /** 기록 중인 고객사 — 같은 품목·수량의 다른 딜이 섞일 때 후보를 가르는 신호. */
+  customerName?: string | null
 }
 
 export interface HardwareCrmOrderCandidateResult {
@@ -115,6 +117,17 @@ function confidenceFromMatch(input: {
   if (productMatched && quantityMatched) return "high"
   if (productMatched || (input.localLineItem && quantityMatched)) return "medium"
   return "low"
+}
+
+/**
+ * 고객사 일치 — 양방향 포함으로 본다("남명학원" ↔ "남명학원 본원").
+ * 두 글자 미만은 우연히 겹치기 쉬워 신호로 쓰지 않는다(품목 매칭과 같은 기준).
+ */
+function customerNameMatches(requested: string | null | undefined, candidate: string | null | undefined) {
+  const needle = normalizeForMatch(requested)
+  const haystack = normalizeForMatch(candidate)
+  if (needle.length < 2 || haystack.length < 2) return false
+  return haystack.includes(needle) || needle.includes(haystack)
 }
 
 function candidateRank(candidate: HardwareCrmOrderCandidate) {
@@ -468,9 +481,30 @@ export async function listHardwareCrmOrderCandidates(
     }
   }
 
+  // 고객사는 품목·수량 뒤에 얹는 신호다 — 후보를 지우지 않고 올린다(오프라인 판매처럼 CRM 에
+  // 고객사가 다르게 적힌 건을 숨기면 운영자가 찾을 길이 없어진다). 정렬은 confidence 를 따르므로
+  // 고객사까지 맞는 후보가 맨 위로 온다.
+  const requestedCustomer = cleanString(input.customerName)
+  const customerMatchIds = new Set<string>()
+  const ranked = requestedCustomer
+    ? candidates.map((candidate) => {
+        if (!customerNameMatches(requestedCustomer, candidate.customerName)) return candidate
+        customerMatchIds.add(candidate.id)
+        return {
+          ...candidate,
+          confidence: (candidate.confidence === "low" ? "medium" : "high") as HardwareCrmOrderConfidence,
+          reason: `고객사가 일치합니다 · ${candidate.reason}`,
+        }
+      })
+    : candidates
+
   return {
-    candidates: candidates
+    candidates: ranked
       .sort((a, b) => {
+        // 고객사 일치가 먼저다 — 품목·수량이 같은 딜이 여럿일 때 신뢰도만으로는 갈리지 않고
+        // 최신순 동점 처리에 밀려 엉뚱한 딜이 맨 위에 온다(실제로 그랬다).
+        const customerGap = Number(customerMatchIds.has(b.id)) - Number(customerMatchIds.has(a.id))
+        if (customerGap !== 0) return customerGap
         const rankGap = candidateRank(a) - candidateRank(b)
         if (rankGap !== 0) return rankGap
         return new Date(b.occurredAt ?? b.syncedAt ?? 0).getTime() - new Date(a.occurredAt ?? a.syncedAt ?? 0).getTime()

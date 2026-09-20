@@ -23,6 +23,8 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
+import CustomerPicker from "./CustomerPicker"
+import ProductPicker from "./ProductPicker"
 import {
   customerLabel,
   DETAIL_PRESET_KEYS,
@@ -378,6 +380,19 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                     ref={formRef}
                     onSubmit={(event) => void submitMovement(event)}
                     onKeyDown={(event) => {
+                      if (event.nativeEvent.isComposing) return
+                      // Cmd/Ctrl+Enter 저장 — 입고표와 같은 규약(inbound-sheet-model의 키 의도).
+                      // 손을 키보드에 둔 채 연속 기록할 때 저장 버튼까지 가지 않아도 된다.
+                      if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                        event.preventDefault()
+                        if (busy != null || crmLoading) return
+                        if (sheetMode === "batch" && !editingId) {
+                          if (quickCart.length > 0) void submitQuickCart()
+                          return
+                        }
+                        formRef.current?.requestSubmit()
+                        return
+                      }
                       // 작업건 모드에서 텍스트 input의 Enter가 암묵 폼 제출(단건 저장)을 오발사하지 않도록 차단.
                       // 버튼/textarea의 Enter는 그대로 — 키보드 사용자의 담기·저장 활성화를 막지 않는다.
                       if (event.key === "Enter" && sheetMode === "batch" && event.target instanceof HTMLInputElement) {
@@ -739,20 +754,17 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                           })}
                         </div>
                       )}
-                      <select
+                      {/* 주요 칩 밖 품목은 검색으로 고른다 — 전 품목 select 를 훑지 않는다(입력 가속 P1-3). */}
+                      <ProductPicker
+                        items={data?.items ?? []}
                         value={selectedItemId}
-                        onChange={(event) => {
-                          setSelectedItemId(event.target.value)
+                        onChange={(itemId) => {
+                          setSelectedItemId(itemId)
                           setCustomProduct("")
                         }}
-                        aria-label="전체 품목에서 선택"
+                        ariaLabel="전체 품목에서 선택"
                         disabled={Boolean(customProduct.trim())}
-                        className="mt-2 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] font-semibold text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {(data?.items ?? []).map((item) => (
-                          <option key={item.id} value={item.id}>{item.name}</option>
-                        ))}
-                      </select>
+                      />
                       <div className="mt-2">
                         <button
                           type="button"
@@ -964,16 +976,19 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                         원장 저장 시 loan/return 이벤트가 유닛 타임라인에 함께 남는다. */}
                     {activePresetKey === "sample" && !editingId && (
                       <div className="space-y-3">
-                        <label className="block">
+                        <div className="block">
                           <span className={SHEET_LABEL_CLASS}>대여 고객사</span>
-                          <input
-                            value={sampleCustomer}
-                            onChange={(event) => setSampleCustomer(event.target.value)}
-                            placeholder="예: 남명학원 — 트래커에 유닛 행방으로 기록됩니다"
-                            list="hardware-customer-options"
-                            className={SHEET_INPUT_CLASS}
-                          />
-                        </label>
+                          <div className="mt-1">
+                            <CustomerPicker
+                              value={sampleCustomer}
+                              onChange={setSampleCustomer}
+                              options={historyCustomers}
+                              ariaLabel="대여 고객사"
+                              placeholder="예: 남명학원 — 트래커에 유닛 행방으로 기록됩니다"
+                              className={SHEET_INPUT_CLASS.replace("mt-1 ", "")}
+                            />
+                          </div>
+                        </div>
                         {sampleSource === "사무실" && (
                           <div>
                             <span className={SHEET_LABEL_CLASS}>
@@ -1075,18 +1090,33 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                           className={SHEET_INPUT_CLASS}
                         />
                       </label>
-                      <label className="block">
-                        <span className={SHEET_LABEL_CLASS}>
+                      <div className="block">
+                        <span className={SHEET_LABEL_CLASS} id="hardware-destination-label">
                           {isCustomerDestination ? "도착 (고객사)" : "도착"}
                         </span>
-                        <input
-                          value={toLocation}
-                          onChange={(event) => setToLocation(event.target.value)}
-                          placeholder={isCustomerDestination ? "고객사명 — 예: 남명학원" : "창고/샘플/사무실"}
-                          list={isCustomerDestination ? "hardware-customer-options" : "hardware-location-options"}
-                          className={SHEET_INPUT_CLASS}
-                        />
-                      </label>
+                        {/* 고객사 칸만 고르는 입력으로 바꾼다 — 창고·샘플 같은 일반 위치는 기존 datalist 그대로. */}
+                        {isCustomerDestination ? (
+                          <div className="mt-1">
+                            <CustomerPicker
+                              value={toLocation}
+                              onChange={setToLocation}
+                              options={historyCustomers}
+                              ariaLabel="도착 고객사"
+                              placeholder="고객사명 — 예: 남명학원"
+                              className={SHEET_INPUT_CLASS.replace("mt-1 ", "")}
+                            />
+                          </div>
+                        ) : (
+                          <input
+                            value={toLocation}
+                            onChange={(event) => setToLocation(event.target.value)}
+                            placeholder="창고/샘플/사무실"
+                            aria-labelledby="hardware-destination-label"
+                            list="hardware-location-options"
+                            className={SHEET_INPUT_CLASS}
+                          />
+                        )}
+                      </div>
                     </div>
                     )}
 
@@ -1439,11 +1469,6 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                       ))}
                     </datalist>
 
-                    <datalist id="hardware-customer-options">
-                      {historyCustomers.map((customer) => (
-                        <option key={customer} value={customer} />
-                      ))}
-                    </datalist>
 
                     {/* 입력 미리보기 — 박스 대신 border-top 구분으로 위→아래 단일 스캔 흐름 유지(HW-5). */}
                     {(sheetMode === "single" || Boolean(editingId)) && (

@@ -51,6 +51,7 @@ import {
   SectionLoadingFallback,
   shouldSkipCrmConfirmation,
   todayKey,
+  UNSPECIFIED_CUSTOMER,
   type HardwareCardGroup,
   type HardwareCrmOrderCandidate,
   type HardwareDashboard,
@@ -770,6 +771,8 @@ export default function HardwareInventoryClient({
     if (!sheetOpen && pendingMovement == null && voidTarget == null && detailId == null && customerDetail == null) return
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return
+      // 안쪽에서 먼저 처리한 Escape(고객사 목록 닫기 등)는 시트까지 닫지 않는다 — 입고표와 같은 규약.
+      if (event.defaultPrevented) return
       if (pendingMovement) {
         if (busy !== "movement") setPendingMovement(null)
       } else if (voidTarget) {
@@ -1862,14 +1865,16 @@ export default function HardwareInventoryClient({
     setEntrySub("outbound")
   }, [])
 
+  // 고객사 제안 — movements 가 최신순이라 Set 삽입 순서가 곧 "최근 출고 순"이다.
+  // 가나다순으로 다시 정렬하지 않는다: 고를 때 위에 있어야 하는 것은 자음 순서가 아니라 최근 거래다.
   const historyCustomers = useMemo(() => {
     const set = new Set<string>()
     for (const movement of data?.movements ?? []) {
       if (movement.movement_type !== "outbound") continue
       const label = customerLabel(movement.to_location)
-      if (label !== "고객(미지정)") set.add(label)
+      if (label !== UNSPECIFIED_CUSTOMER) set.add(label)
     }
-    return Array.from(set).sort((a, b) => a.localeCompare(b, "ko"))
+    return Array.from(set)
   }, [data?.movements])
 
   // 직전 기록 복제용 — 손으로 남긴(admin_manual) 최신 유효 기록. 시트 임포트 행은 복제 후보에서 제외한다.
@@ -2308,6 +2313,46 @@ export default function HardwareInventoryClient({
   const openInboundSheet = useCallback((itemId?: string | null) => {
     setInboundSheet({ open: true, product: itemId || null })
   }, [])
+
+  /**
+   * 기록 단축키 — i 입고표, o 출고 시트.
+   *
+   * 데스크톱 연속 입력이 마우스(우하단 FAB)에 묶여 있었다. 오버레이가 하나라도 열려 있거나 글자를
+   * 입력하는 중에는 잡지 않는다(수정 키 조합·한글 조합 포함) — 화면을 보고 있을 때만 동작한다.
+   */
+  useEffect(() => {
+    const overlayOpen =
+      sheetOpen || inboundSheet.open || pendingMovement != null || voidTarget != null ||
+      detailId != null || customerDetail != null || sampleUnitSheetId != null
+    if (overlayOpen) return
+
+    const onKey = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey || event.isComposing || event.defaultPrevented) return
+      const target = event.target as HTMLElement | null
+      if (target?.isContentEditable) return
+      const tag = target?.tagName
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return
+
+      const key = event.key.toLowerCase()
+      if (key !== "i" && key !== "o") return
+      event.preventDefault()
+      if (key === "i") openInboundSheet()
+      else openSheet("sale")
+    }
+
+    document.addEventListener("keydown", onKey)
+    return () => document.removeEventListener("keydown", onKey)
+  }, [
+    sheetOpen,
+    inboundSheet.open,
+    pendingMovement,
+    voidTarget,
+    detailId,
+    customerDetail,
+    sampleUnitSheetId,
+    openInboundSheet,
+    openSheet,
+  ])
 
   const prepareQuickEntry = useCallback((itemId: string, presetKey: string) => {
     // 새 입고는 한 화면 입고표로 연다 — 재고 표·알림·검색의 "입고" 퀵버튼이 모두 여기를 거친다.
@@ -2919,6 +2964,9 @@ export default function HardwareInventoryClient({
         productName: draft.productName,
         quantity: String(draft.quantity),
       })
+      // 고객사도 함께 보낸다 — 같은 품목·수량의 딜이 여럿일 때 후보가 하나로 좁혀져 확인이 한 번에 끝난다.
+      const draftCustomer = customerLabel(draft.toLocation)
+      if (draftCustomer !== UNSPECIFIED_CUSTOMER) params.set("customer", draftCustomer)
       const result = await adminFetchJson<HardwareCrmOrderCandidatesResponse>(
         `/api/admin/hardware/crm-orders?${params.toString()}`,
         { cache: "no-cache" }
@@ -3658,7 +3706,8 @@ export default function HardwareInventoryClient({
           type="button"
           onClick={openFreshSheet}
           className="fixed bottom-6 right-6 z-30 inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-[#084734] px-4 py-3 text-[13px] font-bold text-white shadow-[0_2px_8px_rgba(0,0,0,0.12)] transition hover:bg-[#065c41] hover:shadow-[0_4px_14px_rgba(0,0,0,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8] active:scale-95 motion-reduce:active:scale-100"
-          aria-label="빠른 기록 열기"
+          aria-label="빠른 기록 열기 (단축키 o)"
+          title="빠른 기록 (o) · 입고표 (i)"
           style={{ bottom: "max(1.5rem, calc(env(safe-area-inset-bottom) + 1rem))" }}
         >
           <Plus className="h-4 w-4" />

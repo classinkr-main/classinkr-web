@@ -17,9 +17,11 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const productName = searchParams.get("productName")
   const quantity = readPositiveInt(searchParams.get("quantity"))
+  // 기록 중인 고객사 — 같은 품목·수량의 다른 딜이 섞일 때 후보를 가른다(입력 가속 P1-2).
+  const customerName = searchParams.get("customer")?.trim() || null
 
   try {
-    const result = await listHardwareCrmOrderCandidates({ productName, quantity })
+    const result = await listHardwareCrmOrderCandidates({ productName, quantity, customerName })
     return adminCachedJson(result)
   } catch (error) {
     return NextResponse.json(
