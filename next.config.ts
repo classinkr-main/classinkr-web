@@ -40,6 +40,9 @@ const googleAdsSources = [
   "https://pagead2.googlesyndication.com",
   "https://stats.g.doubleclick.net",
 ].join(" ");
+// 네이버 프리미엄 로그분석/광고 전환 추적(wcs.trans). wcslog.js 스크립트와 그것이 쏘는
+// 로그 비콘(이미지·XHR) 도메인이 다르다 — 셋을 다 열어야 전환이 실제로 도달한다.
+const naverWcsSources = "https://wcs.naver.net https://wcs.naver.com";
 const channelTalkDefaultSources =
   "https://*.channel.io https://*.channel.app https://*.cdninstagram.com";
 const channelTalkConnectSources =
@@ -55,14 +58,14 @@ const contentSecurityPolicy = [
   "object-src 'none'",
   "frame-ancestors 'none'",
   "form-action 'self'",
-  // GTM/GA, Google Ads 전환, Meta Pixel, 카카오(daumcdn), 채널톡, 토스페이먼츠 스크립트
-  `script-src 'self' 'unsafe-inline'${developmentScriptPolicy} blob: https://www.googletagmanager.com https://www.google-analytics.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://connect.facebook.net https://t1.daumcdn.net https://*.daumcdn.net ${channelTalkScriptSources} https://js.tosspayments.com`,
+  // GTM/GA, Google Ads 전환, Meta Pixel, 카카오(daumcdn), 채널톡, 토스페이먼츠, 네이버 wcs 스크립트
+  `script-src 'self' 'unsafe-inline'${developmentScriptPolicy} blob: https://www.googletagmanager.com https://www.google-analytics.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://connect.facebook.net https://t1.daumcdn.net https://*.daumcdn.net ${channelTalkScriptSources} https://js.tosspayments.com https://wcs.naver.net`,
   "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com",
   "font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com",
-  // unsplash(블로그 이미지), Supabase Storage, 픽셀/지도/카카오/Google Ads 이미지
-  `img-src 'self' data: blob: https://images.unsplash.com ${supabaseImageSources} ${siteImageSources} https://www.facebook.com https://*.kakao.com https://*.daumcdn.net https://www.googletagmanager.com https://maps.google.com ${googleAdsSources} ${channelTalkDefaultSources}`,
-  // Supabase API/Realtime, GA/Google Ads 수집, 채널톡 웹소켓, 토스 결제
-  `connect-src 'self' ${supabaseHttp} ${supabaseWs} https://www.google-analytics.com https://region1.google-analytics.com ${googleAdsSources} https://www.facebook.com https://*.kakao.com ${channelTalkConnectSources} https://*.tosspayments.com https://cdn.jsdelivr.net`,
+  // unsplash(블로그 이미지), Supabase Storage, 픽셀/지도/카카오/Google Ads/네이버 wcs 이미지
+  `img-src 'self' data: blob: https://images.unsplash.com ${supabaseImageSources} ${siteImageSources} https://www.facebook.com https://*.kakao.com https://*.daumcdn.net https://www.googletagmanager.com https://maps.google.com ${googleAdsSources} ${naverWcsSources} ${channelTalkDefaultSources}`,
+  // Supabase API/Realtime, GA/Google Ads 수집, 네이버 wcs 로그 전송, 채널톡 웹소켓, 토스 결제
+  `connect-src 'self' ${supabaseHttp} ${supabaseWs} https://www.google-analytics.com https://region1.google-analytics.com ${googleAdsSources} https://www.facebook.com https://*.kakao.com ${naverWcsSources} ${channelTalkConnectSources} https://*.tosspayments.com https://cdn.jsdelivr.net`,
   // GTM 미리보기, 구글 지도 embed, 토스 결제창
   "frame-src 'self' https://www.googletagmanager.com https://maps.google.com https://www.google.com https://*.channel.io https://*.channel.app https://*.tosspayments.com https://*.toss.im",
   "media-src 'self' data: blob: https://cdn.channel.io",

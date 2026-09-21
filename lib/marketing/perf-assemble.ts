@@ -21,8 +21,20 @@ import { unstable_cache } from "next/cache"
 import { shareInFlightByArgs } from "@/lib/server/share-in-flight"
 
 import { isContactedLead, isConvertedLead, isTestLead } from "@/lib/crm/lead-attribution"
+import { isGoogleAdsConfigured } from "@/lib/google/ads"
+import {
+  fromGoogle,
+  fromMeta,
+  fromNaver,
+  LIVE_AD_CHANNELS,
+  summarizeChannel,
+  type AdInsightRow,
+  type LiveAdChannel,
+} from "@/lib/marketing/ad-insights"
+import { buildAttributionFunnel } from "@/lib/marketing/attribution-funnel"
 import { detectAnomalies } from "@/lib/marketing/anomaly"
 import { anomalyLoadSince, buildAnomalyCampaignInputs } from "@/lib/marketing/anomaly-input"
+import { isNaverAdConfigured } from "@/lib/naver/searchad"
 import {
   aggregateDailySeries,
   aggregateLeadDailyBySource,
@@ -33,6 +45,7 @@ import {
   resolvePerfPeriod,
   shiftDays,
   type MarketingPerfResponse,
+  type PerfChannelLive,
   type PerfKpi,
   type PerfPeriodKey,
   type PerfScoreboardRow,
@@ -42,6 +55,11 @@ import { getMetaCampaignDashboard, type MetaCampaignDashboard } from "@/lib/meta
 import { latestUpdatesByCampaign, listRecentUpdates } from "@/lib/repositories/campaign-updates"
 import { getChannelBudgets } from "@/lib/repositories/channel-budgets"
 import { getAllEventMetrics } from "@/lib/repositories/event-metrics"
+import {
+  getGoogleAdsDailyRange,
+  getGoogleLatestSyncedAt,
+  type GoogleAdsDailyRecord,
+} from "@/lib/repositories/google-ads-daily"
 import { getMarketingLeads, type LeadRecord } from "@/lib/repositories/leads"
 import { MARKETING_PERF_CACHE_TAG } from "@/lib/repositories/marketing"
 import { listCampaigns } from "@/lib/repositories/marketing-campaigns"
@@ -50,6 +68,11 @@ import {
   getMetaInsightsDailyRange,
   type MetaInsightsDailyRecord,
 } from "@/lib/repositories/meta-insights-daily"
+import {
+  getNaverAdsDailyRange,
+  getNaverLatestSyncedAt,
+  type NaverAdsDailyRecord,
+} from "@/lib/repositories/naver-ads-daily"
 import { AD_CHANNELS, type AdChannel, type EventMetrics } from "@/lib/types/event-metrics"
 import type { CampaignUpdate, CampaignWithLinks } from "@/lib/types/marketing-campaign"
 
@@ -118,19 +141,39 @@ export async function assembleMarketingPerf(
   const loadSince = [sparklineSince, period.prevSince, anomalyLoadSince(period.until)].sort()[0]
 
   // ── 소스 수집(병렬 + 개별 격리) ──
-  const [insightRows, leads, campaigns, budgets, eventMetricsMap, updatesFeed, snapshotAt] =
-    await Promise.all([
-      // 현재/직전 기간 + 스파크라인 창을 1회 조회로 덮는다 — 이후 전부 메모리 분할.
-      getMetaInsightsDailyRange(loadSince, period.until).catch(
-        (): MetaInsightsDailyRecord[] | null => null
-      ),
-      getMarketingLeads().catch((): LeadRecord[] | null => null),
-      listCampaigns().catch((): CampaignWithLinks[] => []),
-      getChannelBudgets().catch((): Record<AdChannel, number> | null => null),
-      getAllEventMetrics().catch((): Record<string, EventMetrics> | null => null),
-      listRecentUpdates(20).catch((): CampaignUpdate[] => []),
-      getLatestSyncedAt(), // 자체적으로 실패를 null 로 강등한다
-    ])
+  // 광고 채널 스냅샷 셋은 서로를 막지 않는다 — Google 조회가 죽어도 Meta·네이버 칸은 살아야 한다.
+  const [
+    insightRows,
+    googleRows,
+    naverRows,
+    leads,
+    campaigns,
+    budgets,
+    eventMetricsMap,
+    updatesFeed,
+    snapshotAt,
+    googleSyncedAt,
+    naverSyncedAt,
+  ] = await Promise.all([
+    // 현재/직전 기간 + 스파크라인 창을 1회 조회로 덮는다 — 이후 전부 메모리 분할.
+    getMetaInsightsDailyRange(loadSince, period.until).catch(
+      (): MetaInsightsDailyRecord[] | null => null
+    ),
+    getGoogleAdsDailyRange(loadSince, period.until).catch(
+      (): GoogleAdsDailyRecord[] | null => null
+    ),
+    getNaverAdsDailyRange(loadSince, period.until).catch(
+      (): NaverAdsDailyRecord[] | null => null
+    ),
+    getMarketingLeads().catch((): LeadRecord[] | null => null),
+    listCampaigns().catch((): CampaignWithLinks[] => []),
+    getChannelBudgets().catch((): Record<AdChannel, number> | null => null),
+    getAllEventMetrics().catch((): Record<string, EventMetrics> | null => null),
+    listRecentUpdates(20).catch((): CampaignUpdate[] => []),
+    getLatestSyncedAt(), // 자체적으로 실패를 null 로 강등한다
+    getGoogleLatestSyncedAt(),
+    getNaverLatestSyncedAt(),
+  ])
 
   // ── Meta 일자 스냅샷: 기간 분할 (경계는 KST 일자 문자열 비교 — off-by-one 없음) ──
   const currentRows = insightRows?.filter((r) => r.date >= period.since) ?? []
@@ -145,6 +188,56 @@ export async function assembleMarketingPerf(
       : null
   const currentSpendUsd = insightRows ? sum(currentRows, (r) => r.spend) : null
   const prevSpendUsd = insightRows ? sum(prevRows, (r) => r.spend) : null
+
+  // ── 채널 중립 행: 세 채널 스냅샷을 한 형태로 접는다 ──────────
+  // null(소스 실패)은 그대로 null 로 전달한다 — summarizeChannel 이 "미측정"으로 읽고,
+  // 빈 배열(조회는 됐는데 집행 없음)과 구분한다.
+  const liveRowsByChannel: Record<LiveAdChannel, AdInsightRow[] | null> = {
+    meta: insightRows ? fromMeta(insightRows) : null,
+    google: googleRows ? fromGoogle(googleRows) : null,
+    naver: naverRows ? fromNaver(naverRows) : null,
+  }
+  const channelConfigured: Record<LiveAdChannel, boolean> = {
+    // Meta 는 조립 시점에 자격증명을 확인하지 않는다 — 이 대시보드가 이미 Meta 전제이고,
+    // 스냅샷이 있으면 붙어 있는 것이다. 나머지 둘만 env 로 연동 여부를 가른다.
+    meta: true,
+    google: isGoogleAdsConfigured(),
+    naver: isNaverAdConfigured(),
+  }
+  const channelSyncedAt: Record<LiveAdChannel, string | null> = {
+    meta: snapshotAt,
+    google: googleSyncedAt,
+    naver: naverSyncedAt,
+  }
+
+  /** 한 채널의 현재/직전 기간 요약 + 전기 대비. 통화가 바뀌면 델타를 내지 않는다. */
+  const buildChannelLive = (channel: LiveAdChannel): PerfChannelLive => {
+    const all = liveRowsByChannel[channel]
+    const current = all?.filter((r) => r.date >= period.since) ?? null
+    const previous =
+      all?.filter((r) => r.date >= period.prevSince && r.date <= period.prevUntil) ?? null
+    const summary = summarizeChannel(channel, current)
+    const prevSummary = summarizeChannel(channel, previous)
+    // 통화가 다르면 비교 자체가 성립하지 않는다(환산 금지) — 델타를 null 로 둔다.
+    const comparable =
+      summary.currency != null && prevSummary.currency != null
+        ? summary.currency === prevSummary.currency
+        : // 한쪽이 집행 0이라 통화를 못 정한 경우는 비교 가능하다고 본다.
+          true
+    const previousSpend = comparable ? prevSummary.spend : null
+    const dataThrough =
+      all && all.length > 0 ? all.reduce((latest, r) => (r.date > latest ? r.date : latest), all[0].date) : null
+    return {
+      ...summary,
+      configured: channelConfigured[channel],
+      dataThrough,
+      syncedAt: channelSyncedAt[channel],
+      previousSpend,
+      deltaPct: computeDeltaPct(summary.spend, previousSpend),
+    }
+  }
+  const channelLive = LIVE_AD_CHANNELS.map(buildChannelLive)
+  const channelLiveByKey = new Map(channelLive.map((entry) => [entry.channel, entry]))
 
   // ── 리드: created_at(KST 일자)으로 현재/직전 기간 분할 ──
   const currentLeads: LeadRecord[] = []
@@ -245,10 +338,49 @@ export async function assembleMarketingPerf(
   const sparklineDates: string[] = []
   for (let i = 13; i >= 0; i -= 1) sparklineDates.push(shiftDays(period.until, -i))
 
+  // 채널 링크 → 그 채널 일자 행. 캠페인 ID 는 채널을 가로질러 겹치지 않으므로(Meta 는 숫자,
+  // 네이버는 cmp- 접두, Google 은 숫자지만 다른 네임스페이스) 채널별로 따로 색인한다.
+  const linkRefTypeByChannel: Record<LiveAdChannel, string> = {
+    meta: "meta_campaign",
+    google: "google_campaign",
+    naver: "naver_campaign",
+  }
+  const rowsByChannelCampaign: Record<LiveAdChannel, Map<string, AdInsightRow[]>> = {
+    meta: new Map(),
+    google: new Map(),
+    naver: new Map(),
+  }
+  for (const channel of LIVE_AD_CHANNELS) {
+    for (const row of liveRowsByChannel[channel] ?? []) {
+      const list = rowsByChannelCampaign[channel].get(row.campaignId)
+      if (list) list.push(row)
+      else rowsByChannelCampaign[channel].set(row.campaignId, [row])
+    }
+  }
+
   const scoreboard: PerfScoreboardRow[] = campaigns.map((campaign) => {
     const metaRefIds = campaign.links
       .filter((l) => l.refType === "meta_campaign")
       .map((l) => l.refId)
+
+    // 링크된 라이브 채널별 집행 — 각 항목이 자기 통화를 들고 다닌다.
+    // 위의 leads·spendUsd·cpl(Meta 축)은 건드리지 않는다: 주간 보고서가 그 의미에 의존한다.
+    const linkedChannels: LiveAdChannel[] = []
+    const channelSpend = []
+    for (const channel of LIVE_AD_CHANNELS) {
+      const refIds = campaign.links
+        .filter((l) => l.refType === linkRefTypeByChannel[channel])
+        .map((l) => l.refId)
+      if (refIds.length === 0) continue
+      linkedChannels.push(channel)
+      // 이 채널 소스가 실패했으면 null 을 넘겨 "미측정"으로 요약된다(0 으로 포장하지 않는다).
+      const channelRows = liveRowsByChannel[channel]
+        ? refIds
+            .flatMap((id) => rowsByChannelCampaign[channel].get(id) ?? [])
+            .filter((r) => r.date >= period.since)
+        : null
+      channelSpend.push(summarizeChannel(channel, channelRows))
+    }
     const metaRows = metaRefIds.flatMap((id) => rowsByMetaCampaign.get(id) ?? [])
     const currentMetaRows = metaRows.filter((r) => r.date >= period.since)
 
@@ -309,6 +441,8 @@ export async function assembleMarketingPerf(
           }
         : null,
       anomalies: [], // 아래 2패스에서 채운다(감지에 이 행의 페이싱이 먼저 필요하다).
+      channels: linkedChannels,
+      channelSpend,
     }
   })
 
@@ -336,15 +470,20 @@ export async function assembleMarketingPerf(
     row.anomalies = anomalyKindsByCampaignId.get(row.campaignId) ?? []
   }
 
-  // ── 채널 믹스: 7채널 배정(KRW) vs 수기 집행(KRW), meta 행에만 라이브 USD 를 분리 표기 ──
+  // ── 채널 믹스: 7채널 배정(KRW) vs 수기 집행(KRW) + 라이브 3채널의 실집행(통화 네이티브) ──
+  // liveSpend 와 spendKrw 는 같은 칸에 더하지 않는다 — 통화도, 출처(API vs 수기)도 다르다.
   const channelMix = budgets
-    ? AD_CHANNELS.map((channel) => ({
-        channel,
-        budget: budgets[channel],
-        spendKrw: channelSpend ? channelSpend[channel] : null,
-        metaSpendUsd:
-          channel === "meta" && currentSpendUsd != null ? round2(currentSpendUsd) : null,
-      }))
+    ? AD_CHANNELS.map((channel) => {
+        const live = channelLiveByKey.get(channel as LiveAdChannel)
+        return {
+          channel,
+          budget: budgets[channel],
+          spendKrw: channelSpend ? channelSpend[channel] : null,
+          // 통화를 모르는 금액은 표기하지 않는다 — 둘 중 하나라도 없으면 미측정으로 둔다.
+          liveSpend: live?.currency != null ? live.spend : null,
+          liveCurrency: live?.currency ?? null,
+        }
+      })
     : []
 
   return {
@@ -374,6 +513,11 @@ export async function assembleMarketingPerf(
     // 소스 그룹별 일자 유입 — 분할 루프의 (date, lead) 쌍에서 파생(추가 조회 없음).
     leadDailyBySource: aggregateLeadDailyBySource(currentLeadDaily),
     channelMix,
+    channelLive,
+    // currentLeads 는 이미 이 기간으로 잘렸고 테스트 리드도 빠져 있다 — 폭포는 기간 필터를
+    // 하지 않으므로(테스트 리드만 다시 거른다) 그대로 넘긴다.
+    // 소스 실패(leads === null)면 빈 배열이라 전 단계 0 · 비율 null 로 정직하게 떨어진다.
+    attributionFunnel: buildAttributionFunnel(currentLeads),
     updatesFeed,
   }
 }

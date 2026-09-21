@@ -13,7 +13,7 @@ import {
   type CrmPriorityItem,
 } from "@/lib/crm/priority"
 import { classifyLeadOrigin } from "@/lib/crm/capture/origin"
-import { isTestLead } from "@/lib/crm/lead-attribution"
+import { hasAdClickId, isTestLead } from "@/lib/crm/lead-attribution"
 import { buildCompassDemoIndex, hydrateCompassDemoSource } from "@/lib/crm/compass-demo-signal"
 import { deriveLeadRegionLabel } from "@/lib/crm/lead-message"
 import { deriveCustomerRegion, REGION_UNSPECIFIED } from "@/lib/crm/region-label"
@@ -569,7 +569,7 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
         engagement: engagements?.[lead.id] ?? null,
         demoIndex,
       })
-      const hasAdClickId = Boolean(lead.gclid || lead.fbclid || lead.msclkid || lead.ttclid)
+      const adClickId = hasAdClickId(lead)
       rows.push({
         key: `lead:${lead.id}`,
         tags: [],
@@ -593,7 +593,7 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
         updatedAt: lead.follow_up_at ?? lead.timestamp,
         expireAt: null,
         balance: null,
-        origin: classifyLeadOrigin(lead.source, hasAdClickId),
+        origin: classifyLeadOrigin(lead.source, adClickId),
         crmRegistered: neoLinkedLeadIds.has(lead.id),
         // 미확인 신규 리드도 행은 만들되 처리 큐 뷰(site_leads/unanswered)에서만 노출된다.
         provisional: !shouldIncludeLeadInUnifiedCustomers(lead),

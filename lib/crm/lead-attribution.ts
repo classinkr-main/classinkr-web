@@ -4,6 +4,7 @@
 // components/admin/crm/leads/shared.tsx 에 있던 표를 여기로 옮겼다. shared.tsx 는
 // 이 모듈을 그대로 re-export 하므로 기존 import 경로는 그대로 동작한다.
 
+import { naverAdLabel, naverCampaignTypeLabel } from "@/lib/naver-ad-params"
 import type { LeadRecord } from "@/lib/repositories/leads"
 import { DIRECT_INBOUND_LEAD_SOURCES } from "@/lib/lead-types"
 
@@ -219,7 +220,30 @@ export function hasTrackingSignal(lead: LeadRecord): boolean {
       lead.msclkid?.trim() ||
       lead.ttclid?.trim() ||
       lead.lead_magnet?.trim() ||
-      lead.landing_page?.trim()
+      lead.landing_page?.trim() ||
+      // 네이버는 클릭ID 한 값이 아니라 n_* 묶음으로 온다 — 한 키라도 있으면 광고 유입이다.
+      (lead.naver_ad != null && Object.keys(lead.naver_ad).length > 0)
+  )
+}
+
+/**
+ * 광고 클릭 식별자를 들고 왔는가 — 세 호출부(행사 참석자 출신 판정·통합 고객·고객 360)가
+ * 같은 불리언을 각자 조립하던 것을 여기로 모았다. 채널이 늘 때 한 곳만 고치면 되게 하려는
+ * 것이고, 실제로 네이버(n_*)는 클릭ID 한 값이 아니라 묶음이라 조립을 복제했다면 빠졌을 것이다.
+ */
+export function hasAdClickId(
+  lead:
+    | Pick<LeadRecord, "gclid" | "fbclid" | "msclkid" | "ttclid" | "naver_ad">
+    | null
+    | undefined
+): boolean {
+  if (!lead) return false
+  return Boolean(
+    cleanText(lead.gclid) ||
+      cleanText(lead.fbclid) ||
+      cleanText(lead.msclkid) ||
+      cleanText(lead.ttclid) ||
+      (lead.naver_ad != null && Object.keys(lead.naver_ad).length > 0)
   )
 }
 
@@ -262,16 +286,31 @@ export function getLeadChannelLabel(lead: LeadRecord): string {
   if (medium) return medium
   if (cleanText(lead.gclid)) return "google / cpc"
   if (cleanText(lead.fbclid)) return "meta / paid"
+  // 네이버 검색광고는 클릭ID 대신 n_* 묶음으로 온다. utm 을 안 붙이고 돌리는 계정이 많아
+  // 이 폴백이 없으면 네이버 유입이 통째로 '홈페이지'로 접힌다.
+  if (naverAdLabel(lead.naver_ad) || lead.naver_ad?.n_campaign_type) return "naver / cpc"
   return SOURCE_GROUP_LABEL[getLeadSourceGroup(lead)]
 }
 
 export function getLeadCampaignLabel(lead: LeadRecord): string | null {
-  return cleanText(lead.utm_campaign) ?? cleanText(getMetaAdInfo(lead)?.campaign)
+  return (
+    cleanText(lead.utm_campaign) ??
+    cleanText(getMetaAdInfo(lead)?.campaign) ??
+    // 네이버는 캠페인'명'을 URL 로 안 넘긴다 — 유형(n_campaign_type)뿐이라 접두를 붙여
+    // 캠페인명처럼 보이지 않게 한다(정확한 이름은 naver_ads_daily.campaign_name).
+    naverCampaignTypeLabel(lead.naver_ad)
+  )
 }
 
 export function getLeadAdLabel(lead: LeadRecord): string | null {
   const meta = getMetaAdInfo(lead)
-  return cleanText(meta?.ad) ?? cleanText(lead.utm_content) ?? cleanText(meta?.adset)
+  return (
+    cleanText(meta?.ad) ??
+    cleanText(lead.utm_content) ??
+    cleanText(meta?.adset) ??
+    // 네이버 소재 축: 광고 → 광고그룹 → 검색어 순으로 있는 것 하나.
+    naverAdLabel(lead.naver_ad)
+  )
 }
 
 /**

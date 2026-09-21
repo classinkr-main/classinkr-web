@@ -1,4 +1,5 @@
 import type { LeadPayload } from "@/lib/lead-types"
+import { collectNaverAdParams, type NaverAdAttribution } from "@/lib/naver-ad-params"
 
 const ATTRIBUTION_STORAGE_KEY = "classinkr.leadAttribution.v1"
 
@@ -16,7 +17,7 @@ const ATTRIBUTION_PARAM_MAP = {
 
 type AttributionField = typeof ATTRIBUTION_PARAM_MAP[keyof typeof ATTRIBUTION_PARAM_MAP]
 export type LeadAttribution = Partial<
-  Pick<LeadPayload, AttributionField | "landingPage" | "currentPage" | "referrer">
+  Pick<LeadPayload, AttributionField | "landingPage" | "currentPage" | "referrer" | "naverAd">
 >
 
 function safeReadStoredAttribution(): LeadAttribution {
@@ -90,9 +91,16 @@ export function collectLeadAttribution(): LeadAttribution {
     if (value) current[field as AttributionField] = value
   }
 
+  // 네이버는 클릭ID 한 값이 아니라 n_* 묶음으로 온다 — 목록·정규화 규칙은
+  // lib/naver-ad-params.ts 하나가 정본이다. 이번 방문에 없으면 이전 방문 값을 유지한다
+  // (utm·gclid 와 같은 last-touch-wins 규약).
+  const naverAd: NaverAdAttribution | null =
+    collectNaverAdParams((key) => url.searchParams.get(key)) ?? stored.naverAd ?? null
+
   const next: LeadAttribution = {
     ...stored,
     ...current,
+    ...(naverAd ? { naverAd } : {}),
     landingPage: stored.landingPage ?? trimAttributionValue(window.location.href),
     currentPage: trimAttributionValue(window.location.href),
     referrer: trimAttributionValue(document.referrer) ?? stored.referrer,

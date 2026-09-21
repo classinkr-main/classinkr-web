@@ -38,7 +38,7 @@ function makeRollup(overrides: Partial<CampaignRollup> = {}): CampaignRollup {
     metaSpend: null,
     metaCurrency: null,
     metaLeads: 12,
-    linkedCounts: { email: 1, sms: 1, event: 1, meta: 0 },
+    linkedCounts: { email: 1, sms: 1, event: 1, meta: 0, google: 0, naver: 0 },
     ...overrides,
   }
 }
@@ -101,7 +101,7 @@ describe("CampaignRow", () => {
       smsRecipients: 0,
       eventDeals: 0,
       metaLeads: 0,
-      linkedCounts: { email: 0, sms: 0, event: 0, meta: 0 },
+      linkedCounts: { email: 0, sms: 0, event: 0, meta: 0, google: 0, naver: 0 },
     })
     const html = renderToStaticMarkup(
       <CampaignRow campaign={makeCampaign({ links: [], rollup: empty })} />,
@@ -133,7 +133,7 @@ describe("CampaignRow", () => {
           // 매출만 남기려고 이메일·문자 링크를 비운다(스트립 상한 4 에 밀리지 않게).
           rollup: makeRollup({
             eventRevenue: null,
-            linkedCounts: { email: 0, sms: 0, event: 1, meta: 0 },
+            linkedCounts: { email: 0, sms: 0, event: 1, meta: 0, google: 0, naver: 0 },
           }),
         })}
       />,
@@ -150,7 +150,7 @@ describe("CampaignRow", () => {
           rollup: makeRollup({
             metaSpend: 1209,
             metaCurrency: "USD",
-            linkedCounts: { email: 0, sms: 0, event: 0, meta: 1 },
+            linkedCounts: { email: 0, sms: 0, event: 0, meta: 1, google: 0, naver: 0 },
           }),
         })}
       />,
@@ -175,7 +175,7 @@ describe("CampaignRow", () => {
 describe("buildCampaignRowMetrics", () => {
   it("연결된 채널의 가용 지표만 만든다(연결 0 → 빈 목록)", () => {
     const none = buildCampaignRowMetrics(
-      makeRollup({ linkedCounts: { email: 0, sms: 0, event: 0, meta: 0 } }),
+      makeRollup({ linkedCounts: { email: 0, sms: 0, event: 0, meta: 0, google: 0, naver: 0 } }),
     )
     expect(none).toEqual([])
   })
@@ -186,7 +186,7 @@ describe("buildCampaignRowMetrics", () => {
         emailRecipients: 0,
         emailOpens: 0,
         smsRecipients: 500,
-        linkedCounts: { email: 1, sms: 1, event: 0, meta: 0 },
+        linkedCounts: { email: 1, sms: 1, event: 0, meta: 0, google: 0, naver: 0 },
       }),
     )
     expect(metrics.map((m) => m.label)).toEqual(["수신"])
@@ -197,7 +197,7 @@ describe("buildCampaignRowMetrics", () => {
       makeRollup({
         metaSpend: null,
         metaCurrency: null,
-        linkedCounts: { email: 0, sms: 0, event: 0, meta: 2 },
+        linkedCounts: { email: 0, sms: 0, event: 0, meta: 2, google: 0, naver: 0 },
       }),
     )
     expect(metrics).toEqual([{ label: "Meta", value: "—", quiet: true }])
@@ -209,7 +209,7 @@ describe("buildCampaignRowMetrics", () => {
         eventRevenue: 5_000_000,
         metaSpend: 1209,
         metaCurrency: "USD",
-        linkedCounts: { email: 1, sms: 1, event: 1, meta: 1 },
+        linkedCounts: { email: 1, sms: 1, event: 1, meta: 1, google: 0, naver: 0 },
       }),
     )
     expect(metrics).toHaveLength(4)

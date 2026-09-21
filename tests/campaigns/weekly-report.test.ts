@@ -25,6 +25,8 @@ const campaign = (
   pacing: { elapsedPct: 100, executionPct: null },
   pacingCurrency: null,
   leads: 0,
+  channels: [],
+  channelSpend: [],
   spendUsd: null,
   cpl: null,
   sparkline: [],
@@ -87,6 +89,8 @@ function makePerf(overrides: Partial<MarketingPerfResponse> = {}): MarketingPerf
       { date: "2026-08-16", meta: 4 },
     ],
     channelMix: [],
+    channelLive: [],
+    attributionFunnel: { stages: [], byChannel: [], endToEndPct: null },
     updatesFeed: [],
     ...overrides,
   }

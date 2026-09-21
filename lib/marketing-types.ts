@@ -1,3 +1,5 @@
+import type { NaverAdAttribution } from "@/lib/naver-ad-params"
+
 /**
  * ─────────────────────────────────────────────────────────────
  * marketing-types.ts  —  마케팅 이메일 시스템 타입 정의
@@ -134,6 +136,8 @@ export interface NewsletterSubscribeRequest {
     landingPage?: string
     currentPage?: string
     referrer?: string
+    /** 네이버 검색광고 n_* 묶음 — 다른 필드와 달리 문자열이 아니라 객체다. */
+    naverAd?: NaverAdAttribution
   }
 }
 

@@ -1,6 +1,7 @@
 import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { parseNaverAd } from "@/lib/naver-ad-params"
 // FX 는 구독형(USD 정가 → KRW 승인)에서만 쓴다. 충전형은 2026-07 이후 원화 선충전이라 환산이 없다.
 import { convertUsdToKrw, getFxRates } from "@/lib/billing/fx"
 import {
@@ -167,15 +168,23 @@ const ATTRIBUTION_KEYS = [
   "referrer",
 ]
 
-function sanitizeAttribution(value: unknown) {
+/**
+ * 주문 메타데이터에 실을 귀속. 문자열 키는 ATTRIBUTION_KEYS 를 돌고, 네이버 n_* 는
+ * **객체**라 그 루프를 못 타므로 따로 붙인다 — 빠뜨리면 네이버를 타고 온 결제가
+ * 귀속 없이 남는다(문자열 전용 루프가 조용히 버리던 자리).
+ */
+function sanitizeAttribution(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null
 
   const source = value as Record<string, unknown>
-  const attribution: Record<string, string> = {}
+  const attribution: Record<string, unknown> = {}
   for (const key of ATTRIBUTION_KEYS) {
     const normalized = normalizeString(source[key]).slice(0, 500)
     if (normalized) attribution[key] = normalized
   }
+
+  const naverAd = parseNaverAd(source.naverAd ?? source.naver_ad)
+  if (naverAd) attribution.naverAd = naverAd
 
   return Object.keys(attribution).length > 0 ? attribution : null
 }

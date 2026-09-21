@@ -8745,6 +8745,9 @@ function clientScript(segment) {
         fbclid: getUrlParam('fbclid'),
         msclkid: getUrlParam('msclkid'),
         ttclid: getUrlParam('ttclid'),
+        // 네이버는 클릭ID 한 값이 아니라 n_* 묶음이라 공용 스크립트가 모아 준다
+        // (키 목록 정본: lib/naver-ad-params.ts). 값이 없으면 null.
+        naverAd: window.classinNaverAd ? window.classinNaverAd() : null,
       };
 
       try {
@@ -9512,6 +9515,7 @@ function buildKidsHtml(segment) {
       </div>
     </footer>
   </div>
+  <script src="/l/attribution.js"></script>
   <script>${clientScript(segment)}</script>
 </body>
 </html>`
@@ -10119,6 +10123,7 @@ function buildHtml(segment) {
       </div>
     </footer>
   </div>
+  <script src="/l/attribution.js"></script>
   <script>${clientScript(segment)}</script>
 </body>
 </html>`

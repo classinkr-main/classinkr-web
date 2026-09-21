@@ -13,7 +13,7 @@ import ShowMore, { useVisibleCount } from "@/components/admin/ui/ShowMore"
 
 const CAMPAIGN_LIST_STEP = 20
 import Link from "next/link"
-import { Activity, AlertCircle, ArrowLeft, Plus, RefreshCw, X } from "lucide-react"
+import { Activity, AlertCircle, ArrowLeft, Link2, Plus, RefreshCw, X } from "lucide-react"
 
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { useToast } from "@/components/ui/toast"
@@ -39,6 +39,25 @@ interface MetaSyncResult {
   crossChannelLinkedCount: number
   unresolvedMirrorCount: number
   skipped: Array<{ metaId: string; name: string; reason: string }>
+}
+
+// POST /api/admin/marketing-campaigns/ad-sync 응답 — Google·네이버 캠페인을 동명 우산에 붙인다.
+// meta-sync 와 달리 우산을 만들지 않는다(붙일 데가 없으면 skipped 로 보고). 그래서 배너에서
+// 정작 읽을 값은 linked 가 아니라 **skipped 의 이유**다 — 사람이 뭘 해야 하는지가 거기 있다.
+interface AdSyncResult {
+  linked: Array<{ channel: string; label: string; umbrellaName: string }>
+  failed: Array<{ label: string; umbrellaName: string; error: string }>
+  alreadyLinked: Array<{ label: string }>
+  skipped: Array<{ label: string; reason: string; detail: string }>
+  candidateCount: number
+  sources: Array<{ channel: string; ok: boolean; rowCount: number; error: string | null }>
+  lookbackDays: number
+}
+
+// 스냅샷을 못 읽은 채널을 배너에 이름으로 적는다 — "0건"과 "못 읽었다"는 다른 사실이다.
+const AD_SYNC_CHANNEL_LABEL: Record<string, string> = {
+  google: "Google",
+  naver: "네이버",
 }
 
 // 변경 필드 → 사람이 읽는 라벨(결과 배너의 갱신 행).
@@ -68,6 +87,10 @@ export default function CampaignManageClient() {
   const [syncResult, setSyncResult] = useState<MetaSyncResult | null>(null)
   // setState 는 비동기라 연타를 못 막는다 — 동기 ref 로 실행 중 잠금(중복 가져오기 방지).
   const syncingRef = useRef(false)
+  // Google·네이버 링크 동기화 — Meta 와 별개 버튼이다(하는 일이 다르다: 이쪽은 붙이기만).
+  const [adSyncing, setAdSyncing] = useState(false)
+  const [adSyncResult, setAdSyncResult] = useState<AdSyncResult | null>(null)
+  const adSyncingRef = useRef(false)
 
   // 목록 라우트는 롤업 포함이라 서버가 Meta Graph 를 부른다 — 30초 캐시로 마운트·재방문
   // 재조회를 흡수하고, 생성·수정·동기화 직후에만 force 로 우회한다.
@@ -123,6 +146,20 @@ export default function CampaignManageClient() {
   // 상세 패널(링크 추가·해제 등)이 부르는 목록 갱신 — 변경 직후이므로 캐시 우회.
   const reloadAfterChange = useCallback(() => load({ force: true }), [load])
 
+  // 건너뛴 후보를 **이유 문장으로** 묶는다. 같은 이유(예: "이름이 같은 우산이 없다")는 문장이
+  // 글자 그대로 같아서 한 줄로 접히고, 우산 이름이 박힌 문장은 따로 남는다 — 이유 코드를
+  // 다시 라벨로 번역하지 않고도 목록이 짧아진다(번역표를 두면 서버 문장과 둘로 갈린다).
+  const adSkipGroups = useMemo(() => {
+    if (!adSyncResult) return []
+    const groups = new Map<string, string[]>()
+    for (const item of adSyncResult.skipped) {
+      const labels = groups.get(item.detail)
+      if (labels) labels.push(item.label)
+      else groups.set(item.detail, [item.label])
+    }
+    return [...groups].sort((a, b) => b[1].length - a[1].length)
+  }, [adSyncResult])
+
   // Meta 동기화 — 미링크 Meta 캠페인을 미러로 가져오고, 미러의 이름·상태·기간을 Meta 에 맞춘다.
   // 서버가 플랜·적용을 모두 담당하므로 여기서는 1콜 + 결과 배너 + 목록 리로드만 한다.
   const handleMetaSync = useCallback(async () => {
@@ -149,6 +186,40 @@ export default function CampaignManageClient() {
     } finally {
       syncingRef.current = false
       setSyncing(false)
+    }
+  }, [load, toast])
+
+  // Google·네이버 링크 — 스냅샷에 잡힌 광고 캠페인을 **이름이 같은 우산에 붙이기만** 한다.
+  // 우산을 만들지 않으므로 되돌릴 일이 적다(붙은 링크는 상세 패널에서 해제 가능).
+  const handleAdSync = useCallback(async () => {
+    if (adSyncingRef.current) return
+    adSyncingRef.current = true
+    setAdSyncing(true)
+    try {
+      const result = await adminFetchJson<AdSyncResult>(
+        "/api/admin/marketing-campaigns/ad-sync",
+        { method: "POST" },
+      )
+      setAdSyncResult(result)
+      const unreadable = result.sources.filter((source) => !source.ok)
+      if (result.failed.length > 0) {
+        toast.error(`광고 링크 부분 실패 — 연결 ${result.linked.length}건 · 실패 ${result.failed.length}건`)
+      } else if (unreadable.length > 0) {
+        // 못 읽은 채널이 있으면 "변경 없음"이 참이 아니다 — 성공 토스트로 덮지 않는다.
+        toast.error(
+          `${unreadable.map((s2) => AD_SYNC_CHANNEL_LABEL[s2.channel] ?? s2.channel).join("·")} 스냅샷을 읽지 못했습니다`,
+        )
+      } else if (result.linked.length > 0) {
+        toast.success(`광고 링크 완료 — 연결 ${result.linked.length}건`)
+      } else {
+        toast.success("광고 링크 완료 — 새로 연결할 캠페인이 없음")
+      }
+      await load({ force: true })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "광고 캠페인 링크에 실패했습니다.")
+    } finally {
+      adSyncingRef.current = false
+      setAdSyncing(false)
     }
   }, [load, toast])
 
@@ -185,6 +256,16 @@ export default function CampaignManageClient() {
             >
               <Activity className={`h-3.5 w-3.5 ${syncing ? "animate-pulse" : ""}`} />
               {syncing ? "동기화 중…" : "Meta 동기화"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleAdSync()}
+              disabled={adSyncing || loading}
+              title="최근 90일 집행이 잡힌 Google·네이버 캠페인을 이름이 같은 캠페인에 연결합니다. 캠페인을 새로 만들지는 않습니다."
+              className="inline-flex items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-1.5 text-[12px] font-bold text-[#111110] transition hover:bg-[#F6F5F4] disabled:opacity-60"
+            >
+              <Link2 className={`h-3.5 w-3.5 ${adSyncing ? "animate-pulse" : ""}`} />
+              {adSyncing ? "연결 중…" : "Google·네이버 링크"}
             </button>
             <button
               type="button"
@@ -294,6 +375,87 @@ export default function CampaignManageClient() {
             </div>
           </div>
         )}
+
+        {/* Google·네이버 링크 결과 — 붙은 것보다 **안 붙은 이유**가 이 배너의 본문이다. */}
+        {adSyncResult && (() => {
+          const unreadable = adSyncResult.sources.filter((source) => !source.ok)
+          const warn = adSyncResult.failed.length > 0 || unreadable.length > 0
+          return (
+            <div
+              className={`mb-4 rounded-2xl border px-4 py-3.5 ${
+                warn ? "border-[#ECD29C] bg-[#FBF1E0]" : "border-[#BDEFD8] bg-[#ECFDF5]"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 text-[12px] leading-relaxed">
+                  <p className={`font-bold ${warn ? "text-[#A8741A]" : "text-[#084734]"}`}>
+                    Google·네이버 링크 — 연결 {adSyncResult.linked.length}
+                    {adSyncResult.alreadyLinked.length > 0
+                      ? ` · 이미 연결됨 ${adSyncResult.alreadyLinked.length}`
+                      : ""}
+                    {adSyncResult.skipped.length > 0 ? ` · 건너뜀 ${adSyncResult.skipped.length}` : ""}
+                    {adSyncResult.failed.length > 0 ? ` · 실패 ${adSyncResult.failed.length}` : ""}
+                  </p>
+                  {adSyncResult.linked.length > 0 && (
+                    <p className="mt-1 text-[#084734]/80">
+                      {adSyncResult.linked
+                        .slice(0, 5)
+                        .map((item) => `${item.label} → ${item.umbrellaName}`)
+                        .join(", ")}
+                      {adSyncResult.linked.length > 5
+                        ? ` 외 ${adSyncResult.linked.length - 5}건`
+                        : ""}
+                    </p>
+                  )}
+                  {/* 못 읽은 채널은 0 건이 아니라 미측정이다 — 이름을 적어 둔다. */}
+                  {unreadable.map((source) => (
+                    <p key={source.channel} className="mt-0.5 break-words text-[#A8741A]">
+                      {AD_SYNC_CHANNEL_LABEL[source.channel] ?? source.channel} 스냅샷을 읽지
+                      못했습니다 — {source.error ?? "원인 불명"}
+                    </p>
+                  ))}
+                  {adSyncResult.failed.length > 0 && (
+                    <p className="mt-0.5 break-words text-[#A8741A]">
+                      실패: {adSyncResult.failed.map((f) => f.label).join(", ")} —{" "}
+                      {adSyncResult.failed[0].error}
+                    </p>
+                  )}
+                  {adSkipGroups.length > 0 && (
+                    <ul className="mt-1.5 space-y-0.5 text-[11px] text-[#615D59]">
+                      {adSkipGroups.slice(0, 4).map(([detail, labels]) => (
+                        <li key={detail}>
+                          <span className="font-medium text-[#111110]">
+                            {labels.slice(0, 3).join(", ")}
+                            {labels.length > 3 ? ` 외 ${labels.length - 3}건` : ""}
+                          </span>{" "}
+                          — {detail}
+                        </li>
+                      ))}
+                      {adSkipGroups.length > 4 && (
+                        <li className="text-[#A39E98]">
+                          다른 이유 {adSkipGroups.length - 4}가지 더 있습니다.
+                        </li>
+                      )}
+                    </ul>
+                  )}
+                  <p className="mt-1 text-[11px] text-[#A39E98]">
+                    최근 {adSyncResult.lookbackDays}일 스냅샷에서 후보{" "}
+                    {adSyncResult.candidateCount}건을 검토했습니다. 캠페인을 새로 만들지는 않습니다 —
+                    붙일 우산이 없으면 건너뜁니다.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAdSyncResult(null)}
+                  aria-label="광고 링크 결과 닫기"
+                  className="shrink-0 rounded-md p-1 text-[#615D59] transition hover:text-[#111110]"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          )
+        })()}
 
         {loading ? (
           <div className="space-y-1.5" aria-busy="true">

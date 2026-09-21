@@ -9,12 +9,16 @@ import AiCreativeSuggestSection from "@/components/admin/campaigns/creative/AiCr
 import { EventPerformanceSection } from "@/components/admin/campaigns/events/EventPerformanceSection"
 import { MetaDatePresetToggle } from "@/components/admin/campaigns/meta/MetaCampaignPanel"
 import type { MetaPerfRow } from "@/components/admin/campaigns/MetaPerformanceCharts"
+import { AttributionFunnelCard } from "@/components/admin/campaigns/perf/AttributionFunnelCard"
+import { ChannelCoverageMatrix } from "@/components/admin/campaigns/perf/ChannelCoverageMatrix"
+import { ChannelLiveStrip } from "@/components/admin/campaigns/perf/ChannelLiveStrip"
 import { ChannelMixCard } from "@/components/admin/campaigns/perf/ChannelMixCard"
 import { EmailPerformanceCard } from "@/components/admin/campaigns/perf/EmailPerformanceCard"
 import { FunnelCard } from "@/components/admin/campaigns/perf/FunnelCard"
 import { usePerf } from "@/components/admin/campaigns/perf/use-perf"
 import { DETAIL_SECTIONS, campaignHubHref } from "@/lib/marketing/hub-tabs"
 import type { PerfPeriodKey } from "@/lib/marketing/perf"
+import { AD_CHANNELS } from "@/lib/types/event-metrics"
 import type { PublicEvent } from "@/lib/types/public-events"
 import type { MetaCampaignDashboard, MetaDatePreset, PerEventEconRow, Period } from "./types"
 
@@ -100,6 +104,10 @@ export default function DetailTab({
 
   const budgetsHref = campaignHubHref({ tab: "data", section: "budgets", perf: period })
 
+  // 라이브 연동 채널을 뺀 나머지 — 수기 입력만 있는 채널 수(카카오·YouTube·오프라인·기타).
+  // AD_CHANNELS 에서 파생해 채널이 늘 때 이 숫자가 자동으로 맞는다.
+  const manualChannelCount = AD_CHANNELS.length - (perf?.channelLive.length ?? 0)
+
   const perfFallback = perfError ? (
     <EmptyState
       title="퍼포먼스 집계를 불러오지 못했습니다"
@@ -165,16 +173,34 @@ export default function DetailTab({
         <HubSection
           id="funnel"
           title="퍼널·채널"
-          description="세로 퍼널(단계별 이탈 수) + 채널 믹스(KRW 배정·집행, Meta USD 병기) — 배정 입력은 데이터 층"
+          description="세로 퍼널(단계별 이탈 수) · 귀속 폭포(리드에 출처를 붙일 수 있는가) + 채널 믹스(KRW 배정·집행, Meta USD 병기) · 채널별 라이브 집행(Meta·Google·네이버) — 배정 입력은 데이터 층"
         >
           {perf ? (
-            <div className="grid gap-4 lg:grid-cols-[minmax(280px,1fr)_minmax(0,2fr)]">
-              <FunnelCard
-                funnel={perf.funnel}
-                metaMeasured={perf.kpis.spendUsd.value != null && perf.snapshotAt != null}
-                layout="vertical"
+            <div className="space-y-4">
+              <div className="grid gap-4 lg:grid-cols-[minmax(280px,1fr)_minmax(0,2fr)]">
+                <FunnelCard
+                  funnel={perf.funnel}
+                  metaMeasured={perf.kpis.spendUsd.value != null && perf.snapshotAt != null}
+                  layout="vertical"
+                />
+                <ChannelMixCard channelMix={perf.channelMix} budgetExecution={perf.kpis.budgetExecutionPct} editHref={budgetsHref} />
+              </div>
+              {/* 채널별 집행 — 채널 믹스(배정 대비 집행) 바로 아래. KPI 의 spendUsd 는 Meta 축 한 줄이라
+                  채널이 셋이 되면 그 칸만 보고는 어디에 얼마를 썼는지 알 수 없다. 커버리지 매트릭스는
+                  접어 둔다 — 매일 볼 표가 아니라 "어디가 비었나"를 물을 때 여는 표다.
+                  3층 재구성 전에는 요약 탭 KPI 스트립 아래에 있었다 — 한눈에 층은 판정·핵심 숫자만 두므로
+                  "왜·어디서"를 답하는 이 층으로 옮겼다. */}
+              <div className="flex flex-col gap-3">
+                <ChannelLiveStrip channels={perf.channelLive} manualChannelCount={manualChannelCount} />
+                <ChannelCoverageMatrix channels={perf.channelLive} />
+              </div>
+              {/* 귀속 폭포 — 퍼널 카드와 같은 섹션에 둔다. 둘 다 '퍼널'이지만 축이 다르다:
+                  위는 리드가 고객이 되는 과정, 여기는 리드에 출처를 붙일 수 있는가.
+                  떨어뜨려 놓으면 같은 걸 두 번 그린 것처럼 읽힌다. */}
+              <AttributionFunnelCard
+                funnel={perf.attributionFunnel}
+                leadsMeasured={perf.kpis.leads.value != null}
               />
-              <ChannelMixCard channelMix={perf.channelMix} budgetExecution={perf.kpis.budgetExecutionPct} editHref={budgetsHref} />
             </div>
           ) : (
             perfFallback

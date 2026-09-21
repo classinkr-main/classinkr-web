@@ -22,6 +22,7 @@ import { getResolvedSettings } from "@/lib/repositories/settings"
 import { postJson } from "@/lib/server/post-json"
 import { isWebhookEnabled } from "@/lib/webhook-settings"
 import { parseEventToken, setEventToken } from "@/lib/types/event-metrics"
+import { parseNaverAd } from "@/lib/naver-ad-params"
 
 const VALID_SOURCES = new Set<LeadSource>([
   "demo_modal",
@@ -232,6 +233,9 @@ export function buildLeadPayload(raw: unknown): LeadPayload {
     currentPage: normalizeString(body.currentPage ?? body.current_page),
     referrer: normalizeString(body.referrer),
     anonymousId: normalizeString(body.anonymousId ?? body.anonymous_id),
+    // 네이버 n_* 묶음. 목록 밖 키는 parseNaverAd 가 버리고, 하나도 없으면 undefined 다
+    // (빈 객체를 저장하면 "네이버 유입"으로 잘못 읽힌다).
+    naverAd: parseNaverAd(body.naverAd ?? body.naver_ad) ?? undefined,
   }
 
   if (
@@ -503,6 +507,7 @@ export async function submitLeadCapture(
           current_page: body.currentPage,
           referrer: body.referrer,
           anonymous_id: body.anonymousId,
+          naver_ad: body.naverAd,
         })
         savedLeadId = savedLead.id
         conversionEventId = `lead:${savedLead.id}`
@@ -620,6 +625,7 @@ export async function submitLeadCapture(
             landingPage: body.landingPage,
             currentPage: body.currentPage,
             referrer: body.referrer,
+            naverAd: body.naverAd,
           },
           // 개별 리드는 관리자 인앱에 즉시 남기되 WeCom은 10:10 일일 카드로 묶는다.
           channels: [],

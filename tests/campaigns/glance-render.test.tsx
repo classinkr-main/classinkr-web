@@ -49,6 +49,9 @@ function scoreboardRow(overrides: Partial<PerfScoreboardRow>): PerfScoreboardRow
     sparkline: [],
     latestUpdate: null,
     anomalies: [],
+    // 광고 채널 확장(Google·네이버) 뒤 필수 — 링크된 라이브 채널과 채널별 집행. Meta 단일 축 픽스처라 비운다.
+    channels: [],
+    channelSpend: [],
     ...overrides,
   }
 }
@@ -182,12 +185,12 @@ describe("CampaignScoreboard compact", () => {
 })
 
 describe("ChannelMixCard", () => {
-  it("KRW 배정·집행과 Meta USD 를 분리해 표기하고 미입력은 — 다", () => {
+  it("KRW 배정·집행과 라이브 집행(Meta USD)을 분리해 표기하고 미입력은 — 다", () => {
     const html = renderToStaticMarkup(
       <ChannelMixCard
         channelMix={[
-          { channel: "meta", budget: 3000000, spendKrw: null, metaSpendUsd: 4860 },
-          { channel: "naver", budget: 1000000, spendKrw: 400000, metaSpendUsd: null },
+          { channel: "meta", budget: 3000000, spendKrw: null, liveSpend: 4860, liveCurrency: "USD" },
+          { channel: "naver", budget: 1000000, spendKrw: 400000, liveSpend: null, liveCurrency: null },
         ]}
         budgetExecution={{ value: 40, previous: null, deltaPct: null, currency: "KRW" }}
         editHref="/admin/campaigns?tab=data#budgets"
@@ -197,5 +200,32 @@ describe("ChannelMixCard", () => {
     expect(html).toContain("40%")
     expect(html).toContain("배정·집행 입력 → 데이터")
     expect(html).toContain("tab=data#budgets")
+  })
+
+  it("라이브 집행 통화가 섞이면(Meta USD · 네이버 KRW) 각 통화 그대로 적고 합계는 내지 않는다", () => {
+    const html = renderToStaticMarkup(
+      <ChannelMixCard
+        channelMix={[
+          { channel: "meta", budget: 3000000, spendKrw: null, liveSpend: 4860, liveCurrency: "USD" },
+          { channel: "naver", budget: 1000000, spendKrw: 400000, liveSpend: 1250000, liveCurrency: "KRW" },
+        ]}
+        budgetExecution={{ value: 40, previous: null, deltaPct: null, currency: "KRW" }}
+        editHref="/admin/campaigns?tab=data#budgets"
+      />
+    )
+    expect(html).toContain("USD 4,860")
+    expect(html).toContain("KRW 1,250,000")
+    expect(html).toContain("통화 혼재 — 합산 없음")
+  })
+
+  it("통화를 모르는 라이브 금액은 표기하지 않는다(liveCurrency 없으면 —)", () => {
+    const html = renderToStaticMarkup(
+      <ChannelMixCard
+        channelMix={[{ channel: "google", budget: 0, spendKrw: null, liveSpend: 999, liveCurrency: null }]}
+        budgetExecution={{ value: null, previous: null, deltaPct: null, currency: "KRW" }}
+        editHref="/admin/campaigns?tab=data#budgets"
+      />
+    )
+    expect(html).not.toContain("999")
   })
 })

@@ -5,6 +5,7 @@ import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import { getMarketingRequestMeta } from "@/lib/marketing/server-conversions"
 import type { NewsletterSubscribeRequest } from "@/lib/marketing-types"
 import { submitLeadCapture } from "@/lib/server/lead-capture"
+import { parseNaverAd } from "@/lib/naver-ad-params"
 
 function normalizeNewsletterSource(value: unknown) {
   if (typeof value !== "string") return "newsletter"
@@ -83,6 +84,8 @@ export async function POST(req: NextRequest) {
       landingPage: getAttributionValue(attribution, "landingPage"),
       currentPage: getAttributionValue(attribution, "currentPage"),
       referrer: getAttributionValue(attribution, "referrer"),
+      // getAttributionValue 는 문자열 전용이라 객체인 n_* 묶음은 여기서 따로 정규화한다.
+      naverAd: parseNaverAd(attribution?.naverAd) ?? undefined,
     }, {
       requestMeta: getMarketingRequestMeta(req, {
         sourceUrl: getAttributionValue(attribution, "currentPage"),

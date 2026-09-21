@@ -34,7 +34,10 @@ import {
   normalizeMultilineText,
   normalizeText,
 } from "@/lib/server/contact-field-validation"
-import { pickLeadAttribution, type LeadAttribution } from "@/lib/marketing-attribution"
+import {
+  sanitizeLeadAttribution,
+  type LeadAttributionPayload,
+} from "@/lib/lead-attribution-payload"
 import { sendShowroomBookingReceipt } from "@/lib/messaging/customer-receipt"
 import { submitLeadCapture } from "@/lib/server/lead-capture"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
@@ -88,10 +91,12 @@ export interface NormalizedShowroomBooking {
   memo: string | null
   sourcePage: string | null
   /**
-   * 광고 귀속·익명 활동 결합 키. 이 경로는 lib/submitLead.ts 를 거치지 않아 예전에는
-   * 둘 다 붙지 않았다 — 퍼널 뒤쪽 리드가 성과 측정에서 통째로 빠져 있던 이유다.
+   * 광고 귀속·익명 활동 결합 키. 이 경로도 lib/submitLead.ts·/api/lead 를 거치지 않아(도입신청과
+   * 같은 구조) 예전에는 둘 다 붙지 않았다 — 광고로 들어온 방문 예약이 '출처 미상'이 되고 퍼널
+   * 뒤쪽이 성과 측정에서 통째로 빠져 있던 이유다. 여기서 들고 다니다 리드 미러링에 넘긴다.
+   * 정규화는 미러링 경로 공용인 sanitizeLeadAttribution 하나로 한다(네이버 n_* 묶음 포함).
    */
-  attribution: LeadAttribution
+  attribution: LeadAttributionPayload
   anonymousId: string | null
 }
 
@@ -166,7 +171,7 @@ export function normalizeShowroomBooking(raw: unknown): ShowroomBookingValidatio
       academySize: normalizeText(body.academySize, MAX_ACADEMY_SIZE_LENGTH),
       interests: normalizeInterests(body.interests),
       memo: normalizeMultilineText(body.memo, MAX_MEMO_LENGTH),
-      attribution: pickLeadAttribution(body),
+      attribution: sanitizeLeadAttribution(body),
       anonymousId: normalizeText(body.anonymousId, MAX_NAME_LENGTH),
       sourcePage: normalizeText(body.sourcePage, MAX_SOURCE_PAGE_LENGTH),
     },
@@ -351,7 +356,8 @@ async function mirrorToLeadQueue(
       marketingConsent: false,
       sourceDetail: "showroom_booking",
       ...booking.attribution,
-      // sourcePage 가 있으면 그게 더 정확한 제출 지점이다.
+      // sourcePage 가 있으면 그게 더 정확한 제출 지점이다(접수 큐가 보여 주는 값과 같다) —
+      // 없을 때만 수집기의 currentPage 로 물러난다. tests/showroom/bookings.test.ts 가 이 순서를 고정한다.
       currentPage: booking.sourcePage ?? booking.attribution.currentPage,
       anonymousId: booking.anonymousId ?? undefined,
     },

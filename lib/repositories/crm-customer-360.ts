@@ -34,6 +34,7 @@ import { findConfirmedLeadNeoLink } from "@/lib/repositories/crm-source-links"
 import { listCrmDeals, type ListCrmDealsResult } from "@/lib/repositories/crm-deals"
 import { listCrmTasks, type ListCrmTasksResult } from "@/lib/repositories/crm-tasks"
 import { getLeadById, type LeadRecord } from "@/lib/repositories/leads"
+import { hasAdClickId } from "@/lib/crm/lead-attribution"
 
 export type Customer360Source = "lead" | "neo_account"
 export type Customer360Severity = "critical" | "high" | "medium" | "low"
@@ -478,10 +479,7 @@ export async function getCrmCustomer360(
       if (lead) {
         header = buildLeadHeader(key, lead, now)
         contacts = buildLeadContacts(lead)
-        origin = classifyLeadOrigin(
-          lead.source,
-          Boolean(lead.gclid || lead.fbclid || lead.msclkid || lead.ttclid)
-        )
+        origin = classifyLeadOrigin(lead.source, hasAdClickId(lead))
         found = true
       }
     } else {

@@ -41,6 +41,11 @@ const GTMScript = dynamic(
   () => import("@/components/GTMScript").then((mod) => mod.GTMScript),
   { ssr: false }
 )
+const NaverAnalyticsScript = dynamic(
+  () => import("@/components/NaverAnalyticsScript").then((mod) => mod.NaverAnalyticsScript),
+  { ssr: false },
+)
+
 const MetaPixelScript = dynamic(
   () => import("@/components/MetaPixelScript").then((mod) => mod.MetaPixelScript),
   { ssr: false }
@@ -129,7 +134,8 @@ export function AppChrome({ children }: { children: ReactNode }) {
           <PageViewTracker />
           {consentChoice.marketing ? (
             <>
-              <MetaPixelScript />
+                <MetaPixelScript />
+              <NaverAnalyticsScript />
               <AnalyticsProviders />
             </>
           ) : null}

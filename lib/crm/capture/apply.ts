@@ -19,6 +19,7 @@ import {
   type CaptureRowRecord,
 } from "./repository"
 import { captureTaskDueAt, captureTaskTemplate } from "./task-templates"
+import { hasAdClickId } from "@/lib/crm/lead-attribution"
 
 export interface ApplyCaptureSummary {
   eventCreated: number
@@ -153,9 +154,7 @@ export async function applyCaptureBatch(
         if (targetType === "lead" && row.matchStatus !== "new_lead_candidate" && targetId) {
           const matchedLead = await getLeadById(targetId)
           leadSource = matchedLead?.source ?? null
-          leadHasAdClickId = Boolean(
-            matchedLead?.gclid || matchedLead?.fbclid || matchedLead?.msclkid || matchedLead?.ttclid
-          )
+          leadHasAdClickId = hasAdClickId(matchedLead)
         }
         attendeeOrigin = deriveAttendeeOrigin({
           matchedTargetType: targetType,
