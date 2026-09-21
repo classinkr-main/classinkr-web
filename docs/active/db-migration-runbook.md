@@ -100,6 +100,16 @@ npm run check:db --  --strict
 
 ### 2026-09-21 통합 시점에 서울 프로젝트 적용이 필요한 파일
 
+> **2026-09-21 적용 완료.** 아래 8개와 `20260902_compass_leads_v_phone_key_column.sql`(Compass 생성식이 뷰의 옛 식과
+> 글자 그대로 같고 916행 값 차이 0인 것을 확인한 뒤)을 서울 프로젝트에 파일명 순서로 적용했다. 백필(`20260921_lead_source_intake_split`)은
+> 운영 배포 직후 실행했다(대상 0행). 적용 경로는 Supabase Management API `database/query`(파일 내용 그대로 + 앞에
+> `set lock_timeout = '5s'`)이고, 파일마다 읽기 전용 조회로 결과를 확인했다 — 요약:
+> RPC 오버로드 1개·service_role 전용 / 광고 테이블 2개 RLS deny-all / `campaign_links` CHECK 6종·기존 18행 검증 /
+> `norm_phone_key` 자기검증 통과·인덱스 3·새 뷰 6·**브리지 뷰 13개 service_role 쓰기 권한 0**(적용 전 보강, 아래) /
+> `leads.naver_ad`·`leads.phone_key`(= `norm_phone_key(phone)`, 392행 재계산 대조 불일치 0) / `checkout_requests.role·academy_size`.
+> 적용 전에 파일별 안전성 검토와 반박 검증(에이전트 18개)을 거쳤고, 브리지는 그 지적(service_role 이 자동 갱신 뷰를 통해
+> Compass `crm` 테이블에 RLS 없이 쓸 수 있음 — 운영 실측으로 확인)을 반영해 보강한 판으로 적용했다.
+
 아래는 같은 시기에 갈라져 있던 브랜치들을 한 줄기로 합치면서 들어온 마이그레이션이다. **파일명 순서대로**,
 **코드 배포 전에** 적용한다. "배포 전 필수"는 미적용 상태로 코드가 먼저 나가면 화면이나 저장이 깨지는 것이다.
 

@@ -27,15 +27,20 @@
 
 ## 1. P0 — 배포 전 반드시
 
+> **2026-09-21 운영 반영 완료.** 서울 DB 마이그레이션 9개 적용(파일별 안전성 검토·반박 검증 18건 후, 단계마다 읽기 전용 확인) →
+> Vercel 운영 배포(main `762e864`, Promote to Production — main push 는 Preview 만 만든다) → 배포 직후 백필 → 라이브 검증
+> (공개 페이지 200, 쇼룸 가용성 API 공휴일·쇼룸 캘린더 원천 true, 잘못된 리드 400, 크론 무인증 401, `icn1`, 어드민 접수 큐·
+> 마케팅 상세 퍼널·채널 실데이터 렌더). 적용 상세는 [DB 마이그레이션 런북](./db-migration-runbook.md) "2026-09-21 통합 시점".
+
 ### 1-1. 환경
 
 - [ ] **로컬 `.env.local`을 서울 프로젝트 값으로 교체한다.** 이관 전 호스트는 2026-09-21 실측에서 DNS 조회부터 실패했다.
   이 상태에서는 `check:db`·`check:alpha-db`·`postbuild`·dev 서버의 어드민 화면이 전부 `fetch failed`다.
   근거: [supabase-korea-migration-status](./supabase-korea-migration-status.md) "로컬 개발 환경 점검". — 운영자 수동 조치
-- [ ] **운영 env에 SOLAPI 키가 있는지 확인하고 접수 확인 문자의 실발송 여부를 정한다.** 쇼룸 예약·도입 신청이 접수되면
+- [x] (2026-09-21 확인: 운영 env 에 `SOLAPI_*` 없음 → 접수 확인 문자는 simulated 기록만, 고객에게 나가지 않는다. 켜려면 키 추가 전 이 항목을 다시 본다.) **운영 env에 SOLAPI 키가 있는지 확인하고 접수 확인 문자의 실발송 여부를 정한다.** 쇼룸 예약·도입 신청이 접수되면
   고객 연락처로 확인 문자(템플릿이 있으면 알림톡)를 보낸다. 게이트는 없고 `SOLAPI_API`+`SOLAPI_SECRET` 유무가 곧 스위치다 —
   키가 이미 다른 용도로 들어 있으면 **배포 즉시 고객에게 나간다.** 끄려면 `MESSAGING_DRY_RUN=1`. — 사용자 결정 + 운영자 조치
-- [ ] **쇼룸 공휴일 원천 자격을 확인한다.** `GOOGLE_SERVICE_ACCOUNT_EMAIL`/`GOOGLE_PRIVATE_KEY` 또는 `SHOWROOM_CALENDAR_ICS_URL`이
+- [x] (2026-09-21 확인: 운영 env 에 Google 서비스 계정·`SHOWROOM_CALENDAR_ICS_URL` 있음, 라이브 `/api/showroom/availability` 가 `sources.holidays=true, showroomCalendar=true`.) **쇼룸 공휴일 원천 자격을 확인한다.** `GOOGLE_SERVICE_ACCOUNT_EMAIL`/`GOOGLE_PRIVATE_KEY` 또는 `SHOWROOM_CALENDAR_ICS_URL`이
   비면 공휴일 목록이 조용히 빈 배열이 되어 설·추석이 예약 가능일로 열린다(화면에 저하 신호 없음). 도입 신청 희망일 차단도 같은
   원천을 쓴다. 근거: 퍼널 기획 §3-2 S9. — 운영자 확인
 
@@ -43,16 +48,16 @@
 
 적용 목록·순서·미적용 시 증상은 [DB 마이그레이션 런북](./db-migration-runbook.md) "2026-09-21 통합 시점" 표가 정본이다.
 
-- [ ] **`20260921_checkout_requests_lead_qualifiers.sql` — 배포 전 필수.** 도입 신청 insert가 `role`·`academy_size`를 무조건 실어
+- [x] **`20260921_checkout_requests_lead_qualifiers.sql` — 배포 전 필수.** 도입 신청 insert가 `role`·`academy_size`를 무조건 실어
   미적용이면 신청이 500으로 끊긴다.
-- [ ] 광고 채널 3종(`20260914_ad_channel_daily` → `campaign_links_ad_channels` → `leads_naver_attribution`). 크론이 쓸 테이블이 없으면
+- [x] 광고 채널 3종(`20260914_ad_channel_daily` → `campaign_links_ad_channels` → `leads_naver_attribution`). 크론이 쓸 테이블이 없으면
   upsert에서 죽고, `leads.naver_ad`가 없는 동안의 네이버 유입 귀속은 소급 복구할 수 없다. 네이버·Google 광고를 켜기 전에.
-- [ ] `20260914_compass_integration_bridge.sql` → `20260914_leads_phone_key.sql`(이 순서). 뒤 파일은 앞 파일이 만드는
+- [x] `20260914_compass_integration_bridge.sql` → `20260914_leads_phone_key.sql`(이 순서). 브리지는 적용 전 보강판(뷰의 service_role 쓰기 권한 회수, 20260828 기존 뷰 7개 포함)으로 적용했다. 뒤 파일은 앞 파일이 만드는
   `norm_phone_key()`를 부른다. Compass 쪽 선행 배포·재실행 조건은 [compass-integration](./compass-integration-2026-09-14.md) §0·§2.
-- [ ] `20260828_channel_match_rpc_single_overload.sql`. 적용 전까지 `check:alpha-db`가 이 프로브에서 blocked다(의도된 신호) —
+- [x] `20260828_channel_match_rpc_single_overload.sql`. 적용 전까지 `check:alpha-db`가 이 프로브에서 blocked다(의도된 신호) —
   내부 CS 코파일럿의 "과거 상담 사례" 근거가 2026-07-16부터 빈 배열이었다.
-- [ ] `20260921_lead_source_intake_split.sql`(멱등 백필). 미적용이면 과거 쇼룸·도입 신청 리드가 계속 `contact_page`로 집계된다.
-- [ ] 적용 뒤 `npm run check:db -- --strict`, `npm run check:alpha-db`.
+- [x] `20260921_lead_source_intake_split.sql`(멱등 백필 — 배포 직후 실행, 대상 0행). 미적용이면 과거 쇼룸·도입 신청 리드가 계속 `contact_page`로 집계된다.
+- [ ] 적용 뒤 `npm run check:db -- --strict`, `npm run check:alpha-db`. — 파일별 확인은 읽기 전용 SQL 로 마쳤다. 두 스크립트는 로컬 `.env.local` 이 서울 URL·키로 바뀐 뒤 한 번 돌린다(위 1-1 첫 항목).
 
 ### 1-3. 이번 배포에 함께 나가는 동작 변화 (알고 내보낸다)
 
@@ -161,3 +166,13 @@
 - 이미 다른 형태로 운영 기준선에 들어가 있던 것: Supabase 최적화 리뷰의 perf 커밋들, 한국 리전 기록, 캘린더 범위 선택.
 - 기준선이 그 뒤로 재설계돼 자리가 없어진 것: 공개 페이지 서버/클라이언트 분리(7월), 홈 Overview의 CRM 런처, 캠페인 화면
   스켈레톤·포커스, "죽은 JSON CRUD 정리"(적용하면 `lib/repositories/bugs.ts`가 컴파일되지 않는다 — 전제가 무너졌다).
+
+## 7. 운영 반영 중 새로 발견한 것 (2026-09-21)
+
+- [ ] **한글 slug 블로그 글이 500.** 예: `/blog/naver-2026-06-11-최대-500만원-…`. Vercel 런타임 로그
+  `TypeError: Invalid character in header content ["x-next…`. 배포 **전** 빌드(17:20 KST)에서도 같은 오류가 있었고 이번 배포 뒤에도
+  재현된다 — 이번 통합의 회귀가 아니다. `app/blog/[slug]/page.tsx` 는 ISR(`revalidate=3600`, `dynamicParams`)이고, 디코딩된
+  한글 경로가 Next 내부 헤더에 들어가는 것으로 보인다. 네이버에서 가져온 글이 이 형태라 SEO 영향이 있다. — 개발 작업(별도 세션으로 분리)
+- [ ] **Compass 브리지 뷰 권한 보강의 Compass 쪽 반영 확인.** 이번에 20260828 브리지 뷰 7개와 새 뷰 6개에서 service_role 쓰기 권한을
+  회수했다. 어드민 앱은 읽기만 하므로 영향이 없지만, Compass 저장소가 같은 뷰에 쓰는 경로가 있는지 한 번 확인한다(없을 것으로 본다 —
+  뷰 주석이 "쓰기 금지"다). — Compass 담당 확인

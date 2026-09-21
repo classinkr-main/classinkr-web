@@ -28,6 +28,10 @@
   이관 전 값이다. 그 상태에서는 DB를 읽는 모든 로컬 작업(`check:db`, `check:alpha-db`, `npm run build`의
   postbuild `check:public-content` 등)이 `fetch failed`·쓰기 거절로 실패한다 — 코드 문제로 오인하지 말고
   서울 프로젝트의 URL·publishable key·secret key로 교체한다. 키 값은 문서·로그·커밋에 남기지 않는다.
+- **main push 는 Preview 만 만든다 — 운영 배포는 따로 한다.** Vercel 대시보드에서 main 의 Ready 배포를 "Promote to Production"
+  (운영 env 로 다시 빌드한 뒤 classin.co.kr 에 연결)하거나, Vercel 배포 API(`POST /v13/deployments`, `target: "production"`,
+  `gitSource.ref: "main"` + sha)로 한다. 운영 배포 전에 그 코드가 요구하는 마이그레이션을 서울 프로젝트에 먼저 적용하고,
+  배포 뒤에는 라이브 사이트에서 새 코드 흔적·런타임 로그를 확인한다(2026-09-21 절차: `docs/active/integration-followups-2026-09-21.md`).
 - 마이그레이션은 수동 적용이다. 적용 대상·순서는 [DB 마이그레이션 런북](docs/active/db-migration-runbook.md),
   적용 여부 확인은 `npm run check:db`(`lib/db/schema-contract.ts`)로 한다. 2026-09-14 이전에 적용된 것은
   DB 복제로 서울에 그대로 넘어갔고, 그 뒤에 만든 마이그레이션은 서울 프로젝트에 직접 적용해야 한다.
