@@ -98,8 +98,9 @@
   (같은 절의 "우선순위 큐 무효화 함수에 호출자가 없다"는 이미 해소됐다 — `crm-priority-queue.ts`가 리드·할 일·연락 기록 변이에 등록한다.)
 - [ ] `compass/adsets` 라우트는 아직 route-local 메모 + 행 수 근사 절단 판정이다. 같은 계열 `compass/ads`는 Data Cache +
   브리지 `truncated`로 옮겨졌다 — 같은 패턴으로 맞춘다.
-- [ ] 미러링 경로의 귀속 정규화를 `sanitizeLeadAttribution` 하나로 통일하면서 `lib/marketing-attribution.ts`의
-  `pickLeadAttribution`은 테스트만 부른다. 제거하거나 위임으로 바꾼다.
+- [x] (2026-09-21 제거: 계약 테스트는 `tests/crm/lead-attribution-payload.test.ts`로 옮기고, 수집기 결과를 폼 본문에
+  평평하게 펼쳐 보낸 값이 서버 정규화를 그대로 왕복하는지 잠갔다.) 미러링 경로의 귀속 정규화를 `sanitizeLeadAttribution`
+  하나로 통일하면서 `lib/marketing-attribution.ts`의 `pickLeadAttribution`은 테스트만 부른다. 제거하거나 위임으로 바꾼다.
 - [ ] 태그 관리 화면의 행 클릭 → 통합 고객 `?tag=` 딥링크 미배선, `customerSourceTone()`의 팔레트 밖 색상, 리드 보드의
   신선도 캡션 생략(`generatedAt` 없음) — CRM 기획 §10의 라운드별 "후속".
 - [x] (2026-09-21: `site_settings` 컬럼·overview 카탈로그 프로브 추가, CHECK 전용 `lead_digest_runs`는 주석의 제약 조회로 대체 — 서울 `check:db` 실행은 남음.) `schema-contract.ts`에 프로브가 없는 최근 마이그레이션 3건(런북 "프로브가 없던 최근 파일").

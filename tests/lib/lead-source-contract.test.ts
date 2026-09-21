@@ -6,7 +6,6 @@ import {
   WEBSITE_FORM_LEAD_SOURCES,
 } from "@/lib/lead-types"
 import { getSourceGroup, SOURCE_GROUP_LABEL, SOURCE_GROUP_ORDER } from "@/lib/crm/lead-attribution"
-import { pickLeadAttribution } from "@/lib/marketing-attribution"
 
 /**
  * 리드 source 계약.
@@ -66,50 +65,5 @@ describe("유입 그룹 매핑", () => {
   })
 })
 
-describe("pickLeadAttribution", () => {
-  it("알려진 귀속 필드만 고른다", () => {
-    expect(
-      pickLeadAttribution({
-        utmSource: "meta",
-        utmCampaign: "omo-2026",
-        gclid: "abc",
-        fbclid: "def",
-        landingPage: "https://classin.co.kr/l/omo1",
-        referrer: "https://www.google.com/",
-        // 아래는 귀속 필드가 아니다 — 통과하면 리드 페이로드가 오염된다.
-        phone: "010-1234-5678",
-        source: "checkout_request",
-        status: "converted",
-      })
-    ).toEqual({
-      utmSource: "meta",
-      utmCampaign: "omo-2026",
-      gclid: "abc",
-      fbclid: "def",
-      landingPage: "https://classin.co.kr/l/omo1",
-      referrer: "https://www.google.com/",
-    })
-  })
-
-  it("공백만 있는 값은 버린다", () => {
-    expect(pickLeadAttribution({ utmSource: "   ", utmMedium: "cpc" })).toEqual({
-      utmMedium: "cpc",
-    })
-  })
-
-  it("문자열이 아닌 값은 버린다", () => {
-    expect(pickLeadAttribution({ utmSource: 42, gclid: null, fbclid: ["a"] })).toEqual({})
-  })
-
-  it("500자를 넘는 값은 자른다", () => {
-    const long = "x".repeat(900)
-    const picked = pickLeadAttribution({ landingPage: long })
-    expect(picked.landingPage).toHaveLength(500)
-  })
-
-  it("객체가 아니면 빈 값이다", () => {
-    expect(pickLeadAttribution(null)).toEqual({})
-    expect(pickLeadAttribution("utmSource=meta")).toEqual({})
-    expect(pickLeadAttribution([{ utmSource: "meta" }])).toEqual({})
-  })
-})
+// 본문 → 귀속 필드 정규화 계약은 tests/crm/lead-attribution-payload.test.ts 가 정본이다
+// (서버 정규화기 sanitizeLeadAttribution 하나로 통일됐다).
