@@ -113,16 +113,16 @@ describe("외부 피드(노션·쇼룸)", () => {
 })
 
 describe("팀원 캘린더 접근", () => {
-  it("실측 상황: 9명 구성 · 0명 접근 → dead '9명 공유 필요'", () => {
+  it("실측 상황: 9명 구성 · 0명 접근 → dead '위임 미부여'", () => {
     const health = deriveTeamAccessHealth({ configured: 9, accessible: 0 })
     expect(health.status).toBe("dead")
-    expect(health.headline).toBe("9명 공유 필요")
+    expect(health.headline).toBe("위임 미부여")
   })
 
   it("일부만 접근되면 stale + 남은 인원", () => {
     const health = deriveTeamAccessHealth({ configured: 9, accessible: 6 })
     expect(health.status).toBe("stale")
-    expect(health.headline).toBe("3명 공유 필요")
+    expect(health.headline).toBe("3명 확인 필요")
     expect(health.detail).toBe("6/9명 연결됨")
   })
 

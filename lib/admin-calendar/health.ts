@@ -187,15 +187,18 @@ export function deriveTeamAccessHealth(input: {
     return {
       source: "team_event",
       status: "dead",
-      headline: `${input.configured}명 공유 필요`,
-      detail: "서비스 계정에 캘린더 공유",
+      // 2026-09-21: 개인별 공유가 아니라 도메인 전체 위임으로 읽는다. 전원이 0명이면
+      // 대개 위임이 아직 안 걸린 것이라, 9명에게 각자 공유하라고 말하면 틀린 조치를 시킨다.
+      headline: "위임 미부여",
+      detail: "관리 콘솔에서 calendar.readonly 도메인 위임 승인",
     }
   }
   if (input.accessible < input.configured) {
     return {
       source: "team_event",
       status: "stale",
-      headline: `${input.configured - input.accessible}명 공유 필요`,
+      // 일부만 안 열리는 건 위임 문제가 아니다 — 그 사람 캘린더 쪽 사정이다
+      headline: `${input.configured - input.accessible}명 확인 필요`,
       detail: `${input.accessible}/${input.configured}명 연결됨`,
     }
   }
