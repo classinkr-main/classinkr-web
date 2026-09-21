@@ -648,7 +648,7 @@ export async function findLeadsByContacts(contacts: {
   phones: string[];
   emails: string[];
 }): Promise<
-  Pick<LeadRecord, "id" | "phone" | "email" | "status" | "timestamp" | "last_inflow_at" | "notes">[]
+  Pick<LeadRecord, "id" | "phone" | "email" | "source" | "status" | "timestamp" | "last_inflow_at" | "notes">[]
 > {
   const phones = contacts.phones.map((phone) => phone.trim()).filter(Boolean);
   const emails = contacts.emails.map((email) => email.trim()).filter(Boolean);
@@ -671,6 +671,7 @@ export async function findLeadsByContacts(contacts: {
         id: lead.id,
         phone: lead.phone,
         email: lead.email,
+        source: lead.source,
         status: lead.status,
         timestamp: lead.timestamp,
         notes: lead.notes,
@@ -683,11 +684,13 @@ export async function findLeadsByContacts(contacts: {
   const supabase = createSupabaseAdminClient();
   // notes 는 행사 신청 토큰([event:slug], notes 첫 줄) 판정용 — 재유입 병합이 다른 행사의
   // 신청 집계를 덮어쓰지 않게 호출부가 본다(lib/server/lead-capture.ts).
-  const CONTACT_COLUMNS = "id, phone, email, status, created_at, last_inflow_at, notes";
+  // source 는 재유입 병합 대상을 응대 대상 소스 행으로 좁히는 데 쓴다(lib/server/lead-capture.ts pickReinflowTarget).
+  const CONTACT_COLUMNS = "id, phone, email, source, status, created_at, last_inflow_at, notes";
   type ContactRow = {
     id: string;
     phone: string | null;
     email: string | null;
+    source: LeadRecord["source"];
     status: LeadRecord["status"];
     created_at: string;
     last_inflow_at: string | null;
@@ -732,13 +735,14 @@ export async function findLeadsByContacts(contacts: {
   // 전화·이메일 양쪽에 걸린 리드가 두 번 세이지 않게 id로 합친다.
   const byId = new Map<
     string,
-    Pick<LeadRecord, "id" | "phone" | "email" | "status" | "timestamp" | "last_inflow_at" | "notes">
+    Pick<LeadRecord, "id" | "phone" | "email" | "source" | "status" | "timestamp" | "last_inflow_at" | "notes">
   >();
   for (const row of [...phoneRows, ...((emailRes.data ?? []) as unknown as ContactRow[])]) {
     byId.set(row.id, {
       id: row.id,
       phone: row.phone ?? undefined,
       email: row.email ?? undefined,
+      source: row.source,
       status: row.status,
       timestamp: row.created_at,
       last_inflow_at: row.last_inflow_at ?? undefined,

@@ -297,7 +297,7 @@ function buildLeadNotificationMessage(body: LeadPayload) {
 
 type ReinflowCandidate = Pick<
   LeadRecord,
-  "id" | "phone" | "email" | "status" | "timestamp" | "last_inflow_at" | "notes"
+  "id" | "phone" | "email" | "source" | "status" | "timestamp" | "last_inflow_at" | "notes"
 >
 
 const MERGEABLE_LEAD_STATUSES = new Set<LeadRecord["status"]>(["new", "contacted"])
@@ -305,10 +305,15 @@ const MERGEABLE_LEAD_STATUSES = new Set<LeadRecord["status"]>(["new", "contacted
 /**
  * 재유입 병합 대상 선정 — new/contacted만 후보로 본다. converted/closed는 이미 끝난 딜이라
  * 병합하지 않고 새 리드로 쌓는다("다시 온 고객"과 "이미 끝난 건"을 섞지 않기 위해서다).
+ * 후보 행의 소스도 응대 대상(RESPONSE_TARGET_SOURCES)이어야 한다 — 같은 연락처의 뉴스레터 구독·
+ * 자료 다운로드 행(status new)에 데모·문의 신청을 합치면, 소스로 거르는 아침 공지·다이제스트·응대 SLA
+ * 어디에도 그 신청이 잡히지 않는다(2026-09-21 재유입 집계 검토에서 발견). 그런 행만 있으면 새 리드로 쌓는다.
  * 후보가 여럿이면 가장 최근(timestamp 내림차순) 1건만 합친다.
  */
 function pickReinflowTarget(candidates: ReinflowCandidate[]): ReinflowCandidate | null {
-  const mergeable = candidates.filter((lead) => MERGEABLE_LEAD_STATUSES.has(lead.status))
+  const mergeable = candidates.filter(
+    (lead) => MERGEABLE_LEAD_STATUSES.has(lead.status) && RESPONSE_TARGET_SOURCES.has(lead.source)
+  )
   if (mergeable.length === 0) return null
   return mergeable.reduce((latest, lead) =>
     new Date(lead.timestamp).getTime() > new Date(latest.timestamp).getTime() ? lead : latest

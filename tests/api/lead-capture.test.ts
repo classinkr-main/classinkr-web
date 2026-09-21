@@ -391,6 +391,7 @@ describe("submitLeadCapture reinflow merge", () => {
       {
         id: "lead-existing-new",
         phone: baseLead.phone,
+        source: baseLead.source,
         status: "new",
         timestamp: "2026-09-01T00:00:00.000Z",
         last_inflow_at: "2026-09-01T00:00:00.000Z",
@@ -434,6 +435,7 @@ describe("submitLeadCapture reinflow merge", () => {
       {
         id: "lead-existing-closed",
         phone: baseLead.phone,
+        source: baseLead.source,
         status: "closed",
         timestamp: "2026-09-01T00:00:00.000Z",
         last_inflow_at: "2026-09-01T00:00:00.000Z",
@@ -452,6 +454,69 @@ describe("submitLeadCapture reinflow merge", () => {
     })
     expect(saveLead).toHaveBeenCalledTimes(1)
     expect(touchLeadInflow).not.toHaveBeenCalled()
+  })
+
+  it("does not merge a demo/contact request into a newsletter or lead-magnet row of the same contact", async () => {
+    // 뉴스레터·자료 다운로드 행은 아침 공지·다이제스트·응대 SLA 가 소스로 걸러 보지 않는다 — 거기에 합치면
+    // 데모·문의 신청이 영업 눈에서 사라진다. 응대 대상 소스 행이 없으면 새 리드로 쌓는다.
+    const { submitLeadCapture, saveLead, findLeadsByContacts, touchLeadInflow } =
+      await loadLeadCapture()
+    findLeadsByContacts.mockResolvedValue([
+      {
+        id: "lead-newsletter",
+        phone: baseLead.phone,
+        email: "customer@example.com",
+        source: "newsletter",
+        status: "new",
+        timestamp: "2026-09-10T00:00:00.000Z",
+        last_inflow_at: "2026-09-10T00:00:00.000Z",
+      },
+      {
+        id: "lead-magnet",
+        phone: baseLead.phone,
+        source: "lead_magnet",
+        status: "new",
+        timestamp: "2026-09-12T00:00:00.000Z",
+        last_inflow_at: "2026-09-12T00:00:00.000Z",
+      },
+    ])
+    saveLead.mockResolvedValue({ id: "lead-new-contact" })
+
+    const result = await submitLeadCapture(baseLead)
+
+    expect(result.status).toBe(200)
+    expect(result.body).toMatchObject({ ok: true, stored: true, leadId: "lead-new-contact", merged: false })
+    expect(saveLead).toHaveBeenCalledTimes(1)
+    expect(touchLeadInflow).not.toHaveBeenCalled()
+  })
+
+  it("merges into the response-target row even when a newer newsletter row shares the contact", async () => {
+    const { submitLeadCapture, saveLead, findLeadsByContacts, touchLeadInflow } =
+      await loadLeadCapture()
+    findLeadsByContacts.mockResolvedValue([
+      {
+        id: "lead-demo-older",
+        phone: baseLead.phone,
+        source: "demo_modal",
+        status: "contacted",
+        timestamp: "2026-09-01T00:00:00.000Z",
+        last_inflow_at: "2026-09-01T00:00:00.000Z",
+      },
+      {
+        id: "lead-newsletter-newer",
+        phone: baseLead.phone,
+        source: "newsletter",
+        status: "new",
+        timestamp: "2026-09-15T00:00:00.000Z",
+        last_inflow_at: "2026-09-15T00:00:00.000Z",
+      },
+    ])
+
+    const result = await submitLeadCapture(baseLead)
+
+    expect(result.body).toMatchObject({ ok: true, merged: true, leadId: "lead-demo-older" })
+    expect(saveLead).not.toHaveBeenCalled()
+    expect(touchLeadInflow).toHaveBeenCalledWith("lead-demo-older", expect.any(String))
   })
 
   it("falls back to inserting a new lead when the reinflow candidate lookup throws", async () => {
@@ -480,6 +545,7 @@ describe("submitLeadCapture reinflow merge", () => {
       {
         id: "lead-existing-new",
         phone: baseLead.phone,
+        source: baseLead.source,
         status: "new",
         timestamp: "2026-09-01T00:00:00.000Z",
         last_inflow_at: "2026-09-01T00:00:00.000Z",
@@ -511,6 +577,7 @@ describe("submitLeadCapture reinflow merge", () => {
       {
         id: "lead-existing-new",
         phone: baseLead.phone,
+        source: baseLead.source,
         status: "new",
         timestamp: "2026-09-01T00:00:00.000Z",
         last_inflow_at: "2026-09-01T00:00:00.000Z",
