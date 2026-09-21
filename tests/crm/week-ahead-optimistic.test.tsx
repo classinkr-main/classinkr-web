@@ -11,14 +11,20 @@ vi.mock("@/components/admin/crm/useCrmOwners", () => ({
   buildOwnerSelectOptions: () => [],
 }))
 
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
+
 import CrmWeekAheadPanel, {
   WEEK_AHEAD_UNDO_WINDOW_MS,
+  buildDueAtRestoreBody,
   focusTargetAfterTaskRemoval,
   patchTaskRow,
   removeTaskRow,
   restoreTaskRow,
+  snoozeUndoRestoredMessage,
   visibleTaskOrder,
 } from "@/components/admin/crm/CrmWeekAheadPanel"
+import { classifyTaskBucket } from "@/lib/crm/week-ahead"
 import type { CrmTaskRecord, ListCrmTasksResult } from "@/lib/repositories/crm-tasks"
 
 const NOW = Date.UTC(2026, 8, 15, 3, 0, 0) // 2026-09-15 12:00 KST
@@ -95,6 +101,53 @@ describe("CrmWeekAheadPanel 낙관 갱신 헬퍼", () => {
 
   it("되돌리기 창은 8초", () => {
     expect(WEEK_AHEAD_UNDO_WINDOW_MS).toBe(8_000)
+  })
+})
+
+// 기한 없던 할 일의 '내일로' 되돌리기(crm-tab-develop-plan §10 후속, 2026-09-21) — 서버 update가
+// dueAt: null을 "기한 지움"으로 받게 되면서 클라이언트도 null을 실제로 보내야 한다.
+describe("CrmWeekAheadPanel 미루기 되돌리기 — 기한 복원", () => {
+  it("원래 기한이 없던 할 일은 dueAt: null을 JSON 바디에 명시해 보낸다(undefined로 키가 빠지지 않게)", () => {
+    const body = buildDueAtRestoreBody(makeTask("a", { dueAt: null }))
+    expect(body).toEqual({ action: "update", dueAt: null })
+    const wire = JSON.parse(JSON.stringify(body)) as Record<string, unknown>
+    expect(wire).toHaveProperty("dueAt", null)
+  })
+
+  it("원래 기한이 있던 할 일은 그 기한을 그대로 보낸다", () => {
+    const dueAt = "2026-09-14T00:00:00.000Z"
+    expect(buildDueAtRestoreBody(makeTask("a", { dueAt }))).toEqual({ action: "update", dueAt })
+  })
+
+  it("복원된 행은 기한 없음 버킷으로 돌아가고, 문구도 기한 없음으로 돌아갔다고 밝힌다", () => {
+    const original = makeTask("a", { dueAt: null, title: "견적 회신" })
+    const restored = { ...original, dueAt: buildDueAtRestoreBody(original).dueAt }
+    expect(classifyTaskBucket(restored, NOW)).toBe("nodue")
+
+    const message = snoozeUndoRestoredMessage(original)
+    expect(message).toContain("'견적 회신' 미루기를 되돌렸습니다")
+    expect(message).toContain("기한 없는 할 일")
+    expect(message).not.toContain("내일 오전 9시로 남")
+  })
+
+  it("기한이 있던 할 일의 문구는 복원한 기한을 말한다", () => {
+    const message = snoozeUndoRestoredMessage(makeTask("a", { dueAt: "2026-09-14T00:00:00.000Z", title: "데모" }))
+    expect(message).toContain("'데모' 미루기를 되돌렸습니다 — 기한 ")
+    expect(message).toContain("로 복원.")
+  })
+
+  it("되돌리기 흐름은 기한 유무와 무관하게 미루기면 항상 기한 복원 단계를 탄다(소스 계약)", () => {
+    const source = readFileSync(join(process.cwd(), "components/admin/crm/CrmWeekAheadPanel.tsx"), "utf8").replace(
+      /\r\n/g,
+      "\n"
+    )
+    // 이전 결함: 기한 없는 할 일은 복원 단계를 건너뛰어 기한이 내일 09:00으로 남았다.
+    expect(source).not.toContain("if (!task.dueAt) return")
+    expect(source).not.toContain('action === "snooze" && task.dueAt')
+    expect(source).toContain('if (action === "snooze") {\n        await restoreTaskDueAt(task, reopened)')
+    // 복원 PATCH는 buildDueAtRestoreBody로만 만든다(null 명시가 한 곳에서 보장되도록).
+    expect(source).toContain("const body = buildDueAtRestoreBody(task)")
+    expect(source).toContain('adminFetchJson(taskUrl, { method: "PATCH", body: JSON.stringify(body) })')
   })
 })
 
