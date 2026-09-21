@@ -21,6 +21,7 @@ import {
   type InternalCsChatTurn,
   type InternalCsRequestedMode,
 } from "@/lib/internal-cs-chat/gemini"
+import { redactInternalCsText } from "@/lib/internal-cs-chat/privacy"
 import {
   getInternalCsConversation,
   listInternalCsRegressionEvalCandidates,
@@ -302,9 +303,10 @@ export async function judgeRegression(input: {
         parts: [
           {
             text: [
-              `질문:\n${input.question}`,
-              `기준 답변(담당자 확정 정답):\n${input.reference}`,
-              `재생성 답변(현재 모델 초안):\n${input.regenerated}`,
+              // 심판도 외부 모델이다 — 원 질문·교정본에 섞인 고객 식별정보를 경계에서 가린다.
+              `질문:\n${redactInternalCsText(input.question)}`,
+              `기준 답변(담당자 확정 정답):\n${redactInternalCsText(input.reference)}`,
+              `재생성 답변(현재 모델 초안):\n${redactInternalCsText(input.regenerated)}`,
               "위 재생성 답변을 기준 답변에 비추어 pass/needs_fix 로 판정하고, 사유를 한국어 한두 문장으로 적어라.",
             ].join("\n\n"),
           },

@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
-import { promoteMessageToInternalArticle } from "@/lib/internal-cs-chat/internal-article-writer"
+import {
+  embedInternalText,
+  promoteMessageToInternalArticle,
+} from "@/lib/internal-cs-chat/internal-article-writer"
+import { redactInternalCsText } from "@/lib/internal-cs-chat/privacy"
 import {
   getInternalCsMessageById,
   isInternalCsChatNotReadyError,
@@ -40,6 +44,10 @@ export async function POST(req: NextRequest, context: Context) {
       messageId: message.id,
       conversationId: message.conversation_id,
       correctedContent,
+      // 임베딩 API 도 외부 모델이다 — 청크 원문은 그대로 저장하되 임베딩 입력만 PII 를 가린다.
+      // (질의 쪽도 redacted 질문으로 임베딩하므로 같은 토큰 공간에서 매칭된다.) internal-article-writer 는
+      // seed 스크립트가 tsx 로 직접 실행해 server-only 경계를 import 할 수 없어 라우트에서 주입한다.
+      embed: (text) => embedInternalText(redactInternalCsText(text)),
     })
 
     // searchable: 모든 청크 임베딩 성공 = 벡터 검색으로 즉시 노출. 실패분이 있으면 문서는

@@ -69,6 +69,26 @@ describe("internal CS image analysis", () => {
     expect(body.generationConfig).toMatchObject({ responseMimeType: "application/json" })
   })
 
+  it("redacts PII from the file name and CS instruction before model delivery", async () => {
+    vi.stubEnv("GEMINI_API_KEY", "test-key")
+    const fetchMock = vi.fn().mockResolvedValue(geminiResponse(modelJson))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await analyzeInternalCsImage({
+      bytes: Uint8Array.from([0x89, 0x50, 0x4e, 0x47]),
+      mimeType: "image/png",
+      fileName: "customer-010-1234-5678.png",
+      instruction: "customer@example.com 고객의 결제 화면 확인",
+    })
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const prompt = JSON.parse(String(init.body)).contents[0].parts[0].text as string
+    expect(prompt).toContain("File name: customer-[phone].png")
+    expect(prompt).toContain("[email] 고객의 결제 화면 확인")
+    expect(prompt).not.toContain("010-1234-5678")
+    expect(prompt).not.toContain("customer@example.com")
+  })
+
   it("uses latest Pro only for deep analysis, then falls back through the safe chain", async () => {
     vi.stubEnv("GEMINI_API_KEY", "test-key")
     const fetchMock = vi
