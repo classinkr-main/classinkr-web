@@ -107,6 +107,12 @@ describe("CRM tasks", () => {
     expect(buildCrmTaskEditPatch({})).toEqual({})
   })
 
+  it("distinguishes an absent dueAt (unchanged) from null (clear) and a date string (set)", () => {
+    expect(buildCrmTaskEditPatch({ dueAt: undefined })).toEqual({})
+    expect(buildCrmTaskEditPatch({ dueAt: null })).toEqual({ due_at: null })
+    expect(buildCrmTaskEditPatch({ dueAt: "2026-09-22T09:00:00+09:00" })).toEqual({ due_at: "2026-09-22T00:00:00.000Z" })
+  })
+
   it("maps a db row into a camelCase record", () => {
     const row: CrmTask = {
       id: "task-1",

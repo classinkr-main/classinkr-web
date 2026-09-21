@@ -22,6 +22,27 @@ function optionalString(value: unknown) {
   return typeof value === "string" ? value : undefined
 }
 
+type DueAtPatch = { ok: true; dueAt: string | null | undefined } | { ok: false; error: string }
+
+/**
+ * update 액션의 dueAt 3상태 — 키 없음 = 기한 그대로, null = 기한 지움, 날짜 문자열 = 그 시각으로 설정.
+ * 빈 문자열도 지움으로 받는다(기존 동작 — 비운 날짜 입력칸이 ""를 보낸다).
+ * 이전엔 optionalString이 null을 undefined(=그대로)로 버려 기한 없던 할 일의 '내일로' 되돌리기가
+ * 기한을 지우지 못했고, 반대로 파싱 안 되는 문자열은 저장소 nullableIso가 null로 바꿔 기한을
+ * 조용히 지웠다. 이제 둘 다 명시적으로 갈라, 해석 못 하는 값은 400으로 거절한다.
+ */
+function parseDueAtPatch(raw: Record<string, unknown>): DueAtPatch {
+  const value = raw.dueAt
+  if (value === undefined) return { ok: true, dueAt: undefined }
+  if (value === null) return { ok: true, dueAt: null }
+  if (typeof value !== "string") return { ok: false, error: "dueAt must be a date string or null" }
+  const trimmed = value.trim()
+  if (!trimmed) return { ok: true, dueAt: null }
+  const time = new Date(trimmed).getTime()
+  if (Number.isNaN(time)) return { ok: false, error: "Invalid dueAt" }
+  return { ok: true, dueAt: new Date(time).toISOString() }
+}
+
 function notReadyResponse(error: unknown) {
   if (isCrmTasksNotReadyError(error)) {
     return NextResponse.json({ error: error.message }, { status: 503 })
@@ -68,16 +89,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         task = await reassignCrmTask(id, { ownerKey, ownerNameSnapshot, assignedBy: actor })
         break
       }
-      case "update":
+      case "update": {
+        const due = parseDueAtPatch(raw)
+        if (!due.ok) return NextResponse.json({ error: due.error }, { status: 400 })
         task = await updateCrmTask(id, {
           title: optionalString(raw.title),
           detail: optionalString(raw.detail),
-          dueAt: optionalString(raw.dueAt),
+          dueAt: due.dueAt,
           priority: optionalString(raw.priority) as CrmTaskRecord["priority"] | undefined,
           taskType: optionalString(raw.taskType) as CrmTaskRecord["taskType"] | undefined,
           targetLabel: optionalString(raw.targetLabel),
         })
         break
+      }
       default:
         return NextResponse.json({ error: `Unsupported action: ${action}` }, { status: 400 })
     }
