@@ -194,6 +194,10 @@
   `TypeError: Invalid character in header content ["x-next…`. 배포 **전** 빌드(17:20 KST)에서도 같은 오류가 있었고 이번 배포 뒤에도
   재현된다 — 이번 통합의 회귀가 아니다. `app/blog/[slug]/page.tsx` 는 ISR(`revalidate=3600`, `dynamicParams`)이고, 디코딩된
   한글 경로가 Next 내부 헤더에 들어가는 것으로 보인다. 네이버에서 가져온 글이 이 형태라 SEO 영향이 있다. — 개발 작업(별도 세션으로 분리)
+- [ ] 한글 slug 수정의 후속(검토 비차단): ① `/events/[slug]`·`/resources/[slug]`도 ISR 이라 같은 원인에 노출된다 — 2026-09-21 운영에
+  한글 slug 행사 1건(광주 세미나)이 있으나 라이브 200 이라 지금은 증상이 없다. 증상이 나오면 `getBlogSlugTokenRewritePath`를 접두 목록으로
+  일반화한다. ② 네이버 가져오기 slug 상한(112자)에 가까운 한글 slug 는 토큰·캐시 태그가 400자를 넘는다 — Vercel 캐시 태그 길이 제한에
+  걸리면 그 글만 `revalidatePath`가 안 먹을 수 있어 긴 slug 글이 생기면 한 번 확인. ③ 없는 slug 가 404 가 아니라 200 "찾을 수 없음"이다(기존).
 - [ ] **Compass 브리지 뷰 권한 보강의 Compass 쪽 반영 확인.** 이번에 20260828 브리지 뷰 7개와 새 뷰 6개에서 service_role 쓰기 권한을
   회수했다. 어드민 앱은 읽기만 하므로 영향이 없지만, Compass 저장소가 같은 뷰에 쓰는 경로가 있는지 한 번 확인한다(없을 것으로 본다 —
   뷰 주석이 "쓰기 금지"다). — Compass 담당 확인
