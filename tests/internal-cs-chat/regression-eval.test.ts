@@ -282,6 +282,31 @@ describe("judgeRegression", () => {
     expect(fetchSpy.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal)
   })
 
+  it("redacts PII from the question and both answers before calling the external judge", async () => {
+    process.env.GEMINI_API_KEY = "test-key"
+    const fetchSpy = vi.fn<(url: string, init: { body: string }) => Promise<unknown>>(async () => ({
+      ok: true,
+      json: async () => ({
+        candidates: [{ content: { parts: [{ text: JSON.stringify({ outcome: "pass", rationale: "정합" }) }] } }],
+      }),
+    }))
+    vi.stubGlobal("fetch", fetchSpy)
+
+    await judgeRegression({
+      question: "010-1234-5678 고객 환불 문의",
+      reference: "customer@example.com 으로 안내 완료",
+      regenerated: "카드 4111 1111 1111 1111 확인 필요",
+    })
+
+    const promptText = JSON.parse(fetchSpy.mock.calls[0][1].body).contents[0].parts[0].text as string
+    expect(promptText).toContain("[phone]")
+    expect(promptText).toContain("[email]")
+    expect(promptText).toContain("[payment_number]")
+    expect(promptText).not.toContain("010-1234-5678")
+    expect(promptText).not.toContain("customer@example.com")
+    expect(promptText).not.toContain("4111 1111 1111 1111")
+  })
+
   it("returns null on a non-ok response or unparseable body, warning with the failure detail", async () => {
     process.env.GEMINI_API_KEY = "test-key"
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined)

@@ -14,6 +14,8 @@
 
 import "server-only"
 
+import { redactInternalCsText } from "@/lib/internal-cs-chat/privacy"
+
 export type InternalCsModelMode = "fast" | "deep"
 export type InternalCsRequestedMode = "auto" | InternalCsModelMode
 export type InternalCsRiskLevel = "low" | "medium" | "high"
@@ -245,12 +247,12 @@ function buildContents(input: GenerateInternalCsAnswerInput) {
     .slice(-MAX_HISTORY_TURNS)
     .map((turn) => ({
       role: turn.role,
-      parts: [{ text: trimTo(turn.text, MAX_HISTORY_TURN_LENGTH) }],
+      parts: [{ text: trimTo(redactInternalCsText(turn.text), MAX_HISTORY_TURN_LENGTH) }],
     }))
     .filter((turn) => Boolean(turn.parts[0].text))
 
-  const question = trimTo(input.question, MAX_QUESTION_LENGTH)
-  const context = trimTo(input.internalContext, MAX_CONTEXT_LENGTH)
+  const question = trimTo(redactInternalCsText(input.question), MAX_QUESTION_LENGTH)
+  const context = trimTo(redactInternalCsText(input.internalContext), MAX_CONTEXT_LENGTH)
   const prompt = [
     context ? `내부 참고 정보:\n${context}` : "내부 참고 정보: 없음",
     `담당자 질문:\n${question}`,

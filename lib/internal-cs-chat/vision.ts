@@ -5,6 +5,7 @@ import {
   type InternalCsModelMode,
   type InternalCsRequestedMode,
 } from "@/lib/internal-cs-chat/gemini"
+import { redactInternalCsText } from "@/lib/internal-cs-chat/privacy"
 
 export const INTERNAL_CS_VISION_MIME_TYPES = [
   "image/jpeg",
@@ -182,9 +183,12 @@ export async function analyzeInternalCsImage(
     8_000
   )
   const deadline = Date.now() + totalTimeoutMs
-  const instruction = trimTo(input.instruction, MAX_INSTRUCTION_LENGTH)
+  // 텍스트 입력(파일명·담당자 지시문)은 외부 모델 경계에서 PII 를 가린다. 지시문에는 generate 와 같은
+  // 원 질문이 그대로 실려 온다. 이미지 바이트 자체는 가릴 수 없어 분석 결과가 pending 검토로 남는다.
+  const instruction = trimTo(redactInternalCsText(input.instruction), MAX_INSTRUCTION_LENGTH)
+  const fileName = trimTo(redactInternalCsText(input.fileName), 200)
   const prompt = [
-    `File name: ${trimTo(input.fileName, 200) || "attachment"}`,
+    `File name: ${fileName || "attachment"}`,
     instruction ? `CS owner instruction: ${instruction}` : "Analyze visible CS evidence.",
     "Describe only what is visible. If text is unreadable, state that explicitly.",
   ].join("\n")
