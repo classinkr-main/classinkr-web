@@ -72,7 +72,12 @@
 
 ### 2-1. 재유입 병합의 후속 공백 (개발)
 
-- [ ] 재문의가 집계에서 빠진다. 어드민 리드를 생성 시각으로만 보는 곳: "오늘 유입" 카드(`lib/marketing/intake-feed.ts`의 어드민 리드
+- [x] (2026-09-21 완료: 판정은 `lib/crm/lead-reinflow.ts`의 `leadInflowInWindow`·`tallyLeadInflow` — 생성이 창 안이면 신규,
+  아니면 생성보다 60초 넘게 뒤인 `last_inflow_at`이 창 안일 때 재유입, 둘 다 창 안이면 신규 1건. 마케팅 리드 조회에
+  `last_inflow_at`을 선택 컬럼으로 추가(없으면 생성 시각 축으로 강등), "오늘 유입" 캐시 키 v3. 아침 공지·다이제스트·주간 보고서
+  "주말 유입"은 재유입이 있을 때만 "신규 N · 재유입 M"을 붙이고, 다이제스트 방치 시간은 최신 유입부터 잰다. 한계: `last_inflow_at`은
+  최신 재문의만 담아 직전 기간의 재문의가 나중 재문의로 덮이면 직전 기간 건수에서 빠진다.)
+  재문의가 집계에서 빠진다. 어드민 리드를 생성 시각으로만 보는 곳: "오늘 유입" 카드(`lib/marketing/intake-feed.ts`의 어드민 리드
   쪽 — Compass 리드는 이미 `created_at` 또는 `last_inflow_at`으로 센다), 아침 리드 공지(`lib/server/lead-morning-brief.ts`),
   주간·월간 다이제스트(`lib/server/lead-digest-alerts.ts`). `max(created_at, last_inflow_at)` 축으로 옮기고 신규/재유입을 가른다.
 - [ ] 재문의한 리드가 보드에서 다시 떠오르지 않는다 — 이식 문서가 후속으로 남긴 `isReinflowAwaitingContact` 배선. 종료·전환

@@ -152,8 +152,9 @@ export interface LeadRecord {
   // 네이버 검색광고 유입 파라미터(n_*). undefined = 미조회이거나 네이버 유입이 아님.
   // 키 목록·정규화는 lib/naver-ad-params.ts 가 정본.
   naver_ad?: NaverAdAttribution;
-  // 마지막 유입 시각(재유입 축, 20260828 마이그레이션). 저장 경로가 행을 병합하지 않으므로
-  // 지금은 생성 시각과 같다 — 재유입 판정은 lib/crm/lead-reinflow가 연락처 중복으로 도출한다.
+  // 마지막 유입 시각(재유입 축, 20260828 마이그레이션). 신규 저장 시 생성 시각과 같고, 응대 대상 소스의
+  // 재문의는 새 행 대신 이 값만 갱신된다(lib/server/lead-capture.ts 재유입 병합). 기간 유입 집계는
+  // lib/crm/lead-reinflow.ts leadInflowInWindow 로 생성 시각과 함께 본다.
   last_inflow_at?: string;
 }
 
@@ -267,7 +268,7 @@ function supabaseToLegacy(row: LeadRowWithInflow): LeadRecord {
     anonymous_id: row.anonymous_id ?? undefined,
     // JSONB 라 무엇이든 들어올 수 있다 — 목록 밖 키는 parseNaverAd 가 버린다.
     naver_ad: parseNaverAd(row.naver_ad) ?? undefined,
-    // 스코프 조회(대시보드·마케팅)는 이 컬럼을 select하지 않는다 — 그때는 undefined다.
+    // 전량(`*`)·마케팅 스코프만 이 컬럼을 select한다 — 대시보드·캠페인·보드 스코프에서는 undefined다.
     last_inflow_at: row.last_inflow_at ?? undefined,
   };
 }
@@ -504,13 +505,17 @@ const MARKETING_LEAD_COLUMN_LIST = [
   "gclid", "fbclid", "msclkid", "ttclid", "landing_page", "current_page",
   "naver_ad",
   "created_at", "confirmed_at",
+  // 재유입 축(20260828) — 재문의 병합(lib/server/lead-capture.ts)은 새 행 대신 이 컬럼만 갱신한다.
+  // "오늘 유입"(lib/marketing/intake-feed.ts)이 재문의를 재유입으로 세는 근거라 이 스코프에 싣는다.
+  "last_inflow_at",
 ] as const;
 
 // 마이그레이션 전 배포 창에서도 화면이 깨지지 않게 — 아직 없는 컬럼만 빼고 다시 읽는다(대시보드
 // 조회와 같은 폴백). naver_ad(20260914)는 저장 쪽에만 선택 컬럼 폴백이 있고 이 SELECT 에는 없어서,
 // 마이그레이션보다 코드가 먼저 나가면 마케팅 허브의 리드 집계가 42703 으로 통째로 실패했다 —
 // 런북의 "읽기 경로는 강등한다" 규칙대로 맞춘다. 빠진 컬럼은 supabaseToLegacy 가 undefined 로 둔다.
-const MARKETING_LEAD_OPTIONAL_COLUMNS = ["naver_ad", "confirmed_at"] as const;
+// last_inflow_at 이 빠지면 재문의가 재유입으로 잡히지 않을 뿐(생성 시각 축으로 강등), 집계는 산다.
+const MARKETING_LEAD_OPTIONAL_COLUMNS = ["naver_ad", "confirmed_at", "last_inflow_at"] as const;
 
 export async function getMarketingLeads(): Promise<LeadRecord[]> {
   if (!USE_SUPABASE) {

@@ -27,6 +27,7 @@ async function loadIntakeToday(): Promise<IntakeFeedResult> {
   const windows = resolveIntakeWindows()
 
   const [adminLeads, compass, adNames] = await Promise.all([
+    // 마케팅 스코프는 last_inflow_at 을 싣는다 — 재문의 병합 리드를 오늘 재유입으로 세는 근거다.
     getMarketingLeads().catch((): LeadRecord[] | null => null),
     // 어제 00:00 이후 생성 또는 재유입한 Compass 리드(브리지가 created_at·last_inflow_at 을 OR 로 읽는다).
     getCompassLeadsByInflowRange(windows.yesterdayStartIso, windows.nowIso),
@@ -72,7 +73,9 @@ export const getCachedIntakeToday = unstable_cache(
   // 인자가 없는 조회이므로 shareInFlight(콜드 인스턴스의 동시 미스를 한 번만 계산 + dev·test
   // JSON 안전성 검사)만으로 충분하다.
   // v2(2026-09-14): 응답에 reinflow·todayReinflowCount 가 붙고 Compass 신규가 들어온다 — 옛 모양 캐시를 재사용하지 않게.
-  () => shareInFlight("marketing-intake-today-v2", loadIntakeToday),
-  ["marketing-intake-today-v2"],
+  // v3(2026-09-21): 어드민 리드도 유입 축(생성 또는 재문의 last_inflow_at)으로 세고 재유입을 표시한다 — 같은 모양이지만
+  // 옛 값은 재문의가 빠진 건수라 섞이지 않게 키를 올린다.
+  () => shareInFlight("marketing-intake-today-v3", loadIntakeToday),
+  ["marketing-intake-today-v3"],
   { revalidate: 20, tags: [INTAKE_TODAY_CACHE_TAG] }
 )

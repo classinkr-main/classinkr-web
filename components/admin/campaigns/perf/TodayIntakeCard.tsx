@@ -16,6 +16,8 @@ import type { IntakeFeedItem, IntakeFeedResult } from "@/lib/marketing/intake-fe
 //  - Compass 리드는 신규(오늘 생성)와 재유입(이미 있던 리드가 오늘 다시 들어옴)을 함께 센다 — 합계 아래
 //    "신규 N · 재유입 k"로 가르고, 피드 줄에는 재유입 배지를 단다(2026-09-14 R2 F12). 인바운드 채널
 //    (채널톡·다이렉트·워크인·소개)은 Compass 대시보드처럼 마케팅 유입에서 뺀다.
+//  - 어드민 리드도 같은 축이다(2026-09-21) — 재문의는 새 행 대신 기존 리드에 병합되므로 오늘 재문의한
+//    기존 리드를 재유입으로 센다.
 
 const TTL_MS = 20_000
 export const INTAKE_TODAY_URL = "/api/admin/marketing/intake-today"
@@ -131,7 +133,7 @@ function ReinflowMark({ reinflow }: { reinflow: boolean }) {
   return (
     <span
       className="shrink-0 rounded border border-[#ECD29C] bg-[#FBF1E0] px-1 py-px text-[9.5px] font-medium text-[#7A520F]"
-      title="Compass 에 이미 있던 리드가 다시 들어왔습니다"
+      title="이미 있던 리드가 다시 들어왔습니다(어드민 재문의 또는 Compass 재유입)"
     >
       재유입
     </span>
@@ -211,7 +213,7 @@ export function TodayIntakeCard({
           <h2 className="text-[14px] font-semibold text-[#111110]">오늘 유입</h2>
         )}
         <p className={hero ? "sr-only" : "mt-0.5 text-[11px] text-[#1a1a1a]/40"}>
-          KST 오늘 00:00~지금 · 어드민 리드 + Compass 마케팅 리드(신규·재유입, 인바운드 제외), 전화 기준 중복 접음
+          KST 오늘 00:00~지금 · 어드민 리드 + Compass 마케팅 리드(인바운드 제외), 신규·재유입 포함, 전화 기준 중복 접음
         </p>
       </div>
 
@@ -250,8 +252,9 @@ export function TodayIntakeCard({
             <DeltaLine delta={data.delta} />
           </div>
 
-          {/* 신규/재유입 구분 — 재유입 판정은 Compass 기록에서만 나온다. Compass 미집계면 가르지 않는다(0 으로 포장 금지). */}
-          {data.compassMeasured && data.todayCount > 0 && (
+          {/* 신규/재유입 구분 — 재유입 판정은 측정된 원천(어드민 재문의·Compass 재유입)에서 나온다. 합계가 센 원천만
+              가르므로 한쪽이 미집계여도 숫자끼리는 맞는다(빠진 원천은 위 "미집계" 배지가 밝힌다). */}
+          {(data.adminMeasured || data.compassMeasured) && data.todayCount > 0 && (
             <p className="mt-1.5 text-[11px] tabular-nums text-[#1a1a1a]/45">
               신규 {COUNT.format(data.todayCount - (data.todayReinflowCount ?? 0))} · 재유입{" "}
               {COUNT.format(data.todayReinflowCount ?? 0)}

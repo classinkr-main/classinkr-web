@@ -323,6 +323,127 @@ describe("buildIntakeFeed", () => {
     expect(result.items[0]).toMatchObject({ key: "a:lead-walkin", origins: ["admin"], compassLeadId: null, reinflow: false })
   })
 
+  // 2026-09-21 — 응대 대상 소스의 재문의는 새 행 대신 기존 행의 last_inflow_at 만 갱신한다(재유입 병합).
+  // 생성 시각만 보면 오늘 재문의한 기존 리드가 "오늘 유입"에서 통째로 빠진다.
+  it("재문의 병합: 예전에 생성되고 오늘 재문의한 어드민 리드를 오늘 재유입으로 센다", () => {
+    const result = buildIntakeFeed({
+      adminLeads: [
+        lead({
+          id: "lead-again",
+          phone: "010-4545-0000",
+          org: "다시학원",
+          timestamp: "2026-07-01T00:00:00.000Z",
+          last_inflow_at: "2026-08-28T05:10:00.000Z",
+        }),
+      ],
+      compassLeads: [],
+      windows,
+    })
+    expect(result.todayCount).toBe(1)
+    expect(result.todayReinflowCount).toBe(1)
+    expect(result.yesterdayCount).toBe(0)
+    expect(result.items[0]).toMatchObject({
+      key: "a:lead-again",
+      org: "다시학원",
+      origins: ["admin"],
+      reinflow: true,
+      at: "2026-08-28T05:10:00.000Z",
+    })
+  })
+
+  it("어드민 신규와 재문의를 함께 세고 재유입만 표시한다 — 백필(두 값이 같음)은 재유입이 아니다", () => {
+    const result = buildIntakeFeed({
+      adminLeads: [
+        // 오늘 신규 — 저장 경로가 last_inflow_at 을 생성 시각으로 채운다.
+        lead({ id: "lead-new", phone: "01046460000", timestamp: "2026-08-28T02:00:00.000Z", last_inflow_at: "2026-08-28T02:00:00.000Z" }),
+        // 오늘 재문의
+        lead({ id: "lead-re", phone: "01047470000", timestamp: "2026-08-01T02:00:00.000Z", last_inflow_at: "2026-08-28T03:00:00.000Z" }),
+        // 옛 리드(백필) — 오늘 유입이 아니다.
+        lead({ id: "lead-old", phone: "01048480000", timestamp: "2026-08-01T02:00:00.000Z", last_inflow_at: "2026-08-01T02:00:00.000Z" }),
+      ],
+      compassLeads: [],
+      windows,
+    })
+    expect(result.todayCount).toBe(2)
+    expect(result.todayReinflowCount).toBe(1)
+    const byKey = new Map(result.items.map((item) => [item.key, item]))
+    expect(byKey.get("a:lead-new")?.reinflow).toBe(false)
+    expect(byKey.get("a:lead-re")?.reinflow).toBe(true)
+    expect(byKey.has("a:lead-old")).toBe(false)
+  })
+
+  it("오늘 생성 뒤 오늘 재문의한 어드민 리드는 신규 1건 — 최초 유입 시각", () => {
+    const result = buildIntakeFeed({
+      adminLeads: [
+        lead({ id: "lead-twice", phone: "01049490000", timestamp: "2026-08-28T01:00:00.000Z", last_inflow_at: "2026-08-28T05:00:00.000Z" }),
+      ],
+      compassLeads: [],
+      windows,
+    })
+    expect(result.todayCount).toBe(1)
+    expect(result.todayReinflowCount).toBe(0)
+    expect(result.items[0]).toMatchObject({ key: "a:lead-twice", reinflow: false, at: "2026-08-28T01:00:00.000Z" })
+  })
+
+  it("어제 생성되고 오늘 재문의한 어드민 리드는 어제엔 신규, 오늘엔 재유입으로 각각 1건", () => {
+    const result = buildIntakeFeed({
+      adminLeads: [
+        lead({ id: "lead-y", phone: "01050500000", timestamp: "2026-08-27T02:00:00.000Z", last_inflow_at: "2026-08-28T02:00:00.000Z" }),
+      ],
+      compassLeads: [],
+      windows,
+    })
+    expect(result.todayCount).toBe(1)
+    expect(result.todayReinflowCount).toBe(1)
+    expect(result.yesterdayCount).toBe(1)
+    expect(result.delta).toBe(0)
+  })
+
+  it("어제 같은 시각 이후의 재문의는 어제 비교 창에 넣지 않는다", () => {
+    const result = buildIntakeFeed({
+      adminLeads: [
+        // 어제 17:00 KST 재문의 — 어제 창(~14:30 KST) 밖, 오늘 창 밖.
+        lead({ phone: "01051510000", timestamp: "2026-07-01T00:00:00.000Z", last_inflow_at: "2026-08-27T08:00:00.000Z" }),
+        // 어제 12:00 KST 재문의 — 어제 창 안.
+        lead({ phone: "01052520000", timestamp: "2026-07-01T00:00:00.000Z", last_inflow_at: "2026-08-27T03:00:00.000Z" }),
+      ],
+      compassLeads: [],
+      windows,
+    })
+    expect(result.todayCount).toBe(0)
+    expect(result.yesterdayCount).toBe(1)
+  })
+
+  it("어드민 재문의와 Compass 신규가 같은 전화면 1건으로 접고 재유입으로 표시한다", () => {
+    const result = buildIntakeFeed({
+      adminLeads: [
+        lead({ id: "lead-fold", phone: "010-5353-0000", timestamp: "2026-07-01T00:00:00.000Z", last_inflow_at: "2026-08-28T04:30:00.000Z" }),
+      ],
+      compassLeads: [compassNew({ id: 950, phone_key: "01053530000", created_at: "2026-08-28T04:00:00.000Z" })],
+      windows,
+    })
+    expect(result.todayCount).toBe(1)
+    expect(result.overlapCount).toBe(1)
+    expect(result.todayReinflowCount).toBe(1)
+    expect(result.items[0]).toMatchObject({
+      origins: ["admin", "compass"],
+      reinflow: true,
+      at: "2026-08-28T04:00:00.000Z",
+    })
+  })
+
+  it("재문의 스탬프라도 테스트 리드는 세지 않는다", () => {
+    const result = buildIntakeFeed({
+      adminLeads: [
+        lead({ email: "test@meta.com", phone: "01054540000", timestamp: "2026-07-01T00:00:00.000Z", last_inflow_at: "2026-08-28T04:00:00.000Z" }),
+      ],
+      compassLeads: [],
+      windows,
+    })
+    expect(result.todayCount).toBe(0)
+    expect(result.todayReinflowCount).toBe(0)
+  })
+
   it("깨진 타임스탬프는 창에 넣지 않는다(0 시각으로 오늘에 끌려들어오지 않게)", () => {
     const result = buildIntakeFeed({
       adminLeads: [lead({ phone: "01011110000", timestamp: "not-a-date" })],

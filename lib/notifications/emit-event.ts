@@ -124,6 +124,17 @@ function peopleLabel(value?: string) {
   return value ? `${value}명` : undefined
 }
 
+/**
+ * 리드 보고 카드의 강조 숫자 설명 — 합계에 재문의(재유입)가 섞였을 때만 "신규 N · 재유입 M"으로 가른다.
+ * 재유입이 없거나 payload 에 없으면(옛 발송 경로) 원래 설명을 그대로 쓴다. 위컴 강조 설명은 짧아야 하므로
+ * 단위 없이 숫자만 싣는다(오늘 유입 카드와 같은 표기).
+ */
+function leadInflowSplitDesc(input: EmitNotificationEventInput, fallback: string) {
+  const reinflow = getPayloadCount(input, "reinflowLeadCount")
+  if (reinflow <= 0) return fallback
+  return `신규 ${getPayloadCount(input, "newLeadCount")} · 재유입 ${reinflow}`
+}
+
 function formatDigestDelta(value?: string) {
   if (!value) return "0"
   const delta = Number(value)
@@ -182,7 +193,8 @@ function buildLeadDigestWecomCard(input: EmitNotificationEventInput) {
       },
       emphasis_content: {
         title: totalLeads,
-        desc: "신규 리드",
+        // 합계는 신규 + 재문의(재유입)다 — 재유입이 섞이면 "신규 리드"라고 부르지 않는다.
+        desc: leadInflowSplitDesc(input, "신규 리드"),
       },
       sub_title_text: `${previousLabel} ${delta}개 / 미응답 ${countLabel(unrespondedCount)}`,
       horizontal_content_list: [
@@ -251,7 +263,7 @@ function buildLeadMorningWecomCard(input: EmitNotificationEventInput) {
       },
       emphasis_content: {
         title: getPayloadValue(input, "totalLeads") ?? "0",
-        desc: "전체 접수",
+        desc: leadInflowSplitDesc(input, "전체 접수"),
       },
       sub_title_text: `미응대 ${unresponded} / 상담 진행 ${contacted} / 전환 ${converted}`,
       horizontal_content_list: [

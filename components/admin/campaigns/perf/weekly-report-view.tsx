@@ -219,7 +219,10 @@ function RecentIntakeBand({ intake }: { intake: WeeklyAdLeadRecentIntake | null 
           <span className="pb-0.5 text-[12px] font-medium text-[#615D59]">건 접수</span>
         </p>
         <p className="pb-0.5 text-[11.5px] tabular-nums text-[#615D59]">
-          Meta 광고 {count(intake.metaLeadAdsLeadCount)}건 · 홈페이지 {count(intake.homepageLeadCount)}건 · 미응대{" "}
+          Meta 광고 {count(intake.metaLeadAdsLeadCount)}건 · 홈페이지 {count(intake.homepageLeadCount)}건
+          {/* 합계에 재문의(재유입)가 섞였을 때만 밝힌다 — 옛 저장본에는 이 값이 없다. */}
+          {(intake.reinflowLeadCount ?? 0) > 0 && <> · 재유입 {count(intake.reinflowLeadCount ?? 0)}건</>}
+          {" "}· 미응대{" "}
           <span className={intake.unrespondedCount > 0 ? "font-semibold text-[#B43E3E]" : ""}>
             {count(intake.unrespondedCount)}건
           </span>

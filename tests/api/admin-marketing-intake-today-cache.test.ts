@@ -109,6 +109,36 @@ describe("GET /api/admin/marketing/intake-today — unstable_cache 배선", () =
     expect(typeof truncated.todayReinflowCount).toBe("number")
   })
 
+  it("캐시 키를 v3 로 올렸다 — 재문의가 빠진 옛 건수(v2)를 재사용하지 않는다", async () => {
+    vi.resetModules()
+    await import("@/app/api/admin/marketing/intake-today/route")
+
+    const call = unstableCacheCalls.find((c) => c.options?.revalidate === 20)
+    expect(call?.keyParts).toEqual(["marketing-intake-today-v3"])
+  })
+
+  it("재문의 병합 리드(예전 생성·오늘 last_inflow_at)를 오늘 재유입으로 싣는다", async () => {
+    vi.resetModules()
+    const now = new Date()
+    mocks.getMarketingLeads.mockResolvedValue([
+      {
+        id: "lead-again",
+        source: "demo_modal",
+        status: "contacted",
+        phone: "010-7777-1234",
+        org: "다시학원",
+        timestamp: new Date(now.getTime() - 90 * 86_400_000).toISOString(),
+        last_inflow_at: now.toISOString(),
+      },
+    ])
+    const { GET } = await import("@/app/api/admin/marketing/intake-today/route")
+    const body = await (await GET(req())).json()
+
+    expect(body.todayCount).toBe(1)
+    expect(body.todayReinflowCount).toBe(1)
+    expect(body.items[0]).toMatchObject({ key: "a:lead-again", reinflow: true, origins: ["admin"] })
+  })
+
   it("관리자 인증 실패 응답을 그대로 반환하고 원천을 조회하지 않는다", async () => {
     vi.resetModules()
     mocks.verifyAdmin.mockResolvedValue(new Response(null, { status: 403 }))
