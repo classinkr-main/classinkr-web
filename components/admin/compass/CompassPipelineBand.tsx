@@ -1,10 +1,20 @@
 "use client"
 
-// CRM 홈 — M7 마케팅 파이프라인(Compass) 밴드. app/admin/crm/page.tsx 분해(2026-08-28)로 이동 — 로직 무변경.
-// 2026-09-20 Compass 정리 라운드(§13 D2): 기존 3숫자 아래에 요약 블록(기간 칩·세그먼트 타일·
+// Compass(mkt.classin.co.kr) 파이프라인 밴드 — 오늘 데모 · 다음 액션 임박 · BD인계 진행 3칸.
+//
+// CRM 홈(M7 밴드)에서 시작해 2026-09-14 마케팅 한눈에 층도 같은 밴드를 쓰게 되면서
+// components/admin/crm/home 에서 공용 위치로 옮겼다. 3칸의 원천은
+// /api/admin/crm/compass-pipeline(조립 정본 lib/compass/home-band.ts) 하나다.
+//
+// 2026-09-20 Compass 정리 라운드(§13 D2): 3숫자 아래에 요약 블록(기간 칩·세그먼트 타일·
 // 단계 퍼널·유입 플랫폼·다음 액션 임박 목록)을 추가한다. 요약은 이 파일 안에서 별도로
 // GET /api/admin/crm/compass-summary 를 클라이언트 조회한다(compass-pipeline과 무관한 소스라
 // 위 3숫자의 fetch·로딩·에러 상태와 완전히 분리한다 — 한쪽이 죽어도 다른 쪽을 물들이지 않는다).
+// 요약 블록은 CRM 홈 전용이다 — 한눈에 층(quiet)은 "세 숫자만" 보여주는 참조 밴드라 요약을
+// 그리지도, 조회하지도 않는다.
+//
+// 리드 단위 작업(콜·케어·BD인계)은 어드민에 만들지 않는다 — 숫자만 보여주고 새 탭 딥링크로
+// Compass 에 보낸다. down 이면 무음 실패 금지 — 숫자 자리를 전부 걷어내고 무채색 한 줄로 강등한다.
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { ExternalLink, Handshake, Megaphone, ReceiptText, UserCheck } from "lucide-react"
@@ -24,7 +34,27 @@ import { COMPASS_STAGE_LABEL } from "@/lib/compass/normalize"
 import { AD_CHANNEL_COLOR } from "@/lib/types/event-metrics"
 import { EmptyState, MiniFunnel, Skeleton, StatTile, type FunnelStage } from "@/components/admin/viz"
 import FreshnessCaption from "@/components/admin/crm/FreshnessCaption"
-import { formatNumber, ValueSkeleton, type CompassPipelineKpis } from "./shared"
+
+// /api/admin/crm/compass-pipeline 응답. 타입 정본은 여기다 — components/admin/crm/home/shared.tsx 는
+// 재수출만 하므로, 이 파일이 shared 를 다시 import 하면 순환이 된다(formatNumber·ValueSkeleton 을
+// 아래에 따로 두는 이유).
+export interface CompassPipelineKpis {
+  down: boolean
+  todayDemoCount: number
+  upcomingActionCount: number
+  bdOpenCount: number
+  generatedAt: string
+}
+
+export const COMPASS_PIPELINE_URL = "/api/admin/crm/compass-pipeline"
+
+function formatNumber(value: number | null | undefined) {
+  return Number(value ?? 0).toLocaleString("ko-KR")
+}
+
+function ValueSkeleton({ className = "h-6 w-20" }: { className?: string }) {
+  return <span aria-hidden className={`inline-block animate-pulse rounded-md bg-[#f0f0ec] align-middle ${className}`} />
+}
 
 // Compass(mkt.classin.co.kr) 딥링크 — 실측 확인된 것은 lib/compass/normalize.ts의
 // compassLeadUrl(개별 리드 상세)뿐이다. 아래는 crm.stages 실측 어휘(new/demo/bd/quote/won/lost)를
@@ -360,32 +390,65 @@ export function CompassSummaryBlock({
   )
 }
 
-// ─── 밴드 본체(오케스트레이션) ───────────────────────────────────────────
-// M7 — 마케팅 파이프라인(Compass) 한 줄 밴드. 리드 요약과 같은 카드 껍데기(rounded-2xl·white·p-4)를
-// 쓰지만 3항목을 한 행에 눕힌다. 각 항목은 mkt.classin.co.kr 새 탭 딥링크라 StatTile(href)이 쓰는
-// next/link로는 target="_blank"를 못 붙여 순수 <a>로 직접 구성한다(그래도 bare 변형과 같은 타이포).
-// down이면 무음 실패 금지 — 숫자 자리를 전부 걷어내고 무채색 한 줄 "Compass 연결 끊김"로 강등한다.
-//
-// 2026-09-20(§13 D2): 위 3숫자 아래에 기간 칩·세그먼트 타일·단계 퍼널·유입 플랫폼·다음 액션
-// 임박 목록으로 구성된 요약 블록을 추가한다. 요약은 compass-pipeline과 별개 API
-// (GET /api/admin/crm/compass-summary)라 자체 loading/error/down 상태를 이 컴포넌트 안에서
-// 독립적으로 관리한다 — 위 3숫자가 죽어도 요약은 살아있을 수 있고 그 반대도 마찬가지다.
-export default function CompassPipelineBand({
-  data,
-  loading,
-  error,
-  onRetry,
-  refreshKey,
-}: {
-  data: CompassPipelineKpis | null
-  loading: boolean
-  error: string | null
-  onRetry: () => void
-  /** 부모(CrmHomeClient)의 새로고침 세대 — 바뀌면 현재 기간으로 요약을 강제 재조회한다. */
-  refreshKey?: number
-}) {
-  const showDown = (error && !data) || data?.down
+// ─── 3숫자 조회 훅(한눈에 층 전용) ───────────────────────────────────────
+/**
+ * 한눈에 층 전용 조회 훅 — CRM 홈과 같은 URL·cacheKey 라 두 화면을 오가면 한 응답을 재사용한다.
+ * 403(권한 밖 역할)은 에러가 아니라 "이 계정에는 없는 칸"이다 — forbidden 으로 돌려 소비처가
+ * 밴드를 아예 그리지 않게 한다(권한 없는 계정에 빈 숫자 자리를 보여주지 않는다).
+ */
+export function useCompassPipeline(refreshNonce: number) {
+  const [data, setData] = useState<CompassPipelineKpis | null>(() =>
+    getCachedAdminJson<CompassPipelineKpis>(COMPASS_PIPELINE_URL, { cacheKey: COMPASS_PIPELINE_URL })
+  )
+  const [loading, setLoading] = useState(data == null)
+  const [error, setError] = useState<string | null>(null)
+  const [forbidden, setForbidden] = useState(false)
+  const seqRef = useRef(0)
 
+  const load = useCallback(async ({ fresh = false }: { fresh?: boolean } = {}) => {
+    const seq = ++seqRef.current
+    setLoading(true)
+    setError(null)
+    try {
+      const response = await adminFetchJsonCached<CompassPipelineKpis>(
+        fresh ? `${COMPASS_PIPELINE_URL}?force=1` : COMPASS_PIPELINE_URL,
+        undefined,
+        { ttlMs: 60_000, cacheKey: COMPASS_PIPELINE_URL, force: fresh, staleIfError: !fresh }
+      )
+      if (seq !== seqRef.current) return
+      setData(response)
+    } catch (e) {
+      if (seq !== seqRef.current) return
+      const message = e instanceof Error ? e.message : "Compass 파이프라인 조회 실패"
+      if (/\b403\b|forbidden|권한/i.test(message)) setForbidden(true)
+      else setError(message)
+    } finally {
+      if (seq === seqRef.current) setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  const handledNonceRef = useRef(refreshNonce)
+  useEffect(() => {
+    if (refreshNonce === handledNonceRef.current) return
+    handledNonceRef.current = refreshNonce
+    void load({ fresh: true })
+  }, [refreshNonce, load])
+
+  return { data, loading, error, forbidden, retry: () => void load({ fresh: true }) }
+}
+
+// ─── 요약 블록 오케스트레이션(CRM 홈 전용) ───────────────────────────────
+// 2026-09-20(§13 D2): 3숫자 아래에 기간 칩·세그먼트 타일·단계 퍼널·유입 플랫폼·다음 액션
+// 임박 목록으로 구성된 요약 블록을 붙인다. 요약은 compass-pipeline과 별개 API
+// (GET /api/admin/crm/compass-summary)라 자체 loading/error/down 상태를 독립적으로 관리한다 —
+// 위 3숫자가 죽어도 요약은 살아있을 수 있고 그 반대도 마찬가지다.
+// 밴드 본체에서 떼어 둔 이유: 훅은 조건부로 부를 수 없으므로, 한눈에 층(quiet)에서 요약 조회
+// 자체를 하지 않으려면 상태·조회를 별도 컴포넌트가 쥐고 있어야 한다.
+function CompassSummarySection({ refreshKey }: { refreshKey?: number }) {
   const [period, setPeriod] = useState<CompassSummaryPeriodKey>(COMPASS_SUMMARY_DEFAULT_PERIOD)
   const [summary, setSummary] = useState<CompassSummary | null>(null)
   const [summaryLoading, setSummaryLoading] = useState(true)
@@ -442,9 +505,64 @@ export default function CompassPipelineBand({
   }, [fetchSummary, period])
 
   return (
-    <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+    <CompassSummaryBlock
+      // summary가 새로 갱신될 때마다 리마운트해 내부 mountNowMs(D-시간 기준)를 신선하게 되돌린다.
+      key={summary?.generatedAt ?? "pending"}
+      summary={summary}
+      loading={summaryLoading}
+      error={summaryError}
+      period={period}
+      onPeriodChange={setPeriod}
+      onRetry={handleSummaryRetry}
+    />
+  )
+}
+
+// ─── 밴드 본체 ───────────────────────────────────────────────────────────
+// M7 — 마케팅 파이프라인(Compass) 한 줄 밴드. 리드 요약과 같은 카드 껍데기(rounded-2xl·white·p-4)를
+// 쓰지만 3항목을 한 행에 눕힌다. 각 항목은 mkt.classin.co.kr 새 탭 딥링크라 StatTile(href)이 쓰는
+// next/link로는 target="_blank"를 못 붙여 순수 <a>로 직접 구성한다(그래도 bare 변형과 같은 타이포).
+// down이면 무음 실패 금지 — 숫자 자리를 전부 걷어내고 무채색 한 줄 "Compass 연결 끊김"로 강등한다.
+export default function CompassPipelineBand({
+  data,
+  loading,
+  error,
+  onRetry,
+  refreshKey,
+  quiet = false,
+}: {
+  data: CompassPipelineKpis | null
+  loading: boolean
+  error: string | null
+  onRetry: () => void
+  /** 부모(CrmHomeClient)의 새로고침 세대 — 바뀌면 현재 기간으로 요약을 강제 재조회한다. */
+  refreshKey?: number
+  /**
+   * 한눈에 층(참조 밴드)용 — 배경을 한 단 물리고 라벨 앞에 "Compass에서 하는 일" 한 줄을 둔다.
+   * 세 숫자만 보여주는 자리라 §13 D2 요약 블록은 그리지도 조회하지도 않는다.
+   */
+  quiet?: boolean
+}) {
+  const showDown = (error && !data) || data?.down
+  // 칸 구분선 — 한눈에 층은 한 단 물린 카드(#f0f0ec 테두리)에 맞추고, CRM 홈은 UX 라운드 1 대비 기준(#e8e8e4)을 쓴다.
+  const dividerClass = quiet ? "border-[#f0f0ec]" : "border-[#e8e8e4]"
+
+  return (
+    <section
+      className={
+        quiet
+          ? "rounded-2xl border border-[#f0f0ec] bg-[#fdfdfc] p-4"
+          : "mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4"
+      }
+      aria-label="마케팅 파이프라인(Compass)"
+    >
       <div className="mb-3 flex items-center justify-between gap-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">마케팅 파이프라인(Compass)</p>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">마케팅 파이프라인(Compass)</p>
+          {quiet && (
+            <p className="mt-0.5 text-[11px] text-[#A39E98]">리드 단위 작업은 mkt.classin.co.kr 에서 — 여기서는 세 숫자만.</p>
+          )}
+        </div>
         {showDown ? (
           <button type="button" onClick={onRetry} className="text-[11px] font-semibold text-[#084734] underline underline-offset-2">
             다시 확인
@@ -466,7 +584,7 @@ export default function CompassPipelineBand({
               href={item.href}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex min-w-[168px] flex-1 items-center justify-between gap-3 border-t border-[#e8e8e4] pt-3 transition-opacity hover:opacity-70"
+              className={`flex min-w-[168px] flex-1 items-center justify-between gap-3 border-t ${dividerClass} pt-3 transition-opacity hover:opacity-70`}
             >
               <span>
                 <span className="block text-[11px] font-medium uppercase tracking-[0.1em] text-[#1a1a1a]/40">{item.label}</span>
@@ -481,20 +599,13 @@ export default function CompassPipelineBand({
         </div>
       )}
 
-      {/* §13 D2 — Compass 정리 요약 블록. compass-pipeline(위 3숫자)과 무관한 별도 소스라
-          독립된 loading/error/down으로 그린다. */}
-      <div className="mt-4 border-t border-[#e8e8e4] pt-4">
-        <CompassSummaryBlock
-          // summary가 새로 갱신될 때마다 리마운트해 내부 mountNowMs(D-시간 기준)를 신선하게 되돌린다.
-          key={summary?.generatedAt ?? "pending"}
-          summary={summary}
-          loading={summaryLoading}
-          error={summaryError}
-          period={period}
-          onPeriodChange={setPeriod}
-          onRetry={handleSummaryRetry}
-        />
-      </div>
+      {/* §13 D2 — Compass 정리 요약 블록(CRM 홈 전용). compass-pipeline(위 3숫자)과 무관한 별도
+          소스라 독립된 loading/error/down으로 그린다. 한눈에 층(quiet)은 세 숫자만 둔다. */}
+      {quiet ? null : (
+        <div className="mt-4 border-t border-[#e8e8e4] pt-4">
+          <CompassSummarySection refreshKey={refreshKey} />
+        </div>
+      )}
     </section>
   )
 }

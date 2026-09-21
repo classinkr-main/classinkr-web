@@ -35,13 +35,8 @@ export interface LeadActionKpis {
 }
 
 // /api/admin/crm/compass-pipeline 응답 — M7 "마케팅 파이프라인(Compass)" 밴드.
-export interface CompassPipelineKpis {
-  down: boolean
-  todayDemoCount: number
-  upcomingActionCount: number
-  bdOpenCount: number
-  generatedAt: string
-}
+// 밴드가 마케팅 한눈에 층과 공용이 되면서(2026-09-14) 타입 정본도 그 컴포넌트로 옮겼다 — 여기서는 재수출만.
+export type { CompassPipelineKpis } from "@/components/admin/compass/CompassPipelineBand"
 
 export interface BranchKpiMemberRow {
   member: string

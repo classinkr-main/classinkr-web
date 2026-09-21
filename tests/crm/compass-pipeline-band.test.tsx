@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest"
 import CompassPipelineBand, {
   CompassSummaryBlock,
   formatActionEta,
-} from "@/components/admin/crm/home/CompassPipelineBand"
+} from "@/components/admin/compass/CompassPipelineBand"
 import { leadSegmentHref } from "@/lib/crm/lead-segments"
 import type { CompassSummary, CompassSummaryActionRow } from "@/lib/compass/summary-contract"
 

@@ -1,5 +1,7 @@
 # 마케팅 퍼포먼스 대시보드 — 설계 (3페이즈)
 
+> **2026-09-14 갱신**: Phase 2의 "위→아래" 화면 목록은 [마케팅 탭 재구성 기획](marketing-tab-dashboard-restructure-2026-09-14.md) §3.3(한눈에 층 밴드 순서)으로 대체됐다. Phase 1(데이터 스파인)·Phase 3(AI 레이어)과 정직 규칙은 그대로 유효하다.
+
 2026-08-20 확정. 캠페인 허브(/admin/campaigns) 요약 탭을 퍼포먼스 마케팅 대시보드로 재구축하고, 데이터 스파인과 AI 레이어를 얹는다. 선행 분석: [campaign-marketing-ia-develop-analysis-2026-07-23.md](campaign-marketing-ia-develop-analysis-2026-07-23.md), [campaign-entity-d1-d3-plan-2026-07-24.md](campaign-entity-d1-d3-plan-2026-07-24.md).
 
 ## 배경 — 병목 3가지 (2026-08-20 실측)

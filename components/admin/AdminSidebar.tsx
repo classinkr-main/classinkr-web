@@ -216,11 +216,13 @@ export const NAV_WARMUP_REQUESTS: Record<string, WarmupEntry[] | (() => WarmupEn
   // 호출되지 않는다(페이지의 코어 로더가 summary면 early return한다) — 이 파일이 /admin/docs·
   // /admin/cs-chatbot에 이미 적용한 "안 여는 탭을 데우면 대역폭만 쓴다" 원칙을 캠페인에도 적용.
   // 넷 다 cacheKey가 URL과 다르므로 객체 항목이어야 적중한다.
+  // (2026-09-14 3층 재구성) 기본 탭 "한눈에"가 쓰는 넷 — perf·insights·intake-today·Compass 파이프라인.
+  // 소재별 CPL(compass/ads)은 상세 층으로 갔으므로 기본 진입에서 데우지 않는다.
   "/admin/campaigns": [
     { url: "/api/admin/marketing/perf?period=30d", cacheKey: "marketing-perf:30d" },
     { url: "/api/admin/marketing/insights", cacheKey: "marketing-insights" },
     { url: "/api/admin/marketing/intake-today", cacheKey: "marketing-intake-today" },
-    { url: "/api/admin/compass/ads?period=30d", cacheKey: "compass-ads:30d" },
+    "/api/admin/crm/compass-pipeline",
   ],
   "/admin/lead-magnets": [
     "/api/admin/lead-magnets",

@@ -8,12 +8,42 @@ import type { LeadRecord } from "@/lib/repositories/leads"
 import { AD_CHANNELS, type AdChannel } from "@/lib/types/event-metrics"
 import type { CampaignUpdate } from "@/lib/types/marketing-campaign"
 
-export type PerfPeriodKey = "7d" | "30d" | "90d" | "quarter"
+export type PerfPeriodKey = "7d" | "30d" | "90d" | "quarter" | "month"
+
+/**
+ * 기간 키의 런타임 목록 — 라우트 검증·토글 옵션·딥링크 파서가 이 하나를 본다.
+ * "month"(이번 달, MTD)는 2026-09-14 한눈에 층 재구성에서 추가했다 — 마케팅팀의 KPI 주기와
+ * Compass 대시보드의 월 축에 맞추기 위함이다. 순서는 토글 표시 순서다.
+ */
+export const PERF_PERIOD_KEYS: readonly PerfPeriodKey[] = ["7d", "30d", "90d", "quarter", "month"]
+
+export function isPerfPeriodKey(value: string | null | undefined): value is PerfPeriodKey {
+  return value != null && (PERF_PERIOD_KEYS as readonly string[]).includes(value)
+}
+
+/** 토글 버튼 라벨(짧게). */
+export const PERF_PERIOD_LABEL: Record<PerfPeriodKey, string> = {
+  "7d": "7일",
+  "30d": "30일",
+  "90d": "90일",
+  quarter: "분기",
+  month: "이번 달",
+}
+
+/** 배지·문장용 라벨("최근 30일") — 브리핑 카드·판정 밴드가 같은 문구를 쓴다. */
+export const PERF_PERIOD_BADGE: Record<PerfPeriodKey, string> = {
+  "7d": "최근 7일",
+  "30d": "최근 30일",
+  "90d": "최근 90일",
+  quarter: "이번 분기",
+  month: "이번 달",
+}
 
 /**
  * 직전 구간을 어떤 기준으로 잡았는지 — 표시 문구·프롬프트가 비교 축을 정확히 말하기 위한 라벨.
  *  - `trailing`: 현재 창 바로 앞의 같은 길이 창(7d/30d/90d 처럼 이미 완결된 롤링 창).
- *  - `calendar_aligned`: 달력 구간의 같은 위치·같은 일수(진행 중인 QTD 는 전분기 1~N일).
+ *  - `calendar_aligned`: 달력 구간의 같은 위치·같은 일수(진행 중인 QTD 는 전분기 1~N일,
+ *    MTD 는 전월 1~N일).
  */
 export type PerfPrevBasis = "trailing" | "calendar_aligned"
 
@@ -43,6 +73,12 @@ export function shiftDays(iso: string, days: number): string {
 function quarterStartOf(iso: string): string {
   const d = toDate(iso)
   return toIso(new Date(Date.UTC(d.getUTCFullYear(), Math.floor(d.getUTCMonth() / 3) * 3, 1)))
+}
+
+/** ISO 일자가 속한 달의 첫날. */
+function monthStartOf(iso: string): string {
+  const d = toDate(iso)
+  return toIso(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)))
 }
 
 /** 두 ISO 일자 사이의 일수(양끝 포함). */
@@ -78,6 +114,19 @@ export function resolvePerfPeriod(key: PerfPeriodKey, today: string): PerfPeriod
     return { key, since, until: today, prevSince, prevUntil, prevBasis: "calendar_aligned" }
   }
 
+  // month — 이번 달 1일~오늘(MTD). quarter 와 같은 달력 정렬 규칙: 전월 1일차~N일차와 비교하고,
+  // 전월이 더 짧으면(예: 3/31 vs 2월) 전월 마지막 날에서 자른다 — 비교 창이 이번 달로 넘어와
+  // 자기 자신과 겹치는 일은 만들지 않는다.
+  if (key === "month") {
+    const since = monthStartOf(today)
+    const lengthDays = inclusiveDays(since, today)
+    const prevMonthEnd = shiftDays(since, -1)
+    const prevSince = monthStartOf(prevMonthEnd)
+    const wantedUntil = shiftDays(prevSince, lengthDays - 1)
+    const prevUntil = wantedUntil <= prevMonthEnd ? wantedUntil : prevMonthEnd
+    return { key, since, until: today, prevSince, prevUntil, prevBasis: "calendar_aligned" }
+  }
+
   const days = key === "7d" ? 7 : key === "90d" ? 90 : 30
   const since = shiftDays(today, -(days - 1))
   const prevUntil = shiftDays(since, -1)
@@ -85,11 +134,13 @@ export function resolvePerfPeriod(key: PerfPeriodKey, today: string): PerfPeriod
   return { key, since, until: today, prevSince, prevUntil, prevBasis: "trailing" }
 }
 
-/** 비교 축 표기 — KPI 델타 툴팁·AI 프롬프트가 같은 문장을 쓰게 하는 SSOT. */
-export function prevBasisLabel(period: Pick<PerfPeriod, "prevBasis">): string {
-  return period.prevBasis === "calendar_aligned"
-    ? "전분기 같은 일수(1일차~N일차)"
-    : "직전 동일 길이"
+/**
+ * 비교 축 표기 — KPI 델타 툴팁·AI 프롬프트가 같은 문장을 쓰게 하는 SSOT.
+ * calendar_aligned 는 분기(기본)와 달(key="month")에서 비교 대상이 다르므로 key 로 문장을 가른다.
+ */
+export function prevBasisLabel(period: Pick<PerfPeriod, "prevBasis"> & { key?: PerfPeriodKey }): string {
+  if (period.prevBasis !== "calendar_aligned") return "직전 동일 길이"
+  return period.key === "month" ? "전월 같은 일수(1일차~N일차)" : "전분기 같은 일수(1일차~N일차)"
 }
 
 /** 전기 대비 증감률(%). 이전이 0/null 이거나 현재가 null 이면 null. */

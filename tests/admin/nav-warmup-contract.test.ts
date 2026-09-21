@@ -65,16 +65,19 @@ describe("admin nav warm-up cache-key parity", () => {
     expect(warmupUrls("/admin/crm/activity")).not.toContain("/api/admin/crm/events?limit=50&offset=0")
   })
 
-  it("warms the campaigns default (summary) tab with matching cache keys, not other tabs' data", () => {
+  it("warms the campaigns default (한눈에) tab with matching cache keys, not other tiers' data", () => {
     expect(warmupCacheKeys("/admin/campaigns")).toEqual(
       expect.arrayContaining([
         "marketing-perf:30d",
         "marketing-insights",
         "marketing-intake-today",
-        "compass-ads:30d",
       ])
     )
-    // 광고·메시지·행사 탭 전용 — 기본 진입에서는 호출되지 않는다.
+    // Compass 파이프라인 3칸 — CRM 홈과 같은 URL·cacheKey(문자열 항목)라 두 화면이 한 슬롯을 쓴다.
+    expect(warmupUrls("/admin/campaigns")).toContain("/api/admin/crm/compass-pipeline")
+    // 소재별 CPL 은 상세 층으로 갔다(2026-09-14) — 기본 진입에서 데우지 않는다.
+    expect(warmupUrls("/admin/campaigns")).not.toContain("/api/admin/compass/ads?period=30d")
+    // 상세·데이터·메시지 층 전용 — 기본 진입에서는 호출되지 않는다.
     for (const dead of [
       "/api/admin/email",
       "/api/admin/subscribers",

@@ -90,6 +90,7 @@ npx vitest run tests/crm
 
 ## 5. 먼저 읽을 것
 
+0. 마케팅 허브(`/admin/campaigns`) 작업이면 [마케팅 탭 재구성 기획(2026-09-14)](../marketing-tab-dashboard-restructure-2026-09-14.md)의 3층 IA·재배치표·진척 기록을 먼저 확인한다 — 탭·섹션·레거시 딥링크의 코드 정본은 `lib/marketing/hub-tabs.ts`.
 0. CRM 탭 작업이면 [CRM 탭 디벨롭 기획(2026-09-12)](../crm-tab-develop-plan-2026-09-12.md)의 개선 후보 ID와 Wave 순서를 먼저 확인하고,
    [CRM 탭 품질 감사(2026-08-06)](../crm-tab-quality-audit-2026-08-06.md) —
    항목별 채점, 고친 결함, 90선에 못 미친 채 남긴 항목(큐 스코어링 비용, 필터 URL 소유권)
