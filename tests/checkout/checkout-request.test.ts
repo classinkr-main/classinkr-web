@@ -119,15 +119,27 @@ async function loadWithMockedNotifications(options: LoadOptions = {}) {
   const emitNotificationEvent = options.emitError
     ? vi.fn().mockRejectedValue(options.emitError)
     : vi.fn().mockResolvedValue({ id: "event-1" })
+  const sendCheckoutRequestReceipt = vi.fn().mockResolvedValue({
+    provider: "solapi",
+    channel: "sms",
+    requested: 1,
+    sent: 0,
+    failed: 0,
+    simulated: 1,
+    results: [],
+  })
 
   vi.doMock("@/lib/supabase/admin", () => ({
     createSupabaseAdminClient: supabase.createSupabaseAdminClient,
   }))
   vi.doMock("@/lib/server/lead-capture", () => ({ submitLeadCapture }))
   vi.doMock("@/lib/notifications/emit-event", () => ({ emitNotificationEvent }))
+  // 고객 확인 발송은 message_logs 에도 쓴다 — 모킹하지 않으면 그 insert 가
+  // 신청 행 검증용 목록에 섞여 들어온다.
+  vi.doMock("@/lib/messaging/customer-receipt", () => ({ sendCheckoutRequestReceipt }))
 
   const mod = await import("@/lib/checkout-requests")
-  return { ...mod, supabase, submitLeadCapture, emitNotificationEvent }
+  return { ...mod, supabase, submitLeadCapture, emitNotificationEvent, sendCheckoutRequestReceipt }
 }
 
 /** WeCom 본문 검증용 — emit-event 는 진짜로 돌리고 leaf 의존성만 모킹한다. */
@@ -638,6 +650,37 @@ describe("submitCheckoutRequest — 저장 · 리드 연동 · 알림", () => {
       totalLabel: "₩12,600,000",
       itemCount: 1,
     })
+  })
+
+  it("신청당 고객 확인을 정확히 1건 보낸다", async () => {
+    const { submitCheckoutRequest, sendCheckoutRequestReceipt } =
+      await loadWithMockedNotifications()
+    const deferred = createDeferred()
+
+    await submitCheckoutRequest(VALID_PAYLOAD, deferred.context)
+    await deferred.flush()
+
+    expect(sendCheckoutRequestReceipt).toHaveBeenCalledTimes(1)
+    // 연락처는 폼 필수 항목이라 항상 있다 — 이메일(선택)과 달리 커버리지가 100% 다.
+    expect(sendCheckoutRequestReceipt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestId: "req-uuid-1",
+        phone: VALID_PAYLOAD.phone,
+        desiredDate: VALID_PAYLOAD.desiredDate,
+      })
+    )
+  })
+
+  it("고객 확인 발송이 실패해도 신청은 성공으로 남는다", async () => {
+    const { submitCheckoutRequest, sendCheckoutRequestReceipt } =
+      await loadWithMockedNotifications()
+    sendCheckoutRequestReceipt.mockRejectedValueOnce(new Error("solapi down"))
+    const deferred = createDeferred()
+
+    const result = await submitCheckoutRequest(VALID_PAYLOAD, deferred.context)
+    await deferred.flush()
+
+    expect(result.status).toBe(200)
   })
 
   it("리드 미러링이 실패해도 알림은 그대로 1건 나간다", async () => {

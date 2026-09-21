@@ -473,6 +473,10 @@ export function ShowroomBookingForm({ interests }: Props) {
           요청이 접수되었고 담당자가 확인 후 확정 연락을 드립니다. 아직 방문이 확정된 것은
           아니며, 남겨주신 연락처로 일정을 확인한 뒤 확정해 드립니다.
         </p>
+        {/* 이 화면을 닫으면 아무 흔적도 남지 않던 문제 — 접수 확인을 연락처로도 보낸다. */}
+        <p className="mt-1.5 text-[13px] leading-relaxed text-[#615D59]">
+          접수 내용은 남겨주신 연락처로도 보내드립니다.
+        </p>
 
         <dl className="mt-5 space-y-2 rounded-xl border border-black/[0.08] bg-[#F6F5F4] px-4 py-3 text-[13px]">
           {submitted.bookingId ? (

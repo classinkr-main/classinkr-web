@@ -34,6 +34,7 @@ import {
   normalizeMultilineText,
   normalizeText,
 } from "@/lib/server/contact-field-validation"
+import { sendShowroomBookingReceipt } from "@/lib/messaging/customer-receipt"
 import { submitLeadCapture } from "@/lib/server/lead-capture"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import {
@@ -418,6 +419,17 @@ export async function submitShowroomBooking(
     // 접수당 정확히 1건 — 리드 미러가 실패해도(leadId null) 알림은 그대로 나간다.
     await runSafely("ops notification", () =>
       emitNotificationEvent(buildShowroomBookingNotification({ booking, bookingId, leadId }))
+    )
+
+    // 고객 확인. 여기까지의 후속 처리는 전부 내부용이라, 고객은 성공 화면을 닫는 순간
+    // 아무 흔적도 갖지 못했다. 발송이 실패해도 접수는 그대로다.
+    await runSafely("customer receipt", () =>
+      sendShowroomBookingReceipt({
+        bookingId,
+        phone: booking.phone,
+        visitDate: booking.visitDate,
+        visitTime: booking.visitTime,
+      })
     )
   }
 

@@ -390,7 +390,8 @@ export function CheckoutRequestForm({
             <DialogHeader className="mt-4">
               <DialogTitle>주문 신청이 접수되었습니다</DialogTitle>
               <DialogDescription>
-                담당자가 1영업일 내에 연락드려 결제·설치 일정을 함께 잡아드립니다.
+                담당자가 1영업일 내에 연락드려 결제·설치 일정을 함께 잡아드립니다. 접수
+                내용은 남겨주신 연락처로도 보내드립니다.
               </DialogDescription>
             </DialogHeader>
 

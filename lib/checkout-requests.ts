@@ -19,6 +19,7 @@ import { getBusinessDateParts } from "@/lib/business-time"
 import { HARDWARE_CURRENCY, getHardwareItem } from "@/lib/billing/hardware-catalog"
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import type { NotificationChannel } from "@/lib/notifications/types"
+import { sendCheckoutRequestReceipt } from "@/lib/messaging/customer-receipt"
 import { submitLeadCapture } from "@/lib/server/lead-capture"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import {
@@ -650,6 +651,18 @@ export async function submitCheckoutRequest(
     // 신청당 정확히 1건 — 리드 미러가 실패해도(leadId null) 알림은 그대로 나간다.
     await runSafely("ops notification", () =>
       emitNotificationEvent(buildCheckoutRequestNotification({ request, requestId, leadId }))
+    )
+
+    // 고객 확인. 접수번호는 모달을 닫으면 사라지므로, 남는 기록은 이 문자 한 통이다.
+    await runSafely("customer receipt", () =>
+      sendCheckoutRequestReceipt({
+        requestId,
+        phone: request.phone,
+        desiredDate: request.desiredDate,
+        items: request.items,
+        totalAmount: request.totalAmount,
+        currency: request.currency,
+      })
     )
   }
 
