@@ -105,6 +105,8 @@ const ForecastBoard = dynamic(() => import("./ledger/ForecastBoard").then((m) =>
 })
 import { RevAuxAnalysisSection } from "./ledger/RevAuxAnalysisSection"
 import { RevMobileList } from "./ledger/RevMobileList"
+import { RevMatrixEditBar } from "./ledger/RevMatrixEditBar"
+import { buildCustomerOptions } from "./ledger/customer-suggest"
 import { type CrmCoverageResponse } from "./CrmSyncStrip"
 import MultiSelect from "./MultiSelect"
 // 입력 레일·콕핏 2-pane(~1,350줄)은 기본 화면(REV 렌즈 + 접힌 레일)에서 렌더되지 않는다 —
@@ -137,6 +139,7 @@ const DraftQueue = dynamic(() => import("./ledger/DraftQueue").then((m) => m.Dra
 // 진입 시에도 이 무거운 컴포넌트 트리가 메인 청크를 가르지 않게 한다(다른 렌즈들과 동일 관례).
 import {
   buildMatrixPastePlan,
+  buildPasteNewRowInputs,
   buildMatrixPendingByCell,
   dominantCellConfidence,
   EMPTY_BUCKET,
@@ -476,27 +479,54 @@ export default function SalesLedgerWorkbench({
   // 담당자별 월 수치 테이블 top6 캡 해제 토글(항목 6) — 기본은 캡, "전체 보기"로 전체 목록.
   const [revManagerSummaryExpanded, setRevManagerSummaryExpanded] = useState(false)
   // 매트릭스 셀 커밋 실패(로컬 폴백) 등 편집 지점 인근 알림 토스트 — 상단 Source 바만으로는
-  // 편집 중 시야 밖이라 침묵 실패가 되던 문제 대응. 각 토스트는 7초 뒤 자동 소멸.
+  // 편집 중 시야 밖이라 침묵 실패가 되던 문제 대응. 각 토스트는 기본 7초(ttlMs) 뒤 자동 소멸.
   // 최대 MATRIX_TOAST_MAX개 스택(품질 웨이브 3, 항목 6) — 이전엔 단일 슬롯이라 에러 표시 도중
-  // 뒤이은 info 토스트가 그걸 덮어써 실패 알림을 놓칠 수 있었다. 같은 문구는 dedupe(연타 방지),
+  // 뒤이은 info 토스트가 그걸 덮어써 실패 알림을 놓칠 수 있었다. 같은 dedupe 키는 무시(연타 방지),
   // 초과분은 에러를 우선 유지하고 가장 오래된 info부터 밀어낸다(전부 에러면 가장 오래된 에러부터).
-  const [matrixToasts, setMatrixToasts] = useState<Array<{ id: string; kind: "error" | "info"; text: string }>>([])
-  const pushMatrixToast = useCallback((next: { kind: "error" | "info"; text: string }) => {
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-    setMatrixToasts((current) => {
-      if (current.some((toast) => toast.text === next.text)) return current
-      const stacked = [...current, { id, ...next }]
-      if (stacked.length <= MATRIX_TOAST_MAX) return stacked
-      const dropIndex = stacked.findIndex((toast) => toast.kind === "info")
-      return stacked.filter((_, index) => index !== (dropIndex !== -1 ? dropIndex : 0))
-    })
-    window.setTimeout(() => {
-      setMatrixToasts((current) => current.filter((toast) => toast.id !== id))
-    }, 7000)
-  }, [])
+  // action(입력 속도 라운드 4 P1-6): 토스트에 버튼 1개를 붙일 수 있다(예: 커밋 직후 "실행 취소").
+  // key(같은 라운드): dedupe 판정을 text 대신 key로 한다 — 실행 취소 토스트는 문구가 매번 같아서
+  // text로 dedupe하면 두 번째 커밋부터 새 토스트가 버려져 그 초안의 취소 버튼이 아예 안 뜬다.
+  // key가 없는 기존 토스트(에러·안내)는 그대로 text로 dedupe(하위 호환).
+  const [matrixToasts, setMatrixToasts] = useState<
+    Array<{
+      id: string
+      kind: "error" | "info"
+      text: string
+      key?: string
+      action?: { label: string; onClick: () => void | Promise<void> }
+      ttlMs?: number
+    }>
+  >([])
+  const pushMatrixToast = useCallback(
+    (next: {
+      kind: "error" | "info"
+      text: string
+      key?: string
+      action?: { label: string; onClick: () => void | Promise<void> }
+      ttlMs?: number
+    }) => {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+      const dedupeKey = next.key ?? next.text
+      setMatrixToasts((current) => {
+        if (current.some((toast) => (toast.key ?? toast.text) === dedupeKey)) return current
+        const stacked = [...current, { id, ...next }]
+        if (stacked.length <= MATRIX_TOAST_MAX) return stacked
+        const dropIndex = stacked.findIndex((toast) => toast.kind === "info")
+        return stacked.filter((_, index) => index !== (dropIndex !== -1 ? dropIndex : 0))
+      })
+      window.setTimeout(() => {
+        setMatrixToasts((current) => current.filter((toast) => toast.id !== id))
+      }, next.ttlMs ?? 7000)
+    },
+    [],
+  )
   const dismissMatrixToast = useCallback((id: string) => {
     setMatrixToasts((current) => current.filter((toast) => toast.id !== id))
   }, [])
+  // 토스트 action 버튼 연타 방지(입력 속도 라운드 4 P1-6) — onClick이 비동기(예: 초안 취소 API
+  // 호출)라 완료 전 재클릭하면 같은 초안을 두 번 취소 요청하게 된다. 어느 토스트가 처리 중인지만
+  // 기록하면 충분해 단일 id로 둔다(여러 액션 토스트를 동시에 연타하는 경우는 실사용에서 없음).
+  const [pendingToastActionId, setPendingToastActionId] = useState<string | null>(null)
   const [sidePanelCollapsed, setSidePanelCollapsed] = useState(true)
   const [railView, setRailView] = useState<RailView>("detail")
   const [selectedRow, setSelectedRow] = useState<LedgerRevenueRow | null>(null)
@@ -525,6 +555,7 @@ export default function SalesLedgerWorkbench({
     applyDraft,
     checkDrafts,
     applyDrafts,
+    persistDraftsBatch,
     cancelDraft,
     deleteDraft,
     reverseEntry,
@@ -1248,6 +1279,10 @@ export default function SalesLedgerWorkbench({
       .sort((a, b) => a.localeCompare(b, "ko"))
   }, [rows])
 
+  // 매출 장부 입력 속도 라운드 4(2026-09-20, P0-3): 레일 고객/계정 datalist 후보 — managerOptions와
+  // 동일한 모집단(rows = 시트 행 + 적용 초안 행)에서 유일·정렬(customer-suggest.buildCustomerOptions).
+  const customerOptions = useMemo(() => buildCustomerOptions(rows), [rows])
+
   const regionOptions = useMemo(() => {
     return Array.from(new Set(rows.map((row) => row.region).filter((value): value is string => Boolean(value))))
       .sort((a, b) => a.localeCompare(b, "ko"))
@@ -1818,7 +1853,11 @@ export default function SalesLedgerWorkbench({
     [pendingByCell, rowById],
   )
 
-  // 셀 커밋 1건 = createDraft 1건. buildDraftInput의 metadata 키·단위 규약을 그대로 따른다.
+  // 셀 커밋 입력 빌더(입력 속도 라운드 4 — docs/active/sales-ledger-input-speed-plan-2026-09-20.md P0-1·P0-2).
+  // 단건 셀 커밋(onCommitCell)과 붙여넣기 배치(confirmMatrixPaste → persistDraftsBatch)가 같은 초안
+  // 입력을 만들도록 onCommitCell 본문에서 분리했다 — 셀당 초안 1건·같은 셀 재편집은 PATCH·주차 병합·
+  // 자가 체크 규약이 두 경로에서 문자 그대로 같아야 한다. buildDraftInput(레일)의 metadata 키·단위
+  // 규약을 그대로 따른다.
   // kind: sourceDealId 있으면 edit-row(항상 있음, 시트 딜행), 없으면 new-row.
   // operation: 기존 금액 있으면 amount-change, 없던 칸이면 forecast-add.
   //   - 월 셀: 기준 = 그 달 표시 금액. 주차 셀: 기준 = 그 주차 표시 금액(월 기준과 동일 분기 규약).
@@ -1826,20 +1865,28 @@ export default function SalesLedgerWorkbench({
   // 주차 병합: explicit 주차가 있는 행의 주차 셀 편집은 나머지 주차를 보존해 metadata.weekly(5칸)로
   // 싣고 amount=주차 합으로 재기재한다 — 단일 주차 값이 그 달 전체를 대체해 다른 주차가 소멸하던 버그 방지.
   // (inferred/월합계만 행은 보존할 실주차가 없어 기존 단일 주차 대체 규약 유지 — 팝오버/큐에서 경고.)
-  // 반환값: 서버에 실제로 반영됐으면 true, 로컬 폴백(장부 적용 불가)이면 false — 붙여넣기 루프가
-  // 이 값을 모아 "N건 생성 · M건 실패" 요약 토스트를 만든다(SL-2 실패 집계, 항목 4).
-  // options.silent=true면 개별 실패 토스트를 억제한다(붙여넣기 루프처럼 상위에서 집계 토스트를 낼 때).
-  const onCommitCell = useCallback(
+  //
+  // 자가 체크(P0-2, 결정 D1(a)): 매트릭스 셀 커밋은 시트 행을 눈으로 보며 치는 동작이라 별도 검수
+  // 이득이 작다 — 저장 시점에 status:"checked"로 올려 3단(입력→체크→적용)을 2단으로 줄인다. 2단
+  // 게이트를 없앤 게 아니라 체크 시점을 입력 시점으로 당긴 것: 적용은 그대로 큐의 명시적 액션이고,
+  // 서버가 checked_by=작성자를 기록해 큐가 "자가 체크" 배지(ledger/self-check.ts)로 남의 체크와
+  // 구분한다. 자가 체크된 초안을 같은 셀에서 다시 고치면 PATCH에도 status:"checked"가 실려 서버가
+  // 잠금 해제→갱신→재체크를 한 요청 안에서 처리한다(남이 체크한 초안이면 409 reason=checked-by-other,
+  // 큐 행 배지로 안내). 레일 폼(buildDraftInput)은 시트에 없는 행을 만드는 동작이라 3단을 유지한다.
+  //
+  // 반환: null이면 행 없음. existingId는 같은 셀(월/주차)에 이미 대기 중(draft|checked)인 초안 id —
+  // sourceDealId+month에 DB 유일성이 없어, 재편집 때마다 새 초안을 만들면 둘 다 적용됐을 때 같은 셀
+  // 매출이 이중 계상된다(P0). 호출부는 있으면 updateDraft(PATCH), 없으면 createDraft(POST)로 나눈다.
+  const buildCellDraftInput = useCallback(
     (
       rowId: string,
       month: string,
       amount: number,
       confidence: DraftConfidence,
       week?: number,
-      options?: { silent?: boolean },
-    ): Promise<boolean> => {
+    ): { input: LedgerDraftInput; existingId: string | null } | null => {
       const row = rowById.get(rowId)
-      if (!row) return Promise.resolve(false)
+      if (!row) return null
       const sourceDealId = row.sourceDealId ?? (row.ledgerOrigin === "sheet" ? row.id : undefined)
       const kind: DraftKind = sourceDealId ? "edit-row" : "new-row"
       const weekToken = week != null ? `w${week + 1}` : "month"
@@ -1891,6 +1938,8 @@ export default function SalesLedgerWorkbench({
         month,
         amount: draftAmount,
         note: "",
+        // 자가 체크(P0-2) — 위 빌더 주석 참조. 서버가 checked_by=작성자를 함께 기록한다.
+        status: "checked",
         metadata: {
           source: "sales-ledger-workbench",
           origin: "rev-matrix-cell",
@@ -1912,15 +1961,59 @@ export default function SalesLedgerWorkbench({
           sourceDealId: sourceDealId ?? null,
         },
       }
-      // 같은 셀(월/주차)에 이미 대기 중(draft|checked)인 초안이 있으면 새 초안을 POST하지 않고
-      // 그 초안을 PATCH한다 — sourceDealId+month에 DB 유일성이 없어, 재편집 때마다 새 초안을 만들면
-      // 둘 다 적용됐을 때 같은 셀 매출이 이중 계상된다(P0). 상태 전이(draft/checked/applied)는 건드리지
-      // 않는다 — 이 input에는 status 필드가 없어 PATCH가 금액/메타데이터만 갱신한다.
       const existingId = lookupMatrixPending(pendingByCell, { rowId, month, week })?.id ?? null
-      const persist = existingId ? updateDraft(existingId, input) : createDraft(input)
+      return { input, existingId }
+    },
+    [lens, pendingByCell, period, rowById, team],
+  )
+
+  // 실행 취소(입력 속도 라운드 4 P1-6) — cancelDraft(useLedgerDraftQueue)는 drafts를 의존성으로 갖고
+  // 있어 초안이 바뀔 때마다 함수 identity가 새로 생긴다. onCommitCell deps에 cancelDraft를 그대로
+  // 넣으면 onCommitCell identity도 매 초안 변경마다 바뀌어 수백 개 매트릭스 셀의 memo가 깨진다 —
+  // latest-ref로 감싸 "최신 함수를 참조만" 하고, 그 갱신 자체는 onCommitCell의 의존성이 되지 않게 한다.
+  const cancelDraftRef = useRef(cancelDraft)
+  useEffect(() => {
+    cancelDraftRef.current = cancelDraft
+  }, [cancelDraft])
+  // 방금 만든 초안을 취소(cancelled 전이 — 하드 삭제 아님, 2026-09-10 #8 감사 추적 결정과 동일)한다.
+  // pushMatrixToast에만 의존해 identity가 고정되므로 onCommitCell deps에 넣어도 drafts 변경으로
+  // 흔들리지 않는다. cancelDraft 자체는 서버/네트워크 실패를 큐 강등·queueError로 흡수하고 예외를
+  // 던지지 않는 계약이라(useLedgerDraftQueue.ts), 아래 catch는 예상 밖 예외에 대한 방어선이다.
+  const undoCellDraft = useCallback(async (id: string) => {
+    try {
+      // cancelDraft는 실패를 예외가 아니라 불리언으로 알린다(큐 상태로 흡수하는 훅 계약) — 서버가
+      // 거부했는데 "취소됨"이라고 말하지 않도록 반환값으로 분기한다. 구체 사유는 큐 배너/행 배지에 있다.
+      const cancelled = await cancelDraftRef.current(id)
+      if (cancelled) {
+        pushMatrixToast({ kind: "info", text: "초안 취소됨 — 셀은 시트 값으로 돌아갑니다." })
+      } else {
+        pushMatrixToast({ kind: "error", text: "초안 취소가 반영되지 않았습니다 — 체크 큐에서 상태를 확인한 뒤 다시 시도하세요." })
+      }
+    } catch (error) {
+      pushMatrixToast({ kind: "error", text: `초안 취소에 실패했습니다 — 다시 시도하세요. ${errorMessage(error)}` })
+    }
+  }, [pushMatrixToast])
+
+  // 셀 커밋 1건 = 초안 1건(POST; 같은 셀에 대기 초안이 있으면 그 초안을 PATCH). 입력 조립은 위
+  // buildCellDraftInput — 붙여넣기 배치(confirmMatrixPaste)와 공유한다.
+  // 반환값: 서버에 실제로 반영됐으면 true, 로컬 폴백(장부 적용 불가)이면 false — 상위 집계용.
+  // options.silent=true면 개별 실패 토스트를 억제한다(상위에서 집계 토스트를 낼 때).
+  const onCommitCell = useCallback(
+    (
+      rowId: string,
+      month: string,
+      amount: number,
+      confidence: DraftConfidence,
+      week?: number,
+      options?: { silent?: boolean },
+    ): Promise<boolean> => {
+      const built = buildCellDraftInput(rowId, month, amount, confidence, week)
+      if (!built) return Promise.resolve(false)
+      const persist = built.existingId ? updateDraft(built.existingId, built.input) : createDraft(built.input)
       return persist.then((result) => {
-        // 낙관적 잠금 충돌(웨이브 7 2단, I4): 이번 수정은 반영되지 않았고, 해당 초안은 훅이 서버
-        // 현재본으로 이미 새로고침했다(로컬 낙관 반영 없음) — 로컬 폴백과는 다른 문구로 정확히 알린다.
+        // 낙관적 잠금 충돌(웨이브 7 2단, I4) 또는 남이 체크한 초안(checked-by-other): 이번 수정은 반영되지
+        // 않았고, 해당 초안은 훅이 서버 현재본으로 이미 새로고침했다(로컬 낙관 반영 없음). 구체 사유는
+        // 큐 행 배지(recordErrors)에 있다 — 토스트는 공통 충돌 문구로 정확히 "반영 안 됨"만 알린다.
         if (result.conflict) {
           if (!options?.silent) pushMatrixToast({ kind: "error", text: DRAFT_CONFLICT_MESSAGE })
           return false
@@ -1946,16 +2039,35 @@ export default function SalesLedgerWorkbench({
         if (result.dedupedRecent && !usedLocalFallback && !options?.silent) {
           pushMatrixToast({ kind: "info", text: DRAFT_DEDUPED_RECENT_NOTICE })
         } else if (!usedLocalFallback && !options?.silent) {
-          // 품질 감사 2026-09-10 — #4: 셀 커밋은 항상 "검토 초안"만 만든다(draft → checked → apply
-          // 2단 게이트를 거쳐야 장부·리포트·CRM 화면에 반영). 이전엔 성공 시 토스트가 전혀 없어
-          // 앰버 점(셀 인라인 표시)을 못 보고 지나치면 "저장됨=반영됨"으로 오인하기 쉬웠다.
+          // 자가 체크(라운드 4 P0-2): 셀 커밋은 저장 시점에 체크까지 끝난다 — 남은 단계는 큐의 "적용"
+          // 하나뿐임을 토스트가 정확히 말해야 "저장됨=반영됨" 오인도, "체크하러 가야 하나" 헛걸음도 없다.
           // pushMatrixToast는 동일 문구를 dedupe하므로 연속 입력에서도 토스트가 쌓이지 않는다.
-          pushMatrixToast({ kind: "info", text: "초안 저장됨 — 체크 큐에서 체크 → 적용해야 장부에 반영됩니다." })
+          //
+          // 실행 취소(라운드 4 P1-6): 새로 만들어진 초안(built.existingId 없음)에만 붙인다. 같은
+          // 셀 재편집으로 기존 대기 초안을 PATCH한 경로(existingId 있음)는 취소하면 그 전 대기값까지
+          // 통째로 사라져 "방금 입력만 되돌리기"가 아니게 되므로 제외한다. dedupe key를 draft.id로
+          // 고정해 문구가 매번 같은 이 토스트가 text 기준 dedupe에 걸려 두 번째 커밋부터 취소
+          // 버튼이 사라지는 문제를 막는다.
+          if (!built.existingId && draft) {
+            pushMatrixToast({
+              kind: "info",
+              key: `undo:${draft.id}`,
+              ttlMs: 6000,
+              text: "자가 체크로 저장됨 — 체크 큐에서 적용해야 장부에 반영됩니다.",
+              action: { label: "실행 취소", onClick: () => undoCellDraft(draft.id) },
+            })
+          } else {
+            pushMatrixToast({ kind: "info", text: "자가 체크로 저장됨 — 체크 큐에서 적용해야 장부에 반영됩니다." })
+          }
         }
         return !usedLocalFallback
       })
     },
-    [createDraft, lens, pendingByCell, period, pushMatrixToast, rowById, team, updateDraft],
+    // undoCellDraft 추가(라운드 4 P1-6) — cancelDraft를 latest-ref로 감쌌으므로 drafts 변경에는
+    // 반응하지 않는다(위 cancelDraftRef 주석 참조). 이 배열 문자열은
+    // tests/branch/ledger-draft-optimistic-lock.test.ts의 onCommitCell 슬라이스 종료 마커이기도
+    // 하다 — 다시 바꾸면 그 테스트의 마커도 함께 갱신할 것.
+    [buildCellDraftInput, createDraft, pushMatrixToast, undoCellDraft, updateDraft],
   )
 
   const onMatrixAmountClamped = useCallback(() => {
@@ -1989,6 +2101,44 @@ export default function SalesLedgerWorkbench({
   const [pastePlan, setPastePlan] = useState<MatrixPastePlan | null>(null)
   const [pasteConfidence, setPasteConfidence] = useState<DraftConfidence>("expected")
 
+  // 편집 바(UX 감사 §8.3 A안의 대체 — ledger/RevMatrixEditBar.tsx 헤더 주석 참조) 배선.
+  // 확도 버튼 클릭: 편집 중이면 팝오버와 같은 setEditConfidence(명시 선택 → localStorage 기억까지 동일),
+  // 선택만 된 셀이면 E/H/C 단축키(useMatrixEditor.onSelectedKeyDown의 확도 분기)와 동등하게 "금액은
+  // 그대로, 확도만" 커밋한다 — 빈 칸·같은 확도면 초안을 만들지 않는 조건도 그대로.
+  const pickConfidenceFromEditBar = useCallback(
+    (next: DraftConfidence) => {
+      if (matrixEditor.editing) {
+        matrixEditor.actions.setEditConfidence(next)
+        return
+      }
+      const coord = matrixEditor.selected
+      if (!coord) return
+      const value = matrixCellValue(coord)
+      if (value > 0 && next !== matrixCellConfidence(coord)) {
+        void onCommitCell(coord.rowId, coord.month, value, next, coord.week)
+      }
+    },
+    [matrixCellConfidence, matrixCellValue, matrixEditor.actions, matrixEditor.editing, matrixEditor.selected, onCommitCell],
+  )
+  const editBarContext = useMemo(() => {
+    const coord = matrixEditor.editing ?? matrixEditor.selected
+    if (!coord) return null
+    const row = rowById.get(coord.rowId)
+    if (!row) return null
+    return {
+      customer: row.customer,
+      monthLabel: formatMonthLabel(coord.month),
+      weekLabel: coord.week != null ? `W${coord.week + 1}` : undefined,
+      currentAmount: matrixCellValue(coord),
+    }
+  }, [matrixCellValue, matrixEditor.editing, matrixEditor.selected, rowById])
+  // 바가 보여줄 확도: 편집 중이면 편집 버퍼의 확도, 선택만 됐으면 그 셀의 우세 확도(E/H/C가 바꿀 기준값).
+  const editBarConfidence: DraftConfidence = matrixEditor.editing
+    ? matrixEditor.editConfidence
+    : matrixEditor.selected
+      ? matrixCellConfidence(matrixEditor.selected)
+      : "expected"
+
   const handleMatrixPaste = useCallback(
     (event: React.ClipboardEvent<HTMLDivElement>) => {
       // 편집 중(input 포커스)이면 input의 기본 붙여넣기를 존중한다. 선택 셀이 없으면 대상 불명 → 무시.
@@ -2014,29 +2164,90 @@ export default function SalesLedgerWorkbench({
     [matrixEditor.editing, matrixEditor.selected, matrixMonths, pushMatrixToast, visibleDealRows, editRowOverrideMonths],
   )
 
-  // 프리뷰 확인 → 셀 편집과 동일한 onCommitCell 경로로만 커밋(셀당 검토 초안 1건, 2단 게이트 유지).
-  // 붙여넣기 커밋 루프: 셀당 onCommitCell(silent) → 결과를 모아 성공/실패 건수를 한 번에 요약한다.
-  // 이전엔 셀마다 개별 실패 토스트가 fire-and-forget으로 날아와 단일 슬롯 토스트를 서로 덮어썼다
-  // (항목 4) — 이제 개별 토스트는 억제하고 전체 완료 후 "N건 생성 · M건 실패" 하나만 띄운다.
-  const confirmMatrixPaste = useCallback(async () => {
+  // 프리뷰 확인 → 셀 편집과 같은 입력 빌더(buildCellDraftInput)로 초안 입력을 만들어 배치 1회(200건
+  // 청크)로 저장한다(입력 속도 라운드 4 P0-1). 이전엔 셀당 onCommitCell → 요청 1건이라 붙여넣기 상한
+  // 600칸이 곧 동시 요청 600건이었다. 셀당 초안 1건·같은 셀 대기 초안은 갱신(existingId)·자가 체크는
+  // 단건 경로와 문자 그대로 같은 규약이다(빌더 공유). 결과는 항목별로 돌아오므로 성공/충돌/거부/로컬
+  // 폴백을 나눠 한 번의 집계 토스트로 요약한다 — 부분 실패를 전체 성공으로 뭉개지 않는다.
+  // 라운드 4 P1-5: 프리뷰에서 승인한 미매칭 고객(newRowNames)은 새 행 초안으로 함께 저장한다 —
+  // 월당 1건, kind=new-row, status 없음(시트에 없는 행을 만드는 동작이라 3단 게이트 유지: 레일
+  // new-row와 같은 이유, P0-2 결정). 담당·팀은 화면 컨텍스트에서 추론한다: 팀은 현재 팀 필터
+  // (ALL이면 기본 BD — defaultDraftForm과 동일), 담당자는 담당자 필터가 정확히 1명일 때만 그 사람
+  // (여럿·없음이면 빈 값 — 큐에서 채운다), 상품군은 defaultDraftForm 기본값(software).
+  const confirmMatrixPaste = useCallback(async (options?: { newRowNames?: string[] }) => {
     if (!pastePlan) return
     storeMatrixConfidence(pasteConfidence)
     const applyCells = pastePlan.cells.filter((cell) => cell.status === "apply")
+    const newRowNames = options?.newRowNames ?? []
+    const newRowInputs = newRowNames.length > 0
+      ? buildPasteNewRowInputs(pastePlan, newRowNames, {
+          team: team === "ALL" ? "BD" : team,
+          manager: managerFilter.size === 1 ? Array.from(managerFilter)[0] : "",
+          productCategory: "software",
+          confidence: pasteConfidence,
+          lens,
+          period,
+        })
+      : []
     setPastePlan(null)
-    if (applyCells.length === 0) return
-    const results = await Promise.all(
-      applyCells.map((cell) => onCommitCell(cell.rowId, cell.month, cell.next, pasteConfidence, undefined, { silent: true })),
-    )
-    const committed = results.filter(Boolean).length
-    const failed = results.length - committed
-    pushMatrixToast({
-      kind: failed > 0 ? "error" : "info",
-      text:
-        failed > 0
-          ? `${committed.toLocaleString("ko-KR")}건 생성 · ${failed.toLocaleString("ko-KR")}건 실패 — 실패분은 로컬 임시 저장(장부 적용 불가), 서버 재연결 후 다시 붙여넣으세요.`
-          : `검토 초안 ${committed.toLocaleString("ko-KR")}건 생성 — 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다.`,
+    if (applyCells.length === 0 && newRowInputs.length === 0) return
+    const items: Array<{ id?: string; input: LedgerDraftInput }> = []
+    let missingRows = 0
+    for (const cell of applyCells) {
+      const built = buildCellDraftInput(cell.rowId, cell.month, cell.next, pasteConfidence)
+      if (!built) {
+        missingRows += 1
+        continue
+      }
+      items.push(built.existingId ? { id: built.existingId, input: built.input } : { input: built.input })
+    }
+    // 새 행 초안은 셀 항목 뒤에 이어 붙인다 — 결과 배열이 items와 같은 순서라 이 경계(cellItemCount)
+    // 이후의 성공만 세면 "새 행 N건"을 따로 말할 수 있다.
+    const cellItemCount = items.length
+    for (const input of newRowInputs) items.push({ input })
+    const results = items.length > 0 ? await persistDraftsBatch(items) : []
+    let committed = 0
+    let newRowsCommitted = 0
+    let conflicts = 0
+    let rejected = 0
+    let localOnly = 0
+    let failed = missingRows
+    results.forEach((result, index) => {
+      if (result.conflict) conflicts += 1
+      else if (result.validationMessage) rejected += 1
+      else if (result.draft && result.draft.id.startsWith("local-")) localOnly += 1
+      else if (result.draft) {
+        committed += 1
+        if (index >= cellItemCount) newRowsCommitted += 1
+      } else failed += 1
     })
-  }, [onCommitCell, pasteConfidence, pastePlan, pushMatrixToast])
+    const problems = conflicts + rejected + localOnly + failed
+    const fmt = (value: number) => value.toLocaleString("ko-KR")
+    // 새 행 초안은 자가 체크가 아니라 draft로 열린다 — 셀 초안("적용만 하면 됨")과 다음 단계가
+    // 달라 토스트가 둘을 구분해 말한다.
+    const newRowNote = newRowsCommitted > 0
+      ? ` · 새 행 초안 ${fmt(newRowsCommitted)}건(체크 큐에서 체크 → 적용)`
+      : ""
+    if (problems === 0) {
+      pushMatrixToast({
+        kind: "info",
+        text: `자가 체크 초안 ${fmt(committed - newRowsCommitted)}건 저장${newRowNote} — 체크 큐에서 적용하면 장부에 반영됩니다.`,
+      })
+      return
+    }
+    const detail = [
+      conflicts > 0 ? `충돌 ${fmt(conflicts)}` : null,
+      rejected > 0 ? `거부 ${fmt(rejected)}` : null,
+      localOnly > 0 ? `로컬 임시 ${fmt(localOnly)}(장부 적용 불가)` : null,
+      failed > 0 ? `실패 ${fmt(failed)}` : null,
+    ]
+      .filter((part): part is string => part !== null)
+      .join(" · ")
+    pushMatrixToast({
+      kind: "error",
+      text: `${fmt(committed)}건 저장${newRowNote} · ${fmt(problems)}건 미반영(${detail}) — 미반영 셀은 체크 큐 행 배지를 확인한 뒤 다시 붙여넣으세요.`,
+    })
+  }, [buildCellDraftInput, lens, managerFilter, pasteConfidence, pastePlan, period, persistDraftsBatch, pushMatrixToast, team])
 
   const toggleRevMonth = useCallback((month: string) => {
     setExpandedRevMonths((prev) => {
@@ -2248,6 +2459,19 @@ export default function SalesLedgerWorkbench({
       setDetailLoading(false)
     }
   }, [selectedMonth, team])
+
+  // 입력 진입 동선 라운드(2026-09-20 기획 §4 P2-7/§8.4 "레일·상세") — 모바일 REV 리스트에서
+  // 금액을 탭하면 상세가 아니라 레일 "입력/수정"으로 직행한다. loadDealDetail이 행 선택·폼
+  // 프리필과 함께 setRailView("detail")을 먼저 실행하므로, 완료(await) 뒤에
+  // setRailView("input")으로 덮어써야 상세가 아닌 입력 폼이 열린다(순서 중요).
+  // InputRailSection은 마운트 시 데스크톱 폭(640px 이상)에서만 금액 input에 자동 포커스한다
+  // (이미 구현됨) — 모바일은 포커스가 곧장 키보드를 띄워 화면을 가리므로 여기서 별도 포커스
+  // 호출을 얹지 않는다.
+  const openQuickInputForRow = useCallback(async (row: LedgerRevenueRow) => {
+    await loadDealDetail(row)
+    setRailView("input")
+    setSidePanelCollapsed(false)
+  }, [loadDealDetail])
 
   // M13: 콕핏 딜 선택 전용 진입 — loadDealDetail(REV·보드 공용, 시트 행을 항상 "예정"으로 시드)
   // 뒤에 편집기 확도를 리스트 톤과 일치시킨다. 톤 규약은 CockpitDealList.rowConfidenceTone과 동일
@@ -2637,6 +2861,7 @@ export default function SalesLedgerWorkbench({
     monthOptions,
     selectedMonth,
     managerOptions,
+    customerOptions,
     draftAmountInvalid,
     draftQuantityInvalid,
     draftFormInvalid,
@@ -2756,7 +2981,18 @@ export default function SalesLedgerWorkbench({
         )}
       </header>
 
-      <main className="space-y-5 px-4 pt-5 sm:px-6 lg:px-9">
+      {/* 입력 진입 동선 라운드(2026-09-20 기획 §4 P2-7/§8.4 "REV 레일 겹침") — 우측 플로팅
+          레일(420px 폭 + 여백 20px)이 매트릭스 우측 열 위에 fixed로 뜨면서 겹치는 문제 보정.
+          xl(1280px) 이상에서만 본문 오른쪽에 레일 폭만큼 여백을 비워 겹침을 없앤다. 콕핏
+          렌즈는 이 fixed 레일을 쓰지 않으므로(lens !== "cockpit" 게이트가 아래 aside 렌더
+          조건에도 이미 있음 — 동일 조건) 제외한다. xl 미만(모바일 바텀시트·태블릿)은 여백을
+          비우지 않는다 — 그 폭에서 440px를 빼면 매트릭스 자체가 너무 좁아져 겹침보다 더
+          나쁜 트레이드오프가 되므로, 거기서는 겹침을 그대로 감수한다. */}
+      {/* 조건은 아래 <aside> 렌더 게이트와 같은 식이어야 한다 — 콕핏 렌즈에서도 큐 레일만은 열리므로
+          (lens !== "cockpit" || railView === "queue") 그 경우까지 여백을 비운다. */}
+      <main
+        className={`space-y-5 px-4 pt-5 sm:px-6 lg:px-9${!sidePanelCollapsed && (lens !== "cockpit" || railView === "queue") ? " xl:pr-[440px]" : ""}`}
+      >
         {/* 상태 한 줄(2026-09-14) — 동기화·정합 체크·CRM 연결을 칸 하나씩, 누른 칸만 아래로 펼친다.
             예전엔 정합 스트립·CRM 싱크 스트립·동기화 배너가 각자 한 줄씩 쌓여 표보다 먼저 세 줄을 읽어야 했다. */}
         <LedgerStatusRail
@@ -3444,6 +3680,7 @@ export default function SalesLedgerWorkbench({
                   revRowViews={revRowViews}
                   selectedRow={selectedRow}
                   loadDealDetail={loadDealDetail}
+                  onQuickInput={openQuickInputForRow}
                 />
 
                 {revTotalPages > 1 && (
@@ -3476,6 +3713,18 @@ export default function SalesLedgerWorkbench({
                     </div>
                   </div>
                 )}
+                {/* 편집 바(§8.3 A안 대체) — 셀 팝오버가 이웃 셀·아래 행을 가리던 문제를 "셀 밖 상시 표면"으로
+                    푼다. 스크롤 컨테이너 밖(위)에 두어 가로·세로 스크롤과 무관하게 항상 보이고, 매트릭스의
+                    sticky z-서열(z-10/20/30/40)과도 겹치지 않는다. */}
+                <RevMatrixEditBar
+                  editing={matrixEditor.editing}
+                  selected={matrixEditor.selected}
+                  context={editBarContext}
+                  buffer={matrixEditor.buffer}
+                  confidence={editBarConfidence}
+                  onPickConfidence={pickConfidenceFromEditBar}
+                  disabled={!matrixEditor.editing && !matrixEditor.selected}
+                />
                 {/* 세로 스크롤을 이 컨테이너 안으로 한정해야 thead sticky top / tfoot sticky bottom이
                     실제로 붙는다 — 페이지 스크롤 + overflow-x-auto 조합에서는 세로 sticky가 무효였음.
                     onPaste: 선택 셀(포커스된 td)에서 버블된 Ctrl+V를 받아 TSV 벌크 프리뷰를 연다(SL-2). */}
@@ -3837,27 +4086,52 @@ export default function SalesLedgerWorkbench({
 
         {matrixToasts.length > 0 && (
           <div className="fixed bottom-20 left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-col gap-2">
-            {matrixToasts.map((toast) => (
-              <div
-                key={toast.id}
-                role="alert"
-                className={`flex items-start gap-2 rounded-lg border px-4 py-2.5 text-[12px] font-bold shadow-[0_18px_48px_rgba(17,17,16,0.18)] ${
-                  toast.kind === "error"
-                    ? "border-[#F2B8B8] bg-[#FCE9E9] text-[#B43E3E]"
-                    : "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
-                }`}
-              >
-                <span className="pt-0.5">{toast.text}</span>
-                <button
-                  type="button"
-                  onClick={() => dismissMatrixToast(toast.id)}
-                  aria-label="알림 닫기"
-                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-70 transition hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current"
+            {matrixToasts.map((toast) => {
+              // 지역 변수로 좁혀서 아래 action.onClick/label 접근에 non-null 단언 없이 타입이 좁혀지게 한다.
+              const action = toast.action
+              const actionPending = pendingToastActionId === toast.id
+              return (
+                <div
+                  key={toast.id}
+                  role="alert"
+                  className={`flex items-start gap-2 rounded-lg border px-4 py-2.5 text-[12px] font-bold shadow-[0_18px_48px_rgba(17,17,16,0.18)] ${
+                    toast.kind === "error"
+                      ? "border-[#F2B8B8] bg-[#FCE9E9] text-[#B43E3E]"
+                      : "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
+                  }`}
                 >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ))}
+                  <span className="pt-0.5">{toast.text}</span>
+                  {action && (
+                    <button
+                      type="button"
+                      disabled={actionPending}
+                      onClick={async () => {
+                        // 더블클릭 방지: 이미 처리 중인 토스트면 재실행하지 않는다(disabled 로컬 상태).
+                        if (pendingToastActionId === toast.id) return
+                        setPendingToastActionId(toast.id)
+                        try {
+                          await action.onClick()
+                        } finally {
+                          setPendingToastActionId(null)
+                        }
+                        dismissMatrixToast(toast.id)
+                      }}
+                      className="flex h-6 shrink-0 items-center justify-center rounded px-2 opacity-70 transition hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {action.label}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => dismissMatrixToast(toast.id)}
+                    aria-label="알림 닫기"
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-70 transition hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )
+            })}
           </div>
         )}
 
@@ -3912,6 +4186,8 @@ export default function SalesLedgerWorkbench({
                     key={item.id}
                     type="button"
                     role="tab"
+                    id={`ledger-rail-tab-${item.id}`}
+                    aria-controls={`ledger-rail-panel-${item.id}`}
                     aria-selected={active}
                     tabIndex={active ? 0 : -1}
                     ref={(node) => { railTabRefs.current[index] = node }}
@@ -3936,7 +4212,12 @@ export default function SalesLedgerWorkbench({
           </div>
 
           {railView === "detail" && (
-          <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white">
+          <section
+            id="ledger-rail-panel-detail"
+            role="tabpanel"
+            aria-labelledby="ledger-rail-tab-detail"
+            className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white"
+          >
             <div className="border-b border-[rgba(0,0,0,0.08)] px-4 py-3">
               <p className="text-[13px] font-bold text-[#111110]">행 상세</p>
               <p className="mt-1 text-[11px] text-[#615D59]">REV 행 선택 시 월별 금액과 수정 초안 입력</p>
@@ -4298,12 +4579,22 @@ export default function SalesLedgerWorkbench({
           </section>
           )}
 
+          {/* InputRailSection 자체 루트(그 컴포넌트 소유 파일)에는 role/id를 직접 못 얹으므로
+              스타일 없는 래퍼 div로만 tabpanel 계약(id·role·aria-labelledby)을 덧씌운다 —
+              className이 없어 레이아웃(테두리·여백)에는 영향이 없다. */}
           {railView === "input" && (
-          <InputRailSection {...inputRailProps} />
+          <div id="ledger-rail-panel-input" role="tabpanel" aria-labelledby="ledger-rail-tab-input">
+            <InputRailSection {...inputRailProps} />
+          </div>
           )}
 
           {railView === "queue" && (
-          <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white">
+          <section
+            id="ledger-rail-panel-queue"
+            role="tabpanel"
+            aria-labelledby="ledger-rail-tab-queue"
+            className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white"
+          >
             <div className="border-b border-[rgba(0,0,0,0.08)] px-4 py-3">
               <p className="flex items-center gap-2 text-[13px] font-bold text-[#111110]">
                 <AlertTriangle className="h-4 w-4 text-[#A8741A]" />

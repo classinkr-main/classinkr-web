@@ -294,7 +294,9 @@ export function CockpitEditor({
                       weeklyConfidence: defaultDraftWeeklyConfidence(option.id),
                     }))
                   }
-                  className={`h-9 rounded-md text-[12px] font-bold transition ${
+                  // UX 감사 2026-09-20: 확도 3버튼 최소 타깃을 앱 전역 관행(min-h-11 md:min-h-9)에 맞춘다 —
+                  // 같은 grid grid-cols-3 행의 형제 버튼 3개가 전부 동일 클래스라 정렬은 깨지지 않는다.
+                  className={`min-h-11 md:min-h-9 rounded-md text-[12px] font-bold transition ${
                     pressed
                       ? `${CONFIDENCE_TOKENS[option.id].bgClass} text-white`
                       : "border border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:text-[#111110]"

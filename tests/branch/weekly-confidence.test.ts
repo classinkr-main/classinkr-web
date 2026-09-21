@@ -294,9 +294,11 @@ describe("SalesLedgerWorkbench — weeklyConfidence 배선 규약(소스 스캔)
   })
 
   it("onCommitCell: 주차 병합 시 확도 병렬 구성(편집 주차=선택 확도, 나머지=기존 보존) + 우세 확도 기록", () => {
+    // 라운드 4(P0-1): 주차 병합·metadata 조립은 onCommitCell에서 buildCellDraftInput으로 분리됐다
+    // (붙여넣기 배치와 공유). 슬라이스 시작만 그 빌더로 옮기고 검증 내용은 그대로다.
     const body = sliceBetween(
       source,
-      "const onCommitCell = useCallback",
+      "const buildCellDraftInput = useCallback",
       "const onMatrixAmountClamped = useCallback",
     )
     expect(body).toContain("const baseStates = weeklyConfidenceFromMetadata(row.draftMetadata)")
@@ -377,7 +379,7 @@ describe("matrixCellConfidence — 주차 슬롯 우선(소스 스캔)", () => {
 
   it("주차 좌표는 pending 슬롯 → pending 확도 → 행 슬롯 → 월 우세 순으로 폴백한다", () => {
     const workbench = read("components/admin/branch/SalesLedgerWorkbench.tsx")
-    const fn = sliceBetween(workbench, "const matrixCellConfidence = useCallback", "const onCommitCell")
+    const fn = sliceBetween(workbench, "const matrixCellConfidence = useCallback", "const buildCellDraftInput")
     expect(fn).toContain("pending.weeklyConfidence?.[coord.week]")
     expect(fn).toContain("weeklyConfidenceFromMetadata(row.draftMetadata)?.[coord.week]")
     expect(fn).toContain("dominantCellConfidence(rowMonthBucket(row, coord.month))")

@@ -11,7 +11,7 @@
 // 결과만 가져다 쓰고, 기존 "ledger/RevMatrix에서 전부 import 가능" 표면은 재수출로 유지한다.
 export * from "./rev-matrix-logic"
 
-import { Fragment, memo, useEffect, useRef } from "react"
+import { Fragment, memo, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { AlertTriangle, ChevronRight, Link2Off, Lock } from "lucide-react"
 
@@ -152,7 +152,10 @@ const RevMatrixEditPopover = memo(function RevMatrixEditPopover({
       className="absolute left-0 top-full z-40 mt-0.5 flex flex-col gap-0.5 rounded-md border border-[rgba(0,0,0,0.12)] bg-white p-0.5 shadow-lg"
       onMouseDown={(event) => event.preventDefault()} // input 포커스 유지(blur 커밋 방지)
     >
-      <div className="flex items-center gap-0.5">
+      {/* UX 감사 2026-09-20: 가장 많이 쓰는 이 팝오버가 6종 크기 중 가장 작았다(버튼 높이 ≈14px,
+          WCAG 2.5.8 최소 24px의 58%) — 라벨 자연폭 + min-w로 키우고, 색만으로 상태를 전하지
+          않도록 radiogroup/radio 시맨틱을 더한다. */}
+      <div className="flex items-center gap-0.5" role="radiogroup" aria-label="확도">
         {DRAFT_CONFIDENCE_OPTIONS.map((option) => {
           const activeColor = CONFIDENCE_TOKENS[option.id].color
           const active = option.id === confidence
@@ -160,9 +163,11 @@ const RevMatrixEditPopover = memo(function RevMatrixEditPopover({
             <button
               key={option.id}
               type="button"
+              role="radio"
+              aria-checked={active}
               title={`확도: ${option.label}`}
               onClick={() => onPickConfidence(option.id)}
-              className="rounded px-1.5 py-0.5 text-[10px] font-bold leading-none transition"
+              className="min-w-[40px] rounded-md px-2.5 py-1.5 text-[11px] font-bold leading-none transition"
               style={
                 active
                   ? { backgroundColor: activeColor, color: "#FFFFFF" }
@@ -272,8 +277,11 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
             actions!.commitBuffer({ rowId: rowId!, month: month! }, editConfidence)
             actions!.cancelEdit()
           }}
-          aria-label={`${formatMonthLabel(month!)} 금액(원 단위)`}
-          className="h-6 w-full bg-transparent px-1 text-right text-[11px] font-bold tabular-nums text-[#111110] outline-none"
+          aria-label={`${formatMonthLabel(month!)} 금액(원 단위) · 확도 ${confidenceLabel(editConfidence)}`}
+          // UX 감사 2026-09-20: 편집 중 확도를 바꿔도 input이 무색이라 "골랐는데 확인할 길이 없다" —
+          // 테두리를 현재 확도색으로 즉시 반영한다(색만으로 답하지 않도록 aria-label도 함께 보강).
+          className="h-6 w-full rounded-sm border-2 bg-transparent px-1 text-right text-[11px] font-bold tabular-nums text-[#111110] outline-none"
+          style={{ borderColor: CONFIDENCE_TOKENS[editConfidence].color }}
         />
         <RevMatrixEditPopover confidence={editConfidence} onPickConfidence={actions!.setEditConfidence} />
       </td>
@@ -291,9 +299,7 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
       : periodHighlighted
         ? "border-l-2 border-l-[#084734]/25"
         : "border-l border-[#F2F1EE]"
-  } ${bg} ${interactive && editable ? "cursor-cell" : ""} ${selected ? "ring-2 ring-inset ring-[#084734]/40" : ""} ${
-    pending ? "shadow-[inset_0_-2px_0_0_#A8741A]" : ""
-  } focus-visible:outline-none`
+  } ${bg} ${interactive && editable ? "cursor-cell" : ""} ${selected ? "ring-2 ring-inset ring-[#084734]/40" : ""} focus-visible:outline-none`
 
   const interactiveHandlers = interactive
     ? {
@@ -326,20 +332,27 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
       title={title}
       aria-label={interactive ? title : undefined}
       className={cellClassName}
-      style={{ width: MATRIX_MONTH_W, minWidth: MATRIX_MONTH_W, maxWidth: MATRIX_MONTH_W }}
+      style={{
+        width: MATRIX_MONTH_W,
+        minWidth: MATRIX_MONTH_W,
+        maxWidth: MATRIX_MONTH_W,
+        // 미검수 밑줄도 확도별 색 — 확도 무관 앰버 고정(UX 감사 2026-09-20)이던 것을 CONFIDENCE_TOKENS로.
+        ...(pending ? { boxShadow: `inset 0 -2px 0 0 ${CONFIDENCE_TOKENS[pending.confidence].color}` } : {}),
+      }}
       {...interactiveHandlers}
     >
       {pending && (
         <span
           aria-hidden
-          className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-[#A8741A]"
+          className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full"
+          style={{ backgroundColor: CONFIDENCE_TOKENS[pending.confidence].color }}
         />
       )}
       {bucket.total > 0 ? (
         <span
           className={`inline-flex items-center justify-end gap-0.5 leading-none ${
             bucket.total < 10000 ? "text-[10px] opacity-75" : "text-[11px]"
-          } ${pending ? "font-bold text-[#7A520F]" : MATRIX_TONE[tone]}`}
+          } ${pending ? `font-bold ${CONFIDENCE_TOKENS[pending.confidence].textStrongClass}` : MATRIX_TONE[tone]}`}
         >
           {locked && <Lock className="h-2.5 w-2.5 shrink-0 text-[#A39E98]" aria-label={lockLabel} />}
           {mismatch && !locked && <AlertTriangle className="h-2.5 w-2.5 shrink-0" />}
@@ -429,8 +442,10 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
             actions!.commitBuffer({ rowId: rowId!, month: month!, week: weekIndex }, editConfidence)
             actions!.cancelEdit()
           }}
-          aria-label={`${formatMonthLabel(month!)} W${weekIndex + 1} 금액(원 단위)`}
-          className="h-6 w-full bg-transparent px-1 text-right text-[11.5px] font-bold tabular-nums text-[#111110] outline-none"
+          aria-label={`${formatMonthLabel(month!)} W${weekIndex + 1} 금액(원 단위) · 확도 ${confidenceLabel(editConfidence)}`}
+          // UX 감사 2026-09-20: 월 셀과 동일 — 편집 중 확도 변경이 즉시 테두리색으로 보이게 한다.
+          className="h-6 w-full rounded-sm border-2 bg-transparent px-1 text-right text-[11.5px] font-bold tabular-nums text-[#111110] outline-none"
+          style={{ borderColor: CONFIDENCE_TOKENS[editConfidence].color }}
         />
         <RevMatrixEditPopover
           confidence={editConfidence}
@@ -441,11 +456,15 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
     )
   }
 
+  // 미검수 표시(점·텍스트·밑줄)는 확도별 색 — 주차 슬롯(metadata.weeklyConfidence)이 있으면 그 값을
+  // 우선한다(월 우세 확도로 뭉개면 같은 달 안 다른 주차의 확도가 묻힌다 — UX 감사 2026-09-20).
+  const pendingConfidence = pending ? pending.weeklyConfidence?.[weekIndex] ?? pending.confidence : null
+
   const cellClassName = `relative px-1.5 text-right align-middle tabular-nums ${
     periodHighlighted ? "border-l-2 border-l-[#084734]/25" : "border-l border-[#F2F1EE]"
   } ${bgClass} ${
     interactive && editable ? "cursor-cell" : ""
-  } ${selected ? "ring-2 ring-inset ring-[#084734]/40" : ""} ${pending ? "shadow-[inset_0_-2px_0_0_#A8741A]" : ""} focus-visible:outline-none`
+  } ${selected ? "ring-2 ring-inset ring-[#084734]/40" : ""} focus-visible:outline-none`
 
   const interactiveHandlers = interactive
     ? {
@@ -478,17 +497,28 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
       title={title}
       aria-label={interactive ? title : undefined}
       className={cellClassName}
-      style={{ width: MATRIX_WEEK_W, minWidth: MATRIX_WEEK_W, maxWidth: MATRIX_WEEK_W }}
+      style={{
+        width: MATRIX_WEEK_W,
+        minWidth: MATRIX_WEEK_W,
+        maxWidth: MATRIX_WEEK_W,
+        ...(pendingConfidence ? { boxShadow: `inset 0 -2px 0 0 ${CONFIDENCE_TOKENS[pendingConfidence].color}` } : {}),
+      }}
       {...interactiveHandlers}
     >
-      {pending && <span aria-hidden className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-[#A8741A]" />}
+      {pendingConfidence && (
+        <span
+          aria-hidden
+          className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full"
+          style={{ backgroundColor: CONFIDENCE_TOKENS[pendingConfidence].color }}
+        />
+      )}
       {/* 1만 미만(원시 위안) 값은 저대비·소형으로 강등 — 월 셀(RevMatrixMonthCell)과 동일 규약(SL-7). */}
       <span
         className={`inline-flex items-center gap-0.5 leading-none tabular-nums ${
           display > 0 && display < 10000 ? "text-[10px] opacity-75" : "text-[11.5px]"
         } ${
-          pending
-            ? "font-bold text-[#7A520F]"
+          pendingConfidence
+            ? `font-bold ${CONFIDENCE_TOKENS[pendingConfidence].textStrongClass}`
             : display > 0
               ? isMonthOnly
                 ? "font-semibold text-[#7A520F]"
@@ -808,7 +838,9 @@ export function RevMatrixPasteDialog({
   confidence: DraftConfidence
   onPickConfidence: (next: DraftConfidence) => void
   onCancel: () => void
-  onConfirm: () => void
+  // 라운드 4 P1-5 — 새 행(unmatched) 승인 선택을 함께 실어 보낸다. 워크벤치의 confirmMatrixPaste가
+  // buildPasteNewRowInputs(plan, newRowNames, context)로 넘겨 new-row 초안을 만든다(배선은 상위에서).
+  onConfirm: (options: { newRowNames: string[] }) => void | Promise<void>
 }) {
   const shown = plan.cells.slice(0, MATRIX_PASTE_PREVIEW_LIMIT)
   const hidden = plan.cells.length - shown.length
@@ -826,6 +858,26 @@ export function RevMatrixPasteDialog({
     locked: { label: "잠금 제외", className: "text-[#A39E98]" },
     unchanged: { label: "동일 값", className: "text-[#A39E98]" },
   }
+  // 라운드 4 P1-5 — "시트에 없는 고객" 체크박스 선택(다이얼로그 로컬 state, 기본 전부 해제 —
+  // 승인한 것만 new-row 초안이 된다는 스펙). onConfirm 계약이 이름 배열(newRowNames)이라 이름을
+  // 키로 관리한다 — 같은 이름이 plan.unmatched에 중복될 일은 실무상 없다(한 붙여넣기 안에서
+  // 같은 신규 고객명이 두 줄로 나뉘어 오는 경우는 없다고 본다).
+  const [selectedNewRowNames, setSelectedNewRowNames] = useState<Set<string>>(new Set())
+  const toggleNewRowName = (name: string) => {
+    setSelectedNewRowNames((prev) => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
+    })
+  }
+  const allNewRowsSelected = plan.unmatched.length > 0 && plan.unmatched.every((row) => selectedNewRowNames.has(row.name))
+  const toggleAllNewRows = () => {
+    setSelectedNewRowNames(allNewRowsSelected ? new Set() : new Set(plan.unmatched.map((row) => row.name)))
+  }
+  const confirmLabel = `초안 ${plan.applyCount.toLocaleString("ko-KR")}건 생성${
+    selectedNewRowNames.size > 0 ? ` · 새 행 ${selectedNewRowNames.size.toLocaleString("ko-KR")}명` : ""
+  }`
   return (
     <div
       role="dialog"
@@ -835,12 +887,30 @@ export function RevMatrixPasteDialog({
     >
       <div className="flex max-h-[85dvh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_24px_70px_rgba(17,17,16,0.22)]">
         <div className="border-b border-[rgba(0,0,0,0.08)] px-4 py-3">
-          <p className="text-[13px] font-bold text-[#111110]">엑셀 붙여넣기 미리보기</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[13px] font-bold text-[#111110]">엑셀 붙여넣기 미리보기</p>
+            {/* 라운드 4 P1-5 — 모드 배지: 이름 매칭이면 매칭 행수까지, 위치 투영이면 기존 앵커 규칙 안내. */}
+            <span className="rounded-full border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-2 py-0.5 text-[10px] font-bold text-[#615D59]">
+              {plan.mode === "by-name"
+                ? `이름 매칭 · ${plan.matchedRowCount.toLocaleString("ko-KR")}행 일치`
+                : "위치 투영(앵커 행부터 아래로)"}
+            </span>
+          </div>
           <p className="mt-1 text-[11px] leading-relaxed text-[#615D59]">
-            {plan.anchorCustomer} 선택 셀 기준 아래·오른쪽으로 매핑됩니다. 확인 시{" "}
+            {plan.mode === "by-name"
+              ? "고객명을 정규화 키로 매칭해 같은 고객의 행에 매핑됩니다."
+              : `${plan.anchorCustomer} 선택 셀 기준 아래·오른쪽으로 매핑됩니다.`}{" "}
+            확인 시{" "}
             <span className="font-bold text-[#7A520F]">검토 초안 {plan.applyCount.toLocaleString("ko-KR")}건</span>이 생성되고,
             장부 반영은 체크 큐에서 체크 → 적용을 거쳐야만 이뤄집니다.
           </p>
+          {/* 라운드 4 P1-5 — 같은 정규화 키의 딜 행이 여럿이라 자동 투영이 불가능한 이름. 매트릭스
+              직접 입력으로 유도한다(신규 초안 오생성보다 안전). */}
+          {plan.ambiguousNames.length > 0 && (
+            <p className="mt-2 rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-2.5 py-1.5 text-[10.5px] font-semibold leading-relaxed text-[#7A520F]">
+              같은 이름의 행이 여러 개라 건너뜀: {plan.ambiguousNames.join(", ")} — 매트릭스에서 직접 입력하세요
+            </p>
+          )}
           <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] font-bold">
             <span className="rounded-full border border-[#BDEFD8] bg-[#ECFDF5] px-2 py-0.5 text-[#084734]">
               생성 {plan.applyCount.toLocaleString("ko-KR")}
@@ -881,7 +951,8 @@ export function RevMatrixPasteDialog({
                     type="button"
                     aria-pressed={active}
                     onClick={() => onPickConfidence(option.id)}
-                    className="rounded-md px-2.5 py-1 text-[11px] font-bold transition"
+                    // UX 감사 2026-09-20: 최소 타깃(WCAG 2.5.8 24px) 확보 — 색·로직은 그대로.
+                    className="min-h-9 rounded-md px-3 py-1.5 text-[11px] font-bold transition"
                     style={
                       active
                         ? { backgroundColor: activeColor, color: "#FFFFFF" }
@@ -929,6 +1000,48 @@ export function RevMatrixPasteDialog({
           {hidden > 0 && (
             <p className="py-2 text-center text-[10.5px] font-semibold text-[#A39E98]">외 {hidden.toLocaleString("ko-KR")}칸 — 전체가 동일 규칙으로 처리됩니다</p>
           )}
+          {/* 라운드 4 P1-5 — 매칭되는 딜 행이 없는 이름. 기본 전부 미선택(스펙) — 승인한 것만
+              아래 onConfirm의 newRowNames로 실려 new-row 초안이 된다. */}
+          {plan.unmatched.length > 0 && (
+            <div className="mt-3 border-t border-[rgba(0,0,0,0.08)] pt-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-[11.5px] font-bold text-[#111110]">
+                  시트에 없는 고객 {plan.unmatched.length.toLocaleString("ko-KR")}명
+                </p>
+                <button
+                  type="button"
+                  onClick={toggleAllNewRows}
+                  className="text-[10.5px] font-bold text-[#7A520F] hover:underline"
+                >
+                  {allNewRowsSelected ? "모두 해제" : "모두 선택"}
+                </button>
+              </div>
+              <ul className="flex flex-col gap-1.5">
+                {plan.unmatched.map((row, index) => {
+                  const checked = selectedNewRowNames.has(row.name)
+                  const summary = row.cells
+                    .map((cell) => `${Number(cell.month.slice(5))}월 ${formatMoney(cell.amount)}`)
+                    .join(" · ")
+                  return (
+                    // 접근성: label로 감싸 클릭 영역을 체크박스 밖까지 확보 + min-h-11(44px, WCAG
+                    // 2.5.8)로 모바일 탭 타깃을 만족한다.
+                    <li key={`${index}-${row.name}`}>
+                      <label className="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2.5 py-1.5 transition hover:bg-[#F6F5F4]">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleNewRowName(row.name)}
+                          className="h-4 w-4 shrink-0 accent-[#084734]"
+                        />
+                        <span className="flex-1 truncate text-[12px] font-semibold text-[#111110]">{row.name}</span>
+                        <span className="shrink-0 text-[10.5px] font-semibold text-[#615D59]">{summary}</span>
+                      </label>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
         </div>
         <div className="flex items-center justify-end gap-2 border-t border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 py-3">
           <button
@@ -944,11 +1057,11 @@ export function RevMatrixPasteDialog({
           <button
             ref={confirmButtonRef}
             type="button"
-            onClick={onConfirm}
-            disabled={plan.applyCount === 0}
+            onClick={() => void onConfirm({ newRowNames: Array.from(selectedNewRowNames) })}
+            disabled={plan.applyCount === 0 && selectedNewRowNames.size === 0}
             className="inline-flex h-9 items-center gap-2 rounded-md bg-[#084734] px-3 text-[12px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
           >
-            검토 초안 {plan.applyCount.toLocaleString("ko-KR")}건 생성
+            {confirmLabel}
           </button>
         </div>
       </div>
