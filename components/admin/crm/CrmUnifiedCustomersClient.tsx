@@ -3,14 +3,15 @@
 // ClassIn 고객 DB(통합 고객) 본체 — URL·캐시·드로어 상태와 저장 보기 로직만 소유하고,
 // 검색 패널·결과 테이블·행 시각 요소·정렬은 components/admin/crm/unified/* 로 분해했다(2026-08-28).
 
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, use, Suspense, type MouseEvent } from "react"
 import dynamic from "next/dynamic"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { ChevronRight, Filter, UserPlus } from "lucide-react"
 
-import { adminFetchJsonCachedWithMeta, getCachedAdminJson } from "@/lib/admin-client"
+import { adminFetchJsonCachedWithMeta, getCachedAdminJson, seedAdminRequestCache } from "@/lib/admin-client"
 import { CRM_CACHE_SWR_MS, CRM_CACHE_TTL_MS } from "@/lib/crm/client-cache"
 import type { CrmUnifiedCustomerRow } from "@/lib/repositories/crm-unified-customers"
+import type { CrmUnifiedInitialData } from "@/lib/admin/crm/unified-prefetch"
 import { buildOwnerSelectOptions, useCrmOwners } from "./useCrmOwners"
 import Account360Lens from "./Account360Lens"
 import CrmNoticeBanner from "./CrmNoticeBanner"
@@ -59,6 +60,58 @@ const LOAD_FAILURE_FALLBACK_MESSAGE = "통합 고객 목록을 불러오지 못�
 
 function describeLoadError(error: unknown) {
   return error instanceof Error && error.message ? error.message : LOAD_FAILURE_FALLBACK_MESSAGE
+}
+
+// 프리페치 자체가 없을 때(미인증·역할 부족·실패 — prefetchCrmUnifiedInitialData가 null) 아래
+// 브리지에게 "레인 없음"을 표현하는 안정된 싱글턴. React use()는 매 렌더 새 promise를 주면
+// 무한 서스펜스로 보일 수 있으므로, 모듈 스코프 상수 하나를 항상 재사용한다(홈 화면과 동일 패턴).
+const RESOLVED_NULL_UNIFIED_CUSTOMERS_PROMISE: Promise<CrmUnifiedCustomers | null> = Promise.resolve(null)
+
+/**
+ * 통합 고객 목록의 "기본" 첫 조회 URL — 검색어·저장 뷰를 뺀 나머지 필터는 전부 마운트 시점
+ * state 초기값과 같다. `lib/admin/crm/unified-prefetch.ts`의 `buildUnifiedPrefetchUrl()`이
+ * 같은 계산을 서버에서 반복해 같은 문자열을 만들어야 시드가 `loadPage(0)`의 캐시 조회에
+ * 맞는다(tests/admin/crm-unified-prefetch.test.ts가 두 값을 직접 비교해 고정한다).
+ *
+ * "my_owner" 저장 뷰는 제외한다 — 서버 프리페치는 로그인한 담당자의 소유자 키를 풀지 않으므로
+ * (unified-prefetch.ts 상단 주석의 한계) my_owner 딥링크의 URL을 여기서도 만들지 않는다.
+ * 알 수 없는 view 값과 my_owner는 모두 "all"로 떨어진다.
+ */
+export function buildUnifiedListDefaultUrl(overrides?: { query?: string; view?: string }): string {
+  const rawView = overrides?.view
+  const view: SavedViewFilter =
+    rawView && rawView !== "my_owner" && SAVED_VIEW_FILTERS.some((filter) => filter.key === rawView)
+      ? (rawView as SavedViewFilter)
+      : "all"
+  return listUrl({
+    query: overrides?.query?.trim() ?? "",
+    source: "all",
+    lifecycle: "all",
+    owner: "",
+    view,
+    tag: "",
+    includeUnconfirmed: false,
+    offset: 0,
+  })
+}
+
+/**
+ * 소스 하나(customers)의 openPrefetchLane 결과를 React use()로 풀어 부모에 값을 넘기기만 하는
+ * 다리 컴포넌트 — 화면에는 아무것도 그리지 않는다. CrmHomeClient의 PrefetchSourceBridge와
+ * 같은 패턴(그 파일은 소유 밖이라 재사용하지 않고 이 화면 것을 따로 둔다).
+ */
+function CrmUnifiedPrefetchBridge({
+  promise,
+  onSettled,
+}: {
+  promise: Promise<CrmUnifiedCustomers | null>
+  onSettled: (value: CrmUnifiedCustomers | null) => void
+}) {
+  const value = use(promise)
+  useEffect(() => {
+    onSettled(value)
+  }, [value, onSettled])
+  return null
 }
 
 // 갱신 실패 배너의 기준 시각 — 화면에 남아 있는 결과가 언제 것인지 명시한다(UX 규약 4).
@@ -117,7 +170,12 @@ export function isSameLoadQuery(lastQueryKey: string | null, requestUrl: string)
   return lastQueryKey !== null && lastQueryKey === queryKeyFromUrl(requestUrl)
 }
 
-export default function CrmUnifiedCustomersClient() {
+export default function CrmUnifiedCustomersClient({
+  initialData,
+}: {
+  /** 서버 프리페치(lib/admin/crm/unified-prefetch.ts) — 미인증·역할 부족·실패면 null. */
+  initialData?: CrmUnifiedInitialData | null
+}) {
   const [query, setQuery] = useState("")
   const [debouncedQuery, setDebouncedQuery] = useState("")
   useEffect(() => {
@@ -284,6 +342,34 @@ export default function CrmUnifiedCustomersClient() {
     },
     [router, pathname, searchParams]
   )
+  // P1b 프리페치 시드 — 마운트 시점 searchParams(q·view)만 한 번 읽어 얼린다(이후 세그먼트
+  // 칩 클릭 등으로 URL이 바뀌어도 이 값은 그대로다: 시드는 "첫 로드 한 번"의 계약이지 매
+  // 내비게이션마다 다시 심는 자리가 아니다). 서버 프리페치(unified-prefetch.ts)가 같은
+  // 원문을 받아 같은 함수로 URL을 만들어야 문자열이 같아진다.
+  const [unifiedListDefaultUrl] = useState(() =>
+    buildUnifiedListDefaultUrl({
+      query: searchParams.get("q") ?? undefined,
+      view: searchParams.get("view") ?? undefined,
+    })
+  )
+  // 프리페치가 없으면(initialData null) 첫 렌더부터 바로 loadPage(0)을 허용한다(기존 동작
+  // 그대로). 있으면 브리지가 정착(settle)해 캐시를 심을 때까지 미룬다 — 그래야 loadPage(0)이
+  // 캐시 미스로 헛돌지 않는다.
+  const [customersReady, setCustomersReady] = useState(() => !initialData)
+  const handleCustomersPrefetchSettled = useCallback(
+    (value: CrmUnifiedCustomers | null) => {
+      if (value) {
+        seedAdminRequestCache(unifiedListDefaultUrl, value, {
+          ttlMs: CRM_CACHE_TTL_MS,
+          staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
+          generatedAt: initialData?.customers.generatedAt,
+        })
+      }
+      setCustomersReady(true)
+    },
+    [initialData?.customers.generatedAt, unifiedListDefaultUrl]
+  )
+
   const { owners: crmOwners, currentOwner, health: ownerHealth } = useCrmOwners()
   const ownerOptions = useMemo(() => buildOwnerSelectOptions(data?.owners, crmOwners), [crmOwners, data?.owners])
 
@@ -390,8 +476,9 @@ export default function CrmUnifiedCustomersClient() {
   )
 
   useEffect(() => {
+    if (!customersReady) return
     void loadPage(0)
-  }, [loadPage])
+  }, [loadPage, customersReady])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -529,6 +616,15 @@ export default function CrmUnifiedCustomersClient() {
       className="mx-auto max-w-7xl [&_a]:min-h-11 [&_a]:focus-visible:outline-none [&_a]:focus-visible:ring-2 [&_a]:focus-visible:ring-[#084734] [&_a]:focus-visible:ring-offset-2 [&_button]:min-h-11 [&_button]:focus-visible:outline-none [&_button]:focus-visible:ring-2 [&_button]:focus-visible:ring-[#084734] [&_button]:focus-visible:ring-offset-2 [&_input:not([type=checkbox]):not([type=file])]:min-h-11 [&_input:not([type=checkbox]):not([type=file])]:focus-visible:outline-none [&_input:not([type=checkbox]):not([type=file])]:focus-visible:ring-2 [&_input:not([type=checkbox]):not([type=file])]:focus-visible:ring-[#084734] [&_select]:min-h-11 [&_select]:focus-visible:outline-none [&_select]:focus-visible:ring-2 [&_select]:focus-visible:ring-[#084734] lg:[&_a]:min-h-6 lg:[&_button]:min-h-6 lg:[&_input:not([type=checkbox]):not([type=file])]:min-h-0 lg:[&_select]:min-h-0"
       aria-busy={loading || loadingMore || refreshing}
     >
+        {/* 화면에는 아무것도 그리지 않는다 — 서버 프리페치(customers) 레인을 use()로 풀어
+            요청 캐시에 심기만 한다(P1b). initialData가 없으면 이미 정착된 null 프라미스라
+            다음 마이크로태스크에 곧장 onSettled(null)로 떨어져 customersReady=true가 된다. */}
+        <Suspense fallback={null}>
+          <CrmUnifiedPrefetchBridge
+            promise={initialData?.customers.promise ?? RESOLVED_NULL_UNIFIED_CUSTOMERS_PROMISE}
+            onSettled={handleCustomersPrefetchSettled}
+          />
+        </Suspense>
         {/* 항상 마운트된 sr-only 진행 상태 live region(polite) — 로딩·새로고침·완료만 담당한다.
             조회 실패(danger)·갱신 실패(warning)는 아래 CrmNoticeBanner가 새로 마운트되며
             role=alert/role=status로 스스로 통지하므로, 여기서는 성공 문구만 억제해 상충하는
