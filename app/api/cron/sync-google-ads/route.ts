@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { checkCronAuth } from "@/lib/server/cron-auth"
 import { fetchGoogleAdsDaily, GoogleAdsConfigError } from "@/lib/google/ads"
 import { kstToday } from "@/lib/marketing/perf-assemble"
 import { upsertGoogleAdsDaily } from "@/lib/repositories/google-ads-daily"
@@ -20,9 +21,9 @@ export const dynamic = "force-dynamic"
 const TRAILING_DAYS = 7
 
 export async function GET(req: NextRequest) {
-  const expected = process.env.CRON_SECRET
-  const auth = req.headers.get("authorization") ?? ""
-  if (!expected || auth !== `Bearer ${expected}`) {
+  // 비교는 lib/server/cron-auth 의 timing-safe 헬퍼로 한다(다른 크론 라우트와 같은 판정).
+  // 시크릿 미설정도 인증 실패와 같은 401 로 닫는다(fail closed).
+  if (checkCronAuth(req) !== "ok") {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 })
   }
 

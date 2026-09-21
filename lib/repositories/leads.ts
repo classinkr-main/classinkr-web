@@ -497,17 +497,20 @@ export async function getCampaignLeads(): Promise<LeadRecord[]> {
  * 앞으로 늘어날 컬럼까지 캠페인 페이로드에 자동으로 실리는 것을 막기 위함이다.
  * supabaseToLegacy는 미선택 컬럼을 `?? undefined`로 처리하므로 그대로 재사용 가능.
  */
-const MARKETING_LEAD_COLUMNS = [
+const MARKETING_LEAD_COLUMN_LIST = [
   "id", "source", "name", "org", "role", "email", "phone", "message", "status",
   "branch", "notes", "source_detail", "lead_magnet", "follow_up_at", "assigned_to",
   "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
   "gclid", "fbclid", "msclkid", "ttclid", "landing_page", "current_page",
   "naver_ad",
   "created_at", "confirmed_at",
-].join(", ");
+] as const;
 
-// confirmed_at 마이그레이션 전 배포 창에서도 화면이 깨지지 않게 — 대시보드 조회와 같은 폴백.
-const MARKETING_LEAD_COLUMNS_WITHOUT_CONFIRMED = MARKETING_LEAD_COLUMNS.replace(", confirmed_at", "");
+// 마이그레이션 전 배포 창에서도 화면이 깨지지 않게 — 아직 없는 컬럼만 빼고 다시 읽는다(대시보드
+// 조회와 같은 폴백). naver_ad(20260914)는 저장 쪽에만 선택 컬럼 폴백이 있고 이 SELECT 에는 없어서,
+// 마이그레이션보다 코드가 먼저 나가면 마케팅 허브의 리드 집계가 42703 으로 통째로 실패했다 —
+// 런북의 "읽기 경로는 강등한다" 규칙대로 맞춘다. 빠진 컬럼은 supabaseToLegacy 가 undefined 로 둔다.
+const MARKETING_LEAD_OPTIONAL_COLUMNS = ["naver_ad", "confirmed_at"] as const;
 
 export async function getMarketingLeads(): Promise<LeadRecord[]> {
   if (!USE_SUPABASE) {
@@ -515,16 +518,25 @@ export async function getMarketingLeads(): Promise<LeadRecord[]> {
     return jsonGetLeads();
   }
 
-  try {
-    const rows = await fetchAllLeadRows(MARKETING_LEAD_COLUMNS, "마케팅 조회");
-    return rows.map(supabaseToLegacy);
-  } catch (error) {
-    if (!(error instanceof LeadQueryError) || !isMissingLeadColumn(error.supabaseError, "confirmed_at")) {
-      throw error;
+  let columns: string[] = [...MARKETING_LEAD_COLUMN_LIST];
+  // 선택 컬럼 수만큼만 다시 시도한다 — 그 밖의 오류(또는 같은 컬럼이 또 걸리는 경우)는 그대로 던진다.
+  for (let attempt = 0; attempt <= MARKETING_LEAD_OPTIONAL_COLUMNS.length; attempt += 1) {
+    try {
+      const rows = await fetchAllLeadRows(columns.join(", "), "마케팅 조회");
+      return rows.map(supabaseToLegacy);
+    } catch (error) {
+      if (!(error instanceof LeadQueryError)) throw error;
+      const supabaseError = error.supabaseError;
+      const missing = MARKETING_LEAD_OPTIONAL_COLUMNS.find(
+        (column) => columns.includes(column) && isMissingLeadColumn(supabaseError, column)
+      );
+      if (!missing) throw error;
+      console.warn(`[leads] 마케팅 조회: ${missing} 컬럼이 없어 빼고 다시 읽습니다(마이그레이션 미적용).`);
+      columns = columns.filter((column) => column !== missing);
     }
-    const fallback = await fetchAllLeadRows(MARKETING_LEAD_COLUMNS_WITHOUT_CONFIRMED, "마케팅 조회");
-    return fallback.map(supabaseToLegacy);
   }
+  // 도달하지 않는다 — 마지막 시도의 실패는 위 catch 가 그대로 던진다(타입 검사용 종결).
+  throw new Error("[leads] 마케팅 조회 실패: 선택 컬럼 폴백을 모두 소진했습니다.");
 }
 
 /**
