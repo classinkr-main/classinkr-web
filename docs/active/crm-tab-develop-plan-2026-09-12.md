@@ -271,6 +271,7 @@ home_v4.42(9/10 어드민 개편 중심)를 병합했다. 이 브랜치는 Wave 
 - 남은 6개 화면 단위(원천 고객·지도, 기록, 입력함, 검수, 돈흐름·인사이트, 공통 셸)는 이번 라운드에서 감사하지 않았다.
 - `lib/repositories/crm-priority-queue.ts`의 `invalidateCrmPrioritySourceSnapshot()`가 정의만 되고 리드·할 일 쓰기 경로에서 호출되지 않아, force 없는 재조회는 최대 60초 낡은 스냅샷을 돌려줄 수 있다(120초 suppress 창으로 화면상 가려짐).
 - `app/api/admin/crm/tasks/[id]/route.ts`의 `update` 액션이 `dueAt: null`을 받지 않아, 기한 없던 할 일의 "내일로" 되돌리기가 기한을 정확히 지우지 못한다.
+  → 2026-09-21 해소: `update`가 `dueAt` 3상태(키 없음=그대로·null/빈 문자열=지움·날짜=설정)를 받고 해석 못 하는 값은 400. 되돌리기는 `dueAt: null`로 기한 없음까지 복원한다. 같은 계열로 남은 것: 할 일 **생성**(POST)은 해석 못 하는 `dueAt`을 여전히 조용히 기한 없음으로 저장한다.
 - `lib/admin-client.ts`의 `invalidationScopesForUrl`이 리드 PATCH 하나로 CRM 집계 캐시 전체(overview·action-kpis·compass·coverage·owners·tasks·health)를 지운다 — 범위가 넓다.
 - `components/admin/crm/unified/shared.ts`의 `customerSourceTone()`이 여전히 팔레트 밖 리터럴(#B85C33 계열)을 쓴다. 소비처(`CustomerSearchPanel.tsx`)가 이번 라운드 클러스터 밖이라 그대로 두었다.
   → 2026-09-21 해소: 실패=danger·부분=warning·정상=ok 매핑(`customerSourceStatusTone`)으로 `lib/crm/status-tone.ts` 토큰만 조합한다(`STATUS_TONE_BG_CLASS` 추가). 제목은 강조 텍스트색이라 틴트 배경 위 대비 AA 이상(`tests/crm/unified-customer-source-tone.test.ts`).

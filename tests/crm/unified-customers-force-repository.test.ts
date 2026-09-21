@@ -150,6 +150,20 @@ describe("getCrmUnifiedCustomers bypassCache 계약 (unified-01)", () => {
     expect(mocks.revalidateTag).toHaveBeenCalledWith(SNAPSHOT_TAG, { expire: 0 })
   })
 
+  it("라벨 필터는 대소문자·공백 차이를 무시한다 — 태그 관리 화면의 묶음(VIP/vip) 건수와 맞게", async () => {
+    // 행의 라벨은 스냅샷이 아니라 요청마다 읽는 태그 맵(`<source>:<id>`)에서 붙는다.
+    vi.resetModules()
+    mockRealSourcesEmpty()
+    vi.doMock("@/lib/repositories/crm-customer-tags", () => ({
+      getAllCustomerTagsMap: vi.fn().mockResolvedValue({ "neo_account:sentinel": ["vip", "이탈  위험"] }),
+    }))
+    const { getCrmUnifiedCustomers } = await import("@/lib/repositories/crm-unified-customers")
+
+    expect((await getCrmUnifiedCustomers({ tag: "VIP" })).rows.map((row) => row.key)).toEqual(["neo:sentinel"])
+    expect((await getCrmUnifiedCustomers({ tag: " 이탈 위험 " })).rows).toHaveLength(1)
+    expect((await getCrmUnifiedCustomers({ tag: "재계약" })).rows).toEqual([])
+  })
+
   it("health-distribution 경로도 같은 bypassCache 계약을 따른다", async () => {
     const { getCrmUnifiedHealthDistribution } = await loadRepository()
 

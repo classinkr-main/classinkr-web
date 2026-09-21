@@ -480,6 +480,8 @@ export default function TagManagementPanel() {
                           ) : (
                             <Link
                               href={unifiedCustomersTagHref(row.tag)}
+                              // 태그 행마다 뷰포트 프리페치가 나가지 않게 — /admin 은 동적 렌더라 행 수만큼 요청이 붙는다.
+                              prefetch={false}
                               // 건수는 태그 부착 수라 통합 목록 결과(미확인 리드 게이트 등 적용)와 다를 수
                               // 있어 이름에 싣지 않는다.
                               aria-label={`태그 ${row.tag} 고객 목록 보기`}

@@ -220,8 +220,9 @@ function RecentIntakeBand({ intake }: { intake: WeeklyAdLeadRecentIntake | null 
         </p>
         <p className="pb-0.5 text-[11.5px] tabular-nums text-[#615D59]">
           Meta 광고 {count(intake.metaLeadAdsLeadCount)}건 · 홈페이지 {count(intake.homepageLeadCount)}건
-          {/* 합계에 재문의(재유입)가 섞였을 때만 밝힌다 — 옛 저장본에는 이 값이 없다. */}
-          {(intake.reinflowLeadCount ?? 0) > 0 && <> · 재유입 {count(intake.reinflowLeadCount ?? 0)}건</>}
+          {/* 합계에 재문의(재유입)가 섞였을 때만 밝힌다 — 옛 저장본에는 이 값이 없다. 재유입은 Meta·홈페이지
+              갈래 안에 이미 들어 있어 별도 갈래처럼 더해 읽히지 않게 "포함"으로 적는다. */}
+          {(intake.reinflowLeadCount ?? 0) > 0 && <> (재유입 {count(intake.reinflowLeadCount ?? 0)}건 포함)</>}
           {" "}· 미응대{" "}
           <span className={intake.unrespondedCount > 0 ? "font-semibold text-[#B43E3E]" : ""}>
             {count(intake.unrespondedCount)}건

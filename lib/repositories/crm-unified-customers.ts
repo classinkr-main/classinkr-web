@@ -42,6 +42,7 @@ import {
 import type { LeadRecord } from "@/lib/repositories/leads"
 import { computeCustomerHealth, type CustomerHealthBand } from "@/lib/crm/customer-health"
 import { getAllCustomerTagsMap } from "./crm-customer-tags"
+import { isDuplicateTag } from "@/lib/crm/tag-suggestions"
 // 리드·NEO 고객·참여 신호·Compass 데모 원본 수집은 우선순위 큐(crm-priority-queue.ts)와
 // 공유한다(2026-09-07 감사 #7) — 아래 loadSourceSnapshot 참고.
 import { getCrmCoreSourceSnapshot, type CrmCoreSourceSnapshot } from "@/lib/repositories/crm-shared-source-snapshot"
@@ -802,7 +803,9 @@ export async function getCrmUnifiedCustomers(
   const baseRows = rows.filter((row) => {
     if (source !== "all" && row.source !== source) return false
     if (lifecycle !== "all" && row.lifecycle !== lifecycle) return false
-    if (tagFilter && !row.tags.includes(tagFilter)) return false
+    // 라벨은 대소문자·공백 차이를 무시하고 맞춘다 — 태그 관리 화면이 "VIP"/"vip"를 한 묶음으로 세므로
+    // 그 화면의 ?tag= 딥링크 목록이 묶음 건수보다 적게 뜨지 않게(tagGroupKey 와 같은 규칙).
+    if (tagFilter && !isDuplicateTag(row.tags, tagFilter)) return false
     if (!rowMatchesOwner(row, ownerKeys)) return false
     if (!includesQuery(row, query)) return false
     return true

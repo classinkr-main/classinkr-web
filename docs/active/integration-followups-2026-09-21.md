@@ -80,6 +80,10 @@
   재문의가 집계에서 빠진다. 어드민 리드를 생성 시각으로만 보는 곳: "오늘 유입" 카드(`lib/marketing/intake-feed.ts`의 어드민 리드
   쪽 — Compass 리드는 이미 `created_at` 또는 `last_inflow_at`으로 센다), 아침 리드 공지(`lib/server/lead-morning-brief.ts`),
   주간·월간 다이제스트(`lib/server/lead-digest-alerts.ts`). `max(created_at, last_inflow_at)` 축으로 옮기고 신규/재유입을 가른다.
+- [ ] 리드 보드의 신규 리드 탭(`NewLeadsTab`의 `filterNewLeads`)은 아직 생성 시각으로 날짜를 자른다 — 병합된 재문의는 원래 생성일
+  칸에서 재유입 배지만 붙고 오늘 칸에 뜨지 않는다. 유입 축(`leadInflowInWindow`)으로 옮긴다.
+- [ ] 다이제스트의 24·48시간 초과는 이제 최신 유입부터 잰다(정본 SLA 규칙 `summarizeLeadResponseStatus`와 같게). 한 번도 연락하지
+  않은 리드가 재문의하면 방치 시간이 0부터 다시 시작한다 — 의도한 규칙인지 영업 담당 확인.
 - [ ] 재문의한 리드가 보드에서 다시 떠오르지 않는다 — 이식 문서가 후속으로 남긴 `isReinflowAwaitingContact` 배선. 종료·전환
   상태에서 재문의가 오면 어떻게 다룰지(다시 열기 / 배지만 / 담당 알림)부터 정한다.
 - [ ] 병합 시 새로 들어온 자격 필드(직책·학원 규모)와 광고 귀속은 기존 리드에 반영되지 않는다(타임라인 본문에만 남는다).
@@ -107,7 +111,10 @@
   평평하게 펼쳐 보낸 값이 서버 정규화를 그대로 왕복하는지 잠갔다.) 미러링 경로의 귀속 정규화를 `sanitizeLeadAttribution`
   하나로 통일하면서 `lib/marketing-attribution.ts`의 `pickLeadAttribution`은 테스트만 부른다. 제거하거나 위임으로 바꾼다.
 - [ ] (2026-09-21 앞의 둘 완료: 태그 행 → 통합 고객 `?tag=` 딥링크(라벨 필터가 URL 상태, 서버 프리페치도 라벨을 싣고 마운트 레인만 시드),
-  원천 상태 타일을 팔레트 톤으로. **남은 것: 리드 보드 신선도 캡션.**) 태그 관리 화면의 행 클릭 → 통합 고객 `?tag=` 딥링크 미배선, `customerSourceTone()`의 팔레트 밖 색상, 리드 보드의
+  원천 상태 타일을 팔레트 톤으로. 검토 후속으로 라벨 필터를 태그 화면 묶음과 같은 대소문자 무시 비교로, `?tag=` 착지에서 저장된
+  담당자 필터를 복원하지 않게, 태그 행 링크 프리페치 끔. **남은 것: 리드 보드 신선도 캡션**, 그리고 라벨 칩 이동이 서버 레인을 기다리는
+  동안 드로어·저장 뷰 칩을 누르면 낡은 `searchParams`에서 URL을 만들어 `?tag=`가 빠질 수 있는 경합(칩당 서버 왕복 2회와 함께
+  `history.replaceState` 기반 동기화로 바꿀 때 같이 본다).) 태그 관리 화면의 행 클릭 → 통합 고객 `?tag=` 딥링크 미배선, `customerSourceTone()`의 팔레트 밖 색상, 리드 보드의
   신선도 캡션 생략(`generatedAt` 없음) — CRM 기획 §10의 라운드별 "후속".
 - [x] (2026-09-21: `site_settings` 컬럼·overview 카탈로그 프로브 추가, CHECK 전용 `lead_digest_runs`는 주석의 제약 조회로 대체. 서울에서 `check:db --strict` 통과, 제약 정의에 `'daily'`·overview 3인자 한 줄만 있음을 SQL로 확인.) `schema-contract.ts`에 프로브가 없는 최근 마이그레이션 3건(런북 "프로브가 없던 최근 파일").
 
@@ -176,6 +183,12 @@
   스켈레톤·포커스, "죽은 JSON CRUD 정리"(적용하면 `lib/repositories/bugs.ts`가 컴파일되지 않는다 — 전제가 무너졌다).
 
 ## 7. 운영 반영 중 새로 발견한 것 (2026-09-21)
+
+- [x] (2026-09-21 수정: 병합 후보를 응대 대상 소스 행으로만 좁혔다 — `pickReinflowTarget`, `findLeadsByContacts`가 `source`를 싣는다.)
+  **재문의 병합이 뉴스레터·자료 다운로드 행을 대상으로 골랐다.** 같은 연락처의 뉴스레터 구독 행(status `new`)이 있으면 데모·문의·
+  쇼룸·도입 신청이 그 행에 합쳐져, 소스로 거르는 아침 공지·다이제스트·응대 SLA 어디에도 신청이 잡히지 않았다("오늘 유입"
+  카드만 셌다). 762e864c 배포(재문의 병합 첫 운영 반영)부터 이 수정 배포 전까지 그렇게 합쳐진 신청이 있는지 타임라인의
+  "재문의(재유입)" 이벤트가 붙은 비응대 소스 리드로 한 번 확인한다.
 
 - [x] (2026-09-21 수정: 원인은 Next 16 ISR 이 디코드된 한글 경로로 만든 암묵 캐시 태그가 minimal mode(Vercel)에서 `x-next-cache-tags` 헤더에 실려 Node 가 거부한 것. `proxy.ts` 가 헤더에 못 싣는 슬러그만 `/blog/_u8_<base64url>` 토큰 경로로 rewrite 한다 — 주소창 URL·canonical 은 원래 슬러그 그대로, ISR 유지, `revalidatePath` 도 토큰 경로로. `lib/blog-slug-route.ts`.) **한글 slug 블로그 글이 500.** 예: `/blog/naver-2026-06-11-최대-500만원-…`. Vercel 런타임 로그
   `TypeError: Invalid character in header content ["x-next…`. 배포 **전** 빌드(17:20 KST)에서도 같은 오류가 있었고 이번 배포 뒤에도

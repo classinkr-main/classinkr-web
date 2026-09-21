@@ -531,8 +531,10 @@ export default function CrmUnifiedCustomersClient({
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    // 세그먼트 딥링크(?view=) 착지 시에는 저장된 담당자 필터를 복원하지 않는다 — 칩 카운트(전역 기준) 정합.
-    if (new URLSearchParams(window.location.search).get("view")) return
+    // 세그먼트(?view=)·라벨(?tag=) 딥링크 착지 시에는 저장된 담당자 필터를 복원하지 않는다 — 칩 카운트(전역 기준)·
+    // 태그 관리 화면 건수와의 정합, 그리고 첫 요청이 서버 프리페치 시드(담당자 없음)와 맞게.
+    const landing = new URLSearchParams(window.location.search)
+    if (landing.get("view") || landing.get("tag")) return
     const storedOwner = window.localStorage.getItem(OWNER_STORAGE_KEY)
     if (storedOwner) setOwner(storedOwner)
   }, [])
@@ -615,12 +617,13 @@ export default function CrmUnifiedCustomersClient({
 
   const clearLingeringFilters = useCallback(() => {
     setQuery("")
-    changeTagFilter("")
+    // 라벨이 걸려 있을 때만 URL(?tag=)을 쓴다 — 안 걸렸는데 부르면 router.replace 로 서버 레인이 헛돈다.
+    if (tagFilter) changeTagFilter("")
     if (savedView !== "my_owner") {
       setOwner("")
       persistOwner("")
     }
-  }, [changeTagFilter, persistOwner, savedView])
+  }, [changeTagFilter, persistOwner, savedView, tagFilter])
 
   // 빈 상태 다음 행동 안내 — 필터가 걸려 있으면 초기화를, 아니면 리드 등록/매칭 연결을 권한다.
   const hasActiveFilters =
