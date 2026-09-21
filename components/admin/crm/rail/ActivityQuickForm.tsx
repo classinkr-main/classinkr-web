@@ -9,15 +9,17 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react"
 import { Building2, CheckCircle2, ChevronDown, Loader2, Paperclip, PhoneCall } from "lucide-react"
 
-import { adminFetch } from "@/lib/admin-client"
+import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
 import {
   ACTIVITY_TEMPLATES,
   activityTemplatePrefill,
   applyActivityTemplate,
   type ActivityTemplate,
 } from "@/lib/crm/activity-templates"
+import { CRM_CACHE_SWR_MS, CRM_CACHE_TTL_MS } from "@/lib/crm/client-cache"
 import { entityIdFromCustomerKey, getRecentCustomers, type RecentCustomer } from "@/lib/crm/recent-customers"
 import { STATUS_TONE_CLASS, STATUS_TONE_TEXT_STRONG_CLASS } from "@/lib/crm/status-tone"
+import { extractTodayContacts, type TodayContact } from "@/lib/crm/today-contacts"
 import { Toast } from "@/components/admin/crm/leads/shared"
 import CrmCustomerPicker, { type CustomerPickValue } from "@/components/admin/crm/CrmCustomerPicker"
 import {
@@ -37,6 +39,7 @@ import {
   localInputToIso,
   toLocalDateTimeInput,
   type ActivityTargetType,
+  type CrmEventsResponse,
   type FormMode,
   type OptionalFieldKey,
   type Sentiment,
@@ -119,6 +122,49 @@ export function recentCustomersForUnlinkedWarning(recents: RecentCustomer[]): Re
   return recents.filter((recent) => recent.key && recent.name.trim()).slice(0, UNLINKED_RECENT_LIMIT)
 }
 
+/** 칩 행 상한(오늘 최대 4 + 최근 최대 4를 합쳐 중복 제거 후 최대 6 — 기획 §14.2 A1). */
+export const CONTACT_CHIP_LIMIT = 6
+const CONTACT_CHIP_SOURCE_LIMIT = 4
+
+export interface ContactChip {
+  key: string
+  targetType: "lead" | "neo_account"
+  targetId: string
+  name: string
+  /** 칩 라벨 옆 작은 표시 — 오늘 기록된 대상이 최근 열람보다 우선한다. */
+  tag: "오늘" | "최근"
+}
+
+/**
+ * 오늘 기록 대상(today)과 최근 열람 고객(recents)을 합쳐 칩 목록을 만든다. 순수 함수(테스트 고정용).
+ * 오늘 쪽을 먼저 채워 같은 대상이 둘 다에 있으면 "오늘" 표시가 남고, 각 쪽 상한(4)을 지나면
+ * 합계가 6을 넘지 않게 자른다.
+ */
+export function buildContactChips(recents: RecentCustomer[], today: TodayContact[]): ContactChip[] {
+  const chips: ContactChip[] = []
+  const seen = new Set<string>()
+
+  for (const contact of today.slice(0, CONTACT_CHIP_SOURCE_LIMIT)) {
+    if (seen.has(contact.key)) continue
+    seen.add(contact.key)
+    chips.push({ key: contact.key, targetType: contact.targetType, targetId: contact.targetId, name: contact.name, tag: "오늘" })
+  }
+
+  for (const recent of recents.slice(0, CONTACT_CHIP_SOURCE_LIMIT)) {
+    if (!recent.key || !recent.name.trim() || seen.has(recent.key)) continue
+    seen.add(recent.key)
+    chips.push({
+      key: recent.key,
+      targetType: recent.source,
+      targetId: entityIdFromCustomerKey(recent.key),
+      name: recent.name,
+      tag: "최근",
+    })
+  }
+
+  return chips.slice(0, CONTACT_CHIP_LIMIT)
+}
+
 /**
  * 인라인 확인 블록(템플릿 덮어쓰기·미연결 경고)의 공통 닫힘 규칙 — 바깥 클릭(mousedown)·Esc 에 닫힌다.
  * 열리는 클릭의 mousedown 은 리스너 등록 전에 이미 지나갔으므로 열자마자 닫히지 않는다.
@@ -197,6 +243,34 @@ export default function ActivityQuickForm({
   const [appliedTemplateId, setAppliedTemplateId] = useState<string | null>(null)
   // A3 — 고객 미연결 저장 경고. null 이면 닫힘, 열리면 그 시점의 최근 고객 목록을 들고 있다.
   const [unlinkedWarning, setUnlinkedWarning] = useState<{ recents: RecentCustomer[] } | null>(null)
+
+  // A1 — 최근·오늘 연락 고객 칩 행. composer/compact 이고 대상이 고정(lockTarget)되지 않은
+  // 컨텍스트에서만 의미가 있다(고정 대상이면 이미 연결돼 있어 칩이 할 일이 없다).
+  const showContactChips = (isComposer || isCompact) && !lockTarget
+  // 최근 열람 고객은 마운트 시점 1회 스냅샷 — 정적 렌더(SSR/테스트)에서도 useState 초기화 함수가
+  // 동기 실행되어 마크업에 그대로 반영된다(localStorage mock 테스트 호환).
+  const [recentContacts] = useState<RecentCustomer[]>(() => (showContactChips ? getRecentCustomers() : []))
+  const [todayContacts, setTodayContacts] = useState<TodayContact[]>([])
+  useEffect(() => {
+    if (!showContactChips) return
+    let cancelled = false
+    adminFetchJsonCached<CrmEventsResponse>(`${EVENTS_URL}?limit=50`, undefined, {
+      cacheKey: `${EVENTS_URL}?limit=50`,
+      ttlMs: CRM_CACHE_TTL_MS,
+      staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
+    })
+      .then((data) => {
+        if (cancelled) return
+        setTodayContacts(extractTodayContacts(data.rows, Date.now()))
+      })
+      .catch(() => {
+        // 보조 기능 — 실패해도 최근 고객 칩만 노출한다(캡션 불필요).
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [showContactChips])
+  const contactChips = buildContactChips(recentContacts, todayContacts)
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const templateConfirmRef = useRef<HTMLDivElement | null>(null)
@@ -465,6 +539,42 @@ export default function ActivityQuickForm({
       }}
     />
   )
+
+  // A1 — 최근·오늘 연락 고객 칩. 클릭하면 customerPicker onPick과 같은 경로로 대상을 설정한다
+  // (저장은 별도 — 미연결 경고 칩과 달리 곧바로 제출하지 않는다).
+  const contactChipRow =
+    showContactChips && contactChips.length > 0 ? (
+      <div
+        className={`flex flex-wrap items-center gap-1.5 ${MOBILE_TOUCH_TARGET_CLASS}`}
+        role="group"
+        aria-label="최근·오늘 연락 고객"
+        data-testid="activity-contact-chip-row"
+      >
+        {contactChips.map((chip) => {
+          const active = targetType === chip.targetType && targetId === chip.targetId
+          return (
+            <button
+              key={chip.key}
+              type="button"
+              aria-pressed={active}
+              onClick={() => {
+                setTargetType(chip.targetType)
+                setTargetId(chip.targetId)
+                setTargetLabel(chip.name)
+              }}
+              className={`inline-flex h-8 max-w-full items-center gap-1 rounded-md border px-2.5 text-[12px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] ${
+                active
+                  ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                  : "border-[#e8e8e4] bg-white text-[#111110] hover:bg-[#F6F5F4]"
+              }`}
+            >
+              <span className="max-w-[9rem] truncate">{chip.name}</span>
+              <span className={`text-[10px] font-medium ${active ? "text-[#084734]/70" : SECONDARY_TEXT_CLASS}`}>{chip.tag}</span>
+            </button>
+          )
+        })}
+      </div>
+    ) : null
 
   // ⌘/Ctrl+Enter 저장 — 본문 textarea 에서. 조합 입력(한글 IME) 중의 Enter 는 무시한다. 저장 게이트(A3)는 같은 handleSubmit 을 탄다.
   const onBodyKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
@@ -883,10 +993,18 @@ export default function ActivityQuickForm({
             </button>
           </div>
 
+          {contactChipRow ? <div className="mt-1.5">{contactChipRow}</div> : null}
+
           {/* 녹음 모드: 파일 입력을 컴포저 줄 바로 아래 인라인 노출(상세 토글 없이 첨부 가능) */}
           {recordingField ? <div className="mt-2 grid">{recordingField}</div> : null}
 
           {unlinkedWarningBlock ? <div className="mt-2">{unlinkedWarningBlock}</div> : null}
+
+          {mode === "meeting_minutes" ? (
+            <p className="mt-1.5 text-[11px] text-[#1a1a1a]/35" data-testid="composer-meeting-hint">
+              요지 한 줄이면 저장됩니다 · 결정·차단·참석자는 +상세
+            </p>
+          ) : null}
 
           <div className="mt-1.5 flex items-center justify-between gap-2">
             <p className="text-[11px] text-[#1a1a1a]/35">
@@ -1016,6 +1134,8 @@ export default function ActivityQuickForm({
           </label>
         </div>
 
+        {isCompact && contactChipRow ? contactChipRow : null}
+
         {targetId ? (
           <p className="text-[11px] text-[#1a1a1a]/40">연결된 대상에 기록이 저장되어 고객 360 타임라인에 바로 표시됩니다.</p>
         ) : (
@@ -1048,14 +1168,21 @@ export default function ActivityQuickForm({
         ) : null}
 
         {MODE_FIELDS[mode].advanced.length ? (
-          <button
-            type="button"
-            onClick={() => setShowAdvanced((value) => !value)}
-            className="inline-flex h-9 items-center justify-center gap-1.5 self-start rounded-lg border border-[#e8e8e4] bg-[#fafaf8] px-3 text-[12px] font-semibold text-[#1a1a1a]/60 transition-colors hover:bg-[#f0f0ec]"
-          >
-            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
-            {showAdvanced ? "상세 입력 접기" : "상세 입력 펼치기"}
-          </button>
+          <div className="flex flex-col items-start gap-1">
+            {mode === "meeting_minutes" ? (
+              <p className="text-[11px] text-[#1a1a1a]/40" data-testid="fields-meeting-hint">
+                요지 한 줄이면 저장됩니다 · 결정·차단·참석자는 +상세
+              </p>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setShowAdvanced((value) => !value)}
+              className="inline-flex h-9 items-center justify-center gap-1.5 self-start rounded-lg border border-[#e8e8e4] bg-[#fafaf8] px-3 text-[12px] font-semibold text-[#1a1a1a]/60 transition-colors hover:bg-[#f0f0ec]"
+            >
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
+              {showAdvanced ? "상세 입력 접기" : "상세 입력 펼치기"}
+            </button>
+          </div>
         ) : null}
 
         {advancedFieldStack}
