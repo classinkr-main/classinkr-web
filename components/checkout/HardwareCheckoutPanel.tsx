@@ -20,6 +20,7 @@ import {
   clampHardwareQty,
   countInstallRequiredUnits,
   computeHardwareTotalKrw,
+  computeInstallSubtotalKrw,
   countHardwareUnits,
   createEmptyHardwareQuantities,
   formatHardwareKrw,
@@ -191,6 +192,10 @@ export function HardwareCheckoutPanel() {
   const requestItems = useMemo(() => buildHardwareRequestItems(quantities), [quantities])
   // 설치가 따로 필요한 대수(전자칠판 단품). 패키지는 벽걸이를 이미 포함해 세지 않는다.
   const installUnitCount = useMemo(() => countInstallRequiredUnits(quantities), [quantities])
+  // 설치비는 스탠드·벽걸이 단가가 같아 담은 구성만으로 확정된다. 신청 모달에서만 더하면
+  // 사이드바가 말하는 금액과 실제 신청 합계가 대당 단가만큼 갈라진다.
+  const installSubtotalKrw = useMemo(() => computeInstallSubtotalKrw(quantities), [quantities])
+  const grandTotalKrw = totalKrw + installSubtotalKrw
   const hasSelection = requestItems.length > 0
 
   function setQty(sku: string, next: number) {
@@ -203,7 +208,7 @@ export function HardwareCheckoutPanel() {
       page: "/checkout",
       product_family: "hardware",
       item_count: requestItems.length,
-      value: totalKrw,
+      value: grandTotalKrw,
       currency: "KRW",
     })
     setRequestOpen(true)
@@ -268,6 +273,17 @@ export function HardwareCheckoutPanel() {
                   </span>
                 </li>
               ))}
+              {installUnitCount > 0 ? (
+                <li className="flex items-start justify-between gap-3 text-[13px]">
+                  <span className="min-w-0 text-[#44514A]">
+                    전자칠판 설치
+                    <span className="ml-1.5 text-[#7C8A83]">× {installUnitCount}대</span>
+                  </span>
+                  <span className="shrink-0 font-medium tabular-nums text-[#111110]">
+                    {formatHardwareKrw(installSubtotalKrw)}
+                  </span>
+                </li>
+              ) : null}
             </ul>
           ) : (
             <p className="mt-4 text-[13px] leading-relaxed text-[#A39E98]">
@@ -282,9 +298,13 @@ export function HardwareCheckoutPanel() {
                 {unitCount > 0 ? `${unitCount}점 선택` : "선택 없음"}
               </p>
             </div>
-            <p className="text-[26px] font-semibold tabular-nums tracking-tight text-[#111110]">
-              {formatHardwareKrw(totalKrw)}
-            </p>
+            <div className="text-right">
+              <p className="text-[26px] font-semibold tabular-nums tracking-tight text-[#111110]">
+                {formatHardwareKrw(grandTotalKrw)}
+              </p>
+              {/* 고객이 마지막으로 보는 숫자 옆에 과세 기준을 붙인다. */}
+              <p className="mt-0.5 text-[11px] text-[#7C8A83]">부가세 별도</p>
+            </div>
           </div>
 
           <p className="mt-3 text-[11px] leading-relaxed text-[#7C8A83]">

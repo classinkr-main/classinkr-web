@@ -1,17 +1,20 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { AlertCircle, CalendarCheck, Check, Loader2 } from "lucide-react"
 
 import { DesiredDateCalendar } from "@/components/checkout/DesiredDateCalendar"
 import { formatDesiredDateLabel } from "@/components/checkout/request-date"
 import { SlotPicker } from "@/components/showroom/SlotPicker"
+import { ACADEMY_SIZE_OPTIONS } from "@/lib/contact/academy-size"
+import { getAnonymousId } from "@/lib/consent/consent"
+import { collectLeadAttribution } from "@/lib/marketing-attribution"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { trackEvent } from "@/lib/analytics"
+import { trackDemoRequestAdsConversion, trackEvent } from "@/lib/analytics"
 import {
   toDisabledIsoDates,
   type ShowroomDayAvailability,
@@ -27,12 +30,8 @@ interface Props {
   interests: readonly string[]
 }
 
-/**
- * 학원 규모 선택지. `app/resources/[slug]/ResourceDownloadForm.tsx` 의 size select 와
- * **같은 문자열**이어야 한다 — 리드 미러링이 두 경로의 값을 같은 `size` 필드에 쌓기
- * 때문에, 문구가 갈라지면 규모별 집계가 둘로 쪼개진다.
- */
-const ACADEMY_SIZE_OPTIONS = ["100명 이하", "100~300명", "300~500명", "500명 이상"] as const
+// 규모 선택지 정본은 lib/contact/academy-size.ts 다 — 여기서 다시 적으면 같은 컬럼에
+// 쌓이는 값이 폼마다 갈라진다.
 
 /* ── 가용성 ───────────────────────────────────────────────────────────────── */
 
@@ -42,6 +41,8 @@ interface Availability {
   maxIso: string
   days: ShowroomDayAvailability[]
   slotDurationMinutes: number
+  /** 원천 설정 상태. 구버전 응답을 대비해 선택 필드로 둔다. */
+  sources?: { holidays?: boolean; showroomCalendar?: boolean }
 }
 
 const EMPTY_DAYS: ShowroomDayAvailability[] = []
@@ -254,22 +255,30 @@ export function ShowroomBookingForm({ interests }: Props) {
   const submitLock = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
 
+  /**
+   * 가용성 조회. 마운트와 "다시 불러오기" 둘 다 이 경로를 쓴다.
+   *
+   * 실패 시 폼 전체가 잠기는데(제출 버튼이 ready 를 요구한다) 재시도 수단이 없으면
+   * 사용자는 페이지를 직접 새로고침하는 수밖에 없었다. 잠그는 것 자체는 유지한다 —
+   * 가용성을 모르는 채 접수를 받으면 확정된 방문 위에 덧예약이 난다.
+   */
+  const reloadAvailability = useCallback(async (signal?: AbortSignal) => {
+    setAvailabilityStatus("loading")
+    const next = await fetchAvailability(signal)
+    if (signal?.aborted) return
+    if (!next) {
+      setAvailabilityStatus("error")
+      return
+    }
+    setAvailability(next)
+    setAvailabilityStatus("ready")
+  }, [])
+
   useEffect(() => {
     const controller = new AbortController()
-
-    void (async () => {
-      const next = await fetchAvailability(controller.signal)
-      if (controller.signal.aborted) return
-      if (!next) {
-        setAvailabilityStatus("error")
-        return
-      }
-      setAvailability(next)
-      setAvailabilityStatus("ready")
-    })()
-
+    void reloadAvailability(controller.signal)
     return () => controller.abort()
-  }, [])
+  }, [reloadAvailability])
 
   // 언마운트 중 진행 중인 제출을 끊는다 — 늦게 온 응답이 사라진 폼을 갱신하지 않게.
   useEffect(() => {
@@ -390,6 +399,10 @@ export function ShowroomBookingForm({ interests }: Props) {
           ...(memo ? { memo } : {}),
           sourcePage: "/showroom",
           consent: true,
+          // 이 폼은 lib/submitLead.ts 를 거치지 않아 귀속이 붙지 않았다 — 직접 태운다.
+          // getAnonymousId 는 분석 동의가 있을 때만 값을 낸다.
+          ...collectLeadAttribution(),
+          anonymousId: getAnonymousId(),
         }),
       })
 
@@ -411,6 +424,12 @@ export function ShowroomBookingForm({ interests }: Props) {
           interest_count: form.interests.length,
           academy_size: form.academySize || undefined,
         })
+        // Google Ads 전환. 지금까지 문의·데모·행사만 이걸 불러서, 가장 값비싼 전환이
+        // 광고 최적화 신호로 돌아가지 않았다. 실제 발화 여부는 Consent Mode v2(ad_storage)가
+        // 정하므로 동의 없는 방문자에게는 나가지 않는다.
+        // 리드 id 는 서버가 응답 후에 미러링하며 만들어 클라이언트가 모른다 — 접수번호를
+        // 전환의 transaction_id 로 쓴다(중복 제거 키로 충분하다).
+        trackDemoRequestAdsConversion({ leadId: payload.bookingId })
         return
       }
 
@@ -462,6 +481,10 @@ export function ShowroomBookingForm({ interests }: Props) {
         <p className="mt-2 text-[14px] leading-relaxed text-[#615D59]">
           요청이 접수되었고 담당자가 확인 후 확정 연락을 드립니다. 아직 방문이 확정된 것은
           아니며, 남겨주신 연락처로 일정을 확인한 뒤 확정해 드립니다.
+        </p>
+        {/* 이 화면을 닫으면 아무 흔적도 남지 않던 문제 — 접수 확인을 연락처로도 보낸다. */}
+        <p className="mt-1.5 text-[13px] leading-relaxed text-[#615D59]">
+          접수 내용은 남겨주신 연락처로도 보내드립니다.
         </p>
 
         <dl className="mt-5 space-y-2 rounded-xl border border-black/[0.08] bg-[#F6F5F4] px-4 py-3 text-[13px]">
@@ -556,6 +579,13 @@ export function ShowroomBookingForm({ interests }: Props) {
                 </Link>
                 로 남겨주시면 담당자가 일정을 잡아드립니다.
               </p>
+              <button
+                type="button"
+                onClick={() => void reloadAvailability()}
+                className="mt-3 inline-flex min-h-11 items-center justify-center rounded-[6px] border border-[#084734] px-4 text-[13px] font-semibold text-[#084734] transition-colors hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+              >
+                다시 불러오기
+              </button>
             </div>
           ) : (
             <>
@@ -574,6 +604,14 @@ export function ShowroomBookingForm({ interests }: Props) {
                 평일만 운영하며, 담당자 배정과 자료 준비를 위해 최소 2영업일 전부터 예약을
                 받습니다. 회색 날짜는 휴무이거나 이미 마감된 날입니다.
               </p>
+              {/* 공휴일 원천이 꺼져 있으면 달력이 연휴를 열어 둔다. 요청형이라 담당자가
+                  확정 단계에서 거를 수 있지만, 화면이 아는 척하지는 않는다. */}
+              {availability?.sources?.holidays === false ? (
+                <p className="text-[11px] text-[#A8741A]">
+                  공휴일은 자동 반영되지 않습니다. 연휴에 걸친 날짜를 고르셨다면 담당자가 확인
+                  단계에서 함께 조정해 드립니다.
+                </p>
+              ) : null}
             </>
           )}
 

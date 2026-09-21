@@ -3,8 +3,30 @@
 import { useState, useEffect, useRef } from "react"
 import { usePathname } from "next/navigation"
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion"
-import { MessageSquare, X } from "lucide-react"
+import { MapPin, MessageSquare, X } from "lucide-react"
 import { TrackedLink } from "@/components/TrackedLink"
+
+/**
+ * 제품 상세를 보고 있는 사람은 이미 "무엇인지"를 지나 "실물을 보고 판단하는" 단계다.
+ * 그 구간에서만 쇼룸 예약으로 보내고, 나머지 경로는 기존 문의를 유지한다.
+ */
+function resolveCta(pathname: string) {
+    if (pathname.startsWith("/product")) {
+        return {
+            href: "/showroom",
+            ctaId: "mobile_floating_showroom",
+            label: "쇼룸 예약하기",
+            Icon: MapPin,
+        } as const
+    }
+
+    return {
+        href: "/contact",
+        ctaId: "mobile_floating_contact",
+        label: "도입 문의하기",
+        Icon: MessageSquare,
+    } as const
+}
 
 export function MobileFloatingCTA() {
     const pathname = usePathname()
@@ -64,6 +86,8 @@ export function MobileFloatingCTA() {
         return null
     }
 
+    const cta = resolveCta(pathname)
+
     return (
         <div className="md:hidden">
             <AnimatePresence>
@@ -94,12 +118,12 @@ export function MobileFloatingCTA() {
                                 className="w-full"
                             >
                                 <TrackedLink
-                                    href="/contact"
-                                    ctaId="mobile_floating_contact"
+                                    href={cta.href}
+                                    ctaId={cta.ctaId}
                                     className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-bold text-white shadow-[0_8px_24px_rgba(16,185,129,0.35)] transition-all duration-200 hover:bg-primary/90 active:scale-95"
                                 >
-                                    <MessageSquare className="h-4 w-4 shrink-0" />
-                                    도입 문의하기
+                                    <cta.Icon className="h-4 w-4 shrink-0" />
+                                    {cta.label}
                                 </TrackedLink>
                             </motion.div>
 

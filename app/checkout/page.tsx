@@ -1,7 +1,13 @@
 import type { Metadata } from "next"
 
 import { CheckoutClient, type ProductFamily } from "@/components/checkout/CheckoutClient"
+import {
+  getKstToday,
+  getMaxDesiredDate,
+  getMinDesiredDate,
+} from "@/components/checkout/request-date"
 import type { BillingMode } from "@/components/billing/BillingModeTabs"
+import { loadKoreaHolidayDates } from "@/lib/korea-holiday-dates"
 
 export const metadata: Metadata = {
   title: "Checkout",
@@ -36,6 +42,27 @@ function resolveInitialMode(
   return "subscription"
 }
 
+/**
+ * 희망일 달력이 막을 공휴일. 주말은 화면이 직접 계산한다(순수 계산).
+ *
+ * 원천이 늦거나 자격이 없으면 빈 목록으로 떨어뜨린다 — 공휴일을 못 읽었다고 신청 화면을
+ * 닫으면 멀쩡한 신청을 잃는다. 희망일은 담당자와 다시 조율하는 값이라 "덜 막는" 쪽이 맞다.
+ */
+async function loadDesiredDateHolidays(): Promise<string[]> {
+  const todayIso = getKstToday()
+
+  try {
+    const holidays = await loadKoreaHolidayDates(
+      getMinDesiredDate(todayIso),
+      getMaxDesiredDate(todayIso)
+    )
+    return [...holidays]
+  } catch (error) {
+    console.error("[checkout] 공휴일 조회 실패 — 주말만 막고 진행:", error)
+    return []
+  }
+}
+
 export default async function CheckoutPage({
   searchParams,
 }: {
@@ -45,12 +72,14 @@ export default async function CheckoutPage({
   const initialQuote = pickString(params?.quote)
   const initialMode = resolveInitialMode(params?.mode, Boolean(initialQuote))
   const initialFamily = resolveProductFamily(params?.type)
+  const holidayIsoDates = await loadDesiredDateHolidays()
 
   return (
     <CheckoutClient
       initialFamily={initialFamily}
       initialMode={initialMode}
       initialQuoteCode={initialQuote || undefined}
+      holidayIsoDates={holidayIsoDates}
     />
   )
 }

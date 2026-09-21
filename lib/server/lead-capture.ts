@@ -19,6 +19,8 @@ import { setEventToken } from "@/lib/types/event-metrics"
 const VALID_SOURCES = new Set<LeadSource>([
   "demo_modal",
   "contact_page",
+  "showroom_booking",
+  "checkout_request",
   "newsletter",
   "meta_lead_ads",
 ])
@@ -26,6 +28,8 @@ const VALID_SOURCES = new Set<LeadSource>([
 const SITE_INFLOW_SOURCE_LABELS = {
   demo_modal: "데모 신청",
   contact_page: "문의",
+  showroom_booking: "쇼룸 예약",
+  checkout_request: "도입 신청",
   newsletter: "뉴스레터",
 } as Record<string, string>
 
@@ -240,6 +244,15 @@ export function buildLeadPayload(raw: unknown): LeadPayload {
     !hasRequiredFields(payload, ["org", "name", "phone", "message"])
   ) {
     throw new Error("필수 문의 정보를 모두 입력해 주세요.")
+  }
+
+  // 접수 두 갈래는 서버 내부 미러라 이미 각자의 normalize 를 통과했지만, 계약을 여기에도
+  // 적어 둔다 — 이 경로로 들어오는 값은 담당자가 연락할 수 있어야 한다.
+  if (
+    (payload.source === "showroom_booking" || payload.source === "checkout_request") &&
+    !hasRequiredFields(payload, ["org", "name", "phone"])
+  ) {
+    throw new Error("접수에 필요한 연락 정보가 없습니다.")
   }
 
   if (payload.source === "newsletter" && !payload.email) {

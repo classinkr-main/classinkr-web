@@ -176,6 +176,17 @@ export function Header() {
                     })}
                     {isMobileMenuOpen ? (
                         <div className="mt-3 grid gap-2 border-t border-black/[0.08] pt-4 md:hidden">
+                            {/* 쇼룸은 도입 검토 단계의 가장 강한 CTA인데 그동안 헤더에서 닿을 수 없었다.
+                                문의(넓은 입구)를 대체하지 않고 그 옆에 둔다. */}
+                            <TrackedLink
+                                href="/showroom"
+                                prefetch={false}
+                                ctaId="gnb_mobile_showroom"
+                                onClick={() => setIsMobileMenuOpen(false)}
+                                className="flex min-h-11 w-full items-center justify-center rounded-[8px] border border-[#084734]/30 bg-[#ECFDF5] px-4 text-[15px] font-semibold text-[#084734] transition-colors hover:bg-[#D1FAE5]"
+                            >
+                                쇼룸 예약
+                            </TrackedLink>
                             <TrackedLink
                                 href="/download"
                                 prefetch={false}
@@ -200,6 +211,16 @@ export function Header() {
 
                 <div className="hidden md:flex items-center gap-4">
                     <SessionNavEntry />
+                    {/* md 구간은 내비 5개 + CTA 2개로 이미 빠듯해 lg 부터 노출한다.
+                        md~lg 는 푸터·홈 FinalCTA·제품 페이지가 쇼룸 경로를 받는다. */}
+                    <TrackedLink
+                        href="/showroom"
+                        prefetch={false}
+                        ctaId="gnb_showroom"
+                        className="hidden font-semibold text-[15px] text-[#084734] transition-colors hover:text-[#065c41] lg:flex"
+                    >
+                        쇼룸 예약
+                    </TrackedLink>
                     <TrackedLink
                         href="/download"
                         prefetch={false}

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { trackEvent } from "@/lib/analytics"
 import { getAnonymousId } from "@/lib/consent/consent"
+import { ACADEMY_SIZE_OPTIONS } from "@/lib/contact/academy-size"
 import { collectLeadAttribution } from "@/lib/marketing-attribution"
 import { MaterialDownloadError, requestMaterialDownload } from "@/lib/materials-client"
 import { cn } from "@/lib/utils"
@@ -387,10 +388,11 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
                   className={cn(inputClassName, "w-full px-3")}
                 >
                   <option value="">선택</option>
-                  <option value="100명 이하">100명 이하</option>
-                  <option value="100~300명">100~300명</option>
-                  <option value="300~500명">300~500명</option>
-                  <option value="500명 이상">500명 이상</option>
+                  {ACADEMY_SIZE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
                 </select>
               </label>
 

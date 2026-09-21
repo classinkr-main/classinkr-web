@@ -27,6 +27,11 @@ async function loadBookings(options?: { insertError?: string; leadOk?: boolean }
   const insertedRows: Record<string, unknown>[] = []
   const updates: Record<string, unknown>[] = []
   const emitNotificationEvent = vi.fn().mockResolvedValue(undefined)
+  // 고객 확인 발송은 message_logs 에도 쓴다 — 모킹하지 않으면 그 insert 가
+  // 아래 insertedRows(예약 행 검증용)에 섞여 들어온다.
+  const sendShowroomBookingReceipt = vi.fn().mockResolvedValue(
+    { provider: "solapi", channel: "sms", requested: 1, sent: 0, failed: 0, simulated: 1, results: [] }
+  )
   const submitLeadCapture = vi.fn().mockResolvedValue({
     status: 200,
     body: options?.leadOk === false ? { ok: false } : { ok: true, leadId: "lead-1" },
@@ -55,9 +60,17 @@ async function loadBookings(options?: { insertError?: string; leadOk?: boolean }
   vi.doMock("@/lib/supabase/admin", () => ({ createSupabaseAdminClient }))
   vi.doMock("@/lib/notifications/emit-event", () => ({ emitNotificationEvent }))
   vi.doMock("@/lib/server/lead-capture", () => ({ submitLeadCapture }))
+  vi.doMock("@/lib/messaging/customer-receipt", () => ({ sendShowroomBookingReceipt }))
 
   const mod = await import("@/lib/showroom/bookings")
-  return { mod, insertedRows, updates, emitNotificationEvent, submitLeadCapture }
+  return {
+    mod,
+    insertedRows,
+    updates,
+    emitNotificationEvent,
+    submitLeadCapture,
+    sendShowroomBookingReceipt,
+  }
 }
 
 /** 후속 작업(deferTask)을 즉시 돌리고 끝날 때까지 기다린다. */
@@ -184,10 +197,11 @@ describe("submitShowroomBooking", () => {
       org: "무궁화 학원",
     })
 
-    // 리드 큐 미러 — 쇼룸 의향이 분리 집계되도록 sourceDetail 을 고정한다.
+    // 리드 큐 미러 — 전용 source 로 갈려야 SLA·공지·랭킹이 쇼룸 예약을 따로 센다.
+    // sourceDetail 은 과거 리드와의 연속성 때문에 그대로 둔다.
     expect(submitLeadCapture).toHaveBeenCalledTimes(1)
     expect(submitLeadCapture.mock.calls[0][0]).toMatchObject({
-      source: "contact_page",
+      source: "showroom_booking",
       sourceDetail: "showroom_booking",
       marketingConsent: false,
     })
@@ -205,10 +219,75 @@ describe("submitShowroomBooking", () => {
     })
   })
 
-  it("저장이 실패하면 500 이고 후속을 돌리지 않는다", async () => {
-    const { mod, emitNotificationEvent, submitLeadCapture } = await loadBookings({
-      insertError: "boom",
+  it("귀속과 익명 ID 를 리드 미러에 실어 보낸다", async () => {
+    const { mod, submitLeadCapture } = await loadBookings()
+    const defer = immediateDefer()
+
+    await mod.submitShowroomBooking(
+      {
+        ...VALID_BODY,
+        utmSource: "meta",
+        fbclid: "fbclid-1",
+        landingPage: "https://classin.co.kr/l/omo1",
+        anonymousId: "anon-1",
+      },
+      { deferTask: defer.deferTask }
+    )
+    await defer.settle()
+
+    // 이 폼은 lib/submitLead.ts 를 거치지 않아 예전에는 귀속이 전혀 붙지 않았다.
+    expect(submitLeadCapture.mock.calls[0][0]).toMatchObject({
+      utmSource: "meta",
+      fbclid: "fbclid-1",
+      landingPage: "https://classin.co.kr/l/omo1",
+      anonymousId: "anon-1",
     })
+  })
+
+  it("sourcePage 가 있으면 currentPage 는 그 값이다", async () => {
+    const { mod, submitLeadCapture } = await loadBookings()
+    const defer = immediateDefer()
+
+    await mod.submitShowroomBooking(
+      { ...VALID_BODY, currentPage: "https://classin.co.kr/showroom?x=1" },
+      { deferTask: defer.deferTask }
+    )
+    await defer.settle()
+
+    expect(submitLeadCapture.mock.calls[0][0].currentPage).toBe("/showroom")
+  })
+
+  it("접수당 고객 확인을 정확히 1건 보낸다", async () => {
+    const { mod, sendShowroomBookingReceipt } = await loadBookings()
+    const defer = immediateDefer()
+
+    await mod.submitShowroomBooking(VALID_BODY, { deferTask: defer.deferTask })
+    await defer.settle()
+
+    expect(sendShowroomBookingReceipt).toHaveBeenCalledTimes(1)
+    // 연락처는 폼 필수 항목이라 항상 있다 — 이메일과 달리 커버리지가 100% 인 이유다.
+    expect(sendShowroomBookingReceipt).toHaveBeenCalledWith({
+      bookingId: "booking-1",
+      phone: VALID_BODY.phone,
+      visitDate: VALID_BODY.visitDate,
+      visitTime: VALID_BODY.visitTime,
+    })
+  })
+
+  it("고객 확인 발송이 실패해도 예약은 성공이다", async () => {
+    const { mod, sendShowroomBookingReceipt } = await loadBookings()
+    sendShowroomBookingReceipt.mockRejectedValueOnce(new Error("solapi down"))
+    const defer = immediateDefer()
+
+    const result = await mod.submitShowroomBooking(VALID_BODY, { deferTask: defer.deferTask })
+    await defer.settle()
+
+    expect(result.status).toBe(200)
+  })
+
+  it("저장이 실패하면 500 이고 후속을 돌리지 않는다", async () => {
+    const { mod, emitNotificationEvent, submitLeadCapture, sendShowroomBookingReceipt } =
+      await loadBookings({ insertError: "boom" })
     const defer = immediateDefer()
 
     const result = await mod.submitShowroomBooking(VALID_BODY, { deferTask: defer.deferTask })
@@ -217,6 +296,7 @@ describe("submitShowroomBooking", () => {
     expect(result.status).toBe(500)
     expect(submitLeadCapture).not.toHaveBeenCalled()
     expect(emitNotificationEvent).not.toHaveBeenCalled()
+    expect(sendShowroomBookingReceipt).not.toHaveBeenCalled()
   })
 
   it("리드 미러가 실패해도 예약은 성공이고 알림은 나간다", async () => {

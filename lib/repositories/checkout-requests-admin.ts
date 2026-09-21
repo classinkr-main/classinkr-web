@@ -27,8 +27,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 const TABLE = "checkout_requests"
 
 const COLUMNS =
-  "id, kind, items, total_amount, currency, org, name, phone, email, install_type, " +
-  "address, desired_date, memo, source_page, lead_id, status, created_at, updated_at"
+  "id, kind, items, total_amount, currency, org, name, phone, email, role, academy_size, " +
+  "install_type, address, desired_date, memo, source_page, lead_id, status, created_at, updated_at"
 
 /** 신청 종류 — 마이그레이션 CHECK(kind in ('hardware','software'))와 같은 목록. */
 export const CHECKOUT_REQUEST_KINDS = ["hardware", "software"] as const
@@ -91,6 +91,8 @@ interface CheckoutRequestRow {
   name: string
   phone: string
   email: string | null
+  role: string | null
+  academy_size: string | null
   install_type: "stand" | "wall" | null
   address: string | null
   desired_date: string
@@ -113,6 +115,8 @@ export interface CheckoutRequestRecord {
   name: string
   phone: string
   email: string | null
+  role: string | null
+  academySize: string | null
   installType: "stand" | "wall" | null
   address: string | null
   desiredDate: string
@@ -165,6 +169,8 @@ function toRecord(row: CheckoutRequestRow): CheckoutRequestRecord {
     name: row.name,
     phone: row.phone,
     email: row.email,
+    role: row.role,
+    academySize: row.academy_size,
     installType: row.install_type,
     address: row.address,
     desiredDate: row.desired_date,

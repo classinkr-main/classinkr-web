@@ -2,6 +2,7 @@ import type { LeadRecord } from "@/lib/repositories/leads"
 import type { NeoCrmCustomerRow } from "@/lib/admin-crm-customers-neo"
 import type { CrmTaskPriority, CrmTaskRecord, CrmTaskType } from "@/lib/repositories/crm-tasks"
 import { parseLeadSize, type LeadEngagement } from "@/lib/crm/lead-ranking"
+import { DIRECT_INBOUND_LEAD_SOURCES, INTAKE_LEAD_SOURCES } from "@/lib/lead-types"
 import { getMetaIntent, isTestLead } from "@/lib/crm/lead-attribution"
 import {
   EMPTY_COMPASS_DEMO_INDEX,
@@ -49,7 +50,7 @@ export interface CrmPriorityItem {
   sourceKey: string | null
 }
 
-const RESPONSE_TARGET_SOURCES = new Set(["demo_modal", "contact_page", "meta_lead_ads"])
+const RESPONSE_TARGET_SOURCES = DIRECT_INBOUND_LEAD_SOURCES
 /** 데모 색인이 없을 때 쓰는 빈 색인 — 호출부마다 null 분기를 두지 않기 위해. */
 const EMPTY_DEMO_INDEX: CompassDemoIndex = EMPTY_COMPASS_DEMO_INDEX
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -224,7 +225,8 @@ export function buildLeadPriorityItem(
   }
 
   // ─ 감도(유입 의도)·규모 — "지금 사줄 것 같은 곳"을 위로 올리는 축.
-  if (lead.source === "demo_modal") score += 12
+  if (INTAKE_LEAD_SOURCES.has(lead.source)) score += 14
+  else if (lead.source === "demo_modal") score += 12
   else if (lead.source === "contact_page") score += 6
   if (lead.source === "meta_lead_ads") {
     score += 8

@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>컨택·쇼룸·구매 퍼널 진단 — 2026-09-20</title>
+<!-- 정본: docs/active/contact-showroom-checkout-develop-round2-2026-09-20.md
+     팔레트·보더·radius 는 DESIGN.md 토큰을 그대로 쓴다. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap">
+<style>
+  /* 팔레트는 저장소 DESIGN.md 토큰을 그대로 쓴다 —
+     ClassIn Green 이 유일한 포화색, 나머지는 웜 뉴트럴. */
+  :root{
+    --ground:#FAFAF8;        /* Page White */
+    --surface:#FFFFFF;       /* Pure White */
+    --warm:#F6F5F4;          /* Warm White */
+    --green-surface:#ECFDF5; /* Green Surface 50 */
+    --ink:#111110;           /* Near Black */
+    --muted:#615D59;         /* Warm Gray 500 */
+    --faint:#A39E98;         /* Warm Gray 300 */
+    --accent:#084734;        /* ClassIn Green */
+    --accent-soft:#0B6A4D;
+    --hairline:rgba(0,0,0,0.08);
+    --hairline-firm:rgba(0,0,0,0.14);
+    --danger:#B43E3E;
+    --warn:#A8741A;
+    --shadow:rgba(0,0,0,0.04) 0 4px 18px, rgba(0,0,0,0.027) 0 2px 7.8px, rgba(0,0,0,0.02) 0 .8px 2.9px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --ground:#181715; --surface:#201F1C; --warm:#252320;
+      --green-surface:#12322A;
+      --ink:#F2F0EC; --muted:#A9A39B; --faint:#77716A;
+      --accent:#6EE7B7; --accent-soft:#A7F3D0;
+      --hairline:rgba(255,255,255,0.10); --hairline-firm:rgba(255,255,255,0.18);
+      --danger:#E59595; --warn:#DCB472;
+      --shadow:rgba(0,0,0,0.30) 0 4px 18px, rgba(0,0,0,0.20) 0 2px 7.8px;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#181715; --surface:#201F1C; --warm:#252320;
+    --green-surface:#12322A;
+    --ink:#F2F0EC; --muted:#A9A39B; --faint:#77716A;
+    --accent:#6EE7B7; --accent-soft:#A7F3D0;
+    --hairline:rgba(255,255,255,0.10); --hairline-firm:rgba(255,255,255,0.18);
+    --danger:#E59595; --warn:#DCB472;
+    --shadow:rgba(0,0,0,0.30) 0 4px 18px, rgba(0,0,0,0.20) 0 2px 7.8px;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:"IBM Plex Sans KR","Pretendard Variable",Pretendard,system-ui,-apple-system,"Apple SD Gothic Neo",sans-serif;
+    font-size:15px; line-height:1.7; word-break:keep-all;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px; margin:0 auto; padding-inline:20px; padding-block:0}
+  code,.mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+
+  h1,h2,h3{text-wrap:balance; margin:0; letter-spacing:-0.022em; font-weight:600}
+  h1{font-size:clamp(28px,5.2vw,44px); line-height:1.16; letter-spacing:-0.032em; font-weight:700}
+  h2{font-size:clamp(20px,3vw,26px); line-height:1.3}
+  h3{font-size:16px; line-height:1.45; letter-spacing:-0.012em}
+  @media (max-width:640px){ h1,h2,h3{letter-spacing:0} } /* DESIGN.md: 모바일 letter-spacing 0 */
+  p{margin:0}
+
+  .eyebrow{
+    font-family:"IBM Plex Mono",monospace; font-size:11.5px; font-weight:500;
+    letter-spacing:.09em; text-transform:uppercase; color:var(--muted);
+  }
+
+  /* 섹션 배경 교차 — DESIGN.md 흰색 ↔ 웜 ↔ 그린 서피스 */
+  section{padding-block:clamp(44px,7vw,72px); border-top:1px solid var(--hairline)}
+  .s-white{background:var(--surface)}
+  .s-warm{background:var(--warm)}
+  .s-green{background:var(--green-surface)}
+
+  header.hero{background:var(--surface); padding-block:clamp(40px,7vw,68px)}
+  .hero .lede{
+    margin-top:18px; font-size:clamp(16px,2.1vw,18.5px); line-height:1.72;
+    color:var(--muted); max-width:62ch;
+  }
+  .hero .lede strong{color:var(--ink); font-weight:600}
+  .meta{display:flex; flex-wrap:wrap; gap:10px 20px; margin-top:26px}
+  .meta span{font-family:"IBM Plex Mono",monospace; font-size:11.5px; color:var(--faint)}
+  .meta span b{color:var(--muted); font-weight:500}
+
+  .sec-head{display:flex; flex-direction:column; gap:10px; margin-bottom:28px}
+  .sec-head p{color:var(--muted); max-width:66ch; font-size:14.5px}
+
+  /* 끊긴 고리 3장 — 좌측 액센트 바, 채움 박스 금지(플레이북 시각 취향) */
+  .breaks{display:grid; gap:14px; grid-template-columns:repeat(3,1fr)}
+  @media (max-width:800px){ .breaks{grid-template-columns:1fr} }
+  .brk{
+    background:var(--surface); border:1px solid var(--hairline);
+    border-left:3px solid var(--danger); border-radius:8px;
+    padding:20px 20px 18px; display:flex; flex-direction:column; gap:9px;
+  }
+  .brk .k{font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.12em; color:var(--danger); font-weight:600}
+  .brk h3{font-size:16.5px}
+  .brk p{font-size:13.8px; color:var(--muted); line-height:1.62}
+
+  figure{margin:0}
+  figure svg{display:block; width:100%; max-width:100%; height:auto}
+  .fig-scroll{overflow-x:auto; -webkit-overflow-scrolling:touch}
+  .fig-scroll > svg{min-width:660px}
+  figcaption{
+    margin-top:16px; font-size:13px; color:var(--muted); line-height:1.65;
+    max-width:70ch; padding-top:14px; border-top:1px solid var(--hairline);
+  }
+
+  /* 화면별 진단 */
+  .surface{margin-top:34px}
+  .surface:first-of-type{margin-top:0}
+  .surface-head{
+    display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;
+    padding-bottom:12px; border-bottom:1px solid var(--hairline-firm); margin-bottom:4px;
+  }
+  .surface-head .route{font-family:"IBM Plex Mono",monospace; font-size:15px; font-weight:600; color:var(--accent)}
+  .surface-head .what{font-size:14px; color:var(--muted)}
+
+  .find{
+    display:grid; grid-template-columns:52px 1fr; gap:0 16px;
+    padding:16px 0; border-bottom:1px solid var(--hairline);
+  }
+  .find:last-child{border-bottom:0}
+  .sev{
+    font-family:"IBM Plex Mono",monospace; font-size:11px; font-weight:600;
+    letter-spacing:.06em; padding-top:3px;
+  }
+  .sev.p0{color:var(--danger)} .sev.p1{color:var(--warn)} .sev.p2{color:var(--faint)}
+  .find > div{min-width:0}
+  .find h3{margin-bottom:5px}
+  .find p{font-size:14px; color:var(--muted); line-height:1.65}
+  code{overflow-wrap:anywhere}
+  .ref{
+    display:inline-block; max-width:100%; overflow-wrap:anywhere;
+    font-family:"IBM Plex Mono",monospace; font-size:11.5px;
+    color:var(--accent); background:var(--green-surface);
+    padding:1px 6px; border-radius:4px; margin-top:8px; margin-right:6px;
+    border:1px solid var(--hairline);
+  }
+
+  /* 금액 불일치 대조 */
+  .gap-grid{display:grid; gap:14px; grid-template-columns:1fr 1fr; margin-top:18px}
+  @media (max-width:720px){ .gap-grid{grid-template-columns:1fr} }
+  .bill{
+    background:var(--surface); border:1px solid var(--hairline); border-radius:12px;
+    padding:20px; display:flex; flex-direction:column; gap:12px;
+  }
+  .bill.real{border-color:var(--accent); border-width:1.5px}
+  .bill .cap{font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.1em; color:var(--muted); text-transform:uppercase}
+  .bill .rows{display:flex; flex-direction:column; gap:7px}
+  .bill .row{display:flex; justify-content:space-between; gap:14px; font-size:13.5px; color:var(--muted)}
+  .bill .row span:first-child{min-width:0}
+  .bill .row.add{color:var(--accent); font-weight:500}
+  .bill .row span:last-child{font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums}
+  .bill .tot{
+    display:flex; justify-content:space-between; align-items:baseline; gap:14px;
+    padding-top:12px; border-top:1px solid var(--hairline-firm);
+  }
+  .bill .tot .lbl{font-size:13px; color:var(--muted)}
+  .bill .tot .amt{font-family:"IBM Plex Mono",monospace; font-size:clamp(19px,3vw,23px); font-weight:600; font-variant-numeric:tabular-nums; letter-spacing:-0.02em}
+  .bill.real .tot .amt{color:var(--accent)}
+  .delta{
+    margin-top:14px; font-size:13.5px; color:var(--muted);
+    border-left:3px solid var(--warn); padding:2px 0 2px 14px; line-height:1.6;
+  }
+  .delta b{color:var(--ink); font-weight:600}
+
+  /* 실행 순서 */
+  .phases{display:grid; gap:14px; grid-template-columns:repeat(4,1fr); align-items:stretch}
+  @media (max-width:860px){ .phases{grid-template-columns:repeat(2,1fr)} }
+  @media (max-width:560px){ .phases{grid-template-columns:1fr} }
+  .pair{
+    grid-column:span 2; display:grid; gap:12px; grid-template-columns:1fr 1fr;
+    border:1.5px solid var(--accent); border-radius:12px; padding:12px; position:relative;
+    background:color-mix(in srgb, var(--green-surface) 55%, transparent);
+  }
+  @media (max-width:560px){ .pair{grid-column:span 1; grid-template-columns:1fr} }
+  .pair-tag{
+    position:absolute; top:-9px; left:14px; background:var(--accent); color:var(--ground);
+    font-family:"IBM Plex Mono",monospace; font-size:10px; font-weight:600;
+    letter-spacing:.08em; padding:2px 8px; border-radius:9999px;
+  }
+  .ph{
+    background:var(--surface); border:1px solid var(--hairline); border-radius:8px;
+    padding:16px 16px 15px; display:flex; flex-direction:column; gap:7px;
+  }
+  .ph .id{font-family:"IBM Plex Mono",monospace; font-size:11px; font-weight:600; letter-spacing:.1em; color:var(--accent)}
+  .ph h3{font-size:15px}
+  .ph p{font-size:13px; color:var(--muted); line-height:1.6}
+  .pair-why{margin-top:16px; font-size:13.5px; color:var(--muted); max-width:70ch}
+
+  /* 결정 표 */
+  .tbl-scroll{overflow-x:auto; margin-top:8px; -webkit-overflow-scrolling:touch}
+  table{border-collapse:collapse; width:100%; min-width:600px; font-size:14px}
+  th,td{text-align:left; padding:13px 14px; border-bottom:1px solid var(--hairline); vertical-align:top}
+  th{
+    font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--muted); font-weight:500;
+    border-bottom:1px solid var(--hairline-firm); white-space:nowrap;
+  }
+  td:first-child{font-family:"IBM Plex Mono",monospace; font-weight:600; color:var(--accent); white-space:nowrap}
+  td.rec{color:var(--muted)}
+  td.rec b{color:var(--ink); font-weight:600}
+
+  /* 운영 점검 */
+  .alert{
+    background:var(--surface); border:1px solid var(--hairline);
+    border-left:3px solid var(--warn); border-radius:8px; padding:22px 24px;
+    display:flex; flex-direction:column; gap:10px; box-shadow:var(--shadow);
+  }
+  .alert .k{font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.12em; color:var(--warn); font-weight:600}
+  .alert p{font-size:14.5px; color:var(--muted); line-height:1.7; max-width:72ch}
+  .alert p b{color:var(--ink); font-weight:600}
+
+  footer{padding-block:34px; border-top:1px solid var(--hairline); background:var(--ground)}
+  footer p{font-family:"IBM Plex Mono",monospace; font-size:11.5px; color:var(--faint); line-height:1.8}
+
+  a{color:var(--accent); text-underline-offset:3px}
+  :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:4px}
+  @media (prefers-reduced-motion:reduce){ *{animation:none!important; transition:none!important} }
+</style>
+<style>
+  html{color-scheme:light dark}
+  body{margin:0}
+  img{max-width:100%}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">2차 디벨롭 기획 · 실측 기준 2026-09-20</p>
+    <h1>컨택 · 쇼룸 예약 · 구매 신청<br>퍼널 진단</h1>
+    <p class="lede">
+      1차 기획(2026-08-29)은 <strong>백엔드를 거의 다 만들었다.</strong> 쇼룸은 슬롯·가용성·접수·알림·캘린더
+      어댑터까지, 구매는 서버 단가 핀·상태 기계·중복 방지까지 동작한다. 공개 쇼룸 화면도 월 캘린더와
+      슬롯 선택, 409 충돌 리커버리까지 완성돼 있다.
+      이번 실측에서 드러난 것은 그 위에 얹힐 <strong>세 개의 끊긴 고리</strong>다.
+    </p>
+    <div class="meta">
+      <span><b>대상</b> /contact · /showroom · /checkout</span>
+      <span><b>범위</b> 결제 활성화 이전 단계</span>
+      <span><b>정본</b> docs/active/contact-showroom-checkout-develop-round2-2026-09-20.md</span>
+    </div>
+  </div>
+</header>
+
+<section class="s-warm">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">세 개의 끊긴 고리</p>
+      <h2>만들어졌지만 닿지 않고, 접수되지만 처리되지 않는다</h2>
+    </div>
+    <div class="breaks">
+      <article class="brk">
+        <span class="k">01 · 도달</span>
+        <h3>쇼룸 예약에 도달할 방법이 없다</h3>
+        <p><code>/showroom</code>을 가리키는 링크가 제품 전체에 2개뿐이다. 헤더·푸터·홈·모바일 CTA는
+           전부 <code>/contact</code>로 간다. 전략 문서가 "가장 강한 CTA"로 지목한 경로다.</p>
+      </article>
+      <article class="brk">
+        <span class="k">02 · 처리</span>
+        <h3>접수를 확정할 화면이 두 개 다 없다</h3>
+        <p><code>showroom_bookings</code>·<code>checkout_requests</code> 모두 GET/PATCH API는 있는데
+           호출하는 어드민 UI가 0건이다. 접수가 <code>requested</code>/<code>new</code>에 머문다.</p>
+      </article>
+      <article class="brk">
+        <span class="k">03 · 측정</span>
+        <h3>퍼널 뒤쪽 두 단계가 데이터에서 사라진다</h3>
+        <p>쇼룸·구매 리드가 <code>source: "contact_page"</code>를 빌려 쓴다. 리드 랭킹의
+           <code>showroom: 14</code> 가중치는 한 번도 실행되지 않는 죽은 코드다.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="s-white">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">그림 1 · 진입 경로 지도</p>
+      <h2>사이트 전역 진입점 5개 중 쇼룸으로 가는 것은 0개다</h2>
+      <p>헤더·푸터·모바일 CTA는 문의로, 홈의 두 CTA는 리드마그넷 다운로드로 간다.
+         쇼룸으로 들어오는 링크는 문의 화면 사이드바의 작은 텍스트 링크와 실험용 랜딩뿐이다.</p>
+    </div>
+
+    <figure>
+      <div class="fig-scroll">
+      <svg viewBox="0 0 840 440" role="img"
+           aria-label="사이트 전역 진입점 다섯 개는 모두 문의 화면 또는 리드마그넷으로 향하고, 쇼룸 예약으로 들어오는 링크는 문의 사이드바와 실험용 랜딩 두 개뿐이다">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <polygon points="0,1.5 9,5 0,8.5" fill="currentColor"/>
+          </marker>
+          <marker id="ar-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <polygon points="0,1.5 9,5 0,8.5" fill="var(--accent)"/>
+          </marker>
+        </defs>
+
+        <!-- 열 제목 -->
+        <text x="12" y="20" font-size="11" font-family="IBM Plex Mono, monospace"
+              letter-spacing="1.4" fill="var(--faint)">진입점</text>
+        <text x="828" y="20" font-size="11" font-family="IBM Plex Mono, monospace"
+              letter-spacing="1.4" fill="var(--faint)" text-anchor="end">목적지</text>
+
+        <!-- 전역 진입점 5개 -->
+        <g fill="none" stroke="var(--hairline-firm)" stroke-width="1">
+          <rect x="12" y="38"  width="252" height="40" rx="6"/>
+          <rect x="12" y="90"  width="252" height="40" rx="6"/>
+          <rect x="12" y="142" width="252" height="40" rx="6"/>
+          <rect x="12" y="194" width="252" height="40" rx="6"/>
+          <rect x="12" y="246" width="252" height="40" rx="6"/>
+        </g>
+        <g font-size="12.5" fill="var(--ink)" font-family="IBM Plex Sans KR, sans-serif">
+          <text x="26" y="56">헤더 내비</text>
+          <text x="26" y="108">푸터</text>
+          <text x="26" y="160">모바일 플로팅 CTA</text>
+          <text x="26" y="212">홈 Hero</text>
+          <text x="26" y="264">홈 FinalCTA</text>
+        </g>
+        <g font-size="10" fill="var(--faint)" font-family="IBM Plex Mono, monospace">
+          <text x="26" y="71">Header.tsx:189,212</text>
+          <text x="26" y="123">Footer.tsx:39</text>
+          <text x="26" y="175">MobileFloatingCTA.tsx:97</text>
+          <text x="26" y="227">Hero.tsx:75</text>
+          <text x="26" y="279">FinalCTA.tsx:44</text>
+        </g>
+
+        <!-- 구분선: 주변부 -->
+        <line x1="12" y1="304" x2="264" y2="304" stroke="var(--hairline-firm)" stroke-width="1" stroke-dasharray="3 3"/>
+        <text x="12" y="320" font-size="10" font-family="IBM Plex Mono, monospace"
+              letter-spacing="1.2" fill="var(--faint)">주변부</text>
+
+        <!-- 주변부 진입점 2개 -->
+        <g fill="none" stroke="var(--hairline)" stroke-width="1" stroke-dasharray="4 3">
+          <rect x="12" y="330" width="252" height="38" rx="6"/>
+          <rect x="12" y="380" width="252" height="38" rx="6"/>
+        </g>
+        <g font-size="12" fill="var(--muted)" font-family="IBM Plex Sans KR, sans-serif">
+          <text x="26" y="347">문의 사이드바 텍스트 링크</text>
+          <text x="26" y="397">실험용 랜딩</text>
+        </g>
+        <g font-size="10" fill="var(--faint)" font-family="IBM Plex Mono, monospace">
+          <text x="26" y="361">contact/page.tsx:678</text>
+          <text x="26" y="411">app/l/test1/page.tsx:18</text>
+        </g>
+
+        <!-- 연결선: 전역 5개 -->
+        <g fill="none" stroke="currentColor" stroke-width="1.75" opacity="0.4" marker-end="url(#ar)">
+          <path d="M264 58  C 422 58,  422 66,  572 66"/>
+          <path d="M264 110 C 422 110, 422 78,  572 78"/>
+          <path d="M264 162 C 422 162, 422 90,  572 90"/>
+          <path d="M264 214 C 422 214, 422 196, 572 196"/>
+          <path d="M264 266 C 422 266, 422 216, 572 216"/>
+        </g>
+        <!-- 연결선: 주변부 2개 → 쇼룸 -->
+        <g fill="none" stroke="var(--accent)" stroke-width="1.25" stroke-dasharray="5 4" marker-end="url(#ar-a)">
+          <path d="M264 349 C 422 349, 422 334, 572 334"/>
+          <path d="M264 399 C 422 399, 422 356, 572 356"/>
+        </g>
+
+        <!-- 목적지 -->
+        <rect x="580" y="44" width="248" height="62" rx="8" fill="none" stroke="var(--hairline-firm)" stroke-width="1"/>
+        <text x="598" y="72" font-size="14" font-weight="600" fill="var(--ink)" font-family="IBM Plex Mono, monospace">/contact</text>
+        <text x="598" y="90" font-size="10.5" fill="var(--muted)" font-family="IBM Plex Sans KR, sans-serif">전역 진입점 3개가 여기로</text>
+
+        <rect x="580" y="176" width="248" height="62" rx="8" fill="none" stroke="var(--hairline-firm)" stroke-width="1"/>
+        <text x="598" y="204" font-size="13.5" font-weight="600" fill="var(--ink)" font-family="IBM Plex Sans KR, sans-serif">리드마그넷 다운로드</text>
+        <text x="598" y="222" font-size="10.5" fill="var(--muted)" font-family="IBM Plex Sans KR, sans-serif">홈의 두 CTA가 여기로</text>
+
+        <rect x="580" y="308" width="248" height="74" rx="8" fill="none" stroke="var(--accent)" stroke-width="2"/>
+        <text x="598" y="336" font-size="14" font-weight="600" fill="var(--accent)" font-family="IBM Plex Mono, monospace">/showroom</text>
+        <text x="598" y="354" font-size="10.5" fill="var(--muted)" font-family="IBM Plex Sans KR, sans-serif">전략 문서가 지목한 최강 CTA</text>
+        <text x="598" y="370" font-size="10.5" fill="var(--accent)" font-family="IBM Plex Sans KR, sans-serif">전역 진입점 0개</text>
+      </svg>
+      </div>
+      <figcaption>
+        화살표는 "이 진입점이 사용자를 여기로 보낸다"를 뜻한다. 실선은 사이트 전역에 상시 노출되는 경로,
+        점선은 특정 화면 안에서만 보이는 주변부 경로다.
+        <code>/showroom</code>은 <code>app/sitemap.ts</code>에 등록돼 검색 색인 대상이지만, 내부 유입 경로가 없다.
+      </figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="s-warm">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">화면별 진단</p>
+      <h2>각 화면에서 실제로 마찰이 되는 지점</h2>
+    </div>
+
+    <div class="surface">
+      <div class="surface-head">
+        <span class="route">/showroom</span>
+        <span class="what">기본기는 이미 있다 — 월 그리드, roving tabindex, 마감 슬롯 표시, 409 리커버리</span>
+      </div>
+      <div class="find">
+        <span class="sev p0">P0</span>
+        <div>
+          <h3>슬롯 선택기가 radiogroup 패턴을 위반한다</h3>
+          <p><code>role="radiogroup"</code>인데 <code>onKeyDown</code>도 <code>tabIndex</code> 관리도 없다.
+             슬롯 5개가 개별 탭 정지점이 된다. 같은 폼 안에서 캘린더는 roving tabindex를 제대로 구현해놓고
+             슬롯만 어긋나 있다. 마감 슬롯은 native <code>disabled</code>라 스크린리더가 "마감"에 도달하지 못한다.</p>
+          <span class="ref">components/showroom/SlotPicker.tsx</span>
+        </div>
+      </div>
+      <div class="find">
+        <span class="sev p0">P0</span>
+        <div>
+          <h3>원천이 조용히 비면 연휴가 예약 가능일로 열린다</h3>
+          <p>구글 서비스 계정 자격이 없으면 공휴일 조회가 빈 배열을 반환한다. 설날·추석이 예약 가능일로
+             표시되고, 화면에 어떤 저하 신호도 없다. "덜 막는" 방침 자체는 타당하지만, 그 방침이
+             <b>자격 미설정이라는 상시 상태</b>에도 똑같이 적용되면 연휴에 예약을 받는다.</p>
+          <span class="ref">lib/korea-holidays.ts:118</span>
+        </div>
+      </div>
+      <div class="find">
+        <span class="sev p1">P1</span>
+        <div>
+          <h3>막힌 날짜의 이유가 캘린더에 없다</h3>
+          <p>서버는 날짜별 <code>blockedReason</code>(주말·공휴일·리드타임·마감)을 주는데 셀은 전부 같은 회색이다.
+             사유 문구는 "예약 불가인 날을 고른 경우"에만 뜨는데 그 날짜들은 클릭이 막혀 있어
+             사실상 도달할 수 없는 경로다. 남은 자리 수도 데이터에 있지만 셀이 쓰지 않는다.</p>
+          <span class="ref">lib/showroom/slots.ts</span>
+        </div>
+      </div>
+      <div class="find">
+        <span class="sev p1">P1</span>
+        <div>
+          <h3>가용성 에러가 폼을 영구히 잠근다</h3>
+          <p>재시도 버튼이 없고 제출 버튼은 가용성이 <code>ready</code>가 아니면 비활성이다.
+             마이그레이션 미적용 환경이면 DB 조회가 throw → 가용성 500 → 폼 전체 사용 불가로 이어진다.
+             그런데 이 테이블은 스키마 점검 스크립트에도 마이그레이션 런북에도 없다.</p>
+          <span class="ref">supabase/migrations/20260829_showroom_bookings.sql</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="surface">
+      <div class="surface-head">
+        <span class="route">/checkout</span>
+        <span class="what">서버 단가 핀·상태 기계·중복 방지는 동작한다 — 문제는 고객이 보는 숫자다</span>
+      </div>
+      <div class="find">
+        <span class="sev p0">P0</span>
+        <div>
+          <h3>장바구니 합계가 설치비를 빼고 계산된다</h3>
+          <p>설치 유형 라디오가 신청 모달 안에만 있어, 좌측 합계는 설치비를 모른다.
+             1차 기획이 "설치를 가격에 반영했다"고 기록한 범위가 <b>모달까지</b>였고, 그 앞 단계는 그대로다.</p>
+          <span class="ref">components/checkout/HardwareCheckoutPanel.tsx</span>
+        </div>
+      </div>
+
+      <div class="gap-grid">
+        <div class="bill">
+          <span class="cap">고객이 장바구니에서 보는 것</span>
+          <div class="rows">
+            <div class="row"><span>86″ Classin 전자칠판 × 1</span><span>₩6,300,000</span></div>
+            <div class="row"><span>설치</span><span>—</span></div>
+          </div>
+          <div class="tot"><span class="lbl">합계</span><span class="amt">₩6,300,000</span></div>
+        </div>
+        <div class="bill real">
+          <span class="cap">모달에서 설치를 고른 뒤</span>
+          <div class="rows">
+            <div class="row"><span>86″ Classin 전자칠판 × 1</span><span>₩6,300,000</span></div>
+            <div class="row add"><span>벽걸이 설치 × 1대</span><span>+₩500,000</span></div>
+          </div>
+          <div class="tot"><span class="lbl">신청 합계</span><span class="amt">₩6,800,000</span></div>
+        </div>
+      </div>
+      <p class="delta">
+        차이는 <b>대당 ₩500,000</b>이고, 모달을 열어 라디오를 고른 뒤에야 드러난다.
+        게다가 "부가세 별도" 문구는 좌측 카탈로그 하단 한 곳뿐이라 —
+        <b>고객이 마지막으로 보는 숫자 옆에는 부가세 표기가 없다.</b>
+      </p>
+
+      <div class="find" style="margin-top:18px">
+        <span class="sev p1">P1</span>
+        <div>
+          <h3>희망일에 주말·공휴일 차단이 없다</h3>
+          <p>캘린더 컴포넌트에 <code>disabledIsoDates</code>가 이미 구현돼 있는데 구매 화면은 넘기지 않는다.
+             일요일·추석 당일도 선택 가능해서, 재조율 왕복이 기본 전제가 된다.</p>
+          <span class="ref">components/checkout/CheckoutRequestForm.tsx</span>
+        </div>
+      </div>
+      <div class="find">
+        <span class="sev p1">P1</span>
+        <div>
+          <h3>가장 비싼 리드가 랭킹 바닥에 깔린다</h3>
+          <p>신청 폼이 직책·학원 규모를 받지 않는다. 리드 스코어는 규모만으로 최대 +34점을 주므로,
+             전자칠판 주문 신청이 "300명"이라 적은 단순 문의보다 낮게 깔린다. honeypot도 이 폼만 없다.</p>
+          <span class="ref">lib/crm/lead-ranking.ts</span>
+        </div>
+      </div>
+      <div class="find">
+        <span class="sev p2">P2</span>
+        <div>
+          <h3>진입 자체가 계측되지 않는다</h3>
+          <p>내부 경로로 분류돼 GTM·PageViewTracker·Pixel·동의 배너가 전부 빠진다.
+             "장바구니 진입 → 모달 오픈 → 제출" 퍼널의 첫 단계가 데이터에 없고,
+             가장 값비싼 전환이 광고 최적화 신호로 돌아가지 않는다.</p>
+          <span class="ref">components/AppChrome.tsx</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="surface">
+      <div class="surface-head">
+        <span class="route">/contact</span>
+        <span class="what">마찰의 대부분이 작성 비용이다 — 711줄 단일 컴포넌트</span>
+      </div>
+      <div class="find">
+        <span class="sev p1">P1</span>
+        <div>
+          <h3>동의가 마지막 관문인데 증적이 안 남는다</h3>
+          <p>검증 순서상 맨 마지막에 차단되어, 6개 필드를 다 채운 뒤에야 알 수 있다.
+             그런데 동의값이 서버로 전송되지 않는다 — 페이로드에 없고 저장소 전체에 참조가 0건이다.
+             <b>사용자에겐 마찰이고 회사엔 증적이 안 남는 조합.</b></p>
+          <span class="ref">app/contact/page.tsx:567-604</span>
+        </div>
+      </div>
+      <div class="find">
+        <span class="sev p1">P1</span>
+        <div>
+          <h3>자유서술이 필수이고, 자동완성이 꺼져 있다</h3>
+          <p>필수 6개 중 하나가 textarea다. "전화 주세요"만 하려는 사람도 작문해야 한다.
+             <code>autoComplete</code> 속성은 페이지 전체에 2개뿐이라 모바일 타이핑 비용이 그대로 든다.
+             <b>필수 해제는 서버 변경 없이 가능하다</b> — 클라이언트가 문의 유형 접두를 조합하므로
+             본문이 비어도 서버 필수 검사를 통과한다.</p>
+          <span class="ref">lib/server/lead-capture.ts:240</span>
+        </div>
+      </div>
+      <div class="find">
+        <span class="sev p2">P2</span>
+        <div>
+          <h3>에러가 전부를 흔들고 아무 데도 데려가지 않는다</h3>
+          <p>어떤 에러든 6개 필드가 동시에 흔들리고 스크린리더에도 전부 틀린 것으로 읽힌다.
+             에러 요소로의 포커스 이동이 없어, 711줄 폼에서 뷰포트 밖 에러는 보이지 않는다.</p>
+        </div>
+      </div>
+      <div class="find">
+        <span class="sev p2">P2</span>
+        <div>
+          <h3>디자인 시스템 위반이 이 화면에만 남아 있다</h3>
+          <p>블루-그레이 <code>slate-*</code> 55회. 신규 화면(<code>/showroom</code>·<code>/checkout</code>)은
+             0회인데 문의 화면만 구 스타일이다. 자동 가드는 어드민 한 폴더만 스캔하고 검사 패턴에
+             <code>slate-</code>가 없어 공개 화면은 무검사다.</p>
+          <span class="ref">scripts/check-design-tokens.mjs:20</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="s-white">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">실행 순서</p>
+      <h2>유입을 늘리기 전에 처리할 화면이 서 있어야 한다</h2>
+    </div>
+    <div class="phases">
+      <div class="pair">
+        <span class="pair-tag">같은 배포에 싣는다</span>
+        <article class="ph">
+          <span class="id">PHASE A</span>
+          <h3>도달과 신뢰</h3>
+          <p>쇼룸 진입 경로 신설, 설치비를 장바구니 합계에 반영, 희망일 주말·공휴일 차단, 폼 마찰 3건.</p>
+        </article>
+        <article class="ph">
+          <span class="id">PHASE B</span>
+          <h3>운영 루프 닫기</h3>
+          <p>접수 큐 어드민 화면, 마이그레이션 적용 확인 수단, 고객 확인 경로, 저하 신호.</p>
+        </article>
+      </div>
+      <article class="ph">
+        <span class="id">PHASE C</span>
+        <h3>데이터 정합</h3>
+        <p>리드 source 확장, 직책·규모·honeypot 추가, UTM·익명 ID 배선, 계측 allowlist 확장.</p>
+      </article>
+      <article class="ph">
+        <span class="id">PHASE D</span>
+        <h3>UX 심화</h3>
+        <p>캘린더 상태 표시와 접근성, 문의 화면 재구성, 공개 화면 디자인 가드, 폼 계약 테스트.</p>
+      </article>
+    </div>
+    <p class="pair-why">
+      <strong>A와 B를 붙이는 이유:</strong> 유입만 늘리고 처리 화면이 없으면 "1영업일 내 연락" 약속이
+      구조적으로 깨진다. <strong>C를 D보다 먼저 두는 이유:</strong> A·B의 효과를 재려면 계측이 먼저 서 있어야
+      하는데, 지금은 구매 화면 진입조차 데이터에 없어 개선 전후 비교가 불가능하다.
+    </p>
+  </div>
+</section>
+
+<section class="s-warm">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">판단 대기</p>
+      <h2>이번 라운드에서 새로 열린 결정</h2>
+      <p>1차 문서의 D1~D8은 그대로 유효하다. 아래는 각각 제안을 붙여 문서에 기록했다.</p>
+    </div>
+    <div class="tbl-scroll">
+      <table>
+        <thead>
+          <tr><th>#</th><th>결정</th><th>제안</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>D9</td>
+            <td>접수 큐 어드민 화면의 위치</td>
+            <td class="rec"><b>CRM 리드 큐 안의 "접수" 탭</b>에 쇼룸·구매를 함께. 알림 링크가 이미 리드 큐를 가리킨다. 캘린더는 <i>확정된 일정</i>을 보는 곳이고 접수는 <i>처리할 큐</i>다</td>
+          </tr>
+          <tr>
+            <td>D10</td>
+            <td>고객 확인 발송 범위</td>
+            <td class="rec"><b>이메일로 시작.</b> 이메일이 선택 필드라 전원 발송은 불가능하고, 필수화는 마찰을 늘린다. 알림톡은 외부 발송 요건이 따라붙는다</td>
+          </tr>
+          <tr>
+            <td>D11</td>
+            <td>구매 화면 계측 복구 여부</td>
+            <td class="rec"><b>복구한다.</b> 다만 동의 배너를 띄우면 터널 UX가 바뀌므로, 동의 없는 방문자의 내부 적재를 함께 정해야 한다</td>
+          </tr>
+          <tr>
+            <td>D12</td>
+            <td>희망일에 오전/오후 선호를 받을지</td>
+            <td class="rec"><b>받는다.</b> 지금은 시간대 정보가 없어 설치 조율에 통화가 한 번 더 든다. 슬롯 확정은 하지 않는다</td>
+          </tr>
+          <tr>
+            <td>D13</td>
+            <td>문의 폼 직책을 선택지로 올릴지</td>
+            <td class="rec"><b>올린다.</b> 자유 입력이라 집계 키로 못 쓴다. 다만 직책은 리드 스코어에 0점이라 집계·검색에 한정된 이득이다</td>
+          </tr>
+          <tr>
+            <td>D14</td>
+            <td>쇼룸을 헤더에 넣는 방식</td>
+            <td class="rec"><b>운영 합의 필요.</b> 헤더는 모든 화면에 걸리고 모바일 폭 제약이 있다. 플레이북이 "시안 먼저 합의"를 요구하는 영역</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="s-green">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">즉시 확인</p>
+      <h2>결정이 아니라 운영 점검 항목</h2>
+    </div>
+    <div class="alert">
+      <span class="k">환경 변수 점검</span>
+      <p>
+        <b>구글 서비스 계정 자격이 운영 환경에 설정돼 있는지 확인이 필요하다.</b>
+        미설정이면 공휴일 조회가 조용히 빈 배열을 반환해 <b>설날·추석이 예약 가능일로 열린다.</b>
+        화면에 아무 신호도 없어 그럴듯하게 보인다.
+      </p>
+      <p>
+        설정돼 있다면 화면 저하 신호만 추가하면 된다. 아니라면 —
+        <b>이미 연휴 예약을 받고 있었다는 뜻이므로 즉시 조치 대상이다.</b>
+      </p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>
+      정본 · docs/active/contact-showroom-checkout-develop-round2-2026-09-20.md<br>
+      1차 · docs/active/contact-showroom-store-develop-plan-2026-08-29.md<br>
+      팔레트와 보더·radius는 저장소 DESIGN.md 토큰을 따른다.
+    </p>
+  </div>
+</footer>
+</body>
+</html>

@@ -12,6 +12,7 @@ import {
   FileSpreadsheet,
   Inbox,
   LineChart,
+  ListChecks,
   MapPinned,
   PhoneCall,
   Tag,
@@ -26,7 +27,7 @@ import { NAV_WARMUP_REQUESTS } from "@/components/admin/AdminSidebar"
 
 type CrmSection = "home" | "customers" | "activity" | "deals" | "insights" | "sync"
 type DealsSub = "revenue" | "revSheet" | "orders" | "kpi"
-type CustomersSub = "unified" | "leads" | "accounts" | "map" | "tags"
+type CustomersSub = "unified" | "leads" | "intake" | "accounts" | "map" | "tags"
 type ReviewSub = "matching" | "insights" | "revSheet"
 
 // 상단 primary 탭은 글로벌 사이드바(AdminSidebar)의 CRM 확장으로 이전됨.
@@ -44,6 +45,7 @@ const DEALS_SUBTABS = [
 const CUSTOMERS_SUBTABS = [
   { key: "unified", href: "/admin/crm/customers/unified", label: "통합", icon: <Users className="h-3.5 w-3.5" /> },
   { key: "leads", href: "/admin/crm/customers/leads", label: "리드", icon: <PhoneCall className="h-3.5 w-3.5" /> },
+  { key: "intake", href: "/admin/crm/customers/intake", label: "접수", icon: <ListChecks className="h-3.5 w-3.5" /> },
   { key: "accounts", href: "/admin/crm/customers/accounts", label: "원천 고객", icon: <Building2 className="h-3.5 w-3.5" /> },
   { key: "map", href: "/admin/crm/customers/map", label: "지도", icon: <MapPinned className="h-3.5 w-3.5" /> },
   { key: "tags", href: "/admin/crm/customers/tags", label: "태그", icon: <Tag className="h-3.5 w-3.5" /> },
@@ -150,6 +152,7 @@ function resolveCustomersSub(pathname: string | null): CustomersSub | null {
   if (!pathname) return null
   if (pathname === "/admin/crm/customers" || pathname.startsWith("/admin/crm/customers/unified")) return "unified"
   if (pathname.startsWith("/admin/crm/customers/leads")) return "leads"
+  if (pathname.startsWith("/admin/crm/customers/intake")) return "intake"
   if (pathname.startsWith("/admin/crm/customers/map")) return "map"
   if (pathname.startsWith("/admin/crm/customers/tags")) return "tags"
   if (

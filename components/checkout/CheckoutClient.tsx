@@ -4,6 +4,7 @@ import { Suspense, useState } from "react"
 import Link from "next/link"
 
 import { SoftwareCheckoutClient } from "@/components/billing/SoftwareCheckoutClient"
+import { DesiredDateBlocksProvider } from "@/components/checkout/desired-date-blocks"
 import { HardwareCheckoutPanel } from "@/components/checkout/HardwareCheckoutPanel"
 import type { BillingMode } from "@/components/billing/BillingModeTabs"
 import { trackEvent } from "@/lib/analytics"
@@ -34,7 +35,11 @@ interface Props {
   initialFamily?: ProductFamily
   initialMode?: BillingMode
   initialQuoteCode?: string
+  /** 희망일 달력이 막을 공휴일(`YYYY-MM-DD`). 서버가 읽어 내려준다. */
+  holidayIsoDates?: readonly string[]
 }
+
+const NO_HOLIDAYS: readonly string[] = []
 
 /**
  * /checkout 의 상품군 셸. 소프트웨어(기존 결제 흐름)와 하드웨어(도입 신청) 두 갈래를
@@ -44,6 +49,7 @@ export function CheckoutClient({
   initialFamily = "sw",
   initialMode,
   initialQuoteCode,
+  holidayIsoDates = NO_HOLIDAYS,
 }: Props) {
   const [family, setFamily] = useState<ProductFamily>(initialFamily)
   const copy = FAMILY_COPY[family]
@@ -64,6 +70,9 @@ export function CheckoutClient({
   }
 
   return (
+    // 희망일 달력은 하드웨어·소프트웨어 두 갈래 아래 신청 폼에 있다 — prop 으로 내리면
+    // 중간 컴포넌트가 값을 나르기만 하므로 여기서 한 번 깔아 둔다.
+    <DesiredDateBlocksProvider holidayIsoDates={holidayIsoDates}>
     <div className="min-h-screen bg-[#FAFAF8] font-sans text-[#111110]">
       <header className="border-b border-black/5 bg-white">
         <div className="container mx-auto flex items-center justify-between px-4 py-4 md:px-8">
@@ -127,5 +136,6 @@ export function CheckoutClient({
         )}
       </main>
     </div>
+    </DesiredDateBlocksProvider>
   )
 }

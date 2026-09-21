@@ -5,13 +5,14 @@
 // 이 모듈을 그대로 re-export 하므로 기존 import 경로는 그대로 동작한다.
 
 import type { LeadRecord } from "@/lib/repositories/leads"
+import { DIRECT_INBOUND_LEAD_SOURCES } from "@/lib/lead-types"
 
 export const SOURCE_LABEL: Record<string, string> = {
   demo_modal: "데모 신청", contact_page: "문의", newsletter: "뉴스레터", meta_lead_ads: "Meta 리드",
   channel_talk: "채널톡",
 }
 
-export const RESPONSE_TARGET_SOURCES = new Set(["demo_modal", "contact_page", "meta_lead_ads"])
+export const RESPONSE_TARGET_SOURCES = DIRECT_INBOUND_LEAD_SOURCES
 
 // ─── 전환 판정 ─────────────────────────────────────────────────
 // 광고 리드 섹션(lib/campaigns/ad-leads → AdLeadsPanel)과 perf 대시보드가 공유하는 단일 정의.
@@ -40,21 +41,24 @@ export function isConversionEligibleLead(lead: Pick<LeadRecord, "status">): bool
 // 실제 source 값은 16종+로 잘게 흩어져 있어, 리드 보드 상단 유입 칩 필터는 이 7묶음으로 접는다.
 // 여기가 source→그룹 매핑의 단일 진실원 — 새 유입 채널이 생기면 이 표에만 추가한다.
 export type LeadSourceGroup =
-  | "meta" | "homepage" | "resources" | "newsletter" | "channel_talk" | "chatbot" | "manual_etc"
+  | "meta" | "homepage" | "intake" | "resources" | "newsletter" | "channel_talk" | "chatbot"
+  | "manual_etc"
 
 export const SOURCE_GROUP_ORDER: LeadSourceGroup[] = [
-  "meta", "homepage", "resources", "newsletter", "channel_talk", "chatbot", "manual_etc",
+  "meta", "homepage", "intake", "resources", "newsletter", "channel_talk", "chatbot", "manual_etc",
 ]
 
 export const SOURCE_GROUP_LABEL: Record<LeadSourceGroup, string> = {
-  meta: "메타", homepage: "홈페이지", resources: "자료실", newsletter: "뉴스레터",
+  meta: "메타", homepage: "홈페이지", intake: "접수", resources: "자료실", newsletter: "뉴스레터",
   channel_talk: "채널톡", chatbot: "챗봇", manual_etc: "수기·기타",
 }
 
 // 웨이파인딩용 색점 — 라이트/다크 공통으로 보이는 중간 톤(넓은 채움 아님, 점만).
+// 접수(#17868F)는 남아 있던 틈(청록)을 쓴다 — 홈페이지 초록과 메타 파랑 사이지만
+// 채도·명도가 달라 점 크기에서도 갈린다.
 export const SOURCE_GROUP_DOT: Record<LeadSourceGroup, string> = {
-  meta: "#378ADD", homepage: "#1D9E75", resources: "#BA7517", newsletter: "#7F77DD",
-  channel_talk: "#D85A30", chatbot: "#D4537E", manual_etc: "#888780",
+  meta: "#378ADD", homepage: "#1D9E75", intake: "#17868F", resources: "#BA7517",
+  newsletter: "#7F77DD", channel_talk: "#D85A30", chatbot: "#D4537E", manual_etc: "#888780",
 }
 
 const SOURCE_GROUP_BY_SOURCE: Record<string, LeadSourceGroup> = {
@@ -68,7 +72,9 @@ const SOURCE_GROUP_BY_SOURCE: Record<string, LeadSourceGroup> = {
   channel_talk: "channel_talk", channel_talk_mining: "channel_talk",
   chatbot: "chatbot",
   admin_manual: "manual_etc", manual: "manual_etc",
-  seminar: "manual_etc", event: "manual_etc", team_event: "manual_etc", showroom: "manual_etc",
+  seminar: "manual_etc", event: "manual_etc", team_event: "manual_etc",
+  // 방문·주문을 실제로 잡은 접수. "showroom" 은 리드를 만든 적이 없는 레거시 키다.
+  showroom_booking: "intake", checkout_request: "intake", showroom: "intake",
 }
 
 // 매핑에 없는 source는 전부 '수기·기타'로 흡수 — 칩에서 리드가 새지 않게 한다.

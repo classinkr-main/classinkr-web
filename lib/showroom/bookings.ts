@@ -34,6 +34,8 @@ import {
   normalizeMultilineText,
   normalizeText,
 } from "@/lib/server/contact-field-validation"
+import { pickLeadAttribution, type LeadAttribution } from "@/lib/marketing-attribution"
+import { sendShowroomBookingReceipt } from "@/lib/messaging/customer-receipt"
 import { submitLeadCapture } from "@/lib/server/lead-capture"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import {
@@ -85,6 +87,12 @@ export interface NormalizedShowroomBooking {
   interests: string[]
   memo: string | null
   sourcePage: string | null
+  /**
+   * 광고 귀속·익명 활동 결합 키. 이 경로는 lib/submitLead.ts 를 거치지 않아 예전에는
+   * 둘 다 붙지 않았다 — 퍼널 뒤쪽 리드가 성과 측정에서 통째로 빠져 있던 이유다.
+   */
+  attribution: LeadAttribution
+  anonymousId: string | null
 }
 
 export type ShowroomBookingValidation =
@@ -158,6 +166,8 @@ export function normalizeShowroomBooking(raw: unknown): ShowroomBookingValidatio
       academySize: normalizeText(body.academySize, MAX_ACADEMY_SIZE_LENGTH),
       interests: normalizeInterests(body.interests),
       memo: normalizeMultilineText(body.memo, MAX_MEMO_LENGTH),
+      attribution: pickLeadAttribution(body),
+      anonymousId: normalizeText(body.anonymousId, MAX_NAME_LENGTH),
       sourcePage: normalizeText(body.sourcePage, MAX_SOURCE_PAGE_LENGTH),
     },
   }
@@ -328,7 +338,8 @@ async function mirrorToLeadQueue(
 ): Promise<string | null> {
   const { body } = await submitLeadCapture(
     {
-      source: "contact_page",
+      // 전용 source. source_detail 은 과거 리드와의 연속성을 위해 그대로 둔다.
+      source: "showroom_booking",
       org: booking.org,
       name: booking.name,
       phone: booking.phone,
@@ -339,7 +350,10 @@ async function mirrorToLeadQueue(
       // 방문 예약 동의는 연락 목적 — 마케팅 수신 동의로 승격하지 않는다.
       marketingConsent: false,
       sourceDetail: "showroom_booking",
-      currentPage: booking.sourcePage ?? undefined,
+      ...booking.attribution,
+      // sourcePage 가 있으면 그게 더 정확한 제출 지점이다.
+      currentPage: booking.sourcePage ?? booking.attribution.currentPage,
+      anonymousId: booking.anonymousId ?? undefined,
     },
     { suppressLeadCreatedNotification: true }
   )
@@ -418,6 +432,17 @@ export async function submitShowroomBooking(
     // 접수당 정확히 1건 — 리드 미러가 실패해도(leadId null) 알림은 그대로 나간다.
     await runSafely("ops notification", () =>
       emitNotificationEvent(buildShowroomBookingNotification({ booking, bookingId, leadId }))
+    )
+
+    // 고객 확인. 여기까지의 후속 처리는 전부 내부용이라, 고객은 성공 화면을 닫는 순간
+    // 아무 흔적도 갖지 못했다. 발송이 실패해도 접수는 그대로다.
+    await runSafely("customer receipt", () =>
+      sendShowroomBookingReceipt({
+        bookingId,
+        phone: booking.phone,
+        visitDate: booking.visitDate,
+        visitTime: booking.visitTime,
+      })
     )
   }
 

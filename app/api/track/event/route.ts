@@ -37,7 +37,29 @@ const ALLOWED_PARAM_KEYS: Record<string, Set<string>> = {
     "slug",
     "event_slug",
   ]),
-  submit_demo_request: new Set(["event_id", "source", "lead_id", "stored", "event_slug", "lead_magnet"]),
+  // 세 화면(문의·쇼룸 예약·도입 신청)이 같은 이벤트명으로 발화하고 source 로만 갈린다.
+  // 도메인 파라미터가 여기 없으면 서버 적재에서 조용히 탈락해, 어떤 날짜에 몇 명이
+  // 오려 했는지·얼마짜리 구성을 담았는지가 내부 DB 에 전혀 남지 않는다.
+  submit_demo_request: new Set([
+    "event_id",
+    "source",
+    "lead_id",
+    "stored",
+    "event_slug",
+    "lead_magnet",
+    "page",
+    // 쇼룸 예약
+    "visit_date",
+    "visit_time",
+    "visitor_count",
+    "interest_count",
+    "academy_size",
+    // 도입 신청
+    "request_kind",
+    "item_count",
+    "value",
+    "currency",
+  ]),
   submit_newsletter: new Set(["event_id", "source", "lead_magnet", "post_slug", "gate"]),
   download_materials: new Set(["event_id", "asset_id", "page", "source", "lead_magnet", "post_slug", "gate"]),
   view_resource_card: new Set(["event_id", "source", "lead_magnet", "gate", "tier", "category"]),

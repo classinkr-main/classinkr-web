@@ -12,6 +12,10 @@ import Link from "next/link"
 import { submitLead } from "@/lib/submitLead"
 import { trackDemoRequestAdsConversion, trackEvent } from "@/lib/analytics"
 import { useToast } from "@/components/ui/toast"
+import {
+    ACADEMY_SIZE_OPTIONS,
+    ACADEMY_SIZE_PLACEHOLDER,
+} from "@/lib/contact/academy-size"
 import { CONTACT_TOPICS, EVENT_CONTACT_TOPICS, isContactTopic } from "@/lib/contact/topics"
 import type { PublicEvent } from "@/lib/types/public-events"
 
@@ -71,6 +75,9 @@ export default function ContactPage() {
     const [message, setMessage] = useState("")
     const [privacyConsent, setPrivacyConsent] = useState(false)
     const [privacyConsentError, setPrivacyConsentError] = useState("")
+    // 어떤 필드 때문에 막혔는지. 이게 없으면 에러 하나에 6개 필드가 동시에 흔들리고
+    // 스크린리더에도 전부 잘못된 것으로 읽힌다.
+    const [errorField, setErrorField] = useState<string | null>(null)
     const [events, setEvents] = useState<PublicEvent[]>([])
     const [eventsLoaded, setEventsLoaded] = useState(false)
     const formRef = useRef<HTMLFormElement>(null)
@@ -79,6 +86,15 @@ export default function ContactPage() {
     const toast = useToast()
     const errorMessageId = error ? "contact-form-error" : undefined
     const phoneErrorMessageId = phoneError ? "contact-phone-error" : undefined
+
+    /** 막힌 필드로 데려간다 — 긴 폼에서는 뷰포트 밖 에러가 보이지 않는다. */
+    const focusField = (name: string) => {
+        const target = formRef.current?.elements.namedItem(name)
+        const element = target instanceof HTMLElement ? target : null
+        if (!element) return
+        element.focus({ preventScroll: true })
+        element.scrollIntoView({ block: "center", behavior: "smooth" })
+    }
 
     const showEventPicker = EVENT_CONTACT_TOPICS.has(topic)
     const eventPickerCategory = topic === "세미나 신청" ? "웨비나" : null
@@ -159,6 +175,10 @@ export default function ContactPage() {
         setMessage("")
         setPrivacyConsent(false)
         setPrivacyConsentError("")
+        // 이걸 비우지 않으면 두 번째 문의에 첫 제출의 lead_magnet 이 재첨부되고,
+        // 서버 중복키 context 가 leadMagnet 이라 정상 재문의가 409 로 막힐 수 있다.
+        setLeadMagnet("")
+        setErrorField(null)
         formRef.current?.reset()
     }
 
@@ -209,6 +229,7 @@ export default function ContactPage() {
         setError("")
         setNotice("")
         setPhoneError("")
+        setErrorField(null)
 
         const form = e.currentTarget
         const formData = new FormData(form)
@@ -220,9 +241,22 @@ export default function ContactPage() {
                 ? events.find((e) => e.slug === eventSlug)
                 : undefined
 
+            // 목록이 아직 안 왔으면 availableEvents 가 비어 아래 가드를 통과한다.
+            // 그 사이 제출하면 어떤 행사인지 없이 접수된다.
+            if (isEventTopic && !eventsLoaded) {
+                setError("행사 목록을 불러오는 중입니다. 잠시 후 다시 시도해주세요.")
+                setErrorField("topic")
+                triggerShake()
+                focusField("topic")
+                setLoading(false)
+                return
+            }
+
             if (isEventTopic && availableEvents.length > 0 && !eventSlug) {
                 setError("신청하실 행사를 선택해주세요.")
+                setErrorField("event-slug")
                 triggerShake()
+                focusField("event-slug")
                 setLoading(false)
                 return
             }
@@ -230,6 +264,7 @@ export default function ContactPage() {
             const phoneValidationMessage = getPhoneValidationMessage(phone)
             if (phoneValidationMessage) {
                 rejectPhoneInput(phoneValidationMessage)
+                focusField("phone")
                 setLoading(false)
                 return
             }
@@ -237,6 +272,7 @@ export default function ContactPage() {
             if (!privacyConsent) {
                 setPrivacyConsentError(PRIVACY_CONSENT_REQUIRED_MESSAGE)
                 triggerShake()
+                focusField("privacy-consent")
                 setLoading(false)
                 return
             }
@@ -378,6 +414,9 @@ export default function ContactPage() {
                                 </div>
                             </div>
 
+                            {/* 채널 URL 이 없으면 CTA 는 폼 앵커로 바뀌는데 QR 만 남으면
+                                스캔해도 아무 일이 없는 블록이 폼 위를 차지한다. */}
+                            {kakaoChannelUrl ? (
                             <div className="shrink-0 flex flex-col items-center gap-4">
                                 <div className="rounded-[22px] border border-[#22A366]/25 bg-[#E9F8F1] p-1.5 shadow-[0_18px_45px_rgba(8,71,52,0.12)] sm:rounded-[26px] sm:p-2">
                                     <div className="w-40 h-40 md:h-48 md:w-48 bg-white rounded-[18px] flex items-center justify-center relative overflow-hidden ring-1 ring-[#22A366]/10">
@@ -392,6 +431,7 @@ export default function ContactPage() {
                                 </div>
                                 <span className="text-sm font-medium text-slate-500">카카오채널 스캔</span>
                             </div>
+                            ) : null}
                         </div>
                     </div>
                 </motion.div>
@@ -432,11 +472,11 @@ export default function ContactPage() {
                                 <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="org-name" className="text-slate-700 font-bold ml-1">학원명 / 기관명 <span className="text-[#084734]">*</span></Label>
-                                        <Input id="org-name" name="org-name" placeholder="예: 무궁화 학원" required aria-invalid={!!error} aria-describedby={errorMessageId} className={`w-full bg-white border-slate-200 focus-visible:ring-[#084734] h-11 rounded-xl shadow-sm text-base${shake ? " animate-shake" : ""}`} />
+                                        <Input id="org-name" name="org-name" placeholder="예: 무궁화 학원" required autoComplete="organization" aria-invalid={errorField === "org-name"} aria-describedby={errorMessageId} className="w-full bg-white border-slate-200 focus-visible:ring-[#084734] h-11 rounded-xl shadow-sm text-base" />
                                     </div>
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="name" className="text-slate-700 font-bold ml-1">담당자 성함 <span className="text-[#084734]">*</span></Label>
-                                        <Input id="name" name="name" placeholder="홍길동 원장" required aria-invalid={!!error} aria-describedby={errorMessageId} className={`w-full bg-white border-slate-200 focus-visible:ring-[#084734] h-11 rounded-xl shadow-sm text-base${shake ? " animate-shake" : ""}`} />
+                                        <Input id="name" name="name" placeholder="홍길동 원장" required autoComplete="name" aria-invalid={errorField === "name"} aria-describedby={errorMessageId} className="w-full bg-white border-slate-200 focus-visible:ring-[#084734] h-11 rounded-xl shadow-sm text-base" />
                                     </div>
                                 </div>
                                 <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -456,25 +496,25 @@ export default function ContactPage() {
                                                 event.preventDefault()
                                                 rejectPhoneInput(PHONE_REQUIRED_MESSAGE)
                                             }}
-                                            aria-invalid={!!phoneError || !!error}
+                                            aria-invalid={!!phoneError}
                                             aria-describedby={phoneErrorMessageId ?? errorMessageId}
-                                            className={`w-full bg-white h-11 rounded-xl shadow-sm text-base transition-colors ${phoneError ? "border-red-300 text-red-900 focus-visible:ring-red-500" : "border-slate-200 focus-visible:ring-[#084734]"}${shake || phoneRejected ? " animate-shake" : ""}`}
+                                            className={`w-full bg-white h-11 rounded-xl shadow-sm text-base transition-colors ${phoneError ? "border-[#B43E3E]/40 text-[#B43E3E] focus-visible:ring-[#B43E3E]" : "border-slate-200 focus-visible:ring-[#084734]"}${phoneError || phoneRejected ? " animate-shake" : ""}`}
                                         />
                                         {phoneError && (
-                                            <p id="contact-phone-error" role="alert" aria-live="polite" className="px-1 text-sm font-medium text-red-600">
+                                            <p id="contact-phone-error" role="alert" aria-live="polite" className="px-1 text-sm font-medium text-[#B43E3E]">
                                                 {phoneError}
                                             </p>
                                         )}
                                     </div>
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="email" className="text-slate-700 font-bold ml-1">이메일 (선택)</Label>
-                                        <Input id="email" name="email" placeholder="example@classin.com" type="email" className="w-full bg-white border-slate-200 focus-visible:ring-[#084734] h-11 rounded-xl shadow-sm text-base" />
+                                        <Input id="email" name="email" placeholder="example@classin.com" type="email" autoComplete="email" className="w-full bg-white border-slate-200 focus-visible:ring-[#084734] h-11 rounded-xl shadow-sm text-base" />
                                     </div>
                                 </div>
                                 <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="role" className="text-[#111110] font-bold ml-1">직책 (선택)</Label>
-                                        <Input id="role" name="role" placeholder="예: 원장, 부원장, 운영실장" className="w-full bg-white border-[#E5E5E0] focus-visible:ring-[#084734] h-11 rounded-xl shadow-sm text-base" />
+                                        <Input id="role" name="role" placeholder="예: 원장, 부원장, 운영실장" autoComplete="organization-title" className="w-full bg-white border-[#E5E5E0] focus-visible:ring-[#084734] h-11 rounded-xl shadow-sm text-base" />
                                     </div>
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="size" className="text-[#111110] font-bold ml-1">학원 규모 (선택)</Label>
@@ -483,11 +523,12 @@ export default function ContactPage() {
                                             name="size"
                                             className="h-11 w-full rounded-xl border border-[#E5E5E0] bg-white px-4 text-base shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#084734]"
                                         >
-                                            <option value="">학원 규모를 선택해주세요</option>
-                                            <option value="100명 이하">100명 이하</option>
-                                            <option value="100~300명">100~300명</option>
-                                            <option value="300~500명">300~500명</option>
-                                            <option value="500명 이상">500명 이상</option>
+                                            <option value="">{ACADEMY_SIZE_PLACEHOLDER}</option>
+                                            {ACADEMY_SIZE_OPTIONS.map((option) => (
+                                                <option key={option} value={option}>
+                                                    {option}
+                                                </option>
+                                            ))}
                                         </select>
                                     </div>
                                 </div>
@@ -499,7 +540,7 @@ export default function ContactPage() {
                                         required
                                         aria-invalid={!!error}
                                         aria-describedby={errorMessageId}
-                                        className={`h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-base shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#084734]${shake ? " animate-shake" : ""}`}
+                                        className={`h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-base shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#084734]${errorField === "topic" ? " animate-shake" : ""}`}
                                         value={topic}
                                         onChange={(e) => {
                                             setTopic(e.target.value)
@@ -535,7 +576,7 @@ export default function ContactPage() {
                                                 required
                                                 aria-invalid={!!error}
                                                 aria-describedby={errorMessageId}
-                                                className={`h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-base shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#084734]${shake ? " animate-shake" : ""}`}
+                                                className={`h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-base shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#084734]${errorField === "event-slug" ? " animate-shake" : ""}`}
                                                 value={eventSlug}
                                                 onChange={(e) => setEventSlug(e.target.value)}
                                             >
@@ -550,16 +591,14 @@ export default function ContactPage() {
                                     </div>
                                 )}
                                 <div className="space-y-3 w-full">
-                                    <Label htmlFor="message" className="text-slate-700 font-bold ml-1">문의 내용 <span className="text-[#084734]">*</span></Label>
+                                    <Label htmlFor="message" className="text-slate-700 font-bold ml-1">문의 내용 <span className="font-medium text-slate-400">(선택)</span></Label>
                                     <textarea
-                                        className={`w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-4 text-base focus:outline-none focus:ring-2 focus:ring-[#084734] focus:border-transparent transition-all shadow-sm min-h-[110px]${shake ? " animate-shake" : ""}`}
-                                        placeholder="현재 상황, 원하는 상담 결과, 급한 일정이 있다면 함께 적어주세요."
+                                        className="w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-4 text-base focus:outline-none focus:ring-2 focus:ring-[#084734] focus:border-transparent transition-all shadow-sm min-h-[110px]"
+                                        placeholder="비워두셔도 됩니다. 현재 상황이나 급한 일정이 있다면 적어주세요."
                                         value={message}
                                         onChange={(e) => setMessage(e.target.value)}
                                         id="message"
                                         name="message"
-                                        required
-                                        aria-invalid={!!error}
                                         aria-describedby={errorMessageId}
                                     />
                                 </div>
@@ -615,7 +654,7 @@ export default function ContactPage() {
                                     </span>
                                 </label>
                                 {error && (
-                                    <p id="contact-form-error" role="alert" aria-live="polite" className="text-red-600 text-sm text-center">{error}</p>
+                                    <p id="contact-form-error" role="alert" aria-live="polite" className={`text-center text-sm text-[#B43E3E]${shake ? " animate-shake" : ""}`}>{error}</p>
                                 )}
                                 <Button type="submit" disabled={loading} className="w-full h-12 text-base font-bold bg-[#084734] hover:bg-[#065c41] text-white rounded-xl shadow-[0_8px_20px_rgba(8,71,52,0.18)] hover:shadow-[0_12px_25px_rgba(8,71,52,0.26)] transition-all hover:-translate-y-0.5 mt-4">
                                     {loading ? (

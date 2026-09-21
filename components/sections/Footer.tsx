@@ -36,6 +36,11 @@ export function Footer() {
                             <li><Link href="/product/sw" className="hover:text-white transition-colors">소프트웨어</Link></li>
                             <li><Link href="/product/hw" className="hover:text-white transition-colors">하드웨어</Link></li>
                             <li>
+                                <TrackedLink href="/showroom" ctaId="footer_showroom" className="hover:text-white transition-colors">
+                                    목동 쇼룸 방문 예약
+                                </TrackedLink>
+                            </li>
+                            <li>
                                 <TrackedLink href="/contact" ctaId="footer_contact" className="hover:text-white transition-colors">
                                     도입 문의
                                 </TrackedLink>

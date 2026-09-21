@@ -80,10 +80,16 @@ export function getEngagement(map: LeadEngagementMap | undefined, leadId: string
 // "이 경로로 들어온 사람이 구매 대화에 얼마나 가까운가"의 사전값. 데모 신청이 최상단,
 // 뉴스레터 구독이 최하단. 표에 없는 source 는 DEFAULT.
 const SOURCE_INTENT: Record<string, number> = {
+  // 접수 두 갈래가 가장 앞이다 — 방문 일정을 잡았거나 구성을 담아 금액까지 확정한 상태라,
+  // "무엇인지 묻는" 문의보다 한 단계 더 갔다. 이 두 키가 생기기 전에는 둘 다
+  // contact_page(22)로 들어와 단순 문의와 같은 값을 받았다.
+  checkout_request: 34,
+  showroom_booking: 30,
   demo_modal: 30,
   contact_page: 22,
   meta_lead_ads: 14,
   seminar: 14,
+  // 리드 source 로 쓰인 적 없는 레거시 키. 외부 CRM 유입 대비로 남긴다.
   showroom: 14,
   event: 12,
   team_event: 12,

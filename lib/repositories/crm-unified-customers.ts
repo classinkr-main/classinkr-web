@@ -4,6 +4,7 @@ import { unstable_cache, revalidateTag } from "next/cache"
 import { shareInFlight } from "@/lib/server/share-in-flight"
 
 import { ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG } from "@/lib/admin/crm/cache-tags"
+import { DIRECT_INBOUND_LEAD_SOURCES } from "@/lib/lead-types"
 import {
   CRM_PRIORITY_BUCKET_LABELS,
   buildLeadPriorityItem,
@@ -254,7 +255,7 @@ const NON_LEAD_ROW_DEFAULTS = {
 } as const
 
 // 응답 SLA 대상 소스 — 고객이 직접 남긴 유입 채널만(수기 등록·동기화 소스 제외).
-const SLA_TARGET_LEAD_SOURCES = new Set(["demo_modal", "contact_page", "meta_lead_ads"])
+const SLA_TARGET_LEAD_SOURCES = DIRECT_INBOUND_LEAD_SOURCES
 
 // 리드 전환 산출물(portal customers) → 통합 행. 거래 요약(customer_deal_summary)이 있으면
 // 미수·진행 딜 신호로 다음 액션과 점수를 보수적으로 잡는다(우선순위 엔진 미적용 소스).
