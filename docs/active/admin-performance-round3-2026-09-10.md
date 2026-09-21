@@ -118,6 +118,8 @@ ADMIN_BASE_URL=https://<도메인> ADMIN_COOKIE='<cookie>' npm run measure:admin
 
 **`vercel.json`에 크론을 추가하지 않는다.** 하루 1회 이하 제한(Hobby 기준, `AGENTS.md`)에 걸리고, `after()` 백그라운드 갱신이면 그 제약을 건드리지 않는다. 화면은 이미 `refreshedAt`을 받고 있으므로 "N분 전 기준" 표기로 정직성을 유지한다.
 
+> ※ 2026-09-14 이후: Vercel Pro 전환으로 "하루 1회 이하" 제한은 없어졌다(현재 규칙은 `AGENTS.md` "배포 / Cron 안전 규칙" — 경로당 항목 하나·하루 288회 이하·전체 40개 이하). 이 절과 아래 "하지 않을 것"의 sub-daily 크론 금지는 그 전제에서 나온 판단이다 — `after()` 갱신을 고른 설계 이유(제약 회피)는 다시 볼 수 있다. 운영 DB·리전의 최신 상태는 [Supabase 한국 리전 이관 결과](./supabase-korea-migration-status.md).
+
 - 소유: 플랫폼 & 데이터(마이그레이션) + 마케팅/그로스/CRM(`lib/admin-crm-overview.ts` 소비부)
 - 검증: `supabase/migrations/YYYYMMDD_*.sql` 1장, `npm run check:db`, 관련 vitest
 - 실패 모드: 스냅샷 인프라 부재는 이미 `isMissingSnapshotInfraError`로 폴백 경로가 있다 — 그 경로를 깨지 않는다
