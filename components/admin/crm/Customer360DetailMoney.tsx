@@ -1,16 +1,18 @@
 "use client"
 
-// 고객 360 · 매출(돈흐름) 탭 — 기획안 §11.1 M1(통화별 분리 타일) · M3(주문 타임라인).
+// 고객 360 · 매출(돈흐름) 탭 — 기획안 §11.1 M1(통화별 분리 타일) · M2(품목별 대수) ·
+// M3(주문 타임라인) · M4(미매칭 출고 즉시 연결).
 //
 // 통화 정책: ₩(자체 딜) / $(NEO 오더) / ¥(NEO 수금·성과·EEO 잔액)은 절대 합산하지 않는다.
 // 이 파일의 합계는 전부 같은 통화 목록 안에서만 센다(sumAmounts 호출부 확인). 통화를 넘나드는
-// 합계 변수·표기는 두지 않는다.
+// 합계 변수·표기는 두지 않는다. M2 품목 표도 같은 원칙 — 통화·근거·출처가 다른 행은
+// lib/crm/money-line-items.ts가 이미 분리해 두므로 여기서 다시 합치지 않는다.
 
 import { useMemo, useState, type ReactNode } from "react"
-import { Coins, Handshake, Receipt, TrendingUp, Wallet } from "lucide-react"
+import { ChevronDown, Coins, Handshake, Link2, Receipt, TrendingUp, Wallet } from "lucide-react"
 
 import { EmptyState, Panel, StatTile, TableEmpty } from "@/components/admin/viz"
-import { CRM_CURRENCY_BADGE, formatCNY, formatCrmMoney, formatKRWAbbrev, formatUSD, type CrmCurrency } from "@/lib/crm/money-format"
+import { CRM_CURRENCY_BADGE, formatCrmMoney, formatCNY, formatKRWAbbrev, formatUSD, type CrmCurrency } from "@/lib/crm/money-format"
 import {
   buildMoneyTimeline,
   groupMoneyTimelineByMonth,
@@ -19,6 +21,7 @@ import {
   type MoneyTimelineEntry,
   type MoneyTimelineKind,
 } from "@/lib/crm/money-timeline"
+import { categorizeMoneyLineItemProduct, type CrmMoneyLineItem, type CrmUnmatchedOutboundCandidate } from "@/lib/crm/money-line-items"
 import { STATUS_TONE_TEXT_CLASS } from "@/lib/crm/status-tone"
 import type { Customer360Money } from "@/lib/repositories/crm-customer-360"
 import type { ListCrmDealsResult } from "@/lib/repositories/crm-deals"
@@ -197,6 +200,270 @@ function MoneyTimeline({ entries }: { entries: MoneyTimelineEntry[] }) {
   )
 }
 
+// ── M2 · 품목별 대수 표 ────────────────────────────────────────────────
+const LINE_ITEM_CATEGORY_LABEL: Record<CrmMoneyLineItem["category"], string> = {
+  board: "칠판",
+  stand: "스탠드",
+  camera: "카메라",
+  software: "소프트웨어",
+  other: "기타",
+}
+
+/** 확정=점+텍스트, 추정=점선 배지("추정 · 이름 일치") — Warning 톤(#7A520F/#FBF1E0). */
+function EvidenceBadge({ evidence, optimistic }: { evidence: CrmMoneyLineItem["evidence"]; optimistic?: boolean }) {
+  if (evidence === "confirmed") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#084734]">
+        <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
+        {optimistic ? "연결됨 · 다음 새로고침에 반영" : "확정"}
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex items-center rounded-full border border-dashed border-[#ECD29C] bg-[#FBF1E0] px-1.5 py-0.5 text-[10px] font-semibold text-[#7A520F]">
+      추정 · 이름 일치
+    </span>
+  )
+}
+
+function LineItemRow({
+  item,
+  isOpen,
+  onToggle,
+  optimistic,
+}: {
+  item: CrmMoneyLineItem
+  isOpen: boolean
+  onToggle: () => void
+  optimistic?: boolean
+}) {
+  const hasDetails = item.details.length > 0
+  return (
+    <>
+      <tr className="border-b border-[#E8E8E4] align-top last:border-b-0">
+        <td className="py-2 pr-3">
+          <button
+            type="button"
+            aria-expanded={hasDetails ? isOpen : undefined}
+            disabled={!hasDetails}
+            onClick={onToggle}
+            className="flex min-h-11 items-center gap-1.5 text-left font-semibold text-[#111110] disabled:cursor-default sm:min-h-0"
+          >
+            {hasDetails ? (
+              <ChevronDown
+                aria-hidden="true"
+                className={`h-3.5 w-3.5 shrink-0 text-[#615D59] transition-transform ${isOpen ? "rotate-180" : ""}`}
+              />
+            ) : null}
+            <span className="truncate">{item.product}</span>
+          </button>
+        </td>
+        <td className="py-2 pr-3 text-[12px] text-[#615D59]">{LINE_ITEM_CATEGORY_LABEL[item.category]}</td>
+        <td className="py-2 pr-3 text-right text-[13px] font-semibold tabular-nums text-[#111110]">
+          {item.quantity.toLocaleString("ko-KR")}개
+        </td>
+        <td className="py-2 pr-3 text-right text-[12px] tabular-nums text-[#615D59]">
+          {item.unitPrice == null || item.currency == null ? "-" : formatCrmMoney({ amount: item.unitPrice, currency: item.currency })}
+        </td>
+        <td className="py-2 pr-3 text-right text-[13px] font-bold tabular-nums text-[#111110]">
+          {item.amount == null || item.currency == null ? "-" : formatCrmMoney({ amount: item.amount, currency: item.currency })}
+        </td>
+        <td className="py-2 pr-3 text-[12px] text-[#615D59]">{formatDay(item.lastAt)}</td>
+        <td className="py-2 pr-0">
+          <EvidenceBadge evidence={item.evidence} optimistic={optimistic} />
+        </td>
+      </tr>
+      {isOpen && hasDetails ? (
+        <tr className="border-b border-[#E8E8E4] bg-[#F6F5F4] last:border-b-0">
+          <td colSpan={7} className="px-3 py-2.5">
+            <ul className="space-y-1.5">
+              {item.details.map((detail, index) => (
+                <li
+                  key={`${item.key}:${detail.ref}:${index}`}
+                  className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-[#615D59]"
+                >
+                  <span className="font-semibold text-[#31302E]">{detail.ref}</span>
+                  <span>{formatDay(detail.at)}</span>
+                  <span className="tabular-nums">{detail.quantity.toLocaleString("ko-KR")}개</span>
+                  {detail.serials.length > 0 ? <span className="truncate">S/N {detail.serials.join(", ")}</span> : null}
+                </li>
+              ))}
+            </ul>
+          </td>
+        </tr>
+      ) : null}
+    </>
+  )
+}
+
+const LINE_ITEM_TABLE_HEADERS = ["품목", "구분", "수량", "단가", "금액", "최근", "근거"] as const
+
+function LineItemsTable({
+  items,
+  truncated,
+  note,
+  optimisticKeys,
+}: {
+  items: CrmMoneyLineItem[]
+  truncated: boolean
+  note?: string
+  optimisticKeys: Set<string>
+}) {
+  const [expandedKey, setExpandedKey] = useState<string | null>(null)
+
+  if (items.length === 0) {
+    return <TableEmpty message="품목 데이터 없음 · NEO 오더는 위 통화 그룹 참고" />
+  }
+
+  return (
+    <div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[560px] border-collapse text-[13px]">
+          <thead>
+            <tr className="border-b border-[#E8E8E4] text-left text-[11px] font-semibold text-[#615D59]">
+              {LINE_ITEM_TABLE_HEADERS.map((label, index) => (
+                <th
+                  key={label}
+                  className={`py-2 pr-3 font-semibold ${index >= 2 && index <= 4 ? "text-right" : "text-left"}`}
+                >
+                  {label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item) => (
+              <LineItemRow
+                key={item.key}
+                item={item}
+                isOpen={expandedKey === item.key}
+                onToggle={() => setExpandedKey((current) => (current === item.key ? null : item.key))}
+                optimistic={optimisticKeys.has(item.key)}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {truncated ? (
+        <p className="mt-2 text-[11px] text-[#615D59]">일부 원천 데이터가 조회 상한에 걸려 최신 전부가 아닐 수 있습니다.</p>
+      ) : null}
+      {note ? <p className="mt-2 text-[11px] text-[#615D59]">{note}</p> : null}
+    </div>
+  )
+}
+
+// ── M4 · 연결 대기 출고 ────────────────────────────────────────────────
+function UnmatchedOutboundRow({
+  row,
+  accountId,
+  pending,
+  linked,
+  error,
+  onLink,
+}: {
+  row: CrmUnmatchedOutboundCandidate
+  accountId: string | null
+  pending: boolean
+  linked: boolean
+  error: string | null
+  onLink: () => void
+}) {
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-3 py-2.5">
+      <div className="min-w-0">
+        <p className="truncate text-[13px] font-semibold text-[#111110]">
+          {row.destination || "목적지 미상"} · {row.product}
+        </p>
+        <p className="mt-0.5 text-[11px] text-[#615D59]">
+          {row.quantity.toLocaleString("ko-KR")}개 · {formatDay(row.outboundDate)} · 유사도{" "}
+          <span className="tabular-nums">{Math.round(row.similarity * 100)}%</span>
+        </p>
+        {error ? <p className="mt-0.5 text-[11px] font-semibold text-[#B43E3E]">{error}</p> : null}
+      </div>
+      {linked ? (
+        <span className="shrink-0 text-[12px] font-semibold text-[#084734]">연결됨 · 다음 새로고침에 반영</span>
+      ) : (
+        <button
+          type="button"
+          disabled={pending || !accountId}
+          onClick={onLink}
+          title={accountId ? undefined : "계정 정보가 없어 연결할 수 없습니다."}
+          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-[#084734] px-3 text-[13px] font-semibold text-[#084734] transition-colors hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-9"
+        >
+          <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
+          {pending ? "연결 중…" : "이 고객에 연결"}
+        </button>
+      )}
+    </li>
+  )
+}
+
+function UnmatchedOutboundSection({
+  rows,
+  accountId,
+  onRelinked,
+}: {
+  rows: CrmUnmatchedOutboundCandidate[]
+  accountId: string | null
+  onRelinked?: (row: CrmUnmatchedOutboundCandidate) => void
+}) {
+  const [pendingId, setPendingId] = useState<string | null>(null)
+  const [linkedIds, setLinkedIds] = useState<Set<string>>(new Set())
+  const [errorById, setErrorById] = useState<Record<string, string>>({})
+
+  if (rows.length === 0) return null
+
+  async function handleLink(row: CrmUnmatchedOutboundCandidate) {
+    if (pendingId) return // 중복 클릭 잠금
+    if (!accountId) {
+      setErrorById((prev) => ({ ...prev, [row.id]: "계정 정보가 없어 연결할 수 없습니다." }))
+      return
+    }
+    setPendingId(row.id)
+    setErrorById((prev) => {
+      if (!(row.id in prev)) return prev
+      const next = { ...prev }
+      delete next[row.id]
+      return next
+    })
+    try {
+      const res = await fetch("/api/admin/crm/source-links/hw-outbound", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ outboundId: row.id, accountId }),
+      })
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null
+        throw new Error(body?.error || "연결에 실패했습니다.")
+      }
+      setLinkedIds((prev) => new Set(prev).add(row.id))
+      onRelinked?.(row)
+    } catch (error) {
+      setErrorById((prev) => ({ ...prev, [row.id]: error instanceof Error ? error.message : "연결에 실패했습니다." }))
+    } finally {
+      setPendingId(null)
+    }
+  }
+
+  return (
+    <Panel title="연결 대기 출고" description="이름이 비슷하지만 아직 이 고객으로 확정되지 않은 HW 출고입니다.">
+      <ul className="divide-y divide-[#E8E8E4]">
+        {rows.map((row) => (
+          <UnmatchedOutboundRow
+            key={row.id}
+            row={row}
+            accountId={accountId}
+            pending={pendingId === row.id}
+            linked={linkedIds.has(row.id)}
+            error={errorById[row.id] ?? null}
+            onLink={() => handleLink(row)}
+          />
+        ))}
+      </ul>
+    </Panel>
+  )
+}
+
 // ── 원천별 목록(기존 유지, 접기 가능) ───────────────────────────────────
 // 돈 항목 한 줄: 제목 · 금액 · 날짜 · 담당 · 상태.
 function MoneyRow({
@@ -310,6 +577,8 @@ function CollapsibleSection({
 export default function Customer360DetailMoney({
   money,
   deals,
+  accountId,
+  onRelinked,
 }: {
   money: Customer360Money
   /**
@@ -317,6 +586,13 @@ export default function Customer360DetailMoney({
    * 생략되면 KRW 그룹은 "해당 없음"으로, 타임라인은 NEO 오더·수금만 그린다.
    */
   deals?: ListCrmDealsResult | null
+  /**
+   * NEO 계정 id — M4 "이 고객에 연결" POST 바디에 필요하다. lead 대상이거나 상위가 아직
+   * 전달하지 않으면 undefined/null → 연결 버튼이 비활성화되고 안내 캡션을 보여준다.
+   */
+  accountId?: string | null
+  /** M4 연결 성공 후 상위가 360 데이터를 다시 불러오고 싶을 때(선택). */
+  onRelinked?: () => void
 }) {
   const dealRows = useMemo(() => deals?.rows ?? [], [deals])
   const timeline = useMemo(
@@ -327,7 +603,48 @@ export default function Customer360DetailMoney({
     [money.available, money.orders, money.collections, dealRows]
   )
 
-  if (!money.available) {
+  // M4 — 연결 성공 시 8초 되돌리기 없이 낙관적으로 품목 표에 확정 행을 얹는다. 부모가
+  // money를 다시 내려주면(onRelinked 이후 재조회) 이 로컬 상태는 그냥 남아 있어도 되지만,
+  // key가 `optimistic:`로 시작해 서버 lineItems와 절대 충돌하지 않는다.
+  const [optimisticLineItems, setOptimisticLineItems] = useState<CrmMoneyLineItem[]>([])
+  const [dismissedUnmatchedIds, setDismissedUnmatchedIds] = useState<Set<string>>(new Set())
+
+  const lineItems = useMemo(() => {
+    if (optimisticLineItems.length === 0) return money.lineItems
+    return [...money.lineItems, ...optimisticLineItems].sort((a, b) => b.quantity - a.quantity)
+  }, [money.lineItems, optimisticLineItems])
+
+  const unmatchedOutbound = useMemo(() => {
+    if (dismissedUnmatchedIds.size === 0) return money.unmatchedOutbound
+    return money.unmatchedOutbound.filter((row) => !dismissedUnmatchedIds.has(row.id))
+  }, [money.unmatchedOutbound, dismissedUnmatchedIds])
+
+  const optimisticKeys = useMemo(() => new Set(optimisticLineItems.map((item) => item.key)), [optimisticLineItems])
+
+  function handleRelinked(row: CrmUnmatchedOutboundCandidate) {
+    setDismissedUnmatchedIds((prev) => new Set(prev).add(row.id))
+    setOptimisticLineItems((prev) => [
+      ...prev,
+      {
+        key: `optimistic:hw_outbound:${row.id}`,
+        product: row.product,
+        category: categorizeMoneyLineItemProduct(row.product),
+        quantity: row.quantity,
+        unitPrice: null,
+        amount: null,
+        currency: null,
+        source: "hw_outbound",
+        evidence: "confirmed",
+        lastAt: row.outboundDate,
+        details: [{ ref: row.id, at: row.outboundDate, quantity: row.quantity, serials: row.serials }],
+      },
+    ])
+    onRelinked?.()
+  }
+
+  const hasLineItemData = lineItems.length > 0 || unmatchedOutbound.length > 0
+
+  if (!money.available && !hasLineItemData) {
     return (
       <Panel title="Revenue" description="NEO(본사 CRM) 동기화 원천">
         <TableEmpty message="표시할 돈흐름 데이터가 없습니다. (리드 단계이거나 NEO 연결 없음)" />
@@ -442,6 +759,23 @@ export default function Customer360DetailMoney({
           })}
         </div>
       </section>
+
+      {/* M2 · 품목별 대수 — 딜 라인아이템·HW 출고를 품목으로 합산, 근거(확정/추정) 표기 */}
+      <Panel
+        title="품목별 대수"
+        description="딜 라인아이템·HW 출고를 품목으로 합산 · 통화가 다른 금액은 더하지 않음"
+        action={<TotalTag>{lineItems.length.toLocaleString("ko-KR")}개 품목</TotalTag>}
+      >
+        <LineItemsTable
+          items={lineItems}
+          truncated={money.lineItemsMeta.truncated}
+          note={money.lineItemsMeta.note}
+          optimisticKeys={optimisticKeys}
+        />
+      </Panel>
+
+      {/* M4 · 미매칭 출고 즉시 연결 — 이름이 비슷하지만 확정 링크가 없는 HW 출고 상위 5 */}
+      <UnmatchedOutboundSection rows={unmatchedOutbound} accountId={accountId ?? null} onRelinked={handleRelinked} />
 
       {/* M3 · 주문 타임라인 — 오더($) · 수금(¥) · 딜(₩) 한 축, 최신 먼저 */}
       <Panel

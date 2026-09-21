@@ -2315,6 +2315,108 @@ export async function confirmLeadNeoLink(input: {
   return { created: !existing }
 }
 
+const HW_OUTBOUND_LINK_PAGE_SIZE = 1000
+const HW_OUTBOUND_LINK_MAX_PAGES = 20
+
+/**
+ * HW 출고 → NEO 계정 확정 링크 전체를 source_record_key(`hw:outbound:{id}`) → target_id 로
+ * 한 번에 읽는다. 360 매출 탭 M2(crm-account-money.ts의 getCrmMoneyLineItemsSummary)가
+ * 계정별 조회마다 이 맵 하나를 재사용해 HW 출고 라인아이템의 근거(확정/추정)를 판정한다.
+ * listConfirmedLeadNeoAccountLinks와 같은 페이지네이션 규약(PostgREST 1000행 절단 방어).
+ */
+export async function listConfirmedHwOutboundAccountLinks(): Promise<Map<string, string>> {
+  const sb = createSupabaseAdminClient()
+  const bySourceKey = new Map<string, string>()
+
+  for (let page = 0; ; page += 1) {
+    if (page >= HW_OUTBOUND_LINK_MAX_PAGES) {
+      throw new Error(
+        `crm_source_links branch_hw→계정 링크 조회가 ${HW_OUTBOUND_LINK_MAX_PAGES}페이지(${HW_OUTBOUND_LINK_MAX_PAGES * HW_OUTBOUND_LINK_PAGE_SIZE}행)를 초과했습니다 — 페이지 상한을 재검토하세요.`
+      )
+    }
+    const from = page * HW_OUTBOUND_LINK_PAGE_SIZE
+    const { data, error } = await sb
+      .from("crm_source_links")
+      .select("source_record_key, target_id")
+      .eq("source_system", "branch_hw")
+      .eq("source_object", "outbound")
+      .eq("target_type", "external_account")
+      .eq("status", "confirmed")
+      .order("id", { ascending: true })
+      .range(from, from + HW_OUTBOUND_LINK_PAGE_SIZE - 1)
+
+    if (error) throw new Error(`crm_source_links branch_hw→계정 링크 조회 실패: ${error.message}`)
+
+    const rows = (data ?? []) as Array<{ source_record_key: string | null; target_id: string | null }>
+    for (const row of rows) {
+      const sourceKey = row.source_record_key ? String(row.source_record_key) : ""
+      const targetId = row.target_id ? String(row.target_id) : ""
+      if (sourceKey && targetId) bySourceKey.set(sourceKey, targetId)
+    }
+    if (rows.length < HW_OUTBOUND_LINK_PAGE_SIZE) break
+  }
+
+  return bySourceKey
+}
+
+/**
+ * M4 — 360 매출 탭의 "연결 대기 출고"에서 미매칭 HW 출고를 이 계정에 바로 확정 연결한다.
+ * confirmLeadNeoLink와 같은 upsert 패턴(부분 유니크 인덱스가 select-then-insert 레이스를
+ * 흡수)이지만, 이미 이 소스가 confirmed면(같은 타깃이어도) 그대로 409로 되돌린다 — 미매칭
+ * 후보 화면에 같은 행이 다시 뜨지 않아야 하므로 lead→neo의 멱등 성공과 달리 재확정을 거부한다.
+ */
+export async function confirmHwOutboundAccountLink(input: {
+  outboundId: string
+  accountId: string
+  actorUserId?: string | null
+}): Promise<{ id: string; status: "confirmed" }> {
+  const sb = createSupabaseAdminClient()
+  const outboundId = input.outboundId.trim()
+  const accountId = input.accountId.trim()
+  if (!outboundId || !accountId) {
+    throw new Error("출고→계정 링크 입력이 비어 있습니다.")
+  }
+  const sourceRecordKey = `hw:outbound:${outboundId}`
+
+  const { data, error: readError } = await sb
+    .from("crm_source_links")
+    .select("id, status")
+    .eq("source_system", "branch_hw")
+    .eq("source_object", "outbound")
+    .eq("source_record_key", sourceRecordKey)
+
+  if (readError) throw new Error(`출고 링크 조회 실패: ${readError.message}`)
+
+  const links = (data ?? []) as Array<{ id: string; status: string }>
+  if (links.some((link) => link.status === "confirmed")) {
+    throw new CrmSourceLinkConflictError("이미 확정된 출고 연결입니다.")
+  }
+
+  const now = new Date().toISOString()
+  const { data: upserted, error } = await sb
+    .from("crm_source_links")
+    .upsert(
+      {
+        source_system: "branch_hw",
+        source_object: "outbound",
+        source_record_key: sourceRecordKey,
+        target_type: "external_account",
+        target_id: accountId,
+        confidence: 1,
+        status: "confirmed",
+        confirmed_by: input.actorUserId ?? null,
+        confirmed_at: now,
+        metadata: { manual: true, manual_confirmed_at: now },
+      },
+      { onConflict: "source_system,source_object,source_record_key,target_type,target_id" }
+    )
+    .select("id, status")
+    .single()
+
+  if (error) throw new Error(`출고→계정 링크 확정 실패: ${error.message}`)
+  return { id: String(upserted.id), status: "confirmed" }
+}
+
 interface ConfirmableSourceLinkRow {
   id: string
   source_system: string

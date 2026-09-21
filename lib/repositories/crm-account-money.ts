@@ -1,10 +1,23 @@
 import "server-only"
 
+import { unstable_cache } from "next/cache"
+
 import { normalizedAccountKey } from "@/lib/branch/account-key"
 import { classifySalesLedgerProductCategory } from "@/lib/branch/product-category"
 import { isInactiveSheetStatus, isPlaceholderCrmName } from "@/lib/crm-source-linking"
+import {
+  buildCrmMoneyLineItems,
+  buildUnmatchedOutboundCandidates,
+  type CrmMoneyLineItem,
+  type CrmMoneyLineItemsMeta,
+  type CrmUnmatchedOutboundCandidate,
+  type MoneyDealLineItemRow,
+  type MoneyHwOutboundRow,
+} from "@/lib/crm/money-line-items"
 import { listBranchRevDeals, type BranchRevDeal } from "@/lib/repositories/branch-deals"
 import { listHwOutbound, type HwOutbound } from "@/lib/repositories/branch-hw"
+import { listConfirmedHwOutboundAccountLinks } from "@/lib/repositories/crm-source-links"
+import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 // ── 고객 360 제품 매출 요약 (계정키 조인) ────────────────────────────────────
 //
@@ -106,4 +119,164 @@ export async function getCrmAccountProductSummary(
   if (!matched) return EMPTY_CRM_ACCOUNT_PRODUCT_SUMMARY
 
   return { swCumulativeCNY, hwCumulativeCNY, hwBoardCount, matched: true }
+}
+
+// ── 360 M2·M4 — 품목별 대수 표 · 미매칭 출고 후보 ─────────────────────────
+//
+// Portal V2 딜(`deals`/`deal_line_items`)과 HW 출고(`branch_hw_outbound`)를 계정키로 조인해
+// 품목·대수·근거(확정/추정)를 계산한다. 근거 판정·합산·정렬·유사도 산식은 전부
+// lib/crm/money-line-items.ts(순수)에 있다 — 이 파일은 원천 조회와 계정 매칭 필터만 한다.
+
+export interface CrmMoneyLineItemsSummary {
+  lineItems: CrmMoneyLineItem[]
+  lineItemsMeta: CrmMoneyLineItemsMeta
+  unmatchedOutbound: CrmUnmatchedOutboundCandidate[]
+}
+
+export const EMPTY_CRM_MONEY_LINE_ITEMS_SUMMARY: CrmMoneyLineItemsSummary = {
+  lineItems: [],
+  lineItemsMeta: { truncated: false, sources: [] },
+  unmatchedOutbound: [],
+}
+
+// deals.customer_id는 NOT NULL FK라 이 조인에 걸리는 라인아이템은 전부 "고객 레코드에 구조적으로
+// 연결됨" — money-line-items.ts가 이 사실을 근거로 deal_line_items 행을 항상 confirmed로 둔다.
+const PORTAL_DEAL_LINE_ITEM_QUERY_LIMIT = 5000
+// 이 원천을 무효화하는 쓰기 경로가 아직 없다(Portal V2 딜은 이 CRM 화면 밖에서만 쓰기가
+// 일어난다) — account-master.ts의 "부분 커버리지, TTL만" 관례와 같다. 쓰기 트리거가 생기면
+// 이 태그를 revalidateTag(tag, "max")로 걸면 된다.
+export const CRM_MONEY_LINE_ITEMS_CACHE_TAG = "crm-money-line-items"
+const CRM_MONEY_LINE_ITEMS_REVALIDATE_SECONDS = 60
+
+interface PortalDealLineItemJoinRow {
+  id: string
+  deal_id: string
+  product_name: string
+  quantity: number | string | null
+  unit_price: number | string | null
+  amount: number | string | null
+  updated_at: string | null
+  deals: {
+    id: string
+    deal_code: string | null
+    customer_id: string | null
+    customers: {
+      id: string
+      name: string | null
+      campus_name: string | null
+      contact_name: string | null
+    } | null
+  } | null
+}
+
+interface PortalDealLineItemsSnapshot {
+  rows: PortalDealLineItemJoinRow[]
+  truncated: boolean
+}
+
+// deal_line_items → deals → customers를 임베디드 셀렉트 한 번으로 읽는다(lib/portal/repositories
+// 가 이미 쓰는 `!inner(...)` 패턴). deal_id 목록으로 .in()을 거는 대신 이 방식을 쓰는 이유는
+// 계정이 많을 때 URL 길이 상한(수천 UUID)을 피하기 위해서다 — 전량을 60초 캐시로 재사용한다.
+async function listPortalDealLineItemsUncached(): Promise<PortalDealLineItemsSnapshot> {
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("deal_line_items")
+    .select(
+      "id, deal_id, product_name, quantity, unit_price, amount, updated_at, deals!inner(id, deal_code, customer_id, customers!inner(id, name, campus_name, contact_name))"
+    )
+    .limit(PORTAL_DEAL_LINE_ITEM_QUERY_LIMIT)
+
+  if (error) throw error
+  const rows = ((data ?? []) as unknown[]) as PortalDealLineItemJoinRow[]
+  return { rows, truncated: rows.length >= PORTAL_DEAL_LINE_ITEM_QUERY_LIMIT }
+}
+
+const listCachedPortalDealLineItems = unstable_cache(
+  listPortalDealLineItemsUncached,
+  ["crm-money-line-items-portal-deals"],
+  { revalidate: CRM_MONEY_LINE_ITEMS_REVALIDATE_SECONDS, tags: [CRM_MONEY_LINE_ITEMS_CACHE_TAG] }
+)
+
+function toFiniteNumberOrNull(value: number | string | null | undefined): number | null {
+  if (value == null || value === "") return null
+  const parsed = typeof value === "number" ? value : Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+/**
+ * 360 매출 탭 M2(품목별 대수)·M4(미매칭 출고 후보) 조립. `accountId`가 null이면(리드 대상)
+ * 품목 조인 대상이 아니라는 사실 자체를 note로 밝히고 빈 배열을 돌려준다 — NEO 계정으로
+ * 등록되기 전 리드는 애초에 어느 NEO 계정과도 확정 링크를 가질 수 없기 때문이다.
+ */
+export async function getCrmMoneyLineItemsSummary(input: {
+  name: string | null | undefined
+  /** NEO 계정 id. lead 대상은 null. */
+  accountId: string | null
+}): Promise<CrmMoneyLineItemsSummary> {
+  const accountKey = normalizedAccountKey(input.name)
+  if (!accountKey) return EMPTY_CRM_MONEY_LINE_ITEMS_SUMMARY
+
+  if (!input.accountId) {
+    return {
+      lineItems: [],
+      lineItemsMeta: {
+        truncated: false,
+        sources: [],
+        note: "리드는 품목 조인 대상이 아닙니다 · NEO 계정 등록 후 표시됩니다.",
+      },
+      unmatchedOutbound: [],
+    }
+  }
+
+  const [portalSnapshot, hwOutbound, confirmedHwLinks] = await Promise.all([
+    listCachedPortalDealLineItems().catch(() => ({ rows: [], truncated: false }) as PortalDealLineItemsSnapshot),
+    listHwOutbound().catch(() => [] as HwOutbound[]),
+    listConfirmedHwOutboundAccountLinks().catch(() => new Map<string, string>()),
+  ])
+
+  const dealLineItems: MoneyDealLineItemRow[] = []
+  for (const row of portalSnapshot.rows) {
+    const deal = row.deals
+    const customer = deal?.customers ?? null
+    if (!deal || !customer) continue
+    const customerKeys = [
+      normalizedAccountKey(customer.name),
+      normalizedAccountKey(customer.campus_name),
+      normalizedAccountKey(customer.contact_name),
+    ].filter(Boolean)
+    if (!customerKeys.includes(accountKey)) continue
+
+    dealLineItems.push({
+      ref: deal.deal_code ?? row.deal_id,
+      product: row.product_name,
+      quantity: toFiniteNumberOrNull(row.quantity),
+      unitPrice: toFiniteNumberOrNull(row.unit_price),
+      amount: toFiniteNumberOrNull(row.amount),
+      currency: "KRW",
+      at: row.updated_at,
+    })
+  }
+
+  const hwOutboundRows: MoneyHwOutboundRow[] = hwOutbound.map((row) => ({
+    id: row.id,
+    ref: row.logistics_no ?? row.id,
+    product: row.product,
+    quantity: toFiniteNumberOrNull(row.quantity),
+    revenue: toFiniteNumberOrNull(row.revenue),
+    destination: row.destination,
+    serials: Array.isArray(row.serials) ? row.serials : [],
+    outboundDate: row.outbound_date,
+    isPlanned: isPlannedOutbound(row),
+    confirmedAccountId: confirmedHwLinks.get(`hw:outbound:${row.id}`) ?? null,
+  }))
+
+  const built = buildCrmMoneyLineItems(
+    { accountId: input.accountId, accountName: input.name ?? "" },
+    { dealLineItems, hwOutbound: hwOutboundRows },
+    { truncated: portalSnapshot.truncated }
+  )
+
+  const unmatchedOutbound = buildUnmatchedOutboundCandidates(input.name ?? "", built.unlinkedHwOutbound, 5)
+
+  return { lineItems: built.lineItems, lineItemsMeta: built.meta, unmatchedOutbound }
 }

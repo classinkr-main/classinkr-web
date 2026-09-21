@@ -141,7 +141,19 @@ describe("Customer360DetailOverview 점수 라벨 (T3)", () => {
       <Customer360DetailOverview
         data={make360({
           source: "lead",
-          money: { available: false, label: null, totalBalance: null, totalOrderAmount: null, orders: [], collections: [], performances: [], eeoAccounts: [] },
+          money: {
+            available: false,
+            label: null,
+            totalBalance: null,
+            totalOrderAmount: null,
+            orders: [],
+            collections: [],
+            performances: [],
+            eeoAccounts: [],
+            lineItems: [],
+            lineItemsMeta: { truncated: false, sources: [] },
+            unmatchedOutbound: [],
+          },
         } as Partial<Customer360>)}
       />
     )

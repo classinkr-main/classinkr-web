@@ -35,6 +35,9 @@ function money(overrides: Partial<Customer360Money> = {}): Customer360Money {
     collections: [],
     performances: [],
     eeoAccounts: [],
+    lineItems: [],
+    lineItemsMeta: { truncated: false, sources: [] },
+    unmatchedOutbound: [],
     ...overrides,
   }
 }
