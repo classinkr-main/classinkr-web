@@ -122,6 +122,10 @@ export interface ListCrmCustomerEventsOptions {
   sourceTypes?: CrmCustomerEventSourceType[]
   sentiment?: CrmCustomerEventSentiment | "all"
   targetId?: string
+  /** occurred_at >= from (ISO). A4 기간 칩 — 서버 측 범위 조회. */
+  from?: string
+  /** occurred_at <= to (ISO). */
+  to?: string
   limit?: number
   offset?: number
 }
@@ -398,6 +402,12 @@ export async function listCrmCustomerEvents(
   }
   if (options.targetId) {
     query = query.eq("target_id", options.targetId)
+  }
+  if (options.from) {
+    query = query.gte("occurred_at", options.from)
+  }
+  if (options.to) {
+    query = query.lte("occurred_at", options.to)
   }
 
   const search = safeSearch(options.q)

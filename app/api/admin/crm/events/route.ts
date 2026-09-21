@@ -43,6 +43,13 @@ function parseBoundedInt(value: string | null, fallback: number, min: number, ma
   return Math.max(min, Math.min(Math.floor(parsed), max))
 }
 
+// A4 기간 칩 — 잘못된 값(파싱 실패)은 조용히 무시한다(무제한 조회로 폴백, 400을 던지지 않음).
+function parseIsoOrUndefined(value: string | null): string | undefined {
+  if (!value) return undefined
+  const ms = Date.parse(value)
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : undefined
+}
+
 function parseTargetType(value: unknown): CrmCustomerEventTargetType {
   return typeof value === "string" && TARGET_TYPES.has(value) ? (value as CrmCustomerEventTargetType) : "unknown"
 }
@@ -125,6 +132,8 @@ export async function GET(req: NextRequest) {
       sourceType: parsedSourceType,
       sourceTypes: scope === "work" && parsedSourceType === "all" ? CRM_WORK_ACTIVITY_SOURCE_TYPES : undefined,
       sentiment: sentiment && SENTIMENTS.has(sentiment) ? (sentiment as CrmCustomerEventSentiment) : "all",
+      from: parseIsoOrUndefined(url.searchParams.get("from")),
+      to: parseIsoOrUndefined(url.searchParams.get("to")),
       limit: parseBoundedInt(url.searchParams.get("limit"), 50, 1, 100),
       offset: parseBoundedInt(url.searchParams.get("offset"), 0, 0, 100_000),
     })
