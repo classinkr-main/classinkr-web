@@ -30,7 +30,9 @@ function listSourceFiles(target: string): string[] {
   const abs = path.join(ROOT, target)
   if (statSync(abs).isFile()) return [target]
   return readdirSync(abs, { withFileTypes: true }).flatMap((entry) => {
-    const rel = path.join(target, entry.name)
+    // 상대 경로는 "/" 로 잇는다 — path.join 은 Windows 에서 "\" 를 내서 ALLOWED 의 file("/" 표기)과
+    // 문자열 비교가 어긋났고, 예외로 둔 두 줄이 위반으로 잡혔다. SCOPES·ALLOWED 도 "/" 표기다.
+    const rel = path.posix.join(target, entry.name)
     if (entry.isDirectory()) return listSourceFiles(rel)
     return /\.(ts|tsx)$/.test(entry.name) ? [rel] : []
   })
