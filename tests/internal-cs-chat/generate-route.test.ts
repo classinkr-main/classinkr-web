@@ -181,32 +181,39 @@ afterEach(() => {
 })
 
 describe("internal CS attachment evidence", () => {
-  it("excludes pending and rejected image analysis from factual evidence", () => {
+  it("labels pending image analysis as unverified context and redacts PII", () => {
+    // 방금 올린 캡처로 바로 초안을 만드는 흐름 — 검토 대기 분석도 싣되 미확인으로 표시한다.
     const evidence = buildInternalCsAssetEvidence([
       {
         id: "asset-1",
-        original_file_name: "pending.png",
-        analysis_summary: "PENDING CLAIM MUST NOT BE USED",
-        analysis_payload: {},
+        original_file_name: "refund-010-1234-5678.png",
+        analysis_summary: "The screen shows a refund request from customer@example.com.",
+        analysis_payload: {
+          extractedText: ["REFUND REQUESTED 010-1234-5678"],
+          sensitiveDataWarnings: ["Account identifier is visible"],
+        },
         review_state: "pending",
-        corrected_analysis: null,
-      } as unknown as InternalCsAssetRow,
-      {
-        id: "asset-2",
-        original_file_name: "rejected.png",
-        analysis_summary: "REJECTED CLAIM MUST NOT BE USED",
-        analysis_payload: {},
-        review_state: "rejected",
         corrected_analysis: null,
       } as unknown as InternalCsAssetRow,
     ])
 
-    expect(evidence.count).toBe(0)
-    expect(evidence.text).toBe("")
-    expect(evidence.sourceRefs).toEqual([])
+    expect(evidence.count).toBe(1)
+    expect(evidence.text).toContain("treat as unverified unless approved")
+    expect(evidence.text).toContain("REFUND REQUESTED [phone]")
+    expect(evidence.text).toContain("refund request from [email]")
+    expect(evidence.text).not.toContain("010-1234-5678")
+    expect(evidence.text).not.toContain("customer@example.com")
+    expect(evidence.sourceRefs).toEqual([
+      expect.objectContaining({
+        id: "internal-cs-asset:asset-1",
+        kind: "internal_asset",
+        label: "Attached image: refund-[phone].png",
+        reviewState: "pending",
+      }),
+    ])
   })
 
-  it("uses only the approved corrected analysis and redacts PII", () => {
+  it("uses the corrected analysis instead of the original OCR and redacts PII", () => {
     const evidence = buildInternalCsAssetEvidence([
       {
         id: "asset-approved",
