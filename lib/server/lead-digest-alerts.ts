@@ -1,6 +1,7 @@
 import "server-only"
 
 import { isTestLead } from "@/lib/crm/lead-attribution"
+import { DIRECT_INBOUND_LEAD_SOURCES, INTAKE_LEAD_SOURCES } from "@/lib/lead-types"
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import {
   getConversations,
@@ -9,7 +10,7 @@ import {
 import { getLeads, type LeadRecord } from "@/lib/repositories/leads"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
-const TARGET_SOURCES = new Set(["contact_page", "demo_modal", "meta_lead_ads"])
+const TARGET_SOURCES = DIRECT_INBOUND_LEAD_SOURCES
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000
 const HOUR_MS = 60 * 60 * 1000
 const DAY_MS = 24 * HOUR_MS
@@ -26,6 +27,8 @@ export interface LeadDigestAlertResult {
   deltaLeads: number
   contactPageLeadCount: number
   demoModalLeadCount: number
+  /** 쇼룸 예약 + 도입 신청. 전용 source 로 갈린 뒤로 문의 건수에서 빠지므로 따로 센다. */
+  intakeLeadCount: number
   metaLeadAdsLeadCount: number
   contactedCount: number
   convertedCount: number
@@ -162,6 +165,7 @@ function buildDigestMessage(input: {
   deltaLeads: number
   contactPageLeadCount: number
   demoModalLeadCount: number
+  intakeLeadCount: number
   metaLeadAdsLeadCount: number
   unrespondedCount: number
   over24h: number
@@ -179,7 +183,7 @@ function buildDigestMessage(input: {
 }) {
   return [
     `${input.periodLabel} 유효 인바운드 ${input.totalInboundCount}개`,
-    `홈페이지 문의 ${input.contactPageLeadCount}개 / 데모 신청 ${input.demoModalLeadCount}개 / Meta ${input.metaLeadAdsLeadCount}개`,
+    `홈페이지 문의 ${input.contactPageLeadCount}개 / 데모 신청 ${input.demoModalLeadCount}개 / 접수 ${input.intakeLeadCount}개 / Meta ${input.metaLeadAdsLeadCount}개`,
     `채널톡 문의 ${input.channelTalkInquiryCount}개 / 열린 상담 ${input.channelTalkOpenCount}개 / CRM 매칭 ${input.channelTalkMatchedLeadCount}개`,
     `챗봇→채널톡 넘김 ${input.chatbotHandoffSentCount}개 / 전체 ${input.chatbotHandoffCount}개`,
     `${input.previousLabel} ${formatDelta(input.deltaLeads)}개`,
@@ -272,6 +276,9 @@ export async function sendLeadDigestAlert(
   const previousLabel = period === "weekly" ? "전주 대비" : "전월 대비"
   const contactPageLeadCount = periodLeads.filter((lead) => lead.source === "contact_page").length
   const demoModalLeadCount = periodLeads.filter((lead) => lead.source === "demo_modal").length
+  const intakeLeadCount = periodLeads.filter((lead) =>
+    INTAKE_LEAD_SOURCES.has(lead.source)
+  ).length
   const metaLeadAdsLeadCount = periodLeads.filter((lead) => lead.source === "meta_lead_ads").length
 
   const result = {
@@ -284,6 +291,7 @@ export async function sendLeadDigestAlert(
     deltaLeads: periodLeads.length - previousPeriodLeads.length,
     contactPageLeadCount,
     demoModalLeadCount,
+    intakeLeadCount,
     metaLeadAdsLeadCount,
     contactedCount: periodLeads.filter((lead) => lead.status === "contacted").length,
     convertedCount: periodLeads.filter((lead) => lead.status === "converted").length,

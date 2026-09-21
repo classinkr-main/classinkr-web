@@ -7,11 +7,14 @@ import { AlertCircle, CalendarCheck, Check, Loader2 } from "lucide-react"
 import { DesiredDateCalendar } from "@/components/checkout/DesiredDateCalendar"
 import { formatDesiredDateLabel } from "@/components/checkout/request-date"
 import { SlotPicker } from "@/components/showroom/SlotPicker"
+import { ACADEMY_SIZE_OPTIONS } from "@/lib/contact/academy-size"
+import { getAnonymousId } from "@/lib/consent/consent"
+import { collectLeadAttribution } from "@/lib/marketing-attribution"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { trackEvent } from "@/lib/analytics"
+import { trackDemoRequestAdsConversion, trackEvent } from "@/lib/analytics"
 import {
   toDisabledIsoDates,
   type ShowroomDayAvailability,
@@ -27,12 +30,8 @@ interface Props {
   interests: readonly string[]
 }
 
-/**
- * 학원 규모 선택지. `app/resources/[slug]/ResourceDownloadForm.tsx` 의 size select 와
- * **같은 문자열**이어야 한다 — 리드 미러링이 두 경로의 값을 같은 `size` 필드에 쌓기
- * 때문에, 문구가 갈라지면 규모별 집계가 둘로 쪼개진다.
- */
-const ACADEMY_SIZE_OPTIONS = ["100명 이하", "100~300명", "300~500명", "500명 이상"] as const
+// 규모 선택지 정본은 lib/contact/academy-size.ts 다 — 여기서 다시 적으면 같은 컬럼에
+// 쌓이는 값이 폼마다 갈라진다.
 
 /* ── 가용성 ───────────────────────────────────────────────────────────────── */
 
@@ -400,6 +399,10 @@ export function ShowroomBookingForm({ interests }: Props) {
           ...(memo ? { memo } : {}),
           sourcePage: "/showroom",
           consent: true,
+          // 이 폼은 lib/submitLead.ts 를 거치지 않아 귀속이 붙지 않았다 — 직접 태운다.
+          // getAnonymousId 는 분석 동의가 있을 때만 값을 낸다.
+          ...collectLeadAttribution(),
+          anonymousId: getAnonymousId(),
         }),
       })
 
@@ -421,6 +424,12 @@ export function ShowroomBookingForm({ interests }: Props) {
           interest_count: form.interests.length,
           academy_size: form.academySize || undefined,
         })
+        // Google Ads 전환. 지금까지 문의·데모·행사만 이걸 불러서, 가장 값비싼 전환이
+        // 광고 최적화 신호로 돌아가지 않았다. 실제 발화 여부는 Consent Mode v2(ad_storage)가
+        // 정하므로 동의 없는 방문자에게는 나가지 않는다.
+        // 리드 id 는 서버가 응답 후에 미러링하며 만들어 클라이언트가 모른다 — 접수번호를
+        // 전환의 transaction_id 로 쓴다(중복 제거 키로 충분하다).
+        trackDemoRequestAdsConversion({ leadId: payload.bookingId })
         return
       }
 

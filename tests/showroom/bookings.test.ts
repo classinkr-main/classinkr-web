@@ -197,10 +197,11 @@ describe("submitShowroomBooking", () => {
       org: "무궁화 학원",
     })
 
-    // 리드 큐 미러 — 쇼룸 의향이 분리 집계되도록 sourceDetail 을 고정한다.
+    // 리드 큐 미러 — 전용 source 로 갈려야 SLA·공지·랭킹이 쇼룸 예약을 따로 센다.
+    // sourceDetail 은 과거 리드와의 연속성 때문에 그대로 둔다.
     expect(submitLeadCapture).toHaveBeenCalledTimes(1)
     expect(submitLeadCapture.mock.calls[0][0]).toMatchObject({
-      source: "contact_page",
+      source: "showroom_booking",
       sourceDetail: "showroom_booking",
       marketingConsent: false,
     })
@@ -216,6 +217,44 @@ describe("submitShowroomBooking", () => {
       eventType: "showroom.booking_requested",
       channels: ["wecom_webhook"],
     })
+  })
+
+  it("귀속과 익명 ID 를 리드 미러에 실어 보낸다", async () => {
+    const { mod, submitLeadCapture } = await loadBookings()
+    const defer = immediateDefer()
+
+    await mod.submitShowroomBooking(
+      {
+        ...VALID_BODY,
+        utmSource: "meta",
+        fbclid: "fbclid-1",
+        landingPage: "https://classin.co.kr/l/omo1",
+        anonymousId: "anon-1",
+      },
+      { deferTask: defer.deferTask }
+    )
+    await defer.settle()
+
+    // 이 폼은 lib/submitLead.ts 를 거치지 않아 예전에는 귀속이 전혀 붙지 않았다.
+    expect(submitLeadCapture.mock.calls[0][0]).toMatchObject({
+      utmSource: "meta",
+      fbclid: "fbclid-1",
+      landingPage: "https://classin.co.kr/l/omo1",
+      anonymousId: "anon-1",
+    })
+  })
+
+  it("sourcePage 가 있으면 currentPage 는 그 값이다", async () => {
+    const { mod, submitLeadCapture } = await loadBookings()
+    const defer = immediateDefer()
+
+    await mod.submitShowroomBooking(
+      { ...VALID_BODY, currentPage: "https://classin.co.kr/showroom?x=1" },
+      { deferTask: defer.deferTask }
+    )
+    await defer.settle()
+
+    expect(submitLeadCapture.mock.calls[0][0].currentPage).toBe("/showroom")
   })
 
   it("접수당 고객 확인을 정확히 1건 보낸다", async () => {

@@ -149,6 +149,13 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // REST·카탈로그 RPC 프로브로 확인할 방법이 없어 계약에 넣지 않는다 — 적용 확인은
   // docs/active/hardware-scm-tab-reference.md §6 의 제약 조회로 한다.
   "supabase/migrations/20260914_hardware_confirm_planned_v3.sql",
+  // 도입 신청 리드 자격 필드(2026-09-21). 같은 날의
+  // 20260921_lead_source_intake_split.sql 은 leads.source 값을 옮기는 데이터 백필이라
+  // 스키마 프로브로 확인할 대상이 없어 계약에 넣지 않는다 — 적용 확인은 아래 쿼리로 한다.
+  //   select source, count(*) from public.leads
+  //   where source_detail = 'showroom_booking' or source_detail like 'checkout_request:%'
+  //   group by source;
+  "supabase/migrations/20260921_checkout_requests_lead_qualifiers.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -516,6 +523,15 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     label: "도입 신청 접수 anon 차단(RLS deny-all)",
     migration: "supabase/migrations/20260727_checkout_requests.sql",
     impact: "신청자 연락처·설치 주소·주문 금액이 anon 키로 읽힌다.",
+  },
+  {
+    kind: "table",
+    table: "checkout_requests",
+    label: "도입 신청 리드 자격 필드(직책·학원 규모)",
+    columns: ["role", "academy_size"],
+    migration: "supabase/migrations/20260921_checkout_requests_lead_qualifiers.sql",
+    impact:
+      "신청 저장이 42703 으로 실패한다. 컬럼이 없으면 리드 스코어의 규모 배점도 계속 비어 가장 비싼 신청이 단순 문의보다 낮게 깔린다.",
   },
   {
     kind: "anon",

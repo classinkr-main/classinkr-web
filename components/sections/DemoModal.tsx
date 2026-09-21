@@ -17,6 +17,7 @@ import {
     marketingSurfaceClassName,
 } from "@/components/ui/marketing-form"
 import { Input } from "@/components/ui/input"
+import { ACADEMY_SIZE_OPTIONS, ACADEMY_SIZE_PLACEHOLDER } from "@/lib/contact/academy-size"
 
 export function DemoModal({ children, trackingButton }: { children: React.ReactNode; trackingButton?: string }) {
     const [open, setOpen] = useState(false)
@@ -186,7 +187,16 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                                     </div>
                                     <div className="grid gap-2">
                                         <FormLabel htmlFor="size">운영 규모</FormLabel>
-                                        <Input id="size" name="size" placeholder="예: 학생 300명 / 강사 20명" required aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} />
+                                        {/* 자유 입력이던 자리다 — 같은 leads.size 컬럼에 버킷 값과
+                                            자유 문자열이 섞여 규모별 집계가 둘로 쪼개졌다. */}
+                                        <select id="size" name="size" required aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} defaultValue="">
+                                            <option value="" disabled>{ACADEMY_SIZE_PLACEHOLDER}</option>
+                                            {ACADEMY_SIZE_OPTIONS.map((option) => (
+                                                <option key={option} value={option}>
+                                                    {option}
+                                                </option>
+                                            ))}
+                                        </select>
                                     </div>
                                 </div>
                                 <div className="grid gap-5 md:grid-cols-2">

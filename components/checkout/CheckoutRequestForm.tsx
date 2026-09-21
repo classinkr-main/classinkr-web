@@ -32,8 +32,11 @@ import {
   isDesiredDateSelectable,
   type DesiredDateRange,
 } from "@/components/checkout/request-date"
+import { ACADEMY_SIZE_OPTIONS, ACADEMY_SIZE_PLACEHOLDER } from "@/lib/contact/academy-size"
+import { getAnonymousId } from "@/lib/consent/consent"
+import { collectLeadAttribution } from "@/lib/marketing-attribution"
 import type { CheckoutRequestItem } from "@/lib/billing/hardware-catalog"
-import { trackEvent } from "@/lib/analytics"
+import { trackDemoRequestAdsConversion, trackEvent } from "@/lib/analytics"
 
 export type CheckoutRequestKind = "hardware" | "software"
 
@@ -80,11 +83,16 @@ type FormState = {
   name: string
   phone: string
   email: string
+  /** 리드 자격 필드(선택) — 규모는 리드 스코어의 배점 입력이다. */
+  role: string
+  academySize: string
   installType: InstallType | ""
   address: string
   memo: string
   desiredDate: string
   consent: boolean
+  /** honeypot — 사람에게는 보이지 않는 필드다. */
+  website: string
 }
 
 const EMPTY_FORM: FormState = {
@@ -92,11 +100,14 @@ const EMPTY_FORM: FormState = {
   name: "",
   phone: "",
   email: "",
+  role: "",
+  academySize: "",
   installType: "",
   address: "",
   memo: "",
   desiredDate: "",
   consent: false,
+  website: "",
 }
 
 const RETRY_MESSAGE = "지금은 신청을 접수하지 못했습니다. 잠시 후 다시 시도해 주세요."
@@ -173,6 +184,8 @@ export function CheckoutRequestForm({
   const [formError, setFormError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [requestId, setRequestId] = useState<string | null>(null)
+  /** honeypot 에 걸린 제출. 봇에게는 성공처럼 보여 재시도를 유도하지 않는다. */
+  const [blockedByHoneypot, setBlockedByHoneypot] = useState(false)
 
   /**
    * 선택한 설치 방식의 주문 라인. 설치가 필요 없는 구성(패키지만 담았거나 카메라만)
@@ -244,6 +257,7 @@ export function CheckoutRequestForm({
     setFormError(null)
     setIsSubmitting(false)
     setRequestId(null)
+    setBlockedByHoneypot(false)
     // initialContact 는 열리는 순간의 스냅샷만 쓰면 된다 — 참조 변경마다 재시드하지 않는다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
@@ -269,6 +283,12 @@ export function CheckoutRequestForm({
 
   async function handleSubmit() {
     if (submitLock.current) return
+
+    // honeypot — 봇에게는 성공처럼 보여 재시도를 유도하지 않는다(쇼룸 예약과 같은 규약).
+    if (form.website.trim()) {
+      setBlockedByHoneypot(true)
+      return
+    }
 
     if (items.length === 0) {
       setFormError("신청할 구성을 먼저 선택해 주세요.")
@@ -315,6 +335,8 @@ export function CheckoutRequestForm({
           name: form.name.trim(),
           phone: form.phone.trim(),
           ...(email ? { email } : {}),
+          ...(form.role.trim() ? { role: form.role.trim() } : {}),
+          ...(form.academySize ? { academySize: form.academySize } : {}),
           ...(kind === "hardware"
             ? { installType: form.installType, address: form.address.trim() }
             : {}),
@@ -322,6 +344,9 @@ export function CheckoutRequestForm({
           ...(memo ? { memo } : {}),
           sourcePage,
           consent: true,
+          // 이 폼도 lib/submitLead.ts 를 거치지 않는다 — 귀속을 직접 태운다.
+          ...collectLeadAttribution(),
+          anonymousId: getAnonymousId(),
         }),
       })
 
@@ -339,10 +364,18 @@ export function CheckoutRequestForm({
           source: "checkout_request",
           request_kind: kind,
           page: sourcePage,
-          item_count: items.length,
-          value: items.reduce((sum, item) => sum + item.qty * item.unitAmount, 0),
+          item_count: submitItems.length,
+          // 사이드바·모달이 말하는 금액과 같아야 한다 — 설치비를 뺀 값을 보내면
+          // 전환 금액이 실제 신청보다 대당 단가만큼 낮게 잡힌다.
+          value: itemsSubtotalKrw + installSubtotalKrw,
           currency: items[0]?.currency ?? "KRW",
         })
+        // Google Ads 전환. 지금까지 문의·데모·행사만 이걸 불러서, 가장 값비싼 전환이
+        // 광고 최적화 신호로 돌아가지 않았다. 실제 발화 여부는 Consent Mode v2(ad_storage)가
+        // 정하므로 동의 없는 방문자에게는 나가지 않는다.
+        // 리드 id 는 서버가 응답 후에 미러링하며 만들어 클라이언트가 모른다 — 접수번호를
+        // 전환의 transaction_id 로 쓴다(중복 제거 키로 충분하다).
+        trackDemoRequestAdsConversion({ leadId: payload.requestId })
         return
       }
 
@@ -382,7 +415,7 @@ export function CheckoutRequestForm({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[560px]">
-        {requestId ? (
+        {requestId || blockedByHoneypot ? (
           <div className="py-2">
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#ECFDF5]">
               <Check className="h-5 w-5 text-[#084734]" strokeWidth={2.4} />
@@ -396,10 +429,12 @@ export function CheckoutRequestForm({
             </DialogHeader>
 
             <dl className="mt-5 space-y-2 rounded-xl border border-black/[0.08] bg-[#F6F5F4] px-4 py-3 text-[13px]">
-              <div className="flex items-baseline justify-between gap-3">
-                <dt className="text-[#615D59]">접수번호</dt>
-                <dd className="font-semibold tabular-nums text-[#111110]">{requestId}</dd>
-              </div>
+              {requestId ? (
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-[#615D59]">접수번호</dt>
+                  <dd className="font-semibold tabular-nums text-[#111110]">{requestId}</dd>
+                </div>
+              ) : null}
               <div className="flex items-baseline justify-between gap-3">
                 <dt className="text-[#615D59]">희망 날짜</dt>
                 <dd className="font-medium text-[#111110]">{dateLabel}</dd>
@@ -569,6 +604,58 @@ export function CheckoutRequestForm({
                     {errors.email}
                   </p>
                 ) : null}
+              </div>
+
+              {/* 리드 자격 필드 — 둘 다 선택이다. 규모는 리드 스코어의 배점 입력이라,
+                  없으면 가장 비싼 신청이 단순 문의보다 낮게 깔린다. */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="request-role" className="text-[12px] text-[#44514A]">
+                    직책 <span className="text-[#A39E98]">(선택)</span>
+                  </Label>
+                  <Input
+                    id="request-role"
+                    value={form.role}
+                    onChange={(event) => update("role", event.target.value)}
+                    placeholder="예: 원장, 운영실장"
+                    autoComplete="organization-title"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="request-size" className="text-[12px] text-[#44514A]">
+                    학원 규모 <span className="text-[#A39E98]">(선택)</span>
+                  </Label>
+                  <select
+                    id="request-size"
+                    value={form.academySize}
+                    onChange={(event) => update("academySize", event.target.value)}
+                    className="h-9 w-full rounded-[6px] border border-[#E5E5E0] bg-white px-2 text-[13px] text-[#111110] transition-colors focus:outline-none focus:ring-2 focus:ring-[#084734]"
+                  >
+                    <option value="">{ACADEMY_SIZE_PLACEHOLDER}</option>
+                    {ACADEMY_SIZE_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* honeypot — 사람에게는 보이지 않는다. */}
+              <div
+                aria-hidden="true"
+                className="absolute -left-[9999px] top-0 h-px w-px overflow-hidden"
+              >
+                <label htmlFor="request-website">웹사이트</label>
+                <input
+                  id="request-website"
+                  name="website"
+                  type="text"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  value={form.website}
+                  onChange={(event) => update("website", event.target.value)}
+                />
               </div>
 
               {kind === "hardware" ? (

@@ -141,7 +141,14 @@ export function matchesSegment(
   seg: SegmentConfig
 ): boolean {
   if (seg.sources && seg.sources.length > 0) {
-    if (!seg.sources.includes(recipient.source as "demo_modal" | "contact_page" | "newsletter" | "manual" | "meta_lead_ads")) {
+    if (!seg.sources.includes(recipient.source as
+        | "demo_modal"
+        | "contact_page"
+        | "showroom_booking"
+        | "checkout_request"
+        | "newsletter"
+        | "manual"
+        | "meta_lead_ads")) {
       return false
     }
   }

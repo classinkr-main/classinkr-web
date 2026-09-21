@@ -19,6 +19,8 @@ export type LeadStatus = "new" | "contacted" | "converted" | "closed";
 export type LeadSource =
   | "demo_modal"
   | "contact_page"
+  | "showroom_booking"
+  | "checkout_request"
   | "newsletter"
   | "manual"
   | "meta_lead_ads";

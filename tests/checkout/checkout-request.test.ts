@@ -603,7 +603,8 @@ describe("submitCheckoutRequest — 저장 · 리드 연동 · 알림", () => {
     expect(submitLeadCapture).toHaveBeenCalledTimes(1)
     const [leadPayload, leadContext] = submitLeadCapture.mock.calls[0]
     expect(leadPayload).toMatchObject({
-      source: "contact_page",
+      // 전용 source — sourceDetail 은 과거 리드 연속성 때문에 유지한다.
+      source: "checkout_request",
       org: "행복학원",
       phone: "010-1234-5678",
       sourceDetail: "checkout_request:hardware",
@@ -650,6 +651,59 @@ describe("submitCheckoutRequest — 저장 · 리드 연동 · 알림", () => {
       totalLabel: "₩12,600,000",
       itemCount: 1,
     })
+  })
+
+  it("리드 자격 필드와 귀속을 미러에 실어 보낸다", async () => {
+    const { submitCheckoutRequest, submitLeadCapture } = await loadWithMockedNotifications()
+    const deferred = createDeferred()
+
+    await submitCheckoutRequest(
+      {
+        ...VALID_PAYLOAD,
+        role: "원장",
+        academySize: "300~500명",
+        utmSource: "meta",
+        utmCampaign: "omo-2026",
+        gclid: "gclid-1",
+        anonymousId: "anon-1",
+      },
+      deferred.context
+    )
+    await deferred.flush()
+
+    // size 가 없으면 리드 스코어의 규모 배점(최대 +34)이 통째로 빈다.
+    expect(submitLeadCapture.mock.calls[0][0]).toMatchObject({
+      role: "원장",
+      size: "300~500명",
+      utmSource: "meta",
+      utmCampaign: "omo-2026",
+      gclid: "gclid-1",
+      anonymousId: "anon-1",
+    })
+  })
+
+  it("버킷에 없는 규모 값은 버린다 — 같은 컬럼에 자유 문자열이 섞이면 집계가 쪼개진다", async () => {
+    const { submitCheckoutRequest, submitLeadCapture } = await loadWithMockedNotifications()
+    const deferred = createDeferred()
+
+    await submitCheckoutRequest(
+      { ...VALID_PAYLOAD, academySize: "학생 300명쯤" },
+      deferred.context
+    )
+    await deferred.flush()
+
+    expect(submitLeadCapture.mock.calls[0][0].size).toBeUndefined()
+  })
+
+  it("귀속 필드가 없어도 접수는 그대로 된다", async () => {
+    const { submitCheckoutRequest, submitLeadCapture } = await loadWithMockedNotifications()
+    const deferred = createDeferred()
+
+    const result = await submitCheckoutRequest(VALID_PAYLOAD, deferred.context)
+    await deferred.flush()
+
+    expect(result.status).toBe(200)
+    expect(submitLeadCapture.mock.calls[0][0].utmSource).toBeUndefined()
   })
 
   it("신청당 고객 확인을 정확히 1건 보낸다", async () => {

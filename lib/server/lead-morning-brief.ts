@@ -1,6 +1,11 @@
 import "server-only"
 
 import { getMetaAdInfo, isTestLead } from "@/lib/crm/lead-attribution"
+import {
+  DIRECT_INBOUND_LEAD_SOURCES,
+  INTAKE_LEAD_SOURCES,
+  WEBSITE_FORM_LEAD_SOURCES,
+} from "@/lib/lead-types"
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import {
   DEFAULT_NOTIFICATION_SCHEDULE,
@@ -17,7 +22,7 @@ import { getResolvedSettings } from "@/lib/repositories/settings"
 
 // 아침 카드가 세는 유입 세 갈래. 세 갈래 사이에 겹침이 없어 합계가 곧 전체 접수다
 // ("Meta 광고 경유"는 홈페이지 유입의 부분집합이라 합계에 다시 더하지 않는다).
-const REPORT_SOURCES = new Set(["meta_lead_ads", "contact_page", "demo_modal"])
+const REPORT_SOURCES = DIRECT_INBOUND_LEAD_SOURCES
 // 카드 한 장 = 창 하나 = 실행 레코드 한 줄.
 const DAILY_REPORT_TYPE: LeadDigestReportType = "daily"
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000
@@ -43,10 +48,12 @@ export interface LeadMorningBriefMetrics {
   metaLeadAdsLeadCount: number
   topCampaignLabel: string
   topCampaignCount: number
-  /** 홈페이지 유입 합계 — 문의 + 데모 신청. 카드에서 Meta 아래 서브 요소로 붙는다. */
+  /** 홈페이지 유입 합계 — 문의 + 데모 신청 + 접수. 카드에서 Meta 아래 서브 요소로 붙는다. */
   homepageLeadCount: number
   contactPageLeadCount: number
   demoModalLeadCount: number
+  /** 쇼룸 예약 + 도입 신청. 방문·주문을 실제로 잡은 건이라 문의와 따로 센다. */
+  intakeLeadCount: number
   metaAttributedWebsiteLeadCount: number
   unrespondedCount: number
   contactedCount: number
@@ -159,9 +166,8 @@ export function summarizeLeadIntake(
   return {
     totalLeads: current.length,
     metaLeadAdsLeadCount: current.filter((lead) => lead.source === "meta_lead_ads").length,
-    homepageLeadCount: current.filter(
-      (lead) => lead.source === "contact_page" || lead.source === "demo_modal"
-    ).length,
+    homepageLeadCount: current.filter((lead) => WEBSITE_FORM_LEAD_SOURCES.has(lead.source))
+      .length,
     unrespondedCount: current.filter((lead) => lead.status === "new").length,
   }
 }
@@ -190,7 +196,7 @@ function inRange(lead: LeadRecord, start: Date, end: Date) {
 }
 
 function isMetaAttributedWebsiteLead(lead: LeadRecord) {
-  if (lead.source !== "contact_page" && lead.source !== "demo_modal") return false
+  if (!WEBSITE_FORM_LEAD_SOURCES.has(lead.source)) return false
   if (lead.fbclid?.trim()) return true
 
   const source = lead.utm_source?.trim().toLowerCase()
@@ -231,6 +237,8 @@ function buildMetrics(
   )
   const contactPageLeadCount = current.filter((lead) => lead.source === "contact_page").length
   const demoModalLeadCount = current.filter((lead) => lead.source === "demo_modal").length
+  // 쇼룸 예약·도입 신청. 이 줄이 없으면 홈페이지 합계와 내역의 합이 어긋난다.
+  const intakeLeadCount = current.filter((lead) => INTAKE_LEAD_SOURCES.has(lead.source)).length
 
   return {
     periodLabel: `${formatKstDateTime(window.start)} - ${formatKstDateTime(window.end)}`,
@@ -241,6 +249,7 @@ function buildMetrics(
     homepageLeadCount: contactPageLeadCount + demoModalLeadCount,
     contactPageLeadCount,
     demoModalLeadCount,
+    intakeLeadCount,
     metaAttributedWebsiteLeadCount: current.filter(isMetaAttributedWebsiteLead).length,
     unrespondedCount: current.filter((lead) => lead.status === "new").length,
     contactedCount: current.filter((lead) => lead.status === "contacted").length,
@@ -252,7 +261,7 @@ function buildMessage(metrics: LeadMorningBriefMetrics) {
   return [
     `${metrics.periodLabel} 전체 접수 ${metrics.totalLeads}건`,
     `Meta 광고 리드 ${metrics.metaLeadAdsLeadCount}건 (주요 캠페인 ${metrics.topCampaignLabel} ${metrics.topCampaignCount}건)`,
-    `홈페이지 ${metrics.homepageLeadCount}건 — 문의 ${metrics.contactPageLeadCount}건 / 데모 신청 ${metrics.demoModalLeadCount}건 / Meta 광고 경유 ${metrics.metaAttributedWebsiteLeadCount}건`,
+    `홈페이지 ${metrics.homepageLeadCount}건 — 문의 ${metrics.contactPageLeadCount}건 / 데모 신청 ${metrics.demoModalLeadCount}건 / 접수 ${metrics.intakeLeadCount}건 / Meta 광고 경유 ${metrics.metaAttributedWebsiteLeadCount}건`,
     `미응대 ${metrics.unrespondedCount}건 / 상담 진행 ${metrics.contactedCount}건 / 전환 ${metrics.convertedCount}건`,
   ].join("\n")
 }

@@ -19,6 +19,8 @@ import { getBusinessDateParts } from "@/lib/business-time"
 import { HARDWARE_CURRENCY, getHardwareItem } from "@/lib/billing/hardware-catalog"
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import type { NotificationChannel } from "@/lib/notifications/types"
+import { isAcademySize } from "@/lib/contact/academy-size"
+import { pickLeadAttribution, type LeadAttribution } from "@/lib/marketing-attribution"
 import { sendCheckoutRequestReceipt } from "@/lib/messaging/customer-receipt"
 import { submitLeadCapture } from "@/lib/server/lead-capture"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
@@ -129,6 +131,15 @@ export interface NormalizedCheckoutRequest {
   name: string
   phone: string
   email: string | null
+  /**
+   * 직책·학원 규모 — 리드 자격 필드(선택).
+   *
+   * 없던 동안 이 신청의 리드는 `leads.size` 가 항상 비어, 리드 스코어의 규모 배점(최대
+   * +34)을 통째로 못 받았다. 수천만 원짜리 주문 신청이 "300명"이라 적은 단순 문의보다
+   * 낮게 깔린 이유다. 규모 값은 `lib/contact/academy-size.ts` 의 버킷을 쓴다.
+   */
+  role: string | null
+  academySize: string | null
   /** 설치 유형 — 하드웨어 신청만 필수(stand=스탠드형/wall=벽걸이형), 소프트웨어는 null. */
   installType: "stand" | "wall" | null
   /** 설치/배송 주소 — 하드웨어 신청만 필수(장비가 실제로 가는 곳), 소프트웨어는 null. */
@@ -136,6 +147,12 @@ export interface NormalizedCheckoutRequest {
   desiredDate: string
   memo: string | null
   sourcePage: string | null
+  /**
+   * 광고 귀속·익명 활동 결합 키. 이 경로는 lib/submitLead.ts 를 거치지 않아 예전에는
+   * 둘 다 붙지 않았다 — 퍼널 뒤쪽 리드가 성과 측정에서 통째로 빠져 있던 이유다.
+   */
+  attribution: LeadAttribution
+  anonymousId: string | null
 }
 
 export type CheckoutRequestValidation =
@@ -311,6 +328,12 @@ export function normalizeCheckoutRequest(
     email = candidate
   }
 
+  // 리드 자격 필드는 선택이다 — 여기서 막으면 Phase A 에서 줄인 작성 비용이 되돌아간다.
+  // 규모는 버킷 값만 받는다. 자유 문자열이 섞이면 규모별 집계가 쪼개진다.
+  const role = normalizeText(body.role, MAX_NAME_LENGTH)
+  const academySizeRaw = normalizeText(body.academySize, MAX_NAME_LENGTH)
+  const academySize = isAcademySize(academySizeRaw) ? academySizeRaw : null
+
   const desiredDate = typeof body.desiredDate === "string" ? body.desiredDate.trim() : ""
   if (!DATE_REGEX.test(desiredDate) || !isRealCalendarDate(desiredDate)) {
     return { ok: false, field: "desiredDate" }
@@ -354,11 +377,15 @@ export function normalizeCheckoutRequest(
       name,
       phone,
       email,
+      role,
+      academySize,
       installType,
       address,
       desiredDate,
       memo: normalizeMultilineText(body.memo, MAX_MEMO_LENGTH),
       sourcePage: normalizeText(body.sourcePage, MAX_SOURCE_PAGE_LENGTH),
+      attribution: pickLeadAttribution(body),
+      anonymousId: normalizeText(body.anonymousId, MAX_NAME_LENGTH),
     },
   }
 }
@@ -539,6 +566,8 @@ async function insertCheckoutRequest(request: NormalizedCheckoutRequest) {
       name: request.name,
       phone: request.phone,
       email: request.email,
+      role: request.role,
+      academy_size: request.academySize,
       install_type: request.installType,
       address: request.address,
       desired_date: request.desiredDate,
@@ -577,16 +606,23 @@ async function mirrorToLeadQueue(
 ): Promise<string | null> {
   const { body } = await submitLeadCapture(
     {
-      source: "contact_page",
+      // 전용 source. source_detail(checkout_request:{kind})은 그대로 둔다.
+      source: "checkout_request",
       org: request.org,
       name: request.name,
       phone: request.phone,
       email: request.email ?? undefined,
+      // 리드 스코어의 규모 배점이 여기서 살아난다.
+      role: request.role ?? undefined,
+      size: request.academySize ?? undefined,
       message: buildCheckoutRequestLeadMessage(request, requestId),
       // 도입 신청 동의는 연락 목적 — 마케팅 수신 동의로 승격하지 않는다.
       marketingConsent: false,
       sourceDetail: `checkout_request:${request.kind}`,
-      currentPage: request.sourcePage ?? undefined,
+      ...request.attribution,
+      // sourcePage 가 있으면 그게 더 정확한 제출 지점이다.
+      currentPage: request.sourcePage ?? request.attribution.currentPage,
+      anonymousId: request.anonymousId ?? undefined,
     },
     { suppressLeadCreatedNotification: true }
   )

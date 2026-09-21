@@ -159,17 +159,22 @@ describe("filterNewLeads", () => {
 })
 
 describe("countBySourceGroup", () => {
-  it("7개 그룹 키를 항상 채운다 — 0건 그룹도 null 이 아니라 0으로 보인다", () => {
+  it("전 그룹 키를 항상 채운다 — 0건 그룹도 null 이 아니라 0으로 보인다", () => {
     const counts = countBySourceGroup([
       makeLead({ id: "a", source: "meta_lead_ads" }),
       makeLead({ id: "b", source: "meta_lead_ads" }),
       makeLead({ id: "c", source: "demo_modal" }),
       // 매핑에 없는 source 는 수기·기타로 흡수된다(칩에서 리드가 새지 않게).
       makeLead({ id: "d", source: "무언가_새_채널" }),
+      // 접수 두 갈래는 전용 그룹으로 갈린다 — 방문·주문을 실제로 잡은 리드라
+      // 문의와 같은 칩에 섞이면 큐에서 구분이 안 된다.
+      makeLead({ id: "e", source: "showroom_booking" }),
+      makeLead({ id: "f", source: "checkout_request" }),
     ])
     expect(counts).toEqual({
       meta: 2,
       homepage: 1,
+      intake: 2,
       resources: 0,
       newsletter: 0,
       channel_talk: 0,

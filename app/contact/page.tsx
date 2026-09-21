@@ -12,6 +12,10 @@ import Link from "next/link"
 import { submitLead } from "@/lib/submitLead"
 import { trackDemoRequestAdsConversion, trackEvent } from "@/lib/analytics"
 import { useToast } from "@/components/ui/toast"
+import {
+    ACADEMY_SIZE_OPTIONS,
+    ACADEMY_SIZE_PLACEHOLDER,
+} from "@/lib/contact/academy-size"
 import { CONTACT_TOPICS, EVENT_CONTACT_TOPICS, isContactTopic } from "@/lib/contact/topics"
 import type { PublicEvent } from "@/lib/types/public-events"
 
@@ -519,11 +523,12 @@ export default function ContactPage() {
                                             name="size"
                                             className="h-11 w-full rounded-xl border border-[#E5E5E0] bg-white px-4 text-base shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#084734]"
                                         >
-                                            <option value="">학원 규모를 선택해주세요</option>
-                                            <option value="100명 이하">100명 이하</option>
-                                            <option value="100~300명">100~300명</option>
-                                            <option value="300~500명">300~500명</option>
-                                            <option value="500명 이상">500명 이상</option>
+                                            <option value="">{ACADEMY_SIZE_PLACEHOLDER}</option>
+                                            {ACADEMY_SIZE_OPTIONS.map((option) => (
+                                                <option key={option} value={option}>
+                                                    {option}
+                                                </option>
+                                            ))}
                                         </select>
                                     </div>
                                 </div>

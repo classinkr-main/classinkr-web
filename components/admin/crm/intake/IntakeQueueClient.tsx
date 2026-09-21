@@ -502,6 +502,12 @@ export default function IntakeQueueClient() {
                     <dd>{INSTALL_LABEL[row.installType]}</dd>
                   </div>
                 ) : null}
+                {row.academySize ? (
+                  <div className="flex items-center gap-1">
+                    <dt className="sr-only">학원 규모</dt>
+                    <dd>{row.academySize}</dd>
+                  </div>
+                ) : null}
                 <div className="flex items-center gap-1">
                   <dt className="sr-only">접수 시각</dt>
                   <dd className="text-[#A39E98]">{formatReceivedAt(row.createdAt)} 접수</dd>

@@ -22,7 +22,9 @@ export const runtime = "nodejs"
  * 본문 상한(바이트). 정상 접수는 메모 2000자에 짧은 필드 몇 개라 8KB 안쪽이다.
  * Content-Length 가 없는 요청(chunked)은 통과시키고 플랫폼 제한에 맡긴다.
  */
-const MAX_BODY_BYTES = 8_192
+// 귀속 필드(utm·gclid·landingPage…)가 붙으면서 본문이 커졌다. 각 값이 500자 상한이라
+// 긴 메모와 겹치면 8KB 를 넘길 수 있다 — 도입 신청(32KB)보다는 여전히 좁게 둔다.
+const MAX_BODY_BYTES = 16_384
 
 export async function POST(req: NextRequest) {
   try {
