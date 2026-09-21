@@ -1,6 +1,6 @@
 # 매출 장부 입력 속도·편의 기획 (라운드 4)
 
-상태: 1단계 P0 + UI·UX 즉시 3건 구현 완료(2026-09-20), P1·P2·§8 다음 라운드 항목 실행 대기
+상태: 1단계 P0·P1-5·P1-6 + UI·UX 5건 구현 완료(2026-09-21), P1-4·P2·§8 잔여 항목 실행 대기
 범위: `/admin/branch/ledger`의 입력 경로 — REV 매트릭스 셀 편집, 빠른 작업 레일(입력/수정), 체크 큐
 목표: **1단계** 구글 시트를 원천으로 유지한 채 어드민 입력의 클릭·왕복·오타를 줄인다 →
 **2단계** 어드민을 매출 입력 정본으로 올리고 시트 입력을 중단한다.
@@ -126,7 +126,10 @@ API가 `amount <= 0`을 거부한다
 | P0-1 초안 배치 API | **완료** | `app/api/admin/branch/ledger-drafts/batch/route.ts`, `lib/branch/ledger-draft-body.ts`(단건·배치 공용 파서), `components/admin/branch/ledger/useLedgerDraftQueue.ts`(`checkDrafts`/`applyDrafts`/`persistDraftsBatch`, 200건 청크) | `tests/api/branch-ledger-drafts-batch-route.test.ts`, `tests/branch/ledger-draft-batch.test.ts` |
 | P0-2 자가 체크 | **완료 — 결정 D1(a) 채택** | 저장소 `buildInsert`(status=checked → `checked_by`/`checked_at`), `updateBranchSalesLedgerDraft`(자가 체크 재편집: 잠금 해제→갱신→재체크, 남의 체크는 409 `checked-by-other`), 워크벤치 `buildCellDraftInput`(매트릭스 셀 커밋만 `status:"checked"`), `ledger/self-check.ts` + 큐 배지 | `tests/repositories/branch-sales-ledger-drafts.test.ts`(자가 체크 5건), `tests/branch/ledger-self-check.test.ts` |
 | P0-3 고객/계정 자동완성 | **완료** | `components/admin/branch/ledger/customer-suggest.ts`, `InputRailSection.tsx`(datalist + 표기 흔들림 경고·원클릭 맞추기) | `tests/branch/customer-suggest.test.ts` |
-| P1-4 ~ P2-10 | 대기 | — | — |
+| P1-5 붙여넣기 이름 매칭 | **완료** | `rev-matrix-logic.ts`(`buildMatrixPastePlan` by-name 모드·`buildPasteNewRowInputs`), `RevMatrix.tsx`(프리뷰: 모드 배지·건너뜀 안내·"시트에 없는 고객" 체크리스트), 워크벤치 `confirmMatrixPaste` | `tests/branch/matrix-paste-name-match.test.ts` |
+| P1-6 실행 취소 토스트 | **완료** | 워크벤치 토스트 `key/action/ttlMs`, `undoCellDraft`(latest-ref), 훅 `cancelDraft` 성공 여부 반환 | `tests/branch/ledger-undo-toast.test.ts` |
+| P1-4 인라인 신규 행 | 대기 — 설계 보강 필요 | 미적용 초안 행을 매트릭스에 임시 행으로 보여주는 파생(`visibleDealRows`)이 먼저 필요하다. 지금은 적용 전 new-row 초안이 큐에만 보여, 인라인으로 만들어도 저장 직후 사라진다 | — |
+| P2-7 ~ P2-10 | 대기 | — | — |
 
 구현하며 확정된 세부 규약:
 
@@ -264,7 +267,7 @@ API 계약(양수 전용)은 **바꾸지 않는다.** 대신 셀 컨텍스트에
 | D3 | 감액 표현 | (a) 되돌리기+재적용을 1액션으로 포장 (b) 음수 초안 허용 | **(a)** — 감사 추적과 기존 계약을 지키면서 체감만 개선. (b)는 2-2에서 재검토 |
 | D4 | 모바일 범위 | (a) 레일 프리필까지 (b) 그리드 이식 | **(a)** |
 | D5 | 시트 역방향 export | 필요 / 불필요 | **확인 필요** — 시트를 읽는 사람이 KR Team 밖에 있는지 운영 확인 후 결정 |
-| D6 | 확도 중간 단계 어휘 | "고확도" 유지 / "일반"으로 변경 | **유지** — §8.5 근거. 툴팁에 "90%+ 마감 임박(시트 파랑)" 병기로 매핑 비용만 줄인다 |
+| D6 | 확도 중간 단계 어휘 | "고확도" 유지 / "일반"으로 변경 | **유지(적용됨)** — §8.5 근거. `DRAFT_CONFIDENCE_OPTIONS.hint`로 툴팁에 "90%+ 마감 임박(시트 파랑)" 병기(2026-09-21) |
 
 ---
 
@@ -349,8 +352,8 @@ npm run build
 | C pending 마커·글자 확도별 색 | 高 | 小 | 낮음 | **즉시** | **완료**(2026-09-20) |
 | 통일안 레일·콕핏·주차 seg 크기 | 中 | 小 | 낮음 | **즉시** | **완료**(2026-09-20) |
 | A 팝오버 행 우측 재배치 | 高 | 中 | 낮음 | 다음 | 대기 |
-| 레일 확도 블록을 금액 뒤로 + autoFocus | 中 | 小 | 낮음 | 다음 | 대기 |
-| 큐 적용/체크 버튼 라벨+확대 | 中 | 小 | 낮음 | 다음 | 대기 |
+| 레일 확도 블록을 금액 뒤로 + autoFocus | 中 | 小 | 낮음 | 다음 | **완료**(2026-09-21) |
+| 큐 적용/체크 버튼 라벨+확대 | 中 | 小 | 낮음 | 다음 | **완료**(2026-09-21) |
 | 레일 420px 겹침 보정 | 中 | 中 | 中 | 다음 | 대기 |
 | 보드 카드 인라인 편집 | 中 | 中~大 | 中 | 다음 | 대기 |
 | 모바일 금액 탭 → 입력 직행(P2-7) | 中 | 小 | 낮음 | 다음 | 대기 |
