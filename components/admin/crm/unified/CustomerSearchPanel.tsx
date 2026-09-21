@@ -14,6 +14,7 @@ import {
   customerSourceTone,
   formatDate,
   summarizeCustomerSources,
+  tagChipsWithActive,
   type CrmUnifiedCustomers,
   type CustomerSourceStatus,
   type LifecycleFilter,
@@ -91,6 +92,8 @@ export default function CustomerSearchPanel({
 }) {
   const sourceSummary = summarizeCustomerSources(data?.sources.statuses ?? [])
   const hiddenUnconfirmedCount = data?.summary.hiddenUnconfirmedCount ?? 0
+  // ?tag= 딥링크로 걸린 라벨이 응답 목록에 없어도 칩(활성·해제 경로)이 사라지지 않게 합친다.
+  const tagChips = data ? tagChipsWithActive(data.summary.availableTags, tagFilter) : []
 
   return (
     <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
@@ -183,13 +186,13 @@ export default function CustomerSearchPanel({
         </div>
       ) : null}
 
-      {data?.summary.availableTags?.length ? (
+      {tagChips.length ? (
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <span className="inline-flex h-8 items-center gap-1.5 text-[12px] font-semibold text-[#1a1a1a]/45">
             <Tag className="h-3.5 w-3.5" />
             라벨
           </span>
-          {data.summary.availableTags.map((tag) => {
+          {tagChips.map((tag) => {
             const isActive = tagFilter === tag
             return (
               <button

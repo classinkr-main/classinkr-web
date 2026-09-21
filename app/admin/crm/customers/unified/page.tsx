@@ -54,6 +54,7 @@ export default async function AdminCrmUnifiedCustomersPage({
   const initialData = await prefetchCrmUnifiedInitialData({
     q: pick("q"),
     view: pick("view"),
+    tag: pick("tag"),
     account: pick("account"),
   })
 

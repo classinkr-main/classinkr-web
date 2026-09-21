@@ -167,6 +167,20 @@ describe("prefetchCrmUnifiedInitialData 옵션 매핑 — 클라이언트 기본
     expect(getCrmUnifiedCustomers).toHaveBeenCalledWith(expect.objectContaining({ view: "all", owner: undefined }))
   })
 
+  it("?tag= 를 클라이언트 tagFilter 초기값과 같은 규칙(normalizeTag)으로 정규화해 싣는다", async () => {
+    const { prefetchCrmUnifiedInitialData } = await loadPrefetchModule()
+    await prefetchCrmUnifiedInitialData({ tag: "  이탈   위험 " })
+
+    expect(getCrmUnifiedCustomers).toHaveBeenCalledWith(expect.objectContaining({ tag: "이탈 위험" }))
+  })
+
+  it("공백뿐인 ?tag= 는 undefined(라벨 없음)로 접는다", async () => {
+    const { prefetchCrmUnifiedInitialData } = await loadPrefetchModule()
+    await prefetchCrmUnifiedInitialData({ tag: "   " })
+
+    expect(getCrmUnifiedCustomers).toHaveBeenCalledWith(expect.objectContaining({ tag: undefined }))
+  })
+
   it("account 파라미터는 목록 조회 옵션에 영향을 주지 않는다(드로어 전용)", async () => {
     const { prefetchCrmUnifiedInitialData } = await loadPrefetchModule()
     await prefetchCrmUnifiedInitialData({ account: "lead:123" })
@@ -193,6 +207,47 @@ describe("프리페치 URL == 클라이언트 기본 URL (시드 정합 고정)"
     expect(serverUrl).toBe(clientUrl)
     expect(serverUrl).toContain("q=acme")
     expect(serverUrl).toContain("view=priority")
+  })
+
+  it("?tag= 딥링크도 두 함수가 같은 정규화로 같은 URL을 만든다(태그 관리 화면 → 통합 고객 착지 시드)", async () => {
+    const { buildUnifiedPrefetchUrl } = await loadPrefetchModule()
+    const { buildUnifiedListDefaultUrl } = await import("@/components/admin/crm/CrmUnifiedCustomersClient")
+
+    const serverUrl = buildUnifiedPrefetchUrl({ tag: " VIP ", view: "priority" })
+    const clientUrl = buildUnifiedListDefaultUrl({ tag: " VIP ", view: "priority" })
+    expect(serverUrl).toBe(clientUrl)
+    expect(new URL(serverUrl, "http://x").searchParams.get("tag")).toBe("VIP")
+    // 공백뿐인 라벨은 두 쪽 모두 싣지 않는다 — 기본 URL과 같다.
+    expect(buildUnifiedPrefetchUrl({ tag: "  " })).toBe(buildUnifiedListDefaultUrl({ tag: "  " }))
+    expect(buildUnifiedPrefetchUrl({ tag: "  " })).toBe("/api/admin/crm/customers/unified?limit=50&offset=0")
+  })
+
+  it("시드는 마운트 레인만 — 칩·드로어 URL 변경이 서버 페이지를 다시 돌려 내려온 레인은 마운트 키에 심지 않는다", async () => {
+    // 라벨 칩(?tag=)이 URL 상태가 되며 드러난 오염 경로: 칩 클릭 → router.replace → 서버 페이지 재실행 →
+    // 라벨 조건의 새 레인 → (가드 없으면) 마운트 URL 키에 라벨 결과가 fresh로 심겨, 라벨을 풀면 기본
+    // 목록 자리에 라벨 결과가 뜬다.
+    const { isMountPrefetchLane } = await import("@/components/admin/crm/CrmUnifiedCustomersClient")
+
+    expect(isMountPrefetchLane(1_000, 1_000)).toBe(true)
+    expect(isMountPrefetchLane(2_000, 1_000)).toBe(false)
+    expect(isMountPrefetchLane(undefined, undefined)).toBe(false)
+    expect(isMountPrefetchLane(1_000, undefined)).toBe(false)
+
+    const { readFileSync } = await import("node:fs")
+    const { resolve } = await import("node:path")
+    const clientSource = readFileSync(
+      resolve(process.cwd(), "components/admin/crm/CrmUnifiedCustomersClient.tsx"),
+      "utf8"
+    ).replace(/\r\n/g, "\n")
+    expect(clientSource).toContain("const [mountLaneGeneratedAt] = useState(() => initialData?.customers.generatedAt)")
+    expect(clientSource).toContain(
+      "if (value && isMountPrefetchLane(initialData?.customers.generatedAt, mountLaneGeneratedAt)) {"
+    )
+    // 정착 자체(customersReady)는 시드 여부와 무관하게 항상 연다.
+    const start = clientSource.indexOf("const handleCustomersPrefetchSettled = useCallback(")
+    expect(clientSource.slice(start, clientSource.indexOf("[initialData?.customers.generatedAt", start))).toContain(
+      "setCustomersReady(true)"
+    )
   })
 
   it("모르는 view·my_owner도 두 함수가 같은 방식(all)으로 접는다", async () => {

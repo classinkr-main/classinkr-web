@@ -8,6 +8,13 @@ import type {
   CrmUnifiedSavedView,
 } from "@/lib/repositories/crm-unified-customers"
 import { deriveCustomerFlags, type CustomerFlag } from "@/lib/crm/customer-flags"
+import {
+  STATUS_TONE_BG_CLASS,
+  STATUS_TONE_BORDER_CLASS,
+  STATUS_TONE_TEXT_STRONG_CLASS,
+  type StatusTone,
+} from "@/lib/crm/status-tone"
+import { normalizeTag } from "@/lib/crm/tag-suggestions"
 
 export type SourceFilter = "all" | CrmUnifiedCustomerSource
 export type LifecycleFilter = "all" | CrmUnifiedLifecycle
@@ -66,22 +73,27 @@ export function summarizeCustomerSources(statuses: CustomerSourceStatus[]) {
   }
 }
 
-export function customerSourceTone(status: CustomerSourceStatus) {
-  if (!status.ok) {
-    return {
-      surface: "border-[#F6D5C5] bg-[#FEF3EE]",
-      text: "text-[#B85C33]",
-    }
-  }
-  if (status.partial) {
-    return {
-      surface: "border-[#ECD29C] bg-[#FBF1E0]",
-      text: "text-[#7A520F]",
-    }
-  }
+/**
+ * 원천 상태 → DESIGN.md 운영 상태 스케일 톤. 실패(ok=false)가 부분 동기화(partial)보다 우선한다 —
+ * 실패한 원천을 주의색으로 낮춰 그리지 않는다.
+ */
+export function customerSourceStatusTone(status: Pick<CustomerSourceStatus, "ok" | "partial">): StatusTone {
+  if (!status.ok) return "danger"
+  if (status.partial) return "warning"
+  return "ok"
+}
+
+/**
+ * 원천 상태 타일 색 — lib/crm/status-tone.ts 토큰만 조합한다(2026-09-21). 예전엔 실패 톤이 팔레트
+ * 밖 주황 계열 리터럴, 정상 보더가 토큰과 다른 녹색이었다(은퇴 값 목록은
+ * tests/crm/unified-customer-source-tone.test.ts). 타일 제목은 12px 굵은 글자라 강조 텍스트색
+ * (textStrong)을 써서 틴트 배경 위 대비를 AA(4.5:1) 이상으로 둔다.
+ */
+export function customerSourceTone(status: Pick<CustomerSourceStatus, "ok" | "partial">) {
+  const tone = customerSourceStatusTone(status)
   return {
-    surface: "border-[#D7EBDD] bg-[#ECFDF5]",
-    text: "text-[#084734]",
+    surface: `${STATUS_TONE_BORDER_CLASS[tone]} ${STATUS_TONE_BG_CLASS[tone]}`,
+    text: STATUS_TONE_TEXT_STRONG_CLASS[tone],
   }
 }
 
@@ -176,6 +188,61 @@ export function listUrl(input: {
   if (input.tag) params.set("tag", input.tag)
   if (input.includeUnconfirmed) params.set("includeUnconfirmed", "1")
   return `/api/admin/crm/customers/unified?${params.toString()}`
+}
+
+// ── 화면 URL 상태(?view= · ?tag=) ──────────────────────────────────────
+// 저장 뷰와 라벨은 화면 URL에 실리는 필터다(2026-09-21 — 라벨이 추가됐다). 검색어(?q=)는 착지 시
+// 1회 복원만 하고 입력을 URL에 되쓰지 않으며, 원천·상태·담당은 로컬 state다.
+
+export const UNIFIED_CUSTOMERS_PATH = "/admin/crm/customers/unified"
+
+/**
+ * `?tag=` 원문 → 라벨 필터 값. 저장 규칙과 같은 normalizeTag(trim → 연속 공백 1칸 → 40자 컷)로
+ * 맞춘다 — 서버 필터는 행 태그와 문자열이 정확히 같아야 걸리므로(crm-unified-customers.ts
+ * `row.tags.includes(tagFilter)`), 저장된 형태와 어긋난 공백이 0건 결과로 이어지지 않게 한다.
+ * 없거나 공백뿐이면 ""(라벨 필터 없음).
+ */
+export function parseTagParam(raw: string | null | undefined): string {
+  return raw ? normalizeTag(raw) : ""
+}
+
+/** 태그 관리 화면(/admin/crm/customers/tags) → 그 라벨로 좁힌 통합 고객 목록 딥링크. */
+export function unifiedCustomersTagHref(tag: string): string {
+  const value = parseTagParam(tag)
+  return value ? `${UNIFIED_CUSTOMERS_PATH}?tag=${encodeURIComponent(value)}` : UNIFIED_CUSTOMERS_PATH
+}
+
+/**
+ * 현재 화면 쿼리에 저장 뷰·라벨 변경을 한 번에 적용한 쿼리 문자열(앞의 `?` 없음)을 만든다.
+ * 넘긴 키만 바꾸고 나머지(?account= 드로어·?q= 등)는 그대로 둔다. 둘을 함께 바꿀 때(필터 초기화)
+ * 따로 router.replace를 두 번 부르면 두 번째 호출이 같은 이전 쿼리에서 출발해 첫 변경을 덮어쓴다 —
+ * 그래서 한 번의 패치로 묶는다.
+ */
+export function patchUnifiedListParams(
+  current: string,
+  patch: { view?: SavedViewFilter; tag?: string }
+): string {
+  const params = new URLSearchParams(current)
+  if (patch.view !== undefined) {
+    if (patch.view === "all") params.delete("view")
+    else params.set("view", patch.view)
+  }
+  if (patch.tag !== undefined) {
+    const tag = parseTagParam(patch.tag)
+    if (tag) params.set("tag", tag)
+    else params.delete("tag")
+  }
+  return params.toString()
+}
+
+/**
+ * 라벨 칩 목록 — 걸려 있는 라벨이 응답의 availableTags에 없어도(방금 이름이 바뀐 태그 딥링크 등)
+ * 칩으로 보여 활성 상태와 해제 경로를 잃지 않게 맨 앞에 붙인다.
+ */
+export function tagChipsWithActive(availableTags: readonly string[] | undefined, activeTag: string): string[] {
+  const tags = availableTags ? [...availableTags] : []
+  if (activeTag && !tags.includes(activeTag)) tags.unshift(activeTag)
+  return tags
 }
 
 export function formatDate(value: string | null | undefined) {

@@ -31,6 +31,8 @@ import {
   listUrl,
   mergePage,
   normalizeText,
+  parseTagParam,
+  patchUnifiedListParams,
   type CrmUnifiedCustomers,
   type LifecycleFilter,
   type SavedViewFilter,
@@ -68,16 +70,17 @@ function describeLoadError(error: unknown) {
 const RESOLVED_NULL_UNIFIED_CUSTOMERS_PROMISE: Promise<CrmUnifiedCustomers | null> = Promise.resolve(null)
 
 /**
- * 통합 고객 목록의 "기본" 첫 조회 URL — 검색어·저장 뷰를 뺀 나머지 필터는 전부 마운트 시점
+ * 통합 고객 목록의 "기본" 첫 조회 URL — 검색어·저장 뷰·라벨을 뺀 나머지 필터는 전부 마운트 시점
  * state 초기값과 같다. `lib/admin/crm/unified-prefetch.ts`의 `buildUnifiedPrefetchUrl()`이
  * 같은 계산을 서버에서 반복해 같은 문자열을 만들어야 시드가 `loadPage(0)`의 캐시 조회에
  * 맞는다(tests/admin/crm-unified-prefetch.test.ts가 두 값을 직접 비교해 고정한다).
  *
  * "my_owner" 저장 뷰는 제외한다 — 서버 프리페치는 로그인한 담당자의 소유자 키를 풀지 않으므로
  * (unified-prefetch.ts 상단 주석의 한계) my_owner 딥링크의 URL을 여기서도 만들지 않는다.
- * 알 수 없는 view 값과 my_owner는 모두 "all"로 떨어진다.
+ * 알 수 없는 view 값과 my_owner는 모두 "all"로 떨어진다. 라벨(?tag=)은 parseTagParam으로
+ * 정규화한 값이 그대로 실린다 — 마운트 시 tagFilter 초기값도 같은 함수로 URL에서 읽는다.
  */
-export function buildUnifiedListDefaultUrl(overrides?: { query?: string; view?: string }): string {
+export function buildUnifiedListDefaultUrl(overrides?: { query?: string; view?: string; tag?: string }): string {
   const rawView = overrides?.view
   const view: SavedViewFilter =
     rawView && rawView !== "my_owner" && SAVED_VIEW_FILTERS.some((filter) => filter.key === rawView)
@@ -89,10 +92,20 @@ export function buildUnifiedListDefaultUrl(overrides?: { query?: string; view?: 
     lifecycle: "all",
     owner: "",
     view,
-    tag: "",
+    tag: parseTagParam(overrides?.tag),
     includeUnconfirmed: false,
     offset: 0,
   })
+}
+
+/**
+ * 정착한 프리페치 레인이 마운트 때 받은 레인인지 — 그때만 마운트 URL 키(buildUnifiedListDefaultUrl)에
+ * 시드해도 키와 데이터의 조건이 같다. 레인 생성 시각(ms epoch)이 레인마다 달라 식별자로 쓴다.
+ * 이후 같은 화면 안 URL 변경(칩·드로어)이 서버 페이지를 다시 돌려 내려보낸 레인은 다른 조건의
+ * 결과라 false — 마운트 레인이 없던 경우(undefined)도 false.
+ */
+export function isMountPrefetchLane(laneGeneratedAt: number | undefined, mountLaneGeneratedAt: number | undefined) {
+  return laneGeneratedAt !== undefined && laneGeneratedAt === mountLaneGeneratedAt
 }
 
 /**
@@ -176,6 +189,9 @@ export default function CrmUnifiedCustomersClient({
   /** 서버 프리페치(lib/admin/crm/unified-prefetch.ts) — 미인증·역할 부족·실패면 null. */
   initialData?: CrmUnifiedInitialData | null
 }) {
+  // 드로어(?account=)·저장 뷰(?view=)·라벨(?tag=) 딥링크의 원천. 라벨 초기값을 URL에서 바로 읽어야
+  // 해서 다른 state보다 먼저 둔다.
+  const searchParams = useSearchParams()
   const [query, setQuery] = useState("")
   const [debouncedQuery, setDebouncedQuery] = useState("")
   useEffect(() => {
@@ -186,7 +202,9 @@ export default function CrmUnifiedCustomersClient({
   const [lifecycle, setLifecycle] = useState<LifecycleFilter>("all")
   const [owner, setOwner] = useState("")
   const [savedView, setSavedView] = useState<SavedViewFilter>("all")
-  const [tagFilter, setTagFilter] = useState("")
+  // 라벨 필터는 URL(?tag=) 상태다 — 태그 관리 화면 딥링크 착지의 첫 요청부터 라벨이 실리도록
+  // 마운트 시점 URL로 초기화하고, 이후 동기화는 아래 ?tag= 착지 effect·changeTagFilter가 맡는다.
+  const [tagFilter, setTagFilter] = useState(() => parseTagParam(searchParams.get("tag")))
   // 확인 게이트 우회 — 기본 false(미확인 리드 숨김 + 건수만 표시). 리드 보드의 includeUnconfirmed와 같은 이름·UX.
   // URL에 싣지 않는 세션 한정 토글이며, 요청 URL(=캐시 키)에는 includeUnconfirmed=1로 실린다.
   const [includeUnconfirmed, setIncludeUnconfirmed] = useState(false)
@@ -221,7 +239,6 @@ export default function CrmUnifiedCustomersClient({
   // 드로어를 ?account= 에 동기화 — 딥링크/뒤로가기 (C9)
   const router = useRouter()
   const pathname = usePathname()
-  const searchParams = useSearchParams()
 
   const setDrawerUrl = useCallback(
     (key: string | null, mode: "push" | "replace") => {
@@ -312,6 +329,9 @@ export default function CrmUnifiedCustomersClient({
   // 사이드바 칩 카운트는 전역(검색·담당·라벨 무필터) 기준이므로, 딥링크 착지 시 남아 있는
   // 로컬 필터를 함께 초기화해 목록 건수가 칩 숫자와 일치하게 한다(착지 정합).
   // view 값이 실제로 바뀔 때만 실행 — 드로어(?account=) push 등 다른 쿼리 변경에는 불변.
+  // 라벨은 여기서 비우지 않는다 — 라벨은 URL(?tag=) 상태라 아래 ?tag= 착지 effect가 URL 기준으로
+  // 맞춘다(세그먼트 링크는 ?view=만 싣고 오므로 그 effect가 라벨을 푼다). 여기서 비우면
+  // ?view=…&tag=… 를 함께 받은 착지에서 URL과 화면 필터가 어긋난다.
   const lastViewParamRef = useRef<string | null>(null)
   useEffect(() => {
     const view = searchParams.get("view")
@@ -322,27 +342,50 @@ export default function CrmUnifiedCustomersClient({
     setSavedView(known ? (view as SavedViewFilter) : "all")
     setSource("all")
     setLifecycle("all")
-    setTagFilter("")
     setQuery("")
     setOwner(view === "my_owner" ? CURRENT_OWNER_VALUE : "")
   }, [searchParams])
 
+  // 태그 관리 화면 딥링크(?tag=) ↔ 라벨 필터 — ?view=와 같은 규약: 값이 실제로 바뀔 때만 반영하고
+  // (드로어 ?account= push 등 다른 쿼리 변경에는 불변), 우리 자신의 URL 쓰기(replaceListParams)는
+  // ref를 라우터 호출보다 먼저 갱신해 재발화하지 않는다. ?view=와 달리 파라미터가 사라지면
+  // 라벨도 푼다 — 라벨은 URL이 정본이라, 같은 화면 안에서 ?tag= 없는 링크(서브내비·세그먼트)로
+  // 이동했는데 이전 라벨이 조용히 남아 결과를 좁히는 일을 막는다.
+  const lastTagParamRef = useRef<string | null>(null)
+  useEffect(() => {
+    const tag = parseTagParam(searchParams.get("tag"))
+    if (tag === lastTagParamRef.current) return
+    lastTagParamRef.current = tag
+    setTagFilter(tag)
+  }, [searchParams])
+
   // 칩 클릭 ↔ URL 동기화 — setDrawerUrl과 동일하게 라우터 경유(router.replace).
-  // raw history API는 useSearchParams와 desync되어 드로어 열기/닫기가 ?view=를 유실한다.
-  // replace라 히스토리를 오염시키지 않고(뒤로가기 안전), lastViewParamRef를 라우터 호출보다
+  // raw history API는 useSearchParams와 desync되어 드로어 열기/닫기가 ?view=·?tag=를 유실한다.
+  // replace라 히스토리를 오염시키지 않고(뒤로가기 안전), last*ParamRef를 라우터 호출보다
   // 먼저 갱신해 우리 자신의 URL 변경이 위 착지 effect(필터 초기화)를 재발화시키지 않게 한다.
-  const syncViewParam = useCallback(
-    (view: SavedViewFilter) => {
-      const params = new URLSearchParams(Array.from(searchParams.entries()))
-      if (view === "all") params.delete("view")
-      else params.set("view", view)
-      lastViewParamRef.current = view === "all" ? null : view
-      const qs = params.toString()
+  // 저장 뷰·라벨을 함께 바꿀 때(필터 초기화)는 한 번의 replace로 묶는다 — 두 번 부르면 두 번째가
+  // 같은 이전 searchParams에서 출발해 첫 변경을 되돌린다(patchUnifiedListParams 주석).
+  const replaceListParams = useCallback(
+    (patch: { view?: SavedViewFilter; tag?: string }) => {
+      if (patch.view !== undefined) lastViewParamRef.current = patch.view === "all" ? null : patch.view
+      if (patch.tag !== undefined) lastTagParamRef.current = parseTagParam(patch.tag)
+      const qs = patchUnifiedListParams(searchParams.toString(), patch)
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
     },
     [router, pathname, searchParams]
   )
-  // P1b 프리페치 시드 — 마운트 시점 searchParams(q·view)만 한 번 읽어 얼린다(이후 세그먼트
+  const syncViewParam = useCallback((view: SavedViewFilter) => replaceListParams({ view }), [replaceListParams])
+
+  // 라벨 칩·해제·잔존 필터 해제가 모두 이 경로로 state와 URL(?tag=)을 함께 바꾼다.
+  const changeTagFilter = useCallback(
+    (next: string) => {
+      const tag = parseTagParam(next)
+      setTagFilter(tag)
+      replaceListParams({ tag })
+    },
+    [replaceListParams]
+  )
+  // P1b 프리페치 시드 — 마운트 시점 searchParams(q·view·tag)만 한 번 읽어 얼린다(이후 세그먼트
   // 칩 클릭 등으로 URL이 바뀌어도 이 값은 그대로다: 시드는 "첫 로드 한 번"의 계약이지 매
   // 내비게이션마다 다시 심는 자리가 아니다). 서버 프리페치(unified-prefetch.ts)가 같은
   // 원문을 받아 같은 함수로 URL을 만들어야 문자열이 같아진다.
@@ -350,15 +393,21 @@ export default function CrmUnifiedCustomersClient({
     buildUnifiedListDefaultUrl({
       query: searchParams.get("q") ?? undefined,
       view: searchParams.get("view") ?? undefined,
+      tag: searchParams.get("tag") ?? undefined,
     })
   )
   // 프리페치가 없으면(initialData null) 첫 렌더부터 바로 loadPage(0)을 허용한다(기존 동작
   // 그대로). 있으면 브리지가 정착(settle)해 캐시를 심을 때까지 미룬다 — 그래야 loadPage(0)이
   // 캐시 미스로 헛돌지 않는다.
   const [customersReady, setCustomersReady] = useState(() => !initialData)
+  // 시드는 마운트 레인 하나만 — 칩(?view=·?tag=)·드로어(?account=)의 URL 쓰기도 라우터 경유라 서버
+  // 페이지가 다시 돌며 "그 조건"으로 새 레인(initialData)을 내려보낸다. 그 결과를 위에서 얼린 마운트
+  // URL 키에 심으면 다른 조건의 목록으로 캐시가 오염된다(라벨 칩을 눌렀다 풀면 기본 목록 자리에
+  // 라벨 결과가 fresh 캐시로 뜬다). 레인 생성 시각(generatedAt)으로 마운트 레인인지 가른다.
+  const [mountLaneGeneratedAt] = useState(() => initialData?.customers.generatedAt)
   const handleCustomersPrefetchSettled = useCallback(
     (value: CrmUnifiedCustomers | null) => {
-      if (value) {
+      if (value && isMountPrefetchLane(initialData?.customers.generatedAt, mountLaneGeneratedAt)) {
         seedAdminRequestCache(unifiedListDefaultUrl, value, {
           ttlMs: CRM_CACHE_TTL_MS,
           staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
@@ -367,7 +416,7 @@ export default function CrmUnifiedCustomersClient({
       }
       setCustomersReady(true)
     },
-    [initialData?.customers.generatedAt, unifiedListDefaultUrl]
+    [initialData?.customers.generatedAt, mountLaneGeneratedAt, unifiedListDefaultUrl]
   )
 
   const { owners: crmOwners, currentOwner, health: ownerHealth } = useCrmOwners()
@@ -566,12 +615,12 @@ export default function CrmUnifiedCustomersClient({
 
   const clearLingeringFilters = useCallback(() => {
     setQuery("")
-    setTagFilter("")
+    changeTagFilter("")
     if (savedView !== "my_owner") {
       setOwner("")
       persistOwner("")
     }
-  }, [persistOwner, savedView])
+  }, [changeTagFilter, persistOwner, savedView])
 
   // 빈 상태 다음 행동 안내 — 필터가 걸려 있으면 초기화를, 아니면 리드 등록/매칭 연결을 권한다.
   const hasActiveFilters =
@@ -590,10 +639,11 @@ export default function CrmUnifiedCustomersClient({
     setOwner("")
     persistOwner("")
     setSavedView("all")
-    syncViewParam("all")
     setTagFilter("")
+    // 저장 뷰·라벨 URL을 한 번의 replace로 함께 비운다(따로 부르면 두 번째가 첫 변경을 덮어쓴다).
+    replaceListParams({ view: "all", tag: "" })
     setIncludeUnconfirmed(false)
-  }, [persistOwner, syncViewParam])
+  }, [persistOwner, replaceListParams])
 
   const hiddenUnconfirmedCount = data?.summary.hiddenUnconfirmedCount ?? 0
 
@@ -757,7 +807,7 @@ export default function CrmUnifiedCustomersClient({
             currentOwnerCount={currentOwnerCount}
             ownerOptions={ownerOptions}
             tagFilter={tagFilter}
-            onTagFilterChange={setTagFilter}
+            onTagFilterChange={changeTagFilter}
             includeUnconfirmed={includeUnconfirmed}
             onIncludeUnconfirmedChange={setIncludeUnconfirmed}
             data={data}

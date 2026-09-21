@@ -273,6 +273,7 @@ home_v4.42(9/10 어드민 개편 중심)를 병합했다. 이 브랜치는 Wave 
 - `app/api/admin/crm/tasks/[id]/route.ts`의 `update` 액션이 `dueAt: null`을 받지 않아, 기한 없던 할 일의 "내일로" 되돌리기가 기한을 정확히 지우지 못한다.
 - `lib/admin-client.ts`의 `invalidationScopesForUrl`이 리드 PATCH 하나로 CRM 집계 캐시 전체(overview·action-kpis·compass·coverage·owners·tasks·health)를 지운다 — 범위가 넓다.
 - `components/admin/crm/unified/shared.ts`의 `customerSourceTone()`이 여전히 팔레트 밖 리터럴(#B85C33 계열)을 쓴다. 소비처(`CustomerSearchPanel.tsx`)가 이번 라운드 클러스터 밖이라 그대로 두었다.
+  → 2026-09-21 해소: 실패=danger·부분=warning·정상=ok 매핑(`customerSourceStatusTone`)으로 `lib/crm/status-tone.ts` 토큰만 조합한다(`STATUS_TONE_BG_CLASS` 추가). 제목은 강조 텍스트색이라 틴트 배경 위 대비 AA 이상(`tests/crm/unified-customer-source-tone.test.ts`).
 
 ### §11 1단계 — 2026-09-18 완료 (M1·M3·A2·A3·A5·T2·T3·P2)
 
@@ -342,6 +343,7 @@ home_v4.42(9/10 어드민 개편 중심)를 병합했다. 이 브랜치는 Wave 
 후속으로 남긴 것:
 
 - 태그 관리 행 클릭 → 통합 고객 필터 이동은 통합 클라이언트가 `?tag=` 를 읽지 않아 생략했다. 통합 화면이 `?tag=` 딥링크를 받으면 한 줄로 연결된다.
+  → 2026-09-21 해소: 태그 이름이 `/admin/crm/customers/unified?tag=<인코딩>` 링크(next/link, 키보드 포커스 링)다. 통합 클라이언트는 `?tag=`를 `?view=`와 같은 규약의 URL 상태로 읽고 쓴다 — 마운트 시 초기값, 값이 바뀔 때만 반영, 칩·해제·초기화는 `router.replace`로 URL도 함께 바꿈(`parseTagParam`·`patchUnifiedListParams`). 서버 프리페치도 같은 정규화로 라벨을 싣는다. 이 과정에서 칩·드로어 URL 변경이 서버 페이지를 다시 돌려 내려온 새 레인이 마운트 URL 키에 재시드되던 캐시 오염 경로를 막았다(마운트 레인만 시드, `isMountPrefetchLane`).
 - 딜 6단계 퍼널 막대는 딜 목록 화면이 없어 링크가 없다. MiniFunnel bar 변형은 9단계에서 마지막 막대가 opacity 감쇠로 거의 보이지 않는다(값·라벨은 정상) — viz 공용 컴포넌트 조정은 별도.
 - 통합 프리페치는 `view=my_owner` 와 localStorage 담당자 복원값을 시드에 반영하지 않는다(그 경우 프리페치 효과만 없고 캐시 오염은 없음).
 - 태그 집계의 byTargetType 은 lead/neo_account/customer 3키라 `unknown` 대상은 총 건수에만 포함된다.
