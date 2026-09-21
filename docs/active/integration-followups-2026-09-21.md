@@ -34,7 +34,7 @@
 
 ### 1-1. 환경
 
-- [ ] **로컬 `.env.local`을 서울 프로젝트 값으로 교체한다.** 이관 전 호스트는 2026-09-21 실측에서 DNS 조회부터 실패했다.
+- [x] (2026-09-21 완료: Management API 로 서울 URL·publishable·secret·`SUPABASE_PROJECT_REF` 교체, 값 비출력, 백업은 git-ignored `.env.local.bak-20260921-pre-seoul`.) **로컬 `.env.local`을 서울 프로젝트 값으로 교체한다.** 이관 전 호스트는 2026-09-21 실측에서 DNS 조회부터 실패했다.
   이 상태에서는 `check:db`·`check:alpha-db`·`postbuild`·dev 서버의 어드민 화면이 전부 `fetch failed`다.
   근거: [supabase-korea-migration-status](./supabase-korea-migration-status.md) "로컬 개발 환경 점검". — 운영자 수동 조치
 - [x] (2026-09-21 확인: 운영 env 에 `SOLAPI_*` 없음 → 접수 확인 문자는 simulated 기록만, 고객에게 나가지 않는다. 켜려면 키 추가 전 이 항목을 다시 본다.) **운영 env에 SOLAPI 키가 있는지 확인하고 접수 확인 문자의 실발송 여부를 정한다.** 쇼룸 예약·도입 신청이 접수되면
@@ -57,7 +57,7 @@
 - [x] `20260828_channel_match_rpc_single_overload.sql`. 적용 전까지 `check:alpha-db`가 이 프로브에서 blocked다(의도된 신호) —
   내부 CS 코파일럿의 "과거 상담 사례" 근거가 2026-07-16부터 빈 배열이었다.
 - [x] `20260921_lead_source_intake_split.sql`(멱등 백필 — 배포 직후 실행, 대상 0행). 미적용이면 과거 쇼룸·도입 신청 리드가 계속 `contact_page`로 집계된다.
-- [ ] 적용 뒤 `npm run check:db -- --strict`, `npm run check:alpha-db`. — 파일별 확인은 읽기 전용 SQL 로 마쳤다. 두 스크립트는 로컬 `.env.local` 이 서울 URL·키로 바뀐 뒤 한 번 돌린다(위 1-1 첫 항목).
+- [x] 적용 뒤 `npm run check:db -- --strict`, `npm run check:alpha-db`. (2026-09-21: 둘 다 `--strict` 통과 — "DB가 repo 마이그레이션까지 최신", 상담 근거 RPC 프로브 ok.) — 파일별 확인은 읽기 전용 SQL 로 마쳤다. 두 스크립트는 로컬 `.env.local` 이 서울 URL·키로 바뀐 뒤 한 번 돌린다(위 1-1 첫 항목).
 
 ### 1-3. 이번 배포에 함께 나가는 동작 변화 (알고 내보낸다)
 
@@ -88,7 +88,7 @@
   [ad-channel-activation-runbook](./ad-channel-activation-runbook-2026-09-14.md) §1~4. 크론 항목은 37개(상한 40).
 - [ ] 마케팅 허브 3층 화면의 실데이터 눈검수(1280·390px). 상세 › 소재의 **광고세트별 성과**, 상세 › 퍼널·채널의
   **채널별 집행·커버리지 매트릭스·귀속 폭포**는 옛 요약 탭 배치에서 이 통합 때 옮겨 단 것이다 — 위치가 의도와 맞는지 본다.
-- [ ] Compass 로그인 후 화면 검증(이관 문서의 미검증 항목). 기존 Supabase 프로젝트의 현재 상태(일시정지 여부)도 대시보드에서 확인.
+- [ ] Compass 로그인 후 화면 검증(이관 문서의 미검증 항목). (2026-09-21: 로그인 페이지 200·무인증 API 401 은 이관 기준과 같고, DB 에서 `postgres`·`service_role` 은 역브리지 뷰를 읽을 수 있음을 확인. 로그인 후 화면은 여전히 미검증 — 팀 비밀번호가 필요해 사람이 본다.) 기존 Supabase 프로젝트의 현재 상태(일시정지 여부)도 대시보드에서 확인.
 - [ ] 운영 Production 커밋에 `vercel.json`의 `icn1`이 들어 있는지 배포 직후 1회 확인.
 
 ### 2-3. 알려진 결함 (개발, 작음)
