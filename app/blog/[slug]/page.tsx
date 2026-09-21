@@ -19,6 +19,7 @@ import {
 import { getLeadMagnetBySlugFromStore } from "@/lib/repositories/lead-magnets"
 import { extractMarkdownHeadings } from "@/lib/blog-markdown"
 import { getBlogSlugRedirect, getCanonicalBlogSlug } from "@/lib/blog-slug-redirects"
+import { getBlogPostPath, resolveBlogRouteSlug } from "@/lib/blog-slug-route"
 import { sanitizePublicImageUrl, sanitizePublicUrl } from "@/lib/safe-public-url"
 import { JsonLd } from "@/components/seo/JsonLd"
 import {
@@ -29,11 +30,6 @@ import {
 
 export const revalidate = 3600 // 1시간마다 재생성
 export const dynamicParams = true
-
-// Next.js dynamic params arrive URL-encoded for non-ASCII paths; decode before DB lookup.
-function decodeSlug(raw: string) {
-  try { return decodeURIComponent(raw) } catch { return raw }
-}
 
 async function getOptionalRelatedPosts(post: NonNullable<Awaited<ReturnType<typeof getPublishedPostBySlug>>>) {
   try {
@@ -57,7 +53,7 @@ export async function generateMetadata({
   params,
 }: BlogDetailPageProps): Promise<Metadata> {
   const { slug } = await params
-  const canonicalSlug = getCanonicalBlogSlug(decodeSlug(slug))
+  const canonicalSlug = getCanonicalBlogSlug(resolveBlogRouteSlug(slug))
   const post = await getPublishedPostBySlug(canonicalSlug)
   if (!post) {
     return {
@@ -73,7 +69,8 @@ export async function generateMetadata({
     post.heroImageUrl ||
     post.imageUrl ||
     toAbsoluteUrl(`/api/og/blog/${encodeURIComponent(post.slug)}`)
-  const canonical = toAbsoluteUrl(`/blog/${post.slug}`)
+  // 공개 URL 은 늘 원래 슬러그(퍼센트 인코딩) 기준 — rewrite 토큰 경로는 밖으로 내보내지 않는다.
+  const canonical = toAbsoluteUrl(getBlogPostPath(post.slug))
   return {
     title: metaTitle,
     description: metaDescription,
@@ -108,7 +105,10 @@ export default async function BlogDetailPage({
   params,
 }: BlogDetailPageProps) {
   const { slug } = await params
-  const decodedSlug = decodeSlug(slug)
+  // params.slug 는 퍼센트 인코딩된 원문이거나, 한글 등 비ASCII 슬러그면 proxy.ts 가 rewrite 한
+  // `_u8_` 토큰이다(ISR 캐시 태그가 x-next-cache-tags 헤더에 실려 500 나던 사고 — lib/blog-slug-route.ts).
+  // 어느 쪽이든 DB 조회 전에 원래 슬러그로 되돌린다.
+  const decodedSlug = resolveBlogRouteSlug(slug)
   const redirectSlug = getBlogSlugRedirect(decodedSlug)
   if (redirectSlug) {
     permanentRedirect(`/blog/${encodeURIComponent(redirectSlug)}`)
@@ -137,7 +137,7 @@ export default async function BlogDetailPage({
       <JsonLd
         data={[
           createArticleJsonLd({
-            path: `/blog/${post.slug}`,
+            path: getBlogPostPath(post.slug),
             title: post.title,
             description: post.excerpt,
             imageUrl: post.heroImageUrl || post.imageUrl || undefined,
@@ -148,7 +148,7 @@ export default async function BlogDetailPage({
           createBreadcrumbJsonLd([
             { name: "홈", path: "/" },
             { name: "블로그", path: "/blog" },
-            { name: post.title, path: `/blog/${post.slug}` },
+            { name: post.title, path: getBlogPostPath(post.slug) },
           ]),
         ]}
       />
@@ -206,7 +206,7 @@ export default async function BlogDetailPage({
               </div>
 
               <div className="mt-6">
-                <ShareActions title={post.title} url={toAbsoluteUrl(`/blog/${post.slug}`)} />
+                <ShareActions title={post.title} url={toAbsoluteUrl(getBlogPostPath(post.slug))} />
               </div>
             </div>
 
