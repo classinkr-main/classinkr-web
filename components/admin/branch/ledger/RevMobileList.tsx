@@ -22,6 +22,9 @@ interface RevMobileListProps {
   revRowViews: Map<string, RevRowView>
   selectedRow: LedgerRevenueRow | null
   loadDealDetail: (row: LedgerRevenueRow) => void | Promise<void>
+  // 입력 속도 라운드(2026-09-20) §4 P2-7 — 카드의 금액을 눌렀을 때 상세가 아니라 레일
+  // "입력/수정"으로 직행시키는 콜백. 고객명·"상세" 클릭은 그대로 loadDealDetail(상세)로 둔다.
+  onQuickInput: (row: LedgerRevenueRow) => void | Promise<void>
 }
 
 export function RevMobileList({
@@ -34,6 +37,7 @@ export function RevMobileList({
   revRowViews,
   selectedRow,
   loadDealDetail,
+  onQuickInput,
 }: RevMobileListProps) {
   return (
     <div className="space-y-2 p-3 md:hidden">
@@ -113,9 +117,20 @@ export function RevMobileList({
                                     </p>
                                   </div>
                                   <div className="shrink-0 text-right">
-                                    <p className="text-[13px] font-bold tabular-nums text-[#111110]">
+                                    {/* P2-7: 금액 표시를 탭 가능한 버튼으로 — 레일 "입력/수정"
+                                        직행 진입점(감사 발견: 기존엔 클릭 불가한 텍스트였음).
+                                        min-h-11(44px)로 터치 타깃 확보, 텍스트 스타일은 기존
+                                        그대로(새 색 없음) — flex/justify-end/w-full은 <p>가
+                                        block으로 우측 정렬되던 것과 같은 자리를 버튼으로도
+                                        재현하기 위한 레이아웃일 뿐 시각 변화는 아니다. */}
+                                    <button
+                                      type="button"
+                                      onClick={() => void onQuickInput(row)}
+                                      className="flex min-h-11 w-full items-center justify-end text-[13px] font-bold tabular-nums text-[#111110]"
+                                      aria-label={`${row.customer} 금액 입력 열기`}
+                                    >
                                       {formatMoney(monthAmount || row.revenue)}
-                                    </p>
+                                    </button>
                                     <button
                                       type="button"
                                       onClick={() => void loadDealDetail(row)}

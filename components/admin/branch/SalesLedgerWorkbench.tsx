@@ -105,6 +105,7 @@ const ForecastBoard = dynamic(() => import("./ledger/ForecastBoard").then((m) =>
 })
 import { RevAuxAnalysisSection } from "./ledger/RevAuxAnalysisSection"
 import { RevMobileList } from "./ledger/RevMobileList"
+import { RevMatrixEditBar } from "./ledger/RevMatrixEditBar"
 import { buildCustomerOptions } from "./ledger/customer-suggest"
 import { type CrmCoverageResponse } from "./CrmSyncStrip"
 import MultiSelect from "./MultiSelect"
@@ -2100,6 +2101,44 @@ export default function SalesLedgerWorkbench({
   const [pastePlan, setPastePlan] = useState<MatrixPastePlan | null>(null)
   const [pasteConfidence, setPasteConfidence] = useState<DraftConfidence>("expected")
 
+  // 편집 바(UX 감사 §8.3 A안의 대체 — ledger/RevMatrixEditBar.tsx 헤더 주석 참조) 배선.
+  // 확도 버튼 클릭: 편집 중이면 팝오버와 같은 setEditConfidence(명시 선택 → localStorage 기억까지 동일),
+  // 선택만 된 셀이면 E/H/C 단축키(useMatrixEditor.onSelectedKeyDown의 확도 분기)와 동등하게 "금액은
+  // 그대로, 확도만" 커밋한다 — 빈 칸·같은 확도면 초안을 만들지 않는 조건도 그대로.
+  const pickConfidenceFromEditBar = useCallback(
+    (next: DraftConfidence) => {
+      if (matrixEditor.editing) {
+        matrixEditor.actions.setEditConfidence(next)
+        return
+      }
+      const coord = matrixEditor.selected
+      if (!coord) return
+      const value = matrixCellValue(coord)
+      if (value > 0 && next !== matrixCellConfidence(coord)) {
+        void onCommitCell(coord.rowId, coord.month, value, next, coord.week)
+      }
+    },
+    [matrixCellConfidence, matrixCellValue, matrixEditor.actions, matrixEditor.editing, matrixEditor.selected, onCommitCell],
+  )
+  const editBarContext = useMemo(() => {
+    const coord = matrixEditor.editing ?? matrixEditor.selected
+    if (!coord) return null
+    const row = rowById.get(coord.rowId)
+    if (!row) return null
+    return {
+      customer: row.customer,
+      monthLabel: formatMonthLabel(coord.month),
+      weekLabel: coord.week != null ? `W${coord.week + 1}` : undefined,
+      currentAmount: matrixCellValue(coord),
+    }
+  }, [matrixCellValue, matrixEditor.editing, matrixEditor.selected, rowById])
+  // 바가 보여줄 확도: 편집 중이면 편집 버퍼의 확도, 선택만 됐으면 그 셀의 우세 확도(E/H/C가 바꿀 기준값).
+  const editBarConfidence: DraftConfidence = matrixEditor.editing
+    ? matrixEditor.editConfidence
+    : matrixEditor.selected
+      ? matrixCellConfidence(matrixEditor.selected)
+      : "expected"
+
   const handleMatrixPaste = useCallback(
     (event: React.ClipboardEvent<HTMLDivElement>) => {
       // 편집 중(input 포커스)이면 input의 기본 붙여넣기를 존중한다. 선택 셀이 없으면 대상 불명 → 무시.
@@ -2420,6 +2459,19 @@ export default function SalesLedgerWorkbench({
       setDetailLoading(false)
     }
   }, [selectedMonth, team])
+
+  // 입력 진입 동선 라운드(2026-09-20 기획 §4 P2-7/§8.4 "레일·상세") — 모바일 REV 리스트에서
+  // 금액을 탭하면 상세가 아니라 레일 "입력/수정"으로 직행한다. loadDealDetail이 행 선택·폼
+  // 프리필과 함께 setRailView("detail")을 먼저 실행하므로, 완료(await) 뒤에
+  // setRailView("input")으로 덮어써야 상세가 아닌 입력 폼이 열린다(순서 중요).
+  // InputRailSection은 마운트 시 데스크톱 폭(640px 이상)에서만 금액 input에 자동 포커스한다
+  // (이미 구현됨) — 모바일은 포커스가 곧장 키보드를 띄워 화면을 가리므로 여기서 별도 포커스
+  // 호출을 얹지 않는다.
+  const openQuickInputForRow = useCallback(async (row: LedgerRevenueRow) => {
+    await loadDealDetail(row)
+    setRailView("input")
+    setSidePanelCollapsed(false)
+  }, [loadDealDetail])
 
   // M13: 콕핏 딜 선택 전용 진입 — loadDealDetail(REV·보드 공용, 시트 행을 항상 "예정"으로 시드)
   // 뒤에 편집기 확도를 리스트 톤과 일치시킨다. 톤 규약은 CockpitDealList.rowConfidenceTone과 동일
@@ -2929,7 +2981,18 @@ export default function SalesLedgerWorkbench({
         )}
       </header>
 
-      <main className="space-y-5 px-4 pt-5 sm:px-6 lg:px-9">
+      {/* 입력 진입 동선 라운드(2026-09-20 기획 §4 P2-7/§8.4 "REV 레일 겹침") — 우측 플로팅
+          레일(420px 폭 + 여백 20px)이 매트릭스 우측 열 위에 fixed로 뜨면서 겹치는 문제 보정.
+          xl(1280px) 이상에서만 본문 오른쪽에 레일 폭만큼 여백을 비워 겹침을 없앤다. 콕핏
+          렌즈는 이 fixed 레일을 쓰지 않으므로(lens !== "cockpit" 게이트가 아래 aside 렌더
+          조건에도 이미 있음 — 동일 조건) 제외한다. xl 미만(모바일 바텀시트·태블릿)은 여백을
+          비우지 않는다 — 그 폭에서 440px를 빼면 매트릭스 자체가 너무 좁아져 겹침보다 더
+          나쁜 트레이드오프가 되므로, 거기서는 겹침을 그대로 감수한다. */}
+      {/* 조건은 아래 <aside> 렌더 게이트와 같은 식이어야 한다 — 콕핏 렌즈에서도 큐 레일만은 열리므로
+          (lens !== "cockpit" || railView === "queue") 그 경우까지 여백을 비운다. */}
+      <main
+        className={`space-y-5 px-4 pt-5 sm:px-6 lg:px-9${!sidePanelCollapsed && (lens !== "cockpit" || railView === "queue") ? " xl:pr-[440px]" : ""}`}
+      >
         {/* 상태 한 줄(2026-09-14) — 동기화·정합 체크·CRM 연결을 칸 하나씩, 누른 칸만 아래로 펼친다.
             예전엔 정합 스트립·CRM 싱크 스트립·동기화 배너가 각자 한 줄씩 쌓여 표보다 먼저 세 줄을 읽어야 했다. */}
         <LedgerStatusRail
@@ -3617,6 +3680,7 @@ export default function SalesLedgerWorkbench({
                   revRowViews={revRowViews}
                   selectedRow={selectedRow}
                   loadDealDetail={loadDealDetail}
+                  onQuickInput={openQuickInputForRow}
                 />
 
                 {revTotalPages > 1 && (
@@ -3649,6 +3713,18 @@ export default function SalesLedgerWorkbench({
                     </div>
                   </div>
                 )}
+                {/* 편집 바(§8.3 A안 대체) — 셀 팝오버가 이웃 셀·아래 행을 가리던 문제를 "셀 밖 상시 표면"으로
+                    푼다. 스크롤 컨테이너 밖(위)에 두어 가로·세로 스크롤과 무관하게 항상 보이고, 매트릭스의
+                    sticky z-서열(z-10/20/30/40)과도 겹치지 않는다. */}
+                <RevMatrixEditBar
+                  editing={matrixEditor.editing}
+                  selected={matrixEditor.selected}
+                  context={editBarContext}
+                  buffer={matrixEditor.buffer}
+                  confidence={editBarConfidence}
+                  onPickConfidence={pickConfidenceFromEditBar}
+                  disabled={!matrixEditor.editing && !matrixEditor.selected}
+                />
                 {/* 세로 스크롤을 이 컨테이너 안으로 한정해야 thead sticky top / tfoot sticky bottom이
                     실제로 붙는다 — 페이지 스크롤 + overflow-x-auto 조합에서는 세로 sticky가 무효였음.
                     onPaste: 선택 셀(포커스된 td)에서 버블된 Ctrl+V를 받아 TSV 벌크 프리뷰를 연다(SL-2). */}
@@ -4110,6 +4186,8 @@ export default function SalesLedgerWorkbench({
                     key={item.id}
                     type="button"
                     role="tab"
+                    id={`ledger-rail-tab-${item.id}`}
+                    aria-controls={`ledger-rail-panel-${item.id}`}
                     aria-selected={active}
                     tabIndex={active ? 0 : -1}
                     ref={(node) => { railTabRefs.current[index] = node }}
@@ -4134,7 +4212,12 @@ export default function SalesLedgerWorkbench({
           </div>
 
           {railView === "detail" && (
-          <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white">
+          <section
+            id="ledger-rail-panel-detail"
+            role="tabpanel"
+            aria-labelledby="ledger-rail-tab-detail"
+            className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white"
+          >
             <div className="border-b border-[rgba(0,0,0,0.08)] px-4 py-3">
               <p className="text-[13px] font-bold text-[#111110]">행 상세</p>
               <p className="mt-1 text-[11px] text-[#615D59]">REV 행 선택 시 월별 금액과 수정 초안 입력</p>
@@ -4496,12 +4579,22 @@ export default function SalesLedgerWorkbench({
           </section>
           )}
 
+          {/* InputRailSection 자체 루트(그 컴포넌트 소유 파일)에는 role/id를 직접 못 얹으므로
+              스타일 없는 래퍼 div로만 tabpanel 계약(id·role·aria-labelledby)을 덧씌운다 —
+              className이 없어 레이아웃(테두리·여백)에는 영향이 없다. */}
           {railView === "input" && (
-          <InputRailSection {...inputRailProps} />
+          <div id="ledger-rail-panel-input" role="tabpanel" aria-labelledby="ledger-rail-tab-input">
+            <InputRailSection {...inputRailProps} />
+          </div>
           )}
 
           {railView === "queue" && (
-          <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white">
+          <section
+            id="ledger-rail-panel-queue"
+            role="tabpanel"
+            aria-labelledby="ledger-rail-tab-queue"
+            className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white"
+          >
             <div className="border-b border-[rgba(0,0,0,0.08)] px-4 py-3">
               <p className="flex items-center gap-2 text-[13px] font-bold text-[#111110]">
                 <AlertTriangle className="h-4 w-4 text-[#A8741A]" />
