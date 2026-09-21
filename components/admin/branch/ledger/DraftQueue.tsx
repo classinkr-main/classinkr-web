@@ -512,7 +512,11 @@ export function DraftQueue({
                 ))}
               {draft.note && <p className="mt-1.5 line-clamp-2 text-[11.5px] leading-relaxed text-[#615D59]">{draft.note}</p>}
             </div>
-            <div className="flex shrink-0 items-center gap-1">
+            {/* 입력 속도 라운드(2026-09-20) §8.4/§8.5 "레일·큐": 6개가 전부 h-8 w-8 동일 크기라
+                "지금 눌러야 할 버튼"이 아이콘 색으로만 구분됐다 — 체크·적용만 라벨을 상시 노출해
+                다음 할 일을 텍스트로도 읽히게 한다(편집·되돌리기·취소·삭제는 그대로). 폭이 늘어난
+                버튼 2개 때문에 좁은 화면에서 넘치지 않도록 이 행에 flex-wrap을 더한다. */}
+            <div className="flex shrink-0 flex-wrap items-center gap-1">
               <button
                 type="button"
                 onClick={() => onEdit(draft)}
@@ -527,7 +531,7 @@ export function DraftQueue({
                 type="button"
                 onClick={() => void runToggle(draft.id)}
                 disabled={draft.status === "applied" || draft.status === "cancelled" || isRowBusy(draft.id)}
-                className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] text-[#084734] transition hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-35"
+                className="flex h-9 min-w-[72px] items-center justify-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] px-2.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-35"
                 aria-label="초안 체크 상태 변경"
                 title="초안 체크 상태 변경"
               >
@@ -536,16 +540,18 @@ export function DraftQueue({
                 ) : (
                   <CheckCircle2 className="h-4 w-4" />
                 )}
+                {draft.status === "checked" ? "체크 해제" : "체크"}
               </button>
               <button
                 type="button"
                 onClick={() => setConfirmApplyDraft(draft)}
                 disabled={draft.status !== "checked" || mode !== "server" || draft.id.startsWith("local-") || isRowBusy(draft.id)}
-                className="flex h-8 w-8 items-center justify-center rounded-md border border-[#BDEFD8] text-[#084734] transition hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-35"
+                className="flex h-9 min-w-[72px] items-center justify-center gap-1 rounded-md border border-[#BDEFD8] px-2.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-35"
                 aria-label={`${draft.customer || "초안"} 적용`}
                 title="체크 완료 초안 적용"
               >
                 {applyingId === draft.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                적용
               </button>
               <button
                 type="button"

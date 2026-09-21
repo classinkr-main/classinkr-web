@@ -267,10 +267,13 @@ export interface DraftForm {
   weeklyConfidence: DraftConfidence[]
 }
 
-export const DRAFT_CONFIDENCE_OPTIONS: Array<{ id: DraftConfidence; label: string }> = [
-  { id: "expected", label: "예정" },
-  { id: "high-confidence", label: "고확도" },
-  { id: "confirmed", label: "확정" },
+// 결정 D6(입력 속도 라운드 2026-09-20 §8.5): 확도 어휘("고확도")는 바꾸지 않고, 대신 버튼
+// title/aria-label에 병기할 짧은 설명을 hint로 SSOT에 얹는다 — 소비처가 각자 문구를 베끼면
+// 드리프트가 생기므로 label 옆에 같이 둔다(다른 소비처는 label/id만 쓰므로 무영향).
+export const DRAFT_CONFIDENCE_OPTIONS: Array<{ id: DraftConfidence; label: string; hint: string }> = [
+  { id: "expected", label: "예정", hint: "예정 — 아직 확정되지 않은 예상 매출" },
+  { id: "high-confidence", label: "고확도", hint: "고확도 — 90%+ 마감 임박(시트 파랑)" },
+  { id: "confirmed", label: "확정", hint: "확정 — 입금·계약 확정" },
 ]
 
 export interface KpiMetricView {
