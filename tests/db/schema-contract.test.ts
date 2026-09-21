@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from "node:fs"
+import { join } from "node:path"
+
 import { describe, expect, it } from "vitest"
 
 import {
@@ -9,6 +12,61 @@ import {
   summarizeSchemaProbes,
   type SchemaProbeResult,
 } from "@/lib/db/schema-contract"
+
+// autocrlf 체크아웃에서도 여러 줄 패턴이 깨지지 않게 줄끝을 정규화한다.
+function readRepoFile(path: string): string {
+  return readFileSync(join(process.cwd(), path), "utf8").replace(/\r\n/g, "\n")
+}
+
+function stripSqlComments(sql: string): string {
+  return sql
+    .split("\n")
+    .map((line) => line.replace(/--.*$/, ""))
+    .join("\n")
+}
+
+const PG_TYPE_ALIASES: Record<string, string> = { int: "integer", int4: "integer", bool: "boolean" }
+
+/** SQL 인자 타입 목록을 pg_proc oidvectortypes 표기("integer, boolean")로 맞춘다. */
+function normalizeTypeList(types: string[]): string {
+  return types
+    .map((type) => type.trim().toLowerCase().replace(/\s+/g, " "))
+    .map((type) => PG_TYPE_ALIASES[type] ?? type)
+    .join(", ")
+}
+
+/** 마이그레이션의 CREATE FUNCTION 인자 목록에서 식별 타입을 뽑는다(이름·DEFAULT 제거). */
+function identityTypesFromMigration(sql: string, functionName: string): string | null {
+  const match = new RegExp(
+    `create\\s+or\\s+replace\\s+function\\s+public\\.${functionName}\\s*\\(([^)]*)\\)`,
+    "i"
+  ).exec(stripSqlComments(sql))
+  if (!match) return null
+  return normalizeTypeList(
+    match[1].split(",").map((arg) =>
+      arg
+        .trim()
+        .replace(/\s+default\s+[\s\S]*$/i, "")
+        .split(/\s+/)
+        .slice(1)
+        .join(" ")
+    )
+  )
+}
+
+/** 주어진 시그니처에 대해 REVOKE 된 역할 집합(여러 문장에 나뉘어 있어도 합친다). */
+function revokedRoles(sql: string, functionName: string, identityTypes: string): Set<string> {
+  const roles = new Set<string>()
+  const pattern = new RegExp(
+    `revoke\\s+(?:all|execute)\\s+on\\s+function\\s+public\\.${functionName}\\s*\\(([^)]*)\\)\\s+from\\s+([^;]+);`,
+    "gi"
+  )
+  for (const match of stripSqlComments(sql).matchAll(pattern)) {
+    if (normalizeTypeList(match[1].split(",")) !== identityTypes) continue
+    for (const role of match[2].split(",")) roles.add(role.trim().toLowerCase())
+  }
+  return roles
+}
 
 const base = {
   name: "lead_magnets",
@@ -193,5 +251,94 @@ describe("SCHEMA_PROBES — RLS 등재", () => {
       column: "status",
       value: "PUBLISHED",
     })
+  })
+})
+
+// 계약 ↔ 마이그레이션 원문 대조. 프로브가 파일과 어긋나면 check:db 가 멀쩡한 DB 를 막거나
+// (시그니처 오타), 반대로 미적용을 놓친다(컬럼 누락) — 둘 다 DB 없이 여기서 먼저 잡는다.
+describe("SCHEMA_PROBES — 마이그레이션 원문 대조", () => {
+  it("lists only migration files that exist, each once", () => {
+    for (const migration of SCHEMA_CONTRACT_MIGRATIONS) {
+      expect(existsSync(join(process.cwd(), migration)), migration).toBe(true)
+    }
+    expect(new Set(SCHEMA_CONTRACT_MIGRATIONS).size).toBe(SCHEMA_CONTRACT_MIGRATIONS.length)
+  })
+
+  it("lists every migration a probe points at", () => {
+    const listed = new Set<string>(SCHEMA_CONTRACT_MIGRATIONS)
+    for (const probe of SCHEMA_PROBES) {
+      expect(listed.has(probe.migration), probeName(probe)).toBe(true)
+    }
+  })
+
+  it("keeps each catalog RPC probe's identity types in step with its migration", () => {
+    for (const probe of SCHEMA_PROBES) {
+      if (probe.kind !== "rpc" || !probe.catalogIdentityTypes) continue
+      // scripts/check-db-schema.ts 는 이 형식이 아니면 카탈로그 조회를 거부한다.
+      expect(probe.catalogIdentityTypes, probe.functionName).toMatch(/^[a-z0-9_[\], ]+$/i)
+      // 카탈로그 프로브는 호출하지 않는다 — 인자를 적어 두면 실행 프로브로 오해하게 된다.
+      expect(probe.args, probe.functionName).toBeUndefined()
+      expect(
+        identityTypesFromMigration(readRepoFile(probe.migration), probe.functionName),
+        probe.functionName
+      ).toBe(probe.catalogIdentityTypes)
+    }
+  })
+
+  it("backs every service-role-only probe with a REVOKE from anon and authenticated", () => {
+    for (const probe of SCHEMA_PROBES) {
+      if (probe.kind !== "rpc" || !probe.serviceRoleOnly || !probe.catalogIdentityTypes) continue
+      const roles = revokedRoles(
+        readRepoFile(probe.migration),
+        probe.functionName,
+        probe.catalogIdentityTypes
+      )
+      expect([...roles], probe.functionName).toEqual(
+        expect.arrayContaining(["public", "anon", "authenticated"])
+      )
+    }
+  })
+
+  it("checks the stale-first CRM overview RPC through the catalog without executing it", () => {
+    const probe = SCHEMA_PROBES.find(
+      (candidate) =>
+        candidate.kind === "rpc" && candidate.functionName === "admin_crm_business_overview"
+    )
+    expect(probe?.migration).toBe(
+      "supabase/migrations/20260910_admin_crm_overview_stale_first.sql"
+    )
+    // 스냅샷 쓰기·advisory lock 이 있는 SECURITY DEFINER 함수 — 3인자 시그니처만 존재해야 한다.
+    expect(probe?.kind === "rpc" && probe.catalogIdentityTypes).toBe("integer, boolean, integer")
+    expect(probe?.kind === "rpc" && probe.serviceRoleOnly).toBe(true)
+  })
+
+  it("probes every column the webhook toggle migration adds to site_settings", () => {
+    const migration =
+      "supabase/migrations/20260907_site_settings_webhook_toggles_and_schedule.sql"
+    const added = [...readRepoFile(migration).matchAll(/add column if not exists (\w+)/gi)].map(
+      (match) => match[1]
+    )
+    expect(added).toEqual(["webhook_enabled_json", "notification_schedule_json"])
+
+    const probe = SCHEMA_PROBES.find(
+      (candidate) => candidate.kind === "table" && candidate.migration === migration
+    )
+    expect(probe?.kind === "table" && probe.table).toBe("site_settings")
+    for (const column of added) {
+      expect(probe?.kind === "table" && probe.columns, column).toContain(column)
+    }
+  })
+
+  it("keeps the CHECK-only lead digest migration out of the contract and documents how to verify it", () => {
+    const migration = "supabase/migrations/20260907_lead_digest_runs_daily_type.sql"
+    // CHECK 허용 집합은 REST 로 볼 수 없다 — 프로브를 지어내지 않는다.
+    expect(readRepoFile(migration)).not.toMatch(/add\s+column|create\s+(?:table|function|view)/i)
+    expect(SCHEMA_CONTRACT_MIGRATIONS).not.toContain(migration)
+    expect(SCHEMA_PROBES.some((probe) => probe.migration === migration)).toBe(false)
+
+    // 대신 계약 파일 주석에 적용 확인 조회를 남긴다.
+    const contract = readRepoFile("lib/db/schema-contract.ts")
+    expect(contract).toContain("20260907_lead_digest_runs_daily_type.sql")
+    expect(contract).toContain("conname = 'lead_digest_runs_report_type_check'")
   })
 })
