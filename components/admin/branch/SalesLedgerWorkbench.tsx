@@ -477,27 +477,54 @@ export default function SalesLedgerWorkbench({
   // 담당자별 월 수치 테이블 top6 캡 해제 토글(항목 6) — 기본은 캡, "전체 보기"로 전체 목록.
   const [revManagerSummaryExpanded, setRevManagerSummaryExpanded] = useState(false)
   // 매트릭스 셀 커밋 실패(로컬 폴백) 등 편집 지점 인근 알림 토스트 — 상단 Source 바만으로는
-  // 편집 중 시야 밖이라 침묵 실패가 되던 문제 대응. 각 토스트는 7초 뒤 자동 소멸.
+  // 편집 중 시야 밖이라 침묵 실패가 되던 문제 대응. 각 토스트는 기본 7초(ttlMs) 뒤 자동 소멸.
   // 최대 MATRIX_TOAST_MAX개 스택(품질 웨이브 3, 항목 6) — 이전엔 단일 슬롯이라 에러 표시 도중
-  // 뒤이은 info 토스트가 그걸 덮어써 실패 알림을 놓칠 수 있었다. 같은 문구는 dedupe(연타 방지),
+  // 뒤이은 info 토스트가 그걸 덮어써 실패 알림을 놓칠 수 있었다. 같은 dedupe 키는 무시(연타 방지),
   // 초과분은 에러를 우선 유지하고 가장 오래된 info부터 밀어낸다(전부 에러면 가장 오래된 에러부터).
-  const [matrixToasts, setMatrixToasts] = useState<Array<{ id: string; kind: "error" | "info"; text: string }>>([])
-  const pushMatrixToast = useCallback((next: { kind: "error" | "info"; text: string }) => {
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-    setMatrixToasts((current) => {
-      if (current.some((toast) => toast.text === next.text)) return current
-      const stacked = [...current, { id, ...next }]
-      if (stacked.length <= MATRIX_TOAST_MAX) return stacked
-      const dropIndex = stacked.findIndex((toast) => toast.kind === "info")
-      return stacked.filter((_, index) => index !== (dropIndex !== -1 ? dropIndex : 0))
-    })
-    window.setTimeout(() => {
-      setMatrixToasts((current) => current.filter((toast) => toast.id !== id))
-    }, 7000)
-  }, [])
+  // action(입력 속도 라운드 4 P1-6): 토스트에 버튼 1개를 붙일 수 있다(예: 커밋 직후 "실행 취소").
+  // key(같은 라운드): dedupe 판정을 text 대신 key로 한다 — 실행 취소 토스트는 문구가 매번 같아서
+  // text로 dedupe하면 두 번째 커밋부터 새 토스트가 버려져 그 초안의 취소 버튼이 아예 안 뜬다.
+  // key가 없는 기존 토스트(에러·안내)는 그대로 text로 dedupe(하위 호환).
+  const [matrixToasts, setMatrixToasts] = useState<
+    Array<{
+      id: string
+      kind: "error" | "info"
+      text: string
+      key?: string
+      action?: { label: string; onClick: () => void | Promise<void> }
+      ttlMs?: number
+    }>
+  >([])
+  const pushMatrixToast = useCallback(
+    (next: {
+      kind: "error" | "info"
+      text: string
+      key?: string
+      action?: { label: string; onClick: () => void | Promise<void> }
+      ttlMs?: number
+    }) => {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+      const dedupeKey = next.key ?? next.text
+      setMatrixToasts((current) => {
+        if (current.some((toast) => (toast.key ?? toast.text) === dedupeKey)) return current
+        const stacked = [...current, { id, ...next }]
+        if (stacked.length <= MATRIX_TOAST_MAX) return stacked
+        const dropIndex = stacked.findIndex((toast) => toast.kind === "info")
+        return stacked.filter((_, index) => index !== (dropIndex !== -1 ? dropIndex : 0))
+      })
+      window.setTimeout(() => {
+        setMatrixToasts((current) => current.filter((toast) => toast.id !== id))
+      }, next.ttlMs ?? 7000)
+    },
+    [],
+  )
   const dismissMatrixToast = useCallback((id: string) => {
     setMatrixToasts((current) => current.filter((toast) => toast.id !== id))
   }, [])
+  // 토스트 action 버튼 연타 방지(입력 속도 라운드 4 P1-6) — onClick이 비동기(예: 초안 취소 API
+  // 호출)라 완료 전 재클릭하면 같은 초안을 두 번 취소 요청하게 된다. 어느 토스트가 처리 중인지만
+  // 기록하면 충분해 단일 id로 둔다(여러 액션 토스트를 동시에 연타하는 경우는 실사용에서 없음).
+  const [pendingToastActionId, setPendingToastActionId] = useState<string | null>(null)
   const [sidePanelCollapsed, setSidePanelCollapsed] = useState(true)
   const [railView, setRailView] = useState<RailView>("detail")
   const [selectedRow, setSelectedRow] = useState<LedgerRevenueRow | null>(null)
@@ -1938,6 +1965,33 @@ export default function SalesLedgerWorkbench({
     [lens, pendingByCell, period, rowById, team],
   )
 
+  // 실행 취소(입력 속도 라운드 4 P1-6) — cancelDraft(useLedgerDraftQueue)는 drafts를 의존성으로 갖고
+  // 있어 초안이 바뀔 때마다 함수 identity가 새로 생긴다. onCommitCell deps에 cancelDraft를 그대로
+  // 넣으면 onCommitCell identity도 매 초안 변경마다 바뀌어 수백 개 매트릭스 셀의 memo가 깨진다 —
+  // latest-ref로 감싸 "최신 함수를 참조만" 하고, 그 갱신 자체는 onCommitCell의 의존성이 되지 않게 한다.
+  const cancelDraftRef = useRef(cancelDraft)
+  useEffect(() => {
+    cancelDraftRef.current = cancelDraft
+  }, [cancelDraft])
+  // 방금 만든 초안을 취소(cancelled 전이 — 하드 삭제 아님, 2026-09-10 #8 감사 추적 결정과 동일)한다.
+  // pushMatrixToast에만 의존해 identity가 고정되므로 onCommitCell deps에 넣어도 drafts 변경으로
+  // 흔들리지 않는다. cancelDraft 자체는 서버/네트워크 실패를 큐 강등·queueError로 흡수하고 예외를
+  // 던지지 않는 계약이라(useLedgerDraftQueue.ts), 아래 catch는 예상 밖 예외에 대한 방어선이다.
+  const undoCellDraft = useCallback(async (id: string) => {
+    try {
+      // cancelDraft는 실패를 예외가 아니라 불리언으로 알린다(큐 상태로 흡수하는 훅 계약) — 서버가
+      // 거부했는데 "취소됨"이라고 말하지 않도록 반환값으로 분기한다. 구체 사유는 큐 배너/행 배지에 있다.
+      const cancelled = await cancelDraftRef.current(id)
+      if (cancelled) {
+        pushMatrixToast({ kind: "info", text: "초안 취소됨 — 셀은 시트 값으로 돌아갑니다." })
+      } else {
+        pushMatrixToast({ kind: "error", text: "초안 취소가 반영되지 않았습니다 — 체크 큐에서 상태를 확인한 뒤 다시 시도하세요." })
+      }
+    } catch (error) {
+      pushMatrixToast({ kind: "error", text: `초안 취소에 실패했습니다 — 다시 시도하세요. ${errorMessage(error)}` })
+    }
+  }, [pushMatrixToast])
+
   // 셀 커밋 1건 = 초안 1건(POST; 같은 셀에 대기 초안이 있으면 그 초안을 PATCH). 입력 조립은 위
   // buildCellDraftInput — 붙여넣기 배치(confirmMatrixPaste)와 공유한다.
   // 반환값: 서버에 실제로 반영됐으면 true, 로컬 폴백(장부 적용 불가)이면 false — 상위 집계용.
@@ -1986,12 +2040,32 @@ export default function SalesLedgerWorkbench({
           // 자가 체크(라운드 4 P0-2): 셀 커밋은 저장 시점에 체크까지 끝난다 — 남은 단계는 큐의 "적용"
           // 하나뿐임을 토스트가 정확히 말해야 "저장됨=반영됨" 오인도, "체크하러 가야 하나" 헛걸음도 없다.
           // pushMatrixToast는 동일 문구를 dedupe하므로 연속 입력에서도 토스트가 쌓이지 않는다.
-          pushMatrixToast({ kind: "info", text: "자가 체크로 저장됨 — 체크 큐에서 적용해야 장부에 반영됩니다." })
+          //
+          // 실행 취소(라운드 4 P1-6): 새로 만들어진 초안(built.existingId 없음)에만 붙인다. 같은
+          // 셀 재편집으로 기존 대기 초안을 PATCH한 경로(existingId 있음)는 취소하면 그 전 대기값까지
+          // 통째로 사라져 "방금 입력만 되돌리기"가 아니게 되므로 제외한다. dedupe key를 draft.id로
+          // 고정해 문구가 매번 같은 이 토스트가 text 기준 dedupe에 걸려 두 번째 커밋부터 취소
+          // 버튼이 사라지는 문제를 막는다.
+          if (!built.existingId && draft) {
+            pushMatrixToast({
+              kind: "info",
+              key: `undo:${draft.id}`,
+              ttlMs: 6000,
+              text: "자가 체크로 저장됨 — 체크 큐에서 적용해야 장부에 반영됩니다.",
+              action: { label: "실행 취소", onClick: () => undoCellDraft(draft.id) },
+            })
+          } else {
+            pushMatrixToast({ kind: "info", text: "자가 체크로 저장됨 — 체크 큐에서 적용해야 장부에 반영됩니다." })
+          }
         }
         return !usedLocalFallback
       })
     },
-    [buildCellDraftInput, createDraft, pushMatrixToast, updateDraft],
+    // undoCellDraft 추가(라운드 4 P1-6) — cancelDraft를 latest-ref로 감쌌으므로 drafts 변경에는
+    // 반응하지 않는다(위 cancelDraftRef 주석 참조). 이 배열 문자열은
+    // tests/branch/ledger-draft-optimistic-lock.test.ts의 onCommitCell 슬라이스 종료 마커이기도
+    // 하다 — 다시 바꾸면 그 테스트의 마커도 함께 갱신할 것.
+    [buildCellDraftInput, createDraft, pushMatrixToast, undoCellDraft, updateDraft],
   )
 
   const onMatrixAmountClamped = useCallback(() => {
@@ -3907,27 +3981,52 @@ export default function SalesLedgerWorkbench({
 
         {matrixToasts.length > 0 && (
           <div className="fixed bottom-20 left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-col gap-2">
-            {matrixToasts.map((toast) => (
-              <div
-                key={toast.id}
-                role="alert"
-                className={`flex items-start gap-2 rounded-lg border px-4 py-2.5 text-[12px] font-bold shadow-[0_18px_48px_rgba(17,17,16,0.18)] ${
-                  toast.kind === "error"
-                    ? "border-[#F2B8B8] bg-[#FCE9E9] text-[#B43E3E]"
-                    : "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
-                }`}
-              >
-                <span className="pt-0.5">{toast.text}</span>
-                <button
-                  type="button"
-                  onClick={() => dismissMatrixToast(toast.id)}
-                  aria-label="알림 닫기"
-                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-70 transition hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current"
+            {matrixToasts.map((toast) => {
+              // 지역 변수로 좁혀서 아래 action.onClick/label 접근에 non-null 단언 없이 타입이 좁혀지게 한다.
+              const action = toast.action
+              const actionPending = pendingToastActionId === toast.id
+              return (
+                <div
+                  key={toast.id}
+                  role="alert"
+                  className={`flex items-start gap-2 rounded-lg border px-4 py-2.5 text-[12px] font-bold shadow-[0_18px_48px_rgba(17,17,16,0.18)] ${
+                    toast.kind === "error"
+                      ? "border-[#F2B8B8] bg-[#FCE9E9] text-[#B43E3E]"
+                      : "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
+                  }`}
                 >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ))}
+                  <span className="pt-0.5">{toast.text}</span>
+                  {action && (
+                    <button
+                      type="button"
+                      disabled={actionPending}
+                      onClick={async () => {
+                        // 더블클릭 방지: 이미 처리 중인 토스트면 재실행하지 않는다(disabled 로컬 상태).
+                        if (pendingToastActionId === toast.id) return
+                        setPendingToastActionId(toast.id)
+                        try {
+                          await action.onClick()
+                        } finally {
+                          setPendingToastActionId(null)
+                        }
+                        dismissMatrixToast(toast.id)
+                      }}
+                      className="flex h-6 shrink-0 items-center justify-center rounded px-2 opacity-70 transition hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {action.label}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => dismissMatrixToast(toast.id)}
+                    aria-label="알림 닫기"
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-70 transition hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )
+            })}
           </div>
         )}
 

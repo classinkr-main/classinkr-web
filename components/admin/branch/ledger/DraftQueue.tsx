@@ -148,7 +148,9 @@ export function DraftQueue({
   onApply: (id: string) => void | Promise<void>
   // 품질 감사 2026-09-10 — #8: draft/checked → cancelled 전이. 삭제(onDelete, 하드 DELETE·감사
   // 추적 없음)와 달리 행이 DB에 그대로 남는다 — "취소했다"는 사실 자체가 감사 대상일 때 이걸 쓴다.
-  onCancel: (id: string) => void | Promise<void>
+  // 라운드 4 P1-6: 훅의 cancelDraft가 성공 여부(boolean)를 돌려주게 되면서 반환 타입을 넓힌다 —
+  // 큐 카드는 결과를 쓰지 않으므로(상태는 drafts로 반영) 어떤 값이든 무시한다.
+  onCancel: (id: string) => void | Promise<unknown>
   onDelete: (id: string) => void | Promise<void>
   onReverse: (id: string, reason?: string) => Promise<unknown> | void
   // 일괄 체크·적용(2026-09-14) — 지금 보이는 목록 기준. 3단계는 그대로이고 누르는 횟수만 줄인다.

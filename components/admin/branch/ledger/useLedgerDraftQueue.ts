@@ -657,9 +657,12 @@ export function useLedgerDraftQueue() {
   // 추적 없음)로만 가능했다. status=cancelled로의 PATCH는 백엔드가 이미 지원한다
   // (updateBranchSalesLedgerDraft가 "applied"만 막는다, DB CHECK도 cancelled를 유효 상태로 이미
   // 허용) — toggleDraft와 동일한 패턴으로 액션만 추가한다(로컬 폴백 포함).
-  const cancelDraft = useCallback(async (id: string) => {
+  // 반환값(입력 속도 라운드 4 P1-6): 취소가 실제로 반영됐으면 true, 서버 실패·레코드 소실·대상 없음이면
+  // false. 이 훅은 실패를 큐 상태(queueMode/queueError/recordErrors)로 흡수하고 예외를 던지지 않는
+  // 계약이라, 호출부(실행 취소 토스트)가 결과를 정직하게 말하려면 불리언이 필요하다.
+  const cancelDraft = useCallback(async (id: string): Promise<boolean> => {
     const current = drafts.find((draft) => draft.id === id)
-    if (!current || current.status === "applied" || current.status === "cancelled") return
+    if (!current || current.status === "applied" || current.status === "cancelled") return false
 
     if (queueMode === "server" && !id.startsWith("local-")) {
       try {
@@ -675,21 +678,22 @@ export function useLedgerDraftQueue() {
         setDrafts((items) => items.map((draft) => (draft.id === id ? nextDraft : draft)))
         setQueueError(null)
         clearRecordError(id)
-        return
+        return true
       } catch (error) {
         if (isDraftRecordError(error)) {
           setRecordError(id)
-          return
+          return false
         }
         setQueueMode("local")
         setQueueError(`서버 초안 취소에 실패했습니다(네트워크/서버 오류) — 재연결 후 다시 시도하세요. ${errorMessage(error)}`)
-        return
+        return false
       }
     }
 
     updateLocalDrafts((items) => items.map((draft) =>
       draft.id === id ? { ...draft, status: "cancelled" as DraftStatus, updatedAt: new Date().toISOString() } : draft,
     ))
+    return true
   }, [clearRecordError, drafts, queueMode, setRecordError, updateLocalDrafts])
 
   const deleteDraft = useCallback(async (id: string) => {
