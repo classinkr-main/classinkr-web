@@ -65,3 +65,10 @@ export const STATUS_TONE_BORDER_CLASS: Record<StatusTone, string> = {
   warning: "border-[#ECD29C]",
   ok: "border-[#BDEFD8]",
 }
+
+/** 배경 틴트만 필요한 자리(표면 색과 제목 텍스트 색을 따로 고르는 타일 등)용. */
+export const STATUS_TONE_BG_CLASS: Record<StatusTone, string> = {
+  danger: "bg-[#FCE9E9]",
+  warning: "bg-[#FBF1E0]",
+  ok: "bg-[#ECFDF5]",
+}

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
   STATUS_TONE,
+  STATUS_TONE_BG_CLASS,
   STATUS_TONE_BORDER_CLASS,
   STATUS_TONE_CLASS,
   STATUS_TONE_TEXT_CLASS,
@@ -25,6 +26,7 @@ describe("status-tone SSOT", () => {
       expect(STATUS_TONE_TEXT_CLASS[tone]).toBe(`text-[${t.text}]`)
       expect(STATUS_TONE_TEXT_STRONG_CLASS[tone]).toBe(`text-[${t.textStrong}]`)
       expect(STATUS_TONE_BORDER_CLASS[tone]).toBe(`border-[${t.border}]`)
+      expect(STATUS_TONE_BG_CLASS[tone]).toBe(`bg-[${t.bg}]`)
     }
   })
 

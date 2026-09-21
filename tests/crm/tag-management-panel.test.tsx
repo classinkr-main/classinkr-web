@@ -91,7 +91,25 @@ describe("TagManagementPanel 소스 계약", () => {
     expect(SOURCE).toContain("등록된 태그가 없습니다")
   })
 
-  it("행 클릭으로 통합 고객 화면 이동 링크는 넣지 않았다(통합 클라이언트가 ?tag=를 읽지 않음)", () => {
-    expect(SOURCE).not.toContain("/admin/crm/customers/unified?tag=")
+  // 2026-09-21 CRM 기획 §10 후속 — 통합 클라이언트가 ?tag=를 라벨 필터 URL 상태로 읽게 되면서
+  // (예전 계약: "링크 생략") 태그 이름을 통합 고객 딥링크로 바꿨다.
+  it("태그 이름은 클릭 전용 div가 아니라 통합 고객 ?tag= 딥링크(next/link)다", () => {
+    expect(SOURCE).toContain('import Link from "next/link"')
+    const linkBlock = SOURCE.slice(SOURCE.indexOf("<Link"), SOURCE.indexOf("</Link>"))
+    expect(linkBlock).toContain("href={unifiedCustomersTagHref(row.tag)}")
+    // 키보드 포커스 링(Tab 이동 시 가시)과 태그 이름을 포함한 접근 가능한 이름.
+    expect(linkBlock).toContain("focus-visible:ring-2")
+    expect(linkBlock).toContain("aria-label={`태그 ${row.tag} 고객 목록 보기`}")
+    // 모바일 44px 터치 타깃.
+    expect(linkBlock).toContain("min-h-11")
+    // 행 전체 클릭(onClick 내비게이션)으로 체크박스·이름 변경 버튼과 겹치지 않는다.
+    expect(SOURCE).not.toMatch(/<tr[^>]*onClick/)
+    expect(SOURCE).not.toContain("router.push")
+  })
+
+  it("이름 변경 중인 행은 링크 대신 입력칸을 보여 준다(편집 중 이탈 방지)", () => {
+    const cell = SOURCE.slice(SOURCE.indexOf("{isRenamingThis ? ("), SOURCE.indexOf("</Link>"))
+    expect(cell.indexOf("autoFocus")).toBeGreaterThan(-1)
+    expect(cell.indexOf("autoFocus")).toBeLessThan(cell.indexOf("<Link"))
   })
 })

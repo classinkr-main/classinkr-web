@@ -1,7 +1,8 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Search } from "lucide-react"
+import Link from "next/link"
+import { ChevronRight, Search } from "lucide-react"
 
 import { adminFetchJson, adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import { CRM_CACHE_SWR_MS, CRM_CACHE_TTL_MS } from "@/lib/crm/client-cache"
@@ -17,18 +18,19 @@ import { EmptyState } from "@/components/admin/viz"
 import CrmNoticeBanner from "./CrmNoticeBanner"
 import FreshnessCaption from "./FreshnessCaption"
 import { SECONDARY_TEXT_CLASS } from "./home/shared"
+import { unifiedCustomersTagHref } from "./unified/shared"
 
 // T4 태그 관리 패널(§14) — /admin/crm/customers/tags. 전체 태그·건수를 모아 보여주고, 되돌릴 수
 // 없는 이름 변경·병합은 인라인 확인(브라우저 기본 확인창 금지)을 거친 뒤에만 커밋한다. 미리보기 숫자는
 // 항상 서버(PATCH …dryRun:true)가 계산한다 — 클라이언트는 어느 대상에 이미 목표 태그가 있어
 // 중복 정리가 필요한지 알 수 없다(GET 응답은 건수만 주고 대상 목록은 주지 않는다).
 //
-// 행 클릭으로 통합 고객 화면 필터 이동은 넣지 않았다 — CrmUnifiedCustomersClient는 마운트 시
-// `?q=`만 1회 복원하고 `?tag=`는 읽지 않으며(상태는 세션 로컬), `q` 검색은 태그가 아니라
-// 이름·연락처·지역·담당·상태 텍스트만 본다(lib/repositories/crm-unified-customers.ts
-// includesQuery). 둘 중 어느 쪽으로 링크해도 클릭 결과가 기대와 다르므로(필터가 안 걸리거나
-// 엉뚱한 텍스트 검색이 되거나) 링크를 생략했다 — 통합 클라이언트가 `?tag=`를 읽게 되면 그때
-// 여기에 Link를 추가한다.
+// 태그 이름은 그 라벨로 좁힌 통합 고객 목록(/admin/crm/customers/unified?tag=…)으로 가는 링크다
+// (2026-09-21, CRM 기획 §10 후속). 통합 클라이언트가 `?tag=`를 라벨 필터 URL 상태로 읽는다 —
+// `?q=`로 링크하지 않는 이유는 그 검색이 태그가 아니라 이름·연락처·지역·담당·상태 텍스트만 보기
+// 때문이다(lib/repositories/crm-unified-customers.ts includesQuery). 행 전체가 아니라 이름만
+// 링크로 둔다 — 같은 행의 선택 체크박스·이름 변경 버튼과 클릭이 겹치지 않고, 키보드(Tab·Enter)와
+// 스크린리더가 행마다 하나의 목적지를 명확히 만난다.
 
 const TAGS_URL = "/api/admin/crm/tags"
 
@@ -476,7 +478,19 @@ export default function TagManagementPanel() {
                               ) : null}
                             </div>
                           ) : (
-                            <span className="font-medium text-[#111110]">{row.tag}</span>
+                            <Link
+                              href={unifiedCustomersTagHref(row.tag)}
+                              // 건수는 태그 부착 수라 통합 목록 결과(미확인 리드 게이트 등 적용)와 다를 수
+                              // 있어 이름에 싣지 않는다.
+                              aria-label={`태그 ${row.tag} 고객 목록 보기`}
+                              className="group/tag -mx-1 inline-flex min-h-11 max-w-full items-center gap-1 rounded px-1 font-medium text-[#111110] underline-offset-2 transition-colors hover:text-[#084734] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 sm:min-h-0"
+                            >
+                              <span className="min-w-0 break-all">{row.tag}</span>
+                              <ChevronRight
+                                className="h-3.5 w-3.5 shrink-0 text-[#615D59] transition-colors group-hover/tag:text-[#084734]"
+                                aria-hidden
+                              />
+                            </Link>
                           )}
                         </td>
                         <td className="px-3 py-3 align-top tabular-nums text-[#111110]">

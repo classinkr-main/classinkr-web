@@ -7,6 +7,7 @@ import { getCrmUnifiedCustomers } from "@/lib/repositories/crm-unified-customers
 import {
   listUrl,
   PAGE_LIMIT,
+  parseTagParam,
   SAVED_VIEW_FILTERS,
   type CrmUnifiedCustomers,
   type SavedViewFilter,
@@ -41,6 +42,8 @@ import {
  * 뒤이어(두 번째 커밋에서) 그 값을 반영한 두 번째 요청을 다시 쏘는데, 아래에서
  * `searchParams.q`/`searchParams.view`를 받으면 그 값도 반영해 이 두 번째 요청까지
  * 캐시가 맞도록 한다(완전한 커버는 아니다 — 아래 한계 참고).
+ * 라벨(`?tag=`, 태그 관리 화면 딥링크)은 예외로 클라이언트가 마운트 시점 URL에서 state 초기값을
+ * 바로 읽으므로(`parseTagParam`) 첫 요청부터 라벨이 실린다 — 여기서도 같은 함수로 정규화해 싣는다.
  *
  * 한계(문서화, 코드로 닫지 않음):
  *  - `view=my_owner`는 매칭 대상에서 뺀다("all"로 취급) — my_owner는 owner를
@@ -69,14 +72,14 @@ function resolveInitialSavedView(raw: string | undefined): SavedViewFilter {
  * 클라이언트 기본 첫 요청과 같은 URL을 만든다 — 실제 네트워크를 타지 않고 캐시 키/테스트
  * 비교용으로만 쓴다(getCrmUnifiedCustomers 호출 자체는 옵션을 직접 넘겨 URL 파싱을 거치지 않는다).
  */
-export function buildUnifiedPrefetchUrl(searchParams?: { q?: string; view?: string }): string {
+export function buildUnifiedPrefetchUrl(searchParams?: { q?: string; view?: string; tag?: string }): string {
   return listUrl({
     query: searchParams?.q?.trim() ?? "",
     source: "all",
     lifecycle: "all",
     owner: "",
     view: resolveInitialSavedView(searchParams?.view),
-    tag: "",
+    tag: parseTagParam(searchParams?.tag),
     includeUnconfirmed: false,
     offset: 0,
   })
@@ -85,6 +88,8 @@ export function buildUnifiedPrefetchUrl(searchParams?: { q?: string; view?: stri
 export async function prefetchCrmUnifiedInitialData(searchParams?: {
   q?: string
   view?: string
+  /** 태그 관리 화면 딥링크(?tag=) — 클라이언트 tagFilter 초기값과 같은 parseTagParam 정규화. */
+  tag?: string
   /** 360 드로어 딥링크 — 목록 조회 옵션에는 영향 없다(드로어는 별도 조회). 시그니처만 받는다. */
   account?: string
 }): Promise<CrmUnifiedInitialData | null> {
@@ -99,6 +104,7 @@ export async function prefetchCrmUnifiedInitialData(searchParams?: {
 
   const view = resolveInitialSavedView(searchParams?.view)
   const q = searchParams?.q?.trim() || undefined
+  const tag = parseTagParam(searchParams?.tag) || undefined
 
   const lane = openPrefetchLane<CrmUnifiedCustomers>(() =>
     getCrmUnifiedCustomers({
@@ -107,7 +113,7 @@ export async function prefetchCrmUnifiedInitialData(searchParams?: {
       lifecycle: "all",
       view,
       owner: undefined,
-      tag: undefined,
+      tag,
       includeUnconfirmed: false,
       limit: PAGE_LIMIT,
       offset: 0,
