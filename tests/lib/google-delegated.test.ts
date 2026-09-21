@@ -86,6 +86,50 @@ describe("calendarAs", () => {
   })
 })
 
+describe("calendarForMember — 두 길을 다 살려 둔다", () => {
+  it("기본은 대행이다", async () => {
+    const { calendarForMember } = await import("@/lib/google-delegated")
+    await calendarForMember("a@classin.com")
+    expect(gapi.GoogleAuth.mock.calls[0][0].clientOptions).toEqual({ subject: "a@classin.com" })
+  })
+
+  it("위임이 거부된 뒤에는 대행을 건너뛰고 공유 방식으로 읽는다 — 실패할 토큰 교환을 반복하지 않는다", async () => {
+    const { calendarForMember, noteDelegationDenied } = await import("@/lib/google-delegated")
+    noteDelegationDenied(0)
+    await calendarForMember("a@classin.com", 1_000)
+    // 공유 클라이언트에는 subject 가 없다
+    expect(gapi.GoogleAuth.mock.calls[0][0].clientOptions).toBeUndefined()
+    expect(gapi.GoogleAuth.mock.calls[0][0].scopes).toEqual([
+      "https://www.googleapis.com/auth/calendar.readonly",
+    ])
+  })
+
+  it("한 시간이 지나면 저절로 다시 대행을 시도한다 — 하드 비활성이 아니다", async () => {
+    const { calendarForMember, noteDelegationDenied } = await import("@/lib/google-delegated")
+    noteDelegationDenied(0)
+    await calendarForMember("a@classin.com", 60 * 60_000 + 1)
+    expect(gapi.GoogleAuth.mock.calls[0][0].clientOptions).toEqual({ subject: "a@classin.com" })
+  })
+})
+
+describe("isDelegationDenied", () => {
+  it("실측된 위임 미부여 오류를 잡는다 — code 는 401 이라 숫자로는 못 잡는다", async () => {
+    const { isDelegationDenied } = await import("@/lib/google-delegated")
+    const real = Object.assign(
+      new Error(
+        "unauthorized_client: Client is unauthorized to retrieve access tokens using this method, or client not authorized for any of the scopes requested.",
+      ),
+      { code: 401 },
+    )
+    expect(isDelegationDenied(real)).toBe(true)
+  })
+
+  it("평범한 미공유(404)는 위임 문제가 아니다", async () => {
+    const { isDelegationDenied } = await import("@/lib/google-delegated")
+    expect(isDelegationDenied(Object.assign(new Error("Not Found"), { code: 404 }))).toBe(false)
+  })
+})
+
 describe("hasDelegationCredentials", () => {
   it("자격이 다 있으면 true", async () => {
     const { hasDelegationCredentials } = await import("@/lib/google-delegated")

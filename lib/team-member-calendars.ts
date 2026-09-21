@@ -29,7 +29,13 @@ import path from "path"
 import type { calendar_v3 } from "googleapis"
 
 import type { CalendarEvent } from "@/lib/calendar-data"
-import { calendarAs, hasDelegationCredentials } from "@/lib/google-delegated"
+import {
+  calendarForMember,
+  calendarShared,
+  hasDelegationCredentials,
+  isDelegationDenied,
+  noteDelegationDenied,
+} from "@/lib/google-delegated"
 import {
   EXTERNAL_SOURCE_HARD_TIMEOUT_MS,
   EXTERNAL_SOURCE_STALE_MS,
@@ -233,9 +239,26 @@ let sourceBlockedUntil = 0
  * isAccessDenied 가 false 를 돌려주고 **네거티브 캐시가 이 실패를 기억하지 못한다** —
  * 그러면 TTL 마다 9명을 다시 두드린다(위임 부여 전까지 영원히).
  */
-function isDelegationDenied(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : typeof error === "string" ? error : ""
-  return /unauthorized_client|access_denied|invalid_grant/i.test(message)
+/**
+ * events.list 한 번. **두 길을 다 살려 둔다.**
+ *
+ * 기본은 대행(도메인 전체 위임)이지만, 조직이 위임을 못 열어 주면 팀원 개인 공유가 유일한 길이다.
+ * 대행만 쓰면 토큰 교환에서 막혀서 팀원이 공유를 해줘도 호출이 아예 안 나간다 — 그래서
+ * 위임 거부로 읽히면 공유 방식으로 한 번 더 건다. 그 뒤 한 시간은 대행을 건너뛴다
+ * (실패할 토큰 교환을 매번 반복하지 않는다). 시간이 지나면 저절로 다시 대행을 시도한다.
+ */
+async function listEventsForMember(
+  email: string,
+  params: calendar_v3.Params$Resource$Events$List,
+  options: { timeout: number }
+) {
+  try {
+    return await (await calendarForMember(email)).events.list(params, options)
+  } catch (error) {
+    if (!isDelegationDenied(error)) throw error
+    noteDelegationDenied()
+    return await (await calendarShared()).events.list(params, options)
+  }
 }
 
 function isAccessDenied(error: unknown): boolean {
@@ -282,7 +305,8 @@ async function listMemberEvents(
   range: { timeMin: string; timeMax: string }
 ): Promise<MemberFetchResult> {
   try {
-    const res = await (await calendarAs(member.email)).events.list(
+    const res = await listEventsForMember(
+      member.email,
       {
         calendarId: member.email,
         singleEvents: true,
@@ -441,7 +465,8 @@ export async function probeTeamCalendarAccess(): Promise<TeamCalendarAccessSumma
       const results = await Promise.all(
         members.map(async (member) => {
           try {
-            await (await calendarAs(member.email)).events.list(
+            await listEventsForMember(
+              member.email,
               {
                 calendarId: member.email,
                 maxResults: 1,
