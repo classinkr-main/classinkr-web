@@ -138,6 +138,7 @@ const DraftQueue = dynamic(() => import("./ledger/DraftQueue").then((m) => m.Dra
 // 진입 시에도 이 무거운 컴포넌트 트리가 메인 청크를 가르지 않게 한다(다른 렌즈들과 동일 관례).
 import {
   buildMatrixPastePlan,
+  buildPasteNewRowInputs,
   buildMatrixPendingByCell,
   dominantCellConfidence,
   EMPTY_BUCKET,
@@ -2129,12 +2130,28 @@ export default function SalesLedgerWorkbench({
   // 600칸이 곧 동시 요청 600건이었다. 셀당 초안 1건·같은 셀 대기 초안은 갱신(existingId)·자가 체크는
   // 단건 경로와 문자 그대로 같은 규약이다(빌더 공유). 결과는 항목별로 돌아오므로 성공/충돌/거부/로컬
   // 폴백을 나눠 한 번의 집계 토스트로 요약한다 — 부분 실패를 전체 성공으로 뭉개지 않는다.
-  const confirmMatrixPaste = useCallback(async () => {
+  // 라운드 4 P1-5: 프리뷰에서 승인한 미매칭 고객(newRowNames)은 새 행 초안으로 함께 저장한다 —
+  // 월당 1건, kind=new-row, status 없음(시트에 없는 행을 만드는 동작이라 3단 게이트 유지: 레일
+  // new-row와 같은 이유, P0-2 결정). 담당·팀은 화면 컨텍스트에서 추론한다: 팀은 현재 팀 필터
+  // (ALL이면 기본 BD — defaultDraftForm과 동일), 담당자는 담당자 필터가 정확히 1명일 때만 그 사람
+  // (여럿·없음이면 빈 값 — 큐에서 채운다), 상품군은 defaultDraftForm 기본값(software).
+  const confirmMatrixPaste = useCallback(async (options?: { newRowNames?: string[] }) => {
     if (!pastePlan) return
     storeMatrixConfidence(pasteConfidence)
     const applyCells = pastePlan.cells.filter((cell) => cell.status === "apply")
+    const newRowNames = options?.newRowNames ?? []
+    const newRowInputs = newRowNames.length > 0
+      ? buildPasteNewRowInputs(pastePlan, newRowNames, {
+          team: team === "ALL" ? "BD" : team,
+          manager: managerFilter.size === 1 ? Array.from(managerFilter)[0] : "",
+          productCategory: "software",
+          confidence: pasteConfidence,
+          lens,
+          period,
+        })
+      : []
     setPastePlan(null)
-    if (applyCells.length === 0) return
+    if (applyCells.length === 0 && newRowInputs.length === 0) return
     const items: Array<{ id?: string; input: LedgerDraftInput }> = []
     let missingRows = 0
     for (const cell of applyCells) {
@@ -2145,25 +2162,37 @@ export default function SalesLedgerWorkbench({
       }
       items.push(built.existingId ? { id: built.existingId, input: built.input } : { input: built.input })
     }
+    // 새 행 초안은 셀 항목 뒤에 이어 붙인다 — 결과 배열이 items와 같은 순서라 이 경계(cellItemCount)
+    // 이후의 성공만 세면 "새 행 N건"을 따로 말할 수 있다.
+    const cellItemCount = items.length
+    for (const input of newRowInputs) items.push({ input })
     const results = items.length > 0 ? await persistDraftsBatch(items) : []
     let committed = 0
+    let newRowsCommitted = 0
     let conflicts = 0
     let rejected = 0
     let localOnly = 0
     let failed = missingRows
-    for (const result of results) {
+    results.forEach((result, index) => {
       if (result.conflict) conflicts += 1
       else if (result.validationMessage) rejected += 1
       else if (result.draft && result.draft.id.startsWith("local-")) localOnly += 1
-      else if (result.draft) committed += 1
-      else failed += 1
-    }
+      else if (result.draft) {
+        committed += 1
+        if (index >= cellItemCount) newRowsCommitted += 1
+      } else failed += 1
+    })
     const problems = conflicts + rejected + localOnly + failed
     const fmt = (value: number) => value.toLocaleString("ko-KR")
+    // 새 행 초안은 자가 체크가 아니라 draft로 열린다 — 셀 초안("적용만 하면 됨")과 다음 단계가
+    // 달라 토스트가 둘을 구분해 말한다.
+    const newRowNote = newRowsCommitted > 0
+      ? ` · 새 행 초안 ${fmt(newRowsCommitted)}건(체크 큐에서 체크 → 적용)`
+      : ""
     if (problems === 0) {
       pushMatrixToast({
         kind: "info",
-        text: `자가 체크 초안 ${fmt(committed)}건 저장 — 체크 큐에서 적용하면 장부에 반영됩니다.`,
+        text: `자가 체크 초안 ${fmt(committed - newRowsCommitted)}건 저장${newRowNote} — 체크 큐에서 적용하면 장부에 반영됩니다.`,
       })
       return
     }
@@ -2177,9 +2206,9 @@ export default function SalesLedgerWorkbench({
       .join(" · ")
     pushMatrixToast({
       kind: "error",
-      text: `${fmt(committed)}건 저장 · ${fmt(problems)}건 미반영(${detail}) — 미반영 셀은 체크 큐 행 배지를 확인한 뒤 다시 붙여넣으세요.`,
+      text: `${fmt(committed)}건 저장${newRowNote} · ${fmt(problems)}건 미반영(${detail}) — 미반영 셀은 체크 큐 행 배지를 확인한 뒤 다시 붙여넣으세요.`,
     })
-  }, [buildCellDraftInput, pasteConfidence, pastePlan, persistDraftsBatch, pushMatrixToast])
+  }, [buildCellDraftInput, lens, managerFilter, pasteConfidence, pastePlan, period, persistDraftsBatch, pushMatrixToast, team])
 
   const toggleRevMonth = useCallback((month: string) => {
     setExpandedRevMonths((prev) => {
