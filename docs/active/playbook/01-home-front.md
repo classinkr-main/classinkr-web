@@ -24,6 +24,8 @@
 - `components/ui/` — 디자인 시스템 프리미티브 + `FloatingChatbot.tsx`, `MobileFloatingCTA.tsx`, `ChatbotTeaser.tsx`, `marketing-form.tsx`.
 - `components/TrackedLink.tsx` — CTA 클릭을 `trackEvent("click_cta", {...})`로 계측하는 표준 링크.
 - `app/sitemap.ts` / `app/robots.ts` / `app/opengraph-image.tsx` — 동적 사이트맵, 크롤 차단, 1200×630 OG 이미지.
+- `app/checkout/` — 도입 신청·결제 진입. 폼/비즈니스 로직(`components/checkout/`, `lib/checkout-requests.ts`)은 Growth/CRM 파트 소유([04-growth-crm.md](./04-growth-crm.md) 참고).
+- `app/showroom/` — 쇼룸 방문 예약. 폼/비즈니스 로직(`components/showroom/`, `lib/showroom/`)은 Growth/CRM 파트 소유([04-growth-crm.md](./04-growth-crm.md) 참고).
 - `DESIGN.md` — 디자인 시스템 SSOT(팔레트/타이포/컴포넌트/레이아웃/접근성).
 
 ## 3. 가장 중요한 업무
@@ -68,6 +70,7 @@
 - `docs/active/content-roadmap-blog-events-docs-2026-06-10.md` — 콘텐츠 기능 로드맵.
 - `docs/active/classin-pre-adoption-question-matrix-2026-06-18.md` — 도입 전 22질문 → FAQ/자료실/상담 반영 기준.
 - `docs/active/software-checkout-revamp-plan.md` — `/checkout` 재정렬(공개 결제 UI).
+- `docs/active/contact-showroom-checkout-develop-round2-2026-09-20.md` — 컨택·쇼룸 예약·구매 신청 2차 디벨롭 기획. Phase A·B·C 구현됨, Phase D 미착수.
 
 ## 7. 현재 목표 & 백로그 (2026-06-23 스냅샷)
 

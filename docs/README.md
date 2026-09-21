@@ -1,6 +1,6 @@
 # Docs Index
 
-기준 시점: 2026-09-02
+기준 시점: 2026-09-21
 문서 목적: 현재 저장소에서 무엇을 먼저 읽어야 하는지, 어떤 문서를 믿어야 하는지, 어떤 문서가 역사 기록인지 빠르게 구분한다.
 
 ## Admin OS 정본 우선순위
@@ -161,6 +161,10 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
 
 - [active/supabase-korea-migration-status.md](./active/supabase-korea-migration-status.md)
   - 2026-09-14 한국 리전 이관 결과, 현재 운영 프로젝트, 원본 쓰기 차단 및 후속 배포 주의점.
+- [active/db-migration-runbook.md](./active/db-migration-runbook.md)
+  - **DB 마이그레이션 적용 런북.** 수동 적용 절차, `check:db` 스키마 계약, 서울 프로젝트 기준 미적용 목록(배포 전 필수 표시), 적용 보류 중인 마이그레이션
+- [active/integration-followups-2026-09-21.md](./active/integration-followups-2026-09-21.md)
+  - **2026-09-21 통합 시점 과제 목록.** 갈라져 있던 작업 줄기를 한 줄기로 합치며 정리한 우선순위(P0 배포 전 필수 → P1 배포 직후 → P2 결정 대기 → P3 백로그)와 합치며 내린 판단 기록
 - [active/operational-failure-handling-guidelines.md](./active/operational-failure-handling-guidelines.md)
   - **운영 장애·Cron·Webhook 현재 지침.** 미응답 Webhook 폐기 상태, Cron 인증·백로그 상한,
     비밀값, Supabase·외부 API·캐시·배포 장애의 공통 대응 기준.

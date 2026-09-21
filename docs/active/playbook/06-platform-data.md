@@ -10,6 +10,7 @@
 - `lib/portal/*`, `app/api/portal/**`, 파트너 share/auth 표면
 - `lib/server/software-checkout.ts`, `lib/billing/*`, `app/api/billing/**`, checkout/receipt 기반
 - `app/api/cron/**`, `app/api/webhook/**`, `lib/notifications/*`
+- `lib/server/cron-auth.ts` — 모든 `app/api/cron/**` 라우트가 쓰는 timing-safe Bearer 인증 헬퍼(`checkCronAuth`). 라우트에서 `CRON_SECRET`을 직접 비교하지 않는다 — `tests/server/cron-auth-route-coverage.test.ts`가 전 라우트를 검사한다.
 - `lib/auth/*`, `lib/identity/*`, `lib/storage/*`, `lib/regions/*`
 - `next.config.ts`, `vercel.json`, `eslint.config.mjs`, `vitest.config.ts`의 공용 기반 규칙
 
@@ -49,7 +50,7 @@ Platform은 `lib/server/*`, `app/api/*`, `tests/*` 전체를 소유하지 않는
   [ADR-010](../../adr/ADR-010-operational-failure-containment.md)을 따른다.
 - Vercel cron은 `Authorization: Bearer ${CRON_SECRET}`만 검증한다. `x-vercel-cron`은 Vercel의
   전송 계약이 아니므로 인증 또는 추가 실행 조건으로 사용하지 않는다.
-- Vercel 플랜은 Pro다(2026-09-14 확인). `vercel.json` cron 식은 UTC로 적고, 경로당 항목 하나·하루 288회(5분 간격) 이하·전체 40개 이하로 둔다. 주기를 올릴 때는 외부 API 한도, 하루 1회를 전제로 한 실패 알림·중복 방지 코드, 실행 잠금 시간을 함께 확인한다.
+- 운영 DB는 서울(ap-northeast-2) 프로젝트, Vercel 함수 리전은 `icn1`, 플랜은 Pro다(2026-09-14 전환). `vercel.json` cron 식은 UTC로 적고, 경로당 항목 하나·하루 288회(5분 간격) 이하·전체 40개 이하로 둔다. 주기를 올릴 때는 외부 API 한도, 하루 1회를 전제로 한 실패 알림·중복 방지 코드, 실행 잠금 시간을 함께 확인한다. 이관 상세는 [Supabase 한국 리전 이관 결과](../supabase-korea-migration-status.md)를 따른다.
 - 외부 발송 cron은 at-least-once 실행을 가정하고 멱등 키, backlog dry-run, lookback·실행당 발송량
   상한, 부분 성공 테스트와 circuit breaker를 갖춘다. 인증 수리·장기 중단 후 첫 실행에 과거분을
   자동으로 전량 재생하지 않는다.

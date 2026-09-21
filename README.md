@@ -28,12 +28,15 @@ The dev server runs on port `3888`.
 
 ## Verification
 
-Use these two commands as the current default truth checks:
+Use these three commands, in this order, as the current default quality gate:
 
 ```bash
+npm run typecheck
 npx eslint app components lib --max-warnings=0
 npm run build
 ```
+
+`typecheck` runs first because it is the only one of the three that checks `tests/` and `scripts/`.
 
 `npm run lint` is broader than the current standard source check for this repository.
 

@@ -36,6 +36,8 @@
 | 코드 규모 | Admin만 약 14.3만 줄(분리 계획 문서 기준) | 약 1.6만 줄, 최대 파일 953줄 |
 | Vercel 리전 | sin1 | sin1 |
 
+> ※ 2026-09-14 이후: 운영 DB는 서울(ap-northeast-2) 프로젝트, Vercel 리전은 icn1 이다. 최신 상태는 [Supabase 한국 리전 이관 결과](./supabase-korea-migration-status.md).
+
 브리지 계약(이 저장소 → Compass 읽기): `compass_leads_v`, `compass_activities_v`, `compass_ads_v`, `compass_adsets_v`, `compass_demos_v`, `compass_cal_events_v`, `compass_revenue_v`. 모두 definer 뷰이며 anon/authenticated는 REVOKE, service_role만 SELECT. `lib/compass/bridge.ts`가 유일한 소비 계층이다.
 
 ## 2. 서브 에이전트 풀 할당

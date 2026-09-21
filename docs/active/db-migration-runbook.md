@@ -108,13 +108,19 @@ npm run check:db --  --strict
 | `20260828_channel_match_rpc_single_overload.sql` | 상담 근거 RPC의 vector/text 동명 오버로드를 text 하나로 단일화 | 내부 CS 코파일럿의 "과거 상담 사례" 근거가 계속 빈 배열(2026-07-16부터 무음 실패) | `npm run check:alpha-db` |
 | `20260914_ad_channel_daily.sql` | `google_ads_daily`·`naver_ads_daily` 스냅샷 테이블 | Google·네이버 크론이 쓸 곳이 없다 | `check:db` |
 | `20260914_campaign_links_ad_channels.sql` | `campaign_links.ref_type`에 google/naver 캠페인 추가 | 채널 캠페인 링크 저장이 CHECK 위반 | `check:db` |
-| `20260914_leads_naver_attribution.sql` | `leads.naver_ad`(jsonb) | **배포 전 필수** — `getMarketingLeads()`의 SELECT 목록에 이 컬럼이 있어 마케팅 허브의 리드 집계가 42703으로 실패한다(저장은 선택 컬럼 폴백이 있다) | `check:db` |
+| `20260914_leads_naver_attribution.sql` | `leads.naver_ad`(jsonb) | 저장·조회 모두 없는 컬럼만 빼고 계속 동작한다(선택 컬럼 폴백 — 조회 쪽은 2026-09-21에 추가, 그 전에는 마케팅 허브 리드 집계가 42703으로 실패했다). 다만 **미적용 기간의 네이버 유입 귀속은 저장되지 않아 소급 복구할 수 없다** — 네이버 광고를 켜기 전에 적용한다 | `check:db` |
 | `20260914_compass_integration_bridge.sql` | `norm_phone_key()` + Compass 링크/연락/역브리지 뷰 | 적용 순서·재실행 조건은 [Compass 연동 2차](./compass-integration-2026-09-14.md) | `check:db`(warning) |
 | `20260914_leads_phone_key.sql` | `leads.phone_key` 생성 컬럼(= `norm_phone_key(phone)`) + 인덱스 | 재유입 병합이 원문·숫자만 비교 폴백으로 돌아 서식이 다른 같은 번호를 놓친다. **위 bridge 파일 뒤에** 적용(함수가 없으면 가드가 멈춘다) | `check:db`(warning) |
 | `20260921_checkout_requests_lead_qualifiers.sql` | `checkout_requests.role`·`academy_size` | **배포 전 필수** — 도입 신청 insert가 두 컬럼을 무조건 실어 42703으로 실패한다(신청 500) | `check:db` |
 | `20260921_lead_source_intake_split.sql` | 과거 리드의 `source`를 `showroom_booking`·`checkout_request`로 백필(멱등) | 과거 쇼룸·도입 신청 리드가 계속 `contact_page`로 집계된다 | `schema-contract.ts` 주석의 조회 |
 
 하드웨어 계열은 아래 "하드웨어 마이그레이션" 절의 문서가 정본이다.
+
+**프로브가 없는 최근 파일.** `20260907_lead_digest_runs_daily_type.sql`, `20260907_site_settings_webhook_toggles_and_schedule.sql`,
+`20260910_admin_crm_overview_stale_first.sql`은 스키마를 바꾸지만 `schema-contract.ts`에 프로브가 없다. 관련 기능이
+이관 시점의 운영 커밋에 들어 있었고 이관 문서가 overview 함수 적용을 기록하고 있어 적용된 것으로 보이나, 코드로
+확인되는 상태는 아니다 — 아래 "새 마이그레이션을 추가할 때" 2번 규칙대로 프로브를 보강할 대상이다.
+`20260921_lead_source_intake_split.sql`은 데이터 백필이라 프로브로 확인할 수 없다(위 표의 조회로 확인).
 
 ## 적용 보류 중인 마이그레이션
 

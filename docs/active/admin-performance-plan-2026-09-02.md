@@ -28,6 +28,8 @@
 
 Next 16의 `proxy`는 Node.js 런타임 기본이므로 함수 리전(sin1)에서 실행된다. GoTrue 왕복은 리전 간 지연이 아니라 호출 자체의 처리 시간(수십 ms)이 비용이다. 화면 하나가 API를 20번 부르면 인증 처리만 20~60회다.
 
+> ※ 2026-09-14 이후: 운영 DB는 서울(ap-northeast-2) 프로젝트, Vercel 리전은 icn1 이다. 최신 상태는 [Supabase 한국 리전 이관 결과](./supabase-korea-migration-status.md).
+
 ### 1.2 클라이언트 팬아웃 (진단 에이전트가 오케스트레이터 가정을 정정)
 
 처음 가정은 "사이드바와 CRM 서브내비가 마운트 시 약 12개씩 프리페치를 일괄 발사한다"였다. 코드 판독 결과는 다르다. `components/admin/AdminSidebar.tsx`의 예열 목록은 nav 항목별 URL 맵이고, 발사는 링크의 hover(180ms 디바운스)·focus·pointerdown·click에서만 일어나 "다음에 갈 탭"을 데운다. 유휴 시에는 인접 탭의 라우트 코드만 프리페치하고 API 데이터는 발사하지 않는다. 캐시가 따뜻하면 네트워크를 타지 않는다.
@@ -231,6 +233,8 @@ ADMIN_BASE_URL=https://<배포 도메인> ADMIN_COOKIE='<cookie>' npm run measur
 | DB 시간 1위 그룹(pg_stat_statements 3/23~) | `external_crm_records` 페이지당 exact count 재실행·`ORDER BY synced_at` 전량 정렬 7문, 평균 0.35~2.5초, 합계 약 5,000초 | 이 문서 범위 밖이었다 → §8.2 |
 | 단일 문장 1위 | `docs_articles` 전문 20컬럼 로드(`lib/docs-content.ts` getDocsContent) 12,359콜 × 138ms = 1,710초, 콜당 1,696블록 | 공개 문서·챗봇 폴백 경로. 요청 스코프 cache()뿐이었다 → §8.2 |
 | 이상 이력 | 롤백 트랜잭션 30,002,074건 ≈ `public.leads` 순차 스캔 30,006,815회(전체 트랜잭션의 75.6%). 실패 문장은 pg_stat_statements에 남지 않아 원인 문장 미상. 현재는 정지(25분간 +1, 최근 24시간 leads API 396건) | 재발 시 postgres_logs(보존 1일)를 즉시 조회 |
+
+> ※ 2026-09-14 이후: Supabase 서울 이관과 Vercel Pro 전환이 완료돼 이 표와 위 결론의 전제가 바뀌었다. 최신 상태는 [Supabase 한국 리전 이관 결과](./supabase-korea-migration-status.md), 크론 규칙은 AGENTS.md.
 
 ### 8.2 이번 후속에서 적용한 것
 
