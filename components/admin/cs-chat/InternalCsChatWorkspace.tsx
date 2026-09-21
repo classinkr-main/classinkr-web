@@ -59,7 +59,12 @@ import {
   withHqConfirmed,
   withHqPending,
 } from "./hq-desk"
-import { summarizeDocsGaps, type DocsGapsDeskSummary } from "./ops-desk"
+import {
+  correctedContentForReview,
+  initialCustomerDraft,
+  summarizeDocsGaps,
+  type DocsGapsDeskSummary,
+} from "./ops-desk"
 import ChatPanel from "./panels/ChatPanel"
 import HqPanel from "./panels/HqPanel"
 import QueuePanel from "./panels/QueuePanel"
@@ -204,7 +209,7 @@ function InternalCsChatWorkspaceInner() {
     if (process.env.NODE_ENV === "development" && demoMode && id === DEMO_CONVERSATION.id) {
       setDetail(DEMO_DETAIL)
       setSelectedId(id)
-      setFinalDraft(DEMO_MESSAGES[1].content)
+      setFinalDraft(initialCustomerDraft(DEMO_MESSAGES[1]))
       setReviewChecks(INITIAL_CHECKS)
       setReviewNote("")
       setExcludeFromGapQueue(false)
@@ -216,7 +221,8 @@ function InternalCsChatWorkspaceInner() {
     const pending = [...loaded.messages].reverse().find(
       (message) => message.role === "assistant" && message.review_state === "pending"
     )
-    setFinalDraft(pending?.corrected_content ?? pending?.content ?? "")
+    // 고객 전달용 최종 답변은 AI 내부 분석으로 미리 채우지 않는다 — 담당자가 확정한 교정본만 복원한다.
+    setFinalDraft(initialCustomerDraft(pending))
     setReviewChecks(INITIAL_CHECKS)
     setReviewNote("")
     setRegressionCandidate(pending?.regression_candidate ?? false)
@@ -401,7 +407,7 @@ function InternalCsChatWorkspaceInner() {
         setConversations([DEMO_CONVERSATION])
         setDetail(DEMO_DETAIL)
         setSelectedId(DEMO_CONVERSATION.id)
-        setFinalDraft(DEMO_MESSAGES[1].content)
+        setFinalDraft(initialCustomerDraft(DEMO_MESSAGES[1]))
         setError(null)
         setNotice(null)
       } else {
@@ -869,7 +875,7 @@ function InternalCsChatWorkspaceInner() {
       setDetail(nextDetail)
       setPendingFiles([])
       setSelectedAssetId(previewAssets.at(-1)?.id ?? selectedAssetId)
-      setFinalDraft(nextAssistant.content)
+      setFinalDraft("")
       setReviewChecks(INITIAL_CHECKS)
       setNotice("미리보기 초안을 생성했습니다. 실제 환경에서는 Gemini와 내부 근거 검색을 사용합니다.")
       return
@@ -930,7 +936,7 @@ function InternalCsChatWorkspaceInner() {
         created_at: now,
       }
       setDetail((current) => current ? { ...current, messages: [...current.messages, proMessage] } : current)
-      setFinalDraft(proMessage.content)
+      setFinalDraft("")
       setReviewChecks(INITIAL_CHECKS)
       setNotice("Pro 심층 검토 미리보기를 추가했습니다.")
       return
@@ -972,6 +978,17 @@ function InternalCsChatWorkspaceInner() {
       setError("수정 요청 사유를 입력해 주세요.")
       return
     }
+    // 승인은 내부 분석과 분리된 고객 전달용 답변을 반드시 요구한다(라우트도 같은 규칙으로 400).
+    // 수정 요청은 원본과 실질적으로 다를 때만 교정본으로 저장한다 — 회귀 기준 답안 오염 방지.
+    const correctedContent = correctedContentForReview({
+      decision,
+      draft: finalDraft,
+      original: pendingMessage.content,
+    })
+    if (decision === "approved" && !correctedContent) {
+      setError("고객 전달용 최종 답변을 별도로 작성해 주세요.")
+      return
+    }
 
     if (demoMode) {
       const now = new Date().toISOString()
@@ -987,7 +1004,7 @@ function InternalCsChatWorkspaceInner() {
             ? {
                 ...message,
                 review_state: decision,
-                corrected_content: finalDraft,
+                corrected_content: correctedContent ?? null,
                 review_note: reviewNote || null,
                 regression_candidate: decision === "changes_requested" || regressionCandidate,
                 regression_outcome: decision === "changes_requested" ? "needs_fix" : "not_evaluated",
@@ -1001,7 +1018,7 @@ function InternalCsChatWorkspaceInner() {
         ? { ...conversation, status: nextStatus, updated_at: now, last_message_at: now }
         : conversation))
       if (decision === "approved") {
-        void copyText(finalDraft, "승인된 최종 답변을 복사했습니다.")
+        void copyText(correctedContent ?? "", "승인된 최종 답변을 복사했습니다.")
         setReviewOpen(false)
       } else {
         setNotice("수정 요청을 기록하고 회귀 개선 후보로 남겼습니다.")
@@ -1018,7 +1035,7 @@ function InternalCsChatWorkspaceInner() {
             method: "PATCH",
             body: JSON.stringify({
               decision,
-              correctedContent: finalDraft,
+              correctedContent,
               reviewNote: reviewNote || undefined,
               feedbackLabels: decision === "changes_requested" ? ["human_revision_requested"] : ["human_approved"],
               regressionCandidate: decision === "changes_requested" || regressionCandidate,
@@ -1029,7 +1046,7 @@ function InternalCsChatWorkspaceInner() {
           }
         )
         if (decision === "approved") {
-          await copyText(finalDraft, "승인된 최종 답변을 복사했습니다.")
+          await copyText(correctedContent ?? "", "승인된 최종 답변을 복사했습니다.")
           setReviewOpen(false)
         } else {
           setNotice("수정 요청을 기록하고 회귀 개선 후보로 남겼습니다.")

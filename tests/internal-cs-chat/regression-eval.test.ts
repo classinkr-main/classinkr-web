@@ -66,7 +66,7 @@ afterEach(() => {
 })
 
 describe("referenceAnswerFor", () => {
-  it("prefers corrected_content", () => {
+  it("uses a materially edited correction for changes_requested", () => {
     expect(referenceAnswerFor(candidate())).toBe("담당자 확정 답변")
   })
   it("falls back to content only when approved", () => {
@@ -78,6 +78,14 @@ describe("referenceAnswerFor", () => {
     expect(
       referenceAnswerFor(candidate({ correctedContent: null, reviewState: "changes_requested" }))
     ).toBeNull()
+  })
+  it("returns null when changes_requested stores the unchanged model draft", () => {
+    expect(
+      referenceAnswerFor(candidate({ correctedContent: "  원본   답변  " }))
+    ).toBeNull()
+  })
+  it("never treats a rejected answer as a gold reference", () => {
+    expect(referenceAnswerFor(candidate({ reviewState: "rejected" }))).toBeNull()
   })
 })
 

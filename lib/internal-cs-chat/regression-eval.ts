@@ -112,15 +112,23 @@ function clampLimit(limit: number | undefined) {
 }
 
 /**
- * 기준 정답: 검토 수정본(corrected_content) 우선. 없으면 승인(approved)된 답변은 원문 자체를
- * 담당자가 인정한 정답으로 본다. 그 외(수정본 없는 changes_requested/rejected)는 기준이 없어 스킵한다.
+ * 기준 정답:
+ * - approved: 검토 수정본(corrected_content) 우선, 없으면(구 데이터) 원문을 담당자가 인정한 정답으로 본다.
+ * - changes_requested: 수정본이 원문과 공백 정규화 후 "다를 때만" 채택한다 — 손대지 않은 모델 초안이
+ *   그대로 저장된 경우는 기준이 아니다.
+ * - 그 외(rejected, 수정본 없는 changes_requested)는 기준이 없어 스킵한다.
  */
 export function referenceAnswerFor(candidate: InternalCsRegressionEvalCandidate): string | null {
   const corrected = candidate.correctedContent?.trim()
-  if (corrected) return corrected
   if (candidate.reviewState === "approved") {
+    if (corrected) return corrected
     const content = candidate.content?.trim()
     if (content) return content
+  }
+  if (candidate.reviewState === "changes_requested" && corrected) {
+    const normalizedCorrection = corrected.replace(/\s+/g, " ")
+    const normalizedOriginal = candidate.content?.replace(/\s+/g, " ").trim() ?? ""
+    if (normalizedCorrection !== normalizedOriginal) return corrected
   }
   return null
 }
@@ -140,7 +148,7 @@ export async function runInternalCsRegressionEval(
     if (!reference) {
       skipped.push({
         messageId: candidate.messageId,
-        reason: "검토 수정본(corrected_content)이 없어 기준 정답을 만들 수 없습니다",
+        reason: "검토 수정본(corrected_content)이 없거나 원본과 같아 기준 정답을 만들 수 없습니다",
       })
       continue
     }
