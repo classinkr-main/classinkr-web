@@ -1,0 +1,251 @@
+"use client"
+
+// CRM 오더 대사 — "CRM 에 있는데 원장에 없는 출고"를 한 줄에 하나씩 놓고, 그 자리에서 배송 예정으로
+// 등록한다(입력 가속 P2-1).
+//
+// 출고 기록 대부분은 이미 CRM/견적에 있다. 그러면 운영자가 할 일은 "입력"이 아니라 "확인"이다 —
+// 고객사·품목·수량·참조번호를 다시 치지 않는다.
+//
+// ⚠️ 겹침 의심 배지: 시트 이관 행에는 딜 참조가 없어 참조로 대사할 수 없다. 고객사·품목이 맞는 실제
+// 출고가 원장에 있으면 배지를 붙이고 기본 동작을 막는다 — 시트가 이미 실어 온 물량을 다시 등록하면
+// §8-6 이중 계상이 되는데, 링크가 없어 가져오기 때 자동 정리도 되지 않는다.
+import { memo, useCallback, useState } from "react"
+import { ChevronDown, ExternalLink, Plus, RefreshCw } from "lucide-react"
+
+import { adminFetchJson } from "@/lib/admin-client"
+import { formatNumber, todayKey } from "./shared"
+
+interface BacklogOverlap {
+  quantity: number
+  lastOccurredAt: string | null
+}
+
+export interface CrmOrderBacklogEntry {
+  id: string
+  source: string
+  sourceLabel: string
+  referenceNo: string
+  title: string
+  productName: string | null
+  quantity: number | null
+  customerName: string | null
+  status: string | null
+  occurredAt: string | null
+  href: string | null
+  reason: string
+  ledgerOverlap: BacklogOverlap | null
+}
+
+interface CrmOrderBacklogSectionProps {
+  /** 등록에 성공하면 부모가 원장을 다시 받는다(HardwareInventoryClient의 refresh). */
+  onRegistered: () => void | Promise<void>
+}
+
+const SECTION_CARD_CLASS = "rounded-lg border border-[rgba(0,0,0,0.08)] bg-white"
+const GHOST_BUTTON_CLASS =
+  "inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 disabled:pointer-events-none disabled:opacity-50"
+
+function CrmOrderBacklogSection({ onRegistered }: CrmOrderBacklogSectionProps) {
+  const [expanded, setExpanded] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [entries, setEntries] = useState<CrmOrderBacklogEntry[]>([])
+  const [warnings, setWarnings] = useState<string[]>([])
+  const [listError, setListError] = useState<string | null>(null)
+  const [registeringId, setRegisteringId] = useState<string | null>(null)
+  const [rowResults, setRowResults] = useState<Record<string, { ok: boolean; message: string }>>({})
+  // 겹침 의심 줄은 한 번 더 누르게 한다 — 첫 클릭은 경고만 띄운다.
+  const [overlapAcknowledged, setOverlapAcknowledged] = useState<ReadonlySet<string>>(() => new Set())
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setListError(null)
+    try {
+      const result = await adminFetchJson<{ entries: CrmOrderBacklogEntry[]; warnings?: string[] }>(
+        "/api/admin/hardware/crm-orders?scope=backlog"
+      )
+      setEntries(result.entries ?? [])
+      setWarnings(result.warnings ?? [])
+      setLoaded(true)
+    } catch (err) {
+      setListError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  const toggleExpanded = () => {
+    const next = !expanded
+    setExpanded(next)
+    if (next && !loaded && !loading) void load()
+  }
+
+  const register = async (entry: CrmOrderBacklogEntry) => {
+    if (!entry.productName || !entry.quantity) return
+    if (entry.ledgerOverlap && !overlapAcknowledged.has(entry.id)) {
+      setOverlapAcknowledged((current) => new Set(current).add(entry.id))
+      setRowResults((current) => ({
+        ...current,
+        [entry.id]: {
+          ok: false,
+          message: `원장에 같은 고객사·품목 출고 ${formatNumber(entry.ledgerOverlap!.quantity)}대가 이미 있습니다. 시트가 실어 온 물량이면 등록하지 마세요 — 다시 누르면 그래도 등록합니다.`,
+        },
+      }))
+      return
+    }
+
+    setRegisteringId(entry.id)
+    setRowResults((current) => {
+      const next = { ...current }
+      delete next[entry.id]
+      return next
+    })
+    try {
+      await adminFetchJson("/api/admin/hardware/movements", {
+        method: "POST",
+        body: JSON.stringify({
+          productName: entry.productName,
+          movementType: "outbound",
+          quantity: entry.quantity,
+          occurredAt: todayKey(),
+          fromLocation: "창고",
+          toLocation: entry.customerName ?? "",
+          status: "배송 예정",
+          referenceNo: entry.referenceNo,
+          memo: `CRM 연동: ${entry.sourceLabel} · ${entry.title}`,
+          crmLink: {
+            id: entry.id,
+            source: entry.source,
+            sourceLabel: entry.sourceLabel,
+            referenceNo: entry.referenceNo,
+            title: entry.title,
+            href: entry.href,
+          },
+        }),
+      })
+      setEntries((current) => current.filter((row) => row.id !== entry.id))
+      setRowResults((current) => ({ ...current, [entry.id]: { ok: true, message: "배송 예정으로 등록했습니다." } }))
+      await onRegistered()
+    } catch (err) {
+      setRowResults((current) => ({
+        ...current,
+        [entry.id]: { ok: false, message: err instanceof Error ? err.message : String(err) },
+      }))
+    } finally {
+      setRegisteringId(null)
+    }
+  }
+
+  return (
+    <section className={SECTION_CARD_CLASS}>
+      <button
+        type="button"
+        onClick={toggleExpanded}
+        aria-expanded={expanded}
+        className="flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+      >
+        <span className="min-w-0">
+          <span className="block text-[13px] font-bold text-[#111110]">
+            CRM 오더 대사
+            {loaded ? (
+              <span className="ml-1.5 rounded-full bg-[#F6F5F4] px-2 py-0.5 text-[11px] font-bold tabular-nums text-[#615D59]">
+                {formatNumber(entries.length)}
+              </span>
+            ) : null}
+          </span>
+          <span className="mt-0.5 block text-[11.5px] text-[#615D59]">
+            CRM·견적에 있는데 원장에 없는 출고를 그 자리에서 배송 예정으로 등록합니다.
+          </span>
+        </span>
+        <ChevronDown className={`h-4 w-4 shrink-0 text-[#A39E98] transition ${expanded ? "rotate-180" : ""}`} />
+      </button>
+
+      {expanded ? (
+        <div className="border-t border-[rgba(0,0,0,0.06)] px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[11.5px] font-semibold text-[#615D59]">
+              참조번호가 원장에 이미 있으면 목록에서 빠집니다. 시트 이관 행은 딜 참조가 없어 대사되지 않으므로, 고객사·품목이 겹치면 배지로 알립니다.
+            </p>
+            <button type="button" onClick={() => void load()} disabled={loading} className={GHOST_BUTTON_CLASS}>
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+              다시 조회
+            </button>
+          </div>
+
+          {listError ? (
+            <p role="alert" className="mt-2 rounded-md border border-[#F2B8B8] bg-[#FCE9E9] px-3 py-2 text-[12px] font-semibold text-[#8F2C2C]">
+              {listError}
+            </p>
+          ) : null}
+          {warnings.length > 0 ? (
+            <p className="mt-2 rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2 text-[11.5px] font-semibold text-[#7A520F]">
+              일부 원천을 읽지 못했습니다 — {warnings.join(" · ")}
+            </p>
+          ) : null}
+
+          {loading && !loaded ? (
+            <p className="mt-3 text-[12px] font-semibold text-[#A39E98]">불러오는 중…</p>
+          ) : null}
+          {loaded && entries.length === 0 && !listError ? (
+            <p className="mt-3 text-[12px] font-semibold text-[#A39E98]">원장에 없는 CRM 오더가 없습니다.</p>
+          ) : null}
+
+          <ul className="mt-2 divide-y divide-[rgba(0,0,0,0.06)]">
+            {entries.map((entry) => {
+              const result = rowResults[entry.id]
+              const busy = registeringId === entry.id
+              return (
+                <li key={entry.id} className="flex flex-wrap items-start justify-between gap-3 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="flex flex-wrap items-center gap-1.5 text-[12.5px] font-bold text-[#111110]">
+                      <span className="truncate">{entry.customerName ?? "고객사 미상"}</span>
+                      <span className="text-[#A39E98]">·</span>
+                      <span className="truncate">{entry.productName}</span>
+                      <span className="tabular-nums text-[#615D59]">{formatNumber(entry.quantity ?? 0)}대</span>
+                      {entry.ledgerOverlap ? (
+                        <span className="rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[10.5px] font-bold text-[#7A520F]">
+                          원장에 겹침 의심 {formatNumber(entry.ledgerOverlap.quantity)}대
+                        </span>
+                      ) : null}
+                    </p>
+                    <p className="mt-0.5 truncate text-[11.5px] text-[#615D59]">
+                      {entry.sourceLabel} · {entry.title}
+                      {entry.status ? ` · ${entry.status}` : ""}
+                    </p>
+                    {result ? (
+                      <p
+                        role={result.ok ? "status" : "alert"}
+                        className={`mt-1 text-[11.5px] font-semibold ${result.ok ? "text-[#084734]" : "text-[#8F2C2C]"}`}
+                      >
+                        {result.message}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {entry.href ? (
+                      <a href={entry.href} className={GHOST_BUTTON_CLASS} target="_blank" rel="noreferrer">
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        CRM
+                      </a>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => void register(entry)}
+                      disabled={busy || registeringId != null}
+                      className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md border border-[#084734] bg-white px-3 text-[12px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 disabled:pointer-events-none disabled:opacity-50"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      {busy ? "등록 중…" : entry.ledgerOverlap && overlapAcknowledged.has(entry.id) ? "그래도 예정 등록" : "예정 등록"}
+                    </button>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
+export default memo(CrmOrderBacklogSection)

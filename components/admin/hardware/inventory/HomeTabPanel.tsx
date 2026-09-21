@@ -9,6 +9,7 @@ import { motion } from "framer-motion"
 
 import AlertsOutboundSections from "./AlertsOutboundSections"
 import CategoryCardsSection from "./CategoryCardsSection"
+import CrmOrderBacklogSection from "./CrmOrderBacklogSection"
 import HardwareSearchPanel from "./HardwareSearchPanel"
 import ImportFreshnessStrip from "./ImportFreshnessStrip"
 import OfficeSamplePoolSection from "./OfficeSamplePoolSection"
@@ -170,6 +171,9 @@ export default function HomeTabPanel({
     <SummaryBand data={data} plannedMovementQuantity={plannedMovementQuantity} plannedStaleGroupCount={plannedStaleGroupCount} />
 
     <ImportFreshnessStrip importRun={data?.importRun ?? null} importCosting={data?.importCosting} />
+
+    {/* 예정 큐 바로 위 — 등록할 것을 먼저 보고, 그 아래에서 확정한다(입력 가속 P2-1). */}
+    <CrmOrderBacklogSection onRegistered={refresh} />
 
     <PlannedOutboundPanel
       data={data}

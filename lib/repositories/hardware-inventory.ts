@@ -238,6 +238,8 @@ export interface HardwareSheetImportResult {
   snapshotId: string
   snapshotChecksum: string
   snapshotCreatedAt: string
+  /** 시트가 이겨서 취소된 어드민 확정 수(§8-6 정책). 교체 가져오기에서만 0 이 아닐 수 있다. */
+  sheetWinsVoided: number
 }
 
 const DEFAULT_STOCK_LOCATION = "창고"
@@ -1708,6 +1710,63 @@ async function listCurrentSheetImportMovements() {
   return data ?? []
 }
 
+const SHEET_WINS_VOID_REASON =
+  "시트 가져오기 우선(정책 §8-6): 같은 물량을 시트가 다시 싣는다"
+
+/**
+ * 시트 행에서 전환된(확정된) 어드민 기록 id — 교체 가져오기 전에 모아 둔다.
+ *
+ * 시트 이관 행을 어드민에서 확정하면 admin_manual 출고가 생기고 원래 시트 행은 void 된다. 그런데
+ * 교체 가져오기는 시트 이관분을 통째로 지우고 다시 넣으므로, 같은 물량이 시트 쪽에서 다시 들어와
+ * 어드민 확정과 **두 번 잡힌다**. 시트에 안정적 행 ID 가 없어 행 단위 대조로는 풀 수 없다.
+ *
+ * 링크(converted_from_movement_id)가 시트 행을 가리키는 것만 고른다 — 사람이 직접 만든 어드민
+ * 기록은 시트와 겹치는지 알 방법이 없으므로 자동으로 손대지 않는다(겹침 의심은 화면이 알린다).
+ * 가져오기가 시트 행을 지우면 이 링크는 더 이상 따라갈 수 없으므로 **반드시 가져오기 전에** 부른다.
+ */
+async function listSheetConvertedAdminMovementIds(): Promise<string[]> {
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("hardware_movements")
+    .select("id,converted_from_movement_id")
+    .eq("source", "admin_manual")
+    .is("voided_at", null)
+    .not("converted_from_movement_id", "is", null)
+  if (error) throw error
+
+  const rows = (data ?? []) as Array<{ id: string; converted_from_movement_id: string | null }>
+  const sourceIds = Array.from(new Set(rows.map((row) => row.converted_from_movement_id).filter(Boolean))) as string[]
+  if (sourceIds.length === 0) return []
+
+  const { data: sources, error: sourcesError } = await sb
+    .from("hardware_movements")
+    .select("id")
+    .eq("source", "sheet_import")
+    .in("id", sourceIds)
+  if (sourcesError) throw sourcesError
+
+  const sheetIds = new Set(((sources ?? []) as Array<{ id: string }>).map((row) => row.id))
+  return rows
+    .filter((row) => row.converted_from_movement_id && sheetIds.has(row.converted_from_movement_id))
+    .map((row) => row.id)
+}
+
+/** 위에서 모은 기록을 사유와 함께 취소한다 — 지우지 않는다(되돌릴 수 있게 남긴다). */
+async function voidSheetConvertedAdminMovements(ids: readonly string[], actor?: string | null): Promise<number> {
+  if (ids.length === 0) return 0
+  const sb = createSupabaseAdminClient()
+  const { error } = await sb
+    .from("hardware_movements")
+    .update({
+      voided_at: new Date().toISOString(),
+      voided_by: cleanString(actor),
+      void_reason: SHEET_WINS_VOID_REASON,
+    })
+    .in("id", ids as string[])
+  if (error) throw error
+  return ids.length
+}
+
 async function createHardwareSheetImportSnapshot(input: {
   runId: string
   actor?: string | null
@@ -1797,6 +1856,13 @@ export async function importHardwareFromBranchSheets(
     const additiveMerge =
       process.env.HARDWARE_SHEET_ADDITIVE_MERGE === "1" ||
       process.env.HARDWARE_SHEET_ADDITIVE_MERGE === "true"
+
+    // §8-6 정책(2026-09-21 운영자 결정): 가져오기 때는 시트가 이긴다.
+    // 교체 모드에서만 해당한다 — 추가형 머지는 시트 행을 지우지 않고 확정된 행을 human_locked 로
+    // 보호하므로 같은 물량이 두 번 들어오지 않는다(§7).
+    // 링크는 가져오기가 시트 행을 지우면 따라갈 수 없으므로 **지금** 모은다.
+    const sheetConvertedAdminIds = additiveMerge ? [] : await listSheetConvertedAdminMovementIds()
+
     const sb = createSupabaseAdminClient()
     const { data, error } = await sb.rpc(
       additiveMerge ? "merge_hardware_sheet_import" : "replace_hardware_sheet_import",
@@ -1813,6 +1879,10 @@ export async function importHardwareFromBranchSheets(
       : typeof data === "number"
         ? data
         : rows.length
+    // 시트가 새 사본을 싣고 난 **뒤에** 정리한다 — 가져오기가 실패하면 어드민 확정은 그대로 남는다
+    // (정리가 실패해도 지금까지와 같은 이중 계상일 뿐, 없던 손실이 생기지 않는다).
+    const sheetWinsVoided = await voidSheetConvertedAdminMovements(sheetConvertedAdminIds, options.actor)
+
     await finishImportRun(runId, {
       status: "success",
       rowsImported: imported,
@@ -1823,6 +1893,7 @@ export async function importHardwareFromBranchSheets(
         snapshot_id: snapshot.id,
         snapshot_checksum: snapshot.checksum,
         snapshot_created_at: snapshot.created_at,
+        sheet_wins_voided: sheetWinsVoided,
       },
     })
     revalidateTag(HARDWARE_INVENTORY_CACHE_TAG, "max")
@@ -1833,6 +1904,7 @@ export async function importHardwareFromBranchSheets(
       snapshotId: snapshot.id,
       snapshotChecksum: snapshot.checksum,
       snapshotCreatedAt: snapshot.created_at,
+      sheetWinsVoided,
     }
   } catch (error) {
     await finishImportRun(runId, {

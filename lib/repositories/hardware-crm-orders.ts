@@ -1,6 +1,7 @@
 import "server-only"
 
 import { normalizeQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
+import { fetchAllSupabaseRows } from "@/lib/repositories/branch-hw"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 export type HardwareCrmOrderSource = "portal_deal" | "portal_quote" | "legacy_quote" | "external_crm"
@@ -512,4 +513,105 @@ export async function listHardwareCrmOrderCandidates(
       .slice(0, 12),
     warnings,
   }
+}
+
+
+// ---------------------------------------------------------------------------
+// CRM 오더 대사 — "CRM 에 있는데 원장에 없는 출고"
+//
+// 출고 기록 대부분은 이미 CRM/견적에 있다. 그러면 하는 일은 "입력"이 아니라 "확인"이어야 한다
+// (입력 가속 기획 P2-1). 여기서 그 목록을 만든다.
+//
+// 두 가지를 구분해서 본다.
+//   1) **참조번호 일치** — 어드민에서 이 딜 라인으로 만든 기록이 이미 있으면 목록에서 뺀다(확실).
+//   2) **겹침 의심** — 시트 이관 행에는 딜 참조가 없어 참조로는 못 찾는다. 그래서 고객사·품목이
+//      맞는 실제 출고가 원장에 있으면 **지우지 않고 표시**한다. 시트가 이미 실어 온 물량을 다시
+//      등록하면 §8-6 이중 계상이 되는데, 그건 링크가 없어 가져오기 때 자동 정리도 되지 않는다.
+//      숨기면 운영자가 알 길이 없으므로 경고로 남긴다.
+
+export interface HardwareCrmOrderBacklogOverlap {
+  quantity: number
+  lastOccurredAt: string | null
+}
+
+export interface HardwareCrmOrderBacklogEntry extends HardwareCrmOrderCandidate {
+  /** 고객사·품목이 맞는 실제 출고가 원장에 이미 있으면 그 요약. 없으면 null. */
+  ledgerOverlap: HardwareCrmOrderBacklogOverlap | null
+}
+
+export interface HardwareCrmOrderBacklogResult {
+  entries: HardwareCrmOrderBacklogEntry[]
+  warnings: string[]
+}
+
+interface LedgerOutboundRow {
+  id: string
+  product_name: string | null
+  to_location: string | null
+  quantity: number | string | null
+  occurred_at: string | null
+  status: string | null
+  reference_no: string | null
+  source: string | null
+}
+
+async function listLedgerOutboundRows(): Promise<LedgerOutboundRow[]> {
+  const sb = createSupabaseAdminClient()
+  return fetchAllSupabaseRows<LedgerOutboundRow>((afterId, limit) => {
+    let query = sb
+      .from("hardware_movements")
+      .select("id,product_name,to_location,quantity,occurred_at,status,reference_no,source")
+      .eq("movement_type", "outbound")
+      .is("voided_at", null)
+      .order("id", { ascending: true })
+      .limit(limit)
+    if (afterId) query = query.gt("id", afterId)
+    return query
+  })
+}
+
+export async function listHardwareCrmOrderBacklog(): Promise<HardwareCrmOrderBacklogResult> {
+  const [candidateResult, ledgerRows] = await Promise.all([
+    listHardwareCrmOrderCandidates({}),
+    listLedgerOutboundRows(),
+  ])
+
+  // 등록할 수 있는 후보만 — 품목·수량이 있어야 원장 기록을 만들 수 있다.
+  // 외부 CRM 오더(실제 CRM)는 품목·수량이 없어 여기 오르지 않는다.
+  const registrable = candidateResult.candidates.filter(
+    (candidate) => Boolean(cleanString(candidate.productName)) && (candidate.quantity ?? 0) > 0
+  )
+  if (registrable.length === 0) return { entries: [], warnings: candidateResult.warnings }
+
+  const recordedReferences = new Set(
+    ledgerRows
+      .map((row) => cleanString(row.reference_no))
+      .filter((reference): reference is string => Boolean(reference))
+  )
+
+  const entries: HardwareCrmOrderBacklogEntry[] = []
+  for (const candidate of registrable) {
+    if (recordedReferences.has(candidate.referenceNo)) continue
+
+    const productNeedle = normalizeForMatch(candidate.productName)
+    const overlapRows = ledgerRows.filter((row) => {
+      if (!customerNameMatches(candidate.customerName, row.to_location)) return false
+      const haystack = normalizeForMatch(row.product_name)
+      return productNeedle.length >= 2 && haystack.includes(productNeedle)
+    })
+
+    const overlapQuantity = overlapRows.reduce((total, row) => total + (toNumber(row.quantity) ?? 0), 0)
+    const lastOccurredAt = overlapRows.reduce<string | null>((latest, row) => {
+      const occurred = cleanString(row.occurred_at)
+      if (!occurred) return latest
+      return !latest || occurred > latest ? occurred : latest
+    }, null)
+
+    entries.push({
+      ...candidate,
+      ledgerOverlap: overlapRows.length > 0 ? { quantity: overlapQuantity, lastOccurredAt } : null,
+    })
+  }
+
+  return { entries, warnings: candidateResult.warnings }
 }

@@ -2698,15 +2698,20 @@ export default function HardwareInventoryClient({
     setError(null)
     try {
       const result = await adminFetchJson<{
-        import: { imported: number; skipped: number; snapshotId?: string }
+        import: { imported: number; skipped: number; snapshotId?: string; sheetWinsVoided?: number }
         sync: { inbound: number; outbound: number; stock: number; sales: number } | null
       }>("/api/admin/hardware/import-sheet", {
         method: "POST",
         body: JSON.stringify({ sync: true }),
       })
       const snapshotHint = result.import.snapshotId ? ` · 백업 ${result.import.snapshotId.slice(0, 8)}` : ""
+      // 시트가 이겨서 취소된 어드민 확정 수는 조용히 넘기지 않는다 — 원장에서 빠진 기록이 있다는 뜻이다.
+      const sheetWinsHint =
+        result.import.sheetWinsVoided && result.import.sheetWinsVoided > 0
+          ? ` 시트가 같은 물량을 다시 실어, 시트 행에서 확정했던 어드민 기록 ${formatNumber(result.import.sheetWinsVoided)}건은 취소했습니다(내역 탭에서 사유 확인).`
+          : ""
       setNotice(
-        `시트 강제 싱크와 백업 후 이관 완료: 원장 ${formatNumber(result.import.imported)}건 반영${snapshotHint}. 기존 시트 이관분은 최신 백업 기준으로 갱신되었습니다.`
+        `시트 강제 싱크와 백업 후 이관 완료: 원장 ${formatNumber(result.import.imported)}건 반영${snapshotHint}. 기존 시트 이관분은 최신 백업 기준으로 갱신되었습니다.${sheetWinsHint}`
       )
       await refresh()
     } catch (err) {
