@@ -417,6 +417,27 @@ home_v4.42(9/10 어드민 개편 중심)를 병합했다. 이 브랜치는 Wave 
 1. 계약 2종 커밋 → 6개 클러스터 병렬(S1+S2 / S3+S4 / D1 / D2 / D3 / Q1–Q4) → 클러스터별 게이트·커밋 → 전체 게이트 → §10 기록.
 2. 후속 후보: Compass 활동 타임라인을 고객 360 기록 탭에 병합(브리지 `getCompassActivitiesByLeadIds` 준비됨), 광고세트 성과는 캠페인 허브(`/admin/campaigns`)가 정본이라 CRM 에 중복하지 않는다.
 
+## 14. 2026-09-21 §11 2단계 착수 — M2·M4·A1·A4·T1·T4·P1·P3
+
+### 14.1 조사 요약 (Haiku 탐색 3건, 2026-09-21 코드 기준)
+
+- 품목·수량 원천은 셋이다: `deal_line_items`(딜 id → 고객, `hardware-crm-orders.ts` 가 ilike·limit 40 으로만 읽음), `HwOutbound`(`branch-hw.ts` 전량 조회, 고객은 destination 문자열을 `normalizedAccountKey` 로 비교 — `crm_source_links` 미참조), NEO 오더(account id 직결). `crm_source_links.source_system` 은 자유 TEXT 이고 `target_type` 에 `external_account` 가 있어, 출고→NEO 계정 링크는 **스키마 변경 없이** `source_system="branch_hw"` 로 만들 수 있다. 수동 링크 API(`source-links/manual`)는 sourceSystem·targetType 화이트리스트가 좁아 출고 전용 경로가 필요하다.
+- 컴포저는 회의록 모드에서 9개 필드를 전부 primary 로 노출한다(`rail/activity-contract.ts` MODE_FIELDS). 서버는 hasUsefulContent 만 검증하므로 클라 MODE_FIELDS 만 바꾸면 "요지 한 줄" 기본이 된다. ⌘Enter·템플릿·미연결 게이트는 1단계에서 이미 반영. 기록 목록은 occurred_at 내림차순, 기간(from/to) 파라미터가 없고, 행(CrmEventRow)은 유형·감정·액션 수·펼침을 이미 그린다 — A4 의 신규는 날짜 그룹 헤더와 기간 칩이다.
+- 태그 저장소는 고객 단위 CRUD 와 전체 맵 조회만 있고 집계·이름 변경·병합·관리 UI 가 없다. 인사이트에는 리드 상태 퍼널만 있고 딜 7단계(consult·demo·quote·decision·order·won·lost) 퍼널·병목이 없다. 프리페치 레인은 홈에만 있다. 고객 360 탭은 URL 동기화·서버 재요청 없음은 해결됐지만 탭 내용이 조건부 렌더라 전환 시 언마운트되어 펼침·더 보기 같은 로컬 상태가 사라진다.
+
+### 14.2 항목과 클러스터
+
+| 클러스터 | 항목 | 소유 파일 |
+|---|---|---|
+| M | M2 품목별 대수 표(딜 라인아이템·HW 출고 고객 합산, 통화별 분리, 근거 확정/추정, 행 펼침 시리얼·주문번호) · M4 미매칭 출고 후보를 360 매출 탭에서 바로 연결(`branch_hw` 소스 링크 생성 → 즉시 재집계) | `lib/repositories/crm-account-money.ts`·`crm-customer-360.ts`·`crm-source-links.ts`(추가만), 신규 `lib/crm/money-line-items.ts`, 신규 `app/api/admin/crm/source-links/hw-outbound/route.ts`, `Customer360DetailMoney.tsx` |
+| A1 | 한 줄 컴포저: 회의록도 요지 한 줄 기본(결정·차단·참석자는 "+상세"), 최근·오늘 연락 고객 칩 원클릭 연결 | `rail/ActivityQuickForm.tsx`, `rail/activity-contract.ts` |
+| A4+P1a | 기록 목록 날짜 그룹(스티키 헤더)·기간 칩(오늘·7일·30일·전체)·유형·감정 칩, 서버 from/to; 기록 화면 스트리밍 프리페치 레인 + 캐시 시드 | `CrmActivityClient.tsx`, `CrmEventRow.tsx`, `lib/repositories/crm-events.ts`, `app/api/admin/crm/events/route.ts`(GET 파라미터만), 신규 `lib/admin/crm/activity-prefetch.ts`, `app/admin/crm/activity/page.tsx` |
+| T1 | 리드 상태 → 딜 7단계 퍼널(단일 색, 단계별 전환율, 최저 전환 구간 병목 표시) | `lib/repositories/crm-deals.ts`(추가만)·`crm-insights.ts`, `CrmInsightsClient.tsx` |
+| T4 | 태그 관리: 전체 태그·건수, 클릭 시 통합 고객 필터 이동, 이름 변경·병합(일괄), 새 화면 `/admin/crm/customers/tags` + 서브내비 | `lib/repositories/crm-customer-tags.ts`, 신규 `app/api/admin/crm/tags/route.ts`, 신규 `components/admin/crm/TagManagementPanel.tsx`, 신규 페이지, `CrmSubnav.tsx` |
+| P1b+P3 | 통합 고객 스트리밍 프리페치 레인 + 캐시 시드; 고객 360 방문한 탭은 언마운트 대신 hidden 으로 유지(로컬 상태 보존) | 신규 `lib/admin/crm/unified-prefetch.ts`, `app/admin/crm/customers/unified/page.tsx`, `CrmUnifiedCustomersClient.tsx`, `Customer360DetailClient.tsx` |
+
+역할 매트릭스 테스트(`tests/admin/crm-role-matrix.test.ts`)는 새 라우트 2개(hw-outbound·tags)를 한 번에 갱신한다(클러스터가 아니라 통합 단계에서).
+
 ## 12. 근거 요약 (영역별 조사 결과 원문 위치)
 
 이 문서의 파일:라인 근거는 2026-09-12 코드 기준이다. 후속 작업 시 각 항목의 파일을 다시 열어 현재 상태를 재확인한 뒤 착수한다. 감사 문서(2026-08-06) §4에서 미해결로 남았던 3건의 현재 상태: 큐 스코어링 비용 = 부분 해결(소스 수집만 캐시) → H7, 필터 URL 소유권 = 사용처가 홈 1곳으로 줄어 선행 조건 해소 → H4, 죽은 task 분기 = 미해결 → H2. 입력함 열 매핑·매칭 제외 되돌리기·통합 목록 offset·customers-neo 1만 행 = 전부 미해결 → R2·R4·C1·C9.
