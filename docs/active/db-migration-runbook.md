@@ -126,10 +126,15 @@ npm run check:db --  --strict
 
 하드웨어 계열은 아래 "하드웨어 마이그레이션" 절의 문서가 정본이다.
 
-**프로브가 없는 최근 파일.** `20260907_lead_digest_runs_daily_type.sql`, `20260907_site_settings_webhook_toggles_and_schedule.sql`,
-`20260910_admin_crm_overview_stale_first.sql`은 스키마를 바꾸지만 `schema-contract.ts`에 프로브가 없다. 관련 기능이
-이관 시점의 운영 커밋에 들어 있었고 이관 문서가 overview 함수 적용을 기록하고 있어 적용된 것으로 보이나, 코드로
-확인되는 상태는 아니다 — 아래 "새 마이그레이션을 추가할 때" 2번 규칙대로 프로브를 보강할 대상이다.
+**프로브가 없던 최근 파일(2026-09-21 보강).** 아래 셋은 스키마를 바꾸는데 `schema-contract.ts`에 프로브가 없었다.
+지금은 이렇게 확인한다. 보강한 프로브는 아직 서울 프로젝트에서 `check:db`로 돌려 보지 않았다 — 다음 실행에서 초록인지 본다.
+
+| 파일 | 확인 | 한계 |
+| --- | --- | --- |
+| `20260907_site_settings_webhook_toggles_and_schedule.sql` | `check:db` 테이블 프로브(`site_settings.webhook_enabled_json`·`notification_schedule_json`). 미적용이면 사이트 설정 저장이 어느 탭에서든 실패한다 | 같은 파일의 백필 UPDATE(wecom_ops 스위치 이관·`'disabled'` 정리)는 컬럼 프로브로 구분되지 않는다 |
+| `20260910_admin_crm_overview_stale_first.sql` | `check:db` 카탈로그 프로브(`admin_crm_business_overview(integer, boolean, integer)`, service_role 전용). 호출하지 않고 `pg_proc`·권한만 본다 — `SUPABASE_ACCESS_TOKEN` 필요 | 옛 2인자 오버로드가 되살아났는지는 보지 않는다(`20260613_admin_crm_overview_snapshot.sql`을 재실행하면 생긴다). `schema-contract.ts` 주석의 `pg_proc` 조회로 확인한다 |
+| `20260907_lead_digest_runs_daily_type.sql` | 프로브 없음 — `report_type` CHECK에 `'daily'`를 더하는 변경뿐이라 REST로 볼 수 없다. `schema-contract.ts` 주석의 제약 조회로 정의에 `'daily'`가 있는지 본다 | 미적용이면 아침 카드 실행 선점 insert가 23514로 실패해 카드가 나가지 않는다 |
+
 `20260921_lead_source_intake_split.sql`은 데이터 백필이라 프로브로 확인할 수 없다(위 표의 조회로 확인).
 
 ## 적용 보류 중인 마이그레이션

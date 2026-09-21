@@ -102,7 +102,7 @@
   `pickLeadAttribution`은 테스트만 부른다. 제거하거나 위임으로 바꾼다.
 - [ ] 태그 관리 화면의 행 클릭 → 통합 고객 `?tag=` 딥링크 미배선, `customerSourceTone()`의 팔레트 밖 색상, 리드 보드의
   신선도 캡션 생략(`generatedAt` 없음) — CRM 기획 §10의 라운드별 "후속".
-- [ ] `schema-contract.ts`에 프로브가 없는 최근 마이그레이션 3건(런북 "프로브가 없는 최근 파일").
+- [x] (2026-09-21: `site_settings` 컬럼·overview 카탈로그 프로브 추가, CHECK 전용 `lead_digest_runs`는 주석의 제약 조회로 대체 — 서울 `check:db` 실행은 남음.) `schema-contract.ts`에 프로브가 없는 최근 마이그레이션 3건(런북 "프로브가 없던 최근 파일").
 
 ## 3. P2 — 결정 대기
 

@@ -142,6 +142,17 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // 리드 중복 탐지 + 어드민 핫패스 인덱스(2026-09-02). 인덱스 전용 마이그레이션이라
   // 프로브의 한계는 SCHEMA_PROBES 쪽 주석 참고.
   "supabase/migrations/20260902_leads_dedupe_and_admin_hot_path_indexes.sql",
+  // 아침 리드 카드 한 장 통합(2026-09-07). 같은 날의 20260907_lead_digest_runs_daily_type.sql 은
+  // lead_digest_runs.report_type CHECK 에 'daily' 를 더하는 변경뿐이라 REST 로 확인할 방법이 없어
+  // 계약에 넣지 않는다(미적용이면 아침 카드 실행 선점 insert 가 23514 로 실패해 카드가 안 나간다).
+  // 적용 확인은 아래 제약 조회로 한다 — 정의에 'daily' 가 보이면 적용된 것이다.
+  //   select pg_get_constraintdef(oid) from pg_constraint
+  //   where conname = 'lead_digest_runs_report_type_check';
+  // 웹훅별 켜기/끄기 + 알림 발송 스케줄(2026-09-07) — site_settings 두 JSONB 컬럼.
+  "supabase/migrations/20260907_site_settings_webhook_toggles_and_schedule.sql",
+  // CRM 개요 스냅샷 stale-first(2026-09-10) — 2인자 함수를 DROP 하고 3인자로 재생성한다.
+  // 스냅샷을 쓰고 advisory lock 을 잡는 SECURITY DEFINER 함수라 카탈로그로만 확인한다.
+  "supabase/migrations/20260910_admin_crm_overview_stale_first.sql",
   // 광고 채널 확장 — Google Ads·네이버 검색광고(2026-09-14). 파일명 사전순(= 적용 순서).
   // ad_channel_daily 가 먼저여야 한다: 나머지 둘은 그 테이블을 참조하지 않지만, 크론이
   // 먼저 돌아 스냅샷이 쌓여 있어야 화면이 빈 채널을 "미측정"이 아니라 "집행 없음"으로 읽는다.
@@ -470,6 +481,39 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     severity: "warning",
     impact:
       "idx_crm_tasks_status_completed_at이 없어도 기능은 정상이나, /api/admin/crm/manager-report의 기간 내 완료 집계가 done 누적 전체 스캔이 되고 그 비용은 시간이 지날수록 커진다.",
+  },
+  // ── 웹훅별 켜기/끄기 + 알림 발송 스케줄(2026-09-07) ─────────────────────
+  // updateSettings()(lib/repositories/settings.ts)가 두 컬럼을 upsert 에 무조건 싣는다.
+  // 읽기(select *)는 컬럼이 없어도 죽지 않고 기본값으로 강등되므로, 드러나는 증상은 저장 실패뿐이다.
+  // 같은 파일의 백필 UPDATE(wecom_ops 스위치 이관·'disabled' 문자열 정리·스케줄 기본값)는
+  // 컬럼 프로브로 구분되지 않는다 — 한 파일이라 컬럼이 있으면 백필도 돌았다고 본다.
+  {
+    kind: "table",
+    table: "site_settings",
+    label: "웹훅별 켜기/끄기 맵 + 알림 발송 스케줄 컬럼",
+    columns: ["id", "webhook_enabled_json", "notification_schedule_json"],
+    migration: "supabase/migrations/20260907_site_settings_webhook_toggles_and_schedule.sql",
+    impact:
+      "사이트 설정 저장(PATCH /api/admin/settings)이 어느 탭에서든 컬럼 없음 오류로 실패한다. 읽기는 기본값으로 강등돼 조용히 틀린다 — 웹훅 스위치는 옛 wecom_ops 하나만 반영되고 아침 카드 발송 시각은 기본값(평일 11시)에 고정된다.",
+  },
+  // ── CRM 개요 스냅샷 stale-first(2026-09-10) ────────────────────────────
+  // 스냅샷을 쓰고 dirty 로그를 지우며 advisory lock 을 잡는 SECURITY DEFINER 함수라 실행 프로브를
+  // 금지하고 pg_proc·권한만 본다. 미적용이어도 앱이 2인자로 한 번 재시도해 화면은 살지만
+  // blocker 로 둔다 — 이 프로브는 service_role 전용 권한도 함께 보고, anon/authenticated 에 열리면
+  // CRM 사업 개요 payload 가 공개 키로 읽히고 무거운 재계산을 누구나 유발할 수 있다.
+  // 한계: 3인자 시그니처만 본다. 20260613_admin_crm_overview_snapshot.sql 을 재실행하면 옛 2인자
+  // 함수가 오버로드로 되살아나(두 이름만 넘기는 호출이 PGRST203) 이 프로브로는 잡히지 않는다.
+  //   select oid::regprocedure from pg_proc where proname = 'admin_crm_business_overview';
+  // 가 3인자 한 줄만 돌려주는지로 확인한다.
+  {
+    kind: "rpc",
+    functionName: "admin_crm_business_overview",
+    label: "CRM 개요 스냅샷 stale-first 조회(3인자, 안전핀 p_hard_max_age_seconds) RPC",
+    catalogIdentityTypes: "integer, boolean, integer",
+    serviceRoleOnly: true,
+    migration: "supabase/migrations/20260910_admin_crm_overview_stale_first.sql",
+    impact:
+      "앱이 2인자 함수로 재시도해 CRM 개요는 뜨지만, 어드민 쓰기가 있었거나 300초가 지난 뒤의 조회마다 무거운 집계 재계산(실측 콜 평균 약 1초)을 동기로 기다리는 옛 동작으로 돌아가고 호출마다 실패 왕복이 한 번 더 붙는다.",
   },
   // ── Compass 연동 브리지 2차(2026-09-14) ─────────────────────────────────
   // 전부 warning — 아직 소비 코드가 어드민에 없고, Compass(lib/homeBridge.ts)는 뷰가 없으면
