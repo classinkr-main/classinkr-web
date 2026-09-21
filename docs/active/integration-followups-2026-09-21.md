@@ -98,17 +98,18 @@
 
 ### 2-3. 알려진 결함 (개발, 작음)
 
-- [ ] 할 일 PATCH가 `dueAt: null`을 못 받아 기한 삭제·"내일로" 되돌리기가 안 된다(`app/api/admin/crm/tasks/[id]/route.ts`가
+- [x] (2026-09-21 완료: 라우트가 `dueAt` 3상태(키 없음=그대로·null/빈 문자열=지움·날짜=설정)를 받고 해석 못 하는 값은 400. "내일로" 되돌리기는 기한이 없던 할 일도 `dueAt: null`로 정확히 복원한다.) 할 일 PATCH가 `dueAt: null`을 못 받아 기한 삭제·"내일로" 되돌리기가 안 된다(`app/api/admin/crm/tasks/[id]/route.ts`가
   `optionalString(raw.dueAt)`로만 받는다. CRM 기획 §10).
   (같은 절의 "우선순위 큐 무효화 함수에 호출자가 없다"는 이미 해소됐다 — `crm-priority-queue.ts`가 리드·할 일·연락 기록 변이에 등록한다.)
-- [ ] `compass/adsets` 라우트는 아직 route-local 메모 + 행 수 근사 절단 판정이다. 같은 계열 `compass/ads`는 Data Cache +
+- [x] (2026-09-21 완료: `unstable_cache` 60초 + `compass-adsets` 태그, `fresh=1`은 태그 즉시 만료, 절단 판정은 브리지 `truncated`.) `compass/adsets` 라우트는 아직 route-local 메모 + 행 수 근사 절단 판정이다. 같은 계열 `compass/ads`는 Data Cache +
   브리지 `truncated`로 옮겨졌다 — 같은 패턴으로 맞춘다.
 - [x] (2026-09-21 제거: 계약 테스트는 `tests/crm/lead-attribution-payload.test.ts`로 옮기고, 수집기 결과를 폼 본문에
   평평하게 펼쳐 보낸 값이 서버 정규화를 그대로 왕복하는지 잠갔다.) 미러링 경로의 귀속 정규화를 `sanitizeLeadAttribution`
   하나로 통일하면서 `lib/marketing-attribution.ts`의 `pickLeadAttribution`은 테스트만 부른다. 제거하거나 위임으로 바꾼다.
-- [ ] 태그 관리 화면의 행 클릭 → 통합 고객 `?tag=` 딥링크 미배선, `customerSourceTone()`의 팔레트 밖 색상, 리드 보드의
+- [ ] (2026-09-21 앞의 둘 완료: 태그 행 → 통합 고객 `?tag=` 딥링크(라벨 필터가 URL 상태, 서버 프리페치도 라벨을 싣고 마운트 레인만 시드),
+  원천 상태 타일을 팔레트 톤으로. **남은 것: 리드 보드 신선도 캡션.**) 태그 관리 화면의 행 클릭 → 통합 고객 `?tag=` 딥링크 미배선, `customerSourceTone()`의 팔레트 밖 색상, 리드 보드의
   신선도 캡션 생략(`generatedAt` 없음) — CRM 기획 §10의 라운드별 "후속".
-- [x] (2026-09-21: `site_settings` 컬럼·overview 카탈로그 프로브 추가, CHECK 전용 `lead_digest_runs`는 주석의 제약 조회로 대체 — 서울 `check:db` 실행은 남음.) `schema-contract.ts`에 프로브가 없는 최근 마이그레이션 3건(런북 "프로브가 없던 최근 파일").
+- [x] (2026-09-21: `site_settings` 컬럼·overview 카탈로그 프로브 추가, CHECK 전용 `lead_digest_runs`는 주석의 제약 조회로 대체. 서울에서 `check:db --strict` 통과, 제약 정의에 `'daily'`·overview 3인자 한 줄만 있음을 SQL로 확인.) `schema-contract.ts`에 프로브가 없는 최근 마이그레이션 3건(런북 "프로브가 없던 최근 파일").
 
 ## 3. P2 — 결정 대기
 
@@ -121,6 +122,7 @@
 | CRM | 돈흐름을 6번째 작업면으로, `/deals/orders`·`kpi` 재구현, 매출 원장 Phase 2 테이블, NEO `crm_orders` PRD, 리드 소프트 삭제 방식, 되밀기 초안 자동 생성 범위, 문서 아카이브 — 7건 | [crm-tab-develop-plan](./crm-tab-develop-plan-2026-09-12.md) §6 |
 | 퍼널 | `/checkout`에 GTM·Pixel·동의 배너 복구(D11, 미결), 쇼룸 헤더 진입 방식(D14), 부가세 표기(D6, 세무 확인), 문의 폼 `role` select 승격(D13 — 결정됐으나 미구현) | [퍼널 기획](./contact-showroom-checkout-develop-round2-2026-09-20.md) §8 |
 | 마케팅 허브 | `/admin/marketing` 라우트 정본화(N3) 진행 여부 | [marketing-tab-dashboard-restructure](./marketing-tab-dashboard-restructure-2026-09-14.md) §6 |
+| 내부 CS 승인 흐름 | 승인 때 AI 초안을 미리 채우지 않고 고객 전달용 최종 답변을 따로 쓰게 할 것인가(라우트 400 포함), 답변 생성의 첨부 이미지 근거를 담당자 승인 분석만으로 좁힐 것인가(좁히면 캡처를 올리고 바로 만든 초안에 이미지가 빠진다). 구현은 브랜치 `feat/0921-cs-approval-customer-answer`에 있다 — 상담원 작업 방식이 바뀌므로 CS 담당과 정한다 | §6 |
 | 알림 발송 시각 UI | "시" 단위만 고르게 한 설계는 Hobby 플랜 전제였다 — Pro에서 분 단위를 열 것인가 | [admin-settings-webhook-toggles](./admin-settings-webhook-toggles-and-schedule-2026-09-07.md) |
 
 ## 4. P3 — 백로그 (정본은 각 문서)
@@ -163,7 +165,7 @@
 ## 6. 가져오지 않은 것
 
 - **로컬에만 있던 작업 3건**(원격에 없다 — 백업이 먼저다): 공개 챗봇 민감 주제 잠금(§3 결정 대기), 내부 CS의 외부 모델 전송 PII
-  리댁션 + 검수 답안 필수화(워크스페이스가 패널로 분해돼 UI 재작업 필요 — 리댁션 자체는 가치가 크다), CRM 고객 배치·선택 모션
+  리댁션 + 검수 답안 필수화(2026-09-21: **리댁션은 main 에 병합** — 외부 모델(생성·비전·회귀 심판·임베딩)로 나가는 질문·히스토리·파일명·요약·OCR·교정본을 `lib/internal-cs-chat/privacy.ts` 경계에서 가린다. 승인 흐름 부분은 §3 결정 대기. 남은 노출: 내부 AI 브리지 dispatch 웹훅은 대화 원문을 그대로 보내고, 캡처 이미지 바이트는 Gemini 비전에 원본으로 간다), CRM 고객 배치·선택 모션
   (통합 고객 화면 재설계로 UI 재작업 필요, `lib/crm/customer-placement.ts` 로직은 그대로 쓸 수 있다).
 - **인프라 Phase 0 묶음**(리전·이미지 최적화·캐시 헤더·타임아웃): 리전을 `sin1`로 되돌리는 줄이 들어 있어 통째로 가져오면 안 된다.
   나머지는 항목별로 본다 — Supabase fetch 10초 타임아웃은 긴 RPC(시트 교체 가져오기 등)를 끊을 수 있고, `/l/<slug>/assets`
@@ -175,7 +177,7 @@
 
 ## 7. 운영 반영 중 새로 발견한 것 (2026-09-21)
 
-- [ ] **한글 slug 블로그 글이 500.** 예: `/blog/naver-2026-06-11-최대-500만원-…`. Vercel 런타임 로그
+- [x] (2026-09-21 수정: 원인은 Next 16 ISR 이 디코드된 한글 경로로 만든 암묵 캐시 태그가 minimal mode(Vercel)에서 `x-next-cache-tags` 헤더에 실려 Node 가 거부한 것. `proxy.ts` 가 헤더에 못 싣는 슬러그만 `/blog/_u8_<base64url>` 토큰 경로로 rewrite 한다 — 주소창 URL·canonical 은 원래 슬러그 그대로, ISR 유지, `revalidatePath` 도 토큰 경로로. `lib/blog-slug-route.ts`.) **한글 slug 블로그 글이 500.** 예: `/blog/naver-2026-06-11-최대-500만원-…`. Vercel 런타임 로그
   `TypeError: Invalid character in header content ["x-next…`. 배포 **전** 빌드(17:20 KST)에서도 같은 오류가 있었고 이번 배포 뒤에도
   재현된다 — 이번 통합의 회귀가 아니다. `app/blog/[slug]/page.tsx` 는 ISR(`revalidate=3600`, `dynamicParams`)이고, 디코딩된
   한글 경로가 Next 내부 헤더에 들어가는 것으로 보인다. 네이버에서 가져온 글이 이 형태라 SEO 영향이 있다. — 개발 작업(별도 세션으로 분리)
