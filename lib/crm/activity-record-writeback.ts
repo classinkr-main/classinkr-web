@@ -95,9 +95,17 @@ export interface ActivityWritebackTarget {
    * `activityRecordFrom_data`(값) 쌍이다. `dbcRelation26` 은 고객 전용이라 리드에는 넣지 않는다.
    */
   externalAccountId: string | null
-  /** 외부 CRM 담당자 id. 비우면 실행 계정이 담당자가 된다. */
+  /**
+   * 외부 CRM 담당자 id. describe 상 **필수**다(되밀기 지침 §2-4·§5) — 비우면 자동 주입돼
+   * 실행 계정 소유로 쌓이므로 모르면 만들지 않는다(`missing_owner`).
+   * 어드민 계정 → 네오CRM ownerId 매핑은 아직 없다(지침 §9) — 호출자가 채워야 한다.
+   */
   externalOwnerId: string | null
-  /** 대상 레코드의 피드 그룹 id — 대상을 단건 조회하면 groupId 로 나온다. */
+  /**
+   * 대상 레코드의 피드 그룹 id — 대상을 단건 조회하면 groupId 로 나온다.
+   * ⚠️ 리드 출처(`fromLead`)는 되밀기 지침 §8 확인 3(리드 단건 조회에 groupId 가 있는지)이
+   * 아직 미확인이다. 리드에 groupId 가 없으면 리드 대상 활동은 `missing_group` 으로 막힌다.
+   */
   targetGroupId: string | null
   /** 리드 단계에서 남긴 기록인지 — 출처 구분에 쓴다. */
   fromLead?: boolean
@@ -132,11 +140,13 @@ export interface ActivityRecordPayload {
    * 그래서 **리드에 붙일 때는 넣지 않는다** — 리드 id 를 넣으면 고객 참조에 리드 id 가 들어간다.
    */
   dbcRelation26?: string
-  ownerId?: string
+  /** 담당자 — describe 필수. 정책(`xiaoshouyi-write.ts`)도 같은 값을 필수로 검증한다. */
+  ownerId: string
 }
 
 export type ContactWritebackSkipReason =
   | "missing_account"
+  | "missing_owner"
   | "invalid_time"
   | "missing_group"
   | "missing_content"
@@ -171,7 +181,10 @@ function buildActivityRecord(input: {
 }): ContactWritebackResult {
   const { target } = input
   if (!target.externalAccountId) return { ok: false, reason: "missing_account" }
+  // ownerId 는 describe 필수 — 비우면 실행 계정 소유로 자동 주입되고 정책 검증에서도 거절된다.
+  if (!target.externalOwnerId) return { ok: false, reason: "missing_owner" }
   // 틀린 그룹으로 보내면 조용히 다른 피드에 꽂힌다 — 모르면 만들지 않는다.
+  // (리드 출처는 지침 §8 확인 3 — 리드 단건 조회에 groupId 가 있는지 — 에 의존한다.)
   if (!target.targetGroupId) return { ok: false, reason: "missing_group" }
   if (!input.kind) return { ok: false, reason: "unknown_kind" }
 
@@ -192,10 +205,12 @@ function buildActivityRecord(input: {
     activityRecordFrom: target.fromLead ? XIAOSHOUYI_ACTIVITY_FROM.lead : XIAOSHOUYI_ACTIVITY_FROM.account,
     activityRecordFrom_data: target.externalAccountId,
     itemId: target.externalAccountId,
+    ownerId: target.externalOwnerId,
   }
   // 고객 참조는 고객일 때만. 리드 id 를 여기 넣으면 account 참조에 리드 id 가 들어간다.
+  // 정책(activityrecord.conditionalCreateRules)이 같은 규칙을 다시 검증한다 —
+  // 고객 출처면 dbcRelation26 필수, 리드 출처면 금지.
   if (!target.fromLead) payload.dbcRelation26 = target.externalAccountId
-  if (target.externalOwnerId) payload.ownerId = target.externalOwnerId
 
   return { ok: true, payload }
 }

@@ -8,6 +8,7 @@ import type { Customer360 } from "@/lib/repositories/crm-customer-360"
 import type { CrmTaskType } from "@/lib/repositories/crm-tasks"
 import { CS_MOTIONS, type CsMotion } from "@/lib/crm/cs-motions"
 import { formatDay, SectionTitle, TASK_TYPE_OPTIONS } from "./shared"
+import { TASKS_SECTION_HEADING_ID, taskCompleteButtonId } from "./c360-local-patch"
 
 export default function DrawerTasksSection({
   data,
@@ -40,7 +41,8 @@ export default function DrawerTasksSection({
 }) {
   return (
     <section id="c360-tasks" className="scroll-mt-2 rounded-2xl border border-[#e8e8e4] bg-white p-4">
-      <SectionTitle icon={<ListChecks className="h-3.5 w-3.5" />}>
+      {/* heading은 tabIndex=-1 — 마지막 할 일을 완료해 행이 사라지면 포커스가 여기로 돌아온다. */}
+      <SectionTitle icon={<ListChecks className="h-3.5 w-3.5" />} id={TASKS_SECTION_HEADING_ID} focusable>
         열린 할 일 {data.tasks.summary.total > 0 ? `(${data.tasks.summary.total})` : ""}
       </SectionTitle>
       <div className="mb-3 space-y-1.5">
@@ -59,8 +61,10 @@ export default function DrawerTasksSection({
               </div>
               <button
                 type="button"
+                id={taskCompleteButtonId(task.id)}
                 onClick={() => onCompleteTask(task.id)}
                 disabled={actingId === `task:${task.id}`}
+                aria-busy={actingId === `task:${task.id}` ? true : undefined}
                 aria-label={`${task.title} 할 일 완료`}
                 className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-[#D7EBDD] bg-[#ECFDF5] px-2 text-[11px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD] disabled:opacity-50"
               >
@@ -106,6 +110,7 @@ export default function DrawerTasksSection({
                 type="button"
                 onClick={onAddTask}
                 disabled={!taskTitle.trim() || actingId === "task"}
+                aria-busy={actingId === "task" ? true : undefined}
                 className="inline-flex h-9 flex-1 items-center justify-center gap-1 rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -141,6 +146,7 @@ export default function DrawerTasksSection({
               type="button"
               onClick={() => onCsMotion(motion)}
               disabled={actingId === `cs:${motion.key}`}
+              aria-busy={actingId === `cs:${motion.key}` ? true : undefined}
               className="inline-flex h-7 items-center gap-1 rounded-full border border-[#e8e8e4] bg-white px-2.5 text-[11px] font-semibold text-[#1a1a1a]/65 transition-colors hover:border-[#084734] hover:text-[#084734] disabled:opacity-50"
             >
               <Plus className="h-3 w-3" />

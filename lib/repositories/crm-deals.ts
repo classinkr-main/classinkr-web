@@ -323,3 +323,40 @@ export async function deleteCrmDeal(id: string): Promise<boolean> {
   }
   return Boolean(data)
 }
+
+export type CrmDealStageCounts = Record<CrmDealStage, number> & { total: number }
+
+/**
+ * 단계별 건수(T1 단계 퍼널 원천). lost 포함 7개 단계를 head count로 병렬 집계한다 —
+ * 전체 행을 select하지 않으므로 PostgREST max-rows 절단(플레이북 "전량 조회는 range" 규칙)의
+ * 대상이 아니다(count: "exact" + head: true는 행을 내려받지 않고 서버가 정확한 건수만 센다).
+ * 실패(테이블 미존재 포함)는 throw 대신 null을 반환한다 — 호출부(getCrmInsights)가 "딜 집계
+ * 실패면 stageFunnel 전체를 null로 만든다"를 강제하기 쉽도록.
+ */
+export async function getCrmDealStageCounts(): Promise<CrmDealStageCounts | null> {
+  try {
+    const supabase = createSupabaseAdminClient()
+    const results = await Promise.all(
+      CRM_DEAL_STAGES.map((stage) =>
+        supabase.from("crm_deals").select("id", { count: "exact", head: true }).eq("stage", stage)
+      )
+    )
+
+    const counts = {} as Record<CrmDealStage, number>
+    let total = 0
+    for (let i = 0; i < CRM_DEAL_STAGES.length; i += 1) {
+      const { count, error } = results[i]
+      if (error) {
+        console.error("[crm-deals] getCrmDealStageCounts 실패", error)
+        return null
+      }
+      const n = count ?? 0
+      counts[CRM_DEAL_STAGES[i]] = n
+      total += n
+    }
+    return { ...counts, total }
+  } catch (error) {
+    console.error("[crm-deals] getCrmDealStageCounts 실패", error)
+    return null
+  }
+}

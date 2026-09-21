@@ -44,11 +44,18 @@ function parseSavedView(value: string | null): CrmUnifiedSavedView {
     value === "hot_lead" ||
     value === "upsell" ||
     value === "site_leads" ||
-    value === "unanswered"
+    value === "unanswered" ||
+    value === "meta_leads" ||
+    value === "registered_leads"
   ) {
     return value
   }
   return "all"
+}
+
+// 리드 보드의 `unconfirmed=1`과 같은 의미 — 확인 게이트를 우회해 미확인 리드를 목록에 포함한다.
+function parseIncludeUnconfirmed(value: string | null) {
+  return value === "1" || value === "true"
 }
 
 function parseBoundedInt(value: string | null, fallback: number, min: number, max: number) {
@@ -71,6 +78,10 @@ export async function GET(req: NextRequest) {
         ? currentOwner.ownerKeys
         : ["__no_current_admin_owner__"]
       : undefined
+    // 새로고침(?force=1) — 홈 우선순위 큐 라우트와 같은 계약(파라미터 존재 여부로 판정).
+    // 서버 소스 스냅샷 Data Cache(60초)를 우회해 방금 등록한 리드·동기화 결과를 즉시 반영하고,
+    // 응답도 브라우저 프라이빗 캐시에 남기지 않는다(no-store).
+    const force = url.searchParams.has("force")
     const customers = await getCrmUnifiedCustomers({
       q: url.searchParams.get("q") ?? undefined,
       source: parseSource(url.searchParams.get("source")),
@@ -79,12 +90,17 @@ export async function GET(req: NextRequest) {
       owner: isMine ? undefined : ownerParam,
       ownerKeys,
       tag: url.searchParams.get("tag") ?? undefined,
+      includeUnconfirmed: parseIncludeUnconfirmed(url.searchParams.get("includeUnconfirmed")),
       limit: parseBoundedInt(url.searchParams.get("limit"), 100, 1, 200),
       offset: parseBoundedInt(url.searchParams.get("offset"), 0, 0, 100_000),
+      bypassCache: force,
     })
-    return adminCachedJson(customers)
+    const response = adminCachedJson(customers)
+    if (force) response.headers.set("Cache-Control", "no-store")
+    return response
   } catch (error) {
     console.error("[GET /api/admin/crm/customers/unified]", error)
-    return NextResponse.json({ error: "Failed to load unified CRM customers" }, { status: 500 })
+    // 클라이언트가 이 문자열을 배너에 그대로 띄운다 — 한국어 고정 문구.
+    return NextResponse.json({ error: "통합 고객 목록을 불러오지 못했습니다." }, { status: 500 })
   }
 }

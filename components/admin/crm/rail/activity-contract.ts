@@ -131,19 +131,11 @@ export const MODE_FIELDS: Record<FormMode, { primary: OptionalFieldKey[]; advanc
     primary: ["body"],
     advanced: ["nextAction", "sentiment", "tags"],
   },
+  // 회의록도 "요지 한 줄"이 기본(2026-09-21 §14 A1) — 참석자·목적·결정·리스크·다음 액션·단계 신호·태그는
+  // 전부 "+상세"로 옮긴다. 서버 검증(hasUsefulContent)은 body 유무와 무관하게 그대로라 저장 계약은 불변.
   meeting_minutes: {
-    primary: [
-      "body",
-      "attendees",
-      "meetingPurpose",
-      "decisions",
-      "blockers",
-      "nextAction",
-      "sentiment",
-      "stageSignal",
-      "tags",
-    ],
-    advanced: [],
+    primary: ["body"],
+    advanced: ["attendees", "meetingPurpose", "decisions", "blockers", "nextAction", "sentiment", "stageSignal", "tags"],
   },
   recording: {
     primary: ["recording"],

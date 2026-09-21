@@ -1,10 +1,13 @@
 import { Suspense } from "react"
 
 import CrmUnifiedCustomersClient from "@/components/admin/crm/CrmUnifiedCustomersClient"
+import { prefetchCrmUnifiedInitialData } from "@/lib/admin/crm/unified-prefetch"
 
 export const metadata = {
   title: "통합 고객 | Admin CRM",
 }
+
+export const dynamic = "force-dynamic"
 
 function UnifiedCustomersLoading() {
   return (
@@ -32,10 +35,31 @@ function UnifiedCustomersLoading() {
 
 // useSearchParams를 쓰는 클라이언트 컴포넌트는 Suspense 경계가 필요하다(정적 프리렌더 실패 방지).
 // 형제 라우트(leads·accounts)는 이미 같은 형태로 감싸는데 이 화면만 빠져 있었다.
-export default function AdminCrmUnifiedCustomersPage() {
+//
+// P1b(2026-09-21) — 서버 프리페치 레인. admin 인증 확인만 여기서 await하고(ms 단위), 실제
+// 통합 고객 조회(getCrmUnifiedCustomers)는 openPrefetchLane으로 시작만 해 둔다(TTFB 영향 없음).
+// CrmUnifiedCustomersClient가 그 promise를 React use()로 풀어 요청 캐시에 심은 뒤 기존
+// loadPage(0)이 그 캐시를 그대로 적중한다 — 자세한 시드 정합 규약은
+// lib/admin/crm/unified-prefetch.ts 상단 주석 참고.
+export default async function AdminCrmUnifiedCustomersPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const params = await searchParams
+  const pick = (key: string) => {
+    const value = params[key]
+    return Array.isArray(value) ? value[0] : value
+  }
+  const initialData = await prefetchCrmUnifiedInitialData({
+    q: pick("q"),
+    view: pick("view"),
+    account: pick("account"),
+  })
+
   return (
     <Suspense fallback={<UnifiedCustomersLoading />}>
-      <CrmUnifiedCustomersClient />
+      <CrmUnifiedCustomersClient initialData={initialData} />
     </Suspense>
   )
 }

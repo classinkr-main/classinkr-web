@@ -47,6 +47,8 @@
 - 다음 액션 실행 상태는 `crm_tasks`가 담당한다. 외부 CRM 변경 요청과 REV/매출 데이터 연결은 별도 검수 흐름으로 유지한다.
 - `snoozed`의 UI 용어는 **미루기**이며 재개일을 가진다. 재개일을 생략한 빠른 미루기는 다음 날 오전 9시(KST)를 사용한다.
 
+현재 코드 상태(2026-09-12, IA 위치 미결): 돈흐름(`/admin/crm/deals/*`)은 1차 탭 없이 현황(홈) 활성 판정에 흡수된 하위 화면이고(`deals/rev-sheet`만 검수 판정), 인사이트(`/admin/crm/insights`)는 검수 활성 판정에 흡수된 독립 라우트다(`components/admin/admin-nav.ts`의 `CRM_CHILD_NAV`). 두 화면이 위 다섯 작업면 중 어디에 속하는지는 정해지지 않았으며, 결정은 [CRM 탭 디벨롭 기획 §6-1](crm-tab-develop-plan-2026-09-12.md#6-사용자-결정이-필요한-항목)에서 대기한다.
+
 ## 4. 상태와 삭제
 
 - 상태는 허용 enum과 명시적 액션(`complete`, `snooze`, `cancel`, `reopen` 등)으로만 전이한다. 임의 문자열 상태 PATCH를 허용하지 않는다.

@@ -132,11 +132,12 @@ describe("buildCustomerEventWritebackPayload", () => {
     expect(lead.payload).not.toHaveProperty("dbcRelation26")
   })
 
-  it("담당자를 안 주면 필드 자체를 빼서 실행 계정에 맡긴다", () => {
-    const result = buildCustomerEventWritebackPayload(eventInput({ externalOwnerId: null }))
-    expect(result.ok).toBe(true)
-    if (!result.ok) return
-    expect(result.payload).not.toHaveProperty("ownerId")
+  // ownerId 는 describe 필수(되밀기 지침 §2-4·§5) — 실행 계정에 맡기면 전부 실행 계정 소유로 쌓인다.
+  it("담당자를 모르면 만들지 않는다", () => {
+    expect(buildCustomerEventWritebackPayload(eventInput({ externalOwnerId: null }))).toEqual({
+      ok: false,
+      reason: "missing_owner",
+    })
   })
 
   it("groupId 가 없으면 만들지 않는다 — 틀린 그룹은 조용히 안 보이는 곳에 꽂힌다", () => {

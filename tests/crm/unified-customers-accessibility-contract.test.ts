@@ -32,7 +32,10 @@ describe("CRM 통합 고객 접근성 계약", () => {
     expect(clientSource).toContain('role="group" aria-label="빠른 고객 필터"')
     expect(clientSource).toContain('aria-label="통합 고객 검색 결과"')
     expect(clientSource).toContain("<caption className=\"sr-only\">통합 고객 검색 결과 목록</caption>")
-    expect(clientSource).toContain('role="alert"')
+    // 조회 실패 통지는 CrmNoticeBanner(role=alert, tone="danger")가 전담한다 — 2026-09-12
+    // 리뷰 #3으로 중복 통지하던 상시 sr-only role=alert div는 제거했다.
+    expect(clientSource).toContain('tone="danger"')
+    expect(clientSource).not.toContain('role="alert"')
     expect(clientSource).toContain("다시 시도")
     expect(clientSource).toContain("aria-busy={loading || loadingMore || refreshing}")
   })

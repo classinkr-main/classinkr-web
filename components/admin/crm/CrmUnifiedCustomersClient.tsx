@@ -3,23 +3,26 @@
 // ClassIn 고객 DB(통합 고객) 본체 — URL·캐시·드로어 상태와 저장 보기 로직만 소유하고,
 // 검색 패널·결과 테이블·행 시각 요소·정렬은 components/admin/crm/unified/* 로 분해했다(2026-08-28).
 
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, use, Suspense, type MouseEvent } from "react"
 import dynamic from "next/dynamic"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { AlertTriangle, ChevronRight, Filter, RefreshCw, UserPlus } from "lucide-react"
+import { ChevronRight, Filter, UserPlus } from "lucide-react"
 
-import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
-import { CRM_CACHE_SWR_MS } from "@/lib/crm/client-cache"
+import { adminFetchJsonCachedWithMeta, getCachedAdminJson, seedAdminRequestCache } from "@/lib/admin-client"
+import { CRM_CACHE_SWR_MS, CRM_CACHE_TTL_MS } from "@/lib/crm/client-cache"
 import type { CrmUnifiedCustomerRow } from "@/lib/repositories/crm-unified-customers"
+import type { CrmUnifiedInitialData } from "@/lib/admin/crm/unified-prefetch"
 import { buildOwnerSelectOptions, useCrmOwners } from "./useCrmOwners"
 import Account360Lens from "./Account360Lens"
+import CrmNoticeBanner from "./CrmNoticeBanner"
+import FreshnessCaption from "./FreshnessCaption"
 import Customer360DrawerSkeleton from "./Customer360DrawerSkeleton"
 import SavedViewButton from "./unified/SavedViewButton"
 import CustomerSearchPanel from "./unified/CustomerSearchPanel"
 import CustomerResultsSection from "./unified/CustomerResultsSection"
+import UnconfirmedToggle from "./unified/UnconfirmedToggle"
 import { SORT_DEFAULT_DIRECTION, sortRows, type SortKey, type SortState } from "./unified/sort"
 import {
-  CACHE_TTL_MS,
   CURRENT_OWNER_VALUE,
   OWNER_STORAGE_KEY,
   PRIMARY_SAVED_VIEW_FILTERS,
@@ -53,7 +56,126 @@ const LeadRegisterModal = dynamic(() => import("./LeadRegisterModal"), {
 // requestSeq(기존 loadPage 계약)가 이미 맡고 있어 그대로 둔다.
 const SEARCH_DEBOUNCE_MS = 200
 
-export default function CrmUnifiedCustomersClient() {
+const LOAD_FAILURE_FALLBACK_MESSAGE = "통합 고객 목록을 불러오지 못했습니다."
+
+function describeLoadError(error: unknown) {
+  return error instanceof Error && error.message ? error.message : LOAD_FAILURE_FALLBACK_MESSAGE
+}
+
+// 프리페치 자체가 없을 때(미인증·역할 부족·실패 — prefetchCrmUnifiedInitialData가 null) 아래
+// 브리지에게 "레인 없음"을 표현하는 안정된 싱글턴. React use()는 매 렌더 새 promise를 주면
+// 무한 서스펜스로 보일 수 있으므로, 모듈 스코프 상수 하나를 항상 재사용한다(홈 화면과 동일 패턴).
+const RESOLVED_NULL_UNIFIED_CUSTOMERS_PROMISE: Promise<CrmUnifiedCustomers | null> = Promise.resolve(null)
+
+/**
+ * 통합 고객 목록의 "기본" 첫 조회 URL — 검색어·저장 뷰를 뺀 나머지 필터는 전부 마운트 시점
+ * state 초기값과 같다. `lib/admin/crm/unified-prefetch.ts`의 `buildUnifiedPrefetchUrl()`이
+ * 같은 계산을 서버에서 반복해 같은 문자열을 만들어야 시드가 `loadPage(0)`의 캐시 조회에
+ * 맞는다(tests/admin/crm-unified-prefetch.test.ts가 두 값을 직접 비교해 고정한다).
+ *
+ * "my_owner" 저장 뷰는 제외한다 — 서버 프리페치는 로그인한 담당자의 소유자 키를 풀지 않으므로
+ * (unified-prefetch.ts 상단 주석의 한계) my_owner 딥링크의 URL을 여기서도 만들지 않는다.
+ * 알 수 없는 view 값과 my_owner는 모두 "all"로 떨어진다.
+ */
+export function buildUnifiedListDefaultUrl(overrides?: { query?: string; view?: string }): string {
+  const rawView = overrides?.view
+  const view: SavedViewFilter =
+    rawView && rawView !== "my_owner" && SAVED_VIEW_FILTERS.some((filter) => filter.key === rawView)
+      ? (rawView as SavedViewFilter)
+      : "all"
+  return listUrl({
+    query: overrides?.query?.trim() ?? "",
+    source: "all",
+    lifecycle: "all",
+    owner: "",
+    view,
+    tag: "",
+    includeUnconfirmed: false,
+    offset: 0,
+  })
+}
+
+/**
+ * 소스 하나(customers)의 openPrefetchLane 결과를 React use()로 풀어 부모에 값을 넘기기만 하는
+ * 다리 컴포넌트 — 화면에는 아무것도 그리지 않는다. CrmHomeClient의 PrefetchSourceBridge와
+ * 같은 패턴(그 파일은 소유 밖이라 재사용하지 않고 이 화면 것을 따로 둔다).
+ */
+function CrmUnifiedPrefetchBridge({
+  promise,
+  onSettled,
+}: {
+  promise: Promise<CrmUnifiedCustomers | null>
+  onSettled: (value: CrmUnifiedCustomers | null) => void
+}) {
+  const value = use(promise)
+  useEffect(() => {
+    onSettled(value)
+  }, [value, onSettled])
+  return null
+}
+
+// 갱신 실패 배너의 기준 시각 — 화면에 남아 있는 결과가 언제 것인지 명시한다(UX 규약 4).
+function formatShownAt(iso: string | null | undefined) {
+  if (!iso) return null
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return null
+  return date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })
+}
+
+// 갱신 실패(이전 결과 표시 중) — 목록 자체를 못 불러온 `error`(danger)와 구분되는 warning 상태.
+// staleIfError 폴백·백그라운드 재검증 실패·다음 페이지 실패가 모두 여기로 모인다.
+// 재시도는 항상 force(no-store·staleIfError 없음)로 나간다 — 같은 만료 캐시를 다시 받는 헛돌기를 막는다.
+interface RefreshFailure {
+  message: string
+  retryOffset: number
+  retryAppend: boolean
+}
+
+// 라이브 리전 문구 — 상태 우선순위를 진행 중 > 완료 순으로 고정한 순수 함수라 RTL 없이도
+// 실제 입력·출력으로 검증할 수 있다(2026-09-12 리뷰 #1: refreshFailure를 놓치고 실패
+// 직후에도 성공 문구 "N명 결과를 불러왔습니다"를 읽어주던 결함). error·refreshFailure는
+// 각자의 CrmNoticeBanner(role=alert/status)가 스스로 통지하므로 여기서는 성공 문구만
+// 억제해 상충하는 두 안내가 동시에 읽히지 않게 한다.
+export function describeUnifiedListStatus(input: {
+  refreshing: boolean
+  loadingMore: boolean
+  loading: boolean
+  error: string | null
+  refreshFailure: unknown
+  totalCount: number | null
+}): string {
+  if (input.refreshing) return "통합 고객 목록을 새로고치는 중입니다."
+  if (input.loadingMore) return "다음 고객 목록을 불러오는 중입니다."
+  if (input.loading) return "통합 고객 목록을 불러오는 중입니다."
+  if (input.error || input.refreshFailure) return ""
+  if (input.totalCount == null) return ""
+  return `통합 고객 ${input.totalCount.toLocaleString("ko-KR")}명 결과를 불러왔습니다.`
+}
+
+// 실패 분류의 질의 키 — offset만 다른 재요청(다음/이전 페이지·새로고침 재시도)은 "같은 질의"로
+// 보고, 검색어·필터가 바뀐 뒤의 재요청은 "다른 질의"로 가른다(2026-09-12 리뷰 #2: 필터를
+// 바꾼 직후 요청이 실패하면 무관한 이전 필터 결과가 약한 경고만 띄운 채 그대로 남던 결함).
+export function queryKeyFromUrl(url: string): string {
+  const [path, qs = ""] = url.split("?")
+  const params = new URLSearchParams(qs)
+  params.delete("offset")
+  params.sort()
+  return `${path}?${params.toString()}`
+}
+
+// 화면에 남아 있는 데이터가 지금 실패한 요청과 같은 질의에서 온 것인지 — 같을 때만 "갱신
+// 실패"(warning, 이전 결과 유지)로 보내고, 다르면 "조회 실패"(danger)로 보내며 무관한
+// 데이터를 비운다.
+export function isSameLoadQuery(lastQueryKey: string | null, requestUrl: string): boolean {
+  return lastQueryKey !== null && lastQueryKey === queryKeyFromUrl(requestUrl)
+}
+
+export default function CrmUnifiedCustomersClient({
+  initialData,
+}: {
+  /** 서버 프리페치(lib/admin/crm/unified-prefetch.ts) — 미인증·역할 부족·실패면 null. */
+  initialData?: CrmUnifiedInitialData | null
+}) {
   const [query, setQuery] = useState("")
   const [debouncedQuery, setDebouncedQuery] = useState("")
   useEffect(() => {
@@ -65,16 +187,33 @@ export default function CrmUnifiedCustomersClient() {
   const [owner, setOwner] = useState("")
   const [savedView, setSavedView] = useState<SavedViewFilter>("all")
   const [tagFilter, setTagFilter] = useState("")
+  // 확인 게이트 우회 — 기본 false(미확인 리드 숨김 + 건수만 표시). 리드 보드의 includeUnconfirmed와 같은 이름·UX.
+  // URL에 싣지 않는 세션 한정 토글이며, 요청 URL(=캐시 키)에는 includeUnconfirmed=1로 실린다.
+  const [includeUnconfirmed, setIncludeUnconfirmed] = useState(false)
   // 정렬 상태 — null=추천순(서버 버킷→점수→시각 순서 그대로). 탐색용 일회성 상태라 URL·저장소에 영속하지 않는다.
   const [sort, setSort] = useState<SortState | null>(null)
   const [data, setData] = useState<CrmUnifiedCustomers | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  // 신선도 캡션(P2)용 — 화면의 결과를 받은 시각(SWR 폴백이면 그 캐시가 저장된 시각)과 배경 재검증 진행 여부.
+  // 신선한 캐시 적중은 헬퍼가 저장 시각을 주지 않아 읽은 시각으로 적는다(최대 TTL 만큼 낙관적).
+  const [receivedAt, setReceivedAt] = useState<number | null>(null)
+  const [revalidating, setRevalidating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [refreshFailure, setRefreshFailure] = useState<RefreshFailure | null>(null)
   const [drawer, setDrawer] = useState<{ key: string; name: string } | null>(null)
   const [leadModalOpen, setLeadModalOpen] = useState(false)
   const requestSeq = useRef(0)
+  // loadPage 콜백이 "지금 화면에 결과가 있는가"를 deps 없이 읽기 위한 거울 — 실패를 danger(조회
+  // 실패)로 띄울지 warning(갱신 실패·이전 결과 표시 중)으로 띄울지 가른다. 데이터 유무만으로는
+  // 부족하다 — 검색어·필터를 바꾼 뒤 실패하면 화면엔 무관한 이전 질의 결과가 남는다.
+  // lastLoadedQueryKeyRef 로 "그 데이터가 지금 요청과 같은 질의인가"까지 함께 본다.
+  const hasDataRef = useRef(false)
+  const lastLoadedQueryKeyRef = useRef<string | null>(null)
+  useEffect(() => {
+    hasDataRef.current = data != null
+  }, [data])
   // 드로어 컴포저 dirty — 뒤로가기(?account= 소실) 닫기 경로가 드로어 내부 닫기 가드와
   // 같은 확인을 거치게 한다(가드 없이는 뒤로가기가 작성 중 기록을 무음 폐기).
   const drawerDirtyRef = useRef(false)
@@ -203,6 +342,34 @@ export default function CrmUnifiedCustomersClient() {
     },
     [router, pathname, searchParams]
   )
+  // P1b 프리페치 시드 — 마운트 시점 searchParams(q·view)만 한 번 읽어 얼린다(이후 세그먼트
+  // 칩 클릭 등으로 URL이 바뀌어도 이 값은 그대로다: 시드는 "첫 로드 한 번"의 계약이지 매
+  // 내비게이션마다 다시 심는 자리가 아니다). 서버 프리페치(unified-prefetch.ts)가 같은
+  // 원문을 받아 같은 함수로 URL을 만들어야 문자열이 같아진다.
+  const [unifiedListDefaultUrl] = useState(() =>
+    buildUnifiedListDefaultUrl({
+      query: searchParams.get("q") ?? undefined,
+      view: searchParams.get("view") ?? undefined,
+    })
+  )
+  // 프리페치가 없으면(initialData null) 첫 렌더부터 바로 loadPage(0)을 허용한다(기존 동작
+  // 그대로). 있으면 브리지가 정착(settle)해 캐시를 심을 때까지 미룬다 — 그래야 loadPage(0)이
+  // 캐시 미스로 헛돌지 않는다.
+  const [customersReady, setCustomersReady] = useState(() => !initialData)
+  const handleCustomersPrefetchSettled = useCallback(
+    (value: CrmUnifiedCustomers | null) => {
+      if (value) {
+        seedAdminRequestCache(unifiedListDefaultUrl, value, {
+          ttlMs: CRM_CACHE_TTL_MS,
+          staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
+          generatedAt: initialData?.customers.generatedAt,
+        })
+      }
+      setCustomersReady(true)
+    },
+    [initialData?.customers.generatedAt, unifiedListDefaultUrl]
+  )
+
   const { owners: crmOwners, currentOwner, health: ownerHealth } = useCrmOwners()
   const ownerOptions = useMemo(() => buildOwnerSelectOptions(data?.owners, crmOwners), [crmOwners, data?.owners])
 
@@ -215,38 +382,88 @@ export default function CrmUnifiedCustomersClient() {
   const loadPage = useCallback(
     async (offset: number, options?: { force?: boolean; append?: boolean }) => {
       const append = Boolean(options?.append)
-      const url = listUrl({ query: debouncedQuery, source, lifecycle, owner, view: savedView, tag: tagFilter, offset })
+      const url = listUrl({
+        query: debouncedQuery,
+        source,
+        lifecycle,
+        owner,
+        view: savedView,
+        tag: tagFilter,
+        includeUnconfirmed,
+        offset,
+      })
       const cached = !append && !options?.force ? getCachedAdminJson<CrmUnifiedCustomers>(url, { cacheKey: url }) : null
       const requestId = ++requestSeq.current
 
-      if (cached) setData(cached)
+      if (cached) {
+        setData(cached)
+        hasDataRef.current = true
+        lastLoadedQueryKeyRef.current = queryKeyFromUrl(url)
+      }
 
       setLoading(!append && !cached)
       setLoadingMore(append)
       setRefreshing(Boolean(options?.force))
       setError(null)
+      const failRefresh = (cause: unknown) => {
+        setRefreshFailure({ message: describeLoadError(cause), retryOffset: offset, retryAppend: append })
+      }
       try {
-        const next = await adminFetchJsonCached<CrmUnifiedCustomers>(
+        const result = await adminFetchJsonCachedWithMeta<CrmUnifiedCustomers>(
           options?.force ? `${url}&force=1` : url,
           undefined,
           {
             cacheKey: url,
-            ttlMs: CACHE_TTL_MS,
+            ttlMs: CRM_CACHE_TTL_MS,
             staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
             force: options?.force,
+            // 새로고침(force)은 실패를 만료 캐시로 대체하지 않고 throw 한다 — '방금 새로고침했으니
+            // 최신'이라는 오인을 막는다. 일반 로드는 폴백을 허용하되 아래 staleReason으로 드러낸다.
+            staleIfError: !options?.force,
             // 배경 갱신도 포그라운드와 같은 병합 규칙을 탄다 — 더 늦게 시작한 요청이
             // 이미 화면을 갈아치웠다면(필터 변경·다음 페이지) 이 결과는 버린다.
-            onRevalidated: ({ data: fresh }) => {
-              if (!fresh || requestId !== requestSeq.current) return
+            onRevalidated: ({ data: fresh, error: revalidateError }) => {
+              if (requestId !== requestSeq.current) return
+              setRevalidating(false)
+              if (revalidateError !== undefined) {
+                failRefresh(revalidateError)
+                return
+              }
+              if (!fresh) return
               setData((current) => mergePage(current, fresh, append))
+              hasDataRef.current = true
+              lastLoadedQueryKeyRef.current = queryKeyFromUrl(url)
+              setReceivedAt(Date.now())
+              setRefreshFailure(null)
             },
           }
         )
         if (requestId !== requestSeq.current) return
-        setData((current) => mergePage(current, next, append))
+        setData((current) => mergePage(current, result.data, append))
+        hasDataRef.current = true
+        lastLoadedQueryKeyRef.current = queryKeyFromUrl(url)
+        setReceivedAt(result.stale ? result.staleSince ?? Date.now() : Date.now())
+        setRevalidating(result.stale && result.staleReason === "revalidate")
+        if (result.stale && result.staleReason === "error") {
+          // staleIfError 폴백 — 네트워크로 새로 받은 게 아니라 만료 캐시다. 성공처럼 두지 않는다.
+          failRefresh(result.staleError)
+        } else if (!result.stale) {
+          setRefreshFailure(null)
+        }
       } catch (err) {
         if (requestId !== requestSeq.current) return
-        setError(err instanceof Error ? err.message : "통합 고객 목록을 불러오지 못했습니다.")
+        setRevalidating(false)
+        // 화면에 남은 데이터가 "지금 실패한 이 질의"에서 온 것일 때만 갱신 실패(warning)로
+        // 묶어 이전 결과를 유지한다. 검색어·필터를 바꾼 뒤의 실패는 무관한 이전 질의 결과이므로
+        // 조회 실패(danger)로 보내고 화면도 비운다.
+        if (hasDataRef.current && isSameLoadQuery(lastLoadedQueryKeyRef.current, url)) {
+          failRefresh(err)
+        } else {
+          setRefreshFailure(null)
+          setData(null)
+          hasDataRef.current = false
+          setError(describeLoadError(err))
+        }
       } finally {
         if (requestId === requestSeq.current) {
           setLoading(false)
@@ -255,12 +472,13 @@ export default function CrmUnifiedCustomersClient() {
         }
       }
     },
-    [debouncedQuery, source, lifecycle, owner, savedView, tagFilter]
+    [debouncedQuery, source, lifecycle, owner, savedView, tagFilter, includeUnconfirmed]
   )
 
   useEffect(() => {
+    if (!customersReady) return
     void loadPage(0)
-  }, [loadPage])
+  }, [loadPage, customersReady])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -362,7 +580,8 @@ export default function CrmUnifiedCustomersClient() {
     lifecycle !== "all" ||
     Boolean(owner) ||
     savedView !== "all" ||
-    Boolean(tagFilter)
+    Boolean(tagFilter) ||
+    includeUnconfirmed
 
   const resetFilters = useCallback(() => {
     setQuery("")
@@ -373,7 +592,10 @@ export default function CrmUnifiedCustomersClient() {
     setSavedView("all")
     syncViewParam("all")
     setTagFilter("")
+    setIncludeUnconfirmed(false)
   }, [persistOwner, syncViewParam])
+
+  const hiddenUnconfirmedCount = data?.summary.hiddenUnconfirmedCount ?? 0
 
   // 같은 키 재클릭=방향 토글, 다른 키=성격별 기본 방향으로 진입. 추천순 복귀는 전용 버튼만 담당한다.
   const toggleSort = useCallback((key: SortKey) => {
@@ -394,18 +616,29 @@ export default function CrmUnifiedCustomersClient() {
       className="mx-auto max-w-7xl [&_a]:min-h-11 [&_a]:focus-visible:outline-none [&_a]:focus-visible:ring-2 [&_a]:focus-visible:ring-[#084734] [&_a]:focus-visible:ring-offset-2 [&_button]:min-h-11 [&_button]:focus-visible:outline-none [&_button]:focus-visible:ring-2 [&_button]:focus-visible:ring-[#084734] [&_button]:focus-visible:ring-offset-2 [&_input:not([type=checkbox]):not([type=file])]:min-h-11 [&_input:not([type=checkbox]):not([type=file])]:focus-visible:outline-none [&_input:not([type=checkbox]):not([type=file])]:focus-visible:ring-2 [&_input:not([type=checkbox]):not([type=file])]:focus-visible:ring-[#084734] [&_select]:min-h-11 [&_select]:focus-visible:outline-none [&_select]:focus-visible:ring-2 [&_select]:focus-visible:ring-[#084734] lg:[&_a]:min-h-6 lg:[&_button]:min-h-6 lg:[&_input:not([type=checkbox]):not([type=file])]:min-h-0 lg:[&_select]:min-h-0"
       aria-busy={loading || loadingMore || refreshing}
     >
+        {/* 화면에는 아무것도 그리지 않는다 — 서버 프리페치(customers) 레인을 use()로 풀어
+            요청 캐시에 심기만 한다(P1b). initialData가 없으면 이미 정착된 null 프라미스라
+            다음 마이크로태스크에 곧장 onSettled(null)로 떨어져 customersReady=true가 된다. */}
+        <Suspense fallback={null}>
+          <CrmUnifiedPrefetchBridge
+            promise={initialData?.customers.promise ?? RESOLVED_NULL_UNIFIED_CUSTOMERS_PROMISE}
+            onSettled={handleCustomersPrefetchSettled}
+          />
+        </Suspense>
+        {/* 항상 마운트된 sr-only 진행 상태 live region(polite) — 로딩·새로고침·완료만 담당한다.
+            조회 실패(danger)·갱신 실패(warning)는 아래 CrmNoticeBanner가 새로 마운트되며
+            role=alert/role=status로 스스로 통지하므로, 여기서는 성공 문구만 억제해 상충하는
+            두 안내가 동시에 읽히지 않게 한다(과거엔 실패 중에도 성공 문구를 읽었고, 별도 상시
+            role=alert div가 CrmNoticeBanner와 같은 문구를 중복으로 읽었다 — 2026-09-12 리뷰). */}
         <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-          {refreshing
-            ? "통합 고객 목록을 새로고치는 중입니다."
-            : loadingMore
-              ? "다음 고객 목록을 불러오는 중입니다."
-              : loading
-                ? "통합 고객 목록을 불러오는 중입니다."
-                : error
-                  ? "통합 고객 목록을 불러오지 못했습니다."
-                  : data
-                    ? `통합 고객 ${data.summary.total.toLocaleString("ko-KR")}명 결과를 불러왔습니다.`
-                    : ""}
+          {describeUnifiedListStatus({
+            refreshing,
+            loadingMore,
+            loading,
+            error,
+            refreshFailure,
+            totalCount: data?.summary.total ?? null,
+          })}
         </div>
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -420,15 +653,7 @@ export default function CrmUnifiedCustomersClient() {
               <UserPlus className="h-3.5 w-3.5" />
               리드 등록
             </button>
-            <button
-              type="button"
-              onClick={() => void loadPage(0, { force: true })}
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
-              disabled={refreshing}
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-              새로고침
-            </button>
+            {/* 새로고침은 목록 위 신선도 캡션(FreshnessCaption)의 버튼 하나로 모았다(P2) — 같은 동작을 두 곳에 두지 않는다. */}
           </div>
         </div>
 
@@ -481,13 +706,21 @@ export default function CrmUnifiedCustomersClient() {
                   {data ? `${data.summary.total.toLocaleString("ko-KR")}건` : error ? "불러오지 못했습니다" : "불러오는 중"}
                 </span>
               </p>
-              <button
-                type="button"
-                onClick={exitQuickView}
-                className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#1a1a1a]/60 hover:bg-[#fafaf8]"
-              >
-                전체 보기 (검색·필터)
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                {/* 빠른 보기에서도 게이트로 숨긴 건수를 알리고 포함할 수 있어야 한다 — 검색 패널이 접혀 있으므로 여기서 노출. */}
+                <UnconfirmedToggle
+                  includeUnconfirmed={includeUnconfirmed}
+                  hiddenUnconfirmedCount={hiddenUnconfirmedCount}
+                  onToggle={() => setIncludeUnconfirmed((prev) => !prev)}
+                />
+                <button
+                  type="button"
+                  onClick={exitQuickView}
+                  className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#1a1a1a]/60 hover:bg-[#fafaf8]"
+                >
+                  전체 보기 (검색·필터)
+                </button>
+              </div>
             </div>
             {lingeringParts.length > 0 ? (
               // 잔존 필터 힌트 — 접힌 검색 패널의 필터가 이 뷰 결과를 좁히고 있음을 알린다.
@@ -525,50 +758,68 @@ export default function CrmUnifiedCustomersClient() {
             ownerOptions={ownerOptions}
             tagFilter={tagFilter}
             onTagFilterChange={setTagFilter}
+            includeUnconfirmed={includeUnconfirmed}
+            onIncludeUnconfirmedChange={setIncludeUnconfirmed}
             data={data}
             loading={loading}
           />
         )}
 
+        {/* 조회 실패(danger) · 갱신 실패/부분 데이터/담당자 매핑(warning) — 톤은 status-tone SSOT.
+            목록 자체를 못 불러온 것과 '이전 결과가 남아 있는 갱신 실패'·참고 경고를 색과 role로 가른다. */}
         {error ? (
-          <div
-            className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] font-medium text-[#B85C33]"
-            role="alert"
-            aria-live="assertive"
-          >
-            <span>{error}</span>
-            <button
-              type="button"
-              onClick={() => void loadPage(0, { force: true })}
-              disabled={loading || refreshing}
-              className="inline-flex items-center justify-center rounded-lg border border-[#F6D5C5] bg-white px-3 text-[12px] font-bold text-[#B85C33] transition-colors hover:bg-[#FEF3EE] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              다시 시도
-            </button>
-          </div>
+          <CrmNoticeBanner
+            tone="danger"
+            className="mb-4"
+            title="조회 실패"
+            message={error}
+            action={{ label: "다시 시도", onClick: () => void loadPage(0, { force: true }), pending: loading || refreshing }}
+            onDismiss={() => setError(null)}
+          />
+        ) : null}
+
+        {refreshFailure ? (
+          <CrmNoticeBanner
+            tone="warning"
+            className="mb-4"
+            title="갱신 실패 — 이전 결과 표시 중"
+            message={
+              <>
+                {refreshFailure.message}
+                {formatShownAt(data?.generatedAt) ? ` · 표시 중인 목록은 ${formatShownAt(data?.generatedAt)} 기준` : null}
+              </>
+            }
+            action={{
+              label: "다시 시도",
+              onClick: () => void loadPage(refreshFailure.retryOffset, { force: true, append: refreshFailure.retryAppend }),
+              pending: loading || loadingMore || refreshing,
+            }}
+            onDismiss={() => setRefreshFailure(null)}
+          />
         ) : null}
 
         {data?.sources.warnings.length ? (
-          <div
-            className="mb-4 flex items-start gap-2 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] text-[#B85C33]"
-            role="status"
-            aria-live="polite"
-          >
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>{data.sources.warnings.join(" ")}</span>
-          </div>
+          <CrmNoticeBanner
+            tone="warning"
+            className="mb-4"
+            title="일부 원천 참고 지연"
+            message={data.sources.warnings.join(" ")}
+          />
         ) : null}
 
         {ownerHealth?.ok === false && ownerHealth.message ? (
-          <div
-            className="mb-4 flex items-start gap-2 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] text-[#B85C33]"
-            role="status"
-            aria-live="polite"
-          >
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>{ownerHealth.message}</span>
-          </div>
+          <CrmNoticeBanner tone="warning" className="mb-4" title="담당자 매핑 참고" message={ownerHealth.message} />
         ) : null}
+
+        {/* 신선도 캡션 — 필터 아래·표 위에서 "기준 HH:MM · 갱신 N초 전"(P2). 강제 재조회(force)는 이 버튼이 유일하다. */}
+        <FreshnessCaption
+          className="mb-2 px-0.5"
+          generatedAt={data?.generatedAt}
+          receivedAt={receivedAt}
+          refreshing={refreshing || revalidating}
+          staleReason={refreshFailure ? "error" : null}
+          onRefresh={() => void loadPage(0, { force: true })}
+        />
 
         <CustomerResultsSection
           data={data}

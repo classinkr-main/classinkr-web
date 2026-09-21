@@ -17,7 +17,10 @@ describe("CRM lead bulk assignment UX contract", () => {
     // 분해 후: 훅은 본체가, 타입은 드로어가 각각 정본 디렉터리에서 가져온다.
     expect(source).toContain('import { useCrmOwners } from "@/components/admin/crm/useCrmOwners"')
     expect(source).toContain('import type { CrmOwnerOption } from "@/components/admin/crm/useCrmOwners"')
-    expect(source).toContain("const { owners: crmOwners, health: crmOwnerHealth } = useCrmOwners()")
+    // §13 Q4: 드로어의 "나" 빠른 배정 칩을 위해 currentOwner 도 같은 검증된 디렉터리 훅에서 꺼낸다.
+    expect(source).toContain(
+      "const { owners: crmOwners, health: crmOwnerHealth, currentOwner: crmCurrentOwner } = useCrmOwners()"
+    )
     expect(source).toContain('id="bulk-lead-assignment"')
     expect(source).toContain("담당자를 선택하세요")
     expect(source).toContain('aria-label="리드 담당자"')

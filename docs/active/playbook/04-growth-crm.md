@@ -36,7 +36,7 @@
 
 ### CRM과 매출
 
-- 시트 REV, 외부 CRM, Portal V2 딜은 확정된 `crm_source_links`를 통해 중복 제거한 뒤 합산한다. 미확정 연결은 검토 대상으로만 표시한다.
+- 시트 REV, 외부 CRM, Portal V2 딜은 확정된(`status=confirmed`) `crm_source_links`가 있는 건만 중복 제거 대상이다. 미확정 연결은 검토 대상으로만 표시하고, 미확정·통화가 다른 원천은 합산하지 않고 병기한다. 통화 혼합 합산은 금지한다. 코드 정본은 `lib/admin-crm-revenue.ts`(원천별 `sources[]` 나열, 시트는 앱 집계와 별도 지표)이며 정책 근거는 [매출시트 워크스페이스 계획 §1](../admin-3-revenue-sheet-workspace-plan-2026-06-29.md)이다.
 - 공개 채널 리드의 확인 게이트와 SLA 예외를 유지한다. 숨긴 리드는 건수를 표시하고 사용자가 명시적으로 포함할 수 있어야 한다.
 - 리드 우선순위의 `value`는 실제 원화 매출이 연결되기 전까지 상대 점수다. 금액처럼 표시하지 않는다.
 - CRM 홈은 행동면과 참조면을 중복 배치하지 않는다. 요약에서 잘린 항목은 남은 건수를 표시한다.
@@ -90,7 +90,8 @@ npx vitest run tests/crm
 
 ## 5. 먼저 읽을 것
 
-0. CRM 탭 작업이면 [CRM 탭 품질 감사(2026-08-06)](../crm-tab-quality-audit-2026-08-06.md) —
+0. CRM 탭 작업이면 [CRM 탭 디벨롭 기획(2026-09-12)](../crm-tab-develop-plan-2026-09-12.md)의 개선 후보 ID와 Wave 순서를 먼저 확인하고,
+   [CRM 탭 품질 감사(2026-08-06)](../crm-tab-quality-audit-2026-08-06.md) —
    항목별 채점, 고친 결함, 90선에 못 미친 채 남긴 항목(큐 스코어링 비용, 필터 URL 소유권)
 1. `lib/server/lead-capture.ts`
 2. `lib/consent/consent.ts`, `lib/analytics.ts`, `app/api/track/event/route.ts`

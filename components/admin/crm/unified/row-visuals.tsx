@@ -5,29 +5,51 @@
 
 import { memo, useSyncExternalStore } from "react"
 import { Building2, PhoneCall, UserRound } from "lucide-react"
-import type { CrmUnifiedCustomerRow } from "@/lib/repositories/crm-unified-customers"
+import type { CrmUnifiedCustomerRow, CrmUnifiedCustomerSource } from "@/lib/repositories/crm-unified-customers"
 import { LEAD_BADGE_TONE_CLASSES, leadBadges } from "@/lib/crm/lead-badges"
+import { STATUS_TONE_TEXT_CLASS } from "@/lib/crm/status-tone"
+import { SECONDARY_TEXT_CLASS } from "../home/shared"
+
+// 돈흐름 zero 상태의 소스별 표기 — 외부 CRM 계정의 잔액은 위안화(¥)·오더는 달러($)이고
+// 전환 고객의 계약·미수만 원화(₩)다. 소스와 무관한 "0원"은 ¥0 잔액을 원화 0으로 오독하게 했다.
+// 저장소(moneyLabel)는 zero 케이스에 null을 내려주는 기존 계약을 유지하므로 UI가 소스로 분기한다.
+// 리드·할 일은 돈흐름 개념이 없어 zero 로 내려오지 않는다 — 없는 소스는 아래 폴백("—")으로 그린다.
+export const MONEY_ZERO_LABEL: Partial<Record<CrmUnifiedCustomerSource, { label: string; title: string }>> = {
+  neo_account: { label: "잔액 ¥0", title: "외부 CRM 동기화 잔액 ¥0 · 오더 $0" },
+  customer: { label: "₩0", title: "전환 고객 계약·미수 ₩0" },
+}
+const MONEY_ZERO_FALLBACK = { label: "—", title: "돈흐름 정보가 없는 원천입니다" }
 
 // 돈흐름 3상태 표기 — moneyState(lib/crm/unified-view-rules)가 "-"의 사유를 구분한다.
-// value=금액 그대로 · zero=0원(중립) · unsynced=동기화 대기(주의 톤) · none=리드(돈흐름 개념 없음).
+// value=금액 그대로(저장소가 ¥/$/₩ 기호를 포함해 만든 라벨) · zero=소스별 0 표기(중립) ·
+// unsynced=동기화 대기(주의 톤) · none=리드(돈흐름 개념 없음).
 export function moneyCell(row: CrmUnifiedCustomerRow) {
   if (row.moneyState === "value") {
-    return <span className="text-[12px] font-medium text-[#1a1a1a]/55">{row.moneyLabel ?? "-"}</span>
+    return <span className={`text-[12px] font-medium ${SECONDARY_TEXT_CLASS}`}>{row.moneyLabel ?? "-"}</span>
   }
   if (row.moneyState === "zero") {
-    return <span className="text-[12px] font-medium text-[#1a1a1a]/40">0원</span>
+    const zero = MONEY_ZERO_LABEL[row.source] ?? MONEY_ZERO_FALLBACK
+    return (
+      <span className={`text-[12px] font-medium ${SECONDARY_TEXT_CLASS}`} title={zero.title}>
+        {zero.label}
+      </span>
+    )
   }
   if (row.moneyState === "unsynced") {
     return (
       <span
-        className="text-[11px] font-semibold text-[#A8741A]"
+        className={`text-[11px] font-semibold ${STATUS_TONE_TEXT_CLASS.warning}`}
         title="외부 CRM 잔액·만료 동기화가 아직 안 된 고객입니다"
       >
         동기화 대기
       </span>
     )
   }
-  return <span className="text-[12px] font-medium text-[#1a1a1a]/30">—</span>
+  return (
+    <span className={`text-[12px] font-medium ${SECONDARY_TEXT_CLASS}`} aria-label="돈흐름 정보 없음">
+      —
+    </span>
+  )
 }
 
 export function TagChips({ tags }: { tags: string[] }) {

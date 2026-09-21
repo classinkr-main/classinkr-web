@@ -131,10 +131,12 @@ describe("activity-contract", () => {
     expect(MODE_FIELDS.call.advanced).toEqual(MODE_FIELDS.manual_note.advanced)
     expect(MODE_FIELDS.sms.advanced).toEqual(MODE_FIELDS.manual_note.advanced)
     expect(MODE_FIELDS.recording.primary).toEqual(["recording"])
-    expect(MODE_FIELDS.meeting_minutes.advanced).toEqual([])
-    // 회의록 모드는 다음 액션·단계 신호를 항상 노출한다(액션 누락 방지).
-    expect(MODE_FIELDS.meeting_minutes.primary).toContain("nextAction")
-    expect(MODE_FIELDS.meeting_minutes.primary).toContain("stageSignal")
+    // 2026-09-21 §14 A1 — 회의록도 요지 한 줄이 기본. 참석자·목적·결정·리스크·다음 액션·
+    // 단계 신호·태그는 전부 "+상세"로 옮겨졌다(서버 hasUsefulContent 검증은 불변).
+    expect(MODE_FIELDS.meeting_minutes.primary).toEqual(["body"])
+    for (const key of ["attendees", "meetingPurpose", "decisions", "blockers", "nextAction", "sentiment", "stageSignal", "tags"]) {
+      expect(MODE_FIELDS.meeting_minutes.advanced).toContain(key)
+    }
   })
 
   it("validates activity target types against the shared option list", () => {

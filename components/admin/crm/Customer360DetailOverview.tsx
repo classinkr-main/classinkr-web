@@ -16,7 +16,11 @@ import {
 
 import { MiniFunnel, Panel, StatTile, type FunnelStage } from "@/components/admin/viz"
 import CrmContactValue from "@/components/admin/crm/CrmContactValue"
+import { buildDrawerHealthInput } from "@/components/admin/crm/Customer360Drawer"
+import CustomerTagChips from "@/components/admin/crm/CustomerTagChips"
 import LeadMessageCard from "@/components/admin/crm/LeadMessageCard"
+import { ScoreKindLabel } from "@/components/admin/crm/ScoreKind"
+import { computeCustomerHealth } from "@/lib/crm/customer-health"
 import { formatCNY, formatUSD } from "@/lib/crm/money-format"
 import type { Customer360 } from "@/lib/repositories/crm-customer-360"
 
@@ -57,6 +61,21 @@ export default function Customer360DetailOverview({ data }: { data: Customer360 
     ],
     [data.deals.summary.total, money.orders.length, money.collections.length]
   )
+
+  // 건강도(기존 고객 전용) — 드로어 헤더 배지와 같은 입력(buildDrawerHealthInput, c360-04)으로
+  // lib/crm/customer-health SSOT 산식을 돌린다. 리드는 건강도 대상이 아니라 우선순위만 표기한다.
+  // 만료까지 일수는 렌더 순수성을 위해 Date.now() 대신 페이로드의 generatedAt(서버 조립 시각) 기준.
+  const health = useMemo(() => {
+    if (isLead) return null
+    const iso = data.risk.nearestExpireAt
+    const baseMs = new Date(data.generatedAt).getTime()
+    let daysToExpire: number | null = null
+    if (iso && Number.isFinite(baseMs)) {
+      const due = new Date(iso)
+      if (!Number.isNaN(due.getTime())) daysToExpire = Math.round((due.getTime() - baseMs) / 86_400_000)
+    }
+    return computeCustomerHealth(buildDrawerHealthInput(data, daysToExpire))
+  }, [data, isLead])
 
   const hasRiskBanner = data.risk.reasons.length > 0
   const showFunnel = money.available || data.deals.summary.total > 0
@@ -179,7 +198,7 @@ export default function Customer360DetailOverview({ data }: { data: Customer360 
       {/* 라이프사이클 / 리드 현황 */}
       <section>
         <GroupLabel>{money.available ? "라이프사이클" : "리드 현황"}</GroupLabel>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className={`grid grid-cols-2 gap-3 ${money.available ? "sm:grid-cols-3 lg:grid-cols-5" : "sm:grid-cols-4"}`}>
           {money.available ? (
             <>
               <StatTile
@@ -197,7 +216,23 @@ export default function Customer360DetailOverview({ data }: { data: Customer360 
               />
             </>
           ) : null}
-          <StatTile icon={<Gauge className="h-4 w-4" />} label="점수" value={header?.score ?? "-"} tone="neutral" />
+          {/* 점수는 종류를 항상 함께 적는다(T3): 건강도(기존 고객)와 우선순위(리드+고객)는 다른 산식. */}
+          {health ? (
+            <StatTile
+              icon={<Gauge className="h-4 w-4" />}
+              label="건강도"
+              value={<ScoreKindLabel kind="health" value={health.score} />}
+              hint={`${health.label} · 75 이상 안전 · 55 이상 주의`}
+              tone={health.band === "safe" ? "brand" : health.band === "watch" ? "caution" : "danger"}
+            />
+          ) : null}
+          <StatTile
+            icon={<Gauge className="h-4 w-4" />}
+            label="우선순위"
+            value={<ScoreKindLabel kind="priority" value={header?.score ?? "-"} />}
+            hint="오늘/재계약/재활성/주시 버킷 · 85·68·42 심각도"
+            tone="neutral"
+          />
           <StatTile
             icon={<CalendarClock className="h-4 w-4" />}
             label="최근 업데이트"
@@ -207,6 +242,11 @@ export default function Customer360DetailOverview({ data }: { data: Customer360 
           />
         </div>
       </section>
+
+      {/* 태그 — 수기 라벨(crm_customer_tags). 자동 파생 신호(리스크·건강도)와 별개다(§13 Q3). */}
+      <Panel title="태그" description="수기 라벨 — 제안 칩 원클릭 또는 직접 입력, 자동 플래그와 별개">
+        <CustomerTagChips key={data.key} customerKey={data.key} initialTags={data.tags} />
+      </Panel>
 
       {/* 세일즈 퍼널 */}
       {showFunnel ? (

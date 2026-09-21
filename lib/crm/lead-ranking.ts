@@ -556,8 +556,17 @@ export function tokenizeLeadSearch(query: string): string[] {
   return tokens
 }
 
+/**
+ * 리드 레코드 필드 밖에서 온 보조 검색어 — 예: Compass 매칭 리드의 학원명·이름(S2, 2026-09-20
+ * Compass 정리 라운드). 리드 자체 필드가 아니라 화면이 겹쳐 보여주는 오버레이 값이므로 옵션으로만
+ * 받는다 — 기존 호출부(옵션 생략)는 그대로 컴파일되고 동작도 그대로다.
+ */
+export interface LeadSearchHaystackOptions {
+  extraTerms?: Array<string | null | undefined>
+}
+
 /** 검색 대상 필드 — 연락처·귀속·메모·담당자까지 한 줄로 접어 토큰마다 대조한다. */
-export function buildLeadSearchHaystack(lead: LeadRecord): string {
+export function buildLeadSearchHaystack(lead: LeadRecord, options?: LeadSearchHaystackOptions): string {
   return [
     lead.name,
     lead.org,
@@ -581,15 +590,16 @@ export function buildLeadSearchHaystack(lead: LeadRecord): string {
     lead.utm_content,
     lead.landing_page,
     lead.referrer,
+    ...(options?.extraTerms ?? []),
   ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase()
 }
 
-export function matchesLeadSearch(lead: LeadRecord, tokens: string[]): boolean {
+export function matchesLeadSearch(lead: LeadRecord, tokens: string[], options?: LeadSearchHaystackOptions): boolean {
   if (tokens.length === 0) return true
-  const haystack = buildLeadSearchHaystack(lead)
+  const haystack = buildLeadSearchHaystack(lead, options)
   return tokens.every((token) => haystack.includes(token))
 }
 

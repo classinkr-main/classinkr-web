@@ -8,6 +8,7 @@ import {
   ADMIN_OS_SUMMARY_CACHE_TAG,
 } from "@/lib/admin/crm/cache-tags"
 import { ADMIN_CRM_REVENUE_CACHE_TAG } from "@/lib/admin-crm-revenue"
+import { ADMIN_CRM_REVENUE_SHEET_CACHE_TAG } from "@/lib/admin-crm-revenue-sheet"
 import {
   type CrmSourceLinkAction,
   bulkUpdateCrmSourceLinkStatus,
@@ -37,6 +38,8 @@ export async function PATCH(req: NextRequest) {
     revalidateTag(ADMIN_CRM_COVERAGE_CACHE_TAG, "max")
     revalidateTag(ADMIN_OS_SUMMARY_CACHE_TAG, "max")
     revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, "max")
+    // REV 링크(branch_rev_sheet)가 바뀌면 lib/admin-crm-revenue-sheet.ts의 60초 캐시도 낡는다(D1).
+    revalidateTag(ADMIN_CRM_REVENUE_SHEET_CACHE_TAG, "max")
     // 확정/해제된 링크는 crm-unified-customers.ts 소스 스냅샷(listConfirmedLeadCustomerLinks·
     // listConfirmedLeadNeoLinkLeadIds)의 입력이기도 하다.
     revalidateTag(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, "max")

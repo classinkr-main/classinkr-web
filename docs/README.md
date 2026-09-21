@@ -58,6 +58,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - 하드웨어 운영 허브 문서의 상위 인덱스
 - [active/erp-blueprint-2026-06-22.md](./active/erp-blueprint-2026-06-22.md)
   - 어드민 → 지사 운영 OS(ERP) 청사진 & 실행 로드맵(Account 360 스파인·귀속·노션 캘린더 라이브 연동·거버넌스 결정)
+- [active/crm-tab-develop-plan-2026-09-12.md](./active/crm-tab-develop-plan-2026-09-12.md)
+  - **CRM 탭 실행 로드맵.** 5작업면·돈흐름·데이터층의 현황 진단, 정책-코드 불일치 총괄, 개선 후보 ID(H/C/R/D)와 4 Wave 실행 순서, 사용자 결정 항목, 문서 정리 제안
 - [active/internal-crm-backend-operating-plan-2026-06-26.md](./active/internal-crm-backend-operating-plan-2026-06-26.md)
   - 자체 CRM 백엔드/운영 기준. 시트·OCRM·HQ CRM은 참고/동기화 원천으로 두고, Admin CRM의 고객 스파인·회의록·녹음·다음 액션 구조를 정의
 - [active/internal-cs-ai-bridge.md](./active/internal-cs-ai-bridge.md)
@@ -116,6 +118,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - Admin 속도 가설 판정(인증 왕복·팬아웃·메모이제이션·플랜), 적용한 조치와 측정 방법, 운영 확인 목록
 - [active/admin-performance-round2-2026-09-04.md](./active/admin-performance-round2-2026-09-04.md)
   - Admin 속도 2라운드: 탭 전환 RSC 왕복 제거(라우터 캐시·hover 전체 프리페치·시드 신선도)와 콜드 인스턴스 모듈 메모의 Data Cache 승격, 전후 실측
+- [active/admin-performance-round3-2026-09-10.md](./active/admin-performance-round3-2026-09-10.md)
+  - Admin 속도 3라운드 계획: 현재 캐시 5층 구조와 외부 원천별 자체 DB 미러 준수 여부, DB 스냅샷 RPC의 stale-first 전환, 미승격 조회 엔드포인트·캐시 태그 무효화 공백 정리
 - [active/architecture-schema-erd.md](./active/architecture-schema-erd.md)
   - 엔티티와 스키마 관점의 입구
 - [active/internal-crm-backend-operating-plan-2026-06-26.md](./active/internal-crm-backend-operating-plan-2026-06-26.md)

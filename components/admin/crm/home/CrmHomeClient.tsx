@@ -26,7 +26,10 @@ import CrmCockpitHero from "@/components/admin/crm/home/CrmCockpitHero"
 import CrmHealthDonut from "@/components/admin/crm/home/CrmHealthDonut"
 import CrmHomeReportSection, { type CrmReportTab } from "@/components/admin/crm/home/CrmHomeReportSection"
 import {
+  INTERACTIVE_TEXT_CLASS,
+  MOBILE_TOUCH_TARGET_CLASS,
   monthDayParts,
+  SECONDARY_TEXT_CLASS,
   ValueSkeleton,
   type AdminCrmOverview,
   type BranchKpiResponse,
@@ -70,6 +73,9 @@ function getKstMonthKey(date: Date) {
 // 아래 세 다리에게 "레인 없음"을 표현하는 안정된 싱글턴. React use()는 매 렌더 새 promise를
 // 주면 무한 서스펜스로 보일 수 있으므로, 모듈 스코프 상수 하나를 항상 재사용한다.
 const RESOLVED_NULL_PROMISE: Promise<null> = Promise.resolve(null)
+
+// '고객 찾기' 헤더 <p> 와 CrmCustomerPicker 콤보박스를 aria-labelledby 로 잇는 id(home-08).
+const CRM_HOME_CUSTOMER_SEARCH_HEADING_ID = "crm-home-customer-search-heading"
 
 /**
  * 소스 하나의 openPrefetchLane 결과(promise)를 React use()로 풀어, 부모(CrmHomeClient)의
@@ -354,6 +360,9 @@ export default function CrmHomeClient({
   }, [])
 
   return (
+    // home-07 → review: MOBILE_TOUCH_TARGET_CLASS 를 루트에 걸면 같은 트리의 CrmCoverageStrip 한 줄 스트립·
+    // CrmCustomerPicker 의 입력 안 '지우기'(h-5 absolute) 버튼까지 44px 로 부풀어 레이아웃이 깨진다.
+    // 실제로 행 액션이 있는 컨테이너(빠른 실행 바·큐·최근/자주 접촉 칩 줄·주간 조망·바로 가기)에만 개별 스코프한다.
     <div>
       {/* 소스별 독립 Suspense 경계 — 서버가 openPrefetchLane으로 연 세 레인을 각각 형제
           <Suspense>로 감싼다(화면 전체를 하나로 감싸면 overview의 DB 왕복 30회가 리드 KPI·
@@ -382,7 +391,7 @@ export default function CrmHomeClient({
       {/* 헤더 — 타이틀만. 액션은 아래 sticky 빠른 실행 바로 이동(H2) */}
       <div className="mb-4">
         <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">CRM 홈</h1>
-        <p className="mt-1 text-[13px] text-[#1a1a1a]/42">
+        <p className={`mt-1 text-[13px] ${SECONDARY_TEXT_CLASS}`}>
           ClassIn 고객 DB 기준 · 시트와 외부 CRM은 동기화 참고자료
         </p>
       </div>
@@ -392,7 +401,7 @@ export default function CrmHomeClient({
           lg+에서 sticky(admin main이 스크롤 컨테이너라 body overflow-x 함정 무관).
           <lg는 body 스크롤 + overflow-x:hidden으로 sticky가 깨지는 저장소 함정이 있어 일반 플로우 폴백. */}
       <div className="-mx-4 mb-4 px-4 py-2 sm:-mx-6 sm:px-6 lg:sticky lg:top-0 lg:z-40 lg:-mx-8 lg:border-b lg:border-[#e8e8e4] lg:bg-[#FAFAF8]/92 lg:px-8 lg:backdrop-blur">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className={`flex flex-wrap items-center gap-2 ${MOBILE_TOUCH_TARGET_CLASS}`}>
           <button
             type="button"
             onClick={() => setLeadModalOpen(true)}
@@ -416,7 +425,7 @@ export default function CrmHomeClient({
           >
             <Search className="h-3.5 w-3.5" />
             검색
-            <kbd className="rounded border border-[#e8e8e4] bg-[#fafaf8] px-1 py-0.5 text-[10px] font-semibold text-[#1a1a1a]/45">
+            <kbd className={`rounded border border-[#e8e8e4] bg-[#fafaf8] px-1 py-0.5 text-[10px] font-semibold ${SECONDARY_TEXT_CLASS}`}>
               ⌘K
             </kbd>
           </button>
@@ -448,14 +457,17 @@ export default function CrmHomeClient({
         loading={compassPipelineLoading}
         error={compassPipelineError}
         onRetry={() => void fetchCompassPipeline({ force: true })}
+        refreshKey={neoCrmRefreshKey}
       />
 
       {/* 리드 요약 다음에 오늘의 행동 큐를 붙여 숫자 확인 → 처리 흐름을 한 축으로 만든다.
           CrmPriorityQueuePanel이 initialData(레인)를 React use()로 직접 소비하므로 이 자리가
           그 Suspense 경계다 — fallback은 패널 자신의 로딩 크롬을 재사용한 스켈레톤. */}
-      <Suspense fallback={<CrmPriorityQueuePanelSkeleton />}>
-        <CrmPriorityQueuePanel refreshKey={neoCrmRefreshKey} initialData={initialPriorityQueue ?? null} />
-      </Suspense>
+      <div className={MOBILE_TOUCH_TARGET_CLASS}>
+        <Suspense fallback={<CrmPriorityQueuePanelSkeleton />}>
+          <CrmPriorityQueuePanel refreshKey={neoCrmRefreshKey} initialData={initialPriorityQueue ?? null} />
+        </Suspense>
+      </div>
 
       {/* 결과 지표는 행동 큐 뒤의 참고 밴드로 둔다. */}
       <CrmCockpitHero
@@ -468,10 +480,13 @@ export default function CrmHomeClient({
       {/* 고객 찾기 — 검색 + 최근 본 + 자주 접촉을 한 표면에. 고객으로 가는 입구를 한 곳으로 모은다
           (자주 접촉 칩은 리드·일정 요약 안에 끼어 있던 것을 여기로 옮겼다). */}
       <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/30">고객 찾기</p>
+        <p id={CRM_HOME_CUSTOMER_SEARCH_HEADING_ID} className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/30">
+          고객 찾기
+        </p>
         <CrmCustomerPicker
           label={searchQuery}
           linkedId=""
+          labelledBy={CRM_HOME_CUSTOMER_SEARCH_HEADING_ID}
           onFreeText={setSearchQuery}
           onClear={() => setSearchQuery("")}
           onPick={(pick) => {
@@ -483,7 +498,7 @@ export default function CrmHomeClient({
           }}
         />
         {recentCustomers.length > 0 ? (
-          <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-[#f0f0ec] pt-2.5">
+          <div className={`mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-[#f0f0ec] pt-2.5 ${MOBILE_TOUCH_TARGET_CLASS}`}>
             <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#1a1a1a]/30">최근 본 고객</span>
             {recentCustomers.slice(0, 6).map((rc) => (
               <button
@@ -493,14 +508,14 @@ export default function CrmHomeClient({
                 className="inline-flex items-center gap-1 rounded-full border border-[#e8e8e4] bg-white px-2.5 py-1 text-[11px] font-medium text-[#111110] transition-colors hover:border-[#c8c8c4] hover:bg-[#fafaf8]"
               >
                 <span className="max-w-[120px] truncate">{rc.name}</span>
-                <span className="text-[10px] text-[#1a1a1a]/35">{rc.sourceLabel}</span>
+                <span className={`text-[10px] ${SECONDARY_TEXT_CLASS}`}>{rc.sourceLabel}</span>
               </button>
             ))}
           </div>
         ) : null}
 
         {(crmOverview?.business.frequentCustomers.length ?? 0) > 0 ? (
-          <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-[#f0f0ec] pt-2.5">
+          <div className={`mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-[#f0f0ec] pt-2.5 ${MOBILE_TOUCH_TARGET_CLASS}`}>
             <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#1a1a1a]/30">자주 접촉 · 14일</span>
             {crmOverview?.business.frequentCustomers.map((customer) => (
               <Link
@@ -510,7 +525,7 @@ export default function CrmHomeClient({
                 className="inline-flex items-center gap-1.5 rounded-full border border-[#e8e8e4] bg-white px-2.5 py-1 text-[11px] font-medium text-[#111110] transition-colors hover:border-[#c8c8c4] hover:bg-[#fafaf8]"
               >
                 <span className="max-w-[120px] truncate">{customer.customerName}</span>
-                <span className="rounded-full bg-[#f0f0ec] px-1.5 text-[10px] font-semibold tabular-nums text-[#1a1a1a]/55">
+                <span className={`rounded-full bg-[#f0f0ec] px-1.5 text-[10px] font-semibold tabular-nums ${SECONDARY_TEXT_CLASS}`}>
                   {customer.contactCount}
                 </span>
               </Link>
@@ -520,14 +535,14 @@ export default function CrmHomeClient({
       </section>
 
       {/* 주간 조망 밴드 — 우측 aside에서 본문으로 이동(H4: 우측 열은 액션 레일 전용) · 기능 보존 */}
-      <div className="mb-4 grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className={`mb-4 grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3 ${MOBILE_TOUCH_TARGET_CLASS}`}>
         {/* 이번 주 할 일 — 주간 일정·버킷 조망 */}
         <CrmWeekAheadPanel compact refreshKey={neoCrmRefreshKey} />
 
         {/* 설치·방문 일정 — upcomingThisWeek(install|visit) 상위 3건 */}
         <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
           <div className="mb-3 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 text-[#1a1a1a]/45">
+            <div className={`flex items-center gap-1.5 ${SECONDARY_TEXT_CLASS}`}>
               <Calendar className="h-3.5 w-3.5" />
               <p className="text-[11px] font-bold uppercase tracking-[0.08em]">설치·방문 일정</p>
               {/* 0 플래시 금지(CRM-5) — overview 도착 전엔 스켈레톤 */}
@@ -541,7 +556,7 @@ export default function CrmHomeClient({
             </div>
             <Link
               href="/admin/calendar"
-              className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#1a1a1a]/40 transition-colors hover:text-[#111110]"
+              className={`inline-flex items-center gap-1 text-[11px] font-semibold ${INTERACTIVE_TEXT_CLASS} transition-colors hover:text-[#111110]`}
             >
               캘린더
               <ExternalLink className="h-3 w-3" />
@@ -556,7 +571,7 @@ export default function CrmHomeClient({
                 ))}
               </div>
             ) : (
-              <p className="rounded-xl bg-[#fafaf8] px-3 py-4 text-center text-[12px] text-[#1a1a1a]/35">
+              <p className={`rounded-xl bg-[#fafaf8] px-3 py-4 text-center text-[12px] ${SECONDARY_TEXT_CLASS}`}>
                 예정된 설치·방문이 없습니다.
               </p>
             )
@@ -573,7 +588,7 @@ export default function CrmHomeClient({
                       </span>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[12px] font-semibold text-[#111110]">{item.title}</p>
-                        <p className="truncate text-[11px] text-[#1a1a1a]/45">
+                        <p className={`truncate text-[11px] ${SECONDARY_TEXT_CLASS}`}>
                           {item.kind === "install" ? "설치" : "방문"}
                           {item.customerName ? ` · ${item.customerName}` : ""}
                         </p>
@@ -611,8 +626,8 @@ export default function CrmHomeClient({
 
       {/* 바로 가기 — 상단 sticky 바의 보조 링크와 하단 '심화 보기'로 갈려 있던 딥링크를 한 줄로 모았다.
           (주요 화면 이동은 사이드바 CRM 확장이 담당 — 여기는 보조 경로) */}
-      <div className="mb-4 flex flex-wrap items-center gap-2 text-[12px]">
-        <span className="text-[#1a1a1a]/35">바로 가기</span>
+      <div className={`mb-4 flex flex-wrap items-center gap-2 text-[12px] ${MOBILE_TOUCH_TARGET_CLASS}`}>
+        <span className={SECONDARY_TEXT_CLASS}>바로 가기</span>
         {[
           { href: "/admin/crm/customers/leads", label: "리드" },
           { href: "/admin/crm/deals", label: "견적·매출" },
@@ -624,7 +639,7 @@ export default function CrmHomeClient({
           <Link
             key={link.href}
             href={link.href}
-            className="inline-flex h-7 items-center rounded-lg border border-[#e8e8e4] bg-white px-2.5 font-medium text-[#1a1a1a]/60 transition-colors hover:border-[#c8c8c4] hover:text-[#111110]"
+            className={`inline-flex h-7 items-center rounded-lg border border-[#e8e8e4] bg-white px-2.5 font-medium ${INTERACTIVE_TEXT_CLASS} transition-colors hover:border-[#c8c8c4] hover:text-[#111110]`}
           >
             {link.label}
           </Link>

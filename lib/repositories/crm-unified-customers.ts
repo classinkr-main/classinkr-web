@@ -18,6 +18,7 @@ import { deriveLeadRegionLabel } from "@/lib/crm/lead-message"
 import { deriveCustomerRegion, REGION_UNSPECIFIED } from "@/lib/crm/region-label"
 import {
   daysUntil,
+  rowHiddenByUnconfirmedGate,
   rowMatchesOwner,
   rowVisibleInView,
   type CrmUnifiedCustomerRow,
@@ -65,6 +66,9 @@ export const CRM_SEGMENT_VIEWS = [
   "site_leads",
   "unanswered",
   "expiring",
+  // 2026-09-20 Compass 정리 라운드 S4 — meta_leads/registered_leads 저장 뷰 칩 건수.
+  "meta_leads",
+  "registered_leads",
 ] as const
 export type CrmUnifiedSourceStatusKey = "classin_leads" | "app_customers" | "external_crm" | "sheets"
 
@@ -76,6 +80,26 @@ export interface CrmHealthDistribution {
   risk: number
 }
 
+// 담당자 한 명의 건강도 분포(T2 담당별 스택바). ownerId는 행의 ownerKeys 중 표시 이름이 아닌
+// 키(NEO ownerId, 소문자 정규화)이며 없으면 null. 담당 없는 고객은 ownerId null ·
+// ownerName CRM_HEALTH_UNASSIGNED_OWNER_LABEL 한 행으로 모은다.
+export interface CrmHealthDistributionOwnerRow {
+  ownerId: string | null
+  ownerName: string
+  total: number
+  safe: number
+  watch: number
+  risk: number
+}
+
+// getCrmUnifiedHealthDistribution()이 돌려주는 확장형 — 상위 4개 키는 CrmHealthDistribution과 동일
+// (하위 호환), byOwner는 total 내림차순·동률은 이름 ko 정렬·미배정은 항상 맨 뒤.
+export interface CrmHealthDistributionWithOwners extends CrmHealthDistribution {
+  byOwner: CrmHealthDistributionOwnerRow[]
+}
+
+export const CRM_HEALTH_UNASSIGNED_OWNER_LABEL = "미배정"
+
 export interface CrmUnifiedCustomersOptions {
   q?: string
   source?: CrmUnifiedCustomerSource | "all"
@@ -84,9 +108,22 @@ export interface CrmUnifiedCustomersOptions {
   owner?: string
   ownerKeys?: string[]
   tag?: string
+  /**
+   * 확인 게이트 우회 — 기본(false)은 미확인(provisional) 리드를 일반 뷰에서 숨기고
+   * summary.hiddenUnconfirmedCount로 건수만 알린다. true면 그 행들을 목록에 포함한다
+   * (리드 보드 "미확인 포함" 토글과 같은 이름·UX).
+   */
+  includeUnconfirmed?: boolean
   limit?: number
   offset?: number
   now?: Date
+  /**
+   * 새로고침(?force=1) — 소스 스냅샷 Data Cache(unstable_cache 60초)를 읽지 않고 신선하게
+   * 재수집한 뒤 태그를 즉시 하드 만료한다. 홈 우선순위 큐(getCrmPriorityQueue({ force }))와
+   * 같은 계약(Wave 0 H1). 클라이언트 '새로고침'·리드 등록 직후 재조회가 등록 전 스냅샷을
+   * 최대 60초 돌려받던 결함(C1)을 막는다.
+   */
+  bypassCache?: boolean
 }
 
 export interface CrmUnifiedCustomers {
@@ -115,6 +152,11 @@ export interface CrmUnifiedCustomers {
     ownerCount: number
     viewCounts: Record<string, number>
     availableTags: string[]
+    /**
+     * 현재 검색·필터·뷰 범위 안에서 확인 게이트 때문에 숨겨진 미확인 리드 수.
+     * includeUnconfirmed=true로 재조회하면 정확히 이 건수가 목록에 추가된다(토글 on이면 0).
+     */
+    hiddenUnconfirmedCount: number
   }
   // 활성 고객 건강도 분포 — 현재 검색/필터와 무관한 전역 집계(코크핏 도넛용).
   healthDistribution: CrmHealthDistribution
@@ -148,10 +190,12 @@ function formatCNY(value: number | null | undefined) {
   return `¥${amount.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}`
 }
 
+// 전환 고객(자체 DB) 계약·미수 — 같은 열의 ¥잔액·$오더와 나란히 놓이므로 통화 기호(₩)를
+// 라벨 안에 포함한다(UX 규약 4). "원" 접미사만으로는 외부 CRM 값과 원화가 구분되지 않았다.
 function formatKRW(value: number | null | undefined) {
   const amount = Number(value ?? 0)
   if (!amount) return null
-  return `${Math.round(amount).toLocaleString("ko-KR")}원`
+  return `₩${Math.round(amount).toLocaleString("ko-KR")}`
 }
 
 function leadName(lead: LeadRecord) {
@@ -338,19 +382,51 @@ function rowHealthBand(row: CrmUnifiedCustomerRow, nowMs: number): CustomerHealt
 // healthDistribution 필드와 getCrmUnifiedHealthDistribution() 경량 경로가 공유하는 단일 산식.
 // 태그 부착 여부와 무관(rowHealthBand는 tags를 보지 않음)하므로 태그 없는 스냅샷 원본 rows에
 // 바로 적용해도 의미 동일.
-function computeHealthDistribution(
+// 전체 합계와 담당별 합계를 같은 순회 한 번에 모은다(추가 쿼리·재순회 없음). 담당 묶음 키는
+// buildOwnerOptions와 같은 ownerName 기준(정규화)이라 통합 목록의 담당 카운트와 같은 이름으로 묶인다.
+function collectHealthDistribution(
   rows: CrmUnifiedCustomerRow[],
   nowMs: number
-): CrmHealthDistribution {
-  return rows.reduce<CrmHealthDistribution>(
-    (acc, row) => {
-      if (row.source !== "neo_account") return acc
-      acc.total += 1
-      acc[rowHealthBand(row, nowMs)] += 1
-      return acc
-    },
-    { total: 0, safe: 0, watch: 0, risk: 0 }
-  )
+): CrmHealthDistributionWithOwners {
+  const totals: CrmHealthDistribution = { total: 0, safe: 0, watch: 0, risk: 0 }
+  const byOwnerKey = new Map<string, CrmHealthDistributionOwnerRow>()
+  for (const row of rows) {
+    if (row.source !== "neo_account") continue
+    const band = rowHealthBand(row, nowMs)
+    totals.total += 1
+    totals[band] += 1
+
+    const ownerName = row.ownerName?.trim() ?? ""
+    const groupKey = normalize(ownerName)
+    let bucket = byOwnerKey.get(groupKey)
+    if (!bucket) {
+      bucket = {
+        ownerId: groupKey ? ((row.ownerKeys ?? []).find((key) => key !== groupKey) ?? null) : null,
+        ownerName: ownerName || CRM_HEALTH_UNASSIGNED_OWNER_LABEL,
+        total: 0,
+        safe: 0,
+        watch: 0,
+        risk: 0,
+      }
+      byOwnerKey.set(groupKey, bucket)
+    }
+    bucket.total += 1
+    bucket[band] += 1
+  }
+  const byOwner = Array.from(byOwnerKey.entries())
+    .sort(([aKey, a], [bKey, b]) => {
+      // 미배정("" 키)은 건수와 무관하게 맨 뒤.
+      if (!aKey !== !bKey) return aKey ? -1 : 1
+      return b.total - a.total || a.ownerName.localeCompare(b.ownerName, "ko")
+    })
+    .map(([, bucket]) => bucket)
+  return { ...totals, byOwner }
+}
+
+// getCrmUnifiedCustomers().healthDistribution 용 — 기존 4개 키만 돌려 응답 형태를 바꾸지 않는다.
+function computeHealthDistribution(rows: CrmUnifiedCustomerRow[], nowMs: number): CrmHealthDistribution {
+  const { total, safe, watch, risk } = collectHealthDistribution(rows, nowMs)
+  return { total, safe, watch, risk }
 }
 
 // ── 소스 스냅샷 Data Cache (7-23 감사 3-A 서버 메모이제이션 → 콜드 인스턴스 대응 승격) ──
@@ -372,7 +448,8 @@ function computeHealthDistribution(
 // - 모든 소스가 성공했을 때만 저장(NEO의 `if (value.ok)`와 동일 원칙) — 부분 실패
 //   스냅샷을 60초 고정하지 않고 다음 요청이 즉시 재시도한다. unstable_cache는 throw한
 //   호출을 캐시에 쓰지 않으므로(성공 값만 저장), incomplete면 여기서 던져 이 성질을 지킨다.
-// - options.now가 주어진 호출(테스트·고정 시각)은 캐시를 읽지도 쓰지도 않는다.
+// - options.now가 주어진 호출(테스트·고정 시각)과 options.bypassCache(새로고침 ?force=1) 호출은
+//   캐시를 읽지도 쓰지도 않는다. bypassCache는 재수집 뒤 태그를 즉시 하드 만료한다.
 // - 리드 쓰기(lib/repositories/leads.ts의 invalidateLeadReadCaches)와 소스 링크 확정/해제/
 //   생성 라우트(app/api/admin/crm/source-links/*)가 이 태그를 revalidateTag(tag, "max")로
 //   건다 — 쓰기 직후 다음 읽기가 SWR로 재계산을 트리거한다.
@@ -690,7 +767,14 @@ export async function getCrmUnifiedCustomers(
   options: CrmUnifiedCustomersOptions = {}
 ): Promise<CrmUnifiedCustomers> {
   const now = options.now ?? new Date()
-  const snapshot = await getSourceSnapshot(now, options.now != null)
+  const bypassCache = options.bypassCache === true
+  const snapshot = await getSourceSnapshot(now, options.now != null || bypassCache)
+  if (bypassCache) {
+    // 새로고침 직후 다음 일반 읽기(다른 인스턴스 포함)가 낡은 스냅샷을 돌려주지 않게 태그를
+    // 즉시 하드 만료한다({ expire: 0 } = 즉시 만료, "max" = SWR) — 우선순위 큐 force 계약과 동일.
+    // 실패한 재수집 결과가 캐시에 쓰이는 일은 없다(force 경로는 unstable_cache를 거치지 않는다).
+    revalidateTag(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, { expire: 0 })
+  }
   const { leadsOk, neoAccountsOk, portalCustomersOk } = snapshot
   const warnings = [...snapshot.warnings]
 
@@ -711,6 +795,7 @@ export async function getCrmUnifiedCustomers(
   const source = options.source ?? "all"
   const lifecycle = options.lifecycle ?? "all"
   const view = options.view ?? "all"
+  const includeUnconfirmed = options.includeUnconfirmed === true
 
   const nowMs = now.getTime()
   const baseRows = rows.filter((row) => {
@@ -722,12 +807,17 @@ export async function getCrmUnifiedCustomers(
     return true
   })
   // provisional 게이트 포함 가시성 규칙 — 일반 뷰에서는 미확인 리드가 자동 제외된다.
-  const filtered = baseRows.filter((row) => rowVisibleInView(row, view, ownerKeys, nowMs))
+  // 단 숨긴 건수는 항상 내려주고, includeUnconfirmed 토글이 켜지면 게이트를 우회한다.
+  const filtered = baseRows.filter((row) => rowVisibleInView(row, view, ownerKeys, nowMs, includeUnconfirmed))
+  const hiddenUnconfirmedCount = includeUnconfirmed
+    ? 0
+    : baseRows.filter((row) => rowHiddenByUnconfirmedGate(row, view, ownerKeys, nowMs)).length
   // 세그먼트 칩 카운트 — 현재 검색/담당 범위 안에서 각 세그먼트에 몇 건이 들어오는지.
+  // 토글이 켜지면 칩 숫자도 목록과 같은 기준(게이트 우회)으로 센다.
   const viewCounts = Object.fromEntries(
     CRM_SEGMENT_VIEWS.map((segment) => [
       segment,
-      baseRows.filter((row) => rowVisibleInView(row, segment, ownerKeys, nowMs)).length,
+      baseRows.filter((row) => rowVisibleInView(row, segment, ownerKeys, nowMs, includeUnconfirmed)).length,
     ])
   )
 
@@ -772,7 +862,8 @@ export async function getCrmUnifiedCustomers(
   const limit = clampInteger(options.limit, 100, 1, 2_000)
   const offset = clampInteger(options.offset, 0, 0, 100_000)
   // provisional 리드는 기본 뷰에 안 보이므로 담당자 카운트에서도 제외 — 배지·목록 정합.
-  const owners = buildOwnerOptions(rows.filter((row) => !row.provisional))
+  // 토글로 포함하면 담당자 카운트에도 같이 들어온다.
+  const owners = buildOwnerOptions(rows.filter((row) => includeUnconfirmed || !row.provisional))
   const pageRows = sorted.slice(offset, offset + limit)
   const nextOffset = offset + pageRows.length
   const { neoLatestSyncedAt, neoPartial } = snapshot
@@ -835,6 +926,7 @@ export async function getCrmUnifiedCustomers(
       ownerCount: owners.length,
       viewCounts,
       availableTags,
+      hiddenUnconfirmedCount,
     },
     healthDistribution,
     pagination: {
@@ -853,12 +945,14 @@ export async function getCrmUnifiedCustomers(
 // health-distribution 라우트 전용 최소 경로 — 소스 스냅샷(unstable_cache 60초, Data Cache)만
 // 태우고, 도넛 숫자와 무관한 후처리(태그 부착·필터·세그먼트별 viewCounts 8회 재순회·
 // sortPriorityItems 전량 정렬·오너 집계)는 전부 건너뛴다. 카운트 산식은
-// computeHealthDistribution을 그대로 재사용해 getCrmUnifiedCustomers().healthDistribution과
-// 동일한 값을 낸다.
+// collectHealthDistribution을 그대로 재사용해 상위 4개 키가 getCrmUnifiedCustomers().healthDistribution과
+// 동일한 값을 내고, 같은 순회에서 모은 담당별 분포(byOwner)를 덧붙인다(T2).
 export async function getCrmUnifiedHealthDistribution(
-  options: { now?: Date } = {}
-): Promise<CrmHealthDistribution> {
+  options: { now?: Date; bypassCache?: boolean } = {}
+): Promise<CrmHealthDistributionWithOwners> {
   const now = options.now ?? new Date()
-  const snapshot = await getSourceSnapshot(now, options.now != null)
-  return computeHealthDistribution(snapshot.rows, now.getTime())
+  const bypassCache = options.bypassCache === true
+  const snapshot = await getSourceSnapshot(now, options.now != null || bypassCache)
+  if (bypassCache) revalidateTag(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, { expire: 0 })
+  return collectHealthDistribution(snapshot.rows, now.getTime())
 }

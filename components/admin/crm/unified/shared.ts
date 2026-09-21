@@ -39,6 +39,8 @@ export interface CrmUnifiedCustomers {
     ownerCount: number
     viewCounts?: Record<string, number>
     availableTags?: string[]
+    /** 확인 게이트로 숨긴 미확인 리드 수(서버 산출, 토글 on이면 0). 구 응답 호환으로 선택. */
+    hiddenUnconfirmedCount?: number
   }
   pagination: {
     limit: number
@@ -116,6 +118,9 @@ export const SAVED_VIEW_FILTERS: Array<{
   { key: "unanswered", label: "미응답", description: "첫 응답 전 리드 (24h 초과 위험)" },
   { key: "dormant", label: "30일+ 미접촉", description: "마지막 활동 30일 초과" },
   { key: "expiring", label: "만료 임박", description: "만료 14일 이내(지난 것 포함)" },
+  // 2026-09-20 Compass 정리 라운드 S4 — 세그먼트 딥링크(커맨드 팔레트·홈 타일)가 착지하는 저장 뷰.
+  { key: "meta_leads", label: "메타 광고 리드", description: "광고 클릭·Meta 리드 광고 유입" },
+  { key: "registered_leads", label: "NEO 등록 리드", description: "NEO CRM 에 등록 확정된 리드" },
 ]
 
 const PRIMARY_SAVED_VIEW_KEYS = new Set<SavedViewFilter>([
@@ -130,7 +135,8 @@ const PRIMARY_SAVED_VIEW_KEYS = new Set<SavedViewFilter>([
 export const PRIMARY_SAVED_VIEW_FILTERS = SAVED_VIEW_FILTERS.filter((filter) => PRIMARY_SAVED_VIEW_KEYS.has(filter.key))
 export const SECONDARY_SAVED_VIEW_FILTERS = SAVED_VIEW_FILTERS.filter((filter) => !PRIMARY_SAVED_VIEW_KEYS.has(filter.key))
 
-export const CACHE_TTL_MS = 90_000
+// 캐시 TTL·SWR 창은 lib/crm/client-cache.ts(CRM_CACHE_TTL_MS · CRM_CACHE_SWR_MS)가 SSOT다 —
+// 여기 사본(예전 90초)을 두지 않는다(2026-09-17 우선순위 P2, tests/crm/crm-cache-ttl-ssot.test.ts).
 // 데스크톱 한 화면에 100행을 붙이면 초기 DOM과 스크린리더 탐색 비용이 과도하다.
 // 50행 단위로 맞춰 필터/상세 전환 반응성을 우선한다.
 export const PAGE_LIMIT = 50
@@ -157,6 +163,8 @@ export function listUrl(input: {
   owner: string
   view: SavedViewFilter
   tag: string
+  /** 미확인 포함 토글 — URL(=클라이언트 캐시 키)에 실려 토글 상태별로 캐시가 분리된다. */
+  includeUnconfirmed?: boolean
   offset: number
 }) {
   const params = new URLSearchParams({ limit: String(PAGE_LIMIT), offset: String(input.offset) })
@@ -166,6 +174,7 @@ export function listUrl(input: {
   if (input.view !== "all") params.set("view", input.view)
   if (input.owner) params.set("owner", input.owner)
   if (input.tag) params.set("tag", input.tag)
+  if (input.includeUnconfirmed) params.set("includeUnconfirmed", "1")
   return `/api/admin/crm/customers/unified?${params.toString()}`
 }
 

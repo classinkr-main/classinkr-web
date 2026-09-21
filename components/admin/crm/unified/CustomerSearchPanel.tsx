@@ -6,6 +6,7 @@
 
 import { Filter, Search, Tag } from "lucide-react"
 import { buildOwnerSelectOptions, useCrmOwners } from "../useCrmOwners"
+import UnconfirmedToggle from "./UnconfirmedToggle"
 import {
   CURRENT_OWNER_VALUE,
   LIFECYCLE_FILTERS,
@@ -65,6 +66,8 @@ export default function CustomerSearchPanel({
   ownerOptions,
   tagFilter,
   onTagFilterChange,
+  includeUnconfirmed,
+  onIncludeUnconfirmedChange,
   data,
   loading,
 }: {
@@ -81,10 +84,13 @@ export default function CustomerSearchPanel({
   ownerOptions: ReturnType<typeof buildOwnerSelectOptions>
   tagFilter: string
   onTagFilterChange: (value: string) => void
+  includeUnconfirmed: boolean
+  onIncludeUnconfirmedChange: (value: boolean) => void
   data: CrmUnifiedCustomers | null
   loading: boolean
 }) {
   const sourceSummary = summarizeCustomerSources(data?.sources.statuses ?? [])
+  const hiddenUnconfirmedCount = data?.summary.hiddenUnconfirmedCount ?? 0
 
   return (
     <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
@@ -160,6 +166,22 @@ export default function CustomerSearchPanel({
           </select>
         </label>
       </div>
+
+      {includeUnconfirmed || hiddenUnconfirmedCount > 0 ? (
+        // 확인 게이트 안내 — 숨긴 미확인 리드 건수와 포함 토글(리드 보드와 같은 UX).
+        <div className="mt-2 flex flex-wrap items-center gap-2" role="group" aria-label="미확인 리드 표시">
+          <UnconfirmedToggle
+            includeUnconfirmed={includeUnconfirmed}
+            hiddenUnconfirmedCount={hiddenUnconfirmedCount}
+            onToggle={() => onIncludeUnconfirmedChange(!includeUnconfirmed)}
+          />
+          <span className="text-[12px] font-medium text-[#1a1a1a]/45">
+            {includeUnconfirmed
+              ? "미확인 리드를 목록에 포함하는 중입니다."
+              : `공개 폼 미확인 리드 ${hiddenUnconfirmedCount.toLocaleString("ko-KR")}건이 이 검색 범위에서 숨겨져 있습니다.`}
+          </span>
+        </div>
+      ) : null}
 
       {data?.summary.availableTags?.length ? (
         <div className="mt-2 flex flex-wrap items-center gap-2">

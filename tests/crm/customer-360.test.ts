@@ -246,6 +246,17 @@ async function loadCustomer360(options?: {
       hwBoardCount: null,
       matched: false,
     }),
+    // M2·M4 — 이 하네스는 품목 표를 검증하지 않으므로 항상 빈 값을 돌려준다.
+    EMPTY_CRM_MONEY_LINE_ITEMS_SUMMARY: {
+      lineItems: [],
+      lineItemsMeta: { truncated: false, sources: [] },
+      unmatchedOutbound: [],
+    },
+    getCrmMoneyLineItemsSummary: vi.fn().mockResolvedValue({
+      lineItems: [],
+      lineItemsMeta: { truncated: false, sources: [] },
+      unmatchedOutbound: [],
+    }),
   }))
   vi.doMock("@/lib/repositories/crm-customer-tags", () => ({
     getCustomerTags: vi.fn().mockResolvedValue([]),

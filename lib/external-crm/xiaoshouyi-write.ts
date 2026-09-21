@@ -93,11 +93,27 @@ export interface XiaoshouyiWriteSchemaReadiness {
   error?: string
 }
 
+/**
+ * 페이로드 내용에 따라 달라지는 생성 규칙. 정적 목록(`requiredCreateFields`)으로는
+ * "고객 출처일 때만 dbcRelation26 필수, 리드 출처면 금지" 같은 조건을 적을 수 없어서 둔다.
+ * `when` 이 참인 페이로드에 한해 `requires` 는 전부 있어야 하고 `forbids` 는 하나도 없어야 한다.
+ */
+interface XiaoshouyiConditionalCreateRule {
+  /** 규칙 이름 — 위반 메시지에 그대로 실린다. */
+  label: string
+  when: (payload: Record<string, unknown>) => boolean
+  requires?: readonly string[]
+  forbids?: readonly string[]
+}
+
 interface XiaoshouyiWriteObjectPolicy {
   label: string
   operations: ReadonlySet<CrmWriteOperation>
   allowedFields: ReadonlySet<string>
   requiredCreateFields?: readonly string[]
+  conditionalCreateRules?: readonly XiaoshouyiConditionalCreateRule[]
+  /** 문자열로 보내면 `5000047 Field data type mismatch` 로 거절되는 숫자 필드. 있으면 number 여야 한다. */
+  numericCreateFields?: readonly string[]
   ownerTransferField?: string
   /** 객체 전체를 닫는다(모든 작업 거절, 메타데이터 점검에서 read_only). */
   readOnlyReason?: string
@@ -106,6 +122,14 @@ interface XiaoshouyiWriteObjectPolicy {
    * "…작업을 허용하지 않습니다" 로만 보여서 왜 닫혔는지, 어디로 가야 하는지가 코드 밖으로 안 나간다.
    */
   closedOperationReasons?: Partial<Record<CrmWriteOperation, string>>
+}
+
+/** 활동 기록의 출처 객체 구분(`activityRecordFrom`). 11=리드, 1=고객 — 매퍼 상수와 같은 값. */
+const ACTIVITY_RECORD_FROM = { lead: 11, account: 1 } as const
+
+function activityRecordFromIs(payload: Record<string, unknown>, expected: number) {
+  const value = payload.activityRecordFrom
+  return (typeof value === "number" || typeof value === "string") && Number(value) === expected
 }
 
 const XIAOSHOUYI_WRITE_POLICIES: Record<string, XiaoshouyiWriteObjectPolicy> = {
@@ -184,7 +208,33 @@ const XIAOSHOUYI_WRITE_POLICIES: Record<string, XiaoshouyiWriteObjectPolicy> = {
       "dbcRelation26",
       "ownerId",
     ]),
-    requiredCreateFields: ["content", "dbcRelation26"],
+    // describe 실측 생성 필수(2026-09-07, 102필드): content·dimDepart·ownerId·startTime·entityType.
+    // ownerId 를 비우면 자동 주입돼 실행 계정 소유로 쌓이므로 "선택"이 아니라 필수로 잠근다.
+    // 관계의 정본은 activityRecordFrom(다형 참조) + activityRecordFrom_data(값) 쌍이라 함께 필수다.
+    requiredCreateFields: [
+      "content",
+      "startTime",
+      "entityType",
+      "dimDepart",
+      "ownerId",
+      "activityRecordFrom",
+      "activityRecordFrom_data",
+    ],
+    // dbcRelation26 은 describe 상 referObjectApiKey="account" 인 고객 전용 참조다.
+    // 고객 출처(1)면 필수, 리드 출처(11)면 금지 — 리드 id 를 넣으면 고객 참조에 리드 id 가 들어간다.
+    conditionalCreateRules: [
+      {
+        label: "고객 출처(activityRecordFrom=1)",
+        when: (payload) => activityRecordFromIs(payload, ACTIVITY_RECORD_FROM.account),
+        requires: ["dbcRelation26"],
+      },
+      {
+        label: "리드 출처(activityRecordFrom=11)",
+        when: (payload) => activityRecordFromIs(payload, ACTIVITY_RECORD_FROM.lead),
+        forbids: ["dbcRelation26"],
+      },
+    ],
+    numericCreateFields: ["startTime"],
   },
   ShroffAccount__c: {
     label: "EEO 계정",
@@ -250,6 +300,29 @@ function validateWritePayload(input: {
     const missingRequired = (input.policy.requiredCreateFields ?? []).filter((field) => isBlank(input.payload[field]))
     if (missingRequired.length > 0) {
       throw new Error(`Missing required create fields for ${input.policy.label}: ${missingRequired.join(", ")}`)
+    }
+
+    for (const field of input.policy.numericCreateFields ?? []) {
+      const value = input.payload[field]
+      if (!isBlank(value) && (typeof value !== "number" || !Number.isFinite(value))) {
+        throw new Error(`${input.policy.label} 의 ${field} 는 숫자(ms 타임스탬프)여야 합니다.`)
+      }
+    }
+
+    for (const rule of input.policy.conditionalCreateRules ?? []) {
+      if (!rule.when(input.payload)) continue
+      const missing = (rule.requires ?? []).filter((field) => isBlank(input.payload[field]))
+      if (missing.length > 0) {
+        throw new Error(
+          `Missing required create fields for ${input.policy.label} (${rule.label}): ${missing.join(", ")}`
+        )
+      }
+      const forbidden = (rule.forbids ?? []).filter((field) => !isBlank(input.payload[field]))
+      if (forbidden.length > 0) {
+        throw new Error(
+          `Forbidden create fields for ${input.policy.label} (${rule.label}): ${forbidden.join(", ")}`
+        )
+      }
     }
   }
 }

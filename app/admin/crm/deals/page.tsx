@@ -27,6 +27,8 @@ import { adminFetch, adminFetchJson, adminFetchJsonCached } from "@/lib/admin-cl
 import { StatTile } from "@/components/admin/viz"
 // 확도(예상·시트 확정/임박/예상) 색은 확도 신호 토큰 SSOT — 색 리터럴 재정의 금지(DESIGN.md 확도 신호 토큰 절).
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
+// 통화 표기·칩 메타는 CRM 공용 규약(lib/crm/money-format.ts) — 기호·출처 라벨 재정의 금지.
+import { CRM_CURRENCY_BADGE, formatKRWAbbrev, type CrmCurrency } from "@/lib/crm/money-format"
 import {
   resolveCrmWriteExecuteOutcome,
   type CrmWriteExecuteResponseBody,
@@ -165,14 +167,10 @@ interface CrmReadinessReport {
   checks: CrmReadinessCheck[]
 }
 
+// 자체 DB(레거시 견적/계약/영수증·Portal V2 딜) 금액은 전부 원화 — 같은 화면의 REV/NEO ¥ 값과
+// 인접하므로 기호 없는 숫자를 금지하고 공용 ₩ 표기(formatKRWAbbrev)에 위임한다(감사 2B.1, D2).
 function formatCurrency(value: number) {
-  if (Math.abs(value) >= 100_000_000) {
-    return `${(value / 100_000_000).toLocaleString("ko-KR", { maximumFractionDigits: 1 })}억`
-  }
-  if (Math.abs(value) >= 10_000) {
-    return `${Math.round(value / 10_000).toLocaleString("ko-KR")}만`
-  }
-  return value.toLocaleString("ko-KR")
+  return formatKRWAbbrev(value)
 }
 
 function formatNumber(value: number) {
@@ -249,6 +247,17 @@ function StatusBadge({ label, tone }: { label: string; tone?: string }) {
   )
 }
 
+// 통화·출처 칩 — ₩(자체 DB)와 ¥(REV 시트)가 한 화면에 인접하므로 기호와 산정 원천을 값 옆에 붙여
+// 합산 오독을 막는다(감사 2B.1). 기호는 CRM_CURRENCY_BADGE, 출처 라벨은 이 화면의 집계 원천 그대로.
+function CurrencySourceChip({ currency, source }: { currency: CrmCurrency; source: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-[#e8e8e4] bg-white px-1.5 py-0.5 text-[9.5px] font-bold text-[#1a1a1a]/50">
+      <span>{CRM_CURRENCY_BADGE[currency].symbol}</span>
+      <span className="font-semibold">{source}</span>
+    </span>
+  )
+}
+
 // 콜드 로드 '...' 금지 — 값 자리 크기의 저대비 펄스 스켈레톤(레이아웃 일치, CRM-5).
 function ValueSkeleton({ className = "h-5 w-20" }: { className?: string }) {
   return (
@@ -272,18 +281,21 @@ function MetricCard({
 
 // KR Team 보드(현황) 측정 타일 차용 — 마크업은 viz StatTile(soft 변형)에 위임(W2-2b).
 // tone은 값 색만 바꾸는 기존 계약 유지(값·라벨·캡션 불변).
+// chip은 금액 타일 전용 통화·출처 칩 — 캡션(hint) 앞에 붙는다(D2).
 function MeasureTile({
   icon,
   label,
   value,
   hint,
   tone = "text-[#111110]",
+  chip,
 }: {
   icon: ReactNode
   label: string
   value: ReactNode
   hint: string
   tone?: string
+  chip?: ReactNode
 }) {
   return (
     <StatTile
@@ -293,7 +305,16 @@ function MeasureTile({
       compact
       label={label}
       value={tone === "text-[#111110]" ? value : <span className={tone}>{value}</span>}
-      hint={hint}
+      hint={
+        chip ? (
+          <span className="inline-flex flex-wrap items-center gap-1.5">
+            {chip}
+            <span>{hint}</span>
+          </span>
+        ) : (
+          hint
+        )
+      }
     />
   )
 }
@@ -757,15 +778,16 @@ export default function AdminCrmRevenuePage() {
         <div className="grid gap-5 lg:grid-cols-[minmax(0,280px)_minmax(0,1fr)]">
           {/* 히어로 — 인식 매출 (홈 대시보드 차용) */}
           <div className="border-t border-[#084734]/18 pt-4">
-            <div className="flex items-center gap-2 text-[#084734]/70">
+            <div className="flex flex-wrap items-center gap-2 text-[#084734]/70">
               <CircleDollarSign className="h-5 w-5" />
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em]">딜리버리 총매출</p>
+              <CurrencySourceChip currency="KRW" source="Portal V2 딜" />
             </div>
             <p className="mt-2 text-4xl font-bold tracking-[-0.045em] text-[#084734] sm:text-[40px]">
               {loading && !data ? <ValueSkeleton className="h-9 w-36" /> : formatCurrency(data?.summary.deliveryTotalAmount ?? 0)}
             </p>
             <p className="mt-2 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-              본사 CRM 원천의 인식 매출 합산(자체 집계 ₩) — 시트 &lsquo;확정 표시&rsquo;(¥)와 다른 기준
+              Portal V2 딜 설치 금액(installed) 합산(자체 집계 ₩) — 시트 &lsquo;확정 표시&rsquo;(¥)와 다른 기준, 통화 간 합산 없음
             </p>
           </div>
 
@@ -776,6 +798,7 @@ export default function AdminCrmRevenuePage() {
               label="계약 기준"
               value={loading && !data ? <ValueSkeleton /> : formatCurrency(data?.summary.contractedAmount ?? 0)}
               hint="보조 확인용 계약 합계"
+              chip={<CurrencySourceChip currency="KRW" source="레거시 계약 + V2 딜" />}
             />
             <MeasureTile
               icon={<ReceiptText className="h-4 w-4" />}
@@ -783,6 +806,7 @@ export default function AdminCrmRevenuePage() {
               value={loading && !data ? <ValueSkeleton /> : formatCurrency(data?.summary.paidAmount ?? 0)}
               hint="영수증 수납 · V2 paid"
               tone="text-[#084734]"
+              chip={<CurrencySourceChip currency="KRW" source="레거시 영수증 + V2 딜" />}
             />
             <MeasureTile
               icon={<AlertCircle className="h-4 w-4" />}
@@ -790,18 +814,21 @@ export default function AdminCrmRevenuePage() {
               value={loading && !data ? <ValueSkeleton /> : formatCurrency(data?.summary.outstandingAmount ?? 0)}
               hint="확정 대비 미수 리스크"
               tone={(data?.summary.outstandingAmount ?? 0) > 0 ? "text-[#B85C33]" : "text-[#111110]"}
+              chip={<CurrencySourceChip currency="KRW" source="레거시 계약·영수증 + V2 딜" />}
             />
             <MeasureTile
               icon={<TrendingUp className="h-4 w-4" />}
               label="예상 파이프라인"
               value={loading && !data ? <ValueSkeleton /> : formatCurrency(data?.summary.expectedPipelineAmount ?? 0)}
               hint={`active ${formatNumber(data?.summary.activeDealCount ?? 0)}건`}
+              chip={<CurrencySourceChip currency="KRW" source="V2 딜 예상액" />}
             />
             <MeasureTile
               icon={<FileText className="h-4 w-4" />}
               label="견적 총액"
               value={formatCurrency(data?.summary.quotedAmount ?? 0)}
               hint={`승인/전환 ${formatCurrency(data?.summary.acceptedQuoteAmount ?? 0)}`}
+              chip={<CurrencySourceChip currency="KRW" source="레거시 견적" />}
             />
             <MeasureTile
               icon={<Building2 className="h-4 w-4" />}
@@ -832,6 +859,7 @@ export default function AdminCrmRevenuePage() {
             <div className="flex items-center gap-2">
               <FileSpreadsheet className="h-4 w-4 text-[#1a1a1a]/35" />
               <h2 className="text-[14px] font-semibold text-[#111110]">회사 시트 (REV) 내부 대조</h2>
+              <CurrencySourceChip currency="CNY" source="REV 시트" />
             </div>
             <span className="text-[12px] text-[#1a1a1a]/45">
               매칭 완료{" "}
