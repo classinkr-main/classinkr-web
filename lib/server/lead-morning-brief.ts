@@ -1,6 +1,7 @@
 import "server-only"
 
 import { getMetaAdInfo, isTestLead } from "@/lib/crm/lead-attribution"
+import { tallyLeadInflow, type LeadInflowTally } from "@/lib/crm/lead-reinflow"
 import {
   DIRECT_INBOUND_LEAD_SOURCES,
   INTAKE_LEAD_SOURCES,
@@ -22,6 +23,8 @@ import { getResolvedSettings } from "@/lib/repositories/settings"
 
 // 아침 카드가 세는 유입 세 갈래. 세 갈래 사이에 겹침이 없어 합계가 곧 전체 접수다
 // ("Meta 광고 경유"는 홈페이지 유입의 부분집합이라 합계에 다시 더하지 않는다).
+// 유입 축은 생성 시각 또는 재문의 시각(last_inflow_at)이다(2026-09-21) — 이 소스들의 재문의는 새 행 대신
+// 기존 행에 병합되므로(lib/server/lead-capture.ts) 생성 시각만 보면 재문의가 빠진다. 신규/재유입은 따로 센다.
 const REPORT_SOURCES = DIRECT_INBOUND_LEAD_SOURCES
 // 카드 한 장 = 창 하나 = 실행 레코드 한 줄.
 const DAILY_REPORT_TYPE: LeadDigestReportType = "daily"
@@ -44,7 +47,12 @@ export interface LeadMorningWindow {
 
 export interface LeadMorningBriefMetrics {
   periodLabel: string
+  /** 창 안 유입 합계 = 신규 + 재유입. 한 리드는 한 번만 센다(생성과 재문의가 모두 창 안이면 신규). */
   totalLeads: number
+  /** 창 안에 생성된 리드. */
+  newLeadCount: number
+  /** 창 밖에 생성됐고 창 안에 재문의(last_inflow_at)한 리드. */
+  reinflowLeadCount: number
   metaLeadAdsLeadCount: number
   topCampaignLabel: string
   topCampaignCount: number
@@ -144,13 +152,31 @@ export function getLastSentLeadMorningWindowEnd(
 
 export interface LeadIntakeCounts {
   totalLeads: number
+  newLeadCount: number
+  reinflowLeadCount: number
   metaLeadAdsLeadCount: number
   homepageLeadCount: number
   unrespondedCount: number
 }
 
 /**
- * 임의 구간의 유입을 일일 카드와 **같은 정의**로 센다 — 같은 세 소스, 같은 테스트 리드 제외.
+ * 창 안 유입 — 보고 소스·테스트 리드 제외 뒤 유입 축(생성 또는 재문의)으로 거른다. 창은 반열린 [start, end) 라
+ * 이어 붙은 일일 창 경계의 리드가 두 카드에 겹치지 않는다.
+ */
+function collectWindowInflow(
+  leads: LeadRecord[],
+  start: Date,
+  end: Date
+): LeadInflowTally<LeadRecord> {
+  return tallyLeadInflow(
+    leads.filter((lead) => REPORT_SOURCES.has(lead.source) && !isTestLead(lead)),
+    start.getTime(),
+    end.getTime()
+  )
+}
+
+/**
+ * 임의 구간의 유입을 일일 카드와 **같은 정의**로 센다 — 같은 세 소스, 같은 테스트 리드 제외, 같은 유입 축.
  * 정의가 갈라지면 주간 보고서의 "주말 유입"과 일일 카드의 합이 조용히 어긋난다.
  */
 export function summarizeLeadIntake(
@@ -158,13 +184,13 @@ export function summarizeLeadIntake(
   start: Date,
   end: Date
 ): LeadIntakeCounts {
-  const current = leads.filter(
-    (lead) =>
-      REPORT_SOURCES.has(lead.source) && inRange(lead, start, end) && !isTestLead(lead)
-  )
+  const inflow = collectWindowInflow(leads, start, end)
+  const current = inflow.leads
 
   return {
     totalLeads: current.length,
+    newLeadCount: inflow.newCount,
+    reinflowLeadCount: inflow.reinflowCount,
     metaLeadAdsLeadCount: current.filter((lead) => lead.source === "meta_lead_ads").length,
     homepageLeadCount: current.filter((lead) => WEBSITE_FORM_LEAD_SOURCES.has(lead.source))
       .length,
@@ -184,15 +210,6 @@ function formatKstDateTime(date: Date) {
   const hour = String(shifted.getUTCHours()).padStart(2, "0")
   const minute = String(shifted.getUTCMinutes()).padStart(2, "0")
   return `${month}.${day} ${hour}:${minute}`
-}
-
-function inRange(lead: LeadRecord, start: Date, end: Date) {
-  const timestamp = new Date(lead.timestamp).getTime()
-  return (
-    Number.isFinite(timestamp) &&
-    timestamp >= start.getTime() &&
-    timestamp < end.getTime()
-  )
 }
 
 function isMetaAttributedWebsiteLead(lead: LeadRecord) {
@@ -221,12 +238,9 @@ function buildMetrics(
   leads: LeadRecord[],
   window: LeadMorningWindow
 ): LeadMorningBriefMetrics {
-  const current = leads.filter(
-    (lead) =>
-      REPORT_SOURCES.has(lead.source) &&
-      inRange(lead, window.start, window.end) &&
-      !isTestLead(lead)
-  )
+  // 재문의(재유입) 리드도 이 창의 유입으로 세고 아래 갈래·응대 상태 집계에 똑같이 들어간다.
+  const inflow = collectWindowInflow(leads, window.start, window.end)
+  const current = inflow.leads
 
   // 주요 캠페인은 Meta 리드 광고 축에서만 뽑는다. 홈페이지 유입의 utm_campaign 을
   // 섞으면 같은 칸에 성격이 다른 두 축이 올라와 무슨 캠페인인지 읽을 수 없다.
@@ -243,6 +257,8 @@ function buildMetrics(
   return {
     periodLabel: `${formatKstDateTime(window.start)} - ${formatKstDateTime(window.end)}`,
     totalLeads: current.length,
+    newLeadCount: inflow.newCount,
+    reinflowLeadCount: inflow.reinflowCount,
     metaLeadAdsLeadCount: current.filter((lead) => lead.source === "meta_lead_ads").length,
     topCampaignLabel: topCampaign.label,
     topCampaignCount: topCampaign.count,
@@ -258,8 +274,13 @@ function buildMetrics(
 }
 
 function buildMessage(metrics: LeadMorningBriefMetrics) {
+  // 재유입이 있을 때만 신규/재유입을 가른다 — 없으면 예전 문구 그대로(전부 신규다).
+  const inflowSplit =
+    metrics.reinflowLeadCount > 0
+      ? ` (신규 ${metrics.newLeadCount}건 · 재유입 ${metrics.reinflowLeadCount}건)`
+      : ""
   return [
-    `${metrics.periodLabel} 전체 접수 ${metrics.totalLeads}건`,
+    `${metrics.periodLabel} 전체 접수 ${metrics.totalLeads}건${inflowSplit}`,
     `Meta 광고 리드 ${metrics.metaLeadAdsLeadCount}건 (주요 캠페인 ${metrics.topCampaignLabel} ${metrics.topCampaignCount}건)`,
     `홈페이지 ${metrics.homepageLeadCount}건 — 문의 ${metrics.contactPageLeadCount}건 / 데모 신청 ${metrics.demoModalLeadCount}건 / 접수 ${metrics.intakeLeadCount}건 / Meta 광고 경유 ${metrics.metaAttributedWebsiteLeadCount}건`,
     `미응대 ${metrics.unrespondedCount}건 / 상담 진행 ${metrics.contactedCount}건 / 전환 ${metrics.convertedCount}건`,

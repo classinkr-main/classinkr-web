@@ -1,13 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 /**
- * getMarketingLeads() 의 SELECT 목록에는 뒤늦게 추가된 선택 컬럼이 들어 있다(naver_ad, confirmed_at).
- * 마이그레이션보다 코드가 먼저 나가는 순서 사고는 반드시 일어난다 — 그때 마케팅 허브의 리드 집계가
+ * getMarketingLeads() 의 SELECT 목록에는 뒤늦게 추가된 선택 컬럼이 들어 있다(naver_ad, confirmed_at,
+ * last_inflow_at). 마이그레이션보다 코드가 먼저 나가는 순서 사고는 반드시 일어난다 — 그때 마케팅 허브의 리드 집계가
  * 42703 으로 통째로 죽지 않고, 없는 컬럼만 빼고 다시 읽어야 한다(docs/active/db-migration-runbook.md
  * "읽기 경로는 강등한다"). 2026-09-21 통합 전에는 confirmed_at 에만 폴백이 있고 naver_ad 에는 없었다.
+ * last_inflow_at(2026-09-21 추가)은 "오늘 유입" 카드가 재문의 병합 리드를 재유입으로 세는 근거다.
  */
 
-function makeLeadRow(index: number) {
+function makeLeadRow(index: number, requested: string[] = []) {
   return {
     id: `lead-${index}`,
     source: "contact_page",
@@ -21,6 +22,8 @@ function makeLeadRow(index: number) {
     status: "new",
     notes: null,
     created_at: "2026-09-01T00:00:00.000Z",
+    // 요청한 컬럼만 돌려준다(PostgREST 처럼) — 재문의 병합으로 갱신된 마지막 유입 시각.
+    ...(requested.includes("last_inflow_at") ? { last_inflow_at: "2026-09-20T03:00:00.000Z" } : {}),
   }
 }
 
@@ -46,7 +49,11 @@ function mockSupabaseLeads(missingColumns: string[], options: { otherError?: boo
               count: null,
             })
           }
-          return Promise.resolve({ data: [makeLeadRow(1), makeLeadRow(2)], error: null, count: 2 })
+          return Promise.resolve({
+            data: [makeLeadRow(1, requested), makeLeadRow(2, requested)],
+            error: null,
+            count: 2,
+          })
         },
       }
       return builder
@@ -74,7 +81,7 @@ describe("getMarketingLeads — 선택 컬럼 폴백", () => {
     vi.resetModules()
   })
 
-  it("컬럼이 다 있으면 한 번에 읽고 naver_ad·confirmed_at 을 함께 요청한다", async () => {
+  it("컬럼이 다 있으면 한 번에 읽고 naver_ad·confirmed_at·last_inflow_at 을 함께 요청한다", async () => {
     vi.resetModules()
     process.env.USE_SUPABASE_LEADS = "true"
     const { selects } = mockSupabaseLeads([])
@@ -84,7 +91,31 @@ describe("getMarketingLeads — 선택 컬럼 폴백", () => {
 
     expect(leads).toHaveLength(2)
     expect(selects).toHaveLength(1)
-    expect(columnsOf(selects[0])).toEqual(expect.arrayContaining(["naver_ad", "confirmed_at"]))
+    expect(columnsOf(selects[0])).toEqual(
+      expect.arrayContaining(["naver_ad", "confirmed_at", "last_inflow_at"])
+    )
+    // supabaseToLegacy 가 재유입 축을 LeadRecord 로 옮긴다 — 생성 시각(timestamp)과 따로 남는다.
+    expect(leads[0]).toMatchObject({
+      timestamp: "2026-09-01T00:00:00.000Z",
+      last_inflow_at: "2026-09-20T03:00:00.000Z",
+    })
+  })
+
+  it("last_inflow_at 마이그레이션이 없으면 그 컬럼만 빼고 다시 읽는다 — 재유입만 못 셀 뿐 집계는 산다", async () => {
+    vi.resetModules()
+    process.env.USE_SUPABASE_LEADS = "true"
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    const { selects } = mockSupabaseLeads(["last_inflow_at"])
+
+    const { getMarketingLeads } = await import("@/lib/repositories/leads")
+    const leads = await getMarketingLeads()
+
+    expect(leads).toHaveLength(2)
+    expect(selects).toHaveLength(2)
+    expect(columnsOf(selects[1])).not.toContain("last_inflow_at")
+    expect(columnsOf(selects[1])).toEqual(expect.arrayContaining(["naver_ad", "confirmed_at", "created_at"]))
+    expect(leads[0].last_inflow_at).toBeUndefined()
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("last_inflow_at"))
   })
 
   it("naver_ad 마이그레이션이 아직 없으면 그 컬럼만 빼고 다시 읽는다(집계가 죽지 않는다)", async () => {
@@ -105,20 +136,21 @@ describe("getMarketingLeads — 선택 컬럼 폴백", () => {
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("naver_ad"))
   })
 
-  it("두 선택 컬럼이 모두 없어도 차례로 덜어내고 끝까지 읽는다", async () => {
+  it("선택 컬럼이 모두 없어도 차례로 덜어내고 끝까지 읽는다", async () => {
     vi.resetModules()
     process.env.USE_SUPABASE_LEADS = "true"
     vi.spyOn(console, "warn").mockImplementation(() => {})
-    const { selects } = mockSupabaseLeads(["naver_ad", "confirmed_at"])
+    const { selects } = mockSupabaseLeads(["naver_ad", "confirmed_at", "last_inflow_at"])
 
     const { getMarketingLeads } = await import("@/lib/repositories/leads")
     const leads = await getMarketingLeads()
 
     expect(leads).toHaveLength(2)
-    expect(selects).toHaveLength(3)
-    const last = columnsOf(selects[2])
+    expect(selects).toHaveLength(4)
+    const last = columnsOf(selects[3])
     expect(last).not.toContain("naver_ad")
     expect(last).not.toContain("confirmed_at")
+    expect(last).not.toContain("last_inflow_at")
     expect(last).toEqual(expect.arrayContaining(["id", "source", "created_at"]))
   })
 

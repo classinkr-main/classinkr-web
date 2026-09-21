@@ -239,6 +239,22 @@ describe("마지막 일일 보고 이후 유입", () => {
     expect(report.markdown).toContain("- 미응대: 6건")
   })
 
+  it("재문의(재유입)가 섞이면 전체 접수를 신규/재유입으로 가른다 — 없으면 예전 문구 그대로", () => {
+    const report = buildWeeklyAdLeadReport(makePerf(), {
+      generatedAt: "2026-09-07T00:20:00.000Z",
+      recentIntake: { ...intake, newLeadCount: 5, reinflowLeadCount: 2 },
+    })
+    expect(report.markdown).toContain(
+      "- 전체 접수: 7건 (신규 5건 · 재유입 2건) — Meta 광고 5건 / 홈페이지 2건"
+    )
+
+    const noReinflow = buildWeeklyAdLeadReport(makePerf(), {
+      generatedAt: "2026-09-07T00:20:00.000Z",
+      recentIntake: { ...intake, newLeadCount: 7, reinflowLeadCount: 0 },
+    })
+    expect(noReinflow.markdown).toContain("- 전체 접수: 7건 — Meta 광고 5건 / 홈페이지 2건")
+  })
+
   it("평일 구간이면 주말이라고 부르지 않는다", () => {
     const report = buildWeeklyAdLeadReport(makePerf(), {
       generatedAt: "2026-09-09T09:00:00.000Z",

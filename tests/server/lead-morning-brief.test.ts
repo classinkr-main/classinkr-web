@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-async function loadMorningBrief() {
+async function loadMorningBrief(extraLeads: Array<Record<string, unknown>> = []) {
   vi.resetModules()
 
   const postJson = vi.fn().mockResolvedValue({ ok: true, status: 200 })
@@ -107,6 +107,7 @@ async function loadMorningBrief() {
         timestamp: "2026-08-05T05:00:00.000Z",
         status: "new",
       },
+      ...extraLeads,
     ]),
   }))
 
@@ -116,8 +117,46 @@ async function loadMorningBrief() {
     postJson,
     claimLeadDigestRun,
     markLeadDigestRunSent,
+    createNotificationEvent,
   }
 }
+
+// 2026-09-21 재유입 병합 — 응대 대상 소스의 재문의는 새 행 대신 기존 행의 last_inflow_at 만 갱신한다.
+// 기본 창(2026-08-06 10:10 ~ 08-07 10:10 KST) 기준 픽스처.
+const REINFLOW_LEADS = [
+  {
+    // 예전에 생성되고 창 안에 재문의 — 재유입 1건.
+    id: "demo-reinflow",
+    source: "demo_modal",
+    timestamp: "2026-07-01T02:00:00.000Z",
+    last_inflow_at: "2026-08-06T07:00:00.000Z",
+    status: "contacted",
+  },
+  {
+    // 창 안에 생성되고 창 안에 또 재문의 — 신규 1건으로만(이중 집계 금지). 기존 픽스처와 합쳐 Meta 3건.
+    id: "meta-created-and-reinflow",
+    source: "meta_lead_ads",
+    timestamp: "2026-08-06T02:30:00.000Z",
+    last_inflow_at: "2026-08-06T09:00:00.000Z",
+    status: "new",
+  },
+  {
+    // 백필(두 값이 같음) 옛 리드 — 창 밖이다.
+    id: "contact-old-backfilled",
+    source: "contact_page",
+    timestamp: "2026-07-01T02:00:00.000Z",
+    last_inflow_at: "2026-07-01T02:00:00.000Z",
+    status: "new",
+  },
+  {
+    // 재문의가 창 끝 뒤 — 다음 카드의 몫이다.
+    id: "contact-reinflow-next-window",
+    source: "contact_page",
+    timestamp: "2026-07-01T02:00:00.000Z",
+    last_inflow_at: "2026-08-07T01:10:00.000Z",
+    status: "new",
+  },
+]
 
 describe("10:10 KST lead morning brief", () => {
   afterEach(() => {
@@ -180,6 +219,49 @@ describe("10:10 KST lead morning brief", () => {
       },
     })
     expect(markLeadDigestRunSent).toHaveBeenCalledTimes(1)
+  })
+
+  it("재유입이 없으면 신규/재유입을 가르지 않는다 — 예전 문구 그대로", async () => {
+    const { sendLeadMorningBrief, createNotificationEvent } = await loadMorningBrief()
+
+    const result = await sendLeadMorningBrief(new Date("2026-08-07T01:15:00.000Z"))
+
+    expect(result).toMatchObject({ status: "sent", totalLeads: 4, newLeadCount: 4, reinflowLeadCount: 0 })
+    const message = createNotificationEvent.mock.calls[0][0].message as string
+    expect(message.split("\n")[0]).toBe("08.06 10:10 - 08.07 10:10 전체 접수 4건")
+  })
+
+  it("재문의 병합 리드를 창 안 유입으로 세고 신규·재유입을 가른다(생성·재문의가 모두 창 안이면 신규 1건)", async () => {
+    const { sendLeadMorningBrief, postJson, createNotificationEvent } =
+      await loadMorningBrief(REINFLOW_LEADS)
+
+    const result = await sendLeadMorningBrief(new Date("2026-08-07T01:15:00.000Z"))
+
+    expect(result).toMatchObject({
+      status: "sent",
+      totalLeads: 6,
+      newLeadCount: 5,
+      reinflowLeadCount: 1,
+      metaLeadAdsLeadCount: 3,
+      homepageLeadCount: 3,
+      demoModalLeadCount: 2,
+      unrespondedCount: 3,
+      contactedCount: 2,
+      convertedCount: 1,
+    })
+
+    const event = createNotificationEvent.mock.calls[0][0]
+    expect((event.message as string).split("\n")[0]).toBe(
+      "08.06 10:10 - 08.07 10:10 전체 접수 6건 (신규 5건 · 재유입 1건)"
+    )
+    expect(event.payload).toMatchObject({ newLeadCount: 5, reinflowLeadCount: 1 })
+
+    // 위컴 카드 — 강조 숫자는 합계, 설명은 신규/재유입 분해.
+    expect(postJson.mock.calls[0][1]).toMatchObject({
+      template_card: {
+        emphasis_content: { title: "6", desc: "신규 5 · 재유입 1" },
+      },
+    })
   })
 
   it("주말(토·일 KST)에는 일일 보고를 발송하지 않는다", async () => {
@@ -264,8 +346,57 @@ describe("주간 보고서가 쓰는 '마지막 일일 보고 이후' 구간", (
 
     expect(counts).toEqual({
       totalLeads: 3,
+      newLeadCount: 3,
+      reinflowLeadCount: 0,
       metaLeadAdsLeadCount: 1,
       homepageLeadCount: 2,
+      unrespondedCount: 2,
+    })
+  })
+
+  it("구간 집계도 일일 카드와 같은 유입 축 — 구간 안 재문의는 재유입으로 센다", async () => {
+    const { summarizeLeadIntake } = await loadMorningBrief()
+    const start = new Date("2026-09-04T01:10:00.000Z")
+    const end = new Date("2026-09-07T00:20:00.000Z")
+
+    const counts = summarizeLeadIntake(
+      [
+        { id: "a", source: "meta_lead_ads", timestamp: "2026-09-05T02:00:00.000Z", status: "new" },
+        // 금요일 이전 생성 + 주말 재문의
+        {
+          id: "b",
+          source: "contact_page",
+          timestamp: "2026-08-20T02:00:00.000Z",
+          last_inflow_at: "2026-09-06T02:00:00.000Z",
+          status: "new",
+        },
+        // 재문의가 구간 밖(이미 금요일 카드가 보고한 구간)
+        {
+          id: "c",
+          source: "demo_modal",
+          timestamp: "2026-08-20T02:00:00.000Z",
+          last_inflow_at: "2026-09-03T02:00:00.000Z",
+          status: "new",
+        },
+        // 보고 대상 소스가 아니면 재문의여도 빠진다
+        {
+          id: "d",
+          source: "chatbot",
+          timestamp: "2026-08-20T02:00:00.000Z",
+          last_inflow_at: "2026-09-06T03:00:00.000Z",
+          status: "new",
+        },
+      ] as never,
+      start,
+      end
+    )
+
+    expect(counts).toEqual({
+      totalLeads: 2,
+      newLeadCount: 1,
+      reinflowLeadCount: 1,
+      metaLeadAdsLeadCount: 1,
+      homepageLeadCount: 1,
       unrespondedCount: 2,
     })
   })
