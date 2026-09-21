@@ -1,8 +1,11 @@
 import "server-only"
 
 import { getAdminCrmOverview } from "@/lib/admin-crm-overview"
+import { buildStageFunnel, type StageFunnelResult } from "@/lib/crm/stage-funnel"
+import { getCrmDealStageCounts } from "@/lib/repositories/crm-deals"
 import { getCrmPriorityQueue } from "@/lib/repositories/crm-priority-queue"
 import { getCrmSourceLinkCoverage } from "@/lib/repositories/crm-source-links"
+import { getLeadActionStats } from "@/lib/repositories/leads"
 
 export type CrmInsightTone = "risk" | "warn" | "ok" | "neutral"
 
@@ -43,6 +46,12 @@ export interface CrmInsights {
   risks: CrmInsightListItem[]
   opportunities: CrmInsightListItem[]
   operations: CrmInsightListItem[]
+  /**
+   * T1 단계 퍼널(리드 4 + 딜 7을 한 축으로). 딜 단계 집계가 실패하면 null이다 — 리드만으로
+   * 반쪽 퍼널을 만들지 않는다(buildStageFunnel 자체가 deals가 null이면 null을 돌려준다).
+   */
+  stageFunnel: StageFunnelResult | null
+  stageFunnelGeneratedAt: string
 }
 
 function coverageTone(coveragePct: number): CrmInsightTone {
@@ -82,13 +91,18 @@ function buildCoverageHealth(coverage: {
 
 export async function getCrmInsights(): Promise<CrmInsights> {
   const generatedAt = new Date().toISOString()
-  const [priorityResult, coverageResult, overviewResult] = await Promise.allSettled([
-    // 홈 "오늘 전화" 큐(CrmPriorityQueuePanel)와 같은 source="customer"(리드 + ClassIn 고객)로
-    // 센다 — 기본 "all"이면 할 일까지 섞여 "우선 연락" 숫자가 홈 큐와 달라진다(H2).
-    getCrmPriorityQueue({ limit: 12, source: "customer" }),
-    getCrmSourceLinkCoverage(),
-    getAdminCrmOverview(),
-  ])
+  const [priorityResult, coverageResult, overviewResult, leadStatsResult, dealStageCountsResult] =
+    await Promise.allSettled([
+      // 홈 "오늘 전화" 큐(CrmPriorityQueuePanel)와 같은 source="customer"(리드 + ClassIn 고객)로
+      // 센다 — 기본 "all"이면 할 일까지 섞여 "우선 연락" 숫자가 홈 큐와 달라진다(H2).
+      getCrmPriorityQueue({ limit: 12, source: "customer" }),
+      getCrmSourceLinkCoverage(),
+      getAdminCrmOverview(),
+      // T1 단계 퍼널 원천. getCrmDealStageCounts는 실패해도 throw하지 않고 null을 준다 —
+      // 여기서는 리드 쪽 실패(getLeadActionStats가 throw할 수 있다)까지 함께 격리한다.
+      getLeadActionStats(),
+      getCrmDealStageCounts(),
+    ])
   const warnings: string[] = []
   const unavailableSources: CrmInsightSourceKey[] = []
 
@@ -231,6 +245,13 @@ export async function getCrmInsights(): Promise<CrmInsights> {
     })
   }
 
+  // T1 단계 퍼널. 리드 상태 조회가 실패했거나(leadStatsResult rejected) 딜 단계 집계가
+  // 실패(null 또는 rejected)했으면 stageFunnel 전체를 null로 둔다 — 리드만으로 반쪽 퍼널을
+  // 만들지 않는다.
+  const leadStats = leadStatsResult.status === "fulfilled" ? leadStatsResult.value : null
+  const dealStageCounts = dealStageCountsResult.status === "fulfilled" ? dealStageCountsResult.value : null
+  const stageFunnel = leadStats ? buildStageFunnel({ leads: leadStats.byStatus, deals: dealStageCounts }) : null
+
   for (const event of overview?.business.upcomingThisWeek.items.slice(0, 5) ?? []) {
     operations.push({
       id: `upcoming:${event.id}`,
@@ -261,5 +282,7 @@ export async function getCrmInsights(): Promise<CrmInsights> {
     risks,
     opportunities,
     operations,
+    stageFunnel,
+    stageFunnelGeneratedAt: generatedAt,
   }
 }

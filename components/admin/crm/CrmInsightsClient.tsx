@@ -4,10 +4,11 @@ import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { AlertTriangle, CalendarClock, ChevronDown, ExternalLink, FileText, RefreshCw, ShieldCheck, TrendingUp } from "lucide-react"
 
-import { EmptyState } from "@/components/admin/viz"
+import { EmptyState, MiniFunnel, type FunnelStage } from "@/components/admin/viz"
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import { CRM_CACHE_SWR_MS, CRM_CACHE_TTL_MS } from "@/lib/crm/client-cache"
 import type { CustomerHealthBand } from "@/lib/crm/customer-health"
+import type { StageFunnelResult } from "@/lib/crm/stage-funnel"
 import type {
   CrmInsightListItem,
   CrmInsights,
@@ -50,6 +51,98 @@ function formatClock(iso: string | null | undefined) {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return null
   return date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false })
+}
+
+// 리드 3단계만 통합 고객 leads 보드 필터로 딥링크한다. 딜 6단계는 /admin/crm/deals가
+// stage 쿼리 파라미터를 받지 않아(조사 결과 — 그 경로는 매출 대시보드다) 링크를 생략한다.
+const STAGE_FUNNEL_HREF: Record<string, string> = {
+  lead_new: "/admin/crm/customers/leads?filter=new",
+  lead_contacted: "/admin/crm/customers/leads?filter=contacted",
+  lead_converted: "/admin/crm/customers/leads?filter=converted",
+}
+
+function formatStageFunnelPct(value: number) {
+  const fixed = value.toFixed(1)
+  return fixed.endsWith(".0") ? fixed.slice(0, -2) : fixed
+}
+
+/**
+ * 단계 퍼널(T1) — 리드 상태 4 + 딜 단계 7을 한 축으로 이은 9단계(리드 신규→연락중→전환→
+ * 딜 상담→데모→견적→결정→주문→결제). MiniFunnel(bar, 단일 브랜드 색)이 막대와 "이전 단계
+ * 대비 N% 전환" 캡션을 이미 그리므로 여기서 전환율을 다시 쓰지 않는다(중복 금지).
+ * 병목 구간은 MiniFunnel이 단계별 배지를 지원하지 않아 퍼널 아래 별도 줄에 Warning 배지 +
+ * 단계명 텍스트로 표시한다(색만으로 구분하지 않는다). 리드 종료·딜 이탈은 퍼널 밖 캡션.
+ */
+export function CrmStageFunnelSection({
+  stageFunnel,
+  generatedAt,
+  loading,
+}: {
+  stageFunnel: StageFunnelResult | null
+  generatedAt: string | null
+  loading: boolean
+}) {
+  const clock = formatClock(generatedAt)
+  const bottleneckStage = stageFunnel?.bottleneck
+    ? stageFunnel.stages.find((stage) => stage.key === stageFunnel.bottleneck?.key)
+    : null
+
+  const funnelStages: FunnelStage[] =
+    stageFunnel?.stages.map((stage) => ({
+      key: stage.key,
+      label: stage.label,
+      value: stage.value,
+      tone: "brand" as const,
+      href: STAGE_FUNNEL_HREF[stage.key],
+    })) ?? []
+
+  return (
+    <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4" aria-labelledby="crm-stage-funnel-title">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 id="crm-stage-funnel-title" className="text-[15px] font-bold text-[#111110]">
+            단계 퍼널 · 리드 → 딜
+          </h2>
+          <p className="mt-0.5 text-[11px] text-[#615D59]">
+            리드 신규·연락중·전환은 상태 분포를 &ldquo;이상 도달&rdquo;로 순차 누적한 값(각 리드는 상태
+            하나에만 있다) · 딜 6단계는 현재 단계 이상 누적(lost 제외)
+            {clock ? ` · 기준 ${clock}` : ""}
+          </p>
+        </div>
+      </div>
+
+      {stageFunnel ? (
+        <>
+          <MiniFunnel stages={funnelStages} variant="bar" />
+          {bottleneckStage && stageFunnel.bottleneck ? (
+            <p className="mt-3 flex flex-wrap items-center gap-2">
+              <span
+                className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-bold"
+                style={{ color: "#7A520F", backgroundColor: "#FBF1E0", borderColor: "#ECD29C" }}
+              >
+                병목 · 전환 {formatStageFunnelPct(stageFunnel.bottleneck.conversion)}%
+              </span>
+              <span className="text-[12px] text-[#615D59]">
+                {bottleneckStage.label} 구간의 전환율이 가장 낮습니다
+              </span>
+            </p>
+          ) : null}
+          <p className="mt-3 text-[10px] text-[#1a1a1a]/35">
+            리드 종료 <span className="tabular-nums">{stageFunnel.closed.toLocaleString("ko-KR")}</span>건 · 딜
+            이탈 <span className="tabular-nums">{stageFunnel.lost.toLocaleString("ko-KR")}</span>건 — 퍼널 밖 별도
+            집계
+          </p>
+        </>
+      ) : loading ? (
+        <div className="rounded-xl bg-[#fafaf8] px-3 py-6 text-center text-[13px] text-[#1a1a1a]/40">계산 중입니다...</div>
+      ) : (
+        <EmptyState
+          title="딜 단계 집계를 가져오지 못했습니다."
+          description="CRM deal 마이그레이션 적용 여부와 조회 상태를 확인하세요."
+        />
+      )}
+    </section>
+  )
 }
 
 /**
@@ -264,11 +357,6 @@ function kpiValue({
   return `${formatCount(value)}${suffix}`
 }
 
-interface LeadFunnelKpis {
-  total: number
-  byStatus: Record<"new" | "contacted" | "converted" | "closed", number>
-}
-
 interface LeadChannelStat {
   source: string
   total: number
@@ -281,7 +369,6 @@ export default function CrmInsightsClient() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [leadKpis, setLeadKpis] = useState<LeadFunnelKpis | null>(null)
   const [channels, setChannels] = useState<LeadChannelStat[]>([])
   const [healthDistribution, setHealthDistribution] = useState<HealthDistributionResponse | null>(null)
   const [healthLoading, setHealthLoading] = useState(true)
@@ -324,29 +411,12 @@ export default function CrmInsightsClient() {
     void load()
   }, [load])
 
-  // 전환 퍼널 — 리드 status 집계(action-kpis). 별도 백엔드 불필요.
-  // 새로고침이 이 두 블록에 닿지 않아, 리드를 등록하고 새로고침해도 퍼널·채널은 첫 로드 값
-  // 그대로였다(빈 의존성 배열이라 effect가 다시 돌지 않는다). refreshKey로 함께 강제 재조회한다.
-  useEffect(() => {
-    let alive = true
-    // 캐시 창은 홈(CrmHomeClient)과 같은 SSOT(lib/crm/client-cache.ts)를 쓴다 — 같은 cacheKey를
-    // 다른 TTL/SWR로 부르면 한 엔트리의 keepUntil이 화면마다 달라진다(H8).
-    adminFetchJsonCached<{ leads: LeadFunnelKpis }>("/api/admin/crm/action-kpis", undefined, {
-      cacheKey: "/api/admin/crm/action-kpis",
-      ttlMs: CRM_CACHE_TTL_MS,
-      staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
-      force: secondaryRefreshKey > 0,
-    })
-      .then((d) => {
-        if (alive) setLeadKpis(d?.leads ?? null)
-      })
-      .catch(() => {})
-    return () => {
-      alive = false
-    }
-  }, [secondaryRefreshKey])
-
-  // 채널별 전환율 — lead-channels 집계.
+  // 단계 퍼널(T1)은 getCrmInsights 응답의 additive stageFunnel을 그대로 쓴다 — 별도 fetch가
+  // 필요 없다(과거엔 action-kpis를 로컬로 다시 불러 리드 3단계만 그렸다).
+  //
+  // 채널별 전환율 — lead-channels 집계. 새로고침이 이 블록에 닿지 않아, 리드를 등록하고
+  // 새로고침해도 채널은 첫 로드 값 그대로였다(빈 의존성 배열이라 effect가 다시 돌지 않는다).
+  // refreshKey로 함께 강제 재조회한다.
   useEffect(() => {
     let alive = true
     adminFetchJsonCached<{ channels: LeadChannelStat[] }>("/api/admin/crm/lead-channels", undefined, {
@@ -388,24 +458,6 @@ export default function CrmInsightsClient() {
       alive = false
     }
   }, [secondaryRefreshKey])
-
-  const funnelStages = leadKpis
-    ? [
-        { label: "신규 유입", count: leadKpis.total, color: "#1a1a1a", href: "/admin/crm/customers/leads" },
-        {
-          label: "응대",
-          count: Math.max(0, leadKpis.total - (leadKpis.byStatus?.new ?? 0)),
-          color: "#7A520F",
-          href: "/admin/crm/customers/leads?filter=contacted",
-        },
-        {
-          label: "전환",
-          count: leadKpis.byStatus?.converted ?? 0,
-          color: "#084734",
-          href: "/admin/crm/customers/leads?filter=converted",
-        },
-      ]
-    : []
 
   const initialLoading = loading && !data
   const partialWarnings = data?.health.status === "partial" ? data.health.warnings : []
@@ -454,44 +506,11 @@ export default function CrmInsightsClient() {
       </button>
       {reportOpen ? <CrmManagerReportPanel /> : null}
 
-      {funnelStages.length > 0 && funnelStages[0].count > 0 ? (
-        <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <h2 className="text-[15px] font-bold text-[#111110]">전환 퍼널 · 리드 파이프라인</h2>
-            <span className="text-[11px] text-[#1a1a1a]/35">신규 → 응대 → 전환</span>
-          </div>
-          <div className="space-y-2">
-            {funnelStages.map((stage, i) => {
-              const top = funnelStages[0].count || 1
-              const pctOfTotal = stage.count / top
-              const stepRate =
-                i === 0 ? null : funnelStages[i - 1].count > 0 ? stage.count / funnelStages[i - 1].count : 0
-              return (
-                <Link
-                  key={stage.label}
-                  href={stage.href}
-                  className="-mx-1 flex items-center gap-3 rounded-lg px-1 py-0.5 transition-colors hover:bg-[#fafaf8]"
-                >
-                  <span className="w-14 shrink-0 text-[12px] font-semibold text-[#1a1a1a]/55">{stage.label}</span>
-                  <div className="h-7 flex-1 overflow-hidden rounded-lg bg-[#fafaf8]">
-                    <div
-                      className="flex h-full items-center rounded-lg px-2 text-[12px] font-bold text-white"
-                      style={{ width: `${Math.max(8, pctOfTotal * 100)}%`, backgroundColor: stage.color }}
-                    >
-                      {stage.count.toLocaleString("ko-KR")}
-                    </div>
-                  </div>
-                  <span className="w-24 shrink-0 text-right text-[11px] tabular-nums text-[#1a1a1a]/45">
-                    {Math.round(pctOfTotal * 100)}%
-                    {stepRate != null ? ` · 전환 ${Math.round(stepRate * 100)}%` : ""}
-                  </span>
-                </Link>
-              )
-            })}
-          </div>
-          <p className="mt-2 text-[10px] text-[#1a1a1a]/35">리드 status 기준 · 신규 응대율과 전환율을 한눈에</p>
-        </section>
-      ) : null}
+      <CrmStageFunnelSection
+        stageFunnel={data?.stageFunnel ?? null}
+        generatedAt={data?.stageFunnelGeneratedAt ?? null}
+        loading={initialLoading}
+      />
 
       {channels.length > 0 ? (
         <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
