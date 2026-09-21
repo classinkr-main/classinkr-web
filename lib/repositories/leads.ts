@@ -783,8 +783,10 @@ export async function saveLead(
     // 빈 객체는 저장하지 않는다 — NULL 이어야 "네이버 유입이 아님"으로 읽힌다.
     naver_ad: parseNaverAd(lead.naver_ad),
     // 재유입 축의 시작점. 마이그레이션 백필은 기존 행만 채웠으므로 여기서 안 넣으면
-    // 신규 행은 전부 NULL로 남아 컬럼이 죽는다. 자체 저장 경로는 같은 연락처가 다시 와도
-    // 행을 새로 만들기 때문에(병합 없음) 최초값 = 생성 시각이 맞다.
+    // 신규 행은 전부 NULL로 남아 컬럼이 죽는다. 이 함수는 새 행을 만들 때만 불리므로 최초값 =
+    // 생성 시각이 맞다 — 같은 연락처의 재문의는 lib/server/lead-capture.ts 의 재유입 병합 분기가
+    // 새 행 대신 touchLeadInflow()로 이 컬럼만 갱신한다(응대 대상 소스 한정. 그 밖의 소스와
+    // 어드민 수기 등록·챗봇·캡처 경로는 여전히 제출마다 한 행이다).
     last_inflow_at: lead.last_inflow_at ?? new Date().toISOString(),
   };
 
