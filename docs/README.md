@@ -124,6 +124,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - Admin 속도 2라운드: 탭 전환 RSC 왕복 제거(라우터 캐시·hover 전체 프리페치·시드 신선도)와 콜드 인스턴스 모듈 메모의 Data Cache 승격, 전후 실측
 - [active/admin-performance-round3-2026-09-10.md](./active/admin-performance-round3-2026-09-10.md)
   - Admin 속도 3라운드 계획: 현재 캐시 5층 구조와 외부 원천별 자체 DB 미러 준수 여부, DB 스냅샷 RPC의 stale-first 전환, 미승격 조회 엔드포인트·캐시 태그 무효화 공백 정리
+- [active/compass-admin-feature-exchange-2026-09-02.md](./active/compass-admin-feature-exchange-2026-09-02.md)
+  - Compass와 Admin 사이 알고리즘·편의 기능 교차 적용 판정, 기능·엔지니어링 소유권 분할과 끊을 중복, PR 단위 실행 순서
 - [active/architecture-schema-erd.md](./active/architecture-schema-erd.md)
   - 엔티티와 스키마 관점의 입구
 - [active/internal-crm-backend-operating-plan-2026-06-26.md](./active/internal-crm-backend-operating-plan-2026-06-26.md)

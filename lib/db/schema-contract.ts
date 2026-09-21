@@ -149,6 +149,9 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // REST·카탈로그 RPC 프로브로 확인할 방법이 없어 계약에 넣지 않는다 — 적용 확인은
   // docs/active/hardware-scm-tab-reference.md §6 의 제약 조회로 한다.
   "supabase/migrations/20260914_hardware_confirm_planned_v3.sql",
+  // 재유입 병합 전화 정규화 키(2026-09-14) — Compass phone_key 규칙을 public.leads 생성 컬럼으로 이식.
+  // 생성식이 norm_phone_key() 를 부르므로 위 compass_integration_bridge 뒤에 적용한다(파일명 순서와 같다).
+  "supabase/migrations/20260914_leads_phone_key.sql",
   // 도입 신청 리드 자격 필드(2026-09-21). 같은 날의
   // 20260921_lead_source_intake_split.sql 은 leads.source 값을 옮기는 데이터 백필이라
   // 스키마 프로브로 확인할 대상이 없어 계약에 넣지 않는다 — 적용 확인은 아래 쿼리로 한다.
@@ -539,6 +542,19 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     label: "쇼룸 예약 접수 anon 차단(RLS deny-all)",
     migration: "supabase/migrations/20260829_showroom_bookings.sql",
     impact: "방문자 이름·연락처·방문 일정이 anon 키로 읽힌다.",
+  },
+  // ── 재유입 병합 전화 정규화 키(2026-09-14) ──────────────────────────────
+  // phone_key가 없어도 findLeadsByContacts()가 원문/숫자만 비교 폴백으로 계속 동작하므로
+  // (기능은 안 죽는다) severity는 warning — 다만 그 폴백은 서식이 다른 같은 번호를 놓친다.
+  {
+    kind: "table",
+    table: "leads",
+    label: "재유입 병합 전화 정규화 키(phone_key, 생성 컬럼) + 마지막 유입 시각",
+    columns: ["id", "phone_key", "last_inflow_at"],
+    migration: "supabase/migrations/20260914_leads_phone_key.sql",
+    severity: "warning",
+    impact:
+      "없으면 재유입 병합이 원문/숫자만 비교 폴백으로 동작해 서식이 다른 같은 번호를 못 잡는다.",
   },
 ]
 

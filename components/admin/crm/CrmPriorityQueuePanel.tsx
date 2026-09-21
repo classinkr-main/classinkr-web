@@ -265,12 +265,15 @@ export function CrmPriorityQueuePanelSkeleton({ compact = false }: { compact?: b
 
 export default function CrmPriorityQueuePanel({
   refreshKey = 0,
+  softRefreshKey = 0,
   compact = false,
   embedded = false,
   previewCount = QUEUE_PREVIEW_COUNT,
   initialData = null,
 }: {
   refreshKey?: number
+  /** 값이 바뀌면 force 없이 다시 조회한다 — TTL 이 지난 경우에만 네트워크를 탄다(홈 자동 갱신). */
+  softRefreshKey?: number
   compact?: boolean
   embedded?: boolean
   /** 처음 그릴 카드 수(=쿼터 믹스 총량). "다음 후보"는 같은 응답 안에서 펼친다. */
@@ -530,6 +533,14 @@ export default function CrmPriorityQueuePanel({
       }, QUEUE_UNDO_WINDOW_MS)
     }
   }, [])
+
+  // 백그라운드 자동 갱신 — force 없이 load(): 캐시가 신선하면 네트워크 없이 끝난다.
+  const lastSoftRefreshKey = useRef(softRefreshKey)
+  useEffect(() => {
+    if (lastSoftRefreshKey.current === softRefreshKey) return
+    lastSoftRefreshKey.current = softRefreshKey
+    void load()
+  }, [load, softRefreshKey])
 
   const { calls, overflow, totals, meta } = useMemo(
     () => pickTodayCalls(data?.items ?? [], { limit: cardCount }),

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { checkCronAuth } from "@/lib/server/cron-auth"
 
 import {
   NOTIFICATION_SCHEDULE_JOB_KEYS,
@@ -58,15 +59,15 @@ export async function GET(
   request: NextRequest,
   context: { params: Promise<{ slot: string }> }
 ) {
-  const cronSecret = process.env.CRON_SECRET
-  if (!cronSecret) {
+  // 비교는 lib/server/cron-auth 의 timing-safe 헬퍼로 한다(다른 크론 라우트와 같은 판정).
+  const authResult = checkCronAuth(request)
+  if (authResult === "missing_secret") {
     return NextResponse.json(
       { error: "CRON_SECRET 환경변수가 설정되지 않았습니다." },
       { status: 401 }
     )
   }
-
-  if (request.headers.get("authorization") !== `Bearer ${cronSecret}`) {
+  if (authResult !== "ok") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

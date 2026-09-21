@@ -19,6 +19,13 @@ async function loadLeadCapture(options?: {
   vi.resetModules()
 
   const saveLead = vi.fn()
+  // 기본값은 "일치하는 재유입 후보 없음" — 기존 테스트 대부분이 신규 insert 경로를 그대로
+  // 타야 하므로 findLeadsByContacts는 빈 배열, touchLeadInflow는 호출되지 않는 것이 기본
+  // 기대치다. 재유입 병합 테스트만 개별적으로 mockResolvedValue/mockRejectedValue를 덮어쓴다.
+  const findLeadsByContacts = vi.fn().mockResolvedValue([])
+  const touchLeadInflow = vi.fn().mockResolvedValue(null)
+  // 재유입 병합 중 행사 토큰을 새길 때만 호출된다(notes 의 [event:slug] 줄).
+  const updateLead = vi.fn().mockResolvedValue(null)
   const createCrmCustomerEvent = vi.fn().mockResolvedValue(undefined)
   const emitNotificationEvent = vi.fn().mockResolvedValue(undefined)
   const postJson = vi.fn().mockResolvedValue({ ok: true, status: 200 })
@@ -44,6 +51,9 @@ async function loadLeadCapture(options?: {
   }))
   vi.doMock("@/lib/repositories/leads", () => ({
     saveLead,
+    findLeadsByContacts,
+    touchLeadInflow,
+    updateLead,
   }))
   vi.doMock("@/lib/repositories/marketing", () => ({
     upsertSubscriber: vi.fn().mockResolvedValue(undefined),
@@ -62,6 +72,9 @@ async function loadLeadCapture(options?: {
   return {
     ...leadCapture,
     saveLead,
+    findLeadsByContacts,
+    touchLeadInflow,
+    updateLead,
     createCrmCustomerEvent,
     emitNotificationEvent,
     postJson,
@@ -337,5 +350,195 @@ describe("submitLeadCapture notification", () => {
         }),
       })
     )
+  })
+})
+
+describe("submitLeadCapture reinflow merge", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.resetModules()
+  })
+
+  it("inserts a new lead when no existing contact matches", async () => {
+    const { submitLeadCapture, saveLead, findLeadsByContacts, touchLeadInflow } =
+      await loadLeadCapture()
+    saveLead.mockResolvedValue({ id: "lead-fresh" })
+
+    const result = await submitLeadCapture(baseLead)
+
+    expect(result.status).toBe(200)
+    expect(result.body).toMatchObject({
+      ok: true,
+      stored: true,
+      leadId: "lead-fresh",
+      merged: false,
+    })
+    expect(findLeadsByContacts).toHaveBeenCalledWith({ phones: [baseLead.phone], emails: [] })
+    expect(saveLead).toHaveBeenCalledTimes(1)
+    expect(touchLeadInflow).not.toHaveBeenCalled()
+  })
+
+  it("merges into an existing new-status lead instead of inserting, and stamps the reinflow timeline", async () => {
+    const {
+      submitLeadCapture,
+      saveLead,
+      findLeadsByContacts,
+      touchLeadInflow,
+      createCrmCustomerEvent,
+      emitNotificationEvent,
+    } = await loadLeadCapture()
+    findLeadsByContacts.mockResolvedValue([
+      {
+        id: "lead-existing-new",
+        phone: baseLead.phone,
+        status: "new",
+        timestamp: "2026-09-01T00:00:00.000Z",
+        last_inflow_at: "2026-09-01T00:00:00.000Z",
+      },
+    ])
+
+    const result = await submitLeadCapture(baseLead)
+
+    expect(result.status).toBe(200)
+    expect(result.body).toMatchObject({
+      ok: true,
+      stored: true,
+      leadId: "lead-existing-new",
+      merged: true,
+    })
+    expect(saveLead).not.toHaveBeenCalled()
+    expect(touchLeadInflow).toHaveBeenCalledTimes(1)
+    expect(touchLeadInflow).toHaveBeenCalledWith("lead-existing-new", expect.any(String))
+    expect(createCrmCustomerEvent).toHaveBeenCalledTimes(1)
+    expect(createCrmCustomerEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetType: "lead",
+        targetId: "lead-existing-new",
+        sourceType: "site_inflow",
+        title: "재문의(재유입)",
+      })
+    )
+    // 알림 제목에 "재문의 · " 접두어가 붙어 관리자가 제목만 보고 재유입임을 알 수 있어야 한다.
+    expect(emitNotificationEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "lead.created",
+        title: expect.stringContaining("재문의 · "),
+      })
+    )
+  })
+
+  it("does not merge into a closed-status lead — stores a new lead instead", async () => {
+    const { submitLeadCapture, saveLead, findLeadsByContacts, touchLeadInflow } =
+      await loadLeadCapture()
+    findLeadsByContacts.mockResolvedValue([
+      {
+        id: "lead-existing-closed",
+        phone: baseLead.phone,
+        status: "closed",
+        timestamp: "2026-09-01T00:00:00.000Z",
+        last_inflow_at: "2026-09-01T00:00:00.000Z",
+      },
+    ])
+    saveLead.mockResolvedValue({ id: "lead-new-after-closed" })
+
+    const result = await submitLeadCapture(baseLead)
+
+    expect(result.status).toBe(200)
+    expect(result.body).toMatchObject({
+      ok: true,
+      stored: true,
+      leadId: "lead-new-after-closed",
+      merged: false,
+    })
+    expect(saveLead).toHaveBeenCalledTimes(1)
+    expect(touchLeadInflow).not.toHaveBeenCalled()
+  })
+
+  it("falls back to inserting a new lead when the reinflow candidate lookup throws", async () => {
+    const { submitLeadCapture, saveLead, findLeadsByContacts, touchLeadInflow } =
+      await loadLeadCapture()
+    findLeadsByContacts.mockRejectedValue(new Error("lookup unavailable"))
+    saveLead.mockResolvedValue({ id: "lead-after-lookup-error" })
+
+    const result = await submitLeadCapture(baseLead)
+
+    expect(result.status).toBe(200)
+    expect(result.body).toMatchObject({
+      ok: true,
+      stored: true,
+      leadId: "lead-after-lookup-error",
+      merged: false,
+    })
+    expect(saveLead).toHaveBeenCalledTimes(1)
+    expect(touchLeadInflow).not.toHaveBeenCalled()
+  })
+
+  it("stamps the event token on the merged lead when the submission is an event signup", async () => {
+    const { submitLeadCapture, saveLead, findLeadsByContacts, touchLeadInflow, updateLead } =
+      await loadLeadCapture()
+    findLeadsByContacts.mockResolvedValue([
+      {
+        id: "lead-existing-new",
+        phone: baseLead.phone,
+        status: "new",
+        timestamp: "2026-09-01T00:00:00.000Z",
+        last_inflow_at: "2026-09-01T00:00:00.000Z",
+        notes: "기존 메모",
+      },
+    ])
+
+    const result = await submitLeadCapture({ ...baseLead, eventSlug: "seoul-0920" })
+
+    expect(result.status).toBe(200)
+    expect(result.body).toMatchObject({
+      ok: true,
+      merged: true,
+      leadId: "lead-existing-new",
+      // 재문의는 별개 전환 이벤트 — 병합 전(새 행마다 새 id)과 같은 계산을 유지한다.
+      conversionEventId: expect.stringContaining("lead:lead-existing-new:reinflow:"),
+    })
+    expect(saveLead).not.toHaveBeenCalled()
+    expect(touchLeadInflow).toHaveBeenCalledTimes(1)
+    // 행사 토큰은 notes 첫 줄에만 새기고 나머지 메모는 그대로 둔다.
+    expect(updateLead).toHaveBeenCalledWith("lead-existing-new", { notes: "[event:seoul-0920]\n기존 메모" })
+  })
+
+  it("does not merge into a lead that already carries a different event token", async () => {
+    const { submitLeadCapture, saveLead, findLeadsByContacts, touchLeadInflow, updateLead } =
+      await loadLeadCapture()
+    saveLead.mockResolvedValue({ id: "lead-new-row" })
+    findLeadsByContacts.mockResolvedValue([
+      {
+        id: "lead-existing-new",
+        phone: baseLead.phone,
+        status: "new",
+        timestamp: "2026-09-01T00:00:00.000Z",
+        last_inflow_at: "2026-09-01T00:00:00.000Z",
+        notes: "[event:busan-0901]\n기존 메모",
+      },
+    ])
+
+    const result = await submitLeadCapture({ ...baseLead, eventSlug: "seoul-0920" })
+
+    expect(result.status).toBe(200)
+    // 토큰은 한 개뿐이라 덮어쓰면 이전 행사의 신청 집계가 사라진다 — 예전처럼 새 행을 만든다.
+    expect(result.body).toMatchObject({ ok: true, merged: false, leadId: "lead-new-row" })
+    expect(saveLead).toHaveBeenCalledTimes(1)
+    expect(touchLeadInflow).not.toHaveBeenCalled()
+    expect(updateLead).not.toHaveBeenCalled()
+  })
+
+  it("does not look up reinflow candidates for sources outside RESPONSE_TARGET_SOURCES", async () => {
+    const { submitLeadCapture, saveLead, findLeadsByContacts } = await loadLeadCapture()
+    saveLead.mockResolvedValue({ id: "lead-newsletter" })
+
+    const result = await submitLeadCapture({
+      source: "newsletter",
+      email: "ops@example.com",
+    })
+
+    expect(result.status).toBe(200)
+    expect(findLeadsByContacts).not.toHaveBeenCalled()
+    expect(saveLead).toHaveBeenCalledTimes(1)
   })
 })

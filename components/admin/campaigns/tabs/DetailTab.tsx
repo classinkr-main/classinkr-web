@@ -32,6 +32,12 @@ const CreativeCplCard = dynamic(
   () => import("@/components/admin/campaigns/perf/CreativeCplCard").then((m) => m.CreativeCplCard),
   { ssr: false, loading: () => <ChartSkeleton className="h-[300px]" /> }
 )
+// 광고세트별 성과(Compass 브리지) — 소재 카드 바로 아래 마운트. Recharts 는 안 쓰지만
+// 자기 엔드포인트를 직접 fetch 하는 client-only 카드라 소재 카드와 같은 청크 규약을 따른다.
+const AdsetPerfCard = dynamic(
+  () => import("@/components/admin/campaigns/perf/AdsetPerfCard").then((m) => m.AdsetPerfCard),
+  { ssr: false, loading: () => <ChartSkeleton className="h-[260px]" /> }
+)
 const MetaPerformanceCharts = dynamic(
   () => import("@/components/admin/campaigns/MetaPerformanceCharts").then((m) => m.MetaPerformanceCharts),
   { ssr: false, loading: () => <ChartSkeleton className="h-[260px]" /> }
@@ -145,10 +151,13 @@ export default function DetailTab({
         <HubSection
           id="creatives"
           title="소재"
-          description="소재별 지출·CPL(Compass 브리지, Meta 리포트 리드 축) + 리드·전환 랭킹 기반 AI 제안"
+          description="소재별·광고세트별 지출·CPL(Compass 브리지, Meta 리포트 리드 축) + 리드·전환 랭킹 기반 AI 제안"
         >
           <div className="space-y-6">
             <CreativeCplCard period={period} refreshNonce={refreshNonce} />
+            {/* 광고세트별 성과 — 소재별 CPL 바로 아래. 같은 질문의 한 단 위 해상도(세트)라 붙여 둔다.
+                3층 재구성 전에는 요약 탭 좌측 컬럼에 있었다 — 소재 카드가 상세 › 소재로 오면서 함께 옮겼다. */}
+            <AdsetPerfCard period={period} refreshNonce={refreshNonce} />
             <AiCreativeSuggestSection />
           </div>
         </HubSection>

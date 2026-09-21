@@ -205,6 +205,8 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
   const [taskTitle, setTaskTitle] = useState("")
   const [taskType, setTaskType] = useState<CrmTaskType>("call")
   const [taskDue, setTaskDue] = useState("")
+  // 한 줄 입력에서 파싱된 담당자(정본 ownerKey). 없으면 기존처럼 "나"에게 배정한다.
+  const [taskOwner, setTaskOwner] = useState<{ ownerKey: string; displayName: string } | null>(null)
   const [dealTitle, setDealTitle] = useState("")
   const [dealStage, setDealStage] = useState<CrmDealStage>("consult")
   const [dealAmount, setDealAmount] = useState<number | null>(null)
@@ -435,6 +437,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
     setTaskTitle("")
     setTaskType("call")
     setTaskDue("")
+    setTaskOwner(null)
     setDealTitle("")
     setDealStage("consult")
     setDealAmount(null)
@@ -697,7 +700,11 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
           targetId: entityId,
           targetLabel: displayName,
           dueAt: taskDue ? new Date(taskDue).toISOString() : undefined,
-          assignToMe: true,
+          // 한 줄 입력에 담당자가 적혀 있으면 그 사람에게, 아니면 기존처럼 나에게 배정한다.
+          // 서버는 assignToMe === true 일 때만 ownerKey 를 현재 관리자로 덮어쓴다.
+          ...(taskOwner
+            ? { ownerKey: taskOwner.ownerKey, ownerNameSnapshot: taskOwner.displayName, assignToMe: false }
+            : { assignToMe: true }),
         },
         mutationKey
       )
@@ -706,6 +713,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
       if (!isSameCustomer(mutationKey)) return
       setTaskTitle("")
       setTaskDue("")
+      setTaskOwner(null)
       setTaskFormOpen(false)
       setSavedMsg("할 일을 추가했어요")
       revalidate()
@@ -1681,6 +1689,8 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
               onTaskTypeChange={setTaskType}
               taskDue={taskDue}
               onTaskDueChange={setTaskDue}
+              taskOwner={taskOwner}
+              onTaskOwnerChange={setTaskOwner}
               onAddTask={() => void handleAddTask()}
               onCompleteTask={(taskId) => void handleCompleteTask(taskId)}
               onCsMotion={(motion) => void handleCsMotion(motion)}

@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import dynamic from "next/dynamic"
+import { X } from "lucide-react"
 import { EmptyState, Skeleton } from "@/components/admin/viz"
+import { useDialogFocus } from "@/components/admin/use-dialog-focus"
 import { COUNT, money, previewText } from "@/components/admin/campaigns/event-format"
 import { adminFetchJsonCached } from "@/lib/admin-client"
 import type { CompassCreativeRow, CompassCreativeTotals } from "@/lib/marketing/compass-creative"
@@ -99,12 +101,23 @@ const ROW_GRID =
  *
  * failed 상태는 effect 로 되돌리지 않고 호출부의 key={src} 로 리셋한다 — URL 이 바뀌면
  * 컴포넌트를 새로 마운트하는 쪽이 "prop 이 바뀌면 state 초기화"의 정석이다.
+ *
+ * onZoom 이 있으면(원본 이미지가 있어 확대할 거리가 있으면) <button> 으로 감싼다 — 없으면
+ * 눌러도 아무 일도 안 하는 빈 버튼을 만들지 않는다.
  */
-function CreativeThumb({ src, label }: { src: string | null; label: string }) {
+function CreativeThumb({
+  src,
+  label,
+  onZoom,
+}: {
+  src: string | null
+  label: string
+  onZoom?: () => void
+}) {
   const [failed, setFailed] = useState(false)
 
-  if (src && !failed) {
-    return (
+  const visual =
+    src && !failed ? (
       // eslint-disable-next-line @next/next/no-img-element -- 외부 CDN 서명 URL(만료·차단 가능) — next/image 원격 패턴 대상 아님
       <img
         src={src}
@@ -115,26 +128,110 @@ function CreativeThumb({ src, label }: { src: string | null; label: string }) {
         onError={() => setFailed(true)}
         className="h-9 w-9 shrink-0 rounded-md border border-[#e8e8e4] object-cover"
       />
+    ) : (
+      <span
+        aria-hidden
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[#e8e8e4] bg-[#f7f7f4] text-[11px] font-semibold text-[#1a1a1a]/35"
+      >
+        {label.slice(0, 2) || "—"}
+      </span>
     )
-  }
+
+  if (!onZoom) return visual
+
   return (
-    <span
-      aria-hidden
-      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[#e8e8e4] bg-[#f7f7f4] text-[11px] font-semibold text-[#1a1a1a]/35"
+    <button
+      type="button"
+      onClick={onZoom}
+      aria-label={`${label} 소재 원본 이미지 크게 보기`}
+      className="shrink-0 rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
     >
-      {label.slice(0, 2) || "—"}
-    </span>
+      {visual}
+    </button>
   )
 }
 
-function CreativeRow({ row }: { row: CompassCreativeRow }) {
+/**
+ * 원본 이미지 확대 다이얼로그 — 썸네일 버튼 클릭 시 imageUrl(없으면 thumbUrl)을 크게 보여준다.
+ * useDialogFocus 로 Escape 닫기·포커스가 원래 썸네일 버튼으로 복귀를 처리하고, 바깥(배경)
+ * 클릭은 오버레이 onClick(이미지 자체는 stopPropagation)으로 닫는다.
+ */
+function ZoomedImage({ src, alt }: { src: string; alt: string }) {
+  const [failed, setFailed] = useState(false)
+  if (failed) {
+    return (
+      <p className="max-w-sm rounded-lg bg-white/10 px-4 py-3 text-center text-[13px] text-white">
+        이미지를 불러오지 못했습니다
+      </p>
+    )
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- 외부 CDN 원본(만료·차단 가능) — next/image 원격 패턴 대상 아님
+    <img
+      src={src}
+      alt={alt}
+      onError={() => setFailed(true)}
+      className="max-h-[90vh] max-w-full rounded-lg object-contain"
+    />
+  )
+}
+
+function CreativeImageDialog({
+  image,
+  onClose,
+}: {
+  image: { src: string; alt: string } | null
+  onClose: () => void
+}) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+  useDialogFocus(image?.src ?? null, onClose, closeButtonRef)
+
+  if (!image) return null
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${image.alt} 원본 이미지`}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+      onClick={onClose}
+    >
+      <button
+        ref={closeButtonRef}
+        type="button"
+        onClick={onClose}
+        aria-label="닫기"
+        className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+      >
+        <X className="h-5 w-5" />
+      </button>
+      <div onClick={(e) => e.stopPropagation()}>
+        <ZoomedImage key={image.src} src={image.src} alt={image.alt} />
+      </div>
+    </div>
+  )
+}
+
+function CreativeRow({
+  row,
+  onZoomImage,
+}: {
+  row: CompassCreativeRow
+  onZoomImage: (src: string, alt: string) => void
+}) {
   const name = row.adName ?? row.adId
   const copy = previewText(row.title ?? row.body, 60)
   const hasLeads = row.sparkline.some((value) => value > 0)
+  const zoomSrc = row.imageUrl ?? row.thumbUrl
   return (
     <div className={`${ROW_GRID} py-2.5`}>
       <div className="flex min-w-0 items-center gap-2.5">
-        <CreativeThumb key={row.thumbUrl ?? "no-thumb"} src={row.thumbUrl} label={name} />
+        <CreativeThumb
+          key={row.thumbUrl ?? "no-thumb"}
+          src={row.thumbUrl}
+          label={name}
+          onZoom={zoomSrc ? () => onZoomImage(zoomSrc, name) : undefined}
+        />
         <div className="min-w-0">
           <p className="truncate text-[13px] font-semibold text-[#111110]">{name}</p>
           <p className="mt-0.5 truncate text-[11px] text-[#1a1a1a]/45">
@@ -202,6 +299,9 @@ export function CreativeCplCard({
 }) {
   const { data, loading, error } = useCompassAds(period, refreshNonce)
   const [expanded, setExpanded] = useState(false)
+  const [zoomImage, setZoomImage] = useState<{ src: string; alt: string } | null>(null)
+  const openZoom = useCallback((src: string, alt: string) => setZoomImage({ src, alt }), [])
+  const closeZoom = useCallback(() => setZoomImage(null), [])
 
   const rows = useMemo(() => data?.rows ?? [], [data])
   const visible = expanded ? rows : rows.slice(0, DEFAULT_VISIBLE)
@@ -249,65 +349,68 @@ export function CreativeCplCard({
   const sparklineDays = data?.sparkline?.days ?? 14
 
   return (
-    <CardShell
-      note={
-        totals && totals.adCount > 0 ? (
-          <div className="flex flex-wrap items-center justify-end gap-1.5">
-            <p className="text-[11px] tabular-nums text-[#1a1a1a]/45">
-              소재 {COUNT.format(totals.adCount)} · 지출 {money(totals.spendUsd, "USD")} · 평균 CPL{" "}
-              {totals.cplUsd != null ? money(totals.cplUsd, "USD") : "—"}
-            </p>
-            {/* 행 상한에 닿았으면 합계를 "전체"라고 부를 수 없다 — 부분 집계임을 밝힌다. */}
-            {data?.truncated && (
-              <span className="rounded border border-[#d8d6cf] px-1.5 py-px text-[10px] font-medium text-[#1a1a1a]/45">
-                일부 일자 미포함
-              </span>
-            )}
-          </div>
-        ) : undefined
-      }
-    >
-      {rows.length === 0 ? (
-        <EmptyState
-          title="기간 내 집계된 소재가 없습니다"
-          description="Compass 가 수집한 광고(ad) 레벨 성과가 이 기간에 없습니다 — 집행이 없었거나 동기화가 아직 밀려 있습니다."
-        />
-      ) : (
-        <div className="overflow-x-auto">
-          <div className="min-w-[600px]">
-            <div
-              className={`${ROW_GRID} border-b border-b-[#f0f0ec] pb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/35`}
-            >
-              <span>소재</span>
-              <span className="text-right">리드</span>
-              <span className="text-right">지출 USD</span>
-              <span className="text-right">CPL</span>
-              <span className="pl-1">리드 {sparklineDays}일</span>
-            </div>
-            <div className="divide-y divide-[#f0f0ec]">
-              {visible.map((row) => (
-                <CreativeRow key={row.adId} row={row} />
-              ))}
-            </div>
-            {/* 재조회 실패는 화면을 비우지 않고 밝히기만 한다(직전 값 유지 — 무음 강등 금지). */}
-            {error && (
-              <p className="mt-2 text-[11px] text-[#1a1a1a]/45">
-                최신 값을 다시 받지 못했습니다 — {error}
+    <>
+      <CardShell
+        note={
+          totals && totals.adCount > 0 ? (
+            <div className="flex flex-wrap items-center justify-end gap-1.5">
+              <p className="text-[11px] tabular-nums text-[#1a1a1a]/45">
+                소재 {COUNT.format(totals.adCount)} · 지출 {money(totals.spendUsd, "USD")} · 평균
+                CPL {totals.cplUsd != null ? money(totals.cplUsd, "USD") : "—"}
               </p>
-            )}
-            {rows.length > DEFAULT_VISIBLE && (
-              <button
-                type="button"
-                onClick={() => setExpanded((open) => !open)}
-                aria-expanded={expanded}
-                className="mt-1 w-full border-t border-[#f0f0ec] pt-2.5 pl-1.5 text-left text-[11.5px] font-medium text-[#1a1a1a]/45 transition hover:text-[#111110]"
+              {/* 행 상한에 닿았으면 합계를 "전체"라고 부를 수 없다 — 부분 집계임을 밝힌다. */}
+              {data?.truncated && (
+                <span className="rounded border border-[#d8d6cf] px-1.5 py-px text-[10px] font-medium text-[#1a1a1a]/45">
+                  일부 일자 미포함
+                </span>
+              )}
+            </div>
+          ) : undefined
+        }
+      >
+        {rows.length === 0 ? (
+          <EmptyState
+            title="기간 내 집계된 소재가 없습니다"
+            description="Compass 가 수집한 광고(ad) 레벨 성과가 이 기간에 없습니다 — 집행이 없었거나 동기화가 아직 밀려 있습니다."
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <div className="min-w-[600px]">
+              <div
+                className={`${ROW_GRID} border-b border-b-[#f0f0ec] pb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/35`}
               >
-                {expanded ? "상위 소재만 보기" : `소재 ${hiddenCount}개 더 보기`}
-              </button>
-            )}
+                <span>소재</span>
+                <span className="text-right">리드</span>
+                <span className="text-right">지출 USD</span>
+                <span className="text-right">CPL</span>
+                <span className="pl-1">리드 {sparklineDays}일</span>
+              </div>
+              <div className="divide-y divide-[#f0f0ec]">
+                {visible.map((row) => (
+                  <CreativeRow key={row.adId} row={row} onZoomImage={openZoom} />
+                ))}
+              </div>
+              {/* 재조회 실패는 화면을 비우지 않고 밝히기만 한다(직전 값 유지 — 무음 강등 금지). */}
+              {error && (
+                <p className="mt-2 text-[11px] text-[#1a1a1a]/45">
+                  최신 값을 다시 받지 못했습니다 — {error}
+                </p>
+              )}
+              {rows.length > DEFAULT_VISIBLE && (
+                <button
+                  type="button"
+                  onClick={() => setExpanded((open) => !open)}
+                  aria-expanded={expanded}
+                  className="mt-1 w-full border-t border-[#f0f0ec] pt-2.5 pl-1.5 text-left text-[11.5px] font-medium text-[#1a1a1a]/45 transition hover:text-[#111110]"
+                >
+                  {expanded ? "상위 소재만 보기" : `소재 ${hiddenCount}개 더 보기`}
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-      )}
-    </CardShell>
+        )}
+      </CardShell>
+      <CreativeImageDialog image={zoomImage} onClose={closeZoom} />
+    </>
   )
 }

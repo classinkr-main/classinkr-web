@@ -29,6 +29,8 @@ export interface CompassAdDailyInput {
   campaign_name?: string | null
   category?: string | null
   creative_thumb?: string | null
+  /** 소재 원본 이미지(확대 보기용) — creative_thumb 와 별도 컬럼. 없으면 null. */
+  creative_image?: string | null
   creative_title?: string | null
   creative_body?: string | null
   spend_usd: number | null
@@ -44,6 +46,8 @@ export interface CompassCreativeRow {
   campaignName: string | null
   category: string | null
   thumbUrl: string | null
+  /** 소재 원본 이미지(확대 보기용) — 여러 날짜 중 첫 non-null 값을 그대로 패스스루(최신 갱신 아님). */
+  imageUrl: string | null
   title: string | null
   body: string | null
   /** Meta 리포트 리드(Compass 수집분) — 우리 leads 테이블 건수와 정의가 다르다. */
@@ -148,6 +152,7 @@ export function aggregateCompassCreatives(
         campaignName: null,
         category: null,
         thumbUrl: null,
+        imageUrl: null,
         title: null,
         body: null,
         leads: 0,
@@ -183,6 +188,12 @@ export function aggregateCompassCreatives(
       acc.title = text(row.creative_title) ?? acc.title
       acc.body = text(row.creative_body) ?? acc.body
     }
+
+    // 원본 이미지는 "최신 날짜가 이긴다"가 아니라 첫 non-null 값을 그대로 패스스루한다 —
+    // 한 번 채워지면 이후 행(다른 날짜)이 와도 덮어쓰지 않는다.
+    if (acc.imageUrl == null) {
+      acc.imageUrl = text(row.creative_image)
+    }
   }
 
   const rows: CompassCreativeRow[] = []
@@ -199,6 +210,7 @@ export function aggregateCompassCreatives(
       campaignName: acc.campaignName,
       category: acc.category,
       thumbUrl: acc.thumbUrl,
+      imageUrl: acc.imageUrl,
       title: acc.title,
       body: acc.body,
       leads: acc.leads,
