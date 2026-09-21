@@ -124,6 +124,47 @@ describe("listHardwareCrmOrderBacklog", () => {
     expect(result.entries.find((entry) => entry.customerName === "갈무리국어")?.ledgerOverlap).toBeNull()
   })
 
+  it("예정 출고는 겹침 근거가 아니다 — 아직 나가지 않은 물량이다", async () => {
+    ledgerRows = [
+      {
+        id: "movement-planned",
+        product_name: '86" IFP',
+        to_location: "남명학원",
+        quantity: 2,
+        occurred_at: "2026-09-18",
+        status: "배송 예정",
+        reference_no: "H8",
+        source: "sheet_import",
+      },
+    ]
+    const { listHardwareCrmOrderBacklog } = await loadRepository()
+
+    const result = await listHardwareCrmOrderBacklog()
+
+    expect(result.entries.find((entry) => entry.customerName === "남명학원")?.ledgerOverlap).toBeNull()
+  })
+
+  it("짧은 품목명은 부분일치로 겹쳤다고 보지 않는다 — T1 이 DT1 에 걸리면 등록이 막힌다", async () => {
+    ledgerRows = [
+      {
+        id: "movement-dt1",
+        product_name: "DT1",
+        to_location: "갈무리국어",
+        quantity: 1,
+        occurred_at: "2026-09-18",
+        status: "설치 완료",
+        reference_no: "H8",
+        source: "sheet_import",
+      },
+    ]
+    const { listHardwareCrmOrderBacklog } = await loadRepository()
+
+    const result = await listHardwareCrmOrderBacklog()
+
+    // T1 주문은 DT1 출고와 무관하다.
+    expect(result.entries.find((entry) => entry.productName === "T1")?.ledgerOverlap).toBeNull()
+  })
+
   it("품목·수량이 없는 후보(외부 CRM 오더)는 등록 후보로 올리지 않는다", async () => {
     dealLineItems = [
       { id: "line-3", deal_id: "deal-1", product_name: '86" IFP', quantity: 0, amount: 0, updated_at: "2026-09-20" },

@@ -634,6 +634,8 @@ export default function HardwareInventoryClient({
   const deferredHardwareSearch = useDeferredValue(hardwareSearch)
   // 확정·취소 권한(hardware.finalize) — 표시용. viewer가 없으면(구응답·로딩) 열어두고 서버 게이트만 믿는다.
   const canFinalize = data?.viewer?.canFinalize ?? true
+  // 기록 생성 권한 — 없으면 쓰기 버튼을 미리 내린다(강제는 서버 게이트). 구응답·로딩 중에는 열어 둔다.
+  const canWriteHardware = data?.viewer?.canWrite ?? true
   const [customerFilter, setCustomerFilter] = useState("")
   const [lotFilter, setLotFilter] = useState("")
   // 내역 탭 보조 필터 축 — 상태(완료/배송 예정/취소 포함), 판매유형(출고 전용), 기간(occurred_at 기준).
@@ -991,7 +993,14 @@ export default function HardwareInventoryClient({
     if (readLocalString(QUICK_RECORD_STAY_OPEN_KEY) === "1") setStayOpenAfterSave(true)
     const savedCart = readStoredQuickCartDrafts()
     quickCartRestoredRef.current = true
-    if (savedCart.length > 0) setQuickCart(savedCart)
+    if (savedCart.length > 0) {
+      setQuickCart(savedCart)
+      // 시트가 닫힌 채 되살아나면 화면에 아무 표시가 없다 — 보이지 않는 바구니가 저장 동작을
+      // 바꾸고(저장 후 시트가 닫히지 않는다), Cmd+Enter 가 어제 날짜 줄을 그대로 원장에 넣는다.
+      setNotice(
+        `저장하지 않은 기록 바구니 ${formatNumber(savedCart.length)}건을 되살렸습니다 — 빠른 기록에서 확인하거나 비우세요.`
+      )
+    }
   }, [])
 
   // 검증 에러는 폼 상단에 뜬다 — 하단 저장 버튼을 누른 사용자에게 보이도록 시트를 위로 스크롤.
@@ -2358,6 +2367,9 @@ export default function HardwareInventoryClient({
       if (target?.isContentEditable) return
       const tag = target?.tagName
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return
+      // 자식 컴포넌트가 가진 확인창(스냅샷 복원·샘플 백필 등)은 부모 state 로 보이지 않는다.
+      // 열려 있는 모달이 하나라도 있으면 물러난다 — 모달 뒤로 시트가 열려 두 면이 겹치지 않게.
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return
 
       const key = event.key.toLowerCase()
       if (key !== "i" && key !== "o") return
@@ -2698,7 +2710,14 @@ export default function HardwareInventoryClient({
     setError(null)
     try {
       const result = await adminFetchJson<{
-        import: { imported: number; skipped: number; snapshotId?: string; sheetWinsVoided?: number }
+        import: {
+          imported: number
+          skipped: number
+          snapshotId?: string
+          sheetWinsVoided?: number
+          sheetWinsKept?: number
+          sheetWinsError?: string | null
+        }
         sync: { inbound: number; outbound: number; stock: number; sales: number } | null
       }>("/api/admin/hardware/import-sheet", {
         method: "POST",
@@ -2706,10 +2725,18 @@ export default function HardwareInventoryClient({
       })
       const snapshotHint = result.import.snapshotId ? ` · 백업 ${result.import.snapshotId.slice(0, 8)}` : ""
       // 시트가 이겨서 취소된 어드민 확정 수는 조용히 넘기지 않는다 — 원장에서 빠진 기록이 있다는 뜻이다.
-      const sheetWinsHint =
+      const sheetWinsHint = [
         result.import.sheetWinsVoided && result.import.sheetWinsVoided > 0
           ? ` 시트가 같은 물량을 다시 실어, 시트 행에서 확정했던 어드민 기록 ${formatNumber(result.import.sheetWinsVoided)}건은 취소했습니다(내역 탭에서 사유 확인).`
-          : ""
+          : "",
+        // 시트가 다시 싣지 않은 건은 남긴다 — 취소했다면 그 출하가 원장에서 통째로 사라진다.
+        result.import.sheetWinsKept && result.import.sheetWinsKept > 0
+          ? ` 시트에 같은 물량이 없어 어드민 확정 ${formatNumber(result.import.sheetWinsKept)}건은 그대로 뒀습니다 — 시트에서 빠진 건인지 확인하세요.`
+          : "",
+        result.import.sheetWinsError
+          ? ` 다만 어드민 확정 정리는 실패했습니다: ${result.import.sheetWinsError} — 가져오기 자체는 반영됐습니다.`
+          : "",
+      ].join("")
       setNotice(
         `시트 강제 싱크와 백업 후 이관 완료: 원장 ${formatNumber(result.import.imported)}건 반영${snapshotHint}. 기존 시트 이관분은 최신 백업 기준으로 갱신되었습니다.${sheetWinsHint}`
       )
@@ -3159,20 +3186,22 @@ export default function HardwareInventoryClient({
       if (!stayOpenAfterSave && quickCart.length === 0) setSheetOpen(false)
       setPendingMovement(null)
       // 샘플 프리셋이면 유닛 트래커도 함께 기록 — 원장은 이미 저장됐으므로 실패는 별도 문구로 알린다.
+      let sampleSyncError: string | null = null
       if (activePresetKey === "sample" || activePresetKey === "sampleReturn" || activePresetKey === "sampleAssign") {
         try {
           await syncSampleTracker(draft, saveResult?.movement?.id ?? null)
         } catch (syncErr) {
-          setError(
-            `원장은 저장됐지만 샘플 트래커 기록에 실패했습니다: ${
-              syncErr instanceof Error ? syncErr.message : String(syncErr)
-            } — 샘플 트래커에서 수동으로 정정하세요.`
-          )
+          sampleSyncError = `원장은 저장됐지만 샘플 트래커 기록에 실패했습니다: ${
+            syncErr instanceof Error ? syncErr.message : String(syncErr)
+          } — 샘플 트래커에서 수동으로 정정하세요.`
         }
       }
       // 재검증은 기다리지 않는다 — 연속 기록에서 다음 건을 바로 받기 위해서다(감사 2026-09-20).
       // 방금 저장한 줄은 위에서 이미 원장에 들어갔고, 파생 숫자만 이 응답이 오면 바뀐다.
       void refresh()
+      // 트래커 실패 문구는 재검증 **뒤에** 세운다 — load()가 시작하자마자 setError(null)을 하므로,
+      // 먼저 세우면 같은 배치에서 지워져 화면에 뜨지 않는다.
+      if (sampleSyncError) setError(sampleSyncError)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       setError(message)
@@ -3485,6 +3514,7 @@ export default function HardwareInventoryClient({
               setOutboundPage={setOutboundPage}
               setDetailId={setDetailId}
               refresh={refresh}
+              canWriteHardware={canWriteHardware}
             />
             )}
 
@@ -3716,7 +3746,7 @@ export default function HardwareInventoryClient({
           activeItemIds={inboundActiveItemIds}
           lotStaleNote={inboundLotStaleNote}
           // VIEWER 는 저장 시 서버가 403 으로 막는다 — 대시보드에 편집 권한 플래그가 없어 입력 UI 는 열어 둔다(빠른 기록과 같은 관례).
-          canWrite
+          canWrite={canWriteHardware}
           owner={owner.trim() || data?.viewer?.name || null}
           onSaved={(result) => {
             const sampleNote =

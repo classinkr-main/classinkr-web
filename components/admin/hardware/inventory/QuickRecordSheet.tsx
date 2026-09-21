@@ -383,10 +383,11 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                     ref={formRef}
                     onSubmit={(event) => void submitMovement(event)}
                     onKeyDown={(event) => {
-                      if (event.nativeEvent.isComposing) return
                       // Cmd/Ctrl+Enter 저장 — 입고표와 같은 규약(inbound-sheet-model의 키 의도).
                       // 손을 키보드에 둔 채 연속 기록할 때 저장 버튼까지 가지 않아도 된다.
-                      if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                      // IME 조합 중에는 저장으로 받지 않지만, 아래 배치 Enter 가드까지 건너뛰면
+                      // 한글 조합 확정 Enter 가 단건 저장을 오발사한다(그 가드가 막으려던 바로 그것).
+                      if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing) {
                         event.preventDefault()
                         if (busy != null || crmLoading) return
                         if (sheetMode === "batch" && !editingId) {

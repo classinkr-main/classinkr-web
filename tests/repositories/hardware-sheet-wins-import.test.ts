@@ -18,12 +18,14 @@ const updates: Update[] = []
 let adminConvertedRows: Row[] = []
 let sheetSourceRows: Row[] = []
 let rpcCalls: string[] = []
+// 시트가 이번에 실어 온 출고 — 같은 품목·고객사가 다시 들어와야 어드민 확정을 취소한다.
+let outboundSheetRows: Row[] = []
 
 function movementsTable() {
   return {
     select(columns: string) {
       // 전환 링크가 있는 어드민 기록 조회: .eq().is().not()
-      if (columns === "id,converted_from_movement_id") {
+      if (columns === "id,product_name,to_location,converted_from_movement_id") {
         const chain = {
           eq: () => chain,
           is: () => chain,
@@ -121,7 +123,7 @@ async function loadRepository() {
         raw: {},
       },
     ]),
-    listFreshHwOutbound: vi.fn(async () => []),
+    listFreshHwOutbound: vi.fn(async () => outboundSheetRows),
     listFreshHwStock: vi.fn(async () => []),
     listHwInbound: vi.fn(async () => []),
     listHwOutbound: vi.fn(async () => []),
@@ -137,6 +139,23 @@ describe("importHardwareFromBranchSheets — 시트가 이긴다(§8-6)", () => 
     rpcCalls = []
     adminConvertedRows = []
     sheetSourceRows = []
+    outboundSheetRows = [
+      {
+        id: "sheet-out-1",
+        logistics_no: "H8",
+        outbound_date: "2026-09-21",
+        owner: null,
+        product: '86" IFP',
+        quantity: 2,
+        revenue: null,
+        destination: "남명학원",
+        serials: [],
+        progress: "설치 완료",
+        type: "Sales",
+        remarks: "",
+        raw: {},
+      },
+    ]
     delete process.env.HARDWARE_SHEET_ADDITIVE_MERGE
   })
 
@@ -148,8 +167,8 @@ describe("importHardwareFromBranchSheets — 시트가 이긴다(§8-6)", () => 
 
   it("시트 행에서 확정한 어드민 기록만 취소하고, 사람이 직접 만든 기록은 건드리지 않는다", async () => {
     adminConvertedRows = [
-      { id: "admin-from-sheet", converted_from_movement_id: "sheet-1" },
-      { id: "admin-from-admin", converted_from_movement_id: "admin-planned-1" },
+      { id: "admin-from-sheet", product_name: '86" IFP', to_location: "남명학원", converted_from_movement_id: "sheet-1" },
+      { id: "admin-from-admin", product_name: '86" IFP', to_location: "남명학원", converted_from_movement_id: "admin-planned-1" },
     ]
     sheetSourceRows = [{ id: "sheet-1" }]
 
@@ -168,7 +187,9 @@ describe("importHardwareFromBranchSheets — 시트가 이긴다(§8-6)", () => 
   })
 
   it("정리는 교체가 끝난 뒤에 한다 — 가져오기가 먼저다", async () => {
-    adminConvertedRows = [{ id: "admin-from-sheet", converted_from_movement_id: "sheet-1" }]
+    adminConvertedRows = [
+      { id: "admin-from-sheet", product_name: '86" IFP', to_location: "남명학원", converted_from_movement_id: "sheet-1" },
+    ]
     sheetSourceRows = [{ id: "sheet-1" }]
 
     const { importHardwareFromBranchSheets } = await loadRepository()
@@ -176,6 +197,23 @@ describe("importHardwareFromBranchSheets — 시트가 이긴다(§8-6)", () => 
 
     expect(rpcCalls).toContain("replace_hardware_sheet_import")
     expect(updates).toHaveLength(1)
+  })
+
+  it("시트가 같은 물량을 다시 싣지 않으면 취소하지 않고 남긴다", async () => {
+    adminConvertedRows = [
+      { id: "admin-from-sheet", product_name: '86" IFP', to_location: "남명학원", converted_from_movement_id: "sheet-1" },
+    ]
+    sheetSourceRows = [{ id: "sheet-1" }]
+    // 시트에서 그 줄이 사라졌다(운영자가 지웠거나 품목이 해석되지 않아 건너뛰었다).
+    outboundSheetRows = []
+
+    const { importHardwareFromBranchSheets } = await loadRepository()
+    const result = await importHardwareFromBranchSheets({ actor: "ops@classin.kr" })
+
+    // 취소하면 그 출하가 원장에서 통째로 사라진다 — 스냅샷도 시트 이관분만 담아 되돌리지 못한다.
+    expect(result.sheetWinsVoided).toBe(0)
+    expect(result.sheetWinsKept).toBe(1)
+    expect(updates).toHaveLength(0)
   })
 
   it("취소할 것이 없으면 아무것도 건드리지 않는다", async () => {
@@ -190,7 +228,9 @@ describe("importHardwareFromBranchSheets — 시트가 이긴다(§8-6)", () => 
 
   it("추가형 머지 모드에서는 취소하지 않는다 — 머지는 확정 행을 human_locked 로 보호한다", async () => {
     process.env.HARDWARE_SHEET_ADDITIVE_MERGE = "1"
-    adminConvertedRows = [{ id: "admin-from-sheet", converted_from_movement_id: "sheet-1" }]
+    adminConvertedRows = [
+      { id: "admin-from-sheet", product_name: '86" IFP', to_location: "남명학원", converted_from_movement_id: "sheet-1" },
+    ]
     sheetSourceRows = [{ id: "sheet-1" }]
 
     const { importHardwareFromBranchSheets } = await loadRepository()

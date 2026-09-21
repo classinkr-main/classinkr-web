@@ -16,6 +16,35 @@ import { normalizeHardwareText } from "./shared"
 
 const MAX_VISIBLE = 8
 
+export type CustomerPickerKeyIntent = "commit" | "close" | "next" | "previous" | null
+
+/**
+ * 키 하나가 목록에 무엇을 시키는지 — 순수 판정이라 따로 테스트한다.
+ *
+ * Enter 가 커밋이 되려면 **사용자가 위아래로 고른 뒤**여야 한다. 포커스만으로 목록이 열리고 첫 줄이
+ * 강조되기 때문에, 그 조건이 없으면 빈 고객사 칸에서 저장하려고 누른 Enter 가 최근 고객사를 조용히
+ * 적어 넣는다(리뷰 2026-09-21). 고르지 않은 Enter 는 null 을 돌려 폼으로 흘려보낸다.
+ */
+export function customerPickerKeyIntent(input: {
+  key: string
+  open: boolean
+  navigated: boolean
+  rowCount: number
+  isComposing: boolean
+}): CustomerPickerKeyIntent {
+  if (input.isComposing) return null
+  if (input.key === "Escape") return input.open ? "close" : null
+  if (input.key === "ArrowDown" || input.key === "ArrowUp") {
+    if (input.rowCount === 0) return null
+    return input.key === "ArrowDown" ? "next" : "previous"
+  }
+  if (input.key === "Enter") {
+    if (!input.open || !input.navigated || input.rowCount === 0) return null
+    return "commit"
+  }
+  return null
+}
+
 export interface CustomerPickerRow {
   key: string
   label: string
@@ -63,6 +92,10 @@ export default function CustomerPicker({
   const listId = useId()
   const [open, setOpen] = useState(false)
   const [highlight, setHighlight] = useState(0)
+  // Enter 로 목록 값을 넣는 것은 **사용자가 위아래로 골랐을 때만**이다.
+  // 포커스만으로 목록이 열리고 첫 줄이 강조되므로, 빈 칸에서 Enter(=저장)가 최근 고객사를 조용히
+  // 적어 넣는 사고가 났다(리뷰 2026-09-21). 그 Enter 는 폼으로 그대로 흘려보낸다.
+  const [navigated, setNavigated] = useState(false)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
 
   const rows = useMemo(() => buildCustomerPickerRows(options, value), [options, value])
@@ -86,40 +119,45 @@ export default function CustomerPicker({
   const commit = (label: string) => {
     onChange(label)
     setOpen(false)
+    setNavigated(false)
   }
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
-    if (event.nativeEvent.isComposing) return
+    const intent = customerPickerKeyIntent({
+      key: event.key,
+      open,
+      navigated,
+      rowCount: rows.length,
+      isComposing: event.nativeEvent.isComposing,
+    })
+    if (!intent) return
 
-    if (event.key === "Escape") {
-      if (!open) return
+    if (intent === "close") {
       // 시트가 함께 닫히지 않게 한다(document 핸들러가 defaultPrevented 를 본다).
       event.preventDefault()
       setOpen(false)
+      setNavigated(false)
       return
     }
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      if (rows.length === 0) return
+    if (intent === "next" || intent === "previous") {
       event.preventDefault()
+      setNavigated(true)
       if (!open) {
         setOpen(true)
         setHighlight(0)
         return
       }
       setHighlight(() => {
-        const next = event.key === "ArrowDown" ? activeIndex + 1 : activeIndex - 1
+        const next = intent === "next" ? activeIndex + 1 : activeIndex - 1
         return (next + rows.length) % rows.length
       })
       return
     }
-    if (event.key === "Enter") {
-      if (!open || rows.length === 0) return
-      const row = rows[activeIndex]
-      if (!row) return
-      // 목록에서 고르는 Enter 는 폼 제출로 새지 않는다.
-      event.preventDefault()
-      commit(row.label)
-    }
+    const row = rows[activeIndex]
+    if (!row) return
+    // 목록에서 고르는 Enter 는 폼 제출로 새지 않는다.
+    event.preventDefault()
+    commit(row.label)
   }
 
   const activeRowId = open && rows[activeIndex] ? `${listId}-${activeIndex}` : undefined
@@ -132,6 +170,7 @@ export default function CustomerPicker({
           onChange(event.target.value)
           setOpen(true)
           setHighlight(0)
+          setNavigated(false)
         }}
         onFocus={() => setOpen(true)}
         onKeyDown={onKeyDown}

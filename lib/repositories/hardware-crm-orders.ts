@@ -31,6 +31,8 @@ export interface HardwareCrmOrderCandidateInput {
   quantity?: number | null
   /** 기록 중인 고객사 — 같은 품목·수량의 다른 딜이 섞일 때 후보를 가르는 신호. */
   customerName?: string | null
+  /** 돌려줄 후보 수 상한(기본 12). 대사 목록은 원장 필터를 **뒤에** 하므로 여기서 미리 자르면 안 된다. */
+  limit?: number | null
 }
 
 export interface HardwareCrmOrderCandidateResult {
@@ -510,7 +512,7 @@ export async function listHardwareCrmOrderCandidates(
         if (rankGap !== 0) return rankGap
         return new Date(b.occurredAt ?? b.syncedAt ?? 0).getTime() - new Date(a.occurredAt ?? a.syncedAt ?? 0).getTime()
       })
-      .slice(0, 12),
+      .slice(0, Math.max(1, Math.floor(input.limit ?? 12))),
     warnings,
   }
 }
@@ -528,6 +530,28 @@ export async function listHardwareCrmOrderCandidates(
 //      맞는 실제 출고가 원장에 있으면 **지우지 않고 표시**한다. 시트가 이미 실어 온 물량을 다시
 //      등록하면 §8-6 이중 계상이 되는데, 그건 링크가 없어 가져오기 때 자동 정리도 되지 않는다.
 //      숨기면 운영자가 알 길이 없으므로 경고로 남긴다.
+
+/** 대사 목록이 훑을 후보 수 — 원장 필터 전이라 화면 상한(아래 BACKLOG_LIMIT)보다 넉넉하게 본다. */
+const BACKLOG_CANDIDATE_SCAN_LIMIT = 120
+/** 화면에 올리는 최대 줄 수. */
+const BACKLOG_LIMIT = 20
+
+/** 원장 상태 문자열이 "아직 안 나간 예정"인지 — 저장소 내부 판정과 같은 어휘. */
+function isPlannedLedgerStatus(status: string | null | undefined) {
+  return /예정|예약|대기|planned/i.test(status ?? "")
+}
+
+/**
+ * 겹침으로 볼 만큼 품목 이름이 같은지.
+ *
+ * 맨 부분일치는 T1 이 DT1 에 걸린다(실제 카탈로그에 둘 다 있다). 짧은 이름일수록 우연히 겹치므로
+ * 완전 일치를 우선하고, 부분일치는 네 글자 이상일 때만 인정한다.
+ */
+function productNamesOverlap(needle: string, haystack: string) {
+  if (!needle || !haystack) return false
+  if (needle === haystack) return true
+  return needle.length >= 4 && haystack.includes(needle)
+}
 
 export interface HardwareCrmOrderBacklogOverlap {
   quantity: number
@@ -572,7 +596,9 @@ async function listLedgerOutboundRows(): Promise<LedgerOutboundRow[]> {
 
 export async function listHardwareCrmOrderBacklog(): Promise<HardwareCrmOrderBacklogResult> {
   const [candidateResult, ledgerRows] = await Promise.all([
-    listHardwareCrmOrderCandidates({}),
+    // 원장에 이미 있는 것을 걸러낸 **뒤에** 잘라야 한다 — 기본 상한 12 로 먼저 자르면 등록이 끝난
+    // 줄로만 목록이 채워져 "원장에 없는 CRM 오더가 없습니다"가 거짓이 된다(리뷰 2026-09-21).
+    listHardwareCrmOrderCandidates({ limit: BACKLOG_CANDIDATE_SCAN_LIMIT }),
     listLedgerOutboundRows(),
   ])
 
@@ -589,15 +615,17 @@ export async function listHardwareCrmOrderBacklog(): Promise<HardwareCrmOrderBac
       .filter((reference): reference is string => Boolean(reference))
   )
 
+  // 겹침 판정은 **실제 출고**만 본다 — 예정은 아직 나가지 않은 물량이라 중복 근거가 아니다.
+  const actualOutboundRows = ledgerRows.filter((row) => !isPlannedLedgerStatus(row.status))
+
   const entries: HardwareCrmOrderBacklogEntry[] = []
   for (const candidate of registrable) {
     if (recordedReferences.has(candidate.referenceNo)) continue
 
     const productNeedle = normalizeForMatch(candidate.productName)
-    const overlapRows = ledgerRows.filter((row) => {
+    const overlapRows = actualOutboundRows.filter((row) => {
       if (!customerNameMatches(candidate.customerName, row.to_location)) return false
-      const haystack = normalizeForMatch(row.product_name)
-      return productNeedle.length >= 2 && haystack.includes(productNeedle)
+      return productNamesOverlap(productNeedle, normalizeForMatch(row.product_name))
     })
 
     const overlapQuantity = overlapRows.reduce((total, row) => total + (toNumber(row.quantity) ?? 0), 0)
@@ -613,5 +641,5 @@ export async function listHardwareCrmOrderBacklog(): Promise<HardwareCrmOrderBac
     })
   }
 
-  return { entries, warnings: candidateResult.warnings }
+  return { entries: entries.slice(0, BACKLOG_LIMIT), warnings: candidateResult.warnings }
 }

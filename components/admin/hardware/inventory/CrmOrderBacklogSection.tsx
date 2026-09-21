@@ -37,6 +37,8 @@ export interface CrmOrderBacklogEntry {
 }
 
 interface CrmOrderBacklogSectionProps {
+  /** 기록 생성 권한(표시용) — 읽기 역할은 등록 버튼을 누를 수 없다. 강제는 서버 게이트다. */
+  canWrite: boolean
   /** 등록에 성공하면 부모가 원장을 다시 받는다(HardwareInventoryClient의 refresh). */
   onRegistered: () => void | Promise<void>
 }
@@ -45,7 +47,7 @@ const SECTION_CARD_CLASS = "rounded-lg border border-[rgba(0,0,0,0.08)] bg-white
 const GHOST_BUTTON_CLASS =
   "inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 disabled:pointer-events-none disabled:opacity-50"
 
-function CrmOrderBacklogSection({ onRegistered }: CrmOrderBacklogSectionProps) {
+function CrmOrderBacklogSection({ canWrite, onRegistered }: CrmOrderBacklogSectionProps) {
   const [expanded, setExpanded] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -53,6 +55,7 @@ function CrmOrderBacklogSection({ onRegistered }: CrmOrderBacklogSectionProps) {
   const [warnings, setWarnings] = useState<string[]>([])
   const [listError, setListError] = useState<string | null>(null)
   const [registeringId, setRegisteringId] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [rowResults, setRowResults] = useState<Record<string, { ok: boolean; message: string }>>({})
   // 겹침 의심 줄은 한 번 더 누르게 한다 — 첫 클릭은 경고만 띄운다.
   const [overlapAcknowledged, setOverlapAcknowledged] = useState<ReadonlySet<string>>(() => new Set())
@@ -66,6 +69,10 @@ function CrmOrderBacklogSection({ onRegistered }: CrmOrderBacklogSectionProps) {
       )
       setEntries(result.entries ?? [])
       setWarnings(result.warnings ?? [])
+      // 행 상태는 목록과 함께 비운다 — 겹침 경고를 이미 본 것으로 남겨 두면 다시 조회한 뒤
+      // 첫 클릭에 바로 등록된다(두 번 누르기 보호가 목록보다 오래 살면 안 된다).
+      setOverlapAcknowledged(new Set())
+      setRowResults({})
       setLoaded(true)
     } catch (err) {
       setListError(err instanceof Error ? err.message : String(err))
@@ -95,6 +102,7 @@ function CrmOrderBacklogSection({ onRegistered }: CrmOrderBacklogSectionProps) {
     }
 
     setRegisteringId(entry.id)
+    setNotice(null)
     setRowResults((current) => {
       const next = { ...current }
       delete next[entry.id]
@@ -124,7 +132,15 @@ function CrmOrderBacklogSection({ onRegistered }: CrmOrderBacklogSectionProps) {
         }),
       })
       setEntries((current) => current.filter((row) => row.id !== entry.id))
-      setRowResults((current) => ({ ...current, [entry.id]: { ok: true, message: "배송 예정으로 등록했습니다." } }))
+      setOverlapAcknowledged((current) => {
+        const next = new Set(current)
+        next.delete(entry.id)
+        return next
+      })
+      // 행이 목록에서 빠지므로 확인 문구는 섹션 알림으로 남긴다.
+      setNotice(
+        `${entry.customerName ?? "고객사 미상"} · ${entry.productName} ${formatNumber(entry.quantity ?? 0)}대를 배송 예정으로 등록했습니다.`
+      )
       await onRegistered()
     } catch (err) {
       setRowResults((current) => ({
@@ -172,6 +188,16 @@ function CrmOrderBacklogSection({ onRegistered }: CrmOrderBacklogSectionProps) {
             </button>
           </div>
 
+          {notice ? (
+            <p role="status" className="mt-2 rounded-md border border-[#BDEFD8] bg-[#ECFDF5] px-3 py-2 text-[12px] font-semibold text-[#084734]">
+              {notice}
+            </p>
+          ) : null}
+          {!canWrite ? (
+            <p className="mt-2 text-[11.5px] font-semibold text-[#A8741A]">
+              읽기 권한 계정입니다 — 목록은 볼 수 있지만 등록은 하드웨어 편집 권한이 있는 관리자에게 요청하세요.
+            </p>
+          ) : null}
           {listError ? (
             <p role="alert" className="mt-2 rounded-md border border-[#F2B8B8] bg-[#FCE9E9] px-3 py-2 text-[12px] font-semibold text-[#8F2C2C]">
               {listError}
@@ -231,7 +257,8 @@ function CrmOrderBacklogSection({ onRegistered }: CrmOrderBacklogSectionProps) {
                     <button
                       type="button"
                       onClick={() => void register(entry)}
-                      disabled={busy || registeringId != null}
+                      disabled={!canWrite || busy || registeringId != null}
+                      title={canWrite ? undefined : "하드웨어 기록 권한이 없습니다"}
                       className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md border border-[#084734] bg-white px-3 text-[12px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 disabled:pointer-events-none disabled:opacity-50"
                     >
                       <Plus className="h-3.5 w-3.5" />

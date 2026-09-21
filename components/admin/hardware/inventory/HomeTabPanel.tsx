@@ -85,6 +85,7 @@ interface HomeTabPanelProps {
   setDetailId: Dispatch<SetStateAction<string | null>>
   // 감사(2026-09-07 #4) — SnapshotRestorePanel이 복원 성공 후 대시보드를 다시 불러오는 데 쓴다.
   refresh: ComponentProps<typeof SnapshotRestorePanel>["onRestored"]
+  canWriteHardware: ComponentProps<typeof CrmOrderBacklogSection>["canWrite"]
 }
 
 export default function HomeTabPanel({
@@ -144,6 +145,7 @@ export default function HomeTabPanel({
   setOutboundPage,
   setDetailId,
   refresh,
+  canWriteHardware,
 }: HomeTabPanelProps) {
   return (
     <motion.div
@@ -173,7 +175,7 @@ export default function HomeTabPanel({
     <ImportFreshnessStrip importRun={data?.importRun ?? null} importCosting={data?.importCosting} />
 
     {/* 예정 큐 바로 위 — 등록할 것을 먼저 보고, 그 아래에서 확정한다(입력 가속 P2-1). */}
-    <CrmOrderBacklogSection onRegistered={refresh} />
+    <CrmOrderBacklogSection canWrite={canWriteHardware} onRegistered={refresh} />
 
     <PlannedOutboundPanel
       data={data}

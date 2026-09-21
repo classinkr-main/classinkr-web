@@ -240,6 +240,10 @@ export interface HardwareSheetImportResult {
   snapshotCreatedAt: string
   /** 시트가 이겨서 취소된 어드민 확정 수(§8-6 정책). 교체 가져오기에서만 0 이 아닐 수 있다. */
   sheetWinsVoided: number
+  /** 시트가 같은 물량을 다시 싣지 않아 **남겨 둔** 어드민 확정 수 — 지우지 않았다는 뜻이다. */
+  sheetWinsKept: number
+  /** 정리 자체가 실패했을 때의 문구. 가져오기는 이미 성공했다. */
+  sheetWinsError: string | null
 }
 
 const DEFAULT_STOCK_LOCATION = "창고"
@@ -1163,9 +1167,26 @@ export async function createHardwareMovementsBatch(
     if (!line.ok || input.itemId) continue
     missingNames.add(line.productName)
   }
-  const items = missingNames.size > 0
-    ? await ensureHardwareItems(Array.from(missingNames, (name) => ({ name })))
-    : new Map<string, HardwareItem>()
+  // 이름 여러 개를 한 statement 로 upsert 한다. 그 중 하나가 DB 에 거절당하면 statement 전체가
+  // 실패하는데, 예전(줄마다 저장) 구조에서는 그 줄만 실패했다 — 빠르기 때문에 부분 저장 계약을
+  // 잃을 수는 없으므로, 실패하면 이름 단위로 한 번 더 시도해 나쁜 이름만 떨어뜨린다.
+  let items = new Map<string, HardwareItem>()
+  const unresolvableNames = new Map<string, string>()
+  if (missingNames.size > 0) {
+    try {
+      items = await ensureHardwareItems(Array.from(missingNames, (name) => ({ name })))
+    } catch {
+      for (const name of missingNames) {
+        try {
+          const resolved = await ensureHardwareItems([{ name }])
+          const item = resolved.get(name)
+          if (item) items.set(name, item)
+        } catch (error) {
+          unresolvableNames.set(name, batchLineErrorMessage(error))
+        }
+      }
+    }
+  }
 
   // 2) CRM 중복 후보 — 참조번호를 모아 한 번에.
   const references = Array.from(new Set(
@@ -1193,7 +1214,7 @@ export async function createHardwareMovementsBatch(
     try {
       const productName = line.productName
       const itemId = input.itemId ?? items.get(productName)?.id
-      if (!itemId) throw new Error("하드웨어 품목을 만들 수 없습니다.")
+      if (!itemId) throw new Error(unresolvableNames.get(productName) ?? "하드웨어 품목을 만들 수 없습니다.")
 
       const referenceNo = cleanString(input.referenceNo)
       const crmKey = referenceNo && isCrmReference(referenceNo) ? crmDuplicateKey(referenceNo, productName) : null
@@ -1724,17 +1745,28 @@ const SHEET_WINS_VOID_REASON =
  * 기록은 시트와 겹치는지 알 방법이 없으므로 자동으로 손대지 않는다(겹침 의심은 화면이 알린다).
  * 가져오기가 시트 행을 지우면 이 링크는 더 이상 따라갈 수 없으므로 **반드시 가져오기 전에** 부른다.
  */
-async function listSheetConvertedAdminMovementIds(): Promise<string[]> {
+interface SheetConvertedAdminMovement {
+  id: string
+  productName: string
+  customer: string
+}
+
+async function listSheetConvertedAdminMovements(): Promise<SheetConvertedAdminMovement[]> {
   const sb = createSupabaseAdminClient()
   const { data, error } = await sb
     .from("hardware_movements")
-    .select("id,converted_from_movement_id")
+    .select("id,product_name,to_location,converted_from_movement_id")
     .eq("source", "admin_manual")
     .is("voided_at", null)
     .not("converted_from_movement_id", "is", null)
   if (error) throw error
 
-  const rows = (data ?? []) as Array<{ id: string; converted_from_movement_id: string | null }>
+  const rows = (data ?? []) as Array<{
+    id: string
+    product_name: string | null
+    to_location: string | null
+    converted_from_movement_id: string | null
+  }>
   const sourceIds = Array.from(new Set(rows.map((row) => row.converted_from_movement_id).filter(Boolean))) as string[]
   if (sourceIds.length === 0) return []
 
@@ -1748,7 +1780,44 @@ async function listSheetConvertedAdminMovementIds(): Promise<string[]> {
   const sheetIds = new Set(((sources ?? []) as Array<{ id: string }>).map((row) => row.id))
   return rows
     .filter((row) => row.converted_from_movement_id && sheetIds.has(row.converted_from_movement_id))
-    .map((row) => row.id)
+    .map((row) => ({
+      id: row.id,
+      productName: normalizeProductName(row.product_name ?? ""),
+      customer: cleanString(row.to_location) ?? "",
+    }))
+}
+
+/**
+ * 시트가 **같은 물량을 다시 실었을 때만** 취소한다.
+ *
+ * 정책은 "가져오기 때는 시트가 이긴다"지, "가져오기 때는 기록을 지운다"가 아니다. 시트에서 그 줄이
+ * 사라졌거나(운영자가 지움) 품목이 해석되지 않아 건너뛴 경우(skipped)에는 시트 쪽에 대체 기록이
+ * 없으므로, 어드민 확정까지 취소하면 그 출하가 원장에서 통째로 사라진다 — 스냅샷은 시트 이관분만
+ * 담아 되돌리지도 못한다. 그래서 이번에 들어온 출고 행에 같은 품목·고객사가 있는 것만 고른다.
+ */
+function selectSheetWinsVoidTargets(
+  candidates: readonly SheetConvertedAdminMovement[],
+  importedRows: readonly ImportMovementRow[]
+): { void: SheetConvertedAdminMovement[]; kept: SheetConvertedAdminMovement[] } {
+  if (candidates.length === 0) return { void: [], kept: [] }
+
+  const reimported = new Set<string>()
+  for (const row of importedRows) {
+    if (row.movement_type !== "outbound") continue
+    const product = normalizeProductName(row.product_name ?? "")
+    const customer = cleanString(row.to_location) ?? ""
+    if (!product || !customer) continue
+    reimported.add(`${product}\u0000${normalizeLocationName(customer)}`)
+  }
+
+  const targets: SheetConvertedAdminMovement[] = []
+  const kept: SheetConvertedAdminMovement[] = []
+  for (const candidate of candidates) {
+    const key = `${candidate.productName}\u0000${normalizeLocationName(candidate.customer) ?? ""}`
+    if (candidate.productName && candidate.customer && reimported.has(key)) targets.push(candidate)
+    else kept.push(candidate)
+  }
+  return { void: targets, kept }
 }
 
 /** 위에서 모은 기록을 사유와 함께 취소한다 — 지우지 않는다(되돌릴 수 있게 남긴다). */
@@ -1861,7 +1930,7 @@ export async function importHardwareFromBranchSheets(
     // 교체 모드에서만 해당한다 — 추가형 머지는 시트 행을 지우지 않고 확정된 행을 human_locked 로
     // 보호하므로 같은 물량이 두 번 들어오지 않는다(§7).
     // 링크는 가져오기가 시트 행을 지우면 따라갈 수 없으므로 **지금** 모은다.
-    const sheetConvertedAdminIds = additiveMerge ? [] : await listSheetConvertedAdminMovementIds()
+    const sheetConvertedAdmin = additiveMerge ? [] : await listSheetConvertedAdminMovements()
 
     const sb = createSupabaseAdminClient()
     const { data, error } = await sb.rpc(
@@ -1879,9 +1948,23 @@ export async function importHardwareFromBranchSheets(
       : typeof data === "number"
         ? data
         : rows.length
-    // 시트가 새 사본을 싣고 난 **뒤에** 정리한다 — 가져오기가 실패하면 어드민 확정은 그대로 남는다
-    // (정리가 실패해도 지금까지와 같은 이중 계상일 뿐, 없던 손실이 생기지 않는다).
-    const sheetWinsVoided = await voidSheetConvertedAdminMovements(sheetConvertedAdminIds, options.actor)
+    // 시트가 새 사본을 싣고 난 **뒤에** 정리한다 — 가져오기가 실패하면 어드민 확정은 그대로 남는다.
+    // 정리 실패로 가져오기를 실패로 적지 않는다: 교체는 이미 커밋됐고, 남은 결과는 지금까지와 같은
+    // 이중 계상일 뿐이다. 실패로 적으면 성공한 이관이 실패로 보이고 캐시 무효화도 건너뛴다.
+    const { void: sheetWinsTargets, kept: sheetWinsKeptRows } = selectSheetWinsVoidTargets(
+      sheetConvertedAdmin,
+      rows
+    )
+    let sheetWinsVoided = 0
+    let sheetWinsError: string | null = null
+    try {
+      sheetWinsVoided = await voidSheetConvertedAdminMovements(
+        sheetWinsTargets.map((row) => row.id),
+        options.actor
+      )
+    } catch (cleanupError) {
+      sheetWinsError = getErrorMessage(cleanupError)
+    }
 
     await finishImportRun(runId, {
       status: "success",
@@ -1894,6 +1977,8 @@ export async function importHardwareFromBranchSheets(
         snapshot_checksum: snapshot.checksum,
         snapshot_created_at: snapshot.created_at,
         sheet_wins_voided: sheetWinsVoided,
+        sheet_wins_kept: sheetWinsKeptRows.length,
+        sheet_wins_error: sheetWinsError,
       },
     })
     revalidateTag(HARDWARE_INVENTORY_CACHE_TAG, "max")
@@ -1905,6 +1990,8 @@ export async function importHardwareFromBranchSheets(
       snapshotChecksum: snapshot.checksum,
       snapshotCreatedAt: snapshot.created_at,
       sheetWinsVoided,
+      sheetWinsKept: sheetWinsKeptRows.length,
+      sheetWinsError,
     }
   } catch (error) {
     await finishImportRun(runId, {

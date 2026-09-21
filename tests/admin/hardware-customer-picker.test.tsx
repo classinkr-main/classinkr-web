@@ -2,7 +2,10 @@ import { renderToStaticMarkup } from "react-dom/server"
 
 import { describe, expect, it } from "vitest"
 
-import CustomerPicker, { buildCustomerPickerRows } from "@/components/admin/hardware/inventory/CustomerPicker"
+import CustomerPicker, {
+  buildCustomerPickerRows,
+  customerPickerKeyIntent,
+} from "@/components/admin/hardware/inventory/CustomerPicker"
 
 // 출고 기록에서 고객사는 매번 손으로 치는 유일한 칸이었다(입력 가속 P1-1).
 // 목록은 제안일 뿐이고 새 고객사는 그대로 저장돼야 한다 — 그 규칙을 여기에 고정한다.
@@ -67,5 +70,40 @@ describe("CustomerPicker", () => {
     expect(html).not.toContain("<datalist")
     // 닫힌 상태에서는 목록을 그리지 않는다(포커스·입력으로 연다).
     expect(html).not.toContain('role="listbox"')
+  })
+})
+
+// 리뷰(2026-09-21) — 빈 고객사 칸에서 Enter(=저장)가 최근 고객사를 조용히 적어 넣던 사고.
+// 포커스만으로 목록이 열리고 첫 줄이 강조되므로, Enter 커밋은 사용자가 위아래로 고른 뒤에만 한다.
+describe("customerPickerKeyIntent", () => {
+  const base = { open: true, navigated: false, rowCount: 5, isComposing: false }
+
+  it("고르지 않은 Enter 는 목록을 건드리지 않는다 — 폼 저장으로 흘려보낸다", () => {
+    expect(customerPickerKeyIntent({ ...base, key: "Enter" })).toBeNull()
+  })
+
+  it("위아래로 고른 뒤의 Enter 만 커밋한다", () => {
+    expect(customerPickerKeyIntent({ ...base, key: "Enter", navigated: true })).toBe("commit")
+  })
+
+  it("목록이 닫혀 있거나 줄이 없으면 Enter 는 그대로 흘려보낸다", () => {
+    expect(customerPickerKeyIntent({ ...base, key: "Enter", navigated: true, open: false })).toBeNull()
+    expect(customerPickerKeyIntent({ ...base, key: "Enter", navigated: true, rowCount: 0 })).toBeNull()
+  })
+
+  it("한글 조합 중에는 어떤 키도 받지 않는다", () => {
+    expect(customerPickerKeyIntent({ ...base, key: "Enter", navigated: true, isComposing: true })).toBeNull()
+    expect(customerPickerKeyIntent({ ...base, key: "ArrowDown", isComposing: true })).toBeNull()
+  })
+
+  it("Escape 는 열려 있을 때만 닫는다(닫혀 있으면 시트 쪽으로 넘긴다)", () => {
+    expect(customerPickerKeyIntent({ ...base, key: "Escape" })).toBe("close")
+    expect(customerPickerKeyIntent({ ...base, key: "Escape", open: false })).toBeNull()
+  })
+
+  it("화살표는 줄이 있을 때만 움직인다", () => {
+    expect(customerPickerKeyIntent({ ...base, key: "ArrowDown" })).toBe("next")
+    expect(customerPickerKeyIntent({ ...base, key: "ArrowUp" })).toBe("previous")
+    expect(customerPickerKeyIntent({ ...base, key: "ArrowDown", rowCount: 0 })).toBeNull()
   })
 })
