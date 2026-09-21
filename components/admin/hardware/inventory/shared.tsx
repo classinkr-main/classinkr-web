@@ -144,6 +144,8 @@ export interface HardwareDashboard {
   // 없으면(구버전 응답·테스트) UI는 열어두고 서버 게이트만 믿는다.
   viewer?: {
     canFinalize: boolean
+    // 기록을 만들 수 있는 역할인지(HARDWARE_EDITOR_ADMIN_API_ROLES). 표시용 — 강제는 서버 게이트다.
+    canWrite?: boolean
     // 로그인한 관리자의 표시 이름(admin_profiles.display_name) — "내 담당" 칩이 movement.owner와
     // 비교하는 정본. 세션에 이름이 없으면(레거시 세션 등) null — 그 경우 "내 담당"은 아무 것도
     // 매칭하지 않는다(담당자 배정된 모든 건을 보여주던 예전 버그로 되돌아가지 않기 위함).

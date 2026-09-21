@@ -21,6 +21,13 @@ import { adminFetch, adminFetchJson, adminFetchJsonCached, clearAdminRequestCach
 import { paginateAdminList } from "@/lib/admin-list-pagination"
 import { isPrefetchFresh } from "@/lib/admin/prefetch-freshness"
 import {
+  clearStoredDraft,
+  QUICK_CART_DRAFT_KEY,
+  QUICK_CART_DRAFT_VERSION,
+  readStoredQuickCartDrafts,
+  writeStoredDraft,
+} from "./inventory/draft-storage"
+import {
   customerLabel,
   DETAIL_PRESET_KEYS,
   elapsedDaysSince,
@@ -51,6 +58,7 @@ import {
   SectionLoadingFallback,
   shouldSkipCrmConfirmation,
   todayKey,
+  UNSPECIFIED_CUSTOMER,
   type HardwareCardGroup,
   type HardwareCrmOrderCandidate,
   type HardwareDashboard,
@@ -249,6 +257,9 @@ export function extractCrmLink(movement: HardwareMovement): { label: string; ref
 // SSR 프리렌더 중에는 window가 없으므로 항상 가드하고, storage 접근 불가 환경에선 조용히 비활성화한다.
 const QUICK_RECORD_OWNER_KEY = "hw.quickRecord.owner"
 const QUICK_RECORD_STAY_OPEN_KEY = "hw.quickRecord.stayOpen"
+// 저장 대기 바구니 — 새로고침·탭 폐기로 담아 둔 작업건을 잃지 않게 한다(입력 가속 P3-1).
+// 입고표와 달리 조용히 되살린다: 시트가 "저장 대기 바구니 N건"으로 이미 보여 주기 때문에
+// 사람이 모르는 상태가 생기지 않는다. 키·스키마 검사는 draft-storage 가 가진다.
 
 // 시트 공용 클래스 토큰(SHEET_INPUT_CLASS 등)·LOCATION_OPTIONS·QUICK_QUANTITIES는 구조 분해(#6)로
 // QuickRecordSheet.tsx로 이전했다 — 그 시트에서만 쓰여 이 오케스트레이터에는 더 필요 없다.
@@ -516,6 +527,8 @@ export default function HardwareInventoryClient({
 }) {
   const prefetched = initialData ? use(initialData.promise) : null
   const formRef = useRef<HTMLFormElement | null>(null)
+  // 재조회 순번 — 겹친 재검증에서 늦게 온 옛 응답을 버린다(load 참고).
+  const loadSeqRef = useRef(0)
   const [data, setData] = useState<HardwareDashboard | null>(() =>
     prefetched ? withDerivedMovementViews(prefetched) : null
   )
@@ -525,6 +538,8 @@ export default function HardwareInventoryClient({
   const [notice, setNotice] = useState<string | null>(null)
   const [pendingMovement, setPendingMovement] = useState<HardwareMovementDraft | null>(null)
   const [quickCart, setQuickCart] = useState<HardwareMovementDraft[]>([])
+  // 보관된 바구니를 읽었는지 — 읽기 전에는 자동 보관이 저장분을 지우지 않게 한다(효과 실행 순서).
+  const quickCartRestoredRef = useRef(false)
   const [quickCartLineErrors, setQuickCartLineErrors] = useState<Record<string, string>>({})
   const [quickCartSaveSummary, setQuickCartSaveSummary] = useState<QuickCartSaveSummary | null>(null)
   const [quotePasteText, setQuotePasteText] = useState("")
@@ -619,6 +634,8 @@ export default function HardwareInventoryClient({
   const deferredHardwareSearch = useDeferredValue(hardwareSearch)
   // 확정·취소 권한(hardware.finalize) — 표시용. viewer가 없으면(구응답·로딩) 열어두고 서버 게이트만 믿는다.
   const canFinalize = data?.viewer?.canFinalize ?? true
+  // 기록 생성 권한 — 없으면 쓰기 버튼을 미리 내린다(강제는 서버 게이트). 구응답·로딩 중에는 열어 둔다.
+  const canWriteHardware = data?.viewer?.canWrite ?? true
   const [customerFilter, setCustomerFilter] = useState("")
   const [lotFilter, setLotFilter] = useState("")
   // 내역 탭 보조 필터 축 — 상태(완료/배송 예정/취소 포함), 판매유형(출고 전용), 기간(occurred_at 기준).
@@ -768,6 +785,8 @@ export default function HardwareInventoryClient({
     if (!sheetOpen && pendingMovement == null && voidTarget == null && detailId == null && customerDetail == null) return
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return
+      // 안쪽에서 먼저 처리한 Escape(고객사 목록 닫기 등)는 시트까지 닫지 않는다 — 입고표와 같은 규약.
+      if (event.defaultPrevented) return
       if (pendingMovement) {
         if (busy !== "movement") setPendingMovement(null)
       } else if (voidTarget) {
@@ -799,6 +818,10 @@ export default function HardwareInventoryClient({
   }, [sheetOpen])
 
   const load = useCallback(async (options: { force?: boolean } = {}) => {
+    // 저장 후 재검증을 기다리지 않게 되면서(applySavedMovements) 재조회가 겹칠 수 있다.
+    // 늦게 도착한 옛 응답이 새 응답을 덮어쓰면 방금 저장한 줄이 화면에서 사라져 보인다 — 순번으로 막는다.
+    const seq = loadSeqRef.current + 1
+    loadSeqRef.current = seq
     setLoading(true)
     setError(null)
     try {
@@ -810,12 +833,14 @@ export default function HardwareInventoryClient({
           force: options.force,
         })
       )
+      if (seq !== loadSeqRef.current) return
       setData(next)
       setSelectedItemId((current) => current || defaultEntryItemId(next.items))
     } catch (err) {
+      if (seq !== loadSeqRef.current) return
       setError(err instanceof Error ? err.message : String(err))
     } finally {
-      setLoading(false)
+      if (seq === loadSeqRef.current) setLoading(false)
     }
   }, [])
 
@@ -843,6 +868,43 @@ export default function HardwareInventoryClient({
     clearAdminRequestCache("/api/admin/hardware")
     await load({ force: true })
   }, [load])
+
+  // 바구니 자동 보관 — 담을 때마다 남기고, 저장·비우기로 비면 지운다.
+  // 원장이 아니라 작성 중 입력이고, 24시간이 지나면 읽지 않는다(draft-storage 규칙).
+  useEffect(() => {
+    if (!quickCartRestoredRef.current) return
+    if (quickCart.length === 0) clearStoredDraft(QUICK_CART_DRAFT_KEY)
+    else writeStoredDraft(QUICK_CART_DRAFT_KEY, QUICK_CART_DRAFT_VERSION, quickCart)
+  }, [quickCart])
+
+  /**
+   * 저장 직후 화면 — 서버가 돌려준 **원장 줄만** 즉시 끼워 넣는다.
+   *
+   * 재고·가용·알림 같은 파생 숫자는 손대지 않는다. 그 계산은 서버(computeHardwareStockRow)가 정본이고,
+   * 화면에서 흉내 내면 가용이 틀린다. 숫자는 이어지는 재검증(void refresh)이 도착할 때 한 번에 바뀐다.
+   * 정렬 키는 서버와 같다(occurred_at ?? created_at 내림차순) — 어제 날짜로 적은 기록이 맨 위로 튀지 않게.
+   */
+  const applySavedMovements = useCallback((saved: readonly HardwareMovement[]) => {
+    const rows = saved.filter((movement): movement is HardwareMovement => Boolean(movement?.id))
+    if (rows.length === 0) return
+    setData((current) => {
+      if (!current) return current
+      const seen = new Set(current.movements.map((movement) => movement.id))
+      const appended = rows.filter((movement) => !seen.has(movement.id))
+      if (appended.length === 0) return current
+      const sortKey = (movement: HardwareMovement) => {
+        const time = new Date(movement.occurred_at ?? movement.created_at).getTime()
+        return Number.isFinite(time) ? time : 0
+      }
+      const movements = [...appended, ...current.movements].sort((a, b) => sortKey(b) - sortKey(a))
+      return withDerivedMovementViews({
+        ...current,
+        movements,
+        // 서버가 세는 전체 건수 — 값이 없으면 지어내지 않는다("N건 중 M건" 표기가 틀어진다).
+        movementsTotal: current.movementsTotal == null ? current.movementsTotal : current.movementsTotal + appended.length,
+      })
+    })
+  }, [])
 
   // 감사(2026-09-07 #7) — 기본 응답은 최신 2000건까지만 싣는다. 그 너머(더 오래된 이동)는
   // 지금까지 화면에서 닿을 방법이 전혀 없었다 — 내역 탭의 "더 불러오기"가 이 왕복으로 다음
@@ -924,10 +986,21 @@ export default function HardwareInventoryClient({
   )
 
   // 반복 입력 기억 복원 — 하이드레이션 불일치를 피하려고 마운트 후 1회만 읽는다.
+  // 저장 대기 바구니도 같은 자리에서 되살린다(시트가 "저장 대기 N건"으로 보여 주므로 조용히 되살려도 된다).
   useEffect(() => {
     const savedOwner = readLocalString(QUICK_RECORD_OWNER_KEY)
     if (savedOwner) setOwner((current) => current || savedOwner)
     if (readLocalString(QUICK_RECORD_STAY_OPEN_KEY) === "1") setStayOpenAfterSave(true)
+    const savedCart = readStoredQuickCartDrafts()
+    quickCartRestoredRef.current = true
+    if (savedCart.length > 0) {
+      setQuickCart(savedCart)
+      // 시트가 닫힌 채 되살아나면 화면에 아무 표시가 없다 — 보이지 않는 바구니가 저장 동작을
+      // 바꾸고(저장 후 시트가 닫히지 않는다), Cmd+Enter 가 어제 날짜 줄을 그대로 원장에 넣는다.
+      setNotice(
+        `저장하지 않은 기록 바구니 ${formatNumber(savedCart.length)}건을 되살렸습니다 — 빠른 기록에서 확인하거나 비우세요.`
+      )
+    }
   }, [])
 
   // 검증 에러는 폼 상단에 뜬다 — 하단 저장 버튼을 누른 사용자에게 보이도록 시트를 위로 스크롤.
@@ -1825,14 +1898,16 @@ export default function HardwareInventoryClient({
     setEntrySub("outbound")
   }, [])
 
+  // 고객사 제안 — movements 가 최신순이라 Set 삽입 순서가 곧 "최근 출고 순"이다.
+  // 가나다순으로 다시 정렬하지 않는다: 고를 때 위에 있어야 하는 것은 자음 순서가 아니라 최근 거래다.
   const historyCustomers = useMemo(() => {
     const set = new Set<string>()
     for (const movement of data?.movements ?? []) {
       if (movement.movement_type !== "outbound") continue
       const label = customerLabel(movement.to_location)
-      if (label !== "고객(미지정)") set.add(label)
+      if (label !== UNSPECIFIED_CUSTOMER) set.add(label)
     }
-    return Array.from(set).sort((a, b) => a.localeCompare(b, "ko"))
+    return Array.from(set)
   }, [data?.movements])
 
   // 직전 기록 복제용 — 손으로 남긴(admin_manual) 최신 유효 기록. 시트 임포트 행은 복제 후보에서 제외한다.
@@ -2272,6 +2347,52 @@ export default function HardwareInventoryClient({
     setInboundSheet({ open: true, product: itemId || null })
   }, [])
 
+  /**
+   * 기록 단축키 — i 입고표, o 출고 시트.
+   *
+   * 데스크톱 연속 입력이 마우스(우하단 FAB)에 묶여 있었다. 오버레이가 하나라도 열려 있거나 글자를
+   * 입력하는 중에는 잡지 않는다(수정 키 조합·한글 조합 포함) — 화면을 보고 있을 때만 동작한다.
+   */
+  useEffect(() => {
+    const busyWithAnotherSurface =
+      sheetOpen || inboundSheet.open || pendingMovement != null || voidTarget != null ||
+      detailId != null || customerDetail != null || sampleUnitSheetId != null ||
+      // 예정 출고를 고르는 중에는 하단 작업 바가 그 화면의 주 작업면이다 — FAB 와 같은 기준으로 물러난다.
+      plannedSelectionCount > 0
+    if (busyWithAnotherSurface) return
+
+    const onKey = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey || event.isComposing || event.defaultPrevented) return
+      const target = event.target as HTMLElement | null
+      if (target?.isContentEditable) return
+      const tag = target?.tagName
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return
+      // 자식 컴포넌트가 가진 확인창(스냅샷 복원·샘플 백필 등)은 부모 state 로 보이지 않는다.
+      // 열려 있는 모달이 하나라도 있으면 물러난다 — 모달 뒤로 시트가 열려 두 면이 겹치지 않게.
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return
+
+      const key = event.key.toLowerCase()
+      if (key !== "i" && key !== "o") return
+      event.preventDefault()
+      if (key === "i") openInboundSheet()
+      else openSheet("sale")
+    }
+
+    document.addEventListener("keydown", onKey)
+    return () => document.removeEventListener("keydown", onKey)
+  }, [
+    sheetOpen,
+    inboundSheet.open,
+    pendingMovement,
+    voidTarget,
+    detailId,
+    customerDetail,
+    sampleUnitSheetId,
+    plannedSelectionCount,
+    openInboundSheet,
+    openSheet,
+  ])
+
   const prepareQuickEntry = useCallback((itemId: string, presetKey: string) => {
     // 새 입고는 한 화면 입고표로 연다 — 재고 표·알림·검색의 "입고" 퀵버튼이 모두 여기를 거친다.
     if (presetKey === "inbound") {
@@ -2589,15 +2710,35 @@ export default function HardwareInventoryClient({
     setError(null)
     try {
       const result = await adminFetchJson<{
-        import: { imported: number; skipped: number; snapshotId?: string }
+        import: {
+          imported: number
+          skipped: number
+          snapshotId?: string
+          sheetWinsVoided?: number
+          sheetWinsKept?: number
+          sheetWinsError?: string | null
+        }
         sync: { inbound: number; outbound: number; stock: number; sales: number } | null
       }>("/api/admin/hardware/import-sheet", {
         method: "POST",
         body: JSON.stringify({ sync: true }),
       })
       const snapshotHint = result.import.snapshotId ? ` · 백업 ${result.import.snapshotId.slice(0, 8)}` : ""
+      // 시트가 이겨서 취소된 어드민 확정 수는 조용히 넘기지 않는다 — 원장에서 빠진 기록이 있다는 뜻이다.
+      const sheetWinsHint = [
+        result.import.sheetWinsVoided && result.import.sheetWinsVoided > 0
+          ? ` 시트가 같은 물량을 다시 실어, 시트 행에서 확정했던 어드민 기록 ${formatNumber(result.import.sheetWinsVoided)}건은 취소했습니다(내역 탭에서 사유 확인).`
+          : "",
+        // 시트가 다시 싣지 않은 건은 남긴다 — 취소했다면 그 출하가 원장에서 통째로 사라진다.
+        result.import.sheetWinsKept && result.import.sheetWinsKept > 0
+          ? ` 시트에 같은 물량이 없어 어드민 확정 ${formatNumber(result.import.sheetWinsKept)}건은 그대로 뒀습니다 — 시트에서 빠진 건인지 확인하세요.`
+          : "",
+        result.import.sheetWinsError
+          ? ` 다만 어드민 확정 정리는 실패했습니다: ${result.import.sheetWinsError} — 가져오기 자체는 반영됐습니다.`
+          : "",
+      ].join("")
       setNotice(
-        `시트 강제 싱크와 백업 후 이관 완료: 원장 ${formatNumber(result.import.imported)}건 반영${snapshotHint}. 기존 시트 이관분은 최신 백업 기준으로 갱신되었습니다.`
+        `시트 강제 싱크와 백업 후 이관 완료: 원장 ${formatNumber(result.import.imported)}건 반영${snapshotHint}. 기존 시트 이관분은 최신 백업 기준으로 갱신되었습니다.${sheetWinsHint}`
       )
       await refresh()
     } catch (err) {
@@ -2853,7 +2994,8 @@ export default function HardwareInventoryClient({
       }
       if (result.summary.success > 0) {
         rememberOwner(owner)
-        await refresh()
+        applySavedMovements(result.movements ?? [])
+        void refresh()
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -2881,6 +3023,9 @@ export default function HardwareInventoryClient({
         productName: draft.productName,
         quantity: String(draft.quantity),
       })
+      // 고객사도 함께 보낸다 — 같은 품목·수량의 딜이 여럿일 때 후보가 하나로 좁혀져 확인이 한 번에 끝난다.
+      const draftCustomer = customerLabel(draft.toLocation)
+      if (draftCustomer !== UNSPECIFIED_CUSTOMER) params.set("customer", draftCustomer)
       const result = await adminFetchJson<HardwareCrmOrderCandidatesResponse>(
         `/api/admin/hardware/crm-orders?${params.toString()}`,
         { cache: "no-cache" }
@@ -2999,7 +3144,7 @@ export default function HardwareInventoryClient({
       // status 파생·isPlanned 제거를 전송 직전에 적용한다.
       const serverDraft = toServerDraft(draft)
 
-      const saveResult = await adminFetchJson<{ movement?: HardwareMovement }>("/api/admin/hardware/movements", {
+      const saveResult = await adminFetchJson<{ movement?: HardwareMovement; movements?: HardwareMovement[] }>("/api/admin/hardware/movements", {
         method: "POST",
         body: JSON.stringify({
           ...serverDraft,
@@ -3018,6 +3163,7 @@ export default function HardwareInventoryClient({
             : undefined,
         }),
       })
+      applySavedMovements(saveResult?.movements ?? (saveResult?.movement ? [saveResult.movement] : []))
       // 성공 노티스에 경로(출발→도착)를 병기해 방금 기록한 이동을 즉시 확인할 수 있게 한다.
       const routeHint = `${draft.fromLocation || "-"} → ${draft.toLocation || (draft.movementType === "outbound" ? "고객" : "-")}`
       setNotice(
@@ -3040,18 +3186,22 @@ export default function HardwareInventoryClient({
       if (!stayOpenAfterSave && quickCart.length === 0) setSheetOpen(false)
       setPendingMovement(null)
       // 샘플 프리셋이면 유닛 트래커도 함께 기록 — 원장은 이미 저장됐으므로 실패는 별도 문구로 알린다.
+      let sampleSyncError: string | null = null
       if (activePresetKey === "sample" || activePresetKey === "sampleReturn" || activePresetKey === "sampleAssign") {
         try {
           await syncSampleTracker(draft, saveResult?.movement?.id ?? null)
         } catch (syncErr) {
-          setError(
-            `원장은 저장됐지만 샘플 트래커 기록에 실패했습니다: ${
-              syncErr instanceof Error ? syncErr.message : String(syncErr)
-            } — 샘플 트래커에서 수동으로 정정하세요.`
-          )
+          sampleSyncError = `원장은 저장됐지만 샘플 트래커 기록에 실패했습니다: ${
+            syncErr instanceof Error ? syncErr.message : String(syncErr)
+          } — 샘플 트래커에서 수동으로 정정하세요.`
         }
       }
-      await refresh()
+      // 재검증은 기다리지 않는다 — 연속 기록에서 다음 건을 바로 받기 위해서다(감사 2026-09-20).
+      // 방금 저장한 줄은 위에서 이미 원장에 들어갔고, 파생 숫자만 이 응답이 오면 바뀐다.
+      void refresh()
+      // 트래커 실패 문구는 재검증 **뒤에** 세운다 — load()가 시작하자마자 setError(null)을 하므로,
+      // 먼저 세우면 같은 배치에서 지워져 화면에 뜨지 않는다.
+      if (sampleSyncError) setError(sampleSyncError)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       setError(message)
@@ -3364,6 +3514,7 @@ export default function HardwareInventoryClient({
               setOutboundPage={setOutboundPage}
               setDetailId={setDetailId}
               refresh={refresh}
+              canWriteHardware={canWriteHardware}
             />
             )}
 
@@ -3595,7 +3746,7 @@ export default function HardwareInventoryClient({
           activeItemIds={inboundActiveItemIds}
           lotStaleNote={inboundLotStaleNote}
           // VIEWER 는 저장 시 서버가 403 으로 막는다 — 대시보드에 편집 권한 플래그가 없어 입력 UI 는 열어 둔다(빠른 기록과 같은 관례).
-          canWrite
+          canWrite={canWriteHardware}
           owner={owner.trim() || data?.viewer?.name || null}
           onSaved={(result) => {
             const sampleNote =
@@ -3617,7 +3768,8 @@ export default function HardwareInventoryClient({
           type="button"
           onClick={openFreshSheet}
           className="fixed bottom-6 right-6 z-30 inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-[#084734] px-4 py-3 text-[13px] font-bold text-white shadow-[0_2px_8px_rgba(0,0,0,0.12)] transition hover:bg-[#065c41] hover:shadow-[0_4px_14px_rgba(0,0,0,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8] active:scale-95 motion-reduce:active:scale-100"
-          aria-label="빠른 기록 열기"
+          aria-label="빠른 기록 열기 (단축키 o)"
+          title="빠른 기록 (o) · 입고표 (i)"
           style={{ bottom: "max(1.5rem, calc(env(safe-area-inset-bottom) + 1rem))" }}
         >
           <Plus className="h-4 w-4" />

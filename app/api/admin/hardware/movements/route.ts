@@ -18,6 +18,7 @@ import {
 } from "@/lib/admin-auth"
 import {
   createHardwareMovementRows,
+  createHardwareMovementsBatch,
   HARDWARE_MOVEMENT_TYPES,
 } from "@/lib/repositories/hardware-inventory"
 
@@ -85,37 +86,75 @@ export async function POST(req: NextRequest) {
     const createdBy = admin.name ?? admin.userId ?? admin.role
     const movementBodies = readMovementBodies(body)
     if (movementBodies) {
+      // 줄별 결과(201/207/422)는 그대로 두고 저장만 한 번에 보낸다 — 예전에는 줄마다 저장소를 불러
+      // 입고표 20줄이 INSERT 20회 + 캐시 무효화 20회였다(감사 2026-09-20).
+      // 본문 파싱 실패는 저장 전에 걸러 그 줄만 실패로 남긴다.
+      type ParsedLine =
+        | { ok: true; index: number; input: ReturnType<typeof readMovementInput> }
+        | { ok: false; index: number; error: string }
+
+      const parsedLines: ParsedLine[] = movementBodies.map((movementBody, index) => {
+        try {
+          return { ok: true, index, input: readMovementInput(movementBody, createdBy) }
+        } catch (error) {
+          return {
+            ok: false,
+            index,
+            error: error instanceof Error ? error.message : "저장에 실패했습니다.",
+          }
+        }
+      })
+
+      const savable = parsedLines.filter((line): line is Extract<ParsedLine, { ok: true }> => line.ok)
+      const batchResults = await createHardwareMovementsBatch(savable.map((line) => line.input))
+
       const lineResults = []
       const movements = []
+      let savedCursor = 0
 
       for (const [index, movementBody] of movementBodies.entries()) {
-        try {
-          const input = readMovementInput(movementBody, createdBy)
-          const createdMovements = await createHardwareMovementRows(input)
-          movements.push(...createdMovements)
-          lineResults.push({
-            index,
-            ok: true,
-            productName: input.productName,
-            quantity: input.quantity,
-            movement: createdMovements[0],
-            movements: createdMovements,
-          })
-        } catch (error) {
+        const parsed = parsedLines[index]
+        const fallbackProductName =
+          typeof movementBody.productName === "string" && movementBody.productName.trim()
+            ? movementBody.productName.trim()
+            : `#${index + 1}`
+        const fallbackQuantity =
+          typeof movementBody.quantity === "number"
+            ? movementBody.quantity
+            : typeof movementBody.quantity === "string"
+              ? Number(movementBody.quantity) || null
+              : null
+
+        if (!parsed.ok) {
           lineResults.push({
             index,
             ok: false,
-            productName:
-              typeof movementBody.productName === "string" && movementBody.productName.trim()
-                ? movementBody.productName.trim()
-                : `#${index + 1}`,
-            quantity:
-              typeof movementBody.quantity === "number"
-                ? movementBody.quantity
-                : typeof movementBody.quantity === "string"
-                  ? Number(movementBody.quantity) || null
-                  : null,
-            error: error instanceof Error ? error.message : "저장에 실패했습니다.",
+            productName: fallbackProductName,
+            quantity: fallbackQuantity,
+            error: parsed.error,
+          })
+          continue
+        }
+
+        const result = batchResults[savedCursor]
+        savedCursor += 1
+        if (result?.ok) {
+          movements.push(...result.movements)
+          lineResults.push({
+            index,
+            ok: true,
+            productName: parsed.input.productName,
+            quantity: parsed.input.quantity,
+            movement: result.movements[0],
+            movements: result.movements,
+          })
+        } else {
+          lineResults.push({
+            index,
+            ok: false,
+            productName: parsed.input.productName,
+            quantity: parsed.input.quantity,
+            error: result?.error ?? "저장에 실패했습니다.",
           })
         }
       }

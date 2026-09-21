@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 
 import {
   BRANCH_READ_ADMIN_API_ROLES,
+  HARDWARE_EDITOR_ADMIN_API_ROLES,
   HARDWARE_FINALIZE_CAPABILITY,
+  hasAdminApiRole,
   hasAdminCapability,
   requireVerifiedAdminContext,
 } from "@/lib/admin-auth"
@@ -53,6 +55,8 @@ export async function GET(req: NextRequest) {
       ...dashboard,
       viewer: {
         canFinalize: hasAdminCapability(admin, HARDWARE_FINALIZE_CAPABILITY),
+        // 읽기 역할(VIEWER)은 기록을 만들 수 없다 — 화면이 쓰기 버튼을 미리 내려 403 을 보여주지 않게 한다.
+        canWrite: hasAdminApiRole(admin.role, HARDWARE_EDITOR_ADMIN_API_ROLES),
         name: admin.name?.trim() || null,
       },
     })
