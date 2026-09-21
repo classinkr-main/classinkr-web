@@ -226,7 +226,9 @@ let sourceBlockedUntil = 0
  */
 /**
  * 도메인 전체 위임이 아직 부여되지 않은 실패. Calendar API 가 아니라 **OAuth 토큰 교환**에서
- * 터지므로 모양이 다르다 — 숫자 code 는 400 이고 메시지가 `unauthorized_client: …` 다.
+ * 터지므로 모양이 다르다 — 실측(2026-09-21)으로 숫자 code 는 **401**, 메시지는
+ * `unauthorized_client: Client is unauthorized to retrieve access tokens using this method, …` 다.
+ * 403/404 도 아니고 400 도 아니다. 그래서 숫자가 아니라 메시지로 판정한다.
  * readGoogleErrorStatus 는 숫자 code 를 우선하므로, 메시지를 따로 보지 않으면
  * isAccessDenied 가 false 를 돌려주고 **네거티브 캐시가 이 실패를 기억하지 못한다** —
  * 그러면 TTL 마다 9명을 다시 두드린다(위임 부여 전까지 영원히).

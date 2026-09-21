@@ -42,13 +42,19 @@ function notShared() {
 }
 
 /**
- * 도메인 전체 위임 미부여. Calendar API 가 아니라 **OAuth 토큰 교환**에서 터지므로
- * 숫자 code 는 400 이고 메시지가 `unauthorized_client: …` 다 — 403/404 가 아니다.
+ * 도메인 전체 위임 미부여. Calendar API 가 아니라 **OAuth 토큰 교환**에서 터진다.
+ *
+ * 아래 모양은 추정이 아니라 **실측**이다(2026-09-21, classin-admin@classin-home 서비스 계정으로
+ * gyusung.jung@classin.com 를 대행 시도): 숫자 code 는 **401**, 메시지는
+ * `unauthorized_client: Client is unauthorized to retrieve access tokens using this method, …`.
+ * 403/404 가 아니므로 숫자만 보는 판정으로는 절대 안 걸린다.
  */
 function delegationDenied() {
   return Object.assign(
-    new Error("unauthorized_client: Client is unauthorized to retrieve access tokens using this method"),
-    { code: 400 },
+    new Error(
+      "unauthorized_client: Client is unauthorized to retrieve access tokens using this method, or client not authorized for any of the scopes requested.",
+    ),
+    { code: 401 },
   )
 }
 
@@ -106,7 +112,7 @@ describe("위임 미부여(unauthorized_client)", () => {
     await vi.advanceTimersByTimeAsync(TTL_MS + 1)
     expect(await getTeamEventsCalendarEvents({ year: 2026, month: 8 })).toEqual([])
 
-    // 추가 왕복이 없어야 한다. 숫자 code(400)만 보고 판단하면 여기가 3배로 늘어난다.
+    // 추가 왕복이 없어야 한다. 숫자 code(401)만 보고 판단하면 여기가 3배로 늘어난다.
     expect(google.list).toHaveBeenCalledTimes(MEMBERS.length)
   })
 
