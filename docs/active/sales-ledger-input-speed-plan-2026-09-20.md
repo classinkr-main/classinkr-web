@@ -1,6 +1,6 @@
 # 매출 장부 입력 속도·편의 기획 (라운드 4)
 
-상태: 1단계 P0·P1-5·P1-6·P2-7 + UI·UX 10건 구현 완료(2026-09-21), P1-4·P2-8~10·보드 카드 인라인 편집 실행 대기
+상태: 1단계 P0·P1-5·P1-6·P2-7·P2-8·P2-10 + UI·UX 12건 구현 완료(2026-09-22). P1-4는 기반(파생+테스트) 완료·배선 대기, P2-9와 §8.7 수리가 다음 라운드
 범위: `/admin/branch/ledger`의 입력 경로 — REV 매트릭스 셀 편집, 빠른 작업 레일(입력/수정), 체크 큐
 목표: **1단계** 구글 시트를 원천으로 유지한 채 어드민 입력의 클릭·왕복·오타를 줄인다 →
 **2단계** 어드민을 매출 입력 정본으로 올리고 시트 입력을 중단한다.
@@ -128,9 +128,11 @@ API가 `amount <= 0`을 거부한다
 | P0-3 고객/계정 자동완성 | **완료** | `components/admin/branch/ledger/customer-suggest.ts`, `InputRailSection.tsx`(datalist + 표기 흔들림 경고·원클릭 맞추기) | `tests/branch/customer-suggest.test.ts` |
 | P1-5 붙여넣기 이름 매칭 | **완료** | `rev-matrix-logic.ts`(`buildMatrixPastePlan` by-name 모드·`buildPasteNewRowInputs`), `RevMatrix.tsx`(프리뷰: 모드 배지·건너뜀 안내·"시트에 없는 고객" 체크리스트), 워크벤치 `confirmMatrixPaste` | `tests/branch/matrix-paste-name-match.test.ts` |
 | P1-6 실행 취소 토스트 | **완료** | 워크벤치 토스트 `key/action/ttlMs`, `undoCellDraft`(latest-ref), 훅 `cancelDraft` 성공 여부 반환 | `tests/branch/ledger-undo-toast.test.ts` |
-| P1-4 인라인 신규 행 | 대기 — 설계 보강 필요 | 미적용 초안 행을 매트릭스에 임시 행으로 보여주는 파생(`visibleDealRows`)이 먼저 필요하다. 지금은 적용 전 new-row 초안이 큐에만 보여, 인라인으로 만들어도 저장 직후 사라진다 | — |
+| P1-4 인라인 신규 행 | **기반 완료, 배선 대기** | 파생 `ledger/pending-draft-rows.ts`(`buildPendingDraftRows`) — 미적용 new-row 초안을 매트릭스 임시 행으로. 워크벤치 배선은 다음 라운드(행 파생 변경이 이번 라운드 최대 회귀 지점) | `tests/branch/pending-draft-rows.test.ts` (18건) |
 | P2-7 모바일 입력 진입 | **완료** | `RevMobileList.tsx`(금액 44px 버튼 → `openQuickInputForRow`: 행 선택·프리필 후 레일 입력 탭) | `tests/branch/ledger-entry-paths.test.ts` |
-| P2-8 ~ P2-10 | 대기 | — | — |
+| P2-8 키보드 보강 | **완료** | `rev-matrix-logic.ts`(`computeMatrixRange`·anchor/range·`onCommitRangeConfidence`), `RevMatrix.tsx`(range 배경), 워크벤치(`/` 검색 포커스·Ctrl+Z·범위 확도 배치 저장) | `tests/branch/matrix-keyboard-range.test.ts` |
+| P2-9 감액 1액션화 | 대기 — 위치 결정 필요(편집 바 권장) | 되돌리기 → 재적용을 배치 1회로 묶는 안(D3-a) | — |
+| P2-10 매출시트 → 장부 딥링크 | **완료** | `app/admin/crm/deals/rev-sheet/page.tsx`(행·배너 링크, `lens=rev&q=<고객>&team=`) | `tests/crm/rev-sheet-ledger-link.test.ts` |
 
 구현하며 확정된 세부 규약:
 
@@ -356,7 +358,7 @@ npm run build
 | 레일 확도 블록을 금액 뒤로 + autoFocus | 中 | 小 | 낮음 | 다음 | **완료**(2026-09-21) |
 | 큐 적용/체크 버튼 라벨+확대 | 中 | 小 | 낮음 | 다음 | **완료**(2026-09-21) |
 | 레일 420px 겹침 보정 | 中 | 中 | 中 | 다음 | **완료**(2026-09-21) — xl 이상에서 `<main>` 우측 여백 440px(aside 게이트와 동일 조건) |
-| 보드 카드 인라인 편집 | 中 | 中~大 | 中 | 다음 | 대기 |
+| 보드 카드 인라인 편집 | 中 | 中~大 | 中 | 다음 | 부분 완료(2026-09-22) — 카드 클릭이 입력 탭으로 직행. 카드 안 인라인 편집기는 여전히 대기 |
 | 모바일 금액 탭 → 입력 직행(P2-7) | 中 | 小 | 낮음 | 다음 | **완료**(2026-09-21) |
 | 레일 tabpanel + 포커스 이동 | 低~中 | 小 | 낮음 | 다음 | **완료**(2026-09-21) — tabpanel 연결; 포커스는 입력 패널 마운트 자동 포커스가 담당 |
 
@@ -369,6 +371,18 @@ npm run build
 - 매트릭스 인라인 편집 골격 재설계, 2단 게이트 폐기, 그리드 모바일 이식, 새 색·토큰 — 전부 §1·§9 결정 유지.
 
 ---
+
+### 8.7 구현 중 발견 — new-row 초안 매칭 규약 불일치 (다음 라운드 수리 대상)
+
+`rev-matrix-logic.ts`의 `buildMatrixPendingByCell`은 new-row 초안을 기존 행에 붙일 때 고객명
+**정확 일치**(`draft.customer.trim() !== row.customer.trim()`)를 쓰는데, 다른 경로(고객 자동완성
+P0-3, 임시 행 파생 P1-4 기반)는 `normalizedAccountKey`(표기 흔들림 허용)를 쓴다. 그래서 "OO 학원"으로
+만든 초안이 "OO학원" 행에 앰버 점으로 표시되지 않는 사각지대가 있다 — 초안은 큐에만 남고 매트릭스
+어디에도 안 보인다. P0-3의 표기 경고로 발생 빈도는 줄었지만 규약 불일치는 그대로다.
+
+수리 방향: `buildMatrixPendingByCell`의 new-row 매칭을 `normalizedAccountKey` 기준으로 통일한다.
+셀 dedup·재잠금 회귀 테스트(`ledger-cell-dedup`·`ledger-cell-relock`)가 이 함수를 직접 검증하므로
+그 테스트를 먼저 확장한 뒤 바꾼다.
 
 ## 9. 하지 않기로 한 것
 
