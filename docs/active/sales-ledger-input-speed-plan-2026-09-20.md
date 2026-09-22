@@ -271,6 +271,7 @@ API 계약(양수 전용)은 **바꾸지 않는다.** 대신 셀 컨텍스트에
 | D4 | 모바일 범위 | (a) 레일 프리필까지 (b) 그리드 이식 | **(a)** |
 | D5 | 시트 역방향 export | 필요 / 불필요 | **확인 필요** — 시트를 읽는 사람이 KR Team 밖에 있는지 운영 확인 후 결정 |
 | D6 | 확도 중간 단계 어휘 | "고확도" 유지 / "일반"으로 변경 | **유지(적용됨)** — §8.5 근거. `DRAFT_CONFIDENCE_OPTIONS.hint`로 툴팁에 "90%+ 마감 임박(시트 파랑)" 병기(2026-09-21) |
+| D7 | 셀 재편집이 같은 이름의 new-row 대기 초안을 갱신할지 | (a) 같은 종류(edit-row)만 갱신 / (b) 현행 | **(a)** — §8.7 근거. 추가분 초안이 대체 정정으로 바뀌는 의미 전환 차단 |
 
 ---
 
@@ -372,17 +373,34 @@ npm run build
 
 ---
 
-### 8.7 구현 중 발견 — new-row 초안 매칭 규약 불일치 (다음 라운드 수리 대상)
+### 8.7 구현 중 발견 — new-row 초안의 표시 규약 (2026-09-22 정정·수리)
 
-`rev-matrix-logic.ts`의 `buildMatrixPendingByCell`은 new-row 초안을 기존 행에 붙일 때 고객명
-**정확 일치**(`draft.customer.trim() !== row.customer.trim()`)를 쓰는데, 다른 경로(고객 자동완성
-P0-3, 임시 행 파생 P1-4 기반)는 `normalizedAccountKey`(표기 흔들림 허용)를 쓴다. 그래서 "OO 학원"으로
-만든 초안이 "OO학원" 행에 앰버 점으로 표시되지 않는 사각지대가 있다 — 초안은 큐에만 남고 매트릭스
-어디에도 안 보인다. P0-3의 표기 경고로 발생 빈도는 줄었지만 규약 불일치는 그대로다.
+**처음 기록(정정됨)**: `buildMatrixPendingByCell`이 new-row 초안을 기존 행에 붙일 때 고객명 정확 일치를
+써서 "OO 학원" 초안이 "OO학원" 행에 앰버 점으로 안 보이니, 그 함수를 `normalizedAccountKey`로 넓히자.
 
-수리 방향: `buildMatrixPendingByCell`의 new-row 매칭을 `normalizedAccountKey` 기준으로 통일한다.
-셀 dedup·재잠금 회귀 테스트(`ledger-cell-dedup`·`ledger-cell-relock`)가 이 함수를 직접 검증하므로
-그 테스트를 먼저 확장한 뒤 바꾼다.
+**정정**: 그 수리는 틀리다. `pendingByCell`은 점 표시만이 아니라 **셀 재편집의 갱신 대상**(`onCommitCell` →
+`buildCellDraftInput` → `lookupMatrixPending` → `updateDraft`)도 정한다. 매칭을 퍼지로 넓히면 "OO 학원
+추가분"으로 만든 new-row 초안이 "OO학원" 행 셀을 고칠 때 edit-row로 PATCH되어 **대체 정정**으로 바뀔
+수 있다. 오늘 사각지대의 실체는 "표기가 다른 new-row 초안은 적용 전까지 매트릭스 어디에도 안 보인다"이고,
+이는 새 고객 초안이 안 보이는 P1-4 문제와 같은 부류다.
+
+**수리(완료)**: P1-4 임시 행 파생(`ledger/pending-draft-rows.ts`)의 제외 규칙을 `buildMatrixPendingByCell`과
+**같은 술어(고객명 trim 정확 일치)**로 맞췄다. 점이 찍히는 초안은 임시 행을 만들지 않고, 점이 안 찍히는
+(표기가 다른) 초안은 임시 행으로 보인다 — 매트릭스 고객 그룹핑이 정규화 키라 같은 고객 그룹 안에 붙는다.
+테스트: `tests/branch/pending-draft-rows.test.ts` 규칙 4(trim 일치 제외, 표기 차이는 임시 행).
+
+**남은 잠재 결함 — 결정 D7 필요**: 표기가 **같은** 경우에도 위 PATCH 경로는 이미 존재한다. 시트 행 "OO학원"의
+10월 셀에 같은 이름의 new-row 초안(10월 +50만, 추가분 의도)이 점으로 붙어 있을 때 그 셀을 고치면, 그 new-row
+초안이 edit-row로 바뀌어 시트 값을 대체하는 정정이 된다 — 추가분 의도가 사라지고 셀 편집 시작값도 시트
+값이 아니라 초안 금액(50만)으로 뜬다.
+
+| 선택지 | 내용 | 영향 |
+| --- | --- | --- |
+| (a) 종류가 같은 초안만 갱신 대상 | 셀 커밋(edit-row)은 같은 딜·월의 **edit-row** 대기 초안만 PATCH, new-row 초안은 점 표시만 하고 건드리지 않는다 | 추가분 의도 보존. 셀 편집 시작값도 시트 값. 이중 계상 가드(P0)의 대상은 원래 edit-row끼리라 유지된다 |
+| (b) 현행 유지 | 같은 이름의 new-row 초안이 있는 셀은 그 초안을 고치는 것으로 본다 | 동작 변화 없음. 위 의미 전환이 계속 가능 |
+
+제안: **(a)**. P0 셀 dedup 회귀 테스트(`ledger-cell-dedup`)를 먼저 확장해 new-row/edit-row 분리를 고정한 뒤
+`buildCellDraftInput`의 `existingId` 판정만 바꾼다.
 
 ## 9. 하지 않기로 한 것
 

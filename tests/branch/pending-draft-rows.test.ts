@@ -99,7 +99,11 @@ describe("규칙 3 — 표시 월/팀 스코프", () => {
   })
 })
 
-describe("규칙 4 — existingRows에 같은 정규화 키가 있으면 임시 행을 만들지 않는다", () => {
+// 규칙 4 제외 판정은 buildMatrixPendingByCell(rev-matrix-logic.ts)의 new-row 매칭과 **같은 술어**여야
+// 한다: 고객명 trim 정확 일치. 그 함수가 점을 찍는 행이면 임시 행을 만들지 않고, 점을 못 찍는(표기가
+// 다른) 초안은 임시 행으로 보여야 "어디에도 안 보이는 초안"이 생기지 않는다. 정규화 키로 넓히면
+// 반대로 사각지대가 생긴다(점도 없고 임시 행도 없음) — 그 회귀를 아래 두 번째 케이스가 고정한다.
+describe("규칙 4 — buildMatrixPendingByCell과 같은 술어(고객명 trim 정확 일치)로 제외한다", () => {
   it("정확히 같은 고객명이 이미 매트릭스에 있으면 제외한다", () => {
     const existing: LedgerRevenueRow = {
       id: "row-1", customer: "기존 고객", manager: null, team: "BD", region: null,
@@ -109,13 +113,25 @@ describe("규칙 4 — existingRows에 같은 정규화 키가 있으면 임시 
     expect(run(drafts, { existingRows: [existing] })).toEqual([])
   })
 
-  it("표기만 다른 같은 정규화 키(\"OO학원\" vs \"OO 학원\")도 제외 대상이다", () => {
+  it("앞뒤 공백만 다른 고객명은 같은 고객으로 보고 제외한다(trim 일치)", () => {
+    const existing: LedgerRevenueRow = {
+      id: "row-1", customer: "기존 고객", manager: null, team: "BD", region: null,
+      revenue: 0, ledgerOrigin: "sheet",
+    }
+    const drafts: LedgerDraft[] = [makeDraft({ id: "d-1", customer: "  기존 고객 " })]
+    expect(run(drafts, { existingRows: [existing] })).toEqual([])
+  })
+
+  it("표기가 다른 같은 정규화 키(\"OO학원\" vs \"OO 학원\")는 제외하지 않는다 — 셀 점이 안 찍히므로 임시 행으로 보여야 한다", () => {
     const existing: LedgerRevenueRow = {
       id: "row-1", customer: "OO학원", manager: null, team: "BD", region: null,
       revenue: 0, ledgerOrigin: "sheet",
     }
     const drafts: LedgerDraft[] = [makeDraft({ id: "d-1", customer: "OO 학원" })]
-    expect(run(drafts, { existingRows: [existing] })).toEqual([])
+    const rows = run(drafts, { existingRows: [existing] })
+    expect(rows.map((row) => row.customer)).toEqual(["OO 학원"])
+    // 매트릭스 고객 그룹핑은 정규화 키라 이 임시 행은 "OO학원" 시트 행과 같은 그룹에 붙는다.
+    expect(normalizedAccountKey(rows[0].customer)).toBe(normalizedAccountKey(existing.customer))
   })
 
   it("다른 고객(정규화 키가 다름)이면 제외되지 않는다", () => {

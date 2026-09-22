@@ -159,7 +159,14 @@ function buildRowForGroup(key: string, groupDrafts: LedgerDraft[]): PendingDraft
 export function buildPendingDraftRows(options: PendingDraftRowsOptions): PendingDraftRow[] {
   const { drafts, matrixMonths, team, existingRows } = options
   const monthSet = new Set(matrixMonths)
-  const existingKeys = new Set(existingRows.map((row) => normalizedAccountKey(row.customer)))
+  // 규칙 4의 대조군은 정규화 키가 아니라 **trim한 고객명 그대로**다 — buildMatrixPendingByCell
+  // (rev-matrix-logic.ts)이 new-row 초안을 기존 행 셀에 점으로 붙일 때 쓰는 술어와 같아야 하기
+  // 때문이다. 정규화 키로 제외하면 "OO 학원" 초안이 "OO학원" 행에 점도 안 찍히고(그 함수는 정확 일치)
+  // 임시 행도 안 생겨 매트릭스 어디에도 안 보인다. 반대로 그 함수를 정규화 키로 넓히는 수리는 틀리다:
+  // 셀 재편집이 그 new-row 초안을 edit-row로 PATCH하는 경로(onCommitCell → lookupMatrixPending)까지
+  // 퍼지 매칭으로 넓어져, "추가분"으로 만든 초안이 다른 표기 행의 "대체 정정"으로 바뀔 수 있다.
+  // 표기가 다른 초안의 임시 행은 매트릭스 고객 그룹핑(정규화 키)에 의해 같은 그룹 안에 붙는다.
+  const existingNames = new Set(existingRows.map((row) => row.customer.trim()))
 
   // 규칙 5 — 같은 정규화 고객키의 초안을 한 그룹으로 모은다. Map은 첫 발견 순서를 보존하지만
   // 그 순서는 최종 결과에 영향을 주지 않는다(그룹 내부는 sortGroupDrafts로, 행 순서는 마지막에
@@ -168,10 +175,10 @@ export function buildPendingDraftRows(options: PendingDraftRowsOptions): Pending
   for (const draft of drafts) {
     if (!isEligibleDraft(draft, monthSet, team)) continue
     const key = normalizedAccountKey(draft.customer)
-    // 규칙 4 + 빈 이름 가드: 정규화 키가 없으면(고객명 미입력) 서로 무관한 초안들이 한 행으로
-    // 잘못 합쳐질 수 있어 제외한다. existingRows에 이미 같은 키가 있으면 그 행의 셀에 pending
-    // 점으로 이미 표시되므로(buildMatrixPendingByCell) 임시 행을 또 만들지 않는다(이중 표시 방지).
-    if (!key || existingKeys.has(key)) continue
+    // 빈 이름 가드: 정규화 키가 없으면(고객명 미입력) 서로 무관한 초안들이 한 행으로 잘못 합쳐질
+    // 수 있어 제외한다. 규칙 4: 같은 이름(trim 일치)의 행이 이미 있으면 그 행의 셀에 pending 점으로
+    // 이미 표시되므로(buildMatrixPendingByCell) 임시 행을 또 만들지 않는다(이중 표시 방지).
+    if (!key || existingNames.has(draft.customer.trim())) continue
     const bucket = groups.get(key)
     if (bucket) bucket.push(draft)
     else groups.set(key, [draft])
