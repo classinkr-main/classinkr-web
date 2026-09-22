@@ -569,6 +569,8 @@ export default function SalesLedgerWorkbench({
     checkDrafts,
     applyDrafts,
     persistDraftsBatch,
+    supersedeAvailable,
+    supersedeEntry,
     cancelDraft,
     deleteDraft,
     reverseEntry,
@@ -1248,6 +1250,22 @@ export default function SalesLedgerWorkbench({
       if (!dealId || !month) continue
       const months = map.get(dealId) ?? new Set<string>()
       months.add(month)
+      map.set(dealId, months)
+    }
+    return map
+  }, [replacementAppliedDraftRows])
+  // P2-9 — 레일 잠금 배너의 "한 번에 바꾸기" 대상 역참조: (딜, 월) → 그 칸에 적용된 정정의 초안 id·금액.
+  // editRowOverrideMonths(월 집합)는 잠금 판정 계약(correctedMonths)이라 건드리지 않고 별도 맵을 둔다.
+  // 활성 정정 유일성 인덱스가 (딜, 월)당 정정 1건을 보장하므로 대체 대상이 모호하지 않다.
+  const editRowOverrideDrafts = useMemo(() => {
+    const map = new Map<string, Map<string, { draftId: string; amount: number }>>()
+    for (const row of replacementAppliedDraftRows) {
+      const dealId = row.sourceDealId
+      const month = row.draftMonth
+      const draftId = row.draftId
+      if (!dealId || !month || !draftId || draftId.startsWith("local-")) continue
+      const months = map.get(dealId) ?? new Map<string, { draftId: string; amount: number }>()
+      months.set(month, { draftId, amount: row.revenue })
       map.set(dealId, months)
     }
     return map
@@ -3033,6 +3051,29 @@ export default function SalesLedgerWorkbench({
   const weeklyAddUnlocked =
     draftForm.weeklyMode && operationSupportsWeeklySplit(draftForm.operation) && weeklyLockMask.some(Boolean)
   const targetCellLocked = rawTargetCellLocked && !weeklyAddUnlocked
+  // P2-9 — 잠긴 칸이 "적용된 정정" 때문이면 그 정정을 새 값으로 원자 대체할 수 있다. 이번 라운드는
+  // edit-row 정정만 대상(적용된 new-row 행은 레일이 정정 초안을 만들지 않는 경로 — canCreateEditDraft).
+  // 편집 중인 초안이 있으면 그 초안의 저장 흐름과 섞이지 않게 노출하지 않는다.
+  const supersedeTarget = useMemo(() => {
+    if (!targetCellLocked || editingDraft || !isEditRowSaveTarget || !draftEditTargetRow) return null
+    const hit = editRowOverrideDrafts.get(draftEditTargetRow.id)?.get(draftForm.month)
+    return hit ? { oldDraftId: hit.draftId, oldAmount: hit.amount, available: supersedeAvailable } : null
+  }, [draftEditTargetRow, draftForm.month, editRowOverrideDrafts, editingDraft, isEditRowSaveTarget, supersedeAvailable, targetCellLocked])
+  // 새 값 초안은 레일 저장과 같은 입력 빌더(buildDraftInput)로 만든다(주차 분해·metadata 규약 동일).
+  // 대체 요청이 실패해도 장부는 옛 값 그대로이고 새 초안(자가 체크)만 큐에 남는다 — 그 사실을 문구로 알린다.
+  const onSupersede = useCallback(async (): Promise<DraftSaveResult | { unavailable?: boolean }> => {
+    if (!supersedeTarget) return { persisted: false, deduped: false, validationMessage: "대체할 적용 값을 찾지 못했습니다." }
+    const result = await supersedeEntry(supersedeTarget.oldDraftId, buildDraftInput("edit-row"))
+    if (result.unavailable) return { unavailable: true }
+    const leftInQueue = result.draft ? " — 새 값 초안은 체크 큐에 남았습니다(장부는 옛 값 그대로)." : ""
+    if (result.conflict) return { persisted: false, deduped: false, validationMessage: `${result.error ?? DRAFT_CONFLICT_MESSAGE}${leftInQueue}` }
+    if (result.validationMessage || result.error) {
+      return { persisted: false, deduped: false, validationMessage: `${result.validationMessage ?? result.error}${leftInQueue}` }
+    }
+    if (!result.draft) return { persisted: false, deduped: false }
+    setDraftForm(defaultDraftForm)
+    return { persisted: true, deduped: false }
+  }, [buildDraftInput, defaultDraftForm, supersedeEntry, supersedeTarget])
   const draftAmountValue = safeAmount(draftForm.amount)
   // 주차 분해 모드(지원 작업 유형 한정)에서는 단일 금액(draftForm.amount) 대신 주차 자동합계가
   // 저장 금액이므로 "고객명 + 주차 합>0"이 유효 조건이다 — 음수/비숫자 칸은 draftWeeklyAmounts가
@@ -3080,6 +3121,8 @@ export default function SalesLedgerWorkbench({
     canCreateEditDraft,
     targetCellLocked,
     lockedWeeks: weeklyLockMask,
+    supersedeTarget,
+    onSupersede,
     saveEditedDraft,
     cancelDraftEdit,
     saveDraft,

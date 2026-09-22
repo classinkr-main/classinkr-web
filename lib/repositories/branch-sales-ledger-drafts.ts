@@ -281,6 +281,49 @@ function isNonPositiveAmountCheckError(error: { code?: string; message?: string;
   return error.code === "23514" && haystack.includes(NON_POSITIVE_AMOUNT_CHECK)
 }
 
+// P2-9 — "적용된 값을 한 번에 바꾸기"(supersede_branch_sales_ledger_entry RPC, 20260922) 에러
+// 번역. 기존 isMissingLedgerInfrastructureError와 같은 판정 어휘(PGRST202/42883/"could not
+// find"/"does not exist"/"schema cache")를 재사용하되, 이 RPC 이름으로 스코프한다 — 오탐 없이
+// "이 RPC가 아직 배포 안 됐다"만 잡아야 fail-closed(폴백 없이 기능만 꺼짐) 판정이 정확하다.
+const SUPERSEDE_UNAVAILABLE_MESSAGE =
+  "운영 DB에 '적용값 한 번에 바꾸기' 마이그레이션이 아직 적용되지 않았습니다 — 체크 큐에서 되돌리기 후 새 값을 적용하세요."
+
+function isSupersedeUnavailableError(error: { code?: string; message?: string; details?: string; hint?: string }) {
+  const haystack = [error.code, error.message, error.details, error.hint].filter(Boolean).join(" ").toLowerCase()
+  return (
+    haystack.includes("42883") ||
+    haystack.includes("pgrst202") ||
+    (haystack.includes("supersede_branch_sales_ledger_entry") &&
+      (haystack.includes("does not exist") || haystack.includes("could not find") || haystack.includes("schema cache")))
+  )
+}
+
+// 마이그레이션의 1)/2) — 옛 entry 또는 새 초안이 없으면 둘 다 P0002. 어느 쪽이 없었는지는
+// 라우트/훅 입장에서 둘 다 404로 수렴하므로(옛 entry·새 초안 모두 "대체 대상") 메시지도
+// 하나로 합친다.
+const SUPERSEDE_NOT_FOUND_MESSAGE = "대체 대상을 찾을 수 없습니다 — 기존 적용 항목 또는 새 초안이 존재하지 않습니다."
+
+function isSupersedeNotFoundError(error: { code?: string }) {
+  return error.code === "P0002"
+}
+
+// 마이그레이션의 4) — 새 초안이 checked가 아니면(멱등 분기 제외) P0001 + "must be checked".
+const SUPERSEDE_NOT_CHECKED_MESSAGE = "새 값 초안이 체크 상태가 아닙니다."
+
+function isSupersedeNotCheckedError(error: { code?: string; message?: string; details?: string }) {
+  const haystack = [error.code, error.message, error.details].filter(Boolean).join(" ").toLowerCase()
+  return error.code === "P0001" && haystack.includes("must be checked")
+}
+
+// 마이그레이션의 5) — 대상 일치 검증(kind/entry_type·ledger_month·source_deal_id·customer_name)
+// 4종 중 하나라도 불일치하면 P0001 + "target mismatch".
+const SUPERSEDE_TARGET_MISMATCH_MESSAGE = "대체 대상이 새 값 초안과 다른 딜·월입니다."
+
+function isSupersedeTargetMismatchError(error: { code?: string; message?: string; details?: string }) {
+  const haystack = [error.code, error.message, error.details].filter(Boolean).join(" ").toLowerCase()
+  return error.code === "P0001" && haystack.includes("target mismatch")
+}
+
 export function isBranchSalesLedgerDraftsNotReadyError(error: unknown): error is Error {
   return error instanceof Error && error.message.includes("매출 장부")
 }
@@ -291,6 +334,22 @@ export function isBranchSalesLedgerDuplicateActiveCorrectionError(error: unknown
 
 export function isBranchSalesLedgerNonPositiveAmountError(error: unknown): error is Error {
   return error instanceof Error && error.message === NON_POSITIVE_AMOUNT_MESSAGE
+}
+
+export function isBranchSalesLedgerSupersedeUnavailableError(error: unknown): error is Error {
+  return error instanceof Error && error.message === SUPERSEDE_UNAVAILABLE_MESSAGE
+}
+
+export function isBranchSalesLedgerSupersedeNotFoundError(error: unknown): error is Error {
+  return error instanceof Error && error.message === SUPERSEDE_NOT_FOUND_MESSAGE
+}
+
+export function isBranchSalesLedgerSupersedeNotCheckedError(error: unknown): error is Error {
+  return error instanceof Error && error.message === SUPERSEDE_NOT_CHECKED_MESSAGE
+}
+
+export function isBranchSalesLedgerSupersedeTargetMismatchError(error: unknown): error is Error {
+  return error instanceof Error && error.message === SUPERSEDE_TARGET_MISMATCH_MESSAGE
 }
 
 function notReadyResult(): ListBranchSalesLedgerDraftsResult {
@@ -774,6 +833,86 @@ export async function reverseBranchSalesLedgerEntryByDraftId(
 
   const row = Array.isArray(data) ? data[0] : data
   return row ? toEntry(row as BranchSalesLedgerEntryRow) : null
+}
+
+/**
+ * P2-9 — "적용된 값을 한 번에 바꾸기": 옛 entry 반전 + 새 checked 초안 적용을
+ * supersede_branch_sales_ledger_entry RPC 한 번(=DB 한 트랜잭션)으로 묶는다.
+ *
+ * fail-closed: RPC가 운영 DB에 없으면(isSupersedeUnavailableError) 여기서 절대
+ * reverseBranchSalesLedgerEntryByDraftId → applyBranchSalesLedgerDraft를 순차 호출하지
+ * 않는다 — 그 폴백은 이 함수가 없애려는 바로 그 "반전은 됐는데 재적용이 실패하는" 비원자
+ * 실패 창을 되살린다. 대신 에러를 그대로 던져 호출부(라우트)가 503으로 번역하고, 사용자는
+ * 기존 수동 경로(큐에서 되돌리기 → 새 값 적용)를 쓴다.
+ */
+export async function supersedeBranchSalesLedgerEntry(
+  oldDraftId: string,
+  newDraftId: string,
+  actor: string,
+  reason?: string | null,
+): Promise<BranchSalesLedgerDraft | null> {
+  const supabase = createSupabaseAdminClient()
+
+  const rpcParams: Record<string, unknown> = {
+    p_old_draft_id: oldDraftId,
+    p_new_draft_id: newDraftId,
+    p_actor: actor,
+  }
+  const trimmedReason = reason?.trim()
+  if (trimmedReason) rpcParams.p_reason = trimmedReason
+
+  const { data, error } = await supabase.rpc("supersede_branch_sales_ledger_entry", rpcParams)
+
+  if (error) {
+    if (isSupersedeUnavailableError(error)) throw new Error(SUPERSEDE_UNAVAILABLE_MESSAGE)
+    if (isSupersedeNotFoundError(error)) throw new Error(SUPERSEDE_NOT_FOUND_MESSAGE)
+    if (isSupersedeNotCheckedError(error)) throw new Error(SUPERSEDE_NOT_CHECKED_MESSAGE)
+    if (isSupersedeTargetMismatchError(error)) throw new Error(SUPERSEDE_TARGET_MISMATCH_MESSAGE)
+    if (isDuplicateActiveCorrectionIndexError(error)) throw new Error(DUPLICATE_ACTIVE_CORRECTION_MESSAGE)
+    if (isMissingLedgerInfrastructureError(error)) throw new Error(INTERNAL_LEDGER_NOT_READY_MESSAGE)
+    throw new Error(`[branch-sales-ledger-drafts] 대체 실패: ${error.message}`)
+  }
+
+  // apply/reverse와 동일 관례 — 두 캐시 태그 모두 무효화한다(entries가 반전+새로 적용된
+  // entry 양쪽으로 바뀌었고, drafts도 새 초안이 applied로 바뀌었다).
+  revalidateTag(BRANCH_SALES_LEDGER_DRAFTS_CACHE_TAG, "max")
+  revalidateTag(BRANCH_SALES_LEDGER_ENTRIES_CACHE_TAG, "max")
+
+  const row = Array.isArray(data) ? data[0] : data
+  return row ? toDraft(row as BranchSalesLedgerDraftRow) : null
+}
+
+// probeSupersedeAvailable 모듈 캐시 — 결과(true/false) 무관 60초 TTL. 마이그레이션을 막
+// 적용한 뒤 1분 안에는 기능이 켜지고, 반대로 일시 오류로 얻은 false를 오래 들고 있지 않는다.
+const SUPERSEDE_PROBE_TTL_MS = 60_000
+let supersedeProbeCache: { checkedAt: number; available: boolean } | null = null
+
+/**
+ * supersede RPC가 운영 DB에 있는지 "호출 없이" 확인할 카탈로그 경로가 이 저장소에는 없다
+ * (Management API 접근은 scripts/check-db-schema.ts의 npm run check:db 전용이고, 런타임
+ * repository는 그 접근 권한/경로를 갖고 있지 않다) — 그래서 함수의 **프로브 전용 경로**를 부른다:
+ * 두 id를 모두 NULL로 넘기면 마이그레이션 0단계가 아무것도 잠그거나 쓰지 않고 NULL을 돌려준다.
+ * 존재하지 않는 UUID로 부르는 방식은 매번 P0002 예외를 DB ERROR 로그로 남겨(인스턴스마다 60초에
+ * 한 번) 장애 대응 중 실제 실패로 오인될 수 있어 쓰지 않는다. 판별: 에러 없음 = 사용 가능,
+ * 함수 부재 에러 = 사용 불가, 그 외 예기치 않은 에러도 전부 "사용 불가"로 보수적으로 판단한다
+ * (쓰기 경로는 fail-closed — 켜져 있다고 잘못 판단하는 쪽이 더 위험하다).
+ */
+export async function probeSupersedeAvailable(): Promise<boolean> {
+  const now = Date.now()
+  if (supersedeProbeCache && now - supersedeProbeCache.checkedAt < SUPERSEDE_PROBE_TTL_MS) {
+    return supersedeProbeCache.available
+  }
+
+  const supabase = createSupabaseAdminClient()
+  const { error } = await supabase.rpc("supersede_branch_sales_ledger_entry", {
+    p_old_draft_id: null,
+    p_new_draft_id: null,
+    p_actor: "schema-probe",
+  })
+
+  const available = !error
+  supersedeProbeCache = { checkedAt: now, available }
+  return available
 }
 
 export async function deleteBranchSalesLedgerDraft(id: string): Promise<boolean> {

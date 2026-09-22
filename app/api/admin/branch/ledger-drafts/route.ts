@@ -9,6 +9,7 @@ import {
   isBranchSalesLedgerDraftsNotReadyError,
   listBranchSalesLedgerDrafts,
   listBranchSalesLedgerEntries,
+  probeSupersedeAvailable,
   type BranchSalesLedgerDraftStatus,
 } from "@/lib/repositories/branch-sales-ledger-drafts"
 
@@ -47,10 +48,15 @@ export async function GET(req: NextRequest) {
     // "아직 동기화 안 된 신규 적용"으로 오인돼 되살아났다. reversed 항목을 별도(status:"reversed")로
     // 200 한도까지 조회해 draft_id 목록을 함께 내려준다 — active 조회와 합쳐서 하나의 200 한도로
     // 자르면 reversed가 밀려날 수 있어 반드시 별도 조회+별도 한도를 쓴다.
-    const [draftResult, entryResult, reversedEntryResult] = await Promise.all([
+    // P2-9 — capabilities.supersede: probeSupersedeAvailable()가 실패해도(네트워크 등) GET
+    // 전체는 계속 성공해야 한다. Promise.all 자체는 그대로 쓰되(병렬 조회는 유지) 이 프로브
+    // 호출에만 .catch(() => false)를 걸어 강등한다 — 나머지 두 목록 조회는 지금처럼 실패 시
+    // 그대로 던져 500이 나야 하지만, 이 프로브의 실패는 GET 자체를 막을 이유가 없다.
+    const [draftResult, entryResult, reversedEntryResult, supersedeAvailable] = await Promise.all([
       listBranchSalesLedgerDrafts({ status, limit }),
       listBranchSalesLedgerEntries({ limit: 200 }),
       listBranchSalesLedgerEntries({ status: "reversed", limit: 200 }),
+      probeSupersedeAvailable().catch(() => false),
     ])
 
     const reversedDraftIds = Array.from(
@@ -66,6 +72,7 @@ export async function GET(req: NextRequest) {
       entries: entryResult.entries,
       ledgerHealth: entryResult.health,
       reversedDraftIds,
+      capabilities: { supersede: supersedeAvailable },
     })
   } catch (error) {
     console.error("[GET /api/admin/branch/ledger-drafts]", error)

@@ -8,9 +8,18 @@ import {
   isBranchSalesLedgerDraftsNotReadyError,
   isBranchSalesLedgerDuplicateActiveCorrectionError,
   isBranchSalesLedgerNonPositiveAmountError,
+  isBranchSalesLedgerSupersedeNotCheckedError,
+  isBranchSalesLedgerSupersedeNotFoundError,
+  isBranchSalesLedgerSupersedeTargetMismatchError,
+  isBranchSalesLedgerSupersedeUnavailableError,
   reverseBranchSalesLedgerEntryByDraftId,
+  supersedeBranchSalesLedgerEntry,
   updateBranchSalesLedgerDraft,
 } from "@/lib/repositories/branch-sales-ledger-drafts"
+
+// P2-9 — action=supersede의 newDraftId 형식 검증. draft id는 gen_random_uuid()(v4) 산출물이지만
+// 형식 검증 자체는 버전 무관 표준 UUID 8-4-4-4-12만 확인한다(과도한 제약 금지).
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 function adminActorName(admin: { name?: string; userId?: string; role: string }) {
   return admin.name?.trim() || admin.userId || admin.role
@@ -37,6 +46,40 @@ function duplicateActiveCorrectionResponse(error: unknown) {
 
 function nonPositiveAmountResponse(error: unknown) {
   if (isBranchSalesLedgerNonPositiveAmountError(error)) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 400 })
+  }
+  return null
+}
+
+// P2-9 — supersede RPC가 운영 DB에 없으면(fail-closed) 503 + reason으로 명시한다. 훅이 이
+// reason만 보고 폴백 없이 즉시 기능을 끄고(capabilities 재확인), 절대 reverse/apply를 순차
+// 호출하지 않는다.
+function supersedeUnavailableResponse(error: unknown) {
+  if (isBranchSalesLedgerSupersedeUnavailableError(error)) {
+    return NextResponse.json(
+      { error: (error as Error).message, reason: "supersede-unavailable" },
+      { status: 503 },
+    )
+  }
+  return null
+}
+
+function supersedeNotFoundResponse(error: unknown) {
+  if (isBranchSalesLedgerSupersedeNotFoundError(error)) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 404 })
+  }
+  return null
+}
+
+function supersedeNotCheckedResponse(error: unknown) {
+  if (isBranchSalesLedgerSupersedeNotCheckedError(error)) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 409 })
+  }
+  return null
+}
+
+function supersedeTargetMismatchResponse(error: unknown) {
+  if (isBranchSalesLedgerSupersedeTargetMismatchError(error)) {
     return NextResponse.json({ error: (error as Error).message }, { status: 400 })
   }
   return null
@@ -74,6 +117,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         return NextResponse.json({ error: "해당 초안에 연결된 적용 항목을 찾을 수 없습니다." }, { status: 404 })
       }
       return NextResponse.json({ entry })
+    }
+    if (action === "supersede") {
+      // P2-9 "적용된 값을 한 번에 바꾸기" — id는 옛(대체될) 초안 id, body.newDraftId는 이미
+      // checked로 만들어 둔 새 값 초안 id다. 두 동작(반전+적용)을 RPC 한 번(=DB 한 트랜잭션)
+      // 으로 묶어 원자적으로 처리한다 — 서버는 절대 reverse/apply를 순차 호출하지 않는다.
+      const newDraftId = raw.newDraftId
+      if (typeof newDraftId !== "string" || !UUID_RE.test(newDraftId)) {
+        return NextResponse.json({ error: "newDraftId must be a UUID string" }, { status: 400 })
+      }
+      const reason = optionalString(raw.reason)
+      if (reason === null) return NextResponse.json({ error: "reason must be a string" }, { status: 400 })
+
+      const draft = await supersedeBranchSalesLedgerEntry(id, newDraftId, actor, reason)
+      if (!draft) {
+        return NextResponse.json({ error: "적용값 대체에 실패했습니다." }, { status: 500 })
+      }
+      return NextResponse.json({ draft })
     }
     if (action !== "update") return NextResponse.json({ error: `Unsupported action: ${action}` }, { status: 400 })
 
@@ -136,6 +196,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       notReadyResponse(error) ??
       duplicateActiveCorrectionResponse(error) ??
       nonPositiveAmountResponse(error) ??
+      supersedeUnavailableResponse(error) ??
+      supersedeNotFoundResponse(error) ??
+      supersedeNotCheckedResponse(error) ??
+      supersedeTargetMismatchResponse(error) ??
       NextResponse.json({ error: "Failed to update sales ledger draft" }, { status: 500 })
     )
   }

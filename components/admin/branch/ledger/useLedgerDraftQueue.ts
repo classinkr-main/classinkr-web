@@ -73,6 +73,10 @@ interface LedgerDraftsResponse {
   // 별도 전달된다(app/api/admin/branch/ledger-drafts/route.ts GET). loadDrafts가 이를
   // reversedDraftIds 클라 상태의 서버 진실 소스로 시드한다.
   reversedDraftIds?: string[]
+  // P2-9 — "적용된 값을 한 번에 바꾸기"(supersede) 기능 노출 여부. 서버가 운영 DB에서
+  // probeSupersedeAvailable()로 실제 확인한 값이다 — 미확인/구버전 서버는 필드 자체가 없을
+  // 수 있어 옵셔널이고, 그 경우 아래 loadDrafts가 기본값 false로 채운다(fail-closed).
+  capabilities?: { supersede?: boolean }
   error?: string
 }
 
@@ -107,6 +111,30 @@ export interface DraftMutationResult {
 export interface LedgerEntryResponse {
   entry?: LedgerEntry
   error?: string
+}
+
+// P2-9 — PATCH .../{id} action=supersede 응답 계약. 성공(200)이면 draft(새로 적용된 초안)만
+// 실린다. 실패는 상태코드로 구분한다: 503이면 reason이 항상 "supersede-unavailable"이고(fail
+// -closed 신호), 그 외(400/404/409)는 error에 서버 문구만 실린다.
+interface LedgerSupersedeResponse {
+  draft?: LedgerDraft
+  error?: string
+  reason?: "supersede-unavailable"
+}
+
+// supersedeEntry 전용 결과 — 기존 DraftMutationResult와 필드 구성은 비슷하지만 unavailable
+// (RPC 부재, fail-closed) 분기가 추가로 필요해 별도 타입으로 둔다.
+export interface SupersedeEntryResult {
+  draft: LedgerDraft | null
+  /** RPC가 운영 DB에 아직 없다(fail-closed) — 1단계에서 만든 checked 초안은 큐에 남아 있고
+      장부는 옛 값 그대로다. reverse는 이 분기에서 절대 호출되지 않는다. */
+  unavailable?: boolean
+  /** 404(대상 없음) 등 서버 문구 그대로 — 새 초안은 큐에 남아 있고 장부는 무변경이다. */
+  error?: string
+  /** 400(입력 형식·대상 불일치) 서버 문구 그대로. */
+  validationMessage?: string
+  /** 409(새 초안 미체크·중복 정정) — error에 서버 문구가 함께 실린다. */
+  conflict?: boolean
 }
 
 // 라운드 4(P0-1) — 서버 배치 API 요청/응답 계약(서버 에이전트와 공유, 계약 문서:
@@ -254,6 +282,9 @@ export function useLedgerDraftQueue() {
   // draft를 entries 누락 시 대체 표시하는 안전망)가 "아직 동기화 안 된 신규 적용"과 "방금
   // 상쇄된 적용"을 구분 못 해 되돌린 행을 재조회 후 유령처럼 되살린다. 이 Set이 그 구분자.
   const [reversedDraftIds, setReversedDraftIds] = useState<Set<string>>(new Set())
+  // P2-9 — "적용된 값을 한 번에 바꾸기" 기능 노출 여부. GET의 capabilities.supersede를 그대로
+  // 미러링한다(기본 false — fail-closed: 서버가 아직 확인해 주지 않았거나 RPC가 없으면 꺼둔다).
+  const [supersedeAvailable, setSupersedeAvailable] = useState(false)
   const [ledgerHealth, setLedgerHealth] = useState<{ ok: boolean; message: string | null } | null>(null)
   const [queueMode, setQueueMode] = useState<DraftQueueMode>("server")
   const [queueLoading, setQueueLoading] = useState(true)
@@ -320,6 +351,10 @@ export function useLedgerDraftQueue() {
           return next
         })
       }
+      // P2-9 — capabilities.supersede를 서버 진실로 그대로 미러링한다(health 분기와 무관하게
+      // 항상 갱신 — GET은 drafts 테이블이 비어 있어도 이 필드를 함께 내려준다). 필드 자체가
+      // 없는 구버전 서버 응답은 undefined이고 `=== true` 비교로 안전하게 false가 된다(fail-closed).
+      setSupersedeAvailable(data.capabilities?.supersede === true)
       // 품질 웨이브 7 — 항목 2: 재조회 성공(서버가 응답함, health와 무관)마다 행별 에러를 비운다 —
       // 새 목록이 그 행의 실제 서버 상태를 다시 반영하므로 오래된 배지를 들고 있을 이유가 없다.
       setRecordErrors(new Map())
@@ -376,6 +411,8 @@ export function useLedgerDraftQueue() {
       setQueueMode("local")
       setQueueError(`서버 입력 큐를 불러오지 못해 로컬 큐로 전환했습니다. ${errorMessage(error)}`)
       setRecordErrors(new Map())
+      // P2-9 — 서버 상태 자체를 확인하지 못했다면 보수적으로 꺼둔다(fail-closed).
+      setSupersedeAvailable(false)
     } finally {
       setQueueLoading(false)
     }
@@ -886,10 +923,106 @@ export function useLedgerDraftQueue() {
     return results
   }, [clearRecordError, queueMode, setRecordError, updateLocalDrafts])
 
+  // P2-9 — "적용된 값을 한 번에 바꾸기": 이미 장부에 적용된 값(entry)을 새 값으로 원자
+  // 대체한다. 새 초안을 status:"checked"로 만든 뒤(자가 체크 — 매트릭스 셀 커밋과 같은 2단
+  // 게이트 생략 계약) PATCH action:"supersede" 1건만 보내 서버가 반전+적용을 한 트랜잭션으로
+  // 처리하게 한다.
+  //
+  // 로컬 폴백 금지: createDraft를 그대로 재사용하지 않는 이유가 이것이다 — createDraft는 실패
+  // 시 항상 로컬 임시 초안으로 폴백하지만, 로컬 초안은 DB 장부에 적용될 수 없어 "적용값을
+  // 한 번에 바꾸기"라는 목적 자체를 달성하지 못한다. 서버 모드가 아니면 즉시 실패를 알리고,
+  // 생성/대체 요청이 실패해도 폴백 없이 그대로 실패를 알린다 — 사용자가 재시도하거나 기존
+  // 수동 경로(체크 큐에서 되돌리기 → 새 값 적용)를 쓰게 한다.
+  //
+  // 원자성 불변식(주석 필수 — 이 두 요청 사이 어디서 실패해도 장부가 틀린 값으로 남지 않는다):
+  // 1단계(생성 POST)가 실패하면 장부는 전혀 건드려지지 않았으니 안전하다. 2단계(PATCH
+  // supersede)가 실패하면(503 RPC 부재·400·404·409·네트워크 전부) 서버의 supersede RPC 자체가
+  // 트랜잭션 하나라 "옛 값만 반전되고 새 값은 안 붙는" 부분 상태가 DB에 있을 수 없다 — 남는
+  // 것은 "새 초안이 checked로 큐에 남아 있음 + 장부는 옛 값 그대로"뿐이고, 이는 사용자가 큐
+  // 에서 이어갈 수 있는 안전한 중간 상태다.
+  const supersedeEntry = useCallback(async (
+    oldDraftId: string,
+    input: LedgerDraftInput,
+  ): Promise<SupersedeEntryResult> => {
+    if (queueMode !== "server") {
+      return { draft: null, error: "로컬 임시 큐에서는 적용값을 한 번에 바꿀 수 없습니다. 서버 큐가 복구된 뒤 다시 시도하세요." }
+    }
+
+    let created: LedgerDraft
+    try {
+      const response = await adminFetch("/api/admin/branch/ledger-drafts", {
+        method: "POST",
+        body: JSON.stringify({ ...input, status: "checked" }),
+      })
+      const data = (await response.json().catch(() => null)) as LedgerDraftResponse | null
+      if (response.status === 400) {
+        return { draft: null, validationMessage: data?.error ?? "저장 요청이 거부되었습니다." }
+      }
+      if (!response.ok || !data?.draft) {
+        throw new Error(data?.error ?? (`${response.status} ${response.statusText}`.trim() || "요청에 실패했습니다."))
+      }
+      created = data.draft
+    } catch (error) {
+      // 생성 자체가 실패 — 장부는 전혀 건드리지 않았으니 안전하다(위 원자성 불변식 1단계).
+      // 로컬 폴백을 만들지 않는다(위 함수 주석과 동일 이유).
+      return { draft: null, error: errorMessage(error) }
+    }
+
+    // 아래 supersede가 실패해도(503/400/404/409/네트워크) 이 checked 초안은 큐에 남아 있어야
+    // 하므로 여기서 먼저 로컬 상태에 반영해 둔다.
+    setDrafts((current) => [created, ...current.filter((draft) => draft.id !== created.id)].slice(0, 50))
+
+    try {
+      const response = await adminFetch(`/api/admin/branch/ledger-drafts/${encodeURIComponent(oldDraftId)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "supersede", newDraftId: created.id }),
+      })
+      const data = (await response.json().catch(() => null)) as LedgerSupersedeResponse | null
+
+      if (response.status === 503 && data?.reason === "supersede-unavailable") {
+        // 운영 DB에 마이그레이션이 아직 없다(fail-closed) — 방금 만든 checked 초안은 큐에
+        // 그대로 남긴다(장부는 옛 값 그대로라 안전한 중간 상태) — 사용자가 큐에서 옛 값을
+        // 되돌리기 → 이 초안 적용으로 이어갈 수 있다. reverse는 절대 호출하지 않는다.
+        setSupersedeAvailable(false)
+        return { draft: created, unavailable: true }
+      }
+      if (response.status === 400) {
+        // 대상 불일치 등 — 새 초안은 큐에 남고 장부는 무변경이다.
+        return { draft: created, validationMessage: data?.error ?? "요청이 거부되었습니다." }
+      }
+      if (response.status === 404) {
+        return { draft: created, error: data?.error ?? "대체 대상을 찾을 수 없습니다." }
+      }
+      if (response.status === 409) {
+        // 새 초안 미체크·중복 정정 — 새 초안은 큐에 남고 장부는 무변경이다.
+        return { draft: created, conflict: true, error: data?.error }
+      }
+      if (!response.ok || !data?.draft) {
+        return { draft: created, error: data?.error ?? (`${response.status} ${response.statusText}`.trim() || "요청에 실패했습니다.") }
+      }
+
+      const appliedDraft = data.draft
+      setDrafts((items) => items.map((draft) => (draft.id === appliedDraft.id ? appliedDraft : draft)))
+      setReversedDraftIds((current) => {
+        const next = new Set(current)
+        next.add(oldDraftId)
+        return next
+      })
+      setQueueError(null)
+      await loadDrafts()
+      return { draft: appliedDraft }
+    } catch (error) {
+      // 네트워크 실패 — 1단계에서 만든 checked 초안은 이미 위에서 큐에 반영해 뒀다(위 원자성
+      // 불변식 2단계). 장부는 옛 값 그대로라 안전하다.
+      return { draft: created, error: errorMessage(error) }
+    }
+  }, [loadDrafts, queueMode])
+
   return {
     drafts,
     ledgerEntries,
     reversedDraftIds,
+    supersedeAvailable,
     ledgerHealth,
     queueMode,
     queueLoading,
@@ -905,6 +1038,7 @@ export function useLedgerDraftQueue() {
     cancelDraft,
     deleteDraft,
     reverseEntry,
+    supersedeEntry,
     persistDraftsBatch,
     reloadDrafts: loadDrafts,
   }

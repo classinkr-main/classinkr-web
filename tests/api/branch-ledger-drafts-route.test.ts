@@ -19,12 +19,20 @@ const updateBranchSalesLedgerDraft = vi.fn()
 const applyBranchSalesLedgerDraft = vi.fn()
 const deleteBranchSalesLedgerDraft = vi.fn()
 const reverseBranchSalesLedgerEntryByDraftId = vi.fn()
+// P2-9 — "적용된 값을 한 번에 바꾸기" 원자 대체 RPC 래퍼 + capabilities 프로브.
+const supersedeBranchSalesLedgerEntry = vi.fn()
+const probeSupersedeAvailable = vi.fn()
 
 // 실제 repository의 문구와 동일해야 route.ts의 에러 번역기(duplicateActiveCorrectionResponse 등)가
 // 인식한다 — 이 파일에서는 repository를 통째로 목하므로 판별 함수도 같은 문구 기준으로 재구현한다.
 const DUPLICATE_ACTIVE_CORRECTION_MESSAGE =
   "이미 이 딜·월에 적용된 정정 항목이 있습니다. 기존 항목을 먼저 반전한 뒤 다시 적용하세요."
 const NON_POSITIVE_AMOUNT_MESSAGE = "금액이 0 이하인 초안은 체크 완료할 수 없습니다. 금액을 입력한 뒤 다시 시도하세요."
+const SUPERSEDE_UNAVAILABLE_MESSAGE =
+  "운영 DB에 '적용값 한 번에 바꾸기' 마이그레이션이 아직 적용되지 않았습니다 — 체크 큐에서 되돌리기 후 새 값을 적용하세요."
+const SUPERSEDE_NOT_FOUND_MESSAGE = "대체 대상을 찾을 수 없습니다 — 기존 적용 항목 또는 새 초안이 존재하지 않습니다."
+const SUPERSEDE_NOT_CHECKED_MESSAGE = "새 값 초안이 체크 상태가 아닙니다."
+const SUPERSEDE_TARGET_MISMATCH_MESSAGE = "대체 대상이 새 값 초안과 다른 딜·월입니다."
 
 vi.mock("@/lib/admin-auth", () => ({
   BRANCH_READ_ADMIN_API_ROLES: ["ADMIN"],
@@ -40,14 +48,31 @@ vi.mock("@/lib/repositories/branch-sales-ledger-drafts", () => ({
   applyBranchSalesLedgerDraft,
   deleteBranchSalesLedgerDraft,
   reverseBranchSalesLedgerEntryByDraftId,
+  supersedeBranchSalesLedgerEntry,
+  probeSupersedeAvailable,
   isBranchSalesLedgerDraftsNotReadyError: () => false,
   isBranchSalesLedgerDuplicateActiveCorrectionError: (error: unknown) =>
     error instanceof Error && error.message === DUPLICATE_ACTIVE_CORRECTION_MESSAGE,
   isBranchSalesLedgerNonPositiveAmountError: (error: unknown) =>
     error instanceof Error && error.message === NON_POSITIVE_AMOUNT_MESSAGE,
+  isBranchSalesLedgerSupersedeUnavailableError: (error: unknown) =>
+    error instanceof Error && error.message === SUPERSEDE_UNAVAILABLE_MESSAGE,
+  isBranchSalesLedgerSupersedeNotFoundError: (error: unknown) =>
+    error instanceof Error && error.message === SUPERSEDE_NOT_FOUND_MESSAGE,
+  isBranchSalesLedgerSupersedeNotCheckedError: (error: unknown) =>
+    error instanceof Error && error.message === SUPERSEDE_NOT_CHECKED_MESSAGE,
+  isBranchSalesLedgerSupersedeTargetMismatchError: (error: unknown) =>
+    error instanceof Error && error.message === SUPERSEDE_TARGET_MISMATCH_MESSAGE,
   listBranchSalesLedgerDrafts,
   listBranchSalesLedgerEntries,
 }))
+
+// GET 라우트는 항상 capabilities.supersede를 계산하려고 probeSupersedeAvailable()을 부른다 —
+// 이 값을 직접 검증하지 않는 기존 describe들이 undefined 반환(미설정 vi.fn())으로 깨지지
+// 않도록 기본값을 미리 채운다. clearAllMocks()는 구현을 지우지 않으므로(호출 기록만 초기화)
+// 이 기본값은 파일 전체에서 유지되고, capabilities를 직접 검증하는 아래 describe들만
+// mockResolvedValueOnce/mockResolvedValue로 개별 재정의한다.
+probeSupersedeAvailable.mockResolvedValue(false)
 
 const routePath = join(
   process.cwd(),
@@ -258,6 +283,65 @@ describe("GET /api/admin/branch/ledger-drafts — reversedDraftIds (P0 되돌리
   })
 })
 
+describe("GET /api/admin/branch/ledger-drafts — capabilities.supersede (P2-9)", () => {
+  afterEach(() => {
+    vi.clearAllMocks()
+    probeSupersedeAvailable.mockResolvedValue(false)
+  })
+
+  function emptyListMocks() {
+    listBranchSalesLedgerDrafts.mockResolvedValue({
+      generatedAt: "x",
+      health: { ok: true, message: null },
+      drafts: [],
+    })
+    listBranchSalesLedgerEntries.mockResolvedValue({
+      generatedAt: "x",
+      health: { ok: true, message: null },
+      entries: [],
+    })
+  }
+
+  it("probeSupersedeAvailable()가 true면 capabilities.supersede도 true다", async () => {
+    mockAdmin()
+    emptyListMocks()
+    probeSupersedeAvailable.mockResolvedValue(true)
+
+    const { GET } = await import("@/app/api/admin/branch/ledger-drafts/route")
+    const response = await GET(ledgerDraftsRequest())
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.capabilities).toEqual({ supersede: true })
+  })
+
+  it("probeSupersedeAvailable()가 false면 capabilities.supersede도 false다", async () => {
+    mockAdmin()
+    emptyListMocks()
+    probeSupersedeAvailable.mockResolvedValue(false)
+
+    const { GET } = await import("@/app/api/admin/branch/ledger-drafts/route")
+    const response = await GET(ledgerDraftsRequest())
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.capabilities).toEqual({ supersede: false })
+  })
+
+  it("probeSupersedeAvailable()가 실패해도 GET 전체는 200으로 성공하고 capabilities.supersede는 false로 강등된다", async () => {
+    mockAdmin()
+    emptyListMocks()
+    probeSupersedeAvailable.mockRejectedValue(new Error("network down"))
+
+    const { GET } = await import("@/app/api/admin/branch/ledger-drafts/route")
+    const response = await GET(ledgerDraftsRequest())
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.capabilities).toEqual({ supersede: false })
+  })
+})
+
 function postDraftRequest(body: Record<string, unknown>) {
   return new NextRequest("https://classin.kr/api/admin/branch/ledger-drafts", {
     method: "POST",
@@ -447,5 +531,160 @@ describe("PATCH /api/admin/branch/ledger-drafts/[id] — 서버 금액 검증(I5
 
     expect(response.status).toBe(400)
     expect(json.error).toBe(NON_POSITIVE_AMOUNT_MESSAGE)
+  })
+})
+
+const VALID_UUID = "11111111-1111-4111-8111-111111111111"
+
+describe("PATCH /api/admin/branch/ledger-drafts/[id] — action=supersede (P2-9)", () => {
+  afterEach(() => {
+    vi.clearAllMocks()
+    probeSupersedeAvailable.mockResolvedValue(false)
+  })
+
+  it("성공하면 저장소에 (id, newDraftId, actor, reason)을 넘기고 200 + draft를 반환한다", async () => {
+    mockAdmin()
+    supersedeBranchSalesLedgerEntry.mockResolvedValue({ id: VALID_UUID, status: "applied" })
+    const { PATCH } = await import("@/app/api/admin/branch/ledger-drafts/[id]/route")
+
+    const response = await PATCH(
+      patchDraftRequest("old-draft-1", { action: "supersede", newDraftId: VALID_UUID, reason: "금액 정정" }),
+      { params: Promise.resolve({ id: "old-draft-1" }) },
+    )
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.draft).toEqual({ id: VALID_UUID, status: "applied" })
+    expect(supersedeBranchSalesLedgerEntry).toHaveBeenCalledWith("old-draft-1", VALID_UUID, "Tester", "금액 정정")
+  })
+
+  it("reason을 생략해도 동작하고 undefined로 넘긴다", async () => {
+    mockAdmin()
+    supersedeBranchSalesLedgerEntry.mockResolvedValue({ id: VALID_UUID, status: "applied" })
+    const { PATCH } = await import("@/app/api/admin/branch/ledger-drafts/[id]/route")
+
+    const response = await PATCH(
+      patchDraftRequest("old-draft-1", { action: "supersede", newDraftId: VALID_UUID }),
+      { params: Promise.resolve({ id: "old-draft-1" }) },
+    )
+
+    expect(response.status).toBe(200)
+    expect(supersedeBranchSalesLedgerEntry).toHaveBeenCalledWith("old-draft-1", VALID_UUID, "Tester", undefined)
+  })
+
+  it("newDraftId가 UUID 형식이 아니면 400으로 거부하고 저장소를 호출하지 않는다", async () => {
+    mockAdmin()
+    const { PATCH } = await import("@/app/api/admin/branch/ledger-drafts/[id]/route")
+
+    const response = await PATCH(
+      patchDraftRequest("old-draft-1", { action: "supersede", newDraftId: "not-a-uuid" }),
+      { params: Promise.resolve({ id: "old-draft-1" }) },
+    )
+    const json = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(json.error).toContain("UUID")
+    expect(supersedeBranchSalesLedgerEntry).not.toHaveBeenCalled()
+  })
+
+  it("newDraftId가 없으면 400으로 거부한다", async () => {
+    mockAdmin()
+    const { PATCH } = await import("@/app/api/admin/branch/ledger-drafts/[id]/route")
+
+    const response = await PATCH(patchDraftRequest("old-draft-1", { action: "supersede" }), {
+      params: Promise.resolve({ id: "old-draft-1" }),
+    })
+
+    expect(response.status).toBe(400)
+    expect(supersedeBranchSalesLedgerEntry).not.toHaveBeenCalled()
+  })
+
+  it("대체 대상(옛 entry·새 초안)을 찾을 수 없으면 404를 반환한다", async () => {
+    mockAdmin()
+    supersedeBranchSalesLedgerEntry.mockRejectedValue(new Error(SUPERSEDE_NOT_FOUND_MESSAGE))
+    const { PATCH } = await import("@/app/api/admin/branch/ledger-drafts/[id]/route")
+
+    const response = await PATCH(
+      patchDraftRequest("old-draft-1", { action: "supersede", newDraftId: VALID_UUID }),
+      { params: Promise.resolve({ id: "old-draft-1" }) },
+    )
+    const json = await response.json()
+
+    expect(response.status).toBe(404)
+    expect(json.error).toBe(SUPERSEDE_NOT_FOUND_MESSAGE)
+  })
+
+  it("새 초안이 체크 상태가 아니면 409를 반환한다", async () => {
+    mockAdmin()
+    supersedeBranchSalesLedgerEntry.mockRejectedValue(new Error(SUPERSEDE_NOT_CHECKED_MESSAGE))
+    const { PATCH } = await import("@/app/api/admin/branch/ledger-drafts/[id]/route")
+
+    const response = await PATCH(
+      patchDraftRequest("old-draft-1", { action: "supersede", newDraftId: VALID_UUID }),
+      { params: Promise.resolve({ id: "old-draft-1" }) },
+    )
+    const json = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(json.error).toBe(SUPERSEDE_NOT_CHECKED_MESSAGE)
+  })
+
+  it("대상 불일치(다른 딜·월)는 400을 반환한다", async () => {
+    mockAdmin()
+    supersedeBranchSalesLedgerEntry.mockRejectedValue(new Error(SUPERSEDE_TARGET_MISMATCH_MESSAGE))
+    const { PATCH } = await import("@/app/api/admin/branch/ledger-drafts/[id]/route")
+
+    const response = await PATCH(
+      patchDraftRequest("old-draft-1", { action: "supersede", newDraftId: VALID_UUID }),
+      { params: Promise.resolve({ id: "old-draft-1" }) },
+    )
+    const json = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(json.error).toBe(SUPERSEDE_TARGET_MISMATCH_MESSAGE)
+  })
+
+  it("이미 이 딜·월에 적용된 정정(23505)이 있으면 409를 반환한다(기존 중복 정정 문구 재사용)", async () => {
+    mockAdmin()
+    supersedeBranchSalesLedgerEntry.mockRejectedValue(new Error(DUPLICATE_ACTIVE_CORRECTION_MESSAGE))
+    const { PATCH } = await import("@/app/api/admin/branch/ledger-drafts/[id]/route")
+
+    const response = await PATCH(
+      patchDraftRequest("old-draft-1", { action: "supersede", newDraftId: VALID_UUID }),
+      { params: Promise.resolve({ id: "old-draft-1" }) },
+    )
+    const json = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(json.error).toBe(DUPLICATE_ACTIVE_CORRECTION_MESSAGE)
+  })
+
+  it("운영 DB에 RPC가 없으면 503 + reason:'supersede-unavailable'을 반환한다(fail-closed)", async () => {
+    mockAdmin()
+    supersedeBranchSalesLedgerEntry.mockRejectedValue(new Error(SUPERSEDE_UNAVAILABLE_MESSAGE))
+    const { PATCH } = await import("@/app/api/admin/branch/ledger-drafts/[id]/route")
+
+    const response = await PATCH(
+      patchDraftRequest("old-draft-1", { action: "supersede", newDraftId: VALID_UUID }),
+      { params: Promise.resolve({ id: "old-draft-1" }) },
+    )
+    const json = await response.json()
+
+    expect(response.status).toBe(503)
+    expect(json.error).toBe(SUPERSEDE_UNAVAILABLE_MESSAGE)
+    expect(json.reason).toBe("supersede-unavailable")
+  })
+
+  it("그 외 예기치 않은 에러는 500을 반환한다", async () => {
+    mockAdmin()
+    supersedeBranchSalesLedgerEntry.mockRejectedValue(new Error("boom"))
+    const { PATCH } = await import("@/app/api/admin/branch/ledger-drafts/[id]/route")
+
+    const response = await PATCH(
+      patchDraftRequest("old-draft-1", { action: "supersede", newDraftId: VALID_UUID }),
+      { params: Promise.resolve({ id: "old-draft-1" }) },
+    )
+
+    expect(response.status).toBe(500)
   })
 })
