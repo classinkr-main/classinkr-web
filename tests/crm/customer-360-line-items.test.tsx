@@ -100,6 +100,19 @@ describe("Customer360DetailMoney · M2 품목별 대수 표", () => {
     expect(html).toContain("품목 데이터 없음 · NEO 오더는 위 통화 그룹 참고")
   })
 
+  it("M5 — 품목·타임라인 CSV 버튼 2개가 모두 렌더되고, 품목이 0건이면 비활성화 + 안내 title을 갖는다", () => {
+    const html = renderToStaticMarkup(<Customer360DetailMoney money={money()} />)
+    expect(html.match(/CSV/g) ?? []).toHaveLength(2)
+    // 품목·타임라인 둘 다 0건인 fixture라 CSV 버튼 2개 모두 비활성 + 같은 안내 title.
+    expect(html.match(/내보낼 행이 없습니다\./g) ?? []).toHaveLength(2)
+  })
+
+  it("M5 — 품목이 있으면 그만큼 CSV 비활성 버튼이 줄어든다(품목 CSV가 활성화)", () => {
+    const html = renderToStaticMarkup(<Customer360DetailMoney money={money({ lineItems: [lineItem({ key: "row-1" })] })} />)
+    // 타임라인은 여전히 0건(이 fixture는 orders/collections/deals를 채우지 않음)이라 그쪽 CSV만 비활성으로 남는다.
+    expect(html.match(/내보낼 행이 없습니다\./g) ?? []).toHaveLength(1)
+  })
+
   it("truncated면 캡션을 보여주고, meta.note가 있으면 함께 보여준다", () => {
     const html = renderToStaticMarkup(
       <Customer360DetailMoney

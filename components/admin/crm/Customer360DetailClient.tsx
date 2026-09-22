@@ -49,6 +49,7 @@ function MoneyTabWithRelink({ data }: { data: Customer360 }) {
       money={data.money}
       deals={data.deals}
       accountId={accountId}
+      customerName={data.header?.name ?? null}
       onRelinked={() => router.refresh()}
     />
   )

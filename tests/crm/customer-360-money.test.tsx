@@ -175,6 +175,22 @@ describe("Customer360DetailMoney · M3 주문 타임라인", () => {
     expect(html).toMatch(/<button[^>]*min-h-11[^>]*>더 보기/)
   })
 
+  it("M5 — 품목·타임라인이 모두 비어 있으면 CSV 버튼 2개가 모두 비활성화되고 안내 title을 갖는다", () => {
+    const html = renderToStaticMarkup(
+      <Customer360DetailMoney
+        money={money({ eeoAccounts: [{ id: "e1", name: "EEO A", uid: null, balance: 500, expireAt: null, lastClassAt: null, serviceStatus: null, syncedAt: null }] })}
+      />
+    )
+    expect(html.match(/CSV/g) ?? []).toHaveLength(2)
+    expect(html.match(/내보낼 행이 없습니다\./g) ?? []).toHaveLength(2)
+  })
+
+  it("M5 — 타임라인에 항목이 생기면 그만큼 CSV 비활성 버튼이 줄어든다(타임라인 CSV가 활성화)", () => {
+    const html = renderToStaticMarkup(<Customer360DetailMoney money={money({ orders: [neo({ id: "o1" })] })} />)
+    // 품목별 대수는 여전히 0건(이 fixture는 lineItems를 채우지 않음)이라 그쪽 CSV만 비활성으로 남는다.
+    expect(html.match(/내보낼 행이 없습니다\./g) ?? []).toHaveLength(1)
+  })
+
   it("항목이 없으면 EmptyState 문구를 그린다", () => {
     const html = renderToStaticMarkup(
       <Customer360DetailMoney

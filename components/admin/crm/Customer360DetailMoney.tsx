@@ -9,10 +9,11 @@
 // lib/crm/money-line-items.ts가 이미 분리해 두므로 여기서 다시 합치지 않는다.
 
 import { useMemo, useState, type ReactNode } from "react"
-import { ChevronDown, Coins, Handshake, Link2, Receipt, TrendingUp, Wallet } from "lucide-react"
+import { ChevronDown, Coins, Download, Handshake, Link2, Receipt, TrendingUp, Wallet } from "lucide-react"
 
 import { EmptyState, Panel, StatTile, TableEmpty } from "@/components/admin/viz"
 import { CRM_CURRENCY_BADGE, formatCrmMoney, formatCNY, formatKRWAbbrev, formatUSD, type CrmCurrency } from "@/lib/crm/money-format"
+import { buildMoneyLineItemsCsv, buildMoneyTimelineCsv, moneyCsvFileName } from "@/lib/crm/money-csv"
 import {
   buildMoneyTimeline,
   groupMoneyTimelineByMonth,
@@ -52,6 +53,56 @@ const CURRENCY_TITLE: Record<CrmCurrency, string> = {
 // 패널 헤더 우측 합계 표기.
 function TotalTag({ children }: { children: ReactNode }) {
   return <span className="text-[13px] font-bold tabular-nums text-[#111110]">{children}</span>
+}
+
+// ── M5 · CSV 내보내기 ──────────────────────────────────────────────────
+// leads/LeadsBoardClient.tsx의 handleExportCsv와 같은 UX(BOM + Blob + a[download] + 인라인 캡션).
+// UTC 기준 YYYY-MM-DD — 실행 환경 타임존과 무관하게 결정적이다(lib/crm/money-csv.ts와 같은 규약).
+function utcDateKey(date: Date): string {
+  return date.toISOString().slice(0, 10)
+}
+
+const BOM = String.fromCharCode(0xfeff)
+
+function downloadCsvFile(csv: string, fileName: string) {
+  // BOM — 한글 헤더가 Excel에서 깨지지 않게(리드 보드 CSV 내보내기와 동일 규약).
+  const blob = new Blob([BOM + csv], { type: "text/csv;charset=utf-8" })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement("a")
+  anchor.href = url
+  anchor.download = fileName
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
+
+/** 섹션 헤더의 CSV 내보내기 버튼. 0건이면 비활성 + title 안내, 성공하면 인라인 캡션을 옆에 남긴다. */
+function MoneyCsvExportButton({
+  label,
+  count,
+  exportedCaption,
+  onExport,
+}: {
+  label: string
+  count: number
+  exportedCaption: string | null
+  onExport: () => void
+}) {
+  const disabled = count === 0
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onExport}
+        title={disabled ? "내보낼 행이 없습니다." : undefined}
+        className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-[#E8E8E4] bg-white px-3 text-[12px] font-semibold text-[#31302E] transition-colors hover:bg-[#F6F5F4] disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-9"
+      >
+        <Download className="h-3.5 w-3.5" aria-hidden="true" />
+        {label}
+      </button>
+      {exportedCaption ? <p className="text-[11px] font-medium text-[#615D59]">{exportedCaption}</p> : null}
+    </div>
+  )
 }
 
 // ── M1 · 통화별 그룹 ───────────────────────────────────────────────────
@@ -578,6 +629,7 @@ export default function Customer360DetailMoney({
   money,
   deals,
   accountId,
+  customerName,
   onRelinked,
 }: {
   money: Customer360Money
@@ -591,9 +643,16 @@ export default function Customer360DetailMoney({
    * 전달하지 않으면 undefined/null → 연결 버튼이 비활성화되고 안내 캡션을 보여준다.
    */
   accountId?: string | null
+  /**
+   * M5 CSV 파일명·메타 행에 쓸 고객 표시명. 상위(Customer360DetailClient)가 아직 넘기지 않으면
+   * "고객"으로 대체한다 — 상위가 `data.header.name`을 넘기도록 배선하는 것은 이 컴포넌트 소유
+   * 밖(후속 작업)이다.
+   */
+  customerName?: string | null
   /** M4 연결 성공 후 상위가 360 데이터를 다시 불러오고 싶을 때(선택). */
   onRelinked?: () => void
 }) {
+  const csvCustomerName = customerName?.trim() || "고객"
   const dealRows = useMemo(() => deals?.rows ?? [], [deals])
   const timeline = useMemo(
     () =>
@@ -620,6 +679,27 @@ export default function Customer360DetailMoney({
   }, [money.unmatchedOutbound, dismissedUnmatchedIds])
 
   const optimisticKeys = useMemo(() => new Set(optimisticLineItems.map((item) => item.key)), [optimisticLineItems])
+
+  // M5 — 품목 표·타임라인 CSV 내보내기. 각각 화면에 그려지는 행 전체(타임라인은 페이지네이션
+  // 이전 전체 목록)를 대상으로 하고, 내보낸 뒤 인라인 캡션으로 건수를 남긴다.
+  const [lineItemsExportCaption, setLineItemsExportCaption] = useState<string | null>(null)
+  const [timelineExportCaption, setTimelineExportCaption] = useState<string | null>(null)
+
+  function handleExportLineItemsCsv() {
+    if (lineItems.length === 0) return
+    const now = new Date()
+    const csv = buildMoneyLineItemsCsv(lineItems, { customerName: csvCustomerName, generatedAt: now.toISOString() })
+    downloadCsvFile(csv, moneyCsvFileName("line-items", csvCustomerName, utcDateKey(now)))
+    setLineItemsExportCaption(`${lineItems.length.toLocaleString("ko-KR")}행 내보냄`)
+  }
+
+  function handleExportTimelineCsv() {
+    if (timeline.length === 0) return
+    const now = new Date()
+    const csv = buildMoneyTimelineCsv(timeline, { customerName: csvCustomerName, generatedAt: now.toISOString() })
+    downloadCsvFile(csv, moneyCsvFileName("timeline", csvCustomerName, utcDateKey(now)))
+    setTimelineExportCaption(`${timeline.length.toLocaleString("ko-KR")}행 내보냄`)
+  }
 
   function handleRelinked(row: CrmUnmatchedOutboundCandidate) {
     setDismissedUnmatchedIds((prev) => new Set(prev).add(row.id))
@@ -764,7 +844,17 @@ export default function Customer360DetailMoney({
       <Panel
         title="품목별 대수"
         description="딜 라인아이템·HW 출고를 품목으로 합산 · 통화가 다른 금액은 더하지 않음"
-        action={<TotalTag>{lineItems.length.toLocaleString("ko-KR")}개 품목</TotalTag>}
+        action={
+          <div className="flex flex-wrap items-start justify-end gap-3">
+            <TotalTag>{lineItems.length.toLocaleString("ko-KR")}개 품목</TotalTag>
+            <MoneyCsvExportButton
+              label="CSV"
+              count={lineItems.length}
+              exportedCaption={lineItemsExportCaption}
+              onExport={handleExportLineItemsCsv}
+            />
+          </div>
+        }
       >
         <LineItemsTable
           items={lineItems}
@@ -781,7 +871,17 @@ export default function Customer360DetailMoney({
       <Panel
         title="주문 타임라인"
         description="NEO 오더($) · NEO 수금(¥) · 자체 딜(₩) 을 최신 순으로 한 축에 · 통화가 다른 금액은 더하지 않음"
-        action={<TotalTag>{timeline.length.toLocaleString("ko-KR")}건</TotalTag>}
+        action={
+          <div className="flex flex-wrap items-start justify-end gap-3">
+            <TotalTag>{timeline.length.toLocaleString("ko-KR")}건</TotalTag>
+            <MoneyCsvExportButton
+              label="CSV"
+              count={timeline.length}
+              exportedCaption={timelineExportCaption}
+              onExport={handleExportTimelineCsv}
+            />
+          </div>
+        }
       >
         <MoneyTimeline entries={timeline} />
       </Panel>
