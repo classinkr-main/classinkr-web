@@ -1,6 +1,14 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 
 import {
@@ -21,6 +29,22 @@ import {
   type YearMonth,
 } from "@/components/checkout/request-date"
 
+/**
+ * 날짜 한 칸에 덧붙이는 정보. 달력 자체는 쇼룸의 슬롯 개념을 모르므로 무엇을 보여줄지는
+ * 부르는 쪽이 정한다(`/checkout` 은 넘기지 않아 기존 렌더와 1픽셀도 다르지 않다).
+ */
+export interface DesiredDateAnnotation {
+  /** 날짜 숫자 아래에 붙는 짧은 표시(예: 남은 자리 점). 장식이라 aria 에서 숨긴다. */
+  hint?: ReactNode
+  /** 스크린리더용 보충 — 기본 날짜 라벨 뒤에 붙는다(예: "마감", "공휴일"). */
+  label?: string
+  /**
+   * `full` 은 "원래 안 여는 날"이 아니라 **찼던 날**이다. 둘 다 같은 회색으로 그리면
+   * 다른 날짜를 볼지 판단할 근거가 사라진다.
+   */
+  tone?: "full"
+}
+
 interface Props {
   /** 선택된 날짜('YYYY-MM-DD'). 미선택은 빈 문자열. */
   value: string
@@ -38,6 +62,8 @@ interface Props {
   invalid?: boolean
   labelledById?: string
   describedById?: string
+  /** 날짜별 보조 표시. 키는 `YYYY-MM-DD`. */
+  annotations?: ReadonlyMap<string, DesiredDateAnnotation>
 }
 
 /**
@@ -57,6 +83,7 @@ export function DesiredDateCalendar({
   invalid = false,
   labelledById,
   describedById,
+  annotations,
 }: Props) {
   const range = useMemo<DesiredDateRange>(
     () => ({ minIso, maxIso, disabledIsoDates }),
@@ -212,6 +239,7 @@ export function DesiredDateCalendar({
               // 범위 안인데 disabledIsoDates 로 막힌 날짜만 aria-disabled 대상이다.
               // 범위 밖(inRange=false)은 이미 native disabled 라 중복 표시하지 않는다.
               const blockedByDisabledSet = inRange && !selectable
+              const annotation = annotations?.get(cell.iso)
               const selected = value === cell.iso
               const isToday = cell.iso === todayIso
               const isFocusTarget = cell.iso === focusedIso
@@ -230,7 +258,11 @@ export function DesiredDateCalendar({
                     disabled={!inRange}
                     aria-disabled={blockedByDisabledSet ? true : undefined}
                     aria-current={isToday ? "date" : undefined}
-                    aria-label={formatDesiredDateLabel(cell.iso)}
+                    aria-label={
+                      annotation?.label
+                        ? `${formatDesiredDateLabel(cell.iso)} ${annotation.label}`
+                        : formatDesiredDateLabel(cell.iso)
+                    }
                     onClick={() => {
                       setFocusedIso(cell.iso)
                       // native disabled 가 아닌 막힌 날짜(disabledIsoDates)는 클릭 이벤트가
@@ -242,7 +274,7 @@ export function DesiredDateCalendar({
                     }}
                     className={[
                       // 모바일 터치 타깃을 넉넉히 — 데스크톱에서만 살짝 조인다.
-                      "flex h-10 w-full items-center justify-center rounded-md text-[13px] tabular-nums transition-colors sm:h-9",
+                      "flex h-10 w-full flex-col items-center justify-center gap-[3px] rounded-md text-[13px] tabular-nums transition-colors sm:h-9",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]",
                       selected
                         ? "bg-[#084734] font-semibold text-white"
@@ -250,11 +282,19 @@ export function DesiredDateCalendar({
                           ? cell.inMonth
                             ? "text-[#111110] hover:bg-[#F6F5F4]"
                             : "text-[#A39E98] hover:bg-[#F6F5F4]"
-                          : "cursor-not-allowed text-[#D5D2CB]",
+                          : annotation?.tone === "full"
+                            // 찼던 날은 회색이되 취소선으로 "열렸다가 닫힌 날"임을 남긴다.
+                            ? "cursor-not-allowed text-[#A39E98] line-through decoration-[#D5D2CB]"
+                            : "cursor-not-allowed text-[#D5D2CB]",
                       !selected && isToday ? "ring-1 ring-inset ring-[#084734]/35" : "",
                     ].join(" ")}
                   >
-                    {cell.day}
+                    <span>{cell.day}</span>
+                    {annotation?.hint ? (
+                      <span aria-hidden="true" className="flex h-[3px] items-center gap-[2px]">
+                        {annotation.hint}
+                      </span>
+                    ) : null}
                   </button>
                 </div>
               )
