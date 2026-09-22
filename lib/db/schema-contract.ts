@@ -531,7 +531,7 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     columns: ["role", "academy_size"],
     migration: "supabase/migrations/20260921_checkout_requests_lead_qualifiers.sql",
     impact:
-      "신청 저장이 42703 으로 실패한다. 컬럼이 없으면 리드 스코어의 규모 배점도 계속 비어 가장 비싼 신청이 단순 문의보다 낮게 깔린다.",
+      "어드민 접수 큐(lib/repositories/checkout-requests-admin.ts)가 두 컬럼을 select 해 목록·상세 조회가 42703 으로 실패한다. 공개 신청은 두 컬럼을 빼고 다시 저장되지만(lib/checkout-requests.ts 폴백) 직책·학원 규모는 리드 쪽(leads.role·leads.size)에만 남는다.",
   },
   {
     kind: "anon",

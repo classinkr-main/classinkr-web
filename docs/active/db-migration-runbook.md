@@ -113,6 +113,48 @@ npm run check:db --  --strict
 - 하드웨어 탭 마이그레이션의 적용 상태와 순서는 [하드웨어 SCM 탭 reference §6](./hardware-scm-tab-reference.md#6-마이그레이션-상태)에 둔다.
 - `20260915_hardware_sample_showroom_status.sql`은 check 제약 값만 넓히는 변경이라 `check:db` 프로브로 확인할 수 없다. 그 문서의 제약 조회로 확인한다.
 
+## 순서가 정해진 마이그레이션
+
+### 컨택·쇼룸 예약·도입 신청 퍼널 (2026-09-22)
+
+퍼널 개편([2차 기획](./contact-showroom-checkout-develop-round2-2026-09-20.md))이 기대는 마이그레이션 3개다. 앞의 둘은 **코드 배포 전에**, 마지막 하나는 **코드 배포 후에** 적용한다.
+
+| 순서 | 파일 | 내용 | 코드 배포와의 순서 | 확인 |
+| --- | --- | --- | --- | --- |
+| 1 | `20260829_showroom_bookings.sql` | 쇼룸 예약 테이블(RLS deny-all) | 전 | `check:db` — `showroom_bookings`, anon 차단 |
+| 2 | `20260921_checkout_requests_lead_qualifiers.sql` | `checkout_requests.role`·`academy_size` (nullable) | 전 | `check:db` — 도입 신청 리드 자격 필드 |
+| 3 | `20260921_lead_source_intake_split.sql` | 과거 리드 `source` 보정(UPDATE 2문) | **후** | 아래 SQL. 데이터 보정이라 `check:db` 계약에 없다 |
+
+**2번이 빠지면 무엇이 깨지나.** Phase C 코드부터 도입 신청 insert가 두 컬럼을 싣는다.
+
+- 폴백이 들어가기 전 코드(Phase C·D)는 신청 저장이 42703/PGRST204로 실패하고 500을 돌려준다. 신청이 통째로 유실된다.
+- 폴백 이후 코드는 두 컬럼을 빼고 다시 저장하고 `console.warn`을 남긴다([lib/checkout-requests.ts](../../lib/checkout-requests.ts)).
+- 어느 쪽이든 어드민 접수 큐 조회는 두 컬럼을 select하므로 실패한다([lib/repositories/checkout-requests-admin.ts](../../lib/repositories/checkout-requests-admin.ts)).
+- `ADD COLUMN IF NOT EXISTS` 두 줄이라 재실행해도 무해하다. 가장 먼저 적용한다.
+
+**3번을 배포 후에 돌리는 이유.** 두 방향 모두 틈이 생긴다.
+
+- 배포 전에 돌리면, 배포까지 이전 코드가 새 쇼룸·신청 리드를 계속 `contact_page`로 쓴다. 이 행들은 보정에서 빠진다.
+- 이전 코드의 응답 SLA·아침 공지 집합은 새 값(`showroom_booking`·`checkout_request`)을 모른다. 보정된 과거 행이 배포 때까지 공지에서 빠진다.
+- 멱등이라 배포 전후로 두 번 돌려도 된다(이미 바뀐 행은 조건에 다시 걸리지 않는다).
+
+```sql
+-- 적용 전: 보정 대상 규모
+select source, count(*)
+from public.leads
+where source_detail = 'showroom_booking' or source_detail like 'checkout_request:%'
+group by source;
+
+-- 적용 후: 0행이어야 한다
+select source_detail, count(*)
+from public.leads
+where source = 'contact_page'
+  and (source_detail = 'showroom_booking' or source_detail like 'checkout_request:%')
+group by source_detail;
+```
+
+`leads.source`에는 CHECK 제약이 없다. 3번을 적용하지 않아도 새 리드 저장은 깨지지 않는다. 빠지는 것은 과거 행의 집계 연속성뿐이다.
+
 ## 새 마이그레이션을 추가할 때
 
 1. `supabase/migrations/YYYYMMDD_설명.sql` — idempotent 구문, 관리자·금융 테이블은 즉시 RLS 활성화

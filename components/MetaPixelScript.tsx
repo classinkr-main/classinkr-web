@@ -4,6 +4,7 @@ import { usePathname, useSearchParams } from "next/navigation"
 import Script from "next/script"
 import { useEffect } from "react"
 import { META_PIXEL_ID } from "@/lib/analytics-config"
+import { excludesAnalytics } from "@/lib/analytics-paths"
 
 let lastMetaPageViewPath: string | null = null
 
@@ -11,10 +12,7 @@ export function MetaPixelScript() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const search = searchParams.toString()
-  const isInternal =
-    pathname.startsWith("/admin") ||
-    pathname.startsWith("/checkout") ||
-    pathname.startsWith("/receipt")
+  const isInternal = excludesAnalytics(pathname)
 
   useEffect(() => {
     if (isInternal || !META_PIXEL_ID) return

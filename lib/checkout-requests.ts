@@ -551,33 +551,61 @@ function rememberRequest(key: string, requestId: string) {
 
 /* ─── 저장 · 후속 처리 ─── */
 
+/**
+ * 자격 컬럼(`role`·`academy_size`)이 아직 없다는 오류인지.
+ *
+ * 두 컬럼은 20260921_checkout_requests_lead_qualifiers.sql 이 더한다. 코드가 마이그레이션보다
+ * 먼저 나가면 insert 전체가 42703/PGRST204 로 죽어 **신청 자체를 잃는다**. 폴백은 이
+ * 두 컬럼이 이름으로 걸린 컬럼 부재 오류일 때만 탄다 — 이름만 겹치는 다른 오류(제약 위반
+ * 등)에 내려가면 원인을 가린다.
+ */
+function isMissingQualifierColumn(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false
+  const message = error.message ?? ""
+  const looksMissing =
+    error.code === "42703" ||
+    error.code === "PGRST204" ||
+    /schema cache|column .*does not exist|could not find/i.test(message)
+  return looksMissing && /['"](role|academy_size)['"]/.test(message)
+}
+
 async function insertCheckoutRequest(request: NormalizedCheckoutRequest) {
   // 공개 무인증 경로 — RLS deny-all 테이블이므로 service role 클라이언트만 통한다.
   const supabase = createSupabaseAdminClient()
 
-  const { data, error } = await supabase
+  const baseRow = {
+    kind: request.kind,
+    items: request.items,
+    total_amount: request.totalAmount,
+    currency: request.currency,
+    org: request.org,
+    name: request.name,
+    phone: request.phone,
+    email: request.email,
+    install_type: request.installType,
+    address: request.address,
+    desired_date: request.desiredDate,
+    memo: request.memo,
+    source_page: request.sourcePage,
+    status: "new" as const,
+  }
+
+  let result = await supabase
     .from("checkout_requests")
-    .insert({
-      kind: request.kind,
-      items: request.items,
-      total_amount: request.totalAmount,
-      currency: request.currency,
-      org: request.org,
-      name: request.name,
-      phone: request.phone,
-      email: request.email,
-      role: request.role,
-      academy_size: request.academySize,
-      install_type: request.installType,
-      address: request.address,
-      desired_date: request.desiredDate,
-      memo: request.memo,
-      source_page: request.sourcePage,
-      status: "new",
-    })
+    .insert({ ...baseRow, role: request.role, academy_size: request.academySize })
     .select("id")
     .single()
 
+  // 자격 필드는 선택 항목이고 리드 미러링(leads.role·leads.size)으로도 가므로, 컬럼이 없으면
+  // 빼고 한 번 더 넣는다 — 스코어 배점은 이 폴백에서도 리드 쪽에 남는다.
+  if (isMissingQualifierColumn(result.error)) {
+    console.warn(
+      "[checkout-request] role·academy_size 컬럼 미적용 — 빼고 저장합니다. 20260921_checkout_requests_lead_qualifiers.sql 적용 필요"
+    )
+    result = await supabase.from("checkout_requests").insert(baseRow).select("id").single()
+  }
+
+  const { data, error } = result
   if (error || !data?.id) {
     throw new Error(`[checkout-request] 저장 실패: ${error?.message ?? "no row returned"}`)
   }

@@ -44,8 +44,6 @@ interface Availability {
   maxIso: string
   days: ShowroomDayAvailability[]
   slotDurationMinutes: number
-  /** 원천 설정 상태. 구버전 응답을 대비해 선택 필드로 둔다. */
-  sources?: { holidays?: boolean; showroomCalendar?: boolean }
 }
 
 const EMPTY_DAYS: ShowroomDayAvailability[] = []
@@ -683,17 +681,10 @@ export function ShowroomBookingForm({ interests }: Props) {
                 describedById="showroom-date-hint"
               />
               <p id="showroom-date-hint" className="text-[11px] text-[#A39E98]">
-                평일만 운영하며, 담당자 배정과 자료 준비를 위해 최소 2영업일 전부터 예약을
-                받습니다. 날짜 아래 점은 그날 남은 자리이고, 취소선은 이미 마감된 날입니다.
+                평일만 운영하며 공휴일은 쉽니다. 담당자 배정과 자료 준비를 위해 최소 2영업일
+                전부터 예약을 받습니다. 날짜 아래 점은 그날 남은 자리이고, 취소선은 이미 마감된
+                날입니다.
               </p>
-              {/* 공휴일 원천이 꺼져 있으면 달력이 연휴를 열어 둔다. 요청형이라 담당자가
-                  확정 단계에서 거를 수 있지만, 화면이 아는 척하지는 않는다. */}
-              {availability?.sources?.holidays === false ? (
-                <p className="text-[11px] text-[#A8741A]">
-                  공휴일은 자동 반영되지 않습니다. 연휴에 걸친 날짜를 고르셨다면 담당자가 확인
-                  단계에서 함께 조정해 드립니다.
-                </p>
-              ) : null}
             </>
           )}
 
