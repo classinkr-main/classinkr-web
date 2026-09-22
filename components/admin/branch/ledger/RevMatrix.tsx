@@ -37,6 +37,7 @@ import {
 import {
   computeWeekCellStates,
   EMPTY_BUCKET,
+  EMPTY_MATRIX_RANGE,
   isMatrixCellEditable,
   isMatrixCellLocked,
   MATRIX_ANNUAL_W,
@@ -122,7 +123,9 @@ export function MatrixToneLegend() {
       <span>· 잠금=시트확정/장부반영</span>
       <span className="hidden lg:inline">· 합산 셀 주황=확도 혼합 포함</span>
       {/* 13인치(lg~xl) 랩탑에서도 단축키 힌트가 보이도록 xl→lg 하향. 편집 진입 시엔 팝오버가 셀 인근 힌트를 재노출한다. */}
-      <span className="hidden text-[#A39E98] lg:inline">· Enter 편집 · Tab 이동 · Ctrl+D 아래 복사 · Ctrl+V 엑셀 붙여넣기 · E/H/C 확도(예정·고확도·확정) · Esc 취소</span>
+      {/* 라운드 4 P2-8: "/" 검색 포커스·Ctrl+Z 직전 입력 취소 추가 — 배선은 SalesLedgerWorkbench.tsx
+          매트릭스 스크롤 컨테이너 keydown(revSearchInputRef·lastUndoableDraftIdRef) 참고. */}
+      <span className="hidden text-[#A39E98] lg:inline">· Enter 편집 · Tab 이동 · Ctrl+D 아래 복사 · Ctrl+V 엑셀 붙여넣기 · E/H/C 확도(예정·고확도·확정) · Esc 취소 · / 검색 · Ctrl+Z 직전 입력 취소</span>
     </span>
   )
 }
@@ -219,6 +222,9 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
   // 두고 좌측 보더만 옅은 그린 accent로 바꿔 세로로 훑었을 때 "이 열들이 선택 기간"임이 읽히게
   // 한다 — bgClass를 덮어쓰지 않아 selected/draft/hover 등 기존 행 상태 표시와 충돌하지 않는다.
   periodHighlighted = false,
+  // 라운드 4 P2-8: Shift+방향키로 선택된 범위(anchor~selected)에 포함된 셀 — 선택 링(ring)과
+  // 구분되는 은은한 중립 배경만 준다(새 색 없음, 아래 bg 계산 참고).
+  rangeHighlighted = false,
 }: {
   bucket: RevMonthlyBucket
   mismatch?: boolean
@@ -235,6 +241,7 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
   editBuffer?: string
   editConfidence?: DraftConfidence
   periodHighlighted?: boolean
+  rangeHighlighted?: boolean
 }) {
   const tone = mismatch ? "mismatch" : matrixBucketTone(bucket)
   const interactive = Boolean(actions && month && rowId)
@@ -292,7 +299,10 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
   // "강조는 한 곳만" 위계를 지킨다. 색은 CONFIDENCE_TOKENS['high-confidence'].tintBg(#EFF6FF) SSOT.
   // 불일치(빨강)·미검수 초안은 운영상 더 급한 신호라 틴트보다 우선한다.
   const highTint = !mismatch && !pending && tone === "high"
-  const bg = mismatch ? "bg-[#FCE9E9]" : highTint ? "bg-[#EFF6FF]" : bgClass
+  // 라운드 4 P2-8: range 배경은 불일치·고확도 틴트보다는 아래지만 일반 행 배경(bgClass — hover/
+  // draft/selected 행 톤)보다는 위다. 새 색이 아니라 이 파일에 이미 쓰이는 중립 톤(#F6F5F4 — 하단
+  // 합계행·뱃지 배경과 동일)을 재사용한다.
+  const bg = mismatch ? "bg-[#FCE9E9]" : highTint ? "bg-[#EFF6FF]" : rangeHighlighted ? "bg-[#F6F5F4]" : bgClass
   const cellClassName = `relative px-1.5 text-right align-middle tabular-nums ${
     mismatch
       ? "border-l-2 border-l-[#B43E3E]"
@@ -389,6 +399,8 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
   editConfidence = "expected",
   // 웨이브 5 — 항목 1(b): 이 칸이 속한 달이 현재 M/Q 선택 기간이면 월 셀과 동일한 좌측 accent.
   periodHighlighted = false,
+  // 라운드 4 P2-8: 월 셀(RevMatrixMonthCell)과 동일한 range 배경 처리.
+  rangeHighlighted = false,
 }: {
   display: number
   isMonthOnly: boolean
@@ -408,6 +420,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
   editBuffer?: string
   editConfidence?: DraftConfidence
   periodHighlighted?: boolean
+  rangeHighlighted?: boolean
 }) {
   const interactive = Boolean(actions && month && rowId)
   const cellRef = useRef<HTMLTableCellElement | null>(null)
@@ -460,9 +473,10 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
   // 우선한다(월 우세 확도로 뭉개면 같은 달 안 다른 주차의 확도가 묻힌다 — UX 감사 2026-09-20).
   const pendingConfidence = pending ? pending.weeklyConfidence?.[weekIndex] ?? pending.confidence : null
 
+  // 라운드 4 P2-8: 월 셀과 동일한 중립 range 배경(새 색 없음) — bgClass(행 상태 톤)보다 위.
   const cellClassName = `relative px-1.5 text-right align-middle tabular-nums ${
     periodHighlighted ? "border-l-2 border-l-[#084734]/25" : "border-l border-[#F2F1EE]"
-  } ${bgClass} ${
+  } ${rangeHighlighted ? "bg-[#F6F5F4]" : bgClass} ${
     interactive && editable ? "cursor-cell" : ""
   } ${selected ? "ring-2 ring-inset ring-[#084734]/40" : ""} focus-visible:outline-none`
 
@@ -575,6 +589,10 @@ function RevMatrixWeekCells({
     // 선택/편집은 이 칸 기준으로 계산해 원시값으로 내린다 — 비선택·비편집 칸은 memo 스킵.
     const weekSelected = Boolean(editContext) && editContext!.isSelectedCell(month ?? "", index)
     const weekEditing = Boolean(editContext) && editContext!.isEditingCell(month ?? "", index)
+    // 라운드 4 P2-8: range도 선택/편집과 같은 행 스코프 판정(editContext.isRangeCell) — 확장 주차
+    // 칸까지 포함해 Shift+방향키 구간이 주차 칸에서도 보이게 한다. non-null 단언 없이 삼항으로
+    // 좁힌다(위 monthLockedOf와 동일 관례).
+    const weekRangeHighlighted = editContext ? editContext.isRangeCell(month ?? "", index) : false
     cells.push(
       <RevMatrixWeekCell
         key={index}
@@ -596,6 +614,7 @@ function RevMatrixWeekCells({
         editBuffer={weekEditing ? editContext!.editBuffer : ""}
         editConfidence={weekEditing ? editContext!.editConfidence : "expected"}
         periodHighlighted={periodHighlighted}
+        rangeHighlighted={weekRangeHighlighted}
       />,
     )
   }
@@ -610,6 +629,8 @@ interface RevMatrixEditContext {
   actions: MatrixEditorActions // identity 안정 — 셀 핸들러(선택/편집 시작/커밋/버퍼)용
   isSelectedCell: (month: string, week?: number) => boolean // 이 행 기준 셀 선택 판정
   isEditingCell: (month: string, week?: number) => boolean // 이 행 기준 셀 편집 판정
+  // 라운드 4 P2-8: 이 행 기준 range(Shift+방향키 선택 구간) 판정 — rangeCoords(행 스코프 prop)에서 파생.
+  isRangeCell: (month: string, week?: number) => boolean
   editBuffer: string // 편집 중 버퍼 값(편집 셀에만 의미)
   editConfidence: DraftConfidence // 편집 중 확도(편집 셀에만 의미)
   // 잠금 아이콘·툴팁 라벨(월별) — 시트 원천은 "시트 확정", 적용 초안은 "장부 반영", 정정 적용으로
@@ -674,6 +695,9 @@ function RevMatrixMonthStrip({
         }
         const monthSelected = Boolean(editContext) && editContext!.isSelectedCell(month)
         const monthEditing = Boolean(editContext) && editContext!.isEditingCell(month)
+        // 라운드 4 P2-8: range도 선택/편집과 같은 행 스코프 판정(editContext.isRangeCell). non-null
+        // 단언 없이 삼항으로 좁힌다(위 monthLockedOf와 동일 관례).
+        const monthRangeHighlighted = editContext ? editContext.isRangeCell(month) : false
         return (
           <RevMatrixMonthCell
             key={month}
@@ -692,6 +716,7 @@ function RevMatrixMonthStrip({
             editBuffer={monthEditing ? editContext!.editBuffer : ""}
             editConfidence={monthEditing ? editContext!.editConfidence : "expected"}
             periodHighlighted={periodHighlighted}
+            rangeHighlighted={monthRangeHighlighted}
           />
         )
       })}
@@ -1231,6 +1256,9 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
   editingCoord = null,
   editBuffer = "",
   editConfidence = "expected",
+  // 라운드 4 P2-8: range(Shift+방향키 선택 구간)도 같은 행 스코프 패턴 — 이 행에 걸린 좌표만
+  // 배열로 온다. 해당 없으면 부모가 EMPTY_MATRIX_RANGE(안정 참조)를 넘겨 memo가 깨지지 않는다.
+  rangeCoords = EMPTY_MATRIX_RANGE,
   pendingByCell = null,
   density = "regular",
   periodMonths,
@@ -1252,6 +1280,7 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
   editingCoord?: MatrixCellCoord | null
   editBuffer?: string
   editConfidence?: DraftConfidence
+  rangeCoords?: MatrixCellCoord[]
   pendingByCell?: Map<string, MatrixPendingDraft> | null
   density?: MatrixDensity
   periodMonths?: Set<string> // 웨이브 5 — 항목 1(b): 선택 기간 열 accent
@@ -1290,6 +1319,9 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
           selectedCoord != null && selectedCoord.month === month && (selectedCoord.week ?? -1) === (week ?? -1),
         isEditingCell: (month, week) =>
           editingCoord != null && editingCoord.month === month && (editingCoord.week ?? -1) === (week ?? -1),
+        // 라운드 4 P2-8: rangeCoords는 이 행에 걸린 range 좌표만(부모가 이미 행별로 필터링해 넘김) —
+        // 여기서는 월·주차만 비교하면 된다(rowId 일치는 부모 필터링에 이미 내포).
+        isRangeCell: (month, week) => rangeCoords.some((coord) => coord.month === month && (coord.week ?? -1) === (week ?? -1)),
         editBuffer,
         editConfidence,
         // 품질 웨이브 4 — 항목 1: 정정으로 재잠긴 달만 "장부 반영(정정)"으로 구분 — 나머지는 기존 규약.

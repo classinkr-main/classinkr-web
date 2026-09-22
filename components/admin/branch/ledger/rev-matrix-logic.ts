@@ -79,6 +79,11 @@ export function matrixCoordKey(coord: MatrixCellCoord): string {
   return coord.week == null ? `${coord.rowId}::${coord.month}` : `${coord.rowId}::${coord.month}::w${coord.week + 1}`
 }
 
+// 라운드 4 P2-8 — range(Shift+방향키 선택 구간) prop이 행에 없을 때 넘기는 공유 빈 배열. 매번
+// 새 []를 만들면 memo(React.memo) 얕은비교가 매 렌더 깨진다 — selectedCoord/editingCoord의 null
+// 패턴과 같은 목적으로, 참조 하나를 고정해 재사용한다.
+export const EMPTY_MATRIX_RANGE: MatrixCellCoord[] = []
+
 // 두 좌표가 같은 세로 열(같은 월·같은 주차)인지 — 아래/위 이동·fill-down 소스 판정용.
 function matrixSameColumn(a: MatrixCellCoord, b: MatrixCellCoord): boolean {
   return a.month === b.month && (a.week ?? -1) === (b.week ?? -1)
@@ -635,6 +640,25 @@ export function storeMatrixConfidence(value: DraftConfidence) {
   }
 }
 
+// 라운드 4 P2-8 — Shift+방향키 범위 선택의 순수 계산. anchor~selected 사이를 "직사각형"이 아니라
+// editableCells의 순회 순서(index) 구간으로 잡는다 — 상하 이동으로 여러 행을 거치면 그 사이 모든
+// 열이 통째로 포함된다(직사각형 계산 없이 기존 좌표 순회 순서를 그대로 재사용하는 구현 단순화).
+// anchor·selected 중 하나가 없거나 editableCells에서 찾을 수 없으면(필터링으로 사라진 좌표 등)
+// 빈 배열(EMPTY_MATRIX_RANGE, 안정 참조)을 돌려준다.
+export function computeMatrixRange(
+  editableCells: MatrixCellCoord[],
+  anchor: MatrixCellCoord | null,
+  selected: MatrixCellCoord | null,
+): MatrixCellCoord[] {
+  if (!anchor || !selected) return EMPTY_MATRIX_RANGE
+  const anchorIndex = editableCells.findIndex((cell) => matrixCoordKey(cell) === matrixCoordKey(anchor))
+  const selectedIndex = editableCells.findIndex((cell) => matrixCoordKey(cell) === matrixCoordKey(selected))
+  if (anchorIndex < 0 || selectedIndex < 0) return EMPTY_MATRIX_RANGE
+  const start = Math.min(anchorIndex, selectedIndex)
+  const end = Math.max(anchorIndex, selectedIndex)
+  return editableCells.slice(start, end + 1)
+}
+
 // ── Phase 2 인라인 편집 상태기계(useMatrixEditor) ───────────────────────────
 // JSX를 반환하지 않는 훅 — SalesLedgerWorkbench 최상위에서 무조건 호출되므로(Rules of Hooks)
 // next/dynamic 대상이 될 수 없다. RevMatrix.tsx의 행/셀 컴포넌트가 이 훅의 반환값(actions 등)을
@@ -645,6 +669,7 @@ export function useMatrixEditor({
   cellConfidence,
   onCommitCell,
   onAmountClamped,
+  onCommitRangeConfidence,
 }: {
   editableCells: MatrixCellCoord[] // 렌더 순서(행 위→아래, 월 좌→우, 확장월은 w1→w5)로 정렬된 편집가능 셀
   cellValue: (coord: MatrixCellCoord) => number // 커밋 기준값(원 단위) — fill-down 소스
@@ -652,6 +677,9 @@ export function useMatrixEditor({
   onCommitCell: (rowId: string, month: string, amount: number, confidence: DraftConfidence, week?: number) => void
   // 음수 입력이 0으로 클램프될 때 호출(커밋 결과와 무관 — 무입력 취급되는 경우도 포함). 항목 3.
   onAmountClamped?: () => void
+  // 라운드 4 P2-8 — range(2칸 이상)에서 E/H/C를 누르면 호출. 없으면(하위호환) range 크기와 무관하게
+  // 항상 기존 단일 셀(selected) 경로로 폴백한다 — 그래서 선택적 인자다.
+  onCommitRangeConfidence?: (coords: MatrixCellCoord[], confidence: DraftConfidence) => void
 }) {
   const [selected, setSelected] = useState<MatrixCellCoord | null>(null)
   const [editing, setEditing] = useState<MatrixCellCoord | null>(null)
@@ -670,6 +698,21 @@ export function useMatrixEditor({
     editConfidenceRef.current = editConfidence
   }, [buffer, editConfidence])
 
+  // 라운드 4 P2-8 — Shift+방향키 범위 선택의 시작점(anchor)과 파생 range(anchor~selected 구간,
+  // editableCells 순회 순서 — computeMatrixRange). Shift 없는 이동·편집 진입(beginEdit)·Esc
+  // (cancelEdit)는 anchor를 null로 되돌린다(각 함수 참고) — 그래야 새 선택이 이전 range를 들고
+  // 다니지 않는다.
+  const [anchor, setAnchor] = useState<MatrixCellCoord | null>(null)
+  const range = useMemo(() => computeMatrixRange(editableCells, anchor, selected), [editableCells, anchor, selected])
+  // range의 최신값 미러(latest-ref) — bufferRef와 같은 목적: onSelectedKeyDown의 E/H/C 분기가
+  // range.length를 상태값으로 직접 읽으면 그 콜백(과 이를 물고 있는 actions)의 identity가
+  // Shift+방향키를 누를 때마다(=range가 바뀔 때마다) 흔들린다. range 자체는 훅 반환값으로 그대로
+  // 노출해 상위(워크벤치)의 행 스코프 prop 계산에 쓰고, 훅 내부 판정만 이 ref로 읽는다.
+  const rangeRef = useRef(range)
+  useEffect(() => {
+    rangeRef.current = range
+  }, [range])
+
   // 편집가능 셀 순번 조회 O(1) — 방향키/Tab 이동에 사용. 주차 셀은 `::wN`까지 포함한 키.
   const indexByKey = useMemo(() => {
     const map = new Map<string, number>()
@@ -680,12 +723,17 @@ export function useMatrixEditor({
   const selectCell = useCallback((rowId: string, month: string, week?: number) => {
     setEditing(null)
     setSelected({ rowId, month, week })
+    // 라운드 4 P2-8: Shift 없는 선택(클릭)은 이전 range를 지운다 — 아래 moveSelection 등과 동일 취급.
+    setAnchor(null)
   }, [])
 
   const beginEdit = useCallback(
     (rowId: string, month: string, seed?: string, week?: number) => {
       const coord: MatrixCellCoord = { rowId, month, week }
       setSelected(coord)
+      // 라운드 4 P2-8: 편집 진입은 range를 지운다(스펙) — 편집 중엔 anchor가 없어 range가 항상
+      // 빈 배열이 되므로, 편집 셀에서 range 배경을 따로 배제하는 분기가 필요 없어진다.
+      setAnchor(null)
       // 기본 확도: 값이 있거나(우세 확도) 미검수 초안이 확도를 남긴 셀은 그대로, 완전 빈 셀만
       // 마지막 명시 선택 확도(localStorage)로 시작한다 — SL-6, A1 확도-분배 로직 회귀 없음.
       const current = cellValue(coord)
@@ -705,6 +753,8 @@ export function useMatrixEditor({
   const cancelEdit = useCallback(() => {
     setEditing(null)
     setBuffer("")
+    // 라운드 4 P2-8: Esc도 range를 지운다(스펙).
+    setAnchor(null)
   }, [])
 
   // 확도 팝오버의 "명시 선택"만 기억한다 — 기본값으로 흘러간 확도는 기록하지 않아
@@ -736,6 +786,8 @@ export function useMatrixEditor({
 
   const moveSelection = useCallback(
     (from: MatrixCellCoord, delta: number) => {
+      // 라운드 4 P2-8: Shift 없는 이동은 range를 지운다(스펙) — 경계에 막혀 실제로는 안 움직여도 지운다.
+      setAnchor(null)
       const index = indexByKey.get(matrixCoordKey(from))
       if (index == null) return
       const nextIndex = index + delta
@@ -749,6 +801,8 @@ export function useMatrixEditor({
   // 같은 행에서 다음 셀(오른쪽 우선). Tab/Shift+Tab·Enter(아래) 커밋 후 이동에 공유.
   const moveWithinRowOrNext = useCallback(
     (from: MatrixCellCoord, direction: "right" | "left" | "down") => {
+      // 라운드 4 P2-8: Shift 없는 이동은 range를 지운다(스펙) — 편집 커밋 후 이동(Tab/Enter)도 포함.
+      setAnchor(null)
       const index = indexByKey.get(matrixCoordKey(from))
       if (index == null) return
       if (direction === "down") {
@@ -765,6 +819,34 @@ export function useMatrixEditor({
       const nextIndex = index + delta
       if (nextIndex < 0 || nextIndex >= editableCells.length) return
       setSelected(editableCells[nextIndex])
+    },
+    [editableCells, indexByKey],
+  )
+
+  // 라운드 4 P2-8 — Shift+방향키 범위 선택. anchor가 없으면 지금 좌표를 anchor로 고정한다(함수형
+  // setState로 최신 anchor를 읽어 이 콜백의 deps에 anchor를 넣지 않는다 — bufferRef와 같은 취지의
+  // "상태를 deps에 넣지 않기" 트릭). 이동 자체는 방향에 따라 기존 좌표 순회를 그대로 재사용한다:
+  // 좌우는 moveSelection과 같은 index±1, 상하는 matrixSameColumn 규약(같은 월·같은 주차)으로 다음/
+  // 이전 행을 찾는다(onSelectedKeyDown의 기존 ArrowDown/Up 인라인 로직과 동일 순회).
+  const extendRangeSelection = useCallback(
+    (from: MatrixCellCoord, key: "ArrowRight" | "ArrowLeft" | "ArrowDown" | "ArrowUp") => {
+      setAnchor((current) => current ?? from)
+      const index = indexByKey.get(matrixCoordKey(from))
+      if (index == null) return
+      if (key === "ArrowRight" || key === "ArrowLeft") {
+        const delta = key === "ArrowRight" ? 1 : -1
+        const nextIndex = index + delta
+        if (nextIndex < 0 || nextIndex >= editableCells.length) return
+        setSelected(editableCells[nextIndex])
+        return
+      }
+      const step = key === "ArrowDown" ? 1 : -1
+      for (let i = index + step; step > 0 ? i < editableCells.length : i >= 0; i += step) {
+        if (matrixSameColumn(editableCells[i], from)) {
+          setSelected(editableCells[i])
+          return
+        }
+      }
     },
     [editableCells, indexByKey],
   )
@@ -822,11 +904,26 @@ export function useMatrixEditor({
       }
       // 선택 중 E/H/C = 그 칸 금액은 그대로 두고 확도만 바꾼다(시트에서 글자색만 바꾸는 동작).
       // 빈 칸은 바꿀 금액이 없고, 같은 확도면 초안을 만들지 않는다 — 결과는 기존과 같은 검토 초안 1건.
+      // 라운드 4 P2-8: range가 2칸 이상이면(Shift+방향키로 선택된 상태) onCommitRangeConfidence가
+      // 있을 때만 range 전체 일괄 적용으로 바꾼다 — 콜백이 없으면(하위호환) range 크기와 무관하게
+      // 항상 아래 단일 셀 경로로 폴백한다. range.length는 rangeRef(latest-ref)로 읽어 이 콜백의
+      // identity가 Shift+방향키를 누를 때마다 흔들리지 않게 한다(actions 안정성, 위 주석 참고).
       const shortcut = confidenceFromShortcut({ code: event.code, ctrlKey: event.ctrlKey, metaKey: event.metaKey, altKey: event.altKey, isComposing: event.nativeEvent.isComposing })
       if (shortcut) {
         event.preventDefault()
+        if (onCommitRangeConfidence && rangeRef.current.length >= 2) {
+          onCommitRangeConfidence(rangeRef.current, shortcut)
+          return
+        }
         const value = cellValue(coord)
         if (value > 0 && shortcut !== cellConfidence(coord)) onCommitCell(coord.rowId, coord.month, value, shortcut, coord.week)
+        return
+      }
+      // 라운드 4 P2-8: Shift+방향키는 이동이 아니라 범위 선택 — 아래 "Shift 없는 이동" 분기들보다
+      // 먼저 가로챈다(같은 ArrowRight 등 키값을 이 분기가 먼저 소비해 폴스루를 막는다).
+      if (event.shiftKey && (event.key === "ArrowRight" || event.key === "ArrowLeft" || event.key === "ArrowDown" || event.key === "ArrowUp")) {
+        event.preventDefault()
+        extendRangeSelection(coord, event.key)
         return
       }
       if (event.key === "ArrowRight") {
@@ -846,6 +943,9 @@ export function useMatrixEditor({
       }
       if (event.key === "ArrowUp") {
         event.preventDefault()
+        // 라운드 4 P2-8: 이 분기는 moveWithinRowOrNext를 쓰지 않는 기존 인라인 구현이라 range도
+        // 여기서 직접 지운다(Shift 없는 이동 규약, 위 moveSelection 등과 동일 취지).
+        setAnchor(null)
         const index = indexByKey.get(matrixCoordKey(coord))
         if (index == null) return
         for (let i = index - 1; i >= 0; i -= 1) {
@@ -866,7 +966,18 @@ export function useMatrixEditor({
         beginEdit(coord.rowId, coord.month, event.key, coord.week)
       }
     },
-    [beginEdit, cellConfidence, cellValue, editableCells, indexByKey, moveSelection, moveWithinRowOrNext, onCommitCell],
+    [
+      beginEdit,
+      cellConfidence,
+      cellValue,
+      editableCells,
+      extendRangeSelection,
+      indexByKey,
+      moveSelection,
+      moveWithinRowOrNext,
+      onCommitCell,
+      onCommitRangeConfidence,
+    ],
   )
 
   // 셀 핸들러가 호출하는 액션들 — 전부 identity 안정(콜백 deps가 데이터/펼침에만 반응).
@@ -893,6 +1004,10 @@ export function useMatrixEditor({
     editing,
     buffer,
     editConfidence,
+    // 라운드 4 P2-8 — Shift+방향키 범위 선택 상태. anchor는 디버깅/테스트 가시성을 위해 함께
+    // 노출한다(실제 UI 소비는 range만으로 충분 — RevMatrix.tsx는 range만 행 스코프로 좁혀 받는다).
+    anchor,
+    range,
     actions,
   }
 }

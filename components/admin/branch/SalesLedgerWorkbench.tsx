@@ -143,6 +143,7 @@ import {
   buildMatrixPendingByCell,
   dominantCellConfidence,
   EMPTY_BUCKET,
+  EMPTY_MATRIX_RANGE,
   findOpenNewRowDuplicate,
   isDraftFormTargetLocked,
   isMatrixCellEditable,
@@ -1975,6 +1976,10 @@ export default function SalesLedgerWorkbench({
   useEffect(() => {
     cancelDraftRef.current = cancelDraft
   }, [cancelDraft])
+  // 라운드 4 P2-8 — Ctrl/Cmd+Z로 되돌릴 "직전 셀 커밋"의 초안 id. onCommitCell이 새 초안을 만든
+  // 경우에만(기존 P1-6 실행 취소 토스트와 같은 조건) 채워 넣고, undoCellDraft가 성공하면 비운다.
+  // ref라 onCommitCell/undoCellDraft의 deps 배열에는 들어가지 않는다(값을 읽지 않고 쓰기만 하므로).
+  const lastUndoableDraftIdRef = useRef<string | null>(null)
   // 방금 만든 초안을 취소(cancelled 전이 — 하드 삭제 아님, 2026-09-10 #8 감사 추적 결정과 동일)한다.
   // pushMatrixToast에만 의존해 identity가 고정되므로 onCommitCell deps에 넣어도 drafts 변경으로
   // 흔들리지 않는다. cancelDraft 자체는 서버/네트워크 실패를 큐 강등·queueError로 흡수하고 예외를
@@ -1986,6 +1991,10 @@ export default function SalesLedgerWorkbench({
       const cancelled = await cancelDraftRef.current(id)
       if (cancelled) {
         pushMatrixToast({ kind: "info", text: "초안 취소됨 — 셀은 시트 값으로 돌아갑니다." })
+        // 라운드 4 P2-8: Ctrl+Z 대상도 정리한다 — 단, 그사이 더 최신 커밋이 ref를 이미 다른 id로
+        // 덮어썼다면(토스트의 "실행 취소" 버튼이 옛 id를 직접 캡처해 부르는 경우) 그 최신 대상까지
+        // 같이 지우지 않는다.
+        if (lastUndoableDraftIdRef.current === id) lastUndoableDraftIdRef.current = null
       } else {
         pushMatrixToast({ kind: "error", text: "초안 취소가 반영되지 않았습니다 — 체크 큐에서 상태를 확인한 뒤 다시 시도하세요." })
       }
@@ -2049,6 +2058,9 @@ export default function SalesLedgerWorkbench({
           // 고정해 문구가 매번 같은 이 토스트가 text 기준 dedupe에 걸려 두 번째 커밋부터 취소
           // 버튼이 사라지는 문제를 막는다.
           if (!built.existingId && draft) {
+            // 라운드 4 P2-8: Ctrl+Z 대상 기록 — 토스트의 "실행 취소" 버튼과 같은 조건(새 초안이
+            // 실제로 만들어진 경우만)에서만 채운다.
+            lastUndoableDraftIdRef.current = draft.id
             pushMatrixToast({
               kind: "info",
               key: `undo:${draft.id}`,
@@ -2074,13 +2086,86 @@ export default function SalesLedgerWorkbench({
     pushMatrixToast({ kind: "info", text: "음수는 0으로 처리됩니다 — 감액은 장부 가감 입력 사용" })
   }, [pushMatrixToast])
 
+  // 라운드 4 P2-8 — Shift+방향키 범위 선택 후 E/H/C 일괄 확도 적용. 붙여넣기(confirmMatrixPaste)와
+  // 같은 입력 빌더(buildCellDraftInput) + persistDraftsBatch 1회 경로를 재사용한다(새 저장 경로
+  // 없음). matrixCellValue(coord) > 0(빈 칸 제외)이고 확도가 실제로 바뀌는 좌표만 골라 담는다 —
+  // 단일 셀 E/H/C 가드(onSelectedKeyDown)와 같은 취지로, 무변화 초안을 만들지 않는다. 결과 집계
+  // 토스트는 confirmMatrixPaste의 성공/충돌/거부/로컬폴백/실패 분류·문구 톤을 그대로 재사용한다.
+  const onCommitRangeConfidence = useCallback(
+    async (coords: MatrixCellCoord[], confidence: DraftConfidence) => {
+      const items: Array<{ id?: string; input: LedgerDraftInput }> = []
+      let missingRows = 0
+      for (const coord of coords) {
+        const value = matrixCellValue(coord)
+        // 스펙 가드: 빈 칸(matrixCellValue(coord) > 0 아님)이거나 이미 같은 확도면 건드리지 않는다.
+        if (!(value > 0 && confidence !== matrixCellConfidence(coord))) continue
+        const built = buildCellDraftInput(coord.rowId, coord.month, value, confidence, coord.week)
+        if (!built) {
+          missingRows += 1
+          continue
+        }
+        items.push(built.existingId ? { id: built.existingId, input: built.input } : { input: built.input })
+      }
+      if (items.length === 0) return // 스펙: 0건이면 토스트 없이 no-op
+      const results = await persistDraftsBatch(items)
+      let committed = 0
+      let conflicts = 0
+      let rejected = 0
+      let localOnly = 0
+      let failed = missingRows
+      results.forEach((result) => {
+        if (result.conflict) conflicts += 1
+        else if (result.validationMessage) rejected += 1
+        else if (result.draft && result.draft.id.startsWith("local-")) localOnly += 1
+        else if (result.draft) committed += 1
+        else failed += 1
+      })
+      const problems = conflicts + rejected + localOnly + failed
+      const fmt = (value: number) => value.toLocaleString("ko-KR")
+      if (problems === 0) {
+        pushMatrixToast({
+          kind: "info",
+          text: `${fmt(committed)}건 확도 일괄 적용됨 — 체크 큐에서 적용하면 장부에 반영됩니다.`,
+        })
+        return
+      }
+      const detail = [
+        conflicts > 0 ? `충돌 ${fmt(conflicts)}` : null,
+        rejected > 0 ? `거부 ${fmt(rejected)}` : null,
+        localOnly > 0 ? `로컬 임시 ${fmt(localOnly)}(장부 적용 불가)` : null,
+        failed > 0 ? `실패 ${fmt(failed)}` : null,
+      ]
+        .filter((part): part is string => part !== null)
+        .join(" · ")
+      pushMatrixToast({
+        kind: "error",
+        text: `${fmt(committed)}건 확도 적용 · ${fmt(problems)}건 미반영(${detail}) — 미반영 셀은 체크 큐 행 배지를 확인한 뒤 다시 시도하세요.`,
+      })
+    },
+    [buildCellDraftInput, matrixCellConfidence, matrixCellValue, persistDraftsBatch, pushMatrixToast],
+  )
+
   const matrixEditor = useMatrixEditor({
     editableCells,
     cellValue: matrixCellValue,
     cellConfidence: matrixCellConfidence,
     onCommitCell,
     onAmountClamped: onMatrixAmountClamped,
+    onCommitRangeConfidence,
   })
+
+  // 라운드 4 P2-8 — range 좌표를 행 id별로 미리 묶어둔다(selectedCoord/editingCoord와 같은 행
+  // 스코프 prop 패턴). matrixEditor.range가 바뀔 때만 재계산되고(useMemo), 행에 걸리지 않으면
+  // EMPTY_MATRIX_RANGE(안정 참조)를 공유해 RevMatrixDealRow의 memo가 불필요하게 깨지지 않는다.
+  const rangeCoordsByRow = useMemo(() => {
+    const map = new Map<string, MatrixCellCoord[]>()
+    for (const coord of matrixEditor.range) {
+      const bucket = map.get(coord.rowId)
+      if (bucket) bucket.push(coord)
+      else map.set(coord.rowId, [coord])
+    }
+    return map
+  }, [matrixEditor.range])
 
   // 딜행별 편집 prop — selected/editing 좌표를 이 행 스코프로 좁힌다. actions·selected·editing은
   // 안정 참조라, 이 행이 선택/편집 중이 아니면 매 렌더 같은 값(null/""/"expected")이 되어 RevMatrixDealRow
@@ -2094,6 +2179,7 @@ export default function SalesLedgerWorkbench({
       editingCoord: isEditingRow ? matrixEditor.editing : null,
       editBuffer: isEditingRow ? matrixEditor.buffer : "",
       editConfidence: isEditingRow ? matrixEditor.editConfidence : "expected",
+      rangeCoords: rangeCoordsByRow.get(rowId) ?? EMPTY_MATRIX_RANGE,
     }
   }
 
@@ -2162,6 +2248,33 @@ export default function SalesLedgerWorkbench({
       setPastePlan(plan)
     },
     [matrixEditor.editing, matrixEditor.selected, matrixMonths, pushMatrixToast, visibleDealRows, editRowOverrideMonths],
+  )
+
+  // 라운드 4 P2-8(키보드 보강) — "/" 검색 포커스 대상. 매트릭스 스크롤 컨테이너에서 "/"를 누르면
+  // 이 input으로 포커스를 옮겨 마우스 왕복 없이 계속 자판만으로 검색·필터링할 수 있게 한다.
+  const revSearchInputRef = useRef<HTMLInputElement | null>(null)
+
+  // 매트릭스 스크롤 컨테이너 keydown — "/" 검색 포커스 + Ctrl/Cmd+Z 직전 셀 커밋 실행 취소를 한
+  // 핸들러로 묶는다. 편집 중(input 포커스)에는 둘 다 가로채지 않는다: "/"는 금액 버퍼에 그대로
+  // 문자로 들어가야 하고(파싱 시 어차피 걸러짐), Ctrl+Z는 그 input 안에서는 브라우저 기본 텍스트
+  // undo가 우선해야 한다.
+  const handleMatrixContainerKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (matrixEditor.editing) return
+      if (event.key === "/" && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault()
+        revSearchInputRef.current?.focus()
+        revSearchInputRef.current?.select()
+        return
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key === "z") {
+        const draftId = lastUndoableDraftIdRef.current
+        if (!draftId) return // 되돌릴 직전 커밋이 없으면 브라우저 기본 동작에 맡긴다(무시)
+        event.preventDefault()
+        void undoCellDraft(draftId)
+      }
+    },
+    [matrixEditor.editing, undoCellDraft],
   )
 
   // 프리뷰 확인 → 셀 편집과 같은 입력 빌더(buildCellDraftInput)로 초안 입력을 만들어 배치 1회(200건
@@ -3345,6 +3458,7 @@ export default function SalesLedgerWorkbench({
                       <span className="sr-only">REV 매출 행 검색</span>
                       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A39E98]" />
                       <input
+                        ref={revSearchInputRef}
                         value={query}
                         onChange={(event) => setQuery(event.target.value)}
                         placeholder="고객, 담당자, 팀, 지역, 상태, 메모 검색"
@@ -3731,6 +3845,7 @@ export default function SalesLedgerWorkbench({
                 <div
                   className="relative hidden max-h-[calc(100vh-13rem)] min-h-[320px] overflow-auto md:block"
                   onPaste={handleMatrixPaste}
+                  onKeyDown={handleMatrixContainerKeyDown}
                 >
                   <table role="grid" aria-label="REV 매출 매트릭스" className="w-max min-w-full border-collapse text-left text-[12px]">
                     <thead className="text-[10px] uppercase tracking-[0.06em] text-[#615D59]">
@@ -4010,7 +4125,11 @@ export default function SalesLedgerWorkbench({
                 selectedMonth={selectedMonth}
                 monthOptions={monthOptions}
                 onSelectMonth={setSelectedMonth}
-                onOpenRow={(row) => void loadDealDetail(row)}
+                // 라운드 4 §8.4 "보드" — 카드 클릭은 상세가 아니라 입력/수정 탭으로 바로 연다(P2-7과
+                // 같은 진입 헬퍼 재사용). 보드는 주차 예측을 보며 바로 고치는 면이라 "상세 → 탭 한 번
+                // 더"가 불필요하다. REV 매트릭스 행 클릭·모바일 "상세" 버튼 등 다른 진입점은 그대로
+                // loadDealDetail(상세)을 쓴다 — 건드리지 않는다.
+                onOpenRow={openQuickInputForRow}
                 selectedRowId={selectedRow?.id ?? null}
               />
             )}
