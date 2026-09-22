@@ -231,7 +231,9 @@ export function buildMatrixPendingByCell(
 // 편집 input이 받는 문자열 → 원 단위 정수 + 음수 클램프 여부. rail의 safeAmount와 동일 규칙
 // (¥·콤마·공백 제거). 만 단위 입력은 지원하지 않는다(rail이 원 단위 String을 쓰므로 단위 고정).
 // clamped=true면 파싱값이 음수라 0으로 잘렸다는 뜻 — 호출부가 무경고로 삼키지 않도록 신호를 남긴다.
-function parseMatrixAmountResult(value: string): { amount: number; clamped: boolean } {
+// 입력 속도 라운드 P1-4 — 워크벤치 인라인 새 행 금액 input이 이 파서를 그대로 재사용한다(매트릭스
+// 셀 편집 input과 같은 파싱 규칙: ¥·콤마·공백 제거, 음수는 0으로 클램프). 새 파서를 만들지 않는다.
+export function parseMatrixAmountResult(value: string): { amount: number; clamped: boolean } {
   const normalized = value.replace(/[^\d.-]/g, "")
   if (!normalized) return { amount: 0, clamped: false }
   const numeric = Number(normalized)
@@ -240,7 +242,7 @@ function parseMatrixAmountResult(value: string): { amount: number; clamped: bool
   return { amount: Math.max(rounded, 0), clamped: rounded < 0 }
 }
 
-function parseMatrixAmount(value: string): number {
+export function parseMatrixAmount(value: string): number {
   return parseMatrixAmountResult(value).amount
 }
 
@@ -548,11 +550,69 @@ export function buildMatrixPastePlan(
   return plan
 }
 
-// 라운드 4 P1-5 — 프리뷰에서 승인된 미매칭 이름만 new-row 초안 입력으로 뒤집는 순수 헬퍼.
-// 월 1개당 초안 1건(그 이름의 보존된 금액 칸 수만큼). 시트에 없던 행을 새로 만드는 동작이라
-// status를 싣지 않는다 — 매트릭스 셀 커밋(buildCellDraftInput)의 자가 체크(P0-2)와 달리, 레일
-// new-row(buildDraftInput)와 같은 3단(초안→체크→적용) 게이트를 그대로 유지한다는 결정(D1(a))과
-// 동일 이유: 시트를 보며 값을 옮기는 게 아니라 화면에 없던 행을 만드는 것이라 검수 가치가 있다.
+// 라운드 4 P1-4/P1-5 공통 — new-row 초안 1건(월 1개) 입력 조립의 단일 소스. 붙여넣기 새 행
+// (buildPasteNewRowInputs, 월마다 반복 호출)과 워크벤치 매트릭스 인라인 새 행 저장(1건)이 이
+// 헬퍼 하나를 공유해, 두 경로가 각자 객체를 조립하다 metadata 키 하나가 드리프트해도 알아채기
+// 어려운 상황을 막는다. status를 싣지 않는다 — 시트에 없던 행을 새로 만드는 동작이라 매트릭스
+// 셀 커밋(buildCellDraftInput)의 자가 체크(P0-2)를 타지 않고, 레일 new-row(buildDraftInput)와
+// 같은 3단(초안→체크→적용) 게이트를 그대로 유지한다는 결정(D1(a))과 동일 이유: 시트를 보며 값을
+// 옮기는 게 아니라 화면에 없던 행을 만드는 것이라 검수 가치가 있다.
+export interface NewRowDraftEntry {
+  customer: string
+  month: string
+  amount: number
+  confidence: DraftConfidence
+  productCategory: Exclude<RevProductCategory, "all">
+}
+
+export interface NewRowDraftContext {
+  team: string
+  manager: string
+  lens: string
+  period: string
+  /** 초안 출처 — sourceSnapshot.origin·metadata.origin에 그대로 실려 검수·감사 추적에 쓰인다. */
+  origin: "rev-matrix-paste" | "rev-matrix-inline"
+}
+
+export function buildNewRowDraftInput(entry: NewRowDraftEntry, context: NewRowDraftContext): LedgerDraftInput {
+  return {
+    kind: "new-row",
+    customer: entry.customer.trim(),
+    manager: context.manager,
+    team: context.team,
+    month: entry.month,
+    amount: entry.amount,
+    note: "",
+    sourceSheetRow: null,
+    sourceSnapshot: {
+      capturedAt: new Date().toISOString(),
+      origin: context.origin,
+      selectedMonth: entry.month,
+      week: "month",
+      row: null,
+    },
+    metadata: {
+      source: "sales-ledger-workbench",
+      origin: context.origin,
+      lens: context.lens,
+      period: context.period,
+      team: context.team,
+      operation: "forecast-add",
+      productCategory: entry.productCategory,
+      fromMonth: entry.month,
+      week: "month",
+      weekly: null,
+      weeklyConfidence: null,
+      confidence: entry.confidence,
+      quantity: null,
+      sourceDealId: null,
+    },
+  }
+}
+
+// 프리뷰에서 승인된 미매칭 이름만 new-row 초안 입력으로 뒤집는 순수 헬퍼. 월 1개당 초안 1건(그
+// 이름의 보존된 금액 칸 수만큼) — 위 buildNewRowDraftInput을 월마다 호출한다(출력은 리팩터
+// 이전과 문자 그대로 동일 — origin만 이 호출부에서 "rev-matrix-paste"로 고정해서 넘긴다).
 export function buildPasteNewRowInputs(
   plan: MatrixPastePlan,
   selectedNames: readonly string[],
@@ -570,40 +630,12 @@ export function buildPasteNewRowInputs(
   for (const row of plan.unmatched) {
     if (!selected.has(row.name)) continue
     for (const cell of row.cells) {
-      const input: LedgerDraftInput = {
-        kind: "new-row",
-        customer: row.name.trim(),
-        manager: context.manager,
-        team: context.team,
-        month: cell.month,
-        amount: cell.amount,
-        note: "",
-        sourceSheetRow: null,
-        sourceSnapshot: {
-          capturedAt: new Date().toISOString(),
-          origin: "rev-matrix-paste",
-          selectedMonth: cell.month,
-          week: "month",
-          row: null,
-        },
-        metadata: {
-          source: "sales-ledger-workbench",
-          origin: "rev-matrix-paste",
-          lens: context.lens,
-          period: context.period,
-          team: context.team,
-          operation: "forecast-add",
-          productCategory: context.productCategory,
-          fromMonth: cell.month,
-          week: "month",
-          weekly: null,
-          weeklyConfidence: null,
-          confidence: context.confidence,
-          quantity: null,
-          sourceDealId: null,
-        },
-      }
-      inputs.push(input)
+      inputs.push(
+        buildNewRowDraftInput(
+          { customer: row.name, month: cell.month, amount: cell.amount, confidence: context.confidence, productCategory: context.productCategory },
+          { team: context.team, manager: context.manager, lens: context.lens, period: context.period, origin: "rev-matrix-paste" },
+        ),
+      )
     }
   }
   return inputs

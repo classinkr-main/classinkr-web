@@ -6,8 +6,14 @@
 // 그래서 레일에서 새 고객 행을 만들어 저장해도, 적용 전까지는 매트릭스 어디에도 나타나지
 // 않는다 — 입력 직후 행이 사라진 것처럼 보여 혼란스럽다.
 //
-// 이 파일은 그 미적용 new-row 초안들을 매트릭스용 "임시 행"으로 미리 보여주기 위한 순수 파생
-// 함수만 담는다(렌더/워크벤치 배선은 다음 라운드 — rows 조립에 끼워 넣는 것까지는 이번 범위 밖).
+// 이 파일은 그 미적용 new-row 초안들을 매트릭스용 "임시 행"으로 만드는 순수 파생 함수를 담는다.
+// 워크벤치 배선(SalesLedgerWorkbench.tsx)은 이 임시 행을 rows/revBaseFilteredRows/filteredRows/
+// revCustomerGroups/visibleDealRows 같은 합계 파이프라인에 절대 섞지 않는다 — "다음 라운드에
+// 합치는" 임시 상태가 아니라 핵심 설계 결정이다. 저 파생들은 매트릭스 합계·그룹 합계·검수
+// 인박스 칩·보드·모바일 리스트·필터 옵션까지 전부 먹는 파이프라인이라, 섞으면 "장부 미반영
+// 금액"이 장부 합계에 들어가 버린다. 대신 매트릭스 본문 위 별도 "적용 대기" tbody
+// (RevMatrix.tsx의 RevMatrixPendingRow)로만 렌더한다 — 이 파일 하단 matchesRevRowFilters가
+// 그 tbody에 보일 행만 다시 필터링한다(revBaseFilteredRows와 같은 술어를 공유).
 //
 // 필드 매핑·필터는 SalesLedgerWorkbench.tsx의 ledgerEntryRows/appliedDraftFallbackRows
 // (초안 → LedgerRevenueRow 매핑의 기존 규약)를 그대로 따른다 — 새 규약을 만들지 않는다.
@@ -16,9 +22,10 @@
 // 1개 규약) 매트릭스가 안 읽힌다.
 
 import { normalizedAccountKey } from "@/lib/branch/account-key"
-import { appliedDraftConfidenceMaps, snapshotField, snapshotText } from "./workbench-shared"
+import { matchesTokens } from "../search-tokens"
+import { appliedDraftConfidenceMaps, snapshotField, snapshotText, type RevOriginFilter } from "./workbench-shared"
 import { weeklyPaymentsFromDraftMetadata } from "./rev-matrix-logic"
-import type { LedgerDraft, LedgerRevenueRow } from "./shared"
+import { productCategoryMeta, rowProductCategory, type LedgerDraft, type LedgerRevenueRow, type RevProductCategory } from "./shared"
 
 export interface PendingDraftRowsOptions {
   drafts: readonly LedgerDraft[]
@@ -165,7 +172,9 @@ export function buildPendingDraftRows(options: PendingDraftRowsOptions): Pending
   // 임시 행도 안 생겨 매트릭스 어디에도 안 보인다. 반대로 그 함수를 정규화 키로 넓히는 수리는 틀리다:
   // 셀 재편집이 그 new-row 초안을 edit-row로 PATCH하는 경로(onCommitCell → lookupMatrixPending)까지
   // 퍼지 매칭으로 넓어져, "추가분"으로 만든 초안이 다른 표기 행의 "대체 정정"으로 바뀔 수 있다.
-  // 표기가 다른 초안의 임시 행은 매트릭스 고객 그룹핑(정규화 키)에 의해 같은 그룹 안에 붙는다.
+  // 표기가 다른 초안은 매트릭스 고객 그룹에 섞이지 않고 "적용 대기" 섹션에 별도 임시 행으로
+  // 보인다 — 그 섹션이 findCustomerSpellingMatch로 기존 표기 힌트(예: 기존 "OO학원"과 표기
+  // 다름)를 붙여, 사용자가 스스로 표기를 맞출지 새 고객으로 둘지 판단하게 한다(RevMatrixPendingRow).
   const existingNames = new Set(existingRows.map((row) => row.customer.trim()))
 
   // 규칙 5 — 같은 정규화 고객키의 초안을 한 그룹으로 모은다. Map은 첫 발견 순서를 보존하지만
@@ -187,4 +196,48 @@ export function buildPendingDraftRows(options: PendingDraftRowsOptions): Pending
   const rows = Array.from(groups.entries()).map(([key, groupDrafts]) => buildRowForGroup(key, groupDrafts))
   // 정렬: 고객명 localeCompare(ko).
   return rows.sort((a, b) => a.customer.localeCompare(b.customer, "ko"))
+}
+
+// ── 적용 대기 섹션 표시 필터(P1-4 §1) ────────────────────────────────────────
+// 워크벤치 revBaseFilteredRows의 필터 술어(담당자·지역·상품·상태·딜유형·원천·검색 토큰)를 그대로
+// 기계적으로 뽑아낸 순수 함수 — revBaseFilteredRows가 이 함수를 쓰도록 리팩터되어 동작이
+// 완전히 동일하고(로직 문자 그대로), 그 결과로 이 함수를 pendingDraftRows에도 재사용할 수 있게
+// 됐다. 검수 인박스 칩(revForecastFilter)은 여기 없다 — 그 필터는 "이미 매트릭스에 있는 행"의
+// 검수 상태를 거르는 필터라 호출부(워크벤치)가 별도로 처리한다(주석은 그쪽에).
+export interface RevRowFilters {
+  managerFilter: Set<string>
+  regionFilter: Set<string>
+  productFilter: RevProductCategory
+  revStatusFilter: string
+  revDealTypeFilter: string
+  revOriginFilter: RevOriginFilter
+}
+
+export function matchesRevRowFilters(row: LedgerRevenueRow, filters: RevRowFilters, tokens: string[]): boolean {
+  if (filters.managerFilter.size > 0 && (row.manager == null || !filters.managerFilter.has(row.manager))) return false
+  if (filters.regionFilter.size > 0 && (row.region == null || !filters.regionFilter.has(row.region))) return false
+  if (filters.productFilter !== "all" && rowProductCategory(row) !== filters.productFilter) return false
+  if (filters.revStatusFilter !== "ALL" && row.status !== filters.revStatusFilter) return false
+  if (filters.revDealTypeFilter !== "ALL" && row.dealType !== filters.revDealTypeFilter) return false
+  if (filters.revOriginFilter !== "all" && row.ledgerOrigin !== filters.revOriginFilter) return false
+  if (tokens.length === 0) return true
+  const originLabel = row.ledgerOrigin === "draft" ? "장부 입력 applied draft 신규 수정" : "시트 원본 sheet"
+  const productMeta = productCategoryMeta(rowProductCategory(row))
+  return matchesTokens(tokens, [
+    row.customer,
+    row.manager,
+    row.team,
+    row.region,
+    row.status,
+    row.dealType,
+    row.productVersion,
+    productMeta.label,
+    productMeta.shortLabel,
+    originLabel,
+    row.draftKind,
+    row.draftNote,
+    row.draftMonth,
+    row.sourceDealId,
+    row.sheetRow != null ? String(row.sheetRow) : "",
+  ])
 }

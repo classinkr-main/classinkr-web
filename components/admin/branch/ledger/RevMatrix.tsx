@@ -17,6 +17,8 @@ import { AlertTriangle, ChevronRight, Link2Off, Lock } from "lucide-react"
 
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { useDialogFocus } from "../../use-dialog-focus"
+import { findCustomerSpellingMatch } from "./customer-suggest"
+import type { PendingDraftRow } from "./pending-draft-rows"
 import {
   DRAFT_CONFIDENCE_OPTIONS,
   formatMoney,
@@ -36,6 +38,7 @@ import {
 } from "./shared"
 import {
   computeWeekCellStates,
+  dominantCellConfidence,
   EMPTY_BUCKET,
   EMPTY_MATRIX_RANGE,
   isMatrixCellEditable,
@@ -1402,6 +1405,132 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
       >
         {annual.total > 0 ? (
           <span className={`block text-[11px] leading-tight ${MATRIX_TONE[annualTone]}`}>{formatWeekAmount(annual.total)}</span>
+        ) : (
+          <span className="text-[11px] font-semibold text-[#C9C5BF]">–</span>
+        )}
+      </td>
+    </tr>
+  )
+})
+
+// 입력 속도 라운드(2026-09-20 §4 P1-4) — 적용 대기 섹션의 임시 행. 미적용(draft|checked) new-row
+// 초안을 매트릭스에 미리 보여주되(ledger/pending-draft-rows.ts buildPendingDraftRows), 장부 합계
+// 파이프라인(rows/filteredRows/revCustomerGroups 등)에는 절대 섞이지 않는다는 설계 그대로 이
+// 행도 "보여주기 전용"이다: 월/주차 셀은 읽기 전용(tabIndex 없음·editableCells 미등록·잠금
+// 판정 없음)이고, useMatrixEditor·pendingByCell과 완전히 무관하다. 열 폭 상수만 RevMatrixDealRow와
+// 공유해 그 위·아래 실제 매트릭스 행과 세로 정렬이 맞게 한다.
+export const RevMatrixPendingRow = memo(function RevMatrixPendingRow({
+  row,
+  months,
+  expandedMonths,
+  customerOptions,
+  onOpenQueue,
+}: {
+  row: PendingDraftRow
+  months: string[]
+  expandedMonths: Set<string>
+  /** 레일 datalist(customer-suggest.buildCustomerOptions)와 같은 모집단 — 표기 흔들림 힌트용. */
+  customerOptions: string[]
+  onOpenQueue: () => void
+}) {
+  // 레일 폼(InputRailSection)과 같은 헬퍼·같은 판정(P0-3) — 정규화 키는 같은데 표기만 다른 기존
+  // 고객이 있으면 알려준다. 여기서는 저장 전 경고가 아니라 "왜 이 초안이 기존 행과 안 합쳐졌는지"
+  // 설명하는 힌트다(매트릭스 고객 그룹은 정규화 키라 표기가 갈리면 이 임시 행이 별도로 보인다).
+  const spellingMatch = findCustomerSpellingMatch(row.customer, customerOptions)
+  const annualTotal = months.reduce((sum, month) => sum + (row.monthlyPayments?.[month] ?? 0), 0)
+  return (
+    <tr role="row" className="group border-t border-dashed border-[#ECD29C] bg-[#FFFCF5] transition hover:bg-[#FBF1E0]">
+      <td
+        className="sticky left-0 z-10 border-r border-[rgba(0,0,0,0.08)] bg-[#FFFCF5] py-1.5 pl-2 pr-2 align-middle group-hover:bg-[#FBF1E0]"
+        style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
+      >
+        {/* 행 클릭(고객 칸)만 체크 큐로 연결한다 — 셀 편집 상태기계와 겹치지 않도록 셀 자체는
+            버튼이 아니라 이 칸 전체를 누른다(매트릭스 잠금/편집 판정을 건드리지 않는다). */}
+        <button
+          type="button"
+          onClick={onOpenQueue}
+          title="체크 큐 열기 — 적용 대기 새 행"
+          className="flex w-full min-w-0 flex-col items-start gap-0.5 text-left"
+        >
+          <span className="flex min-w-0 flex-wrap items-center gap-1">
+            <span className="truncate text-[11.5px] font-bold text-[#111110]">{row.customer}</span>
+            <span className="shrink-0 rounded-full border border-[#ECD29C] bg-white px-1.5 py-0.5 text-[9px] font-bold leading-none text-[#7A520F]">
+              미적용
+            </span>
+            {row.pendingLocalOnly && (
+              <span className="shrink-0 rounded-full border border-[#ECD29C] bg-white px-1.5 py-0.5 text-[9px] font-bold leading-none text-[#7A520F]">
+                로컬 임시(적용 불가)
+              </span>
+            )}
+          </span>
+          {spellingMatch && (
+            <span className="truncate text-[9.5px] font-semibold text-[#7A520F]">
+              기존 &quot;{spellingMatch.canonical}&quot;과 표기 다름
+            </span>
+          )}
+        </button>
+      </td>
+      <td
+        className="border-l border-[#F2F1EE] px-1.5 text-right align-middle"
+        style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }}
+      >
+        {/* 이 칸은 딜행에서 원천 라벨("장부"/"시트")이 서는 자리다 — 적용 전이라 둘 다 아니므로
+            "대기"로 구분해 이미 반영된 장부행과 헷갈리지 않게 한다. */}
+        <span className="text-[10px] font-semibold text-[#A8741A]">대기</span>
+      </td>
+      {months.map((month) => {
+        const total = row.monthlyPayments?.[month] ?? 0
+        const confirmed = row.monthlyConfirmed?.[month] ?? 0
+        const high = row.monthlyHighConfidence?.[month] ?? 0
+        const bucket: RevMonthlyBucket = { total, confirmed, high, open: Math.max(total - confirmed - high, 0) }
+        // 그 달 우세 확도(dominantCellConfidence — 편집 팝오버 기본값 산식과 동일 SSOT)의
+        // textStrongClass로 금액 글자색을 정한다. 아직 장부에 없는 값이라 일반 매트릭스 셀보다
+        // 강한 색(pending 셀과 같은 textStrongClass)을 써 "확정 아님"을 은은하게 표시한다.
+        const toneClass = CONFIDENCE_TOKENS[dominantCellConfidence(bucket)].textStrongClass
+        if (expandedMonths.has(month)) {
+          const weeks = row.weeklyPayments?.[month] ?? [0, 0, 0, 0, 0]
+          return (
+            <Fragment key={month}>
+              {weeks.map((value, weekIndex) => (
+                <td
+                  key={weekIndex}
+                  className="border-l border-[#F2F1EE] px-1.5 text-right align-middle tabular-nums"
+                  style={{ width: MATRIX_WEEK_W, minWidth: MATRIX_WEEK_W, maxWidth: MATRIX_WEEK_W }}
+                >
+                  <span className={`text-[11.5px] leading-none ${value > 0 ? `font-bold ${toneClass}` : "text-[#DDD9D3]"}`}>
+                    {value > 0 ? formatWeekAmount(value) : "·"}
+                  </span>
+                </td>
+              ))}
+              <td
+                className="border-l border-[#F2F1EE] px-1.5 text-right align-middle tabular-nums"
+                style={{ width: MATRIX_MONTH_W, minWidth: MATRIX_MONTH_W, maxWidth: MATRIX_MONTH_W }}
+              >
+                <span className={`text-[11px] leading-none ${total > 0 ? `font-bold ${toneClass}` : "text-[#DDD9D3]"}`}>
+                  {total > 0 ? formatWeekAmount(total) : "·"}
+                </span>
+              </td>
+            </Fragment>
+          )
+        }
+        return (
+          <td
+            key={month}
+            className="border-l border-[#F2F1EE] px-1.5 text-right align-middle tabular-nums"
+            style={{ width: MATRIX_MONTH_W, minWidth: MATRIX_MONTH_W, maxWidth: MATRIX_MONTH_W }}
+          >
+            <span className={`text-[11px] leading-none ${total > 0 ? `font-bold ${toneClass}` : "text-[#DDD9D3]"}`}>
+              {total > 0 ? formatWeekAmount(total) : "·"}
+            </span>
+          </td>
+        )
+      })}
+      <td
+        className="sticky right-0 z-10 border-l border-[rgba(0,0,0,0.08)] bg-[#FFFCF5] px-2 text-right align-middle tabular-nums group-hover:bg-[#FBF1E0]"
+        style={{ width: MATRIX_ANNUAL_W, minWidth: MATRIX_ANNUAL_W, maxWidth: MATRIX_ANNUAL_W }}
+      >
+        {annualTotal > 0 ? (
+          <span className="block text-[11px] font-bold leading-tight text-[#7A520F]">{formatWeekAmount(annualTotal)}</span>
         ) : (
           <span className="text-[11px] font-semibold text-[#C9C5BF]">–</span>
         )}

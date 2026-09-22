@@ -5,13 +5,15 @@ import {
   parseMultiFilterParam,
   serializeMultiFilterParam,
 } from "@/components/admin/branch/SalesLedgerWorkbench"
+import { matchesRevRowFilters, type RevRowFilters } from "@/components/admin/branch/ledger/pending-draft-rows"
+import type { LedgerRevenueRow } from "@/components/admin/branch/ledger/shared"
 
 // 회귀 방지(품질 웨이브 7, 항목 3): 장부 담당/지역 필터가 단일 select에서 MultiSelect(Set)로
 // 바뀌면서 URL 직렬화(mgr/region)가 콤마 구분 다중값을 지원해야 하되, 기존 단일값 링크(장부
 // 자체가 예전에 만든 북마크 · PipelineTable/BranchPipelineKanban/ActivityBottleneckSection 등
 // 다른 화면이 보내는 크로스링크는 항상 "첫 값 규약"으로 단일 mgr 하나만 싣는다)도 그대로
 // 동작해야 한다. 이 스위트는 그 파싱/직렬화 순수 함수를 직접 구동하고, 필터 로직이 실제로
-// Set 포함 검사로 바뀌었는지 소스 스캔으로 확인한다.
+// Set 포함 검사로 동작하는지 추출된 술어(matchesRevRowFilters)를 직접 구동해 확인한다.
 
 const workbenchPath = join(process.cwd(), "components/admin/branch/SalesLedgerWorkbench.tsx")
 
@@ -59,10 +61,41 @@ describe("serializeMultiFilterParam — Set → URL 직렬화", () => {
 })
 
 describe("장부 필터 로직 — Set 포함 검사로 전환(소스 스캔, 품질 웨이브 7 항목 3)", () => {
-  it("revBaseFilteredRows가 담당자/지역 필터를 managerFilter.has/regionFilter.has로 판정한다", () => {
+  // 입력 속도 라운드 P1-4에서 필터 술어가 matchesRevRowFilters(ledger/pending-draft-rows.ts)로 추출됐다
+  // (장부 행과 적용 대기 섹션이 같은 술어를 공유). 옛 소스 리터럴 스캔 대신 그 함수를 직접 구동해
+  // "Set 포함 검사" 의미를 동작으로 고정하고, revBaseFilteredRows가 그 함수를 쓰는지만 소스로 본다.
+  const baseFilters: RevRowFilters = {
+    managerFilter: new Set<string>(),
+    regionFilter: new Set<string>(),
+    productFilter: "all",
+    revStatusFilter: "ALL",
+    revDealTypeFilter: "ALL",
+    revOriginFilter: "all",
+  }
+  function row(overrides: Partial<LedgerRevenueRow>): LedgerRevenueRow {
+    return { id: "r", customer: "테스트 학원", manager: null, team: "BD", region: null, revenue: 0, ledgerOrigin: "sheet", ...overrides }
+  }
+
+  it("담당자 필터는 Set 포함 검사다 — 빈 Set이면 전부 통과, 값이 있으면 포함된 담당자만(담당자 없음은 탈락)", () => {
+    const multi = { ...baseFilters, managerFilter: new Set(["김지사", "박지사"]) }
+    expect(matchesRevRowFilters(row({ manager: "이지사" }), baseFilters, [])).toBe(true)
+    expect(matchesRevRowFilters(row({ manager: "김지사" }), multi, [])).toBe(true)
+    expect(matchesRevRowFilters(row({ manager: "박지사" }), multi, [])).toBe(true)
+    expect(matchesRevRowFilters(row({ manager: "이지사" }), multi, [])).toBe(false)
+    expect(matchesRevRowFilters(row({ manager: null }), multi, [])).toBe(false)
+  })
+
+  it("지역 필터도 같은 Set 포함 검사다", () => {
+    const multi = { ...baseFilters, regionFilter: new Set(["서울", "부산"]) }
+    expect(matchesRevRowFilters(row({ region: "대구" }), baseFilters, [])).toBe(true)
+    expect(matchesRevRowFilters(row({ region: "부산" }), multi, [])).toBe(true)
+    expect(matchesRevRowFilters(row({ region: "대구" }), multi, [])).toBe(false)
+    expect(matchesRevRowFilters(row({ region: null }), multi, [])).toBe(false)
+  })
+
+  it("revBaseFilteredRows는 인라인 사본 없이 matchesRevRowFilters를 소비한다(드리프트 차단)", () => {
     const source = workbenchSource()
-    expect(source).toContain("managerFilter.size === 0 || (row.manager != null && managerFilter.has(row.manager))")
-    expect(source).toContain("regionFilter.size === 0 || (row.region != null && regionFilter.has(row.region))")
+    expect(source).toContain("return rows.filter((row) => matchesRevRowFilters(row, filters, tokens))")
   })
 
   it("장부 필터 UI가 <select> 대신 MultiSelect를 담당/지역에 각각 소비한다", () => {

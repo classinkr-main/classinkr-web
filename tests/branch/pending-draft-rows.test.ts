@@ -130,7 +130,10 @@ describe("규칙 4 — buildMatrixPendingByCell과 같은 술어(고객명 trim 
     const drafts: LedgerDraft[] = [makeDraft({ id: "d-1", customer: "OO 학원" })]
     const rows = run(drafts, { existingRows: [existing] })
     expect(rows.map((row) => row.customer)).toEqual(["OO 학원"])
-    // 매트릭스 고객 그룹핑은 정규화 키라 이 임시 행은 "OO학원" 시트 행과 같은 그룹에 붙는다.
+    // 이 임시 행은 매트릭스 고객 그룹에 섞이지 않고 "적용 대기" 섹션에 별도로 보인다(핵심 설계
+    // 결정) — 정규화 키가 "OO학원"과 같다는 사실은(아래 단언) 그 섹션이 findCustomerSpellingMatch로
+    // "기존 표기와 다름" 힌트를 붙이기 위한 근거로만 쓰인다(RevMatrixPendingRow, 배선은
+    // tests/branch/pending-section-wiring.test.ts).
     expect(normalizedAccountKey(rows[0].customer)).toBe(normalizedAccountKey(existing.customer))
   })
 

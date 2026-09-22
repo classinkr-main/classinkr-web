@@ -22,6 +22,7 @@ import {
   LayoutList,
   ListChecks,
   Pencil,
+  Plus,
   RefreshCw,
   RotateCcw,
   Search,
@@ -44,7 +45,7 @@ import {
 // 회귀 테스트(tests/branch/ledger-record-error-isolation)가 이 모듈 경로에서 import하는 기존
 // 표면 유지용 재수출.
 export { isDraftRecordError } from "./ledger/useLedgerDraftQueue"
-import { matchesTokens, tokenize } from "./search-tokens"
+import { tokenize } from "./search-tokens"
 import { normalizedAccountKey } from "@/lib/branch/account-key"
 import { revLinkedTargetHref } from "@/lib/crm/rev-sync-health"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
@@ -106,7 +107,10 @@ const ForecastBoard = dynamic(() => import("./ledger/ForecastBoard").then((m) =>
 import { RevAuxAnalysisSection } from "./ledger/RevAuxAnalysisSection"
 import { RevMobileList } from "./ledger/RevMobileList"
 import { RevMatrixEditBar } from "./ledger/RevMatrixEditBar"
-import { buildCustomerOptions } from "./ledger/customer-suggest"
+import { buildCustomerOptions, findCustomerSpellingMatch } from "./ledger/customer-suggest"
+// 입력 속도 라운드(2026-09-20 §4 P1-4) — 미적용 new-row 초안 → 매트릭스 "적용 대기" 임시 행
+// 순수 파생 + 그 섹션 표시 필터(revBaseFilteredRows와 공유하는 술어).
+import { buildPendingDraftRows, matchesRevRowFilters, type PendingDraftRow, type RevRowFilters } from "./ledger/pending-draft-rows"
 import { type CrmCoverageResponse } from "./CrmSyncStrip"
 import MultiSelect from "./MultiSelect"
 // 입력 레일·콕핏 2-pane(~1,350줄)은 기본 화면(REV 렌즈 + 접힌 레일)에서 렌더되지 않는다 —
@@ -139,6 +143,7 @@ const DraftQueue = dynamic(() => import("./ledger/DraftQueue").then((m) => m.Dra
 // 진입 시에도 이 무거운 컴포넌트 트리가 메인 청크를 가르지 않게 한다(다른 렌즈들과 동일 관례).
 import {
   buildMatrixPastePlan,
+  buildNewRowDraftInput,
   buildPasteNewRowInputs,
   buildMatrixPendingByCell,
   dominantCellConfidence,
@@ -158,6 +163,7 @@ import {
   MATRIX_MONTH_W,
   MATRIX_PRODUCT_W,
   MATRIX_WEEK_W,
+  parseMatrixAmount,
   pendingCellAmount,
   railDedupTarget,
   resolveDraftEditTargetRow,
@@ -224,6 +230,11 @@ const RevMatrixGroupRow = dynamic(() => import("./ledger/RevMatrix").then((m) =>
   ssr: false,
   loading: RevMatrixSkeletonRow,
 })
+// 입력 속도 라운드 P1-4 — "적용 대기" 섹션의 임시 행(다른 매트릭스 행 컴포넌트와 동일한 지연 로드 관례).
+const RevMatrixPendingRow = dynamic(() => import("./ledger/RevMatrix").then((m) => m.RevMatrixPendingRow), {
+  ssr: false,
+  loading: RevMatrixSkeletonRow,
+})
 const RevMatrixPasteDialog = dynamic(() => import("./ledger/RevMatrix").then((m) => m.RevMatrixPasteDialog), {
   ssr: false,
   loading: () => null,
@@ -232,6 +243,7 @@ import {
   buildRevWeekProjection,
   defaultDraftWeeklyConfidence,
   dominantWeeklyConfidence,
+  DRAFT_CONFIDENCE_OPTIONS,
   DRAFT_CONFLICT_MESSAGE,
   DRAFT_DEDUPED_RECENT_NOTICE,
   DRAFT_OPERATIONS,
@@ -1307,36 +1319,20 @@ export default function SalesLedgerWorkbench({
     // 검색을 지원한다. sheetRow를 필드에 포함(항목 2) — IntegrityStrip의 "장부에서 열기 →"
     // 딥링크(`?lens=rev&q=<sheetRow>`)가 실제로 그 행을 찾아 매칭되게 한다(기존엔 sheetRow가
     // 검색 대상에 없어 링크를 눌러도 검색 결과가 비었다).
+    // 입력 속도 라운드 P1-4 — 필터 술어 자체는 matchesRevRowFilters(ledger/pending-draft-rows.ts)로
+    // 뽑아냈다(동작 동일). 적용 대기 섹션도 같은 함수를 써서 두 목록이 같은 필터 조건을 공유한다
+    // (드리프트 방지) — 그 배선은 이 useMemo 밖(아래)에서 한다. 합계 파이프라인인 이 useMemo 본문에는
+    // 그 섹션의 파생값을 끌어들이지 않는다.
     const tokens = tokenize(query)
-    return rows
-      .filter((row) => managerFilter.size === 0 || (row.manager != null && managerFilter.has(row.manager)))
-      .filter((row) => regionFilter.size === 0 || (row.region != null && regionFilter.has(row.region)))
-      .filter((row) => productFilter === "all" || rowProductCategory(row) === productFilter)
-      .filter((row) => revStatusFilter === "ALL" || row.status === revStatusFilter)
-      .filter((row) => revDealTypeFilter === "ALL" || row.dealType === revDealTypeFilter)
-      .filter((row) => revOriginFilter === "all" || row.ledgerOrigin === revOriginFilter)
-      .filter((row) => {
-        if (tokens.length === 0) return true
-        const originLabel = row.ledgerOrigin === "draft" ? "장부 입력 applied draft 신규 수정" : "시트 원본 sheet"
-        const productMeta = productCategoryMeta(rowProductCategory(row))
-        return matchesTokens(tokens, [
-          row.customer,
-          row.manager,
-          row.team,
-          row.region,
-          row.status,
-          row.dealType,
-          row.productVersion,
-          productMeta.label,
-          productMeta.shortLabel,
-          originLabel,
-          row.draftKind,
-          row.draftNote,
-          row.draftMonth,
-          row.sourceDealId,
-          row.sheetRow != null ? String(row.sheetRow) : "",
-        ])
-      })
+    const filters: RevRowFilters = {
+      managerFilter,
+      regionFilter,
+      productFilter,
+      revStatusFilter,
+      revDealTypeFilter,
+      revOriginFilter,
+    }
+    return rows.filter((row) => matchesRevRowFilters(row, filters, tokens))
   }, [managerFilter, productFilter, query, regionFilter, revDealTypeFilter, revOriginFilter, revStatusFilter, rows])
 
   const filteredRows = useMemo(() => {
@@ -1739,12 +1735,107 @@ export default function SalesLedgerWorkbench({
     [matrixMonths, expandedRevMonths],
   )
 
-  // 적용 전(new-row) 초안은 매트릭스에 행 자체가 없어 "초안 넣었는데 표에 없음"이 되던 사각 —
-  // 표 상단 요약 스트립으로 노출한다(집계에는 미반영, 적용 후 정식 행으로 합류).
-  const pendingNewRowDrafts = useMemo(
-    () => drafts.filter((draft) => draft.kind === "new-row" && (draft.status === "draft" || draft.status === "checked")),
-    [drafts],
+  // 입력 속도 라운드(2026-09-20 §4 P1-4) — 적용 전(new-row) 초안은 매트릭스에 행 자체가 없어
+  // "초안 넣었는데 표에 없음"이 되던 사각. buildPendingDraftRows(ledger/pending-draft-rows.ts,
+  // 순수 파생·별도 테스트 완비)로 임시 행을 만들어 매트릭스 본문 위 "적용 대기" 섹션에 노출한다.
+  // existingRows에 rows(시트행+적용초안행)를 그대로 넘겨 "이미 매트릭스에 보이는 고객"과 중복
+  // 임시 행을 만들지 않는다(그 함수의 규칙 4 — buildMatrixPendingByCell의 셀 점 표시와 같은 술어).
+  //
+  // 핵심 설계 결정(바꾸지 말 것): 이 임시 행은 rows/revBaseFilteredRows/filteredRows/
+  // revCustomerGroups/visibleDealRows 등 합계 파이프라인에 절대 섞지 않는다 — 저 파생들은 매트릭스
+  // 합계·그룹 합계·revWeekProjection·담당자/상품 요약·검수 인박스 칩·보드(ForecastBoard)·모바일
+  // 리스트·필터 옵션까지 전부 먹으므로, 섞으면 "장부 미반영 금액"이 장부 합계에 들어가 버린다.
+  const pendingDraftRows = useMemo<PendingDraftRow[]>(
+    () => buildPendingDraftRows({ drafts, matrixMonths, team, existingRows: rows }),
+    [drafts, matrixMonths, rows, team],
   )
+
+  // "적용 대기" 섹션에 실제로 보일 임시 행 — revBaseFilteredRows와 같은 필터 술어
+  // (matchesRevRowFilters, revBaseFilteredRows에서 기계적으로 추출한 순수 함수)를 그대로 적용해
+  // "지금 화면 필터 조건에 맞는" 임시 행만 남긴다. revForecastFilter(검수 인박스 칩)만 예외 —
+  // 그 필터는 "이미 매트릭스에 있는 행"의 검수 상태(주차 불일치·월합계만·미확정 등)를 거르는
+  // 필터라, 아직 매트릭스 행이 아닌 임시 행은 애초에 검수 대상이 아니다(필터가 걸리면 전부 숨김).
+  // revOriginFilter==="sheet"면 임시 행(ledgerOrigin:"draft")은 원천 필터 술어가 자연히 거른다.
+  const visiblePendingDraftRows = useMemo(() => {
+    if (revForecastFilter !== "all") return []
+    const tokens = tokenize(query)
+    const filters: RevRowFilters = {
+      managerFilter,
+      regionFilter,
+      productFilter,
+      revStatusFilter,
+      revDealTypeFilter,
+      revOriginFilter,
+    }
+    return pendingDraftRows.filter((row) => matchesRevRowFilters(row, filters, tokens))
+  }, [pendingDraftRows, managerFilter, productFilter, query, regionFilter, revDealTypeFilter, revForecastFilter, revOriginFilter, revStatusFilter])
+
+  // ── 입력 속도 라운드 P1-4 본체 — 매트릭스 인라인 새 행 ───────────────────────
+  // 적용 대기 섹션 맨 아래 입력 행(데스크톱 전용). 저장은 붙여넣기 새 행과 같은
+  // buildNewRowDraftInput(rev-matrix-logic.ts)을 쓴다 — 새 저장 경로를 만들지 않는다. 월/상품군/
+  // 확도는 연속 입력을 위해 저장 성공 후에도 유지하고, 고객·금액만 비운다(아래 saveInlineNewRow).
+  const [newRowCustomer, setNewRowCustomer] = useState("")
+  const [newRowMonth, setNewRowMonth] = useState(selectedMonth)
+  const [newRowProduct, setNewRowProduct] = useState<Exclude<RevProductCategory, "all">>("software")
+  const [newRowAmount, setNewRowAmount] = useState("")
+  const [newRowConfidence, setNewRowConfidence] = useState<DraftConfidence>("expected")
+  const [newRowSaving, setNewRowSaving] = useState(false)
+  const newRowCustomerInputRef = useRef<HTMLInputElement | null>(null)
+  const newRowAmountInputRef = useRef<HTMLInputElement | null>(null)
+  // 레일 폼(InputRailSection)과 같은 헬퍼·같은 판정(P0-3) — 저장을 막지 않는 인라인 경고 + 원클릭
+  // 맞추기에만 쓴다(draftFormInvalid류 저장 가능 조건은 아래 newRowSaveDisabled로 별도 관리).
+  const newRowSpellingMatch = findCustomerSpellingMatch(newRowCustomer, customerOptions)
+  // 매트릭스 편집 input과 같은 파싱 규칙(rev-matrix-logic.ts parseMatrixAmount) — 음수는 0으로.
+  const newRowParsedAmount = parseMatrixAmount(newRowAmount)
+  const newRowSaveDisabled = newRowSaving || !newRowCustomer.trim() || newRowParsedAmount <= 0
+
+  const saveInlineNewRow = useCallback(async () => {
+    if (newRowSaveDisabled) return
+    setNewRowSaving(true)
+    try {
+      const input = buildNewRowDraftInput(
+        { customer: newRowCustomer, month: newRowMonth, amount: newRowParsedAmount, confidence: newRowConfidence, productCategory: newRowProduct },
+        {
+          team: team === "ALL" ? "BD" : team,
+          // 붙여넣기 새 행과 같은 규약(confirmMatrixPaste 주석과 동일) — 담당자 필터가 정확히
+          // 1명일 때만 그 사람, 아니면 빈 값(체크 큐에서 채운다).
+          manager: managerFilter.size === 1 ? Array.from(managerFilter)[0] : "",
+          lens,
+          period,
+          origin: "rev-matrix-inline",
+        },
+      )
+      const result = await createDraft(input)
+      if (result.validationMessage) {
+        pushMatrixToast({ kind: "error", text: result.validationMessage })
+        return
+      }
+      const draft = result.draft
+      // createDraft는 실패 시에도 local-* 초안으로 폴백해 resolve된다(onCommitCell과 동일 계약).
+      const usedLocalFallback = !draft || draft.id.startsWith("local-")
+      if (usedLocalFallback) {
+        pushMatrixToast({
+          kind: "error",
+          text: "서버 저장 실패 — 로컬 임시 초안으로만 저장됐습니다 (장부 적용 불가). 입력 큐에서 서버 재연결 후 다시 입력하세요.",
+        })
+      } else if (result.dedupedRecent) {
+        pushMatrixToast({ kind: "info", text: DRAFT_DEDUPED_RECENT_NOTICE })
+      } else {
+        pushMatrixToast({
+          kind: "info",
+          text: "새 행 초안 저장 — 적용 대기 섹션에 표시됩니다(체크 큐에서 체크 → 적용)",
+        })
+      }
+      // 연속 입력: 고객·금액만 비우고 월/상품군/확도는 유지한다.
+      setNewRowCustomer("")
+      setNewRowAmount("")
+      newRowCustomerInputRef.current?.focus()
+    } catch (error) {
+      pushMatrixToast({ kind: "error", text: `새 행 저장에 실패했습니다 — 다시 시도하세요. ${errorMessage(error)}` })
+    } finally {
+      setNewRowSaving(false)
+    }
+  }, [createDraft, lens, managerFilter, newRowConfidence, newRowCustomer, newRowMonth, newRowParsedAmount, newRowProduct, newRowSaveDisabled, period, pushMatrixToast, team])
 
   // ── Phase 2: 매트릭스 인라인 편집 배선 ─────────────────────────────────────
   // 현재 페이지에서 실제로 보이는 딜행(접힌 그룹 하위행 제외)만 대상. row.id로 좌표 부여.
@@ -2872,6 +2963,13 @@ export default function SalesLedgerWorkbench({
     setRailView(nextView)
     setSidePanelCollapsed(false)
   }, [])
+  // 입력 속도 라운드 P1-4 — "적용 대기" 섹션(헤더 버튼·행 클릭)·모바일 카드가 공유하는 체크 큐
+  // 진입점. selectRailView("queue")가 이미 setSidePanelCollapsed(false)를 하지만, 큐 탭으로
+  // 전환하면서 패널이 접힌 채로 남는 경로가 생기지 않도록 명시적으로도 호출해 이중 보장한다.
+  const openPendingQueue = useCallback(() => {
+    selectRailView("queue")
+    setSidePanelCollapsed(false)
+  }, [selectRailView])
   const draftTotal = openDrafts.reduce((sum, draft) => sum + draft.amount, 0)
   const appliedDraftTotal = additiveAppliedDraftRows.reduce((sum, row) => sum + row.revenue, 0)
   const ledgerConfirmed = (revenue?.confirmed ?? 0) + appliedDraftTotal
@@ -3795,6 +3893,8 @@ export default function SalesLedgerWorkbench({
                   selectedRow={selectedRow}
                   loadDealDetail={loadDealDetail}
                   onQuickInput={openQuickInputForRow}
+                  pendingRows={visiblePendingDraftRows}
+                  onOpenQueue={openPendingQueue}
                 />
 
                 {revTotalPages > 1 && (
@@ -3923,6 +4023,178 @@ export default function SalesLedgerWorkbench({
                         </th>
                       </tr>
                     </thead>
+                    {/* 입력 속도 라운드 P1-4 — "적용 대기" 섹션. 미적용(draft|checked) new-row 초안을
+                        임시 행으로 보여주되(집계 파이프라인과 무관 — 위 pendingDraftRows 주석 참고),
+                        메인 매트릭스 tbody와 물리적으로 분리해 둔다: 헤더+목록은 임시 행이 있을 때만,
+                        인라인 새 행 입력줄(P1-4 본체)은 섹션이 비어 있어도 항상 렌더한다. */}
+                    <tbody aria-label="적용 대기 중인 새 행">
+                      {visiblePendingDraftRows.length > 0 && (
+                        <>
+                          <tr role="row" className="border-t border-dashed border-[#ECD29C] bg-[#FFFCF5]">
+                            <td colSpan={matrixColSpan} className="px-3 py-2">
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-semibold text-[#7A520F]">
+                                <span className="rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 font-bold">
+                                  적용 대기 새 행 {visiblePendingDraftRows.length}건
+                                </span>
+                                <span>
+                                  체크 큐에서 체크 → 적용하면 장부 합계에 들어갑니다(지금 매트릭스 합계 불포함)
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={openPendingQueue}
+                                  className="inline-flex items-center gap-1 font-bold text-[#084734] sm:ml-auto"
+                                >
+                                  체크 큐 열기
+                                  <ChevronRight className="h-3 w-3" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                          {visiblePendingDraftRows.map((row) => (
+                            <RevMatrixPendingRow
+                              key={row.id}
+                              row={row}
+                              months={matrixMonths}
+                              expandedMonths={expandedRevMonths}
+                              customerOptions={customerOptions}
+                              onOpenQueue={openPendingQueue}
+                            />
+                          ))}
+                        </>
+                      )}
+                      {/* 입력 속도 라운드 P1-4 본체 — 인라인 새 행. 섹션이 비어 있어도(위 헤더·목록
+                          미렌더) 이 입력줄만은 항상 렌더한다. 데스크톱 전용(hidden md:table-row) —
+                          모바일은 레일 입력 폼(빠른 작업)이 이미 있는 진입점이라 별도 폼을 두지 않는다.
+                          표준 매트릭스 열은 "달마다 1칸" 구조라 이 폼(고객·월·상품군·금액·확도·저장)에
+                          그대로 대응하지 않는다 — 고객 칸만 sticky 정렬을 맞추고 나머지는 colSpan으로
+                          합쳐 자유롭게 배치한다(스펙 이탈 — 보고 참고). 매트릭스 편집 상태기계
+                          (useMatrixEditor)·editableCells·pendingByCell·잠금 판정은 건드리지 않는다. */}
+                      <tr role="row" className="hidden border-t border-[rgba(0,0,0,0.08)] bg-white md:table-row">
+                        <td
+                          className="sticky left-0 z-10 border-r border-[rgba(0,0,0,0.08)] bg-white px-2 py-2 align-top"
+                          style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
+                        >
+                          <input
+                            ref={newRowCustomerInputRef}
+                            value={newRowCustomer}
+                            onChange={(event) => setNewRowCustomer(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault()
+                                newRowAmountInputRef.current?.focus()
+                              } else if (event.key === "Escape") {
+                                setNewRowCustomer("")
+                                setNewRowAmount("")
+                              }
+                            }}
+                            list="matrix-inline-customer-options"
+                            autoComplete="off"
+                            placeholder="+ 새 행 추가 — 고객/계정"
+                            aria-label="새 행 고객명"
+                            className="h-8 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 text-[11.5px] font-semibold text-[#111110] outline-none focus:border-[#084734]"
+                          />
+                          {/* datalist는 자유 입력을 막지 않는다 — 기존 표기를 추천해 표기 흔들림만 줄인다.
+                              레일(input-rail-customer-options)과 id가 겹치지 않게 별도 id를 쓴다. */}
+                          <datalist id="matrix-inline-customer-options">
+                            {customerOptions.map((name) => <option key={name} value={name} />)}
+                          </datalist>
+                          {newRowSpellingMatch && (
+                            <p
+                              role="status"
+                              className="mt-1 flex flex-wrap items-center gap-1.5 text-[9.5px] font-semibold leading-snug text-[#7A520F]"
+                            >
+                              <span>기존 행 &quot;{newRowSpellingMatch.canonical}&quot;과 같은 계정으로 보입니다</span>
+                              <button
+                                type="button"
+                                onClick={() => setNewRowCustomer(newRowSpellingMatch.canonical)}
+                                className="shrink-0 font-bold underline-offset-2 hover:underline"
+                              >
+                                그 표기로 맞추기
+                              </button>
+                            </p>
+                          )}
+                        </td>
+                        <td colSpan={Math.max(matrixColSpan - 1, 1)} className="border-l border-[#F2F1EE] bg-white px-2 py-2 align-top">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <label className="flex items-center gap-1 text-[10.5px] font-bold text-[#615D59]">
+                              월
+                              <select
+                                value={newRowMonth}
+                                onChange={(event) => setNewRowMonth(event.target.value)}
+                                aria-label="새 행 월"
+                                className="h-8 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-1.5 text-[11px] font-bold text-[#111110] outline-none"
+                              >
+                                {matrixMonths.map((month) => (
+                                  <option key={month} value={month}>{formatMonthLabel(month)}</option>
+                                ))}
+                              </select>
+                            </label>
+                            <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-0.5" role="group" aria-label="새 행 상품군">
+                              {(["software", "hardware"] as const).map((category) => (
+                                <button
+                                  key={category}
+                                  type="button"
+                                  aria-pressed={newRowProduct === category}
+                                  onClick={() => setNewRowProduct(category)}
+                                  className={`rounded px-2 py-1 text-[10.5px] font-bold transition ${
+                                    newRowProduct === category ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59] hover:text-[#111110]"
+                                  }`}
+                                >
+                                  {category === "software" ? "SW" : "HW"}
+                                </button>
+                              ))}
+                            </div>
+                            <input
+                              ref={newRowAmountInputRef}
+                              inputMode="numeric"
+                              value={newRowAmount}
+                              onChange={(event) => setNewRowAmount(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault()
+                                  void saveInlineNewRow()
+                                } else if (event.key === "Escape") {
+                                  setNewRowCustomer("")
+                                  setNewRowAmount("")
+                                }
+                              }}
+                              placeholder="금액"
+                              aria-label="새 행 금액(원 단위)"
+                              className="h-8 w-24 rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 text-right text-[11.5px] font-bold tabular-nums text-[#111110] outline-none focus:border-[#084734]"
+                            />
+                            <div className="flex items-center gap-0.5" role="radiogroup" aria-label="새 행 확도">
+                              {DRAFT_CONFIDENCE_OPTIONS.map((option) => {
+                                const active = option.id === newRowConfidence
+                                const activeColor = CONFIDENCE_TOKENS[option.id].color
+                                return (
+                                  <button
+                                    key={option.id}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={active}
+                                    title={option.hint}
+                                    onClick={() => setNewRowConfidence(option.id)}
+                                    className="min-w-[36px] rounded-md px-2 py-1 text-[10.5px] font-bold transition"
+                                    style={active ? { backgroundColor: activeColor, color: "#FFFFFF" } : { color: activeColor, backgroundColor: "transparent" }}
+                                  >
+                                    {option.label}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => void saveInlineNewRow()}
+                              disabled={newRowSaveDisabled}
+                              className="ml-auto inline-flex h-8 items-center gap-1 rounded-md bg-[#084734] px-3 text-[11px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                              새 행 추가
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    </tbody>
                     <tbody>
                       {filteredRows.length === 0 && (
                         <tr role="row">
@@ -3940,32 +4212,6 @@ export default function SalesLedgerWorkbench({
                                 </button>
                               )}
                             </div>
-                          </td>
-                        </tr>
-                      )}
-                      {pendingNewRowDrafts.length > 0 && (
-                        <tr role="row" className="border-t border-dashed border-[#ECD29C] bg-[#FFFCF5]">
-                          <td colSpan={matrixColSpan} className="px-3 py-2">
-                            <button
-                              type="button"
-                              onClick={() => selectRailView("queue")}
-                              title="체크 큐 열기 — 신규 초안 검수"
-                              className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 text-left text-[11px] font-semibold text-[#7A520F]"
-                            >
-                              <span className="rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 font-bold">
-                                미적용 신규 초안 {pendingNewRowDrafts.length}건
-                              </span>
-                              {pendingNewRowDrafts.slice(0, 3).map((draft) => (
-                                <span key={draft.id} className="max-w-[220px] truncate">
-                                  {draft.customer || "고객명 미입력"} · {formatMonthLabel(draft.month)} · {formatMoney(draft.amount)}
-                                </span>
-                              ))}
-                              {pendingNewRowDrafts.length > 3 && <span>외 {pendingNewRowDrafts.length - 3}건</span>}
-                              <span className="inline-flex items-center gap-1 font-bold text-[#084734] sm:ml-auto">
-                                체크 큐에서 검수
-                                <ChevronRight className="h-3 w-3" />
-                              </span>
-                            </button>
                           </td>
                         </tr>
                       )}
