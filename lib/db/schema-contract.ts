@@ -145,6 +145,9 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // REST·카탈로그 RPC 프로브로 확인할 방법이 없어 계약에 넣지 않는다 — 적용 확인은
   // docs/active/hardware-scm-tab-reference.md §6 의 제약 조회로 한다.
   "supabase/migrations/20260914_hardware_confirm_planned_v3.sql",
+  // 매출 장부 "적용된 값을 한 번에 바꾸기"(P2-9, 2026-09-22) — 옛 entry 반전 + 새 checked
+  // 초안 적용을 한 트랜잭션으로 묶는 원자 대체 RPC. 잠금/쓰기 함수라 카탈로그로만 확인한다.
+  "supabase/migrations/20260922_branch_sales_ledger_supersede_entry.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -476,6 +479,18 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     migration: "supabase/migrations/20260914_hardware_confirm_planned_v3.sql",
     impact:
       "앱이 v2로 폴백하는데, v2는 lot_no 칸에서만 로트를 찾아 lot_no가 빈 예정 출고(운영 원장 전부)를 확정하지 못한다.",
+  },
+  // ── 매출 장부 "적용된 값을 한 번에 바꾸기"(P2-9, 2026-09-22) ────────────────────────────
+  // 옛 entry를 FOR UPDATE로 잠그고 반전+적용을 한 트랜잭션으로 묶는 쓰기 함수라 실행 프로브를
+  // 금지하고 pg_proc·권한만 카탈로그로 확인한다(하드웨어 v3 RPC와 동일 관례).
+  {
+    kind: "rpc",
+    functionName: "supersede_branch_sales_ledger_entry",
+    label: "매출 장부 적용값 원자 대체 RPC",
+    catalogIdentityTypes: "uuid, uuid, text, text",
+    serviceRoleOnly: true,
+    migration: "supabase/migrations/20260922_branch_sales_ledger_supersede_entry.sql",
+    impact: "적용된 값을 한 번에 바꾸기가 꺼진다(기존 되돌리기 → 재적용 수동 경로는 그대로 동작).",
   },
 ]
 
