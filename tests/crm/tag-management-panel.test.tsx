@@ -29,9 +29,10 @@ describe("TagManagementPanel 정적 마크업(초기 로딩 상태)", () => {
     expect(html).toContain('placeholder="태그 검색"')
   })
 
-  it("표 헤더 4종(태그·건수·리드/고객 분해·최근 사용)을 렌더한다", () => {
+  it("표 헤더 5종(태그·범주·건수·리드/고객 분해·최근 사용)을 렌더한다", () => {
     const html = renderToStaticMarkup(<TagManagementPanel />)
     expect(html).toContain(">태그<")
+    expect(html).toContain(">범주<")
     expect(html).toContain(">건수<")
     expect(html).toContain("리드 · NEO · 고객")
     expect(html).toContain(">최근 사용<")
@@ -47,7 +48,16 @@ describe("TagManagementPanel 정적 마크업(초기 로딩 상태)", () => {
     const html = renderToStaticMarkup(<TagManagementPanel />)
     expect(html).not.toContain("개 선택됨")
   })
+
+  it("자동 태그 규칙 섹션을 접힌 상태로 렌더한다(T5)", () => {
+    const html = renderToStaticMarkup(<TagManagementPanel />)
+    expect(html).toContain("자동 태그 규칙")
+    expect(html).toContain('aria-expanded="false"')
+    // 접혀 있으므로 "지금 미리보기" 버튼은 아직 렌더되지 않는다.
+    expect(html).not.toContain("지금 미리보기")
+  })
 })
+
 
 describe("TagManagementPanel 소스 계약", () => {
   it("window.confirm을 쓰지 않는다(파괴적 확인은 인라인)", () => {
@@ -93,5 +103,50 @@ describe("TagManagementPanel 소스 계약", () => {
 
   it("행 클릭으로 통합 고객 화면 이동 링크는 넣지 않았다(통합 클라이언트가 ?tag=를 읽지 않음)", () => {
     expect(SOURCE).not.toContain("/admin/crm/customers/unified?tag=")
+  })
+
+  // ── T6 범주 셀렉트 ───────────────────────────────────────────────────
+  it("범주 셀렉트는 TAG_CATEGORIES 5종을 옵션으로 렌더하고 태그별 aria-label을 갖는다", () => {
+    expect(SOURCE).toContain("TAG_CATEGORIES.map((category)")
+    expect(SOURCE).toContain("aria-label={`${row.tag} 범주`}")
+    expect(SOURCE).toContain('onChange={(event) => void changeCategory(row.tag, event.target.value as TagCategory)}')
+  })
+
+  it("범주 셀렉트는 set_category PATCH를 태운다", () => {
+    expect(SOURCE).toContain('action: "set_category", tag, category')
+  })
+
+  it("risk 범주만 Warning 텍스트 색을 쓰고 다른 범주는 웜 뉴트럴이다", () => {
+    const block = SOURCE.slice(SOURCE.indexOf('aria-label={`${row.tag} 범주`}'), SOURCE.indexOf("</select>"))
+    expect(block).toContain('STATUS_TONE_TEXT_CLASS.warning')
+    expect(block).toContain('"text-[#111110]"')
+  })
+
+  it("자동 태그는 정의(isAuto)가 참일 때만 배지를 렌더한다", () => {
+    expect(SOURCE).toContain("definitionByTag.get(row.tag)?.isAuto")
+    expect(SOURCE).toContain("자동")
+  })
+
+  // ── T5 자동 태그 규칙 섹션 ───────────────────────────────────────────
+  it("규칙 섹션은 접힘 상태를 aria-expanded로 표기하고 토글 버튼을 갖는다", () => {
+    expect(SOURCE).toContain("aria-expanded={rulesOpen}")
+    expect(SOURCE).toContain("setRulesOpen((prev) => !prev)")
+  })
+
+  it("규칙별로 조건 설명·enabled 토글·마지막 실행·적용/제거 건수를 렌더한다", () => {
+    expect(SOURCE).toContain("describeAutoTagRuleCondition(rule)")
+    expect(SOURCE).toContain("void toggleRuleEnabled(rule)")
+    expect(SOURCE).toContain("formatRuleRunTimestamp(rule.lastRunAt)")
+    expect(SOURCE).toContain("formatAutoTagRuleOutcomeLabel(rule.lastApplied ?? 0, rule.lastRemoved ?? 0)")
+  })
+
+  it("enabled 토글은 set_rule_enabled PATCH를 태운다", () => {
+    expect(SOURCE).toContain('action: "set_rule_enabled", ruleId: rule.id, enabled: !rule.enabled')
+  })
+
+  it("\"지금 미리보기\" 버튼은 CRON_SECRET 없이 preview_rules PATCH를 태운다", () => {
+    expect(SOURCE).toContain("지금 미리보기")
+    expect(SOURCE).toContain('action: "preview_rules"')
+    expect(SOURCE).not.toContain("CRON_SECRET")
   })
 })

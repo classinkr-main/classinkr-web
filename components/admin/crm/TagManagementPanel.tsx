@@ -5,14 +5,22 @@ import { Search } from "lucide-react"
 
 import { adminFetchJson, adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import { CRM_CACHE_SWR_MS, CRM_CACHE_TTL_MS } from "@/lib/crm/client-cache"
+import { STATUS_TONE_TEXT_CLASS } from "@/lib/crm/status-tone"
 import {
+  TAG_CATEGORIES,
+  TAG_CATEGORY_LABELS,
+  describeAutoTagRuleCondition,
+  formatAutoTagRuleOutcomeLabel,
   formatMergePreviewLabel,
   formatRenamePreviewLabel,
   validateMergeInput,
   validateRenameInput,
   type TagBulkOutcome,
+  type TagCategory,
 } from "@/lib/crm/tag-admin"
 import type { CustomerTagStat } from "@/lib/repositories/crm-customer-tags"
+// 타입만 참조 — crm-tag-rules.ts는 server-only라 값 import는 클라이언트 번들에 들어가면 안 된다.
+import type { AutoTagRuleApplyResult, CrmTagDefinition, CrmTagRule } from "@/lib/repositories/crm-tag-rules"
 import { EmptyState } from "@/components/admin/viz"
 import CrmNoticeBanner from "./CrmNoticeBanner"
 import FreshnessCaption from "./FreshnessCaption"
@@ -35,6 +43,9 @@ const TAGS_URL = "/api/admin/crm/tags"
 interface TagsResponse {
   tags: CustomerTagStat[]
   generatedAt: string
+  // T5·T6 — additive. 배포 직후 잠깐 남은 캐시 응답에는 없을 수 있어 optional로 둔다.
+  definitions?: CrmTagDefinition[]
+  rules?: CrmTagRule[]
 }
 
 function formatLastUsed(iso: string | null) {
@@ -42,6 +53,19 @@ function formatLastUsed(iso: string | null) {
   const ms = Date.parse(iso)
   if (!Number.isFinite(ms)) return "-"
   return new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ms))
+}
+
+function formatRuleRunTimestamp(iso: string | null) {
+  if (!iso) return "실행 전"
+  const ms = Date.parse(iso)
+  if (!Number.isFinite(ms)) return "실행 전"
+  return new Intl.DateTimeFormat("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(ms))
 }
 
 function errorDetail(err: unknown) {
@@ -75,6 +99,9 @@ function RowSkeleton() {
         <div className="h-3.5 w-24 animate-pulse rounded bg-[#f0f0ec]" />
       </td>
       <td className="px-3 py-3">
+        <div className="h-3.5 w-14 animate-pulse rounded bg-[#f0f0ec]" />
+      </td>
+      <td className="px-3 py-3">
         <div className="h-3.5 w-10 animate-pulse rounded bg-[#f0f0ec]" />
       </td>
       <td className="px-3 py-3">
@@ -102,6 +129,18 @@ export default function TagManagementPanel() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [merge, setMerge] = useState<MergeState | null>(null)
   const [notice, setNotice] = useState<{ tone: "success" | "danger"; message: string } | null>(null)
+
+  // T6 — 범주 셀렉트 저장 중 표시(태그별).
+  const [categorySaving, setCategorySaving] = useState<Set<string>>(new Set())
+  // T5 — 규칙 섹션: 접힘 상태, 토글 저장 중, "지금 미리보기" 결과.
+  const [rulesOpen, setRulesOpen] = useState(false)
+  const [ruleToggling, setRuleToggling] = useState<Set<string>>(new Set())
+  const [rulePreview, setRulePreview] = useState<
+    | { phase: "idle" }
+    | { phase: "loading" }
+    | { phase: "done"; results: AutoTagRuleApplyResult[] }
+    | { phase: "error"; error: string }
+  >({ phase: "idle" })
 
   const load = useCallback(async (options?: { force?: boolean }) => {
     const force = Boolean(options?.force)
@@ -149,6 +188,20 @@ export default function TagManagementPanel() {
     if (!q) return rows
     return rows.filter((row) => row.tag.toLowerCase().includes(q))
   }, [data, query])
+
+  // T6 — 태그 → 정의(범주·자동 여부) 조회용 맵.
+  const definitionByTag = useMemo(() => {
+    const map = new Map<string, CrmTagDefinition>()
+    for (const definition of data?.definitions ?? []) map.set(definition.tag, definition)
+    return map
+  }, [data])
+
+  // T5 — 태그 → 그 태그를 만드는 규칙의 조건 설명("자동 · 만료 30일 이내" 배지용).
+  const ruleConditionByTag = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const rule of data?.rules ?? []) map.set(rule.tag, describeAutoTagRuleCondition(rule))
+    return map
+  }, [data])
 
   // 목록이 갱신되며 사라진 태그가 선택·병합 대상에 그대로 남지 않게 정리.
   useEffect(() => {
@@ -261,7 +314,69 @@ export default function TagManagementPanel() {
     }
   }
 
+  // ── T6 범주 변경 ─────────────────────────────────────────────────────
+  async function changeCategory(tag: string, category: TagCategory) {
+    setCategorySaving((prev) => new Set(prev).add(tag))
+    try {
+      const result = await adminFetchJson<{ definition: CrmTagDefinition }>(TAGS_URL, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "set_category", tag, category }),
+      })
+      setData((prev) => {
+        if (!prev) return prev
+        const rest = (prev.definitions ?? []).filter((definition) => definition.tag !== tag)
+        return { ...prev, definitions: [...rest, result.definition] }
+      })
+    } catch (err) {
+      setNotice({ tone: "danger", message: `범주 변경에 실패했습니다(${errorDetail(err)}).` })
+    } finally {
+      setCategorySaving((prev) => {
+        const next = new Set(prev)
+        next.delete(tag)
+        return next
+      })
+    }
+  }
+
+  // ── T5 자동 태그 규칙 ────────────────────────────────────────────────
+  async function toggleRuleEnabled(rule: CrmTagRule) {
+    setRuleToggling((prev) => new Set(prev).add(rule.id))
+    try {
+      const result = await adminFetchJson<{ rule: CrmTagRule }>(TAGS_URL, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "set_rule_enabled", ruleId: rule.id, enabled: !rule.enabled }),
+      })
+      setData((prev) => {
+        if (!prev) return prev
+        const rules = (prev.rules ?? []).map((existing) => (existing.id === rule.id ? result.rule : existing))
+        return { ...prev, rules }
+      })
+    } catch (err) {
+      setNotice({ tone: "danger", message: `규칙 상태 변경에 실패했습니다(${errorDetail(err)}).` })
+    } finally {
+      setRuleToggling((prev) => {
+        const next = new Set(prev)
+        next.delete(rule.id)
+        return next
+      })
+    }
+  }
+
+  async function previewRules() {
+    setRulePreview({ phase: "loading" })
+    try {
+      const result = await adminFetchJson<{ report: { results: AutoTagRuleApplyResult[] } }>(TAGS_URL, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "preview_rules" }),
+      })
+      setRulePreview({ phase: "done", results: result.report.results })
+    } catch (err) {
+      setRulePreview({ phase: "error", error: errorDetail(err) })
+    }
+  }
+
   const showEmpty = !loading && filtered.length === 0
+  const rules = data?.rules ?? []
 
   return (
     <div>
@@ -293,6 +408,89 @@ export default function TagManagementPanel() {
           action={{ label: "다시 시도", onClick: error.retry, pending: refreshing }}
         />
       ) : null}
+
+      <div className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white">
+        <button
+          type="button"
+          onClick={() => setRulesOpen((prev) => !prev)}
+          aria-expanded={rulesOpen}
+          className="flex min-h-11 w-full items-center justify-between px-4 py-3 text-left"
+        >
+          <span className="text-[13px] font-semibold text-[#111110]">자동 태그 규칙</span>
+          <span className={`text-[11px] ${SECONDARY_TEXT_CLASS}`}>
+            {rulesOpen ? "접기" : `${rules.length.toLocaleString("ko-KR")}개 · 펼치기`}
+          </span>
+        </button>
+        {rulesOpen ? (
+          <div className="border-t border-[#f0f0ec] px-4 py-3">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <p className={`text-[11px] ${SECONDARY_TEXT_CLASS}`}>
+                조건을 충족하는 대상에 매일 한 번 자동으로 태그를 붙이거나 뗍니다. 사람이 직접 붙인
+                태그는 건드리지 않습니다.
+              </p>
+              <button
+                type="button"
+                onClick={() => void previewRules()}
+                disabled={rulePreview.phase === "loading" || rules.length === 0}
+                aria-busy={rulePreview.phase === "loading" || undefined}
+                className="inline-flex min-h-11 items-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#fafaf8] disabled:opacity-50 sm:min-h-8"
+              >
+                {rulePreview.phase === "loading" ? "미리보기 계산 중" : "지금 미리보기"}
+              </button>
+            </div>
+            {rulePreview.phase === "error" ? (
+              <p role="alert" className="mb-2 text-[11px] text-[#B43E3E]">
+                미리보기 계산에 실패했습니다({rulePreview.error}).
+              </p>
+            ) : null}
+            {rules.length === 0 ? (
+              <p className={`text-[11px] ${SECONDARY_TEXT_CLASS}`}>등록된 자동 태그 규칙이 없습니다.</p>
+            ) : (
+              <ul className="space-y-2">
+                {rules.map((rule) => {
+                  const previewResult =
+                    rulePreview.phase === "done"
+                      ? rulePreview.results.find((result) => result.ruleId === rule.id)
+                      : undefined
+                  return (
+                    <li
+                      key={rule.id}
+                      className="flex flex-col gap-2 rounded-xl border border-[#f0f0ec] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div>
+                        <p className="text-[12px] font-semibold text-[#111110]">{rule.tag}</p>
+                        <p className={`text-[11px] ${SECONDARY_TEXT_CLASS}`}>{describeAutoTagRuleCondition(rule)}</p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3 text-[11px]">
+                        <span className={SECONDARY_TEXT_CLASS}>
+                          마지막 실행 {formatRuleRunTimestamp(rule.lastRunAt)} ·{" "}
+                          {formatAutoTagRuleOutcomeLabel(rule.lastApplied ?? 0, rule.lastRemoved ?? 0)}
+                        </span>
+                        {previewResult ? (
+                          <span role="status" className="font-medium text-[#31302E]">
+                            미리보기 {formatAutoTagRuleOutcomeLabel(previewResult.applied, previewResult.removed)}
+                          </span>
+                        ) : null}
+                        <label className="inline-flex min-h-11 items-center gap-1.5 sm:min-h-0">
+                          <input
+                            type="checkbox"
+                            checked={rule.enabled}
+                            disabled={ruleToggling.has(rule.id)}
+                            onChange={() => void toggleRuleEnabled(rule)}
+                            aria-label={`${rule.tag} 규칙 사용`}
+                            className="h-4 w-4 rounded border-[#C9C6C0] disabled:opacity-50"
+                          />
+                          사용
+                        </label>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+        ) : null}
+      </div>
 
       <label className="mb-3 flex h-10 max-w-sm items-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] text-[#111110] focus-within:border-[#084734]">
         <Search className="h-4 w-4 text-[#1a1a1a]/35" aria-hidden />
@@ -396,6 +594,7 @@ export default function TagManagementPanel() {
               <tr className="border-b border-[#e8e8e4] text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1a1a1a]/40">
                 <th className="w-10 px-3 py-2.5" aria-hidden />
                 <th className="px-3 py-2.5">태그</th>
+                <th className="px-3 py-2.5">범주</th>
                 <th className="px-3 py-2.5">건수</th>
                 <th className="px-3 py-2.5">리드 · NEO · 고객</th>
                 <th className="px-3 py-2.5">최근 사용</th>
@@ -476,8 +675,34 @@ export default function TagManagementPanel() {
                               ) : null}
                             </div>
                           ) : (
-                            <span className="font-medium text-[#111110]">{row.tag}</span>
+                            <span>
+                              <span className="font-medium text-[#111110]">{row.tag}</span>
+                              {definitionByTag.get(row.tag)?.isAuto ? (
+                                <span className={`ml-1.5 text-[11px] font-medium ${SECONDARY_TEXT_CLASS}`}>
+                                  자동{ruleConditionByTag.has(row.tag) ? ` · ${ruleConditionByTag.get(row.tag)}` : ""}
+                                </span>
+                              ) : null}
+                            </span>
                           )}
+                        </td>
+                        <td className="px-3 py-3 align-top">
+                          <select
+                            value={definitionByTag.get(row.tag)?.category ?? "manual"}
+                            disabled={categorySaving.has(row.tag)}
+                            onChange={(event) => void changeCategory(row.tag, event.target.value as TagCategory)}
+                            aria-label={`${row.tag} 범주`}
+                            className={`h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] outline-none focus:border-[#084734] disabled:opacity-50 ${
+                              definitionByTag.get(row.tag)?.category === "risk"
+                                ? STATUS_TONE_TEXT_CLASS.warning
+                                : "text-[#111110]"
+                            }`}
+                          >
+                            {TAG_CATEGORIES.map((category) => (
+                              <option key={category} value={category}>
+                                {TAG_CATEGORY_LABELS[category]}
+                              </option>
+                            ))}
+                          </select>
                         </td>
                         <td className="px-3 py-3 align-top tabular-nums text-[#111110]">
                           {row.count.toLocaleString("ko-KR")}건

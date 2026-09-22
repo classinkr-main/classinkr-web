@@ -10,6 +10,12 @@ const mocks = vi.hoisted(() => ({
   listCustomerTagStats: vi.fn(),
   renameCustomerTag: vi.fn(),
   mergeCustomerTags: vi.fn(),
+  listTagDefinitions: vi.fn(),
+  listTagRules: vi.fn(),
+  upsertTagDefinition: vi.fn(),
+  setTagRuleEnabled: vi.fn(),
+  syncTagDefinitionsOnRename: vi.fn(),
+  applyAutoTagRules: vi.fn(),
 }))
 
 vi.mock("@/lib/admin-auth", () => ({
@@ -21,6 +27,15 @@ vi.mock("@/lib/repositories/crm-customer-tags", () => ({
   listCustomerTagStats: mocks.listCustomerTagStats,
   renameCustomerTag: mocks.renameCustomerTag,
   mergeCustomerTags: mocks.mergeCustomerTags,
+}))
+
+vi.mock("@/lib/repositories/crm-tag-rules", () => ({
+  listTagDefinitions: mocks.listTagDefinitions,
+  listTagRules: mocks.listTagRules,
+  upsertTagDefinition: mocks.upsertTagDefinition,
+  setTagRuleEnabled: mocks.setTagRuleEnabled,
+  syncTagDefinitionsOnRename: mocks.syncTagDefinitionsOnRename,
+  applyAutoTagRules: mocks.applyAutoTagRules,
 }))
 
 function patchRequest(body: unknown) {
@@ -39,6 +54,9 @@ describe("GET /api/admin/crm/tags", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.requireVerifiedAdminContext.mockResolvedValue({ userId: "admin-1" })
+    mocks.listCustomerTagStats.mockResolvedValue([])
+    mocks.listTagDefinitions.mockResolvedValue([])
+    mocks.listTagRules.mockResolvedValue([])
   })
 
   it("인증 실패면 저장소 조회 없이 그대로 응답한다", async () => {
@@ -47,10 +65,11 @@ describe("GET /api/admin/crm/tags", () => {
     const response = await GET(new NextRequest("https://classin.kr/api/admin/crm/tags"))
     expect(response.status).toBe(401)
     expect(mocks.listCustomerTagStats).not.toHaveBeenCalled()
+    expect(mocks.listTagDefinitions).not.toHaveBeenCalled()
+    expect(mocks.listTagRules).not.toHaveBeenCalled()
   })
 
   it("CRM_STAFF_ADMIN_API_ROLES로 requireVerifiedAdminContext를 호출한다", async () => {
-    mocks.listCustomerTagStats.mockResolvedValue([])
     const { GET } = await loadRoute()
     await GET(new NextRequest("https://classin.kr/api/admin/crm/tags"))
     expect(mocks.requireVerifiedAdminContext).toHaveBeenCalledWith(
@@ -71,6 +90,32 @@ describe("GET /api/admin/crm/tags", () => {
     expect(response.headers.get("Cache-Control")).toContain("private")
   })
 
+  it("definitions·rules를 additive로 함께 돌려준다(T5·T6)", async () => {
+    const definitions = [{ tag: "재계약", category: "stage", description: null, isAuto: true, createdAt: "x", updatedAt: "x" }]
+    const rules = [
+      {
+        id: "rule-1",
+        tag: "재계약",
+        ruleType: "expiring_within_days",
+        params: { days: 30 },
+        targetTypes: ["neo_account"],
+        enabled: true,
+        lastRunAt: null,
+        lastApplied: null,
+        lastRemoved: null,
+        createdAt: "x",
+        updatedAt: "x",
+      },
+    ]
+    mocks.listTagDefinitions.mockResolvedValue(definitions)
+    mocks.listTagRules.mockResolvedValue(rules)
+    const { GET } = await loadRoute()
+    const response = await GET(new NextRequest("https://classin.kr/api/admin/crm/tags"))
+    const body = await response.json()
+    expect(body.definitions).toEqual(definitions)
+    expect(body.rules).toEqual(rules)
+  })
+
   it("저장소 조회가 실패하면 500을 돌려준다", async () => {
     mocks.listCustomerTagStats.mockRejectedValue(new Error("boom"))
     const { GET } = await loadRoute()
@@ -83,6 +128,7 @@ describe("PATCH /api/admin/crm/tags", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.requireVerifiedAdminContext.mockResolvedValue({ userId: "admin-1" })
+    mocks.syncTagDefinitionsOnRename.mockResolvedValue(undefined)
   })
 
   it("인증 실패면 저장소 호출 없이 그대로 응답한다", async () => {
@@ -136,11 +182,27 @@ describe("PATCH /api/admin/crm/tags", () => {
     expect(body).toMatchObject({ updated: 3, removedDuplicates: 1, dryRun: false, from: "VIP", to: "우수고객" })
   })
 
-  it("rename: dryRun:true를 그대로 저장소에 전달한다", async () => {
+  it("rename: 커밋 시 태그 정의 테이블도 함께 동기화한다", async () => {
+    mocks.renameCustomerTag.mockResolvedValue({ updated: 3, removedDuplicates: 1 })
+    const { PATCH } = await loadRoute()
+    await PATCH(patchRequest({ action: "rename", from: "VIP", to: "우수고객" }))
+    expect(mocks.syncTagDefinitionsOnRename).toHaveBeenCalledWith(["VIP"], "우수고객")
+  })
+
+  it("rename: 정의 동기화가 실패해도 이름 변경 자체는 200을 유지한다(best-effort)", async () => {
+    mocks.renameCustomerTag.mockResolvedValue({ updated: 3, removedDuplicates: 1 })
+    mocks.syncTagDefinitionsOnRename.mockRejectedValue(new Error("definitions boom"))
+    const { PATCH } = await loadRoute()
+    const response = await PATCH(patchRequest({ action: "rename", from: "VIP", to: "우수고객" }))
+    expect(response.status).toBe(200)
+  })
+
+  it("rename: dryRun:true를 그대로 저장소에 전달하고 정의 동기화는 하지 않는다", async () => {
     mocks.renameCustomerTag.mockResolvedValue({ updated: 3, removedDuplicates: 0 })
     const { PATCH } = await loadRoute()
     await PATCH(patchRequest({ action: "rename", from: "VIP", to: "우수고객", dryRun: true }))
     expect(mocks.renameCustomerTag).toHaveBeenCalledWith("VIP", "우수고객", { dryRun: true })
+    expect(mocks.syncTagDefinitionsOnRename).not.toHaveBeenCalled()
   })
 
   it("rename: 저장소 실패면 500을 돌려준다", async () => {
@@ -176,5 +238,98 @@ describe("PATCH /api/admin/crm/tags", () => {
     const { PATCH } = await loadRoute()
     const response = await PATCH(patchRequest({ action: "merge", from: ["VIP"], to: "우수고객" }))
     expect(response.status).toBe(500)
+  })
+
+  it("merge: 커밋 시 태그 정의 테이블도 함께 동기화한다", async () => {
+    mocks.mergeCustomerTags.mockResolvedValue({ updated: 2, removedDuplicates: 1 })
+    const { PATCH } = await loadRoute()
+    await PATCH(patchRequest({ action: "merge", from: ["VIP", "재계약"], to: "우수고객" }))
+    expect(mocks.syncTagDefinitionsOnRename).toHaveBeenCalledWith(["VIP", "재계약"], "우수고객")
+  })
+
+  // ── T6: set_category ────────────────────────────────────────────────
+  describe("set_category", () => {
+    it("태그가 없으면 400이고 저장소를 호출하지 않는다", async () => {
+      const { PATCH } = await loadRoute()
+      const response = await PATCH(patchRequest({ action: "set_category", tag: "  ", category: "risk" }))
+      expect(response.status).toBe(400)
+      expect(mocks.upsertTagDefinition).not.toHaveBeenCalled()
+    })
+
+    it("범주가 5종 enum 밖이면 400이고 저장소를 호출하지 않는다", async () => {
+      const { PATCH } = await loadRoute()
+      const response = await PATCH(patchRequest({ action: "set_category", tag: "VIP", category: "color" }))
+      expect(response.status).toBe(400)
+      expect(mocks.upsertTagDefinition).not.toHaveBeenCalled()
+    })
+
+    it("정상 입력이면 저장소를 호출하고 definition을 돌려준다", async () => {
+      const definition = { tag: "VIP", category: "segment", description: null, isAuto: false, createdAt: "x", updatedAt: "x" }
+      mocks.upsertTagDefinition.mockResolvedValue(definition)
+      const { PATCH } = await loadRoute()
+      const response = await PATCH(patchRequest({ action: "set_category", tag: "VIP", category: "segment" }))
+      const body = await response.json()
+      expect(response.status).toBe(200)
+      expect(mocks.upsertTagDefinition).toHaveBeenCalledWith("VIP", "segment")
+      expect(body).toEqual({ definition })
+    })
+
+    it("저장소 실패면 500을 돌려준다", async () => {
+      mocks.upsertTagDefinition.mockRejectedValue(new Error("boom"))
+      const { PATCH } = await loadRoute()
+      const response = await PATCH(patchRequest({ action: "set_category", tag: "VIP", category: "risk" }))
+      expect(response.status).toBe(500)
+    })
+  })
+
+  // ── T5: set_rule_enabled ─────────────────────────────────────────────
+  describe("set_rule_enabled", () => {
+    it("ruleId나 enabled가 없으면(또는 boolean이 아니면) 400이고 저장소를 호출하지 않는다", async () => {
+      const { PATCH } = await loadRoute()
+      const response1 = await PATCH(patchRequest({ action: "set_rule_enabled", ruleId: "", enabled: true }))
+      expect(response1.status).toBe(400)
+      const response2 = await PATCH(patchRequest({ action: "set_rule_enabled", ruleId: "rule-1", enabled: "yes" }))
+      expect(response2.status).toBe(400)
+      expect(mocks.setTagRuleEnabled).not.toHaveBeenCalled()
+    })
+
+    it("정상 입력이면 저장소를 호출하고 rule을 돌려준다", async () => {
+      const rule = { id: "rule-1", enabled: false }
+      mocks.setTagRuleEnabled.mockResolvedValue(rule)
+      const { PATCH } = await loadRoute()
+      const response = await PATCH(patchRequest({ action: "set_rule_enabled", ruleId: "rule-1", enabled: false }))
+      const body = await response.json()
+      expect(response.status).toBe(200)
+      expect(mocks.setTagRuleEnabled).toHaveBeenCalledWith("rule-1", false)
+      expect(body).toEqual({ rule })
+    })
+
+    it("저장소 실패면 500을 돌려준다", async () => {
+      mocks.setTagRuleEnabled.mockRejectedValue(new Error("boom"))
+      const { PATCH } = await loadRoute()
+      const response = await PATCH(patchRequest({ action: "set_rule_enabled", ruleId: "rule-1", enabled: true }))
+      expect(response.status).toBe(500)
+    })
+  })
+
+  // ── T5: preview_rules ────────────────────────────────────────────────
+  describe("preview_rules", () => {
+    it("applyAutoTagRules를 dryRun:true로 호출하고 report를 돌려준다", async () => {
+      const report = { generatedAt: "x", dryRun: true, results: [{ ruleId: "rule-1", tag: "재계약", ruleType: "expiring_within_days", matched: 2, applied: 1, removed: 0, skippedManual: 0 }] }
+      mocks.applyAutoTagRules.mockResolvedValue(report)
+      const { PATCH } = await loadRoute()
+      const response = await PATCH(patchRequest({ action: "preview_rules" }))
+      const body = await response.json()
+      expect(response.status).toBe(200)
+      expect(mocks.applyAutoTagRules).toHaveBeenCalledWith({ dryRun: true })
+      expect(body).toEqual({ report })
+    })
+
+    it("실패면 500을 돌려준다", async () => {
+      mocks.applyAutoTagRules.mockRejectedValue(new Error("boom"))
+      const { PATCH } = await loadRoute()
+      const response = await PATCH(patchRequest({ action: "preview_rules" }))
+      expect(response.status).toBe(500)
+    })
   })
 })

@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  TAG_CATEGORIES,
+  TAG_CATEGORY_LABELS,
+  describeAutoTagRuleCondition,
+  formatAutoTagRuleOutcomeLabel,
   formatMergePreviewLabel,
   formatRenamePreviewLabel,
+  isTagCategory,
   validateMergeInput,
   validateRenameInput,
   validateTagName,
@@ -106,5 +111,62 @@ describe("formatMergePreviewLabel", () => {
     expect(formatMergePreviewLabel(["VIP", "재계약"], "우수고객", { updated: 5, removedDuplicates: 1 })).toBe(
       "VIP·재계약 → 우수고객, 5건, 중복 1건 정리"
     )
+  })
+})
+
+// ── T6 범주 ──────────────────────────────────────────────────────────────
+
+describe("TAG_CATEGORIES / isTagCategory", () => {
+  it("범주는 정확히 5종(segment·stage·risk·product·manual)이다", () => {
+    expect(TAG_CATEGORIES).toEqual(["segment", "stage", "risk", "product", "manual"])
+  })
+
+  it("5종 모두 라벨을 갖는다", () => {
+    for (const category of TAG_CATEGORIES) {
+      expect(typeof TAG_CATEGORY_LABELS[category]).toBe("string")
+      expect(TAG_CATEGORY_LABELS[category].length).toBeGreaterThan(0)
+    }
+  })
+
+  it("isTagCategory는 5종만 참으로 판정한다", () => {
+    for (const category of TAG_CATEGORIES) expect(isTagCategory(category)).toBe(true)
+    expect(isTagCategory("color")).toBe(false)
+    expect(isTagCategory(123)).toBe(false)
+    expect(isTagCategory(null)).toBe(false)
+    expect(isTagCategory(undefined)).toBe(false)
+  })
+})
+
+// ── T5 자동 태그 규칙 문구 ──────────────────────────────────────────────────
+
+describe("describeAutoTagRuleCondition", () => {
+  it("expiring_within_days: params.days가 있으면 그 값을 쓴다", () => {
+    expect(describeAutoTagRuleCondition({ ruleType: "expiring_within_days", params: { days: 30 } })).toBe(
+      "만료 30일 이내"
+    )
+  })
+
+  it("expiring_within_days: params.days가 없으면 기본값 30을 쓴다", () => {
+    expect(describeAutoTagRuleCondition({ ruleType: "expiring_within_days", params: {} })).toBe("만료 30일 이내")
+  })
+
+  it("health_risk: 고정 문구", () => {
+    expect(describeAutoTagRuleCondition({ ruleType: "health_risk", params: {} })).toBe("건강도 위험 밴드")
+  })
+
+  it("dormant_days: params.days가 없으면 기본값 60을 쓴다", () => {
+    expect(describeAutoTagRuleCondition({ ruleType: "dormant_days", params: {} })).toBe(
+      "최근 접촉 60일 이전 또는 없음"
+    )
+  })
+})
+
+describe("formatAutoTagRuleOutcomeLabel", () => {
+  it("적용·제거 건수를 함께 표기한다", () => {
+    expect(formatAutoTagRuleOutcomeLabel(3, 1)).toBe("3건 적용 · 1건 제거")
+  })
+
+  it("0건도 그대로 표기한다(생략하지 않는다)", () => {
+    expect(formatAutoTagRuleOutcomeLabel(0, 0)).toBe("0건 적용 · 0건 제거")
   })
 })

@@ -44,6 +44,10 @@
       "schedule": "20 0 * * 1"
     },
     {
+      "path": "/api/cron/crm-auto-tags",
+      "schedule": "0 20 * * *"
+    },
+    {
       "path": "/api/cron/dispatch/00",
       "schedule": "0 0 * * *"
     },

@@ -7,6 +7,24 @@
 // 실제로 저장하는 이름이 어긋나지 않아야 한다.
 
 import { isDuplicateTag, normalizeTag } from "@/lib/crm/tag-suggestions"
+import type { AutoTagRuleType } from "@/lib/crm/auto-tag-rules"
+
+// ── T6 범주 — 색 컬럼은 추가하지 않는다(DESIGN.md가 카테고리 색을 제한). 범주는 라벨/점으로만
+// 구분하고, 신호색(Warning)은 risk 범주에만 쓴다(다른 4종은 웜 뉴트럴 텍스트).
+export const TAG_CATEGORIES = ["segment", "stage", "risk", "product", "manual"] as const
+export type TagCategory = (typeof TAG_CATEGORIES)[number]
+
+export const TAG_CATEGORY_LABELS: Record<TagCategory, string> = {
+  segment: "세그먼트",
+  stage: "단계",
+  risk: "위험",
+  product: "제품",
+  manual: "수기",
+}
+
+export function isTagCategory(value: unknown): value is TagCategory {
+  return typeof value === "string" && (TAG_CATEGORIES as readonly string[]).includes(value)
+}
 
 export type TagNameValidation = { ok: true; value: string } | { ok: false; error: string }
 
@@ -81,4 +99,35 @@ export function formatMergePreviewLabel(from: readonly string[], to: string, out
   return outcome.removedDuplicates > 0
     ? `${base}, 중복 ${outcome.removedDuplicates.toLocaleString("ko-KR")}건 정리`
     : base
+}
+
+// ── T5 자동 태그 규칙 — 관리 패널 조건 설명 문구 ───────────────────────────
+
+export interface AutoTagRuleLike {
+  ruleType: AutoTagRuleType
+  params: { days?: unknown } | null | undefined
+}
+
+function ruleDays(params: AutoTagRuleLike["params"], fallback: number): number {
+  const raw = params?.days
+  return typeof raw === "number" && Number.isFinite(raw) ? raw : fallback
+}
+
+/** 규칙 조건을 사람이 읽는 한 줄로 — 관리 패널 규칙 섹션·미리보기 라벨 공용. */
+export function describeAutoTagRuleCondition(rule: AutoTagRuleLike): string {
+  switch (rule.ruleType) {
+    case "expiring_within_days":
+      return `만료 ${ruleDays(rule.params, 30)}일 이내`
+    case "health_risk":
+      return "건강도 위험 밴드"
+    case "dormant_days":
+      return `최근 접촉 ${ruleDays(rule.params, 60)}일 이전 또는 없음`
+    default:
+      return "알 수 없는 조건"
+  }
+}
+
+/** "N건 적용 · M건 제거" — dryRun 미리보기·규칙 섹션 요약 공용. */
+export function formatAutoTagRuleOutcomeLabel(applied: number, removed: number): string {
+  return `${applied.toLocaleString("ko-KR")}건 적용 · ${removed.toLocaleString("ko-KR")}건 제거`
 }

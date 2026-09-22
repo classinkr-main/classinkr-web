@@ -140,6 +140,8 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   "supabase/migrations/20260902_leads_dedupe_and_admin_hot_path_indexes.sql",
   // CRM 3단계 A6 — crm_customer_events.source_type CHECK를 코드 enum(10종)과 동기화.
   "supabase/migrations/20260922_crm_events_source_type_sync.sql",
+  // CRM 3단계 T5·T6 — 태그 정의(범주) + 자동 태그 규칙.
+  "supabase/migrations/20260922_crm_tag_definitions_and_rules.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -412,6 +414,32 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     migration: "supabase/migrations/20260922_crm_events_source_type_sync.sql",
     impact:
       "이 마이그레이션이 미적용이면 site_inflow 기록 INSERT가 CHECK 위반(23514)으로 실패한다 — 홈페이지 리드 유입 시 자동 삽입되는 '홈페이지 상담 신청' 타임라인 이벤트, app/api/webhook/channel-talk와 lib/server/lead-capture.ts의 site_inflow 기록이 모두 대상이다.",
+  },
+  // ── 태그 정의 + 자동 태그 규칙(§11.3 T5·T6, 2026-09-22) ─────────────────
+  {
+    kind: "table",
+    table: "crm_tag_definitions",
+    label: "CRM 태그 정의(범주·자동 여부)",
+    columns: ["tag", "category", "is_auto"],
+    migration: "supabase/migrations/20260922_crm_tag_definitions_and_rules.sql",
+    impact: "태그 관리 패널의 범주 표시·변경과 자동 태그 배지가 동작하지 않는다.",
+  },
+  {
+    kind: "table",
+    table: "crm_tag_rules",
+    label: "CRM 자동 태그 규칙(만료 임박·건강도 위험 등)",
+    columns: ["id", "tag", "rule_type", "params", "target_types", "enabled", "last_run_at"],
+    migration: "supabase/migrations/20260922_crm_tag_definitions_and_rules.sql",
+    impact:
+      "자동 태그 cron(/api/cron/crm-auto-tags)이 규칙을 읽지 못해 실패하고, 관리 패널의 규칙 섹션이 비어 보인다.",
+  },
+  {
+    kind: "table",
+    table: "crm_customer_tags",
+    label: "고객 태그 출처 구분(수기/자동) 컬럼",
+    columns: ["target_type", "target_id", "tag", "source"],
+    migration: "supabase/migrations/20260922_crm_tag_definitions_and_rules.sql",
+    impact: "자동 태그 cron이 자동 부여 태그를 수기 태그와 구분하지 못해 upsert·삭제를 건너뛴다.",
   },
 ]
 
