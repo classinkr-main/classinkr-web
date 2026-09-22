@@ -18,6 +18,8 @@ import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { StatTile } from "@/components/admin/viz"
 // 고확도(임박) 금액 색은 확도 신호 토큰 SSOT — 원시 sky 리터럴 재정의 금지(DESIGN.md 확도 신호 토큰 절).
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
+// 장부 team 필터가 실제로 받는 값(P2-10 딥링크 검증용) — 이 상수의 소유자는 branch 파트라 읽기만 한다.
+import { TEAMS } from "@/components/admin/branch/types"
 import type {
   AdminCrmRevenueSheetBreakdownRow,
   AdminCrmRevenueSheetCompassCompare,
@@ -104,6 +106,29 @@ function getTargetLabel(row: AdminCrmRevenueSheetRow) {
           ? "파트너"
           : row.targetType
   return row.targetLabel ? `${typeLabel} · ${row.targetLabel}` : `${typeLabel} ${row.targetId.slice(0, 8)}`
+}
+
+// 매출시트 → 장부 딥링크(기획 P2-10, docs/active/sales-ledger-input-speed-plan-2026-09-20.md
+// §0·§4). 장부(SalesLedgerWorkbench)가 URL 복원부에서 실제로 읽는 파라미터 이름만 쓴다 — lens·
+// q·team(components/admin/branch/SalesLedgerWorkbench.tsx:780-795, 다중 토큰 검색은 :1309-1338
+// filteredRows에서 row.customer 등과 매칭). month는 일부러 뺀다:
+// 1) 이 행(AdminCrmRevenueSheetRow)은 월별 금액의 합계라 "이 행의 달"이 하나로 정해지지 않는다.
+// 2) 장부도 이 링크가 만드는 기본 진입 상태(period=Q)에서는 month를 실질적으로 쓰지 않는다 —
+//    period="Q"의 periodMonths는 selectedMonth와 무관하게 오늘 날짜 기준 분기로 고정되고(period=
+//    "Y"는 회계연도 전체), 월 선택 UI 자체도 period==="M"일 때만 렌더된다(workbench-shared.tsx
+//    buildPeriodMonths:407-413, SalesLedgerWorkbench.tsx:2939 `{period === "M" && (...)}`).
+//    summary/kpi/pipeline 조회도 period==="M"일 때만 month를 싣는다(SalesLedgerWorkbench.tsx:
+//    1006, 1017-1018). 그런데 URL 복원 자체는 month를 period와 무관하게 항상 selectedMonth
+//    state에 반영하므로(SalesLedgerWorkbench.tsx:787-790), 지금 붙여봤자 화면엔 안 보이면서
+//    나중에 사용자가 M으로 직접 전환할 때만 뜬금없는 달로 튀는 부작용만 남는다. 행 딥링크는
+//    "그 고객을 연다"까지만 책임진다 — 과한 파라미터로 사용자의 기간 컨텍스트를 덮어쓰지 않는다.
+function buildLedgerInputHref(row: AdminCrmRevenueSheetRow): string {
+  // "ALL"은 장부 team 필터의 기본값(생략 규약과 동일) — RevLensLink(DshTeamGrid.tsx) 선례와
+  // 같은 이유로 명시적으로 제외한다.
+  const team = row.team && row.team !== "ALL" && (TEAMS as readonly string[]).includes(row.team) ? row.team : null
+  return `/admin/branch/ledger?lens=rev&q=${encodeURIComponent(row.customerName)}${
+    team ? `&team=${encodeURIComponent(team)}` : ""
+  }`
 }
 
 function matchesStatusFilter(row: AdminCrmRevenueSheetRow, filter: StatusFilter) {
@@ -334,11 +359,17 @@ export default function AdminCrmRevenueSheetPage() {
 
   return (
     <div className="[&_button]:min-h-11 [&_button]:min-w-11 [&_button]:focus-visible:outline-none [&_button]:focus-visible:ring-2 [&_button]:focus-visible:ring-[#084734] [&_input:not([type=checkbox]):not([type=file])]:min-h-11 [&_input:not([type=checkbox]):not([type=file])]:focus-visible:outline-none [&_input:not([type=checkbox]):not([type=file])]:focus-visible:ring-2 [&_input:not([type=checkbox]):not([type=file])]:focus-visible:ring-[#084734] [&_section_a]:inline-flex [&_section_a]:min-h-11 [&_section_a]:min-w-11 [&_section_a]:items-center [&_section_a]:focus-visible:outline-none [&_section_a]:focus-visible:ring-2 [&_section_a]:focus-visible:ring-[#084734] [&_select]:min-h-11 [&_select]:focus-visible:outline-none [&_select]:focus-visible:ring-2 [&_select]:focus-visible:ring-[#084734] sm:[&_button]:min-h-0 sm:[&_button]:min-w-0 sm:[&_input:not([type=checkbox]):not([type=file])]:min-h-0 sm:[&_section_a]:min-h-0 sm:[&_section_a]:min-w-0 sm:[&_select]:min-h-0">
-      {/* 역할 배너 — 매출시트 = REV 분석·검수 READ 표면, 링크 확정 액션은 매칭 인박스(CRM-1 역할 확정) */}
+      {/* 역할 배너 — 매출시트 = REV 분석·검수 READ 표면, 링크 확정 액션은 매칭 인박스(CRM-1 역할 확정).
+          P2-10: 금액 입력 액션은 매출 장부(기존 문구·링크는 유지, 옆에 추가만) — 파라미터 없는
+          기본 진입점(lens=rev 생략 시에도 어차피 기본 렌즈라 동일, 명시는 가독성용). */}
       <p className="mb-4 border-b border-[#f0f0ec] pb-3 text-[12px] text-[#1a1a1a]/45">
         <span className="font-semibold text-[#111110]">분석·검수 전용</span> — 링크 확정은{" "}
         <Link href="/admin/crm/matching" className="inline-flex min-h-11 items-center font-semibold text-[#084734] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] sm:min-h-0">
           매칭 인박스 ↗
+        </Link>
+        에서. 금액 입력은{" "}
+        <Link href="/admin/branch/ledger?lens=rev" className="inline-flex min-h-11 items-center font-semibold text-[#084734] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] sm:min-h-0">
+          매출 장부 ↗
         </Link>
         에서.
       </p>
@@ -606,22 +637,33 @@ export default function AdminCrmRevenueSheetPage() {
                     {row.note ?? row.productVersion}
                   </p>
                 ) : null}
-                <div className="mt-2 flex items-center justify-between gap-2 border-t border-[#f0f0ec] pt-2">
-                  {row.linkStatus === "confirmed" ? (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#084734]">
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      연결 확정
-                    </span>
-                  ) : (
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-[#f0f0ec] pt-2">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    {row.linkStatus === "confirmed" ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#084734]">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        연결 확정
+                      </span>
+                    ) : (
+                      <Link
+                        // 행 고객명을 인박스 이름 필터로 프리필 — 이탈+재검색 없는 핸드오프(CRM-1).
+                        href={`/admin/crm/matching?name=${encodeURIComponent(row.customerName)}`}
+                        className="text-[11px] font-semibold text-[#084734] hover:underline"
+                      >
+                        연결하기
+                      </Link>
+                    )}
+                    {/* 장부 딥링크(P2-10) — 매칭 상태와 무관하게 항상 노출(입력은 매칭 확정과 별개 동작). */}
                     <Link
-                      // 행 고객명을 인박스 이름 필터로 프리필 — 이탈+재검색 없는 핸드오프(CRM-1).
-                      href={`/admin/crm/matching?name=${encodeURIComponent(row.customerName)}`}
-                      className="text-[11px] font-semibold text-[#084734] hover:underline"
+                      href={buildLedgerInputHref(row)}
+                      onClick={(event) => event.stopPropagation()}
+                      aria-label={`${row.customerName} 장부에서 입력 열기`}
+                      className="inline-flex min-h-11 shrink-0 items-center text-[11px] font-semibold text-[#084734] underline-offset-2 hover:underline md:min-h-0"
                     >
-                      연결하기
+                      장부에서 입력 ↗
                     </Link>
-                  )}
-                  <span className="text-[10.5px] text-[#1a1a1a]/30">{formatDate(row.syncedAt)}</span>
+                  </div>
+                  <span className="shrink-0 text-[10.5px] text-[#1a1a1a]/30">{formatDate(row.syncedAt)}</span>
                 </div>
               </div>
             ))
@@ -677,6 +719,15 @@ export default function AdminCrmRevenueSheetPage() {
                         {[row.team, row.manager, row.region].filter(Boolean).join(" · ") || "-"}
                       </p>
                       <p className="mt-1 text-[11px] text-[#1a1a1a]/35">{row.branchContact ?? row.dealType ?? "-"}</p>
+                      {/* 장부 딥링크(P2-10) — CRM 연결 칼럼(매칭 상태)과 무관하게 항상 노출. */}
+                      <Link
+                        href={buildLedgerInputHref(row)}
+                        onClick={(event) => event.stopPropagation()}
+                        aria-label={`${row.customerName} 장부에서 입력 열기`}
+                        className="mt-1.5 inline-flex min-h-11 shrink-0 items-center text-[11px] font-semibold text-[#084734] underline-offset-2 hover:underline md:min-h-0"
+                      >
+                        장부에서 입력 ↗
+                      </Link>
                     </td>
                     <td className="py-4 pr-4">
                       <p className="text-[12px] font-semibold text-[#111110]">{row.status ?? "-"}</p>
