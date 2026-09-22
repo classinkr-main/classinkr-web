@@ -1,6 +1,6 @@
 # 매출 장부 입력 속도·편의 기획 (라운드 4)
 
-상태: 1단계 P0·P1-5·P1-6·P2-7·P2-8·P2-10 + UI·UX 12건 구현 완료(2026-09-22). P1-4는 기반(파생+테스트) 완료·배선 대기, P2-9와 §8.7 수리가 다음 라운드
+상태: 1단계 P0·P1(4·5·6)·P2(7·8·9·10) + UI·UX 12건 구현 완료(2026-09-22). P2-9는 **운영 DB 마이그레이션 적용 전까지 꺼진 상태(fail-closed)** — 운영자 단계는 §4 P2-9. 남은 것: D7 결정, 보드 카드 안 인라인 편집기(보류)
 범위: `/admin/branch/ledger`의 입력 경로 — REV 매트릭스 셀 편집, 빠른 작업 레일(입력/수정), 체크 큐
 목표: **1단계** 구글 시트를 원천으로 유지한 채 어드민 입력의 클릭·왕복·오타를 줄인다 →
 **2단계** 어드민을 매출 입력 정본으로 올리고 시트 입력을 중단한다.
@@ -140,10 +140,10 @@
 | P0-3 고객/계정 자동완성 | **완료** | `components/admin/branch/ledger/customer-suggest.ts`, `InputRailSection.tsx`(datalist + 표기 흔들림 경고·원클릭 맞추기) | `tests/branch/customer-suggest.test.ts` |
 | P1-5 붙여넣기 이름 매칭 | **완료** | `rev-matrix-logic.ts`(`buildMatrixPastePlan` by-name 모드·`buildPasteNewRowInputs`), `RevMatrix.tsx`(프리뷰: 모드 배지·건너뜀 안내·"시트에 없는 고객" 체크리스트), 워크벤치 `confirmMatrixPaste` | `tests/branch/matrix-paste-name-match.test.ts` |
 | P1-6 실행 취소 토스트 | **완료** | 워크벤치 토스트 `key/action/ttlMs`, `undoCellDraft`(latest-ref), 훅 `cancelDraft` 성공 여부 반환 | `tests/branch/ledger-undo-toast.test.ts` |
-| P1-4 인라인 신규 행 | **기반 완료, 배선 대기** | 파생 `ledger/pending-draft-rows.ts`(`buildPendingDraftRows`) — 미적용 new-row 초안을 매트릭스 임시 행으로. 워크벤치 배선은 다음 라운드(행 파생 변경이 이번 라운드 최대 회귀 지점) | `tests/branch/pending-draft-rows.test.ts` (18건) |
+| P1-4 인라인 신규 행 | **완료** | `ledger/pending-draft-rows.ts`(`buildPendingDraftRows`·`matchesRevRowFilters`), 매트릭스 머리 아래 "적용 대기 새 행" 섹션(`RevMatrixPendingRow`, 합계·그룹·보드·요약 파이프라인과 **분리**) + 섹션 맨 아래 "+ 새 행 추가" 인라인 입력(`buildNewRowDraftInput`, 3단 유지), 모바일 적용 대기 카드 | `pending-draft-rows`·`pending-section-wiring`·`inline-new-row` |
 | P2-7 모바일 입력 진입 | **완료** | `RevMobileList.tsx`(금액 44px 버튼 → `openQuickInputForRow`: 행 선택·프리필 후 레일 입력 탭) | `tests/branch/ledger-entry-paths.test.ts` |
 | P2-8 키보드 보강 | **완료** | `rev-matrix-logic.ts`(`computeMatrixRange`·anchor/range·`onCommitRangeConfidence`), `RevMatrix.tsx`(range 배경), 워크벤치(`/` 검색 포커스·Ctrl+Z·범위 확도 배치 저장) | `tests/branch/matrix-keyboard-range.test.ts` |
-| P2-9 적용값 한 번에 바꾸기 | 진행 중(2026-09-22) — 원자적 대체 RPC + fail-closed | §4 P2-9 | — |
+| P2-9 적용값 한 번에 바꾸기 | **완료 — 운영 DB 적용 대기(그 전엔 꺼짐)** | 마이그레이션 `20260922_branch_sales_ledger_supersede_entry.sql`(+`check:db` 계약), 저장소 `supersedeBranchSalesLedgerEntry`·`probeSupersedeAvailable`, `PATCH action=supersede`, 훅 `supersedeEntry`, 레일 잠금 배너 CTA(인라인 2단 확인), 워크벤치 `supersedeTarget`. 이번 라운드는 edit-row 정정만 | `tests/db/branch-sales-ledger-supersede-migration`·저장소·라우트·`ledger-entry-supersede` |
 | P2-10 매출시트 → 장부 딥링크 | **완료** | `app/admin/crm/deals/rev-sheet/page.tsx`(행·배너 링크, `lens=rev&q=<고객>&team=`) | `tests/crm/rev-sheet-ledger-link.test.ts` |
 
 구현하며 확정된 세부 규약:
