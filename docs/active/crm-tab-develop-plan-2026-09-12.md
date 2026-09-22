@@ -348,6 +348,25 @@ home_v4.42(9/10 어드민 개편 중심)를 병합했다. 이 브랜치는 Wave 
 - 품목 표의 딜 라인아이템은 딜→고객 FK 가 구조적 연결이라 항상 "확정"이고, HW 출고만 링크 유무로 확정/추정을 가른다. 딜 라인아이템 조회는 Portal V2 딜 전체를 60초 캐시로 읽는다.
 - M5(CSV 내보내기)·A6·T5·T6(스키마)는 3단계.
 
+### §11 3단계 — 2026-09-22 완료 (A6·T5·T6·M5)
+
+§11.5 3단계(스키마 변경 항목)와 M5 를 Sonnet 서브에이전트 3개로 병렬 구현했다. 마이그레이션 2개가 추가됐고 둘 다 `lib/db/schema-contract.ts` 프로브에 등재했다 — **프로덕션 적용은 별도 작업**이며 자격증명 있는 환경에서 `npm run check:db` 로 확인한다.
+
+핵심 반영 사항:
+
+- A6: 조사 결과 `crm_customer_events.source_type` CHECK 는 `20260717_crm_events_site_inflow.sql` 이 이미 10종으로 맞춰 두었으나 그 마이그레이션이 스키마 계약 프로브에 없어 적용 여부를 검증할 수 없었다. `20260922_crm_events_source_type_sync.sql` 이 같은 10종을 idempotent 로 재확정하고 프로브를 등재했다. `site_inflow` INSERT 경로(홈페이지 리드 저장, 채널톡 웹훅)는 미적용 DB 에서 CHECK 위반(23514)으로 실패하므로 check:db 에서 이 프로브가 막히면 최우선 적용 대상이다. 코드 enum 과 마이그레이션 IN 목록의 집합 동일성을 테스트가 고정한다.
+- T6 결정: 색 컬럼은 두지 않고 **범주만** 둔다(segment·stage·risk·product·manual). 정의는 `crm_tag_definitions` 별도 테이블(태그 행에 컬럼을 얹지 않음).
+- T5: `crm_tag_rules`(만료 N일 이내·건강도 위험·미접촉 N일, 기본 규칙 "재계약"·"이탈 위험" 시드) + `crm_customer_tags.source`(manual|auto). `GET /api/cron/crm-auto-tags`(CRON_SECRET, KST 05:00) 가 규칙별 대상을 통합 고객 행 모델로 계산해 auto 태그만 부착·제거하고 manual 태그는 절대 건드리지 않는다(dryRun 지원). 태그 관리 화면에 범주 셀렉트·자동 배지·규칙 섹션(토글·마지막 실행·적용/제거 건수·미리보기).
+- M5: 360 매출 탭 품목 표·주문 타임라인 CSV 내보내기(통화 열 분리, 합계 행 없음, 근거·출처·주문번호·시리얼, 0건 disabled).
+
+검증: `npm run typecheck` 통과, 3단계 변경 파일 전체 `eslint --max-warnings=0` 통과, `npm run check:vercel-crons` 통과(35 entries), `npx vitest run` 645 파일 / 5,130 케이스 통과, `npm run build` 통과. `npm run check:db` 는 자격증명이 없어 미실행.
+
+후속으로 남긴 것:
+
+- 자동 태그 cron 은 `crm-customer-tags.ts` 모듈 내부 30초 캐시를 무효화하지 못한다(하루 1회 실행이라 최대 30초 지연). 건강도 밴드 판정은 `crm-unified-customers.ts` 의 비공개 `rowHealthBand` 를 `lib/crm/auto-tag-rules.ts` 에 복제했다 — 그 함수를 export 하면 복제를 없앨 수 있다.
+- 태그 범주는 관리 화면에만 보인다. 360·통합 목록의 태그 칩(CustomerTagChips)에 범주 표시는 후속.
+- 두 마이그레이션 적용 후 `check:db` 재확인이 배포 전 필수.
+
 ## 11. 2026-09-17 우선순위 재정의 — "기존보다 편리·정확·편의 기능"
 
 운영자가 정한 네 가지 우선순위와, 코드에서 확인한 현재 공백, 그에 대응하는 작업 항목이다. 이 절은 Wave 1 이후의 판단 기준이며 §4의 ID보다 우선한다. 목업은 [고객별 매출·기록·세그먼트 목업](https://claude.ai/artifact/SXDZ9UDHuC6qmQEjKVu7hy)과 [우선순위 큐 3방향 목업](https://claude.ai/artifact/2c61KxVoNus84UhfECsQHM)에 있다.
