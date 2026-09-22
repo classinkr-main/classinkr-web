@@ -22,6 +22,12 @@ npm run check:db
 
 챗봇·문서 알파 계약은 `npm run check:alpha-db`가 따로 담당한다. 두 계약은 중복 등재하지 않는다.
 
+- `20260922_crm_events_source_type_sync.sql`(CRM 3단계 A6): `crm_customer_events.source_type` CHECK를
+  코드 enum(`CRM_EVENT_SOURCE_TYPES`, 10종 — site_inflow 포함)과 동기화한다. `check:db`는 컬럼
+  존재만 확인하고 CHECK 목록 자체는 검증하지 못한다(REST 조회로는 CHECK 위반을 재현할 수 없음) —
+  이 마이그레이션 미적용 여부는 `tests/crm/event-source-type-sync.test.ts`가 마이그레이션 SQL을
+  파싱해 코드 enum과의 불일치를 별도로 고정한다.
+
 ## 2. 적용
 
 Supabase SQL Editor(또는 CLI)에서 미적용 파일을 **파일명 날짜 순서대로** 실행한다.

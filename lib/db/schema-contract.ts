@@ -138,6 +138,8 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // 리드 중복 탐지 + 어드민 핫패스 인덱스(2026-09-02). 인덱스 전용 마이그레이션이라
   // 프로브의 한계는 SCHEMA_PROBES 쪽 주석 참고.
   "supabase/migrations/20260902_leads_dedupe_and_admin_hot_path_indexes.sql",
+  // CRM 3단계 A6 — crm_customer_events.source_type CHECK를 코드 enum(10종)과 동기화.
+  "supabase/migrations/20260922_crm_events_source_type_sync.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -395,6 +397,21 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     severity: "warning",
     impact:
       "idx_crm_tasks_status_completed_at이 없어도 기능은 정상이나, /api/admin/crm/manager-report의 기간 내 완료 집계가 done 누적 전체 스캔이 되고 그 비용은 시간이 지날수록 커진다.",
+  },
+  // ── CRM 이벤트 source_type CHECK 동기화(2026-09-22, A6) ────────────────
+  // REST 컬럼 프로브는 id/source_type 컬럼의 존재만 확인할 수 있고 CHECK 제약의 실제 허용
+  // 목록(10종 vs 9종 등)은 검증하지 못한다 — PostgREST는 CHECK 위반을 INSERT 시점에야 42P17로
+  // 드러내고, 조회 프로브로는 재현할 수 없다. 그래서 이 프로브의 "ok"는 컬럼이 살아있다는
+  // 뜻일 뿐, CHECK가 site_inflow를 포함해 10종 전부를 허용한다는 보장은 아니다 — CHECK 목록
+  // 자체의 고정은 tests/crm/event-source-type-sync.test.ts가 마이그레이션 SQL을 파싱해 담당한다.
+  {
+    kind: "table",
+    table: "crm_customer_events",
+    label: "CRM 이벤트 source_type CHECK 동기화(컬럼 존재만 확인 — CHECK 목록은 검증 불가)",
+    columns: ["id", "source_type"],
+    migration: "supabase/migrations/20260922_crm_events_source_type_sync.sql",
+    impact:
+      "이 마이그레이션이 미적용이면 site_inflow 기록 INSERT가 CHECK 위반(23514)으로 실패한다 — 홈페이지 리드 유입 시 자동 삽입되는 '홈페이지 상담 신청' 타임라인 이벤트, app/api/webhook/channel-talk와 lib/server/lead-capture.ts의 site_inflow 기록이 모두 대상이다.",
   },
 ]
 
