@@ -31,6 +31,7 @@ import {
   metadataString,
   rowMonthAmount,
   rowProductCategory,
+  rowWeeklySplit,
   weeklyConfidenceFromMetadata,
   type DraftConfidence,
   type LedgerDraft,
@@ -184,6 +185,63 @@ export function findOpenNewRowDuplicate(
         draft.customer.trim().toLowerCase() === normalizedCustomer,
     ) ?? null
   )
+}
+
+// 주차 칸에 보일 대기 초안(라운드 5 R-2·R-W). 정확히 그 주차 키에 걸린 초안이 먼저고, 없으면 같은 달의 주차 병합
+// 초안(weekly 배열 — 여러 주차를 연속 편집한 결과)에서 그 주차 값을 꺼낸다. 병합 초안이 그 주차를 바꾸지 않았으면
+// (표시값과 같으면) 대기 표시를 하지 않는다 — 달 전체가 대기 중이라도 바뀐 칸만 표시해 소음을 줄인다.
+// 월 단위 한 금액 초안(weekly 없음)은 주차별로 나눌 근거가 없어 주차 칸에는 표시하지 않는다(기존 규약).
+export function pendingWeekDisplay(
+  pendingByCell: Map<string, MatrixPendingDraft> | null | undefined,
+  rowId: string,
+  month: string,
+  week: number,
+  display: number,
+): { pending: MatrixPendingDraft; amount: number } | null {
+  if (!pendingByCell) return null
+  const exact = pendingByCell.get(matrixCoordKey({ rowId, month, week }))
+  if (exact) return { pending: exact, amount: pendingCellAmount(exact, week) }
+  const monthPending = pendingByCell.get(matrixCoordKey({ rowId, month }))
+  if (!monthPending?.weekly) return null
+  const amount = Math.max(Number(monthPending.weekly[week] ?? 0) || 0, 0)
+  if (amount === Math.round(display)) return null
+  return { pending: monthPending, amount }
+}
+
+// 펼친 달의 주차 칸 입력값(RevMatrixWeekCells props) — 행 표시(RevMatrixDealRow)와 복사(matrixDisplayedCellAmount)가
+// 같은 산식을 쓰도록 한 곳에 둔다. 월합계만 있는 행은 주차 배열을 비우고 월합계를 따로 넘긴다(W5에 얹어 보임).
+export function matrixWeekInputs(
+  row: LedgerRevenueRow,
+  month: string,
+): { weeks: number[]; inferred: boolean; monthOnlyAmount: number } | null {
+  const split = rowWeeklySplit(row, month)
+  if (split.source === "empty") return null
+  return {
+    weeks: split.source === "explicit" || split.source === "inferred" ? split.weeks : [0, 0, 0, 0, 0],
+    inferred: split.source === "inferred",
+    monthOnlyAmount: split.source === "month-only" ? split.total : 0,
+  }
+}
+
+// 매트릭스 한 칸에 "보이는" 금액(라운드 5 B1 — 선택 셀 Ctrl+C). 월 칸 = 대기 초안 금액 → 장부 월 금액,
+// 주차 칸 = 주차 표시값(월합계만 행은 W5에 월합계) → 그 주차의 대기 초안 값(pendingWeekDisplay).
+// 커밋 기준값(워크벤치 matrixCellValue)과는 다를 수 있다 — 월 단위 초안만 걸린 주차 칸은 재편집 시작값이
+// 월 초안 금액이지만, 칸에는 주차 표시값이 보이고 복사도 그 값을 낸다.
+export function matrixDisplayedCellAmount(
+  row: LedgerRevenueRow | null | undefined,
+  coord: MatrixCellCoord,
+  pendingByCell: Map<string, MatrixPendingDraft> | null | undefined,
+): number {
+  if (coord.week == null) {
+    const pending = pendingByCell?.get(matrixCoordKey({ rowId: coord.rowId, month: coord.month }))
+    if (pending) return pending.amount
+    return row ? rowMonthAmount(row, coord.month) : 0
+  }
+  const inputs = row ? matrixWeekInputs(row, coord.month) : null
+  const display = inputs
+    ? (computeWeekCellStates(inputs.weeks, inputs.monthOnlyAmount, false)[coord.week]?.display ?? 0)
+    : 0
+  return pendingWeekDisplay(pendingByCell, coord.rowId, coord.month, coord.week, display)?.amount ?? display
 }
 
 // 주차 칸 편집의 병합 기준(라운드 5 R-W). explicit 주차가 있는 행의 주차 셀을 고치면 나머지 주차를 보존해
@@ -692,6 +750,8 @@ export function useMatrixEditor({
   cellConfidence,
   onCommitCell,
   onAmountClamped,
+  onZeroCommitBlocked,
+  onCopyCell,
 }: {
   editableCells: MatrixCellCoord[] // 렌더 순서(행 위→아래, 월 좌→우, 확장월은 w1→w5)로 정렬된 편집가능 셀
   cellValue: (coord: MatrixCellCoord) => number // 커밋 기준값(원 단위) — fill-down 소스
@@ -699,6 +759,11 @@ export function useMatrixEditor({
   onCommitCell: (rowId: string, month: string, amount: number, confidence: DraftConfidence, week?: number) => void
   // 음수 입력이 0으로 클램프될 때 호출(커밋 결과와 무관 — 무입력 취급되는 경우도 포함). 항목 3.
   onAmountClamped?: () => void
+  // 라운드 5 R-12 — 값이 있는 칸을 비우거나 0으로 치면 커밋하지 않고 이 콜백으로 알린다. 초안 API는 양수만 받아
+  // 예전엔 0을 그대로 보내 서버 400 오류 토스트가 떴다. 감액·취소는 큐의 취소/되돌리기가 맡는다.
+  onZeroCommitBlocked?: (coord: MatrixCellCoord) => void
+  // 라운드 5 B1 — 선택 셀에서 Ctrl/Cmd+C. 텍스트를 드래그로 골라 둔 상태면 브라우저 기본 복사를 존중한다.
+  onCopyCell?: (coord: MatrixCellCoord) => void
 }) {
   const [selected, setSelected] = useState<MatrixCellCoord | null>(null)
   const [editing, setEditing] = useState<MatrixCellCoord | null>(null)
@@ -775,10 +840,14 @@ export function useMatrixEditor({
       // 금액·확도 둘 다 그대로면 저장하지 않는다. (주차 셀도 cellValue/cellConfidence가 주차 기준이라 동일 가드 적용)
       if (amount === previous && confidence === previousConfidence) return false
       if (amount <= 0 && previous <= 0) return false
+      if (amount <= 0) {
+        onZeroCommitBlocked?.(coord)
+        return false
+      }
       onCommitCell(coord.rowId, coord.month, amount, confidence, coord.week)
       return true
     },
-    [cellConfidence, cellValue, onAmountClamped, onCommitCell],
+    [cellConfidence, cellValue, onAmountClamped, onCommitCell, onZeroCommitBlocked],
   )
 
   const moveSelection = useCallback(
@@ -853,6 +922,15 @@ export function useMatrixEditor({
   // 셀렉트(비편집) keydown. 방향키=이동, Enter/F2/숫자=편집 진입, Ctrl/Cmd+D=위 값 채우기.
   const onSelectedKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTableCellElement>, coord: MatrixCellCoord) => {
+      // Ctrl/Cmd+C — 선택 셀의 원 단위 금액 복사(물리 키 판정이라 한글 자판에서도 동작).
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.code === "KeyC") {
+        if (!onCopyCell) return
+        const textSelection = typeof window !== "undefined" ? window.getSelection?.()?.toString() ?? "" : ""
+        if (textSelection) return
+        event.preventDefault()
+        onCopyCell(coord)
+        return
+      }
       if ((event.ctrlKey || event.metaKey) && (event.key === "d" || event.key === "D")) {
         event.preventDefault()
         // 위 셀 = 같은 세로 열(같은 월·같은 주차)에서 index 앞쪽 첫 번째 셀의 커밋값.
@@ -913,7 +991,7 @@ export function useMatrixEditor({
         beginEdit(coord.rowId, coord.month, event.key, coord.week)
       }
     },
-    [beginEdit, cellConfidence, cellValue, editableCells, indexByKey, moveSelection, moveWithinRowOrNext, onCommitCell],
+    [beginEdit, cellConfidence, cellValue, editableCells, indexByKey, moveSelection, moveWithinRowOrNext, onCommitCell, onCopyCell],
   )
 
   // 셀 핸들러가 호출하는 액션들 — 전부 identity 안정(콜백 deps가 데이터/펼침에만 반응).

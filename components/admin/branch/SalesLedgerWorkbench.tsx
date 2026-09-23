@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Columns3,
   Database,
+  Download,
   FileSpreadsheet,
   Gauge,
   LayoutList,
@@ -34,6 +35,9 @@ import {
 } from "lucide-react"
 import { adminFetchJson, clearBranchRequestCache, postBranchSync, useBranchJson, type BranchJsonState, type BranchSyncResponseBody } from "./client-api"
 import { SyncOutcomeNotice } from "./SyncOutcomeNotice"
+import { buildRevMatrixCsvRows } from "./ledger/ledger-export"
+import { copyTextToClipboard, downloadCsvFile } from "@/lib/export/browser-download"
+import { fileDateStamp, safeFileName, toCsv } from "@/lib/export/delimited"
 import { describeSyncOutcome, type SyncOutcomeNotice as SyncOutcomeNoticeValue } from "@/lib/admin/sync-outcome"
 import { useVisibleInterval } from "./use-visible-interval"
 // 서버 입력 큐 훅(초안 CRUD·적용·되돌리기·로컬 폴백·낙관적 잠금)은 ledger/useLedgerDraftQueue로
@@ -159,6 +163,7 @@ import {
   MATRIX_MONTH_W,
   MATRIX_PRODUCT_W,
   MATRIX_WEEK_W,
+  matrixDisplayedCellAmount,
   mergeWeeklyCellEdit,
   pendingCellAmount,
   railDedupTarget,
@@ -2134,12 +2139,44 @@ export default function SalesLedgerWorkbench({
     pushMatrixToast({ kind: "info", text: "음수는 0으로 처리됩니다 — 감액은 장부 가감 입력 사용" })
   }, [pushMatrixToast])
 
+  // 라운드 5 R-12 — 값 있는 칸을 비우거나 0으로 치면 서버 400 대신 여기서 안내한다(양수만 받는 초안 계약은 그대로).
+  const onMatrixZeroCommitBlocked = useCallback(() => {
+    pushMatrixToast({
+      kind: "info",
+      key: "matrix-zero-blocked",
+      text: "칸을 비우거나 0으로 만들 수는 없습니다 — 대기 초안은 체크 큐에서 취소, 적용분은 되돌리기(상쇄)로 뺍니다.",
+    })
+  }, [pushMatrixToast])
+
+  // 라운드 5 B1 — 선택 셀 Ctrl/Cmd+C: 셀에 보이는 값(대기 초안이 있으면 그 금액)을 원 단위 정수로 복사한다.
+  // 시트·엑셀에 그대로 붙여 넣을 수 있게 통화 기호·콤마 없이. 범위 복사는 Shift+방향키 범위 선택(P2-8)과 함께.
+  // 데이터는 ref로 읽어 콜백 identity를 고정한다(useMatrixEditor의 keydown 핸들러 재생성 방지).
+  const copySourceRef = useRef({ rowById, pendingByCell })
+  useEffect(() => {
+    copySourceRef.current = { rowById, pendingByCell }
+  }, [pendingByCell, rowById])
+  const copyMatrixCell = useCallback((coord: MatrixCellCoord) => {
+    const row = copySourceRef.current.rowById.get(coord.rowId)
+    const value = Math.round(matrixDisplayedCellAmount(row, coord, copySourceRef.current.pendingByCell))
+    const customer = row?.customer ?? ""
+    const where = `${customer} ${formatMonthLabel(coord.month)}${coord.week != null ? ` W${coord.week + 1}` : ""}`.trim()
+    void copyTextToClipboard(String(value)).then((copied) => {
+      pushMatrixToast(
+        copied
+          ? { kind: "info", key: "matrix-copy", ttlMs: 2500, text: `복사됨 · ${where} ¥${value.toLocaleString("ko-KR")}` }
+          : { kind: "error", text: "클립보드에 복사하지 못했습니다 — 브라우저의 클립보드 권한을 확인하세요." },
+      )
+    })
+  }, [pushMatrixToast])
+
   const matrixEditor = useMatrixEditor({
     editableCells,
     cellValue: matrixCellValue,
     cellConfidence: matrixCellConfidence,
     onCommitCell,
     onAmountClamped: onMatrixAmountClamped,
+    onZeroCommitBlocked: onMatrixZeroCommitBlocked,
+    onCopyCell: copyMatrixCell,
   })
 
   // 딜행별 편집 prop — selected/editing 좌표를 이 행 스코프로 좁힌다. actions·selected·editing은
@@ -2380,6 +2417,23 @@ export default function SalesLedgerWorkbench({
     revSortKey !== "revenue" ||
     revSortDirection !== "desc" ||
     revPageSize !== 100
+
+  // 라운드 5 B1 — REV "현재 보기" CSV: 필터·정렬이 반영된 전체 행(페이지 무관) × FY 12개월 월 합계 + 연간 확도 분해,
+  // 원 단위 정수. 미적용 초안은 넣지 않는다(합계 행과 같은 "장부 반영분" 기준 — 토스트가 말한다).
+  const exportRevCsv = useCallback(() => {
+    if (filteredRows.length === 0) return
+    const table = buildRevMatrixCsvRows(filteredRows, {
+      months: matrixMonths,
+      monthLabel: (month) => `${month.slice(0, 4)}.${Number(month.slice(5))}월`,
+      bucketOf: rowMonthBucket,
+      productLabel: (row) => productCategoryMeta(rowProductCategory(row)).label,
+    })
+    downloadCsvFile(safeFileName(`매출장부_REV_${fyLabel}_${team}_${fileDateStamp()}.csv`), toCsv(table))
+    pushMatrixToast({
+      kind: "info",
+      text: `현재 보기 ${filteredRows.length.toLocaleString("ko-KR")}행을 CSV로 내려받았습니다 — 원 단위, 적용 전 대기 초안 제외.`,
+    })
+  }, [filteredRows, fyLabel, matrixMonths, pushMatrixToast, team])
 
   useEffect(() => {
     // 데이터 로드 전(revTotalPages가 아직 1)에는 클램프하지 않는다 — URL로 복원한 p가
@@ -3539,6 +3593,17 @@ export default function SalesLedgerWorkbench({
                     >
                       <RotateCcw className="h-3.5 w-3.5" />
                       초기화
+                    </button>
+                    <button
+                      type="button"
+                      onClick={exportRevCsv}
+                      disabled={filteredRows.length === 0}
+                      title="현재 필터·정렬 결과 전체(페이지 무관)를 CSV로 내려받습니다 — FY 12개월 원 단위 + 연간 확도 분해, 적용 전 대기 초안 제외"
+                      className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
+                      aria-label={`REV 현재 보기 ${filteredRows.length}행 CSV 내려받기`}
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      CSV
                     </button>
                   </div>
                 </div>

@@ -13,7 +13,8 @@
 // 충돌하지 않도록 자체 position/z-index를 갖지 않는다.
 
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
-import { DRAFT_CONFIDENCE_OPTIONS, formatMoney } from "./shared"
+import { formatExactMoney } from "@/lib/branch/ledger-format"
+import { DRAFT_CONFIDENCE_OPTIONS } from "./shared"
 import type { DraftConfidence } from "./shared"
 import type { MatrixCellCoord } from "./rev-matrix-logic"
 
@@ -46,6 +47,9 @@ export interface RevMatrixEditBarProps {
 // 기존 관례(components/admin/calendar/DatePickerPopover.tsx)와도 일치한다.
 export function RevMatrixEditBar(props: RevMatrixEditBarProps): React.JSX.Element {
   const { editing, selected, context, buffer, confidence, onPickConfidence, disabled = false } = props
+  // 편집 버퍼 → 원 단위 숫자(콤마·¥·공백 허용). 숫자가 없으면 null("빈 칸").
+  const bufferDigits = buffer.replace(/[^\d]/g, "")
+  const bufferAmount = bufferDigits ? Number(bufferDigits) : null
 
   return (
     <div
@@ -69,8 +73,23 @@ export function RevMatrixEditBar(props: RevMatrixEditBarProps): React.JSX.Elemen
               {context.customer} · {context.monthLabel}
               {context.weekLabel ? ` ${context.weekLabel}` : ""}
             </span>
+            {/* 라운드 5 R-8 — 원 단위(반올림 없음). 만 단위로 줄이면 1만 원 미만 변화가 "같은 값"으로 보였다. */}
             <span className="shrink-0 whitespace-nowrap text-[11.5px] font-semibold tabular-nums text-[#615D59]">
-              {formatMoney(context.currentAmount)} → {buffer === "" ? "빈 칸" : formatMoney(Number(buffer))}
+              {formatExactMoney(context.currentAmount)} → {bufferAmount == null ? "빈 칸" : formatExactMoney(bufferAmount)}
+            </span>
+          </>
+        ) : selected && context ? (
+          // 선택 상태는 스프레드시트 수식 입력줄처럼 — 고객·월·정확한 금액을 보인다(라운드 5 R-8).
+          <>
+            <span className="truncate text-[12px] font-bold text-[#111110]">
+              {context.customer} · {context.monthLabel}
+              {context.weekLabel ? ` ${context.weekLabel}` : ""}
+            </span>
+            <span className="shrink-0 whitespace-nowrap text-[11.5px] font-semibold tabular-nums text-[#615D59]">
+              {context.currentAmount > 0 ? formatExactMoney(context.currentAmount) : "빈 칸"}
+            </span>
+            <span className="hidden shrink-0 whitespace-nowrap text-[10.5px] font-semibold text-[#A39E98] xl:inline">
+              Enter/F2·숫자 편집 · Ctrl+C 복사
             </span>
           </>
         ) : selected ? (
@@ -122,7 +141,7 @@ export function RevMatrixEditBar(props: RevMatrixEditBarProps): React.JSX.Elemen
 
       {/* 우측: 단축키 힌트 — 13인치 랩탑 이하(<lg)에서는 공간을 좌측 상태 텍스트에 양보한다. */}
       <p className="hidden shrink-0 whitespace-nowrap text-[10.5px] font-semibold text-[#A39E98] lg:inline">
-        Enter 저장 · Tab 다음 칸 · Esc 취소 · Ctrl+D 아래 복사 · Ctrl+V 붙여넣기
+        Enter 저장 · Tab 다음 칸 · Esc 취소 · Ctrl+D 위 값 채우기 · Ctrl+C 복사 · Ctrl+V 붙여넣기
       </p>
     </div>
   )
