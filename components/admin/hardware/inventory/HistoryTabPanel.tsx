@@ -31,6 +31,9 @@ const HistoryLogSection = dynamic(() => import("./HistoryLogSection"), {
 })
 
 interface HistoryTabPanelProps {
+  // 취소 기록 읽기 상태(하드웨어 라운드 2 L-1) — "취소 포함"을 켰을 때만 따로 읽는다.
+  voidedState?: { loading: boolean; error: string | null; limit: number | null; count: number | null }
+  retryVoided?: () => void
   activePanelId: string
   activeTabId: string
   reduceMotion: boolean | null
@@ -84,6 +87,8 @@ interface HistoryTabPanelProps {
 }
 
 export default function HistoryTabPanel({
+  voidedState,
+  retryVoided,
   activePanelId,
   activeTabId,
   reduceMotion,
@@ -305,7 +310,24 @@ export default function HistoryTabPanel({
               }`}
             >
               취소 포함
+              {includeVoided && voidedState ? (
+                <span className="ml-1 font-semibold tabular-nums">
+                  {voidedState.loading ? "· 불러오는 중" : voidedState.count != null ? `· ${voidedState.count}건` : ""}
+                </span>
+              ) : null}
             </button>
+            {includeVoided && voidedState?.error ? (
+              <span role="alert" className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#8F2C2C]">
+                취소 기록을 불러오지 못했습니다
+                {retryVoided ? (
+                  <button type="button" onClick={retryVoided} className="cursor-pointer rounded px-1 underline underline-offset-2">
+                    다시 시도
+                  </button>
+                ) : null}
+              </span>
+            ) : includeVoided && voidedState?.limit != null && voidedState.count != null && voidedState.count >= voidedState.limit ? (
+              <span className="text-[11px] font-semibold text-[#615D59]">최근 취소 {voidedState.limit}건까지 보입니다</span>
+            ) : null}
           </div>
           <div className="mt-2.5 flex flex-wrap items-center gap-2">
             <span className="w-12 shrink-0 text-[12px] font-bold text-[#111110]">판매유형</span>

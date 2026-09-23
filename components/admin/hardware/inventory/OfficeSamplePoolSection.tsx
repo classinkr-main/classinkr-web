@@ -271,6 +271,8 @@ function OfficeSamplePoolSection({
       setRowFeedback(row.key, { tone: "success", text: successText })
     } catch (err) {
       setRowFeedback(row.key, { tone: "error", text: err instanceof Error ? err.message : "저장에 실패했습니다." })
+      // 실패("새로고침 후 다시 시도" 404·전이 409)는 대개 목록이 옛 상태라서다 — 다시 받아 둔다(하드웨어 라운드 2 P-15).
+      void Promise.resolve(onUnitsChanged()).catch(() => undefined)
     } finally {
       setBusyRowKey(null)
     }
@@ -442,8 +444,16 @@ function OfficeSamplePoolSection({
       </p>
 
       {sampleUnitsError && (
-        <p className="border-y border-[rgba(0,0,0,0.06)] bg-[#FCE9E9] px-5 py-2.5 text-[12px] font-semibold text-[#8F2C2C]">
-          샘플 유닛을 불러오지 못했습니다: {sampleUnitsError}
+        <p role="alert" className="flex flex-wrap items-center gap-2 border-y border-[rgba(0,0,0,0.06)] bg-[#FCE9E9] px-5 py-2.5 text-[12px] font-semibold text-[#8F2C2C]">
+          <span className="min-w-0 flex-1">샘플 유닛을 불러오지 못했습니다: {sampleUnitsError}</span>
+          <button
+            type="button"
+            onClick={() => void onUnitsChanged()}
+            disabled={sampleUnitsLoading}
+            className="shrink-0 cursor-pointer rounded-md border border-[#F2B8B8] bg-white px-2.5 py-1 text-[12px] font-bold text-[#8F2C2C] transition hover:bg-[#FCE9E9] disabled:opacity-60"
+          >
+            {sampleUnitsLoading ? "불러오는 중" : "다시 불러오기"}
+          </button>
         </p>
       )}
       {!unitsReady && !sampleUnitsError && (
@@ -591,7 +601,10 @@ function OfficeSamplePoolSection({
                           원장 교차 확인 — {gapDetail(row)}. 시트는 샘플 반출·회수를 늘 기록하지 않아 참고용입니다.
                         </p>
                       )}
-                      {!unitsReady ? (
+                      {!unitsReady && sampleUnitsError ? (
+                        // 조회 실패면 스켈레톤을 끝없이 돌리지 않는다(P-3) — 위 배너의 다시 불러오기로.
+                        <p className="text-[12px] font-semibold text-[#8F2C2C]">유닛 목록을 불러오지 못했습니다 — 위 &lsquo;다시 불러오기&rsquo;를 누르세요.</p>
+                      ) : !unitsReady ? (
                         <div className="space-y-2" aria-hidden>
                           {Array.from({ length: 2 }).map((_, skeletonIndex) => (
                             <div key={skeletonIndex} className="h-9 animate-pulse rounded-lg bg-[#F0F0EC]" />

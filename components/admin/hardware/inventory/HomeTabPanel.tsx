@@ -88,6 +88,8 @@ interface HomeTabPanelProps {
   canWriteHardware: ComponentProps<typeof CrmOrderBacklogSection>["canWrite"]
   // 가져오기·업로드 진행 중 — 스냅샷 복원을 막는다(하드웨어 라운드 2 S-4).
   importBusy: boolean
+  describePlannedConfirm: NonNullable<ComponentProps<typeof HardwareSearchPanel>["describePlannedConfirm"]>
+  resetHistoryFilters: NonNullable<ComponentProps<typeof HardwareSearchPanel>["resetHistoryFilters"]>
 }
 
 export default function HomeTabPanel({
@@ -149,6 +151,8 @@ export default function HomeTabPanel({
   refresh,
   canWriteHardware,
   importBusy,
+  describePlannedConfirm,
+  resetHistoryFilters,
 }: HomeTabPanelProps) {
   return (
     <motion.div
@@ -183,7 +187,11 @@ export default function HomeTabPanel({
     />
 
     {/* 예정 큐 바로 위 — 등록할 것을 먼저 보고, 그 아래에서 확정한다(입력 가속 P2-1). */}
-    <CrmOrderBacklogSection canWrite={canWriteHardware} onRegistered={refresh} />
+    <CrmOrderBacklogSection
+      canWrite={canWriteHardware}
+      onRegistered={refresh}
+      ledgerVersion={`${data?.importRun?.id ?? ""}:${data?.movementsTotal ?? data?.movements.length ?? ""}`}
+    />
 
     <PlannedOutboundPanel
       data={data}
@@ -238,6 +246,9 @@ export default function HomeTabPanel({
       plannedConfirmLocked={plannedConfirmLocked}
       canFinalize={canFinalize}
       setCustomerDetail={setCustomerDetail}
+      describePlannedConfirm={describePlannedConfirm}
+      confirmingId={confirmingId}
+      resetHistoryFilters={resetHistoryFilters}
     />
 
     {/* 사무실·샘플 재고 풀(2026-09-15) — 예전 "재고 위치 맵" 자리. 위치 맵의 남은/나간 샘플은 원장 위치 잔량이었는데,
@@ -248,7 +259,7 @@ export default function HomeTabPanel({
       sampleUnits={sampleUnits}
       sampleUnitsLoading={sampleUnitsLoading}
       sampleUnitsError={sampleUnitsError}
-      canWrite
+      canWrite={canWriteHardware}
       todayKey={todayKey()}
       onLoan={(_productName, _availableUnitIds, itemId) => prepareQuickEntry(itemId ?? "", "sample")}
       onReturn={(_productName, itemId) => prepareQuickEntry(itemId ?? "", "sampleReturn")}
@@ -264,6 +275,7 @@ export default function HomeTabPanel({
       stock={data?.stock ?? null}
       onOpenUnit={setSampleUnitSheetId}
       onChanged={loadSampleUnits}
+      canWrite={canWriteHardware}
     />
 
     <AlertsOutboundSections

@@ -15,6 +15,8 @@ interface VoidConfirmModalProps {
   voidReason: string
   setVoidReason: Dispatch<SetStateAction<string>>
   confirmVoid: () => Promise<void>
+  // 취소 실패 사유 — 모달 안에 보인다(하드웨어 라운드 2 L-3). 예전엔 모달 뒤 상단 배너로만 가서 가려졌다.
+  voidError?: string | null
 }
 
 export default function VoidConfirmModal({
@@ -24,6 +26,7 @@ export default function VoidConfirmModal({
   voidReason,
   setVoidReason,
   confirmVoid,
+  voidError = null,
 }: VoidConfirmModalProps) {
   return (
     <div
@@ -51,6 +54,11 @@ export default function VoidConfirmModal({
           }}
         >
           <div className="px-5 py-4">
+            {voidError ? (
+              <p role="alert" className="mb-3 rounded-md border border-[#F2B8B8] bg-[#FCE9E9] px-3 py-2 text-[12px] font-semibold text-[#8F2C2C]">
+                취소하지 못했습니다 — {voidError}
+              </p>
+            ) : null}
             <label className="block">
               <span className="text-[11px] font-bold text-[#615D59]">취소 사유 (선택)</span>
               <input

@@ -82,6 +82,13 @@ import {
   type SampleSource,
 } from "./inventory/shared"
 import { describeMirrorDelta, judgeImportFreshness, judgeMirrorPending } from "./inventory/ImportFreshnessStrip"
+import { compareInboundLotGroups, sortLotsByRecency } from "./inventory/lot-order"
+import {
+  customerFromDestination,
+  matchStockRowByText,
+  parseHardwareLineText,
+  pickLatestManualOutbound,
+} from "./inventory/quick-record-model"
 
 interface HardwareCrmOrderCandidatesResponse {
   candidates: HardwareCrmOrderCandidate[]
@@ -451,20 +458,6 @@ function mergeQuickCartDrafts(current: HardwareMovementDraft[], incoming: Hardwa
   return next
 }
 
-function parseHardwareLineText(line: string) {
-  const cleaned = line.replace(/[•·]/g, " ").replace(/\s+/g, " ").trim()
-  if (!cleaned) return null
-  const quantityMatch =
-    cleaned.match(/(?:^|\s)(?:x|\*)\s*(\d+)\s*$/i) ??
-    cleaned.match(/(?:^|\s)(\d+)\s*(?:대|ea|EA|개)\s*$/) ??
-    cleaned.match(/[,\t]\s*(\d+)\s*$/)
-  const quantity = quantityMatch ? Math.max(1, Number(quantityMatch[1])) : 1
-  const productText = (quantityMatch ? cleaned.slice(0, quantityMatch.index).trim() : cleaned)
-    .replace(/[-–—:|]+$/g, "")
-    .trim()
-  return productText ? { productText, quantity } : null
-}
-
 const CrmConfirmModal = dynamic(() => import("@/components/admin/hardware/inventory/CrmConfirmModal"), { loading: () => null })
 const VoidConfirmModal = dynamic(() => import("@/components/admin/hardware/inventory/VoidConfirmModal"), { loading: () => null })
 // 상시 마운트 오버레이 3종 — 열리기 전까지 null만 그리므로 지연 분리해도 잃는 상태·화면이 없다.
@@ -533,6 +526,11 @@ export default function HardwareInventoryClient({
   const formRef = useRef<HTMLFormElement | null>(null)
   // 재조회 순번 — 겹친 재검증에서 늦게 온 옛 응답을 버린다(load 참고).
   const loadSeqRef = useRef(0)
+  // CRM 후보 조회 순번 — 조회 중 시트를 닫거나 다시 열면 늦게 온 응답을 버린다(하드웨어 라운드 2 Q-5).
+  // 예전엔 닫은 뒤 후보가 없으면 확인 없이 저장됐고, 새로 연 폼이 그 저장 성공 처리로 비워졌다.
+  const crmLookupSeqRef = useRef(0)
+  // 기록 수정으로 들어가기 전의 담당자 — 수정 대상의 담당자가 다음 새 기록과 기억값에 새지 않게 되돌린다(Q-4).
+  const ownerBeforeEditRef = useRef<string | null>(null)
   const [data, setData] = useState<HardwareDashboard | null>(() =>
     prefetched ? withDerivedMovementViews(prefetched) : null
   )
@@ -621,7 +619,7 @@ export default function HardwareInventoryClient({
   const [voidingId, setVoidingId] = useState<string | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   // 한 화면 입고표 — product 는 품목 id(행 퀵버튼에서 연 경우) 또는 null.
-  const [inboundSheet, setInboundSheet] = useState<{ open: boolean; product: string | null }>({ open: false, product: null })
+  const [inboundSheet, setInboundSheet] = useState<{ open: boolean; product: string | null; lot?: string | null }>({ open: false, product: null })
   // 시트 모드 — "single": 빠른 단건 기록, "batch": 작업건(다품목) 구성. 단건과 대량이
   // 한 폼에 섞여 있던 15섹션 구조를 업무 단위로 가른다. 수정(editingId)은 항상 single.
   const [sheetMode, setSheetMode] = useState<"single" | "batch">("single")
@@ -631,6 +629,9 @@ export default function HardwareInventoryClient({
   // 출고 실제|예정 2차 세그먼트 — UI 판별 전용. status 파생(deriveStatus)과 드래프트 isPlanned로만 흐른다.
   const [isPlanned, setIsPlanned] = useState(false)
   const [voidTarget, setVoidTarget] = useState<HardwareMovement | null>(null)
+  const [voidError, setVoidError] = useState<string | null>(null)
+  // 거래이력 → 상세로 넘어간 경우 상세를 닫으면 거래이력으로 돌아간다(하드웨어 라운드 2 L-12).
+  const returnToCustomerRef = useRef<string | null>(null)
   const [voidReason, setVoidReason] = useState("")
   const [editingId, setEditingId] = useState<string | null>(null)
   const [confirmQtys, setConfirmQtys] = useState<Record<string, string>>({})
@@ -653,6 +654,13 @@ export default function HardwareInventoryClient({
   // 내역 탭 보조 필터 축 — 상태(완료/배송 예정/취소 포함), 판매유형(출고 전용), 기간(occurred_at 기준).
   const [historyStatus, setHistoryStatus] = useState<"all" | "done" | "planned">("all")
   const [includeVoided, setIncludeVoided] = useState(false)
+  // 취소 기록 — "취소 포함"을 켰을 때만 따로 읽는다(하드웨어 라운드 2 L-1). 대시보드는 취소 행을 싣지 않는다.
+  const [voidedMovements, setVoidedMovements] = useState<HardwareMovement[] | null>(null)
+  const [voidedState, setVoidedState] = useState<{ loading: boolean; error: string | null; limit: number | null }>({
+    loading: false,
+    error: null,
+    limit: null,
+  })
   const [saleTypeFilter, setSaleTypeFilter] = useState<OutboundSaleType | "">("")
   const [historyDateFrom, setHistoryDateFrom] = useState("")
   const [historyDateTo, setHistoryDateTo] = useState("")
@@ -784,6 +792,9 @@ export default function HardwareInventoryClient({
 
   const requestCloseSheet = useCallback(() => {
     if (busy === "movement") return
+    // CRM 후보 조회 중에 닫으면 그 조회는 버린다 — 늦게 온 응답이 확인 없이 저장하지 않게(Q-5).
+    crmLookupSeqRef.current += 1
+    setCrmLoading(false)
     if (
       !editingId &&
       quickCart.length > 0 &&
@@ -823,10 +834,29 @@ export default function HardwareInventoryClient({
   useEffect(() => {
     if (!sheetOpen) return
     const previousFocus = document.activeElement as HTMLElement | null
-    sheetPanelRef.current
-      ?.querySelector<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')
-      ?.focus()
-    return () => previousFocus?.focus?.()
+    // 첫 포커스는 닫기 버튼이 아니라 이번에 칠 칸 — 품목은 진입점이 미리 채우므로 고객사(판매·예정)나 대여 고객사(샘플)로,
+    // 그 칸이 없는 모드(상세·입고 수정)는 첫 컨트롤로(하드웨어 라운드 2 Q-15). 시트 청크가 늦게 붙는 첫 열기를 위해 몇 프레임 기다린다.
+    let frame = 0
+    let handle = 0
+    const focusFirst = () => {
+      const panel = sheetPanelRef.current
+      if (!panel) {
+        if (frame++ < 20) handle = window.requestAnimationFrame(focusFirst)
+        return
+      }
+      const preferred = panel.querySelector<HTMLElement>("[data-sheet-autofocus] input:not([disabled]), [data-sheet-autofocus] button:not([disabled])")
+      const fallback = panel.querySelector<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )
+      ;(preferred ?? fallback)?.focus({ preventScroll: true })
+    }
+    focusFirst()
+    return () => {
+      window.cancelAnimationFrame(handle)
+      // FAB 로 열었으면 FAB 가 시트 동안 사라졌다가 다시 생긴다 — 원래 요소가 문서에 없으면 FAB 를 찾아 돌려준다.
+      if (previousFocus && previousFocus.isConnected) previousFocus.focus?.()
+      else document.querySelector<HTMLElement>('[data-hardware-fab="true"]')?.focus()
+    }
   }, [sheetOpen])
 
   const load = useCallback(async (options: { force?: boolean } = {}) => {
@@ -880,6 +910,23 @@ export default function HardwareInventoryClient({
     clearAdminRequestCache("/api/admin/hardware")
     await load({ force: true })
   }, [load])
+
+  const loadVoidedMovements = useCallback(async () => {
+    setVoidedState((current) => ({ ...current, loading: true, error: null }))
+    try {
+      const result = await adminFetchJson<{ movements: HardwareMovement[]; limit: number }>("/api/admin/hardware?scope=voided")
+      setVoidedMovements(result.movements ?? [])
+      setVoidedState({ loading: false, error: null, limit: result.limit ?? null })
+    } catch (err) {
+      setVoidedState({ loading: false, error: err instanceof Error ? err.message : String(err), limit: null })
+    }
+  }, [])
+  // 켜질 때 한 번 읽고, 켜진 채 원장이 바뀌면(취소·가져오기) 다시 읽는다.
+  const voidedLedgerVersion = `${data?.importRun?.id ?? ""}:${data?.movementsTotal ?? ""}`
+  useEffect(() => {
+    if (!includeVoided) return
+    void loadVoidedMovements()
+  }, [includeVoided, loadVoidedMovements, voidedLedgerVersion])
 
   // 바구니 자동 보관 — 담을 때마다 남기고, 저장·비우기로 비면 지운다.
   // 원장이 아니라 작성 중 입력이고, 24시간이 지나면 읽지 않는다(draft-storage 규칙).
@@ -1094,6 +1141,10 @@ export default function HardwareInventoryClient({
   const filteredMovements = useMemo(() => {
     let rows = data?.movements ?? []
     if (!includeVoided) rows = rows.filter((movement) => !movement.voided_at)
+    else if (voidedMovements && voidedMovements.length > 0) {
+      const seen = new Set(rows.map((movement) => movement.id))
+      rows = [...rows, ...voidedMovements.filter((movement) => !seen.has(movement.id))]
+    }
     if (historyType === "sample") {
       // 샘플: 출고 중 판매유형이 샘플(대여/데모)로 분류된 건만.
       rows = rows.filter((movement) => outboundSaleType(movement) === "sample")
@@ -1153,6 +1204,7 @@ export default function HardwareInventoryClient({
   }, [
     data?.movements,
     includeVoided,
+    voidedMovements,
     historyType,
     historyStatus,
     saleTypeFilter,
@@ -1419,9 +1471,13 @@ export default function HardwareInventoryClient({
     for (const movement of data?.movements ?? []) {
       if (movement.movement_type !== "outbound" || movement.voided_at) continue
       const customer = customerLabel(movement.to_location)
-      if (!normalized && !todayIntent) continue
-      if (normalized && !matchesText(customer, movement.product_name, movement.owner, movement.reference_no)) continue
+      // 의도 칩(오늘 출고·내 담당)은 문자열 매칭을 하지 않는다(하드웨어 라운드 2 H-12) — "오늘 출고"가 "오늘출고"로
+      // 정규화돼 고객명과 비교되면서 고객 칸이 늘 비었다. 의도가 조건이다.
+      const intentQuery = todayIntent || myIntent
+      if (!normalized && !intentQuery) continue
+      if (!intentQuery && normalized && !matchesText(customer, movement.product_name, movement.owner, movement.reference_no)) continue
       if (todayIntent && movement.occurred_at?.slice(0, 10) !== today) continue
+      if (myIntent && !isMine(movement.owner)) continue
       const entry = customerAgg.get(customer) ?? { customer, planned: 0, outbound: 0, lastDate: null }
       if (isPlannedMovement(movement)) entry.planned += movement.quantity
       else entry.outbound += movement.quantity
@@ -1492,11 +1548,14 @@ export default function HardwareInventoryClient({
     }
     const groups = new Map<string, LogGroup>()
     for (const movement of filteredMovements) {
-      const customer = movement.to_location
-        ? customerLabel(movement.to_location)
-        : movement.movement_type === "inbound"
+      // 입고는 유형으로 묶는다(하드웨어 라운드 2 L-5) — 입고의 도착은 늘 보관처(창고)라 "고객(미지정)"으로 보였고,
+      // 같은 날 도착 없는 출고와 한 묶음이 됐다.
+      const customer =
+        movement.movement_type === "inbound"
           ? "매입 입고"
-          : MOVEMENT_LABEL[movement.movement_type]
+          : movement.to_location
+            ? customerLabel(movement.to_location)
+            : MOVEMENT_LABEL[movement.movement_type]
       const dateKey = movement.occurred_at ? movement.occurred_at.slice(0, 10) : "미상"
       const key = `${customer}|${dateKey}`
       let group = groups.get(key)
@@ -1761,19 +1820,9 @@ export default function HardwareInventoryClient({
       const date = movement.occurred_at?.slice(0, 10)
       if (date && (group.date === "-" || date < group.date)) group.date = date
     }
-    // H물량번호는 최신 lot 먼저(H8→H1), 비-H(과사람 등)는 후순위로 맨 뒤에.
-    const lotHNum = (lot: string): number | null => {
-      const match = /^H(\d+)$/i.exec(formatLotLabel(lot) ?? lot)
-      return match ? Number(match[1]) : null
-    }
-    const allLots = Array.from(groups.values()).sort((a, b) => {
-      const na = lotHNum(a.lot)
-      const nb = lotHNum(b.lot)
-      if (na != null && nb != null) return nb - na
-      if (na != null) return -1
-      if (nb != null) return 1
-      return (formatLotLabel(a.lot) ?? a.lot).localeCompare(formatLotLabel(b.lot) ?? b.lot, "ko")
-    })
+    // 최신 입고가 위로 — 입고일(lot 의 첫 입고) 내림차순, 같은 날이면 H 번호 내림차순, 그다음 가나다(하드웨어 라운드 2 E-1).
+    // 예전엔 H 번호를 먼저 세워 지금 쓰는 C1·C2·방금 저장한 C3가 H8~H0 뒤 맨 아래로 갔고, "직전 구성 복사"가 H8을 썼다.
+    const allLots = Array.from(groups.values()).sort(compareInboundLotGroups)
     let lots = allLots
     const query = inboundSearch.trim().toLowerCase()
     if (query) {
@@ -1931,44 +1980,28 @@ export default function HardwareInventoryClient({
   }, [data?.movements])
 
   // 직전 기록 복제용 — 손으로 남긴(admin_manual) 최신 유효 기록. 시트 임포트 행은 복제 후보에서 제외한다.
-  const lastManualMovement = useMemo(() => {
-    let latest: HardwareMovement | null = null
-    let latestTime = -Infinity
-    for (const movement of data?.movements ?? []) {
-      if (movement.voided_at || movement.source !== "admin_manual") continue
-      const time = new Date(movement.occurred_at ?? movement.created_at).getTime()
-      if (Number.isFinite(time) && time >= latestTime) {
-        latestTime = time
-        latest = movement
-      }
-    }
-    return latest
-  }, [data?.movements])
+  // 직전 기록 복제 후보 — 출고 계열만, 같은 날이면 늦게 만든 것(하드웨어 라운드 2 Q-7·Q-8, quick-record-model).
+  const lastManualMovement = useMemo(() => pickLatestManualOutbound(data?.movements ?? []), [data?.movements])
 
   const historyLots = useMemo(() => {
-    const set = new Set<string>()
+    // 최근 움직인 lot 이 위로(입고 목록과 같은 규칙, lot-order.ts) — 예전 H 우선 정렬은 C 계열을 맨 아래로 보냈다(E-1).
+    const lastDate = new Map<string, string>()
     for (const movement of data?.movements ?? []) {
       const lot = movementLot(movement)
-      if (lot) set.add(lot)
+      if (!lot) continue
+      const date = movement.occurred_at?.slice(0, 10) ?? ""
+      if (!lastDate.has(lot) || date > (lastDate.get(lot) ?? "")) lastDate.set(lot, date)
     }
-    // H물량번호는 최신 lot 먼저(H8→H1) 내림차순, 비-H(과사람 등)는 맨 뒤로 몰아 배치.
-    const hNum = (lot: string): number | null => {
-      const match = /^H(\d+)$/i.exec(formatLotLabel(lot) ?? lot)
-      return match ? Number(match[1]) : null
-    }
-    return Array.from(set).sort((a, b) => {
-      const na = hNum(a)
-      const nb = hNum(b)
-      if (na != null && nb != null) return nb - na
-      if (na != null) return -1
-      if (nb != null) return 1
-      return (formatLotLabel(a) ?? a).localeCompare(formatLotLabel(b) ?? b, "ko")
-    })
+    return sortLotsByRecency(lastDate.keys(), lastDate)
   }, [data?.movements])
 
   const detailMovement = useMemo(
-    () => (data?.movements ?? []).find((movement) => movement.id === detailId) ?? null,
-    [data?.movements, detailId]
+    () =>
+      (data?.movements ?? []).find((movement) => movement.id === detailId) ??
+      // 취소 기록(L-1)은 대시보드 원장에 없다 — "취소 포함"으로 읽은 목록에서 찾는다(취소 사유·취소자 표시).
+      voidedMovements?.find((movement) => movement.id === detailId) ??
+      null,
+    [data?.movements, voidedMovements, detailId]
   )
 
   const customerHistory = useMemo(() => {
@@ -1976,14 +2009,32 @@ export default function HardwareInventoryClient({
     const rows = (data?.movements ?? [])
       .filter((movement) => !movement.voided_at && customerLabel(movement.to_location) === customerDetail)
       .sort((a, b) => new Date(b.occurred_at ?? b.created_at).getTime() - new Date(a.occurred_at ?? a.created_at).getTime())
-    const totalQty = rows.reduce((total, movement) => total + movement.quantity, 0)
+    // 총 수량은 확정 출고만 — 예정(아직 안 나감)은 따로 센다(하드웨어 라운드 2 L-11). 예전엔 예정·샘플 대여까지 한 숫자에 섞였다.
+    const totalQty = rows
+      .filter((movement) => movement.movement_type === "outbound" && !isPlannedMovement(movement))
+      .reduce((total, movement) => total + movement.quantity, 0)
+    const plannedQty = rows
+      .filter((movement) => movement.movement_type === "outbound" && isPlannedMovement(movement))
+      .reduce((total, movement) => total + movement.quantity, 0)
     const totalRevenue = rows.reduce(
       (total, movement) => total + (outboundSaleType(movement) === "sales" && movement.amount_usd != null ? movement.amount_usd : 0),
       0
     )
     const hasRevenue = rows.some((movement) => outboundSaleType(movement) === "sales" && movement.amount_usd != null)
-    return { name: customerDetail, rows, totalQty, totalRevenue, hasRevenue, count: rows.length }
-  }, [data?.movements, customerDetail])
+    const partialRange = (data?.movementsTotal ?? 0) > (data?.movements.length ?? 0)
+    return { name: customerDetail, rows, totalQty, plannedQty, totalRevenue, hasRevenue, count: rows.length, partialRange }
+  }, [data?.movements, data?.movementsTotal, customerDetail])
+
+  // 거래이력에서 연 상세를 닫으면 거래이력으로 돌아간다(L-12) — 드릴다운에서 되돌아갈 길이 없었다.
+  useEffect(() => {
+    if (detailId != null) return
+    const customer = returnToCustomerRef.current
+    if (!customer) return
+    returnToCustomerRef.current = null
+    // 상세에서 "수정"으로 빠른 기록 시트를 열었으면 거래이력을 그 위에 다시 띄우지 않는다.
+    if (sheetOpen) return
+    setCustomerDetail(customer)
+  }, [detailId, sheetOpen])
 
   // MovementDetailSheet memo 유지용 — 시트가 닫혀 있어도 매 렌더 새 배열/객체가 만들어져 memo를 깨던 파생값.
   const detailFacts = useMemo(() => detailMovement
@@ -2070,19 +2121,8 @@ export default function HardwareInventoryClient({
     })
   }, [cartSetMultiplier, data?.stock])
 
-  const findStockRowByText = (text: string) => {
-    const normalized = normalizeHardwareText(text)
-    if (!normalized) return null
-    return data?.stock.find((row) => {
-      if (normalizeHardwareText(row.product) === normalized) return true
-      if (normalizeHardwareText(row.product).includes(normalized) || normalized.includes(normalizeHardwareText(row.product))) return true
-      const item = data.items.find((candidate) => candidate.id === row.itemId)
-      return item?.source_aliases.some((alias) => {
-        const normalizedAlias = normalizeHardwareText(alias)
-        return normalizedAlias === normalized || normalizedAlias.includes(normalized) || normalized.includes(normalizedAlias)
-      })
-    }) ?? null
-  }
+  // 완전일치(품목명·별칭) 먼저, 부분일치는 네 글자 이상 — T1 이 DT1 로 담기지 않게(Q-3).
+  const findStockRowByText = (text: string) => matchStockRowByText(data?.stock ?? [], data?.items ?? [], text)
 
   const buildCartDraft = (input: {
     productName: string
@@ -2198,10 +2238,12 @@ export default function HardwareInventoryClient({
       setError("이 유형은 배치 담기를 지원하지 않습니다. 단건 기록으로 저장하세요.")
       return
     }
-    const drafts = quotePasteText
+    const parsedLines = quotePasteText
       .split(/\r?\n/)
       .map(parseHardwareLineText)
-      .filter((line): line is { productText: string; quantity: number } => Boolean(line))
+      .filter((line): line is NonNullable<ReturnType<typeof parseHardwareLineText>> => Boolean(line))
+    const guessedCount = parsedLines.filter((line) => line.quantityGuessed).length
+    const drafts = parsedLines
       .map((line) => {
         const row = findStockRowByText(line.productText)
         return buildCartDraft({
@@ -2216,6 +2258,10 @@ export default function HardwareInventoryClient({
       return
     }
     pushDraftsToQuickCart(drafts, "견적/CRM 라인")
+    // 수량을 못 읽은 줄은 1로 담았다는 것을 숨기지 않는다(Q-9).
+    if (guessedCount > 0) {
+      setNotice(`견적/CRM 라인 ${formatNumber(drafts.length)}개를 담았습니다 — 수량을 읽지 못한 ${formatNumber(guessedCount)}줄은 1대로 담았으니 확인하세요.`)
+    }
     setQuotePasteText("")
   }
 
@@ -2291,10 +2337,23 @@ export default function HardwareInventoryClient({
     applyPreset(isPlanned && activePresetKey !== "sample" ? "planned" : "sale")
   }
 
+  // 출고 세그먼트 전환 — 값이 **의미가 같은 칸**으로 옮겨 가게 한다(하드웨어 라운드 2 Q-1).
+  // 샘플 판정은 도착 == "샘플"이라, 판매에서 친 고객사가 도착 칸에 남으면 샘플이 판매(sales)로 저장되고
+  // CRM 게이트·상태가 판매로 갔다. 샘플로 가면 고객사를 대여 고객사로 옮기고 도착은 "샘플"로, 돌아오면 되돌린다.
   const selectOutboundMode = (mode: "actual" | "planned" | "sample") => {
-    if (mode === "actual") applyPreset("sale")
-    else if (mode === "planned") applyPreset("planned")
-    else applyPreset("sample")
+    const presetLocations = new Set<string>(["", ...ENTRY_PRESETS.flatMap((item) => [item.from, item.to])])
+    if (mode === "sample") {
+      const carried = customerFromDestination(toLocation, presetLocations)
+      applyPreset("sample")
+      setToLocation("샘플")
+      if (carried && !sampleCustomer.trim()) setSampleCustomer(carried)
+      // 샘플은 단건 전용(Q-2) — 작업건 화면에서 넘어와도 단건으로.
+      setSheetMode("single")
+      return
+    }
+    const fromSample = activePresetKey === "sample"
+    applyPreset(mode === "actual" ? "sale" : "planned")
+    if (fromSample && sampleCustomer.trim()) setToLocation(sampleCustomer.trim())
   }
 
   // 상세 모드 진입/복귀 — 같은 시트를 상세 프리셋 5종으로 전환한다. 상세는 항상 단건.
@@ -2321,6 +2380,13 @@ export default function HardwareInventoryClient({
   // 기록 바구니는 어떤 진입점에서도 조용히 파괴하지 않는다(바구니 헤더의 '비우기'로만 명시적 삭제).
   const resetSheetDraft = useCallback((presetKey: string, itemId?: string) => {
     setEditingId(null)
+    // 수정에서 가져온 담당자를 걷어내고 원래 담당자로(Q-4). 진행 중이던 CRM 조회는 버린다(Q-5).
+    if (ownerBeforeEditRef.current != null) {
+      setOwner(ownerBeforeEditRef.current)
+      ownerBeforeEditRef.current = null
+    }
+    crmLookupSeqRef.current += 1
+    setCrmLoading(false)
     setFromLocation("")
     setToLocation("")
     setSampleSource("사무실")
@@ -2363,8 +2429,8 @@ export default function HardwareInventoryClient({
     })
   }, [resetSheetDraft, reduceMotion])
 
-  const openInboundSheet = useCallback((itemId?: string | null) => {
-    setInboundSheet({ open: true, product: itemId || null })
+  const openInboundSheet = useCallback((itemId?: string | null, lot?: string | null) => {
+    setInboundSheet({ open: true, product: itemId || null, lot: lot || null })
   }, [])
 
   /**
@@ -2454,7 +2520,10 @@ export default function HardwareInventoryClient({
     setToLocation(movement.to_location ?? "")
     // 샘플 대여 수정 시 출처 토글이 실제 출발지(사무실/창고)와 어긋나지 않도록 동기화.
     if (movement.from_location === "창고") setSampleSource("창고")
-    setOwner(movement.owner ?? "")
+    setOwner((current) => {
+      if (ownerBeforeEditRef.current == null) ownerBeforeEditRef.current = current
+      return movement.owner ?? ""
+    })
     setStatus(movement.status ?? "")
     setReferenceNo(movement.reference_no ?? "")
     setMemo(movement.memo ?? "")
@@ -2530,6 +2599,24 @@ export default function HardwareInventoryClient({
     return qty
   }, [readPlannedConfirmInput])
 
+  // 확정이 성공한 행의 수량·확정일 입력을 지운다(하드웨어 라운드 2 H-8) — 부분 확정 뒤 잔여 2대 행에 "3"이 남아
+  // max 로만 잘려 전송되던 잔재를 없앤다. 결과 문구는 부분 확정이면 잔여를 함께 말한다.
+  const clearConfirmInputs = useCallback((ids: readonly string[]) => {
+    if (ids.length === 0) return
+    const drop = <T,>(current: Record<string, T>) => {
+      if (!ids.some((id) => id in current)) return current
+      const next = { ...current }
+      for (const id of ids) delete next[id]
+      return next
+    }
+    setConfirmQtys(drop)
+    setConfirmDates(drop)
+  }, [])
+  const confirmedMessage = (movement: HardwareMovement, qty: number) =>
+    qty < movement.quantity
+      ? `직전 ${formatNumber(qty)}대 확정 · 잔여 ${formatNumber(movement.quantity - qty)}대 예정`
+      : `${formatNumber(qty)}대 확정 완료`
+
   const confirmPlannedMovement = useCallback(async (
     movement: HardwareMovement,
     override: { quantity?: number; occurredAt?: string } = {}
@@ -2542,8 +2629,9 @@ export default function HardwareInventoryClient({
       const qty = await confirmPlannedMovementRequest(movement, override)
       setPlannedConfirmResults((current) => ({
         ...current,
-        [movement.id]: { ok: true, message: `${formatNumber(qty)}대 확정 완료` },
+        [movement.id]: { ok: true, message: confirmedMessage(movement, qty) },
       }))
+      clearConfirmInputs([movement.id])
       setNotice(
         `${movement.product_name} ${formatNumber(qty)}대를 실제 출고로 확정했습니다.${
           qty < movement.quantity ? ` 잔여 ${formatNumber(movement.quantity - qty)}대는 예정으로 유지됩니다.` : ""
@@ -2551,11 +2639,14 @@ export default function HardwareInventoryClient({
       )
       await refresh()
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      const message = err instanceof Error ? err.message : String(err)
+      setError(message)
+      // 그룹·선택 확정처럼 실패 사유를 그 행에도 남긴다(H-7) — 상단 배너는 스크롤 밖일 수 있다.
+      setPlannedConfirmResults((current) => ({ ...current, [movement.id]: { ok: false, message } }))
     } finally {
       setConfirmingId(null)
     }
-  }, [busy, confirmingGroupKey, confirmingId, confirmPlannedMovementRequest, refresh])
+  }, [busy, confirmingGroupKey, confirmingId, confirmPlannedMovementRequest, refresh, clearConfirmInputs])
 
   const confirmPlannedGroup = useCallback(async (group: { key: string; customer: string; items: HardwareMovement[] }) => {
     if (group.items.length === 0 || plannedConfirmLocked) return
@@ -2578,7 +2669,7 @@ export default function HardwareInventoryClient({
             occurredAt: entry.occurredAt,
           })
           success += 1
-          nextResults[entry.movement.id] = { ok: true, message: `${formatNumber(qty)}대 확정 완료` }
+          nextResults[entry.movement.id] = { ok: true, message: confirmedMessage(entry.movement, qty) }
         } catch (err) {
           failed += 1
           nextResults[entry.movement.id] = {
@@ -2588,6 +2679,7 @@ export default function HardwareInventoryClient({
         }
       }
       setPlannedConfirmResults((current) => ({ ...current, ...nextResults }))
+      clearConfirmInputs(Object.keys(nextResults).filter((id) => nextResults[id].ok))
       setNotice(
         failed > 0
           ? `${group.customer} 출고 확정: ${formatNumber(success)}건 성공, ${formatNumber(failed)}건 실패`
@@ -2597,7 +2689,7 @@ export default function HardwareInventoryClient({
     } finally {
       setConfirmingGroupKey(null)
     }
-  }, [plannedConfirmLocked, readPlannedConfirmInput, confirmPlannedMovementRequest, refresh])
+  }, [plannedConfirmLocked, readPlannedConfirmInput, confirmPlannedMovementRequest, refresh, clearConfirmInputs])
 
   // 일괄 체크(감사 2026-09-14) — PlannedOutboundPanel이 여러 딜을 가로질러 고른 예정 출고를
   // 한 번에 확정하는 전용 핸들러. confirmPlannedGroup의 루프 패턴(성공/실패 집계 →
@@ -2629,7 +2721,7 @@ export default function HardwareInventoryClient({
           try {
             const qty = await confirmPlannedMovementRequest(movement, { quantity, occurredAt })
             successIds.push(movement.id)
-            nextResults[movement.id] = { ok: true, message: `${formatNumber(qty)}대 확정 완료` }
+            nextResults[movement.id] = { ok: true, message: confirmedMessage(movement, qty) }
           } catch (err) {
             // 한 건 실패가 전체를 멈추지 않는다 — 사유를 그 행에 남기고 다음 건을 계속 진행한다.
             failedIds.push(movement.id)
@@ -2642,6 +2734,7 @@ export default function HardwareInventoryClient({
         // plannedConfirmResults는 단건·그룹 확정과 공유하는 같은 맵이다 — 행 아래 결과 문구
         // 렌더링(PlannedOutboundPanel)을 새로 만들지 않고 그대로 재사용한다.
         setPlannedConfirmResults((current) => ({ ...current, ...nextResults }))
+        clearConfirmInputs(successIds)
         setNotice(
           failedIds.length > 0
             ? `선택 출고 확정: ${formatNumber(successIds.length)}건 성공, ${formatNumber(failedIds.length)}건 실패`
@@ -2653,12 +2746,13 @@ export default function HardwareInventoryClient({
       }
       return { successIds, failedIds }
     },
-    [plannedConfirmLocked, confirmPlannedMovementRequest, refresh]
+    [plannedConfirmLocked, confirmPlannedMovementRequest, refresh, clearConfirmInputs]
   )
 
   const voidMovement = useCallback((movement: HardwareMovement) => {
     if (movement.voided_at) return
     setVoidReason("")
+    setVoidError(null)
     setVoidTarget(movement)
   }, [])
 
@@ -2668,6 +2762,7 @@ export default function HardwareInventoryClient({
     setVoidingId(movement.id)
     setNotice(null)
     setError(null)
+    setVoidError(null)
     try {
       await adminFetchJson(`/api/admin/hardware/movements/${movement.id}`, {
         method: "PATCH",
@@ -2675,9 +2770,12 @@ export default function HardwareInventoryClient({
       })
       setNotice(`${movement.product_name} ${MOVEMENT_LABEL[movement.movement_type]} 기록을 취소했습니다.`)
       setVoidTarget(null)
+      // 상세 위에서 연 취소면 성공할 때만 상세를 닫는다(L-12) — 닫기를 누르면 상세로 돌아간다.
+      setDetailId((current) => (current === movement.id ? null : current))
       await refresh()
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      // 실패는 모달 안에 둔다(L-3) — 모달이 열린 채라 상단 배너는 가려진다.
+      setVoidError(err instanceof Error ? err.message : String(err))
     } finally {
       setVoidingId(null)
     }
@@ -2915,7 +3013,10 @@ export default function HardwareInventoryClient({
 
   // 바구니는 편집 모드만 아니면 입고·출고 전체에서 사용 가능 — 가장 잦은 판매 출고를
   // 배제하던 예전 조건(예정 출고만 허용)이 연속 기록 마찰의 주범이라 철폐.
-  const quickCartEnabled = !editingId && (movementType === "inbound" || movementType === "outbound")
+  // 샘플 대여는 단건 전용 — 유닛(관리번호)을 사람이 골라야 하고 트래커 동기화가 단건 저장에만 있다.
+  // 예전엔 바구니로 담으면 고객사·유닛 검증과 트래커를 건너뛰어 원장은 대여, 유닛은 사무실 가용으로 남았다(Q-2·P-1).
+  const quickCartEnabled =
+    !editingId && (movementType === "inbound" || movementType === "outbound") && activePresetKey !== "sample"
 
   // 입고 재설계 분기 — lot 단위 다품목 입력 루프(공유 헤더 → 품목 담기 → 리스트 → 저장)는 입고+작업건+신규에서만 적용.
   // 출고 작업건·단건·상세·편집 레이아웃은 이 분기 밖에서 현행 유지한다.
@@ -2949,6 +3050,10 @@ export default function HardwareInventoryClient({
   }, [amountUsd, movementType, quantity, serialsText, unitPrice])
 
   const addDraftToQuickCart = () => {
+    if (!quickCartEnabled) {
+      setError("샘플 대여는 유닛을 골라야 해서 단건으로만 저장합니다.")
+      return
+    }
     const draft = buildMovementDraft()
     const message = validateMovementDraft(draft)
     if (message) {
@@ -3001,6 +3106,15 @@ export default function HardwareInventoryClient({
 
   const submitQuickCart = async () => {
     if (quickCart.length === 0 || busy === "movement") return
+    // 샘플 대여 줄은 바구니로 저장하지 않는다(Q-2) — 이전 버전에서 담아 되살아난 줄이 트래커를 건너뛰지 않게 막는다.
+    const sampleLines = quickCart.filter((draft) => draft.movementType === "outbound" && isSampleOutbound(draft))
+    if (sampleLines.length > 0) {
+      setQuickCartLineErrors(
+        Object.fromEntries(sampleLines.map((draft) => [quickCartLineKey(draft), "샘플 대여는 단건으로 저장하세요 — 유닛을 골라야 합니다."]))
+      )
+      setError(`샘플 대여 줄 ${formatNumber(sampleLines.length)}건은 바구니로 저장할 수 없습니다 — 빼고 단건 기록으로 저장하세요.`)
+      return
+    }
     const submittedCart = quickCart.map((draft) => ({ ...draft, serials: [...draft.serials] }))
     setBusy("movement")
     setNotice(null)
@@ -3046,7 +3160,12 @@ export default function HardwareInventoryClient({
         void refresh()
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      if (isAdminTimeoutError(err)) {
+        void refresh()
+        setError("바구니 저장 응답이 오래 걸려 기다리기를 멈췄습니다 — 서버에 이미 저장됐을 수 있어 원장을 다시 불러왔습니다. 내역을 확인한 뒤에만 다시 저장하세요.")
+      } else {
+        setError(err instanceof Error ? err.message : String(err))
+      }
     } finally {
       setBusy(null)
     }
@@ -3059,6 +3178,8 @@ export default function HardwareInventoryClient({
   // 무음 저장 없음). 조회 자체가 실패하면 안전한 쪽으로: 모달을 열어 에러를 보여주고 사용자가
   // "연동 없이 기록"으로 계속 진행할 수 있게 한다(조용한 실패로 CRM 링크를 놓치지 않게).
   const openCrmConfirmation = async (draft: HardwareMovementDraft) => {
+    const seq = crmLookupSeqRef.current + 1
+    crmLookupSeqRef.current = seq
     setCrmCandidates([])
     setCrmWarnings([])
     setCrmError(null)
@@ -3078,6 +3199,8 @@ export default function HardwareInventoryClient({
         `/api/admin/hardware/crm-orders?${params.toString()}`,
         { cache: "no-cache" }
       )
+      // 조회 중 시트를 닫았거나 다시 열었으면 이 응답으로 아무것도 하지 않는다(Q-5).
+      if (seq !== crmLookupSeqRef.current) return
       setCrmCandidates(result.candidates)
       setCrmWarnings(result.warnings ?? [])
       if (shouldSkipCrmConfirmation(result.candidates, result.warnings ?? [])) {
@@ -3089,11 +3212,12 @@ export default function HardwareInventoryClient({
       setCrmAutoReflect(result.candidates.length > 0)
       setPendingMovement(draft)
     } catch (err) {
+      if (seq !== crmLookupSeqRef.current) return
       setCrmError(err instanceof Error ? err.message : String(err))
       setCrmAutoReflect(false)
       setPendingMovement(draft)
     } finally {
-      setCrmLoading(false)
+      if (seq === crmLookupSeqRef.current) setCrmLoading(false)
     }
   }
 
@@ -3172,9 +3296,9 @@ export default function HardwareInventoryClient({
         }),
       })
     }
-    setSampleCustomer("")
+    // 연속 기록이면 대여 고객사는 남긴다 — 판매는 고객사를 유지하는데 샘플만 매번 비워 다시 쳐야 했다(Q-23).
+    if (!stayOpenAfterSave) setSampleCustomer("")
     setSampleUnitSelection([])
-    await loadSampleUnits()
   }
 
   const createMovementFromDraft = async (
@@ -3242,16 +3366,24 @@ export default function HardwareInventoryClient({
           sampleSyncError = `원장은 저장됐지만 샘플 트래커 기록에 실패했습니다: ${
             syncErr instanceof Error ? syncErr.message : String(syncErr)
           } — 샘플 트래커에서 수동으로 정정하세요.`
+        } finally {
+          // 성공·부분 실패 모두 유닛 목록을 다시 받는다 — 대여 이벤트는 들어갔는데 발급이 실패한 경우에도
+          // 풀이 이미 나간 유닛을 사무실 가용으로 보이지 않게(하드웨어 라운드 2 P-4).
+          await loadSampleUnits()
         }
       }
       // 재검증은 기다리지 않는다 — 연속 기록에서 다음 건을 바로 받기 위해서다(감사 2026-09-20).
       // 방금 저장한 줄은 위에서 이미 원장에 들어갔고, 파생 숫자만 이 응답이 오면 바뀐다.
       void refresh()
-      // 트래커 실패 문구는 재검증 **뒤에** 세운다 — load()가 시작하자마자 setError(null)을 하므로,
-      // 먼저 세우면 같은 배치에서 지워져 화면에 뜨지 않는다.
+      // 재검증(load)은 이제 동작 오류(error)를 지우지 않는다(조회 실패는 loadError) — 트래커 실패 문구가 그대로 남는다.
       if (sampleSyncError) setError(sampleSyncError)
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
+      // 45초 타임아웃은 "실패"가 아니라 "모름"이다 — 서버는 저장했을 수 있다. 다시 누르면 중복 기록이 되므로
+      // 원장을 다시 불러오고 확인을 권한다(재전송 없음, 하드웨어 라운드 2 Q-11).
+      const message = isAdminTimeoutError(err)
+        ? "저장 응답이 오래 걸려 기다리기를 멈췄습니다 — 서버에 이미 저장됐을 수 있어 원장을 다시 불러왔습니다. 내역에 같은 기록이 있는지 확인한 뒤에만 다시 저장하세요."
+        : err instanceof Error ? err.message : String(err)
+      if (isAdminTimeoutError(err)) void refresh()
       setError(message)
       setCrmError(message)
     } finally {
@@ -3275,6 +3407,10 @@ export default function HardwareInventoryClient({
       setNotice(`${draft.productName} 기록을 수정했습니다.`)
       setEditingId(null)
       setSheetOpen(false)
+      if (ownerBeforeEditRef.current != null) {
+        setOwner(ownerBeforeEditRef.current)
+        ownerBeforeEditRef.current = null
+      }
       setQuantity("1")
       setMemo("")
       setUnitPrice("")
@@ -3293,6 +3429,8 @@ export default function HardwareInventoryClient({
 
   const submitMovement = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    // CRM 확인 모달이 떠 있거나 후보를 조회하는 중이면 다시 제출하지 않는다 — 예전엔 조회가 다시 돌며 후보 선택이 초기화됐다(Q-6).
+    if (pendingMovement || crmLoading) return
     const draft = buildMovementDraft()
     const validationError = validateMovementDraft(draft)
     if (validationError) {
@@ -3601,6 +3739,8 @@ export default function HardwareInventoryClient({
               refresh={refresh}
               canWriteHardware={canWriteHardware}
               importBusy={busy === "import" || busy === "ledger"}
+              describePlannedConfirm={readPlannedConfirmInput}
+              resetHistoryFilters={resetHistoryFilters}
             />
             )}
 
@@ -3760,6 +3900,8 @@ export default function HardwareInventoryClient({
               historyStatus={historyStatus}
               setHistoryStatus={setHistoryStatus}
               includeVoided={includeVoided}
+              voidedState={{ ...voidedState, count: voidedMovements?.length ?? null }}
+              retryVoided={() => void loadVoidedMovements()}
               setIncludeVoided={setIncludeVoided}
               saleTypeFilter={saleTypeFilter}
               setSaleTypeFilter={setSaleTypeFilter}
@@ -3813,6 +3955,9 @@ export default function HardwareInventoryClient({
         setCustomerDetail={setCustomerDetail}
         setDetailId={setDetailId}
         reduceMotion={reduceMotion}
+        onDrillDown={(customer) => {
+          returnToCustomerRef.current = customer
+        }}
       />
 
       <SampleUnitSheet
@@ -3827,6 +3972,8 @@ export default function HardwareInventoryClient({
           open={inboundSheet.open}
           onClose={() => setInboundSheet({ open: false, product: null })}
           initialProduct={inboundSheet.product}
+          initialLot={inboundSheet.lot ?? null}
+          onUncertainFailure={() => void refresh()}
           items={data?.items ?? []}
           movements={data?.movements ?? []}
           activeItemIds={inboundActiveItemIds}
@@ -3855,6 +4002,7 @@ export default function HardwareInventoryClient({
           onClick={openFreshSheet}
           className="fixed bottom-6 right-6 z-30 inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-[#084734] px-4 py-3 text-[13px] font-bold text-white shadow-[0_2px_8px_rgba(0,0,0,0.12)] transition hover:bg-[#065c41] hover:shadow-[0_4px_14px_rgba(0,0,0,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8] active:scale-95 motion-reduce:active:scale-100"
           aria-label="빠른 기록 열기 (단축키 o)"
+          data-hardware-fab="true"
           title="빠른 기록 (o) · 입고표 (i)"
           style={{ bottom: "max(1.5rem, calc(env(safe-area-inset-bottom) + 1rem))" }}
         >
@@ -3887,6 +4035,7 @@ export default function HardwareInventoryClient({
           voidReason={voidReason}
           setVoidReason={setVoidReason}
           confirmVoid={confirmVoid}
+          voidError={voidError}
         />
       )}
 

@@ -23,9 +23,13 @@ interface CustomerHistoryData {
   name: string
   rows: HardwareMovement[]
   totalQty: number
+  // 배송 예정(아직 안 나감) 대수 — 총 수량과 따로 센다(L-11).
+  plannedQty?: number
   totalRevenue: number
   hasRevenue: boolean
   count: number
+  // 기본 응답(최신 2,000건) 밖에 이력이 더 있으면 true — 합계가 불러온 범위 기준임을 밝힌다.
+  partialRange?: boolean
 }
 
 interface CustomerHistorySheetProps {
@@ -33,6 +37,8 @@ interface CustomerHistorySheetProps {
   setCustomerDetail: Dispatch<SetStateAction<string | null>>
   setDetailId: Dispatch<SetStateAction<string | null>>
   reduceMotion: boolean | null
+  // 행에서 상세로 넘어갈 때 부른다 — 부모가 상세를 닫으면 이 고객사 거래이력을 다시 연다(L-12).
+  onDrillDown?: (customer: string) => void
 }
 
 function CustomerHistorySheet({
@@ -40,6 +46,7 @@ function CustomerHistorySheet({
   setCustomerDetail,
   setDetailId,
   reduceMotion,
+  onDrillDown,
 }: CustomerHistorySheetProps) {
   return (
     <AnimatePresence>
@@ -107,8 +114,11 @@ function CustomerHistorySheet({
                   <p className="mt-0.5 text-[16px] font-bold tabular-nums text-[#111110]">{formatNumber(customerHistory.count)}</p>
                 </div>
                 <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-3 py-2.5">
-                  <p className="text-[11px] font-semibold text-[#615D59]">총 수량</p>
+                  <p className="text-[11px] font-semibold text-[#615D59]">확정 출고</p>
                   <p className="mt-0.5 text-[16px] font-bold tabular-nums text-[#111110]">{formatNumber(customerHistory.totalQty)}대</p>
+                  {customerHistory.plannedQty ? (
+                    <p className="mt-0.5 text-[11px] font-semibold tabular-nums text-[#A8741A]">예정 {formatNumber(customerHistory.plannedQty)}대 별도</p>
+                  ) : null}
                 </div>
                 <div className="rounded-lg border border-[#BDEFD8] bg-[#ECFDF5] px-3 py-2.5">
                   <p className="text-[11px] font-semibold text-[#065c41]">총 매출</p>
@@ -116,6 +126,11 @@ function CustomerHistorySheet({
                 </div>
               </div>
 
+              {customerHistory.partialRange ? (
+                <p className="rounded-lg bg-[#F6F5F4] px-3 py-2 text-[11px] font-semibold text-[#615D59]">
+                  최근 불러온 원장 기준 합계입니다 — 더 오래된 거래는 내역 탭 &lsquo;이전 이력 더 불러오기&rsquo; 뒤에 반영됩니다.
+                </p>
+              ) : null}
               {!customerHistory.hasRevenue ? (
                 <p className="rounded-lg bg-[#F6F5F4] px-3 py-2 text-[11px] font-semibold text-[#615D59]">매출은 실판매 기준이며, 시트 재가져오기 후 반영됩니다.</p>
               ) : null}
@@ -130,6 +145,7 @@ function CustomerHistorySheet({
                         key={movement.id}
                         type="button"
                         onClick={() => {
+                          onDrillDown?.(customerHistory.name)
                           setCustomerDetail(null)
                           setDetailId(movement.id)
                         }}
@@ -146,6 +162,7 @@ function CustomerHistorySheet({
                           </span>
                           <span className="mt-0.5 block text-[11px] tabular-nums text-[#615D59]">
                             {formatNumber(movement.quantity)}대{movement.status ? ` · ${movement.status}` : ""}
+                            {movement.movement_type === "outbound" && /예정|예약|대기/.test(movement.status ?? "") ? " (미출고)" : ""}
                           </span>
                         </span>
                         <span className="text-right text-[12px] font-bold tabular-nums text-[#084734]">

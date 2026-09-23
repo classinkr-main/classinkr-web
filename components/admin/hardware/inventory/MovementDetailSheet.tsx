@@ -203,9 +203,9 @@ function MovementDetailSheet({
                     type="button"
                     onClick={() => {
                       if (!detailMovement) return
-                      const target = detailMovement
-                      setDetailId(null)
-                      voidMovement(target)
+                      // 상세는 연 채로 두고 확인 모달만 띄운다(L-12) — 모달에서 닫기를 누르면 상세로 돌아온다.
+                      // 성공하면 부모가 상세를 닫는다.
+                      voidMovement(detailMovement)
                     }}
                     disabled={!canFinalize}
                     title={canFinalize ? undefined : "기록 취소에는 확정 권한(hardware.finalize)이 필요합니다"}

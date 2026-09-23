@@ -525,7 +525,8 @@ export function historyDateRange(key: HistoryDateRangeKey): { from: string; to: 
   const year = now.getFullYear()
   const month = now.getMonth()
   if (key === "thisMonth") {
-    return { from: dateKeyOf(new Date(year, month, 1)), to: dateKeyOf(now) }
+    // 말일까지 — 오늘 이후 예정일인 이번 달 배송 예정도 포함한다(하드웨어 라운드 2 L-15).
+    return { from: dateKeyOf(new Date(year, month, 1)), to: dateKeyOf(new Date(year, month + 1, 0)) }
   }
   if (key === "lastMonth") {
     return { from: dateKeyOf(new Date(year, month - 1, 1)), to: dateKeyOf(new Date(year, month, 0)) }

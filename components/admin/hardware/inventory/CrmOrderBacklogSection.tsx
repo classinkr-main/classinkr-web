@@ -9,7 +9,7 @@
 // ⚠️ 겹침 의심 배지: 시트 이관 행에는 딜 참조가 없어 참조로 대사할 수 없다. 고객사·품목이 맞는 실제
 // 출고가 원장에 있으면 배지를 붙이고 기본 동작을 막는다 — 시트가 이미 실어 온 물량을 다시 등록하면
 // §8-6 이중 계상이 되는데, 링크가 없어 가져오기 때 자동 정리도 되지 않는다.
-import { memo, useCallback, useState } from "react"
+import { memo, useCallback, useEffect, useRef, useState } from "react"
 import { ChevronDown, ExternalLink, Plus, RefreshCw } from "lucide-react"
 
 import { adminFetchJson } from "@/lib/admin-client"
@@ -41,13 +41,19 @@ interface CrmOrderBacklogSectionProps {
   canWrite: boolean
   /** 등록에 성공하면 부모가 원장을 다시 받는다(HardwareInventoryClient의 refresh). */
   onRegistered: () => void | Promise<void>
+  /**
+   * 원장 버전(이관 id·원장 건수) — 바뀌면 목록과 겹침 배지가 옛 원장 기준이 된다(하드웨어 라운드 2 H-4).
+   * 펼쳐 둔 상태면 곧바로 다시 조회하고, 접혀 있으면 다음 펼칠 때 조회한다. 겹침 경고는 이 화면만의 이중 계상
+   * 방어라, 가져오기 직후 옛 목록으로 첫 클릭에 등록되면 안 된다.
+   */
+  ledgerVersion?: string
 }
 
 const SECTION_CARD_CLASS = "rounded-lg border border-[rgba(0,0,0,0.08)] bg-white"
 const GHOST_BUTTON_CLASS =
   "inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 disabled:pointer-events-none disabled:opacity-50"
 
-function CrmOrderBacklogSection({ canWrite, onRegistered }: CrmOrderBacklogSectionProps) {
+function CrmOrderBacklogSection({ canWrite, onRegistered, ledgerVersion = "" }: CrmOrderBacklogSectionProps) {
   const [expanded, setExpanded] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -80,6 +86,15 @@ function CrmOrderBacklogSection({ canWrite, onRegistered }: CrmOrderBacklogSecti
       setLoading(false)
     }
   }, [])
+
+  const lastLedgerVersionRef = useRef(ledgerVersion)
+  useEffect(() => {
+    if (lastLedgerVersionRef.current === ledgerVersion) return
+    lastLedgerVersionRef.current = ledgerVersion
+    if (!loaded) return
+    if (expanded) void load()
+    else setLoaded(false)
+  }, [expanded, ledgerVersion, load, loaded])
 
   const toggleExpanded = () => {
     const next = !expanded

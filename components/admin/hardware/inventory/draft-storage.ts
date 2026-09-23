@@ -94,20 +94,47 @@ export function clearStoredDraft(key: string, options: { storage?: StorageLike |
  * 기한을 통과한 뒤에도 **줄마다 최소 형태**를 다시 본다 — 품목명·유형·양수 수량·시리얼 배열.
  * 통과하지 못한 줄은 조용히 버린다(부분 복구가 전부 잃는 것보다 낫다).
  */
+const MOVEMENT_TYPES = new Set(["inbound", "outbound", "return", "transfer", "repair", "adjust"])
+const DRAFT_STRING_FIELDS = [
+  "occurredAt",
+  "fromLocation",
+  "toLocation",
+  "owner",
+  "status",
+  "referenceNo",
+  "memo",
+  "lotNo",
+  "storageLocation",
+  "importer",
+] as const
+
 export function readStoredQuickCartDrafts(options: DraftReadOptions = {}): HardwareMovementDraft[] {
   const saved = readStoredDraft<unknown>(QUICK_CART_DRAFT_KEY, QUICK_CART_DRAFT_VERSION, options)
   if (!Array.isArray(saved)) return []
-  return saved.filter((line): line is HardwareMovementDraft => {
-    if (!line || typeof line !== "object") return false
+  const restored: HardwareMovementDraft[] = []
+  for (const line of saved) {
+    if (!line || typeof line !== "object") continue
     const draft = line as Partial<HardwareMovementDraft>
-    return (
-      typeof draft.productName === "string" &&
-      draft.productName.trim().length > 0 &&
-      typeof draft.movementType === "string" &&
-      typeof draft.quantity === "number" &&
-      Number.isFinite(draft.quantity) &&
-      draft.quantity > 0 &&
-      Array.isArray(draft.serials)
-    )
-  })
+    // 유형은 허용 목록, 수량은 양의 정수 — 옛 값·손상된 값이 저장 요청에 실리지 않게(하드웨어 라운드 2 Q-25).
+    if (
+      typeof draft.productName !== "string" ||
+      draft.productName.trim().length === 0 ||
+      typeof draft.movementType !== "string" ||
+      !MOVEMENT_TYPES.has(draft.movementType) ||
+      typeof draft.quantity !== "number" ||
+      !Number.isInteger(draft.quantity) ||
+      draft.quantity <= 0 ||
+      !Array.isArray(draft.serials)
+    ) {
+      continue
+    }
+    // 화면이 문자열 메서드를 바로 부르는 칸(도착·lot 등)이 빠졌거나 문자열이 아니면 빈 문자열로 채운다 — 시트가 깨지지 않게.
+    const normalized = { ...draft } as HardwareMovementDraft
+    for (const field of DRAFT_STRING_FIELDS) {
+      if (typeof normalized[field] !== "string") (normalized as unknown as Record<string, unknown>)[field] = ""
+    }
+    normalized.serials = draft.serials.filter((serial): serial is string => typeof serial === "string")
+    restored.push(normalized)
+  }
+  return restored
 }

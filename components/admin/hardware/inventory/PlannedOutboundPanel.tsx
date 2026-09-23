@@ -101,9 +101,7 @@ function PlannedOutboundPanel({
   // 이는 페이지네이션과 무관한 별개 동작이라 요구사항 범위 밖으로 둔다.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
 
-  useEffect(() => {
-    onSelectionCountChange?.(selectedIds.size)
-  }, [selectedIds.size, onSelectionCountChange])
+
   // 홈 탭을 벗어나 이 패널이 사라지면 선택도 사라진다 — 부모가 옛 개수를 들고 있으면 다른 탭에서
   // 빠른 기록 버튼이 계속 숨는다. 언마운트 때 0 으로 되돌린다.
   useEffect(() => () => onSelectionCountChange?.(0), [onSelectionCountChange])
@@ -126,6 +124,13 @@ function PlannedOutboundPanel({
   // plannedStaleGroupCount 배지와 동일 임계값·동일 범위).
   const staleIds = useMemo(() => collectStalePlannedMovementIds(allPlanned, PLANNED_AGING_DANGER_DAYS), [allPlanned])
   const selectedMovements = useMemo(() => allPlanned.filter((movement) => selectedIds.has(movement.id)), [allPlanned, selectedIds])
+  // 선택 개수는 지금 큐에 있는 행만 센다(하드웨어 라운드 2 H-6) — 행·그룹 확정으로 큐에서 사라진 id 가 선택에 남아
+  // "선택 N건"과 대수가 어긋나고, 부모의 빠른 기록 버튼·단축키가 계속 꺼져 있었다.
+  const selectedCount = selectedMovements.length
+  useEffect(() => {
+    onSelectionCountChange?.(selectedCount)
+  }, [selectedCount, onSelectionCountChange])
+  // 큐에서 사라진 id 는 selectedMovements·selectedCount 에서 이미 빠진다 — 확인창·일괄 확정도 selectedMovements 만 쓴다.
   // 행별 수량 입력을 그대로 존중한다(요청사항 ①.3) — 사용자가 건드린 값이 있으면 그 값, 없으면 전량.
   const selectedQuantityTotal = useMemo(
     () => selectedMovements.reduce((total, movement) => total + resolveConfirmQuantity(movement, confirmQtys), 0),
@@ -253,7 +258,7 @@ function PlannedOutboundPanel({
           <button
             type="button"
             onClick={clearSelection}
-            disabled={plannedConfirmLocked || selectedIds.size === 0}
+            disabled={plannedConfirmLocked || selectedCount === 0}
             className="cursor-pointer rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-1 text-[11px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
           >
             선택 해제
@@ -277,6 +282,8 @@ function PlannedOutboundPanel({
                   <div className="flex min-w-0 items-start gap-2.5">
                     {/* 그룹(딜) 전체 선택 — 부분 선택이면 indeterminate(요청사항 ①.1). indeterminate는
                         JSX 속성이 없어 콜백 ref로 DOM 프로퍼티를 직접 설정한다. */}
+                    {/* 누름 영역을 넓힌다(하드웨어 라운드 2 H-18) — 체크박스 16px 은 모바일 44px·웹 24px 기준에 못 미쳤다. */}
+                    <label className="-m-3.5 inline-flex shrink-0 cursor-pointer p-3.5 md:-m-1 md:p-1">
                     <input
                       type="checkbox"
                       ref={(el: HTMLInputElement | null) => {
@@ -289,6 +296,7 @@ function PlannedOutboundPanel({
                       title="이 딜의 품목을 모두 선택"
                       className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border-[rgba(0,0,0,0.25)] text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 disabled:cursor-not-allowed disabled:opacity-50"
                     />
+                    </label>
                     <div className="min-w-0">
                       <p title={group.customer} className="truncate text-[13.5px] font-bold text-[#111110]">{group.customer}</p>
                       <p className="mt-0.5 text-[11px] text-[#615D59]">
@@ -341,6 +349,7 @@ function PlannedOutboundPanel({
                           {/* 행 체크박스 — 네이티브 input이라 스페이스 토글·포커스 링이 기본 제공된다
                               (요청사항 ①.8). Shift+클릭 범위 선택은 onClick에서 shiftKey를 읽어
                               기본 토글(change)을 preventDefault로 막고 직접 범위를 적용한다. */}
+                          <label className="-m-3.5 inline-flex shrink-0 cursor-pointer p-3.5 md:-m-1 md:p-1">
                           <input
                             type="checkbox"
                             checked={checked}
@@ -360,6 +369,7 @@ function PlannedOutboundPanel({
                             title="Shift+클릭으로 범위 선택"
                             className="h-4 w-4 shrink-0 cursor-pointer rounded border-[rgba(0,0,0,0.25)] text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 disabled:cursor-not-allowed disabled:opacity-50"
                           />
+                          </label>
                         </div>
                         <div className="min-w-0">
                           <p title={movement.product_name} className="truncate text-[12.5px] font-semibold text-[#111110]">
@@ -369,7 +379,12 @@ function PlannedOutboundPanel({
                             <PlannedFifoPreviewText preview={fifoPreview} />
                           </p>
                           {confirmResult && (
-                            <p className={`mt-1 truncate text-[11px] font-bold ${confirmResult.ok ? "text-[#084734]" : "text-[#8F2C2C]"}`}>
+                            // 실패 사유는 자르지 않는다(H-7) — 서버가 돌려준 원인이 잘리면 고칠 수가 없다.
+                            <p
+                              role={confirmResult.ok ? "status" : "alert"}
+                              title={confirmResult.message}
+                              className={`mt-1 text-[11px] font-bold ${confirmResult.ok ? "truncate text-[#084734]" : "break-words text-[#8F2C2C]"}`}
+                            >
                               {confirmResult.message}
                             </p>
                           )}
@@ -427,7 +442,7 @@ function PlannedOutboundPanel({
             })}
           </div>
           <PaginationControls pagination={plannedPagination} label="딜" onPageChange={setPlannedPage} />
-          {selectedIds.size > 0 && (
+          {selectedCount > 0 && (
             // 하단 고정(sticky) 일괄 작업 바(요청사항 ①.3) — fixed(뷰포트 전체 폭)가 아니라
             // sticky로 이 섹션(<section>) 안에서만 바닥에 붙인다. 이유: fixed는 사이드바 폭·
             // 1616px 콘텐츠 캡을 이 파일이 모르는 상위 레이아웃과 직접 좌표를 맞춰야 해서
@@ -437,7 +452,7 @@ function PlannedOutboundPanel({
             <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 border-t border-[rgba(0,0,0,0.08)] bg-white px-5 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
               <div className="flex flex-wrap items-center gap-3">
                 <span className="text-[12.5px] font-bold tabular-nums text-[#111110]">
-                  선택 {formatNumber(selectedIds.size)}건 · {formatNumber(selectedQuantityTotal)}대
+                  선택 {formatNumber(selectedCount)}건 · {formatNumber(selectedQuantityTotal)}대
                 </span>
                 {selectionConfirmProgress ? (
                   <span className="text-[11.5px] font-semibold tabular-nums text-[#7A520F]">
@@ -492,7 +507,7 @@ function PlannedOutboundPanel({
         loading={selectionConfirmProgress != null}
         destructive={false}
         title="선택한 예정 출고 확정"
-        description={`${formatNumber(selectedIds.size)}건 ${formatNumber(selectedQuantityTotal)}대를 확정합니다. 로트가 모자란 수량은 로트 미지정으로 기록됩니다.`}
+        description={`${formatNumber(selectedCount)}건 ${formatNumber(selectedQuantityTotal)}대를 확정일 ${bulkConfirmDate}로 확정합니다.${bulkConfirmDate !== todayKey() ? " 오늘이 아닌 날짜입니다 — 확인하세요." : ""} 로트가 모자란 수량은 로트 미지정으로 기록됩니다.`}
         confirmLabel="확정"
         confirmLoadingLabel="확정 중…"
         cancelLabel="취소"

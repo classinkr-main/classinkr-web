@@ -2731,6 +2731,29 @@ const getHardwareDashboardCached = unstable_cache(
   { tags: [HARDWARE_INVENTORY_CACHE_TAG], revalidate: 120 }
 )
 
+// 취소(void)된 기록 — 내역 탭 "취소 포함"을 켰을 때만 읽는다(하드웨어 라운드 2 L-1). 대시보드는 취소 행을 싣지 않아
+// 예전 토글은 아무것도 바꾸지 못했다 — 가져오기의 시트 우선 취소를 사람이 확인할 곳이 없었다. 읽기 전용, 캐시 없음.
+export const HARDWARE_VOIDED_MOVEMENTS_LIMIT = 500
+
+export async function listVoidedHardwareMovements(
+  limit = HARDWARE_VOIDED_MOVEMENTS_LIMIT
+): Promise<{ movements: Array<HardwareMovementView & { voided_by: string | null; void_reason: string | null }>; limit: number }> {
+  const safeLimit = Math.max(1, Math.min(HARDWARE_VOIDED_MOVEMENTS_LIMIT, Math.floor(limit) || HARDWARE_VOIDED_MOVEMENTS_LIMIT))
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("hardware_movements")
+    .select(`${HARDWARE_MOVEMENT_LEDGER_COLUMNS},voided_by,void_reason`)
+    .not("voided_at", "is", null)
+    .order("voided_at", { ascending: false })
+    .limit(safeLimit)
+  if (error) throw error
+  const rows = (data ?? []) as Array<HardwareMovementLedgerRow & { voided_by: string | null; void_reason: string | null }>
+  return {
+    movements: rows.map((row) => ({ ...toMovementView(row), voided_by: row.voided_by ?? null, void_reason: row.void_reason ?? null })),
+    limit: safeLimit,
+  }
+}
+
 export function getHardwareDashboard(): Promise<HardwareDashboard> {
   return getHardwareDashboardCached()
 }
