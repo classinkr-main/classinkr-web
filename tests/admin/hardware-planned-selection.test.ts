@@ -134,7 +134,15 @@ describe("resolvePlannedFifoPreview", () => {
 
 describe("judgeImportFreshness", () => {
   it("returns level 'none' when there has never been an import run", () => {
-    expect(judgeImportFreshness(null)).toEqual({ level: "none", failed: false, finishedKey: null, daysAgo: null })
+    expect(judgeImportFreshness(null)).toEqual({
+      level: "none",
+      failed: false,
+      finishedKey: null,
+      daysAgo: null,
+      state: "none",
+      runningMinutes: null,
+      basisKey: null,
+    })
   })
 
   it("returns 'danger' for a failed run regardless of how recent it was", () => {

@@ -106,6 +106,31 @@ export interface HardwareAlert {
   muted?: boolean
 }
 
+export interface HardwareImportRunSummary {
+  id: string
+  status: string
+  started_at: string
+  finished_at: string | null
+  rows_imported: number | null
+  rows_skipped: number | null
+  error: string | null
+  // 가져올 때의 미러 행 수(2026-09-23 이후 이관만) — 지금 미러와 비교해 "가져오기 대기"를 판정한다.
+  mirror_rows?: HardwareMirrorRowCounts | null
+  // "sheet"(시트 싱크) · "ledger_file"(원장 파일 업로드). 이전 이관은 없음.
+  origin?: string | null
+}
+
+export interface HardwareMirrorRowCounts {
+  inbound: number
+  outbound: number
+  stock: number
+}
+
+export interface HardwareMirrorState {
+  syncedAt: string | null
+  rows: HardwareMirrorRowCounts
+}
+
 export interface HardwareDashboard {
   items: HardwareItem[]
   stock: HardwareStockRow[]
@@ -125,15 +150,11 @@ export interface HardwareDashboard {
     lowItems: number
     orderRecommended: number
   }
-  importRun: {
-    id: string
-    status: string
-    started_at: string
-    finished_at: string | null
-    rows_imported: number | null
-    rows_skipped: number | null
-    error: string | null
-  } | null
+  importRun: HardwareImportRunSummary | null
+  // 하드웨어 라운드 2 S-5 — 최신 이관이 성공이 아니면 마지막 성공 이관(경과일 기준). 구응답은 필드가 없다.
+  importRunLastSuccess?: HardwareImportRunSummary | null
+  // 하드웨어 라운드 2 S-9 — 시트 미러 행 수·교체 시각. 조회 실패·구응답은 null/없음.
+  mirror?: HardwareMirrorState | null
   // 감사(2026-09-07 #1) — 시트 이관 RPC가 구버전(20260630 마이그레이션 미적용)이면 금액 컬럼이
   // raw JSON 백업에서 복구된다. recoveredFromRawCount > 0이면 그 상태가 지금도 살아 있다는 뜻.
   // 구버전 응답·테스트 픽스처는 이 필드가 없을 수 있어 optional로 둔다(ImportFreshnessStrip이 가드).

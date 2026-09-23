@@ -19,7 +19,7 @@ import { SALES_LEDGER_IMPORTS_CACHE_TAG } from "@/lib/repositories/sales-ledger-
 // DSH·KPI 미러 캐시) 바깥 캐시가 안쪽의 옛 값으로 다시 채워질 수도 있다. 그래서 동기화가 실제로
 // 데이터를 쓴 소스의 묶음(바깥·안쪽 태그를 함께)을 { expire: 0 }으로 즉시 만료한다.
 //
-// 이 파일은 매출 장부 영역(REV·HW 시트 동기화)의 묶음만 담는다. NEO·채널톡·Meta 등 다른 동기화의
+// 이 파일은 매출 장부 영역(REV·HW 시트 동기화)과 하드웨어 원장 가져오기의 묶음만 담는다. NEO·채널톡·Meta 등 다른 동기화의
 // 묶음은 설계 §7의 나머지 범위로 남아 있다(라운드 5 기획 §7).
 
 // 지사 개요·세그먼트 품질 점검 캐시(app/api/admin/branch/data-quality)의 태그. 라우트 파일에서
@@ -45,7 +45,11 @@ export const SYNC_CACHE_TAG_BUNDLES = {
   branchSyncStatus: [BRANCH_SEG_CACHE_TAG, BRANCH_SYNC_RUNS_CACHE_TAG],
   // REV 링크 유지보수(재부착·후보 생성)가 crm_source_links를 다시 바꾼 뒤의 매칭 표시.
   crmRevenueLinks: [ADMIN_CRM_REVENUE_CACHE_TAG, ADMIN_CRM_REVENUE_SHEET_CACHE_TAG],
-} as const satisfies Record<BranchSyncCacheBundle | "crmRevenueLinks", readonly string[]>
+  // 하드웨어 원장 가져오기(시트 이관·원장 파일 업로드·스냅샷 복원)는 hardware_movements와 이관 기록을
+  // 바꾼다 — 대시보드(원장·재고·신선도)와, 업로드가 교체하는 HW 미러 캐시를 함께 즉시 만료한다
+  // (설계 §7.1 표의 hardwareImport, 하드웨어 라운드 2 S-1·S-2).
+  hardwareImport: [HARDWARE_INVENTORY_CACHE_TAG, BRANCH_HW_CACHE_TAG],
+} as const satisfies Record<BranchSyncCacheBundle | "crmRevenueLinks" | "hardwareImport", readonly string[]>
 
 export type SyncCacheBundle = keyof typeof SYNC_CACHE_TAG_BUNDLES
 

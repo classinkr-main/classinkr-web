@@ -4,6 +4,7 @@ import { createHash } from "crypto"
 import { revalidateTag, unstable_cache } from "next/cache"
 
 import { isPromotedProduct } from "@/lib/hardware/product"
+import { isDormantStockRow } from "@/lib/hardware/stock-attention"
 import { normalizedAccountKey } from "@/lib/branch/account-key"
 import {
   fetchAllSupabaseRows,
@@ -188,11 +189,8 @@ export interface HardwareAlert {
   muted?: boolean
 }
 
-// 미가동(취급 중단) 품목 판정 — 창고가 정확히 0이고 예정·최근 30일 출고가 없으면 "부족" 알림은
-// 상시 소음이다. 음수 창고는 원장 이상 실신호이므로 0 초과·미만이 아닌 0 일치로만 본다.
-export function isDormantStockRow(row: Pick<HardwareStockRow, "warehouseStock" | "plannedOut" | "outbound30d">): boolean {
-  return row.warehouseStock === 0 && row.plannedOut === 0 && row.outbound30d === 0
-}
+// 미가동 판정은 홈 요약 밴드와 같은 규칙을 쓰도록 순수 모듈로 옮겼다(lib/hardware/stock-attention.ts).
+export { isDormantStockRow }
 
 export interface HardwareDashboard {
   items: HardwareItemView[]
@@ -213,15 +211,14 @@ export interface HardwareDashboard {
     lowItems: number
     orderRecommended: number
   }
-  importRun: {
-    id: string
-    status: string
-    started_at: string
-    finished_at: string | null
-    rows_imported: number | null
-    rows_skipped: number | null
-    error: string | null
-  } | null
+  importRun: HardwareImportRunSummary | null
+  // 하드웨어 라운드 2 S-5·H-11 — 최신 이관이 성공이 아니면(진행 중·실패·중단) 마지막 성공 이관. 화면의
+  // 경과일은 이 날짜로 센다 — 실패 한 번에 "데이터가 언제 기준인지"가 사라지지 않게. 최신이 성공이면 null.
+  importRunLastSuccess: HardwareImportRunSummary | null
+  // 하드웨어 라운드 2 S-9 — 시트 미러(branch_hw_*) 상태. 크론이 매일 미러를 갱신하지만 원장 반영은
+  // 가져오기 버튼이라, "시트에 원장에 없는 행이 있다"를 보여 주려면 미러 쪽 시각·행 수가 필요하다.
+  // 조회 실패는 null(화면은 미러 줄을 생략한다 — 대시보드 전체를 실패시키지 않는다).
+  mirror: HardwareMirrorState | null
   // 감사(2026-09-07 #1): replace_hardware_sheet_import RPC가 구버전(20260630 마이그레이션 미적용)이면
   // amount_usd/amount_cny/unit_price/importer 컬럼을 못 채우고 recoverMoneyFromRaw가 raw JSON에서
   // 조용히 복구한다. recoveredFromRawCount > 0이면 그 상태가 지금도 살아 있다는 뜻 — 화면에 노출해
@@ -231,9 +228,37 @@ export interface HardwareDashboard {
   }
 }
 
+export interface HardwareImportRunSummary {
+  id: string
+  status: string
+  started_at: string
+  finished_at: string | null
+  rows_imported: number | null
+  rows_skipped: number | null
+  error: string | null
+  // 가져오기 당시 미러 행 수(raw.mirror_rows, 2026-09-23 이후 이관만). 지금 미러와 비교해 "가져오기 대기"를 판정한다.
+  mirror_rows?: HardwareMirrorRowCounts | null
+  // 무엇으로 가져왔는지(raw.origin) — "sheet"(시트 싱크) · "ledger_file"(원장 파일 업로드). 이전 이관은 없음.
+  origin?: string | null
+}
+
+export interface HardwareMirrorRowCounts {
+  inbound: number
+  outbound: number
+  stock: number
+}
+
+export interface HardwareMirrorState {
+  // 미러가 마지막으로 교체된 시각(branch_hw_outbound.synced_at 최댓값).
+  syncedAt: string | null
+  rows: HardwareMirrorRowCounts
+}
+
 export interface HardwareSheetImportResult {
   imported: number
   skipped: number
+  // 교체는 커밋됐는데 이관 기록을 success로 못 바꾼 경우의 원인(없으면 null).
+  runRecordError?: string | null
   runId: string
   snapshotId: string
   snapshotChecksum: string
@@ -522,17 +547,86 @@ export function getHardwareCustomerLinks(): Promise<HardwareCustomerLink[]> {
   return getHardwareCustomerLinksCached()
 }
 
+// raw 전체(스냅샷 요약·병합 카운트)는 읽지 않고 화면이 쓰는 두 경로만 JSON 경로로 뽑는다.
+const IMPORT_RUN_SUMMARY_COLUMNS =
+  "id,status,started_at,finished_at,rows_imported,rows_skipped,error,mirror_rows:raw->mirror_rows,origin:raw->>origin"
+
 async function getLatestImportRun(): Promise<HardwareDashboard["importRun"]> {
   const sb = createSupabaseAdminClient()
   const { data, error } = await sb
     .from("hardware_import_runs")
-    .select("id,status,started_at,finished_at,rows_imported,rows_skipped,error")
+    .select(IMPORT_RUN_SUMMARY_COLUMNS)
     .eq("source", "branch_hw_sheet")
     .order("started_at", { ascending: false })
     .limit(1)
     .maybeSingle()
   if (error) throw error
-  return data as HardwareDashboard["importRun"]
+  return (data ?? null) as HardwareDashboard["importRun"]
+}
+
+// 마지막 성공 이관 — 최신 이관이 성공이면 부르지 않는다(대시보드 왕복을 늘리지 않게). 실패해도 null.
+async function getLastSuccessfulImportRun(): Promise<HardwareImportRunSummary | null> {
+  try {
+    const sb = createSupabaseAdminClient()
+    const { data, error } = await sb
+      .from("hardware_import_runs")
+      .select(IMPORT_RUN_SUMMARY_COLUMNS)
+      .eq("source", "branch_hw_sheet")
+      .eq("status", "success")
+      .order("started_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (error) return null
+    return (data ?? null) as HardwareImportRunSummary | null
+  } catch {
+    return null
+  }
+}
+
+// 미러 상태 — 행 수 3개(head count)와 마지막 교체 시각. 부가 정보라 실패하면 null로 두고 대시보드는 계속 간다.
+async function getHwMirrorState(): Promise<HardwareMirrorState | null> {
+  try {
+    const sb = createSupabaseAdminClient()
+    const count = async (table: string) => {
+      const { count: rows, error } = await sb.from(table).select("id", { count: "exact", head: true })
+      if (error) throw error
+      return typeof rows === "number" ? rows : 0
+    }
+    const [inbound, outbound, stock, latest] = await Promise.all([
+      count("branch_hw_inbound"),
+      count("branch_hw_outbound"),
+      count("branch_hw_stock"),
+      sb.from("branch_hw_outbound").select("synced_at").order("synced_at", { ascending: false }).limit(1).maybeSingle(),
+    ])
+    if (latest.error) throw latest.error
+    const syncedAt = (latest.data as { synced_at?: string | null } | null)?.synced_at ?? null
+    return { syncedAt, rows: { inbound, outbound, stock } }
+  } catch {
+    return null
+  }
+}
+
+// 가져오기 잠금 판정 창 — 라우트 maxDuration(300초)에 여유를 더한 값. 이보다 오래된 running 행은 함수가
+// 죽고 남은 흔적(중단)으로 보고 잠금으로 치지 않는다(지사 동기화 잠금 SYNC_RUN_LOCK_WINDOW_MS와 같은 값).
+export const HARDWARE_IMPORT_LOCK_WINDOW_MS = 10 * 60_000
+
+/**
+ * 지금 도는 가져오기(창 안에 시작한 running 이관 기록 중 가장 최근). 없으면 null.
+ * 두 탭·두 사람이 동시에 "싱크·백업 후 가져오기"를 눌러 교체가 겹치지 않게 라우트가 먼저 본다.
+ */
+export async function findRunningHardwareImportRun(): Promise<{ id: string; started_at: string } | null> {
+  const sb = createSupabaseAdminClient()
+  const cutoff = new Date(Date.now() - HARDWARE_IMPORT_LOCK_WINDOW_MS).toISOString()
+  const { data, error } = await sb
+    .from("hardware_import_runs")
+    .select("id,started_at")
+    .eq("status", "running")
+    .gte("started_at", cutoff)
+    .order("started_at", { ascending: false })
+    .limit(1)
+  if (error) throw error
+  const row = (data ?? [])[0] as { id: string; started_at: string } | undefined
+  return row ?? null
 }
 
 async function ensureHardwareItems(
@@ -1721,14 +1815,20 @@ function getImportWarehouseBalances(rows: ImportMovementRow[]) {
   return balances
 }
 
+// 스냅샷에 담을 "가져오기 전 시트 이관분" — 복원이 이 목록으로 원장을 되돌린다. PostgREST 1000행 캡에
+// 조용히 잘리면 복원이 전량을 지우고 1000행만 되살린다(하드웨어 라운드 2 S-12) — id 키셋으로 끝까지 읽는다.
 async function listCurrentSheetImportMovements() {
   const sb = createSupabaseAdminClient()
-  const { data, error } = await sb
-    .from("hardware_movements")
-    .select("*")
-    .eq("source", "sheet_import")
-  if (error) throw error
-  return data ?? []
+  return fetchAllSupabaseRows<{ id: string } & Record<string, unknown>>((afterId, limit) => {
+    let query = sb
+      .from("hardware_movements")
+      .select("*")
+      .eq("source", "sheet_import")
+      .order("id", { ascending: true })
+      .limit(limit)
+    if (afterId) query = query.gt("id", afterId)
+    return query
+  })
 }
 
 const SHEET_WINS_VOID_REASON =
@@ -1882,9 +1982,11 @@ async function createHardwareSheetImportSnapshot(input: {
 }
 
 export async function importHardwareFromBranchSheets(
-  options: { actor?: string | null } = {}
+  options: { actor?: string | null; origin?: "sheet" | "ledger_file"; fileName?: string | null } = {}
 ): Promise<HardwareSheetImportResult> {
   const runId = await startImportRun()
+  // 교체 RPC가 커밋된 뒤의 실패(이관 기록 갱신)는 가져오기 실패가 아니다 — 아래 catch가 구분한다.
+  let ledgerCommitted = false
 
   try {
     const [inbound, outbound, stock] = await Promise.all([
@@ -1938,6 +2040,7 @@ export async function importHardwareFromBranchSheets(
       { rows, run_id: runId, snapshot_id: snapshot.id }
     )
     if (error) throw error
+    ledgerCommitted = true
 
     const mergeCounts =
       additiveMerge && data && typeof data === "object"
@@ -1966,23 +2069,36 @@ export async function importHardwareFromBranchSheets(
       sheetWinsError = getErrorMessage(cleanupError)
     }
 
-    await finishImportRun(runId, {
-      status: "success",
-      rowsImported: imported,
-      rowsSkipped: skipped,
-      raw: {
-        mode: additiveMerge ? "additive_merge" : "replace",
-        merge: mergeCounts,
-        snapshot_id: snapshot.id,
-        snapshot_checksum: snapshot.checksum,
-        snapshot_created_at: snapshot.created_at,
-        sheet_wins_voided: sheetWinsVoided,
-        sheet_wins_kept: sheetWinsKeptRows.length,
-        sheet_wins_error: sheetWinsError,
-      },
-    })
+    // 이관 기록 갱신 실패로 커밋된 교체를 "실패"로 적지 않는다(하드웨어 라운드 2 S-6) — 실패로 적으면
+    // 반영된 원장이 화면에서 실패로 보이고 캐시 무효화도 건너뛴다. 결과에 경고로만 싣는다.
+    let runRecordError: string | null = null
+    try {
+      await finishImportRun(runId, {
+        status: "success",
+        rowsImported: imported,
+        rowsSkipped: skipped,
+        raw: {
+          mode: additiveMerge ? "additive_merge" : "replace",
+          origin: options.origin ?? "sheet",
+          ...(options.fileName ? { file_name: options.fileName } : {}),
+          merge: mergeCounts,
+          snapshot_id: snapshot.id,
+          snapshot_checksum: snapshot.checksum,
+          snapshot_created_at: snapshot.created_at,
+          sheet_wins_voided: sheetWinsVoided,
+          sheet_wins_voided_ids: sheetWinsTargets.map((row) => row.id),
+          sheet_wins_kept: sheetWinsKeptRows.length,
+          sheet_wins_error: sheetWinsError,
+          // 가져올 때의 미러 행 수 — 대시보드가 지금 미러와 비교해 "시트에 원장에 없는 행"을 알린다(S-9).
+          mirror_rows: { inbound: inbound.length, outbound: outbound.length, stock: stock.length },
+        },
+      })
+    } catch (recordError) {
+      runRecordError = getErrorMessage(recordError)
+    }
     revalidateTag(HARDWARE_INVENTORY_CACHE_TAG, "max")
     return {
+      runRecordError,
       imported,
       skipped,
       runId,
@@ -1994,10 +2110,13 @@ export async function importHardwareFromBranchSheets(
       sheetWinsError,
     }
   } catch (error) {
-    await finishImportRun(runId, {
-      status: "failed",
-      error: getErrorMessage(error),
-    }).catch(() => undefined)
+    // 커밋 뒤의 예외(위 try 밖 코드가 늘어날 때를 대비)는 이관 기록을 실패로 덮지 않는다.
+    if (!ledgerCommitted) {
+      await finishImportRun(runId, {
+        status: "failed",
+        error: getErrorMessage(error),
+      }).catch(() => undefined)
+    }
     throw error
   }
 }
@@ -2215,6 +2334,64 @@ export async function listHardwareSheetImportSnapshots(limit = 10): Promise<Hard
 
 export interface HardwareSheetImportRestoreResult {
   restoredCount: number
+  // 되돌린 가져오기(들)가 시트 우선 정책(§8-6)으로 취소했던 어드민 확정 중 다시 살린 건수(하드웨어 라운드 2 S-11).
+  sheetWinsRevived?: number
+  // 원장 복원은 끝났는데 취소 되살리기가 실패한 경우의 원인 — 복원 자체를 실패로 적지 않는다.
+  sheetWinsReviveError?: string | null
+}
+
+/**
+ * 복원으로 되돌린 가져오기들이 시트 우선 정책으로 취소한 어드민 확정 id — 복원 **전에** 모은다.
+ *
+ * 스냅샷 N은 가져오기 N 직전의 시트 이관분이다. 그 스냅샷으로 복원하면 가져오기 N(과 그 뒤 가져오기들)이
+ * 없었던 상태로 돌아가야 하는데, RPC 는 시트 이관분만 되돌린다. 가져오기가 취소한 어드민 확정은 취소된 채
+ * 남고, 되살아난 시트 행은 "전환됨(취소)" 상태라 **같은 출하가 원장에서 통째로 사라진다**. 그래서 스냅샷의
+ * 가져오기 시작 시각 이후 이관 기록(raw.sheet_wins_voided_ids, 2026-09-23 이후 이관만 기록)의 id를 모은다.
+ */
+async function listSheetWinsVoidIdsSinceSnapshot(snapshotId: string): Promise<string[]> {
+  const sb = createSupabaseAdminClient()
+  const { data: snapshot, error: snapshotError } = await sb
+    .from("hardware_sheet_import_snapshots")
+    .select("import_run_id")
+    .eq("id", snapshotId)
+    .maybeSingle()
+  if (snapshotError) throw snapshotError
+  const runId = (snapshot as { import_run_id?: string | null } | null)?.import_run_id
+  if (!runId) return []
+  const { data: run, error: runError } = await sb
+    .from("hardware_import_runs")
+    .select("started_at")
+    .eq("id", runId)
+    .maybeSingle()
+  if (runError) throw runError
+  const since = (run as { started_at?: string | null } | null)?.started_at
+  if (!since) return []
+  const { data: runs, error: runsError } = await sb
+    .from("hardware_import_runs")
+    .select("id,voided_ids:raw->sheet_wins_voided_ids")
+    .eq("source", "branch_hw_sheet")
+    .gte("started_at", since)
+  if (runsError) throw runsError
+  const ids = new Set<string>()
+  for (const row of (runs ?? []) as Array<{ voided_ids?: unknown }>) {
+    if (!Array.isArray(row.voided_ids)) continue
+    for (const id of row.voided_ids) if (typeof id === "string" && id) ids.add(id)
+  }
+  return Array.from(ids)
+}
+
+// 사유가 여전히 시트 우선 정책인 취소만 되살린다 — 그 사이 사람이 다른 사유로 다시 취소했거나 이미 살린 행은 건드리지 않는다.
+async function reviveSheetWinsVoidedMovements(ids: readonly string[]): Promise<number> {
+  if (ids.length === 0) return 0
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("hardware_movements")
+    .update({ voided_at: null, voided_by: null, void_reason: null })
+    .in("id", ids as string[])
+    .eq("void_reason", SHEET_WINS_VOID_REASON)
+    .select("id")
+  if (error) throw error
+  return Array.isArray(data) ? data.length : 0
 }
 
 // 실행하면 되돌릴 수 없다 — 현재 sheet_import 원장을 전부 지우고 스냅샷 시점으로 교체한다
@@ -2225,6 +2402,15 @@ export async function restoreHardwareSheetImportSnapshot(
   snapshotId: string,
   actor: string | null
 ): Promise<HardwareSheetImportRestoreResult> {
+  // 되살릴 취소 id 는 복원 전에 모은다(조회 실패는 복원을 막지 않는다 — 결과에 경고로 남긴다).
+  let reviveIds: string[] = []
+  let sheetWinsReviveError: string | null = null
+  try {
+    reviveIds = await listSheetWinsVoidIdsSinceSnapshot(snapshotId)
+  } catch (collectError) {
+    sheetWinsReviveError = getErrorMessage(collectError)
+  }
+
   const sb = createSupabaseAdminClient()
   const { data, error } = await sb.rpc("restore_hardware_sheet_import_snapshot", {
     snapshot_id: snapshotId,
@@ -2232,8 +2418,17 @@ export async function restoreHardwareSheetImportSnapshot(
   })
   if (error) throw error
 
+  let sheetWinsRevived = 0
+  if (!sheetWinsReviveError) {
+    try {
+      sheetWinsRevived = await reviveSheetWinsVoidedMovements(reviveIds)
+    } catch (reviveError) {
+      sheetWinsReviveError = getErrorMessage(reviveError)
+    }
+  }
+
   revalidateTag(HARDWARE_INVENTORY_CACHE_TAG, "max")
-  return { restoredCount: typeof data === "number" ? data : 0 }
+  return { restoredCount: typeof data === "number" ? data : 0, sheetWinsRevived, sheetWinsReviveError }
 }
 
 function applyLocationDelta(map: Map<string, number>, location: string | null | undefined, delta: number) {
@@ -2395,11 +2590,13 @@ export function computeHardwareStockRow(input: HardwareStockRowComputeInput): Ha
 }
 
 async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
-  const [items, movementsResult, importRun] = await Promise.all([
+  const [items, movementsResult, importRun, mirror] = await Promise.all([
     listHardwareItems(),
     listAllHardwareMovements(),
     getLatestImportRun(),
+    getHwMirrorState(),
   ])
+  const importRunLastSuccess = importRun && importRun.status !== "success" ? await getLastSuccessfulImportRun() : null
   const { rows: movements, moneyRecoveredFromRawCount } = movementsResult
   const activeMovements = movements.filter((movement) => !movement.voided_at)
   const cutoff30d = Date.now() - TREND_WINDOW_DAYS * 24 * 60 * 60 * 1000
@@ -2515,6 +2712,8 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
       orderRecommended: rows.filter((row) => row.orderRecommended).length,
     },
     importRun,
+    importRunLastSuccess,
+    mirror,
     importCosting: { recoveredFromRawCount: moneyRecoveredFromRawCount },
   }
 }
@@ -2527,7 +2726,8 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
 const getHardwareDashboardCached = unstable_cache(
   () => getHardwareDashboardUncached(),
   // v3(2026-09-15): 위치 정규화 변경("클래스인"→사무실, 수리 오탐 제거) — 옛 규칙 결과를 SWR 로 먼저 주지 않게 키를 올린다.
-  ["hardware-dashboard-v3"],
+  // v4(2026-09-23): 응답에 importRunLastSuccess·mirror가 더해졌다 — 옛 모양을 SWR 로 먼저 주지 않게 키를 올린다.
+  ["hardware-dashboard-v4"],
   { tags: [HARDWARE_INVENTORY_CACHE_TAG], revalidate: 120 }
 )
 

@@ -17,7 +17,11 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
-import { adminFetch, adminFetchJson, adminFetchJsonCached, clearAdminRequestCache } from "@/lib/admin-client"
+import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
+import { SyncOutcomeNotice } from "@/components/admin/branch/SyncOutcomeNotice"
+import { adminFetch, adminFetchJson, adminFetchJsonCached, clearAdminRequestCache, isAdminTimeoutError } from "@/lib/admin-client"
+import { readSyncOutcomeResponse, type SyncOutcomeNotice as SyncOutcomeNoticeValue } from "@/lib/admin/sync-outcome"
+import { describeHardwareImportOutcome, type HardwareImportResponse } from "@/lib/hardware/import-outcome"
 import { paginateAdminList } from "@/lib/admin-list-pagination"
 import { isPrefetchFresh } from "@/lib/admin/prefetch-freshness"
 import {
@@ -77,7 +81,7 @@ import {
   type QuickCartSaveSummary,
   type SampleSource,
 } from "./inventory/shared"
-import { judgeImportFreshness } from "./inventory/ImportFreshnessStrip"
+import { describeMirrorDelta, judgeImportFreshness, judgeMirrorPending } from "./inventory/ImportFreshnessStrip"
 
 interface HardwareCrmOrderCandidatesResponse {
   candidates: HardwareCrmOrderCandidate[]
@@ -533,9 +537,17 @@ export default function HardwareInventoryClient({
     prefetched ? withDerivedMovementViews(prefetched) : null
   )
   const [loading, setLoading] = useState(prefetched == null)
+  // error = 사람이 누른 동작(저장·확정·가져오기)의 실패. loadError = 대시보드 조회 실패 — 둘을 가른다
+  // (하드웨어 라운드 2 Q-12·H-1). 예전엔 배경 재검증 실패가 빠른 기록 시트의 저장 오류 자리에 떠
+  // 방금 성공한 저장을 실패로 오인했고, 재검증이 시작될 때마다 동작 오류를 지웠다.
   const [error, setError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  // 가져오기·업로드 결과(설계 §7.2 결과 계약) — 성공·안내·경고 톤을 SyncOutcomeNotice로 그린다.
+  const [importNotice, setImportNotice] = useState<SyncOutcomeNoticeValue | null>(null)
+  // 가져오기 확인 다이얼로그(하드웨어 라운드 2 S-3) — 원장 교체·어드민 확정 취소를 한 번 묻는다.
+  const [importConfirmOpen, setImportConfirmOpen] = useState(false)
   const [pendingMovement, setPendingMovement] = useState<HardwareMovementDraft | null>(null)
   const [quickCart, setQuickCart] = useState<HardwareMovementDraft[]>([])
   // 보관된 바구니를 읽었는지 — 읽기 전에는 자동 보관이 저장분을 지우지 않게 한다(효과 실행 순서).
@@ -823,7 +835,6 @@ export default function HardwareInventoryClient({
     const seq = loadSeqRef.current + 1
     loadSeqRef.current = seq
     setLoading(true)
-    setError(null)
     try {
       // 재방문·뒤로가기는 공용 클라이언트 캐시(45s TTL + stale-while-revalidate)로 즉시 페인트한다
       // (서버도 이미 max-age=30/swr=120을 보낸다). 새로고침·저장 후 재조회는 force로 우회한다 —
@@ -835,10 +846,11 @@ export default function HardwareInventoryClient({
       )
       if (seq !== loadSeqRef.current) return
       setData(next)
+      setLoadError(null)
       setSelectedItemId((current) => current || defaultEntryItemId(next.items))
     } catch (err) {
       if (seq !== loadSeqRef.current) return
-      setError(err instanceof Error ? err.message : String(err))
+      setLoadError(err instanceof Error ? err.message : String(err))
     } finally {
       if (seq === loadSeqRef.current) setLoading(false)
     }
@@ -1709,10 +1721,18 @@ export default function HardwareInventoryClient({
   // 새 물량번호 추천은 원장 입고 이력으로 만든다 — 시트 이관이 밀려 있으면 그 뒤에 들어온 물량(예: 9/8 C2)이 원장에 없어
   // 이미 쓰인 번호를 추천한다(2026-09-15 실측). 신선도 판정은 홈 스트립과 같은 함수(judgeImportFreshness)를 쓴다.
   const inboundLotStaleNote = useMemo(() => {
-    const freshness = judgeImportFreshness(data?.importRun ?? null)
+    const importRun = data?.importRun ?? null
+    const lastSuccess = data?.importRunLastSuccess ?? null
+    // 시트 미러에 원장보다 입고 행이 많으면(가져오기 대기, 라운드 2 S-9) 경과일과 무관하게 알린다 — 그 행이 새 물량일 수 있다.
+    const basis = importRun?.status === "success" ? importRun : lastSuccess
+    const pending = judgeMirrorPending(basis, data?.mirror ?? null)
+    if (pending?.delta && pending.delta.inbound > 0) {
+      return `시트에 원장에 아직 없는 입고 ${formatNumber(pending.delta.inbound)}행이 있어요 — 추천 번호가 이미 쓰였을 수 있으니 시트의 최신 번호를 확인하거나 먼저 가져오세요.`
+    }
+    const freshness = judgeImportFreshness(importRun, { lastSuccess })
     if (freshness.level === "ok" || freshness.level === "none" || freshness.daysAgo == null) return null
     return `시트 이관이 ${formatNumber(freshness.daysAgo)}일 전이라 그 뒤에 들어온 물량번호가 추천에 빠져 있을 수 있어요. 시트의 최신 번호를 확인하세요.`
-  }, [data?.importRun])
+  }, [data?.importRun, data?.importRunLastSuccess, data?.mirror])
 
   const inboundLots = useMemo(() => {
     const inbound = (data?.movements ?? []).filter((movement) => movement.movement_type === "inbound" && !movement.voided_at)
@@ -2704,46 +2724,57 @@ export default function HardwareInventoryClient({
     [crmCandidates, selectedCrmCandidateId]
   )
 
+  // 가져오기 확인 문구 — 지금 원장이 무엇을 기준으로 하는지(마지막 성공 이관·원천)와 시트에 쌓인 차이를 보여 준다.
+  const importConfirmCopy = useMemo(() => {
+    const latest = data?.importRun ?? null
+    const basis = latest?.status === "success" ? latest : data?.importRunLastSuccess ?? null
+    const pending = judgeMirrorPending(basis, data?.mirror ?? null)
+    const basisLabel = basis?.finished_at ? formatDate(basis.finished_at) : null
+    const description = [
+      "구글 시트를 먼저 동기화하고 백업(스냅샷)을 뜬 뒤, 원장의 시트 이관분을 시트 기준으로 교체합니다.",
+      basis?.rows_imported != null ? `지금 시트 이관분은 ${formatNumber(basis.rows_imported)}행${basisLabel ? `(${basisLabel} 이관)` : ""}입니다.` : "",
+      pending?.changed && pending.delta ? `시트에 원장과 다른 행이 있습니다: ${describeMirrorDelta(pending.delta)}(행 수 기준).` : "",
+      "시트가 같은 물량을 다시 실은 어드민 확정은 사유와 함께 취소되고, 홈 맨 아래 스냅샷 복원으로 되돌릴 수 있습니다. 어드민에서 직접 만든 기록은 건드리지 않습니다.",
+    ]
+      .filter(Boolean)
+      .join(" ")
+    const warning =
+      basis?.origin === "ledger_file"
+        ? `마지막 이관은 원장 파일 업로드${basisLabel ? `(${basisLabel})` : ""}였습니다 — 가져오면 업로드한 원장이 시트 기준으로 바뀝니다.`
+        : latest && latest.status === "running"
+          ? "다른 가져오기가 진행 중일 수 있습니다 — 진행 중이면 이번 요청은 실행되지 않습니다."
+          : null
+    return { description, warning }
+  }, [data?.importRun, data?.importRunLastSuccess, data?.mirror])
+
+  // 싱크·백업 후 가져오기 — 확인 다이얼로그(S-3) 뒤에만 부른다. 결과 계약(outcome·stage)을 한 함수로 읽고,
+  // 잠김이 아니면 결과와 무관하게 다시 불러온다 — 실패·시간 초과여도 이관 기록이나 원장이 바뀌었을 수 있다(S-6).
+  // 재전송은 하지 않는다.
   const importSheet = async () => {
+    setImportConfirmOpen(false)
     setBusy("import")
     setNotice(null)
     setError(null)
+    setImportNotice(null)
+    let status: number | undefined
+    let body: HardwareImportResponse | null = null
     try {
-      const result = await adminFetchJson<{
-        import: {
-          imported: number
-          skipped: number
-          snapshotId?: string
-          sheetWinsVoided?: number
-          sheetWinsKept?: number
-          sheetWinsError?: string | null
-        }
-        sync: { inbound: number; outbound: number; stock: number; sales: number } | null
-      }>("/api/admin/hardware/import-sheet", {
+      const response = await adminFetch("/api/admin/hardware/import-sheet", {
         method: "POST",
         body: JSON.stringify({ sync: true }),
       })
-      const snapshotHint = result.import.snapshotId ? ` · 백업 ${result.import.snapshotId.slice(0, 8)}` : ""
-      // 시트가 이겨서 취소된 어드민 확정 수는 조용히 넘기지 않는다 — 원장에서 빠진 기록이 있다는 뜻이다.
-      const sheetWinsHint = [
-        result.import.sheetWinsVoided && result.import.sheetWinsVoided > 0
-          ? ` 시트가 같은 물량을 다시 실어, 시트 행에서 확정했던 어드민 기록 ${formatNumber(result.import.sheetWinsVoided)}건은 취소했습니다(내역 탭에서 사유 확인).`
-          : "",
-        // 시트가 다시 싣지 않은 건은 남긴다 — 취소했다면 그 출하가 원장에서 통째로 사라진다.
-        result.import.sheetWinsKept && result.import.sheetWinsKept > 0
-          ? ` 시트에 같은 물량이 없어 어드민 확정 ${formatNumber(result.import.sheetWinsKept)}건은 그대로 뒀습니다 — 시트에서 빠진 건인지 확인하세요.`
-          : "",
-        result.import.sheetWinsError
-          ? ` 다만 어드민 확정 정리는 실패했습니다: ${result.import.sheetWinsError} — 가져오기 자체는 반영됐습니다.`
-          : "",
-      ].join("")
-      setNotice(
-        `시트 강제 싱크와 백업 후 이관 완료: 원장 ${formatNumber(result.import.imported)}건 반영${snapshotHint}. 기존 시트 이관분은 최신 백업 기준으로 갱신되었습니다.${sheetWinsHint}`
-      )
-      await refresh()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      const read = await readSyncOutcomeResponse(response)
+      status = read.status
+      body = read.body as HardwareImportResponse | null
+    } catch {
+      body = null
+    }
+    try {
+      if (body?.outcome !== "running") await refresh()
     } finally {
+      const described = describeHardwareImportOutcome(body, { httpStatus: status })
+      if (described.tone === "error") setError(described.message)
+      else setImportNotice(described)
       setBusy(null)
     }
   }
@@ -2759,27 +2790,44 @@ export default function HardwareInventoryClient({
     setBusy("ledger")
     setNotice(null)
     setError(null)
+    setImportNotice(null)
+    let changedOrUnknown = true
     try {
       const form = new FormData()
       form.append("file", file)
       const result = await adminFetchJson<{
+        outcome?: HardwareImportResponse["outcome"]
+        startedAt?: string
         file: string
         parsed: { lots: string[]; inboundRows: number; outboundRows: number; byType: Record<string, number> }
         import: { imported: number; skipped: number; snapshotId?: string }
         warnings: string[]
+        importWarnings?: string[]
       }>("/api/admin/hardware/import-ledger", { method: "POST", body: form })
+      if (result.outcome === "running") {
+        changedOrUnknown = false
+        setImportNotice(describeHardwareImportOutcome({ outcome: "running", startedAt: result.startedAt }))
+        return
+      }
       const snapshotHint = result.import?.snapshotId ? ` · 백업 ${result.import.snapshotId.slice(0, 8)}` : ""
       const typeHint = Object.entries(result.parsed.byType)
         .map(([key, value]) => `${key} ${formatNumber(value)}`)
         .join(" · ")
-      const warnHint = result.warnings.length > 0 ? ` · 경고 ${formatNumber(result.warnings.length)}건` : ""
-      setNotice(
-        `원장 가져오기 완료: 물량번호 ${formatNumber(result.parsed.lots.length)}개 · 입고 ${formatNumber(result.parsed.inboundRows)} · 출고 ${formatNumber(result.parsed.outboundRows)} (${typeHint}) → 원장 ${formatNumber(result.import.imported)}건 반영${snapshotHint}${warnHint}.`
-      )
-      await refresh()
+      const warnHint = result.warnings.length > 0 ? ` · 파서 경고 ${formatNumber(result.warnings.length)}건` : ""
+      const importWarnings = result.importWarnings ?? []
+      setImportNotice({
+        tone: importWarnings.length > 0 ? "warning" : "success",
+        message: `원장 파일 가져오기 완료: 물량번호 ${formatNumber(result.parsed.lots.length)}개 · 입고 ${formatNumber(result.parsed.inboundRows)} · 출고 ${formatNumber(result.parsed.outboundRows)} (${typeHint}) → 원장 ${formatNumber(result.import.imported)}건 반영${snapshotHint}${warnHint}.${importWarnings.length > 0 ? ` 확인할 것: ${importWarnings[0]}` : ""}`,
+      })
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(
+        isAdminTimeoutError(err)
+          ? "업로드 응답이 오래 걸려 화면에서 기다리기를 멈췄습니다 — 서버는 끝까지 처리했을 수 있어 화면을 다시 불러왔습니다. 스트립의 이관 시각으로 반영 여부를 확인하세요."
+          : err instanceof Error ? err.message : String(err)
+      )
     } finally {
+      // 실패여도 미러·이관 기록이 바뀌었을 수 있다 — 잠김이 아니면 다시 불러온다(S-6).
+      if (changedOrUnknown) await refresh().catch(() => undefined)
       setBusy(null)
     }
   }
@@ -3332,8 +3380,9 @@ export default function HardwareInventoryClient({
             </button>
             <button
               type="button"
-              onClick={() => void importSheet()}
+              onClick={() => setImportConfirmOpen(true)}
               disabled={busy != null}
+              aria-haspopup="dialog"
               className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-[#084734] px-3 py-2 text-[12px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
             >
               <UploadCloud className={`h-3.5 w-3.5 ${busy === "import" ? "animate-pulse" : ""}`} />
@@ -3408,18 +3457,54 @@ export default function HardwareInventoryClient({
       </div>
 
       <main className="px-4 pt-6 sm:px-6 lg:px-9">
+        {/* 전역 배너 — 오류는 role=alert, 성공·안내는 role=status(하드웨어 라운드 2 S-8·H-19·L-3). 둘 다 닫을 수 있다.
+            가져오기·업로드 결과는 결과 계약 톤(성공·안내·경고)을 그대로 쓰는 SyncOutcomeNotice로 그린다. */}
         {error && (
-          <div className="mb-4 rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] px-4 py-3 text-[13px] font-semibold text-[#8F2C2C]">
-            {error}
+          <div role="alert" className="mb-4 flex items-start gap-2 rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] px-4 py-3 text-[13px] font-semibold text-[#8F2C2C]">
+            <span className="min-w-0 flex-1 leading-relaxed">{error}</span>
+            <button type="button" onClick={() => setError(null)} aria-label="오류 알림 닫기" className="-my-1 -mr-1 shrink-0 cursor-pointer rounded-md px-2 py-1 text-[12px] font-bold opacity-70 transition hover:bg-black/5 hover:opacity-100">
+              닫기
+            </button>
           </div>
         )}
         {notice && (
-          <div className="mb-4 rounded-lg border border-[#BDEFD8] bg-[#ECFDF5] px-4 py-3 text-[13px] font-semibold text-[#084734]">
-            {notice}
+          <div role="status" aria-live="polite" className="mb-4 flex items-start gap-2 rounded-lg border border-[#BDEFD8] bg-[#ECFDF5] px-4 py-3 text-[13px] font-semibold text-[#084734]">
+            <span className="min-w-0 flex-1 leading-relaxed">{notice}</span>
+            <button type="button" onClick={() => setNotice(null)} aria-label="알림 닫기" className="-my-1 -mr-1 shrink-0 cursor-pointer rounded-md px-2 py-1 text-[12px] font-bold opacity-70 transition hover:bg-black/5 hover:opacity-100">
+              닫기
+            </button>
+          </div>
+        )}
+        <SyncOutcomeNotice notice={importNotice} onDismiss={() => setImportNotice(null)} className="mb-4" />
+        {/* 데이터가 이미 있는데 재검증이 실패했으면 화면은 직전 값이다 — 그 사실만 알리고 다시 불러오기를 준다(Q-12).
+            데이터가 없으면 아래 오류 패널이 맡는다. */}
+        {loadError && data && (
+          <div role="status" className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-4 py-2.5 text-[12px] font-semibold text-[#7A520F]">
+            <span className="min-w-0 flex-1">화면 갱신에 실패해 직전에 불러온 값을 보여 주고 있습니다 — {loadError}</span>
+            <button type="button" onClick={() => void refresh()} disabled={loading} className="shrink-0 cursor-pointer rounded-md border border-[#ECD29C] bg-white px-2.5 py-1 text-[12px] font-bold text-[#7A520F] transition hover:bg-[#FBF1E0] disabled:cursor-not-allowed disabled:opacity-60">
+              {loading ? "불러오는 중" : "다시 불러오기"}
+            </button>
           </div>
         )}
 
-        {loading && !data ? (
+        {!data && loadError && !loading ? (
+          // 첫 조회 실패 — 빈 원장처럼 그리면 "시트 가져오기를 먼저 실행하세요"가 떠 조회 오류에 파괴적 동작을 권한다
+          // (하드웨어 라운드 2 H-1·S-10·L-8). 오류와 다시 불러오기만 보인다.
+          <section role="alert" data-testid="hardware-load-error" className="rounded-xl border border-[#F2B8B8] bg-white px-5 py-6 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+            <p className="text-[15px] font-bold text-[#8F2C2C]">하드웨어 데이터를 불러오지 못했습니다</p>
+            <p className="mt-1.5 text-[12.5px] leading-relaxed text-[#615D59]">
+              {loadError} — 원장이 비어 있는 것이 아니라 조회가 실패한 상태입니다. 가져오기·업로드는 다시 불러온 뒤에 판단하세요.
+            </p>
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              className="mt-4 inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-[#084734] px-4 py-2 text-[13px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+            >
+              <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+              다시 불러오기
+            </button>
+          </section>
+        ) : loading && !data ? (
           // 콜드로드 스켈레톤 — 딥링크(?tab=…) 직행 시 레이아웃 점프가 없도록 활성 탭 레이아웃과 일치시킨다(HW-8).
           activeTab === "history" ? (
             <div className="space-y-4" aria-hidden>
@@ -3515,6 +3600,7 @@ export default function HardwareInventoryClient({
               setDetailId={setDetailId}
               refresh={refresh}
               canWriteHardware={canWriteHardware}
+              importBusy={busy === "import" || busy === "ledger"}
             />
             )}
 
@@ -3776,6 +3862,22 @@ export default function HardwareInventoryClient({
           빠른 기록
         </button>
       )}
+
+      {/* 가져오기 확인(하드웨어 라운드 2 S-3) — 원장의 시트 이관분을 교체하고 시트가 다시 실은 어드민 확정을
+          취소하는 동작이라 한 번 묻는다. 업로드(window.confirm)·복원(모달)과 같은 층위. */}
+      <DeleteConfirmDialog
+        open={importConfirmOpen}
+        onClose={() => setImportConfirmOpen(false)}
+        onConfirm={() => void importSheet()}
+        loading={busy === "import"}
+        destructive={false}
+        title="시트 싱크·백업 후 가져오기"
+        description={importConfirmCopy.description}
+        irreversibleNote={importConfirmCopy.warning ?? undefined}
+        confirmLabel="백업 후 가져오기"
+        confirmLoadingLabel="싱크·백업 중"
+        cancelLabel="취소"
+      />
 
       {voidTarget && (
         <VoidConfirmModal

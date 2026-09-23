@@ -86,6 +86,8 @@ interface HomeTabPanelProps {
   // 감사(2026-09-07 #4) — SnapshotRestorePanel이 복원 성공 후 대시보드를 다시 불러오는 데 쓴다.
   refresh: ComponentProps<typeof SnapshotRestorePanel>["onRestored"]
   canWriteHardware: ComponentProps<typeof CrmOrderBacklogSection>["canWrite"]
+  // 가져오기·업로드 진행 중 — 스냅샷 복원을 막는다(하드웨어 라운드 2 S-4).
+  importBusy: boolean
 }
 
 export default function HomeTabPanel({
@@ -146,6 +148,7 @@ export default function HomeTabPanel({
   setDetailId,
   refresh,
   canWriteHardware,
+  importBusy,
 }: HomeTabPanelProps) {
   return (
     <motion.div
@@ -172,7 +175,12 @@ export default function HomeTabPanel({
         기존처럼 맨 끝에 접어 둔다(#4). */}
     <SummaryBand data={data} plannedMovementQuantity={plannedMovementQuantity} plannedStaleGroupCount={plannedStaleGroupCount} />
 
-    <ImportFreshnessStrip importRun={data?.importRun ?? null} importCosting={data?.importCosting} />
+    <ImportFreshnessStrip
+      importRun={data?.importRun ?? null}
+      importRunLastSuccess={data?.importRunLastSuccess ?? null}
+      mirror={data?.mirror ?? null}
+      importCosting={data?.importCosting}
+    />
 
     {/* 예정 큐 바로 위 — 등록할 것을 먼저 보고, 그 아래에서 확정한다(입력 가속 P2-1). */}
     <CrmOrderBacklogSection canWrite={canWriteHardware} onRegistered={refresh} />
@@ -271,7 +279,12 @@ export default function HomeTabPanel({
     />
 
     {/* 되돌리기는 사고 대응용 안전망이라 일상 확인 흐름(요약·예정 출고·재고) 아래, 맨 끝에 접어 둔다(#4). */}
-    <SnapshotRestorePanel canFinalize={canFinalize} onRestored={refresh} />
+    <SnapshotRestorePanel
+      canFinalize={canFinalize}
+      onRestored={refresh}
+      disabled={importBusy}
+      importRunId={data?.importRun?.id ?? null}
+    />
     </motion.div>
   )
 }

@@ -108,6 +108,14 @@ const LOCAL_PERSIST_SCOPES = [
 const DEFAULT_ADMIN_FETCH_TIMEOUT_MS = 45_000
 const ADMIN_TIMEOUT_MESSAGE = "요청이 너무 오래 걸립니다 — 다시 시도해 주세요"
 
+/**
+ * 이 클라이언트의 45초 타임아웃으로 끊긴 요청인지 — 서버는 끝까지 처리했을 수 있다. 쓰기 호출부는
+ * "다시 시도"를 권하기 전에 결과를 다시 조회해 확인한다(재전송은 하지 않는다 — 중복 기록 위험).
+ */
+export function isAdminTimeoutError(error: unknown): boolean {
+  return error instanceof Error && error.message === ADMIN_TIMEOUT_MESSAGE
+}
+
 // 실측(grep) 기준 — 동기화/가져오기/생성/평가/일괄 처리류. 어드민 어디서 호출하든(이
 // 파일을 import하는 한) 자동으로 타임아웃이 비활성화된다 — 호출부가 sections/*·
 // SalesLedgerWorkbench처럼 이 웨이브에서 손댈 수 없는 파일이어도 안전하게 적용된다.
