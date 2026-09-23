@@ -1,0 +1,589 @@
+"use client"
+
+import Link from "next/link"
+import { useCallback, useState, type ReactNode } from "react"
+import { ArrowUpRight, Check, ChevronDown, Copy, Download, RefreshCw } from "lucide-react"
+import { adminFetchJsonCached } from "@/lib/admin-client"
+import { ANOMALY_KIND_LABEL, type AnomalyKind } from "@/lib/marketing/anomaly"
+import { campaignHubHref } from "@/lib/marketing/hub-tabs"
+import type { PerfKpi } from "@/lib/marketing/perf"
+import type {
+  WeeklyAdLeadCampaignRow,
+  WeeklyAdLeadDailyPoint,
+  WeeklyAdLeadRecentIntake,
+  WeeklyAdLeadReport,
+} from "@/lib/marketing/weekly-report"
+
+// 주간 보고서 뷰 — 조회 훅 + 본문 + 액션(복사·다운로드·재생성)을 한 모듈에 둔다.
+// 헤더의 다이얼로그(WeeklyReportDialog)와 데이터 층의 인라인 섹션(WeeklyReportSection)이 같은
+// 본문을 그린다(2026-09-14 분리, 로직 무변경). 데이터 계약은 lib/marketing/weekly-report.ts.
+
+export interface WeeklyReportResponse {
+  report: WeeklyAdLeadReport
+  source: "stored" | "live"
+}
+
+const REPORT_TTL_MS = 60_000
+const TOP_CAMPAIGN_COUNT = 3
+
+const WEEKDAY = new Intl.DateTimeFormat("ko-KR", { weekday: "short", timeZone: "UTC" })
+const MONTH_DAY = new Intl.DateTimeFormat("ko-KR", { month: "2-digit", day: "2-digit", timeZone: "UTC" })
+
+function parseIsoDate(value: string): Date {
+  return new Date(`${value}T00:00:00Z`)
+}
+
+export function formatReportDate(value: string): string {
+  const date = parseIsoDate(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }).format(date)
+}
+
+function formatDay(value: string): { weekday: string; date: string } {
+  const date = parseIsoDate(value)
+  if (Number.isNaN(date.getTime())) return { weekday: value, date: "" }
+  return { weekday: WEEKDAY.format(date), date: MONTH_DAY.format(date).replace(/\.$/, "") }
+}
+
+export function formatGeneratedAt(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Seoul",
+  }).format(date)
+}
+
+function usd(value: number | null): string {
+  return value == null
+    ? "—"
+    : `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+function count(value: number | null): string {
+  return value == null ? "—" : value.toLocaleString("ko-KR")
+}
+
+function pct(value: number | null): string {
+  return value == null ? "—" : `${value.toLocaleString("ko-KR", { maximumFractionDigits: 1 })}%`
+}
+
+/* ─── 조회 훅 ─────────────────────────────────────────────────── */
+
+export function useWeeklyReport() {
+  const [response, setResponse] = useState<WeeklyReportResponse | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle")
+
+  const load = useCallback(async ({ fresh = false }: { fresh?: boolean } = {}) => {
+    setLoading(true)
+    setError(null)
+    setCopyState("idle")
+    try {
+      const url = `/api/admin/marketing/weekly-report${fresh ? "?fresh=1" : ""}`
+      const next = await adminFetchJsonCached<WeeklyReportResponse>(url, undefined, {
+        ttlMs: REPORT_TTL_MS,
+        cacheKey: "marketing-weekly-report",
+        force: fresh,
+        staleIfError: !fresh,
+      })
+      setResponse(next)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "주간 보고서를 만들지 못했습니다")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  const copy = useCallback(async () => {
+    if (!response) return
+    try {
+      await copyText(response.report.markdown)
+      setCopyState("copied")
+    } catch {
+      setCopyState("failed")
+    }
+  }, [response])
+
+  const download = useCallback(() => {
+    if (response) downloadMarkdown(response.report)
+  }, [response])
+
+  return { response, loading, error, copyState, load, copy, download }
+}
+
+async function copyText(value: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value)
+    return
+  }
+  const input = document.createElement("textarea")
+  input.value = value
+  input.style.position = "fixed"
+  input.style.opacity = "0"
+  document.body.appendChild(input)
+  input.select()
+  const copied = document.execCommand("copy")
+  document.body.removeChild(input)
+  if (!copied) throw new Error("클립보드 복사 실패")
+}
+
+function downloadMarkdown(report: WeeklyAdLeadReport) {
+  const blob = new Blob([`﻿${report.markdown}`], { type: "text/markdown;charset=utf-8" })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement("a")
+  anchor.href = url
+  anchor.download = `marketing-lead-weekly-${report.period.since}_${report.period.until}.md`
+  anchor.rel = "noopener"
+  document.body.appendChild(anchor)
+  anchor.click()
+  document.body.removeChild(anchor)
+  URL.revokeObjectURL(url)
+}
+
+/* ─── 표시 조각 ──────────────────────────────────────────────── */
+
+function Delta({ kpi, lowerIsBetter = false }: { kpi: PerfKpi; lowerIsBetter?: boolean }) {
+  if (kpi.deltaPct == null) {
+    return <span className="text-[#A39E98]">직전 주 대비 —</span>
+  }
+  const improved = lowerIsBetter ? kpi.deltaPct < 0 : kpi.deltaPct > 0
+  const tone = kpi.deltaPct === 0 ? "text-[#615D59]" : improved ? "text-[#084734]" : "text-[#B43E3E]"
+  return (
+    <span className={tone}>
+      직전 주 대비 {kpi.deltaPct > 0 ? "+" : ""}
+      {kpi.deltaPct}%
+    </span>
+  )
+}
+
+function LeadHero({ kpi }: { kpi: PerfKpi }) {
+  return (
+    <section className="rounded-xl border border-[#BDEFD8] bg-[#ECFDF5] p-5 sm:p-6">
+      <p className="text-[11px] font-semibold text-[#084734]">광고 리드 · CRM</p>
+      <div className="mt-2 flex items-end gap-1.5">
+        <p className="text-[38px] font-semibold leading-none tabular-nums tracking-[-0.045em] text-[#111110] sm:text-[44px]">
+          {count(kpi.value)}
+        </p>
+        <span className="pb-1 text-[14px] font-medium text-[#615D59]">건</span>
+      </div>
+      <p className="mt-3 text-[11px] font-semibold tabular-nums">
+        <Delta kpi={kpi} />
+      </p>
+    </section>
+  )
+}
+
+function CompactMetric({ label, value, detail }: { label: string; value: string; detail: ReactNode }) {
+  return (
+    <div className="min-w-0 border-b border-[rgba(0,0,0,0.08)] py-3 last:border-b-0 sm:border-b-0 sm:border-r sm:px-4 sm:py-1 sm:first:pl-0 sm:last:border-r-0">
+      <p className="text-[10.5px] font-medium text-[#615D59]">{label}</p>
+      <p className="mt-1 text-[20px] font-semibold tabular-nums tracking-[-0.025em] text-[#111110]">{value}</p>
+      <p className="mt-1 text-[10px] font-medium tabular-nums text-[#615D59]">{detail}</p>
+    </div>
+  )
+}
+
+/**
+ * 보고 주간이 끝난 뒤 지금까지의 라이브 유입. 주말에는 일일 카드가 나가지 않으므로
+ * 월요일 아침에는 이 띠가 주말 이틀의 유일한 보고다.
+ */
+function RecentIntakeBand({ intake }: { intake: WeeklyAdLeadRecentIntake | null }) {
+  if (!intake) {
+    return (
+      <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white px-4 py-3 sm:px-5">
+        <p className="text-[11px] font-semibold text-[#615D59]">마지막 일일 보고 이후 유입</p>
+        <p className="mt-1 text-[12px] text-[#A39E98]">리드 조회에 실패해 미측정입니다.</p>
+      </section>
+    )
+  }
+
+  return (
+    <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white px-4 py-3 sm:px-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <p className="text-[11px] font-semibold text-[#084734]">
+          {intake.spansWeekend ? "주말 유입" : "마지막 일일 보고 이후 유입"}
+        </p>
+        <p className="text-[10.5px] tabular-nums text-[#615D59]">{intake.label} KST</p>
+      </div>
+      <div className="mt-2 flex flex-wrap items-end gap-x-5 gap-y-2">
+        <p className="flex items-end gap-1">
+          <span className="text-[28px] font-semibold leading-none tabular-nums tracking-[-0.03em] text-[#111110]">
+            {count(intake.totalLeads)}
+          </span>
+          <span className="pb-0.5 text-[12px] font-medium text-[#615D59]">건 접수</span>
+        </p>
+        <p className="pb-0.5 text-[11.5px] tabular-nums text-[#615D59]">
+          Meta 광고 {count(intake.metaLeadAdsLeadCount)}건 · 홈페이지 {count(intake.homepageLeadCount)}건
+          {/* 합계에 재문의(재유입)가 섞였을 때만 밝힌다 — 옛 저장본에는 이 값이 없다. 재유입은 Meta·홈페이지
+              갈래 안에 이미 들어 있어 별도 갈래처럼 더해 읽히지 않게 "포함"으로 적는다. */}
+          {(intake.reinflowLeadCount ?? 0) > 0 && <> (재유입 {count(intake.reinflowLeadCount ?? 0)}건 포함)</>}
+          {" "}· 미응대{" "}
+          <span className={intake.unrespondedCount > 0 ? "font-semibold text-[#B43E3E]" : ""}>
+            {count(intake.unrespondedCount)}건
+          </span>
+        </p>
+      </div>
+    </section>
+  )
+}
+
+function DailyLeadRhythm({
+  points,
+  weekendLeads,
+  weekendSharePct,
+}: {
+  points: WeeklyAdLeadDailyPoint[]
+  weekendLeads: number | null
+  weekendSharePct: number | null
+}) {
+  if (points.length === 0) {
+    return (
+      <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4 sm:p-5">
+        <h3 className="text-[13px] font-semibold text-[#111110]">요일별 광고 리드</h3>
+        <p className="mt-4 text-[12px] text-[#A39E98]">요일별 CRM 리드를 측정하지 못했습니다.</p>
+      </section>
+    )
+  }
+
+  const maxLeads = Math.max(1, ...points.map((point) => point.leads))
+  const description = points.map((point) => `${formatDay(point.date).weekday} ${point.leads}건`).join(", ")
+
+  return (
+    <section
+      className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4 sm:p-5"
+      aria-labelledby="weekly-lead-rhythm-title"
+      aria-describedby="weekly-lead-rhythm-description"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 id="weekly-lead-rhythm-title" className="text-[13px] font-semibold text-[#111110]">
+            요일별 광고 리드
+          </h3>
+          <p className="mt-0.5 text-[10.5px] text-[#615D59]">CRM Meta 리드폼 기준 · 숫자는 실제 건수</p>
+        </div>
+        <p className="text-right text-[11px] font-semibold tabular-nums text-[#084734]">
+          주말 {count(weekendLeads)}건
+          {weekendSharePct != null ? ` · 전체의 ${pct(weekendSharePct)}` : ""}
+        </p>
+      </div>
+
+      <p id="weekly-lead-rhythm-description" className="sr-only">
+        {description}
+      </p>
+      <ol className="mt-4 grid grid-cols-7 gap-1.5" aria-label="월요일부터 일요일까지 광고 리드 수">
+        {points.map((point) => {
+          const day = formatDay(point.date)
+          const barHeight = point.leads > 0 ? Math.max(12, (point.leads / maxLeads) * 100) : 2
+          return (
+            <li
+              key={point.date}
+              className={
+                point.isWeekend
+                  ? "flex min-w-0 flex-col rounded-lg bg-[#F6F5F4] px-1.5 py-2"
+                  : "flex min-w-0 flex-col rounded-lg px-1.5 py-2"
+              }
+              aria-label={`${day.weekday} ${day.date}, 광고 리드 ${point.leads}건${point.isWeekend ? ", 주말" : ""}`}
+            >
+              <p className="text-center text-[10px] font-semibold text-[#615D59]">{day.weekday}</p>
+              <p className="mt-1 text-center text-[15px] font-semibold tabular-nums text-[#111110]">{point.leads}</p>
+              <div className="mt-2 flex h-16 items-end justify-center" aria-hidden>
+                <div
+                  className={point.isWeekend ? "w-full max-w-7 rounded-sm bg-[#A8741A]" : "w-full max-w-7 rounded-sm bg-[#084734]"}
+                  style={{ height: `${barHeight}%` }}
+                />
+              </div>
+              <p className="mt-1 truncate text-center text-[9px] tabular-nums text-[#A39E98]">{day.date}</p>
+            </li>
+          )
+        })}
+      </ol>
+    </section>
+  )
+}
+
+function CampaignHighlights({ campaigns }: { campaigns: WeeklyAdLeadCampaignRow[] }) {
+  const top = campaigns.slice(0, TOP_CAMPAIGN_COUNT)
+  if (top.length === 0) {
+    return (
+      <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4 sm:p-5">
+        <h3 className="text-[13px] font-semibold text-[#111110]">캠페인 TOP 3</h3>
+        <p className="mt-4 text-[12px] text-[#A39E98]">기간 내 측정된 연결 캠페인이 없습니다.</p>
+      </section>
+    )
+  }
+
+  const maxLeads = Math.max(1, ...top.map((campaign) => campaign.leads))
+  return (
+    <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4 sm:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-[13px] font-semibold text-[#111110]">캠페인 TOP 3</h3>
+          <p className="mt-0.5 text-[10.5px] text-[#615D59]">Meta 플랫폼 귀속 리드 기준</p>
+        </div>
+        <Link
+          href={campaignHubHref({ tab: "detail", section: "campaigns" })}
+          className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-[#084734] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
+        >
+          상세 › 캠페인 <ArrowUpRight className="h-3 w-3" aria-hidden />
+        </Link>
+      </div>
+
+      <ol className="mt-4 space-y-3">
+        {top.map((campaign, index) => {
+          const anomaly = campaign.anomalies.map((kind) => ANOMALY_KIND_LABEL[kind as AnomalyKind] ?? kind).join(", ")
+          return (
+            <li key={campaign.campaignId} className="grid grid-cols-[20px_minmax(0,1fr)_auto] items-start gap-2.5">
+              <span className="pt-0.5 text-[11px] font-semibold tabular-nums text-[#A39E98]">{index + 1}</span>
+              <div className="min-w-0">
+                <p className="truncate text-[11.5px] font-semibold text-[#111110]">{campaign.name}</p>
+                <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[#F0F0EC]" aria-hidden>
+                  <div className="h-full rounded-full bg-[#084734]" style={{ width: `${Math.max(4, (campaign.leads / maxLeads) * 100)}%` }} />
+                </div>
+                {anomaly ? <p className="mt-1 text-[9.5px] font-medium text-[#B43E3E]">{anomaly}</p> : null}
+              </div>
+              <div className="text-right">
+                <p className="text-[13px] font-semibold tabular-nums text-[#111110]">{count(campaign.leads)}건</p>
+                <p className="mt-0.5 text-[9.5px] tabular-nums text-[#615D59]">CPL {usd(campaign.cplUsd)}</p>
+              </div>
+            </li>
+          )
+        })}
+      </ol>
+    </section>
+  )
+}
+
+function DetailedReport({ report, source }: { report: WeeklyAdLeadReport; source: WeeklyReportResponse["source"] }) {
+  return (
+    <details className="group rounded-xl border border-[rgba(0,0,0,0.08)] bg-white">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 text-[12px] font-semibold text-[#111110] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] sm:px-5">
+        상세 데이터 보기
+        <ChevronDown className="h-4 w-4 text-[#615D59] transition group-open:rotate-180" aria-hidden />
+      </summary>
+      <div className="space-y-5 border-t border-[rgba(0,0,0,0.08)] px-4 py-5 sm:px-5">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <section className="rounded-lg bg-[#F6F5F4] p-4">
+            <h4 className="text-[11px] font-semibold text-[#111110]">광고 반응 · Meta</h4>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] text-[#615D59]">
+              <strong className="text-[17px] tabular-nums text-[#111110]">{count(report.funnel.impressions)}</strong>
+              <span>노출</span>
+              <span aria-hidden>→</span>
+              <strong className="text-[17px] tabular-nums text-[#111110]">{count(report.funnel.clicks)}</strong>
+              <span>클릭</span>
+            </div>
+            <p className="mt-2 text-[10.5px] text-[#615D59]">CTR {pct(report.funnel.ctrPct)}</p>
+          </section>
+          <section className="rounded-lg bg-[#F6F5F4] p-4">
+            <h4 className="text-[11px] font-semibold text-[#111110]">리드 운영 · CRM</h4>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] text-[#615D59]">
+              <strong className="text-[17px] tabular-nums text-[#111110]">{count(report.funnel.adLeads)}</strong>
+              <span>리드</span>
+              <span aria-hidden>→</span>
+              <strong className="text-[17px] tabular-nums text-[#111110]">{count(report.funnel.contacted)}</strong>
+              <span>접촉</span>
+              <span aria-hidden>→</span>
+              <strong className="text-[17px] tabular-nums text-[#111110]">{count(report.funnel.convertedLeads)}</strong>
+              <span>전환</span>
+            </div>
+            <p className="mt-2 text-[10.5px] text-[#615D59]">접촉률 {pct(report.funnel.contactRatePct)}</p>
+          </section>
+        </div>
+
+        <section>
+          <h4 className="text-[12px] font-semibold text-[#111110]">전체 캠페인 성과</h4>
+          {report.campaigns.length === 0 ? (
+            <p className="mt-3 text-[11px] text-[#A39E98]">표시할 캠페인이 없습니다.</p>
+          ) : (
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[560px] text-left">
+                <thead className="border-b border-[rgba(0,0,0,0.08)] text-[10px] font-semibold text-[#615D59]">
+                  <tr>
+                    <th className="pb-2 pr-3">캠페인</th>
+                    <th className="px-3 pb-2 text-right">리드</th>
+                    <th className="px-3 pb-2 text-right">광고비</th>
+                    <th className="px-3 pb-2 text-right">CPL</th>
+                    <th className="pb-2 pl-3">신호</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#F0F0EC] text-[11.5px]">
+                  {report.campaigns.map((campaign) => (
+                    <tr key={campaign.campaignId}>
+                      <td className="max-w-[260px] truncate py-2.5 pr-3 font-medium text-[#111110]">{campaign.name}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{count(campaign.leads)}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{usd(campaign.spendUsd)}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{usd(campaign.cplUsd)}</td>
+                      <td className="py-2.5 pl-3 text-[#B43E3E]">
+                        {campaign.anomalies.length > 0
+                          ? campaign.anomalies.map((kind) => ANOMALY_KIND_LABEL[kind as AnomalyKind] ?? kind).join(", ")
+                          : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <section>
+          <h4 className="text-[11px] font-semibold text-[#111110]">데이터 기준</h4>
+          <ul className="mt-2 space-y-1 text-[10.5px] leading-relaxed text-[#615D59]">
+            {report.dataCaveats.map((item) => (
+              <li key={item}>· {item}</li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[10px] tabular-nums text-[#A39E98]">
+            {source === "stored" ? "주간 자동 생성본" : "원천 데이터 즉시 생성본"} · {formatGeneratedAt(report.generatedAt)} 생성
+          </p>
+        </section>
+      </div>
+    </details>
+  )
+}
+
+/* ─── 본문·액션 ──────────────────────────────────────────────── */
+
+export function WeeklyReportStatusBadge({ report }: { report: WeeklyAdLeadReport }) {
+  return (
+    <span
+      className={
+        report.dataStatus === "confirmed"
+          ? "border-l-2 border-[#084734] pl-2 text-[10px] font-semibold text-[#084734]"
+          : "border-l-2 border-[#A8741A] pl-2 text-[10px] font-semibold text-[#7A520F]"
+      }
+    >
+      {report.dataStatus === "confirmed" ? "확정 데이터" : "잠정 데이터"}
+    </span>
+  )
+}
+
+export function WeeklyReportBody({
+  response,
+  loading,
+  error,
+}: {
+  response: WeeklyReportResponse
+  loading: boolean
+  /** 재생성 실패 등 — 이전 보고서를 유지한 채 밝힌다. */
+  error: string | null
+}) {
+  const { report, source } = response
+  return (
+    <div className={loading ? "space-y-4 opacity-60" : "space-y-4"}>
+      {error ? (
+        <p role="alert" className="rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] px-3 py-2 text-[11.5px] text-[#8F2C2C]">
+          최신 데이터 재생성에 실패해 이전 보고서를 유지합니다 — {error}
+        </p>
+      ) : null}
+
+      <section
+        className={
+          report.dataStatus === "confirmed"
+            ? "rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4 sm:p-5"
+            : "rounded-xl border border-[#ECD29C] bg-[#FBF1E0] p-4 sm:p-5"
+        }
+      >
+        <p id="weekly-report-summary" className="text-[14px] font-semibold leading-relaxed tracking-[-0.01em] text-[#111110] sm:text-[15px]">
+          {report.summary}
+        </p>
+        <p className="mt-2 text-[10.5px] tabular-nums text-[#615D59]">
+          Meta 집계 완료일 {report.metaDataThrough ? formatReportDate(report.metaDataThrough) : "미확인"}
+          {report.snapshotAt ? ` · ${formatGeneratedAt(report.snapshotAt)} 동기화` : ""}
+        </p>
+      </section>
+
+      <RecentIntakeBand intake={report.recentIntake} />
+
+      <div className="grid gap-3 lg:grid-cols-[minmax(220px,0.72fr)_minmax(0,1.28fr)]">
+        <LeadHero kpi={report.kpis.adLeads} />
+        <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white px-4 py-1 sm:flex sm:items-center sm:px-5">
+          <CompactMetric label="Meta 광고비 · USD" value={usd(report.kpis.spendUsd.value)} detail={<Delta kpi={report.kpis.spendUsd} />} />
+          <CompactMetric label="CPL · USD" value={usd(report.kpis.cplUsd.value)} detail={<Delta kpi={report.kpis.cplUsd} lowerIsBetter />} />
+          <CompactMetric label="미접촉 리드" value={`${count(report.uncontactedLeads)}건`} detail={`접촉률 ${pct(report.funnel.contactRatePct)}`} />
+        </section>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(260px,0.75fr)]">
+        <DailyLeadRhythm points={report.dailyLeads} weekendLeads={report.weekendLeads} weekendSharePct={report.weekendSharePct} />
+        <section className="rounded-xl border border-[#BDEFD8] bg-white p-4 sm:p-5">
+          <h3 className="text-[13px] font-semibold text-[#084734]">지금 처리할 일</h3>
+          <ol className="mt-3 space-y-3">
+            {report.actions.map((action, index) => (
+              <li key={action} className="flex gap-2.5 text-[11.5px] leading-relaxed text-[#111110]">
+                <span className="mt-px inline-flex h-4 w-4 shrink-0 items-center justify-center border-l-2 border-[#084734] text-[9px] font-bold text-[#084734]">
+                  {index + 1}
+                </span>
+                <span>{action}</span>
+              </li>
+            ))}
+          </ol>
+          <Link
+            href={campaignHubHref({ tab: "data", section: "ad-leads" })}
+            className="mt-4 inline-flex items-center gap-1 text-[11px] font-semibold text-[#084734] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
+          >
+            광고 리드 확인 → 데이터 <ArrowUpRight className="h-3 w-3" aria-hidden />
+          </Link>
+        </section>
+      </div>
+
+      <CampaignHighlights campaigns={report.campaigns} />
+      <DetailedReport report={report} source={source} />
+    </div>
+  )
+}
+
+export function WeeklyReportActions({
+  loading,
+  hasReport,
+  copyState,
+  onRegenerate,
+  onDownload,
+  onCopy,
+}: {
+  loading: boolean
+  hasReport: boolean
+  copyState: "idle" | "copied" | "failed"
+  onRegenerate: () => void
+  onDownload: () => void
+  onCopy: () => void
+}) {
+  return (
+    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <button
+        type="button"
+        onClick={onRegenerate}
+        disabled={loading}
+        className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[11.5px] font-semibold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] disabled:opacity-50"
+      >
+        <RefreshCw className={loading ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5"} aria-hidden />
+        최신 데이터로 다시 만들기
+      </button>
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+        <button
+          type="button"
+          onClick={onDownload}
+          disabled={!hasReport || loading}
+          className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-1.5 text-[11.5px] font-bold text-[#111110] transition hover:bg-[#F6F5F4] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] disabled:opacity-50"
+        >
+          <Download className="h-3.5 w-3.5" aria-hidden /> Markdown
+        </button>
+        <button
+          type="button"
+          onClick={onCopy}
+          disabled={!hasReport || loading}
+          aria-live="polite"
+          className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md bg-[#084734] px-3 py-1.5 text-[11.5px] font-bold text-white transition hover:bg-[#065c41] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] disabled:opacity-50"
+        >
+          {copyState === "copied" ? <Check className="h-3.5 w-3.5" aria-hidden /> : <Copy className="h-3.5 w-3.5" aria-hidden />}
+          {copyState === "copied" ? "복사됨" : copyState === "failed" ? "복사 실패" : "보고서 복사"}
+        </button>
+      </div>
+    </div>
+  )
+}

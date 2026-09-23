@@ -9,6 +9,16 @@ import {
 } from "lucide-react"
 import { formatCNY, formatKRWAbbrev, CRM_CURRENCY_BADGE, type CrmCurrency } from "@/lib/crm/money-format"
 
+// ─── 대비·터치 타깃 토큰(UX 규약 5·6) ────────────────────────────
+// 정보 텍스트(설명·보조 문구)의 최저 대비. /30~/45 알파는 장식 eyebrow 에만 쓴다.
+export const SECONDARY_TEXT_CLASS = "text-[#615D59]"
+// 버튼·링크처럼 인터랙티브한 글자의 최저 대비.
+export const INTERACTIVE_TEXT_CLASS = "text-[#31302E]"
+// 모바일(<sm)에서 하위 버튼·링크를 44px 터치 타깃으로 키우고 데스크톱은 기존 높이로 돌린다
+// (Customer360Drawer 의 컨테이너 셀렉터 패턴과 동일). 행·카드 컨테이너에 붙인다.
+export const MOBILE_TOUCH_TARGET_CLASS =
+  "[&_button]:min-h-11 [&_a]:min-h-11 sm:[&_button]:min-h-0 sm:[&_a]:min-h-0"
+
 export type CrmOverviewStatus = "ok" | "warning" | "blocked"
 export type AdminCrmCustomerLogKind = "call" | "visit" | "quote" | "order" | "payment" | "activity"
 export type BranchKpiMetricKey = "LD" | "ACC" | "OPP" | "SOL" | "VST"
@@ -25,13 +35,8 @@ export interface LeadActionKpis {
 }
 
 // /api/admin/crm/compass-pipeline 응답 — M7 "마케팅 파이프라인(Compass)" 밴드.
-export interface CompassPipelineKpis {
-  down: boolean
-  todayDemoCount: number
-  upcomingActionCount: number
-  bdOpenCount: number
-  generatedAt: string
-}
+// 밴드가 마케팅 한눈에 층과 공용이 되면서(2026-09-14) 타입 정본도 그 컴포넌트로 옮겼다 — 여기서는 재수출만.
+export type { CompassPipelineKpis } from "@/components/admin/compass/CompassPipelineBand"
 
 export interface BranchKpiMemberRow {
   member: string

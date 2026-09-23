@@ -32,7 +32,10 @@ describe("CRM 통합 고객 접근성 계약", () => {
     expect(clientSource).toContain('role="group" aria-label="빠른 고객 필터"')
     expect(clientSource).toContain('aria-label="통합 고객 검색 결과"')
     expect(clientSource).toContain("<caption className=\"sr-only\">통합 고객 검색 결과 목록</caption>")
-    expect(clientSource).toContain('role="alert"')
+    // 조회 실패 통지는 CrmNoticeBanner(role=alert, tone="danger")가 전담한다 — 2026-09-12
+    // 리뷰 #3으로 중복 통지하던 상시 sr-only role=alert div는 제거했다.
+    expect(clientSource).toContain('tone="danger"')
+    expect(clientSource).not.toContain('role="alert"')
     expect(clientSource).toContain("다시 시도")
     expect(clientSource).toContain("aria-busy={loading || loadingMore || refreshing}")
   })
@@ -47,10 +50,14 @@ describe("CRM 통합 고객 접근성 계약", () => {
   })
 
   it("부분 동기화는 장애색이 아니라 주의색으로 구분한다", () => {
-    expect(clientSource).toContain('if (!status.ok)')
-    expect(clientSource).toContain('if (status.partial)')
-    expect(clientSource).toContain('surface: "border-[#ECD29C] bg-[#FBF1E0]"')
-    expect(clientSource).toContain('surface: "border-[#F6D5C5] bg-[#FEF3EE]"')
+    expect(clientSource).toContain('if (!status.ok) return "danger"')
+    expect(clientSource).toContain('if (status.partial) return "warning"')
+    // 색 값 자체는 lib/crm/status-tone.ts 토큰에서만 온다(2026-09-21 — 팔레트 밖 #B85C33 계열 은퇴).
+    // 매핑 결과는 tests/crm/unified-customer-source-tone.test.ts가 실제 입력·출력으로 고정한다.
+    expect(clientSource).toContain("STATUS_TONE_BORDER_CLASS[tone]")
+    expect(clientSource).not.toContain("#B85C33")
+    expect(clientSource).not.toContain("#FEF3EE")
+    expect(clientSource).not.toContain("#F6D5C5")
   })
 
   it("Suspense 첫 페인트가 빈 화면이 아니라 의미 있는 로딩 골격이다", () => {

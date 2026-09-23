@@ -3,17 +3,24 @@
 // ─── 연락 로그 폼 ──────────────────────────────────────────────
 // LeadsBoardClient.tsx 분해(2026-08-28)로 이동 — 로직 무변경.
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { Loader2, Save } from "lucide-react"
 import type { ContactLogResult, ContactLogType } from "@/lib/repositories/contact-logs"
 import { buildContactLogEntry, channelCarriesResult } from "@/lib/crm/contact-log"
+import { buildFollowUpQuickSuggestions, type FollowUpQuickSuggestion } from "@/lib/crm/follow-up-presets"
+import { MOBILE_TOUCH_TARGET_CLASS } from "@/components/admin/crm/home/shared"
 import { LOG_RESULT_LABEL, LOG_TYPE_LABEL } from "../shared"
+
+// 저장 성공 뒤 팔로업 제안 칩을 보여주는 시간(Q1) — 8초 뒤 자동으로 사라지고 폼도 함께 닫힌다.
+const FOLLOW_UP_SUGGESTION_VISIBLE_MS = 8000
 
 export default function ContactLogForm({
   onSave,
   onCancel,
   initialType = "call",
   willAutoConfirm = false,
+  currentFollowUpDate,
+  onSuggestFollowUp,
 }: {
   onSave: (entry: { type: ContactLogType; result?: ContactLogResult; notes?: string; contacted_by?: string }) => Promise<void>
   onCancel: () => void
@@ -25,6 +32,17 @@ export default function ContactLogForm({
    * 확인 다이얼로그를 걸면 CRM 실무 속도가 떨어진다) 해당될 때만 저장 버튼 위에 명시한다.
    */
   willAutoConfirm?: boolean
+  /**
+   * 현재 리드의 팔로업 날짜("YYYY-MM-DD", 없으면 undefined/빈 문자열) — 저장 성공 뒤 낼 제안 칩이
+   * 이미 그 날짜를 가리키면 숨기는 데만 쓴다(Q1). LeadDrawer가 서버 정본(savedFollowUp)을 넘긴다.
+   */
+  currentFollowUpDate?: string
+  /**
+   * 연락 결과가 부재중(no_answer)·재통화(callback)로 저장에 성공한 직후에만 보여줄 제안 칩
+   * ("팔로업 내일"·"팔로업 3일 뒤") 클릭 콜백(Q1) — LeadDrawer가 넘겨 기존 팔로업 저장 경로
+   * (saveFollowUp)로 그대로 커밋한다. 없으면(undefined) 제안 칩 자체를 계산·표시하지 않는다.
+   */
+  onSuggestFollowUp?: (dateKey: string) => void
 }) {
   const [type, setType] = useState<ContactLogType>(initialType)
   const [result, setResult] = useState<ContactLogResult>("answered")
@@ -32,14 +50,50 @@ export default function ContactLogForm({
   const [by, setBy] = useState("")
   const [saving, setSaving] = useState(false)
   const notesRef = useRef<HTMLTextAreaElement | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
   // 감사 2026-09-07 §4 — saving은 리렌더 커밋 전까지 저장 버튼을 막지 못한다. 연락 기록은
   // CRM에서 가장 빈번한 쓰기라 빠른 더블클릭이 실측 가능성이 높다 — 동기 ref로 먼저 잠근다.
   const saveInFlightRef = useRef(false)
+  // 저장 성공 뒤 보여줄 팔로업 제안 칩(Q1) — null이면 안 보인다. 폼을 닫는 결정(onCancel)은 이
+  // 상태가 있을 때만 타이머/Esc/바깥 클릭으로 미뤄진다 — 없으면 기존과 같이 저장 즉시 닫힌다.
+  const [suggestions, setSuggestions] = useState<FollowUpQuickSuggestion[] | null>(null)
+  const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => notesRef.current?.focus())
     return () => window.cancelAnimationFrame(frame)
   }, [])
+
+  // 제안 칩을 접고 폼을 닫는 단일 경로 — 8초 경과·Esc·바깥 클릭·칩 클릭이 전부 여기로 모인다.
+  const dismissSuggestions = useCallback(() => {
+    if (dismissTimerRef.current) {
+      clearTimeout(dismissTimerRef.current)
+      dismissTimerRef.current = null
+    }
+    setSuggestions(null)
+    onCancel()
+  }, [onCancel])
+
+  useEffect(() => {
+    if (!suggestions) return
+    dismissTimerRef.current = setTimeout(dismissSuggestions, FOLLOW_UP_SUGGESTION_VISIBLE_MS)
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") dismissSuggestions()
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) dismissSuggestions()
+    }
+    document.addEventListener("keydown", handleKeyDown)
+    document.addEventListener("pointerdown", handlePointerDown)
+    return () => {
+      if (dismissTimerRef.current) {
+        clearTimeout(dismissTimerRef.current)
+        dismissTimerRef.current = null
+      }
+      document.removeEventListener("keydown", handleKeyDown)
+      document.removeEventListener("pointerdown", handlePointerDown)
+    }
+  }, [suggestions, dismissSuggestions])
 
   const handleSave = async () => {
     if (saveInFlightRef.current) return
@@ -48,7 +102,19 @@ export default function ContactLogForm({
     try {
       // 채널↔결과 규약은 lib/crm/contact-log가 단일 진실원 — 카카오·이메일은 결과 칩이 숨겨져도
       // 직전에 고른 result가 state에 남아 있어 그대로 전송되던 경로를 여기서 막는다.
-      await onSave(buildContactLogEntry({ type, result, notes, contacted_by: by }))
+      const entry = buildContactLogEntry({ type, result, notes, contacted_by: by })
+      await onSave(entry)
+      // 부재중/재통화로 저장된 경우에만 제안한다 — buildContactLogEntry가 이미 채널이 결과를
+      // 안 나르면(카카오·이메일) result를 지웠으므로 entry.result만 보면 된다.
+      const nextSuggestions =
+        onSuggestFollowUp && (entry.result === "no_answer" || entry.result === "callback")
+          ? buildFollowUpQuickSuggestions({ nowMs: Date.now(), currentFollowUpDate })
+          : []
+      if (nextSuggestions.length > 0) {
+        setSuggestions(nextSuggestions)
+      } else {
+        onCancel()
+      }
     } catch {
       // 상위 핸들러가 오류 토스트를 맡는다. 폼 값은 유지해 사용자가 바로 재시도할 수 있게 한다.
     } finally {
@@ -59,7 +125,7 @@ export default function ContactLogForm({
   }
 
   return (
-    <div className="bg-[#fafaf8] border border-[#e8e8e4] rounded-xl p-3 space-y-2.5" aria-busy={saving}>
+    <div ref={containerRef} className="bg-[#fafaf8] border border-[#e8e8e4] rounded-xl p-3 space-y-2.5" aria-busy={saving}>
       {/* 채널 */}
       <div className="flex gap-1.5">
         {(["call", "sms", "kakao", "email"] as ContactLogType[]).map((t) => (
@@ -136,6 +202,30 @@ export default function ContactLogForm({
           저장
         </button>
       </div>
+
+      {/* 부재중/재통화 저장 성공 직후 제안 칩(Q1) — 폼 아래에 8초간, Esc·바깥 클릭·칩 클릭으로 닫힌다. */}
+      {suggestions && suggestions.length > 0 && (
+        <div
+          role="group"
+          aria-label="팔로업 제안"
+          className={`flex flex-wrap items-center gap-1.5 border-t border-[#e8e8e4] pt-2.5 ${MOBILE_TOUCH_TARGET_CLASS}`}
+        >
+          <span className="text-[11px] text-[#1a1a1a]/40">다음 팔로업을 바로 잡을까요?</span>
+          {suggestions.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => {
+                onSuggestFollowUp?.(item.dateKey)
+                dismissSuggestions()
+              }}
+              className="inline-flex items-center rounded-full border border-[#084734] bg-[#ECFDF5] px-3 py-1 text-[11px] font-medium text-[#084734] transition-colors hover:bg-[#084734]/10"
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

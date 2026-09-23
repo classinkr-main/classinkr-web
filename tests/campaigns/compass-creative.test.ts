@@ -15,6 +15,7 @@ function row(over: Partial<CompassAdDailyInput> & { day: string; ad_id: string }
     campaign_name: "캠페인 X",
     category: null,
     creative_thumb: null,
+    creative_image: null,
     creative_title: null,
     creative_body: null,
     spend_usd: 0,
@@ -84,6 +85,26 @@ describe("aggregateCompassCreatives", () => {
       window
     )
     expect(rows[0].title).toBe("카피")
+  })
+
+  it("원본 이미지(creative_image)는 최신이 아니라 첫 non-null 값을 그대로 패스스루한다", () => {
+    const { rows } = aggregateCompassCreatives(
+      [
+        row({ day: "2026-08-10", ad_id: "a1", creative_image: "https://img/first.jpg", leads: 1 }),
+        row({ day: "2026-08-12", ad_id: "a1", creative_image: "https://img/second.jpg", leads: 1 }),
+      ],
+      window
+    )
+    // creative_title 과 달리 "최신 날짜가 이긴다"가 아니라 처음 만난 non-null 값 그대로다.
+    expect(rows[0].imageUrl).toBe("https://img/first.jpg")
+  })
+
+  it("creative_image 가 전부 없으면 imageUrl 은 null(빈 문자열로 포장하지 않는다)", () => {
+    const { rows } = aggregateCompassCreatives(
+      [row({ day: "2026-08-10", ad_id: "a1", leads: 1 })],
+      window
+    )
+    expect(rows[0].imageUrl).toBeNull()
   })
 
   it("조회 범위가 스파크라인 창을 안 덮으면 0 을 채우지 않고 빈 배열로 강등한다", () => {

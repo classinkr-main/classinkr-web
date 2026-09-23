@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 import {
   CRM_STAFF_ADMIN_API_ROLES,
+  STAFF_ADMIN_API_ROLES,
   requireVerifiedAdminContext,
 } from "@/lib/admin-auth"
 import { parseNaverMapFolderId, type NaverMapPlaceInput } from "@/lib/crm/naver-map-source"
@@ -39,8 +40,14 @@ export async function GET(req: NextRequest) {
   }
 }
 
+// 공유지도 "가져오기"는 외부 원천 적재다 — external_crm_sync_runs 실행을 기록하고
+// external_crm_records를 폴더 단위로 upsert하며, fullSnapshot이면 이전 스냅샷 전체를
+// stale로 되돌린다. 장소 하나를 CRM 레코드에 잇는 형제 라우트(map-source/link,
+// CRM_STAFF)와 달리 원천 테이블 전체를 바꾸는 동작이라 external-sync POST와 같은
+// 관리자 전용(STAFF_ADMIN_API_ROLES)으로 둔다. 종전에도 POST 기본 역할이 STAFF였으므로
+// 동작은 그대로이고, 기본값 의존을 없애 역할 매트릭스 테스트에 고정하기 위해 명시한다.
 export async function POST(req: NextRequest) {
-  const admin = await requireVerifiedAdminContext(req)
+  const admin = await requireVerifiedAdminContext(req, STAFF_ADMIN_API_ROLES)
   if (admin instanceof NextResponse) return admin
 
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null

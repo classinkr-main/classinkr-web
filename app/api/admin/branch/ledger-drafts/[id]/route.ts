@@ -1,24 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
+import { isLedgerDraftBodyError, parseLedgerDraftUpdateBody } from "@/lib/branch/ledger-draft-body"
 import {
   applyBranchSalesLedgerDraft,
-  BRANCH_SALES_LEDGER_DRAFT_KINDS,
-  BRANCH_SALES_LEDGER_DRAFT_STATUSES,
   deleteBranchSalesLedgerDraft,
   isBranchSalesLedgerDraftsNotReadyError,
   isBranchSalesLedgerDuplicateActiveCorrectionError,
   isBranchSalesLedgerNonPositiveAmountError,
   reverseBranchSalesLedgerEntryByDraftId,
   updateBranchSalesLedgerDraft,
-  type BranchSalesLedgerDraftKind,
-  type BranchSalesLedgerDraftStatus,
-  type BranchSalesLedgerDraftUpdateInput,
 } from "@/lib/repositories/branch-sales-ledger-drafts"
-
-const KINDS = new Set<string>(BRANCH_SALES_LEDGER_DRAFT_KINDS)
-const STATUSES = new Set<string>(BRANCH_SALES_LEDGER_DRAFT_STATUSES)
-const MONTH_RE = /^\d{4}-\d{2}$/
 
 function adminActorName(admin: { name?: string; userId?: string; role: string }) {
   return admin.name?.trim() || admin.userId || admin.role
@@ -27,26 +19,6 @@ function adminActorName(admin: { name?: string; userId?: string; role: string })
 function optionalString(value: unknown) {
   if (value == null) return undefined
   return typeof value === "string" ? value : null
-}
-
-function optionalAmount(value: unknown) {
-  if (value === undefined) return undefined
-  if (value == null || value === "") return null
-  const numeric = Number(value)
-  return Number.isFinite(numeric) ? numeric : null
-}
-
-function optionalInteger(value: unknown) {
-  if (value === undefined) return undefined
-  if (value == null || value === "") return null
-  const numeric = Number(value)
-  return Number.isFinite(numeric) ? Math.floor(numeric) : null
-}
-
-function optionalRecord(value: unknown) {
-  if (value === undefined) return undefined
-  if (value == null) return null
-  return typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null
 }
 
 function notReadyResponse(error: unknown) {
@@ -68,65 +40,6 @@ function nonPositiveAmountResponse(error: unknown) {
     return NextResponse.json({ error: (error as Error).message }, { status: 400 })
   }
   return null
-}
-
-function parseUpdate(raw: Record<string, unknown>): BranchSalesLedgerDraftUpdateInput | NextResponse {
-  const update: BranchSalesLedgerDraftUpdateInput = {}
-
-  if (raw.kind !== undefined) {
-    if (typeof raw.kind !== "string" || !KINDS.has(raw.kind)) return NextResponse.json({ error: "Invalid draft kind" }, { status: 400 })
-    update.kind = raw.kind as BranchSalesLedgerDraftKind
-  }
-
-  if (raw.status !== undefined) {
-    if (typeof raw.status !== "string" || !STATUSES.has(raw.status)) return NextResponse.json({ error: "Invalid draft status" }, { status: 400 })
-    if (raw.status === "applied") return NextResponse.json({ error: "Use action=apply to apply a checked draft" }, { status: 400 })
-    update.status = raw.status as BranchSalesLedgerDraftStatus
-  }
-
-  if (raw.sourceDealId !== undefined) update.sourceDealId = optionalString(raw.sourceDealId)
-  if (raw.sourceSheetRow !== undefined) {
-    const sourceSheetRow = optionalInteger(raw.sourceSheetRow)
-    if (sourceSheetRow === undefined) return NextResponse.json({ error: "sourceSheetRow must be a number" }, { status: 400 })
-    update.sourceSheetRow = sourceSheetRow
-  }
-  if (raw.sourceSnapshot !== undefined) {
-    const sourceSnapshot = optionalRecord(raw.sourceSnapshot)
-    if (sourceSnapshot === null) return NextResponse.json({ error: "sourceSnapshot must be an object" }, { status: 400 })
-    update.sourceSnapshot = sourceSnapshot
-  }
-  if (raw.customer !== undefined) {
-    if (typeof raw.customer !== "string" || !raw.customer.trim()) return NextResponse.json({ error: "고객/계정명은 필수입니다." }, { status: 400 })
-    update.customer = raw.customer.trim()
-  }
-  if (raw.manager !== undefined) update.manager = optionalString(raw.manager)
-  if (raw.team !== undefined) update.team = optionalString(raw.team)
-  if (raw.month !== undefined) {
-    if (typeof raw.month !== "string" || !MONTH_RE.test(raw.month)) return NextResponse.json({ error: "월은 YYYY-MM 형식이어야 합니다." }, { status: 400 })
-    update.month = raw.month
-  }
-  if (raw.amount !== undefined) {
-    const amount = optionalAmount(raw.amount)
-    if (amount == null) return NextResponse.json({ error: "금액은 숫자여야 합니다." }, { status: 400 })
-    // 웨이브7(I5): POST와 동일하게 admin API를 통한 amount 수정은 항상 양수만 받는다 — 감액은
-    // 장부 가감(반전 후 재적용)으로 표현한다.
-    if (amount <= 0) {
-      return NextResponse.json(
-        { error: "감액은 장부 가감으로 처리하세요. 금액은 0보다 커야 합니다." },
-        { status: 400 },
-      )
-    }
-    update.amount = amount
-  }
-  if (raw.currency !== undefined) update.currency = optionalString(raw.currency)
-  if (raw.note !== undefined) update.note = optionalString(raw.note)
-  if (raw.metadata !== undefined) {
-    const metadata = optionalRecord(raw.metadata)
-    if (metadata === null) return NextResponse.json({ error: "metadata must be an object" }, { status: 400 })
-    update.metadata = metadata
-  }
-
-  return update
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -164,8 +77,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
     if (action !== "update") return NextResponse.json({ error: `Unsupported action: ${action}` }, { status: 400 })
 
-    const update = parseUpdate(raw)
-    if (update instanceof NextResponse) return update
+    // "applied"로의 직접 전이는 전용 액션(action=apply)만 허용한다 — 이 거부를 파서 호출보다
+    // 앞에 라우트 자신의 코드로 남겨 둔다(tests/api/branch-ledger-drafts-route.test.ts가 이
+    // 라우트 소스에서 이 리터럴을 직접 스캔한다). 파서(parseLedgerDraftUpdateBody)도 동일 거부를
+    // 자체적으로 갖고 있어 배치 라우트가 이 라우트를 거치지 않고도 같은 보호를 받는다.
+    if (raw.status === "applied") {
+      return NextResponse.json({ error: "Use action=apply to apply a checked draft" }, { status: 400 })
+    }
+
+    const parsed = parseLedgerDraftUpdateBody(raw)
+    if (isLedgerDraftBodyError(parsed)) {
+      return NextResponse.json({ error: parsed.error }, { status: parsed.status })
+    }
+    const update = parsed
 
     // 낙관적 잠금(웨이브7 I4, 선택): 전달하면 DB의 실제 updated_at과 비교해 CAS로 반영한다.
     // 생략하면 기존 무조건 덮어쓰기 동작과 동일(하위호환).
@@ -189,6 +113,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         {
           error: "다른 곳에서 먼저 수정되었습니다. 최신 내용을 확인한 뒤 다시 시도하세요.",
           draft: result.draft,
+        },
+        { status: 409 },
+      )
+    }
+    // 라운드4(P0-2) — 다른 사람이 자가 체크한 초안을 매트릭스 재편집이 조용히 덮어쓰지 않도록
+    // 안내한다(repository의 updateBranchSalesLedgerDraft 참고).
+    if (result.outcome === "checked-by-other") {
+      return NextResponse.json(
+        {
+          error: "다른 사람이 체크한 초안입니다 — 체크 큐에서 체크를 해제한 뒤 수정하세요.",
+          draft: result.draft,
+          reason: "checked-by-other",
         },
         { status: 409 },
       )

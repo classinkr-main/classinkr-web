@@ -52,6 +52,10 @@ function tableClient(table: string) {
         async eq() {
           return { data: null, error: null }
         },
+        async in(_column: string, ids: string[]) {
+          operations.push({ table, method: "update.in", payload: ids })
+          return { data: null, error: null }
+        },
       }
     },
     upsert(payload: unknown) {
@@ -77,11 +81,20 @@ function tableClient(table: string) {
             error: null,
           }
         },
-        async eq(column: string, value: string) {
-          if (table === "hardware_movements" && column === "source" && value === "sheet_import") {
-            return { data: previousSheetMovements, error: null }
+        // PostgREST 빌더처럼 체인 자체가 thenable 이어야 한다 — 시트 우선 정리(§8-6)가
+        // .eq().is().not() 로 전환 링크를 찾고, .eq().in() 으로 그 원본이 시트 행인지 본다.
+        eq(column: string, value: string) {
+          const result =
+            table === "hardware_movements" && column === "source" && value === "sheet_import"
+              ? { data: previousSheetMovements, error: null }
+              : { data: [], error: null }
+          const chain: Record<string, unknown> = {
+            then: (resolve: (value: typeof result) => unknown) => Promise.resolve(result).then(resolve),
           }
-          return { data: [], error: null }
+          for (const method of ["is", "not", "in", "eq", "order", "limit"]) {
+            chain[method] = () => chain
+          }
+          return chain
         },
       }
     },

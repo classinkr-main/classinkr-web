@@ -1,4 +1,4 @@
-// GET /api/admin/compass/ads?period=7d|30d|90d|quarter[&fresh=1]
+// GET /api/admin/compass/ads?period=7d|30d|90d|quarter|month[&fresh=1]
 // 마케팅 퍼포먼스 대시보드 "소재별 CPL" 카드의 단일 엔드포인트.
 //
 // 원천은 Compass 브리지의 읽기 전용 뷰 compass_ads_v(ad 레벨 Meta insights) 하나뿐이다 —
@@ -18,10 +18,8 @@ import {
   aggregateCompassCreatives,
   type CompassCreativeAggregate,
 } from "@/lib/marketing/compass-creative"
-import { resolvePerfPeriod, shiftDays, type PerfPeriodKey } from "@/lib/marketing/perf"
+import { isPerfPeriodKey, PERF_PERIOD_KEYS, resolvePerfPeriod, shiftDays, type PerfPeriodKey } from "@/lib/marketing/perf"
 import { kstToday } from "@/lib/marketing/perf-assemble"
-
-const PERIOD_KEYS: readonly PerfPeriodKey[] = ["7d", "30d", "90d", "quarter"]
 
 /** 스코어보드와 같은 14일 창. */
 const SPARKLINE_DAYS = 14
@@ -80,13 +78,13 @@ export async function GET(req: NextRequest) {
   if (authError) return authError
 
   const rawPeriod = req.nextUrl.searchParams.get("period") ?? "30d"
-  if (!PERIOD_KEYS.includes(rawPeriod as PerfPeriodKey)) {
+  if (!isPerfPeriodKey(rawPeriod)) {
     return NextResponse.json(
-      { error: `유효하지 않은 period — ${PERIOD_KEYS.join("|")} 중 하나여야 합니다` },
+      { error: `유효하지 않은 period — ${PERF_PERIOD_KEYS.join("|")} 중 하나여야 합니다` },
       { status: 400 }
     )
   }
-  const period = rawPeriod as PerfPeriodKey
+  const period = rawPeriod
   const fresh = req.nextUrl.searchParams.get("fresh") === "1"
 
   try {

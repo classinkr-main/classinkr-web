@@ -20,7 +20,10 @@ import { HARDWARE_CURRENCY, getHardwareItem } from "@/lib/billing/hardware-catal
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import type { NotificationChannel } from "@/lib/notifications/types"
 import { isAcademySize } from "@/lib/contact/academy-size"
-import { pickLeadAttribution, type LeadAttribution } from "@/lib/marketing-attribution"
+import {
+  sanitizeLeadAttribution,
+  type LeadAttributionPayload,
+} from "@/lib/lead-attribution-payload"
 import { sendCheckoutRequestReceipt } from "@/lib/messaging/customer-receipt"
 import { submitLeadCapture } from "@/lib/server/lead-capture"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
@@ -148,10 +151,13 @@ export interface NormalizedCheckoutRequest {
   memo: string | null
   sourcePage: string | null
   /**
-   * 광고 귀속·익명 활동 결합 키. 이 경로는 lib/submitLead.ts 를 거치지 않아 예전에는
-   * 둘 다 붙지 않았다 — 퍼널 뒤쪽 리드가 성과 측정에서 통째로 빠져 있던 이유다.
+   * 광고 귀속·익명 활동 결합 키. 이 경로는 lib/submitLead.ts·/api/lead 를 거치지 않아
+   * buildLeadPayload 의 정규화를 못 탄다 — 예전에는 둘 다 붙지 않아 광고를 타고 들어온
+   * 도입신청이 통째로 '출처 미상' 리드가 됐다(퍼널 뒤쪽이 성과 측정에서 빠져 있던 이유).
+   * 여기서 들고 다니다 리드 미러링에 그대로 넘긴다. 정규화는 미러링 경로 공용인
+   * sanitizeLeadAttribution 하나로 한다(평평한 필드·attribution 묶음·snake_case·네이버 n_* 묶음).
    */
-  attribution: LeadAttribution
+  attribution: LeadAttributionPayload
   anonymousId: string | null
 }
 
@@ -384,7 +390,7 @@ export function normalizeCheckoutRequest(
       desiredDate,
       memo: normalizeMultilineText(body.memo, MAX_MEMO_LENGTH),
       sourcePage: normalizeText(body.sourcePage, MAX_SOURCE_PAGE_LENGTH),
-      attribution: pickLeadAttribution(body),
+      attribution: sanitizeLeadAttribution(body),
       anonymousId: normalizeText(body.anonymousId, MAX_NAME_LENGTH),
     },
   }
@@ -648,7 +654,8 @@ async function mirrorToLeadQueue(
       marketingConsent: false,
       sourceDetail: `checkout_request:${request.kind}`,
       ...request.attribution,
-      // sourcePage 가 있으면 그게 더 정확한 제출 지점이다.
+      // sourcePage 가 있으면 그게 더 정확한 제출 지점이다(접수 큐가 보여 주는 값과 같다) —
+      // 없을 때만 수집기의 currentPage 로 물러난다. tests/checkout·tests/showroom 이 이 순서를 고정한다.
       currentPage: request.sourcePage ?? request.attribution.currentPage,
       anonymousId: request.anonymousId ?? undefined,
     },

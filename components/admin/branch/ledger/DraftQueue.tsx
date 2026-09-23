@@ -12,6 +12,7 @@ import { CheckCircle2, Loader2, Pencil, RefreshCw, RotateCcw, Search, Send, Tras
 import { matchesTokens, tokenize } from "../search-tokens"
 import { useDialogFocus } from "../../use-dialog-focus"
 import { planBulkApply, planBulkCheck } from "./draft-bulk-plan"
+import { isSelfCheckedDraft, SELF_CHECK_BADGE_LABEL, SELF_CHECK_BADGE_TITLE } from "./self-check"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import {
   DRAFT_STATUS_LABELS,
@@ -147,7 +148,9 @@ export function DraftQueue({
   onApply: (id: string) => void | Promise<void>
   // 품질 감사 2026-09-10 — #8: draft/checked → cancelled 전이. 삭제(onDelete, 하드 DELETE·감사
   // 추적 없음)와 달리 행이 DB에 그대로 남는다 — "취소했다"는 사실 자체가 감사 대상일 때 이걸 쓴다.
-  onCancel: (id: string) => void | Promise<void>
+  // 라운드 4 P1-6: 훅의 cancelDraft가 성공 여부(boolean)를 돌려주게 되면서 반환 타입을 넓힌다 —
+  // 큐 카드는 결과를 쓰지 않으므로(상태는 drafts로 반영) 어떤 값이든 무시한다.
+  onCancel: (id: string) => void | Promise<unknown>
   onDelete: (id: string) => void | Promise<void>
   onReverse: (id: string, reason?: string) => Promise<unknown> | void
   // 일괄 체크·적용(2026-09-14) — 지금 보이는 목록 기준. 3단계는 그대로이고 누르는 횟수만 줄인다.
@@ -471,6 +474,16 @@ export function DraftQueue({
                 <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${draftStatusMeta(draft.status, reversedDraftIds.has(draft.id)).className}`}>
                   {draftStatusMeta(draft.status, reversedDraftIds.has(draft.id)).label}
                 </span>
+                {/* 자가 체크(입력 속도 라운드 4 P0-2): 매트릭스 셀 커밋은 저장 시점에 체크까지 끝난다 —
+                    남(검수자)의 체크와 구분되게 created_by===checked_by 파생 배지를 상태 배지 옆에 단다. */}
+                {isSelfCheckedDraft(draft) && (
+                  <span
+                    title={SELF_CHECK_BADGE_TITLE}
+                    className="rounded-full border border-[#BDEFD8] bg-white px-2 py-0.5 text-[10px] font-bold text-[#084734]"
+                  >
+                    {SELF_CHECK_BADGE_LABEL}
+                  </span>
+                )}
                 <span className="rounded-full border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 py-0.5 text-[10px] font-bold text-[#615D59]">
                   {draft.kind === "edit-row" ? "수정" : "신규 입력"}
                 </span>
@@ -501,7 +514,11 @@ export function DraftQueue({
                 ))}
               {draft.note && <p className="mt-1.5 line-clamp-2 text-[11.5px] leading-relaxed text-[#615D59]">{draft.note}</p>}
             </div>
-            <div className="flex shrink-0 items-center gap-1">
+            {/* 입력 속도 라운드(2026-09-20) §8.4/§8.5 "레일·큐": 6개가 전부 h-8 w-8 동일 크기라
+                "지금 눌러야 할 버튼"이 아이콘 색으로만 구분됐다 — 체크·적용만 라벨을 상시 노출해
+                다음 할 일을 텍스트로도 읽히게 한다(편집·되돌리기·취소·삭제는 그대로). 폭이 늘어난
+                버튼 2개 때문에 좁은 화면에서 넘치지 않도록 이 행에 flex-wrap을 더한다. */}
+            <div className="flex shrink-0 flex-wrap items-center gap-1">
               <button
                 type="button"
                 onClick={() => onEdit(draft)}
@@ -516,7 +533,7 @@ export function DraftQueue({
                 type="button"
                 onClick={() => void runToggle(draft.id)}
                 disabled={draft.status === "applied" || draft.status === "cancelled" || isRowBusy(draft.id)}
-                className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] text-[#084734] transition hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-35"
+                className="flex h-9 min-w-[72px] items-center justify-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] px-2.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-35"
                 aria-label="초안 체크 상태 변경"
                 title="초안 체크 상태 변경"
               >
@@ -525,16 +542,18 @@ export function DraftQueue({
                 ) : (
                   <CheckCircle2 className="h-4 w-4" />
                 )}
+                {draft.status === "checked" ? "체크 해제" : "체크"}
               </button>
               <button
                 type="button"
                 onClick={() => setConfirmApplyDraft(draft)}
                 disabled={draft.status !== "checked" || mode !== "server" || draft.id.startsWith("local-") || isRowBusy(draft.id)}
-                className="flex h-8 w-8 items-center justify-center rounded-md border border-[#BDEFD8] text-[#084734] transition hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-35"
+                className="flex h-9 min-w-[72px] items-center justify-center gap-1 rounded-md border border-[#BDEFD8] px-2.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-35"
                 aria-label={`${draft.customer || "초안"} 적용`}
                 title="체크 완료 초안 적용"
               >
                 {applyingId === draft.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                적용
               </button>
               <button
                 type="button"

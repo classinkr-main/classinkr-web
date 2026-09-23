@@ -40,3 +40,17 @@ export const META_PIXEL_ID =
 export const KAKAO_PIXEL_ID = getConfiguredAnalyticsId(
   process.env.NEXT_PUBLIC_KAKAO_PIXEL_ID
 )
+
+// 네이버 프리미엄 로그분석 사이트 식별자(공통키). 미설정이면 wcs 스크립트를 아예 마운트하지 않는다.
+// ⚠️ 값이 있어도 네이버 **검수 신청**을 통과하기 전에는 수집이 시작되지 않는다 —
+//    그 구간의 0 은 "성과 없음"이 아니라 "아직 안 켜짐"이다.
+export const NAVER_WCS_ID = getConfiguredAnalyticsId(process.env.NEXT_PUBLIC_NAVER_WCS_ID)
+
+/**
+ * 네이버 전환 유형 문자열(wcs.trans 의 type). 네이버 광고 관리에서 정의한 값과 정확히 같아야 한다.
+ * 테스트 중에는 `test_` 접두를 붙여 돌리고 확정 시 제거한다(네이버 가이드 권장).
+ * 미설정이면 전환을 보내지 않는다 — 유형을 지어내면 네이버 쪽 집계가 오염된다.
+ */
+export const NAVER_LEAD_CONVERSION_TYPE = getConfiguredAnalyticsId(
+  process.env.NEXT_PUBLIC_NAVER_LEAD_CONVERSION_TYPE
+)

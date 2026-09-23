@@ -135,7 +135,8 @@ export function WeeklyAmountGrid({
                   className={`${
                     isCockpit
                       ? "h-10 rounded-md px-2.5 text-[11px] font-bold transition"
-                      : "h-8 w-6 rounded text-[10px] font-bold transition"
+                      // UX 감사 2026-09-20: 최소 타깃 확보(w-6→w-9) — 라벨 축약(slice(0, 1))은 그대로 유지한다.
+                      : "h-8 w-9 rounded text-[10px] font-bold transition"
                   } ${
                     zeroWeek
                       ? "cursor-not-allowed border border-[rgba(0,0,0,0.06)] bg-white text-[#DDD9D3]"

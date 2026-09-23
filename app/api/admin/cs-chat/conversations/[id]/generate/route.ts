@@ -9,6 +9,7 @@ import {
   type InternalCsChatTurn,
   type InternalCsRequestedMode,
 } from "@/lib/internal-cs-chat/gemini"
+import { redactInternalCsText } from "@/lib/internal-cs-chat/privacy"
 import {
   createInternalCsMessage,
   getInternalCsConversation,
@@ -45,24 +46,37 @@ function compactAssetList(value: unknown, limit = 12) {
   if (!Array.isArray(value)) return []
   return value
     .filter((item): item is string => typeof item === "string" && Boolean(item.trim()))
-    .map((item) => item.trim().slice(0, 500))
+    .map((item) => redactInternalCsText(item.trim()).slice(0, 500))
     .slice(0, limit)
 }
 
 export function buildInternalCsAssetEvidence(assets: InternalCsAssetRow[]) {
+  // 검토 대기 분석도 근거로 싣는다(방금 올린 캡처로 바로 초안을 만드는 흐름) — 대신 검토 상태를 밝혀
+  // 모델이 미확인 근거로 다루게 한다. 승인된 분석만 싣는 규칙은 승인 흐름 변경과 함께 따로 결정한다.
   const usable = assets
-    .filter((asset) => Boolean(asset.analysis_summary?.trim()))
+    .filter((asset) => Boolean(asset.corrected_analysis?.trim() || asset.analysis_summary?.trim()))
     .slice(-5)
 
   return {
     text: usable.map((asset, index) => {
-      const extractedText = compactAssetList(asset.analysis_payload?.extractedText)
-      const observations = compactAssetList(asset.analysis_payload?.observations)
-      const sensitiveWarnings = compactAssetList(asset.analysis_payload?.sensitiveDataWarnings, 6)
+      const correctedAnalysis = asset.corrected_analysis?.trim()
+      // Once a reviewer corrects an image analysis, do not reintroduce contradicted OCR or
+      // observations from the original model payload into factual generation context.
+      const extractedText = correctedAnalysis
+        ? []
+        : compactAssetList(asset.analysis_payload?.extractedText)
+      const observations = correctedAnalysis
+        ? []
+        : compactAssetList(asset.analysis_payload?.observations)
+      const sensitiveWarnings = correctedAnalysis
+        ? []
+        : compactAssetList(asset.analysis_payload?.sensitiveDataWarnings, 6)
+      const fileName = redactInternalCsText(asset.original_file_name)
+      const summary = redactInternalCsText(correctedAnalysis || asset.analysis_summary)
       return [
-        `[Attached image ${index + 1}: ${asset.original_file_name}]`,
+        `[Attached image ${index + 1}: ${fileName}]`,
         `Review state: ${asset.review_state} (treat as unverified unless approved)`,
-        `Analysis summary: ${asset.corrected_analysis || asset.analysis_summary}`,
+        `Analysis summary: ${summary}`,
         extractedText.length ? `Visible text: ${extractedText.join(" | ")}` : "",
         observations.length ? `Visible observations: ${observations.join(" | ")}` : "",
         sensitiveWarnings.length ? `Sensitive-data warnings: ${sensitiveWarnings.join(" | ")}` : "",
@@ -70,7 +84,7 @@ export function buildInternalCsAssetEvidence(assets: InternalCsAssetRow[]) {
     }).join("\n\n"),
     sourceRefs: usable.map((asset) => ({
       id: `internal-cs-asset:${asset.id}`,
-      label: `Attached image: ${asset.original_file_name}`,
+      label: `Attached image: ${redactInternalCsText(asset.original_file_name)}`,
       kind: "internal_asset" as const,
       reviewState: asset.review_state,
     })),

@@ -46,7 +46,7 @@ export function computeCampaignRollup(
   let firstMetaCurrency: string | null = null
   let metaCurrencyMixed = false
 
-  const linkedCounts = { email: 0, sms: 0, event: 0, meta: 0 }
+  const linkedCounts = { email: 0, sms: 0, event: 0, meta: 0, google: 0, naver: 0 }
 
   for (const link of links) {
     switch (link.refType) {
@@ -92,6 +92,18 @@ export function computeCampaignRollup(
             metaCurrencyMixed = true
           }
         }
+        break
+      }
+      // Google·네이버는 **연결 수만** 센다. 집행 금액을 여기서 합치지 않는 이유:
+      // Meta 는 USD, 네이버는 KRW 라 한 칸(metaSpend)에 더할 수 없고, 통화별 칸을 이 롤업에
+      // 늘리면 "캠페인 하나에 금액 세 칸"이 된다. 채널별 금액은 perf 응답의 channelSpend 가
+      // 통화를 달고 따로 싣는다(lib/marketing/perf.ts PerfScoreboardRow).
+      case "google_campaign": {
+        linkedCounts.google += 1
+        break
+      }
+      case "naver_campaign": {
+        linkedCounts.naver += 1
         break
       }
       // refType 은 CampaignRefType 로 좁혀져 있어 그 외 값은 도달 불가(방어적으로 무시).

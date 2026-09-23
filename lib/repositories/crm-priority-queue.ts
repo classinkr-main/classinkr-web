@@ -41,6 +41,11 @@ export interface CrmPriorityQueueOptions {
   lane?: CrmPriorityLane | "all"
   bucket?: CrmPriorityBucket | "all"
   now?: Date
+  /**
+   * 새로고침(force=1) — 소스 스냅샷 Data Cache를 읽지 않고 신선하게 재수집한다.
+   * lib/admin-crm-overview.ts의 getAdminCrmOverview({ force })와 같은 계약이다.
+   */
+  force?: boolean
 }
 
 export interface CrmPriorityQueue {
@@ -232,7 +237,9 @@ export function selectVisiblePriorityItems(
 //   throw한 호출을 캐시에 쓰지 않으므로, incomplete면 여기서 던져 이 성질을 지킨다.
 // - 참여 신호·데모 일정은 원래도 보조 지표라 실패해도 경고 없이 빈 값으로 빠지며,
 //   complete 판정에도 넣지 않는다(원본 동작 유지).
-// - options.now가 주어진 호출(테스트·고정 시각)은 캐시를 읽지도 쓰지도 않는다.
+// - options.now가 주어진 호출(테스트·고정 시각)과 options.force(새로고침) 호출은 캐시를
+//   읽지도 쓰지도 않는다. force는 재수집 뒤 태그를 즉시 하드 만료해 다음 일반 읽기가
+//   낡은 스냅샷을 돌려주지 않게 한다(overview의 force 계약과 동일).
 // - 이 파일에는 쓰기 경로가 없다. 대신 소스 모듈의 쓰기 알림을 구독해(파일 하단)
 //   할 일 완료·리드 변경·컨택 로그 직후 태그를 SWR 무효화한다 — TTL만 믿으면 이미 끝낸
 //   할 일이 "오늘 전화" 패널에 최대 60초 되살아난다.
@@ -361,7 +368,15 @@ export async function getCrmPriorityQueue(
   options: CrmPriorityQueueOptions = {}
 ): Promise<CrmPriorityQueue> {
   const now = options.now ?? new Date()
-  const snapshot = await getSourceSnapshot(options.now != null)
+  const force = options.force === true
+  const snapshot = await getSourceSnapshot(options.now != null || force)
+  if (force) {
+    // 새로고침 직후 다음 읽기는 반드시 새 값을 봐야 한다 — Data Cache에 fresh를 직접 채워
+    // 넣을 API는 없으므로 태그를 즉시 하드 만료한다(revalidateTag(tag, { expire: 0 }) = 즉시
+    // 만료, "max"는 SWR — lib/admin-crm-overview.ts getAdminCrmOverview({ force })와 같은 컨벤션).
+    // 실패한 재수집 결과를 캐시에 쓰는 일은 없다 — force 경로는 unstable_cache를 거치지 않는다.
+    revalidateTag(ADMIN_CRM_PRIORITY_QUEUE_SNAPSHOT_CACHE_TAG, { expire: 0 })
+  }
   const { leadsOk, neoAccountsOk, tasksOk } = snapshot
   const warnings = [...snapshot.warnings]
 

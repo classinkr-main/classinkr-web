@@ -1,15 +1,21 @@
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 
 import { describe, expect, it } from "vitest"
 
-import { CRM_STAFF_ADMIN_API_ROLES } from "@/lib/admin-auth"
+import {
+  CRM_STAFF_ADMIN_API_ROLES,
+  STAFF_ADMIN_API_ROLES,
+  defaultAdminApiRolesForMethod,
+} from "@/lib/admin-auth"
 
 // CRM 도메인 어드민 API 라우트 — 전부 requireVerifiedAdminContext + CRM_STAFF_ADMIN_API_ROLES
 // 단일 롤 매트릭스를 써야 한다. (감사 이슈: 사이드바는 BRANCH에게 CRM을 노출하는데
 // API 절반이 BRANCH를 거부해 화면이 깨졌다. unified가 같은 데이터를 BRANCH에 이미
 // 합성 반환하므로 원천 거부는 보호 효과도 없다.)
 // 주의: crm/source-links/lead-conversion 라우트는 2026-07-02 제거되어 이 목록에 없다.
+// app/api/admin/crm/** 전체는 아래 CRM_ROUTE_HANDLER_MATRIX(디렉터리 glob 기반)가
+// 핸들러 단위로 다시 고정한다. 이 목록은 leads 라우트를 포함한 원 감사 범위를 유지한다.
 const CRM_DOMAIN_ROUTES = [
   "app/api/admin/leads/route.ts",
   "app/api/admin/leads/[id]/route.ts",
@@ -28,6 +34,7 @@ const CRM_DOMAIN_ROUTES = [
   "app/api/admin/crm/coverage/route.ts",
   "app/api/admin/crm/source-links/generate/route.ts",
   "app/api/admin/crm/source-links/manual/route.ts",
+  "app/api/admin/crm/source-links/hw-outbound/route.ts",
   "app/api/admin/crm/source-links/targets/route.ts",
   "app/api/admin/crm/source-links/bulk/route.ts",
   "app/api/admin/crm/source-links/[id]/route.ts",
@@ -186,4 +193,225 @@ describe("CRM nav exposure vs API role matrix (2026-09-10 전면 공개 이후)"
   it("allows BRANCH in CRM_STAFF_ADMIN_API_ROLES", () => {
     expect(apiRoles).toContain("BRANCH")
   })
+})
+
+// ---------------------------------------------------------------------------
+// app/api/admin/crm/** 전체 핸들러 역할 매트릭스 (기획 D3, 2026-09-12)
+//
+// 파일 목록은 디렉터리를 직접 훑어 만든다 — route.ts가 새로 생기면 매트릭스에 없어서
+// 실패하고, 매트릭스에만 있고 파일이 없어도 실패한다. 핸들러 단위로 가드 함수와
+// 역할 상수를 고정하며, 역할 상수는 호출부에 명시적으로 전달돼야 한다.
+//
+// 예외(의도) 목록:
+//  - revenue-target POST / external-sync POST: verifyAdmin(req) 기본 역할(POST=STAFF).
+//    월 매출 목표 설정·외부 CRM sync 트리거는 관리자 전용.
+//  - region-assignments PUT: requireVerifiedAdminContext(req) 기본 역할(PUT=STAFF).
+//    팀 라우팅을 바꾸는 쓰기라 GET보다 좁게 둔다(라우트 주석 참조).
+//  - map-source POST: STAFF_ADMIN_API_ROLES 명시. 공유지도 원천 적재(폴더 단위 upsert,
+//    fullSnapshot 시 이전 스냅샷 stale 처리)는 external-sync와 같은 급의 데이터층 쓰기다.
+//    형제 map-source/link POST(장소 1건 연결)는 실무 작업이라 CRM_STAFF.
+//  - write-requests/[id] PATCH · execute POST: STAFF_ADMIN_API_ROLES 명시.
+//    되밀기 승인·실행은 관리자만 한다(초안 생성 POST·조회 GET은 CRM_STAFF).
+//  - revenue-sheet GET: CRM_STAFF(감사 2B.2 수정본). 인자 없는 GET 기본은 VIEWER를 포함해
+//    /admin/crm/deals에서 막히는 롤이 REV 시트를 열 수 있었다.
+//  - capability 검사(requireAdminCapability)는 CRM 라우트에 0건 — 현 상태를 그대로 고정.
+// ---------------------------------------------------------------------------
+
+type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
+type GuardName = "requireVerifiedAdminContext" | "verifyAdmin"
+// DEFAULT_BY_METHOD: 역할 인자 없이 가드를 호출해 defaultAdminApiRolesForMethod에 맡긴다.
+type RoleSpec = "CRM_STAFF_ADMIN_API_ROLES" | "STAFF_ADMIN_API_ROLES" | "DEFAULT_BY_METHOD"
+type HandlerSpec = { guard: GuardName; roles: RoleSpec }
+
+const CRM_STAFF: HandlerSpec = { guard: "requireVerifiedAdminContext", roles: "CRM_STAFF_ADMIN_API_ROLES" }
+const STAFF_EXPLICIT: HandlerSpec = { guard: "requireVerifiedAdminContext", roles: "STAFF_ADMIN_API_ROLES" }
+const STAFF_BY_DEFAULT: HandlerSpec = { guard: "requireVerifiedAdminContext", roles: "DEFAULT_BY_METHOD" }
+const VERIFY_ADMIN_BY_DEFAULT: HandlerSpec = { guard: "verifyAdmin", roles: "DEFAULT_BY_METHOD" }
+
+const CRM_ROUTE_DIR = "app/api/admin/crm"
+
+const CRM_ROUTE_HANDLER_MATRIX: Record<string, Partial<Record<HttpMethod, HandlerSpec>>> = {
+  "account-master/route.ts": { GET: CRM_STAFF },
+  "action-kpis/route.ts": { GET: CRM_STAFF },
+  "capture/batches/[id]/apply/route.ts": { POST: CRM_STAFF },
+  "capture/batches/[id]/cancel/route.ts": { POST: CRM_STAFF },
+  "capture/batches/[id]/parse/route.ts": { POST: CRM_STAFF },
+  "capture/batches/[id]/route.ts": { GET: CRM_STAFF },
+  "capture/batches/route.ts": { GET: CRM_STAFF, POST: CRM_STAFF },
+  "capture/rows/[id]/route.ts": { PATCH: CRM_STAFF },
+  "compass-pipeline/route.ts": { GET: CRM_STAFF },
+  "compass-summary/route.ts": { GET: CRM_STAFF },
+  "coverage/route.ts": { GET: CRM_STAFF },
+  "customers-neo/[accountId]/route.ts": { GET: CRM_STAFF },
+  "customers-neo/route.ts": { GET: CRM_STAFF },
+  "customers/[key]/360/route.ts": { GET: CRM_STAFF },
+  "customers/[key]/tags/route.ts": { GET: CRM_STAFF, POST: CRM_STAFF, DELETE: CRM_STAFF },
+  "customers/unified/route.ts": { GET: CRM_STAFF },
+  "deals-lite/[id]/route.ts": { PATCH: CRM_STAFF },
+  "deals-lite/route.ts": { POST: CRM_STAFF },
+  "event-attendance/route.ts": { GET: CRM_STAFF },
+  "events/route.ts": { GET: CRM_STAFF, POST: CRM_STAFF },
+  "external-sync/route.ts": { GET: CRM_STAFF, POST: VERIFY_ADMIN_BY_DEFAULT },
+  "health-distribution/route.ts": { GET: CRM_STAFF },
+  "home/priority-queue/route.ts": { GET: CRM_STAFF },
+  "insights/route.ts": { GET: CRM_STAFF },
+  "lead-channels/route.ts": { GET: CRM_STAFF },
+  "leads/neo-link/route.ts": { POST: CRM_STAFF },
+  "manager-report/route.ts": { GET: CRM_STAFF },
+  "map-source/link/route.ts": { POST: CRM_STAFF },
+  "map-source/route.ts": { GET: CRM_STAFF, POST: STAFF_EXPLICIT },
+  "matching/route.ts": { GET: CRM_STAFF },
+  "mcp-context/route.ts": { GET: CRM_STAFF },
+  "neo/route.ts": { GET: CRM_STAFF },
+  "overview/route.ts": { GET: CRM_STAFF },
+  "owners/route.ts": { GET: CRM_STAFF },
+  "performance/route.ts": { GET: CRM_STAFF },
+  "readiness/route.ts": { GET: CRM_STAFF },
+  "reconcile/hw-rev/route.ts": { GET: CRM_STAFF },
+  "region-assignments/route.ts": { GET: CRM_STAFF, PUT: STAFF_BY_DEFAULT },
+  "region-map/route.ts": { GET: CRM_STAFF },
+  "revenue-sheet/route.ts": { GET: CRM_STAFF },
+  "revenue-target/route.ts": { GET: CRM_STAFF, POST: VERIFY_ADMIN_BY_DEFAULT },
+  "revenue/route.ts": { GET: CRM_STAFF },
+  "source-links/[id]/route.ts": { PATCH: CRM_STAFF },
+  "source-links/bulk/route.ts": { PATCH: CRM_STAFF },
+  "source-links/generate/route.ts": { POST: CRM_STAFF },
+  "source-links/hw-outbound/route.ts": { POST: CRM_STAFF },
+  "source-links/manual/route.ts": { POST: CRM_STAFF },
+  "source-links/targets/route.ts": { GET: CRM_STAFF },
+  "tasks/[id]/route.ts": { GET: CRM_STAFF, PATCH: CRM_STAFF, DELETE: CRM_STAFF },
+  "tags/route.ts": { GET: CRM_STAFF, PATCH: CRM_STAFF },
+  "tasks/route.ts": { GET: CRM_STAFF, POST: CRM_STAFF },
+  "write-requests/[id]/execute/route.ts": { POST: STAFF_EXPLICIT },
+  "write-requests/[id]/route.ts": { GET: CRM_STAFF, PATCH: STAFF_EXPLICIT },
+  "write-requests/route.ts": { GET: CRM_STAFF, POST: CRM_STAFF },
+}
+
+// 매트릭스 합계 — 라우트가 늘거나 역할이 바뀌면 여기와 기획 문서(D3)를 함께 갱신한다.
+const EXPECTED_HANDLER_TOTAL = 68
+const EXPECTED_ROLE_DISTRIBUTION: Record<RoleSpec, number> = {
+  CRM_STAFF_ADMIN_API_ROLES: 62,
+  STAFF_ADMIN_API_ROLES: 3,
+  DEFAULT_BY_METHOD: 3,
+}
+
+const HTTP_METHODS: readonly HttpMethod[] = ["GET", "POST", "PUT", "PATCH", "DELETE"]
+
+// CRM_ROUTE_DIR 아래 모든 route.ts를 posix 상대 경로로 수집한다 (정렬됨).
+function listRouteFiles(relativeDir: string): string[] {
+  const found: string[] = []
+  const walk = (relative: string) => {
+    for (const entry of readdirSync(join(process.cwd(), CRM_ROUTE_DIR, relative), { withFileTypes: true })) {
+      const next = relative ? `${relative}/${entry.name}` : entry.name
+      if (entry.isDirectory()) walk(next)
+      else if (entry.isFile() && entry.name === "route.ts") found.push(next)
+    }
+  }
+  walk(relativeDir)
+  return found.sort()
+}
+
+function splitGuardArgs(raw: string): string[] {
+  return raw
+    .split(",")
+    .map((token) => token.trim())
+    .filter(Boolean)
+}
+
+describe("CRM route handler role matrix (app/api/admin/crm/** by directory scan)", () => {
+  const discovered = listRouteFiles("")
+  const expectedRoutes = Object.keys(CRM_ROUTE_HANDLER_MATRIX).sort()
+
+  it("every route.ts under app/api/admin/crm is listed in the matrix (and vice versa)", () => {
+    expect(discovered, "new/removed CRM route files must be reflected in CRM_ROUTE_HANDLER_MATRIX").toEqual(
+      expectedRoutes
+    )
+  })
+
+  it(`fixes ${EXPECTED_HANDLER_TOTAL} handlers with the expected role distribution`, () => {
+    const distribution: Record<RoleSpec, number> = {
+      CRM_STAFF_ADMIN_API_ROLES: 0,
+      STAFF_ADMIN_API_ROLES: 0,
+      DEFAULT_BY_METHOD: 0,
+    }
+    let total = 0
+    for (const handlers of Object.values(CRM_ROUTE_HANDLER_MATRIX)) {
+      for (const spec of Object.values(handlers)) {
+        total += 1
+        distribution[spec.roles] += 1
+      }
+    }
+    expect(total).toBe(EXPECTED_HANDLER_TOTAL)
+    expect(distribution).toEqual(EXPECTED_ROLE_DISTRIBUTION)
+  })
+
+  it("DEFAULT_BY_METHOD handlers are all unsafe methods whose default resolves to STAFF_ADMIN_API_ROLES", () => {
+    for (const [route, handlers] of Object.entries(CRM_ROUTE_HANDLER_MATRIX)) {
+      for (const [method, spec] of Object.entries(handlers)) {
+        if (spec.roles !== "DEFAULT_BY_METHOD") continue
+        expect(method, `${route} ${method}: GET must never rely on the default (VIEWER-inclusive)`).not.toBe("GET")
+        expect(
+          [...defaultAdminApiRolesForMethod(method)],
+          `${route} ${method}: default role set drifted away from STAFF_ADMIN_API_ROLES`
+        ).toEqual([...STAFF_ADMIN_API_ROLES])
+      }
+    }
+  })
+
+  it("has no capability checks (requireAdminCapability) in any CRM route — current state, not a policy", () => {
+    for (const route of discovered) {
+      const source = readFileSync(join(process.cwd(), CRM_ROUTE_DIR, route), "utf8")
+      expect(
+        source.includes("requireAdminCapability") || source.includes("hasAdminCapability"),
+        `${route} introduced a capability check — add it to the matrix intentionally`
+      ).toBe(false)
+    }
+  })
+
+  for (const [route, expectedHandlers] of Object.entries(CRM_ROUTE_HANDLER_MATRIX)) {
+    const expectedMethods = HTTP_METHODS.filter((method) => method in expectedHandlers)
+    const label = expectedMethods
+      .map((method) => {
+        const spec = expectedHandlers[method] as HandlerSpec
+        return `${method}=${spec.guard}(${spec.roles})`
+      })
+      .join(", ")
+
+    it(`${CRM_ROUTE_DIR}/${route}: ${label}`, () => {
+      const absolute = join(process.cwd(), CRM_ROUTE_DIR, route)
+      expect(existsSync(absolute), `${route} is in the matrix but missing on disk`).toBe(true)
+      const source = readFileSync(absolute, "utf8")
+      const handlers = splitRouteHandlers(source)
+
+      // export된 메서드 집합이 매트릭스와 정확히 같아야 한다 (핸들러 추가·삭제 감지).
+      expect(
+        HTTP_METHODS.filter((method) => handlers.has(method)),
+        `${route}: exported handler set changed — update the matrix`
+      ).toEqual(expectedMethods)
+
+      for (const method of expectedMethods) {
+        const spec = expectedHandlers[method] as HandlerSpec
+        const body = handlers.get(method) ?? ""
+        const calls = [...body.matchAll(/\b(requireVerifiedAdminContext|verifyAdmin)\s*\(([^)]*)\)/g)]
+        expect(calls.length, `${route} ${method}: expected exactly one admin guard call`).toBe(1)
+
+        const [, guard, rawArgs] = calls[0]
+        expect(guard, `${route} ${method}: guard function`).toBe(spec.guard)
+
+        const args = splitGuardArgs(rawArgs)
+        expect(args[0], `${route} ${method}: guard must receive the request first`).toBe("req")
+        if (spec.roles === "DEFAULT_BY_METHOD") {
+          expect(
+            args,
+            `${route} ${method}: intended to rely on the method default — must pass no role argument`
+          ).toEqual(["req"])
+        } else {
+          expect(
+            args,
+            `${route} ${method}: role constant must be passed explicitly (no default reliance)`
+          ).toEqual(["req", spec.roles])
+        }
+      }
+    })
+  }
 })

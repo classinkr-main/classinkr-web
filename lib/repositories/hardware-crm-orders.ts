@@ -1,6 +1,7 @@
 import "server-only"
 
 import { normalizeQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
+import { fetchAllSupabaseRows } from "@/lib/repositories/branch-hw"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 export type HardwareCrmOrderSource = "portal_deal" | "portal_quote" | "legacy_quote" | "external_crm"
@@ -28,6 +29,10 @@ export interface HardwareCrmOrderCandidate {
 export interface HardwareCrmOrderCandidateInput {
   productName?: string | null
   quantity?: number | null
+  /** 기록 중인 고객사 — 같은 품목·수량의 다른 딜이 섞일 때 후보를 가르는 신호. */
+  customerName?: string | null
+  /** 돌려줄 후보 수 상한(기본 12). 대사 목록은 원장 필터를 **뒤에** 하므로 여기서 미리 자르면 안 된다. */
+  limit?: number | null
 }
 
 export interface HardwareCrmOrderCandidateResult {
@@ -115,6 +120,17 @@ function confidenceFromMatch(input: {
   if (productMatched && quantityMatched) return "high"
   if (productMatched || (input.localLineItem && quantityMatched)) return "medium"
   return "low"
+}
+
+/**
+ * 고객사 일치 — 양방향 포함으로 본다("남명학원" ↔ "남명학원 본원").
+ * 두 글자 미만은 우연히 겹치기 쉬워 신호로 쓰지 않는다(품목 매칭과 같은 기준).
+ */
+function customerNameMatches(requested: string | null | undefined, candidate: string | null | undefined) {
+  const needle = normalizeForMatch(requested)
+  const haystack = normalizeForMatch(candidate)
+  if (needle.length < 2 || haystack.length < 2) return false
+  return haystack.includes(needle) || needle.includes(haystack)
 }
 
 function candidateRank(candidate: HardwareCrmOrderCandidate) {
@@ -468,14 +484,162 @@ export async function listHardwareCrmOrderCandidates(
     }
   }
 
+  // 고객사는 품목·수량 뒤에 얹는 신호다 — 후보를 지우지 않고 올린다(오프라인 판매처럼 CRM 에
+  // 고객사가 다르게 적힌 건을 숨기면 운영자가 찾을 길이 없어진다). 정렬은 confidence 를 따르므로
+  // 고객사까지 맞는 후보가 맨 위로 온다.
+  const requestedCustomer = cleanString(input.customerName)
+  const customerMatchIds = new Set<string>()
+  const ranked = requestedCustomer
+    ? candidates.map((candidate) => {
+        if (!customerNameMatches(requestedCustomer, candidate.customerName)) return candidate
+        customerMatchIds.add(candidate.id)
+        return {
+          ...candidate,
+          confidence: (candidate.confidence === "low" ? "medium" : "high") as HardwareCrmOrderConfidence,
+          reason: `고객사가 일치합니다 · ${candidate.reason}`,
+        }
+      })
+    : candidates
+
   return {
-    candidates: candidates
+    candidates: ranked
       .sort((a, b) => {
+        // 고객사 일치가 먼저다 — 품목·수량이 같은 딜이 여럿일 때 신뢰도만으로는 갈리지 않고
+        // 최신순 동점 처리에 밀려 엉뚱한 딜이 맨 위에 온다(실제로 그랬다).
+        const customerGap = Number(customerMatchIds.has(b.id)) - Number(customerMatchIds.has(a.id))
+        if (customerGap !== 0) return customerGap
         const rankGap = candidateRank(a) - candidateRank(b)
         if (rankGap !== 0) return rankGap
         return new Date(b.occurredAt ?? b.syncedAt ?? 0).getTime() - new Date(a.occurredAt ?? a.syncedAt ?? 0).getTime()
       })
-      .slice(0, 12),
+      .slice(0, Math.max(1, Math.floor(input.limit ?? 12))),
     warnings,
   }
+}
+
+
+// ---------------------------------------------------------------------------
+// CRM 오더 대사 — "CRM 에 있는데 원장에 없는 출고"
+//
+// 출고 기록 대부분은 이미 CRM/견적에 있다. 그러면 하는 일은 "입력"이 아니라 "확인"이어야 한다
+// (입력 가속 기획 P2-1). 여기서 그 목록을 만든다.
+//
+// 두 가지를 구분해서 본다.
+//   1) **참조번호 일치** — 어드민에서 이 딜 라인으로 만든 기록이 이미 있으면 목록에서 뺀다(확실).
+//   2) **겹침 의심** — 시트 이관 행에는 딜 참조가 없어 참조로는 못 찾는다. 그래서 고객사·품목이
+//      맞는 실제 출고가 원장에 있으면 **지우지 않고 표시**한다. 시트가 이미 실어 온 물량을 다시
+//      등록하면 §8-6 이중 계상이 되는데, 그건 링크가 없어 가져오기 때 자동 정리도 되지 않는다.
+//      숨기면 운영자가 알 길이 없으므로 경고로 남긴다.
+
+/** 대사 목록이 훑을 후보 수 — 원장 필터 전이라 화면 상한(아래 BACKLOG_LIMIT)보다 넉넉하게 본다. */
+const BACKLOG_CANDIDATE_SCAN_LIMIT = 120
+/** 화면에 올리는 최대 줄 수. */
+const BACKLOG_LIMIT = 20
+
+/** 원장 상태 문자열이 "아직 안 나간 예정"인지 — 저장소 내부 판정과 같은 어휘. */
+function isPlannedLedgerStatus(status: string | null | undefined) {
+  return /예정|예약|대기|planned/i.test(status ?? "")
+}
+
+/**
+ * 겹침으로 볼 만큼 품목 이름이 같은지.
+ *
+ * 맨 부분일치는 T1 이 DT1 에 걸린다(실제 카탈로그에 둘 다 있다). 짧은 이름일수록 우연히 겹치므로
+ * 완전 일치를 우선하고, 부분일치는 네 글자 이상일 때만 인정한다.
+ */
+function productNamesOverlap(needle: string, haystack: string) {
+  if (!needle || !haystack) return false
+  if (needle === haystack) return true
+  return needle.length >= 4 && haystack.includes(needle)
+}
+
+export interface HardwareCrmOrderBacklogOverlap {
+  quantity: number
+  lastOccurredAt: string | null
+}
+
+export interface HardwareCrmOrderBacklogEntry extends HardwareCrmOrderCandidate {
+  /** 고객사·품목이 맞는 실제 출고가 원장에 이미 있으면 그 요약. 없으면 null. */
+  ledgerOverlap: HardwareCrmOrderBacklogOverlap | null
+}
+
+export interface HardwareCrmOrderBacklogResult {
+  entries: HardwareCrmOrderBacklogEntry[]
+  warnings: string[]
+}
+
+interface LedgerOutboundRow {
+  id: string
+  product_name: string | null
+  to_location: string | null
+  quantity: number | string | null
+  occurred_at: string | null
+  status: string | null
+  reference_no: string | null
+  source: string | null
+}
+
+async function listLedgerOutboundRows(): Promise<LedgerOutboundRow[]> {
+  const sb = createSupabaseAdminClient()
+  return fetchAllSupabaseRows<LedgerOutboundRow>((afterId, limit) => {
+    let query = sb
+      .from("hardware_movements")
+      .select("id,product_name,to_location,quantity,occurred_at,status,reference_no,source")
+      .eq("movement_type", "outbound")
+      .is("voided_at", null)
+      .order("id", { ascending: true })
+      .limit(limit)
+    if (afterId) query = query.gt("id", afterId)
+    return query
+  })
+}
+
+export async function listHardwareCrmOrderBacklog(): Promise<HardwareCrmOrderBacklogResult> {
+  const [candidateResult, ledgerRows] = await Promise.all([
+    // 원장에 이미 있는 것을 걸러낸 **뒤에** 잘라야 한다 — 기본 상한 12 로 먼저 자르면 등록이 끝난
+    // 줄로만 목록이 채워져 "원장에 없는 CRM 오더가 없습니다"가 거짓이 된다(리뷰 2026-09-21).
+    listHardwareCrmOrderCandidates({ limit: BACKLOG_CANDIDATE_SCAN_LIMIT }),
+    listLedgerOutboundRows(),
+  ])
+
+  // 등록할 수 있는 후보만 — 품목·수량이 있어야 원장 기록을 만들 수 있다.
+  // 외부 CRM 오더(실제 CRM)는 품목·수량이 없어 여기 오르지 않는다.
+  const registrable = candidateResult.candidates.filter(
+    (candidate) => Boolean(cleanString(candidate.productName)) && (candidate.quantity ?? 0) > 0
+  )
+  if (registrable.length === 0) return { entries: [], warnings: candidateResult.warnings }
+
+  const recordedReferences = new Set(
+    ledgerRows
+      .map((row) => cleanString(row.reference_no))
+      .filter((reference): reference is string => Boolean(reference))
+  )
+
+  // 겹침 판정은 **실제 출고**만 본다 — 예정은 아직 나가지 않은 물량이라 중복 근거가 아니다.
+  const actualOutboundRows = ledgerRows.filter((row) => !isPlannedLedgerStatus(row.status))
+
+  const entries: HardwareCrmOrderBacklogEntry[] = []
+  for (const candidate of registrable) {
+    if (recordedReferences.has(candidate.referenceNo)) continue
+
+    const productNeedle = normalizeForMatch(candidate.productName)
+    const overlapRows = actualOutboundRows.filter((row) => {
+      if (!customerNameMatches(candidate.customerName, row.to_location)) return false
+      return productNamesOverlap(productNeedle, normalizeForMatch(row.product_name))
+    })
+
+    const overlapQuantity = overlapRows.reduce((total, row) => total + (toNumber(row.quantity) ?? 0), 0)
+    const lastOccurredAt = overlapRows.reduce<string | null>((latest, row) => {
+      const occurred = cleanString(row.occurred_at)
+      if (!occurred) return latest
+      return !latest || occurred > latest ? occurred : latest
+    }, null)
+
+    entries.push({
+      ...candidate,
+      ledgerOverlap: overlapRows.length > 0 ? { quantity: overlapQuantity, lastOccurredAt } : null,
+    })
+  }
+
+  return { entries: entries.slice(0, BACKLOG_LIMIT), warnings: candidateResult.warnings }
 }

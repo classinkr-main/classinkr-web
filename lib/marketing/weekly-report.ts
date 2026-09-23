@@ -42,7 +42,11 @@ export interface WeeklyAdLeadRecentIntake {
   label: string
   /** 구간이 토·일을 품는가. 월요일 아침 보고서에서 참이 된다. */
   spansWeekend: boolean
+  /** 구간 유입 = 신규 + 재유입(재문의 병합 리드의 last_inflow_at 이 구간 안). */
   totalLeads: number
+  /** 2026-09-21 이후 저장본에만 있다 — 옛 저장본은 비어 있다. */
+  newLeadCount?: number
+  reinflowLeadCount?: number
   metaLeadAdsLeadCount: number
   homepageLeadCount: number
   unrespondedCount: number
@@ -247,9 +251,15 @@ function buildRecentIntakeLines(intake: WeeklyAdLeadRecentIntake | null): string
     return ["- 리드 조회에 실패해 이 구간은 미측정입니다."]
   }
 
+  // 재문의(재유입)가 섞였을 때만 합계를 가른다 — 일일 카드 문구와 같은 규칙.
+  const reinflow = intake.reinflowLeadCount ?? 0
+  const inflowSplit =
+    reinflow > 0
+      ? ` (신규 ${formatCount(intake.newLeadCount ?? intake.totalLeads - reinflow)} · 재유입 ${formatCount(reinflow)})`
+      : ""
   return [
     `- 구간: ${intake.label} (KST)`,
-    `- 전체 접수: ${formatCount(intake.totalLeads)} — Meta 광고 ${formatCount(intake.metaLeadAdsLeadCount)} / 홈페이지 ${formatCount(intake.homepageLeadCount)}`,
+    `- 전체 접수: ${formatCount(intake.totalLeads)}${inflowSplit} — Meta 광고 ${formatCount(intake.metaLeadAdsLeadCount)} / 홈페이지 ${formatCount(intake.homepageLeadCount)}`,
     `- 미응대: ${formatCount(intake.unrespondedCount)}`,
   ]
 }

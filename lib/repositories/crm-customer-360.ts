@@ -17,9 +17,16 @@ import { deriveLeadRegionLabel } from "@/lib/crm/lead-message"
 import { buildLeadPriorityItem } from "@/lib/crm/priority"
 import {
   EMPTY_CRM_ACCOUNT_PRODUCT_SUMMARY,
+  EMPTY_CRM_MONEY_LINE_ITEMS_SUMMARY,
   getCrmAccountProductSummary,
+  getCrmMoneyLineItemsSummary,
   type CrmAccountProductSummary,
 } from "@/lib/repositories/crm-account-money"
+import type {
+  CrmMoneyLineItem,
+  CrmMoneyLineItemsMeta,
+  CrmUnmatchedOutboundCandidate,
+} from "@/lib/crm/money-line-items"
 import { deriveServiceRisk, type ServiceRisk } from "@/lib/crm/service-risk"
 import { getCustomerTags } from "@/lib/repositories/crm-customer-tags"
 import { listCrmCustomerEvents, type ListCrmCustomerEventsResult } from "@/lib/repositories/crm-events"
@@ -27,6 +34,7 @@ import { findConfirmedLeadNeoLink } from "@/lib/repositories/crm-source-links"
 import { listCrmDeals, type ListCrmDealsResult } from "@/lib/repositories/crm-deals"
 import { listCrmTasks, type ListCrmTasksResult } from "@/lib/repositories/crm-tasks"
 import { getLeadById, type LeadRecord } from "@/lib/repositories/leads"
+import { hasAdClickId } from "@/lib/crm/lead-attribution"
 
 export type Customer360Source = "lead" | "neo_account"
 export type Customer360Severity = "critical" | "high" | "medium" | "low"
@@ -89,6 +97,14 @@ export interface Customer360Money {
   collections: NeoCrmCustomerMoneyItem[]
   performances: NeoCrmCustomerMoneyItem[]
   eeoAccounts: NeoCrmCustomerEeoAccount[]
+  /**
+   * M2 — 고객 단위 품목별 대수(`deal_line_items`·HW 출고를 계정키로 합산). lead 대상이거나
+   * 조회에 실패하면 빈 배열 + lineItemsMeta.note로 이유를 밝힌다(360 전체를 막지 않는다).
+   */
+  lineItems: CrmMoneyLineItem[]
+  lineItemsMeta: CrmMoneyLineItemsMeta
+  /** M4 — 이름은 비슷하지만 아직 확정 링크가 없는 HW 출고 후보(유사도 상위 5). */
+  unmatchedOutbound: CrmUnmatchedOutboundCandidate[]
 }
 
 export interface Customer360Risk {
@@ -268,6 +284,10 @@ export function summarizeNeoMoney(detail: NeoCrmCustomerDetail): Customer360Mone
     collections: detail.collections,
     performances: detail.performances,
     eeoAccounts: detail.eeoAccounts,
+    // M2·M4는 header 조립 이후(계정 id 필요) 별도로 채워 넣는다 — 여기서는 자리만 둔다.
+    lineItems: [],
+    lineItemsMeta: EMPTY_CRM_MONEY_LINE_ITEMS_SUMMARY.lineItemsMeta,
+    unmatchedOutbound: [],
   }
 }
 
@@ -387,6 +407,9 @@ const EMPTY_MONEY: Customer360Money = {
   collections: [],
   performances: [],
   eeoAccounts: [],
+  lineItems: [],
+  lineItemsMeta: EMPTY_CRM_MONEY_LINE_ITEMS_SUMMARY.lineItemsMeta,
+  unmatchedOutbound: [],
 }
 
 function emptyEventsResult(): ListCrmCustomerEventsResult {
@@ -456,10 +479,7 @@ export async function getCrmCustomer360(
       if (lead) {
         header = buildLeadHeader(key, lead, now)
         contacts = buildLeadContacts(lead)
-        origin = classifyLeadOrigin(
-          lead.source,
-          Boolean(lead.gclid || lead.fbclid || lead.msclkid || lead.ttclid)
-        )
+        origin = classifyLeadOrigin(lead.source, hasAdClickId(lead))
         found = true
       }
     } else {
@@ -519,11 +539,19 @@ export async function getCrmCustomer360(
   // 제품 매출 요약 — 고객명(header.name)을 계정키로 REV/HW 원장에 조인. 비핵심이라 실패해도
   // 드로어 전체를 막지 않게 unmatched 폴백으로 흡수하고 경고만 남긴다.
   // Compass 활동은 전화 조인이라 contacts 가 정해진 뒤에야 갈 수 있다 — 같은 단계에서 병렬로 묶는다.
-  const [productSummaryResult, compassResult] = await Promise.allSettled([
+  const [productSummaryResult, compassResult, lineItemsResult] = await Promise.allSettled([
     found && header?.name
       ? getCrmAccountProductSummary(header.name)
       : Promise.resolve(EMPTY_CRM_ACCOUNT_PRODUCT_SUMMARY),
     found ? loadCompassActivity(contacts?.phone) : Promise.resolve(EMPTY_COMPASS),
+    // M2·M4 — 품목별 대수·미매칭 출고 후보. neo 계정만 accountId를 넘긴다(리드는 조인 대상이
+    // 아니라는 사실 자체를 note로 밝힌다 — crm-account-money.ts의 accountId===null 분기).
+    found && header?.name
+      ? getCrmMoneyLineItemsSummary({
+          name: header.name,
+          accountId: parsed.source === "neo" ? parsed.entityId : null,
+        })
+      : Promise.resolve(EMPTY_CRM_MONEY_LINE_ITEMS_SUMMARY),
   ])
 
   let productSummary: CrmAccountProductSummary = EMPTY_CRM_ACCOUNT_PRODUCT_SUMMARY
@@ -537,6 +565,19 @@ export async function getCrmCustomer360(
   // health.ok(=warnings 없음) 의미를 뒤집지 않게 한다(태그와 같은 additive 원칙).
   const compass: Customer360Compass =
     compassResult.status === "fulfilled" ? compassResult.value : { ...EMPTY_COMPASS, down: true }
+
+  // 품목·미매칭 출고도 비핵심 additive 필드라 실패해도 경고만 남기고 빈 값으로 흡수한다
+  // (태그·Compass와 같은 원칙 — 이 조회 하나가 health.ok를 뒤집지 않는다).
+  if (lineItemsResult.status === "fulfilled") {
+    money = {
+      ...money,
+      lineItems: lineItemsResult.value.lineItems,
+      lineItemsMeta: lineItemsResult.value.lineItemsMeta,
+      unmatchedOutbound: lineItemsResult.value.unmatchedOutbound,
+    }
+  } else {
+    warnings.push("품목별 대수를 불러오지 못했습니다.")
+  }
 
   return {
     generatedAt: now.toISOString(),

@@ -344,7 +344,9 @@ export function CheckoutRequestForm({
           ...(memo ? { memo } : {}),
           sourcePage,
           consent: true,
-          // 이 폼도 lib/submitLead.ts 를 거치지 않는다 — 귀속을 직접 태운다.
+          // 광고 유입 귀속 — 이 폼은 lib/submitLead.ts·/api/lead 를 안 거치므로 보내지 않으면 서버가
+          // 알 방법이 없다. 평평하게 태우면 서버의 sanitizeLeadAttribution 이 utm·클릭ID·네이버 n_*
+          // 묶음(naverAd)을 골라 리드 미러링에 이어 준다.
           ...collectLeadAttribution(),
           anonymousId: getAnonymousId(),
         }),

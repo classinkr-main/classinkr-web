@@ -4,11 +4,24 @@
 // 스키마: supabase/migrations/20260724_marketing_campaigns.sql
 
 export type CampaignStatus = "planned" | "active" | "paused" | "done"
-export type CampaignRefType = "email_campaign" | "sms_campaign" | "event" | "meta_campaign"
+export type CampaignRefType =
+  | "email_campaign"
+  | "sms_campaign"
+  | "event"
+  | "meta_campaign"
+  | "google_campaign"
+  | "naver_campaign"
 
 // 런타임 SSOT — sanitizer·API·UI 가 이 순서/목록을 공유한다(중복 리터럴 금지).
 export const CAMPAIGN_STATUSES: CampaignStatus[] = ["planned", "active", "paused", "done"]
-export const CAMPAIGN_REF_TYPES: CampaignRefType[] = ["email_campaign", "sms_campaign", "event", "meta_campaign"]
+export const CAMPAIGN_REF_TYPES: CampaignRefType[] = [
+  "email_campaign",
+  "sms_campaign",
+  "event",
+  "meta_campaign",
+  "google_campaign",
+  "naver_campaign",
+]
 
 export const CAMPAIGN_STATUS_LABEL: Record<CampaignStatus, string> = {
   planned: "계획",
@@ -22,6 +35,8 @@ export const CAMPAIGN_REF_TYPE_LABEL: Record<CampaignRefType, string> = {
   sms_campaign: "문자",
   event: "행사",
   meta_campaign: "Meta 광고",
+  google_campaign: "Google 광고",
+  naver_campaign: "네이버 광고",
 }
 
 export interface MarketingCampaign {
@@ -65,7 +80,14 @@ export interface CampaignRollup {
   metaSpend: number | null      // 계정 통화 네이티브 — KRW 로 합산하지 않음
   metaCurrency: string | null
   metaLeads: number
-  linkedCounts: { email: number; sms: number; event: number; meta: number }
+  linkedCounts: {
+    email: number
+    sms: number
+    event: number
+    meta: number
+    google: number
+    naver: number
+  }
 }
 
 export interface CampaignWithLinks extends MarketingCampaign {

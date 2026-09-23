@@ -471,6 +471,7 @@ async function applyTaskUpdate(id: string, patch: CrmTaskUpdate): Promise<CrmTas
 export interface CrmTaskEditInput {
   title?: string | null
   detail?: string | null
+  /** undefined = 기한 그대로, null = 기한 지움(due_at = null), 문자열 = 그 시각으로 설정. 날짜 검증은 라우트가 먼저 한다. */
   dueAt?: string | null
   priority?: CrmTaskPriority
   taskType?: CrmTaskType

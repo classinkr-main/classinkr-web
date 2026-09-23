@@ -71,6 +71,7 @@ vi.mock("@/lib/external-crm/xiaoshouyi-request", async (importOriginal) => {
   return { ...actual, ...remote }
 })
 
+import { buildActivityRecordPayload } from "@/lib/crm/activity-record-writeback"
 import {
   buildCrmWritePreview,
   createCrmWriteRequest,
@@ -188,10 +189,24 @@ describe("lead create 외 정책 — 그대로", () => {
   })
 
   it("activityrecord create(유일한 실제 호출부 — 연락 기록 되밀기)는 그대로 열려 있다", () => {
+    // payload 는 실제 호출부의 매퍼로 만든다 — 손으로 적은 최소 payload 는 되밀기 정책의 필수 필드
+    // (content·startTime·entityType·dimDepart·ownerId + activityRecordFrom 쌍, 고객 출처는 dbcRelation26)가
+    // 바뀔 때마다 "닫혔다"가 아니라 "필수 누락"으로 깨져, 이 테스트가 잠그려는 것(create 가 열려 있음)을
+    // 가린다. 필수 필드 계약 자체는 tests/external-crm/activity-record-write-policy.test.ts 가 잠근다.
+    const mapped = buildActivityRecordPayload({
+      externalAccountId: "3700000000000009",
+      externalOwnerId: "3637136716307280",
+      targetGroupId: "4374707173786001",
+      type: "call",
+      result: "answered",
+      notes: "콜",
+      contactedAt: "2026-09-14T00:00:00.000Z",
+    })
+    if (!mapped.ok) throw new Error(`mapper refused: ${mapped.reason}`)
     const preview = buildCrmWritePreview({
       objectApiKey: "activityrecord",
       operation: "create",
-      payload: { content: "콜", startTime: 1757808000000, dbcRelation26: "3700000000000009" },
+      payload: mapped.payload as unknown as Record<string, unknown>,
     })
     expect(preview).toMatchObject({ operation: "create", method: "POST", urlPath: "/rest/data/v2.0/xobjects/activityrecord" })
   })

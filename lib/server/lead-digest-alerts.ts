@@ -1,6 +1,8 @@
 import "server-only"
 
 import { isTestLead } from "@/lib/crm/lead-attribution"
+import { tallyLeadInflow } from "@/lib/crm/lead-reinflow"
+import { summarizeLeadResponseStatus } from "@/lib/crm/lead-response-status"
 import { DIRECT_INBOUND_LEAD_SOURCES, INTAKE_LEAD_SOURCES } from "@/lib/lead-types"
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import {
@@ -10,6 +12,9 @@ import {
 import { getLeads, type LeadRecord } from "@/lib/repositories/leads"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
+// 기간 유입 축은 생성 시각 또는 재문의 시각(last_inflow_at)이다(2026-09-21) — 이 소스들의 재문의는 새 행 대신
+// 기존 행에 병합되므로(lib/server/lead-capture.ts) 생성 시각만 보면 재문의가 빠진다. 아침 카드
+// (lib/server/lead-morning-brief.ts)와 같은 규칙(lib/crm/lead-reinflow.ts tallyLeadInflow)으로 세고 신규/재유입을 가른다.
 const TARGET_SOURCES = DIRECT_INBOUND_LEAD_SOURCES
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000
 const HOUR_MS = 60 * 60 * 1000
@@ -21,7 +26,12 @@ export interface LeadDigestAlertResult {
   period: LeadDigestPeriod
   periodLabel: string
   previousPeriodLabel: string
+  /** 기간 유입 리드 = 신규 + 재유입. 한 리드는 한 번만(생성과 재문의가 모두 기간 안이면 신규). */
   totalLeads: number
+  /** 기간 안에 생성된 리드. */
+  newLeadCount: number
+  /** 기간 밖에 생성됐고 기간 안에 재문의(last_inflow_at)한 리드. */
+  reinflowLeadCount: number
   totalInboundCount: number
   previousTotalLeads: number
   deltaLeads: number
@@ -116,21 +126,6 @@ function formatPeriodLabel(start: Date, end: Date) {
   return `${formatKstDate(start)} - ${formatKstDate(new Date(end.getTime() - DAY_MS))}`
 }
 
-function isLeadInRange(lead: LeadRecord, start: Date, end: Date) {
-  const timestamp = new Date(lead.timestamp).getTime()
-  return (
-    Number.isFinite(timestamp) &&
-    timestamp >= start.getTime() &&
-    timestamp < end.getTime()
-  )
-}
-
-function hoursSince(value: string | Date, now: Date) {
-  const startedAt = value instanceof Date ? value : new Date(value)
-  const diff = now.getTime() - startedAt.getTime()
-  return Math.max(0, Math.floor(diff / HOUR_MS))
-}
-
 function getSourceLabel(source: string) {
   if (source === "meta_lead_ads") return "Meta 광고"
   if (source === "demo_modal") return "데모 신청"
@@ -161,6 +156,8 @@ function buildDigestMessage(input: {
   periodLabel: string
   previousLabel: string
   totalLeads: number
+  newLeadCount: number
+  reinflowLeadCount: number
   totalInboundCount: number
   deltaLeads: number
   contactPageLeadCount: number
@@ -184,13 +181,19 @@ function buildDigestMessage(input: {
   return [
     `${input.periodLabel} 유효 인바운드 ${input.totalInboundCount}개`,
     `홈페이지 문의 ${input.contactPageLeadCount}개 / 데모 신청 ${input.demoModalLeadCount}개 / 접수 ${input.intakeLeadCount}개 / Meta ${input.metaLeadAdsLeadCount}개`,
+    // 재문의(재유입)가 섞였을 때만 리드 합계를 가른다 — 없으면 예전 문구 그대로(전부 신규다).
+    input.reinflowLeadCount > 0
+      ? `리드 ${input.totalLeads}개 — 신규 ${input.newLeadCount}개 · 재유입 ${input.reinflowLeadCount}개`
+      : null,
     `채널톡 문의 ${input.channelTalkInquiryCount}개 / 열린 상담 ${input.channelTalkOpenCount}개 / CRM 매칭 ${input.channelTalkMatchedLeadCount}개`,
     `챗봇→채널톡 넘김 ${input.chatbotHandoffSentCount}개 / 전체 ${input.chatbotHandoffCount}개`,
     `${input.previousLabel} ${formatDelta(input.deltaLeads)}개`,
     `미응답 ${input.unrespondedCount}개 / 24시간 초과 ${input.over24h}개 / 48시간 초과 ${input.over48h}개`,
     `상담 진행 ${input.contactedCount}개 / 전환 ${input.convertedCount}개 / 종료 ${input.closedCount}개`,
     `주요 경로: ${input.topSourceLabel} (${input.topSourceCount}개)`,
-  ].join("\n")
+  ]
+    .filter((line): line is string => line !== null)
+    .join("\n")
 }
 
 function hasSupabaseServerEnv() {
@@ -264,11 +267,19 @@ export async function sendLeadDigestAlert(
   const periodLabel = formatPeriodLabel(range.start, range.end)
   const previousPeriodLabel = formatPeriodLabel(range.previousStart, range.previousEnd)
   const leads = (await getLeads()).filter(isTargetLead)
-  const periodLeads = leads.filter((lead) => isLeadInRange(lead, range.start, range.end))
-  const previousPeriodLeads = leads.filter((lead) =>
-    isLeadInRange(lead, range.previousStart, range.previousEnd)
+  // 기간마다 반열린 창 [start, end) 로 유입 축(생성 또는 재문의)을 센다 — 직전 기간도 같은 축이라 델타가 맞선다.
+  const periodInflow = tallyLeadInflow(leads, range.start.getTime(), range.end.getTime())
+  const previousInflow = tallyLeadInflow(
+    leads,
+    range.previousStart.getTime(),
+    range.previousEnd.getTime()
   )
+  const periodLeads = periodInflow.leads
+  const previousPeriodLeads = previousInflow.leads
   const unrespondedLeads = periodLeads.filter((lead) => lead.status === "new")
+  // 방치 시간은 최신 유입부터 잰다(lib/crm/lead-response-status.ts 와 같은 규칙) — 몇 달 전 첫 문의 때문에
+  // 방금 재문의한 리드가 곧장 48시간 초과로 뜨지 않게. 재문의가 없는 리드는 예전처럼 생성 시각이다.
+  const responseStatus = summarizeLeadResponseStatus(unrespondedLeads, now)
   const channelTalkStats = getChannelTalkPeriodStats(range)
   const chatbotHandoffStats = await getChatbotHandoffPeriodStats(range)
   const topSource = getTopSource(periodLeads)
@@ -286,6 +297,8 @@ export async function sendLeadDigestAlert(
     periodLabel,
     previousPeriodLabel,
     totalLeads: periodLeads.length,
+    newLeadCount: periodInflow.newCount,
+    reinflowLeadCount: periodInflow.reinflowCount,
     totalInboundCount: periodLeads.length + channelTalkStats.total,
     previousTotalLeads: previousPeriodLeads.length,
     deltaLeads: periodLeads.length - previousPeriodLeads.length,
@@ -297,8 +310,8 @@ export async function sendLeadDigestAlert(
     convertedCount: periodLeads.filter((lead) => lead.status === "converted").length,
     closedCount: periodLeads.filter((lead) => lead.status === "closed").length,
     unrespondedCount: unrespondedLeads.length,
-    over24h: unrespondedLeads.filter((lead) => hoursSince(lead.timestamp, now) >= 24).length,
-    over48h: unrespondedLeads.filter((lead) => hoursSince(lead.timestamp, now) >= 48).length,
+    over24h: responseStatus.over24hCount,
+    over48h: responseStatus.over48hCount,
     unassignedCount: periodLeads.filter((lead) => !lead.assigned_to?.trim()).length,
     channelTalkInquiryCount: channelTalkStats.total,
     channelTalkOpenCount: channelTalkStats.open,

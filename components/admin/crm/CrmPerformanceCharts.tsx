@@ -23,6 +23,9 @@ interface Performance {
   byTeam: PerfGroup[]
   byMember: PerfGroup[]
   dealCount: number
+  // 신규 전환 계정 — 계정별 최초 확정매출 발생월에만 1(Compass paidAccounts 규칙 이식)
+  newAccountsByMonth: { month: string; count: number }[]
+  windowLimited: boolean
 }
 
 function fmtMan(value: number): string {
@@ -159,6 +162,12 @@ export default function CrmPerformanceCharts() {
 
   // 당월 실적 + 목표 대비 달성률·월말 추정(목표 있을 때만). 목표 통화도 CNY.
   const currentRevenue = data.monthly.length ? data.monthly[data.monthly.length - 1].revenue : 0
+  // 당월 신규 전환 계정 — 계정별 최초 확정매출 발생월에만 1, 갱신월은 중복 계상 안 함.
+  // 옵셔널 체이닝: adminFetchJsonCached는 기본 persist(localStorage) 캐시라, 배포 직후
+  // 이 필드가 없던 옛 응답이 잠깐 재사용돼도(staleWhileRevalidate) 렌더가 죽지 않게 한다.
+  const currentNewAccounts = data.newAccountsByMonth?.length
+    ? data.newAccountsByMonth[data.newAccountsByMonth.length - 1].count
+    : 0
   const projection = projectMonthEnd(currentRevenue, target, kstMonthProgressRatio(new Date()))
   const maxRevenue = trend.reduce((max, point) => Math.max(max, point.revenue), 0)
   const yTop = target != null ? Math.ceil(Math.max(target, maxRevenue) * 1.12) : undefined
@@ -170,6 +179,10 @@ export default function CrmPerformanceCharts() {
           <div>
             <p className="text-[12px] font-semibold text-[#1a1a1a]/45">매출 추이 (최근 6개월)</p>
             <p className="text-[10px] text-[#1a1a1a]/35">REV 동기화 · 위안화(¥)</p>
+            <p className="mt-1 text-[10px] text-[#1a1a1a]/35">
+              이번 달 신규 전환 계정 <span className="font-semibold text-[#084734]">{currentNewAccounts}건</span>
+              {data.windowLimited ? " · 조회 기간 내 최초 결제 기준" : null}
+            </p>
           </div>
           <div className="flex flex-col items-end gap-1">
             <div className="flex items-center gap-2">

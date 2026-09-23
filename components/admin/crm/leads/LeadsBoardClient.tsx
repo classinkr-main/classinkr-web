@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback, useDeferredValue, useMemo, useRef } f
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import {
-  RefreshCw, X,
+  X,
   Building2,
   UserPlus, ExternalLink,
   Search, Check,
@@ -17,12 +17,15 @@ import {
 } from "lucide-react"
 import LeadRegisterModal from "@/components/admin/crm/LeadRegisterModal"
 import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
+import CrmNoticeBanner, { type CrmNoticeTone } from "@/components/admin/crm/CrmNoticeBanner"
+import FreshnessCaption from "@/components/admin/crm/FreshnessCaption"
 import LeadTrackingPanel from "@/components/admin/crm/leads/LeadTrackingPanel"
 import { useCrmOwners } from "@/components/admin/crm/useCrmOwners"
 import { useVisibleCount } from "@/components/admin/ui/ShowMore"
+import { MOBILE_TOUCH_TARGET_CLASS } from "@/components/admin/crm/home/shared"
 
 import { adminFetch, adminFetchJsonCached, adminFetchJsonCachedWithMeta } from "@/lib/admin-client"
-import { Button } from "@/components/ui/button"
+import { CRM_CACHE_SWR_MS, CRM_CACHE_TTL_MS } from "@/lib/crm/client-cache"
 import type { LeadActivity, LeadActivityBadge } from "@/lib/repositories/lead-activity"
 import type { LeadRecord, LeadStatus } from "@/lib/repositories/leads"
 import type { ContactLogRecord, ContactLogType, ContactLogResult } from "@/lib/repositories/contact-logs"
@@ -64,15 +67,30 @@ import {
   type TrackingDimension,
 } from "@/lib/crm/lead-attribution"
 import {
+  buildStatusUndoPlan,
+  describeStatusUndo,
+  type LeadStatusChange,
+  type LeadStatusUndoRequest,
+} from "@/lib/crm/lead-status-undo"
+import {
   LEAD_SORT_OPTIONS,
   calcLeadPriority,
   getEngagement,
   isLeadSortKey,
+  matchesLeadSearch,
   sortLeads,
   tokenizeLeadSearch,
   type LeadPriority,
   type LeadSortKey,
 } from "@/lib/crm/lead-ranking"
+import {
+  LEAD_SEGMENTS,
+  LEAD_SEGMENT_PARAM,
+  countLeadSegments,
+  matchesLeadSegment,
+  readLeadSegmentParam,
+  type LeadSegmentId,
+} from "@/lib/crm/lead-segments"
 import {
   buildLeadAssignmentProfile,
   formatLeadAssignmentProfile,
@@ -95,8 +113,6 @@ import LeadsConsoleList from "./board/LeadsConsoleList"
 import { PipelineRiskPanel, StageOwnerPanels, UnconfirmedInbox } from "./board/LeadsConsolePanels"
 import {
   LEAD_BOARD_LIST_STEP,
-  LEADS_CACHE_SWR_MS,
-  LEADS_CACHE_TTL_MS,
   LENS_OPTIONS,
   NOW_TICK_MS,
   isLeadLens,
@@ -105,6 +121,69 @@ import {
   type LeadAssignmentPreviewResponse,
   type LeadLens,
 } from "./board/shared"
+
+// ─── 벌크 요청 공통기 ──────────────────────────────────────────
+// 8건씩 끊어 보낸다. 수백 건을 한 번에 발사하면 브라우저 연결 한도와 서버가 같이 밀리고,
+// 부분 실패 시 어디까지 갔는지도 알기 어렵다. PATCH(확인·상태)와 DELETE가 같은 동시성 정책을
+// 쓰도록 여기 한 곳에 둔다. 실패한 id 목록(failedIds)을 함께 돌려줘 "실패 항목만 다시 선택"이
+// 같은 벌크 작업을 처음부터 반복하지 않게 한다.
+export const BULK_CHUNK_SIZE = 8
+
+export async function runInChunks<T>(
+  ids: string[],
+  fn: (id: string) => Promise<T>,
+  options?: { chunkSize?: number; fallbackMessage?: string }
+): Promise<{ succeeded: T[]; failedIds: string[]; firstError: Error | null }> {
+  const chunkSize = Math.max(1, options?.chunkSize ?? BULK_CHUNK_SIZE)
+  const fallbackMessage = options?.fallbackMessage ?? "요청을 처리하지 못했습니다."
+  const succeeded: T[] = []
+  const failedIds: string[] = []
+  let firstError: Error | null = null
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const chunk = ids.slice(i, i + chunkSize)
+    const settled = await Promise.allSettled(chunk.map((id) => fn(id)))
+    settled.forEach((result, index) => {
+      if (result.status === "fulfilled") {
+        succeeded.push(result.value)
+        return
+      }
+      failedIds.push(chunk[index])
+      if (!firstError) firstError = result.reason instanceof Error ? result.reason : new Error(fallbackMessage)
+    })
+  }
+  return { succeeded, failedIds, firstError }
+}
+
+// 드로어 선택을 URL(?lead=)에 반영한다 — closeSelectedLead(파라미터 삭제)와 짝. 이미 같은 값이면
+// 바꾸지 않아(false) 딥링크 진입 회차에 replaceState가 중복으로 나가지 않는다.
+export function applySelectedLeadParam(url: URL, selectedId: string | null): boolean {
+  if (!selectedId) return false
+  if (url.searchParams.get("lead") === selectedId) return false
+  url.searchParams.set("lead", selectedId)
+  return true
+}
+
+// 확인 다이얼로그용 대상 요약 — 최대 5건의 표시 이름을 나열하고 나머지는 건수로 접는다.
+export function summarizeLeadNames(leads: LeadRecord[], ids: string[], max = 5): string {
+  const byId = new Map(leads.map((lead) => [lead.id, lead]))
+  const names = ids.slice(0, max).map((id) => `"${getLeadDisplayName(byId.get(id))}"`)
+  const rest = ids.length - names.length
+  return rest > 0 ? `${names.join(", ")} 외 ${rest}건` : names.join(", ")
+}
+
+type BoardToast = {
+  msg: string
+  type: "success" | "error"
+  action?: { label: string; onClick: () => void }
+}
+
+// 목록 상단 고정 배너 — 벌크 부분 실패처럼 토스트 3초로는 읽고 대응할 수 없는 결과를 닫기 전까지 남긴다.
+type BulkNotice = {
+  tone: CrmNoticeTone
+  title: string
+  message: string
+  failedIds?: string[]
+}
 
 // ─── 리드 보드 ─────────────────────────────────────────────────
 // 현황(/admin/crm)에서 추출한 리드 관리 보드 전체. ?filter=·?focus=risk 딥링크 지원.
@@ -154,13 +233,23 @@ export default function LeadsBoardClient() {
     const raw = searchParams.get("group")
     return raw && (SOURCE_GROUP_ORDER as readonly string[]).includes(raw) ? (raw as LeadSourceGroup) : "all"
   })
+  // 세그먼트 칩(S1, Compass 정리 라운드 2026-09-20) — 메타 광고/인계/기존/고객을 한 번에 고른다.
+  // 유입 칩과 직교 AND. 뷰 전환·다른 필터 변경에도 보존한다(설계 규약 "전환은 상태를 리셋하지 않는다").
+  const [segment, setSegment] = useState<LeadSegmentId>(() =>
+    readLeadSegmentParam(searchParams.get(LEAD_SEGMENT_PARAM))
+  )
   const [selected, setSelected] = useState<LeadRecord | null>(null)
   const [contactDraft, setContactDraft] = useState<{ leadId: string; type: ContactLogType } | null>(null)
   const [logs, setLogs] = useState<ContactLogRecord[]>([])
   const [logsLoading, setLogsLoading] = useState(false)
   const [activity, setActivity] = useState<LeadActivity | null>(null)
   const [activityLoading, setActivityLoading] = useState(false)
-  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
+  const [toast, setToast] = useState<BoardToast | null>(null)
+  // 벌크 작업 부분 실패 배너(목록 상단, 닫기 전까지 유지) — 실패 id를 들고 있어 재선택이 가능하다.
+  const [bulkNotice, setBulkNotice] = useState<BulkNotice | null>(null)
+  // 연락 기록 저장은 됐지만 리드 상태 동기화가 실패한 경우의 경고 — 저장 성공 토스트와 분리해
+  // 낮은 강도(warning)로 병기한다(leads-04). 드로어(z-50) 위에 보이도록 고정 배치한다.
+  const [syncWarning, setSyncWarning] = useState<string | null>(null)
   // CRM 전환 직후 동선 — 딜/고객 딥링크 패널 (토스트와 달리 닫기 전까지 유지).
   const [convertResult, setConvertResult] = useState<ConvertResultState | null>(null)
   const [events, setEvents] = useState<PublicEvent[]>([])
@@ -186,9 +275,36 @@ export default function LeadsBoardClient() {
   // 목록 로드 실패를 빈 목록과 구분한다 — 장애 중에 "등록된 리드가 없습니다"로 오인되면 안 된다.
   const [loadError, setLoadError] = useState<string | null>(null)
   const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null)
+  // SWR 고속 경로로 옛 목록을 먼저 그린 뒤 배경 갱신이 도는 중 — 신선도 캡션이 "갱신 중"으로 표시한다(P2).
+  const [revalidating, setRevalidating] = useState(false)
   const [dismissedDeepLinkedLeadId, setDismissedDeepLinkedLeadId] = useState<string | null>(null)
+  // 감사 2026-09-07 §3 후속 — 하드 삭제만 브라우저 confirm()에 남아 있었다. 확인·전환과 같은
+  // 요청 상태 패턴으로 공용 확인 다이얼로그를 거친다(대상 이름·영향 범위·비가역 경고 표시).
+  const [deleteLeadsRequest, setDeleteLeadsRequest] = useState<{ ids: string[]; successMessage?: string } | null>(null)
+  const [deleteLeadsBusy, setDeleteLeadsBusy] = useState(false)
+  // 벌크 "종료"·"배정"도 같은 요청 상태 패턴 — window.confirm 을 이 화면에서 완전히 걷는다(UX 규약 1).
+  const [closeLeadsRequest, setCloseLeadsRequest] = useState<{ ids: string[] } | null>(null)
+  // 종료·배정 확인 다이얼로그 전용 busy — bulkWorking과 분리한다. onConfirm이 요청 상태를
+  // finally에서만 비워 처리가 끝날 때까지 다이얼로그가 열려 있고, 그 사이 loading이 실제로
+  // 화면에 보인다(리뷰 발견 2 — 예전엔 onConfirm이 즉시 request를 null로 비워 다이얼로그가
+  // bulkWorking(true)이 찍히기 전에 닫혀 loading이 보일 기회가 없었다).
+  const [closeLeadsBusy, setCloseLeadsBusy] = useState(false)
+  const [bulkAssignRequest, setBulkAssignRequest] = useState<{
+    ids: string[]
+    ownerKey: string
+    preview: LeadAssignmentPreviewResponse | undefined
+    ownerLabel: string
+    profileText: string
+  } | null>(null)
+  const [bulkAssignBusy, setBulkAssignBusy] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
-  const { owners: crmOwners, health: crmOwnerHealth } = useCrmOwners()
+  // 행·카드가 사라지는 처리(삭제) 뒤 포커스를 목록 섹션으로 옮긴다(UX 규약 7).
+  const listSectionRef = useRef<HTMLDivElement>(null)
+  // 우하단 고정 스택(전환 완료 패널·토스트) 실측용 — syncWarning 배너를 bottom-44/28/24/6 같은
+  // 추정치가 아니라 실제 렌더된 상단 좌표 위에 얹기 위해 각 패널의 DOM 노드를 잡는다(리뷰 발견 3).
+  const convertResultPanelRef = useRef<HTMLDivElement>(null)
+  const toastMeasureRef = useRef<HTMLDivElement>(null)
+  const { owners: crmOwners, health: crmOwnerHealth, currentOwner: crmCurrentOwner } = useCrmOwners()
   // Compass(마케팅팀 앱) 콜 상태 병기 — 읽기 전용 오버레이. 우리 리드 상태는 건드리지 않는다.
   const compass = useCompassOverlay(leads)
 
@@ -196,6 +312,9 @@ export default function LeadsBoardClient() {
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
       if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return
+      // IME 조합 중(한글·중국어·일본어 입력) 발생한 키 이벤트는 무시 — 조합 완성 키가 "/"로
+      // 잡히는 조합기에서 검색창으로 포커스가 튀며 입력 중이던 글자를 끊지 않게 한다.
+      if (event.isComposing) return
       const target = event.target as HTMLElement | null
       if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return
       event.preventDefault()
@@ -209,7 +328,7 @@ export default function LeadsBoardClient() {
     let cancelled = false
     void (async () => {
       try {
-        const data = await adminFetchJsonCached<PublicEvent[]>("/api/admin/events", undefined, { ttlMs: 60_000 })
+        const data = await adminFetchJsonCached<PublicEvent[]>("/api/admin/events", undefined, { ttlMs: CRM_CACHE_TTL_MS })
         if (!cancelled) setEvents(Array.isArray(data) ? data : [])
       } catch {
         /* noop — 행사 연결 UI는 events 없어도 동작 */
@@ -226,7 +345,7 @@ export default function LeadsBoardClient() {
         const data = await adminFetchJsonCached<{ summary: Record<string, LeadActivityBadge> }>(
           "/api/admin/leads/activity-summary",
           undefined,
-          { ttlMs: 60_000 }
+          { ttlMs: CRM_CACHE_TTL_MS }
         )
         if (!cancelled) setActivitySummary(data?.summary ?? {})
       } catch {
@@ -249,10 +368,61 @@ export default function LeadsBoardClient() {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
   }, [])
 
-  const showToast = (msg: string, type: "success" | "error" = "success") => {
-    setToast({ msg, type })
+  // syncWarning 배너의 세로 오프셋 — bottom-44/28/24/6 네 값 중 하나를 토스트·전환 패널의
+  // "있음/없음" 조합만으로 고르면, 토스트가 action 버튼·긴 메시지로 여러 줄이 되거나 전환
+  // 패널 높이가 늘어날 때 두 고정 패널이 겹칠 수 있었다(리뷰 발견 3). 실제 렌더된 두 패널의
+  // 상단 좌표를 재서 그 위에 얹는 값으로 대체한다.
+  const [syncWarningOffsetPx, setSyncWarningOffsetPx] = useState(24)
+  useEffect(() => {
+    if (!syncWarning) return
+    const GAP_PX = 12
+    const FALLBACK_PX = 24
+    const measure = () => {
+      const tops: number[] = []
+      const toastEl = toastMeasureRef.current?.firstElementChild as HTMLElement | null
+      if (toastEl) tops.push(toastEl.getBoundingClientRect().top)
+      if (convertResultPanelRef.current) tops.push(convertResultPanelRef.current.getBoundingClientRect().top)
+      if (tops.length === 0) {
+        setSyncWarningOffsetPx(FALLBACK_PX)
+        return
+      }
+      setSyncWarningOffsetPx(Math.max(FALLBACK_PX, window.innerHeight - Math.min(...tops) + GAP_PX))
+    }
+    measure()
+    const observedEls = [toastMeasureRef.current?.firstElementChild, convertResultPanelRef.current].filter(
+      (el): el is HTMLElement => Boolean(el)
+    )
+    const observer = new ResizeObserver(measure)
+    observedEls.forEach((el) => observer.observe(el))
+    window.addEventListener("resize", measure)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener("resize", measure)
+    }
+  }, [syncWarning, toast, convertResult])
+
+  // 성공은 3초 뒤 자동으로 걷고, 실패는 원인을 읽고 닫을 때까지 남긴다(UX 규약 3 — 실패는 자동
+  // 소멸하지 않는다). 둘 다 X 닫기를 갖고, action(재시도·되돌리기)은 선택.
+  // options.action: 메시지 옆 되돌리기 등 텍스트 버튼. 토스트가 사라지면(타이머 만료·닫기 또는
+  // 다음 showToast 호출) toast state가 통째로 null/교체되므로 액션도 함께 사라진다 —
+  // 별도 정리 타이머가 필요 없다. options.durationMs: 되돌리기 토스트는 8초로 늘려
+  // 클릭할 시간을 더 준다(성공 토스트의 자동 소멸 시간만 바꾼다 — 실패는 여전히 닫을 때까지 남는다).
+  const showToast = (
+    msg: string,
+    type: "success" | "error" = "success",
+    options?: { action?: BoardToast["action"]; durationMs?: number }
+  ) => {
+    setToast({ msg, type, action: options?.action })
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
-    toastTimerRef.current = setTimeout(() => setToast(null), 3000)
+    toastTimerRef.current = null
+    if (type === "success") {
+      toastTimerRef.current = setTimeout(() => setToast(null), options?.durationMs ?? 3000)
+    }
+  }
+  const dismissToast = () => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = null
+    setToast(null)
   }
 
   const fetchLeads = useCallback(async (options?: { force?: boolean }) => {
@@ -261,15 +431,16 @@ export default function LeadsBoardClient() {
       // WithMeta를 쓰는 이유: staleIfError 폴백(갱신 실패 → 예전 캐시)이 조용히 성공처럼
       // 보이면 안 된다. 실패로 대체된 경우에만 배너를 띄우고, 갱신 시각도 실제 저장 시각으로 적는다.
       const result = await adminFetchJsonCachedWithMeta<{ leads: LeadRecord[] }>("/api/admin/leads", undefined, {
-        ttlMs: LEADS_CACHE_TTL_MS,
+        ttlMs: CRM_CACHE_TTL_MS,
         force: options?.force,
         persist: false,
-        staleWhileRevalidateMs: LEADS_CACHE_SWR_MS,
+        staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
         // SWR 고속 경로로 옛 목록을 먼저 그린 회차는 여기로 갱신 결과가 온다. 이 화면은
         // 마운트 시 1회만 로드하므로 이 콜백이 없으면 갱신분이 화면에 도달하지 못하고
-        // 세션 내내 최대 TTL+SWR(150초)만큼 옛 목록이 남는다.
+        // 세션 내내 최대 TTL+SWR 창만큼 옛 목록이 남는다.
         onRevalidated: ({ data, error }) => {
           if (!mountedRef.current) return
+          setRevalidating(false)
           if (error || !data) {
             setLoadError("리드 목록을 새로 받지 못했습니다.")
             return
@@ -282,7 +453,9 @@ export default function LeadsBoardClient() {
       setLeads(result.data.leads)
       setLoadError(result.staleReason === "error" ? "리드 목록을 새로 받지 못했습니다." : null)
       setLastLoadedAt(result.staleSince === null ? new Date() : new Date(result.staleSince))
+      setRevalidating(result.staleReason === "revalidate")
     } catch (err) {
+      setRevalidating(false)
       const message = err instanceof Error ? err.message : "리드를 불러오지 못했습니다."
       setLoadError(message)
       showToast(message, "error")
@@ -364,6 +537,19 @@ export default function LeadsBoardClient() {
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`)
   }, [deepLinkedLeadId])
 
+  // closeSelectedLead와 짝 — 행 클릭으로 연 드로어도 ?lead= 에 남겨 새로고침·링크 공유·뒤로가기
+  // 복귀에서 같은 리드가 다시 열리게 한다. 딥링크로 들어온 회차(이미 ?lead=같은 id)는 헬퍼가
+  // false를 돌려 replaceState를 중복으로 부르지 않는다. 딥링크와 다른 리드를 클릭했으면 그
+  // 딥링크는 소비된 것으로 표시해, 위 딥링크 effect가 원래 리드로 되돌리지 않게 한다.
+  const selectedId = selected?.id ?? null
+  useEffect(() => {
+    if (!selectedId) return
+    if (deepLinkedLeadId && selectedId !== deepLinkedLeadId) setDismissedDeepLinkedLeadId(deepLinkedLeadId)
+    const url = new URL(window.location.href)
+    if (!applySelectedLeadParam(url, selectedId)) return
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`)
+  }, [selectedId, deepLinkedLeadId])
+
   // 검색어만 300ms 눌러서 URL에 반영한다 — 나머지 축은 클릭 단위라 즉시 반영해도 되지만,
   // 검색은 키 입력마다 replaceState를 불러 타이핑 중 히스토리 API를 초당 수십 번 두드렸다.
   const [urlSearchQuery, setUrlSearchQuery] = useState(searchQuery)
@@ -386,9 +572,10 @@ export default function LeadsBoardClient() {
     apply("filter", filter, "all")
     apply("q", urlSearchQuery.trim(), "")
     apply("group", sourceGroup, "all")
+    apply(LEAD_SEGMENT_PARAM, segment, "all")
     apply("unconfirmed", includeUnconfirmed ? "1" : "0", "0")
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`)
-  }, [view, lens, sortKey, filter, urlSearchQuery, sourceGroup, includeUnconfirmed])
+  }, [view, lens, sortKey, filter, urlSearchQuery, sourceGroup, segment, includeUnconfirmed])
 
   // 렌즈나 축이 바뀌면 이전 축의 트래킹 선택은 의미를 잃는다 — 조용히 남겨두면 빈 목록이 된다.
   useEffect(() => {
@@ -484,7 +671,13 @@ export default function LeadsBoardClient() {
   // 고쳤어도 걸릴 수 있음 — 그 리드를 새로고침해야 한다는 정확한 신호다).
   const getExpectedUpdatedAt = (id: string) => leads.find((lead) => lead.id === id)?.updated_at ?? null
 
+  // 반환값(성공 여부)은 아래 되돌리기 액션이 handleStatus를 silent로 재귀 호출해 같은
+  // PATCH 경로를 재사용할 때만 쓴다 — onStatusChange={handleStatus}처럼 반환값을 보지
+  // 않는 기존 호출부는 그대로 동작한다(대상 시그니처가 void라 Promise<boolean> 반환도
+  // 대입 가능).
   const handleStatus = async (id: string, status: LeadStatus, options?: { silent?: boolean }) => {
+    // 되돌리기 액션이 그대로 쓸 값 — 성공 후 leads가 서버 응답으로 덮이기 전에 미리 챙겨 둔다.
+    const previousStatus = leads.find((lead) => lead.id === id)?.status
     setStatusUpdatingIds((prev) => new Set(prev).add(id))
     try {
       const res = await adminFetch(`/api/admin/leads/${id}`, {
@@ -492,12 +685,40 @@ export default function LeadsBoardClient() {
         body: JSON.stringify({ status, expectedUpdatedAt: getExpectedUpdatedAt(id) }),
       })
       // 서버 응답 리드를 그대로 반영한다 — 상태 전이 때 서버가 함께 채우는 confirmed_at을
-      // 버리면 "미확인" 배지·수신함 카운트가 새로고침 전까지 어긋난다.
+      // 버리면 "미확인" 배지·수신함 카운트가 새로고침 전까지 어긋난다. 되돌리기로 status만
+      // 원상복구해도 이 confirmed_at은 지워지지 않는다 — "검토했다"는 사실은 그대로 남는다
+      // (app/api/admin/leads/[id]/route.ts는 status가 "new"로 돌아갈 때 confirmed_at을
+      // 지우는 경로를 두지 않았다. 확인 처리 자체를 되돌리는 것은 대상 밖 — 아래 handleConfirmMany 참고).
       const data = await readAdminResponse<{ lead: LeadRecord }>(res, "상태를 변경하지 못했습니다.")
       setLeads((prev) => prev.map((l) => (l.id === id ? data.lead : l)))
-      if (!options?.silent) showToast(`"${STATUS_LABEL[status]}" 상태로 변경했습니다.`)
+      if (!options?.silent) {
+        const undoPlan = previousStatus
+          ? buildStatusUndoPlan([{ id, previous: previousStatus, next: status }])
+          : []
+        showToast(
+          `"${STATUS_LABEL[status]}" 상태로 변경했습니다.`,
+          "success",
+          undoPlan.length > 0
+            ? {
+                action: {
+                  label: describeStatusUndo(undoPlan, STATUS_LABEL),
+                  onClick: () => {
+                    // silent — 복원 자체는 조용히 처리하고, 성공/실패에 따라 이 토스트가
+                    // 새 토스트로 알린다(handleStatus 내부의 실패 토스트는 그대로 씀).
+                    void handleStatus(id, undoPlan[0].status, { silent: true }).then((ok) => {
+                      if (ok) showToast("되돌렸습니다.")
+                    })
+                  },
+                },
+                durationMs: 8000,
+              }
+            : undefined
+        )
+      }
+      return true
     } catch (err) {
       showToast(err instanceof Error ? err.message : "상태를 변경하지 못했습니다.", "error")
+      return false
     } finally {
       setStatusUpdatingIds((prev) => {
         const next = new Set(prev)
@@ -568,7 +789,12 @@ export default function LeadsBoardClient() {
         setLeads((prev) => prev.map((lead) => (lead.id === selected.id ? next : lead)))
         setSelected(next)
       }
-      showToast(data.warning ?? "연락 기록이 저장되었습니다.", data.warning ? "error" : undefined)
+      // 저장 성공과 상태 동기화 경고를 분리한다 — 경고를 실패 톤 토스트로 내면 "저장 실패"로
+      // 오인해 같은 기록을 다시 넣는다(leads-04). 저장은 성공 토스트, 경고는 warning 배너.
+      showToast("연락 기록이 저장되었습니다.")
+      // 새 경고가 있을 때만 갱신한다 — 이번 저장에 경고가 없다고 해서 아직 사용자가 닫지 않은
+      // 이전 경고를 조용히 지우지 않는다(UX 규약 3: 실패·경고는 자동 소멸하지 않는다. 리뷰 발견 4).
+      if (data.warning) setSyncWarning(`상태 동기화 실패: ${data.warning}`)
     } catch (err) {
       const error = err instanceof Error ? err : new Error("연락 기록을 저장하지 못했습니다.")
       showToast(error.message, "error")
@@ -624,32 +850,52 @@ export default function LeadsBoardClient() {
     }
   }
 
-  // 벌크 PATCH 공통기 — 8건씩 끊어 보낸다. 수백 건을 한 번에 발사하면 브라우저 연결 한도와
-  // 서버가 같이 밀리고, 부분 실패 시 어디까지 갔는지도 알기 어렵다. 성공 행은 서버 응답
+  // 벌크 PATCH 공통기 — 동시성 정책은 runInChunks(파일 상단) 한 곳. 성공 행은 서버 응답
   // 리드로 병합한다(낙관적 덮어쓰기 금지 — confirmed_at 등 서버 산출 필드 보존).
   const patchLeadsInChunks = async (ids: string[], body: Record<string, unknown>, fallbackMessage: string) => {
-    const succeeded: LeadRecord[] = []
-    let firstError: Error | null = null
-    const CHUNK = 8
-    for (let i = 0; i < ids.length; i += CHUNK) {
-      const chunk = ids.slice(i, i + CHUNK)
-      const settled = await Promise.allSettled(
-        chunk.map(async (id) => {
-          const res = await adminFetch(`/api/admin/leads/${id}`, { method: "PATCH", body: JSON.stringify(body) })
-          const data = await readAdminResponse<{ lead: LeadRecord }>(res, fallbackMessage)
-          return data.lead
-        })
-      )
-      for (const result of settled) {
-        if (result.status === "fulfilled") succeeded.push(result.value)
-        else if (!firstError) firstError = result.reason instanceof Error ? result.reason : new Error(fallbackMessage)
-      }
-    }
+    const { succeeded, failedIds, firstError } = await runInChunks(
+      ids,
+      async (id) => {
+        const res = await adminFetch(`/api/admin/leads/${id}`, { method: "PATCH", body: JSON.stringify(body) })
+        const data = await readAdminResponse<{ lead: LeadRecord }>(res, fallbackMessage)
+        return data.lead
+      },
+      { fallbackMessage }
+    )
     if (succeeded.length > 0) {
       const merged = new Map(succeeded.map((lead) => [lead.id, lead]))
       setLeads((prev) => prev.map((lead) => merged.get(lead.id) ?? lead))
     }
-    return { succeeded, failedCount: ids.length - succeeded.length, firstError }
+    return { succeeded, failedIds, failedCount: failedIds.length, firstError }
+  }
+
+  // 벌크 부분 실패 → 목록 상단 고정 배너. 토스트 3초로는 원인을 읽고 어떤 리드가 실패했는지
+  // 확인할 수 없었다(leads-02). '실패 항목만 다시 선택'으로 같은 작업을 실패분에만 반복한다.
+  const reportBulkFailure = (
+    verb: string,
+    succeededCount: number,
+    failedIds: string[],
+    firstError: Error | null,
+    fallbackMessage: string
+  ) => {
+    const reason = firstError?.message ?? fallbackMessage
+    setBulkNotice({
+      tone: "danger",
+      title: succeededCount > 0 ? `일부 리드를 ${verb}하지 못했습니다` : `리드를 ${verb}하지 못했습니다`,
+      message:
+        succeededCount > 0
+          ? `${succeededCount}건 ${verb}, ${failedIds.length}건 실패 · ${reason}`
+          : `${failedIds.length}건 실패 · ${reason}`,
+      failedIds,
+    })
+  }
+
+  const reselectFailedLeads = () => {
+    if (!bulkNotice?.failedIds?.length) return
+    const failed = new Set(bulkNotice.failedIds)
+    setSelectedLeadIds(new Set(leads.filter((lead) => failed.has(lead.id)).map((lead) => lead.id)))
+    setView("console")
+    setBulkNotice(null)
   }
 
   // "확인" 실행기 — 공개 채널 리드를 기본 리드 화면으로 승격한다. 단건(드로어) · 다건(수신함
@@ -666,18 +912,13 @@ export default function LeadsBoardClient() {
       return next
     })
     try {
-      const { succeeded, failedCount, firstError } = await patchLeadsInChunks(
+      const { succeeded, failedIds, firstError } = await patchLeadsInChunks(
         uniqueIds,
         { confirmed: true },
         "리드를 확인 처리하지 못했습니다."
       )
-      if (failedCount > 0) {
-        showToast(
-          succeeded.length > 0
-            ? `${succeeded.length}건 확인, ${failedCount}건 실패: ${firstError?.message ?? ""}`
-            : firstError?.message ?? "리드를 확인 처리하지 못했습니다.",
-          "error"
-        )
+      if (failedIds.length > 0) {
+        reportBulkFailure("확인 처리", succeeded.length, failedIds, firstError, "리드를 확인 처리하지 못했습니다.")
         return
       }
       showToast(`${succeeded.length}건 확인 처리했습니다.`)
@@ -728,32 +969,78 @@ export default function LeadsBoardClient() {
     }
   }
 
+  // 벌크 되돌리기 실행 — 대상마다 복원할 status가 다를 수 있다(되돌리기 전 상태가
+  // 제각각이던 리드들을 이번 벌크 변경으로 한 상태에 몰아준 경우). status별로 묶어
+  // patchLeadsInChunks를 그대로 재사용한다 — 벌크 변경과 같은 청크·동시성 규칙을 쓰기
+  // 위함이지 새 PATCH 로직이 아니다. 실패한 되돌리기 재시도는 제공하지 않는다(원래
+  // 값으로 다시 상태를 바꾸면 되므로 사용자가 보드에서 직접 재조작할 수 있다).
+  const runBulkStatusUndo = async (plan: LeadStatusUndoRequest[]) => {
+    if (plan.length === 0) return
+    const idsByStatus = new Map<LeadStatus, string[]>()
+    for (const entry of plan) {
+      const idsForStatus = idsByStatus.get(entry.status) ?? []
+      idsForStatus.push(entry.id)
+      idsByStatus.set(entry.status, idsForStatus)
+    }
+    const results = await Promise.all(
+      Array.from(idsByStatus.entries()).map(([status, idsForStatus]) =>
+        patchLeadsInChunks(idsForStatus, { status }, "상태를 되돌리지 못했습니다.")
+      )
+    )
+    const succeededCount = results.reduce((sum, result) => sum + result.succeeded.length, 0)
+    const failedIds = results.flatMap((result) => result.failedIds)
+    const firstError = results.find((result) => result.firstError)?.firstError ?? null
+    if (failedIds.length > 0) {
+      // 다른 벌크 작업과 같은 규약 — 부분 실패는 닫기 전까지 남는 상단 배너로 알리고 실패분 재선택을 준다.
+      reportBulkFailure("상태 복원", succeededCount, failedIds, firstError, "상태를 되돌리지 못했습니다.")
+      return
+    }
+    showToast("되돌렸습니다.")
+  }
+
   // 벌크 상태 변경 — 선택한 신규 리드를 "연락중"으로 넘기거나 선택 전체를 "종료"로 정리한다.
+  // "종료"는 활성 파이프라인에서 빠지는 단계 전환이라 requestBulkStatus 의 확인 다이얼로그를 거친다.
   const handleBulkStatus = async (ids: string[], status: LeadStatus) => {
     const uniqueIds = Array.from(new Set(ids)).filter(Boolean)
     if (uniqueIds.length === 0) return
-    if (
-      status === "closed" &&
-      !confirm(`${uniqueIds.length}건을 "종료" 상태로 변경할까요? 활성 파이프라인에서 빠집니다.`)
-    )
-      return
+    // 되돌리기 계획은 PATCH 전 상태 기준이라, 청크 PATCH가 leads를 서버 응답으로 덮기
+    // 전에 미리 스냅샷해 둔다.
+    const previousStatusById = new Map(leads.map((lead) => [lead.id, lead.status]))
     setBulkWorking(true)
     try {
-      const { succeeded, failedCount, firstError } = await patchLeadsInChunks(
+      const { succeeded, failedIds, firstError } = await patchLeadsInChunks(
         uniqueIds,
         { status },
         "상태를 변경하지 못했습니다."
       )
-      if (failedCount > 0) {
-        showToast(
-          succeeded.length > 0
-            ? `${succeeded.length}건 변경, ${failedCount}건 실패: ${firstError?.message ?? ""}`
-            : firstError?.message ?? "상태를 변경하지 못했습니다.",
-          "error"
-        )
+      // 실패한 건은 애초에 상태가 안 바뀌었으니 되돌릴 계획에서 뺀다.
+      const changes: LeadStatusChange[] = []
+      for (const lead of succeeded) {
+        const previous = previousStatusById.get(lead.id)
+        if (previous) changes.push({ id: lead.id, previous, next: status })
+      }
+      const undoPlan = buildStatusUndoPlan(changes)
+      const undoAction =
+        undoPlan.length > 0
+          ? { label: describeStatusUndo(undoPlan, STATUS_LABEL), onClick: () => void runBulkStatusUndo(undoPlan) }
+          : undefined
+      if (failedIds.length > 0) {
+        // 부분 실패는 닫기 전까지 남는 상단 배너(실패분 재선택 포함)로 알린다. 성공한 건의 되돌리기는
+        // 배너와 별개로 토스트에 남긴다 — 실패 원인을 읽는 동안에도 방금 바뀐 건을 되돌릴 수 있어야 한다.
+        reportBulkFailure("변경", succeeded.length, failedIds, firstError, "상태를 변경하지 못했습니다.")
+        if (succeeded.length > 0 && undoAction) {
+          showToast(`${succeeded.length}건을 "${STATUS_LABEL[status]}" 상태로 변경했습니다.`, "success", {
+            action: undoAction,
+            durationMs: 8000,
+          })
+        }
         return
       }
-      showToast(`${succeeded.length}건을 "${STATUS_LABEL[status]}" 상태로 변경했습니다.`)
+      showToast(
+        `${succeeded.length}건을 "${STATUS_LABEL[status]}" 상태로 변경했습니다.`,
+        "success",
+        undoAction ? { action: undoAction, durationMs: 8000 } : undefined
+      )
     } finally {
       setBulkWorking(false)
     }
@@ -783,13 +1070,24 @@ export default function LeadsBoardClient() {
       const selectedIds = new Set(uniqueIds)
       const profile = buildLeadAssignmentProfile(leads.filter((lead) => selectedIds.has(lead.id)))
       const ownerLabel = crmOwners.find((owner) => owner.ownerKey === ownerKey)?.displayName ?? ownerKey
-      if (
-        !confirm(
-          `${uniqueIds.length}건을 "${ownerLabel}" 담당자에게 배정할까요?\n${formatLeadAssignmentProfile(profile)}`
-        )
-      )
-        return
+      // 배정 확인은 공용 다이얼로그로 — 실행은 runBulkAssignRequest 가 이어받는다.
+      setBulkAssignRequest({
+        ids: uniqueIds,
+        ownerKey,
+        preview,
+        ownerLabel,
+        profileText: formatLeadAssignmentProfile(profile),
+      })
+      return
     }
+    await runBulkAssign(uniqueIds, ownerKey, preview)
+  }
+
+  const runBulkAssign = async (
+    uniqueIds: string[],
+    ownerKey: string | null,
+    preview: LeadAssignmentPreviewResponse | undefined
+  ) => {
     setBulkWorking(true)
     try {
       const data = await applyLeadAssignment(uniqueIds, ownerKey, preview)
@@ -804,24 +1102,26 @@ export default function LeadsBoardClient() {
           : `${data.updated}건의 담당자 배정을 해제했습니다.`
       )
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "담당자를 저장하지 못했습니다.", "error")
+      // 서버 한 번의 UPDATE라 전량 실패다 — 선택은 그대로 남아 있으니 배너에서 바로 재시도할 수 있다.
+      reportBulkFailure(
+        "배정",
+        0,
+        uniqueIds,
+        err instanceof Error ? err : null,
+        "담당자를 저장하지 못했습니다."
+      )
     } finally {
       setBulkWorking(false)
     }
   }
 
-  const handleDeleteMany = async (
-    ids: string[],
-    options?: { confirmMessage?: string; successMessage?: string }
-  ) => {
+  // 삭제 실행기 — 단건(행·드로어)·다건(벌크 바) 공용. 실제 실행은 항상 requestDeleteMany가 띄우는
+  // 확인 다이얼로그를 거친 뒤에만 호출된다(이 함수 자체는 confirm을 갖지 않는다). DELETE도
+  // PATCH와 같은 runInChunks(8건) 정책을 쓴다 — 전량 동시 발사로 연결을 밀어내지 않는다.
+  // 소프트 삭제·복구(C3)는 기획안 §6 결정5 대기 항목이라 여기 넣지 않는다.
+  const handleDeleteMany = async (ids: string[], options?: { successMessage?: string }) => {
     const uniqueIds = Array.from(new Set(ids)).filter(Boolean)
     if (uniqueIds.length === 0) return
-
-    const confirmMessage =
-      options?.confirmMessage ??
-      `${uniqueIds.length}개 리드를 완전히 삭제할까요? 실수/스팸 리드 정리용이며 되돌릴 수 없습니다.`
-
-    if (!confirm(confirmMessage)) return
 
     setDeletingIds((prev) => {
       const next = new Set(prev)
@@ -830,36 +1130,39 @@ export default function LeadsBoardClient() {
     })
 
     try {
-      const results = await Promise.allSettled(
-        uniqueIds.map(async (id) => {
+      const { succeeded: deletedIds, failedIds, firstError } = await runInChunks(
+        uniqueIds,
+        async (id) => {
           const res = await adminFetch(`/api/admin/leads/${id}`, { method: "DELETE" })
           await readAdminResponse<{ ok: true }>(res, "리드를 삭제하지 못했습니다.")
           return id
-        })
+        },
+        { fallbackMessage: "리드를 삭제하지 못했습니다." }
       )
-      const deletedIds = results
-        .filter((result): result is PromiseFulfilledResult<string> => result.status === "fulfilled")
-        .map((result) => result.value)
-      const failed = results.find((result): result is PromiseRejectedResult => result.status === "rejected")
-      const failedCount = uniqueIds.length - deletedIds.length
 
       if (deletedIds.length > 0) {
         const deletedIdSet = new Set(deletedIds)
         setLeads((prev) => prev.filter((lead) => !deletedIdSet.has(lead.id)))
-        setSelected((prev) => (prev && deletedIdSet.has(prev.id) ? null : prev))
+        // 드로어가 보여주던 리드가 삭제 대상에 포함되면 closeSelectedLead()로 닫는다 — 그냥
+        // setSelected(null)만 하면 closeSelectedLead의 url.searchParams.delete("lead")를 타지
+        // 않아 이미 삭제된 리드를 가리키는 ?lead= 가 주소창에 남는다(리뷰 발견 1). selected가
+        // (드물게) 이 클로저와 어긋나는 경우를 대비해 함수형 폴백도 유지한다.
+        if (selected && deletedIdSet.has(selected.id)) {
+          closeSelectedLead()
+        } else {
+          setSelected((prev) => (prev && deletedIdSet.has(prev.id) ? null : prev))
+        }
         setSelectedLeadIds((prev) => {
           const next = new Set(prev)
           deletedIds.forEach((id) => next.delete(id))
           return next
         })
+        // 행이 사라졌으니 포커스를 목록 섹션으로 옮긴다 — 사라진 버튼에 남은 포커스는 body로 떨어진다.
+        listSectionRef.current?.focus({ preventScroll: true })
       }
 
-      if (failedCount > 0) {
-        const message = failed?.reason instanceof Error ? failed.reason.message : "리드를 삭제하지 못했습니다."
-        showToast(
-          deletedIds.length > 0 ? `${deletedIds.length}개 삭제, ${failedCount}개 실패: ${message}` : message,
-          "error"
-        )
+      if (failedIds.length > 0) {
+        reportBulkFailure("삭제", deletedIds.length, failedIds, firstError, "리드를 삭제하지 못했습니다.")
         return
       }
 
@@ -873,12 +1176,61 @@ export default function LeadsBoardClient() {
     }
   }
 
-  const handleDelete = async (id: string) => {
-    const lead = leads.find((item) => item.id === id)
-    await handleDeleteMany([id], {
-      confirmMessage: `"${getLeadDisplayName(lead)}" 리드를 완전히 삭제할까요? 연락 기록도 함께 정리되며 되돌릴 수 없습니다.`,
-      successMessage: "리드가 삭제되었습니다.",
-    })
+  const requestBulkStatus = (ids: string[], status: LeadStatus) => {
+    const uniqueIds = Array.from(new Set(ids)).filter(Boolean)
+    if (uniqueIds.length === 0) return
+    if (status === "closed") {
+      setCloseLeadsRequest({ ids: uniqueIds })
+      return
+    }
+    void handleBulkStatus(uniqueIds, status)
+  }
+
+  const runCloseLeadsRequest = async () => {
+    if (!closeLeadsRequest || closeLeadsBusy) return
+    setCloseLeadsBusy(true)
+    try {
+      await handleBulkStatus(closeLeadsRequest.ids, "closed")
+    } finally {
+      // 삭제 플로우와 동일하게 finally에서만 요청을 비운다 — 다이얼로그가 처리가 끝날 때까지
+      // 열려 있어야 그 사이의 loading={closeLeadsBusy}이 실제로 화면에 보인다(리뷰 발견 2).
+      setCloseLeadsBusy(false)
+      setCloseLeadsRequest(null)
+    }
+  }
+
+  const runBulkAssignRequest = async () => {
+    if (!bulkAssignRequest || bulkAssignBusy) return
+    const request = bulkAssignRequest
+    setBulkAssignBusy(true)
+    try {
+      await runBulkAssign(request.ids, request.ownerKey, request.preview)
+    } finally {
+      setBulkAssignBusy(false)
+      setBulkAssignRequest(null)
+    }
+  }
+
+  // 삭제 진입점 — 행 액션·드로어·벌크 바 전부 여기를 거친다. 다이얼로그의 onConfirm이 실제 실행.
+  const requestDeleteMany = (ids: string[], options?: { successMessage?: string }) => {
+    const uniqueIds = Array.from(new Set(ids)).filter(Boolean)
+    if (uniqueIds.length === 0) return
+    setDeleteLeadsRequest({ ids: uniqueIds, successMessage: options?.successMessage })
+  }
+
+  const runDeleteLeadsRequest = async () => {
+    if (!deleteLeadsRequest || deleteLeadsBusy) return
+    setDeleteLeadsBusy(true)
+    try {
+      await handleDeleteMany(deleteLeadsRequest.ids, { successMessage: deleteLeadsRequest.successMessage })
+    } finally {
+      setDeleteLeadsBusy(false)
+      setDeleteLeadsRequest(null)
+    }
+  }
+
+  const handleDelete = (id: string) => {
+    requestDeleteMany([id], { successMessage: "리드가 삭제되었습니다." })
   }
 
   const deferredSearch = useDeferredValue(searchQuery)
@@ -927,6 +1279,8 @@ export default function LeadsBoardClient() {
     leadMagnetOptions,
     sourceGroupChips,
     sourceChipTotal,
+    segmentCounts,
+    segmentBlockedByCompassDown,
     filtered,
     filteredIds,
     overdueFollowUps,
@@ -969,8 +1323,19 @@ export default function LeadsBoardClient() {
       new Set(lensLeads.map((lead) => lead.lead_magnet?.trim()).filter(Boolean) as string[])
     ).sort((a, b) => a.localeCompare(b, "ko"))
     const searchTokens = tokenizeLeadSearch(deferredSearch)
+    // Compass 매칭 리드는 학원명·담당명도 검색 대상에 포함한다(S2, 2026-09-20 Compass 정리
+    // 라운드). 공유 규칙(matchesLeadScopeFilters)은 리드 레코드 필드만 보므로, 그 축은 아래
+    // scopeCriteria에서 끄고(searchTokens: []) matchesSearch로 별도 AND 한다 — 칩·트래킹·
+    // 미확인·목록 전부 같은 판정을 봐야 카운트와 목록이 어긋나지 않는다(유입 칩과 같은 원칙).
+    const compassSearchTerms = (lead: LeadRecord): Array<string | null> => {
+      const entry = compass.down ? undefined : compass.lookup(lead)
+      return entry ? [entry.academy, entry.name] : []
+    }
+    const matchesSearch = (lead: LeadRecord) =>
+      matchesLeadSearch(lead, searchTokens, { extraTerms: compassSearchTerms(lead) })
     // 상태와 직교하는 범위 축 한 벌. 유입 칩·트래킹 롤업·미확인 수신함이 같은 판정을 본다
-    // (규칙 정본: lib/crm/leads-board-state.matchesLeadScopeFilters).
+    // (규칙 정본: lib/crm/leads-board-state.matchesLeadScopeFilters). 검색은 matchesSearch가
+    // Compass 확장까지 대신하므로 searchTokens는 항상 빈 배열로 넘긴다.
     const scopeCriteria: LeadScopeCriteria = {
       sourceGroup,
       sourceDetail: sourceDetailFilter,
@@ -978,10 +1343,19 @@ export default function LeadsBoardClient() {
       leadMagnet: leadMagnetFilter,
       trackingDimension,
       trackingKey,
-      searchTokens,
+      searchTokens: [],
     }
-    // 수신함·게이트 배지가 세는 모집단 — 지금 화면이 보고 있는 범위 그대로.
-    const unconfirmedLeads = selectScopedUnconfirmedLeads(lensLeads, scopeCriteria)
+    // 세그먼트 판정(S1) — Compass가 끊겼는데 지금 고른 세그먼트가 Compass 필요 축(인계·기존)
+    // 이면 무음으로 0건을 만들지 않고 필터를 통과시킨다(전체로 표시). 캡션이 이유를 알린다.
+    const segmentBlockedByCompassDown =
+      Boolean(LEAD_SEGMENTS.find((item) => item.id === segment)?.needsCompass) && compass.down
+    const matchesSegmentFor = (lead: LeadRecord) =>
+      segmentBlockedByCompassDown ||
+      matchesLeadSegment(lead, segment, { overlay: compass.lookup(lead), compassDown: compass.down })
+    // 수신함·게이트 배지가 세는 모집단 — 지금 화면이 보고 있는 범위 그대로(검색·세그먼트 포함).
+    const unconfirmedLeads = selectScopedUnconfirmedLeads(lensLeads, scopeCriteria).filter(
+      (lead) => matchesSearch(lead) && matchesSegmentFor(lead)
+    )
     // 상태별 필터 술어 — 목록·필터 카드 카운트가 같은 판정을 공유한다(카운트≠목록 어긋남 방지).
     const matchesStatusFilter = (lead: LeadRecord, key: LeadFilter) => {
       if (key === "all") return true
@@ -992,10 +1366,10 @@ export default function LeadsBoardClient() {
       if (key === "unassigned") return isActiveLead(lead.status) && !lead.assigned_to?.trim()
       return lead.status === key
     }
-    // 상태 외 필터(유입·세부유입·채널·마그넷·트래킹·검색) 술어 — 필터 카드·유입 칩 카운트가
-    // "그 카드를 눌렀을 때 실제로 보게 될 건수"를 보여주기 위해 공유한다.
+    // 상태 외 필터(유입·세부유입·채널·마그넷·트래킹·검색·세그먼트) 술어 — 필터 카드·유입 칩
+    // 카운트가 "그 카드를 눌렀을 때 실제로 보게 될 건수"를 보여주기 위해 공유한다.
     const matchesSubFilters = (lead: LeadRecord, options?: { skipSourceGroup?: boolean }) =>
-      matchesLeadScopeFilters(lead, scopeCriteria, options)
+      matchesLeadScopeFilters(lead, scopeCriteria, options) && matchesSearch(lead) && matchesSegmentFor(lead)
     // 상태/SLA 필터까지만 적용한 중간 집합 — 아래 유입·검색 필터는 이 집합 위에서 돈다.
     const statusFiltered = lensLeads.filter((lead) => {
       // 응대 SLA 큐·미확인 큐가 아니면 검토 전 리드는 기본 화면에서 숨긴다("미확인 포함"으로 해제).
@@ -1016,10 +1390,20 @@ export default function LeadsBoardClient() {
       .map((group) => ({ group, label: SOURCE_GROUP_LABEL[group], count: sourceGroupCounts.get(group) ?? 0 }))
       // 현재 상태 뷰에 존재하는 묶음만 노출하되, 이미 선택한 그룹은 0건이어도 남겨 해제할 수 있게 한다.
       .filter((chip) => chip.count > 0 || chip.group === sourceGroup)
-    // 트래킹 롤업이 보는 집합 — 렌즈+상태+유입+검색까지. 롤업 행을 고르면 여기서 한 겹 더 좁힌다.
-    // (트래킹 키 자체는 제외 — 롤업 표가 키별 건수를 보여주는 모집단이므로.)
-    const trackingScopeLeads = statusFiltered.filter((lead) =>
-      matchesLeadScopeFilters(lead, scopeCriteria, { skipTracking: true })
+    // 세그먼트 칩 카운트(S1) — "세그먼트만 뺀 나머지 필터"를 통과한 모집단 기준(유입 칩의
+    // skipSourceGroup과 같은 원리). countLeadSegments가 Compass 끊김이면 인계·기존을
+    // null(연결 끊김)로 셈해 화면이 "0건"과 "모름"을 구분하게 한다.
+    const segmentScope = statusFiltered.filter(
+      (lead) => matchesLeadScopeFilters(lead, scopeCriteria) && matchesSearch(lead)
+    )
+    const segmentCounts = countLeadSegments(segmentScope, (lead) => compass.lookup(lead), compass.down)
+    // 트래킹 롤업이 보는 집합 — 렌즈+상태+유입+검색+세그먼트까지. 롤업 행을 고르면 여기서 한 겹 더
+    // 좁힌다.(트래킹 키 자체는 제외 — 롤업 표가 키별 건수를 보여주는 모집단이므로.)
+    const trackingScopeLeads = statusFiltered.filter(
+      (lead) =>
+        matchesLeadScopeFilters(lead, scopeCriteria, { skipTracking: true }) &&
+        matchesSearch(lead) &&
+        matchesSegmentFor(lead)
     )
     const filtered = sortLeads(
       trackingKey
@@ -1142,6 +1526,8 @@ export default function LeadsBoardClient() {
       leadMagnetOptions,
       sourceGroupChips,
       sourceChipTotal,
+      segmentCounts,
+      segmentBlockedByCompassDown,
       filtered,
       filteredIds,
       overdueFollowUps,
@@ -1174,6 +1560,8 @@ export default function LeadsBoardClient() {
     sourceDetailFilter,
     channelSource,
     leadMagnetFilter,
+    segment,
+    compass,
     deferredSearch,
     nowMs,
   ])
@@ -1200,6 +1588,7 @@ export default function LeadsBoardClient() {
     sourceDetailFilter,
     channelSource,
     leadMagnetFilter,
+    segment,
     searchQuery,
     collapseLeads,
   ])
@@ -1370,7 +1759,7 @@ export default function LeadsBoardClient() {
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">리드</h1>
-          {/* 뷰 축은 제목 아래 — 액션 줄에 섞으면 CSV·새로고침과 같은 무게가 된다.
+          {/* 뷰 축은 제목 아래 — 액션 줄에 섞으면 CSV·리드 등록과 같은 무게가 된다.
               전환은 어떤 상태도 리셋하지 않고, 같은 filter 를 뷰마다 다르게 해석할 뿐이다. */}
           <div className="mt-3 flex flex-wrap items-center gap-2">
           <div
@@ -1422,12 +1811,7 @@ export default function LeadsBoardClient() {
           </div>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-          {/* 지금 보는 숫자가 언제 것인지 — 캐시본/이전 로드와 혼동하지 않게 갱신 시각을 남긴다. */}
-          {lastLoadedAt ? (
-            <span className="text-[11px] tabular-nums text-[#1a1a1a]/40">
-              {lastLoadedAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 갱신
-            </span>
-          ) : null}
+          {/* 갱신 시각·새로고침은 목록 위 신선도 캡션(FreshnessCaption)으로 옮겼다(P2) — 같은 동작을 두 곳에 두지 않는다. */}
           <button
             type="button"
             onClick={() => setLeadModalOpen(true)}
@@ -1446,15 +1830,6 @@ export default function LeadsBoardClient() {
             <Download className="h-3.5 w-3.5" />
             CSV
           </button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void fetchLeads({ force: true })}
-            disabled={loading}
-            className="h-9 flex-1 gap-1.5 rounded-lg text-[12px] sm:flex-none"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />새로고침
-          </Button>
         </div>
       </div>
 
@@ -1553,6 +1928,57 @@ export default function LeadsBoardClient() {
           onSelect={setSelected}
         />
       )}
+
+      {/* 세그먼트 칩(S1, Compass 정리 라운드 2026-09-20) — 필터 카드 위, 검색·다른 필터와 AND.
+          "메타 광고/인계/기존/고객"을 한 번에 고른다. 인계·기존은 Compass 오버레이가 있어야
+          판정되므로 끊기면 칩을 비활성 + "연결 끊김"으로 낮춘다(0건으로 보이면 안 된다).
+          ?segment= 딥링크로 진입하면 해당 칩이 눌린 채로 열린다. */}
+      <div
+        id="lead-segment-chips"
+        role="group"
+        aria-label="리드 세그먼트"
+        className={`mb-3 flex flex-wrap items-center gap-1.5 ${MOBILE_TOUCH_TARGET_CLASS}`}
+      >
+        {LEAD_SEGMENTS.map((item) => {
+          const active = segment === item.id
+          const compassBlocked = item.needsCompass && compass.down
+          const compassLoading = item.needsCompass && !compass.down && compass.loading
+          const count = segmentCounts[item.id]
+          return (
+            <button
+              key={item.id}
+              type="button"
+              disabled={compassBlocked}
+              onClick={() => setSegment(active ? "all" : item.id)}
+              aria-pressed={active}
+              title={item.hint}
+              className={`inline-flex h-[30px] items-center gap-1.5 rounded-full border px-3 text-[12px] font-medium transition-colors ${
+                compassBlocked
+                  ? "cursor-not-allowed border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/30"
+                  : active
+                    ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                    : "border-[#e8e8e4] bg-white text-[#111110] hover:border-[#c8c8c4]"
+              }`}
+            >
+              {item.shortLabel}
+              {compassBlocked ? (
+                <span className="text-[11px]">연결 끊김</span>
+              ) : compassLoading ? (
+                <span aria-hidden className="inline-block h-3 w-5 animate-pulse rounded bg-[#f0f0ec]" />
+              ) : (
+                <span className={`tabular-nums ${active ? "text-[#084734]/70" : "text-[#1a1a1a]/40"}`}>
+                  {count ?? 0}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+      {segmentBlockedByCompassDown ? (
+        <p role="status" className="mb-3 text-[12px] text-[#7A520F]">
+          Compass 연결이 끊겨 인계·기존 리드를 가릴 수 없습니다 — 전체로 표시
+        </p>
+      ) : null}
 
       {/* 필터 카운트 카드 — 숫자로 들어가는 단일 창구 */}
       <div
@@ -1750,10 +2176,16 @@ export default function LeadsBoardClient() {
           leadMagnetFilter !== "all" ||
           channelSource ||
           trackingKey ||
+          segment !== "all" ||
           searchQuery.trim()) && (
           <div className="mt-3 flex items-center justify-between gap-3 text-[12px] text-[#1a1a1a]/45">
             <span>
-              현재 조건 {filtered.length}건
+              {/* S2 — 검색 중에는 "검색 N건"으로, 아니면 "현재 조건 N건"으로. 세그먼트가
+                  기존 캡션에 합쳐지므로 별도 캡션을 새로 만들지 않는다. */}
+              {searchQuery.trim() ? `검색 ${filtered.length}건` : `현재 조건 ${filtered.length}건`}
+              {segment !== "all"
+                ? ` · 세그먼트 ‘${LEAD_SEGMENTS.find((item) => item.id === segment)?.shortLabel ?? segment}’`
+                : ""}
               {sourceGroup !== "all" ? ` · 유입 ‘${SOURCE_GROUP_LABEL[sourceGroup]}’` : ""}
               {channelSource ? ` · 채널 ‘${channelSource}’` : ""}
               {trackingKey
@@ -1769,6 +2201,7 @@ export default function LeadsBoardClient() {
                 setLeadMagnetFilter("all")
                 setChannelSource("")
                 setTrackingKey(null)
+                setSegment("all")
               }}
               className="font-medium text-[#084734] hover:text-[#065c41]"
             >
@@ -1777,6 +2210,33 @@ export default function LeadsBoardClient() {
           </div>
         )}
       </div>
+
+      {/* 목록 섹션 — 삭제 등으로 행이 사라진 뒤 포커스 착지점(tabIndex=-1). */}
+      <div ref={listSectionRef} tabIndex={-1} aria-label="리드 목록" className="outline-none">
+      {/* 신선도 캡션 — 필터 아래·목록 위에서 "갱신 N초 전"(P2). /api/admin/leads 는 generatedAt 이 없어 받은 시각만 적는다.
+          강제 재조회(force)는 이 버튼이 유일하다. */}
+      <FreshnessCaption
+        className="mb-2 px-0.5"
+        receivedAt={lastLoadedAt?.getTime() ?? null}
+        refreshing={loading || revalidating}
+        staleReason={loadError && leads.length > 0 ? "error" : null}
+        onRefresh={() => void fetchLeads({ force: true })}
+      />
+      {/* 벌크 부분 실패 배너 — 닫기 전까지 남고, 실패한 리드만 다시 선택해 재시도할 수 있다. */}
+      {bulkNotice ? (
+        <CrmNoticeBanner
+          tone={bulkNotice.tone}
+          title={bulkNotice.title}
+          message={bulkNotice.message}
+          className="mb-4"
+          action={
+            bulkNotice.failedIds && bulkNotice.failedIds.length > 0
+              ? { label: "실패 항목만 다시 선택", onClick: reselectFailedLeads, pending: bulkWorking || deletingIds.size > 0 }
+              : undefined
+          }
+          onDismiss={() => setBulkNotice(null)}
+        />
+      ) : null}
 
       {view === "console" && selectedLeadIds.size > 0 && (
         <LeadsBulkBar
@@ -1803,8 +2263,8 @@ export default function LeadsBoardClient() {
           onOwnerKeyChange={setBulkOwnerKey}
           onAssign={() => void handleBulkAssign(Array.from(selectedLeadIds), bulkOwnerKey)}
           onUnassign={() => void handleBulkAssign(Array.from(selectedLeadIds), null)}
-          onCloseSelected={() => void handleBulkStatus(Array.from(selectedLeadIds), "closed")}
-          onDeleteSelected={() => void handleDeleteMany(Array.from(selectedLeadIds))}
+          onCloseSelected={() => requestBulkStatus(Array.from(selectedLeadIds), "closed")}
+          onDeleteSelected={() => requestDeleteMany(Array.from(selectedLeadIds))}
           onSelectSafeTargets={(safeLeadIds) => setSelectedLeadIds(new Set(safeLeadIds))}
         />
       )}
@@ -1856,6 +2316,7 @@ export default function LeadsBoardClient() {
             setLeadMagnetFilter("all")
             setChannelSource("")
             setTrackingKey(null)
+            setSegment("all")
           }}
         />
       ) : (
@@ -1871,6 +2332,7 @@ export default function LeadsBoardClient() {
           compassOverlay={compass.overlay}
         />
       )}
+      </div>
 
       {/* 드로어 */}
       {selected && (
@@ -1889,8 +2351,13 @@ export default function LeadsBoardClient() {
           initialContactType={contactDraft?.leadId === selected.id ? contactDraft.type : undefined}
           crmOwners={crmOwners}
           crmOwnerHealth={crmOwnerHealth}
+          currentOwner={crmCurrentOwner}
           onClose={closeSelectedLead}
-          onStatusChange={handleStatus}
+          // 드로어는 저장 완료를 기다리기만 한다(void | Promise<void>) — 성공 여부(boolean)는
+          // 되돌리기 액션의 재귀 호출만 쓰므로 여기서 버린다.
+          onStatusChange={async (id, status) => {
+            await handleStatus(id, status)
+          }}
           onNotesChange={handleNotes}
           onFollowUpChange={handleFollowUp}
           onAssignedToChange={handleAssignedTo}
@@ -1910,7 +2377,10 @@ export default function LeadsBoardClient() {
 
       {/* 전환 완료 패널 — 생성/재사용된 딜·고객으로 바로 이동 */}
       {convertResult && (
-        <div className="fixed bottom-6 right-6 z-[60] w-[320px] rounded-xl border border-black/[0.08] bg-white p-4 shadow-xl">
+        <div
+          ref={convertResultPanelRef}
+          className="fixed bottom-6 right-6 z-[60] w-[320px] rounded-xl border border-black/[0.08] bg-white p-4 shadow-xl"
+        >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="text-[13px] font-semibold text-[#1a1a1a]">
@@ -2000,8 +2470,99 @@ export default function LeadsBoardClient() {
         confirmLoadingLabel="전환 중..."
         irreversibleNote="되돌릴 수 없습니다 — 전환 후에는 리드로 되돌릴 수 없습니다."
       />
+      <DeleteConfirmDialog
+        open={deleteLeadsRequest !== null}
+        onClose={() => {
+          if (!deleteLeadsBusy) setDeleteLeadsRequest(null)
+        }}
+        onConfirm={() => void runDeleteLeadsRequest()}
+        loading={deleteLeadsBusy}
+        title={deleteLeadsRequest && deleteLeadsRequest.ids.length > 1 ? "리드 여러 건 삭제" : "리드 삭제"}
+        description={
+          deleteLeadsRequest
+            ? deleteLeadsRequest.ids.length > 1
+              ? `${deleteLeadsRequest.ids.length}건을 완전히 삭제할까요? 대상: ${summarizeLeadNames(leads, deleteLeadsRequest.ids)}. 실수·스팸 리드 정리용입니다.`
+              : `${summarizeLeadNames(leads, deleteLeadsRequest.ids)} 리드를 완전히 삭제할까요?`
+            : "이 리드를 완전히 삭제할까요?"
+        }
+        confirmLabel={deleteLeadsRequest && deleteLeadsRequest.ids.length > 1 ? `${deleteLeadsRequest.ids.length}건 삭제` : "삭제"}
+        confirmLoadingLabel="삭제 중..."
+        irreversibleNote="연락 기록도 함께 삭제되며 되돌릴 수 없습니다."
+      />
+      <DeleteConfirmDialog
+        open={closeLeadsRequest !== null}
+        onClose={() => {
+          if (!closeLeadsBusy) setCloseLeadsRequest(null)
+        }}
+        onConfirm={() => void runCloseLeadsRequest()}
+        loading={closeLeadsBusy}
+        destructive={false}
+        title="리드 종료 처리"
+        description={
+          closeLeadsRequest
+            ? `${closeLeadsRequest.ids.length}건을 "종료" 상태로 변경할까요? 대상: ${summarizeLeadNames(leads, closeLeadsRequest.ids)}. 활성 파이프라인에서 빠집니다.`
+            : "선택한 리드를 종료 상태로 변경할까요?"
+        }
+        confirmLabel="종료 처리"
+        confirmLoadingLabel="처리 중..."
+      />
+      <DeleteConfirmDialog
+        open={bulkAssignRequest !== null}
+        onClose={() => {
+          if (!bulkAssignBusy) setBulkAssignRequest(null)
+        }}
+        onConfirm={() => void runBulkAssignRequest()}
+        loading={bulkAssignBusy}
+        destructive={false}
+        title="담당자 일괄 배정"
+        description={
+          bulkAssignRequest ? (
+            <>
+              {bulkAssignRequest.ids.length}건을 &ldquo;{bulkAssignRequest.ownerLabel}&rdquo; 담당자에게 배정할까요?
+              <span className="mt-2 block whitespace-pre-line">{bulkAssignRequest.profileText}</span>
+            </>
+          ) : (
+            "선택한 리드를 배정할까요?"
+          )
+        }
+        confirmLabel="배정"
+        confirmLoadingLabel="배정 중..."
+      />
 
-      {toast && <Toast msg={toast.msg} type={toast.type} raised={Boolean(convertResult)} />}
+      {/* 연락 기록 저장 성공 + 상태 동기화 경고 병기(leads-04) — 드로어 위(z-70), warning 톤, 닫기 전까지 유지.
+          위치는 bottom-44/28/24/6 추정치가 아니라 toastMeasureRef·convertResultPanelRef로 실측한
+          syncWarningOffsetPx — 토스트·전환 패널이 길어져도 겹치지 않는다(리뷰 발견 3). */}
+      {syncWarning ? (
+        <div
+          className="fixed left-4 right-4 z-[70] sm:left-auto sm:right-6 sm:w-[360px]"
+          style={{ bottom: syncWarningOffsetPx }}
+        >
+          <CrmNoticeBanner
+            tone="warning"
+            title="연락 기록은 저장되었습니다"
+            message={syncWarning}
+            className="shadow-xl"
+            onDismiss={() => setSyncWarning(null)}
+          />
+        </div>
+      ) : null}
+
+      {/* 항상 마운트된 라이브 리전 — 성공 토스트(role=status)는 뜨는 순간 노드가 생겨 첫 알림을
+          스크린리더가 놓칠 수 있다. 텍스트만 갈아끼워 통지한다(실패는 Toast 자체가 role=alert). */}
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {toast?.type === "success" ? toast.msg : ""}
+      </div>
+      {toast && (
+        <div ref={toastMeasureRef}>
+          <Toast
+            msg={toast.msg}
+            type={toast.type}
+            raised={Boolean(convertResult)}
+            action={toast.action}
+            onDismiss={dismissToast}
+          />
+        </div>
+      )}
     </div>
   )
 }

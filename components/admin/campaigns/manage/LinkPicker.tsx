@@ -27,6 +27,8 @@ interface CandidatesResponse {
   smsCampaigns: Candidate[]
   events: Candidate[]
   metaCampaigns: Candidate[]
+  googleCampaigns: Candidate[]
+  naverCampaigns: Candidate[]
 }
 
 // refType → /link-candidates 응답의 채널 키(SSOT 매핑).
@@ -35,6 +37,8 @@ const GROUP_KEY: Record<CampaignRefType, keyof CandidatesResponse> = {
   sms_campaign: "smsCampaigns",
   event: "events",
   meta_campaign: "metaCampaigns",
+  google_campaign: "googleCampaigns",
+  naver_campaign: "naverCampaigns",
 }
 
 interface LinkPickerProps {

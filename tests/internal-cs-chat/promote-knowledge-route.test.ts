@@ -157,8 +157,44 @@ describe("POST /api/admin/cs-chat/messages/[messageId]/promote-knowledge", () =>
         messageId: "assistant-1",
         conversationId: "conv-1",
         correctedContent: "환불은 계약 조건 확인 후 안내합니다.",
+        embed: expect.any(Function),
       }
     )
+  })
+
+  it("redacts PII from the chunk text before it reaches the external embedding API", async () => {
+    mocks.requireVerifiedAdminContext.mockResolvedValue({ role: "ADMIN", name: "CS" })
+    mocks.getInternalCsMessageById.mockResolvedValue(approvedMessage)
+    mocks.promoteMessageToInternalArticle.mockResolvedValue({
+      articleId: "article-x",
+      slug: "cs-assistant-1",
+      reused: false,
+      embeddingFailures: 0,
+    })
+    vi.stubEnv("GEMINI_API_KEY", "test-key")
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ embedding: { values: [0.1, 0.2] } }), { status: 200 })
+    )
+    vi.stubGlobal("fetch", fetchMock)
+
+    try {
+      await promotePost(promoteRequest("assistant-1"), routeContext("assistant-1"))
+      const [, input] = mocks.promoteMessageToInternalArticle.mock.calls[0] as [
+        unknown,
+        { embed: (text: string) => Promise<number[] | null> },
+      ]
+      expect(await input.embed("고객 010-1234-5678 / customer@example.com 환불 안내")).toEqual([0.1, 0.2])
+
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+      const payload = String(init.body)
+      expect(payload).toContain("[phone]")
+      expect(payload).toContain("[email]")
+      expect(payload).not.toContain("010-1234-5678")
+      expect(payload).not.toContain("customer@example.com")
+    } finally {
+      vi.unstubAllEnvs()
+      vi.unstubAllGlobals()
+    }
   })
 
   it("passes reused=true through on re-promotion", async () => {

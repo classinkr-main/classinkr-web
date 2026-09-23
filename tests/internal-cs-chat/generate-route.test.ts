@@ -181,14 +181,15 @@ afterEach(() => {
 })
 
 describe("internal CS attachment evidence", () => {
-  it("labels pending image analysis as unverified context", () => {
+  it("labels pending image analysis as unverified context and redacts PII", () => {
+    // 방금 올린 캡처로 바로 초안을 만드는 흐름 — 검토 대기 분석도 싣되 미확인으로 표시한다.
     const evidence = buildInternalCsAssetEvidence([
       {
         id: "asset-1",
-        original_file_name: "refund-screen.png",
-        analysis_summary: "The screen shows a refund request.",
+        original_file_name: "refund-010-1234-5678.png",
+        analysis_summary: "The screen shows a refund request from customer@example.com.",
         analysis_payload: {
-          extractedText: ["REFUND REQUESTED"],
+          extractedText: ["REFUND REQUESTED 010-1234-5678"],
           sensitiveDataWarnings: ["Account identifier is visible"],
         },
         review_state: "pending",
@@ -198,12 +199,48 @@ describe("internal CS attachment evidence", () => {
 
     expect(evidence.count).toBe(1)
     expect(evidence.text).toContain("treat as unverified unless approved")
-    expect(evidence.text).toContain("REFUND REQUESTED")
+    expect(evidence.text).toContain("REFUND REQUESTED [phone]")
+    expect(evidence.text).toContain("refund request from [email]")
+    expect(evidence.text).not.toContain("010-1234-5678")
+    expect(evidence.text).not.toContain("customer@example.com")
     expect(evidence.sourceRefs).toEqual([
       expect.objectContaining({
         id: "internal-cs-asset:asset-1",
         kind: "internal_asset",
+        label: "Attached image: refund-[phone].png",
         reviewState: "pending",
+      }),
+    ])
+  })
+
+  it("uses the corrected analysis instead of the original OCR and redacts PII", () => {
+    const evidence = buildInternalCsAssetEvidence([
+      {
+        id: "asset-approved",
+        original_file_name: "customer-010-1234-5678.png",
+        analysis_summary: "INCORRECT ORIGINAL SUMMARY",
+        analysis_payload: {
+          extractedText: ["UNSAFE ORIGINAL OCR customer@example.com"],
+          observations: ["UNSAFE ORIGINAL OBSERVATION"],
+        },
+        review_state: "approved",
+        corrected_analysis: "Approved refund evidence for 010-1234-5678 and customer@example.com",
+      } as unknown as InternalCsAssetRow,
+    ])
+
+    expect(evidence.count).toBe(1)
+    expect(evidence.text).toContain("Approved refund evidence for [phone] and [email]")
+    expect(evidence.text).not.toContain("010-1234-5678")
+    expect(evidence.text).not.toContain("customer@example.com")
+    expect(evidence.text).not.toContain("INCORRECT ORIGINAL SUMMARY")
+    expect(evidence.text).not.toContain("UNSAFE ORIGINAL OCR")
+    expect(evidence.text).not.toContain("UNSAFE ORIGINAL OBSERVATION")
+    expect(evidence.sourceRefs).toEqual([
+      expect.objectContaining({
+        id: "internal-cs-asset:asset-approved",
+        kind: "internal_asset",
+        label: "Attached image: customer-[phone].png",
+        reviewState: "approved",
       }),
     ])
   })

@@ -10,6 +10,7 @@ import {
 import { verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { validatePublicMarkdownContent } from "@/lib/admin/public-content-validation"
+import { getBlogPostRevalidatePath } from "@/lib/blog-slug-route"
 
 function revalidatePublicBlogSurfaces(slug?: string) {
   revalidatePath("/blog")
@@ -17,7 +18,8 @@ function revalidatePublicBlogSurfaces(slug?: string) {
   revalidatePath("/sitemap.xml")
   revalidatePath("/updates")
   revalidatePath("/about")
-  if (slug) revalidatePath(`/blog/${slug}`)
+  // 한글 슬러그 글의 ISR 캐시는 proxy 가 rewrite 한 토큰 경로에 붙는다(lib/blog-slug-route.ts).
+  if (slug) revalidatePath(getBlogPostRevalidatePath(slug))
 }
 
 export async function GET(req: NextRequest) {

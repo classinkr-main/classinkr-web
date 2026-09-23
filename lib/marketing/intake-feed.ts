@@ -11,6 +11,9 @@
 //  - 시각 축은 KST(lib/business-time.ts) 단일 기준.
 //  - Compass 리드는 생성(created_at) 또는 최신 재유입(last_inflow_at)이 창 안이면 센다(2026-09-14 R2 F12 —
 //    예전엔 last_inflow_at 만 봐서 Compass 신규가 빠지고 재유입만 셌다). 재유입은 표시로 구분한다.
+//  - 어드민 리드도 같은 유입 축이다(2026-09-21) — 응대 대상 소스의 재문의는 새 행 대신 기존 행의 last_inflow_at 만
+//    갱신하므로(lib/server/lead-capture.ts 재유입 병합) 생성 시각만 보면 재문의가 빠진다. 판정은
+//    lib/crm/lead-reinflow.ts leadInflowInWindow(생성 시각보다 유의미하게 뒤인 last_inflow_at 만 재유입).
 //  - Compass 인바운드 경로(채널톡·다이렉트·워크인·소개)는 세지 않는다 — Compass 대시보드 "오늘"이 마케팅 유입만
 //    세는 규칙(mktLeadCond)과 같게(2026-09-14 후속 수정). 수동 등록된 워크인이 어드민 카드에만 +1 되던 불일치를 막는다.
 //    어드민 public.leads 에는 이 규칙을 걸지 않는다(웹사이트 문의라 Compass 채널 어휘가 없다).
@@ -19,6 +22,7 @@ import { toBusinessStorageDateTime, getBusinessDateParts } from "@/lib/business-
 import { compassInflowInWindow, type CompassInflowEvent } from "@/lib/compass/inflow-window"
 import { isCompassMarketingChannel, normalizePhoneKey } from "@/lib/compass/normalize"
 import { getMetaAdInfo, isTestLead } from "@/lib/crm/lead-attribution"
+import { leadInflowInWindow, type LeadInflowEvent } from "@/lib/crm/lead-reinflow"
 import { shiftDays } from "@/lib/marketing/perf"
 import type { LeadRecord } from "@/lib/repositories/leads"
 
@@ -97,9 +101,10 @@ export interface IntakeFeedItem {
   origins: IntakeOrigin[]
   compassLeadId: number | null
   /**
-   * 재유입인가 — 이 창에서 Compass 가 "이미 있던 리드의 재유입"으로 기록했다(생성은 창 밖, 최신 재유입이 창 안).
+   * 재유입인가 — 이 창에서 "이미 있던 리드가 다시 들어왔다"(생성은 창 밖, 최신 재유입이 창 안).
+   *  - Compass: 최신 재유입(last_inflow_at)이 창 안.
+   *  - 어드민 public.leads: 재문의 병합이 갱신한 last_inflow_at 이 창 안(생성 시각보다 유의미하게 뒤일 때만).
    * 두 원천이 접힌 항목은 어느 한쪽이라도 재유입이면 true — 적어도 한 시스템이 이미 아는 사람이다.
-   * 어드민 public.leads 는 재제출마다 행을 새로 만들어 이 판정에 넣지 않는다(lib/crm/lead-reinflow.ts 는 별도 축).
    */
   reinflow: boolean
 }
@@ -107,7 +112,10 @@ export interface IntakeFeedItem {
 export interface IntakeFeedResult {
   /** 오늘 00:00 KST~지금, 중복 접은 뒤 건수(신규 + 재유입). */
   todayCount: number
-  /** todayCount 중 재유입(IntakeFeedItem.reinflow) 건수. 나머지가 신규다. Compass 미측정이면 0 — compassMeasured 로 가린다. */
+  /**
+   * todayCount 중 재유입(IntakeFeedItem.reinflow) 건수. 나머지가 신규다. 미측정 원천의 재유입은 여기에도
+   * 합계에도 없다 — adminMeasured/compassMeasured 로 무엇이 빠졌는지 함께 밝힌다.
+   */
   todayReinflowCount: number
   /** 어제 00:00 KST~같은 시각, 중복 접은 뒤 건수. */
   yesterdayCount: number
@@ -140,7 +148,7 @@ interface Bucket {
   compassLeadId: number | null
   /** 표시 키 산출용 — 이 버킷에 기여한 첫 어드민 리드 id. */
   adminLeadId: string | null
-  /** 기여한 Compass 유입 중 하나라도 재유입이면 true. */
+  /** 기여한 유입(어드민·Compass) 중 하나라도 재유입이면 true. */
   reinflow: boolean
 }
 
@@ -196,7 +204,10 @@ function displayKey(bucket: Bucket): string {
 }
 
 export interface BuildIntakeFeedInput {
-  /** 어드민 리드 전량. null 이면 조회 실패(미측정) — 0 건과 구분한다. */
+  /**
+   * 어드민 리드 전량. null 이면 조회 실패(미측정) — 0 건과 구분한다.
+   * last_inflow_at 이 실려 있어야 재문의(재유입)를 센다 — 없으면(컬럼 미적용 폴백) 생성 시각만으로 센다.
+   */
   adminLeads: readonly LeadRecord[] | null
   /** Compass 리드(어제 00:00 이후 생성 또는 재유입). null 이면 브리지 다운(미측정). 인바운드 채널은 여기서 거른다. */
   compassLeads: readonly CompassIntakeLead[] | null
@@ -230,20 +241,25 @@ export function buildIntakeFeed({
 
   for (const lead of adminLeads ?? []) {
     if (isTestLead(lead)) continue
-    const ms = timeOf(lead.timestamp)
-    if (ms == null) continue
-    const inToday = ms >= todayFrom && ms <= todayTo
-    const inYesterday = ms >= yFrom && ms <= yTo
-    if (!inToday && !inYesterday) continue
-
-    const phoneKey = normalizePhoneKey(lead.phone)
-    const key = phoneKey ? `p:${phoneKey}` : `a:${lead.id}`
-    const bucket = foldInto(inToday ? today : yesterday, key, ms, lead.timestamp)
-    bucket.origins.add("admin")
-    if (bucket.adminLeadId == null) bucket.adminLeadId = lead.id
-    fill(bucket, "name", clean(lead.name))
-    fill(bucket, "org", clean(lead.org))
-    fill(bucket, "adName", clean(getMetaAdInfo(lead)?.ad ?? lead.source_detail))
+    // 오늘·어제 창을 따로 판정한다(Compass 와 같은 규칙) — 재문의 병합은 행을 새로 만들지 않고
+    // last_inflow_at 만 갱신하므로, 어제 생성되고 오늘 재문의한 리드는 어제엔 신규, 오늘엔 재유입으로 1건씩 잡힌다.
+    // 두 창 모두 끝을 포함한다(오늘 = 00:00~지금, 어제 = 00:00~같은 시각).
+    const perWindow: Array<[Map<string, Bucket>, LeadInflowEvent | null]> = [
+      [today, leadInflowInWindow(lead, todayFrom, todayTo, { inclusiveEnd: true })],
+      [yesterday, leadInflowInWindow(lead, yFrom, yTo, { inclusiveEnd: true })],
+    ]
+    for (const [map, event] of perWindow) {
+      if (!event) continue
+      const phoneKey = normalizePhoneKey(lead.phone)
+      const key = phoneKey ? `p:${phoneKey}` : `a:${lead.id}`
+      const bucket = foldInto(map, key, event.atMs, event.at)
+      bucket.origins.add("admin")
+      if (bucket.adminLeadId == null) bucket.adminLeadId = lead.id
+      if (event.kind === "reinflow") bucket.reinflow = true
+      fill(bucket, "name", clean(lead.name))
+      fill(bucket, "org", clean(lead.org))
+      fill(bucket, "adName", clean(getMetaAdInfo(lead)?.ad ?? lead.source_detail))
+    }
   }
 
   for (const lead of compassLeads ?? []) {

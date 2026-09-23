@@ -459,7 +459,8 @@ export function ShowroomBookingForm({ interests }: Props) {
           ...(memo ? { memo } : {}),
           sourcePage: "/showroom",
           consent: true,
-          // 이 폼은 lib/submitLead.ts 를 거치지 않아 귀속이 붙지 않았다 — 직접 태운다.
+          // 광고 유입 귀속 — 이 폼은 lib/submitLead.ts·/api/lead 를 거치지 않아 귀속이 붙지 않았다.
+          // 도입신청 폼과 같은 규약으로 평평하게 태운다(서버 sanitizeLeadAttribution 이 네이버 n_* 까지 고른다).
           // getAnonymousId 는 분석 동의가 있을 때만 값을 낸다.
           ...collectLeadAttribution(),
           anonymousId: getAnonymousId(),

@@ -1,4 +1,25 @@
-# .mjs 스크립트는 항상 LF로 체크아웃한다. Windows core.autocrlf=true가 CRLF로 바꾸면
-# vitest(vite/esbuild)가 동적 import 시 "SyntaxError: Invalid or unexpected token"을 낸다
-# (node 직접 실행은 무해). repo 저장은 이미 LF — 체크아웃 EOL만 고정한다.
+# 이 저장소의 줄바꿈 정책은 LF 하나다(.editorconfig: end_of_line = lf). repo 저장은 이미 LF 라
+# 여기서는 체크아웃 EOL 만 고정한다 — Windows 의 core.autocrlf=true 가 작업 트리를 CRLF 로
+# 물질화하면 두 가지가 깨진다.
+#   1) 소스 스캔 테스트: tests/ 의 계약 테스트 다수가 소스를 읽어 여러 줄 "\n" 리터럴로 찾는다.
+#      CRLF 체크아웃에서는 indexOf 가 -1 이 되어 Linux·CI 에서 통과하는 테스트가 Windows 에서만
+#      실패한다(2026-09-21 병합 시점 9건). 테스트마다 read 헬퍼에 \r\n→\n 정규화를 넣던 관례
+#      (2026-07-18)는 새 테스트가 들어올 때마다 빠졌다 — 원인을 여기서 없앤다.
+#   2) .mjs 스크립트: vitest(vite/esbuild)가 동적 import 시 "SyntaxError: Invalid or unexpected
+#      token" 을 낸다(node 직접 실행은 무해).
+# text=auto 는 바이너리를 자동 판별하지만, 오판 여지를 없애려고 아래에 바이너리 확장자를 명시한다.
+* text=auto eol=lf
 *.mjs text eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.mp4 binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary

@@ -22,6 +22,7 @@ import {
 
 import { adminFetchJsonCached } from "@/lib/admin-client"
 import { useDialogFocus } from "@/components/admin/use-dialog-focus"
+import { leadSegment, leadSegmentHref } from "@/lib/crm/lead-segments"
 
 // 스크린리더 combobox 연결용 고정 id — AdminCommandPalette와 동일 패턴.
 const CRM_PALETTE_LISTBOX_ID = "crm-command-palette-listbox"
@@ -29,10 +30,43 @@ const crmPaletteOptionId = (index: number) => `crm-command-palette-option-${inde
 
 // CRM 내비 라우트 인덱스 — ⌘K "이동" 명령. AdminSidebar의 CRM 확장과 동일 라우트
 // + 머니 표면(매출 장부·하드웨어 재고) 점프를 함께 인덱싱한다.
-const NAV_CMDS: Array<{ label: string; sub: string; href: string; icon: ReactNode }> = [
+// export: 단위 테스트(tests/crm/command-palette-segments.test.tsx)가 세그먼트 이동 명령의
+// label/sub/href를 렌더 없이 직접 검증한다 — AdminCommandPalette의 ADMIN_COMMANDS와 동일 패턴.
+export const NAV_CMDS: Array<{ label: string; sub: string; href: string; icon: ReactNode; keywords?: string }> = [
   { label: "현황 · 홈", sub: "코크핏·작업대", href: "/admin/crm", icon: <LayoutGrid className="h-4 w-4" /> },
   { label: "통합 고객", sub: "운영 목록", href: "/admin/crm/customers/unified", icon: <Users className="h-4 w-4" /> },
   { label: "리드 보드", sub: "리드 관리", href: "/admin/crm/customers/leads", icon: <PhoneCall className="h-4 w-4" /> },
+  // 리드 세그먼트 이동 명령 4종(2026-09-20 Compass 정리 라운드 S3) — 정의·href·hint는
+  // lib/crm/lead-segments.ts(SSOT)를 그대로 재사용한다. keywords는 label·sub(hint)에
+  // 없는 검색어("세그먼트" 등)를 보강한다 — 매칭 키워드 자체는 items useMemo에서 계산한다.
+  {
+    label: "메타 광고 리드 보기",
+    sub: leadSegment("meta_ads").hint,
+    href: leadSegmentHref("meta_ads"),
+    icon: <PhoneCall className="h-4 w-4" />,
+    keywords: "메타 광고 세그먼트",
+  },
+  {
+    label: "인계 리드 보기",
+    sub: leadSegment("bd_handover").hint,
+    href: leadSegmentHref("bd_handover"),
+    icon: <PhoneCall className="h-4 w-4" />,
+    keywords: "인계 BD 세그먼트",
+  },
+  {
+    label: "기존 리드 보기",
+    sub: leadSegment("existing").hint,
+    href: leadSegmentHref("existing"),
+    icon: <PhoneCall className="h-4 w-4" />,
+    keywords: "기존 세그먼트",
+  },
+  {
+    label: "고객(전환) 리드 보기",
+    sub: leadSegment("customer").hint,
+    href: leadSegmentHref("customer"),
+    icon: <PhoneCall className="h-4 w-4" />,
+    keywords: "고객 전환 세그먼트",
+  },
   { label: "원천 고객", sub: "NEO 어카운트", href: "/admin/crm/customers/accounts", icon: <Building2 className="h-4 w-4" /> },
   { label: "매출 대시보드", sub: "자체 원장·견적·정합성", href: "/admin/crm/deals", icon: <CircleDollarSign className="h-4 w-4" /> },
   { label: "REV 스냅샷", sub: "DB 저장본·매칭 검수", href: "/admin/crm/deals/rev-sheet", icon: <BookOpenCheck className="h-4 w-4" /> },
@@ -45,6 +79,16 @@ const NAV_CMDS: Array<{ label: string; sub: string; href: string; icon: ReactNod
   { label: "매칭 검수", sub: "매칭 인박스", href: "/admin/crm/matching", icon: <ListChecks className="h-4 w-4" /> },
   { label: "참석자 입력", sub: "Capture", href: "/admin/crm/capture", icon: <ClipboardList className="h-4 w-4" /> },
 ]
+
+/**
+ * 내비 명령 검색 매칭 — label + sub(부제) + keywords(보강어) 연결 문자열에 대소문자 무시 부분일치.
+ * 팔레트 useMemo와 단위 테스트(tests/crm/command-palette-segments.test.tsx)가 같은 함수를 쓴다.
+ */
+export function matchesNavCommand(nav: { label: string; sub: string; keywords?: string }, query: string): boolean {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  return (nav.label + nav.sub + (nav.keywords ?? "")).toLowerCase().includes(q)
+}
 
 interface CustomerRow {
   key: string
@@ -152,9 +196,14 @@ export default function CrmCommandPalette({ initiallyOpen = false }: CrmCommandP
 
   const items = useMemo<CmdItem[]>(() => {
     const q = query.trim().toLowerCase()
-    const navItems: CmdItem[] = NAV_CMDS.filter(
-      (nav) => !q || (nav.label + nav.sub).toLowerCase().includes(q)
-    ).map((nav) => ({ kind: "nav", id: `nav:${nav.href}`, label: nav.label, sub: nav.sub, icon: nav.icon, href: nav.href }))
+    const navItems: CmdItem[] = NAV_CMDS.filter((nav) => matchesNavCommand(nav, query)).map((nav) => ({
+      kind: "nav",
+      id: `nav:${nav.href}`,
+      label: nav.label,
+      sub: nav.sub,
+      icon: nav.icon,
+      href: nav.href,
+    }))
     // 빈 쿼리일 때는 직전 고객 결과를 노출하지 않는다.
     const custItems: CmdItem[] = q
       ? rows.map((row) => ({
@@ -247,6 +296,12 @@ export default function CrmCommandPalette({ initiallyOpen = false }: CrmCommandP
             ESC
           </kbd>
         </div>
+        {/* 세그먼트 이동 명령 발견성 — 검색 중에는 결과 공간을 가리지 않도록 idle일 때만 보인다. */}
+        {!hasQuery ? (
+          <p className="border-b border-[#f0f0ec] px-4 py-2 text-[11px] text-[#1a1a1a]/40">
+            리드 세그먼트는 메타, 인계로 검색
+          </p>
+        ) : null}
         <div
           id={CRM_PALETTE_LISTBOX_ID}
           role="listbox"

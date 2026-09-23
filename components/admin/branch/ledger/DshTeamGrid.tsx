@@ -9,8 +9,9 @@
 // Goal/Status/Gap/Rate 뷰 토글은 이 그리드 자체 상태다(수치 그리드와 독립).
 
 import { ArrowLeftRight, ChevronDown, ChevronRight } from "lucide-react"
+import Link from "next/link"
 import { useMemo, useState } from "react"
-import type { BranchDshRow } from "../types"
+import { TEAMS, type BranchDshRow } from "../types"
 import {
   buildDshTeamGrid,
   DSH_CELL,
@@ -39,6 +40,25 @@ const VIEW_OPTIONS: Array<{ id: DshGridView; label: string }> = [
 // 팀 라벨 — ALL은 시트 표기(Team KR)를 따른다.
 function teamLabel(team: string): string {
   return team === "ALL" ? "Team KR" : team
+}
+
+// 입력 진입점(기획 2026-09-20 §8.4 DSH 행: "입력 진입점이 0개") — 팀 그리드는 읽기 전용이라
+// REV 렌즈로 팀 필터까지 동봉해 넘긴다. 같은 라우트 딥링크라 워크벤치의 URL 동기화(마운트 +
+// useSearchParams 반응형 복원)가 lens=rev·team=X를 그대로 적용한다. ALL이나 TEAMS(REV team
+// 필터가 실제로 받는 값) 밖의 팀 표기는 워크벤치가 조용히 ALL로 무시해 필터가 안 먹힌 채
+// 걸린 링크처럼 보이므로, 그런 team 값은 아예 렌더하지 않는다.
+function RevLensLink({ team }: { team: string }) {
+  if (team === "ALL" || !(TEAMS as string[]).includes(team)) return null
+  return (
+    <Link
+      href={`/admin/branch/ledger?lens=rev&team=${encodeURIComponent(team)}`}
+      onClick={(event) => event.stopPropagation()}
+      aria-label={`${teamLabel(team)} 팀을 REV 매트릭스에서 보기`}
+      className="ml-2 inline-flex min-h-11 shrink-0 items-center text-[10px] font-bold text-[#7A520F] underline-offset-2 transition hover:text-[#A8741A] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 md:min-h-0"
+    >
+      REV에서 보기 ↗
+    </Link>
+  )
 }
 
 // 뷰별 수치 묶음 — goal/status는 해당 kind가 시트에 없으면 null(전부 "–"),
@@ -277,6 +297,7 @@ function TeamRows({
           ) : (
             teamLabel(team.team)
           )}
+          <RevLensLink team={team.team} />
         </td>
         {annualRateCell(team, emphasis)}
         {cells}

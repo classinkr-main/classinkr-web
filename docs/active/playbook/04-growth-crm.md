@@ -11,8 +11,9 @@
 - 영업 운영 화면: 견적·계약·영수증·하드웨어·설치 일정의 어드민 워크플로
 - 어드민 API: 위 화면과 연결된 `app/api/admin/{crm,leads,marketing,marketing-campaigns,marketing-projects,branch,calendar,...}`
 - 데이터 구현: `lib/crm/*`, `lib/branch/*`, `lib/admin-crm-*`, `lib/external-crm/*`, `lib/repositories/`의 리드·CRM·캠페인·캘린더·영업 운영 repository
+- 인입 퍼널: 도입 신청·쇼룸 예약 접수(`components/checkout/`, `components/showroom/`, `lib/checkout-requests.ts`, `lib/showroom/`), 어드민 접수 큐(`/admin/crm/customers/intake`), 태그 관리(`/admin/crm/customers/tags`), 고객 접수 확인 문자·알림톡(`lib/messaging/` — 별도 스위치 없이 `SOLAPI_API`·`SOLAPI_SECRET`이 있으면 **고객에게 실제로 발송된다**. 검증할 때는 `MESSAGING_DRY_RUN=1`을 쓴다)
 
-결제 승인·Toss 검증 같은 결제 기반은 Platform 소유다. 영업 화면의 견적/계약 라이프사이클과 CRM 연결은 Growth 소유다. 모든 어드민 화면/API는 Admin Core의 인증·권한 규약을 따른다.
+결제 승인·Toss 검증 같은 결제 기반은 Platform 소유다. 영업 화면의 견적/계약 라이프사이클과 CRM 연결은 Growth 소유다. 모든 어드민 화면/API는 Admin Core의 인증·권한 규약을 따른다. 공개 페이지 셸 `app/checkout`, `app/showroom`은 Home/Front와 공유하고, 결제 승인 자체는 Platform 소유다.
 
 ## 2. 핵심 흐름
 
@@ -23,6 +24,11 @@
 - `lib/admin-crm-revenue.ts`, `lib/crm-source-linking.ts`: 매출 연결·중복 제거
 - `lib/notion-marketing-calendar.ts`, `lib/calendar-data.ts`, `lib/repositories/admin-calendar-events.ts`: 외부 원천 읽기와 자체 일정
 - `lib/branch/*`: KR Team 시트 동기화·매출 확정·인사이트
+- `lib/lead-attribution-payload.ts`(`sanitizeLeadAttribution`): `/api/lead`를 거치지 않는 미러링 경로의 단일 귀속 정규화기
+- `lib/marketing/ad-campaign-sync.ts`·`ad-insights.ts`·`ad-sync-candidates.ts`: Google Ads·네이버 검색광고 동기화와 캠페인 자동 링크 후보 — 크론 `sync-google-ads`·`sync-naver-ads`의 도메인 로직은 이 파트, 인증·스케줄 계약은 Platform
+- `lib/marketing/intake-today.ts`: "오늘 유입" 조회 — 라우트와 한눈에 층 서버 프리페치가 공유, Data Cache 20초
+- `components/admin/compass/`: CRM 홈·마케팅 한눈에 층이 함께 쓰는 Compass 밴드. 구 `components/admin/crm/home/CompassPipelineBand.tsx`에서 이동
+- 재유입 병합 규칙: `lib/server/lead-capture.ts`는 응대 대상 소스의 같은 연락처 재문의를 새 행 대신 기존 리드에 합친다(담당·상태·메모 불변, `last_inflow_at`만 갱신) — 생성 시각(`created_at`)으로 집계하는 화면은 재문의를 세지 못한다
 
 ## 3. 강제 규칙
 
@@ -36,7 +42,7 @@
 
 ### CRM과 매출
 
-- 시트 REV, 외부 CRM, Portal V2 딜은 확정된 `crm_source_links`를 통해 중복 제거한 뒤 합산한다. 미확정 연결은 검토 대상으로만 표시한다.
+- 시트 REV, 외부 CRM, Portal V2 딜은 확정된(`status=confirmed`) `crm_source_links`가 있는 건만 중복 제거 대상이다. 미확정 연결은 검토 대상으로만 표시하고, 미확정·통화가 다른 원천은 합산하지 않고 병기한다. 통화 혼합 합산은 금지한다. 코드 정본은 `lib/admin-crm-revenue.ts`(원천별 `sources[]` 나열, 시트는 앱 집계와 별도 지표)이며 정책 근거는 [매출시트 워크스페이스 계획 §1](../admin-3-revenue-sheet-workspace-plan-2026-06-29.md)이다.
 - 공개 채널 리드의 확인 게이트와 SLA 예외를 유지한다. 숨긴 리드는 건수를 표시하고 사용자가 명시적으로 포함할 수 있어야 한다.
 - 리드 우선순위의 `value`는 실제 원화 매출이 연결되기 전까지 상대 점수다. 금액처럼 표시하지 않는다.
 - CRM 홈은 행동면과 참조면을 중복 배치하지 않는다. 요약에서 잘린 항목은 남은 건수를 표시한다.
@@ -90,8 +96,12 @@ npx vitest run tests/crm
 
 ## 5. 먼저 읽을 것
 
-0. CRM 탭 작업이면 [CRM 탭 품질 감사(2026-08-06)](../crm-tab-quality-audit-2026-08-06.md) —
+0. 마케팅 허브(`/admin/campaigns`) 작업이면 [마케팅 탭 재구성 기획(2026-09-14)](../marketing-tab-dashboard-restructure-2026-09-14.md)의 3층 IA·재배치표·진척 기록을 먼저 확인한다 — 탭·섹션·레거시 딥링크의 코드 정본은 `lib/marketing/hub-tabs.ts`.
+0. CRM 탭 작업이면 [CRM 탭 디벨롭 기획(2026-09-12)](../crm-tab-develop-plan-2026-09-12.md)의 개선 후보 ID와 Wave 순서를 먼저 확인하고,
+   [CRM 탭 품질 감사(2026-08-06)](../crm-tab-quality-audit-2026-08-06.md) —
    항목별 채점, 고친 결함, 90선에 못 미친 채 남긴 항목(큐 스코어링 비용, 필터 URL 소유권)
+0. 컨택·쇼룸·체크아웃 작업이면 [컨택·쇼룸 예약·구매 신청 2차 기획(2026-09-20)](../contact-showroom-checkout-develop-round2-2026-09-20.md)에서 쇼룸 진입 경로·접수 확정 어드민 화면·퍼널 뒤쪽 귀속 결손을 먼저 확인한다.
+0. 광고 채널 동기화 작업이면 [광고 채널 Google·네이버 연동 설계(2026-09-14)](../ad-channel-google-naver-integration-2026-09-14.md)와 [광고 채널 활성화 런북(2026-09-14)](../ad-channel-activation-runbook-2026-09-14.md)을 먼저 확인한다 — 전자는 "왜 이렇게 만들었나", 후자는 "켜고 나서 켜졌는지 어떻게 아나".
 1. `lib/server/lead-capture.ts`
 2. `lib/consent/consent.ts`, `lib/analytics.ts`, `app/api/track/event/route.ts`
 3. `lib/admin-crm-revenue.ts`, `lib/crm-source-linking.ts`

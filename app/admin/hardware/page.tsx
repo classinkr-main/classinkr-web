@@ -8,6 +8,7 @@ import { getVerifiedAdminContextForPage } from "@/lib/admin/page-auth"
 import { openPrefetchLane } from "@/lib/admin/prefetch-budget"
 import {
   BRANCH_READ_ADMIN_API_ROLES,
+  HARDWARE_EDITOR_ADMIN_API_ROLES,
   HARDWARE_FINALIZE_CAPABILITY,
   hasAdminApiRole,
   hasAdminCapability,
@@ -41,6 +42,7 @@ async function prefetchHardwareDashboard(): Promise<HardwareDashboardResponse | 
     ...dashboard,
     viewer: {
       canFinalize: hasAdminCapability(admin, HARDWARE_FINALIZE_CAPABILITY),
+      canWrite: hasAdminApiRole(admin.role, HARDWARE_EDITOR_ADMIN_API_ROLES),
       name: admin.name?.trim() || null,
     },
   }

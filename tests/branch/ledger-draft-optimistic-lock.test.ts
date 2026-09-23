@@ -174,7 +174,9 @@ describe("onCommitCell — 매트릭스 셀 커밋의 충돌/재사용/검증 �
   const fnBody = () => sliceFn(
     workbenchSource(),
     "const onCommitCell = useCallback",
-    "[createDraft, lens, pendingByCell, period, pushMatrixToast, rowById, team, updateDraft]",
+    // 라운드 4(P1-6): 실행 취소 콜백(undoCellDraft)이 deps에 추가되며 종료 마커 문자열도 함께
+    // 갱신됐다 — SalesLedgerWorkbench.tsx의 onCommitCell 의존성 배열을 다시 바꾸면 이 마커도 같이 고친다.
+    "[buildCellDraftInput, createDraft, pushMatrixToast, undoCellDraft, updateDraft]",
   )
 
   it("conflict면 로컬 폴백 문구가 아니라 DRAFT_CONFLICT_MESSAGE 토스트를 띄우고 false를 반환한다", () => {

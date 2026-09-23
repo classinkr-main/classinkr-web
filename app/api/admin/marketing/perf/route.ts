@@ -4,11 +4,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { revalidateTag } from "next/cache"
 import { verifyAdmin } from "@/lib/admin-auth"
-import type { PerfPeriodKey } from "@/lib/marketing/perf"
+import { isPerfPeriodKey, PERF_PERIOD_KEYS } from "@/lib/marketing/perf"
 import { getCachedMarketingPerf } from "@/lib/marketing/perf-assemble"
 import { MARKETING_PERF_CACHE_TAG } from "@/lib/repositories/marketing"
-
-const PERIOD_KEYS: readonly PerfPeriodKey[] = ["7d", "30d", "90d", "quarter"]
 
 // 조립(lib/marketing/perf-assemble.ts의 getCachedMarketingPerf)이 60초 Data Cache를 든다 —
 // 예전 route-local 45초 Map(perfMemo)은 Vercel Fluid 콜드 인스턴스마다 비어 있었고, insights
@@ -21,13 +19,13 @@ export async function GET(req: NextRequest) {
   if (err) return err
 
   const rawPeriod = req.nextUrl.searchParams.get("period") ?? "30d"
-  if (!PERIOD_KEYS.includes(rawPeriod as PerfPeriodKey)) {
+  if (!isPerfPeriodKey(rawPeriod)) {
     return NextResponse.json(
-      { error: `유효하지 않은 period — ${PERIOD_KEYS.join("|")} 중 하나여야 합니다` },
+      { error: `유효하지 않은 period — ${PERF_PERIOD_KEYS.join("|")} 중 하나여야 합니다` },
       { status: 400 }
     )
   }
-  const period = rawPeriod as PerfPeriodKey
+  const period = rawPeriod
   const fresh = req.nextUrl.searchParams.get("fresh") === "1"
 
   try {

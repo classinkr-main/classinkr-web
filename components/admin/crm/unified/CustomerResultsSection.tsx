@@ -13,6 +13,16 @@ import CrmCustomerFlags from "../CrmCustomerFlags"
 import { SORT_LABELS, SortableHeaderCell, type SortKey, type SortState } from "./sort"
 import { LeadRowBadges, moneyCell, sourceBadge, TagChips } from "./row-visuals"
 import { PAGE_LIMIT, formatDate, rowToFlags, type CrmUnifiedCustomers, type SavedViewFilter } from "./shared"
+import { SECONDARY_TEXT_CLASS } from "../home/shared"
+
+// 돈흐름 열 통화 안내 — 외부 CRM(¥잔액·$오더)과 전환 고객(₩계약·미수)이 같은 열에 놓인다.
+export const MONEY_COLUMN_CURRENCY_HINT = "외부 CRM: ¥잔액·$오더 / 전환 고객: ₩계약·미수"
+
+// 정렬 범위 캡션 — 정렬은 서버 재요청 없이 현재 페이지(≤PAGE_LIMIT)만 재정렬한다(sort.tsx).
+// 전체 정렬처럼 읽히지 않도록 툴바·페이지네이션 양쪽에 같은 문구를 붙인다(C1 서버 정렬 전까지).
+export function sortScopeCaption(loadedCount: number) {
+  return `이 페이지 ${loadedCount.toLocaleString("ko-KR")}건 기준`
+}
 
 export default function CustomerResultsSection({
   data,
@@ -47,6 +57,8 @@ export default function CustomerResultsSection({
   onLoadPage: (offset: number) => void
   onOpenLeadModal: () => void
 }) {
+  const loadedCount = data?.rows.length ?? rows.length
+  const scopeCaption = sortScopeCaption(loadedCount)
   return (
     <section
       className="rounded-2xl border border-[#e8e8e4] bg-white"
@@ -56,10 +68,10 @@ export default function CustomerResultsSection({
       {/* 정렬 툴바 — 현재 정렬 상태 표시 + 점수 정렬 진입점. 점수 컬럼은 화면에서 제거됐지만
           정렬 옵션으로는 유지한다(이 버튼이 유일한 진입점). 추천순 복귀 버튼은 정렬 활성 시에만 노출. */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#f0f0ec] px-4 py-2">
-        <p className="text-[11px] font-semibold text-[#1a1a1a]/40">
+        <p className={`text-[11px] font-semibold ${SECONDARY_TEXT_CLASS}`}>
           정렬 ·{" "}
           {sort
-            ? `${SORT_LABELS[sort.key]} ${sort.direction === "asc" ? "오름차순" : "내림차순"}`
+            ? `${SORT_LABELS[sort.key]} ${sort.direction === "asc" ? "오름차순" : "내림차순"} · ${scopeCaption}`
             : "추천순 (기본)"}
         </p>
         <div className="flex items-center gap-1.5">
@@ -95,7 +107,10 @@ export default function CustomerResultsSection({
               <SortableHeaderCell label="고객" sortKey="name" sort={sort} onToggle={onToggleSort} />
               <SortableHeaderCell label="상태" sortKey="status" sort={sort} onToggle={onToggleSort} />
               <th className="px-4 py-3">다음 액션</th>
-              <th className="px-4 py-3">돈흐름</th>
+              <th className="px-4 py-3" title={MONEY_COLUMN_CURRENCY_HINT}>
+                돈흐름
+                <span className="sr-only"> ({MONEY_COLUMN_CURRENCY_HINT})</span>
+              </th>
               <SortableHeaderCell label="담당" sortKey="owner" sort={sort} onToggle={onToggleSort} />
               <SortableHeaderCell label="최근 업데이트" sortKey="updated" sort={sort} onToggle={onToggleSort} align="right" />
             </tr>
@@ -261,9 +276,13 @@ export default function CustomerResultsSection({
 
       {data && data.pagination.total > 0 ? (
         <div className="flex flex-col gap-3 border-t border-[#f0f0ec] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[12px] font-medium text-[#1a1a1a]/45 tabular-nums">
+          <p className={`text-[12px] font-medium tabular-nums ${SECONDARY_TEXT_CLASS}`}>
             {(data.pagination.offset + 1).toLocaleString("ko-KR")}–
             {(data.pagination.offset + data.rows.length).toLocaleString("ko-KR")} / {data.pagination.total.toLocaleString("ko-KR")}명
+            {sort ? (
+              // 정렬 활성 시 페이지를 넘기면 다음 페이지 안에서만 다시 정렬된다 — 범위를 명시.
+              <span className="ml-2 font-normal">· 정렬은 {scopeCaption}</span>
+            ) : null}
           </p>
           <div className="flex items-center gap-1.5">
             <button

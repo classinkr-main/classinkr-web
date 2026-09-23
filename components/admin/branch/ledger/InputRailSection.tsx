@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, type Dispatch, type FormEvent, type SetStateAction } from "react"
+import { useCallback, useEffect, useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from "react"
 import { Loader2, Plus, Save, X } from "lucide-react"
 import { AdminMoneyInput, parseMoneyInput } from "@/components/admin/AdminMoneyInput"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
@@ -27,6 +27,7 @@ import {
   type LedgerDraft,
   type RevProductCategory,
 } from "./shared"
+import { findCustomerSpellingMatch } from "./customer-suggest"
 import { WeeklyAmountGrid } from "./WeeklyAmountGrid"
 import { TEAMS } from "../types"
 
@@ -41,6 +42,10 @@ interface InputRailSectionProps {
   // 품질 감사 2026-09-10 — #7: CockpitEditor와 동일 이유(담당자 자유 텍스트 오탈자가 집계를
   // 조용히 쪼갬) — datalist로 기존 표기를 추천만 하고 자유 입력(신규 담당자 온보딩)은 유지한다.
   managerOptions: string[]
+  // 매출 장부 입력 속도 라운드 4(2026-09-20, P0-3): 집계 키인 고객명도 자유 텍스트라 표기 흔들림
+  // ("OO학원"/"OO 학원")이 정규화 키(normalizedAccountKey)는 같은데 새 행으로 갈라져 집계를
+  // 쪼갠다. managerOptions와 동일 이유로 datalist는 추천만 하고 자유 입력(신규 고객)은 막지 않는다.
+  customerOptions: string[]
   draftAmountInvalid: boolean
   draftQuantityInvalid: boolean
   draftFormInvalid: boolean
@@ -72,6 +77,7 @@ export function InputRailSection({
   monthOptions,
   selectedMonth,
   managerOptions,
+  customerOptions,
   draftAmountInvalid,
   draftQuantityInvalid,
   draftFormInvalid,
@@ -93,6 +99,29 @@ export function InputRailSection({
     setFeedbackForDraftId(editingDraft?.id ?? null)
     setFeedback(null)
   }
+
+  // 입력 속도 라운드(2026-09-20) §8.4 "레일·입력" 항목: 레일이 열려도(=이 컴포넌트 마운트) 첫
+  // 필드에 포커스가 안 가 탭/클릭을 한 번 더 써야 했다. 고객명이 비어 있으면(신규 입력) 고객명부터,
+  // 이미 채워져 있으면(행 선택·편집 프리필) 고객명은 이미 맞으니 금액부터 — 마운트 시점 값을
+  // useRef로 스냅샷해 1회만 판정한다(이 값을 effect deps에 그대로 넣으면 타이핑 중에도 재실행돼
+  // 매번 포커스를 다시 빼앗는 회귀가 생긴다). railView==="input"일 때만 이 컴포넌트가 마운트되므로
+  // "레일이 열릴 때"와 "컴포넌트 마운트"가 실제로 같은 시점이다(SalesLedgerWorkbench 배선).
+  const customerInputRef = useRef<HTMLInputElement | null>(null)
+  const amountInputRef = useRef<HTMLInputElement | null>(null)
+  // AdminMoneyInput.inputRef는 콜백 ref만 받는다 — 매 렌더 새 함수면 그 내부 attachInput도
+  // 매번 재생성돼(그 컴포넌트의 useCallback deps가 이 함수 자체) null→node로 불필요하게
+  // 재바인딩되므로 useCallback으로 고정한다.
+  const attachAmountInput = useCallback((node: HTMLInputElement | null) => {
+    amountInputRef.current = node
+  }, [])
+  const focusAmountFirstRef = useRef(Boolean(draftForm.customer))
+  useEffect(() => {
+    // 모바일 바텀시트는 열리자마자 키보드가 뜨면 부담이라(화면의 반 이상을 가림) 자동 포커스를
+    // 걸지 않는다 — 데스크톱 폭(640px 이상)에서만 사용자가 탭하기 전에 커서를 미리 놓아준다.
+    if (!window.matchMedia("(min-width: 640px)").matches) return
+    const target = focusAmountFirstRef.current ? amountInputRef.current : customerInputRef.current
+    target?.focus({ preventScroll: false })
+  }, [])
 
   // 공용 금액 입력(숫자|null) ↔ 폼 버퍼(문자열) 어댑터 — 상위 상태·저장 payload 형태는 그대로 둔다
   // (draftForm.amount/quantity는 계속 문자열이고 safeAmount가 파싱하는 계약 유지).
@@ -133,6 +162,10 @@ export function InputRailSection({
   // 저장·new-row 초안 편집은 대응 매트릭스 행이 없어 부모 쪽에서 항상 false로 내려온다. 여기서는
   // 그대로 소비만 한다(중복 판정 없음).
   const blockedByLock = targetCellLocked
+
+  // 표기만 다른 기존 고객 후보 추천(라운드 4 P0-3) — 저장을 막지 않는 인라인 경고 + 원클릭
+  // 맞추기에만 쓴다. draftFormInvalid 등 저장 버튼 활성 조건은 그대로 둔다.
+  const customerSpellingMatch = findCustomerSpellingMatch(draftForm.customer, customerOptions)
 
   // form 래핑으로 Enter 제출 — 편집 중이면 그 초안 갱신, 아니면 primaryDraftKind로 저장.
   // 실제 버튼 클릭도 동일 코드 경로를 타 두 번 저장되지 않는다(submit 버튼은 onClick 없음).
@@ -199,11 +232,37 @@ export function InputRailSection({
               <label className="block text-[11px] font-bold text-[#615D59]">
                 고객/계정
                 <input
+                  ref={customerInputRef}
                   value={draftForm.customer}
                   onChange={(event) => setDraftForm((current) => ({ ...current, customer: event.target.value }))}
+                  list="input-rail-customer-options"
+                  autoComplete="off"
                   className="mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-3 text-[12px] font-semibold text-[#111110] outline-none focus:border-[#084734]"
                 />
+                {/* datalist는 자유 입력을 막지 않는다 — 기존 표기를 추천해 표기 흔들림(집계 쪼갬)만 줄인다. */}
+                <datalist id="input-rail-customer-options">
+                  {customerOptions.map((name) => <option key={name} value={name} />)}
+                </datalist>
               </label>
+              {/* 라운드 4 P0-3: 정규화 키(normalizedAccountKey)는 같은데 표기만 다른 기존 행이 있으면
+                  알려준다 — role="status"(alert 아님)로 저장은 막지 않고 원클릭으로만 표기를 맞춘다. */}
+              {customerSpellingMatch && (
+                <p
+                  role="status"
+                  className="flex flex-wrap items-center gap-2 rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2 text-[11px] font-semibold leading-relaxed text-[#7A520F]"
+                >
+                  <span>
+                    기존 행 &quot;{customerSpellingMatch.canonical}&quot;과 같은 계정으로 보입니다 — 표기를 맞추면 같은 행으로 집계됩니다
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setDraftForm((current) => ({ ...current, customer: customerSpellingMatch.canonical }))}
+                    className="shrink-0 rounded-md border border-[#ECD29C] bg-white px-2 py-1 text-[10.5px] font-bold text-[#7A520F] transition hover:bg-[#FBF1E0]"
+                  >
+                    그 표기로 맞추기
+                  </button>
+                </p>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <label className="block text-[11px] font-bold text-[#615D59]">
                   담당자
@@ -305,47 +364,6 @@ export function InputRailSection({
                   </label>
                 )}
               </div>
-              <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2">
-                <p className="mb-1.5 text-[11px] font-bold text-[#615D59]">
-                  {weeklySplitActive ? "확도 · 전체 일괄 적용" : "확도"}
-                </p>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {DRAFT_CONFIDENCE_OPTIONS.map((option) => {
-                    // 주차 분해 모드(라운드 3 P1)에서는 이 블록이 "전체 일괄 적용" — 클릭 시 주차별
-                    // 확도 5칸이 전부 이 확도로 세트되고, 그 뒤 그리드의 주차 seg로 개별 변경한다.
-                    // pressed 판정도 5칸 전부 일치일 때만(개별 변경 후 혼합 상태는 아무 버튼도 눌리지
-                    // 않은 표시). 단일 모드는 기존 그대로 confidence 1값 — 버퍼도 함께 시드해 나중에
-                    // 주차 분해로 전환했을 때 마지막 선택 확도가 기본값이 되게 한다.
-                    const pressed = weeklySplitActive
-                      ? draftForm.weeklyConfidence.every((value) => value === option.id)
-                      : draftForm.confidence === option.id
-                    return (
-                      <button
-                        key={option.id}
-                        type="button"
-                        onClick={() => setDraftForm((current) => ({
-                          ...current,
-                          confidence: option.id,
-                          weeklyConfidence: defaultDraftWeeklyConfidence(option.id),
-                        }))}
-                        aria-pressed={pressed}
-                        className={`min-h-8 rounded-md px-2 py-1 text-[11px] font-bold transition ${
-                          pressed
-                            ? `${CONFIDENCE_TOKENS[option.id].bgClass} text-white`
-                            : "border border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:text-[#111110]"
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    )
-                  })}
-                </div>
-                <p className="mt-1.5 text-[10.5px] leading-relaxed text-[#615D59]">
-                  {weeklySplitActive
-                    ? "전체 일괄 적용 — 주차별로 개별 변경 가능 · 저장 확도는 우세 버킷 자동"
-                    : "초안 적용 시 확도가 함께 기록됩니다. 예정 → 고확도 → 확정 전환도 이 폼으로 남깁니다."}
-                </p>
-              </div>
               {draftForm.operation === "period-shift" && (
                 <label className="block text-[11px] font-bold text-[#615D59]">
                   기존 월
@@ -385,11 +403,63 @@ export function InputRailSection({
                       blurOnEnter={false}
                       invalid={draftAmountInvalid}
                       ariaLabel="금액"
+                      inputRef={attachAmountInput}
                       className="mt-1 w-full"
                       fieldClassName="h-9"
                     />
                   </label>
                 )}
+              </div>
+              {/* 입력 속도 라운드(2026-09-20) §8.4/§8.5: 운영자 멘탈모델("금액을 친 뒤 확도를
+                  고른다")에 맞춰 확도 블록을 월·금액 뒤로 옮겼다 — 검증 로직(draftAmountInvalid 등)은
+                  필드 값만 참조해 순서와 무관하다. 주차 분해 모드에서는 이 블록(전체 일괄 적용)이
+                  아래 그리드(주차별 개별 확도 seg) 바로 앞에 붙어 있어야 "먼저 일괄 세팅 → 그리드에서
+                  개별 조정"이라는 관계가 그대로 읽힌다. */}
+              <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2">
+                <p className="mb-1.5 text-[11px] font-bold text-[#615D59]">
+                  {weeklySplitActive ? "확도 · 전체 일괄 적용" : "확도"}
+                </p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {DRAFT_CONFIDENCE_OPTIONS.map((option) => {
+                    // 주차 분해 모드(라운드 3 P1)에서는 이 블록이 "전체 일괄 적용" — 클릭 시 주차별
+                    // 확도 5칸이 전부 이 확도로 세트되고, 그 뒤 그리드의 주차 seg로 개별 변경한다.
+                    // pressed 판정도 5칸 전부 일치일 때만(개별 변경 후 혼합 상태는 아무 버튼도 눌리지
+                    // 않은 표시). 단일 모드는 기존 그대로 confidence 1값 — 버퍼도 함께 시드해 나중에
+                    // 주차 분해로 전환했을 때 마지막 선택 확도가 기본값이 되게 한다.
+                    const pressed = weeklySplitActive
+                      ? draftForm.weeklyConfidence.every((value) => value === option.id)
+                      : draftForm.confidence === option.id
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => setDraftForm((current) => ({
+                          ...current,
+                          confidence: option.id,
+                          weeklyConfidence: defaultDraftWeeklyConfidence(option.id),
+                        }))}
+                        aria-pressed={pressed}
+                        // 결정 D6(§8.5): 어휘("고확도")는 바꾸지 않고 title/aria-label에 SSOT hint를
+                        // 병기해 매핑 비용만 줄인다 — 라벨 텍스트({option.label})는 그대로.
+                        title={option.hint}
+                        aria-label={`확도 ${option.label} — ${option.hint}`}
+                        // UX 감사 2026-09-20: 확도 3버튼 최소 타깃을 앱 전역 관행(min-h-11 md:min-h-9)에 맞춘다.
+                        className={`min-h-11 md:min-h-9 rounded-md px-2 py-1 text-[11px] font-bold transition ${
+                          pressed
+                            ? `${CONFIDENCE_TOKENS[option.id].bgClass} text-white`
+                            : "border border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:text-[#111110]"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="mt-1.5 text-[10.5px] leading-relaxed text-[#615D59]">
+                  {weeklySplitActive
+                    ? "전체 일괄 적용 — 주차별로 개별 변경 가능 · 저장 확도는 우세 버킷 자동"
+                    : "초안 적용 시 확도가 함께 기록됩니다. 예정 → 고확도 → 확정 전환도 이 폼으로 남깁니다."}
+                </p>
               </div>
               {weeklySplitActive && (
                 <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2">

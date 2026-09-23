@@ -2,6 +2,7 @@ import "server-only"
 
 import { triggerOnSubmitRules } from "@/lib/automation-engine"
 import { isSiteFormLead } from "@/lib/crm/capture/origin"
+import { RESPONSE_TARGET_SOURCES } from "@/lib/crm/lead-attribution"
 import type { LeadPayload, LeadSource } from "@/lib/lead-types"
 import {
   type MarketingRequestMeta,
@@ -9,12 +10,19 @@ import {
 } from "@/lib/marketing/server-conversions"
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import { createCrmCustomerEvent } from "@/lib/repositories/crm-events"
-import { saveLead } from "@/lib/repositories/leads"
+import {
+  findLeadsByContacts,
+  saveLead,
+  touchLeadInflow,
+  updateLead,
+  type LeadRecord,
+} from "@/lib/repositories/leads"
 import { upsertSubscriber } from "@/lib/repositories/marketing"
 import { getResolvedSettings } from "@/lib/repositories/settings"
 import { postJson } from "@/lib/server/post-json"
 import { isWebhookEnabled } from "@/lib/webhook-settings"
-import { setEventToken } from "@/lib/types/event-metrics"
+import { parseEventToken, setEventToken } from "@/lib/types/event-metrics"
+import { parseNaverAd } from "@/lib/naver-ad-params"
 
 const VALID_SOURCES = new Set<LeadSource>([
   "demo_modal",
@@ -101,6 +109,8 @@ export interface LeadSubmissionSuccess {
   warnings: string[]
   leadId?: string
   conversionEventId?: string
+  /** 같은 연락처의 재문의를 새 리드 대신 기존 리드에 합쳤을 때 true(재유입 병합, §submitLeadCapture). */
+  merged?: boolean
 }
 
 export interface LeadSubmissionError {
@@ -223,6 +233,9 @@ export function buildLeadPayload(raw: unknown): LeadPayload {
     currentPage: normalizeString(body.currentPage ?? body.current_page),
     referrer: normalizeString(body.referrer),
     anonymousId: normalizeString(body.anonymousId ?? body.anonymous_id),
+    // 네이버 n_* 묶음. 목록 밖 키는 parseNaverAd 가 버리고, 하나도 없으면 undefined 다
+    // (빈 객체를 저장하면 "네이버 유입"으로 잘못 읽힌다).
+    naverAd: parseNaverAd(body.naverAd ?? body.naver_ad) ?? undefined,
   }
 
   if (
@@ -282,6 +295,71 @@ function buildLeadNotificationMessage(body: LeadPayload) {
     .join(" / ")
 }
 
+type ReinflowCandidate = Pick<
+  LeadRecord,
+  "id" | "phone" | "email" | "source" | "status" | "timestamp" | "last_inflow_at" | "notes"
+>
+
+const MERGEABLE_LEAD_STATUSES = new Set<LeadRecord["status"]>(["new", "contacted"])
+
+/**
+ * 재유입 병합 대상 선정 — new/contacted만 후보로 본다. converted/closed는 이미 끝난 딜이라
+ * 병합하지 않고 새 리드로 쌓는다("다시 온 고객"과 "이미 끝난 건"을 섞지 않기 위해서다).
+ * 후보 행의 소스도 응대 대상(RESPONSE_TARGET_SOURCES)이어야 한다 — 같은 연락처의 뉴스레터 구독·
+ * 자료 다운로드 행(status new)에 데모·문의 신청을 합치면, 소스로 거르는 아침 공지·다이제스트·응대 SLA
+ * 어디에도 그 신청이 잡히지 않는다(2026-09-21 재유입 집계 검토에서 발견). 그런 행만 있으면 새 리드로 쌓는다.
+ * 후보가 여럿이면 가장 최근(timestamp 내림차순) 1건만 합친다.
+ */
+function pickReinflowTarget(candidates: ReinflowCandidate[]): ReinflowCandidate | null {
+  const mergeable = candidates.filter(
+    (lead) => MERGEABLE_LEAD_STATUSES.has(lead.status) && RESPONSE_TARGET_SOURCES.has(lead.source)
+  )
+  if (mergeable.length === 0) return null
+  return mergeable.reduce((latest, lead) =>
+    new Date(lead.timestamp).getTime() > new Date(latest.timestamp).getTime() ? lead : latest
+  )
+}
+
+// 재유입 병합 이벤트의 본문 — 새 제출이 가져온 값을 "라벨: 값" 줄로 정리한다. 기존 리드의
+// notes/assigned_to 등은 건드리지 않으므로(§submitLeadCapture 재유입 병합 분기) 여기 담지 않는다.
+function buildReinflowEventBody(body: LeadPayload): string {
+  return [
+    body.message ? `문의 내용: ${body.message}` : undefined,
+    body.org ? `학원/기관: ${body.org}` : undefined,
+    body.role ? `역할: ${body.role}` : undefined,
+    body.size ? `규모: ${body.size}` : undefined,
+    body.leadMagnet ? `리드마그넷: ${body.leadMagnet}` : undefined,
+    body.utmSource ? `UTM 소스: ${body.utmSource}` : undefined,
+    body.utmMedium ? `UTM 매체: ${body.utmMedium}` : undefined,
+    body.utmCampaign ? `UTM 캠페인: ${body.utmCampaign}` : undefined,
+    body.utmTerm ? `UTM 키워드: ${body.utmTerm}` : undefined,
+    body.utmContent ? `UTM 콘텐츠: ${body.utmContent}` : undefined,
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("\n")
+}
+
+/**
+ * 제출 전에 쌓인 익명 활동을 리드로 귀속한다(신원 스티칭). 신규 저장·재유입 병합 두 경로가
+ * 모두 부르므로 leadId만 갈아끼워 재사용한다. 응답을 막지 않게 뒤로 미룬다 — 실패해도
+ * 경고만 남긴다.
+ */
+function scheduleIdentityStitch(leadId: string, anonymousId: string, context: LeadCaptureContext) {
+  const stitchTask = async () => {
+    try {
+      const { stitchIdentity } = await import("@/lib/identity/stitch")
+      const result = await stitchIdentity({ anonymousId, leadId })
+      if (result.warnings.length) {
+        console.warn("[lead-capture] identity stitch warnings:", result.warnings.join(" | "))
+      }
+    } catch (error) {
+      console.warn("[lead-capture] identity stitch failed:", error)
+    }
+  }
+  if (context.deferTask) context.deferTask(stitchTask)
+  else void stitchTask()
+}
+
 export async function submitLeadCapture(
   raw: unknown,
   context: LeadCaptureContext = {}
@@ -326,63 +404,132 @@ export async function submitLeadCapture(
     let savedLeadId: string | undefined
     let storageError: string | undefined
     let conversionEventId: string | undefined
+    // 같은 연락처의 재문의를 새 리드 대신 기존 리드에 합쳤는지 — 응답 body와 알림 제목이 본다.
+    let merged = false
 
     const notes = body.eventSlug ? setEventToken("", body.eventSlug) : undefined
 
-    try {
-      const savedLead = await saveLead({
-        ...body,
-        notes,
-        source_detail: body.sourceDetail,
-        lead_magnet: body.leadMagnet,
-        utm_source: body.utmSource,
-        utm_medium: body.utmMedium,
-        utm_campaign: body.utmCampaign,
-        utm_term: body.utmTerm,
-        utm_content: body.utmContent,
-        gclid: body.gclid,
-        fbclid: body.fbclid,
-        msclkid: body.msclkid,
-        ttclid: body.ttclid,
-        landing_page: body.landingPage,
-        current_page: body.currentPage,
-        referrer: body.referrer,
-        anonymous_id: body.anonymousId,
-      })
-      savedLeadId = savedLead.id
-      conversionEventId = `lead:${savedLead.id}`
-      stored = true
-
-      // 제출 전에 쌓인 익명 활동을 이 리드로 귀속한다.
-      //
-      // 신원 결합 모듈은 원래부터 있었지만(로그인 콜백·자료 다운로드·뉴스레터에서 호출),
-      // 정작 리드 제출 경로에서는 한 번도 부르지 않았다. 그래서 client_events 2,159행 중
-      // lead_id 가 채워진 행이 0이었고, 리드 참여 신호가 항상 빈손이었다(2026-08-05 실측).
-      //
-      // 응답을 막지 않게 뒤로 미룬다 — 리드 저장은 이미 끝났으므로 실패해도 경고만 남긴다.
-      if (body.anonymousId) {
-        const leadIdForStitch = savedLead.id
-        const anonymousIdForStitch = body.anonymousId
-        const stitchTask = async () => {
-          try {
-            const { stitchIdentity } = await import("@/lib/identity/stitch")
-            const result = await stitchIdentity({
-              anonymousId: anonymousIdForStitch,
-              leadId: leadIdForStitch,
-            })
-            if (result.warnings.length) {
-              console.warn("[lead-capture] identity stitch warnings:", result.warnings.join(" | "))
-            }
-          } catch (error) {
-            console.warn("[lead-capture] identity stitch failed:", error)
-          }
-        }
-        if (context.deferTask) context.deferTask(stitchTask)
-        else void stitchTask()
+    // 재유입 병합 후보 조회 — Compass 웹훅의 "재유입" 분기(같은 연락처가 다시 오면 새 리드
+    // 대신 last_inflow_at만 갱신하고 activities에 inflow 이력을 남긴다. Compass 저장소
+    // app/api/webhook/meta/route.ts)를 공개 제출 경로에도 이식한다.
+    // 대상은 응대가 필요한 소스(RESPONSE_TARGET_SOURCES = demo_modal/contact_page/
+    // meta_lead_ads)로 좁힌다 — 뉴스레터 재구독·자료 재다운로드처럼 같은 연락처 재제출이
+    // 정상 동작인 소스까지 합치면 서로 다른 제출(예: 리드마그넷 A/B)이 하나로 뭉개진다
+    // (아래 "different lead-magnet submissions" 기존 테스트가 이 경계를 고정한다).
+    // 조회 자체가 실패해도 warn만 남기고 신규 저장으로 계속 진행한다 — 공개 홈페이지 폼이
+    // 쓰는 경로라 어떤 경우에도 예외로 저장이 막히면 안 된다. 여기서 왕복 2회(전화/이메일
+    // 병렬 조회, findLeadsByContacts 내부)만 추가되고 그 외 추가 조회는 없다.
+    let reinflowTarget: ReinflowCandidate | null = null
+    if ((body.phone || body.email) && RESPONSE_TARGET_SOURCES.has(body.source)) {
+      try {
+        const candidates = await findLeadsByContacts({
+          phones: body.phone ? [body.phone] : [],
+          emails: body.email ? [body.email] : [],
+        })
+        reinflowTarget = pickReinflowTarget(candidates)
+      } catch (error) {
+        console.warn("[lead-capture] reinflow candidate lookup failed:", error)
       }
-    } catch (error) {
-      console.error("[lead-capture] saveLead error:", error)
-      storageError = "Failed to store the lead record."
+      // 행사 신청(eventSlug)은 notes 첫 줄의 [event:slug] 토큰 하나로 행사별 신청 수를 센다
+      // (lib/events/attribution.ts). 기존 리드가 이미 다른 행사 토큰을 갖고 있으면 병합하지
+      // 않고 예전처럼 새 행을 만든다 — 토큰은 한 개뿐이라 덮어쓰면 이전 행사의 신청 집계가 사라진다.
+      if (reinflowTarget && body.eventSlug) {
+        const existingToken = parseEventToken(reinflowTarget.notes).token
+        if (existingToken && existingToken !== body.eventSlug) reinflowTarget = null
+      }
+    }
+
+    if (reinflowTarget) {
+      // 새 리드 행을 만들지 않고 기존 리드에 합친다 — status/assigned_to/follow_up_at/notes는
+      // 절대 건드리지 않는다(touchLeadInflow는 last_inflow_at만 갱신한다. Compass도 재유입
+      // 시 coalesce로만 채우고 담당·단계는 그대로 둔다). last_inflow_at이 실제로 생성
+      // 시각보다 뒤로 갱신되는 순간부터 lib/crm/lead-reinflow.ts의 inflow_stamp 근거
+      // (백필 오차 허용치를 넘겨 유의미하게 뒤인 last_inflow_at)가 이 저장 경로에서 처음으로
+      // 참이 된다 — 지금까지는 저장 경로가 항상 새 행을 만들어 그 조건이 구조적으로 거짓이었다.
+      const mergedAt = new Date().toISOString()
+      const existingId = reinflowTarget.id
+      savedLeadId = existingId
+      // 재문의도 광고 성과상 별개의 전환 이벤트다 — 병합 전에는 새 행마다 새 id 였으므로 그 계산을
+      // 유지한다. 원래 id 를 재사용하면 브라우저 픽셀과의 dedup 창 안에서 재문의가 묶여 사라진다.
+      conversionEventId = `lead:${existingId}:reinflow:${mergedAt}`
+      stored = true
+      merged = true
+
+      try {
+        await touchLeadInflow(existingId, mergedAt)
+      } catch (error) {
+        // 실패해도 병합 결정을 되돌리지 않는다 — last_inflow_at 스탬프가 이번엔 안 찍혀도
+        // 리드를 새로 두 배 쌓는 것보다 낫다(리드는 이미 DB에 존재한다).
+        console.warn("[lead-capture] touchLeadInflow failed:", error)
+      }
+
+      // 행사 신청이면 기존 리드에 행사 토큰을 새긴다(토큰이 없던 리드만 — 다른 행사 토큰이 있는
+      // 리드는 위에서 병합 대상에서 뺐다). notes 는 이 토큰 줄 외에는 건드리지 않는다.
+      if (body.eventSlug && parseEventToken(reinflowTarget.notes).token !== body.eventSlug) {
+        try {
+          await updateLead(existingId, {
+            notes: setEventToken(reinflowTarget.notes ?? "", body.eventSlug),
+          })
+        } catch (error) {
+          console.warn("[lead-capture] reinflow event token update failed:", error)
+        }
+      }
+
+      void createCrmCustomerEvent({
+        targetType: "lead",
+        targetId: existingId,
+        targetLabel: body.org || body.name || body.email || "홈페이지 리드",
+        sourceType: "site_inflow",
+        title: "재문의(재유입)",
+        summary: [SITE_INFLOW_SOURCE_LABELS[body.source] ?? body.source, body.currentPage ?? body.landingPage]
+          .filter(Boolean)
+          .join(" · "),
+        body: buildReinflowEventBody(body),
+        occurredAt: mergedAt,
+      }).catch((error) => {
+        console.error("[lead-capture] reinflow site_inflow event insert failed:", error)
+      })
+
+      // 제출 전에 쌓인 익명 활동을 이 리드로 귀속한다 — 신규 저장과 동일 경로(scheduleIdentityStitch).
+      if (body.anonymousId) scheduleIdentityStitch(existingId, body.anonymousId, context)
+    } else {
+      try {
+        const savedLead = await saveLead({
+          ...body,
+          notes,
+          source_detail: body.sourceDetail,
+          lead_magnet: body.leadMagnet,
+          utm_source: body.utmSource,
+          utm_medium: body.utmMedium,
+          utm_campaign: body.utmCampaign,
+          utm_term: body.utmTerm,
+          utm_content: body.utmContent,
+          gclid: body.gclid,
+          fbclid: body.fbclid,
+          msclkid: body.msclkid,
+          ttclid: body.ttclid,
+          landing_page: body.landingPage,
+          current_page: body.currentPage,
+          referrer: body.referrer,
+          anonymous_id: body.anonymousId,
+          naver_ad: body.naverAd,
+        })
+        savedLeadId = savedLead.id
+        conversionEventId = `lead:${savedLead.id}`
+        stored = true
+
+        // 제출 전에 쌓인 익명 활동을 이 리드로 귀속한다.
+        //
+        // 신원 결합 모듈은 원래부터 있었지만(로그인 콜백·자료 다운로드·뉴스레터에서 호출),
+        // 정작 리드 제출 경로에서는 한 번도 부르지 않았다. 그래서 client_events 2,159행 중
+        // lead_id 가 채워진 행이 0이었고, 리드 참여 신호가 항상 빈손이었다(2026-08-05 실측).
+        //
+        // 응답을 막지 않게 뒤로 미룬다 — 리드 저장은 이미 끝났으므로 실패해도 경고만 남긴다.
+        if (body.anonymousId) scheduleIdentityStitch(savedLead.id, body.anonymousId, context)
+      } catch (error) {
+        console.error("[lead-capture] saveLead error:", error)
+        storageError = "Failed to store the lead record."
+      }
     }
 
     const deliveryTasks: Promise<void>[] = []
@@ -453,7 +600,8 @@ export async function submitLeadCapture(
           categoryTag: "lead",
           severity: "info",
           scopeTag: "org_admin",
-          title: buildLeadNotificationTitle(body),
+          // 재유입 병합이면 "이건 새 문의가 아니라 재문의다"를 관리자가 제목만 보고 알 수 있게 접두어를 붙인다.
+          title: (merged ? "재문의 · " : "") + buildLeadNotificationTitle(body),
           message: buildLeadNotificationMessage(body),
           routeUrl: "/admin/crm",
           source: "lead",
@@ -482,6 +630,7 @@ export async function submitLeadCapture(
             landingPage: body.landingPage,
             currentPage: body.currentPage,
             referrer: body.referrer,
+            naverAd: body.naverAd,
           },
           // 개별 리드는 관리자 인앱에 즉시 남기되 WeCom은 10:10 일일 카드로 묶는다.
           channels: [],
@@ -509,7 +658,11 @@ export async function submitLeadCapture(
       // 판정은 폼 출처(source) 하나로만 한다. 예전에는 광고 클릭 식별자가 있으면 건너뛰었는데,
       // 그러면 광고를 타고 들어와 홈페이지 폼을 채운 문의가 CRM 타임라인에 한 줄도 안 남았다.
       // 유료 트래픽이 대부분이라 사실상 홈페이지 문의 대부분이 사라지던 경로다(2026-09-01 실측).
-      if (savedLeadId && isSiteFormLead(body.source)) {
+      //
+      // 재유입 병합 시에는 위에서 이미 "재문의(재유입)" site_inflow 이벤트를 남겼다 — 여기서
+      // 또 만들면 같은 제출에 site_inflow 이벤트가 두 번(신규용 문구 + 재유입용 문구) 남으므로
+      // merged면 건너뛴다.
+      if (savedLeadId && !merged && isSiteFormLead(body.source)) {
         void createCrmCustomerEvent({
           targetType: "lead",
           targetId: savedLeadId,
@@ -576,6 +729,7 @@ export async function submitLeadCapture(
         stored,
         leadId: savedLeadId,
         conversionEventId,
+        merged,
         warnings: [...(storageError ? [storageError] : []), ...errors],
       },
     }

@@ -142,6 +142,24 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // 리드 중복 탐지 + 어드민 핫패스 인덱스(2026-09-02). 인덱스 전용 마이그레이션이라
   // 프로브의 한계는 SCHEMA_PROBES 쪽 주석 참고.
   "supabase/migrations/20260902_leads_dedupe_and_admin_hot_path_indexes.sql",
+  // 아침 리드 카드 한 장 통합(2026-09-07). 같은 날의 20260907_lead_digest_runs_daily_type.sql 은
+  // lead_digest_runs.report_type CHECK 에 'daily' 를 더하는 변경뿐이라 REST 로 확인할 방법이 없어
+  // 계약에 넣지 않는다(미적용이면 아침 카드 실행 선점 insert 가 23514 로 실패해 카드가 안 나간다).
+  // 적용 확인은 아래 제약 조회로 한다 — 정의에 'daily' 가 보이면 적용된 것이다.
+  //   select pg_get_constraintdef(oid) from pg_constraint
+  //   where conname = 'lead_digest_runs_report_type_check';
+  // 웹훅별 켜기/끄기 + 알림 발송 스케줄(2026-09-07) — site_settings 두 JSONB 컬럼.
+  "supabase/migrations/20260907_site_settings_webhook_toggles_and_schedule.sql",
+  // CRM 개요 스냅샷 stale-first(2026-09-10) — 2인자 함수를 DROP 하고 3인자로 재생성한다.
+  // 스냅샷을 쓰고 advisory lock 을 잡는 SECURITY DEFINER 함수라 카탈로그로만 확인한다.
+  "supabase/migrations/20260910_admin_crm_overview_stale_first.sql",
+  // 광고 채널 확장 — Google Ads·네이버 검색광고(2026-09-14). 파일명 사전순(= 적용 순서).
+  // ad_channel_daily 가 먼저여야 한다: 나머지 둘은 그 테이블을 참조하지 않지만, 크론이
+  // 먼저 돌아 스냅샷이 쌓여 있어야 화면이 빈 채널을 "미측정"이 아니라 "집행 없음"으로 읽는다.
+  // (같은 날짜의 아래 Compass·하드웨어·phone_key 와는 서로 독립이라 묶음째 앞에 둔다.)
+  "supabase/migrations/20260914_ad_channel_daily.sql",
+  "supabase/migrations/20260914_campaign_links_ad_channels.sql",
+  "supabase/migrations/20260914_leads_naver_attribution.sql",
   // Compass 연동 브리지 2차(2026-09-14) — 전화 키 함수 + 링크/연락 뷰 + 역브리지 뷰.
   "supabase/migrations/20260914_compass_integration_bridge.sql",
   // 하드웨어 배송 예정 확정 v3(2026-09-14, 운영 적용 완료). 쓰기 RPC라 카탈로그로만 확인한다.
@@ -149,6 +167,9 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // REST·카탈로그 RPC 프로브로 확인할 방법이 없어 계약에 넣지 않는다 — 적용 확인은
   // docs/active/hardware-scm-tab-reference.md §6 의 제약 조회로 한다.
   "supabase/migrations/20260914_hardware_confirm_planned_v3.sql",
+  // 재유입 병합 전화 정규화 키(2026-09-14) — Compass phone_key 규칙을 public.leads 생성 컬럼으로 이식.
+  // 생성식이 norm_phone_key() 를 부르므로 위 compass_integration_bridge 뒤에 적용한다(파일명 순서와 같다).
+  "supabase/migrations/20260914_leads_phone_key.sql",
   // 도입 신청 리드 자격 필드(2026-09-21). 같은 날의
   // 20260921_lead_source_intake_split.sql 은 leads.source 값을 옮기는 데이터 백필이라
   // 스키마 프로브로 확인할 대상이 없어 계약에 넣지 않는다 — 적용 확인은 아래 쿼리로 한다.
@@ -257,6 +278,52 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     migration: "supabase/migrations/20260820_meta_insights_daily.sql",
     impact:
       "크론(/api/cron/sync-meta-insights)과 백필 스크립트(scripts/backfill-meta-insights.mjs)의 upsert 가 실패해 일자별 스냅샷이 쌓이지 않는다(조회 함수는 아직 라우트에 연결되지 않았다).",
+  },
+  // ── 광고 채널 확장(2026-09-14) ────────────────────────────────────────
+  // Meta 와 같은 계열의 일자 스냅샷 두 벌. 미적용이면 크론이 upsert 에서 죽고, 화면은
+  // 해당 채널을 "미측정"으로 떨어뜨린다(0 으로 포장하지 않으므로 조용한 오답은 없다).
+  {
+    kind: "table",
+    table: "google_ads_daily",
+    label: "Google Ads 캠페인 일자별 성과 스냅샷",
+    // synced_at 은 감사용이라 제외 — meta_insights_daily 프로브와 같은 규약.
+    columns: ["date", "campaign_id", "campaign_name", "spend", "impressions", "clicks", "conversions", "currency"],
+    migration: "supabase/migrations/20260914_ad_channel_daily.sql",
+    impact:
+      "크론(/api/cron/sync-google-ads)의 upsert 가 실패해 Google 집행이 쌓이지 않는다 — /admin/campaigns 채널 스트립의 Google 칸이 계속 '미측정'으로 남는다.",
+  },
+  {
+    kind: "table",
+    table: "naver_ads_daily",
+    label: "네이버 검색광고 캠페인 일자별 성과 스냅샷",
+    columns: ["date", "campaign_id", "campaign_name", "spend", "impressions", "clicks", "conversions", "currency"],
+    migration: "supabase/migrations/20260914_ad_channel_daily.sql",
+    impact:
+      "크론(/api/cron/sync-naver-ads)의 upsert 가 실패해 네이버 집행이 쌓이지 않는다 — /admin/campaigns 채널 스트립의 네이버 칸이 계속 '미측정'으로 남는다.",
+  },
+  {
+    kind: "table",
+    table: "campaign_links",
+    label: "우산 캠페인 ↔ 광고 채널 링크(ref_type CHECK 확장) — CHECK 자체는 이 프로브로 확인 불가",
+    // CHECK 제약의 허용 집합은 REST 로 확인할 방법이 없다(pg_constraint 접근 불가).
+    // 컬럼이 살아있는지만 보고, 실제 확장 여부는 google_campaign 링크를 한 건 저장해 보면 안다.
+    // 그래서 severity 는 warning — 이 프로브의 "ok" 가 CHECK 확장을 보장하지 않는다.
+    columns: ["id", "campaign_id", "ref_type", "ref_id"],
+    migration: "supabase/migrations/20260914_campaign_links_ad_channels.sql",
+    severity: "warning",
+    impact:
+      "미적용이면 Google·네이버 캠페인 링크 저장이 23514(check violation)로 거부된다. 링크 피커에서 두 채널만 실패하고 나머지는 정상이라 눈에 잘 안 띈다.",
+  },
+  {
+    kind: "table",
+    table: "leads",
+    label: "네이버 검색광고 유입 파라미터 컬럼(naver_ad)",
+    columns: ["id", "naver_ad"],
+    migration: "supabase/migrations/20260914_leads_naver_attribution.sql",
+    // 리드 저장은 이 컬럼을 선택 컬럼으로 다뤄(OPTIONAL_LEAD_INSERT_COLUMNS) 미적용에도 죽지 않는다.
+    // 다만 네이버 유입 표식이 통째로 유실되므로 소급 복구가 불가능하다 — warning 이 아니라 blocker.
+    impact:
+      "네이버 광고를 타고 들어온 리드의 n_* 파라미터가 저장되지 않는다. 리드 저장 자체는 성공하지만(선택 컬럼) 그 기간 유입은 사후에 네이버로 귀속시킬 방법이 없다.",
   },
   // ── 어드민 담당자 ↔ NEO 연결(2026-08-28) ──────────────────────────────
   // 이 마이그레이션은 UPDATE 10건뿐인 데이터 백필이다 — neo_owner_id 컬럼 자체는
@@ -415,6 +482,39 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     impact:
       "idx_crm_tasks_status_completed_at이 없어도 기능은 정상이나, /api/admin/crm/manager-report의 기간 내 완료 집계가 done 누적 전체 스캔이 되고 그 비용은 시간이 지날수록 커진다.",
   },
+  // ── 웹훅별 켜기/끄기 + 알림 발송 스케줄(2026-09-07) ─────────────────────
+  // updateSettings()(lib/repositories/settings.ts)가 두 컬럼을 upsert 에 무조건 싣는다.
+  // 읽기(select *)는 컬럼이 없어도 죽지 않고 기본값으로 강등되므로, 드러나는 증상은 저장 실패뿐이다.
+  // 같은 파일의 백필 UPDATE(wecom_ops 스위치 이관·'disabled' 문자열 정리·스케줄 기본값)는
+  // 컬럼 프로브로 구분되지 않는다 — 한 파일이라 컬럼이 있으면 백필도 돌았다고 본다.
+  {
+    kind: "table",
+    table: "site_settings",
+    label: "웹훅별 켜기/끄기 맵 + 알림 발송 스케줄 컬럼",
+    columns: ["id", "webhook_enabled_json", "notification_schedule_json"],
+    migration: "supabase/migrations/20260907_site_settings_webhook_toggles_and_schedule.sql",
+    impact:
+      "사이트 설정 저장(PATCH /api/admin/settings)이 어느 탭에서든 컬럼 없음 오류로 실패한다. 읽기는 기본값으로 강등돼 조용히 틀린다 — 웹훅 스위치는 옛 wecom_ops 하나만 반영되고 아침 카드 발송 시각은 기본값(평일 11시)에 고정된다.",
+  },
+  // ── CRM 개요 스냅샷 stale-first(2026-09-10) ────────────────────────────
+  // 스냅샷을 쓰고 dirty 로그를 지우며 advisory lock 을 잡는 SECURITY DEFINER 함수라 실행 프로브를
+  // 금지하고 pg_proc·권한만 본다. 미적용이어도 앱이 2인자로 한 번 재시도해 화면은 살지만
+  // blocker 로 둔다 — 이 프로브는 service_role 전용 권한도 함께 보고, anon/authenticated 에 열리면
+  // CRM 사업 개요 payload 가 공개 키로 읽히고 무거운 재계산을 누구나 유발할 수 있다.
+  // 한계: 3인자 시그니처만 본다. 20260613_admin_crm_overview_snapshot.sql 을 재실행하면 옛 2인자
+  // 함수가 오버로드로 되살아나(두 이름만 넘기는 호출이 PGRST203) 이 프로브로는 잡히지 않는다.
+  //   select oid::regprocedure from pg_proc where proname = 'admin_crm_business_overview';
+  // 가 3인자 한 줄만 돌려주는지로 확인한다.
+  {
+    kind: "rpc",
+    functionName: "admin_crm_business_overview",
+    label: "CRM 개요 스냅샷 stale-first 조회(3인자, 안전핀 p_hard_max_age_seconds) RPC",
+    catalogIdentityTypes: "integer, boolean, integer",
+    serviceRoleOnly: true,
+    migration: "supabase/migrations/20260910_admin_crm_overview_stale_first.sql",
+    impact:
+      "앱이 2인자 함수로 재시도해 CRM 개요는 뜨지만, 어드민 쓰기가 있었거나 300초가 지난 뒤의 조회마다 무거운 집계 재계산(실측 콜 평균 약 1초)을 동기로 기다리는 옛 동작으로 돌아가고 호출마다 실패 왕복이 한 번 더 붙는다.",
+  },
   // ── Compass 연동 브리지 2차(2026-09-14) ─────────────────────────────────
   // 전부 warning — 아직 소비 코드가 어드민에 없고, Compass(lib/homeBridge.ts)는 뷰가 없으면
   // available:false 로 조용히 비켜 간다. compass_lead_* 두 뷰는 Compass 배포(crm.lead_refs·
@@ -539,6 +639,19 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     label: "쇼룸 예약 접수 anon 차단(RLS deny-all)",
     migration: "supabase/migrations/20260829_showroom_bookings.sql",
     impact: "방문자 이름·연락처·방문 일정이 anon 키로 읽힌다.",
+  },
+  // ── 재유입 병합 전화 정규화 키(2026-09-14) ──────────────────────────────
+  // phone_key가 없어도 findLeadsByContacts()가 원문/숫자만 비교 폴백으로 계속 동작하므로
+  // (기능은 안 죽는다) severity는 warning — 다만 그 폴백은 서식이 다른 같은 번호를 놓친다.
+  {
+    kind: "table",
+    table: "leads",
+    label: "재유입 병합 전화 정규화 키(phone_key, 생성 컬럼) + 마지막 유입 시각",
+    columns: ["id", "phone_key", "last_inflow_at"],
+    migration: "supabase/migrations/20260914_leads_phone_key.sql",
+    severity: "warning",
+    impact:
+      "없으면 재유입 병합이 원문/숫자만 비교 폴백으로 동작해 서식이 다른 같은 번호를 못 잡는다.",
   },
 ]
 

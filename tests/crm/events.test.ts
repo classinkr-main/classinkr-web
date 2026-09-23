@@ -1,10 +1,68 @@
-import { describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
   CRM_WORK_ACTIVITY_SOURCE_TYPES,
   buildCrmCustomerEventInsert,
   parseLooseList,
 } from "@/lib/repositories/crm-events"
+
+// A4 — listCrmCustomerEvents의 from/to(occurred_at 범위) 옵션이 실제 쿼리에 반영되는지.
+// 체이너블 쿼리 빌더 — select/order/range/eq/in/or/gte/lte는 전부 this를 돌려주고,
+// await query(직접 thenable)가 최종 결과를 낸다.
+function makeListQueryBuilder(result: { data: unknown[]; error: unknown; count: number }) {
+  const calls: { method: string; args: unknown[] }[] = []
+  const builder: Record<string, unknown> = {}
+  const chain = (name: string) => (...args: unknown[]) => {
+    calls.push({ method: name, args })
+    return builder
+  }
+  builder.select = chain("select")
+  builder.order = chain("order")
+  builder.range = chain("range")
+  builder.eq = chain("eq")
+  builder.in = chain("in")
+  builder.or = chain("or")
+  builder.gte = chain("gte")
+  builder.lte = chain("lte")
+  builder.then = (resolve: (value: unknown) => void) => resolve(result)
+  return { builder, calls }
+}
+
+describe("listCrmCustomerEvents from/to(A4 기간 범위)", () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  it("from·to가 있으면 occurred_at에 gte·lte를 건다", async () => {
+    const { builder, calls } = makeListQueryBuilder({ data: [], error: null, count: 0 })
+    const from = vi.fn(() => builder)
+    vi.doMock("@/lib/supabase/admin", () => ({ createSupabaseAdminClient: vi.fn(() => ({ from })) }))
+    vi.doMock("@/lib/storage/crm-recordings", () => ({
+      createCrmRecordingSignedUrls: vi.fn(async () => new Map()),
+    }))
+
+    const { listCrmCustomerEvents } = await import("@/lib/repositories/crm-events")
+    await listCrmCustomerEvents({ from: "2026-09-15T00:00:00.000Z", to: "2026-09-21T23:59:59.999Z" })
+
+    expect(calls).toContainEqual({ method: "gte", args: ["occurred_at", "2026-09-15T00:00:00.000Z"] })
+    expect(calls).toContainEqual({ method: "lte", args: ["occurred_at", "2026-09-21T23:59:59.999Z"] })
+  })
+
+  it("from·to가 없으면 gte·lte를 걸지 않는다(무제한 조회)", async () => {
+    const { builder, calls } = makeListQueryBuilder({ data: [], error: null, count: 0 })
+    const from = vi.fn(() => builder)
+    vi.doMock("@/lib/supabase/admin", () => ({ createSupabaseAdminClient: vi.fn(() => ({ from })) }))
+    vi.doMock("@/lib/storage/crm-recordings", () => ({
+      createCrmRecordingSignedUrls: vi.fn(async () => new Map()),
+    }))
+
+    const { listCrmCustomerEvents } = await import("@/lib/repositories/crm-events")
+    await listCrmCustomerEvents({})
+
+    expect(calls.some((c) => c.method === "gte")).toBe(false)
+    expect(calls.some((c) => c.method === "lte")).toBe(false)
+  })
+})
 
 const NOW = new Date("2026-06-26T09:00:00.000Z")
 

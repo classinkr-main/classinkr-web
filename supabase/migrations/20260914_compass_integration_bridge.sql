@@ -36,6 +36,14 @@
 -- 권한으로 평가되므로, 회수하면 anon/authenticated 경로의 public.leads insert 가 깨질 수 있다.
 -- 부작용 없는 순수 함수라 열어 두어도 노출되는 데이터가 없다.
 --
+-- 권한 주의 2(2026-09-21 운영 적용 전 보강): GRANT SELECT 는 Supabase 기본권한이 service_role 에 준
+-- INSERT·UPDATE·DELETE·TRUNCATE 를 좁히지 않는다. 단순 뷰는 Postgres 가 자동 갱신 뷰로 만들고
+-- 뷰는 소유자(postgres) 권한으로 실행되므로, 그대로 두면 service_role 이 뷰를 통해 Compass 소유
+-- crm.lead_refs 나 admin_profiles·NEO 스냅샷 행을 RLS 없이 쓸 수 있다(운영 실측: 20260828 뷰 7개 전부
+-- 쓰기 권한 보유, 그중 5개 자동 갱신 가능). 그래서 모든 브리지 뷰에서 service_role 권한을 먼저 전부
+-- 회수하고 SELECT 만 다시 준다 — 아래 D) 절이 20260828 기존 뷰에도 같은 조치를 한다. 앱은 이 뷰들을
+-- 읽기만 한다(app/·lib/ 에 insert·update·upsert·delete 호출 0건).
+--
 -- 되돌리기(필요 시): drop view public.home_channel_contacts_v, public.home_site_leads_v,
 --   public.home_neo_accounts_v, public.home_owner_directory_v, public.compass_lead_contact_v,
 --   public.compass_lead_refs_v; drop index public.leads_norm_phone_key_idx,
@@ -135,6 +143,7 @@ begin
       from crm.lead_refs
     $view$;
     execute 'revoke all on public.compass_lead_refs_v from anon, authenticated';
+    execute 'revoke all on public.compass_lead_refs_v from service_role';
     execute 'grant select on public.compass_lead_refs_v to service_role';
     execute $comment$
       comment on view public.compass_lead_refs_v is
@@ -158,6 +167,7 @@ begin
       from crm.lead_contact_facts_v
     $view$;
     execute 'revoke all on public.compass_lead_contact_v from anon, authenticated';
+    execute 'revoke all on public.compass_lead_contact_v from service_role';
     execute 'grant select on public.compass_lead_contact_v to service_role';
     execute $comment$
       comment on view public.compass_lead_contact_v is
@@ -246,6 +256,13 @@ revoke all on public.home_owner_directory_v,
               public.home_channel_contacts_v
   from anon, authenticated;
 
+-- service_role 의 기본 쓰기 권한도 회수한 뒤 SELECT 만 준다(머리 주석 "권한 주의 2").
+revoke all on public.home_owner_directory_v,
+              public.home_neo_accounts_v,
+              public.home_site_leads_v,
+              public.home_channel_contacts_v
+  from service_role;
+
 grant select on public.home_owner_directory_v,
                 public.home_neo_accounts_v,
                 public.home_site_leads_v,
@@ -260,3 +277,26 @@ comment on view public.home_site_leads_v is
   '어드민 public.leads → Compass 역브리지 — phone_key 당 문의 건수·최근 시각·최근 출처·상태. 이름·기관·이메일·메시지 제외, meta_lead_ads 제외.';
 comment on view public.home_channel_contacts_v is
   '어드민 channel_conversations → Compass 역브리지 — phone_key 당 상담 건수·메시지 수·최근 시각·홈페이지 리드 매칭 여부. 대화 본문 제외.';
+
+-- ─── D) 20260828 기존 브리지 뷰의 service_role 권한을 SELECT 로 좁힌다 ────────────────
+-- 20260828_compass_bridge_views.sql 은 anon/authenticated 만 회수했다. service_role 에 남은 기본 쓰기 권한으로
+-- 자동 갱신 가능한 뷰(compass_leads_v·compass_activities_v·compass_demos_v·compass_cal_events_v·compass_revenue_v)를
+-- 통해 Compass 소유 crm 테이블에 RLS 없이 쓸 수 있었다(머리 주석 "권한 주의 2"). 뷰가 없는 환경에서는 건너뛴다.
+do $$
+declare
+  v text;
+begin
+  foreach v in array array[
+    'compass_leads_v', 'compass_activities_v', 'compass_ads_v', 'compass_adsets_v',
+    'compass_demos_v', 'compass_cal_events_v', 'compass_revenue_v'
+  ] loop
+    if to_regclass('public.' || v) is not null then
+      execute format('revoke all on public.%I from service_role', v);
+      execute format('grant select on public.%I to service_role', v);
+    else
+      raise notice 'bridge view privilege narrowing: skip missing view public.%', v;
+    end if;
+  end loop;
+end $$;
+
+notify pgrst, 'reload schema';

@@ -366,9 +366,12 @@ function draftRow(overrides: Partial<DraftFixtureRow> = {}): DraftFixtureRow {
 interface DraftsFixture {
   rows?: DraftFixtureRow[]
   insert?: (payload: Record<string, unknown>) => { data: unknown; error: { code?: string; message: string } | null }
+  // 라운드4(P0-2) 자가 체크 재편집은 잠금 해제 UPDATE(.eq("status","checked") 포함)와 본 UPDATE
+  // 두 번을 순서대로 부른다 — 필터 검증을 위해 id/updated_at뿐 아니라 실제로 걸린 모든 eq
+  // 컬럼(예: status)을 그대로 넘긴다(기존 필드 id/updated_at 접근은 하위호환으로 그대로 동작).
   update?: (
     payload: Record<string, unknown>,
-    filters: { id?: string; updated_at?: string },
+    filters: Record<string, unknown>,
   ) => { data: unknown; error: { code?: string; message: string } | null }
 }
 
@@ -425,7 +428,10 @@ function makeDraftsClient(fixture: DraftsFixture) {
           return fixture.insert ? fixture.insert(payload) : { data: null, error: { message: "no insert handler" } }
         }
         if (mode === "update") {
-          const filters = { id: eqFilters.id as string | undefined, updated_at: eqFilters.updated_at as string | undefined }
+          // 이전에는 id/updated_at만 골라 담았지만, 라운드4(P0-2) 잠금 해제 UPDATE 검증에는
+          // .eq("status","checked") 같은 다른 컬럼 필터도 필요해 걸린 eq 전부를 담는다 — 기존
+          // 테스트가 읽는 filters.id/filters.updated_at는 그대로 값이 존재해 영향이 없다.
+          const filters: Record<string, unknown> = { ...eqFilters }
           updateCalls.push({ payload, filters })
           return fixture.update ? fixture.update(payload, filters) : { data: null, error: null }
         }
@@ -575,6 +581,55 @@ describe("createBranchSalesLedgerDraft — new-row 이중 제출 방어(I1)", ()
   })
 })
 
+describe("createBranchSalesLedgerDraft — 자가 체크 생성(라운드4 P0-2)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.resetModules()
+  })
+
+  it('status:"checked"로 생성하면 insert payload에 status/checked_by/checked_at이 함께 담긴다', async () => {
+    const inserted = draftRow({ id: "new-draft", status: "checked", checked_by: "tester" })
+    const { repository, client } = await loadDraftsRepository({
+      rows: [],
+      insert: (payload) => {
+        expect(payload.status).toBe("checked")
+        expect(payload.checked_by).toBe("tester")
+        expect(typeof payload.checked_at).toBe("string")
+        return { data: inserted, error: null }
+      },
+    })
+
+    const result = await repository.createBranchSalesLedgerDraft(
+      { kind: "new-row", customer: "테스트 학원", month: "2026-09", amount: 500_000, status: "checked" },
+      "tester",
+    )
+
+    expect(result.dedupedRecent).toBe(false)
+    expect(client.insertCalls).toHaveLength(1)
+  })
+
+  it("status를 생략하면 기존과 동일하게 draft로 저장되고 checked_by/checked_at은 없다", async () => {
+    const inserted = draftRow({ id: "new-draft-2", status: "draft" })
+    const { repository, client } = await loadDraftsRepository({
+      rows: [],
+      insert: (payload) => {
+        expect(payload.status).toBe("draft")
+        expect(payload.checked_by).toBeUndefined()
+        expect(payload.checked_at).toBeUndefined()
+        return { data: inserted, error: null }
+      },
+    })
+
+    const result = await repository.createBranchSalesLedgerDraft(
+      { kind: "new-row", customer: "새 학원", month: "2026-09", amount: 500_000 },
+      "tester",
+    )
+
+    expect(result.dedupedRecent).toBe(false)
+    expect(client.insertCalls).toHaveLength(1)
+  })
+})
+
 describe("updateBranchSalesLedgerDraft — 낙관적 잠금(I4)", () => {
   afterEach(() => {
     vi.restoreAllMocks()
@@ -707,5 +762,111 @@ describe("updateBranchSalesLedgerDraft — 낙관적 잠금(I4)", () => {
     await expect(
       repository.updateBranchSalesLedgerDraft("draft-1", { status: "checked" }, "tester"),
     ).rejects.toThrow(/수정 실패/)
+  })
+})
+
+describe("updateBranchSalesLedgerDraft — 자가 체크 재편집(라운드4 P0-2)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.resetModules()
+  })
+
+  it("현재 행이 본인 checked면 잠금 해제 UPDATE 후 본 UPDATE로 이어간다(호출 순서·필터 검증)", async () => {
+    const selfChecked = draftRow({
+      id: "draft-1",
+      status: "checked",
+      checked_by: "tester",
+      checked_at: "2026-09-01T00:00:00.000Z",
+    })
+    const unlocked = draftRow({
+      id: "draft-1",
+      status: "draft",
+      checked_by: null,
+      checked_at: null,
+      updated_at: "2026-09-20T00:00:01.000Z",
+    })
+    const finalRow = draftRow({ id: "draft-1", status: "checked", amount: 2_000_000, checked_by: "tester" })
+
+    const updateCallOrder: Array<{ payload: Record<string, unknown>; filters: Record<string, unknown> }> = []
+    const { repository, client } = await loadDraftsRepository({
+      rows: [selfChecked],
+      update: (payload, filters) => {
+        updateCallOrder.push({ payload, filters })
+        if (updateCallOrder.length === 1) return { data: unlocked, error: null }
+        return { data: finalRow, error: null }
+      },
+    })
+
+    const result = await repository.updateBranchSalesLedgerDraft(
+      "draft-1",
+      { amount: 2_000_000, status: "checked" },
+      "tester",
+    )
+
+    expect(result.outcome).toBe("updated")
+    if (result.outcome === "updated") expect(result.draft.amount).toBe(2_000_000)
+    expect(updateCallOrder).toHaveLength(2)
+
+    // 1차: 잠금 해제 UPDATE — 현재 checked인 행만 대상으로 draft로 되돌린다.
+    expect(updateCallOrder[0].filters.id).toBe("draft-1")
+    expect(updateCallOrder[0].filters.status).toBe("checked")
+    expect(updateCallOrder[0].payload).toMatchObject({
+      status: "draft",
+      checked_by: null,
+      checked_at: null,
+      updated_by: "tester",
+    })
+
+    // 2차: 본 UPDATE — 내용 + status:"checked" 재전이(buildUpdate 경로 — checked_by/checked_at 재기록).
+    expect(updateCallOrder[1].payload).toMatchObject({
+      amount: 2_000_000,
+      status: "checked",
+      checked_by: "tester",
+    })
+
+    // fetchBranchSalesLedgerDraftById로 현재 행을 먼저 읽었다(자가 체크 여부 판정을 위해).
+    expect(client.selectCalls.some((c) => (c.eq as Record<string, unknown>)?.id === "draft-1")).toBe(true)
+  })
+
+  it("현재 행이 다른 사람 checked면 checked-by-other를 반환하고 UPDATE는 호출하지 않는다", async () => {
+    const othersChecked = draftRow({ id: "draft-1", status: "checked", checked_by: "other-actor" })
+    const { repository, client } = await loadDraftsRepository({
+      rows: [othersChecked],
+      update: () => {
+        throw new Error("[test] update should not be called when checked by another actor")
+      },
+    })
+
+    const result = await repository.updateBranchSalesLedgerDraft(
+      "draft-1",
+      { amount: 2_000_000, status: "checked" },
+      "tester",
+    )
+
+    expect(result.outcome).toBe("checked-by-other")
+    if (result.outcome === "checked-by-other") {
+      expect(result.draft.id).toBe("draft-1")
+      expect(result.draft.checkedBy).toBe("other-actor")
+    }
+    expect(client.updateCalls).toEqual([])
+  })
+
+  it('{status:"checked"}만 있으면(내용 변경 없음) 현재 행 조회 없이 기존 단일 UPDATE로 처리한다(토글 경로 불변)', async () => {
+    const updated = draftRow({ id: "draft-1", status: "checked" })
+    const { repository, client } = await loadDraftsRepository({
+      // 다른 사람이 체크한 행이 fixture에 있어도, 이 경로는 애초에 현재 행을 조회하면 안 된다 —
+      // 조회했다면(그리고 그 결과를 써서) checked-by-other가 됐을 텐데 그러지 않아야 회귀가 잡힌다.
+      rows: [draftRow({ id: "draft-1", status: "checked", checked_by: "other-actor" })],
+      update: (_payload, filters) => {
+        expect(filters.id).toBe("draft-1")
+        return { data: updated, error: null }
+      },
+    })
+
+    const result = await repository.updateBranchSalesLedgerDraft("draft-1", { status: "checked" }, "tester")
+
+    expect(result.outcome).toBe("updated")
+    expect(client.selectCalls).toEqual([]) // fetchBranchSalesLedgerDraftById 조회 자체가 없었다
+    expect(client.updateCalls).toHaveLength(1)
   })
 })

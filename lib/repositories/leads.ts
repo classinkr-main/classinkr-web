@@ -9,9 +9,11 @@ import "server-only";
 
 import { revalidateTag } from "next/cache";
 import { ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG } from "@/lib/admin/crm/cache-tags";
+import { normalizePhoneKey } from "@/lib/compass/normalize";
 import { summarizeLeadResponseStatus } from "@/lib/crm/lead-response-status";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Lead, LeadInsert, LeadUpdate } from "@/lib/supabase/database.types";
+import { parseNaverAd, type NaverAdAttribution } from "@/lib/naver-ad-params";
 
 // 기존 타입 re-export (호환성)
 export type { LeadStatus } from "@/lib/supabase/database.types";
@@ -63,6 +65,8 @@ const OPTIONAL_LEAD_INSERT_COLUMNS = [
   "referrer",
   "confirmed_at",
   "anonymous_id",
+  // 20260914 마이그레이션. 미적용 환경에서도 리드 저장이 통째로 죽지 않게 선택 컬럼으로 다룬다.
+  "naver_ad",
   // 마이그레이션 미적용 환경에서도 리드 저장이 통째로 죽지 않게 선택 컬럼으로 다룬다.
   "last_inflow_at",
 ] as const satisfies readonly (keyof LeadInsertWithInflow)[];
@@ -145,8 +149,12 @@ export interface LeadRecord {
   confirmed_at?: string;
   // 제출 시점의 익명 식별자(cln_aid) — 사이트 활동 귀속의 결합 키.
   anonymous_id?: string;
-  // 마지막 유입 시각(재유입 축, 20260828 마이그레이션). 저장 경로가 행을 병합하지 않으므로
-  // 지금은 생성 시각과 같다 — 재유입 판정은 lib/crm/lead-reinflow가 연락처 중복으로 도출한다.
+  // 네이버 검색광고 유입 파라미터(n_*). undefined = 미조회이거나 네이버 유입이 아님.
+  // 키 목록·정규화는 lib/naver-ad-params.ts 가 정본.
+  naver_ad?: NaverAdAttribution;
+  // 마지막 유입 시각(재유입 축, 20260828 마이그레이션). 신규 저장 시 생성 시각과 같고, 응대 대상 소스의
+  // 재문의는 새 행 대신 이 값만 갱신된다(lib/server/lead-capture.ts 재유입 병합). 기간 유입 집계는
+  // lib/crm/lead-reinflow.ts leadInflowInWindow 로 생성 시각과 함께 본다.
   last_inflow_at?: string;
 }
 
@@ -258,7 +266,9 @@ function supabaseToLegacy(row: LeadRowWithInflow): LeadRecord {
     referrer: row.referrer ?? undefined,
     confirmed_at: row.confirmed_at ?? undefined,
     anonymous_id: row.anonymous_id ?? undefined,
-    // 스코프 조회(대시보드·마케팅)는 이 컬럼을 select하지 않는다 — 그때는 undefined다.
+    // JSONB 라 무엇이든 들어올 수 있다 — 목록 밖 키는 parseNaverAd 가 버린다.
+    naver_ad: parseNaverAd(row.naver_ad) ?? undefined,
+    // 전량(`*`)·마케팅 스코프만 이 컬럼을 select한다 — 대시보드·캠페인·보드 스코프에서는 undefined다.
     last_inflow_at: row.last_inflow_at ?? undefined,
   };
 }
@@ -488,16 +498,24 @@ export async function getCampaignLeads(): Promise<LeadRecord[]> {
  * 앞으로 늘어날 컬럼까지 캠페인 페이로드에 자동으로 실리는 것을 막기 위함이다.
  * supabaseToLegacy는 미선택 컬럼을 `?? undefined`로 처리하므로 그대로 재사용 가능.
  */
-const MARKETING_LEAD_COLUMNS = [
+const MARKETING_LEAD_COLUMN_LIST = [
   "id", "source", "name", "org", "role", "email", "phone", "message", "status",
   "branch", "notes", "source_detail", "lead_magnet", "follow_up_at", "assigned_to",
   "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
   "gclid", "fbclid", "msclkid", "ttclid", "landing_page", "current_page",
+  "naver_ad",
   "created_at", "confirmed_at",
-].join(", ");
+  // 재유입 축(20260828) — 재문의 병합(lib/server/lead-capture.ts)은 새 행 대신 이 컬럼만 갱신한다.
+  // "오늘 유입"(lib/marketing/intake-feed.ts)이 재문의를 재유입으로 세는 근거라 이 스코프에 싣는다.
+  "last_inflow_at",
+] as const;
 
-// confirmed_at 마이그레이션 전 배포 창에서도 화면이 깨지지 않게 — 대시보드 조회와 같은 폴백.
-const MARKETING_LEAD_COLUMNS_WITHOUT_CONFIRMED = MARKETING_LEAD_COLUMNS.replace(", confirmed_at", "");
+// 마이그레이션 전 배포 창에서도 화면이 깨지지 않게 — 아직 없는 컬럼만 빼고 다시 읽는다(대시보드
+// 조회와 같은 폴백). naver_ad(20260914)는 저장 쪽에만 선택 컬럼 폴백이 있고 이 SELECT 에는 없어서,
+// 마이그레이션보다 코드가 먼저 나가면 마케팅 허브의 리드 집계가 42703 으로 통째로 실패했다 —
+// 런북의 "읽기 경로는 강등한다" 규칙대로 맞춘다. 빠진 컬럼은 supabaseToLegacy 가 undefined 로 둔다.
+// last_inflow_at 이 빠지면 재문의가 재유입으로 잡히지 않을 뿐(생성 시각 축으로 강등), 집계는 산다.
+const MARKETING_LEAD_OPTIONAL_COLUMNS = ["naver_ad", "confirmed_at", "last_inflow_at"] as const;
 
 export async function getMarketingLeads(): Promise<LeadRecord[]> {
   if (!USE_SUPABASE) {
@@ -505,16 +523,25 @@ export async function getMarketingLeads(): Promise<LeadRecord[]> {
     return jsonGetLeads();
   }
 
-  try {
-    const rows = await fetchAllLeadRows(MARKETING_LEAD_COLUMNS, "마케팅 조회");
-    return rows.map(supabaseToLegacy);
-  } catch (error) {
-    if (!(error instanceof LeadQueryError) || !isMissingLeadColumn(error.supabaseError, "confirmed_at")) {
-      throw error;
+  let columns: string[] = [...MARKETING_LEAD_COLUMN_LIST];
+  // 선택 컬럼 수만큼만 다시 시도한다 — 그 밖의 오류(또는 같은 컬럼이 또 걸리는 경우)는 그대로 던진다.
+  for (let attempt = 0; attempt <= MARKETING_LEAD_OPTIONAL_COLUMNS.length; attempt += 1) {
+    try {
+      const rows = await fetchAllLeadRows(columns.join(", "), "마케팅 조회");
+      return rows.map(supabaseToLegacy);
+    } catch (error) {
+      if (!(error instanceof LeadQueryError)) throw error;
+      const supabaseError = error.supabaseError;
+      const missing = MARKETING_LEAD_OPTIONAL_COLUMNS.find(
+        (column) => columns.includes(column) && isMissingLeadColumn(supabaseError, column)
+      );
+      if (!missing) throw error;
+      console.warn(`[leads] 마케팅 조회: ${missing} 컬럼이 없어 빼고 다시 읽습니다(마이그레이션 미적용).`);
+      columns = columns.filter((column) => column !== missing);
     }
-    const fallback = await fetchAllLeadRows(MARKETING_LEAD_COLUMNS_WITHOUT_CONFIRMED, "마케팅 조회");
-    return fallback.map(supabaseToLegacy);
   }
+  // 도달하지 않는다 — 마지막 시도의 실패는 위 catch 가 그대로 던진다(타입 검사용 종결).
+  throw new Error("[leads] 마케팅 조회 실패: 선택 컬럼 폴백을 모두 소진했습니다.");
 }
 
 /**
@@ -602,65 +629,124 @@ export async function getLeadById(id: string): Promise<LeadRecord | null> {
 }
 
 /**
- * 등록 전 중복 검사용 — 전화/이메일이 일치할 수 있는 기존 리드의 최소 컬럼만 가져온다.
- * DB에는 하이픈 포함 전화가 흔해 원문만으로는 "010-1234-5678"과 "01012345678"을 다른
- * 번호로 오인한다. in 목록에 원문과 숫자만 남긴 정규화형을 함께 넣어 그 차이를 흡수하고,
- * 최종 판정(정규화 비교)은 호출부가 한다. 이메일도 원문·소문자형을 함께 조회한다.
+ * 등록 전 중복 검사 + 재유입 병합 후보 조회용 — 전화/이메일이 일치할 수 있는 기존 리드의
+ * 최소 컬럼만 가져온다.
+ *
+ * 전화 키는 normalizePhoneKey(Compass phone_key와 같은 규칙, lib/compass/normalize.ts)로
+ * 만든다 — 하이픈("010-1234-5678")뿐 아니라 국가코드 서식(+82/0082)까지 흡수해야
+ * "010-1234-5678"과 "+82 10-1234-5678"을 같은 번호로 묶을 수 있기 때문이다(digitsOnly만으로는
+ * 국가코드가 붙은 자리수가 달라 다른 번호로 오인한다). phone_key 생성 컬럼(20260914
+ * 마이그레이션)이 아직 없는 배포 창에서는 PostgREST 42703(또는 메시지의 "phone_key" 언급)을
+ * 감지해 기존 원문/숫자만/정규화 키 3중 in("phone", …) 비교로 폴백한다. 이메일도 원문·소문자형을
+ * 함께 조회한다.
+ *
+ * status/timestamp/last_inflow_at은 호출부(lib/server/lead-capture.ts submitLeadCapture)가
+ * 재유입 병합 대상(new/contacted)과 그중 최신 1건을 고르는 데 쓴다 — 병합 여부의 최종 판정은
+ * 여기서 하지 않는다.
  */
 export async function findLeadsByContacts(contacts: {
   phones: string[];
   emails: string[];
-}): Promise<Pick<LeadRecord, "id" | "phone" | "email">[]> {
+}): Promise<
+  Pick<LeadRecord, "id" | "phone" | "email" | "source" | "status" | "timestamp" | "last_inflow_at" | "notes">[]
+> {
   const phones = contacts.phones.map((phone) => phone.trim()).filter(Boolean);
   const emails = contacts.emails.map((email) => email.trim()).filter(Boolean);
   if (phones.length === 0 && emails.length === 0) return [];
 
   const digitsOnly = (value: string) => value.replace(/\D/g, "");
+  const phoneKeyOf = (value: string) => normalizePhoneKey(value) ?? "";
 
   if (!USE_SUPABASE) {
     const { getLeads: jsonGetLeads } = await import("@/lib/db");
-    const phoneKeys = new Set(phones.map(digitsOnly).filter(Boolean));
+    const phoneKeys = new Set(phones.map(phoneKeyOf).filter(Boolean));
     const emailKeys = new Set(emails.map((email) => email.toLowerCase()));
     return jsonGetLeads()
       .filter(
         (lead) =>
-          (lead.phone && phoneKeys.has(digitsOnly(lead.phone))) ||
+          (lead.phone && phoneKeys.has(phoneKeyOf(lead.phone))) ||
           (lead.email && emailKeys.has(lead.email.toLowerCase()))
       )
-      .map((lead) => ({ id: lead.id, phone: lead.phone, email: lead.email }));
+      .map((lead) => ({
+        id: lead.id,
+        phone: lead.phone,
+        email: lead.email,
+        source: lead.source,
+        status: lead.status,
+        timestamp: lead.timestamp,
+        notes: lead.notes,
+        // JSON 폴백의 LeadRecord(lib/site-settings-types.ts)는 last_inflow_at을 선언하지 않는다
+        // (그 축은 Supabase 전용 20260828 마이그레이션에서 추가됐다) — 구조적으로 얹어 읽는다.
+        last_inflow_at: (lead as { last_inflow_at?: string }).last_inflow_at,
+      }));
   }
 
   const supabase = createSupabaseAdminClient();
-  const phoneCandidates = Array.from(
-    new Set(phones.flatMap((phone) => [phone, digitsOnly(phone)]).filter(Boolean))
-  );
+  // notes 는 행사 신청 토큰([event:slug], notes 첫 줄) 판정용 — 재유입 병합이 다른 행사의
+  // 신청 집계를 덮어쓰지 않게 호출부가 본다(lib/server/lead-capture.ts).
+  // source 는 재유입 병합 대상을 응대 대상 소스 행으로 좁히는 데 쓴다(lib/server/lead-capture.ts pickReinflowTarget).
+  const CONTACT_COLUMNS = "id, phone, email, source, status, created_at, last_inflow_at, notes";
+  type ContactRow = {
+    id: string;
+    phone: string | null;
+    email: string | null;
+    source: LeadRecord["source"];
+    status: LeadRecord["status"];
+    created_at: string;
+    last_inflow_at: string | null;
+    notes: string | null;
+  };
+
+  const phoneKeyCandidates = Array.from(new Set(phones.map(phoneKeyOf).filter(Boolean)));
   const emailCandidates = Array.from(
     new Set(emails.flatMap((email) => [email, email.toLowerCase()]))
   );
 
-  const [phoneRes, emailRes] = await Promise.all([
-    phoneCandidates.length > 0
-      ? supabase.from("leads").select("id, phone, email").in("phone", phoneCandidates)
+  const [phoneKeyRes, emailRes] = await Promise.all([
+    phoneKeyCandidates.length > 0
+      ? supabase.from("leads").select(CONTACT_COLUMNS).in("phone_key", phoneKeyCandidates)
       : Promise.resolve({ data: [], error: null }),
     emailCandidates.length > 0
-      ? supabase.from("leads").select("id, phone, email").in("email", emailCandidates)
+      ? supabase.from("leads").select(CONTACT_COLUMNS).in("email", emailCandidates)
       : Promise.resolve({ data: [], error: null }),
   ]);
 
-  const error = phoneRes.error ?? emailRes.error;
+  let phoneRows = (phoneKeyRes.data ?? []) as unknown as ContactRow[];
+  let phoneError = phoneKeyRes.error as SupabaseColumnError | null;
+
+  if (phoneError && (phoneError.code === "42703" || phoneError.message?.includes("phone_key"))) {
+    // phone_key 생성 컬럼(20260914 마이그레이션)이 아직 없는 배포 창 — 기존 3중 in() 비교로 폴백.
+    const phoneCandidates = Array.from(
+      new Set(
+        phones.flatMap((phone) => [phone, digitsOnly(phone), phoneKeyOf(phone)]).filter(Boolean)
+      )
+    );
+    const fallback =
+      phoneCandidates.length > 0
+        ? await supabase.from("leads").select(CONTACT_COLUMNS).in("phone", phoneCandidates)
+        : { data: [], error: null };
+    phoneRows = (fallback.data ?? []) as unknown as ContactRow[];
+    phoneError = fallback.error as SupabaseColumnError | null;
+  }
+
+  const error = phoneError ?? (emailRes.error as SupabaseColumnError | null);
   if (error) throw new Error(`[leads] 중복 조회 실패: ${error.message}`);
 
   // 전화·이메일 양쪽에 걸린 리드가 두 번 세이지 않게 id로 합친다.
-  const byId = new Map<string, Pick<LeadRecord, "id" | "phone" | "email">>();
-  for (const row of [...(phoneRes.data ?? []), ...(emailRes.data ?? [])] as Array<{
-    id: string;
-    phone: string | null;
-    email: string | null;
-  }>) {
+  const byId = new Map<
+    string,
+    Pick<LeadRecord, "id" | "phone" | "email" | "source" | "status" | "timestamp" | "last_inflow_at" | "notes">
+  >();
+  for (const row of [...phoneRows, ...((emailRes.data ?? []) as unknown as ContactRow[])]) {
     byId.set(row.id, {
       id: row.id,
       phone: row.phone ?? undefined,
       email: row.email ?? undefined,
+      source: row.source,
+      status: row.status,
+      timestamp: row.created_at,
+      last_inflow_at: row.last_inflow_at ?? undefined,
+      notes: row.notes ?? undefined,
     });
   }
   return Array.from(byId.values());
@@ -715,9 +801,13 @@ export async function saveLead(
     // 어드민 수기 등록(app/api/admin/leads)만 생성 시점에 confirmed_at을 명시적으로 채운다.
     confirmed_at: lead.confirmed_at ?? null,
     anonymous_id: lead.anonymous_id ?? null,
+    // 빈 객체는 저장하지 않는다 — NULL 이어야 "네이버 유입이 아님"으로 읽힌다.
+    naver_ad: parseNaverAd(lead.naver_ad),
     // 재유입 축의 시작점. 마이그레이션 백필은 기존 행만 채웠으므로 여기서 안 넣으면
-    // 신규 행은 전부 NULL로 남아 컬럼이 죽는다. 자체 저장 경로는 같은 연락처가 다시 와도
-    // 행을 새로 만들기 때문에(병합 없음) 최초값 = 생성 시각이 맞다.
+    // 신규 행은 전부 NULL로 남아 컬럼이 죽는다. 이 함수는 새 행을 만들 때만 불리므로 최초값 =
+    // 생성 시각이 맞다 — 같은 연락처의 재문의는 lib/server/lead-capture.ts 의 재유입 병합 분기가
+    // 새 행 대신 touchLeadInflow()로 이 컬럼만 갱신한다(응대 대상 소스 한정. 그 밖의 소스와
+    // 어드민 수기 등록·챗봇·캡처 경로는 여전히 제출마다 한 행이다).
     last_inflow_at: lead.last_inflow_at ?? new Date().toISOString(),
   };
 
@@ -883,6 +973,49 @@ export async function updateLead(
   }
   if (!data) return null;
   return returnAfterLeadMutation(supabaseToLegacy(data as Lead));
+}
+
+/**
+ * 재유입 병합 전용 — last_inflow_at만 갱신한다. status/assigned_to/follow_up_at/notes 등
+ * 다른 필드는 절대 건드리지 않는다 — Compass 웹훅의 재유입 분기도 last_inflow_at·연락처·지역만
+ * coalesce로 채우고 담당·단계는 그대로 둔다(Compass 저장소의
+ * app/api/webhook/meta/route.ts). updateLead와 같은 변경 리스너·캐시 무효화
+ * (returnAfterLeadMutation)를 태운다.
+ *
+ * last_inflow_at 컬럼(20260828 마이그레이션)이 없는 배포 창에서는 warn만 남기고 null을
+ * 돌려준다 — 호출부(submitLeadCapture)는 병합 여부를 이 반환값과 무관하게 이미 결정했으므로
+ * 리드 제출 자체는 막히지 않는다.
+ */
+export async function touchLeadInflow(id: string, at?: string): Promise<LeadRecord | null> {
+  const inflowAt = at ?? new Date().toISOString();
+
+  // JSON 폴백은 스키마 제약이 없어 기존 updateLead 경로를 그대로 재사용한다 — updateLead 자신의
+  // Supabase 분기는 LeadUpdate 타입에 last_inflow_at이 없어 이 필드를 조용히 무시하므로
+  // (스키마에 없는 컬럼을 얹어 쓰는 saveLead와 달리 updateLead는 그 목록에 last_inflow_at을
+  // 추가하지 않았다) Supabase 모드는 아래에서 전용 update 호출로 직접 처리한다.
+  if (!USE_SUPABASE) {
+    return updateLead(id, { last_inflow_at: inflowAt });
+  }
+
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("leads")
+    .update({ last_inflow_at: inflowAt })
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) {
+    if (isMissingLeadColumn(error, "last_inflow_at")) {
+      console.warn("[leads] last_inflow_at 컬럼이 없어 재유입 시각 갱신을 건너뜁니다:", error.message);
+    } else {
+      console.warn("[leads] touchLeadInflow 실패:", error.message);
+    }
+    return null;
+  }
+  if (!data) return null;
+
+  return returnAfterLeadMutation(supabaseToLegacy(data as LeadRowWithInflow));
 }
 
 /**

@@ -44,6 +44,9 @@ export async function GET(req: NextRequest) {
         ? currentOwner.ownerKeys
         : ["__no_current_admin_owner__"]
       : undefined
+    // 새로고침(?force=1) — overview 라우트와 같은 계약(파라미터 존재 여부로 판정).
+    // 서버 소스 스냅샷 캐시를 우회해 신선한 데이터로 계산하고, 응답도 브라우저 캐시에 남기지 않는다.
+    const force = url.searchParams.has("force")
     const queue = await getCrmPriorityQueue({
       limit: Number.isFinite(limit) ? limit : 12,
       owner: isMine ? undefined : ownerParam,
@@ -51,9 +54,12 @@ export async function GET(req: NextRequest) {
       source: parseSource(url.searchParams.get("source")),
       lane: parseLane(url.searchParams.get("lane")),
       bucket: parseBucket(url.searchParams.get("bucket")),
+      force,
     })
 
-    return adminCachedJson(queue)
+    const response = adminCachedJson(queue)
+    if (force) response.headers.set("Cache-Control", "no-store")
+    return response
   } catch (error) {
     console.error("[GET /api/admin/crm/home/priority-queue]", error)
     return NextResponse.json({ error: "Failed to load CRM priority queue" }, { status: 500 })

@@ -1,6 +1,6 @@
 # Docs Index
 
-기준 시점: 2026-09-02
+기준 시점: 2026-09-21
 문서 목적: 현재 저장소에서 무엇을 먼저 읽어야 하는지, 어떤 문서를 믿어야 하는지, 어떤 문서가 역사 기록인지 빠르게 구분한다.
 
 ## Admin OS 정본 우선순위
@@ -58,6 +58,10 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - 하드웨어 운영 허브 문서의 상위 인덱스
 - [active/erp-blueprint-2026-06-22.md](./active/erp-blueprint-2026-06-22.md)
   - 어드민 → 지사 운영 OS(ERP) 청사진 & 실행 로드맵(Account 360 스파인·귀속·노션 캘린더 라이브 연동·거버넌스 결정)
+- [active/marketing-tab-dashboard-restructure-2026-09-14.md](./active/marketing-tab-dashboard-restructure-2026-09-14.md)
+  - **마케팅 허브(/admin/campaigns) 실행 로드맵.** 한눈에·상세·데이터 3층 IA, 컴포넌트 재배치표, 개선 후보 ID(G/D/T/N), 확정 결정, 진척 기록. Compass(mkt.classin.co.kr)와의 역할 경계 정본
+- [active/crm-tab-develop-plan-2026-09-12.md](./active/crm-tab-develop-plan-2026-09-12.md)
+  - **CRM 탭 실행 로드맵.** 5작업면·돈흐름·데이터층의 현황 진단, 정책-코드 불일치 총괄, 개선 후보 ID(H/C/R/D)와 4 Wave 실행 순서, 사용자 결정 항목, 문서 정리 제안
 - [active/internal-crm-backend-operating-plan-2026-06-26.md](./active/internal-crm-backend-operating-plan-2026-06-26.md)
   - 자체 CRM 백엔드/운영 기준. 시트·OCRM·HQ CRM은 참고/동기화 원천으로 두고, Admin CRM의 고객 스파인·회의록·녹음·다음 액션 구조를 정의
 - [active/internal-cs-ai-bridge.md](./active/internal-cs-ai-bridge.md)
@@ -118,6 +122,10 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - Admin 속도 가설 판정(인증 왕복·팬아웃·메모이제이션·플랜), 적용한 조치와 측정 방법, 운영 확인 목록
 - [active/admin-performance-round2-2026-09-04.md](./active/admin-performance-round2-2026-09-04.md)
   - Admin 속도 2라운드: 탭 전환 RSC 왕복 제거(라우터 캐시·hover 전체 프리페치·시드 신선도)와 콜드 인스턴스 모듈 메모의 Data Cache 승격, 전후 실측
+- [active/admin-performance-round3-2026-09-10.md](./active/admin-performance-round3-2026-09-10.md)
+  - Admin 속도 3라운드 계획: 현재 캐시 5층 구조와 외부 원천별 자체 DB 미러 준수 여부, DB 스냅샷 RPC의 stale-first 전환, 미승격 조회 엔드포인트·캐시 태그 무효화 공백 정리
+- [active/compass-admin-feature-exchange-2026-09-02.md](./active/compass-admin-feature-exchange-2026-09-02.md)
+  - Compass와 Admin 사이 알고리즘·편의 기능 교차 적용 판정, 기능·엔지니어링 소유권 분할과 끊을 중복, PR 단위 실행 순서
 - [active/architecture-schema-erd.md](./active/architecture-schema-erd.md)
   - 엔티티와 스키마 관점의 입구
 - [active/internal-crm-backend-operating-plan-2026-06-26.md](./active/internal-crm-backend-operating-plan-2026-06-26.md)
@@ -153,6 +161,10 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
 
 - [active/supabase-korea-migration-status.md](./active/supabase-korea-migration-status.md)
   - 2026-09-14 한국 리전 이관 결과, 현재 운영 프로젝트, 원본 쓰기 차단 및 후속 배포 주의점.
+- [active/db-migration-runbook.md](./active/db-migration-runbook.md)
+  - **DB 마이그레이션 적용 런북.** 수동 적용 절차, `check:db` 스키마 계약, 서울 프로젝트 기준 미적용 목록(배포 전 필수 표시), 적용 보류 중인 마이그레이션
+- [active/integration-followups-2026-09-21.md](./active/integration-followups-2026-09-21.md)
+  - **2026-09-21 통합 시점 과제 목록.** 갈라져 있던 작업 줄기를 한 줄기로 합치며 정리한 우선순위(P0 배포 전 필수 → P1 배포 직후 → P2 결정 대기 → P3 백로그)와 합치며 내린 판단 기록
 - [active/operational-failure-handling-guidelines.md](./active/operational-failure-handling-guidelines.md)
   - **운영 장애·Cron·Webhook 현재 지침.** 미응답 Webhook 폐기 상태, Cron 인증·백로그 상한,
     비밀값, Supabase·외부 API·캐시·배포 장애의 공통 대응 기준.

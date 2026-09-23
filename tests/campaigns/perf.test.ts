@@ -68,11 +68,37 @@ describe("resolvePerfPeriod", () => {
     expect(p.prevUntil).toBe("2025-10-10")
   })
 
+  // ── month(이번 달, MTD) — quarter 와 같은 달력 정렬 규칙을 달에 적용한다 ────────
+  it("month — 이번 달 1일~오늘, 전월 1일차부터 같은 일수", () => {
+    const p = resolvePerfPeriod("month", "2026-09-14")
+    expect(p).toEqual({
+      key: "month",
+      since: "2026-09-01",
+      until: "2026-09-14",
+      prevSince: "2026-08-01",
+      prevUntil: "2026-08-14",
+      prevBasis: "calendar_aligned",
+    })
+  })
+
+  it("month — 전월이 더 짧으면 전월 마지막 날에서 자른다(3/31 vs 2월)", () => {
+    const p = resolvePerfPeriod("month", "2026-03-31")
+    expect(p.since).toBe("2026-03-01")
+    expect(p.prevSince).toBe("2026-02-01")
+    expect(p.prevUntil).toBe("2026-02-28")
+  })
+
+  it("month — 연 경계에서 전년 12월로 넘어간다", () => {
+    const p = resolvePerfPeriod("month", "2026-01-05")
+    expect(p.prevSince).toBe("2025-12-01")
+    expect(p.prevUntil).toBe("2025-12-05")
+  })
+
   it("비교 창 길이는 현재 창을 넘지 않는다(전 기간 공통 불변식)", () => {
     const days = (a: string, b: string) =>
       Math.round((new Date(`${b}T00:00:00Z`).getTime() - new Date(`${a}T00:00:00Z`).getTime()) / 86_400_000) + 1
-    for (const today of ["2026-01-10", "2026-06-30", "2026-08-20", "2026-12-31"]) {
-      for (const key of ["7d", "30d", "90d", "quarter"] as const) {
+    for (const today of ["2026-01-10", "2026-03-31", "2026-06-30", "2026-08-20", "2026-12-31"]) {
+      for (const key of ["7d", "30d", "90d", "quarter", "month"] as const) {
         const p = resolvePerfPeriod(key, today)
         expect(days(p.prevSince, p.prevUntil)).toBeLessThanOrEqual(days(p.since, p.until))
         // 비교 창이 현재 창과 겹치면 자기 자신과 비교하는 꼴이 된다.
@@ -86,6 +112,8 @@ describe("prevBasisLabel", () => {
   it("기준별 문구 — 표시층과 프롬프트가 같은 문장을 쓴다", () => {
     expect(prevBasisLabel({ prevBasis: "trailing" })).toBe("직전 동일 길이")
     expect(prevBasisLabel({ prevBasis: "calendar_aligned" })).toBe("전분기 같은 일수(1일차~N일차)")
+    expect(prevBasisLabel({ prevBasis: "calendar_aligned", key: "quarter" })).toBe("전분기 같은 일수(1일차~N일차)")
+    expect(prevBasisLabel({ prevBasis: "calendar_aligned", key: "month" })).toBe("전월 같은 일수(1일차~N일차)")
   })
 })
 
@@ -327,6 +355,8 @@ describe("sortScoreboardRows", () => {
     pacing: { elapsedPct: null, executionPct: null },
     pacingCurrency: null,
     leads: 0,
+    channels: [],
+    channelSpend: [],
     spendUsd: null,
     cpl: null,
     sparkline: [],
@@ -364,6 +394,8 @@ describe("splitScoreboardByActivity", () => {
     pacing: { elapsedPct: null, executionPct: null },
     pacingCurrency: null,
     leads: 0,
+    channels: [],
+    channelSpend: [],
     spendUsd: null,
     cpl: null,
     sparkline: [],

@@ -424,4 +424,39 @@ describe("권한 — service_role 전용", () => {
     }
     expect(code).not.toMatch(/grant[^;]*to (?:anon|authenticated|public)\b/i)
   })
+
+  // GRANT SELECT 는 Supabase 기본권한이 service_role 에 준 쓰기 권한을 좁히지 않는다. 단순 뷰는 자동 갱신 뷰가 되고
+  // 소유자(postgres) 권한으로 실행되므로, 회수하지 않으면 service_role 이 뷰를 통해 crm·admin 원본에 RLS 없이 쓴다
+  // (2026-09-21 운영 실측: 20260828 뷰 7개 전부 INSERT·UPDATE·DELETE·TRUNCATE 보유).
+  it("모든 새 뷰에서 service_role 권한을 먼저 전부 회수한 뒤 SELECT 만 다시 준다", () => {
+    const revokedFromServiceRole = new Map<string, number>()
+    for (const m of code.matchAll(/revoke all on ([^;']*?)\s+from service_role(?=[';])/g)) {
+      for (const name of m[1].matchAll(/public\.(\w+)/g)) revokedFromServiceRole.set(name[1], m.index ?? -1)
+    }
+    const grantedAt = new Map<string, number>()
+    for (const m of code.matchAll(/grant select on ([^;']*?)\s+to service_role(?=[';])/g)) {
+      for (const name of m[1].matchAll(/public\.(\w+)/g)) grantedAt.set(name[1], m.index ?? -1)
+    }
+    for (const parsed of views) {
+      const revokedAt = revokedFromServiceRole.get(parsed.name)
+      expect(revokedAt, `revoke service_role ${parsed.name}`).toBeDefined()
+      expect(revokedAt!, `revoke before grant ${parsed.name}`).toBeLessThan(grantedAt.get(parsed.name)!)
+    }
+  })
+
+  it("20260828 기존 브리지 뷰 7개도 service_role 을 SELECT 로 좁힌다(없는 뷰는 건너뛴다)", () => {
+    // code 는 주석을 걷어낸 본문이라 절 제목 대신 D) 블록의 배열 첫 원소로 찾는다.
+    const start = code.indexOf("'compass_leads_v', 'compass_activities_v'")
+    expect(start, "D) 블록").toBeGreaterThan(-1)
+    const block = code.slice(start)
+    for (const name of [
+      "compass_leads_v", "compass_activities_v", "compass_ads_v", "compass_adsets_v",
+      "compass_demos_v", "compass_cal_events_v", "compass_revenue_v",
+    ]) {
+      expect(block, name).toContain(`'${name}'`)
+    }
+    expect(block).toMatch(/to_regclass\('public\.' \|\| v\) is not null/)
+    expect(block).toMatch(/revoke all on public\.%I from service_role/)
+    expect(block).toMatch(/grant select on public\.%I to service_role/)
+  })
 })

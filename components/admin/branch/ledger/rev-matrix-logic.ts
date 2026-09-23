@@ -15,7 +15,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
+import { normalizedAccountKey } from "@/lib/branch/account-key"
+
 import { confidenceFromShortcut } from "./confidence-shortcuts"
+// 라운드 4 P1-5 — buildPasteNewRowInputs가 만드는 초안의 타입. 이 파일은 순수 로직만 담아
+// useLedgerDraftQueue(훅)를 값으로 import하지 않으므로 type-only만 가져온다(순환 없음 —
+// useLedgerDraftQueue.ts는 rev-matrix-logic을 import하지 않는다).
+import type { LedgerDraftInput } from "./useLedgerDraftQueue"
 
 import {
   draftConfidenceFromMetadata,
@@ -294,6 +300,13 @@ export function isDraftFormTargetLocked(
 // onCommitCell → createDraft(초안 2단 게이트: draft → checked → apply) 경로만 사용한다 —
 // 새 저장 경로 없음. 잠금 셀(시트확정/장부반영)은 계획 단계에서 제외되고, 주차 칸은 대상이
 // 아니므로 B1 주차 병합 규약과 셀 상태기계는 문자 단위로 불변이다.
+//
+// 라운드 4 P1-5 — 이름 매칭: 시트에서 복사한 블록의 행 순서가 화면 정렬과 다르면 위치 투영은
+// 엉뚱한 행에 값을 꽂는다(프리뷰가 막아 주지만 다시 쳐야 함). 첫 열이 숫자형이 아니면 고객명
+// 열로 보고 normalizedAccountKey(SSOT — customer-suggest.ts와 동일 키)로 기존 딜 행에 매칭해
+// 행 순서와 무관하게 투영한다. 위치 투영으로는 애초에 대상 행이 없어 붙여넣을 수 없던, 시트에만
+// 있는 새 고객은 매칭 실패(unmatched)로 보존해두고, 프리뷰에서 승인한 이름만
+// buildPasteNewRowInputs(아래)가 new-row 초안으로 만든다.
 
 export interface MatrixPasteCellPlan {
   rowId: string
@@ -305,23 +318,62 @@ export interface MatrixPasteCellPlan {
   status: "apply" | "locked" | "unchanged"
 }
 
+// 라운드 4 P1-5 — 매칭되는 딜 행이 없는 이름 한 줄과 그 금액 칸(빈 칸·0 제외 보존). 프리뷰의
+// "시트에 없는 고객" 섹션이 그대로 렌더하고, 체크된 이름만 buildPasteNewRowInputs가 소비한다.
+export interface MatrixPasteUnmatchedRow {
+  name: string
+  cells: Array<{ month: string; amount: number }>
+}
+
 export interface MatrixPastePlan {
   anchorCustomer: string
+  // "positional"(기존) = 앵커 행 기준 위치 투영. "by-name"(P1-5) = 첫 열을 고객명으로 보고
+  // normalizedAccountKey로 매칭 — 이 모드에서 앵커 행은 월 열 시작점(colStart) 제공에만 쓰인다.
+  mode: "positional" | "by-name"
   cells: MatrixPasteCellPlan[]
   applyCount: number
   lockedCount: number
   unchangedCount: number
   nonNumericCount: number
   outOfRangeCount: number
+  // by-name 모드에서 정확히 1개 딜 행에 매칭되어 투영된 행 수(positional 모드는 항상 0).
+  matchedRowCount: number
+  // 같은 정규화 키의 딜 행이 2개 이상(같은 고객의 상품군별 행 등)이라 어느 행인지 정할 수 없어
+  // 셀을 만들지 않고 건너뛴 이름들 — 프리뷰가 "매트릭스에서 직접 입력" 안내로 노출한다.
+  ambiguousNames: string[]
+  // 매칭되는 딜 행이 0개인 이름과 그 금액 칸 — 프리뷰의 "새 행으로 생성" 체크 대상(승인제).
+  unmatched: MatrixPasteUnmatchedRow[]
 }
 
 // 오조작(전체 시트 복사 등) 방어 상한 — 12개월 × 50행. 넘치는 칸은 범위 밖으로 집계만 한다.
+// by-name 모드도 매칭 셀 + 미매칭 보존 칸을 합산해 같은 예산 하나를 그대로 쓴다(라운드 4 P1-5).
 const MATRIX_PASTE_MAX_CELLS = 600
 
 function parseTsvGrid(text: string): string[][] {
   const lines = text.replace(/\r\n?/g, "\n").split("\n")
   while (lines.length > 0 && lines[lines.length - 1].trim() === "") lines.pop()
   return lines.map((line) => line.split("\t"))
+}
+
+// 전체가 숫자형(통화기호·콤마·공백·부호 허용)인 칸만 금액으로 인정 — "Q4 2026"·"2026-04" 같은
+// 숫자 섞인 라벨을 금액으로 오독(42026·0 덮어쓰기)하지 않는다. 라운드 4 P1-5의 이름 열 판정도
+// 같은 기준을 재사용한다(새 숫자형 판정 기준을 만들지 않는다).
+function isNumericMatrixToken(raw: string): boolean {
+  return /^[\s¥₩$,.\-+]*\d[\d\s¥₩$,.\-+]*$/.test(raw) && Number.isFinite(Number(raw.replace(/[^\d.-]/g, "")))
+}
+
+// 라운드 4 P1-5 — 파싱된 그리드의 첫 열이 고객명 열인지 판정: 비어 있지 않은 칸 중 과반이
+// 비숫자면 이름 열로 본다. 첫 열이 전부 빈 칸이면 판단 근거가 없어 기존 위치 투영으로 폴백한다.
+function detectPasteMode(grid: string[][]): MatrixPastePlan["mode"] {
+  let nonEmpty = 0
+  let nonNumeric = 0
+  for (const row of grid) {
+    const raw = (row[0] ?? "").trim()
+    if (!raw) continue
+    nonEmpty += 1
+    if (!isNumericMatrixToken(raw)) nonNumeric += 1
+  }
+  return nonEmpty > 0 && nonNumeric * 2 > nonEmpty ? "by-name" : "positional"
 }
 
 export function buildMatrixPastePlan(
@@ -339,59 +391,217 @@ export function buildMatrixPastePlan(
   const colStart = months.indexOf(anchor.month)
   if (rowStart < 0 || colStart < 0) return null
 
+  const mode = detectPasteMode(grid)
   const plan: MatrixPastePlan = {
     anchorCustomer: dealRows[rowStart].customer,
+    mode,
     cells: [],
     applyCount: 0,
     lockedCount: 0,
     unchangedCount: 0,
     nonNumericCount: 0,
     outOfRangeCount: 0,
+    matchedRowCount: 0,
+    ambiguousNames: [],
+    unmatched: [],
   }
   let cellBudget = MATRIX_PASTE_MAX_CELLS
-  for (let r = 0; r < grid.length; r += 1) {
-    const row = dealRows[rowStart + r]
-    for (let c = 0; c < grid[r].length; c += 1) {
-      const raw = grid[r][c].trim()
-      if (raw === "") continue // 빈 칸은 건드리지 않는다(엑셀 부분 범위 복사 관용)
-      // 전체가 숫자형(통화기호·콤마·공백·부호 허용)일 때만 금액으로 인정 —
-      // "Q4 2026"·"2026-04" 같은 숫자 섞인 라벨을 금액으로 오독(42026·0 덮어쓰기)하지 않는다.
-      if (!/^[\s¥₩$,.\-+]*\d[\d\s¥₩$,.\-+]*$/.test(raw) || !Number.isFinite(Number(raw.replace(/[^\d.-]/g, "")))) {
-        plan.nonNumericCount += 1 // 헤더/라벨 텍스트 등 — 값으로 오독하지 않고 집계만
-        continue
+
+  if (mode === "by-name") {
+    // 이름 → normalizedAccountKey(SSOT) → 같은 키의 딜 행들. 그리드를 화면 순서와 무관하게
+    // 그대로 순회한다 — 시트 행 순서가 화면 정렬과 달라도 이름으로 정확히 투영하는 것이 목적.
+    const rowsByKey = new Map<string, LedgerRevenueRow[]>()
+    for (const dealRow of dealRows) {
+      const key = normalizedAccountKey(dealRow.customer)
+      const bucket = rowsByKey.get(key)
+      if (bucket) bucket.push(dealRow)
+      else rowsByKey.set(key, [dealRow])
+    }
+    const seenAmbiguous = new Set<string>()
+    for (let r = 0; r < grid.length; r += 1) {
+      const name = (grid[r][0] ?? "").trim()
+      if (!name) continue // 이름 없는 행(빈 칸) — 엑셀 부분 범위 복사 관용과 동일 취급
+      // 구분 기호뿐인 이름("---" 등)은 정규화 키가 빈 문자열이 되어 서로 무관한 행끼리 거짓
+      // 매칭될 수 있다(customer-suggest.ts findCustomerSpellingMatch와 동일 가드) — 의미 있는
+      // 키가 없으면 매칭을 시도하지 않고 곧장 미매칭으로 본다.
+      const key = normalizedAccountKey(name)
+      const matches = key ? (rowsByKey.get(key) ?? []) : []
+      if (matches.length > 1) {
+        if (!seenAmbiguous.has(name)) {
+          seenAmbiguous.add(name)
+          plan.ambiguousNames.push(name)
+        }
+        continue // 스펙: 어느 행인지 정할 수 없으므로 셀을 만들지 않는다
       }
-      const month = months[colStart + c]
-      if (!row || !month) {
-        plan.outOfRangeCount += 1
-        continue
+      const matchedRow = matches[0] ?? null
+      if (matchedRow) plan.matchedRowCount += 1
+      const unmatchedCells: Array<{ month: string; amount: number }> = []
+      for (let c = 1; c < grid[r].length; c += 1) {
+        const raw = (grid[r][c] ?? "").trim()
+        if (raw === "") continue
+        if (!isNumericMatrixToken(raw)) {
+          plan.nonNumericCount += 1
+          continue
+        }
+        const month = months[colStart + (c - 1)]
+        if (!month) {
+          plan.outOfRangeCount += 1
+          continue
+        }
+        const next = parseMatrixAmount(raw)
+        if (matchedRow) {
+          if (cellBudget <= 0) {
+            plan.outOfRangeCount += 1
+            continue
+          }
+          cellBudget -= 1
+          const current = rowMonthAmount(matchedRow, month)
+          const locked = isMatrixCellLocked(matchedRow, month, overrideMonthsByRow.get(matchedRow.id))
+          // 동일 금액은 초안을 만들지 않는다(commitBuffer의 중복 커밋 가드와 같은 취지).
+          const status: MatrixPasteCellPlan["status"] =
+            locked ? "locked" : next === current || (next <= 0 && current <= 0) ? "unchanged" : "apply"
+          plan.cells.push({
+            rowId: matchedRow.id,
+            customer: matchedRow.customer,
+            productCategory: rowProductCategory(matchedRow),
+            month,
+            current,
+            next,
+            status,
+          })
+          if (status === "apply") plan.applyCount += 1
+          else if (status === "locked") plan.lockedCount += 1
+          else plan.unchangedCount += 1
+        } else {
+          // 미매칭 보존은 빈 칸·0 제외(스펙) — 0은 값 없는 칸과 동일 취급이라 예산도 쓰지 않는다.
+          if (next <= 0) continue
+          if (cellBudget <= 0) {
+            plan.outOfRangeCount += 1
+            continue
+          }
+          cellBudget -= 1
+          unmatchedCells.push({ month, amount: next })
+        }
       }
-      if (cellBudget <= 0) {
-        plan.outOfRangeCount += 1
-        continue
+      if (!matchedRow && unmatchedCells.length > 0) plan.unmatched.push({ name, cells: unmatchedCells })
+    }
+  } else {
+    for (let r = 0; r < grid.length; r += 1) {
+      const row = dealRows[rowStart + r]
+      for (let c = 0; c < grid[r].length; c += 1) {
+        const raw = grid[r][c].trim()
+        if (raw === "") continue // 빈 칸은 건드리지 않는다(엑셀 부분 범위 복사 관용)
+        if (!isNumericMatrixToken(raw)) {
+          plan.nonNumericCount += 1 // 헤더/라벨 텍스트 등 — 값으로 오독하지 않고 집계만
+          continue
+        }
+        const month = months[colStart + c]
+        if (!row || !month) {
+          plan.outOfRangeCount += 1
+          continue
+        }
+        if (cellBudget <= 0) {
+          plan.outOfRangeCount += 1
+          continue
+        }
+        cellBudget -= 1
+        const next = parseMatrixAmount(raw)
+        const current = rowMonthAmount(row, month)
+        const locked = isMatrixCellLocked(row, month, overrideMonthsByRow.get(row.id))
+        // 동일 금액은 초안을 만들지 않는다(commitBuffer의 중복 커밋 가드와 같은 취지).
+        const status: MatrixPasteCellPlan["status"] =
+          locked ? "locked" : next === current || (next <= 0 && current <= 0) ? "unchanged" : "apply"
+        plan.cells.push({
+          rowId: row.id,
+          customer: row.customer,
+          productCategory: rowProductCategory(row),
+          month,
+          current,
+          next,
+          status,
+        })
+        if (status === "apply") plan.applyCount += 1
+        else if (status === "locked") plan.lockedCount += 1
+        else plan.unchangedCount += 1
       }
-      cellBudget -= 1
-      const next = parseMatrixAmount(raw)
-      const current = rowMonthAmount(row, month)
-      const locked = isMatrixCellLocked(row, month, overrideMonthsByRow.get(row.id))
-      // 동일 금액은 초안을 만들지 않는다(commitBuffer의 중복 커밋 가드와 같은 취지).
-      const status: MatrixPasteCellPlan["status"] =
-        locked ? "locked" : next === current || (next <= 0 && current <= 0) ? "unchanged" : "apply"
-      plan.cells.push({
-        rowId: row.id,
-        customer: row.customer,
-        productCategory: rowProductCategory(row),
-        month,
-        current,
-        next,
-        status,
-      })
-      if (status === "apply") plan.applyCount += 1
-      else if (status === "locked") plan.lockedCount += 1
-      else plan.unchangedCount += 1
     }
   }
-  if (plan.cells.length === 0 && plan.nonNumericCount === 0 && plan.outOfRangeCount === 0) return null
+
+  // 이름 열이 있어도 매칭·미매칭 셀이 하나도 없고 비숫자/범위밖 집계도 0이면 기존과 동일하게
+  // "붙여넣을 값 없음"으로 본다(positional 모드는 원래 판정 그대로 — unmatched는 늘 비어 있다).
+  // ambiguousNames도 본다 — 붙여넣기가 같은 이름의 중복 행뿐이면 셀·미매칭이 전부 0이라도 "건너뜀"
+  // 안내를 프리뷰에 띄워야 한다(null이면 호출부가 "숫자 값을 찾지 못했다"고 잘못 말한다).
+  if (
+    plan.cells.length === 0 &&
+    plan.nonNumericCount === 0 &&
+    plan.outOfRangeCount === 0 &&
+    plan.unmatched.length === 0 &&
+    plan.ambiguousNames.length === 0
+  ) {
+    return null
+  }
   return plan
+}
+
+// 라운드 4 P1-5 — 프리뷰에서 승인된 미매칭 이름만 new-row 초안 입력으로 뒤집는 순수 헬퍼.
+// 월 1개당 초안 1건(그 이름의 보존된 금액 칸 수만큼). 시트에 없던 행을 새로 만드는 동작이라
+// status를 싣지 않는다 — 매트릭스 셀 커밋(buildCellDraftInput)의 자가 체크(P0-2)와 달리, 레일
+// new-row(buildDraftInput)와 같은 3단(초안→체크→적용) 게이트를 그대로 유지한다는 결정(D1(a))과
+// 동일 이유: 시트를 보며 값을 옮기는 게 아니라 화면에 없던 행을 만드는 것이라 검수 가치가 있다.
+export function buildPasteNewRowInputs(
+  plan: MatrixPastePlan,
+  selectedNames: readonly string[],
+  context: {
+    team: string
+    manager: string
+    productCategory: Exclude<RevProductCategory, "all">
+    confidence: DraftConfidence
+    lens: string
+    period: string
+  },
+): LedgerDraftInput[] {
+  const selected = new Set(selectedNames)
+  const inputs: LedgerDraftInput[] = []
+  for (const row of plan.unmatched) {
+    if (!selected.has(row.name)) continue
+    for (const cell of row.cells) {
+      const input: LedgerDraftInput = {
+        kind: "new-row",
+        customer: row.name.trim(),
+        manager: context.manager,
+        team: context.team,
+        month: cell.month,
+        amount: cell.amount,
+        note: "",
+        sourceSheetRow: null,
+        sourceSnapshot: {
+          capturedAt: new Date().toISOString(),
+          origin: "rev-matrix-paste",
+          selectedMonth: cell.month,
+          week: "month",
+          row: null,
+        },
+        metadata: {
+          source: "sales-ledger-workbench",
+          origin: "rev-matrix-paste",
+          lens: context.lens,
+          period: context.period,
+          team: context.team,
+          operation: "forecast-add",
+          productCategory: context.productCategory,
+          fromMonth: cell.month,
+          week: "month",
+          weekly: null,
+          weeklyConfidence: null,
+          confidence: context.confidence,
+          quantity: null,
+          sourceDealId: null,
+        },
+      }
+      inputs.push(input)
+    }
+  }
+  return inputs
 }
 
 // 셀의 우세 확도 → 편집 팝오버 기본 선택값. 확정>고확도>예정 순, 없으면 예정.
