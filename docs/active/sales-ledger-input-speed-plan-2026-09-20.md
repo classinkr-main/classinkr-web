@@ -1,6 +1,7 @@
 # 매출 장부 입력 속도·편의 기획 (라운드 4)
 
-상태: 1단계 P0·P1-5·P1-6·P2-7 + UI·UX 10건 구현 완료(2026-09-21), P1-4·P2-8~10·보드 카드 인라인 편집 실행 대기
+상태: 1단계 P0·P1-5·P1-6·P2-7 + UI·UX 10건 구현 완료(2026-09-21), P1-4·P2-8~10·보드 카드 인라인 편집 실행 대기 —
+미완 항목과 그 뒤 사용성 평가는 [라운드 5 기획](sales-ledger-view-ux-round5-plan-2026-09-23.md)으로 이어진다(2026-09-23)
 범위: `/admin/branch/ledger`의 입력 경로 — REV 매트릭스 셀 편집, 빠른 작업 레일(입력/수정), 체크 큐
 목표: **1단계** 구글 시트를 원천으로 유지한 채 어드민 입력의 클릭·왕복·오타를 줄인다 →
 **2단계** 어드민을 매출 입력 정본으로 올리고 시트 입력을 중단한다.
@@ -126,7 +127,7 @@ API가 `amount <= 0`을 거부한다
 | P0-1 초안 배치 API | **완료** | `app/api/admin/branch/ledger-drafts/batch/route.ts`, `lib/branch/ledger-draft-body.ts`(단건·배치 공용 파서), `components/admin/branch/ledger/useLedgerDraftQueue.ts`(`checkDrafts`/`applyDrafts`/`persistDraftsBatch`, 200건 청크) | `tests/api/branch-ledger-drafts-batch-route.test.ts`, `tests/branch/ledger-draft-batch.test.ts` |
 | P0-2 자가 체크 | **완료 — 결정 D1(a) 채택** | 저장소 `buildInsert`(status=checked → `checked_by`/`checked_at`), `updateBranchSalesLedgerDraft`(자가 체크 재편집: 잠금 해제→갱신→재체크, 남의 체크는 409 `checked-by-other`), 워크벤치 `buildCellDraftInput`(매트릭스 셀 커밋만 `status:"checked"`), `ledger/self-check.ts` + 큐 배지 | `tests/repositories/branch-sales-ledger-drafts.test.ts`(자가 체크 5건), `tests/branch/ledger-self-check.test.ts` |
 | P0-3 고객/계정 자동완성 | **완료** | `components/admin/branch/ledger/customer-suggest.ts`, `InputRailSection.tsx`(datalist + 표기 흔들림 경고·원클릭 맞추기) | `tests/branch/customer-suggest.test.ts` |
-| P1-5 붙여넣기 이름 매칭 | **완료** | `rev-matrix-logic.ts`(`buildMatrixPastePlan` by-name 모드·`buildPasteNewRowInputs`), `RevMatrix.tsx`(프리뷰: 모드 배지·건너뜀 안내·"시트에 없는 고객" 체크리스트), 워크벤치 `confirmMatrixPaste` | `tests/branch/matrix-paste-name-match.test.ts` |
+| P1-5 붙여넣기 이름 매칭 | **완료**(주차 칸 앵커 붙여넣기는 미구현 — 라운드 5 §3.3 R-16) | `rev-matrix-logic.ts`(`buildMatrixPastePlan` by-name 모드·`buildPasteNewRowInputs`), `RevMatrix.tsx`(프리뷰: 모드 배지·건너뜀 안내·"시트에 없는 고객" 체크리스트), 워크벤치 `confirmMatrixPaste` | `tests/branch/matrix-paste-name-match.test.ts` |
 | P1-6 실행 취소 토스트 | **완료** | 워크벤치 토스트 `key/action/ttlMs`, `undoCellDraft`(latest-ref), 훅 `cancelDraft` 성공 여부 반환 | `tests/branch/ledger-undo-toast.test.ts` |
 | P1-4 인라인 신규 행 | 대기 — 설계 보강 필요 | 미적용 초안 행을 매트릭스에 임시 행으로 보여주는 파생(`visibleDealRows`)이 먼저 필요하다. 지금은 적용 전 new-row 초안이 큐에만 보여, 인라인으로 만들어도 저장 직후 사라진다 | — |
 | P2-7 모바일 입력 진입 | **완료** | `RevMobileList.tsx`(금액 44px 버튼 → `openQuickInputForRow`: 행 선택·프리필 후 레일 입력 탭) | `tests/branch/ledger-entry-paths.test.ts` |
