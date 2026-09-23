@@ -6,7 +6,7 @@
 // 경로는 전부 기존 draft/apply(InputRailSection)를 재사용하고 여기서 새로 만들지 않는다.
 // 금액·확도 산식은 매트릭스·보드와 동일한 shared 헬퍼(rowMonth*)만 쓴다(별도 집계 금지).
 
-import { useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react"
 import { AlertTriangle, ChevronLeft, ChevronRight, Plus, Search, UserRound } from "lucide-react"
 import { CONFIDENCE_TOKENS, type ConfidenceKey } from "@/lib/branch/confidence-tokens"
 import { formatExactMoney } from "@/lib/branch/ledger-format"
@@ -54,11 +54,14 @@ interface CockpitDealListProps {
   onNewDeal: () => void
   /** 행·월 대기 초안(키 `rowId::month`) — 목록에 확도색 점과 "대기" 금액(라운드 5 B-6). */
   pendingByCell?: Map<string, MatrixPendingDraft> | null
+  /** 지금 보이는 순서(로컬 검색·퀵필터·정렬 반영)의 행 id — 편집기 "저장 후 다음"이 쓴다(라운드 5 K-6). */
+  onVisibleRowIdsChange?: (rowIds: string[]) => void
 }
 
 export function CockpitDealList({
   rows,
   pendingByCell = null,
+  onVisibleRowIdsChange,
   selectedMonth,
   monthOptions,
   onSelectMonth,
@@ -138,6 +141,24 @@ export function CockpitDealList({
       // 선택월 금액 있는 행 먼저(내림차순), 동액은 이름순.
       .sort((a, b) => b.amount - a.amount || a.row.customer.localeCompare(b.row.customer, "ko"))
   }, [rows, selectedMonth, term, confidenceFilters, productFilters])
+
+  // 라운드 5 K-6 — 보이는 순서를 부모에 알린다("저장 후 다음"의 다음 딜 = 이 순서의 다음 항목).
+  useEffect(() => {
+    onVisibleRowIdsChange?.(items.map((item) => item.row.id))
+  }, [items, onVisibleRowIdsChange])
+  // 선택이 바뀌면(저장 후 다음 포함) 그 항목이 목록 스크롤 안에 보이게 한다. 창(window)은 건드리지 않고 목록 상자만
+  // 움직인다 — scrollIntoView는 바깥 스크롤까지 끌어가서, 모바일에서 편집기를 보던 화면이 목록으로 튀었다.
+  const listScrollRef = useRef<HTMLDivElement | null>(null)
+  const selectedIndex = items.findIndex((item) => item.row.id === selectedRowId)
+  useEffect(() => {
+    const container = listScrollRef.current
+    const item = selectedIndex >= 0 ? itemRefs.current[selectedIndex] : null
+    if (!container || !item) return
+    const box = container.getBoundingClientRect()
+    const rect = item.getBoundingClientRect()
+    if (rect.top < box.top) container.scrollTop -= box.top - rect.top
+    else if (rect.bottom > box.bottom) container.scrollTop += rect.bottom - box.bottom
+  }, [selectedIndex])
 
   const monthTotal = useMemo(() => items.reduce((sum, item) => sum + item.amount, 0), [items])
   const filtersActive = term.trim() !== "" || confidenceFilters.size > 0 || productFilters.size > 0
@@ -302,7 +323,7 @@ export function CockpitDealList({
         </div>
       </div>
 
-      <div className="max-h-[70dvh] overflow-y-auto p-2">
+      <div ref={listScrollRef} className="max-h-[70dvh] overflow-y-auto p-2">
         {items.length === 0 ? (
           <p className="m-2 rounded-lg border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-6 text-center text-[12px] text-[#615D59]">
             조건에 맞는 딜이 없습니다 — 검색어·필터를 지우거나 담당자 필터를 풀어보세요.

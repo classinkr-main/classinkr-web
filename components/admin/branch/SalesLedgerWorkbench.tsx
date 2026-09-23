@@ -2554,9 +2554,13 @@ export default function SalesLedgerWorkbench({
 
   // 상세 요청 순번 — 빠르게 다른 딜을 연달아 고르면 늦게 도착한 앞 딜의 응답이 폼·상세를 덮어쓰지 않게 한다.
   const detailRequestSeqRef = useRef(0)
+  // 라운드 5 K-4 — 콕핏 편집기에 사용자가 손댄 값이 있는지. 딜을 새로 불러오면 깨끗해지고, 편집기 입력(setCockpitDraftForm)이
+  // 더럽힌다. 목록 월이 바뀌었을 때 손댄 값은 지우지 않고(편집기가 월 불일치를 알린다), 깨끗하면 그 달 값으로 다시 불러온다.
+  const cockpitFormDirtyRef = useRef(false)
   const loadDealDetail = useCallback(async (row: LedgerRevenueRow) => {
     const requestSeq = ++detailRequestSeqRef.current
     const isLatestRequest = () => detailRequestSeqRef.current === requestSeq
+    cockpitFormDirtyRef.current = false
     // 라운드 5 K-2 — 다른 딜을 고르면 진행 중이던 초안 편집을 끝낸다. 폼은 아래에서 이 딜로 통째로 바뀌는데
     // 편집 상태(editingDraftId)만 남으면, 저장이 그 초안을 이 딜의 값으로 덮어쓴다(초안 X가 딜 B로 재지정).
     setEditingDraftId(null)
@@ -2692,6 +2696,65 @@ export default function SalesLedgerWorkbench({
       cockpitEditorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
     })
   }, [onSelectCockpitDeal])
+
+  // 라운드 5 K-4 — 콕핏 편집기 입력은 이 래퍼로: 값을 손댔다는 표시를 남긴다(loadDealDetail이 지운다).
+  const setCockpitDraftForm = useCallback<typeof setDraftForm>((update) => {
+    cockpitFormDirtyRef.current = true
+    setDraftForm(update)
+  }, [])
+  // 목록 월(selectedMonth)과 편집기 월이 따로 놀면 다른 달의 주차값을 이 달로 저장할 수 있었다(K-4). 시트 행을 고른
+  // 상태에서 목록 월이 바뀌면 그 달 기준으로 다시 불러온다 — 손댄 값이 있으면 지우지 않고 편집기가 불일치를 알린다.
+  // 적용 초안 행(draftMonth 고정)·초안 편집 중·새 딜은 대상이 아니다.
+  const cockpitSheetRow =
+    lens === "cockpit" && selectedRow && !editingDraftId && selectedRow.ledgerOrigin !== "draft" ? selectedRow : null
+  // 목록 월이 "실제로 바뀐" 실행에서만 다시 불러온다 — 렌즈 전환·딜 선택처럼 월은 그대로인 실행이 레일에서 치던 값을
+  // 지우지 않게(그 경우 월이 다르면 편집기가 불일치 안내와 "다시 불러오기"를 보인다).
+  const cockpitListMonthRef = useRef(selectedMonth)
+  useEffect(() => {
+    const previousMonth = cockpitListMonthRef.current
+    cockpitListMonthRef.current = selectedMonth
+    if (previousMonth === selectedMonth) return
+    if (!cockpitSheetRow || draftForm.month === selectedMonth || cockpitFormDirtyRef.current) return
+    void loadDealDetail(cockpitSheetRow)
+  }, [cockpitSheetRow, draftForm.month, loadDealDetail, selectedMonth])
+  // 편집기의 월 선택: 시트 행이면 목록 월도 같이 옮긴다. 손대지 않았으면 위 effect가 그 달 값으로 다시 불러오고,
+  // 손댔으면 입력값을 그 달로 옮긴다(명시적으로 고른 달이므로).
+  const onCockpitEditorMonthChange = useCallback((month: string) => {
+    if (cockpitFormDirtyRef.current) setDraftForm((current) => ({ ...current, month }))
+    setSelectedMonth(month)
+  }, [])
+  const reloadCockpitDealForListMonth = useCallback(() => {
+    if (cockpitSheetRow) void loadDealDetail(cockpitSheetRow)
+  }, [cockpitSheetRow, loadDealDetail])
+
+  // 라운드 5 K-6 — "저장 후 다음": 목록이 실제로 보여 주는 순서(로컬 검색·퀵필터 반영)의 다음 딜로 넘어간다.
+  const [cockpitVisibleIds, setCockpitVisibleIds] = useState<string[]>([])
+  const onCockpitVisibleRowIds = useCallback((ids: string[]) => {
+    setCockpitVisibleIds((current) =>
+      current.length === ids.length && current.every((id, index) => id === ids[index]) ? current : ids,
+    )
+  }, [])
+  const cockpitNextRow = useMemo(() => {
+    if (lens !== "cockpit" || !selectedRow || editingDraftId) return null
+    const index = cockpitVisibleIds.indexOf(selectedRow.id)
+    const nextId = index >= 0 ? cockpitVisibleIds[index + 1] : undefined
+    return nextId ? filteredRows.find((row) => row.id === nextId) ?? null : null
+  }, [cockpitVisibleIds, editingDraftId, filteredRows, lens, selectedRow])
+  // 다음 딜로 넘어간 직후 한 번만 편집기 첫 주차 칸에 포커스한다(키보드 연속 입력). 목록 클릭 선택에는 쓰지 않는다 —
+  // 목록의 방향키 이동을 끊지 않게.
+  const [cockpitAutoFocusRowId, setCockpitAutoFocusRowId] = useState<string | null>(null)
+  const goToNextCockpitDeal = useCallback(({ deduped }: { deduped: boolean }) => {
+    if (!cockpitNextRow) return
+    const savedCustomer = selectedRow?.customer ?? ""
+    pushMatrixToast({
+      kind: "info",
+      key: "cockpit-saved-next",
+      ttlMs: 4000,
+      text: `${deduped ? "기존 대기 초안 수정" : "저장됨"} · ${savedCustomer} → 다음 딜 ${cockpitNextRow.customer} (체크 큐에서 적용 전)`,
+    })
+    setCockpitAutoFocusRowId(cockpitNextRow.id)
+    handleCockpitSelectDeal(cockpitNextRow)
+  }, [cockpitNextRow, handleCockpitSelectDeal, pushMatrixToast, selectedRow])
 
   // 헤더 "동기화"(관리자) / "다시 불러오기"(그 외). 관리자는 시트를 다시 읽고(POST sync), 누구든 끝나면 화면을
   // 다시 불러온다. 결과는 결과 계약(outcome)으로 읽어 "이미 동기화 중"·"일부만"을 완료로 뭉개지 않는다
@@ -2841,6 +2904,13 @@ export default function SalesLedgerWorkbench({
       setDraftSaving(false)
     }
   }, [buildDraftInput, createDraft, defaultDraftForm, draftForm.customer, draftForm.month, draftForm.week, drafts, selectedRow, updateDraft])
+
+  // 라운드 5 K-4 — 콕핏 저장: 성공하면 그 값은 초안으로 남았으니 "손댄 값"이 아니다(이후 월 이동은 그 달 값으로 다시 불러온다).
+  const saveCockpitDraft = useCallback(async (kind: DraftKind) => {
+    const result = await saveDraft(kind)
+    if (result.persisted && !result.conflict && !result.validationMessage) cockpitFormDirtyRef.current = false
+    return result
+  }, [saveDraft])
 
   const editDraft = useCallback((draft: LedgerDraft) => {
     setEditingDraftId(draft.id)
@@ -4253,6 +4323,7 @@ export default function SalesLedgerWorkbench({
                 <CockpitDealList
                   rows={filteredRows}
                   pendingByCell={lensPendingByCell}
+                  onVisibleRowIdsChange={onCockpitVisibleRowIds}
                   selectedMonth={selectedMonth}
                   monthOptions={monthOptions}
                   onSelectMonth={setSelectedMonth}
@@ -4268,6 +4339,8 @@ export default function SalesLedgerWorkbench({
                 />
                 <div ref={cockpitEditorRef} className="min-w-0 scroll-mt-4">
                 <CockpitEditor
+                  // 라운드 5 K-8 — 딜·초안마다 새로 마운트해 이전 딜의 저장 메시지·주차 선택이 남지 않게 한다.
+                  key={editingDraftId ?? selectedRow?.id ?? "new"}
                   editingDraft={editingDraft}
                   dealContext={
                     selectedRow
@@ -4282,7 +4355,7 @@ export default function SalesLedgerWorkbench({
                       : null
                   }
                   draftForm={draftForm}
-                  setDraftForm={setDraftForm}
+                  setDraftForm={setCockpitDraftForm}
                   monthOptions={monthOptions}
                   managerOptions={managerOptions}
                   draftFormInvalid={draftFormInvalid}
@@ -4293,8 +4366,15 @@ export default function SalesLedgerWorkbench({
                   currentMonthAmount={selectedRowMonthTotal}
                   saveEditedDraft={saveEditedDraft}
                   cancelDraftEdit={cancelDraftEdit}
-                  saveDraft={saveDraft}
+                  saveDraft={saveCockpitDraft}
                   onSwitchToRev={() => selectLens("rev")}
+                  listMonth={cockpitSheetRow ? selectedMonth : undefined}
+                  onMonthChange={cockpitSheetRow ? onCockpitEditorMonthChange : undefined}
+                  onReloadForListMonth={cockpitSheetRow ? reloadCockpitDealForListMonth : undefined}
+                  nextDealName={cockpitNextRow?.customer ?? null}
+                  onSavedGoNext={cockpitNextRow ? goToNextCockpitDeal : undefined}
+                  autoFocusWeekly={cockpitAutoFocusRowId != null && cockpitAutoFocusRowId === selectedRow?.id}
+                  onAutoFocused={() => setCockpitAutoFocusRowId(null)}
                 />
                 </div>
               </div>
