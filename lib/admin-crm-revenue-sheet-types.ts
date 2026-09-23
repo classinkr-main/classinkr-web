@@ -86,12 +86,19 @@ export interface AdminCrmRevenueSheetCompassCompare {
 // 범위에서는 하지 않고, 대신 "이 화면 밖에 반영 안 된 장부 매출이 N건 있다"를 셈해 눈에 띄게
 // 알린다 — 화면이 최신이라고 오인하지 않도록.
 export interface AdminCrmRevenueSheetManualLedgerGap {
-  /** 미반영 건수. */
+  /** 미반영 건수(신규 + 정정). */
   count: number
-  /** 미반영 건 금액 합(원 단위). */
+  /** 미반영 건 금액 합(시트 통화 ¥ — branch_sales_ledger_entries.currency 기본값 CNY). 정정 건의 대체값까지
+      더한 값이라 "빠진 매출"로 읽으면 과대하다 — 화면은 newAmount를 쓴다(라운드 5 S-7). 호환을 위해 남긴다. */
   amount: number
   /** 가장 최근 적용 시각 — count가 0이면 null. */
   latestAppliedAt: string | null
+  /** 장부에서 새로 만든 행(entry_type manual-new) — 이 화면에 아예 없는 매출. */
+  newCount: number
+  /** 신규 건 금액 합(¥). 이 화면 합계에 더해져야 할 몫. */
+  newAmount: number
+  /** 시트 행을 대체한 정정(entry_type manual-edit) — 이 화면은 정정 전 값을 보여 준다. 금액은 더하지 않는다. */
+  editCount: number
 }
 
 export interface AdminCrmRevenueSheetWorkspace {

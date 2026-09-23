@@ -18,6 +18,9 @@ import type {
 interface BranchSalesLedgerEntryAmountRow {
   amount: number | string | null
   applied_at: string | null
+  // manual-new(장부에서 새로 만든 행) | manual-edit(시트 행 정정). 구 호출·테스트 입력에는 없을 수 있다 —
+  // 없으면 신규로 센다(정정으로 세면 빠진 매출을 숨기게 되므로 보수적인 쪽).
+  entry_type?: string | null
 }
 
 interface BranchRevDealRow {
@@ -188,9 +191,15 @@ function getTargetLabel(
 // 품질 감사 2026-09-10 — #1(P0, 이중 진실): 순수 집계 함수로 분리해 단위 테스트 가능하게 한다
 // (tests/branch/crm-revenue-sheet-manual-ledger-gap.test.ts). applied_at 오름차순이 아니어도
 // 안전하도록 매번 Date 비교로 최댓값을 찾는다 — 빈 배열이면 count/amount 0, latestAppliedAt null.
+// 라운드 5 S-7: 신규(manual-new)와 정정(manual-edit)을 나눠 센다. 정정은 시트 행의 그 달 값을 "대체"하는 값이라
+// 금액을 더하면 빠진 매출이 아니라 대체값 총액이 된다 — 장부의 "장부 가감" 타일(신규만 더함)과 정의를 맞춘다.
 export function computeManualLedgerGap(rows: BranchSalesLedgerEntryAmountRow[]): AdminCrmRevenueSheetManualLedgerGap {
+  const newRows = rows.filter((row) => row.entry_type !== "manual-edit")
   return {
     count: rows.length,
+    newCount: newRows.length,
+    newAmount: newRows.reduce((sum, row) => sum + numberValue(row.amount), 0),
+    editCount: rows.length - newRows.length,
     amount: rows.reduce((sum, row) => sum + numberValue(row.amount), 0),
     latestAppliedAt: rows.reduce<string | null>((latest, row) => {
       if (!row.applied_at) return latest
@@ -228,7 +237,7 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
     // 구조적으로 볼 수 없다. 서버 병합(row 단위 매칭) 대신 규모만 세어 배지로 알린다.
     sb
       .from("branch_sales_ledger_entries")
-      .select("amount, applied_at")
+      .select("amount, applied_at, entry_type")
       .eq("entry_status", "active")
       .limit(QUERY_LIMIT),
   ])
@@ -249,7 +258,7 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
     )
   }
   const manualLedgerGap: AdminCrmRevenueSheetManualLedgerGap = manualLedgerResult.error
-    ? { count: 0, amount: 0, latestAppliedAt: null }
+    ? { count: 0, amount: 0, latestAppliedAt: null, newCount: 0, newAmount: 0, editCount: 0 }
     : computeManualLedgerGap((manualLedgerResult.data ?? []) as BranchSalesLedgerEntryAmountRow[])
 
   // 상한에 정확히 닿았다면 그 뒤가 잘렸을 수 있다. 형제 모듈(admin-crm-revenue)은 같은 위험을
