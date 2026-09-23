@@ -244,6 +244,27 @@ export function matrixDisplayedCellAmount(
   return pendingWeekDisplay(pendingByCell, coord.rowId, coord.month, coord.week, display)?.amount ?? display
 }
 
+// 라운드 5 R-13 — 클립보드가 한 칸짜리 숫자면 그 원 단위 정수(양수)를, 여러 칸·문자·0 이하면 null. 셀 편집 파싱
+// (parseMatrixAmountResult)과 같은 규칙(¥·콤마·공백 제거, 반올림)이라 "1,234.6"은 1235다 — 편집 진입 seed가 숫자만
+// 남기는 방식(beginEdit)으로 소수점을 지우면 10배 오류가 나므로 여기서 먼저 정수로 만든다.
+export function parseSinglePastedAmount(text: string): number | null {
+  const single = text.replace(/\r?\n$/, "")
+  if (/[\t\r\n]/.test(single)) return null
+  if (!/\d/.test(single)) return null
+  const { amount, clamped } = parseMatrixAmountResult(single)
+  if (clamped || !(amount > 0)) return null
+  return amount
+}
+
+// 라운드 5 R-7 — 검색창에서 Enter·↓로 들어갈 첫 칸: 렌더 순서상 첫 행의 선택 월(접힌 월 칸, 펼쳤으면 W1)이 먼저,
+// 그 행에 그 달 편집 칸이 없으면 렌더 순서의 첫 편집 칸.
+export function firstMatrixCellForMonth(editableCells: readonly MatrixCellCoord[], month: string): MatrixCellCoord | null {
+  if (editableCells.length === 0) return null
+  const firstRowId = editableCells[0].rowId
+  const inFirstRow = editableCells.find((cell) => cell.rowId === firstRowId && cell.month === month && (cell.week ?? 0) === 0)
+  return inFirstRow ?? editableCells.find((cell) => cell.month === month && (cell.week ?? 0) === 0) ?? editableCells[0]
+}
+
 // 주차 칸 편집의 병합 기준(라운드 5 R-W). explicit 주차가 있는 행의 주차 셀을 고치면 나머지 주차를 보존해
 // 5칸 배열(metadata.weekly)로 싣는다. 그 "나머지 주차"의 기준은 같은 달에 이미 대기 중인 초안의 주차 배열이
 // 먼저다 — 행 표시값(시트·적용분)을 기준으로 하면 W1을 고친 뒤 W2를 고칠 때 두 번째 저장이 W1을 시트 원값으로
@@ -752,6 +773,7 @@ export function useMatrixEditor({
   onAmountClamped,
   onZeroCommitBlocked,
   onCopyCell,
+  onLockedCellActivate,
 }: {
   editableCells: MatrixCellCoord[] // 렌더 순서(행 위→아래, 월 좌→우, 확장월은 w1→w5)로 정렬된 편집가능 셀
   cellValue: (coord: MatrixCellCoord) => number // 커밋 기준값(원 단위) — fill-down 소스
@@ -764,6 +786,8 @@ export function useMatrixEditor({
   onZeroCommitBlocked?: (coord: MatrixCellCoord) => void
   // 라운드 5 B1 — 선택 셀에서 Ctrl/Cmd+C. 텍스트를 드래그로 골라 둔 상태면 브라우저 기본 복사를 존중한다.
   onCopyCell?: (coord: MatrixCellCoord) => void
+  // 라운드 5 R-14 — 잠긴 칸에서 Enter·F2·더블클릭. 예전엔 아무 반응이 없었다(부모가 상세·고치는 방법을 연다).
+  onLockedCellActivate?: (coord: MatrixCellCoord) => void
 }) {
   const [selected, setSelected] = useState<MatrixCellCoord | null>(null)
   const [editing, setEditing] = useState<MatrixCellCoord | null>(null)
@@ -994,6 +1018,15 @@ export function useMatrixEditor({
     [beginEdit, cellConfidence, cellValue, editableCells, indexByKey, moveSelection, moveWithinRowOrNext, onCommitCell, onCopyCell],
   )
 
+  // 잠긴 칸 활성화(R-14) — 부모 콜백을 ref로 읽어 actions identity를 흔들지 않는다(셀 memo 보호).
+  const onLockedCellActivateRef = useRef(onLockedCellActivate)
+  useEffect(() => {
+    onLockedCellActivateRef.current = onLockedCellActivate
+  }, [onLockedCellActivate])
+  const activateLocked = useCallback((coord: MatrixCellCoord) => {
+    onLockedCellActivateRef.current?.(coord)
+  }, [])
+
   // 셀 핸들러가 호출하는 액션들 — 전부 identity 안정(콜백 deps가 데이터/펼침에만 반응).
   // selected/editing/buffer/editConfidence 같은 잦은 상태는 여기 넣지 않고 별도 경로로 내려,
   // 이 객체를 prop으로 받는 memo 셀들이 선택·타이핑마다 얕은비교가 깨지지 않게 한다.
@@ -1009,8 +1042,9 @@ export function useMatrixEditor({
       commitBuffer,
       onEditingKeyDown,
       onSelectedKeyDown,
+      activateLocked,
     }),
-    [setBuffer, pickEditConfidence, selectCell, beginEdit, cancelEdit, commitBuffer, onEditingKeyDown, onSelectedKeyDown],
+    [setBuffer, pickEditConfidence, selectCell, beginEdit, cancelEdit, commitBuffer, onEditingKeyDown, onSelectedKeyDown, activateLocked],
   )
 
   return {

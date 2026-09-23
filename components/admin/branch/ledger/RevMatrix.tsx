@@ -257,7 +257,7 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
       ? `합계 ${formatExactMoney(bucket.total)} · 확정 ${formatExactMoney(bucket.confirmed)} · 고확도 ${formatExactMoney(bucket.high)} · 예정 ${formatExactMoney(bucket.open)}${mismatch ? " · 주차·월 불일치(허용오차 ±¥1)" : ""}`
       : "미입력"
   const title = locked
-    ? `${baseTitle} · 🔒 ${lockLabel} 값이라 잠금(실수 방지) — 수정은 우측 패널에서 정정 초안으로`
+    ? `${baseTitle} · 🔒 ${lockLabel} 값이라 잠금(실수 방지) — Enter·더블클릭으로 상세와 고치는 방법 보기`
     : pending
       ? `${bucket.total > 0 ? `장부 ${formatExactMoney(bucket.total)}` : "장부 미입력"} → 대기 초안 ${formatExactMoney(pending.amount)} (${confidenceLabel(pending.confidence)}, 적용 전 — 합계 행 미반영)`
       : editable
@@ -317,9 +317,17 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
         },
         onDoubleClick: () => {
           if (editable) actions!.beginEdit(rowId!, month!)
+          // 라운드 5 R-14 — 잠긴 칸은 편집 대신 상세와 "고치는 방법"을 연다(예전엔 무반응).
+          else if (locked) actions!.activateLocked({ rowId: rowId!, month: month! })
         },
         onKeyDown: (event: React.KeyboardEvent<HTMLTableCellElement>) => {
-          if (!editable) return
+          if (!editable) {
+            if (locked && (event.key === "Enter" || event.key === "F2")) {
+              event.preventDefault()
+              actions!.activateLocked({ rowId: rowId!, month: month! })
+            }
+            return
+          }
           if (!selected) {
             // Tab 포커스만 된 셀도 Enter/F2로 선택 진입 — 마우스 클릭 없이 키보드만으로 편집 가능.
             if (event.key === "Enter" || event.key === "F2") {
@@ -431,7 +439,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
   // 라운드 5 R-2 — 대기 초안이 이 주차에 걸려 있으면 그 금액을 칸에 보인다(월 셀과 같은 규약).
   const shownDisplay = pending && pendingAmount != null ? pendingAmount : display
   const title = locked
-    ? `${baseTitle} · 🔒 ${lockLabel} 값이라 잠금(실수 방지) — 수정은 우측 패널에서 정정 초안으로`
+    ? `${baseTitle} · 🔒 ${lockLabel} 값이라 잠금(실수 방지) — Enter·더블클릭으로 상세와 고치는 방법 보기`
     : pending
       ? `W${weekIndex + 1} ${display > 0 ? `장부 ${formatExactMoney(display)}` : "장부 미입력"} → 대기 초안 ${formatExactMoney(shownDisplay)} (${confidenceLabel(pending.weeklyConfidence?.[weekIndex] ?? pending.confidence)}, 적용 전)`
       : editable
@@ -488,9 +496,16 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
         },
         onDoubleClick: () => {
           if (editable) actions!.beginEdit(rowId!, month!, undefined, weekIndex)
+          else if (locked) actions!.activateLocked({ rowId: rowId!, month: month!, week: weekIndex })
         },
         onKeyDown: (event: React.KeyboardEvent<HTMLTableCellElement>) => {
-          if (!editable) return
+          if (!editable) {
+            if (locked && (event.key === "Enter" || event.key === "F2")) {
+              event.preventDefault()
+              actions!.activateLocked({ rowId: rowId!, month: month!, week: weekIndex })
+            }
+            return
+          }
           if (!selected) {
             // Tab 포커스만 된 칸도 Enter/F2로 선택 진입 — 마우스 클릭 없이 키보드만으로 편집 가능.
             if (event.key === "Enter" || event.key === "F2") {
@@ -630,7 +645,7 @@ interface RevMatrixEditContext {
   editConfidence: DraftConfidence // 편집 중 확도(편집 셀에만 의미)
   // 잠금 아이콘·툴팁 라벨(월별) — 시트 원천은 "시트 확정", 적용 초안은 "장부 반영", 정정 적용으로
   // 재잠긴 원본 달은 "장부 반영(정정)"(품질 웨이브 4 — 항목 1: 정정이 셀을 지운 게 아니라 대체했음을
-  // 구분해 보여준다 — 재편집을 시도하면 우측 패널 정정 초안으로 유도).
+  // 구분해 보여준다). 잠긴 칸에서 Enter·더블클릭하면 상세와 실제로 고치는 경로를 안내한다(라운드 5 R-14).
   lockLabelOf: (month: string) => string
   editableOf: (month: string) => boolean
   lockedOf: (month: string) => boolean

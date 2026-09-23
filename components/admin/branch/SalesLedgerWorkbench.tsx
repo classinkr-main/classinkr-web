@@ -163,8 +163,10 @@ import {
   MATRIX_MONTH_W,
   MATRIX_PRODUCT_W,
   MATRIX_WEEK_W,
+  firstMatrixCellForMonth,
   matrixDisplayedCellAmount,
   mergeWeeklyCellEdit,
+  parseSinglePastedAmount,
   pendingCellAmount,
   railDedupTarget,
   resolveDraftEditTargetRow,
@@ -2176,6 +2178,11 @@ export default function SalesLedgerWorkbench({
     })
   }, [pushMatrixToast])
 
+  // 라운드 5 R-14 — 잠긴 칸 활성화는 아래(selectRailView·loadDealDetail 정의 뒤)의 activateLockedMatrixCell이 처리한다.
+  // 에디터에는 identity가 고정된 중계 함수만 넘기고, 실제 구현은 ref로 잇는다(선언 순서 의존 제거).
+  const lockedCellActivateRef = useRef<(coord: MatrixCellCoord) => void>(() => {})
+  const onMatrixLockedCellActivate = useCallback((coord: MatrixCellCoord) => lockedCellActivateRef.current(coord), [])
+
   const matrixEditor = useMatrixEditor({
     editableCells,
     cellValue: matrixCellValue,
@@ -2184,6 +2191,7 @@ export default function SalesLedgerWorkbench({
     onAmountClamped: onMatrixAmountClamped,
     onZeroCommitBlocked: onMatrixZeroCommitBlocked,
     onCopyCell: copyMatrixCell,
+    onLockedCellActivate: onMatrixLockedCellActivate,
   })
 
   // 딜행별 편집 prop — selected/editing 좌표를 이 행 스코프로 좁힌다. actions·selected·editing은
@@ -2252,6 +2260,13 @@ export default function SalesLedgerWorkbench({
       const text = event.clipboardData?.getData("text/plain") ?? ""
       if (!text.trim()) return
       event.preventDefault()
+      // 라운드 5 R-13 — 한 칸짜리 숫자는 미리보기 없이 그 칸 편집으로 들어가 값만 채운다(치는 것과 같은 경로 —
+      // Enter로 저장, Esc로 취소, 확도 팝오버 그대로). 주차 칸도 한 칸이면 치는 것과 같아 안전하다.
+      const singleAmount = parseSinglePastedAmount(text)
+      if (singleAmount != null) {
+        matrixEditor.actions.beginEdit(anchor.rowId, anchor.month, String(singleAmount), anchor.week)
+        return
+      }
       if (anchor.week != null) {
         // 주차 칸 붙여넣기는 B1 주차 병합 규약과 얽혀 파괴 위험 — 월 셀만 지원(잠금과 같은 안전 규약).
         pushMatrixToast({ kind: "info", text: "주차 칸에는 붙여넣기를 지원하지 않습니다 — 월 셀을 선택한 뒤 붙여넣으세요." })
@@ -2266,7 +2281,7 @@ export default function SalesLedgerWorkbench({
       setPasteConfidence(loadStoredMatrixConfidence() ?? "expected")
       setPastePlan(plan)
     },
-    [matrixEditor.editing, matrixEditor.selected, matrixMonths, pushMatrixToast, visibleDealRows, editRowOverrideMonths, rows],
+    [matrixEditor.actions, matrixEditor.editing, matrixEditor.selected, matrixMonths, pushMatrixToast, visibleDealRows, editRowOverrideMonths, rows],
   )
 
   // 프리뷰 확인 → 셀 편집과 같은 입력 빌더(buildCellDraftInput)로 초안 입력을 만들어 배치 1회(200건
@@ -2557,7 +2572,7 @@ export default function SalesLedgerWorkbench({
   // 라운드 5 K-4 — 콕핏 편집기에 사용자가 손댄 값이 있는지. 딜을 새로 불러오면 깨끗해지고, 편집기 입력(setCockpitDraftForm)이
   // 더럽힌다. 목록 월이 바뀌었을 때 손댄 값은 지우지 않고(편집기가 월 불일치를 알린다), 깨끗하면 그 달 값으로 다시 불러온다.
   const cockpitFormDirtyRef = useRef(false)
-  const loadDealDetail = useCallback(async (row: LedgerRevenueRow) => {
+  const loadDealDetail = useCallback(async (row: LedgerRevenueRow, options?: { month?: string }) => {
     const requestSeq = ++detailRequestSeqRef.current
     const isLatestRequest = () => detailRequestSeqRef.current === requestSeq
     cockpitFormDirtyRef.current = false
@@ -2574,7 +2589,8 @@ export default function SalesLedgerWorkbench({
     const operation: DraftOperation = row.ledgerOrigin === "draft" && isDraftOperation(metadataString(row.draftMetadata, "operation"))
       ? metadataString(row.draftMetadata, "operation") as DraftOperation
       : "amount-change"
-    const formMonth = row.draftMonth ?? selectedMonth
+    // 라운드 5 R-14 — 잠긴 칸에서 열 때처럼 호출부가 달을 정하면 그 달로(없으면 적용 초안 행의 달 → 선택 월).
+    const formMonth = options?.month ?? row.draftMonth ?? selectedMonth
     // 주차 프리필(Ledger-1a): 폼 타겟 월에 explicit 주차 입력이 있으면 5칸을 채워 주차 분해
     // 모드로 연다 — inferred(일자 추정)/month-only는 실주차 입력이 아니라 월합계 모드 유지.
     // week 토큰은 저장 계약(week:"month")·이중계상 dedup 좌표와 일치하도록 month로 고정한다.
@@ -3048,6 +3064,36 @@ export default function SalesLedgerWorkbench({
     setRailView(nextView)
     setSidePanelCollapsed(false)
   }, [])
+
+  // 라운드 5 R-14 — 잠긴 칸(Enter·F2·더블클릭): 그 행 상세를 그 달로 열고, 잠금 종류별로 실제로 고치는 길을 알린다.
+  // 예전 셀 title은 "우측 패널 정정 초안"을 말했지만 레일은 잠긴 달의 수정 초안 저장을 막는다(LOCK_WARNING_TEXT) —
+  // 시트 확정은 시트에서, 장부 반영은 체크 큐 되돌리기(상쇄)가 실제 경로다.
+  const activateLockedMatrixCell = useCallback((coord: MatrixCellCoord) => {
+    const row = copySourceRef.current.rowById.get(coord.rowId)
+    if (!row) return
+    void loadDealDetail(row, { month: coord.month })
+    const where = `${row.customer} · ${formatMonthLabel(coord.month)}`
+    const ledgerApplied = row.ledgerOrigin === "draft" || Boolean(editRowOverrideMonths.get(row.id)?.has(coord.month))
+    pushMatrixToast(
+      ledgerApplied
+        ? {
+            kind: "info",
+            key: "matrix-locked-cell",
+            text: `${where}: 장부에 반영된 값이라 잠겨 있습니다 — 바꾸려면 체크 큐에서 그 초안을 되돌리기(상쇄)한 뒤 다시 입력하세요.`,
+            action: { label: "큐 열기", onClick: () => selectRailView("queue") },
+          }
+        : {
+            kind: "info",
+            key: "matrix-locked-cell",
+            text: `${where}: 시트에서 확정된 값이라 장부에서 고치지 않습니다 — 원본 시트에서 고친 뒤 동기화하세요. 상세는 우측 패널.`,
+          },
+    )
+  }, [editRowOverrideMonths, loadDealDetail, pushMatrixToast, selectRailView])
+
+  useEffect(() => {
+    lockedCellActivateRef.current = activateLockedMatrixCell
+  }, [activateLockedMatrixCell])
+
   const draftTotal = openDrafts.reduce((sum, draft) => sum + draft.amount, 0)
   const appliedDraftTotal = additiveAppliedDraftRows.reduce((sum, row) => sum + row.revenue, 0)
   const ledgerConfirmed = (revenue?.confirmed ?? 0) + appliedDraftTotal
@@ -3665,6 +3711,15 @@ export default function SalesLedgerWorkbench({
                       <input
                         value={query}
                         onChange={(event) => setQuery(event.target.value)}
+                        // 라운드 5 R-7 — 검색 뒤 Enter·↓로 첫 결과 행의 선택 월 칸으로(없으면 첫 편집 칸). 이후는 방향키·Enter 편집.
+                        onKeyDown={(event) => {
+                          if ((event.key !== "Enter" && event.key !== "ArrowDown") || event.nativeEvent.isComposing) return
+                          const target = firstMatrixCellForMonth(editableCells, selectedMonth)
+                          if (!target) return
+                          event.preventDefault()
+                          matrixEditor.actions.selectCell(target.rowId, target.month, target.week)
+                        }}
+                        aria-keyshortcuts="Enter ArrowDown"
                         placeholder="고객, 담당자, 팀, 지역, 상태, 메모 검색"
                         className="h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] pl-9 pr-3 text-[12px] font-medium outline-none transition focus:border-[#084734]"
                       />
