@@ -4,6 +4,7 @@ import { usePathname, useSearchParams } from "next/navigation"
 import Script from "next/script"
 import { useEffect } from "react"
 import { NAVER_WCS_ID } from "@/lib/analytics-config"
+import { excludesAnalytics } from "@/lib/analytics-paths"
 
 /**
  * 네이버 프리미엄 로그분석 + 광고 전환 추적 (wcs.trans 신 스크립트).
@@ -26,10 +27,7 @@ export function NaverAnalyticsScript() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const search = searchParams.toString()
-  const isInternal =
-    pathname.startsWith("/admin") ||
-    pathname.startsWith("/checkout") ||
-    pathname.startsWith("/receipt")
+  const isInternal = excludesAnalytics(pathname)
 
   // 소프트 내비게이션에는 스크립트 태그가 다시 실행되지 않는다 — 경로가 바뀔 때마다
   // 직접 wcs_do 를 한 번 더 호출해야 SPA 이동이 페이지뷰로 잡힌다.

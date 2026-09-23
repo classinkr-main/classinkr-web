@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from "node:fs"
+import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 
 import { excludesAnalytics, hidesPublicChrome } from "@/lib/analytics-paths"
@@ -29,6 +31,27 @@ describe("경로별 크롬·계측 범위", () => {
     for (const path of ["/", "/contact", "/showroom", "/l/omo1"]) {
       expect(hidesPublicChrome(path), path).toBe(false)
       expect(excludesAnalytics(path), path).toBe(false)
+    }
+  })
+})
+
+describe("계측 스크립트의 경로 판정 출처", () => {
+  /**
+   * 소스 텍스트 고정(tests/admin/admin-gtag-scope.test.ts 와 같은 패턴). 경로 목록을 복사해
+   * 들고 있는 스크립트가 두 번 나왔다 — Meta Pixel, 그리고 나중에 병합된 네이버 로그분석.
+   * 복사본은 AppChrome 의 판정이 바뀌어도 따라오지 않아 그 스크립트만 조용히 꺼진다.
+   */
+  const componentsDir = join(__dirname, "..", "..", "components")
+  const scripts = readdirSync(componentsDir).filter((name) => name.endsWith("Script.tsx"))
+
+  it("최상위 계측 스크립트가 있다 — 이름 규칙이 바뀌면 이 검사가 빈손이 된다", () => {
+    expect(scripts).toEqual(expect.arrayContaining(["MetaPixelScript.tsx", "NaverAnalyticsScript.tsx"]))
+  })
+
+  it("/checkout·/receipt 판정을 직접 들지 않는다 — lib/analytics-paths.ts 를 쓴다", () => {
+    for (const name of scripts) {
+      const source = readFileSync(join(componentsDir, name), "utf8")
+      expect(source, name).not.toMatch(/startsWith\(\s*["'`]\/(checkout|receipt)/)
     }
   })
 })

@@ -2,7 +2,8 @@
  * analytics-paths — 경로별 공개 크롬·계측 범위.
  *
  * AppChrome 과 픽셀 컴포넌트가 경로 목록을 각자 들고 있어 서로 어긋날 수 있었다
- * (`MetaPixelScript` 가 `/checkout` 을 따로 막고 있었다). 판정을 여기 한 곳에 둔다.
+ * (`MetaPixelScript` 가 `/checkout` 을 따로 막고 있었고, 나중에 들어온 `NaverAnalyticsScript`
+ * 도 그 목록을 복사해 왔다). 판정을 여기 한 곳에 둔다 — 새 계측 스크립트도 이 함수를 쓴다.
  */
 
 /** 헤더·푸터·챗봇·플로팅 CTA·채널톡을 걷어내는 경로 — 결제·신청 터널과 내부 화면. */
