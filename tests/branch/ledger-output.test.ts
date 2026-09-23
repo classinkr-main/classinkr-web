@@ -55,7 +55,7 @@ describe("buildRevMatrixCsvRows — REV 현재 보기 CSV(B1)", () => {
     "row-2::2026-05": { total: 500_000, confirmed: 0, high: 0, open: 500_000 },
   }
   const table = buildRevMatrixCsvRows(
-    [row(), row({ id: "row-2", sheetRow: null, customer: "=CMD()", ledgerOrigin: "draft" })],
+    [row(), row({ id: "row-2", sheetRow: undefined, customer: "=CMD()", ledgerOrigin: "draft" })],
     {
       months,
       monthLabel: (month) => `${month.slice(0, 4)}.${Number(month.slice(5))}월`,

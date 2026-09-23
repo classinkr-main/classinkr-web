@@ -11,24 +11,27 @@
 import { ArrowLeftRight, ChevronDown, ChevronRight } from "lucide-react"
 import Link from "next/link"
 import { useMemo, useState } from "react"
-import { TEAMS, type BranchDshRow } from "../types"
+import { TEAMS, type BranchDataSourceInfo, type BranchDshRow } from "../types"
 import {
   buildDshTeamGrid,
   DSH_CELL,
   dshExactTitle,
+  dshNumbersForView,
   dshRate,
   dshRateTitle,
   dshRateToneClass,
-  emptyDshNumbers,
   formatDshRate,
   formatDshThousands,
-  subtractDshNumbers,
   type DshNumbers,
   type DshTeamGridMember,
   type DshTeamGridTeam,
 } from "./dsh-derive"
-import type { DshGridView } from "./DshNumericGrid"
+import { dshSourceLabel, type DshGridView } from "./DshNumericGrid"
+import { CopyTableButton } from "./CopyTableButton"
+import { buildDshTeamTsvRows, dshCopyCaption, DSH_COPY_VIEW_LABEL } from "./dsh-export"
+import { withCaptionRow } from "./ledger-export"
 import { LoadingPanel } from "./shared"
+import { toTsv } from "@/lib/export/delimited"
 
 const VIEW_OPTIONS: Array<{ id: DshGridView; label: string }> = [
   { id: "goal", label: "Goal" },
@@ -61,17 +64,26 @@ function RevLensLink({ team }: { team: string }) {
   )
 }
 
-// 뷰별 수치 묶음 — goal/status는 해당 kind가 시트에 없으면 null(전부 "–"),
-// gap은 한쪽만 있어도 0으로 간주해 전개한다(수치 그리드 Gap 규약과 동일).
-function numbersForView(
-  view: Exclude<DshGridView, "rate">,
-  entry: { goal: DshNumbers | null; status: DshNumbers | null },
-  monthKeys: string[],
-): DshNumbers | null {
-  if (view === "goal") return entry.goal
-  if (view === "status") return entry.status
-  if (!entry.goal && !entry.status) return null
-  return subtractDshNumbers(entry.status ?? emptyDshNumbers(), entry.goal ?? emptyDshNumbers(), monthKeys)
+// 멤버 행 → REV 매트릭스 그 담당자(라운드 5 D-9). DSH 멤버명과 REV 담당자명은 둘 다 normalizeBranchMemberName
+// (lib/branch/member-names.ts)으로 정규화돼 담당자 필터(mgr=)에 그대로 맞는다. 팀은 REV가 받는 값일 때만 싣는다.
+export function dshMemberRevHref(team: string, member: string): string {
+  const params = new URLSearchParams({ lens: "rev" })
+  if (team !== "ALL" && (TEAMS as string[]).includes(team)) params.set("team", team)
+  params.set("mgr", member)
+  return `/admin/branch/ledger?${params.toString()}`
+}
+
+function RevMemberLink({ team, member }: { team: string; member: string }) {
+  return (
+    <Link
+      href={dshMemberRevHref(team, member)}
+      prefetch={false}
+      aria-label={`${member} 담당 딜을 REV 매트릭스에서 보기`}
+      className="ml-2 inline-flex min-h-11 shrink-0 items-center text-[10px] font-bold text-[#084734] underline-offset-2 transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 md:min-h-0"
+    >
+      REV ↗
+    </Link>
+  )
 }
 
 // 금액 셀 묶음(연간+Q1–Q4+월별) — DshNumericGrid numericCells와 같은 규약
@@ -140,9 +152,11 @@ function annualRateCell(entry: { goal: DshNumbers | null; status: DshNumbers | n
 interface DshTeamGridProps {
   rows: BranchDshRow[]
   loading?: boolean
+  /** 복사 첫 줄의 원천·기준 시각(라운드 5 B2). */
+  dataSource?: BranchDataSourceInfo | null
 }
 
-export function DshTeamGrid({ rows, loading = false }: DshTeamGridProps) {
+export function DshTeamGrid({ rows, loading = false, dataSource = null }: DshTeamGridProps) {
   // 기본 뷰는 Status — 상시 달성률(연간) 열이 목표 대비 판정을 이미 깔고 있어,
   // 팀별 검수에서 먼저 확인하는 건 실적 절대치다(Goal은 토글 한 번).
   const [view, setView] = useState<DshGridView>("status")
@@ -151,6 +165,20 @@ export function DshTeamGrid({ rows, loading = false }: DshTeamGridProps) {
 
   const grid = useMemo(() => buildDshTeamGrid(rows), [rows])
   const { monthKeys, teams } = grid
+
+  // 라운드 5 B2 — 현재 보기를 TSV로. 접힌 멤버 행도 전부 싣는다(펼침은 화면 상태일 뿐).
+  const copyText = () =>
+    toTsv(
+      withCaptionRow(
+        dshCopyCaption([
+          "DSH 팀·멤버 수치",
+          DSH_COPY_VIEW_LABEL[view],
+          view === "rate" ? "달성률 % = 실적 ÷ 목표 · 목표 없는 칸은 빈 칸" : "단위 ¥(시트 원값 · 반올림 없음)",
+          dataSource ? `원천 ${dshSourceLabel(dataSource)}` : null,
+        ]),
+        buildDshTeamTsvRows(grid, view),
+      ),
+    )
 
   const toggleTeam = (team: string) => {
     setExpandedTeams((current) => {
@@ -166,25 +194,33 @@ export function DshTeamGrid({ rows, loading = false }: DshTeamGridProps) {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-4 py-3">
         <div>
           <p className="text-[13px] font-bold text-[#111110]">
-            팀 · 멤버 수치 <span className="font-semibold text-[#615D59]">(단위: 천 · 달성률 %)</span>
+            팀 · 멤버 수치 <span className="font-semibold text-[#615D59]">(단위: ¥천 · 달성률 %)</span>
           </p>
         </div>
-        <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]" role="group" aria-label="팀 그리드 Goal/Status/Gap/Rate 보기 전환">
-          {VIEW_OPTIONS.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              aria-pressed={view === option.id}
-              onClick={() => setView(option.id)}
-              className={`rounded-md px-3 py-1.5 text-[12px] font-bold transition ${
-                view === option.id
-                  ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
-                  : "text-[#615D59] hover:text-[#111110]"
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <CopyTableButton
+            getText={copyText}
+            disabled={teams.length === 0}
+            title="현재 보기를 팀·멤버 전부(접힌 멤버 포함) 표로 복사합니다 — 금액은 시트 원값(¥), 첫 줄에 보기·단위·원천"
+            ariaLabel={`팀·멤버 수치 ${DSH_COPY_VIEW_LABEL[view]} 표 복사`}
+          />
+          <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]" role="group" aria-label="팀 그리드 Goal/Status/Gap/Rate 보기 전환">
+            {VIEW_OPTIONS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                aria-pressed={view === option.id}
+                onClick={() => setView(option.id)}
+                className={`rounded-md px-3 py-1.5 text-[12px] font-bold transition ${
+                  view === option.id
+                    ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
+                    : "text-[#615D59] hover:text-[#111110]"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -272,7 +308,7 @@ function TeamRows({
   const cells =
     view === "rate"
       ? rateCellsFor(team, monthKeys, emphasis)
-      : amountCells(numbersForView(view, team, monthKeys), monthKeys, isAll ? `${emphasis} text-[#084734]` : "")
+      : amountCells(dshNumbersForView(view, team, monthKeys), monthKeys, isAll ? `${emphasis} text-[#084734]` : "")
 
   return (
     <>
@@ -304,17 +340,19 @@ function TeamRows({
       </tr>
       {expanded &&
         team.members.map((member) => (
-          <MemberRow key={member.member} member={member} view={view} monthKeys={monthKeys} />
+          <MemberRow key={member.member} team={team.team} member={member} view={view} monthKeys={monthKeys} />
         ))}
     </>
   )
 }
 
 function MemberRow({
+  team,
   member,
   view,
   monthKeys,
 }: {
+  team: string
   member: DshTeamGridMember
   view: DshGridView
   monthKeys: string[]
@@ -322,11 +360,12 @@ function MemberRow({
   const cells =
     view === "rate"
       ? rateCellsFor(member, monthKeys, "bg-[#FAFAF8]")
-      : amountCells(numbersForView(view, member, monthKeys), monthKeys, "bg-[#FAFAF8]")
+      : amountCells(dshNumbersForView(view, member, monthKeys), monthKeys, "bg-[#FAFAF8]")
   return (
     <tr>
       <td className={`${DSH_CELL} sticky left-0 z-[1] bg-[#FAFAF8] text-left`}>
         <span className="pl-5 text-[11px] font-semibold text-[#615D59]">{member.member}</span>
+        <RevMemberLink team={team} member={member.member} />
       </td>
       {annualRateCell(member, "bg-[#FAFAF8]")}
       {cells}

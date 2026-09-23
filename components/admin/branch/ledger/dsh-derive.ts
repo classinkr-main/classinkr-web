@@ -52,6 +52,19 @@ export function subtractDshNumbers(status: DshNumbersLike, goal: DshNumbersLike,
   }
 }
 
+// Goal/Status/Gap 뷰의 수치 묶음 — goal/status는 해당 kind가 시트에 없으면 null(전부 "–"), gap은 한쪽만
+// 있어도 0으로 간주해 전개한다(수치 그리드 Gap 규약과 동일). 팀 그리드 표시와 TSV 복사(dsh-export)가 공유.
+export function dshNumbersForView(
+  view: "goal" | "status" | "gap",
+  entry: { goal: DshNumbers | null; status: DshNumbers | null },
+  monthKeys: string[],
+): DshNumbers | null {
+  if (view === "goal") return entry.goal
+  if (view === "status") return entry.status
+  if (!entry.goal && !entry.status) return null
+  return subtractDshNumbers(entry.status ?? emptyDshNumbers(), entry.goal ?? emptyDshNumbers(), monthKeys)
+}
+
 // ── breakdown 중복 제거(최대-annual 채택) — 모든 파생의 단일 진입점 ──────────
 // 구현은 lib/branch/dsh-dedupe.ts로 이동했다(SSOT — summary 라우트 deal_mix도 같은
 // 함수를 쓴다). 기존 소비처(DshNumericGrid·테스트) 임포트 경로 보존을 위해 재노출한다.
@@ -116,9 +129,10 @@ export function formatDshRate(pct: number | null): string {
 
 export const DSH_CELL = "whitespace-nowrap border-b border-r border-[rgba(0,0,0,0.08)] px-2.5 py-1.5 text-right"
 
-// 단위 천 — 시트 원값을 1,000으로 나눠 정수 표기한다.
+// 단위 천 — 시트 원값을 1,000으로 나눠 정수 표기한다. -500 < 값 < 0 은 반올림이 -0이 되어 빨간 "-0"으로
+// 찍혔다(라운드 5 D-11) — `|| 0`으로 -0·NaN을 0으로 접는다(음수 빨강 판정은 호출부가 원값으로 따로 한다).
 export function formatDshThousands(value: number): string {
-  return Math.round(value / 1000).toLocaleString("ko-KR")
+  return (Math.round(value / 1000) || 0).toLocaleString("ko-KR")
 }
 
 // 원값 title 병기 — 표는 천 단위 반올림 표기이므로 title에 반올림 없는 원값(¥)을 병기한다.

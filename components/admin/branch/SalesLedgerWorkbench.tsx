@@ -3360,16 +3360,19 @@ export default function SalesLedgerWorkbench({
                   view={dshGridView}
                   onViewChange={setDshGridView}
                   loading={summary.loading && !summary.data}
+                  dataSource={summary.data?.data_sources?.dsh ?? null}
                 />
 
                 <DshMonthlyPace
                   breakdown={summary.data?.dsh_breakdown ?? []}
                   loading={summary.loading && !summary.data}
+                  dataSource={summary.data?.data_sources?.dsh ?? null}
                 />
 
                 <DshTeamGrid
                   rows={summary.data?.dsh_rows ?? []}
                   loading={summary.loading && !summary.data}
+                  dataSource={summary.data?.data_sources?.dsh ?? null}
                 />
 
                 <WeeklyCloseSection

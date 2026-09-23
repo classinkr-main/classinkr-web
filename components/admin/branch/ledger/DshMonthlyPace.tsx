@@ -8,10 +8,16 @@
 // 진하게 찍으면 오독을 부른다(달성률은 "–").
 
 import { ArrowLeftRight } from "lucide-react"
+import Link from "next/link"
 import { useMemo } from "react"
 import type { ReactNode } from "react"
-import type { BranchDshBreakdownRow } from "../types"
+import type { BranchDataSourceInfo, BranchDshBreakdownRow } from "../types"
 import { formatMoney } from "@/lib/branch/ledger-format"
+import { toTsv } from "@/lib/export/delimited"
+import { CopyTableButton } from "./CopyTableButton"
+import { dshSourceLabel } from "./DshNumericGrid"
+import { buildDshPaceTsvRows, dshCopyCaption } from "./dsh-export"
+import { withCaptionRow } from "./ledger-export"
 import {
   deriveDshMonthlyPace,
   DSH_CELL,
@@ -102,11 +108,33 @@ const PACE_BLOCKS: Array<{ id: string; label: string; rows: PaceRowSpec[] }> = [
 interface DshMonthlyPaceProps {
   breakdown: BranchDshBreakdownRow[]
   loading?: boolean
+  /** 복사 첫 줄의 원천·기준 시각(라운드 5 B2). */
+  dataSource?: BranchDataSourceInfo | null
 }
 
-export function DshMonthlyPace({ breakdown, loading = false }: DshMonthlyPaceProps) {
+// 월 머리 → REV 매트릭스 그 달(라운드 5 D-9). 장부는 period=M일 때만 month를 쓴다.
+export function dshMonthRevHref(ym: string): string {
+  return `/admin/branch/ledger?${new URLSearchParams({ lens: "rev", period: "M", month: ym }).toString()}`
+}
+
+export function DshMonthlyPace({ breakdown, loading = false, dataSource = null }: DshMonthlyPaceProps) {
   const now = useMemo(() => new Date(), [])
   const pace = useMemo(() => deriveDshMonthlyPace(breakdown, now), [breakdown, now])
+
+  // 라운드 5 B2 — 월별 페이스 표를 TSV로(금액 원값 ¥ · 달성률 %).
+  const copyText = () =>
+    pace
+      ? toTsv(
+          withCaptionRow(
+            dshCopyCaption([
+              "DSH 월별 페이스(Team KR 전사)",
+              "금액 ¥(시트 원값 · 반올림 없음) · 달성률 %",
+              dataSource ? `원천 ${dshSourceLabel(dataSource)}` : null,
+            ]),
+            buildDshPaceTsvRows(pace),
+          ),
+        )
+      : ""
 
   // 현재 회계월 열 배경 — 헤더는 진하게, 본문 셀은 같은 틴트로 세로 스트립을 만든다
   // (좁은 1열이라 그린 액센트 허용 범위).
@@ -143,10 +171,18 @@ export function DshMonthlyPace({ breakdown, loading = false }: DshMonthlyPacePro
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-4 py-3">
         <div>
           <p className="text-[13px] font-bold text-[#111110]">
-            월별 페이스 <span className="font-semibold text-[#615D59]">(단위: 천)</span>
+            월별 페이스 <span className="font-semibold text-[#615D59]">(단위: ¥천)</span>
           </p>
         </div>
-        {annualSummary}
+        <div className="flex flex-wrap items-center gap-3">
+          {annualSummary}
+          <CopyTableButton
+            getText={copyText}
+            disabled={!pace}
+            title="월별·누적 목표/실적/Gap/달성률을 표 그대로 복사합니다 — 금액은 시트 원값(¥), 첫 줄에 단위·원천"
+            ariaLabel="월별 페이스 표 복사"
+          />
+        </div>
       </div>
 
       {loading && breakdown.length === 0 ? (
@@ -176,10 +212,17 @@ export function DshMonthlyPace({ breakdown, loading = false }: DshMonthlyPacePro
                       className={`${DSH_CELL} font-bold ${
                         month.isCurrent ? "bg-[#ECFDF5] text-[#084734]" : "bg-[#F6F5F4]"
                       }`}
-                      title={month.isCurrent ? `${month.ym} — 현재 회계월` : month.ym}
                     >
-                      {dshMonthLabel(month.ym)}
-                      {month.isCurrent && <span className="ml-1 text-[9px] font-extrabold">今</span>}
+                      {/* 월 머리 = REV 매트릭스 그 달로(D-9). 당월 표시는 한자 대신 한글(D-13). */}
+                      <Link
+                        href={dshMonthRevHref(month.ym)}
+                        prefetch={false}
+                        title={`${month.ym}${month.isCurrent ? " — 현재 회계월" : ""} · REV 매트릭스에서 이 달 보기`}
+                        className="rounded underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+                      >
+                        {dshMonthLabel(month.ym)}
+                        {month.isCurrent && <span className="ml-1 text-[9px] font-extrabold">당월</span>}
+                      </Link>
                     </th>
                   ))}
                 </tr>

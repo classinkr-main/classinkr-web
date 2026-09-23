@@ -1,7 +1,7 @@
 "use client"
 
 // 장부 DSH 렌즈의 수치 상세 그리드 — 목업 kr-team-unified-2026-07-16.html의
-// "목표 · 실적 상세 (단위: 천)" 카드 재현. 시각화는 KR Team 개요로 이동했고,
+// "목표 · 실적 상세 (단위: ¥천)" 카드 재현. 시각화는 KR Team 개요로 이동했고,
 // 이 그리드는 시트 '1. DSH' breakdown(Goal/Status × Software/Hardware ×
 // New/Renew × Direct/Channel)을 검수용 밀도 높은 숫자 표로 보여준다.
 // breakdown은 팀 필터와 무관한 Team KR 전사 수치다(summary API 참조).
@@ -27,6 +27,10 @@ import {
   type DshNumbers,
 } from "./dsh-derive"
 import { formatDateTime, LoadingPanel } from "./shared"
+import { CopyTableButton } from "./CopyTableButton"
+import { buildDshNumericTsvRows, dshCopyCaption, DSH_COPY_VIEW_LABEL } from "./dsh-export"
+import { withCaptionRow } from "./ledger-export"
+import { toTsv } from "@/lib/export/delimited"
 
 export type DshGridView = "goal" | "status" | "gap" | "rate"
 
@@ -248,9 +252,11 @@ interface DshNumericGridProps {
   view: DshGridView
   onViewChange: (view: DshGridView) => void
   loading?: boolean
+  /** 복사 첫 줄의 원천·기준 시각(라운드 5 B2). 없으면 원천 표기를 뺀다. */
+  dataSource?: BranchDataSourceInfo | null
 }
 
-export function DshNumericGrid({ breakdown, view, onViewChange, loading = false }: DshNumericGridProps) {
+export function DshNumericGrid({ breakdown, view, onViewChange, loading = false, dataSource = null }: DshNumericGridProps) {
   // Rate 뷰는 셀 형태(원값 쌍+달성률)가 달라 별도 집계를 태운다 — 둘 다 순수 함수라
   // 비활성 뷰 쪽 memo는 null로 스킵된다(불필요 계산 없음).
   const numeric = useMemo(
@@ -267,6 +273,23 @@ export function DshNumericGrid({ breakdown, view, onViewChange, loading = false 
 
   const columnCount = 2 + 4 + monthKeys.length + 1
 
+  // 라운드 5 B2 — 현재 보기를 TSV로 복사. 화면은 ¥천 반올림이어도 복사는 시트 원값(¥)이라 붙여 넣은 뒤
+  // 다시 합산해도 어긋나지 않는다. 원값 표시 토글과 무관하게 항상 원값이다(첫 줄에 단위 명시).
+  const copyText = () => {
+    const table = rate
+      ? buildDshNumericTsvRows({ view: "rate", monthKeys, rows: rate.rows, total: rate.total })
+      : numeric && view !== "rate"
+        ? buildDshNumericTsvRows({ view, monthKeys, rows: numeric.rows, total: numeric.total })
+        : []
+    const caption = dshCopyCaption([
+      "DSH 목표·실적 상세(Team KR 전사)",
+      DSH_COPY_VIEW_LABEL[view],
+      view === "rate" ? "달성률 % = 실적 ÷ 목표 · 목표 없는 칸은 빈 칸" : "단위 ¥(시트 원값 · 반올림 없음)",
+      dataSource ? `원천 ${dshSourceLabel(dataSource)}` : null,
+    ])
+    return toTsv(withCaptionRow(caption, table))
+  }
+
   return (
     <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-4 py-3">
@@ -274,7 +297,7 @@ export function DshNumericGrid({ breakdown, view, onViewChange, loading = false 
           <p className="text-[13px] font-bold text-[#111110]">
             목표 · 실적 상세{" "}
             <span className="font-semibold text-[#615D59]">
-              {view === "rate" ? "(달성률 %)" : showRawValue ? "(원값)" : "(단위: 천)"}
+              {view === "rate" ? "(달성률 %)" : showRawValue ? "(원값 ¥)" : "(단위: ¥천)"}
             </span>
           </p>
         </div>
@@ -320,6 +343,12 @@ export function DshNumericGrid({ breakdown, view, onViewChange, loading = false 
               </button>
             ))}
           </div>
+          <CopyTableButton
+            getText={copyText}
+            disabled={breakdown.length === 0}
+            title="현재 보기(Goal/Status/Gap/Rate)를 표 그대로 복사합니다 — 금액은 시트 원값(¥, 반올림 없음), 첫 줄에 보기·단위·원천"
+            ariaLabel={`목표·실적 상세 ${DSH_COPY_VIEW_LABEL[view]} 표 복사`}
+          />
           <Link
             href="/admin/branch"
             className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-[rgba(0,0,0,0.15)] bg-white px-3 py-1.5 text-[12px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
