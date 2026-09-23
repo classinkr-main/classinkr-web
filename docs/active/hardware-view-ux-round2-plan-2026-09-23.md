@@ -1,6 +1,6 @@
 # 하드웨어 탭 뷰별 사용성 디벨롭 — 입출력·데이터 싱크 (라운드 2)
 
-상태: 사용성 평가 완료 · 기획 확정(2026-09-23) · 이번 라운드 구현 진행 — 항목별 상태는 §5 표가 정본
+상태: 사용성 평가 완료 · 기획 확정(2026-09-23) · 이번 라운드 구현 완료(2026-09-23) — 항목별 상태는 §5 표가 정본
 범위: `/admin/hardware`의 세 탭(홈·입출고·내역), 두 입력면(빠른 기록 시트·한 화면 입고표), 사무실·샘플 풀과 유닛 시트,
 시트 → 미러 → 원장 데이터 싱크(싱크·백업 후 가져오기·원장 파일 업로드·스냅샷 복원)
 목표: 각 뷰가 이미 잘하는 일을 더 잘하게 만든다 — **값이 틀리지 않게(정합) → 넣고 꺼내기 쉽게(입출력) → 손이 덜 가게(마이크로 편의)** 순서.
@@ -344,20 +344,32 @@
 
 ## 5. 이번 라운드 실행 표 (상태 정본)
 
-커밋은 트랙 단위(롤백 단위). 트랙마다 하드웨어 테스트 세트를 먼저 돌리고, 라운드 끝에 기본 게이트를 돌린다.
+커밋은 트랙 단위(롤백 단위). 트랙마다 하드웨어 테스트 세트를 먼저 돌리고, 라운드 끝에 기본 게이트를 돌렸다(§8).
+DB 변경은 없다 — 마이그레이션도, 운영 조치도 추가되지 않는다(이관 기록의 새 값은 이미 있는 `raw` jsonb 에 싣는다).
 
-| 트랙 | 항목 | 상태 | 근거 파일 |
-| --- | --- | --- | --- |
-| A 싱크 | S-1~S-7·S-9·S-10·S-12~S-14·H-1·H-11·L-8 가져오기 결과 계약·잠금·만료·확인·신선도·오류 패널 | 진행 | `import-sheet`·`import-ledger`·`restore` 라우트, `hardware-inventory.ts`, `lib/hardware/import-outcome.ts`, `ImportFreshnessStrip.tsx`, 클라이언트 |
-| A 싱크 | S-11 복원이 시트 우선 취소를 되살림 | 진행 | `hardware-inventory.ts`, `SnapshotRestorePanel.tsx` |
-| A 정합 | H-2·H-4·H-5·H-6·H-7·H-8·H-12 홈 정합 | 진행 | `SummaryBand.tsx`, `CrmOrderBacklogSection.tsx`, `HardwareSearchPanel.tsx`, `PlannedOutboundPanel.tsx`, 클라이언트 |
-| A 정합 | Q-1~Q-5·Q-7·Q-8·Q-9·Q-11·Q-12·Q-25·P-1 빠른 기록 정합 | 진행 | 클라이언트, `QuickRecordSheet.tsx`, `draft-storage.ts`, `shared.tsx` |
-| A 정합 | P-2·P-3·P-4·P-7·P-14·P-15 샘플 정합 | 진행 | `SampleTrackerSection.tsx`, `OfficeSamplePoolSection.tsx`, `HomeTabPanel.tsx`, 클라이언트 |
-| A 정합 | L-1·L-5·L-11·L-15·L-16 내역 정합 | 진행 | `scope=voided` 읽기, 클라이언트, `shared.tsx` |
-| A 정합 | E-1·I-1·I-2·I-3·I-4·I-6·I-9·I-13 입고 정합 | 진행 | `InboundSheet.tsx`, `inbound-sheet-model.ts`, 클라이언트 |
-| B 출력 | 내역·큐·재고·lot·기간·트래커 CSV/TSV, 상세 복사·링크 | 진행 | `inventory/hardware-export.ts`(순수) + 각 섹션 |
-| C 동선 | L-4·L-10·L-12·L-14·L-20·E-2·E-5·E-6·E-9·P-9·P-10 | 진행 | 클라이언트, 각 섹션 |
-| D 편의 | 배너 role·포커스·복원 다이얼로그·체크박스·aria-pressed·NFKC·대비·90일+·필수 표시·⌘↵ | 진행 | 각 섹션 |
+| 트랙 | 항목 | 상태 | 근거 파일 | 검증 |
+| --- | --- | --- | --- | --- |
+| A 싱크 | S-1~S-10·S-12~S-15·H-1·H-2·H-11·L-8 가져오기 결과 계약·잠금·즉시 만료·확인·신선도(진행 중·중단·마지막 성공)·미러 대기·오류 패널·배너 role | 완료 | `import-sheet`·`import-ledger`·`restore` 라우트, `hardware-inventory.ts`, `lib/hardware/import-outcome.ts`, `lib/hardware/stock-attention.ts`, `ImportFreshnessStrip.tsx`, `SummaryBand.tsx`, `SnapshotRestorePanel.tsx`, 클라이언트 | `tests/api/admin-hardware-import-sheet.test.ts`(6), `tests/admin/hardware-import-outcome.test.ts`(17), `tests/repositories/hardware-inventory.test.ts`(raw 기록) |
+| A 싱크 | S-11 복원이 시트 우선 취소를 되살림 | 완료 | `hardware-inventory.ts`(`listSheetWinsVoidIdsSinceSnapshot`·`reviveSheetWinsVoidedMovements`) | `tests/repositories/hardware-import-snapshots.test.ts`(+2) |
+| A 정합 | H-2·H-4·H-5·H-6·H-7·H-8·H-12·H-18 홈 | 완료 | `SummaryBand.tsx`, `CrmOrderBacklogSection.tsx`, `HardwareSearchPanel.tsx`, `PlannedOutboundPanel.tsx`, 클라이언트 | `hardware-import-outcome.test.ts`(부족 합집합) |
+| A 정합 | Q-1~Q-9·Q-11·Q-12·Q-14·Q-15·Q-20·Q-23~Q-25·P-1 빠른 기록 | 완료 | `quick-record-model.ts`, `QuickRecordSheet.tsx`, `CrmConfirmModal.tsx`, `draft-storage.ts`, 클라이언트 | `tests/admin/hardware-quick-record-model.test.ts`(10) |
+| A 정합 | P-2·P-3·P-4·P-7·P-14·P-15·P-16 샘플 | 완료 | `SampleTrackerSection.tsx`, `OfficeSamplePoolSection.tsx`, `HomeTabPanel.tsx`, 클라이언트 | `tests/admin/hardware-round2-correctness.test.ts` |
+| A 정합 | L-1·L-3·L-5·L-11·L-12·L-15·L-16 내역 | 완료 | `route.ts`(`scope=voided`), `hardware-inventory.ts`(`listVoidedHardwareMovements`), `VoidConfirmModal.tsx`, `CustomerHistorySheet.tsx`, `MovementDetailSheet.tsx`, `shared.tsx` | `tests/api/hardware-voided-scope.test.ts`, `hardware-round2-correctness.test.ts` |
+| A 정합 | E-1·I-1·I-2·I-3·I-4·I-6·I-9·I-11·I-13 입고 | 완료 | `InboundSheet.tsx`, `inbound-sheet-model.ts`, `lot-order.ts`, 클라이언트 | `hardware-round2-correctness.test.ts`, `hardware-inbound-sheet-model.test.ts`(기존 52 유지) |
+| B 출력 | 내역·큐·재고·lot(입고표 붙여넣기 형식)·입고 목록·기간·트래커 CSV/TSV, 상세 물량번호·참조번호·링크 복사(L-6·L-9·L-10·L-20·H-15·E-3·E-4·P-12) | 완료 | `hardware-export.ts`, `ExportActions.tsx`, 각 섹션 | `tests/admin/hardware-export.test.ts`(8, lot 구성 왕복 포함) |
+| C 동선 | L-4·E-2·E-5·E-6·E-8·E-9·E-10·P-9·P-10·L-14 | 완료 | 클라이언트 URL 계약(`m`·`page`·`sub`·`iq`·`period`·`unit`), `EntryTabPanel.tsx`, `InboundLotsSection.tsx`, `OutboundPeriodSection.tsx`, `SampleUnitSheet.tsx` | 기본 게이트 |
+| D 편의 | L-2·L-13·L-17·L-19·P-11·H-17·H-19·H-20·Q-18(role) | 완료 | 클라이언트(시트 포커스·Esc), `HistoryTabPanel.tsx`, `MovementDetailSheet.tsx` | 기본 게이트 |
+
+### 5.1 3라운드로 넘긴 것
+
+§3.3 표에서 라운드 "3"인 항목 — H-3(FIFO 미리보기 서버 이관), H-9(확정일 확인 일부만), H-10, H-16(드릴다운 pushState),
+E-7, I-5, I-7, I-8, I-10, I-12, I-14, L-7, L-18, Q-10(바구니 줄 칩), Q-13, Q-16, Q-17, Q-19, Q-21, Q-22, P-5, P-6, P-8, P-13, P-17, P-18.
+그리고 라운드 2 중 새로 보인 것:
+
+- 가져오기가 `runAll`을 타면서 HW 가져오기도 `branch_sync_runs`에 source `all`·trigger `manual`로 남는다(매출 장부 라운드 5 S-10과 같은
+  문제 — 실제로 돈 소스를 기록하지 않는다). 소스 기록을 고칠 때 함께 본다.
+- 미러 대기 판정은 행 수 비교라 같은 행 안의 값 수정(수량 정정 등)은 잡지 못한다(결정 HW-E2). 해시 비교는 미러 교체 시 해시를 남기는 일이라 3라운드.
+- 브라우저 실측(운영 계정)으로 포커스 이동·딥링크 착지·CSV 엑셀 열기를 한 번 확인한다 — 이번 라운드는 렌더 하네스가 없어 순수 로직 테스트와 기본 게이트로 검증했다.
 
 ---
 
