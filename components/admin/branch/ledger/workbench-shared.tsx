@@ -5,7 +5,7 @@
 // 주의: 이 파일은 ../SalesLedgerWorkbench를 import하지 않는다 — 사이클 금지(ledger/shared와 동일 규칙).
 
 import type { KeyboardEvent as ReactKeyboardEvent, MutableRefObject } from "react"
-import { ArrowDownNarrowWide, ArrowUpNarrowWide, X } from "lucide-react"
+import { ArrowDownNarrowWide, ArrowUpNarrowWide, Loader2, X } from "lucide-react"
 import { formatMoney } from "@/lib/branch/ledger-format"
 import { ledgerMonthSplit } from "@/lib/branch/computations/revenue-core"
 import { fiscalQuarter } from "@/lib/branch/fiscal"
@@ -428,6 +428,20 @@ function FilterTag({ label, onClear }: { label: string; onClear: () => void }) {
       <span className="max-w-[220px] truncate">{label}</span>
       <X className="h-3 w-3 shrink-0 opacity-60" />
     </button>
+  )
+}
+
+// 다시 불러오는 동안 직전 데이터를 보여 줄 때의 "갱신 중" 표시(라운드 5 R-5·D-8, useBranchJson keepPreviousData).
+// 로딩 패널로 통째 바꾸지 않는 대신, 지금 보이는 값이 곧 바뀐다는 사실만 작게 알린다.
+export function RefreshingBadge({ label = "갱신 중 — 직전 값 표시" }: { label?: string }) {
+  return (
+    <span
+      role="status"
+      className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 py-0.5 text-[10px] font-bold text-[#615D59]"
+    >
+      <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+      {label}
+    </span>
   )
 }
 

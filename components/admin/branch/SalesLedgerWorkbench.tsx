@@ -374,6 +374,7 @@ import {
   REV_ORIGIN_FILTERS,
   REV_PAGE_SIZES,
   REV_SORT_LABELS,
+  RefreshingBadge,
   RevLoadErrorPanel,
   RevSortHeader,
   revSortAriaValue,
@@ -523,6 +524,9 @@ export default function SalesLedgerWorkbench({
         const dropIndex = stacked.findIndex((toast) => toast.kind === "info")
         return stacked.filter((_, index) => index !== (dropIndex !== -1 ? dropIndex : 0))
       })
+      // 라운드 5 Q-14 — 오류는 읽기 전에 사라지면 안 된다: ttlMs를 따로 주지 않은 오류 토스트는 사용자가 닫을 때까지 둔다
+      // (스택 상한을 넘으면 정보 토스트부터 밀려난다). 정보 토스트는 7초.
+      if (next.kind === "error" && next.ttlMs == null) return
       window.setTimeout(() => {
         setMatrixToasts((current) => current.filter((toast) => toast.id !== id))
       }, next.ttlMs ?? 7000)
@@ -1064,10 +1068,16 @@ export default function SalesLedgerWorkbench({
   const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
   // DSH 팀 그리드만 상세 breakdown을 소비한다. 기본 REV 장부는 93%가 미사용인
   // breakdown payload를 받지 않고, DSH 렌즈로 전환할 때 같은 summary 계약을 확장한다.
+  // 라운드 5 R-5·D-8 — 팀·기간·월 전환·새로고침 동안 직전 값을 유지한다(로딩 패널로 통째 교체 → 깜빡임·스크롤 소실).
   const summary = useBranchJson<BranchSummaryResponse>(
     `/api/admin/branch/summary?team=${team}&period=${period}${monthQuery}${lens === "dsh" ? "&breakdown=1" : ""}`,
-    refreshKey
+    refreshKey,
+    { keepPreviousData: true },
   )
+  // DSH 카드는 breakdown(?breakdown=1)이 실린 응답만 쓴다 — REV에서 DSH로 처음 넘어올 때 직전 응답에는 breakdown이
+  // 없으니, 그동안은 "데이터 없음"이 아니라 로딩으로 본다.
+  const dshBreakdownLoading = summary.loading && !(summary.data?.dsh_breakdown && summary.data.dsh_breakdown.length > 0)
+  const dshRowsLoading = summary.loading && !(summary.data?.dsh_rows && summary.data.dsh_rows.length > 0)
   // KPI 응답은 이 화면에서 우측 레일 "행 상세"의 담당자 KPI 박스(selectedMember)에만 쓰인다 —
   // 마운트 즉시 fetch하면 접힌 레일만 보다 떠나는 세션에도 항상 요청이 나간다(코덱스 감사).
   // 레일 열림 + detail 보기 + 행 선택일 때만 시작한다(콕핏은 detail 레일을 렌더하지 않으므로 제외).
@@ -1119,6 +1129,7 @@ export default function SalesLedgerWorkbench({
   const pipelineSeedFresh = pipelineSeed != null && isPrefetchFresh(pipelineSeed.generatedAt)
   const pipelineFetched = useBranchJson<BranchPipelineResponse>(pipelineUrl, refreshKey, {
     enabled: pipelineSeed == null || !pipelineSeedFresh,
+    keepPreviousData: true,
   })
   const pipeline: BranchJsonState<BranchPipelineResponse> =
     pipelineFetched.data != null || pipelineFetched.error != null
@@ -2348,10 +2359,19 @@ export default function SalesLedgerWorkbench({
     const newRowNote = newRowsCommitted > 0
       ? ` · 새 행 초안 ${fmt(newRowsCommitted)}건(체크 큐에서 체크 → 적용)`
       : ""
+    // 라운드 5 Q-15 — 결과 토스트에서 바로 체크 큐로(다음 할 일이 "큐에서 적용"이다).
+    const openQueueAction = {
+      label: "큐 열기",
+      onClick: () => {
+        setRailView("queue")
+        setSidePanelCollapsed(false)
+      },
+    }
     if (problems === 0) {
       pushMatrixToast({
         kind: "info",
         text: `자가 체크 초안 ${fmt(committed - newRowsCommitted)}건 저장${newRowNote} — 체크 큐에서 적용하면 장부에 반영됩니다.`,
+        action: openQueueAction,
       })
       return
     }
@@ -2366,6 +2386,7 @@ export default function SalesLedgerWorkbench({
     pushMatrixToast({
       kind: "error",
       text: `${fmt(committed)}건 저장${newRowNote} · ${fmt(problems)}건 미반영(${detail}) — 미반영 셀은 체크 큐 행 배지를 확인한 뒤 다시 붙여넣으세요.`,
+      action: openQueueAction,
     })
   }, [buildCellDraftInput, lens, managerFilter, pasteConfidence, pastePlan, period, persistDraftsBatch, pushMatrixToast, team])
 
@@ -3471,7 +3492,10 @@ export default function SalesLedgerWorkbench({
         </aside>
 
         <section className="min-w-0 space-y-5">
-          <div className={`grid gap-3 ${showLedgerInputTiles ? "sm:grid-cols-2 xl:grid-cols-5" : "sm:grid-cols-3"}`}>
+          <div
+            aria-busy={summary.previous ? true : undefined}
+            className={`grid gap-3 transition-opacity ${summary.previous ? "opacity-60" : ""} ${showLedgerInputTiles ? "sm:grid-cols-2 xl:grid-cols-5" : "sm:grid-cols-3"}`}
+          >
             <MetricTile
               label="목표"
               value={summaryPending ? "–" : formatMoney(revenue?.goal)}
@@ -3547,9 +3571,14 @@ export default function SalesLedgerWorkbench({
                 {/* DSH 렌즈 배치(2026-07-27 디벨롭): 지표 밴드 → 수치 그리드 → 월별 페이스 →
                     팀·멤버 그리드 → 주간 마감. 밴드/페이스는 dsh_breakdown 클라이언트 파생,
                     팀 그리드만 dsh_rows(같은 ?breakdown=1 opt-in) 신규 필드를 소비한다. */}
+                {summary.previous && (
+                  <div className="flex justify-end">
+                    <RefreshingBadge />
+                  </div>
+                )}
                 <DshMetricsBand
                   breakdown={summary.data?.dsh_breakdown ?? []}
-                  loading={summary.loading && !summary.data}
+                  loading={dshBreakdownLoading}
                   dataSource={summary.data?.data_sources?.dsh ?? null}
                   // 주간 뷰 원천 — deal_mix(week_actual)는 summary 팀 필터를 따르므로 team도
                   // 함께 넘겨 밴드 캡션이 스코프를 정직하게 표기하게 한다(M/Q/Y는 전사 고정).
@@ -3561,19 +3590,19 @@ export default function SalesLedgerWorkbench({
                   breakdown={summary.data?.dsh_breakdown ?? []}
                   view={dshGridView}
                   onViewChange={setDshGridView}
-                  loading={summary.loading && !summary.data}
+                  loading={dshBreakdownLoading}
                   dataSource={summary.data?.data_sources?.dsh ?? null}
                 />
 
                 <DshMonthlyPace
                   breakdown={summary.data?.dsh_breakdown ?? []}
-                  loading={summary.loading && !summary.data}
+                  loading={dshBreakdownLoading}
                   dataSource={summary.data?.data_sources?.dsh ?? null}
                 />
 
                 <DshTeamGrid
                   rows={summary.data?.dsh_rows ?? []}
-                  loading={summary.loading && !summary.data}
+                  loading={dshRowsLoading}
                   dataSource={summary.data?.data_sources?.dsh ?? null}
                 />
 
@@ -3606,6 +3635,7 @@ export default function SalesLedgerWorkbench({
                       <FileSpreadsheet className="h-4 w-4 text-[#084734]" />
                       REV 매출 행
                     </p>
+                    {pipeline.previous && <RefreshingBadge />}
                     {/* 웨이브 5 — 항목 1(a): M/Q 토글이 아래 본표(12개월 매트릭스)를 좁힌다는 오인
                         방지 — 본표 열 구성은 항상 FY 12개월 고정이고, M/Q/Y는 이 카드의 보조
                         분석(목표대비·담당자별 등)과 아래 요약 타일에만 반영된다는 것을 명시한다. */}
@@ -4349,6 +4379,12 @@ export default function SalesLedgerWorkbench({
             {/* 주차 Forecast 보드(Board-1b 이식) — REV와 같은 filteredRows 모집단(검색·담당자·지역·
                 상품 필터 반영)을 주차 칸반으로 재배열. 카드 클릭은 기존 빠른 작업 레일(행 상세)로
                 연결된다 — 보드 전용 편집 경로를 만들지 않는다. */}
+            {(lens === "board" || lens === "cockpit") && pipeline.previous && (
+              <div className="flex justify-end">
+                <RefreshingBadge />
+              </div>
+            )}
+
             {/* 라운드 5 B-4 — 보드·콕핏은 REV와 같은 filteredRows를 쓰지만 필터 UI는 REV 툴바에만 있어, 걸린 필터를
                 모른 채 "행이 없다"로 읽혔다. 같은 칩(개별 해제)과 전체 초기화를 이 줄에 둔다. */}
             {(lens === "board" || lens === "cockpit") && revRowFilterCount > 0 && (
@@ -4475,8 +4511,10 @@ export default function SalesLedgerWorkbench({
           />
         )}
 
+        {/* 라운드 5 Q-14 — 레일(z-50) 위에 뜨도록 z-[55](확인 대화상자 z-[60]보다는 아래). R-9 — 정보는 role=status(공손히),
+            오류만 role=alert(즉시 낭독). 예전엔 전부 alert라 셀 복사·저장 같은 정보 토스트도 낭독을 끊었다. */}
         {matrixToasts.length > 0 && (
-          <div className="fixed bottom-20 left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-col gap-2">
+          <div className="fixed bottom-20 left-1/2 z-[55] flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-col gap-2">
             {matrixToasts.map((toast) => {
               // 지역 변수로 좁혀서 아래 action.onClick/label 접근에 non-null 단언 없이 타입이 좁혀지게 한다.
               const action = toast.action
@@ -4484,7 +4522,7 @@ export default function SalesLedgerWorkbench({
               return (
                 <div
                   key={toast.id}
-                  role="alert"
+                  role={toast.kind === "error" ? "alert" : "status"}
                   className={`flex items-start gap-2 rounded-lg border px-4 py-2.5 text-[12px] font-bold shadow-[0_18px_48px_rgba(17,17,16,0.18)] ${
                     toast.kind === "error"
                       ? "border-[#F2B8B8] bg-[#FCE9E9] text-[#B43E3E]"

@@ -27,11 +27,17 @@ export interface BranchJsonState<T> {
   stale: boolean
   /** stale이 true일 때, 그 캐시 항목이 저장된 시각(ms epoch). */
   staleSince: number | null
+  /** 라운드 5 R-5·D-8 — keepPreviousData로 새 키를 불러오는 동안 직전 키의 data를 그대로 보여 주는 중이면 true
+   *  (loading도 true). 화면은 이 값으로 "갱신 중" 표시만 하고 로딩 패널로 통째 바꾸지 않는다. */
+  previous?: boolean
 }
 
 interface UseBranchJsonOptions {
   /** false면 네트워크 요청을 만들지 않는다. 탭·렌즈가 실제로 소비하는 동안에만 켠다. */
   enabled?: boolean
+  /** 라운드 5 R-5·D-8 — URL(팀·기간·월)이나 refreshKey가 바뀌어 다시 불러오는 동안 직전 data를 유지한다
+   *  (previous=true, loading=true). 첫 로드·직전이 오류였으면 그대로 빈 로딩 상태다. */
+  keepPreviousData?: boolean
 }
 
 const EMPTY_STATE = { data: null, error: null, loading: true, stale: false, staleSince: null } as const
@@ -128,6 +134,11 @@ export function useBranchJson<T>(url: string, refreshKey: number, options: UseBr
   }
 
   if (state.key !== stateKey) {
+    // 직전 키의 결과가 아직 state에 있다 — keepPreviousData면 그 data를 "갱신 중"으로 보여 준다(로딩 패널로 통째
+    // 교체하면 스크롤·펼침 위치가 날아가고, 전사 고정인 DSH 카드까지 팀·기간 토글마다 깜빡였다).
+    if (options.keepPreviousData && state.data != null) {
+      return { key: stateKey, data: state.data, error: null, loading: true, stale: false, staleSince: null, previous: true }
+    }
     return { key: stateKey, ...EMPTY_STATE }
   }
 
