@@ -1,6 +1,6 @@
 # 매출 장부·매출시트 뷰별 사용성 디벨롭 — 입출력·데이터 싱크 (라운드 5)
 
-상태: 사용성 평가 완료 · 기획 확정(2026-09-23) · 이번 라운드 구현 진행 — 항목별 상태는 §5 표가 정본
+상태: 사용성 평가 완료 · 기획 확정 · 이번 라운드 구현 완료(2026-09-23) — 항목별 상태·근거는 §5 표가 정본, 6라운드로 넘긴 것은 §5.1
 범위: `/admin/branch/ledger`(매출 장부)의 4개 뷰(DSH·REV·보드·콕핏)와 모바일·우측 레일(상세·입력·체크 큐),
 `/admin/crm/deals/rev-sheet`(매출시트), 두 화면이 함께 쓰는 REV 동기화
 목표: 각 뷰가 이미 잘하는 일을 더 잘하게 만든다 — **값이 틀리지 않게(정합) → 넣고 꺼내기 쉽게(입출력) → 손이 덜 가게(마이크로 편의)** 순서.
@@ -112,7 +112,7 @@
 | S-1 | 상 | 잠금 응답을 성공처럼 표시 | 결과 계약 `outcome` + `describeSyncOutcome`로 "이미 동기화 중(N분 전 시작)" 안내 | 5 |
 | S-2 | 상 | 동기화 직후 첫 조회가 옛 값 | `revalidateTag(tag, { expire: 0 })` 묶음 만료(`lib/server/sync-cache-tags.ts`) | 5 |
 | S-3 | 중 | REV 범위 상한 경고가 두 화면 모두에서 버려짐 | 응답 `warnings`를 경고 톤으로 표시 | 5 |
-| S-4 | 중 | 재캡처 실패 경고가 누른 세션에만 남음 | 장부 "REV 원천" 칸에 `isImportStale` 배지 | 5 |
+| S-4 | 중 | 재캡처 실패 경고가 누른 세션에만 남음 | 장부 "REV 원천" 칸에 `isImportStale` 배지 | 6(§5.1 — 오탐 위험으로 이관) |
 | S-5 | 중 | 비관리자에게 "동기화"가 사실상 재조회뿐, 매출시트는 403 노출 | 장부 라벨 "다시 불러오기", 매출시트 동기화·매칭 버튼은 관리자에게만 | 5 |
 | S-6 | 중 | 매출시트에 화면 기준 시각·신선도 없음 | 제목 아래 "시트 동기화 N분 전 기준", 26시간 초과 경고 | 5 |
 | S-7 | 중 | "이중 진실" 배너가 정정(대체값)까지 전 기간 합산 — 장부의 "장부 가감"과 정의가 다름 | "신규 N건·정정 M건"으로 나누고 금액은 신규만, 장부 링크에 `origin=draft` | 5 |
@@ -271,24 +271,44 @@
 
 ## 5. 이번 라운드 실행 표 (상태 정본)
 
-커밋은 트랙·항목 단위(롤백 단위). 항목마다 가장 가까운 테스트를 먼저 돌리고, 라운드 끝에 기본 게이트를 돌린다.
+커밋은 트랙·항목 단위(롤백 단위). 항목마다 가장 가까운 테스트를 먼저 돌리고, 라운드 끝에 기본 게이트를 돌렸다(§8).
 
 | 트랙 | 항목 | 상태 | 근거 파일 | 검증 |
 | --- | --- | --- | --- | --- |
-| A 정합 | S-1·S-2·S-3·S-5 동기화 결과 계약·즉시 만료 | 진행 | `app/api/admin/branch/sync/route.ts`, `lib/server/sync-cache-tags.ts`, `lib/admin/sync-outcome.ts` | — |
-| A 정합 | Q-1 대기 초안 전량 | 진행 | `app/api/admin/branch/ledger-drafts/route.ts`, 저장소, `useLedgerDraftQueue.ts` | — |
-| A 정합 | K-1·K-2·R-W·R-1 이중 계상·편집 격리·주차 병합·붙여넣기 범위 | 진행 | 워크벤치, `rev-matrix-logic.ts` | — |
-| A 정합 | Q-2·Q-4·K-3 프리필 | 진행 | 워크벤치, `RevMobileList.tsx` | — |
-| A 정합 | R-4 페이지 복원, D-6 주간 비교 잔존 | 진행 | 워크벤치 | — |
-| A 정합 | S-4·S-6·S-7·S-8 신선도·배너 정의 | 진행 | 워크벤치, 매출시트, `lib/admin-crm-revenue-sheet.ts` | — |
-| B 출력 | B1 REV CSV·Ctrl+C | 진행 | `ledger/ledger-export.ts`, 워크벤치 | — |
-| B 출력 | B2 DSH TSV 복사 | 진행 | `ledger/ledger-export.ts`, DSH 카드 | — |
-| B 출력 | B3 매출시트 딥링크·URL·CSV | 진행 | 매출시트 | — |
-| C 동선 | REV R-2·R-7·R-8·R-12·R-13·R-14 | 진행 | `RevMatrix.tsx`, `rev-matrix-logic.ts`, 워크벤치 | — |
-| C 동선 | 보드·콕핏 B-1·B-4·B-5·B-6·K-4·K-6·K-8 | 진행 | `ForecastBoard.tsx`, `CockpitDealList.tsx`, `CockpitEditor.tsx`, 워크벤치 | — |
-| C 동선 | 레일·큐 Q-3·Q-7·Q-8·Q-9·Q-11 | 진행 | `InputRailSection.tsx`, `DraftQueue.tsx`, 워크벤치 | — |
-| C 동선 | DSH D-3·D-9 | 진행 | `DshTeamGrid.tsx`, `DshMonthlyPace.tsx`, `WeeklyCloseSection.tsx` | — |
-| D 편의 | R-5·D-8, R-9·Q-14·Q-15, S-11·S-12·D-10·D-11·D-13 | 진행 | 워크벤치, DSH 카드, `LedgerStatusRail.tsx` | — |
+| A 정합 | S-1·S-2·S-3·S-5 동기화 결과 계약·즉시 만료, S-11·S-12 스케줄 표기·문구 | 완료 | `app/api/admin/branch/sync/route.ts`, `app/api/cron/sync-branch/route.ts`, `lib/server/sync-cache-tags.ts`, `lib/branch/sync/cache-bundles.ts`, `lib/admin/sync-outcome.ts`, `lib/branch/sync/schedule.ts`, `SyncOutcomeNotice.tsx` | `tests/api/branch-sync-partial-failure-cache.test.ts`, `tests/branch/sync-outcome.test.ts`, `tests/branch/sync-schedule.test.ts`(vercel.json 대조), `tests/branch/sync/run-all-rev-recapture.test.ts` |
+| A 정합 | Q-1 대기 초안 전량 | 완료 | `app/api/admin/branch/ledger-drafts/route.ts`(`open`), `lib/repositories/branch-sales-ledger-drafts.ts`, `ledger/draft-list.ts`, `useLedgerDraftQueue.ts` | `tests/branch/ledger-draft-integrity.test.ts`, `tests/api/branch-ledger-drafts-route.test.ts` |
+| A 정합 | K-1·K-2·R-W·R-1 이중 계상·편집 격리·주차 병합·붙여넣기 범위 | 완료 | 워크벤치, `rev-matrix-logic.ts`(`mergeWeeklyCellEdit`, `buildMatrixPastePlan`) | `tests/branch/ledger-draft-integrity.test.ts`, `tests/branch/weekly-confidence.test.ts` |
+| A 정합 | Q-2·Q-4·K-3 프리필 | 완료 | 워크벤치(`loadDealDetail`), `shared.tsx`(`rowMonthConfidenceTone`), `RevMobileList.tsx` | `tests/branch/ledger-draft-integrity.test.ts` |
+| A 정합 | R-4 페이지 복원, D-6 주간 비교 잔존, D-3 비교 월 선택 | 완료 | 워크벤치, `workbench-shared.tsx`(`revPageResetSignature`), `WeeklyCloseSection.tsx` | `tests/branch/ledger-draft-integrity.test.ts` |
+| A 정합 | S-6·S-7·S-8 신선도·배너 정의 | 완료 | 매출시트 `app/admin/crm/deals/rev-sheet/page.tsx`, `lib/admin-crm-revenue-sheet.ts` | `tests/branch/crm-revenue-sheet-manual-ledger-gap.test.ts`, `tests/crm/revenue-sheet-view.test.ts` |
+| A 정합 | S-4 재캡처 실패 배지 | 6라운드 이관 | — | §5.1 |
+| B 출력 | B1 REV CSV·선택 셀 Ctrl+C(R-10) | 완료 | `ledger/ledger-export.ts`, `lib/export/delimited.ts`, `lib/export/browser-download.ts`, 워크벤치 | `tests/branch/ledger-output.test.ts`, `tests/lib/export-delimited.test.ts` |
+| B 출력 | B2 DSH 표 복사(TSV)(D-1) | 완료 | `ledger/dsh-export.ts`, `ledger/CopyTableButton.tsx`, DSH 카드 3종 | `tests/branch/dsh-export.test.ts` |
+| B 출력 | B3 매출시트 딥링크·URL·CSV(S-9, 라운드 4 P2-10) | 완료 | `lib/crm/revenue-sheet-view.ts`, 매출시트 | `tests/crm/revenue-sheet-view.test.ts`, `tests/admin/rev-sheet-mobile-contract.test.ts` |
+| C 동선 | REV R-2·R-8·R-12(표시·정확 금액·0 입력 차단) | 완료 | `RevMatrix.tsx`, `RevMatrixEditBar.tsx`, `rev-matrix-logic.ts`, `lib/branch/ledger-format.ts` | `tests/branch/ledger-output.test.ts`, `tests/branch/rev-matrix-edit-bar.test.ts` |
+| C 동선 | REV R-7·R-13·R-14(검색→첫 칸, 한 칸 붙여넣기, 잠긴 칸 Enter) | 완료 | `rev-matrix-logic.ts`, `RevMatrix.tsx`, `WeeklyAmountGrid.tsx`, 워크벤치 | `tests/branch/rev-keyboard-flow.test.ts` |
+| C 동선 | 보드·콕핏 B-1·B-4·B-5·B-6 | 완료 | `ForecastBoard.tsx`, `CockpitDealList.tsx`, `workbench-shared.tsx`(`RevLoadErrorPanel`), 워크벤치 | `tests/branch/board-cockpit-flow.test.tsx`(SSR 렌더) |
+| C 동선 | 콕핏 K-4·K-6·K-8 | 완료 | `CockpitEditor.tsx`, `CockpitDealList.tsx`, 워크벤치 | `tests/branch/cockpit-editor-flow.test.tsx`(SSR 렌더) |
+| C 동선 | 레일·큐 Q-3·Q-7·Q-8·Q-9·Q-11 | 완료 | `InputRailSection.tsx`, `DraftQueue.tsx`, `ledger/draft-card-meta.ts`, 워크벤치 | `tests/branch/rail-queue-flow.test.tsx`(SSR 렌더) |
+| C 동선 | DSH D-9 멤버·월 → REV | 완료 | `DshTeamGrid.tsx`, `DshMonthlyPace.tsx` | `tests/branch/dsh-export.test.ts` |
+| D 편의 | R-5·D-8 갱신 중 직전 값 유지 | 완료 | `client-api.ts`(`keepPreviousData`), 워크벤치(`RefreshingBadge`) | `tests/branch/refresh-and-toast.test.tsx` |
+| D 편의 | R-9·Q-14·Q-15 토스트 | 완료 | 워크벤치 | `tests/branch/refresh-and-toast.test.tsx`, `tests/branch/ledger-undo-toast.test.ts` |
+| D 편의 | D-10·D-11·D-13 표기 | 완료 | DSH 카드 3종, `dsh-derive.ts`, `WeeklyCloseSection.tsx` | `tests/branch/dsh-export.test.ts` |
+
+### 5.1 라운드 중 판단을 바꾼 것 · 6라운드로 넘기는 것
+
+- **S-4(재캡처 실패 배지) → 6라운드.** 임포트의 `asOf`는 런 시작 시각이고, 체크섬이 같으면 새 런을 만들지 않고 옛 런을 유지한다.
+  그래서 `isImportStale`을 그대로 쓰면 **내용이 안 바뀐 정상 동기화 뒤에도** "오래됨"이 뜬다. 런 기록에 "마지막 확인 시각"을 따로
+  남기는 것(S-10과 같은 계열)을 먼저 해야 한다.
+- **잠긴 칸의 "정정 초안" 안내를 바로잡음(R-14 진행 중 발견).** 셀 title은 "수정은 우측 패널에서 정정 초안으로"를 약속했지만,
+  레일은 잠긴 달의 수정 초안 저장을 막는다(`LOCK_WARNING_TEXT`). 이번 라운드는 약속을 실제 경로로 고쳤다 — 시트 확정은 원본
+  시트에서 고친 뒤 동기화, 장부 반영은 체크 큐 되돌리기(상쇄) 뒤 다시 입력. **R-17(6라운드 후보):** 잠긴 달을 장부에서 바로
+  정정하는 경로(확인 한 번 + 정정 사유)가 필요한지 운영에 확인한다.
+- **K-10(6라운드 후보):** 대기 초안이 걸린 딜을 레일·콕핏에서 열면 편집기는 장부 값으로 시작한다(매트릭스 셀은 R-2로 초안 값을
+  보인다). 저장은 기존 초안을 갱신하므로 이중 계상은 없지만, "친 값이 보인다"가 편집기에서는 아직 아니다.
+- **1칸 붙여넣기는 주차 칸에서도 된다(R-13).** 여러 칸 주차 앵커 붙여넣기(R-16)는 그대로 6라운드.
+- **이월 목록(변경 없음):** S-10·S-13~S-16, R-3·R-6·R-11·R-15·R-16, D-2·D-4·D-5·D-7·D-12, B-2·B-3·B-7·B-8, K-5·K-7·K-9,
+  Q-5·Q-6·Q-10·Q-12·Q-13, 결정 E2·E4·D5.
 
 ---
 
