@@ -431,6 +431,26 @@ function FilterTag({ label, onClear }: { label: string; onClear: () => void }) {
   )
 }
 
+// REV 행(pipeline) 조회 실패 패널 — API 실패를 "필터 결과 없음" 빈 상태로 위장하지 않는다(원인 + 제자리 재시도).
+// REV 카드 안(framed=false)과 보드·콕핏 자리(framed=true, 카드 테두리 포함)가 같은 문구를 쓴다(라운드 5 B-5).
+export function RevLoadErrorPanel({ error, onRetry, framed = false }: { error: string; onRetry: () => void; framed?: boolean }) {
+  return (
+    <div className={framed ? "rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-6" : "p-6"}>
+      <div role="alert" className="mx-auto max-w-md rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-center">
+        <p className="text-[13px] font-bold text-[#B43E3E]">REV 데이터를 불러오지 못했습니다</p>
+        {error ? <p className="mt-1 break-all text-[11px] leading-relaxed text-[#B43E3E] opacity-80">{error}</p> : null}
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-3 rounded-md border border-[#B43E3E] bg-white px-3 py-1.5 text-[11px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B43E3E]/30"
+        >
+          다시 불러오기
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function rowMonthOpen(row: LedgerRevenueRow, month: string) {
   return ledgerMonthSplit(row, month, rowMonthAmount(row, month)).expected
 }

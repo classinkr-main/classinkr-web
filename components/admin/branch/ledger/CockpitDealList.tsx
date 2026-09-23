@@ -9,7 +9,9 @@
 import { useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react"
 import { AlertTriangle, ChevronLeft, ChevronRight, Plus, Search, UserRound } from "lucide-react"
 import { CONFIDENCE_TOKENS, type ConfidenceKey } from "@/lib/branch/confidence-tokens"
+import { formatExactMoney } from "@/lib/branch/ledger-format"
 import { branchMemberSearchHaystack } from "@/lib/branch/member-names"
+import type { MatrixPendingDraft } from "./rev-matrix-logic"
 import {
   formatMonthLabel,
   formatMoney,
@@ -50,10 +52,13 @@ interface CockpitDealListProps {
   selectedRowId: string | null
   onSelectDeal: (row: LedgerRevenueRow) => void
   onNewDeal: () => void
+  /** 행·월 대기 초안(키 `rowId::month`) — 목록에 확도색 점과 "대기" 금액(라운드 5 B-6). */
+  pendingByCell?: Map<string, MatrixPendingDraft> | null
 }
 
 export function CockpitDealList({
   rows,
+  pendingByCell = null,
   selectedMonth,
   monthOptions,
   onSelectMonth,
@@ -307,6 +312,7 @@ export function CockpitDealList({
             {items.map(({ row, amount, tone, product }, index) => {
               const token = CONFIDENCE_TOKENS[tone]
               const selected = row.id === selectedRowId
+              const pending = pendingByCell?.get(`${row.id}::${selectedMonth}`) ?? null
               return (
                 <li key={row.id}>
                   <button
@@ -327,6 +333,20 @@ export function CockpitDealList({
                       <span className="min-w-0 truncate text-[13px] font-bold text-[#111110]">{row.customer || "(무제목)"}</span>
                       <span className="shrink-0 text-[12px] font-bold tabular-nums text-[#111110]">{formatMoney(amount)}</span>
                     </span>
+                    {/* 라운드 5 B-6 — 적용 전 초안이 있으면 그 금액을 확도색으로(매트릭스 대기 셀과 같은 문법). */}
+                    {pending && (
+                      <span
+                        className="mt-1 flex items-center justify-end gap-1 text-[10.5px] font-bold tabular-nums"
+                        title={`대기 초안 ${formatExactMoney(pending.amount)}(${CONFIDENCE_TOKENS[pending.confidence].label}) — 적용 전, 체크 큐에서 확인`}
+                      >
+                        <span
+                          aria-hidden
+                          className="h-1.5 w-1.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: CONFIDENCE_TOKENS[pending.confidence].color }}
+                        />
+                        <span className={CONFIDENCE_TOKENS[pending.confidence].textStrongClass}>대기 {formatMoney(pending.amount)}</span>
+                      </span>
+                    )}
                     <span className="mt-1.5 flex items-center justify-between gap-2">
                       <span className="flex min-w-0 items-center gap-1.5">
                         <span className="shrink-0 rounded-full border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-2 py-0.5 text-[10px] font-semibold text-[#615D59]">

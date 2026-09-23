@@ -372,6 +372,7 @@ import {
   REV_ORIGIN_FILTERS,
   REV_PAGE_SIZES,
   REV_SORT_LABELS,
+  RevLoadErrorPanel,
   RevSortHeader,
   revSortAriaValue,
   rowMatchesForecastFilterInMonths,
@@ -1868,6 +1869,12 @@ export default function SalesLedgerWorkbench({
   // 검증하는 그 함수를 그대로 소비한다. 이전엔 동일 로직 인라인 사본이 있어 드리프트 위험이 있었다
   // (라운드 4 최적화에서 통합 — 주차별 확도 weeklyConfidence 동봉도 순수 함수 한 곳에서만 관리).
   const pendingByCell = useMemo(() => buildMatrixPendingByCell(drafts, visibleDealRows), [drafts, visibleDealRows])
+  // 보드·콕핏의 대기 초안 표시(라운드 5 B-6)는 REV 페이지가 아니라 그 화면의 전체 행 기준이라 따로 만든다 —
+  // 같은 순수 함수라 "대기"의 정의(draft·checked, 딜 키 매칭)가 매트릭스와 같다. 그 두 렌즈에서만 계산한다.
+  const lensPendingByCell = useMemo(
+    () => (lens === "board" || lens === "cockpit" ? buildMatrixPendingByCell(drafts, filteredRows) : null),
+    [drafts, filteredRows, lens],
+  )
 
   // 커밋 기준값(원 단위): 편집 진입 초기값·fill-down·중복 판정 소스.
   // 그 셀에 미검수(draft|checked) 초안이 있으면 시트 원값 대신 그 초안 금액을 우선한다 — 그래야
@@ -2417,6 +2424,59 @@ export default function SalesLedgerWorkbench({
     revSortKey !== "revenue" ||
     revSortDirection !== "desc" ||
     revPageSize !== 100
+
+  // REV 행 필터(검색·담당·지역·상품·상태·유형·원천·검수) 칩 — REV 툴바 아래 줄과 보드·콕핏의 "필터 적용 중" 줄이
+  // 같은 칩(개별 해제)을 쓴다(라운드 5 B-4: 보드·콕핏은 같은 filteredRows를 쓰는데 필터가 안 보였다).
+  const revRowFilterCount =
+    (query.trim() ? 1 : 0) +
+    managerFilter.size +
+    regionFilter.size +
+    (productFilter !== "all" ? 1 : 0) +
+    (revStatusFilter !== "ALL" ? 1 : 0) +
+    (revDealTypeFilter !== "ALL" ? 1 : 0) +
+    (revOriginFilter !== "all" ? 1 : 0) +
+    (revForecastFilter !== "all" ? 1 : 0)
+  const revFilterTags = (
+    <>
+      {query.trim() && <FilterTag label={`검색 ${query.trim()}`} onClear={() => setQuery("")} />}
+      {/* 품질 웨이브 7 — 항목 3: 멀티셀렉트 전환 — 선택값마다 칩 1개, 개별 해제(Set에서 그
+          값만 delete) 가능. MultiSelect 버튼 자체의 "A 외 N" 요약과는 별개로, 툴바 아래
+          활성 필터 칩 줄은 기존 관례(다른 필터도 전부 여기서 개별 해제)를 그대로 따른다. */}
+      {Array.from(managerFilter).map((name) => (
+        <FilterTag
+          key={`mgr-${name}`}
+          label={`담당자 ${name}`}
+          onClear={() => setManagerFilter((current) => {
+            const next = new Set(current)
+            next.delete(name)
+            return next
+          })}
+        />
+      ))}
+      {Array.from(regionFilter).map((name) => (
+        <FilterTag
+          key={`region-${name}`}
+          label={`지역 ${name}`}
+          onClear={() => setRegionFilter((current) => {
+            const next = new Set(current)
+            next.delete(name)
+            return next
+          })}
+        />
+      ))}
+      {productFilter !== "all" && (
+        <FilterTag label={`상품 ${productCategoryMeta(productFilter).label}`} onClear={() => setProductFilter("all")} />
+      )}
+      {revStatusFilter !== "ALL" && <FilterTag label={`상태 ${revStatusFilter}`} onClear={() => setRevStatusFilter("ALL")} />}
+      {revDealTypeFilter !== "ALL" && <FilterTag label={`유형 ${revDealTypeFilter}`} onClear={() => setRevDealTypeFilter("ALL")} />}
+      {revOriginFilter !== "all" && (
+        <FilterTag label={REV_ORIGIN_FILTERS.find((item) => item.id === revOriginFilter)?.label ?? "원천"} onClear={() => setRevOriginFilter("all")} />
+      )}
+      {revForecastFilter !== "all" && (
+        <FilterTag label={REV_FORECAST_FILTERS.find((item) => item.id === revForecastFilter)?.label ?? "검수"} onClear={() => setRevForecastFilter("all")} />
+      )}
+    </>
+  )
 
   // 라운드 5 B1 — REV "현재 보기" CSV: 필터·정렬이 반영된 전체 행(페이지 무관) × FY 12개월 월 합계 + 연간 확도 분해,
   // 원 단위 정수. 미적용 초안은 넣지 않는다(합계 행과 같은 "장부 반영분" 기준 — 토스트가 말한다).
@@ -3693,43 +3753,7 @@ export default function SalesLedgerWorkbench({
                 <span className="text-[10px] font-semibold text-[#A39E98]" aria-live="polite">
                   현재 정렬: {REV_SORT_LABELS[revSortKey]} {revSortDirection === "asc" ? "오름차순" : "내림차순"}
                 </span>
-                {query.trim() && <FilterTag label={`검색 ${query.trim()}`} onClear={() => setQuery("")} />}
-                {/* 품질 웨이브 7 — 항목 3: 멀티셀렉트 전환 — 선택값마다 칩 1개, 개별 해제(Set에서 그
-                    값만 delete) 가능. MultiSelect 버튼 자체의 "A 외 N" 요약과는 별개로, 툴바 아래
-                    활성 필터 칩 줄은 기존 관례(다른 필터도 전부 여기서 개별 해제)를 그대로 따른다. */}
-                {Array.from(managerFilter).map((name) => (
-                  <FilterTag
-                    key={`mgr-${name}`}
-                    label={`담당자 ${name}`}
-                    onClear={() => setManagerFilter((current) => {
-                      const next = new Set(current)
-                      next.delete(name)
-                      return next
-                    })}
-                  />
-                ))}
-                {Array.from(regionFilter).map((name) => (
-                  <FilterTag
-                    key={`region-${name}`}
-                    label={`지역 ${name}`}
-                    onClear={() => setRegionFilter((current) => {
-                      const next = new Set(current)
-                      next.delete(name)
-                      return next
-                    })}
-                  />
-                ))}
-                {productFilter !== "all" && (
-                  <FilterTag label={`상품 ${productCategoryMeta(productFilter).label}`} onClear={() => setProductFilter("all")} />
-                )}
-                {revStatusFilter !== "ALL" && <FilterTag label={`상태 ${revStatusFilter}`} onClear={() => setRevStatusFilter("ALL")} />}
-                {revDealTypeFilter !== "ALL" && <FilterTag label={`유형 ${revDealTypeFilter}`} onClear={() => setRevDealTypeFilter("ALL")} />}
-                {revOriginFilter !== "all" && (
-                  <FilterTag label={REV_ORIGIN_FILTERS.find((item) => item.id === revOriginFilter)?.label ?? "원천"} onClear={() => setRevOriginFilter("all")} />
-                )}
-                {revForecastFilter !== "all" && (
-                  <FilterTag label={REV_FORECAST_FILTERS.find((item) => item.id === revForecastFilter)?.label ?? "검수"} onClear={() => setRevForecastFilter("all")} />
-                )}
+                {revFilterTags}
                 <span className="ml-auto flex flex-wrap items-center gap-1.5" aria-label="검수 인박스">
                   {/* 편집→검수 큐 연결 고리: 셀 편집으로 쌓인 미적용 초안이 있으면 여기서 바로 큐를 연다 */}
                   {openDrafts.length > 0 && (
@@ -3769,19 +3793,7 @@ export default function SalesLedgerWorkbench({
               <div className="p-4"><LoadingPanel label="REV 행을 불러오는 중" /></div>
             ) : pipeline.error && !pipeline.data ? (
               // API 실패를 "필터 결과 없음" 빈 상태로 위장하지 않는다 — 원인 표기 + 제자리 재시도.
-              <div className="p-6">
-                <div className="mx-auto max-w-md rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-center">
-                  <p className="text-[13px] font-bold text-[#B43E3E]">REV 데이터를 불러오지 못했습니다</p>
-                  <p className="mt-1 break-all text-[11px] leading-relaxed text-[#B43E3E] opacity-80">{pipeline.error}</p>
-                  <button
-                    type="button"
-                    onClick={() => setRefreshKey((value) => value + 1)}
-                    className="mt-3 rounded-md border border-[#B43E3E] bg-white px-3 py-1.5 text-[11px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9]"
-                  >
-                    다시 불러오기
-                  </button>
-                </div>
-              </div>
+              <RevLoadErrorPanel error={pipeline.error} onRetry={() => setRefreshKey((value) => value + 1)} />
             ) : (
               <>
                 {/* 로컬 큐 모드: 서버 저장 불가 상태를 매트릭스 근처에서 명시 — 입력이 쌓이는 막다른 길 방지 */}
@@ -4186,14 +4198,49 @@ export default function SalesLedgerWorkbench({
             {/* 주차 Forecast 보드(Board-1b 이식) — REV와 같은 filteredRows 모집단(검색·담당자·지역·
                 상품 필터 반영)을 주차 칸반으로 재배열. 카드 클릭은 기존 빠른 작업 레일(행 상세)로
                 연결된다 — 보드 전용 편집 경로를 만들지 않는다. */}
-            {lens === "board" && (
+            {/* 라운드 5 B-4 — 보드·콕핏은 REV와 같은 filteredRows를 쓰지만 필터 UI는 REV 툴바에만 있어, 걸린 필터를
+                모른 채 "행이 없다"로 읽혔다. 같은 칩(개별 해제)과 전체 초기화를 이 줄에 둔다. */}
+            {(lens === "board" || lens === "cockpit") && revRowFilterCount > 0 && (
+              <div
+                role="region"
+                aria-label="적용 중인 REV 필터"
+                className="flex flex-wrap items-center gap-1.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-3 py-2 text-[11px]"
+              >
+                <span className="font-bold text-[#615D59]">
+                  REV 필터 {revRowFilterCount.toLocaleString("ko-KR")}개 적용 중 — 이 화면도 같은 행만 보입니다
+                </span>
+                {revFilterTags}
+                <button
+                  type="button"
+                  onClick={resetRevFilters}
+                  className="ml-auto rounded text-[11px] font-bold text-[#084734] underline-offset-2 transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+                >
+                  필터 초기화
+                </button>
+              </div>
+            )}
+
+            {/* 라운드 5 B-5 — 보드·콕핏도 REV처럼 로딩·오류를 "행 없음"과 구분한다(같은 문구·같은 재시도). */}
+            {(lens === "board" || lens === "cockpit") && !pipeline.data && (pipeline.loading || pipeline.error) ? (
+              pipeline.loading ? (
+                <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-4">
+                  <LoadingPanel label="REV 행을 불러오는 중" />
+                </div>
+              ) : (
+                <RevLoadErrorPanel framed error={pipeline.error ?? ""} onRetry={() => setRefreshKey((value) => value + 1)} />
+              )
+            ) : null}
+
+            {lens === "board" && (pipeline.data || (!pipeline.loading && !pipeline.error)) && (
               <ForecastBoard
                 rows={filteredRows}
                 selectedMonth={selectedMonth}
                 monthOptions={monthOptions}
                 onSelectMonth={setSelectedMonth}
-                onOpenRow={(row) => void loadDealDetail(row)}
+                // 라운드 5 B-1 — 카드는 곧장 빠른 입력(그 행·그 달)으로. 상세는 레일의 "상세" 탭.
+                onOpenRow={(row) => void openQuickInputForRow(row)}
                 selectedRowId={selectedRow?.id ?? null}
+                pendingByCell={lensPendingByCell}
               />
             )}
 
@@ -4201,10 +4248,11 @@ export default function SalesLedgerWorkbench({
                 우: 편집기(기존 InputRailSection을 그대로 인라인 배치 — 로직/저장 계약 재사용). 딜 선택은
                 REV·보드와 동일한 loadDealDetail로 draftForm을 채운다(새 편집 경로 없음). 콕핏에서는 우측
                 플로팅 레일·FAB를 렌더하지 않는다(아래 조건에서 lens !== "cockpit"). */}
-            {lens === "cockpit" && (
+            {lens === "cockpit" && (pipeline.data || (!pipeline.loading && !pipeline.error)) && (
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] lg:items-start">
                 <CockpitDealList
                   rows={filteredRows}
+                  pendingByCell={lensPendingByCell}
                   selectedMonth={selectedMonth}
                   monthOptions={monthOptions}
                   onSelectMonth={setSelectedMonth}
