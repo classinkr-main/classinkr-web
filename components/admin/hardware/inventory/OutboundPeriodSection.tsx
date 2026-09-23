@@ -5,6 +5,9 @@ import type { Dispatch, SetStateAction } from "react"
 import Link from "next/link"
 import { ChevronRight } from "lucide-react"
 
+import ExportActions from "./ExportActions"
+import { buildOutboundPeriodExportRows } from "./hardware-export"
+
 import {
   formatCurrency,
   formatNumber,
@@ -51,11 +54,21 @@ function OutboundPeriodSection({
           <p className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">기간별 출고 집계</p>
           <p className="mt-1 text-[12px] text-[#615D59]">확정 출고(샘플·수리 제외) 기준 기간 집계. 행을 열면 고객사별 출고·매출이 펼쳐지고, 고객사를 누르면 거래이력이 열립니다. 매출은 실판매(Sales) 기준이며 시트 재가져오기 후 반영됩니다. 분기·연은 회계연도(4월 시작~3월 종료) 기준입니다.</p>
         </div>
-        <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5">
+        <div className="flex flex-wrap items-center gap-2">
+        {/* 기간·고객사 표를 가져간다(하드웨어 라운드 2 E-4) — 복사는 스프레드시트·메신저, CSV 는 파일. */}
+        <ExportActions
+          subject="기간별 출고 집계"
+          fileBaseName={`하드웨어_출고집계_${outPeriod === "month" ? "월" : outPeriod === "quarter" ? "분기" : "연"}`}
+          rowCount={outboundBuckets.length}
+          buildRows={() => buildOutboundPeriodExportRows(outboundBuckets)}
+          size="xs"
+        />
+        <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5" role="group" aria-label="집계 기간">
           {([["month", "월"], ["quarter", "분기"], ["year", "연"]] as const).map(([key, label]) => (
             <button
               key={key}
               type="button"
+              aria-pressed={outPeriod === key}
               onClick={() => setOutPeriod(key)}
               className={`cursor-pointer rounded-md px-3.5 py-1.5 text-[12px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 ${
                 outPeriod === key ? "bg-white text-[#084734] shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : "text-[#615D59] hover:text-[#111110]"
@@ -64,6 +77,7 @@ function OutboundPeriodSection({
               {label}
             </button>
           ))}
+        </div>
         </div>
       </div>
       <div>
@@ -74,6 +88,7 @@ function OutboundPeriodSection({
               <button
                 type="button"
                 onClick={() => setOpenPeriods((current) => ({ ...current, [bucket.key]: !current[bucket.key] }))}
+                aria-expanded={open}
                 className="block w-full cursor-pointer px-5 py-4 text-left transition hover:bg-[#FAFAF8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40"
               >
                 <div className="flex items-center justify-between gap-3">
@@ -130,7 +145,7 @@ function OutboundPeriodSection({
                           className="col-span-4 grid cursor-pointer grid-cols-subgrid items-center gap-2.5 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40"
                         >
                           <span title={customer.name} className="truncate text-[12.5px] font-semibold text-[#111110]">{customer.name}</span>
-                          <span className="truncate text-[12px] tabular-nums text-[#615D59]">{customer.dateLabel}</span>
+                          <span title={customer.dateLabel} className="truncate text-[12px] tabular-nums text-[#615D59]">{customer.dateLabel}</span>
                           <span className="text-right text-[13px] font-bold tabular-nums text-[#111110]">{formatNumber(customer.qty)}대</span>
                           <span className="text-right text-[12.5px] font-bold tabular-nums text-[#084734]">{customer.hasRevenue ? formatCurrency(customer.revenue, "USD") : "-"}</span>
                         </button>

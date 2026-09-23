@@ -2,7 +2,10 @@
 
 import { memo } from "react"
 import type { Dispatch, SetStateAction } from "react"
-import { Search } from "lucide-react"
+import { History, PackagePlus, Search } from "lucide-react"
+
+import ExportActions from "./ExportActions"
+import { buildInboundLotsExportRows, buildLotCompositionRows } from "./hardware-export"
 
 import {
   formatCurrency,
@@ -40,9 +43,16 @@ interface InboundLotsSectionProps {
   inboundSearch: string
   setInboundSearch: Dispatch<SetStateAction<string>>
   inboundLots: InboundLotsData
+  // lot 허브(하드웨어 라운드 2 E-2) — 카드에서 내역(lot 필터)으로, 같은 물량에 추가 입고로 한 번에 간다.
+  onShowLotHistory?: (lot: string) => void
+  onAddToLot?: (lot: string) => void
+  canWrite?: boolean
 }
 
-function InboundLotsSection({ inboundSearch, setInboundSearch, inboundLots }: InboundLotsSectionProps) {
+const CARD_ACTION_CLASS =
+  "inline-flex cursor-pointer items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 py-1 text-[11px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 disabled:pointer-events-none disabled:opacity-50"
+
+function InboundLotsSection({ inboundSearch, setInboundSearch, inboundLots, onShowLotHistory, onAddToLot, canWrite = true }: InboundLotsSectionProps) {
   return (
     <section className="overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[rgba(0,0,0,0.08)] px-5 py-4">
@@ -57,10 +67,19 @@ function InboundLotsSection({ inboundSearch, setInboundSearch, inboundLots }: In
               value={inboundSearch}
               onChange={(event) => setInboundSearch(event.target.value)}
               aria-label="입고 lot 검색"
-              placeholder="물량번호·품목 검색"
+              placeholder="물량번호·품목·수입자 검색"
               className="h-9 w-full rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] pl-8 pr-3 text-[12.5px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15 sm:w-[210px]"
             />
           </label>
+          {/* 보이는(검색된) lot 의 품목 줄 전체를 가져간다(하드웨어 라운드 2 E-3). */}
+          <ExportActions
+            subject="입고 물량"
+            fileBaseName="하드웨어_입고물량"
+            rowCount={inboundLots.lots.length}
+            buildRows={() => buildInboundLotsExportRows(inboundLots.lots)}
+            showCopy={false}
+            size="xs"
+          />
           <div className="flex gap-5">
             <div className="text-right">
               <p className="text-[11px] font-semibold text-[#615D59]">총 입고 <span className="font-normal text-[#A39E98]">(86·75·T1)</span></p>
@@ -91,7 +110,37 @@ function InboundLotsSection({ inboundSearch, setInboundSearch, inboundLots }: In
                   {lot.date} · {lot.importer ?? "수입자 미상"} · {formatNumber(lot.items.length)}개 품목
                 </span>
               </div>
-              <div className="flex items-center gap-4">
+              <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
+                <span className="inline-flex flex-wrap items-center gap-1.5">
+                  {/* 구성 복사 = 입고표 붙여넣기 형식(품목·수량·단가) — 되돌려 붙이면 같은 구성이 된다. */}
+                  <ExportActions
+                    subject={`${lot.displayLot} 구성`}
+                    fileBaseName={`하드웨어_${lot.displayLot}_구성`}
+                    rowCount={lot.items.length}
+                    buildRows={() => buildLotCompositionRows(lot)}
+                    showCsv={false}
+                    size="xs"
+                  />
+                  {onShowLotHistory ? (
+                    <button type="button" onClick={() => onShowLotHistory(lot.lot)} className={CARD_ACTION_CLASS} aria-label={`${lot.displayLot} 내역 보기`}>
+                      <History className="h-3.5 w-3.5" aria-hidden />
+                      내역
+                    </button>
+                  ) : null}
+                  {onAddToLot ? (
+                    <button
+                      type="button"
+                      onClick={() => onAddToLot(lot.lot)}
+                      disabled={!canWrite}
+                      title={canWrite ? "이 물량번호로 입고표를 엽니다" : "읽기 권한 계정은 입고할 수 없습니다"}
+                      className={CARD_ACTION_CLASS}
+                      aria-label={`${lot.displayLot}에 추가 입고`}
+                    >
+                      <PackagePlus className="h-3.5 w-3.5" aria-hidden />
+                      추가 입고
+                    </button>
+                  ) : null}
+                </span>
                 <span className="text-[12px] font-semibold text-[#615D59]">
                   총 <span className="font-bold tabular-nums text-[#111110]">{formatNumber(lot.totalQty)}대</span>
                 </span>

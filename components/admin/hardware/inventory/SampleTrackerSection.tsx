@@ -5,6 +5,8 @@ import { ChevronDown, ChevronRight, PackagePlus } from "lucide-react"
 
 import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
 import { adminFetchJson } from "@/lib/admin-client"
+import ExportActions from "./ExportActions"
+import { buildSampleUnitsExportRows } from "./hardware-export"
 import {
   formatNumber,
   loanElapsedDays,
@@ -201,6 +203,16 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {/* 후속 연락 목록 — 지금 걸린 필터(예: 대여 1년+)의 유닛을 고객·대여일·회수 예정일과 함께(하드웨어 라운드 2 P-12). */}
+          {filtered.length > 0 && (
+            <ExportActions
+              subject={filter === "loaned" || agingMinDays != null ? "대여중 샘플" : "샘플 유닛"}
+              fileBaseName="하드웨어_샘플유닛"
+              rowCount={filtered.length}
+              buildRows={() => buildSampleUnitsExportRows(filtered, latestEvents, todayKey())}
+              size="xs"
+            />
+          )}
           {integrity && integrity.overCount > 0 && (
             <span className="rounded-full bg-[#FBF1E0] px-2.5 py-1 text-[11px] font-bold text-[#A8741A]" title="유닛 수가 원장 잔량보다 많습니다 — 폐기/전환 처리로 정리하세요">
               정합 확인 {formatNumber(integrity.overCount)}대

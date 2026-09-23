@@ -1,12 +1,12 @@
 "use client"
 
-import { memo } from "react"
+import { memo, useState } from "react"
 import type { Dispatch, Ref, SetStateAction } from "react"
 import Link from "next/link"
 import { AnimatePresence, motion } from "framer-motion"
-import { Clock3, Settings2, Users, X } from "lucide-react"
+import { Check, Clock3, Copy, Link2, Settings2, Users, X } from "lucide-react"
 
-import { CopyButton } from "@/components/admin/crm/leads/shared"
+import { copyTextToClipboard } from "@/lib/export/browser-download"
 
 import {
   formatLotLabel,
@@ -20,7 +20,28 @@ import {
 // 값이 길어 truncate될 수 있는(시리얼 목록·보관 장소 등 자유 텍스트) detailFacts 항목만
 // 복사 버튼을 붙인다 — 날짜·수량처럼 짧고 자명한 값까지 도배하지 않는다.
 function isCopyableFact(label: string): boolean {
-  return label.startsWith("시리얼") || label === "보관 장소"
+  return label.startsWith("시리얼") || label === "보관 장소" || label === "참조번호"
+}
+
+// 복사 버튼 — 비보안 컨텍스트·권한 거부에도 폴백이 있는 공용 복사(lib/export/browser-download)를 쓰고, 실패하면 "복사됨"이라 말하지 않는다.
+function CopyButton({ value, label }: { value: string; label?: string }) {
+  const [state, setState] = useState<"idle" | "ok" | "fail">("idle")
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        const ok = await copyTextToClipboard(value)
+        setState(ok ? "ok" : "fail")
+        window.setTimeout(() => setState("idle"), 1500)
+      }}
+      aria-label={label ? `${label} 복사` : "클립보드에 복사"}
+      title={state === "fail" ? "복사하지 못했습니다" : "복사"}
+      className="shrink-0 cursor-pointer rounded-md p-1 text-[#A39E98] transition hover:bg-[#F0F0EC] hover:text-[#31302E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+    >
+      {state === "ok" ? <Check className="h-3.5 w-3.5 text-[#084734]" aria-hidden /> : <Copy className="h-3.5 w-3.5" aria-hidden />}
+      <span aria-live="polite" className="sr-only">{state === "ok" ? "복사되었습니다" : state === "fail" ? "복사하지 못했습니다" : ""}</span>
+    </button>
+  )
 }
 
 interface MovementDetailSheetProps {
@@ -82,7 +103,10 @@ function MovementDetailSheet({
                     {MOVEMENT_LABEL[detailMovement.movement_type]} {formatNumber(detailMovement.quantity)}
                   </span>
                   {detailLotLabel ? (
-                    <span className="inline-flex rounded-md bg-[#ECFDF5] px-2 py-0.5 text-[12px] font-bold text-[#084734]">{detailLotLabel}</span>
+                    <span className="inline-flex items-center gap-0.5">
+                      <span className="inline-flex rounded-md bg-[#ECFDF5] px-2 py-0.5 text-[12px] font-bold text-[#084734]">{detailLotLabel}</span>
+                      <CopyButton value={detailLotLabel} label="물량번호" />
+                    </span>
                   ) : (
                     <span className="inline-flex rounded-md border border-dashed border-[rgba(0,0,0,0.14)] bg-[#F6F5F4] px-2 py-0.5 text-[12px] font-bold text-[#A39E98]">물량번호 미지정</span>
                   )}
@@ -102,6 +126,8 @@ function MovementDetailSheet({
                   {formatLotLabel(detailMovement.reference_no) ?? detailMovement.status ?? MOVEMENT_LABEL[detailMovement.movement_type]}
                 </p>
               </div>
+              {/* 이 기록으로 바로 오는 링크(?tab=history&m=<id>) — 메신저로 "이 건 확인해 주세요"를 보낼 때(L-10·L-4). */}
+              <LinkCopyButton movementId={detailMovement.id} />
               <button
                 type="button"
                 onClick={() => setDetailId(null)}
@@ -122,7 +148,7 @@ function MovementDetailSheet({
                       {copyable ? (
                         <div className="mt-0.5 flex items-center gap-1">
                           <p className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#111110]">{fact.value}</p>
-                          <CopyButton value={fact.value} />
+                          <CopyButton value={fact.value} label={fact.label} />
                         </div>
                       ) : (
                         <p className="mt-0.5 text-[13px] font-bold text-[#111110]">{fact.value}</p>
@@ -228,3 +254,24 @@ function MovementDetailSheet({
 }
 
 export default memo(MovementDetailSheet)
+
+function LinkCopyButton({ movementId }: { movementId: string }) {
+  const [state, setState] = useState<"idle" | "ok" | "fail">("idle")
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        const url = `${window.location.origin}/admin/hardware?tab=history&m=${encodeURIComponent(movementId)}`
+        const ok = await copyTextToClipboard(url)
+        setState(ok ? "ok" : "fail")
+        window.setTimeout(() => setState("idle"), 1800)
+      }}
+      aria-label="이 기록 링크 복사"
+      title={state === "ok" ? "링크를 복사했습니다" : state === "fail" ? "복사하지 못했습니다" : "이 기록 링크 복사"}
+      className="flex h-8 shrink-0 cursor-pointer items-center gap-1 rounded-md px-2 text-[11px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+    >
+      {state === "ok" ? <Check className="h-3.5 w-3.5 text-[#084734]" aria-hidden /> : <Link2 className="h-3.5 w-3.5" aria-hidden />}
+      <span aria-live="polite">{state === "ok" ? "복사됨" : "링크"}</span>
+    </button>
+  )
+}

@@ -1826,8 +1826,13 @@ export default function HardwareInventoryClient({
     let lots = allLots
     const query = inboundSearch.trim().toLowerCase()
     if (query) {
+      // 표시 lot(H0 = FY24-25)·수입자로도 찾는다(E-6) — 배지에 보이는 이름으로 검색되지 않았다.
       lots = lots.filter(
-        (group) => group.lot.toLowerCase().includes(query) || group.items.some((item) => item.product_name.toLowerCase().includes(query))
+        (group) =>
+          group.lot.toLowerCase().includes(query) ||
+          group.displayLot.toLowerCase().includes(query) ||
+          (group.importer ?? "").toLowerCase().includes(query) ||
+          group.items.some((item) => item.product_name.toLowerCase().includes(query) || (item.importer ?? "").toLowerCase().includes(query))
       )
     }
     // 헤더 총계는 86/75/T1만 집계(사용자 지정). lot별 상세 목록(lots)은 전 품목 그대로.
@@ -2043,6 +2048,8 @@ export default function HardwareInventoryClient({
         { label: "수량", value: `${formatNumber(detailMovement.quantity)}대` },
         { label: "담당자", value: detailMovement.owner ?? "-" },
         { label: "경로", value: `${detailMovement.from_location ?? "-"} → ${detailMovement.to_location ?? "-"}` },
+        // 참조번호(딜·견적·시트 물류No)는 다른 시스템에서 찾는 열쇠라 복사할 수 있게 보인다(L-10).
+        ...(detailMovement.reference_no?.trim() ? [{ label: "참조번호", value: detailMovement.reference_no.trim() }] : []),
         // 받기만 하고 안 보여주던 필드(write-only) 해소 — 값이 있을 때만 노출해 소음을 막는다.
         ...(detailMovement.storage_location ? [{ label: "보관 장소", value: detailMovement.storage_location }] : []),
         ...(detailMovement.serials.length > 0 ? [{ label: `시리얼 (${detailMovement.serials.length})`, value: detailMovement.serials.join(", ") }] : []),
@@ -3762,6 +3769,13 @@ export default function HardwareInventoryClient({
               setOpenPeriods={setOpenPeriods}
               setCustomerDetail={setCustomerDetail}
               setActiveTab={setActiveTab}
+              onShowLotHistory={(lot) => {
+                resetHistoryFilters()
+                setLotFilter(lot)
+                setActiveTab("history")
+              }}
+              onAddToLot={(lot) => openInboundSheet(null, lot)}
+              canWrite={canWriteHardware}
             />
             )}
 

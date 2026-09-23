@@ -215,6 +215,7 @@ export default function HomeTabPanel({
       confirmPlannedSelection={confirmPlannedSelection}
       selectionConfirmProgress={selectionConfirmProgress}
       onSelectionCountChange={onPlannedSelectionCountChange}
+      canWrite={canWriteHardware}
     />
 
     <CategoryCardsSection categoryCards={categoryCards.cards} etcSummary={categoryCards.etcSummary} />

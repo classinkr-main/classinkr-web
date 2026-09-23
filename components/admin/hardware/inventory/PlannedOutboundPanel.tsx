@@ -6,6 +6,8 @@ import { CheckCheck, Clock3 } from "lucide-react"
 
 import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
 import type { AdminListPaginationResult } from "@/lib/admin-list-pagination"
+import ExportActions from "./ExportActions"
+import { buildPlannedExportRows } from "./hardware-export"
 import {
   collectStalePlannedMovementIds,
   elapsedDaysSince,
@@ -70,6 +72,8 @@ interface PlannedOutboundPanelProps {
   // 작업 바의 "선택 확정" 버튼을 가린다(1440px 폭 실측: 두 버튼 영역이 겹침). 선택 중에는 일괄 작업
   // 바가 이 화면의 주 작업면이므로 부모가 그 버튼을 내린다.
   onSelectionCountChange?: (count: number) => void
+  // 기록 생성·수정 권한(표시용, 하드웨어 라운드 2 H-14) — 읽기 역할은 등록·수정을 누를 수 없다(강제는 서버).
+  canWrite?: boolean
 }
 
 function PlannedOutboundPanel({
@@ -94,6 +98,7 @@ function PlannedOutboundPanel({
   confirmPlannedSelection,
   selectionConfirmProgress,
   onSelectionCountChange,
+  canWrite = true,
 }: PlannedOutboundPanelProps) {
   // 일괄 체크 선택 상태 — 패널 로컬 state. plannedPagination은 부모 plannedPage state가 바뀔 때
   // 값만 갱신될 뿐 이 컴포넌트 인스턴스를 언마운트하지 않으므로, 페이지를 넘겨도 선택이 그대로
@@ -217,13 +222,24 @@ function PlannedOutboundPanel({
               30일+ 미확정 {formatNumber(plannedStaleGroupCount)}딜
             </span>
           )}
-          <span className="text-[11px] font-semibold text-[#615D59]">
+          <span className="text-[11px] font-semibold tabular-nums text-[#615D59]">
             {formatNumber(data?.plannedMovements.length ?? 0)}건 · {formatNumber(plannedMovementQuantity)}대
           </span>
+          {/* 연락·배차용 목록 — 선택이 있으면 선택분, 없으면 전체(하드웨어 라운드 2 H-15). */}
+          {hasPlanned && (
+            <ExportActions
+              subject={selectedCount > 0 ? `선택한 예정 출고 ${selectedCount}건` : "예정 출고"}
+              fileBaseName="하드웨어_예정출고"
+              rowCount={selectedCount > 0 ? selectedCount : allPlanned.length}
+              buildRows={() => buildPlannedExportRows(selectedCount > 0 ? selectedMovements : allPlanned, todayKey())}
+              size="xs"
+            />
+          )}
           <button
             type="button"
             onClick={startPlannedEntry}
-            disabled={plannedConfirmLocked}
+            disabled={plannedConfirmLocked || !canWrite}
+            title={canWrite ? undefined : "읽기 권한 계정은 예상 출고를 등록할 수 없습니다"}
             className="inline-flex items-center gap-1.5 cursor-pointer rounded-md bg-[#084734] px-3 py-2 text-[12px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Clock3 className="h-3.5 w-3.5" />
@@ -416,7 +432,8 @@ function PlannedOutboundPanel({
                           <button
                             type="button"
                             onClick={() => editMovement(movement)}
-                            disabled={plannedConfirmLocked}
+                            disabled={plannedConfirmLocked || !canWrite}
+                            title={canWrite ? undefined : "읽기 권한 계정은 수정할 수 없습니다"}
                             className="cursor-pointer rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-1.5 text-[11px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             수정

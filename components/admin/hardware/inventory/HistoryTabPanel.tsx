@@ -214,7 +214,8 @@ export default function HistoryTabPanel({
                 </button>
               ))}
               <span className="ml-auto text-[11px] font-semibold text-[#615D59]">
-                필터 후 {formatNumber(filteredMovements.length)}건 / 전체 {formatNumber(data?.movements.length ?? 0)}건
+                {/* "전체"는 서버 총계와 헷갈린다(L-6) — 이 숫자는 불러온 범위다. */}
+                필터 후 {formatNumber(filteredMovements.length)}건 / 불러온 {formatNumber(data?.movements.length ?? 0)}건
               </span>
             </div>
           ) : null}
@@ -607,6 +608,11 @@ export default function HistoryTabPanel({
           setMovementsPage={setMovementsPage}
           hasActiveFilter={hasHistoryFilter}
           onResetFilters={resetHistoryFilters}
+          hasMoreHistory={hasMoreHistory}
+          loadedCount={movementsLoaded}
+          totalCount={movementsTotal}
+          onLoadMore={() => void loadMoreHistory()}
+          loadingMore={loadingMoreHistory}
         />
     </motion.div>
   )
