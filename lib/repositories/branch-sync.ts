@@ -59,14 +59,27 @@ export async function getRecentSyncRuns(limit = 10): Promise<SyncRun[]> {
 export async function listRecentSyncRunsFresh(limit = 60): Promise<SyncRun[]> {
   return fetchRecentSyncRuns(limit)
 }
-export async function isAnyRunning(): Promise<boolean> {
+// 실행 잠금 판정 창 — 이보다 오래된 running 행은 함수가 죽고 남은 흔적으로 보고 잠금으로 치지 않는다.
+const SYNC_RUN_LOCK_WINDOW_MS = 10 * 60_000
+
+// 지금 잠금을 잡고 있는 실행(10분 안에 시작한 running 행 중 가장 최근). 없으면 null.
+// runAll이 "이미 동기화 중" 응답에 그 실행의 시작 시각을 실어 보내는 데 쓴다 — 버튼 화면이
+// "완료" 대신 "N분 전 시작한 동기화가 도는 중"이라고 정직하게 말하게 하는 근거(라운드 5 S-1).
+export async function findRunningSyncRun(): Promise<Pick<SyncRun, "id" | "started_at" | "source" | "trigger"> | null> {
   const sb = createSupabaseAdminClient()
-  const cutoff = new Date(Date.now() - 10 * 60_000).toISOString()
-  const { count, error } = await sb
+  const cutoff = new Date(Date.now() - SYNC_RUN_LOCK_WINDOW_MS).toISOString()
+  const { data, error } = await sb
     .from("branch_sync_runs")
-    .select("*", { count: "exact", head: true })
+    .select("id, started_at, source, trigger")
     .eq("status", "running")
     .gte("started_at", cutoff)
+    .order("started_at", { ascending: false })
+    .limit(1)
   if (error) throw error
-  return (count ?? 0) > 0
+  const row = (data ?? [])[0] as Pick<SyncRun, "id" | "started_at" | "source" | "trigger"> | undefined
+  return row ?? null
+}
+
+export async function isAnyRunning(): Promise<boolean> {
+  return (await findRunningSyncRun()) !== null
 }

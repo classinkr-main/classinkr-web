@@ -6,6 +6,9 @@ const runBranchRevLinkMaintenance = vi.hoisted(() => vi.fn())
 
 vi.mock("@/lib/branch/sync/run-all", () => ({ runAll }))
 vi.mock("@/lib/repositories/crm-source-links", () => ({ runBranchRevLinkMaintenance }))
+// 캐시 만료(lib/server/sync-cache-tags.ts)는 next/cache·저장소를 끌어오므로 막아 둔다 — 만료 규칙 자체는
+// tests/api/branch-sync-partial-failure-cache.test.ts와 tests/branch/sync-outcome.test.ts가 고정한다.
+vi.mock("@/lib/server/sync-cache-tags", () => ({ expireSyncCacheTags: vi.fn(() => []) }))
 
 import { GET } from "@/app/api/cron/sync-branch/route"
 

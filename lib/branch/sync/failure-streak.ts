@@ -107,7 +107,7 @@ export function buildSyncFailureAlert(
     `${lastSuccess} · 실패 ${streak.failedRuns}회. 그동안 어드민 매출 화면은 마지막으로 성공한 데이터를 보여줍니다.`,
     streak.lastError ? `오류: ${streak.lastError.slice(0, 180)}` : null,
     isPermissionError(streak.lastError)
-      ? `조치: 시트 공유가 끊겼습니다. 시트를 ${options.serviceAccountEmail || "서비스 계정"}에 뷰어로 다시 공유한 뒤 매출 장부에서 새로고침하세요.`
+      ? `조치: 시트 공유가 끊겼습니다. 시트를 ${options.serviceAccountEmail || "서비스 계정"}에 뷰어로 다시 공유한 뒤 매출 장부의 동기화 버튼을 누르세요.`
       : null,
   ].filter((line): line is string => Boolean(line))
   return {

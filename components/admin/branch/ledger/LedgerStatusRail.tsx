@@ -9,6 +9,7 @@ import { describeSyncHealth } from "@/lib/branch/sync-health-copy"
 import { CrmSyncDetail, stripStateFromResponse, type CrmCoverageResponse } from "../CrmSyncStrip"
 import { IntegrityDetail, useIntegrityData } from "../IntegrityStrip"
 import type { BranchSyncHealth } from "../types"
+import { branchSyncScheduleLabel } from "@/lib/branch/sync/schedule"
 
 // 장부 상단 상태 한 줄(2026-09-14) — 정합 체크·CRM 연결·동기화 끊김 세 줄을 칸 하나씩으로 합친다.
 // 요약은 한 줄, 상세는 누른 칸 하나만 아래로 펼친다. 가장 심각한 톤은 테두리 한 곳에만 쓰고
@@ -138,7 +139,7 @@ export default function LedgerStatusRail({
               ) : (
                 <p>매출 시트가 정상적으로 동기화되고 있습니다.</p>
               )}
-              <p className="text-[11px] text-[#615D59]">마지막 시도 {lastSyncAttemptLabel} · 매일 17:38(KST) 자동 동기화, 2일 연속 실패 시 운영방 알림</p>
+              <p className="text-[11px] text-[#615D59]">마지막 시도 {lastSyncAttemptLabel} · {branchSyncScheduleLabel()}, 2일 연속 실패 시 운영방 알림</p>
             </div>
           )}
 

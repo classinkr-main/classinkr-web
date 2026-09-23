@@ -32,7 +32,9 @@ import {
   Users,
   X,
 } from "lucide-react"
-import { adminFetchJson, clearBranchRequestCache, useBranchJson, type BranchJsonState } from "./client-api"
+import { adminFetchJson, clearBranchRequestCache, postBranchSync, useBranchJson, type BranchJsonState, type BranchSyncResponseBody } from "./client-api"
+import { SyncOutcomeNotice } from "./SyncOutcomeNotice"
+import { describeSyncOutcome, type SyncOutcomeNotice as SyncOutcomeNoticeValue } from "@/lib/admin/sync-outcome"
 import { useVisibleInterval } from "./use-visible-interval"
 // 서버 입력 큐 훅(초안 CRUD·적용·되돌리기·로컬 폴백·낙관적 잠금)은 ledger/useLedgerDraftQueue로
 // 물리 이동(웨이브 7 2단 F5 — 기계적 분할, 로직 무변경).
@@ -406,14 +408,9 @@ export type { LedgerPipelinePrefetch, PeriodComparisonChip, RevManagerSummary } 
 
 // initialPipeline이 없으면(비인증·역할 부족·프리페치 실패) 이 화면은 지금까지와 100% 동일하게
 // 마운트 후 클라이언트 페치로만 채워진다.
-// POST /api/admin/branch/sync 응답 중 이 화면이 읽는 부분 — lib/branch/sync/run-all.ts RunAllResult 미러.
-// 서버가 동기화 직후 REV 장부 임포트를 재캡처하고 그 결과를 싣는다(액티브 임포트가 없으면 inactive).
-type BranchSyncResponse = {
-  revImport?:
-    | { status: "inactive" }
-    | { status: "captured" | "unchanged"; runId: string; capturedAt: string; lineCount: number }
-  revImportError?: string
-}
+// POST /api/admin/branch/sync 응답 중 이 화면이 읽는 부분 — 결과 계약(outcome) + 장부 임포트 재캡처 결과.
+// 정의는 client-api(BranchSyncResponseBody)가 정본이다(매출시트 화면과 공유).
+type BranchSyncResponse = BranchSyncResponseBody
 
 export default function SalesLedgerWorkbench({
   initialPipeline = null,
@@ -537,6 +534,8 @@ export default function SalesLedgerWorkbench({
   const [refreshKey, setRefreshKey] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   const [syncError, setSyncError] = useState<string | null>(null)
+  // 동기화 결과 한 줄(라운드 5 S-1) — 오류는 syncError 배너가, 완료·이미 실행 중·일부 성공은 이 알림이 맡는다.
+  const [syncNotice, setSyncNotice] = useState<SyncOutcomeNoticeValue | null>(null)
   const [canRunAdminOperations, setCanRunAdminOperations] = useState(false)
   const [draftSaving, setDraftSaving] = useState(false)
   const {
@@ -2507,16 +2506,21 @@ export default function SalesLedgerWorkbench({
     })
   }, [onSelectCockpitDeal])
 
+  // 헤더 "동기화"(관리자) / "다시 불러오기"(그 외). 관리자는 시트를 다시 읽고(POST sync), 누구든 끝나면 화면을
+  // 다시 불러온다. 결과는 결과 계약(outcome)으로 읽어 "이미 동기화 중"·"일부만"을 완료로 뭉개지 않는다
+  // (라운드 5 S-1·S-3 — 예전엔 잠금 응답 200을 아무 표시 없이 넘겼다). 동기화 POST는 서버도 ADMIN·SUPER_ADMIN만
+  // 통과하므로(lib/admin-auth) 그 외 역할은 요청 자체를 보내지 않는다.
   const onRefresh = useCallback(async () => {
     setSyncError(null)
+    setSyncNotice(null)
     setRefreshing(true)
     try {
       if (canRunAdminOperations) {
-        const result = await adminFetchJson<BranchSyncResponse>("/api/admin/branch/sync", {
-          method: "POST",
-          body: JSON.stringify({ sources: ["rev"] }),
-        })
-        applySyncRevImport(result)
+        const { status, body } = await postBranchSync(["rev"])
+        const notice = describeSyncOutcome(body, { httpStatus: status })
+        if (notice.tone === "error") setSyncError(notice.message)
+        else setSyncNotice(notice)
+        applySyncRevImport(body)
       }
     } catch (error) {
       setSyncError(error instanceof Error ? error.message : String(error))
@@ -2526,6 +2530,13 @@ export default function SalesLedgerWorkbench({
       setRefreshing(false)
     }
   }, [applySyncRevImport, canRunAdminOperations])
+
+  // 완료 알림은 잠깐만 — 확인할 것이 남는 안내·경고는 닫거나 다음 동기화까지 둔다.
+  useEffect(() => {
+    if (syncNotice?.tone !== "success") return
+    const timer = window.setTimeout(() => setSyncNotice(null), 8000)
+    return () => window.clearTimeout(timer)
+  }, [syncNotice])
 
   const buildDraftInput = useCallback((kind: DraftKind, base?: LedgerDraft | null): LedgerDraftInput => {
     const sourceSnapshot = kind === "edit-row" && selectedRow ? {
@@ -2954,10 +2965,18 @@ export default function SalesLedgerWorkbench({
               type="button"
               onClick={() => void onRefresh()}
               disabled={refreshing}
+              aria-busy={refreshing}
+              title={
+                canRunAdminOperations
+                  ? "매출 시트(REV·DSH·KPI)를 다시 읽어 장부에 반영합니다 — 보통 수십 초 걸립니다."
+                  : "화면 데이터를 다시 불러옵니다. 시트 동기화는 관리자(ADMIN) 계정만 실행할 수 있습니다."
+              }
               className="inline-flex h-9 items-center gap-2 rounded-md bg-[#084734] px-3 text-[12px] font-bold text-white transition hover:bg-[#065c41] disabled:opacity-60"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-              동기화
+              {refreshing
+                ? canRunAdminOperations ? "동기화 중…" : "불러오는 중…"
+                : canRunAdminOperations ? "동기화" : "다시 불러오기"}
             </button>
           </div>
         </div>
@@ -2979,6 +2998,7 @@ export default function SalesLedgerWorkbench({
             </button>
           </div>
         )}
+        <SyncOutcomeNotice notice={syncNotice} onDismiss={() => setSyncNotice(null)} className="mt-4" />
       </header>
 
       {/* 입력 진입 동선 라운드(2026-09-20 기획 §4 P2-7/§8.4 "REV 레일 겹침") — 우측 플로팅

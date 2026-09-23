@@ -9,13 +9,15 @@ const syncHw = vi.fn()
 const recaptureActiveRevImport = vi.fn()
 const startSyncRun = vi.fn(async () => "run-1")
 const finishSyncRun = vi.fn(async () => undefined)
-const isAnyRunning = vi.fn(async () => false)
+const findRunningSyncRun = vi.fn(
+  async (): Promise<{ id: string; started_at: string; source: string; trigger: string } | null> => null,
+)
 
 vi.mock("server-only", () => ({}))
 vi.mock("@/lib/branch/sync/sync-rev", () => ({ syncRev }))
 vi.mock("@/lib/branch/sync/sync-hw", () => ({ syncHw }))
 vi.mock("@/lib/repositories/sales-ledger-rev-import", () => ({ recaptureActiveRevImport }))
-vi.mock("@/lib/repositories/branch-sync", () => ({ startSyncRun, finishSyncRun, isAnyRunning }))
+vi.mock("@/lib/repositories/branch-sync", () => ({ startSyncRun, finishSyncRun, findRunningSyncRun }))
 
 const HW = { inbound: 1, outbound: 2, stock: 3, sales: 4 }
 
@@ -75,5 +77,26 @@ describe("runAll — REV 장부 임포트 자동 재캡처", () => {
     expect(recaptureActiveRevImport).not.toHaveBeenCalled()
     expect(result.revOk).toBeUndefined()
     expect(result.ok).toBe(true)
+  })
+})
+
+// 라운드 5 S-1 — 잠금에 걸리면(10분 안에 시작한 running 실행이 있으면) 아무것도 하지 않고
+// 그 실행의 시작 시각을 싣는다. 버튼 화면이 "완료" 대신 "N분 전 시작한 동기화가 도는 중"을 말하는 근거.
+describe("runAll — 실행 잠금(skipped)", () => {
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("잠금을 잡은 실행이 있으면 startSyncRun 없이 skipped와 runningSince를 돌려준다", async () => {
+    findRunningSyncRun.mockResolvedValueOnce({
+      id: "run-locked", started_at: "2026-09-23T08:00:00Z", source: "all", trigger: "cron",
+    })
+    const { runAll } = await import("@/lib/branch/sync/run-all")
+
+    const result = await runAll({ trigger: "manual", sources: ["rev"] })
+
+    expect(result).toEqual({ ok: false, skipped: true, runningSince: "2026-09-23T08:00:00Z" })
+    expect(startSyncRun).not.toHaveBeenCalled()
+    expect(syncRev).not.toHaveBeenCalled()
   })
 })

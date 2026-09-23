@@ -20,7 +20,7 @@ import { fyOf } from "@/lib/branch/fiscal"
 // 태그는 sync 라우트의 무효화(["branch-dsh","branch-seg","branch-kpi"])를 그대로 받도록 유지.
 // TTL 60→300초(품질 웨이브3): DQ 이슈는 시트 편집을 즉시 반영해야 하는 정본 수치가
 // 아니라 후행 QC 지표(위 주석)라 정확성에 영향이 없다 — sync 라우트가 동기화 직후
-// 이 태그들을 무효화하므로(app/api/admin/branch/sync/route.ts:20 cacheTags) "방금 동기화"
+// 이 태그들을 즉시 만료하므로(lib/server/sync-cache-tags.ts branchRev·branchHw 묶음) "방금 동기화"
 // 직후에는 여전히 즉시 갱신되고, TTL은 동기화 없이 유휴 상태로 재요청될 때만 체감된다.
 const readDsh = unstable_cache(
   async () => parseDsh(await readRangeWithFormat(envSheetId("dashboard"), DSH_RANGE), fyOf(new Date())),

@@ -1,5 +1,5 @@
 import "server-only"
-import { startSyncRun, finishSyncRun, isAnyRunning, type SyncTrigger } from "@/lib/repositories/branch-sync"
+import { startSyncRun, finishSyncRun, findRunningSyncRun, type SyncTrigger } from "@/lib/repositories/branch-sync"
 import { syncRev } from "./sync-rev"
 import { syncHw } from "./sync-hw"
 import { recaptureActiveRevImport, type RevImportRecaptureResult } from "@/lib/repositories/sales-ledger-rev-import"
@@ -16,6 +16,8 @@ export interface RunAllResult {
   revImportError?: string
   error?: string
   skipped?: boolean
+  // skipped일 때 잠금을 잡고 있는 실행의 시작 시각(ISO). 버튼 화면이 "N분 전 시작" 안내에 쓴다.
+  runningSince?: string
   // 실패로 간주하지 않는 소스별 경고(예: REV 범위 상한 도달 가능성). ok=true여도 있을 수 있다.
   warnings?: string[]
 }
@@ -36,7 +38,8 @@ function describeError(e: unknown): string {
 }
 
 export async function runAll(opts: { trigger: SyncTrigger; sources?: Array<"rev"|"hw"> }): Promise<RunAllResult> {
-  if (await isAnyRunning()) return { ok: false, skipped: true }
+  const running = await findRunningSyncRun()
+  if (running) return { ok: false, skipped: true, runningSince: running.started_at }
   const sources = opts.sources ?? ["rev", "hw"]
   const id = await startSyncRun("all", opts.trigger)
   try {
