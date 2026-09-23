@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { Component, useEffect, useState, type ReactNode } from "react"
 
 import { RouteTransition } from "@/components/transitions/RouteTransition"
+import { excludesAnalytics, hidesPublicChrome } from "@/lib/analytics-paths"
 import { useConsent } from "@/lib/consent/useConsent"
 
 const ConditionalHeader = dynamic(() =>
@@ -57,14 +58,6 @@ const ChannelTalkLoader = dynamic(
 
 const PUBLIC_WIDGET_IDLE_TIMEOUT_MS = 2800
 
-function isInternalPath(pathname: string) {
-  return (
-    pathname.startsWith("/admin") ||
-    pathname.startsWith("/checkout") ||
-    pathname.startsWith("/receipt")
-  )
-}
-
 class PublicWidgetBoundary extends Component<
   { children: ReactNode; resetKey: string },
   { hasError: boolean }
@@ -91,8 +84,9 @@ export function AppChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const [readyPath, setReadyPath] = useState<string | null>(null)
   const { choice: consentChoice } = useConsent()
-  const showPublicChrome = !isInternalPath(pathname)
-  const showAnalytics = showPublicChrome
+  const showPublicChrome = !hidesPublicChrome(pathname)
+  // 크롬과 계측은 범위가 다르다 — /checkout 은 크롬을 걷되 계측·동의 배너는 공개 화면과 같다.
+  const showAnalytics = !excludesAnalytics(pathname)
   const showMobileFloatingCta = showPublicChrome && !pathname.startsWith("/l/")
 
   useEffect(() => {
@@ -141,7 +135,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
           ) : null}
         </>
       ) : null}
-      {showPublicChrome ? <ConsentBanner /> : null}
+      {showAnalytics ? <ConsentBanner /> : null}
       {showPublicChrome ? <ChannelTalkLoader /> : null}
       {/* 챗봇은 첫 idle 마운트 이후 계속 떠 있게 유지한다 — readyPath는 한 번
           채워지면 null로 되돌아가지 않으므로, 소프트 내비게이션 중에도 언마운트되지

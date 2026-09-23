@@ -64,7 +64,13 @@ interface SupabaseUpdateCall extends SupabaseCall {
   match: unknown
 }
 
-function createSupabaseStub(insertError: string | null) {
+/** 행마다 다른 오류를 내려면 함수로 넘긴다(컬럼 미적용 폴백 검증). */
+type InsertErrorInput =
+  | string
+  | null
+  | ((values: Record<string, unknown>) => { code?: string; message: string } | null)
+
+function createSupabaseStub(insertError: InsertErrorInput) {
   const inserts: SupabaseCall[] = []
   const updates: SupabaseUpdateCall[] = []
 
@@ -73,12 +79,16 @@ function createSupabaseStub(insertError: string | null) {
       return {
         insert(values: Record<string, unknown>) {
           inserts.push({ table, values })
+          const error =
+            typeof insertError === "function"
+              ? insertError(values)
+              : insertError
+                ? { message: insertError }
+                : null
           return {
             select: () => ({
               single: async () =>
-                insertError
-                  ? { data: null, error: { message: insertError } }
-                  : { data: { id: "req-uuid-1" }, error: null },
+                error ? { data: null, error } : { data: { id: "req-uuid-1" }, error: null },
             }),
           }
         },
@@ -99,7 +109,7 @@ function createSupabaseStub(insertError: string | null) {
 
 /** 알림 실패가 신청 저장을 깨지 않는지 보기 위해 실패 주입을 옵션으로 둔다. */
 interface LoadOptions {
-  insertError?: string | null
+  insertError?: InsertErrorInput
   leadId?: string | null
   emitError?: Error
 }
@@ -680,6 +690,57 @@ describe("submitCheckoutRequest — 저장 · 리드 연동 · 알림", () => {
       gclid: "gclid-1",
       anonymousId: "anon-1",
     })
+  })
+
+  it("자격 컬럼이 아직 없으면 빼고 다시 넣는다 — 코드가 마이그레이션보다 먼저 나가도 신청을 잃지 않는다", async () => {
+    const { submitCheckoutRequest, supabase, submitLeadCapture } = await loadWithMockedNotifications({
+      insertError: (values) =>
+        "academy_size" in values
+          ? {
+              code: "PGRST204",
+              message:
+                "Could not find the 'academy_size' column of 'checkout_requests' in the schema cache",
+            }
+          : null,
+    })
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const deferred = createDeferred()
+
+    const result = await submitCheckoutRequest(
+      { ...VALID_PAYLOAD, role: "원장", academySize: "300~500명" },
+      deferred.context
+    )
+    await deferred.flush()
+
+    expect(result).toEqual({ status: 200, body: { ok: true, requestId: "req-uuid-1" } })
+    expect(supabase.inserts).toHaveLength(2)
+    expect(supabase.inserts[1].values).not.toHaveProperty("role")
+    expect(supabase.inserts[1].values).not.toHaveProperty("academy_size")
+    expect(supabase.inserts[1].values).toMatchObject({ org: "행복학원", phone: "010-1234-5678" })
+    expect(consoleWarn).toHaveBeenCalled()
+    // 신청 행에서 빠진 자격 값은 리드 쪽에 남는다 — 스코어 배점이 폴백에서도 산다.
+    expect(submitLeadCapture.mock.calls[0][0]).toMatchObject({ role: "원장", size: "300~500명" })
+  })
+
+  it("이름만 겹치는 다른 오류에는 폴백하지 않는다 — 원인을 가리지 않는다", async () => {
+    const { submitCheckoutRequest, supabase } = await loadWithMockedNotifications({
+      insertError: () => ({
+        code: "23514",
+        message:
+          'new row for relation "checkout_requests" violates check constraint "checkout_requests_role_check"',
+      }),
+    })
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const deferred = createDeferred()
+
+    const result = await submitCheckoutRequest(
+      { ...VALID_PAYLOAD, role: "원장" },
+      deferred.context
+    )
+    await deferred.flush()
+
+    expect(result).toEqual({ status: 500, body: { ok: false } })
+    expect(supabase.inserts).toHaveLength(1)
   })
 
   it("버킷에 없는 규모 값은 버린다 — 같은 컬럼에 자유 문자열이 섞이면 집계가 쪼개진다", async () => {

@@ -8,6 +8,7 @@ import {
 } from "@/components/checkout/request-date"
 import type { BillingMode } from "@/components/billing/BillingModeTabs"
 import { loadKoreaHolidayDates } from "@/lib/korea-holiday-dates"
+import { koreaPublicHolidayDatesBetween } from "@/lib/korea-public-holidays"
 
 export const metadata: Metadata = {
   title: "Checkout",
@@ -45,21 +46,21 @@ function resolveInitialMode(
 /**
  * 희망일 달력이 막을 공휴일. 주말은 화면이 직접 계산한다(순수 계산).
  *
- * 원천이 늦거나 자격이 없으면 빈 목록으로 떨어뜨린다 — 공휴일을 못 읽었다고 신청 화면을
- * 닫으면 멀쩡한 신청을 잃는다. 희망일은 담당자와 다시 조율하는 값이라 "덜 막는" 쪽이 맞다.
+ * 설치는 공휴일에 하지 않는다(운영 방침). 법정 공휴일은 고정 목록이 하한선이라 구글 원천이
+ * 늦거나 자격이 없어도 막히고, 빠지는 것은 임시공휴일뿐이다. 조회가 통째로 던져도 신청
+ * 화면은 닫지 않고 고정 목록으로 진행한다 — 공휴일을 못 읽었다고 멀쩡한 신청을 잃지 않는다.
  */
 async function loadDesiredDateHolidays(): Promise<string[]> {
   const todayIso = getKstToday()
+  const minIso = getMinDesiredDate(todayIso)
+  const maxIso = getMaxDesiredDate(todayIso)
 
   try {
-    const holidays = await loadKoreaHolidayDates(
-      getMinDesiredDate(todayIso),
-      getMaxDesiredDate(todayIso)
-    )
+    const holidays = await loadKoreaHolidayDates(minIso, maxIso)
     return [...holidays]
   } catch (error) {
-    console.error("[checkout] 공휴일 조회 실패 — 주말만 막고 진행:", error)
-    return []
+    console.error("[checkout] 공휴일 조회 실패 — 법정 공휴일 고정 목록으로 진행:", error)
+    return koreaPublicHolidayDatesBetween(minIso, maxIso)
   }
 }
 
