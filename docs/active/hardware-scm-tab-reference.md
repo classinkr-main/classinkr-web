@@ -2,7 +2,7 @@
 
 기준 시점: 2026-09-15
 대상: `/admin/hardware` → [components/admin/hardware/HardwareInventoryClient.tsx](../../components/admin/hardware/HardwareInventoryClient.tsx)
-관련: [UX 계획·작업내역](./hardware-admin-ux-plan.md) · [입력 가속 기획](./hardware-input-speed-plan-2026-09-20.md) · [hardware-ops 개념 문서](../hardware-ops/README.md) · [시트 해석](../hardware-ops/sheet-interpretation.md) · [DESIGN.md](../../DESIGN.md) · [DB 마이그레이션 런북](./db-migration-runbook.md)
+관련: [UX 계획·작업내역](./hardware-admin-ux-plan.md) · [입력 가속 기획](./hardware-input-speed-plan-2026-09-20.md) · [뷰별 사용성 라운드 2 — 입출력·데이터 싱크](./hardware-view-ux-round2-plan-2026-09-23.md) · [hardware-ops 개념 문서](../hardware-ops/README.md) · [시트 해석](../hardware-ops/sheet-interpretation.md) · [DESIGN.md](../../DESIGN.md) · [DB 마이그레이션 런북](./db-migration-runbook.md)
 
 이 문서는 하드웨어 재고 화면을 **공급망(SCM) 운영 콘솔**로 보고 정체성·UI·기능을 한곳에 고정한다. "지금 무엇이고, 어떻게 생겼고, 무엇을 하는가"의 단일 기준이다. 운영자가 할 일은 §8에 순서대로 모았다.
 
