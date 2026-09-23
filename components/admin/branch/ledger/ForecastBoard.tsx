@@ -9,7 +9,7 @@ import { useMemo, useState } from "react"
 import { CalendarRange } from "lucide-react"
 import { CONFIDENCE_TOKENS, type ConfidenceKey } from "@/lib/branch/confidence-tokens"
 import { formatExactMoney } from "@/lib/branch/ledger-format"
-import type { MatrixPendingDraft } from "./rev-matrix-logic"
+import { pendingMatchesKind, rowCommitKind, type MatrixPendingDraft } from "./rev-matrix-logic"
 import {
   ConfidenceStackBar,
   FORECAST_WEEK_RANGE_LABELS,
@@ -325,8 +325,10 @@ export function ForecastBoard({
                           const token = CONFIDENCE_TOKENS[card.confidence]
                           const partial = card.confidence !== "confirmed" && card.confirmedRatio > 0
                           const meta = productCategoryMeta(card.productCategory)
-                          // 라운드 5 B-6 — 이 행·이 달에 적용 전 초안이 있으면 매트릭스 셀과 같은 문법(확도색 점)으로.
+                          // 라운드 5 B-6 — 이 행·이 달에 적용 전 초안이 있으면 매트릭스 셀과 같은 문법(확도색 점)으로. 기존 딜
+                          // 카드에 고객명으로 걸린 신규 초안은 이 카드 값을 바꾸지 않고 별도 행으로 더해진다(title에서 구분).
                           const pending = pendingByCell?.get(`${card.rowId}::${selectedMonth}`) ?? null
+                          const pendingAdditive = Boolean(pending && row && !pendingMatchesKind(pending, rowCommitKind(row)))
                           return (
                             <button
                               key={`${card.rowId}-${cardIndex}`}
@@ -339,7 +341,9 @@ export function ForecastBoard({
                                 partial ? `확정 ${Math.round(card.confirmedRatio * 100)}% 포함` : null,
                                 card.draft ? "장부 입력(적용 초안) 행" : null,
                                 pending
-                                  ? `대기 초안 ${formatExactMoney(pending.amount)}(${CONFIDENCE_TOKENS[pending.confidence].label}) — 적용 전, 체크 큐에서 확인`
+                                  ? pendingAdditive
+                                    ? `신규 초안 +${formatExactMoney(pending.amount)}(${CONFIDENCE_TOKENS[pending.confidence].label}) — 적용 전, 적용되면 별도 행으로 더해짐`
+                                    : `대기 초안 ${formatExactMoney(pending.amount)}(${CONFIDENCE_TOKENS[pending.confidence].label}) — 적용 전, 체크 큐에서 확인`
                                   : null,
                                 "누르면 빠른 입력",
                               ]

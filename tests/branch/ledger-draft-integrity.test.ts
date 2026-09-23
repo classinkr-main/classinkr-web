@@ -124,7 +124,8 @@ describe("R-W mergeWeeklyCellEdit — 주차 연속 편집이 앞 편집을 지�
 
   it("워크벤치 buildCellDraftInput이 같은 달 대기 초안(월 키)을 병합 기준으로 넘긴다", () => {
     const body = sliceBetween(workbenchSource(), "const buildCellDraftInput = useCallback", "const onMatrixAmountClamped = useCallback")
-    expect(body).toContain("lookupMatrixPending(pendingByCell, { rowId, month })")
+    // 라운드 5 리뷰 — 편집 대상 판정은 이 행의 초안 종류(kind)와 맞는 대기 초안만 본다.
+    expect(body).toContain("lookupMatrixPending(pendingByCell, { rowId, month }, kind)")
     expect(body).toContain("pendingWeekly: monthPending?.weekly ?? null")
   })
 })

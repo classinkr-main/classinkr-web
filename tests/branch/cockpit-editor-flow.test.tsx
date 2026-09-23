@@ -90,18 +90,27 @@ describe("워크벤치 배선 — 콕핏", () => {
     expect(source).toContain('key={editingDraftId ?? selectedRow?.id ?? "new"}')
   })
 
-  it("편집기 입력은 '손댄 값' 표시를 남기고, 딜을 새로 불러오면 지운다", () => {
-    expect(source).toContain("setDraftForm={setCockpitDraftForm}")
+  it("레일·콕핏 입력은 편집 순번을 올리고(손댄 값), 딜을 새로 불러오면 깨끗한 순번을 맞춘다(리뷰 보강: 레일 입력도 센다)", () => {
+    expect(source).toContain("setDraftForm={setUserDraftForm}")
+    expect(source).toContain("setDraftForm: setUserDraftForm,")
+    expect(source).toContain("saveDraft: saveDraftTracked,")
     const load = source.slice(source.indexOf("const loadDealDetail = useCallback"), source.indexOf("const operation: DraftOperation = row.ledgerOrigin"))
-    expect(load).toContain("cockpitFormDirtyRef.current = false")
+    expect(load).toContain("draftCleanSeqRef.current = userDraftEditSeqRef.current")
+    // 저장이 도는 사이에 친 값은 저장 뒤에도 "손댄 값"으로 남는다 — 저장 시점 순번으로만 깨끗하게.
+    const save = source.slice(source.indexOf("const saveDraftTracked = useCallback"), source.indexOf("const editDraft = useCallback"))
+    expect(save).toContain("const editSeqAtSave = userDraftEditSeqRef.current")
+    expect(save).toContain("draftCleanSeqRef.current = editSeqAtSave")
   })
 
-  it("목록 월이 실제로 바뀐 실행에서만, 손대지 않은 시트 행을 그 달로 다시 불러온다", () => {
+  it("목록 월이 실제로 바뀐 실행에서만, 손대지 않은 시트 행을 그 달로 다시 불러온다(열린 큐는 닫지 않는다)", () => {
     const effect = source.slice(source.indexOf("const cockpitListMonthRef = useRef(selectedMonth)"), source.indexOf("const onCockpitEditorMonthChange"))
     expect(effect).toContain("if (previousMonth === selectedMonth) return")
-    expect(effect).toContain("cockpitFormDirtyRef.current) return")
-    expect(effect).toContain("void loadDealDetail(cockpitSheetRow)")
+    expect(effect).toContain("isDraftFormDirty()) return")
+    expect(effect).toContain("void loadDealDetail(cockpitSheetRow, { keepRail: true })")
     expect(source).toContain('lens === "cockpit" && selectedRow && !editingDraftId && selectedRow.ledgerOrigin !== "draft" ? selectedRow : null')
+    // 편집기 월 선택: 손대지 않았으면 바로 그 달로 다시 불러온다(목록과 같은 달을 고른 경우도).
+    const change = source.slice(source.indexOf("const onCockpitEditorMonthChange = useCallback"), source.indexOf("const reloadCockpitDealForListMonth"))
+    expect(change).toContain("void loadDealDetail(cockpitSheetRow, { month, keepRail: true })")
   })
 
   it("저장 후 다음은 목록이 보여 주는 순서의 다음 딜로, 넘어간 직후 한 번만 첫 주차 칸 포커스", () => {

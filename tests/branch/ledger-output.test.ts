@@ -117,7 +117,7 @@ describe("pendingWeekDisplay — 주차 칸 대기 초안 표시(R-2·R-W)", () 
   it("같은 달 주차 병합 초안은 바뀐 주차만 표시하고, 표시값과 같은 주차는 표시하지 않는다", () => {
     const merged = pending({ amount: 700_000, weekly: [100_000, 600_000, 0, 0, 0] })
     const map = new Map([["row-1::2026-09", merged]])
-    expect(pendingWeekDisplay(map, "row-1", "2026-09", 1, 200_000)).toEqual({ pending: merged, amount: 600_000 })
+    expect(pendingWeekDisplay(map, "row-1", "2026-09", 1, 200_000)).toEqual({ pending: merged, amount: 600_000, additive: false })
     expect(pendingWeekDisplay(map, "row-1", "2026-09", 0, 100_000)).toBeNull()
   })
 
@@ -159,12 +159,15 @@ describe("matrixDisplayedCellAmount — Ctrl+C는 칸에 보이는 값을 복사
 describe("useMatrixEditor 배선 — 0 커밋 차단(R-12)·Ctrl+C(B1)", () => {
   const logic = read("components/admin/branch/ledger/rev-matrix-logic.ts")
 
-  it("값 있는 칸을 0으로 치면 onCommitCell 대신 onZeroCommitBlocked — 서버 400을 사전 차단", () => {
+  it("0 커밋은 에디터가 아니라 onCommitCell이 '만들어질 초안 금액'으로 막는다 — 주차 병합 행의 한 주 0은 저장된다(리뷰 보강)", () => {
     const commit = sliceBetween(logic, "const commitBuffer = useCallback(", "const moveSelection = useCallback(")
-    const guard = commit.indexOf("if (amount <= 0) {")
-    expect(guard).toBeGreaterThan(-1)
-    expect(commit.indexOf("onZeroCommitBlocked?.(coord)")).toBeGreaterThan(guard)
-    expect(commit.indexOf("onCommitCell(coord.rowId")).toBeGreaterThan(commit.indexOf("onZeroCommitBlocked?.(coord)"))
+    // 에디터는 값이 원래 없던 칸의 0만 무시하고, 나머지는 부모로 넘긴다.
+    expect(commit).toContain("if (amount <= 0 && previous <= 0) return false")
+    expect(commit).not.toContain("if (amount <= 0) {")
+    const workbench = read("components/admin/branch/SalesLedgerWorkbench.tsx")
+    const onCommit = sliceBetween(workbench, "const onCommitCell = useCallback(", "const persist = built.existingId")
+    expect(onCommit).toContain("if (!(built.input.amount > 0)) {")
+    expect(onCommit).toContain('key: "matrix-zero-blocked"')
   })
 
   it("Ctrl/Cmd+C는 물리 키(KeyC)로 판정하고, 드래그로 고른 텍스트가 있으면 브라우저 기본 복사를 둔다", () => {
@@ -191,7 +194,7 @@ describe("워크벤치 배선 — CSV 버튼·셀 복사·0 차단 안내", () =
     const copy = sliceBetween(workbench, "const copyMatrixCell = useCallback(", "const matrixEditor = useMatrixEditor(")
     expect(copy).toContain("matrixDisplayedCellAmount(row, coord, copySourceRef.current.pendingByCell)")
     expect(copy).toContain("copyTextToClipboard(String(value))")
-    expect(workbench).toContain("onZeroCommitBlocked: onMatrixZeroCommitBlocked")
+    expect(workbench).not.toContain("onZeroCommitBlocked")
     expect(workbench).toContain("onCopyCell: copyMatrixCell")
   })
 })
@@ -200,13 +203,15 @@ describe("RevMatrix 표시 — 대기 초안 값이 칸에 보인다(R-2)·원 �
   const matrix = read("components/admin/branch/ledger/RevMatrix.tsx")
 
   it("월 칸은 대기 초안 금액을 보이고, title은 장부 → 대기 초안(적용 전) 원 단위", () => {
-    expect(matrix).toContain("const shownTotal = pending ? pending.amount : bucket.total")
+    // 기존 딜 행에 고객명으로 걸린 신규 초안은 더해질 값이라 칸 값을 대신하지 않는다(리뷰 보강).
+    expect(matrix).toContain("const replacingPending = pending && !pendingAdditive ? pending : null")
+    expect(matrix).toContain("const shownTotal = replacingPending ? replacingPending.amount : bucket.total")
     expect(matrix).toContain("{formatWeekAmount(shownTotal)}")
     expect(matrix).toContain("→ 대기 초안 ${formatExactMoney(pending.amount)}")
   })
 
   it("주차 칸은 pendingWeekDisplay로 고른 값, 행 주차 입력은 matrixWeekInputs 한 곳에서", () => {
-    expect(matrix).toContain("weekPendingOf: (month, week, display) => pendingWeekDisplay(pendingByCell, row.id, month, week, display)")
+    expect(matrix).toContain("weekPendingOf: (month, week, display) => pendingWeekDisplay(pendingByCell, row.id, month, week, display, rowCommitKind(row))")
     expect(matrix).toContain("const inputs = matrixWeekInputs(row, month)")
     expect(matrix).toContain("{shownDisplay > 0 ? formatWeekAmount(shownDisplay) : \"·\"}")
   })

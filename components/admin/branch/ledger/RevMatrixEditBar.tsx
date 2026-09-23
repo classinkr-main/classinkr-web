@@ -17,6 +17,7 @@ import { formatExactMoney } from "@/lib/branch/ledger-format"
 import { DRAFT_CONFIDENCE_OPTIONS } from "./shared"
 import type { DraftConfidence } from "./shared"
 import type { MatrixCellCoord } from "./rev-matrix-logic"
+import { previewMatrixAmount } from "./rev-matrix-logic"
 
 // 확도 단축키 표시 문자(E/H/C) — 실제 keydown 판정의 정본은 confidence-shortcuts.ts(SHORTCUTS)
 // 다. 여기서는 버튼에 작게 병기할 표시 문자만 필요해 별도 로컬 맵을 둔다(판정 로직 중복 아님).
@@ -47,9 +48,8 @@ export interface RevMatrixEditBarProps {
 // 기존 관례(components/admin/calendar/DatePickerPopover.tsx)와도 일치한다.
 export function RevMatrixEditBar(props: RevMatrixEditBarProps): React.JSX.Element {
   const { editing, selected, context, buffer, confidence, onPickConfidence, disabled = false } = props
-  // 편집 버퍼 → 원 단위 숫자(콤마·¥·공백 허용). 숫자가 없으면 null("빈 칸").
-  const bufferDigits = buffer.replace(/[^\d]/g, "")
-  const bufferAmount = bufferDigits ? Number(bufferDigits) : null
+  // 편집 버퍼 → 원 단위 숫자 — 커밋과 같은 파싱(콤마·¥·공백 허용, 소수는 반올림). 숫자가 없으면 null("빈 칸").
+  const bufferAmount = previewMatrixAmount(buffer)
 
   return (
     <div

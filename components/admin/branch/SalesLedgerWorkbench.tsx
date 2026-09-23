@@ -164,9 +164,11 @@ import {
   MATRIX_PRODUCT_W,
   MATRIX_WEEK_W,
   firstMatrixCellForMonth,
+  matrixCoordKey,
   matrixDisplayedCellAmount,
   mergeWeeklyCellEdit,
   parseSinglePastedAmount,
+  rowCommitKind,
   pendingCellAmount,
   railDedupTarget,
   resolveDraftEditTargetRow,
@@ -261,6 +263,7 @@ import {
   productCategoryMeta,
   ProductCategoryPill,
   REV_PRODUCT_FILTERS,
+  resultToDraftFeedback,
   rowMonthAmount,
   rowMonthConfidenceTone,
   rowMonthConfirmed,
@@ -521,7 +524,9 @@ export default function SalesLedgerWorkbench({
         if (current.some((toast) => (toast.key ?? toast.text) === dedupeKey)) return current
         const stacked = [...current, { id, ...next }]
         if (stacked.length <= MATRIX_TOAST_MAX) return stacked
-        const dropIndex = stacked.findIndex((toast) => toast.kind === "info")
+        // 넘치면 기존 것 중 가장 오래된 info부터, 없으면 가장 오래된 것을 민다 — 방금 넣은 토스트는 밀지 않는다(라운드 5
+        // 리뷰: 오류가 닫을 때까지 남게 된 뒤로, 오류 3건이 떠 있으면 실행 취소·큐 열기 같은 새 info가 즉시 사라졌다).
+        const dropIndex = current.findIndex((toast) => toast.kind === "info")
         return stacked.filter((_, index) => index !== (dropIndex !== -1 ? dropIndex : 0))
       })
       // 라운드 5 Q-14 — 오류는 읽기 전에 사라지면 안 된다: ttlMs를 따로 주지 않은 오류 토스트는 사용자가 닫을 때까지 둔다
@@ -1131,12 +1136,22 @@ export default function SalesLedgerWorkbench({
     enabled: pipelineSeed == null || !pipelineSeedFresh,
     keepPreviousData: true,
   })
-  const pipeline: BranchJsonState<BranchPipelineResponse> =
+  const pipelineResolved: BranchJsonState<BranchPipelineResponse> =
     pipelineFetched.data != null || pipelineFetched.error != null
       ? pipelineFetched
       : pipelineSeed
         ? { key: pipelineStateKey, data: pipelineSeed.data, error: null, loading: false, stale: false, staleSince: null }
         : pipelineFetched
+  // 라운드 5 R-5(리뷰 보강) — 서버 시드로 첫 화면을 그린 경우 useBranchJson은 요청을 만들지 않아(enabled=false) 자기
+  // state에 data가 없다. 그래서 첫 새로고침·팀/기간 전환에서 keepPreviousData가 돌려줄 "직전 값"이 없어, 매트릭스가
+  // 로딩 패널로 바뀌고 콕핏은 통째로 다시 마운트돼 목록 검색·퀵필터가 지워졌다. 마지막으로 보여 준 행을 기억해
+  // 로딩 중(오류 아님)에는 그 값을 "갱신 중"으로 보인다(렌더 중 상태 조정 — 값이 바뀔 때만 한 번).
+  const [lastPipelineData, setLastPipelineData] = useState<BranchPipelineResponse | null>(null)
+  if (pipelineResolved.data != null && pipelineResolved.data !== lastPipelineData) setLastPipelineData(pipelineResolved.data)
+  const pipeline: BranchJsonState<BranchPipelineResponse> =
+    pipelineResolved.data == null && pipelineResolved.loading && !pipelineResolved.error && lastPipelineData != null
+      ? { ...pipelineResolved, data: lastPipelineData, previous: true }
+      : pipelineResolved
 
   // 하드웨어 콘솔 역링크 게이팅: 하드웨어 원장에 실제 출고 이력이 있는 고객사만 링크로 건다.
   // 출고 목적지(to_location)가 창고/샘플/고객(generic) 등이 아닌 실제 고객사명인 것만 수집.
@@ -1896,9 +1911,10 @@ export default function SalesLedgerWorkbench({
   // pending이 없으면 기존 규약: 주차 셀은 그 주차의 현재 표시값, 아니면 그 달 표시 금액.
   const matrixCellValue = useCallback(
     (coord: MatrixCellCoord) => {
-      const pending = lookupMatrixPending(pendingByCell, coord)
-      if (pending) return pendingCellAmount(pending, coord.week)
       const row = rowById.get(coord.rowId)
+      // 편집 대상이 될 수 있는 초안만(라운드 5 리뷰) — 기존 딜 행에 이름으로 걸린 신규 초안은 더해질 값이지 이 칸의 값이 아니다.
+      const pending = lookupMatrixPending(pendingByCell, coord, row ? rowCommitKind(row) : undefined)
+      if (pending) return pendingCellAmount(pending, coord.week)
       if (!row) return 0
       if (coord.week != null) return rowWeeklySplit(row, coord.month).weeks[coord.week] ?? 0
       return rowMonthAmount(row, coord.month)
@@ -1912,7 +1928,8 @@ export default function SalesLedgerWorkbench({
   // 확도가 기록된 셀을 재편집할 때 기본값이 이웃 주차의 우세치로 뭉개지지 않는다.
   const matrixCellConfidence = useCallback(
     (coord: MatrixCellCoord): DraftConfidence => {
-      const pending = lookupMatrixPending(pendingByCell, coord)
+      const row = rowById.get(coord.rowId)
+      const pending = lookupMatrixPending(pendingByCell, coord, row ? rowCommitKind(row) : undefined)
       if (pending) {
         if (coord.week != null) {
           const slot = pending.weeklyConfidence?.[coord.week]
@@ -1920,7 +1937,6 @@ export default function SalesLedgerWorkbench({
         }
         return pending.confidence
       }
-      const row = rowById.get(coord.rowId)
       if (!row) return "expected"
       if (coord.week != null && row.draftMonth === coord.month) {
         const slot = weeklyConfidenceFromMetadata(row.draftMetadata)?.[coord.week]
@@ -1966,7 +1982,7 @@ export default function SalesLedgerWorkbench({
       const row = rowById.get(rowId)
       if (!row) return null
       const sourceDealId = row.sourceDealId ?? (row.ledgerOrigin === "sheet" ? row.id : undefined)
-      const kind: DraftKind = sourceDealId ? "edit-row" : "new-row"
+      const kind: DraftKind = rowCommitKind(row)
       const weekToken = week != null ? `w${week + 1}` : "month"
       const weekSplit = week != null ? rowWeeklySplit(row, month) : null
       const priorAmount = week != null ? (weekSplit?.weeks[week] ?? 0) : rowMonthAmount(row, month)
@@ -1981,7 +1997,7 @@ export default function SalesLedgerWorkbench({
       // 라운드 5 R-W — 병합 기준은 같은 달에 이미 대기 중인 초안의 주차 배열이 먼저다(순수 함수 mergeWeeklyCellEdit).
       // 행 표시값을 기준으로 하면 W1 → W2 연속 편집에서 두 번째 저장이 W1을 시트 원값으로 되돌린 채 같은 초안을
       // PATCH해 첫 편집이 사라졌다. 대기 초안에 주차 배열이 있으면 월합계만 행이어도 그 배열로 병합한다.
-      const monthPending = week != null ? lookupMatrixPending(pendingByCell, { rowId, month }) : null
+      const monthPending = week != null ? lookupMatrixPending(pendingByCell, { rowId, month }, kind) : null
       if (week != null && (weekSplit?.source === "explicit" || monthPending?.weekly)) {
         const merged = mergeWeeklyCellEdit({
           rowWeeks: weekSplit?.source === "explicit" ? weekSplit.weeks : [],
@@ -2046,7 +2062,7 @@ export default function SalesLedgerWorkbench({
           sourceDealId: sourceDealId ?? null,
         },
       }
-      const existingId = lookupMatrixPending(pendingByCell, { rowId, month, week })?.id ?? null
+      const existingId = lookupMatrixPending(pendingByCell, { rowId, month, week }, kind)?.id ?? null
       return { input, existingId }
     },
     [lens, pendingByCell, period, rowById, team],
@@ -2094,6 +2110,18 @@ export default function SalesLedgerWorkbench({
     ): Promise<boolean> => {
       const built = buildCellDraftInput(rowId, month, amount, confidence, week)
       if (!built) return Promise.resolve(false)
+      // 라운드 5 R-12 — 초안 API는 양수만 받는다. 만들어질 초안 금액이 0 이하(값 있는 월 칸 비우기, 주차 병합이 아닌
+      // 칸 비우기)면 서버 400 대신 여기서 안내한다. 주차 병합 행에서 한 주만 0으로 만드는 것은 합계가 양수라 저장된다.
+      if (!(built.input.amount > 0)) {
+        if (!options?.silent) {
+          pushMatrixToast({
+            kind: "info",
+            key: "matrix-zero-blocked",
+            text: "칸을 비우거나 0으로 만들 수는 없습니다 — 대기 초안은 체크 큐에서 취소, 적용분은 되돌리기(상쇄)로 뺍니다.",
+          })
+        }
+        return Promise.resolve(false)
+      }
       const persist = built.existingId ? updateDraft(built.existingId, built.input) : createDraft(built.input)
       return persist.then((result) => {
         // 낙관적 잠금 충돌(웨이브 7 2단, I4) 또는 남이 체크한 초안(checked-by-other): 이번 수정은 반영되지
@@ -2159,15 +2187,6 @@ export default function SalesLedgerWorkbench({
     pushMatrixToast({ kind: "info", text: "음수는 0으로 처리됩니다 — 감액은 장부 가감 입력 사용" })
   }, [pushMatrixToast])
 
-  // 라운드 5 R-12 — 값 있는 칸을 비우거나 0으로 치면 서버 400 대신 여기서 안내한다(양수만 받는 초안 계약은 그대로).
-  const onMatrixZeroCommitBlocked = useCallback(() => {
-    pushMatrixToast({
-      kind: "info",
-      key: "matrix-zero-blocked",
-      text: "칸을 비우거나 0으로 만들 수는 없습니다 — 대기 초안은 체크 큐에서 취소, 적용분은 되돌리기(상쇄)로 뺍니다.",
-    })
-  }, [pushMatrixToast])
-
   // 라운드 5 B1 — 선택 셀 Ctrl/Cmd+C: 셀에 보이는 값(대기 초안이 있으면 그 금액)을 원 단위 정수로 복사한다.
   // 시트·엑셀에 그대로 붙여 넣을 수 있게 통화 기호·콤마 없이. 범위 복사는 Shift+방향키 범위 선택(P2-8)과 함께.
   // 데이터는 ref로 읽어 콜백 identity를 고정한다(useMatrixEditor의 keydown 핸들러 재생성 방지).
@@ -2200,7 +2219,6 @@ export default function SalesLedgerWorkbench({
     cellConfidence: matrixCellConfidence,
     onCommitCell,
     onAmountClamped: onMatrixAmountClamped,
-    onZeroCommitBlocked: onMatrixZeroCommitBlocked,
     onCopyCell: copyMatrixCell,
     onLockedCellActivate: onMatrixLockedCellActivate,
   })
@@ -2273,8 +2291,11 @@ export default function SalesLedgerWorkbench({
       event.preventDefault()
       // 라운드 5 R-13 — 한 칸짜리 숫자는 미리보기 없이 그 칸 편집으로 들어가 값만 채운다(치는 것과 같은 경로 —
       // Enter로 저장, Esc로 취소, 확도 팝오버 그대로). 주차 칸도 한 칸이면 치는 것과 같아 안전하다.
+      // 선택이 남아 있어도 그 칸이 지금 잠겼을 수 있다(큐에서 적용 등) — 편집 가능한 칸일 때만 편집으로 들어간다.
+      // 아니면 아래 기존 경로(주차 칸 안내·미리보기의 "잠김" 표시)로 간다.
       const singleAmount = parseSinglePastedAmount(text)
-      if (singleAmount != null) {
+      const anchorKey = matrixCoordKey(anchor)
+      if (singleAmount != null && editableCells.some((cell) => matrixCoordKey(cell) === anchorKey)) {
         matrixEditor.actions.beginEdit(anchor.rowId, anchor.month, String(singleAmount), anchor.week)
         return
       }
@@ -2292,7 +2313,7 @@ export default function SalesLedgerWorkbench({
       setPasteConfidence(loadStoredMatrixConfidence() ?? "expected")
       setPastePlan(plan)
     },
-    [matrixEditor.actions, matrixEditor.editing, matrixEditor.selected, matrixMonths, pushMatrixToast, visibleDealRows, editRowOverrideMonths, rows],
+    [editableCells, matrixEditor.actions, matrixEditor.editing, matrixEditor.selected, matrixMonths, pushMatrixToast, visibleDealRows, editRowOverrideMonths, rows],
   )
 
   // 프리뷰 확인 → 셀 편집과 같은 입력 빌더(buildCellDraftInput)로 초안 입력을 만들어 배치 1회(200건
@@ -2590,20 +2611,29 @@ export default function SalesLedgerWorkbench({
 
   // 상세 요청 순번 — 빠르게 다른 딜을 연달아 고르면 늦게 도착한 앞 딜의 응답이 폼·상세를 덮어쓰지 않게 한다.
   const detailRequestSeqRef = useRef(0)
-  // 라운드 5 K-4 — 콕핏 편집기에 사용자가 손댄 값이 있는지. 딜을 새로 불러오면 깨끗해지고, 편집기 입력(setCockpitDraftForm)이
-  // 더럽힌다. 목록 월이 바뀌었을 때 손댄 값은 지우지 않고(편집기가 월 불일치를 알린다), 깨끗하면 그 달 값으로 다시 불러온다.
-  const cockpitFormDirtyRef = useRef(false)
-  const loadDealDetail = useCallback(async (row: LedgerRevenueRow, options?: { month?: string }) => {
+  // 라운드 5 K-4 — 폼에 사용자가 손댄 값이 있는지(레일·콕핏 공통). 사람이 고칠 때마다 편집 순번을 올리고(setUserDraftForm),
+  // 폼을 새로 채우거나(loadDealDetail) 그 값이 저장되면 "깨끗한 순번"을 맞춘다. 불리언 대신 순번이라 저장이 도는 사이에
+  // 친 값은 저장 성공 뒤에도 "손댄 값"으로 남는다. 목록 월이 바뀌어도 손댄 값은 지우지 않는다(편집기가 월 불일치를 알린다).
+  const userDraftEditSeqRef = useRef(0)
+  const draftCleanSeqRef = useRef(0)
+  // 폼 전체를 갈아 끼운 마지막 동작의 순번(라운드 5 리뷰) — 상세 응답이 늦게 와도, 그 사이 다른 동작(대상 해제·초안 편집·
+  // 새 딜)이 폼을 가져갔으면 그 폼에 이 딜의 고객·담당·메모를 덮어쓰지 않는다.
+  const draftFormOwnerRef = useRef(0)
+  const loadDealDetail = useCallback(async (row: LedgerRevenueRow, options?: { month?: string; keepRail?: boolean }) => {
     const requestSeq = ++detailRequestSeqRef.current
     const isLatestRequest = () => detailRequestSeqRef.current === requestSeq
-    cockpitFormDirtyRef.current = false
+    const formOwner = ++draftFormOwnerRef.current
+    draftCleanSeqRef.current = userDraftEditSeqRef.current
     // 라운드 5 K-2 — 다른 딜을 고르면 진행 중이던 초안 편집을 끝낸다. 폼은 아래에서 이 딜로 통째로 바뀌는데
     // 편집 상태(editingDraftId)만 남으면, 저장이 그 초안을 이 딜의 값으로 덮어쓴다(초안 X가 딜 B로 재지정).
     setEditingDraftId(null)
     setSelectedRow(row)
     setSelectedGroupKey(null)
-    setSidePanelCollapsed(false)
-    setRailView("detail")
+    // keepRail: 콕핏이 월을 옮겨 다시 불러올 때처럼 사용자가 레일을 부른 게 아니면 열려 있는 큐를 닫지 않는다.
+    if (!options?.keepRail) {
+      setSidePanelCollapsed(false)
+      setRailView("detail")
+    }
     setDetail(null)
     setDetailError(null)
     setDetailLoading(true)
@@ -2663,7 +2693,7 @@ export default function SalesLedgerWorkbench({
       if (!isLatestRequest()) return
       if (data.error) throw new Error(data.error)
       setDetail(data.deal ?? null)
-      if (data.deal) {
+      if (data.deal && draftFormOwnerRef.current === formOwner) {
         setDraftForm((current) => {
           // 금액 갱신 기준 월은 폼의 타겟 월(current.month) — selectedMonth로 고정하면 초안 파생
           // 행(draftMonth ≠ selectedMonth)을 열었을 때 원천 딜의 '다른 달' 금액이 폼 금액을 덮어썼다.
@@ -2734,11 +2764,12 @@ export default function SalesLedgerWorkbench({
     })
   }, [onSelectCockpitDeal])
 
-  // 라운드 5 K-4 — 콕핏 편집기 입력은 이 래퍼로: 값을 손댔다는 표시를 남긴다(loadDealDetail이 지운다).
-  const setCockpitDraftForm = useCallback<typeof setDraftForm>((update) => {
-    cockpitFormDirtyRef.current = true
+  // 라운드 5 K-4 — 사람이 폼을 고치는 경로(레일·콕핏 편집기)는 이 래퍼로: 편집 순번을 올린다.
+  const setUserDraftForm = useCallback<typeof setDraftForm>((update) => {
+    userDraftEditSeqRef.current += 1
     setDraftForm(update)
   }, [])
+  const isDraftFormDirty = useCallback(() => userDraftEditSeqRef.current !== draftCleanSeqRef.current, [])
   // 목록 월(selectedMonth)과 편집기 월이 따로 놀면 다른 달의 주차값을 이 달로 저장할 수 있었다(K-4). 시트 행을 고른
   // 상태에서 목록 월이 바뀌면 그 달 기준으로 다시 불러온다 — 손댄 값이 있으면 지우지 않고 편집기가 불일치를 알린다.
   // 적용 초안 행(draftMonth 고정)·초안 편집 중·새 딜은 대상이 아니다.
@@ -2751,17 +2782,22 @@ export default function SalesLedgerWorkbench({
     const previousMonth = cockpitListMonthRef.current
     cockpitListMonthRef.current = selectedMonth
     if (previousMonth === selectedMonth) return
-    if (!cockpitSheetRow || draftForm.month === selectedMonth || cockpitFormDirtyRef.current) return
-    void loadDealDetail(cockpitSheetRow)
-  }, [cockpitSheetRow, draftForm.month, loadDealDetail, selectedMonth])
-  // 편집기의 월 선택: 시트 행이면 목록 월도 같이 옮긴다. 손대지 않았으면 위 effect가 그 달 값으로 다시 불러오고,
-  // 손댔으면 입력값을 그 달로 옮긴다(명시적으로 고른 달이므로).
+    if (!cockpitSheetRow || draftForm.month === selectedMonth || isDraftFormDirty()) return
+    void loadDealDetail(cockpitSheetRow, { keepRail: true })
+  }, [cockpitSheetRow, draftForm.month, isDraftFormDirty, loadDealDetail, selectedMonth])
+  // 편집기의 월 선택: 시트 행이면 목록 월도 같이 옮긴다. 손댔으면 입력값을 그 달로 옮기고(명시적으로 고른 달), 손대지
+  // 않았으면 그 달 값으로 바로 다시 불러온다 — 목록 월과 같은 달을 고른 경우(월 불일치 상태)도 여기서 처리된다.
   const onCockpitEditorMonthChange = useCallback((month: string) => {
-    if (cockpitFormDirtyRef.current) setDraftForm((current) => ({ ...current, month }))
+    if (isDraftFormDirty()) {
+      setDraftForm((current) => ({ ...current, month }))
+      setSelectedMonth(month)
+      return
+    }
     setSelectedMonth(month)
-  }, [])
+    if (cockpitSheetRow) void loadDealDetail(cockpitSheetRow, { month, keepRail: true })
+  }, [cockpitSheetRow, isDraftFormDirty, loadDealDetail])
   const reloadCockpitDealForListMonth = useCallback(() => {
-    if (cockpitSheetRow) void loadDealDetail(cockpitSheetRow)
+    if (cockpitSheetRow) void loadDealDetail(cockpitSheetRow, { keepRail: true })
   }, [cockpitSheetRow, loadDealDetail])
 
   // 라운드 5 K-6 — "저장 후 다음": 목록이 실제로 보여 주는 순서(로컬 검색·퀵필터 반영)의 다음 딜로 넘어간다.
@@ -2942,14 +2978,25 @@ export default function SalesLedgerWorkbench({
     }
   }, [buildDraftInput, createDraft, defaultDraftForm, draftForm.customer, draftForm.month, draftForm.week, drafts, selectedRow, updateDraft])
 
-  // 라운드 5 K-4 — 콕핏 저장: 성공하면 그 값은 초안으로 남았으니 "손댄 값"이 아니다(이후 월 이동은 그 달 값으로 다시 불러온다).
-  const saveCockpitDraft = useCallback(async (kind: DraftKind) => {
+  // 라운드 5 K-4 — 레일·콕핏 저장 래퍼: 성공하면 저장 시점까지의 값은 초안으로 남았으니 "손댄 값"이 아니다(저장이 도는
+  // 사이에 친 값은 순번이 앞서 있어 그대로 "손댄 값"). 콕핏에서 선택 딜로 "새 딜"을 저장하면 폼이 비고 편집기가 새로
+  // 마운트돼(딜별 key) 편집기 안 결과 문구가 사라지므로, 그 경우 결과를 토스트로 말한다(리뷰 보강).
+  const saveDraftTracked = useCallback(async (kind: DraftKind) => {
+    const editSeqAtSave = userDraftEditSeqRef.current
+    const remountsCockpitEditor = lens === "cockpit" && kind === "new-row" && selectedRow != null
     const result = await saveDraft(kind)
-    if (result.persisted && !result.conflict && !result.validationMessage) cockpitFormDirtyRef.current = false
+    const accepted = !result.conflict && !result.validationMessage
+    if (result.persisted && accepted) draftCleanSeqRef.current = editSeqAtSave
+    if (remountsCockpitEditor && accepted) {
+      const feedback = resultToDraftFeedback(result)
+      pushMatrixToast({ kind: feedback.kind === "error" ? "error" : "info", key: "cockpit-new-deal-saved", text: feedback.text })
+    }
     return result
-  }, [saveDraft])
+  }, [lens, pushMatrixToast, saveDraft, selectedRow])
 
   const editDraft = useCallback((draft: LedgerDraft) => {
+    // 진행 중인 딜 상세 응답이 이 초안 폼에 그 딜의 고객·담당을 덮어쓰지 않게 폼을 가져온다(라운드 5 리뷰).
+    draftFormOwnerRef.current += 1
     setEditingDraftId(draft.id)
     setSidePanelCollapsed(false)
     setRailView("input")
@@ -2986,6 +3033,7 @@ export default function SalesLedgerWorkbench({
   }, [team])
 
   const cancelDraftEdit = useCallback(() => {
+    draftFormOwnerRef.current += 1
     setEditingDraftId(null)
     setDraftForm(defaultDraftForm)
   }, [defaultDraftForm])
@@ -3211,6 +3259,13 @@ export default function SalesLedgerWorkbench({
   // 라운드 5 Q-3 — 입력 탭 상단 "대상" 칩: 지금 저장하면 어느 행을 고치는지(수정 초안) 보인다. ×는 대상을 풀고
   // 빈 신규 입력으로(고객·담당·금액 초기화) — 다른 행 값을 달고 신규로 저장되는 실수를 막는다.
   const clearRailTarget = useCallback(() => {
+    // 진행 중인 상세 요청을 끊고 폼을 가져온다 — 늦게 온 응답이 빈 신규 입력에 방금 푼 행의 고객·담당을 되채우면
+    // 그대로 그 고객의 신규 초안이 된다(라운드 5 리뷰).
+    detailRequestSeqRef.current += 1
+    draftFormOwnerRef.current += 1
+    setDetail(null)
+    setDetailError(null)
+    setDetailLoading(false)
     setEditingDraftId(null)
     setSelectedRow(null)
     setSelectedGroupKey(null)
@@ -3227,7 +3282,8 @@ export default function SalesLedgerWorkbench({
     onClearTarget: clearRailTarget,
     queueMode,
     draftForm,
-    setDraftForm,
+    // 라운드 5 K-4(리뷰 보강) — 레일 입력도 "손댄 값"으로 센다. 레일에서 치고 콕핏으로 넘어가 월을 옮겨도 지워지지 않게.
+    setDraftForm: setUserDraftForm,
     selectedDraftOperation,
     monthOptions,
     selectedMonth,
@@ -3242,7 +3298,7 @@ export default function SalesLedgerWorkbench({
     lockedWeeks: weeklyLockMask,
     saveEditedDraft,
     cancelDraftEdit,
-    saveDraft,
+    saveDraft: saveDraftTracked,
   }
 
   return (
@@ -4449,6 +4505,10 @@ export default function SalesLedgerWorkbench({
                   selectedRowId={selectedRow?.id ?? null}
                   onSelectDeal={handleCockpitSelectDeal}
                   onNewDeal={() => {
+                    // 진행 중인 딜 상세 응답이 새 딜 폼을 되채우지 않게(clearRailTarget과 같은 이유).
+                    detailRequestSeqRef.current += 1
+                    draftFormOwnerRef.current += 1
+                    setDetailLoading(false)
                     setEditingDraftId(null)
                     setSelectedRow(null)
                     setDraftForm(defaultDraftForm)
@@ -4472,7 +4532,7 @@ export default function SalesLedgerWorkbench({
                       : null
                   }
                   draftForm={draftForm}
-                  setDraftForm={setCockpitDraftForm}
+                  setDraftForm={setUserDraftForm}
                   monthOptions={monthOptions}
                   managerOptions={managerOptions}
                   draftFormInvalid={draftFormInvalid}
@@ -4483,7 +4543,7 @@ export default function SalesLedgerWorkbench({
                   currentMonthAmount={selectedRowMonthTotal}
                   saveEditedDraft={saveEditedDraft}
                   cancelDraftEdit={cancelDraftEdit}
-                  saveDraft={saveCockpitDraft}
+                  saveDraft={saveDraftTracked}
                   onSwitchToRev={() => selectLens("rev")}
                   listMonth={cockpitSheetRow ? selectedMonth : undefined}
                   onMonthChange={cockpitSheetRow ? onCockpitEditorMonthChange : undefined}
@@ -4514,7 +4574,12 @@ export default function SalesLedgerWorkbench({
         {/* 라운드 5 Q-14 — 레일(z-50) 위에 뜨도록 z-[55](확인 대화상자 z-[60]보다는 아래). R-9 — 정보는 role=status(공손히),
             오류만 role=alert(즉시 낭독). 예전엔 전부 alert라 셀 복사·저장 같은 정보 토스트도 낭독을 끊었다. */}
         {matrixToasts.length > 0 && (
-          <div className="fixed bottom-20 left-1/2 z-[55] flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-col gap-2">
+          <div
+            className={`fixed left-1/2 z-[55] flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-col gap-2 ${
+              // 모바일에서 레일은 화면 아래를 덮는 시트다 — 열려 있으면 토스트를 위로 올려 시트의 입력·저장 줄을 가리지 않는다.
+              !sidePanelCollapsed && (lens !== "cockpit" || railView === "queue") ? "top-3 sm:top-auto sm:bottom-20" : "bottom-20"
+            }`}
+          >
             {matrixToasts.map((toast) => {
               // 지역 변수로 좁혀서 아래 action.onClick/label 접근에 non-null 단언 없이 타입이 좁혀지게 한다.
               const action = toast.action

@@ -11,7 +11,7 @@ import { AlertTriangle, ChevronLeft, ChevronRight, Plus, Search, UserRound } fro
 import { CONFIDENCE_TOKENS, type ConfidenceKey } from "@/lib/branch/confidence-tokens"
 import { formatExactMoney } from "@/lib/branch/ledger-format"
 import { branchMemberSearchHaystack } from "@/lib/branch/member-names"
-import type { MatrixPendingDraft } from "./rev-matrix-logic"
+import { pendingMatchesKind, rowCommitKind, type MatrixPendingDraft } from "./rev-matrix-logic"
 import {
   formatMonthLabel,
   formatMoney,
@@ -334,6 +334,8 @@ export function CockpitDealList({
               const token = CONFIDENCE_TOKENS[tone]
               const selected = row.id === selectedRowId
               const pending = pendingByCell?.get(`${row.id}::${selectedMonth}`) ?? null
+              // 기존 딜에 고객명으로 걸린 신규 초안은 이 딜 값이 아니라 별도 행으로 더해진다(라운드 5 리뷰) — "신규 +"로 구분.
+              const pendingAdditive = Boolean(pending && !pendingMatchesKind(pending, rowCommitKind(row)))
               return (
                 <li key={row.id}>
                   <button
@@ -358,14 +360,20 @@ export function CockpitDealList({
                     {pending && (
                       <span
                         className="mt-1 flex items-center justify-end gap-1 text-[10.5px] font-bold tabular-nums"
-                        title={`대기 초안 ${formatExactMoney(pending.amount)}(${CONFIDENCE_TOKENS[pending.confidence].label}) — 적용 전, 체크 큐에서 확인`}
+                        title={
+                          pendingAdditive
+                            ? `신규 초안 +${formatExactMoney(pending.amount)}(${CONFIDENCE_TOKENS[pending.confidence].label}) — 적용 전, 적용되면 별도 행으로 더해짐`
+                            : `대기 초안 ${formatExactMoney(pending.amount)}(${CONFIDENCE_TOKENS[pending.confidence].label}) — 적용 전, 체크 큐에서 확인`
+                        }
                       >
                         <span
                           aria-hidden
                           className="h-1.5 w-1.5 shrink-0 rounded-full"
                           style={{ backgroundColor: CONFIDENCE_TOKENS[pending.confidence].color }}
                         />
-                        <span className={CONFIDENCE_TOKENS[pending.confidence].textStrongClass}>대기 {formatMoney(pending.amount)}</span>
+                        <span className={CONFIDENCE_TOKENS[pending.confidence].textStrongClass}>
+                          {pendingAdditive ? `신규 +${formatMoney(pending.amount)}` : `대기 ${formatMoney(pending.amount)}`}
+                        </span>
                       </span>
                     )}
                     <span className="mt-1.5 flex items-center justify-between gap-2">
