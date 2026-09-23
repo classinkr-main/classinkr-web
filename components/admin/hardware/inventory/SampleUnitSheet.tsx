@@ -253,6 +253,14 @@ function SampleUnitSheet({ unit, onClose, onChanged, reduceMotion }: SampleUnitS
 
                 {action && (
                   <div className="mt-3 space-y-2.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-3">
+                    {(action === "loan" || action === "return") && (
+                      // 같은 "대여·반환"인데 경로마다 결과가 다르다(하드웨어 라운드 2 P-9) — 여기서는 유닛만 바뀌고 원장에는
+                      // 남지 않는다. 원장까지 남기려면 홈 사무실·샘플 재고의 [대여]·[반납](빠른 기록)으로.
+                      <p className="text-[11px] font-semibold leading-relaxed text-[#615D59]">
+                        이 시트의 {action === "loan" ? "대여" : "반환"}는 유닛 상태만 바꾸고 원장(입출고 기록)에는 남지 않습니다. 원장까지
+                        남기려면 홈 &lsquo;사무실·샘플 재고&rsquo;의 [{action === "loan" ? "대여" : "반납"}]으로 기록하세요.
+                      </p>
+                    )}
                     <div className="grid grid-cols-2 gap-2.5">
                       <label className="block">
                         <span className="mb-1 block text-[11px] font-bold text-[#615D59]">처리일</span>

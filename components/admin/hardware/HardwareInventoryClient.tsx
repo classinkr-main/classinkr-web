@@ -667,6 +667,12 @@ export default function HardwareInventoryClient({
   // 내역 탭 상세 필터 패널 — 상태/판매유형/기간/제품/물류No/고객사는 기본 접힘, 검색·유형만 상시 노출.
   const [filtersExpanded, setFiltersExpanded] = useState(false)
   const [detailId, setDetailId] = useState<string | null>(null)
+  // 샘플 유닛 목록·열린 유닛 시트 — URL 동기화(unit=)가 읽으므로 그 effect 보다 먼저 선언한다.
+  const [sampleUnits, setSampleUnits] = useState<HardwareSampleUnit[] | null>(null)
+  const [sampleUnitSheetId, setSampleUnitSheetId] = useState<string | null>(null)
+  // 딥링크로 들어온 대상(하드웨어 라운드 2 L-4·P-10) — 데이터가 도착한 뒤 파생값으로 확인·해석한다.
+  // unit= 딥링크의 관리번호 — 유닛 목록이 오면 그 유닛 시트로 연다(상태라서 목록 조회도 부른다). 닫으면 비운다.
+  const [linkedUnitCode, setLinkedUnitCode] = useState<string | null>(null)
   const [customerDetail, setCustomerDetail] = useState<string | null>(null)
   const sheetPanelRef = useRef<HTMLElement>(null)
   const detailPanelRef = useRef<HTMLElement>(null)
@@ -695,6 +701,9 @@ export default function HardwareInventoryClient({
   //   &q=<검색어> &type=<유형> &status=<상태> &voided=1 &saleType=<유형> &product=<필터키>
   //   &lot=<물류No> &from=<YYYY-MM-DD> &to=<YYYY-MM-DD> &sort=asc(기본 desc는 생략)
   //   &hq=<홈 탭 통합검색어> — 내역 탭 q와 별개 상태(hardwareSearch)라 키를 분리한다(감사 2026-09-11).
+  //   하드웨어 라운드 2(L-4·E-5·P-10) — 되돌아오기·공유·새로고침에서 위치를 잃지 않게 더한 키:
+  //   &m=<이동 id>(내역 상세 시트) &page=<내역 묶음 페이지, 1은 생략> &sub=outbound(입출고 하위 보기, 입고는 생략)
+  //   &iq=<입고 물량 검색어> &period=quarter|year(출고 집계 기간, 월은 생략) &unit=<샘플 관리번호>(유닛 시트)
   // 값이 기본값이면 파라미터 자체를 쓰지 않는다 — URL을 깨끗하게 유지하고, 필터를 하나도 안 걸었을
   // 때는 예전과 동일하게 ?tab=history 정도로 짧다.
   const HISTORY_TYPE_URL_VALUES = new Set(["all", "sample", "inbound", "outbound", "return", "transfer", "repair", "adjust"])
@@ -739,6 +748,21 @@ export default function HardwareInventoryClient({
     const hq = params.get("hq")
     if (hq) setHardwareSearch(hq)
 
+    const movementId = (params.get("m") ?? "").trim()
+    if (movementId) {
+      if (!tab) setActiveTab("history")
+      setDetailId(movementId)
+    }
+    const page = Number(params.get("page"))
+    if (Number.isInteger(page) && page > 1) setMovementsPage(page)
+    if (params.get("sub") === "outbound") setEntrySub("outbound")
+    const iq = params.get("iq")
+    if (iq) setInboundSearch(iq)
+    const period = params.get("period")
+    if (period === "quarter" || period === "year") setOutPeriod(period)
+    const unitCode = (params.get("unit") ?? "").trim()
+    if (unitCode) setLinkedUnitCode(unitCode)
+
     setUrlReady(true)
     // 마운트 1회 전용 — 의도적으로 의존성 없음(urlReady 판정용 useEffect 관례, 아래 쓰기 effect와 동일).
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -767,6 +791,16 @@ export default function HardwareInventoryClient({
     if (historyDateFrom) params.set("from", historyDateFrom)
     if (historyDateTo) params.set("to", historyDateTo)
     if (historySort === "asc") params.set("sort", "asc")
+    if (detailId) params.set("m", detailId)
+    if (activeTab === "history" && movementsPage > 1) params.set("page", String(movementsPage))
+    if (entrySub === "outbound") params.set("sub", "outbound")
+    if (inboundSearch.trim()) params.set("iq", inboundSearch.trim())
+    if (outPeriod !== "month") params.set("period", outPeriod)
+    // 유닛 시트는 관리번호로 — id 보다 사람이 읽고 말하기 쉽다. 목록이 아직 없으면 들어온 값을 그대로 유지한다.
+    const unitCodeForUrl = sampleUnitSheetId
+      ? sampleUnits?.find((unit) => unit.id === sampleUnitSheetId)?.asset_code ?? null
+      : linkedUnitCode
+    if (unitCodeForUrl) params.set("unit", unitCodeForUrl)
 
     const queryString = params.toString()
     const nextUrl = `${window.location.pathname}${queryString ? `?${queryString}` : ""}${window.location.hash}`
@@ -788,6 +822,14 @@ export default function HardwareInventoryClient({
     historyDateFrom,
     historyDateTo,
     historySort,
+    detailId,
+    movementsPage,
+    entrySub,
+    inboundSearch,
+    outPeriod,
+    sampleUnitSheetId,
+    sampleUnits,
+    linkedUnitCode,
   ])
 
   const requestCloseSheet = useCallback(() => {
@@ -805,7 +847,8 @@ export default function HardwareInventoryClient({
   }, [busy, editingId, quickCart.length])
 
   useEffect(() => {
-    if (!sheetOpen && pendingMovement == null && voidTarget == null && detailId == null && customerDetail == null) return
+    const unitSheetOpen = sampleUnitSheetId != null || linkedUnitCode != null
+    if (!sheetOpen && pendingMovement == null && voidTarget == null && detailId == null && customerDetail == null && !unitSheetOpen) return
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return
       // 안쪽에서 먼저 처리한 Escape(고객사 목록 닫기 등)는 시트까지 닫지 않는다 — 입고표와 같은 규약.
@@ -818,6 +861,10 @@ export default function HardwareInventoryClient({
         setCustomerDetail(null)
       } else if (detailId) {
         setDetailId(null)
+      } else if (unitSheetOpen) {
+        // 유닛 시트도 Esc 로 닫는다(하드웨어 라운드 2 P-11) — aria-modal 인데 Esc 가 없었다.
+        setSampleUnitSheetId(null)
+        setLinkedUnitCode(null)
       } else if (sheetOpen) {
         requestCloseSheet()
       }
@@ -829,7 +876,68 @@ export default function HardwareInventoryClient({
       document.removeEventListener("keydown", onKey)
       document.body.style.overflow = previousOverflow
     }
-  }, [sheetOpen, pendingMovement, voidTarget, detailId, customerDetail, busy, voidingId, requestCloseSheet])
+  }, [sheetOpen, pendingMovement, voidTarget, detailId, customerDetail, sampleUnitSheetId, linkedUnitCode, busy, voidingId, requestCloseSheet])
+
+  // 상세·거래이력·유닛 시트 포커스(하드웨어 라운드 2 L-2·P-11) — 열리면 그 시트의 닫기 버튼으로 옮기고, Tab 은 맨 위
+  // 대화상자 안에서 돌고, 닫히면 연 자리로 돌려준다. 예전엔 포커스가 블러 뒤 목록에 남아 Tab 이 가려진 배경을 돌았다.
+  // (빠른 기록 시트·입고표·확인 다이얼로그는 각자 한다.)
+  const overlayFocusKey = detailId
+    ? `detail:${detailId}`
+    : customerDetail
+      ? `customer:${customerDetail}`
+      : sampleUnitSheetId != null || linkedUnitCode != null
+        ? `unit:${sampleUnitSheetId ?? linkedUnitCode}`
+        : null
+  useEffect(() => {
+    if (!overlayFocusKey) return
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const topDialog = () => {
+      const dialogs = document.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"]')
+      return dialogs.length > 0 ? dialogs[dialogs.length - 1] : null
+    }
+    let frame = 0
+    let handle = 0
+    const focusIn = () => {
+      const dialog = topDialog()
+      if (!dialog) {
+        if (frame++ < 20) handle = window.requestAnimationFrame(focusIn)
+        return
+      }
+      if (dialog.contains(document.activeElement)) return
+      const target = dialog.querySelector<HTMLElement>('[aria-label="닫기"]') ?? dialog.querySelector<HTMLElement>("button:not([disabled])")
+      target?.focus({ preventScroll: true })
+    }
+    focusIn()
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return
+      const dialog = topDialog()
+      if (!dialog) return
+      const items = dialog.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )
+      if (items.length === 0) return
+      const first = items[0]
+      const last = items[items.length - 1]
+      const active = document.activeElement
+      if (!dialog.contains(active)) {
+        event.preventDefault()
+        first.focus()
+      } else if (event.shiftKey && active === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener("keydown", onKey)
+    return () => {
+      window.cancelAnimationFrame(handle)
+      document.removeEventListener("keydown", onKey)
+      // 다른 시트로 넘어가는 중(거래이력 → 상세)이면 다음 effect 가 다시 옮긴다. 아니면 연 자리로.
+      if (previous && previous.isConnected && !topDialog()) previous.focus({ preventScroll: true })
+    }
+  }, [overlayFocusKey])
 
   useEffect(() => {
     if (!sheetOpen) return
@@ -1003,11 +1111,9 @@ export default function HardwareInventoryClient({
 
   // 샘플 유닛 트래커 — 대시보드와 별도 수명주기(작은 테이블, 캐시 없음). 부모가 소유해야
   // 입출고 시트(대여 유닛 선택)와 홈 섹션·상세 시트가 같은 데이터를 본다.
-  const [sampleUnits, setSampleUnits] = useState<HardwareSampleUnit[] | null>(null)
   const [sampleLatestEvents, setSampleLatestEvents] = useState<Record<string, HardwareSampleEvent>>({})
   const [sampleUnitsLoading, setSampleUnitsLoading] = useState(false)
   const [sampleUnitsError, setSampleUnitsError] = useState<string | null>(null)
-  const [sampleUnitSheetId, setSampleUnitSheetId] = useState<string | null>(null)
   const sampleUnitsRequestedRef = useRef(false)
 
   const loadSampleUnits = useCallback(async () => {
@@ -1033,15 +1139,21 @@ export default function HardwareInventoryClient({
   // 처음 필요해지는 순간 한 번만 받아온다(이후 갱신은 저장 후 loadSampleUnits 재호출).
   // urlReady를 함께 보는 이유: activeTab 초기값이 "home"이라, URL의 tab을 반영하기 전에
   // 판단하면 내역 탭 딥링크도 첫 커밋에서 한 번 받아버린다.
-  const sampleUnitsNeeded = urlReady && (activeTab === "home" || sheetOpen)
+  const sampleUnitsNeeded = urlReady && (activeTab === "home" || sheetOpen || linkedUnitCode != null)
   useEffect(() => {
     if (!sampleUnitsNeeded || sampleUnitsRequestedRef.current) return
     void loadSampleUnits()
   }, [sampleUnitsNeeded, loadSampleUnits])
 
   const selectedSampleUnit = useMemo(
-    () => sampleUnits?.find((unit) => unit.id === sampleUnitSheetId) ?? null,
-    [sampleUnits, sampleUnitSheetId]
+    () =>
+      sampleUnits?.find((unit) => unit.id === sampleUnitSheetId) ??
+      // unit= 딥링크 — 관리번호로 찾는다(대소문자 무시). 못 찾으면 시트를 열지 않고 아래 안내가 맡는다.
+      (sampleUnitSheetId == null && linkedUnitCode
+        ? sampleUnits?.find((unit) => unit.asset_code.toUpperCase() === linkedUnitCode.toUpperCase()) ?? null
+        : null) ??
+      null,
+    [sampleUnits, sampleUnitSheetId, linkedUnitCode]
   )
 
   // 반복 입력 기억 복원 — 하이드레이션 불일치를 피하려고 마운트 후 1회만 읽는다.
@@ -1179,6 +1291,11 @@ export default function HardwareInventoryClient({
           movement.owner,
           movement.memo,
           movement.status,
+          // "이 시리얼은 어디 갔나"에 답한다(하드웨어 라운드 2 L-14) — 시리얼·출발지·보관처·수입자도 찾는다.
+          (movement.serials ?? []).join(" "),
+          movement.from_location,
+          movement.storage_location,
+          movement.importer,
         ]
           .filter(Boolean)
           .some((value) => String(value).toLowerCase().includes(query))
@@ -2449,7 +2566,7 @@ export default function HardwareInventoryClient({
   useEffect(() => {
     const busyWithAnotherSurface =
       sheetOpen || inboundSheet.open || pendingMovement != null || voidTarget != null ||
-      detailId != null || customerDetail != null || sampleUnitSheetId != null ||
+      detailId != null || customerDetail != null || sampleUnitSheetId != null || linkedUnitCode != null ||
       // 예정 출고를 고르는 중에는 하단 작업 바가 그 화면의 주 작업면이다 — FAB 와 같은 기준으로 물러난다.
       plannedSelectionCount > 0
     if (busyWithAnotherSurface) return
@@ -2481,6 +2598,7 @@ export default function HardwareInventoryClient({
     detailId,
     customerDetail,
     sampleUnitSheetId,
+    linkedUnitCode,
     plannedSelectionCount,
     openInboundSheet,
     openSheet,
@@ -3621,6 +3739,26 @@ export default function HardwareInventoryClient({
           </div>
         )}
         <SyncOutcomeNotice notice={importNotice} onDismiss={() => setImportNotice(null)} className="mb-4" />
+        {/* 딥링크 대상이 불러온 범위에 없을 때(하드웨어 라운드 2 L-4·P-10) — 시트를 조용히 안 여는 대신 이유와 다음 행동을 말한다. */}
+        {detailId && data && !detailMovement && (
+          <div role="status" className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-4 py-2.5 text-[12px] font-semibold text-[#31302E]">
+            <span className="min-w-0 flex-1">
+              링크한 기록을 불러온 최근 {formatNumber(data.movements.length)}건 안에서 찾지 못했습니다 — 취소된 기록이면 내역의 &lsquo;취소 포함&rsquo;을,
+              오래된 기록이면 &lsquo;이전 이력 더 불러오기&rsquo;를 누르면 열립니다.
+            </span>
+            <button type="button" onClick={() => setDetailId(null)} className="shrink-0 cursor-pointer rounded-md px-2 py-1 text-[12px] font-bold text-[#615D59] hover:bg-black/5">
+              닫기
+            </button>
+          </div>
+        )}
+        {linkedUnitCode && sampleUnits && !selectedSampleUnit && (
+          <div role="status" className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-4 py-2.5 text-[12px] font-semibold text-[#31302E]">
+            <span className="min-w-0 flex-1">관리번호 {linkedUnitCode} 유닛을 찾지 못했습니다 — 샘플 트래커에서 확인하세요.</span>
+            <button type="button" onClick={() => setLinkedUnitCode(null)} className="shrink-0 cursor-pointer rounded-md px-2 py-1 text-[12px] font-bold text-[#615D59] hover:bg-black/5">
+              닫기
+            </button>
+          </div>
+        )}
         {/* 데이터가 이미 있는데 재검증이 실패했으면 화면은 직전 값이다 — 그 사실만 알리고 다시 불러오기를 준다(Q-12).
             데이터가 없으면 아래 오류 패널이 맡는다. */}
         {loadError && data && (
@@ -3976,7 +4114,10 @@ export default function HardwareInventoryClient({
 
       <SampleUnitSheet
         unit={selectedSampleUnit}
-        onClose={() => setSampleUnitSheetId(null)}
+        onClose={() => {
+          setSampleUnitSheetId(null)
+          setLinkedUnitCode(null)
+        }}
         onChanged={loadSampleUnits}
         reduceMotion={reduceMotion}
       />
@@ -4010,7 +4151,7 @@ export default function HardwareInventoryClient({
 
       {/* 예정 출고를 선택 중이면 숨긴다 — 이 버튼(fixed bottom-6 right-6)이 하단 일괄 작업 바의
           "선택 확정" 버튼을 덮는다(1440px 실측). 선택 중엔 그 바가 이 화면의 주 작업면이다. */}
-      {!sheetOpen && !inboundSheet.open && !pendingMovement && !voidTarget && !detailId && !customerDetail && !sampleUnitSheetId && plannedSelectionCount === 0 && (
+      {!sheetOpen && !inboundSheet.open && !pendingMovement && !voidTarget && !detailId && !customerDetail && !sampleUnitSheetId && !linkedUnitCode && plannedSelectionCount === 0 && (
         <button
           type="button"
           onClick={openFreshSheet}

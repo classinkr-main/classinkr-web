@@ -239,9 +239,9 @@ function CrmOrderBacklogSection({ canWrite, onRegistered, ledgerVersion = "" }: 
                 <li key={entry.id} className="flex flex-wrap items-start justify-between gap-3 py-2.5">
                   <div className="min-w-0 flex-1">
                     <p className="flex flex-wrap items-center gap-1.5 text-[12.5px] font-bold text-[#111110]">
-                      <span className="truncate">{entry.customerName ?? "고객사 미상"}</span>
+                      <span title={entry.customerName ?? undefined} className="truncate">{entry.customerName ?? "고객사 미상"}</span>
                       <span className="text-[#A39E98]">·</span>
-                      <span className="truncate">{entry.productName}</span>
+                      <span title={entry.productName ?? undefined} className="truncate">{entry.productName}</span>
                       <span className="tabular-nums text-[#615D59]">{formatNumber(entry.quantity ?? 0)}대</span>
                       {entry.ledgerOverlap ? (
                         <span className="rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[10.5px] font-bold text-[#7A520F]">

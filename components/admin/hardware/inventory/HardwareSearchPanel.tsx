@@ -128,7 +128,7 @@ function HardwareSearchPanel({
                 <p className="text-[11px] text-[#A39E98]">결과 없음</p>
               ) : hardwareSearchResults.products.map((row) => (
                 <div key={row.itemId} className="rounded-md bg-white px-2.5 py-2">
-                  <p className="truncate text-[12px] font-bold text-[#111110]">{row.product}</p>
+                  <p title={row.product} className="truncate text-[12px] font-bold text-[#111110]">{row.product}</p>
                   <p className="mt-0.5 text-[11px] font-semibold tabular-nums text-[#615D59]">
                     가용 {formatNumber(row.availableStock)} · 예정 {formatNumber(row.plannedOut)} · 창고 {formatNumber(row.warehouseStock)}
                   </p>
@@ -181,7 +181,7 @@ function HardwareSearchPanel({
                 <p className="text-[11px] text-[#A39E98]">결과 없음</p>
               ) : hardwareSearchResults.planned.map((movement) => (
                 <div key={movement.id} className="rounded-md bg-white px-2.5 py-2">
-                  <p className="truncate text-[12px] font-bold text-[#111110]">{movement.to_location ?? "도착지 미정"}</p>
+                  <p title={movement.to_location ?? undefined} className="truncate text-[12px] font-bold text-[#111110]">{movement.to_location ?? "도착지 미정"}</p>
                   <p className="mt-0.5 truncate text-[11px] font-semibold text-[#615D59]">
                     {movement.product_name} · {formatNumber(movement.quantity)}대 · {formatDate(movement.occurred_at)}
                   </p>
@@ -212,7 +212,7 @@ function HardwareSearchPanel({
                   onClick={() => setCustomerDetail(customer.customer)}
                   className="block w-full cursor-pointer rounded-md bg-white px-2.5 py-2 text-left transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
                 >
-                  <p className="truncate text-[12px] font-bold text-[#111110]">{customer.customer}</p>
+                  <p title={customer.customer} className="truncate text-[12px] font-bold text-[#111110]">{customer.customer}</p>
                   <p className="mt-0.5 text-[11px] font-semibold tabular-nums text-[#615D59]">
                     예정 {formatNumber(customer.planned)} · 출고 {formatNumber(customer.outbound)} · {customer.lastDate ?? "-"}
                   </p>

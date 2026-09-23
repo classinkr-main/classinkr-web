@@ -163,7 +163,7 @@ export default function HistoryTabPanel({
                   setMovementsPage(1)
                 }}
                 aria-label="하드웨어 원장 검색"
-                placeholder="품목·고객사·물량번호·담당자·특이사항 검색"
+                placeholder="품목·고객사·물량번호·시리얼·담당자·특이사항 검색"
                 className="h-10 w-full rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] pl-9 pr-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
               />
             </label>
@@ -230,6 +230,7 @@ export default function HistoryTabPanel({
                 <button
                   key={type}
                   type="button"
+                  aria-pressed={active}
                   onClick={() => {
                     setHistoryType(type)
                     setMovementsPage(1)
@@ -251,6 +252,7 @@ export default function HistoryTabPanel({
                   <button
                     key={order}
                     type="button"
+                  aria-pressed={active}
                     onClick={() => {
                       setHistorySort(order)
                       setMovementsPage(1)
@@ -283,6 +285,7 @@ export default function HistoryTabPanel({
                 <button
                   key={option.key}
                   type="button"
+                  aria-pressed={active}
                   onClick={() => {
                     setHistoryStatus(option.key)
                     setMovementsPage(1)
@@ -352,6 +355,7 @@ export default function HistoryTabPanel({
                 <button
                   key={type}
                   type="button"
+                  aria-pressed={active}
                   onClick={() => {
                     setSaleTypeFilter(active ? "" : type)
                     setMovementsPage(1)
@@ -382,6 +386,7 @@ export default function HistoryTabPanel({
                 <button
                   key={option.key}
                   type="button"
+                  aria-pressed={active}
                   onClick={() => {
                     setHistoryDateFrom(range.from)
                     setHistoryDateTo(range.to)
@@ -464,6 +469,7 @@ export default function HistoryTabPanel({
                   <button
                     key={option.key}
                     type="button"
+                  aria-pressed={active}
                     onClick={() => {
                       setProductFilter(active ? "" : option.key)
                       setMovementsPage(1)
@@ -482,7 +488,7 @@ export default function HistoryTabPanel({
           ) : null}
           {historyLots.length > 0 ? (
             <div className="mt-2.5 flex flex-wrap items-center gap-2">
-              <span className="shrink-0 text-[12px] font-bold text-[#111110]">물류No</span>
+              <span className="w-12 shrink-0 text-[12px] font-bold text-[#111110]">물량번호</span>
               <button
                 type="button"
                 onClick={() => {
@@ -503,6 +509,7 @@ export default function HistoryTabPanel({
                   <button
                     key={lot}
                     type="button"
+                  aria-pressed={active}
                     onClick={() => {
                       setLotFilter(active ? "" : lot)
                       setMovementsPage(1)

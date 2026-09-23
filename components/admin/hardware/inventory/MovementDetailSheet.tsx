@@ -245,6 +245,10 @@ function MovementDetailSheet({
                   시트 이관 기록은 여기서 수정·취소할 수 없습니다.
                 </p>
               ) : null}
+              {/* 비활성 버튼의 title 은 떠오르지 않는다(pointer-events-none) — 이유를 글로 보인다(L-17). */}
+              {detailCanEdit && !canFinalize ? (
+                <p className="text-center text-[11px] font-semibold text-[#615D59]">기록 취소에는 확정 권한(hardware.finalize)이 필요합니다.</p>
+              ) : null}
             </div>
           </motion.aside>
         </motion.div>
