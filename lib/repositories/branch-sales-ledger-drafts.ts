@@ -194,12 +194,20 @@ export interface UpdateBranchSalesLedgerDraftOptions {
 export interface ListBranchSalesLedgerDraftsOptions {
   status?: BranchSalesLedgerDraftStatus | "all"
   limit?: number
+  /**
+   * status가 "all"일 때 열린 초안(draft·checked)을 최근순 limit과 별도로 이만큼(최대 1,000) 더 읽어 합친다
+   * (라운드 5 Q-1). 최근 수정순 50건만 읽으면 큰 붙여넣기(최대 600칸) 뒤 대기 초안이 목록에서 빠져,
+   * 큐·일괄 적용·같은 셀 재편집(PATCH 대상 판정)이 그 초안을 못 봐 이중 계상 위험이 생겼다. 0·생략이면 끔.
+   */
+  openLimit?: number
 }
 
 export interface ListBranchSalesLedgerDraftsResult {
   generatedAt: string
   health: { ok: boolean; message: string | null }
   drafts: BranchSalesLedgerDraft[]
+  /** 열린 초안 조회가 openLimit에 닿았다 — 그보다 오래된 대기 초안이 더 있을 수 있다. */
+  openTruncated?: boolean
 }
 
 export interface ListBranchSalesLedgerEntriesOptions {
@@ -434,10 +442,30 @@ function buildUpdate(input: BranchSalesLedgerDraftUpdateInput, actor: string) {
   return patch
 }
 
+// 최근 이력(recent)과 열린 초안(open) 두 조회 결과를 id로 합쳐 최근 수정순으로 — 순수 함수(테스트 대상).
+export function mergeRecentAndOpenDraftRows<T extends { id: string; updated_at: string | null }>(
+  recent: readonly T[],
+  open: readonly T[],
+): T[] {
+  const byId = new Map<string, T>()
+  for (const row of [...recent, ...open]) {
+    if (!byId.has(row.id)) byId.set(row.id, row)
+  }
+  const time = (row: T) => {
+    const parsed = row.updated_at ? Date.parse(row.updated_at) : Number.NaN
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+  return Array.from(byId.values()).sort((a, b) => time(b) - time(a))
+}
+
+export const LEDGER_OPEN_DRAFTS_MAX = 1000
+
 export async function listBranchSalesLedgerDrafts(
   options: ListBranchSalesLedgerDraftsOptions = {},
 ): Promise<ListBranchSalesLedgerDraftsResult> {
   const limit = clampInteger(options.limit, 50, 1, 200)
+  const status = options.status ?? "all"
+  const openLimit = status === "all" && options.openLimit ? clampInteger(options.openLimit, 0, 0, LEDGER_OPEN_DRAFTS_MAX) : 0
   const supabase = createSupabaseAdminClient()
 
   let query = supabase
@@ -446,18 +474,31 @@ export async function listBranchSalesLedgerDrafts(
     .order("updated_at", { ascending: false })
     .limit(limit)
 
-  if (options.status && options.status !== "all") query = query.eq("status", options.status)
+  if (status !== "all") query = query.eq("status", status)
 
-  const { data, error } = await query
+  const openQuery = openLimit > 0
+    ? supabase
+        .from("branch_sales_ledger_drafts")
+        .select("*")
+        .in("status", ["draft", "checked"])
+        .order("updated_at", { ascending: false })
+        .limit(openLimit)
+    : null
+
+  const [recentResult, openResult] = await Promise.all([query, openQuery])
+  const error = recentResult.error ?? openResult?.error ?? null
   if (error) {
     if (isMissingDraftsTableError(error)) return notReadyResult()
     throw new Error(`[branch-sales-ledger-drafts] 조회 실패: ${error.message}`)
   }
 
+  const recentRows = (recentResult.data ?? []) as BranchSalesLedgerDraftRow[]
+  const openRows = (openResult?.data ?? []) as BranchSalesLedgerDraftRow[]
   return {
     generatedAt: new Date().toISOString(),
     health: { ok: true, message: null },
-    drafts: ((data ?? []) as BranchSalesLedgerDraftRow[]).map(toDraft),
+    drafts: (openQuery ? mergeRecentAndOpenDraftRows(recentRows, openRows) : recentRows).map(toDraft),
+    ...(openQuery ? { openTruncated: openRows.length >= openLimit } : {}),
   }
 }
 

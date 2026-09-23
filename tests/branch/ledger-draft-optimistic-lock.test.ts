@@ -209,7 +209,7 @@ describe("saveDraft/saveEditedDraft — 입력 레일 결과 플래그 전파(�
     const body = sliceFn(
       workbenchSource(),
       "const saveDraft = useCallback",
-      "[buildDraftInput, createDraft, defaultDraftForm, draftForm.customer, draftForm.month, draftForm.week, drafts, pendingByCell, selectedRow, updateDraft]",
+      "[buildDraftInput, createDraft, defaultDraftForm, draftForm.customer, draftForm.month, draftForm.week, drafts, selectedRow, updateDraft]",
     )
     expect(body).toContain('if (kind === "new-row" && draft) {')
     expect(body).toContain("conflict: result.conflict")
@@ -221,7 +221,7 @@ describe("saveDraft/saveEditedDraft — 입력 레일 결과 플래그 전파(�
     const body = sliceFn(
       workbenchSource(),
       "const saveEditedDraft = useCallback",
-      "[buildDraftInput, defaultDraftForm, draftForm.month, draftForm.week, editingDraft, pendingByCell, rowByDealKey, updateDraft]",
+      "[buildDraftInput, defaultDraftForm, draftForm.month, draftForm.week, drafts, editingDraft, rowByDealKey, updateDraft]",
     )
     const guardIndex = body.indexOf("if (!result.conflict && !result.validationMessage) {")
     const clearEditIndex = body.indexOf("setEditingDraftId(null)")

@@ -911,6 +911,15 @@ export function RevMatrixPasteDialog({
               같은 이름의 행이 여러 개라 건너뜀: {plan.ambiguousNames.join(", ")} — 매트릭스에서 직접 입력하세요
             </p>
           )}
+          {/* 라운드 5 R-1 — 장부에는 있지만 지금 화면(현재 페이지·펼친 행·필터) 밖에 있는 고객. 예전엔 "시트에
+              없는 고객"으로 분류돼 새 행 초안(중복 고객 행)을 만들 수 있었다. 화면 밖 행을 몰래 고치지도 않는다. */}
+          {plan.outOfViewNames.length > 0 && (
+            <p className="mt-2 rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-2.5 py-1.5 text-[10.5px] font-semibold leading-relaxed text-[#7A520F]">
+              화면 밖 고객 {plan.outOfViewNames.length.toLocaleString("ko-KR")}명 건너뜀: {plan.outOfViewNames.slice(0, 8).join(", ")}
+              {plan.outOfViewNames.length > 8 ? ` 외 ${(plan.outOfViewNames.length - 8).toLocaleString("ko-KR")}명` : ""} — 다른 페이지이거나
+              필터·접힌 품목 행에 있습니다. 필터를 풀거나 행을 펼친 뒤 다시 붙여넣으세요.
+            </p>
+          )}
           <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] font-bold">
             <span className="rounded-full border border-[#BDEFD8] bg-[#ECFDF5] px-2 py-0.5 text-[#084734]">
               생성 {plan.applyCount.toLocaleString("ko-KR")}

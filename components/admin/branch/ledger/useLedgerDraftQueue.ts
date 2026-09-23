@@ -16,6 +16,7 @@ import {
   type DraftStatus,
   type LedgerDraft,
 } from "./shared"
+import { capLedgerDrafts } from "./draft-list"
 
 export interface LedgerEntry {
   id: string
@@ -73,6 +74,8 @@ interface LedgerDraftsResponse {
   // 별도 전달된다(app/api/admin/branch/ledger-drafts/route.ts GET). loadDrafts가 이를
   // reversedDraftIds 클라 상태의 서버 진실 소스로 시드한다.
   reversedDraftIds?: string[]
+  // 라운드 5 Q-1 — 열린 초안 조회(open=600)가 한도에 닿았다. 더 오래된 대기 초안이 목록 밖에 있을 수 있다.
+  openTruncated?: boolean
   error?: string
 }
 
@@ -260,6 +263,8 @@ export function useLedgerDraftQueue() {
   const [queueError, setQueueError] = useState<string | null>(null)
   // 서버 재연결 시 재전송에 실패해 여전히 로컬에만 있는 초안 수 — 배지 경고용(항목 2).
   const [unsyncedLocalCount, setUnsyncedLocalCount] = useState(0)
+  // 열린 초안이 조회 한도(600)를 넘었는지 — 큐 머리에 "일부만 보임"을 알린다(부분을 전체로 숨기지 않기).
+  const [openDraftsTruncated, setOpenDraftsTruncated] = useState(false)
   // 품질 웨이브 7 — 항목 2: 레코드별 에러(404 "레코드 소실" 등) — draft id → 사용자 대상 메시지.
   // 이 Set/Map은 queueMode를 절대 건드리지 않는다(전역 강등 없음) — 그 행에만 배지로 보여주고
   // 새로고침(loadDrafts)을 유도한다. loadDrafts가 서버 목록을 다시 받아오면 통째로 비운다 —
@@ -305,7 +310,9 @@ export function useLedgerDraftQueue() {
   const loadDrafts = useCallback(async () => {
     setQueueLoading(true)
     try {
-      const data = await adminFetchJson<LedgerDraftsResponse>("/api/admin/branch/ledger-drafts?status=all&limit=50", {
+      // 최근 이력 50건 + 열린 초안(draft·checked) 최대 600건(붙여넣기 상한과 같은 값)을 따로 받아 합친다
+      // (라운드 5 Q-1 — 예전엔 최근 50건뿐이라 큰 붙여넣기 뒤 대기 초안이 목록에서 빠졌다).
+      const data = await adminFetchJson<LedgerDraftsResponse>("/api/admin/branch/ledger-drafts?status=all&limit=50&open=600", {
         cache: "no-cache",
       })
       // 되돌리기 부활 버그(P0) 수정 — reversedDraftIds는 세션 로컬 Set이라 마운트마다 비워진다.
@@ -323,6 +330,7 @@ export function useLedgerDraftQueue() {
       // 품질 웨이브 7 — 항목 2: 재조회 성공(서버가 응답함, health와 무관)마다 행별 에러를 비운다 —
       // 새 목록이 그 행의 실제 서버 상태를 다시 반영하므로 오래된 배지를 들고 있을 이유가 없다.
       setRecordErrors(new Map())
+      setOpenDraftsTruncated(data.openTruncated === true)
       if (data.health?.ok === false) {
         setDrafts(readLocalDrafts())
         setLedgerEntries([])
@@ -359,7 +367,7 @@ export function useLedgerDraftQueue() {
         })
         writeLocalDrafts(stillLocal)
         setUnsyncedLocalCount(stillLocal.length)
-        setDrafts([...resent, ...stillLocal, ...(data.drafts ?? [])].slice(0, 50))
+        setDrafts(capLedgerDrafts([...resent, ...stillLocal, ...(data.drafts ?? [])]))
         setQueueError(
           stillLocal.length > 0
             ? `로컬 초안 ${stillLocal.length}건을 서버로 재전송하지 못했습니다 — 재연결 후 다시 시도하세요.`
@@ -407,7 +415,7 @@ export function useLedgerDraftQueue() {
         }
         if (!data?.draft) throw new Error(data?.error ?? "초안 저장 응답이 비어 있습니다.")
         const nextDraft = data.draft
-        setDrafts((current) => [nextDraft, ...current.filter((draft) => draft.id !== nextDraft.id)].slice(0, 50))
+        setDrafts((current) => capLedgerDrafts([nextDraft, ...current.filter((draft) => draft.id !== nextDraft.id)]))
         setQueueError(null)
         return { draft: nextDraft, dedupedRecent: data.dedupedRecent === true }
       } catch (error) {
@@ -827,7 +835,7 @@ export function useLedgerDraftQueue() {
             if (item.id) {
               setDrafts((current) => current.map((draft) => (draft.id === item.id ? nextDraft : draft)))
             } else {
-              setDrafts((current) => [nextDraft, ...current.filter((draft) => draft.id !== nextDraft.id)].slice(0, 50))
+              setDrafts((current) => capLedgerDrafts([nextDraft, ...current.filter((draft) => draft.id !== nextDraft.id)]))
             }
             clearRecordError(nextDraft.id)
             results[itemIndex] = { draft: nextDraft, dedupedRecent: result.dedupedRecent === true }
@@ -895,6 +903,7 @@ export function useLedgerDraftQueue() {
     queueLoading,
     queueError,
     unsyncedLocalCount,
+    openDraftsTruncated,
     recordErrors,
     createDraft,
     updateDraft,

@@ -186,6 +186,30 @@ export function findOpenNewRowDuplicate(
   )
 }
 
+// 주차 칸 편집의 병합 기준(라운드 5 R-W). explicit 주차가 있는 행의 주차 셀을 고치면 나머지 주차를 보존해
+// 5칸 배열(metadata.weekly)로 싣는다. 그 "나머지 주차"의 기준은 같은 달에 이미 대기 중인 초안의 주차 배열이
+// 먼저다 — 행 표시값(시트·적용분)을 기준으로 하면 W1을 고친 뒤 W2를 고칠 때 두 번째 저장이 W1을 시트 원값으로
+// 되돌린 채 같은 초안을 PATCH해 첫 편집이 사라졌다. 대기 초안이 주차 배열 없이 월 단위 한 금액이면(레일 단일
+// 금액 등) 주차별로 나눌 근거가 없으므로 행 표시값으로 돌아간다(기존 규약).
+export function mergeWeeklyCellEdit(input: {
+  rowWeeks: readonly number[]
+  pendingWeekly: readonly number[] | null | undefined
+  week: number
+  amount: number
+  confidence: DraftConfidence
+  baseWeeklyConfidence: ReadonlyArray<DraftConfidence | null> | null | undefined
+}): { weeks: number[]; total: number; weeklyConfidence: Array<DraftConfidence | null> } {
+  const base = input.pendingWeekly && input.pendingWeekly.length > 0 ? input.pendingWeekly : input.rowWeeks
+  const weeks = Array.from({ length: 5 }, (_, index) => Math.max(Number(base[index] ?? 0) || 0, 0))
+  weeks[input.week] = Math.max(input.amount, 0)
+  const weeklyConfidence = weeks.map((value, index) => {
+    if (value <= 0) return null
+    if (index === input.week) return input.confidence
+    return input.baseWeeklyConfidence?.[index] ?? null
+  })
+  return { weeks, total: weeks.reduce((sum, value) => sum + value, 0), weeklyConfidence }
+}
+
 // 미검수(draft|checked) 초안 → 셀 낙관적 표시 + 재편집/커밋 타겟 판정 맵. drafts에서 파생(별도 버퍼 없음).
 // 매칭: 초안 sourceDealId == 행 sourceDealId(또는 id) && 초안 month == 셀 month.
 // 월 키(`rowId::month`)와 주차 키(`rowId::month::wN`)를 각각 채운다:
@@ -343,6 +367,10 @@ export interface MatrixPastePlan {
   ambiguousNames: string[]
   // 매칭되는 딜 행이 0개인 이름과 그 금액 칸 — 프리뷰의 "새 행으로 생성" 체크 대상(승인제).
   unmatched: MatrixPasteUnmatchedRow[]
+  // 라운드 5 R-1 — 장부에는 있지만 지금 화면(현재 페이지·펼친 행·필터)에 없는 고객 이름. 셀을 만들지도,
+  // "새 행" 후보로 올리지도 않는다(화면 밖 행을 몰래 고치지도, 같은 고객을 중복 행으로 만들지도 않기).
+  // 프리뷰가 "필터·페이지를 풀고 다시 붙여넣으세요"로 안내한다.
+  outOfViewNames: string[]
 }
 
 // 오조작(전체 시트 복사 등) 방어 상한 — 12개월 × 50행. 넘치는 칸은 범위 밖으로 집계만 한다.
@@ -384,6 +412,9 @@ export function buildMatrixPastePlan(
   // 품질 웨이브 4 — 항목 1: 정정 적용으로 재잠긴 (딜, 월) 칸을 붙여넣기 계획에서도 locked로
   // 판정하기 위한 dealId → 대체된 월 집합(editRowOverrideMonths).
   overrideMonthsByRow: Map<string, Set<string>>,
+  // 라운드 5 R-1 — 장부 전체 행(페이지·펼침·필터 무관). by-name 모드에서 "보이는 행에 없는 이름"이 장부에
+  // 아예 없는 고객인지(새 행 후보), 화면 밖에 있을 뿐인지(건너뜀)를 가른다. 생략하면 예전처럼 보이는 행만 본다.
+  allRows?: readonly LedgerRevenueRow[],
 ): MatrixPastePlan | null {
   const grid = parseTsvGrid(text)
   if (grid.length === 0) return null
@@ -404,6 +435,7 @@ export function buildMatrixPastePlan(
     matchedRowCount: 0,
     ambiguousNames: [],
     unmatched: [],
+    outOfViewNames: [],
   }
   let cellBudget = MATRIX_PASTE_MAX_CELLS
 
@@ -418,6 +450,13 @@ export function buildMatrixPastePlan(
       else rowsByKey.set(key, [dealRow])
     }
     const seenAmbiguous = new Set<string>()
+    // 화면 밖 존재 판정용 — 정규화 키만 모은다(행 자체는 쓰지 않는다: 보이지 않는 행에는 셀을 만들지 않는다).
+    const allKeys = new Set<string>()
+    for (const row of allRows ?? []) {
+      const key = normalizedAccountKey(row.customer)
+      if (key) allKeys.add(key)
+    }
+    const seenOutOfView = new Set<string>()
     for (let r = 0; r < grid.length; r += 1) {
       const name = (grid[r][0] ?? "").trim()
       if (!name) continue // 이름 없는 행(빈 칸) — 엑셀 부분 범위 복사 관용과 동일 취급
@@ -434,6 +473,13 @@ export function buildMatrixPastePlan(
         continue // 스펙: 어느 행인지 정할 수 없으므로 셀을 만들지 않는다
       }
       const matchedRow = matches[0] ?? null
+      if (!matchedRow && key && allKeys.has(key)) {
+        if (!seenOutOfView.has(name)) {
+          seenOutOfView.add(name)
+          plan.outOfViewNames.push(name)
+        }
+        continue
+      }
       if (matchedRow) plan.matchedRowCount += 1
       const unmatchedCells: Array<{ month: string; amount: number }> = []
       for (let c = 1; c < grid[r].length; c += 1) {
@@ -536,7 +582,8 @@ export function buildMatrixPastePlan(
     plan.nonNumericCount === 0 &&
     plan.outOfRangeCount === 0 &&
     plan.unmatched.length === 0 &&
-    plan.ambiguousNames.length === 0
+    plan.ambiguousNames.length === 0 &&
+    plan.outOfViewNames.length === 0
   ) {
     return null
   }

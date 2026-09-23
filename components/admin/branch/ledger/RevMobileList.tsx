@@ -127,9 +127,11 @@ export function RevMobileList({
                                       type="button"
                                       onClick={() => void onQuickInput(row)}
                                       className="flex min-h-11 w-full items-center justify-end text-[13px] font-bold tabular-nums text-[#111110]"
-                                      aria-label={`${row.customer} 금액 입력 열기`}
+                                      aria-label={`${row.customer} ${monthAmount > 0 ? formatMoney(monthAmount) : "금액 없음"} — 금액 입력 열기`}
                                     >
-                                      {formatMoney(monthAmount || row.revenue)}
+                                      {/* 라운드 5 Q-2 — 이 줄은 선택 월 금액이다. 빈 달에 기간 합계(row.revenue)를
+                                          대신 보이면 그 값이 입력 폼 프리필로 이어져 틀린 금액이 저장될 수 있었다. */}
+                                      {monthAmount > 0 ? formatMoney(monthAmount) : <span className="text-[#A39E98]">—</span>}
                                     </button>
                                     <button
                                       type="button"

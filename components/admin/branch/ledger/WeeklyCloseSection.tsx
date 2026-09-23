@@ -15,6 +15,10 @@ import {
 
 interface WeeklyCloseSectionProps {
   selectedMonth: string
+  // 라운드 5 D-3 — 비교 기준 월을 이 카드 안에서 바꾼다(헤더 월 선택은 기간 M일 때만 보여, 기본 Q에서는 비교 월을
+  // 바꿀 길이 없었다). 헤더와 같은 selectedMonth 상태를 공유한다.
+  monthOptions?: Array<{ value: string; label: string; current?: boolean }>
+  onSelectMonth?: (month: string) => void
   captureWeeklySnapshot: () => Promise<void>
   wcSnapshotting: boolean
   wcNotice: string | null
@@ -30,6 +34,8 @@ interface WeeklyCloseSectionProps {
 
 export function WeeklyCloseSection({
   selectedMonth,
+  monthOptions = [],
+  onSelectMonth,
   captureWeeklySnapshot,
   wcSnapshotting,
   wcNotice,
@@ -78,6 +84,23 @@ export function WeeklyCloseSection({
                     </div>
                   )}
 
+                  {onSelectMonth && monthOptions.length > 0 && (
+                    <label className="mb-3 inline-flex items-center gap-1.5 text-[11px] font-bold text-[#615D59]">
+                      비교 월
+                      <select
+                        value={selectedMonth}
+                        onChange={(event) => onSelectMonth(event.target.value)}
+                        className="h-8 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[11.5px] font-semibold text-[#111110] outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+                      >
+                        {monthOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}{option.current ? " · 당월" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+
                   {wcRuns.length < 2 ? (
                     <div className="rounded-lg border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-5 text-[12px] leading-relaxed text-[#615D59]">
                       저장된 스냅샷 {wcRuns.length.toLocaleString("ko-KR")}개 — 스냅샷이 2개 이상 쌓이면 주간 비교가 열립니다. 매주 금요일
@@ -91,7 +114,7 @@ export function WeeklyCloseSection({
                           <select
                             value={wcBase}
                             onChange={(event) => setWcBase(event.target.value)}
-                            className="h-8 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[11.5px] font-semibold text-[#111110] outline-none"
+                            className="h-8 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[11.5px] font-semibold text-[#111110] outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
                           >
                             {wcRuns.map((run) => (
                               <option key={run.id} value={run.id} disabled={run.id === wcHead}>
@@ -106,7 +129,7 @@ export function WeeklyCloseSection({
                           <select
                             value={wcHead}
                             onChange={(event) => setWcHead(event.target.value)}
-                            className="h-8 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[11.5px] font-semibold text-[#111110] outline-none"
+                            className="h-8 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[11.5px] font-semibold text-[#111110] outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
                           >
                             {wcRuns.map((run) => (
                               <option key={run.id} value={run.id} disabled={run.id === wcBase}>
@@ -127,7 +150,12 @@ export function WeeklyCloseSection({
                       </div>
 
                       {wcDiff ? (
-                        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+                        // 라운드 5 D-6 — 다른 쌍·월을 불러오는 동안 직전 결과는 흐리게 두고(aria-busy) 끝나면
+                        // 새 결과로 바꾼다. 실패하면 워크벤치가 결과를 비워 옛 쌍의 수치가 남지 않는다.
+                        <div
+                          aria-busy={wcLoading}
+                          className={`grid gap-4 transition-opacity xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] ${wcLoading ? "opacity-50" : ""}`}
+                        >
                           <div>
                             <div className="overflow-x-auto">
                               <table className="w-full min-w-[380px] text-right text-[11.5px] tabular-nums">

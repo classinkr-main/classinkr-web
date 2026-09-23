@@ -571,6 +571,16 @@ export function rowMonthHighConfidence(row: LedgerRevenueRow, month: string) {
   return ledgerMonthSplit(row, month, rowMonthAmount(row, month)).highConfidence
 }
 
+// 행·월의 대표 확도 한 가지 — 폼 확도 시드와 목록 톤의 단일 규약(라운드 5 Q-4). 전액 확정(±¥1)이면 확정,
+// 고확도 금액이 있으면 고확도, 나머지(부분 확정 포함·빈 달)는 예정. 부분 확정을 확정으로 올리지 않는다 —
+// 적어도 일부는 아직 예정이므로 낮은 쪽이 안전하다(콕핏 목록 M13 규약과 같음).
+export function rowMonthConfidenceTone(row: LedgerRevenueRow, month: string): DraftConfidence {
+  const amount = rowMonthAmount(row, month)
+  if (amount <= 0) return "expected"
+  if (rowMonthConfirmed(row, month) >= amount - 1) return "confirmed"
+  return rowMonthHighConfidence(row, month) > 0 ? "high-confidence" : "expected"
+}
+
 function firstPaymentWeekIndex(firstPayment: string | null | undefined, month: string) {
   if (!firstPayment?.startsWith(month)) return null
   const day = Number(firstPayment.slice(8, 10))

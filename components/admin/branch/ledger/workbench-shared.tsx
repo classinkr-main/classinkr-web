@@ -341,6 +341,43 @@ function replaceEquivalentSet(current: Set<string>, next: Set<string>): Set<stri
 // 있다). alreadyAttempted가 true면(직전 실행에서 이미 판정을 소비) 파라미터가 이번엔 우연히
 // 비어 있어도 항상 false — "pristine 진입 최초 1회만"이라 내비게이션·self-echo로 되돌아온
 // 빈 파라미터는 재시드 대상이 아니다.
+// 라운드 5 R-4 — REV 페이지를 1로 돌릴지 판단하는 필터 조합 시그니처(순수). 복원 effect가 URL에서 읽은 조합과
+// 지금 상태의 조합을 이 문자열로 비교해 "실제로 바뀌었을 때만" 리셋한다. Set은 정규형(정렬된 콤마 목록)으로
+// 비교해 같은 값의 새 Set 인스턴스를 변경으로 오인하지 않는다.
+export function revPageResetSignature(input: {
+  managerFilter: ReadonlySet<string>
+  regionFilter: ReadonlySet<string>
+  period: string
+  team: string
+  query: string
+  productFilter: string
+  revStatusFilter: string
+  revDealTypeFilter: string
+  revOriginFilter: string
+  revForecastFilter: string
+  revSortKey: string
+  revSortDirection: string
+  revPageSize: number
+  selectedMonth: string
+}): string {
+  return JSON.stringify([
+    serializeMultiFilterParam(new Set(input.managerFilter)) ?? "",
+    serializeMultiFilterParam(new Set(input.regionFilter)) ?? "",
+    input.period,
+    input.team,
+    input.query.trim(),
+    input.productFilter,
+    input.revStatusFilter,
+    input.revDealTypeFilter,
+    input.revOriginFilter,
+    input.revForecastFilter,
+    input.revSortKey,
+    input.revSortDirection,
+    input.revPageSize,
+    input.selectedMonth,
+  ])
+}
+
 export function isPinSeedEligible(alreadyAttempted: boolean, searchParamsString: string): boolean {
   return !alreadyAttempted && searchParamsString === ""
 }

@@ -134,7 +134,9 @@ describe("persistDraftsBatch — 여러 건 생성/수정을 배치 POST로 묶�
     expect(okIndex).toBeGreaterThan(-1)
     expect(status400Index).toBeGreaterThan(okIndex)
     const okBranch = body.slice(okIndex, status400Index)
-    expect(okBranch).toContain(".slice(0, 50)")
+    // 라운드 5 Q-1: 최근 50건 일괄 자르기 대신 "열린 초안은 전부 + 닫힌 초안만 최근 50"(capLedgerDrafts).
+    expect(okBranch).toContain("capLedgerDrafts([nextDraft, ...current.filter((draft) => draft.id !== nextDraft.id)])")
+    expect(okBranch).not.toContain(".slice(0, 50)")
     expect(okBranch).toContain("clearRecordError(nextDraft.id)")
   })
 

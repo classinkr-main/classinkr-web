@@ -256,6 +256,30 @@ describe("GET /api/admin/branch/ledger-drafts — reversedDraftIds (P0 되돌리
 
     expect(json.reversedDraftIds).toEqual([])
   })
+
+  // 라운드 5 Q-1 — 장부 화면은 최근 이력 50건과 별도로 열린 초안(draft·checked)을 open=600까지 받는다.
+  it("open 파라미터가 있으면 열린 초안 한도(openLimit)를 저장소에 넘기고, 없으면 예전 호출 그대로", async () => {
+    mockAdmin()
+    listBranchSalesLedgerDrafts.mockResolvedValue({
+      generatedAt: "x",
+      health: { ok: true, message: null },
+      drafts: [],
+      openTruncated: false,
+    })
+    listBranchSalesLedgerEntries.mockResolvedValue({ generatedAt: "x", health: { ok: true, message: null }, entries: [] })
+
+    const { GET } = await import("@/app/api/admin/branch/ledger-drafts/route")
+    const withOpen = await GET(ledgerDraftsRequest("?status=all&limit=50&open=600"))
+    expect(listBranchSalesLedgerDrafts).toHaveBeenLastCalledWith({ status: "all", limit: 50, openLimit: 600 })
+    expect((await withOpen.json()).openTruncated).toBe(false)
+
+    await GET(ledgerDraftsRequest("?status=all&limit=50"))
+    expect(listBranchSalesLedgerDrafts).toHaveBeenLastCalledWith({ status: "all", limit: 50 })
+
+    // 상한 1,000으로 자른다.
+    await GET(ledgerDraftsRequest("?status=all&open=99999"))
+    expect(listBranchSalesLedgerDrafts).toHaveBeenLastCalledWith({ status: "all", limit: 50, openLimit: 1000 })
+  })
 })
 
 function postDraftRequest(body: Record<string, unknown>) {

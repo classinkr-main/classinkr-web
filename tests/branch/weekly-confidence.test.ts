@@ -301,9 +301,11 @@ describe("SalesLedgerWorkbench — weeklyConfidence 배선 규약(소스 스캔)
       "const buildCellDraftInput = useCallback",
       "const onMatrixAmountClamped = useCallback",
     )
-    expect(body).toContain("const baseStates = weeklyConfidenceFromMetadata(row.draftMetadata)")
-    expect(body).toContain("if (index === week) return confidence")
-    expect(body).toContain("return baseStates?.[index] ?? null")
+    // 라운드 5 R-W: 병합(금액·확도 병렬 구성)은 순수 함수 mergeWeeklyCellEdit로 옮겼다 — 편집 주차=선택 확도,
+    // 나머지=기존 보존 규약은 tests/branch/ledger-draft-integrity.test.ts가 함수로 직접 검증한다. 여기서는 배선만.
+    expect(body).toContain("mergeWeeklyCellEdit({")
+    expect(body).toContain(": weeklyConfidenceFromMetadata(row.draftMetadata)")
+    expect(body).toContain("mergedWeeklyConfidence = merged.weeklyConfidence")
     expect(body).toContain("weeklyConfidence: mergedWeeklyConfidence,")
     expect(body).toContain("dominantWeeklyConfidence(mergedWeekly, mergedWeeklyConfidence)")
   })
