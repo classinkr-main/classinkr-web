@@ -12,6 +12,7 @@ import { CheckCircle2, Loader2, Pencil, RefreshCw, RotateCcw, Search, Send, Tras
 import { matchesTokens, tokenize } from "../search-tokens"
 import { useDialogFocus } from "../../use-dialog-focus"
 import { planBulkApply, planBulkCheck } from "./draft-bulk-plan"
+import { draftAuthorLine, draftDeleteDisabledReason, draftEditDisabledReason } from "./draft-card-meta"
 import { isSelfCheckedDraft, SELF_CHECK_BADGE_LABEL, SELF_CHECK_BADGE_TITLE } from "./self-check"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import {
@@ -497,6 +498,10 @@ export function DraftQueue({
               <p className="mt-1 text-[11px] text-[#615D59]">
                 {formatMonthLabel(draft.month)} · {draft.manager || "-"} · {draft.team || "-"} · {formatMoney(draft.amount)}
               </p>
+              {/* 라운드 5 Q-9 — 누가·언제 넣었는지(수정·체크한 사람까지). */}
+              <p className="mt-0.5 truncate text-[10.5px] font-semibold text-[#A39E98]" title={draftAuthorLine(draft)}>
+                {draftAuthorLine(draft)}
+              </p>
               <WeeklyConfidenceDots metadata={draft.metadata} />
               {/* 주차 셀 초안 고지: 병합(metadata.weekly 보존) vs 레거시 단일값(월 전체 대체) 구분 */}
               {draft.kind === "edit-row" &&
@@ -519,16 +524,19 @@ export function DraftQueue({
                 다음 할 일을 텍스트로도 읽히게 한다(편집·되돌리기·취소·삭제는 그대로). 폭이 늘어난
                 버튼 2개 때문에 좁은 화면에서 넘치지 않도록 이 행에 flex-wrap을 더한다. */}
             <div className="flex shrink-0 flex-wrap items-center gap-1">
-              <button
-                type="button"
-                onClick={() => onEdit(draft)}
-                disabled={draft.status === "checked" || draft.status === "applied" || draft.status === "cancelled"}
-                className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-35"
-                aria-label={`${draft.customer || "초안"} 편집`}
-                title="초안 편집"
-              >
-                <Pencil className="h-4 w-4" />
-              </button>
+              {/* 라운드 5 Q-8 — 막힌 이유를 말한다. disabled 버튼은 브라우저에 따라 title이 안 떠 감싼 span에 둔다. */}
+              <span title={draftEditDisabledReason(draft) ?? undefined} className="inline-flex">
+                <button
+                  type="button"
+                  onClick={() => onEdit(draft)}
+                  disabled={draftEditDisabledReason(draft) != null}
+                  className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-35"
+                  aria-label={`${draft.customer || "초안"} 편집${draftEditDisabledReason(draft) ? ` — ${draftEditDisabledReason(draft)}` : ""}`}
+                  title={draftEditDisabledReason(draft) ? undefined : "초안 편집"}
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+              </span>
               <button
                 type="button"
                 onClick={() => void runToggle(draft.id)}
@@ -588,20 +596,22 @@ export function DraftQueue({
                   <XCircle className="h-4 w-4" />
                 )}
               </button>
-              <button
-                type="button"
-                onClick={() => setConfirmDeleteDraft(draft)}
-                disabled={draft.status === "checked" || draft.status === "applied" || draft.status === "cancelled" || isRowBusy(draft.id)}
-                className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] text-[#B43E3E] transition hover:bg-[#FCE9E9] disabled:cursor-not-allowed disabled:opacity-35"
-                aria-label="초안 삭제"
-                title="초안 삭제"
-              >
-                {rowActionBusy?.id === draft.id && rowActionBusy.action === "delete" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Trash2 className="h-4 w-4" />
-                )}
-              </button>
+              <span title={draftDeleteDisabledReason(draft) ?? undefined} className="inline-flex">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteDraft(draft)}
+                  disabled={draftDeleteDisabledReason(draft) != null || isRowBusy(draft.id)}
+                  className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] text-[#B43E3E] transition hover:bg-[#FCE9E9] disabled:cursor-not-allowed disabled:opacity-35"
+                  aria-label={`초안 삭제${draftDeleteDisabledReason(draft) ? ` — ${draftDeleteDisabledReason(draft)}` : ""}`}
+                  title={draftDeleteDisabledReason(draft) ? undefined : "초안 삭제"}
+                >
+                  {rowActionBusy?.id === draft.id && rowActionBusy.action === "delete" ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                </button>
+              </span>
             </div>
           </div>
           {/* 품질 웨이브 7 — 항목 2: 레코드별 에러(404 등) — 큐 전체를 로컬로 강등하지 않고 이
@@ -640,7 +650,7 @@ export function DraftQueue({
             </p>
           </div>
           <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#FBF1E0] px-4 py-3 text-[11.5px] font-semibold leading-relaxed text-[#7A520F]">
-            적용하면 장부 원장에 기록됩니다 — 초안 1건. 이 작업은 되돌릴 수 없습니다.
+            적용하면 장부 원장에 기록됩니다 — 초안 1건. 적용 뒤에 빼려면 &lsquo;되돌리기&rsquo;(상쇄 기록)를 씁니다 — 초안 기록은 감사용으로 그대로 남습니다.
           </div>
           <div className="flex items-center justify-end gap-2 bg-[#FAFAF8] px-4 py-3">
             <button

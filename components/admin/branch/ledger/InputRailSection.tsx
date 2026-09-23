@@ -33,6 +33,10 @@ import { TEAMS } from "../types"
 
 interface InputRailSectionProps {
   editingDraft: LedgerDraft | null
+  // 라운드 5 Q-3 — 지금 저장하면 고치게 될 행(수정 초안 대상). null이면 신규 입력. onClearTarget은 대상을 풀고
+  // 빈 신규 입력으로 돌린다.
+  targetRow?: { customer: string; sheetRow: number | null; origin: "sheet" | "draft" } | null
+  onClearTarget?: () => void
   queueMode: DraftQueueMode
   draftForm: DraftForm
   setDraftForm: Dispatch<SetStateAction<DraftForm>>
@@ -70,6 +74,8 @@ interface InputRailSectionProps {
 
 export function InputRailSection({
   editingDraft,
+  targetRow = null,
+  onClearTarget,
   queueMode,
   draftForm,
   setDraftForm,
@@ -203,6 +209,37 @@ export function InputRailSection({
               </div>
             </div>
             <form onSubmit={handleFormSubmit} className="space-y-3 p-4">
+              {/* 라운드 5 Q-3 — 대상 행을 폼 맨 위에. 예전엔 어느 행을 고치는지 입력 탭에서 보이지 않았다. */}
+              {!editingDraft &&
+                (targetRow ? (
+                  <div className="flex items-center justify-between gap-2 rounded-md border border-[#BDEFD8] bg-[#ECFDF5] px-3 py-2 text-[11px]">
+                    <p className="min-w-0 truncate font-semibold text-[#084734]">
+                      <span className="font-bold">대상</span> {targetRow.customer || "(무제목)"}
+                      {targetRow.sheetRow != null ? ` · 시트 ${targetRow.sheetRow}행` : targetRow.origin === "draft" ? " · 장부 입력 행" : ""}
+                      {` · ${formatMonthLabel(draftForm.month)}`}
+                    </p>
+                    {onClearTarget && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClearTarget()
+                          setFeedback(null)
+                          customerInputRef.current?.focus()
+                        }}
+                        aria-label="대상 행 풀고 신규 입력으로"
+                        title="대상 행을 풀고 빈 신규 입력으로 바꿉니다"
+                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-[#084734] opacity-70 transition hover:bg-white hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+                      >
+                        <X className="h-3.5 w-3.5" aria-hidden />
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <p className="rounded-md border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] px-3 py-2 text-[11px] leading-relaxed text-[#615D59]">
+                    <span className="font-bold text-[#111110]">신규 입력</span> — 장부에 없는 고객·딜을 새 행으로 남깁니다. 기존 행을
+                    고치려면 REV에서 행이나 셀을 고르세요.
+                  </p>
+                ))}
               <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2">
                 <p className="mb-2 text-[11px] font-bold text-[#615D59]">작업 유형</p>
                 <div className="grid grid-cols-2 gap-1.5">

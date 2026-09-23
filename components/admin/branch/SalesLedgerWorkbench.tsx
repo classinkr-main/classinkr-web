@@ -2976,6 +2976,17 @@ export default function SalesLedgerWorkbench({
       if (!result.conflict && !result.validationMessage) {
         setEditingDraftId(null)
         setDraftForm(defaultDraftForm)
+        // 라운드 5 Q-7 — 큐에서 고친 초안은 저장 뒤 큐로 돌아간다(예전엔 빈 입력 폼에 남아 큐를 다시 열어야 했다).
+        // 레일의 인라인 피드백은 입력 탭과 함께 사라지므로 결과는 토스트로 말한다.
+        if (draft && !draft.id.startsWith("local-")) {
+          setRailView("queue")
+          pushMatrixToast({
+            kind: "info",
+            key: "draft-edit-saved",
+            ttlMs: 4000,
+            text: `${editingDraft.customer || "초안"} ${formatMonthLabel(draftForm.month)} 초안을 고쳤습니다 — 체크 큐로 돌아왔습니다.`,
+          })
+        }
       }
       return {
         persisted: Boolean(draft && !draft.id.startsWith("local-")),
@@ -2986,7 +2997,7 @@ export default function SalesLedgerWorkbench({
     } finally {
       setDraftSaving(false)
     }
-  }, [buildDraftInput, defaultDraftForm, draftForm.month, draftForm.week, drafts, editingDraft, rowByDealKey, updateDraft])
+  }, [buildDraftInput, defaultDraftForm, draftForm.month, draftForm.week, drafts, editingDraft, pushMatrixToast, rowByDealKey, updateDraft])
 
   const revenue = summary.data?.revenue
   // 첫 로드 중 타일이 가짜 ¥0을 보여주지 않도록 — 값이 오기 전에는 대시로 정직하게.
@@ -3130,8 +3141,23 @@ export default function SalesLedgerWorkbench({
 
   // 콕핏 인라인 편집기(2-pane 우측)와 우측 플로팅 레일이 같은 InputRailSection을 공유한다 —
   // props 단일 정의로 두 소비처가 동일 draftForm·저장 계약을 쓰게 한다(로직 중복 금지).
+  // 라운드 5 Q-3 — 입력 탭 상단 "대상" 칩: 지금 저장하면 어느 행을 고치는지(수정 초안) 보인다. ×는 대상을 풀고
+  // 빈 신규 입력으로(고객·담당·금액 초기화) — 다른 행 값을 달고 신규로 저장되는 실수를 막는다.
+  const clearRailTarget = useCallback(() => {
+    setEditingDraftId(null)
+    setSelectedRow(null)
+    setSelectedGroupKey(null)
+    setDraftForm(defaultDraftForm)
+  }, [defaultDraftForm])
+  const railTargetRow =
+    !editingDraft && canCreateEditDraft && selectedRow
+      ? { customer: selectedRow.customer, sheetRow: selectedRow.sheetRow ?? null, origin: selectedRow.ledgerOrigin }
+      : null
+
   const inputRailProps = {
     editingDraft,
+    targetRow: railTargetRow,
+    onClearTarget: clearRailTarget,
     queueMode,
     draftForm,
     setDraftForm,

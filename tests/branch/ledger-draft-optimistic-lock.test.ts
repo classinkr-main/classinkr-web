@@ -221,7 +221,7 @@ describe("saveDraft/saveEditedDraft — 입력 레일 결과 플래그 전파(�
     const body = sliceFn(
       workbenchSource(),
       "const saveEditedDraft = useCallback",
-      "[buildDraftInput, defaultDraftForm, draftForm.month, draftForm.week, drafts, editingDraft, rowByDealKey, updateDraft]",
+      "[buildDraftInput, defaultDraftForm, draftForm.month, draftForm.week, drafts, editingDraft, pushMatrixToast, rowByDealKey, updateDraft]",
     )
     const guardIndex = body.indexOf("if (!result.conflict && !result.validationMessage) {")
     const clearEditIndex = body.indexOf("setEditingDraftId(null)")
