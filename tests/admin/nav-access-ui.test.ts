@@ -46,6 +46,48 @@ describe("AdminSidebar — 상시/기타 2단 구조", () => {
   })
 })
 
+describe("AdminSidebar — 개인 숨김(2026-09-25)", () => {
+  it("active 판정·헤더는 전체(accessible), 하단 바·유휴 프리페치는 보이는 목록(visible)을 쓴다", () => {
+    expect(sidebar).toContain("siblings: accessibleNav")
+    expect(sidebar).toContain("getVisibleAdminNavItems(navAccess)")
+    const bottomBar = sidebar.slice(sidebar.indexOf("const mobilePrimaryNav = useMemo("))
+    expect(bottomBar.slice(0, 400)).toContain("visibleNav.find(")
+    expect(sidebar).toContain("visibleNav.filter((item) => item.section === currentNavItem.section)")
+  })
+
+  it("숨긴 탭 묶음을 기타 아래에 그리고, 현재 경로가 숨긴 항목이면 강제로 펼친다", () => {
+    expect(sidebar).toContain("navAccess.hidden")
+    expect(sidebar).toContain("숨긴 탭")
+    expect(sidebar).toContain("다시 표시")
+    expect(sidebar).toContain("const hiddenExpanded = hiddenOpen || hiddenHasActiveItem")
+  })
+
+  it("편집기 열기 이벤트를 공용 상수로 듣는다 — ⌘K 명령이 같은 이름으로 쏜다", () => {
+    expect(sidebar).toContain("ADMIN_OPEN_NAV_EDITOR_EVENT")
+    expect(sidebar).toContain("addEventListener(ADMIN_OPEN_NAV_EDITOR_EVENT")
+    expect(sidebar).toContain("사이드바 편집")
+  })
+
+  it("다시 표시는 기본 자리로 되돌려 본인 경로로 저장한다", () => {
+    expect(sidebar).toContain("resolveNavPlacement(href")
+    expect(sidebar).toContain("saveMyNavOverrides(")
+  })
+})
+
+const preferences = readFileSync(join(process.cwd(), "components/admin/my-nav-preferences.ts"), "utf8")
+
+describe("my-nav-preferences — 클라이언트 계약", () => {
+  it("이벤트 이름은 admin:open-nav-editor 다(AdminCommandPalette 가 dispatch)", () => {
+    expect(preferences).toContain('ADMIN_OPEN_NAV_EDITOR_EVENT = "admin:open-nav-editor"')
+  })
+
+  it("본인 저장은 /api/admin/me/nav PATCH 로 전체 상태를 보낸다", () => {
+    expect(preferences).toContain('MY_NAV_ENDPOINT = "/api/admin/me/nav"')
+    expect(preferences).toContain('method: "PATCH"')
+    expect(preferences).not.toContain("userId")
+  })
+})
+
 // 셸 본문은 app/admin/layout.tsx에서 components/admin/AdminShell.tsx로 옮겼다.
 // (레이아웃은 서버에서 세션을 확정해 넘기는 얇은 RSC가 됐다 — 아래 두 번째 describe)
 const shell = readFileSync(join(process.cwd(), "components/admin/AdminShell.tsx"), "utf8")
@@ -66,6 +108,18 @@ describe("AdminShell — 전면 공개 이후", () => {
 
   it("보안 경계는 여전히 서버 가드라는 것을 주석으로 남긴다", () => {
     expect(shell).toContain("보안 경계")
+  })
+
+  it("본인 편집 저장을 받아 세션을 갱신하고 핀을 건다", () => {
+    expect(shell).toContain("onNavOverridesChange={handleNavOverridesChange}")
+    expect(shell).toContain("pinNavOverrides(sessionStorage, next, Date.now())")
+  })
+
+  it("서버 세션을 sessionStorage 에 옮길 때 핀 창의 로컬 값을 덮지 않는다", () => {
+    // 초기화·이펙트 두 경로 모두 핀을 반영한 값으로 hydrate 해야 한다.
+    expect(shell).toContain("hydrateAdminSessionStorage(withPinnedNavOverrides(initialSession))")
+    expect(shell).toContain("const effectiveSession = withPinnedNavOverrides(initialSession)")
+    expect(shell).toContain("hydrateAdminSessionStorage(effectiveSession)")
   })
 })
 
@@ -88,24 +142,77 @@ const drawer = readFileSync(
   join(process.cwd(), "components/admin/settings/MemberNavAccessDrawer.tsx"),
   "utf8"
 )
+// 행 목록·미리보기·저장 푸터는 두 드로어(회원 관리·본인 편집)가 공유하는 편집기로 추출됐다.
+const editor = readFileSync(
+  join(process.cwd(), "components/admin/settings/NavPreferenceEditor.tsx"),
+  "utf8"
+)
+const myDrawer = readFileSync(
+  join(process.cwd(), "components/admin/settings/MyNavEditorDrawer.tsx"),
+  "utf8"
+)
 
-describe("MemberNavAccessDrawer", () => {
+describe("NavPreferenceEditor — 두 드로어 공통 본문", () => {
   it("previews with the shared resolver instead of a second implementation", () => {
     // 미리보기가 자체 계산을 하면 실제 사이드바와 어긋나고, 어긋난 미리보기는
     // 이 기능 전체의 신뢰를 깎는다.
-    expect(drawer).toContain("resolveAdminNavAccess(")
-    expect(drawer).toContain('from "@/components/admin/admin-nav-access"')
+    expect(editor).toContain("resolveAdminNavAccess(")
+    expect(editor).toContain("buildNavPreferenceRows(")
+    expect(editor).toContain('from "@/components/admin/admin-nav-access"')
   })
 
-  it("차단(deny) 선택지를 제공하지 않는다", () => {
-    // 배치는 상시/기타 두 자리뿐이다. 세 번째 선택지가 돌아오면 전면 공개가 깨진다.
-    expect(drawer).not.toContain('label: "차단"')
-    expect(drawer).toContain('label: "상시"')
-    expect(drawer).toContain('label: "기타"')
+  // (2026-09-25 재작성) 예전 테스트는 "세 번째 선택지 금지"였다 — 그 세 번째가 차단(deny)이었기
+  // 때문이다. 세 번째 값 "숨김"은 목록 정리일 뿐 도달성을 줄이지 않으므로 허용하되, 그 경계를
+  // 화면 문구로 고정한다: 차단·권한 제한처럼 읽히는 말은 금지, "⌘K·주소로 그대로 열린다"는 필수.
+  it("상시·기타·숨김 3단을 주되 '차단' 문구는 어디에도 쓰지 않는다", () => {
+    expect(editor).toContain('label: "상시"')
+    expect(editor).toContain('label: "기타"')
+    expect(editor).toContain('label: "숨김"')
+    for (const [name, source] of [
+      ["editor", editor],
+      ["member drawer", drawer],
+      ["my drawer", myDrawer],
+    ] as const) {
+      expect(source, name).not.toContain("차단")
+    }
   })
 
-  it("기본과 다른 행을 예외로 표시한다", () => {
-    expect(drawer).toContain("예외")
+  it("숨김은 도달성을 줄이지 않는다는 안내를 편집기에 싣는다", () => {
+    expect(editor).toContain("숨긴 탭도 ⌘K와 주소로 그대로 열립니다.")
+    expect(editor).toContain("도달성을 줄이지 않습니다")
+  })
+
+  it("Overview 는 숨김을 비활성화하고 이유를 보여준다", () => {
+    expect(editor).toContain("로그인 첫 화면이라 숨길 수 없습니다")
+    expect(editor).toContain('option.value === "hidden" && !hideable')
+  })
+
+  it("기본과 다른 행을 예외로 표시하고, 미리보기에 숨김 개수를 싣는다", () => {
+    expect(editor).toContain("예외")
+    expect(editor).toContain("숨김 {preview.hidden.length}")
+  })
+
+  it("renders explicit saving, saved, and error states", () => {
+    expect(editor).toContain('"saving"')
+    expect(editor).toContain('"saved"')
+    expect(editor).toContain('role="alert"')
+  })
+
+  it("admin 트리의 fixed 오버레이를 document.body 로 포털한다", () => {
+    expect(editor).toContain("createPortal(")
+    expect(editor).toContain("document.body")
+  })
+})
+
+describe("MemberNavAccessDrawer", () => {
+  it("uses the shared editor and keeps hidden when normalizing the initial value", () => {
+    expect(drawer).toContain("<NavPreferenceEditor")
+    expect(drawer).toContain("normalizeNavOverrides(initialOverrides)")
+  })
+
+  it("labels the dialog as a sidebar layout, not a permission screen", () => {
+    expect(drawer).toContain("사이드바 배치")
+    expect(drawer).not.toContain("탭 권한")
   })
 
   it("always sends both nav fields — the PATCH overwrites both columns", () => {
@@ -113,11 +220,14 @@ describe("MemberNavAccessDrawer", () => {
     expect(drawer).toContain("navOverrides")
     expect(drawer).toContain('method: "PATCH"')
   })
+})
 
-  it("renders explicit saving, saved, and error states", () => {
-    expect(drawer).toContain('"saving"')
-    expect(drawer).toContain('"saved"')
-    expect(drawer).toContain('role="alert"')
+describe("MyNavEditorDrawer — 본인 편집", () => {
+  it("본인 경로로 저장하고 같은 편집기를 쓴다", () => {
+    expect(myDrawer).toContain("saveMyNavOverrides(")
+    expect(myDrawer).toContain("<NavPreferenceEditor")
+    expect(myDrawer).toContain('subject="self"')
+    expect(myDrawer).not.toContain("/api/admin/users")
   })
 })
 

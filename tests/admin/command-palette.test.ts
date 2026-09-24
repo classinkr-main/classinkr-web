@@ -1,10 +1,20 @@
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 
 import {
   ADMIN_COMMANDS,
+  ADMIN_OPEN_NAV_EDITOR_EVENT,
   resolveAdminCommands,
 } from "@/components/admin/AdminCommandPalette"
-import type { NavAccessContext } from "@/components/admin/admin-nav-access"
+import { ADMIN_NAV } from "@/components/admin/admin-nav"
+import {
+  getAccessibleAdminNavItems,
+  normalizeNavOverrides,
+  resolveAdminNavAccess,
+  type NavAccessContext,
+} from "@/components/admin/admin-nav-access"
+import { CAMPAIGN_TABS } from "@/lib/marketing/hub-tabs"
 
 // 팔레트 커맨드는 admin-nav.ts(SSOT)에서 파생된다 — 그룹은 사이드바 섹션 라벨과 동일.
 describe("admin command palette (admin-nav 파생)", () => {
@@ -84,6 +94,144 @@ describe("admin command palette (admin-nav 파생)", () => {
     expect(matches.map((command) => command.href)).toEqual(
       expect.arrayContaining(["/admin/events", "/admin/events/new"])
     )
+  })
+})
+
+// 팔레트 필터와 같은 규칙(라벨 + 검색어, 소문자 포함 검사)으로 찾는다.
+function search(query: string) {
+  const q = query.trim().toLowerCase()
+  return ADMIN_COMMANDS.filter(
+    (cmd) => cmd.label.toLowerCase().includes(q) || (cmd.keywords ?? "").toLowerCase().includes(q)
+  )
+}
+
+describe("admin command palette — 2026-09-25 탭 정리", () => {
+  const byHref = (href: string) => ADMIN_COMMANDS.filter((cmd) => cmd.href === href)
+
+  it.each([
+    ["빠른 견적 작성", "app/admin/quotes/new/page.tsx"],
+    ["녹화 세트 견적", "app/admin/quotes/recording-studio/page.tsx"],
+    ["AI Suite 견적", "app/admin/quotes/ai-suite/page.tsx"],
+  ])("%s 는 스텁을 거치지 않고 스텁이 보내는 최종 URL로 간다", (label, stubPath) => {
+    // 스텁(북마크 보호용으로 유지)의 redirect 목적지를 읽어 그대로 비교한다 — 스텁 목적지가
+    // 바뀌면 이 테스트가 팔레트도 함께 바꾸라고 알려 준다.
+    const stub = readFileSync(join(process.cwd(), stubPath), "utf8")
+    const target = stub.match(/redirect\("([^"]+)"\)/)?.[1]
+    const command = ADMIN_COMMANDS.find((cmd) => cmd.label === label)
+
+    expect(target).toMatch(/^\/admin\/quotes\?tab=hardware&action=/)
+    expect(command?.href).toBe(target)
+    expect(command?.group).toBe("영업·매출")
+  })
+
+  it("no command routes through a /admin/quotes/* redirect stub", () => {
+    const stubbed = ADMIN_COMMANDS.filter((cmd) =>
+      ["/admin/quotes/new", "/admin/quotes/recording-studio", "/admin/quotes/ai-suite"].includes(cmd.href)
+    )
+    expect(stubbed).toEqual([])
+  })
+
+  it.each([
+    ["/admin/crm/customers/tags", "태그", ["태그", "tag"]],
+    ["/admin/crm/customers/intake", "접수", ["접수", "intake", "쇼룸"]],
+  ])("CRM 고객 보조 탭 %s 가 ⌘K 에서 한/영으로 찾아진다", (href, label, queries) => {
+    const [command] = byHref(href)
+    expect(command?.label).toBe(label)
+    expect(command?.group).toBe("영업·매출")
+    for (const query of queries) {
+      expect(search(query).map((cmd) => cmd.href), query).toContain(href)
+    }
+  })
+
+  it("labels rev-sheet 매출시트 (screen title) and keeps the old REV 스냅샷 wording searchable", () => {
+    const [command] = byHref("/admin/crm/deals/rev-sheet")
+    expect(command?.label).toBe("매출시트")
+    expect(search("REV 스냅샷").map((cmd) => cmd.href)).toContain("/admin/crm/deals/rev-sheet")
+  })
+
+  it("names the campaigns email tab command after the hub tab (메시지)", () => {
+    const hubTabLabel = CAMPAIGN_TABS.find((tab) => tab.id === "email")?.label
+    const [command] = byHref("/admin/campaigns?tab=email")
+
+    expect(hubTabLabel).toBe("메시지")
+    expect(command?.label).toBe(hubTabLabel)
+    // 옛 라벨로 찾던 손버릇은 검색어로 계속 걸린다.
+    expect(search("이메일 자동화").map((cmd) => cmd.href)).toContain("/admin/campaigns?tab=email")
+  })
+
+  it("reaches 캠페인 관리 and 마케팅 프로젝트 exactly once (child fallback never duplicates a nav item)", () => {
+    for (const href of ["/admin/campaigns/manage", "/admin/campaigns/projects"]) {
+      expect(byHref(href), href).toHaveLength(1)
+      expect(byHref(href)[0]?.group).toBe("마케팅·분석")
+    }
+    expect(search("프로젝트").map((cmd) => cmd.href)).toContain("/admin/campaigns/projects")
+  })
+
+  it("offers '내 사이드바 편집' as an event command, not a navigation", () => {
+    const edit = ADMIN_COMMANDS.find((cmd) => cmd.label === "내 사이드바 편집")
+
+    expect(ADMIN_OPEN_NAV_EDITOR_EVENT).toBe("admin:open-nav-editor")
+    expect(edit?.event).toBe(ADMIN_OPEN_NAV_EDITOR_EVENT)
+    expect(edit?.href).toBe("")
+    expect(edit?.group).toBe("운영·시스템")
+    for (const query of ["사이드바", "숨기기", "sidebar"]) {
+      expect(search(query).map((cmd) => cmd.label), query).toContain("내 사이드바 편집")
+    }
+  })
+
+  it("only event commands have an empty href (everything else navigates)", () => {
+    for (const cmd of ADMIN_COMMANDS) {
+      if (cmd.event) expect(cmd.href, cmd.label).toBe("")
+      else expect(cmd.href, cmd.label).toMatch(/^\/admin\//)
+    }
+  })
+
+  it("dispatches the event instead of pushing a route when an event command runs", () => {
+    // DOM 환경이 없어 실행부는 소스 계약으로 고정한다 — 이벤트면 dispatch 후 return, 아니면 push.
+    const source = readFileSync(join(process.cwd(), "components/admin/AdminCommandPalette.tsx"), "utf8")
+    const run = source.slice(source.indexOf("const run = useCallback"), source.indexOf("const onListKeyDown"))
+
+    expect(run).toContain("window.dispatchEvent(new CustomEvent(command.event))")
+    expect(run.indexOf("window.dispatchEvent")).toBeLessThan(run.indexOf("router.push(command.href)"))
+    expect(run).toMatch(/if \(command\.event\) \{[\s\S]*?return\s*\}/)
+    expect(source).toContain("onClick={() => run(cmd)}")
+    expect(source).toContain("if (target) run(target)")
+  })
+})
+
+// 불변식 — 사이드바 배치·숨김(기본 숨김 포함)은 ⌘K 도달성을 절대 줄이지 않는다.
+// 팔레트는 getAccessibleAdminNavItems 를 거치고, 그 함수는 항상 ADMIN_NAV 전체를 돌려줘야 한다.
+describe("admin command palette — 숨긴 탭도 ⌘K 에서 검색된다", () => {
+  const allNavHrefs = ADMIN_NAV.map((item) => item.href)
+  const everyItem = (value: string) =>
+    normalizeNavOverrides(Object.fromEntries(allNavHrefs.map((href) => [href, value])))
+
+  const cases: Array<[string, NavAccessContext["overrides"]]> = [
+    ["설정 없음(전원 공통 기본 — 기본 숨김 포함)", {}],
+    ["전부 숨김", everyItem("hidden")],
+    ["전부 기타", everyItem("folded")],
+    ["전부 상시", everyItem("primary")],
+    ["레거시 deny", everyItem("deny")],
+  ]
+
+  it.each(cases)("getAccessibleAdminNavItems 는 %s 에서도 ADMIN_NAV 전체다", (_name, overrides) => {
+    for (const role of ["SUPER_ADMIN", "ADMIN", "BRANCH", "EDITOR"]) {
+      const accessible = getAccessibleAdminNavItems(resolveAdminNavAccess({ role, overrides }))
+      expect(accessible.map((item) => item.href), role).toEqual(allNavHrefs)
+    }
+  })
+
+  it.each(cases)("⌘K 명령 목록은 %s 에서도 설정 없는 목록과 같다", (_name, overrides) => {
+    const baseline = resolveAdminCommands({ role: "ADMIN", overrides: {} })
+    const commands = resolveAdminCommands({ role: "ADMIN", overrides })
+
+    expect(commands).toEqual(baseline)
+    expect(commands.map((cmd) => cmd.href)).toEqual(expect.arrayContaining(allNavHrefs))
+    // 숨길 수 있는 부모의 자식 명령(CS 콘솔 → 가이드 문서 등)도 함께 남는다.
+    expect(commands.map((cmd) => cmd.href)).toEqual(
+      expect.arrayContaining(["/admin/docs", "/admin/channel-talk", "/admin/events", "/admin/traffic"])
+    )
+    expect(commands.map((cmd) => cmd.label)).toContain("내 사이드바 편집")
   })
 })
 

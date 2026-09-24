@@ -23,10 +23,21 @@ const paletteOptionId = (index: number) => `admin-command-palette-option-${index
 
 export interface AdminCommand {
   label: string
+  /** 이동 대상. 이벤트형 명령(event)은 이동하지 않으므로 빈 문자열이다. */
   href: string
   group: string
   keywords?: string
+  /**
+   * 설정되면 이동 대신 window 에 이 이름의 CustomEvent 를 보낸다 — 화면 이동이 아닌
+   * 셸 동작(예: 사이드바 편집기 열기)을 팔레트에서 실행하기 위한 선택 필드.
+   */
+  event?: string
 }
+
+// "내 사이드바 편집" 명령이 보내는 이벤트 — 사이드바(AdminSidebar)가 받아 편집기를 연다.
+// 정본은 my-nav-preferences.ts 하나다(기존 import 경로 호환을 위해 여기서 재수출한다).
+import { ADMIN_OPEN_NAV_EDITOR_EVENT } from "./my-nav-preferences"
+export { ADMIN_OPEN_NAV_EDITOR_EVENT }
 
 export interface AdminCommandPaletteAccessProps {
   role: string
@@ -53,20 +64,34 @@ const PALETTE_CHILD_COMMANDS: Record<string, Array<Omit<AdminCommand, "group">>>
     })),
     { label: "고객 (Accounts)", href: "/admin/crm/customers/accounts", keywords: "고객 거래처 account customer" },
     { label: "리드", href: "/admin/crm/customers/leads", keywords: "리드 잠재고객 lead 문의" },
+    // 고객 보조 탭(CrmSubnav)과 같은 라벨. 2026-09-20·21 신설 화면이라 ⌘K 도달이 빠져 있었다.
+    { label: "접수", href: "/admin/crm/customers/intake", keywords: "접수 쇼룸 예약 도입 신청 접수 큐 intake showroom booking application queue" },
     { label: "지도", href: "/admin/crm/customers/map", keywords: "고객 지역 지도 분포 지역분포 원천 map source region" },
+    { label: "태그", href: "/admin/crm/customers/tags", keywords: "태그 라벨 고객 분류 태그 관리 tag tags label" },
     { label: "Deals", href: "/admin/crm/deals", keywords: "딜 거래 오더 order deal" },
-    { label: "REV 스냅샷", href: "/admin/crm/deals/rev-sheet", keywords: "매출 시트 rev snapshot revenue 검수" },
+    // 화면 제목(rev-sheet/page.tsx h1)·교차 링크가 전부 "매출시트"라 그 표기로 통일했다.
+    // 옛 라벨 "REV 스냅샷"은 검색어로 남겨 손에 익은 검색이 계속 걸리게 한다.
+    { label: "매출시트", href: "/admin/crm/deals/rev-sheet", keywords: "매출시트 매출 시트 rev 스냅샷 snapshot revenue sheet 검수" },
     { label: "오더·설치", href: "/admin/crm/deals/orders", keywords: "오더 설치 일정 주문 order installation" },
     { label: "워크스페이스", href: "/admin/crm/deals/kpi", keywords: "파트너 계약 정산 큐 kpi workspace" },
     { label: "인사이트", href: "/admin/crm/insights", keywords: "crm 인사이트 분석 insight analytics" },
   ],
+  // 견적 빠른 작업은 redirect 스텁(app/admin/quotes/{new,recording-studio,ai-suite}/page.tsx)을
+  // 거치지 않고 스텁이 보내는 최종 URL로 곧장 간다 — 서버 왕복 한 번과 히스토리 한 칸을 던다.
+  // 스텁 파일은 북마크·외부 링크 보호용으로 남아 있다(목적지를 바꾸면 여기도 함께 바꿀 것).
   "/admin/quotes": [
-    { label: "빠른 견적 작성", href: "/admin/quotes/new", keywords: "견적 작성 빠른 견적 quick quote" },
-    { label: "녹화 세트 견적", href: "/admin/quotes/recording-studio", keywords: "녹화 세트 omo1 studio recording 견적" },
-    { label: "AI Suite 견적", href: "/admin/quotes/ai-suite", keywords: "ai suite 구독형 온라인 패키지 견적" },
+    { label: "빠른 견적 작성", href: "/admin/quotes?tab=hardware&action=new", keywords: "견적 작성 빠른 견적 quick quote" },
+    { label: "녹화 세트 견적", href: "/admin/quotes?tab=hardware&action=recording_studio", keywords: "녹화 세트 omo1 studio recording 견적" },
+    { label: "AI Suite 견적", href: "/admin/quotes?tab=hardware&action=online_suite", keywords: "ai suite 구독형 온라인 패키지 견적" },
   ],
   "/admin/campaigns": [
-    { label: "이메일 자동화", href: "/admin/campaigns?tab=email", keywords: "이메일 자동화 automation email logs" },
+    // 라벨은 허브 탭 이름(lib/marketing/hub-tabs.ts CAMPAIGN_TABS의 email 탭 = "메시지")과 같다.
+    { label: "메시지", href: "/admin/campaigns?tab=email", keywords: "메시지 발송 이메일 자동화 문자 카카오 구독자 message email sms kakao automation logs" },
+    // 캠페인 관리·마케팅 프로젝트는 그 자체가 사이드바(ADMIN_NAV) 항목이라 평소에는 최상위 명령으로
+    // 뜨고 여기 자식은 중복이라 방출되지 않는다(buildAdminCommands). 사이드바 SSOT에서 빠지는 날
+    // (허브 흡수 결정 D2) 이 자식이 ⌘K 도달 경로를 자동으로 이어받는 안전망이다.
+    { label: "캠페인 관리", href: "/admin/campaigns/manage", keywords: "캠페인 관리 크로스채널 통합 롤업 연결 campaign manage cross-channel rollup" },
+    { label: "마케팅 프로젝트", href: "/admin/campaigns/projects", keywords: "마케팅 프로젝트 캠페인 묶음 롤업 예산 소진 project rollup budget" },
   ],
   "/admin/blog": [
     { label: "새 블로그 글 작성", href: "/admin/blog/new", keywords: "새글 작성 write new post 블로그" },
@@ -97,26 +122,48 @@ const PALETTE_CHILD_COMMANDS: Record<string, Array<Omit<AdminCommand, "group">>>
   ],
 }
 
+// 이동이 아닌 셸 동작 — nav 항목과 무관하게 항상 목록 끝(운영·시스템 그룹)에 붙는다.
+const PALETTE_ACTION_COMMANDS: Array<Omit<AdminCommand, "group">> = [
+  {
+    label: "내 사이드바 편집",
+    href: "",
+    event: ADMIN_OPEN_NAV_EDITOR_EVENT,
+    keywords: "내 사이드바 편집 탭 숨기기 숨김 다시 표시 상시 기타 배치 메뉴 정리 sidebar nav menu edit hide customize",
+  },
+]
+
+// 사이드바 SSOT의 모든 최상위 href — 자식 명령이 최상위 명령과 겹치면 자식을 방출하지 않는다.
+const TOP_LEVEL_NAV_HREFS = new Set(ADMIN_NAV.map((item) => item.href))
+
 // 어드민 전역 이동·검색 대상 — 사이드바 nav(admin-nav SSOT)에서 파생.
 // 그룹은 사이드바 섹션 라벨과 동일해 사이드바와 팔레트의 IA가 항상 일치한다.
 function buildAdminCommands(items: readonly AdminNavItem[]): AdminCommand[] {
   const accessibleHrefs = new Set(items.map((item) => item.href))
 
-  return ADMIN_NAV_SECTIONS.flatMap((section) => {
+  const navCommands = ADMIN_NAV_SECTIONS.flatMap((section) => {
     const group = ADMIN_NAV_SECTION_META[section].label
     return ADMIN_NAV.filter(
       (item) => item.section === section && accessibleHrefs.has(item.href)
     ).flatMap((item) => [
       { group, label: item.label, href: item.href, keywords: item.keywords },
-      ...(PALETTE_CHILD_COMMANDS[item.href] ?? []).map((child) => ({ group, ...child })),
+      ...(PALETTE_CHILD_COMMANDS[item.href] ?? [])
+        .filter((child) => !TOP_LEVEL_NAV_HREFS.has(child.href))
+        .map((child) => ({ group, ...child })),
     ])
   })
+
+  const actionGroup = ADMIN_NAV_SECTION_META.system.label
+  return [...navCommands, ...PALETTE_ACTION_COMMANDS.map((command) => ({ group: actionGroup, ...command }))]
 }
 
 /** 정적 전체 인벤토리 — 문서/회귀 테스트용. 실제 UI는 사용자별 resolveAdminCommands를 쓴다. */
 export const ADMIN_COMMANDS: AdminCommand[] = buildAdminCommands(ADMIN_NAV)
 
-/** 사이드바와 같은 배치 해석(전원 공통 기본 + 사람별 오버라이드)을 거친 명령 목록. */
+/**
+ * 사이드바와 같은 배치 해석(전원 공통 기본 + 사람별 오버라이드)을 거친 명령 목록.
+ * getAccessibleAdminNavItems 는 배치·숨김과 무관하게 ADMIN_NAV 전체를 돌려준다 — 그래서
+ * 사이드바에서 숨긴 탭(기본 숨김 포함)도 ⌘K 에서는 계속 검색된다(command-palette.test.ts 고정).
+ */
 export function resolveAdminCommands(ctx: NavAccessContext): AdminCommand[] {
   return buildAdminCommands(getAccessibleAdminNavItems(resolveAdminNavAccess(ctx)))
 }
@@ -161,10 +208,17 @@ export default function AdminCommandPalette({
   // 실행되므로 동기 focus()로 충분하다.
   useDialogFocus(open, close, inputRef)
 
-  const go = useCallback(
-    (href: string) => {
+  // 이벤트형 명령은 이동하지 않고 셸에 이벤트만 보낸다. 닫기와 같은 핸들러에서 보내므로 두
+  // 상태 변경이 한 커밋에 묶이고, 팔레트의 포커스 복귀(언마운트 정리)가 받는 쪽 다이얼로그의
+  // 포커스 이동(마운트 이펙트)보다 먼저 실행된다.
+  const run = useCallback(
+    (command: AdminCommand) => {
       close()
-      router.push(href)
+      if (command.event) {
+        window.dispatchEvent(new CustomEvent(command.event))
+        return
+      }
+      router.push(command.href)
     },
     [close, router]
   )
@@ -179,7 +233,7 @@ export default function AdminCommandPalette({
     } else if (event.key === "Enter") {
       event.preventDefault()
       const target = filtered[selected]
-      if (target) go(target.href)
+      if (target) run(target)
     }
     // Escape는 useDialogFocus의 전역 document keydown 리스너가 처리한다(위 참조).
   }
@@ -232,13 +286,13 @@ export default function AdminCommandPalette({
               const active = index === safeSelected
               return (
                 <button
-                  key={cmd.href + cmd.label}
+                  key={(cmd.event ?? cmd.href) + cmd.label}
                   id={paletteOptionId(index)}
                   role="option"
                   aria-selected={active}
                   type="button"
                   onMouseEnter={() => setSelected(index)}
-                  onClick={() => go(cmd.href)}
+                  onClick={() => run(cmd)}
                   className={`flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors ${
                     active ? "bg-[#ECFDF5]" : "hover:bg-[#fafaf8]"
                   }`}

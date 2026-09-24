@@ -36,7 +36,9 @@ type ReviewSub = "matching" | "insights" | "revSheet"
 // Deals 섹션 안에서만 보이는 단계별 보조 탭 (매출→오더·설치→KPI).
 const DEALS_SUBTABS = [
   { key: "revenue", href: "/admin/crm/deals", label: "매출", icon: <CircleDollarSign className="h-3.5 w-3.5" /> },
-  { key: "revSheet", href: "/admin/crm/deals/rev-sheet", label: "REV 스냅샷", icon: <FileSpreadsheet className="h-3.5 w-3.5" /> },
+  // 같은 경로가 검수 보조 탭(REVIEW_SUBTABS)에도 있다 — 두 곳 라벨은 화면 제목(rev-sheet/page.tsx h1)과
+  // 같은 "매출시트" 하나로 맞춘다(2026-09-25, 이전엔 여기만 "REV 스냅샷").
+  { key: "revSheet", href: "/admin/crm/deals/rev-sheet", label: "매출시트", icon: <FileSpreadsheet className="h-3.5 w-3.5" /> },
   { key: "orders", href: "/admin/crm/deals/orders", label: "오더·설치", icon: <Truck className="h-3.5 w-3.5" /> },
   { key: "kpi", href: "/admin/crm/deals/kpi", label: "워크스페이스", icon: <Target className="h-3.5 w-3.5" /> },
 ] satisfies Array<{ key: DealsSub; href: string; label: string; icon: ReactNode }>

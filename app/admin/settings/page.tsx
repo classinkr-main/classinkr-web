@@ -12,10 +12,8 @@ import {
   ExternalLink,
   Zap,
   ShieldCheck,
-  History,
   LayoutGrid,
   Sparkles,
-  CircleAlert,
   Copy,
   Code2,
   Globe,
@@ -650,16 +648,17 @@ function WebhookRow({
   )
 }
 
+// "CTA"(cta)·"변경 이력"(history) 탭은 삭제했다(2026-09-25) — 편집 필드 0개의 "준비중"
+// 플레이스홀더만 있었고 nav 에서도 이미 빠져 있었다. 옛 ?tab=cta·?tab=history 로 들어오면
+// 아래 activeTab 판정(SECTION_FIELDS 키 기준)이 기본 탭(외부 연동)으로 받는다.
 type SettingsTab =
   | "general"
   | "lead"
-  | "cta"
   | "links"
   | "integrations"
   | "notifications"
   | "security"
   | "members"
-  | "history"
 
 type SettingsKey = keyof SiteSettings
 
@@ -682,7 +681,7 @@ const NAV_ITEMS: Array<{
   desc: string
   icon: ReactNode
 }> = [
-  // "일반"(general) 탭은 노출에서 제외한다(2026-09-07) — cta·history 와 같은 처리.
+  // "일반"(general) 탭은 노출에서 제외한다(2026-09-07).
   // 이 탭의 6개 필드(데모 폼·블로그 섹션·배너 2종과 문구)는 공개 사이트에서 읽는
   // 곳이 한 군데도 없다. 배너 컴포넌트 자체가 없고 공개용 settings API 도 없어서,
   // 켜고 꺼도 홈페이지가 바뀌지 않는데 "즉시 반영" 배지가 붙어 있었다.
@@ -694,8 +693,6 @@ const NAV_ITEMS: Array<{
     desc: "데모 신청, 문의, 구독 경로",
     icon: <ShieldCheck className="w-4 h-4" />,
   },
-  // "CTA"(cta) 탭은 전 블록이 준비중 플레이스홀더(편집 필드 0)라 노출에서 제외 — history와 동일 처리.
-  // 타입/SECTION_FIELDS/렌더 블록은 ?tab=cta 직접 진입 및 추후 데이터 모델 연결을 위해 유지.
   {
     key: "links",
     label: "주소",
@@ -727,8 +724,6 @@ const NAV_ITEMS: Array<{
     desc: "지사장·매니저 계정",
     icon: <UserCog className="w-4 h-4" />,
   },
-  // "변경 이력"(history) 탭은 리비전 모델 미연결 placeholder라 노출에서 제외.
-  // 타입/SECTION_FIELDS/렌더 블록은 ?tab=history 직접 진입 및 추후 연결을 위해 유지.
 ]
 
 const SITE_LINK_GROUPS: SiteLinkGroup[] = [
@@ -935,7 +930,6 @@ const SECTION_FIELDS: Record<SettingsTab, SettingsKey[]> = {
   // lead 탭은 안내·크로스링크 전용 — demoFormEnabled·blogSectionEnabled의 편집 정본은 general 하나다.
   // 여기 키를 중복 등록하면 같은 변경이 dirtyCount에 두 번 잡힌다(AS-2 dirty 이중 계산 해소).
   lead: [],
-  cta: [],
   links: [],
   integrations: [...WEBHOOK_SETTING_KEYS, "webhookEnabled"],
   notifications: [
@@ -945,7 +939,6 @@ const SECTION_FIELDS: Record<SettingsTab, SettingsKey[]> = {
   ],
   security: [],
   members: [], // 읽기 전용 계정 디렉터리 — 편집 필드 없음(dirty 계산 제외)
-  history: [],
 }
 
 function isSettingsDirty(current: SiteSettings, baseline: SiteSettings) {
@@ -988,29 +981,6 @@ function PanelCard({
       </div>
       <div className="px-4 py-4 sm:px-6 sm:py-5">{children}</div>
     </section>
-  )
-}
-
-function EmptyHint({
-  title,
-  description,
-  action,
-}: {
-  title: string
-  description: string
-  action: string
-}) {
-  return (
-    <div className="rounded-2xl border border-dashed border-[#e0e0dc] bg-[#fafaf8] px-5 py-4">
-      <div className="flex items-start gap-3">
-        <CircleAlert className="w-4 h-4 text-[#1a1a1a]/30 mt-0.5 shrink-0" />
-        <div>
-          <p className="text-[13px] font-medium text-[#111110]">{title}</p>
-          <p className="text-[12px] text-[#1a1a1a]/40 mt-1 leading-relaxed">{description}</p>
-          <p className="text-[12px] text-[#111110] mt-2 font-medium">{action}</p>
-        </div>
-      </div>
-    </div>
   )
 }
 
@@ -1092,7 +1062,8 @@ export default function SettingsPage() {
   const [webhookMeta, setWebhookMeta] = useState<WebhookMetaMap>({})
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
   const [currentOrigin, setCurrentOrigin] = useState("")
-  // nav에서 숨긴 탭(cta/history)도 ?tab= 직접 진입은 보존한다 — 유효 탭 판정은 SECTION_FIELDS 키 기준.
+  // nav에서 숨긴 탭(general)도 ?tab= 직접 진입은 보존한다 — 유효 탭 판정은 SECTION_FIELDS 키 기준.
+  // 모르는 값(삭제된 cta·history 포함)은 기본 탭(외부 연동)으로 떨어진다.
   const activeTab = Object.prototype.hasOwnProperty.call(SECTION_FIELDS, tabParam)
     ? (tabParam as SettingsTab)
     : DEFAULT_SETTINGS_TAB
@@ -1670,52 +1641,6 @@ export default function SettingsPage() {
             </>
           )}
 
-          {activeTab === "cta" && (
-            <>
-              <PanelCard
-                title="CTA 인벤토리"
-                description="CTA는 다음 단계에서 데이터 모델을 연결할 예정입니다."
-                badge="준비중"
-              >
-                <div className="space-y-3">
-                  <div className="flex items-start justify-between gap-4 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-4">
-                    <div>
-                      <p className="text-[13px] font-medium text-[#111110]">Hero Primary CTA</p>
-                      <p className="text-[12px] text-[#1a1a1a]/40 mt-1">도입 문의하기 · form · /contact</p>
-                    </div>
-                    <span className="text-[11px] px-2 py-1 rounded-full bg-amber-50 text-amber-700 font-medium">연결 예정</span>
-                  </div>
-                  <div className="flex items-start justify-between gap-4 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-4">
-                    <div>
-                      <p className="text-[13px] font-medium text-[#111110]">Blog Sidebar CTA</p>
-                      <p className="text-[12px] text-[#1a1a1a]/40 mt-1">소개서 받기 · download · /assets/brochure</p>
-                    </div>
-                    <span className="text-[11px] px-2 py-1 rounded-full bg-amber-50 text-amber-700 font-medium">연결 예정</span>
-                  </div>
-                  <div className="flex items-start justify-between gap-4 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-4">
-                    <div>
-                      <p className="text-[13px] font-medium text-[#111110]">Final CTA</p>
-                      <p className="text-[12px] text-[#1a1a1a]/40 mt-1">무료 구독 · modal · newsletter</p>
-                    </div>
-                    <span className="text-[11px] px-2 py-1 rounded-full bg-amber-50 text-amber-700 font-medium">연결 예정</span>
-                  </div>
-                </div>
-              </PanelCard>
-
-              <PanelCard
-                title="다음 액션"
-                description="CTA 화면은 구조부터 먼저 열어두고, 데이터 모델이 준비되면 즉시 연결합니다."
-                badge="읽기 전용"
-              >
-                <EmptyHint
-                  title="CTA 편집은 아직 준비중입니다."
-                  description="버튼 라벨, 액션 타입, 다운로드 파일, 추적 이벤트를 한 화면에서 다루는 전용 모델이 다음 단계에서 연결됩니다."
-                  action="우선은 Settings의 리드·폼과 Analytics의 CTA 성과 지표를 같이 맞춰주세요."
-                />
-              </PanelCard>
-            </>
-          )}
-
           {activeTab === "links" && (
             <>
               <PanelCard
@@ -2155,65 +2080,6 @@ export default function SettingsPage() {
           {activeTab === "security" && <SecurityPanel />}
 
           {activeTab === "members" && <MembersPanel />}
-
-          {activeTab === "history" && (
-            <>
-              <PanelCard
-                title="변경 이력"
-                description="아직 리비전 모델이 연결되지 않아 UI만 먼저 준비해 둔 상태입니다."
-                badge="준비중"
-              >
-                <div className="space-y-3">
-                  <div className="rounded-2xl border border-[#e8e8e4] bg-white px-4 py-4">
-                    <div className="flex items-start gap-3">
-                      <History className="w-4 h-4 text-[#1a1a1a]/35 mt-0.5 shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-[13px] font-medium text-[#111110]">설정 버전 로그가 아직 없습니다.</p>
-                        <p className="text-[12px] text-[#1a1a1a]/40 mt-1 leading-relaxed">
-                          저장 이력, 변경자, 이전값/이후값 비교는 다음 단계에서 붙입니다.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div className="rounded-2xl border border-dashed border-[#e0e0dc] bg-[#fafaf8] p-4">
-                      <p className="text-[12px] font-medium text-[#111110] mb-1">예상되는 이력 항목</p>
-                      <p className="text-[12px] text-[#1a1a1a]/45 leading-relaxed">
-                        누가, 언제, 무엇을 바꿨는지 기록합니다. 배너 문구와 웹훅처럼 민감한 항목부터 먼저 쌓는 것이 좋습니다.
-                      </p>
-                    </div>
-                    <div className="rounded-2xl border border-dashed border-[#e0e0dc] bg-[#fafaf8] p-4">
-                      <p className="text-[12px] font-medium text-[#111110] mb-1">다음 연결 포인트</p>
-                      <p className="text-[12px] text-[#1a1a1a]/45 leading-relaxed">
-                        변경 로그 API가 준비되면 여기에 필터, 롤백, 상세 비교를 붙일 수 있습니다.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </PanelCard>
-
-              <PanelCard
-                title="다음 액션"
-                description="이력 기능은 지금은 구조만 잡고, 실제 데이터는 추후 연결합니다."
-                badge="안내"
-              >
-                <div className="grid gap-3 md:grid-cols-3">
-                  <div className="rounded-2xl bg-[#fafaf8] border border-[#e8e8e4] p-4">
-                    <p className="text-[12px] font-medium text-[#111110] mb-1">1. 저장 로그 모델</p>
-                    <p className="text-[12px] text-[#1a1a1a]/45 leading-relaxed">설정 저장 시 변경 요약과 이전 값을 함께 남깁니다.</p>
-                  </div>
-                  <div className="rounded-2xl bg-[#fafaf8] border border-[#e8e8e4] p-4">
-                    <p className="text-[12px] font-medium text-[#111110] mb-1">2. 안전장치</p>
-                    <p className="text-[12px] text-[#1a1a1a]/45 leading-relaxed">웹훅과 보안 설정은 마스킹과 재확인 흐름을 붙입니다.</p>
-                  </div>
-                  <div className="rounded-2xl bg-[#fafaf8] border border-[#e8e8e4] p-4">
-                    <p className="text-[12px] font-medium text-[#111110] mb-1">3. 롤백 UX</p>
-                    <p className="text-[12px] text-[#1a1a1a]/45 leading-relaxed">이력 탭에서 이전 버전 되돌리기 액션을 제공할 수 있습니다.</p>
-                  </div>
-                </div>
-              </PanelCard>
-            </>
-          )}
         </main>
       </div>
 

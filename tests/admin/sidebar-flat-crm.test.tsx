@@ -43,6 +43,16 @@ function mobileHeader(html: string) {
   return html.match(/<header\b[^>]*>[\s\S]*?<\/header>/)?.[0] ?? ""
 }
 
+function mobileBottomBar(html: string) {
+  return html.match(/<nav class="fixed inset-x-0 bottom-0[^"]*">[\s\S]*?<\/nav>/)?.[0] ?? ""
+}
+
+/** "숨긴 탭 N · 보기" 토글의 N. 묶음이 없으면 null. */
+function hiddenCount(html: string) {
+  const match = html.match(/숨긴 탭 <span class="tabular-nums">(\d+)<\/span>/)
+  return match ? Number(match[1]) : null
+}
+
 describe("사이드바 CRM 평탄화", () => {
   it("CRM 안에서도 다른 상시 링크가 그대로 보인다", () => {
     // 드릴인은 CRM 진입 시 전체 메뉴를 CRM 패널로 교체해, 마케팅·CS 로 바로 갈 수 없었다.
@@ -56,10 +66,12 @@ describe("사이드바 CRM 평탄화", () => {
   })
 
   it("접힌 기타에도 항목 수와 함께 토글이 렌더된다", () => {
-    // 기타로 내려간 9개(마케팅·분석 6 + 시스템 3)는 클릭 한 번으로 열린다.
+    // 기타 자리 9개(마케팅·분석 6 + 시스템 3) 중 마케팅 프로젝트·운영 상태 2개는 기본 숨김이라
+    // (2026-09-25) 기타 토글에는 7개가 뜨고, 나머지 2개는 그 아래 "숨긴 탭 2"로 묶인다.
     const html = render("/admin/crm")
     expect(html).toContain("기타")
-    expect(html).toContain(">9<")
+    expect(html).toContain(">7<")
+    expect(hiddenCount(html)).toBe(2)
   })
 
   it("'전체 메뉴' 복귀 버튼이 더는 없다", () => {
@@ -120,12 +132,68 @@ describe("사이드바 CRM 평탄화", () => {
 
     // 모바일 하단 바로가기(MOBILE_PRIMARY_NAV)는 고정 목록이라 견적이 남는다 —
     // 여기서 확인하는 것은 사이드바 상시/기타 배치가 오버라이드를 반영하는지다.
-    expect(html).toContain(">10<")
+    // 기본 기타 7(기본 숨김 2 제외) + 내려온 견적 1 = 8.
+    expect(html).toContain(">8<")
+  })
+
+  describe("개인 숨김", () => {
+    it("숨긴 항목은 목록에서 빠지고 '숨긴 탭' 개수가 뜬다", () => {
+      const html = render("/admin/calendar", { navOverrides: { "/admin/hardware": "hidden" } })
+
+      expect(navHrefs(html)).not.toContain("/admin/hardware")
+      // 기본 숨김 2 + 하드웨어 1.
+      expect(hiddenCount(html)).toBe(3)
+      expect(html).toContain("보기")
+    })
+
+    it("아무것도 숨기지 않았으면 숨긴 탭 묶음이 없다", () => {
+      const html = render("/admin/calendar", {
+        navOverrides: { "/admin/campaigns/projects": "folded", "/admin/ops": "folded" },
+      })
+      expect(hiddenCount(html)).toBeNull()
+      expect(html).not.toContain("다시 표시")
+    })
+
+    it("숨긴 경로에 있으면 묶음이 펼쳐지고 active·모바일 헤더 라벨이 맞다", () => {
+      // 주소·⌘K 로 들어온 숨긴 화면 — 도달성은 그대로이고 현재 위치도 보여야 한다.
+      const html = render("/admin/ops")
+
+      expect(activeNavHrefs(html)).toEqual(["/admin/ops"])
+      expect(mobileHeader(html)).toContain("운영 상태")
+      expect(html).toContain("다시 표시")
+      expect(html).toContain("접기")
+    })
+
+    it("직접 숨긴 상시 항목의 하위 화면에서도 active·헤더가 맞다", () => {
+      const html = render("/admin/hardware/items", { navOverrides: { "/admin/hardware": "hidden" } })
+
+      expect(activeNavHrefs(html)).toContain("/admin/hardware")
+      expect(mobileHeader(html)).toContain("하드웨어 재고")
+    })
+
+    it("모바일 하단 바는 숨긴 견적을 뺀다", () => {
+      const html = render("/admin/calendar", { navOverrides: { "/admin/quotes": "hidden" } })
+      const bottomBar = mobileBottomBar(html)
+
+      expect(bottomBar).toContain('href="/admin/calendar"')
+      expect(bottomBar).toContain('href="/admin/crm"')
+      expect(bottomBar).not.toContain('href="/admin/quotes"')
+    })
+
+    it("사이드바 편집 버튼은 설정이 없어도 렌더된다", () => {
+      expect(render("/admin/calendar")).toContain("사이드바 편집")
+    })
+
+    it("Overview 를 숨긴 값이 들어와도 목록에 남는다", () => {
+      const html = render("/admin/calendar", { navOverrides: { "/admin/overview": "hidden" } })
+      expect(navHrefs(html)).toContain("/admin/overview")
+      expect(hiddenCount(html)).toBe(2)
+    })
   })
 
   it.each([
     ["/admin/crm/customers/customer-1", "고객 360"],
-    ["/admin/crm/deals/rev-sheet", "REV 스냅샷"],
+    ["/admin/crm/deals/rev-sheet", "매출시트"],
     ["/admin/crm/deals/orders", "오더·설치"],
     ["/admin/crm/deals/kpi", "워크스페이스"],
     ["/admin/crm/matching", "데이터 매칭"],
