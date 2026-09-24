@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { NextRequest } from "next/server"
 
-// contacted 상태는 실제 연락 로그가 있을 때만 허용한다. 확인 도장은 서버 시각을 쓴다.
+// contacted 상태는 실제 연락 증거(연락 로그 또는 사람 접촉 기록)가 있을 때만 허용한다. 확인 도장은 서버 시각을 쓴다.
 const requireVerifiedAdminContext = vi.fn()
 const updateLead = vi.fn()
 const deleteLead = vi.fn()
 const hasContactLog = vi.fn()
+const hasLeadContactEvent = vi.fn()
 
 vi.mock("@/lib/admin-auth", () => ({
   CRM_STAFF_ADMIN_API_ROLES: ["SUPER_ADMIN", "ADMIN", "BRANCH"],
@@ -20,6 +21,7 @@ vi.mock("@/lib/repositories/leads", () => ({
   LeadVersionConflictError: class LeadVersionConflictError extends Error {},
 }))
 vi.mock("@/lib/repositories/contact-logs", () => ({ hasContactLog }))
+vi.mock("@/lib/repositories/crm-events", () => ({ hasLeadContactEvent }))
 
 function patchRequest(body: unknown) {
   return new NextRequest("https://classin.kr/api/admin/leads/lead-1", {
@@ -43,6 +45,7 @@ describe("PATCH /api/admin/leads/[id] — 연락 체크와 확인 도장", () =>
   beforeEach(() => {
     requireVerifiedAdminContext.mockResolvedValue({ source: "supabase", role: "ADMIN", userId: "admin-1" })
     hasContactLog.mockResolvedValue(true)
+    hasLeadContactEvent.mockResolvedValue(false)
     updateLead.mockImplementation(async (id: string, patch: Record<string, unknown>) => ({
       id,
       source: "meta_lead_ads",
@@ -78,13 +81,31 @@ describe("PATCH /api/admin/leads/[id] — 연락 체크와 확인 도장", () =>
     expect(body.lead.confirmed_at).toBe(patch.confirmed_at)
   })
 
-  it("연락 로그 없이 contacted 상태만 만드는 요청은 409로 거부한다", async () => {
+  it("연락 로그도 사람 접촉 기록도 없이 contacted 상태만 만드는 요청은 409로 거부한다", async () => {
     hasContactLog.mockResolvedValueOnce(false)
 
     const res = await callPatch({ status: "contacted" })
 
     expect(res.status).toBe(409)
+    expect(hasLeadContactEvent).toHaveBeenCalledWith("lead-1")
     expect(updateLead).not.toHaveBeenCalled()
+  })
+
+  it("연락 로그가 없어도 기록 컴포저로 남긴 사람 연락(콜·문자 등)이 있으면 연락중을 허용한다", async () => {
+    hasContactLog.mockResolvedValueOnce(false)
+    hasLeadContactEvent.mockResolvedValueOnce(true)
+
+    const res = await callPatch({ status: "contacted" })
+
+    expect(res.status).toBe(200)
+    expect(sentPatch().status).toBe("contacted")
+  })
+
+  it("연락 로그가 있으면 기록 조회 없이 바로 허용한다(1차 증거 우선)", async () => {
+    const res = await callPatch({ status: "contacted" })
+
+    expect(res.status).toBe(200)
+    expect(hasLeadContactEvent).not.toHaveBeenCalled()
   })
 
   it("converted·closed로 바뀔 때도 확인 도장을 찍는다", async () => {

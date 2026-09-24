@@ -2,7 +2,10 @@ import "server-only"
 
 import { unstable_cache, revalidateTag } from "next/cache"
 
-import { ADMIN_CRM_TASKS_CACHE_TAG } from "@/lib/admin/crm/cache-tags"
+import {
+  ADMIN_CRM_PRIORITY_QUEUE_SNAPSHOT_CACHE_TAG,
+  ADMIN_CRM_TASKS_CACHE_TAG,
+} from "@/lib/admin/crm/cache-tags"
 import { findAdminCrmOwner, listAdminUserDirectory } from "@/lib/repositories/admin-users"
 import { assertJsonSafeInDev } from "@/lib/server/json-safe"
 import { shareInFlightByArgs } from "@/lib/server/share-in-flight"
@@ -52,6 +55,15 @@ export function onCrmTasksMutated(listener: CrmTaskMutationListener) {
 }
 
 function notifyCrmTasksMutated() {
+  // 우선순위 큐 소스 스냅샷은 인스턴스 간 공유 Data Cache다 — 구독(onCrmTasksMutated)은 그 모듈을
+  // 로드한 인스턴스에만 걸려 있어, 쓰기가 다른 인스턴스에서 일어나면 리스너가 0개다. 태그를 직접
+  // SWR 무효화한다(cache-tags 모듈만 import — 큐 모듈을 import하면 순환이 된다).
+  // 쓰기는 이미 커밋됐다 — 이 무효화 실패가 구독 리스너 호출과 저장 응답을 깨뜨리지 않게 감싼다.
+  try {
+    revalidateTag(ADMIN_CRM_PRIORITY_QUEUE_SNAPSHOT_CACHE_TAG, "max")
+  } catch (error) {
+    console.warn("[crm-tasks] priority queue snapshot invalidation failed:", error)
+  }
   for (const listener of crmTaskMutationListeners) listener()
 }
 

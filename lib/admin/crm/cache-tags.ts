@@ -15,8 +15,9 @@ export const ADMIN_CRM_OVERVIEW_CACHE_TAG = "admin-crm-overview"
 export const ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG = "admin-crm-unified-snapshot"
 
 // lib/repositories/crm-priority-queue.ts의 소스 스냅샷(getCrmPriorityQueue)이 unstable_cache에
-// 거는 태그. invalidateCrmPrioritySourceSnapshot()이 이 태그를 revalidateTag(tag, "max")로 건다 —
-// 리드·CRM 할 일·컨택 로그 쓰기가 그 함수를 구독해 호출한다(파일 하단 onLeadsMutated 등).
+// 거는 태그. 리드·CRM 할 일·컨택 로그 쓰기 경로가 이 태그를 revalidateTag(tag, "max")로 직접 건다
+// (2026-09-25 — 큐 모듈 구독(onLeadsMutated 등)은 큐 모듈을 로드한 인스턴스에만 걸려 다른 인스턴스의
+// 쓰기를 놓쳤다). 구독 경로(invalidateCrmPrioritySourceSnapshot)도 같은 인스턴스 보조로 남아 있다.
 export const ADMIN_CRM_PRIORITY_QUEUE_SNAPSHOT_CACHE_TAG = "admin-crm-priority-queue-snapshot"
 
 // ── 2026-09-10 3라운드 승격분 (§3.2·§3.3) ────────────────────────────────────────
@@ -37,10 +38,10 @@ export const ADMIN_CRM_TASKS_CACHE_TAG = "admin-crm-tasks"
 
 // lib/repositories/crm-region-map.ts의 getCrmRegionMap이 unstable_cache에 거는 태그.
 // 이전엔 module-level let cache(60초)+inFlight로 손으로 구현한 캐시라 인스턴스마다 따로 놀았다.
-// 무효화는 부분적이다 — lib/repositories/crm-naver-map.ts의 importCrmNaverMapSource(지도 장소
-// 재수집)만 revalidateTag(tag, "max")로 건다. branch_rev_deals.region(REV 시트 동기화)과
-// leads.branch(리드 쓰기) 변경은 이 태그를 무효화하지 않는다 — 각각 branch/leads 소유
-// 파일이라 이번 라운드에서 배선하지 못했다(TTL을 60초에서 올리지 않은 이유이기도 하다).
+// 무효화: lib/repositories/crm-naver-map.ts의 importCrmNaverMapSource(지도 장소 재수집)와
+// 리드 쓰기(lib/repositories/leads.ts의 invalidateLeadReadCaches, 2026-09-25)가 revalidateTag(tag, "max")로
+// 건다. branch_rev_deals.region(REV 시트 동기화) 변경은 아직 무효화하지 않는다(TTL을 60초에서
+// 올리지 않은 이유).
 export const ADMIN_CRM_REGION_MAP_CACHE_TAG = "admin-crm-region-map"
 
 // lib/repositories/account-master.ts의 getAccountMaster가 unstable_cache에 거는 태그.

@@ -8,7 +8,7 @@ import {
   type LeadStatus,
   type LeadRecord,
 } from "@/lib/repositories/leads"
-import { hasContactLog } from "@/lib/repositories/contact-logs"
+import { hasLeadContactEvidence } from "@/lib/crm/contact-record"
 
 const LEAD_STATUSES = new Set<LeadStatus>(["new", "contacted", "converted", "closed"])
 const STRING_OR_NULL_FIELDS = [
@@ -96,7 +96,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const expectedUpdatedAt = isRecord(body) ? readExpectedUpdatedAt(body) : undefined
 
   try {
-    if (sanitized.patch?.status === "contacted" && !(await hasContactLog(id))) {
+    // 연락중 증거 = 연락 로그, 또는 사람 접촉 기록(기록 컴포저의 콜·문자·회의록·녹음). 이전엔 로그만
+    // 봐서 컴포저로 통화를 남긴 리드를 연락중으로 바꾸면 409가 났다.
+    if (sanitized.patch?.status === "contacted" && !(await hasLeadContactEvidence(id))) {
       return NextResponse.json(
         { error: "연락중 상태는 실제 연락 기록을 저장한 뒤에만 선택할 수 있습니다." },
         { status: 409 }

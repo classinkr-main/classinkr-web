@@ -6,6 +6,7 @@
  * [NOTE-AE1] 세그먼트 수신자 추출
  *   leads + newsletter_subscribers 두 테이블을 통합 조회.
  *   중복 이메일은 subscribers 데이터를 우선시하여 dedupe.
+ *   leads 분기는 발송 동의 게이트(isLeadMarketingEligible)를 통과한 행만 넣는다 — 해지·동의 없음 제외.
  *
  * [NOTE-AE2] 규칙 실행 플로우
  *   1. 규칙 조회 (template 포함)
@@ -42,6 +43,99 @@ import type {
 } from "@/lib/automation-types"
 
 const sb = () => createSupabaseAdminClient()
+
+/* ─────────────────────────────────────────────────────────────
+   광고성 발송 동의 게이트 (leads 분기) — CT11, 2026-09-25
+   ─────────────────────────────────────────────────────────────
+   leads 행에는 동의 컬럼이 없다. 그래서 leads 분기는 구독 해지자도, 동의한 적 없는 리드도 그대로
+   세그먼트 발송(executeRule — 수신거부 링크가 붙는 캠페인 메일) 대상에 다시 넣고 있었다.
+   동의 근거 = newsletter_subscribers.status "active"(공개 폼에서 마케팅 동의 시 여기로 동기화된다)
+   또는 user_profiles.marketing_consent = true. 구독 행이 하나라도 active가 아니면(해지) 제외한다 —
+   해지가 로그인 프로필 동의보다 우선. 미결정·조회 실패는 거부로 취급한다(fail-closed).
+   on_submit(접수 직후 안내)·delay 트리거는 이 함수를 거치지 않는다 — 정보성 접수 확인은 대상 아님. */
+
+const CONSENT_PAGE_SIZE = 1000
+const CONSENT_MAX_PAGES = 50
+
+export interface LeadMarketingConsentIndex {
+  /** 소문자 이메일 → 구독 상태. 같은 이메일(대소문자 무시) 행 중 하나라도 active가 아니면 "blocked". */
+  subscriberStatusByEmail: Map<string, "active" | "blocked">
+  /** user_profiles.marketing_consent = true 인 소문자 이메일 */
+  profileConsentEmails: Set<string>
+}
+
+function consentEmailKey(email: string | null | undefined): string {
+  return (email ?? "").trim().toLowerCase()
+}
+
+/** 이 리드 이메일에 광고성 발송을 해도 되는가 — 해지면 false, 동의 근거가 없으면 false. */
+export function isLeadMarketingEligible(email: string, index: LeadMarketingConsentIndex): boolean {
+  const key = consentEmailKey(email)
+  if (!key) return false
+  const status = index.subscriberStatusByEmail.get(key)
+  if (status === "blocked") return false
+  return status === "active" || index.profileConsentEmails.has(key)
+}
+
+type ConsentPage = { data: unknown[] | null; error: { message: string } | null }
+
+/** range 페이지네이션(실제 받은 행 수만큼 전진, 빈 페이지에서 종료). 상한 초과·오류는 던진다. */
+async function readAllConsentRows(
+  label: string,
+  fetchPage: (from: number, to: number) => PromiseLike<ConsentPage>
+): Promise<Record<string, unknown>[]> {
+  const rows: Record<string, unknown>[] = []
+  let from = 0
+  for (let page = 0; ; page += 1) {
+    if (page >= CONSENT_MAX_PAGES) {
+      throw new Error(`[automation] ${label} 조회가 ${CONSENT_MAX_PAGES}페이지를 넘었습니다 — 상한을 재검토하세요.`)
+    }
+    const { data, error } = await fetchPage(from, from + CONSENT_PAGE_SIZE - 1)
+    if (error) throw new Error(`[automation] ${label} 조회 실패: ${error.message}`)
+    const batch = (data ?? []) as Record<string, unknown>[]
+    if (batch.length === 0) break
+    rows.push(...batch)
+    from += batch.length
+  }
+  return rows
+}
+
+export async function loadLeadMarketingConsentIndex(): Promise<LeadMarketingConsentIndex> {
+  const [subscribers, profiles] = await Promise.all([
+    readAllConsentRows("구독 상태", (from, to) =>
+      sb()
+        .from("newsletter_subscribers")
+        .select("id, email, status")
+        .order("id", { ascending: true })
+        .range(from, to)
+    ),
+    readAllConsentRows("로그인 마케팅 동의", (from, to) =>
+      sb()
+        .from("user_profiles")
+        .select("id, email")
+        .eq("marketing_consent", true)
+        .not("email", "is", null)
+        .order("id", { ascending: true })
+        .range(from, to)
+    ),
+  ])
+
+  const subscriberStatusByEmail = new Map<string, "active" | "blocked">()
+  for (const row of subscribers) {
+    const key = consentEmailKey(row.email as string | null)
+    if (!key) continue
+    if (row.status !== "active") subscriberStatusByEmail.set(key, "blocked")
+    else if (!subscriberStatusByEmail.has(key)) subscriberStatusByEmail.set(key, "active")
+  }
+
+  const profileConsentEmails = new Set<string>()
+  for (const row of profiles) {
+    const key = consentEmailKey(row.email as string | null)
+    if (key) profileConsentEmails.add(key)
+  }
+
+  return { subscriberStatusByEmail, profileConsentEmails }
+}
 
 /* ─────────────────────────────────────────────────────────────
    세그먼트 수신자 추출
@@ -114,8 +208,21 @@ export async function resolveSegmentRecipients(
     }
 
     const { data } = await query
-    for (const row of data ?? []) {
+    const leadRows = (data ?? []).filter((row) => Boolean(row.email))
+
+    // 동의 게이트 — 조회 실패면 leads 분기 전체를 뺀다(미결정 consent = 거부).
+    let consent: LeadMarketingConsentIndex | null = null
+    if (leadRows.length > 0) {
+      try {
+        consent = await loadLeadMarketingConsentIndex()
+      } catch (err) {
+        console.error("[automation] 발송 동의 근거 조회 실패 — leads 분기를 발송 대상에서 제외합니다:", err)
+      }
+    }
+
+    for (const row of leadRows) {
       if (!row.email) continue
+      if (!consent || !isLeadMarketingEligible(row.email, consent)) continue
       // 중복 이메일은 subscribers 우선
       if (seenEmails.has(row.email.toLowerCase())) continue
       seenEmails.add(row.email.toLowerCase())

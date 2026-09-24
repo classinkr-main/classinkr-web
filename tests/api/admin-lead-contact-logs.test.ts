@@ -8,7 +8,12 @@ const deleteContactLog = vi.fn()
 const getLeadById = vi.fn()
 const updateLead = vi.fn()
 const getOrCreateCrmCustomerEventBySource = vi.fn()
+const createCrmCustomerEvent = vi.fn()
+const deleteCrmCustomerEventsBySource = vi.fn()
+const hasLeadContactEvent = vi.fn()
 const createTasksFromEventNextActions = vi.fn()
+const findDuplicateContactLog = vi.fn()
+const hasContactLog = vi.fn()
 
 vi.mock("@/lib/admin-auth", () => ({
   CRM_STAFF_ADMIN_API_ROLES: ["SUPER_ADMIN", "ADMIN", "BRANCH"],
@@ -18,9 +23,18 @@ vi.mock("@/lib/repositories/contact-logs", () => ({
   getContactLogs,
   addContactLog,
   deleteContactLog,
+  findDuplicateContactLog,
+  hasContactLog,
 }))
 vi.mock("@/lib/repositories/leads", () => ({ getLeadById, updateLead }))
-vi.mock("@/lib/repositories/crm-events", () => ({ getOrCreateCrmCustomerEventBySource }))
+vi.mock("@/lib/repositories/crm-events", () => ({
+  getOrCreateCrmCustomerEventBySource,
+  // 로그 경로는 미러를 getOrCreate(원천 id 기준)로만 만든다 — 일반 기록 생성은 절대 부르지 않는다.
+  createCrmCustomerEvent,
+  deleteCrmCustomerEventsBySource,
+  hasLeadContactEvent,
+  LEAD_CONTACT_MIRROR_SOURCE_TYPES: ["lead_contact_log", "call", "sms"],
+}))
 vi.mock("@/lib/repositories/crm-tasks", () => ({ createTasksFromEventNextActions }))
 
 const LEAD = {
@@ -75,6 +89,8 @@ describe("POST /api/admin/leads/[id]/logs", () => {
     getLeadById.mockResolvedValue(LEAD)
     getContactLogs.mockResolvedValue([LOG])
     addContactLog.mockResolvedValue(LOG)
+    findDuplicateContactLog.mockResolvedValue(null)
+    deleteCrmCustomerEventsBySource.mockResolvedValue(1)
     updateLead.mockResolvedValue({ ...LEAD, status: "contacted" })
     getOrCreateCrmCustomerEventBySource.mockResolvedValue({
       created: false,
@@ -161,6 +177,54 @@ describe("POST /api/admin/leads/[id]/logs", () => {
     )
   })
 
+  it("mirrors the saved log exactly once by its log id — never through a generic CRM event insert", async () => {
+    const response = await callPost({ type: "call", result: "answered", notes: "상담 완료" })
+
+    expect(response.status).toBe(200)
+    expect(addContactLog).toHaveBeenCalledTimes(1)
+    expect(getOrCreateCrmCustomerEventBySource).toHaveBeenCalledTimes(1)
+    expect(getOrCreateCrmCustomerEventBySource).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetType: "lead",
+        targetId: "lead-1",
+        sourceType: "lead_contact_log",
+        sourceId: "log-1",
+        occurredAt: LOG.contacted_at,
+      })
+    )
+    expect(createCrmCustomerEvent).not.toHaveBeenCalled()
+  })
+
+  it("reuses an identical log at the same contact time instead of storing it twice (retry/double click)", async () => {
+    findDuplicateContactLog.mockResolvedValueOnce(LOG)
+    getLeadById.mockResolvedValueOnce({ ...LEAD, status: "contacted" })
+
+    const response = await callPost({
+      type: "call",
+      result: "answered",
+      notes: "상담 완료",
+      contacted_at: LOG.contacted_at,
+    })
+
+    expect(response.status).toBe(200)
+    expect(addContactLog).not.toHaveBeenCalled()
+    expect(updateLead).not.toHaveBeenCalled()
+    // 미러는 로그 id 기준 getOrCreate라 기존 미러를 돌려받고(created: false) 할 일도 다시 만들지 않는다.
+    expect(getOrCreateCrmCustomerEventBySource).toHaveBeenCalledTimes(1)
+    expect(createTasksFromEventNextActions).not.toHaveBeenCalled()
+    await expect(response.json()).resolves.toMatchObject({ log: LOG, statusSync: "unchanged" })
+  })
+
+  it("keeps the saved log when the CRM mirror fails (fail-soft, no 500 → no duplicate retry)", async () => {
+    getOrCreateCrmCustomerEventBySource.mockRejectedValueOnce(new Error("events down"))
+
+    const response = await callPost({ type: "call", result: "callback" })
+
+    expect(response.status).toBe(200)
+    expect(createTasksFromEventNextActions).not.toHaveBeenCalled()
+    await expect(response.json()).resolves.toMatchObject({ log: LOG, statusSync: "updated" })
+  })
+
   it("does not delete the only evidence while the lead is contacted", async () => {
     getLeadById.mockResolvedValueOnce({ ...LEAD, status: "contacted" })
 
@@ -186,5 +250,42 @@ describe("POST /api/admin/leads/[id]/logs", () => {
 
     expect(response.status).toBe(200)
     expect(deleteContactLog).toHaveBeenCalledWith("log-1")
+  })
+
+  it("removes the pure CRM mirror first, then the log (no ghost contact, composer originals kept)", async () => {
+    deleteContactLog.mockResolvedValueOnce(true)
+
+    const response = await callDelete()
+
+    expect(response.status).toBe(200)
+    expect(deleteCrmCustomerEventsBySource.mock.invocationCallOrder[0]).toBeLessThan(
+      deleteContactLog.mock.invocationCallOrder[0]
+    )
+    expect(deleteCrmCustomerEventsBySource).toHaveBeenCalledWith({
+      sourceTypes: ["lead_contact_log"],
+      sourceId: "log-1",
+      targetType: "lead",
+      targetId: "lead-1",
+    })
+    await expect(response.json()).resolves.toMatchObject({ ok: true, mirrorsRemoved: 1 })
+  })
+
+  it("keeps the log and returns 500 when the mirror cleanup fails — a retry can finish the job", async () => {
+    deleteCrmCustomerEventsBySource.mockRejectedValueOnce(new Error("events down"))
+
+    const response = await callDelete()
+    const body = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(body.error).toContain("CRM 기록")
+    expect(deleteContactLog).not.toHaveBeenCalled()
+  })
+
+  it("returns 500 when the log deletion itself fails", async () => {
+    deleteContactLog.mockResolvedValueOnce(false)
+
+    const response = await callDelete()
+
+    expect(response.status).toBe(500)
   })
 })
