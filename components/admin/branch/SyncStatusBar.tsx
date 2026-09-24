@@ -1,6 +1,7 @@
 "use client"
 import { useState } from "react"
 import { RefreshCw, AlertTriangle, CheckCircle2, Clock, Database } from "lucide-react"
+import { classifySyncFailure, SYNC_FAILURE_CLASS_LABEL } from "@/lib/admin/sync-health"
 import { isImportStale } from "@/lib/branch/data-source-freshness"
 import { isSheetAheadOfSync } from "@/lib/branch/sheet-freshness"
 import { formatCNY } from "@/lib/crm/money-format"
@@ -112,7 +113,12 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
                       : <CheckCircle2 className="h-4 w-4 text-[#084734]" />}
             <span className="text-[#1a1a1a]/75">
               {lastError
-                ? lastError
+                ? // 원문 오류(예: 시트 API 의 권한 문구)는 키·내부 URL 이 섞일 수 있어 싣지 않고, 동기화 경고 띠와
+                  // 같은 분류로 말한다(lib/admin/sync-health.ts 정직 규칙). 원문은 실행 기록(DB)에 남아 있다.
+                  // lastError 에는 동기화 실패만 오지 않는다 — 수동 동기화 요청 실패(권한·타임아웃 포함)·요약
+                  // 불러오기 실패·마지막 실행 기록 오류가 섞여 온다(BranchDashboardClient). 그래서 "동기화
+                  // 실패"로 단정하지 않고 둘 다를 가리키는 라벨로 말한다.
+                  `불러오기·동기화 오류 — ${SYNC_FAILURE_CLASS_LABEL[classifySyncFailure("sheets", lastError).failureClass]}`
                 : staleRefresh
                   ? `갱신 실패 — ${relativeTime(new Date(staleSince as number).toISOString(), now)} 데이터 표시 중`
                   : importStale

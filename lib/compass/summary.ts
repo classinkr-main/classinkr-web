@@ -40,8 +40,33 @@ import {
  * 담당별 집계는 정확하기 때문이다.
  */
 
-const UNASSIGNED_OWNER_LABEL = "미배정"
+export const UNASSIGNED_OWNER_LABEL = "미배정"
 const NO_LOST_REASON_LABEL = "사유 없음"
+
+/**
+ * 담당별 행 순위(F7) — "미배정"을 뺀 담당자만 total 내림차순으로 상위 limit개를 고르고,
+ * 미배정 행이 있으면 **항상** 맨 끝에 붙인다(그래서 결과는 최대 limit + 1행).
+ *
+ * 예전에는 미배정을 포함한 전체에서 상위 N을 먼저 자른 뒤 미배정을 뒤로 옮겼다. 미배정이 크면
+ * 실제 담당자 한 명이 잘렸고(상위 8칸 중 한 칸을 미배정이 차지), 미배정이 작으면 잘려서 사라져
+ * "배정 안 된 유입이 몇 건인가"라는 운영 신호가 통째로 빠졌다.
+ * 동률은 담당자 이름(ko) 순으로 전순서를 만든다 — 순위가 새로고침마다 흔들리지 않게.
+ */
+export function rankCompassOwnerRows<T extends { owner: string; total: number }>(
+  rows: Iterable<T>,
+  limit: number = COMPASS_SUMMARY_OWNER_LIMIT,
+): T[] {
+  const assigned: T[] = []
+  let unassigned: T | null = null
+  for (const row of rows) {
+    if (row.owner === UNASSIGNED_OWNER_LABEL) unassigned = row
+    else assigned.push(row)
+  }
+  const top = assigned
+    .sort((a, b) => b.total - a.total || a.owner.localeCompare(b.owner, "ko"))
+    .slice(0, Math.max(0, limit))
+  return unassigned ? [...top, unassigned] : top
+}
 const OTHER_PLATFORM_LABEL = "기타"
 
 // Compass의 platform/channel 자유 텍스트 안에서 메타 계열을 판별한다. fb/ig는 부분 문자열
@@ -230,17 +255,7 @@ export async function buildCompassSummary(
     count: careCounts.get(stage) ?? 0,
   }))
 
-  // total 내림차순 상위 N을 먼저 자르고, 그 안에서만 "미배정"을 맨 뒤로 옮긴다(정렬 안정성
-  // 덕에 나머지는 total 순서를 그대로 유지).
-  const byOwner = [...ownerRows.values()]
-    .sort((a, b) => b.total - a.total)
-    .slice(0, COMPASS_SUMMARY_OWNER_LIMIT)
-    .sort((a, b) => {
-      const aUnassigned = a.owner === UNASSIGNED_OWNER_LABEL
-      const bUnassigned = b.owner === UNASSIGNED_OWNER_LABEL
-      if (aUnassigned === bUnassigned) return 0
-      return aUnassigned ? 1 : -1
-    })
+  const byOwner = rankCompassOwnerRows(ownerRows.values())
 
   const lostReasons = [...lostReasonCounts.entries()]
     .map(([key, count]) => ({ key, label: key, count }))

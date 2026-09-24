@@ -15,7 +15,7 @@ export interface SyncRunLike {
 
 export interface SyncFailureStreak {
   source: SyncSourceKey
-  /** 마지막 성공 이후 실패한 런 수(수동 재시도 포함). */
+  /** 마지막 성공 이후 이 원천을 돌려 실패한 런 수(수동 재시도 포함, 이 원천을 돌리지 않은 런은 빼고). */
   failedRuns: number
   /** 실패가 있었던 서로 다른 KST 날짜 수 — 알림 판정 기준. */
   failedDays: number
@@ -31,9 +31,28 @@ const SOURCE_KEYS: SyncSourceKey[] = ["rev", "hw"]
 const SOURCE_LABEL: Record<SyncSourceKey, string> = { rev: "매출 시트(REV·DSH·KPI)", hw: "하드웨어 시트" }
 const DAY_MS = 86_400_000
 
-// runAll은 소스별 오류를 "rev: … | hw: …"로 잇는다. 접두사 없는 오류는 런 전체 실패로 본다.
+/**
+ * 이 런이 해당 원천을 실제로 돌렸는가.
+ *
+ * runAll은 한 원천만 돌린 런(매출 장부 새로고침·매출 대시보드·매출시트의 수동 동기화 = REV만)에
+ * 그 원천 이름("rev"·"hw")을 source로 남긴다(2026-09-25). 그런 런은 다른 원천의 판정에서 건너뛴다 —
+ * 예전에는 모든 런이 "all"로 남아, HW가 이틀째 실패 중이어도 누가 REV만 새로고침하면 그 성공이
+ * HW의 성공으로 읽혀 연속 실패가 0으로 돌아갔다(경고 띠·크론 알림 둘 다).
+ *
+ * 하위 호환: "all"·빈 값(옛 기록 포함)은 예전 해석 그대로 두 원천을 모두 돌린 런으로 본다. 수정
+ * 이전에 REV만 돌린 옛 "all" 행은 구분할 방법이 없어 그대로 읽힌다 — 최근 60런 창에서 밀려나며 사라진다.
+ */
+export function syncRunCoversSource(run: Pick<SyncRunLike, "source">, source: SyncSourceKey): boolean {
+  const recorded = run.source
+  if (recorded === "rev" || recorded === "hw") return recorded === source
+  return true
+}
+
+// runAll은 소스별 오류를 "rev: … | hw: …"로 잇는다. 접두사 없는 오류는 런 전체 실패로 본다
+// (단일 원천 런이면 그 원천의 실패 — 다른 원천에는 애초에 건너뜀이다).
 function outcomeFor(run: SyncRunLike, source: SyncSourceKey): { kind: "success" | "failed" | "skip"; error?: string } {
   if (run.status === "running") return { kind: "skip" }
+  if (!syncRunCoversSource(run, source)) return { kind: "skip" }
   if (run.status === "success") return { kind: "success" }
   const segments = (run.error ?? "").split(" | ").map((segment) => segment.trim()).filter(Boolean)
   const own = segments.find((segment) => segment.startsWith(`${source}:`))

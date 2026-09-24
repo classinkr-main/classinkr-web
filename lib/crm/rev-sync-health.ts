@@ -93,7 +93,9 @@ export interface RevSyncLinkedTarget {
  *   (매칭 인박스 라벨 조회가 customers 테이블 — lib/admin-crm-matching.ts). 고객 360 키
  *   규약(lead:{id}|neo:{accountId}) 어느 쪽으로도 해석되지 않아 360 직행이 불가하므로
  *   (360 API는 그 외 키를 400으로 거부), 통합 고객 DB 검색 착지(?q=)로 보낸다 — P0-2 기본형.
- * - partner_account: /admin/crm/partners/{id} (기존 파트너 상세 경로 규약).
+ * - partner_account: /admin/crm/deals/kpi/{id} (D7 — 현재 파트너 상세 경로). 구경로
+ *   /admin/crm/partners/{id}는 북마크 보존용 redirect 스텁(app/admin/crm/partners/[id]/page.tsx)이
+ *   정확히 이 경로로 보낸다 — 새 링크는 스텁을 거치지 않고 도착지로 직행한다(스텁은 유지).
  * - deal: 딜 상세 라우트가 없어(개요 대시보드뿐) 링크 생략(null).
  */
 export function revLinkedTargetHref(
@@ -102,7 +104,7 @@ export function revLinkedTargetHref(
   const targetId = target.targetId?.trim()
   if (!targetId) return null
   if (target.targetType === "partner_account") {
-    return `/admin/crm/partners/${encodeURIComponent(targetId)}`
+    return `/admin/crm/deals/kpi/${encodeURIComponent(targetId)}`
   }
   if (target.targetType === "customer") {
     const q = (target.label ?? "").trim() || target.name.trim()
