@@ -36,6 +36,8 @@ interface HomeTabPanelProps {
   setHardwareSearch: ComponentProps<typeof HardwareSearchPanel>["setHardwareSearch"]
   hardwareSearchResults: ComponentProps<typeof HardwareSearchPanel>["hardwareSearchResults"]
   prepareQuickEntry: ComponentProps<typeof HardwareSearchPanel>["prepareQuickEntry"]
+  // 사무실·샘플 풀에서 고른 유닛을 담아 빠른 기록을 연다(하드웨어 라운드 3 P-8). 유닛이 없으면 빈 선택으로 연다.
+  openSampleQuickRecord: (itemId: string, kind: "loan" | "return", unitIds: readonly string[]) => void
   setActiveTab: ComponentProps<typeof HardwareSearchPanel>["setActiveTab"]
   setHistoryType: ComponentProps<typeof HardwareSearchPanel>["setHistoryType"]
   setProductFilter: ComponentProps<typeof HardwareSearchPanel>["setProductFilter"]
@@ -104,6 +106,7 @@ export default function HomeTabPanel({
   setHardwareSearch,
   hardwareSearchResults,
   prepareQuickEntry,
+  openSampleQuickRecord,
   setActiveTab,
   setHistoryType,
   setProductFilter,
@@ -262,8 +265,8 @@ export default function HomeTabPanel({
       sampleUnitsError={sampleUnitsError}
       canWrite={canWriteHardware}
       todayKey={todayKey()}
-      onLoan={(_productName, _availableUnitIds, itemId) => prepareQuickEntry(itemId ?? "", "sample")}
-      onReturn={(_productName, itemId) => prepareQuickEntry(itemId ?? "", "sampleReturn")}
+      onLoan={(_productName, preselectUnitIds, itemId) => openSampleQuickRecord(itemId ?? "", "loan", preselectUnitIds)}
+      onReturn={(_productName, itemId, preselectUnitIds) => openSampleQuickRecord(itemId ?? "", "return", preselectUnitIds ?? [])}
       onOpenUnit={setSampleUnitSheetId}
       onUnitsChanged={loadSampleUnits}
     />

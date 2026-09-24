@@ -10,11 +10,13 @@ import {
   isOfficePoolDueSoon,
   isOfficePoolLongLoan,
   OFFICE_POOL_BULK_ACTION_FROM,
+  OFFICE_POOL_CONFIRM_CORRECTION_TARGETS,
   OFFICE_POOL_STATUS_ORDER,
   officePoolDaysBetween,
+  officePoolGapChips,
   officePoolGapTotal,
   officePoolLoanElapsedDays,
-  type OfficePoolCounts,
+  splitPoolSelectionForQuickRecord,
   type OfficeSamplePoolRow,
 } from "./office-sample-pool"
 import {
@@ -42,8 +44,9 @@ export interface OfficeSamplePoolSectionProps {
   // 로컬 날짜 YYYY-MM-DD — 90일+·회수 예정 경계와 일괄 액션 처리일에 쓴다.
   todayKey: string
   // itemId 는 이 행의 품목 id(재고 행 기준). 부모가 prepareQuickEntry(itemId, "sample")로 바로 넘길 수 있다.
-  onLoan: (productName: string, availableUnitIds: string[], itemId: string | null) => void
-  onReturn: (productName: string, itemId: string | null) => void
+  // preselectUnitIds 는 풀에서 고른 유닛(하드웨어 라운드 3 P-8) — 빠른 기록이 그 유닛을 담고 수량을 맞춰 연다. 빈 배열이면 고르지 않고 연다.
+  onLoan: (productName: string, preselectUnitIds: string[], itemId: string | null) => void
+  onReturn: (productName: string, itemId: string | null, preselectUnitIds?: string[]) => void
   onOpenUnit: (unitId: string) => void
   onUnitsChanged: () => Promise<void> | void
 }
@@ -62,6 +65,10 @@ interface CorrectionDraft {
   target: SampleUnitStatus | ""
   memo: string
   customer: string
+  // 처리일(하드웨어 라운드 3 P-13) — 실사한 날처럼 오늘이 아닌 날로 정정할 수 있다. 기본 오늘.
+  occurredAt: string
+  // 폐기·판매 전환은 한 번 더 확인한다 — 첫 저장이 이 값을 켜고 위험 톤 확인줄을 띄운다.
+  confirming: boolean
 }
 
 const SAMPLES_API = "/api/admin/hardware/samples"
@@ -79,6 +86,9 @@ const STATUS_TARGET_PHRASE: Record<SampleUnitStatus, string> = {
 const OUTLINE_BUTTON_CLASS =
   "inline-flex cursor-pointer items-center justify-center rounded-md border border-[rgba(0,0,0,0.1)] bg-white px-2.5 py-1.5 text-[11.5px] font-bold text-[#31302E] transition hover:border-[#084734]/45 hover:text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100 disabled:pointer-events-none disabled:opacity-50"
 
+const PRIMARY_SMALL_BUTTON_CLASS =
+  "inline-flex cursor-pointer items-center justify-center rounded-md bg-[#084734] px-3 py-1.5 text-[11.5px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100 disabled:pointer-events-none disabled:opacity-50"
+
 const INPUT_CLASS =
   "h-9 w-full rounded-md border border-[rgba(0,0,0,0.1)] bg-white px-2.5 text-[12.5px] font-semibold text-[#111110] outline-none transition focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/20"
 
@@ -93,19 +103,6 @@ const ROW_GRID_COLUMNS =
 function unitCodes(units: HardwareSampleUnit[], limit = 3): string {
   const codes = units.slice(0, limit).map((unit) => unit.asset_code).join(", ")
   return units.length > limit ? `${codes} 외 ${formatNumber(units.length - limit)}대` : codes
-}
-
-function gapDetail(row: OfficePoolCounts): string {
-  const parts: string[] = []
-  if (row.gaps.office !== 0) {
-    parts.push(
-      `원장 사무실 잔량 ${formatNumber(row.ledger.office)} · 사무실 유닛 ${formatNumber(row.office.held)}(보관 ${formatNumber(row.office.available)} + 전시 ${formatNumber(row.office.showroom)})`
-    )
-  }
-  if (row.gaps.sample !== 0) {
-    parts.push(`원장 샘플 잔량 ${formatNumber(row.ledger.sample)} · 대여 유닛 ${formatNumber(row.loaned.count)}`)
-  }
-  return parts.join(" / ")
 }
 
 function Num({ value, ready = true, accent = false }: { value: number; ready?: boolean; accent?: boolean }) {
@@ -309,7 +306,9 @@ function OfficeSamplePoolSection({
     }
     setRowFeedback(row.key, null)
     setCorrection((current) =>
-      current?.rowKey === row.key ? null : { rowKey: row.key, target: "", memo: "", customer: "" }
+      current?.rowKey === row.key
+        ? null
+        : { rowKey: row.key, target: "", memo: "", customer: "", occurredAt: todayKey, confirming: false }
     )
   }
 
@@ -330,13 +329,33 @@ function OfficeSamplePoolSection({
       return
     }
     const target = correction.target
+    const occurredAt = correction.occurredAt || todayKey
+    if (occurredAt > todayKey) {
+      setRowFeedback(row.key, { tone: "error", text: "처리일은 오늘 이후로 적을 수 없습니다." })
+      return
+    }
+    // 폐기·판매 전환은 풀과 대여 목록에서 빠지는 끝 상태다 — 첫 저장은 위험 톤 확인줄만 띄운다(하드웨어 라운드 3 P-13).
+    if (OFFICE_POOL_CONFIRM_CORRECTION_TARGETS.has(target) && !correction.confirming) {
+      setRowFeedback(row.key, null)
+      setCorrection((current) => (current?.rowKey === row.key ? { ...current, confirming: true } : current))
+      return
+    }
     const customer = target === "loaned" ? correction.customer.trim() : ""
     void postBulkEvent(
       row,
       units,
-      { eventType: "adjust", nextStatus: target, memo: memoText, ...(customer ? { customer } : {}) },
-      `${formatNumber(units.length)}대를 ${STATUS_TARGET_PHRASE[target]} 정정했습니다.`
+      { eventType: "adjust", nextStatus: target, memo: memoText, occurredAt, ...(customer ? { customer } : {}) },
+      `${formatNumber(units.length)}대를 ${occurredAt === todayKey ? "" : `${occurredAt} 자로 `}${STATUS_TARGET_PHRASE[target]} 정정했습니다.`
     )
+  }
+
+  // 풀에서 고른 유닛을 빠른 기록으로 넘긴다(하드웨어 라운드 3 P-8) — 대여는 사무실 보관 유닛, 반납은 대여중 유닛만.
+  // 쓰기는 빠른 기록이 한다(고객사·담당자·메모를 거기서 받는다) — 이 섹션은 새 쓰기 경로를 만들지 않는다.
+  const openQuickRecordWithSelection = (row: OfficeSamplePoolRow, kind: "loan" | "return") => {
+    const { loanIds, returnIds } = splitPoolSelectionForQuickRecord(selectedUnitsOf(row))
+    setRowFeedback(row.key, null)
+    if (kind === "loan") onLoan(row.product, loanIds, row.itemId)
+    else onReturn(row.product, row.itemId, returnIds)
   }
 
   const handleLoan = (row: OfficeSamplePoolRow) => {
@@ -362,7 +381,8 @@ function OfficeSamplePoolSection({
       return
     }
     setRowFeedback(row.key, null)
-    onLoan(row.product, row.availableUnitIds, row.itemId)
+    // 행 버튼은 유닛을 고르지 않고 연다 — 고른 유닛을 담아 여는 건 펼친 목록의 "선택 N대 대여"다(P-8).
+    onLoan(row.product, [], row.itemId)
   }
 
   if (!stockRows) {
@@ -487,7 +507,8 @@ function OfficeSamplePoolSection({
             {visibleRows.map((row, index) => {
               const panelId = `${baseId}-panel-${index}`
               const expanded = expandedKeys.has(row.key)
-              const gapTotal = unitsReady ? officePoolGapTotal(row) : 0
+              // 원장 교차 확인 — 위치별·부호 있는 칩(하드웨어 라운드 3 P-6). 유닛을 받기 전에는 비교할 수 없어 숨긴다.
+              const gapChips = unitsReady && officePoolGapTotal(row) > 0 ? officePoolGapChips(row) : []
               const rowFeedback = feedback[row.key]
               const busy = busyRowKey === row.key
               const selectedUnits = selectedUnitsOf(row)
@@ -513,14 +534,15 @@ function OfficeSamplePoolSection({
                         </span>
                         {row.promoted && <span className="shrink-0 text-[11px] font-semibold text-[#A39E98]">판촉형</span>}
                       </button>
-                      {gapTotal > 0 && (
+                      {gapChips.map((gap) => (
                         <span
-                          title={gapDetail(row)}
+                          key={gap.location}
+                          title={gap.detail}
                           className="shrink-0 rounded-full border border-[#ECD29C] px-2 py-0.5 text-[10.5px] font-bold tabular-nums text-[#7A520F]"
                         >
-                          원장과 {formatNumber(gapTotal)}대 차이
+                          {gap.chip}
                         </span>
-                      )}
+                      ))}
                     </div>
 
                     <PoolCell label="창고 · 가용">
@@ -556,7 +578,7 @@ function OfficeSamplePoolSection({
                           type="button"
                           onClick={() => {
                             setRowFeedback(row.key, null)
-                            onReturn(row.product, row.itemId)
+                            onReturn(row.product, row.itemId, [])
                           }}
                           aria-label={`${row.product} 샘플 반납 기록`}
                           className={OUTLINE_BUTTON_CLASS}
@@ -596,9 +618,10 @@ function OfficeSamplePoolSection({
 
                   {expanded && (
                     <div id={panelId} className="border-t border-[rgba(0,0,0,0.06)] bg-[#FAFAF8] px-5 py-3">
-                      {gapTotal > 0 && (
-                        <p className="mb-2 text-[11.5px] font-semibold text-[#7A520F]">
-                          원장 교차 확인 — {gapDetail(row)}. 시트는 샘플 반출·회수를 늘 기록하지 않아 참고용입니다.
+                      {gapChips.length > 0 && (
+                        <p className="mb-2 text-[11.5px] font-semibold leading-relaxed text-[#7A520F]">
+                          원장 교차 확인 — {gapChips.map((gap) => gap.detail).join(" / ")}. 시트는 샘플 반출·회수를 늘 기록하지 않아
+                          참고용입니다.
                         </p>
                       )}
                       {!unitsReady && sampleUnitsError ? (
@@ -627,9 +650,13 @@ function OfficeSamplePoolSection({
                           onToggleGroup={(groupIds) => toggleGroup(row.key, groupIds)}
                           onClearSelection={() => clearSelection(row.key)}
                           onMove={(eventType) => runMove(row, eventType)}
+                          onQuickRecord={(kind) => openQuickRecordWithSelection(row, kind)}
                           onOpenCorrection={() => openCorrection(row)}
+                          // 내용을 바꾸면 위험 확인은 처음부터 — 확인한 대상·사유와 저장하는 대상·사유가 같아야 한다.
                           onCorrectionChange={(patch) =>
-                            setCorrection((current) => (current?.rowKey === row.key ? { ...current, ...patch } : current))
+                            setCorrection((current) =>
+                              current?.rowKey === row.key ? { ...current, confirming: false, ...patch } : current
+                            )
                           }
                           onSubmitCorrection={() => submitCorrection(row)}
                           onCancelCorrection={() => setCorrection(null)}
@@ -673,6 +700,8 @@ interface UnitPanelProps {
   onToggleGroup: (groupIds: string[]) => void
   onClearSelection: () => void
   onMove: (eventType: "showcase" | "store") => void
+  // 고른 유닛을 담아 빠른 기록을 연다(하드웨어 라운드 3 P-8).
+  onQuickRecord: (kind: "loan" | "return") => void
   onOpenCorrection: () => void
   onCorrectionChange: (patch: Partial<Omit<CorrectionDraft, "rowKey">>) => void
   onSubmitCorrection: () => void
@@ -697,6 +726,7 @@ function UnitPanel({
   onToggleGroup,
   onClearSelection,
   onMove,
+  onQuickRecord,
   onOpenCorrection,
   onCorrectionChange,
   onSubmitCorrection,
@@ -708,15 +738,50 @@ function UnitPanel({
     units: row.units.filter((unit) => unit.status === status),
   })).filter((group) => group.units.length > 0)
   const correctionTarget = correction?.target ?? ""
+  // 선택을 빠른 기록으로 넘길 수 있는 몫(P-8) — 대여는 사무실 보관, 반납은 대여중 유닛만.
+  const { loanIds, returnIds } = splitPoolSelectionForQuickRecord(selectedUnits)
+  const selectionByStatus = OFFICE_POOL_STATUS_ORDER.map((status) => ({
+    status,
+    count: selectedUnits.filter((unit) => unit.status === status).length,
+  })).filter((entry) => entry.count > 0)
+  // 고른 유닛 전부가 그 동작 대상이면 "선택 N대", 일부면 상태 이름으로 몫을 밝힌다 — 5대 골랐는데 "선택 3대 반납"이면 헷갈린다.
+  const returnLabel =
+    returnIds.length === selectedUnits.length ? `선택 ${formatNumber(returnIds.length)}대 반납` : `대여중 ${formatNumber(returnIds.length)}대 반납`
+  const loanLabel =
+    loanIds.length === selectedUnits.length ? `선택 ${formatNumber(loanIds.length)}대 대여` : `사무실 ${formatNumber(loanIds.length)}대 대여`
+  const confirmingCorrection = Boolean(correction?.confirming && correctionTarget)
+  const correctionVerb = correctionTarget === "retired" ? "폐기" : "판매 전환"
 
   return (
     <div className="space-y-3">
       {canWrite && (
         <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div
+            className={`flex flex-wrap items-center gap-1.5 ${
+              selectedUnits.length > 0 ? "rounded-lg border border-[#084734]/35 bg-white px-2.5 py-2" : ""
+            }`}
+          >
             <span className="mr-1 text-[11.5px] font-bold tabular-nums text-[#31302E]">
               {formatNumber(selectedUnits.length)}대 선택
+              {selectionByStatus.length > 0 && (
+                <span className="font-semibold text-[#615D59]">
+                  {" "}
+                  · {selectionByStatus.map((entry) => `${SAMPLE_STATUS_META[entry.status].label} ${formatNumber(entry.count)}`).join(" · ")}
+                </span>
+              )}
             </span>
+            {/* 대여·반납은 기록이 고객사·담당자를 받아야 해서 빠른 기록으로 넘긴다 — 고른 유닛과 수량이 담긴 채로 열린다(P-8). */}
+            {returnIds.length > 0 && (
+              <button type="button" onClick={() => onQuickRecord("return")} disabled={busy} className={PRIMARY_SMALL_BUTTON_CLASS}>
+                {returnLabel}
+              </button>
+            )}
+            {loanIds.length > 0 && (
+              <button type="button" onClick={() => onQuickRecord("loan")} disabled={busy} className={PRIMARY_SMALL_BUTTON_CLASS}>
+                {loanLabel}
+              </button>
+            )}
+            {(returnIds.length > 0 || loanIds.length > 0) && <span aria-hidden className="mx-0.5 h-4 w-px bg-[rgba(0,0,0,0.12)]" />}
             <button type="button" onClick={() => onMove("showcase")} disabled={busy} className={OUTLINE_BUTTON_CLASS}>
               {SAMPLE_EVENT_META.showcase.label}
             </button>
@@ -746,24 +811,35 @@ function UnitPanel({
           </div>
 
           {correction && (
-            <div className="grid gap-2 border-l-2 border-[#084734] bg-white py-2.5 pl-3 pr-3 md:grid-cols-[180px_minmax(0,1fr)_auto] md:items-end">
-              <label className="block">
-                <span className="mb-1 block text-[11px] font-bold text-[#615D59]">바꿀 상태</span>
-                <select
-                  value={correctionTarget}
-                  onChange={(event) => onCorrectionChange({ target: event.target.value as SampleUnitStatus | "" })}
-                  className={INPUT_CLASS}
-                >
-                  <option value="">상태 선택</option>
-                  {OFFICE_POOL_STATUS_ORDER.map((status) => (
-                    <option key={status} value={status}>
-                      {SAMPLE_STATUS_META[status].label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]">
-                <label className={`block ${correctionTarget === "loaned" ? "" : "md:col-span-2"}`}>
+            <div className="space-y-2 border-l-2 border-[#084734] bg-white py-2.5 pl-3 pr-3">
+              <div className="grid gap-2 md:grid-cols-[170px_150px_minmax(0,1fr)] md:items-end">
+                <label className="block">
+                  <span className="mb-1 block text-[11px] font-bold text-[#615D59]">바꿀 상태</span>
+                  <select
+                    value={correctionTarget}
+                    onChange={(event) => onCorrectionChange({ target: event.target.value as SampleUnitStatus | "" })}
+                    className={INPUT_CLASS}
+                  >
+                    <option value="">상태 선택</option>
+                    {OFFICE_POOL_STATUS_ORDER.map((status) => (
+                      <option key={status} value={status}>
+                        {SAMPLE_STATUS_META[status].label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {/* 처리일(P-13) — 실사한 날로 정정할 수 있다. 대여로 정정하면 이 날이 대여일이 된다. 미래는 막는다. */}
+                <label className="block">
+                  <span className="mb-1 block text-[11px] font-bold text-[#615D59]">처리일</span>
+                  <input
+                    type="date"
+                    value={correction.occurredAt}
+                    max={todayKey}
+                    onChange={(event) => onCorrectionChange({ occurredAt: event.target.value })}
+                    className={INPUT_CLASS}
+                  />
+                </label>
+                <label className="block">
                   <span className="mb-1 block text-[11px] font-bold text-[#615D59]">사유 메모 (필수)</span>
                   <input
                     value={correction.memo}
@@ -772,33 +848,57 @@ function UnitPanel({
                     className={INPUT_CLASS}
                   />
                 </label>
-                {correctionTarget === "loaned" && (
-                  <label className="block">
-                    <span className="mb-1 block text-[11px] font-bold text-[#615D59]">고객사 (선택)</span>
-                    <input
-                      value={correction.customer}
-                      onChange={(event) => onCorrectionChange({ customer: event.target.value })}
-                      placeholder="비우면 기존 고객 유지"
-                      className={INPUT_CLASS}
-                    />
-                  </label>
-                )}
               </div>
+              {correctionTarget === "loaned" && (
+                <label className="block md:max-w-sm">
+                  <span className="mb-1 block text-[11px] font-bold text-[#615D59]">고객사 (선택)</span>
+                  <input
+                    value={correction.customer}
+                    onChange={(event) => onCorrectionChange({ customer: event.target.value })}
+                    placeholder="비우면 기존 고객 유지"
+                    className={INPUT_CLASS}
+                  />
+                </label>
+              )}
+              {confirmingCorrection && (
+                // 폐기·판매 전환 확인(P-13) — 풀과 대여 목록에서 빠지는 끝 상태라 한 번 더 묻는다. 버튼 자리는 그대로 두고
+                // 문구와 톤만 바꿔, 키보드 포커스가 저장 버튼 자리에 머문다.
+                <div role="alert" className="rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] px-3 py-2">
+                  <p className="text-[12px] font-bold text-[#8F2C2C]">
+                    {formatNumber(selectedUnits.length)}대({unitCodes(selectedUnits)})를{" "}
+                    {correction.occurredAt && correction.occurredAt !== todayKey ? `${correction.occurredAt} 자로 ` : ""}
+                    {correctionVerb}합니다.
+                  </p>
+                  <p className="mt-0.5 text-[11.5px] font-semibold text-[#8F2C2C]">
+                    {correctionTarget === "retired"
+                      ? "폐기한 유닛은 사무실·샘플 풀과 대여 목록에서 빠지고 이력으로만 남습니다."
+                      : "판매 전환한 유닛은 사무실·샘플 풀과 대여 목록에서 빠집니다."}
+                  </p>
+                </div>
+              )}
               <div className="flex justify-end gap-1.5">
                 <button
                   type="button"
-                  onClick={onCancelCorrection}
+                  onClick={confirmingCorrection ? () => onCorrectionChange({}) : onCancelCorrection}
                   className="cursor-pointer rounded-md px-3 py-1.5 text-[12px] font-bold text-[#615D59] transition hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
                 >
-                  취소
+                  {confirmingCorrection ? "돌아가기" : "취소"}
                 </button>
                 <button
                   type="button"
                   onClick={onSubmitCorrection}
                   disabled={busy}
-                  className="cursor-pointer rounded-md bg-[#084734] px-3.5 py-1.5 text-[12px] font-bold text-white transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:opacity-60"
+                  className={`cursor-pointer rounded-md px-3.5 py-1.5 text-[12px] font-bold text-white transition focus-visible:outline-none focus-visible:ring-2 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:opacity-60 ${
+                    confirmingCorrection
+                      ? "bg-[#B43E3E] hover:bg-[#8F2C2C] focus-visible:ring-[#B43E3E]/40"
+                      : "bg-[#084734] hover:bg-[#065c41] focus-visible:ring-[#084734]/40"
+                  }`}
                 >
-                  {busy ? "저장 중" : `${formatNumber(selectedUnits.length)}대 정정 저장`}
+                  {busy
+                    ? "저장 중"
+                    : confirmingCorrection
+                      ? `${formatNumber(selectedUnits.length)}대 ${correctionVerb} 확정`
+                      : `${formatNumber(selectedUnits.length)}대 정정 저장`}
                 </button>
               </div>
             </div>

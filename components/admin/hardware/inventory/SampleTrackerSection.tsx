@@ -7,6 +7,7 @@ import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
 import { adminFetchJson } from "@/lib/admin-client"
 import ExportActions from "./ExportActions"
 import { buildSampleUnitsExportRows } from "./hardware-export"
+import { sampleUnitMatchesItem } from "./office-sample-pool"
 import {
   formatNumber,
   loanElapsedDays,
@@ -83,15 +84,22 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
     if (!stock || !units) return null
     const plan: RegisterPlanLine[] = []
     let overCount = 0
+    // 유닛 ↔ 품목은 사무실·샘플 풀과 같은 규칙(하드웨어 라운드 3 P-5) — 예전 이름 완전일치는 이름이 바뀐 품목의 유닛을 못 세어
+    // "원장 차이 등록"이 실물 있는 유닛을 한 번 더 만들자고 했다.
+    const knownItemIds = new Set(stock.map((row) => row.itemId).filter(Boolean))
     for (const row of stock) {
       const officeExpected = Math.max(0, locationQuantity(row, "사무실"))
       const loanedExpected = Math.max(0, locationQuantity(row, "샘플"))
       if (officeExpected === 0 && loanedExpected === 0) continue
+      const target = { itemId: row.itemId, productName: row.product }
       // 전시·사내 사용 유닛도 사무실에 있는 물량이다 — 빼고 세면 전시 대수만큼 "원장 차이 등록"을 제안해 실물 없는 유닛을 만든다.
       const officeActual = units.filter(
-        (unit) => unit.product_name === row.product && (unit.status === "office" || unit.status === "showroom")
+        (unit) =>
+          (unit.status === "office" || unit.status === "showroom") && sampleUnitMatchesItem(unit, target, knownItemIds)
       ).length
-      const loanedActual = units.filter((unit) => unit.product_name === row.product && unit.status === "loaned").length
+      const loanedActual = units.filter(
+        (unit) => unit.status === "loaned" && sampleUnitMatchesItem(unit, target, knownItemIds)
+      ).length
       const officeDiff = officeExpected - officeActual
       const loanedDiff = loanedExpected - loanedActual
       if (officeDiff > 0) plan.push({ itemId: row.itemId, productName: row.product, status: "office", count: officeDiff })

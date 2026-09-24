@@ -83,6 +83,7 @@ import {
 } from "./inventory/shared"
 import { describeMirrorDelta, judgeImportFreshness, judgeMirrorPending } from "./inventory/ImportFreshnessStrip"
 import { compareInboundLotGroups, sortLotsByRecency } from "./inventory/lot-order"
+import { sampleUnitMatchesItem } from "./inventory/office-sample-pool"
 import {
   customerFromDestination,
   matchStockRowByText,
@@ -593,6 +594,9 @@ export default function HardwareInventoryClient({
   // 샘플 유닛 트래커 연계 — 대여 고객사 + 나갈/돌아올 유닛 선택(단건 시트 전용).
   const [sampleCustomer, setSampleCustomer] = useState("")
   const [sampleUnitSelection, setSampleUnitSelection] = useState<string[]>([])
+  // 풀 선택 담기 요청(P-8) — 아래 openSampleQuickRecord·담기 효과 주석 참고.
+  const sampleUnitPrefillRef = useRef<string[] | null>(null)
+  const [sampleUnitPrefillSeq, setSampleUnitPrefillSeq] = useState(0)
   const [openSections, setOpenSections] = useState<Record<HardwareSectionKey, boolean>>(() => ({ ...DEFAULT_OPEN_SECTIONS }))
   const [stockPage, setStockPage] = useState(1)
   const [outboundPage, setOutboundPage] = useState(1)
@@ -2604,6 +2608,16 @@ export default function HardwareInventoryClient({
     openSheet,
   ])
 
+  // 사무실·샘플 풀에서 고른 유닛을 담아 빠른 기록을 연다(하드웨어 라운드 3 P-8). 수량은 고른 대수, 유닛 선택은 그 유닛들 —
+  // 대여는 고객사·담당자, 반납은 처리일만 채우면 된다. 고른 유닛이 없으면 예전 행 버튼과 같다(빈 선택으로 연다).
+  const openSampleQuickRecord = useCallback((itemId: string, kind: "loan" | "return", unitIds: readonly string[]) => {
+    openSheet(kind === "loan" ? "sample" : "sampleReturn", itemId)
+    if (unitIds.length === 0) return
+    setQuantity(String(unitIds.length))
+    sampleUnitPrefillRef.current = [...unitIds]
+    setSampleUnitPrefillSeq((seq) => seq + 1)
+  }, [openSheet])
+
   const prepareQuickEntry = useCallback((itemId: string, presetKey: string) => {
     // 새 입고는 한 화면 입고표로 연다 — 재고 표·알림·검색의 "입고" 퀵버튼이 모두 여기를 거친다.
     if (presetKey === "inbound") {
@@ -3061,13 +3075,30 @@ export default function HardwareInventoryClient({
   // 필요 수 = min(수량, 풀 크기): 풀이 수량보다 작으면 있는 만큼 선택하고 부족분은 저장 시 자동 발급.
   const draftProductName = customProduct.trim() || selectedItem?.name || ""
   const draftQuantityNumber = Math.max(0, Math.floor(Number(quantity) || 0))
+  // 유닛 ↔ 품목은 풀·트래커와 같은 규칙으로 잇는다(하드웨어 라운드 3 P-5) — item_id 우선, 재고 행에 없는 id 는 이름으로.
+  // 예전엔 이름 완전일치라 이름이 바뀐 품목의 유닛이 풀에는 있는데 여기엔 없었다.
+  const draftItemId = customProduct.trim() ? null : selectedItemId || null
+  const sampleKnownItemIds = useMemo(
+    () => new Set((data?.stock ?? []).map((row) => row.itemId).filter(Boolean)),
+    [data?.stock]
+  )
   const sampleLoanPool = useMemo(
-    () => (sampleUnits ?? []).filter((unit) => unit.status === "office" && unit.product_name === draftProductName),
-    [sampleUnits, draftProductName]
+    () =>
+      (sampleUnits ?? []).filter(
+        (unit) =>
+          unit.status === "office" &&
+          sampleUnitMatchesItem(unit, { itemId: draftItemId, productName: draftProductName }, sampleKnownItemIds)
+      ),
+    [sampleUnits, draftItemId, draftProductName, sampleKnownItemIds]
   )
   const sampleReturnPool = useMemo(
-    () => (sampleUnits ?? []).filter((unit) => unit.status === "loaned" && unit.product_name === draftProductName),
-    [sampleUnits, draftProductName]
+    () =>
+      (sampleUnits ?? []).filter(
+        (unit) =>
+          unit.status === "loaned" &&
+          sampleUnitMatchesItem(unit, { itemId: draftItemId, productName: draftProductName }, sampleKnownItemIds)
+      ),
+    [sampleUnits, draftItemId, draftProductName, sampleKnownItemIds]
   )
   const sampleLoanNeed = sampleSource === "사무실" ? Math.min(draftQuantityNumber, sampleLoanPool.length) : 0
   const sampleReturnNeed = Math.min(draftQuantityNumber, sampleReturnPool.length)
@@ -3090,6 +3121,17 @@ export default function HardwareInventoryClient({
       setSampleUnitSelection([])
     }
   }, [sheetOpen])
+  // 사무실·샘플 풀에서 고른 유닛 담기(하드웨어 라운드 3 P-8) — 위 두 효과(품목·프리셋이 바뀌면 비우기)보다 **뒤에** 선언해
+  // 같은 커밋에서 마지막으로 적용된다. 요청은 openSampleQuickRecord 가 ref 에 두고 순번으로 이 효과를 깨운다.
+  useEffect(() => {
+    const unitIds = sampleUnitPrefillRef.current
+    if (!unitIds) return
+    sampleUnitPrefillRef.current = null
+    // 시트 목록에 보이는 유닛만 담는다 — 목록에 없는 유닛(비활성 품목 행 등)이 보이지 않는 선택으로 저장되지 않게.
+    const pool = activePresetKey === "sampleReturn" ? sampleReturnPool : sampleLoanPool
+    const visible = new Set(pool.map((unit) => unit.id))
+    setSampleUnitSelection(unitIds.filter((id) => visible.has(id)))
+  }, [sampleUnitPrefillSeq, activePresetKey, sampleLoanPool, sampleReturnPool])
 
   const buildMovementDraft = (): HardwareMovementDraft => {
     const productName = customProduct.trim() || selectedItem?.name || ""
@@ -3839,6 +3881,7 @@ export default function HardwareInventoryClient({
               setHardwareSearch={setHardwareSearch}
               hardwareSearchResults={hardwareSearchResults}
               prepareQuickEntry={prepareQuickEntry}
+              openSampleQuickRecord={openSampleQuickRecord}
               setActiveTab={setActiveTab}
               setHistoryType={setHistoryType}
               setProductFilter={setProductFilter}
