@@ -27,6 +27,7 @@ import {
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { formatCNY, formatUSD } from "@/lib/crm/money-format"
 import { formatAgeHours } from "@/lib/crm/sync-freshness"
+import { NEO_SOURCE_EXPIRING_WINDOW_DAYS } from "@/lib/crm/customer-segment-spec"
 import { CRM_EVENT_SOURCE_TYPES, eventSourceIcon, eventSourceLabel } from "./event-source-meta"
 import type {
   NeoCrmCustomerDetail,
@@ -41,7 +42,8 @@ type SortKey = "balance" | "expire" | "order" | "lastClass" | "name"
 
 const SORT_OPTIONS: Array<{ key: SortKey; label: string }> = [
   { key: "balance", label: "잔액순" },
-  { key: "expire", label: "만료임박" },
+  // "만료 임박"(통합 목록 SSOT 30일)과 다른 뜻이라 같은 단어를 쓰지 않는다 — 만료일이 가까운 순 정렬이다.
+  { key: "expire", label: "만료일순" },
   { key: "order", label: "오더순" },
   { key: "lastClass", label: "최근수업" },
   { key: "name", label: "이름순" },
@@ -98,7 +100,7 @@ function ExpiryBadge({ expireAt }: { expireAt: string | null }) {
         만료 {formatDay(expireAt)}
       </span>
     )
-  if (days <= 60)
+  if (days <= NEO_SOURCE_EXPIRING_WINDOW_DAYS)
     return (
       <span className="inline-flex items-center gap-1 rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[11px] font-semibold text-[#7A520F]">
         D-{days} · {formatDay(expireAt)}
@@ -675,7 +677,8 @@ export default function NeoCrmCustomersClient() {
   const router = useRouter()
   const pathname = usePathname()
   const deepLinkedAccountId = searchParams.get("account")?.trim() ?? ""
-  // ?expiring=1 딥링크 — Overview 리뉴얼 타일에서 '만료 임박만' 필터가 켜진 채 착지한다.
+  // ?expiring=1 딥링크 — Overview "리뉴얼 D-60" 타일에서 '60일 내 만료만' 필터가 켜진 채 착지한다.
+  // 기준은 요약 타일(summary.expiringSoonCount)과 같은 창(오늘~60일, 지난 만료 제외)이라 착지 건수가 타일과 맞는다.
   const deepLinkedExpiring = searchParams.get("expiring") === "1"
   const [data, setData] = useState<NeoCrmCustomerListResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -747,7 +750,7 @@ export default function NeoCrmCustomersClient() {
       if (ownerFilter !== "all" && row.ownerId !== ownerFilter) return false
       if (expiringOnly) {
         const d = daysUntil(row.expireAt)
-        if (d === null || d > 60) return false
+        if (d === null || d < 0 || d > NEO_SOURCE_EXPIRING_WINDOW_DAYS) return false
       }
       if (!q) return true
       return (
@@ -840,9 +843,9 @@ export default function NeoCrmCustomersClient() {
         />
         <KpiTile
           icon={<CalendarClock className="h-4 w-4" />}
-          label="만료 임박"
+          label={`${NEO_SOURCE_EXPIRING_WINDOW_DAYS}일 내 만료`}
           value={loading && !data ? "..." : formatNumber(summary?.expiringSoonCount)}
-          hint="60일 이내 만료 고객"
+          hint={`오늘~${NEO_SOURCE_EXPIRING_WINDOW_DAYS}일 안에 만료되는 고객(지난 만료 제외)`}
           tone={(summary?.expiringSoonCount ?? 0) > 0 ? "text-[#B85C33]" : "text-[#111110]"}
         />
         <KpiTile
@@ -904,7 +907,7 @@ export default function NeoCrmCustomersClient() {
           }`}
         >
           <AlertTriangle className="h-3.5 w-3.5" />
-          만료 임박만
+          {NEO_SOURCE_EXPIRING_WINDOW_DAYS}일 내 만료만
         </button>
         <span className="ml-auto text-[11px] text-[#1a1a1a]/35">{formatNumber(filtered.length)}곳 표시</span>
       </div>

@@ -85,9 +85,11 @@ import { useDialogFocus } from "@/components/admin/use-dialog-focus"
 import { deriveCustomerFlags } from "@/lib/crm/customer-flags"
 import { LEAD_BADGE_TONE_CLASSES } from "@/lib/crm/lead-badges"
 import { computeCustomerHealth, HEALTH_BAND_STYLE } from "@/lib/crm/customer-health"
+import { isLeadEraRow, LEAD_ERA_LABEL, lastContactDaysForHealth } from "@/lib/crm/customer-contact-summary"
 import { buildCustomerNextActionRecommendation } from "@/lib/crm/customer-next-action"
 import type { CsMotion } from "@/lib/crm/cs-motions"
 import type { Customer360 } from "@/lib/repositories/crm-customer-360"
+import Customer360ContactSummary from "./Customer360ContactSummary"
 import type { CrmDealRecord, CrmDealStage } from "@/lib/repositories/crm-deals"
 import type { CrmTaskRecord, CrmTaskType } from "@/lib/repositories/crm-tasks"
 
@@ -171,6 +173,9 @@ export function buildDerivedSummary(data: Customer360, targetType: "lead" | "neo
  * 건강도 산식 입력(c360-04). hasOutstanding은 null — 충전 잔액(긍정 신호)을 미수로 읽어 12점을 깎던 것을
  * 멈춘다(헤더 배지의 outstanding=null 처리와 정합). 같은 통화의 확정 미수 원천이 360 페이로드에 없다.
  * 소진(depleted_balance)·재충전(recharge_due) 신호의 건강도 승격은 별도 변경으로 분리한다.
+ * lastContactDays(CT9)는 헤더 "마지막 연락"과 같은 값(contactSummary, 서버 조립 시각 기준 — 통합 목록과
+ * 같은 lib/crm/last-contact 정의). 기록이 없으면 null(모름 — 감점하지 않는다, lastContactDaysForHealth).
+ * 옛 캐시 페이로드·테스트 픽스처에는 contactSummary 가 없을 수 있어 선택적으로 읽는다.
  */
 export function buildDrawerHealthInput(data: Customer360, daysToExpire: number | null) {
   return {
@@ -178,8 +183,24 @@ export function buildDrawerHealthInput(data: Customer360, daysToExpire: number |
     serviceLevel: data.serviceRisk?.level ?? null,
     hasOutstanding: null,
     daysToExpire,
-    lastContactDays: null,
+    lastContactDays: lastContactDaysForHealth(data.contactSummary),
   }
+}
+
+/**
+ * CT9 — NEO 계정 360 에 합쳐진 확정 연결 리드 기록(리드 시절)을 드로어 타임라인에서 알아보게 제목 머리에
+ * "리드 시절 · "을 붙인다(표시 전용 사본 — data 는 바꾸지 않는다). 드로어 타임라인 행은
+ * drawer/DrawerActivitySection.tsx 가 그리므로, 그 파일이 원천 칩을 직접 그리게 되면 이 변환은 걷는다.
+ * 리드 360 이면 입력 배열을 그대로 돌려준다(참조 동일 — 불필요한 재렌더 없음).
+ */
+export function labelLeadEraRowsForDrawer(
+  rows: Customer360["activity"]["rows"],
+  customerSource: string | null | undefined
+): Customer360["activity"]["rows"] {
+  if (customerSource !== "neo_account" || !rows.some((row) => isLeadEraRow(customerSource, row.targetType))) return rows
+  return rows.map((row) =>
+    isLeadEraRow(customerSource, row.targetType) ? { ...row, title: `${LEAD_ERA_LABEL} · ${row.title}` } : row
+  )
 }
 
 // [major, 2026-09-15 리뷰] patchDeal이 override로 저장할 patch를 좁히는 순수 로직. pickConfirmed가
@@ -1011,14 +1032,19 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
     [data, header, targetType, outstanding, money, ltv]
   )
 
+  // CT9 — 리드 시절 행은 제목 머리말로 구분한 표시용 사본(labelLeadEraRowsForDrawer).
+  const activityRows = useMemo(
+    () => labelLeadEraRowsForDrawer(data?.activity.rows ?? [], data?.source),
+    [data]
+  )
   // 특이사항 피드 = 위험 신호가 있는 활동만.
-  const feedRows = useMemo(() => (data?.activity.rows ?? []).filter((event) => event.sentiment === "risk"), [data])
+  const feedRows = useMemo(() => activityRows.filter((event) => event.sentiment === "risk"), [activityRows])
   // 타임라인은 출처(메모/회의록) 필터를 적용. 피드는 위험 신호 전용이라 필터 비적용.
   const visibleActivity = useMemo(() => {
-    const base = activityTab === "feed" ? feedRows : data?.activity.rows ?? []
+    const base = activityTab === "feed" ? feedRows : activityRows
     if (activityTab === "feed" || activitySource === "all") return base
     return base.filter((event) => event.sourceType === activitySource)
-  }, [activityTab, activitySource, feedRows, data])
+  }, [activityTab, activitySource, feedRows, activityRows])
 
   // Compass(마케팅팀 앱) 활동을 같은 타임라인에 시간순으로 얹는다. 피드 탭은 위험 신호
   // 전용인데 Compass 기록에는 sentiment 축이 없어서 넣지 않는다(없는 판정을 지어내지 않는다).
@@ -1261,7 +1287,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                     backgroundColor: HEALTH_BAND_STYLE[health.band].bg,
                     borderColor: HEALTH_BAND_STYLE[health.band].bd,
                   }}
-                  title="규칙 기반 건강도 점수(0~100) — 리스크·서비스 위험·만료 신호 합성 (충전 잔액은 감점하지 않음)"
+                  title="규칙 기반 건강도 점수(0~100) — 리스크·서비스 위험·만료·마지막 연락 신호 합성 (충전 잔액은 감점하지 않음, 마지막 연락 기록이 없으면 감점하지 않음)"
                 >
                   건강도 {health.score} · {health.label}
                 </span>
@@ -1285,6 +1311,8 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                 {header?.priorityReason ? ` · ${header.priorityReason}` : ""}
               </span>
             </div>
+            {/* CT9 — 마지막 연락 · 다음 연락(원천 표시). 모바일은 두 줄로 쌓고 각 줄은 말줄임. */}
+            <Customer360ContactSummary summary={data?.contactSummary} className="mt-1" />
             {/* 기준 시각·출처 캡션(UX 규약 4) — 항상 마운트된 aria-live 영역이라 '갱신 중 → 조회 HH:MM' 전이가 통지된다. */}
             <p className={`mt-0.5 text-[11px] ${SECONDARY_TEXT_CLASS}`} role="status" aria-live="polite" data-testid="c360-basis-caption">
               {basisCaption ?? (loading ? "불러오는 중…" : "")}

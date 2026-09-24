@@ -14,6 +14,7 @@
 // 임계값(고정): 75 이상 안전 · 55 이상 주의 · 그 미만 위험. (드로어 healthMeta·문서 §1 DISCARD와 동일 기준.)
 
 import { STATUS_TONE } from "@/lib/crm/status-tone"
+import { EXPIRING_SOON_DAYS, daysSinceIso, daysUntilIso } from "@/lib/crm/customer-segment-spec"
 
 export type CustomerHealthBand = "safe" | "watch" | "risk"
 
@@ -78,7 +79,7 @@ export function computeCustomerHealth(input: CustomerHealthInput): CustomerHealt
 
   if (input.daysToExpire != null && Number.isFinite(input.daysToExpire)) {
     if (input.daysToExpire <= 7) score -= 25
-    else if (input.daysToExpire <= 30) score -= 12
+    else if (input.daysToExpire <= EXPIRING_SOON_DAYS) score -= 12
   }
 
   if (input.lastContactDays != null && Number.isFinite(input.lastContactDays)) {
@@ -89,6 +90,39 @@ export function computeCustomerHealth(input: CustomerHealthInput): CustomerHealt
   const clamped = Math.max(0, Math.min(100, Math.round(score)))
   const band = healthBand(clamped)
   return { score: clamped, band, label: BAND_LABEL[band] }
+}
+
+/** 우선순위 점수 → 리스크 등급(통합 목록 severity 와 같은 임계: 85/68/42). */
+export function severityFromPriorityScore(score: number): NonNullable<CustomerHealthInput["riskSeverity"]> {
+  return score >= 85 ? "critical" : score >= 68 ? "high" : score >= 42 ? "medium" : "low"
+}
+
+/** 통합 목록 행에서 건강도 입력에 쓰는 필드만. */
+export interface UnifiedRowHealthSignals {
+  score: number
+  lifecycle: string
+  expireAt: string | null
+  /** NEO 스냅샷 서비스 위험 등급 — 있으면 라이프사이클 근사보다 우선한다. */
+  riskLevel?: "urgent" | "soon" | "watch" | "normal" | null
+  /** 마지막 연락(Home 기록·Compass 활동). 기록 없음(null)은 감점하지 않는다 — 모름은 오래됨이 아니다. */
+  lastContactAt?: string | null
+}
+
+/**
+ * 통합 목록(neo_account) 행 → 건강도 입력(F3).
+ *  - 서비스 위험은 스냅샷 riskLevel 우선, 없을 때만 라이프사이클(account_risk → soon)로 근사한다.
+ *  - NEO 잔액은 선불 충전 잔액이라 미수가 아니다 — hasOutstanding 을 걸지 않는다(예전엔 잔액>0 을 미수로 −12).
+ *  - 마지막 연락 경과일을 lastContactDays 로 넣는다(예전엔 늘 null).
+ */
+export function unifiedRowHealthInput(row: UnifiedRowHealthSignals, nowMs: number): CustomerHealthInput {
+  const since = daysSinceIso(row.lastContactAt ?? null, nowMs)
+  return {
+    riskSeverity: severityFromPriorityScore(row.score),
+    serviceLevel: row.riskLevel ?? (row.lifecycle === "account_risk" ? "soon" : "normal"),
+    hasOutstanding: false,
+    daysToExpire: daysUntilIso(row.expireAt, nowMs),
+    lastContactDays: since == null ? null : Math.max(0, Math.floor(since)),
+  }
 }
 
 // 건강도 밴드별 표기 색 — lib/crm/status-tone.ts(DESIGN.md 운영 상태 스케일) 토큰만 쓴다.

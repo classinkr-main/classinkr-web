@@ -30,12 +30,21 @@ const rangeSpy = vi.fn(async (start: number, end: number) => ({
   error: null as { message: string } | null,
 }))
 
+// 전량 읽기는 created_at → id(타이브레이커) 두 번 정렬한 뒤 range 를 부른다 — order 는 체인으로 받는다.
+const orderSpy = vi.fn()
+function makeOrderChain() {
+  const chain: { order: (field: string, options?: unknown) => typeof chain; range: typeof rangeSpy } = {
+    order: (field, options) => {
+      orderSpy(field, options)
+      return chain
+    },
+    range: rangeSpy,
+  }
+  return chain
+}
+
 const from = vi.fn(() => ({
-  select: vi.fn(() => ({
-    order: vi.fn(() => ({
-      range: rangeSpy,
-    })),
-  })),
+  select: vi.fn(() => makeOrderChain()),
   update: vi.fn((patch: { tag: string }) =>
     makeFilterBuilder((matches) => {
       const row = rows.find(
@@ -121,6 +130,36 @@ describe("listCustomerTagStats", () => {
       { tag: "대량태그", count: 1001, byTargetType: { lead: 1001, neo_account: 0, customer: 0 }, lastUsedAt: "2026-09-01T00:00:00Z" },
     ])
     expect(rangeSpy.mock.calls.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it("서버 상한이 요청보다 작아도(max-rows 400) 받은 행 수만큼 전진해 중간 행을 건너뛰지 않는다", async () => {
+    rows = Array.from({ length: 1001 }, (_, i) => row("lead", `l${i}`, i < 500 ? "앞" : "뒤"))
+    rangeSpy.mockImplementation(async (start: number, end: number) => ({
+      data: rows.slice(start, Math.min(end + 1, start + 400)),
+      error: null,
+    }))
+    try {
+      const stats = await listCustomerTagStats()
+      expect(stats.map((s) => [s.tag, s.count])).toEqual([
+        ["뒤", 501],
+        ["앞", 500],
+      ])
+      // 0, 400, 800, 1001(빈 페이지로 종료) — 요청 크기(1000)만큼 뛰지 않는다.
+      expect(rangeSpy.mock.calls.map(([start]) => start)).toEqual([0, 400, 800, 1001])
+    } finally {
+      rangeSpy.mockImplementation(async (start: number, end: number) => ({
+        data: rows.slice(start, end + 1),
+        error: null,
+      }))
+    }
+  })
+
+  it("created_at 다음에 id 타이브레이커로 정렬해 페이지 경계가 흔들리지 않게 한다", async () => {
+    orderSpy.mockClear()
+    rows = [row("lead", "l1", "VIP")]
+    await listCustomerTagStats()
+    // 페이지마다 같은 정렬(created_at → id)을 건다 — 첫 페이지 기준으로 확인한다.
+    expect(orderSpy.mock.calls.slice(0, 2).map(([field]) => field)).toEqual(["created_at", "id"])
   })
 })
 

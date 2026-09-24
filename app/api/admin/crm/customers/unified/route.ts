@@ -7,56 +7,15 @@ import {
   findAdminCrmOwner,
   listAdminUserDirectory,
 } from "@/lib/repositories/admin-users"
+import { getCrmUnifiedCustomers } from "@/lib/repositories/crm-unified-customers"
+import { parseSegmentSpec } from "@/lib/crm/customer-segment-spec"
 import {
-  getCrmUnifiedCustomers,
-  type CrmUnifiedSavedView,
-  type CrmUnifiedCustomerSource,
-  type CrmUnifiedLifecycle,
-} from "@/lib/repositories/crm-unified-customers"
-
-function parseSource(value: string | null): CrmUnifiedCustomerSource | "all" {
-  return value === "lead" || value === "neo_account" || value === "customer" ? value : "all"
-}
-
-function parseLifecycle(value: string | null): CrmUnifiedLifecycle | "all" {
-  if (
-    value === "new_lead" ||
-    value === "active_lead" ||
-    value === "account_risk" ||
-    value === "active_account" ||
-    value === "closed"
-  ) {
-    return value
-  }
-  return "all"
-}
-
-function parseSavedView(value: string | null): CrmUnifiedSavedView {
-  if (
-    value === "priority" ||
-    value === "new_leads" ||
-    value === "needs_care" ||
-    value === "my_owner" ||
-    value === "recent_contact" ||
-    value === "active_deal" ||
-    value === "expiring" ||
-    value === "dormant" ||
-    value === "hot_lead" ||
-    value === "upsell" ||
-    value === "site_leads" ||
-    value === "unanswered" ||
-    value === "meta_leads" ||
-    value === "registered_leads"
-  ) {
-    return value
-  }
-  return "all"
-}
-
-// 리드 보드의 `unconfirmed=1`과 같은 의미 — 확인 게이트를 우회해 미확인 리드를 목록에 포함한다.
-function parseIncludeUnconfirmed(value: string | null) {
-  return value === "1" || value === "true"
-}
+  parseIncludeUnconfirmedParam,
+  parseUnifiedLifecycle,
+  parseUnifiedSavedView,
+  parseUnifiedSort,
+  parseUnifiedSource,
+} from "@/lib/crm/unified-view-rules"
 
 function parseBoundedInt(value: string | null, fallback: number, min: number, max: number) {
   const parsed = Number(value ?? fallback)
@@ -84,13 +43,17 @@ export async function GET(req: NextRequest) {
     const force = url.searchParams.has("force")
     const customers = await getCrmUnifiedCustomers({
       q: url.searchParams.get("q") ?? undefined,
-      source: parseSource(url.searchParams.get("source")),
-      lifecycle: parseLifecycle(url.searchParams.get("lifecycle")),
-      view: parseSavedView(url.searchParams.get("view")),
+      source: parseUnifiedSource(url.searchParams.get("source")),
+      lifecycle: parseUnifiedLifecycle(url.searchParams.get("lifecycle")),
+      view: parseUnifiedSavedView(url.searchParams.get("view")),
       owner: isMine ? undefined : ownerParam,
       ownerKeys,
       tag: url.searchParams.get("tag") ?? undefined,
-      includeUnconfirmed: parseIncludeUnconfirmed(url.searchParams.get("includeUnconfirmed")),
+      includeUnconfirmed: parseIncludeUnconfirmedParam(url.searchParams.get("includeUnconfirmed")),
+      // 세그먼트 조건(SG4) — 알 수 없는 값은 파서가 버린다(lib/crm/customer-segment-spec.ts).
+      segment: parseSegmentSpec(url.searchParams),
+      // 서버 정렬(C1) — 전체를 정렬한 뒤 페이지를 자른다. 없거나 모르는 키면 추천순.
+      sort: parseUnifiedSort(url.searchParams.get("sort"), url.searchParams.get("dir")),
       limit: parseBoundedInt(url.searchParams.get("limit"), 100, 1, 200),
       offset: parseBoundedInt(url.searchParams.get("offset"), 0, 0, 100_000),
       bypassCache: force,

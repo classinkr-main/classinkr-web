@@ -2,6 +2,14 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 const NOW = new Date("2026-08-28T00:00:00.000Z")
 
+/** PostgREST 빌더 흉내 — 어떤 체인이든 빈 결과로 끝난다. */
+function emptyQuery(): Record<string, unknown> {
+  const query: Record<string, unknown> = {}
+  for (const method of ["select", "eq", "in", "order", "limit"]) query[method] = () => query
+  query.then = (resolve: (value: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(resolve)
+  return query
+}
+
 function emptyList(extra: Record<string, unknown> = {}) {
   return {
     generatedAt: NOW.toISOString(),
@@ -46,6 +54,7 @@ async function loadRepository(options?: {
     getNeoCrmCustomerDetail: vi.fn().mockResolvedValue({ ok: false, error: null, account: null }),
   }))
   vi.doMock("@/lib/repositories/crm-events", () => ({
+    LEAD_CONTACT_MIRROR_SOURCE_TYPES: ["lead_contact_log", "call", "sms"],
     listCrmCustomerEvents: vi.fn().mockResolvedValue(
       emptyList({
         summary: { total: 1, returned: 1, recordings: 0, risks: 0, openNextActions: 0 },
@@ -132,6 +141,10 @@ async function loadRepository(options?: {
       lineItemsMeta: { truncated: false, sources: [] },
       unmatchedOutbound: [],
     }),
+  }))
+  // CT9 — 360 이 연락 로그 원본(lead_contact_logs)을 직접 읽는다. 이 하네스는 로그가 없는 고객이다.
+  vi.doMock("@/lib/supabase/admin", () => ({
+    createSupabaseAdminClient: () => ({ from: () => emptyQuery() }),
   }))
   vi.doMock("@/lib/compass/bridge", () => ({
     getCompassLeadsByPhoneKeys: vi.fn().mockResolvedValue({
@@ -249,6 +262,34 @@ describe("고객 360 — Compass 활동 병합", () => {
     expect(result.compass.down).toBe(true)
     expect(result.compass.entries).toEqual([])
     expect(result.health.ok).toBe(true)
+    // CT9 — 헤더 요약도 "Compass 연결 끊김 — Home 기록만"으로 0 과 구분한다.
+    expect(result.contactSummary.compassDown).toBe(true)
+  })
+
+  it("CT9 — Compass 콜이 가장 최근 사람 연락이면 마지막 연락 원천은 Compass 다(알림톡·우리 메모는 연락이 아니다)", async () => {
+    const { getCrmCustomer360 } = await loadRepository({
+      compassLeads: [{ id: 77, phone_key: "01012345678" }],
+      compassActivities: [
+        activity(1, "alimtalk", "2026-08-27T00:00:00.000Z"),
+        activity(2, "call", "2026-08-25T00:00:00.000Z"),
+      ],
+    })
+
+    const result = await getCrmCustomer360(
+      { source: "lead", entityId: "lead-1", targetType: "lead" },
+      { now: NOW }
+    )
+
+    // 우리 기록(crm-1)은 manual_note(8/22), Compass 알림톡(8/27)은 자동 발송 → Compass 콜(8/25).
+    expect(result.contactSummary.last).toMatchObject({
+      origin: "compass",
+      source: "compass",
+      channelLabel: "Compass 콜",
+      actor: "진소망",
+      daysAgo: 3,
+    })
+    expect(result.contactSummary.compassDown).toBe(false)
+    expect(result.linkedLeads.down).toBe(false)
   })
 
   it("활동 조회만 끊기면 리드 링크는 남기고 down 만 올린다", async () => {

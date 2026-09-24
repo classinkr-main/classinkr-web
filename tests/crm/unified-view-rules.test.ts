@@ -100,17 +100,28 @@ describe("기존 저장 뷰 회귀 (규칙 모듈 분리 전 동작 보존)", ()
     expect(matchesSavedView(neoRow({ activeDealCount: 0 }), "active_deal", new Set(), NOW)).toBe(false)
   })
 
-  it("expiring — 만료 14일 이내(지난 것 포함), null 제외", () => {
+  // F1(2026-09-25) — "만료 임박"은 통합 뷰·행 플래그·재연락 알림이 같은 SSOT(EXPIRING_SOON_DAYS=30,
+  // 오늘~30일, 이미 지난 만료 제외)를 쓴다. 예전 뷰는 14일·지난 것 포함이라 플래그(30일)와 어긋났다.
+  it("expiring — 만료까지 0~30일(SSOT), 지난 만료·null 제외", () => {
     expect(matchesSavedView(neoRow({ expireAt: "2026-07-30T09:00:00Z" }), "expiring", new Set(), NOW)).toBe(true)
-    expect(matchesSavedView(neoRow({ expireAt: "2026-07-01T09:00:00Z" }), "expiring", new Set(), NOW)).toBe(true)
-    expect(matchesSavedView(neoRow({ expireAt: "2026-08-15T09:00:00Z" }), "expiring", new Set(), NOW)).toBe(false)
+    expect(matchesSavedView(neoRow({ expireAt: "2026-08-15T09:00:00Z" }), "expiring", new Set(), NOW)).toBe(true)
+    expect(matchesSavedView(neoRow({ expireAt: "2026-08-16T09:00:00Z" }), "expiring", new Set(), NOW)).toBe(true)
+    expect(matchesSavedView(neoRow({ expireAt: "2026-08-17T09:00:00Z" }), "expiring", new Set(), NOW)).toBe(false)
+    expect(matchesSavedView(neoRow({ expireAt: "2026-07-01T09:00:00Z" }), "expiring", new Set(), NOW)).toBe(false)
     expect(matchesSavedView(neoRow({ expireAt: null }), "expiring", new Set(), NOW)).toBe(false)
   })
 
-  it("dormant — 마지막 활동 30일 초과만, null 제외", () => {
-    expect(matchesSavedView(neoRow({ updatedAt: "2026-06-01T09:00:00Z" }), "dormant", new Set(), NOW)).toBe(true)
-    expect(matchesSavedView(neoRow({ updatedAt: "2026-07-01T09:00:00Z" }), "dormant", new Set(), NOW)).toBe(false)
-    expect(matchesSavedView(neoRow({ updatedAt: null }), "dormant", new Set(), NOW)).toBe(false)
+  // F2(2026-09-25) — "30일+ 미접촉"은 updatedAt(NEO는 동기화 시각)이 아니라 마지막 연락 기준이다.
+  // 연락 기록이 아예 없는 행도 포함하고(화면은 "기록 없음"으로 구분), 종료 리드는 뺀다.
+  it("dormant — 마지막 연락 30일 이상 전 또는 기록 없음, 종료 제외", () => {
+    expect(matchesSavedView(neoRow({ lastContactAt: "2026-06-01T09:00:00Z" }), "dormant", new Set(), NOW)).toBe(true)
+    expect(matchesSavedView(neoRow({ lastContactAt: "2026-07-01T09:00:00Z" }), "dormant", new Set(), NOW)).toBe(false)
+    expect(matchesSavedView(neoRow({ lastContactAt: null }), "dormant", new Set(), NOW)).toBe(true)
+    // updatedAt 은 더 이상 보지 않는다 — 동기화가 멈춰 오래된 NEO 행도 최근 연락이 있으면 미접촉이 아니다.
+    expect(
+      matchesSavedView(neoRow({ updatedAt: "2026-01-01T09:00:00Z", lastContactAt: "2026-07-10T09:00:00Z" }), "dormant", new Set(), NOW)
+    ).toBe(false)
+    expect(matchesSavedView(leadRow({ lifecycle: "closed", lastContactAt: null }), "dormant", new Set(), NOW)).toBe(false)
   })
 
   it("hot_lead — lead + score 68 이상만", () => {

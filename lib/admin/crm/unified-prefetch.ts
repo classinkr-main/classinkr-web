@@ -5,13 +5,16 @@ import { getVerifiedAdminContextForPage } from "@/lib/admin/page-auth"
 import { openPrefetchLane, type DeferredPrefetch } from "@/lib/admin/prefetch-budget"
 import { getCrmUnifiedCustomers } from "@/lib/repositories/crm-unified-customers"
 import {
+  CURRENT_OWNER_VALUE,
   listUrl,
   PAGE_LIMIT,
+  parseOwnerParam,
   parseTagParam,
   SAVED_VIEW_FILTERS,
   type CrmUnifiedCustomers,
   type SavedViewFilter,
 } from "@/components/admin/crm/unified/shared"
+import { isSegmentSpecEmpty, normalizeSegmentSpec, type CustomerSegmentSpec } from "@/lib/crm/customer-segment-spec"
 
 /**
  * 통합 고객(ClassIn 고객 DB) 목록 첫 페이지의 서버 프리페치 — 홈(home-prefetch.ts)과 같은
@@ -44,17 +47,19 @@ import {
  * 캐시가 맞도록 한다(완전한 커버는 아니다 — 아래 한계 참고).
  * 라벨(`?tag=`, 태그 관리 화면 딥링크)은 예외로 클라이언트가 마운트 시점 URL에서 state 초기값을
  * 바로 읽으므로(`parseTagParam`) 첫 요청부터 라벨이 실린다 — 여기서도 같은 함수로 정규화해 싣는다.
+ * 담당(`?owner=`, F6)·세그먼트 조건(`?expDays=` 등, SG4)도 같다 — 클라이언트가 마운트 시점 URL로
+ * state 를 초기화하므로 여기서도 같은 파서(parseOwnerParam·parseSegmentSpec 결과)로 싣는다.
+ * 기본값(담당 없음·빈 조건)은 URL 에 싣지 않으므로 딥링크 없는 기본 URL 은 그대로다.
  *
  * 한계(문서화, 코드로 닫지 않음):
  *  - `view=my_owner`는 매칭 대상에서 뺀다("all"로 취급) — my_owner는 owner를
  *    `CURRENT_OWNER_VALUE`로 바꾸는데, 그 값이 가리키는 실제 소유자 키(`ownerKeys`)를 구하려면
  *    이 프리페치가 admin-users 디렉터리까지 조회해야 한다(route.ts의 `findAdminCrmOwner`와
  *    동급 비용). 이번 범위 밖으로 남긴다 — my_owner 딥링크는 지금처럼 클라이언트 fetch로 떨어진다.
- *  - `owner`(담당자) 필터는 항상 기본값(전체)만 심는다 — 클라이언트가 `OWNER_STORAGE_KEY`
- *    localStorage에 저장된 담당자를 마운트 후 별도 이펙트로 복원하는데, 이건 서버가 알 수
- *    없는 상태다. 저장된 담당자가 있으면 클라이언트는 그 값으로 다시 요청하고, 그 요청은
- *    이 프리페치의 시드와 URL이 달라 그냥 새 fetch를 탄다(캐시 오염 없음 — 시드는 항상
- *    "기본 URL" 하나만 심으므로 다른 URL의 조회를 막거나 더럽히지 않는다).
+ *  - `owner`(담당자)는 URL(`?owner=`)에 있을 때만 싣는다 — localStorage 에 저장된 담당자는 서버가
+ *    알 수 없는 상태라 기본값(전체)으로 심는다. 저장된 담당자가 있으면 클라이언트는 그 값으로 다시
+ *    요청하고, 그 요청은 이 프리페치의 시드와 URL이 달라 그냥 새 fetch를 탄다(캐시 오염 없음).
+ *    `?owner=__me`(내 담당)는 my_owner 와 같은 이유(로그인 담당자 키를 풀지 않음)로 싣지 않는다.
  */
 export interface CrmUnifiedInitialData {
   customers: DeferredPrefetch<CrmUnifiedCustomers>
@@ -72,15 +77,28 @@ function resolveInitialSavedView(raw: string | undefined): SavedViewFilter {
  * 클라이언트 기본 첫 요청과 같은 URL을 만든다 — 실제 네트워크를 타지 않고 캐시 키/테스트
  * 비교용으로만 쓴다(getCrmUnifiedCustomers 호출 자체는 옵션을 직접 넘겨 URL 파싱을 거치지 않는다).
  */
-export function buildUnifiedPrefetchUrl(searchParams?: { q?: string; view?: string; tag?: string }): string {
+/** `?owner=` 원문 → 시드에 실을 담당. `__me`(내 담당)는 서버가 풀지 않으므로 "". */
+function resolveInitialOwner(raw: string | undefined): string {
+  const owner = parseOwnerParam(raw)
+  return owner === CURRENT_OWNER_VALUE ? "" : owner
+}
+
+export function buildUnifiedPrefetchUrl(searchParams?: {
+  q?: string
+  view?: string
+  tag?: string
+  owner?: string
+  segment?: CustomerSegmentSpec
+}): string {
   return listUrl({
     query: searchParams?.q?.trim() ?? "",
     source: "all",
     lifecycle: "all",
-    owner: "",
+    owner: resolveInitialOwner(searchParams?.owner),
     view: resolveInitialSavedView(searchParams?.view),
     tag: parseTagParam(searchParams?.tag),
     includeUnconfirmed: false,
+    segment: normalizeSegmentSpec(searchParams?.segment),
     offset: 0,
   })
 }
@@ -92,6 +110,10 @@ export async function prefetchCrmUnifiedInitialData(searchParams?: {
   tag?: string
   /** 360 드로어 딥링크 — 목록 조회 옵션에는 영향 없다(드로어는 별도 조회). 시그니처만 받는다. */
   account?: string
+  /** `?owner=` 담당 딥링크(F6) — `__me` 는 싣지 않는다(위 한계). */
+  owner?: string
+  /** 세그먼트 조건 딥링크(SG4) — 페이지가 parseSegmentSpec 으로 푼 값. */
+  segment?: CustomerSegmentSpec
 }): Promise<CrmUnifiedInitialData | null> {
   let admin: Awaited<ReturnType<typeof getVerifiedAdminContextForPage>> = null
   try {
@@ -105,6 +127,8 @@ export async function prefetchCrmUnifiedInitialData(searchParams?: {
   const view = resolveInitialSavedView(searchParams?.view)
   const q = searchParams?.q?.trim() || undefined
   const tag = parseTagParam(searchParams?.tag) || undefined
+  const owner = resolveInitialOwner(searchParams?.owner) || undefined
+  const segment = normalizeSegmentSpec(searchParams?.segment)
 
   const lane = openPrefetchLane<CrmUnifiedCustomers>(() =>
     getCrmUnifiedCustomers({
@@ -112,9 +136,11 @@ export async function prefetchCrmUnifiedInitialData(searchParams?: {
       source: "all",
       lifecycle: "all",
       view,
-      owner: undefined,
+      owner,
       tag,
       includeUnconfirmed: false,
+      // 빈 조건은 옵션에 싣지 않는다 — 기본 첫 조회와 같은 옵션 모양 유지.
+      ...(isSegmentSpecEmpty(segment) ? {} : { segment }),
       limit: PAGE_LIMIT,
       offset: 0,
     })

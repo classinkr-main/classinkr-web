@@ -2,6 +2,7 @@ import { Suspense } from "react"
 
 import CrmUnifiedCustomersClient from "@/components/admin/crm/CrmUnifiedCustomersClient"
 import { prefetchCrmUnifiedInitialData } from "@/lib/admin/crm/unified-prefetch"
+import { parseSegmentSpec } from "@/lib/crm/customer-segment-spec"
 
 export const metadata = {
   title: "통합 고객 | Admin CRM",
@@ -51,11 +52,18 @@ export default async function AdminCrmUnifiedCustomersPage({
     const value = params[key]
     return Array.isArray(value) ? value[0] : value
   }
+  // 세그먼트 조건은 목록 값(같은 키 반복)이 있어 배열까지 URLSearchParams 로 옮겨 클라이언트와 같은 파서로 푼다.
+  const urlParams = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    for (const item of Array.isArray(value) ? value : value == null ? [] : [value]) urlParams.append(key, item)
+  }
   const initialData = await prefetchCrmUnifiedInitialData({
     q: pick("q"),
     view: pick("view"),
     tag: pick("tag"),
     account: pick("account"),
+    owner: pick("owner"),
+    segment: parseSegmentSpec(urlParams),
   })
 
   return (

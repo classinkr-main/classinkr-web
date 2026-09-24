@@ -2,26 +2,37 @@
 
 // 결과 섹션 — 정렬 툴바 · 데스크톱 테이블 · 모바일 카드 · 페이지네이션 · 빈 상태.
 // 상태는 전부 부모(CrmUnifiedCustomersClient)가 소유하고 여기는 표시·콜백만 담당한다.
-// CrmUnifiedCustomersClient.tsx 분해(2026-08-28)로 이동 — 로직 무변경.
+// CrmUnifiedCustomersClient.tsx 분해(2026-08-28)로 이동. 2026-09-25: 행 선택 체크박스(현재 페이지만)·
+// 마지막 연락 열·NEO 신호 줄·서버 정렬(전체 결과 기준) 추가.
 
 import Link from "next/link"
-import { type MouseEvent } from "react"
+import { type MouseEvent, type ReactNode } from "react"
 import { ChevronLeft, ChevronRight, ExternalLink, MapPin, PhoneCall, UserPlus } from "lucide-react"
 import type { CrmUnifiedCustomerRow } from "@/lib/repositories/crm-unified-customers"
 import CrmContactValue from "../CrmContactValue"
 import CrmCustomerFlags from "../CrmCustomerFlags"
 import { SORT_LABELS, SortableHeaderCell, type SortKey, type SortState } from "./sort"
-import { LeadRowBadges, moneyCell, sourceBadge, TagChips } from "./row-visuals"
+import { LastContactCell, LeadRowBadges, moneyCell, NeoSignalLine, sourceBadge, TagChips } from "./row-visuals"
 import { PAGE_LIMIT, formatDate, rowToFlags, type CrmUnifiedCustomers, type SavedViewFilter } from "./shared"
 import { SECONDARY_TEXT_CLASS } from "../home/shared"
 
 // 돈흐름 열 통화 안내 — 외부 CRM(¥잔액·$오더)과 전환 고객(₩계약·미수)이 같은 열에 놓인다.
 export const MONEY_COLUMN_CURRENCY_HINT = "외부 CRM: ¥잔액·$오더 / 전환 고객: ₩계약·미수"
 
-// 정렬 범위 캡션 — 정렬은 서버 재요청 없이 현재 페이지(≤PAGE_LIMIT)만 재정렬한다(sort.tsx).
-// 전체 정렬처럼 읽히지 않도록 툴바·페이지네이션 양쪽에 같은 문구를 붙인다(C1 서버 정렬 전까지).
-export function sortScopeCaption(loadedCount: number) {
-  return `이 페이지 ${loadedCount.toLocaleString("ko-KR")}건 기준`
+// 정렬 범위 캡션 — 헤더 정렬은 서버가 현재 조건 전체를 정렬한 뒤 페이지를 자른다(C1). 페이지를 넘겨도
+// 순서가 이어진다는 것을 툴바·페이지네이션 양쪽에 같은 문구로 알린다.
+export function sortScopeCaption(totalCount: number) {
+  return `전체 ${totalCount.toLocaleString("ko-KR")}건 기준`
+}
+
+/** 현재 페이지 선택 체크박스 상태 — 전부/일부/없음. */
+export function pageSelectionState(pageKeys: readonly string[], selectedKeys: ReadonlySet<string>) {
+  const selected = pageKeys.filter((key) => selectedKeys.has(key)).length
+  return {
+    selected,
+    all: pageKeys.length > 0 && selected === pageKeys.length,
+    some: selected > 0 && selected < pageKeys.length,
+  }
 }
 
 export default function CustomerResultsSection({
@@ -40,6 +51,11 @@ export default function CustomerResultsSection({
   onRowDoubleClick,
   onLoadPage,
   onOpenLeadModal,
+  nowMs,
+  selectedKeys,
+  onToggleRow,
+  onTogglePage,
+  toolbarExtra,
 }: {
   data: CrmUnifiedCustomers | null
   rows: CrmUnifiedCustomerRow[]
@@ -56,9 +72,24 @@ export default function CustomerResultsSection({
   onRowDoubleClick: (event: MouseEvent<HTMLElement>, row: CrmUnifiedCustomerRow) => void
   onLoadPage: (offset: number) => void
   onOpenLeadModal: () => void
+  /** 상대 일수 기준 시각(보통 응답 generatedAt) — 없으면 지금. */
+  nowMs?: number
+  /** 선택한 행 키(현재 페이지만 고를 수 있다). 생략하면 체크박스를 그리지 않는다. */
+  selectedKeys?: ReadonlySet<string>
+  onToggleRow?: (key: string) => void
+  onTogglePage?: () => void
+  /** 툴바 오른쪽 끝 추가 행동(CSV 등). */
+  toolbarExtra?: ReactNode
 }) {
-  const loadedCount = data?.rows.length ?? rows.length
-  const scopeCaption = sortScopeCaption(loadedCount)
+  const totalCount = data?.pagination.total ?? rows.length
+  const scopeCaption = sortScopeCaption(totalCount)
+  // 행이 있으면 응답(generatedAt)도 있다 — 없을 때의 0 은 그려질 행이 없어 쓰이지 않는다.
+  const baseNowMs = nowMs ?? (data?.generatedAt ? Date.parse(data.generatedAt) : 0)
+  const selectable = Boolean(selectedKeys && onToggleRow)
+  const pageSelection = pageSelectionState(
+    rows.map((row) => row.key),
+    selectedKeys ?? new Set<string>()
+  )
   return (
     <section
       className="rounded-2xl border border-[#e8e8e4] bg-white"
@@ -74,7 +105,20 @@ export default function CustomerResultsSection({
             ? `${SORT_LABELS[sort.key]} ${sort.direction === "asc" ? "오름차순" : "내림차순"} · ${scopeCaption}`
             : "추천순 (기본)"}
         </p>
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => onToggleSort("last_contact")}
+            aria-pressed={sort?.key === "last_contact"}
+            title="마지막 연락이 오래된 순(기록 없음은 맨 뒤)"
+            className={`h-7 rounded-md border px-2.5 text-[11px] font-semibold transition-colors ${
+              sort?.key === "last_contact"
+                ? "border-[#111110] bg-[#111110] text-white"
+                : "border-[#e8e8e4] bg-white text-[#1a1a1a]/55 hover:text-[#111110]"
+            }`}
+          >
+            연락순{sort?.key === "last_contact" ? (sort.direction === "asc" ? " ▲" : " ▼") : ""}
+          </button>
           <button
             type="button"
             onClick={() => onToggleSort("score")}
@@ -97,6 +141,7 @@ export default function CustomerResultsSection({
               추천순으로 되돌리기
             </button>
           ) : null}
+          {toolbarExtra}
         </div>
       </div>
       <div className="hidden overflow-hidden lg:block">
@@ -104,6 +149,21 @@ export default function CustomerResultsSection({
           <caption className="sr-only">통합 고객 검색 결과 목록</caption>
           <thead className="bg-[#fafaf8] text-[11px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/35">
             <tr>
+              {selectable ? (
+                <th className="w-10 px-3 py-3">
+                  <input
+                    type="checkbox"
+                    aria-label="이 페이지 고객 모두 선택"
+                    checked={pageSelection.all}
+                    ref={(element) => {
+                      if (element) element.indeterminate = pageSelection.some
+                    }}
+                    onChange={() => onTogglePage?.()}
+                    disabled={rows.length === 0}
+                    className="h-4 w-4 accent-[#084734]"
+                  />
+                </th>
+              ) : null}
               <SortableHeaderCell label="고객" sortKey="name" sort={sort} onToggle={onToggleSort} />
               <SortableHeaderCell label="상태" sortKey="status" sort={sort} onToggle={onToggleSort} />
               <th className="px-4 py-3">다음 액션</th>
@@ -112,6 +172,7 @@ export default function CustomerResultsSection({
                 <span className="sr-only"> ({MONEY_COLUMN_CURRENCY_HINT})</span>
               </th>
               <SortableHeaderCell label="담당" sortKey="owner" sort={sort} onToggle={onToggleSort} />
+              <SortableHeaderCell label="마지막 연락" sortKey="last_contact" sort={sort} onToggle={onToggleSort} />
               <SortableHeaderCell label="최근 업데이트" sortKey="updated" sort={sort} onToggle={onToggleSort} align="right" />
             </tr>
           </thead>
@@ -120,6 +181,7 @@ export default function CustomerResultsSection({
               ? // 콜드로드 스켈레톤 — 컬럼(고객/상태/다음 액션/돈흐름/담당/최근 업데이트) 골격 일치.
                 Array.from({ length: 8 }).map((_, index) => (
                   <tr key={`sk-${index}`}>
+                    {selectable ? <td className="px-3 py-3" /> : null}
                     <td className="px-4 py-3">
                       <div className="h-4 w-40 animate-pulse rounded bg-[#f0f0ec]" />
                       <div className="mt-1.5 h-3 w-24 animate-pulse rounded bg-[#f5f5f2]" />
@@ -137,6 +199,9 @@ export default function CustomerResultsSection({
                       <div className="h-4 w-16 animate-pulse rounded bg-[#f0f0ec]" />
                     </td>
                     <td className="px-4 py-3">
+                      <div className="h-4 w-16 animate-pulse rounded bg-[#f0f0ec]" />
+                    </td>
+                    <td className="px-4 py-3">
                       <div className="ml-auto h-4 w-14 animate-pulse rounded bg-[#f0f0ec]" />
                     </td>
                   </tr>
@@ -147,8 +212,19 @@ export default function CustomerResultsSection({
                 key={row.key}
                 onDoubleClick={(event) => onRowDoubleClick(event, row)}
                 title={row.source === "customer" ? undefined : "더블클릭 — 고객 카드 열기"}
-                className="transition-colors hover:bg-[#fafaf8]"
+                className={`transition-colors hover:bg-[#fafaf8] ${selectedKeys?.has(row.key) ? "bg-[#f7faf8]" : ""}`}
               >
+                {selectable ? (
+                  <td className="w-10 px-3 py-3 align-top">
+                    <input
+                      type="checkbox"
+                      aria-label={`${row.name} 선택`}
+                      checked={Boolean(selectedKeys?.has(row.key))}
+                      onChange={() => onToggleRow?.(row.key)}
+                      className="mt-0.5 h-4 w-4 accent-[#084734]"
+                    />
+                  </td>
+                ) : null}
                 <td className="px-4 py-3">
                   <div className="flex min-w-0 items-center gap-2">
                     <div className="min-w-0 flex-1">
@@ -190,6 +266,7 @@ export default function CustomerResultsSection({
                   <div className="flex flex-col gap-1">
                     {sourceBadge(row)}
                     <span className="text-[12px] font-medium text-[#111110]">{row.statusLabel}</span>
+                    <NeoSignalLine row={row} />
                   </div>
                 </td>
                 <td className="px-4 py-3">
@@ -199,6 +276,9 @@ export default function CustomerResultsSection({
                 <td className="px-4 py-3">{moneyCell(row)}</td>
                 <td className="px-4 py-3">
                   <p className="text-[12px] font-semibold text-[#111110]">{row.ownerName ?? "미배정"}</p>
+                </td>
+                <td className="px-4 py-3">
+                  <LastContactCell row={row} nowMs={baseNowMs} />
                 </td>
                 {/* 점수 컬럼 자리 — 탐색 테이블에서 점수 숫자는 숨기고 최근 업데이트 날짜로 대체. */}
                 <td className="px-4 py-3 text-right text-[12px] font-medium tabular-nums text-[#1a1a1a]/55">
@@ -227,6 +307,18 @@ export default function CustomerResultsSection({
           : null}
         {rows.map((row) => (
           <div key={row.key} className="relative transition-colors hover:bg-[#fafaf8]">
+            {selectable ? (
+              // 카드 전체가 상세 열기 버튼이라 체크박스는 그 위(z-20)에 따로 둔다.
+              <label className="absolute right-3 top-3 z-20 inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center">
+                <input
+                  type="checkbox"
+                  aria-label={`${row.name} 선택`}
+                  checked={Boolean(selectedKeys?.has(row.key))}
+                  onChange={() => onToggleRow?.(row.key)}
+                  className="h-4 w-4 accent-[#084734]"
+                />
+              </label>
+            ) : null}
             {row.source === "customer" ? (
               <Link href={row.href} aria-label={`${row.name} 상세 보기`} className="absolute inset-0 z-0" />
             ) : (
@@ -253,8 +345,8 @@ export default function CustomerResultsSection({
                   </div>
                   <TagChips tags={row.tags} />
                 </div>
-                {/* 점수 숫자 숨김(탐색 전용) — 카드 우측 상단은 최근 업데이트 날짜로 대체. */}
-                <span className="shrink-0 text-[11px] font-medium tabular-nums text-[#1a1a1a]/35">
+                {/* 점수 숫자 숨김(탐색 전용) — 카드 우측 상단은 최근 업데이트 날짜로 대체(선택 체크박스 자리만큼 비킨다). */}
+                <span className={`shrink-0 text-[11px] font-medium tabular-nums text-[#1a1a1a]/35 ${selectable ? "mr-10" : ""}`}>
                   {formatDate(row.updatedAt)}
                 </span>
               </div>
@@ -267,7 +359,14 @@ export default function CustomerResultsSection({
                   <p className="text-[11px] font-semibold text-[#1a1a1a]/35">담당</p>
                   <p className="mt-0.5 font-semibold text-[#111110]">{row.ownerName ?? "미배정"}</p>
                 </div>
+                <div className="col-span-2">
+                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">마지막 연락</p>
+                  <div className="mt-0.5">
+                    <LastContactCell row={row} nowMs={baseNowMs} />
+                  </div>
+                </div>
               </div>
+              <NeoSignalLine row={row} />
               <p className="mt-2 text-[12px] text-[#1a1a1a]/45">{row.priorityReason}</p>
             </div>
           </div>
@@ -326,7 +425,7 @@ export default function CustomerResultsSection({
           </p>
           <p className="mt-1 text-[12px] text-[#1a1a1a]/45">
             {savedView === "recent_contact"
-              ? "고객이나 리드에 메모·콜·문자를 남기면 최근 컨택에 표시됩니다."
+              ? "Home에 콜·문자·미팅을 기록하거나 Compass에서 연락하면 최근 컨택에 표시됩니다."
               : savedView === "active_deal"
                 ? "Portal V2에서 진행 상태인 딜이 연결되면 여기에 표시됩니다."
                 : hasActiveFilters

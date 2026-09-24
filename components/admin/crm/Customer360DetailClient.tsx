@@ -7,6 +7,7 @@ import { ArrowLeft, Briefcase, ClipboardList, Coins, ExternalLink, LayoutDashboa
 
 import type { Customer360 } from "@/lib/repositories/crm-customer-360"
 
+import Customer360ContactSummary from "./Customer360ContactSummary"
 import Customer360DetailActivity from "./Customer360DetailActivity"
 import Customer360DetailDeals from "./Customer360DetailDeals"
 import Customer360DetailMoney from "./Customer360DetailMoney"
@@ -49,6 +50,7 @@ function MoneyTabWithRelink({ data }: { data: Customer360 }) {
       money={data.money}
       deals={data.deals}
       accountId={accountId}
+      customerName={data.header?.name ?? null}
       onRelinked={() => router.refresh()}
     />
   )
@@ -61,7 +63,14 @@ function renderTabBody(tab: TabKey, data: Customer360) {
     case "deals":
       return <Customer360DetailDeals deals={data.deals} />
     case "activity":
-      return <Customer360DetailActivity activity={data.activity} compass={data.compass} />
+      return (
+        <Customer360DetailActivity
+          activity={data.activity}
+          compass={data.compass}
+          customerSource={data.source}
+          linkedLeads={data.linkedLeads}
+        />
+      )
     case "tasks":
       return <Customer360DetailTasks tasks={data.tasks} customerKey={data.key} targetLabel={data.header?.name ?? null} />
     case "overview":
@@ -219,6 +228,8 @@ export default function Customer360DetailClient({ data, customerKey }: Props) {
             </div>
             <h1 className="text-xl font-bold tracking-[-0.02em] text-[#111110] sm:text-2xl">{displayName}</h1>
             <p className="mt-1 text-[13px] text-[#1a1a1a]/45">{metaLine}</p>
+            {/* CT9 — 마지막 연락 · 다음 연락(원천 표시, 서버 조립 시각 기준). 좁으면 두 줄로 쌓는다. */}
+            <Customer360ContactSummary summary={data.contactSummary} className="mt-1.5" />
           </div>
           <Link
             href={originHref}

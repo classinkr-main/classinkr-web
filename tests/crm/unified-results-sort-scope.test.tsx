@@ -1,8 +1,8 @@
 /**
  * unified-07 · unified-08 — 결과 섹션 헤더의 정렬 범위 캡션과 돈흐름 통화 안내.
  *
- * 정렬은 현재 페이지(≤50건)만 클라이언트에서 재정렬한다(unified/sort.tsx). 툴바·페이지네이션에
- * 범위를 명시하지 않으면 전체 정렬처럼 읽혀 페이지를 넘길 때 순서 리셋을 오해한다.
+ * C1(2026-09-25) — 헤더 정렬은 서버가 현재 조건 전체를 정렬한 뒤 페이지를 자른다(sort/dir 파라미터).
+ * 예전(현재 페이지 ≤50건만 재정렬)과 달리 페이지를 넘겨도 순서가 이어진다는 것을 "전체 N건 기준"으로 알린다.
  */
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it, vi } from "vitest"
@@ -85,19 +85,20 @@ function render(sort: { key: "name"; direction: "asc" } | null, rows: CrmUnified
 describe("CustomerResultsSection 정렬 범위·통화 안내", () => {
   const fifty = Array.from({ length: 50 }, (_, index) => row(index))
 
-  it("정렬 활성 시 툴바 문구와 페이지네이션에 '이 페이지 N건 기준' 캡션을 붙인다", () => {
+  it("정렬 활성 시 툴바 문구와 페이지네이션에 '전체 N건 기준'(서버 정렬) 캡션을 붙인다", () => {
     const html = render({ key: "name", direction: "asc" }, fifty)
 
-    expect(sortScopeCaption(50)).toBe("이 페이지 50건 기준")
-    expect(html).toContain("정렬 · 고객명 오름차순 · 이 페이지 50건 기준")
-    expect(html).toContain("정렬은 이 페이지 50건 기준")
+    expect(sortScopeCaption(120)).toBe("전체 120건 기준")
+    expect(html).toContain("정렬 · 고객명 오름차순 · 전체 120건 기준")
+    expect(html).toContain("정렬은 전체 120건 기준")
+    expect(html).not.toContain("이 페이지")
   })
 
   it("추천순(기본)에는 범위 캡션을 붙이지 않는다", () => {
     const html = render(null, fifty)
 
     expect(html).toContain("추천순 (기본)")
-    expect(html).not.toContain("이 페이지 50건 기준")
+    expect(html).not.toContain("전체 120건 기준")
   })
 
   it("돈흐름 헤더에 통화 안내(title + sr-only)를 붙인다", () => {

@@ -10,6 +10,7 @@ import { listCrmNeoCustomerSnapshots } from "@/lib/repositories/crm-neo-customer
 import { assertJsonSafeInDev } from "@/lib/server/json-safe"
 import { shareInFlight } from "@/lib/server/share-in-flight"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import type { CrmNeoBillingMode } from "@/lib/supabase/database.types"
 
 export interface NeoCrmCustomerRow {
   accountId: string
@@ -32,6 +33,8 @@ export interface NeoCrmCustomerRow {
   freshnessLabel?: string | null
   /** 소진 예상일. 표본이 부족하면 null — 라벨에서 재파생하지 말 것. */
   depletionInDays?: number | null
+  /** 과금 유형(매출시트 J열). 통합 목록 세그먼트 조건(과금 방식)의 원천 — 스냅샷 billing_mode. */
+  billingMode?: CrmNeoBillingMode | null
 }
 
 export interface NeoCrmCustomerOwnerOption {
@@ -212,6 +215,7 @@ async function computeNeoCrmCustomers(): Promise<NeoCrmCustomerList> {
       depletionInDays: row.depletionInDays,
       riskConfidence: row.riskConfidence,
       freshnessLabel: row.freshnessLabel,
+      billingMode: row.billingMode ?? null,
     })),
   }
 }

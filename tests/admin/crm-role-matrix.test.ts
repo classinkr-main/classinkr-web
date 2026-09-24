@@ -246,6 +246,8 @@ const CRM_ROUTE_HANDLER_MATRIX: Record<string, Partial<Record<HttpMethod, Handle
   "customers-neo/route.ts": { GET: CRM_STAFF },
   "customers/[key]/360/route.ts": { GET: CRM_STAFF },
   "customers/[key]/tags/route.ts": { GET: CRM_STAFF, POST: CRM_STAFF, DELETE: CRM_STAFF },
+  // 현재 조건 전체 CSV(개인정보 포함) — 관리자 전용(2026-09-25).
+  "customers/export/route.ts": { GET: STAFF_EXPLICIT },
   "customers/unified/route.ts": { GET: CRM_STAFF },
   "deals-lite/[id]/route.ts": { PATCH: CRM_STAFF },
   "deals-lite/route.ts": { POST: CRM_STAFF },
@@ -280,7 +282,9 @@ const CRM_ROUTE_HANDLER_MATRIX: Record<string, Partial<Record<HttpMethod, Handle
   "source-links/manual/route.ts": { POST: CRM_STAFF },
   "source-links/targets/route.ts": { GET: CRM_STAFF },
   "tasks/[id]/route.ts": { GET: CRM_STAFF, PATCH: CRM_STAFF, DELETE: CRM_STAFF },
+  "tags/bulk/route.ts": { POST: CRM_STAFF },
   "tags/route.ts": { GET: CRM_STAFF, PATCH: CRM_STAFF },
+  "tasks/bulk/route.ts": { POST: CRM_STAFF },
   "tasks/route.ts": { GET: CRM_STAFF, POST: CRM_STAFF },
   "write-requests/[id]/execute/route.ts": { POST: STAFF_EXPLICIT },
   "write-requests/[id]/route.ts": { GET: CRM_STAFF, PATCH: STAFF_EXPLICIT },
@@ -288,10 +292,10 @@ const CRM_ROUTE_HANDLER_MATRIX: Record<string, Partial<Record<HttpMethod, Handle
 }
 
 // 매트릭스 합계 — 라우트가 늘거나 역할이 바뀌면 여기와 기획 문서(D3)를 함께 갱신한다.
-const EXPECTED_HANDLER_TOTAL = 68
+const EXPECTED_HANDLER_TOTAL = 71
 const EXPECTED_ROLE_DISTRIBUTION: Record<RoleSpec, number> = {
-  CRM_STAFF_ADMIN_API_ROLES: 62,
-  STAFF_ADMIN_API_ROLES: 3,
+  CRM_STAFF_ADMIN_API_ROLES: 64,
+  STAFF_ADMIN_API_ROLES: 4,
   DEFAULT_BY_METHOD: 3,
 }
 

@@ -1,6 +1,6 @@
 "use client"
 
-// 통합 고객 목록 행 시각 요소 — 라벨 칩·소스 배지·돈흐름 셀·리드 배지(공용 분 시계).
+// 통합 고객 목록 행 시각 요소 — 라벨 칩·소스 배지·돈흐름 셀·리드 배지(공용 분 시계)·마지막 연락·NEO 신호.
 // CrmUnifiedCustomersClient.tsx 분해(2026-08-28)로 이동 — 로직 무변경.
 
 import { memo, useSyncExternalStore } from "react"
@@ -8,6 +8,8 @@ import { Building2, PhoneCall, UserRound } from "lucide-react"
 import type { CrmUnifiedCustomerRow, CrmUnifiedCustomerSource } from "@/lib/repositories/crm-unified-customers"
 import { LEAD_BADGE_TONE_CLASSES, leadBadges } from "@/lib/crm/lead-badges"
 import { STATUS_TONE_TEXT_CLASS } from "@/lib/crm/status-tone"
+import { describeLastContact } from "@/lib/crm/last-contact"
+import { SEGMENT_BILLING_LABELS, SEGMENT_RISK_LABELS } from "@/lib/crm/customer-segment-spec"
 import { SECONDARY_TEXT_CLASS } from "../home/shared"
 
 // 돈흐름 zero 상태의 소스별 표기 — 외부 CRM 계정의 잔액은 위안화(¥)·오더는 달러($)이고
@@ -185,3 +187,79 @@ export const LeadRowBadges = memo(function LeadRowBadges({ row }: { row: CrmUnif
   if (row.source !== "lead") return null
   return <LeadRowBadgeList row={row} />
 })
+
+// ── 마지막 연락 셀(CT8) ─────────────────────────────────────────────────────
+// "3일 전" 위, "Compass 콜 · 담당명" 아래. 연락 기록이 전혀 없으면 "기록 없음"(0일이 아니다).
+// nowMs 는 부모가 응답 생성 시각(generatedAt)으로 넘긴다 — 일 단위라 분 시계를 구독하지 않는다.
+export function LastContactCell({ row, nowMs }: { row: CrmUnifiedCustomerRow; nowMs: number }) {
+  const info = describeLastContact(row, nowMs)
+  if (!info.hasRecord) {
+    return (
+      <span
+        className="text-[11px] font-medium text-[#1a1a1a]/35"
+        title="Home 연락 로그·CRM 기록·Compass 활동 어디에도 연락 기록이 없습니다"
+      >
+        기록 없음
+      </span>
+    )
+  }
+  return (
+    <div className="min-w-0" title={info.text}>
+      <p className="text-[12px] font-semibold tabular-nums text-[#111110]">{info.when}</p>
+      {info.detail ? <p className="mt-0.5 max-w-[180px] truncate text-[11px] text-[#1a1a1a]/45">{info.detail}</p> : null}
+    </div>
+  )
+}
+
+// ── NEO 신호 줄(SG2) ────────────────────────────────────────────────────────
+// 위험 등급·소진 예상·과금 방식·최근 수업일을 글자색 한 줄로(밀집 화면 규약 — 채움 배지 금지).
+// 위험 사유는 title 로만 붙인다.
+function shortDate(iso: string | null | undefined) {
+  if (!iso) return null
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return null
+  return new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric", timeZone: "Asia/Seoul" }).format(date)
+}
+
+const RISK_TEXT_CLASS: Partial<Record<string, string>> = {
+  urgent: STATUS_TONE_TEXT_CLASS.danger,
+  soon: STATUS_TONE_TEXT_CLASS.warning,
+  watch: STATUS_TONE_TEXT_CLASS.warning,
+}
+
+export function neoSignalParts(row: CrmUnifiedCustomerRow): Array<{ key: string; text: string; className?: string }> {
+  if (row.source !== "neo_account") return []
+  const parts: Array<{ key: string; text: string; className?: string }> = []
+  if (row.riskLevel && row.riskLevel !== "normal") {
+    parts.push({
+      key: "risk",
+      text: `위험 ${SEGMENT_RISK_LABELS[row.riskLevel] ?? row.riskLevel}`,
+      className: RISK_TEXT_CLASS[row.riskLevel],
+    })
+  }
+  if (row.depletionInDays != null && Number.isFinite(row.depletionInDays)) {
+    parts.push({ key: "depletion", text: row.depletionInDays <= 0 ? "잔액 소진" : `소진 D-${row.depletionInDays}` })
+  }
+  if (row.billingMode && row.billingMode !== "unknown") {
+    parts.push({ key: "billing", text: SEGMENT_BILLING_LABELS[row.billingMode] ?? row.billingMode })
+  }
+  const lastClass = shortDate(row.lastClassAt)
+  if (lastClass) parts.push({ key: "class", text: `수업 ${lastClass}` })
+  return parts
+}
+
+export function NeoSignalLine({ row }: { row: CrmUnifiedCustomerRow }) {
+  const parts = neoSignalParts(row)
+  if (parts.length === 0) return null
+  const reasons = (row.riskReasonLabels ?? []).join(" · ")
+  return (
+    <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[11px] font-medium text-[#1a1a1a]/45" title={reasons || undefined}>
+      {parts.map((part, index) => (
+        <span key={part.key} className={part.className}>
+          {index > 0 ? <span aria-hidden className="mr-1.5 text-[#1a1a1a]/25">·</span> : null}
+          {part.text}
+        </span>
+      ))}
+    </p>
+  )
+}
