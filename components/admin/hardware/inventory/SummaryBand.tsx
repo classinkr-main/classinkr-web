@@ -4,7 +4,7 @@ import { memo } from "react"
 import type { ReactNode } from "react"
 import { AlertTriangle } from "lucide-react"
 
-import { summarizeStockAttention } from "@/lib/hardware/stock-attention"
+import { summarizeStockAttention, summarizeStockTotals } from "@/lib/hardware/stock-attention"
 import { judgeImportFreshness } from "./ImportFreshnessStrip"
 import { formatNumber, type HardwareDashboard } from "./shared"
 
@@ -24,7 +24,9 @@ interface SummaryBandProps {
 // 만들지 않고 순수 앵커 링크(<a href="#...">)로 구현해 부모의 기존 상태 계약을 건드리지
 // 않는다 — 스크롤 그 이상(필터 연동)은 보고서에 위임 항목으로 남긴다.
 function SummaryBand({ data, plannedMovementQuantity, plannedStaleGroupCount }: SummaryBandProps) {
-  const totals = data?.totals ?? null
+  // 창고·가용 헤드라인은 실판매 라인 합이다 — 판촉 라인은 아래 줄에 따로(하드웨어 라운드 3 H-10, 카테고리 카드와 같은 기준).
+  // 예전엔 서버 totals(판촉 포함)라 판촉 원장 이상(음수)이 헤드라인을 깎았다.
+  const stockTotals = summarizeStockTotals(data?.stock ?? [])
   const plannedCount = data?.plannedMovements.length ?? 0
   // 부족과 주문 검토의 합집합(품목당 한 번) — 알림 목록과 같은 규칙(하드웨어 라운드 2 H-2). 예전엔 부족 품목이
   // 주문 검토에도 걸려 두 번 세졌다.
@@ -66,11 +68,13 @@ function SummaryBand({ data, plannedMovementQuantity, plannedStaleGroupCount }: 
   return (
     <section aria-label="하드웨어 재고 요약" className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
       <SummaryTile href="#hardware-section-stock" label="창고 재고" title="현재 재고 섹션으로 이동">
-        <Headline value={formatNumber(totals?.warehouseStock ?? 0)} unit="대" negative={(totals?.warehouseStock ?? 0) < 0} />
+        <Headline value={formatNumber(stockTotals.warehouse)} unit="대" negative={stockTotals.warehouse < 0} />
+        {stockTotals.promoted && <PromotedLine value={stockTotals.promoted.warehouse} />}
       </SummaryTile>
 
       <SummaryTile href="#hardware-section-stock" label="가용 재고" title="현재 재고 섹션으로 이동">
-        <Headline value={formatNumber(totals?.availableStock ?? 0)} unit="대" negative={(totals?.availableStock ?? 0) < 0} />
+        <Headline value={formatNumber(stockTotals.available)} unit="대" negative={stockTotals.available < 0} />
+        {stockTotals.promoted && <PromotedLine value={stockTotals.promoted.available} />}
       </SummaryTile>
 
       <SummaryTile href="#hardware-section-planned" label="예정 출고 대기" title="예상 출고 섹션으로 이동">
@@ -105,6 +109,18 @@ function SummaryBand({ data, plannedMovementQuantity, plannedStaleGroupCount }: 
         </p>
       </SummaryTile>
     </section>
+  )
+}
+
+// 판촉(promoted) 라인 합 — 헤드라인에서 뺀 값을 숨기지 않고 한 줄로 말한다. 음수면 원장 점검 신호(Danger 텍스트).
+function PromotedLine({ value }: { value: number }) {
+  return (
+    <p
+      className={`mt-2 text-[11px] font-semibold tabular-nums ${value < 0 ? "text-[#B43E3E]" : "text-[#615D59]"}`}
+      title="판촉(promoted) 라인은 실판매 합계와 따로 셉니다 — 카테고리 카드와 같은 기준"
+    >
+      판촉 별도 {formatNumber(value)}대{value < 0 ? " · 원장 점검" : ""}
+    </p>
   )
 }
 

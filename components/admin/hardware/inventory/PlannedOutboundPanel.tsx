@@ -4,10 +4,11 @@ import { memo, useCallback, useMemo, useState, useEffect } from "react"
 import type { Dispatch, SetStateAction } from "react"
 import { CheckCheck, Clock3 } from "lucide-react"
 
-import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
 import type { AdminListPaginationResult } from "@/lib/admin-list-pagination"
 import ExportActions from "./ExportActions"
 import { buildPlannedExportRows } from "./hardware-export"
+import PlannedConfirmDialog from "./PlannedConfirmDialog"
+import type { PlannedConfirmEntry } from "./planned-confirm-model"
 import {
   collectStalePlannedMovementIds,
   elapsedDaysSince,
@@ -25,6 +26,11 @@ import {
   type PlannedSelectionConfirmProgress,
   type PlannedSelectionConfirmResult,
 } from "./shared"
+import { useTodayKey } from "./use-today-key"
+
+// 확인창 대상 — 선택 확정 또는 딜 하나의 전체 확정(하드웨어 라운드 3 H-9, 예전 window.confirm 대체). 연 순간의 행 id 를
+// 들고 있다 — 확인창을 연 사이 행이 사라져 닫힌 뒤 새로 고른 행으로 확인창이 저절로 다시 뜨지 않게.
+type ConfirmDialogTarget = { mode: "selection"; ids: string[] } | { mode: "group"; key: string; customer: string; ids: string[] }
 
 // 예정 방치 신호 임계 — 예정일로부터 14일이면 주의, 30일이면 확정·정리가 밀린 것으로 본다.
 const PLANNED_AGING_WARN_DAYS = 14
@@ -112,8 +118,12 @@ function PlannedOutboundPanel({
   useEffect(() => () => onSelectionCountChange?.(0), [onSelectionCountChange])
   // Shift+클릭 범위 선택의 기준점(anchor) — 마지막으로 클릭한 행 id. 일반 클릭·Shift 클릭 모두 갱신한다.
   const [lastCheckedId, setLastCheckedId] = useState<string | null>(null)
-  const [bulkConfirmDate, setBulkConfirmDate] = useState(() => todayKey())
-  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false)
+  // 일괄 확정일 — null 이면 "오늘"이고, 실행할 때 그 순간의 오늘로 읽는다(하드웨어 라운드 3 H-9). 예전엔 마운트 시각의
+  // 오늘을 state 로 들고 있어 자정을 넘긴 탭이 어제 날짜로 확정했다. 사람이 고른 날짜만 기억한다.
+  const [bulkConfirmDateOverride, setBulkConfirmDateOverride] = useState<string | null>(null)
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogTarget | null>(null)
+  const today = useTodayKey()
+  const bulkConfirmDate = bulkConfirmDateOverride ?? today
 
   // useMemo로 감싸 참조를 안정시킨다 — 감싸지 않으면 매 렌더 새 배열(??의 폴백 [])이 만들어져
   // 아래 staleIds·selectedMovements useMemo의 의존성이 매번 바뀐 것으로 잡힌다(eslint
@@ -179,17 +189,60 @@ function PlannedOutboundPanel({
     setLastCheckedId(null)
   }, [])
 
-  const runConfirmSelection = useCallback(async () => {
-    setBulkConfirmOpen(false)
-    const entries = selectedMovements.map((movement) => ({
-      movement,
-      quantity: resolveConfirmQuantity(movement, confirmQtys),
-    }))
-    const { failedIds } = await confirmPlannedSelection(entries, bulkConfirmDate)
-    // 끝나면 성공한 행은 선택에서 빼고 실패한 행만 선택으로 남겨 재시도가 쉽게 한다(요청사항 ①.5).
-    setSelectedIds(new Set(failedIds))
+  // 행 미리보기 — 서버가 준 "이 행을 뺀" lot 잔량(plannedLotAvailability)이 있으면 확정과 같은 계산이다(하드웨어 라운드 3 H-3).
+  const lotAvailability = data?.plannedLotAvailability
+  const stock = data?.stock
+  const previewFor = useCallback(
+    (movement: HardwareMovement, quantity: number) => {
+      const stockRow = stock?.find((row) => row.itemId === movement.item_id || row.product === movement.product_name)
+      return resolvePlannedFifoPreview(movement, stockRow, quantity, lotAvailability?.[movement.id])
+    },
+    [stock, lotAvailability]
+  )
+
+  // 확인창 행 — 연 순간의 행 중 지금 큐에 남은 것만(확인창을 연 사이 다른 확정으로 사라진 행은 빠진다).
+  const dialogEntries = useMemo<PlannedConfirmEntry[]>(() => {
+    if (!confirmDialog) return []
+    const ids = new Set(confirmDialog.ids)
+    return allPlanned.filter((movement) => ids.has(movement.id)).map((movement) => {
+      const quantity = resolveConfirmQuantity(movement, confirmQtys)
+      return {
+        id: movement.id,
+        productName: movement.product_name,
+        // 딜 묶음(HardwareInventoryClient plannedGroups)과 같은 고객 표기.
+        customer: movement.to_location ?? "도착지 미정",
+        quantity,
+        // 선택 확정은 공통 확정일, 딜 전체 확정은 행마다 입력한 확정일(부모 readPlannedConfirmInput 과 같은 규칙).
+        occurredAt: confirmDialog.mode === "selection" ? bulkConfirmDate : confirmDates[movement.id] || today,
+        preview: previewFor(movement, quantity),
+      }
+    })
+  }, [confirmDialog, allPlanned, confirmQtys, confirmDates, bulkConfirmDate, today, previewFor])
+
+  const runConfirmDialog = useCallback(async () => {
+    const target = confirmDialog
+    if (!target) return
+    // 거절이 확실한 행(지정 lot 잔량 부족)은 보내지 않는다 — 확인창이 "이번 확정에서 뺍니다"라고 말한 그대로.
+    const runnableIds = new Set(
+      dialogEntries.filter((entry) => entry.preview.kind !== "assigned-short").map((entry) => entry.id)
+    )
+    const skippedIds = dialogEntries.filter((entry) => !runnableIds.has(entry.id)).map((entry) => entry.id)
+    const runnable = allPlanned.filter((movement) => runnableIds.has(movement.id))
+    setConfirmDialog(null)
+    if (target.mode === "group") {
+      if (runnable.length > 0) await confirmPlannedGroup({ key: target.key, customer: target.customer, items: runnable })
+      return
+    }
+    const entries = runnable.map((movement) => ({ movement, quantity: resolveConfirmQuantity(movement, confirmQtys) }))
+    // 손대지 않은 확정일은 누르는 순간의 오늘이다(H-9).
+    const { failedIds } =
+      entries.length > 0
+        ? await confirmPlannedSelection(entries, bulkConfirmDateOverride ?? todayKey())
+        : { failedIds: [] as string[] }
+    // 끝나면 성공한 행은 선택에서 빼고, 실패한 행과 확정에서 뺀 행만 남겨 고치고 다시 누르기 쉽게 한다(요청사항 ①.5).
+    setSelectedIds(new Set([...failedIds, ...skippedIds]))
     setLastCheckedId(null)
-  }, [selectedMovements, confirmQtys, confirmPlannedSelection, bulkConfirmDate])
+  }, [confirmDialog, dialogEntries, allPlanned, confirmPlannedGroup, confirmQtys, confirmPlannedSelection, bulkConfirmDateOverride])
 
   const hasPlanned = (data?.plannedMovements.length ?? 0) > 0
 
@@ -208,7 +261,9 @@ function PlannedOutboundPanel({
           </span>
           <span className="min-w-0">
             <span className="block text-[15px] font-bold tracking-[-0.01em] text-[#111110]">예상 출고</span>
-            <span className="mt-1 block text-[12px] text-[#615D59]">배송 예정 물량을 확정하면 현재 lot 재고를 기준으로 FIFO 배정 후 실제 출고로 전환됩니다.</span>
+            <span className="mt-1 block text-[12px] text-[#615D59]">
+              확정하면 이 예약을 뺀 lot 잔량으로 FIFO 배정한 뒤 실제 출고로 바꿉니다. 행마다 보이는 배정이 확정 때 찍히는 값입니다.
+            </span>
           </span>
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
@@ -337,7 +392,10 @@ function PlannedOutboundPanel({
                     </span>
                     <button
                       type="button"
-                      onClick={() => void confirmPlannedGroup(group)}
+                      // 확인창에서 확정일·행별 배정을 보고 확정한다(H-9) — 예전 window.confirm 은 품목 수만 말했다.
+                      onClick={() =>
+                        setConfirmDialog({ mode: "group", key: group.key, customer: group.customer, ids: groupIds })
+                      }
                       disabled={plannedConfirmLocked || !canFinalize}
                       title={canFinalize ? undefined : "출고 확정에는 확정 권한(hardware.finalize)이 필요합니다"}
                       className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-md bg-[#084734] px-2.5 text-[11px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
@@ -350,10 +408,10 @@ function PlannedOutboundPanel({
                 <div className="mt-2 divide-y divide-[rgba(0,0,0,0.05)] overflow-hidden rounded-lg border border-[rgba(0,0,0,0.06)] bg-[#FAFAF8]">
                   {group.items.map((movement) => {
                     const confirmQty = resolveConfirmQuantity(movement, confirmQtys)
-                    const stockRow = data?.stock.find((row) => row.itemId === movement.item_id || row.product === movement.product_name)
-                    const fifoPreview = resolvePlannedFifoPreview(movement, stockRow, confirmQty)
+                    const fifoPreview = previewFor(movement, confirmQty)
                     const confirmResult = plannedConfirmResults[movement.id]
                     const checked = selectedIds.has(movement.id)
+                    const rowConfirmDate = confirmDates[movement.id] || today
                     return (
                       <div
                         key={movement.id}
@@ -391,7 +449,7 @@ function PlannedOutboundPanel({
                           <p title={movement.product_name} className="truncate text-[12.5px] font-semibold text-[#111110]">
                             {movement.product_name} <span className="tabular-nums text-[#7A520F]">· {formatNumber(movement.quantity)}대</span>
                           </p>
-                          <p className="mt-1 truncate text-[11px] font-bold">
+                          <p className="mt-1 break-words text-[11px] font-bold">
                             <PlannedFifoPreviewText preview={fifoPreview} />
                           </p>
                           {confirmResult && (
@@ -423,12 +481,18 @@ function PlannedOutboundPanel({
                             <span className="text-[10.5px] font-bold text-[#A39E98]">확정일</span>
                             <input
                               type="date"
-                              value={confirmDates[movement.id] ?? todayKey()}
+                              value={rowConfirmDate}
                               onChange={(event) => setConfirmDates((current) => ({ ...current, [movement.id]: event.target.value }))}
                               disabled={plannedConfirmLocked}
-                              className="h-8 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[11px] font-semibold text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15 disabled:cursor-not-allowed disabled:bg-[#F6F5F4] disabled:text-[#A39E98]"
+                              className={`h-8 rounded-md border bg-white px-2 text-[11px] font-semibold text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15 disabled:cursor-not-allowed disabled:bg-[#F6F5F4] disabled:text-[#A39E98] ${
+                                rowConfirmDate !== today ? "border-[#ECD29C]" : "border-[rgba(0,0,0,0.08)]"
+                              }`}
                             />
                           </label>
+                          {/* 한 번에 확정하는 행 경로는 확인창이 없다 — 오늘이 아닌 날짜를 누르기 전에 보이게 한다(H-9). */}
+                          {rowConfirmDate !== today && (
+                            <span className="text-[10.5px] font-bold text-[#7A520F]">오늘 아님</span>
+                          )}
                           <button
                             type="button"
                             onClick={() => editMovement(movement)}
@@ -476,16 +540,24 @@ function PlannedOutboundPanel({
                     {formatNumber(selectionConfirmProgress.index)} / {formatNumber(selectionConfirmProgress.total)} 확정 중…
                   </span>
                 ) : (
-                  <label className="flex cursor-pointer items-center gap-1.5" title="선택한 건에 공통 적용할 확정일">
-                    <span className="text-[10.5px] font-bold text-[#A39E98]">확정일</span>
-                    <input
-                      type="date"
-                      value={bulkConfirmDate}
-                      onChange={(event) => setBulkConfirmDate(event.target.value)}
-                      disabled={plannedConfirmLocked}
-                      className="h-8 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[11px] font-semibold text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15 disabled:cursor-not-allowed disabled:bg-[#F6F5F4] disabled:text-[#A39E98]"
-                    />
-                  </label>
+                  <>
+                    <label className="flex cursor-pointer items-center gap-1.5" title="선택한 건에 공통 적용할 확정일">
+                      <span className="text-[10.5px] font-bold text-[#A39E98]">확정일</span>
+                      <input
+                        type="date"
+                        value={bulkConfirmDate}
+                        // 비우면 다시 "오늘"(누르는 순간의 오늘)로 돌아간다.
+                        onChange={(event) => setBulkConfirmDateOverride(event.target.value || null)}
+                        disabled={plannedConfirmLocked}
+                        className={`h-8 rounded-md border bg-white px-2 text-[11px] font-semibold text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15 disabled:cursor-not-allowed disabled:bg-[#F6F5F4] disabled:text-[#A39E98] ${
+                          bulkConfirmDate !== today ? "border-[#ECD29C]" : "border-[rgba(0,0,0,0.08)]"
+                        }`}
+                      />
+                    </label>
+                    {bulkConfirmDate !== today && (
+                      <span className="text-[10.5px] font-bold text-[#7A520F]">오늘 아님</span>
+                    )}
+                  </>
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-2">
@@ -501,7 +573,7 @@ function PlannedOutboundPanel({
                     이 화면의 유일한 기본 액션이라 경쟁하는 CTA가 없다. */}
                 <button
                   type="button"
-                  onClick={() => setBulkConfirmOpen(true)}
+                  onClick={() => setConfirmDialog({ mode: "selection", ids: selectedMovements.map((movement) => movement.id) })}
                   disabled={plannedConfirmLocked || !canFinalize}
                   title={canFinalize ? undefined : "출고 확정에는 확정 권한(hardware.finalize)이 필요합니다"}
                   className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md bg-[#084734] px-3.5 text-[12px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
@@ -514,21 +586,20 @@ function PlannedOutboundPanel({
           )}
         </>
       )}
-      {/* 되돌리기 어려운 동작 확인 — window.confirm 대신 저장소 공용 다이얼로그(일반화된
-          DeleteConfirmDialog)를 쓴다(요청사항 ①.6). destructive=false: 삭제가 아니라 정상
-          업무 흐름(출고 확정)이라 Danger 빨강이 아니라 Classin Green 주 버튼으로 그린다. */}
-      <DeleteConfirmDialog
-        open={bulkConfirmOpen}
-        onClose={() => setBulkConfirmOpen(false)}
-        onConfirm={() => void runConfirmSelection()}
-        loading={selectionConfirmProgress != null}
-        destructive={false}
-        title="선택한 예정 출고 확정"
-        description={`${formatNumber(selectedCount)}건 ${formatNumber(selectedQuantityTotal)}대를 확정일 ${bulkConfirmDate}로 확정합니다.${bulkConfirmDate !== todayKey() ? " 오늘이 아닌 날짜입니다 — 확인하세요." : ""} 로트가 모자란 수량은 로트 미지정으로 기록됩니다.`}
-        confirmLabel="확정"
-        confirmLoadingLabel="확정 중…"
-        cancelLabel="취소"
-        irreversibleNote="출고 확정은 되돌릴 수 없습니다."
+      {/* 되돌리기 어려운 동작 확인(요청사항 ①.6) — 선택 확정과 딜 전체 확정이 같은 확인창을 쓴다(하드웨어 라운드 3 H-9).
+          확정일·행별 배정·거절 예상을 보여 준다. 정상 업무 흐름이라 Danger 빨강이 아니라 Classin Green 주 버튼이다.
+          확인창이 뜬 사이 대상 행이 모두 사라지면(다른 확정·새로고침) 닫는다. */}
+      <PlannedConfirmDialog
+        open={confirmDialog != null && dialogEntries.length > 0}
+        title={
+          confirmDialog?.mode === "group"
+            ? `${confirmDialog.customer} 전체 확정`
+            : `선택한 예정 출고 ${formatNumber(dialogEntries.length)}건 확정`
+        }
+        entries={dialogEntries}
+        today={today}
+        onConfirm={() => void runConfirmDialog()}
+        onClose={() => setConfirmDialog(null)}
       />
     </section>
   )
@@ -539,19 +610,40 @@ function PlannedOutboundPanel({
 // 미지정분(unassigned)은 Danger가 아니라 Warning(주황) 톤으로 낮춰 "확정이 막힌다"가 아니라
 // "참고하되 진행된다"는 신호로 읽히게 한다(요청사항 ② — 신정책: 로트가 모자라도 확정은
 // 막히지 않고 나머지가 로트 미지정으로 기록된다).
+// 하드웨어 라운드 3 H-3: 문구를 "FIFO 예상"에서 "확정 시 배정"으로 바꿨다 — 이제 확정과 같은 잔량(이 예약을 뺀 값)으로
+// 계산하므로 예상이 아니라 확정 때 찍히는 값이다. 지정 lot 잔량이 모자라면(서버가 거절) Danger 로 미리 말한다.
 function PlannedFifoPreviewText({ preview }: { preview: PlannedFifoPreview }) {
-  if (preview.kind === "assigned") return <span className="text-[#084734]">지정 lot {preview.label}</span>
-  if (preview.kind === "unavailable") return <span className="text-[#084734]">FIFO 예상 없음</span>
+  const label = <span className="text-[#A39E98]">확정 시 배정 </span>
+  if (preview.kind === "assigned") {
+    return (
+      <>
+        {label}
+        <span className="text-[#084734]">지정 lot {preview.label}</span>
+      </>
+    )
+  }
+  if (preview.kind === "assigned-short") {
+    return (
+      <span className="text-[#8F2C2C]">
+        지정 lot {preview.label} 잔량 {formatNumber(preview.available)}대 — 이 수량은 확정이 거절됩니다. 수정에서 로트를 비우면 자동
+        배정됩니다.
+      </span>
+    )
+  }
+  if (preview.kind === "unavailable") return <span className="text-[#A39E98]">배정 미리보기 없음 — 확정 때 배정합니다</span>
   if (preview.kind === "no-lot-records") {
     // 로트 잔량 기록 자체가 없는 품목(OPS·케이블 등) — "부족"이 아니라 애초에 lot 추적 대상이
     // 아니라는 뜻이라 문구로 명확히 구분한다(요청사항 ②).
-    return <span className="text-[#A8741A]">로트 기록 없음 — 로트 미지정으로 출고</span>
+    return <span className="text-[#A8741A]">로트 기록 없는 품목 — 로트 미지정으로 출고</span>
   }
   return (
     <>
-      <span className="text-[#084734]">{preview.matchedText ? `FIFO 예상 ${preview.matchedText}` : "FIFO 예상"}</span>
+      {label}
+      {preview.matchedText && <span className="text-[#084734]">{preview.matchedText}</span>}
       {preview.unassignedQty > 0 && (
-        <span className="ml-1 text-[#A8741A]">· 로트 미지정 {formatNumber(preview.unassignedQty)}대</span>
+        <span className="text-[#A8741A]">
+          {preview.matchedText ? " · " : ""}로트 미지정 {formatNumber(preview.unassignedQty)}대
+        </span>
       )}
     </>
   )

@@ -2708,7 +2708,8 @@ export default function HardwareInventoryClient({
       : movement.quantity
     return {
       qty,
-      occurredAt: override.occurredAt ?? confirmDates[movement.id] ?? todayKey(),
+      // 비운 날짜 입력("")은 오늘로 본다 — 패널의 행 표시(confirmDates[id] || today)와 같은 규칙.
+      occurredAt: override.occurredAt || confirmDates[movement.id] || todayKey(),
     }
   }, [confirmQtys, confirmDates])
 
@@ -2773,13 +2774,14 @@ export default function HardwareInventoryClient({
     }
   }, [busy, confirmingGroupKey, confirmingId, confirmPlannedMovementRequest, refresh, clearConfirmInputs])
 
+  // 확인은 호출부(PlannedOutboundPanel 의 PlannedConfirmDialog)가 확정일·행별 배정과 함께 받는다(하드웨어 라운드 3 H-9) —
+  // 예전 window.confirm 은 품목 수만 말했다. 거절이 확실한 행(지정 lot 잔량 부족)은 호출부가 빼고 넘긴다.
   const confirmPlannedGroup = useCallback(async (group: { key: string; customer: string; items: HardwareMovement[] }) => {
     if (group.items.length === 0 || plannedConfirmLocked) return
     const plannedSnapshot = group.items.map((movement) => ({
       movement,
       ...readPlannedConfirmInput(movement),
     }))
-    if (!window.confirm(`${group.customer} 예정 출고 ${formatNumber(group.items.length)}개 품목을 확정할까요?`)) return
     setConfirmingGroupKey(group.key)
     setNotice(null)
     setError(null)

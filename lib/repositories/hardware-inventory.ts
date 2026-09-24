@@ -226,6 +226,17 @@ export interface HardwareDashboard {
   importCosting: {
     recoveredFromRawCount: number
   }
+  // 하드웨어 라운드 3 H-3 — 예정 출고 행마다 "그 행을 뺀" lot 잔량. 확정(planConfirmLotAllocations)은 자기 예약을
+  // 빼고 배정하는데, 품목 잔량(stock.lotBalances)은 모든 예정을 이미 뺀 값이라 화면 미리보기가 로트를 모자라게 말했다.
+  plannedLotAvailability: Record<string, PlannedLotAvailability>
+}
+
+// 예정 출고 한 줄이 확정될 때 쓸 수 있는 lot 잔량 — 확정과 같은 해석기(resolveHardwareLotBalances)로, 그 줄만 빼고 낸다.
+export interface PlannedLotAvailability {
+  // FIFO 순(가장 먼저 소진될 lot 이 앞) — 화면은 다시 정렬하지 않고 이 순서대로 배정한다.
+  lots: Array<{ lot: string; quantity: number }>
+  // 품목에 lot 이 붙은 기록이 하나라도 있는지. false 면 lot 추적 대상이 아닌 품목(OPS·케이블 등)이다.
+  tracked: boolean
 }
 
 export interface HardwareImportRunSummary {
@@ -891,6 +902,53 @@ export function resolveHardwareLotBalances(
     unabsorbedOverdraw,
     unattributedReduction,
   }
+}
+
+type PlannedLotLedgerMovement = HardwareLotLedgerMovement & Pick<HardwareMovement, "id" | "item_id" | "status">
+
+/**
+ * 예정 출고 행마다 "그 행을 뺀" lot 잔량(하드웨어 라운드 3 H-3). 확정(planConfirmLotAllocations)이
+ * excludeMovementIds 로 자기 예약을 빼고 resolveHardwareLotBalances 로 배정하므로, 미리보기도 **같은 입력·같은 해석기**를 쓴다.
+ *
+ * 비용: 예정 행 × 품목 원장. lot 키가 없는 예정 행은 해석기에서 "로트 없는 감소분" 합계에만 들어가므로(순서 무관),
+ * 같은 품목·같은 수량이면 어느 행을 빼도 결과가 같다 — 그 경우는 한 번만 계산한다.
+ * 입력은 취소되지 않은 원장 전체여야 한다(호출부가 voided 를 이미 뺀다).
+ */
+export function buildPlannedLotAvailability(
+  movements: readonly PlannedLotLedgerMovement[]
+): Record<string, PlannedLotAvailability> {
+  const byItem = new Map<string, PlannedLotLedgerMovement[]>()
+  for (const movement of movements) {
+    if (!movement.item_id) continue
+    const bucket = byItem.get(movement.item_id)
+    if (bucket) bucket.push(movement)
+    else byItem.set(movement.item_id, [movement])
+  }
+
+  const result: Record<string, PlannedLotAvailability> = {}
+  for (const itemMovements of byItem.values()) {
+    const planned = itemMovements.filter(
+      (movement) => movement.movement_type === "outbound" && isPlannedStatus(movement.status)
+    )
+    if (planned.length === 0) continue
+    const tracked = itemMovements.some((movement) => movementLotKey(movement) != null && lotDeltaOf(movement) !== 0)
+    const unlottedMemo = new Map<number, PlannedLotAvailability>()
+    for (const row of planned) {
+      const unlotted = movementLotKey(row) == null
+      const memoed = unlotted ? unlottedMemo.get(row.quantity) : undefined
+      if (memoed) {
+        result[row.id] = memoed
+        continue
+      }
+      const lots = resolveHardwareLotBalances(itemMovements.filter((movement) => movement.id !== row.id)).lots.map(
+        ({ lot, quantity }) => ({ lot, quantity })
+      )
+      const availability: PlannedLotAvailability = { lots, tracked }
+      if (unlotted) unlottedMemo.set(row.quantity, availability)
+      result[row.id] = availability
+    }
+  }
+  return result
 }
 
 function splitMoney(value: number | null | undefined, quantity: number, totalQuantity: number) {
@@ -2715,6 +2773,7 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
     importRunLastSuccess,
     mirror,
     importCosting: { recoveredFromRawCount: moneyRecoveredFromRawCount },
+    plannedLotAvailability: buildPlannedLotAvailability(activeMovements),
   }
 }
 
@@ -2727,7 +2786,8 @@ const getHardwareDashboardCached = unstable_cache(
   () => getHardwareDashboardUncached(),
   // v3(2026-09-15): 위치 정규화 변경("클래스인"→사무실, 수리 오탐 제거) — 옛 규칙 결과를 SWR 로 먼저 주지 않게 키를 올린다.
   // v4(2026-09-23): 응답에 importRunLastSuccess·mirror가 더해졌다 — 옛 모양을 SWR 로 먼저 주지 않게 키를 올린다.
-  ["hardware-dashboard-v4"],
+  // v5(2026-09-24): 응답에 plannedLotAvailability(예정 행별 자기 제외 lot 잔량)가 더해졌다.
+  ["hardware-dashboard-v5"],
   { tags: [HARDWARE_INVENTORY_CACHE_TAG], revalidate: 120 }
 )
 

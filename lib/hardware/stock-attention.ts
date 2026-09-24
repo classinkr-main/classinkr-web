@@ -5,6 +5,8 @@
 // orderRecommended(가용 ≤ 추세 주문점, 추세 주문점 ≥ 최소)도 반드시 참이라 부족 품목이 두 번 세졌고,
 // 알림 목록이 접어 두는 미가동 품목과 원장 점검(음수 창고) 품목까지 셌다. 알림과 같은 분기 순서로 센다.
 
+import { isPromotedProduct } from "./product"
+
 export interface StockAttentionRow {
   warehouseStock: number
   plannedOut: number
@@ -50,4 +52,45 @@ export function summarizeStockAttention(rows: readonly StockAttentionRow[]): Sto
     }
   }
   return { low, orderOnly, total: low + orderOnly, dormantLow, ledgerCheck }
+}
+
+export interface StockTotalsRow {
+  product: string
+  warehouseStock: number
+  availableStock: number
+}
+
+export interface StockTotalsSummary {
+  // 실판매 라인 합 — 판촉(promoted) 라인 제외. 카테고리 카드·사무실·샘플 풀 합계와 같은 기준.
+  warehouse: number
+  available: number
+  // 판촉 라인 합(창고·가용). 판촉 라인이 없으면 null.
+  promoted: { warehouse: number; available: number } | null
+}
+
+/**
+ * 홈 요약 밴드 "창고 재고·가용 재고" 합계(하드웨어 라운드 3 H-10). 예전 밴드는 서버 totals(판촉 포함)를 그대로 써서
+ * 판촉 라인의 원장 이상(예: STD1(promoted) −16)이 실판매 헤드라인을 깎았다 — 카드는 판촉을 따로 세는데 밴드만 달랐다.
+ */
+export function summarizeStockTotals(rows: readonly StockTotalsRow[]): StockTotalsSummary {
+  let warehouse = 0
+  let available = 0
+  let promotedWarehouse = 0
+  let promotedAvailable = 0
+  let hasPromoted = false
+  for (const row of rows) {
+    if (isPromotedProduct(row.product)) {
+      hasPromoted = true
+      promotedWarehouse += row.warehouseStock
+      promotedAvailable += row.availableStock
+    } else {
+      warehouse += row.warehouseStock
+      available += row.availableStock
+    }
+  }
+  return {
+    warehouse,
+    available,
+    promoted: hasPromoted ? { warehouse: promotedWarehouse, available: promotedAvailable } : null,
+  }
 }

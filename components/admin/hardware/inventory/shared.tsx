@@ -131,6 +131,13 @@ export interface HardwareMirrorState {
   rows: HardwareMirrorRowCounts
 }
 
+// 예정 출고 한 줄이 확정될 때 쓸 수 있는 lot 잔량(서버 buildPlannedLotAvailability). lots 는 FIFO 순,
+// tracked=false 는 lot 추적 대상이 아닌 품목(OPS·케이블 등).
+export interface PlannedLotAvailability {
+  lots: Array<{ lot: string; quantity: number }>
+  tracked: boolean
+}
+
 export interface HardwareDashboard {
   items: HardwareItem[]
   stock: HardwareStockRow[]
@@ -161,6 +168,8 @@ export interface HardwareDashboard {
   importCosting?: {
     recoveredFromRawCount: number
   }
+  // 하드웨어 라운드 3 H-3 — 예정 출고 행 id → 그 행을 뺀 lot 잔량(FIFO 순). 확정이 쓰는 잔량과 같다. 구응답은 없다.
+  plannedLotAvailability?: Record<string, PlannedLotAvailability>
   // 요청자별 필드 — API 라우트가 캐시된 대시보드 밖에서 매 요청 계산해 붙인다(Cache-Control private).
   // 없으면(구버전 응답·테스트) UI는 열어두고 서버 게이트만 믿는다.
   viewer?: {
@@ -636,26 +645,64 @@ export function shiftSelectRange(orderedIds: string[], anchorId: string, targetI
 export type PlannedFifoPreview =
   // 이미 lot이 지정된 행 — FIFO 계산 자체가 필요 없다.
   | { kind: "assigned"; label: string }
+  // 지정 lot 의 잔량(이 예약을 뺀 값)이 확정 수량보다 적다 — 서버 확정이 거절한다(allocateLotsFromBalances 의 지정 lot
+  // 검사). 하드웨어 라운드 3 H-3: 예전엔 "지정 lot H6"만 말해 누르고 나서야 거절을 알았다.
+  | { kind: "assigned-short"; label: string; available: number }
   // 이 품목의 재고 행(stockRow)을 못 찾음 — 드문 데이터 불일치, 계산 불가.
   | { kind: "unavailable" }
   // 이 품목은 애초에 lot 잔량 기록이 없다(OPS·케이블 등 lot 미운영 품목) — "부족"이 아니라
   // 애초에 추적 대상이 아니라는 뜻이라 별도 케이스로 구분한다.
   | { kind: "no-lot-records" }
-  // 정상 FIFO 계산 — matchedText는 실제 배정될 lot·수량 문자열, unassignedQty는 lot으로 못
+  // 정상 FIFO 계산 — plan은 실제 배정될 lot·수량(FIFO 순), matchedText는 그 문자열, unassignedQty는 lot으로 못
   // 채워 "로트 미지정"으로 기록될 나머지 수량(0이면 전량 lot 배정됨).
-  | { kind: "fifo"; matchedText: string; unassignedQty: number }
+  | { kind: "fifo"; matchedText: string; unassignedQty: number; plan: Array<{ lot: string; quantity: number }> }
 
+/**
+ * 예정 출고 한 줄의 확정 배정 미리보기.
+ *
+ * availability(대시보드 plannedLotAvailability — 그 줄을 뺀 lot 잔량, FIFO 순)가 있으면 **확정과 같은 입력**으로 계산한다
+ * (하드웨어 라운드 3 H-3). 없으면(품목 id 없는 줄·구응답) 예전처럼 품목 잔량(stockRow.lotBalances)으로 어림한다 —
+ * 그 값은 이 줄의 예약까지 이미 뺀 잔량이라 lot 을 모자라게 말할 수 있다.
+ */
 export function resolvePlannedFifoPreview(
   movement: Pick<HardwareMovement, "lot_no">,
   stockRow: HardwareStockRow | undefined,
-  quantity: number
+  quantity: number,
+  availability?: PlannedLotAvailability | null
 ): PlannedFifoPreview {
-  if (movement.lot_no) return { kind: "assigned", label: formatLotLabel(movement.lot_no) ?? movement.lot_no }
+  const explicitLot = movement.lot_no?.trim() || null
+  if (explicitLot) {
+    const label = formatLotLabel(explicitLot) ?? explicitLot
+    if (!availability) return { kind: "assigned", label }
+    // 서버와 같은 비교 — 지정 lot 문자열 그대로(allocateLotsFromBalances: lots.find(lot.lotNo === explicitLotNo)).
+    const available = availability.lots.find((lot) => lot.lot === explicitLot)?.quantity ?? 0
+    return available < quantity ? { kind: "assigned-short", label, available } : { kind: "assigned", label }
+  }
+  if (availability) {
+    if (!availability.tracked) return { kind: "no-lot-records" }
+    return fifoPreviewFromPlan(allocateLotsInOrder(availability.lots, quantity))
+  }
   if (!stockRow) return { kind: "unavailable" }
   if (stockRow.lotBalances.length === 0) return { kind: "no-lot-records" }
-  const { plan, shortage } = previewFifoLots(stockRow.lotBalances, quantity)
+  return fifoPreviewFromPlan(previewFifoLots(stockRow.lotBalances, quantity))
+}
+
+// 이미 FIFO 순인 lot 잔량을 앞에서부터 쓴다 — 서버 allocateLotsFromBalances 와 같은 루프(다시 정렬하지 않는다).
+function allocateLotsInOrder(lots: ReadonlyArray<{ lot: string; quantity: number }>, quantity: number) {
+  let remaining = Math.max(0, Math.floor(quantity))
+  const plan: Array<{ lot: string; quantity: number }> = []
+  for (const lot of lots) {
+    if (remaining <= 0) break
+    const next = Math.min(remaining, lot.quantity)
+    if (next > 0) plan.push({ lot: lot.lot, quantity: next })
+    remaining -= next
+  }
+  return { plan, shortage: remaining }
+}
+
+function fifoPreviewFromPlan({ plan, shortage }: { plan: Array<{ lot: string; quantity: number }>; shortage: number }): PlannedFifoPreview {
   const matchedText = plan.map((lot) => `${formatLotLabel(lot.lot) ?? lot.lot} ${formatNumber(lot.quantity)}대`).join(" · ")
-  return { kind: "fifo", matchedText, unassignedQty: shortage }
+  return { kind: "fifo", matchedText, unassignedQty: shortage, plan }
 }
 
 // 일괄 체크(감사 2026-09-14) 실행 결과·진행률 타입 — PlannedOutboundPanel(선택 UI 소유)과
