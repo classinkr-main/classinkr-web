@@ -26,6 +26,15 @@ vi.mock("@/lib/server/security-tokens", () => ({
   createEmailClickUrl: vi.fn((_base: string, _id: string, url: string) => url),
   createUnsubscribeUrl: vi.fn(() => "https://classin.kr/unsubscribe"),
 }))
+// 직접 입력 발송은 수신거부 목록을 읽는다(2026-09-25 해지자 제외) — 여기서는 해지자가 없는 빈 목록.
+// 해지자 제외·조회 실패 동작은 tests/api/admin-email-send-segment-guard.test.ts 가 고정한다.
+vi.mock("@/lib/messaging/marketing-consent", () => ({
+  loadLeadMarketingConsentIndex: vi.fn(async () => ({
+    subscriberStatusByEmail: new Map<string, "active" | "blocked">(),
+    profileConsentEmails: new Set<string>(),
+  })),
+  isEmailUnsubscribed: vi.fn(() => false),
+}))
 
 import { POST } from "@/app/api/admin/email/send/route"
 

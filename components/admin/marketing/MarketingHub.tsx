@@ -38,7 +38,8 @@ import {
   TabLoadingSkeleton,
   formatDateTime,
 } from "@/components/admin/marketing/tabs/tab-ui"
-import type { PreSendCheck } from "@/components/admin/marketing/send-center-types"
+import type { AudienceMode, PreSendCheck } from "@/components/admin/marketing/send-center-types"
+import { buildVariableCheck } from "@/components/admin/marketing/presend-review"
 import { unwrapMessagingData, type MessagingStatus } from "@/lib/messaging-client-types"
 import type { EmailCampaign, EmailDraft, SavedEmailSegment, Subscriber } from "@/lib/marketing-types"
 import type {
@@ -49,6 +50,8 @@ import type {
   CreateTemplateRequest,
 } from "@/lib/automation-types"
 import type { MessagePrefill } from "@/lib/message-prefill"
+import type { SegmentHandoff } from "@/lib/crm/segment-handoff"
+import { SEGMENT_SEND_PREVIEW_ONLY_TOAST } from "@/lib/crm/segment-audience"
 
 // ── 탭 청크 분할 — 기본 탭(subscribers)만 정적 번들에 남기고, compose(SendCenter)·
 //    history·automation 패널은 활성 탭 진입 시에만 청크를 로드한다. 상태·핸들러는
@@ -221,11 +224,20 @@ interface MarketingHubProps {
   recipientPrefill?: MessagePrefill | null
   /** 프리필을 적용(소모)한 직후 호출 — 부모가 상태를 비워 허브 재마운트 시 재적용을 막는다. */
   onRecipientPrefillConsumed?: () => void
+  /**
+   * CRM 세그먼트 허브에서 넘어온 저장 세그먼트 id(?segment=) — 마운트 시 1회만 캡처해 발송 작성 탭을
+   * 고객 세그먼트(CRM) 모드로 연다. 대상 미리보기·테스트 발송만 되고 세그먼트 실발송은 막혀 있다(2026-09-25 1단계).
+   */
+  segmentHandoff?: SegmentHandoff | null
+  /** 넘김을 적용(소모)한 직후 호출 — 부모가 상태를 비운다. */
+  onSegmentHandoffConsumed?: () => void
 }
 
 export default function MarketingHub({
   recipientPrefill: recipientPrefillProp,
   onRecipientPrefillConsumed,
+  segmentHandoff: segmentHandoffProp,
+  onSegmentHandoffConsumed,
 }: MarketingHubProps) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<Tab>("subscribers")
@@ -254,6 +266,23 @@ export default function MarketingHub({
     setActiveTab("compose")
     onRecipientPrefillConsumed?.()
   }, [recipientPrefill, onRecipientPrefillConsumed])
+
+  // 고객 세그먼트(CRM) 넘김 — 수신자 프리필과 같은 one-shot 패턴. 마운트 시점 값(또는 늦게 도착한 첫 값)만 받고,
+  // 발송 센터에서 "세그먼트 해제"를 누르면 여기서 사라진다(다시 채워지지 않는다).
+  const [segmentHandoff, setSegmentHandoff] = useState<SegmentHandoff | null>(() => segmentHandoffProp ?? null)
+  const segmentHandoffAppliedRef = useRef(false)
+
+  useEffect(() => {
+    if (!segmentHandoffProp || segmentHandoffAppliedRef.current) return
+    setSegmentHandoff(segmentHandoffProp)
+  }, [segmentHandoffProp])
+
+  useEffect(() => {
+    if (!segmentHandoff || segmentHandoffAppliedRef.current) return
+    segmentHandoffAppliedRef.current = true
+    setActiveTab("compose")
+    onSegmentHandoffConsumed?.()
+  }, [segmentHandoff, onSegmentHandoffConsumed])
   const [subscribers, setSubscribers] = useState<Subscriber[]>([])
   const [campaigns, setCampaigns] = useState<EmailCampaign[]>([])
   const [campaignsLoading, setCampaignsLoading] = useState(false)
@@ -848,36 +877,8 @@ export default function MarketingHub({
       // 변수 치환 가능성 — 발송 백엔드(replacePlaceholders)는 {name}/{org}/{role}만 치환한다.
       // 그 밖의 {token}과 {ai:} 블록은 글자 그대로 나가므로 경고, org/role 빈 값은
       // 공백("")으로 발송되므로 대상 기준 빈 값 수를 정직하게 알린다.
-      const knownVariableKeys = ["name", "org", "role"] as const
-      const draftText = `${draft.subject} ${draft.body}`
-      const tokenKeys = Array.from(draftText.matchAll(/\{([a-zA-Z_]+)\}/g)).map((m) => m[1])
-      const usedKnown = knownVariableKeys.filter((key) => tokenKeys.includes(key))
-      const unknownTokens = Array.from(new Set(tokenKeys.filter((key) => !knownVariableKeys.includes(key as (typeof knownVariableKeys)[number]))))
-      const hasAiBlock = /\{ai:/i.test(draftText)
-      const emptyValueNotes: string[] = []
-      if (usedKnown.includes("org")) {
-        const empties = draftRecipients.filter((s) => !(s.org ?? "").trim()).length
-        if (empties > 0) emptyValueNotes.push(`{org} 빈 값 ${empties}명`)
-      }
-      if (usedKnown.includes("role")) {
-        const empties = draftRecipients.filter((s) => !(s.role ?? "").trim()).length
-        if (empties > 0) emptyValueNotes.push(`{role} 빈 값 ${empties}명`)
-      }
-      const variableCheck: PreSendCheck = {
-        key: "variables",
-        label: "변수 치환",
-        status: unknownTokens.length > 0 || hasAiBlock ? "warning" : usedKnown.length === 0 ? "info" : "ok",
-        detail:
-          unknownTokens.length > 0
-            ? `치환되지 않는 변수 ${unknownTokens.map((t) => `{${t}}`).join(", ")} — 글자 그대로 발송됩니다.`
-            : hasAiBlock
-              ? "AI 블록({ai:})은 이 발송 경로에서 치환되지 않습니다."
-              : usedKnown.length === 0
-                ? "변수 미사용 — 모든 수신자에게 동일한 내용이 발송됩니다."
-                : emptyValueNotes.length > 0
-                  ? `변수 ${usedKnown.length}종 치환 가능 · ${emptyValueNotes.join(" · ")} — 빈 값은 공백으로 발송됩니다.`
-                  : `사용한 변수 ${usedKnown.length}종 모두 치환 가능합니다.`,
-      }
+      // 규칙은 presend-review.ts 한 곳 — 고객 세그먼트(CRM) 모드는 발송 센터가 같은 함수를 대상 없이 다시 부른다.
+      const variableCheck: PreSendCheck = buildVariableCheck(draft, draftRecipients)
 
       const checks: PreSendCheck[] = [
         {
@@ -1230,7 +1231,16 @@ export default function MarketingHub({
     showToast("success", `${subscriber.name} 기준으로 발송 초안을 열었습니다.`)
   }, [showToast])
 
-  const handleSendEmail = async (data: EmailDraft & { directEmails?: string[] }) => {
+  const handleSendEmail = async (
+    data: EmailDraft & { directEmails?: string[] },
+    context?: { audienceMode?: AudienceMode }
+  ) => {
+    // 고객 세그먼트(CRM) 모드는 미리보기만 — 태그 발송(targetTags [] = 전체 활성 구독자)으로 떨어뜨리지 않는다.
+    // 발송 센터 CTA 도 비활성이고 서버도 세그먼트 요청을 400 으로 거절한다(삼중 방어).
+    if (context?.audienceMode === "segment") {
+      showToast("error", SEGMENT_SEND_PREVIEW_ONLY_TOAST)
+      return
+    }
     // 직접 입력 모드면 audience 체크 스킵
     const isDirectMode = Array.isArray(data.directEmails) && data.directEmails.length > 0
 
@@ -1270,14 +1280,19 @@ export default function MarketingHub({
         setComposerDraft({ ...EMPTY_DRAFT })
         setDraftNotice(null)
         setActiveTab("history")
+        // 직접 입력에서 수신거부(해지) 주소를 서버가 뺐으면 함께 알린다(건수만 온다).
+        const excludedNote =
+          typeof result.excludedUnsubscribed === "number" && result.excludedUnsubscribed > 0
+            ? ` · 수신거부 ${result.excludedUnsubscribed}명 제외`
+            : ""
         if (typeof result.failedCount === "number" && result.failedCount > 0) {
           // 부분 실패를 성공 토스트로 덮지 않는다(2026-08-18) — 이력에서 오류 상세 확인 가능.
           showToast(
             "error",
-            `${result.recipientCount}명 발송 · ${result.failedCount}명 실패 — 이력에서 오류를 확인하세요.`
+            `${result.recipientCount}명 발송 · ${result.failedCount}명 실패${excludedNote} — 이력에서 오류를 확인하세요.`
           )
         } else {
-          showToast("success", `${result.recipientCount}명에게 발송되었습니다.`)
+          showToast("success", `${result.recipientCount}명에게 발송되었습니다.${excludedNote}`)
         }
       } else if (result.status === "failed") {
         await fetchCampaigns()
@@ -1597,6 +1612,8 @@ export default function MarketingHub({
             messagingStatusLoaded={messagingStatusLoaded}
             recipientPrefill={recipientPrefill}
             onClearRecipientPrefill={() => setRecipientPrefill(null)}
+            segmentHandoff={segmentHandoff}
+            onClearSegmentHandoff={() => setSegmentHandoff(null)}
             draftNotice={draftNotice}
             activeSegment={activeSegment}
             hasDraft={!!hasComposerDraft}

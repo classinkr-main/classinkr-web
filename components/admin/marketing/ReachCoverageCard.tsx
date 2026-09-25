@@ -9,18 +9,22 @@
  * - "어떤 채널로도 닿지 않는 대상" = 이메일·휴대폰이 모두 빈 수신자 — 0이 아니면
  *   앰버로 정직하게 보여준다.
  * - 직접 입력 모드는 구독자 DB 밖 수신자라 커버리지 바 대신 파싱 결과만 보여준다.
+ * - 고객 세그먼트(CRM) 모드(발송 1단계, 2026-09-25)는 발송 센터가 이 카드 대신 SegmentAudienceCard 를 그린다.
+ *   여기서는 CRM 에서 넘겨받은 세그먼트가 있을 때만(segmentAvailable) 모드 토글에 "고객 세그먼트" 칸을 보인다.
  */
 
 import { useState } from "react"
 import { CheckCircle2, ChevronDown, Pencil, TriangleAlert } from "lucide-react"
 import type { SavedEmailSegment, Subscriber } from "@/lib/marketing-types"
+import { CRM_SEGMENT_AUDIENCE_LABEL } from "@/lib/crm/segment-audience"
+import type { AudienceMode } from "./send-center-types"
 import TagSelector from "./TagSelector"
-
-type AudienceMode = "tags" | "direct"
 
 interface Props {
   audienceMode: AudienceMode
   onAudienceModeChange: (mode: AudienceMode) => void
+  /** CRM 세그먼트 허브에서 넘겨받은 세그먼트가 있는가 — 있을 때만 "고객 세그먼트" 모드 칸을 보인다 */
+  segmentAvailable?: boolean
   targetTags: string[]
   onTagsChange: (tags: string[]) => void
   countMap?: Record<string, number>
@@ -64,6 +68,7 @@ function CoverageBar({
 export default function ReachCoverageCard({
   audienceMode,
   onAudienceModeChange,
+  segmentAvailable = false,
   targetTags,
   onTagsChange,
   countMap,
@@ -88,6 +93,13 @@ export default function ReachCoverageCard({
 
   // 빠른 적용 칩 — 현재 적용 중인 세그먼트는 이미 헤더 칩으로 보이므로 제외
   const quickSegments = savedSegments.filter((s) => s.id !== activeSegment?.id).slice(0, 3)
+
+  // 대상 모드 칸 — 고객 세그먼트(CRM)는 넘김이 있을 때만.
+  const modeOptions: Array<{ key: AudienceMode; label: string }> = [
+    { key: "tags", label: "태그 필터" },
+    { key: "direct", label: "직접 입력" },
+    ...(segmentAvailable ? [{ key: "segment" as const, label: CRM_SEGMENT_AUDIENCE_LABEL }] : []),
+  ]
 
   return (
     <section className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
@@ -124,6 +136,10 @@ export default function ReachCoverageCard({
               <ChevronDown className={`h-3 w-3 transition-transform ${tagEditorOpen ? "rotate-180" : ""}`} />
             </button>
           </>
+        ) : audienceMode === "segment" ? (
+          <span className="rounded-full bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-semibold text-[#084734]">
+            {CRM_SEGMENT_AUDIENCE_LABEL}
+          </span>
         ) : (
           <span className="rounded-full bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-semibold text-[#084734]">
             직접 입력 {directEmails.length}명
@@ -137,10 +153,7 @@ export default function ReachCoverageCard({
 
       {/* 대상 모드 토글 — EmailComposer의 태그/직접 입력 이원 구조를 그대로 승계 */}
       <div className="flex border-b border-[#e8e8e4]">
-        {([
-          { key: "tags", label: "태그 필터" },
-          { key: "direct", label: "직접 입력" },
-        ] as const).map((mode) => (
+        {modeOptions.map((mode) => (
           <button
             key={mode.key}
             type="button"
@@ -191,6 +204,10 @@ export default function ReachCoverageCard({
               커버리지는 활성(active) 대상 {total}명 기준 — 수신거부는 발송 시 자동 제외됩니다.
             </p>
           </>
+        ) : audienceMode === "segment" ? (
+          <p className="text-[12px] text-[#1a1a1a]/55">
+            CRM 에서 넘겨받은 고객 세그먼트 — 대상 미리보기와 테스트 발송만 됩니다.
+          </p>
         ) : (
           <>
             <p className="text-[11px] font-medium text-[#1a1a1a]/40">
