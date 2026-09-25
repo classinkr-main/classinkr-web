@@ -43,6 +43,8 @@
 Overview는 로그인·`/admin` 착지 화면이라 숨길 수 없다(`UNHIDEABLE_NAV_HREFS`).
 
 `admin_profiles.nav_overrides`(`primary`·`folded`·`hidden`)는 그 자리를 사람별로 바꾸는 취향 설정이다.
+CRM 하위 탭은 같은 컬럼에 `crm:<href>` 키(`hidden`·`shown`)로 저장한다 — 기록·입력함·태그가 전원 기본 숨김이고,
+현황·고객DB(통합)·검수는 숨길 수 없다([탭 재구성 §16](admin-tab-restructure-2026-07-29.md)).
 본인은 사이드바의 "사이드바 편집"(또는 ⌘K "내 사이드바 편집", `PATCH /api/admin/me/nav`)으로,
 SUPER_ADMIN은 설정 › 회원으로 편집한다. 레거시 `deny` 값은 `folded`로 읽는다(숨김으로 옮기지 않는다).
 `nav_preset` 컬럼은 레거시다 — 값은 검증만 하고 화면을 가르지 않는다.

@@ -530,9 +530,86 @@ B를 권하는 이유: Home이 유일하게 가진 데이터(NEO 계정·하드�
 
 | 결정 | 영향 항목 |
 |---|---|
-| 3안 중 방향 | A: 입력 화면 기본 숨김 확대 / B: 계정 케어 보조탭·계정 연락 주기·케어 발송 / C: 오늘 연락 콕핏·세그먼트 허브 |
+| 3안 중 방향 — **결정됨(2026-09-25): A안 기본 + C안 ①②, §16** | A: 입력 화면 기본 숨김 확대 / B: 계정 케어 보조탭·계정 연락 주기·케어 발송 / C: 오늘 연락 콕핏·세그먼트 허브 |
 | 연락 주기 숫자(신규 리드 첫 연락·연락중 리드·데모 후·기존 계정·만료 전 간격) | CT5·CT6·CT7 |
-| 저장 세그먼트 위치(URL·localStorage / `crm_saved_segments` 테이블) | SG11·SG12, 자동 태그 T5·SG13 |
-| 세그먼트 → 발송(동의 수신자만, 실행당 상한·멱등 키·드라이런) | SG10 — 문자 "(광고)" 표기·야간 차단·문자 수신 동의 필드 정책 선행 |
+| 저장 세그먼트 위치 — **결정됨: `crm_saved_segments` 테이블 + 일별 기록, 자동 태그 구현(§16)** | SG11·SG12, 자동 태그 T5·SG13 |
+| 세그먼트 → 발송 — **1단계 구현(미리보기·넘기기, §16)**, 2·3단계 대기 | SG10 — 문자 "(광고)" 표기·야간 차단·문자 수신 동의 필드 정책 선행 |
 | NEO 담당 이관(승인 큐 초안) | SG9 — R9(ownerId 매핑) 선행 |
 | CRM 입력 계열(R2·R3·R5·C4·D6→R7) | 사용 0 — 방향 결정 전 투자 동결 |
+
+## 16. 2026-09-25 방향 결정 — A안 기본 + C안 ①② (Compass 관계는 기존 방식)
+
+사용자 결정: "기본적인 기능 A안으로 진행, C안의 1,2 추가. 관계도는 우선 기존 방식으로." — §15.2 의 A안(Compass 거울)을 기본으로 하고, C안의 ① 현황 "오늘 연락"과 ② 고객DB "세그먼트 허브"를 더한다. Compass 와의 관계는 지금처럼 단방향 읽기(어드민은 Compass `crm` 스키마에 쓰지 않는다)이고, C안 ③ 연락 주기 규칙·④ 양방향 연동은 이번 범위가 아니다. 조사 7건 → 계약 고정 → 8개 클러스터 병렬 구현(클러스터마다 적대 리뷰·수정) → 교차 검증 순서로 진행했다.
+
+### 16.1 결정 기본값 (열린 질문에 대한 통합 담당 결정 — 바꾸려면 이 표를 고친다)
+
+| 영역 | 결정 |
+|---|---|
+| 오늘 연락 — 원천 | 우선순위 추천(bucket=today)·리드 팔로업·할 일(기한 도래·지난 것)·Compass 다음 액션(지난 14일까지, 더 오래된 건 건수만)·NEO 만료/소진(엔진 bucket=today)·재문의(재유입 후 미연락). 리드↔NEO 확정 링크 병합은 하지 않는다 |
+| 오늘 연락 — 행동 | Compass 매칭 리드·Compass 전용 행 = "Compass에서 열기"만. NEO 계정·전환 고객·딜 = Home 에서 결과 → 다음 일정. Compass 에 없는 리드·NEO 등록 확정 리드 = Home 기록(360·리드 보드와 같은 `lib/crm/write-surface.ts` 판정). 결과 어휘는 기존 enum(연결됨·부재·콜백 요청·미팅 확정, 카톡·이메일은 결과 없음). NEO 다음 일정 제목은 사유 기반, 담당은 저장한 사람 |
+| 오늘 연락 — 진행률 | 스키마 없이 추정(approximate — 아침 목록을 저장하지 않는다). 정확한 분모가 필요하면 일별 스냅샷 테이블이 필요하다(결정 대기) |
+| 오늘 연락 — 주변 패널 | 주간 할 일 패널은 홈에서 "내일 이후 예정"만, Compass 밴드 임박 목록은 오늘 끝 이후만. 옛 "오늘 전화" 큐 패널은 삭제, 큐 라우트·`getCrmPriorityQueue`(인사이트·매니저 리포트)는 유지 |
+| 세그먼트 허브 | 저장 세그먼트(팀 공유/내 것 — "내 것"은 소유자만, SUPER_ADMIN 포함 비노출), 스펙 v1 = 세그먼트 조건만, OR 한 단계(기본 AND ∧ 그룹 OR, 그룹 ≤5)·허브에서만 편집(통합 목록은 `or=` 를 받아 보여 주기만), 일별 건수 180일·8주 추이 |
+| 자동 태그 | 매일 KST 06:00 — 디스패처 `/api/cron/dispatch/[slot]` UTC 슬롯 21 에 편승(새 크론 없음). 켜기·적용은 관리자(SUPER_ADMIN·ADMIN)만, 팀 공유 세그먼트만. NEO 조건 세그먼트는 NEO 가 오래되면 건너뜀. 떼기 기본 끔, 보관하면 멈추고 붙은 태그는 둔다. 세그먼트당 1,000명·실행당 20개·급변 가드(전날 20명 이상에서 3배/3분의 1)·떼기 상한 max(50, 직전 50%). 마커 `created_by = auto:seg:<id>` — 수동 태그는 절대 지우지 않는다 |
+| 세그먼트 → 행동 | 태그(tags/bulk)·오늘 연락에 넣기(tasks/bulk, "[세그먼트] <이름>", 기한 오늘 18:00 KST, 담당 비움)·CSV(관리자)·담당 배정(리드만, NEO 는 외부 CRM 소유) |
+| 메시지 발송(SG10) | **1단계만**: 대상 미리보기(이메일 = 활성 구독자만, 프로필 동의만 있는 사람 제외, 문자 0명 "정책 결정 대기") + 메시지 탭으로 세그먼트 id 만 넘기기. 세그먼트 실발송은 서버 400(`segment_send_not_enabled`)·화면 비활성. 이메일 직접 입력 분기에서 해지자 제외 |
+| CRM 하위 탭 숨김 | 키 `crm:<href>`, 값 hidden·shown. 숨김 불가 = 현황·고객DB(통합)·검수. 전원 기본 숨김 = 기록·입력함·태그. CrmSubnav 에 "숨긴 탭 N · 보기", 그 화면에 있으면 강제 표시, ⌘K·주소로는 그대로 열림. 세그먼트 보조탭은 원천 고객 뒤·지도 앞 |
+| 고객 360·리드 | Compass 매칭 리드(단계 무관): 주 행동 "Compass에서 열기", Home 컴포저는 "Home에 따로 남기기"로 접음(작성 중 초안은 숨기지 않음). Compass 없는 리드·NEO·전환 고객·NEO 등록 확정 리드: Home 컴포저가 주 행동. 콜(tel)은 보조 유지 |
+
+### 16.2 구현
+
+- **현황 "오늘 연락"**: `GET /api/admin/crm/home/today-contacts`(목록·진행률·원천 상태), `POST·DELETE /api/admin/crm/home/today-contacts/outcome`(결과 기록·되돌리기 — 계정은 `crm_customer_events`(sourceId `today-contact:<requestId>`, 멱등) + `crm_tasks`, 리드는 `recordLeadContact` + `follow_up_at`). 순수 병합 `lib/crm/today-contact-queue.ts`, 원천 조립 `lib/repositories/crm-today-contacts.ts`(후보 풀은 우선순위 큐 스냅샷 재사용, Compass 는 캐시 밖 — 끊기면 `sources.compass` 로만), 계약 `lib/crm/today-contact-types.ts`. 브리지 추가: `getCompassNextActionsInRange`·`getCompassLeadIndexByPhoneKeys`. 화면 `CrmTodayContactsPanel`(진행률·담당 `?owner=`·원천 칩·10행 + 더 보기·메타 밴드·낙관 오버레이 + 8초 되돌리기).
+- **세그먼트 허브**: `/admin/crm/customers/segments`, `GET·POST /api/admin/crm/segments`, `GET·PATCH·DELETE /segments/[id]`(보관·복구), `POST /segments/[id]/run`(dryRun 기본), `GET /segments/[id]/members`. 평가 `evaluateCrmSegmentFilters`(스냅샷 1회로 N개), OR 필터 `lib/crm/customer-segment-filter.ts`, 규칙 `lib/crm/saved-segments.ts`, 저장 `lib/repositories/crm-saved-segments.ts`, 매일 잡 `lib/server/crm-segment-daily.ts`. 표 미적용이면 목록 200 `available:false`·쓰기 503·크론 skipped.
+- **발송 1단계**: `POST /api/admin/crm/customers/audience-preview`(저장 전 조건), `GET /api/admin/crm/segments/[id]/audience-preview`, 동의 인덱스 `lib/messaging/marketing-consent.ts`(자동화 엔진이 재수출), 넘기기 `lib/crm/segment-handoff.ts`(`/admin/campaigns?tab=email&segment=<id>`), 메시지 탭 `SegmentAudienceCard`.
+- **통합 고객(A안)**: 리드 행 "Compass에서 열기"(행 `compass` 참조 — 전화 키 비노출, 조회 실패는 `meta.compassRefs="down"` 캡션), NEO 동기화 경고 띠, `or=` URL 표시("OR 조건 포함 — 세그먼트 허브에서 편집"), 쿼리 파서 `lib/crm/unified-query-options.ts`.
+- **360·리드 보드**: 공용 판정 `lib/crm/write-surface.ts`, `C360WriteSurfaceBar`, 리드 보드 입력 `GET /api/admin/crm/leads/neo-registered`(NEO 등록 확정 리드 id, 읽기 전용), 기록 탭 리드 포커스 안내 바, 드로어 "리드 시절" 칩.
+- **CRM 하위 탭 숨김**: `CRM_CUSTOMERS_CHILD_NAV`(admin-nav.ts), `crm:` 키 정규화·판정(admin-nav-access.ts), `admin-nav-preferences-context.tsx`, 편집기 하위 탭 섹션.
+- 역할 매트릭스 84 핸들러(새 13개 모두 CRM 스태프 가드 — 세부 권한은 라우트 안에서 판정).
+
+### 16.3 운영 반영 전 필요한 것
+
+1. 서울 프로젝트에 `supabase/migrations/20260925_crm_saved_segments.sql` 적용 + `npm run check:db`(적용 전에는 허브만 "미적용" 안내로 강등).
+2. 자동 태그를 처음 켜기 전 `GET /api/cron/dispatch/21?dryRun=true`(크론 인증) 의 `segmentsPreview` 확인.
+3. NEO 자동 동기화 env 복구 — 안 되면 NEO 조건 세그먼트 자동 태그는 계속 건너뛰고, 오늘 연락 계정 행은 "NEO 값 08-28 기준" 캡션으로 뜬다.
+
+### 16.4 남긴 것
+
+- 발송 2단계(이메일 세그먼트 실발송): `POST /api/admin/email/send {mode:"segment", segmentId, subject, body, expected:{eligible, generatedAt}}` — 서버가 대상을 다시 계산, 활성 구독 행만, 500명 상한(409 `recipient_cap_exceeded`), 대상 변동 409 `audience_changed`, 10분 중복 가드·멱등 키, 기본 dryRun 응답 + 두 번째 확인에서만 실발송, `logAdminAudit("crm.segment.message_send")`, 선택 `email_campaigns.segment_id`. 3단계(문자)는 문자 수신 동의 필드·"(광고)" 표기·무료 수신거부·야간 규칙 결정 뒤.
+- 수신거부 경로 보강(별도 과제): 구독 행이 없을 때의 수신거부가 프로필 동의를 끄지 못함, 구독 upsert 가 해지 상태를 덮을 수 있음, 테스트 모드(`testEmail` 한 주소) 해지자 미확인, 이메일 드라이런 스위치 부재. (aiPersonalized 이메일 분기의 해지자 제외는 2026-09-26 교차 검증 수정에서 반영)
+- 저장 전 조건의 발송 미리보기 화면 호출부(POST 라우트는 준비됨), 통합 행 Compass 참조를 `getCompassLeadIndexByPhoneKeys` 로 바꾸는 성능 개선, CRM 홈 빠른 실행 "기록 추가" 버튼(기록 탭 기본 숨김과 겹침) 판단, Compass 밴드의 "오늘 이후" 목록을 서버가 내려주기.
+- 연락 주기 규칙(CT5·CT7 — C안 ③)은 여전히 숫자 결정 대기.
+- 결정 대기(2026-09-26 교차 검증에서 나온 것):
+  - 고객 360 추천 카드 "Home 할 일 추가"는 기한·우선순위 없이 할 일을 만들어 오늘 연락에 뜨지 않는다. 세그먼트처럼 기한(오늘 18:00)을 넣을지 정한다.
+  - 세그먼트 "오늘 연락에 넣기"가 Compass 매칭 리드에도 Home 할 일을 만든다. 행에서 닫을 수는 있다. 제외할지, 안내만 붙일지 정한다.
+  - 360 "CS 동선 · 원클릭"(Home 할 일 생성)에도 "Home 에만 저장" 캡션을 붙일지 정한다(지금은 할 일 추가 폼에만 있다).
+  - 세그먼트 할 일로 뜬 전환 고객 행의 담당은 원천에 owner 가 없어 "미배정"이다.
+- 알려진 위험(수용): 계정 결과의 동시 재전송 경합(`today-contact:%` 부분 유니크 인덱스 없음 — 스키마 추가 없음 결정). 미루기 중복 판정은 requestId 가 아니라 대상·기한 2분 창이다. 통합 고객 스냅샷은 리드 행마다 약 50B 늘었다(Data Cache 2MB 한도 대비 운영 데이터로 한 번 잴 것).
+
+### 16.5 교차 검증·수정 라운드 (2026-09-26)
+
+구현 8개 클러스터를 서로 다른 렌즈로 교차 검증했다. 결함 37건 중 30건이 확정됐고, 4묶음(오늘 연락 서버·화면, 세그먼트, 기타)으로 고친 뒤 수정마다 적대 검증 → 재수정했다. 남은 요청은 3묶음 후속 수정 → 검증 → 재수정으로 닫았다. 주요 변경:
+
+- **오늘 연락 서버**:
+  - 보조 원천 실패가 캐시를 옛 스냅샷에 고정하지 않는다(`home-aux-v2` — 던지지 않고 메타로만 알림). 강등 응답은 `no-store`.
+  - 할 일 기한 도래는 `listCrmTasksDueForToday`(페이지네이션, 2,000 상한 + 잘림 표시)로 읽는다.
+  - 리드 결과 로그 id 는 requestId 로 정해진다(SHA-256 → UUID v5 모양) — 재전송은 첫 요청의 닫은 할 일·다음 일정을 돌려준다.
+  - 되돌리기는 요청자 자신의 10분 이내 기록만 허용한다(그 밖은 409).
+  - Compass 전용 행은 전화 키로 묶는다. 접은 리드는 진행률 분모에만 넣고 `truncated.totalRows`(행 수)는 따로 싣는다.
+  - Compass 가 맡은 사유가 남은 행은 Home 할 일 흔적(완료·미루기)으로 "처리됨"이 되지 않는다.
+  - 할 일 쓰기는 오늘 연락 캐시를 즉시 만료하고, force 조회는 할 일 캐시를 우회한다.
+- **오늘 연락 화면**:
+  - 강등 응답은 보여 주되 요청 캐시에 심거나 남기지 않는다.
+  - "불러오지 않은 N건"은 행 수로 센다(오버레이 이중 계산 제거).
+  - 재전송 내용 불일치 경고는 한 번만 보인다.
+  - 되돌리기 409 는 재시도 없이 안내하고, 포커스를 행으로 옮긴다.
+  - 할 일 커버리지 규칙은 행 모양과 무관하게 적용한다.
+- **세그먼트**:
+  - RLS 는 deny-all(정책 없음)이다. 마커 인덱스는 `(created_by, id)` 일반 인덱스다.
+  - 급변 가드는 NEO·Compass·원천이 복구된 첫날 하루 보류한다(라벨 "건너뜀 — 건수 급변·비교 기준 없음(하루 보류)").
+  - 사람이 이름을 바꾸거나 병합하면 마커 행이 사람 소유로 넘어간다(태그 PATCH 응답 `claimedAutoTags`).
+  - 허브 미리보기의 Compass 링크는 통합 목록과 같은 공용 판정(`UnifiedCompassLink`)을 쓰고, `ContactSourceCaption` 으로 "연결 끊김"과 "매칭 없음"을 구분한다.
+- **통합·360**:
+  - 리드 행에 `leadStatus`·`neoAccountConfirmed`(external_account 확정만)를 싣는다. 서버가 등록 여부를 알려 주면 목록은 `/leads/neo-registered` 전체 조회를 건너뛴다.
+  - 드로어 할 일 추가 폼에 "Home 에만 저장" 캡션을 붙였다.
+  - 이메일 aiPersonalized 분기에서도 해지자를 뺀다.
+- 게이트(브랜치 끝): `typecheck` 0 · eslint 0 · vitest 793 파일 / 7,433 건 · `build`(postbuild 포함) 통과.
