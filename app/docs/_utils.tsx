@@ -31,42 +31,42 @@ const categoryNavCopy: Partial<
   updates: {
     label: "업데이트",
     scope: "변경",
-    summary: "새 기능과 변경 사항을 확인합니다.",
+    summary: "새 버전에서 달라진 기능과 화면",
   },
   start: {
     label: "시작하기",
     scope: "처음 시작",
-    summary: "설치, 회원 가입, 비밀번호 변경을 빠르게 확인합니다.",
+    summary: "설치, 회원 가입, 비밀번호 변경, 도입 전에 묻는 질문",
   },
   software: {
     label: "소프트웨어",
     scope: "기능",
-    summary: "수업 도구, 학습 활동, LMS, AI 기능을 봅니다.",
+    summary: "교실과 판서 도구, 숙제·시험 같은 학습 활동, AI 튜터와 AI 평가, 요금제",
   },
   admin: {
     label: "관리자",
     scope: "운영",
-    summary: "코스, 교사, 학생, 스토리지 관리를 점검합니다.",
+    summary: "기관 설정, 교사·학생 추가, 코스 개설, 스토리지와 통계",
   },
   teacher: {
     label: "교사",
     scope: "수업",
-    summary: "코스 생성, 학습 활동, 교실 설정을 확인합니다.",
+    summary: "코스 만들기, 학습 활동 추가, 교실 설정, 수업 자료 관리",
   },
   student: {
     label: "학생",
     scope: "학습",
-    summary: "코스 참여, 수업 듣기, 과제 제출을 찾습니다.",
+    summary: "코스 참여, 수업 듣기와 다시보기, 과제 제출, 성적 확인",
   },
   hardware: {
     label: "하드웨어",
     scope: "장비",
-    summary: "보드 라인업, 판서, 디스플레이, AI 카메라를 봅니다.",
+    summary: "ClassIn Board 판서와 조작, AI 카메라·마이크, 모델별 사양",
   },
   board: {
     label: "전자칠판",
     scope: "설치",
-    summary: "전자칠판 배송과 설치 흐름을 확인합니다.",
+    summary: "전자칠판 배송과 설치 순서",
   },
 }
 
@@ -144,8 +144,8 @@ export function toArticleSections(doc: DocArticle): DocsArticleSection[] {
     callout:
       doc.category === "board" && index === 0
         ? {
-            title: "전자칠판 설치는 현장 환경에 맞춰 진행하세요.",
-            body: "네트워크와 카메라 위치는 학원마다 다릅니다. 단계별 절차는 참고용으로 보고, 실제 설치 시에는 본사 엔지니어 안내를 우선합니다.",
+            title: "실제 설치는 본사 엔지니어 안내를 따르세요.",
+            body: "네트워크와 카메라 위치는 학원마다 다릅니다. 아래 순서는 미리 알아 두는 용도로 보시면 됩니다.",
             tone: "info" as const,
           }
         : undefined,
@@ -287,22 +287,22 @@ const GUIDE_INTENT_COPY: Array<{
   {
     categoryId: "start",
     title: "도입을 검토하고 있어요",
-    description: "설치와 가입부터 도입 전 확인 사항까지",
+    description: "도입 전에 묻는 질문, 설치와 회원 가입",
   },
   {
     categoryId: "admin",
     title: "학원을 운영하고 있어요",
-    description: "기관 설정, 코스·교사·학생 관리, 통계",
+    description: "기관 설정, 교사·학생 추가, 코스 개설, 통계",
   },
   {
     categoryId: "teacher",
-    title: "수업을 진행해요",
-    description: "교실 설정, 학습 활동, 수업 도구",
+    title: "수업을 맡고 있어요",
+    description: "코스 만들기, 교실 설정, 숙제·시험 내기",
   },
   {
     categoryId: "student",
-    title: "수업에 참여해요",
-    description: "코스 참여, 수업 듣기, 과제 제출",
+    title: "수업을 듣고 있어요",
+    description: "코스 참여, 수업 다시보기, 과제 제출",
   },
 ]
 

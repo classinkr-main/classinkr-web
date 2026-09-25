@@ -128,7 +128,8 @@ describe("공개 문서 전수 왕복 — 어드민 저장 한 번으로 구조�
     }
 
     expect(lost).toEqual([])
-    expect(compared).toBeGreaterThan(140)
+    // 2026-09-25 사내 전용 CS 생성 가이드 13편을 공개 문서에서 뺀 뒤 기준(136개)에 맞춰 하한을 낮췄다.
+    expect(compared).toBeGreaterThan(130)
   })
 
   it("세로 스크린샷 판정(height > width)이 저장 뒤에도 유지된다", () => {

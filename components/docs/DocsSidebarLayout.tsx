@@ -27,7 +27,7 @@ export function DocsSidebar({ groups, title = "가이드", className }: DocsSide
                 </svg>
                 문서 검색
             </Link>
-            <nav className="mt-4 space-y-5" aria-label="가이드 사이드바">
+            <nav className="mt-4 space-y-5" aria-label="가이드 문서 목록">
                 {groups.map((group) => (
                     <div key={group.title}>
                         <p className="text-sm font-bold text-[#111110]">{group.title}</p>
@@ -62,7 +62,7 @@ export interface DocsTableOfContentsProps {
 
 export function DocsTableOfContents({
     items,
-    title = "이 안내에서",
+    title = "목차",
     className,
 }: DocsTableOfContentsProps) {
     if (items.length === 0) {
@@ -123,7 +123,7 @@ export function DocsSidebarLayout({
                         {/* 모바일: 본문이 먼저 보이도록 기본 접힘 상태의 목차 (no-JS details) */}
                         <details className="group hidden rounded-2xl border border-black/[0.08] bg-white px-4 py-3 max-lg:block lg:!hidden lg:[content-visibility:hidden]">
                             <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-bold text-[#111110] lg:hidden [&::-webkit-details-marker]:hidden">
-                                가이드 목차 보기
+                                다른 가이드 보기
                                 <svg
                                     className="h-4 w-4 text-[#084734] transition-transform duration-200 group-open:rotate-180"
                                     viewBox="0 0 16 16"

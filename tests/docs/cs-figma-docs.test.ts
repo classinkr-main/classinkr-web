@@ -17,7 +17,7 @@ describe("CS Figma docs", () => {
       expect.arrayContaining([
         "순서대로 따라 하기",
         "화면 기준 확인",
-        "CS 주의사항과 안내 화면",
+        "주의사항과 안내 화면",
       ])
     )
     expect(doc?.sections[0]?.steps).toEqual(
@@ -55,7 +55,7 @@ describe("CS Figma docs", () => {
 
     expect(doc).toMatchObject({
       title: "코스 전체 학생 채팅 활성화와 비활성화",
-      updatedAt: "2026-08-05",
+      updatedAt: "2026-09-24",
       visibility: "unlisted",
       noindex: true,
     })
@@ -108,7 +108,7 @@ describe("CS Figma docs", () => {
       "/docs/files/cs-figma/문제-은행-가이드.png",
     ])
     expect(bulkExamDoc?.sections[0]?.steps).toContain(
-      "코스 화면에서 새로 만들기를 누르고 시험을 선택합니다."
+      "코스 화면에서 [새로 만들기]를 누르고 [시험]을 선택합니다."
     )
   })
 
@@ -135,5 +135,29 @@ describe("CS Figma docs", () => {
     expect(partiallyLinkedDoc.sections[0]?.media?.map((item) => item.src)).toEqual([
       "/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-pc.png",
     ])
+  })
+
+  it("keeps staff-only captures and internal identifiers out of public CS docs and chatbot guides", () => {
+    const staffOnly = ["cs-figma-digest-881", "cs-figma-digest-1402", "cs-figma-digest-1960", "cs-figma-digest-2017"]
+    const guideSlugs = CS_FIGMA_GUIDES.map((guide) => guide.docSlug)
+    for (const slug of staffOnly) expect(guideSlugs).not.toContain(slug)
+
+    const leak =
+      /EEO[-_ ]?TEST|EEO\d{4,}|Minjae|zhangsan|Classin_Hope|Wayne\s+Kim|학원[A-Z](?![A-Za-z])|CS\s*주의사항|내부 비밀번호 재설정|\p{Script=Han}/u
+    for (const guide of CS_FIGMA_GUIDES) {
+      const doc = buildCsFigmaDocArticle(guide)
+      const visible = [
+        doc.title,
+        doc.description,
+        doc.audience,
+        doc.chatbotSummary,
+        ...doc.keywords,
+        ...doc.sections.flatMap((section) => [section.heading, section.body, ...(section.steps ?? [])]),
+      ].join("\n")
+
+      expect(visible, doc.slug).not.toMatch(leak)
+      expect(doc.audience, doc.slug).not.toMatch(/(?<![A-Za-z])CS(?![A-Za-z])/)
+      expect(doc.keywords.filter((keyword) => /\.(?:png|jpe?g|webp)$/i.test(keyword)), doc.slug).toEqual([])
+    }
   })
 })
