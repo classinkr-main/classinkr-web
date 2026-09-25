@@ -118,7 +118,8 @@ function sourceRef(source: ChatbotSource): InternalCsSourceRef {
   return {
     id: source.articleId || `${source.urlPath}${anchor}`,
     label: compact([source.title, source.heading].filter(Boolean).join(" · "), 200),
-    kind: "public_doc",
+    // 공개 문서는 "/docs/..." 경로로, 내부 전용 CS 가이드는 digest 원문 경로(docs/active/...)로 온다.
+    kind: source.urlPath.startsWith("/") ? "public_doc" : "internal_guide",
   }
 }
 

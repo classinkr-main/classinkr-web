@@ -33,7 +33,7 @@ import {
   buildCsFigmaGuideSuggestedQuestions,
   findCsFigmaGuideForQuestion,
   formatCsFigmaGuideAnswer,
-  getCsFigmaGuideDocPath,
+  getCsFigmaGuideSourcePath,
   isCsFigmaSymptomQuestion,
   sanitizeGuideStep,
 } from "@/lib/cs-figma-guides"
@@ -3566,7 +3566,10 @@ async function buildChatbotCore(
     }
   }
 
-  const csFigmaGuide = findCsFigmaGuideForQuestion(question.redacted)
+  // 내부 전용 가이드는 코파일럿(includeInternalDocs)에서만 직답 후보가 된다 — 공개 경로는 제외(계약 6).
+  const csFigmaGuide = findCsFigmaGuideForQuestion(question.redacted, {
+    includeInternal: options.includeInternalDocs,
+  })
   if (csFigmaGuide) {
     const { category, intent, handoffIntent } = classifyChatbotQuestion(question.redacted, [
       csFigmaGuide.category,
@@ -3588,7 +3591,7 @@ async function buildChatbotCore(
           {
             title: csFigmaGuide.title,
             heading: CS_FIGMA_GUIDE_SOURCE_HEADING,
-            urlPath: getCsFigmaGuideDocPath(csFigmaGuide),
+            urlPath: getCsFigmaGuideSourcePath(csFigmaGuide),
             category: csFigmaGuide.category,
             excerpt:
               getCsFigmaEnrichment(csFigmaGuide.docSlug)?.intro ??

@@ -64,6 +64,30 @@ describe("buildInternalCsCopilotContext", () => {
     expect(result.deterministicFallback).toContain("## 확인 상태")
   })
 
+  it("labels internal-only CS guide evidence as an internal guide instead of a public doc", async () => {
+    mocks.evaluateChatbotQuery.mockResolvedValue({
+      answer: "Crowdin 에디터에서 번역을 입력하고 저장합니다.",
+      sources: [
+        {
+          title: "Crowdin UI 가이드",
+          heading: "사용 순서 안내",
+          urlPath: "docs/active/cs-figma-board-digest-2026-06-21.md:1988",
+          category: "classroom",
+          excerpt: "번역 입력 후 저장 버튼을 누릅니다.",
+          score: 420,
+        },
+      ],
+    })
+
+    const result = await buildInternalCsCopilotContext("Crowdin 번역 저장 방법", { includeInternalDocs: true })
+
+    expect(result.sourceRefs).toContainEqual({
+      id: "docs/active/cs-figma-board-digest-2026-06-21.md:1988#사용 순서 안내",
+      label: "Crowdin UI 가이드 · 사용 순서 안내",
+      kind: "internal_guide",
+    })
+  })
+
   it("remains usable when public document retrieval fails", async () => {
     mocks.evaluateChatbotQuery.mockRejectedValue(new Error("docs unavailable"))
 

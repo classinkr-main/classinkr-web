@@ -2,7 +2,6 @@
 // Do not edit manually; place images under public/docs/files/cs-figma and regenerate.
 
 export const CS_FIGMA_ASSET_PATHS = [
-  "/docs/files/cs-figma/0114-학원f-omr-cs.png",
   "/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-ifp.png",
   "/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-pc.png",
   "/docs/files/cs-figma/4-1.png",
@@ -65,14 +64,11 @@ export const CS_FIGMA_ASSET_PATHS = [
   "/docs/files/cs-figma/ai-기능-비활성화-2.png",
   "/docs/files/cs-figma/ai-기능-비활성화.png",
   "/docs/files/cs-figma/classin-ai-비활성화-안내.png",
-  "/docs/files/cs-figma/crowdin-ui-가이드-작업-과정.png",
-  "/docs/files/cs-figma/crowdin-ui-가이드.png",
   "/docs/files/cs-figma/edx-파일-가이드.png",
   "/docs/files/cs-figma/edx-파일-생성-사용법.png",
   "/docs/files/cs-figma/frame-1.png",
   "/docs/files/cs-figma/frame-2.png",
   "/docs/files/cs-figma/frame-24.png",
-  "/docs/files/cs-figma/frame-25.png",
   "/docs/files/cs-figma/frame-27.png",
   "/docs/files/cs-figma/frame-29.png",
   "/docs/files/cs-figma/frame-3.png",
@@ -88,8 +84,6 @@ export const CS_FIGMA_ASSET_PATHS = [
   "/docs/files/cs-figma/group-4.png",
   "/docs/files/cs-figma/group-5.png",
   "/docs/files/cs-figma/group-6.png",
-  "/docs/files/cs-figma/group-7.png",
-  "/docs/files/cs-figma/group-8.png",
   "/docs/files/cs-figma/image-12.png",
   "/docs/files/cs-figma/image-215.png",
   "/docs/files/cs-figma/image-6.png",
@@ -111,7 +105,5 @@ export const CS_FIGMA_ASSET_PATHS = [
   "/docs/files/cs-figma/image-76.png",
   "/docs/files/cs-figma/image-8.png",
   "/docs/files/cs-figma/image-9.png",
-  "/docs/files/cs-figma/pc-데이터-로그-보고.png",
-  "/docs/files/cs-figma/pdf-다운로드.png",
-  "/docs/files/cs-figma/univpn-설정법.png"
+  "/docs/files/cs-figma/pdf-다운로드.png"
 ] satisfies string[]

@@ -721,6 +721,55 @@ export const CS_FIGMA_GUIDES = [
   ...CS_FIGMA_DIGEST_GUIDES,
 ] satisfies CsFigmaGuide[]
 
+export type CsFigmaInternalGuideReason =
+  | "localization"
+  | "staff-account"
+  | "cs-diagnostics"
+  | "cs-log-collection"
+  | "customer-case"
+  | "capture-qa"
+
+export interface CsFigmaInternalGuide {
+  /** 생성 가이드 제목. digest 줄이 밀려 slug가 바뀌면 테스트가 제목 불일치로 잡는다. */
+  title: string
+  reason: CsFigmaInternalGuideReason
+}
+
+// 생성 가이드 중 직원용 항목(번역 작업, 사내 계정, CS 진단 화면, CS팀 로그 수집 절차, 특정 학원 대응 기록, 캡처 검수 메모).
+// cs-figma-guides.generated.ts는 digest에서 재생성되므로 손대지 않고 여기서 slug로 뺀다.
+// 공개 문서(/docs)와 공개 챗봇 직답에서는 제외하고, 내부 CS 코파일럿(includeInternal)만 참고한다.
+export const CS_FIGMA_INTERNAL_GUIDES: Readonly<Record<string, CsFigmaInternalGuide>> = {
+  "cs-figma-digest-689": { title: "학원F OMR CS", reason: "customer-case" },
+  "cs-figma-digest-881": { title: "내부 비밀번호 재설정", reason: "staff-account" },
+  "cs-figma-digest-1385": {
+    title: "사용자 정보 — 수업 상세 / 네트워크·녹화 기록 조회 화면",
+    reason: "cs-diagnostics",
+  },
+  "cs-figma-digest-1402": {
+    title: "사용자 정보 (Classin 관리자 — 사용자 수업 이력/품질 진단 화면)",
+    reason: "cs-diagnostics",
+  },
+  // 고객용 로그 보고 안내는 "전자칠판 데이터 로그 보고"(cs-figma-digest-1516)가 맡는다.
+  "cs-figma-digest-1427": { title: "PC 데이터 로그 보고", reason: "cs-log-collection" },
+  "cs-figma-digest-1988": { title: "Crowdin UI 가이드", reason: "localization" },
+  "cs-figma-digest-2017": {
+    title: "Crowdin UI 가이드 — 작업 과정 (EEO ClassIn / Korean / All Strings)",
+    reason: "localization",
+  },
+  "cs-figma-digest-2256": { title: "(빈 이미지 — 내용 없음)", reason: "capture-qa" },
+}
+
+const CS_FIGMA_INTERNAL_GUIDE_SLUGS = new Set(Object.keys(CS_FIGMA_INTERNAL_GUIDES))
+
+export function isCsFigmaInternalGuide(guide: Pick<CsFigmaGuide, "slug">) {
+  return CS_FIGMA_INTERNAL_GUIDE_SLUGS.has(guide.slug)
+}
+
+/** 공개 문서·공개 챗봇·공개 자산이 쓰는 가이드. 내부 전용 가이드는 빠진다. */
+export const CS_FIGMA_PUBLIC_GUIDES: CsFigmaGuide[] = CS_FIGMA_GUIDES.filter(
+  (guide) => !isCsFigmaInternalGuide(guide)
+)
+
 function normalizeGuideText(value: string) {
   return value
     .toLowerCase()
@@ -755,6 +804,7 @@ const CS_FIGMA_GUIDE_INDEX = CS_FIGMA_GUIDES.map((guide) => {
       [guide.title, guide.summary, allKeywords.join(" "), guide.steps.join(" ")].join(" ")
     ),
     isCurated: CURATED_CS_FIGMA_GUIDE_SLUGS.has(guide.slug),
+    isInternal: isCsFigmaInternalGuide(guide),
     normalizedKeywords: allKeywords.map(normalizeGuideText).filter(Boolean),
     normalizedTitle: normalizeGuideText(guide.title),
     normalizedTitleAliases: normalizeGuideTitleAliases(guide.title),
@@ -1067,7 +1117,15 @@ const POLICY_BOUNDARY_ALLOWED_KNOWN_INTENT_SLUGS = new Set([
   "cs-figma-digest-1294",
 ])
 
-export function findCsFigmaGuideForQuestion(question: string): CsFigmaGuide | null {
+export interface FindCsFigmaGuideOptions {
+  // 내부 CS 코파일럿 전용. 공개 챗봇 경로는 넘기지 않아 내부 전용 가이드가 직답 후보에서 빠진다.
+  includeInternal?: boolean
+}
+
+export function findCsFigmaGuideForQuestion(
+  question: string,
+  options: FindCsFigmaGuideOptions = {}
+): CsFigmaGuide | null {
   const normalized = normalizeGuideText(question)
   if (!normalized) return null
 
@@ -1099,7 +1157,11 @@ export function findCsFigmaGuideForQuestion(question: string): CsFigmaGuide | nu
         return stripped !== token && !TOKEN_STOPWORDS.has(stripped) ? [token, stripped] : [token]
       })
   )]
-  const scored = CS_FIGMA_GUIDE_INDEX.filter(isDirectAnswerEligibleGuide).map(({ guide, haystack, isCurated, normalizedKeywords, normalizedTitleAliases }) => {
+  const candidates = CS_FIGMA_GUIDE_INDEX.filter(
+    (indexedGuide) =>
+      (options.includeInternal || !indexedGuide.isInternal) && isDirectAnswerEligibleGuide(indexedGuide)
+  )
+  const scored = candidates.map(({ guide, haystack, isCurated, normalizedKeywords, normalizedTitleAliases }) => {
     let score = 0
     let strongKeywordHits = 0
     let weakKeywordHits = 0
@@ -1324,4 +1386,9 @@ export function buildCsFigmaGuideSuggestedQuestions(guide: CsFigmaGuide) {
 
 export function getCsFigmaGuideDocPath(guide: CsFigmaGuide) {
   return `/docs/${guide.docCategory}/${guide.docSlug}`
+}
+
+// 내부 전용 가이드는 공개 문서가 없으므로 digest 원문 위치를 출처로 쓴다(코파일럿에서 링크 없이 표시된다).
+export function getCsFigmaGuideSourcePath(guide: CsFigmaGuide) {
+  return isCsFigmaInternalGuide(guide) ? guide.sourceDigestLineHint : getCsFigmaGuideDocPath(guide)
 }

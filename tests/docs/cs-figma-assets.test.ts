@@ -10,7 +10,7 @@ import {
   normalizeCsFigmaAssetPathKeys,
   suggestCsFigmaAssetPath,
 } from "@/lib/cs-figma-assets"
-import { CS_FIGMA_GUIDES } from "@/lib/cs-figma-guides"
+import { CS_FIGMA_GUIDES, CS_FIGMA_PUBLIC_GUIDES } from "@/lib/cs-figma-guides"
 
 describe("CS Figma asset resolver", () => {
   it("matches Figma source filenames to safe public image paths", () => {
@@ -206,11 +206,12 @@ describe("CS Figma asset resolver", () => {
   })
 
   it("keeps the imported Figma asset manifest fully linked", () => {
-    const missing = findMissingCsFigmaAssetLabels(CS_FIGMA_GUIDES)
-    const requirements = getCsFigmaAssetRequirements(CS_FIGMA_GUIDES)
+    // 공개 문서용 가이드만 자산을 요구한다 — 내부 전용 가이드 캡처는 public/에 두지 않는다.
+    const missing = findMissingCsFigmaAssetLabels(CS_FIGMA_PUBLIC_GUIDES)
+    const requirements = getCsFigmaAssetRequirements(CS_FIGMA_PUBLIC_GUIDES)
 
-    expect(CS_FIGMA_ASSET_PATHS.length).toBe(112)
-    expect(requirements).toHaveLength(112)
+    expect(CS_FIGMA_ASSET_PATHS.length).toBe(104)
+    expect(requirements).toHaveLength(104)
     expect(missing).toEqual([])
   })
 })

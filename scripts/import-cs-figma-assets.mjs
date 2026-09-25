@@ -27,7 +27,8 @@ const jiti = createJiti(import.meta.url, {
   },
 })
 
-const { CS_FIGMA_GUIDES } = await jiti.import("../lib/cs-figma-guides.ts")
+// 공개 문서용 자산만 다룬다 — 내부 전용 가이드 캡처는 public/에 두지 않는다.
+const { CS_FIGMA_PUBLIC_GUIDES: CS_FIGMA_GUIDES } = await jiti.import("../lib/cs-figma-guides.ts")
 const { buildCsFigmaAssetImportPlan } = await jiti.import("../lib/cs-figma-assets.ts")
 
 function listImageFiles(dir) {

@@ -2,11 +2,16 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
   CS_FIGMA_GUIDES,
+  CS_FIGMA_INTERNAL_GUIDES,
   findCsFigmaGuideForQuestion,
   formatCsFigmaGuideAnswer,
+  isCsFigmaInternalGuide,
 } from "@/lib/chatbot/cs-figma-guides"
 import { evaluateChatbotQuery } from "@/lib/chatbot/service"
 import { getCsFigmaEnrichment } from "@/lib/cs-figma-enrichments"
+import { CS_FIGMA_GUIDE_ALIASES } from "@/lib/cs-figma-guide-aliases"
+
+const INTERNAL_GUIDE_SLUGS = Object.keys(CS_FIGMA_INTERNAL_GUIDES)
 
 function disableExternalChatbotServices() {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "")
@@ -333,6 +338,60 @@ describe("CS Figma guide source", () => {
     expect(result.answer).toContain("코스 가입 허용")
     expect(result.suggestedQuestions).not.toContain("PC 순서 알려줘")
     expect(result.suggestedQuestions).not.toContain("설정/옵션 순서 알려줘")
+  })
+
+  it("keeps internal-only guides out of public direct answers but available to the CS copilot", () => {
+    const cases = [
+      ["Crowdin 번역 저장 방법 알려줘", "cs-figma-digest-1988"],
+      // 고객의 흔한 질문이 사내(EEO) 계정 비밀번호 재설정 안내로 빠지면 안 된다.
+      ["비밀번호 재설정 방법 알려줘", "cs-figma-digest-881"],
+      ["OMR 답안 공개 시점 변경 방법 알려줘", "cs-figma-digest-689"],
+      ["PC 소프트웨어 로그 보고 방법 알려줘", "cs-figma-digest-1427"],
+    ] as const
+
+    for (const [question, internalSlug] of cases) {
+      const publicGuide = findCsFigmaGuideForQuestion(question)
+      if (publicGuide) expect(isCsFigmaInternalGuide(publicGuide), question).toBe(false)
+      expect(findCsFigmaGuideForQuestion(question, { includeInternal: true })?.slug, question).toBe(
+        internalSlug
+      )
+    }
+
+    // 고객용 로그 보고 안내는 전자칠판 로그 보고 가이드가 계속 맡는다.
+    expect(findCsFigmaGuideForQuestion("PC 소프트웨어 로그 보고 방법 알려줘")?.slug).toBe(
+      "cs-figma-digest-1516"
+    )
+  })
+
+  it("never answers the public chatbot from internal guide titles or alias phrasings", () => {
+    for (const [slug, { title }] of Object.entries(CS_FIGMA_INTERNAL_GUIDES)) {
+      for (const phrase of [title, ...(CS_FIGMA_GUIDE_ALIASES[slug] ?? [])]) {
+        for (const question of [`${phrase} 방법 알려줘`, `${phrase} 안 돼요`]) {
+          expect(INTERNAL_GUIDE_SLUGS, question).not.toContain(findCsFigmaGuideForQuestion(question)?.slug)
+        }
+      }
+    }
+  })
+
+  it("cites internal guides by digest location only on the copilot path", async () => {
+    disableExternalChatbotServices()
+    const question = "Crowdin 번역 저장 방법 알려줘"
+
+    const publicResult = await evaluateChatbotQuery(question, { generateAnswer: false })
+    for (const source of publicResult.sources) {
+      expect(INTERNAL_GUIDE_SLUGS.some((slug) => source.urlPath.includes(slug)), source.urlPath).toBe(false)
+    }
+    expect(publicResult.answer ?? "").not.toMatch(/crowdin/i)
+
+    const copilotResult = await evaluateChatbotQuery(question, {
+      generateAnswer: false,
+      includeInternalDocs: true,
+    })
+    expect(copilotResult.answerMode).toBe("direct_answer")
+    expect(copilotResult.sources[0]).toMatchObject({
+      title: "Crowdin UI 가이드",
+      urlPath: "docs/active/cs-figma-board-digest-2026-06-21.md:1988",
+    })
   })
 
   it("prefers curated guides over duplicated generated captures for concise setup questions", () => {

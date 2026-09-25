@@ -1,6 +1,6 @@
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 import { buildCsFigmaMediaForGuide } from "@/lib/cs-figma-assets"
-import { CS_FIGMA_GUIDES, sanitizeGuideStep, type CsFigmaGuide } from "@/lib/cs-figma-guides"
+import { CS_FIGMA_PUBLIC_GUIDES, sanitizeGuideStep, type CsFigmaGuide } from "@/lib/cs-figma-guides"
 import { getCsFigmaEnrichment } from "@/lib/cs-figma-enrichments"
 
 export const DOC_CATEGORY_IDS = [
@@ -309,7 +309,8 @@ export function buildCsFigmaDocArticle(
   }
 }
 
-const csFigmaDocs: DocArticle[] = CS_FIGMA_GUIDES.map((guide) => buildCsFigmaDocArticle(guide))
+// 내부 전용 CS 가이드(CS_FIGMA_INTERNAL_GUIDES)는 공개 문서로 만들지 않는다.
+const csFigmaDocs: DocArticle[] = CS_FIGMA_PUBLIC_GUIDES.map((guide) => buildCsFigmaDocArticle(guide))
 
 const docs: DocArticle[] = [
   ...csFigmaDocs,
