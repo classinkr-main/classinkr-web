@@ -111,6 +111,20 @@ export interface CrmUnifiedCustomerRow {
   contractedKrw?: number | null
   /** 전환 고객 미수 잔액(KRW) — customer 행만 */
   outstandingKrw?: number | null
+  /**
+   * 같은 전화 키의 Compass 리드(대표 1건) — A안 "Compass에서 열기" 딥링크용(2026-09-25).
+   * 읽기 전용 참조다(교차 쓰기 0). 매칭이 없거나 Compass 가 끊겼으면 null/미정 — 화면은 링크를 그리지 않는다.
+   * 전화 키 자체는 싣지 않는다(API 응답에 전화 키 노출 금지).
+   */
+  compass?: CrmUnifiedCompassRef | null
+}
+
+/** 통합 행의 Compass 참조 — url 은 lib/compass/normalize.ts compassLeadUrl(leadId) 결과. */
+export interface CrmUnifiedCompassRef {
+  leadId: number
+  url: string
+  /** Compass 퍼널 단계 한글 라벨(COMPASS_STAGE_LABEL) — 모르면 null */
+  stageLabel: string | null
 }
 
 export function rowMatchesOwner(row: CrmUnifiedCustomerRow, ownerKeys: Set<string>) {
