@@ -177,6 +177,10 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   //   where source_detail = 'showroom_booking' or source_detail like 'checkout_request:%'
   //   group by source;
   "supabase/migrations/20260921_checkout_requests_lead_qualifiers.sql",
+  // CRM 저장 세그먼트(세그먼트 허브, C안 ②, 2026-09-25) — 설정 표 + 일별 건수·자동 태그 실행 기록.
+  // 두 표 모두 RLS deny-all(정책 없음 — service_role 만). 앱은 service role API 로만 읽고 쓴다.
+  // 미적용이어도 허브만 '미적용' 안내로 강등하고(쓰기 503) 매일 자동 태그 크론이 skipped 로 넘어간다.
+  "supabase/migrations/20260925_crm_saved_segments.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -652,6 +656,41 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     severity: "warning",
     impact:
       "없으면 재유입 병합이 원문/숫자만 비교 폴백으로 동작해 서식이 다른 같은 번호를 못 잡는다.",
+  },
+  // ── CRM 저장 세그먼트(세그먼트 허브, 2026-09-25) ────────────────────────
+  // 두 표 모두 RLS deny-all(정책 없음 — service_role 만 읽고 쓴다). '내 것은 소유자만'·'자동 태그는 관리자만'은 API 가
+  // 강제하고, 로그인 세션(authenticated)으로 PostgREST 를 직접 불러도 읽히거나 바뀌지 않는다.
+  // anon 프로브는 두지 않는다 — 빈 표에서는 '검증 불가' warning 이 나와 --strict 를 흔든다(crm_region_assignments 관례).
+  {
+    kind: "table",
+    table: "crm_saved_segments",
+    label: "CRM 저장 세그먼트(조건·공유 범위·자동 태그 설정)",
+    columns: [
+      "id",
+      "name",
+      "spec",
+      "spec_version",
+      "spec_hash",
+      "visibility",
+      "owner_user_id",
+      "auto_tag_enabled",
+      "auto_tag_label",
+      "auto_untag",
+      "last_count",
+      "last_evaluated_at",
+      "archived_at",
+    ],
+    migration: "supabase/migrations/20260925_crm_saved_segments.sql",
+    impact:
+      "세그먼트 허브가 '미적용' 안내로 내려가 저장·공유를 못 하고, 매일 자동 태그(디스패처 KST 06시 슬롯)가 건너뛴다. 통합 목록·조건 칩·CSV는 영향 없다.",
+  },
+  {
+    kind: "table",
+    table: "crm_saved_segment_daily",
+    label: "저장 세그먼트 일별 건수·자동 태그 실행 기록",
+    columns: ["segment_id", "snapshot_date", "total", "spec_hash", "flags", "auto_tag_status", "tagged", "untagged", "run_trigger"],
+    migration: "supabase/migrations/20260925_crm_saved_segments.sql",
+    impact: "8주 추이가 비고, 자동 태그 실행 결과(붙임·뗌·건너뛴 사유)가 남지 않는다.",
   },
 ]
 

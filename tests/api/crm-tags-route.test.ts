@@ -10,6 +10,12 @@ const mocks = vi.hoisted(() => ({
   listCustomerTagStats: vi.fn(),
   renameCustomerTag: vi.fn(),
   mergeCustomerTags: vi.fn(),
+  listActiveAutoTagLabels: vi.fn(),
+}))
+
+// 저장 세그먼트가 매일 자동으로 붙이는 라벨(세그먼트 허브, 2026-09-25) — 이름 변경·병합 409 가드.
+vi.mock("@/lib/repositories/crm-saved-segments", () => ({
+  listActiveAutoTagLabels: mocks.listActiveAutoTagLabels,
 }))
 
 vi.mock("@/lib/admin-auth", () => ({
@@ -132,7 +138,7 @@ describe("PATCH /api/admin/crm/tags", () => {
     const response = await PATCH(patchRequest({ action: "rename", from: "  VIP  ", to: "우수고객" }))
     const body = await response.json()
     expect(response.status).toBe(200)
-    expect(mocks.renameCustomerTag).toHaveBeenCalledWith("VIP", "우수고객", { dryRun: false })
+    expect(mocks.renameCustomerTag).toHaveBeenCalledWith("VIP", "우수고객", { dryRun: false, actor: "admin-1" })
     expect(body).toMatchObject({ updated: 3, removedDuplicates: 1, dryRun: false, from: "VIP", to: "우수고객" })
   })
 
@@ -140,7 +146,7 @@ describe("PATCH /api/admin/crm/tags", () => {
     mocks.renameCustomerTag.mockResolvedValue({ updated: 3, removedDuplicates: 0 })
     const { PATCH } = await loadRoute()
     await PATCH(patchRequest({ action: "rename", from: "VIP", to: "우수고객", dryRun: true }))
-    expect(mocks.renameCustomerTag).toHaveBeenCalledWith("VIP", "우수고객", { dryRun: true })
+    expect(mocks.renameCustomerTag).toHaveBeenCalledWith("VIP", "우수고객", { dryRun: true, actor: "admin-1" })
   })
 
   it("rename: 저장소 실패면 500을 돌려준다", async () => {
@@ -167,7 +173,7 @@ describe("PATCH /api/admin/crm/tags", () => {
     )
     const body = await response.json()
     expect(response.status).toBe(200)
-    expect(mocks.mergeCustomerTags).toHaveBeenCalledWith(["VIP", "재계약"], "우수고객", { dryRun: false })
+    expect(mocks.mergeCustomerTags).toHaveBeenCalledWith(["VIP", "재계약"], "우수고객", { dryRun: false, actor: "admin-1" })
     expect(body).toMatchObject({ updated: 4, removedDuplicates: 2, dryRun: false, from: ["VIP", "재계약"], to: "우수고객" })
   })
 
@@ -176,5 +182,47 @@ describe("PATCH /api/admin/crm/tags", () => {
     const { PATCH } = await loadRoute()
     const response = await PATCH(patchRequest({ action: "merge", from: ["VIP"], to: "우수고객" }))
     expect(response.status).toBe(500)
+  })
+})
+
+describe("PATCH /api/admin/crm/tags — 세그먼트 자동 태그 라벨 보호", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.requireVerifiedAdminContext.mockResolvedValue({ userId: "admin-1" })
+    mocks.listActiveAutoTagLabels.mockResolvedValue([{ segmentId: "seg-1", segmentName: "만료 임박 고객", label: "만료임박" }])
+    mocks.renameCustomerTag.mockResolvedValue({ updated: 1, removedDuplicates: 0 })
+    mocks.mergeCustomerTags.mockResolvedValue({ updated: 1, removedDuplicates: 0 })
+  })
+
+  it("활성 자동 라벨의 이름 변경·병합은 409 — 다음 날 자동 떼기·붙이기가 되돌리므로 세그먼트에서 바꾸게 한다", async () => {
+    const { PATCH } = await loadRoute()
+    const rename = await PATCH(patchRequest({ action: "rename", from: " 만료임박", to: "재계약" }))
+    expect(rename.status).toBe(409)
+    expect(await rename.json()).toMatchObject({ code: "auto_tag_label_locked", segmentId: "seg-1" })
+    const merge = await PATCH(patchRequest({ action: "merge", from: ["VIP", "만료임박"], to: "재계약" }))
+    expect(merge.status).toBe(409)
+    expect(mocks.renameCustomerTag).not.toHaveBeenCalled()
+    expect(mocks.mergeCustomerTags).not.toHaveBeenCalled()
+  })
+
+  it("to 가 자동 라벨이면 막지 않고 실행한 사람(actor)을 넘긴다 — 저장소가 마커 행을 사람 소유로 넘긴다([8]·[33])", async () => {
+    mocks.requireVerifiedAdminContext.mockResolvedValue({ userId: "admin-1", name: " 김관리 ", role: "ADMIN" })
+    mocks.mergeCustomerTags.mockResolvedValue({ updated: 1, removedDuplicates: 2, claimedAutoTags: 2 })
+    const { PATCH } = await loadRoute()
+    const merge = await PATCH(patchRequest({ action: "merge", from: ["만료 임박 고객"], to: "만료임박" }))
+    expect(merge.status).toBe(200)
+    expect(await merge.json()).toMatchObject({ updated: 1, removedDuplicates: 2, claimedAutoTags: 2, to: "만료임박" })
+    expect(mocks.mergeCustomerTags).toHaveBeenCalledWith(["만료 임박 고객"], "만료임박", { dryRun: false, actor: "김관리" })
+    const rename = await PATCH(patchRequest({ action: "rename", from: "재접촉요망", to: "만료임박" }))
+    expect(rename.status).toBe(200)
+    expect(mocks.renameCustomerTag).toHaveBeenCalledWith("재접촉요망", "만료임박", { dryRun: false, actor: "김관리" })
+  })
+
+  it("자동 라벨이 아니면 그대로, 세그먼트 표를 못 읽어도 막지 않는다", async () => {
+    const { PATCH } = await loadRoute()
+    expect((await PATCH(patchRequest({ action: "rename", from: "VIP", to: "우수" }))).status).toBe(200)
+    mocks.listActiveAutoTagLabels.mockRejectedValueOnce(new Error("db down"))
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    expect((await PATCH(patchRequest({ action: "rename", from: "만료임박", to: "우수" }))).status).toBe(200)
   })
 })

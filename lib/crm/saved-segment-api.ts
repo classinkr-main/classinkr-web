@@ -82,11 +82,14 @@ export interface SavedSegmentListItem {
   specVersion: number
   /** 앱이 읽을 수 있는 조건 판인지(구 배포가 새 어휘를 버려 조건이 넓어지는 사고 방지) */
   specReadable: boolean
-  /** OR 그룹이 없는지 — true 면 통합 목록 URL 로 그대로 열 수 있다 */
+  /** OR 그룹이 없는지 — true 면 통합 목록에서 조건을 그대로 편집할 수 있다(OR 은 목록에서 보기만) */
   andOnly: boolean
   /** 조건 문구(캡션용, OR 은 "(A) 또는 (B)") */
   labels: string[]
-  /** andOnly 일 때 통합 고객 딥링크(/admin/crm/customers/unified?…), 아니면 null */
+  /**
+   * 통합 고객 딥링크(/admin/crm/customers/unified?… — OR 그룹은 or= 로 실린다. 통합 목록은 OR 을 보여 주기만 하고
+   * 편집은 허브에서 한다). 읽을 수 없는 판(specReadable=false)이면 null.
+   */
   listHref: string | null
   /** 지금 조건으로 센 건수 — 평가 실패면 null(화면은 lastCount 로 폴백 표기) */
   count: number | null
