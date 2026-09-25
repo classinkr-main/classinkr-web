@@ -2,8 +2,14 @@
 
 // ClassIn 고객 DB(통합 고객) 본체 — URL·캐시·드로어 상태와 저장 보기 로직만 소유하고,
 // 검색 패널·결과 테이블·행 시각 요소·정렬은 components/admin/crm/unified/* 로 분해했다(2026-08-28).
+//
+// A안(2026-09-25) — 이 목록은 판단·집계 화면이다. 리드 응대·기록은 Compass 에서 하므로 매칭 행에는
+// "Compass에서 열기" 새 탭 링크(UnifiedCompassLink)만 둔다. 목록 위에는 NEO 동기화 경고 띠(page.tsx 가
+// syncHealthSlot 으로 넘기는 SyncHealthBannerServer)와, URL 에 OR 그룹(`or=`)이 있으면 "OR 조건 포함 —
+// 세그먼트 허브에서 편집" 안내(SegmentOrNotice)를 둔다 — 조건 칩 편집은 AND 만. 일괄 태그·할 일은 유지한다
+// (세그먼트 허브·C안 ②가 쓰는 행동).
 
-import { useCallback, useEffect, useMemo, useRef, useState, use, Suspense, type MouseEvent } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, use, Suspense, type MouseEvent, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import dynamic from "next/dynamic"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
@@ -17,7 +23,6 @@ import {
   parseSegmentSpec,
   type CustomerSegmentSpec,
 } from "@/lib/crm/customer-segment-spec"
-import { STATUS_TONE_TEXT_CLASS } from "@/lib/crm/status-tone"
 import type { CrmUnifiedCustomerRow } from "@/lib/repositories/crm-unified-customers"
 import type { CrmUnifiedInitialData } from "@/lib/admin/crm/unified-prefetch"
 import { buildOwnerSelectOptions, useCrmOwners } from "./useCrmOwners"
@@ -30,6 +35,8 @@ import CustomerSearchPanel from "./unified/CustomerSearchPanel"
 import CustomerResultsSection from "./unified/CustomerResultsSection"
 import UnconfirmedToggle from "./unified/UnconfirmedToggle"
 import SegmentConditionBar from "./unified/SegmentConditionBar"
+import SegmentOrNotice from "./unified/SegmentOrNotice"
+import ContactSourceCaption from "./unified/ContactSourceCaption"
 import BulkActionBar from "./unified/BulkActionBar"
 import { nextSortState, type SortKey, type SortState } from "./unified/sort"
 import {
@@ -49,6 +56,7 @@ import {
   listUrl,
   mergePage,
   normalizeText,
+  parseOrGroupsParam,
   parseOwnerParam,
   parseTagParam,
   patchUnifiedListParams,
@@ -214,9 +222,15 @@ export function isSameLoadQuery(lastQueryKey: string | null, requestUrl: string)
 
 export default function CrmUnifiedCustomersClient({
   initialData,
+  syncHealthSlot,
 }: {
   /** 서버 프리페치(lib/admin/crm/unified-prefetch.ts) — 미인증·역할 부족·실패면 null. */
   initialData?: CrmUnifiedInitialData | null
+  /**
+   * 데이터 신선도 경고 띠 자리 — page.tsx 가 서버 컴포넌트(SyncHealthBannerServer, 자체 Suspense)를 넘긴다.
+   * 제목 아래·목록 위에 그대로 꽂기만 한다(정상이면 서버가 아무것도 그리지 않는다).
+   */
+  syncHealthSlot?: ReactNode
 }) {
   // 드로어(?account=)·저장 뷰(?view=)·라벨(?tag=) 딥링크의 원천. 라벨 초기값을 URL에서 바로 읽어야
   // 해서 다른 state보다 먼저 둔다.
@@ -234,6 +248,9 @@ export default function CrmUnifiedCustomersClient({
   const [savedView, setSavedView] = useState<SavedViewFilter>("all")
   // 세그먼트 조건(SG4) — URL(?expDays= 등) 상태. 딥링크 첫 요청부터 조건이 실리게 마운트 시점 URL 로 초기화.
   const [segmentSpec, setSegmentSpec] = useState<CustomerSegmentSpec>(() => parseSegmentSpec(searchParams))
+  // OR 그룹(`or=`, 세그먼트 허브) — 이 화면은 편집하지 않는다. URL 에서 읽어 목록·CSV 요청에 그대로 싣고,
+  // 목록 위 안내(SegmentOrNotice)로 "허브에서 편집"을 알린다. 조건 칩(AND) 변경은 이 값을 건드리지 않는다.
+  const [orGroups, setOrGroups] = useState<CustomerSegmentSpec[]>(() => parseOrGroupsParam(searchParams))
   // 라벨 필터는 URL(?tag=) 상태다 — 태그 관리 화면 딥링크 착지의 첫 요청부터 라벨이 실리도록
   // 마운트 시점 URL로 초기화하고, 이후 동기화는 아래 ?tag= 착지 effect·changeTagFilter가 맡는다.
   const [tagFilter, setTagFilter] = useState(() => parseTagParam(searchParams.get("tag")))
@@ -410,13 +427,14 @@ export default function CrmUnifiedCustomersClient({
     setOwner(next)
   }, [searchParams])
 
-  // 세그먼트 조건 딥링크(?expDays= 등, SG4) — 정규형 문자열로 비교해 값이 바뀔 때만 반영한다.
+  // 세그먼트 조건 딥링크(?expDays= 등, SG4 · OR 그룹 `or=`) — 정규형 문자열로 비교해 값이 바뀔 때만 반영한다.
   const lastSegmentParamRef = useRef<string>(segmentParamSignature(searchParams))
   useEffect(() => {
     const signature = segmentParamSignature(searchParams)
     if (signature === lastSegmentParamRef.current) return
     lastSegmentParamRef.current = signature
     setSegmentSpec(parseSegmentSpec(searchParams))
+    setOrGroups(parseOrGroupsParam(searchParams))
   }, [searchParams])
 
   // 칩 클릭 ↔ URL 동기화 — setDrawerUrl과 동일하게 라우터 경유(router.replace).
@@ -426,12 +444,20 @@ export default function CrmUnifiedCustomersClient({
   // 저장 뷰·라벨을 함께 바꿀 때(필터 초기화)는 한 번의 replace로 묶는다 — 두 번 부르면 두 번째가
   // 같은 이전 searchParams에서 출발해 첫 변경을 되돌린다(patchUnifiedListParams 주석).
   const replaceListParams = useCallback(
-    (patch: { view?: SavedViewFilter; tag?: string; owner?: string; segment?: CustomerSegmentSpec }) => {
+    (patch: {
+      view?: SavedViewFilter
+      tag?: string
+      owner?: string
+      segment?: CustomerSegmentSpec
+      orGroups?: readonly CustomerSegmentSpec[]
+    }) => {
       if (patch.view !== undefined) lastViewParamRef.current = patch.view === "all" ? null : patch.view
       if (patch.tag !== undefined) lastTagParamRef.current = parseTagParam(patch.tag)
       if (patch.owner !== undefined) lastOwnerParamRef.current = parseOwnerParam(patch.owner)
       const qs = patchUnifiedListParams(searchParams.toString(), patch)
-      if (patch.segment !== undefined) lastSegmentParamRef.current = segmentParamSignature(new URLSearchParams(qs))
+      if (patch.segment !== undefined || patch.orGroups !== undefined) {
+        lastSegmentParamRef.current = segmentParamSignature(new URLSearchParams(qs))
+      }
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
     },
     [router, pathname, searchParams]
@@ -461,6 +487,7 @@ export default function CrmUnifiedCustomersClient({
   )
 
   // 세그먼트 조건 변경 — state 와 URL 을 함께 바꾼다(정규형으로 다듬어 같은 조건 = 같은 캐시 키).
+  // 조건 칩은 AND 만 바꾼다 — URL 의 OR 그룹(`or=`)은 patchUnifiedListParams 가 그대로 둔다.
   const changeSegment = useCallback(
     (next: CustomerSegmentSpec) => {
       const normalized = normalizeSegmentSpec(next)
@@ -469,6 +496,12 @@ export default function CrmUnifiedCustomersClient({
     },
     [replaceListParams]
   )
+
+  // "OR 조건 빼기" — OR 그룹만 지운다(AND 조건·다른 필터는 그대로). 편집은 세그먼트 허브에서 한다.
+  const removeOrGroups = useCallback(() => {
+    setOrGroups([])
+    replaceListParams({ orGroups: [] })
+  }, [replaceListParams])
 
   // P1b 프리페치 시드 — 마운트 시점 searchParams(q·view·tag)만 한 번 읽어 얼린다(이후 세그먼트
   // 칩 클릭 등으로 URL이 바뀌어도 이 값은 그대로다: 시드는 "첫 로드 한 번"의 계약이지 매
@@ -527,6 +560,7 @@ export default function CrmUnifiedCustomersClient({
         tag: tagFilter,
         includeUnconfirmed,
         segment: segmentSpec,
+        orGroups,
         sort,
         offset,
       })
@@ -612,7 +646,7 @@ export default function CrmUnifiedCustomersClient({
         }
       }
     },
-    [debouncedQuery, source, lifecycle, owner, savedView, tagFilter, includeUnconfirmed, segmentSpec, sort]
+    [debouncedQuery, source, lifecycle, owner, savedView, tagFilter, includeUnconfirmed, segmentSpec, orGroups, sort]
   )
 
   useEffect(() => {
@@ -744,7 +778,8 @@ export default function CrmUnifiedCustomersClient({
     savedView !== "all" ||
     Boolean(tagFilter) ||
     includeUnconfirmed ||
-    !isSegmentSpecEmpty(segmentSpec)
+    !isSegmentSpecEmpty(segmentSpec) ||
+    orGroups.length > 0
 
   const resetFilters = useCallback(() => {
     setQuery("")
@@ -755,8 +790,9 @@ export default function CrmUnifiedCustomersClient({
     setSavedView("all")
     setTagFilter("")
     setSegmentSpec({})
-    // 저장 뷰·라벨·담당·조건 URL을 한 번의 replace로 함께 비운다(따로 부르면 두 번째가 첫 변경을 덮어쓴다).
-    replaceListParams({ view: "all", tag: "", owner: "", segment: {} })
+    setOrGroups([])
+    // 저장 뷰·라벨·담당·조건(AND·OR) URL을 한 번의 replace로 함께 비운다(따로 부르면 두 번째가 첫 변경을 덮어쓴다).
+    replaceListParams({ view: "all", tag: "", owner: "", segment: {}, orGroups: [] })
     setIncludeUnconfirmed(false)
   }, [persistOwner, replaceListParams])
 
@@ -804,6 +840,7 @@ export default function CrmUnifiedCustomersClient({
             tag: tagFilter,
             includeUnconfirmed,
             segment: segmentSpec,
+            orGroups,
             sort,
             keys,
           })
@@ -815,7 +852,7 @@ export default function CrmUnifiedCustomersClient({
         setExporting(false)
       }
     },
-    [debouncedQuery, source, lifecycle, owner, savedView, tagFilter, includeUnconfirmed, segmentSpec, sort]
+    [debouncedQuery, source, lifecycle, owner, savedView, tagFilter, includeUnconfirmed, segmentSpec, orGroups, sort]
   )
 
   // 일괄 태그·할 일 완료 — 토스트 + 같은 페이지 강제 재조회(선택은 loadPage 가 비운다).
@@ -827,8 +864,6 @@ export default function CrmUnifiedCustomersClient({
     [data?.pagination.offset, loadPage]
   )
 
-  const compassStatus = data?.meta?.compass
-  const homeContactDetail = data?.meta?.homeContactDetail
   const totalCount = data?.summary.total ?? null
 
   return (
@@ -876,6 +911,10 @@ export default function CrmUnifiedCustomersClient({
             {/* 새로고침은 목록 위 신선도 캡션(FreshnessCaption)의 버튼 하나로 모았다(P2) — 같은 동작을 두 곳에 두지 않는다. */}
           </div>
         </div>
+
+        {/* NEO 동기화 경고 띠 — 원천 고객의 만료·잔액·소진·위험은 NEO 동기화 값이다. 멈추면 "언제 값인지·누가
+            풀 수 있는지"를 필터보다 먼저 말한다(page.tsx 의 서버 슬롯, 정상이면 아무것도 없음). */}
+        {syncHealthSlot}
 
         {/* 행동 빈도가 높은 보기만 1차 노출하고, 참조성 보기는 한 묶음으로 접는다. */}
         <div className="mb-3 flex flex-wrap items-center gap-2" role="group" aria-label="빠른 고객 필터">
@@ -1000,6 +1039,12 @@ export default function CrmUnifiedCustomersClient({
           loading={loading || refreshing}
         />
 
+        {/* OR 그룹(`or=`)이 URL 에 있으면 목록 위에 "OR 조건 포함 — 세그먼트 허브에서 편집". 목록·CSV 는 OR 까지
+            적용한 결과이고, 위 조건 칩은 AND 만 바꾼다. 그룹이 없으면 아무것도 그리지 않는다. */}
+        {orGroups.length > 0 ? (
+          <SegmentOrNotice groups={orGroups} summary={data?.segment} total={totalCount} onRemove={removeOrGroups} />
+        ) : null}
+
         {/* 조회 실패(danger) · 갱신 실패/부분 데이터/담당자 매핑(warning) — 톤은 status-tone SSOT.
             목록 자체를 못 불러온 것과 '이전 결과가 남아 있는 갱신 실패'·참고 경고를 색과 role로 가른다. */}
         {error ? (
@@ -1056,16 +1101,9 @@ export default function CrmUnifiedCustomersClient({
           onRefresh={() => void loadPage(0, { force: true })}
         />
 
-        {/* 마지막 연락 원천 상태 — Compass 가 끊기면 Home 기록만으로 계산했다는 것을 "기록 없음"과 구분해 알린다. */}
-        {compassStatus === "down" || compassStatus === "partial" || homeContactDetail === "down" ? (
-          <p className={`mb-2 px-0.5 text-[11px] font-semibold ${STATUS_TONE_TEXT_CLASS.warning}`} role="status">
-            {compassStatus === "down"
-              ? "Compass 연결 끊김 — 마지막 연락은 Home 기록만 반영"
-              : compassStatus === "partial"
-                ? "Compass 활동 일부만 반영(조회 상한) — 마지막 연락이 실제보다 오래돼 보일 수 있습니다"
-                : "연락 기록 세부를 불러오지 못해 마지막 연락은 시각만 표시"}
-          </p>
-        ) : null}
+        {/* 원천 상태 — Compass 활동이 끊기면 마지막 연락이 Home 기록만이라는 것을, Compass 리드 참조가 끊기면
+            "Compass에서 열기" 링크가 빠졌다는 것을 "기록 없음·매칭 없음"과 구분해 알린다(둘은 따로 끊길 수 있다). */}
+        <ContactSourceCaption meta={data?.meta} className="mb-2 px-0.5" />
 
         {exportError ? (
           <CrmNoticeBanner

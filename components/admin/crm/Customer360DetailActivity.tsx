@@ -12,6 +12,7 @@ import {
   type CompassTimelineGroup,
 } from "@/lib/crm/compass-timeline"
 import { isLeadEraRow, LEAD_ERA_LABEL } from "@/lib/crm/customer-contact-summary"
+import type { CrmWriteSurface } from "@/lib/crm/write-surface"
 import type { Customer360Compass, Customer360LinkedLeads, Customer360Source } from "@/lib/repositories/crm-customer-360"
 import type { CrmCustomerEventRecord, ListCrmCustomerEventsResult } from "@/lib/repositories/crm-events"
 
@@ -266,15 +267,25 @@ function CompassActivityCard({ entry }: { entry: CompassTimelineEntry }) {
   )
 }
 
-/** 패널 설명 한 줄 — 병합 원천(Compass·리드 시절)을 건수와 함께 밝힌다. 순수 함수(테스트 고정). */
+/**
+ * 패널 설명 한 줄 — 병합 원천(Compass·리드 시절)을 건수와 함께 밝힌다. 순수 함수(테스트 고정).
+ * A안(2026-09-25) — writeSurface="compass"(Compass 에서 응대 중인 리드)면 기록 위치를 "Compass에서"로 안내한다.
+ * 기본값(없음·home)은 기존 문구 그대로다.
+ */
 export function activityPanelDescription(input: {
   compassCount: number
   leadEraCount: number
   linkedLeadCount: number
+  writeSurface?: CrmWriteSurface | null
 }): string {
   const merges: string[] = []
   if (input.compassCount > 0) merges.push(`Compass ${input.compassCount}건`)
   if (input.leadEraCount > 0) merges.push(`${LEAD_ERA_LABEL} ${input.leadEraCount}건(연결 리드 ${input.linkedLeadCount}개)`)
+  if (input.writeSurface === "compass") {
+    return merges.length > 0
+      ? `회의록 · 통화 · 메모 타임라인 · ${merges.join(" · ")} 병합 (읽기 전용 · 기록은 Compass에서)`
+      : "회의록 · 통화 · 메모 타임라인 (읽기 전용 — 기록은 Compass에서)"
+  }
   return merges.length > 0
     ? `회의록 · 통화 · 메모 타임라인 · ${merges.join(" · ")} 병합 (읽기 전용)`
     : "회의록 · 통화 · 메모 타임라인 (읽기 전용 — 기록 생성은 드로어에서)"
@@ -285,6 +296,7 @@ export default function Customer360DetailActivity({
   compass,
   customerSource,
   linkedLeads,
+  writeSurface,
 }: {
   activity: ListCrmCustomerEventsResult
   compass: Customer360Compass
@@ -292,6 +304,8 @@ export default function Customer360DetailActivity({
   customerSource?: Customer360Source
   /** CT9 — 확정 연결 리드 병합 상태(옛 페이로드에는 없을 수 있다). */
   linkedLeads?: Customer360LinkedLeads | null
+  /** A안 — 기록 위치(lib/crm/write-surface). 없으면 기존 안내 문구. */
+  writeSurface?: CrmWriteSurface | null
 }) {
   const [filter, setFilter] = useState<ActivityFilter>("all")
   const rows = activity.rows
@@ -316,6 +330,7 @@ export default function Customer360DetailActivity({
         compassCount: compass.entries.length,
         leadEraCount,
         linkedLeadCount: linkedLeads?.leadIds.length ?? 0,
+        writeSurface,
       })}
       action={
         <div className="inline-flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-0.5">

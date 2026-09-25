@@ -8,6 +8,10 @@
 //  - 금액 조건은 통화별 축만 — 잔액(¥)은 외부 CRM 고객에게만 걸린다.
 // 상태는 부모(CrmUnifiedCustomersClient)가 URL(?expDays= 등)과 함께 소유하고, 여기는 표시·콜백만 한다.
 // 라벨 방식(모두/하나)도 스펙(=URL)에서 파생한다(segmentTagMode) — 고른 라벨이 없을 때의 선호만 로컬에 둔다.
+//
+// 세그먼트 허브(2026-09-25, components/admin/crm/segments/**)도 기본 조건과 OR 그룹마다 이 막대를 다시 쓴다.
+// 그래서 표시만 바꾸는 선택 props(title·ariaLabel·idleHint·className·headerExtra·readOnly·testId)를 **추가만**
+// 했다 — 전부 생략하면 통합 목록의 예전 모양·문구 그대로다(호출부 무변경).
 
 import { useState, type ReactNode } from "react"
 import { ChevronDown, SlidersHorizontal } from "lucide-react"
@@ -66,12 +70,14 @@ function ConditionChip({
   active,
   onClick,
   title,
+  disabled,
 }: {
   label: string
   count: number | undefined
   active: boolean
   onClick: () => void
   title?: string
+  disabled?: boolean
 }) {
   const empty = count === 0
   return (
@@ -80,7 +86,8 @@ function ConditionChip({
       onClick={onClick}
       aria-pressed={active}
       title={title}
-      className={`inline-flex h-7 shrink-0 items-center gap-1 rounded-full border px-2.5 text-[11px] font-semibold transition-colors ${chipClass(active, empty)}`}
+      disabled={disabled}
+      className={`inline-flex h-7 shrink-0 items-center gap-1 rounded-full border px-2.5 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed ${chipClass(active, empty)}`}
     >
       {label}
       {count != null ? <span className="tabular-nums opacity-70">{count.toLocaleString("ko-KR")}</span> : null}
@@ -110,6 +117,7 @@ function FacetPicker({
   emptyText,
   hiddenCount,
   footer,
+  disabled,
 }: {
   label: string
   facets: CrmUnifiedSegmentFacet[]
@@ -119,6 +127,7 @@ function FacetPicker({
   /** 상한 때문에 싣지 않은 선택지 수(segment.facetHiddenCounts) — 옛 응답이면 undefined. */
   hiddenCount?: number
   footer?: ReactNode
+  disabled?: boolean
 }) {
   const hiddenCaption = facetHiddenCaption(hiddenCount)
   const selectedSet = new Set(selected.map((value) => value.toLowerCase()))
@@ -151,6 +160,7 @@ function FacetPicker({
                       type="checkbox"
                       checked={checked}
                       onChange={() => onToggle(option.value)}
+                      disabled={disabled}
                       className="h-3.5 w-3.5 accent-[#084734]"
                     />
                     <span className="min-w-0 flex-1 truncate">{option.label}</span>
@@ -172,18 +182,43 @@ function FacetPicker({
   )
 }
 
+/** 조건 막대 겉 틀 기본 클래스 — className 을 넘기지 않으면 통합 목록의 예전 카드 모양 그대로. */
+export const SEGMENT_CONDITION_BAR_DEFAULT_CLASS = "mb-4 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-3"
+/** 조건이 하나도 없을 때의 기본 안내 문구. */
+export const SEGMENT_CONDITION_BAR_IDLE_HINT = "모두 AND로 묶입니다 · 칩 숫자는 그 조건 하나만 켰을 때 인원"
+
 export default function SegmentConditionBar({
   spec,
   onChange,
   segment,
   total,
   loading,
+  title = "조건",
+  ariaLabel = "고객 조건",
+  idleHint = SEGMENT_CONDITION_BAR_IDLE_HINT,
+  className = SEGMENT_CONDITION_BAR_DEFAULT_CLASS,
+  headerExtra,
+  readOnly = false,
+  testId,
 }: {
   spec: CustomerSegmentSpec
   onChange: (next: CustomerSegmentSpec) => void
   segment: CrmUnifiedSegmentSummary | undefined
   total: number | null
   loading: boolean
+  /** 머리 줄 제목(기본 "조건") — 허브는 "기본 조건"·"그룹 1" 등. */
+  title?: ReactNode
+  /** section aria-label(기본 "고객 조건") — 한 화면에 막대가 여럿이면 서로 다른 이름을 준다. */
+  ariaLabel?: string
+  /** 켜진 조건이 없을 때 머리 줄 안내(기본 SEGMENT_CONDITION_BAR_IDLE_HINT). */
+  idleHint?: string
+  /** 겉 틀 클래스(기본 SEGMENT_CONDITION_BAR_DEFAULT_CLASS) — 넘기면 통째로 바꾼다. */
+  className?: string
+  /** 머리 줄 오른쪽(조건 초기화 옆) 추가 요소 — 허브 OR 그룹의 "그룹 지우기" 등. */
+  headerExtra?: ReactNode
+  /** 읽기 전용(편집 권한 없음·새 조건 판) — 칩·목록 선택·초기화를 막는다. 건수 표시는 그대로. */
+  readOnly?: boolean
+  testId?: string
 }) {
   const optionCounts = segment?.optionCounts ?? {}
   const activeKeys = activeSegmentConditionKeys(spec)
@@ -198,46 +233,58 @@ export default function SegmentConditionBar({
 
   const count = (key: SegmentConditionKey, value: string | number) => optionCounts[segmentOptionKey(key, value)]
 
+  // 읽기 전용이면 어떤 경로로도 onChange 를 부르지 않는다(칩은 disabled 로도 막는다).
+  const emit = (next: CustomerSegmentSpec) => {
+    if (!readOnly) onChange(next)
+  }
+
   const switchTagMode = (mode: SegmentTagMode) => {
-    if (mode === tagMode) return
+    if (readOnly || mode === tagMode) return
     setPreferredTagMode(mode)
     // 이미 고른 라벨은 새 모드로 옮긴다(모두↔하나 전환이 선택을 잃지 않게).
-    if (selectedTags.length) onChange(switchSegmentTagMode(spec, mode))
+    if (selectedTags.length) emit(switchSegmentTagMode(spec, mode))
   }
 
   const toggleTag = (value: string) => {
+    if (readOnly) return
     // 마지막 라벨을 해제해도 방식이 URL 에서 온 쪽으로 남게 지금 방식을 기억한다.
     setPreferredTagMode(tagMode)
-    onChange(toggleSegmentListValue(spec, tagKey, value))
+    emit(toggleSegmentListValue(spec, tagKey, value))
   }
 
+  const resetButton =
+    active && !readOnly ? (
+      <button
+        type="button"
+        onClick={() => emit({})}
+        className="h-7 rounded-md px-2 text-[11px] font-semibold text-[#1a1a1a]/50 transition-colors hover:text-[#111110]"
+      >
+        조건 초기화
+      </button>
+    ) : null
+
   return (
-    <section
-      className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-3"
-      aria-label="고객 조건"
-      aria-busy={loading}
-    >
+    <section className={className} aria-label={ariaLabel} aria-busy={loading} data-testid={testId}>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <p className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#111110]">
           <SlidersHorizontal className="h-3.5 w-3.5 text-[#1a1a1a]/45" aria-hidden />
-          조건
+          {title}
           <span className="font-medium text-[#1a1a1a]/45">
             {active
               ? `${activeKeys.length}개 적용 · ${total == null ? "…" : `${total.toLocaleString("ko-KR")}명`}${
                   segment ? ` / 조건 전 ${segment.baseTotal.toLocaleString("ko-KR")}명` : ""
                 }`
-              : "모두 AND로 묶입니다 · 칩 숫자는 그 조건 하나만 켰을 때 인원"}
+              : idleHint}
           </span>
         </p>
-        {active ? (
-          <button
-            type="button"
-            onClick={() => onChange({})}
-            className="h-7 rounded-md px-2 text-[11px] font-semibold text-[#1a1a1a]/50 transition-colors hover:text-[#111110]"
-          >
-            조건 초기화
-          </button>
-        ) : null}
+        {headerExtra ? (
+          <div className="flex flex-wrap items-center gap-1">
+            {resetButton}
+            {headerExtra}
+          </div>
+        ) : (
+          resetButton
+        )}
       </div>
       {active && labels.length ? (
         <p className="mb-2 text-[11px] font-medium text-[#1a1a1a]/45">{labels.join(" · ")}</p>
@@ -259,7 +306,8 @@ export default function SegmentConditionBar({
                     count={count(group.key, value)}
                     active={current === value}
                     title={group.hint}
-                    onClick={() => onChange(toggleSegmentNumber(spec, group.key, value))}
+                    onClick={() => emit(toggleSegmentNumber(spec, group.key, value))}
+                    disabled={readOnly}
                   />
                 ))}
               </div>
@@ -275,7 +323,8 @@ export default function SegmentConditionBar({
                 label={SEGMENT_KIND_LABELS[value]}
                 count={count("kinds", value)}
                 active={Boolean(spec.kinds?.includes(value))}
-                onClick={() => onChange(toggleSegmentListValue(spec, "kinds", value))}
+                onClick={() => emit(toggleSegmentListValue(spec, "kinds", value))}
+                disabled={readOnly}
               />
             ))}
           </div>
@@ -287,7 +336,8 @@ export default function SegmentConditionBar({
                 label={SEGMENT_RISK_LABELS[value]}
                 count={count("risk", value)}
                 active={Boolean(spec.risk?.includes(value))}
-                onClick={() => onChange(toggleSegmentListValue(spec, "risk", value))}
+                onClick={() => emit(toggleSegmentListValue(spec, "risk", value))}
+                disabled={readOnly}
               />
             ))}
           </div>
@@ -299,7 +349,8 @@ export default function SegmentConditionBar({
                 label={SEGMENT_BILLING_LABELS[value]}
                 count={count("billing", value)}
                 active={Boolean(spec.billing?.includes(value))}
-                onClick={() => onChange(toggleSegmentListValue(spec, "billing", value))}
+                onClick={() => emit(toggleSegmentListValue(spec, "billing", value))}
+                disabled={readOnly}
               />
             ))}
           </div>
@@ -308,7 +359,8 @@ export default function SegmentConditionBar({
               label="담당"
               facets={segment?.facets.owners ?? []}
               selected={spec.owners ?? []}
-              onToggle={(value) => onChange(toggleSegmentListValue(spec, "owners", value))}
+              onToggle={(value) => emit(toggleSegmentListValue(spec, "owners", value))}
+              disabled={readOnly}
               emptyText="담당 정보가 없습니다."
               hiddenCount={segment?.facetHiddenCounts?.owners}
             />
@@ -316,7 +368,8 @@ export default function SegmentConditionBar({
               label="지역"
               facets={segment?.facets.regions ?? []}
               selected={spec.regions ?? []}
-              onToggle={(value) => onChange(toggleSegmentListValue(spec, "regions", value))}
+              onToggle={(value) => emit(toggleSegmentListValue(spec, "regions", value))}
+              disabled={readOnly}
               emptyText="지역 정보가 없습니다."
               hiddenCount={segment?.facetHiddenCounts?.regions}
             />
@@ -325,6 +378,7 @@ export default function SegmentConditionBar({
               facets={segment?.facets.tags ?? []}
               selected={selectedTags}
               onToggle={toggleTag}
+              disabled={readOnly}
               emptyText="붙은 라벨이 없습니다."
               hiddenCount={segment?.facetHiddenCounts?.tags}
               footer={
@@ -336,6 +390,7 @@ export default function SegmentConditionBar({
                       type="button"
                       onClick={() => switchTagMode(mode)}
                       aria-pressed={tagMode === mode}
+                      disabled={readOnly}
                       className={`h-7 rounded-md border px-2 text-[11px] font-semibold ${chipClass(tagMode === mode, false)}`}
                     >
                       {mode === "all" ? "모두 가진" : "하나라도 가진"}

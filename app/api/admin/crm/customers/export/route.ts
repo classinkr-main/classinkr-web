@@ -3,19 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { logAdminAudit } from "@/lib/auth/audit"
 import { csvFileName } from "@/lib/crm/csv"
-import { parseSegmentSpec } from "@/lib/crm/customer-segment-spec"
-import {
-  parseIncludeUnconfirmedParam,
-  parseUnifiedLifecycle,
-  parseUnifiedSavedView,
-  parseUnifiedSort,
-  parseUnifiedSource,
-} from "@/lib/crm/unified-view-rules"
-import {
-  CURRENT_ADMIN_OWNER_TOKEN,
-  findAdminCrmOwner,
-  listAdminUserDirectory,
-} from "@/lib/repositories/admin-users"
+import { parseUnifiedQueryOptions } from "@/lib/crm/unified-query-options"
 import {
   CRM_UNIFIED_EXPORT_MAX_ROWS,
   getCrmUnifiedCustomersForExport,
@@ -28,7 +16,8 @@ import { buildUnifiedCustomersCsv } from "./unified-customers-csv"
 // 쿼리: 통합 목록(GET /api/admin/crm/customers/unified)과 같은 파라미터를 같은 파서로 읽는다 —
 //   q · source · lifecycle · view · owner(__me 포함) · tag · includeUnconfirmed · 세그먼트 조건
 //   (expDays · depDays · noContactDays · minBalanceCny · kinds · risk · billing · owners · regions ·
-//   tagsAll · tagsAny) · sort · dir. limit/offset 은 받지 않는다(페이지가 아니라 조건 전체).
+//   tagsAll · tagsAny + OR 그룹 `or` — 세그먼트 허브) · sort · dir. limit/offset 은 받지 않는다(페이지가 아니라
+//   조건 전체). 파서는 lib/crm/unified-query-options.ts 하나(통합 목록·대상 미리보기와 공용).
 //   keys(반복 또는 쉼표) — 선택한 행만(현재 조건과 AND, 최대 500).
 // 상한: CRM_UNIFIED_EXPORT_MAX_ROWS(5,000)행. 넘으면 앞 5,000행(목록과 같은 정렬)만 싣고 응답 헤더
 //   X-Export-Truncated: 1 · X-Export-Total: 전체 건수로 알린다(화면이 "N명 중 5,000명만" 안내).
@@ -53,31 +42,10 @@ export async function GET(req: NextRequest) {
 
   try {
     const url = new URL(req.url)
-    const ownerParam = url.searchParams.get("owner") ?? undefined
-    const isMine = ownerParam === CURRENT_ADMIN_OWNER_TOKEN
-    const currentOwner = isMine ? findAdminCrmOwner(await listAdminUserDirectory(), admin) : null
-    const ownerKeys = isMine
-      ? currentOwner?.ownerKeys.length
-        ? currentOwner.ownerKeys
-        : ["__no_current_admin_owner__"]
-      : undefined
-    const segment = parseSegmentSpec(url.searchParams)
     const keys = parseKeys(url.searchParams)
 
     const result = await getCrmUnifiedCustomersForExport(
-      {
-        q: url.searchParams.get("q") ?? undefined,
-        source: parseUnifiedSource(url.searchParams.get("source")),
-        lifecycle: parseUnifiedLifecycle(url.searchParams.get("lifecycle")),
-        view: parseUnifiedSavedView(url.searchParams.get("view")),
-        owner: isMine ? undefined : ownerParam,
-        ownerKeys,
-        tag: url.searchParams.get("tag") ?? undefined,
-        includeUnconfirmed: parseIncludeUnconfirmedParam(url.searchParams.get("includeUnconfirmed")),
-        segment,
-        sort: parseUnifiedSort(url.searchParams.get("sort"), url.searchParams.get("dir")),
-        keys,
-      },
+      { ...(await parseUnifiedQueryOptions(url.searchParams, admin)), keys },
       CRM_UNIFIED_EXPORT_MAX_ROWS
     )
 

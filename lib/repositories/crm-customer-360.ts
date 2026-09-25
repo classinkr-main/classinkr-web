@@ -8,6 +8,7 @@ import {
 } from "@/lib/admin-crm-customers-neo"
 import { getCompassActivitiesByLeadIds, getCompassLeadsByPhoneKeys } from "@/lib/compass/bridge"
 import { compassLeadUrl, normalizePhoneKey } from "@/lib/compass/normalize"
+import { pickRepresentativeCompassRow } from "@/lib/compass/overlay"
 import {
   toCompassTimelineEntries,
   type CompassTimelineEntry,
@@ -140,8 +141,16 @@ export interface Customer360Risk {
 export interface Customer360Compass {
   /** 전화 정규화 키로 매칭된 Compass 리드 id들 */
   leadIds: number[]
-  /** 대표 리드 딥링크(매칭 리드가 하나도 없으면 null) */
+  /**
+   * 대표 리드 딥링크(매칭 리드가 하나도 없으면 null). 같은 전화에 Compass 리드가 여러 건이면
+   * lib/compass/overlay pickRepresentativeCompassRow(최근성 → id) — 리드 보드 칩과 같은 리드를 연다.
+   */
   href: string | null
+  /**
+   * A안(2026-09-25) — 대표 리드의 Compass 단계 원값(normalize.ts 사전 키, 예: "contact"·"bd"). 표시 보조용이며
+   * 옛 캐시·픽스처에는 없을 수 있다(옵셔널). 본문(next_action·메모)은 싣지 않는다.
+   */
+  stage?: string | null
   entries: CompassTimelineEntry[]
   down: boolean
   /**
@@ -182,6 +191,12 @@ export interface Customer360 {
   origin: LeadOriginClass | null
   /** 리드가 NEO(회사 CRM) 계정으로 등록 확정됐는지 — crm_source_links lead→external_account confirmed */
   crmRegistered: boolean
+  /**
+   * A안(2026-09-25) — 리드 상태 원값(new·contacted·converted·closed). NEO 계정·미발견은 null.
+   * 기록 위치 판정(lib/crm/write-surface: 전환 리드는 Home 정본)용 additive 필드 — 옛 캐시 페이로드·
+   * 테스트 픽스처에는 없을 수 있어 옵셔널이다.
+   */
+  leadStatus?: LeadRecord["status"] | null
   /** 확정된 NEO 계정 id (crmRegistered=true일 때만, 그 외 null) */
   neoAccountId: string | null
   risk: Customer360Risk
@@ -435,6 +450,11 @@ async function loadCompassActivity(phone: string | null | undefined): Promise<Cu
   if (leads.down) return { ...EMPTY_COMPASS, down: true }
   const leadIds = leads.rows.map((row) => row.id)
   if (leadIds.length === 0) return EMPTY_COMPASS
+  // 대표 행 — 정렬 없는 조회의 leadIds[0] 을 쓰면 같은 전화의 여러 Compass 리드 중 리드 보드 칩과 다른
+  // 리드를 열 수 있다. 칩·상태 자동 반영과 같은 규칙(최근성 → id)으로 고정한다.
+  const representative = pickRepresentativeCompassRow(leads.rows)
+  const href = representative ? compassLeadUrl(representative.id) : null
+  const stage = representative?.stage?.trim() || null
   const nextActionAts = leads.rows
     .filter((row) => !COMPASS_ENDED_STAGES.has(row.stage?.trim() ?? ""))
     .map((row) => row.next_action_at?.trim() ?? "")
@@ -442,12 +462,13 @@ async function loadCompassActivity(phone: string | null | undefined): Promise<Cu
 
   const activities = await getCompassActivitiesByLeadIds(leadIds)
   if (activities.down) {
-    return { leadIds, href: compassLeadUrl(leadIds[0]), entries: [], down: true, nextActionAts }
+    return { leadIds, href, stage, entries: [], down: true, nextActionAts }
   }
 
   return {
     leadIds,
-    href: compassLeadUrl(leadIds[0]),
+    href,
+    stage,
     entries: toCompassTimelineEntries(activities.rows),
     down: false,
     nextActionAts,
@@ -768,6 +789,8 @@ export async function getCrmCustomer360(
   let serviceRisk: ServiceRisk | null = null
   let found = false
   let origin: LeadOriginClass | null = null
+  // A안 — 기록 위치 판정용 리드 상태 원값(NEO 계정은 null).
+  let leadStatus: LeadRecord["status"] | null = null
   // CT9 — 진행 중인 리드의 팔로업만 "다음 연락" 후보다(전환·종료 리드의 남은 follow_up_at 은 뺀다).
   let leadFollowUpAt: string | null = null
 
@@ -778,6 +801,7 @@ export async function getCrmCustomer360(
         header = buildLeadHeader(key, lead, now)
         contacts = buildLeadContacts(lead)
         origin = classifyLeadOrigin(lead.source, hasAdClickId(lead))
+        leadStatus = lead.status
         found = true
         if (lead.status === "new" || lead.status === "contacted") leadFollowUpAt = lead.follow_up_at ?? null
       }
@@ -964,6 +988,7 @@ export async function getCrmCustomer360(
     origin,
     crmRegistered: Boolean(neoLink),
     neoAccountId: neoLink?.targetId ?? null,
+    leadStatus,
     risk,
     serviceRisk,
     activity: merged.activity,

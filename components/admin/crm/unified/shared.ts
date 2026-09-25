@@ -15,7 +15,6 @@ import {
   DORMANT_CONTACT_DAYS,
   EXPIRING_SOON_DAYS,
   RECENT_CONTACT_DAYS,
-  parseSegmentSpec,
   segmentSpecQueryString,
   writeSegmentSpecParams,
   type CustomerSegmentSpec,
@@ -28,6 +27,26 @@ import {
   type StatusTone,
 } from "@/lib/crm/status-tone"
 import { normalizeTag } from "@/lib/crm/tag-suggestions"
+import {
+  SEGMENT_OR_PARAM,
+  parseSegmentFilter,
+  segmentFilterGroups,
+  segmentFilterQueryString,
+} from "@/lib/crm/customer-segment-filter"
+
+/**
+ * Compass 리드 참조("Compass에서 열기" 링크) 조회 상태 — ok · down(끊김: 모든 행의 링크가 빠진다).
+ * 활동 조회(meta.compass)와 따로 돈다(저장소 loadCompassRefsByPhoneKey) — 활동이 ok 여도 참조만 끊길 수 있다.
+ */
+export type CrmUnifiedCompassRefsStatus = "ok" | "down"
+
+/**
+ * 화면이 읽는 원천 메타 — 저장소 메타에 참조 상태(compassRefs)를 옵셔널로 더한다. 저장소가 아직 싣지 않거나
+ * 옛 캐시 스냅샷이면 undefined(= 모름 — 캡션 없음). 저장소가 같은 이름·값으로 필드를 더해도 그대로 맞물린다.
+ */
+export type CrmUnifiedCustomersClientMeta = CrmUnifiedCustomersMeta & {
+  compassRefs?: CrmUnifiedCompassRefsStatus
+}
 
 export type SourceFilter = "all" | CrmUnifiedCustomerSource
 export type LifecycleFilter = "all" | CrmUnifiedLifecycle
@@ -74,8 +93,11 @@ export interface CrmUnifiedCustomers {
   }
   owners: Array<{ ownerName: string; count: number }>
   rows: CrmUnifiedCustomerRow[]
-  /** 마지막 연락 원천 상태(compass: down 이면 "Compass 연결 끊김 — Home 기록만"). 구 응답 호환으로 선택. */
-  meta?: CrmUnifiedCustomersMeta
+  /**
+   * 원천 상태(compass: down 이면 "Compass 연결 끊김 — Home 기록만", compassRefs: down 이면 "Compass 링크를 표시하지
+   * 못함" — ContactSourceCaption). 구 응답 호환으로 선택.
+   */
+  meta?: CrmUnifiedCustomersClientMeta
   /** 세그먼트 조건 요약(칩 건수·facets). 구 응답 호환으로 선택. */
   segment?: CrmUnifiedSegmentSummary
   /** 서버가 적용한 정렬(null = 추천순). */
@@ -212,8 +234,31 @@ export interface UnifiedListQueryInput {
   includeUnconfirmed?: boolean
   /** 세그먼트 조건(SG4) — 빈 조건이면 URL에 아무것도 싣지 않는다(기본 URL·프리페치 시드 불변). */
   segment?: CustomerSegmentSpec
+  /**
+   * 세그먼트 허브가 만든 OR 그룹(한 단계, 2026-09-25) — 이 화면은 편집하지 않고 화면 URL(`or=`)에서 받아
+   * 그대로 실어 보내기만 한다(목록·CSV 가 허브와 같은 조건). 없거나 빈 배열이면 아무것도 싣지 않는다
+   * (기본 URL·프리페치 시드 불변).
+   */
+  orGroups?: readonly CustomerSegmentSpec[]
   /** 서버 정렬(C1) — null/생략이면 싣지 않는다(추천순). */
   sort?: UnifiedSortState | null
+}
+
+/**
+ * OR 그룹을 정규형(빈 그룹 제거·중복 제거·정렬·상한 — lib/crm/customer-segment-filter.ts)으로 `or=` 반복
+ * 파라미터에 싣는다. 기존 `or` 는 먼저 지운다. 서버(parseSegmentFilter)가 같은 규칙으로 다시 읽는다.
+ */
+export function writeOrGroupParams(params: URLSearchParams, groups: readonly CustomerSegmentSpec[] | undefined) {
+  params.delete(SEGMENT_OR_PARAM)
+  for (const group of segmentFilterGroups({ anyOf: groups ? [...groups] : undefined })) {
+    params.append(SEGMENT_OR_PARAM, segmentSpecQueryString(group))
+  }
+  return params
+}
+
+/** 화면 URL 의 OR 그룹(정규형) — 없으면 빈 배열. 편집 UI 는 AND 만이라 이 값은 읽어서 실어 보내기만 한다. */
+export function parseOrGroupsParam(params: SearchParamsLike): CustomerSegmentSpec[] {
+  return segmentFilterGroups(parseSegmentFilter(params))
 }
 
 // 목록·내보내기 공용 쿼리 조립 — 기본값은 싣지 않는다(프리페치 시드 URL과 클라이언트 기본 URL 정합).
@@ -230,6 +275,7 @@ function appendListQuery(params: URLSearchParams, input: UnifiedListQueryInput) 
     params.set("dir", input.sort.direction)
   }
   writeSegmentSpecParams(params, input.segment)
+  writeOrGroupParams(params, input.orGroups)
   return params
 }
 
@@ -274,9 +320,13 @@ export function parseOwnerParam(raw: string | null | undefined): string {
   return raw?.trim().slice(0, 80) ?? ""
 }
 
-/** 화면 URL의 세그먼트 조건(정규형 쿼리 문자열 — 같은 조건이면 같은 문자열). */
+/**
+ * 화면 URL의 세그먼트 조건(정규형 쿼리 문자열 — 같은 조건이면 같은 문자열). AND 조건 + OR 그룹(`or=`)까지
+ * 담는다 — OR 만 바뀐 딥링크(세그먼트 허브 → 목록)도 착지 effect 가 알아채고, OR 만 실린 착지도 담당 복원을
+ * 막는다. OR 이 없으면 예전(AND 만) 문자열과 같다.
+ */
 export function segmentParamSignature(params: SearchParamsLike): string {
-  return segmentSpecQueryString(parseSegmentSpec(params))
+  return segmentFilterQueryString(parseSegmentFilter(params))
 }
 
 /**
@@ -284,10 +334,19 @@ export function segmentParamSignature(params: SearchParamsLike): string {
  * 넘긴 키만 바꾸고 나머지(?account= 드로어·?q= 등)는 그대로 둔다. 둘 이상을 함께 바꿀 때(필터 초기화)
  * 따로 router.replace를 두 번 부르면 두 번째 호출이 같은 이전 쿼리에서 출발해 첫 변경을 덮어쓴다 —
  * 그래서 한 번의 패치로 묶는다.
+ *
+ * `segment`(AND 조건)는 `or=` 를 건드리지 않는다 — 조건 칩으로 AND 만 바꿔도 허브에서 온 OR 그룹은 남는다.
+ * OR 그룹을 바꾸거나 지우는 것은 `orGroups` 를 넘길 때뿐이다(필터 초기화·"OR 조건 빼기").
  */
 export function patchUnifiedListParams(
   current: string,
-  patch: { view?: SavedViewFilter; tag?: string; owner?: string; segment?: CustomerSegmentSpec }
+  patch: {
+    view?: SavedViewFilter
+    tag?: string
+    owner?: string
+    segment?: CustomerSegmentSpec
+    orGroups?: readonly CustomerSegmentSpec[]
+  }
 ): string {
   const params = new URLSearchParams(current)
   if (patch.view !== undefined) {
@@ -305,6 +364,7 @@ export function patchUnifiedListParams(
     else params.delete("owner")
   }
   if (patch.segment !== undefined) writeSegmentSpecParams(params, patch.segment)
+  if (patch.orGroups !== undefined) writeOrGroupParams(params, patch.orGroups)
   return params.toString()
 }
 

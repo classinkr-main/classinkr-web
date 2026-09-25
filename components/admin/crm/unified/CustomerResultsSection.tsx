@@ -3,7 +3,11 @@
 // 결과 섹션 — 정렬 툴바 · 데스크톱 테이블 · 모바일 카드 · 페이지네이션 · 빈 상태.
 // 상태는 전부 부모(CrmUnifiedCustomersClient)가 소유하고 여기는 표시·콜백만 담당한다.
 // CrmUnifiedCustomersClient.tsx 분해(2026-08-28)로 이동. 2026-09-25: 행 선택 체크박스(현재 페이지만)·
-// 마지막 연락 열·NEO 신호 줄·서버 정렬(전체 결과 기준) 추가.
+// 마지막 연락 열·NEO 신호 줄·서버 정렬(전체 결과 기준) 추가. 같은 날 A안: Compass 매칭 행의 "다음 액션"
+// 칸(데스크톱)·카드(모바일)에 "Compass에서 열기 ↗"(UnifiedCompassLink — 매칭이 없으면 아무것도 없음).
+// 문구는 공용 판정(resolveCrmWriteSurface)을 따른다 — 전환·NEO 등록 확정 리드와 계정·전환 고객 행은 Home 정본이라
+// 보조 "Compass 기록 ↗"(2026-09-26 교차 리뷰 [25]). NEO 등록 확정은 리드 보드와 같은 원천(neo-registered)을
+// 여기서 한 번 읽어 넘긴다 — NEO 행이 스냅샷에 없어 안 접힌 등록 리드도 360·리드 보드와 같이 Home 정본(검증 [25] 잔여).
 
 import Link from "next/link"
 import { type MouseEvent, type ReactNode } from "react"
@@ -13,6 +17,7 @@ import CrmContactValue from "../CrmContactValue"
 import CrmCustomerFlags from "../CrmCustomerFlags"
 import { SORT_LABELS, SortableHeaderCell, type SortKey, type SortState } from "./sort"
 import { LastContactCell, LeadRowBadges, moneyCell, NeoSignalLine, sourceBadge, TagChips } from "./row-visuals"
+import UnifiedCompassLink, { unifiedRowNeedsNeoRegistration, useUnifiedNeoRegisteredLeadIds } from "./UnifiedCompassLink"
 import { PAGE_LIMIT, formatDate, rowToFlags, type CrmUnifiedCustomers, type SavedViewFilter } from "./shared"
 import { SECONDARY_TEXT_CLASS } from "../home/shared"
 
@@ -86,6 +91,12 @@ export default function CustomerResultsSection({
   // 행이 있으면 응답(generatedAt)도 있다 — 없을 때의 0 은 그려질 행이 없어 쓰이지 않는다.
   const baseNowMs = nowMs ?? (data?.generatedAt ? Date.parse(data.generatedAt) : 0)
   const selectable = Boolean(selectedKeys && onToggleRow)
+  // 등록 확정 원천은 문구가 바뀔 수 있는 행(Compass 링크가 있는 전환 아닌 리드)이 있을 때만 읽고, 목록 응답이
+  // 새로 오면(generatedAt) 다시 읽는다. 조회 전·실패는 미등록 폴백(리드 보드·360 과 같은 쪽).
+  const neoRegisteredLeadIds = useUnifiedNeoRegisteredLeadIds(
+    rows.some(unifiedRowNeedsNeoRegistration),
+    data?.generatedAt ?? null
+  )
   const pageSelection = pageSelectionState(
     rows.map((row) => row.key),
     selectedKeys ?? new Set<string>()
@@ -272,6 +283,8 @@ export default function CustomerResultsSection({
                 <td className="px-4 py-3">
                   <p className="text-[12px] font-semibold text-[#111110]">{row.nextActionLabel}</p>
                   <p className="mt-0.5 max-w-[220px] truncate text-[11px] text-[#1a1a1a]/40">{row.priorityReason}</p>
+                  {/* A안 — 응대·기록은 Compass 에서. 셀 안 새 탭 링크(행 더블클릭은 a 위에서 무시된다). */}
+                  <UnifiedCompassLink row={row} neoRegisteredLeadIds={neoRegisteredLeadIds} className="mt-1" />
                 </td>
                 <td className="px-4 py-3">{moneyCell(row)}</td>
                 <td className="px-4 py-3">
@@ -354,6 +367,14 @@ export default function CustomerResultsSection({
                 <div>
                   <p className="text-[11px] font-semibold text-[#1a1a1a]/35">다음 액션</p>
                   <p className="mt-0.5 font-semibold text-[#111110]">{row.nextActionLabel}</p>
+                  {/* 카드 상세 버튼은 형제(absolute z-0)라 조상이 button 이 아니다 — 실제 링크를 두고
+                      pointer-events-none 본문 위로만 클릭을 되살린다(z-20). */}
+                  <UnifiedCompassLink
+                    row={row}
+                    neoRegisteredLeadIds={neoRegisteredLeadIds}
+                    className="mt-0.5"
+                    linkClassName="pointer-events-auto relative z-20"
+                  />
                 </div>
                 <div>
                   <p className="text-[11px] font-semibold text-[#1a1a1a]/35">담당</p>

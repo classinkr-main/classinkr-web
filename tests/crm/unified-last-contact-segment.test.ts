@@ -155,7 +155,8 @@ describe("마지막 연락 읽기 모델(CT8)", () => {
     expect(byKey.get("lead:L2")?.lastContactAt ?? null).toBeNull()
     expect(byKey.get("neo:N2")?.lastContactAt ?? null).toBeNull()
     expect(result.summary.noContactRecordCount).toBe(2)
-    expect(result.meta).toEqual({ compass: "ok", homeContactDetail: "ok" })
+    // 연락 원천 메타만 본다(compassRefs 는 Compass 리드 참조 조회 — 이 목은 흉내 내지 않는다).
+    expect(result.meta).toMatchObject({ compass: "ok", homeContactDetail: "ok" })
 
     // 브리지에는 9자리 이상 정규화 전화 키만, 사람 활동 kind 와 자동 작성자 제외 목록을 넘긴다.
     const [keys, bridgeOptions] = compassMock.mock.calls[0]

@@ -6,7 +6,7 @@
 import type { CrmPriorityBucket, CrmPrioritySource } from "@/lib/crm/priority"
 import type { ServiceRiskLevel } from "@/lib/crm/service-risk"
 import type { LastContactSource } from "@/lib/crm/last-contact"
-import type { CrmNeoBillingMode } from "@/lib/supabase/database.types"
+import type { CrmNeoBillingMode, LeadStatus } from "@/lib/supabase/database.types"
 import {
   DORMANT_CONTACT_DAYS,
   RECENT_CONTACT_DAYS,
@@ -70,7 +70,10 @@ export interface CrmUnifiedCustomerRow {
   tags: string[]
   /** 리드 유입 출신 (lead 전용, 그 외 null) */
   origin: "site" | "ad" | "team" | null
-  /** NEO(회사 CRM) 등록 확정 여부 — crm_source_links lead→external_account confirmed */
+  /**
+   * NEO(회사 CRM) 등록 배지 — crm_source_links 의 lead→external_account·external_lead 확정 링크를 모두 센다.
+   * 기록 위치 판정(360·오늘 연락과 같은 external_account 만)에는 아래 neoAccountConfirmed 를 쓴다.
+   */
   crmRegistered: boolean
   /** 미확인(confirmed_at null)·status new 리드 — site_leads/unanswered 뷰에서만 노출 */
   provisional: boolean
@@ -117,6 +120,17 @@ export interface CrmUnifiedCustomerRow {
    * 전화 키 자체는 싣지 않는다(API 응답에 전화 키 노출 금지).
    */
   compass?: CrmUnifiedCompassRef | null
+  // ── 기록 위치 판정 힌트(A안, 2026-09-26 교차 리뷰 [25] 후속) — lead 행만 채운다. 다른 원천은 미정. ──
+  // 이름은 components/admin/crm/unified/UnifiedCompassLink.tsx 의 UnifiedCompassWriteHints 와 같다(그대로 흘러든다).
+  // 둘 다 옵셔널이다 — 옛 캐시 스냅샷·조회 실패면 미정(= 모름)이고, 화면은 statusLabel·neo-registered 원천으로 폴백한다.
+  /** 리드 상태 원값(leads.status). 표시는 statusLabel 이 한다 — 이 값은 판정 입력(resolveCrmWriteSurface)용. */
+  leadStatus?: LeadStatus | null
+  /**
+   * 리드 → NEO 계정(external_account) 등록 확정 — 고객 360 findConfirmedLeadNeoLink·GET /api/admin/crm/leads/neo-registered
+   * 와 같은 집합(listConfirmedLeadNeoAccountLinks). crmRegistered(external_lead 까지 세는 배지)와 다르다 — 섞으면 목록과
+   * 360 이 반대 방향으로 갈린다. 링크 조회가 실패한 스냅샷에서는 필드를 싣지 않는다(false 로 위장하지 않는다).
+   */
+  neoAccountConfirmed?: boolean
 }
 
 /** 통합 행의 Compass 참조 — url 은 lib/compass/normalize.ts compassLeadUrl(leadId) 결과. */

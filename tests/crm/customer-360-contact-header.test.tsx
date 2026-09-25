@@ -19,7 +19,9 @@ vi.mock("next/navigation", () => ({
 import Customer360ContactSummary from "@/components/admin/crm/Customer360ContactSummary"
 import Customer360DetailActivity, { activityPanelDescription } from "@/components/admin/crm/Customer360DetailActivity"
 import Customer360DetailClient from "@/components/admin/crm/Customer360DetailClient"
-import { buildDrawerHealthInput, labelLeadEraRowsForDrawer } from "@/components/admin/crm/Customer360Drawer"
+import { buildDrawerHealthInput } from "@/components/admin/crm/Customer360Drawer"
+import DrawerActivitySection from "@/components/admin/crm/drawer/DrawerActivitySection"
+import { mergeCompassTimeline } from "@/lib/crm/compass-timeline"
 import { buildCustomerContactSummary, type CustomerContactSummary } from "@/lib/crm/customer-contact-summary"
 import { computeCustomerHealth } from "@/lib/crm/customer-health"
 import type { Customer360 } from "@/lib/repositories/crm-customer-360"
@@ -142,19 +144,42 @@ describe("드로어 — 건강도 입력·리드 시절 표시", () => {
     expect(buildDrawerHealthInput(legacy, null).lastContactDays).toBeNull()
   })
 
-  it("NEO 계정 360 의 리드 시절 행만 제목 머리에 '리드 시절 · '을 붙이고, 원본은 바꾸지 않는다", () => {
+  // 2026-09-25 — 제목 머리말("리드 시절 · ") 사본 대신 드로어 타임라인이 원천 칩을 직접 그린다(상세 활동 탭과 같은 표기).
+  it("NEO 계정 360 드로어 타임라인은 리드 시절 행에만 '리드 시절' 칩을 붙이고 제목은 바꾸지 않는다", () => {
     const rows = [event({ id: "own" }), event({ id: "lead", targetType: "lead", targetId: "lead-7", title: "전화 · 응답" })]
-    const labelled = labelLeadEraRowsForDrawer(rows, "neo_account")
-    expect(labelled.map((r) => r.title)).toEqual(["통화", "리드 시절 · 전화 · 응답"])
-    expect(rows[1].title).toBe("전화 · 응답")
-    // 리드 360 은 그대로(참조 동일).
-    expect(labelLeadEraRowsForDrawer(rows, "lead")).toBe(rows)
+    const renderSection = (source: "neo_account" | "lead") =>
+      renderToStaticMarkup(
+        <DrawerActivitySection
+          data={{ source, found: true, activity: activity(rows), compass: COMPASS, header: null } as unknown as Customer360}
+          activityTab="timeline"
+          onActivityTabChange={() => undefined}
+          activitySource="all"
+          onActivitySourceChange={() => undefined}
+          feedRows={[]}
+          mergedActivity={mergeCompassTimeline(rows, [])}
+          eventsExpanded={false}
+          eventsLoading={false}
+          onLoadMoreEvents={() => undefined}
+          targetType={source}
+          entityId={source === "lead" ? "lead-7" : "acc-9"}
+        />
+      )
+
+    const neoHtml = renderSection("neo_account")
+    expect((neoHtml.match(/data-testid="c360-drawer-lead-era-chip"/g) ?? []).length).toBe(1)
+    expect(neoHtml).toContain(">전화 · 응답<")
+    expect(neoHtml).not.toContain("리드 시절 · 전화")
+    // 칩은 채움 없이 얇은 선 + 중립 글자색.
+    expect(neoHtml).toContain("border-[#E8E8E4]")
+    // 리드 360 은 칩이 없다.
+    expect(renderSection("lead")).not.toContain("c360-drawer-lead-era-chip")
   })
 
-  it("소스 계약 — 헤더에 요약을 두고, 피드·타임라인 모두 리드 시절 표시 사본을 쓴다", () => {
+  it("소스 계약 — 헤더에 요약을 두고, 피드·타임라인은 같은 활동 행을 쓴다(제목 사본 없음)", () => {
     const source = readFileSync(join(process.cwd(), "components/admin/crm/Customer360Drawer.tsx"), "utf8")
     expect(source).toContain("<Customer360ContactSummary summary={data?.contactSummary}")
-    expect(source).toContain("labelLeadEraRowsForDrawer(data?.activity.rows ?? [], data?.source)")
+    expect(source).not.toContain("labelLeadEraRowsForDrawer")
+    expect(source).toContain("const activityRows = useMemo(() => data?.activity.rows ?? [], [data])")
     expect(source).toContain("activityRows.filter((event) => event.sentiment === \"risk\")")
     // 세대 가드는 그대로 — 요약도 같은 data 로만 그려진다(별도 fetch 없음).
     expect(source).toContain("const seq = ++loadSeqRef.current")

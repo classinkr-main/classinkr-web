@@ -1,14 +1,35 @@
 "use client"
 
 // 활동 타임라인 + 특이사항 피드 섹션 — 탭·필터 상태는 부모(드로어 본체)가 소유한다.
-// Customer360Drawer.tsx 분해(2026-08-28)로 이동 — 로직 무변경.
+// Customer360Drawer.tsx 분해(2026-08-28)로 이동.
+// 2026-09-25: NEO 계정 360 에 합쳐진 확정 연결 리드 기록(리드 시절)은 제목을 고치지 않고 원천 칩으로 구분한다
+// (상세 활동 탭 LeadEraChip 과 같은 표기). Compass 링크는 공용 CompassOpenLink 하나로 그린다 — 리드가 Compass 에서
+// 응대 중이면 "Compass에서 열기", NEO 계정·전환 리드처럼 Home 이 정본이면 보조 "Compass 기록"(lib/crm/write-surface).
 
 import Link from "next/link"
 import { ArrowUpRight } from "lucide-react"
+import CompassOpenLink from "@/components/admin/compass/CompassOpenLink"
 import type { Customer360 } from "@/lib/repositories/crm-customer-360"
 import type { MergedTimelineItem } from "@/lib/crm/compass-timeline"
+import { isLeadEraRow, LEAD_ERA_LABEL } from "@/lib/crm/customer-contact-summary"
+import { COMPASS_RECORD_LABEL, resolveCrmWriteSurface } from "@/lib/crm/write-surface"
 import { eventSourceIcon, eventSourceLabel } from "../event-source-meta"
 import { CompassTimelineRow, formatDate } from "./shared"
+
+/**
+ * 리드 시절 원천 칩 — 채움 없이 얇은 선 + 중립 글자색(카테고리 구분이지 상태가 아니다).
+ * 상세 활동 탭(Customer360DetailActivity LeadEraChip)과 같은 표기. 테스트가 data-testid 로 유무를 고정한다.
+ */
+export function DrawerLeadEraChip() {
+  return (
+    <span
+      data-testid="c360-drawer-lead-era-chip"
+      className="inline-flex items-center rounded-md border border-[#E8E8E4] px-1.5 py-0.5 text-[10px] font-semibold text-[#615D59]"
+    >
+      {LEAD_ERA_LABEL}
+    </span>
+  )
+}
 
 export type C360ActivityTab = "timeline" | "feed"
 export type C360ActivitySource = "all" | "manual_note" | "meeting_minutes"
@@ -40,6 +61,15 @@ export default function DrawerActivitySection({
   targetType: string
   entityId: string
 }) {
+  // 기록 위치 판정 — 리드가 Compass 에서 응대 중이면 주 링크 문구, Home 이 정본이면 보조 문구.
+  const writeSurface = resolveCrmWriteSurface({
+    source: data.source,
+    found: data.found,
+    compassHref: data.compass.href,
+    compassDown: data.compass.down,
+    leadStatus: data.leadStatus,
+    crmRegistered: data.crmRegistered,
+  })
   return (
     <section id="c360-activity" className="scroll-mt-2 rounded-2xl border border-[#e8e8e4] bg-white p-4">
       <div role="tablist" aria-label="고객 활동 보기" className="mb-3 inline-flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-0.5">
@@ -127,6 +157,7 @@ export default function DrawerActivitySection({
             const isMemo = event.sourceType === "manual_note" || event.sourceType === "meeting_minutes"
             const memoText = event.body ?? event.summary
             const author = event.ownerName ?? event.createdBy
+            const leadEra = isLeadEraRow(data.source, event.targetType)
             return (
               <li key={event.id} className="flex gap-2.5">
                 <span
@@ -138,6 +169,7 @@ export default function DrawerActivitySection({
                 </span>
                 <div className="min-w-0 flex-1 border-b border-[#f5f5f2] pb-2.5">
                   <div className="flex flex-wrap items-center gap-1.5">
+                    {leadEra ? <DrawerLeadEraChip /> : null}
                     <span className="text-[11px] font-semibold text-[#1a1a1a]/45">
                       {eventSourceLabel(event.sourceType)}
                     </span>
@@ -185,15 +217,13 @@ export default function DrawerActivitySection({
         </Link>
         {/* 전화가 일치한 Compass 리드가 있을 때만 — 없으면 링크를 지어내지 않는다. */}
         {data.compass.href ? (
-          <a
+          <CompassOpenLink
             href={data.compass.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#2F5D8C] transition-colors hover:underline"
-          >
-            Compass 리드 열기
-            <ArrowUpRight className="h-3.5 w-3.5" />
-          </a>
+            name={data.header?.name ?? null}
+            variant="inline"
+            label={writeSurface.surface === "compass" ? undefined : COMPASS_RECORD_LABEL}
+            testId="c360-activity-compass-link"
+          />
         ) : null}
       </div>
     </section>

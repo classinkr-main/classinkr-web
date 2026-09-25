@@ -23,7 +23,14 @@ function emptyList(extra: Record<string, unknown> = {}) {
 
 async function loadRepository(options?: {
   phone?: string | null
-  compassLeads?: Array<{ id: number; phone_key: string | null }>
+  compassLeads?: Array<{
+    id: number
+    phone_key: string | null
+    stage?: string | null
+    last_inflow_at?: string | null
+    updated_at?: string | null
+    created_at?: string | null
+  }>
   compassLeadsDown?: boolean
   compassActivities?: Array<{
     id: number
@@ -305,5 +312,72 @@ describe("고객 360 — Compass 활동 병합", () => {
 
     expect(result.compass.down).toBe(true)
     expect(result.compass.href).toBe("https://mkt.classin.co.kr/leads?open=77")
+  })
+})
+
+// A안(2026-09-25) — 기록 위치 판정(lib/crm/write-surface)이 쓰는 additive 필드와 대표 링크.
+describe("고객 360 — 기록 위치 판정 입력(A안)", () => {
+  it("같은 전화에 Compass 리드가 여러 건이면 href 는 리드 보드 칩과 같은 대표(최근 유입) 리드다", async () => {
+    const { getCrmCustomer360 } = await loadRepository({
+      // 조회 순서상 앞에 오는 행(12)이 더 오래됐다 — leadIds[0] 을 쓰면 칩과 다른 리드를 연다.
+      compassLeads: [
+        { id: 12, phone_key: "01012345678", stage: "lost", last_inflow_at: "2026-07-01T00:00:00.000Z" },
+        { id: 34, phone_key: "01012345678", stage: "demo", last_inflow_at: "2026-08-20T00:00:00.000Z" },
+      ],
+    })
+
+    const result = await getCrmCustomer360(
+      { source: "lead", entityId: "lead-1", targetType: "lead" },
+      { now: NOW }
+    )
+
+    expect(result.compass.leadIds).toEqual([12, 34])
+    expect(result.compass.href).toBe("https://mkt.classin.co.kr/leads?open=34")
+    expect(result.compass.stage).toBe("demo")
+  })
+
+  it("리드 360 은 leadStatus 원값을 싣는다(전환 리드는 Home 정본 판정용)", async () => {
+    const { getCrmCustomer360 } = await loadRepository({
+      compassLeads: [{ id: 77, phone_key: "01012345678" }],
+    })
+    const { resolveCrmWriteSurface } = await import("@/lib/crm/write-surface")
+
+    const result = await getCrmCustomer360(
+      { source: "lead", entityId: "lead-1", targetType: "lead" },
+      { now: NOW }
+    )
+
+    expect(result.leadStatus).toBe("new")
+    expect(
+      resolveCrmWriteSurface({
+        source: result.source,
+        found: result.found,
+        compassHref: result.compass.href,
+        compassDown: result.compass.down,
+        leadStatus: result.leadStatus,
+        crmRegistered: result.crmRegistered,
+      })
+    ).toMatchObject({ surface: "compass", reason: "compass_lead", compassHref: "https://mkt.classin.co.kr/leads?open=77" })
+  })
+
+  it("리드 목록 조회가 끊기면 href 없이 down — 판정은 compass_down(Home + 캡션)", async () => {
+    const { getCrmCustomer360 } = await loadRepository({ compassLeadsDown: true })
+    const { resolveCrmWriteSurface } = await import("@/lib/crm/write-surface")
+
+    const result = await getCrmCustomer360(
+      { source: "lead", entityId: "lead-1", targetType: "lead" },
+      { now: NOW }
+    )
+
+    expect(result.compass.href).toBeNull()
+    expect(
+      resolveCrmWriteSurface({
+        source: result.source,
+        found: result.found,
+        compassHref: result.compass.href,
+        compassDown: result.compass.down,
+        leadStatus: result.leadStatus,
+      }).reason
+    ).toBe("compass_down")
   })
 })

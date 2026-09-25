@@ -154,6 +154,34 @@ describe("GET /api/admin/crm/customers/export", () => {
     expect(JSON.stringify(entry.payload)).not.toContain("010-1234-5678")
   })
 
+  it("OR 그룹(`or`, 세그먼트 허브)도 같은 파서로 받는다 — 감사 로그 조건 문구는 저장소가 만든 OR 문구 그대로", async () => {
+    mocks.getCrmUnifiedCustomersForExport.mockResolvedValueOnce({
+      generatedAt: NOW_ISO,
+      total: 2,
+      rows: [row({})],
+      truncated: false,
+      limit: 5000,
+      meta: { compass: "ok", homeContactDetail: "ok" },
+      segmentLabels: ["만료 60일 이내", "(무연락 60일+) 또는 (위험 긴급)"],
+    })
+    const { GET } = await loadRoute()
+    const response = await GET(
+      new NextRequest(
+        "https://classin.kr/api/admin/crm/customers/export?expDays=60&or=risk%3Durgent&or=noContactDays%3D60&or=risk%3Dbogus"
+      )
+    )
+
+    expect(response.status).toBe(200)
+    expect(mocks.getCrmUnifiedCustomersForExport.mock.calls[0][0].segment).toEqual({
+      expDays: 60,
+      anyOf: [{ noContactDays: 60 }, { risk: ["urgent"] }],
+    })
+    expect(mocks.logAdminAudit.mock.calls[0][0].payload.conditions).toEqual([
+      "만료 60일 이내",
+      "(무연락 60일+) 또는 (위험 긴급)",
+    ])
+  })
+
   it("내 담당(__me)은 로그인 담당자 키로 풀어 넘긴다", async () => {
     mocks.listAdminUserDirectory.mockResolvedValue([])
     mocks.findAdminCrmOwner.mockReturnValue({ ownerKeys: ["김담당", "neo-1"] })

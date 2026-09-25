@@ -22,6 +22,7 @@ import {
   rowMatchesOwner,
   rowVisibleInView,
   sortUnifiedRows,
+  type CrmUnifiedCompassRef,
   type CrmUnifiedCustomerRow,
   type CrmUnifiedCustomerSource,
   type CrmUnifiedLifecycle,
@@ -29,6 +30,13 @@ import {
   type CrmUnifiedSavedView,
   type UnifiedSortState,
 } from "@/lib/crm/unified-view-rules"
+import {
+  buildSegmentFilterMatcher,
+  describeSegmentFilter,
+  normalizeSegmentFilter,
+  segmentFilterGroups,
+  type CustomerSegmentFilter,
+} from "@/lib/crm/customer-segment-filter"
 import {
   SEGMENT_NONE_TOKEN,
   activeSegmentConditionKeys,
@@ -53,7 +61,9 @@ import {
   pickLatestContact,
   type LastContactFact,
 } from "@/lib/crm/last-contact"
-import { getCompassLatestActivityByPhoneKeys } from "@/lib/compass/bridge"
+import { getCompassLatestActivityByPhoneKeys, getCompassLeadsByPhoneKeys, type CompassLeadRow } from "@/lib/compass/bridge"
+import { compassLeadUrl } from "@/lib/compass/normalize"
+import { compassStageLabel, pickRepresentativeCompassRow } from "@/lib/compass/overlay"
 import { loadHomeContactIndex } from "@/lib/repositories/crm-contact-index"
 import { listAllCustomerListItemsLite } from "@/lib/portal/repositories/customers"
 import type { CustomerListItem } from "@/lib/portal/types"
@@ -153,8 +163,12 @@ export interface CrmUnifiedCustomersOptions {
    * 최대 60초 돌려받던 결함(C1)을 막는다.
    */
   bypassCache?: boolean
-  /** 세그먼트 조건(SG4) — 저장 뷰·라벨·검색·담당과 AND. lib/crm/customer-segment-spec.ts. */
-  segment?: CustomerSegmentSpec
+  /**
+   * 세그먼트 조건(SG4) — 저장 뷰·라벨·검색·담당과 AND. lib/crm/customer-segment-spec.ts.
+   * anyOf(OR 한 단계, 세그먼트 허브 2026-09-25)가 있으면 기본 조건 ∧ (그룹 중 하나라도) — lib/crm/customer-segment-filter.ts.
+   * CustomerSegmentSpec 의 상위 타입이라 기존 호출부(AND 스펙)는 그대로다.
+   */
+  segment?: CustomerSegmentFilter
   /** 서버 정렬(C1) — 조건 전체를 정렬한 뒤 페이지를 자른다. null/생략 = 추천순. */
   sort?: UnifiedSortState | null
   /** 이 행 키만(선택 내보내기용) — 다른 조건과 AND. */
@@ -169,6 +183,11 @@ export interface CrmUnifiedCustomersMeta {
   compass: CrmUnifiedCompassContactStatus
   /** Home 연락 세부(원천·채널·작성자) 조회 — down 이면 시각만 반영("Home 기록"). */
   homeContactDetail: "ok" | "down"
+  /**
+   * 행의 Compass 리드 참조(row.compass — "Compass에서 열기") 조회 상태. down 이면 링크가 없는 것이 "매칭 없음"이
+   * 아니라 조회 실패다(화면: ContactSourceCaption). 옛 캐시 스냅샷에는 없을 수 있다(= 모름).
+   */
+  compassRefs?: "ok" | "down"
 }
 
 export interface CrmUnifiedSegmentFacet {
@@ -179,11 +198,15 @@ export interface CrmUnifiedSegmentFacet {
 }
 
 export interface CrmUnifiedSegmentSummary {
-  /** 서버가 해석한 정규형 조건(알 수 없는 값은 빠짐) */
+  /** 서버가 해석한 정규형 조건(알 수 없는 값은 빠짐) — 기본(AND) 조건만. OR 그룹은 anyOf 로 따로 싣는다. */
   spec: CustomerSegmentSpec
   active: boolean
-  /** 켜진 조건 문구(캡션용) */
+  /** 켜진 조건 문구(캡션용) — OR 그룹이 있으면 "(A) 또는 (B)" 한 줄이 끝에 붙는다(describeSegmentFilter). */
   labels: string[]
+  /** OR 그룹(정규형, 세그먼트 허브) — 없으면 생략. 통합 목록 화면은 편집하지 않고 "OR 조건 포함" 안내만 한다. */
+  anyOf?: CustomerSegmentSpec[]
+  /** 그룹 i 의 건수 = 현재 베이스 ∧ 기본 조건 ∧ 그룹 i — anyOf 와 같은 길이, 없으면 생략. */
+  anyOfCounts?: number[]
   /** 조건 적용 전 베이스(검색·필터·저장 뷰까지) 건수 */
   baseTotal: number
   /** 조건 적용 후 건수 = summary.total */
@@ -640,6 +663,53 @@ const EMPTY_CORE_SNAPSHOT: CrmCoreSourceSnapshot = {
 // ── 마지막 연락 원천(CT8) ───────────────────────────────────────────────────
 // Home 연락 인덱스 로더는 오늘 연락(홈)·세그먼트 평가와 공유하려고 lib/repositories/crm-contact-index.ts 로 옮겼다.
 
+// ── Compass 리드 참조(A안 "Compass에서 열기", 2026-09-25) ─────────────────────
+// 같은 전화 키의 Compass 리드 중 대표 1건(overlay.ts pickRepresentativeCompassRow — 칩·상태 자동 반영과 같은 규칙)을
+// 행에 {leadId, url, stageLabel} 로만 싣는다. 전화 키·학원명·이름·금액은 싣지 않는다(응답·캐시 PII 최소화).
+// 읽기 전용이다(교차 쓰기 0). 한 덩어리라도 끊기면 전체를 null(링크 없음)로 본다 — 반쪽 링크를 "Compass 없음"처럼
+// 그리지 않는다(leads-overlay 라우트와 같은 판정). 스냅샷 완성 판정에는 넣지 않는다(보조 원천 — 2026-09-25 교훈).
+
+/** in(...) 목록이 길면 PostgREST URL 이 터진다 — 리드 오버레이 라우트와 같은 청크. */
+const COMPASS_REF_KEY_CHUNK = 300
+
+async function loadCompassRefsByPhoneKey(phoneKeys: readonly string[]): Promise<Map<string, CrmUnifiedCompassRef> | null> {
+  if (phoneKeys.length === 0) return new Map()
+  try {
+    // 정렬해 청크를 고정한다 — 같은 키 집합이면 같은 청크라 브리지 메모(60초)를 탄다.
+    const keys = [...phoneKeys].sort()
+    const chunks: string[][] = []
+    for (let index = 0; index < keys.length; index += COMPASS_REF_KEY_CHUNK) {
+      chunks.push(keys.slice(index, index + COMPASS_REF_KEY_CHUNK))
+    }
+    const results = await Promise.all(chunks.map((chunk) => getCompassLeadsByPhoneKeys(chunk)))
+    if (results.some((result) => result.down)) return null
+    const rowsByKey = new Map<string, CompassLeadRow[]>()
+    for (const result of results) {
+      for (const row of result.rows) {
+        const key = row.phone_key?.trim()
+        if (!key) continue
+        const list = rowsByKey.get(key)
+        if (list) list.push(row)
+        else rowsByKey.set(key, [row])
+      }
+    }
+    const refs = new Map<string, CrmUnifiedCompassRef>()
+    for (const [key, rows] of rowsByKey) {
+      const representative = pickRepresentativeCompassRow(rows)
+      if (!representative) continue
+      refs.set(key, {
+        leadId: representative.id,
+        url: compassLeadUrl(representative.id),
+        stageLabel: compassStageLabel(representative.stage),
+      })
+    }
+    return refs
+  } catch (error) {
+    console.warn("[crm-unified-customers] Compass 리드 참조 실패", error instanceof Error ? error.name : "Error")
+    return null
+  }
+}
+
 // 소스 수집 + 행 조립 + 전환 중복 접기까지의 "필터 이전" 단계. 행의 우선순위 점수는
 // 이 시점의 now로 계산되어 캐시 TTL 동안(≤60초) 고정된다 — 뷰 매칭·건강도 등
 // now 민감 판정은 getCrmUnifiedCustomers가 요청 시각으로 다시 수행한다.
@@ -725,6 +795,8 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
         ownerKeys: uniqueOwnerKeys([lead.assigned_to]),
         lifecycle: leadLifecycle(lead),
         statusLabel: leadStatusLabel(lead),
+        // 기록 위치 판정 입력(UnifiedCompassLink) — statusLabel 문자열로 상태를 되짚지 않게 원값을 싣는다.
+        leadStatus: lead.status,
         nextActionLabel: priority?.actionLabel ?? defaultLeadAction(lead),
         priorityReason: priority?.reason ?? "리드 상태 확인",
         score: priority?.score ?? (lead.status === "new" ? 40 : 20),
@@ -830,11 +902,21 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
   // contactMeta.compass 로 알린다(화면: "Compass 연결 끊김 — Home 기록만"). 경고 배너는 늘리지 않는다.
   let compassStatus: CrmUnifiedCompassContactStatus = "skipped"
   const phoneKeys = [...new Set(phoneKeyByRowKey.values())]
-  if (phoneKeys.length > 0) {
-    const compass = await getCompassLatestActivityByPhoneKeys(phoneKeys, {
-      kinds: COMPASS_CONTACT_KINDS,
-      excludeActors: COMPASS_CONTACT_EXCLUDED_ACTORS,
-    })
+  // Compass 리드 참조(A안 "Compass에서 열기")는 활동 조회와 병렬로 모은다 — 끊기면 null(링크 없음), 완성 판정 밖.
+  const [compass, compassRefs] = await Promise.all([
+    phoneKeys.length > 0
+      ? getCompassLatestActivityByPhoneKeys(phoneKeys, {
+          kinds: COMPASS_CONTACT_KINDS,
+          excludeActors: COMPASS_CONTACT_EXCLUDED_ACTORS,
+        })
+      : Promise.resolve(null),
+    loadCompassRefsByPhoneKey(phoneKeys),
+  ])
+  for (const row of rows) {
+    const phoneKey = phoneKeyByRowKey.get(row.key)
+    row.compass = (phoneKey ? compassRefs?.get(phoneKey) : undefined) ?? null
+  }
+  if (compass) {
     if (compass.down) {
       compassStatus = "down"
     } else {
@@ -870,6 +952,7 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
       if (!customerRow.ownerName && row.ownerName) customerRow.ownerName = row.ownerName
       customerRow.ownerKeys = [...new Set([...customerRow.ownerKeys, ...row.ownerKeys])]
       if (!customerRow.contact && row.contact) customerRow.contact = row.contact
+      if (!customerRow.compass && row.compass) customerRow.compass = row.compass
       applyContactFact(customerRow, pickLatestContact(rowContactFact(customerRow), rowContactFact(row)))
       if (customerRow.statusLabel === "전환 고객") customerRow.statusLabel = "리드 전환 완료"
       return false
@@ -886,6 +969,9 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
   // 돌려준다 — 실패하면 이번 스냅샷은 폴드를 건너뛴다(customer 폴드와 같은 원칙:
   // 중복 표시가 행 소실보다 안전).
   let neoAccountIdByLeadId = new Map<string, string>()
+  // 이 지도가 "등록 확정 전부"라고 믿을 수 있는가 — 아래 행 힌트(neoAccountConfirmed)의 근거. 배지 집합 조회가
+  // 실패하면(neoLinkedLeadIds 가 빈 폴백) 계정 링크를 아예 읽지 않으므로 모름이다.
+  let neoAccountLinksKnown = neoLinksResult.status === "fulfilled"
   if (neoLinkedLeadIds.size > 0) {
     try {
       // 배지 붙은 리드마다 단건 조회를 Promise.all 로 돌리면 수백 개의 동시 쿼리가 된다 —
@@ -899,6 +985,7 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
     } catch {
       warnings.push("리드-계정 등록 링크를 불러오지 못해 등록 고객이 리드와 중복 표시될 수 있습니다.")
       neoAccountIdByLeadId = new Map()
+      neoAccountLinksKnown = false
     }
   }
   if (neoAccountIdByLeadId.size > 0) {
@@ -915,9 +1002,24 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
       if ((!neoRow.ownerName || isUnassignedOwnerKey(neoRow.ownerName)) && row.ownerName) neoRow.ownerName = row.ownerName
       neoRow.ownerKeys = [...new Set([...neoRow.ownerKeys, ...row.ownerKeys])]
       if (!neoRow.contact && row.contact) neoRow.contact = row.contact
+      if (!neoRow.compass && row.compass) neoRow.compass = row.compass
       applyContactFact(neoRow, pickLatestContact(rowContactFact(neoRow), rowContactFact(row)))
       return false
     })
+  }
+
+  // 기록 위치 판정 힌트(A안, 2026-09-26 교차 리뷰 [25] 후속) — 접히지 않고 남은 리드 행에 "NEO 계정 등록 확정"을 싣는다.
+  // 통합 목록·세그먼트 미리보기의 UnifiedCompassLink 가 360·리드 보드와 같은 규칙 3(전환·등록 확정 = Home 정본)을 쓰게 한다.
+  // 근거는 위 계정 링크 지도(external_account 만)다 — row.crmRegistered(external_lead 까지 세는 배지)는 쓰지 않는다.
+  // 계정 행이 스냅샷에 없어(동기화 전·NEO 원천 실패) 접히지 않은 등록 리드가 여기서 true 가 된다.
+  // 링크 조회가 실패했으면 필드를 싣지 않는다(모름 — 화면은 neo-registered 원천으로 폴백, false 로 위장하지 않는다).
+  // 크기: 리드 행에만 불리언 하나(+ 위 leadStatus 원값) — CSV(unified-customers-csv 열 화이트리스트)·세그먼트 평가(키·건수만)
+  // 에는 나가지 않고, 목록 응답은 페이지(≤200행) 단위라 증가가 작다. 캐시 키는 그대로(옛 스냅샷은 필드 없음 = 모름).
+  if (neoAccountLinksKnown) {
+    for (const row of rows) {
+      if (row.source !== "lead") continue
+      row.neoAccountConfirmed = neoAccountIdByLeadId.has(row.key.slice("lead:".length))
+    }
   }
 
   const homeContactDetailOk = homeContactResult.status === "fulfilled"
@@ -929,7 +1031,7 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
     portalCustomersOk,
     neoLatestSyncedAt: core.neoLatestSyncedAt,
     neoPartial: neoAccountsOk ? core.neoIsShroffAccountStale : true,
-    contactMeta: { compass: compassStatus, homeContactDetail: homeContactDetailOk ? "ok" : "down" },
+    contactMeta: { compass: compassStatus, homeContactDetail: homeContactDetailOk ? "ok" : "down", compassRefs: compassRefs === null ? "down" : "ok" },
     complete:
       leadsOk &&
       neoAccountsOk &&
@@ -1069,27 +1171,45 @@ interface UnifiedListComputation {
   meta: CrmUnifiedCustomersMeta
 }
 
-async function computeUnifiedList(options: CrmUnifiedCustomersOptions): Promise<UnifiedListComputation> {
-  const now = options.now ?? new Date()
-  const bypassCache = options.bypassCache === true
-  const snapshot = await getSourceSnapshot(now, options.now != null || bypassCache)
+/**
+ * 수기 라벨 부착 — 소규모 태그 테이블을 요청마다 읽어 붙인다(자체 30초 캐시 + 쓰기 즉시 무효화라 태그 변경이
+ * 스냅샷 TTL 을 기다리지 않는다). 실패하면 빈 맵으로 graceful — 대신 tagsOk=false 로 알린다(세그먼트 자동 태그는
+ * 이 신호로 "원천 미완성"을 판정해 라벨 조건이 0명으로 무너진 결과로 태그를 떼지 않는다).
+ * 공유 스냅샷 행을 요청 간 오염시키지 않도록 얕은 복사본에 붙인다 — 이후 단계는 행을 읽기만 한다.
+ */
+async function attachTagsToRows(
+  snapshotRows: readonly CrmUnifiedCustomerRow[]
+): Promise<{ rows: CrmUnifiedCustomerRow[]; availableTags: string[]; tagsOk: boolean }> {
+  let tagsOk = true
+  const tagsMap = await getAllCustomerTagsMap().catch(() => {
+    tagsOk = false
+    return {} as Record<string, string[]>
+  })
+  const rows = snapshotRows.map((row) => ({
+    ...row,
+    tags: tagsMap[`${row.source}:${row.key.slice(row.key.indexOf(":") + 1)}`] ?? [],
+  }))
+  const availableTags = Array.from(new Set(Object.values(tagsMap).flat())).sort((a, b) => a.localeCompare(b, "ko"))
+  return { rows, availableTags, tagsOk }
+}
+
+/** 소스 스냅샷 읽기 — bypass 면 재수집 뒤 태그를 즉시 하드 만료(새로고침·크론 공용). */
+async function readSourceSnapshot(now: Date, fixedNow: boolean, bypassCache: boolean): Promise<CrmUnifiedSourceSnapshot> {
+  const snapshot = await getSourceSnapshot(now, fixedNow || bypassCache)
   if (bypassCache) {
     // 새로고침 직후 다음 일반 읽기(다른 인스턴스 포함)가 낡은 스냅샷을 돌려주지 않게 태그를
     // 즉시 하드 만료한다({ expire: 0 } = 즉시 만료, "max" = SWR) — 우선순위 큐 force 계약과 동일.
     // 실패한 재수집 결과가 캐시에 쓰이는 일은 없다(force 경로는 unstable_cache를 거치지 않는다).
     revalidateTag(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, { expire: 0 })
   }
+  return snapshot
+}
 
-  // 수기 라벨 — 소규모 태그 테이블을 요청마다 읽어 부착(자체 30초 캐시 + 쓰기 즉시
-  // 무효화라 태그 변경이 스냅샷 TTL을 기다리지 않는다; 실패 시 graceful 빈 맵).
-  // 공유 스냅샷 행을 요청 간 오염시키지 않도록 얕은 복사본에 붙인다 — 이후 단계는
-  // 행을 변형하지 않고 읽기만 한다.
-  const tagsMap = await getAllCustomerTagsMap().catch(() => ({}) as Record<string, string[]>)
-  const rows = snapshot.rows.map((row) => ({
-    ...row,
-    tags: tagsMap[`${row.source}:${row.key.slice(row.key.indexOf(":") + 1)}`] ?? [],
-  }))
-  const availableTags = Array.from(new Set(Object.values(tagsMap).flat())).sort((a, b) => a.localeCompare(b, "ko"))
+async function computeUnifiedList(options: CrmUnifiedCustomersOptions): Promise<UnifiedListComputation> {
+  const now = options.now ?? new Date()
+  const snapshot = await readSourceSnapshot(now, options.now != null, options.bypassCache === true)
+
+  const { rows, availableTags } = await attachTagsToRows(snapshot.rows)
   const tagFilter = (options.tag ?? "").trim()
 
   const query = normalize(options.q)
@@ -1099,6 +1219,10 @@ async function computeUnifiedList(options: CrmUnifiedCustomersOptions): Promise<
   const view = options.view ?? "all"
   const includeUnconfirmed = options.includeUnconfirmed === true
   const spec = normalizeSegmentSpec(options.segment)
+  // OR 한 단계(세그먼트 허브) — 기본 조건과 AND. 그룹이 없으면 기존 AND 동작 그대로.
+  const orGroups = segmentFilterGroups(options.segment)
+  const orMatchers = orGroups.map((group) => buildSegmentFilterMatcher(group, now.getTime()))
+  const matchesAnyGroup = (row: CrmUnifiedCustomerRow) => orMatchers.length === 0 || orMatchers.some((match) => match(row))
   const keyFilter = options.keys?.length ? new Set(options.keys) : null
 
   const nowMs = now.getTime()
@@ -1114,7 +1238,10 @@ async function computeUnifiedList(options: CrmUnifiedCustomersOptions): Promise<
   })
   // 세그먼트 조건(SG4) — 저장 뷰·라벨·검색·담당과 AND.
   const matchers = buildSegmentMatchers(spec, nowMs)
-  const specRows = matchers.length ? baseRows.filter((row) => matchers.every((matcher) => matcher.test(row))) : baseRows
+  const specRows =
+    matchers.length || orMatchers.length
+      ? baseRows.filter((row) => matchers.every((matcher) => matcher.test(row)) && matchesAnyGroup(row))
+      : baseRows
   // provisional 게이트 포함 가시성 규칙 — 일반 뷰에서는 미확인 리드가 자동 제외된다.
   // 단 숨긴 건수는 항상 내려주고, includeUnconfirmed 토글이 켜지면 게이트를 우회한다.
   const filtered = specRows.filter(
@@ -1134,10 +1261,18 @@ async function computeUnifiedList(options: CrmUnifiedCustomersOptions): Promise<
   )
   // 조건 칩의 단독 건수 베이스 — 저장 뷰까지 적용, 조건 적용 전.
   const viewBaseRows =
-    matchers.length || keyFilter
+    matchers.length || orMatchers.length || keyFilter
       ? baseRows.filter((row) => rowVisibleInView(row, view, ownerKeys, nowMs, includeUnconfirmed))
       : filtered
   const segment = buildSegmentSummary(viewBaseRows, spec, filtered.length, nowMs)
+  if (orGroups.length > 0) {
+    // 그룹 i 의 건수 = 현재 베이스 ∧ 기본 조건 ∧ 그룹 i. 문구는 OR 까지 담는다(CSV 감사 로그 conditions 도 같은 값).
+    const baseMatched = viewBaseRows.filter((row) => matchers.every((matcher) => matcher.test(row)))
+    segment.anyOf = orGroups
+    segment.anyOfCounts = orMatchers.map((match) => baseMatched.filter((row) => match(row)).length)
+    segment.labels = describeSegmentFilter(normalizeSegmentFilter(options.segment))
+    segment.active = true
+  }
 
   const sortedKeys = new Map(sortPriorityItems(filtered.map((row) => {
     // 행 생성 시 저장한 엔진 버킷을 그대로 쓴다. 버킷 없는 행(전환 고객·정상 계정·게이트
@@ -1327,6 +1462,111 @@ export async function getCrmUnifiedCustomersForExport(
     limit,
     meta: computed.meta,
     segmentLabels: computed.segment.labels,
+  }
+}
+
+// ── 저장 세그먼트 일괄 평가(세그먼트 허브, C안 ②, 2026-09-25) ─────────────────
+// 스냅샷 한 번 + 태그 부착 한 번 위에서 조건 N개를 메모리로 판정한다. 모집단은 통합 목록 기본 화면과 같다
+// (저장 뷰 'all' · 담당 없음 · 미확인 리드 제외) — 그래서 evaluateCrmSegmentFilters([f]).results[0].total 은
+// getCrmUnifiedCustomers({ segment: f }).summary.total 과 같다.
+// 크론·수동 실행은 bypassCache:true 가 필수다 — unstable_cache 가 SWR 이라 KST 06시 첫 호출이 어제 저녁 스냅샷을
+// 돌려줄 수 있다.
+
+/** 조건 하나의 평가 결과. */
+export interface CrmSegmentFilterResult {
+  total: number
+  bySource: Record<CrmUnifiedCustomerSource, number>
+  /** 회원 행 키(lead:·neo:·customer:), 사전순(결정적) — maxKeys 까지 */
+  keys: string[]
+  /** total > maxKeys — keys 가 잘렸다 */
+  truncated: boolean
+  /** 회원 중 연락 기록이 아예 없는 행 */
+  noContactRecordCount: number
+  /** 그룹 i 의 건수 = 기본 조건 ∧ 그룹 i(OR 그룹이 없으면 빈 배열) */
+  anyOfCounts: number[]
+}
+
+export interface CrmSegmentEvaluationBatch {
+  generatedAt: string
+  /** 마지막 연락 원천 상태 — compass ok|down|partial|skipped */
+  meta: CrmUnifiedCustomersMeta
+  sources: {
+    leadsOk: boolean
+    neoAccountsOk: boolean
+    portalCustomersOk: boolean
+    /** 핵심 소스가 전부 성공했는가(스냅샷 완성 판정) */
+    complete: boolean
+    /** 수기 라벨(crm_customer_tags) 읽기 성공 — 실패면 라벨 조건이 0명으로 무너진다 */
+    tagsOk: boolean
+    neoLatestSyncedAt: string | null
+    neoPartial: boolean
+  }
+  /** filters 와 같은 순서 */
+  results: CrmSegmentFilterResult[]
+}
+
+/** 평가 결과 키 상한 기본값 — CSV 상한과 같다. */
+export const CRM_SEGMENT_EVALUATION_MAX_KEYS = CRM_UNIFIED_EXPORT_MAX_ROWS
+
+export async function evaluateCrmSegmentFilters(
+  filters: readonly CustomerSegmentFilter[],
+  options: { now?: Date; bypassCache?: boolean; maxKeys?: number } = {}
+): Promise<CrmSegmentEvaluationBatch> {
+  const now = options.now ?? new Date()
+  const snapshot = await readSourceSnapshot(now, options.now != null, options.bypassCache === true)
+  const { rows, tagsOk } = await attachTagsToRows(snapshot.rows)
+  const nowMs = now.getTime()
+  const maxKeys = clampInteger(options.maxKeys, CRM_SEGMENT_EVALUATION_MAX_KEYS, 0, CRM_SEGMENT_EVALUATION_MAX_KEYS)
+  // 담당 없음(빈 집합) · 저장 뷰 'all' · 미확인 리드 제외 — 통합 목록 기본 화면과 같은 모집단.
+  const noOwnerKeys = new Set<string>()
+  const population = rows.filter((row) => rowVisibleInView(row, "all", noOwnerKeys, nowMs, false))
+
+  const results = filters.map((filter): CrmSegmentFilterResult => {
+    const normalized = normalizeSegmentFilter(filter)
+    const matchBase = buildSegmentFilterMatcher({ ...normalized, anyOf: undefined }, nowMs)
+    const groupMatchers = segmentFilterGroups(normalized).map((group) => buildSegmentFilterMatcher(group, nowMs))
+    const anyOfCounts = groupMatchers.map(() => 0)
+    // task 는 우선순위 원천 타입에서 온 값이라 통합 행에는 나오지 않지만 계약 타입(Record)이 요구해 0 으로 둔다.
+    const bySource: Record<CrmUnifiedCustomerSource, number> = { lead: 0, neo_account: 0, customer: 0, task: 0 }
+    const keys: string[] = []
+    let noContactRecordCount = 0
+    for (const row of population) {
+      if (!matchBase(row)) continue
+      let inAnyGroup = groupMatchers.length === 0
+      groupMatchers.forEach((match, index) => {
+        if (!match(row)) return
+        anyOfCounts[index] += 1
+        inAnyGroup = true
+      })
+      if (!inAnyGroup) continue
+      bySource[row.source] += 1
+      if (!row.lastContactAt) noContactRecordCount += 1
+      keys.push(row.key)
+    }
+    keys.sort()
+    return {
+      total: keys.length,
+      bySource,
+      keys: keys.slice(0, maxKeys),
+      truncated: keys.length > maxKeys,
+      noContactRecordCount,
+      anyOfCounts,
+    }
+  })
+
+  return {
+    generatedAt: now.toISOString(),
+    meta: snapshot.contactMeta ?? { compass: "ok", homeContactDetail: "ok" },
+    sources: {
+      leadsOk: snapshot.leadsOk,
+      neoAccountsOk: snapshot.neoAccountsOk,
+      portalCustomersOk: snapshot.portalCustomersOk,
+      complete: snapshot.complete,
+      tagsOk,
+      neoLatestSyncedAt: snapshot.neoLatestSyncedAt,
+      neoPartial: snapshot.neoPartial,
+    },
+    results,
   }
 }
 
