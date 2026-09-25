@@ -47,19 +47,14 @@ import {
 import {
   COMPASS_CONTACT_EXCLUDED_ACTORS,
   COMPASS_CONTACT_KINDS,
-  HOME_CONTACT_EVENT_SOURCE_TYPES,
   buildCompassContactIndex,
-  buildHomeContactIndex,
   contactPhoneKey,
   contactTargetKey,
   pickLatestContact,
-  type HomeContactEventRow,
-  type HomeContactLogRow,
   type LastContactFact,
 } from "@/lib/crm/last-contact"
 import { getCompassLatestActivityByPhoneKeys } from "@/lib/compass/bridge"
-import { createSupabaseAdminClient } from "@/lib/supabase/admin"
-import { fetchSupabasePages } from "@/lib/supabase/pagination"
+import { loadHomeContactIndex } from "@/lib/repositories/crm-contact-index"
 import { listAllCustomerListItemsLite } from "@/lib/portal/repositories/customers"
 import type { CustomerListItem } from "@/lib/portal/types"
 // 최초 응답·최근 컨택 시각 지도(정본). 키 형식은 lib/crm/last-contact.ts contactTargetKey 와 같다
@@ -643,46 +638,7 @@ const EMPTY_CORE_SNAPSHOT: CrmCoreSourceSnapshot = {
 }
 
 // ── 마지막 연락 원천(CT8) ───────────────────────────────────────────────────
-// Home 원천 두 테이블(lead_contact_logs · crm_customer_events 중 접촉 종류)을 세부(원천·채널·작성자)까지
-// 읽는다. 시각만 필요한 기존 getCrmCustomerContactMaps(lib/repositories/crm-events.ts)는 최초 응답
-// 판정의 정본이라 그대로 두고, 이 조회가 실패하면 그 시각 지도를 "Home 기록" 폴백으로 쓴다.
-// 운영 실측(2026-09-24) 두 테이블 모두 수 행 규모라 이중 조회 비용은 작다.
-const HOME_CONTACT_SCAN_MAX_ROWS = 20_000
-
-async function loadHomeContactIndex(): Promise<Map<string, LastContactFact>> {
-  const sb = createSupabaseAdminClient()
-  const [logs, events] = await Promise.all([
-    fetchSupabasePages<HomeContactLogRow>({
-      maxRows: HOME_CONTACT_SCAN_MAX_ROWS,
-      fetchPage: (from, to) =>
-        sb
-          .from("lead_contact_logs")
-          .select("id, lead_id, type, contacted_at, contacted_by", from === 0 ? { count: "exact" } : undefined)
-          .order("contacted_at", { ascending: true })
-          .order("id", { ascending: true })
-          .range(from, to),
-    }),
-    fetchSupabasePages<HomeContactEventRow>({
-      maxRows: HOME_CONTACT_SCAN_MAX_ROWS,
-      fetchPage: (from, to) =>
-        sb
-          .from("crm_customer_events")
-          .select(
-            "id, target_type, target_id, source_type, occurred_at, created_by, owner_name",
-            from === 0 ? { count: "exact" } : undefined
-          )
-          .in("source_type", [...HOME_CONTACT_EVENT_SOURCE_TYPES])
-          .order("occurred_at", { ascending: true })
-          .order("id", { ascending: true })
-          .range(from, to),
-    }),
-  ])
-  if (logs.error) throw new Error(`리드 연락 로그 조회 실패: ${logs.error.message ?? "unknown"}`)
-  if (events.error) throw new Error(`CRM 연락 기록 조회 실패: ${events.error.message ?? "unknown"}`)
-  // 상한에서 잘린 반쪽 결과로 "마지막 연락"을 만들지 않는다 — 호출부가 시각 지도 폴백으로 내린다.
-  if (logs.truncated || events.truncated) throw new Error("연락 기록 스캔이 상한에 닿았습니다.")
-  return buildHomeContactIndex(logs.data, events.data)
-}
+// Home 연락 인덱스 로더는 오늘 연락(홈)·세그먼트 평가와 공유하려고 lib/repositories/crm-contact-index.ts 로 옮겼다.
 
 // 소스 수집 + 행 조립 + 전환 중복 접기까지의 "필터 이전" 단계. 행의 우선순위 점수는
 // 이 시점의 now로 계산되어 캐시 TTL 동안(≤60초) 고정된다 — 뷰 매칭·건강도 등
