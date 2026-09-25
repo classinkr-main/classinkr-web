@@ -1,5 +1,8 @@
 import "server-only"
 
+import { revalidateTag } from "next/cache"
+
+import { ADMIN_CRM_TODAY_CONTACTS_CACHE_TAG } from "@/lib/admin/crm/cache-tags"
 import { createCrmRecordingSignedUrls } from "@/lib/storage/crm-recordings"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import type {
@@ -595,6 +598,20 @@ async function findRecentDuplicateEvent(
   return data as CrmCustomerEvent
 }
 
+/**
+ * 기록 쓰기 뒤 현황 "오늘 연락" Home 보조 원천 캐시(연락 인덱스)를 SWR로 무효화한다(2026-09-25 C안 ①).
+ * 이 무효화가 없으면 NEO 계정에 결과를 저장한 뒤 행이 최대 60초 "미처리"로 되살아난다(할 일을 만들지
+ * 않은 저장은 할 일 쓰기의 큐 태그 무효화도 타지 않는다). 쓰기는 이미 커밋됐다 — 무효화 실패가 저장
+ * 응답을 깨뜨리지 않게 감싼다(cache-tags 모듈만 import — 오늘 연락 저장소를 import하면 순환이 된다).
+ */
+function notifyCrmCustomerEventsMutated() {
+  try {
+    revalidateTag(ADMIN_CRM_TODAY_CONTACTS_CACHE_TAG, "max")
+  } catch (error) {
+    console.warn("[crm-events] today contacts cache invalidation failed:", error)
+  }
+}
+
 export async function createCrmCustomerEvent(input: CrmCustomerEventCreateInput) {
   const supabase = createSupabaseAdminClient()
   const insert = buildCrmCustomerEventInsert(input)
@@ -617,6 +634,7 @@ export async function createCrmCustomerEvent(input: CrmCustomerEventCreateInput)
     }
     throw new Error(`[crm-events] 저장 실패: ${error.message}`)
   }
+  notifyCrmCustomerEventsMutated()
   const [record] = await recordsWithSignedUrls([data as CrmCustomerEvent])
   return record
 }
@@ -668,6 +686,7 @@ export async function getOrCreateCrmCustomerEventBySource(
     }
     throw new Error(`[crm-events] 저장 실패: ${error.message}`)
   }
+  notifyCrmCustomerEventsMutated()
   const [record] = await recordsWithSignedUrls([data as CrmCustomerEvent])
   return { record, created: true }
 }
@@ -742,5 +761,7 @@ export async function deleteCrmCustomerEventsBySource(input: {
     if (isMissingCrmEventsTableError(error)) return 0
     throw new Error(`[crm-events] 원천 기록 삭제 실패: ${error.message}`)
   }
-  return (data ?? []).length
+  const removed = (data ?? []).length
+  if (removed > 0) notifyCrmCustomerEventsMutated()
+  return removed
 }

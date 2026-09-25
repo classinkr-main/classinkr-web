@@ -56,6 +56,11 @@ export function leadContactTimeError(
 }
 
 export interface LeadContactEntry {
+  /**
+   * 호출자가 정한 로그 id — 요청 키 멱등(현황 "오늘 연락", lib/crm/account-contact-record.ts). 있으면 같은 id 의 로그가
+   * 곧 재전송이다(내용·시각과 무관). 미러 기록도 source_id = 로그 id 라 함께 멱등이 된다. 기존 호출부는 넘기지 않는다.
+   */
+  id?: string
   type: ContactLogType
   result?: ContactLogResult
   notes?: string

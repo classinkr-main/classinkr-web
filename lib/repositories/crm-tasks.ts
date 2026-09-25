@@ -5,11 +5,13 @@ import { unstable_cache, revalidateTag } from "next/cache"
 import {
   ADMIN_CRM_PRIORITY_QUEUE_SNAPSHOT_CACHE_TAG,
   ADMIN_CRM_TASKS_CACHE_TAG,
+  ADMIN_CRM_TODAY_CONTACTS_CACHE_TAG,
 } from "@/lib/admin/crm/cache-tags"
 import { findAdminCrmOwner, listAdminUserDirectory } from "@/lib/repositories/admin-users"
 import { assertJsonSafeInDev } from "@/lib/server/json-safe"
 import { shareInFlightByArgs } from "@/lib/server/share-in-flight"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { fetchSupabasePages } from "@/lib/supabase/pagination"
 import type {
   CrmTask,
   CrmTaskInsert,
@@ -63,6 +65,17 @@ function notifyCrmTasksMutated() {
     revalidateTag(ADMIN_CRM_PRIORITY_QUEUE_SNAPSHOT_CACHE_TAG, "max")
   } catch (error) {
     console.warn("[crm-tasks] priority queue snapshot invalidation failed:", error)
+  }
+  // 현황 "오늘 연락" 보조 원천(오늘 대상 할 일·오늘 닫힌 할 일 — lib/repositories/crm-today-contacts.ts)은 **즉시 만료**
+  // 한다(2026-09-26 교차 리뷰 [Q2-15]). 위 큐 태그의 SWR("max")만 타면 다음 읽기가 옛 값을 돌려주고 뒤에서 갱신해,
+  // 할 일 화면·세그먼트 "오늘 연락에 넣기"·주간 패널에서 방금 만들고/미루고/닫은 할 일이 오늘 연락에 늦게 반영된다.
+  // 오늘 수정된 할 일은 전부 그 보조 원천에 실려(활성 = updated_at ≥ 오늘, 닫힘 = completed_at ≥ 오늘) 후보 풀의 묵은
+  // 사본을 덮으므로 무거운 큐 스냅샷까지 하드 만료할 필요는 없다. 오늘 연락 모듈을 import 하지 않는다(그쪽이 여기를
+  // 읽어 순환) — 태그 문자열만 cache-tags 에서 가져온다.
+  try {
+    revalidateTag(ADMIN_CRM_TODAY_CONTACTS_CACHE_TAG, { expire: 0 })
+  } catch (error) {
+    console.warn("[crm-tasks] today contacts invalidation failed:", error)
   }
   for (const listener of crmTaskMutationListeners) listener()
 }
@@ -118,6 +131,11 @@ export interface ListCrmTasksOptions {
   limit?: number
   offset?: number
   now?: Date
+  /**
+   * Data Cache(admin-crm-tasks, 5분 · 쓰기 뒤 SWR)를 읽지도 쓰지도 않고 DB 를 바로 읽는다 — 새로고침(force) 경로 전용
+   * (lib/repositories/crm-priority-queue.ts). 캐시 키에 들어가지 않는다(normalizeListCrmTasksParams 는 이 값을 싣지 않는다).
+   */
+  bypassCache?: boolean
 }
 
 export interface ListCrmTasksResult {
@@ -379,7 +397,10 @@ const getCachedCrmTasksPage = unstable_cache(
 export async function listCrmTasks(options: ListCrmTasksOptions = {}): Promise<ListCrmTasksResult> {
   const now = options.now ?? new Date()
   const params = normalizeListCrmTasksParams(options)
-  const page = await getCachedCrmTasksPage(params)
+  // bypassCache — 새로고침은 방금 바뀐 할 일을 봐야 한다. 캐시 엔트리는 쓰기 뒤 SWR("max")로만 무효화돼 캐시를 거치면
+  // 다음 한 번은 옛 값이 나온다(2026-09-26 교차 리뷰 [Q2-15]). 같은 인스턴스 동시 조회 합치기(shareInFlightByArgs)도
+  // 건너뛴다 — 쓰기 전에 시작된 조회를 물려받으면 같은 문제가 된다.
+  const page = options.bypassCache ? await fetchCrmTasksPage(params) : await getCachedCrmTasksPage(params)
   const { rows, total, health } = page
   const returned = rows.length
   const nextOffset = params.offset + returned
@@ -401,6 +422,96 @@ export async function listCrmTasks(options: ListCrmTasksOptions = {}): Promise<L
     },
     rows,
   }
+}
+
+export interface ListCrmTasksClosedSinceResult {
+  rows: CrmTaskRecord[]
+  health: { ok: boolean; message: string | null }
+  /** 상한(maxRows)에서 잘렸다 — 받은 만큼만 반영했으니 "전체"라 부르지 않는다. */
+  truncated: boolean
+}
+
+/**
+ * sinceIso 이후 닫힌(완료·취소) 할 일 — 현황 "오늘 연락" 진행률(오늘 처리한 할 일)의 원천(2026-09-25).
+ * listCrmTasks 는 active/done 단위만 보고 completed_at 창 필터가 없어 따로 둔다. 캐시하지 않는다 —
+ * 호출부(lib/repositories/crm-today-contacts.ts)가 자기 Data Cache 안에서 부른다.
+ * 정렬은 completed_at·id 전순서, range 는 실제로 받은 행 수만큼 전진한다(lib/supabase/pagination).
+ * 테이블 미적용이면 health.ok=false·빈 행(던지지 않는다), 그 밖의 조회 실패는 던진다.
+ */
+export async function listCrmTasksClosedSince(
+  sinceIso: string,
+  options: { maxRows?: number } = {}
+): Promise<ListCrmTasksClosedSinceResult> {
+  const since = nullableIso(sinceIso)
+  if (!since) throw new Error("[crm-tasks] sinceIso가 올바른 시각이 아닙니다.")
+  const maxRows = clampInteger(options.maxRows, 2_000, 1, 20_000)
+  const supabase = createSupabaseAdminClient()
+  const paged = await fetchSupabasePages<CrmTask>({
+    maxRows,
+    fetchPage: (from, to) =>
+      supabase
+        .from("crm_tasks")
+        .select("*", from === 0 ? { count: "exact" } : undefined)
+        .in("status", ["done", "canceled"])
+        .gte("completed_at", since)
+        .order("completed_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to),
+  })
+  if (paged.error) {
+    if (isMissingCrmTasksTableError(paged.error)) {
+      return { rows: [], health: { ok: false, message: NOT_READY_MESSAGE }, truncated: false }
+    }
+    throw new Error(`[crm-tasks] 닫힌 할 일 조회 실패: ${paged.error.message ?? "unknown"}`)
+  }
+  return { rows: paged.data.map(toCrmTaskRecord), health: { ok: true, message: null }, truncated: paged.truncated }
+}
+
+/**
+ * 현황 "오늘 연락"의 할 일 원천(2026-09-25 교차 리뷰 [13]) — 활성(open·snoozed) 할 일 중 오늘 대상이 될 수 있는 것 전량:
+ * 기한(due_at)·미룬 기한(snoozed_until)이 오늘 끝 전, 기한 없는 긴급·높음, 오늘 수정(오늘 미룸·오늘 만든 다음 일정 흔적).
+ * 우선순위 큐 후보 풀의 listCrmTasks(active, 상한 200 · due_at 오름차순 · NULL 마지막)만 쓰면 세그먼트 "오늘 연락에 넣기"
+ * 한 번(200건)으로 지난·오늘 할 일과 기한 없는 긴급 할 일이 절단 표시 없이 빠진다. 캐시하지 않는다 — 호출부
+ * (lib/repositories/crm-today-contacts.ts)가 자기 Data Cache 안에서 부른다.
+ * 정렬은 created_at·id 전순서, range 는 실제로 받은 행 수만큼 전진한다(lib/supabase/pagination). 상한에 닿으면 truncated.
+ * 테이블 미적용이면 health.ok=false·빈 행(던지지 않는다), 그 밖의 조회 실패는 던진다.
+ */
+export async function listCrmTasksDueForToday(
+  todayStartIso: string,
+  todayEndIso: string,
+  options: { maxRows?: number } = {}
+): Promise<ListCrmTasksClosedSinceResult> {
+  const todayStart = nullableIso(todayStartIso)
+  const todayEnd = nullableIso(todayEndIso)
+  if (!todayStart || !todayEnd) throw new Error("[crm-tasks] 오늘 범위가 올바른 시각이 아닙니다.")
+  const maxRows = clampInteger(options.maxRows, 2_000, 1, 20_000)
+  // or 트리 안 값은 PostgREST 예약 문자(`:`·`.`)를 품어 큰따옴표로 감싼다.
+  const filter = [
+    `due_at.lt."${todayEnd}"`,
+    `snoozed_until.lt."${todayEnd}"`,
+    "and(due_at.is.null,priority.in.(urgent,high))",
+    `updated_at.gte."${todayStart}"`,
+  ].join(",")
+  const supabase = createSupabaseAdminClient()
+  const paged = await fetchSupabasePages<CrmTask>({
+    maxRows,
+    fetchPage: (from, to) =>
+      supabase
+        .from("crm_tasks")
+        .select("*", from === 0 ? { count: "exact" } : undefined)
+        .in("status", ["open", "snoozed"])
+        .or(filter)
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to),
+  })
+  if (paged.error) {
+    if (isMissingCrmTasksTableError(paged.error)) {
+      return { rows: [], health: { ok: false, message: NOT_READY_MESSAGE }, truncated: false }
+    }
+    throw new Error(`[crm-tasks] 오늘 할 일 조회 실패: ${paged.error.message ?? "unknown"}`)
+  }
+  return { rows: paged.data.map(toCrmTaskRecord), health: { ok: true, message: null }, truncated: paged.truncated }
 }
 
 export async function getCrmTaskById(id: string): Promise<CrmTaskRecord | null> {

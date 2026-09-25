@@ -20,6 +20,15 @@ export const ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG = "admin-crm-unified-snapshot"
 // 쓰기를 놓쳤다). 구독 경로(invalidateCrmPrioritySourceSnapshot)도 같은 인스턴스 보조로 남아 있다.
 export const ADMIN_CRM_PRIORITY_QUEUE_SNAPSHOT_CACHE_TAG = "admin-crm-priority-queue-snapshot"
 
+// 현황 "오늘 연락"(C안 ①, 2026-09-25) — lib/repositories/crm-today-contacts.ts 의 Home 보조 원천
+// (연락 인덱스·오늘 닫힌 할 일) Data Cache 태그. 후보 풀은 위 우선순위 큐 스냅샷(태그·캐시)을 그대로 탄다.
+// 무효화: crm_customer_events 쓰기(lib/repositories/crm-events.ts — 생성·getOrCreate 신규·원천 삭제)가
+// revalidateTag(tag, "max")로, 오늘 연락 결과 기록 라우트(app/api/admin/crm/home/today-contacts/outcome)가
+// 즉시 만료({ expire: 0 })로 건다. 할 일 쓰기(lib/repositories/crm-tasks.ts notifyCrmTasksMutated — 만들기·완료·
+// 미루기·취소·재개·편집·재배정, tasks/bulk 포함)도 즉시 만료로 건다(2026-09-26 — 행에서 닫은 할 일이 옛 상태로
+// 돌아오던 문제). 리드·연락 로그 쓰기는 큐 스냅샷 태그를 치는데, 보조 캐시가 그 태그도 함께 달고 있어 자동으로 따라온다.
+export const ADMIN_CRM_TODAY_CONTACTS_CACHE_TAG = "admin-crm-today-contacts"
+
 // ── 2026-09-10 3라운드 승격분 (§3.2·§3.3) ────────────────────────────────────────
 
 // lib/admin-crm-customers-neo.ts의 getNeoCrmCustomers가 unstable_cache에 거는 태그.

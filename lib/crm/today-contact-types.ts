@@ -152,7 +152,15 @@ export interface CrmTodayContacts {
     neoSync: { latestSyncedAt: string | null; stale: boolean }
     warnings: string[]
   }
-  truncated: { rows: boolean; limit: number }
+  truncated: {
+    rows: boolean
+    limit: number
+    /**
+     * 자르기 전 목록 행 수(includeHandled 반영) — "불러오지 않은 N건" = totalRows − 받은 행 수. progress.total 은 같은 기관으로
+     * 접은 리드까지 센 대상 수라 행 수가 아니다. (옵셔널 추가, 2026-09-26 — 옛 응답에는 없다)
+     */
+    totalRows?: number
+  }
 }
 
 // ── 결과 기록(POST /api/admin/crm/home/today-contacts/outcome) ──────────────────────────────
@@ -188,6 +196,11 @@ export interface TodayContactOutcomeResponse {
   contactLogId: string | null
   nextTask: { id: string; dueAt: string } | null
   followUpAt: string | null
+  /**
+   * 리드 행: 이 저장 직전의 follow_up_at(null = 없었음) — 되돌리기(DELETE)의 previousFollowUpAt 으로 그대로 돌려보낸다.
+   * (K1 옵셔널 추가, 2026-09-25. 리드가 아니거나 알 수 없으면 생략)
+   */
+  previousFollowUpAt?: string | null
   closedTaskIds: string[]
   warnings: string[]
 }

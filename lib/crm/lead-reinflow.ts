@@ -51,7 +51,12 @@ function timeOf(value: string | null | undefined): number | null {
 /** 유입 축 판정에 필요한 두 시각 — 생성(LeadRecord.timestamp)과 최신 유입(last_inflow_at). */
 export type LeadInflowTimes = Pick<ReinflowLead, "timestamp" | "last_inflow_at">
 
-function hasInflowStamp(lead: LeadInflowTimes): boolean {
+/**
+ * last_inflow_at 이 생성 시각보다 유의미하게(REINFLOW_STAMP_TOLERANCE_MS 초과) 뒤인가 — 실제 재문의 스탬프.
+ * 백필(last_inflow_at = created_at)·신규 저장은 false. 현황 "오늘 연락"의 재문의 사유와
+ * lead-response-status.ts isReinflowAwaitingContact 의 백필 오탐 게이트가 이 함수를 쓴다.
+ */
+export function hasInflowStamp(lead: LeadInflowTimes): boolean {
   const created = timeOf(lead.timestamp)
   const inflow = timeOf(lead.last_inflow_at)
   if (created === null || inflow === null) return false

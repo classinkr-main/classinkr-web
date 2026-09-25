@@ -9,16 +9,17 @@ import { adminFetchJsonCached, getCachedAdminJson, seedAdminRequestCache } from 
 import { useVisibleInterval } from "@/components/admin/branch/use-visible-interval"
 import { Button } from "@/components/ui/button"
 import CrmCoverageStrip from "@/components/admin/crm/CrmCoverageStrip"
-import CrmPriorityQueuePanel, {
-  CrmPriorityQueuePanelSkeleton,
-} from "@/components/admin/crm/CrmPriorityQueuePanel"
+import CrmTodayContactsPanel, {
+  CrmTodayContactsPanelSkeleton,
+} from "@/components/admin/crm/home/CrmTodayContactsPanel"
 import CrmWeekAheadPanel from "@/components/admin/crm/CrmWeekAheadPanel"
 import CrmCustomerPicker from "@/components/admin/crm/CrmCustomerPicker"
 import Customer360DrawerSkeleton from "@/components/admin/crm/Customer360DrawerSkeleton"
 import type { CrmHomeInitialData } from "@/lib/admin/crm/home-prefetch"
 import type { DeferredPrefetch } from "@/lib/admin/prefetch-budget"
 import { CRM_CACHE_SWR_MS, CRM_CACHE_TTL_MS } from "@/lib/crm/client-cache"
-import type { CrmPriorityQueue } from "@/lib/repositories/crm-priority-queue"
+import type { WeekAheadBucket } from "@/lib/crm/week-ahead"
+import type { CrmTodayContacts } from "@/lib/crm/today-contact-types"
 import { getRecentCustomers, type RecentCustomer } from "@/lib/crm/recent-customers"
 import { Toast } from "@/components/admin/crm/leads/shared"
 import LeadSummaryPanel from "@/components/admin/crm/home/LeadSummaryPanel"
@@ -75,6 +76,9 @@ function getKstMonthKey(date: Date) {
 // 주면 무한 서스펜스로 보일 수 있으므로, 모듈 스코프 상수 하나를 항상 재사용한다.
 const RESOLVED_NULL_PROMISE: Promise<null> = Promise.resolve(null)
 
+// 홈 주간 패널에서 뺄 버킷 — 지난·오늘 할 일은 "오늘 연락"이 흡수한다(모듈 상수: 매 렌더 새 배열 금지).
+const HOME_WEEK_AHEAD_HIDDEN_BUCKETS: WeekAheadBucket[] = ["overdue", "today"]
+
 // '고객 찾기' 헤더 <p> 와 CrmCustomerPicker 콤보박스를 aria-labelledby 로 잇는 id(home-08).
 const CRM_HOME_CUSTOMER_SEARCH_HEADING_ID = "crm-home-customer-search-heading"
 
@@ -108,17 +112,17 @@ function PrefetchSourceBridge<T>({
 // ─── 메인 화면 ─────────────────────────────────────────────────
 export default function CrmHomeClient({
   initialData,
-  initialPriorityQueue,
+  initialTodayContacts,
 }: {
   initialData?: CrmHomeInitialData | null
   /**
-   * 우선순위 큐(담당 전체 기준) 서버 프리페치 — home-prefetch.ts의 CrmHomeInitialData와
-   * 별도 prop인 이유는 lib/admin/crm/priority-queue-prefetch.ts 상단 주석 참고. 2026-09-10
-   * 스트리밍 전환으로 값이 아니라 레인({promise, generatedAt})이 온다 — CrmPriorityQueuePanel
-   * 이 이 promise를 직접 React use()로 푼다(패널이 화면에 한 곳뿐이라 다리 컴포넌트 없이
-   * 패널 자신이 소비하는 쪽이 더 단순하다).
+   * "오늘 연락"(C안 ①, 담당 전체 기준) 서버 프리페치 — home-prefetch.ts의 CrmHomeInitialData와
+   * 별도 prop인 이유는 lib/admin/crm/today-contacts-prefetch.ts 상단 주석 참고. 값이 아니라
+   * 레인({promise, generatedAt})이 온다 — CrmTodayContactsPanel 이 이 promise를 직접 React use()로
+   * 푼다(패널이 화면에 한 곳뿐이라 다리 컴포넌트 없이 패널 자신이 소비하는 쪽이 더 단순하다).
+   * 2026-09-25: 옛 우선순위 큐(initialPriorityQueue · CrmPriorityQueuePanel)를 대체했다.
    */
-  initialPriorityQueue?: DeferredPrefetch<CrmPriorityQueue> | null
+  initialTodayContacts?: DeferredPrefetch<CrmTodayContacts> | null
 }) {
   const router = useRouter()
   // 스트리밍 전환(2026-09-10 2라운드) — initialData.X는 이제 동기 값이 아니라
@@ -157,6 +161,14 @@ export default function CrmHomeClient({
   const [neoCrmRefreshKey, setNeoCrmRefreshKey] = useState(0)
   // 백그라운드 자동 갱신용 키 — 패널은 이 값이 바뀌면 force 없이 load()만 다시 부른다(TTL 존중).
   const [softRefreshKey, setSoftRefreshKey] = useState(0)
+  // "오늘 연락"이 지난·오늘 할 일을 빠짐없이 담았는가(CrmTodayContactsPanel onCoverageChange). 아니면(목록 잘림·
+  // 할 일 원천 실패·담당 필터·목록 실패) 주간 패널이 숨긴 버킷을 다시 보인다 — 홈에서 그 할 일에 닿을 곳이 사라지지
+  // 않게(도달성 불변, admin-guidance-map §2). 목록에 담긴 할 일은 모두 행에서 닫을 수 있다(Compass 행의 보조 "할 일
+  // 완료"·처리됨 행의 남은 할 일 포함). 첫 응답 전에는 숨김(깜빡임 방지).
+  const [todayCoversTasks, setTodayCoversTasks] = useState(true)
+  // 같은 규칙을 Compass 밴드 임박 목록에도 — "오늘 연락"이 오늘·지난 Compass 다음 액션을 실제로 담았을 때만
+  // (담당 전체·Compass 조회 정상·잘리지 않음) 밴드가 오늘 몫을 뺀다(onCompassCoverageChange).
+  const [todayCoversCompass, setTodayCoversCompass] = useState(true)
 
   // 언마운트 후 setState(경고) 방지 + 토스트가 연달아 뜰 때 이전 타이머가 새 토스트를 지우지 않게.
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -361,7 +373,7 @@ export default function CrmHomeClient({
   )
 
   // Compass AutoRefresh 이식 — 탭이 보일 때만 60초마다 조용히 갱신한다(숨김 탭은 멈추고,
-  // 복귀 시 즉시 1회). 우선순위 큐처럼 켜 두고 보는 화면이 손으로 새로고침하지 않아도 따라온다.
+  // 복귀 시 즉시 1회). 오늘 연락처럼 켜 두고 보는 화면이 손으로 새로고침하지 않아도 따라온다.
   useVisibleInterval(() => {
     if (!pageRefreshing) refreshAll({ background: true })
   }, 60_000)
@@ -476,18 +488,26 @@ export default function CrmHomeClient({
         error={compassPipelineError}
         onRetry={() => void fetchCompassPipeline({ force: true })}
         refreshKey={neoCrmRefreshKey}
+        // 오늘·지난 Compass 다음 액션은 아래 "오늘 연락"이 흡수한다 — 밴드 임박 목록은 내일 이후만(중복 배치 금지).
+        // 단 "오늘 연락"이 그 액션을 다 담지 못하면(담당 필터·Compass 끊김/일부 실패·잘림·목록 실패) 오늘 몫도 보인다.
+        actionsAfterToday={todayCoversCompass}
       />
 
-      {/* 리드 요약 다음에 오늘의 행동 큐를 붙여 숫자 확인 → 처리 흐름을 한 축으로 만든다.
-          CrmPriorityQueuePanel이 initialData(레인)를 React use()로 직접 소비하므로 이 자리가
+      {/* 리드 요약 다음에 "오늘 연락"(C안 ①)을 붙여 숫자 확인 → 처리 흐름을 한 축으로 만든다.
+          여러 원천(엔진 추천·팔로업·할 일·Compass 다음 액션·NEO 만료/소진·재문의)을 서버가 한 목록으로
+          합친다. CrmTodayContactsPanel이 initialData(레인)를 React use()로 직접 소비하므로 이 자리가
           그 Suspense 경계다 — fallback은 패널 자신의 로딩 크롬을 재사용한 스켈레톤.
-          softRefreshKey 는 60초 백그라운드 갱신 틱 — force 없이 TTL 지난 것만 다시 받는다. */}
+          softRefreshKey 는 60초 백그라운드 갱신 틱 — force 없이 TTL 지난 것만 다시 받는다.
+          행 제목(리드·NEO 계정)은 아래 360 드로어를 연다. */}
       <div className={MOBILE_TOUCH_TARGET_CLASS}>
-        <Suspense fallback={<CrmPriorityQueuePanelSkeleton />}>
-          <CrmPriorityQueuePanel
+        <Suspense fallback={<CrmTodayContactsPanelSkeleton />}>
+          <CrmTodayContactsPanel
             refreshKey={neoCrmRefreshKey}
             softRefreshKey={softRefreshKey}
-            initialData={initialPriorityQueue ?? null}
+            initialData={initialTodayContacts ?? null}
+            onOpenCustomer={setDrawerTarget}
+            onCoverageChange={setTodayCoversTasks}
+            onCompassCoverageChange={setTodayCoversCompass}
           />
         </Suspense>
       </div>
@@ -559,8 +579,14 @@ export default function CrmHomeClient({
 
       {/* 주간 조망 밴드 — 우측 aside에서 본문으로 이동(H4: 우측 열은 액션 레일 전용) · 기능 보존 */}
       <div className={`mb-4 grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3 ${MOBILE_TOUCH_TARGET_CLASS}`}>
-        {/* 이번 주 할 일 — 주간 일정·버킷 조망 */}
-        <CrmWeekAheadPanel compact refreshKey={neoCrmRefreshKey} softRefreshKey={softRefreshKey} />
+        {/* 이번 주 할 일 — 홈에서는 "내일 이후 예정"만. 지난·오늘 할 일은 위 "오늘 연락"이 흡수한다(중복 배치 금지).
+            단 "오늘 연락"이 그 할 일을 다 담지 못하면(잘림·할 일 원천 실패·담당 필터·목록 실패) 숨기지 않는다(도달성 불변). */}
+        <CrmWeekAheadPanel
+          compact
+          refreshKey={neoCrmRefreshKey}
+          softRefreshKey={softRefreshKey}
+          hideBuckets={todayCoversTasks ? HOME_WEEK_AHEAD_HIDDEN_BUCKETS : undefined}
+        />
 
         {/* 설치·방문 일정 — upcomingThisWeek(install|visit) 상위 3건 */}
         <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">

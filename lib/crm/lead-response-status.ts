@@ -1,4 +1,5 @@
 import { RESPONSE_TARGET_SOURCES, isTestLead } from "@/lib/crm/lead-attribution"
+import { hasInflowStamp } from "@/lib/crm/lead-reinflow"
 import type { LeadRecord } from "@/lib/repositories/leads"
 
 export type LeadResponseStatusRecord = Pick<
@@ -23,7 +24,7 @@ export function isLeadAwaitingResponse(lead: LeadResponseStatusRecord) {
  * 재유입 이후의 방치 여부를 최초 유입 시각 하나로만 재면, 몇 달 전 첫 유입 때문에 방금
  * 재유입한 리드가 곧장 24h/48h 초과로 뜬다 — 실제로 방치된 것은 "재유입 이후"뿐이다.
  */
-function inflowClockMs(lead: Pick<LeadResponseStatusRecord, "timestamp" | "last_inflow_at">) {
+export function inflowClockMs(lead: Pick<LeadResponseStatusRecord, "timestamp" | "last_inflow_at">) {
   const createdAtMs = new Date(lead.timestamp).getTime()
   const inflowAtMs = lead.last_inflow_at ? new Date(lead.last_inflow_at).getTime() : NaN
   if (!Number.isFinite(inflowAtMs)) return createdAtMs
@@ -67,10 +68,17 @@ export function summarizeLeadResponseStatus(
  *  - lib/repositories/contact-logs.ts getContactLogs(leadId)의 최신 항목(리드 단건 조회용)
  */
 export function isReinflowAwaitingContact(
-  lead: Pick<LeadResponseStatusRecord, "status" | "last_inflow_at">,
+  lead: Pick<LeadResponseStatusRecord, "status" | "last_inflow_at"> &
+    Partial<Pick<LeadResponseStatusRecord, "timestamp">>,
   lastContactAt: string | null | undefined
 ): boolean {
   if (lead.status !== "contacted" || !lead.last_inflow_at) return false
+  // 백필 게이트(2026-09-25) — last_inflow_at 이 생성 시각 그대로(백필·신규 저장)면 재문의가 아니다. 이 게이트가
+  // 없으면 Home 연락 기록이 없는 연락중 리드가 전부 "재문의 미접촉"으로 뜬다(연락은 대부분 Compass 에서 한다).
+  // timestamp 를 넘기지 않는 옛 호출부는 예전처럼 게이트 없이 판정한다.
+  if (lead.timestamp !== undefined && !hasInflowStamp({ timestamp: lead.timestamp, last_inflow_at: lead.last_inflow_at })) {
+    return false
+  }
   if (!lastContactAt) return true
 
   const lastContactMs = new Date(lastContactAt).getTime()

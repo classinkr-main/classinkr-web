@@ -22,7 +22,23 @@ const RESULT_LABELS: Record<NonNullable<ContactLogRecord["result"]>, string> = {
   meeting_set: "미팅 확정",
 }
 
+/**
+ * 연락 기록 제목("전화 · 부재") — 리드 미러(leadContactEventTitle)와 현황 "오늘 연락"의 계정·고객·딜 결과 기록
+ * (crm_customer_events 에 결과 칼럼이 없어 결과는 제목에만 남는다)이 같은 문구를 쓴다.
+ * 결과는 통화 성격 채널(call·sms)에서만 붙인다 — 카톡·이메일 결과는 버린다(lib/crm/contact-log.ts 규약).
+ */
+export function contactEventTitle(
+  type: ContactLogRecord["type"],
+  result: ContactLogRecord["result"] | null | undefined
+): string {
+  const typeLabel = TYPE_LABELS[type] ?? "연락"
+  const carriesResult = type === "call" || type === "sms"
+  const resultLabel = result && carriesResult ? RESULT_LABELS[result] : null
+  return resultLabel ? `${typeLabel} · ${resultLabel}` : typeLabel
+}
+
 export function leadContactEventTitle(log: Pick<ContactLogRecord, "type" | "result">): string {
+  // 이미 저장된 카톡·이메일 로그에 결과가 붙어 있던 행도 예전과 같은 제목을 내도록 결과 드롭 없이 그대로 만든다.
   const typeLabel = TYPE_LABELS[log.type] ?? "연락"
   const resultLabel = log.result ? RESULT_LABELS[log.result] : null
   return resultLabel ? `${typeLabel} · ${resultLabel}` : typeLabel

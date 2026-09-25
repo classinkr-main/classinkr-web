@@ -21,16 +21,17 @@ const overviewPrefetch = readFileSync(join(process.cwd(), "lib/admin/overview/pr
 const overviewClient = readFileSync(join(process.cwd(), "app/admin/overview/OverviewClient.tsx"), "utf8")
 const crmPage = readFileSync(join(process.cwd(), "app/admin/crm/page.tsx"), "utf8")
 const crmHomePrefetch = readFileSync(join(process.cwd(), "lib/admin/crm/home-prefetch.ts"), "utf8")
-const priorityQueuePrefetch = readFileSync(
-  join(process.cwd(), "lib/admin/crm/priority-queue-prefetch.ts"),
+// 2026-09-25(C안 ①): 네 번째 소스가 우선순위 큐 → "오늘 연락"으로 바뀌었다(같은 레인·use() 구조).
+const todayContactsPrefetch = readFileSync(
+  join(process.cwd(), "lib/admin/crm/today-contacts-prefetch.ts"),
   "utf8"
 )
 const crmHomeClient = readFileSync(
   join(process.cwd(), "components/admin/crm/home/CrmHomeClient.tsx"),
   "utf8"
 )
-const priorityQueuePanel = readFileSync(
-  join(process.cwd(), "components/admin/crm/CrmPriorityQueuePanel.tsx"),
+const todayContactsPanel = readFileSync(
+  join(process.cwd(), "components/admin/crm/home/CrmTodayContactsPanel.tsx"),
   "utf8"
 )
 
@@ -91,11 +92,18 @@ describe("CRM 홈 — 첫 바이트가 소스를 기다리지 않는다", () => 
     expect(crmPage).not.toMatch(IMPORTS_SETTLE_WITHIN_BUDGET)
   })
 
-  it("home-prefetch.ts·priority-queue-prefetch.ts 전부 openPrefetchLane이다", () => {
+  it("home-prefetch.ts·today-contacts-prefetch.ts 전부 openPrefetchLane이다", () => {
     expect(crmHomePrefetch).not.toMatch(IMPORTS_SETTLE_WITHIN_BUDGET)
     expect(crmHomePrefetch).toContain("openPrefetchLane")
-    expect(priorityQueuePrefetch).not.toMatch(IMPORTS_SETTLE_WITHIN_BUDGET)
-    expect(priorityQueuePrefetch).toContain("openPrefetchLane")
+    expect(todayContactsPrefetch).not.toMatch(IMPORTS_SETTLE_WITHIN_BUDGET)
+    expect(todayContactsPrefetch).toContain("openPrefetchLane")
+  })
+
+  it("page.tsx는 오늘 연락 프리페치를 나란히 부르고 옛 우선순위 큐 프리페치는 더 부르지 않는다", () => {
+    expect(crmPage).toContain("prefetchCrmTodayContactsForHome()")
+    expect(crmPage).toContain("initialTodayContacts={initialTodayContacts}")
+    expect(crmPage).not.toContain("prefetchCrmPriorityQueueForHome")
+    expect(crmPage).not.toMatch(/await\s+prefetchCrmTodayContactsForHome/)
   })
 
   it("CRM 홈의 OVERVIEW_PREFETCH_BUDGET_MS(700ms) 완화책은 제거됐다 — 예산 자체가 없어져 불필요하다", () => {
@@ -112,14 +120,16 @@ describe("CRM 홈 — 첫 바이트가 소스를 기다리지 않는다", () => 
     }
   })
 
-  it("CrmPriorityQueuePanel(네 번째 소스)은 자신이 직접 use()로 소비하고, 호출부가 Suspense로 감싼다", () => {
-    expect(priorityQueuePanel).toContain("const prefetchSeed = use(prefetchPromise)")
-    expect(crmHomeClient).toContain("<Suspense fallback={<CrmPriorityQueuePanelSkeleton />}>")
+  it("CrmTodayContactsPanel(네 번째 소스)은 자신이 직접 use()로 소비하고, 호출부가 Suspense로 감싼다", () => {
+    expect(todayContactsPanel).toContain("const prefetchSeed = use(prefetchPromise)")
+    expect(crmHomeClient).toContain("<Suspense fallback={<CrmTodayContactsPanelSkeleton />}>")
+    expect(crmHomeClient).not.toContain('from "@/components/admin/crm/CrmPriorityQueuePanel"')
+    expect(crmHomeClient).not.toContain("<CrmPriorityQueuePanel")
   })
 
   it("화면 전체를 한 Suspense로 감싸는 회귀를 막는다 — 헤더는 어떤 Suspense JSX 태그 안에도 없다", () => {
     // "헤더 — 타이틀만" 주석 앞에는 leadActionKpis·overview·compassPipeline 세 bridge의
-    // <Suspense>만 온다(우선순위 큐 패널의 네 번째 경계는 헤더보다 한참 아래, 빠른 실행
+    // <Suspense>만 온다(오늘 연락 패널의 네 번째 경계는 헤더보다 한참 아래, 빠른 실행
     // 바·리드 요약 뒤에 있다) — 열고 닫은 개수가 같아야 한다(열린 채로 헤더까지 넘어가면
     // 헤더까지 첫 소스 settle을 기다리는 회귀다 — 이번 작업이 막으려는 바로 그 안티패턴).
     const headerIdx = crmHomeClient.indexOf("헤더 — 타이틀만")
