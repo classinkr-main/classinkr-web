@@ -71,6 +71,10 @@ function reviewedBody(overrides: Record<string, unknown> = {}) {
 
 describe("PATCH /api/admin/leads/bulk-assign", () => {
   beforeEach(() => {
+    // 배정 정책은 생성 30일이 지난 리드를 자동 배정 대상에서 뺀다(lib/crm/lead-assignment-policy.ts).
+    // 픽스처 시각(2026-08-26)에 맞춰 "지금"을 고정한다 — 실제 날짜로 돌리면 09-25부터 이 테스트가 터졌다.
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date("2026-08-27T00:00:00.000Z"))
     requireVerifiedAdminContext.mockResolvedValue({ role: "ADMIN", userId: "admin-1", name: "운영자" })
     listAdminUserDirectoryCached.mockResolvedValue({
       health: { ok: true, message: null },
@@ -82,6 +86,7 @@ describe("PATCH /api/admin/leads/bulk-assign", () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.clearAllMocks()
     vi.resetModules()
   })
