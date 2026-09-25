@@ -7,7 +7,7 @@
 // 사이드바를 고칠 길이 없어진다(app/api/admin/settings/route.ts). 이 편집은 권한이 아니라 취향이다.
 import { useMemo, useRef, useState } from "react"
 
-import { normalizeNavOverrides, type NavOverrideValue } from "@/components/admin/admin-nav-access"
+import { normalizeNavOverrides, type NavOverrides } from "@/components/admin/admin-nav-access"
 import { saveMyNavOverrides } from "@/components/admin/my-nav-preferences"
 import NavPreferenceEditor, {
   countNavPreferenceExceptions,
@@ -23,7 +23,7 @@ interface MyNavEditorDrawerProps {
   initialOverrides: Record<string, string>
   onClose: () => void
   /** 서버가 정규화해 돌려준 값. 셸이 사이드바·⌘K 에 즉시 반영한다. */
-  onSaved: (navOverrides: Record<string, NavOverrideValue>) => void
+  onSaved: (navOverrides: NavOverrides) => void
 }
 
 export default function MyNavEditorDrawer({
@@ -33,7 +33,7 @@ export default function MyNavEditorDrawer({
   onClose,
   onSaved,
 }: MyNavEditorDrawerProps) {
-  const [overrides, setOverrides] = useState<Record<string, NavOverrideValue>>(() =>
+  const [overrides, setOverrides] = useState<NavOverrides>(() =>
     normalizeNavOverrides(initialOverrides)
   )
   const [save, setSave] = useState<NavSaveState>({ status: "idle" })

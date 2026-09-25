@@ -12,20 +12,28 @@
 //
 // 판정·미리보기는 반드시 admin-nav-access 의 resolveAdminNavAccess·buildNavPreferenceRows 를
 // 쓴다 — 여기서 다시 계산하면 실제 사이드바와 어긋난다.
+//
+// (2026-09-25) 같은 스크롤 영역 아래에 "CRM 하위 탭" 섹션을 둔다 — CRM 본문 탭 줄(CrmSubnav)의
+// 개인 숨김(nav_overrides 의 crm:<href> 키, 표시|숨김 2단). 행·판정은 buildCrmSubnavPreferenceRows ·
+// setCrmSubnavOverride 가 정본이다. 두 범위는 한 오버라이드 객체에 함께 저장된다.
 import { useId, useMemo, type ReactNode, type RefObject } from "react"
 import { createPortal } from "react-dom"
 import { Check, CircleAlert, Loader2, X } from "lucide-react"
 
 import { ADMIN_NAV_CATEGORY_META } from "@/components/admin/admin-nav"
 import {
+  buildCrmSubnavPreferenceRows,
   buildNavPreferenceRows,
   resolveAdminNavAccess,
+  setCrmSubnavOverride,
   setNavOverride,
+  type CrmSubnavPreference,
   type NavAccessContext,
-  type NavOverrideValue,
+  type NavOverrides,
+  type NavPreference,
 } from "@/components/admin/admin-nav-access"
 
-export const NAV_PREFERENCE_OPTIONS: Array<{ value: NavOverrideValue; label: string }> = [
+export const NAV_PREFERENCE_OPTIONS: Array<{ value: NavPreference; label: string }> = [
   { value: "primary", label: "상시" },
   { value: "folded", label: "기타" },
   { value: "hidden", label: "숨김" },
@@ -33,24 +41,40 @@ export const NAV_PREFERENCE_OPTIONS: Array<{ value: NavOverrideValue; label: str
 
 // 선택된 값의 톤 — 명시적 선택 상태라 면을 쓴다(DESIGN.md 어드민 라벨 단순화).
 // 상시만 Success 축, 기타·숨김은 중립이다(숨김은 경고가 아니라 정리다).
-const OPTION_ACTIVE_TONE: Record<NavOverrideValue, string> = {
+const OPTION_ACTIVE_TONE: Record<NavPreference, string> = {
   primary: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]",
   folded: "border-[rgba(0,0,0,0.14)] bg-white text-[#111110]",
   hidden: "border-[rgba(0,0,0,0.14)] bg-white text-[#615D59]",
 }
 
+/** CRM 하위 탭 2단 선택 — 자리 개념이 없어 표시|숨김뿐이다. */
+export const CRM_SUBNAV_PREFERENCE_OPTIONS: Array<{ value: CrmSubnavPreference; label: string }> = [
+  { value: "shown", label: "표시" },
+  { value: "hidden", label: "숨김" },
+]
+
+// 표시는 기존 "기타" 톤(중립 선택), 숨김은 기존 "숨김" 톤을 그대로 쓴다.
+const CRM_OPTION_ACTIVE_TONE: Record<CrmSubnavPreference, string> = {
+  shown: OPTION_ACTIVE_TONE.folded,
+  hidden: OPTION_ACTIVE_TONE.hidden,
+}
+
 export const NAV_UNHIDEABLE_REASON = "로그인 첫 화면이라 숨길 수 없습니다"
 export const NAV_HIDDEN_REACH_NOTE = "숨긴 탭도 ⌘K와 주소로 그대로 열립니다."
+export const CRM_SUBNAV_SECTION_NOTE =
+  "현황·고객DB(통합)·검수는 CRM 진입 탭이라 숨길 수 없습니다. 숨긴 탭은 CRM 탭 줄의 '숨긴 탭 N · 보기'에 모입니다."
 
-/** 기본과 다른 항목 수 — 드로어 머리말용. */
+/** 기본과 다른 항목 수(사이드바 + CRM 하위 탭) — 드로어 머리말용. */
 export function countNavPreferenceExceptions(ctx: NavAccessContext): number {
-  return buildNavPreferenceRows(ctx).filter((row) => row.isException).length
+  const topLevel = buildNavPreferenceRows(ctx).filter((row) => row.isException).length
+  const crm = buildCrmSubnavPreferenceRows(ctx.overrides).filter((row) => row.isException).length
+  return topLevel + crm
 }
 
 interface NavPreferenceEditorProps {
   role: string
-  overrides: Record<string, NavOverrideValue>
-  onChange: (next: Record<string, NavOverrideValue>) => void
+  overrides: NavOverrides
+  onChange: (next: NavOverrides) => void
   /** 안내 문구의 주어 — 본인 편집이면 "내", 회원 관리면 "이 사람". */
   subject: "self" | "member"
   disabled?: boolean
@@ -64,19 +88,27 @@ export default function NavPreferenceEditor({
   disabled = false,
 }: NavPreferenceEditorProps) {
   const reasonId = useId()
+  const crmHeadingId = useId()
   const ctx = useMemo<NavAccessContext>(() => ({ role, overrides }), [role, overrides])
   const rows = useMemo(() => buildNavPreferenceRows(ctx), [ctx])
+  const crmRows = useMemo(() => buildCrmSubnavPreferenceRows(overrides), [overrides])
   const preview = useMemo(() => resolveAdminNavAccess(ctx), [ctx])
 
   const foldedItems = preview.folded.flatMap((group) => group.items)
   const foldedCategoryLabel = preview.folded
     .map((group) => ADMIN_NAV_CATEGORY_META[group.category].label)
     .join(" · ")
-  const exceptionCount = rows.filter((row) => row.isException).length
+  const crmHiddenRows = crmRows.filter((row) => row.preference === "hidden")
+  const exceptionCount =
+    rows.filter((row) => row.isException).length + crmRows.filter((row) => row.isException).length
   const whose = subject === "self" ? "내" : "이 사람"
 
-  const choose = (href: string, next: NavOverrideValue) => {
+  const choose = (href: string, next: NavPreference) => {
     onChange(setNavOverride(overrides, href, next))
+  }
+
+  const chooseCrm = (href: string, next: CrmSubnavPreference) => {
+    onChange(setCrmSubnavOverride(overrides, href, next))
   }
 
   return (
@@ -158,6 +190,68 @@ export default function NavPreferenceEditor({
             )
           })}
         </ul>
+
+        {/* CRM 하위 탭 — CRM 본문 탭 줄의 개인 숨김. 진입 탭 3개는 행 자체가 없다(숨길 수 없음). */}
+        <section aria-labelledby={crmHeadingId} className="mt-2 border-t border-[#e8e8e4] pt-3">
+          <div className="px-3 pb-1">
+            <h3 id={crmHeadingId} className="text-[12px] font-semibold text-[#111110]">
+              CRM 하위 탭
+            </h3>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-[#1a1a1a]/45">{CRM_SUBNAV_SECTION_NOTE}</p>
+          </div>
+          <ul>
+            {crmRows.map(({ item, preference, base, isException }) => (
+              <li
+                key={item.href}
+                className="flex items-center justify-between gap-3 border-b border-[#f0f0ec] px-3 py-2.5 last:border-0"
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  <span
+                    className={`truncate text-[12.5px] font-medium ${
+                      preference === "hidden" ? "text-[#1a1a1a]/45" : "text-[#111110]"
+                    }`}
+                  >
+                    {item.displayLabel}
+                  </span>
+                  {isException ? (
+                    <span className="inline-flex shrink-0 items-center gap-1 text-[10.5px] font-semibold text-[#A8741A]">
+                      <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[#A8741A]" />
+                      예외
+                    </span>
+                  ) : null}
+                  {!isException && base === "hidden" ? (
+                    <span className="shrink-0 text-[10.5px] text-[#1a1a1a]/40">기본 숨김</span>
+                  ) : null}
+                </div>
+                <div
+                  role="group"
+                  aria-label={`${item.displayLabel} 표시`}
+                  className="inline-flex shrink-0 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#fafaf8] p-0.5"
+                >
+                  {CRM_SUBNAV_PREFERENCE_OPTIONS.map((option) => {
+                    const active = preference === option.value
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        aria-pressed={active}
+                        disabled={disabled}
+                        onClick={() => chooseCrm(item.href, option.value)}
+                        className={`rounded-md border px-2.5 py-1 text-[11px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#084734] disabled:cursor-not-allowed disabled:opacity-40 ${
+                          active
+                            ? CRM_OPTION_ACTIVE_TONE[option.value]
+                            : "border-transparent text-[#1a1a1a]/40 hover:bg-white hover:text-[#111110]"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
       </div>
 
       {/* 미리보기 — 저장 전에 실제 사이드바 결과를 보여주는 핵심 장치 */}
@@ -188,6 +282,11 @@ export default function NavPreferenceEditor({
         {preview.hidden.length > 0 ? (
           <p className="text-[11px] text-[#1a1a1a]/50">
             숨김 {preview.hidden.length} — {preview.hidden.map((item) => item.label).join(" · ")}
+          </p>
+        ) : null}
+        {crmHiddenRows.length > 0 ? (
+          <p className="text-[11px] text-[#1a1a1a]/50">
+            CRM 숨긴 탭 {crmHiddenRows.length} — {crmHiddenRows.map((row) => row.item.displayLabel).join(" · ")}
           </p>
         ) : null}
         <p className="text-[11px] text-[#1a1a1a]/40">{NAV_HIDDEN_REACH_NOTE}</p>

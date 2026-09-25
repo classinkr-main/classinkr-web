@@ -57,15 +57,21 @@ const PALETTE_CHILD_COMMANDS: Record<string, Array<Omit<AdminCommand, "group">>>
   ],
   "/admin/crm": [
     // CRM 드릴인 하위 nav(admin-nav SSOT) 파생 — '현황'(/admin/crm)은 부모 항목과 중복이라 제외.
+    // CRM 하위 탭 개인 숨김(기록·입력함·태그 기본 숨김, 2026-09-25)으로 거르지 않는다 — 이 목록은
+    // 정적이고, 숨긴 CRM 탭의 ⌘K 도달성이 이것에 기댄다(tests/admin/nav-crm-subnav.test.ts 고정).
     ...CRM_CHILD_NAV.filter((child) => child.href !== "/admin/crm").map((child) => ({
       label: `CRM ${child.label}`,
       href: child.href,
       keywords: child.keywords,
     })),
-    { label: "고객 (Accounts)", href: "/admin/crm/customers/accounts", keywords: "고객 거래처 account customer" },
+    // 보조 탭 라벨("원천 고객")로도 찾혀야 한다 — 보조 탭을 숨긴 사람의 ⌘K 진입로(2026-09-25).
+    { label: "고객 (Accounts)", href: "/admin/crm/customers/accounts", keywords: "원천 고객 neo 거래처 account customer" },
     { label: "리드", href: "/admin/crm/customers/leads", keywords: "리드 잠재고객 lead 문의" },
     // 고객 보조 탭(CrmSubnav)과 같은 라벨. 2026-09-20·21 신설 화면이라 ⌘K 도달이 빠져 있었다.
     { label: "접수", href: "/admin/crm/customers/intake", keywords: "접수 쇼룸 예약 도입 신청 접수 큐 intake showroom booking application queue" },
+    // 세그먼트 허브(C안 ②, 2026-09-25) — 고객DB 보조 탭 "세그먼트"와 같은 라벨. 리드 보드의 리드
+    // 세그먼트(메타 광고·인계 등, lib/crm/lead-segments.ts)와는 다른 화면이라 검색어로 "허브"를 붙인다.
+    { label: "세그먼트", href: "/admin/crm/customers/segments", keywords: "세그먼트 허브 저장 세그먼트 조건 빌더 자동 태그 오늘 연락 일괄 segment segments saved filter hub" },
     { label: "지도", href: "/admin/crm/customers/map", keywords: "고객 지역 지도 분포 지역분포 원천 map source region" },
     { label: "태그", href: "/admin/crm/customers/tags", keywords: "태그 라벨 고객 분류 태그 관리 tag tags label" },
     { label: "Deals", href: "/admin/crm/deals", keywords: "딜 거래 오더 order deal" },
@@ -163,6 +169,8 @@ export const ADMIN_COMMANDS: AdminCommand[] = buildAdminCommands(ADMIN_NAV)
  * 사이드바와 같은 배치 해석(전원 공통 기본 + 사람별 오버라이드)을 거친 명령 목록.
  * getAccessibleAdminNavItems 는 배치·숨김과 무관하게 ADMIN_NAV 전체를 돌려준다 — 그래서
  * 사이드바에서 숨긴 탭(기본 숨김 포함)도 ⌘K 에서는 계속 검색된다(command-palette.test.ts 고정).
+ * CRM 하위 탭(crm: 키) 숨김도 마찬가지다 — 자식 명령(PALETTE_CHILD_COMMANDS)은 정적이라
+ * 숨김으로 걸러지지 않는다(nav-crm-subnav.test.ts 고정).
  */
 export function resolveAdminCommands(ctx: NavAccessContext): AdminCommand[] {
   return buildAdminCommands(getAccessibleAdminNavItems(resolveAdminNavAccess(ctx)))

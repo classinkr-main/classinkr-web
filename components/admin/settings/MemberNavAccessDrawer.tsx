@@ -14,7 +14,7 @@ import { useMemo, useRef, useState } from "react"
 
 import {
   normalizeNavOverrides,
-  type NavOverrideValue,
+  type NavOverrides,
 } from "@/components/admin/admin-nav-access"
 import NavPreferenceEditor, {
   countNavPreferenceExceptions,
@@ -32,7 +32,7 @@ interface MemberNavAccessDrawerProps {
   initialOverrides: Record<string, string>
   onClose: () => void
   /** 저장된 오버라이드(숨김 포함) — 호출부 MembersPanel 이 키 개수를 세고 회원 행에 담는다. */
-  onSaved: (navOverrides: Record<string, NavOverrideValue>) => void
+  onSaved: (navOverrides: NavOverrides) => void
 }
 
 export default function MemberNavAccessDrawer({
@@ -45,8 +45,9 @@ export default function MemberNavAccessDrawer({
 }: MemberNavAccessDrawerProps) {
   // 전면 공개 이후 오버라이드는 역할과 무관하게 똑같이 적용된다 — SUPER_ADMIN 이라고 무시되지
   // 않으므로 예전의 전체 잠금(locked)은 사라졌다. 정규화가 hidden 을 보존해야 한다 — 버리면
-  // 이 드로어를 한 번 저장하는 것만으로 그 사람이 숨긴 탭이 조용히 되살아난다.
-  const [overrides, setOverrides] = useState<Record<string, NavOverrideValue>>(() =>
+  // 이 드로어를 한 번 저장하는 것만으로 그 사람이 숨긴 탭이 조용히 되살아난다. CRM 하위 탭
+  // 선택(crm: 키, 2026-09-25)도 같은 이유로 정규화가 보존하고, 편집기 아래 섹션에서 함께 고친다.
+  const [overrides, setOverrides] = useState<NavOverrides>(() =>
     normalizeNavOverrides(initialOverrides)
   )
   const [save, setSave] = useState<NavSaveState>({ status: "idle" })

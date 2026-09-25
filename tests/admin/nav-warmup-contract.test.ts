@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { NAV_WARMUP_REQUESTS } from "@/components/admin/AdminSidebar"
+import { todayContactsUrl } from "@/lib/crm/today-contacts-request"
 import {
   buildAdminCalendarUrl,
   getAdminCalendarWeekStripRange,
@@ -103,9 +104,10 @@ describe("admin nav warm-up cache-key parity", () => {
   })
 
   it("warms the CRM home panels the server prefetch does not cover", () => {
-    expect(warmupUrls("/admin/crm")).toContain(
-      "/api/admin/crm/home/priority-queue?limit=50&source=customer&v=3"
-    )
+    // 현황 "오늘 연락" 패널의 기본 호출(todayContactsUrl("")) — 옛 우선순위 큐 URL 은 더 이상 예열하지 않는다.
+    expect(warmupUrls("/admin/crm")).toContain(todayContactsUrl(""))
+    expect(warmupUrls("/admin/crm").some((url) => url.includes("/home/priority-queue"))).toBe(false)
+    expect(warmupUrls("/admin/crm/customers/segments")).toContain("/api/admin/crm/segments")
     // NEO 집계는 기본 접힌 아코디언의 비활성 탭 전용 — 비싼 축이라 데우지 않는다.
     expect(warmupUrls("/admin/crm").some((url) => url.startsWith("/api/admin/crm/neo"))).toBe(false)
   })

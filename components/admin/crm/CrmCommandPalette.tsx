@@ -12,7 +12,9 @@ import {
   ClipboardList,
   LayoutGrid,
   ListChecks,
+  ListFilter,
   Inbox,
+  MapPinned,
   Package,
   PanelLeft,
   PhoneCall,
@@ -77,6 +79,18 @@ export const NAV_CMDS: Array<{ label: string; sub: string; href: string; icon: R
     keywords: "고객 전환 세그먼트",
   },
   { label: "원천 고객", sub: "NEO 어카운트", href: "/admin/crm/customers/accounts", icon: <Building2 className="h-4 w-4" /> },
+  // 세그먼트 허브(C안 ②, 2026-09-25) — 고객DB 보조 탭과 같은 라벨. 위의 "리드 세그먼트" 4종(리드 보드
+  // 필터)과 다른 화면이라 부제로 구분한다. 리드 보드 바로 뒤 4개 순서(테스트 고정)를 깨지 않게 여기에 둔다.
+  {
+    label: "세그먼트",
+    sub: "저장 조건·건수·일괄 행동",
+    href: "/admin/crm/customers/segments",
+    icon: <ListFilter className="h-4 w-4" />,
+    keywords: "segment segments 세그먼트 허브 저장 조건 빌더 자동 태그 오늘 연락",
+  },
+  // 지도 — 고객DB 보조 탭 중 여기에만 빠져 있었다. CRM 라우트에서는 이 팔레트가 전역 ⌘K 를 대신하므로
+  // 보조 탭을 숨겨도 찾히려면 전부 있어야 한다(tests/admin/nav-crm-subnav.test.ts).
+  { label: "지도", sub: "고객 지역 분포", href: "/admin/crm/customers/map", icon: <MapPinned className="h-4 w-4" />, keywords: "map region 지역 분포 원천" },
   { label: "태그 관리", sub: "태그·건수·이름 변경", href: "/admin/crm/customers/tags", icon: <Tags className="h-4 w-4" />, keywords: "tag tags 라벨" },
   { label: "접수", sub: "쇼룸 예약·도입 신청", href: "/admin/crm/customers/intake", icon: <Inbox className="h-4 w-4" />, keywords: "intake 쇼룸 도입 신청 예약" },
   { label: "매출 대시보드", sub: "자체 원장·견적·정합성", href: "/admin/crm/deals", icon: <CircleDollarSign className="h-4 w-4" /> },
@@ -88,7 +102,8 @@ export const NAV_CMDS: Array<{ label: string; sub: string; href: string; icon: R
   { label: "기록 · 활동", sub: "타임라인", href: "/admin/crm/activity", icon: <Activity className="h-4 w-4" /> },
   { label: "인사이트", sub: "분석", href: "/admin/crm/insights", icon: <BarChart3 className="h-4 w-4" /> },
   { label: "매칭 검수", sub: "매칭 인박스", href: "/admin/crm/matching", icon: <ListChecks className="h-4 w-4" /> },
-  { label: "참석자 입력", sub: "Capture", href: "/admin/crm/capture", icon: <ClipboardList className="h-4 w-4" /> },
+  // 탭 이름(입력함)으로도 찾혀야 한다 — 입력함은 기본 숨김 탭이라 ⌘K 가 주 진입로다(2026-09-25).
+  { label: "참석자 입력", sub: "Capture", href: "/admin/crm/capture", icon: <ClipboardList className="h-4 w-4" />, keywords: "입력함 capture 참석자 명함 붙여넣기" },
   {
     label: "내 사이드바 편집",
     sub: "탭 상시·기타·숨김 — 숨겨도 ⌘K로 열림",
@@ -320,7 +335,7 @@ export default function CrmCommandPalette({ initiallyOpen = false }: CrmCommandP
         {/* 세그먼트 이동 명령 발견성 — 검색 중에는 결과 공간을 가리지 않도록 idle일 때만 보인다. */}
         {!hasQuery ? (
           <p className="border-b border-[#f0f0ec] px-4 py-2 text-[11px] text-[#1a1a1a]/40">
-            리드 세그먼트는 메타, 인계로 검색
+            세그먼트 허브는 &lsquo;세그먼트&rsquo;, 리드 세그먼트는 메타·인계로 검색 · 숨긴 탭도 여기서 열립니다
           </p>
         ) : null}
         <div

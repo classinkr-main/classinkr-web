@@ -1,12 +1,16 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 
 import AdminSidebar from "@/components/admin/AdminSidebar"
 import AdminCommandPaletteLauncher from "@/components/admin/AdminCommandPaletteLauncher"
 import AdminNavProgress from "@/components/admin/AdminNavProgress"
-import type { NavOverrideValue } from "@/components/admin/admin-nav-access"
+import type { NavOverrides } from "@/components/admin/admin-nav-access"
+import {
+  AdminNavPreferencesProvider,
+  type AdminNavPreferencesValue,
+} from "@/components/admin/admin-nav-preferences-context"
 import { mergePinnedNavOverrides, pinNavOverrides } from "@/components/admin/my-nav-preferences"
 import { RouteTransition } from "@/components/transitions/RouteTransition"
 import type { AdminShellSession } from "@/lib/admin-auth"
@@ -322,7 +326,7 @@ export default function AdminShell({
   // 서버가 정규화해 돌려준 값을 세션 상태·sessionStorage 에 반영하고 핀을 건다 — 팔레트도
   // 같은 session.navOverrides 를 받으므로 함께 갱신된다. 숨김은 도달성을 바꾸지 않으므로
   // (admin-nav-access.ts 불변식) 여기서 경로 가드 같은 것을 다시 계산하지 않는다.
-  const handleNavOverridesChange = useCallback((next: Record<string, NavOverrideValue>) => {
+  const handleNavOverridesChange = useCallback((next: NavOverrides) => {
     if (typeof window !== "undefined") {
       try {
         pinNavOverrides(sessionStorage, next, Date.now())
@@ -333,6 +337,21 @@ export default function AdminShell({
     setSession((prev) => (prev ? { ...prev, navOverrides: next } : prev))
   }, [])
 
+  // 본문(CRM 탭 줄 CrmSubnav 등)이 같은 세션 오버라이드와 저장 콜백을 읽는 컨텍스트 값.
+  // 첫 렌더는 서버 세션(initialSession) 그대로라 SSR 마크업과 같다 — 핀 값은 위 이펙트가 곧 반영한다.
+  // 세션 확인 전(null)이면 소비자는 전원 공통 기본값으로 읽고 저장 UI 를 막는다.
+  const navPreferences = useMemo<AdminNavPreferencesValue | null>(
+    () =>
+      session
+        ? {
+            role: session.role,
+            navOverrides: session.navOverrides,
+            onNavOverridesChange: handleNavOverridesChange,
+          }
+        : null,
+    [session, handleNavOverridesChange]
+  )
+
   // 2026-09-10 전면 공개 전환으로 "차단된 탭 직접 진입" 가드가 사라졌다.
   // 어떤 항목도 deny 되지 않으므로(admin-nav-access.ts) 이 계산은 항상 false 였고,
   // 매 네비게이션마다 ADMIN_NAV 를 훑는 비용과 도달 불가능한 차단 화면만 남아 있었다.
@@ -342,46 +361,48 @@ export default function AdminShell({
   if (isLoginPage) return <>{children}</>
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-[#FAFAF8] lg:h-[100dvh] lg:flex-row lg:overflow-hidden">
-      {session ? (
-        <AdminSidebar
-          role={session.role}
-          name={session.name}
-          email={session.email}
-          navOverrides={session.navOverrides}
-          onNavOverridesChange={handleNavOverridesChange}
-        />
-      ) : (
-        <aside
-          aria-hidden="true"
-          className="hidden border-b border-[#e8e8e4] bg-white lg:flex lg:min-h-screen lg:w-60 lg:shrink-0 lg:flex-col lg:border-r lg:border-b-0"
-        >
-          <div className="border-b border-[#e8e8e4] px-5 py-6">
-            <div className="h-3 w-12 rounded-full bg-[#f0f0ec] animate-pulse" />
-            <div className="mt-2 h-4 w-20 rounded-full bg-[#f0f0ec] animate-pulse" />
+    <AdminNavPreferencesProvider value={navPreferences}>
+      <div className="flex min-h-[100dvh] flex-col bg-[#FAFAF8] lg:h-[100dvh] lg:flex-row lg:overflow-hidden">
+        {session ? (
+          <AdminSidebar
+            role={session.role}
+            name={session.name}
+            email={session.email}
+            navOverrides={session.navOverrides}
+            onNavOverridesChange={handleNavOverridesChange}
+          />
+        ) : (
+          <aside
+            aria-hidden="true"
+            className="hidden border-b border-[#e8e8e4] bg-white lg:flex lg:min-h-screen lg:w-60 lg:shrink-0 lg:flex-col lg:border-r lg:border-b-0"
+          >
+            <div className="border-b border-[#e8e8e4] px-5 py-6">
+              <div className="h-3 w-12 rounded-full bg-[#f0f0ec] animate-pulse" />
+              <div className="mt-2 h-4 w-20 rounded-full bg-[#f0f0ec] animate-pulse" />
+            </div>
+            <div className="flex-1 px-4 py-5">
+              <div className="h-32 rounded-2xl border border-dashed border-[#ecece8] bg-[#fafaf8]" />
+            </div>
+            <div className="px-4 pb-5">
+              <div className="h-10 rounded-lg bg-[#f5f5f2] animate-pulse" />
+            </div>
+          </aside>
+        )}
+        <AdminNavProgress />
+        <main className="min-w-0 flex-1 overflow-x-hidden pt-16 pb-24 lg:overflow-y-auto lg:overscroll-contain lg:pt-0 lg:pb-0">
+          <div className="mx-auto w-full max-w-[1680px]">
+            <RouteTransition tone="admin">
+              {children}
+            </RouteTransition>
           </div>
-          <div className="flex-1 px-4 py-5">
-            <div className="h-32 rounded-2xl border border-dashed border-[#ecece8] bg-[#fafaf8]" />
-          </div>
-          <div className="px-4 pb-5">
-            <div className="h-10 rounded-lg bg-[#f5f5f2] animate-pulse" />
-          </div>
-        </aside>
-      )}
-      <AdminNavProgress />
-      <main className="min-w-0 flex-1 overflow-x-hidden pt-16 pb-24 lg:overflow-y-auto lg:overscroll-contain lg:pt-0 lg:pb-0">
-        <div className="mx-auto w-full max-w-[1680px]">
-          <RouteTransition tone="admin">
-            {children}
-          </RouteTransition>
-        </div>
-      </main>
-      {session ? (
-        <AdminCommandPaletteLauncher
-          role={session.role}
-          navOverrides={session.navOverrides}
-        />
-      ) : null}
-    </div>
+        </main>
+        {session ? (
+          <AdminCommandPaletteLauncher
+            role={session.role}
+            navOverrides={session.navOverrides}
+          />
+        ) : null}
+      </div>
+    </AdminNavPreferencesProvider>
   )
 }

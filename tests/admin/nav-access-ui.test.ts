@@ -115,6 +115,12 @@ describe("AdminShell — 전면 공개 이후", () => {
     expect(shell).toContain("pinNavOverrides(sessionStorage, next, Date.now())")
   })
 
+  it("본문(CrmSubnav)에 같은 세션 오버라이드·저장 콜백을 컨텍스트로 내려준다", () => {
+    expect(shell).toContain("<AdminNavPreferencesProvider value={navPreferences}>")
+    expect(shell).toContain("onNavOverridesChange: handleNavOverridesChange")
+    expect(shell).toContain("navOverrides: session.navOverrides")
+  })
+
   it("서버 세션을 sessionStorage 에 옮길 때 핀 창의 로컬 값을 덮지 않는다", () => {
     // 초기화·이펙트 두 경로 모두 핀을 반영한 값으로 hydrate 해야 한다.
     expect(shell).toContain("hydrateAdminSessionStorage(withPinnedNavOverrides(initialSession))")
@@ -151,6 +157,7 @@ const myDrawer = readFileSync(
   join(process.cwd(), "components/admin/settings/MyNavEditorDrawer.tsx"),
   "utf8"
 )
+const crmSubnav = readFileSync(join(process.cwd(), "components/admin/crm/CrmSubnav.tsx"), "utf8")
 
 describe("NavPreferenceEditor — 두 드로어 공통 본문", () => {
   it("previews with the shared resolver instead of a second implementation", () => {
@@ -172,9 +179,22 @@ describe("NavPreferenceEditor — 두 드로어 공통 본문", () => {
       ["editor", editor],
       ["member drawer", drawer],
       ["my drawer", myDrawer],
+      ["crm subnav", crmSubnav],
     ] as const) {
       expect(source, name).not.toContain("차단")
     }
+  })
+
+  it("CRM 하위 탭 섹션을 공유 판정(buildCrmSubnavPreferenceRows)으로 그리고 표시|숨김 2단만 준다", () => {
+    expect(editor).toContain("CRM 하위 탭")
+    expect(editor).toContain("buildCrmSubnavPreferenceRows(")
+    expect(editor).toContain("setCrmSubnavOverride(")
+    expect(editor).toContain('label: "표시"')
+    // 진입 탭 3개는 행이 없다는 이유를 화면에 싣는다.
+    expect(editor).toContain("CRM 진입 탭이라 숨길 수 없습니다")
+    // 미리보기·예외 수에 CRM 범위를 합친다(기본으로 되돌리기는 두 범위를 함께 비운다).
+    expect(editor).toContain("CRM 숨긴 탭 {crmHiddenRows.length}")
+    expect(editor).toContain("onChange({})")
   })
 
   it("숨김은 도달성을 줄이지 않는다는 안내를 편집기에 싣는다", () => {
@@ -228,6 +248,35 @@ describe("MyNavEditorDrawer — 본인 편집", () => {
     expect(myDrawer).toContain("<NavPreferenceEditor")
     expect(myDrawer).toContain('subject="self"')
     expect(myDrawer).not.toContain("/api/admin/users")
+  })
+})
+
+describe("CrmSubnav — CRM 하위 탭 개인 숨김(2026-09-25)", () => {
+  it("셸 컨텍스트의 오버라이드를 공유 판정으로 읽는다(자체 계산 금지)", () => {
+    expect(crmSubnav).toContain("useAdminNavPreferences()")
+    expect(crmSubnav).toContain("normalizeNavOverrides(navOverrides)")
+    expect(crmSubnav).toContain("resolveCrmSubnavAccess(overrides)")
+  })
+
+  it("현재 화면의 숨긴 탭은 강제로 보인다(1차·고객 보조 줄 모두)", () => {
+    expect(crmSubnav).toContain("!crmAccess.hiddenHrefs.has(child.href) || child.match(currentPath)")
+    expect(crmSubnav).toContain("!crmAccess.hiddenHrefs.has(sub.href) || customersSub === sub.key")
+    expect(crmSubnav).toContain("(숨긴 탭)")
+  })
+
+  it("'숨긴 탭 N · 보기' 토글과 '다시 표시'를 두고 본인 경로로 저장한다", () => {
+    expect(crmSubnav).toContain("숨긴 탭")
+    expect(crmSubnav).toContain("다시 표시")
+    expect(crmSubnav).toContain('aria-label="숨긴 CRM 탭"')
+    expect(crmSubnav).toContain('setCrmSubnavOverride(overrides, href, "shown")')
+    expect(crmSubnav).toContain("saveMyNavOverrides(")
+    expect(crmSubnav).toContain("onNavOverridesChange?.(saved)")
+    expect(crmSubnav).toContain('role="alert"')
+  })
+
+  it("숨겨도 열린다는 안내와 사이드바 편집 이벤트를 싣는다", () => {
+    expect(crmSubnav).toContain("숨겨도 ⌘K·주소로 열립니다")
+    expect(crmSubnav).toContain("new CustomEvent(ADMIN_OPEN_NAV_EDITOR_EVENT)")
   })
 })
 

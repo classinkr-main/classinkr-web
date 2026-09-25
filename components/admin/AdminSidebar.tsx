@@ -156,11 +156,14 @@ export const NAV_WARMUP_REQUESTS: Record<string, WarmupEntry[] | (() => WarmupEn
     // 아래 다섯은 CRM 홈 첫 화면이 무조건 마운트하는 하위 컴포넌트의 fetch — 지금까지 예열
     // 목록에 없어 매 진입마다 콜드 페치였다(각 컴포넌트에서 cacheKey=URL로 확인).
     "/api/admin/crm/coverage", // CrmCoverageStrip
-    "/api/admin/crm/home/priority-queue?limit=50&source=customer&v=3", // CrmPriorityQueuePanel
-    "/api/admin/crm/owners", // CrmPriorityQueuePanel(useCrmOwners)·CrmWeekAheadPanel
+    // 현황 "오늘 연락"(C안 ①, 2026-09-25) — 패널의 기본(담당 전체) 호출 todayContactsUrl("")와 문자 단위로 같아야 적중한다.
+    "/api/admin/crm/home/today-contacts?limit=60&v=1", // CrmTodayContactsPanel
+    "/api/admin/crm/owners", // CrmTodayContactsPanel(useCrmOwners)·CrmWeekAheadPanel
     "/api/admin/crm/tasks?status=active&limit=100", // CrmWeekAheadPanel(compact)
     "/api/admin/crm/health-distribution", // CrmHealthDonut
   ],
+  // 세그먼트 허브(C안 ②) — 첫 목록 GET(segmentsListUrl("all", false)).
+  "/admin/crm/customers/segments": ["/api/admin/crm/segments"],
   "/admin/crm/customers/unified": [
     "/api/admin/crm/customers/unified?limit=50&offset=0",
     "/api/admin/crm/owners",

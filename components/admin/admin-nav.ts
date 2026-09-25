@@ -181,6 +181,8 @@ export interface CrmChildNavItem {
 // CRM 핵심 탭 — 현황(후속조치+분석+시각화) · 고객(DB·360·연락입력·라벨링) · 기록(전체 로그) · 참석자 입력
 // · 검수(매칭 인박스·인사이트·매출시트 = 백오피스 표면의 상설 진입점, top-nav 재팽창 없이 하위탭으로만).
 // 돈흐름(deals)은 어드민(딜보드·견적)과 겹쳐 최상위에서 내림 — 라우트는 보존, active는 현황 탭 귀속.
+// (2026-09-25) 기록·입력함은 전원 기본 숨김이다(개인 설정으로 다시 표시) — 배열에서 빼지 않는다.
+// 숨김 판정은 admin-nav-access.ts 의 resolveCrmSubnavAccess 가 하고, ⌘K 는 이 표를 거르지 않는다.
 export const CRM_CHILD_NAV: CrmChildNavItem[] = [
   {
     href: "/admin/crm",
@@ -220,4 +222,36 @@ export const CRM_CHILD_NAV: CrmChildNavItem[] = [
       p.startsWith("/admin/crm/insights") ||
       p.startsWith("/admin/crm/deals/rev-sheet"),
   },
+]
+
+/** CRM 고객DB 보조 탭 키 — CrmSubnav 보조 탭 줄의 활성 판정 키이기도 하다. */
+export type CrmCustomersSubKey = "unified" | "leads" | "intake" | "accounts" | "segments" | "map" | "tags"
+
+export interface CrmCustomersChildNavItem {
+  key: CrmCustomersSubKey
+  href: string
+  label: string
+  /** 커맨드 팔레트 검색어 — 공백 구분, 한/영 병기 */
+  keywords?: string
+}
+
+// CRM 고객DB 보조 탭(2차 줄) 정본 — 순수 데이터만 둔다(아이콘은 CrmSubnav가 key로 붙인다).
+// CrmSubnav 안에만 있던 표를 여기로 올린 이유(2026-09-25 CRM 하위 탭 숨김): 개인 숨김 키
+// (nav_overrides 의 crm:<href>)를 검증하는 정규화(admin-nav-access.ts)는 API 라우트도 import 하는
+// 순수 모듈이라 "use client" 컴포넌트의 표를 볼 수 없다. 편집기·모바일 헤더 라벨 테스트도 이 표를 본다.
+// 배열 순서 = 보조 탭 표시 순서. 세그먼트(허브)는 원천 고객 뒤·지도 앞(CRM 탭 개편 목업 C).
+// 통합(unified)의 href 는 1차 탭 "고객DB"(CRM_CHILD_NAV)와 같다 — 둘 다 숨길 수 없는 착지다.
+export const CRM_CUSTOMERS_CHILD_NAV: CrmCustomersChildNavItem[] = [
+  { key: "unified", href: "/admin/crm/customers/unified", label: "통합" },
+  { key: "leads", href: "/admin/crm/customers/leads", label: "리드" },
+  { key: "intake", href: "/admin/crm/customers/intake", label: "접수" },
+  { key: "accounts", href: "/admin/crm/customers/accounts", label: "원천 고객" },
+  {
+    key: "segments",
+    href: "/admin/crm/customers/segments",
+    label: "세그먼트",
+    keywords: "세그먼트 허브 저장 세그먼트 조건 빌더 자동 태그 segment segments saved filter",
+  },
+  { key: "map", href: "/admin/crm/customers/map", label: "지도" },
+  { key: "tags", href: "/admin/crm/customers/tags", label: "태그" },
 ]

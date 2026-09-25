@@ -134,6 +134,7 @@ describe("admin command palette — 2026-09-25 탭 정리", () => {
   it.each([
     ["/admin/crm/customers/tags", "태그", ["태그", "tag"]],
     ["/admin/crm/customers/intake", "접수", ["접수", "intake", "쇼룸"]],
+    ["/admin/crm/customers/segments", "세그먼트", ["세그먼트", "segment", "허브"]],
   ])("CRM 고객 보조 탭 %s 가 ⌘K 에서 한/영으로 찾아진다", (href, label, queries) => {
     const [command] = byHref(href)
     expect(command?.label).toBe(label)
