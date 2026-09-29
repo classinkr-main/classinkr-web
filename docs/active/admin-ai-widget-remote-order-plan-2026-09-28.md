@@ -3,7 +3,7 @@
 상태: **프론트 1차 구현(시안 모드), 서버 미착수.** 방향·정책·병합 시점은 2026-09-29 확정(§9). 구현 범위는 §13.
 범위: `/admin` 전역 플로팅 AI 위젯(이름 **갈매봇**), 신설 `/admin/ai`(AI 올인원 탭), 채팅으로 어드민 작업을 실행하는 원격 오더 엔진
 시안: [mockups/admin-ai-widget-remote-order-2026-09-28.html](mockups/admin-ai-widget-remote-order-2026-09-28.html) (v3, 2026-09-29) · 아이콘 [512px](mockups/assets/galmaebot-512.png) · [128px](mockups/assets/galmaebot-128.png)
-먼저 볼 곳: 결정이 막힌 지점은 [§12 고민·불확실 포인트](#12-고민불확실-포인트)에 모았다.
+먼저 볼 곳: 결정이 막힌 지점은 [§12 고민·불확실 포인트](#12-고민불확실-포인트)에 모았다. 구현 순서는 [갈매봇 구조와 작업 리스트](admin-ai-structure-worklist-2026-09-29.md).
 정책 상위 문서: [Admin OS 운영 결정](admin-os-operating-decisions-2026-07-11.md) › [어드민 탭 재구성](admin-tab-restructure-2026-07-29.md) › [CS 어드민 콘솔 IA](cs-admin-console-ia-2026-07-27.md)
 소유 파트: 셸·내비·위젯 마운트 = 어드민 코어, 대화 엔진·지식 검색 = 챗봇/CS, 오더 핸들러 = 각 도메인, 스키마 = 플랫폼 ([플레이북](playbook/README.md))
 
@@ -242,6 +242,8 @@ interface AdminOrderDefinition<Input> {
 | P5(선택) | 음성 입력, 예약 오더 | 별도 기획 |
 
 P1은 쓰기가 없어서 정책 개정 범위가 가장 작다. 여기서 실제 사용 질문을 모아 P2 오더 우선순위를 정한다.
+
+단계별 작업 id·선행·완료 기준과 서버 구조는 [갈매봇 구조와 작업 리스트](admin-ai-structure-worklist-2026-09-29.md)가 정본이다. 위 표의 P1~P4는 그 문서의 S1~S5에 대응한다.
 
 ## 9. 결정이 필요한 것
 
