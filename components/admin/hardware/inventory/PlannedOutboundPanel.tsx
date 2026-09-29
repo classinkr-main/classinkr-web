@@ -2,13 +2,13 @@
 
 import { memo, useCallback, useMemo, useState, useEffect } from "react"
 import type { Dispatch, SetStateAction } from "react"
-import { CheckCheck, Clock3 } from "lucide-react"
+import { CheckCheck, ChevronDown, Clock3 } from "lucide-react"
 
 import type { AdminListPaginationResult } from "@/lib/admin-list-pagination"
 import ExportActions from "./ExportActions"
 import { buildPlannedExportRows } from "./hardware-export"
 import PlannedConfirmDialog from "./PlannedConfirmDialog"
-import type { PlannedConfirmEntry } from "./planned-confirm-model"
+import { formatConfirmDateShort, summarizePlannedPeek, type PlannedConfirmEntry } from "./planned-confirm-model"
 import {
   collectStalePlannedMovementIds,
   elapsedDaysSince,
@@ -246,6 +246,25 @@ function PlannedOutboundPanel({
 
   const hasPlanned = (data?.plannedMovements.length ?? 0) > 0
 
+  // 기본 접힘(운영자 요청 2026-09-29) — 홈은 지금 재고를 먼저 보여 주고, 예상 출고는 요약과 가장 오래 묵은 딜 몇 개만
+  // 보인다. 펼치면 예전 큐 전체(선택·확정)다. 요약 밴드의 "예정 출고 대기" 칸(#hardware-section-planned)을 누르면 펼친다.
+  const [expanded, setExpanded] = useState(false)
+  const bodyId = "hardware-planned-body"
+  const peek = useMemo(() => summarizePlannedPeek(allPlanned, today), [allPlanned, today])
+  useEffect(() => {
+    const onClick = (event: MouseEvent) => {
+      const anchor = (event.target as Element | null)?.closest?.('a[href="#hardware-section-planned"]')
+      if (anchor) setExpanded(true)
+    }
+    document.addEventListener("click", onClick)
+    return () => document.removeEventListener("click", onClick)
+  }, [])
+  const toggleExpanded = () => {
+    // 접으면 선택도 비운다 — 가려진 선택이 하단 작업 바·빠른 기록 버튼을 붙잡고 있지 않게.
+    if (expanded) clearSelection()
+    setExpanded((value) => !value)
+  }
+
   return (
     <section
       // id: 홈 요약 밴드(SummaryBand)의 "예정 출고 대기" 칸이 앵커 스크롤로 여기를 가리킨다
@@ -290,6 +309,18 @@ function PlannedOutboundPanel({
               size="xs"
             />
           )}
+          {hasPlanned && (
+            <button
+              type="button"
+              onClick={toggleExpanded}
+              aria-expanded={expanded}
+              aria-controls={bodyId}
+              className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-2 text-[12px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+            >
+              {expanded ? "접기" : "펼치기"}
+              <ChevronDown aria-hidden className={`h-3.5 w-3.5 transition-transform motion-reduce:transition-none ${expanded ? "rotate-180" : ""}`} />
+            </button>
+          )}
           <button
             type="button"
             onClick={startPlannedEntry}
@@ -302,7 +333,48 @@ function PlannedOutboundPanel({
           </button>
         </div>
       </div>
-      {hasPlanned && (
+      {hasPlanned && !expanded && (
+        // 접힌 미리보기 — 가장 오래 묵은 딜부터. 행을 누르면 펼쳐 전체 큐에서 확정한다.
+        <div className="px-5 py-3">
+          <ul className="divide-y divide-[rgba(0,0,0,0.05)] overflow-hidden rounded-lg border border-[rgba(0,0,0,0.06)] bg-[#FAFAF8]">
+            {peek.deals.map((deal) => (
+              <li key={deal.key} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                <span className="min-w-0">
+                  <span title={deal.customer} className="block truncate text-[12.5px] font-bold text-[#111110]">{deal.customer}</span>
+                  <span className="block text-[11px] text-[#615D59]">
+                    {deal.date ? formatConfirmDateShort(deal.date) : "일자 미정"} · {formatNumber(deal.items)}품목
+                  </span>
+                </span>
+                <span className="flex shrink-0 items-center gap-1.5">
+                  {deal.elapsedDays != null && deal.elapsedDays >= PLANNED_AGING_WARN_DAYS && (
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold tabular-nums ${
+                        deal.elapsedDays >= PLANNED_AGING_DANGER_DAYS ? "bg-[#FCE9E9] text-[#8F2C2C]" : "bg-[#FBF1E0] text-[#7A520F]"
+                      }`}
+                    >
+                      {formatNumber(deal.elapsedDays)}일 경과
+                    </span>
+                  )}
+                  <span className="text-[12px] font-bold tabular-nums text-[#7A520F]">{formatNumber(deal.quantity)}대</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            onClick={toggleExpanded}
+            aria-expanded={false}
+            aria-controls={bodyId}
+            className="mt-2 inline-flex cursor-pointer items-center gap-1 rounded-md px-1 py-1 text-[12px] font-bold text-[#084734] hover:text-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+          >
+            {peek.totalDeals > peek.deals.length
+              ? `전체 ${formatNumber(peek.totalDeals)}딜 펼쳐서 확정하기`
+              : "펼쳐서 확정하기"}
+            <ChevronDown aria-hidden className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+      {hasPlanned && expanded && (
         // 일괄 체크 퀵 액션 — 딜 여러 개를 가로질러 골라 한 번에 확정하기 위한 진입점(요청사항 ①.2).
         // 항상 노출하고 대상이 없을 때만 개별적으로 비활성화한다(레이아웃이 선택 여부에 따라
         // 들쭉날쭉하지 않게).
@@ -336,12 +408,12 @@ function PlannedOutboundPanel({
           </button>
         </div>
       )}
-      {(data?.plannedMovements.length ?? 0) === 0 ? (
+      {!hasPlanned ? (
         <p className="px-5 py-10 text-center text-[13px] text-[#615D59]">
           현재 배송 예정 기록이 없습니다. 예상 출고 등록으로 미리 차감할 물량을 잡아두세요.
         </p>
-      ) : (
-        <>
+      ) : expanded ? (
+        <div id={bodyId}>
           <div className="divide-y divide-[rgba(0,0,0,0.06)]">
             {plannedPagination.pageItems.map((group) => {
               const elapsed = elapsedDaysSince(group.date)
@@ -584,8 +656,8 @@ function PlannedOutboundPanel({
               </div>
             </div>
           )}
-        </>
-      )}
+        </div>
+      ) : null}
       {/* 되돌리기 어려운 동작 확인(요청사항 ①.6) — 선택 확정과 딜 전체 확정이 같은 확인창을 쓴다(하드웨어 라운드 3 H-9).
           확정일·행별 배정·거절 예상을 보여 준다. 정상 업무 흐름이라 Danger 빨강이 아니라 Classin Green 주 버튼이다.
           확인창이 뜬 사이 대상 행이 모두 사라지면(다른 확정·새로고침) 닫는다. */}

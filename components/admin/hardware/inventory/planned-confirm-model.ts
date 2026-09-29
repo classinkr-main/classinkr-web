@@ -136,3 +136,47 @@ export function formatConfirmDateShort(key: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key)
   return match ? `${Number(match[2])}월 ${Number(match[3])}일` : key
 }
+
+export interface PlannedPeekDeal {
+  key: string
+  customer: string
+  date: string | null
+  quantity: number
+  items: number
+  // 예정일로부터 지난 일수(예정일이 없으면 null).
+  elapsedDays: number | null
+}
+
+/**
+ * 접힌 예상 출고 패널의 미리보기(운영자 요청 2026-09-29 — 기본 접힘, 펼쳐서 전체 확인). 가장 오래 묵은 딜부터 limit 개.
+ * 딜 묶음은 고객(도착지)·예정일 기준 — 먼저 처리할 것이 위로 온다. 예정일 없는 딜은 맨 뒤.
+ */
+export function summarizePlannedPeek(
+  movements: ReadonlyArray<{ to_location: string | null; occurred_at: string | null; quantity: number }>,
+  today: string,
+  limit = 3
+): { deals: PlannedPeekDeal[]; totalDeals: number } {
+  const deals = new Map<string, PlannedPeekDeal>()
+  for (const movement of movements) {
+    const customer = movement.to_location ?? "도착지 미정"
+    const date = movement.occurred_at ? movement.occurred_at.slice(0, 10) : null
+    const key = `${customer}\u0001${date ?? ""}`
+    const deal = deals.get(key) ?? { key, customer, date, quantity: 0, items: 0, elapsedDays: dayDiff(date, today) }
+    deal.quantity += movement.quantity
+    deal.items += 1
+    deals.set(key, deal)
+  }
+  const sorted = Array.from(deals.values()).sort((a, b) => {
+    if (a.date == null || b.date == null) return a.date == null ? (b.date == null ? 0 : 1) : -1
+    return a.date < b.date ? -1 : a.date > b.date ? 1 : a.customer.localeCompare(b.customer, "ko")
+  })
+  return { deals: sorted.slice(0, limit), totalDeals: sorted.length }
+}
+
+function dayDiff(from: string | null, to: string): number | null {
+  if (!from) return null
+  const start = Date.parse(`${from}T00:00:00Z`)
+  const end = Date.parse(`${to}T00:00:00Z`)
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return null
+  return Math.max(0, Math.round((end - start) / 86_400_000))
+}

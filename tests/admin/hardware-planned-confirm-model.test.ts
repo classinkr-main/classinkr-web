@@ -5,6 +5,7 @@ import {
   formatConfirmDateShort,
   plannedAllocationSegments,
   summarizePlannedConfirm,
+  summarizePlannedPeek,
   type PlannedConfirmEntry,
 } from "@/components/admin/hardware/inventory/planned-confirm-model"
 import { resolvePlannedFifoPreview, type HardwareStockRow } from "@/components/admin/hardware/inventory/shared"
@@ -189,5 +190,27 @@ describe("summarizeStockTotals — 요약 밴드 합계(H-10)", () => {
 
   it("판촉 라인이 없으면 promoted 는 null", () => {
     expect(summarizeStockTotals([{ product: "T1", warehouseStock: 3, availableStock: 2 }]).promoted).toBeNull()
+  })
+})
+
+describe("summarizePlannedPeek — 접힌 예상 출고 미리보기", () => {
+  it("고객·예정일로 딜을 묶어 가장 오래 묵은 딜부터 limit 개, 예정일 없는 딜은 뒤로", () => {
+    const peek = summarizePlannedPeek(
+      [
+        { to_location: "서울 ○○초등학교", occurred_at: "2026-09-22", quantity: 3 },
+        { to_location: "서울 ○○초등학교", occurred_at: "2026-09-22T00:00:00Z", quantity: 2 },
+        { to_location: "경기 ○○학원", occurred_at: "2026-08-20", quantity: 2 },
+        { to_location: null, occurred_at: null, quantity: 1 },
+        { to_location: "부산 ○○중학교", occurred_at: "2026-09-10", quantity: 4 },
+      ],
+      TODAY,
+      3
+    )
+    expect(peek.totalDeals).toBe(4)
+    expect(peek.deals.map((deal) => [deal.customer, deal.quantity, deal.items, deal.elapsedDays])).toEqual([
+      ["경기 ○○학원", 2, 1, 35],
+      ["부산 ○○중학교", 4, 1, 14],
+      ["서울 ○○초등학교", 5, 2, 2],
+    ])
   })
 })
