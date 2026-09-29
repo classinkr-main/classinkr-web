@@ -43,6 +43,7 @@ import {
   SENTIMENT_FILTERS,
   SOURCE_FILTERS,
   TARGET_OPTIONS,
+  activityFocusBackHref,
   formatDateTime,
   formatFileSize,
   isActivityTargetType,
@@ -282,7 +283,12 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
   }, [focusLabelFromQuery, focusTargetId, data])
 
   const focusName = focusLabel || "선택한 고객"
-  const backHref = backParam || `/admin/crm/customers/unified?account=${encodeURIComponent(focusTargetId)}`
+  const backHref = activityFocusBackHref({
+    back: backParam,
+    targetType: focusTargetType,
+    targetId: focusTargetId,
+    label: focusLabel,
+  })
 
   const loadEvents = useCallback(
     async (offset: number, options?: { force?: boolean; append?: boolean }) => {

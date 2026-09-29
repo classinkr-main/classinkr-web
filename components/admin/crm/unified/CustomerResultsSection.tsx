@@ -179,6 +179,9 @@ export default function CustomerResultsSection({
                     </div>
                     <Link
                       href={row.source === "customer" ? row.href : `/admin/crm/customers/${encodeURIComponent(row.key)}`}
+                      // 행마다 상세 페이지(360 전체 조회)를 뷰포트 프리페치하지 않는다 — 한 화면 50행이 한꺼번에 서버
+                      // 360 을 돌린다. 상세 404 수정(2026-09-29) 뒤로는 프리페치가 본문 렌더까지 실제로 돈다.
+                      prefetch={false}
                       className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[#1a1a1a]/35 transition-colors hover:bg-[#fafaf8] hover:text-[#111110]"
                       aria-label={`${row.name} 고객 상세 페이지 열기`}
                     >
