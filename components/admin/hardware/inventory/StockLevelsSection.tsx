@@ -4,6 +4,8 @@ import { memo } from "react"
 import type { Dispatch, SetStateAction } from "react"
 
 import type { AdminListPaginationResult } from "@/lib/admin-list-pagination"
+import ExportActions from "./ExportActions"
+import { buildStockExportRows } from "./hardware-export"
 import {
   formatAvg,
   formatDate,
@@ -37,6 +39,10 @@ function StockLevelsSection({
   setStockPage,
   prepareQuickEntry,
 }: StockLevelsSectionProps) {
+  const stockBasisFinishedAt =
+    data?.importRun?.status === "success"
+      ? data.importRun.finished_at
+      : data?.importRunLastSuccess?.finished_at ?? null
   return (
     // id: 홈 요약 밴드(SummaryBand)의 "창고/가용/부족·주문 검토" 칸이 앵커 스크롤로 여기를
     // 가리킨다(감사 2026-09-14, 홈 가시성 개편).
@@ -46,12 +52,25 @@ function StockLevelsSection({
         description="창고 = 실물 재고 · 가용 = 창고 − 예정. 최소재고와 최근 출고량을 같이 보고 주문 시점을 판단합니다."
         open={openSections.stock}
         onToggle={() => toggleSection("stock")}
+        actions={
+          // 품목별 창고·예정·가용·30일·로트 잔량을 가져간다(하드웨어 라운드 2 H-15). 페이지가 아니라 전 품목.
+          (data?.stock.length ?? 0) > 0 ? (
+            <ExportActions
+              subject="현재 재고"
+              fileBaseName="하드웨어_재고"
+              rowCount={data?.stock.length ?? 0}
+              buildRows={() => buildStockExportRows(data?.stock ?? [])}
+              size="xs"
+            />
+          ) : null
+        }
         meta={
           <div className="text-right text-[11px] text-[#615D59]">
             <p>
+              {/* 진행 중·실패한 최신 이관이 아니라 숫자가 실제로 기준하는 마지막 성공 이관(H-11). */}
               마지막 이관{" "}
-              {data?.importRun?.finished_at ? (
-                <span className={MONO_META_CLASS}>{formatDate(data.importRun.finished_at)}</span>
+              {stockBasisFinishedAt ? (
+                <span className={MONO_META_CLASS}>{formatDate(stockBasisFinishedAt)}</span>
               ) : (
                 "없음"
               )}

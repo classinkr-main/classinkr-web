@@ -12,7 +12,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import { ArrowDownToLine, ChevronDown, ClipboardPaste, Plus, RotateCcw, Search, Trash2, X } from "lucide-react"
 
-import { adminFetch, adminFetchJson } from "@/lib/admin-client"
+import { adminFetch, adminFetchJson, isAdminTimeoutError } from "@/lib/admin-client"
 import {
   applyLinesToRows,
   buildFeaturedInboundRows,
@@ -86,6 +86,11 @@ export interface InboundSheetProps {
   owner?: string | null
   // 시트 이관이 오래돼 최신 물량번호가 원장에 없을 수 있을 때 물량번호 아래에 붙이는 안내. 부모가 이관 신선도로 만든다.
   lotStaleNote?: string | null
+  // 이 물량에 추가 입고 — 입고 목록 lot 카드의 [추가 입고]가 넘긴다(하드웨어 라운드 2 E-2). 원장에 있는 lot이면 "기존 물량"으로 연다.
+  initialLot?: string | null
+  // 저장 결과를 확인하지 못한 실패(시간 초과·비-JSON 5xx) 뒤 부모가 원장을 다시 받는다 — 서버에 이미 들어갔으면
+  // 물량번호 문구가 "기존 물량"으로 바뀌어 다시 저장(중복 입고)을 막는다(I-3). 재전송은 하지 않는다.
+  onUncertainFailure?: () => void
 }
 
 interface MovementBatchResponse {
@@ -132,6 +137,12 @@ const ROW_TEXT_BUTTON_CLASS =
   "cursor-pointer rounded px-1 py-0.5 text-[11px] font-semibold text-[#615D59] underline-offset-2 transition hover:text-[#111110] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 disabled:pointer-events-none disabled:opacity-50"
 const TEXTAREA_CLASS =
   "w-full resize-y rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-2 font-mono text-[12px] text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
+
+// 새 물량번호 표기 — `c3`·`h9` 같은 `영문+숫자`는 대문자로(원장 lot 키는 문자열 그대로 비교한다). 그 밖(FY24-25·Sample)은 원문.
+function normalizeNewLotLabel(value: string): string {
+  const trimmed = value.trim()
+  return /^[A-Za-z]+\d+$/.test(trimmed) ? trimmed.toUpperCase() : trimmed
+}
 
 // 행 키 — 이벤트 핸들러에서만 만든다(렌더 중 호출 금지).
 let rowKeySeq = 0
@@ -207,6 +218,8 @@ function InboundSheetPanel({
   activeItemIds,
   owner,
   lotStaleNote,
+  initialLot,
+  onUncertainFailure,
   reduceMotion,
 }: InboundSheetProps & { reduceMotion: boolean | null }) {
   const titleId = useId()
@@ -222,6 +235,7 @@ function InboundSheetPanel({
   const pickerListId = useId()
   const promoGroupLabelId = useId()
   const panelRef = useRef<HTMLElement | null>(null)
+  const applyPasteButtonRef = useRef<HTMLButtonElement | null>(null)
 
   // 열린 순간의 초기값 — 주요 품목 슬롯, 시작 포커스 행, 오늘, 최근 수입자·보관처.
   const [boot] = useState(() => {
@@ -266,9 +280,15 @@ function InboundSheetPanel({
     return items.filter((item) => active.has(item.id))
   }, [activeItemIds, items])
 
-  const [lotMode, setLotMode] = useState<LotMode>("new")
-  const [existingLot, setExistingLot] = useState("")
-  const [customLot, setCustomLot] = useState("")
+  const initialLotChoice = useMemo(() => {
+    const key = initialLot?.trim().toUpperCase()
+    return key ? lotChoices.find((choice) => choice.lot.toUpperCase() === key) ?? null : null
+    // 열린 순간의 값만 본다 — 저장 뒤 목록이 바뀌어도 모드를 되돌리지 않는다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const [lotMode, setLotMode] = useState<LotMode>(() => (initialLotChoice ? "existing" : initialLot?.trim() ? "custom" : "new"))
+  const [existingLot, setExistingLot] = useState(() => initialLotChoice?.lot ?? "")
+  const [customLot, setCustomLot] = useState(() => (!initialLotChoice && initialLot?.trim() ? initialLot.trim() : ""))
   const [occurredAt, setOccurredAt] = useState(today)
   const [datePickerOpen, setDatePickerOpen] = useState(false)
   const [importer, setImporter] = useState(boot.importer)
@@ -293,11 +313,14 @@ function InboundSheetPanel({
 
   // 추천 번호가 없으면(영문+숫자 물량 이력 없음) 직접 입력으로 시작한다.
   const effectiveLotMode: LotMode = lotMode === "new" && !suggestedLot ? "custom" : lotMode
-  const lot = effectiveLotMode === "new" ? suggestedLot ?? "" : effectiveLotMode === "existing" ? existingLot : customLot.trim()
+  const rawLot = effectiveLotMode === "new" ? suggestedLot ?? "" : effectiveLotMode === "existing" ? existingLot : customLot.trim()
   const matchedLot = useMemo(() => {
-    const key = lot.toUpperCase()
+    const key = rawLot.toUpperCase()
     return key ? [...lotChoices, ...savedLots].find((choice) => choice.lot.toUpperCase() === key) ?? null : null
-  }, [lot, lotChoices, savedLots])
+  }, [rawLot, lotChoices, savedLots])
+  // 저장 값은 원장 표기를 따른다(하드웨어 라운드 2 I-2) — `c3`를 치면 화면은 "기존 물량 C3에 추가"라고 말하면서
+  // 원문 `c3`로 저장돼 서버·목록에서 별개 lot이 됐다. 원장에 있으면 그 표기, 새 `영문+숫자` 번호는 대문자로.
+  const lot = matchedLot?.lot ?? normalizeNewLotLabel(rawLot)
 
   const draft = useMemo<InboundDraft>(
     () => ({ lot, occurredAt, importer, defaultStorage, owner: owner ?? "", rows }),
@@ -329,7 +352,9 @@ function InboundSheetPanel({
     setOccurredAt(restorable.occurredAt)
     setImporter(restorable.importer)
     setDefaultStorage(restorable.defaultStorage)
-    setRows(restorable.rows)
+    // 행 키는 새로 붙인다(하드웨어 라운드 2 I-1) — 키 카운터는 새로고침마다 0부터라, 보관된 `row:N` 과 새로 추가한
+    // 행의 키가 겹쳐 한 줄 입력이 다른 줄을 바꾸고 부분 실패 때 성공한 쌍둥이 줄이 남았다.
+    setRows(restorable.rows.map((row) => ({ ...row, key: nextRowKey() })))
     setRestorable(null)
     setNotice(`작성 중이던 ${restorable.lot} 입고표를 되살렸습니다. 수량을 확인하고 저장하세요.`)
   }
@@ -572,6 +597,14 @@ function InboundSheetPanel({
 
   const save = async () => {
     if (saving || !canWrite) return
+    // 표에 적용하지 않은 붙여넣기가 있으면 저장하지 않는다(하드웨어 라운드 2 I-6) — 예전엔 붙여넣은 줄이 빠진 채 저장되고,
+    // 전부 성공하면 시트가 닫히며 붙여넣은 내용까지 사라졌다.
+    if (pastePreview && pastePreview.rows.length > 0) {
+      setError(`붙여넣은 ${formatNumber(pastePreview.rows.length)}줄이 아직 표에 적용되지 않았습니다 — [표에 적용]을 누른 뒤 저장하세요.`)
+      setPasteOpen(true)
+      window.requestAnimationFrame(() => applyPasteButtonRef.current?.focus())
+      return
+    }
     setAttempted(true)
     setError(null)
     setNotice(null)
@@ -654,7 +687,17 @@ function InboundSheetPanel({
           (samples.failure ? ` 샘플 유닛 등록도 실패했습니다: ${samples.failure}` : "")
       )
     } catch (err) {
-      setError(errorMessage(err, "저장에 실패했습니다."))
+      // 응답을 못 받았으면(시간 초과·비-JSON 5xx) 서버에 들어갔는지 모른다 — 원장을 다시 받아 물량번호 문구가
+      // 바뀌는지 보게 한다(I-3). 다시 저장하면 중복 입고가 된다(서버는 중복 입고를 검사하지 않는다).
+      const uncertain = isAdminTimeoutError(err) || (err instanceof Error && /^5\d\d\b/.test(err.message))
+      if (uncertain) {
+        onUncertainFailure?.()
+        setError(
+          `저장 결과를 확인하지 못했습니다(${errorMessage(err, "응답 없음")}). 물량 현황을 다시 받았습니다 — 위 물량번호가 "기존 물량 ${lot}"로 바뀌었으면 이미 저장된 것이니 다시 저장하지 마세요.`
+        )
+      } else {
+        setError(errorMessage(err, "저장에 실패했습니다."))
+      }
     } finally {
       setSaving(false)
     }
@@ -1030,6 +1073,15 @@ function InboundSheetPanel({
                     <textarea
                       value={pasteText}
                       onChange={(event) => setPasteText(event.target.value)}
+                      onKeyDown={(event) => {
+                        // 붙여넣기 칸 안의 Cmd/Ctrl+Enter 는 저장이 아니라 "표에 적용"이다(I-6) — 패널 저장으로 올라가지 않게 막는다.
+                        if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && !event.nativeEvent.isComposing) {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          applyPaste()
+                        }
+                      }}
+                      aria-keyshortcuts="Meta+Enter Control+Enter"
                       rows={4}
                       spellCheck={false}
                       placeholder={'86" IFP\t40\t2500\nSTD1\t40\t155'}
@@ -1049,6 +1101,11 @@ function InboundSheetPanel({
                               <span className="min-w-0 truncate font-semibold text-[#111110]">{line.productName}</span>
                               <span className="shrink-0 tabular-nums text-[#31302E]">
                                 {formatNumber(line.quantity)}대{line.unitPrice != null ? ` · ${formatUsd(line.unitPrice)}` : ""}
+                                {line.priceUnreadable ? (
+                                  <span className="ml-1.5 font-semibold text-[#A8741A]" title={`붙여넣은 단가 "${line.priceText ?? ""}"`}>
+                                    · 단가를 읽지 못함 — 최근 단가 사용
+                                  </span>
+                                ) : null}
                               </span>
                             </li>
                           ))}
@@ -1078,7 +1135,7 @@ function InboundSheetPanel({
                     >
                       닫기
                     </button>
-                    <button type="button" onClick={applyPaste} disabled={!pastePreview || pastePreview.rows.length === 0} className={SECONDARY_BUTTON_CLASS}>
+                    <button ref={applyPasteButtonRef} type="button" onClick={applyPaste} disabled={!pastePreview || pastePreview.rows.length === 0} className={SECONDARY_BUTTON_CLASS}>
                       표에 적용{pastePreview && pastePreview.rows.length > 0 ? ` ${formatNumber(pastePreview.rows.length)}줄` : ""}
                     </button>
                   </div>
@@ -1195,7 +1252,7 @@ function InboundSheetPanel({
                               aria-label={`${row.productName} 단가(USD)${row.unitPriceSuggested ? " — 최근 입고 단가로 채움" : ""}`}
                               title={row.unitPriceSuggested ? "최근 입고 단가 — 그대로 두면 이 값으로 저장됩니다" : undefined}
                               placeholder="—"
-                              className={`${INPUT_BASE_CLASS} text-right tabular-nums ${row.unitPriceSuggested ? "text-[#A39E98]" : "font-semibold text-[#111110]"}`}
+                              className={`${INPUT_BASE_CLASS} text-right tabular-nums ${row.unitPriceSuggested ? "text-[#615D59]" : "font-semibold text-[#111110]"}`}
                             />
                           </label>
                           <span className="hidden whitespace-nowrap text-right text-[13px] font-semibold tabular-nums text-[#111110] sm:block">

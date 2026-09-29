@@ -4,6 +4,7 @@ import { memo } from "react"
 import type { ReactNode } from "react"
 import { AlertTriangle } from "lucide-react"
 
+import { summarizeStockAttention, summarizeStockTotals } from "@/lib/hardware/stock-attention"
 import { judgeImportFreshness } from "./ImportFreshnessStrip"
 import { formatNumber, type HardwareDashboard } from "./shared"
 
@@ -23,42 +24,57 @@ interface SummaryBandProps {
 // 만들지 않고 순수 앵커 링크(<a href="#...">)로 구현해 부모의 기존 상태 계약을 건드리지
 // 않는다 — 스크롤 그 이상(필터 연동)은 보고서에 위임 항목으로 남긴다.
 function SummaryBand({ data, plannedMovementQuantity, plannedStaleGroupCount }: SummaryBandProps) {
-  const totals = data?.totals ?? null
+  // 창고·가용 헤드라인은 실판매 라인 합이다 — 판촉 라인은 아래 줄에 따로(하드웨어 라운드 3 H-10, 카테고리 카드와 같은 기준).
+  // 예전엔 서버 totals(판촉 포함)라 판촉 원장 이상(음수)이 헤드라인을 깎았다.
+  const stockTotals = summarizeStockTotals(data?.stock ?? [])
   const plannedCount = data?.plannedMovements.length ?? 0
-  const shortageCount = (totals?.lowItems ?? 0) + (totals?.orderRecommended ?? 0)
+  // 부족과 주문 검토의 합집합(품목당 한 번) — 알림 목록과 같은 규칙(하드웨어 라운드 2 H-2). 예전엔 부족 품목이
+  // 주문 검토에도 걸려 두 번 세졌다.
+  const attention = summarizeStockAttention(data?.stock ?? [])
+  const shortageCount = attention.total
   // 이관 신선도 임계값은 ImportFreshnessStrip이 이미 갖고 있다 — 여기서 새로 발명하지 않고
   // 그 판정 함수를 그대로 불러 같은 결과를 보장한다(두 곳이 다른 기준으로 어긋나는 사고 방지).
-  const freshness = judgeImportFreshness(data?.importRun ?? null)
+  const freshness = judgeImportFreshness(data?.importRun ?? null, { lastSuccess: data?.importRunLastSuccess ?? null })
 
   const freshnessHeadline =
     freshness.level === "none"
       ? "기록 없음"
-      : freshness.failed
-        ? "이관 실패"
-        : freshness.daysAgo == null
-          ? "-"
-          : freshness.daysAgo === 0
-            ? "오늘"
-            : `${formatNumber(freshness.daysAgo)}일 전`
+      : freshness.state === "running"
+        ? "진행 중"
+        : freshness.state === "stalled"
+          ? "중단됨"
+          : freshness.failed
+            ? "이관 실패"
+            : freshness.daysAgo == null
+            ? "-"
+            : freshness.daysAgo === 0
+              ? "오늘"
+              : `${formatNumber(freshness.daysAgo)}일 전`
   const freshnessDetail =
-    freshness.level === "danger"
-      ? "재고 수치가 실물과 다를 수 있습니다"
-      : freshness.level === "warning"
-        ? "갱신 검토가 필요합니다"
-        : freshness.level === "none"
-          ? "시트 이관을 시작하세요"
-          : "정상 범위입니다"
+    freshness.state === "running"
+      ? "끝나면 새로고침으로 확인하세요"
+      : freshness.state !== "success" && freshness.basisKey
+        ? `원장은 ${freshness.basisKey} 성공 이관 기준`
+        : freshness.level === "danger"
+          ? "재고 수치가 실물과 다를 수 있습니다"
+          : freshness.level === "warning"
+            ? "갱신 검토가 필요합니다"
+            : freshness.level === "none"
+              ? "시트 이관을 시작하세요"
+              : "정상 범위입니다"
   const freshnessToneClass =
     freshness.level === "danger" ? "text-[#B43E3E]" : freshness.level === "warning" ? "text-[#A8741A]" : "text-[#111110]"
 
   return (
     <section aria-label="하드웨어 재고 요약" className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
       <SummaryTile href="#hardware-section-stock" label="창고 재고" title="현재 재고 섹션으로 이동">
-        <Headline value={formatNumber(totals?.warehouseStock ?? 0)} unit="대" negative={(totals?.warehouseStock ?? 0) < 0} />
+        <Headline value={formatNumber(stockTotals.warehouse)} unit="대" negative={stockTotals.warehouse < 0} />
+        {stockTotals.promoted && <PromotedLine value={stockTotals.promoted.warehouse} />}
       </SummaryTile>
 
       <SummaryTile href="#hardware-section-stock" label="가용 재고" title="현재 재고 섹션으로 이동">
-        <Headline value={formatNumber(totals?.availableStock ?? 0)} unit="대" negative={(totals?.availableStock ?? 0) < 0} />
+        <Headline value={formatNumber(stockTotals.available)} unit="대" negative={stockTotals.available < 0} />
+        {stockTotals.promoted && <PromotedLine value={stockTotals.promoted.available} />}
       </SummaryTile>
 
       <SummaryTile href="#hardware-section-planned" label="예정 출고 대기" title="예상 출고 섹션으로 이동">
@@ -74,8 +90,9 @@ function SummaryBand({ data, plannedMovementQuantity, plannedStaleGroupCount }: 
 
       <SummaryTile href="#hardware-section-stock" label="부족 · 주문 검토" title="현재 재고 섹션으로 이동">
         <Headline value={formatNumber(shortageCount)} unit="품목" negative={shortageCount > 0} />
-        <p className="mt-2 text-[11px] font-semibold text-[#615D59]">
-          부족 {formatNumber(totals?.lowItems ?? 0)} · 주문 검토 {formatNumber(totals?.orderRecommended ?? 0)}
+        <p className="mt-2 text-[11px] font-semibold tabular-nums text-[#615D59]">
+          부족 {formatNumber(attention.low)} · 주문 검토 {formatNumber(attention.orderOnly)}
+          {attention.ledgerCheck > 0 ? ` · 원장 점검 ${formatNumber(attention.ledgerCheck)}` : ""}
         </p>
       </SummaryTile>
 
@@ -92,6 +109,18 @@ function SummaryBand({ data, plannedMovementQuantity, plannedStaleGroupCount }: 
         </p>
       </SummaryTile>
     </section>
+  )
+}
+
+// 판촉(promoted) 라인 합 — 헤드라인에서 뺀 값을 숨기지 않고 한 줄로 말한다. 음수면 원장 점검 신호(Danger 텍스트).
+function PromotedLine({ value }: { value: number }) {
+  return (
+    <p
+      className={`mt-2 text-[11px] font-semibold tabular-nums ${value < 0 ? "text-[#B43E3E]" : "text-[#615D59]"}`}
+      title="판촉(promoted) 라인은 실판매 합계와 따로 셉니다 — 카테고리 카드와 같은 기준"
+    >
+      판촉 별도 {formatNumber(value)}대{value < 0 ? " · 원장 점검" : ""}
+    </p>
   )
 }
 

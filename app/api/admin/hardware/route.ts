@@ -9,7 +9,12 @@ import {
   requireVerifiedAdminContext,
 } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
-import { getHardwareCustomerLinks, getHardwareDashboard, getHardwareMovementsPage } from "@/lib/repositories/hardware-inventory"
+import {
+  getHardwareCustomerLinks,
+  getHardwareDashboard,
+  getHardwareMovementsPage,
+  listVoidedHardwareMovements,
+} from "@/lib/repositories/hardware-inventory"
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message
@@ -27,6 +32,13 @@ export async function GET(req: NextRequest) {
   try {
     if (req.nextUrl.searchParams.get("scope") === "customer-links") {
       return adminCachedJson({ customers: await getHardwareCustomerLinks() })
+    }
+
+    // 하드웨어 라운드 2 L-1 — 내역 탭 "취소 포함"이 켜질 때만 부르는 취소 기록 읽기(쓰기 계약 불변).
+    // 방금 취소한 기록이 바로 보여야 해서 캐시하지 않는다.
+    if (req.nextUrl.searchParams.get("scope") === "voided") {
+      const result = await listVoidedHardwareMovements()
+      return NextResponse.json(result, { headers: { "Cache-Control": "private, no-store" } })
     }
 
     // 감사(2026-09-07 #7) — 내역 탭이 기본 대시보드의 2000건 캡 너머를 "더 불러오기"로 요청할 때만

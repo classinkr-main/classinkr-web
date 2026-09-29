@@ -13,11 +13,15 @@ import {
   replaceHwStock,
   replaceHwSalesMonthly,
 } from "@/lib/repositories/branch-hw"
-import { importHardwareFromBranchSheets } from "@/lib/repositories/hardware-inventory"
+import { findRunningSyncRun } from "@/lib/repositories/branch-sync"
+import { findRunningHardwareImportRun, importHardwareFromBranchSheets } from "@/lib/repositories/hardware-inventory"
+import { hardwareImportWarnings } from "@/lib/hardware/import-outcome"
+import { expireSyncCacheTags } from "@/lib/server/sync-cache-tags"
 
 // exceljs relies on Node APIs — pin the Node runtime and allow a longer window.
+// 15MB 파싱 + 미러 교체 + 스냅샷 + 원장 교체를 60초에 넣기 빠듯했다 — 가져오기 라우트와 같은 300초(하드웨어 라운드 2 S-13).
 export const runtime = "nodejs"
-export const maxDuration = 60
+export const maxDuration = 300
 
 const MAX_BYTES = 15 * 1024 * 1024
 
@@ -62,6 +66,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, dryRun: true, file: file.name, parsed: parsed.stats, warnings: parsed.warnings })
     }
 
+    // 다른 가져오기나 시트 동기화가 미러를 쓰는 중이면 시작하지 않는다 — 업로드가 미러를 교체하는 사이에
+    // 크론 싱크가 시트로 덮으면 업로드 원장이 아니라 섞인 미러를 가져온다(하드웨어 라운드 2 S-4).
+    const [runningImport, runningSync] = await Promise.all([findRunningHardwareImportRun(), findRunningSyncRun()])
+    const running = runningImport ?? runningSync
+    if (running) {
+      return NextResponse.json(
+        { ok: false, skipped: true, outcome: "running", startedAt: running.started_at, stage: "lock", ledgerChanged: false },
+        { status: 200 }
+      )
+    }
+
     // Map into the branch_hw_* staging row shape (mirrors syncHw) and replace staging.
     // Stock/sales staging are cleared so no stale reconciliation rows survive.
     const inboundRows = parsed.inbound.map((p) => ({
@@ -84,13 +99,25 @@ export async function POST(req: NextRequest) {
     ])
 
     const actor = admin.name ?? admin.userId ?? admin.role
-    const importResult = await importHardwareFromBranchSheets({ actor })
+    let importResult: Awaited<ReturnType<typeof importHardwareFromBranchSheets>>
+    try {
+      importResult = await importHardwareFromBranchSheets({ actor, origin: "ledger_file", fileName: file.name })
+    } finally {
+      // 미러는 이미 교체됐고 이관 기록도 바뀌었다 — 성공·실패 모두 다음 조회가 새 값을 받게 즉시 만료한다(S-1).
+      expireSyncCacheTags("hardwareImport")
+    }
 
+    // warnings(파서 경고, 기존 필드)는 그대로 두고 가져오기 경고는 importWarnings로 따로 싣는다.
+    const importWarnings = hardwareImportWarnings(importResult)
     return NextResponse.json({
       ok: true,
+      outcome: "done",
+      stage: "import",
+      ledgerChanged: true,
       file: file.name,
       parsed: parsed.stats,
       warnings: parsed.warnings,
+      ...(importWarnings.length > 0 ? { importWarnings } : {}),
       staging: { inbound: inboundStaged, outbound: outboundStaged },
       import: importResult,
     })

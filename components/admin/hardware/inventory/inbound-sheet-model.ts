@@ -112,6 +112,9 @@ export interface InboundPasteRow {
   productName: string
   quantity: number
   unitPrice: number | null
+  // 단가 칸이 있었는데 읽지 못함 — 표에 넣으면 최근 입고 단가가 대신 들어간다(미리보기가 알린다).
+  priceUnreadable?: boolean
+  priceText?: string | null
 }
 
 export interface InboundPasteUnmatched {
@@ -559,8 +562,13 @@ export function previousLotComposition(movements: readonly InboundHistoryMovemen
 // ---------------------------------------------------------------------------
 // 숫자
 
+// 전각 숫자(`４０`)·단위(`40대`)도 받는다(하드웨어 라운드 2 I-13) — 붙여넣기는 이미 단위를 떼고 읽었는데 직접 입력은 거부했다.
 export function parseInboundQuantity(text: string): number | null {
-  const cleaned = text.trim().replace(/,(?=\d{3}(?!\d))/g, "")
+  const cleaned = text
+    .normalize("NFKC")
+    .trim()
+    .replace(/\s*(?:대|개|ea|pcs)$/i, "")
+    .replace(/,(?=\d{3}(?!\d))/g, "")
   if (!/^\d+$/.test(cleaned)) return null
   const value = Number(cleaned)
   return Number.isSafeInteger(value) && value >= 1 ? value : null
@@ -569,6 +577,7 @@ export function parseInboundQuantity(text: string): number | null {
 // "2,500"·"$2,500.00"·"2500 USD" 를 허용한다. 음수·문자는 null.
 export function parseInboundPrice(text: string): number | null {
   const cleaned = text
+    .normalize("NFKC")
     .trim()
     .replace(/^(?:us)?\$\s*/i, "")
     .replace(/\s*(?:usd|달러)$/i, "")
@@ -611,7 +620,8 @@ function splitPasteLine(line: string): { productText: string; quantityText: stri
   const text = line.replace(/ /g, " ")
   if (text.includes("\t") || text.includes(",")) {
     // 공백 뒤의 천 단위 숫자("2,500")는 쉼표 구분자가 아니다. 쉼표 바로 뒤 숫자("T1,100,470")는 구분자로 둔다.
-    const protectedText = text.includes("\t") ? text : text.replace(/(^|\s)(\d{1,3}(?:,\d{3})+(?:\.\d+)?)(?=\s|$)/g, (_, lead: string, number: string) => `${lead}${number.replace(/,/g, "")}`)
+    // 쉼표+공백 구분(`86" IFP, 1,200, 2,500`)의 천 단위도 보호한다(I-9) — 예전엔 뒤에 공백·끝만 봐서 1대 · $200으로 읽혔다.
+    const protectedText = text.includes("\t") ? text : text.replace(/(^|\s)(\d{1,3}(?:,\d{3})+(?:\.\d+)?)(?=\s|$|,\s)/g, (_, lead: string, number: string) => `${lead}${number.replace(/,/g, "")}`)
     const separator = text.includes("\t") ? "\t" : ","
     if (separator === "\t" || protectedText.includes(",")) {
       const cells = protectedText.split(separator).map((cell) => cell.trim())
@@ -665,7 +675,10 @@ export function parseInboundPaste(text: string, productNames: readonly string[])
       unmatched.push({ lineNumber, text: line, reason: "quantity" })
       return
     }
-    rows.push({ lineNumber, productName, quantity, unitPrice: priceText ? parseInboundPrice(priceText) : null })
+    const unitPrice = priceText ? parseInboundPrice(priceText) : null
+    // 단가 칸이 있는데 못 읽었으면(`2500원`·`¥17,500`) 조용히 최근 단가로 대체되지 않게 표시한다(I-4).
+    const priceUnreadable = Boolean(priceText.trim()) && unitPrice == null
+    rows.push({ lineNumber, productName, quantity, unitPrice, ...(priceUnreadable ? { priceUnreadable, priceText: priceText.trim() } : {}) })
   })
   return { rows, unmatched }
 }

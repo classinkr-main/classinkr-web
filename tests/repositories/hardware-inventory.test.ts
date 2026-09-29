@@ -91,7 +91,7 @@ function tableClient(table: string) {
           const chain: Record<string, unknown> = {
             then: (resolve: (value: typeof result) => unknown) => Promise.resolve(result).then(resolve),
           }
-          for (const method of ["is", "not", "in", "eq", "order", "limit"]) {
+          for (const method of ["is", "not", "in", "eq", "order", "limit", "gt"]) {
             chain[method] = () => chain
           }
           return chain
@@ -130,6 +130,12 @@ async function loadRepository() {
     unstable_cache: (fn: unknown) => fn,
   }))
   vi.doMock("@/lib/repositories/branch-hw", () => ({
+    // 키셋 페이지네이션 헬퍼 — 이 목은 한 페이지(1000행 미만)로 끝난다고 보고 쿼리를 한 번만 부른다.
+    fetchAllSupabaseRows: vi.fn(async (buildQuery: (afterId: string | null, limit: number) => PromiseLike<{ data: unknown[] | null; error: unknown }>) => {
+      const { data, error } = await buildQuery(null, 1000)
+      if (error) throw error
+      return data ?? []
+    }),
     listHwInbound,
     listHwOutbound,
     listHwStock,
@@ -433,6 +439,28 @@ describe("importHardwareFromBranchSheets", () => {
     expect(failedRunUpdate).toMatchObject({
       status: "failed",
       error: "snapshot insert denied",
+    })
+  })
+
+  // 하드웨어 라운드 2 S-9·S-11·S-14 — 이관 기록 raw 에 원천·미러 행 수·시트 우선 취소 id 를 남긴다.
+  it("records origin, mirror row counts and sheet-wins voided ids on the successful import run", async () => {
+    const { importHardwareFromBranchSheets } = await loadRepository()
+
+    await importHardwareFromBranchSheets({ actor: "admin@example.com", origin: "ledger_file", fileName: "ledger.xlsx" })
+
+    const successUpdate = operations.find(
+      (op) => op.table === "hardware_import_runs" && op.method === "update"
+    )?.payload as { status: string; raw: Record<string, unknown> }
+    expect(successUpdate.status).toBe("success")
+    expect(successUpdate.raw).toMatchObject({
+      origin: "ledger_file",
+      file_name: "ledger.xlsx",
+      mirror_rows: {
+        inbound: expect.any(Number),
+        outbound: expect.any(Number),
+        stock: expect.any(Number),
+      },
+      sheet_wins_voided_ids: [],
     })
   })
 

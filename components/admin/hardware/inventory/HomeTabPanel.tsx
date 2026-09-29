@@ -36,6 +36,8 @@ interface HomeTabPanelProps {
   setHardwareSearch: ComponentProps<typeof HardwareSearchPanel>["setHardwareSearch"]
   hardwareSearchResults: ComponentProps<typeof HardwareSearchPanel>["hardwareSearchResults"]
   prepareQuickEntry: ComponentProps<typeof HardwareSearchPanel>["prepareQuickEntry"]
+  // 사무실·샘플 풀에서 고른 유닛을 담아 빠른 기록을 연다(하드웨어 라운드 3 P-8). 유닛이 없으면 빈 선택으로 연다.
+  openSampleQuickRecord: (itemId: string, kind: "loan" | "return", unitIds: readonly string[]) => void
   setActiveTab: ComponentProps<typeof HardwareSearchPanel>["setActiveTab"]
   setHistoryType: ComponentProps<typeof HardwareSearchPanel>["setHistoryType"]
   setProductFilter: ComponentProps<typeof HardwareSearchPanel>["setProductFilter"]
@@ -86,6 +88,10 @@ interface HomeTabPanelProps {
   // 감사(2026-09-07 #4) — SnapshotRestorePanel이 복원 성공 후 대시보드를 다시 불러오는 데 쓴다.
   refresh: ComponentProps<typeof SnapshotRestorePanel>["onRestored"]
   canWriteHardware: ComponentProps<typeof CrmOrderBacklogSection>["canWrite"]
+  // 가져오기·업로드 진행 중 — 스냅샷 복원을 막는다(하드웨어 라운드 2 S-4).
+  importBusy: boolean
+  describePlannedConfirm: NonNullable<ComponentProps<typeof HardwareSearchPanel>["describePlannedConfirm"]>
+  resetHistoryFilters: NonNullable<ComponentProps<typeof HardwareSearchPanel>["resetHistoryFilters"]>
 }
 
 export default function HomeTabPanel({
@@ -100,6 +106,7 @@ export default function HomeTabPanel({
   setHardwareSearch,
   hardwareSearchResults,
   prepareQuickEntry,
+  openSampleQuickRecord,
   setActiveTab,
   setHistoryType,
   setProductFilter,
@@ -146,6 +153,9 @@ export default function HomeTabPanel({
   setDetailId,
   refresh,
   canWriteHardware,
+  importBusy,
+  describePlannedConfirm,
+  resetHistoryFilters,
 }: HomeTabPanelProps) {
   return (
     <motion.div
@@ -172,10 +182,19 @@ export default function HomeTabPanel({
         기존처럼 맨 끝에 접어 둔다(#4). */}
     <SummaryBand data={data} plannedMovementQuantity={plannedMovementQuantity} plannedStaleGroupCount={plannedStaleGroupCount} />
 
-    <ImportFreshnessStrip importRun={data?.importRun ?? null} importCosting={data?.importCosting} />
+    <ImportFreshnessStrip
+      importRun={data?.importRun ?? null}
+      importRunLastSuccess={data?.importRunLastSuccess ?? null}
+      mirror={data?.mirror ?? null}
+      importCosting={data?.importCosting}
+    />
 
     {/* 예정 큐 바로 위 — 등록할 것을 먼저 보고, 그 아래에서 확정한다(입력 가속 P2-1). */}
-    <CrmOrderBacklogSection canWrite={canWriteHardware} onRegistered={refresh} />
+    <CrmOrderBacklogSection
+      canWrite={canWriteHardware}
+      onRegistered={refresh}
+      ledgerVersion={`${data?.importRun?.id ?? ""}:${data?.movementsTotal ?? data?.movements.length ?? ""}`}
+    />
 
     <PlannedOutboundPanel
       data={data}
@@ -199,6 +218,7 @@ export default function HomeTabPanel({
       confirmPlannedSelection={confirmPlannedSelection}
       selectionConfirmProgress={selectionConfirmProgress}
       onSelectionCountChange={onPlannedSelectionCountChange}
+      canWrite={canWriteHardware}
     />
 
     <CategoryCardsSection categoryCards={categoryCards.cards} etcSummary={categoryCards.etcSummary} />
@@ -230,6 +250,9 @@ export default function HomeTabPanel({
       plannedConfirmLocked={plannedConfirmLocked}
       canFinalize={canFinalize}
       setCustomerDetail={setCustomerDetail}
+      describePlannedConfirm={describePlannedConfirm}
+      confirmingId={confirmingId}
+      resetHistoryFilters={resetHistoryFilters}
     />
 
     {/* 사무실·샘플 재고 풀(2026-09-15) — 예전 "재고 위치 맵" 자리. 위치 맵의 남은/나간 샘플은 원장 위치 잔량이었는데,
@@ -240,10 +263,10 @@ export default function HomeTabPanel({
       sampleUnits={sampleUnits}
       sampleUnitsLoading={sampleUnitsLoading}
       sampleUnitsError={sampleUnitsError}
-      canWrite
+      canWrite={canWriteHardware}
       todayKey={todayKey()}
-      onLoan={(_productName, _availableUnitIds, itemId) => prepareQuickEntry(itemId ?? "", "sample")}
-      onReturn={(_productName, itemId) => prepareQuickEntry(itemId ?? "", "sampleReturn")}
+      onLoan={(_productName, preselectUnitIds, itemId) => openSampleQuickRecord(itemId ?? "", "loan", preselectUnitIds)}
+      onReturn={(_productName, itemId, preselectUnitIds) => openSampleQuickRecord(itemId ?? "", "return", preselectUnitIds ?? [])}
       onOpenUnit={setSampleUnitSheetId}
       onUnitsChanged={loadSampleUnits}
     />
@@ -256,6 +279,7 @@ export default function HomeTabPanel({
       stock={data?.stock ?? null}
       onOpenUnit={setSampleUnitSheetId}
       onChanged={loadSampleUnits}
+      canWrite={canWriteHardware}
     />
 
     <AlertsOutboundSections
@@ -271,7 +295,12 @@ export default function HomeTabPanel({
     />
 
     {/* 되돌리기는 사고 대응용 안전망이라 일상 확인 흐름(요약·예정 출고·재고) 아래, 맨 끝에 접어 둔다(#4). */}
-    <SnapshotRestorePanel canFinalize={canFinalize} onRestored={refresh} />
+    <SnapshotRestorePanel
+      canFinalize={canFinalize}
+      onRestored={refresh}
+      disabled={importBusy}
+      importRunId={data?.importRun?.id ?? null}
+    />
     </motion.div>
   )
 }

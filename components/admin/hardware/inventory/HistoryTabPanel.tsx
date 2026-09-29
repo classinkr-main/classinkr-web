@@ -31,6 +31,9 @@ const HistoryLogSection = dynamic(() => import("./HistoryLogSection"), {
 })
 
 interface HistoryTabPanelProps {
+  // 취소 기록 읽기 상태(하드웨어 라운드 2 L-1) — "취소 포함"을 켰을 때만 따로 읽는다.
+  voidedState?: { loading: boolean; error: string | null; limit: number | null; count: number | null }
+  retryVoided?: () => void
   activePanelId: string
   activeTabId: string
   reduceMotion: boolean | null
@@ -84,6 +87,8 @@ interface HistoryTabPanelProps {
 }
 
 export default function HistoryTabPanel({
+  voidedState,
+  retryVoided,
   activePanelId,
   activeTabId,
   reduceMotion,
@@ -158,7 +163,7 @@ export default function HistoryTabPanel({
                   setMovementsPage(1)
                 }}
                 aria-label="하드웨어 원장 검색"
-                placeholder="품목·고객사·물량번호·담당자·특이사항 검색"
+                placeholder="품목·고객사·물량번호·시리얼·담당자·특이사항 검색"
                 className="h-10 w-full rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] pl-9 pr-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
               />
             </label>
@@ -209,7 +214,8 @@ export default function HistoryTabPanel({
                 </button>
               ))}
               <span className="ml-auto text-[11px] font-semibold text-[#615D59]">
-                필터 후 {formatNumber(filteredMovements.length)}건 / 전체 {formatNumber(data?.movements.length ?? 0)}건
+                {/* "전체"는 서버 총계와 헷갈린다(L-6) — 이 숫자는 불러온 범위다. */}
+                필터 후 {formatNumber(filteredMovements.length)}건 / 불러온 {formatNumber(data?.movements.length ?? 0)}건
               </span>
             </div>
           ) : null}
@@ -224,6 +230,7 @@ export default function HistoryTabPanel({
                 <button
                   key={type}
                   type="button"
+                  aria-pressed={active}
                   onClick={() => {
                     setHistoryType(type)
                     setMovementsPage(1)
@@ -245,6 +252,7 @@ export default function HistoryTabPanel({
                   <button
                     key={order}
                     type="button"
+                  aria-pressed={active}
                     onClick={() => {
                       setHistorySort(order)
                       setMovementsPage(1)
@@ -277,6 +285,7 @@ export default function HistoryTabPanel({
                 <button
                   key={option.key}
                   type="button"
+                  aria-pressed={active}
                   onClick={() => {
                     setHistoryStatus(option.key)
                     setMovementsPage(1)
@@ -305,7 +314,24 @@ export default function HistoryTabPanel({
               }`}
             >
               취소 포함
+              {includeVoided && voidedState ? (
+                <span className="ml-1 font-semibold tabular-nums">
+                  {voidedState.loading ? "· 불러오는 중" : voidedState.count != null ? `· ${voidedState.count}건` : ""}
+                </span>
+              ) : null}
             </button>
+            {includeVoided && voidedState?.error ? (
+              <span role="alert" className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#8F2C2C]">
+                취소 기록을 불러오지 못했습니다
+                {retryVoided ? (
+                  <button type="button" onClick={retryVoided} className="cursor-pointer rounded px-1 underline underline-offset-2">
+                    다시 시도
+                  </button>
+                ) : null}
+              </span>
+            ) : includeVoided && voidedState?.limit != null && voidedState.count != null && voidedState.count >= voidedState.limit ? (
+              <span className="text-[11px] font-semibold text-[#615D59]">최근 취소 {voidedState.limit}건까지 보입니다</span>
+            ) : null}
           </div>
           <div className="mt-2.5 flex flex-wrap items-center gap-2">
             <span className="w-12 shrink-0 text-[12px] font-bold text-[#111110]">판매유형</span>
@@ -329,6 +355,7 @@ export default function HistoryTabPanel({
                 <button
                   key={type}
                   type="button"
+                  aria-pressed={active}
                   onClick={() => {
                     setSaleTypeFilter(active ? "" : type)
                     setMovementsPage(1)
@@ -359,6 +386,7 @@ export default function HistoryTabPanel({
                 <button
                   key={option.key}
                   type="button"
+                  aria-pressed={active}
                   onClick={() => {
                     setHistoryDateFrom(range.from)
                     setHistoryDateTo(range.to)
@@ -441,6 +469,7 @@ export default function HistoryTabPanel({
                   <button
                     key={option.key}
                     type="button"
+                  aria-pressed={active}
                     onClick={() => {
                       setProductFilter(active ? "" : option.key)
                       setMovementsPage(1)
@@ -459,7 +488,7 @@ export default function HistoryTabPanel({
           ) : null}
           {historyLots.length > 0 ? (
             <div className="mt-2.5 flex flex-wrap items-center gap-2">
-              <span className="shrink-0 text-[12px] font-bold text-[#111110]">물류No</span>
+              <span className="w-12 shrink-0 text-[12px] font-bold text-[#111110]">물량번호</span>
               <button
                 type="button"
                 onClick={() => {
@@ -480,6 +509,7 @@ export default function HistoryTabPanel({
                   <button
                     key={lot}
                     type="button"
+                  aria-pressed={active}
                     onClick={() => {
                       setLotFilter(active ? "" : lot)
                       setMovementsPage(1)
@@ -585,6 +615,11 @@ export default function HistoryTabPanel({
           setMovementsPage={setMovementsPage}
           hasActiveFilter={hasHistoryFilter}
           onResetFilters={resetHistoryFilters}
+          hasMoreHistory={hasMoreHistory}
+          loadedCount={movementsLoaded}
+          totalCount={movementsTotal}
+          onLoadMore={() => void loadMoreHistory()}
+          loadingMore={loadingMoreHistory}
         />
     </motion.div>
   )

@@ -348,7 +348,8 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                         <X className="h-4 w-4" />
                       </button>
                     </div>
-                    {!editingId && sheetView === "quick" && (
+                    {/* 샘플 대여는 단건 전용이라(유닛을 골라야 한다, 라운드 2 Q-2) 작업건 탭을 보이지 않는다. */}
+                    {!editingId && sheetView === "quick" && activePresetKey !== "sample" && (
                       <div className="mt-3 inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5" role="tablist" aria-label="기록 모드">
                         {([["batch", "작업건 구성"], ["single", "단건 기록"]] as const).map(([mode, label]) => (
                           <button
@@ -628,7 +629,7 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
 
                     {sheetMode === "batch" && !editingId && !quickCartEnabled && (
                       <p className="border-b border-[rgba(0,0,0,0.08)] pb-3 text-[12px] font-semibold text-[#615D59]">
-                        반납·샘플 반환·샘플 배정·수리·조정은 배치 담기를 지원하지 않습니다 — 단건 기록 모드로 저장하세요.
+                        샘플 대여·반납·샘플 반환·샘플 배정·수리·조정은 배치 담기를 지원하지 않습니다 — 단건 기록 모드로 저장하세요.
                       </p>
                     )}
                     {sheetMode === "batch" && quickCartEnabled && !inboundBatchLayout && (
@@ -732,7 +733,9 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                       </div>
                     )}
                     <div className={customProduct.trim() ? "opacity-90" : undefined}>
-                      <span className={SHEET_LABEL_CLASS}>품목</span>
+                      <span className={SHEET_LABEL_CLASS}>
+                        품목<RequiredMark />
+                      </span>
                       {(quickPickGroups.featured.length > 0 || quickPickGroups.etc.length > 0) && (
                         <div role="group" aria-label="제품 빠른 선택" className="mt-1.5 flex flex-wrap gap-1.5">
                           {[...quickPickGroups.featured, ...quickPickGroups.etc].map((row) => {
@@ -806,7 +809,9 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                     <div className={`grid grid-cols-1 gap-3 ${inboundBatchLayout ? "" : "min-[400px]:grid-cols-2"}`}>
                       {inboundBatchLayout ? (
                       <div>
-                        <span id="hardware-quantity-label" className={SHEET_LABEL_CLASS}>수량</span>
+                        <span id="hardware-quantity-label" className={SHEET_LABEL_CLASS}>
+                          수량<RequiredMark />
+                        </span>
                         {/* 입고 작업건 — 스테퍼 + 퀵칩을 한 줄로 압축. */}
                         <div className="mt-1 flex items-center gap-2">
                           <div className="grid h-9 w-[104px] shrink-0 grid-cols-[30px_minmax(0,1fr)_30px] rounded-md border border-[rgba(0,0,0,0.08)] bg-white">
@@ -857,7 +862,9 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                       </div>
                       ) : (
                       <div>
-                        <span id="hardware-quantity-label" className={SHEET_LABEL_CLASS}>수량</span>
+                        <span id="hardware-quantity-label" className={SHEET_LABEL_CLASS}>
+                          수량<RequiredMark />
+                        </span>
                         <div className="mt-1 grid h-11 grid-cols-[44px_minmax(0,1fr)_44px] rounded-md border border-[rgba(0,0,0,0.08)] bg-white sm:h-10 sm:grid-cols-[38px_minmax(0,1fr)_38px]">
                           <button
                             type="button"
@@ -981,8 +988,10 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                     {activePresetKey === "sample" && !editingId && (
                       <div className="space-y-3">
                         <div>
-                          <span className={SHEET_LABEL_CLASS}>대여 고객사</span>
-                          <div className="mt-1">
+                          <span className={SHEET_LABEL_CLASS}>
+                            대여 고객사<RequiredMark />
+                          </span>
+                          <div className="mt-1" data-sheet-autofocus>
                             <CustomerPicker
                               value={sampleCustomer}
                               onChange={setSampleCustomer}
@@ -1096,11 +1105,18 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                       </label>
                       <div>
                         <span className={SHEET_LABEL_CLASS} id="hardware-destination-label">
-                          {isCustomerDestination ? "도착 (고객사)" : "도착"}
+                          {isCustomerDestination ? (
+                            <>
+                              도착 (고객사)
+                              <RequiredMark />
+                            </>
+                          ) : (
+                            "도착"
+                          )}
                         </span>
                         {/* 고객사 칸만 고르는 입력으로 바꾼다 — 창고·샘플 같은 일반 위치는 기존 datalist 그대로. */}
                         {isCustomerDestination ? (
-                          <div className="mt-1">
+                          <div className="mt-1" data-sheet-autofocus>
                             <CustomerPicker
                               value={toLocation}
                               onChange={setToLocation}
@@ -1110,6 +1126,16 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                               className={SHEET_FIELD_INPUT_CLASS}
                             />
                           </div>
+                        ) : activePresetKey === "sample" && !editingId ? (
+                          // 샘플 대여의 도착은 "샘플" 고정이다 — 고객사는 아래 "대여 고객사"에 적는다. 도착에 고객사를 적으면
+                          // 샘플 판정(도착 == 샘플)이 깨져 판매로 저장된다(라운드 2 Q-1).
+                          <input
+                            value="샘플"
+                            readOnly
+                            aria-labelledby="hardware-destination-label"
+                            aria-describedby="hardware-destination-sample-hint"
+                            className={`${SHEET_INPUT_CLASS} cursor-default bg-[#F6F5F4] text-[#615D59]`}
+                          />
                         ) : (
                           <input
                             value={toLocation}
@@ -1119,6 +1145,11 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                             list="hardware-location-options"
                             className={SHEET_INPUT_CLASS}
                           />
+                        )}
+                        {activePresetKey === "sample" && !editingId && (
+                          <p id="hardware-destination-sample-hint" className="mt-1 text-[11px] font-semibold text-[#615D59]">
+                            고객사는 아래 &lsquo;대여 고객사&rsquo;에 — 샘플 대여는 단건으로만 저장합니다.
+                          </p>
                         )}
                       </div>
                     </div>
@@ -1795,11 +1826,18 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                           )}
                           <button
                             type="submit"
+                            aria-keyshortcuts="Meta+Enter Control+Enter"
+                            title="저장 (⌘/Ctrl + Enter)"
                             disabled={busy != null || crmLoading || (!customProduct.trim() && !selectedItem)}
                             className="inline-flex h-11 flex-1 items-center justify-center gap-2 cursor-pointer rounded-md bg-[#084734] px-4 text-[13px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60 sm:h-10"
                           >
                             <Save className="h-4 w-4" />
-                            {busy === "movement" || crmLoading ? "저장 중" : editingId ? "수정 저장" : "기록 저장"}
+                            {crmLoading ? "CRM 확인 중" : busy === "movement" ? "저장 중" : editingId ? "수정 저장" : "기록 저장"}
+                            {!crmLoading && busy !== "movement" && (
+                              <kbd aria-hidden className="hidden rounded border border-white/30 px-1 font-sans text-[10.5px] font-semibold text-white/80 md:inline">
+                                ⌘↵
+                              </kbd>
+                            )}
                           </button>
                         </div>
                       )}
@@ -1807,5 +1845,15 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                   </form>
                 </motion.aside>
               </motion.div>
+  )
+}
+
+// 필수 칸 표시(라운드 2 Q-14) — 글자 "*"는 보조기술에 "필수"로 읽힌다. 색만으로 뜻을 전하지 않는다.
+function RequiredMark() {
+  return (
+    <span className="ml-0.5 text-[#B43E3E]">
+      <span aria-hidden>*</span>
+      <span className="sr-only">(필수)</span>
+    </span>
   )
 }

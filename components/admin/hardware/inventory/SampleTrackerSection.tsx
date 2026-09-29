@@ -5,9 +5,13 @@ import { ChevronDown, ChevronRight, PackagePlus } from "lucide-react"
 
 import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
 import { adminFetchJson } from "@/lib/admin-client"
+import ExportActions from "./ExportActions"
+import { buildSampleUnitsExportRows } from "./hardware-export"
+import { sampleUnitMatchesItem } from "./office-sample-pool"
 import {
   formatNumber,
   loanElapsedDays,
+  todayKey,
   MONO_META_CLASS,
   SAMPLE_STATUS_META,
   type HardwareSampleEvent,
@@ -55,13 +59,15 @@ interface SampleTrackerSectionProps {
   stock: HardwareStockRow[] | null
   onOpenUnit: (unitId: string) => void
   onChanged: () => Promise<void> | void
+  // 기록 생성 권한(표시용) — 읽기 역할은 백필 등록을 누를 수 없다(강제는 서버, 하드웨어 라운드 2 P-7).
+  canWrite?: boolean
 }
 
 function locationQuantity(row: HardwareStockRow, location: string): number {
   return row.locationBalances.find((balance) => balance.location === location)?.quantity ?? 0
 }
 
-function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOpenUnit, onChanged }: SampleTrackerSectionProps) {
+function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOpenUnit, onChanged, canWrite = true }: SampleTrackerSectionProps) {
   const [filter, setFilter] = useState<StatusFilter>("all")
   const [agingMinDays, setAgingMinDays] = useState<number | null>(null)
   const [showAllRows, setShowAllRows] = useState(false)
@@ -78,15 +84,22 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
     if (!stock || !units) return null
     const plan: RegisterPlanLine[] = []
     let overCount = 0
+    // 유닛 ↔ 품목은 사무실·샘플 풀과 같은 규칙(하드웨어 라운드 3 P-5) — 예전 이름 완전일치는 이름이 바뀐 품목의 유닛을 못 세어
+    // "원장 차이 등록"이 실물 있는 유닛을 한 번 더 만들자고 했다.
+    const knownItemIds = new Set(stock.map((row) => row.itemId).filter(Boolean))
     for (const row of stock) {
       const officeExpected = Math.max(0, locationQuantity(row, "사무실"))
       const loanedExpected = Math.max(0, locationQuantity(row, "샘플"))
       if (officeExpected === 0 && loanedExpected === 0) continue
+      const target = { itemId: row.itemId, productName: row.product }
       // 전시·사내 사용 유닛도 사무실에 있는 물량이다 — 빼고 세면 전시 대수만큼 "원장 차이 등록"을 제안해 실물 없는 유닛을 만든다.
       const officeActual = units.filter(
-        (unit) => unit.product_name === row.product && (unit.status === "office" || unit.status === "showroom")
+        (unit) =>
+          (unit.status === "office" || unit.status === "showroom") && sampleUnitMatchesItem(unit, target, knownItemIds)
       ).length
-      const loanedActual = units.filter((unit) => unit.product_name === row.product && unit.status === "loaned").length
+      const loanedActual = units.filter(
+        (unit) => unit.status === "loaned" && sampleUnitMatchesItem(unit, target, knownItemIds)
+      ).length
       const officeDiff = officeExpected - officeActual
       const loanedDiff = loanedExpected - loanedActual
       if (officeDiff > 0) plan.push({ itemId: row.itemId, productName: row.product, status: "office", count: officeDiff })
@@ -152,8 +165,10 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
     if (!integrity || integrity.plan.length === 0 || registering) return
     setRegistering(true)
     setRegisterError(null)
+    const plan = integrity.plan
+    let done = 0
     try {
-      for (const line of integrity.plan) {
+      for (const line of plan) {
         await adminFetchJson("/api/admin/hardware/samples", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -163,14 +178,24 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
             productName: line.productName,
             count: line.count,
             status: line.status,
+            // 처리일은 로컬(KST) 오늘 — 서버 기본값은 UTC 날짜라 KST 0~9시에는 전날이 됐다(P-14).
+            occurredAt: todayKey(),
             memo: "초기 등록(원장 잔량 백필)",
           }),
         })
+        done += 1
       }
-      await onChanged()
     } catch (err) {
-      setRegisterError(err instanceof Error ? err.message : "등록에 실패했습니다.")
+      const reason = err instanceof Error ? err.message : "등록에 실패했습니다."
+      setRegisterError(
+        done > 0
+          ? `${formatNumber(done)}/${formatNumber(plan.length)} 품목까지 등록했고 나머지는 실패했습니다(${reason}) — 목록을 다시 불러왔으니 남은 차이만 확인하세요.`
+          : reason
+      )
     } finally {
+      // 성공·실패 모두 다시 받는다(하드웨어 라운드 2 P-2) — 중간 실패 뒤 옛 목록으로 다시 누르면 이미 등록된 품목이
+      // 또 등록돼 실물 없는 유닛이 생겼다.
+      await Promise.resolve(onChanged()).catch(() => undefined)
       setRegistering(false)
       setRegisterConfirmOpen(false)
     }
@@ -186,6 +211,16 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {/* 후속 연락 목록 — 지금 걸린 필터(예: 대여 1년+)의 유닛을 고객·대여일·회수 예정일과 함께(하드웨어 라운드 2 P-12). */}
+          {filtered.length > 0 && (
+            <ExportActions
+              subject={filter === "loaned" || agingMinDays != null ? "대여중 샘플" : "샘플 유닛"}
+              fileBaseName="하드웨어_샘플유닛"
+              rowCount={filtered.length}
+              buildRows={() => buildSampleUnitsExportRows(filtered, latestEvents, todayKey())}
+              size="xs"
+            />
+          )}
           {integrity && integrity.overCount > 0 && (
             <span className="rounded-full bg-[#FBF1E0] px-2.5 py-1 text-[11px] font-bold text-[#A8741A]" title="유닛 수가 원장 잔량보다 많습니다 — 폐기/전환 처리로 정리하세요">
               정합 확인 {formatNumber(integrity.overCount)}대
@@ -195,8 +230,8 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
             <button
               type="button"
               onClick={() => setRegisterConfirmOpen(true)}
-              disabled={registering}
-              title="원장 잔량과 등록 유닛 수의 차이입니다 — 등록 전에 품목별 수량을 확인합니다"
+              disabled={registering || !canWrite}
+              title={canWrite ? "원장 잔량과 등록 유닛 수의 차이입니다 — 등록 전에 품목별 수량을 확인합니다" : "읽기 권한 계정은 유닛을 등록할 수 없습니다"}
               className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-[#084734] bg-white px-3 py-2 text-[12px] font-bold text-[#084734] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:opacity-60"
             >
               <PackagePlus className={`h-3.5 w-3.5 ${registering ? "animate-pulse" : ""}`} />
@@ -283,7 +318,20 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
         })}
       </div>
 
-      {loading && !units ? (
+      {error && !units && !loading ? (
+        // 조회 실패를 "등록된 유닛이 없습니다"로 보이지 않는다(하드웨어 라운드 2 P-3) — 그 문구가 가리키는 등록 버튼도
+        // 이 상태에선 없다. 오류와 다시 불러오기만.
+        <div role="alert" className="px-5 pb-6 pt-3 text-center">
+          <p className="text-[13px] font-semibold text-[#8F2C2C]">샘플 유닛을 불러오지 못했습니다 — 유닛이 없는 것이 아닙니다.</p>
+          <button
+            type="button"
+            onClick={() => void onChanged()}
+            className="mt-3 inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[12px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+          >
+            다시 불러오기
+          </button>
+        </div>
+      ) : loading && !units ? (
         <div className="space-y-2 px-5 pb-5" aria-hidden>
           {Array.from({ length: 4 }).map((_, index) => (
             <div key={index} className="h-12 animate-pulse rounded-lg bg-[#F6F5F4]" />
@@ -316,7 +364,16 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
                       {unit.status === "loaned" ? unit.current_customer ?? "고객 미상" : ""}
                     </span>
                     {elapsed != null && (
-                      <span className="text-[11px] font-semibold tabular-nums text-[#615D59]">{formatNumber(elapsed)}일째</span>
+                      <span className={`text-[11px] font-semibold tabular-nums ${elapsed >= 90 ? "text-[#7A520F]" : "text-[#615D59]"}`}>
+                        {formatNumber(elapsed)}일째
+                        {/* 색만으로 장기 대여를 알리지 않는다(P-16) — 밴드 칩과 같은 말로 적는다. */}
+                        {elapsed >= 90 ? ` · ${elapsed >= 730 ? "2년+" : elapsed >= 365 ? "1년+" : "90일+"}` : ""}
+                      </span>
+                    )}
+                    {unit.status === "loaned" && unit.expected_return_at && (
+                      <span className="text-[11px] font-semibold tabular-nums text-[#615D59]">
+                        {describeReturnDue(unit.expected_return_at)}
+                      </span>
                     )}
                   </span>
                   {latestMemo && (
@@ -347,3 +404,13 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
 }
 
 export default memo(SampleTrackerSection)
+
+// 회수 예정일 → "회수 D-3" · "회수 오늘" · "회수 5일 지남"(로컬 날짜 기준, 트래커 행에 없던 정보 — P-12).
+export function describeReturnDue(expectedReturnAt: string, today: string = todayKey()): string {
+  const due = Date.parse(`${expectedReturnAt.slice(0, 10)}T00:00:00Z`)
+  const base = Date.parse(`${today}T00:00:00Z`)
+  if (!Number.isFinite(due) || !Number.isFinite(base)) return `회수 예정 ${expectedReturnAt.slice(0, 10)}`
+  const days = Math.round((due - base) / 86400000)
+  if (days === 0) return "회수 오늘"
+  return days > 0 ? `회수 D-${formatNumber(days)}` : `회수 ${formatNumber(-days)}일 지남`
+}
