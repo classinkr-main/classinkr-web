@@ -157,7 +157,7 @@ export default function HistoryTabPanel({
                   setSearch(event.target.value)
                   setMovementsPage(1)
                 }}
-                aria-label="하드웨어 원장 검색"
+                aria-label="하드웨어 원본 검색"
                 placeholder="품목·고객사·물량번호·담당자·특이사항 검색"
                 className="h-10 w-full rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] pl-9 pr-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
               />

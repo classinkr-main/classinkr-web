@@ -331,7 +331,7 @@ export default function CustomerResultsSection({
                 ? "Portal V2에서 진행 상태인 딜이 연결되면 여기에 표시됩니다."
                 : hasActiveFilters
                   ? "필터를 초기화하거나 새 리드를 등록해 시작하세요."
-                  : "새 리드를 등록하거나 REV/HW 원장 매칭을 연결해 시작하세요."}
+                  : "새 리드를 등록하거나 REV/HW 원본 매칭을 연결해 시작하세요."}
           </p>
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
             {hasActiveFilters ? (

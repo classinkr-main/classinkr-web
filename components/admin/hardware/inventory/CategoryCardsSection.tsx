@@ -82,7 +82,7 @@ function CategoryCardsSection({ categoryCards, etcSummary }: { categoryCards: Ca
                     }`}
                     title={
                       card.promoted < 0
-                        ? "판촉(promoted) 라인 창고가 음수 — 원장 유형(promoted 판정) 또는 시트 수치 점검 필요"
+                        ? "판촉(promoted) 라인 창고가 음수 — 원본 유형(promoted 판정) 또는 시트 수치 점검 필요"
                         : "판촉(promoted) 라인 창고 재고 — 실판매 수치와 분리 집계"
                     }
                   >

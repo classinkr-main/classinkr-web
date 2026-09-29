@@ -1203,7 +1203,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
 
   // 기준 시각 캡션(UX 규약 4) — 서버가 360을 조립한 시각. 갱신 중/갱신 지연을 함께 적는다.
   const basisCaption = data
-    ? `${syncing ? "갱신 중 · " : notice?.key === "revalidate" ? "갱신 지연 · " : ""}조회 ${formatClock(data.generatedAt)} 기준 · NEO·원장·Compass 합성`
+    ? `${syncing ? "갱신 중 · " : notice?.key === "revalidate" ? "갱신 지연 · " : ""}조회 ${formatClock(data.generatedAt)} 기준 · NEO·원본·Compass 합성`
     : null
 
   if (!customerKey) return null

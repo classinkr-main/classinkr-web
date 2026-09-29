@@ -640,7 +640,7 @@ export function DraftQueue({
             </p>
           </div>
           <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#FBF1E0] px-4 py-3 text-[11.5px] font-semibold leading-relaxed text-[#7A520F]">
-            적용하면 장부 원장에 기록됩니다 — 초안 1건. 이 작업은 되돌릴 수 없습니다.
+            적용하면 장부 원본에 기록됩니다 — 초안 1건. 이 작업은 되돌릴 수 없습니다.
           </div>
           <div className="flex items-center justify-end gap-2 bg-[#FAFAF8] px-4 py-3">
             <button

@@ -38,7 +38,7 @@ function CompassDuplicateNotice({
       </p>
       <p className="mt-0.5 text-[11px] text-[#1a1a1a]/50">
         {registered ? "등록은 그대로 진행됐습니다. " : ""}
-        같은 학원을 두 원장에서 따로 굴리지 않도록 Compass 쪽 진행 상황을 먼저 확인하세요.
+        같은 학원을 두 원본에서 따로 굴리지 않도록 Compass 쪽 진행 상황을 먼저 확인하세요.
         {extraCount > 1 ? ` (이 요청에서 Compass에 이미 있는 건 ${extraCount.toLocaleString("ko-KR")}건)` : ""}
       </p>
       <a

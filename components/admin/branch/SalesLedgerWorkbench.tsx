@@ -3076,7 +3076,7 @@ export default function SalesLedgerWorkbench({
               </span>
             )}
             <span>입력 큐 <span className="font-semibold text-[#111110]">{queueMode === "server" ? "서버" : "로컬"} · {openDrafts.length}건</span></span>
-            <span>내부 원장 <span className="font-semibold text-[#111110]">{ledgerHealth?.ok === false ? "준비 필요" : `${ledgerEntries.length}건`}</span></span>
+            <span>내부 원본 <span className="font-semibold text-[#111110]">{ledgerHealth?.ok === false ? "준비 필요" : `${ledgerEntries.length}건`}</span></span>
             <span className="flex items-center gap-1.5">
               REV 원천{" "}
               <span
@@ -3094,7 +3094,7 @@ export default function SalesLedgerWorkbench({
             </span>
             {(queueError || ledgerHealth?.ok === false) && (
               <span className="rounded border border-[#ECD29C] bg-[#FBF1E0] px-1.5 py-0.5 text-[10px] font-semibold text-[#7A520F]">
-                ⚠ {queueError ?? ledgerHealth?.message ?? "내부 원장 준비 필요"}
+                ⚠ {queueError ?? ledgerHealth?.message ?? "내부 원본 준비 필요"}
               </span>
             )}
             {(dbImportError || dbImportNotice) && (

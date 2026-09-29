@@ -38,7 +38,7 @@ export async function PATCH(
   try {
     const { id } = await params
     const body = await readRequestBody(req)
-    const action = readRequiredEnum(body, "action", "원장 액션", HARDWARE_MOVEMENT_ACTIONS)
+    const action = readRequiredEnum(body, "action", "원본 액션", HARDWARE_MOVEMENT_ACTIONS)
 
     if (action === "confirm-planned") {
       const capabilityError = requireAdminCapability(admin, HARDWARE_FINALIZE_CAPABILITY)

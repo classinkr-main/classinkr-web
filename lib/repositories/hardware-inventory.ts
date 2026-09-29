@@ -1410,13 +1410,13 @@ export async function voidHardwareMovement(
     .eq("id", id)
     .maybeSingle()
   if (existingError) throw existingError
-  if (!existing) throw new Error("원장 기록을 찾을 수 없습니다.")
+  if (!existing) throw new Error("원본 기록을 찾을 수 없습니다.")
   const row = existing as { id: string; source: string; voided_at: string | null }
   if (row.source !== "admin_manual") {
     throw new Error("시트 이관 기록은 직접 취소할 수 없습니다. 수기 조정으로 보정하세요.")
   }
   if (row.voided_at) {
-    throw new Error("이미 취소되었거나 처리된 원장 기록입니다.")
+    throw new Error("이미 취소되었거나 처리된 원본 기록입니다.")
   }
 
   const { data, error } = await sb
@@ -1456,7 +1456,7 @@ export async function updateHardwareMovement(
     .eq("id", id)
     .maybeSingle()
   if (existingError) throw existingError
-  if (!existing) throw new Error("원장 기록을 찾을 수 없습니다.")
+  if (!existing) throw new Error("원본 기록을 찾을 수 없습니다.")
   const row = existing as {
     source: string
     movement_type: string
@@ -2454,9 +2454,9 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
         severity: "critical",
         itemId: row.itemId,
         product: row.product,
-        title: "원장 점검 필요",
+        title: "원본 점검 필요",
         detail: `창고 ${row.warehouseStock}대 · 가용 ${row.availableStock}대 — ${
-          isPromotedProduct(row.product) ? "promoted 판정 또는 시트 수치 정리 필요" : "원장 유형·시트 수치 정리 필요"
+          isPromotedProduct(row.product) ? "promoted 판정 또는 시트 수치 정리 필요" : "원본 유형·시트 수치 정리 필요"
         }`,
       })
     } else if (row.low) {

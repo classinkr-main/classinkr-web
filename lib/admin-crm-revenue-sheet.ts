@@ -241,11 +241,11 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
   // 내부 원장 테이블 자체가 아직 없는 환경(마이그 미적용)도 있을 수 있다 — 그 경우도 "미반영
   // 0건"이 아니라 "확인 불가"로 다뤄야 하므로 별도 경고를 남기고 gap 카운트는 0으로 fail-soft한다.
   if (manualLedgerResult.error) {
-    warnings.push(`장부 내부 원장(수기 입력) 반영 여부를 확인하지 못했습니다: ${manualLedgerResult.error.message}`)
+    warnings.push(`장부 내부 원본(수기 입력) 반영 여부를 확인하지 못했습니다: ${manualLedgerResult.error.message}`)
   }
   if ((manualLedgerResult.data?.length ?? 0) >= QUERY_LIMIT) {
     warnings.push(
-      `장부 내부 원장(수기 입력)이 ${QUERY_LIMIT.toLocaleString("ko-KR")}건 이상입니다 — 미반영 배지 수치가 과소집계일 수 있습니다.`
+      `장부 내부 원본(수기 입력)이 ${QUERY_LIMIT.toLocaleString("ko-KR")}건 이상입니다 — 미반영 배지 수치가 과소집계일 수 있습니다.`
     )
   }
   const manualLedgerGap: AdminCrmRevenueSheetManualLedgerGap = manualLedgerResult.error

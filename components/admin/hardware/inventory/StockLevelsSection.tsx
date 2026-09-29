@@ -80,7 +80,7 @@ function StockLevelsSection({
                 {stockPagination.totalItems === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-5 py-10 text-center text-[13px] text-[#615D59]">
-                      아직 하드웨어 원장 데이터가 없습니다. 시트 가져오기를 먼저 실행하세요.
+                      아직 하드웨어 원본 데이터가 없습니다. 시트 가져오기를 먼저 실행하세요.
                     </td>
                   </tr>
                 ) : (

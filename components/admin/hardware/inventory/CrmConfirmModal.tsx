@@ -145,7 +145,7 @@ export default function CrmConfirmModal({
             <span>
               <span className="block text-[13px] font-bold text-[#084734]">CRM 실제 오더와 연동해서 기록</span>
               <span className="mt-0.5 block text-[11.5px] leading-relaxed text-[#084734]/75">
-                선택한 CRM 후보의 참조번호와 링크가 하드웨어 원장에 같이 저장됩니다.
+                선택한 CRM 후보의 참조번호와 링크가 하드웨어 원본에 같이 저장됩니다.
               </span>
             </span>
           </label>
@@ -176,7 +176,7 @@ export default function CrmConfirmModal({
               ) : crmCandidates.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] px-4 py-8 text-center">
                   <p className="text-[13px] font-bold text-[#111110]">매칭되는 CRM 오더가 없습니다.</p>
-                  <p className="mt-1 text-[12px] text-[#615D59]">연동 없이 하드웨어 원장에만 기록할 수 있습니다.</p>
+                  <p className="mt-1 text-[12px] text-[#615D59]">연동 없이 하드웨어 원본에만 기록할 수 있습니다.</p>
                 </div>
               ) : (
                 crmCandidates.map((candidate) => {

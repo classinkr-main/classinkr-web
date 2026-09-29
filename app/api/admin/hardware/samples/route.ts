@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
         owner: readOptionalString(body, "owner", "담당자") ?? null,
         occurredAt: readOptionalDate(body, "occurredAt", "처리일") ?? null,
         memo: readOptionalString(body, "memo", "메모") ?? null,
-        movementRef: readOptionalString(body, "movementRef", "원장 참조") ?? null,
+        movementRef: readOptionalString(body, "movementRef", "원본 참조") ?? null,
         createdBy,
       })
       await logAdminAudit({
@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
       memo: readOptionalString(body, "memo", "메모") ?? null,
       serialNo: readOptionalString(body, "serialNo", "시리얼 번호"),
       expectedReturnAt: readOptionalDate(body, "expectedReturnAt", "회수 예정일"),
-      movementRef: readOptionalString(body, "movementRef", "원장 참조") ?? null,
+      movementRef: readOptionalString(body, "movementRef", "원본 참조") ?? null,
       nextStatus: nextStatus ?? null,
       createdBy,
     })

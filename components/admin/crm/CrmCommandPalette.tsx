@@ -68,7 +68,7 @@ export const NAV_CMDS: Array<{ label: string; sub: string; href: string; icon: R
     keywords: "고객 전환 세그먼트",
   },
   { label: "원천 고객", sub: "NEO 어카운트", href: "/admin/crm/customers/accounts", icon: <Building2 className="h-4 w-4" /> },
-  { label: "매출 대시보드", sub: "자체 원장·견적·정합성", href: "/admin/crm/deals", icon: <CircleDollarSign className="h-4 w-4" /> },
+  { label: "매출 대시보드", sub: "자체 원본·견적·정합성", href: "/admin/crm/deals", icon: <CircleDollarSign className="h-4 w-4" /> },
   { label: "REV 스냅샷", sub: "DB 저장본·매칭 검수", href: "/admin/crm/deals/rev-sheet", icon: <BookOpenCheck className="h-4 w-4" /> },
   { label: "오더·설치", sub: "파트너 포털·설치 일정", href: "/admin/crm/deals/orders", icon: <Truck className="h-4 w-4" /> },
   { label: "워크스페이스", sub: "계약·정산 큐", href: "/admin/crm/deals/kpi", icon: <Target className="h-4 w-4" /> },

@@ -586,7 +586,7 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     serviceRoleOnly: true,
     migration: "supabase/migrations/20260914_hardware_confirm_planned_v3.sql",
     impact:
-      "앱이 v2로 폴백하는데, v2는 lot_no 칸에서만 로트를 찾아 lot_no가 빈 예정 출고(운영 원장 전부)를 확정하지 못한다.",
+      "앱이 v2로 폴백하는데, v2는 lot_no 칸에서만 로트를 찾아 lot_no가 빈 예정 출고(운영 원본 전부)를 확정하지 못한다.",
   },
   // ── 결제 없는 도입 신청 접수(2026-07-27) ────────────────────────────────
   // 쇼룸 예약(위)은 테이블 프로브가 있었는데 같은 성격의 checkout_requests 는 계약에
