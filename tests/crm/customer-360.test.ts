@@ -5,6 +5,7 @@ import {
   buildLeadHeader,
   buildNeoHeader,
   computeCustomer360Risk,
+  normalizeUnifiedCustomerKeyParam,
   parseUnifiedCustomerKey,
   summarizeNeoMoney,
 } from "@/lib/repositories/crm-customer-360"
@@ -53,6 +54,28 @@ describe("parseUnifiedCustomerKey", () => {
   it("parses lead and neo keys", () => {
     expect(parseUnifiedCustomerKey("lead:abc")).toEqual({ source: "lead", entityId: "abc", targetType: "lead" })
     expect(parseUnifiedCustomerKey("neo:xyz")).toEqual({ source: "neo", entityId: "xyz", targetType: "neo_account" })
+  })
+
+  it("accepts percent-encoded route segments (Next 16.2 passes page params encoded — 2026-09-29 404)", () => {
+    expect(parseUnifiedCustomerKey("lead%3A39f2b68c-6920-4b78-8ba5-516561a88954")).toEqual({
+      source: "lead",
+      entityId: "39f2b68c-6920-4b78-8ba5-516561a88954",
+      targetType: "lead",
+    })
+    expect(parseUnifiedCustomerKey("neo%3A3738042464338638")).toEqual({
+      source: "neo",
+      entityId: "3738042464338638",
+      targetType: "neo_account",
+    })
+    expect(parseUnifiedCustomerKey("neo%3Aa%3Ab")).toEqual({ source: "neo", entityId: "a:b", targetType: "neo_account" })
+    expect(parseUnifiedCustomerKey("lead%3A")).toBeNull()
+  })
+
+  it("normalizeUnifiedCustomerKeyParam decodes once and keeps malformed input as-is", () => {
+    expect(normalizeUnifiedCustomerKeyParam("lead:abc")).toBe("lead:abc")
+    expect(normalizeUnifiedCustomerKeyParam("lead%3Aabc")).toBe("lead:abc")
+    expect(normalizeUnifiedCustomerKeyParam("lead%253Aabc")).toBe("lead%3Aabc")
+    expect(normalizeUnifiedCustomerKeyParam("lead%E0%A4%A")).toBe("lead%E0%A4%A")
   })
 
   it("splits only on the first colon so account ids containing colons survive", () => {
