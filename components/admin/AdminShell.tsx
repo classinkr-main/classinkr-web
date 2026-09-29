@@ -6,6 +6,9 @@ import { usePathname, useRouter } from "next/navigation"
 import AdminSidebar from "@/components/admin/AdminSidebar"
 import AdminCommandPaletteLauncher from "@/components/admin/AdminCommandPaletteLauncher"
 import AdminNavProgress from "@/components/admin/AdminNavProgress"
+import AdminAiLauncher from "@/components/admin/ai/AdminAiLauncher"
+import { isAdminAiWidgetHidden } from "@/components/admin/ai/page-context"
+import { useAdminAiState } from "@/components/admin/ai/use-admin-ai"
 import { RouteTransition } from "@/components/transitions/RouteTransition"
 import type { AdminShellSession } from "@/lib/admin-auth"
 import { clearAdminSessionStorage } from "@/lib/admin-client"
@@ -107,6 +110,11 @@ export default function AdminShell({
   const pathname = usePathname()
   const router = useRouter()
   const isLoginPage = pathname === "/admin/login"
+  // 갈매봇을 옆에 붙이면(xl 이상) 본문을 그 폭만큼 밀어낸다. AI 올인원 탭은 위젯의 전체
+  // 화면판이라 위젯 자체가 뜨지 않는다.
+  const adminAi = useAdminAiState()
+  const aiDocked =
+    adminAi.open && adminAi.size === "docked" && !isAdminAiWidgetHidden(pathname ?? "")
   const [session, setSession] = useState<SessionInfo | null>(() => {
     if (process.env.NEXT_PUBLIC_SKIP_ADMIN_AUTH === "true") {
       return {
@@ -329,7 +337,11 @@ export default function AdminShell({
         </aside>
       )}
       <AdminNavProgress />
-      <main className="min-w-0 flex-1 overflow-x-hidden pt-16 pb-24 lg:overflow-y-auto lg:overscroll-contain lg:pt-0 lg:pb-0">
+      <main
+        className={`min-w-0 flex-1 overflow-x-hidden pt-16 pb-24 lg:overflow-y-auto lg:overscroll-contain lg:pt-0 lg:pb-0 ${
+          aiDocked ? "xl:mr-[420px]" : ""
+        }`}
+      >
         <div className="mx-auto w-full max-w-[1680px]">
           <RouteTransition tone="admin">
             {children}
@@ -342,6 +354,7 @@ export default function AdminShell({
           navOverrides={session.navOverrides}
         />
       ) : null}
+      {session ? <AdminAiLauncher /> : null}
     </div>
   )
 }
