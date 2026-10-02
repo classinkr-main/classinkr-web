@@ -756,23 +756,67 @@ export async function getEventsByMonth(year: number, month: number): Promise<Cal
  * 하는 임시방편을 썼지만, 그 장치는 제거했다.
  */
 export async function getEventsByRange(from: string, to: string): Promise<CalendarEvent[]> {
-  const months = enumerateMonths({ from, to })
-  if (months.length === 0) return []
+  return (await getEventsByRangeWithDiagnostics(from, to)).events
+}
 
-  const perMonthResults = await Promise.all(
+/**
+ * getEventsByRange 와 같은 경로 — 걸치는 달들의 소스별 진단까지 합쳐 돌려준다.
+ *
+ * Compass 미러(/api/compass/calendar)가 "이 소스는 지금 확정본이 아니다"를 알아야
+ * 빈 결과로 기존 미러를 덮어쓰지 않는다. 합치는 규칙: count 는 합(걸치는 달에 나뉘어 온다),
+ * durationMs 는 최대(가장 느린 달이 콜드 비용), degraded 는 하나라도 참이면 참,
+ * ageMs 는 최대(캐시를 안 두는 소스는 null 그대로).
+ */
+export async function getEventsByRangeWithDiagnostics(
+  from: string,
+  to: string
+): Promise<CalendarMonthResult> {
+  const months = enumerateMonths({ from, to })
+  if (months.length === 0) return { events: [], diagnostics: [] }
+
+  const perMonth = await Promise.all(
     months.map(({ year, month }) => getEventsByMonthWithDiagnostics(year, month))
   )
-  const perMonth = perMonthResults.map((result) => result.events)
 
+  return mergeMonthResults(perMonth, { from, to })
+}
+
+/** 걸치는 달들의 결과를 기간 하나로 합친다(순수 — tests/admin/calendar-range-diagnostics.test.ts). */
+export function mergeMonthResults(
+  perMonth: CalendarMonthResult[],
+  range: { from: string; to: string }
+): CalendarMonthResult {
   // 멀티데이 일정은 걸치는 달마다 중복해서 나오므로 id 로 한 번 눌러준다.
   const byId = new Map<string, CalendarEvent>()
-  for (const events of perMonth) {
-    for (const event of events) byId.set(event.id, event)
+  for (const result of perMonth) {
+    for (const event of result.events) byId.set(event.id, event)
   }
 
-  return Array.from(byId.values())
-    .filter((event) => overlapsRange(event, { from, to }))
-    .sort(compareEvents)
+  const bySource = new Map<EventSource, CalendarSourceDiagnostic>()
+  for (const result of perMonth) {
+    for (const d of result.diagnostics) {
+      const prev = bySource.get(d.source)
+      bySource.set(
+        d.source,
+        prev
+          ? {
+              source: d.source,
+              count: prev.count + d.count,
+              durationMs: Math.max(prev.durationMs, d.durationMs),
+              degraded: prev.degraded || d.degraded,
+              ageMs: prev.ageMs === null || d.ageMs === null ? null : Math.max(prev.ageMs, d.ageMs),
+            }
+          : { ...d }
+      )
+    }
+  }
+
+  return {
+    events: Array.from(byId.values())
+      .filter((event) => overlapsRange(event, range))
+      .sort(compareEvents),
+    diagnostics: Array.from(bySource.values()),
+  }
 }
 
 function toErrorMessage(error: unknown) {
