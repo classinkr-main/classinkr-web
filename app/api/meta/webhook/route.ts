@@ -1,67 +1,31 @@
 import { createHmac, timingSafeEqual } from "crypto"
-import { NextRequest, NextResponse } from "next/server"
+import { after, NextRequest, NextResponse } from "next/server"
+
+import { fetchMetaLeadDetail } from "@/lib/meta/lead-ads-graph"
+import {
+  buildLeadCapturePayload,
+  extractLeadValues,
+  type MetaLeadDetail,
+  type MetaLeadValue,
+  type MetaWebhookPayload,
+} from "@/lib/meta/lead-ads-payload"
+import {
+  isLeadgenOwnedByLedger,
+  recordMetaLeadgenReceipts,
+  resolveMetaLeadgenCutover,
+  type MetaLeadgenCutover,
+} from "@/lib/meta/leadgen-cutover"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
+// compass 모드의 after() 미러 시도(제출 행을 최대 20초 기다림)가 이 예산 안에서 돈다
+// (Next 16.2 after "Duration" — 라우트 maxDuration 을 따른다). 설계 META-RECEIVER-FINAL §4-2 H5.
+export const maxDuration = 30
 
-type MetaLeadValue = {
-  leadgen_id?: string
-  page_id?: string
-  form_id?: string
-  ad_id?: string
-  adgroup_id?: string
-  created_time?: number
-}
+/** webhook after() 경로가 Compass 제출 행을 기다리는 최대 시간 */
+const COMPASS_MIRROR_WAIT_MS = 20_000
 
-type MetaWebhookPayload = {
-  object?: string
-  entry?: Array<{
-    id?: string
-    time?: number
-    changes?: Array<{
-      field?: string
-      value?: MetaLeadValue
-    }>
-  }>
-}
-
-type MetaLeadDetail = MetaLeadValue & {
-  id?: string
-  created_time?: string | number
-  ad_name?: string
-  adset_id?: string
-  adset_name?: string
-  campaign_id?: string
-  campaign_name?: string
-  field_data?: Array<{
-    name?: string
-    values?: string[]
-  }>
-}
-
-function getGraphApiVersion() {
-  return process.env.META_GRAPH_API_VERSION?.trim() || "v25.0"
-}
-
-function getMetaAccessToken() {
-  return (
-    process.env.META_PAGE_ACCESS_TOKEN?.trim() ||
-    process.env.META_ACCESS_TOKEN?.trim() ||
-    process.env.META_CAPI_ACCESS_TOKEN?.trim()
-  )
-}
-
-function normalizeString(value: unknown) {
-  if (typeof value !== "string") return undefined
-  const trimmed = value.trim()
-  return trimmed || undefined
-}
-
-function appSecretProof(accessToken: string) {
-  const appSecret = process.env.META_APP_SECRET?.trim()
-  if (!appSecret) return undefined
-  return createHmac("sha256", appSecret).update(accessToken).digest("hex")
-}
+type SubmitLeadCapture = typeof import("@/lib/server/lead-capture").submitLeadCapture
 
 function verifyMetaSignature(payload: string, signature: string | null) {
   const appSecret = process.env.META_APP_SECRET?.trim()
@@ -87,197 +51,6 @@ function verifyMetaSignature(payload: string, signature: string | null) {
   } catch {
     return false
   }
-}
-
-function extractLeadValues(payload: MetaWebhookPayload) {
-  const values: MetaLeadValue[] = []
-
-  for (const entry of payload.entry ?? []) {
-    for (const change of entry.changes ?? []) {
-      if (change.field === "leadgen" && change.value?.leadgen_id) {
-        values.push(change.value)
-      }
-    }
-  }
-
-  return values
-}
-
-function fieldDataToMap(fieldData: MetaLeadDetail["field_data"]) {
-  const fields: Record<string, string> = {}
-
-  for (const field of fieldData ?? []) {
-    const key = normalizeString(field.name)
-    if (!key) continue
-
-    const value = field.values
-      ?.map((item) => normalizeString(item))
-      .filter(Boolean)
-      .join(", ")
-
-    if (value) fields[key.toLowerCase()] = value
-  }
-
-  return fields
-}
-
-function pickField(fields: Record<string, string>, keys: string[]) {
-  for (const key of keys) {
-    const value = fields[key.toLowerCase()]
-    if (value) return value
-  }
-
-  return undefined
-}
-
-function hasMarketingConsent(fields: Record<string, string>) {
-  const value = pickField(fields, [
-    "marketing_consent",
-    "consent_marketing",
-    "email_marketing_consent",
-    "marketing",
-    "마케팅_수신_동의",
-    "마케팅 수신 동의",
-  ])
-
-  if (!value) return false
-
-  return ["1", "true", "yes", "y", "agree", "agreed", "동의"].includes(
-    value.trim().toLowerCase()
-  )
-}
-
-function buildMetaMessage(value: MetaLeadValue, detail?: MetaLeadDetail) {
-  const fields = fieldDataToMap(detail?.field_data)
-  const fieldSummary = Object.entries(fields)
-    .map(([key, item]) => `${key}: ${item}`)
-    .join(" / ")
-
-  return [
-    "Meta Lead Ads",
-    `leadgen_id=${value.leadgen_id ?? detail?.id ?? "-"}`,
-    `page_id=${value.page_id ?? "-"}`,
-    `form_id=${value.form_id ?? detail?.form_id ?? "-"}`,
-    detail?.campaign_name || detail?.campaign_id
-      ? `campaign=${detail.campaign_name ?? detail.campaign_id}`
-      : undefined,
-    detail?.adset_name || detail?.adset_id
-      ? `adset=${detail.adset_name ?? detail.adset_id}`
-      : undefined,
-    detail?.ad_name || detail?.ad_id || value.ad_id
-      ? `ad=${detail?.ad_name ?? detail?.ad_id ?? value.ad_id}`
-      : undefined,
-    fieldSummary ? `fields=${fieldSummary}` : undefined,
-  ]
-    .filter(Boolean)
-    .join("\n")
-}
-
-function buildLeadCapturePayload(value: MetaLeadValue, detail?: MetaLeadDetail) {
-  const fields = fieldDataToMap(detail?.field_data)
-  const firstName = pickField(fields, ["first_name", "firstname", "이름"])
-  const lastName = pickField(fields, ["last_name", "lastname", "성"])
-  const combinedName = [lastName, firstName].filter(Boolean).join("")
-
-  return {
-    source: "meta_lead_ads",
-    name:
-      pickField(fields, ["full_name", "name", "성명", "이름"]) ||
-      combinedName ||
-      undefined,
-    org: pickField(fields, [
-      "company_name",
-      "company",
-      "organization",
-      "business_name",
-      "school_name",
-      "academy_name",
-      "학원명",
-      "회사명",
-      "기관명",
-    ]),
-    role: pickField(fields, ["job_title", "role", "position", "직책", "담당자직책"]),
-    size: pickField(fields, [
-      "student_count",
-      "number_of_students",
-      "academy_size",
-      "team_size",
-      "원생수",
-      "학생수",
-      "규모",
-    ]),
-    email: pickField(fields, ["email", "email_address", "이메일"]),
-    phone: pickField(fields, [
-      "phone_number",
-      "phone",
-      "mobile",
-      "mobile_number",
-      "전화번호",
-      "휴대폰",
-    ]),
-    branch: pickField(fields, [
-      "city",
-      "region",
-      "province",
-      "address",
-      "지역",
-      "주소",
-      "도시",
-    ]),
-    message: buildMetaMessage(value, detail),
-    marketingConsent: hasMarketingConsent(fields),
-    // 광고 계층을 구조화 필드에 저장 — 어드민 리드 보드의 세부유입(광고명) 표시·필터가
-    // message 파싱 없이 바로 작동한다. sourceDetail은 사람이 읽는 라벨이라 이름만 쓴다.
-    sourceDetail: normalizeString(detail?.ad_name),
-    utmSource: "meta",
-    utmMedium: "lead_ads",
-    utmCampaign: detail?.campaign_name ?? detail?.campaign_id,
-    utmTerm: detail?.adset_name ?? detail?.adset_id,
-    utmContent: detail?.ad_name ?? detail?.ad_id ?? value.ad_id,
-  }
-}
-
-async function fetchMetaLeadDetail(leadgenId: string) {
-  const accessToken = getMetaAccessToken()
-  if (!accessToken) {
-    throw new Error("META_PAGE_ACCESS_TOKEN or META_ACCESS_TOKEN is required.")
-  }
-
-  const url = new URL(
-    `https://graph.facebook.com/${getGraphApiVersion()}/${leadgenId}`
-  )
-  url.searchParams.set(
-    "fields",
-    [
-      "id",
-      "created_time",
-      "ad_id",
-      "ad_name",
-      "adset_id",
-      "adset_name",
-      "campaign_id",
-      "campaign_name",
-      "form_id",
-      "field_data",
-    ].join(",")
-  )
-
-  const proof = appSecretProof(accessToken)
-  if (proof) url.searchParams.set("appsecret_proof", proof)
-
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-    cache: "no-store",
-  })
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => "")
-    throw new Error(`Meta lead fetch failed: ${response.status} ${errorText}`)
-  }
-
-  return (await response.json()) as MetaLeadDetail
 }
 
 export async function GET(req: NextRequest) {
@@ -315,8 +88,33 @@ export async function POST(req: NextRequest) {
   }
 
   const leads = extractLeadValues(payload)
+
+  // 여기서부터 모드 분기(설계 META-RECEIVER-FINAL §2-1). 위의 검증·서명·JSON·object 확인은 모드와 무관하다.
+  // 모드를 못 읽거나 env META_LEADGEN_FORCE_ADMIN=1 이면 admin(지금 경로)이다.
+  // leadgen 이 없는 이벤트는 모드를 읽지 않는다 — 지금 본문이 received 0 을 그대로 돌려준다.
+  const resolution = leads.length ? await resolveMetaLeadgenCutover() : null
+
+  if (resolution?.mode === "compass") {
+    return handleCompassMode(leads, resolution.cutover, submitLeadCapture)
+  }
+
+  if (resolution?.mode === "shadow") {
+    // 측정용 증인 — 실패해도 지금 경로는 그대로 돈다
+    try {
+      await recordMetaLeadgenReceipts(leads, "shadow")
+    } catch (error) {
+      console.warn("[meta/webhook] shadow 수신 증인 기록 실패(무시):", errorMessage(error))
+    }
+  }
+
+  // admin·shadow: 지금 본문. 단 mirror_since 가 있으면(한 번이라도 compass 였음) 원장이 이미 가진
+  // leadgen 은 건너뛴다 — 롤백 직후 미러·폴백과의 경합 중복 차단. 원장이 비어 있는 동안에는 동작 불변.
+  const owned = await ledgerOwnedLeadgens(leads, resolution?.cutover ?? null)
+  const pending = owned.size ? leads.filter((lead) => !owned.has(lead.leadgen_id!)) : leads
+  const skipped = leads.length - pending.length
+
   const results = await Promise.allSettled(
-    leads.map(async (lead) => {
+    pending.map(async (lead) => {
       let detail: MetaLeadDetail | undefined
 
       try {
@@ -339,7 +137,103 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     received: leads.length,
-    processed: leads.length - failed,
+    processed: pending.length - failed,
     failed,
+    ...(skipped ? { skipped } : {}),
   })
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
+async function ledgerOwnedLeadgens(leads: MetaLeadValue[], cutover: MetaLeadgenCutover | null) {
+  if (!cutover?.mirrorSince || !leads.length) return new Set<string>()
+  return isLeadgenOwnedByLedger(
+    leads.map((lead) => lead.leadgen_id!),
+    cutover
+  )
+}
+
+/**
+ * compass 모드 — Compass 가 Meta 에서 가져와 저장한다. 어드민은 Graph 를 부르지 않고 증인만 적는다.
+ * 증인 RPC 성공 → after() 로 미러 시도 → 200.
+ * 증인 RPC 실패 → 그 자리에서 옛 경로로 저장(Graph 상세 필수). 하나라도 실패하면 500 → Meta 재전송.
+ */
+async function handleCompassMode(
+  leads: MetaLeadValue[],
+  cutover: MetaLeadgenCutover | null,
+  submitLeadCapture: SubmitLeadCapture
+) {
+  const leadgenIds = [...new Set(leads.map((lead) => lead.leadgen_id!))]
+
+  try {
+    await recordMetaLeadgenReceipts(leads, "compass")
+  } catch (error) {
+    console.error("[meta/webhook] compass 수신 증인 기록 실패 — 옛 경로로 인라인 저장:", errorMessage(error))
+    return captureInline(leads, cutover, submitLeadCapture)
+  }
+
+  after(async () => {
+    try {
+      const { runMetaLeadMirror } = await import("@/lib/server/meta-lead-mirror")
+      await runMetaLeadMirror({
+        trigger: "webhook",
+        leadgenIds,
+        waitForCompassMs: COMPASS_MIRROR_WAIT_MS,
+      })
+    } catch (error) {
+      // 미러 크론이 다시 한다 — 응답은 이미 나갔다
+      console.error("[meta/webhook] after() 미러 시도 실패:", errorMessage(error))
+    }
+  })
+
+  return NextResponse.json({ ok: true, mode: "compass", received: leads.length })
+}
+
+async function captureInline(
+  leads: MetaLeadValue[],
+  cutover: MetaLeadgenCutover | null,
+  submitLeadCapture: SubmitLeadCapture
+) {
+  // 미러·폴백이 이미 행을 만든 leadgen(재전송)은 다시 저장하지 않는다. 원장을 못 읽으면 전부 저장한다.
+  const owned = await ledgerOwnedLeadgens(leads, cutover)
+  const pending = owned.size ? leads.filter((lead) => !owned.has(lead.leadgen_id!)) : leads
+  const skipped = leads.length - pending.length
+
+  const results = await Promise.allSettled(
+    pending.map(async (lead) => {
+      // 상세 필수 — 빈 껍데기 행을 만들지 않는다. 실패는 500 → Meta 재전송으로 다시 받는다.
+      const detail = await fetchMetaLeadDetail(lead.leadgen_id!)
+      if (!detail || typeof detail !== "object") {
+        throw new Error("Meta lead detail is empty.")
+      }
+
+      const result = await submitLeadCapture(buildLeadCapturePayload(lead, detail))
+      if (result.status >= 400) {
+        throw new Error(`submitLeadCapture ${result.status}: ${JSON.stringify(result.body)}`)
+      }
+
+      return result.body
+    })
+  )
+
+  const failed = results.filter((result) => result.status === "rejected").length
+  for (const result of results) {
+    if (result.status === "rejected") {
+      console.error("[meta/webhook] compass 인라인 저장 실패:", errorMessage(result.reason))
+    }
+  }
+
+  const body = {
+    ok: failed === 0,
+    mode: "compass" as const,
+    inline: true,
+    received: leads.length,
+    processed: pending.length - failed,
+    failed,
+    ...(skipped ? { skipped } : {}),
+  }
+
+  return NextResponse.json(body, { status: failed ? 500 : 200 })
 }

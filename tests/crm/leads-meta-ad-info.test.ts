@@ -6,7 +6,7 @@ import {
 } from "@/components/admin/crm/leads/shared"
 import type { LeadRecord } from "@/lib/repositories/leads"
 
-// Meta 웹훅(app/api/meta/webhook/route.ts buildMetaMessage)이 실제로 남기는 message 포맷.
+// Meta 웹훅(lib/meta/lead-ads-payload.ts buildMetaMessage — app/api/meta/webhook/route.ts 가 부른다)이 실제로 남기는 message 포맷.
 // 구버전 리드는 광고·세트명이 이 텍스트에만 존재한다 — 파서가 신구 리드를 통일하는지 검증.
 const LEGACY_META_MESSAGE = [
   "Meta Lead Ads",
