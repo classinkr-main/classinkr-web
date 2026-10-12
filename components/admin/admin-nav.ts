@@ -17,6 +17,7 @@ import {
   PackageCheck,
   ReceiptText,
   Settings,
+  Sparkles,
   Users,
 } from "lucide-react"
 
@@ -111,6 +112,10 @@ export function normalizeAdminRole(role: string): AdminRole {
 // **이 배열의 선언 순서를 바꾸면 그 경계도 함께 흔들린다** — 범주 연속 블록을 깨지 말 것.
 export const ADMIN_NAV: AdminNavItem[] = [
   { href: "/admin/overview", label: "Overview", icon: LayoutDashboard, section: "home", category: "home", keywords: "홈 대시보드 overview home" },
+  // (2026-09-29) AI 올인원 — 갈매봇 대화·오더함·AI 도구 바로가기·오더 카탈로그. 어느 화면에서나 뜨는
+  // 갈매봇 위젯(components/admin/ai)의 전체 화면판이다. home 범주 블록 안, Overview 바로 아래.
+  // 서버 오더 엔진이 붙기 전이라 시안(샘플 데이터)으로 동작한다 — maturity "wip".
+  { href: "/admin/ai", label: "AI 올인원", icon: Sparkles, section: "home", badge: "시안", category: "home", maturity: "wip", keywords: "ai 올인원 갈매봇 챗봇 어시스턴트 오더 원격 오더 오더함 카탈로그 assistant order" },
 
   { href: "/admin/calendar", label: "캘린더", icon: CalendarDays, section: "sales", category: "customer", keywords: "캘린더 일정 calendar schedule 행사 이벤트 event 웨비나 공개 행사" },
 

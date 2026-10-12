@@ -81,6 +81,10 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - 파트너 포털 기능 재배치, 견적 문서 라이프사이클, Admin Hardware 편입 기준
 - [active/partner-portal-master-spec.md](./active/partner-portal-master-spec.md)
   - 파트너 포털 도메인 모델과 거래건 중심 UX 상세 근거
+- [active/admin-ai-widget-remote-order-plan-2026-09-28.md](./active/admin-ai-widget-remote-order-plan-2026-09-28.md)
+  - **갈매봇(어드민 전역 AI 위젯)·AI 올인원 탭·원격 오더 기획.** 오더 등급(R0~R4), 오더 카드 사양, 안전 설계, 프론트 구현 현황과 서버 연결 지점
+- [active/admin-ai-structure-worklist-2026-09-29.md](./active/admin-ai-structure-worklist-2026-09-29.md)
+  - **갈매봇 실행 로드맵.** 서버 구조(조율기·오더 레지스트리·확인 API), 조회·쓰기 후보 함수와 되돌리기 가능 여부, 단계별 작업 id(S0~S5, F)와 완료 기준
 - [active/internal-crm-backend-operating-plan-2026-06-26.md](./active/internal-crm-backend-operating-plan-2026-06-26.md)
   - 내부 동료가 매일 쓰는 자체 CRM의 기록 입력, 회의록/녹음 모으기, 고객 360, 다음 액션 운영 기준
 - [active/admin-3-revenue-sheet-workspace-plan-2026-06-29.md](./active/admin-3-revenue-sheet-workspace-plan-2026-06-29.md)
