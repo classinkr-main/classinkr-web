@@ -9,6 +9,13 @@
 //  - 쓰기는 성공 응답 레코드로 로컬을 먼저 바꾸고(drawer/c360-local-patch) 재검증은 force 없이
 //    백그라운드로 흘린다(c360-03). 실패는 하단 고정 CrmNoticeBanner + 딜 행 인라인 캡션(c360-08).
 //  - 닫기 가드는 컴포저뿐 아니라 할 일/딜/라벨 입력까지 본다(c360-05).
+//
+// 2026-09-25 A안 "기록은 Compass에서": Compass 에 매칭된 리드(단계 무관)는 주 행동이 "Compass에서 열기"(새 탭)이고
+// Home 컴포저는 "Home에 따로 남기기"로 접는다(lib/crm/write-surface 판정, 세션 상태, 작성 중 초안은 숨기지 않음).
+// 컴포저는 같은 트리 위치에 hidden 으로만 감춰 모드가 바뀌어도 리마운트되지 않는다. NEO 계정·전환 리드·
+// Compass 미매칭은 지금처럼 Home 컴포저가 주 행동이고, 같은 전화의 Compass 리드가 있으면 보조 "Compass 기록 ↗".
+// 다음 액션 추천 카드도 같은 규칙(2026-09-26 교차 리뷰 [29]) — Compass 리드는 Compass 링크가 채움 주 행동이고
+// Home 할 일 추가는 외곽선 보조 + Home 전용 캡션(C360RecommendationActions).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
@@ -45,6 +52,8 @@ import {
 import { pushRecentCustomer } from "@/lib/crm/recent-customers"
 import { compassTimelineGroup, mergeCompassTimeline } from "@/lib/crm/compass-timeline"
 import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
+import CompassOpenLink from "@/components/admin/compass/CompassOpenLink"
+import { COMPASS_RECORD_LABEL, resolveCrmWriteSurface } from "@/lib/crm/write-surface"
 import CrmNoticeBanner from "./CrmNoticeBanner"
 import { SECONDARY_TEXT_CLASS } from "./home/shared"
 import CrmCustomerFlags from "./CrmCustomerFlags"
@@ -59,6 +68,11 @@ import DrawerActivitySection, {
 import DrawerTasksSection from "./drawer/DrawerTasksSection"
 import DrawerDealsSection, { type DealRowSaveState } from "./drawer/DrawerDealsSection"
 import DrawerMoneySection from "./drawer/DrawerMoneySection"
+import C360WriteSurfaceBar, {
+  C360_HOME_COMPOSER_ID,
+  CompassDownWriteCaption,
+  HomeOnlyCaption,
+} from "./drawer/C360WriteSurfaceBar"
 import {
   C360_SECTION_DOM_ORDER,
   COMPOSER_BODY_ID,
@@ -85,9 +99,11 @@ import { useDialogFocus } from "@/components/admin/use-dialog-focus"
 import { deriveCustomerFlags } from "@/lib/crm/customer-flags"
 import { LEAD_BADGE_TONE_CLASSES } from "@/lib/crm/lead-badges"
 import { computeCustomerHealth, HEALTH_BAND_STYLE } from "@/lib/crm/customer-health"
+import { lastContactDaysForHealth } from "@/lib/crm/customer-contact-summary"
 import { buildCustomerNextActionRecommendation } from "@/lib/crm/customer-next-action"
 import type { CsMotion } from "@/lib/crm/cs-motions"
 import type { Customer360 } from "@/lib/repositories/crm-customer-360"
+import Customer360ContactSummary from "./Customer360ContactSummary"
 import type { CrmDealRecord, CrmDealStage } from "@/lib/repositories/crm-deals"
 import type { CrmTaskRecord, CrmTaskType } from "@/lib/repositories/crm-tasks"
 
@@ -171,6 +187,9 @@ export function buildDerivedSummary(data: Customer360, targetType: "lead" | "neo
  * 건강도 산식 입력(c360-04). hasOutstanding은 null — 충전 잔액(긍정 신호)을 미수로 읽어 12점을 깎던 것을
  * 멈춘다(헤더 배지의 outstanding=null 처리와 정합). 같은 통화의 확정 미수 원천이 360 페이로드에 없다.
  * 소진(depleted_balance)·재충전(recharge_due) 신호의 건강도 승격은 별도 변경으로 분리한다.
+ * lastContactDays(CT9)는 헤더 "마지막 연락"과 같은 값(contactSummary, 서버 조립 시각 기준 — 통합 목록과
+ * 같은 lib/crm/last-contact 정의). 기록이 없으면 null(모름 — 감점하지 않는다, lastContactDaysForHealth).
+ * 옛 캐시 페이로드·테스트 픽스처에는 contactSummary 가 없을 수 있어 선택적으로 읽는다.
  */
 export function buildDrawerHealthInput(data: Customer360, daysToExpire: number | null) {
   return {
@@ -178,7 +197,7 @@ export function buildDrawerHealthInput(data: Customer360, daysToExpire: number |
     serviceLevel: data.serviceRisk?.level ?? null,
     hasOutstanding: null,
     daysToExpire,
-    lastContactDays: null,
+    lastContactDays: lastContactDaysForHealth(data.contactSummary),
   }
 }
 
@@ -193,6 +212,83 @@ export function resolveDealPatch(
 ): Partial<CrmDealRecord> {
   if (!confirmedDeal) return optimistic
   return { ...optimistic, ...(pickConfirmed?.(confirmedDeal) ?? {}) }
+}
+
+/** 추천 카드의 Home 할 일 버튼 문구 — Compass 모드에서는 Home 전용임을 문구로도 밝힌다. */
+export const C360_RECOMMENDATION_RUN_LABEL = "실행 · 할 일 추가"
+export const C360_RECOMMENDATION_HOME_TASK_LABEL = "Home 할 일 추가"
+
+/**
+ * 다음 액션 추천 카드의 행동 줄(2026-09-26 교차 리뷰 [29]) — presentational(상태·fetch 없음).
+ *  - compassHref 있음(Compass 매칭 리드 = compassPrimary): 주 행동은 Compass 새 탭 링크(채움). 추천이 "첫 응답"·
+ *    "팔로업"처럼 Compass 에서 할 응대라서다. Home 할 일 추가는 기능을 유지하되(오늘 연락이 Home 할 일을 읽는다)
+ *    외곽선 보조로 내리고 HOME_ONLY_CAPTION 을 붙인다 — 컴포저 접기와 같은 규칙. 채움 CTA 가 Home 쓰기를
+ *    주 행동처럼 보이게 하지 않는다.
+ *  - compassHref 없음(Home 정본): 지금처럼 "실행 · 할 일 추가"(채움) + "메모 남기기"(컴포저 포커스).
+ */
+export function C360RecommendationActions({
+  compassHref,
+  name,
+  busy,
+  onRunTask,
+  onFocusComposer,
+}: {
+  /** compassPrimary 일 때만 대표 Compass 리드 딥링크 — 그 외 null. */
+  compassHref: string | null
+  name: string
+  busy: boolean
+  onRunTask: () => void
+  onFocusComposer: () => void
+}) {
+  if (compassHref) {
+    return (
+      <div className="mt-3">
+        <div className="flex flex-wrap gap-2">
+          {/* A안 — Compass 리드의 응대·메모·통화는 Compass 에 남긴다(새 탭 링크, 쓰기 없음). */}
+          <CompassOpenLink
+            href={compassHref}
+            name={name}
+            variant="primary"
+            className="h-8"
+            testId="c360-recommendation-open-compass"
+          />
+          <button
+            type="button"
+            onClick={onRunTask}
+            disabled={busy}
+            data-testid="c360-recommendation-add-task"
+            className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#D7EBDD] bg-white px-3 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD] disabled:opacity-40"
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            {C360_RECOMMENDATION_HOME_TASK_LABEL}
+          </button>
+        </div>
+        <HomeOnlyCaption className="mt-1.5" />
+      </div>
+    )
+  }
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      <button
+        type="button"
+        onClick={onRunTask}
+        disabled={busy}
+        data-testid="c360-recommendation-add-task"
+        className="inline-flex h-8 items-center gap-1 rounded-lg bg-[#084734] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+      >
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        {C360_RECOMMENDATION_RUN_LABEL}
+      </button>
+      <button
+        type="button"
+        onClick={onFocusComposer}
+        className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#D7EBDD] bg-white px-3 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD]"
+      >
+        <StickyNote className="h-3.5 w-3.5" />
+        메모 남기기
+      </button>
+    </div>
+  )
 }
 
 export default function Customer360Drawer({ customerKey, name, onClose, onDirtyChange }: Props) {
@@ -223,6 +319,9 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
   const [activeSection, setActiveSection] = useState<string>("c360-summary")
   // 고정 컴포저 작성 중 여부 — ActivityQuickForm onDirtyChange가 플립 시점에만 통지.
   const [composerDirty, setComposerDirty] = useState(false)
+  // A안 — Compass 리드에서 접어 둔 Home 컴포저를 펼쳤는가(세션 상태, 고객 전환 시 리셋). 한 번 작성을 시작하면
+  // 펼친 채로 둔다 — 초안을 쓰던 자리가 저장·지우기 뒤 갑자기 접히지 않게.
+  const [homeComposerOpen, setHomeComposerOpen] = useState(false)
   // 닫기 확인(작성 중 입력이 있을 때) — window.confirm 대신 공용 다이얼로그.
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
   // 딜 행 인라인 저장 상태(단계·금액).
@@ -267,6 +366,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
   })
   const handleComposerDirtyChange = useCallback((dirty: boolean) => {
     setComposerDirty(dirty)
+    if (dirty) setHomeComposerOpen(true)
   }, [])
 
   // c360-05 — 닫기 가드는 컴포저·할 일/딜 빠른 추가 폼·라벨 입력을 모두 본다. 부모(뒤로가기 가드)에도 같은 값을 통지.
@@ -448,6 +548,8 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
     setTaskFormOpen(false)
     // 고객 전환 시 컴포저는 새 대상으로 리마운트되므로 dirty 가드도 초기화(anyDirty 효과가 부모에 통지).
     handleComposerDirtyChange(false)
+    // A안 — 접힌 Home 컴포저 펼침도 고객마다 새로 시작한다(세션 상태).
+    setHomeComposerOpen(false)
     // NEO 연결 패널도 이전 고객의 입력·에러가 남지 않게 닫는다.
     setNeoLinkOpen(false)
     setNeoLinkBusy(false)
@@ -628,6 +730,25 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
   const isSiteLead = Boolean(data?.found) && targetType === "lead" && data?.origin === "site"
   const crmRegistered = data?.crmRegistered ?? false
 
+  // A안 — 기록 위치 판정(lib/crm/write-surface). 데이터가 오기 전(null)에는 판정하지 않아 지금 화면(Home 컴포저)과 같다.
+  const writeSurface = useMemo(
+    () =>
+      data?.found
+        ? resolveCrmWriteSurface({
+            source: data.source,
+            found: data.found,
+            compassHref: data.compass?.href,
+            compassDown: data.compass?.down,
+            leadStatus: data.leadStatus,
+            crmRegistered: data.crmRegistered,
+          })
+        : null,
+    [data]
+  )
+  const compassPrimary = writeSurface?.surface === "compass"
+  // 보임 여부는 effect 없이 파생 — 작성 중(composerDirty)이면 절대 숨기지 않는다.
+  const composerVisible = !compassPrimary || homeComposerOpen || composerDirty
+
   // 리드 → NEO 계정 수동 등록 확정. 성공 응답 즉시 pill('정식 리드')로 바꾸고 360은 백그라운드 재검증.
   const submitNeoLink = useCallback(
     async (pick: { targetId: string; targetLabel: string }) => {
@@ -666,10 +787,21 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
 
   // 컴포저로 포커스 — 구 인라인 메모 폼을 대체한 CTA(헤더 '활동 기록'·추천 '메모 남기기').
   // 컴포저는 스크롤 본문 밖에 고정돼 있어, 본문 스크롤만 최상단으로 되돌리고 입력에 포커스를 준다.
+  // A안 — 접힌 컴포저(hidden)는 포커스를 받지 못하므로 먼저 펼치고, 커밋 뒤 프레임에서 포커스한다.
   const focusComposer = useCallback(() => {
+    setHomeComposerOpen(true)
     bodyRef.current?.scrollTo({ top: 0, behavior: "smooth" })
-    document.getElementById(COMPOSER_BODY_ID)?.focus()
+    requestAnimationFrame(() => document.getElementById(COMPOSER_BODY_ID)?.focus())
   }, [])
+
+  // "Home에 따로 남기기 / 접기" — 작성 중이면 접지 않는다(바가 접기 버튼을 내놓지 않지만 방어).
+  const toggleHomeComposer = useCallback(() => {
+    if (composerVisible) {
+      if (!composerDirty) setHomeComposerOpen(false)
+      return
+    }
+    focusComposer()
+  }, [composerVisible, composerDirty, focusComposer])
 
   // ---- 쓰기(mutation) — 성공 응답 레코드로 로컬을 먼저 바꾸고 재검증은 백그라운드(c360-03).
   // 재시도 클로저가 자기 자신을 참조하므로 useCallback 대신 일반 함수로 둔다(자식에는 이미 인라인 래퍼로 넘긴다).
@@ -1011,14 +1143,16 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
     [data, header, targetType, outstanding, money, ltv]
   )
 
+  // CT9 — 리드 시절 행은 제목을 바꾸지 않고 DrawerActivitySection 이 원천 칩("리드 시절")으로 구분한다.
+  const activityRows = useMemo(() => data?.activity.rows ?? [], [data])
   // 특이사항 피드 = 위험 신호가 있는 활동만.
-  const feedRows = useMemo(() => (data?.activity.rows ?? []).filter((event) => event.sentiment === "risk"), [data])
+  const feedRows = useMemo(() => activityRows.filter((event) => event.sentiment === "risk"), [activityRows])
   // 타임라인은 출처(메모/회의록) 필터를 적용. 피드는 위험 신호 전용이라 필터 비적용.
   const visibleActivity = useMemo(() => {
-    const base = activityTab === "feed" ? feedRows : data?.activity.rows ?? []
+    const base = activityTab === "feed" ? feedRows : activityRows
     if (activityTab === "feed" || activitySource === "all") return base
     return base.filter((event) => event.sourceType === activitySource)
-  }, [activityTab, activitySource, feedRows, data])
+  }, [activityTab, activitySource, feedRows, activityRows])
 
   // Compass(마케팅팀 앱) 활동을 같은 타임라인에 시간순으로 얹는다. 피드 탭은 위험 신호
   // 전용인데 Compass 기록에는 sentiment 축이 없어서 넣지 않는다(없는 판정을 지어내지 않는다).
@@ -1261,7 +1395,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                     backgroundColor: HEALTH_BAND_STYLE[health.band].bg,
                     borderColor: HEALTH_BAND_STYLE[health.band].bd,
                   }}
-                  title="규칙 기반 건강도 점수(0~100) — 리스크·서비스 위험·만료 신호 합성 (충전 잔액은 감점하지 않음)"
+                  title="규칙 기반 건강도 점수(0~100) — 리스크·서비스 위험·만료·마지막 연락 신호 합성 (충전 잔액은 감점하지 않음, 마지막 연락 기록이 없으면 감점하지 않음)"
                 >
                   건강도 {health.score} · {health.label}
                 </span>
@@ -1285,6 +1419,8 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                 {header?.priorityReason ? ` · ${header.priorityReason}` : ""}
               </span>
             </div>
+            {/* CT9 — 마지막 연락 · 다음 연락(원천 표시). 모바일은 두 줄로 쌓고 각 줄은 말줄임. */}
+            <Customer360ContactSummary summary={data?.contactSummary} className="mt-1" />
             {/* 기준 시각·출처 캡션(UX 규약 4) — 항상 마운트된 aria-live 영역이라 '갱신 중 → 조회 HH:MM' 전이가 통지된다. */}
             <p className={`mt-0.5 text-[11px] ${SECONDARY_TEXT_CLASS}`} role="status" aria-live="polite" data-testid="c360-basis-caption">
               {basisCaption ?? (loading ? "불러오는 중…" : "")}
@@ -1314,10 +1450,25 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
+            {/* A안 — Compass 리드는 응대 기록이 Compass 에 있으므로 주 행동이 Compass 새 탭 링크다(쓰기 없음). */}
+            {compassPrimary && writeSurface?.compassHref ? (
+              <CompassOpenLink
+                href={writeSurface.compassHref}
+                name={displayName}
+                variant="primary"
+                className="h-8"
+                testId="c360-open-compass"
+              />
+            ) : null}
+            {/* 콜(tel)은 쓰기가 아니라 보조로 남긴다 — Compass 모드에서는 외곽선. */}
             {data?.contacts?.phone ? (
               <a
                 href={`tel:${data.contacts.phone}`}
-                className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+                className={
+                  compassPrimary
+                    ? "inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+                    : "inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+                }
               >
                 <Phone className="h-3.5 w-3.5" />콜
               </a>
@@ -1352,13 +1503,27 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
             >
               <CircleDollarSign className="h-3.5 w-3.5" />견적
             </button>
-            <button
-              type="button"
-              onClick={focusComposer}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
-            >
-              <ClipboardList className="h-3.5 w-3.5" />활동 기록
-            </button>
+            {/* Compass 모드에서는 접힘 바("Home에 따로 남기기")가 이 역할을 한다. */}
+            {compassPrimary ? null : (
+              <button
+                type="button"
+                onClick={focusComposer}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+              >
+                <ClipboardList className="h-3.5 w-3.5" />활동 기록
+              </button>
+            )}
+            {/* NEO 계정·전환 리드인데 같은 전화의 Compass 리드가 있으면 — Home 이 정본, Compass 기록은 보조 링크. */}
+            {writeSurface?.secondaryCompassHref ? (
+              <CompassOpenLink
+                href={writeSurface.secondaryCompassHref}
+                name={displayName}
+                variant="secondary"
+                label={COMPASS_RECORD_LABEL}
+                className="h-8"
+                testId="c360-compass-record"
+              />
+            ) : null}
             {/* NEO 등록 상태 — 홈페이지 유입 리드만: 등록 확정이면 pill, 아니면 수동 연결 액션. */}
             {isSiteLead ? (
               crmRegistered ? (
@@ -1452,24 +1617,39 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
             data-testid="customer-quick-log"
             className="shrink-0 border-b border-[#f0f0ec] bg-white px-4 py-2.5"
           >
-            <div className="mb-1.5 flex items-center justify-between gap-2">
-              <p className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#111110]">
-                <StickyNote className="h-3.5 w-3.5 text-[#084734]" />
-                간단 로그
-              </p>
-              <p className="text-[11px] text-[#1a1a1a]/35">메모·통화·문자를 바로 기록합니다.</p>
+            {/* 첫 줄만 모드별로 바꾸고 컴포저는 아래 같은 위치에 고정한다 — 모드가 바뀌어도 리마운트·입력 유실이 없다. */}
+            {compassPrimary ? (
+              <C360WriteSurfaceBar
+                compassHref={writeSurface?.compassHref}
+                name={displayName}
+                open={composerVisible}
+                onToggle={toggleHomeComposer}
+                canCollapse={!composerDirty}
+              />
+            ) : (
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <p className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#111110]">
+                  <StickyNote className="h-3.5 w-3.5 text-[#084734]" />
+                  간단 로그
+                </p>
+                <p className="text-[11px] text-[#1a1a1a]/35">메모·통화·문자를 바로 기록합니다.</p>
+              </div>
+            )}
+            {writeSurface?.reason === "compass_down" ? <CompassDownWriteCaption className="mb-1.5" /> : null}
+            <div id={C360_HOME_COMPOSER_ID} hidden={!composerVisible} className={compassPrimary ? "mt-2" : undefined}>
+              {compassPrimary ? <HomeOnlyCaption className="mb-1.5" /> : null}
+              <ActivityQuickForm
+                key={customerKey}
+                variant="composer"
+                lockTarget
+                defaultTargetType={targetType}
+                defaultTargetId={entityId}
+                defaultTargetLabel={displayName}
+                bodyFieldId={COMPOSER_BODY_ID}
+                onSaved={() => void refetch()}
+                onDirtyChange={handleComposerDirtyChange}
+              />
             </div>
-            <ActivityQuickForm
-              key={customerKey}
-              variant="composer"
-              lockTarget
-              defaultTargetType={targetType}
-              defaultTargetId={entityId}
-              defaultTargetLabel={displayName}
-              bodyFieldId={COMPOSER_BODY_ID}
-              onSaved={() => void refetch()}
-              onDirtyChange={handleComposerDirtyChange}
-            />
           </section>
         ) : null}
 
@@ -1568,25 +1748,14 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
               </div>
               <h3 className="text-[15px] font-bold text-[#111110]">{recommendation.title}</h3>
               <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/55">{recommendation.reason}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => void handleRunRecommendation()}
-                  disabled={actingId === "rec"}
-                  className="inline-flex h-8 items-center gap-1 rounded-lg bg-[#084734] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
-                >
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  실행 · 할 일 추가
-                </button>
-                <button
-                  type="button"
-                  onClick={focusComposer}
-                  className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#D7EBDD] bg-white px-3 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD]"
-                >
-                  <StickyNote className="h-3.5 w-3.5" />
-                  메모 남기기
-                </button>
-              </div>
+              {/* A안 — Compass 매칭 리드는 Compass 링크가 주 행동, Home 할 일은 외곽선 보조 + Home 전용 캡션. */}
+              <C360RecommendationActions
+                compassHref={compassPrimary ? (writeSurface?.compassHref ?? null) : null}
+                name={displayName}
+                busy={actingId === "rec"}
+                onRunTask={() => void handleRunRecommendation()}
+                onFocusComposer={focusComposer}
+              />
             </section>
           ) : null}
 
@@ -1694,6 +1863,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
               onAddTask={() => void handleAddTask()}
               onCompleteTask={(taskId) => void handleCompleteTask(taskId)}
               onCsMotion={(motion) => void handleCsMotion(motion)}
+              compassPrimary={compassPrimary}
             />
           ) : null}
 

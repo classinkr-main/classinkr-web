@@ -6,6 +6,7 @@
  * [NOTE-AE1] 세그먼트 수신자 추출
  *   leads + newsletter_subscribers 두 테이블을 통합 조회.
  *   중복 이메일은 subscribers 데이터를 우선시하여 dedupe.
+ *   leads 분기는 발송 동의 게이트(isLeadMarketingEligible)를 통과한 행만 넣는다 — 해지·동의 없음 제외.
  *
  * [NOTE-AE2] 규칙 실행 플로우
  *   1. 규칙 조회 (template 포함)
@@ -34,6 +35,11 @@ import {
 import { sendBatchEmail, wrapCampaignHtml } from "@/lib/email"
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import { createUnsubscribeUrl } from "@/lib/server/security-tokens"
+import {
+  isLeadMarketingEligible,
+  loadLeadMarketingConsentIndex,
+  type LeadMarketingConsentIndex,
+} from "@/lib/messaging/marketing-consent"
 import type {
   AutomationRule,
   AutomationRecipient,
@@ -42,6 +48,17 @@ import type {
 } from "@/lib/automation-types"
 
 const sb = () => createSupabaseAdminClient()
+
+/* ─────────────────────────────────────────────────────────────
+   광고성 발송 동의 게이트 (leads 분기) — CT11, 2026-09-25
+   ─────────────────────────────────────────────────────────────
+   leads 행에는 동의 컬럼이 없다. 그래서 leads 분기는 구독 해지자도, 동의한 적 없는 리드도 그대로
+   세그먼트 발송(executeRule — 수신거부 링크가 붙는 캠페인 메일) 대상에 다시 넣고 있었다.
+   동의 인덱스·판정은 lib/messaging/marketing-consent.ts 로 옮겼다(세그먼트 대상 미리보기와 공유).
+   여기서는 같은 이름으로 다시 내보낸다 — 동작과 import 경로는 그대로다.
+   on_submit(접수 직후 안내)·delay 트리거는 이 게이트를 거치지 않는다 — 정보성 접수 확인은 대상 아님. */
+
+export { isLeadMarketingEligible, loadLeadMarketingConsentIndex, type LeadMarketingConsentIndex }
 
 /* ─────────────────────────────────────────────────────────────
    세그먼트 수신자 추출
@@ -114,8 +131,21 @@ export async function resolveSegmentRecipients(
     }
 
     const { data } = await query
-    for (const row of data ?? []) {
+    const leadRows = (data ?? []).filter((row) => Boolean(row.email))
+
+    // 동의 게이트 — 조회 실패면 leads 분기 전체를 뺀다(미결정 consent = 거부).
+    let consent: LeadMarketingConsentIndex | null = null
+    if (leadRows.length > 0) {
+      try {
+        consent = await loadLeadMarketingConsentIndex()
+      } catch (err) {
+        console.error("[automation] 발송 동의 근거 조회 실패 — leads 분기를 발송 대상에서 제외합니다:", err)
+      }
+    }
+
+    for (const row of leadRows) {
       if (!row.email) continue
+      if (!consent || !isLeadMarketingEligible(row.email, consent)) continue
       // 중복 이메일은 subscribers 우선
       if (seenEmails.has(row.email.toLowerCase())) continue
       seenEmails.add(row.email.toLowerCase())

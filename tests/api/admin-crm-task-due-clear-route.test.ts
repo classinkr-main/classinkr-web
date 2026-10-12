@@ -7,6 +7,10 @@
  *
  * 저장소(lib/repositories/crm-tasks.ts)는 실제 모듈을 쓰고 Supabase 클라이언트만 기록 스텁으로 바꿔,
  * 요청 바디가 crm_tasks.update(patch)의 due_at까지 어떻게 내려가는지를 끝까지 고정한다.
+ *
+ * F2(2026-09-25) — POST(생성)도 같은 파서(lib/crm/task-due-at.ts)를 쓴다. 이전 POST는 optionalString으로
+ * 읽어 해석 못 하는 값·숫자를 "기한 없음"으로 조용히 저장했다 — 이제 400. 아래 POST 블록이 insert의
+ * due_at까지 고정한다.
  */
 import { NextRequest, NextResponse } from "next/server"
 import { beforeEach, describe, expect, it, vi } from "vitest"
@@ -14,6 +18,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const mocks = vi.hoisted(() => ({
   requireVerifiedAdminContext: vi.fn(),
   updates: [] as Array<Record<string, unknown>>,
+  inserts: [] as Array<Record<string, unknown>>,
 }))
 
 vi.mock("next/cache", () => ({
@@ -56,6 +61,14 @@ const TASK_DB_ROW = {
 vi.mock("@/lib/supabase/admin", () => ({
   createSupabaseAdminClient: () => ({
     from: () => ({
+      insert: (row: Record<string, unknown>) => {
+        mocks.inserts.push(row)
+        return {
+          select: () => ({
+            single: async () => ({ data: { ...TASK_DB_ROW, ...row }, error: null }),
+          }),
+        }
+      },
       update: (patch: Record<string, unknown>) => {
         mocks.updates.push(patch)
         return {
@@ -71,6 +84,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 }))
 
 import { PATCH } from "@/app/api/admin/crm/tasks/[id]/route"
+import { POST } from "@/app/api/admin/crm/tasks/route"
 
 function patchRequest(body: unknown) {
   return new NextRequest("https://classin.kr/api/admin/crm/tasks/task-1", {
@@ -159,5 +173,66 @@ describe("PATCH /api/admin/crm/tasks/[id] — update dueAt 3상태", () => {
     expect(response.status).toBe(403)
     expect(mocks.requireVerifiedAdminContext).toHaveBeenCalledWith(expect.anything(), ["crm-staff-sentinel"])
     expect(mocks.updates).toHaveLength(0)
+  })
+})
+
+function postRequest(body: unknown) {
+  return new NextRequest("https://classin.kr/api/admin/crm/tasks", {
+    method: "POST",
+    body: JSON.stringify(body),
+    headers: { "content-type": "application/json" },
+  })
+}
+
+async function postTask(body: unknown) {
+  const response = await POST(postRequest(body))
+  return { response, json: await response.json() }
+}
+
+describe("POST /api/admin/crm/tasks — 생성 dueAt도 같은 파서(F2)", () => {
+  beforeEach(() => {
+    mocks.inserts.length = 0
+    mocks.requireVerifiedAdminContext.mockReset()
+    mocks.requireVerifiedAdminContext.mockResolvedValue({ role: "admin", name: "관리자", userId: "admin-1" })
+  })
+
+  it("날짜 문자열은 UTC ISO로 정규화해 저장한다", async () => {
+    const { response, json } = await postTask({ title: "콜백", dueAt: "2026-09-26T09:00:00+09:00" })
+
+    expect(response.status).toBe(201)
+    expect(mocks.inserts).toHaveLength(1)
+    expect(mocks.inserts[0].due_at).toBe("2026-09-26T00:00:00.000Z")
+    expect(json.task.dueAt).toBe("2026-09-26T00:00:00.000Z")
+  })
+
+  it.each([[undefined], [null], [""], ["   "]])("dueAt %j은 기한 없음으로 저장한다", async (dueAt) => {
+    const { response } = await postTask(dueAt === undefined ? { title: "콜백" } : { title: "콜백", dueAt })
+
+    expect(response.status).toBe(201)
+    expect(mocks.inserts[0].due_at).toBeNull()
+  })
+
+  it("해석 못 하는 문자열은 기한 없음으로 조용히 저장하지 않고 400으로 거절한다", async () => {
+    const { response, json } = await postTask({ title: "콜백", dueAt: "내일 오전" })
+
+    expect(response.status).toBe(400)
+    expect(json.error).toBe("Invalid dueAt")
+    expect(mocks.inserts).toHaveLength(0)
+  })
+
+  it.each([[123], [true], [{ at: "2026-09-26" }]])("문자열·null이 아닌 dueAt(%j)은 400으로 거절한다", async (dueAt) => {
+    const { response, json } = await postTask({ title: "콜백", dueAt })
+
+    expect(response.status).toBe(400)
+    expect(json.error).toBe("dueAt must be a date string or null")
+    expect(mocks.inserts).toHaveLength(0)
+  })
+
+  it("제목 검증이 먼저다 — 제목이 없으면 dueAt과 무관하게 제목 오류", async () => {
+    const { response, json } = await postTask({ title: " ", dueAt: "not-a-date" })
+
+    expect(response.status).toBe(400)
+    expect(json.error).toBe("할 일 제목은 필수입니다.")
+    expect(mocks.inserts).toHaveLength(0)
   })
 })

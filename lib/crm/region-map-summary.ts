@@ -31,6 +31,10 @@ export interface CrmRegionLayer {
   regions: Record<string, number>
   /** 이 레이어에 대해 화면이 반드시 함께 보여줘야 하는 경고(없으면 빈 배열). */
   notes: string[]
+  /** 원천 행이 조회 상한을 넘어 일부만 셌다(C9). 구 응답에는 없다. */
+  truncated?: boolean
+  /** 원천 조회가 실패했다 — total 0은 "0건"이 아니라 "모름"이다. 구 응답에는 없다. */
+  failed?: boolean
 }
 
 // 지리적이지 않은 정당한 값. REV 시트가 실제로 쓰는 표기다.
@@ -71,13 +75,56 @@ export function tallyRegionValues(values: ReadonlyArray<string | null | undefine
   return tally
 }
 
+/**
+ * 이미 시도 라벨로 해석된 값을 센다(C9 — 리드층). 리드의 지역은 통합 고객 목록·360·리드 드로어가
+ * 쓰는 deriveLeadRegionLabel(branch + 메타 폼 답변 + 영문 도시명)로 정한다. 지도가 leads.branch만
+ * 자유 텍스트로 접으면 같은 리드가 목록에선 "서울", 지도에선 "미상"으로 갈렸다.
+ * 해석 실패(null)일 때만 원문으로 온라인·해외(nonGeo)와 미상(unknown)을 가른다.
+ */
+export function tallyDerivedRegion(
+  tally: RegionTally,
+  derivedLabel: string | null | undefined,
+  raw: string | null | undefined
+) {
+  tally.total += 1
+  if (derivedLabel) {
+    tally.located += 1
+    tally.regions[derivedLabel] = (tally.regions[derivedLabel] ?? 0) + 1
+    return
+  }
+  const trimmed = raw?.trim() ?? ""
+  if (trimmed && NON_GEO_TOKENS.has(trimmed.toLowerCase())) {
+    tally.nonGeo += 1
+    return
+  }
+  tally.unknown += 1
+}
+
+export interface RegionLayerSourceState {
+  /** 원천 행이 조회 상한을 넘었다 — 일부만 셌다. */
+  truncated?: boolean
+  /** 원천 조회 실패 — 세지 못했다. */
+  failed?: boolean
+  /** truncated일 때 문구에 쓸 상한(행). */
+  rowLimit?: number
+}
+
 export function toRegionLayer(
   key: CrmRegionLayerKey,
   label: string,
   unit: string,
   tally: RegionTally,
-  notes: string[] = []
+  notes: string[] = [],
+  state: RegionLayerSourceState = {}
 ): CrmRegionLayer {
+  const stateNotes: string[] = []
+  if (state.failed) {
+    stateNotes.push("이 레이어의 원천을 읽지 못했다 — 표시된 0건은 실제 0건이 아니라 '모름'이다.")
+  } else if (state.truncated) {
+    stateNotes.push(
+      `원천 행이 조회 상한${state.rowLimit ? `(${state.rowLimit.toLocaleString("ko-KR")}행)` : ""}을 넘어 일부만 셌다 — 분포·커버리지는 부분값이다.`
+    )
+  }
   return {
     key,
     label,
@@ -88,6 +135,9 @@ export function toRegionLayer(
     nonGeo: tally.nonGeo,
     coverage: tally.total === 0 ? 0 : tally.located / tally.total,
     regions: tally.regions,
-    notes,
+    // 상태 경고가 먼저 — 화면이 notes를 위에서부터 읽으므로 "부분값/모름"을 원천 설명보다 앞에 둔다.
+    notes: [...stateNotes, ...notes],
+    ...(state.truncated ? { truncated: true } : {}),
+    ...(state.failed ? { failed: true } : {}),
   }
 }

@@ -1,5 +1,6 @@
 import { Suspense } from "react"
 import AdminRouteLoading from "@/components/admin/AdminRouteLoading"
+import SyncHealthBannerServer from "@/components/admin/SyncHealthBannerServer"
 import BranchDashboardClient, { type BranchSummaryPrefetch } from "@/components/admin/branch/BranchDashboardClient"
 import type { BranchSummaryResponse } from "@/components/admin/branch/types"
 import { getVerifiedAdminContextForPage } from "@/lib/admin/page-auth"
@@ -70,9 +71,18 @@ export default function BranchDashboardPage() {
   // use()로 이 promise를 푼다 — 딥링크(?team=BD 등)는 애초에 이 promise를 기다리지 않으므로
   // Suspense가 걸리지 않는다. fallback은 이 라우트의 기존 loading.tsx와 같은 AdminRouteLoading을
   // 재사용해 새 로딩 UI를 만들지 않는다.
+  //
+  // 동기화 건강 띠(2026-09-25) — KR Team 수치는 시트(REV·DSH·KPI)·HW 동기화 결과다. 동기화가 멈추면
+  // "무엇이 멈췄고 화면 값이 언제 것이며 누가 풀 수 있는지"를 대시보드 위에 한 줄로 드러낸다.
+  // 별도 Suspense(fallback 없음)라 첫 바이트·대시보드 스트리밍을 기다리게 하지 않고, 정상이면 아무것도 그리지 않는다.
   return (
-    <Suspense fallback={<AdminRouteLoading />}>
-      <BranchDashboardClient initialData={initialData} />
-    </Suspense>
+    <>
+      <Suspense fallback={null}>
+        <SyncHealthBannerServer sources={["sheets", "hw"]} className="px-4 pt-4 sm:px-6 lg:px-9" />
+      </Suspense>
+      <Suspense fallback={<AdminRouteLoading />}>
+        <BranchDashboardClient initialData={initialData} />
+      </Suspense>
+    </>
   )
 }

@@ -1,5 +1,9 @@
 import type { ContactLogRecord } from "@/lib/repositories/contact-logs"
-import type { CrmCustomerEventCreateInput, CrmEventNextAction } from "@/lib/repositories/crm-events"
+import type {
+  CrmCustomerEventCreateInput,
+  CrmCustomerEventSourceType,
+  CrmEventNextAction,
+} from "@/lib/repositories/crm-events"
 
 // 리드 연락 로그(통화/카톡/문자/이메일)를 CRM 활동 타임라인(crm_customer_events)과
 // 다음 액션(crm_tasks)으로 잇는다(§8 #6, culture-fit §3.1 "결과 중심").
@@ -18,7 +22,23 @@ const RESULT_LABELS: Record<NonNullable<ContactLogRecord["result"]>, string> = {
   meeting_set: "미팅 확정",
 }
 
+/**
+ * 연락 기록 제목("전화 · 부재") — 리드 미러(leadContactEventTitle)와 현황 "오늘 연락"의 계정·고객·딜 결과 기록
+ * (crm_customer_events 에 결과 칼럼이 없어 결과는 제목에만 남는다)이 같은 문구를 쓴다.
+ * 결과는 통화 성격 채널(call·sms)에서만 붙인다 — 카톡·이메일 결과는 버린다(lib/crm/contact-log.ts 규약).
+ */
+export function contactEventTitle(
+  type: ContactLogRecord["type"],
+  result: ContactLogRecord["result"] | null | undefined
+): string {
+  const typeLabel = TYPE_LABELS[type] ?? "연락"
+  const carriesResult = type === "call" || type === "sms"
+  const resultLabel = result && carriesResult ? RESULT_LABELS[result] : null
+  return resultLabel ? `${typeLabel} · ${resultLabel}` : typeLabel
+}
+
 export function leadContactEventTitle(log: Pick<ContactLogRecord, "type" | "result">): string {
+  // 이미 저장된 카톡·이메일 로그에 결과가 붙어 있던 행도 예전과 같은 제목을 내도록 결과 드롭 없이 그대로 만든다.
   const typeLabel = TYPE_LABELS[log.type] ?? "연락"
   const resultLabel = log.result ? RESULT_LABELS[log.result] : null
   return resultLabel ? `${typeLabel} · ${resultLabel}` : typeLabel
@@ -57,5 +77,58 @@ export function buildLeadContactEventInput(
     nextActions: leadContactNextActions(log),
     sentiment: leadContactSentiment(log.result),
     createdBy: log.contacted_by ?? null,
+  }
+}
+
+/**
+ * 기록 컴포저(POST /api/admin/crm/events)가 리드 연락을 남길 때 넘기는 기록 내용.
+ * 대상·원천 id·발생 시각은 서버가 저장된 로그로 덮어쓰므로 받지 않는다.
+ */
+export type LeadContactComposerContent = Omit<
+  CrmCustomerEventCreateInput,
+  "targetType" | "targetId" | "sourceType" | "sourceId" | "occurredAt"
+> & { sourceType: Extract<CrmCustomerEventSourceType, "call" | "sms"> }
+
+export type LeadContactMirrorInput = CrmCustomerEventCreateInput & {
+  sourceType: CrmCustomerEventSourceType
+  sourceId: string
+}
+
+function trimmedOrNull(value: string | null | undefined): string | null {
+  const trimmed = value?.trim()
+  return trimmed ? trimmed : null
+}
+
+/**
+ * 연락 로그 1건의 CRM 기록 미러 입력. 로그가 1차 증거이고 기록은 파생이다 — 어느 입력 경로든
+ * source_id = 로그 id로 묶여 getOrCreateCrmCustomerEventBySource가 로그당 한 번만 만든다.
+ *
+ * - 컴포저 내용이 없으면(리드 드로어·홈 큐) 로그에서 만든 기본 미러(lead_contact_log).
+ * - 컴포저 내용이 있으면 사용자가 고른 모드(call·sms)와 적은 내용(요약·녹음·태그·다음 액션 등)을
+ *   그대로 살리고, 비어 있는 제목·담당자·다음 액션·분위기만 로그 기본값으로 채운다.
+ */
+export function buildLeadContactMirrorInput(
+  log: ContactLogRecord,
+  leadLabel: string | null,
+  composer?: LeadContactComposerContent | null
+): LeadContactMirrorInput {
+  const base = buildLeadContactEventInput(log, leadLabel)
+  if (!composer) return base
+
+  const composerNextActions = (composer.nextActions ?? []).filter((action) => action.title?.trim())
+  return {
+    ...composer,
+    targetType: "lead",
+    targetId: log.lead_id,
+    targetLabel: trimmedOrNull(composer.targetLabel) ?? base.targetLabel ?? null,
+    sourceType: composer.sourceType,
+    sourceId: log.id,
+    occurredAt: log.contacted_at,
+    title: trimmedOrNull(composer.title) ?? base.title,
+    ownerName: trimmedOrNull(composer.ownerName) ?? base.ownerName ?? null,
+    nextActions: composerNextActions.length > 0 ? composerNextActions : base.nextActions,
+    sentiment:
+      composer.sentiment && composer.sentiment !== "neutral" ? composer.sentiment : base.sentiment,
+    createdBy: trimmedOrNull(composer.createdBy) ?? base.createdBy ?? null,
   }
 }

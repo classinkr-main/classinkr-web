@@ -35,10 +35,30 @@ function describeError(e: unknown): string {
   return String(e)
 }
 
+/**
+ * 실행 기록(branch_sync_runs.source)에 남길 값 — 실제로 돌린 원천. 둘 다면 "all", 하나면 그 이름.
+ *
+ * 왜(2026-09-25): 매출 장부 새로고침·매출 대시보드·매출시트의 수동 동기화는 REV만 돌리는데 기록은
+ * 늘 "all"이었다. 동기화 건강 판정(lib/admin/sync-health.ts)과 크론 연속 실패 알림
+ * (lib/branch/sync/failure-streak.ts)은 성공한 "all" 런을 두 원천 모두의 성공으로 읽으므로, HW가
+ * 실패 중이어도 REV 새로고침 한 번이면 HW 연속 실패가 0으로 돌아갔다. 읽는 쪽은
+ * syncRunCoversSource로 자기 원천을 돌리지 않은 런을 건너뛴다. source 컬럼은 CHECK 제약 없는
+ * text라(20260427_branch_dashboard.sql) 스키마 변경이 필요 없다.
+ */
+export function syncRunSourceFor(sources: ReadonlyArray<"rev" | "hw">): "all" | "rev" | "hw" {
+  const hasRev = sources.includes("rev")
+  const hasHw = sources.includes("hw")
+  if (hasRev && !hasHw) return "rev"
+  if (hasHw && !hasRev) return "hw"
+  return "all"
+}
+
 export async function runAll(opts: { trigger: SyncTrigger; sources?: Array<"rev"|"hw"> }): Promise<RunAllResult> {
   if (await isAnyRunning()) return { ok: false, skipped: true }
-  const sources = opts.sources ?? ["rev", "hw"]
-  const id = await startSyncRun("all", opts.trigger)
+  // 빈 배열은 "전부"로 본다 — 아무것도 돌리지 않은 런이 성공("all")으로 남아 두 원천의 연속 실패를
+  // 지우는 일이 없게 한다(수동 동기화 라우트도 빈 배열을 undefined로 넘긴다).
+  const sources: Array<"rev" | "hw"> = opts.sources && opts.sources.length > 0 ? opts.sources : ["rev", "hw"]
+  const id = await startSyncRun(syncRunSourceFor(sources), opts.trigger)
   try {
     let revRows = 0
     let revOk: boolean | undefined

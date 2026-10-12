@@ -2,14 +2,27 @@
 
 // ClassIn 고객 DB(통합 고객) 본체 — URL·캐시·드로어 상태와 저장 보기 로직만 소유하고,
 // 검색 패널·결과 테이블·행 시각 요소·정렬은 components/admin/crm/unified/* 로 분해했다(2026-08-28).
+//
+// A안(2026-09-25) — 이 목록은 판단·집계 화면이다. 리드 응대·기록은 Compass 에서 하므로 매칭 행에는
+// "Compass에서 열기" 새 탭 링크(UnifiedCompassLink)만 둔다. 목록 위에는 NEO 동기화 경고 띠(page.tsx 가
+// syncHealthSlot 으로 넘기는 SyncHealthBannerServer)와, URL 에 OR 그룹(`or=`)이 있으면 "OR 조건 포함 —
+// 세그먼트 허브에서 편집" 안내(SegmentOrNotice)를 둔다 — 조건 칩 편집은 AND 만. 일괄 태그·할 일은 유지한다
+// (세그먼트 허브·C안 ②가 쓰는 행동).
 
-import { useCallback, useEffect, useMemo, useRef, useState, use, Suspense, type MouseEvent } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, use, Suspense, type MouseEvent, type ReactNode } from "react"
+import { createPortal } from "react-dom"
 import dynamic from "next/dynamic"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { ChevronRight, Filter, UserPlus } from "lucide-react"
+import { ChevronRight, Download, Filter, UserPlus } from "lucide-react"
 
 import { adminFetchJsonCachedWithMeta, getCachedAdminJson, seedAdminRequestCache } from "@/lib/admin-client"
 import { CRM_CACHE_SWR_MS, CRM_CACHE_TTL_MS } from "@/lib/crm/client-cache"
+import {
+  isSegmentSpecEmpty,
+  normalizeSegmentSpec,
+  parseSegmentSpec,
+  type CustomerSegmentSpec,
+} from "@/lib/crm/customer-segment-spec"
 import type { CrmUnifiedCustomerRow } from "@/lib/repositories/crm-unified-customers"
 import type { CrmUnifiedInitialData } from "@/lib/admin/crm/unified-prefetch"
 import { buildOwnerSelectOptions, useCrmOwners } from "./useCrmOwners"
@@ -21,19 +34,34 @@ import SavedViewButton from "./unified/SavedViewButton"
 import CustomerSearchPanel from "./unified/CustomerSearchPanel"
 import CustomerResultsSection from "./unified/CustomerResultsSection"
 import UnconfirmedToggle from "./unified/UnconfirmedToggle"
-import { SORT_DEFAULT_DIRECTION, sortRows, type SortKey, type SortState } from "./unified/sort"
+import SegmentConditionBar from "./unified/SegmentConditionBar"
+import SegmentOrNotice from "./unified/SegmentOrNotice"
+import ContactSourceCaption from "./unified/ContactSourceCaption"
+import BulkActionBar from "./unified/BulkActionBar"
+import { nextSortState, type SortKey, type SortState } from "./unified/sort"
+import {
+  canExportUnifiedCsv,
+  describeCsvExport,
+  downloadUnifiedCustomersCsv,
+  readSessionAdminRole,
+} from "./unified/export-csv"
+import { Toast } from "./leads/shared"
 import {
   CURRENT_OWNER_VALUE,
   OWNER_STORAGE_KEY,
   PRIMARY_SAVED_VIEW_FILTERS,
   SAVED_VIEW_FILTERS,
   SECONDARY_SAVED_VIEW_FILTERS,
+  exportUrl,
   isDrawerCustomerKey,
   listUrl,
   mergePage,
   normalizeText,
+  parseOrGroupsParam,
+  parseOwnerParam,
   parseTagParam,
   patchUnifiedListParams,
+  segmentParamSignature,
   type CrmUnifiedCustomers,
   type LifecycleFilter,
   type SavedViewFilter,
@@ -81,20 +109,29 @@ const RESOLVED_NULL_UNIFIED_CUSTOMERS_PROMISE: Promise<CrmUnifiedCustomers | nul
  * 알 수 없는 view 값과 my_owner는 모두 "all"로 떨어진다. 라벨(?tag=)은 parseTagParam으로
  * 정규화한 값이 그대로 실린다 — 마운트 시 tagFilter 초기값도 같은 함수로 URL에서 읽는다.
  */
-export function buildUnifiedListDefaultUrl(overrides?: { query?: string; view?: string; tag?: string }): string {
+export function buildUnifiedListDefaultUrl(overrides?: {
+  query?: string
+  view?: string
+  tag?: string
+  owner?: string
+  segment?: CustomerSegmentSpec
+}): string {
   const rawView = overrides?.view
   const view: SavedViewFilter =
     rawView && rawView !== "my_owner" && SAVED_VIEW_FILTERS.some((filter) => filter.key === rawView)
       ? (rawView as SavedViewFilter)
       : "all"
+  // 담당(?owner=)은 서버 프리페치와 같은 규칙 — __me(내 담당)는 서버가 풀지 않으므로 시드 키에서 뺀다.
+  const owner = parseOwnerParam(overrides?.owner)
   return listUrl({
     query: overrides?.query?.trim() ?? "",
     source: "all",
     lifecycle: "all",
-    owner: "",
+    owner: owner === CURRENT_OWNER_VALUE ? "" : owner,
     view,
     tag: parseTagParam(overrides?.tag),
     includeUnconfirmed: false,
+    segment: normalizeSegmentSpec(overrides?.segment),
     offset: 0,
   })
 }
@@ -186,9 +223,15 @@ export function isSameLoadQuery(lastQueryKey: string | null, requestUrl: string)
 
 export default function CrmUnifiedCustomersClient({
   initialData,
+  syncHealthSlot,
 }: {
   /** 서버 프리페치(lib/admin/crm/unified-prefetch.ts) — 미인증·역할 부족·실패면 null. */
   initialData?: CrmUnifiedInitialData | null
+  /**
+   * 데이터 신선도 경고 띠 자리 — page.tsx 가 서버 컴포넌트(SyncHealthBannerServer, 자체 Suspense)를 넘긴다.
+   * 제목 아래·목록 위에 그대로 꽂기만 한다(정상이면 서버가 아무것도 그리지 않는다).
+   */
+  syncHealthSlot?: ReactNode
 }) {
   // 드로어(?account=)·저장 뷰(?view=)·라벨(?tag=) 딥링크의 원천. 라벨 초기값을 URL에서 바로 읽어야
   // 해서 다른 state보다 먼저 둔다.
@@ -201,16 +244,30 @@ export default function CrmUnifiedCustomersClient({
   }, [query])
   const [source, setSource] = useState<SourceFilter>("all")
   const [lifecycle, setLifecycle] = useState<LifecycleFilter>("all")
-  const [owner, setOwner] = useState("")
+  // 담당(?owner=, F6)은 URL 이 localStorage 보다 우선한다 — 마운트 시점 URL 로 초기화한다.
+  const [owner, setOwner] = useState(() => parseOwnerParam(searchParams.get("owner")))
   const [savedView, setSavedView] = useState<SavedViewFilter>("all")
+  // 세그먼트 조건(SG4) — URL(?expDays= 등) 상태. 딥링크 첫 요청부터 조건이 실리게 마운트 시점 URL 로 초기화.
+  const [segmentSpec, setSegmentSpec] = useState<CustomerSegmentSpec>(() => parseSegmentSpec(searchParams))
+  // OR 그룹(`or=`, 세그먼트 허브) — 이 화면은 편집하지 않는다. URL 에서 읽어 목록·CSV 요청에 그대로 싣고,
+  // 목록 위 안내(SegmentOrNotice)로 "허브에서 편집"을 알린다. 조건 칩(AND) 변경은 이 값을 건드리지 않는다.
+  const [orGroups, setOrGroups] = useState<CustomerSegmentSpec[]>(() => parseOrGroupsParam(searchParams))
   // 라벨 필터는 URL(?tag=) 상태다 — 태그 관리 화면 딥링크 착지의 첫 요청부터 라벨이 실리도록
   // 마운트 시점 URL로 초기화하고, 이후 동기화는 아래 ?tag= 착지 effect·changeTagFilter가 맡는다.
   const [tagFilter, setTagFilter] = useState(() => parseTagParam(searchParams.get("tag")))
   // 확인 게이트 우회 — 기본 false(미확인 리드 숨김 + 건수만 표시). 리드 보드의 includeUnconfirmed와 같은 이름·UX.
   // URL에 싣지 않는 세션 한정 토글이며, 요청 URL(=캐시 키)에는 includeUnconfirmed=1로 실린다.
   const [includeUnconfirmed, setIncludeUnconfirmed] = useState(false)
-  // 정렬 상태 — null=추천순(서버 버킷→점수→시각 순서 그대로). 탐색용 일회성 상태라 URL·저장소에 영속하지 않는다.
+  // 정렬 상태 — null=추천순(서버 버킷→점수→시각 순서 그대로). 헤더를 누르면 서버가 조건 전체를 다시
+  // 정렬한다(C1 — sort/dir 파라미터). 탐색용 일회성 상태라 화면 URL·저장소에 영속하지 않는다.
   const [sort, setSort] = useState<SortState | null>(null)
+  // 선택(현재 페이지만) — 페이지·조건이 바뀌면 비운다(loadPage). 조건 전체 선택은 이번 범위 밖.
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set())
+  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
+  // CSV 는 관리자만(서버가 최종 판단) — 세션 역할이 확실히 다르면 버튼을 막는다. 모르면 연다.
+  const [canExportCsv, setCanExportCsv] = useState(true)
   const [data, setData] = useState<CrmUnifiedCustomers | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -346,7 +403,8 @@ export default function CrmUnifiedCustomersClient({
     setSource("all")
     setLifecycle("all")
     setQuery("")
-    setOwner(view === "my_owner" ? CURRENT_OWNER_VALUE : "")
+    // 담당은 URL(?owner=)이 정본이다(F6) — 함께 실려 온 담당은 지우지 않는다.
+    setOwner(view === "my_owner" ? CURRENT_OWNER_VALUE : parseOwnerParam(searchParams.get("owner")))
   }, [searchParams])
 
   // 태그 관리 화면 딥링크(?tag=) ↔ 라벨 필터 — ?view=와 같은 규약: 값이 실제로 바뀔 때만 반영하고
@@ -362,6 +420,26 @@ export default function CrmUnifiedCustomersClient({
     setTagFilter(tag)
   }, [searchParams])
 
+  // 담당 딥링크(?owner=, F6) — ?tag= 와 같은 규약. 초기값은 마운트 URL 로 이미 맞췄으므로 ref 도 그 값에서
+  // 출발해 마운트 직후 재설정(=localStorage 복원 덮어쓰기)을 하지 않는다. 값이 실제로 바뀔 때만 반영한다.
+  const lastOwnerParamRef = useRef<string>(parseOwnerParam(searchParams.get("owner")))
+  useEffect(() => {
+    const next = parseOwnerParam(searchParams.get("owner"))
+    if (next === lastOwnerParamRef.current) return
+    lastOwnerParamRef.current = next
+    setOwner(next)
+  }, [searchParams])
+
+  // 세그먼트 조건 딥링크(?expDays= 등, SG4 · OR 그룹 `or=`) — 정규형 문자열로 비교해 값이 바뀔 때만 반영한다.
+  const lastSegmentParamRef = useRef<string>(segmentParamSignature(searchParams))
+  useEffect(() => {
+    const signature = segmentParamSignature(searchParams)
+    if (signature === lastSegmentParamRef.current) return
+    lastSegmentParamRef.current = signature
+    setSegmentSpec(parseSegmentSpec(searchParams))
+    setOrGroups(parseOrGroupsParam(searchParams))
+  }, [searchParams])
+
   // 칩 클릭 ↔ URL 동기화 — setDrawerUrl과 동일하게 라우터 경유(router.replace).
   // raw history API는 useSearchParams와 desync되어 드로어 열기/닫기가 ?view=·?tag=를 유실한다.
   // replace라 히스토리를 오염시키지 않고(뒤로가기 안전), last*ParamRef를 라우터 호출보다
@@ -369,10 +447,20 @@ export default function CrmUnifiedCustomersClient({
   // 저장 뷰·라벨을 함께 바꿀 때(필터 초기화)는 한 번의 replace로 묶는다 — 두 번 부르면 두 번째가
   // 같은 이전 searchParams에서 출발해 첫 변경을 되돌린다(patchUnifiedListParams 주석).
   const replaceListParams = useCallback(
-    (patch: { view?: SavedViewFilter; tag?: string }) => {
+    (patch: {
+      view?: SavedViewFilter
+      tag?: string
+      owner?: string
+      segment?: CustomerSegmentSpec
+      orGroups?: readonly CustomerSegmentSpec[]
+    }) => {
       if (patch.view !== undefined) lastViewParamRef.current = patch.view === "all" ? null : patch.view
       if (patch.tag !== undefined) lastTagParamRef.current = parseTagParam(patch.tag)
+      if (patch.owner !== undefined) lastOwnerParamRef.current = parseOwnerParam(patch.owner)
       const qs = patchUnifiedListParams(searchParams.toString(), patch)
+      if (patch.segment !== undefined || patch.orGroups !== undefined) {
+        lastSegmentParamRef.current = segmentParamSignature(new URLSearchParams(qs))
+      }
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
     },
     [router, pathname, searchParams]
@@ -388,6 +476,36 @@ export default function CrmUnifiedCustomersClient({
     },
     [replaceListParams]
   )
+  // 담당 변경(사용자 조작) — state·URL(?owner=)·localStorage 를 함께 바꾼다(URL 이 정본, 저장소는 다음 방문 기본값).
+  const changeOwner = useCallback(
+    (next: string) => {
+      setOwner(next)
+      if (typeof window !== "undefined") {
+        if (next) window.localStorage.setItem(OWNER_STORAGE_KEY, next)
+        else window.localStorage.removeItem(OWNER_STORAGE_KEY)
+      }
+      replaceListParams({ owner: next })
+    },
+    [replaceListParams]
+  )
+
+  // 세그먼트 조건 변경 — state 와 URL 을 함께 바꾼다(정규형으로 다듬어 같은 조건 = 같은 캐시 키).
+  // 조건 칩은 AND 만 바꾼다 — URL 의 OR 그룹(`or=`)은 patchUnifiedListParams 가 그대로 둔다.
+  const changeSegment = useCallback(
+    (next: CustomerSegmentSpec) => {
+      const normalized = normalizeSegmentSpec(next)
+      setSegmentSpec(normalized)
+      replaceListParams({ segment: normalized })
+    },
+    [replaceListParams]
+  )
+
+  // "OR 조건 빼기" — OR 그룹만 지운다(AND 조건·다른 필터는 그대로). 편집은 세그먼트 허브에서 한다.
+  const removeOrGroups = useCallback(() => {
+    setOrGroups([])
+    replaceListParams({ orGroups: [] })
+  }, [replaceListParams])
+
   // P1b 프리페치 시드 — 마운트 시점 searchParams(q·view·tag)만 한 번 읽어 얼린다(이후 세그먼트
   // 칩 클릭 등으로 URL이 바뀌어도 이 값은 그대로다: 시드는 "첫 로드 한 번"의 계약이지 매
   // 내비게이션마다 다시 심는 자리가 아니다). 서버 프리페치(unified-prefetch.ts)가 같은
@@ -397,6 +515,8 @@ export default function CrmUnifiedCustomersClient({
       query: searchParams.get("q") ?? undefined,
       view: searchParams.get("view") ?? undefined,
       tag: searchParams.get("tag") ?? undefined,
+      owner: searchParams.get("owner") ?? undefined,
+      segment: parseSegmentSpec(searchParams),
     })
   )
   // 프리페치가 없으면(initialData null) 첫 렌더부터 바로 loadPage(0)을 허용한다(기존 동작
@@ -442,8 +562,13 @@ export default function CrmUnifiedCustomersClient({
         view: savedView,
         tag: tagFilter,
         includeUnconfirmed,
+        segment: segmentSpec,
+        orGroups,
+        sort,
         offset,
       })
+      // 선택은 현재 페이지 한정 — 페이지·조건·정렬이 바뀌거나 일괄 행동 뒤 다시 불러오면 비운다.
+      setSelectedKeys((current) => (current.size ? new Set() : current))
       const cached = !append && !options?.force ? getCachedAdminJson<CrmUnifiedCustomers>(url, { cacheKey: url }) : null
       const requestId = ++requestSeq.current
 
@@ -524,7 +649,7 @@ export default function CrmUnifiedCustomersClient({
         }
       }
     },
-    [debouncedQuery, source, lifecycle, owner, savedView, tagFilter, includeUnconfirmed]
+    [debouncedQuery, source, lifecycle, owner, savedView, tagFilter, includeUnconfirmed, segmentSpec, orGroups, sort]
   )
 
   useEffect(() => {
@@ -536,11 +661,23 @@ export default function CrmUnifiedCustomersClient({
     if (typeof window === "undefined") return
     // 세그먼트(?view=)·라벨(?tag=) 딥링크 착지 시에는 저장된 담당자 필터를 복원하지 않는다 — 칩 카운트(전역 기준)·
     // 태그 관리 화면 건수와의 정합, 그리고 첫 요청이 서버 프리페치 시드(담당자 없음)와 맞게.
+    // 담당(?owner=)·세그먼트 조건 딥링크도 같다 — URL 이 localStorage 보다 우선한다(F6).
     const landing = new URLSearchParams(window.location.search)
-    if (landing.get("view") || landing.get("tag")) return
+    if (landing.get("view") || landing.get("tag") || landing.get("owner") || segmentParamSignature(landing)) return
     const storedOwner = window.localStorage.getItem(OWNER_STORAGE_KEY)
     if (storedOwner) setOwner(storedOwner)
   }, [])
+
+  useEffect(() => {
+    setCanExportCsv(canExportUnifiedCsv(readSessionAdminRole()))
+  }, [])
+
+  // 성공 토스트는 잠시 뒤 스스로 닫힌다. 실패(부분 실패 포함)는 닫기 전까지 남긴다.
+  useEffect(() => {
+    if (!toast || toast.type !== "success") return
+    const handle = setTimeout(() => setToast(null), 5000)
+    return () => clearTimeout(handle)
+  }, [toast])
 
   // 담당자 필터 영속화 — 사용자가 직접 바꿀 때만 기록한다.
   // (딥링크 착지가 프로그램적으로 owner를 비울 때 저장된 선호가 지워지지 않도록 effect 영속화 대신 액션 시점에 호출.)
@@ -563,7 +700,8 @@ export default function CrmUnifiedCustomersClient({
       setOwner(CURRENT_OWNER_VALUE)
       persistOwner(CURRENT_OWNER_VALUE)
       setSavedView(view)
-      syncViewParam(view)
+      // my_owner 는 담당을 뷰 자체가 정한다 — 남아 있던 ?owner= 는 같은 replace 로 함께 비운다.
+      replaceListParams({ view, owner: "" })
       setSource("all")
       setLifecycle("all")
       return
@@ -620,13 +758,19 @@ export default function CrmUnifiedCustomersClient({
 
   const clearLingeringFilters = useCallback(() => {
     setQuery("")
-    // 라벨이 걸려 있을 때만 URL(?tag=)을 쓴다 — 안 걸렸는데 부르면 router.replace 로 서버 레인이 헛돈다.
-    if (tagFilter) changeTagFilter("")
-    if (savedView !== "my_owner") {
+    const clearOwner = savedView !== "my_owner" && Boolean(owner)
+    // URL(?tag= · ?owner=)은 한 번의 replace 로 함께 비운다 — 따로 부르면 두 번째가 첫 변경을 되돌린다.
+    // 걸린 게 없으면 router.replace 를 부르지 않는다(서버 레인이 헛돈다).
+    if (tagFilter && clearOwner) {
+      setTagFilter("")
       setOwner("")
       persistOwner("")
+      replaceListParams({ tag: "", owner: "" })
+      return
     }
-  }, [changeTagFilter, persistOwner, savedView, tagFilter])
+    if (tagFilter) changeTagFilter("")
+    if (clearOwner) changeOwner("")
+  }, [changeOwner, changeTagFilter, owner, persistOwner, replaceListParams, savedView, tagFilter])
 
   // 빈 상태 다음 행동 안내 — 필터가 걸려 있으면 초기화를, 아니면 리드 등록/매칭 연결을 권한다.
   const hasActiveFilters =
@@ -636,7 +780,9 @@ export default function CrmUnifiedCustomersClient({
     Boolean(owner) ||
     savedView !== "all" ||
     Boolean(tagFilter) ||
-    includeUnconfirmed
+    includeUnconfirmed ||
+    !isSegmentSpecEmpty(segmentSpec) ||
+    orGroups.length > 0
 
   const resetFilters = useCallback(() => {
     setQuery("")
@@ -646,26 +792,82 @@ export default function CrmUnifiedCustomersClient({
     persistOwner("")
     setSavedView("all")
     setTagFilter("")
-    // 저장 뷰·라벨 URL을 한 번의 replace로 함께 비운다(따로 부르면 두 번째가 첫 변경을 덮어쓴다).
-    replaceListParams({ view: "all", tag: "" })
+    setSegmentSpec({})
+    setOrGroups([])
+    // 저장 뷰·라벨·담당·조건(AND·OR) URL을 한 번의 replace로 함께 비운다(따로 부르면 두 번째가 첫 변경을 덮어쓴다).
+    replaceListParams({ view: "all", tag: "", owner: "", segment: {}, orGroups: [] })
     setIncludeUnconfirmed(false)
   }, [persistOwner, replaceListParams])
 
   const hiddenUnconfirmedCount = data?.summary.hiddenUnconfirmedCount ?? 0
 
   // 같은 키 재클릭=방향 토글, 다른 키=성격별 기본 방향으로 진입. 추천순 복귀는 전용 버튼만 담당한다.
+  // 정렬이 바뀌면 loadPage 가 sort/dir 를 실어 서버에 다시 요청한다(C1) — 행 순서는 응답 그대로 쓴다.
   const toggleSort = useCallback((key: SortKey) => {
-    setSort((current) =>
-      current?.key === key
-        ? { key, direction: current.direction === "asc" ? "desc" : "asc" }
-        : { key, direction: SORT_DEFAULT_DIRECTION[key] }
-    )
+    setSort((current) => nextSortState(current, key))
   }, [])
 
-  const sortedRows = useMemo(() => {
-    const rows = data?.rows ?? []
-    return sort ? sortRows(rows, sort) : rows
-  }, [data?.rows, sort])
+  const pageRows = useMemo(() => data?.rows ?? [], [data?.rows])
+  const pageKeys = useMemo(() => pageRows.map((row) => row.key), [pageRows])
+  const selectedOnPage = useMemo(() => pageKeys.filter((key) => selectedKeys.has(key)), [pageKeys, selectedKeys])
+
+  const toggleRowSelected = useCallback((key: string) => {
+    setSelectedKeys((current) => {
+      const next = new Set(current)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }, [])
+
+  const togglePageSelected = useCallback(() => {
+    setSelectedKeys((current) => {
+      const allSelected = pageKeys.length > 0 && pageKeys.every((key) => current.has(key))
+      return allSelected ? new Set() : new Set(pageKeys)
+    })
+  }, [pageKeys])
+
+  // CSV — 목록과 같은 조건(페이지 제외)을 서버가 상한까지 만든다. keys 를 주면 선택한 행만.
+  const runCsvExport = useCallback(
+    async (keys?: readonly string[]) => {
+      setExporting(true)
+      setExportError(null)
+      try {
+        const result = await downloadUnifiedCustomersCsv(
+          exportUrl({
+            query: debouncedQuery,
+            source,
+            lifecycle,
+            owner,
+            view: savedView,
+            tag: tagFilter,
+            includeUnconfirmed,
+            segment: segmentSpec,
+            orGroups,
+            sort,
+            keys,
+          })
+        )
+        setToast({ msg: describeCsvExport(result), type: "success" })
+      } catch (cause) {
+        setExportError(cause instanceof Error && cause.message ? cause.message : "고객 목록 CSV를 만들지 못했습니다.")
+      } finally {
+        setExporting(false)
+      }
+    },
+    [debouncedQuery, source, lifecycle, owner, savedView, tagFilter, includeUnconfirmed, segmentSpec, orGroups, sort]
+  )
+
+  // 일괄 태그·할 일 완료 — 토스트 + 같은 페이지 강제 재조회(선택은 loadPage 가 비운다).
+  const handleBulkCompleted = useCallback(
+    (message: string, tone: "success" | "error") => {
+      setToast({ msg: message, type: tone })
+      void loadPage(data?.pagination.offset ?? 0, { force: true })
+    },
+    [data?.pagination.offset, loadPage]
+  )
+
+  const totalCount = data?.summary.total ?? null
 
   return (
     <div
@@ -712,6 +914,10 @@ export default function CrmUnifiedCustomersClient({
             {/* 새로고침은 목록 위 신선도 캡션(FreshnessCaption)의 버튼 하나로 모았다(P2) — 같은 동작을 두 곳에 두지 않는다. */}
           </div>
         </div>
+
+        {/* NEO 동기화 경고 띠 — 원천 고객의 만료·잔액·소진·위험은 NEO 동기화 값이다. 멈추면 "언제 값인지·누가
+            풀 수 있는지"를 필터보다 먼저 말한다(page.tsx 의 서버 슬롯, 정상이면 아무것도 없음). */}
+        {syncHealthSlot}
 
         {/* 행동 빈도가 높은 보기만 1차 노출하고, 참조성 보기는 한 묶음으로 접는다. */}
         <div className="mb-3 flex flex-wrap items-center gap-2" role="group" aria-label="빠른 고객 필터">
@@ -761,6 +967,12 @@ export default function CrmUnifiedCustomersClient({
                 <span className="ml-2 text-[12px] font-medium text-[#1a1a1a]/45 tabular-nums">
                   {data ? `${data.summary.total.toLocaleString("ko-KR")}건` : error ? "불러오지 못했습니다" : "불러오는 중"}
                 </span>
+                {savedView === "dormant" && data?.summary.noContactRecordCount ? (
+                  // "30일+ 미접촉"은 연락 기록이 아예 없는 고객도 포함한다(F2) — 그 수를 따로 밝힌다.
+                  <span className="ml-2 text-[12px] font-medium text-[#1a1a1a]/45 tabular-nums">
+                    · 기록 없음 {data.summary.noContactRecordCount.toLocaleString("ko-KR")}명
+                  </span>
+                ) : null}
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 {/* 빠른 보기에서도 게이트로 숨긴 건수를 알리고 포함할 수 있어야 한다 — 검색 패널이 접혀 있으므로 여기서 노출. */}
@@ -806,8 +1018,8 @@ export default function CrmUnifiedCustomersClient({
             onOwnerChange={(nextOwner) => {
               // 이 패널은 quickMode(savedView !== "all")에서 렌더되지 않으므로
               // 여기 도달 시 savedView는 항상 "all" — my_owner 해제 가드 불필요.
-              setOwner(nextOwner)
-              persistOwner(nextOwner)
+              // 담당은 URL(?owner=) 상태다(F6) — state·URL·localStorage 를 함께 바꾼다.
+              changeOwner(nextOwner)
             }}
             currentOwner={currentOwner}
             currentOwnerCount={currentOwnerCount}
@@ -820,6 +1032,21 @@ export default function CrmUnifiedCustomersClient({
             loading={loading}
           />
         )}
+
+        {/* 세그먼트 조건(SG4) — 저장 뷰·라벨·검색·담당과 AND. 빠른 보기에서도 함께 보인다. */}
+        <SegmentConditionBar
+          spec={segmentSpec}
+          onChange={changeSegment}
+          segment={data?.segment}
+          total={totalCount}
+          loading={loading || refreshing}
+        />
+
+        {/* OR 그룹(`or=`)이 URL 에 있으면 목록 위에 "OR 조건 포함 — 세그먼트 허브에서 편집". 목록·CSV 는 OR 까지
+            적용한 결과이고, 위 조건 칩은 AND 만 바꾼다. 그룹이 없으면 아무것도 그리지 않는다. */}
+        {orGroups.length > 0 ? (
+          <SegmentOrNotice groups={orGroups} summary={data?.segment} total={totalCount} onRemove={removeOrGroups} />
+        ) : null}
 
         {/* 조회 실패(danger) · 갱신 실패/부분 데이터/담당자 매핑(warning) — 톤은 status-tone SSOT.
             목록 자체를 못 불러온 것과 '이전 결과가 남아 있는 갱신 실패'·참고 경고를 색과 role로 가른다. */}
@@ -877,9 +1104,23 @@ export default function CrmUnifiedCustomersClient({
           onRefresh={() => void loadPage(0, { force: true })}
         />
 
+        {/* 원천 상태 — Compass 활동이 끊기면 마지막 연락이 Home 기록만이라는 것을, Compass 리드 참조가 끊기면
+            "Compass에서 열기" 링크가 빠졌다는 것을 "기록 없음·매칭 없음"과 구분해 알린다(둘은 따로 끊길 수 있다). */}
+        <ContactSourceCaption meta={data?.meta} className="mb-2 px-0.5" />
+
+        {exportError ? (
+          <CrmNoticeBanner
+            tone="warning"
+            className="mb-4"
+            title="CSV 내보내기 실패"
+            message={exportError}
+            onDismiss={() => setExportError(null)}
+          />
+        ) : null}
+
         <CustomerResultsSection
           data={data}
-          rows={sortedRows}
+          rows={pageRows}
           loading={loading}
           loadingMore={loadingMore}
           refreshing={refreshing}
@@ -893,6 +1134,27 @@ export default function CrmUnifiedCustomersClient({
           onRowDoubleClick={handleRowDoubleClick}
           onLoadPage={(offset) => void loadPage(offset)}
           onOpenLeadModal={() => setLeadModalOpen(true)}
+          selectedKeys={selectedKeys}
+          onToggleRow={toggleRowSelected}
+          onTogglePage={togglePageSelected}
+          toolbarExtra={
+            <button
+              type="button"
+              onClick={() => void runCsvExport()}
+              disabled={exporting || !canExportCsv || !data || data.summary.total === 0}
+              title={
+                canExportCsv
+                  ? "현재 조건 전체를 CSV로 내려받습니다(연락처 포함, 최대 5,000명)."
+                  : "CSV 내보내기는 관리자(ADMIN) 권한이 필요합니다."
+              }
+              className="inline-flex h-7 items-center gap-1 rounded-md border border-[#e8e8e4] bg-white px-2.5 text-[11px] font-semibold text-[#111110] transition-colors hover:bg-[#fafaf8] disabled:opacity-40"
+            >
+              <Download className="h-3.5 w-3.5" aria-hidden />
+              {exporting
+                ? "내보내는 중"
+                : `CSV 내보내기(현재 조건 ${(totalCount ?? 0).toLocaleString("ko-KR")}명)`}
+            </button>
+          }
         />
 
         {/* REV 스파인은 참조 렌즈다. 검색 결과와 고객 작업을 먼저 보여준 뒤 하단에 둔다. */}
@@ -920,6 +1182,29 @@ export default function CrmUnifiedCustomersClient({
           onDone={() => void loadPage(0, { force: true })}
         />
       ) : null}
+
+      {/* 선택 + 일괄 행동 바(현재 페이지 선택만) — 자체적으로 document.body 포털. */}
+      <BulkActionBar
+        selectedKeys={selectedOnPage}
+        onClearSelection={() => setSelectedKeys(new Set())}
+        onCompleted={handleBulkCompleted}
+        onExportSelected={() => void runCsvExport(selectedOnPage)}
+        canExportCsv={canExportCsv}
+        exporting={exporting}
+      />
+
+      {/* 결과 토스트 — admin 트리의 fixed 오버레이는 document.body 포털(조상 transform 대비). 선택 바가 떠 있으면 그 위로. */}
+      {toast
+        ? createPortal(
+            <Toast
+              msg={toast.msg}
+              type={toast.type}
+              raised={selectedOnPage.length > 0}
+              onDismiss={() => setToast(null)}
+            />,
+            document.body
+          )
+        : null}
     </div>
   )
 }

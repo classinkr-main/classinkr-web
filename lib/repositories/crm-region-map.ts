@@ -3,9 +3,11 @@ import "server-only"
 import { unstable_cache, revalidateTag } from "next/cache"
 
 import { ADMIN_CRM_REGION_MAP_CACHE_TAG } from "@/lib/admin/crm/cache-tags"
+import { deriveLeadRegionLabel } from "@/lib/crm/lead-message"
 import { NAVER_MAP_SOURCE_OBJECT, NAVER_MAP_SOURCE_SYSTEM } from "@/lib/crm/naver-map-source"
 import {
   emptyRegionTally,
+  tallyDerivedRegion,
   tallyRegionValue,
   toRegionLayer,
   type CrmRegionLayer,
@@ -14,6 +16,11 @@ import { KOREA_PROVINCE_LABELS } from "@/lib/regions/korea-regions"
 import { assertJsonSafeInDev } from "@/lib/server/json-safe"
 import { shareInFlight } from "@/lib/server/share-in-flight"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import {
+  fetchSupabasePages,
+  type SupabasePagedResult,
+  type SupabasePageResult,
+} from "@/lib/supabase/pagination"
 
 /**
  * CRM 지역 지도 — 시도(17개) 단위 분포의 단일 집계 경로.
@@ -43,63 +50,166 @@ export interface CrmRegionMap {
   layers: CrmRegionLayer[]
 }
 
-const ROW_LIMIT = 5_000
+/**
+ * 원천별 전량 조회 상한(C9). 예전 단일 `.limit(5000)`은 PostgREST max-rows(1,000)에 조용히 잘려
+ * 원천이 1,000행을 넘으면 앞 1,000행만 세고도 "전체"처럼 보였다. 이제 1,000행 range 페이지네이션
+ * (lib/supabase/pagination — 실제 받은 행 수만큼 전진, 첫 페이지 count:"exact")으로 읽고, 이 상한을
+ * 넘으면 레이어에 truncated 표시와 경고 문구를 싣는다.
+ */
+export const REGION_MAP_SOURCE_ROW_LIMIT = 20_000
+const REGION_MAP_PAGE_SIZE = 1_000
+
+type RegionSourceRows<T> = SupabasePagedResult<T>
+
+/**
+ * 한 원천을 range 페이지네이션으로 읽는다. makeQuery는 유일 정렬 키(id 등 tie-breaker)까지 건
+ * 쿼리를 새로 만들어야 한다 — 페이지 경계에서 순서가 흔들리면 행이 빠지거나 겹친다.
+ */
+function readRegionSource<T>(
+  makeQuery: (withCount: boolean) => {
+    range: (from: number, to: number) => PromiseLike<SupabasePageResult>
+  }
+): Promise<RegionSourceRows<T>> {
+  return fetchSupabasePages<T>({
+    fetchPage: (from, to) => makeQuery(from === 0).range(from, to),
+    maxRows: REGION_MAP_SOURCE_ROW_LIMIT,
+    pageSize: REGION_MAP_PAGE_SIZE,
+  })
+}
+
+function sourceState<T>(result: RegionSourceRows<T>) {
+  return {
+    failed: Boolean(result.error),
+    truncated: !result.error && result.truncated,
+    rowLimit: REGION_MAP_SOURCE_ROW_LIMIT,
+  }
+}
 
 async function buildCrmRegionMap(): Promise<CrmRegionMap> {
   const sb = createSupabaseAdminClient()
+  const countOption = (withCount: boolean) => (withCount ? { count: "exact" as const } : undefined)
 
   const [deals, targets, leads, customers] = await Promise.all([
-    sb.from("branch_rev_deals").select("region").limit(ROW_LIMIT),
-    sb
-      .from("external_crm_records")
-      .select("payload")
-      .eq("source_system", NAVER_MAP_SOURCE_SYSTEM)
-      .eq("object_api_key", NAVER_MAP_SOURCE_OBJECT)
-      .eq("is_stale", false)
-      .limit(ROW_LIMIT),
-    sb.from("leads").select("branch").limit(ROW_LIMIT),
-    sb.from("crm_neo_customer_snapshots").select("region_label").eq("is_stale", false).limit(ROW_LIMIT),
+    readRegionSource<{ region: string | null }>((withCount) =>
+      sb.from("branch_rev_deals").select("id, region", countOption(withCount)).order("id", { ascending: true })
+    ),
+    readRegionSource<{ payload: unknown }>((withCount) =>
+      sb
+        .from("external_crm_records")
+        .select("id, payload", countOption(withCount))
+        .eq("source_system", NAVER_MAP_SOURCE_SYSTEM)
+        .eq("object_api_key", NAVER_MAP_SOURCE_OBJECT)
+        .eq("is_stale", false)
+        .order("id", { ascending: true })
+    ),
+    // 리드층 지역은 통합 목록과 같은 deriveLeadRegionLabel(branch + message의 메타 폼 답변)로 정한다.
+    readRegionSource<{ branch: string | null; message: string | null }>((withCount) =>
+      sb.from("leads").select("id, branch, message", countOption(withCount)).order("id", { ascending: true })
+    ),
+    // PK(source_system, account_id) 순으로 정렬해 페이지 경계를 고정한다.
+    readRegionSource<{ region_label: string | null }>((withCount) =>
+      sb
+        .from("crm_neo_customer_snapshots")
+        .select("source_system, account_id, region_label", countOption(withCount))
+        .eq("is_stale", false)
+        .order("source_system", { ascending: true })
+        .order("account_id", { ascending: true })
+    ),
   ])
 
+  // 실패한 원천은 반쪽 행으로 세지 않는다(fetchSupabasePages는 오류 전까지 받은 행을 돌려준다).
+  const rowsOf = <T>(result: RegionSourceRows<T>): T[] => (result.error ? [] : result.data)
+
   const dealAcc = emptyRegionTally()
-  for (const row of deals.data ?? []) tallyRegionValue(dealAcc, row.region)
+  for (const row of rowsOf(deals)) tallyRegionValue(dealAcc, row.region)
 
   const targetAcc = emptyRegionTally()
-  for (const row of targets.data ?? []) {
+  for (const row of rowsOf(targets)) {
     const payload = (row.payload ?? {}) as Record<string, unknown>
     const region = typeof payload.region_label === "string" ? payload.region_label : null
     tallyRegionValue(targetAcc, region)
   }
 
   const leadAcc = emptyRegionTally()
-  for (const row of leads.data ?? []) tallyRegionValue(leadAcc, row.branch)
+  for (const row of rowsOf(leads)) tallyDerivedRegion(leadAcc, deriveLeadRegionLabel(row), row.branch)
 
   const customerAcc = emptyRegionTally()
-  for (const row of customers.data ?? []) tallyRegionValue(customerAcc, row.region_label)
+  for (const row of rowsOf(customers)) tallyRegionValue(customerAcc, row.region_label)
 
-  const errors = [deals.error, targets.error, leads.error, customers.error].filter(Boolean)
-  if (errors.length > 0) {
-    console.error("[crm region map] partial source failure", errors.map((e) => e?.message))
+  const failedSources = (
+    [
+      ["branch_rev_deals", deals],
+      ["external_crm_records", targets],
+      ["leads", leads],
+      ["crm_neo_customer_snapshots", customers],
+    ] as const
+  ).filter(([, result]) => result.error)
+  if (failedSources.length > 0) {
+    console.error(
+      "[crm region map] partial source failure",
+      failedSources.map(([table, result]) => `${table}:${result.error?.code ?? "unknown"}`)
+    )
   }
 
   return {
     generatedAt: new Date().toISOString(),
     provinces: KOREA_PROVINCE_LABELS,
     layers: [
-      toRegionLayer("deal", "거래", "REV 딜 건수", dealAcc, [
-        "회계연도 전체 딜. 금액이 아니라 건수이며, 온라인·해외는 지역에서 제외한다.",
-      ]),
-      toRegionLayer("target", "타깃", "공유지도 저장 장소", targetAcc, [
-        "팀이 직접 담은 영업 후보다. 계약 여부와 무관하다.",
-      ]),
-      toRegionLayer("lead", "리드", "유입 리드 건수", leadAcc, [
-        "지역은 리드가 직접 적은 자유 텍스트다. 미기재가 절반을 넘는다.",
-      ]),
-      toRegionLayer("customer", "고객", "NEO 고객 계정", customerAcc, [
-        "외부 CRM 계정에는 주소·지역 필드가 없다. 여기 찍힌 지역은 매출시트 이름 매칭으로 얻은 일부뿐이라, 이 레이어의 분포를 '고객 분포'로 읽으면 안 된다.",
-      ]),
+      toRegionLayer(
+        "deal",
+        "거래",
+        "REV 딜 건수",
+        dealAcc,
+        ["회계연도 전체 딜. 금액이 아니라 건수이며, 온라인·해외는 지역에서 제외한다."],
+        sourceState(deals)
+      ),
+      toRegionLayer(
+        "target",
+        "타깃",
+        "공유지도 저장 장소",
+        targetAcc,
+        ["팀이 직접 담은 영업 후보다. 계약 여부와 무관하다."],
+        sourceState(targets)
+      ),
+      toRegionLayer(
+        "lead",
+        "리드",
+        "유입 리드 건수",
+        leadAcc,
+        [
+          "지역은 리드가 적은 지역 칸과 광고 폼 답변에서 읽는다(통합 고객 목록과 같은 규칙). 미기재가 절반을 넘는다.",
+        ],
+        sourceState(leads)
+      ),
+      toRegionLayer(
+        "customer",
+        "고객",
+        "NEO 고객 계정",
+        customerAcc,
+        [
+          "외부 CRM 계정에는 주소·지역 필드가 없다. 여기 찍힌 지역은 매출시트 이름 매칭으로 얻은 일부뿐이라, 이 레이어의 분포를 '고객 분포'로 읽으면 안 된다.",
+        ],
+        sourceState(customers)
+      ),
     ],
   }
+}
+
+/** 원천 조회가 실패한 지도는 정상 캐시에 넣지 않는다 — 이 오류로 감싸 unstable_cache 밖으로 꺼낸다. */
+class DegradedCrmRegionMapError extends Error {
+  readonly degradedRegionMap: CrmRegionMap
+  constructor(value: CrmRegionMap) {
+    super("crm region map: partial source failure (not cached)")
+    this.name = "DegradedCrmRegionMapError"
+    this.degradedRegionMap = value
+  }
+}
+
+function degradedRegionMapOf(error: unknown): CrmRegionMap | null {
+  if (error && typeof error === "object" && "degradedRegionMap" in error) {
+    return (error as { degradedRegionMap: CrmRegionMap }).degradedRegionMap
+  }
+  return null
 }
 
 // 2026-09-10 3라운드(§3.3) — 이전엔 module-level `let cache`+`inFlight`로 손으로 구현한
@@ -110,6 +220,9 @@ async function buildCrmRegionMap(): Promise<CrmRegionMap> {
 const getCachedCrmRegionMap = unstable_cache(
   async () => {
     const value = await shareInFlight(ADMIN_CRM_REGION_MAP_CACHE_TAG, buildCrmRegionMap)
+    // 원천 하나라도 읽지 못한 지도는 캐시에 넣지 않는다(던지면 unstable_cache가 저장하지 않는다) —
+    // 이번 응답은 getCrmRegionMap이 꺼내 "모름" 표시와 함께 그대로 돌려주고, 다음 요청이 다시 읽는다.
+    if (value.layers.some((layer) => layer.failed)) throw new DegradedCrmRegionMapError(value)
     // unstable_cache는 JSON 직렬화 경계다 — 이 값은 문자열/숫자/배열뿐이라 통과해야 정상이고,
     // dev·test에서 위반 시 즉시 던져 잡는다(2026-09-04 우선순위 큐 500 사고 재발 방지).
     return assertJsonSafeInDev("admin-crm-region-map", value)
@@ -128,7 +241,13 @@ export async function getCrmRegionMap(options: { force?: boolean } = {}): Promis
     revalidateTag(ADMIN_CRM_REGION_MAP_CACHE_TAG, "max")
     return buildCrmRegionMap()
   }
-  return getCachedCrmRegionMap()
+  try {
+    return await getCachedCrmRegionMap()
+  } catch (error) {
+    const degraded = degradedRegionMapOf(error)
+    if (degraded) return degraded
+    throw error
+  }
 }
 
 // 지역 분포에 영향을 주는 원천이 바뀌면 호출한다. 현재 실제로 거는 곳은

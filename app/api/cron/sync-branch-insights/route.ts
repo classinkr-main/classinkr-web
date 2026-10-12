@@ -26,16 +26,19 @@ export async function GET(req: NextRequest) {
   // 있는지 직접 확인하는 자기 방어를 둔다. 크론 순서에 기대지 않는다.
   const recentRuns = await getRecentSyncRuns(RECENT_RUNS_LOOKBACK)
   const cutoff = Date.now() - ONE_DAY_MS
+  // 인사이트는 시트(REV·DSH·KPI) 데이터로 만든다 — 시트를 돌린 성공 런("all" 또는 REV 단독 "rev")이면 된다.
+  // 2026-09-25 전에는 REV 단독 수동 동기화도 "all"로 기록돼 이 게이트를 통과했다. 실행 기록이 실제 원천을
+  // 남기게 된 뒤에도 같은 동작을 유지한다(HW 단독 런은 시트를 읽지 않아 인정하지 않는다).
   const hasRecentSuccessfulSync = recentRuns.some(
     (run) =>
-      run.source === "all" &&
+      (run.source === "all" || run.source === "rev") &&
       run.status === "success" &&
       run.finished_at !== null &&
       new Date(run.finished_at).getTime() >= cutoff
   )
   if (!hasRecentSuccessfulSync) {
     console.warn(
-      "[cron/sync-branch-insights] skipped — no successful branch sync (source=all) within the last 24h"
+      "[cron/sync-branch-insights] skipped — no successful sheet sync (source=all|rev) within the last 24h"
     )
     return NextResponse.json({ ok: false, skipped: true, reason: "branch sync not completed today" })
   }

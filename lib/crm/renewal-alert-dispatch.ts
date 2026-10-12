@@ -9,13 +9,17 @@ import {
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import type { NotificationRecipientTarget } from "@/lib/notifications/types"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { fetchSupabasePages } from "@/lib/supabase/pagination"
 
 /** 알림 원천 태그 — 쿨다운 조회의 기준이자 감사 흔적. */
 export const RENEWAL_ALERT_SOURCE = "crm_renewal_alert"
 
 /** 같은 고객·같은 사유를 이 기간 안에는 다시 보내지 않는다. */
 const DEFAULT_COOLDOWN_DAYS = 7
-const SNAPSHOT_SCAN_LIMIT = 5000
+// 전량 조회는 range 페이지네이션 — PostgREST max-rows(1000)가 단일 .limit(5000)을 조용히 1000행에서
+// 자르던 결함(F5)을 막는다. 상한은 폭주 방지선이고, 닿으면 결과에 truncated 로 드러낸다.
+const SNAPSHOT_SCAN_LIMIT = 20_000
+const SUPPRESSION_SCAN_LIMIT = 20_000
 
 export interface DispatchRenewalAlertsResult {
   ownersNotified: number
@@ -24,6 +28,8 @@ export interface DispatchRenewalAlertsResult {
   /** 담당자 개인에게 도달하지 못하고 관리자 전체로 나간 묶음 수. */
   fellBackToRole: number
   skipped?: string
+  /** 스냅샷 스캔이 상한에 닿아 일부 고객을 보지 못했다. */
+  truncated?: boolean
 }
 
 interface SnapshotRow {
@@ -63,12 +69,20 @@ async function loadSuppressedKeys(
   sb: ReturnType<typeof createSupabaseAdminClient>,
   since: string
 ): Promise<Set<string>> {
-  const { data, error } = await sb
-    .from("notification_events")
-    .select("payload_json, created_at")
-    .eq("source", RENEWAL_ALERT_SOURCE)
-    .gte("created_at", since)
-    .limit(1000)
+  // 단일 .limit(1000)이면 쿨다운 창 안의 이력이 1000건을 넘을 때 뒤쪽 키가 빠져 같은 건이 다시 나갔다.
+  // 정렬 키는 (created_at, id) — 페이지 경계에서 순서가 흔들리지 않게 유일 키를 타이브레이커로 둔다.
+  const { data, error } = await fetchSupabasePages<{ payload_json: unknown }>({
+    maxRows: SUPPRESSION_SCAN_LIMIT,
+    fetchPage: (from, to) =>
+      sb
+        .from("notification_events")
+        .select("id, payload_json, created_at", from === 0 ? { count: "exact" } : undefined)
+        .eq("source", RENEWAL_ALERT_SOURCE)
+        .gte("created_at", since)
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to),
+  })
 
   const keys = new Set<string>()
   // 이력을 못 읽으면 억제하지 않는다 — 중복 한 번이 누락 한 번보다 낫다.
@@ -108,18 +122,38 @@ export async function dispatchRenewalAlerts(
   const cooldownDays = options.cooldownDays ?? DEFAULT_COOLDOWN_DAYS
   const since = new Date(now.getTime() - cooldownDays * 24 * 60 * 60 * 1000).toISOString()
 
-  const { data, error } = await sb
-    .from("crm_neo_customer_snapshots")
-    .select(
-      "account_id, account_name, owner_id, owner_name, billing_mode, balance, expire_in_days, depletion_in_days, risk_reasons"
-    )
-    .limit(SNAPSHOT_SCAN_LIMIT)
+  // 최신 스냅샷만(is_stale=false) — 외부 CRM에서 사라진 고객에게 알림을 만들지 않는다(설계 원칙 3).
+  // 정렬 키 (source_system, account_id) = PK — 페이지 경계에서 행이 겹치거나 빠지지 않는다.
+  const snapshotScan = await fetchSupabasePages<SnapshotRow>({
+    maxRows: SNAPSHOT_SCAN_LIMIT,
+    fetchPage: (from, to) =>
+      sb
+        .from("crm_neo_customer_snapshots")
+        .select(
+          "account_id, account_name, owner_id, owner_name, billing_mode, balance, expire_in_days, depletion_in_days, risk_reasons",
+          from === 0 ? { count: "exact" } : undefined
+        )
+        .eq("is_stale", false)
+        .order("source_system", { ascending: true })
+        .order("account_id", { ascending: true })
+        .range(from, to),
+  })
 
-  if (error) {
-    return { ownersNotified: 0, itemsNotified: 0, suppressedKeys: 0, fellBackToRole: 0, skipped: error.message }
+  if (snapshotScan.error) {
+    return {
+      ownersNotified: 0,
+      itemsNotified: 0,
+      suppressedKeys: 0,
+      fellBackToRole: 0,
+      skipped: snapshotScan.error.message ?? "snapshot scan failed",
+    }
+  }
+  const truncated = snapshotScan.truncated
+  if (truncated) {
+    console.warn(`[crm renewal-alert] snapshot scan truncated at ${SNAPSHOT_SCAN_LIMIT} rows (count=${snapshotScan.count})`)
   }
 
-  const rows: RenewalAlertRow[] = (data ?? []).map((row) => {
+  const rows: RenewalAlertRow[] = snapshotScan.data.map((row) => {
     const snapshot = row as SnapshotRow
     return {
       accountId: snapshot.account_id,
@@ -147,6 +181,7 @@ export async function dispatchRenewalAlerts(
       suppressedKeys: suppressedKeys.size,
       fellBackToRole: digests.filter((digest) => !digest.ownerId || !ownerRecipients.has(digest.ownerId)).length,
       skipped: "dryRun",
+      ...(truncated ? { truncated } : {}),
     }
   }
 
@@ -192,5 +227,6 @@ export async function dispatchRenewalAlerts(
     itemsNotified,
     suppressedKeys: suppressedKeys.size,
     fellBackToRole,
+    ...(truncated ? { truncated } : {}),
   }
 }

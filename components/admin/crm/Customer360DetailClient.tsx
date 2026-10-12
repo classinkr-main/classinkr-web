@@ -1,12 +1,15 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, Briefcase, ClipboardList, Coins, ExternalLink, LayoutDashboard, ListChecks } from "lucide-react"
 
+import CompassOpenLink from "@/components/admin/compass/CompassOpenLink"
+import { COMPASS_RECORD_LABEL, resolveCrmWriteSurface } from "@/lib/crm/write-surface"
 import type { Customer360 } from "@/lib/repositories/crm-customer-360"
 
+import Customer360ContactSummary from "./Customer360ContactSummary"
 import Customer360DetailActivity from "./Customer360DetailActivity"
 import Customer360DetailDeals from "./Customer360DetailDeals"
 import Customer360DetailMoney from "./Customer360DetailMoney"
@@ -49,9 +52,25 @@ function MoneyTabWithRelink({ data }: { data: Customer360 }) {
       money={data.money}
       deals={data.deals}
       accountId={accountId}
+      customerName={data.header?.name ?? null}
       onRelinked={() => router.refresh()}
     />
   )
+}
+
+/**
+ * A안(2026-09-25) — 기록 위치 판정을 360 페이로드에서 한 번에 만든다(lib/crm/write-surface). 헤더 링크와
+ * 활동 탭 안내 문구가 같은 판정을 쓴다. 순수 함수(테스트 고정).
+ */
+export function detailWriteSurface(data: Customer360) {
+  return resolveCrmWriteSurface({
+    source: data.source,
+    found: data.found,
+    compassHref: data.compass?.href,
+    compassDown: data.compass?.down,
+    leadStatus: data.leadStatus,
+    crmRegistered: data.crmRegistered,
+  })
 }
 
 function renderTabBody(tab: TabKey, data: Customer360) {
@@ -61,7 +80,15 @@ function renderTabBody(tab: TabKey, data: Customer360) {
     case "deals":
       return <Customer360DetailDeals deals={data.deals} />
     case "activity":
-      return <Customer360DetailActivity activity={data.activity} compass={data.compass} />
+      return (
+        <Customer360DetailActivity
+          activity={data.activity}
+          compass={data.compass}
+          customerSource={data.source}
+          linkedLeads={data.linkedLeads}
+          writeSurface={detailWriteSurface(data).surface}
+        />
+      )
     case "tasks":
       return <Customer360DetailTasks tasks={data.tasks} customerKey={data.key} targetLabel={data.header?.name ?? null} />
     case "overview":
@@ -193,6 +220,8 @@ export default function Customer360DetailClient({ data, customerKey }: Props) {
   const originHref = isLead
     ? `/admin/crm/customers/leads?lead=${encodeURIComponent(data.entityId)}`
     : `/admin/crm/customers/accounts?account=${encodeURIComponent(data.entityId)}`
+  // A안 — Compass 에서 응대 중인 리드는 헤더 주 행동이 Compass 새 탭 링크, Home 정본(NEO·전환)은 보조 링크.
+  const writeSurface = useMemo(() => detailWriteSurface(data), [data])
 
   return (
     <div className="mx-auto max-w-5xl" data-customer-key={customerKey}>
@@ -219,14 +248,36 @@ export default function Customer360DetailClient({ data, customerKey }: Props) {
             </div>
             <h1 className="text-xl font-bold tracking-[-0.02em] text-[#111110] sm:text-2xl">{displayName}</h1>
             <p className="mt-1 text-[13px] text-[#1a1a1a]/45">{metaLine}</p>
+            {/* CT9 — 마지막 연락 · 다음 연락(원천 표시, 서버 조립 시각 기준). 좁으면 두 줄로 쌓는다. */}
+            <Customer360ContactSummary summary={data.contactSummary} className="mt-1.5" />
           </div>
-          <Link
-            href={originHref}
-            className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
-          >
-            원본 화면
-            <ExternalLink className="h-3.5 w-3.5" />
-          </Link>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {writeSurface.surface === "compass" && writeSurface.compassHref ? (
+              <CompassOpenLink
+                href={writeSurface.compassHref}
+                name={displayName}
+                variant="primary"
+                className="h-11 sm:h-8"
+                testId="c360-detail-open-compass"
+              />
+            ) : writeSurface.secondaryCompassHref ? (
+              <CompassOpenLink
+                href={writeSurface.secondaryCompassHref}
+                name={displayName}
+                variant="secondary"
+                label={COMPASS_RECORD_LABEL}
+                className="h-11 sm:h-8"
+                testId="c360-detail-compass-record"
+              />
+            ) : null}
+            <Link
+              href={originHref}
+              className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+            >
+              원본 화면
+              <ExternalLink className="h-3.5 w-3.5" />
+            </Link>
+          </div>
         </div>
       </div>
 

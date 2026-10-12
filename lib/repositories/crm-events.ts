@@ -1,5 +1,8 @@
 import "server-only"
 
+import { revalidateTag } from "next/cache"
+
+import { ADMIN_CRM_TODAY_CONTACTS_CACHE_TAG } from "@/lib/admin/crm/cache-tags"
 import { createCrmRecordingSignedUrls } from "@/lib/storage/crm-recordings"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import type {
@@ -595,6 +598,20 @@ async function findRecentDuplicateEvent(
   return data as CrmCustomerEvent
 }
 
+/**
+ * 기록 쓰기 뒤 현황 "오늘 연락" Home 보조 원천 캐시(연락 인덱스)를 SWR로 무효화한다(2026-09-25 C안 ①).
+ * 이 무효화가 없으면 NEO 계정에 결과를 저장한 뒤 행이 최대 60초 "미처리"로 되살아난다(할 일을 만들지
+ * 않은 저장은 할 일 쓰기의 큐 태그 무효화도 타지 않는다). 쓰기는 이미 커밋됐다 — 무효화 실패가 저장
+ * 응답을 깨뜨리지 않게 감싼다(cache-tags 모듈만 import — 오늘 연락 저장소를 import하면 순환이 된다).
+ */
+function notifyCrmCustomerEventsMutated() {
+  try {
+    revalidateTag(ADMIN_CRM_TODAY_CONTACTS_CACHE_TAG, "max")
+  } catch (error) {
+    console.warn("[crm-events] today contacts cache invalidation failed:", error)
+  }
+}
+
 export async function createCrmCustomerEvent(input: CrmCustomerEventCreateInput) {
   const supabase = createSupabaseAdminClient()
   const insert = buildCrmCustomerEventInsert(input)
@@ -617,6 +634,7 @@ export async function createCrmCustomerEvent(input: CrmCustomerEventCreateInput)
     }
     throw new Error(`[crm-events] 저장 실패: ${error.message}`)
   }
+  notifyCrmCustomerEventsMutated()
   const [record] = await recordsWithSignedUrls([data as CrmCustomerEvent])
   return record
 }
@@ -668,6 +686,82 @@ export async function getOrCreateCrmCustomerEventBySource(
     }
     throw new Error(`[crm-events] 저장 실패: ${error.message}`)
   }
+  notifyCrmCustomerEventsMutated()
   const [record] = await recordsWithSignedUrls([data as CrmCustomerEvent])
   return { record, created: true }
+}
+
+// ── 연락 기록 쓰기 경로 정합(2026-09-25 W2: CT1·CT3) ─────────────────────────────
+
+/**
+ * 사람이 고객과 실제로 접촉했다는 증거로 치는 기록 종류 — 최초 응답·최근 컨택 집계(RESPONSE_SOURCE_TYPES)와
+ * 같은 목록을 공유한다. 리드를 "연락중"으로 직접 바꿀 때의 증거 판정(lib/crm/contact-record.ts)이 쓴다.
+ */
+export const CRM_HUMAN_CONTACT_SOURCE_TYPES: readonly CrmCustomerEventSourceType[] = RESPONSE_SOURCE_TYPES
+
+/**
+ * 리드 연락 로그 1건에서 만들어질 수 있는 미러 기록 종류. 리드 드로어·홈 큐는 lead_contact_log,
+ * 기록 컴포저의 콜·문자 모드는 call·sms로 미러를 만든다 — 셋 다 source_id = 로그 id.
+ */
+export const LEAD_CONTACT_MIRROR_SOURCE_TYPES: readonly CrmCustomerEventSourceType[] = [
+  "lead_contact_log",
+  "call",
+  "sms",
+]
+
+/**
+ * 이 리드에 사람 접촉 기록(콜·문자·회의록·녹음·연락 로그 미러)이 하나라도 있는지.
+ * 테이블 미적용 환경은 false(증거 없음) — 호출부가 그대로 409로 막는다.
+ */
+export async function hasLeadContactEvent(leadId: string): Promise<boolean> {
+  const id = leadId.trim()
+  if (!id) return false
+  const supabase = createSupabaseAdminClient()
+  const { count, error } = await supabase
+    .from("crm_customer_events")
+    .select("id", { count: "exact", head: true })
+    .eq("target_type", "lead")
+    .eq("target_id", id)
+    .in("source_type", [...CRM_HUMAN_CONTACT_SOURCE_TYPES])
+
+  if (error) {
+    if (isMissingCrmEventsTableError(error)) return false
+    throw new Error(`[crm-events] 리드 접촉 기록 조회 실패: ${error.message}`)
+  }
+  return (count ?? 0) > 0
+}
+
+/**
+ * 원천 행(source_id)에서 파생된 기록을 지운다 — 리드 연락 로그를 삭제하면 그 로그의 미러 기록도
+ * 함께 지워 최초 응답·최근 컨택·주간 콜 집계에 "유령 연락"이 남지 않게 한다(CT3).
+ * 대상(target)까지 좁혀 다른 리드의 기록을 건드리지 않는다. 지운 행 수를 돌려준다.
+ * crm_tasks.source_event_id는 ON DELETE SET NULL이라 그 기록에서 만든 할 일은 남는다.
+ */
+export async function deleteCrmCustomerEventsBySource(input: {
+  sourceTypes: readonly CrmCustomerEventSourceType[]
+  sourceId: string
+  targetType: CrmCustomerEventTargetType
+  targetId: string
+}): Promise<number> {
+  const sourceId = input.sourceId.trim()
+  const targetId = input.targetId.trim()
+  if (!sourceId || !targetId || input.sourceTypes.length === 0) return 0
+
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from("crm_customer_events")
+    .delete()
+    .in("source_type", [...new Set(input.sourceTypes)])
+    .eq("source_id", sourceId)
+    .eq("target_type", input.targetType)
+    .eq("target_id", targetId)
+    .select("id")
+
+  if (error) {
+    if (isMissingCrmEventsTableError(error)) return 0
+    throw new Error(`[crm-events] 원천 기록 삭제 실패: ${error.message}`)
+  }
+  const removed = (data ?? []).length
+  if (removed > 0) notifyCrmCustomerEventsMutated()
+  return removed
 }

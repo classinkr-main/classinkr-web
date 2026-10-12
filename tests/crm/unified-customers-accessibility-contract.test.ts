@@ -64,7 +64,10 @@ describe("CRM 통합 고객 접근성 계약", () => {
     expect(pageSource).toContain("function UnifiedCustomersLoading()")
     expect(pageSource).toContain('role="status"')
     expect(pageSource).toContain('aria-label="통합 고객 화면 로딩 중"')
-    expect(pageSource).toContain("fallback={<UnifiedCustomersLoading />}")
-    expect(pageSource).not.toContain("fallback={null}")
+    expect(pageSource).toMatch(/<Suspense fallback=\{<UnifiedCustomersLoading \/>\}>\s*<CrmUnifiedCustomersClient/)
+    // 빈 폴백은 NEO 동기화 경고 띠(정상이면 아무것도 없는 보조 표면, 2026-09-25) 하나에만 — 본문 첫 페인트에는
+    // 쓰지 않는다.
+    expect(pageSource.match(/fallback=\{null\}/g) ?? []).toHaveLength(1)
+    expect(pageSource).toMatch(/<Suspense fallback=\{null\}>\s*<SyncHealthBannerServer /)
   })
 })

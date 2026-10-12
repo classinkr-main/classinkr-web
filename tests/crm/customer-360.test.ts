@@ -206,6 +206,14 @@ function okEventsResult() {
   }
 }
 
+/** PostgREST 빌더 흉내 — 어떤 체인이든 빈 결과로 끝난다(CT9 연락 로그·계정→리드 링크 조회용). */
+function emptyQuery(): Record<string, unknown> {
+  const query: Record<string, unknown> = {}
+  for (const method of ["select", "eq", "in", "order", "limit"]) query[method] = () => query
+  query.then = (resolve: (value: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(resolve)
+  return query
+}
+
 function okTasksResult() {
   return {
     generatedAt: NOW.toISOString(),
@@ -248,6 +256,7 @@ async function loadCustomer360(options?: {
     findConfirmedLeadNeoLink,
   }))
   vi.doMock("@/lib/repositories/crm-events", () => ({
+    LEAD_CONTACT_MIRROR_SOURCE_TYPES: ["lead_contact_log", "call", "sms"],
     listCrmCustomerEvents: vi.fn().mockResolvedValue(okEventsResult()),
   }))
   vi.doMock("@/lib/repositories/crm-tasks", () => ({
@@ -284,6 +293,10 @@ async function loadCustomer360(options?: {
   vi.doMock("@/lib/repositories/crm-customer-tags", () => ({
     getCustomerTags: vi.fn().mockResolvedValue([]),
   }))
+  // CT9 — 연락 로그 원본·계정→리드 확정 링크를 직접 읽는다. 이 하네스는 둘 다 없는 고객이다.
+  vi.doMock("@/lib/supabase/admin", () => ({
+    createSupabaseAdminClient: () => ({ from: () => emptyQuery() }),
+  }))
 
   const loaded = await import("@/lib/repositories/crm-customer-360")
   return { getCrmCustomer360: loaded.getCrmCustomer360, findConfirmedLeadNeoLink }
@@ -315,6 +328,10 @@ describe("getCrmCustomer360 (mocked harness)", () => {
     expect(result.health.ok).toBe(true)
     // 수기 라벨은 360 페이로드에 additive로 동승한다(드로어 온-오픈 별도 fetch 제거).
     expect(result.tags).toEqual([])
+    // CT9 — 연락 기록이 없는 리드: 마지막 연락 없음(조회 실패가 아니라 0건), 리드 360 은 연결 리드 없음.
+    expect(result.contactSummary.last).toBeNull()
+    expect(result.contactSummary.leadHistoryDown).toBe(false)
+    expect(result.linkedLeads).toEqual({ leadIds: [], truncated: false, mergedCount: 0, down: false })
   })
 
   it("classifies ad-click leads as origin ad and stays unregistered without a link", async () => {

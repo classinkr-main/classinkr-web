@@ -2,13 +2,14 @@
 // 공식 원천은 NEO/HQ. 분모가 불명확한 잔액 비율은 억지로 만들지 않고, 만료일·절대 잔액·
 // freshness 중심으로만 위험을 판단한다. 데이터가 없으면 추정값을 확정값처럼 보이지 않는다.
 
+import { EXPIRING_SOON_DAYS } from "@/lib/crm/customer-segment-spec"
 import { billingModeUsesBalance, type EeoBillingMode } from "@/lib/crm/eeo-account-fields"
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const HOUR_MS = 60 * 60 * 1000
 const STALE_AFTER_HOURS = 24
 const VERY_STALE_AFTER_HOURS = 72
-const EXPIRING_SOON_DAYS = 30
+// "만료 임박" 일수는 통합 뷰·행 플래그·재연락 알림과 같은 SSOT(customer-segment-spec)를 쓴다.
 const WATCH_DAYS = 60
 const INACTIVE_DAYS = 30
 /** 소진 예상일이 이 안이면 재충전을 권할 시점으로 본다. */

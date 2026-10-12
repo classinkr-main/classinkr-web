@@ -104,7 +104,7 @@
 
 - [x] (2026-09-21 완료: 라우트가 `dueAt` 3상태(키 없음=그대로·null/빈 문자열=지움·날짜=설정)를 받고 해석 못 하는 값은 400. "내일로" 되돌리기는 기한이 없던 할 일도 `dueAt: null`로 정확히 복원한다.) 할 일 PATCH가 `dueAt: null`을 못 받아 기한 삭제·"내일로" 되돌리기가 안 된다(`app/api/admin/crm/tasks/[id]/route.ts`가
   `optionalString(raw.dueAt)`로만 받는다. CRM 기획 §10).
-  (같은 절의 "우선순위 큐 무효화 함수에 호출자가 없다"는 이미 해소됐다 — `crm-priority-queue.ts`가 리드·할 일·연락 기록 변이에 등록한다.)
+  (같은 절의 "우선순위 큐 무효화 함수에 호출자가 없다"는 부분 해소였다 — `crm-priority-queue.ts`의 구독은 큐 모듈을 로드한 인스턴스에만 걸려 다른 인스턴스의 쓰기를 놓쳤다. 2026-09-25에 리드·할 일·연락 로그 쓰기 경로가 스냅샷 태그를 직접 무효화하도록 고쳤다 — CRM 기획 §10 "§15 운영 실측 라운드".)
 - [x] (2026-09-21 완료: `unstable_cache` 60초 + `compass-adsets` 태그, `fresh=1`은 태그 즉시 만료, 절단 판정은 브리지 `truncated`.) `compass/adsets` 라우트는 아직 route-local 메모 + 행 수 근사 절단 판정이다. 같은 계열 `compass/ads`는 Data Cache +
   브리지 `truncated`로 옮겨졌다 — 같은 패턴으로 맞춘다.
 - [x] (2026-09-21 제거: 계약 테스트는 `tests/crm/lead-attribution-payload.test.ts`로 옮기고, 수집기 결과를 폼 본문에

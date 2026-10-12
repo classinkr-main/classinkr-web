@@ -22,6 +22,15 @@
 /** 외부 CRM(잔액·만료·최근 수업) 동기화가 "오래됐다"고 판단하는 경과시간 임계(시간). */
 export const CRM_SYNC_STALE_AFTER_HOURS = 24
 
+/**
+ * 하루 1회 크론이 도는 동기화(NEO 읽기·KR Team 시트·HW 시트)의 "멈춤" 임계(시간).
+ *
+ * 24시간으로 두면 크론이 정상이어도 실행 시각 직전·실행 소요 시간만큼 매일 잠깐씩 경고가 뜬다.
+ * 하루 주기 + 반나절 여유 = 36시간을 넘기면 "한 번 이상 건너뛰었다"로 본다
+ * (lib/admin/sync-health.ts가 원천별 건강 판정에 쓴다).
+ */
+export const DAILY_SYNC_STALE_AFTER_HOURS = 36
+
 /** ISO 문자열 → 경과시간(시간). 파싱 실패·값 없음은 null(신선도 미확인). */
 export function hoursSinceIso(value: string | null | undefined, nowMs: number = Date.now()): number | null {
   if (!value) return null

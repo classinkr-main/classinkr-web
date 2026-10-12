@@ -137,6 +137,17 @@ npm run check:db --  --strict
 
 `20260921_lead_source_intake_split.sql`은 데이터 백필이라 프로브로 확인할 수 없다(위 표의 조회로 확인).
 
+### 2026-09-25 세그먼트 허브(C안 ②) — 서울 프로젝트 미적용
+
+| 파일 | 하는 일 | 미적용 시 | 확인 |
+| --- | --- | --- | --- |
+| `20260925_crm_saved_segments.sql` | `crm_saved_segments`(조건·팀/내 것·자동 태그 설정, 활성 자동 라벨 부분 유니크, RLS 활성·정책 없음 = service_role 전용 deny-all, 예전 'Admins manage' 정책은 DROP) + `crm_saved_segment_daily`(일별 건수·자동 태그 실행 기록, RLS deny-all) + `crm_customer_tags (created_by, id)` 일반 인덱스(예전 `LIKE 'auto:%'` 부분 인덱스 `crm_customer_tags_auto_created_by_idx` 는 DROP IF EXISTS) | **배포 전 권장 — 미적용이어도 허브만 강등한다.** 목록 GET 은 200 `available:false`(적용 안내), 저장·수정·보관·적용 실행은 503, 매일 자동 태그(디스패처 UTC 슬롯 21 = KST 06시)는 `skipped(not_ready)`. 통합 목록·조건 칩·CSV 는 영향 없다 | `check:db`(테이블 프로브 2개) |
+
+자동 태그를 처음 켜기 전에는 드라이런으로 대상을 먼저 본다(쓰기 0): 허브 자동 태그 패널의 미리보기
+(`POST /api/admin/crm/segments/[id]/run` `{dryRun:true}`) 또는 `GET /api/cron/dispatch/21?dryRun=true`(Bearer
+`CRON_SECRET`)의 `segmentsPreview`. NEO 동기화가 오래됐으면 NEO 조건 세그먼트는 `skipped_neo_stale` 로 멈추는 것이
+의도된 동작이다.
+
 ## 적용 보류 중인 마이그레이션
 
 `check:db`에 걸리지 않는(프로브가 없는) 파일이라도, 아래 파일은 **파일명 순서대로 일괄 적용하지 않는다.**

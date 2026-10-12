@@ -13,6 +13,11 @@
  *   기존 EmailComposer에서도 탭 이동 시 사라지던 값들이라 동작 동일.
  * - 수신자 프리필(고객 360 딥링크)은 알림톡 테스트 패널을 자동으로 열고
  *   KakaoComposer의 테스트 번호 초기값으로만 쓰인다(기존 흐름 승계).
+ * - 고객 세그먼트(CRM) 넘김(발송 1단계, 2026-09-25)이 있으면 대상 모드를 "segment"로 연다. 받는 사람 카드는
+ *   SegmentAudienceCard(서버 미리보기 — 건수만)로 바뀌고, 채널 도달 수는 미리보기의 이메일 발송 가능 수·문자 0으로
+ *   채운다. 변수 예시는 정적 폴백(구독자 표본을 섞지 않는다). 캠페인 실발송 CTA 는 비활성, 테스트 발송만 유지.
+ *   우측 레일 "최종 확인"도 미리보기 기준으로 바꿔 넘긴다(segmentModeSendReview — 허브 체크는 태그 대상 기준이라
+ *   대상·수신거부·변수 빈 값을 그대로 쓰면 레일 헤더의 발송 가능 수와 어긋난다). 준비도는 "미리보기 전용".
  */
 
 import { useMemo, useRef, useState } from "react"
@@ -23,11 +28,21 @@ import { Input } from "@/components/ui/input"
 import type { EmailDraft, SavedEmailSegment, Subscriber } from "@/lib/marketing-types"
 import type { MessagingStatus } from "@/lib/messaging-client-types"
 import type { MessagePrefill } from "@/lib/message-prefill"
+import type { SegmentHandoff } from "@/lib/crm/segment-handoff"
+import type { SegmentAudiencePreview } from "@/lib/crm/segment-audience"
 import ReachCoverageCard from "./ReachCoverageCard"
+import SegmentAudienceCard from "./SegmentAudienceCard"
 import ChannelCascadeCard from "./ChannelCascadeCard"
 import MessageComposeCard from "./MessageComposeCard"
 import SendInvoiceRail from "./SendInvoiceRail"
-import type { PreSendCheck, SendReadiness, VariableBlockDef } from "./send-center-types"
+import { segmentModeSendReview } from "./presend-review"
+import type {
+  AudienceMode,
+  PreSendCheck,
+  SegmentPreviewStatus,
+  SendReadiness,
+  VariableBlockDef,
+} from "./send-center-types"
 
 // 알림톡 테스트 발송 패널은 열릴 때만 렌더되므로 청크도 그때만 로드한다.
 // 프리필 자동 오픈 경로는 그대로 — 패널 섹션(헤더 포함)은 즉시 열리고,
@@ -37,7 +52,15 @@ const KakaoComposer = dynamic(() => import("./KakaoComposer"), {
   loading: () => <div className="h-40 animate-pulse rounded-xl bg-[#f0f0ec]" aria-hidden />,
 })
 
-type AudienceMode = "tags" | "direct"
+// 고객 세그먼트 모드에서 변수 예시·미리보기 표본으로 쓰는 빈 목록 — 구독자 표본을 섞지 않는다(정적 폴백).
+const NO_RECIPIENTS: Subscriber[] = []
+
+/** 받는 사람 카드가 알린 미리보기 — 어느 세그먼트의 것인지 함께 둬서 넘김이 바뀌면 옛 값을 쓰지 않는다. */
+interface SegmentPreviewSnapshot {
+  segmentId: string
+  preview: SegmentAudiencePreview | null
+  status: SegmentPreviewStatus
+}
 
 interface SendCenterProps {
   draft: EmailDraft
@@ -54,6 +77,10 @@ interface SendCenterProps {
   messagingStatusLoaded: boolean
   recipientPrefill: MessagePrefill | null
   onClearRecipientPrefill: () => void
+  /** CRM 세그먼트 허브에서 넘겨받은 저장 세그먼트 — 있으면 대상 모드를 segment 로 연다 */
+  segmentHandoff?: SegmentHandoff | null
+  /** "세그먼트 해제" — 허브 상태를 비운다 */
+  onClearSegmentHandoff?: () => void
   draftNotice: string | null
   activeSegment: SavedEmailSegment | null
   hasDraft: boolean
@@ -64,7 +91,8 @@ interface SendCenterProps {
   onSaveSegment: () => void
   onApplySegment: (segment: SavedEmailSegment) => void
   onDeleteSegment: (segment: SavedEmailSegment) => void
-  onSend: (data: EmailDraft & { directEmails?: string[] }) => Promise<void>
+  /** 허브 발송 핸들러 — context.audienceMode 가 segment 면 허브가 거절한다(미리보기만) */
+  onSend: (data: EmailDraft & { directEmails?: string[] }, context?: { audienceMode?: AudienceMode }) => Promise<void>
   sendLoading: boolean
 }
 
@@ -82,6 +110,8 @@ export default function SendCenter({
   messagingStatusLoaded,
   recipientPrefill,
   onClearRecipientPrefill,
+  segmentHandoff = null,
+  onClearSegmentHandoff,
   draftNotice,
   activeSegment,
   hasDraft,
@@ -95,7 +125,12 @@ export default function SendCenter({
   onSend,
   sendLoading,
 }: SendCenterProps) {
-  const [audienceMode, setAudienceMode] = useState<AudienceMode>("tags")
+  // 대상 모드 — 사용자가 고르기 전(null)에는 세그먼트 넘김 유무로 파생한다(늦게 도착한 넘김도 effect 없이 반영).
+  // 넘김이 없는데 segment 가 남으면 태그로 떨어진다(해제 직후 등).
+  const [modeOverride, setModeOverride] = useState<AudienceMode | null>(null)
+  const chosenMode: AudienceMode = modeOverride ?? (segmentHandoff ? "segment" : "tags")
+  const audienceMode: AudienceMode = chosenMode === "segment" && !segmentHandoff ? "tags" : chosenMode
+  const [segmentPreviewSnapshot, setSegmentPreviewSnapshot] = useState<SegmentPreviewSnapshot | null>(null)
   const [directInput, setDirectInput] = useState("")
   // 알림톡 테스트 패널 — 사용자가 직접 여닫기 전(null)에는 프리필 존재 여부로 파생한다.
   // effect 없이도 늦게 도착한 프리필(딥링크 마운트 순서)이 패널을 자동으로 연다.
@@ -127,27 +162,66 @@ export default function SendCenter({
       .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
   }, [directInput])
 
-  const audienceCount = audienceMode === "direct" ? directEmails.length : selectedAudience
+  const segmentMode = audienceMode === "segment"
+  // 지금 넘김과 같은 세그먼트의 미리보기만 쓴다 — 카드가 새로 뜨는 사이(다른 세그먼트로 넘김)에는 로드 중으로 본다.
+  const currentSnapshot =
+    segmentMode && segmentHandoff && segmentPreviewSnapshot?.segmentId === segmentHandoff.segmentId
+      ? segmentPreviewSnapshot
+      : null
+  const segmentPreview = currentSnapshot?.preview ?? null
+  const segmentPreviewStatus: SegmentPreviewStatus = currentSnapshot?.status ?? "loading"
+  // 세그먼트 모드의 발송 가능 수 = 서버 미리보기의 이메일 발송 가능(구독 active 고유 주소). 문자는 정책 결정 대기라 0.
+  const segmentEligible = segmentMode && segmentPreview ? segmentPreview.email.eligible : 0
 
-  const emailReach =
-    audienceMode === "direct"
+  const audienceCount = segmentMode ? segmentEligible : audienceMode === "direct" ? directEmails.length : selectedAudience
+
+  const emailReach = segmentMode
+    ? segmentEligible
+    : audienceMode === "direct"
       ? directEmails.length
       : recipients.filter((s) => (s.email ?? "").trim().length > 0).length
   const phoneReach =
-    audienceMode === "direct" ? 0 : recipients.filter((s) => (s.phone ?? "").trim().length > 0).length
+    segmentMode || audienceMode === "direct" ? 0 : recipients.filter((s) => (s.phone ?? "").trim().length > 0).length
+
+  // 변수 예시·메시지 미리보기 표본 — 세그먼트 모드는 구독자 표본을 쓰지 않는다(정적 폴백).
+  const sampleRecipients = segmentMode ? NO_RECIPIENTS : recipients
+
+  const handleSegmentPreviewChange = (preview: SegmentAudiencePreview | null, status: SegmentPreviewStatus) => {
+    if (!segmentHandoff) return
+    setSegmentPreviewSnapshot({ segmentId: segmentHandoff.segmentId, preview, status })
+  }
+
+  // 최종 확인 — 세그먼트 모드면 태그 대상 기준 항목(대상·수신거부·변수 빈 값)을 미리보기 기준으로 바꾸고
+  // 준비도를 "미리보기 전용"으로 덮는다. 태그·직접 모드는 허브 체크 그대로.
+  const railReview = useMemo(
+    () =>
+      segmentMode
+        ? segmentModeSendReview({ checks, draft, preview: segmentPreview, status: segmentPreviewStatus })
+        : { checks, readiness },
+    [segmentMode, checks, draft, segmentPreview, segmentPreviewStatus, readiness]
+  )
+
+  const releaseSegment = () => {
+    setSegmentPreviewSnapshot(null)
+    setModeOverride("tags")
+    onClearSegmentHandoff?.()
+  }
+
+  // 발송은 허브로만 — 모드를 함께 넘겨 허브가 세그먼트 모드 발송을 거절하게 한다(레일 CTA 비활성과 이중 방어).
+  const handleSend = (data: EmailDraft & { directEmails?: string[] }) => onSend(data, { audienceMode })
 
   // 변수 블록 정의 — 발송 백엔드가 실제 치환하는 {name}/{org}/{role}만.
   // 예시값은 현재 대상의 실값(첫 비어있지 않은 값), 빈 값 수는 대상 전체 기준.
   const variables = useMemo<VariableBlockDef[]>(() => {
     const firstNonEmpty = (pick: (s: Subscriber) => string | undefined, fallback: string) => {
-      for (const s of recipients) {
+      for (const s of sampleRecipients) {
         const v = (pick(s) ?? "").trim()
         if (v) return v
       }
       return fallback
     }
     const emptyCount = (pick: (s: Subscriber) => string | undefined) =>
-      recipients.filter((s) => !(pick(s) ?? "").trim()).length
+      sampleRecipients.filter((s) => !(pick(s) ?? "").trim()).length
 
     return [
       {
@@ -161,17 +235,17 @@ export default function SendCenter({
         label: "학원명",
         source: "subscribers.org",
         example: firstNonEmpty((s) => s.org, "클래스인 아카데미"),
-        emptyCount: recipients.length > 0 ? emptyCount((s) => s.org) : undefined,
+        emptyCount: sampleRecipients.length > 0 ? emptyCount((s) => s.org) : undefined,
       },
       {
         token: "{role}",
         label: "직책",
         source: "subscribers.role",
         example: firstNonEmpty((s) => s.role, "원장"),
-        emptyCount: recipients.length > 0 ? emptyCount((s) => s.role) : undefined,
+        emptyCount: sampleRecipients.length > 0 ? emptyCount((s) => s.role) : undefined,
       },
     ]
-  }, [recipients])
+  }, [sampleRecipients])
 
   return (
     <div className="space-y-4">
@@ -203,7 +277,7 @@ export default function SendCenter({
           <p className="text-[12px] text-[#1a1a1a]/55">
             {draftNotice
               ? draftNotice
-              : activeSegment
+              : activeSegment && !segmentMode
                 ? `"${activeSegment.name}" 세그먼트 기준`
                 : "초안이 유지됩니다 — 탭 이동 후 돌아와도 내용이 남아있습니다."}
           </p>
@@ -222,22 +296,32 @@ export default function SendCenter({
       {/* ── 본 레이아웃: 좌측 스택 + 우측 레일 ────── */}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-4">
-          <ReachCoverageCard
-            audienceMode={audienceMode}
-            onAudienceModeChange={setAudienceMode}
-            targetTags={draft.targetTags}
-            onTagsChange={(tags) => onDraftChange({ ...draft, targetTags: tags })}
-            countMap={tagCountMap}
-            activeCount={activeCount}
-            unsubscribedCount={unsubscribedCount}
-            recipients={recipients}
-            directInput={directInput}
-            onDirectInputChange={setDirectInput}
-            directEmails={directEmails}
-            activeSegment={activeSegment}
-            savedSegments={savedSegmentViews}
-            onApplySegment={onApplySegment}
-          />
+          {segmentMode && segmentHandoff ? (
+            <SegmentAudienceCard
+              key={segmentHandoff.segmentId}
+              segmentId={segmentHandoff.segmentId}
+              onRelease={releaseSegment}
+              onPreviewChange={handleSegmentPreviewChange}
+            />
+          ) : (
+            <ReachCoverageCard
+              audienceMode={audienceMode}
+              onAudienceModeChange={setModeOverride}
+              segmentAvailable={Boolean(segmentHandoff)}
+              targetTags={draft.targetTags}
+              onTagsChange={(tags) => onDraftChange({ ...draft, targetTags: tags })}
+              countMap={tagCountMap}
+              activeCount={activeCount}
+              unsubscribedCount={unsubscribedCount}
+              recipients={recipients}
+              directInput={directInput}
+              onDirectInputChange={setDirectInput}
+              directEmails={directEmails}
+              activeSegment={activeSegment}
+              savedSegments={savedSegmentViews}
+              onApplySegment={onApplySegment}
+            />
+          )}
 
           <ChannelCascadeCard
             emailReach={emailReach}
@@ -250,7 +334,7 @@ export default function SendCenter({
           <MessageComposeCard
             draft={draft}
             onChange={onDraftChange}
-            recipients={recipients}
+            recipients={sampleRecipients}
             variables={variables}
             templates={messagingStatus?.templates ?? []}
             messagingStatusLoaded={messagingStatusLoaded}
@@ -299,11 +383,11 @@ export default function SendCenter({
             audienceMode={audienceMode}
             directEmails={directEmails}
             audienceCount={audienceCount}
-            checks={checks}
-            readiness={readiness}
+            checks={railReview.checks}
+            readiness={railReview.readiness}
             balance={messagingStatus?.balance ?? null}
             messagingStatusLoaded={messagingStatusLoaded}
-            onSend={onSend}
+            onSend={handleSend}
             sendLoading={sendLoading}
           />
 

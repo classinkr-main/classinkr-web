@@ -91,6 +91,18 @@ describe("GET /api/admin/crm/customers/unified force 관통 (unified-01)", () =>
     expect(mocks.getCrmUnifiedCustomers).toHaveBeenLastCalledWith(expect.objectContaining({ view: "all" }))
   })
 
+  it("세그먼트 허브 미리보기 — OR 그룹(`or`)을 받아 segment.anyOf 로 넘긴다(옛 URL 은 순수 AND 그대로)", async () => {
+    const { GET } = await loadRoute()
+
+    await GET(new NextRequest("https://classin.kr/api/admin/crm/customers/unified?expDays=60&or=risk%3Durgent&or=noContactDays%3D60&limit=50"))
+    expect(mocks.getCrmUnifiedCustomers).toHaveBeenLastCalledWith(
+      expect.objectContaining({ segment: { expDays: 60, anyOf: [{ noContactDays: 60 }, { risk: ["urgent"] }] }, limit: 50 })
+    )
+
+    await GET(new NextRequest("https://classin.kr/api/admin/crm/customers/unified?expDays=30"))
+    expect(mocks.getCrmUnifiedCustomers.mock.lastCall?.[0].segment).toEqual({ expDays: 30 })
+  })
+
   it("리포지토리 실패는 500 + 한국어 고정 문구로 내려 배너가 그대로 띄울 수 있다 (unified-10)", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined)
     mocks.getCrmUnifiedCustomers.mockRejectedValueOnce(new Error("boom"))

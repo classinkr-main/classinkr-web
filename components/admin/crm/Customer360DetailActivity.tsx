@@ -11,7 +11,9 @@ import {
   type CompassTimelineEntry,
   type CompassTimelineGroup,
 } from "@/lib/crm/compass-timeline"
-import type { Customer360Compass } from "@/lib/repositories/crm-customer-360"
+import { isLeadEraRow, LEAD_ERA_LABEL } from "@/lib/crm/customer-contact-summary"
+import type { CrmWriteSurface } from "@/lib/crm/write-surface"
+import type { Customer360Compass, Customer360LinkedLeads, Customer360Source } from "@/lib/repositories/crm-customer-360"
 import type { CrmCustomerEventRecord, ListCrmCustomerEventsResult } from "@/lib/repositories/crm-events"
 
 import {
@@ -90,7 +92,22 @@ function StringList({ label, items }: { label: string; items: string[] }) {
   )
 }
 
-function ActivityCard({ event }: { event: CrmCustomerEventRecord }) {
+/**
+ * CT9 — 확정 연결된 과거 리드 기록 원천 칩. 채움 없이 얇은 선 + 중립 글자색(카테고리 구분이지 상태가 아니다).
+ * 테스트가 data-testid 로 칩 유무를 고정한다.
+ */
+export function LeadEraChip() {
+  return (
+    <span
+      data-testid="c360-lead-era-chip"
+      className="inline-flex items-center rounded-md border border-[#E8E8E4] px-1.5 py-0.5 text-[10px] font-semibold text-[#615D59]"
+    >
+      {LEAD_ERA_LABEL}
+    </span>
+  )
+}
+
+export function ActivityCard({ event, leadEra = false }: { event: CrmCustomerEventRecord; leadEra?: boolean }) {
   const detail =
     event.meetingPurpose ||
     event.attendees.length > 0 ||
@@ -111,6 +128,7 @@ function ActivityCard({ event }: { event: CrmCustomerEventRecord }) {
       </span>
       <div className="min-w-0 flex-1 rounded-2xl border border-[#f0f0ec] bg-white p-3.5">
         <div className="flex flex-wrap items-center gap-1.5">
+          {leadEra ? <LeadEraChip /> : null}
           <span className="text-[11px] font-semibold text-[#1a1a1a]/45">
             {eventSourceLabel(event.sourceType)}
           </span>
@@ -249,12 +267,45 @@ function CompassActivityCard({ entry }: { entry: CompassTimelineEntry }) {
   )
 }
 
+/**
+ * 패널 설명 한 줄 — 병합 원천(Compass·리드 시절)을 건수와 함께 밝힌다. 순수 함수(테스트 고정).
+ * A안(2026-09-25) — writeSurface="compass"(Compass 에서 응대 중인 리드)면 기록 위치를 "Compass에서"로 안내한다.
+ * 기본값(없음·home)은 기존 문구 그대로다.
+ */
+export function activityPanelDescription(input: {
+  compassCount: number
+  leadEraCount: number
+  linkedLeadCount: number
+  writeSurface?: CrmWriteSurface | null
+}): string {
+  const merges: string[] = []
+  if (input.compassCount > 0) merges.push(`Compass ${input.compassCount}건`)
+  if (input.leadEraCount > 0) merges.push(`${LEAD_ERA_LABEL} ${input.leadEraCount}건(연결 리드 ${input.linkedLeadCount}개)`)
+  if (input.writeSurface === "compass") {
+    return merges.length > 0
+      ? `회의록 · 통화 · 메모 타임라인 · ${merges.join(" · ")} 병합 (읽기 전용 · 기록은 Compass에서)`
+      : "회의록 · 통화 · 메모 타임라인 (읽기 전용 — 기록은 Compass에서)"
+  }
+  return merges.length > 0
+    ? `회의록 · 통화 · 메모 타임라인 · ${merges.join(" · ")} 병합 (읽기 전용)`
+    : "회의록 · 통화 · 메모 타임라인 (읽기 전용 — 기록 생성은 드로어에서)"
+}
+
 export default function Customer360DetailActivity({
   activity,
   compass,
+  customerSource,
+  linkedLeads,
+  writeSurface,
 }: {
   activity: ListCrmCustomerEventsResult
   compass: Customer360Compass
+  /** CT9 — "neo_account" 면 target_type lead 행을 리드 시절로 칩 표시한다. */
+  customerSource?: Customer360Source
+  /** CT9 — 확정 연결 리드 병합 상태(옛 페이로드에는 없을 수 있다). */
+  linkedLeads?: Customer360LinkedLeads | null
+  /** A안 — 기록 위치(lib/crm/write-surface). 없으면 기존 안내 문구. */
+  writeSurface?: CrmWriteSurface | null
 }) {
   const [filter, setFilter] = useState<ActivityFilter>("all")
   const rows = activity.rows
@@ -267,15 +318,20 @@ export default function Customer360DetailActivity({
     [rows, compass.entries, filter]
   )
   const totalCount = activity.summary.total + compass.entries.length
+  const leadEraCount = useMemo(
+    () => rows.filter((event) => isLeadEraRow(customerSource, event.targetType)).length,
+    [rows, customerSource]
+  )
 
   return (
     <Panel
       title={`활동 · 메모 (${totalCount})`}
-      description={
-        compass.entries.length > 0
-          ? `회의록 · 통화 · 메모 타임라인 · Compass ${compass.entries.length}건 병합 (읽기 전용)`
-          : "회의록 · 통화 · 메모 타임라인 (읽기 전용 — 기록 생성은 드로어에서)"
-      }
+      description={activityPanelDescription({
+        compassCount: compass.entries.length,
+        leadEraCount,
+        linkedLeadCount: linkedLeads?.leadIds.length ?? 0,
+        writeSurface,
+      })}
       action={
         <div className="inline-flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-0.5">
           {FILTERS.map((item) => (
@@ -306,13 +362,31 @@ export default function Customer360DetailActivity({
         </p>
       ) : null}
 
+      {/* CT9 — 연결 리드·연락 로그 조회 실패는 "리드 시절 기록 없음"과 다른 사실이다. */}
+      {linkedLeads?.down ? (
+        <p
+          data-testid="c360-lead-history-down"
+          className="mb-3 flex items-center gap-2 border-l-2 border-[#ECD29C] px-3 py-2 text-[12px] text-[#1a1a1a]/55"
+        >
+          연결 리드·연락 로그 기록 일부를 불러오지 못했습니다 — 타임라인이 완전하지 않을 수 있습니다.
+        </p>
+      ) : linkedLeads?.truncated ? (
+        <p className="mb-3 border-l-2 border-[#E8E8E4] px-3 py-2 text-[12px] text-[#1a1a1a]/55">
+          연결 리드가 많아 최근 확정 {linkedLeads.leadIds.length}개의 기록만 합쳤습니다.
+        </p>
+      ) : null}
+
       {merged.length === 0 ? (
         <TableEmpty message={filter === "all" ? "기록된 활동이 없습니다." : "해당 유형의 기록이 없습니다."} />
       ) : (
         <ul className="space-y-3">
           {merged.map((item) =>
             item.kind === "crm" ? (
-              <ActivityCard key={item.event.id} event={item.event} />
+              <ActivityCard
+                key={item.event.id}
+                event={item.event}
+                leadEra={isLeadEraRow(customerSource, item.event.targetType)}
+              />
             ) : (
               <CompassActivityCard key={item.entry.id} entry={item.entry} />
             )

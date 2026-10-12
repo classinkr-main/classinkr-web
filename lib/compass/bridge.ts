@@ -597,6 +597,154 @@ export async function getCompassActivitySignals(
   }
 }
 
+/** getCompassLatestActivityByPhoneKeys 결과 한 행 — 우리 전화 키 하나의 가장 최근 활동(본문 없음). */
+export interface CompassLatestActivityRow {
+  phone_key: string
+  /** 활동이 달린 Compass 리드 id(같은 전화 키에 리드가 여럿이면 최신 활동이 달린 쪽). */
+  lead_id: number
+  /** 활동 시각 — compass_activities_v.created_at. */
+  occurred_at: string
+  kind: string | null
+  actor: string | null
+}
+
+/** compass_leads_v 전화 키 스캔 상한 — crm.leads 전체(2026-09-14 기준 898행)에 넉넉한 폭주 방지선. */
+const LATEST_ACTIVITY_LEAD_SCAN_MAX_ROWS = 50_000
+/** 리드 id 청크당 활동 스캔 상한 — 넘으면 truncated. */
+const LATEST_ACTIVITY_SCAN_MAX_ROWS = 50_000
+/** 활동 청크를 동시에 몇 개까지 보낼지 — 원격 부하 모양을 순차에 가깝게 유지한다. */
+const LATEST_ACTIVITY_CHUNK_CONCURRENCY = 4
+
+interface CompassLeadKeyScanRow {
+  id: number
+  phone_key: string | null
+}
+
+interface CompassActivityScanRow {
+  id: number
+  lead_id: number
+  kind: string | null
+  actor: string | null
+  created_at: string
+}
+
+/**
+ * 전화 키 목록 → 키별 가장 최근 활동(occurred_at·kind·actor) — 통합 고객 "마지막 연락" 읽기 모델(CT8)용.
+ *
+ *  * 필요한 컬럼만 읽는다 — 리드는 id·phone_key, 활동은 id·lead_id·kind·actor·created_at(본문 없음).
+ *  * 전화 키 → 리드: compass_leads_v.phone_key 는 뷰 안의 정규식 계산 컬럼이라 `.in("phone_key", …)` 도
+ *    호출마다 crm.leads 를 전부 훑는다. 키 수천 개를 300개씩 나눠 같은 스캔을 수십 번 도는 대신
+ *    id·phone_key 두 컬럼을 range 페이지네이션으로 한 번 훑고 우리 키 집합과의 교집합만 남긴다
+ *    (원격 부하는 `.in` 한 번과 같고 왕복은 줄어든다). 우리와 무관한 키는 결과·메모에 싣지 않는다.
+ *  * 리드 → 활동: lead_id 를 100개씩 나눠 kind 로 거르고 id 순 range 페이지네이션으로 끝까지 읽은 뒤
+ *    리드별 최신 1건을 고른다. options.excludeActors 에 든 작성자(자동 기록)는 건너뛴다.
+ *  * fail-soft — 절대 throw 하지 않는다. 한 조회라도 실패하면 down(행 없음), 스캔 상한에 닿으면
+ *    truncated(받은 만큼으로 계산 — 호출부가 "일부만 반영"으로 표시한다).
+ *  * 60초 메모(down은 10초) — 키 집합·kind·제외 작성자로 키를 만든다.
+ */
+export async function getCompassLatestActivityByPhoneKeys(
+  phoneKeys: string[],
+  options: { kinds: readonly string[]; excludeActors?: Iterable<string> },
+): Promise<CompassResult<CompassLatestActivityRow>> {
+  const keys = [...new Set(phoneKeys.map((key) => key?.trim()).filter((key): key is string => Boolean(key)))].sort()
+  const kinds = [...new Set(options.kinds.filter(Boolean))].sort()
+  if (keys.length === 0 || kinds.length === 0) return ok([])
+  const excluded = [...new Set(options.excludeActors ?? [])].sort()
+  const excludedSet = new Set(excluded)
+  const cacheKey = `latestActivity:${kinds.join(",")}:${foldLongKey(excluded.join(","))}:${foldLongKey(keys.join(","))}`
+  try {
+    return await memoize(
+      cacheKey,
+      async () => {
+        const sb = createSupabaseAdminClient()
+        const ourKeys = new Set(keys)
+
+        // 1) 전화 키 → Compass 리드 id(교집합만).
+        const leadScan = await fetchSupabasePages<CompassLeadKeyScanRow>({
+          maxRows: LATEST_ACTIVITY_LEAD_SCAN_MAX_ROWS,
+          concurrent: true,
+          fetchPage: (from, to) =>
+            sb
+              .from("compass_leads_v")
+              .select("id, phone_key", from === 0 ? { count: "exact" } : undefined)
+              .order("id", { ascending: true })
+              .range(from, to),
+        })
+        if (leadScan.error != null) return downResult<CompassLatestActivityRow>(leadScan.error)
+        let truncated = leadScan.truncated
+        const phoneKeyByLeadId = new Map<number, string>()
+        for (const lead of leadScan.data) {
+          const key = lead.phone_key?.trim()
+          if (key && ourKeys.has(key)) phoneKeyByLeadId.set(lead.id, key)
+        }
+        const leadIds = [...phoneKeyByLeadId.keys()].sort((a, b) => a - b)
+        if (leadIds.length === 0) return { rows: [], down: false, truncated }
+
+        // 2) 리드 id → 최신 활동(청크 단위, 제한된 동시성).
+        const chunks: number[][] = []
+        for (let index = 0; index < leadIds.length; index += ACTIVITY_LEAD_ID_CHUNK) {
+          chunks.push(leadIds.slice(index, index + ACTIVITY_LEAD_ID_CHUNK))
+        }
+        const latestByLeadId = new Map<number, CompassActivityScanRow>()
+        for (let start = 0; start < chunks.length; start += LATEST_ACTIVITY_CHUNK_CONCURRENCY) {
+          const batch = chunks.slice(start, start + LATEST_ACTIVITY_CHUNK_CONCURRENCY)
+          const results = await Promise.all(
+            batch.map((chunk) =>
+              fetchSupabasePages<CompassActivityScanRow>({
+                maxRows: LATEST_ACTIVITY_SCAN_MAX_ROWS,
+                fetchPage: (from, to) =>
+                  sb
+                    .from("compass_activities_v")
+                    .select("id, lead_id, kind, actor, created_at", from === 0 ? { count: "exact" } : undefined)
+                    .in("lead_id", chunk)
+                    .in("kind", kinds)
+                    .order("id", { ascending: true })
+                    .range(from, to),
+              }),
+            ),
+          )
+          for (const result of results) {
+            if (result.error != null) return downResult<CompassLatestActivityRow>(result.error)
+            if (result.truncated) truncated = true
+            for (const activity of result.data) {
+              const actor = activity.actor?.trim()
+              if (actor && excludedSet.has(actor)) continue
+              const time = new Date(activity.created_at).getTime()
+              if (Number.isNaN(time)) continue
+              const current = latestByLeadId.get(activity.lead_id)
+              if (!current || time > new Date(current.created_at).getTime()) {
+                latestByLeadId.set(activity.lead_id, activity)
+              }
+            }
+          }
+        }
+
+        // 3) 전화 키별로 접는다 — 같은 키에 Compass 리드가 여럿이면 가장 최근 활동 하나.
+        const latestByPhoneKey = new Map<string, CompassLatestActivityRow>()
+        for (const [leadId, activity] of latestByLeadId) {
+          const phoneKey = phoneKeyByLeadId.get(leadId)
+          if (!phoneKey) continue
+          const current = latestByPhoneKey.get(phoneKey)
+          if (!current || new Date(activity.created_at).getTime() > new Date(current.occurred_at).getTime()) {
+            latestByPhoneKey.set(phoneKey, {
+              phone_key: phoneKey,
+              lead_id: leadId,
+              occurred_at: activity.created_at,
+              kind: activity.kind,
+              actor: activity.actor,
+            })
+          }
+        }
+        const rows = [...latestByPhoneKey.values()].sort((a, b) => a.phone_key.localeCompare(b.phone_key))
+        return { rows, down: false, truncated }
+      },
+      { ttlMs: TTL_MS, downTtlMs: TTL_DOWN_MS, isDown: isCompassResultDown, copy: copyCompassResult },
+    )
+  } catch (error) {
+    return downResult(error)
+  }
+}
+
 /** 소재 단위 일별 성과(크리에이티브 포함) — Summary/광고 탭 소재 CPL 카드용.
  *  60초 메모(down은 10초) — (fromDay, toDay) 범위 문자열이 그대로 키다. */
 export async function getCompassAdsDaily(
@@ -873,5 +1021,193 @@ export async function isCompassBridgeDown(): Promise<boolean> {
     )
   } catch {
     return true
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 현황 "오늘 연락"(C안 ①, 2026-09-25) 전용 조회 둘 — 추가만(기존 함수 시그니처 불변), 읽기 전용, 절대 throw 하지 않음.
+// Compass 결과는 호출부(lib/repositories/crm-today-contacts.ts)가 Data Cache(unstable_cache) 밖에서 부른다 —
+// down 이 60초 동안 굳지 않게, 여기의 짧은 메모(60초, down 10초)만 탄다.
+// ---------------------------------------------------------------------------
+
+/** 다음 액션 기간 조회 한 행 — 금액·이메일·메모 칼럼은 읽지 않는다. next_action 문구는 표시 전용(저장·복제 금지). */
+export interface CompassNextActionRow {
+  id: number
+  academy: string | null
+  name: string | null
+  phone_key: string | null
+  stage: string | null
+  owner: string | null
+  caller: string | null
+  bd_owner: string | null
+  care_stage: string | null
+  next_action_at: string
+  next_action: string | null
+  created_at: string
+  updated_at: string | null
+  last_inflow_at: string | null
+}
+
+const COMPASS_NEXT_ACTION_COLUMNS = [
+  "id",
+  "academy",
+  "name",
+  "phone_key",
+  "stage",
+  "owner",
+  "caller",
+  "bd_owner",
+  "care_stage",
+  "next_action_at",
+  "next_action",
+  "created_at",
+  "updated_at",
+  "last_inflow_at",
+].join(", ")
+
+/** 다음 액션 기간 조회 기본 상한 — crm.leads 전체(2026-09 약 900행)에 넉넉한 폭주 방지선. */
+const COMPASS_NEXT_ACTIONS_DEFAULT_MAX_ROWS = 2_000
+
+/** ISO 를 Date 로 한 번 통과시켜 정규화 — 필터 구문에 형식이 어긋난 문자열이 끼어들지 않게. 잘못되면 null. */
+function canonicalBridgeIso(value: string): string | null {
+  const ms = new Date(value).getTime()
+  return Number.isNaN(ms) ? null : new Date(ms).toISOString()
+}
+
+/**
+ * next_action_at 이 [fromIso, toIso] 안인 Compass 리드(단계·종료 여부 필터 없음 — 순수 모듈이 거른다).
+ * getCompassUpcomingActions(now~+48시간, select *, limit 500)와 달리 **지난 다음 액션**까지 읽고, 슬림 칼럼만,
+ * range 페이지네이션(count exact → truncated)으로 읽는다. 잘못된 ISO 는 down.
+ * order: 정렬 방향(기본 asc) — 상한에서 잘릴 때 남길 쪽을 고른다(desc = 최근 행 먼저, 가장 오래된 행이 먼저 잘림).
+ * 타이브레이커 id 도 같은 방향이다(페이지 사이 전순서).
+ * 60초 메모(down은 10초) — 키는 분 단위로 자른 기간 + maxRows + 방향.
+ */
+export async function getCompassNextActionsInRange(
+  fromIso: string,
+  toIso: string,
+  options?: { maxRows?: number; order?: "asc" | "desc" },
+): Promise<CompassSliceResult<CompassNextActionRow>> {
+  const from = canonicalBridgeIso(fromIso)
+  const to = canonicalBridgeIso(toIso)
+  if (!from || !to) return downSliceResult<CompassNextActionRow>(new Error("compass next actions: invalid range"))
+  const maxRows = Math.max(1, Math.floor(options?.maxRows ?? COMPASS_NEXT_ACTIONS_DEFAULT_MAX_ROWS))
+  const ascending = options?.order !== "desc"
+  const cacheKey = `nextActions:${truncateIsoToMinute(from)}:${truncateIsoToMinute(to)}:${maxRows}:${ascending ? "asc" : "desc"}`
+  try {
+    return await memoize(
+      cacheKey,
+      async () => {
+        const sb = createSupabaseAdminClient()
+        const paged = await fetchSupabasePages<CompassNextActionRow>({
+          maxRows,
+          concurrent: true,
+          fetchPage: (start, end) =>
+            sb
+              .from("compass_leads_v")
+              .select(COMPASS_NEXT_ACTION_COLUMNS, start === 0 ? { count: "exact" } : undefined)
+              .gte("next_action_at", from)
+              .lte("next_action_at", to)
+              .order("next_action_at", { ascending })
+              .order("id", { ascending })
+              .range(start, end),
+        })
+        if (paged.error != null) return downSliceResult<CompassNextActionRow>(paged.error)
+        return { rows: paged.data, down: false, truncated: paged.truncated }
+      },
+      {
+        ttlMs: TTL_MS,
+        downTtlMs: TTL_DOWN_MS,
+        isDown: (result) => result.down === true,
+        copy: copyCompassSliceResult,
+      },
+    )
+  } catch (error) {
+    return downSliceResult<CompassNextActionRow>(error)
+  }
+}
+
+/** 전화 키 → Compass 리드 인덱스 한 행 — 조인·대표 행 선택·담당 표시에 필요한 칼럼만(이름·학원·금액 없음). */
+export interface CompassLeadIndexRow {
+  phone_key: string
+  id: number
+  stage: string | null
+  owner: string | null
+  caller: string | null
+  bd_owner: string | null
+  care_stage: string | null
+  next_action_at: string | null
+  created_at: string
+  updated_at: string | null
+  last_inflow_at: string | null
+}
+
+interface CompassLeadIndexScanRow extends Omit<CompassLeadIndexRow, "phone_key"> {
+  phone_key: string | null
+}
+
+const COMPASS_LEAD_INDEX_COLUMNS = [
+  "id",
+  "phone_key",
+  "stage",
+  "owner",
+  "caller",
+  "bd_owner",
+  "care_stage",
+  "next_action_at",
+  "created_at",
+  "updated_at",
+  "last_inflow_at",
+].join(", ")
+
+/** 전화 조인 키 최소 길이 — lib/crm/last-contact.ts contactPhoneKey·lead-contact-sync 와 같은 9자리. */
+const COMPASS_LEAD_INDEX_MIN_KEY_LENGTH = 9
+
+/**
+ * 전화 키 목록 → 그 키를 가진 Compass 리드 전부(같은 키 다건 포함 — 대표 행은 호출부가 overlay.ts
+ * pickRepresentativeCompassRow 로 고른다). `.in("phone_key", …)` 300개 청크 대신 compass_leads_v 슬림 칼럼을
+ * id 순 range 로 한 번 훑고 우리 키 집합과의 교집합만 남긴다(키 수와 무관하게 1~2 왕복 — 약 900행).
+ * 우리와 무관한 키는 결과·메모에 싣지 않는다. 9자리 미만 키는 버린다. 상한에 닿으면 truncated.
+ * 60초 메모(down은 10초) — 키 집합(정렬·중복 제거)이 키다.
+ */
+export async function getCompassLeadIndexByPhoneKeys(
+  phoneKeys: string[],
+): Promise<CompassResult<CompassLeadIndexRow>> {
+  const keys = [
+    ...new Set(
+      phoneKeys
+        .map((key) => key?.trim())
+        .filter((key): key is string => Boolean(key) && key.length >= COMPASS_LEAD_INDEX_MIN_KEY_LENGTH),
+    ),
+  ].sort()
+  if (keys.length === 0) return ok([])
+  const cacheKey = `leadIndex:${foldLongKey(keys.join(","))}`
+  try {
+    return await memoize(
+      cacheKey,
+      async () => {
+        const sb = createSupabaseAdminClient()
+        const ourKeys = new Set(keys)
+        const scan = await fetchSupabasePages<CompassLeadIndexScanRow>({
+          maxRows: LATEST_ACTIVITY_LEAD_SCAN_MAX_ROWS,
+          concurrent: true,
+          fetchPage: (from, to) =>
+            sb
+              .from("compass_leads_v")
+              .select(COMPASS_LEAD_INDEX_COLUMNS, from === 0 ? { count: "exact" } : undefined)
+              .order("id", { ascending: true })
+              .range(from, to),
+        })
+        if (scan.error != null) return downResult<CompassLeadIndexRow>(scan.error)
+        const rows: CompassLeadIndexRow[] = []
+        for (const row of scan.data) {
+          const key = row.phone_key?.trim()
+          if (key && ourKeys.has(key)) rows.push({ ...row, phone_key: key })
+        }
+        return { rows, down: false, truncated: scan.truncated }
+      },
+      { ttlMs: TTL_MS, downTtlMs: TTL_DOWN_MS, isDown: isCompassResultDown, copy: copyCompassResult },
+    )
+  } catch (error) {
+    return downResult(error)
   }
 }

@@ -22,6 +22,11 @@ import {
   type LeadSourceGroup,
 } from "@/lib/crm/lead-attribution"
 import { matchesLeadSearch, tokenizeLeadSearch } from "@/lib/crm/lead-ranking"
+import {
+  leadInflowInWindow,
+  type LeadInflowEvent,
+  type ReinflowReason,
+} from "@/lib/crm/lead-reinflow"
 import type { LeadRecord } from "@/lib/repositories/leads"
 
 // ─── 일자 규약 ─────────────────────────────────────────────────
@@ -115,32 +120,103 @@ export interface NewLeadFilterOptions extends LeadDateRange {
 }
 
 /**
- * 신규 유입 목록. 순서:
- *   테스트 리드 제외 → KST 일자 범위 → 소스 그룹 → 검색 토큰 → 미연락
- * 반환은 최신 유입순.
+ * KST 일자 범위 [since, until](양끝 포함) → 반열린 ms 창 [since 00:00 KST, until 다음날 00:00 KST).
+ * leadInflowInWindow 기본(반열린 창)과 맞춰 하루 경계의 리드가 이웃 창에 두 번 잡히지 않게 한다.
+ * 형식이 깨졌거나 뒤집힌 범위는 null — 임의 보정하지 않는다.
  */
+export function leadDateRangeWindow(range: LeadDateRange): { fromMs: number; toMs: number } | null {
+  if (!ISO_DATE_PATTERN.test(range.since) || !ISO_DATE_PATTERN.test(range.until)) return null
+  const fromMs = Date.parse(`${range.since}T00:00:00+09:00`)
+  const toMs = Date.parse(`${shiftDays(range.until, 1)}T00:00:00+09:00`)
+  if (Number.isNaN(fromMs) || Number.isNaN(toMs) || fromMs >= toMs) return null
+  return { fromMs, toMs }
+}
+
+/** 신규 리드 탭의 한 행 — 리드와 "이 기간의 유입"(신규면 생성 시각, 재문의면 last_inflow_at). */
+export interface NewLeadRow {
+  lead: LeadRecord
+  inflow: LeadInflowEvent
+}
+
+/**
+ * 신규 유입 행(F12). 순서:
+ *   테스트 리드 제외 → 유입 창(생성 또는 재문의, KST) → 소스 그룹 → 검색 토큰 → 미연락
+ * 반환은 최신 유입순(유입 시각 내림차순, 동률은 id 순).
+ *
+ * 창 판정은 lib/crm/lead-reinflow.ts leadInflowInWindow(SSOT)를 그대로 쓴다. 2026-09-21 재유입 병합 뒤로
+ * 응대 대상 소스의 재문의는 새 행 없이 기존 리드의 last_inflow_at만 갱신된다 — 예전처럼 생성 시각으로만
+ * 자르면 "기간 전에 처음 들어와 이번 기간에 다시 문의한" 리드가 이 탭에서 통째로 빠졌다.
+ */
+export function filterNewLeadRows(
+  leads: readonly LeadRecord[],
+  options: NewLeadFilterOptions
+): NewLeadRow[] {
+  const window = leadDateRangeWindow(options)
+  if (!window) return []
+  const { groups, query, onlyUncontacted } = options
+  const groupSet = groups && groups.length > 0 ? new Set(groups) : null
+  const tokens = tokenizeLeadSearch(query ?? "")
+
+  const rows: NewLeadRow[] = []
+  for (const lead of leads) {
+    if (isTestLead(lead)) continue
+
+    const inflow = leadInflowInWindow(lead, window.fromMs, window.toMs)
+    if (!inflow) continue
+
+    if (groupSet && !groupSet.has(getLeadSourceGroup(lead))) continue
+    if (!matchesLeadSearch(lead, tokens)) continue
+    if (onlyUncontacted && isContactedLead(lead)) continue
+
+    rows.push({ lead, inflow })
+  }
+
+  return rows.sort((a, b) => b.inflow.atMs - a.inflow.atMs || a.lead.id.localeCompare(b.lead.id))
+}
+
+/** filterNewLeadRows의 리드만(최신 유입순). 행의 유입 종류가 필요 없는 호출부용. */
 export function filterNewLeads(
   leads: readonly LeadRecord[],
   options: NewLeadFilterOptions
 ): LeadRecord[] {
-  const { since, until, groups, query, onlyUncontacted } = options
-  const groupSet = groups && groups.length > 0 ? new Set(groups) : null
-  const tokens = tokenizeLeadSearch(query ?? "")
+  return filterNewLeadRows(leads, options).map((row) => row.lead)
+}
 
-  const matched = leads.filter((lead) => {
-    if (isTestLead(lead)) return false
+// ─── 재유입 표시 ───────────────────────────────────────────────
+/**
+ * reinquiry      — 재문의: **이 기간의 유입이** 재문의다(생성은 기간 전, last_inflow_at 이 기간 안 — 행의
+ *                  inflow.kind === "reinflow"). 재문의는 새 행 없이 기존 리드에 합쳐진다.
+ * repeat_contact — 재유입: 같은 전화·이메일의 더 이른 리드 행이 이미 있다(자료 다운로드 등 병합 대상 밖 소스).
+ *
+ * 생성이 기간 안인 행은 그 기간의 **첫 유입**이다 — 나중(기간 밖이든 같은 기간 안이든)에 다시 문의했다는
+ * 흔적(buildReinflowIndex 의 inflow_stamp)만으로 "재문의"를 붙이지 않는다. 09-01~07 기간에 09-03 생성·09-20
+ * 재문의한 리드가 그 기간에서 "재문의"·"재유입 N 포함"에 세어지던 결함(2026-09-25 리뷰). 기간 판정
+ * (leadInflowInWindow: 생성이 창 안이면 신규)·신규/재유입 집계(tallyLeadInflow)와 같은 축이다.
+ */
+export type NewLeadReinflowKind = "reinquiry" | "repeat_contact"
 
-    const day = kstDateKey(lead.timestamp)
-    if (!day || day < since || day > until) return false
+/**
+ * 행의 재유입 배지 종류. index는 buildReinflowIndex(전량)로 만든다 — 기간으로 자른 배열로 만들면
+ * 기간 밖 선행 유입을 못 본다. index 에서는 repeat_contact(더 이른 같은 연락처 행)만 읽는다 — inflow_stamp 는
+ * 기간과 무관한 "언젠가 다시 문의함"이라 이 기간의 유입 종류를 말하지 못한다.
+ */
+export function newLeadReinflowKind(
+  row: NewLeadRow,
+  index: ReadonlyMap<string, ReinflowReason>
+): NewLeadReinflowKind | null {
+  if (row.inflow.kind === "reinflow") return "reinquiry"
+  if (index.get(row.lead.id) === "repeat_contact") return "repeat_contact"
+  return null
+}
 
-    if (groupSet && !groupSet.has(getLeadSourceGroup(lead))) return false
-    if (!matchesLeadSearch(lead, tokens)) return false
-    if (onlyUncontacted && isContactedLead(lead)) return false
-
-    return true
-  })
-
-  return matched.sort((a, b) => (b.timestamp ?? "").localeCompare(a.timestamp ?? ""))
+/** 화면 집합에서 재유입(재문의 포함) 배지가 붙는 행 수. */
+export function countNewLeadReinflow(
+  rows: readonly NewLeadRow[],
+  index: ReadonlyMap<string, ReinflowReason>
+): number {
+  let count = 0
+  for (const row of rows) if (newLeadReinflowKind(row, index)) count += 1
+  return count
 }
 
 // ─── 소스 그룹 카운트 ──────────────────────────────────────────

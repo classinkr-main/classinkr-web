@@ -7,6 +7,7 @@ import {
   buildSyncFailureAlert,
   computeSyncFailureStreak,
   shouldAlertSyncFailureStreak,
+  syncRunCoversSource,
   type SyncRunLike,
 } from "@/lib/branch/sync/failure-streak"
 
@@ -59,6 +60,50 @@ describe("computeSyncFailureStreak", () => {
     expect(streak.lastFailureAt).toBe("2026-09-10T07:00:00Z")
     expect(streak.truncated).toBe(true) // 성공 행을 못 만남 — 창보다 오래 실패 중일 수 있다
     expect(streak.lastSuccessAt).toBeNull()
+  })
+
+  // 2026-09-25 — runAll이 한 원천만 돌린 런을 그 원천 이름으로 남긴다(REV 새로고침 = source "rev").
+  // 예전에는 모든 런이 "all"이라 REV 새로고침 성공이 HW 성공으로 읽혀 HW 연속 실패가 0이 됐다.
+  it("skips runs that did not run this source (single-source runs), so a REV-only refresh does not reset HW", () => {
+    const runs: SyncRunLike[] = [
+      { started_at: "2026-09-10T10:00:00Z", status: "success", error: null, source: "rev" }, // 장부 REV 새로고침
+      run("2026-09-10T08:38:00Z", "failed", "hw: 503 Service Unavailable"),
+      { started_at: "2026-09-09T10:00:00Z", status: "failed", error: PERMISSION, source: "rev" }, // REV만 돌려 실패
+      run("2026-09-09T08:38:00Z", "failed", "hw: 503 Service Unavailable"),
+      run("2026-09-08T08:38:00Z", "success"),
+    ]
+    const hw = computeSyncFailureStreak(runs, "hw")
+    expect(hw.failedRuns).toBe(2)
+    expect(hw.failedDays).toBe(2)
+    expect(hw.lastSuccessAt).toBe("2026-09-08T08:38:00Z")
+    expect(hw.lastError).toBe("hw: 503 Service Unavailable")
+
+    const rev = computeSyncFailureStreak(runs, "rev")
+    expect(rev.failedRuns).toBe(0)
+    expect(rev.lastSuccessAt).toBe("2026-09-10T10:00:00Z")
+  })
+
+  it("an unprefixed failure of a single-source run counts only for that source", () => {
+    const runs: SyncRunLike[] = [
+      { started_at: "2026-09-10T10:00:00Z", status: "failed", error: "connection reset", source: "rev" },
+      run("2026-09-09T08:38:00Z", "success"),
+    ]
+    expect(computeSyncFailureStreak(runs, "rev").failedRuns).toBe(1)
+    expect(computeSyncFailureStreak(runs, "hw").failedRuns).toBe(0)
+    expect(computeSyncFailureStreak(runs, "hw").lastSuccessAt).toBe("2026-09-09T08:38:00Z")
+  })
+
+  it("keeps the legacy reading for 'all' and source-less rows (backward compatible)", () => {
+    expect(syncRunCoversSource({ source: "all" }, "hw")).toBe(true)
+    expect(syncRunCoversSource({}, "rev")).toBe(true)
+    expect(syncRunCoversSource({ source: "rev" }, "rev")).toBe(true)
+    expect(syncRunCoversSource({ source: "rev" }, "hw")).toBe(false)
+    expect(syncRunCoversSource({ source: "hw" }, "rev")).toBe(false)
+
+    const legacySuccess = [run("2026-09-10T10:00:00Z", "success"), run("2026-09-10T08:38:00Z", "failed", "hw: boom")]
+    expect(computeSyncFailureStreak(legacySuccess, "hw").failedRuns).toBe(0)
+    const sourceless = [{ started_at: "2026-09-10T10:00:00Z", status: "success" as const, error: null }]
+    expect(computeSyncFailureStreak(sourceless, "hw").lastSuccessAt).toBe("2026-09-10T10:00:00Z")
   })
 
   it("uses the KST calendar day, not UTC (23:30 UTC is the next KST day)", () => {

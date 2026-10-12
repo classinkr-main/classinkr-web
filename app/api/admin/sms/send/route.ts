@@ -16,9 +16,18 @@ import { sendSmsMessages } from "@/lib/messaging/send"
  *   testMode 시에는 body.testPhone 1건만 발송한다.
  *
  * sms_campaigns 에 정직한 status(sent/partial/failed/simulated) + sent_count/failed_count 기록.
+ *
+ * 2026-09-25(CT11) — 수신자 조회를 range 페이지네이션으로 바꿨다(이전엔 PostgREST 기본 1,000행에서
+ * 조용히 잘렸다). 대신 1회 실행 상한(MAX_RECIPIENTS_PER_RUN)을 두고, 넘으면 한 건도 보내지 않고
+ * 대상 수를 보고한다 — 태그로 나눠 보내게 한다. 상한 검사는 MESSAGING_DRY_RUN=1(시뮬레이션)에서도
+ * 똑같이 걸린다. "(광고)" 표기·야간(21~08시) 제한은 메시지 정책 결정 전이라 코드로 강제하지 않는다.
  */
 
 const LMS_MAX = 2000
+/** 1회 실행당 실발송 상한 — 넘으면 중단·보고(나눠 보내기). 늘리려면 정책 결정 후 이 상수만 바꾼다. */
+const MAX_RECIPIENTS_PER_RUN = 500
+const SUBSCRIBER_PAGE_SIZE = 1000
+const SUBSCRIBER_MAX_PAGES = 50
 
 interface SendSmsRequest {
   message: string
@@ -30,35 +39,53 @@ interface SendSmsRequest {
   testPhone?: string
 }
 
-/** 태그 조건으로 활성 구독자 전화번호를 조회한다(중복·빈값 제거). */
+/**
+ * 태그 조건으로 활성 구독자 전화번호를 전량 조회한다(중복·빈값 제거).
+ * range 페이지네이션 + id 타이브레이커 정렬, 실제 받은 행 수만큼 전진하고 빈 페이지에서 멈춘다.
+ * 페이지 상한을 넘으면 무음 절단 대신 에러로 드러낸다.
+ */
 async function resolveRecipientPhones(targetTags: string[]): Promise<string[]> {
   const sb = createSupabaseAdminClient()
-
-  let query = sb
-    .from("newsletter_subscribers")
-    .select("phone")
-    .eq("status", "active")
-    .not("phone", "is", null)
-
-  if (Array.isArray(targetTags) && targetTags.length > 0) {
-    query = query.overlaps("tags", targetTags)
-  }
-
-  const { data, error } = await query
-  if (error) {
-    throw new Error(`수신자 조회 실패: ${error.message}`)
-  }
-
   const seen = new Set<string>()
   const phones: string[] = []
-  for (const row of data ?? []) {
-    const raw = (row as { phone?: string | null }).phone
-    if (!raw) continue
-    const normalized = raw.replace(/[^0-9]/g, "")
-    if (normalized.length < 9) continue // 유효 번호가 아님
-    if (seen.has(normalized)) continue
-    seen.add(normalized)
-    phones.push(raw)
+
+  let from = 0
+  for (let page = 0; ; page += 1) {
+    if (page >= SUBSCRIBER_MAX_PAGES) {
+      throw new Error(
+        `수신자 조회가 ${SUBSCRIBER_MAX_PAGES}페이지(${SUBSCRIBER_MAX_PAGES * SUBSCRIBER_PAGE_SIZE}행)를 넘었습니다.`
+      )
+    }
+
+    let query = sb
+      .from("newsletter_subscribers")
+      .select("id, phone")
+      .eq("status", "active")
+      .not("phone", "is", null)
+
+    if (Array.isArray(targetTags) && targetTags.length > 0) {
+      query = query.overlaps("tags", targetTags)
+    }
+
+    const { data, error } = await query
+      .order("id", { ascending: true })
+      .range(from, from + SUBSCRIBER_PAGE_SIZE - 1)
+    if (error) {
+      throw new Error(`수신자 조회 실패: ${error.message}`)
+    }
+
+    const rows = data ?? []
+    if (rows.length === 0) break
+    for (const row of rows) {
+      const raw = (row as { phone?: string | null }).phone
+      if (!raw) continue
+      const normalized = raw.replace(/[^0-9]/g, "")
+      if (normalized.length < 9) continue // 유효 번호가 아님
+      if (seen.has(normalized)) continue
+      seen.add(normalized)
+      phones.push(raw)
+    }
+    from += rows.length
   }
   return phones
 }
@@ -110,6 +137,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: "발송 대상이 없습니다. 전화번호가 등록된 구독자를 선택해주세요." },
         { status: 400 }
+      )
+    }
+
+    // 1회 상한 초과 — 일부만 보내지 않고 통째로 멈춘 뒤 대상 수를 보고한다(캠페인 이력도 남기지 않는다).
+    if (recipientPhones.length > MAX_RECIPIENTS_PER_RUN) {
+      console.warn(
+        `[SMS SEND] 1회 상한 초과로 중단 — 대상 ${recipientPhones.length}명 > 상한 ${MAX_RECIPIENTS_PER_RUN}명`
+      )
+      return NextResponse.json(
+        {
+          error: `발송 대상 ${recipientPhones.length.toLocaleString("ko-KR")}명이 1회 상한 ${MAX_RECIPIENTS_PER_RUN}명을 넘어 발송하지 않았습니다. 태그로 나눠 보내주세요.`,
+          code: "recipient_cap_exceeded",
+          recipientCount: recipientPhones.length,
+          maxPerRun: MAX_RECIPIENTS_PER_RUN,
+          sentCount: 0,
+        },
+        { status: 409 }
       )
     }
   }

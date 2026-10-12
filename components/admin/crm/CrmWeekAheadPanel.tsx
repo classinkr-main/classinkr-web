@@ -135,11 +135,37 @@ export function snoozeUndoRestoredMessage(task: Pick<CrmTaskRecord, "title" | "d
     : `'${task.title}' 미루기를 되돌렸습니다 — 원래대로 기한 없는 할 일입니다.`
 }
 
+/**
+ * 할 일을 버킷으로 나눈다. hidden 버킷(홈의 지연·오늘 — "오늘 연락"이 흡수)은 목록에서 빼고 건수만
+ * hiddenCount 로 돌려준다 — 화면이 "위 오늘 연락에 N건" 한 줄로 알린다.
+ */
+export function groupWeekAheadTasks(
+  rows: CrmTaskRecord[],
+  nowMs: number,
+  hidden?: ReadonlySet<WeekAheadBucket> | null
+): { groups: Record<WeekAheadBucket, CrmTaskRecord[]>; hiddenCount: number } {
+  const groups: Record<WeekAheadBucket, CrmTaskRecord[]> = { overdue: [], today: [], week: [], snoozed: [], nodue: [], later: [] }
+  let hiddenCount = 0
+  for (const task of rows) {
+    const bucket = classifyTaskBucket(task, nowMs)
+    if (hidden?.has(bucket)) {
+      hiddenCount += 1
+      continue
+    }
+    groups[bucket].push(task)
+  }
+  return { groups, hiddenCount }
+}
+
 /** 화면에 그리는 행 순서(버킷 순 · 예산 적용). 포커스 이동 계산과 렌더가 같은 규칙을 쓴다. */
-export function visibleTaskOrder(rows: CrmTaskRecord[], budget: number | null, nowMs: number): string[] {
-  const map: Record<WeekAheadBucket, CrmTaskRecord[]> = { overdue: [], today: [], week: [], snoozed: [], nodue: [], later: [] }
-  for (const task of rows) map[classifyTaskBucket(task, nowMs)].push(task)
-  return budgetWeekAheadBuckets(map, budget).slices.flatMap((slice) => slice.tasks.map((task) => task.id))
+export function visibleTaskOrder(
+  rows: CrmTaskRecord[],
+  budget: number | null,
+  nowMs: number,
+  hidden?: ReadonlySet<WeekAheadBucket> | null
+): string[] {
+  const { groups } = groupWeekAheadTasks(rows, nowMs, hidden)
+  return budgetWeekAheadBuckets(groups, budget).slices.flatMap((slice) => slice.tasks.map((task) => task.id))
 }
 
 /** 행이 빠진 뒤 포커스를 옮길 행 id — 같은 자리, 없으면 앞 행, 그것도 없으면 null(heading). */
@@ -147,14 +173,16 @@ export function focusTargetAfterTaskRemoval(
   rows: CrmTaskRecord[],
   removedId: string,
   budget: number | null,
-  nowMs: number
+  nowMs: number,
+  hidden?: ReadonlySet<WeekAheadBucket> | null
 ): string | null {
-  const before = visibleTaskOrder(rows, budget, nowMs)
+  const before = visibleTaskOrder(rows, budget, nowMs, hidden)
   const index = before.indexOf(removedId)
   const after = visibleTaskOrder(
     rows.filter((row) => row.id !== removedId),
     budget,
-    nowMs
+    nowMs,
+    hidden
   )
   if (after.length === 0) return null
   const at = index < 0 ? 0 : Math.min(index, after.length - 1)
@@ -172,6 +200,17 @@ interface PanelNotice {
 interface PanelError {
   message: string
   retry?: () => void
+}
+
+/** 홈에서 뺀 버킷(지연·오늘) 건수 한 줄 — 없는 것이 아니라 위 "오늘 연락"에 있다. */
+function HiddenBucketsNote({ count, absorbed }: { count: number; absorbed: boolean }) {
+  return (
+    <p className={`mt-1 text-[11px] ${SECONDARY_TEXT_CLASS}`} data-week-ahead-hidden={count}>
+      {absorbed
+        ? `지난·오늘 할 일 ${count.toLocaleString("ko-KR")}건은 위 '오늘 연락'에 있습니다.`
+        : `숨긴 버킷의 할 일 ${count.toLocaleString("ko-KR")}건은 이 목록에 없습니다.`}
+    </p>
+  )
 }
 
 function TaskRowsSkeleton() {
@@ -196,6 +235,7 @@ export default function CrmWeekAheadPanel({
   previewRows = WEEK_AHEAD_PREVIEW_ROWS,
   refreshKey = 0,
   softRefreshKey = 0,
+  hideBuckets,
 }: {
   compact?: boolean
   embedded?: boolean
@@ -205,6 +245,12 @@ export default function CrmWeekAheadPanel({
   refreshKey?: number
   /** 값이 바뀌면 force 없이 다시 조회한다 — TTL 이 지난 경우에만 네트워크를 탄다(홈 자동 갱신). */
   softRefreshKey?: number
+  /**
+   * 목록에서 뺄 버킷(2026-09-25 C안 ①) — CRM 홈은 ["overdue","today"]를 넘겨 "내일 이후 예정"만 그린다.
+   * 지난·오늘 할 일은 홈의 "오늘 연락"이 흡수하므로 같은 행동을 두 곳에 두지 않는다(플레이북 04 §3).
+   * 뺀 건수는 "위 오늘 연락에 N건" 한 줄로 알린다. 생략하면 기존 동작(전 버킷).
+   */
+  hideBuckets?: readonly WeekAheadBucket[]
 }) {
   const [expanded, setExpanded] = useState(false)
   const { owners: crmOwners, currentOwner } = useCrmOwners()
@@ -385,12 +431,18 @@ export default function CrmWeekAheadPanel({
     }
   }, [])
 
-  const groups = useMemo(() => {
-    const nowMs = Date.now()
-    const map: Record<WeekAheadBucket, CrmTaskRecord[]> = { overdue: [], today: [], week: [], snoozed: [], nodue: [], later: [] }
-    for (const task of data?.rows ?? []) map[classifyTaskBucket(task, nowMs)].push(task)
-    return map
-  }, [data])
+  // 배열 prop 의 참조가 매 렌더 바뀌어도 버킷 구성이 같으면 같은 Set 을 쓴다(아래 메모 연쇄 재계산 방지).
+  const hiddenKey = hideBuckets?.length ? [...hideBuckets].sort().join(",") : ""
+  const hiddenBuckets = useMemo(
+    () => (hiddenKey ? new Set(hiddenKey.split(",") as WeekAheadBucket[]) : null),
+    [hiddenKey]
+  )
+  const hidesOverdueToday = Boolean(hiddenBuckets?.has("overdue") && hiddenBuckets.has("today"))
+
+  const { groups, hiddenCount } = useMemo(
+    () => groupWeekAheadTasks(data?.rows ?? [], Date.now(), hiddenBuckets),
+    [data, hiddenBuckets]
+  )
 
   // 요약 표면(홈)에서 버킷을 전부 펼치면 활성 할 일이 많을 때 수십 행이 된다 —
   // 지연 → 오늘 → 이번 주 순으로 previewRows개까지만 그리고 나머지는 "+N건 더 보기"로 접는다.
@@ -484,7 +536,8 @@ export default function CrmWeekAheadPanel({
     async (task: CrmTaskRecord, action: "complete" | "snooze") => {
       const rows = data?.rows ?? []
       const budget = expanded ? null : previewRows
-      const nextFocusId = action === "complete" ? focusTargetAfterTaskRemoval(rows, task.id, budget, Date.now()) : task.id
+      const nextFocusId =
+        action === "complete" ? focusTargetAfterTaskRemoval(rows, task.id, budget, Date.now(), hiddenBuckets) : task.id
       const snoozePatch: Partial<CrmTaskRecord> = {
         status: "snoozed",
         snoozedUntil: tomorrowMorningIso(),
@@ -537,7 +590,7 @@ export default function CrmWeekAheadPanel({
       requestFocus(nextFocusId)
       void load({ background: true })
     },
-    [announce, clearOverride, data, expanded, load, previewRows, requestFocus, setOverride, showNotice, undoTaskAction]
+    [announce, clearOverride, data, expanded, hiddenBuckets, load, previewRows, requestFocus, setOverride, showNotice, undoTaskAction]
   )
 
   const sourceDown = data != null && !data.health.ok
@@ -552,7 +605,7 @@ export default function CrmWeekAheadPanel({
             </span>
             <div>
               <h2 ref={headingRef} tabIndex={-1} className="text-[15px] font-bold text-[#111110] outline-none">
-                이번 주 해야 할 일
+                {hidesOverdueToday ? "내일 이후 할 일" : "이번 주 해야 할 일"}
               </h2>
               {data?.generatedAt ? (
                 <p className={`text-[11px] ${SECONDARY_TEXT_CLASS}`}>기준 {formatDateTime(data.generatedAt)}</p>
@@ -668,6 +721,11 @@ export default function CrmWeekAheadPanel({
               열린 할 일이 없습니다 — 처리할 것이 없다는 뜻이며 데이터 누락이 아닙니다.
             </div>
           )
+        ) : budgeted.totalCount === 0 && hiddenCount > 0 ? (
+          <div className={`p-4 text-center text-[13px] ${SECONDARY_TEXT_CLASS}`}>
+            <p>{hidesOverdueToday ? "내일 이후 예정된 할 일이 없습니다." : "표시할 할 일이 없습니다."}</p>
+            <HiddenBucketsNote count={hiddenCount} absorbed={hidesOverdueToday} />
+          </div>
         ) : (
           <div className="space-y-3">
             {budgeted.slices.map(({ bucket, tasks, total }) => (
@@ -743,6 +801,8 @@ export default function CrmWeekAheadPanel({
                   : `+${budgeted.hiddenCount}건 더 보기 · 전체 ${budgeted.totalCount}건`}
               </button>
             ) : null}
+
+            {hiddenCount > 0 ? <HiddenBucketsNote count={hiddenCount} absorbed={hidesOverdueToday} /> : null}
 
             {/* 서버에서 잘린 건수 — 불러온 행보다 활성 할 일 총량(summary.total)이 크면 숨기지 않고 알린다. */}
             {data.summary.total > data.rows.length ? (
