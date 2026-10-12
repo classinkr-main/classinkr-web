@@ -2,6 +2,8 @@
  * 팀원 구글 캘린더 네거티브 캐시.
  *
  * 실측(2026-07-29~): 구성된 9명 전원이 서비스 계정에 캘린더를 공유하지 않아 events.list가 404다.
+ * 2026-09-21 부터는 도메인 전체 위임으로 읽는다 — 위임 미부여는 404 가 아니라 토큰 교환의
+ * `unauthorized_client`(숫자 code 400)로 온다. 그 경우도 접근 거부로 기억해야 한다.
  * 실패를 기억하지 않던 시절엔 캐시 TTL이 지날 때마다 9회 왕복을 다시 태웠다(타임라인 3개월이면 27회).
  * 여기서 지키는 것: ①미공유 멤버는 60분 쉰다 ②전원 미공유면 소스 자체가 쉰다
  * ③시간이 지나면 저절로 다시 두드린다(하드 비활성 금지) ④일시 장애는 기억하지 않는다.
@@ -10,7 +12,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const google = vi.hoisted(() => ({ list: vi.fn() }))
 
-vi.mock("@/lib/google", () => ({ calendar: { events: { list: google.list } } }))
+// 2026-09-21: 팀원 캘린더는 도메인 전체 위임(대행 클라이언트)으로 읽는다.
+// 모킹 대상이 @/lib/google 이 아니라 @/lib/google-delegated 다 — 여기를 안 바꾸면
+// 모킹이 안 걸리는데도 production 코드가 멤버별 에러를 전부 삼켜서 **초록으로 통과한다**.
+vi.mock("@/lib/google-delegated", () => ({
+  // 대행·공유 둘 다 같은 스텁을 돌려준다 — 이 파일이 보는 건 "몇 번 왕복하는가"다
+  calendarForMember: async () => ({ events: { list: google.list } }),
+  calendarShared: async () => ({ events: { list: google.list } }),
+  calendarAs: async () => ({ events: { list: google.list } }),
+  hasDelegationCredentials: () => true,
+  isDelegationDenied: (e: unknown) =>
+    /unauthorized_client|access_denied|invalid_grant/i.test(e instanceof Error ? e.message : String(e)),
+  noteDelegationDenied: () => {},
+  resetDelegatedClients: () => {},
+}))
 vi.mock("next/cache", () => ({ unstable_cache: (fetcher: unknown) => fetcher }))
 
 import { resetSourceCache } from "@/lib/admin-calendar/source-cache"
@@ -30,6 +45,23 @@ const BLOCK_MS = 60 * 60_000
 
 function notShared() {
   return Object.assign(new Error("Not Found"), { code: 404 })
+}
+
+/**
+ * 도메인 전체 위임 미부여. Calendar API 가 아니라 **OAuth 토큰 교환**에서 터진다.
+ *
+ * 아래 모양은 추정이 아니라 **실측**이다(2026-09-21, classin-admin@classin-home 서비스 계정으로
+ * gyusung.jung@classin.com 를 대행 시도): 숫자 code 는 **401**, 메시지는
+ * `unauthorized_client: Client is unauthorized to retrieve access tokens using this method, …`.
+ * 403/404 가 아니므로 숫자만 보는 판정으로는 절대 안 걸린다.
+ */
+function delegationDenied() {
+  return Object.assign(
+    new Error(
+      "unauthorized_client: Client is unauthorized to retrieve access tokens using this method, or client not authorized for any of the scopes requested.",
+    ),
+    { code: 401 },
+  )
 }
 
 function transient() {
@@ -72,6 +104,39 @@ afterEach(() => {
   }
   vi.useRealTimers()
   vi.restoreAllMocks()
+})
+
+describe("위임 미부여(unauthorized_client)", () => {
+  it("403/404 가 아니어도 접근 거부로 기억한다 — 안 그러면 위임 부여 전까지 TTL 마다 전원을 다시 두드린다", async () => {
+    google.list.mockRejectedValue(delegationDenied())
+
+    // 첫 회차는 멤버마다 두 번이다: 대행 시도 → 위임 거부 → 개인 공유 방식으로 폴백.
+    // 그 폴백이 "위임은 못 열어 줬는데 팀원이 공유는 해둔" 조직을 살린다.
+    expect(await getTeamEventsCalendarEvents({ year: 2026, month: 8 })).toEqual([])
+    const FIRST_ROUND = MEMBERS.length * 2
+    expect(google.list).toHaveBeenCalledTimes(FIRST_ROUND)
+
+    await vi.advanceTimersByTimeAsync(TTL_MS + 1)
+    expect(await getTeamEventsCalendarEvents({ year: 2026, month: 8 })).toEqual([])
+    await vi.advanceTimersByTimeAsync(TTL_MS + 1)
+    expect(await getTeamEventsCalendarEvents({ year: 2026, month: 8 })).toEqual([])
+
+    // 여기서 늘지 않는 것이 핵심이다. 숫자 code(401)만 보고 판단하면 캐시가 비어서 3배가 된다.
+    expect(google.list).toHaveBeenCalledTimes(FIRST_ROUND)
+  })
+
+  it("위임이 부여되면 60분 뒤 저절로 회복한다 — 하드 비활성이 아니다", async () => {
+    google.list.mockRejectedValue(delegationDenied())
+    await getTeamEventsCalendarEvents({ year: 2026, month: 8 })
+
+    google.list.mockReset()
+    google.list.mockResolvedValue(calendarWith("정규성"))
+    await vi.advanceTimersByTimeAsync(BLOCK_MS + 1)
+    resetSourceCache()
+
+    await getTeamEventsCalendarEvents({ year: 2026, month: 8 })
+    expect(google.list).toHaveBeenCalledTimes(MEMBERS.length)
+  })
 })
 
 describe("전원 미공유(404)", () => {

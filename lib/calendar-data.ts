@@ -755,24 +755,52 @@ export async function getEventsByMonth(year: number, month: number): Promise<Cal
  * 예전엔 이 함수가 Promise를 미리 만들어 여러 달 호출에 명시적으로 공유(MonthQueryContext)
  * 하는 임시방편을 썼지만, 그 장치는 제거했다.
  */
-export async function getEventsByRange(from: string, to: string): Promise<CalendarEvent[]> {
+export async function getEventsByRangeWithDiagnostics(
+  from: string,
+  to: string
+): Promise<CalendarMonthResult> {
   const months = enumerateMonths({ from, to })
-  if (months.length === 0) return []
+  if (months.length === 0) return { events: [], diagnostics: [] }
 
   const perMonthResults = await Promise.all(
     months.map(({ year, month }) => getEventsByMonthWithDiagnostics(year, month))
   )
-  const perMonth = perMonthResults.map((result) => result.events)
 
   // 멀티데이 일정은 걸치는 달마다 중복해서 나오므로 id 로 한 번 눌러준다.
   const byId = new Map<string, CalendarEvent>()
-  for (const events of perMonth) {
-    for (const event of events) byId.set(event.id, event)
+  for (const result of perMonthResults) {
+    for (const event of result.events) byId.set(event.id, event)
   }
 
-  return Array.from(byId.values())
-    .filter((event) => overlapsRange(event, { from, to }))
-    .sort(compareEvents)
+  // 소스별 진단을 하나로 접는다. 합치는 규칙을 여기서 못박아 둔다:
+  //   count      합  — 걸치는 달에 나뉘어 들어온다
+  //   durationMs 최대 — 가장 느린 달이 이 호출의 콜드 비용이다
+  //   degraded   OR  — 한 달이라도 확정본이 아니면 그 기간 전체가 확정본이 아니다
+  //   ageMs      최대 — 가장 오래된 캐시가 이 응답의 나이다. 하나라도 null(캐시 없음)이면 null
+  const diagnostics = new Map<EventSource, CalendarSourceDiagnostic>()
+  for (const result of perMonthResults) {
+    for (const d of result.diagnostics) {
+      const prev = diagnostics.get(d.source)
+      diagnostics.set(d.source, {
+        source: d.source,
+        count: (prev?.count ?? 0) + d.count,
+        durationMs: Math.max(prev?.durationMs ?? 0, d.durationMs),
+        degraded: (prev?.degraded ?? false) || d.degraded,
+        ageMs: prev === undefined ? d.ageMs : prev.ageMs === null || d.ageMs === null ? null : Math.max(prev.ageMs, d.ageMs),
+      })
+    }
+  }
+
+  return {
+    events: Array.from(byId.values())
+      .filter((event) => overlapsRange(event, { from, to }))
+      .sort(compareEvents),
+    diagnostics: Array.from(diagnostics.values()),
+  }
+}
+
+export async function getEventsByRange(from: string, to: string): Promise<CalendarEvent[]> {
+  return (await getEventsByRangeWithDiagnostics(from, to)).events
 }
 
 function toErrorMessage(error: unknown) {

@@ -5,8 +5,10 @@
  * 서비스 계정으로 events.list 하여, 각 이벤트를 "팀원 행사" 소스의 읽기 전용 CalendarEvent로 매핑한다.
  * 이벤트의 담당자(assignee)는 곧 그 캘린더의 주인 = 팀원 이름이다(= 팀원별 트래킹).
  *
- * 전제(요청 필요): 각 팀원이 자기 구글 캘린더를 서비스 계정 이메일(GOOGLE_SERVICE_ACCOUNT_EMAIL)에
- * "모든 이벤트 세부정보 보기" 권한으로 공유해야 한다. 공유 안 된 캘린더는 조용히 건너뛴다(다른 팀원은 유지).
+ * 전제(2026-09-21 변경): **도메인 전체 위임**으로 읽는다. 서비스 계정이 각 팀원을 대행하므로
+ * 개인별 공유 설정이 필요 없다 — Workspace 관리자가 관리 콘솔에서 calendar.readonly 위임을
+ * 한 번 부여하면 된다(lib/google-delegated.ts 헤더에 절차). 위임 전에는 토큰 교환이
+ * `unauthorized_client` 로 실패하고, 아래 네거티브 캐시가 그걸 접근 거부로 분류해 재시도를 억제한다.
  * showroom(그룹 캘린더 ICS 공개주소)과 달리 개인 캘린더는 공개가 아니므로 서비스 계정 API로 읽는다.
  *
  * 실측(2026-07-29~): 구성된 9명 전원이 서비스 계정에 공유하지 않아 events.list가 전부 404다.
@@ -27,7 +29,13 @@ import path from "path"
 import type { calendar_v3 } from "googleapis"
 
 import type { CalendarEvent } from "@/lib/calendar-data"
-import { calendar as googleCalendar } from "@/lib/google"
+import {
+  calendarForMember,
+  calendarShared,
+  hasDelegationCredentials,
+  isDelegationDenied,
+  noteDelegationDenied,
+} from "@/lib/google-delegated"
 import {
   EXTERNAL_SOURCE_HARD_TIMEOUT_MS,
   EXTERNAL_SOURCE_STALE_MS,
@@ -55,10 +63,9 @@ const EMPTY: CalendarEvent[] = []
 
 // ─── 설정 ──────────────────────────────────────────────────────────────────────
 
+/** 자격이 있는지 — 판정은 대행 클라이언트 쪽 한 곳에만 둔다 */
 function hasServiceAccount(): boolean {
-  return Boolean(
-    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim() && process.env.GOOGLE_PRIVATE_KEY?.trim()
-  )
+  return hasDelegationCredentials()
 }
 
 function isMember(value: unknown): value is TeamCalendarMember {
@@ -223,7 +230,39 @@ let sourceBlockedUntil = 0
  * "이 캘린더는 서비스 계정에 공유되지 않았다"로 읽히는 실패만 기억한다.
  * 일시 장애(5xx·네트워크)는 기억하지 않는다 — 다음 요청이 그대로 다시 시도해야 한다.
  */
+/**
+ * 도메인 전체 위임이 아직 부여되지 않은 실패. Calendar API 가 아니라 **OAuth 토큰 교환**에서
+ * 터지므로 모양이 다르다 — 실측(2026-09-21)으로 숫자 code 는 **401**, 메시지는
+ * `unauthorized_client: Client is unauthorized to retrieve access tokens using this method, …` 다.
+ * 403/404 도 아니고 400 도 아니다. 그래서 숫자가 아니라 메시지로 판정한다.
+ * readGoogleErrorStatus 는 숫자 code 를 우선하므로, 메시지를 따로 보지 않으면
+ * isAccessDenied 가 false 를 돌려주고 **네거티브 캐시가 이 실패를 기억하지 못한다** —
+ * 그러면 TTL 마다 9명을 다시 두드린다(위임 부여 전까지 영원히).
+ */
+/**
+ * events.list 한 번. **두 길을 다 살려 둔다.**
+ *
+ * 기본은 대행(도메인 전체 위임)이지만, 조직이 위임을 못 열어 주면 팀원 개인 공유가 유일한 길이다.
+ * 대행만 쓰면 토큰 교환에서 막혀서 팀원이 공유를 해줘도 호출이 아예 안 나간다 — 그래서
+ * 위임 거부로 읽히면 공유 방식으로 한 번 더 건다. 그 뒤 한 시간은 대행을 건너뛴다
+ * (실패할 토큰 교환을 매번 반복하지 않는다). 시간이 지나면 저절로 다시 대행을 시도한다.
+ */
+async function listEventsForMember(
+  email: string,
+  params: calendar_v3.Params$Resource$Events$List,
+  options: { timeout: number }
+) {
+  try {
+    return await (await calendarForMember(email)).events.list(params, options)
+  } catch (error) {
+    if (!isDelegationDenied(error)) throw error
+    noteDelegationDenied()
+    return await (await calendarShared()).events.list(params, options)
+  }
+}
+
 function isAccessDenied(error: unknown): boolean {
+  if (isDelegationDenied(error)) return true
   const status = readGoogleErrorStatus(error)
   if (typeof status === "number") return status === 403 || status === 404
   return /not\s*found|notfound|forbidden|permission|insufficient/i.test(status)
@@ -266,7 +305,8 @@ async function listMemberEvents(
   range: { timeMin: string; timeMax: string }
 ): Promise<MemberFetchResult> {
   try {
-    const res = await googleCalendar.events.list(
+    const res = await listEventsForMember(
+      member.email,
       {
         calendarId: member.email,
         singleEvents: true,
@@ -425,7 +465,8 @@ export async function probeTeamCalendarAccess(): Promise<TeamCalendarAccessSumma
       const results = await Promise.all(
         members.map(async (member) => {
           try {
-            await googleCalendar.events.list(
+            await listEventsForMember(
+              member.email,
               {
                 calendarId: member.email,
                 maxResults: 1,
