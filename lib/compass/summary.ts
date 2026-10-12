@@ -9,7 +9,7 @@ import {
   type CompassLeadRow,
   type CompassLeadSliceRow,
 } from "@/lib/compass/bridge"
-import { compassLeadUrl, COMPASS_CARE_STAGE_LABEL, COMPASS_STAGE_LABEL } from "@/lib/compass/normalize"
+import { compassLeadUrl, COMPASS_CARE_STAGE_LABEL, COMPASS_STAGE_LABEL, isCountedCompassDemo } from "@/lib/compass/normalize"
 import {
   COMPASS_CARE_STAGES,
   COMPASS_FUNNEL_STAGES,
@@ -275,7 +275,7 @@ export async function buildCompassSummary(
     won,
     careStages,
     bdOpen: bdOpen.down ? 0 : bdOpen.count,
-    todayDemoCount: todayDemos.down ? 0 : todayDemos.rows.length,
+    todayDemoCount: todayDemos.down ? 0 : todayDemos.rows.filter(isCountedCompassDemo).length,
     byOwner,
     lostReasons,
     upcomingActions,

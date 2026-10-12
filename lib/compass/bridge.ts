@@ -489,12 +489,13 @@ export async function getCompassLeadSliceByInflowRange(
         while (rows.length < maxRows) {
           const from = rows.length
           const to = Math.min(from + COMPASS_LEAD_SLICE_PAGE_SIZE, maxRows) - 1
+          // created_at OR last_inflow_at — Compass 는 신규 insert 때 last_inflow_at 을 비운다(lib/compass/inflow-window.ts).
+          // last_inflow_at 만으로 거르면 한 번도 재유입하지 않은 신규 리드가 전부 빠진다(F12 와 같은 결함이 요약에 재발,
+          // 2026-10-12 브리지 감사 2번). 정렬은 유일 키 id 하나 — OR 두 축 중 어느 쪽 시각으로 정렬할지가 없다.
           const { data, error } = await sb
             .from("compass_leads_v")
             .select(COMPASS_LEAD_SLICE_COLUMNS)
-            .gte("last_inflow_at", fromIso)
-            .lte("last_inflow_at", toIso)
-            .order("last_inflow_at", { ascending: true })
+            .or(compassInflowWindowFilter(fromIso, toIso))
             .order("id", { ascending: true })
             .range(from, to)
           if (error) return downSliceResult<CompassLeadSliceRow>(error)
@@ -560,6 +561,8 @@ export interface CompassActivitySignalRow {
   lead_id: number
   kind: string | null
   actor: string | null
+  /** 활동 시각 — "홈페이지 문의 뒤의 활동인가" 판정(lib/compass/lead-contact-sync)에 쓴다 */
+  created_at: string | null
 }
 
 /** 주어진 kind 의 활동 신호(lead_id·kind·actor) — 리드 상태 자동 반영(lib/server/lead-contact-compass-sync)용.
@@ -580,7 +583,7 @@ export async function getCompassActivitySignals(
       for (let from = 0; ; from += ACTIVITY_PAGE_SIZE) {
         const { data, error } = await sb
           .from("compass_activities_v")
-          .select("lead_id, kind, actor")
+          .select("lead_id, kind, actor, created_at")
           .in("lead_id", chunk)
           .in("kind", [...kinds])
           .order("id", { ascending: true })
@@ -800,11 +803,13 @@ export async function getCompassUpcomingActions(
         const sb = createSupabaseAdminClient()
         const nowIso = new Date().toISOString()
         const untilIso = new Date(Date.now() + withinHours * 60 * 60 * 1000).toISOString()
+        // 종료된 고객관리 건은 빼고 센다 — Compass 알림(lib/reminderFeedSql.ts)과 같은 조건. .neq 는 null 을 빼므로 .or 로.
         const { data, error } = await sb
           .from("compass_leads_v")
           .select("*")
           .gte("next_action_at", nowIso)
           .lte("next_action_at", untilIso)
+          .or("care_stage.is.null,care_stage.neq.closed")
           .order("next_action_at", { ascending: true })
           .limit(500)
         if (error) return downResult(error)

@@ -8,13 +8,14 @@ import {
   type CompassDemoSource,
 } from "@/lib/crm/compass-demo-signal"
 
-// 러너 타임존과 무관하게 같은 달력일을 가리키도록 로컬 정오로 만든다.
-const NOW = new Date(2026, 7, 28, 12, 0, 0)
+// 「오늘」은 KST 다(lead_demos.day 가 KST 날짜) — 러너 타임존과 무관하게 KST 2026-08-28 정오.
+const NOW = new Date("2026-08-28T03:00:00.000Z")
 
 function demo(overrides: {
   id: number
   lead_id?: number | null
   day: string
+  kind?: string | null
   status?: string | null
   owner?: string | null
   day_approx?: boolean | null
@@ -23,6 +24,7 @@ function demo(overrides: {
     id: overrides.id,
     lead_id: overrides.lead_id === undefined ? 100 : overrides.lead_id,
     day: overrides.day,
+    kind: overrides.kind === undefined ? "demo" : overrides.kind,
     status: overrides.status ?? "booked",
     owner: overrides.owner ?? "진소망",
     day_approx: overrides.day_approx ?? false,
@@ -66,6 +68,46 @@ describe("buildCompassDemoIndex — 단계 분류", () => {
 
     expect(index.byPhoneKey.get("01012345678")?.phase).toBe("upcoming")
     expect(index.byPhoneKey.get("01012345678")?.daysFromNow).toBe(5)
+  })
+})
+
+describe("buildCompassDemoIndex — 취소·노쇼·설명회·시간대 (2026-10-12)", () => {
+  it("취소·노쇼 행과 설명회·미팅은 신호가 아니다 — Compass 는 취소해도 행을 지우지 않는다", () => {
+    const index = buildCompassDemoIndex(
+      source({
+        demos: [
+          demo({ id: 1, day: "2026-08-28", status: "canceled" }),
+          demo({ id: 2, day: "2026-08-29", status: "no_show" }),
+          demo({ id: 3, day: "2026-08-29", kind: "seminar" }),
+          demo({ id: 4, day: "2026-08-30", kind: "meeting" }),
+          demo({ id: 5, day: "2026-09-05" }), // 유일한 진짜 데모
+        ],
+      }),
+      NOW
+    )
+    expect(index.total).toBe(1)
+    expect(index.byPhoneKey.get("01012345678")?.demoId).toBe(5)
+  })
+
+  it("kind 가 비어 있는 옛 행은 데모로 본다", () => {
+    const index = buildCompassDemoIndex(source({ demos: [demo({ id: 1, day: "2026-08-28", kind: null })] }), NOW)
+    expect(index.total).toBe(1)
+  })
+
+  it("「오늘」은 KST — UTC 로는 어제 저녁(KST 00:30)이어도 KST 날짜의 데모가 오늘이다", () => {
+    const kstMidnightPlus = new Date("2026-08-27T15:30:00.000Z") // KST 2026-08-28 00:30
+    const index = buildCompassDemoIndex(source({ demos: [demo({ id: 1, day: "2026-08-28" })] }), kstMidnightPlus)
+    const signal = index.byPhoneKey.get("01012345678")
+    expect(signal?.phase).toBe("today")
+    expect(signal?.daysFromNow).toBe(0)
+  })
+
+  it("같은 단계(최근 완료)가 둘이면 오늘에 가까운 쪽을 남긴다 — day 오름차순이라 그냥 두면 더 오래된 쪽이 남았다", () => {
+    const index = buildCompassDemoIndex(
+      source({ demos: [demo({ id: 1, day: "2026-08-16", status: "done" }), demo({ id: 2, day: "2026-08-25", status: "done" })] }),
+      NOW
+    )
+    expect(index.byPhoneKey.get("01012345678")?.demoId).toBe(2)
   })
 })
 

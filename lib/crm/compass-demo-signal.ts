@@ -14,7 +14,8 @@
  * 단계 규칙(이전 구현과 동일하게 유지 — 점수 연속성):
  *   예정 / 오늘 = 최우선, 최근 완료(14일) = 높음, 그보다 오래된 완료 = 신호 없음.
  */
-import { normalizePhoneKey } from "@/lib/compass/normalize"
+import { getBusinessDateParts } from "@/lib/business-time"
+import { isCountedCompassDemo, normalizePhoneKey } from "@/lib/compass/normalize"
 
 const DAY_MS = 86_400_000
 /** 데모 직후 후속 대화가 유효한 기간. 이 뒤로는 신호를 끈다. */
@@ -27,6 +28,8 @@ export interface CompassDemoLike {
   id: number
   lead_id: number | null
   day: string | null
+  /** demo / seminar / meeting — 데모만 신호다(없으면 옛 행, 데모로 본다) */
+  kind?: string | null
   status: string | null
   owner: string | null
   day_approx: boolean | null
@@ -113,8 +116,14 @@ export const EMPTY_COMPASS_DEMO_INDEX: CompassDemoIndex = {
   down: false,
 }
 
+/** 오늘(KST) — Compass lead_demos.day 는 KST 날짜다. 서버 로컬(Vercel = UTC)로 재면 KST 00~09시에 오늘 데모가 "내일"이 된다. */
 function toDateKey(date: Date) {
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 10)
+  return getBusinessDateParts(date).date
+}
+
+/** 'YYYY-MM-DD' 를 날짜 산술용 ms 로 — 시간대 없는 순수 날짜 차이만 필요하므로 UTC 자정으로 고정한다. */
+function dayMs(dateKey: string) {
+  return new Date(`${dateKey}T00:00:00Z`).getTime()
 }
 
 function classify(dateKey: string, todayKey: string, daysFromNow: number): CompassDemoPhase | null {
@@ -131,16 +140,18 @@ function phaseRank(phase: CompassDemoPhase) {
 /** 수집한 원본을 요청 시각(now) 기준 신호 색인으로 바꾼다. 순수 함수. */
 export function buildCompassDemoIndex(source: CompassDemoSource, now: Date): CompassDemoIndex {
   const todayKey = toDateKey(now)
-  const todayMs = new Date(`${todayKey}T00:00:00`).getTime()
+  const todayMs = dayMs(todayKey)
   const byPhoneKey = new Map<string, CompassDemoSignal>()
   let unmatched = 0
   let total = 0
 
   for (const demo of source.demos) {
+    // 취소·노쇼·설명회·미팅은 데모 신호가 아니다 — Compass 와 같은 판정(isCountedCompassDemo).
+    if (!isCountedCompassDemo(demo)) continue
     const dateKey = demo.day?.slice(0, 10)
     if (!dateKey) continue
 
-    const daysFromNow = Math.round((new Date(`${dateKey}T00:00:00`).getTime() - todayMs) / DAY_MS)
+    const daysFromNow = Math.round((dayMs(dateKey) - todayMs) / DAY_MS)
     if (!Number.isFinite(daysFromNow)) continue
     const phase = classify(dateKey, todayKey, daysFromNow)
     if (!phase) continue
@@ -165,8 +176,14 @@ export function buildCompassDemoIndex(source: CompassDemoSource, now: Date): Com
         owner: demo.owner,
         dayApprox: Boolean(demo.day_approx),
       }
+      // 같은 단계면 오늘에 가까운 쪽 — 쿼리가 day 오름차순이라 그냥 두면 "최근 완료" 둘 중 더 오래된 쪽이 남았다.
       const existing = byPhoneKey.get(phoneKey)
-      if (!existing || phaseRank(signal.phase) < phaseRank(existing.phase)) {
+      if (
+        !existing ||
+        phaseRank(signal.phase) < phaseRank(existing.phase) ||
+        (phaseRank(signal.phase) === phaseRank(existing.phase) &&
+          Math.abs(signal.daysFromNow) < Math.abs(existing.daysFromNow))
+      ) {
         byPhoneKey.set(phoneKey, signal)
       }
     }

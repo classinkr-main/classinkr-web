@@ -297,6 +297,40 @@ describe("syncChannelConversations — 상담 청크 재생성", () => {
     expect(result.ok).toBe(true)
   })
 
+  it("리드 매칭 전화 키는 Compass normPhone 과 같은 규칙이다 — 국가번호·앞 0 탈락 표기도 같은 사람으로 맞춘다", async () => {
+    // 홈페이지 리드는 010-1234-5678 로 저장돼 있고, 채널톡 프로필은 +82 10-1234-5678 로 온다.
+    // 예전 사본(숫자 9자리 이상)은 "821012345678" ≠ "01012345678" 이라 같은 사람을 놓쳤다(compass-integration R6 B-3).
+    mocks.getLeads.mockResolvedValueOnce([
+      { id: "lead-1", phone: "010-1234-5678", org: "예시학원" },
+      { id: "lead-2", phone: "10-9876-5432", org: "앞 0 빠진 학원" },
+    ] as never)
+    mocks.listUserChats.mockResolvedValue({
+      userChats: [
+        { id: "chatIntl", userId: "uIntl", frontMessageId: "i1", state: "opened", tags: [] },
+        { id: "chatNoZero", userId: "uZero", frontMessageId: "z1", state: "opened", tags: [] },
+      ],
+      users: [{ id: "uIntl" }, { id: "uZero" }],
+    })
+    mocks.extractUserContact.mockImplementation((user?: { id?: string }) =>
+      user?.id === "uIntl" ? { phone: "+82 10-1234-5678" } : { phone: "010-9876-5432" }
+    )
+    mocks.getDurableConversationsByIds.mockResolvedValue(new Map())
+    mocks.listUserChatMessages.mockResolvedValue({
+      messages: [{ id: "i1", personType: "user", plainText: "질문", createdAt: 1_700_000_000_000 }],
+      pagesFetched: 1,
+      complete: true,
+    })
+
+    const result = await syncChannelConversations({ force: true })
+
+    const [records] = mocks.upsertDurableConversations.mock.calls[0] as [ChannelConversationRecord[]]
+    expect(records.map((record) => [record.id, record.matchedLeadId])).toEqual([
+      ["chatIntl", "lead-1"],
+      ["chatNoZero", "lead-2"],
+    ])
+    expect(result.matchedLeads).toBe(2)
+  })
+
   it("청크 재생성 1차 실패는 즉시 1회 재시도하고, 성공하면 실패로 집계하지 않는다", async () => {
     mocks.listUserChats.mockResolvedValue({
       userChats: [{ id: "chatA", userId: "uA", frontMessageId: "a1", state: "opened", tags: [] }],

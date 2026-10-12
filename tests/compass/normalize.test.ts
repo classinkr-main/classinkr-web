@@ -6,6 +6,11 @@ import { describe, expect, it } from "vitest"
 import {
   COMPASS_CARE_STAGE_LABEL,
   COMPASS_INBOUND_CHANNELS,
+  COMPASS_NON_MARKETING_CHANNELS,
+  isCountedCompassDemo,
+  isJoinableCompassPhoneKey,
+  isPlaceholderPhoneDigits,
+  joinableCompassPhoneKey,
   COMPASS_STAGE_LABEL,
   compassLeadUrl,
   isCompassMarketingChannel,
@@ -180,11 +185,17 @@ describe("Compass 인바운드 채널 — mktLeadCond 등가", () => {
     expect([...COMPASS_INBOUND_CHANNELS]).toEqual(["channeltalk", "direct", "walkin", "referral"])
   })
 
+  it("마케팅 제외 목록 = 인바운드 + 가져오기(neo) — Compass lib/channels.ts mktLeadCond 의 배열과 같은 순서", () => {
+    expect([...COMPASS_NON_MARKETING_CHANNELS]).toEqual(["channeltalk", "direct", "walkin", "referral", "neo"])
+  })
+
   it.each([
     ["channeltalk", false],
     ["direct", false],
     ["walkin", false],
     ["referral", false],
+    // NEO 에서 들여온 스텁(channel='neo')은 유입이 아니다 — Compass ADR-0015. 오늘 만들어진 스텁이 "오늘 유입"에 잡히면 안 된다.
+    ["neo", false],
     ["sms", true],
     ["email", true],
     ["", true],
@@ -195,5 +206,67 @@ describe("Compass 인바운드 채널 — mktLeadCond 등가", () => {
     ["Walkin", true],
   ] as Array<[string | null | undefined, boolean]>)("channel %j → 마케팅 %j", (channel, expected) => {
     expect(isCompassMarketingChannel(channel)).toBe(expected)
+  })
+})
+
+// Compass tests/phoneJoinKey.test.ts 와 같은 진리표 — 규칙을 바꾸면 양쪽을 같이 바꾼다.
+describe("자리표시·더미 전화 키 — Compass scripts/phoneJoinKey.mjs 사본", () => {
+  it.each([
+    ["01022220002", false],
+    ["021234567", false], // 02-123-4567 — 가장 짧은 국내 번호 9자리
+    ["0212345678", false], // 유선은 블록 규칙을 두지 않는다
+    ["01099990010", false],
+    ["01024681357", false],
+    ["01020003000", false], // 뒤가 전부 0 은 아니고 0 아닌 숫자가 둘
+    ["15881234", false], // 전국대표번호
+    ["01011110001", false], // 끝 블록이 같은 숫자·연속이 아니다
+    ["01090120123", false], // 9012 는 연속이 아니다
+    ["000000000", true],
+    ["1111111111", true],
+    ["01000000000", true], // 010-0000-0000
+    ["0200000000", true],
+    ["16000000", true], // 앞 3자리 뒤 전부 0
+    ["01012345678", true], // 폼에 제일 흔히 치는 더미
+    ["01011111111", true],
+    ["01099999999", true],
+    ["01000000001", true],
+    ["01010000000", true],
+    ["01012341234", true],
+    ["01011112222", true],
+    ["01087654321", true],
+    ["01098769876", true],
+    ["01001230123", true],
+    ["0", true],
+    ["", true],
+  ] as Array<[string, boolean]>)("isPlaceholderPhoneDigits(%j) → %j", (key, expected) => {
+    expect(isPlaceholderPhoneDigits(key)).toBe(expected)
+  })
+
+  it("붙여도 되는 키 = 숫자열 · 9자리 이상 · 자리표시 아님", () => {
+    expect(isJoinableCompassPhoneKey("01022220002")).toBe(true)
+    expect(isJoinableCompassPhoneKey("021234567")).toBe(true)
+    expect(isJoinableCompassPhoneKey("12345678")).toBe(false) // 8자리
+    expect(isJoinableCompassPhoneKey("01012345678")).toBe(false)
+    expect(isJoinableCompassPhoneKey("010-2222-0002")).toBe(false) // 정규화 전 값은 키가 아니다
+    expect(isJoinableCompassPhoneKey(null)).toBe(false)
+    expect(joinableCompassPhoneKey("01022220002")).toBe("01022220002")
+    expect(joinableCompassPhoneKey("01000000000")).toBeNull()
+    expect(joinableCompassPhoneKey(undefined)).toBeNull()
+  })
+})
+
+describe("isCountedCompassDemo — 「오늘 데모」·우선순위 신호로 셀 행", () => {
+  it("취소·노쇼는 세지 않는다(Compass lib/kpi.ts demoCounted 와 같다)", () => {
+    expect(isCountedCompassDemo({ kind: "demo", status: "booked" })).toBe(true)
+    expect(isCountedCompassDemo({ kind: "demo", status: "done" })).toBe(true)
+    expect(isCountedCompassDemo({ kind: "demo", status: "canceled" })).toBe(false)
+    expect(isCountedCompassDemo({ kind: "demo", status: "no_show" })).toBe(false)
+  })
+
+  it("설명회·미팅은 데모가 아니다 — kind 가 비어 있으면(옛 행) 데모로 본다", () => {
+    expect(isCountedCompassDemo({ kind: "seminar", status: "booked" })).toBe(false)
+    expect(isCountedCompassDemo({ kind: "meeting", status: "done" })).toBe(false)
+    expect(isCountedCompassDemo({ kind: null, status: "booked" })).toBe(true)
+    expect(isCountedCompassDemo({})).toBe(true)
   })
 })

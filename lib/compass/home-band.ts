@@ -2,6 +2,7 @@ import "server-only"
 
 import { getBusinessDateParts } from "@/lib/business-time"
 import { getCompassBdOpenCount, getCompassDemos, getCompassUpcomingActions } from "@/lib/compass/bridge"
+import { isCountedCompassDemo } from "@/lib/compass/normalize"
 
 /**
  * CRM 홈 "마케팅 파이프라인(Compass)" 밴드(M7)의 조립 정본.
@@ -35,7 +36,7 @@ export async function buildCompassPipelineBand(): Promise<CompassPipelineBand> {
 
   return {
     down: demos.down || upcoming.down || bdOpen.down,
-    todayDemoCount: demos.rows.length,
+    todayDemoCount: demos.rows.filter(isCountedCompassDemo).length,
     upcomingActionCount: upcoming.rows.length,
     bdOpenCount: bdOpen.count,
     generatedAt: new Date().toISOString(),

@@ -56,7 +56,7 @@ describe("getCompassActivitySignals", () => {
     expect(fromMock).not.toHaveBeenCalled()
   })
 
-  it("lead_id·kind·actor 만 읽고(본문 미전송) kind 를 서버에서 거른다", async () => {
+  it("lead_id·kind·actor·created_at 만 읽고(본문 미전송) kind 를 서버에서 거른다", async () => {
     installChain()
     pages = [
       {
@@ -79,7 +79,7 @@ describe("getCompassActivitySignals", () => {
     })
     expect(calls).toHaveLength(1)
     expect(calls[0].from).toEqual(["compass_activities_v"])
-    expect(calls[0].select).toEqual(["lead_id, kind, actor"])
+    expect(calls[0].select).toEqual(["lead_id, kind, actor, created_at"])
     expect(calls[0].in).toEqual([
       ["lead_id", [2, 5, 9]],
       ["kind", ["call", "note"]],

@@ -13,6 +13,7 @@ function createChain(result: { data?: unknown; error: unknown; count?: unknown }
   chain.gte = vi.fn(() => chain)
   chain.lte = vi.fn(() => chain)
   chain.eq = vi.fn(() => chain)
+  chain.or = vi.fn(() => chain)
   chain.order = vi.fn(() => chain)
   chain.is = vi.fn(() => chain)
   chain.limit = vi.fn(() => Promise.resolve(result))
@@ -48,6 +49,13 @@ describe("getCompassUpcomingActions — 임박 경계", () => {
     expect(chain.gte).toHaveBeenCalledWith("next_action_at", "2026-08-28T03:00:00.000Z")
     // 48시간 = 2일 뒤 같은 시각. 24h/48분 등 단위 착오가 있으면 여기서 깨진다.
     expect(chain.lte).toHaveBeenCalledWith("next_action_at", "2026-08-30T03:00:00.000Z")
+  })
+
+  it("종료된 고객관리 건(care_stage='closed')은 빼고, care_stage 가 null 인 행은 남긴다 — Compass 알림과 같은 조건", async () => {
+    const { getCompassUpcomingActions } = await import("@/lib/compass/bridge")
+    await getCompassUpcomingActions(48)
+
+    expect(chain.or).toHaveBeenCalledWith("care_stage.is.null,care_stage.neq.closed")
   })
 
   it("withinHours가 다르면 상한 경계만 늘어난다(gte는 항상 now)", async () => {
