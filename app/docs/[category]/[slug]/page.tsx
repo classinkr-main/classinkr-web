@@ -52,7 +52,7 @@ export async function generateMetadata({
   if (!doc || doc.category !== category) {
     return {
       title: "문서를 찾을 수 없습니다",
-      description: "요청하신 문서를 찾을 수 없습니다.",
+      description: "주소가 바뀌었거나 없어진 문서입니다. 가이드 홈에서 다시 찾아보세요.",
     }
   }
 
@@ -174,7 +174,7 @@ export default async function DocsArticlePage({
               <Calendar className="h-4 w-4" />
               {formatDocDate(doc.updatedAt)} 업데이트
             </span>
-            <span>추천 대상: {doc.audience}</span>
+            <span>대상: {doc.audience}</span>
           </div>
         }
         sections={toArticleSections(doc)}
@@ -188,7 +188,7 @@ export default async function DocsArticlePage({
                 저장해 두고 보기
               </h2>
               <p className="mt-3 max-w-3xl text-[15px] leading-7 text-[#615D59]">
-                필요할 때 다시 볼 수 있게 이 안내를 PDF로 저장하거나 인쇄하세요.
+                강사나 학생에게 보내거나 교실에 붙여 둘 거라면 PDF로 저장하거나 인쇄하세요.
               </p>
               <div className="mt-4">
                 <DocsPrintButton />
@@ -201,7 +201,7 @@ export default async function DocsArticlePage({
                   자료
                 </p>
                 <h2 className="mt-2 text-xl font-black tracking-card text-[#111110]">
-                  함께 보면 좋은 자료
+                  첨부 자료와 참고 링크
                 </h2>
                 <ul className="mt-5 divide-y divide-black/[0.08]">
                   {doc.resources.map((resource) => (
@@ -242,7 +242,7 @@ export default async function DocsArticlePage({
                 문서로 해결되지 않았나요?
               </h2>
               <p className="mt-3 max-w-3xl text-[15px] leading-7 text-[#615D59]">
-                현재 상황을 남겨주시면 담당 매니저가 확인 순서를 정리해 연락드립니다.
+                어느 화면에서 무엇이 안 되는지 적어 주시면 담당 매니저가 확인하고 연락드립니다.
               </p>
               <Link
                 href={contactHref}
@@ -258,7 +258,7 @@ export default async function DocsArticlePage({
                 요약
               </p>
               <h2 className="mt-2 text-xl font-black tracking-card text-[#111110]">
-                핵심만 빠르게 보기
+                짧게 말하면
               </h2>
               <p className="mt-3 max-w-3xl text-[15px] leading-7 text-[#31594B]">
                 {doc.chatbotSummary}
@@ -268,10 +268,10 @@ export default async function DocsArticlePage({
             {doc.category !== "start" && (
               <section className="border-t border-black/[0.08] pt-8 print:hidden">
                 <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
-                  도움 필요
+                  시작하기
                 </p>
                 <h2 className="mt-2 text-xl font-black tracking-card text-[#111110]">
-                  처음 사용한다면 설치와 회원 가입부터 확인해 보세요.
+                  클래스인을 처음 쓰신다면 설치와 회원 가입부터 하세요.
                 </h2>
                 <Link
                   href="/docs/start"
@@ -324,7 +324,7 @@ export default async function DocsArticlePage({
                   함께 보기
                 </p>
                 <h2 className="mt-2 text-2xl font-black tracking-subhead text-[#111110]">
-                  이어서 보면 좋은 안내
+                  이어서 읽을 문서
                 </h2>
                 <div className="mt-5 divide-y divide-black/[0.08]">
                   {relatedDocs.map((relatedDoc) => (

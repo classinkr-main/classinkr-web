@@ -38,7 +38,7 @@ import {
 } from "./_utils"
 
 const PAGE_DESCRIPTION =
-  "도입 검토부터 수업 운영, 문제 해결까지 — 실제 사용 흐름 그대로 정리한 Classin 공식 가이드입니다."
+  "클래스인 설치와 가입부터 코스 개설, 수업 진행, 전자칠판 사용법까지 원장·강사·학생이 각자 찾아보는 공식 가이드입니다."
 
 export const metadata: Metadata = {
   title: "Classin 가이드",
@@ -66,7 +66,36 @@ const SECTION_EYEBROW = "text-[12px] font-semibold uppercase tracking-[0.14em] t
 /** 블록을 카드가 아니라 얇은 구분선으로 나눈다 — 채움 없이 위계를 만드는 방식. */
 const RULE_BLOCK = "border-t border-black/[0.08] pt-5"
 
-const SEARCH_CHIPS = ["설치", "녹화", "과제", "출결", "전자칠판"]
+// 채널톡 상담·가이드 검색 상위 주제(2026-09 기준): 비밀번호·로그인(번호 형식)·설치·녹화·EDB.
+const SEARCH_CHIPS = ["설치", "로그인", "비밀번호", "녹화", "EDB"]
+
+// 문제 해결 문서 바로가기 — 해당 문서가 공개 목록에 있을 때만 노출한다(발행 전 404 방지).
+const TROUBLESHOOTING_LINKS = [
+  { label: "로그인이 안 될 때", href: "/docs/start/login-troubleshooting" },
+  { label: "수업 중 끊기거나 튕길 때", href: "/docs/start/class-connection-troubleshooting" },
+]
+
+// 처음 쓰는 학생·강사가 가장 많이 막히는 순서(설치 → 가입 → 코스 참여). 실제 공개 문서만 가리킨다.
+const START_STEPS: DocsArticleSummary[] = [
+  {
+    title: "클래스인 설치하기",
+    description:
+      "PC는 다운로드 페이지에서 설치 파일을 받습니다. 휴대폰·태블릿은 앱 스토어나 플레이 스토어에서 '클래스인(Classin)'을 검색해 설치하고, 자세한 순서는 모바일 설치 가이드에 있습니다.",
+    href: "/docs/start/pc-install",
+  },
+  {
+    title: "회원 가입하기",
+    description:
+      "휴대폰 번호로 가입할 때는 국가번호 +82를 고르고, 010의 맨 앞 0을 빼서 10으로 시작하게 입력합니다. 받은 인증코드까지 넣어야 가입이 끝납니다.",
+    href: "/docs/start/signup",
+  },
+  {
+    title: "학원이 보낸 코스에 들어가기",
+    description:
+      "학원에서 받은 초대 링크나 QR, 코스명으로 코스에 참여합니다. 수업이 안 보이면 학원에 알려 준 번호나 이메일로 로그인했는지 먼저 확인하세요.",
+    href: "/docs/student/course-join",
+  },
+]
 
 type IconComponent = (props: { className?: string }) => ReactElement
 
@@ -144,6 +173,8 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
   const productTiles = getGuideProductTiles(docsContent)
   const featuredArticles = getCuratedFeaturedSummaries(docsContent)
   const installLinks = getInstallGuideLinks(docsContent)
+  const listedHrefs = new Set(allDocs.map((doc) => doc.href))
+  const troubleshootingLinks = TROUBLESHOOTING_LINKS.filter((link) => listedHrefs.has(link.href))
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] pb-20 pt-28 text-[#111110] md:pb-24 md:pt-36">
@@ -160,7 +191,8 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
           바로 찾으세요.
         </h1>
         <p className="hero-soft-enter hero-soft-enter-copy mt-5 max-w-2xl text-lg leading-8 text-[#615D59]">
-          도입 검토부터 수업 운영, 문제 해결까지 — 실제 사용 흐름 그대로 정리한 공식 가이드입니다.
+          설치부터 코스 개설, 수업 중에 생기는 문제까지 역할별로 나눠 두었습니다. 검색하거나
+          아래에서 지금 상황을 고르세요.
         </p>
 
         {/* 검색도 면을 두지 않는다 — 카테고리 페이지와 같은 밑줄 입력으로 두 화면을 맞춘다. */}
@@ -175,7 +207,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
             name="q"
             defaultValue={q ?? ""}
             aria-label="가이드 전체 검색"
-            placeholder="궁금한 기능이나 겪는 상황을 검색"
+            placeholder="예: 학생 추가, 비밀번호 변경"
             className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#A39E98]"
           />
           {/* 면은 없애되 히트 영역은 남긴다 — 여백이 없으면 글자 높이(약 20px)가 곧 터치 영역이 된다. */}
@@ -200,6 +232,21 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
           ))}
         </div>
 
+        {troubleshootingLinks.length > 0 && (
+          <div className="hero-soft-enter hero-soft-enter-actions mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <span className="text-xs text-[#615D59]">문제가 생겼다면</span>
+            {troubleshootingLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`text-[13px] font-medium text-[#615D59] underline-offset-4 transition-colors hover:text-[#084734] hover:underline ${FOCUS_RING}`}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </div>
+        )}
+
         {query ? (
           <p className="mt-6 text-[13px] text-[#615D59]">
             “{q}” 검색 결과{" "}
@@ -207,8 +254,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
           </p>
         ) : (
           <p className="mt-6 text-[13px] text-[#615D59]">
-            지금 확인할 수 있는 가이드 {allDocs.length}개 · 채널톡 공식 가이드와 같은 흐름 · 계속
-            업데이트
+            지금 볼 수 있는 가이드 {allDocs.length}개
           </p>
         )}
       </section>
@@ -227,21 +273,22 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
                 </ul>
                 {searchResults.length > 12 && (
                   <p className="mt-4 text-[13px] text-[#615D59]">
-                    관련도 상위 12개를 표시하고 있어요. 단어를 조금 더 구체적으로 하면 좁혀집니다.
+                    관련도가 높은 12개만 보여 드립니다. 찾는 문서가 없으면 다른 단어로 검색해 보세요.
                   </p>
                 )}
               </>
             ) : (
               <div className="mt-4">
                 <p className="text-[15px] leading-[26px] text-[#615D59]">
-                  찾는 안내가 보이지 않습니다. 조금 더 짧은 단어로 검색해 보세요.
+                  맞는 가이드가 없습니다. ‘녹화’, ‘과제’처럼 짧은 단어로 다시 검색하거나, 챗봇에
+                  지금 상황을 그대로 물어보세요.
                 </p>
                 <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3">
                   <DocsAskChatbotButton
                     prefill={q}
                     className={`inline-flex items-center gap-1 text-[14px] font-semibold text-[#084734] ${FOCUS_RING}`}
                   >
-                    챗봇에게 바로 물어보기
+                    챗봇에게 물어보기
                     <ArrowRight className="h-3.5 w-3.5" aria-hidden />
                   </DocsAskChatbotButton>
                   <TrackedLink
@@ -308,7 +355,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
 
       {productTiles.length > 0 && (
         <Reveal as="section" className="container mx-auto max-w-[1080px] px-5 mt-16 md:mt-20">
-          <p className={`${SECTION_EYEBROW} mb-2`}>제품별로 깊이 보기</p>
+          <p className={`${SECTION_EYEBROW} mb-2`}>제품별로 찾기</p>
           <div className="divide-y divide-black/[0.06] border-t border-black/[0.08]">
             {productTiles.map((tile) => {
               const TileIcon = PRODUCT_TILE_ICONS[tile.categoryId] ?? History
@@ -342,17 +389,34 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
         </Reveal>
       )}
 
+      {!query && (
+        <Reveal as="section" className="container mx-auto max-w-[1080px] px-5 mt-16 md:mt-24">
+          <div className="max-w-[880px] border-t border-black/[0.08] pt-4">
+            <p className={SECTION_EYEBROW}>처음이라면 여기부터</p>
+            <ol className="mt-2">
+              {START_STEPS.map((step, index) => (
+                <GuideArticleRow
+                  key={step.href}
+                  article={step}
+                  index={String(index + 1).padStart(2, "0")}
+                />
+              ))}
+            </ol>
+            <p className="mt-4 text-[14px] leading-[22px] text-[#31302E]">
+              학생과 강사는 앱이나 PC 프로그램에서 가입하고 로그인합니다. 웹 브라우저로 여는 관리자
+              페이지는 학원 관리자용입니다.
+            </p>
+          </div>
+        </Reveal>
+      )}
+
       {!query && featuredArticles.length > 0 && (
         <Reveal as="section" className="container mx-auto max-w-[1080px] px-5 mt-16 md:mt-24">
           <div className="border-t border-black/[0.08] pt-4">
-            <p className={SECTION_EYEBROW}>먼저 보면 좋은 안내</p>
+            <p className={SECTION_EYEBROW}>추천 가이드</p>
             <ul className="mt-2 grid gap-x-12 md:grid-cols-2">
-              {featuredArticles.map((article, index) => (
-                <GuideArticleRow
-                  key={article.href}
-                  article={article}
-                  index={String(index + 1).padStart(2, "0")}
-                />
+              {featuredArticles.map((article) => (
+                <GuideArticleRow key={article.href} article={article} />
               ))}
             </ul>
           </div>
@@ -365,11 +429,11 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
             <div>
               <p className={SECTION_EYEBROW}>설치가 필요하신가요</p>
               <h2 className="mt-3 break-keep text-[1.5rem] font-bold leading-[1.3] md:text-[1.75rem]">
-                다운로드부터 첫 로그인까지, 5분이면 충분합니다.
+                설치 파일은 다운로드 페이지에서 받습니다.
               </h2>
               <p className="mt-3 max-w-xl text-[15px] leading-7 text-[#615D59]">
-                다운로드 페이지가 지금 쓰는 기기의 OS를 감지해 맞는 설치 파일을 안내합니다. 계정
-                하나로 모든 기기에서 로그인돼요.
+                페이지를 열면 지금 쓰는 기기에 맞는 설치 파일이 먼저 보입니다. 가입한 계정 하나로
+                PC와 모바일 기기에서 모두 로그인합니다.
               </p>
               <div className="mt-6">
                 <TrackedLink
@@ -414,9 +478,9 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
         <div className="grid gap-x-8 gap-y-9 sm:grid-cols-3">
           <div className={RULE_BLOCK}>
             <MessageCircle className="h-5 w-5 text-[#084734]" aria-hidden />
-            <p className="mt-3.5 text-[16px] font-bold text-[#111110]">챗봇에게 바로 묻기</p>
+            <p className="mt-3.5 text-[16px] font-bold text-[#111110]">챗봇에게 묻기</p>
             <p className="mt-1.5 text-[14px] leading-[22px] text-[#615D59]">
-              가이드 내용을 학원 상황에 맞춰 바로 답합니다.
+              막힌 상황을 적으면 가이드 내용을 바탕으로 답합니다.
             </p>
             <DocsAskChatbotButton
               className={`mt-4 inline-flex items-center gap-1 text-[14px] font-semibold text-[#084734] ${FOCUS_RING}`}
@@ -430,7 +494,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
             <CircleHelp className="h-5 w-5 text-[#084734]" aria-hidden />
             <p className="mt-3.5 text-[16px] font-bold text-[#111110]">자주 묻는 질문</p>
             <p className="mt-1.5 text-[14px] leading-[22px] text-[#615D59]">
-              요금, 계정, 수업 운영에서 자주 나오는 질문 모음.
+              도입 기간, 요금, 전자칠판 설치와 A/S처럼 도입 전에 많이 묻는 질문입니다.
             </p>
             <TrackedLink
               href="/faq"
@@ -446,7 +510,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
             <Headset className="h-5 w-5 text-[#084734]" aria-hidden />
             <p className="mt-3.5 text-[16px] font-bold text-[#111110]">도입·운영 상담</p>
             <p className="mt-1.5 text-[14px] leading-[22px] text-[#615D59]">
-              우리 학원에 맞는 구성이 궁금하다면 상담으로 이어보세요.
+              구성이 궁금하거나 가이드로 풀리지 않으면 남겨 주세요. 담당 매니저가 연락드립니다.
             </p>
             <TrackedLink
               href="/contact"

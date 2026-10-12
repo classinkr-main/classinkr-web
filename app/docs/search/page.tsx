@@ -10,7 +10,7 @@ const DOCS_CONTACT_HREF = `/contact?topic=${encodeURIComponent("계정/접속/�
 
 export const metadata: Metadata = {
   title: "가이드 검색",
-  description: "Classin 가이드 문서를 검색하세요.",
+  description: "클래스인 가이드를 기능 이름이나 지금 겪는 상황으로 검색합니다.",
   // 검색 결과 페이지는 색인하지 않는다 (중복/얕은 콘텐츠 방지).
   robots: { index: false, follow: true },
 }
@@ -61,7 +61,7 @@ export default async function DocsSearchPage({ searchParams }: DocsSearchPagePro
               defaultValue={query}
               autoFocus
               aria-label="가이드 전체 검색"
-              placeholder="궁금한 기능, 수업 준비, 문제 상황 검색"
+              placeholder="예: 학생 추가, 비밀번호 변경"
               className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#A39E98]"
             />
             <button
@@ -82,17 +82,17 @@ export default async function DocsSearchPage({ searchParams }: DocsSearchPagePro
         <div className="mt-9 max-w-3xl">
           {!query ? (
             <p className="text-[15px] leading-7 text-[#615D59]">
-              찾으시는 기능이나 상황을 입력해 보세요. 도입 준비, 수업 운영, 문제 해결까지
-              가이드 전체에서 검색합니다.
+              기능 이름이나 지금 겪는 상황을 짧게 입력하세요. ‘녹화’, ‘학생 추가’, ‘비밀번호’처럼
+              한두 단어로 검색하면 잘 찾아집니다.
             </p>
           ) : results.length === 0 ? (
             <div className="rounded-lg border border-black/[0.08] bg-white p-6">
               <p className="text-[15px] font-semibold text-[#111110]">
-                “{query}”에 대한 결과를 찾지 못했습니다.
+                “{query}” 검색 결과가 없습니다.
               </p>
               <p className="mt-2 text-sm leading-6 text-[#615D59]">
-                다른 키워드로 검색하시거나, 아래에서 바로 상담을 남겨주세요. 검색하신 내용은
-                가이드 보강 우선순위에 반영됩니다.
+                더 짧은 단어로 다시 검색해 보세요. 그래도 없으면 상담을 남겨 주세요. 결과가 없었던
+                검색어는 따로 모아 다음 가이드를 쓸 때 참고합니다.
               </p>
               <Link
                 href={DOCS_CONTACT_HREF}

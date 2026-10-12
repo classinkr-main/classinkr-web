@@ -11,7 +11,7 @@ describe("public FAQ CS Figma usage entries", () => {
 
     expect(usageCategory).toMatchObject({
       label: "사용법",
-      eyebrow: "CS Guide FAQ",
+      eyebrow: "How-to FAQ",
     })
     expect(usageCategory?.items).toEqual(
       expect.arrayContaining([
