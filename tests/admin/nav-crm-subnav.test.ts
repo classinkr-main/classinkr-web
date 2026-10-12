@@ -28,7 +28,7 @@ import { NAV_CMDS, matchesNavCommand } from "@/components/admin/crm/CrmCommandPa
 // 규칙 정본: components/admin/admin-nav-access.ts 상단 주석. 이 파일이 고정하는 것:
 //  1. 레지스트리 정합(숨길 수 있는 탭 = 1차 진입 탭 제외 + 고객DB 보조 착지 제외)
 //  2. 정규화(보존·버림 표) — 세 저장 경로가 모두 이 함수를 거친다
-//  3. 최상위 격리 — crm: 키는 사이드바 배치·accessible 17 불변식에 영향이 0
+//  3. 최상위 격리 — crm: 키는 사이드바 배치·accessible 18 불변식에 영향이 0
 //  4. setCrmSubnavOverride(기본과 같으면 키 삭제·숨김 불가 no-op·입력 불변)
 //  5. ⌘K 도달성 — 숨겨도 두 팔레트(전역·CRM)에서 라벨로 찾힌다
 
@@ -149,14 +149,14 @@ describe("최상위 격리 — crm: 키는 사이드바 배치에 영향이 없�
     expect(resolveAdminNavAccess(ctx({ overrides: HIDE_ALL_CRM }))).toEqual(resolveAdminNavAccess(ctx()))
   })
 
-  it("최상위 전부 숨김 + CRM 전부 숨김이어도 accessible 은 17 전부다", () => {
+  it("최상위 전부 숨김 + CRM 전부 숨김이어도 accessible 은 18 전부다", () => {
     const access = resolveAdminNavAccess(ctx({ overrides: { ...HIDE_EVERYTHING_TOP, ...HIDE_ALL_CRM } }))
     expect(getAccessibleAdminNavItems(access)).toHaveLength(ADMIN_NAV.length)
     expect(getAccessibleAdminNavItems(access).map((item) => item.href)).toEqual(ADMIN_NAV.map((item) => item.href))
-    expect(ADMIN_NAV).toHaveLength(17)
+    expect(ADMIN_NAV).toHaveLength(18)
   })
 
-  it("편집기 최상위 행은 17행 그대로다", () => {
+  it("편집기 최상위 행은 18행 그대로다", () => {
     const rows = buildNavPreferenceRows(ctx({ overrides: { ...HIDE_ALL_CRM } }))
     expect(rows).toHaveLength(ADMIN_NAV.length)
     expect(rows.filter((row) => row.isException)).toHaveLength(0)

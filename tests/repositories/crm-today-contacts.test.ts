@@ -10,7 +10,7 @@
  *  - Compass 조회 전화 키에 할 일 대상 리드(상태 무관)를 넣는다([24]).
  *  - force 는 후보 풀·보조 원천을 우회하고 오늘 연락 태그를 즉시 만료한다.
  */
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const NOW = new Date("2026-09-25T03:00:00.000Z") // 금 12:00 KST
 
@@ -120,6 +120,10 @@ async function loadRepository() {
   return import("@/lib/repositories/crm-today-contacts")
 }
 
+afterEach(() => {
+  vi.useRealTimers()
+})
+
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.cachedAux = null
@@ -219,6 +223,10 @@ describe("crm-today-contacts 원천 조립", () => {
     mocks.nextActions.mockImplementation(async () => ({ rows: [], down: true, truncated: false }))
     mocks.leadIndex.mockResolvedValue({ rows: [], down: true })
     mocks.latestActivity.mockResolvedValue({ rows: [], down: true })
+    // now 를 넘기면 캐시를 우회하므로 이 테스트는 시계만 고정한다 — 실제 날짜로 돌면 픽스처(09-25)가
+    // 목록 창 밖으로 밀려 결과가 날짜에 따라 달라진다.
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(NOW)
     const { getCrmTodayContacts } = await loadRepository()
 
     const first = await getCrmTodayContacts({})
