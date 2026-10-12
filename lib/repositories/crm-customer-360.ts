@@ -47,9 +47,26 @@ export interface ParsedCustomerKey {
   targetType: Customer360Source
 }
 
+/**
+ * 라우트 세그먼트로 들어온 고객 키를 원래 모양(`lead:{id}`)으로 되돌린다.
+ * Next 16.2 는 동적 페이지 본문의 params 를 퍼센트 인코딩된 채(`lead%3A{id}`) 넘긴다 — 같은 요청의
+ * generateMetadata·라우트 핸들러는 디코드된 값을 받는다. 그대로 파싱하면 ':' 가 없어 상세 페이지가 404 였다
+ * (2026-09-29 운영 재현: 탭 제목은 고객 이름인데 본문은 notFound). '%' 가 없으면 그대로, 잘못된 시퀀스면 원문.
+ */
+export function normalizeUnifiedCustomerKeyParam(raw: string): string {
+  if (!raw.includes("%")) return raw
+  try {
+    return decodeURIComponent(raw)
+  } catch {
+    return raw
+  }
+}
+
 // unified 행 key는 `lead:{id}` 또는 `neo:{accountId}`. accountId에 ':'가 있을 수 있어 첫 ':'에서만 분리한다.
-export function parseUnifiedCustomerKey(key: string | null | undefined): ParsedCustomerKey | null {
-  if (!key) return null
+// 라우트 세그먼트 원문(퍼센트 인코딩)도 받는다 — normalizeUnifiedCustomerKeyParam.
+export function parseUnifiedCustomerKey(rawKey: string | null | undefined): ParsedCustomerKey | null {
+  if (!rawKey) return null
+  const key = normalizeUnifiedCustomerKeyParam(rawKey)
   const idx = key.indexOf(":")
   if (idx <= 0) return null
   const source = key.slice(0, idx)

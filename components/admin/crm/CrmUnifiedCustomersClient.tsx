@@ -28,6 +28,7 @@ import {
   PRIMARY_SAVED_VIEW_FILTERS,
   SAVED_VIEW_FILTERS,
   SECONDARY_SAVED_VIEW_FILTERS,
+  isDrawerCustomerKey,
   listUrl,
   mergePage,
   normalizeText,
@@ -296,7 +297,9 @@ export default function CrmUnifiedCustomersClient({
   }, [drawer])
 
   useEffect(() => {
-    const account = searchParams.get("account")
+    const accountParam = searchParams.get("account")
+    // 접두어 없는 원시 id(예전 기록 화면 링크·북마크)는 드로어를 열지 않는다 — 열면 360 API 가 400 이다.
+    const account = isDrawerCustomerKey(accountParam) ? accountParam : null
     const current = drawerRef.current
     if (!account) {
       if (!current) return

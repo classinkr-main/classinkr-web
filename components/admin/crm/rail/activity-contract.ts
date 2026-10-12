@@ -246,3 +246,32 @@ export function appendFormValue(formData: FormData, key: string, value: string) 
 export function isActivityTargetType(value: string): value is ActivityTargetType {
   return TARGET_OPTIONS.some((option) => option.key !== "all" && option.key === value)
 }
+
+const UNIFIED_CUSTOMERS_PATH = "/admin/crm/customers/unified"
+
+/**
+ * 기록 화면 포커스의 "{고객명} 상세로" 링크. 통합 고객 드로어(?account=)는 `lead:`·`neo:` 접두어가 붙은 키만
+ * 열 수 있다 — 예전 폴백은 원시 targetId(uuid·숫자)를 그대로 실어 360 API 가 400(Invalid customer key)을 냈다
+ * (2026-09-29). back 파라미터는 어드민 내부 경로만 따른다. 드로어로 열 수 없는 대상(customer·deal·unknown)은
+ * 이름 검색으로 목록에 착지한다.
+ */
+export function activityFocusBackHref(input: {
+  back: string
+  targetType: ActivityTargetType | undefined
+  targetId: string
+  label: string
+}): string {
+  const back = input.back.trim()
+  if (back.startsWith("/admin/") && !back.startsWith("//")) return back
+  const id = input.targetId.trim()
+  const key = /^(lead|neo):./.test(id)
+    ? id
+    : id && input.targetType === "lead"
+      ? `lead:${id}`
+      : id && input.targetType === "neo_account"
+        ? `neo:${id}`
+        : null
+  if (key) return `${UNIFIED_CUSTOMERS_PATH}?account=${encodeURIComponent(key)}`
+  const label = input.label.trim()
+  return label ? `${UNIFIED_CUSTOMERS_PATH}?q=${encodeURIComponent(label)}` : UNIFIED_CUSTOMERS_PATH
+}

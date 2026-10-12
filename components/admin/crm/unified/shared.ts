@@ -197,6 +197,14 @@ export function listUrl(input: {
 export const UNIFIED_CUSTOMERS_PATH = "/admin/crm/customers/unified"
 
 /**
+ * ?account= 딥링크가 360 드로어로 열 수 있는 키인지(`lead:`·`neo:` 접두어). 접두어 없는 원시 id(예전 기록 화면
+ * 링크·북마크)로 드로어를 열면 360 API 가 400(Invalid customer key)이라 빈 드로어 대신 열지 않는다(2026-09-29).
+ */
+export function isDrawerCustomerKey(value: string | null | undefined): value is string {
+  return typeof value === "string" && /^(lead|neo):\S/.test(value)
+}
+
+/**
  * `?tag=` 원문 → 라벨 필터 값. 저장 규칙과 같은 normalizeTag(trim → 연속 공백 1칸 → 40자 컷)로
  * 맞춘다 — 서버 필터는 행 태그와 문자열이 정확히 같아야 걸리므로(crm-unified-customers.ts
  * `row.tags.includes(tagFilter)`), 저장된 형태와 어긋난 공백이 0건 결과로 이어지지 않게 한다.
