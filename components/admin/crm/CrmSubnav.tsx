@@ -221,10 +221,10 @@ export default function CrmSubnav({ active }: { active?: CrmSection } = {}) {
               onMouseLeave={cancelWarmSubtab}
               onPointerDown={() => warmSubtab(child.href)}
               onTouchStart={() => warmSubtab(child.href)}
-              className={`inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 text-[12.5px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734] sm:min-h-9 ${
+              className={`inline-flex min-h-11 shrink-0 items-center whitespace-nowrap border-b-2 px-3.5 text-[12.5px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734] sm:min-h-9 ${
                 isActive
-                  ? "bg-[#111110] text-white"
-                  : "text-[#1a1a1a]/55 hover:bg-[#f5f5f2] hover:text-[#111110]"
+                  ? "border-[#084734] text-[#084734]"
+                  : "border-transparent text-[#615D59] hover:text-[#111110]"
               }`}
             >
               {child.label}

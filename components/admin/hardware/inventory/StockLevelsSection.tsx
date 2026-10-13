@@ -21,6 +21,7 @@ import {
 } from "./shared"
 
 interface StockLevelsSectionProps {
+  compact?: boolean
   openSections: Record<HardwareSectionKey, boolean>
   toggleSection: (section: HardwareSectionKey) => void
   data: HardwareDashboard | null
@@ -30,6 +31,7 @@ interface StockLevelsSectionProps {
 }
 
 function StockLevelsSection({
+  compact = false,
   openSections,
   toggleSection,
   data,
@@ -40,9 +42,9 @@ function StockLevelsSection({
   return (
     // id: 홈 요약 밴드(SummaryBand)의 "창고/가용/부족·주문 검토" 칸이 앵커 스크롤로 여기를
     // 가리킨다(감사 2026-09-14, 홈 가시성 개편).
-    <section id="hardware-section-stock" className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+    <section id="hardware-section-stock" className="min-w-0 border border-[rgba(0,0,0,0.08)] bg-white">
       <SectionHeader
-        title="현재 재고"
+        title="제품별 재고"
         description="창고 = 실물 재고 · 가용 = 창고 − 예정. 최소재고와 최근 출고량을 같이 보고 주문 시점을 판단합니다."
         open={openSections.stock}
         onToggle={() => toggleSection("stock")}
@@ -63,7 +65,7 @@ function StockLevelsSection({
       {openSections.stock && (
         <>
           <div className="overflow-x-auto">
-            <table className="min-w-[860px] w-full border-collapse text-left">
+            <table className={`w-full border-collapse text-left ${compact ? "min-w-[560px]" : "min-w-[860px]"}`}>
               <thead className="bg-[#F6F5F4] text-[11px] font-bold uppercase tracking-[0.05em] text-[#615D59]">
                 <tr>
                   {/* 지표 1개=라벨 1개 — 카테고리 카드·위치 맵과 같은 어휘(창고/예정/가용)로 고정한다. 값 소스 불변. */}
@@ -71,15 +73,15 @@ function StockLevelsSection({
                   <th scope="col" className="px-4 py-3 text-right">창고</th>
                   <th scope="col" className="px-4 py-3 text-right">예정</th>
                   <th scope="col" className="px-4 py-3 text-right">가용</th>
-                  <th scope="col" className="px-4 py-3 text-right">30일</th>
-                  <th scope="col" className="px-4 py-3 text-right">빠른 처리</th>
+                  {!compact ? <th scope="col" className="px-4 py-3 text-right">30일</th> : null}
+                  {!compact ? <th scope="col" className="px-4 py-3 text-right">빠른 처리</th> : null}
                   <th scope="col" className="px-5 py-3 text-right">상태</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[rgba(0,0,0,0.06)]">
                 {stockPagination.totalItems === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-5 py-10 text-center text-[13px] text-[#615D59]">
+                    <td colSpan={compact ? 5 : 7} className="px-5 py-10 text-center text-[13px] text-[#615D59]">
                       아직 하드웨어 원장 데이터가 없습니다. 시트 가져오기를 먼저 실행하세요.
                     </td>
                   </tr>
@@ -109,6 +111,7 @@ function StockLevelsSection({
                             )}
                           </div>
                         )}
+                        {compact ? <details className="mt-2 text-[11px] text-[#615D59]"><summary className="cursor-pointer">최근 출고·빠른 처리</summary><p className="mt-2">30일 {formatNumber(row.outbound30d)}대 · 주 {formatAvg(row.weeklyOutboundAvg)}대</p><div className="mt-2 flex gap-2"><QuickMoveButton kind="sale" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "sale")} /><QuickMoveButton kind="planned" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "planned")} /><QuickMoveButton kind="inbound" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "inbound")} /></div></details> : null}
                       </td>
                       {/* 음수 = 원장 이상 신호 — 카테고리 카드와 같은 규칙으로 Danger 텍스트만 적용(값 소스 불변). */}
                       <td className={`px-4 py-3.5 text-right text-[14px] font-bold tabular-nums ${row.warehouseStock < 0 ? "text-[#B43E3E]" : "text-[#111110]"}`}>
@@ -120,17 +123,17 @@ function StockLevelsSection({
                       <td className={`px-4 py-3.5 text-right text-[16px] font-bold tabular-nums tracking-[-0.02em] ${row.availableStock < 0 ? "text-[#B43E3E]" : "text-[#111110]"}`}>
                         {formatNumber(row.availableStock)}
                       </td>
-                      <td className="px-4 py-3.5 text-right">
+                      {!compact ? <td className="px-4 py-3.5 text-right">
                         <p className="text-[13px] font-semibold tabular-nums text-[#111110]">{formatNumber(row.outbound30d)}</p>
                         <p className="mt-1 text-[11px] tabular-nums text-[#615D59]">주 {formatAvg(row.weeklyOutboundAvg)}대</p>
-                      </td>
-                      <td className="px-4 py-3.5 text-right">
+                      </td> : null}
+                      {!compact ? <td className="px-4 py-3.5 text-right">
                         <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5">
                           <QuickMoveButton kind="sale" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "sale")} />
                           <QuickMoveButton kind="planned" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "planned")} />
                           <QuickMoveButton kind="inbound" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "inbound")} />
                         </div>
-                      </td>
+                      </td> : null}
                       <td className="px-5 py-3.5 text-right">
                         <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ${statusClass(row)}`}>
                           {statusCopy(row)}

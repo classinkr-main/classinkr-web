@@ -17,6 +17,8 @@ import Account360Lens from "./Account360Lens"
 import CrmNoticeBanner from "./CrmNoticeBanner"
 import FreshnessCaption from "./FreshnessCaption"
 import Customer360DrawerSkeleton from "./Customer360DrawerSkeleton"
+import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
+import { useWideWorkspace } from "@/components/admin/use-wide-workspace"
 import SavedViewButton from "./unified/SavedViewButton"
 import CustomerSearchPanel from "./unified/CustomerSearchPanel"
 import CustomerResultsSection from "./unified/CustomerResultsSection"
@@ -221,6 +223,7 @@ export default function CrmUnifiedCustomersClient({
   const [error, setError] = useState<string | null>(null)
   const [refreshFailure, setRefreshFailure] = useState<RefreshFailure | null>(null)
   const [drawer, setDrawer] = useState<{ key: string; name: string } | null>(null)
+  const [pendingNavigation, setPendingNavigation] = useState<{ key: string | null; name: string; mode: "push" | "replace" } | null>(null)
   const [leadModalOpen, setLeadModalOpen] = useState(false)
   const requestSeq = useRef(0)
   // loadPage 콜백이 "지금 화면에 결과가 있는가"를 deps 없이 읽기 위한 거울 — 실패를 danger(조회
@@ -256,10 +259,15 @@ export default function CrmUnifiedCustomersClient({
   // 열 때 push로 히스토리 항목을 남겨 브라우저 '뒤로가기'가 드로어를 닫게 한다.
   const openDrawer = useCallback(
     (key: string, name: string) => {
+      if (drawer?.key !== key && drawerDirtyRef.current) {
+        setPendingNavigation({ key, name, mode: "push" })
+        return
+      }
+      if (drawer?.key !== key) drawerDirtyRef.current = false
       setDrawer({ key, name })
       setDrawerUrl(key, "push")
     },
-    [setDrawerUrl]
+    [drawer?.key, setDrawerUrl]
   )
 
   // 행 더블클릭 = 드로어 열기. 이름 버튼이 유일한 진입점이라 "행을 눌렀는데 안 열린다"가 반복됐다.
@@ -301,10 +309,10 @@ export default function CrmUnifiedCustomersClient({
     if (!account) {
       if (!current) return
       // 뒤로가기로 ?account=가 사라질 때: 컴포저에 작성 중 기록이 있으면 확인 후에만 닫는다.
-      // 거부 시 라우터 push로 account를 복원(히스토리 한 단계 재적재) — raw history API는
-      // useSearchParams와 desync되므로 금지.
-      if (drawerDirtyRef.current && !window.confirm("작성 중인 기록이 있습니다. 닫을까요?")) {
-        setDrawerUrl(current.key, "push")
+      // 작성 중이면 현재 account를 복원하고 화면 안에서 폐기 여부를 확인한다.
+      if (drawerDirtyRef.current) {
+        setDrawerUrl(current.key, "replace")
+        setPendingNavigation({ key: null, name: "", mode: "replace" })
         return
       }
       // 언마운트 닫기라 드로어 내부 리셋 효과의 dirty=false 통지가 없다 — 여기서 직접 리셋.
@@ -313,6 +321,12 @@ export default function CrmUnifiedCustomersClient({
       return
     }
     if (current?.key === account) return
+    if (current && drawerDirtyRef.current) {
+      setDrawerUrl(current.key, "replace")
+      setPendingNavigation({ key: account, name: "", mode: "push" })
+      return
+    }
+    drawerDirtyRef.current = false
     setDrawer({ key: account, name: current?.name ?? "" })
   }, [searchParams, setDrawerUrl])
 
@@ -663,6 +677,7 @@ export default function CrmUnifiedCustomersClient({
     const rows = data?.rows ?? []
     return sort ? sortRows(rows, sort) : rows
   }, [data?.rows, sort])
+  const wideWorkspace = useWideWorkspace()
 
   return (
     <div
@@ -695,7 +710,8 @@ export default function CrmUnifiedCustomersClient({
         </div>
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">ClassIn 고객 DB</h1>
+            <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">고객을 한눈에</h1>
+            <p className="mt-1 text-[13px] text-[#615D59]">고객 현황·돈흐름·다음 액션을 조회하고, 선택한 고객의 기록을 확인합니다.</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <button
@@ -710,6 +726,8 @@ export default function CrmUnifiedCustomersClient({
           </div>
         </div>
 
+        <div className={`grid items-start gap-6 ${drawer && wideWorkspace ? "xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.65fr)]" : ""}`}>
+        <div className="min-w-0">
         {/* 행동 빈도가 높은 보기만 1차 노출하고, 참조성 보기는 한 묶음으로 접는다. */}
         <div className="mb-3 flex flex-wrap items-center gap-2" role="group" aria-label="빠른 고객 필터">
           <span className="inline-flex h-8 shrink-0 items-center gap-1.5 text-[12px] font-semibold text-[#1a1a1a]/45">
@@ -890,17 +908,22 @@ export default function CrmUnifiedCustomersClient({
           onRowDoubleClick={handleRowDoubleClick}
           onLoadPage={(offset) => void loadPage(offset)}
           onOpenLeadModal={() => setLeadModalOpen(true)}
+          selectedKey={drawer?.key ?? null}
         />
 
         {/* REV 스파인은 참조 렌즈다. 검색 결과와 고객 작업을 먼저 보여준 뒤 하단에 둔다. */}
         <div className="mt-4">
           <Account360Lens />
         </div>
+        </div>
 
       {/* 열림 상태에서만 렌더 — 닫힘=null 렌더였던 기존과 동일 화면이면서, dynamic 청크를
           열 때만 내려받고 닫힌 첫 로드에 로딩 폴백이 새어 나오지 않는다. */}
       {drawer ? (
         <Customer360Drawer
+          key={drawer.key}
+          presentation="workspace"
+          externalDialogOpen={pendingNavigation !== null}
           customerKey={drawer.key}
           name={drawer.name}
           onClose={closeDrawer}
@@ -909,6 +932,24 @@ export default function CrmUnifiedCustomersClient({
           }}
         />
       ) : null}
+      </div>
+
+      <DeleteConfirmDialog
+        open={pendingNavigation !== null}
+        title={pendingNavigation?.key ? "고객을 바꿀까요?" : "고객 상세를 닫을까요?"}
+        description="작성 중인 내용이 아직 저장되지 않았습니다. 계속하면 이 입력 내용은 사라집니다."
+        confirmLabel={pendingNavigation?.key ? "입력 버리고 고객 전환" : "입력 버리고 닫기"}
+        cancelLabel="계속 작성"
+        destructive={false}
+        onClose={() => setPendingNavigation(null)}
+        onConfirm={() => {
+          if (!pendingNavigation) return
+          drawerDirtyRef.current = false
+          setDrawer(pendingNavigation.key ? { key: pendingNavigation.key, name: pendingNavigation.name } : null)
+          setDrawerUrl(pendingNavigation.key, pendingNavigation.mode)
+          setPendingNavigation(null)
+        }}
+      />
 
       {leadModalOpen ? (
         <LeadRegisterModal

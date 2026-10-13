@@ -740,17 +740,17 @@ function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
                               }}
                               className={`flex min-h-11 items-center gap-3 rounded-md px-3 text-[14px] font-medium transition-colors ${
                                 isActive
-                                  ? "bg-[#111110] text-white"
+                                  ? "bg-[#ECFDF5] text-[#084734]"
                                   : "text-[#1a1a1a]/65 hover:bg-[#f5f5f2] hover:text-[#111110]"
                               }`}
                             >
-                              <span className={isActive ? "text-white" : "text-[#1a1a1a]/40"}>
+                              <span className={isActive ? "text-[#084734]" : "text-[#1a1a1a]/40"}>
                                 <item.icon className="h-4 w-4" />
                               </span>
                               <span className="min-w-0 flex-1 truncate">{item.label}</span>
                               {item.badge ? (
                                 <span className={`rounded px-1.5 py-0.5 text-[10px] font-normal ${
-                                  isActive ? "bg-white/15 text-white/80" : "bg-[#e8e8e4] text-[#1a1a1a]/50"
+                                  isActive ? "bg-[#D1FAE5] text-[#084734]" : "bg-[#e8e8e4] text-[#1a1a1a]/50"
                                 }`}>
                                   {item.badge}
                                 </span>
@@ -806,13 +806,13 @@ function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
                                     }}
                                     className={`flex min-h-11 items-center gap-3 rounded-md px-3 text-[14px] font-medium transition-colors ${
                                       isActive
-                                        ? "bg-[#111110] text-white"
+                                        ? "bg-[#ECFDF5] text-[#084734]"
                                         : isWip
                                           ? "text-[#1a1a1a]/40 hover:bg-[#f5f5f2] hover:text-[#1a1a1a]/65"
                                           : "text-[#1a1a1a]/65 hover:bg-[#f5f5f2] hover:text-[#111110]"
                                     }`}
                                   >
-                                    <span className={isActive ? "text-white" : "text-[#1a1a1a]/40"}>
+                                    <span className={isActive ? "text-[#084734]" : "text-[#1a1a1a]/40"}>
                                       <item.icon className="h-4 w-4" />
                                     </span>
                                     <span className="min-w-0 flex-1 truncate">{item.label}</span>
@@ -868,11 +868,11 @@ function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
               onClick={() => warmAdminTab(item.href, "click")}
               className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-md px-1 text-[10px] font-medium leading-none transition-colors ${
                 isActive
-                  ? "bg-[#111110] text-white"
+                  ? "bg-[#ECFDF5] text-[#084734]"
                   : "text-[#1a1a1a]/55 hover:bg-[#f5f5f2] hover:text-[#111110]"
               }`}
             >
-              <span className={isActive ? "text-white" : "text-[#1a1a1a]/40"}>
+              <span className={isActive ? "text-[#084734]" : "text-[#1a1a1a]/40"}>
                 <item.icon className="h-4 w-4" />
               </span>
               <span className="max-w-full truncate">{item.label}</span>
@@ -887,11 +887,11 @@ function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
           aria-pressed={mobileMoreActive}
           className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-md px-1 text-[10px] font-medium leading-none transition-colors ${
             mobileMoreActive
-              ? "bg-[#111110] text-white"
+              ? "bg-[#ECFDF5] text-[#084734]"
               : "text-[#1a1a1a]/55 hover:bg-[#f5f5f2] hover:text-[#111110]"
           }`}
         >
-          <MoreHorizontal className={`h-4 w-4 ${mobileMoreActive ? "text-white" : "text-[#1a1a1a]/40"}`} />
+          <MoreHorizontal className={`h-4 w-4 ${mobileMoreActive ? "text-[#084734]" : "text-[#1a1a1a]/40"}`} />
           <span>More</span>
         </button>
       </div>
@@ -989,11 +989,11 @@ function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
                             effectiveCollapsed ? "justify-center px-2 py-2.5" : "px-3 py-2"
                           } ${
                             isActive
-                              ? "bg-[#111110] text-white"
+                              ? "bg-[#ECFDF5] text-[#084734]"
                               : "text-[#1a1a1a]/60 hover:bg-[#f5f5f2] hover:text-[#111110]"
                           }`}
                         >
-                          <span className={isActive ? "text-white" : "text-[#1a1a1a]/40 group-hover:text-[#111110]"}>
+                          <span className={isActive ? "text-[#084734]" : "text-[#1a1a1a]/40 group-hover:text-[#111110]"}>
                             <item.icon className="h-4 w-4" />
                           </span>
                           {!effectiveCollapsed && (
@@ -1001,7 +1001,7 @@ function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
                               <span className="flex-1">{item.label}</span>
                               {item.badge && (
                                 <span className={`rounded px-1.5 py-0.5 text-[10px] font-normal ${
-                                  isActive ? "bg-white/15 text-white/80" : "bg-[#e8e8e4] text-[#1a1a1a]/50"
+                                  isActive ? "bg-[#D1FAE5] text-[#084734]" : "bg-[#e8e8e4] text-[#1a1a1a]/50"
                                 }`}>
                                   {item.badge}
                                 </span>
@@ -1061,13 +1061,13 @@ function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
                                 onClick={() => warmAdminTab(item.href, "click")}
                                 className={`group flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
                                   isActive
-                                    ? "bg-[#111110] text-white"
+                                    ? "bg-[#ECFDF5] text-[#084734]"
                                     : isWip
                                       ? "text-[#1a1a1a]/35 hover:bg-[#f5f5f2] hover:text-[#1a1a1a]/60"
                                       : "text-[#1a1a1a]/60 hover:bg-[#f5f5f2] hover:text-[#111110]"
                                 }`}
                               >
-                                <span className={isActive ? "text-white" : "text-[#1a1a1a]/30"}>
+                                <span className={isActive ? "text-[#084734]" : "text-[#1a1a1a]/30"}>
                                   <item.icon className="h-4 w-4" />
                                 </span>
                                 <span className="flex-1">{item.label}</span>

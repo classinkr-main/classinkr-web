@@ -19,17 +19,17 @@ export default function ActivityDateGroups<T>({
   return (
     <div className={`space-y-4 ${className ?? ""}`}>
       {groups.map((group) => (
-        <section key={group.dayKey} aria-labelledby={`activity-day-${group.dayKey}`} className="space-y-1.5">
+        <section key={group.dayKey} aria-labelledby={`activity-day-${group.dayKey}`} className="divide-y divide-[rgba(0,0,0,0.08)]">
           <div
             id={`activity-day-${group.dayKey}`}
-            className="sticky top-0 z-10 -mx-1 flex items-center justify-between gap-2 bg-[#FAFAF8] px-1 py-1.5"
+            className="sticky top-0 z-10 -mx-1 flex items-center justify-between gap-2 bg-white px-1 py-3"
           >
-            <h3 className="text-[12px] font-bold text-[#111110]">{group.label}</h3>
+            <h3 className="text-[14px] font-bold text-[#111110]">{group.label}</h3>
             <span className="text-[11px] font-semibold tabular-nums text-[#615D59]">
               {group.rows.length.toLocaleString("ko-KR")}건
             </span>
           </div>
-          <div className="space-y-1.5">{group.rows.map((row) => renderRow(row))}</div>
+          <div className="divide-y divide-[rgba(0,0,0,0.08)]">{group.rows.map((row) => renderRow(row))}</div>
         </section>
       ))}
     </div>

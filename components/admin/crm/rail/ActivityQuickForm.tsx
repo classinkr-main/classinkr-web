@@ -49,8 +49,8 @@ import {
 export interface ActivityQuickFormProps {
   /** true면 레일 장착용 컴팩트 변형(헤더 생략·모드 필 선택기). 필드 구성·계약은 동일. */
   compact?: boolean
-  /** composer = 한 줄 컴포저(기록 탭·드로어 pin용). 미지정 시 compact 여부로 결정. */
-  variant?: "full" | "compact" | "composer"
+  /** workspace = 기록 화면 입력 작업면, composer = 한 줄 입력. 미지정 시 compact 여부로 결정. */
+  variant?: "full" | "compact" | "composer" | "workspace"
   /** composer에서 대상 피커 숨김(드로어처럼 대상이 고정된 컨텍스트) */
   lockTarget?: boolean
   /** 고객 프리셀렉트 — 대상 타입 (홈/고객DB/기록 딥링크 장착용) */
@@ -208,7 +208,7 @@ export default function ActivityQuickForm({
   onDirtyChange,
 }: ActivityQuickFormProps) {
   // 변형 정규화 — 명시 variant 우선, 없으면 기존 compact prop으로 결정(기존 호출부 무수정).
-  const resolvedVariant: "full" | "compact" | "composer" = variant ?? (compact ? "compact" : "full")
+  const resolvedVariant: NonNullable<ActivityQuickFormProps["variant"]> = variant ?? (compact ? "compact" : "full")
   const isComposer = resolvedVariant === "composer"
   const isCompact = resolvedVariant === "compact"
 
@@ -852,7 +852,7 @@ export default function ActivityQuickForm({
         </div>
       ) : null}
 
-      {showField("nextAction") ? (
+      {showField("nextAction") && resolvedVariant !== "workspace" ? (
         <div className="rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-3">
           <p className="mb-2 text-[12px] font-bold text-[#111110]">다음 액션</p>
           <div className="grid gap-2">
@@ -929,6 +929,52 @@ export default function ActivityQuickForm({
       ) : null}
     </>
   )
+
+  // The workspace uses the same state, submit gate and serialization as other variants.
+  if (resolvedVariant === "workspace") {
+    return (
+      <div className="space-y-5 [&_input]:min-w-0 [&_input]:max-w-full">
+        {toast ? <Toast msg={toast.msg} type={toast.type} /> : null}
+        {ownerDatalist}
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <h2 className="text-[18px] font-bold text-[#111110]">기록 추가</h2>
+          <span className={`text-[11px] ${saving ? "text-[#615D59]" : isDirty ? "text-[#A8741A]" : "text-[#615D59]"}`} role="status">
+            {saving ? "저장 중" : isDirty ? "입력 중 · 저장 전" : "새 기록"}
+          </span>
+        </div>
+        {!lockTarget ? <label className="block text-[12px] font-semibold text-[#615D59]">고객 선택<div className="mt-2">{customerPicker}</div></label> : null}
+        <div className="flex flex-wrap gap-3 border-b border-[rgba(0,0,0,0.08)]" role="group" aria-label="기록 종류 선택">
+          {MODE_OPTIONS.map((option) => (
+            <button key={option.key} type="button" aria-pressed={mode === option.key} onClick={() => { setMode(option.key); setShowAdvanced(false) }} className={`min-h-11 border-b-2 px-1 text-[13px] font-semibold focus-visible:outline-2 focus-visible:outline-[#084734] ${mode === option.key ? "border-[#084734] text-[#084734]" : "border-transparent text-[#615D59] hover:text-[#111110]"}`}>
+              {option.label}
+            </button>
+          ))}
+        </div>
+        {templateChipRow}
+        {recordingField}
+        <label className="block text-[12px] font-semibold text-[#615D59]">
+          내용
+          <textarea id={bodyFieldId} aria-label="기록 내용" value={body} onChange={(event) => setBody(event.target.value)} onKeyDown={onBodyKeyDown} rows={5} placeholder={targetLabel ? `${targetLabel} 기록 남기기` : "통화·미팅·메모 내용을 입력하세요"} className="mt-2 w-full resize-y rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-3 text-[14px] font-normal leading-6 text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734]" />
+        </label>
+        {ownerHealthNotice}
+        {metaFields}
+        <div className="space-y-3 border-t border-[rgba(0,0,0,0.08)] pt-4">
+          <label className="block text-[12px] font-semibold text-[#615D59]">다음 액션 (선택)<input aria-label="다음 액션" value={nextActionTitle} onChange={(event) => setNextActionTitle(event.target.value)} placeholder="견적 발송, 설치 일정 확인 등" className="mt-2 h-11 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] font-normal text-[#111110] outline-none focus:border-[#084734]" /></label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-[12px] font-semibold text-[#615D59]">액션 예정일<input aria-label="액션 예정일" type="datetime-local" value={nextActionDueAt} onChange={(event) => setNextActionDueAt(event.target.value)} className="mt-2 h-11 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[12px] text-[#111110]" /></label>
+            <label className="text-[12px] font-semibold text-[#615D59]">액션 담당자<input aria-label="액션 담당자" list={ownerListId} value={nextActionOwner} onChange={(event) => setNextActionOwner(event.target.value)} placeholder="담당자" className="mt-2 h-11 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110]" /></label>
+          </div>
+        </div>
+        <button type="button" aria-expanded={showAdvanced} onClick={() => setShowAdvanced((value) => !value)} className="min-h-11 text-[12px] font-semibold text-[#615D59] underline underline-offset-4">{showAdvanced ? "상세 접기" : "제목·요약·상세 옵션"}</button>
+        {showAdvanced ? <div className="grid gap-3">{titleField}{summaryField}{advancedFieldStack}</div> : null}
+        {unlinkedWarningBlock}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[rgba(0,0,0,0.08)] pt-4">
+          <p className="text-[11px] text-[#615D59]">⌘/Ctrl + Enter 저장</p>
+          <button type="button" onClick={() => void handleSubmit()} disabled={saving} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-[#084734] px-5 text-[13px] font-semibold text-white hover:bg-[#065c41] disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}기록 저장</button>
+        </div>
+      </div>
+    )
+  }
 
   // ---- composer: 한 줄 컴포저(모드 칩 → 대상+본문+저장 → 힌트/상세 토글 → 상세 스택) ----
   if (isComposer) {

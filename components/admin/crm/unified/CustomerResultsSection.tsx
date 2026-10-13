@@ -40,6 +40,7 @@ export default function CustomerResultsSection({
   onRowDoubleClick,
   onLoadPage,
   onOpenLeadModal,
+  selectedKey = null,
 }: {
   data: CrmUnifiedCustomers | null
   rows: CrmUnifiedCustomerRow[]
@@ -56,12 +57,13 @@ export default function CustomerResultsSection({
   onRowDoubleClick: (event: MouseEvent<HTMLElement>, row: CrmUnifiedCustomerRow) => void
   onLoadPage: (offset: number) => void
   onOpenLeadModal: () => void
+  selectedKey?: string | null
 }) {
   const loadedCount = data?.rows.length ?? rows.length
   const scopeCaption = sortScopeCaption(loadedCount)
   return (
     <section
-      className="rounded-2xl border border-[#e8e8e4] bg-white"
+      className="min-w-0 border-y border-[rgba(0,0,0,0.08)] bg-white"
       aria-label="통합 고객 검색 결과"
       aria-busy={loading || loadingMore || refreshing}
     >
@@ -99,9 +101,12 @@ export default function CustomerResultsSection({
           ) : null}
         </div>
       </div>
-      <div className="hidden overflow-hidden lg:block">
-        <table className="w-full border-collapse text-left">
+      <div className="hidden overflow-x-auto lg:block">
+        <table className="w-full min-w-[640px] table-fixed border-collapse text-left">
           <caption className="sr-only">통합 고객 검색 결과 목록</caption>
+          <colgroup>
+            {[27, 12, 17, 17, 12, 15].map((width, index) => <col key={index} style={{ width: `${width}%` }} />)}
+          </colgroup>
           <thead className="bg-[#fafaf8] text-[11px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/35">
             <tr>
               <SortableHeaderCell label="고객" sortKey="name" sort={sort} onToggle={onToggleSort} />
@@ -147,7 +152,8 @@ export default function CustomerResultsSection({
                 key={row.key}
                 onDoubleClick={(event) => onRowDoubleClick(event, row)}
                 title={row.source === "customer" ? undefined : "더블클릭 — 고객 카드 열기"}
-                className="transition-colors hover:bg-[#fafaf8]"
+                aria-selected={selectedKey === row.key}
+                className={`transition-colors ${selectedKey === row.key ? "bg-[#ECFDF5]" : "hover:bg-[#F6F5F4]"}`}
               >
                 <td className="px-4 py-3">
                   <div className="flex min-w-0 items-center gap-2">
@@ -166,11 +172,13 @@ export default function CustomerResultsSection({
                           <p className="truncate text-[13px] font-bold text-[#111110] group-hover:underline">{row.name}</p>
                         </button>
                       )}
-                      <CrmContactValue value={row.contact} className="mt-0.5" />
-                      <p className={`mt-1 inline-flex items-center gap-1 text-[11px] font-semibold ${row.regionLabel ? "text-[#084734]" : "text-[#1a1a1a]/30"}`}>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <CrmContactValue value={row.contact} />
+                      <p className={`inline-flex items-center gap-1 text-[11px] font-semibold ${row.regionLabel ? "text-[#084734]" : "text-[#1a1a1a]/30"}`}>
                         <MapPin className="h-3 w-3" />
                         {row.regionLabel ?? "지역 미지정"}
                       </p>
+                      </div>
                       <div className="mt-1 flex flex-wrap items-center gap-1 empty:hidden">
                         <CrmCustomerFlags flags={rowToFlags(row)} max={4} />
                         <LeadRowBadges row={row} />

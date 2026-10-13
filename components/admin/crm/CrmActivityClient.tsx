@@ -1,6 +1,6 @@
 "use client"
 
-// CRM 기록 표면 — 좌: 컴포저(ActivityQuickForm composer)+필터+타임라인, 우: 이번 주 요약(A5)+CrmActionRail(hideForm·hideRecent — 오늘 할 일).
+// CRM 기록 작업면 — 좌: 검색·날짜별 기록, 우: 입력. 주간 요약과 할 일은 접어서 참조한다.
 // 기록 생성 폼 SSOT는 rail/ActivityQuickForm — 이 파일은 폼을 직접 들고 있지 않는다.
 // 캐시 창(TTL·SWR)은 lib/crm/client-cache.ts SSOT 를 쓴다(P2) — 이 파일에 로컬 TTL 상수를 두지 않는다.
 
@@ -14,6 +14,7 @@ import {
   Clock,
   FileAudio,
   Filter,
+  Plus,
   RefreshCw,
   Search,
   UserRound,
@@ -466,9 +467,17 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
         <div>
           <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">기록</h1>
           <p className="mt-1 text-[13px] text-[#1a1a1a]/45">
-            녹음·회의록·메모 → 고객 DB 운영 기록
+            고객과의 기록을 모아 보고, 다음 액션까지 바로 입력합니다.
           </p>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => {
+          const field = document.getElementById("crm-workspace-body")
+          field?.scrollIntoView({ block: "center" })
+          field?.focus({ preventScroll: true })
+        }} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-[#084734] px-4 text-[13px] font-semibold text-white hover:bg-[#065c41]">
+          <Plus className="h-4 w-4" /> 기록 추가
+        </button>
         <button
           type="button"
           onClick={forceReload}
@@ -478,6 +487,7 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
           <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
           새로고침
         </button>
+        </div>
       </div>
 
       {focusTargetId ? (
@@ -504,22 +514,13 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
         </div>
       ) : null}
 
-      {/* 좌: 컴포저+필터+타임라인(minmax(0,1fr), 2행 span) · 우: 이번 주 요약(1행) + 액션 레일(2행, 독립 스크롤, hideForm).
-          모바일은 컴포저 → 필터 → 신선도 캡션 → 이번 주 요약(접힌 details) → 타임라인 → 레일 순 스택.
-          요약 View 는 두 자리에 그리지만 할 일 fetch(useWeekOpenTasks)는 위에서 한 번만 한다. */}
-      <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="min-w-0 space-y-4 xl:col-start-1 xl:row-span-2 xl:row-start-1">
-          <ActivityQuickForm
-            variant="composer"
-            defaultTargetType={focusTargetType}
-            defaultTargetId={focusTargetId || undefined}
-            defaultTargetLabel={focusLabel || undefined}
-            onSaved={handleRailSaved}
-          />
-
-          <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+      {/* Desktop: list + input workspace. Mobile: list, then input; the header action focuses
+          the composer. Both summary presentations share one useWeekOpenTasks query. */}
+      <section className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.7fr)]">
+        <div className="min-w-0 space-y-4">
+          <section className="border-b border-[rgba(0,0,0,0.08)] bg-white pb-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <div className="inline-flex rounded-lg border border-[#e8e8e4] bg-[#F6F5F4] p-1" role="group" aria-label="기록 범위">
+              <div className="inline-flex gap-2" role="group" aria-label="기록 범위">
                 {([
                   { key: "work", label: "업무 기록" },
                   { key: "all", label: "전체 이벤트" },
@@ -534,7 +535,7 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
                     aria-pressed={activityScope === option.key}
                     className={`h-8 rounded-md px-3 text-[12px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] ${
                       activityScope === option.key
-                        ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
+                        ? "text-[#084734] underline underline-offset-8"
                         : "text-[#615D59] hover:text-[#111110]"
                     }`}
                   >
@@ -556,7 +557,7 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
                   type="button"
                   onClick={() => setPeriod(option.key)}
                   aria-pressed={period === option.key}
-                  className={`inline-flex min-h-11 items-center justify-center rounded-full border px-3 text-[12px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] sm:min-h-0 sm:h-8 ${
+                  className={`inline-flex min-h-11 items-center justify-center rounded-md border px-3 text-[12px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] sm:min-h-0 sm:h-8 ${
                     period === option.key
                       ? "border-[#084734]/25 bg-[#ECFDF5] text-[#084734]"
                       : "border-[#e8e8e4] bg-white text-[#615D59] hover:text-[#111110]"
@@ -573,7 +574,7 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
                   type="button"
                   onClick={() => setFilterSentiment(option.key)}
                   aria-pressed={filterSentiment === option.key}
-                  className={`inline-flex min-h-11 items-center justify-center rounded-full border px-3 text-[12px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] sm:min-h-0 sm:h-8 ${
+                  className={`inline-flex min-h-11 items-center justify-center rounded-md border px-3 text-[12px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] sm:min-h-0 sm:h-8 ${
                     filterSentiment === option.key
                       ? "border-[#084734]/25 bg-[#ECFDF5] text-[#084734]"
                       : "border-[#e8e8e4] bg-white text-[#615D59] hover:text-[#111110]"
@@ -735,21 +736,23 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
           </section>
         </div>
 
-        <ActivityWeekSummaryView
-          {...weekSummaryViewProps}
-          frame="card"
-          className="hidden xl:col-start-2 xl:row-start-1 xl:block"
-        />
-
-        <CrmActionRail
-          hideForm
-          hideRecent
-          defaultTargetType={focusTargetType}
-          defaultTargetId={focusTargetId || undefined}
-          customerName={focusLabel || undefined}
-          onActivitySaved={handleRailSaved}
-          className="xl:col-start-2 xl:row-start-2"
-        />
+        <aside className="min-w-0 border-b border-[rgba(0,0,0,0.08)] bg-white pb-6 xl:sticky xl:top-6 xl:max-h-[calc(100dvh-3rem)] xl:overflow-y-auto xl:border-b-0 xl:border-l xl:pl-6" aria-label="기록 입력 작업면">
+          <ActivityQuickForm
+            variant="workspace"
+            bodyFieldId="crm-workspace-body"
+            defaultTargetType={focusTargetType}
+            defaultTargetId={focusTargetId || undefined}
+            defaultTargetLabel={focusLabel || undefined}
+            onSaved={handleRailSaved}
+          />
+          <details className="mt-6 border-t border-[rgba(0,0,0,0.08)] pt-4">
+            <summary className="cursor-pointer text-[13px] font-semibold text-[#615D59]">이번 주 요약·할 일</summary>
+            <div className="mt-4 space-y-4">
+              <div className="hidden xl:block"><ActivityWeekSummaryView {...weekSummaryViewProps} frame="plain" /></div>
+              <CrmActionRail hideForm hideRecent defaultTargetType={focusTargetType} defaultTargetId={focusTargetId || undefined} customerName={focusLabel || undefined} onActivitySaved={handleRailSaved} />
+            </div>
+          </details>
+        </aside>
       </section>
     </div>
   )

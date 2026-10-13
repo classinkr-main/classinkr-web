@@ -3308,14 +3308,16 @@ export default function HardwareInventoryClient({
               <span>Operations</span>
             </div>
             <h1 className="mt-2 text-[28px] font-bold leading-tight tracking-[-0.02em] text-[#111110] sm:text-[30px]">
-              하드웨어 재고
+              하드웨어
             </h1>
             <p className="mt-2 max-w-[760px] text-[13px] leading-relaxed text-[#615D59]">
-              홈에서 예상 출고를 등록·확정하고, 입출고 탭에서 입고·출고를 기록하고, 내역 탭에서 전체 원장을 확인합니다. 시트 가져오기는 항상 먼저
-              동기화·백업한 뒤 누적 데이터를 최신 백업 기준으로 교체합니다.
+              제품별 재고와 출고 예정을 확인하고, 입출고 기록을 관리합니다.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={openFreshSheet} disabled={busy != null || sheetOpen || inboundSheet.open || plannedSelectionCount > 0} className="inline-flex min-h-11 items-center gap-2 rounded-md bg-[#084734] px-4 text-[13px] font-semibold text-white hover:bg-[#065c41] disabled:opacity-50">
+              <Plus className="h-4 w-4" /> 입출고 기록
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -3334,7 +3336,7 @@ export default function HardwareInventoryClient({
               type="button"
               onClick={() => void importSheet()}
               disabled={busy != null}
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-[#084734] px-3 py-2 text-[12px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[12px] font-semibold text-[#615D59] transition hover:bg-[#F6F5F4] focus-visible:ring-2 focus-visible:ring-[#084734]/40 disabled:pointer-events-none disabled:opacity-60"
             >
               <UploadCloud className={`h-3.5 w-3.5 ${busy === "import" ? "animate-pulse" : ""}`} />
               {busy === "import" ? "싱크·백업 중" : "싱크·백업 후 가져오기"}
@@ -3366,7 +3368,7 @@ export default function HardwareInventoryClient({
       </header>
 
       {/* Sub-tabs — 지사 대시보드와 동일한 폴더형 스트립(#EBE8E2 위에 활성 탭만 본문색으로 채움) */}
-      <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#EBE8E2] px-2 sm:px-4 lg:px-9">
+      <div className="border-b border-[rgba(0,0,0,0.08)] bg-white px-2 sm:px-4 lg:px-9">
         <div className="admin-scroll-snap-x no-scrollbar -mb-px flex flex-nowrap gap-0 overflow-x-auto" role="tablist" aria-label="하드웨어 하위 탭">
           {HARDWARE_TABS.map((tab, index) => {
             const active = activeTab === tab.id
@@ -3383,10 +3385,10 @@ export default function HardwareInventoryClient({
                 ref={(node) => { tabRefs.current[index] = node }}
                 onClick={() => setActiveTab(tab.id)}
                 onKeyDown={(event) => onTabKeyDown(event, index)}
-                className={`relative mt-1 flex shrink-0 cursor-pointer flex-col items-start gap-0.5 rounded-t-lg px-4 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 sm:px-5 sm:py-3 ${
+                className={`relative flex shrink-0 cursor-pointer flex-col items-start gap-0.5 border-b-2 px-4 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 sm:px-5 sm:py-3 ${
                   active
-                    ? "bg-[#FAFAF8] text-[#111110]"
-                    : "bg-transparent text-[#615D59] hover:text-[#111110]"
+                    ? "border-[#084734] text-[#084734]"
+                    : "border-transparent text-[#615D59] hover:text-[#111110]"
                 }`}
               >
                 <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] font-bold tracking-[-0.01em]">
@@ -3767,7 +3769,7 @@ export default function HardwareInventoryClient({
         <button
           type="button"
           onClick={openFreshSheet}
-          className="fixed bottom-6 right-6 z-30 inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-[#084734] px-4 py-3 text-[13px] font-bold text-white shadow-[0_2px_8px_rgba(0,0,0,0.12)] transition hover:bg-[#065c41] hover:shadow-[0_4px_14px_rgba(0,0,0,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8] active:scale-95 motion-reduce:active:scale-100"
+          className="fixed bottom-6 right-6 z-30 inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-[#084734] px-4 py-3 text-[13px] font-bold text-white shadow-[0_2px_8px_rgba(0,0,0,0.12)] transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 xl:hidden"
           aria-label="빠른 기록 열기 (단축키 o)"
           title="빠른 기록 (o) · 입고표 (i)"
           style={{ bottom: "max(1.5rem, calc(env(safe-area-inset-bottom) + 1rem))" }}

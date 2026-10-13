@@ -22,6 +22,7 @@ import {
   LayoutList,
   ListChecks,
   Pencil,
+  Plus,
   RefreshCw,
   RotateCcw,
   Search,
@@ -2893,11 +2894,10 @@ export default function SalesLedgerWorkbench({
               <span>영업·매출</span>
             </div>
             <h1 className="mt-2 text-[28px] font-bold leading-tight tracking-[-0.02em] text-[#111110] sm:text-[30px]">
-              매출 장부
+              매출시트
             </h1>
             <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-[#615D59]">
-              만지는 화면. 시트 수치 검수·장부 입력·주간 스냅샷 비교를 담당합니다. 차트·시각화는 KR Team으로 옮겨졌고, 여기는 수치가 정본입니다.
-              {" "}통화 ¥ — 본사 보고 기준 · 단위 표기가 있는 그리드·매트릭스 셀은 호버(또는 title)로 반올림 전 원값을 확인할 수 있습니다.
+              월별 금액을 비교하고, 선택한 매출을 확인·입력합니다. 통화 ¥ · 본사 보고 기준.
             </p>
           </div>
 
@@ -2952,9 +2952,17 @@ export default function SalesLedgerWorkbench({
             )}
             <button
               type="button"
+              onClick={() => selectRailView("input")}
+              className="inline-flex min-h-9 items-center gap-2 rounded-md bg-[#084734] px-4 text-[13px] font-semibold text-white hover:bg-[#065c41]"
+            >
+              <Plus className="h-4 w-4" />
+              매출 입력
+            </button>
+            <button
+              type="button"
               onClick={() => void onRefresh()}
               disabled={refreshing}
-              className="inline-flex h-9 items-center gap-2 rounded-md bg-[#084734] px-3 text-[12px] font-bold text-white transition hover:bg-[#065c41] disabled:opacity-60"
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-semibold text-[#615D59] transition hover:bg-[#F6F5F4] disabled:opacity-60"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
               동기화
@@ -2981,18 +2989,12 @@ export default function SalesLedgerWorkbench({
         )}
       </header>
 
-      {/* 입력 진입 동선 라운드(2026-09-20 기획 §4 P2-7/§8.4 "REV 레일 겹침") — 우측 플로팅
-          레일(420px 폭 + 여백 20px)이 매트릭스 우측 열 위에 fixed로 뜨면서 겹치는 문제 보정.
-          xl(1280px) 이상에서만 본문 오른쪽에 레일 폭만큼 여백을 비워 겹침을 없앤다. 콕핏
-          렌즈는 이 fixed 레일을 쓰지 않으므로(lens !== "cockpit" 게이트가 아래 aside 렌더
-          조건에도 이미 있음 — 동일 조건) 제외한다. xl 미만(모바일 바텀시트·태블릿)은 여백을
-          비우지 않는다 — 그 폭에서 440px를 빼면 매트릭스 자체가 너무 좁아져 겹침보다 더
-          나쁜 트레이드오프가 되므로, 거기서는 겹침을 그대로 감수한다. */}
-      {/* 조건은 아래 <aside> 렌더 게이트와 같은 식이어야 한다 — 콕핏 렌즈에서도 큐 레일만은 열리므로
-          (lens !== "cockpit" || railView === "queue") 그 경우까지 여백을 비운다. */}
+      {/* Desktop: table and sticky detail/input pane share a grid. Smaller screens keep
+          the existing floating panel; cockpit has its own editor, except when the queue opens. */}
       <main
-        className={`space-y-5 px-4 pt-5 sm:px-6 lg:px-9${!sidePanelCollapsed && (lens !== "cockpit" || railView === "queue") ? " xl:pr-[440px]" : ""}`}
+        className={`grid grid-cols-1 items-start gap-x-6 px-4 pt-5 sm:px-6 lg:px-9${!sidePanelCollapsed && (lens !== "cockpit" || railView === "queue") ? " xl:grid-cols-[minmax(0,1fr)_360px]" : ""}`}
       >
+        <div className="min-w-0 space-y-5">
         {/* 상태 한 줄(2026-09-14) — 동기화·정합 체크·CRM 연결을 칸 하나씩, 누른 칸만 아래로 펼친다.
             예전엔 정합 스트립·CRM 싱크 스트립·동기화 배너가 각자 한 줄씩 쌓여 표보다 먼저 세 줄을 읽어야 했다. */}
         <LedgerStatusRail
@@ -3005,7 +3007,7 @@ export default function SalesLedgerWorkbench({
         />
         <aside className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-1 self-start">
-          <div className="inline-flex flex-wrap gap-1 self-start rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-1" role="tablist" aria-label="장부 렌즈 전환">
+          <div className="inline-flex flex-wrap gap-3 self-start border-b border-[rgba(0,0,0,0.08)]" role="tablist" aria-label="장부 렌즈 전환">
             {LENSES.map((item, index) => (
               <button
                 key={item.id}
@@ -3019,12 +3021,12 @@ export default function SalesLedgerWorkbench({
                 ref={(node) => { lensTabRefs.current[index] = node }}
                 onClick={() => selectLens(item.id)}
                 onKeyDown={(event) => handleRovingTabKeyDown(event, index, LENSES, lensTabRefs, (nextItem) => selectLens(nextItem.id))}
-                className={`inline-flex items-center gap-2 rounded-md px-3.5 py-2 text-[13px] font-bold transition ${
-                  lens === item.id ? "bg-[#111110] text-white" : "text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#111110]"
+                className={`inline-flex min-h-11 items-center gap-2 border-b-2 px-2 py-2 text-[13px] font-semibold transition ${
+                  lens === item.id ? "border-[#084734] text-[#084734]" : "border-transparent text-[#615D59] hover:text-[#111110]"
                 }`}
               >
                 <span className={`flex h-6 w-6 items-center justify-center rounded-md ${
-                  lens === item.id ? "bg-white/12" : "bg-[#ECFDF5] text-[#084734]"
+                  lens === item.id ? "text-[#084734]" : "text-[#615D59]"
                 }`}>
                   {item.id === "dsh" ? <Gauge className="h-3.5 w-3.5" /> : item.id === "rev" ? <Table2 className="h-3.5 w-3.5" /> : item.id === "board" ? <Columns3 className="h-3.5 w-3.5" /> : <LayoutList className="h-3.5 w-3.5" />}
                 </span>
@@ -3112,6 +3114,21 @@ export default function SalesLedgerWorkbench({
         </aside>
 
         <section className="min-w-0 space-y-5">
+          {lens === "rev" ? (
+            <div className="grid grid-cols-1 gap-4 border-b border-[rgba(0,0,0,0.08)] py-4 sm:grid-cols-3" aria-label="선택 월 매출 확도 요약">
+              {([
+                ["confirmed", revMonthConfirmed],
+                ["high-confidence", revMonthHighConfidence],
+                ["expected", revMonthPlanned],
+              ] as const).map(([confidence, amount]) => (
+                <div key={confidence} className="sm:border-l sm:border-[rgba(0,0,0,0.08)] sm:pl-4 sm:first:border-l-0 sm:first:pl-0">
+                  <p className={`text-[13px] font-semibold ${CONFIDENCE_TOKENS[confidence].textClass}`}>{CONFIDENCE_TOKENS[confidence].label}</p>
+                  <p className="mt-2 text-[26px] font-bold tracking-[-0.02em] tabular-nums text-[#111110]">{pipeline.loading && !pipeline.data ? "–" : formatMoney(amount)}</p>
+                  <p className="mt-1 text-[11px] text-[#615D59]">{formatMonthLabel(selectedMonth)} · 현재 필터 기준</p>
+                </div>
+              ))}
+            </div>
+          ) : (
           <div className={`grid gap-3 ${showLedgerInputTiles ? "sm:grid-cols-2 xl:grid-cols-5" : "sm:grid-cols-3"}`}>
             <MetricTile
               label="목표"
@@ -3175,6 +3192,7 @@ export default function SalesLedgerWorkbench({
             )}
           </div>
 
+          )}
           <div
             ref={lensPanelRef}
             id="sales-ledger-lens-panel"
@@ -3234,6 +3252,19 @@ export default function SalesLedgerWorkbench({
 
             {lens === "rev" && (
               <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white">
+            <div className="flex flex-wrap items-center gap-3 border-b border-[rgba(0,0,0,0.08)] p-4">
+              <h2 className="mr-auto text-[15px] font-bold text-[#111110]">월별 매출</h2>
+              <label className="relative min-w-0 flex-1 basis-52 sm:max-w-xs">
+                <span className="sr-only">REV 매출 행 검색</span>
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A39E98]" />
+                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="고객·담당자·메모 검색" className="h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white pl-9 pr-3 text-[13px] outline-none focus:border-[#084734]" />
+              </label>
+              <select aria-label="매출 월 선택" value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)} className="h-10 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110]">
+                {matrixMonths.map((month) => <option key={month} value={month}>{formatMonthLabel(month)}</option>)}
+              </select>
+            </div>
+            <details className="border-b border-[rgba(0,0,0,0.08)]">
+              <summary className="cursor-pointer px-4 py-3 text-[12px] font-semibold text-[#615D59]">담당·상품 필터 / 정렬·표 보기{revControlsDirty ? " · 사용자 설정 적용 중" : ""}</summary>
             <div className="border-b border-[rgba(0,0,0,0.08)] p-4">
               <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                 <div>
@@ -3341,16 +3372,6 @@ export default function SalesLedgerWorkbench({
                   <div className="flex flex-wrap items-center gap-2" role="group" aria-label="탐색">
                     <span aria-hidden className="h-5 w-px shrink-0 bg-[rgba(0,0,0,0.08)]" />
                     <span className="shrink-0 text-[9.5px] font-bold uppercase tracking-wider text-[#A39E98]">탐색</span>
-                    <label className="relative min-w-[220px] flex-1 xl:w-[310px] xl:flex-none">
-                      <span className="sr-only">REV 매출 행 검색</span>
-                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A39E98]" />
-                      <input
-                        value={query}
-                        onChange={(event) => setQuery(event.target.value)}
-                        placeholder="고객, 담당자, 팀, 지역, 상태, 메모 검색"
-                        className="h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] pl-9 pr-3 text-[12px] font-medium outline-none transition focus:border-[#084734]"
-                      />
-                    </label>
                     <MultiSelect
                       label="담당자"
                       options={managerOptions}
@@ -3592,6 +3613,7 @@ export default function SalesLedgerWorkbench({
               </div>
             </div>
 
+            </details>
             {pipeline.loading && !pipeline.data ? (
               <div className="p-4"><LoadingPanel label="REV 행을 불러오는 중" /></div>
             ) : pipeline.error && !pipeline.data ? (
@@ -4158,10 +4180,11 @@ export default function SalesLedgerWorkbench({
           </button>
         )}
 
+        </div>
         {/* M3: 콕핏은 플로팅 레일·FAB를 숨기지만, 헤더 "체크 큐" 버튼으로 연 큐(railView==="queue")만
             예외로 이 패널을 허용한다 — 큐 진입은 헤더 버튼으로 일원화하고 FAB(위)는 계속 콕핏에서 숨긴다. */}
         {!sidePanelCollapsed && (lens !== "cockpit" || railView === "queue") && (
-        <aside className="fixed inset-x-3 bottom-3 top-auto z-50 max-h-[86dvh] overflow-y-auto rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2 shadow-[0_24px_70px_rgba(17,17,16,0.22)] sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-4 sm:w-[min(420px,calc(100vw-2rem))] sm:max-h-[calc(100dvh-2rem)]">
+        <aside className="fixed inset-x-3 bottom-3 top-auto z-50 max-h-[86dvh] overflow-y-auto rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2 shadow-[0_24px_70px_rgba(17,17,16,0.22)] sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-4 sm:w-[min(420px,calc(100vw-2rem))] sm:max-h-[calc(100dvh-2rem)] xl:sticky xl:inset-auto xl:top-6 xl:z-10 xl:col-start-2 xl:row-start-1 xl:max-h-[calc(100dvh-3rem)] xl:w-full xl:rounded-none xl:border-0 xl:border-l xl:bg-white xl:p-3 xl:shadow-none" aria-label="선택 매출 작업면">
           <>
           <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-1.5">
             <div className="mb-1.5 flex items-center justify-between gap-2 px-1">

@@ -1,72 +1,43 @@
-**Comparison target**
+# Admin UI 재정비 검수
 
-- Source visual truth: `output/playwright/internal-cs-chat/reference.png`
-- Latest desktop implementation: `output/playwright/internal-cs-chat/final-desktop-review.png`
-- Latest mobile implementation: `output/playwright/internal-cs-chat/final-mobile-chat.png`
-- Viewport: 1536 × 1024 desktop, 390 × 844 mobile
-- State: refund-policy conversation selected; desktop review drawer open; mobile review drawer closed after its open state was separately tested
-- Route: `/admin/cs-chatbot`
-
-**Findings**
-
-- No actionable P0/P1/P2 design differences remain.
-- [P3] The implementation uses a 64px dark header and slightly denser small-label typography than the source visual. This preserves more vertical room for live conversation content and remains consistent with the repository's admin typography.
-- [P3] The source includes a notification bell and decorative review-row chevrons. The implementation omits those non-core controls and uses the existing Lucide icon family so every visible primary control has a real action.
-
-**Required fidelity surfaces**
-
-- Fonts and typography: the same Korean-first sans-serif hierarchy is preserved. Headings, navigation labels, metadata, body copy, textarea copy, wrapping, and muted states remain legible at both tested viewports.
-- Spacing and layout rhythm: the final desktop build matches the source's full-screen shell, left-aligned 820px conversation column, 438px review drawer, full-width composer, tab rhythm, restrained radii, 1px borders, and minimal elevation. The mobile toolbar wraps without horizontal page overflow.
-- Colors and visual tokens: the dark charcoal header, white working canvas, Classin deep green accents, pale green support surfaces, warm review-warning state, and repository border token are preserved.
-- Image and asset fidelity: the target contains no photographic or illustrative asset. All interface icons use Lucide rather than handcrafted SVG, CSS art, emoji, or placeholder imagery.
-- Copy and content: the selected refund-policy scenario, internal-only caveat, evidence disclosure, HQ template, regression action, human-review checklist, and approval wording are represented with realistic Korean CS copy.
-
-**Full-view comparison evidence**
-
-- Desktop source and final implementation were opened together at 1536 × 1024 with the review drawer open.
-- The final composition preserves the source hierarchy: dark identity bar → primary tabs → conversation toolbar → single chat canvas and sticky composer → optional right review drawer.
-- The implementation intentionally adds an `운영 도구` tab to connect existing admin functions without duplicating their mutation controls.
-
-**Focused-region comparison evidence**
-
-- A separate crop was not required because the 1536 × 1024 captures keep the toolbar, conversation cards, disclosures, review checklist, final-answer field, and approval buttons readable in the same comparison input.
-- The 390 × 844 capture was inspected separately for toolbar wrapping, message-card width, composer persistence, drawer width, and control clipping.
-
-**Comparison history**
-
-1. Earlier finding [P1]: the global admin sidebar remained visible and reduced the CS workspace width compared with the supplied full-screen concept.
-   Fix: changed the CS workspace to a route-local full-screen shell while preserving navigation through the `운영 도구` tab.
-   Post-fix evidence: `output/playwright/internal-cs-chat/iteration-1-fullscreen.png`.
-2. Earlier finding [P2]: the first review drawer overlaid the centered conversation column, clipping message and composer content; it was also 390px instead of the source's approximately 438px.
-   Fix: widened the drawer to 438px and reserved that width in the conversation workspace while the drawer is open; left-aligned the message column and expanded the composer within the remaining canvas.
-   Post-fix evidence: `output/playwright/internal-cs-chat/final-desktop-review.png`.
-3. Earlier finding [P2]: the floating archive action overlapped the mobile composer.
-   Fix: removed the floating archive action below the small breakpoint; archive remains available through the dedicated tab and desktop conversation action.
-   Post-fix evidence: `output/playwright/internal-cs-chat/final-mobile-chat.png`.
-
-**Primary interactions tested**
-
-- Conversation, queue, archive, and operating-tools tab changes
-- Review drawer open and close on desktop and mobile
-- Three mandatory human-review checks and disabled/enabled approval state
-- Approval result locking, local copy confirmation, and no automatic external send
-- Existing admin destination hrefs for docs gaps, recommended questions, Channel Talk, chatbot operations, canonical docs, and integrations
-- 1536 × 1024 and 390 × 844 responsive states
-
-**Console and runtime notes**
-
-- Browser console was checked. The only error is the expected local `503` from the new conversation list endpoint while the database migration is not applied; development mode switches to deterministic preview data. This is an environment setup condition, not a visual or interaction defect. Production does not enable preview fallback.
-
-**Implementation checklist**
-
-- [x] Match the selected full-screen minimal shell.
-- [x] Keep queue, archive, review, evidence, HQ template, and regression actions usable.
-- [x] Keep final approval with the CS operator.
-- [x] Connect existing admin chatbot operations without duplicating publish/sync/reindex authority.
-- [x] Verify desktop and mobile primary flows.
-
-**Follow-up polish**
-
-- Consider restoring a real notification entry in the dark header only if the admin notification surface gets a stable destination route.
+기준일: 2026-10-13
 
 final result: passed
+
+사용자가 선택한 매출시트·CRM 기록·CRM 고객DB·하드웨어 재고 목업의 정보 배치와 작업 흐름을 기존 앱에 적용했다. 사용자가 동일한 복제를 요구하지 않았으므로 기존 내비게이션·데이터 계약·확정 절차를 유지하며 비교했다.
+
+## 비교 조건과 근거
+
+- 데스크톱 CSS 뷰포트 1440×1024, 모바일 390×844. 인앱 브라우저 캡처 파일은 1404×1024 또는 1393×1016이며 비교 캔버스에서는 비율을 유지해 배치했다. 픽셀 단위 일치 판정은 하지 않았다.
+- 목업은 가상 데이터이고 구현은 로컬 환경의 실제 읽기 결과다. 수치·고객명·기록 건수·원천 갱신 경고 차이는 디자인 결함으로 간주하지 않았다.
+- [매출시트 비교](outputs/admin-ui-refresh-2026-10-13/qa/sales-comparison.jpg): 월별 표, 확도 요약, 선택 행과 우측 작업면.
+- [CRM 기록 비교](outputs/admin-ui-refresh-2026-10-13/qa/crm-record-comparison.jpg): 날짜별 목록과 입력 폼, 저장 전 상태, 다음 액션.
+- [고객DB 비교](outputs/admin-ui-refresh-2026-10-13/qa/crm-customer-comparison.jpg): 검색·정렬 목록과 선택 고객 상세. 실제 통화별 의미를 유지해 ¥ 잔액·$ 오더를 임의의 ₩ 누적 매출로 바꾸지 않았다.
+- [하드웨어 비교](outputs/admin-ui-refresh-2026-10-13/qa/hardware-comparison.jpg): 재고 요약, 제품별 표, 출고 예정 요약. 요약의 묶음 수와 전체 예정 기록 수는 서로 다른 집계 단위임을 표시한다.
+
+## 발견과 수정
+
+1. 매출 선택 후 고정 패널이 헤더까지 덮는 문제: 데스크톱에서는 표와 상세를 같은 그리드의 두 열로 배치하고 상세만 sticky로 유지했다. 모바일은 기존 입력 패널을 사용한다.
+2. 매출 표 앞의 긴 컨트롤 목록: 검색·월 선택을 상시 노출하고 담당·상품·정렬·보기 도구를 펼침 영역으로 옮겼다. 전체 회계연도와 셀 편집·잠금·초안 계약은 유지했다.
+3. 고객DB 우측 상세를 열었을 때 표 열이 밀리는 문제: 열 비율을 고정하고 최소 너비를 줄였다. 표 내부 가로 스크롤과 페이지 전체 넘침을 구분해 검사했다.
+4. 고객 전환 중 네이티브 확인창이 브라우저 자동화를 멈추는 문제: 공용 화면 내 확인 다이얼로그로 전환했다. 취소 후 입력 내용이 보존되는 것을 확인했다. [검증 화면](outputs/admin-ui-refresh-2026-10-13/qa/crm-switch-confirmation.jpg).
+5. 기록 입력과 조회의 동선: 데스크톱은 목록·입력 두 열, 모바일은 목록 다음에 입력을 배치했다. 상단 기록 추가 버튼이 내용 입력칸으로 이동하고 포커스를 준다.
+
+## 동작 검증
+
+- CRM: 미연결 고객 저장 가드, 입력 중 상태, 고객 전환 취소 시 초안 보존, 선택 고객 강조, 모바일 모달·배경 스크롤 잠금, 데스크톱 비모달 지역 의미와 목록 접근.
+- 매출시트: 행 선택, 상세·입력 탭, 표와 상세 동시 표시, 모바일 입력 패널. 운영 저장·주간 마감·동기화는 검증 중 실행하지 않았다.
+- 하드웨어: 입출고 기록 패널 진입, 재고·예정 수치의 기존 소스 사용, 모바일 페이지 너비.
+- 네 화면 모두 모바일에서 페이지 전체 가로 넘침 없음. 표 내부 스크롤은 허용한다.
+- 최종 CRM 브라우저 콘솔 오류 없음.
+
+## 품질 게이트
+
+- 타입 검사, 범위 ESLint, prebuild·컴파일·정적 생성·postbuild 공개 콘텐츠 검증 통과.
+- 정식 테스트: 735파일, 6,756테스트 통과. 새 작업면의 모달·비모달 접근성 회귀 검증 포함.
+- 전체 자동 탐색 실행: 741파일·6,763테스트 통과, 기존 임시 DB 실측 테스트 2개 실패. `tmp/db-probe-traffic-parity.test.ts`, `tmp/db-probe-wave3a-cache.test.ts`는 Vitest 환경에 Next.js `incrementalCache`가 없어 실패한다. UI 변경과 별도로 기록하며 성공으로 표시하지 않는다.
+- 오래된 리드 배정 테스트는 30일 제한 때문에 달력 날짜에 따라 실패했다. 테스트의 Date만 고정해 정책 경계가 유지되게 했다.
+
+## 후속 미세 조정
+
+P3: 고객 360의 기존 라벨·추천·머니 섹션과 장부의 12개월 전체 표는 목업보다 정보 밀도가 높다. 기존 운영 기능을 보존한 상태이며 실제 사용 피드백을 받아 다음 표시 밀도를 조정할 수 있다. 운영 데이터 저장·외부 전달의 실환경 검증과 운영 배포는 이번 시각 검수 범위에 포함하지 않는다.

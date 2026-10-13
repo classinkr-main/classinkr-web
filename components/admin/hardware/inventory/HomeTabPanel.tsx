@@ -14,6 +14,7 @@ import HardwareSearchPanel from "./HardwareSearchPanel"
 import ImportFreshnessStrip from "./ImportFreshnessStrip"
 import OfficeSamplePoolSection from "./OfficeSamplePoolSection"
 import PlannedOutboundPanel from "./PlannedOutboundPanel"
+import PlannedOutboundOverview from "./PlannedOutboundOverview"
 import SalesPeriodSummary from "./SalesPeriodSummary"
 import SampleTrackerSection from "./SampleTrackerSection"
 import SnapshotRestorePanel from "./SnapshotRestorePanel"
@@ -157,22 +158,24 @@ export default function HomeTabPanel({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
     >
-    {/* 위계(개편 2026-09-14, 홈 가시성 — 요청사항 ③.3): 요약 밴드 → 이관 신선도(경고) →
-        예정 출고(오늘 할 일) → 재고 현황(카드+표, 품목·로트) → 판매 요약 → 검색 → 위치 → 샘플 →
-        알림·로그 → 스냅샷 복원.
-        예전 순서(검색 → 예정 출고 → 위치 → 재고표)에서 예정 출고를 맨 위로, 재고 카드/표를
-        판매 요약보다 위로, 검색을 아래로 옮겼다 — "할 일(확정 대기)"과 "지금 재고"를 화면
-        상단에서 먼저 보여주고, 검색·위치·샘플처럼 필요할 때 찾아 쓰는 도구성 섹션은 아래로
-        내린다는 원칙(요청사항 본문)을 그대로 따른 것이다. CategoryCardsSection(4축 카드)은
-        지시문에 명시된 8단계에는 없지만 "재고 현황(품목·로트)"의 요약판이라 StockLevelsSection
-        (표)과 한 묶음으로 바로 위에 둔다.
-        이 순서를 소스 문자열로 고정한 기존 테스트는 없다(2026-09-14 확인, tests/hardware·
-        tests/admin 전수 검색 — HomeTabPanel·PlannedOutboundPanel을 참조하는 테스트 자체가
-        없었다) — 그래서 별도 테스트 갱신 없이 순서만 바꿨다. 되돌리기는 사고 대응용 안전망이라
-        기존처럼 맨 끝에 접어 둔다(#4). */}
+    {/* Summary and source warnings lead into stock + planned queue preview. Full
+        finalization, category detail and supporting tools follow without changing handlers. */}
     <SummaryBand data={data} plannedMovementQuantity={plannedMovementQuantity} plannedStaleGroupCount={plannedStaleGroupCount} />
 
     <ImportFreshnessStrip importRun={data?.importRun ?? null} importCosting={data?.importCosting} />
+
+    <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <StockLevelsSection
+        compact
+        openSections={openSections}
+        toggleSection={toggleSection}
+        data={data}
+        stockPagination={stockPagination}
+        setStockPage={setStockPage}
+        prepareQuickEntry={prepareQuickEntry}
+      />
+      <PlannedOutboundOverview plannedPagination={plannedPagination} startPlannedEntry={startPlannedEntry} plannedConfirmLocked={plannedConfirmLocked} />
+    </div>
 
     {/* 예정 큐 바로 위 — 등록할 것을 먼저 보고, 그 아래에서 확정한다(입력 가속 P2-1). */}
     <CrmOrderBacklogSection canWrite={canWriteHardware} onRegistered={refresh} />
@@ -201,16 +204,10 @@ export default function HomeTabPanel({
       onSelectionCountChange={onPlannedSelectionCountChange}
     />
 
-    <CategoryCardsSection categoryCards={categoryCards.cards} etcSummary={categoryCards.etcSummary} />
-
-    <StockLevelsSection
-      openSections={openSections}
-      toggleSection={toggleSection}
-      data={data}
-      stockPagination={stockPagination}
-      setStockPage={setStockPage}
-      prepareQuickEntry={prepareQuickEntry}
-    />
+    <details className="border-t border-[rgba(0,0,0,0.08)] pt-4">
+      <summary className="cursor-pointer text-[13px] font-semibold text-[#615D59]">제품군별 재고 상세</summary>
+      <div className="mt-4"><CategoryCardsSection categoryCards={categoryCards.cards} etcSummary={categoryCards.etcSummary} /></div>
+    </details>
 
     <SalesPeriodSummary summary={salesPeriodSummary} onOpenDetail={openOutboundDetail} />
 

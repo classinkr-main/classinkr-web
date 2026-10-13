@@ -49,11 +49,11 @@ describe("CRM 본문 내비 밴드", () => {
     expect(render(pathname).length).toBeGreaterThan(200)
   })
 
-  it("활성 1차 탭은 채운 pill, 2차는 밑줄로 층을 나눈다", () => {
+  it("활성 탭은 그린 밑줄로 표시하고 현재 페이지를 명시한다", () => {
     const html = render("/admin/crm/customers/leads")
-    // 1차 활성 = 검은 채움
-    expect(html).toContain("bg-[#111110] text-white")
-    // 2차 활성 = 그린 밑줄 (검은 채움을 두 층에 겹쳐 쓰면 위계가 사라진다)
+    // 1차 활성 = 그린 글자와 밑줄
+    expect(html).toContain("border-[#084734] text-[#084734]")
+    // 하위 작업면도 같은 그린 밑줄을 사용한다.
     expect(html).toContain("bg-[#084734]")
     expect(html).toContain('aria-current="page"')
   })

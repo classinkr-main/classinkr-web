@@ -52,7 +52,7 @@ function SummaryBand({ data, plannedMovementQuantity, plannedStaleGroupCount }: 
     freshness.level === "danger" ? "text-[#B43E3E]" : freshness.level === "warning" ? "text-[#A8741A]" : "text-[#111110]"
 
   return (
-    <section aria-label="하드웨어 재고 요약" className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+    <section aria-label="하드웨어 재고 요약" className="grid grid-cols-2 gap-y-4 bg-[#F6F5F4] py-5 md:grid-cols-3 xl:grid-cols-5">
       <SummaryTile href="#hardware-section-stock" label="창고 재고" title="현재 재고 섹션으로 이동">
         <Headline value={formatNumber(totals?.warehouseStock ?? 0)} unit="대" negative={(totals?.warehouseStock ?? 0) < 0} />
       </SummaryTile>
@@ -114,7 +114,7 @@ function SummaryTile({ href, label, title, children }: { href: string; label: st
     <a
       href={href}
       title={title}
-      className="group flex min-w-0 flex-col rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition hover:border-[#084734]/30 hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+      className="group flex min-w-0 flex-col border-l border-[rgba(0,0,0,0.08)] px-5 first:border-l-0 hover:text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
     >
       <p className="text-[11px] font-bold tracking-[0.04em] text-[#615D59]">{label}</p>
       {children}
