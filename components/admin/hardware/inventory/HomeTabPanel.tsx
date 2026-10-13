@@ -11,7 +11,7 @@ import AlertsOutboundSections from "./AlertsOutboundSections"
 import CategoryCardsSection from "./CategoryCardsSection"
 import CrmOrderBacklogSection from "./CrmOrderBacklogSection"
 import HardwareSearchPanel from "./HardwareSearchPanel"
-import ImportFreshnessStrip from "./ImportFreshnessStrip"
+import HomeQuickRecord from "./HomeQuickRecord"
 import OfficeSamplePoolSection from "./OfficeSamplePoolSection"
 import PlannedOutboundPanel from "./PlannedOutboundPanel"
 import PlannedOutboundOverview from "./PlannedOutboundOverview"
@@ -87,6 +87,7 @@ interface HomeTabPanelProps {
   // 감사(2026-09-07 #4) — SnapshotRestorePanel이 복원 성공 후 대시보드를 다시 불러오는 데 쓴다.
   refresh: ComponentProps<typeof SnapshotRestorePanel>["onRestored"]
   canWriteHardware: ComponentProps<typeof CrmOrderBacklogSection>["canWrite"]
+  homeQuickRecord: ComponentProps<typeof HomeQuickRecord>
 }
 
 export default function HomeTabPanel({
@@ -147,6 +148,7 @@ export default function HomeTabPanel({
   setDetailId,
   refresh,
   canWriteHardware,
+  homeQuickRecord,
 }: HomeTabPanelProps) {
   return (
     <motion.div
@@ -161,8 +163,6 @@ export default function HomeTabPanel({
     {/* 숫자 요약과 제품군별 게이지를 먼저 보고, 표·출고 작업으로 이어진다. */}
     <SummaryBand data={data} plannedMovementQuantity={plannedMovementQuantity} plannedStaleGroupCount={plannedStaleGroupCount} />
 
-    <ImportFreshnessStrip importRun={data?.importRun ?? null} importCosting={data?.importCosting} />
-
     <CategoryCardsSection categoryCards={categoryCards.cards} etcSummary={categoryCards.etcSummary} />
 
     <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
@@ -174,9 +174,13 @@ export default function HomeTabPanel({
         stockPagination={stockPagination}
         setStockPage={setStockPage}
         prepareQuickEntry={prepareQuickEntry}
+        selectedItemId={homeQuickRecord.draft.itemId}
+        onSelectItem={itemId => homeQuickRecord.setDraft(current => ({ ...current, itemId }))}
       />
-      <PlannedOutboundOverview plannedPagination={plannedPagination} startPlannedEntry={startPlannedEntry} plannedConfirmLocked={plannedConfirmLocked} />
+      <HomeQuickRecord {...homeQuickRecord} />
     </div>
+
+    <details className="border-t border-[rgba(0,0,0,0.08)] pt-3"><summary className="cursor-pointer text-[13px] font-semibold text-[#615D59]">출고 예정 요약 · {plannedPagination.totalItems}묶음</summary><div className="mt-3 max-w-xl"><PlannedOutboundOverview plannedPagination={plannedPagination} startPlannedEntry={startPlannedEntry} plannedConfirmLocked={plannedConfirmLocked} /></div></details>
 
     {/* 예정 큐 바로 위 — 등록할 것을 먼저 보고, 그 아래에서 확정한다(입력 가속 P2-1). */}
     <CrmOrderBacklogSection canWrite={canWriteHardware} onRegistered={refresh} />

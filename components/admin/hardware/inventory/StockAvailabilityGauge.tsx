@@ -1,14 +1,16 @@
 import { formatNumber } from "./shared"
+import type { ReactNode } from "react"
 
 interface Props {
   warehouse: number
   available: number
   planned: number
   caption?: boolean
+  annotation?: ReactNode
 }
 
 /** 가용/창고 비율. 채워진 녹색은 가용, 나머지 황색은 예정 출고다. */
-export default function StockAvailabilityGauge({ warehouse, available, planned, caption = true }: Props) {
+export default function StockAvailabilityGauge({ warehouse, available, planned, caption = true, annotation }: Props) {
   const invalid = ![warehouse, available, planned].every(Number.isFinite) || warehouse < 0 || planned < 0 || available > warehouse
   const overbooked = !invalid && available < 0
   const ratio = !invalid && warehouse > 0 ? Math.max(0, Math.min(100, available / warehouse * 100)) : 0
@@ -17,7 +19,7 @@ export default function StockAvailabilityGauge({ warehouse, available, planned, 
 
   return (
     <div className={caption ? "space-y-2" : "mt-2"}>
-      {caption ? <p className={`text-[11px] font-semibold tabular-nums ${invalid || overbooked ? "text-[#B43E3E]" : "text-[#615D59]"}`}>{label}</p> : null}
+      {caption ? <div className="flex flex-wrap items-center justify-between gap-1"><p className={`text-[11px] font-semibold tabular-nums ${invalid || overbooked ? "text-[#B43E3E]" : "text-[#615D59]"}`}>{label}</p>{annotation}</div> : null}
       <div
         role="img"
         aria-label={description}

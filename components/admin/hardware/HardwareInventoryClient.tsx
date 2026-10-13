@@ -8,12 +8,9 @@ import {
   Camera,
   ChevronRight,
   Clock3,
-  FileSpreadsheet,
   Monitor,
   Plus,
   Projector,
-  RefreshCw,
-  UploadCloud,
   type LucideIcon,
 } from "lucide-react"
 
@@ -77,7 +74,9 @@ import {
   type QuickCartSaveSummary,
   type SampleSource,
 } from "./inventory/shared"
-import { judgeImportFreshness } from "./inventory/ImportFreshnessStrip"
+import ImportFreshnessStrip, { judgeImportFreshness } from "./inventory/ImportFreshnessStrip"
+import SheetSyncMenu from "./inventory/SheetSyncMenu"
+import type { HomeRecordDraft } from "./inventory/home-record-model"
 
 interface HardwareCrmOrderCandidatesResponse {
   candidates: HardwareCrmOrderCandidate[]
@@ -584,6 +583,7 @@ export default function HardwareInventoryClient({
   const [sampleCustomer, setSampleCustomer] = useState("")
   const [sampleUnitSelection, setSampleUnitSelection] = useState<string[]>([])
   const [openSections, setOpenSections] = useState<Record<HardwareSectionKey, boolean>>(() => ({ ...DEFAULT_OPEN_SECTIONS }))
+  const [homeRecordDraft, setHomeRecordDraft] = useState<HomeRecordDraft>(() => ({ preset: "sale", itemId: "", quantity: "1", customer: "", source: "", date: todayKey(), memo: "" }))
   const [stockPage, setStockPage] = useState(1)
   const [outboundPage, setOutboundPage] = useState(1)
   const [alertsPage, setAlertsPage] = useState(1)
@@ -2695,6 +2695,17 @@ export default function HardwareInventoryClient({
     openSheet("sale")
   }
 
+  const reviewHomeRecord = (draft: HomeRecordDraft) => {
+    if (!canWriteHardware || plannedConfirmLocked || sheetOpen || inboundSheet.open || pendingMovement) return
+    // 홈 입력을 기존 단건 검토 폼에 전달한다. 저장·CRM·로트 검증은 기존 경로가 담당한다.
+    openSheet(draft.preset, draft.itemId, "single")
+    setQuantity(draft.quantity)
+    setOccurredAt(draft.date)
+    setMemo(draft.memo)
+    if (draft.preset === "inbound") setFromLocation(draft.source.trim())
+    else setToLocation(draft.customer.trim())
+  }
+
   const adjustQuantity = (delta: number) => {
     setQuantity((current) => String(Math.max(1, Number(current || 0) + delta)))
   }
@@ -3314,54 +3325,24 @@ export default function HardwareInventoryClient({
               제품별 재고와 출고 예정을 확인하고, 입출고 기록을 관리합니다.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={openFreshSheet} disabled={busy != null || sheetOpen || inboundSheet.open || plannedSelectionCount > 0} className="inline-flex min-h-11 items-center gap-2 rounded-md bg-[#084734] px-4 text-[13px] font-semibold text-white hover:bg-[#065c41] disabled:opacity-50">
+          <div className="flex flex-wrap items-center justify-start gap-3 lg:max-w-[640px] lg:justify-end">
+            <ImportFreshnessStrip importRun={data?.importRun ?? null} importCosting={data?.importCosting} />
+            <SheetSyncMenu
+              busy={busy != null}
+              loading={loading}
+              canWrite={canWriteHardware}
+              onRefresh={() => { void refresh(); if (sampleUnitsNeeded || sampleUnitsRequestedRef.current) void loadSampleUnits() }}
+              onSync={() => void importSheet()}
+              onUpload={() => ledgerFileRef.current?.click()}
+            />
+            <button type="button" onClick={() => {
+              const panel = activeTab === "home" ? document.getElementById("hardware-home-quick-record") : null
+              if (panel) { panel.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" }); panel.querySelector<HTMLElement>("button:not([disabled])")?.focus({ preventScroll: true }) }
+              else openFreshSheet()
+            }} disabled={!canWriteHardware || busy != null || sheetOpen || inboundSheet.open || plannedSelectionCount > 0} className="inline-flex h-10 items-center gap-2 rounded-md bg-[#084734] px-4 text-[13px] font-semibold text-white hover:bg-[#065c41] disabled:opacity-50">
               <Plus className="h-4 w-4" /> 입출고 기록
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                void refresh()
-                // 샘플은 아직 한 번도 안 받았고 지금 필요하지도 않으면 굳이 받지 않는다
-                // (내역 탭 딥링크에서 새로고침을 눌러도 왕복이 늘지 않게).
-                if (sampleUnitsNeeded || sampleUnitsRequestedRef.current) void loadSampleUnits()
-              }}
-              disabled={loading || busy != null}
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[12px] font-bold text-[#111110] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-              새로고침
-            </button>
-            <button
-              type="button"
-              onClick={() => void importSheet()}
-              disabled={busy != null}
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[12px] font-semibold text-[#615D59] transition hover:bg-[#F6F5F4] focus-visible:ring-2 focus-visible:ring-[#084734]/40 disabled:pointer-events-none disabled:opacity-60"
-            >
-              <UploadCloud className={`h-3.5 w-3.5 ${busy === "import" ? "animate-pulse" : ""}`} />
-              {busy === "import" ? "싱크·백업 중" : "싱크·백업 후 가져오기"}
-            </button>
-            <input
-              ref={ledgerFileRef}
-              type="file"
-              accept=".xlsx"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0]
-                event.target.value = ""
-                if (file) void importLedgerFile(file)
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => ledgerFileRef.current?.click()}
-              disabled={busy != null}
-              title="Hardware Ledger 원장(.xlsx)을 업로드해 입출고 내역을 교체합니다"
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-[#084734] bg-white px-3 py-2 text-[12px] font-bold text-[#084734] shadow-sm transition hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <FileSpreadsheet className={`h-3.5 w-3.5 ${busy === "ledger" ? "animate-pulse" : ""}`} />
-              {busy === "ledger" ? "업로드 중" : "업로드"}
-            </button>
+            <input ref={ledgerFileRef} type="file" accept=".xlsx" className="hidden" onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void importLedgerFile(file) }} />
           </div>
         </div>
 
@@ -3464,6 +3445,14 @@ export default function HardwareInventoryClient({
               activeTabId={activeTabId}
               reduceMotion={reduceMotion}
               data={data}
+              homeQuickRecord={{
+                data,
+                draft: { ...homeRecordDraft, itemId: homeRecordDraft.itemId || defaultEntryItemId(data?.items ?? []) },
+                setDraft: setHomeRecordDraft,
+                customers: historyCustomers,
+                disabled: !canWriteHardware || plannedConfirmLocked || sheetOpen || inboundSheet.open || pendingMovement != null || plannedSelectionCount > 0,
+                onReview: reviewHomeRecord,
+              }}
               categoryCards={categoryCards}
               salesPeriodSummary={salesPeriodSummary}
               openOutboundDetail={openOutboundDetail}

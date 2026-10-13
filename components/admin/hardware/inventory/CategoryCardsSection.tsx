@@ -42,14 +42,14 @@ function CategoryCardsSection({ categoryCards, etcSummary }: { categoryCards: Ca
           return (
             <div
               key={card.key}
-              className="flex min-w-0 flex-col rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-5"
+              className="flex min-w-0 flex-col rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-4"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-[13px] font-bold text-[#31302E]">{card.label}</p>
                   <p className="mt-3 flex flex-wrap items-baseline gap-1.5">
                     {/* 음수 창고 = 원장 이상 신호 — Danger 텍스트로 즉시 드러낸다(정상은 중립 유지). */}
-                    <span className={`text-[40px] font-bold leading-none tracking-[-0.04em] tabular-nums ${card.warehouse < 0 ? "text-[#B43E3E]" : "text-[#111110]"}`}>
+                    <span className={`text-[36px] font-bold leading-none tracking-[-0.04em] tabular-nums ${card.warehouse < 0 ? "text-[#B43E3E]" : "text-[#111110]"}`}>
                       {formatNumber(card.warehouse)}
                     </span>
                     <span className="text-[12px] font-semibold text-[#615D59]">대 · 창고</span>
@@ -62,7 +62,7 @@ function CategoryCardsSection({ categoryCards, etcSummary }: { categoryCards: Ca
                   <CardIcon className="h-[18px] w-[18px]" />
                 </span>
               </div>
-              <dl className="mt-5 grid grid-cols-2 gap-3">
+              <dl className="mt-3 grid grid-cols-2 gap-3">
                 <div>
                   <dt className="text-[11px] text-[#615D59]">가용</dt>
                   <dd className={`mt-1 text-[20px] font-bold tabular-nums ${card.available < 0 ? "text-[#B43E3E]" : "text-[#084734]"}`}>
@@ -76,11 +76,8 @@ function CategoryCardsSection({ categoryCards, etcSummary }: { categoryCards: Ca
                   </dd>
                 </div>
               </dl>
-              <div className="mt-3 flex min-h-5 flex-wrap gap-1.5">
-                {/* 판촉 라인은 헤드라인과 분리 — 합산하면 promoted 원장 이상(음수)이 실판매 수치를
-                    오염시킨다(STD1 35 + 판촉 −16 = 19로 보이던 문제). 음수는 점검 신호로 올린다. */}
-                {card.promoted != null && (
-                  <span
+              <div className="mt-auto pt-3">
+                <StockAvailabilityGauge warehouse={card.warehouse} available={card.available} planned={card.planned} annotation={card.promoted != null ? <span
                     className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold tabular-nums ${
                       card.promoted < 0 ? "bg-[#FCE9E9] text-[#B43E3E]" : "bg-[#F6F5F4] text-[#615D59]"
                     }`}
@@ -92,18 +89,14 @@ function CategoryCardsSection({ categoryCards, etcSummary }: { categoryCards: Ca
                   >
                     판촉 {formatNumber(card.promoted)}
                     {card.promoted < 0 ? " · 점검" : ""}
-                  </span>
-                )}
-              </div>
-              <div className="mt-auto pt-4">
-                <StockAvailabilityGauge warehouse={card.warehouse} available={card.available} planned={card.planned} />
+                  </span> : null} />
               </div>
             </div>
           )
         })}
       </div>
       {etcSummary && etcSummary.count > 0 && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white px-4 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+        <details><summary className="cursor-pointer text-[11px] text-[#615D59]">액세서리 · 기타 {etcSummary.count}종 · 창고 {formatNumber(etcSummary.warehouse)}대</summary><div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white px-4 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#F6F5F4] text-[#615D59]">
             <Package className="h-4 w-4" />
           </span>
@@ -127,7 +120,7 @@ function CategoryCardsSection({ categoryCards, etcSummary }: { categoryCards: Ca
               </span>
             ))}
           </span>
-        </div>
+        </div></details>
       )}
     </section>
   )
