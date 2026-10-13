@@ -4,6 +4,7 @@ import { memo } from "react"
 import type { Dispatch, SetStateAction } from "react"
 
 import type { AdminListPaginationResult } from "@/lib/admin-list-pagination"
+import StockAvailabilityGauge from "./StockAvailabilityGauge"
 import {
   formatAvg,
   formatDate,
@@ -122,6 +123,7 @@ function StockLevelsSection({
                       </td>
                       <td className={`px-4 py-3.5 text-right text-[16px] font-bold tabular-nums tracking-[-0.02em] ${row.availableStock < 0 ? "text-[#B43E3E]" : "text-[#111110]"}`}>
                         {formatNumber(row.availableStock)}
+                        {compact ? <div className="ml-auto w-16"><StockAvailabilityGauge warehouse={row.warehouseStock} available={row.availableStock} planned={row.plannedOut} caption={false} /></div> : null}
                       </td>
                       {!compact ? <td className="px-4 py-3.5 text-right">
                         <p className="text-[13px] font-semibold tabular-nums text-[#111110]">{formatNumber(row.outbound30d)}</p>

@@ -158,11 +158,12 @@ export default function HomeTabPanel({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
     >
-    {/* Summary and source warnings lead into stock + planned queue preview. Full
-        finalization, category detail and supporting tools follow without changing handlers. */}
+    {/* 숫자 요약과 제품군별 게이지를 먼저 보고, 표·출고 작업으로 이어진다. */}
     <SummaryBand data={data} plannedMovementQuantity={plannedMovementQuantity} plannedStaleGroupCount={plannedStaleGroupCount} />
 
     <ImportFreshnessStrip importRun={data?.importRun ?? null} importCosting={data?.importCosting} />
+
+    <CategoryCardsSection categoryCards={categoryCards.cards} etcSummary={categoryCards.etcSummary} />
 
     <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
       <StockLevelsSection
@@ -203,11 +204,6 @@ export default function HomeTabPanel({
       selectionConfirmProgress={selectionConfirmProgress}
       onSelectionCountChange={onPlannedSelectionCountChange}
     />
-
-    <details className="border-t border-[rgba(0,0,0,0.08)] pt-4">
-      <summary className="cursor-pointer text-[13px] font-semibold text-[#615D59]">제품군별 재고 상세</summary>
-      <div className="mt-4"><CategoryCardsSection categoryCards={categoryCards.cards} etcSummary={categoryCards.etcSummary} /></div>
-    </details>
 
     <SalesPeriodSummary summary={salesPeriodSummary} onOpenDetail={openOutboundDetail} />
 

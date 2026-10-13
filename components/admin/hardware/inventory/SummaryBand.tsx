@@ -97,9 +97,9 @@ function SummaryBand({ data, plannedMovementQuantity, plannedStaleGroupCount }: 
 
 function Headline({ value, unit, negative }: { value: string; unit: string; negative?: boolean }) {
   return (
-    <p className="mt-2 flex items-baseline gap-1.5">
+    <p className="mt-3 flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
       {/* 음수 = 원장 이상 신호 — CategoryCardsSection·StockLevelsSection과 같은 규칙(Danger 텍스트만). */}
-      <span className={`text-[26px] font-bold leading-none tracking-[-0.03em] tabular-nums ${negative ? "text-[#B43E3E]" : "text-[#111110]"}`}>
+      <span className={`text-[34px] font-bold leading-none tracking-[-0.04em] tabular-nums ${negative ? "text-[#B43E3E]" : "text-[#111110]"}`}>
         {value}
       </span>
       <span className="text-[12px] font-semibold text-[#615D59]">{unit}</span>
