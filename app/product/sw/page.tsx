@@ -1979,6 +1979,20 @@ export default function ProductPage() {
                 </div>
             </section>
 
+            <div className="bg-white px-4 py-8 text-center md:py-12">
+                <TrackedLink
+                    href="/classin-feature-guide.html"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    ctaId="software_feature_guide"
+                    className="inline-flex min-h-12 items-center gap-3 rounded-md bg-[#084734] px-6 text-sm font-semibold text-white transition-colors hover:bg-[#065c41] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#084734]"
+                >
+                    기능 자세히 보기
+                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    <span className="sr-only">(새 탭)</span>
+                </TrackedLink>
+            </div>
+
             <HardwareTeaserSection />
 
             <FullscreenQuoteSection />
