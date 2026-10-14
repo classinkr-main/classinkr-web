@@ -1,5 +1,7 @@
 "use client"
 
+import { useState } from "react"
+import type { CompassKrTeamResult } from "@/lib/compass/kr-team-contract"
 import type { BranchJsonState } from "./client-api"
 import IntegrityStrip from "./IntegrityStrip"
 import type { DealModalDeal } from "./sections/DealModal"
@@ -7,6 +9,7 @@ import BranchHeroGauges from "./sections/BranchHeroGauges"
 import BranchUpcomingDeals, { type UpcomingDealClick } from "./sections/BranchUpcomingDeals"
 import CampaignsSection from "./sections/CampaignsSection"
 import CoreKpiGrid from "./sections/CoreKpiGrid"
+import CompassTeamSection from "./sections/CompassTeamSection"
 import DealMixSection from "./sections/DealMixSection"
 import HardwareSection from "./sections/HardwareSection"
 import RevenueFlowSection from "./sections/RevenueFlowSection"
@@ -15,6 +18,8 @@ import type { BranchKpiResponse, BranchSummaryResponse, Period, Team } from "./t
 interface BranchOverviewPanelProps {
   summary: BranchJsonState<BranchSummaryResponse>
   kpi: BranchJsonState<BranchKpiResponse>
+  compass: BranchJsonState<CompassKrTeamResult>
+  onMonthChange: (month: string) => void
   team: Team
   period: Period
   selectedMonth: string
@@ -79,6 +84,8 @@ function StaleNotice({ summary, kpi }: {
 export default function BranchOverviewPanel({
   summary,
   kpi,
+  compass,
+  onMonthChange,
   team,
   period,
   selectedMonth,
@@ -87,33 +94,44 @@ export default function BranchOverviewPanel({
   canRunAdminOperations,
   onUpcomingDealClick,
 }: BranchOverviewPanelProps) {
+  const [showOperations, setShowOperations] = useState(false)
+  const evaluation = <CompassTeamSection resource={compass} month={selectedMonth} onMonthChange={onMonthChange} team={team} />
   if (summary.loading && !summary.data) {
     return (
-      <OverviewState
-        kind="loading"
-        title="KR 실적 데이터를 불러오는 중"
-        detail="매출 요약이 도착하면 KPI와 차트를 함께 표시합니다."
-      />
+      <div className="space-y-5">
+        <OverviewState
+          kind="loading"
+          title="KR 실적 데이터를 불러오는 중"
+          detail="매출 요약이 도착하면 KPI와 차트를 함께 표시합니다."
+        />
+        {evaluation}
+      </div>
     )
   }
 
   if (summary.error && !summary.data) {
     return (
-      <OverviewState
-        kind="error"
-        title="KR 실적 데이터를 불러오지 못했습니다"
-        detail={summary.error}
-      />
+      <div className="space-y-5">
+        <OverviewState
+          kind="error"
+          title="KR 실적 데이터를 불러오지 못했습니다"
+          detail={summary.error}
+        />
+        {evaluation}
+      </div>
     )
   }
 
   if (!summary.data) {
     return (
-      <OverviewState
-        kind="empty"
-        title="표시할 KR 실적 데이터가 없습니다"
-        detail="선택한 팀과 기간의 원천 데이터가 준비됐는지 확인해 주세요."
-      />
+      <div className="space-y-5">
+        <OverviewState
+          kind="empty"
+          title="표시할 KR 실적 데이터가 없습니다"
+          detail="선택한 팀과 기간의 원천 데이터가 준비됐는지 확인해 주세요."
+        />
+        {evaluation}
+      </div>
     )
   }
 
@@ -129,8 +147,6 @@ export default function BranchOverviewPanel({
   return (
     <div className="space-y-6">
       <StaleNotice summary={summary} kpi={kpi} />
-      <IntegrityStrip refreshKey={refreshKey} canRunAdminOperations={canRunAdminOperations} />
-      <CoreKpiGrid data={summary.data} loading={false} error={null} />
       <BranchHeroGauges
         summary={summary.data}
         kpi={kpi.data}
@@ -138,6 +154,9 @@ export default function BranchOverviewPanel({
         periodLabel={periodLabel}
         error={kpi.error}
       />
+      <IntegrityStrip refreshKey={refreshKey} canRunAdminOperations={canRunAdminOperations} />
+      {evaluation}
+      <CoreKpiGrid data={summary.data} loading={false} error={null} />
       <DealMixSection summary={summary.data} loading={false} error={null} />
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]">
         <RevenueFlowSection
@@ -155,10 +174,13 @@ export default function BranchOverviewPanel({
           onDealClick={openUpcomingDeal}
         />
       </div>
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(340px,0.8fr)]">
+      <button type="button" aria-expanded={showOperations} aria-controls="branch-operations-detail" onClick={() => setShowOperations((open) => !open)} className="flex min-h-11 w-full items-center justify-between rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-5 py-3 text-[13px] font-semibold text-[#31302E] focus-visible:outline-2 focus-visible:outline-[#084734]">
+        캠페인 · 하드웨어 상세<span aria-hidden="true">{showOperations ? "−" : "+"}</span>
+      </button>
+      {showOperations ? <div id="branch-operations-detail" className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(340px,0.8fr)]">
         <CampaignsSection rows={summary.data.campaigns_recent ?? null} loading={false} error={null} />
         <HardwareSection refreshKey={refreshKey} />
-      </div>
+      </div> : null}
     </div>
   )
 }

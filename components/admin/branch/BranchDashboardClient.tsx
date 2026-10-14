@@ -120,7 +120,9 @@ const BranchOverviewPanel = dynamic(
       />
     ),
   })),
-  { loading: BranchOverviewFallback },
+  // 지표는 클라이언트 API 상태로 렌더한다. SSR preload가 이미 본 번들에 포함된
+  // 공용 차트 청크를 다시 요청해 dev에서 404를 내는 경로도 피한다.
+  { loading: BranchOverviewFallback, ssr: false },
 )
 const DealModal = dynamic(() => import("./sections/DealModal"))
 
@@ -205,7 +207,7 @@ export default function BranchDashboardClient({
   const initialPipelineManager = searchParams.get("mgr") ?? ""
   const [pipelineQuery, setPipelineQuery] = useState(initialPipelineQuery)
   const [pipelineManager, setPipelineManager] = useState(initialPipelineManager)
-  const [pipelineView, setPipelineView] = useState<"table" | "kanban">("table")
+  const [pipelineView, setPipelineView] = useState<"table" | "kanban">("kanban")
   const [syncError, setSyncError] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
@@ -490,10 +492,10 @@ export default function BranchDashboardClient({
   return (
     <div className="pb-24">
       {/* TopBar — breadcrumb + title + description + refresh */}
-      <header className="border-b border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 pb-5 pt-6 sm:px-6 lg:px-9 lg:pt-8">
+      <header className="border-b border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 py-3 sm:px-6 sm:pb-5 sm:pt-6 lg:px-9 lg:pt-8">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-[#615D59]">
+            <div className="hidden flex-wrap items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-[#615D59] sm:flex">
               <span>ADMIN</span>
               <span className="opacity-50">›</span>
               <span className="inline-flex items-center gap-1">
@@ -502,7 +504,7 @@ export default function BranchDashboardClient({
               <span className="opacity-50">›</span>
               <span>KR Team</span>
             </div>
-            <h1 className="mt-2 text-[28px] font-bold leading-tight tracking-[-0.02em] text-[#111110] sm:text-[30px]">
+            <h1 className="text-[24px] font-bold leading-tight tracking-[-0.02em] text-[#111110] sm:mt-2 sm:text-[30px]">
               KR Team
             </h1>
           </div>
@@ -518,7 +520,7 @@ export default function BranchDashboardClient({
 
         {/* Filters: team + period (conditional per tab) */}
         {(showTeamFilter || showPeriodFilter) && (
-          <div className="mt-5 flex flex-wrap items-center gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2 sm:mt-5">
             {showTeamFilter && (
               <div className="flex gap-1 rounded-full border border-[rgba(0,0,0,0.08)] bg-white p-1" role="group" aria-label="팀 필터">
                 {TEAMS.map((t) => (
@@ -572,7 +574,7 @@ export default function BranchDashboardClient({
         )}
 
         {/* 단위 표기 규칙 명시(항목 1) — 화면 전체의 ¥ 축약 표기가 어느 통화 기준인지 1회 고지. */}
-        <p className="mt-2 text-[10.5px] font-medium text-[#615D59]/80">통화 ¥ — 본사 보고 기준</p>
+        <p className="mt-2 hidden text-[10.5px] font-medium text-[#615D59]/80 sm:block">통화 ¥ — 본사 보고 기준</p>
       </header>
 
       {/* Sub-tabs */}
@@ -609,7 +611,7 @@ export default function BranchDashboardClient({
       </div>
 
       {/* Tab content */}
-      <div className="px-4 pt-6 sm:px-6 lg:px-9">
+      <div className="px-4 pt-4 sm:px-6 sm:pt-6 lg:px-9">
         <SyncStatusBar
           lastSync={lastSync}
           lastError={lastError}
@@ -622,8 +624,8 @@ export default function BranchDashboardClient({
           sheetFreshnessError={sheetFreshnessError}
         />
 
-        <div className="mt-6">
-          {dataNeeds.kpi ? <CompassTeamSection resource={compass} month={selectedMonth} onMonthChange={setSelectedMonth} team={team} /> : null}
+        <div className="mt-4 sm:mt-6">
+          {activeTab === "pipeline" ? <div className="mb-5"><CompassTeamSection resource={compass} month={selectedMonth} onMonthChange={setSelectedMonth} team={team} /></div> : null}
           {activeTab === "overview" && (
             <div
               id={activePanelId}
@@ -634,6 +636,8 @@ export default function BranchDashboardClient({
               <BranchOverviewPanel
                 summary={summary}
                 kpi={kpi}
+                compass={compass}
+                onMonthChange={setSelectedMonth}
                 team={team}
                 period={period}
                 selectedMonth={selectedMonth}
@@ -657,6 +661,7 @@ export default function BranchDashboardClient({
                   <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]">
                     {(["table", "kanban"] as const).map((v) => (
                       <button key={v} type="button" onClick={() => setPipelineView(v)}
+                        aria-pressed={pipelineView === v}
                         className={`min-h-11 min-w-11 rounded-[5px] px-2.5 py-1 text-[11px] font-semibold transition md:min-h-0 md:min-w-0 ${
                           pipelineView === v ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59]"
                         }`}>

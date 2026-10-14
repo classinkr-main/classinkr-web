@@ -32,4 +32,18 @@ describe("Compass 과정지표의 표시 상태", () => {
     const html = render(resource({ state: "ready", snapshot: data }));
     expect(html).toContain("확정 평가표"); expect(html).toContain("2026-10-31 18:00");
   });
+  it("기본 화면은 요약·차트이고 상세표는 닫혀 있다", () => {
+    const data = snapshot(); data.kpi.report.people[0].rate = -0.25;
+    const html = render(resource({ state: "ready", snapshot: data }));
+    expect(html).toContain("평가 완료"); expect(html).toContain("평가 대기"); expect(html).toContain("확인할 항목");
+    expect(html).toContain('aria-label="김민재 달성률 -25.0%, 목표 100%"');
+    const disclosures = [...html.matchAll(/<details\b[^>]*>/g)];
+    expect(disclosures.length).toBeGreaterThan(0);
+    expect(disclosures.every(([tag]) => !/\sopen(?:[=>\s])/.test(tag))).toBe(true);
+  });
+  it("0 가중치의 목표·조정 내역도 상세에서 보존한다", () => {
+    const data = snapshot(); data.kpi.report.people[0].weightSum = 0; data.kpi.report.people[0].ratedWeight = 0;
+    const html = render(resource({ state: "ready", snapshot: data }));
+    expect(html).toContain("가중치 확인"); expect(html).toContain("환불 반영"); expect(html).toContain("월말 수납 교정");
+  });
 });

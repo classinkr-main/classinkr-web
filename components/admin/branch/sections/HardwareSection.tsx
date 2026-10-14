@@ -126,7 +126,7 @@ function GaugeView({ rows }: { rows: StockRow[] }) {
 }
 
 export default function HardwareSection({ refreshKey }: { refreshKey: number }) {
-  const [view, setView] = useState<"table" | "gauge">("table")
+  const [view, setView] = useState<"table" | "gauge">("gauge")
   const hw = useBranchJson<HardwareResponse>("/api/admin/branch/hw", refreshKey)
   const data = hw.data
 
@@ -159,6 +159,7 @@ export default function HardwareSection({ refreshKey }: { refreshKey: number }) 
           <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]">
             {(["table", "gauge"] as const).map((v) => (
               <button key={v} type="button" onClick={() => setView(v)}
+                aria-pressed={view === v}
                 className={`min-h-11 min-w-11 rounded-[5px] px-2.5 py-1 text-[11px] font-semibold transition md:min-h-0 md:min-w-0 ${
                   view === v ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59]"
                 }`}>
