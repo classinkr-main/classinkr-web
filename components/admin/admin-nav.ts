@@ -130,7 +130,7 @@ export const ADMIN_NAV: AdminNavItem[] = [
   // (AdminCommandPalette의 PALETTE_CHILD_COMMANDS)로 두 화면을 계속 노출한다.
   // /admin/chatbot은 외부(고객)·내부(사내) 두 축을 잇는 콘솔의 첫 화면이라 진입점으로 삼는다.
   // category가 customer인 이유 — CS는 일상 고객 지원 업무면이지 시스템 관리면이 아니다.
-  { href: "/admin/chatbot", label: "CS 콘솔", icon: Bot, section: "cs", category: "customer", keywords: "cs 콘솔 고객 지원 챗봇 운영 지표 골든셋 품질 평가 알파 준비도 chatbot ops console 채널톡 상담 문의 채팅 channel talk chat inbox 보강 큐 미해결 gaps 질문 패턴 가이드 문서 docs guide faq 추천질문 카테고리 리디렉트 내부 cs 상담 도우미 대기열 본사 확인 운영 도구 internal support assistant" },
+  { href: "/admin/chatbot", label: "CS 콘솔", icon: Bot, section: "cs", category: "customer", keywords: "cs 문의 cs 문의 탭 cs 문의 대시보드 cs 콘솔 고객 지원 챗봇 운영 지표 골든셋 품질 평가 알파 준비도 chatbot ops console 채널톡 상담 문의 채팅 channel talk chat inbox 보강 큐 미해결 gaps 질문 패턴 가이드 문서 docs guide faq 추천질문 카테고리 리디렉트 내부 cs 상담 도우미 대기열 본사 확인 운영 도구 internal support assistant" },
 
   // 마케팅·분석 — 캠페인·콘텐츠·리드 + 웹/비즈니스 분석
   // 메시지 발송 허브(이메일·문자·카카오, /admin/marketing)는 캠페인의 "메시지" 탭으로 흡수 — 라우트는 redirect 유지.

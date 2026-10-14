@@ -70,7 +70,13 @@ const CS_STAFF_ADMIN: AdminRole[] = [...STAFF_ADMIN, "BRANCH"]
 
 /** 외부용 · Customer (6) — §2 표 그대로. */
 const CUSTOMER_ITEMS: CsConsoleNavItem[] = [
-  { href: "/admin/chatbot", label: "대시보드", icon: Bot, roles: CS_STAFF_EDITOR },
+  {
+    href: "/admin/chatbot",
+    label: "CS 문의 대시보드",
+    icon: Bot,
+    roles: CS_STAFF_EDITOR,
+    activeWhen: ["/admin/chatbot", "/admin/cs-inquiries", "/admin/cs"],
+  },
   // 채널톡만 STAFF_ADMIN — 사이드바 시절 롤을 그대로 승계한다(§4).
   { href: "/admin/channel-talk", label: "상담 Inbox", icon: MessageSquare, roles: CS_STAFF_ADMIN },
   { href: "/admin/docs?tab=gaps", label: "미해결 큐", icon: Search, roles: CS_STAFF_EDITOR },

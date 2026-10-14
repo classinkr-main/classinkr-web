@@ -15,6 +15,7 @@ const eslintConfig = defineConfig([
     ".claude/**",
     "supabase/.temp/**",
     "tsconfig.tsbuildinfo",
+    "company-work/**",
   ]),
 ]);
 

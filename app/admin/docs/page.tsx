@@ -904,6 +904,15 @@ function AdminDocsPageContent() {
               <ExternalLink className="h-4 w-4" />
               공개 문서
             </Link>
+            <a
+              href="/classin-609-update.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#084734]/25 bg-[#ECFDF5] px-3 text-[13px] font-semibold text-[#084734] transition-colors hover:bg-[#d1fae5]"
+            >
+              <ExternalLink className="h-4 w-4" />
+              6.0.9 가이드 HTML
+            </a>
             <button
               type="button"
               onClick={() => void handleReindex()}

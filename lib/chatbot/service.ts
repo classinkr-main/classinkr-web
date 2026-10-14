@@ -1738,7 +1738,10 @@ function buildStaticSources(question: NormalizedQuestion, docs: DocArticle[]): C
   )
 }
 
-async function keywordSearchSupabaseSources(question: NormalizedQuestion): Promise<ChatbotSource[]> {
+async function keywordSearchSupabaseSources(
+  question: NormalizedQuestion,
+  options?: RetrievalOptions
+): Promise<ChatbotSource[]> {
   if (!hasSupabaseServerEnv()) return []
 
   const likeTokens = getRetrievalTokens(question).map(sanitizeLikeToken).filter(Boolean).slice(0, 10)
@@ -1748,18 +1751,27 @@ async function keywordSearchSupabaseSources(question: NormalizedQuestion): Promi
     .flatMap((token) => [`content.ilike.%${token}%`, `heading.ilike.%${token}%`])
     .join(",")
 
+  const visibilities = options?.includeInternalDocs
+    ? ["public", "unlisted", "internal"]
+    : ["public", "unlisted"]
+
   try {
     const supabase = createSupabaseAdminClient()
-    const { data, error } = await supabase
+    let query = supabase
       .from("docs_ai_chunks")
       .select(
         "id, article_id, heading, content, metadata, docs_articles!inner(id, category_id, slug, title, description, canonical_path, status, visibility, noindex)"
       )
       .eq("docs_articles.status", "published")
-      .in("docs_articles.visibility", ["public", "unlisted"])
-      .eq("docs_articles.noindex", false)
+      .in("docs_articles.visibility", visibilities)
       .or(orFilter)
       .limit(MAX_RETRIEVAL_CANDIDATES * 2)
+
+    if (!options?.includeInternalDocs) {
+      query = query.eq("docs_articles.noindex", false)
+    }
+
+    const { data, error } = await query
 
     if (error) {
       console.warn("[chatbot] docs chunk search failed:", error.message)
@@ -1926,7 +1938,7 @@ async function searchSupabaseSources(
   question: NormalizedQuestion,
   options?: RetrievalOptions
 ): Promise<ChatbotSource[]> {
-  const keywordPromise = keywordSearchSupabaseSources(question)
+  const keywordPromise = keywordSearchSupabaseSources(question, options)
   const embedding = await embedText(buildRetrievalQueryText(question), "RETRIEVAL_QUERY")
   const vectorSources = embedding
     ? await vectorSearchSupabaseSources(question, embedding, options)
