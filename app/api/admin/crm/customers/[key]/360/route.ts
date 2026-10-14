@@ -25,6 +25,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ key:
     const result = await getCrmCustomer360(parsed, {
       eventsLimit: parseBoundedInt(url.searchParams.get("eventsLimit"), 20, 1, 50),
       tasksLimit: parseBoundedInt(url.searchParams.get("tasksLimit"), 50, 1, 50),
+      dealsLimit: parseBoundedInt(url.searchParams.get("dealsLimit"), 20, 1, 200),
     })
 
     if (!result.found) {

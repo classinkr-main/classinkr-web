@@ -2,6 +2,7 @@
 
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
+import { priorityCustomerHref } from "@/lib/crm/customer-navigation"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { CalendarClock, CheckCircle2, Clock3, ExternalLink, Filter, RefreshCw, XCircle } from "lucide-react"
 
@@ -980,7 +981,7 @@ export default function CrmPriorityQueuePanel({
                       <span className={`inline-flex h-[22px] shrink-0 items-center rounded-full px-2 text-[11px] font-semibold ${SLOT_CHIP_CLASS[call.slot]}`}>
                         {call.slotLabel}
                       </span>
-                      <Link href={item.href} className="group inline-flex min-w-0 items-center gap-1.5">
+                      <Link href={priorityCustomerHref(item)} className="group inline-flex min-w-0 items-center gap-1.5">
                         <span className="truncate text-[14px] font-bold text-[#111110]">{item.title}</span>
                         <ExternalLink className="h-3.5 w-3.5 shrink-0 text-[#1a1a1a]/25 group-hover:text-[#111110]" />
                       </Link>
@@ -1048,7 +1049,7 @@ export default function CrmPriorityQueuePanel({
                         </>
                       ) : null}
                       <Link
-                        href={item.href}
+                        href={priorityCustomerHref(item)}
                         className={`inline-flex h-7 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[11px] font-semibold transition-colors hover:bg-[#f5f5f2] hover:text-[#111110] ${INTERACTIVE_TEXT_CLASS}`}
                       >
                         열기
@@ -1338,7 +1339,7 @@ export default function CrmPriorityQueuePanel({
             return (
               <Link
                 key={item.id}
-                href={item.href}
+                href={priorityCustomerHref(item)}
                 className="inline-flex h-[22px] max-w-[160px] items-center gap-1 rounded-full border border-[#e8e8e4] bg-white px-2 text-[11px] font-medium text-[#111110] transition-colors hover:border-[#c8c8c4]"
               >
                 <span className="truncate">{item.title}</span>

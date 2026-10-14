@@ -5,6 +5,7 @@
 // CrmUnifiedCustomersClient.tsx 분해(2026-08-28)로 이동 — 로직 무변경.
 
 import Link from "next/link"
+import { customerDetailHref } from "@/lib/crm/customer-navigation"
 import { type MouseEvent } from "react"
 import { ChevronLeft, ChevronRight, ExternalLink, MapPin, PhoneCall, UserPlus } from "lucide-react"
 import type { CrmUnifiedCustomerRow } from "@/lib/repositories/crm-unified-customers"
@@ -151,7 +152,7 @@ export default function CustomerResultsSection({
               <tr
                 key={row.key}
                 onDoubleClick={(event) => onRowDoubleClick(event, row)}
-                title={row.source === "customer" ? undefined : "더블클릭 — 고객 카드 열기"}
+                title={row.source === "customer" ? undefined : "더블클릭 — 고객 전용 페이지 열기"}
                 aria-selected={selectedKey === row.key}
                 className={`transition-colors ${selectedKey === row.key ? "bg-[#ECFDF5]" : "hover:bg-[#F6F5F4]"}`}
               >
@@ -164,13 +165,9 @@ export default function CustomerResultsSection({
                           <p className="truncate text-[13px] font-bold text-[#111110] group-hover:underline">{row.name}</p>
                         </Link>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => onOpenDrawer(row.key, row.name)}
-                          className="group block max-w-full text-left"
-                        >
+                        <Link href={customerDetailHref(row.key)} prefetch={false} className="group block max-w-full text-left">
                           <p className="truncate text-[13px] font-bold text-[#111110] group-hover:underline">{row.name}</p>
-                        </button>
+                        </Link>
                       )}
                       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                       <CrmContactValue value={row.contact} />
@@ -185,8 +182,9 @@ export default function CustomerResultsSection({
                       </div>
                       <TagChips tags={row.tags} />
                     </div>
+                    {row.source !== "customer" ? <button type="button" onClick={() => onOpenDrawer(row.key, row.name)} className="min-h-11 shrink-0 px-2 text-[12px] font-medium text-[#615D59] hover:text-[#084734]">빠른 보기</button> : null}
                     <Link
-                      href={row.source === "customer" ? row.href : `/admin/crm/customers/${encodeURIComponent(row.key)}`}
+                      href={row.source === "customer" ? row.href : customerDetailHref(row.key)}
                       className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[#1a1a1a]/35 transition-colors hover:bg-[#fafaf8] hover:text-[#111110]"
                       aria-label={`${row.name} 고객 상세 페이지 열기`}
                     >
@@ -238,12 +236,7 @@ export default function CustomerResultsSection({
             {row.source === "customer" ? (
               <Link href={row.href} aria-label={`${row.name} 상세 보기`} className="absolute inset-0 z-0" />
             ) : (
-              <button
-                type="button"
-                onClick={() => onOpenDrawer(row.key, row.name)}
-                aria-label={`${row.name} 상세 보기`}
-                className="absolute inset-1 z-0 rounded-xl focus-visible:ring-inset"
-              />
+              <Link href={customerDetailHref(row.key)} prefetch={false} aria-label={`${row.name} 고객 전용 페이지 열기`} className="absolute inset-1 z-0 rounded-xl focus-visible:ring-inset" />
             )}
             <div className="pointer-events-none relative z-10 p-4">
               <div className="mb-2 flex items-start justify-between gap-3">

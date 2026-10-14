@@ -9,8 +9,8 @@ import {
 export const maxDuration = 60
 
 /**
- * 리드 연락 상태 MKT(Compass) 반영 전용 크론 — 평일 근무 시간에 하루 5회(vercel.json).
- * 11시 아침 카드 직전(10:50)에도 한 번 돌아 카드 숫자가 최신 상태로 나간다.
+ * 리드 연락 상태 MKT(Compass) 반영 전용 크론 — 매일 5분 간격(vercel.json).
+ * 상태 조건부 UPDATE로 담당자가 바꾼 상태를 보존하며, 외부 발송은 수행하지 않는다.
  * 설계: docs/superpowers/specs/2026-09-14-lead-contact-compass-sync-design.md
  *
  * 인증은 `Authorization: Bearer ${CRON_SECRET}` 하나뿐이다 — Vercel 이 크론에 붙이는 게

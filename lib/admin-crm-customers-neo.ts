@@ -98,6 +98,7 @@ export interface NeoCrmCustomerDetail {
   orders: NeoCrmCustomerMoneyItem[]
   collections: NeoCrmCustomerMoneyItem[]
   performances: NeoCrmCustomerMoneyItem[]
+  moneyWarnings?: string[]
 }
 
 function toIso(value: unknown): string | null {
@@ -436,5 +437,13 @@ export async function getNeoCrmCustomerDetail(accountId: string): Promise<NeoCrm
     orders: ((orderResult.error ? [] : orderResult.data ?? []) as MoneyRecordRow[]).map(toMoneyItem),
     collections: ((collectionResult.error ? [] : collectionResult.data ?? []) as MoneyRecordRow[]).map(toMoneyItem),
     performances: ((performanceResult.error ? [] : performanceResult.data ?? []) as MoneyRecordRow[]).map(toMoneyItem),
+    moneyWarnings: [
+      ...(orderResult.error ? ["오더를 불러오지 못했습니다."] : []),
+      ...(collectionResult.error ? ["수금 기록을 불러오지 못했습니다."] : []),
+      ...(performanceResult.error ? ["성과 기록을 불러오지 못했습니다."] : []),
+      ...(shroffResult.error ? ["서비스 계정을 불러오지 못했습니다."] : []),
+      ...(orderResult.data?.length === DETAIL_LIMIT ? ["오더가 조회 상한 200건에 도달했습니다. 목록은 일부 기록입니다."] : []),
+      ...(collectionResult.data?.length === DETAIL_LIMIT ? ["수금이 조회 상한 200건에 도달했습니다. 목록은 일부 기록입니다."] : []),
+    ],
   }
 }

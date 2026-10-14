@@ -38,7 +38,7 @@ describe("CRM workspace accessibility", () => {
     expect(html).toContain('aria-label="기록 내용"')
     expect(html.match(/aria-label="다음 액션"/g)).toHaveLength(1)
     expect(html).toContain('aria-label="액션 예정일"')
-    expect(html).toContain("기록 저장")
+    expect(html).toContain("저장하고 계속 입력")
     expect(html).not.toContain("저장됨")
   })
 })

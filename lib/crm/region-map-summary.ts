@@ -14,7 +14,7 @@ import { normalizeRegionLabel } from "@/lib/regions/korea-regions"
  * 실제보다 나빠 보이고, 반대로 located에 섞으면 지도에 찍을 수 없는 건을 분포에 넣게 된다.
  */
 
-export type CrmRegionLayerKey = "deal" | "target" | "lead" | "customer"
+export type CrmRegionLayerKey = "deal" | "target" | "lead" | "customer" | "compass"
 
 export interface CrmRegionLayer {
   key: CrmRegionLayerKey

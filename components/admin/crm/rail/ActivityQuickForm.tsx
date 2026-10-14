@@ -51,6 +51,8 @@ export interface ActivityQuickFormProps {
   compact?: boolean
   /** workspace = 기록 화면 입력 작업면, composer = 한 줄 입력. 미지정 시 compact 여부로 결정. */
   variant?: "full" | "compact" | "composer" | "workspace"
+  /** 고객 상세 좌측 작업면: 간격 축소·템플릿 접기. 입력/저장 계약은 동일하다. */
+  compactWorkspace?: boolean
   /** composer에서 대상 피커 숨김(드로어처럼 대상이 고정된 컨텍스트) */
   lockTarget?: boolean
   /** 고객 프리셀렉트 — 대상 타입 (홈/고객DB/기록 딥링크 장착용) */
@@ -59,6 +61,7 @@ export interface ActivityQuickFormProps {
   defaultTargetId?: string
   /** 고객 프리셀렉트 — 표시 이름 */
   defaultTargetLabel?: string
+  defaultOwnerName?: string
   /** 본문 textarea에 부여할 DOM id — 부모 CTA가 getElementById(...).focus()로 포커스를 옮길 때 사용 */
   bodyFieldId?: string
   /** 저장 성공 후 콜백(타임라인 refresh 등). tasksCreated = 함께 생성된 할 일 수 */
@@ -197,12 +200,14 @@ function useDismissOnOutside(ref: RefObject<HTMLElement | null>, active: boolean
 }
 
 export default function ActivityQuickForm({
+  compactWorkspace = false,
   compact = false,
   variant,
   lockTarget = false,
   defaultTargetType,
   defaultTargetId,
   defaultTargetLabel,
+  defaultOwnerName,
   bodyFieldId,
   onSaved,
   onDirtyChange,
@@ -218,9 +223,10 @@ export default function ActivityQuickForm({
   const [targetType, setTargetType] = useState<TargetType>(presetTargetType)
   const [targetLabel, setTargetLabel] = useState(defaultTargetLabel ?? "")
   const [targetId, setTargetId] = useState(defaultTargetId ?? "")
+  const bodyRef = useRef<HTMLTextAreaElement | null>(null)
   const [title, setTitle] = useState("")
   const [occurredAt, setOccurredAt] = useState(() => toLocalDateTimeInput(new Date()))
-  const [ownerName, setOwnerName] = useState("")
+  const [ownerName, setOwnerName] = useState(defaultOwnerName ?? "")
   const [attendees, setAttendees] = useState("")
   const [meetingPurpose, setMeetingPurpose] = useState("")
   const [summary, setSummary] = useState("")
@@ -235,6 +241,7 @@ export default function ActivityQuickForm({
   const [tags, setTags] = useState("")
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [recordingName, setRecordingName] = useState<string | null>(null)
+  const [taskQueueWarning, setTaskQueueWarning] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   // A2 — 템플릿 칩. pendingTemplate = 본문이 이미 있어 덮어쓰기 확인을 기다리는 템플릿,
@@ -334,14 +341,16 @@ export default function ActivityQuickForm({
   }, [isDirty])
 
   const resetForm = () => {
-    setMode("manual_note")
-    // 프리셀렉트가 있으면 초기화 후에도 그 고객으로 돌아온다(레일 장착 UX).
-    setTargetType(presetTargetType)
-    setTargetLabel(defaultTargetLabel ?? "")
-    setTargetId(defaultTargetId ?? "")
+    // 연속 입력 작업면은 선택한 고객·종류·담당자를 유지한다.
+    if (resolvedVariant !== "workspace") {
+      setMode("manual_note")
+      setTargetType(presetTargetType)
+      setTargetLabel(defaultTargetLabel ?? "")
+      setTargetId(defaultTargetId ?? "")
+      setOwnerName(defaultOwnerName ?? "")
+    }
     setTitle("")
     setOccurredAt(toLocalDateTimeInput(new Date()))
-    setOwnerName("")
     setAttendees("")
     setMeetingPurpose("")
     setSummary("")
@@ -452,12 +461,14 @@ export default function ActivityQuickForm({
       const response = await adminFetch(EVENTS_URL, { method: "POST", body: formData })
       const payload = await response.json().catch(() => null)
       if (!response.ok) throw new Error(payload?.error ?? "CRM 기록 저장에 실패했습니다.")
+      setTaskQueueWarning(typeof payload?.taskQueueWarning === "string" ? payload.taskQueueWarning : null)
       const tasksCreated = typeof payload?.tasksCreated === "number" ? payload.tasksCreated : 0
       setToast({
         msg: tasksCreated > 0 ? `CRM 기록 저장 · 할 일 ${tasksCreated}건 생성` : "CRM 기록을 저장했습니다.",
         type: "success",
       })
       resetForm()
+      if (resolvedVariant === "workspace") window.requestAnimationFrame(() => bodyRef.current?.focus())
       onSaved?.({ tasksCreated })
     } catch (err) {
       setToast({ msg: err instanceof Error ? err.message : "CRM 기록 저장에 실패했습니다.", type: "error" })
@@ -933,9 +944,10 @@ export default function ActivityQuickForm({
   // The workspace uses the same state, submit gate and serialization as other variants.
   if (resolvedVariant === "workspace") {
     return (
-      <div className="space-y-5 [&_input]:min-w-0 [&_input]:max-w-full">
+      <fieldset disabled={saving} aria-label="고객 기록 입력" className={`min-w-0 ${compactWorkspace ? "space-y-3" : "space-y-5"} [&_input]:min-w-0 [&_input]:max-w-full`}>
         {toast ? <Toast msg={toast.msg} type={toast.type} /> : null}
         {ownerDatalist}
+        {taskQueueWarning ? <p role="alert" className="text-[13px] text-[#B43E3E]">{taskQueueWarning}</p> : null}
         <div className="flex flex-wrap items-start justify-between gap-2">
           <h2 className="text-[18px] font-bold text-[#111110]">기록 추가</h2>
           <span className={`text-[11px] ${saving ? "text-[#615D59]" : isDirty ? "text-[#A8741A]" : "text-[#615D59]"}`} role="status">
@@ -950,11 +962,11 @@ export default function ActivityQuickForm({
             </button>
           ))}
         </div>
-        {templateChipRow}
+        {compactWorkspace && templateChipRow ? <details><summary className="min-h-8 cursor-pointer py-1 text-[12px] text-[#615D59]">기록 템플릿</summary><div className="pt-2">{templateChipRow}</div></details> : templateChipRow}
         {recordingField}
         <label className="block text-[12px] font-semibold text-[#615D59]">
           내용
-          <textarea id={bodyFieldId} aria-label="기록 내용" value={body} onChange={(event) => setBody(event.target.value)} onKeyDown={onBodyKeyDown} rows={5} placeholder={targetLabel ? `${targetLabel} 기록 남기기` : "통화·미팅·메모 내용을 입력하세요"} className="mt-2 w-full resize-y rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-3 text-[14px] font-normal leading-6 text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734]" />
+          <textarea ref={bodyRef} id={bodyFieldId} aria-label="기록 내용" value={body} onChange={(event) => setBody(event.target.value)} onKeyDown={onBodyKeyDown} rows={9} placeholder={targetLabel ? `${targetLabel} 기록 남기기` : "통화·미팅·메모 내용을 입력하세요"} className="mt-2 min-h-[240px] w-full resize-y rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-3 text-[16px] font-normal leading-7 text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734]" />
         </label>
         {ownerHealthNotice}
         {metaFields}
@@ -970,9 +982,9 @@ export default function ActivityQuickForm({
         {unlinkedWarningBlock}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[rgba(0,0,0,0.08)] pt-4">
           <p className="text-[11px] text-[#615D59]">⌘/Ctrl + Enter 저장</p>
-          <button type="button" onClick={() => void handleSubmit()} disabled={saving} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-[#084734] px-5 text-[13px] font-semibold text-white hover:bg-[#065c41] disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}기록 저장</button>
+          <button type="button" onClick={() => void handleSubmit()} disabled={saving} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-[#084734] px-5 text-[13px] font-semibold text-white hover:bg-[#065c41] disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}저장하고 계속 입력</button>
         </div>
-      </div>
+      </fieldset>
     )
   }
 

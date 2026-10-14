@@ -114,23 +114,13 @@ describe("리드 연락 반영 전용 크론", () => {
 })
 
 describe("vercel.json — 리드 연락 반영 일정", () => {
-  it("평일 근무 시간(KST 09~18시) 안에서 하루 최대 5회만 돈다 — 사용자 결정(2026-09-14)", () => {
+  it("매일 5분 간격으로 지속 반영하며 하루 288회 상한을 지킨다 — 사용자 결정(2026-10-13)", () => {
     const config = JSON.parse(readFileSync(path.join(process.cwd(), "vercel.json"), "utf8")) as {
       crons: Array<{ path: string; schedule: string }>
     }
     const entries = config.crons.filter((cron) => cron.path === "/api/cron/lead-contact-sync")
     expect(entries).toHaveLength(1)
-
-    const [minute, hour, dayOfMonth, month, dayOfWeek] = entries[0].schedule.trim().split(/\s+/)
-    expect(minute).toMatch(/^\d{1,2}$/)
-    expect([dayOfMonth, month, dayOfWeek]).toEqual(["*", "*", "1-5"])
-
-    const utcHours = hour.split(",").map(Number)
-    expect(utcHours.length).toBeLessThanOrEqual(5)
-    // UTC 0~8시 = KST 9~17시 — 같은 날짜라 요일 필터(1-5)가 KST 평일과 일치한다.
-    for (const utcHour of utcHours) {
-      expect(utcHour).toBeGreaterThanOrEqual(0)
-      expect(utcHour).toBeLessThanOrEqual(8)
-    }
+    expect(entries[0].schedule).toBe("*/5 * * * *")
+    expect(24 * 60 / 5).toBeLessThanOrEqual(288)
   })
 })

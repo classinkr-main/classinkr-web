@@ -50,6 +50,10 @@ export interface ParsedCustomerKey {
 // unified 행 key는 `lead:{id}` 또는 `neo:{accountId}`. accountId에 ':'가 있을 수 있어 첫 ':'에서만 분리한다.
 export function parseUnifiedCustomerKey(key: string | null | undefined): ParsedCustomerKey | null {
   if (!key) return null
+  // 페이지/RSC와 API params의 디코딩 차이를 흡수한다. 이미 콜론이 있으면 id의 % 표현은 보존한다.
+  if (!key.includes(":")) {
+    try { key = decodeURIComponent(key) } catch { return null }
+  }
   const idx = key.indexOf(":")
   if (idx <= 0) return null
   const source = key.slice(0, idx)
@@ -105,6 +109,7 @@ export interface Customer360Money {
   lineItemsMeta: CrmMoneyLineItemsMeta
   /** M4 — 이름은 비슷하지만 아직 확정 링크가 없는 HW 출고 후보(유사도 상위 5). */
   unmatchedOutbound: CrmUnmatchedOutboundCandidate[]
+  sourceWarnings?: string[]
 }
 
 export interface Customer360Risk {
@@ -127,6 +132,7 @@ export interface Customer360Compass {
   href: string | null
   entries: CompassTimelineEntry[]
   down: boolean
+  pagination?: { total: number; offset: number; nextOffset: number | null; hasMore: boolean }
 }
 
 export interface Customer360 {
@@ -288,6 +294,7 @@ export function summarizeNeoMoney(detail: NeoCrmCustomerDetail): Customer360Mone
     lineItems: [],
     lineItemsMeta: EMPTY_CRM_MONEY_LINE_ITEMS_SUMMARY.lineItemsMeta,
     unmatchedOutbound: [],
+    sourceWarnings: detail.moneyWarnings ?? [],
   }
 }
 
@@ -395,6 +402,12 @@ async function loadCompassActivity(phone: string | null | undefined): Promise<Cu
     href: compassLeadUrl(leadIds[0]),
     entries: toCompassTimelineEntries(activities.rows),
     down: false,
+    pagination: {
+      total: activities.total ?? activities.rows.length,
+      offset: 0,
+      nextOffset: activities.truncated ? activities.rows.length : null,
+      hasMore: activities.truncated === true,
+    },
   }
 }
 
@@ -523,6 +536,19 @@ export async function getCrmCustomer360(
   // NEO 등록 확정 링크 — 실패해도 드로어 전체를 막지 않고 미등록으로 폴백(경고만).
   const neoLink = neoLinkResult.status === "fulfilled" ? neoLinkResult.value : null
   if (neoLinkResult.status === "rejected") warnings.push("NEO 등록 여부를 확인하지 못했습니다.")
+  // 등록이 확정된 리드에서도 연결된 고객의 주문·구매 내역을 보여 준다.
+  // 고객명 유사도로 NEO 오더를 가져오지 않고 확정 링크만 사용한다.
+  let moneyAccountName = header?.name
+  if (parsed.source === "lead" && found && neoLink) {
+    try {
+      const detail = await getNeoCrmCustomerDetail(neoLink.targetId)
+      if (!detail.ok || !detail.account) throw new Error("Linked customer unavailable")
+      money = summarizeNeoMoney(detail)
+      moneyAccountName = detail.account.name
+    } catch {
+      warnings.push("연결된 고객의 구매 기록을 불러오지 못했습니다.")
+    }
+  }
 
   // 수기 라벨 — 실패 시 경고 없이 빈 배열. (기존 드로어의 무음 폴백과 동일하게 두어
   // health.ok(warnings.length===0) 의미가 태그 실패로 바뀌지 않게 한다 — additive 필드 원칙.)
@@ -541,15 +567,15 @@ export async function getCrmCustomer360(
   // Compass 활동은 전화 조인이라 contacts 가 정해진 뒤에야 갈 수 있다 — 같은 단계에서 병렬로 묶는다.
   const [productSummaryResult, compassResult, lineItemsResult] = await Promise.allSettled([
     found && header?.name
-      ? getCrmAccountProductSummary(header.name)
+      ? getCrmAccountProductSummary(moneyAccountName)
       : Promise.resolve(EMPTY_CRM_ACCOUNT_PRODUCT_SUMMARY),
     found ? loadCompassActivity(contacts?.phone) : Promise.resolve(EMPTY_COMPASS),
     // M2·M4 — 품목별 대수·미매칭 출고 후보. neo 계정만 accountId를 넘긴다(리드는 조인 대상이
     // 아니라는 사실 자체를 note로 밝힌다 — crm-account-money.ts의 accountId===null 분기).
     found && header?.name
       ? getCrmMoneyLineItemsSummary({
-          name: header.name,
-          accountId: parsed.source === "neo" ? parsed.entityId : null,
+          name: moneyAccountName,
+          accountId: parsed.source === "neo" ? parsed.entityId : neoLink?.targetId ?? null,
         })
       : Promise.resolve(EMPTY_CRM_MONEY_LINE_ITEMS_SUMMARY),
   ])
@@ -577,6 +603,7 @@ export async function getCrmCustomer360(
     }
   } else {
     warnings.push("품목별 대수를 불러오지 못했습니다.")
+    money = { ...money, lineItemsMeta: { truncated: false, sources: [], note: "구매 품목을 확인하지 못했습니다. 새로고침 후 다시 확인해 주세요." } }
   }
 
   return {

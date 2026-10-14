@@ -1,6 +1,8 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { useVisibleInterval } from "@/components/admin/branch/use-visible-interval"
+import { COMPASS_LIVE_REFRESH_MS } from "@/lib/compass/live-sync"
 
 import { EmptyState, Skeleton } from "@/components/admin/viz"
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
@@ -382,6 +384,8 @@ function useCompassPipelineSummary() {
   const onRefresh = useCallback(() => {
     void load(period, { force: true })
   }, [load, period])
+
+  useVisibleInterval(() => { if (!refreshing) void load(period, { force: true }) }, COMPASS_LIVE_REFRESH_MS)
 
   return { summary, loading, refreshing, error, period, onPeriodChange: setPeriod, onRefresh }
 }

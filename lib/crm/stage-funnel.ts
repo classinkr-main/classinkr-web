@@ -38,6 +38,14 @@ export interface StageFunnelResult {
   closed: number
 }
 
+/** 누적 값을 원천별 현재 단계 건수로 복원한다. 리드와 딜의 경계를 넘겨 빼지 않는다. */
+export function stageDistributionCounts(result: StageFunnelResult): StageFunnelStage[] {
+  return result.stages.map((stage, index) => {
+    const next = result.stages[index + 1]
+    return { ...stage, value: stage.value - (next?.group === stage.group ? next.value : 0), conversionFromPrev: null }
+  })
+}
+
 export interface StageFunnelLeadInput {
   new: number
   contacted: number

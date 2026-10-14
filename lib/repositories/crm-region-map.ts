@@ -3,6 +3,8 @@ import "server-only"
 import { unstable_cache, revalidateTag } from "next/cache"
 
 import { ADMIN_CRM_REGION_MAP_CACHE_TAG } from "@/lib/admin/crm/cache-tags"
+import { getCompassRegionRows } from "@/lib/compass/bridge"
+import { fetchSupabasePages } from "@/lib/supabase/pagination"
 import { NAVER_MAP_SOURCE_OBJECT, NAVER_MAP_SOURCE_SYSTEM } from "@/lib/crm/naver-map-source"
 import {
   emptyRegionTally,
@@ -43,49 +45,54 @@ export interface CrmRegionMap {
   layers: CrmRegionLayer[]
 }
 
-const ROW_LIMIT = 5_000
+const ROW_LIMIT = 50_000
 
 async function buildCrmRegionMap(): Promise<CrmRegionMap> {
   const sb = createSupabaseAdminClient()
 
-  const [deals, targets, leads, customers] = await Promise.all([
-    sb.from("branch_rev_deals").select("region").limit(ROW_LIMIT),
-    sb
-      .from("external_crm_records")
-      .select("payload")
-      .eq("source_system", NAVER_MAP_SOURCE_SYSTEM)
-      .eq("object_api_key", NAVER_MAP_SOURCE_OBJECT)
-      .eq("is_stale", false)
-      .limit(ROW_LIMIT),
-    sb.from("leads").select("branch").limit(ROW_LIMIT),
-    sb.from("crm_neo_customer_snapshots").select("region_label").eq("is_stale", false).limit(ROW_LIMIT),
+  const [deals, targets, leads, customers, compass] = await Promise.all([
+    fetchSupabasePages<{ region: string | null }>({ maxRows: ROW_LIMIT, fetchPage: (from, to) =>
+      sb.from("branch_rev_deals").select("id,region", from === 0 ? { count: "exact" } : undefined).order("id").range(from, to) }),
+    fetchSupabasePages<{ payload: unknown }>({ maxRows: ROW_LIMIT, fetchPage: (from, to) =>
+      sb.from("external_crm_records").select("id,payload", from === 0 ? { count: "exact" } : undefined)
+        .eq("source_system", NAVER_MAP_SOURCE_SYSTEM).eq("object_api_key", NAVER_MAP_SOURCE_OBJECT).eq("is_stale", false).order("id").range(from, to) }),
+    fetchSupabasePages<{ branch: string | null }>({ maxRows: ROW_LIMIT, fetchPage: (from, to) =>
+      sb.from("leads").select("id,branch", from === 0 ? { count: "exact" } : undefined).order("id").range(from, to) }),
+    fetchSupabasePages<{ region_label: string | null }>({ maxRows: ROW_LIMIT, fetchPage: (from, to) =>
+      sb.from("crm_neo_customer_snapshots").select("source_system,account_id,region_label", from === 0 ? { count: "exact" } : undefined)
+        .eq("is_stale", false).order("source_system").order("account_id").range(from, to) }),
+    getCompassRegionRows(),
   ])
+  // 일부 조회 실패·상한 도달을 정상 0으로 저장하지 않는다. UI는 최근 확인한 값을 유지한다.
+  if ([deals, targets, leads, customers].some(result => result.error || result.truncated)
+    || compass.down || compass.truncated) throw new Error("지역 원천 조회가 제한되어 전체 분포를 확인하지 못했습니다.")
 
   const dealAcc = emptyRegionTally()
-  for (const row of deals.data ?? []) tallyRegionValue(dealAcc, row.region)
+  for (const row of deals.data) tallyRegionValue(dealAcc, row.region)
 
   const targetAcc = emptyRegionTally()
-  for (const row of targets.data ?? []) {
+  for (const row of targets.data) {
     const payload = (row.payload ?? {}) as Record<string, unknown>
     const region = typeof payload.region_label === "string" ? payload.region_label : null
     tallyRegionValue(targetAcc, region)
   }
 
   const leadAcc = emptyRegionTally()
-  for (const row of leads.data ?? []) tallyRegionValue(leadAcc, row.branch)
+  for (const row of leads.data) tallyRegionValue(leadAcc, row.branch)
 
   const customerAcc = emptyRegionTally()
-  for (const row of customers.data ?? []) tallyRegionValue(customerAcc, row.region_label)
+  for (const row of customers.data) tallyRegionValue(customerAcc, row.region_label)
 
-  const errors = [deals.error, targets.error, leads.error, customers.error].filter(Boolean)
-  if (errors.length > 0) {
-    console.error("[crm region map] partial source failure", errors.map((e) => e?.message))
-  }
+  const compassAcc = emptyRegionTally()
+  for (const row of compass.rows) tallyRegionValue(compassAcc, row.region)
 
   return {
     generatedAt: new Date().toISOString(),
     provinces: KOREA_PROVINCE_LABELS,
     layers: [
+      toRegionLayer("compass", "Compass", "마케팅 리드 건수", compassAcc, [
+        "Compass에 입력된 지역 기준. 자체 리드와 겹칠 수 있어 원천별 건수를 합산하지 않는다.",
+      ]),
       toRegionLayer("deal", "거래", "REV 딜 건수", dealAcc, [
         "회계연도 전체 딜. 금액이 아니라 건수이며, 온라인·해외는 지역에서 제외한다.",
       ]),
@@ -114,7 +121,7 @@ const getCachedCrmRegionMap = unstable_cache(
     // dev·test에서 위반 시 즉시 던져 잡는다(2026-09-04 우선순위 큐 500 사고 재발 방지).
     return assertJsonSafeInDev("admin-crm-region-map", value)
   },
-  ["admin-crm-region-map-v1"],
+  ["admin-crm-region-map-v2"],
   // 무효화는 부분적이다(§3.4 보고서 참고 — naver-map 재수집만 이 태그를 건드린다) —
   // REV 시트·리드 쓰기가 못 건드리는 동안은 TTL을 이전과 같은 60초로 유지한다.
   { revalidate: 60, tags: [ADMIN_CRM_REGION_MAP_CACHE_TAG] }

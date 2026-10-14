@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, use, Suspense, type MouseEvent } from "react"
 import dynamic from "next/dynamic"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { customerDetailHref } from "@/lib/crm/customer-navigation"
 import { ChevronRight, Filter, UserPlus } from "lucide-react"
 
 import { adminFetchJsonCachedWithMeta, getCachedAdminJson, seedAdminRequestCache } from "@/lib/admin-client"
@@ -280,9 +281,9 @@ export default function CrmUnifiedCustomersClient({
       if ((event.target as HTMLElement).closest("a, button, input, textarea, select")) return
       // 더블클릭의 브라우저 기본 동작(텍스트 선택)이 드로어 위에 남지 않게 지운다.
       window.getSelection()?.removeAllRanges()
-      openDrawer(row.key, row.name)
+      router.push(customerDetailHref(row.key))
     },
-    [openDrawer]
+    [router]
   )
 
   // 닫을 때는 replace로 account만 제거(불필요한 히스토리 항목을 남기지 않음).
