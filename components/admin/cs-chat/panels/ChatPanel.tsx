@@ -27,6 +27,7 @@ import {
 import type { ChangeEvent, FormEvent, RefObject } from "react"
 
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
+import { ClassInInternalAIIcon } from "@/components/ui/ClassInInternalAIIcon"
 import { cn } from "@/lib/utils"
 
 import AnswerFooterChip from "../components/AnswerFooterChip"
@@ -250,9 +251,9 @@ export default function ChatPanel({
                 <article key={message.id} className="flex gap-3 sm:gap-4">
                   <span className={cn(
                     "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
-                    message.role === "assistant" ? "bg-[#084734] text-white" : "bg-[#F0EFED] text-[#31302E]"
+                    message.role === "assistant" ? "bg-[#084734] text-white shadow-xs" : "bg-[#F0EFED] text-[#31302E]"
                   )}>
-                    {message.role === "assistant" ? <Sparkles className="h-4 w-4" /> : <UserRound className="h-4 w-4" />}
+                    {message.role === "assistant" ? <ClassInInternalAIIcon size={18} variant="white" /> : <UserRound className="h-4 w-4" />}
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
