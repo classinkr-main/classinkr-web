@@ -7,6 +7,8 @@ import { AlertTriangle, CalendarDays, ChevronLeft, RefreshCw } from "lucide-reac
 import SyncStatusBar from "./SyncStatusBar"
 import type { DealModalDeal } from "./sections/DealModal"
 import { adminFetchJson, clearBranchRequestCache, useBranchJson, type BranchJsonState } from "./client-api"
+import CompassTeamSection from "./sections/CompassTeamSection"
+import type { CompassKrTeamResult } from "@/lib/compass/kr-team-contract"
 import { adminFetchJsonCached } from "@/lib/admin-client"
 import { isPrefetchFresh } from "@/lib/admin/prefetch-freshness"
 import { buildCrmSyncSummary, type CrmSyncSummary, type RevSyncCoverageView } from "@/lib/crm/rev-sync-health"
@@ -423,6 +425,15 @@ export default function BranchDashboardClient({
         ? { key: summaryStateKey, data: summarySeed.data, error: null, loading: false, stale: false, staleSince: null }
         : summaryFetched
   const kpi = useBranchJson<BranchKpiResponse>(kpiUrl, refreshKey, { enabled: dataNeeds.kpi })
+  const [compassTick, setCompassTick] = useState(0)
+  const compass = useBranchJson<CompassKrTeamResult>(`/api/admin/branch/compass?month=${selectedMonth}`, refreshKey + compassTick, { enabled: dataNeeds.kpi })
+  useEffect(() => {
+    if (!dataNeeds.kpi) return
+    const refresh = () => { if (document.visibilityState === "visible") setCompassTick((tick) => tick + 1) }
+    const timer = window.setInterval(refresh, 60_000)
+    document.addEventListener("visibilitychange", refresh)
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", refresh) }
+  }, [dataNeeds.kpi])
   const monthOptions = useMemo(() => buildMonthOptions(new Date()), [])
   const activePeriodLabel = period === "M" ? formatMonthLabel(selectedMonth) : PERIOD_LABEL[period]
 
@@ -612,6 +623,7 @@ export default function BranchDashboardClient({
         />
 
         <div className="mt-6">
+          {dataNeeds.kpi ? <CompassTeamSection resource={compass} month={selectedMonth} onMonthChange={setSelectedMonth} team={team} /> : null}
           {activeTab === "overview" && (
             <div
               id={activePanelId}

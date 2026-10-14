@@ -99,6 +99,17 @@ function summaryRequest(query = "") {
 }
 
 describe("GET /api/admin/branch/summary — dsh_breakdown", () => {
+  it("선택한 월·분기의 영업 KPI 병목을 같은 기간으로 계산한다", async () => {
+    mockHappyPath()
+    vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-14T00:00:00Z"))
+    const row = (actual: number) => ({ member: "Han", pairs: Object.fromEntries(["LD", "ACC", "OPP", "SOL", "VST"].map((key) => [key, { goal: 10, actual }])) })
+    readKpiBlocksPreferDb.mockResolvedValue({ fy: [row(10)], months: { 10: [row(2)], 11: [row(8)] } })
+    const { GET } = await import("@/app/api/admin/branch/summary/route")
+    const monthly = await (await GET(summaryRequest("?period=M&month=2026-10"))).json()
+    const quarterly = await (await GET(summaryRequest("?period=Q"))).json()
+    expect(monthly.bottleneck.pct).toBe(20)
+    expect(quarterly.bottleneck.pct).toBe(50)
+  })
   afterEach(() => {
     vi.useRealTimers()
     vi.clearAllMocks()

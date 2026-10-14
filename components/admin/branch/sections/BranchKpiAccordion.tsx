@@ -9,6 +9,11 @@ import { matchesTokens, tokenize } from "../search-tokens"
 import MoneyValue from "../MoneyValue"
 
 const KPI_LABELS: Record<string, string> = {
+  LD: "리드",
+  ACC: "계정",
+  OPP: "기회",
+  SOL: "솔루션",
+  VST: "방문",
   lead: "리드",
   account: "계정",
   solution: "솔루션",
@@ -20,14 +25,8 @@ const KPI_LABELS: Record<string, string> = {
   caseStudy: "사례연구",
 }
 
-// Teams with active KPI tracking (others render "?" for KPI fields)
+// 시트 영업 KPI. Compass 과정지표는 별도 월별 평가표로 표시한다.
 const KPI_ACTIVE_TEAMS = new Set(["BD"])
-
-// Placeholder KPI item keys per team — shown as "항목 ?" chips when not yet tracked
-const TEAM_KPI_PLACEHOLDERS: Record<string, string[]> = {
-  MKT: ["event", "content", "template"],
-  CSM: ["caseStudy"],
-}
 
 const COLORS = {
   green: "#084734",
@@ -90,18 +89,7 @@ function MemberRow({ member, viewMode, ledgerHref }: {
         <GaugeBar value={member.confirmed} goal={member.goal} color={memberPct >= 70 ? COLORS.green : COLORS.amber} height={5} />
       </div>
       {!teamHasKpi ? (
-        <div className="flex flex-wrap gap-1.5">
-          {(TEAM_KPI_PLACEHOLDERS[member.team ?? ""] ?? []).map((k) => (
-            <span key={k} title="KPI 목표는 현재 BD팀만 운영 — 아직 집계되지 않음"
-              className="inline-flex items-baseline gap-1 rounded-full border border-dashed border-[rgba(0,0,0,0.1)] bg-[#F6F5F4] px-2 py-0.5 text-[10.5px]">
-              <span className="font-semibold text-[#615D59]">{KPI_LABELS[k] ?? k}</span>
-              <span className="font-bold text-[#A8741A]">?</span>
-            </span>
-          ))}
-          {!TEAM_KPI_PLACEHOLDERS[member.team ?? ""] && (
-            <span title="KPI 목표는 현재 BD팀만 운영 — 아직 집계되지 않음" className="text-[11px] font-medium text-[#A8741A]">?</span>
-          )}
-        </div>
+        <span className="text-[11px] text-[#615D59]">과정지표는 Compass 평가표에서 확인</span>
       ) : viewMode === "matrix" ? (
         <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${Math.max(1, kpiKeys.length)}, 1fr)` }}>
           {kpiKeys.map((k) => {
@@ -191,18 +179,8 @@ function TeamRow({ team, members, defaultOpen, ledgerHref }: {
   // Status chip on the right side (replaces KPI chips when no members)
   const renderRightChip = () => {
     if (!teamHasKpi) {
-      const placeholders = TEAM_KPI_PLACEHOLDERS[team.team]
-      if (placeholders?.length) {
-        return placeholders.map((k) => (
-          <span key={k} title="KPI 목표는 현재 BD팀만 운영 — 아직 집계되지 않음"
-            className="inline-flex items-baseline gap-1 rounded-full border border-dashed border-[rgba(0,0,0,0.1)] bg-[#F6F5F4] px-2 py-0.5 text-[10.5px]">
-            <span className="font-semibold text-[#615D59]">{KPI_LABELS[k] ?? k}</span>
-            <span className="font-bold text-[#A8741A]">?</span>
-          </span>
-        ))
-      }
       return (
-        <span title="KPI 목표는 현재 BD팀만 운영 — 아직 집계되지 않음" className="text-[11px] font-bold text-[#A8741A]">?</span>
+        <span className="text-[11px] text-[#615D59]">Compass 과정지표</span>
       )
     }
     if (!hasMembers) {
@@ -368,13 +346,12 @@ export default function BranchKpiAccordion({
   const totalMembers = teamsWithMembers.reduce((s, t) => s + t.members.length, 0)
   const hasAnyMembers = totalMembers > 0
   const headerTitle = hasAnyMembers
-    ? "팀 KPI · 클릭 시 팀원 펼치기"
+    ? "매출 · 시트 영업 KPI"
     : "팀별 매출 페이싱"
   const headerSub = hasAnyMembers
     ? `${totalMembers}명`
     : "팀원 단위 데이터 미연동"
-  // MKT/CSM은 아직 KPI 목표 운영 대상이 아니다 — 그 팀 행의 "?" 칩이 버그처럼
-  // 보이지 않도록 헤더에 한 번 정직하게 고지한다(KPI_ACTIVE_TEAMS가 유일한 판정 기준).
+  // 두 평가 체계의 원천을 구분한다. MKT/CSM 과정지표는 위 Compass 평가표가 정본이다.
   const hasInactiveKpiTeam = teamsWithMembers.some((t) => !KPI_ACTIVE_TEAMS.has(t.team.team))
   const isSearching = query.trim().length > 0
   const noSearchMatches = isSearching && filteredTeamsWithMembers.length === 0
@@ -401,7 +378,7 @@ export default function BranchKpiAccordion({
           )}
         </div>
         <p className="text-right text-[10.5px] text-[#615D59]">
-          {hasInactiveKpiTeam && <span className="block">KPI 목표는 현재 BD팀만 운영</span>}
+          {hasInactiveKpiTeam && <span className="block">시트 영업 KPI는 BD 기준 · 과정지표는 Compass 평가표</span>}
         </p>
       </div>
       <div className="px-5 pb-2 pt-1">

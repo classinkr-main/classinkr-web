@@ -6,6 +6,12 @@ import { branchMemberSearchHaystack, normalizeBranchMemberName } from "@/lib/bra
 // 미러/임포트 읽기 경로(branch-dsh-kpi-mirror·sales-ledger-imports)도 이 함수를 읽기
 // 시점에 태우므로, 별칭 회귀는 저장 데이터 재동기화 없이도 화면 표기를 되돌려 버린다.
 describe("normalizeBranchMemberName", () => {
+  it("Compass 한글 명부와 장부 영문 담당자를 같은 키로 연결한다", () => {
+    for (const [korean, english] of [["문준혁", "Junhyuk"], ["김민재", "Minjae"], ["정규성", "Gyusung"], ["신희성", "Heesung"], ["진소망", "Somang"], ["황찬우", "Chanwoo"], ["박한", "Han"], ["이왕찬", "Wangchan"]]) {
+      expect(normalizeBranchMemberName(korean)).toBe(english);
+      expect(normalizeBranchMemberName(english.toLowerCase())).toBe(english);
+    }
+  })
   it("시트 성 표기 'Hwang'을 대소문자 무관하게 이름 정본 'Chanwoo'로 정규화한다", () => {
     expect(normalizeBranchMemberName("Hwang")).toBe("Chanwoo")
     expect(normalizeBranchMemberName("hwang")).toBe("Chanwoo")

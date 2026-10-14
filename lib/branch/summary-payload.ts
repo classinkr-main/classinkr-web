@@ -8,6 +8,7 @@ import type { DshBreakdownRow } from "@/lib/branch/parsers/dsh"
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
 import { readRevDealsPreferActiveWithSource } from "@/lib/branch/read-rev-deals"
 import { readDshPreferDbWithSource, readKpiBlocksPreferDb } from "@/lib/branch/read-dsh-kpi"
+import { selectKpiRows } from "@/lib/branch/parsers/kpi"
 import { classifySalesLedgerProductCategory } from "@/lib/branch/product-category"
 import { fyOf, FISCAL_MONTH_ORDER, fiscalQuarter, ymKey } from "@/lib/branch/fiscal"
 import { summarizeRevenue, bottleneckKpi, closingDeals } from "@/lib/branch/computations/core-kpi"
@@ -212,7 +213,10 @@ function projectOverviewTimelines(timelines: SummaryTimelines, now: Date): Summa
 // 계층별 캐시는 read-dsh-kpi.ts / branch-dsh-kpi-mirror.ts 안에 있다. WithSource 변형은
 // "지금 보는 수치가 어느 단계에서, 언제 왔는지"(data_sources)도 함께 반환한다.
 const readDshWithSource = (fy: number) => readDshPreferDbWithSource(fy)
-const readKpi = async (fy: number) => (await readKpiBlocksPreferDb(fy)).fy
+const readKpi = async (fy: number, period: BranchSummaryPeriod, now: Date) => {
+  const blocks = await readKpiBlocksPreferDb(fy)
+  return selectKpiRows({ ...blocks, months: blocks.months ?? {} }, period, now)
+}
 
 // Freshness hint — newest modifiedTime across both source sheets.
 // 60s revalidate keeps Drive API call rate well under any quota concern
@@ -280,7 +284,7 @@ export interface BranchSummaryPayloadQuery {
 export async function buildBranchSummaryPayload(query: BranchSummaryPayloadQuery) {
   const { team, period, periodDate, includeBreakdown, overviewView, now: currentDate, skipSheetFreshness = false } = query
   const [dshResult, kpi, revResult, campaigns, runs, events, sheetFreshness] = await Promise.all([
-    readDshWithSource(fyOf(periodDate)), readKpi(fyOf(periodDate)), readRevDealsPreferActiveWithSource(fyOf(periodDate), { team }), summarizeCampaigns(currentDate), getRecentSyncRuns(3), listCachedPublicEvents(),
+    readDshWithSource(fyOf(periodDate)), readKpi(fyOf(periodDate), period, periodDate), readRevDealsPreferActiveWithSource(fyOf(periodDate), { team }), summarizeCampaigns(currentDate), getRecentSyncRuns(3), listCachedPublicEvents(),
     skipSheetFreshness ? Promise.resolve<SheetFreshnessResult>({ modifiedTime: null, failed: false }) : readSheetFreshness(),
   ])
   const sheetModifiedAt = sheetFreshness.modifiedTime

@@ -66,7 +66,7 @@ export default function CoreKpiGrid({ data, loading, error }: { data: BranchSumm
           sub="목표 대비는 아래 게이지 참고"
           link={{ href: "/admin/branch/ledger?lens=rev", label: "장부에서 열기 ↗" }} />
         <StatCard tone="amber" icon={<Sparkles className="h-[18px] w-[18px]" />}
-          label="활동 KPI 병목" value={metricLabel(data.bottleneck.metric)}
+          label="시트 영업 KPI 병목" value={metricLabel(data.bottleneck.metric)}
           sub={`${data.bottleneck.pct.toFixed(0)}% · ${data.bottleneck.worst_member ?? "-"}`} />
         <StatCard tone="neutral" icon={<Users className="h-[18px] w-[18px]" />}
           label="가까운 딜" value={`${data.closing.count}건`}
