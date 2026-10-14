@@ -121,7 +121,7 @@ npm run check:db --  --strict
 | `20260914_leads_naver_attribution.sql` | `leads.naver_ad`(jsonb) | 저장·조회 모두 없는 컬럼만 빼고 계속 동작한다(선택 컬럼 폴백 — 조회 쪽은 2026-09-21에 추가, 그 전에는 마케팅 허브 리드 집계가 42703으로 실패했다). 다만 **미적용 기간의 네이버 유입 귀속은 저장되지 않아 소급 복구할 수 없다** — 네이버 광고를 켜기 전에 적용한다 | `check:db` |
 | `20260914_compass_integration_bridge.sql` | `norm_phone_key()` + Compass 링크/연락/역브리지 뷰 | 적용 순서·재실행 조건은 [Compass 연동 2차](./compass-integration-2026-09-14.md) | `check:db`(warning) |
 | `20260914_leads_phone_key.sql` | `leads.phone_key` 생성 컬럼(= `norm_phone_key(phone)`) + 인덱스 | 재유입 병합이 원문·숫자만 비교 폴백으로 돌아 서식이 다른 같은 번호를 놓친다. **위 bridge 파일 뒤에** 적용(함수가 없으면 가드가 멈춘다) | `check:db`(warning) |
-| `20260921_checkout_requests_lead_qualifiers.sql` | `checkout_requests.role`·`academy_size` | **배포 전 필수** — 도입 신청 insert가 두 컬럼을 무조건 실어 42703으로 실패한다(신청 500) | `check:db` |
+| `20260921_checkout_requests_lead_qualifiers.sql` | `checkout_requests.role`·`academy_size` | **배포 전 필수** — 어드민 접수 큐 조회가 두 컬럼을 select해 42703으로 실패한다. 공개 도입 신청 insert는 2026-09-22부터 두 컬럼이 없으면 빼고 다시 저장한다([lib/checkout-requests.ts](../../lib/checkout-requests.ts)). 그 전 코드는 신청이 500으로 실패했다 | `check:db` |
 | `20260921_lead_source_intake_split.sql` | 과거 리드의 `source`를 `showroom_booking`·`checkout_request`로 백필(멱등) | 과거 쇼룸·도입 신청 리드가 계속 `contact_page`로 집계된다 | `schema-contract.ts` 주석의 조회 |
 
 하드웨어 계열은 아래 "하드웨어 마이그레이션" 절의 문서가 정본이다.
