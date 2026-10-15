@@ -94,7 +94,7 @@ export default function BranchOverviewPanel({
   canRunAdminOperations,
   onUpcomingDealClick,
 }: BranchOverviewPanelProps) {
-  const [showOperations, setShowOperations] = useState(false)
+  const [showOperations, setShowOperations] = useState(true)
   const evaluation = <CompassTeamSection resource={compass} month={selectedMonth} onMonthChange={onMonthChange} team={team} />
   if (summary.loading && !summary.data) {
     return (

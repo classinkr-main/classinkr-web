@@ -4,8 +4,10 @@ import Link from "next/link"
 import type { BranchKpiResponse, BranchSummaryResponse } from "../types"
 import { comparisonDomain } from "@/lib/branch/compass-overview"
 import { TEAM_COLORS, type TeamKey } from "@/lib/branch/team-colors"
-import { cnyExact } from "@/lib/branch/money-format"
+import { cny, cnyExact } from "@/lib/branch/money-format"
 import { branchTeamLabel, isCurrentBranchTeam, isLegacyBranchTeam } from "@/lib/branch/current-organization"
+import { GaugeRing } from "../../viz/GaugeRing"
+import { ProgressRoadmap } from "../../viz/ProgressRoadmap"
 import MoneyValue from "../MoneyValue"
 import ComparisonBar from "./ComparisonBar"
 
@@ -56,15 +58,25 @@ export default function BranchHeroGauges({ summary, kpi, loading, periodLabel, e
       {loading && !kpi ? <p role="status" className="mt-4 text-[13px] text-[#615D59]">팀 KPI를 불러오는 중입니다.</p>
         : error && !kpi ? <p role="alert" className="mt-4 text-[13px] text-[#8F2C2C]">팀 KPI를 불러오지 못했습니다 · {error}</p>
         : !kpi || teams.length === 0 ? <p role="status" className="mt-4 text-[13px] text-[#615D59]">표시할 팀 KPI 데이터가 없습니다.</p>
-        : <div className="mt-4 space-y-4">
-          {teams.map((item) => <div key={item.team}>
-            <div className="mb-1.5 flex items-baseline justify-between gap-3 text-[13px]">
+        : <div className="mt-4 grid grid-cols-2 gap-4">
+          {teams.map((item) => <div key={item.team} className="min-w-0 rounded-lg bg-[#F6F5F4] p-3">
+            <div className="mb-3 text-[13px]">
               <strong style={{ color: TEAM_COLORS[item.team as TeamKey].color }}>{branchTeamLabel(item.team)}</strong>
-              <span className="tabular-nums text-[#31302E]"><MoneyValue value={item.status} /><span className="text-[12px] text-[#615D59]"> / <MoneyValue value={item.goal} /></span></span>
             </div>
+            <div className="mb-3 flex justify-center">
+              {item.goal > 0 ? <div role="img" aria-label={`${branchTeamLabel(item.team)} 매출 달성률 ${((item.status / item.goal) * 100).toFixed(1)}%`}>
+                <GaugeRing value={item.status} goal={item.goal} size={96} />
+              </div> : <p className="flex h-24 items-center text-[12px] text-[#615D59]">목표 미설정</p>}
+            </div>
+            <p className="mb-3 text-center text-[13px] tabular-nums text-[#31302E]"><MoneyValue value={item.status} /><span className="text-[11px] text-[#615D59]"> / <MoneyValue value={item.goal} /></span></p>
             <ComparisonBar value={item.status} target={item.goal > 0 ? item.goal : null} domain={teamDomain} label={item.team + " DSH 실적 " + cnyExact(item.status) + " CNY, 목표 " + cnyExact(item.goal) + " CNY"} />
           </div>)}
         </div>}
     </div>
+    {goal > 0 ? <div className="min-w-0 border-t border-[rgba(0,0,0,0.08)] px-2 pt-5 xl:col-span-2">
+      <ProgressRoadmap actual={actual} goal={goal} label="매출 로드맵" formatValue={cny} milestones={[
+        { pct: 25, label: "25%" }, { pct: 50, label: "50%" }, { pct: 75, label: "75%" }, { pct: 100, label: "목표 100%" },
+      ]} />
+    </div> : null}
   </section>
 }
