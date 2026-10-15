@@ -149,47 +149,44 @@ export function CockpitDealList({
   }
 
   return (
-    <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white">
-      <div className="border-b border-[rgba(0,0,0,0.08)] p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="flex items-center gap-2 text-[13px] font-bold text-[#111110]">
-              <UserRound className="h-4 w-4 text-[#084734]" />
-              내 딜 · 콕핏 입력
-              <span className="text-[11px] font-semibold text-[#615D59]">
-                {filtersActive
-                  ? `표시 ${items.length.toLocaleString("ko-KR")} / 전체 ${rows.length.toLocaleString("ko-KR")}`
-                  : `${items.length.toLocaleString("ko-KR")}건`}
-              </span>
-            </p>
-            <p className="mt-0.5 text-[11px] leading-relaxed text-[#615D59]">
-              딜을 누르면 우측 빠른 입력에서 주차별 확도를 바로 남깁니다 — 담당자 필터가 곧 &lsquo;내 딜&rsquo;입니다.
-            </p>
+    <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+      <div className="border-b border-[rgba(0,0,0,0.08)] p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <UserRound className="h-4 w-4 text-[#084734]" />
+            <h2 className="text-[14px] font-bold text-[#111110]">
+              내 딜 목록
+            </h2>
+            <span className="rounded-full bg-[#F6F5F4] px-2 py-0.5 text-[11px] font-semibold text-[#615D59]">
+              {filtersActive
+                ? `${items.length.toLocaleString("ko-KR")} / ${rows.length.toLocaleString("ko-KR")}`
+                : `${items.length.toLocaleString("ko-KR")}건`}
+            </span>
           </div>
           <button
             type="button"
             onClick={onNewDeal}
-            className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md bg-[#084734] px-3 text-[12px] font-bold text-white transition hover:bg-[#065c41] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
+            className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[#084734] px-3 text-[12px] font-bold text-white shadow-[0_1px_2px_rgba(8,71,52,0.12)] transition hover:bg-[#065c41] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
           >
             <Plus className="h-3.5 w-3.5" />
             새 딜
           </button>
         </div>
 
-        {/* M2 로컬 월 컨트롤 + M3 체크 큐 진입로 — 콕핏에서 다음 달로 넘기고 대기 초안을 연다. */}
-        <div className="mt-3 flex items-center justify-between gap-2">
-          <div className="inline-flex items-center gap-0.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5">
+        {/* M2 로컬 월 컨트롤 + M3 체크 큐 진입로 */}
+        <div className="mt-3.5 flex items-center justify-between gap-2">
+          <div className="inline-flex items-center rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5 shadow-[inset_0_1px_1px_rgba(0,0,0,0.02)]">
             <button
               type="button"
               onClick={() => stepMonth(-1)}
               disabled={prevMonthDisabled}
               aria-label="이전 달"
               title="이전 달 (회계연도 안에서만 이동)"
-              className="flex h-7 w-7 items-center justify-center rounded-md text-[#615D59] transition hover:bg-white hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-[#615D59] transition hover:bg-white hover:text-[#111110] hover:shadow-[0_1px_2px_rgba(0,0,0,0.04)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 disabled:cursor-not-allowed disabled:opacity-30"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
             </button>
-            <span className="min-w-[60px] px-1 text-center text-[12px] font-bold tabular-nums text-[#111110]">
+            <span className="min-w-[68px] px-1 text-center text-[12px] font-bold tabular-nums text-[#111110]">
               {formatMonthLabel(selectedMonth)}
             </span>
             <button
@@ -198,7 +195,7 @@ export function CockpitDealList({
               disabled={nextMonthDisabled}
               aria-label="다음 달"
               title="다음 달 (회계연도 안에서만 이동)"
-              className="flex h-7 w-7 items-center justify-center rounded-md text-[#615D59] transition hover:bg-white hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-[#615D59] transition hover:bg-white hover:text-[#111110] hover:shadow-[0_1px_2px_rgba(0,0,0,0.04)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 disabled:cursor-not-allowed disabled:opacity-30"
             >
               <ChevronRight className="h-3.5 w-3.5" />
             </button>
@@ -212,39 +209,39 @@ export function CockpitDealList({
             title={openDraftCount > 0 ? "대기 초안을 체크 큐에서 확인·적용" : "대기 중인 초안이 없습니다"}
             className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[11px] font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] ${
               openDraftCount > 0
-                ? "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F] hover:bg-[#F7E6C6]"
-                : "cursor-not-allowed border-[rgba(0,0,0,0.08)] bg-white text-[#A39E98]"
+                ? "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F] hover:bg-[#F7E6C6] shadow-sm"
+                : "cursor-not-allowed border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#A39E98]"
             }`}
           >
-            <AlertTriangle className="h-3.5 w-3.5" />
+            <AlertTriangle className={`h-3.5 w-3.5 ${openDraftCount > 0 ? "text-[#7A520F]" : "text-[#A39E98]"}`} />
             체크 큐 {openDraftCount.toLocaleString("ko-KR")}건
           </button>
         </div>
 
+        {/* 검색 및 합계 바 */}
         <div className="mt-3 flex items-center gap-2">
           <label className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#A39E98]" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#A39E98]" />
             <input
               value={term}
               onChange={(event) => setTerm(event.target.value)}
-              // M10(b) 연장: 검색 후 ↓ 한 번으로 결과 목록 첫 항목에 포커스 — 이후는 기존 롤빙
-              // (↑/↓/Home/End)과 Enter 선택이 이어진다. 마우스 없이 검색→선택이 한 흐름이 된다.
               onKeyDown={(event) => {
                 if (event.key !== "ArrowDown" || items.length === 0) return
                 event.preventDefault()
                 itemRefs.current[0]?.focus()
               }}
-              placeholder="고객·담당자 검색"
+              placeholder="고객·담당자 검색..."
               aria-label="내 딜 검색"
-              className="h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] pl-8 pr-3 text-[12px] font-semibold text-[#111110] outline-none focus:border-[#084734]"
+              className="h-9 w-full rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] pl-8 pr-3 text-[12px] font-semibold text-[#111110] outline-none transition placeholder:text-[#A39E98] focus:border-[#084734] focus:bg-white"
             />
           </label>
-          <span className="shrink-0 rounded-md bg-[#FAFAF8] px-2.5 py-1.5 text-[11px] font-bold tabular-nums text-[#615D59]">
-            합 <span className="text-[#111110]">{formatMoney(monthTotal)}</span>
-          </span>
+          <div className="flex shrink-0 items-center gap-1 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2.5 py-1.5 text-[11px] font-semibold text-[#615D59]">
+            <span>합계</span>
+            <span className="font-bold tabular-nums text-[#111110]">{formatMoney(monthTotal)}</span>
+          </div>
         </div>
 
-        {/* M10(a) 파워 스캔 — 확도·상품 로컬 퀵필터(다중 토글). 확도 색은 CONFIDENCE_TOKENS SSOT를 재사용한다. */}
+        {/* M10(a) 파워 스캔 — 확도·상품 로컬 퀵필터 */}
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           {CONFIDENCE_FILTER_ORDER.map((key) => {
             const token = CONFIDENCE_TOKENS[key]
@@ -256,14 +253,14 @@ export function CockpitDealList({
                 onClick={() => toggleConfidence(key)}
                 aria-pressed={active}
                 className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#084734] ${
-                  active ? token.chipClass : "border-[rgba(0,0,0,0.08)] bg-white text-[#A39E98] hover:text-[#615D59]"
+                  active ? token.chipClass : "border-[rgba(0,0,0,0.08)] bg-white text-[#88847E] hover:border-[rgba(0,0,0,0.15)] hover:text-[#111110]"
                 }`}
               >
                 {token.label}
               </button>
             )
           })}
-          <span className="mx-0.5 h-4 w-px bg-[rgba(0,0,0,0.08)]" aria-hidden />
+          <span className="mx-0.5 h-3.5 w-px bg-[rgba(0,0,0,0.08)]" aria-hidden />
           {PRODUCT_FILTER_ORDER.map((key) => {
             const meta = productCategoryMeta(key)
             const active = productFilters.has(key)
@@ -274,7 +271,7 @@ export function CockpitDealList({
                 onClick={() => toggleProduct(key)}
                 aria-pressed={active}
                 className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#084734] ${
-                  active ? meta.className : "border-[rgba(0,0,0,0.08)] bg-white text-[#A39E98] hover:text-[#615D59]"
+                  active ? meta.className : "border-[rgba(0,0,0,0.08)] bg-white text-[#88847E] hover:border-[rgba(0,0,0,0.15)] hover:text-[#111110]"
                 }`}
               >
                 {meta.shortLabel}
@@ -289,24 +286,26 @@ export function CockpitDealList({
                 setConfidenceFilters(new Set())
                 setProductFilters(new Set())
               }}
-              className="ml-auto text-[11px] font-bold text-[#084734] underline-offset-2 transition hover:underline"
+              className="ml-auto text-[11px] font-bold text-[#084734] transition hover:underline"
             >
-              필터 해제
+              초기화
             </button>
           )}
         </div>
       </div>
 
-      <div className="max-h-[70dvh] overflow-y-auto p-2">
+      <div className="max-h-[calc(100vh-320px)] min-h-[300px] overflow-y-auto p-2 sm:p-2.5">
         {items.length === 0 ? (
-          <p className="m-2 rounded-lg border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-6 text-center text-[12px] text-[#615D59]">
-            조건에 맞는 딜이 없습니다 — 검색어·필터를 지우거나 담당자 필터를 풀어보세요.
-          </p>
+          <div className="m-2 rounded-lg border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-8 text-center">
+            <p className="text-[12px] font-semibold text-[#615D59]">조건에 맞는 딜이 없습니다</p>
+            <p className="mt-1 text-[11px] text-[#A39E98]">검색어나 필터를 해제해보세요.</p>
+          </div>
         ) : (
-          <ul className="space-y-1">
+          <ul className="space-y-1.5">
             {items.map(({ row, amount, tone, product }, index) => {
               const token = CONFIDENCE_TOKENS[tone]
               const selected = row.id === selectedRowId
+              const hasAmount = amount > 0
               return (
                 <li key={row.id}>
                   <button
@@ -317,29 +316,37 @@ export function CockpitDealList({
                     onClick={() => onSelectDeal(row)}
                     onKeyDown={(event) => handleItemKeyDown(event, index)}
                     aria-pressed={selected}
-                    className={`w-full rounded-md border border-l-[3px] px-3 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 ${
+                    className={`w-full rounded-lg border px-3.5 py-2.5 text-left transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 ${
                       selected
-                        ? "border-[#BDEFD8] border-l-[#084734] bg-[#ECFDF5]"
-                        : "border-[rgba(0,0,0,0.08)] border-l-transparent bg-white hover:bg-[#FAFAF8]"
+                        ? "border-[#BDEFD8] border-l-[3.5px] border-l-[#084734] bg-[#ECFDF5] shadow-[0_1px_3px_rgba(8,71,52,0.06)]"
+                        : "border-[rgba(0,0,0,0.08)] border-l-[3.5px] border-l-transparent bg-white hover:border-[rgba(0,0,0,0.15)] hover:bg-[#FAFAF8]"
                     }`}
                   >
-                    <span className="flex items-baseline justify-between gap-2">
-                      <span className="min-w-0 truncate text-[13px] font-bold text-[#111110]">{row.customer || "(무제목)"}</span>
-                      <span className="shrink-0 text-[12px] font-bold tabular-nums text-[#111110]">{formatMoney(amount)}</span>
-                    </span>
-                    <span className="mt-1.5 flex items-center justify-between gap-2">
-                      <span className="flex min-w-0 items-center gap-1.5">
-                        <span className="shrink-0 rounded-full border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-2 py-0.5 text-[10px] font-semibold text-[#615D59]">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="min-w-0 truncate text-[13.5px] font-bold tracking-[-0.01em] text-[#111110]">
+                        {row.customer || "(무제목)"}
+                      </span>
+                      <span className={`shrink-0 tabular-nums ${
+                        hasAmount
+                          ? "text-[13px] font-bold text-[#111110]"
+                          : "text-[11.5px] font-medium text-[#B0ABA4]"
+                      }`}>
+                        {formatMoney(amount)}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <span className="shrink-0 rounded border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-1.5 py-0.5 text-[10px] font-semibold text-[#615D59]">
                           {product.shortLabel}
                         </span>
                         {row.manager && (
-                          <span className="truncate text-[10.5px] font-semibold text-[#A39E98]">{row.manager}</span>
+                          <span className="truncate text-[10.5px] font-medium text-[#88847E]">{row.manager}</span>
                         )}
-                      </span>
+                      </div>
                       <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold ${token.chipClass}`}>
                         {token.label}
                       </span>
-                    </span>
+                    </div>
                   </button>
                 </li>
               )

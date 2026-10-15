@@ -82,6 +82,7 @@ import {
   type C360LocalOverride,
 } from "./drawer/c360-local-patch"
 import { useDialogFocus } from "@/components/admin/use-dialog-focus"
+import { useWideWorkspace } from "@/components/admin/use-wide-workspace"
 import { deriveCustomerFlags } from "@/lib/crm/customer-flags"
 import { LEAD_BADGE_TONE_CLASSES } from "@/lib/crm/lead-badges"
 import { computeCustomerHealth, HEALTH_BAND_STYLE } from "@/lib/crm/customer-health"
@@ -92,6 +93,8 @@ import type { CrmDealRecord, CrmDealStage } from "@/lib/repositories/crm-deals"
 import type { CrmTaskRecord, CrmTaskType } from "@/lib/repositories/crm-tasks"
 
 interface Props {
+  presentation?: "modal" | "workspace"
+  externalDialogOpen?: boolean
   customerKey: string | null
   name?: string | null
   onClose: () => void
@@ -195,7 +198,9 @@ export function resolveDealPatch(
   return { ...optimistic, ...(pickConfirmed?.(confirmedDeal) ?? {}) }
 }
 
-export default function Customer360Drawer({ customerKey, name, onClose, onDirtyChange }: Props) {
+export default function Customer360Drawer({ customerKey, name, onClose, onDirtyChange, presentation = "modal", externalDialogOpen = false }: Props) {
+  const wideWorkspace = useWideWorkspace()
+  const inline = presentation === "workspace" && wideWorkspace
   const [data, setData] = useState<Customer360 | null>(null)
   const [loading, setLoading] = useState(false)
   // 백그라운드 재검증(쓰기 뒤 재조회·SWR 갱신) 진행 중 — 스켈레톤·새로고침 비활성과 분리해 캡션에만 쓴다.
@@ -482,7 +487,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
   // 배경 페이지 컨트롤로 새어 나갔다. 훅은 focusRef의 role="dialog" 조상을 트랩 범위로 잡는다.
   // 닫기 확인 다이얼로그(포털)가 열린 동안은 트랩·ESC를 내려놓는다 — 두 다이얼로그가 포커스를 뺏고 되뺏지 않게.
   const closeButtonRef = useRef<HTMLButtonElement | null>(null)
-  useDialogFocus(closeConfirmOpen ? null : customerKey, requestClose, closeButtonRef)
+  useDialogFocus(closeConfirmOpen || externalDialogOpen || inline ? null : customerKey, requestClose, closeButtonRef)
 
   // [minor] 닫기 확인을 '계속 작성'으로 취소하면 위 훅의 openKey가 null→customerKey로 되돌아가며
   // 두 번째 effect(포커스 이동)가 다시 실행돼 focusRef(닫기 X 버튼)로 포커스를 강제 이동시킨다.
@@ -505,13 +510,13 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
   // 배경 스크롤 잠금 — 드로어는 fixed라 배경 목록이 그대로 스크롤된다. 백드롭 위에서 휠·스와이프하면
   // 뒤 목록이 드로어 밑에서 밀려나가고, 닫았을 때 원래 자리가 아닌 곳에 서 있게 된다.
   useEffect(() => {
-    if (!customerKey) return
+    if (!customerKey || inline) return
     const previous = document.body.style.overflow
     document.body.style.overflow = "hidden"
     return () => {
       document.body.style.overflow = previous
     }
-  }, [customerKey])
+  }, [customerKey, inline])
 
 
   // 스크롤 스파이 — 본문 스크롤 위치로 현재 섹션 탭을 활성화한다(DOM 순서로 '마지막 통과' 판정).
@@ -1209,12 +1214,12 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
   if (!customerKey) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/20" onClick={requestClose} aria-hidden />
+    <div className={inline ? "sticky top-6 h-[calc(100dvh-3rem)] min-w-0" : "fixed inset-0 z-50 flex justify-end"}>
+      {!inline ? <div className="absolute inset-0 bg-black/20" onClick={requestClose} aria-hidden /> : null}
       <div
-        className="relative z-10 flex h-full w-full max-w-xl flex-col overflow-hidden bg-white shadow-2xl [&_a]:min-h-11 [&_a]:focus-visible:outline-none [&_a]:focus-visible:ring-2 [&_a]:focus-visible:ring-[#084734] [&_a]:focus-visible:ring-offset-2 [&_button]:min-h-11 [&_button]:min-w-11 [&_button]:focus-visible:outline-none [&_button]:focus-visible:ring-2 [&_button]:focus-visible:ring-[#084734] [&_button]:focus-visible:ring-offset-2 [&_input]:min-h-11 [&_input]:focus-visible:outline-none [&_input]:focus-visible:ring-2 [&_input]:focus-visible:ring-[#084734] [&_input]:focus-visible:ring-offset-1 [&_select]:min-h-11 [&_select]:focus-visible:outline-none [&_select]:focus-visible:ring-2 [&_select]:focus-visible:ring-[#084734] [&_select]:focus-visible:ring-offset-1 sm:[&_a]:min-h-0 sm:[&_button]:min-h-0 sm:[&_button]:min-w-0 sm:[&_input]:min-h-0 sm:[&_select]:min-h-0"
-        role="dialog"
-        aria-modal="true"
+        className={`relative z-10 flex h-full w-full flex-col overflow-hidden bg-white ${inline ? "border-l border-[rgba(0,0,0,0.08)]" : "max-w-xl shadow-2xl"} [&_a]:min-h-11 [&_a]:focus-visible:outline-none [&_a]:focus-visible:ring-2 [&_a]:focus-visible:ring-[#084734] [&_a]:focus-visible:ring-offset-2 [&_button]:min-h-11 [&_button]:min-w-11 [&_button]:focus-visible:outline-none [&_button]:focus-visible:ring-2 [&_button]:focus-visible:ring-[#084734] [&_button]:focus-visible:ring-offset-2 [&_input]:min-h-11 [&_input]:focus-visible:outline-none [&_input]:focus-visible:ring-2 [&_input]:focus-visible:ring-[#084734] [&_input]:focus-visible:ring-offset-1 [&_select]:min-h-11 [&_select]:focus-visible:outline-none [&_select]:focus-visible:ring-2 [&_select]:focus-visible:ring-[#084734] [&_select]:focus-visible:ring-offset-1 sm:[&_a]:min-h-0 sm:[&_button]:min-h-0 sm:[&_button]:min-w-0 sm:[&_input]:min-h-0 sm:[&_select]:min-h-0`}
+        role={inline ? "region" : "dialog"}
+        aria-modal={inline ? undefined : true}
         aria-labelledby="crm-customer-drawer-title"
         aria-busy={loading || eventsLoading || tagBusy || neoLinkBusy || actingId !== null}
         onTouchStart={onTouchStart}
@@ -1484,7 +1489,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
         </div>
 
         {/* body */}
-        <div ref={bodyRef} className="flex-1 space-y-3 overflow-y-auto bg-[#f5f5f2] p-4">
+        <div ref={bodyRef} className={`flex-1 space-y-3 overflow-y-auto p-4 ${inline ? "bg-white" : "bg-[#f5f5f2]"}`}>
           {data?.health.warnings.length ? (
             <div className="flex items-start gap-2 rounded-xl border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2 text-[12px] text-[#7A520F]">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />

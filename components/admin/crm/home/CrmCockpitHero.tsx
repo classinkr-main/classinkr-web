@@ -142,15 +142,15 @@ export default function CrmCockpitHero({
 
       <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
         {/* 1. 이번 달 인식 매출 — 다크 히어로 (자체집계 ₩) */}
-        <div className="rounded-2xl bg-[#084734] p-3.5 text-white shadow-[0_8px_22px_rgba(8,71,52,0.18)]">
+        <div className="rounded-xl bg-[#084734] p-3.5 text-white shadow-[0_8px_22px_rgba(8,71,52,0.18)]">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 opacity-80">
               <CircleDollarSign className="h-3.5 w-3.5" />
-              <span className="text-[10.5px] font-bold uppercase tracking-[0.12em]">이번 달 인식 매출</span>
+              <span className="text-[12px] font-semibold">이번 달 인식 매출</span>
             </div>
             <CurrencyChip currency="KRW" tone="dark" />
           </div>
-          <p className="mt-2 text-[30px] font-extrabold leading-none tracking-[-0.045em]">
+          <p className="mt-2 text-[26px] sm:text-[30px] font-extrabold leading-none tracking-[-0.045em]">
             {businessState === "unavailable" ? (
               // 다크 배경에서는 danger 텍스트가 묻히므로 흰 글자로 '—' — SR 라벨은 헬퍼와 동일.
               <span role="img" aria-label="확인 불가" title="확인 불가" data-metric-state="unavailable">
@@ -166,57 +166,57 @@ export default function CrmCockpitHero({
           </p>
           {/* 산정 기준 캡션(CRM-6) — 여기 '확정'은 V2 딜리버리 인식, 시트 '확정 표시'(¥)와 다른 기준 */}
           {businessError ? (
-            <p className="mt-1 text-[10px] leading-relaxed text-white/90">확인 불가 · {businessError}</p>
+            <p className="mt-1 text-[12px] leading-relaxed text-white/90">확인 불가 · {businessError}</p>
           ) : (
-            <p className="mt-1 text-[10px] leading-relaxed text-white/80">
+            <p className="mt-1 text-[12px] leading-relaxed text-white/80">
               V2 딜리버리(출고) 인식 합계 · 시트 &lsquo;확정 표시&rsquo;(¥)와 다른 기준
             </p>
           )}
         </div>
 
         {/* 2. 오더 · 확정 임박 (USD) */}
-        <div className="rounded-2xl border border-[#e8e8e4] bg-white p-3.5">
+        <div className="rounded-xl border border-[#e8e8e4] bg-white p-3.5">
           <div className="flex items-center justify-between gap-2">
             <div className={`flex items-center gap-1.5 ${SECONDARY_TEXT_CLASS}`}>
               <BarChart3 className="h-3.5 w-3.5" />
-              <span className="text-[10.5px] font-bold uppercase tracking-[0.12em]">오더 · 확정 임박</span>
+              <span className="text-[12px] font-semibold">오더 · 확정 임박</span>
             </div>
             <CurrencyChip currency="USD" />
           </div>
-          <p className="mt-2 text-[30px] font-extrabold leading-none tracking-[-0.045em] text-[#111110]">
+          <p className="mt-2 text-[26px] sm:text-[30px] font-extrabold leading-none tracking-[-0.045em] text-[#111110]">
             {bigValue(neoState, () => formatUSD(neoKpis?.opportunityAmount))}
           </p>
           <p className={`mt-1 text-[11px] ${SECONDARY_TEXT_CLASS}`}>
             이번 달 {smallValue(neoState, () => formatNumber(neoKpis?.opportunityCountMonth), "h-3 w-6")}건
           </p>
           {neoError ? (
-            <p className={`mt-1 text-[10px] leading-relaxed ${STATUS_TONE_TEXT_CLASS.danger}`}>확인 불가 · {neoError}</p>
+            <p className={`mt-1 text-[12px] leading-relaxed ${STATUS_TONE_TEXT_CLASS.danger}`}>확인 불가 · {neoError}</p>
           ) : (
-            <p className={`mt-1 text-[10px] leading-relaxed ${SECONDARY_TEXT_CLASS}`}>
+            <p className={`mt-1 text-[12px] leading-relaxed ${SECONDARY_TEXT_CLASS}`}>
               Neo CRM 오더(Opportunity) 합계 · 시트 &lsquo;확정 임박&rsquo;(¥)과 다른 기준
             </p>
           )}
         </div>
 
         {/* 3. 동기화 매출 · 수금 (CNY) */}
-        <div className="rounded-2xl border border-[#e8e8e4] bg-white p-3.5">
+        <div className="rounded-xl border border-[#e8e8e4] bg-white p-3.5">
           <div className="flex items-center justify-between gap-2">
             <div className={`flex items-center gap-1.5 ${SECONDARY_TEXT_CLASS}`}>
               <TrendingUp className="h-3.5 w-3.5" />
-              <span className="text-[10.5px] font-bold uppercase tracking-[0.12em]">동기화 매출 · 수금</span>
+              <span className="text-[12px] font-semibold">동기화 매출 · 수금</span>
             </div>
             <CurrencyChip currency="CNY" />
           </div>
-          <p className="mt-2 text-[30px] font-extrabold leading-none tracking-[-0.045em] text-[#084734]">
+          <p className="mt-2 text-[26px] sm:text-[30px] font-extrabold leading-none tracking-[-0.045em] text-[#084734]">
             {bigValue(neoState, () => formatCNY(neoKpis?.salesAmountMonth))}
           </p>
           <p className={`mt-1 text-[11px] ${SECONDARY_TEXT_CLASS}`}>
             수금 {smallValue(neoState, () => formatCNY(neoKpis?.collectionAmountMonth))}
           </p>
           {neoError ? (
-            <p className={`mt-1 text-[10px] leading-relaxed ${STATUS_TONE_TEXT_CLASS.danger}`}>확인 불가 · {neoError}</p>
+            <p className={`mt-1 text-[12px] leading-relaxed ${STATUS_TONE_TEXT_CLASS.danger}`}>확인 불가 · {neoError}</p>
           ) : (
-            <p className={`mt-1 text-[10px] leading-relaxed ${SECONDARY_TEXT_CLASS}`}>
+            <p className={`mt-1 text-[12px] leading-relaxed ${SECONDARY_TEXT_CLASS}`}>
               Neo CRM 동기화 · 이번 달
               {overview?.neoCrm?.latestSyncedAt ? ` · 동기화 ${formatOverviewDate(overview.neoCrm.latestSyncedAt)}` : ""}
             </p>
@@ -226,19 +226,19 @@ export default function CrmCockpitHero({
         {/* 4. 미수 · 이탈 위험 (자체집계 ₩ + 건수) */}
         <Link
           href="/admin/crm/deals"
-          className={`group rounded-2xl border p-3.5 transition-colors ${
+          className={`group rounded-xl border p-3.5 transition-colors ${
             hasRisk ? `${STATUS_TONE_CLASS.danger} hover:brightness-[0.98]` : "border-[#e8e8e4] bg-white hover:bg-[#fafaf8]"
           }`}
         >
           <div className="flex items-center justify-between gap-2">
             <div className={`flex items-center gap-1.5 ${hasRisk ? STATUS_TONE_TEXT_CLASS.danger : SECONDARY_TEXT_CLASS}`}>
               <AlertCircle className="h-3.5 w-3.5" />
-              <span className="text-[10.5px] font-bold uppercase tracking-[0.12em]">미수 · 이탈 위험</span>
+              <span className="text-[12px] font-semibold">미수 · 이탈 위험</span>
             </div>
             <CurrencyChip currency="KRW" />
           </div>
           <p
-            className={`mt-2 text-[30px] font-extrabold leading-none tracking-[-0.045em] ${
+            className={`mt-2 text-[26px] sm:text-[30px] font-extrabold leading-none tracking-[-0.045em] ${
               hasRisk ? STATUS_TONE_TEXT_CLASS.danger : "text-[#111110]"
             }`}
           >
@@ -257,9 +257,9 @@ export default function CrmCockpitHero({
             미수 합계 {smallValue(businessState, () => formatKRWAbbrev(revenue?.outstandingAmount))} · Deals에서 처리
           </p>
           {businessError ? (
-            <p className={`mt-1 text-[10px] leading-relaxed ${STATUS_TONE_TEXT_CLASS.danger}`}>확인 불가 · {businessError}</p>
+            <p className={`mt-1 text-[12px] leading-relaxed ${STATUS_TONE_TEXT_CLASS.danger}`}>확인 불가 · {businessError}</p>
           ) : (
-            <p className={`mt-1 text-[10px] leading-relaxed ${hasRisk ? STATUS_TONE_TEXT_CLASS.danger : SECONDARY_TEXT_CLASS}`}>
+            <p className={`mt-1 text-[12px] leading-relaxed ${hasRisk ? STATUS_TONE_TEXT_CLASS.danger : SECONDARY_TEXT_CLASS}`}>
               V2 계약·수납 대비 미수 거래 수 · 자체 집계 ₩
             </p>
           )}

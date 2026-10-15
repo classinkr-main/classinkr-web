@@ -78,7 +78,7 @@ describe("c360-01 상세 탭 규칙", () => {
     searchParamsRef.current = new URLSearchParams("tab=tasks")
     const html = renderToStaticMarkup(<Customer360DetailClient data={make360()} customerKey="lead:lead-1" />)
     expect(html).toContain('role="tablist"')
-    expect(html).toMatch(/<button[^>]*role="tab"[^>]*aria-selected="true"[^>]*>(?:(?!<\/button>).)*태스크/)
+    expect(html).toMatch(/<button[^>]*role="tab"[^>]*aria-selected="true"[^>]*>(?:(?!<\/button>).)*다음 액션/)
     expect(html).toContain('role="tabpanel"')
     // 탭 버튼은 모바일에서 44px 터치 타깃을 갖고 데스크톱은 기존 높이로 돌아간다.
     expect(html).toContain("min-h-11")

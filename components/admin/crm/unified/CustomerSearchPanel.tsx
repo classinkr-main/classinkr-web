@@ -96,7 +96,7 @@ export default function CustomerSearchPanel({
   const tagChips = data ? tagChipsWithActive(data.summary.availableTags, tagFilter) : []
 
   return (
-    <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+    <section className="mb-4 border-b border-[rgba(0,0,0,0.08)] bg-white pb-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-[minmax(220px,1fr)_auto_auto_auto] lg:items-center">
         <label className="col-span-2 flex h-11 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-[#fafaf8] px-3 lg:col-span-1 lg:h-10">
           <Search className="h-4 w-4 text-[#1a1a1a]/35" />
@@ -121,7 +121,7 @@ export default function CustomerSearchPanel({
               aria-pressed={source === filter.key}
               className={`h-7 rounded-md px-3 text-[12px] font-semibold transition-colors ${
                 source === filter.key
-                  ? "bg-[#111110] text-white"
+                  ? "bg-[#ECFDF5] text-[#084734]"
                   : "text-[#1a1a1a]/55 hover:bg-white hover:text-[#111110]"
               }`}
             >
@@ -225,21 +225,21 @@ export default function CustomerSearchPanel({
       {data ? (
         // 탐색 전용 화면 — "우선 처리" 타일은 실행 지표라 CRM 홈으로 이관, 여기는 규모 파악 4칸만 남긴다.
         <div className="no-scrollbar mt-4 flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-4 sm:overflow-visible sm:pb-0">
-          <div className="min-w-[116px] shrink-0 rounded-xl bg-[#fafaf8] p-3 sm:min-w-0">
+          <div className="min-w-[116px] shrink-0 border-l border-[rgba(0,0,0,0.08)] px-3 py-1 sm:min-w-0">
             <p className="text-[11px] font-semibold text-[#1a1a1a]/35">검색 결과</p>
             <p className="mt-1 text-xl font-bold text-[#111110]">{data.summary.total.toLocaleString("ko-KR")}</p>
           </div>
-          <div className="min-w-[116px] shrink-0 rounded-xl bg-[#fafaf8] p-3 sm:min-w-0">
+          <div className="min-w-[116px] shrink-0 border-l border-[rgba(0,0,0,0.08)] px-3 py-1 sm:min-w-0">
             <p className="text-[11px] font-semibold text-[#1a1a1a]/35">리드</p>
             <p className="mt-1 text-xl font-bold text-[#111110]">{data.summary.leadCount.toLocaleString("ko-KR")}</p>
           </div>
-          <div className="min-w-[116px] shrink-0 rounded-xl bg-[#fafaf8] p-3 sm:min-w-0">
+          <div className="min-w-[116px] shrink-0 border-l border-[rgba(0,0,0,0.08)] px-3 py-1 sm:min-w-0">
             <p className="text-[11px] font-semibold text-[#1a1a1a]/35">고객</p>
             <p className="mt-1 text-xl font-bold text-[#111110]">
               {data.summary.accountCount.toLocaleString("ko-KR")}
             </p>
           </div>
-          <div className="min-w-[116px] shrink-0 rounded-xl bg-[#fafaf8] p-3 sm:min-w-0">
+          <div className="min-w-[116px] shrink-0 border-l border-[rgba(0,0,0,0.08)] px-3 py-1 sm:min-w-0">
             <p className="text-[11px] font-semibold text-[#1a1a1a]/35">전환 고객</p>
             <p className="mt-1 text-xl font-bold text-[#111110]">
               {(data.summary.customerCount ?? 0).toLocaleString("ko-KR")}
@@ -250,7 +250,7 @@ export default function CustomerSearchPanel({
         // 콜드로드 스켈레톤 — 실제 요약 타일 4칸 그리드와 동일 골격(0 플래시·점프 방지).
         <div className="no-scrollbar mt-4 flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-4 sm:overflow-visible sm:pb-0">
           {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="min-w-[116px] shrink-0 rounded-xl bg-[#fafaf8] p-3 sm:min-w-0">
+            <div key={index} className="min-w-[116px] shrink-0 border-l border-[rgba(0,0,0,0.08)] px-3 py-1 sm:min-w-0">
               <div className="h-3 w-14 animate-pulse rounded bg-[#f0f0ec]" />
               <div className="mt-2 h-6 w-16 animate-pulse rounded bg-[#f0f0ec]" />
             </div>

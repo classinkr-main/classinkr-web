@@ -52,30 +52,16 @@ describe("CrmStageFunnelSection — 9단계 라벨과 캡션", () => {
   })
 })
 
-describe("CrmStageFunnelSection — 병목 배지", () => {
-  it("병목 단계가 있으면 Warning 토큰 배지와 텍스트 라벨을 함께 그린다", () => {
-    const html = renderToStaticMarkup(
-      <CrmStageFunnelSection stageFunnel={STAGE_FUNNEL} generatedAt={null} loading={false} />
-    )
-    expect(STAGE_FUNNEL.bottleneck).not.toBeNull()
-    expect(html).toContain("병목 · 전환")
-    expect(html).toContain("color:#7A520F")
-    expect(html).toContain("background-color:#FBF1E0")
-    // 색만으로 구분하지 않는다 — 어느 단계인지 텍스트로도 남는다.
-    const bottleneckStage = STAGE_FUNNEL.stages.find((s) => s.key === STAGE_FUNNEL.bottleneck?.key)!
-    expect(html).toContain(bottleneckStage.label)
-  })
-
-  it("병목이 없으면(전 구간 값이 0이라 후보가 없으면) 배지를 그리지 않는다", () => {
-    const noBottleneck = buildStageFunnel({
-      leads: { new: 0, contacted: 0, converted: 0, closed: 0 },
-      deals: { consult: 0, demo: 0, quote: 0, decision: 0, order: 0, won: 0, lost: 0, total: 0 },
-    })!
-    expect(noBottleneck.bottleneck).toBeNull()
-    const html = renderToStaticMarkup(
-      <CrmStageFunnelSection stageFunnel={noBottleneck} generatedAt={null} loading={false} />
-    )
-    expect(html).not.toContain("병목 ·")
+describe("현재 단계 분포의 의미", () => {
+  it("리드와 딜의 누적값을 실제 현재 상태 건수로 표시하며 전환율을 추정하지 않는다", () => {
+    const html = renderToStaticMarkup(<CrmStageFunnelSection stageFunnel={STAGE_FUNNEL} generatedAt={null} loading={false} />)
+    expect(html).toContain('aria-label="리드 상태 건수"')
+    expect(html).toContain('aria-label="딜 단계 건수"')
+    expect(html).toContain('data-stage="lead_new" data-count="10"')
+    expect(html).toContain('data-stage="lead_contacted" data-count="80"')
+    expect(html).toContain('data-stage="deal_consult" data-count="18"')
+    expect(html).not.toContain("병목 · 전환")
+    expect(html).not.toContain("이전 단계 대비")
   })
 })
 

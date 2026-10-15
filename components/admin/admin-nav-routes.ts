@@ -36,7 +36,7 @@ export const ADMIN_NAV_ROUTE_FAMILIES: readonly AdminNavRouteFamily[] = [
   },
   {
     parentHref: "/admin/chatbot",
-    childPathPrefixes: ["/admin/docs", "/admin/channel-talk", "/admin/cs-chatbot"],
+    childPathPrefixes: ["/admin/docs", "/admin/channel-talk", "/admin/cs-chatbot", "/admin/cs-inquiries"],
   },
   {
     parentHref: "/admin/settings",

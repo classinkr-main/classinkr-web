@@ -52,12 +52,12 @@ export function RevMatrixEditBar(props: RevMatrixEditBarProps): React.JSX.Elemen
       role="region"
       aria-label="셀 편집"
       aria-live="polite"
-      className="hidden md:flex h-11 items-center gap-3 border border-[rgba(0,0,0,0.08)] bg-white px-3"
+      className="hidden md:flex h-12 items-center gap-3 border-b border-[rgba(0,0,0,0.08)] bg-white px-4 shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-colors"
     >
       {/* 확도색 인디케이터 — 편집 input 테두리(border-2 CONFIDENCE_TOKENS 색)와 같은 "색으로 답하기". */}
       <span
         aria-hidden
-        className="w-1 shrink-0 self-stretch rounded-full"
+        className="w-1.5 shrink-0 self-stretch rounded-full my-2 transition-colors duration-200"
         style={{ backgroundColor: CONFIDENCE_TOKENS[confidence].color }}
       />
 
@@ -85,7 +85,7 @@ export function RevMatrixEditBar(props: RevMatrixEditBarProps): React.JSX.Elemen
       </div>
 
       {/* 중앙: 확도 3버튼 세그먼트 — 매트릭스 팝오버(RevMatrixEditPopover)보다 크게(≥36px). */}
-      <div role="radiogroup" aria-label="확도" className="flex shrink-0 items-center gap-1">
+      <div role="radiogroup" aria-label="확도" className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[rgba(0,0,0,0.06)] bg-[#F8F8F7] p-1">
         {DRAFT_CONFIDENCE_OPTIONS.map((option) => {
           const token = CONFIDENCE_TOKENS[option.id]
           const active = !disabled && confidence === option.id
@@ -101,15 +101,15 @@ export function RevMatrixEditBar(props: RevMatrixEditBarProps): React.JSX.Elemen
               // 뺏으면 blur 커밋(의도치 않은 저장)이 발생한다. 클릭이 끝날 때까지 포커스를 지킨다.
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => onPickConfidence(option.id)}
-              className={`inline-flex min-h-9 items-center gap-1.5 rounded-md border px-4 text-[12px] font-bold leading-none transition disabled:cursor-not-allowed disabled:opacity-50 ${
+              className={`inline-flex min-h-9 items-center gap-1.5 rounded-md border px-3.5 text-[12px] font-bold leading-none transition shadow-xs disabled:cursor-not-allowed disabled:opacity-50 ${
                 active
                   ? `${token.bgClass} border-transparent text-white`
-                  : `border-[rgba(0,0,0,0.08)] bg-white ${token.textClass}`
+                  : `border-[rgba(0,0,0,0.08)] bg-white ${token.textClass} hover:bg-[#FAFAF8]`
               }`}
             >
-              {option.label}
+              <span>{option.label}</span>
               <kbd
-                className={`rounded px-1 py-0.5 text-[9px] font-bold leading-none ${
+                className={`rounded px-1.5 py-0.5 text-[9.5px] font-mono font-bold leading-none ${
                   active ? "bg-white/25 text-white" : "bg-[#f0f0ec] text-[#615D59]"
                 }`}
               >

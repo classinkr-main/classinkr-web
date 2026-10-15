@@ -7,7 +7,7 @@ import {
   getDocsByCategoryFromContent,
   getDocsContent,
 } from "@/lib/docs-content"
-import { ExternalLink, Tag, Calendar, ArrowRight, BookOpen } from "lucide-react"
+import { ExternalLink, Tag, Calendar, ArrowRight, BookOpen, Sparkles } from "lucide-react"
 import { createPublicMetadata } from "@/lib/seo"
 
 export const revalidate = 3600
@@ -99,7 +99,7 @@ export default async function UpdatesPage() {
       <div className="mx-auto max-w-[720px] px-4 pb-20 pt-28 sm:px-6 md:pb-24 md:pt-32">
 
         {/* 헤더 */}
-        <div className="mb-12">
+        <div className="mb-10">
           <p className="text-[11px] font-semibold text-[#084734] uppercase tracking-widest mb-3">Changelog</p>
           <h1 className="text-[32px] font-bold text-[#111110] tracking-[-0.03em] leading-tight mb-3">
             업데이트 내역
@@ -107,6 +107,47 @@ export default async function UpdatesPage() {
           <p className="text-[15px] text-[#1a1a1a]/50">
             Classin의 새 기능, 개선 사항, 버그 수정 내역을 확인하세요.
           </p>
+        </div>
+
+        {/* ClassIn 6.0.9 & AI 강의평가 하이라이트 배너 */}
+        <div className="mb-12 overflow-hidden rounded-3xl border border-[#084734]/20 bg-gradient-to-br from-[#084734] via-[#063c2c] to-[#04281c] p-6 text-white shadow-md sm:p-8">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#ECFDF5] px-3 py-0.5 text-[11px] font-bold uppercase tracking-wider text-[#084734]">
+              Major Release
+            </span>
+            <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-[11px] font-semibold text-white/90">
+              ClassIn 6.0.9
+            </span>
+            <span className="rounded-full bg-emerald-400/20 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300">
+              AI 강의평가 공식 탑재
+            </span>
+          </div>
+
+          <h2 className="mt-4 text-[22px] font-bold tracking-[-0.02em] text-white sm:text-[25px]">
+            ClassIn 6.0.9 & AI 강의평가(수업 품질 진단) 공식 출시
+          </h2>
+          <p className="mt-2 text-[14px] leading-relaxed text-white/80 sm:text-[15px]">
+            AI 칠판 손글씨 STEM 수식 인식·실시간 자동 채점부터 수업 녹화본 기반 4대 영역 11개 지표 리포트, 교실 안 AgentIn 대화까지 최신 기능과 활용 가이드를 제공합니다.
+          </p>
+
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <a
+              href="/classin-609-update.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-[13px] font-bold text-[#084734] shadow-sm transition hover:bg-[#ECFDF5]"
+            >
+              <Sparkles className="h-4 w-4 text-[#084734]" />
+              비주얼 인터랙티브 가이드 보기
+            </a>
+            <Link
+              href="/docs/updates/classin-609-update"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-white/25 bg-white/10 px-4 py-2.5 text-[13px] font-semibold text-white backdrop-blur-sm transition hover:bg-white/20"
+            >
+              상세 문서 읽기
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
         </div>
 
         {updateDocs.length > 0 && (

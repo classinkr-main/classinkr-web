@@ -125,7 +125,7 @@ describe("GET /api/admin/calendar/health — unstable_cache 배선", () => {
     const body = await res.json()
 
     const teamEvent = body.sources.find((s: { source: string }) => s.source === "team_event")
-    expect(teamEvent.headline).toBe("9명 공유 필요")
+    expect(teamEvent.headline).toBe("위임 미부여")
   })
 
   it("응답에 8개 캐시 가능 소스 + team_event 총 9개가 담긴다", async () => {

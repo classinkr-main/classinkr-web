@@ -281,9 +281,11 @@ describe("getCrmCustomer360 (mocked harness)", () => {
   })
 
   it("wires origin/crmRegistered/neoAccountId for a site lead with a confirmed NEO link", async () => {
+    const linkedDetail = makeNeoDetail({ orders: [{ id: "linked-order", title: "ClassIn 구독", amount: 99, occurredAt: NOW.toISOString(), ownerName: "담당", status: null }] })
     const { getCrmCustomer360, findConfirmedLeadNeoLink } = await loadCustomer360({
       lead: makeLead({ source: "demo_modal" }),
       neoLink: { targetId: "neo-acc-77" },
+      neoDetail: linkedDetail,
     })
 
     const result = await getCrmCustomer360(LEAD_KEY, { now: NOW })
@@ -294,6 +296,7 @@ describe("getCrmCustomer360 (mocked harness)", () => {
     expect(result.origin).toBe("site")
     expect(result.crmRegistered).toBe(true)
     expect(result.neoAccountId).toBe("neo-acc-77")
+    expect(result.money.orders).toEqual(linkedDetail.orders)
     expect(result.health.ok).toBe(true)
     // 수기 라벨은 360 페이로드에 additive로 동승한다(드로어 온-오픈 별도 fetch 제거).
     expect(result.tags).toEqual([])

@@ -149,6 +149,7 @@ export interface CompassResult<T> {
   error?: string
   /** 기간 조회(페이지네이션)만 채운다 — true 면 총 행수(count)가 받은 행보다 많다(상한에서 잘림). */
   truncated?: boolean
+  total?: number
 }
 
 function ok<T>(rows: T[]): CompassResult<T> {
@@ -518,17 +519,67 @@ export async function getCompassActivitiesByLeadIds(
       cacheKey,
       async () => {
         const sb = createSupabaseAdminClient()
-        const { data, error } = await sb
+        const { data, error, count } = await sb
           .from("compass_activities_v")
-          .select("*")
+          .select("*", { count: "exact" })
           .in("lead_id", ids)
           .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
           .limit(limitPerFetch)
         if (error) return downResult(error)
-        return ok((data ?? []) as CompassActivityRow[])
+        const rows = (data ?? []) as CompassActivityRow[]
+        return { ...ok(rows), total: count ?? rows.length, truncated: count == null ? rows.length >= limitPerFetch : count > rows.length }
       },
       { ttlMs: TTL_MS, downTtlMs: TTL_DOWN_MS, isDown: isCompassResultDown, copy: copyCompassResult },
     )
+  } catch (error) {
+    return downResult(error)
+  }
+}
+
+/** 고객 전체 로그의 다음 페이지. 단건 고객의 전화로 확인한 리드 id만 전달한다. */
+export async function getCompassActivityPage(
+  leadIds: number[],
+  options: { offset: number; limit: number; before?: string },
+): Promise<CompassResult<CompassActivityRow>> {
+  if (leadIds.length === 0) return { ...ok([]), total: 0, truncated: false }
+  try {
+    let query = createSupabaseAdminClient()
+      .from("compass_activities_v")
+      .select("*", { count: "exact" })
+      .in("lead_id", [...new Set(leadIds)])
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+    if (options.before) query = query.lte("created_at", options.before)
+    const { data, error, count } = await query.range(options.offset, options.offset + options.limit - 1)
+    if (error) return downResult(error)
+    const rows = (data ?? []) as CompassActivityRow[]
+    return { ...ok(rows), total: count ?? options.offset + rows.length, truncated: count == null ? rows.length >= options.limit : count > options.offset + rows.length }
+  } catch (error) {
+    return downResult(error)
+  }
+}
+
+export interface CompassRegionRow {
+  id: number
+  region: string | null
+  academy?: string | null
+  name?: string | null
+  owner?: string | null
+}
+
+/** 지역 분석은 Compass 리드의 지역과 고객명·담당자 정보를 읽는다. 금액·활동 본문은 포함하지 않는다. */
+export async function getCompassRegionRows(): Promise<CompassResult<CompassRegionRow>> {
+  try {
+    const sb = createSupabaseAdminClient()
+    const result = await fetchSupabasePages<CompassRegionRow>({
+      maxRows: 50_000,
+      fetchPage: (from, to) => sb.from("compass_leads_v")
+        .select("id,region,academy,name,owner", from === 0 ? { count: "exact" } : undefined)
+        .order("id", { ascending: true }).range(from, to),
+    })
+    if (result.error) return downResult(result.error)
+    return { ...ok(result.data), truncated: result.truncated }
   } catch (error) {
     return downResult(error)
   }

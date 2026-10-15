@@ -4,14 +4,32 @@
 // 2026-09-15(home-05): 타일 큰 값과 힌트 줄이 같은 3분기(metricValue)를 쓴다 — 실패 상태에서
 // '48h 이상 0건' 같은 0 이 새어 나오지 않는다.
 
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import Link from "next/link"
 import { AlertCircle, ExternalLink, PhoneCall, Target, UserPlus } from "lucide-react"
-import { StatTile } from "@/components/admin/viz"
 import CrmNoticeBanner from "@/components/admin/crm/CrmNoticeBanner"
 import { STATUS_TONE_TEXT_CLASS } from "@/lib/crm/status-tone"
 import { METRIC_UNAVAILABLE_LABEL, metricValue, resolveMetricState } from "./metric-value"
 import { formatNumber, type LeadActionKpis } from "./shared"
+
+function LeadMetric({ href, icon, label, value, hint }: {
+  href: string
+  icon: ReactNode
+  label: string
+  value: ReactNode
+  hint: ReactNode
+}) {
+  return (
+    <Link href={href} className="min-w-0 border-t border-[#e8e8e4] py-3 transition-colors hover:bg-[#F6F5F4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]">
+      <div className="mb-2 flex items-center gap-1.5 text-[#615D59]">
+        <span aria-hidden className="shrink-0">{icon}</span>
+        <span className="text-[12px] font-medium sm:text-[13px]">{label}</span>
+      </div>
+      <div>{value}</div>
+      <p className="mt-2 text-[12px] leading-relaxed text-[#615D59]">{hint}</p>
+    </Link>
+  )
+}
 
 export default function LeadSummaryPanel({
   leadKpis,
@@ -59,17 +77,16 @@ export default function LeadSummaryPanel({
     })
 
   return (
-    <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+    <section aria-label="리드 요약" className="mb-4 rounded-xl border border-[#e8e8e4] bg-white p-4 sm:p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">New Sales</p>
-          <h2 className="mt-1 text-[18px] font-bold text-[#111110]">리드 요약</h2>
+          <h2 className="text-[16px] font-semibold text-[#111110]">리드 요약</h2>
         </div>
         <Link
           href="/admin/crm/customers/leads"
-          className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#084734] underline-offset-2 hover:underline"
+          className="inline-flex min-h-11 shrink-0 items-center gap-1 text-[13px] font-semibold text-[#084734] underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
         >
-          구매 전 리드
+          전체 리드
           <ExternalLink className="h-3 w-3" />
         </Link>
       </div>
@@ -86,11 +103,8 @@ export default function LeadSummaryPanel({
       ) : null}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile
+        <LeadMetric
           icon={<UserPlus className="h-4 w-4" />}
-          iconLayout="inline"
-          variant="bare"
-          compact
           href="/admin/crm/customers/leads?filter=unconfirmed"
           label="미확인 유입"
           value={valueOrSkeleton(
@@ -100,13 +114,10 @@ export default function LeadSummaryPanel({
           hint="문의·데모·뉴스레터 · 확인 전"
         />
 
-        <StatTile
+        <LeadMetric
           icon={<PhoneCall className="h-4 w-4" />}
-          iconLayout="inline"
-          variant="bare"
-          compact
           href="/admin/crm/customers/leads?filter=unresponded"
-          label="신규 상태 리드"
+          label="응답 대기 리드"
           value={valueOrSkeleton(
             leadKpis?.unrespondedCount,
             (leadKpis?.unrespondedCount ?? 0) > 0 ? STATUS_TONE_TEXT_CLASS.danger : undefined
@@ -120,13 +131,10 @@ export default function LeadSummaryPanel({
           }
         />
 
-        <StatTile
+        <LeadMetric
           icon={<AlertCircle className="h-4 w-4" />}
-          iconLayout="inline"
-          variant="bare"
-          compact
           href="/admin/crm/customers/leads?focus=risk"
-          label="오버듀 팔로업"
+          label="기한 지난 팔로업"
           value={valueOrSkeleton(
             leadKpis?.overdueFollowUpCount,
             (leadKpis?.overdueFollowUpCount ?? 0) > 0 ? STATUS_TONE_TEXT_CLASS.danger : undefined
@@ -134,13 +142,10 @@ export default function LeadSummaryPanel({
           hint={failed ? <>오늘 예정 {hintValue(leadKpis?.todayFollowUpCount)}</> : <>오늘 예정 {hintValue(leadKpis?.todayFollowUpCount)}건</>}
         />
 
-        <StatTile
+        <LeadMetric
           icon={<Target className="h-4 w-4" />}
-          iconLayout="inline"
-          variant="bare"
-          compact
           href="/admin/crm/customers/leads?filter=contacted"
-          label="컨택 중"
+          label="연락 중"
           value={valueOrSkeleton(leadKpis?.byStatus.contacted, "text-[#084734]")}
           hint="구매 전 영업 진행 리드"
         />

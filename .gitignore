@@ -24,6 +24,7 @@
 /build
 
 # misc
+/company-work/
 .DS_Store
 *.pem
 .claude/*
@@ -57,3 +58,5 @@ tmp_audit/
 scripts/_insight-input.json
 scripts/_insight-output.json
 data/channel-conversations.local.json
+artifacts/
+outputs/

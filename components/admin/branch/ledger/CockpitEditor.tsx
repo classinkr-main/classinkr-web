@@ -184,40 +184,38 @@ export function CockpitEditor({
 
   const fieldLabel = "block text-[11px] font-bold text-[#615D59]"
   const fieldControl =
-    "mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
+    "mt-1 h-9 w-full rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2.5 text-[12px] font-semibold text-[#111110] outline-none transition focus:border-[#084734] focus:bg-white"
 
   return (
-    <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white">
-      <form onSubmit={handleSubmit} className="space-y-4 p-5">
-        {/* 고객 · 계정 — 상단 타이틀(사진의 큰 계정명) */}
+    <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+      <form onSubmit={handleSubmit} className="space-y-4 p-4 sm:p-5">
+        {/* 고객명 타이틀 */}
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#A39E98]">고객 · Account</p>
           <input
             value={draftForm.customer}
             onChange={(event) => setDraftForm((current) => ({ ...current, customer: event.target.value }))}
-            placeholder="고객명"
+            placeholder="고객명을 입력하세요"
             aria-label="고객명"
-            className="mt-1 w-full border-0 border-b border-[rgba(0,0,0,0.08)] bg-transparent px-0.5 pb-2 text-[22px] font-bold tracking-[-0.3px] text-[#111110] outline-none placeholder:text-[#D5D2CB] focus:border-[#084734]"
+            className="w-full border-0 border-b border-[rgba(0,0,0,0.08)] bg-transparent px-0.5 pb-2 text-[20px] font-bold tracking-[-0.02em] text-[#111110] outline-none transition placeholder:text-[#D5D2CB] focus:border-[#084734]"
           />
         </div>
 
-        {/* 읽기 전용 컨텍스트 칩 — 상태(New/Renew)·타입(Direct/Channel)·지역·제품·첫결제·계약목표. 딜 속성이라 CRM 소관. */}
+        {/* 읽기 전용 컨텍스트 칩 */}
         {contextChips.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5">
             {contextChips.map((chip) => (
               <span
                 key={chip.key}
-                className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2.5 py-1 text-[11px]"
+                className="inline-flex items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2.5 py-1 text-[11px]"
               >
-                <span className="font-semibold uppercase tracking-[0.04em] text-[#A39E98]">{chip.key}</span>
+                <span className="font-medium text-[#88847E]">{chip.key}</span>
                 <span className="font-bold text-[#111110]">{chip.value}</span>
               </span>
             ))}
-            <span className="text-[10px] font-semibold text-[#A39E98]">읽기 전용 · 딜 속성은 CRM에서</span>
           </div>
         )}
 
-        {/* 속성 4개 한 줄 — 담당자·팀·상품군·월 (드래프트 편집 가능 필드) */}
+        {/* 속성 4개 한 줄 — 담당자·팀·상품군·월 */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <label className={fieldLabel}>
             담당자
@@ -226,9 +224,8 @@ export function CockpitEditor({
               onChange={(event) => setDraftForm((current) => ({ ...current, manager: event.target.value }))}
               list="cockpit-manager-options"
               autoComplete="off"
-              className="mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-3 text-[12px] font-semibold text-[#111110] outline-none focus:border-[#084734]"
+              className={fieldControl}
             />
-            {/* datalist는 자유 입력을 막지 않는다 — 기존 표기를 추천해 오탈자 분산만 줄인다. */}
             <datalist id="cockpit-manager-options">
               {managerOptions.map((name) => <option key={name} value={name} />)}
             </datalist>
@@ -276,9 +273,12 @@ export function CockpitEditor({
           </label>
         </div>
 
-        {/* 확도 전체 일괄 적용 — 주차별로 개별 변경 가능 */}
-        <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2.5">
-          <p className="mb-2 text-[11px] font-bold text-[#615D59]">확도 · 전체 일괄 적용</p>
+        {/* 확도 전체 일괄 적용 */}
+        <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-[11px] font-bold text-[#615D59]">확도 일괄 적용</p>
+            <span className="text-[10px] text-[#A39E98]">주차별 개별 변경 가능</span>
+          </div>
           <div className="grid grid-cols-3 gap-2">
             {DRAFT_CONFIDENCE_OPTIONS.map((option) => {
               const pressed = draftForm.weeklyConfidence.every((value) => value === option.id)
@@ -294,12 +294,10 @@ export function CockpitEditor({
                       weeklyConfidence: defaultDraftWeeklyConfidence(option.id),
                     }))
                   }
-                  // UX 감사 2026-09-20: 확도 3버튼 최소 타깃을 앱 전역 관행(min-h-11 md:min-h-9)에 맞춘다 —
-                  // 같은 grid grid-cols-3 행의 형제 버튼 3개가 전부 동일 클래스라 정렬은 깨지지 않는다.
                   className={`min-h-11 md:min-h-9 rounded-md text-[12px] font-bold transition ${
                     pressed
-                      ? `${CONFIDENCE_TOKENS[option.id].bgClass} text-white`
-                      : "border border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:text-[#111110]"
+                      ? `${CONFIDENCE_TOKENS[option.id].bgClass} text-white shadow-sm`
+                      : "border border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:border-[rgba(0,0,0,0.15)] hover:text-[#111110]"
                   }`}
                 >
                   {option.label}
@@ -309,15 +307,14 @@ export function CockpitEditor({
           </div>
         </div>
 
-        {/* M1(a): 월합계-only 딜 — 주차 합이 비었지만 월 장부금액이 있을 때 원클릭 참조.
-            자동 채움 없이 사용자가 명시적으로 특정 주에 전액을 넣는다. */}
+        {/* M1(a): 월합계-only 딜 — 원클릭 참조 */}
         {showMonthAmountReference && (
-          <div className="rounded-lg border border-[#ECD29C] bg-[#FBF1E0] p-3">
+          <div className="rounded-lg border border-[#ECD29C] bg-[#FBF1E0]/80 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-[11px] font-semibold text-[#7A520F]">
                 현재 월 장부금액 <span className="font-bold tabular-nums">{formatMoney(currentMonthAmount)}</span>
               </span>
-              <span className="text-[10px] font-bold text-[#A8741A]">주차 합이 비어 있어요 (월합계만)</span>
+              <span className="text-[10px] font-bold text-[#A8741A]">주차 합이 비어 있음 (월합계만)</span>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className="text-[11px] font-bold text-[#7A520F]">전액을</span>
@@ -332,8 +329,6 @@ export function CockpitEditor({
                 ))}
               </select>
               <span className="text-[11px] font-bold text-[#7A520F]">주에</span>
-              {/* 이 달이 잠겨 있으면(월합계-only 확정 등) 채워도 저장이 차단된다 — 막다른 입력을
-                  만들지 않도록 버튼만 비활성(참조 정보 자체는 계속 보여준다). 안내는 아래 잠금 배너. */}
               <button
                 type="button"
                 disabled={blockedByLock}
@@ -344,7 +339,7 @@ export function CockpitEditor({
                     weekly: current.weekly.map((value, i) => (i === prefillWeekIndex ? String(Math.round(currentMonthAmount)) : value)),
                   }))
                 }
-                className="inline-flex h-8 items-center gap-1 rounded-md bg-[#084734] px-3 text-[11px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
+                className="inline-flex h-8 items-center gap-1 rounded-md bg-[#084734] px-3 text-[11px] font-bold text-white shadow-sm transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
               >
                 <Plus className="h-3.5 w-3.5" />
                 넣기
@@ -353,13 +348,12 @@ export function CockpitEditor({
           </div>
         )}
 
-        {/* 주차별 입력 · W1~W5 — 금액 + 주차별 3단 확도. 월 합은 주차 자동합계(직접 수정 불가) */}
-        <div>
-          <div className="mb-2 flex items-baseline justify-between gap-2">
-            <p className="text-[11px] font-bold text-[#615D59]">주차별 입력 · Weekly</p>
-            <p className="text-[10px] font-semibold text-[#A39E98]">금액만 넣으면 월 합 자동</p>
+        {/* 주차별 입력 · W1~W5 */}
+        <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-3.5">
+          <div className="mb-2.5 flex items-baseline justify-between gap-2">
+            <p className="text-[11px] font-bold text-[#615D59]">주차별 입력</p>
+            <p className="text-[10.5px] font-medium text-[#A39E98]">금액을 넣으면 월 합계 자동 계산</p>
           </div>
-          {/* M9-1: 주차 행 그리드는 공용 WeeklyAmountGrid로 — 콕핏 variant(전체 라벨·큰 입력). */}
           <WeeklyAmountGrid
             weekly={draftForm.weekly}
             weeklyConfidence={draftForm.weeklyConfidence}
@@ -380,37 +374,40 @@ export function CockpitEditor({
           />
         </div>
 
-        {/* 월 합계(자동) + 저장 확도(우세 버킷) */}
+        {/* 월 합계(자동) + 우세 버킷 */}
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 py-3">
-          <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.06em] text-[#615D59]">
+          <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.04em] text-[#615D59]">
             <Lock className="h-3.5 w-3.5 text-[#084734]" />
-            월 합계 · 자동
+            월 합계 (자동)
           </span>
-          <span className="flex items-baseline gap-3" aria-live="polite">
+          <div className="flex items-baseline gap-3" aria-live="polite">
             <span className={`text-[20px] font-bold tabular-nums ${weeklySum > 0 ? "text-[#111110]" : "text-[#A39E98]"}`}>
               {formatMoney(weeklySum)}
             </span>
-            <span className={`text-[11px] font-bold ${weeklySum > 0 ? CONFIDENCE_TOKENS[dominant].textClass : "text-[#A39E98]"}`}>
+            <span className={`rounded-full border px-2 py-0.5 text-[10.5px] font-bold ${
+              weeklySum > 0
+                ? `${CONFIDENCE_TOKENS[dominant].chipClass}`
+                : "border-[rgba(0,0,0,0.08)] bg-white text-[#A39E98]"
+            }`}>
               {CONFIDENCE_TOKENS[dominant].label}
-              <span className="ml-1 text-[9.5px] font-semibold text-[#A39E98]">우세 버킷</span>
             </span>
-          </span>
+          </div>
         </div>
 
         {draftFormInvalid && (
-          <p className="rounded-md border border-[#F2B8B8] bg-[#FCE9E9] px-3 py-2 text-[11px] font-semibold text-[#8F2C2C]" role="alert">
+          <p className="rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] px-3.5 py-2.5 text-[11px] font-semibold text-[#8F2C2C]" role="alert">
             고객명을 입력하고 주차 금액을 1칸 이상 넣어야(월 합 0보다 큼) 저장할 수 있습니다.
           </p>
         )}
         {blockedByLock && (
-          <p className="rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2 text-[11px] font-semibold leading-relaxed text-[#7A520F]" role="alert">
+          <p className="rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-3.5 py-2.5 text-[11px] font-semibold leading-relaxed text-[#7A520F]" role="alert">
             {LOCK_WARNING_TEXT}
           </p>
         )}
         {feedback && (
           <p
             role="status"
-            className={`rounded-md border px-3 py-2 text-[11px] font-semibold leading-relaxed ${
+            className={`rounded-lg border px-3.5 py-2.5 text-[11px] font-semibold leading-relaxed ${
               feedback.kind === "success"
                 ? "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]"
                 : feedback.kind === "warning"
@@ -423,11 +420,11 @@ export function CockpitEditor({
         )}
 
         {editingDraft ? (
-          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 pt-1">
             <button
               type="submit"
               disabled={draftSaving || draftFormInvalid || blockedByLock}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-[#084734] px-4 text-[13px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex h-10.5 items-center justify-center gap-2 rounded-lg bg-[#084734] px-4 text-[13px] font-bold text-white shadow-[0_1px_2px_rgba(8,71,52,0.12)] transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
             >
               {draftSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               초안 업데이트
@@ -439,7 +436,7 @@ export function CockpitEditor({
                 cancelDraftEdit()
               }}
               disabled={draftSaving}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex h-10.5 w-10.5 items-center justify-center rounded-lg border border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-45"
               aria-label="초안 편집 취소"
               title="초안 편집 취소"
             >
@@ -447,13 +444,11 @@ export function CockpitEditor({
             </button>
           </div>
         ) : canCreateEditDraft ? (
-          // M7: 딜 선택 상태 — 프라이머리 1개("이 딜 저장", edit-row) + 보조("새 딜", new-row).
-          // 이 딜 저장은 form submit(Enter도 동일 — primaryDraftKind==="edit-row"). 성공 후 폼 유지(연속 편집).
-          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 pt-1">
             <button
               type="submit"
               disabled={draftSaving || draftFormInvalid || blockedByLock}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-[#084734] px-4 text-[13px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex h-10.5 items-center justify-center gap-2 rounded-lg bg-[#084734] px-4 text-[13px] font-bold text-white shadow-[0_1px_2px_rgba(8,71,52,0.12)] transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
             >
               {draftSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               이 딜 저장
@@ -462,22 +457,23 @@ export function CockpitEditor({
               type="button"
               onClick={() => void runSave(() => saveDraft("new-row"))}
               disabled={draftSaving || draftFormInvalid}
-              className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-4 text-[13px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex h-10.5 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-4 text-[13px] font-bold text-[#615D59] transition hover:border-[rgba(0,0,0,0.15)] hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-45"
             >
               <Plus className="h-4 w-4" />
               새 딜
             </button>
           </div>
         ) : (
-          // 선택 딜 없음 — 신규 입력만(new-row). form submit이 곧 신규 입력(primaryDraftKind==="new-row").
-          <button
-            type="submit"
-            disabled={draftSaving || draftFormInvalid}
-            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-[#084734] px-4 text-[13px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
-          >
-            {draftSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-            신규 입력
-          </button>
+          <div className="pt-1">
+            <button
+              type="submit"
+              disabled={draftSaving || draftFormInvalid}
+              className="inline-flex h-10.5 w-full items-center justify-center gap-2 rounded-lg bg-[#084734] px-4 text-[13px] font-bold text-white shadow-[0_1px_2px_rgba(8,71,52,0.12)] transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              {draftSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              신규 입력
+            </button>
+          </div>
         )}
       </form>
     </section>

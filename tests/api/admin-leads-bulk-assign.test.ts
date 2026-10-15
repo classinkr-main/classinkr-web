@@ -71,6 +71,9 @@ function reviewedBody(overrides: Record<string, unknown> = {}) {
 
 describe("PATCH /api/admin/leads/bulk-assign", () => {
   beforeEach(() => {
+    // The reviewed fixture must stay within the 30-day assignment window.
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date("2026-08-27T00:00:00Z"))
     requireVerifiedAdminContext.mockResolvedValue({ role: "ADMIN", userId: "admin-1", name: "운영자" })
     listAdminUserDirectoryCached.mockResolvedValue({
       health: { ok: true, message: null },
@@ -82,6 +85,7 @@ describe("PATCH /api/admin/leads/bulk-assign", () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.clearAllMocks()
     vi.resetModules()
   })

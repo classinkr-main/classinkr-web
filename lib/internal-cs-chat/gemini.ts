@@ -70,6 +70,7 @@ export interface InternalCsGeminiModels {
   backup: string
 }
 
+// 2026-10-15 models.list 재확인: 기존 CS 기본·폴백 모델만 사용한다.
 const DEFAULT_FAST_MODEL = "gemini-3.5-flash"
 const DEFAULT_DEEP_MODEL = "gemini-3.1-pro-preview"
 const DEFAULT_BACKUP_MODEL = "gemini-3.1-flash-lite"
@@ -107,6 +108,9 @@ const ALLOWED_CONFIGURED_MODELS = new Set([
   DEFAULT_FAST_MODEL,
   DEFAULT_DEEP_MODEL,
   DEFAULT_BACKUP_MODEL,
+  "gemini-3.5-flash",
+  "gemini-3.1-pro-preview",
+  "gemini-3.1-flash-lite",
   "gemini-2.5-flash",
   "gemini-2.5-pro",
 ])
@@ -208,9 +212,9 @@ export function selectInternalCsModelMode({
 export function getInternalCsModelChain(mode: InternalCsModelMode) {
   const models = getInternalCsGeminiModels()
   const candidates = mode === "deep"
-    ? [models.deep, models.fast, models.backup]
-    : [models.fast, models.backup]
-  return Array.from(new Set(candidates))
+    ? [models.deep, "gemini-3.1-pro-preview", models.fast, "gemini-3.5-flash", models.backup]
+    : [models.fast, "gemini-3.5-flash", models.backup, "gemini-3.1-flash-lite"]
+  return Array.from(new Set(candidates.filter(isSafeGeminiModelId)))
 }
 
 function normalizeSourceRefs(sourceRefs: InternalCsSourceRef[] | undefined) {
@@ -265,8 +269,8 @@ function buildContents(input: GenerateInternalCsAnswerInput) {
 function buildGenerationConfig(model: string, mode: InternalCsModelMode) {
   const generationConfig: Record<string, unknown> = {}
 
-  // Gemini 3.x uses thinkingLevel. 3.5 Flash supports low/high and 3.1 Pro supports high.
-  if (model.startsWith("gemini-3.5-flash")) {
+  // Gemini 4.x and 3.x support thinkingConfig. Flash supports low/high and Pro supports high.
+  if (model.startsWith("gemini-4") || model.startsWith("gemini-3.5-flash")) {
     generationConfig.thinkingConfig = { thinkingLevel: mode === "deep" ? "high" : "low" }
   } else if (model.startsWith("gemini-3.1-pro")) {
     generationConfig.thinkingConfig = { thinkingLevel: "high" }

@@ -2269,6 +2269,8 @@ export default function LeadsBoardClient() {
         />
       )}
 
+      {compass.updatedAt && !compass.down ? <p className="mb-2 text-[12px] text-[#615D59]">Compass 연결됨 · 1분 자동 갱신 · 확인 {new Date(compass.updatedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Seoul" })}</p> : null}
+
       {/* Compass 브리지 장애 — 칩이 사라진 이유를 말한다(칩 없음 ≠ 마케팅팀 미접촉). */}
       {compass.down && leads.length > 0 ? <CompassBridgeDownNote className="mb-2 px-0.5" /> : null}
 

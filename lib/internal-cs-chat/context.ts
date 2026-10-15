@@ -10,6 +10,12 @@ import {
 } from "@/lib/internal-cs-chat/consultation-search"
 import type { InternalCsSourceRef } from "@/lib/internal-cs-chat/gemini"
 import {
+  formatIncidentEvidence,
+  incidentSourceRefs,
+  searchIncidentEvidence,
+  type IncidentEvidence,
+} from "@/lib/internal-cs-chat/incident-search"
+import {
   selectInternalCsKnowledge,
   type InternalCsExternalUse,
   type InternalCsKnowledgeStatus,
@@ -36,6 +42,7 @@ export interface InternalCsCopilotContext {
     reviewRequired: boolean
     reviewReasons: string[]
   }
+  incidentEvidence?: IncidentEvidence[]
 }
 
 export interface BuildInternalCsCopilotContextOptions {
@@ -232,11 +239,13 @@ function buildDeterministicFallback({
   publicEvidence,
   selectedFacts,
   consultationCount,
+  incidentEvidence = [],
 }: {
   question: string
   publicEvidence: InternalCsCopilotContext["publicEvidence"]
   selectedFacts: ReturnType<typeof selectInternalCsKnowledge>["entries"]
   consultationCount: number
+  incidentEvidence?: IncidentEvidence[]
 }) {
   const focusedWeightAnswer = relevantWeightEvidence(question, publicEvidence)
   const directAnswer = focusedWeightAnswer || [
@@ -252,11 +261,17 @@ function buildDeterministicFallback({
         ...selectedFacts.map((entry) => `- **${statusLabel(entry.status)} · ${entry.title}:** ${entry.summary}`),
       ].join("\n")
     : ""
+  const incidentSummary = incidentEvidence.length > 0
+    ? [
+        "## 선례 오류 케이스 및 점검 흐름",
+        ...incidentEvidence.slice(0, 3).map((entry) => `- **${entry.title}:** ${entry.summary}`),
+      ].join("\n")
+    : ""
   const consultationSummary = consultationCount > 0
     ? `## 참고 사례\n과거 유사 상담 ${consultationCount}건이 검색됐습니다. 최신 정책·계약·사양과 대조한 뒤 사용하세요.`
     : ""
 
-  return [directAnswer, evidenceSummary, consultationSummary].filter(Boolean).join("\n\n")
+  return [directAnswer, evidenceSummary, incidentSummary, consultationSummary].filter(Boolean).join("\n\n")
 }
 
 async function getPublicEvidence(
@@ -303,16 +318,19 @@ export async function buildInternalCsCopilotContext(
   options: BuildInternalCsCopilotContextOptions = {}
 ): Promise<InternalCsCopilotContext> {
   const curated = selectInternalCsKnowledge(question, options.queueTags)
-  // 공개 근거와 과거 상담 사례를 병렬 조회한다. 둘 다 never-throw 지만 방어적으로 빈 배열 폴백을 둔다.
-  const [publicEvidence, consultationEvidence] = await Promise.all([
+  // 공개 근거, 과거 상담 사례, 오류 선례/확인 흐름을 병렬 조회한다. 모두 never-throw 지만 방어적으로 빈 배열 폴백을 둔다.
+  const [publicEvidence, consultationEvidence, incidentEvidence] = await Promise.all([
     getPublicEvidence(question, { includeInternalDocs: options.includeInternalDocs }),
     searchConsultationEvidence(question).catch(() => [] as ConsultationEvidence[]),
+    Promise.resolve(searchIncidentEvidence(question)).catch(() => [] as IncidentEvidence[]),
   ])
   const publicSourceRefs = publicEvidence.sources.map(sourceRef)
   const consultationBlock = formatConsultationEvidence(consultationEvidence)
+  const incidentBlock = formatIncidentEvidence(incidentEvidence)
   const sourceRefs = dedupeSourceRefs([
     ...INTERNAL_GUIDE_REFS,
     ...curated.sourceRefs,
+    ...incidentSourceRefs(incidentEvidence),
     ...publicSourceRefs,
     ...consultationSourceRefs(consultationEvidence),
   ])
@@ -329,12 +347,14 @@ export async function buildInternalCsCopilotContext(
     publicEvidence,
     selectedFacts,
     consultationCount: consultationEvidence.length,
+    incidentEvidence,
   })
 
   return {
     internalContext: [
       formatPublicEvidence(publicEvidence.answer, publicEvidence.sources, publicEvidence.warning),
       curated.internalContext,
+      incidentBlock,
       consultationBlock,
       INTERNAL_OPERATING_GUIDE,
       HQ_COMMUNICATION_GUIDE,
@@ -354,5 +374,6 @@ export async function buildInternalCsCopilotContext(
       reviewRequired: reviewReasons.length > 0,
       reviewReasons,
     },
+    incidentEvidence,
   }
 }

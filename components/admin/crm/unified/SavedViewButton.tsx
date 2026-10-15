@@ -33,12 +33,12 @@ export default function SavedViewButton({
       disabled={disabled}
       aria-pressed={active}
       title={disabled ? "현재 Admin 계정에 CRM 담당자 매핑이 없습니다." : filter.description}
-      className={`h-8 shrink-0 rounded-full border px-3 text-[12px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] ${
+      className={`h-8 shrink-0 border-b-2 px-2 text-[12px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] ${
         active
-          ? "border-[#084734] bg-[#084734] text-white"
+          ? "border-[#084734] text-[#084734]"
           : disabled
-            ? "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/28"
-            : "border-[#e8e8e4] bg-white text-[#1a1a1a]/58 hover:border-[#D1FAE5] hover:bg-[#ECFDF5] hover:text-[#084734]"
+            ? "border-transparent text-[#A39E98]"
+            : "border-transparent text-[#615D59] hover:border-[#084734]/25 hover:text-[#084734]"
       }`}
     >
       {label}

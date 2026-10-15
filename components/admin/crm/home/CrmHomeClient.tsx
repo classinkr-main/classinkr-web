@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef, use, Suspense } from "react"
 import Link from "next/link"
+import { customerDetailHref } from "@/lib/crm/customer-navigation"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
-import { RefreshCw, Calendar, ExternalLink, NotebookPen, Search, UserPlus } from "lucide-react"
+import { RefreshCw, Calendar, ChevronDown, ExternalLink, NotebookPen, Search, UserPlus } from "lucide-react"
 import { adminFetchJsonCached, getCachedAdminJson, seedAdminRequestCache } from "@/lib/admin-client"
 import { useVisibleInterval } from "@/components/admin/branch/use-visible-interval"
 import { Button } from "@/components/ui/button"
@@ -14,7 +15,6 @@ import CrmPriorityQueuePanel, {
 } from "@/components/admin/crm/CrmPriorityQueuePanel"
 import CrmWeekAheadPanel from "@/components/admin/crm/CrmWeekAheadPanel"
 import CrmCustomerPicker from "@/components/admin/crm/CrmCustomerPicker"
-import Customer360DrawerSkeleton from "@/components/admin/crm/Customer360DrawerSkeleton"
 import type { CrmHomeInitialData } from "@/lib/admin/crm/home-prefetch"
 import type { DeferredPrefetch } from "@/lib/admin/prefetch-budget"
 import { CRM_CACHE_SWR_MS, CRM_CACHE_TTL_MS } from "@/lib/crm/client-cache"
@@ -49,9 +49,6 @@ import {
 // 360 드로어·리드 등록 모달 코드 스플리팅(41af51a4 패턴) — 현황 첫 로드에서 청크를 제외하고
 // 고객 클릭/리드 등록 클릭 시점에만 내려받는다. 열림 상태에서만 렌더하므로 로딩 폴백이
 // 닫힌 화면에 노출될 일은 없다. 폴백은 unified와 동일한 드로어 골격 스켈레톤을 공유한다.
-const Customer360Drawer = dynamic(() => import("@/components/admin/crm/Customer360Drawer"), {
-  loading: () => <Customer360DrawerSkeleton />,
-})
 const LeadRegisterModal = dynamic(() => import("@/components/admin/crm/LeadRegisterModal"), {
   loading: () => <div className="fixed inset-0 z-50 bg-black/20" aria-hidden />,
 })
@@ -75,7 +72,7 @@ function getKstMonthKey(date: Date) {
 // 주면 무한 서스펜스로 보일 수 있으므로, 모듈 스코프 상수 하나를 항상 재사용한다.
 const RESOLVED_NULL_PROMISE: Promise<null> = Promise.resolve(null)
 
-// '고객 찾기' 헤더 <p> 와 CrmCustomerPicker 콤보박스를 aria-labelledby 로 잇는 id(home-08).
+// '고객 찾기' 헤더 <h2> 와 CrmCustomerPicker 콤보박스를 aria-labelledby 로 잇는 id(home-08).
 const CRM_HOME_CUSTOMER_SEARCH_HEADING_ID = "crm-home-customer-search-heading"
 
 /**
@@ -133,7 +130,6 @@ export default function CrmHomeClient({
   const [compassPipelineError, setCompassPipelineError] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
-  const [drawerTarget, setDrawerTarget] = useState<{ key: string; name: string } | null>(null)
   const [recentCustomers, setRecentCustomers] = useState<RecentCustomer[]>([])
   const [leadModalOpen, setLeadModalOpen] = useState(false)
   // 리포트(매출 상세·성과·리드·팀 KPI·수납/로그)는 전부 참조 표면 — 기본 접힘으로
@@ -141,10 +137,10 @@ export default function CrmHomeClient({
   const [reportOpen, setReportOpen] = useState(false)
   const [reportTab, setReportTab] = useState<CrmReportTab>("revenue")
 
-  // 고객 바로 가기 — 최근 본 고객(로컬). 드로어 열고 닫을 때마다 갱신.
+  // 고객 바로 가기 — 전용 페이지를 방문한 최근 고객(로컬).
   useEffect(() => {
     setRecentCustomers(getRecentCustomers())
-  }, [drawerTarget])
+  }, [])
   const [crmOverview, setCrmOverview] = useState<AdminCrmOverview | null>(null)
   const [crmOverviewLoading, setCrmOverviewLoading] = useState(true)
   const [crmOverviewError, setCrmOverviewError] = useState<string | null>(null)
@@ -406,11 +402,11 @@ export default function CrmHomeClient({
           onSettled={seedCompassPipeline}
         />
       </Suspense>
-      {/* 헤더 — 타이틀만. 액션은 아래 sticky 빠른 실행 바로 이동(H2) */}
-      <div className="mb-4">
+      {/* 헤더 — 타이틀만. 다음 행동은 바로 아래 빠른 실행 바에 둔다. */}
+      <div className="mb-3">
         <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">CRM 홈</h1>
         <p className={`mt-1 text-[13px] ${SECONDARY_TEXT_CLASS}`}>
-          ClassIn 고객 DB 기준 · 시트와 외부 CRM은 동기화 참고자료
+          응답이 필요한 고객을 확인하고, 연락과 다음 일정을 이어가세요.
         </p>
       </div>
 
@@ -419,11 +415,11 @@ export default function CrmHomeClient({
           lg+에서 sticky(admin main이 스크롤 컨테이너라 body overflow-x 함정 무관).
           <lg는 body 스크롤 + overflow-x:hidden으로 sticky가 깨지는 저장소 함정이 있어 일반 플로우 폴백. */}
       <div className="-mx-4 mb-4 px-4 py-2 sm:-mx-6 sm:px-6 lg:sticky lg:top-0 lg:z-40 lg:-mx-8 lg:border-b lg:border-[#e8e8e4] lg:bg-[#FAFAF8]/92 lg:px-8 lg:backdrop-blur">
-        <div className={`flex flex-wrap items-center gap-2 ${MOBILE_TOUCH_TARGET_CLASS}`}>
+        <div aria-label="CRM 빠른 실행" className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
           <button
             type="button"
             onClick={() => setLeadModalOpen(true)}
-            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#084734] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-[#084734] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-[#065c41] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
           >
             <UserPlus className="h-3.5 w-3.5" />
             리드 등록
@@ -431,7 +427,7 @@ export default function CrmHomeClient({
           <button
             type="button"
             onClick={focusQuickRecord}
-            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-[#e8e8e4] bg-white px-4 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
           >
             <NotebookPen className="h-3.5 w-3.5" />
             기록 추가
@@ -439,11 +435,11 @@ export default function CrmHomeClient({
           <button
             type="button"
             onClick={openCommandPalette}
-            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-[#e8e8e4] bg-white px-4 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
           >
             <Search className="h-3.5 w-3.5" />
-            검색
-            <kbd className={`rounded border border-[#e8e8e4] bg-[#fafaf8] px-1 py-0.5 text-[10px] font-semibold ${SECONDARY_TEXT_CLASS}`}>
+            고객 검색
+            <kbd className={`hidden rounded border border-[#e8e8e4] bg-[#fafaf8] px-1 py-0.5 text-[10px] font-semibold sm:inline ${SECONDARY_TEXT_CLASS}`}>
               ⌘K
             </kbd>
           </button>
@@ -452,8 +448,8 @@ export default function CrmHomeClient({
             size="sm"
             onClick={() => refreshAll()}
             disabled={pageRefreshing}
-            // 옆의 수제 h-9 버튼들과 높이·radius·글자크기 정렬(size=sm 기본 h-8·13px 오버라이드).
-            className="h-9 gap-1.5 rounded-lg text-[12px]"
+            aria-busy={pageRefreshing}
+            className="h-11 gap-2 rounded-md px-4 text-[13px]"
           >
             <RefreshCw className={`w-4 h-4 ${pageRefreshing ? "animate-spin" : ""}`} />새로고침
           </Button>
@@ -466,16 +462,6 @@ export default function CrmHomeClient({
         loading={leadKpisLoading}
         error={leadKpisError}
         onRetry={() => void fetchLeadKpis({ force: true })}
-      />
-
-      {/* M7 — 리드 요약(자체 유입) 바로 아래에 Compass(마케팅팀 앱) 파이프라인 한 줄을 붙인다.
-          같은 아침 지휘대 안에서 자체 리드와 Compass 딜 흐름을 한 시야에 둔다. */}
-      <CompassPipelineBand
-        data={compassPipeline}
-        loading={compassPipelineLoading}
-        error={compassPipelineError}
-        onRetry={() => void fetchCompassPipeline({ force: true })}
-        refreshKey={neoCrmRefreshKey}
       />
 
       {/* 리드 요약 다음에 오늘의 행동 큐를 붙여 숫자 확인 → 처리 흐름을 한 축으로 만든다.
@@ -492,20 +478,12 @@ export default function CrmHomeClient({
         </Suspense>
       </div>
 
-      {/* 결과 지표는 행동 큐 뒤의 참고 밴드로 둔다. */}
-      <CrmCockpitHero
-        overview={crmOverview}
-        loading={crmOverviewLoading}
-        error={crmOverviewError}
-        onRetry={() => void fetchCrmOverview({ force: true })}
-      />
-
       {/* 고객 찾기 — 검색 + 최근 본 + 자주 접촉을 한 표면에. 고객으로 가는 입구를 한 곳으로 모은다
           (자주 접촉 칩은 리드·일정 요약 안에 끼어 있던 것을 여기로 옮겼다). */}
       <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
-        <p id={CRM_HOME_CUSTOMER_SEARCH_HEADING_ID} className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/30">
+        <h2 id={CRM_HOME_CUSTOMER_SEARCH_HEADING_ID} className="mb-2 text-[15px] font-semibold text-[#111110]">
           고객 찾기
-        </p>
+        </h2>
         <CrmCustomerPicker
           label={searchQuery}
           linkedId=""
@@ -513,10 +491,7 @@ export default function CrmHomeClient({
           onFreeText={setSearchQuery}
           onClear={() => setSearchQuery("")}
           onPick={(pick) => {
-            setDrawerTarget({
-              key: `${pick.targetType === "neo_account" ? "neo" : "lead"}:${pick.targetId}`,
-              name: pick.targetLabel,
-            })
+            router.push(customerDetailHref(`${pick.targetType === "neo_account" ? "neo" : "lead"}:${pick.targetId}`))
             setSearchQuery("")
           }}
         />
@@ -527,7 +502,7 @@ export default function CrmHomeClient({
               <button
                 key={rc.key}
                 type="button"
-                onClick={() => setDrawerTarget({ key: rc.key, name: rc.name })}
+                onClick={() => router.push(customerDetailHref(rc.key))}
                 className="inline-flex items-center gap-1 rounded-full border border-[#e8e8e4] bg-white px-2.5 py-1 text-[11px] font-medium text-[#111110] transition-colors hover:border-[#c8c8c4] hover:bg-[#fafaf8]"
               >
                 <span className="max-w-[120px] truncate">{rc.name}</span>
@@ -628,6 +603,44 @@ export default function CrmHomeClient({
         <CrmHealthDonut />
       </div>
 
+      {/* 실행 영역 다음에 참조 지표를 둔다. 원천·통화·실패 표시는 유지한다. */}
+      <section aria-label="매출·수금 현황" className="mt-6">
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-[16px] font-semibold text-[#111110]">매출·수금 현황</h2>
+          <p className={`text-[12px] ${SECONDARY_TEXT_CLASS}`}>자체 집계와 외부 CRM을 통화별로 확인</p>
+        </div>
+        <CrmCockpitHero
+          overview={crmOverview}
+          loading={crmOverviewLoading}
+          error={crmOverviewError}
+          onRetry={() => void fetchCrmOverview({ force: true })}
+        />
+      </section>
+
+      {/* 긴 외부 파이프라인은 펼쳐서 확인한다. 닫힌 상태에서도 연결 실패는 표시한다. */}
+      <details className="group mb-4 border-y border-[#e8e8e4]">
+        <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 py-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] [&::-webkit-details-marker]:hidden">
+          <span className="min-w-0">
+            <span className="block text-[14px] font-semibold text-[#111110]">마케팅 파이프라인</span>
+            <span className={`mt-0.5 block text-[12px] ${compassPipelineError || compassPipeline?.down ? "text-[#B43E3E]" : SECONDARY_TEXT_CLASS}`}>
+              {compassPipelineError || compassPipeline?.down
+                ? "Compass 연결을 확인하지 못했습니다 · 펼쳐서 다시 확인"
+                : "Compass 유입·데모·인계 현황 보기"}
+            </span>
+          </span>
+          <ChevronDown aria-hidden className="h-4 w-4 shrink-0 text-[#615D59] transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="pt-2">
+          <CompassPipelineBand
+            data={compassPipeline}
+            loading={compassPipelineLoading}
+            error={compassPipelineError}
+            onRetry={() => void fetchCompassPipeline({ force: true })}
+            refreshKey={neoCrmRefreshKey}
+          />
+        </div>
+      </details>
+
       <CrmCoverageStrip />
 
       {/* 리포트 · 분석 — 흩어져 있던 참조 블록 5개를 한 아코디언 안의 탭으로 단일화 */}
@@ -668,16 +681,6 @@ export default function CrmHomeClient({
           </Link>
         ))}
       </div>
-
-      {/* 열림 상태에서만 렌더 — 닫힘=null 렌더였던 기존과 동일 화면이면서, dynamic 청크를
-          열 때만 내려받고 닫힌 첫 로드에 로딩 폴백이 새어 나오지 않는다. */}
-      {drawerTarget ? (
-        <Customer360Drawer
-          customerKey={drawerTarget.key}
-          name={drawerTarget.name}
-          onClose={() => setDrawerTarget(null)}
-        />
-      ) : null}
 
       {leadModalOpen ? (
         <LeadRegisterModal

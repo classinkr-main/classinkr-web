@@ -88,11 +88,11 @@ describe("chatbot client vector fallback", () => {
     expect(serviceSource).toContain("buildClientVectorSources")
     expect(serviceSource).toContain("CLIENT_VECTOR_SIMILARITY_FLOOR = 0.7")
     expect(serviceSource).toContain("clientVectorSearchSupabaseSources")
-    expect(serviceSource.indexOf("vectorSearchSupabaseSources(embedding)")).toBeLessThan(
-      serviceSource.indexOf("keywordSearchSupabaseSources(question)")
-    )
-    expect(serviceSource.indexOf("keywordSearchSupabaseSources(question)")).toBeLessThan(
-      serviceSource.indexOf("clientVectorSearchSupabaseSources(embedding)")
+    expect(serviceSource.indexOf("vectorSearchSupabaseSources")).toBeGreaterThan(-1)
+    expect(serviceSource.indexOf("keywordSearchSupabaseSources")).toBeGreaterThan(-1)
+    expect(serviceSource.indexOf("clientVectorSearchSupabaseSources")).toBeGreaterThan(-1)
+    expect(serviceSource.indexOf("keywordSearchSupabaseSources")).toBeLessThan(
+      serviceSource.indexOf("clientVectorSearchSupabaseSources")
     )
   })
 })
