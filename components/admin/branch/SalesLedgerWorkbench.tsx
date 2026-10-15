@@ -154,7 +154,6 @@ import {
   lookupMatrixPending,
   MATRIX_ANNUAL_W,
   MATRIX_CUSTOMER_W,
-  MATRIX_DENSITY_OPTIONS,
   MATRIX_DENSITY_STORAGE_KEY,
   MATRIX_MONTH_W,
   MATRIX_PRODUCT_W,
@@ -2308,21 +2307,6 @@ export default function SalesLedgerWorkbench({
     })
   }, [])
 
-  // 현재 페이지에서 묶음(2행 이상) 그룹만 펼치기/접기 대상.
-  const multiRowGroupKeys = useMemo(
-    () => visibleGroups.filter((group) => group.rows.length > 1).map((group) => group.key),
-    [visibleGroups],
-  )
-  const allRevGroupsExpanded = multiRowGroupKeys.length > 0 && multiRowGroupKeys.every((key) => expandedRevGroups.has(key))
-  const toggleAllRevGroups = useCallback(() => {
-    setExpandedRevGroups((prev) => {
-      const next = new Set(prev)
-      const everyExpanded = multiRowGroupKeys.length > 0 && multiRowGroupKeys.every((key) => next.has(key))
-      if (everyExpanded) multiRowGroupKeys.forEach((key) => next.delete(key))
-      else multiRowGroupKeys.forEach((key) => next.add(key))
-      return next
-    })
-  }, [multiRowGroupKeys])
 
   // 그룹 헤더 클릭 = 우측 상세 패널에 고객 통합(HW+SW 합산) 요약만 로드.
   // 하위 행 펼침은 셰브론/펼치기 버튼(toggleRevGroup)으로만 — 접힘=우측 요약, 펼침=아래 행.
@@ -3142,18 +3126,85 @@ export default function SalesLedgerWorkbench({
 
         <section className="min-w-0 space-y-5">
           {lens === "rev" ? (
-            <div className="flex flex-wrap items-start gap-x-8 sm:gap-x-12 gap-y-4 border-b border-[rgba(0,0,0,0.08)] py-3.5" aria-label="선택 월 매출 확도 요약">
-              {([
-                ["confirmed", revMonthConfirmed],
-                ["high-confidence", revMonthHighConfidence],
-                ["expected", revMonthPlanned],
-              ] as const).map(([confidence, amount], idx) => (
-                <div key={confidence} className={idx > 0 ? "sm:border-l sm:border-[rgba(0,0,0,0.08)] sm:pl-8 sm:lg:pl-10" : ""}>
-                  <p className={`text-[12.5px] font-semibold ${CONFIDENCE_TOKENS[confidence].textClass}`}>{CONFIDENCE_TOKENS[confidence].label}</p>
-                  <p className="mt-1.5 text-[24px] font-bold tracking-[-0.02em] tabular-nums text-[#111110]">{pipeline.loading && !pipeline.data ? "–" : formatMoney(amount)}</p>
-                  <p className="mt-0.5 text-[11px] text-[#615D59]">{formatMonthLabel(selectedMonth)} · 현재 필터 기준</p>
+            <div className="border-b border-[rgba(0,0,0,0.08)] py-3.5 space-y-3.5" aria-label="선택 월 매출 확도 요약">
+              {/* 회계월 이동 스위처 바 */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="inline-flex items-center gap-0.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-0.5 shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSelectedMonth((month) =>
+                          matrixMonths.includes(month) ? shiftMonth(month, -1) : month < matrixMonths[0] ? matrixMonths[0] : matrixMonths[matrixMonths.length - 1],
+                        )
+                      }
+                      disabled={matrixMonths.indexOf(selectedMonth) === 0}
+                      aria-label="이전 달"
+                      title="이전 달 (회계연도 안에서만 이동)"
+                      className="flex h-7 w-7 items-center justify-center rounded-md text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <span className="min-w-[70px] px-1 text-center text-[13px] font-bold text-[#111110]">
+                      {formatMonthLabel(selectedMonth)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSelectedMonth((month) =>
+                          matrixMonths.includes(month) ? shiftMonth(month, 1) : month > matrixMonths[matrixMonths.length - 1] ? matrixMonths[matrixMonths.length - 1] : matrixMonths[0],
+                        )
+                      }
+                      disabled={matrixMonths.indexOf(selectedMonth) === matrixMonths.length - 1}
+                      aria-label="다음 달"
+                      title="다음 달 (회계연도 안에서만 이동)"
+                      className="flex h-7 w-7 items-center justify-center rounded-md text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <label className="sr-only" htmlFor="rev-matrix-month-jump">회계월 직접 선택</label>
+                  <select
+                    id="rev-matrix-month-jump"
+                    value={selectedMonth}
+                    onChange={(event) => setSelectedMonth(event.target.value)}
+                    title="회계월 직접 선택"
+                    className="h-8 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[12px] font-semibold text-[#111110] shadow-2xs outline-none transition hover:border-[#084734]/40 focus:border-[#084734]"
+                  >
+                    {monthOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}{option.current ? " · 현재" : ""}
+                      </option>
+                    ))}
+                  </select>
+
+                  {selectedMonth !== ymKeyUtc(new Date()) && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedMonth(ymKeyUtc(new Date()))}
+                      className="rounded-md bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-bold text-[#084734] transition hover:bg-[#D1FAE5]"
+                    >
+                      이번 달로
+                    </button>
+                  )}
                 </div>
-              ))}
+              </div>
+
+              {/* 확정 / 고확도 / 예정 3단 요약 카드 */}
+              <div className="flex flex-wrap items-start gap-x-8 sm:gap-x-12 gap-y-4">
+                {([
+                  ["confirmed", revMonthConfirmed],
+                  ["high-confidence", revMonthHighConfidence],
+                  ["expected", revMonthPlanned],
+                ] as const).map(([confidence, amount], idx) => (
+                  <div key={confidence} className={idx > 0 ? "sm:border-l sm:border-[rgba(0,0,0,0.08)] sm:pl-8 sm:lg:pl-10" : ""}>
+                    <p className={`text-[12.5px] font-semibold ${CONFIDENCE_TOKENS[confidence].textClass}`}>{CONFIDENCE_TOKENS[confidence].label}</p>
+                    <p className="mt-1.5 text-[24px] font-bold tracking-[-0.02em] tabular-nums text-[#111110]">{pipeline.loading && !pipeline.data ? "–" : formatMoney(amount)}</p>
+                    <p className="mt-0.5 text-[11px] text-[#615D59]">{formatMonthLabel(selectedMonth)} · 현재 필터 기준</p>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : lens === "cockpit" ? (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.02)]" aria-label="선택 월 매출 확도 요약">
@@ -3310,80 +3361,11 @@ export default function SalesLedgerWorkbench({
               <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-xs overflow-hidden">
                 {/* [Row 1] 타이틀, 회계월 네비게이션, 통합 검색창, 도움말 가이드 호버 */}
                 <div className="relative z-30 flex flex-col gap-3.5 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5 lg:flex-row lg:items-center lg:justify-between bg-[#FAFAF8]/50">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ECFDF5] text-[#084734]">
-                        <FileSpreadsheet className="h-4 w-4" />
-                      </div>
-                      <h2 className="text-[16px] font-bold text-[#111110] tracking-tight">REV 매출 장부</h2>
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ECFDF5] text-[#084734]">
+                      <FileSpreadsheet className="h-4 w-4" />
                     </div>
-
-                    <span
-                      title="M/Q/Y 토글은 아래 요약 타일·보조 분석 기간만 바꿉니다. 이 표는 항상 회계연도 12개월 전체를 보여줍니다."
-                      className="inline-flex shrink-0 items-center rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-0.5 text-[11px] font-semibold text-[#615D59]"
-                    >
-                      FY 12개월 표 고정
-                    </span>
-
-                    {/* 회계월 이동 스위처 */}
-                    <div className="inline-flex items-center gap-0.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-0.5 shadow-2xs">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSelectedMonth((month) =>
-                            matrixMonths.includes(month) ? shiftMonth(month, -1) : month < matrixMonths[0] ? matrixMonths[0] : matrixMonths[matrixMonths.length - 1],
-                          )
-                        }
-                        disabled={matrixMonths.indexOf(selectedMonth) === 0}
-                        aria-label="이전 달"
-                        title="이전 달 (회계연도 안에서만 이동)"
-                        className="flex h-7 w-7 items-center justify-center rounded-md text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 disabled:cursor-not-allowed disabled:opacity-30"
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </button>
-                      <span className="min-w-[70px] px-1 text-center text-[13px] font-bold text-[#111110]">
-                        {formatMonthLabel(selectedMonth)}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSelectedMonth((month) =>
-                            matrixMonths.includes(month) ? shiftMonth(month, 1) : month > matrixMonths[matrixMonths.length - 1] ? matrixMonths[matrixMonths.length - 1] : matrixMonths[0],
-                          )
-                        }
-                        disabled={matrixMonths.indexOf(selectedMonth) === matrixMonths.length - 1}
-                        aria-label="다음 달"
-                        title="다음 달 (회계연도 안에서만 이동)"
-                        className="flex h-7 w-7 items-center justify-center rounded-md text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 disabled:cursor-not-allowed disabled:opacity-30"
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </button>
-                    </div>
-
-                    <label className="sr-only" htmlFor="rev-matrix-month-jump">회계월 직접 선택</label>
-                    <select
-                      id="rev-matrix-month-jump"
-                      value={selectedMonth}
-                      onChange={(event) => setSelectedMonth(event.target.value)}
-                      title="회계월 직접 선택"
-                      className="h-8 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[12px] font-semibold text-[#111110] shadow-2xs outline-none transition hover:border-[#084734]/40 focus:border-[#084734]"
-                    >
-                      {monthOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}{option.current ? " · 현재" : ""}
-                        </option>
-                      ))}
-                    </select>
-
-                    {selectedMonth !== ymKeyUtc(new Date()) && (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedMonth(ymKeyUtc(new Date()))}
-                        className="rounded-md bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-bold text-[#084734] transition hover:bg-[#D1FAE5]"
-                      >
-                        이번 달로
-                      </button>
-                    )}
+                    <h2 className="text-[16px] font-bold text-[#111110] tracking-tight">REV 매출 장부</h2>
                   </div>
 
                   {/* 우측: 통합 검색창 & 도움말 가이드 팝오버 */}
@@ -3474,51 +3456,8 @@ export default function SalesLedgerWorkbench({
                     </button>
                   </div>
 
-                  {/* 우측: 표시 개수 / 펼치기 / 행 밀도 / 초기화 */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <select
-                      value={revPageSize}
-                      onChange={(event) => setRevPageSize(Number(event.target.value) as RevPageSize)}
-                      className="h-9 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[12px] font-semibold text-[#111110] shadow-2xs outline-none"
-                      aria-label="REV 표시 개수"
-                    >
-                      {REV_PAGE_SIZES.map((value) => (
-                        <option key={value} value={value}>{value}개씩</option>
-                      ))}
-                    </select>
-
-                    <button
-                      type="button"
-                      onClick={toggleAllRevGroups}
-                      disabled={multiRowGroupKeys.length === 0}
-                      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
-                      aria-label={allRevGroupsExpanded ? "고객 묶음 모두 접기" : "고객 묶음 모두 펼치기"}
-                    >
-                      <ChevronRight className={`h-3.5 w-3.5 transition-transform ${allRevGroupsExpanded ? "rotate-90" : ""}`} />
-                      {allRevGroupsExpanded ? "모두 접기" : "모두 펼치기"}
-                    </button>
-
-                    <div className="inline-flex items-center gap-0.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-0.5" aria-label="매트릭스 행 밀도">
-                      {MATRIX_DENSITY_OPTIONS.map((option) => (
-                        <button
-                          key={option.id}
-                          type="button"
-                          onClick={() => setMatrixDensity(option.id)}
-                          title={option.title}
-                          aria-pressed={matrixDensity === option.id}
-                          className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition ${
-                            matrixDensity === option.id
-                              ? "bg-white text-[#111110] shadow-xs"
-                              : "text-[#615D59] hover:text-[#111110]"
-                          }`}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    <span aria-hidden className="h-5 w-px bg-[rgba(0,0,0,0.1)]" />
-
+                  {/* 우측: 초기화 */}
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={resetRevFilters}
