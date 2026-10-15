@@ -620,6 +620,7 @@ export default function BranchDashboardClient({
       <div className="px-4 pt-4 sm:px-6 sm:pt-6 lg:px-9">
         <SyncStatusBar
           lastSync={lastSync}
+          lastSyncStartedAt={summary.data?.lastSyncStartedAt}
           lastError={lastError}
           sheetModifiedAt={sheetModifiedAt}
           dataSources={dataSources}

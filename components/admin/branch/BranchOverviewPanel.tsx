@@ -8,6 +8,7 @@ import type { DealModalDeal } from "./sections/DealModal"
 import BranchHeroGauges from "./sections/BranchHeroGauges"
 import BranchUpcomingDeals, { type UpcomingDealClick } from "./sections/BranchUpcomingDeals"
 import CampaignsSection from "./sections/CampaignsSection"
+import ChannelSettlementSection from "./sections/ChannelSettlementSection"
 import CoreKpiGrid from "./sections/CoreKpiGrid"
 import CompassTeamSection from "./sections/CompassTeamSection"
 import DealMixSection from "./sections/DealMixSection"
@@ -96,6 +97,7 @@ export default function BranchOverviewPanel({
 }: BranchOverviewPanelProps) {
   const [showOperations, setShowOperations] = useState(true)
   const evaluation = <CompassTeamSection resource={compass} month={selectedMonth} onMonthChange={onMonthChange} team={team} />
+  const settlement = <ChannelSettlementSection period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} />
   if (summary.loading && !summary.data) {
     return (
       <div className="space-y-5">
@@ -105,6 +107,7 @@ export default function BranchOverviewPanel({
           detail="매출 요약이 도착하면 KPI와 차트를 함께 표시합니다."
         />
         {evaluation}
+        {settlement}
       </div>
     )
   }
@@ -118,6 +121,7 @@ export default function BranchOverviewPanel({
           detail={summary.error}
         />
         {evaluation}
+        {settlement}
       </div>
     )
   }
@@ -131,6 +135,7 @@ export default function BranchOverviewPanel({
           detail="선택한 팀과 기간의 원천 데이터가 준비됐는지 확인해 주세요."
         />
         {evaluation}
+        {settlement}
       </div>
     )
   }
@@ -174,6 +179,7 @@ export default function BranchOverviewPanel({
           onDealClick={openUpcomingDeal}
         />
       </div>
+      {settlement}
       <button type="button" aria-expanded={showOperations} aria-controls="branch-operations-detail" onClick={() => setShowOperations((open) => !open)} className="flex min-h-11 w-full items-center justify-between rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-5 py-3 text-[13px] font-semibold text-[#31302E] focus-visible:outline-2 focus-visible:outline-[#084734]">
         캠페인 · 하드웨어 상세<span aria-hidden="true">{showOperations ? "−" : "+"}</span>
       </button>

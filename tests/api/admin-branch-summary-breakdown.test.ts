@@ -99,6 +99,31 @@ function summaryRequest(query = "") {
 }
 
 describe("GET /api/admin/branch/summary — dsh_breakdown", () => {
+  it("상단 확정액과 누적선은 첫결제일 공란·순액 0에서도 같은 REV 산식을 쓴다", async () => {
+    mockHappyPath()
+    vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-15T00:00:00Z"))
+    readDshPreferDbWithSource.mockResolvedValue({
+      dsh: { members: {}, rows: [{ level: "team", team: "ALL", kind: "goal", annual: 100, quarters: [0, 0, 100, 0], months: { "2026-10": 100 } }] },
+      source: { kind: "mirror", asOf: null },
+    })
+    const deal = (id: string, total: number, confirmed: number, high: number) => ({
+      id, sheet_row: 3, customer_name: "합성 검증 계정", branch_contact: null, team: "BD", manager: null,
+      first_payment: null, status: "New", deal_type: "Direct", product_version: "Business", region: null,
+      contract_target: 0, importance: null, note: null, raw: {}, synced_at: "",
+      monthly_payments: { "2026-10": total }, monthly_confirmed: { "2026-10": confirmed },
+      monthly_high_conf: { "2026-10": high }, monthly_red: {},
+    })
+    readRevDealsPreferActiveWithSource.mockResolvedValue({ deals: [deal("paid", 100, 70, 30), deal("offset", 0, 10, -10)], source: { kind: "mirror", asOf: null } })
+    const { GET } = await import("@/app/api/admin/branch/summary/route")
+    const response = await GET(summaryRequest("?period=M&month=2026-10&view=overview"))
+    expect(response.status).toBe(200)
+    const data = await response.json()
+    expect(data.revenue).toEqual({ confirmed: 80, goal: 100, pacing_pct: 80 })
+    const index = data.monthly_series.months.indexOf("2026-10")
+    expect(data.monthly_series.revenue_cum[index] - data.monthly_series.revenue_cum[index - 1]).toBe(80)
+    expect(data.monthly_series.goal_cum[index] - data.monthly_series.goal_cum[index - 1]).toBe(100)
+  })
+
   it("선택한 월·분기의 영업 KPI 병목을 같은 기간으로 계산한다", async () => {
     mockHappyPath()
     vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-14T00:00:00Z"))

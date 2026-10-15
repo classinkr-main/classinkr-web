@@ -150,6 +150,8 @@ export interface BranchSummaryResponse {
    *  이 값으로 "마지막 성공"과 "며칠째 실패"를 따로 보여준다. 구버전 응답은 undefined. */
   sync_health?: { rev: BranchSyncHealth; hw: BranchSyncHealth }
   lastSync: string | null
+  /** lastSync와 같은 동기화 런의 시작 시각. 구버전 응답에는 없음. */
+  lastSyncStartedAt?: string | null
   lastError: string | null
   sheetModifiedAt: string | null
   /** 품질 감사 2026-09-10 — #2: true면 sheetModifiedAt=null이 "시트에 값 없음"이 아니라

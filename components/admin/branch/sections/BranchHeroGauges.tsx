@@ -46,9 +46,10 @@ export default function BranchHeroGauges({ summary, kpi, loading, periodLabel, e
       <p className="mt-2 text-[13px] text-[#615D59]">목표 <MoneyValue value={goal} />{goal > 0 ? <span> · {actual >= goal ? "목표 초과 " : "목표까지 "}<MoneyValue value={Math.abs(goal - actual)} /></span> : null}</p>
       <div className="mt-5"><ComparisonBar value={actual} target={goal > 0 ? goal : null} domain={domain} label={"확정 매출 " + cnyExact(actual) + " CNY, 목표 " + cnyExact(goal) + " CNY"} /></div>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[12px] text-[#615D59]">
-        <p>확정액: REV 장부 · 목표: DSH · 점선: 목표</p>
+        <p>확정액: REV 장부 · 목표: 1. DSH · 점선: 목표</p>
         <Link href="/admin/branch/ledger?lens=rev" className="inline-flex min-h-11 items-center text-[#084734] underline underline-offset-2">장부에서 열기 ↗</Link>
       </div>
+      <p className="mt-1 text-[11px] text-[#615D59]">미승인 조정안(0. DSH_NEW_TEMP)은 목표·달성률에서 제외합니다.</p>
     </div>
     <div className="min-w-0 border-t border-[rgba(0,0,0,0.08)] pt-5 xl:border-l xl:border-t-0 xl:pl-6 xl:pt-0">
       <div className="flex items-baseline justify-between gap-3">

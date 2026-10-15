@@ -327,8 +327,8 @@ export async function buildBranchSummaryPayload(query: BranchSummaryPayloadQuery
   const fy = fyOf(periodDate)
   const months: string[] = FISCAL_MONTH_ORDER.map((m) => `${m >= 4 ? fy : fy + 1}-${String(m).padStart(2, "0")}`)
 
-  const teamGoalRow = team === "ALL" ? null : dsh.rows.find((r) => r.level === "team" && r.team === team && r.kind === "goal")
-  const monthGoal = (m: string) => team === "ALL"
+  const teamGoalRow = dsh.rows.find((r) => r.level === "team" && r.team === team && r.kind === "goal")
+  const monthGoal = (m: string) => team === "ALL" && !teamGoalRow
     ? (["BD", "MKT", "CSM"] as const).reduce((s, t) => {
         const g = dsh.rows.find((r) => r.level === "team" && r.team === t && r.kind === "goal")
         return s + (g?.months[m] ?? 0)
@@ -345,8 +345,7 @@ export async function buildBranchSummaryPayload(query: BranchSummaryPayloadQuery
   for (const m of months) {
     const month = deals.reduce((acc, d) => {
       const amount = Number(d.monthly_payments[m] ?? 0)
-      if (!amount) return acc
-      if (!d.first_payment) return { ...acc, trend: acc.trend + amount }
+      // 상단·장부와 같은 REV 확정 캐논. 첫결제일 공란과 순액 0만으로 색별 확정을 버리지 않는다.
       const confirmed = confirmedMonthAmount(d, m, amount)
       return { confirmed: acc.confirmed + confirmed, trend: acc.trend + (amount - confirmed) }
     }, { confirmed: 0, trend: 0 })
@@ -488,6 +487,9 @@ export async function buildBranchSummaryPayload(query: BranchSummaryPayloadQuery
     campaigns_30d: { count: campaigns.count_30d, avg_open_pct: campaigns.avg_open_pct },
     campaigns_recent: campaigns.recent.slice(0, 8),
     lastSync,
+    // lastSync와 같은 런의 시작. runAll 내부 재캡처는 finished_at보다 앞서므로
+    // 임포트 신선도 비교에는 이 실행 구간이 필요하다(초 단위 임의 허용 금지).
+    lastSyncStartedAt: lastRun?.started_at ?? null,
     lastError: lastRun?.status === "failed" ? lastRun.error ?? "동기화 실패" : null,
     sheetModifiedAt,
     // 품질 감사 2026-09-10 — #2: sheetModifiedAt이 null인 이유가 "시트에 값이 없음"인지

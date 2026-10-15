@@ -2,7 +2,7 @@ import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
 import type { KpiRow, KpiMetric } from "@/lib/branch/parsers/kpi"
 import type { DshOutput } from "@/lib/branch/parsers/dsh"
 import { teamPacing } from "./pacing"
-import { dealProbability } from "./pipeline"
+import { dealProbability, revenueFromRev } from "./pipeline"
 import type { Period } from "./heatmap"
 
 export interface CoreKpiSummary {
@@ -13,16 +13,16 @@ export interface CoreKpiSummary {
   campaigns_30d: { count: number; avg_open_pct: number; conv_revenue: number }
 }
 
-export function summarizeRevenue(dsh: DshOutput, _deals: BranchRevDeal[], team: string, scope: Period, now: Date): CoreKpiSummary["revenue"] {
-  if (team === "ALL") {
-    let goal = 0, status = 0
-    for (const t of ["BD","MKT","CSM"]) {
-      const p = teamPacing(dsh, t, scope, now); goal += p.goal; status += p.status
-    }
-    return { confirmed: status, goal, pacing_pct: goal > 0 ? (status / goal) * 100 : 0 }
-  }
-  const pace = teamPacing(dsh, team, scope, now)
-  return { confirmed: pace.status, goal: pace.goal, pacing_pct: pace.pacing_pct }
+export function summarizeRevenue(dsh: DshOutput, deals: BranchRevDeal[], team: string, scope: Period, now: Date): CoreKpiSummary["revenue"] {
+  // 확정액은 파이프라인·장부와 같은 REV 산식이며 DSH는 승인된 목표만 제공한다.
+  // 이전 조직 장부도 전체 합계에는 남기되 현재 소속으로 재귀속하지 않는다.
+  const confirmed = deals.reduce((sum, deal) => team === "ALL" || deal.team === team
+    ? sum + revenueFromRev(deal, scope, now) : sum, 0)
+  const hasTotalGoal = dsh.rows.some((row) => row.level === "team" && row.team === "ALL" && row.kind === "goal")
+  const goal = team === "ALL" && !hasTotalGoal
+    ? ["BD", "MKT", "CSM"].reduce((sum, key) => sum + teamPacing(dsh, key, scope, now).goal, 0)
+    : teamPacing(dsh, team, scope, now).goal
+  return { confirmed, goal, pacing_pct: goal > 0 ? (confirmed / goal) * 100 : 0 }
 }
 
 export function bottleneckKpi(rows: KpiRow[], teamMembers: Set<string>): CoreKpiSummary["bottleneck_kpi"] {

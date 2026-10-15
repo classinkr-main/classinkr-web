@@ -130,7 +130,7 @@ function inScope(ym: string, scope: RevenuePeriod, now: Date): boolean {
   return fiscalQuarter(m) === fiscalQuarter(now.getUTCMonth() + 1)
 }
 
-function revenueFromRev(d: BranchRevDeal, period?: RevenuePeriod, now = new Date()): number {
+export function revenueFromRev(d: BranchRevDeal, period?: RevenuePeriod, now = new Date()): number {
   const hasColor = dealHasColorData(d)
   return Object.entries(d.monthly_payments).reduce((sum, [ym, value]) => {
     if (period && !inScope(ym, period, now)) return sum
