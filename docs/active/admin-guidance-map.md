@@ -111,3 +111,7 @@ npm run build
 - 플레이북과 에이전트 프롬프트에는 현재 백로그·브랜치·배포 상태를 복사하지 않는다.
 - 기준 문서에는 repo-relative 링크만 사용하고 로컬 절대경로, 실제 비밀번호, 작업 브랜치명을
   남기지 않는다.
+
+## Overview 운영 브리핑
+
+`/admin/overview`의 브리핑·리드/데모/설치 현황·전체 지표 구성과 원천별 집계·권한 기준은 [Admin Overview 운영 브리핑](admin-overview-workspace.md)을 따른다.

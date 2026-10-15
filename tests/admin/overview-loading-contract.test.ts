@@ -3,6 +3,7 @@ import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 
 // page.tsx는 서버 프리페치 래퍼만 남았고 화면 로직은 전부 OverviewClient로 옮겨졌다.
+const workspace = readFileSync(join(process.cwd(), "components/admin/overview/OverviewWorkspace.tsx"), "utf8")
 const source = readFileSync(join(process.cwd(), "app/admin/overview/OverviewClient.tsx"), "utf8")
 
 describe("admin overview loading and failure contract", () => {
@@ -33,8 +34,8 @@ describe("admin overview loading and failure contract", () => {
     expect(source).toContain("0이 아니라 조회 실패입니다.")
     expect(source).toContain("실패를 0으로 표시하지 않습니다.")
     expect(source).toContain("sourceStates.leads === \"error\"")
-    expect(source.match(/sourceStates\.branch === \"error\"/g)?.length).toBeGreaterThanOrEqual(2)
-    expect(source.match(/sourceStates\.visitor === \"error\"/g)?.length).toBeGreaterThanOrEqual(2)
+    expect(source).toContain("state: sourceStates.branch")
+    expect(source).toContain("state: sourceStates.visitor")
   })
 
   it("isolates every OS sub-source failure and keeps successful KPI values visible", () => {
@@ -43,19 +44,21 @@ describe("admin overview loading and failure contract", () => {
       expect(source).toContain(`osSourceState("${key}")`)
       expect(source).toContain(`osSourceError("${key}")`)
     }
-    expect(source).toContain("OsDetailUnavailable")
-    expect(source).toContain('role="alert"')
-    expect(source).toContain('aria-label={`${label} 지표 다시 시도`}')
+    expect(source).toContain("<OverviewScorecard metrics={metrics} />")
+    expect(workspace).toContain('role="alert"')
+    expect(workspace).toContain('aria-label={`${label} 지표 다시 시도`}')
   })
 
   it("offers a force-refresh recovery action", () => {
-    expect(source).toContain("const retryOverview = () => setRefreshKey")
+    expect(source).toContain("setRefreshKey((current) => current + 1)")
     expect(source).toContain("전체 다시 시도")
     expect(source).toContain("force: fresh")
   })
 
   it("uses responsive grids and Next links without clipped mobile KPI rails", () => {
-    expect(source).toContain('"grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5"')
+    expect(workspace).toContain("grid-cols-2")
+    expect(workspace).toContain("lg:grid-cols-4")
+    expect(workspace).toContain("xl:grid-cols-3")
     expect(source).not.toMatch(/<a(?:\s|>)/)
   })
 })
