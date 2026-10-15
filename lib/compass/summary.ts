@@ -1,5 +1,7 @@
 import "server-only"
 
+import { isCountableCompassDemo } from "@/lib/compass/demo"
+
 import { getBusinessDateParts, toBusinessStorageDateTime } from "@/lib/business-time"
 import {
   getCompassBdOpenCount,
@@ -275,7 +277,7 @@ export async function buildCompassSummary(
     won,
     careStages,
     bdOpen: bdOpen.down ? 0 : bdOpen.count,
-    todayDemoCount: todayDemos.down ? 0 : todayDemos.rows.length,
+    todayDemoCount: todayDemos.down ? 0 : todayDemos.rows.filter(isCountableCompassDemo).length,
     byOwner,
     lostReasons,
     upcomingActions,

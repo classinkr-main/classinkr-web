@@ -14,6 +14,8 @@
  */
 import "server-only"
 
+import { isCountableCompassDemo } from "@/lib/compass/demo"
+
 import { getCompassDemos, getCompassLeadPhoneKeysByIds } from "@/lib/compass/bridge"
 import { normalizePhoneKey } from "@/lib/compass/normalize"
 import {
@@ -46,7 +48,7 @@ export async function loadCompassDemoSource(
   const demoResult = await getCompassDemos(from, to)
   if (demoResult.down) return { ...EMPTY_COMPASS_DEMO_SOURCE, down: true }
 
-  const demos: CompassDemoLike[] = demoResult.rows.map((row) => ({
+  const demos: CompassDemoLike[] = demoResult.rows.filter(isCountableCompassDemo).map((row) => ({
     id: row.id,
     lead_id: row.lead_id,
     day: row.day,

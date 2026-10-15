@@ -70,6 +70,19 @@ beforeEach(() => {
 })
 
 describe("loadCompassDemoSource — 역조회", () => {
+  it("미팅·취소·노쇼는 데모 우선순위 신호와 역조회에서 제외한다", async () => {
+    bridge.getCompassDemos.mockResolvedValueOnce({ rows: [
+      DEMOS[0],
+      { ...DEMOS[1], kind: "meeting" },
+      { ...DEMOS[2], status: "canceled" },
+      { ...DEMOS[3], status: "no_show" },
+    ], down: false })
+    const source = await loadCompassDemoSource(OUR_PHONES, NOW)
+    expect(source.demos.map((demo) => demo.id)).toEqual([1])
+    expect(bridge.getCompassLeadPhoneKeysByIds).toHaveBeenCalledWith([11])
+    expect(buildCompassDemoIndex(source, NOW).total).toBe(1)
+  })
+
   it("데모의 lead_id(중복·null 제외)로만 조회하고, 전화 키로는 조회하지 않는다", async () => {
     await loadCompassDemoSource(OUR_PHONES, NOW)
     expect(bridge.getCompassLeadPhoneKeysByIds).toHaveBeenCalledTimes(1)

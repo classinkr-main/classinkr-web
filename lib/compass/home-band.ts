@@ -1,5 +1,7 @@
 import "server-only"
 
+import { isCountableCompassDemo } from "@/lib/compass/demo"
+
 import { getBusinessDateParts } from "@/lib/business-time"
 import { getCompassBdOpenCount, getCompassDemos, getCompassUpcomingActions } from "@/lib/compass/bridge"
 
@@ -35,7 +37,7 @@ export async function buildCompassPipelineBand(): Promise<CompassPipelineBand> {
 
   return {
     down: demos.down || upcoming.down || bdOpen.down,
-    todayDemoCount: demos.rows.length,
+    todayDemoCount: demos.rows.filter(isCountableCompassDemo).length,
     upcomingActionCount: upcoming.rows.length,
     bdOpenCount: bdOpen.count,
     generatedAt: new Date().toISOString(),
