@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 // 가짜 PostgREST 는 브리지가 보낸 .or() 문자열을 실제로 해석해 걸러낸다 — 필터 문자열 모양이 틀리면
 // 결과가 틀려서 잡힌다. 서버 max-rows(1000)로 오류 없이 자르는 것도 흉내 낸다.
 
-const SERVER_MAX_ROWS = 1000
+let serverMaxRows = 1000
 
 interface QueryLog {
   view: string
@@ -81,7 +81,7 @@ function makeQuery(view: string) {
       return 0
     })
     const [from, to] = log.range ?? [0, rows.length - 1]
-    const take = Math.min(to - from + 1, SERVER_MAX_ROWS)
+    const take = Math.min(to - from + 1, serverMaxRows)
     const withCount = (log.selectOptions as { count?: string } | undefined)?.count === "exact"
     return { data: rows.slice(from, from + take), error: null, count: withCount ? total : null }
   }
@@ -124,7 +124,7 @@ vi.mock("@/lib/supabase/admin", () => ({
   createSupabaseAdminClient: () => ({ from: (view: string) => makeQuery(view) }),
 }))
 
-import { __resetCompassBridgeMemoForTests, getCompassLeadsByInflowRange } from "@/lib/compass/bridge"
+import { __resetCompassBridgeMemoForTests, getCompassLeadsByInflowRange, getCompassLeadSliceByInflowRange } from "@/lib/compass/bridge"
 
 const FROM = "2026-09-12T15:00:00.000Z" // 어제 00:00 KST
 const NOW = "2026-09-14T05:30:00.000Z" // 오늘 14:30 KST
@@ -132,6 +132,7 @@ const NOW = "2026-09-14T05:30:00.000Z" // 오늘 14:30 KST
 beforeEach(() => {
   __resetCompassBridgeMemoForTests()
   dataset = []
+  serverMaxRows = 1000
   failing = false
   logs = []
   vi.spyOn(console, "error").mockImplementation(() => {})
@@ -210,5 +211,42 @@ describe("getCompassLeadsByInflowRange", () => {
     await getCompassLeadsByInflowRange(FROM, "2026-09-14T05:30:10.000Z")
     await getCompassLeadsByInflowRange(FROM, "2026-09-14T05:30:50.000Z")
     expect(logs).toHaveLength(1)
+  })
+})
+
+
+describe("요약 슬라이스 — 인테이크와 동일 원천", () => {
+  it("신규(null last_inflow_at)와 재유입을 함께 받고 기간 밖은 뺀다", async () => {
+    dataset = [
+      { id: 1, created_at: "2026-09-14T01:00:00.000Z", last_inflow_at: null },
+      { id: 2, created_at: "2026-07-01T00:00:00.000Z", last_inflow_at: "2026-09-14T02:00:00.000Z" },
+      { id: 3, created_at: "2026-07-01T00:00:00.000Z", last_inflow_at: null },
+    ]
+    const result = await getCompassLeadSliceByInflowRange(FROM, NOW)
+    expect(result).toMatchObject({ down: false, truncated: false })
+    expect(result.rows.map((row) => row.id)).toEqual([1, 2])
+    expect(logs[0].selectOptions).toEqual({ count: "exact" })
+  })
+
+  it("서버 max-rows가 2행이어도 실제 수신 수로 전진하여 5행 모두 받는다", async () => {
+    serverMaxRows = 2
+    dataset = Array.from({ length: 5 }, (_, index) => ({
+      id: index + 1, created_at: "2026-09-14T01:00:00.000Z", last_inflow_at: null,
+    }))
+    const result = await getCompassLeadSliceByInflowRange(FROM, NOW)
+    expect(result.rows.map((row) => row.id)).toEqual([1, 2, 3, 4, 5])
+    expect(result.truncated).toBe(false)
+    expect(logs.map((log) => log.range?.[0])).toEqual([0, 2, 4])
+  })
+
+  it("exact count가 상한과 같으면 전체이며, 상한보다 많을 때만 절단으로 표시한다", async () => {
+    dataset = Array.from({ length: 3 }, (_, index) => ({
+      id: index + 1, created_at: "2026-09-14T01:00:00.000Z", last_inflow_at: null,
+    }))
+    const complete = await getCompassLeadSliceByInflowRange(FROM, NOW, { maxRows: 3 })
+    expect(complete.truncated).toBe(false)
+    const partial = await getCompassLeadSliceByInflowRange(FROM, NOW, { maxRows: 2 })
+    expect(partial.rows).toHaveLength(2)
+    expect(partial.truncated).toBe(true)
   })
 })

@@ -5,6 +5,7 @@ import type { KpiRow } from "@/lib/branch/parsers/kpi"
 import type { SegRow } from "@/lib/branch/parsers/seg"
 import { REV_RANGE } from "@/lib/branch/parsers/rev"
 import { parseRangeLastRow } from "@/lib/branch/sync/range-truncation"
+import { CURRENT_BRANCH_TEAMS } from "@/lib/branch/current-organization"
 import type { HwInbound, HwOutbound, HwStock } from "@/lib/repositories/branch-hw"
 
 export type Severity = "info" | "warn" | "error"
@@ -40,7 +41,7 @@ export function runDataQuality(inp: DqInputs): DqIssue[] {
   }
 
   const teams = new Set(inp.dsh.rows.filter((r) => r.level === "team").map((r) => r.team))
-  for (const t of ["BD","MKT","CSM"]) if (!teams.has(t)) issues.push({ id: "DQ-7", severity: "error", message: `DSH 에 ${t} 팀 행 없음` })
+  for (const t of CURRENT_BRANCH_TEAMS) if (!teams.has(t)) issues.push({ id: "DQ-7", severity: "error", message: `DSH 에 ${t} 팀 행 없음` })
 
   const allHw = [...inp.hwInbound, ...inp.hwOutbound]
   const unknown = allHw.filter((row) => !HW_PRODUCT_PATTERNS.some((p) => p.test(row.product))).map((r) => r.product)

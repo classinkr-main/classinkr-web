@@ -192,32 +192,35 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number }): Re
       let weekSum = 0
       let confirmed = 0
       let highConf = 0
+      let hasWeekValue = false
+      let hasConfirmed = false
+      let hasHighConf = false
       for (const weekIdx of block.weekIdxs) {
         const cell = row[weekIdx]
         const n = cell ? asNumber(cell.value) : null
         const amount = n ?? 0
         weekValues.push(amount)
-        if (!cell || n == null || n === 0) continue
+        if (!cell || n == null) continue
+        hasWeekValue = true
         weekSum += n
         // 운영 규칙: 빨간 글자 = 확정 매출 (과거 배경색 표기 호환), 파란 글자 = 클로징 임박(90%+)
-        if (isRedText(cell.fg) || isRedBg(cell.bg)) confirmed += n
-        else if (isBlueText(cell.fg)) highConf += n
+        if (isRedText(cell.fg) || isRedBg(cell.bg)) { confirmed += n; hasConfirmed = true }
+        else if (isBlueText(cell.fg)) { highConf += n; hasHighConf = true }
       }
-      const monthTotal = total ?? (weekSum !== 0 ? weekSum : null)
-      if (monthTotal == null || monthTotal === 0) continue
+      const monthTotal = total ?? (hasWeekValue ? weekSum : null)
+      if (monthTotal == null) continue
       monthly_payments[block.ym] = monthTotal
-      if (weekValues.some((value) => value !== 0)) weekly_payments[block.ym] = weekValues
+      if (hasWeekValue) weekly_payments[block.ym] = weekValues
       // 주차 입력 없이 월 합계 칸에만 적고 색을 칠한 행 호환
-      if (totalCell && (isRedText(totalCell.fg) || isRedBg(totalCell.bg))) {
-        confirmed = Math.max(confirmed, monthTotal)
-      } else if (totalCell && isBlueText(totalCell.fg) && confirmed === 0) {
-        highConf = Math.max(highConf, monthTotal)
+      if (!hasWeekValue && total != null && totalCell) {
+        if (isRedText(totalCell.fg) || isRedBg(totalCell.bg)) { confirmed = monthTotal; hasConfirmed = true }
+        else if (isBlueText(totalCell.fg)) { highConf = monthTotal; hasHighConf = true }
       }
-      if (confirmed > 0) {
+      if (hasConfirmed) {
         monthly_confirmed[block.ym] = confirmed
         monthly_red[block.ym] = true // 기존 브랜치 집계(boolean 기반) 호환 플래그
       }
-      if (highConf > 0) monthly_high_conf[block.ym] = highConf
+      if (hasHighConf) monthly_high_conf[block.ym] = highConf
     }
     out.push({
       sheet_row: r + 1,

@@ -31,7 +31,7 @@ import {
   type RevProductCategory,
 } from "./shared"
 import { WeeklyAmountGrid } from "./WeeklyAmountGrid"
-import { TEAMS } from "../types"
+import { branchDraftTeamOptions, branchTeamLabel } from "@/lib/branch/current-organization"
 
 interface CockpitEditorProps {
   editingDraft: LedgerDraft | null
@@ -240,8 +240,8 @@ export function CockpitEditor({
               onChange={(event) => setDraftForm((current) => ({ ...current, team: event.target.value }))}
               className={fieldControl}
             >
-              {TEAMS.filter((value) => value !== "ALL").map((value) => (
-                <option key={value} value={value}>{value}</option>
+              {branchDraftTeamOptions(draftForm.team).map((value) => (
+                <option key={value} value={value}>{branchTeamLabel(value)}</option>
               ))}
             </select>
           </label>

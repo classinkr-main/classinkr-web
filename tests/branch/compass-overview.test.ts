@@ -12,7 +12,7 @@ describe("평가 진행 요약은 원본 점수와 미배정을 구분한다", (
     data.kpi.report.people[0].ratedWeight = 1;
     expect(summarizeCompass(data, "ALL").complete).toBe(1);
   });
-  it("현재 팀 변경을 적용하고 평가 당시 역할·수치·사유는 원본 그대로 둔다", () => {
+  it("현재 팀 변경을 적용하고 원본 평가표의 역할·수치·사유는 그대로 둔다", () => {
     const data = snapshot(); data.roster[0].team = "MKT";
     expect(summarizeCompass(data, "CSM").active).toHaveLength(0);
     const view = summarizeCompass(data, "MKT"); expect(view.active[0].role).toBe("CS");
@@ -22,10 +22,25 @@ describe("평가 진행 요약은 원본 점수와 미배정을 구분한다", (
     const data = snapshot(); data.kpi.report.people[0].items[0].reason = null;
     expect(summarizeCompass(data, "ALL").adjustments).toHaveLength(0);
   });
-  it("명부에서 빠진 확정 평가자도 전체 조회에서는 평가표를 보존한다", () => {
-    const data = snapshot(); data.kpi.basis = "closed"; data.roster = [];
-    expect(summarizeCompass(data, "ALL").active[0]).toBe(data.kpi.report.people[0]);
-    expect(summarizeCompass(data, "MKT").active).toHaveLength(0);
+  it.each(["live", "closed"] as const)("명부 외 %s 평가표는 현재 인원 집계에서 제외하고 원본으로 보존한다", (basis) => {
+    const data = snapshot(); data.kpi.basis = basis; data.roster = [];
+    const view = summarizeCompass(data, "ALL");
+    expect(view.active).toHaveLength(0); expect(view.pending).toBe(0); expect(view.complete).toBe(0);
+    expect(view.adjustments).toHaveLength(0); expect(view.archived[0]).toBe(data.kpi.report.people[0]);
+    expect(summarizeCompass(data, "MKT").archived).toHaveLength(0);
+  });
+  it("팀 미분류 명부는 전체 현재 인원에 포함하며 명부 외 평가자로 오인하지 않는다", () => {
+    const data = snapshot(); data.roster[0].team = null;
+    const view = summarizeCompass(data, "ALL");
+    expect(view.active).toHaveLength(1); expect(view.archived).toHaveLength(0);
+    expect(summarizeCompass(data, "CSM").active).toHaveLength(0);
+  });
+  it("폐지된 CSM 표기가 남아도 개인을 삭제하거나 다른 팀으로 임의 이동시키지 않는다", () => {
+    const data = snapshot(); const view = summarizeCompass(data, "ALL");
+    expect(view.roster[0].team).toBeNull(); expect(view.active).toHaveLength(1);
+    expect(view.archived).toHaveLength(0); expect(summarizeCompass(data, "MKT").active).toHaveLength(0);
+    expect(summarizeCompass(data, "CSM").active).toHaveLength(0);
+    expect(data.roster[0].team).toBe("CSM");
   });
   it("평가 목표가 없으면 완료·대기 0명과 미배정 상태를 구분한다", () => {
     const data = snapshot(); data.kpi.report.people[0].items = []; data.kpi.report.people[0].weightSum = 0;

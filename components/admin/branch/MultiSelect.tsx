@@ -70,7 +70,10 @@ export default function MultiSelect({
     }
   }, [open])
 
-  const summary = options.length === 0 || selected.size === 0
+  // 담당자 이동·명부 제외·기간 변경으로 후보가 없어져도 선택을 숨기거나 해제 버튼을 막지 않는다.
+  // 원래 장부의 담당 표기는 보존하고 사용자가 해당 선택을 직접 해제할 수 있게 한다.
+  const visibleOptions = Array.from(new Set([...options, ...selected]))
+  const summary = selected.size === 0
     ? placeholder
     : selected.size === 1
     ? Array.from(selected)[0]
@@ -106,7 +109,7 @@ export default function MultiSelect({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        disabled={options.length === 0}
+        disabled={visibleOptions.length === 0}
         // 웨이브 7 — U5(터치 타깃). 좁은 뷰포트(<md)에서 44px로 확대,
         // 데스크톱은 md:h-8 md:min-h-0으로 기존 밀도 유지.
         className="inline-flex h-11 min-h-11 min-w-[7rem] items-center justify-between gap-2 rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] outline-none transition hover:border-[#111110]/25 focus:border-[#111110]/30 disabled:cursor-not-allowed disabled:opacity-50 md:h-8 md:min-h-0"
@@ -151,7 +154,7 @@ export default function MultiSelect({
             <span>전체 보기</span>
           </button>
           <div className="my-1 h-px bg-[#F6F5F4]" />
-          {options.map((opt) => {
+          {visibleOptions.map((opt) => {
             const checked = selected.has(opt)
             return (
               <button

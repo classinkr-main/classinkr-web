@@ -237,7 +237,11 @@ export function buildInsightInput(a: BuildArgs): InsightInput {
     : { by_category: [], by_status_type: [], by_channel: [] }
 
   // data_caveats
-  const data_caveats: string[] = []
+  const data_caveats: string[] = [
+    "현재 조직은 BD·MKT다. CSM은 과거 장부 귀속이며 현재 부서나 담당 권한을 뜻하지 않는다.",
+    "매출·목표는 연결된 REV·DSH 기준이며, NEO 본사 실적·Compass 평가와 합산하지 않는다. 노션 개정 목표 반영 여부는 별도 대조가 필요하다.",
+    "시트 활동 KPI와 Compass 콜·데모 기록은 정의·기간이 확인되기 전까지 동일 지표로 취급하지 않는다.",
+  ]
   if (closing_deals.length === 0) data_caveats.push("향후 30일 내 first_payment 가 잡힌 가까운 딜이 없음")
   const events30Count = a.events.filter((e) => {
     const t = new Date(e.startsAt).getTime()

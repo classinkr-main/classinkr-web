@@ -286,7 +286,7 @@ describe("buildIntakeFeed", () => {
     expect(result.yesterdayCount).toBe(1)
   })
 
-  it("Compass 인바운드(채널톡·다이렉트·워크인·소개) 리드는 세지 않는다 — Compass 마케팅 유입(mktLeadCond)과 같은 규칙", () => {
+  it("Compass 인바운드·가져오기(NEO 스텁) 리드는 세지 않는다 — Compass 마케팅 유입(mktLeadCond)과 같은 규칙", () => {
     const result = buildIntakeFeed({
       adminLeads: [],
       compassLeads: [
@@ -295,6 +295,8 @@ describe("buildIntakeFeed", () => {
         compassNew({ id: 903, phone_key: "01010200003", channel: "direct" }),
         compass({ id: 904, phone_key: "01010200004", channel: "referral" }), // 재유입이어도 인바운드면 제외
         compassNew({ id: 905, phone_key: "01010200005", channel: "referral", created_at: "2026-08-27T02:00:00.000Z" }), // 어제
+        compassNew({ id: 906, phone_key: "01010200006", channel: "neo" }),
+        compass({ id: 907, phone_key: "01010200007", channel: "neo" }), // 재유입 시각만 있는 NEO 스텁도 제외
         // 마케팅: 채널 없음(메타 리드)·빈 값·프로모션(sms·email)
         compassNew({ id: 911, phone_key: "01010200011", channel: null }),
         compassNew({ id: 912, phone_key: "01010200012", channel: "" }),

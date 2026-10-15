@@ -5,9 +5,8 @@ import { useEffect, useMemo, useState } from "react"
 import { useBranchJson } from "../client-api"
 import { matchesTokens, tokenize } from "../search-tokens"
 import MultiSelect from "../MultiSelect"
-import { PIPELINE_MANAGER_DEFAULT_STORAGE_KEY, TEAMS, type BranchPipelineResponse, type BranchPipelineRow, type Team, type Period } from "../types"
-
-const SELECTABLE_TEAMS = TEAMS.filter((t) => t !== "ALL") as Exclude<Team, "ALL">[]
+import { PIPELINE_MANAGER_DEFAULT_STORAGE_KEY, type BranchPipelineResponse, type BranchPipelineRow, type Team, type Period } from "../types"
+import { branchTeamLabel, CURRENT_BRANCH_TEAMS } from "@/lib/branch/current-organization"
 
 function fmt(n: number) { return new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 }).format(n) }
 
@@ -138,7 +137,7 @@ export default function PipelineTable({
   const pipeline = useBranchJson<BranchPipelineResponse>(`/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}`, refreshKey + localRetry)
   const pipelineRows = pipeline.data?.rows
   const rows = useMemo(() => pipeline.loading ? null : (pipelineRows ?? []), [pipeline.loading, pipelineRows])
-  const teamOptions = team === "ALL" ? SELECTABLE_TEAMS : [team]
+  const teamOptions = team === "ALL" ? [...CURRENT_BRANCH_TEAMS] : [team]
 
   // 장부 크로스링크 — 현재 team/period/selectedMonth를 그대로 동봉해 장부로 넘어가도
   // 컨텍스트가 끊기지 않게 한다(파라미터 이름은 SalesLedgerWorkbench의 URL 파싱부 기준:
@@ -388,7 +387,7 @@ export default function PipelineTable({
                   </span>
                 </td>
                 <td className="px-3 py-1 text-center">{r.manager ?? "-"}</td>
-                <td className="px-3 py-1 text-center">{r.team ?? "-"}</td>
+                <td className="px-3 py-1 text-center">{r.team ? branchTeamLabel(r.team) : "-"}</td>
                 <td className="px-3 py-1 text-center">{r.region ?? "-"}</td>
                 <td className="px-5 py-1 text-right font-semibold tabular-nums">¥{fmt(r.revenue)}</td>
               </tr>

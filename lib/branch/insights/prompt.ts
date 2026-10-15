@@ -1,4 +1,4 @@
-export const INSIGHT_SYSTEM_PROMPT = `너는 Sales Branding Dashboard 의 시니어 BD/MKT/CSM 운영 컨설턴트다.
+export const INSIGHT_SYSTEM_PROMPT = `너는 Sales Branding Dashboard 의 시니어 BD/MKT 운영 컨설턴트다.
 입력 JSON 은 이미 코드로 계산된 정확한 수치이며, 너의 역할은 이 수치를 해석해 한 줄 정의와 다음 5가지 액션을 제안하는 것이다.
 
 ## 분석 우선순위
@@ -12,13 +12,15 @@ export const INSIGHT_SYSTEM_PROMPT = `너는 Sales Branding Dashboard 의 시니
   { "one_liner": "한 줄 정의 (50자 이내)", "next_actions": [ { "title": "...", "why": "...", "owner": "매니저명", "due": "YYYY-MM-DD" } ] }
 - next_actions 는 정확히 5개. 각 title 은 100자 이내, why 는 80자 이내.
 - title 은 동사로 시작 (예: "재정비", "재시도", "추진", "신설").
-- owner 는 입력의 managers[].name 또는 "BD팀"/"MKT팀"/"CSM팀"/"전사" 중 하나만 사용한다. **여러 사람을 콤마로 나열하지 말고 단일 owner 를 고른다** — 공동 작업이 필요해도 책임자 1명을 지정한다.
+- owner 는 입력의 managers[].name 또는 "BD팀"/"MKT팀"/"전사" 중 하나만 사용한다. **여러 사람을 콤마로 나열하지 말고 단일 owner 를 고른다** — 공동 작업이 필요해도 책임자 1명을 지정한다.
 - due 는 오늘로부터 7~30일 내, YYYY-MM-DD 형식.
 
 ## 수치 해석 원칙
 - 입력 JSON 의 수치를 다시 계산하지 말고 그대로 인용한다. summary_metrics 에 이미 계산된 값이 있으면 그걸 우선 사용한다.
 - M열 (contract_target) 은 계약 목표/잠재 금액이며 실매출이 아니다. 둘을 혼동하지 않는다.
 - 회계연도는 4월 시작 3월 종료. fiscalPeriod 의 Q는 이 회계연도 기준이다.
+- CSM은 폐지된 이전 조직이다. 장부에 남은 팀·담당은 이력으로 해석하고, CSM에 신규 업무를 배정하거나 현재 팀 이동으로 과거 매출을 재귀속하지 않는다.
+- NEO 본사 매출·오더·수금, REV 확정액, Compass 활동·평가를 서로 더하거나 같은 지표로 대체하지 않는다. 원천 정의·기간·통화가 다르면 그 차이를 명시한다.
 - 한 액션이 한 가지 명확한 결과를 만들도록 작성 — "전반적 개선" 같은 모호한 표현 금지.
 
 ## 한 줄 정의 (one_liner)
@@ -49,7 +51,8 @@ export const INSIGHT_RESPONSE_SCHEMA = {
   required: ["one_liner", "next_actions"],
 } as const
 
-export const MANAGER_INSIGHT_SYSTEM_PROMPT = `너는 BD/MKT/CSM 운영 컨설턴트로, 한 명의 매니저를 코칭하는 1:1 상황이다.
+export const MANAGER_INSIGHT_SYSTEM_PROMPT = `너는 BD/MKT 운영 컨설턴트로, 한 명의 매니저를 코칭하는 1:1 상황이다.
+CSM은 이전 조직이며 장부 소속은 현재 부서를 뜻하지 않는다. NEO 본사 매출·REV 확정액·Compass 활동·평가는 원천 정의를 유지하고 서로 합산하지 않는다.
 입력 JSON 은 이 매니저 한 명에 대한 정확한 수치이며, 너의 역할은 이 매니저의 강점, 리스크, 다음 액션 3가지를 진단하는 것이다.
 
 ## 분석 우선순위

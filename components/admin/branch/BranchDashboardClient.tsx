@@ -12,7 +12,8 @@ import type { CompassKrTeamResult } from "@/lib/compass/kr-team-contract"
 import { adminFetchJsonCached } from "@/lib/admin-client"
 import { isPrefetchFresh } from "@/lib/admin/prefetch-freshness"
 import { buildCrmSyncSummary, type CrmSyncSummary, type RevSyncCoverageView } from "@/lib/crm/rev-sync-health"
-import { PERIODS, PIPELINE_MANAGER_DEFAULT_STORAGE_KEY, TEAMS, type BranchKpiResponse, type BranchSummaryResponse, type Period, type Team } from "./types"
+import { CURRENT_TEAM_FILTERS, PERIODS, PIPELINE_MANAGER_DEFAULT_STORAGE_KEY, TEAMS, type BranchKpiResponse, type BranchSummaryResponse, type Period, type Team } from "./types"
+import { branchTeamLabel, isLegacyBranchTeam, LEGACY_BRANCH_TEAMS } from "@/lib/branch/current-organization"
 import { getBranchTabDataNeeds, type BranchTab } from "./tab-data-needs"
 import { ADMIN_NAV, ADMIN_NAV_SECTION_META } from "../admin-nav"
 
@@ -207,6 +208,7 @@ export default function BranchDashboardClient({
   const initialPipelineManager = searchParams.get("mgr") ?? ""
   const [pipelineQuery, setPipelineQuery] = useState(initialPipelineQuery)
   const [pipelineManager, setPipelineManager] = useState(initialPipelineManager)
+  const [pipelineFiltersReady, setPipelineFiltersReady] = useState(false)
   const [pipelineView, setPipelineView] = useState<"table" | "kanban">("kanban")
   const [syncError, setSyncError] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -245,28 +247,22 @@ export default function BranchDashboardClient({
     }
   }, [])
 
-  // 웨이브 7 — Q5(개인화 라이트). URL에 mgr이 없을 때만(우선순위: URL > localStorage >
-  // 없음) 저장된 담당 기본값을 1회 복원한다. window.location.search를 직접 다시 읽는
-  // 것은(위에서 이미 계산한 initialPipelineManager를 재사용하지 않는 것은) 이 effect를
-  // exhaustive-deps 경고 없이 순수 마운트-1회([])로 유지하기 위함 — outer 렌더 스코프
-  // 값(initialPipelineManager)을 클로저로 참조하면 그 값도 deps에 넣어야 하는데, 이
-  // 값은 마운트 시점 URL로만 SSR-세이프하게 계산되는 값이라 재실행될 이유가 없다.
-  // localStorage는 이 효과(마운트 후에만 실행)에서만 만진다 — canRunAdminOperations와
-  // 동일하게 서버 렌더와 클라 첫 렌더 사이 하이드레이션 불일치를 만들지 않기 위함.
-  // 개요 탭에서 진입하는 일반적인 경로에서는 파이프라인 탭(PipelineTable·칸반)이 아직
-  // 마운트되지 않은 상태라 이 복원이 끝난 뒤 정상적으로 initialManager로 전달된다 —
-  // 반대로 ?tab=pipeline 딥링크로 곧장 파이프라인 탭에 랜딩하면서 mgr만 빠진 경우는
-  // 자식이 마운트 시 1회만 initialManager를 읽는 기존 규약상 이 복원이 한 박자 늦게
-  // 반영될 수 있다 — 드문 조합이라 "라이트" 스코프에서는 알려진 한계로 둔다.
+  // URL > 저장된 담당 기본값 > 없음. 자식은 initialManager를 마운트 시 1회 읽으므로
+  // 복원이 끝난 뒤 마운트해 딥링크에서도 URL과 실제 필터가 일치하게 한다.
   useEffect(() => {
-    if (typeof window === "undefined") return
-    if (new URLSearchParams(window.location.search).get("mgr")) return
-    const stored = window.localStorage.getItem(PIPELINE_MANAGER_DEFAULT_STORAGE_KEY)
-    if (!stored) return
-    setPipelineManager(stored)
-    const url = new URL(window.location.href)
-    url.searchParams.set("mgr", stored)
-    window.history.replaceState(null, "", url.toString())
+    try {
+      if (new URLSearchParams(window.location.search).get("mgr")) return
+      const stored = window.localStorage.getItem(PIPELINE_MANAGER_DEFAULT_STORAGE_KEY)
+      if (!stored) return
+      setPipelineManager(stored)
+      const url = new URL(window.location.href)
+      url.searchParams.set("mgr", stored)
+      window.history.replaceState(null, "", url.toString())
+    } catch {
+      // 저장된 기본값을 읽지 못하면 URL 초기값을 유지한다.
+    } finally {
+      setPipelineFiltersReady(true)
+    }
   }, [])
 
   // 탭 전환 시 URL도 동기화 — 뒤로가기 히스토리를 오염시키지 않게 replaceState 사용.
@@ -428,14 +424,15 @@ export default function BranchDashboardClient({
         : summaryFetched
   const kpi = useBranchJson<BranchKpiResponse>(kpiUrl, refreshKey, { enabled: dataNeeds.kpi })
   const [compassTick, setCompassTick] = useState(0)
-  const compass = useBranchJson<CompassKrTeamResult>(`/api/admin/branch/compass?month=${selectedMonth}`, refreshKey + compassTick, { enabled: dataNeeds.kpi })
+  const compassEnabled = dataNeeds.kpi && !isLegacyBranchTeam(team)
+  const compass = useBranchJson<CompassKrTeamResult>(`/api/admin/branch/compass?month=${selectedMonth}`, refreshKey + compassTick, { enabled: compassEnabled })
   useEffect(() => {
-    if (!dataNeeds.kpi) return
+    if (!compassEnabled) return
     const refresh = () => { if (document.visibilityState === "visible") setCompassTick((tick) => tick + 1) }
     const timer = window.setInterval(refresh, 60_000)
     document.addEventListener("visibilitychange", refresh)
     return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", refresh) }
-  }, [dataNeeds.kpi])
+  }, [compassEnabled])
   const monthOptions = useMemo(() => buildMonthOptions(new Date()), [])
   const activePeriodLabel = period === "M" ? formatMonthLabel(selectedMonth) : PERIOD_LABEL[period]
 
@@ -523,7 +520,7 @@ export default function BranchDashboardClient({
           <div className="mt-3 flex flex-wrap items-center gap-2 sm:mt-5">
             {showTeamFilter && (
               <div className="flex gap-1 rounded-full border border-[rgba(0,0,0,0.08)] bg-white p-1" role="group" aria-label="팀 필터">
-                {TEAMS.map((t) => (
+                {CURRENT_TEAM_FILTERS.map((t) => (
                   <button key={t} type="button" onClick={() => selectTeam(t)}
                     aria-pressed={team === t}
                     // 웨이브 7 — U5(터치 타깃). 좁은 뷰포트(<md)에서만 최소 44px로
@@ -536,6 +533,13 @@ export default function BranchDashboardClient({
                 ))}
               </div>
             )}
+            {showTeamFilter ? <label className="inline-flex min-h-11 items-center gap-2 text-[12px] text-[#615D59]">
+              이전 조직
+              <select aria-label="이전 조직 이력" value={isLegacyBranchTeam(team) ? team : ""} onChange={(event) => selectTeam((event.target.value || "ALL") as Team)} className="min-h-11 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[16px] md:text-[12px]">
+                <option value="">이력 선택</option>
+                {LEGACY_BRANCH_TEAMS.map((legacy) => <option key={legacy} value={legacy}>{branchTeamLabel(legacy)}</option>)}
+              </select>
+            </label> : null}
             {showPeriodFilter && (
               <>
                 <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]" role="group" aria-label="기간 필터">
@@ -572,6 +576,8 @@ export default function BranchDashboardClient({
             )}
           </div>
         )}
+
+        {isLegacyBranchTeam(team) ? <p role="status" className="mt-3 border-l-2 border-[#A8741A] pl-3 text-[13px] text-[#615D59]">{branchTeamLabel(team)}를 조회 중입니다. 현재 조직은 BD · MKT이며, 과거 장부의 담당·팀 귀속은 보존됩니다.</p> : <p className="mt-3 text-[12px] text-[#615D59]">현재 조직 BD · MKT · 전체 매출에는 이전 조직의 장부 이력이 포함될 수 있습니다.</p>}
 
         {/* 단위 표기 규칙 명시(항목 1) — 화면 전체의 ¥ 축약 표기가 어느 통화 기준인지 1회 고지. */}
         <p className="mt-2 hidden text-[10.5px] font-medium text-[#615D59]/80 sm:block">통화 ¥ — 본사 보고 기준</p>
@@ -654,7 +660,7 @@ export default function BranchDashboardClient({
               {/* 팀 KPI 아코디언 → 활동 병목·담당자 순으로 단일 열 세로 배치(2열 그리드 해제).
                   부모 space-y-4가 아래 파이프라인 카드와 동일한 세로 리듬을 준다. */}
               <BranchKpiAccordion data={kpi.data} loading={kpi.loading} error={kpi.error} team={team} period={period} selectedMonth={selectedMonth} />
-              <ActivityBottleneckSection kpi={kpi.data} loading={kpi.loading} error={kpi.error} />
+              <ActivityBottleneckSection kpi={kpi.data} loading={kpi.loading} error={kpi.error} team={team} />
               <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
                 <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5">
                   <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">파이프라인</h2>
@@ -671,7 +677,7 @@ export default function BranchDashboardClient({
                   </div>
                 </div>
                 <div className={pipelineView === "kanban" ? "" : "px-2.5 py-2"}>
-                  {pipelineView === "table" ? (
+                  {!pipelineFiltersReady ? <p role="status" className="px-5 py-4 text-[13px] text-[#615D59]">담당 필터를 불러오는 중입니다.</p> : pipelineView === "table" ? (
                     // 품질 웨이브 4 — 항목 4. 이 카드가 이미 "파이프라인" 제목을 렌더하므로
                     // PipelineTable 자체의 "REV 고객별 매출" <h2>는 hideHeader로 숨겨 이중화를 없앤다
                     // (장부 링크·필터·표는 그대로 유지). 헤더가 필요한 히트맵 탭 사용처는 기본값 유지.

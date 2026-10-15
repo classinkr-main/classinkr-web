@@ -3,8 +3,9 @@ import { checkCronAuth } from "@/lib/server/cron-auth"
 import { runInsights } from "@/lib/branch/insights/runner"
 import type { TeamScope } from "@/lib/branch/insights/input-builder"
 import { getRecentSyncRuns } from "@/lib/repositories/branch-sync"
+import { CURRENT_BRANCH_TEAMS } from "@/lib/branch/current-organization"
 
-const TEAMS: TeamScope[] = ["ALL", "BD", "MKT", "CSM"]
+const TEAMS: TeamScope[] = ["ALL", ...CURRENT_BRANCH_TEAMS]
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 // 최근 실행 목록에서 그날의 branch sync 성공 여부를 확인하기에 넉넉한 창.

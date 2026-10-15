@@ -261,6 +261,11 @@ async function loadCustomer360(options?: {
   vi.doMock("@/lib/repositories/crm-customer-tags", () => ({
     getCustomerTags: vi.fn().mockResolvedValue([]),
   }))
+  // 이 하네스는 연결·신원·신선도를 검증한다. Compass 활동은 전용 통합 테스트에서 검증한다.
+  vi.doMock("@/lib/compass/bridge", () => ({
+    getCompassLeadsByPhoneKeys: vi.fn().mockResolvedValue({ rows: [], down: false }),
+    getCompassActivitiesByLeadIds: vi.fn().mockResolvedValue({ rows: [], down: false }),
+  }))
 
   const loaded = await import("@/lib/repositories/crm-customer-360")
   return { getCrmCustomer360: loaded.getCrmCustomer360, findConfirmedLeadNeoLink }

@@ -450,9 +450,6 @@ const COMPASS_LEAD_SLICE_COLUMNS = [
   "bd_paid_at",
 ].join(", ")
 
-/** 페이지당 행 수 — .range(from, to) 스텝. PostgREST 기본 max-rows(보통 1,000)와 맞춘다. */
-const COMPASS_LEAD_SLICE_PAGE_SIZE = 1_000
-
 /** CompassResult<T>에 range 스캔이 상한(maxRows)에 닿았는지를 더한 결과 — 합계를 "전체"라
  *  부르면 안 되는 신호(플레이북 "전량 조회 range" 규칙의 잘린 항목 표시 대응). */
 export type CompassSliceResult<T> = CompassResult<T> & { truncated: boolean }
@@ -465,13 +462,10 @@ function copyCompassSliceResult<T>(result: CompassSliceResult<T>): CompassSliceR
   return { ...result, rows: result.rows.slice() }
 }
 
-/** 기간 내 리드 슬라이스(금액 컬럼 제외) — Compass 요약(lib/compass/summary.ts) 집계 전용.
- *  last_inflow_at을 [fromIso, toIso]로 걸러 range 페이지네이션(1,000행/페이지)으로
- *  maxRows(기본 COMPASS_SUMMARY_MAX_ROWS)까지 모은다. 마지막 페이지가 꽉 차 상한에 닿으면
- *  truncated=true — 실제로 더 있는지는 알 수 없지만(플레이북 규칙과 compass-ads 라우트의
- *  BRIDGE_ROW_LIMIT 판정과 같은 근사), 안전하게 "잘렸을 수 있다"로 본다.
- *  60초 메모(down은 10초) — fromIso/toIso를 분 단위로 잘라 만든 키에 maxRows를 더해 키로 쓴다
- *  (같은 기간이라도 maxRows가 다르면 다른 슬라이스이므로 캐시를 분리해야 한다). */
+/** 기간 내 신규·재유입 리드 슬라이스(금액 컬럼 제외) — Compass 요약 집계 전용.
+ * 인테이크와 같은 created_at OR last_inflow_at 기준을 쓴다. 신규 행의 last_inflow_at은 null일 수 있다.
+ * 첫 페이지 exact count + 실제 수신 행 수 기준 전진으로 서버 max-rows가 작아도 누락하지 않는다.
+ * maxRows 상한에 실제로 남은 행이 있을 때만 truncated=true. 캐시는 60초(down 10초). */
 export async function getCompassLeadSliceByInflowRange(
   fromIso: string,
   toIso: string,
@@ -484,30 +478,19 @@ export async function getCompassLeadSliceByInflowRange(
       cacheKey,
       async () => {
         const sb = createSupabaseAdminClient()
-        const rows: CompassLeadSliceRow[] = []
-        let truncated = false
-        while (rows.length < maxRows) {
-          const from = rows.length
-          const to = Math.min(from + COMPASS_LEAD_SLICE_PAGE_SIZE, maxRows) - 1
-          const { data, error } = await sb
-            .from("compass_leads_v")
-            .select(COMPASS_LEAD_SLICE_COLUMNS)
-            .gte("last_inflow_at", fromIso)
-            .lte("last_inflow_at", toIso)
-            .order("last_inflow_at", { ascending: true })
-            .order("id", { ascending: true })
-            .range(from, to)
-          if (error) return downSliceResult<CompassLeadSliceRow>(error)
-          const batch = (data ?? []) as unknown as CompassLeadSliceRow[]
-          rows.push(...batch)
-          const requested = to - from + 1
-          if (batch.length < requested) break // 서버가 요청보다 적게 줬다 — 더 없음
-          if (rows.length >= maxRows) {
-            truncated = true
-            break
-          }
-        }
-        return { rows, down: false, truncated }
+        const inflowFilter = compassInflowWindowFilter(fromIso, toIso)
+        const paged = await fetchSupabasePages<CompassLeadSliceRow>({
+          maxRows,
+          fetchPage: (from, to) =>
+            sb
+              .from("compass_leads_v")
+              .select(COMPASS_LEAD_SLICE_COLUMNS, from === 0 ? { count: "exact" } : undefined)
+              .or(inflowFilter)
+              .order("id", { ascending: true })
+              .range(from, to),
+        })
+        if (paged.error != null) return downSliceResult<CompassLeadSliceRow>(paged.error)
+        return { rows: paged.data, down: false, truncated: paged.truncated }
       },
       {
         ttlMs: TTL_MS,
@@ -577,19 +560,21 @@ export async function getCompassActivitySignals(
     const rows: CompassActivitySignalRow[] = []
     for (let index = 0; index < ids.length; index += ACTIVITY_LEAD_ID_CHUNK) {
       const chunk = ids.slice(index, index + ACTIVITY_LEAD_ID_CHUNK)
-      for (let from = 0; ; from += ACTIVITY_PAGE_SIZE) {
-        const { data, error } = await sb
-          .from("compass_activities_v")
-          .select("lead_id, kind, actor")
-          .in("lead_id", chunk)
-          .in("kind", [...kinds])
-          .order("id", { ascending: true })
-          .range(from, from + ACTIVITY_PAGE_SIZE - 1)
-        if (error) return downResult(error)
-        const page = (data ?? []) as CompassActivitySignalRow[]
-        rows.push(...page)
-        if (page.length < ACTIVITY_PAGE_SIZE) break
-      }
+      const paged = await fetchSupabasePages<CompassActivitySignalRow>({
+        maxRows: Number.MAX_SAFE_INTEGER,
+        pageSize: ACTIVITY_PAGE_SIZE,
+        fetchPage: (from, to) =>
+          sb
+            .from("compass_activities_v")
+            .select("lead_id, kind, actor", from === 0 ? { count: "exact" } : undefined)
+            .in("lead_id", chunk)
+            .in("kind", [...kinds])
+            .order("id", { ascending: true })
+            .range(from, to),
+      })
+      if (paged.error != null) return downResult(paged.error)
+      if (paged.truncated) return downResult("Compass activity scan incomplete")
+      rows.push(...paged.data)
     }
     return ok(rows)
   } catch (error) {
@@ -754,12 +739,20 @@ export async function getCompassRevenue(
       cacheKey,
       async () => {
         const sb = createSupabaseAdminClient()
-        const { data, error } = await sb
-          .from("compass_revenue_v")
-          .select("*")
-          .in("month", uniq)
-        if (error) return downResult(error)
-        return ok((data ?? []) as CompassRevenueRow[])
+        const paged = await fetchSupabasePages<CompassRevenueRow>({
+          maxRows: 10_000,
+          fetchPage: (from, to) =>
+            sb
+              .from("compass_revenue_v")
+              .select("*", from === 0 ? { count: "exact" } : undefined)
+              .in("month", uniq)
+              .order("id", { ascending: true })
+              .range(from, to),
+        })
+        if (paged.error != null) return downResult(paged.error)
+        // 금액 대조는 부분 합계를 전체 실적으로 표시하면 안 된다.
+        if (paged.truncated) return downResult("Compass revenue scan incomplete")
+        return ok(paged.data)
       },
       { ttlMs: TTL_MS, downTtlMs: TTL_DOWN_MS, isDown: isCompassResultDown, copy: copyCompassResult },
     )

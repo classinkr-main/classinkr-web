@@ -54,6 +54,7 @@ import { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
 import { isSheetAheadOfSync } from "@/lib/branch/sheet-freshness"
 import LedgerStatusRail from "./ledger/LedgerStatusRail"
 import { isPrefetchFresh } from "@/lib/admin/prefetch-freshness"
+import { branchTeamLabel, defaultBranchDraftTeam, isLegacyBranchTeam } from "@/lib/branch/current-organization"
 // ledger/ 섹션 파일들이 워크벤치를 단일 진입점으로 import — 포매터 SSOT는 lib/branch/ledger-format
 export { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
 import {
@@ -881,7 +882,7 @@ export default function SalesLedgerWorkbench({
     operation: "forecast-add",
     customer: "",
     manager: "",
-    team: team === "ALL" ? "BD" : team,
+    team: defaultBranchDraftTeam(team),
     productCategory: "software",
     month: selectedMonth,
     fromMonth: selectedMonth,
@@ -911,7 +912,7 @@ export default function SalesLedgerWorkbench({
       month: current.month || selectedMonth,
       fromMonth: current.fromMonth || selectedMonth,
       week: current.week || "month",
-      team: current.team || (team === "ALL" ? "BD" : team),
+      team: current.team || defaultBranchDraftTeam(team),
     }))
   }, [selectedMonth, team])
 
@@ -1934,7 +1935,7 @@ export default function SalesLedgerWorkbench({
         },
         customer: row.customer.trim(),
         manager: (row.manager ?? "").trim(),
-        team: (row.team ?? (team === "ALL" ? "BD" : team)).trim(),
+        team: (row.team ?? defaultBranchDraftTeam(team)).trim(),
         month,
         amount: draftAmount,
         note: "",
@@ -2181,7 +2182,7 @@ export default function SalesLedgerWorkbench({
     const newRowNames = options?.newRowNames ?? []
     const newRowInputs = newRowNames.length > 0
       ? buildPasteNewRowInputs(pastePlan, newRowNames, {
-          team: team === "ALL" ? "BD" : team,
+          team: defaultBranchDraftTeam(team),
           manager: managerFilter.size === 1 ? Array.from(managerFilter)[0] : "",
           productCategory: "software",
           confidence: pasteConfidence,
@@ -2403,7 +2404,7 @@ export default function SalesLedgerWorkbench({
       operation,
       customer: row.customer,
       manager: row.manager ?? "",
-      team: row.team ?? (team === "ALL" ? "BD" : team),
+      team: row.team ?? defaultBranchDraftTeam(team),
       productCategory: rowProductCategory(row),
       month: formMonth,
       fromMonth: metadataString(row.draftMetadata, "fromMonth") ?? row.draftMonth ?? selectedMonth,
@@ -2651,7 +2652,7 @@ export default function SalesLedgerWorkbench({
       operation,
       customer: draft.customer,
       manager: draft.manager,
-      team: draft.team || (team === "ALL" ? "BD" : team),
+      team: draft.team || defaultBranchDraftTeam(team),
       productCategory: draft.metadata?.productCategory === "hardware" ? "hardware" : "software",
       month: draft.month,
       fromMonth: metadataString(draft.metadata, "fromMonth") ?? draft.month,
@@ -2899,6 +2900,7 @@ export default function SalesLedgerWorkbench({
               만지는 화면. 시트 수치 검수·장부 입력·주간 스냅샷 비교를 담당합니다. 차트·시각화는 KR Team으로 옮겨졌고, 여기는 수치가 정본입니다.
               {" "}통화 ¥ — 본사 보고 기준 · 단위 표기가 있는 그리드·매트릭스 셀은 호버(또는 title)로 반올림 전 원값을 확인할 수 있습니다.
             </p>
+            {isLegacyBranchTeam(team) ? <p role="status" className="mt-2 text-[12px] text-[#A8741A]">이전 조직 CSM의 장부 이력입니다. 현재 조직은 BD · MKT이며 기존 팀 귀속은 보존됩니다.</p> : null}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -2918,7 +2920,7 @@ export default function SalesLedgerWorkbench({
                     team === value ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59] hover:text-[#111110]"
                   }`}
                 >
-                  {value === "ALL" ? "KR 전체" : value}
+                  {branchTeamLabel(value)}
                 </button>
               ))}
             </div>

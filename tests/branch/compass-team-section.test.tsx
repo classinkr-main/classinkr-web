@@ -10,8 +10,8 @@ const render = (state: BranchJsonState<CompassKrTeamResult>, team: "ALL" | "MKT"
 
 describe("Compass 과정지표의 표시 상태", () => {
   it("수동 조정과 원본값·부호·가중치·KPI 전용 팀원을 표시한다", () => {
-    const html = render(resource({ state: "ready", snapshot: snapshot() }), "CSM");
-    for (const value of ["김민재", "CSM", "KPI 대상 전용", "수동 조정", "환불 반영", "자동 집계 100", "-100", "50%", "배정 100%", "평가 월", "참고 2건", "월말 수납 교정", "승인자", "10-14", "월말 전망", "-200", "150.0%", "남은 15일"]) expect(html).toContain(value);
+    const html = render(resource({ state: "ready", snapshot: snapshot() }));
+    for (const value of ["김민재", "팀 미분류", "KPI 대상 전용", "수동 조정", "환불 반영", "자동 집계 100", "-100", "50%", "배정 100%", "평가 월", "참고 2건", "월말 수납 교정", "승인자", "10-14", "월말 전망", "-200", "150.0%", "남은 15일"]) expect(html).toContain(value);
     expect(html).toContain("장부 금액과 합산하지 않습니다");
   });
   it("새 팀 명부와 평가표는 목표가 없더라도 구분해 표시한다", () => {
@@ -45,5 +45,23 @@ describe("Compass 과정지표의 표시 상태", () => {
     const data = snapshot(); data.kpi.report.people[0].weightSum = 0; data.kpi.report.people[0].ratedWeight = 0;
     const html = render(resource({ state: "ready", snapshot: data }));
     expect(html).toContain("가중치 확인"); expect(html).toContain("환불 반영"); expect(html).toContain("월말 수납 교정");
+  });
+  it("부서 이동 후 현재 역할과 원본 평가표 역할을 구분하며 기존 팀에서는 제외한다", () => {
+    const data = snapshot(); data.roster[0].team = "MKT"; data.roster[0].role = "마케팅 리드";
+    const html = render(resource({ state: "ready", snapshot: data }), "MKT");
+    expect(html).toContain("마케팅 리드"); expect(html).toContain("평가표 역할: CS"); expect(html).toContain("환불 반영");
+    expect(render(resource({ state: "ready", snapshot: data }), "CSM")).not.toContain("김민재");
+  });
+  it("명부 제외는 삭제로 단정하지 않고 원본 사유·평가를 별도 보존한다", () => {
+    const data = snapshot(); data.roster = [];
+    const html = render(resource({ state: "ready", snapshot: data }));
+    expect(html).toContain("현재 명부 외 원본 평가표"); expect(html).toContain("현재 팀 집계에서 제외");
+    expect(html).toContain("퇴사·삭제 여부를 판단하지 않습니다"); expect(html).toContain("환불 반영");
+    expect(html).not.toContain('aria-label="김민재 달성률');
+  });
+  it("CSM 이력 필터에서 현재 CSM 평가 현황을 되살리지 않는다", () => {
+    const html = render(resource({ state: "ready", snapshot: snapshot() }), "CSM");
+    expect(html).toContain("CSM은 이전 조직입니다"); expect(html).not.toContain("김민재");
+    expect(html).not.toContain("평가 완료");
   });
 });

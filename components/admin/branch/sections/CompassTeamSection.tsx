@@ -3,6 +3,7 @@
 import { ChevronDown, ExternalLink } from "lucide-react";
 import type { CompassKrTeamResult } from "@/lib/compass/kr-team-contract";
 import { comparisonDomain, summarizeCompass } from "@/lib/branch/compass-overview";
+import { isLegacyBranchTeam } from "@/lib/branch/current-organization";
 import { TEAM_COLORS } from "@/lib/branch/team-colors";
 import { cnyExact } from "@/lib/branch/money-format";
 import { formatBusinessDateTimeLabel } from "@/lib/business-time";
@@ -22,6 +23,8 @@ export default function CompassTeamSection({ resource, month, onMonthChange, tea
   const roster = new Map(view?.roster.map((person) => [person.name, person]));
   const domain = comparisonDomain(view?.active.filter((person) => person.ratedWeight > 0).map((person) => person.rate) ?? [], 1.2);
   const period = snapshot?.revenue.period;
+
+  if (isLegacyBranchTeam(team)) return <section aria-label="Compass 월별 과정지표" className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white px-5 py-4 text-[13px] text-[#615D59]">CSM은 이전 조직입니다. 현재 Compass 과정지표는 KR 전체 · BD · MKT에서 확인할 수 있습니다. 원본 평가표와 과거 매출은 보존됩니다.</section>;
 
   return <section aria-label="Compass 월별 과정지표" className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white">
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-4">
@@ -76,7 +79,8 @@ export default function CompassTeamSection({ resource, month, onMonthChange, tea
                   <div className="col-start-1 row-start-1 min-w-0">
                     <strong className="text-[14px] text-[#111110]">{person.name}</strong>
                     <span className="ml-2 text-[12px]" style={{ color: member?.team ? TEAM_COLORS[member.team].color : "#615D59" }}>{member?.team ?? "팀 미분류"}</span>
-                    <p className="mt-1 text-[12px] text-[#615D59]">{person.role} · 평가 {(person.ratedWeight * 100).toFixed(0)}%{member?.evaluationOnly ? " · KPI 대상 전용" : ""}</p>
+                    <p className="mt-1 text-[12px] text-[#615D59]">{member?.role || "역할 미설정"} · 평가 {(person.ratedWeight * 100).toFixed(0)}%{member?.evaluationOnly ? " · KPI 대상 전용" : ""}</p>
+                    {member && member.role !== person.role ? <p className="mt-1 text-[12px] text-[#615D59]">평가표 역할: {person.role || "역할 미설정"}</p> : null}
                   </div>
                   <div className="col-span-3 row-start-2 md:col-span-1 md:col-start-2 md:row-start-1">
                     {person.ratedWeight > 0 ? <ComparisonBar value={person.rate} target={1} domain={domain} label={person.name + " 달성률 " + rate(person.rate) + ", 목표 100%"} /> : <span className="text-[13px] text-[#615D59]">평가 전</span>}
@@ -89,6 +93,15 @@ export default function CompassTeamSection({ resource, month, onMonthChange, tea
             })}
           </div>
         </div> : <p className="text-[13px] text-[#615D59]">선택한 팀의 월별 과정지표가 없습니다.</p>}
+
+        {view.archived.length ? <details className="rounded-lg border border-[rgba(0,0,0,0.08)]">
+          <summary className="min-h-11 cursor-pointer px-4 py-3 text-[13px] font-medium text-[#31302E] focus-visible:outline-2 focus-visible:outline-[#084734]">현재 명부 외 원본 평가표 <span className="ml-2 font-normal text-[#615D59]">{view.archived.length}명</span></summary>
+          <div className="border-t border-[rgba(0,0,0,0.08)] px-4 py-3 text-[12px] text-[#615D59]">현재 팀 집계에서 제외됩니다. 원본 평가 내역은 보존하며 명부 제외만으로 퇴사·삭제 여부를 판단하지 않습니다.</div>
+          {view.archived.map((person) => <details key={person.name} className="border-t border-[rgba(0,0,0,0.08)]">
+            <summary className="min-h-11 cursor-pointer px-4 py-3 text-[13px] text-[#31302E]">{person.name} · 평가표 역할 {person.role || "역할 미설정"}</summary>
+            <CompassKpiDetail person={person} month={month} />
+          </details>)}
+        </details> : null}
 
         <details className="rounded-lg border border-[rgba(0,0,0,0.08)]">
           <summary className="min-h-11 cursor-pointer px-4 py-3 text-[13px] font-medium text-[#31302E] focus-visible:outline-2 focus-visible:outline-[#084734]">팀원 명부 · 원본 자료 <span className="ml-2 font-normal text-[#615D59]">{view.roster.length}명</span></summary>

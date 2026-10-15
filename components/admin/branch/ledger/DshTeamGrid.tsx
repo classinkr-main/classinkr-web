@@ -12,6 +12,7 @@ import { ArrowLeftRight, ChevronDown, ChevronRight } from "lucide-react"
 import Link from "next/link"
 import { useMemo, useState } from "react"
 import { TEAMS, type BranchDshRow } from "../types"
+import { branchTeamLabel } from "@/lib/branch/current-organization"
 import {
   buildDshTeamGrid,
   DSH_CELL,
@@ -39,7 +40,7 @@ const VIEW_OPTIONS: Array<{ id: DshGridView; label: string }> = [
 
 // 팀 라벨 — ALL은 시트 표기(Team KR)를 따른다.
 function teamLabel(team: string): string {
-  return team === "ALL" ? "Team KR" : team
+  return team === "ALL" ? "Team KR" : branchTeamLabel(team)
 }
 
 // 입력 진입점(기획 2026-09-20 §8.4 DSH 행: "입력 진입점이 0개") — 팀 그리드는 읽기 전용이라

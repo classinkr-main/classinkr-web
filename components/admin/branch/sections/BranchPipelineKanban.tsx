@@ -1,4 +1,5 @@
 "use client"
+import { branchTeamLabel } from "@/lib/branch/current-organization"
 import Link from "next/link"
 import { RotateCcw, Search } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
@@ -131,7 +132,7 @@ function PipelineCard({ deal, onClick, ledgerHref }: {
           {deal.team && (
             <span className="rounded-md px-1.5 py-0.5 text-[9.5px] font-bold tracking-[0.02em]"
               style={{ background: `${teamColor}1A`, color: teamColor }}>
-              {deal.team}
+              {branchTeamLabel(deal.team)}
             </span>
           )}
         </div>

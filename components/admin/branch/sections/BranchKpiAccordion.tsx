@@ -5,6 +5,7 @@ import { ArrowDownNarrowWide, ArrowUpNarrowWide, ChevronRight, Search } from "lu
 import type { BranchKpiResponse, BranchKpiTeamRow, BranchKpiMemberRow, Team, Period } from "../types"
 import { cny, cnyExact } from "@/lib/branch/money-format"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
+import { branchTeamLabel, isCurrentBranchTeam, isLegacyBranchTeam, SHEET_KPI_ACTIVE_TEAMS as KPI_ACTIVE_TEAMS } from "@/lib/branch/current-organization"
 import { matchesTokens, tokenize } from "../search-tokens"
 import MoneyValue from "../MoneyValue"
 
@@ -24,9 +25,6 @@ const KPI_LABELS: Record<string, string> = {
   template: "템플릿",
   caseStudy: "사례연구",
 }
-
-// 시트 영업 KPI. Compass 과정지표는 별도 월별 평가표로 표시한다.
-const KPI_ACTIVE_TEAMS = new Set(["BD"])
 
 const COLORS = {
   green: "#084734",
@@ -180,7 +178,7 @@ function TeamRow({ team, members, defaultOpen, ledgerHref }: {
   const renderRightChip = () => {
     if (!teamHasKpi) {
       return (
-        <span className="text-[11px] text-[#615D59]">Compass 과정지표</span>
+        <span className="text-[11px] text-[#615D59]">{isLegacyBranchTeam(team.team) ? "이전 조직 매출 이력" : "Compass 과정지표"}</span>
       )
     }
     if (!hasMembers) {
@@ -216,7 +214,7 @@ function TeamRow({ team, members, defaultOpen, ledgerHref }: {
           expandable ? "text-[#615D59]" : "text-transparent"
         } ${open ? "rotate-90" : ""}`} />
         <div>
-          <p className="text-[14px] font-bold text-[#111110]">{team.team}</p>
+          <p className="text-[14px] font-bold text-[#111110]">{branchTeamLabel(team.team)}</p>
           <p className="mt-0.5 text-[11px] text-[#615D59]">
             {hasMembers ? `${members.length}명` : "팀 단위 집계"}
           </p>
@@ -301,11 +299,11 @@ export default function BranchKpiAccordion({
 
   const teamsWithMembers = useMemo(() => {
     if (!data) return []
-    return data.teams.map((t) => ({
+    return data.teams.filter((t) => isLegacyBranchTeam(team) ? t.team === team : isCurrentBranchTeam(t.team)).map((t) => ({
       team: t,
       members: data.members.filter((m) => m.team === t.team),
     }))
-  }, [data])
+  }, [data, team])
 
   // 매출 장부 크로스링크 — PipelineTable.ledgerHref와 동일 컨텍스트 보존 규약
   // (lens=rev&team=&period=&month=&mgr=). 이 아코디언엔 고객 검색/지역 필터가

@@ -153,7 +153,7 @@ export default function CrmPerformanceCharts() {
         성과 데이터를 불러오지 못했습니다.
       </div>
     )
-  if (!data || data.total === 0)
+  if (!data || (data.total === 0 && !data.monthly.some((point) => point.revenue !== 0)))
     return <p className="text-[12px] text-[#1a1a1a]/40">표시할 매출 데이터가 없습니다.</p>
 
   const trend = data.monthly.map((point) => ({ label: monthLabel(point.month), revenue: point.revenue }))
@@ -170,6 +170,7 @@ export default function CrmPerformanceCharts() {
     : 0
   const projection = projectMonthEnd(currentRevenue, target, kstMonthProgressRatio(new Date()))
   const maxRevenue = trend.reduce((max, point) => Math.max(max, point.revenue), 0)
+  const minRevenue = trend.reduce((min, point) => Math.min(min, point.revenue), 0)
   const yTop = target != null ? Math.ceil(Math.max(target, maxRevenue) * 1.12) : undefined
 
   return (
@@ -254,7 +255,7 @@ export default function CrmPerformanceCharts() {
           maxBarSize={36}
           tooltipVariant="light"
           leftMargin={-8}
-          leftDomain={yTop != null ? [0, yTop] : undefined}
+          leftDomain={yTop != null ? [Math.floor(minRevenue * 1.12), yTop] : undefined}
           formatLeftTick={(value) => `¥${fmtMan(value)}`}
           // 당월(마지막 막대)만 진한 브랜드색으로 강조, 이전 달은 옅은 그린
           cellColor={(_row, index) => (index === trend.length - 1 ? CHART.brand : "#cfe3d8")}

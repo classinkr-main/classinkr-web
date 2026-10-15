@@ -41,6 +41,7 @@ function leadsViewChain(config: {
 }): Chain {
   const chain: Chain = {}
   chain.select = vi.fn(() => chain)
+  chain.or = vi.fn(() => chain)
   chain.gte = vi.fn(() => chain)
   chain.lte = vi.fn(() => chain)
   chain.eq = vi.fn(() => chain)
@@ -56,6 +57,7 @@ function leadsViewChain(config: {
 function demosViewChain(result: { data?: unknown[] | null; error?: unknown }): Chain {
   const chain: Chain = {}
   chain.select = vi.fn(() => chain)
+  chain.or = vi.fn(() => chain)
   chain.gte = vi.fn(() => chain)
   chain.lte = vi.fn(() => chain)
   chain.order = vi.fn(() => Promise.resolve(result))

@@ -65,7 +65,13 @@ function normalizedWeeklyPayments(value: unknown): Record<string, number[]> | nu
   for (const [ym, rawValues] of Object.entries(value)) {
     if (!Array.isArray(rawValues)) continue
     const values = Array.from({ length: REV_WEEK_COUNT }, (_, index) => rawNumber(rawValues[index]))
-    if (values.some((amount) => amount !== 0)) weekly[ym] = values
+    const hasNumericEntry = rawValues.some((raw) => {
+      if (typeof raw === "number") return Number.isFinite(raw)
+      if (typeof raw !== "string") return false
+      const cleaned = raw.replace(/[¥₩$€£,\s]/g, "")
+      return cleaned !== "" && Number.isFinite(Number(cleaned))
+    })
+    if (hasNumericEntry) weekly[ym] = values
   }
   return Object.keys(weekly).length > 0 ? weekly : null
 }
@@ -94,23 +100,21 @@ function weeklyPaymentsFromRaw(deal: BranchRevDeal): Record<string, number[]> {
 
 // 품질 감사 2026-09-10 — #1(페이로드 다이어트): /api/admin/branch/pipeline 172.6KB의 상당 비중은
 // 이 함수가 만드는 4개 월별 맵(monthlyPayments/monthlyConfirmed/monthlyHighConfidence/monthlyRed)이
-// 매출 없는 달까지 0/false로 꽉 채워 직렬화되는 데서 온다 — 임포트 원천(sales-ledger-imports.ts)이
-// 매출 없는 달에도 false를 명시적으로 채워 넣는다. 소비 시맨틱은 전부 "누락 키 = 0/false"와
-// 동일하다(mapNumberValue: 누락 키 → 0, row.monthlyRed?.[month]: 누락 키 → falsy — shared.tsx/
-// RevMatrix 소스로 실측 확인). 그래서 이 마지막 직렬화 경계에서만 0/false 키를 걷어낸다 — 위쪽
-// 집계(revenueFromRev 등)는 원본 d.monthly_payments를 그대로 쓰므로 이 트리밍과 무관하다.
-export function sparseNumberMap(map: Record<string, number> | null | undefined): Record<string, number> {
+// 매출 없는 달까지 0/false로 채워 직렬화되는 데서 온다. 다만 확정 0은 red 전액 폴백을 막고,
+// 색 맵의 키 자체도 무색상 폴백 여부를 결정한다. REV 응답은 preserveZero/False로 원본 키를
+// 보존해야 서버·클라이언트 확정 산식이 같아진다. 단순 숫자 맵의 기존 sparse 기본값은 유지한다.
+export function sparseNumberMap(map: Record<string, number> | null | undefined, preserveZero = false): Record<string, number> {
   const out: Record<string, number> = {}
   for (const [key, value] of Object.entries(map ?? {})) {
-    if (value) out[key] = value
+    if (value || (preserveZero && value === 0)) out[key] = value
   }
   return out
 }
 
-export function sparseBooleanMap(map: Record<string, boolean> | null | undefined): Record<string, boolean> {
+export function sparseBooleanMap(map: Record<string, boolean> | null | undefined, preserveFalse = false): Record<string, boolean> {
   const out: Record<string, boolean> = {}
   for (const [key, value] of Object.entries(map ?? {})) {
-    if (value) out[key] = true
+    if (value || (preserveFalse && value === false)) out[key] = value
   }
   return out
 }
@@ -186,10 +190,10 @@ export function listRevRevenue(
       firstPayment: d.first_payment,
       contractTarget: Number(d.contract_target ?? 0),
       revenue: revenueFromRev(d, scope?.period, scope?.now),
-      monthlyPayments: sparseNumberMap(d.monthly_payments),
-      monthlyConfirmed: sparseNumberMap(d.monthly_confirmed),
-      monthlyHighConfidence: sparseNumberMap(d.monthly_high_conf),
-      monthlyRed: sparseBooleanMap(d.monthly_red),
+      monthlyPayments: sparseNumberMap(d.monthly_payments, true),
+      monthlyConfirmed: sparseNumberMap(d.monthly_confirmed, true),
+      monthlyHighConfidence: sparseNumberMap(d.monthly_high_conf, true),
+      monthlyRed: sparseBooleanMap(d.monthly_red, true),
       weeklyPayments: weeklyPaymentsFromRaw(d),
     }))
     .sort((a, b) => b.revenue - a.revenue || a.customer.localeCompare(b.customer))

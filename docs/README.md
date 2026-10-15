@@ -120,6 +120,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - **Compass ↔ 어드민 리드·CRM 연동 2차.** 전화 키 함수·링크/연락/역브리지 뷰 마이그레이션 적용 순서(Compass 배포 → 서울 적용 → 20260902 재실행), NEO lead 생성 닫기, 연락 상태 동기화 정렬 메모
 - [active/compass-kr-team-sync.md](./active/compass-kr-team-sync.md)
   - KR Team의 Compass 월별 과정지표·현재 팀 명부·매출 조정 읽기 계약, 전용 토큰 설정과 검증·배포 순서
+- [active/kr-data-source-contract.md](./active/kr-data-source-contract.md)
+  - **NEO·Compass·Admin 데이터 연결 기준.** 현재 BD/MKT 조직과 CSM 이력, 본사 실적·장부·활동·평가의 원본 경계, 노션 개정 목표의 대조·반영 절차, 기존 스킬·보류 설계의 적용 범위
 - [active/admin-performance-plan-2026-09-02.md](./active/admin-performance-plan-2026-09-02.md)
   - Admin 속도 가설 판정(인증 왕복·팬아웃·메모이제이션·플랜), 적용한 조치와 측정 방법, 운영 확인 목록
 - [active/admin-performance-round2-2026-09-04.md](./active/admin-performance-round2-2026-09-04.md)

@@ -24,6 +24,12 @@ vi.mock("@/lib/admin/overview/lead-summary-cache", () => ({
   getCachedOverviewLeadSummary: vi.fn(),
 }))
 
+// 형식 검증·자체 중복 방지와 독립인 Compass 교차 경고는 외부 조회 없이 격리한다.
+// 교차 중복의 실제 판정은 tests/compass/admin-leads-compass-duplicate.test.ts가 검증한다.
+vi.mock("@/lib/compass/bridge", () => ({
+  getCompassLeadsByPhoneKeys: vi.fn().mockResolvedValue({ rows: [], down: false }),
+}))
+
 vi.mock("@/lib/repositories/leads", () => ({
   getLeads,
   getDashboardLeads,

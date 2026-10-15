@@ -1,7 +1,11 @@
+import { CURRENT_BRANCH_TEAMS, LEGACY_BRANCH_TEAMS } from "@/lib/branch/current-organization"
+
 export type Team = "ALL" | "BD" | "MKT" | "CSM"
 export type Period = "M" | "Q" | "Y"
 
-export const TEAMS: Team[] = ["ALL", "BD", "MKT", "CSM"]
+// 파서·장부·과거 링크의 허용 값. 현재 조직 선택에는 CURRENT_TEAM_FILTERS를 사용한다.
+export const TEAMS: Team[] = ["ALL", ...CURRENT_BRANCH_TEAMS, ...LEGACY_BRANCH_TEAMS]
+export const CURRENT_TEAM_FILTERS: Team[] = ["ALL", ...CURRENT_BRANCH_TEAMS]
 export const PERIODS: Period[] = ["M", "Q", "Y"]
 
 // 웨이브 7 — Q5(개인화 라이트). 파이프라인 탭(테이블·칸반이 공유하는 BranchDashboardClient의
