@@ -1,5 +1,10 @@
 # Classin Home — Repository Notes
 
+## 작업 브랜치 규칙
+
+- 작업 브랜치는 `cloud_<월>.<버전>` 형식을 사용한다. 첫 숫자는 월이고, 그 뒤의 두 숫자는 버전이다.
+- 월과 버전은 사용자가 지정한 값을 따른다.
+
 ## 프로젝트 개요
 
 - Next.js 16 (App Router) + React 19 + TypeScript
