@@ -16,6 +16,17 @@ import { normalizeRegionLabel } from "@/lib/regions/korea-regions"
 
 export type CrmRegionLayerKey = "deal" | "target" | "lead" | "customer" | "compass"
 
+export interface CrmRegionCustomerItem {
+  id: string
+  name: string
+  region: string
+  source: CrmRegionLayerKey
+  count: number
+  manager: string | null
+  status: string | null
+  detail?: string | null
+}
+
 export interface CrmRegionLayer {
   key: CrmRegionLayerKey
   label: string
@@ -31,6 +42,16 @@ export interface CrmRegionLayer {
   regions: Record<string, number>
   /** 이 레이어에 대해 화면이 반드시 함께 보여줘야 하는 경고(없으면 빈 배열). */
   notes: string[]
+  /** 시도별 상위 고객 목록 */
+  topCustomersByRegion?: Record<string, CrmRegionCustomerItem[]>
+}
+
+export interface RegionCustomerRecord {
+  id?: string
+  name?: string | null
+  manager?: string | null
+  status?: string | null
+  detail?: string | null
 }
 
 // 지리적이지 않은 정당한 값. REV 시트가 실제로 쓰는 표기다.
@@ -42,13 +63,25 @@ export interface RegionTally {
   unknown: number
   nonGeo: number
   regions: Record<string, number>
+  customersByRegion?: Record<string, Map<string, { count: number; record: RegionCustomerRecord }>>
 }
 
 export function emptyRegionTally(): RegionTally {
-  return { total: 0, located: 0, unknown: 0, nonGeo: 0, regions: {} }
+  return {
+    total: 0,
+    located: 0,
+    unknown: 0,
+    nonGeo: 0,
+    regions: {},
+    customersByRegion: {},
+  }
 }
 
-export function tallyRegionValue(tally: RegionTally, raw: string | null | undefined) {
+export function tallyRegionValue(
+  tally: RegionTally,
+  raw: string | null | undefined,
+  customer?: RegionCustomerRecord
+) {
   tally.total += 1
   const trimmed = raw?.trim() ?? ""
   if (trimmed && NON_GEO_TOKENS.has(trimmed.toLowerCase())) {
@@ -62,6 +95,35 @@ export function tallyRegionValue(tally: RegionTally, raw: string | null | undefi
   }
   tally.located += 1
   tally.regions[label] = (tally.regions[label] ?? 0) + 1
+
+  if (customer && customer.name && customer.name.trim()) {
+    const custName = customer.name.trim()
+    if (!tally.customersByRegion) {
+      tally.customersByRegion = {}
+    }
+    if (!tally.customersByRegion[label]) {
+      tally.customersByRegion[label] = new Map()
+    }
+    const map = tally.customersByRegion[label]
+    const existing = map.get(custName)
+    if (existing) {
+      existing.count += 1
+      if (!existing.record.manager && customer.manager) existing.record.manager = customer.manager
+      if (!existing.record.status && customer.status) existing.record.status = customer.status
+      if (!existing.record.detail && customer.detail) existing.record.detail = customer.detail
+    } else {
+      map.set(custName, {
+        count: 1,
+        record: {
+          id: customer.id ?? custName,
+          name: custName,
+          manager: customer.manager ?? null,
+          status: customer.status ?? null,
+          detail: customer.detail ?? null,
+        },
+      })
+    }
+  }
 }
 
 /** 자유 텍스트 지역값 목록을 한 번에 접는다. */
@@ -78,6 +140,28 @@ export function toRegionLayer(
   tally: RegionTally,
   notes: string[] = []
 ): CrmRegionLayer {
+  const topCustomersByRegion: Record<string, CrmRegionCustomerItem[]> = {}
+  if (tally.customersByRegion) {
+    for (const [region, map] of Object.entries(tally.customersByRegion)) {
+      const sorted = Array.from(map.values())
+        .sort((a, b) => b.count - a.count || a.record.name!.localeCompare(b.record.name!, "ko"))
+        .slice(0, 15)
+        .map(({ count, record }) => ({
+          id: record.id || record.name!,
+          name: record.name!,
+          region,
+          source: key,
+          count,
+          manager: record.manager ?? null,
+          status: record.status ?? null,
+          detail: record.detail ?? null,
+        }))
+      if (sorted.length > 0) {
+        topCustomersByRegion[region] = sorted
+      }
+    }
+  }
+
   return {
     key,
     label,
@@ -89,5 +173,6 @@ export function toRegionLayer(
     coverage: tally.total === 0 ? 0 : tally.located / tally.total,
     regions: tally.regions,
     notes,
+    topCustomersByRegion,
   }
 }

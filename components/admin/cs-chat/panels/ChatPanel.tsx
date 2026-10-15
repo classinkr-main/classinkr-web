@@ -7,7 +7,6 @@ import {
   BookOpen,
   Building,
   CheckCircle2,
-  Copy,
   ExternalLink,
   FileCheck2,
   History,
@@ -24,15 +23,19 @@ import {
   Trash2,
   UserRound,
 } from "lucide-react"
-import type { ChangeEvent, FormEvent, RefObject } from "react"
+import { useMemo, type ChangeEvent, type FormEvent, type RefObject } from "react"
 
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import { ClassInInternalAIIcon } from "@/components/ui/ClassInInternalAIIcon"
+import { extractEscalationContext } from "@/lib/internal-cs-chat/escalation-routing"
 import { cn } from "@/lib/utils"
 
 import AnswerFooterChip from "../components/AnswerFooterChip"
+import CommunicationTabs from "../components/CommunicationTabs"
 import ConversationSwitcher from "../components/ConversationSwitcher"
 import PromoteKnowledgeControl from "../components/PromoteKnowledgeControl"
+import QuickPromptChips from "../components/QuickPromptChips"
+import SmartActionCard from "../components/SmartActionCard"
 import StatusBadge from "../components/StatusBadge"
 import { shouldSubmitComposerOnKeyDown } from "../composer-keyboard"
 import {
@@ -106,6 +109,8 @@ export default function ChatPanel({
   assetError,
   composer,
   setComposer,
+  onQuickApprove,
+  onSelectAlternativeIssue,
 }: {
   detail: ConversationDetailResponse | null
   loading: boolean
@@ -147,7 +152,23 @@ export default function ChatPanel({
   assetError: string | null
   composer: string
   setComposer: (value: string) => void
+  onQuickApprove?: (messageId: string) => void
+  onSelectAlternativeIssue?: (issuePrompt: string) => void
 }) {
+  const escalationContext = useMemo(() => {
+    if (!detail) return null
+    const userTexts = detail.messages
+      .filter((m) => m.role === "user")
+      .map((m) => m.content)
+      .join("\n")
+    return extractEscalationContext(userTexts, {
+      title: detail.conversation.title,
+      tags: detail.conversation.tags,
+      assigneeName: detail.conversation.assignee_name,
+      createdDate: detail.conversation.created_at,
+    })
+  }, [detail])
+
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col", reviewOpen && "xl:pr-[438px]")}>
       <div className="shrink-0 border-b border-black/[0.08]">
@@ -207,6 +228,7 @@ export default function ChatPanel({
                   ? "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F] hover:bg-[#F6E7CE]"
                   : "border-black/[0.08] bg-white text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#31302E]"
               )}
+              title={pendingMessage ? "AI 답변 검토·승인 후 본사 확인 요청을 진행할 수 있습니다" : undefined}
             >
               <Building className="h-4 w-4" />
               <span className="hidden sm:inline">
@@ -243,6 +265,7 @@ export default function ChatPanel({
               const review = REVIEW_META[message.review_state]
               const sources = normalizeSourceRefs(message.source_refs)
               const isLatestAssistant = latestAssistant?.id === message.id
+              const isApproved = message.review_state === "approved"
               const visibleContent = message.corrected_content && message.review_state === "approved"
                 ? message.corrected_content
                 : message.content
@@ -301,6 +324,60 @@ export default function ChatPanel({
                             {message.model_name ? <span>{message.model_name}</span> : <span>결정론적 안전 초안</span>}
                             {message.model_mode ? <span>· {message.model_mode}</span> : null}
                           </div>
+
+                          {/* 스마트 제안 UI (상황 확인 '이런 거 맞냐', 즉시 허용/승인, 후속 진행 UI) */}
+                          <SmartActionCard
+                            message={message}
+                            isLatest={isLatestAssistant}
+                            onQuickApprove={(id) => onQuickApprove?.(id)}
+                            onCopyCustomerHolding={() => {
+                              const customerTemplate = communicationTemplates.find((t) => t.id === "customer")?.content
+                              if (customerTemplate) {
+                                void copyText(customerTemplate, "고객 대기 안내 초안을 복사했습니다.")
+                              }
+                            }}
+                            onRequestHq={() => {
+                              if (detail) {
+                                void requestHqConfirmation(detail.conversation)
+                              }
+                            }}
+                            onPromoteKnowledge={
+                              message.review_state === "approved"
+                                ? () => void promoteMessageToKnowledge(message.id)
+                                : undefined
+                            }
+                            onSelectAlternativeIssue={(issuePrompt) => {
+                              onSelectAlternativeIssue?.(issuePrompt)
+                            }}
+                            canPromote={message.review_state === "approved"}
+                          />
+
+                          {/* 승인(허가) 게이트 상태 배너 */}
+                          {message.review_state === "pending" ? (
+                            <div className="mt-3 flex items-center justify-between gap-2 rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-3.5 py-2 text-[11px] text-[#7A520F]">
+                              <span className="flex items-center gap-1.5">
+                                <LockKeyhole className="h-3.5 w-3.5 shrink-0 text-[#A8741A]" />
+                                AI 초안 — 외부 전달 및 소통 작업은 <strong>담당자 검토·승인(허가) 후</strong> 가능합니다.
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setReviewOpen(true)}
+                                className="inline-flex shrink-0 items-center gap-1 rounded bg-white px-2 py-1 text-[11px] font-semibold text-[#7A520F] shadow-xs hover:bg-[#F6E7CE]"
+                              >
+                                검토·승인 열기
+                              </button>
+                            </div>
+                          ) : message.review_state === "approved" ? (
+                            <div className="mt-3 flex items-center justify-between gap-2 rounded-md border border-[#BDEFD8] bg-[#ECFDF5] px-3.5 py-2 text-[11px] text-[#084734]">
+                              <span className="flex items-center gap-1.5">
+                                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-[#084734]" />
+                                담당자 검토·승인 완료 — 외부 전달 및 소통 템플릿 복사가 <strong>허가</strong>되었습니다.
+                              </span>
+                              <span className="text-[10px] text-[#615D59]">
+                                {message.reviewed_by ? `${message.reviewed_by} · ` : ""}{message.reviewed_at ? formatTime(message.reviewed_at) : ""}
+                              </span>
+                            </div>
+                          ) : null}
                           {message.review_state === "approved" && message.corrected_content ? (
                             <div className="mt-3 border-t border-black/[0.06] pt-3">
                               <PromoteKnowledgeControl
@@ -327,7 +404,12 @@ export default function ChatPanel({
                                 onClick={() => setExpanded(expanded === "hq" ? null : "hq")}
                                 icon={<MessageSquare className="h-3.5 w-3.5" />}
                               >
-                                소통 초안 3종
+                                <span>소통 초안 3종</span>
+                                {escalationContext ? (
+                                  <span className="ml-1 rounded bg-[#084734]/10 px-1.5 py-0.5 text-[9.5px] font-semibold text-[#084734]">
+                                    {escalationContext.contact.domainLabel.split("·")[0]}
+                                  </span>
+                                ) : null}
                               </AnswerFooterChip>
                               <AnswerFooterChip
                                 active={expanded === "regression"}
@@ -397,26 +479,13 @@ export default function ChatPanel({
 
                             {expanded === "hq" ? (
                               <div className="border-t border-black/[0.06] bg-[#FAFAF8] px-4 py-4">
-                              <div className="space-y-3">
-                                {communicationTemplates.map((template) => (
-                                  <section key={template.id} className="rounded-md border border-black/[0.08] bg-white p-3">
-                                    <div className="flex items-center justify-between gap-3">
-                                      <h4 className="text-[11px] font-semibold text-[#31302E]">{template.label}</h4>
-                                      <button
-                                        type="button"
-                                        onClick={() => void copyText(template.content, `${template.label} 초안을 복사했습니다.`)}
-                                        className="inline-flex h-7 items-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-2.5 text-[10px] font-semibold hover:bg-[#F6F5F4]"
-                                      >
-                                        <Copy className="h-3 w-3" />
-                                        복사
-                                      </button>
-                                    </div>
-                                    <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap font-sans text-[11px] leading-5 text-[#615D59]">
-                                      {template.content}
-                                    </pre>
-                                  </section>
-                                ))}
-                              </div>
+                                <CommunicationTabs
+                                  detail={detail}
+                                  isApproved={isApproved}
+                                  onOpenReview={() => setReviewOpen(true)}
+                                  onCopyText={copyText}
+                                  legacyTemplates={communicationTemplates}
+                                />
                               </div>
                             ) : null}
 
@@ -637,6 +706,15 @@ export default function ChatPanel({
             ) : null}
           </div>
         ) : null}
+
+        {/* 원클릭 빠른 작업 프리셋 (오탈자/모호성 없는 고속 질의) */}
+        <div className={cn("mb-2", reviewOpen ? "max-w-none" : "mx-auto max-w-[980px]")}>
+          <QuickPromptChips
+            onSelectPrompt={(promptText) => setComposer(promptText)}
+            disabled={isPending || uploadingAssets}
+          />
+        </div>
+
         <div className={cn(
           "flex items-end gap-3 rounded-lg border border-black/[0.16] bg-white px-4 py-3 focus-within:border-[#084734]/50 focus-within:ring-2 focus-within:ring-[#084734]/10",
           reviewOpen ? "max-w-none" : "mx-auto max-w-[980px]"

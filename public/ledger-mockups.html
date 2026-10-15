@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClassIn 매출 원장 표/시트 3가지 디자인 안 목업</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    /* 사용자 정의 폰트 및 스크롤바 */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.03);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.18);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(0, 0, 0, 0.28);
+    }
+    .freeze-shadow-r {
+      box-shadow: 3px 0 6px -2px rgba(0, 0, 0, 0.06);
+    }
+    .freeze-shadow-l {
+      box-shadow: -3px 0 6px -2px rgba(0, 0, 0, 0.06);
+    }
+  </style>
+</head>
+<body class="bg-[#F8F9FA] text-[#1E293B] antialiased p-4 md:p-8 min-h-screen font-sans">
+
+  <div class="max-w-[1500px] mx-auto space-y-6">
+
+    <!-- 상단 헤더 및 디자인 시안 탭 컨트롤러 -->
+    <header class="bg-white rounded-2xl p-6 border border-[#E2E8F0] shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#ECFDF5] text-[#084734] border border-[#A7F3D0]">
+            <span class="w-2 h-2 rounded-full bg-[#084734]"></span>
+            디자인 시안 비교 목업
+          </span>
+          <span class="text-xs text-[#64748B] font-mono">/admin/branch/ledger?fc=open</span>
+        </div>
+        <h1 class="text-xl md:text-2xl font-extrabold text-[#0F172A] mt-1.5 tracking-tight">
+          매출 원장 시트 & 표 — 3가지 디자인 대안
+        </h1>
+        <p class="text-sm text-[#64748B] mt-1">
+          실제 원장 데이터와 상단 툴바, 주차 펼침(10·11월), 셀 포커스 인터랙션을 각 스타일에 맞춰 확인해보세요.
+        </p>
+      </div>
+
+      <!-- 3가지 안 전환 탭 버튼 그룹 -->
+      <div class="inline-flex p-1.5 bg-[#F1F5F9] rounded-xl border border-[#E2E8F0] self-start md:self-auto gap-1">
+        <button id="tab-btn-1" onclick="switchTheme(1)" class="px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition-all bg-white text-[#084734] shadow-sm flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-[#084734]"></span>
+          안 1: 모던 SaaS (Airtable형)
+        </button>
+        <button id="tab-btn-2" onclick="switchTheme(2)" class="px-4 py-2 rounded-lg text-xs md:text-sm font-semibold transition-all text-[#64748B] hover:text-[#0F172A] flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-[#3B82F6]"></span>
+          안 2: 고밀도 프로페셔널 원장
+        </button>
+        <button id="tab-btn-3" onclick="switchTheme(3)" class="px-4 py-2 rounded-lg text-xs md:text-sm font-semibold transition-all text-[#64748B] hover:text-[#0F172A] flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-[#D97706]"></span>
+          안 3: 프리미엄 비주얼 시트
+        </button>
+      </div>
+    </header>
+
+    <!-- 안별 핵심 컨셉 요약 배너 -->
+    <div id="theme-banner" class="bg-gradient-to-r from-[#F0FDF4] to-[#ECFDF5] border border-[#BBF7D0] rounded-xl p-4 flex items-start justify-between gap-4 transition-all">
+      <div class="space-y-1">
+        <h3 id="banner-title" class="text-sm font-bold text-[#065F46] flex items-center gap-1.5">
+          ✨ 안 1. 모던 SaaS 그리드 (Airtable / Linear 스타일)
+        </h3>
+        <p id="banner-desc" class="text-xs text-[#047857] leading-relaxed">
+          가장 세련되고 직관적인 현대적 업무 도구 룩앤필. 둥근 뱃지와 정갈한 보더, 명확한 포커스 링과 소프트 틴트로 오랜 시간 보아도 피로하지 않고 업무 효율을 극대화합니다.
+        </p>
+      </div>
+      <div class="shrink-0 flex items-center gap-2 text-xs">
+        <span class="px-2 py-1 rounded bg-white/80 border border-[#A7F3D0] text-[#065F46] font-semibold">셀 클릭 시 포커스</span>
+        <span class="px-2 py-1 rounded bg-white/80 border border-[#A7F3D0] text-[#065F46] font-semibold">가로 스크롤 가능</span>
+      </div>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- 디자인 컨테이너 래퍼 (동적 스타일링 대상) -->
+    <!-- ============================================================== -->
+    <div id="mockup-frame" class="bg-white rounded-2xl border border-[#E2E8F0] shadow-sm overflow-hidden transition-all duration-300">
+
+      <!-- 1. 상단 정보 & 페이지네이션 툴바 -->
+      <div id="top-toolbar" class="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-[#FAF9F8] border-b border-[#E2E8F0] text-xs">
+        <div class="flex items-center gap-2">
+          <span id="badge-customer-count" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#ECFDF5] text-[#084734] font-bold border border-[#A7F3D0]">
+            <svg class="w-3.5 h-3.5 text-[#084734]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+            고객 138곳
+          </span>
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-white border border-[#E2E8F0] font-semibold text-[#64748B]">
+            총 196행 중 1-100 표시
+          </span>
+        </div>
+
+        <div class="flex items-center gap-1.5">
+          <button class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-white border border-[#E2E8F0] text-[#64748B] hover:text-[#0F172A] font-bold hover:bg-[#F8FAFC] transition shadow-xs text-xs">
+            &lt; 이전
+          </button>
+          <span class="px-2.5 py-0.5 rounded-md bg-white border border-[#E2E8F0] font-bold text-[#0F172A] min-w-[54px] text-center shadow-xs">
+            1 / 2
+          </span>
+          <button class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-white border border-[#E2E8F0] text-[#64748B] hover:text-[#0F172A] font-bold hover:bg-[#F8FAFC] transition shadow-xs text-xs">
+            다음 &gt;
+          </button>
+        </div>
+      </div>
+
+      <!-- 2. 스프레드시트 수식 / 셀 액션 툴바 (RevMatrixEditBar) -->
+      <div id="edit-bar" class="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-white border-b border-[#E2E8F0]">
+        <!-- 좌측: 선택 셀 상태 피드백 -->
+        <div class="flex items-center gap-2.5 min-w-0">
+          <span id="active-indicator" class="w-2.5 h-2.5 rounded-full bg-[#084734] shrink-0 animate-pulse"></span>
+          <div id="selection-info" class="flex items-center gap-2 text-xs truncate">
+            <span class="px-2 py-0.5 rounded bg-[#F1F5F9] font-bold text-[#0F172A] border border-[#E2E8F0]">정원준수학</span>
+            <span class="px-1.5 py-0.5 rounded bg-[#ECFDF5] font-semibold text-[#084734] border border-[#A7F3D0]">10월 W2</span>
+            <span class="text-[#64748B] font-semibold">100,000원 <span class="text-[#94A3B8]">→</span> <strong class="text-[#084734]">100,000원</strong></span>
+          </div>
+        </div>
+
+        <!-- 중앙: 확도 3버튼 세그먼트 컨트롤 -->
+        <div id="confidence-group" class="inline-flex p-0.5 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0] gap-1">
+          <button onclick="setConfidence('expected')" id="conf-btn-expected" class="px-3 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 text-[#B45309] hover:bg-white/80">
+            예정 <kbd class="px-1 py-0.2 rounded bg-black/5 font-mono text-[10px]">E</kbd>
+          </button>
+          <button onclick="setConfidence('high')" id="conf-btn-high" class="px-3 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 text-[#1D4ED8] hover:bg-white/80">
+            고확도 <kbd class="px-1 py-0.2 rounded bg-black/5 font-mono text-[10px]">H</kbd>
+          </button>
+          <button onclick="setConfidence('confirmed')" id="conf-btn-confirmed" class="px-3 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 bg-[#084734] text-white shadow-xs">
+            확정 <kbd class="px-1 py-0.2 rounded bg-white/20 font-mono text-[10px]">C</kbd>
+          </button>
+        </div>
+
+        <!-- 우측: 단축키 힌트 바 -->
+        <div id="shortcut-hints" class="hidden xl:flex items-center gap-2 text-[11px] text-[#64748B]">
+          <span class="inline-flex items-center gap-1"><kbd class="px-1.5 py-0.5 rounded bg-[#F1F5F9] border border-[#CBD5E1] text-[#334155] font-mono text-[10px]">Enter</kbd> 저장</span>
+          <span class="text-[#CBD5E1]">·</span>
+          <span class="inline-flex items-center gap-1"><kbd class="px-1.5 py-0.5 rounded bg-[#F1F5F9] border border-[#CBD5E1] text-[#334155] font-mono text-[10px]">Tab</kbd> 다음</span>
+          <span class="text-[#CBD5E1]">·</span>
+          <span class="inline-flex items-center gap-1"><kbd class="px-1.5 py-0.5 rounded bg-[#F1F5F9] border border-[#CBD5E1] text-[#334155] font-mono text-[10px]">Esc</kbd> 취소</span>
+          <span class="text-[#CBD5E1]">·</span>
+          <span class="inline-flex items-center gap-1"><kbd class="px-1.5 py-0.5 rounded bg-[#F1F5F9] border border-[#CBD5E1] text-[#334155] font-mono text-[10px]">Ctrl+D</kbd> 복사</span>
+        </div>
+      </div>
+
+      <!-- 3. 메인 테이블 (스크롤 및 그리드) -->
+      <div class="overflow-x-auto max-h-[620px] relative">
+        <table id="matrix-table" class="w-full min-w-[1360px] border-collapse text-left text-xs">
+          <!-- thead 영역 -->
+          <thead class="sticky top-0 z-30 bg-[#FAF9F8] border-b-2 border-[#CBD5E1] text-[11px] uppercase tracking-wider text-[#475569] select-none font-bold">
+            <tr class="h-10">
+              <!-- 고객/계정 고정 열 (좌측) -->
+              <th class="sticky left-0 top-0 z-40 bg-[#FAF9F8] px-3.5 py-2.5 border-r border-[#E2E8F0] freeze-shadow-r w-[210px] min-w-[210px]">
+                <div class="flex items-center justify-between">
+                  <span>고객 / 계정</span>
+                  <svg class="w-3.5 h-3.5 text-[#94A3B8]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"></path></svg>
+                </div>
+              </th>
+
+              <!-- 상품 고정 열 (좌측) -->
+              <th class="sticky left-[210px] top-0 z-40 bg-[#FAF9F8] px-2 py-2.5 border-r border-[#E2E8F0] text-center w-[60px] min-w-[60px]">
+                상품
+              </th>
+
+              <!-- 4월 ~ 9월 접혀있는 월 -->
+              <th class="border-l border-[#EDECE8] text-center px-1 py-1 w-[64px] min-w-[64px] hover:bg-[#F1F5F9] cursor-pointer">
+                <span class="block text-[#334155]">4월</span>
+                <span class="text-[9px] text-[#94A3B8]">▼</span>
+              </th>
+              <th class="border-l border-[#EDECE8] text-center px-1 py-1 w-[64px] min-w-[64px] hover:bg-[#F1F5F9] cursor-pointer">
+                <span class="block text-[#334155]">5월</span>
+                <span class="text-[9px] text-[#94A3B8]">▼</span>
+              </th>
+              <th class="border-l border-[#EDECE8] text-center px-1 py-1 w-[64px] min-w-[64px] hover:bg-[#F1F5F9] cursor-pointer">
+                <span class="block text-[#334155]">6월</span>
+                <span class="text-[9px] text-[#94A3B8]">▼</span>
+              </th>
+              <th class="border-l border-[#EDECE8] text-center px-1 py-1 w-[64px] min-w-[64px] hover:bg-[#F1F5F9] cursor-pointer">
+                <span class="block text-[#334155]">7월</span>
+                <span class="text-[9px] text-[#94A3B8]">▼</span>
+              </th>
+              <th class="border-l border-[#EDECE8] text-center px-1 py-1 w-[64px] min-w-[64px] hover:bg-[#F1F5F9] cursor-pointer">
+                <span class="block text-[#334155]">8월</span>
+                <span class="text-[9px] text-[#94A3B8]">▼</span>
+              </th>
+              <th class="border-l border-[#EDECE8] text-center px-1 py-1 w-[64px] min-w-[64px] hover:bg-[#F1F5F9] cursor-pointer">
+                <span class="block text-[#334155]">9월</span>
+                <span class="text-[9px] text-[#94A3B8]">▼</span>
+              </th>
+
+              <!-- 10월 펼쳐진 월 (주차 W1~W5 + 월계 6열 그룹) -->
+              <th colspan="6" class="border-l border-[#EDECE8] p-0 text-center bg-[#F0FDF4] w-[324px] min-w-[324px]">
+                <div class="flex items-center justify-between px-2.5 py-1 border-b border-[#BBF7D0]">
+                  <div class="flex items-center gap-1.5">
+                    <span class="font-bold text-[#065F46] text-xs">10월</span>
+                    <span class="px-1.5 py-0.2 rounded bg-[#DCFCE7] text-[#065F46] font-bold text-[9px] border border-[#86EFAC]">주차 상세</span>
+                  </div>
+                  <button class="px-1.5 py-0.5 rounded bg-white text-[#065F46] font-bold text-[9.5px] border border-[#A7F3D0] hover:bg-[#ECFDF5] transition shadow-2xs">
+                    접기 ▲
+                  </button>
+                </div>
+                <div class="grid grid-cols-6 text-[10px] font-semibold text-[#475569]">
+                  <span class="py-1 text-center">W1</span>
+                  <span class="py-1 text-center border-l border-[#EDECE8]">W2</span>
+                  <span class="py-1 text-center border-l border-[#EDECE8]">W3</span>
+                  <span class="py-1 text-center border-l border-[#EDECE8]">W4</span>
+                  <span class="py-1 text-center border-l border-[#EDECE8]">W5</span>
+                  <span class="py-1 text-center border-l border-[#A7F3D0] bg-[#DCFCE7]/70 font-bold text-[#065F46]">월계</span>
+                </div>
+              </th>
+
+              <!-- 11월 펼쳐진 월 (주차 W1~W5 + 월계 6열 그룹) -->
+              <th colspan="6" class="border-l border-[#EDECE8] p-0 text-center bg-[#F0FDF4] w-[324px] min-w-[324px]">
+                <div class="flex items-center justify-between px-2.5 py-1 border-b border-[#BBF7D0]">
+                  <div class="flex items-center gap-1.5">
+                    <span class="font-bold text-[#065F46] text-xs">11월</span>
+                    <span class="px-1.5 py-0.2 rounded bg-[#DCFCE7] text-[#065F46] font-bold text-[9px] border border-[#86EFAC]">주차 상세</span>
+                  </div>
+                  <button class="px-1.5 py-0.5 rounded bg-white text-[#065F46] font-bold text-[9.5px] border border-[#A7F3D0] hover:bg-[#ECFDF5] transition shadow-2xs">
+                    접기 ▲
+                  </button>
+                </div>
+                <div class="grid grid-cols-6 text-[10px] font-semibold text-[#475569]">
+                  <span class="py-1 text-center">W1</span>
+                  <span class="py-1 text-center border-l border-[#EDECE8]">W2</span>
+                  <span class="py-1 text-center border-l border-[#EDECE8]">W3</span>
+                  <span class="py-1 text-center border-l border-[#EDECE8]">W4</span>
+                  <span class="py-1 text-center border-l border-[#EDECE8]">W5</span>
+                  <span class="py-1 text-center border-l border-[#A7F3D0] bg-[#DCFCE7]/70 font-bold text-[#065F46]">월계</span>
+                </div>
+              </th>
+
+              <!-- 12월 접혀있는 월 -->
+              <th class="border-l border-[#EDECE8] text-center px-1 py-1 w-[64px] min-w-[64px] hover:bg-[#F1F5F9] cursor-pointer">
+                <span class="block text-[#334155]">12월</span>
+                <span class="text-[9px] text-[#94A3B8]">▼</span>
+              </th>
+
+              <!-- 연간합계 고정 열 (우측) -->
+              <th class="sticky right-0 top-0 z-40 bg-[#FAF9F8] px-3.5 py-2.5 border-l border-[#E2E8F0] freeze-shadow-l text-right w-[110px] min-w-[110px]">
+                <div class="flex items-center justify-end gap-1">
+                  <span>연간합계</span>
+                  <svg class="w-3.5 h-3.5 text-[#94A3B8]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"></path></svg>
+                </div>
+              </th>
+            </tr>
+          </thead>
+
+          <!-- tbody 영역 -->
+          <tbody id="matrix-tbody" class="divide-y divide-[#EDECE8] bg-white">
+            <!-- 행 데이터들은 JavaScript에서 동적으로 안별 스타일에 맞게 렌더링됩니다 -->
+          </tbody>
+
+          <!-- tfoot 영역 (Sticky Bottom) -->
+          <tfoot class="sticky bottom-0 z-30 bg-[#F8FAFC] border-t-2 border-[#CBD5E1] freeze-shadow-l font-bold text-xs">
+            <tr class="h-10">
+              <td class="sticky left-0 z-40 bg-[#F8FAFC] px-3.5 py-2 border-r border-[#E2E8F0] freeze-shadow-r text-[#1E293B]">
+                월 합계 (확정·고확도·예정)
+              </td>
+              <td class="sticky left-[210px] z-40 bg-[#F8FAFC] px-2 py-2 border-r border-[#E2E8F0]"></td>
+
+              <td class="px-2 py-1 text-right tabular-nums border-l border-[#EDECE8] text-[#084734]">45만</td>
+              <td class="px-2 py-1 text-right tabular-nums border-l border-[#EDECE8] text-[#084734]">38만</td>
+              <td class="px-2 py-1 text-right tabular-nums border-l border-[#EDECE8] text-[#084734]">52만</td>
+              <td class="px-2 py-1 text-right tabular-nums border-l border-[#EDECE8] text-[#084734]">41만</td>
+              <td class="px-2 py-1 text-right tabular-nums border-l border-[#EDECE8] text-[#084734]">39만</td>
+              <td class="px-2 py-1 text-right tabular-nums border-l border-[#EDECE8] text-[#084734]">64만</td>
+
+              <!-- 10월 6열 -->
+              <td class="px-1 py-1 text-right tabular-nums border-l border-[#EDECE8] text-[#1E293B]">8.5만</td>
+              <td class="px-1 py-1 text-right tabular-nums border-l border-[#EDECE8] text-[#1E293B]">16만</td>
+              <td class="px-1 py-1 text-right tabular-nums border-l border-[#EDECE8] text-[#1E293B]">12만</td>
+              <td class="px-1 py-1 text-right tabular-nums border-l border-[#EDECE8] text-[#1E293B]">7만</td>
+              <td class="px-1 py-1 text-right tabular-nums border-l border-[#EDECE8] text-[#1E293B]">14만</td>
+              <td class="px-2 py-1 text-right tabular-nums border-l border-[#A7F3D0] bg-[#DCFCE7]/60 text-[#084734] font-extrabold">57.5만</td>
+
+              <!-- 11월 6열 -->
+              <td class="px-1 py-1 text-right tabular-nums border-l border-[#EDECE8] text-[#1E293B]">12만</td>
+              <td class="px-1 py-1 text-right tabular-nums border-l border-[#EDECE8] text-[#1E293B]">18만</td>
+              <td class="px-1 py-1 text-right tabular-nums border-l border-[#EDECE8] text-[#1E293B]">16만</td>
+              <td class="px-1 py-1 text-right tabular-nums border-l border-[#EDECE8] text-[#1E293B]">22만</td>
+              <td class="px-1 py-1 text-right tabular-nums border-l border-[#EDECE8] text-[#1D4ED8] bg-[#EFF6FF]">19만</td>
+              <td class="px-2 py-1 text-right tabular-nums border-l border-[#A7F3D0] bg-[#DCFCE7]/60 text-[#084734] font-extrabold">87만</td>
+
+              <td class="px-2 py-1 text-right tabular-nums border-l border-[#EDECE8] text-[#084734]">30만</td>
+              <td class="sticky right-0 z-40 bg-[#F8FAFC] px-3.5 py-2 border-l border-[#E2E8F0] freeze-shadow-l text-right tabular-nums text-[#084734] font-black text-sm">
+                453.5만
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+    </div>
+
+    <!-- 3가지 안별 상세 비교 가이드 카드 -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <!-- 안 1 카드 -->
+      <div class="bg-white rounded-xl p-5 border border-[#E2E8F0] shadow-sm space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="px-2.5 py-1 rounded-md text-xs font-bold bg-[#ECFDF5] text-[#084734] border border-[#A7F3D0]">안 1. 모던 SaaS (Airtable형)</span>
+          <span class="text-xs text-[#64748B] font-semibold">추천 ★★★</span>
+        </div>
+        <p class="text-xs text-[#475569] leading-relaxed">
+          <strong>현대적인 소프트 테두리 & 파스텔 틴트:</strong><br>
+          스프레드시트 본연의 간결함을 유지하면서 고확도(블루 틴트)와 확정(에메랄드 뱃지), 에러(로즈 틴트)를 편안한 색감으로 직관화.
+        </p>
+        <ul class="text-xs text-[#64748B] space-y-1">
+          <li>• 테두리: 라이트 슬레이트 (#EDECE8)</li>
+          <li>• 선택 셀: 2px 에메랄드 딥그린 포커스링</li>
+          <li>• 상품 뱃지: 둥근 소프트 필 (HW / SW / 시트)</li>
+        </ul>
+      </div>
+
+      <!-- 안 2 카드 -->
+      <div class="bg-white rounded-xl p-5 border border-[#E2E8F0] shadow-sm space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="px-2.5 py-1 rounded-md text-xs font-bold bg-[#EFF6FF] text-[#1D4ED8] border border-[#BFDBFE]">안 2. 고밀도 프로페셔널 원장</span>
+          <span class="text-xs text-[#64748B] font-semibold">실무 집중형</span>
+        </div>
+        <p class="text-xs text-[#475569] leading-relaxed">
+          <strong>컴팩트 그리드 & 금융 터미널 감성:</strong><br>
+          셀 간격을 슬림하게 압축하고 수치마다 모노스페이스 정렬과 마이크로 바 인디케이터를 적용하여 화면에 최대한 많은 정보를 한눈에 조망.
+        </p>
+        <ul class="text-xs text-[#64748B] space-y-1">
+          <li>• 테두리: 선명한 격자선 (#E2E8F0)</li>
+          <li>• 선택 셀: 인디고 블루 2px 정밀 테두리</li>
+          <li>• 상품 뱃지: 미니멀 스퀘어 코드 태그</li>
+        </ul>
+      </div>
+
+      <!-- 안 3 카드 -->
+      <div class="bg-white rounded-xl p-5 border border-[#E2E8F0] shadow-sm space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="px-2.5 py-1 rounded-md text-xs font-bold bg-[#FFFBEB] text-[#B45309] border border-[#FDE68A]">안 3. 프리미엄 비주얼 시트</span>
+          <span class="text-xs text-[#64748B] font-semibold">보고 / 임원용</span>
+        </div>
+        <p class="text-xs text-[#475569] leading-relaxed">
+          <strong>금액 막대 게이지(Data-bar) & 시각 위계:</strong><br>
+          셀 배경에 금액 비례 인라인 프로그레스 막대가 은은하게 깔려, 숫자를 일일이 읽지 않아도 어디서 매출이 집중되는지 히트맵처럼 식별 가능.
+        </p>
+        <ul class="text-xs text-[#64748B] space-y-1">
+          <li>• 테두리: 미니멀 소프트 보더 (#F1F5F9)</li>
+          <li>• 시각 효과: 셀 내부 인라인 데이터 바 게이지</li>
+          <li>• 상품 뱃지: 우아한 럭셔리 라운드 칩</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============================================================== -->
+  <!-- 인터랙션 스크립트 (테마 전환 및 데이터 렌더링) -->
+  <!-- ============================================================== -->
+  <script>
+    // 원장 목업 데이터셋 (실제 사용자 스크린샷의 대표 고객 10곳)
+    const mockRows = [
+      {
+        id: "1",
+        customer: "정원준수학",
+        sub: "Wangchan · BD · 울산",
+        product: "시트",
+        productCat: "sheet",
+        m4: "3.7만", m5: "-", m6: "-", m7: "-", m8: "-", m9: "-",
+        w10: ["-", "10만", "-", "-", "-"], w10Sum: "10만", w10Status: "confirmed",
+        w11: ["10만", "-", "-", "17만", "-"], w11Sum: "27만", w11Status: "high",
+        m12: "-",
+        annual: "30만", annualSub: "확정 20만"
+      },
+      {
+        id: "2",
+        customer: "국어에반하다",
+        sub: "Han · BD · 대전",
+        product: "시트",
+        productCat: "sheet",
+        m4: "-", m5: "-", m6: "2.4만", m7: "-", m8: "2.4만", m9: "-",
+        w10: ["-", "-", "-", "-", "5만"], w10Sum: "5만", w10Status: "confirmed",
+        w11: ["5만", "-", "-", "2.3만", "-"], w11Sum: "7.3만", w11Status: "high",
+        m12: "-",
+        annual: "9.6만", annualSub: ""
+      },
+      {
+        id: "3",
+        customer: "차준호국어",
+        sub: "Han-Gyusung · 경남",
+        product: "HW",
+        productCat: "hw",
+        hasSub: true,
+        m4: "8만", m5: "-", m6: "-", m7: "-", m8: "-", m9: "-",
+        w10: ["-", "-", "-", "-", "-"], w10Sum: "-", w10Status: "empty",
+        w11: ["5.8만", "5.3만", "-", "8.2만", "-"], w11Sum: "19.3만", w11Status: "expected",
+        m12: "-",
+        annual: "27만", annualSub: "확정 20만"
+      },
+      {
+        id: "4",
+        customer: "윤유경플러스",
+        sub: "Junhyuk · 경기",
+        product: "HW SW",
+        productCat: "mix",
+        hasSub: true,
+        m4: "29만", m5: "-", m6: "-", m7: "-", m8: "-", m9: "-",
+        w10: ["-", "-", "4.6만", "-", "-"], w10Sum: "4.6만", w10Status: "confirmed",
+        w11: ["-", "12만", "12만", "3.1만", "11만"], w11Sum: "38.1만", w11Status: "mixed",
+        m12: "-",
+        annual: "72만", annualSub: "확정 33만"
+      },
+      {
+        id: "5",
+        customer: "제이스칸",
+        sub: "Somang · MKT · 충남",
+        product: "시트",
+        productCat: "sheet",
+        m4: "-", m5: "-", m6: "4.3만", m7: "-", m8: "4.3만", m9: "-",
+        w10: ["-", "-", "-", "-", "-"], w10Sum: "-", w10Status: "empty",
+        w11: ["-", "-", "-", "2.3만", "-"], w11Sum: "2.3만", w11Status: "high",
+        m12: "-",
+        annual: "6.5만", annualSub: ""
+      },
+      {
+        id: "6",
+        customer: "과사람",
+        sub: "Wangchan · 부산",
+        product: "HW SW",
+        productCat: "mix",
+        hasSub: true,
+        m4: "12만", m5: "-", m6: "-", m7: "-", m8: "2.5만", m9: "-",
+        w10: ["-", "-", "-", "-", "-"], w10Sum: "-", w10Status: "empty",
+        w11: ["2.5만", "5.7만", "14만", "5만", "6만"], w11Sum: "33.2만", w11Status: "expected",
+        m12: "-",
+        annual: "47만", annualSub: "확정 15만"
+      },
+      {
+        id: "7",
+        customer: "12inEdu Language",
+        sub: "Heesung · MKT · 서울",
+        product: "시트",
+        productCat: "sheet",
+        m4: "1만", m5: "-", m6: "-", m7: "-", m8: "-", m9: "-",
+        w10: ["-", "-", "-", "-", "-"], w10Sum: "-", w10Status: "empty",
+        w11: ["-", "1만", "-", "-", "-"], w11Sum: "1만", w11Status: "confirmed",
+        m12: "-",
+        annual: "3만", annualSub: ""
+      },
+      {
+        id: "8",
+        customer: "에듀온픽",
+        sub: "Gyusung · MKT · 온라인",
+        product: "시트",
+        productCat: "sheet",
+        m4: "5만", m5: "-", m6: "1만", m7: "-", m8: "1만", m9: "-",
+        w10: ["-", "-", "-", "1만", "-"], w10Sum: "1만", w10Status: "confirmed",
+        w11: ["1만", "1만", "1만", "1만", "1만"], w11Sum: "5만", w11Status: "high",
+        m12: "-",
+        annual: "11만", annualSub: ""
+      },
+      {
+        id: "9",
+        customer: "N수구원",
+        sub: "Somang · MKT · 온라인",
+        product: "시트",
+        productCat: "sheet",
+        m4: "5,000", m5: "-", m6: "-", m7: "-", m8: "5,000", m9: "-",
+        w10: ["-", "-", "-", "-", "-"], w10Sum: "-", w10Status: "empty",
+        w11: ["5,000", "-", "-", "-", "5,000"], w11Sum: "1만", w11Status: "high",
+        m12: "-",
+        annual: "1.5만", annualSub: ""
+      },
+      {
+        id: "10",
+        customer: "디바아엠건축사무소",
+        sub: "Wangchan · 서울",
+        product: "시트",
+        productCat: "sheet",
+        m4: "745", m5: "-", m6: "3,725", m7: "-", m8: "3,725", m9: "-",
+        w10: ["-", "-", "-", "-", "-"], w10Sum: "-", w10Status: "empty",
+        w11: ["-", "-", "-", "745", "-"], w11Sum: "745", w11Status: "high",
+        m12: "-",
+        annual: "5,215", annualSub: ""
+      }
+    ];
+
+    let currentTheme = 1;
+    let selectedCellId = "cell-1-w10-1";
+
+    // 상품 뱃지 HTML 생성
+    function getProductBadge(cat, label, theme) {
+      if (theme === 1) {
+        // 안 1: 모던 SaaS 파스텔 라운드 배지
+        if (cat === "hw") return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">HW</span>`;
+        if (cat === "mix") return `<span class="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A] mr-0.5">HW</span><span class="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-[#DCFCE7] text-[#166534] border border-[#BBF7D0]">SW</span>`;
+        return `<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#F1F5F9] text-[#475569] border border-[#E2E8F0]">시트</span>`;
+      } else if (theme === 2) {
+        // 안 2: 금융 고밀도 스퀘어 코드 태그
+        if (cat === "hw") return `<span class="px-1.5 py-0.2 rounded text-[9.5px] font-mono font-bold bg-[#F59E0B] text-white">HW</span>`;
+        if (cat === "mix") return `<span class="px-1 py-0.2 rounded text-[9px] font-mono font-bold bg-[#0F766E] text-white">HW/SW</span>`;
+        return `<span class="px-1.5 py-0.2 rounded text-[9.5px] font-mono text-[#64748B] bg-[#F1F5F9] border border-[#CBD5E1]">SHT</span>`;
+      } else {
+        // 안 3: 프리미엄 비주얼 라운드 칩
+        if (cat === "hw") return `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#FFFBEB] text-[#B45309] shadow-2xs border border-[#FDE68A]">Hardware</span>`;
+        if (cat === "mix") return `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#F0FDF4] text-[#15803D] shadow-2xs border border-[#BBF7D0]">All Suite</span>`;
+        return `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-white text-[#64748B] shadow-2xs border border-[#E2E8F0]">Sheet Master</span>`;
+      }
+    }
+
+    // 셀 렌더링 헬퍼
+    function renderCell(row, val, cellKey, theme, statusHint) {
+      const isSelected = selectedCellId === cellKey;
+      let focusClass = "";
+      if (isSelected) {
+        if (theme === 1) focusClass = "ring-2 ring-inset ring-[#084734] bg-white z-20 shadow-sm";
+        if (theme === 2) focusClass = "ring-2 ring-inset ring-[#2563EB] bg-[#EFF6FF] z-20";
+        if (theme === 3) focusClass = "ring-2 ring-inset ring-[#D97706] bg-[#FFFBEB] z-20 shadow-md";
+      }
+
+      // 금액에 따른 배경/스타일
+      let bgStyle = "";
+      let textStyle = "text-[#334155]";
+      let icon = "";
+
+      if (val === "-") {
+        return `<td id="${cellKey}" onclick="selectCell('${cellKey}', '${row.customer}', '${val}')" class="px-1 py-2 text-right border-l border-[#EDECE8] text-[#CBD5E1] select-none hover:bg-[#F8FAFC] cursor-cell transition-colors ${focusClass}">·</td>`;
+      }
+
+      // 고확도 틴트 (11월 W4/W5 등)
+      if (statusHint === "high") {
+        bgStyle = theme === 3 ? "bg-[#EFF6FF]/60" : "bg-[#EFF6FF]";
+        textStyle = "font-bold text-[#1D4ED8]";
+      } else if (statusHint === "confirmed") {
+        textStyle = "font-bold text-[#084734]";
+        icon = `<svg class="w-2.5 h-2.5 inline mr-0.5 text-[#94A3B8]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>`;
+      } else if (statusHint === "mismatch") {
+        bgStyle = "bg-[#FEF2F2] border-l-2 border-l-[#EF4444]";
+        textStyle = "font-bold text-[#DC2626]";
+      }
+
+      // 안 3 전용 인라인 데이터 바 (Data-bar)
+      let dataBarHtml = "";
+      if (theme === 3 && val !== "-") {
+        let pct = Math.min(100, Math.max(15, parseInt(val) * 3 || 35));
+        dataBarHtml = `<div class="absolute bottom-0 left-0 h-1 bg-[#084734]/20 rounded-full" style="width: ${pct}%"></div>`;
+      }
+
+      return `
+        <td id="${cellKey}" onclick="selectCell('${cellKey}', '${row.customer}', '${val}')" 
+            class="relative px-2 py-2 text-right tabular-nums border-l border-[#EDECE8] hover:bg-[#F1F5F9] cursor-cell transition-all ${bgStyle} ${focusClass}">
+          ${dataBarHtml}
+          <span class="inline-flex items-center justify-end ${textStyle}">
+            ${icon}${val}
+          </span>
+        </td>
+      `;
+    }
+
+    // 테이블 본문 렌더링
+    function renderTable() {
+      const tbody = document.getElementById("matrix-tbody");
+      tbody.innerHTML = "";
+
+      mockRows.forEach((row, idx) => {
+        const tr = document.createElement("tr");
+        tr.className = `group transition-colors ${idx % 2 === 0 ? "bg-white" : "bg-[#FCFCFB]"} hover:bg-[#F8FAFC]`;
+
+        // 1열: 고객명 (Sticky Left)
+        const td1 = `
+          <td class="sticky left-0 z-10 px-3.5 py-2.5 border-r border-[#E2E8F0] freeze-shadow-r bg-inherit">
+            <div class="flex items-center gap-1.5">
+              ${row.hasSub ? `
+                <button class="w-4 h-4 rounded hover:bg-black/5 text-[#64748B] flex items-center justify-center shrink-0">
+                  <svg class="w-3 h-3 text-[#64748B]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                </button>
+              ` : `<span class="w-4 shrink-0"></span>`}
+              <div class="min-w-0 flex-1">
+                <span class="block truncate font-bold text-xs text-[#0F172A] group-hover:text-[#084734] transition-colors">${row.customer}</span>
+                <span class="block truncate text-[10px] text-[#94A3B8] font-medium">${row.sub}</span>
+              </div>
+              <span class="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-semibold text-[#B45309] bg-[#FEF3C7] border border-[#FDE68A]">
+                미연결
+              </span>
+            </div>
+          </td>
+        `;
+
+        // 2열: 상품
+        const td2 = `
+          <td class="sticky left-[210px] z-10 px-2 py-2.5 border-r border-[#E2E8F0] text-center bg-inherit">
+            ${getProductBadge(row.productCat, row.product, currentTheme)}
+          </td>
+        `;
+
+        // 4~9월
+        const tdM4 = renderCell(row, row.m4, `cell-${row.id}-m4`, currentTheme);
+        const tdM5 = renderCell(row, row.m5, `cell-${row.id}-m5`, currentTheme);
+        const tdM6 = renderCell(row, row.m6, `cell-${row.id}-m6`, currentTheme, "confirmed");
+        const tdM7 = renderCell(row, row.m7, `cell-${row.id}-m7`, currentTheme);
+        const tdM8 = renderCell(row, row.m8, `cell-${row.id}-m8`, currentTheme, "confirmed");
+        const tdM9 = renderCell(row, row.m9, `cell-${row.id}-m9`, currentTheme);
+
+        // 10월 W1~W5 + 월계
+        const tdW10_0 = renderCell(row, row.w10[0], `cell-${row.id}-w10-0`, currentTheme);
+        const tdW10_1 = renderCell(row, row.w10[1], `cell-${row.id}-w10-1`, currentTheme, row.w10Status);
+        const tdW10_2 = renderCell(row, row.w10[2], `cell-${row.id}-w10-2`, currentTheme);
+        const tdW10_3 = renderCell(row, row.w10[3], `cell-${row.id}-w10-3`, currentTheme, row.id === "8" ? "confirmed" : "");
+        const tdW10_4 = renderCell(row, row.w10[4], `cell-${row.id}-w10-4`, currentTheme, row.id === "2" ? "confirmed" : "");
+        const tdW10_sum = `
+          <td class="px-2 py-2 text-right tabular-nums border-l border-[#A7F3D0] bg-[#DCFCE7]/40 font-bold text-[#084734]">
+            ${row.w10Sum}
+          </td>
+        `;
+
+        // 11월 W1~W5 + 월계
+        const tdW11_0 = renderCell(row, row.w11[0], `cell-${row.id}-w11-0`, currentTheme);
+        const tdW11_1 = renderCell(row, row.w11[1], `cell-${row.id}-w11-1`, currentTheme);
+        const tdW11_2 = renderCell(row, row.w11[2], `cell-${row.id}-w11-2`, currentTheme);
+        const tdW11_3 = renderCell(row, row.w11[3], `cell-${row.id}-w11-3`, currentTheme, row.id === "1" ? "high" : row.id === "8" ? "mismatch" : "high");
+        const tdW11_4 = renderCell(row, row.w11[4], `cell-${row.id}-w11-4`, currentTheme, row.w11[4] !== "-" ? "high" : "");
+        const tdW11_sum = `
+          <td class="px-2 py-2 text-right tabular-nums border-l border-[#A7F3D0] bg-[#DCFCE7]/40 font-bold text-[#084734]">
+            ${row.w11Sum}
+          </td>
+        `;
+
+        // 12월
+        const tdM12 = renderCell(row, row.m12, `cell-${row.id}-m12`, currentTheme);
+
+        // 연간합계 (Sticky Right)
+        const tdAnnual = `
+          <td class="sticky right-0 z-10 px-3.5 py-2.5 border-l border-[#E2E8F0] freeze-shadow-l text-right tabular-nums bg-inherit">
+            <span class="block font-bold text-xs text-[#0F172A] leading-tight">${row.annual}</span>
+            ${row.annualSub ? `<span class="block text-[9.5px] font-semibold text-[#084734] leading-tight">${row.annualSub}</span>` : ""}
+          </td>
+        `;
+
+        tr.innerHTML = td1 + td2 + tdM4 + tdM5 + tdM6 + tdM7 + tdM8 + tdM9 + tdW10_0 + tdW10_1 + tdW10_2 + tdW10_3 + tdW10_4 + tdW10_sum + tdW11_0 + tdW11_1 + tdW11_2 + tdW11_3 + tdW11_4 + tdW11_sum + tdM12 + tdAnnual;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // 테마 전환 함수
+    function switchTheme(themeNum) {
+      currentTheme = themeNum;
+
+      // 탭 버튼 스타일 갱신
+      for (let i = 1; i <= 3; i++) {
+        const btn = document.getElementById(`tab-btn-${i}`);
+        if (i === themeNum) {
+          btn.className = "px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition-all bg-white text-[#084734] shadow-sm flex items-center gap-1.5";
+        } else {
+          btn.className = "px-4 py-2 rounded-lg text-xs md:text-sm font-semibold transition-all text-[#64748B] hover:text-[#0F172A] flex items-center gap-1.5";
+        }
+      }
+
+      // 상단 배너 텍스트 갱신
+      const banner = document.getElementById("theme-banner");
+      const title = document.getElementById("banner-title");
+      const desc = document.getElementById("banner-desc");
+
+      if (themeNum === 1) {
+        banner.className = "bg-gradient-to-r from-[#F0FDF4] to-[#ECFDF5] border border-[#BBF7D0] rounded-xl p-4 flex items-start justify-between gap-4 transition-all";
+        title.innerHTML = "✨ 안 1. 모던 SaaS 그리드 (Airtable / Linear 스타일)";
+        title.className = "text-sm font-bold text-[#065F46] flex items-center gap-1.5";
+        desc.innerText = "가장 세련되고 직관적인 현대적 업무 도구 룩앤필. 둥근 뱃지와 정갈한 보더, 명확한 포커스 링과 소프트 틴트로 오랜 시간 보아도 피로하지 않고 업무 효율을 극대화합니다.";
+      } else if (themeNum === 2) {
+        banner.className = "bg-gradient-to-r from-[#EFF6FF] to-[#DBEAFE] border border-[#BFDBFE] rounded-xl p-4 flex items-start justify-between gap-4 transition-all";
+        title.innerHTML = "⚡ 안 2. 고밀도 프로페셔널 원장 (Bloomberg / Finance Terminal 스타일)";
+        title.className = "text-sm font-bold text-[#1E40AF] flex items-center gap-1.5";
+        desc.innerText = "데이터 집약적 업무에 최적화된 고밀도 레이아웃. 정밀한 모노스페이스 서체와 선명한 수직 구분선으로 한눈에 100건 이상의 숫자를 비교 분석할 수 있습니다.";
+      } else {
+        banner.className = "bg-gradient-to-r from-[#FFFBEB] to-[#FEF3C7] border border-[#FDE68A] rounded-xl p-4 flex items-start justify-between gap-4 transition-all";
+        title.innerHTML = "💎 안 3. 프리미엄 비주얼 시트 (Executive / 경영진 브리핑 스타일)";
+        title.className = "text-sm font-bold text-[#92400E] flex items-center gap-1.5";
+        desc.innerText = "셀 내부에 인라인 데이터 바(Data-bar)를 적용하여 금액의 규모가 직관적으로 시각화됩니다. 우아한 라운드 칩과 고급스러운 타이포그래피로 보고서 화면으로도 손색없습니다.";
+      }
+
+      renderTable();
+    }
+
+    // 셀 선택 인터랙션
+    function selectCell(cellKey, customer, val) {
+      selectedCellId = cellKey;
+      const info = document.getElementById("selection-info");
+      info.innerHTML = `
+        <span class="px-2 py-0.5 rounded bg-[#F1F5F9] font-bold text-[#0F172A] border border-[#E2E8F0]">${customer}</span>
+        <span class="px-1.5 py-0.5 rounded bg-[#ECFDF5] font-semibold text-[#084734] border border-[#A7F3D0]">선택된 셀</span>
+        <span class="text-[#64748B] font-semibold">현재 금액: <strong class="text-[#084734]">${val === '-' ? '미입력' : val}</strong></span>
+      `;
+      renderTable();
+    }
+
+    // 확도 버튼 선택 인터랙션
+    function setConfidence(conf) {
+      const btnExpected = document.getElementById("conf-btn-expected");
+      const btnHigh = document.getElementById("conf-btn-high");
+      const btnConfirmed = document.getElementById("conf-btn-confirmed");
+      const indicator = document.getElementById("active-indicator");
+
+      [btnExpected, btnHigh, btnConfirmed].forEach(b => {
+        b.className = "px-3 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 text-[#64748B] hover:bg-white/80";
+      });
+
+      if (conf === 'expected') {
+        btnExpected.className = "px-3 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 bg-[#D97706] text-white shadow-xs";
+        indicator.className = "w-2.5 h-2.5 rounded-full bg-[#D97706] shrink-0 animate-pulse";
+      } else if (conf === 'high') {
+        btnHigh.className = "px-3 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 bg-[#1D4ED8] text-white shadow-xs";
+        indicator.className = "w-2.5 h-2.5 rounded-full bg-[#1D4ED8] shrink-0 animate-pulse";
+      } else {
+        btnConfirmed.className = "px-3 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 bg-[#084734] text-white shadow-xs";
+        indicator.className = "w-2.5 h-2.5 rounded-full bg-[#084734] shrink-0 animate-pulse";
+      }
+    }
+
+    // 초기 렌더링
+    renderTable();
+  </script>
+</body>
+</html>

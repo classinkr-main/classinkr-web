@@ -9,8 +9,8 @@ export interface InsightResult {
 
 export type GeminiMode = "quality" | "fast"
 
-const DEFAULT_GEMINI_MODEL = "gemini-2.5-pro"
-const DEFAULT_GEMINI_FAST_MODEL = "gemini-2.5-flash"
+const DEFAULT_GEMINI_MODEL = "gemini-4.0-pro"
+const DEFAULT_GEMINI_FAST_MODEL = "gemini-4.0-flash"
 const UNSUPPORTED_GEMINI_MODELS = new Set(["gemini-3.1-pro"])
 
 function resolveModel(envName: "GEMINI_MODEL" | "GEMINI_FAST_MODEL", fallback: string): string {

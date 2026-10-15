@@ -19,11 +19,10 @@ import type { ChatbotSource } from "./service"
 export type ChatbotModelTier = "basic" | "reasoning" | "advanced"
 
 // 챗봇 모델 티어별 기본 모델 설정.
-// 공개 챗봇은 답변 완주가 우선이므로 안정 fast 모델을 기본값으로 쓰고,
-// 3.x 계열은 운영자가 명시 설정했을 때만 primary로 시도한 뒤 안정 모델로 폴백한다.
-const DEFAULT_FAST_MODEL = "gemini-2.5-flash"
-const DEFAULT_REASONING_MODEL = "gemini-2.5-pro"
-const DEFAULT_ADVANCED_MODEL = "gemini-2.5-pro"
+// 기본으로 Gemini 4 계열을 시도하고, 일시 오류나 미지원 시 안정 모델(2.5 flash/pro)로 무중단 폴백한다.
+const DEFAULT_FAST_MODEL = "gemini-4.0-flash"
+const DEFAULT_REASONING_MODEL = "gemini-4.0-pro"
+const DEFAULT_ADVANCED_MODEL = "gemini-4.0-pro"
 const FAST_FALLBACK_MODEL = "gemini-2.5-flash"
 const DEEP_FALLBACK_MODEL = "gemini-2.5-pro"
 
@@ -258,7 +257,7 @@ function buildGenerationConfig(model: string, temperature: number) {
     maxOutputTokens: isFastOutputModel ? 600 : 2048,
   }
 
-  if (lowerModel.startsWith("gemini-3")) {
+  if (lowerModel.startsWith("gemini-4") || lowerModel.startsWith("gemini-3")) {
     generationConfig.thinkingConfig = {
       thinkingLevel: lowerModel.includes("pro") ? "low" : "minimal",
     }

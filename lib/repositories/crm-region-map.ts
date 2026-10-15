@@ -10,9 +10,11 @@ import {
   emptyRegionTally,
   tallyRegionValue,
   toRegionLayer,
+  type CrmRegionCustomerItem,
   type CrmRegionLayer,
 } from "@/lib/crm/region-map-summary"
 import { KOREA_PROVINCE_LABELS } from "@/lib/regions/korea-regions"
+import { normalizeRegionLabel } from "@/lib/regions/korea-regions"
 import { assertJsonSafeInDev } from "@/lib/server/json-safe"
 import { shareInFlight } from "@/lib/server/share-in-flight"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
@@ -37,29 +39,63 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin"
  * 여기서 다시 유도하면 장부와 어긋난 두 번째 진실을 만든다. 이 화면은 건수 분포만 본다.
  */
 
-export type { CrmRegionLayer, CrmRegionLayerKey } from "@/lib/crm/region-map-summary"
+export type { CrmRegionCustomerItem, CrmRegionLayer, CrmRegionLayerKey } from "@/lib/crm/region-map-summary"
+
+export interface CrmRegionOwnerStats {
+  ownerName: string
+  totalCount: number
+  regions: Record<string, number>
+}
 
 export interface CrmRegionMap {
   generatedAt: string
   provinces: string[]
   layers: CrmRegionLayer[]
+  topCustomersByRegion: Record<string, CrmRegionCustomerItem[]>
+  ownerStats: Record<string, CrmRegionOwnerStats>
 }
 
 const ROW_LIMIT = 50_000
+
+interface DealRow {
+  id: number
+  region: string | null
+  customer_name?: string | null
+  manager?: string | null
+  status?: string | null
+  deal_type?: string | null
+}
+
+interface LeadRow {
+  id: number
+  branch: string | null
+  name?: string | null
+  org?: string | null
+  assigned_to?: string | null
+  status?: string | null
+}
+
+interface CustomerRow {
+  source_system: string
+  account_id: string
+  region_label: string | null
+  account_name?: string | null
+  owner_name?: string | null
+}
 
 async function buildCrmRegionMap(): Promise<CrmRegionMap> {
   const sb = createSupabaseAdminClient()
 
   const [deals, targets, leads, customers, compass] = await Promise.all([
-    fetchSupabasePages<{ region: string | null }>({ maxRows: ROW_LIMIT, fetchPage: (from, to) =>
-      sb.from("branch_rev_deals").select("id,region", from === 0 ? { count: "exact" } : undefined).order("id").range(from, to) }),
-    fetchSupabasePages<{ payload: unknown }>({ maxRows: ROW_LIMIT, fetchPage: (from, to) =>
+    fetchSupabasePages<DealRow>({ maxRows: ROW_LIMIT, fetchPage: (from, to) =>
+      sb.from("branch_rev_deals").select("id,region,customer_name,manager,status,deal_type", from === 0 ? { count: "exact" } : undefined).order("id").range(from, to) }),
+    fetchSupabasePages<{ id: number; payload: unknown }>({ maxRows: ROW_LIMIT, fetchPage: (from, to) =>
       sb.from("external_crm_records").select("id,payload", from === 0 ? { count: "exact" } : undefined)
         .eq("source_system", NAVER_MAP_SOURCE_SYSTEM).eq("object_api_key", NAVER_MAP_SOURCE_OBJECT).eq("is_stale", false).order("id").range(from, to) }),
-    fetchSupabasePages<{ branch: string | null }>({ maxRows: ROW_LIMIT, fetchPage: (from, to) =>
-      sb.from("leads").select("id,branch", from === 0 ? { count: "exact" } : undefined).order("id").range(from, to) }),
-    fetchSupabasePages<{ region_label: string | null }>({ maxRows: ROW_LIMIT, fetchPage: (from, to) =>
-      sb.from("crm_neo_customer_snapshots").select("source_system,account_id,region_label", from === 0 ? { count: "exact" } : undefined)
+    fetchSupabasePages<LeadRow>({ maxRows: ROW_LIMIT, fetchPage: (from, to) =>
+      sb.from("leads").select("id,branch,name,org,assigned_to,status", from === 0 ? { count: "exact" } : undefined).order("id").range(from, to) }),
+    fetchSupabasePages<CustomerRow>({ maxRows: ROW_LIMIT, fetchPage: (from, to) =>
+      sb.from("crm_neo_customer_snapshots").select("source_system,account_id,region_label,account_name,owner_name", from === 0 ? { count: "exact" } : undefined)
         .eq("is_stale", false).order("source_system").order("account_id").range(from, to) }),
     getCompassRegionRows(),
   ])
@@ -67,83 +103,154 @@ async function buildCrmRegionMap(): Promise<CrmRegionMap> {
   if ([deals, targets, leads, customers].some(result => result.error || result.truncated)
     || compass.down || compass.truncated) throw new Error("지역 원천 조회가 제한되어 전체 분포를 확인하지 못했습니다.")
 
+  const ownerMap = new Map<string, { totalCount: number; regions: Record<string, number> }>()
+  const recordOwner = (ownerName: string, rawRegion: string | null | undefined) => {
+    const trimmed = ownerName.trim()
+    if (!trimmed) return
+    const norm = normalizeRegionLabel(rawRegion?.trim())
+    let stat = ownerMap.get(trimmed)
+    if (!stat) {
+      stat = { totalCount: 0, regions: {} }
+      ownerMap.set(trimmed, stat)
+    }
+    stat.totalCount += 1
+    if (norm) {
+      stat.regions[norm] = (stat.regions[norm] ?? 0) + 1
+    }
+  }
+
   const dealAcc = emptyRegionTally()
-  for (const row of deals.data) tallyRegionValue(dealAcc, row.region)
+  for (const row of deals.data) {
+    tallyRegionValue(dealAcc, row.region, {
+      id: String(row.id),
+      name: row.customer_name,
+      manager: row.manager,
+      status: row.status,
+      detail: row.deal_type,
+    })
+    if (row.manager) recordOwner(row.manager, row.region)
+  }
 
   const targetAcc = emptyRegionTally()
   for (const row of targets.data) {
     const payload = (row.payload ?? {}) as Record<string, unknown>
     const region = typeof payload.region_label === "string" ? payload.region_label : null
-    tallyRegionValue(targetAcc, region)
+    const name = (typeof payload.title === "string" ? payload.title : null) ||
+                 (typeof payload.name === "string" ? payload.name : null) ||
+                 (typeof payload.place_name === "string" ? payload.place_name : null)
+    tallyRegionValue(targetAcc, region, {
+      id: String(row.id),
+      name,
+    })
   }
 
   const leadAcc = emptyRegionTally()
-  for (const row of leads.data) tallyRegionValue(leadAcc, row.branch)
+  for (const row of leads.data) {
+    const leadName = row.org?.trim() || row.name?.trim() || null
+    tallyRegionValue(leadAcc, row.branch, {
+      id: String(row.id),
+      name: leadName,
+      manager: row.assigned_to,
+      status: row.status,
+    })
+    if (row.assigned_to) recordOwner(row.assigned_to, row.branch)
+  }
 
   const customerAcc = emptyRegionTally()
-  for (const row of customers.data) tallyRegionValue(customerAcc, row.region_label)
+  for (const row of customers.data) {
+    tallyRegionValue(customerAcc, row.region_label, {
+      id: row.account_id,
+      name: row.account_name,
+      manager: row.owner_name,
+    })
+    if (row.owner_name) recordOwner(row.owner_name, row.region_label)
+  }
 
   const compassAcc = emptyRegionTally()
-  for (const row of compass.rows) tallyRegionValue(compassAcc, row.region)
+  for (const row of compass.rows) {
+    const compName = row.academy?.trim() || row.name?.trim() || null
+    tallyRegionValue(compassAcc, row.region, {
+      id: String(row.id),
+      name: compName,
+      manager: row.owner,
+    })
+    if (row.owner) recordOwner(row.owner, row.region)
+  }
+
+  const compassLayer = toRegionLayer("compass", "Compass", "마케팅 리드 건수", compassAcc, [
+    "Compass에 입력된 지역 기준. 자체 리드와 겹칠 수 있어 원천별 건수를 합산하지 않는다.",
+  ])
+  const dealLayer = toRegionLayer("deal", "거래", "REV 딜 건수", dealAcc, [
+    "회계연도 전체 딜. 금액이 아니라 건수이며, 온라인·해외는 지역에서 제외한다.",
+  ])
+  const targetLayer = toRegionLayer("target", "타깃", "공유지도 저장 장소", targetAcc, [
+    "팀이 직접 담은 영업 후보다. 계약 여부와 무관하다.",
+  ])
+  const leadLayer = toRegionLayer("lead", "리드", "유입 리드 건수", leadAcc, [
+    "지역은 리드가 직접 적은 자유 텍스트다. 미기재가 절반을 넘는다.",
+  ])
+  const customerLayer = toRegionLayer("customer", "고객", "NEO 고객 계정", customerAcc, [
+    "외부 CRM 계정에는 주소·지역 필드가 없다. 여기 찍힌 지역은 매출시트 이름 매칭으로 얻은 일부뿐이라, 이 레이어의 분포를 '고객 분포'로 읽으면 안 된다.",
+  ])
+
+  // 시도별 종합 상위 고객 순위 (거래 실적 고객 우선, 리드/고객 보강)
+  const topCustomersByRegion: Record<string, CrmRegionCustomerItem[]> = {}
+  for (const province of KOREA_PROVINCE_LABELS) {
+    const dealItems = dealLayer.topCustomersByRegion?.[province] ?? []
+    const leadItems = leadLayer.topCustomersByRegion?.[province] ?? []
+    const customerItems = customerLayer.topCustomersByRegion?.[province] ?? []
+
+    const merged = new Map<string, CrmRegionCustomerItem>()
+    for (const item of dealItems) merged.set(item.name, item)
+    for (const item of leadItems) {
+      if (!merged.has(item.name)) merged.set(item.name, item)
+    }
+    for (const item of customerItems) {
+      if (!merged.has(item.name)) merged.set(item.name, item)
+    }
+    const sorted = Array.from(merged.values()).slice(0, 15)
+    if (sorted.length > 0) {
+      topCustomersByRegion[province] = sorted
+    }
+  }
+
+  const ownerStats: Record<string, CrmRegionOwnerStats> = {}
+  for (const [ownerName, stat] of ownerMap.entries()) {
+    ownerStats[ownerName] = {
+      ownerName,
+      totalCount: stat.totalCount,
+      regions: stat.regions,
+    }
+  }
 
   return {
     generatedAt: new Date().toISOString(),
     provinces: KOREA_PROVINCE_LABELS,
-    layers: [
-      toRegionLayer("compass", "Compass", "마케팅 리드 건수", compassAcc, [
-        "Compass에 입력된 지역 기준. 자체 리드와 겹칠 수 있어 원천별 건수를 합산하지 않는다.",
-      ]),
-      toRegionLayer("deal", "거래", "REV 딜 건수", dealAcc, [
-        "회계연도 전체 딜. 금액이 아니라 건수이며, 온라인·해외는 지역에서 제외한다.",
-      ]),
-      toRegionLayer("target", "타깃", "공유지도 저장 장소", targetAcc, [
-        "팀이 직접 담은 영업 후보다. 계약 여부와 무관하다.",
-      ]),
-      toRegionLayer("lead", "리드", "유입 리드 건수", leadAcc, [
-        "지역은 리드가 직접 적은 자유 텍스트다. 미기재가 절반을 넘는다.",
-      ]),
-      toRegionLayer("customer", "고객", "NEO 고객 계정", customerAcc, [
-        "외부 CRM 계정에는 주소·지역 필드가 없다. 여기 찍힌 지역은 매출시트 이름 매칭으로 얻은 일부뿐이라, 이 레이어의 분포를 '고객 분포'로 읽으면 안 된다.",
-      ]),
-    ],
+    layers: [compassLayer, dealLayer, targetLayer, leadLayer, customerLayer],
+    topCustomersByRegion,
+    ownerStats,
   }
 }
 
-// 2026-09-10 3라운드(§3.3) — 이전엔 module-level `let cache`+`inFlight`로 손으로 구현한
-// 60초 캐시+동시요청 합치기였다. 뜻은 같지만 process-local이라 Vercel Fluid 인스턴스마다
-// 따로 논다 — unstable_cache(Data Cache)로 옮겨 인스턴스 간 공유되게 하고, 동시요청 합치기는
-// shareInFlight로 대체한다(태그 상수를 그대로 in-flight 키로 쓴다 — 인자가 없는 계산이라
-// crm-unified-customers.ts와 같은 관례).
+// 2026-09-10 3라운드(§3.3) — unstable_cache(Data Cache)로 옮겨 인스턴스 간 공유되게 하고,
+// 동시요청 합치기는 shareInFlight로 대체한다.
 const getCachedCrmRegionMap = unstable_cache(
   async () => {
     const value = await shareInFlight(ADMIN_CRM_REGION_MAP_CACHE_TAG, buildCrmRegionMap)
-    // unstable_cache는 JSON 직렬화 경계다 — 이 값은 문자열/숫자/배열뿐이라 통과해야 정상이고,
-    // dev·test에서 위반 시 즉시 던져 잡는다(2026-09-04 우선순위 큐 500 사고 재발 방지).
     return assertJsonSafeInDev("admin-crm-region-map", value)
   },
   ["admin-crm-region-map-v2"],
-  // 무효화는 부분적이다(§3.4 보고서 참고 — naver-map 재수집만 이 태그를 건드린다) —
-  // REV 시트·리드 쓰기가 못 건드리는 동안은 TTL을 이전과 같은 60초로 유지한다.
   { revalidate: 60, tags: [ADMIN_CRM_REGION_MAP_CACHE_TAG] }
 )
 
 export async function getCrmRegionMap(options: { force?: boolean } = {}): Promise<CrmRegionMap> {
   if (options.force) {
-    // 강제 새로고침 — 이번 응답은 캐시를 우회해 즉시 최신값을 만들고, 태그도 같이 무효화해
-    // 다른 인스턴스의 다음 조회도 새로 계산하게 한다(우회만 하면 이번 응답 이후에도 다른
-    // 인스턴스는 옛 Data Cache를 계속 본다).
     revalidateTag(ADMIN_CRM_REGION_MAP_CACHE_TAG, "max")
     return buildCrmRegionMap()
   }
   return getCachedCrmRegionMap()
 }
 
-// 지역 분포에 영향을 주는 원천이 바뀌면 호출한다. 현재 실제로 거는 곳은
-// lib/repositories/crm-naver-map.ts의 importCrmNaverMapSource(지도 장소 재수집 —
-// region_label을 다시 채운다)와 app/api/admin/crm/external-sync/route.ts(NEO 고객
-// region_label 재계산)뿐이다. branch_rev_deals.region(REV 시트 동기화)과 leads.branch
-// (리드 쓰기)는 각각 branch·leads 소유 파일이라 이번 라운드에서 배선하지 못했다 — 그 두
-// 경로는 TTL(60초)만으로 신선도를 맞춘다.
 export function invalidateCrmRegionMapCache() {
   revalidateTag(ADMIN_CRM_REGION_MAP_CACHE_TAG, "max")
 }

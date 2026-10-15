@@ -55,12 +55,12 @@ describe("internal CS image analysis", () => {
     expect(result).toMatchObject({
       summary: "수업 입장 오류 화면",
       mode: "fast",
-      model: "gemini-3.5-flash",
+      model: "gemini-4.0-flash",
       origin: "model",
       needsHumanReview: true,
     })
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
-    expect(url).toContain("/models/gemini-3.5-flash:generateContent")
+    expect(url).toContain("/models/gemini-4.0-flash:generateContent")
     const body = JSON.parse(String(init.body))
     expect(body.contents[0].parts[1].inlineData).toEqual({
       mimeType: "image/png",
@@ -105,11 +105,11 @@ describe("internal CS image analysis", () => {
 
     expect(result).toMatchObject({
       mode: "deep",
-      model: "gemini-3.5-flash",
+      model: "gemini-3.1-pro-preview",
       fallbackUsed: true,
-      attemptedModels: ["gemini-3.1-pro-preview", "gemini-3.5-flash"],
+      attemptedModels: ["gemini-4.0-pro", "gemini-3.1-pro-preview"],
     })
-    expect(fetchMock.mock.calls[0][0]).toContain("/models/gemini-3.1-pro-preview:generateContent")
+    expect(fetchMock.mock.calls[0][0]).toContain("/models/gemini-4.0-pro:generateContent")
   })
 
   it("returns a non-fabricating deterministic result without a model key", async () => {

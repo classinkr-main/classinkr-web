@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   ArrowRight,
   ArrowUpRight,
+  BookOpen,
   Bot,
   CalendarClock,
   Check,
@@ -22,6 +23,7 @@ import {
   List,
   MessageCircle,
   MessageSquare,
+  PhoneCall,
   RefreshCw,
   Search,
   Sparkles,
@@ -40,6 +42,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
+
+import QuickCallLogModal from "@/components/admin/cs/QuickCallLogModal"
 
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import {
@@ -154,8 +158,11 @@ export default function CsInquiryDashboard() {
 
   // Filters for inquiries
   const [selectedGenre, setSelectedGenre] = useState<string | "all">("all")
-  const [unansweredChannelTab, setUnansweredChannelTab] = useState<"all" | "channel_talk" | "homepage" | "critical">("all")
+  const [unansweredChannelTab, setUnansweredChannelTab] = useState<
+    "all" | "channel_talk" | "homepage" | "call_log" | "critical"
+  >("all")
   const [searchQuery, setSearchQuery] = useState<string>("")
+  const [isCallLogModalOpen, setIsCallLogModalOpen] = useState<boolean>(false)
 
   // Filters for upcoming tasks (앞으로 예정된 작업)
   const [taskTypeFilter, setTaskTypeFilter] = useState<"all" | "follow_up" | "showroom" | "install" | "crm_task" | "guide_doc">("all")
@@ -243,6 +250,7 @@ export default function CsInquiryDashboard() {
     return data.unansweredInquiries.filter((item) => {
       if (unansweredChannelTab === "channel_talk" && item.channel !== "channel_talk") return false
       if (unansweredChannelTab === "homepage" && item.channel !== "homepage") return false
+      if (unansweredChannelTab === "call_log" && item.channel !== "call_log") return false
       if (unansweredChannelTab === "critical" && item.urgency !== "critical") return false
 
       if (selectedGenre !== "all" && item.category !== selectedGenre) return false
@@ -373,57 +381,65 @@ export default function CsInquiryDashboard() {
   }, [data?.trends])
 
   return (
-    <div className="mx-auto w-full max-w-[1240px] px-4 pt-6 pb-20 sm:px-6 sm:pt-8 sm:pb-24 lg:px-8">
+    <div className="mx-auto w-full max-w-[1240px] px-3.5 pt-6 pb-20 sm:px-6 sm:pt-8 sm:pb-24 lg:px-8">
       {/* =========================================================================
           PART 1. 간략한 대시보드 상단부 (Header + Inline Chips + Action Controls)
           ========================================================================= */}
       <div className="flex flex-col gap-4 border-b border-black/[0.06] pb-5 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight text-[#111110]">CS 문의 대시보드</h1>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#111110]">CS 문의 대시보드</h1>
             <span className="rounded-full bg-[#ECFDF5] px-2.5 py-0.5 text-[11px] font-bold text-[#084734]">
               실시간 통합 관제
             </span>
 
             {/* Compact inline connection status chips */}
-            <div className="ml-0 flex flex-wrap items-center gap-1.5 sm:ml-2">
+            <div className="flex flex-wrap items-center gap-1.5 pt-1 sm:pt-0 sm:ml-1">
               <span
                 className={cn(
-                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold",
+                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold transition-colors",
                   connections?.channelTalk.status === "connected"
                     ? "bg-[#ECFDF5] text-[#084734]"
                     : "bg-[#FBF1E0] text-[#A8741A]"
                 )}
-                title="채널톡 실시간 연동"
+                title={`채널톡 ${connections?.channelTalk.syncIntervalLabel ?? "평일 30분 동기화"} · 총 ${connections?.channelTalk.totalCount ?? 0}건`}
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                채널톡 {connections?.channelTalk.status === "connected" ? "동기화" : "확인필요"}
+                채널톡 {connections?.channelTalk.status === "connected" ? "30분동기화" : "확인필요"}
               </span>
 
               <span
                 className={cn(
-                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold",
+                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold transition-colors",
+                  connections?.callLog?.todayCount
+                    ? "bg-[#EEF2FF] text-[#4338CA]"
+                    : "bg-[#ECFDF5] text-[#084734]"
+                )}
+                title={`사내 전화일지 · 오늘 ${connections?.callLog?.todayCount ?? 0}건 접수 / 총 ${connections?.callLog?.totalCount ?? 0}건`}
+              >
+                <PhoneCall className="h-3 w-3" />
+                전화일지 {connections?.callLog?.todayCount ? `오늘 ${connections.callLog.todayCount}건` : "정상"}
+              </span>
+
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold transition-colors",
                   connections?.homepage.status === "connected"
                     ? "bg-[#ECFDF5] text-[#084734]"
                     : "bg-[#FBF1E0] text-[#A8741A]"
                 )}
-                title="홈페이지 문의 폼 연동"
+                title={`홈페이지 문의 폼 연동 · 총 ${connections?.homepage.totalCount ?? 0}건`}
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-current" />
                 홈페이지 폼 {connections?.homepage.status === "connected" ? "정상" : "점검"}
               </span>
 
               <span
-                className={cn(
-                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold",
-                  connections?.homepage.smsConfigured
-                    ? "bg-[#ECFDF5] text-[#084734]"
-                    : "bg-[#F6F5F4] text-[#A39E98]"
-                )}
-                title="알림톡 발송 상태"
+                className="inline-flex items-center gap-1 rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[10.5px] font-semibold text-[#084734] transition-colors"
+                title={`피그마 CSM 캡처 가이드 ${connections?.knowledgeBase?.figmaGuidesCount ?? 107}건 및 MD 매뉴얼 인덱싱`}
               >
-                <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                알림톡 {connections?.homepage.smsConfigured ? "활성" : "미설정"}
+                <BookOpen className="h-3 w-3" />
+                지식베이스 피그마 {connections?.knowledgeBase?.figmaGuidesCount ?? 107}건
               </span>
             </div>
           </div>
@@ -434,15 +450,15 @@ export default function CsInquiryDashboard() {
 
         {/* Action Controls: Period filter + Refresh + CSV */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Segmented Period Selector */}
-          <div className="flex rounded-full border border-black/[0.08] bg-[#F6F5F4] p-0.5">
+          {/* Segmented Period Selector with horizontal scroll safety */}
+          <div className="flex max-w-full overflow-x-auto rounded-full border border-black/[0.08] bg-[#F6F5F4] p-0.5">
             {PERIOD_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
                 type="button"
                 onClick={() => setPeriod(opt.value)}
                 className={cn(
-                  "rounded-full px-3 py-1 text-[12px] font-medium transition-colors",
+                  "shrink-0 rounded-full px-2.5 sm:px-3 py-1 text-[11.5px] sm:text-[12px] font-medium transition-colors",
                   period === opt.value
                     ? "bg-white font-semibold text-[#111110] shadow-2xs"
                     : "text-[#615D59] hover:text-[#111110]"
@@ -452,6 +468,17 @@ export default function CsInquiryDashboard() {
               </button>
             ))}
           </div>
+
+          {/* 전화 일지 빠른 등록 버튼 */}
+          <button
+            type="button"
+            onClick={() => setIsCallLogModalOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-[#084734]/25 bg-[#ECFDF5] px-3 py-1.5 text-[12px] font-semibold text-[#084734] shadow-2xs transition-colors hover:bg-[#d1fae5]"
+            title="사내 채팅방 통화 메모 10초 빠른 등록"
+          >
+            <PhoneCall className="h-3.5 w-3.5" />
+            <span>전화 일지 등록</span>
+          </button>
 
           {/* Quick Refresh */}
           <button
@@ -515,19 +542,19 @@ export default function CsInquiryDashboard() {
           PART 2. 6대 핵심 KPI 요약 밴드 (컴팩트 대시보드 스트립)
           ========================================================================= */}
       <section className="mt-5">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3.5 lg:grid-cols-6">
           {/* 1. 총 문의량 */}
-          <div className="rounded-[16px] border border-black/[0.08] bg-white p-3.5 shadow-2xs">
+          <div className="rounded-[16px] border border-black/[0.08] bg-white p-3 sm:p-3.5 shadow-2xs transition-shadow hover:shadow-xs">
             <div className="flex items-center justify-between text-[#615D59]">
-              <span className="text-[10.5px] font-semibold uppercase tracking-wider text-[#A39E98]">
+              <span className="text-[10px] sm:text-[10.5px] font-semibold uppercase tracking-wider text-[#A39E98]">
                 총 문의량
               </span>
               <Inbox className="h-3.5 w-3.5 text-[#111110]/40" />
             </div>
-            <p className="mt-1.5 text-2xl font-bold tracking-tight text-[#111110] tabular-nums">
+            <p className="mt-1.5 text-xl sm:text-2xl font-bold tracking-tight text-[#111110] tabular-nums">
               {kpis ? `${kpis.totalInquiries}건` : "—"}
             </p>
-            <div className="mt-1 flex items-center gap-1 text-[11px] text-[#615D59]">
+            <div className="mt-1 flex items-center gap-1 text-[10.5px] sm:text-[11px] text-[#615D59] truncate">
               {kpis?.prevPeriodDiff.totalPercent !== undefined && kpis.prevPeriodDiff.totalPercent !== 0 ? (
                 <span
                   className={cn(
@@ -538,19 +565,19 @@ export default function CsInquiryDashboard() {
                   {kpis.prevPeriodDiff.totalPercent > 0 ? `+${kpis.prevPeriodDiff.totalPercent}%` : `${kpis.prevPeriodDiff.totalPercent}%`}
                 </span>
               ) : null}
-              <span>이전 기간 대비</span>
+              <span className="truncate">이전 대비</span>
             </div>
           </div>
 
           {/* 2. 해결 율 */}
-          <div className="rounded-[16px] border border-black/[0.08] bg-white p-3.5 shadow-2xs">
+          <div className="rounded-[16px] border border-black/[0.08] bg-white p-3 sm:p-3.5 shadow-2xs transition-shadow hover:shadow-xs">
             <div className="flex items-center justify-between text-[#615D59]">
-              <span className="text-[10.5px] font-semibold uppercase tracking-wider text-[#A39E98]">
+              <span className="text-[10px] sm:text-[10.5px] font-semibold uppercase tracking-wider text-[#A39E98]">
                 해결 율
               </span>
               <CheckCircle2 className="h-3.5 w-3.5 text-[#084734]" />
             </div>
-            <p className="mt-1.5 text-2xl font-bold tracking-tight text-[#084734] tabular-nums">
+            <p className="mt-1.5 text-xl sm:text-2xl font-bold tracking-tight text-[#084734] tabular-nums">
               {kpis ? `${kpis.resolutionRate}%` : "—"}
             </p>
             <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-black/[0.06]">
@@ -559,7 +586,7 @@ export default function CsInquiryDashboard() {
                 style={{ width: `${Math.min(100, Math.max(0, kpis?.resolutionRate ?? 0))}%` }}
               />
             </div>
-            <p className="mt-1 text-[10px] text-[#A39E98] tabular-nums">
+            <p className="mt-1 text-[10px] text-[#A39E98] tabular-nums truncate">
               완료 {kpis?.resolvedCount ?? 0} · 처리중 {kpis?.inProgressCount ?? 0}
             </p>
           </div>
@@ -567,81 +594,81 @@ export default function CsInquiryDashboard() {
           {/* 3. 답변 대기 */}
           <div
             className={cn(
-              "rounded-[16px] border p-3.5 shadow-2xs transition-colors",
+              "rounded-[16px] border p-3 sm:p-3.5 shadow-2xs transition-all",
               criticalCount > 0
                 ? "border-[#B43E3E]/40 bg-[#FCE9E9]/40"
-                : "border-black/[0.08] bg-white"
+                : "border-black/[0.08] bg-white hover:shadow-xs"
             )}
           >
             <div className="flex items-center justify-between text-[#615D59]">
-              <span className="text-[10.5px] font-semibold uppercase tracking-wider text-[#A39E98]">
+              <span className="text-[10px] sm:text-[10.5px] font-semibold uppercase tracking-wider text-[#A39E98]">
                 답변 대기
               </span>
               <Clock className={cn("h-3.5 w-3.5", criticalCount > 0 ? "text-[#B43E3E]" : "text-[#111110]/40")} />
             </div>
             <p
               className={cn(
-                "mt-1.5 text-2xl font-bold tracking-tight tabular-nums",
+                "mt-1.5 text-xl sm:text-2xl font-bold tracking-tight tabular-nums",
                 criticalCount > 0 ? "text-[#8F2C2C]" : "text-[#111110]"
               )}
             >
               {kpis ? `${kpis.unansweredCount}건` : "—"}
             </p>
-            <div className="mt-1 text-[11px]">
+            <div className="mt-1 text-[10.5px] sm:text-[11px] truncate">
               {criticalCount > 0 ? (
-                <span className="font-bold text-[#8F2C2C]">
-                  🚨 24h 초과 {criticalCount}건 긴급
+                <span className="font-bold text-[#8F2C2C] truncate">
+                  🚨 24h 초과 {criticalCount}건
                 </span>
               ) : (
-                <span className="text-[#084734] font-medium">SLA 기준 정상 준수</span>
+                <span className="text-[#084734] font-medium truncate">SLA 정상 준수</span>
               )}
             </div>
           </div>
 
           {/* 4. 채널톡 상담 */}
-          <div className="rounded-[16px] border border-black/[0.08] bg-white p-3.5 shadow-2xs">
+          <div className="rounded-[16px] border border-black/[0.08] bg-white p-3 sm:p-3.5 shadow-2xs transition-shadow hover:shadow-xs">
             <div className="flex items-center justify-between text-[#615D59]">
-              <span className="text-[10.5px] font-semibold uppercase tracking-wider text-[#A39E98]">
+              <span className="text-[10px] sm:text-[10.5px] font-semibold uppercase tracking-wider text-[#A39E98]">
                 채널톡 상담
               </span>
               <MessageSquare className="h-3.5 w-3.5 text-[#FF6B00]" />
             </div>
-            <p className="mt-1.5 text-2xl font-bold tracking-tight text-[#111110] tabular-nums">
+            <p className="mt-1.5 text-xl sm:text-2xl font-bold tracking-tight text-[#111110] tabular-nums">
               {channelTalkCount}건
             </p>
-            <p className="mt-1 text-[11px] text-[#615D59]">
+            <p className="mt-1 text-[10.5px] sm:text-[11px] text-[#615D59] truncate">
               비중: <span className="font-semibold text-[#111110] tabular-nums">{channelTalkPct}%</span>
             </p>
           </div>
 
           {/* 5. 홈페이지 문의 */}
-          <div className="rounded-[16px] border border-black/[0.08] bg-white p-3.5 shadow-2xs">
+          <div className="rounded-[16px] border border-black/[0.08] bg-white p-3 sm:p-3.5 shadow-2xs transition-shadow hover:shadow-xs">
             <div className="flex items-center justify-between text-[#615D59]">
-              <span className="text-[10.5px] font-semibold uppercase tracking-wider text-[#A39E98]">
+              <span className="text-[10px] sm:text-[10.5px] font-semibold uppercase tracking-wider text-[#A39E98]">
                 홈페이지 문의
               </span>
               <Globe className="h-3.5 w-3.5 text-[#084734]" />
             </div>
-            <p className="mt-1.5 text-2xl font-bold tracking-tight text-[#111110] tabular-nums">
+            <p className="mt-1.5 text-xl sm:text-2xl font-bold tracking-tight text-[#111110] tabular-nums">
               {homepageCount}건
             </p>
-            <p className="mt-1 text-[11px] text-[#615D59]">
+            <p className="mt-1 text-[10.5px] sm:text-[11px] text-[#615D59] truncate">
               비중: <span className="font-semibold text-[#111110] tabular-nums">{homepagePct}%</span>
             </p>
           </div>
 
           {/* 6. 챗봇 응대 */}
-          <div className="rounded-[16px] border border-black/[0.08] bg-white p-3.5 shadow-2xs">
+          <div className="rounded-[16px] border border-black/[0.08] bg-white p-3 sm:p-3.5 shadow-2xs transition-shadow hover:shadow-xs">
             <div className="flex items-center justify-between text-[#615D59]">
-              <span className="text-[10.5px] font-semibold uppercase tracking-wider text-[#A39E98]">
+              <span className="text-[10px] sm:text-[10.5px] font-semibold uppercase tracking-wider text-[#A39E98]">
                 챗봇 응대
               </span>
               <Bot className="h-3.5 w-3.5 text-[#D4537E]" />
             </div>
-            <p className="mt-1.5 text-2xl font-bold tracking-tight text-[#111110] tabular-nums">
+            <p className="mt-1.5 text-xl sm:text-2xl font-bold tracking-tight text-[#111110] tabular-nums">
               {chatbotCount}건
             </p>
-            <p className="mt-1 text-[11px] text-[#615D59]">
+            <p className="mt-1 text-[10.5px] sm:text-[11px] text-[#615D59] truncate">
               비중: <span className="font-semibold text-[#111110] tabular-nums">{chatbotPct}%</span>
             </p>
           </div>
@@ -652,16 +679,16 @@ export default function CsInquiryDashboard() {
           PART 3. 시각 차트 매트릭스 그리드 (동시 4개 패널 풍부한 시각화)
           ========================================================================= */}
       <section className="mt-6">
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+        <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-12">
           {/* PANEL 1: 기간별 문의 유입 & 해결 추이 (Trend Bar Chart - 너비 7 cols) */}
-          <div className="flex flex-col justify-between rounded-[18px] border border-black/[0.08] bg-white p-5 shadow-2xs lg:col-span-7">
-            <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-col justify-between rounded-[18px] border border-black/[0.08] bg-white p-4 sm:p-5 shadow-2xs lg:col-span-7">
+            <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <div className="flex items-center gap-2">
                   <TrendingUp className="h-4 w-4 text-[#084734]" />
                   <h2 className="text-sm font-bold text-[#111110]">기간별 문의 접수 및 해결 추이</h2>
                 </div>
-                <p className="mt-0.5 text-[11.5px] text-[#615D59]">
+                <p className="mt-0.5 text-[11px] sm:text-[11.5px] text-[#615D59]">
                   일별 전체 문의량(연회색) · 해결 완료(초록색) · 답변 대기(적색) 추이
                 </p>
               </div>
@@ -671,19 +698,19 @@ export default function CsInquiryDashboard() {
             </div>
 
             {/* Bar Chart Container */}
-            <div className="mt-4 h-[240px] w-full">
+            <div className="mt-4 h-[210px] sm:h-[240px] w-full">
               {data && data.trends.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={data.trends} margin={{ top: 10, right: 10, left: -22, bottom: 0 }}>
+                  <BarChart data={data.trends} margin={{ top: 10, right: 8, left: -24, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#F0F0EC" vertical={false} />
                     <XAxis
                       dataKey="label"
-                      tick={{ fontSize: 11, fill: "#615D59" }}
+                      tick={{ fontSize: 10.5, fill: "#615D59" }}
                       axisLine={{ stroke: "#E8E8E4" }}
                       tickLine={false}
                     />
                     <YAxis
-                      tick={{ fontSize: 11, fill: "#615D59" }}
+                      tick={{ fontSize: 10.5, fill: "#615D59" }}
                       axisLine={{ stroke: "#E8E8E4" }}
                       tickLine={false}
                       allowDecimals={false}
@@ -716,9 +743,9 @@ export default function CsInquiryDashboard() {
                         )
                       }}
                     />
-                    <Bar dataKey="total" fill="#E8E8E4" radius={[4, 4, 0, 0]} maxBarSize={24} name="전체 문의" />
-                    <Bar dataKey="resolved" fill="#084734" radius={[4, 4, 0, 0]} maxBarSize={24} name="해결 완료" />
-                    <Bar dataKey="unanswered" fill="#B43E3E" radius={[4, 4, 0, 0]} maxBarSize={24} name="답변 대기" />
+                    <Bar dataKey="total" fill="#E8E8E4" radius={[4, 4, 0, 0]} maxBarSize={22} name="전체 문의" />
+                    <Bar dataKey="resolved" fill="#084734" radius={[4, 4, 0, 0]} maxBarSize={22} name="해결 완료" />
+                    <Bar dataKey="unanswered" fill="#B43E3E" radius={[4, 4, 0, 0]} maxBarSize={22} name="답변 대기" />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
@@ -729,14 +756,14 @@ export default function CsInquiryDashboard() {
             </div>
 
             {/* Bottom Legend */}
-            <div className="mt-3 flex items-center justify-between border-t border-black/[0.04] pt-2 text-[11px] text-[#615D59]">
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-black/[0.04] pt-2 text-[10.5px] sm:text-[11px] text-[#615D59]">
               <span className="text-[#A39E98]">총 {kpis?.totalInquiries ?? 0}건 접수 집계</span>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5 sm:gap-3">
                 <span className="flex items-center gap-1">
                   <span className="h-2 w-2 rounded-full bg-[#E8E8E4]" /> 전체
                 </span>
                 <span className="flex items-center gap-1 font-semibold text-[#084734]">
-                  <span className="h-2 w-2 rounded-full bg-[#084734]" /> 해결완료 {kpis?.resolvedCount ?? 0}
+                  <span className="h-2 w-2 rounded-full bg-[#084734]" /> 완료 {kpis?.resolvedCount ?? 0}
                 </span>
                 <span className="flex items-center gap-1 font-semibold text-[#B43E3E]">
                   <span className="h-2 w-2 rounded-full bg-[#B43E3E]" /> 대기 {kpis?.unansweredCount ?? 0}
@@ -746,7 +773,7 @@ export default function CsInquiryDashboard() {
           </div>
 
           {/* PANEL 2: SLA 해결 준수율 & 응대 건강도 (Circular Progress Gauge - 너비 5 cols) */}
-          <div className="flex flex-col justify-between rounded-[18px] border border-black/[0.08] bg-white p-5 shadow-2xs lg:col-span-5">
+          <div className="flex flex-col justify-between rounded-[18px] border border-black/[0.08] bg-white p-4 sm:p-5 shadow-2xs lg:col-span-5">
             <div>
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-bold text-[#111110]">SLA 준수율 & 해결 건강도</h2>
@@ -759,31 +786,31 @@ export default function CsInquiryDashboard() {
                   {criticalCount > 0 ? `긴급 ${criticalCount}건` : "건강도 우수"}
                 </span>
               </div>
-              <p className="mt-0.5 text-[11.5px] text-[#615D59]">
+              <p className="mt-0.5 text-[11px] sm:text-[11.5px] text-[#615D59]">
                 목표 해결률 90% 기준 대비 달성도 및 지연 건수
               </p>
             </div>
 
             {/* Gauge & Metrics Row */}
-            <div className="my-3 flex items-center justify-around gap-4">
+            <div className="my-3 flex items-center justify-around gap-3 sm:gap-4">
               <CircularSlaGauge rate={kpis?.resolutionRate ?? 0} target={90} />
 
               <div className="flex flex-col gap-2 text-xs">
-                <div className="rounded-[12px] bg-[#FAFAF8] p-2.5 border border-black/[0.04]">
-                  <span className="text-[10.5px] text-[#A39E98]">해결 완료</span>
+                <div className="rounded-[12px] bg-[#FAFAF8] p-2 sm:p-2.5 border border-black/[0.04]">
+                  <span className="text-[10px] sm:text-[10.5px] text-[#A39E98]">해결 완료</span>
                   <div className="flex items-baseline gap-1 font-bold text-[#084734]">
-                    <span className="text-base tabular-nums">{kpis?.resolvedCount ?? 0}건</span>
-                    <span className="text-[11px] font-normal text-[#615D59]">
+                    <span className="text-sm sm:text-base tabular-nums">{kpis?.resolvedCount ?? 0}건</span>
+                    <span className="text-[10.5px] sm:text-[11px] font-normal text-[#615D59]">
                       ({kpis?.totalInquiries ? Math.round(((kpis.resolvedCount) / kpis.totalInquiries) * 100) : 0}%)
                     </span>
                   </div>
                 </div>
 
-                <div className="rounded-[12px] bg-[#FAFAF8] p-2.5 border border-black/[0.04]">
-                  <span className="text-[10.5px] text-[#A39E98]">처리 진행 중</span>
+                <div className="rounded-[12px] bg-[#FAFAF8] p-2 sm:p-2.5 border border-black/[0.04]">
+                  <span className="text-[10px] sm:text-[10.5px] text-[#A39E98]">처리 진행 중</span>
                   <div className="flex items-baseline gap-1 font-bold text-[#111110]">
-                    <span className="text-base tabular-nums">{kpis?.inProgressCount ?? 0}건</span>
-                    <span className="text-[11px] font-normal text-[#615D59]">진행</span>
+                    <span className="text-sm sm:text-base tabular-nums">{kpis?.inProgressCount ?? 0}건</span>
+                    <span className="text-[10.5px] sm:text-[11px] font-normal text-[#615D59]">진행</span>
                   </div>
                 </div>
               </div>
@@ -798,8 +825,8 @@ export default function CsInquiryDashboard() {
                   : "border border-[#084734]/20 bg-[#ECFDF5]/50 text-[#084734]"
               )}
             >
-              <div className="flex items-center justify-between">
-                <span className="font-semibold">
+              <div className="flex flex-wrap items-center justify-between gap-1.5">
+                <span className="font-semibold text-[11.5px] sm:text-xs">
                   {criticalCount > 0
                     ? `🚨 24시간 초과 건이 ${criticalCount}건 있습니다!`
                     : "🟢 모든 문의가 SLA 기준 시간 내 응대 중입니다."}
@@ -811,7 +838,7 @@ export default function CsInquiryDashboard() {
                       setUnansweredChannelTab("critical")
                       document.getElementById("unanswered-section")?.scrollIntoView({ behavior: "smooth" })
                     }}
-                    className="font-bold underline hover:opacity-80"
+                    className="font-bold underline hover:opacity-80 text-[11.5px]"
                   >
                     대기 큐 보기
                   </button>
@@ -821,11 +848,11 @@ export default function CsInquiryDashboard() {
           </div>
 
           {/* PANEL 3: 8대 장르별 문의 점유율 (Donut Chart with Center Metric - 너비 6 cols) */}
-          <div className="flex flex-col justify-between rounded-[18px] border border-black/[0.08] bg-white p-5 shadow-2xs lg:col-span-6">
+          <div className="flex flex-col justify-between rounded-[18px] border border-black/[0.08] bg-white p-4 sm:p-5 shadow-2xs lg:col-span-6">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-sm font-bold text-[#111110]">8대 장르별 문의 점유율</h2>
-                <p className="mt-0.5 text-[11.5px] text-[#615D59]">
+                <p className="mt-0.5 text-[11px] sm:text-[11.5px] text-[#615D59]">
                   카테고리별 클릭 시 하단 목록 필터링
                 </p>
               </div>
@@ -843,15 +870,15 @@ export default function CsInquiryDashboard() {
             {/* Donut and Legend Layout */}
             <div className="my-2 flex flex-col sm:flex-row sm:items-center sm:justify-around gap-4">
               {/* Donut with Center Count */}
-              <div className="relative h-[200px] w-[200px] shrink-0 mx-auto">
+              <div className="relative h-[180px] w-[180px] sm:h-[190px] sm:w-[190px] shrink-0 mx-auto">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={data?.genres.filter((g) => g.count > 0)}
                       dataKey="count"
                       nameKey="label"
-                      innerRadius={55}
-                      outerRadius={82}
+                      innerRadius={50}
+                      outerRadius={75}
                       paddingAngle={3}
                     >
                       {data?.genres.map((g) => (
@@ -880,14 +907,14 @@ export default function CsInquiryDashboard() {
                 {/* Center Badge */}
                 <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
                   <span className="text-[10px] font-medium text-[#A39E98]">총 문의</span>
-                  <span className="text-xl font-bold tracking-tight text-[#111110] tabular-nums">
+                  <span className="text-lg sm:text-xl font-bold tracking-tight text-[#111110] tabular-nums">
                     {kpis?.totalInquiries ?? 0}
                   </span>
                 </div>
               </div>
 
               {/* 8 Genres Legend Matrix */}
-              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs w-full sm:w-auto">
+              <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs w-full sm:w-auto">
                 {data?.genres.map((g) => {
                   const isSelected = selectedGenre === g.category
                   return (
@@ -896,7 +923,7 @@ export default function CsInquiryDashboard() {
                       type="button"
                       onClick={() => setSelectedGenre(isSelected ? "all" : g.category)}
                       className={cn(
-                        "flex items-center justify-between gap-2 rounded-lg px-2 py-1 text-left transition-colors",
+                        "flex items-center justify-between gap-1.5 rounded-lg px-2 py-1 text-left transition-colors",
                         isSelected
                           ? "bg-[#ECFDF5] font-bold text-[#084734] ring-1 ring-[#084734]/30"
                           : "hover:bg-[#F6F5F4] text-[#615D59]"
@@ -904,9 +931,9 @@ export default function CsInquiryDashboard() {
                     >
                       <div className="flex items-center gap-1.5 truncate">
                         <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: g.color }} />
-                        <span className="truncate">{g.label}</span>
+                        <span className="truncate text-[11px] sm:text-xs">{g.label}</span>
                       </div>
-                      <span className="font-semibold tabular-nums text-[#111110] text-[11px]">
+                      <span className="font-semibold tabular-nums text-[#111110] text-[10.5px] sm:text-[11px] shrink-0">
                         {g.percentage}%
                       </span>
                     </button>
@@ -915,26 +942,26 @@ export default function CsInquiryDashboard() {
               </div>
             </div>
 
-            <div className="mt-2 border-t border-black/[0.04] pt-2 text-[11px] text-[#A39E98] flex items-center justify-between">
-              <span>선택된 카테고리: {selectedGenre === "all" ? "전체 (8개 장르)" : CS_CATEGORY_MAP[selectedGenre as keyof typeof CS_CATEGORY_MAP]?.label}</span>
-              <span>분류 완료 {data?.genres.reduce((a, b) => a + b.count, 0) ?? 0}건</span>
+            <div className="mt-2 border-t border-black/[0.04] pt-2 text-[10.5px] sm:text-[11px] text-[#A39E98] flex items-center justify-between">
+              <span className="truncate">선택: {selectedGenre === "all" ? "전체 (8개 장르)" : CS_CATEGORY_MAP[selectedGenre as keyof typeof CS_CATEGORY_MAP]?.label}</span>
+              <span className="shrink-0">분류 {data?.genres.reduce((a, b) => a + b.count, 0) ?? 0}건</span>
             </div>
           </div>
 
           {/* PANEL 4: 유입 채널별 비중 & 상위 장르 해결률 매트릭스 (Channel & Resolution Matrix - 너비 6 cols) */}
-          <div className="flex flex-col justify-between rounded-[18px] border border-black/[0.08] bg-white p-5 shadow-2xs lg:col-span-6">
+          <div className="flex flex-col justify-between rounded-[18px] border border-black/[0.08] bg-white p-4 sm:p-5 shadow-2xs lg:col-span-6">
             <div>
               <h2 className="text-sm font-bold text-[#111110]">채널별 유입 & 상위 장르 해결률</h2>
-              <p className="mt-0.5 text-[11.5px] text-[#615D59]">
+              <p className="mt-0.5 text-[11px] sm:text-[11.5px] text-[#615D59]">
                 채널 점유율과 주요 장르별 실시간 처리 진행 건강도
               </p>
             </div>
 
             {/* Horizontal Channel Stack Bar */}
             <div className="my-3 rounded-[14px] bg-[#FAFAF8] p-3 border border-black/[0.04]">
-              <div className="flex items-center justify-between text-xs text-[#615D59] mb-1.5">
+              <div className="flex flex-wrap items-center justify-between text-xs text-[#615D59] mb-1.5 gap-1">
                 <span className="font-semibold text-[#111110]">채널별 점유율</span>
-                <span className="text-[11px] text-[#A39E98]">
+                <span className="text-[10.5px] sm:text-[11px] text-[#A39E98]">
                   채널톡 {channelTalkPct}% · 홈페이지 {homepagePct}% · 챗봇 {chatbotPct}%
                 </span>
               </div>
@@ -959,16 +986,16 @@ export default function CsInquiryDashboard() {
 
             {/* Top Categories Resolution Rates */}
             <div className="space-y-2 text-xs">
-              <span className="text-[11px] font-semibold text-[#615D59]">상위 장르별 해결률 현황</span>
+              <span className="text-[10.5px] sm:text-[11px] font-semibold text-[#615D59]">상위 장르별 해결률 현황</span>
               {categoryResolutionStats.slice(0, 4).map((item) => (
                 <div key={item.category} className="space-y-1">
-                  <div className="flex items-center justify-between text-[11.5px]">
-                    <div className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />
-                      <span className="font-medium text-[#111110]">{item.label}</span>
-                      <span className="text-[10.5px] text-[#A39E98]">({item.count}건)</span>
+                  <div className="flex items-center justify-between text-[11px] sm:text-[11.5px]">
+                    <div className="flex items-center gap-1.5 truncate">
+                      <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                      <span className="font-medium text-[#111110] truncate">{item.label}</span>
+                      <span className="text-[10px] sm:text-[10.5px] text-[#A39E98] shrink-0">({item.count}건)</span>
                     </div>
-                    <span className="font-bold tabular-nums text-[#084734]">
+                    <span className="font-bold tabular-nums text-[#084734] shrink-0 ml-2">
                       {item.rate}% 완료
                     </span>
                   </div>
@@ -982,7 +1009,7 @@ export default function CsInquiryDashboard() {
               ))}
             </div>
 
-            <div className="mt-3 border-t border-black/[0.04] pt-2 text-[11px] text-[#A39E98] flex items-center justify-between">
+            <div className="mt-3 border-t border-black/[0.04] pt-2 text-[10.5px] sm:text-[11px] text-[#A39E98] flex items-center justify-between">
               <span>하위 병목 장르 점검 권장</span>
               <Link href="/admin/channel-talk" className="font-semibold text-[#084734] hover:underline">
                 상담 관리 바로가기 →
@@ -1024,8 +1051,8 @@ export default function CsInquiryDashboard() {
           </div>
 
           {/* View Mode Toggle & Quick Search */}
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 rounded-full border border-black/[0.08] bg-[#F6F5F4] p-0.5 text-xs">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+            <div className="flex items-center gap-1 rounded-full border border-black/[0.08] bg-[#F6F5F4] p-0.5 text-xs self-start sm:self-auto shrink-0">
               <button
                 type="button"
                 onClick={() => setTaskViewMode("cards")}
@@ -1050,7 +1077,7 @@ export default function CsInquiryDashboard() {
               </button>
             </div>
 
-            <div className="relative w-full sm:w-52">
+            <div className="relative w-full sm:w-56">
               <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#A39E98]" />
               <input
                 type="text"
@@ -1069,65 +1096,65 @@ export default function CsInquiryDashboard() {
             type="button"
             onClick={() => setTaskTypeFilter("all")}
             className={cn(
-              "rounded-full px-3 py-1 font-semibold transition-colors",
+              "rounded-full px-2.5 sm:px-3 py-1 font-semibold transition-colors",
               taskTypeFilter === "all"
                 ? "bg-[#111110] text-white"
                 : "bg-[#F6F5F4] text-[#615D59] hover:text-[#111110]"
             )}
           >
-            전체 일정 ({data?.upcomingTasks.length ?? 0})
+            전체 ({data?.upcomingTasks.length ?? 0})
           </button>
           <button
             type="button"
             onClick={() => setTaskTypeFilter("follow_up")}
             className={cn(
-              "rounded-full px-3 py-1 font-semibold transition-colors",
+              "rounded-full px-2.5 sm:px-3 py-1 font-semibold transition-colors",
               taskTypeFilter === "follow_up"
                 ? "bg-[#084734] text-white"
                 : "bg-[#F6F5F4] text-[#615D59] hover:text-[#111110]"
             )}
           >
-            고객 팔로업 ({data?.upcomingTasks.filter((t) => t.type === "follow_up").length ?? 0})
+            팔로업 ({data?.upcomingTasks.filter((t) => t.type === "follow_up").length ?? 0})
           </button>
           <button
             type="button"
             onClick={() => setTaskTypeFilter("showroom")}
             className={cn(
-              "rounded-full px-3 py-1 font-semibold transition-colors",
+              "rounded-full px-2.5 sm:px-3 py-1 font-semibold transition-colors",
               taskTypeFilter === "showroom"
                 ? "bg-[#084734] text-white"
                 : "bg-[#F6F5F4] text-[#615D59] hover:text-[#111110]"
             )}
           >
-            쇼룸 방문 ({data?.upcomingTasks.filter((t) => t.type === "showroom").length ?? 0})
+            쇼룸 ({data?.upcomingTasks.filter((t) => t.type === "showroom").length ?? 0})
           </button>
           <button
             type="button"
             onClick={() => setTaskTypeFilter("install")}
             className={cn(
-              "rounded-full px-3 py-1 font-semibold transition-colors",
+              "rounded-full px-2.5 sm:px-3 py-1 font-semibold transition-colors",
               taskTypeFilter === "install"
                 ? "bg-[#084734] text-white"
                 : "bg-[#F6F5F4] text-[#615D59] hover:text-[#111110]"
             )}
           >
-            설치 지원 ({data?.upcomingTasks.filter((t) => t.type === "install").length ?? 0})
+            설치 ({data?.upcomingTasks.filter((t) => t.type === "install").length ?? 0})
           </button>
           <button
             type="button"
             onClick={() => setTaskTypeFilter("guide_doc")}
             className={cn(
-              "rounded-full px-3 py-1 font-semibold transition-colors",
+              "rounded-full px-2.5 sm:px-3 py-1 font-semibold transition-colors",
               taskTypeFilter === "guide_doc"
                 ? "bg-[#084734] text-white"
                 : "bg-[#F6F5F4] text-[#615D59] hover:text-[#111110]"
             )}
           >
-            가이드 보강 ({data?.upcomingTasks.filter((t) => t.type === "guide_doc").length ?? 0})
+            가이드 ({data?.upcomingTasks.filter((t) => t.type === "guide_doc").length ?? 0})
           </button>
 
           {/* Quick Stat Pill */}
-          <div className="ml-auto flex items-center gap-2 text-[11px]">
+          <div className="ml-auto flex items-center gap-1.5 sm:gap-2 text-[10.5px] sm:text-[11px]">
             {upcomingUrgentCount > 0 ? (
               <span className="rounded-full bg-[#FCE9E9] px-2 py-0.5 font-bold text-[#8F2C2C]">
                 지연 {upcomingUrgentCount}건
@@ -1135,7 +1162,7 @@ export default function CsInquiryDashboard() {
             ) : null}
             {upcomingTodayCount > 0 ? (
               <span className="rounded-full bg-[#ECFDF5] px-2 py-0.5 font-bold text-[#084734]">
-                오늘 예정 {upcomingTodayCount}건
+                오늘 {upcomingTodayCount}건
               </span>
             ) : null}
           </div>
@@ -1520,6 +1547,18 @@ export default function CsInquiryDashboard() {
           >
             홈페이지 문의 ({data?.unansweredInquiries.filter((i) => i.channel === "homepage").length ?? 0})
           </button>
+          <button
+            type="button"
+            onClick={() => setUnansweredChannelTab("call_log")}
+            className={cn(
+              "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
+              unansweredChannelTab === "call_log"
+                ? "bg-[#6366F1] text-white"
+                : "bg-[#F6F5F4] text-[#615D59] hover:text-[#111110]"
+            )}
+          >
+            전화 일지 ({data?.unansweredInquiries.filter((i) => i.channel === "call_log").length ?? 0})
+          </button>
           {criticalCount > 0 ? (
             <button
               type="button"
@@ -1546,7 +1585,7 @@ export default function CsInquiryDashboard() {
                 <div
                   key={inquiry.id}
                   className={cn(
-                    "flex flex-col justify-between gap-3 rounded-[16px] border p-4 shadow-2xs transition-all sm:flex-row sm:items-center",
+                    "flex flex-col justify-between gap-3 rounded-[16px] border p-3.5 sm:p-4 shadow-2xs transition-all sm:flex-row sm:items-center",
                     isCritical
                       ? "border-[#B43E3E]/40 bg-[#FCE9E9]/30 hover:border-[#B43E3E]"
                       : isWarning
@@ -1556,20 +1595,20 @@ export default function CsInquiryDashboard() {
                 >
                   <div className="min-w-0 flex-1">
                     {/* Header info row */}
-                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs">
                       {/* Urgency Badge */}
                       {isCritical ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-[#B43E3E] px-2 py-0.5 text-[10.5px] font-bold text-white">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[#B43E3E] px-2 py-0.5 text-[10px] sm:text-[10.5px] font-bold text-white shrink-0">
                           <AlertTriangle className="h-3 w-3" />
                           24시간 초과 긴급
                         </span>
                       ) : isWarning ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-[#FBF1E0] px-2 py-0.5 text-[10.5px] font-semibold text-[#7A520F]">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[#FBF1E0] px-2 py-0.5 text-[10px] sm:text-[10.5px] font-semibold text-[#7A520F] shrink-0">
                           <Clock className="h-3 w-3" />
                           2시간 경과
                         </span>
                       ) : (
-                        <span className="rounded-full bg-[#F6F5F4] px-2 py-0.5 text-[10.5px] font-medium text-[#615D59]">
+                        <span className="rounded-full bg-[#F6F5F4] px-2 py-0.5 text-[10px] sm:text-[10.5px] font-medium text-[#615D59] shrink-0">
                           신규
                         </span>
                       )}
@@ -1577,7 +1616,7 @@ export default function CsInquiryDashboard() {
                       {/* Channel Badge */}
                       <span
                         className={cn(
-                          "rounded-full px-2 py-0.5 text-[10.5px] font-semibold",
+                          "rounded-full px-2 py-0.5 text-[10px] sm:text-[10.5px] font-semibold shrink-0",
                           inquiry.channel === "channel_talk"
                             ? "bg-[#FF6B00]/10 text-[#D85A30]"
                             : "bg-[#084734]/10 text-[#084734]"
@@ -1588,7 +1627,7 @@ export default function CsInquiryDashboard() {
 
                       {/* Category Badge */}
                       <span
-                        className="rounded-full px-2 py-0.5 text-[10.5px] font-semibold"
+                        className="rounded-full px-2 py-0.5 text-[10px] sm:text-[10.5px] font-semibold shrink-0"
                         style={{
                           backgroundColor: `${CS_CATEGORY_MAP[inquiry.category]?.color ?? "#64748B"}15`,
                           color: CS_CATEGORY_MAP[inquiry.category]?.color ?? "#64748B",
@@ -1598,20 +1637,20 @@ export default function CsInquiryDashboard() {
                       </span>
 
                       {/* Customer Info */}
-                      <span className="font-bold text-[#111110]">
+                      <span className="font-bold text-[#111110] truncate">
                         {inquiry.customerName}
                       </span>
                       {inquiry.customerOrg ? (
-                        <span className="text-[#615D59]">({inquiry.customerOrg})</span>
+                        <span className="text-[#615D59] truncate text-[11px] sm:text-xs">({inquiry.customerOrg})</span>
                       ) : null}
                       {inquiry.customerContact ? (
-                        <span className="text-[#A39E98]">• {inquiry.customerContact}</span>
+                        <span className="text-[#A39E98] text-[11px] hidden sm:inline">• {inquiry.customerContact}</span>
                       ) : null}
 
                       {/* Waiting time */}
                       <span
                         className={cn(
-                          "ml-auto text-[11px] font-medium tabular-nums",
+                          "ml-auto text-[10.5px] sm:text-[11px] font-medium tabular-nums shrink-0",
                           isCritical ? "text-[#8F2C2C] font-bold" : "text-[#A39E98]"
                         )}
                       >
@@ -1620,24 +1659,24 @@ export default function CsInquiryDashboard() {
                     </div>
 
                     {/* Inquiry Message Text */}
-                    <p className="mt-2 text-sm text-[#31302E] line-clamp-2">
+                    <p className="mt-2 text-[13px] sm:text-sm leading-relaxed text-[#31302E] line-clamp-2">
                       {inquiry.inquiryText}
                     </p>
                   </div>
 
                   {/* Action Link buttons */}
-                  <div className="flex shrink-0 items-center gap-2 sm:self-center">
+                  <div className="flex shrink-0 items-center justify-end gap-2 pt-2 sm:pt-0 sm:self-center border-t sm:border-t-0 border-black/[0.04]">
                     <button
                       type="button"
                       onClick={() => setSelectedInquiry(inquiry)}
-                      className="rounded-full border border-black/[0.08] bg-white px-3 py-1.5 text-xs font-semibold text-[#615D59] shadow-2xs transition-colors hover:bg-[#F6F5F4] hover:text-[#111110]"
+                      className="rounded-full border border-black/[0.08] bg-white px-3 py-1.5 text-[11.5px] sm:text-xs font-semibold text-[#615D59] shadow-2xs transition-colors hover:bg-[#F6F5F4] hover:text-[#111110]"
                     >
                       상세보기
                     </button>
                     <Link
                       href={inquiry.targetUrl}
                       className={cn(
-                        "inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold shadow-xs transition-colors",
+                        "inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-[11.5px] sm:text-xs font-semibold shadow-xs transition-colors",
                         isCritical
                           ? "bg-[#B43E3E] text-white hover:bg-[#8F2C2C]"
                           : "bg-[#084734] text-white hover:bg-[#065c41]"
@@ -1810,19 +1849,19 @@ export default function CsInquiryDashboard() {
       {/* Quick View Modal for selected inquiry */}
       {selectedInquiry ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-6 backdrop-blur-xs"
           onClick={() => setSelectedInquiry(null)}
         >
           <div
-            className="w-full max-w-lg rounded-[20px] border border-black/[0.08] bg-white p-6 shadow-xl"
+            className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-[20px] border border-black/[0.08] bg-white p-4 sm:p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between">
+            <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                   <span
                     className={cn(
-                      "rounded-full px-2 py-0.5 text-[11px] font-bold",
+                      "rounded-full px-2 py-0.5 text-[10.5px] sm:text-[11px] font-bold",
                       selectedInquiry.urgency === "critical"
                         ? "bg-[#B43E3E] text-white"
                         : selectedInquiry.urgency === "warning"
@@ -1836,10 +1875,10 @@ export default function CsInquiryDashboard() {
                         ? "⚠️ 2h 경과"
                         : "신규"}
                   </span>
-                  <span className="rounded-full bg-[#F6F5F4] px-2 py-0.5 text-[11px] font-semibold text-[#615D59]">
+                  <span className="rounded-full bg-[#F6F5F4] px-2 py-0.5 text-[10.5px] sm:text-[11px] font-semibold text-[#615D59]">
                     {selectedInquiry.channelLabel}
                   </span>
-                  <span className="rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-semibold text-[#084734]">
+                  <span className="rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[10.5px] sm:text-[11px] font-semibold text-[#084734]">
                     {selectedInquiry.categoryLabel}
                   </span>
                 </div>
@@ -1851,7 +1890,8 @@ export default function CsInquiryDashboard() {
               <button
                 type="button"
                 onClick={() => setSelectedInquiry(null)}
-                className="rounded-full p-1 text-[#A39E98] hover:bg-[#F6F5F4] hover:text-[#111110]"
+                className="rounded-full p-1.5 text-[#A39E98] hover:bg-[#F6F5F4] hover:text-[#111110]"
+                aria-label="닫기"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -1894,16 +1934,16 @@ export default function CsInquiryDashboard() {
 
             <div className="mt-4">
               <h4 className="text-xs font-bold text-[#615D59]">문의 내용 전문</h4>
-              <div className="mt-1.5 max-h-48 overflow-y-auto rounded-[12px] border border-black/[0.06] bg-white p-3.5 text-sm leading-relaxed text-[#111110]">
+              <div className="mt-1.5 max-h-48 overflow-y-auto rounded-[12px] border border-black/[0.06] bg-white p-3.5 text-[13px] sm:text-sm leading-relaxed text-[#111110]">
                 {selectedInquiry.inquiryText}
               </div>
             </div>
 
-            <div className="mt-6 flex items-center justify-end gap-2 border-t border-black/[0.06] pt-4">
+            <div className="mt-6 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 border-t border-black/[0.06] pt-4">
               <button
                 type="button"
                 onClick={() => setSelectedInquiry(null)}
-                className="rounded-full border border-black/[0.08] px-4 py-2 text-xs font-semibold text-[#615D59] hover:bg-[#F6F5F4]"
+                className="rounded-full border border-black/[0.08] px-4 py-2 text-xs font-semibold text-[#615D59] hover:bg-[#F6F5F4] text-center"
               >
                 닫기
               </button>
@@ -1911,7 +1951,7 @@ export default function CsInquiryDashboard() {
                 href={selectedInquiry.targetUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-full bg-[#084734] px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-[#065c41]"
+                className="inline-flex items-center justify-center gap-1.5 rounded-full bg-[#084734] px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-[#065c41] text-center"
               >
                 <span>
                   {selectedInquiry.channel === "channel_talk"
@@ -1924,6 +1964,13 @@ export default function CsInquiryDashboard() {
           </div>
         </div>
       ) : null}
+
+      {/* Quick Call Log Ingestion Modal */}
+      <QuickCallLogModal
+        isOpen={isCallLogModalOpen}
+        onClose={() => setIsCallLogModalOpen(false)}
+        onSuccess={() => void loadData(true)}
+      />
     </div>
   )
 }

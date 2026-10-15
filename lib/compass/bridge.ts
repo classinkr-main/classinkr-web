@@ -577,14 +577,22 @@ export async function getCompassActivityPage(
   }
 }
 
-/** 지역 분석은 Compass 리드의 지역만 읽는다. 금액·활동 본문은 포함하지 않는다. */
-export async function getCompassRegionRows(): Promise<CompassResult<{ id: number; region: string | null }>> {
+export interface CompassRegionRow {
+  id: number
+  region: string | null
+  academy?: string | null
+  name?: string | null
+  owner?: string | null
+}
+
+/** 지역 분석은 Compass 리드의 지역과 고객명·담당자 정보를 읽는다. 금액·활동 본문은 포함하지 않는다. */
+export async function getCompassRegionRows(): Promise<CompassResult<CompassRegionRow>> {
   try {
     const sb = createSupabaseAdminClient()
-    const result = await fetchSupabasePages<{ id: number; region: string | null }>({
+    const result = await fetchSupabasePages<CompassRegionRow>({
       maxRows: 50_000,
       fetchPage: (from, to) => sb.from("compass_leads_v")
-        .select("id,region", from === 0 ? { count: "exact" } : undefined)
+        .select("id,region,academy,name,owner", from === 0 ? { count: "exact" } : undefined)
         .order("id", { ascending: true }).range(from, to),
     })
     if (result.error) return downResult(result.error)

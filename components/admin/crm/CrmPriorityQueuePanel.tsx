@@ -343,6 +343,14 @@ export default function CrmPriorityQueuePanel({
   const listRef = useRef<HTMLDivElement | null>(null)
   const closeCancelRef = useRef<HTMLButtonElement | null>(null)
   const [focusRequest, setFocusRequest] = useState<{ itemId: string | null; seq: number } | null>(null)
+  const defaultAppliedRef = useRef(false)
+  useEffect(() => {
+    if (defaultAppliedRef.current) return
+    if (!searchParams.has("owner") && currentOwner && !owner) {
+      defaultAppliedRef.current = true
+      setOwnerState(CURRENT_OWNER_VALUE)
+    }
+  }, [currentOwner, searchParams, owner])
 
   const lastOwnerParamRef = useRef<string | null>(searchParams.get("owner"))
   useEffect(() => {

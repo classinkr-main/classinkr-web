@@ -26,6 +26,7 @@ import {
 import AdminTabs from "@/components/admin/AdminTabs"
 import ChannelCauseReviewPanel from "@/components/admin/channel-talk/ChannelCauseReviewPanel"
 import CsConsoleNav from "@/components/admin/cs/CsConsoleNav"
+import FigmaKnowledgeSupporter from "@/components/admin/cs/FigmaKnowledgeSupporter"
 import ShowMore, { useVisibleCount } from "@/components/admin/ui/ShowMore"
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import {
@@ -434,19 +435,19 @@ function ChannelTalkInbox() {
 
   return (
     <>
-      <div className="mx-auto w-full max-w-[1240px] px-4 pt-6 pb-24 sm:px-6 sm:pt-8 sm:pb-24 lg:px-8">
+      <div className="mx-auto w-full max-w-[1240px] px-3.5 pt-6 pb-24 sm:px-6 sm:pt-8 sm:pb-24 lg:px-8">
         {/* =========================================================================
             HEADER: 채널톡 실시간 상담 관리 & 액션 툴바
             ========================================================================= */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-black/[0.06] pb-5">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight text-[#111110]">채널톡 상담 Inbox</h1>
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#111110]">채널톡 상담 Inbox</h1>
               <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ECFDF5] px-2.5 py-0.5 text-[11px] font-bold text-[#084734]">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#084734]" />
                 실시간 동기화
               </span>
-              <span className="text-xs text-[#A39E98] tabular-nums">
+              <span className="text-[11.5px] sm:text-xs text-[#A39E98] tabular-nums">
                 마지막 동기화: {formatWhen(data?.lastSyncedAt)}
               </span>
             </div>
@@ -455,12 +456,12 @@ function ChannelTalkInbox() {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             <button
               type="button"
               onClick={() => void runSync()}
               disabled={syncing || loading || isUnconfigured}
-              className="inline-flex items-center gap-1.5 rounded-full bg-[#084734] px-4 py-1.5 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-[#065c41] disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-full bg-[#084734] px-3.5 sm:px-4 py-1.5 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-[#065c41] disabled:opacity-50"
             >
               <RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} />
               <span>{syncing ? "동기화 중…" : isUnconfigured ? "설정 필요" : "지금 동기화"}</span>
@@ -470,7 +471,7 @@ function ChannelTalkInbox() {
               type="button"
               onClick={() => void runSync(true)}
               disabled={syncing || loading || isUnconfigured}
-              className="inline-flex items-center gap-1 rounded-full border border-black/[0.08] bg-white px-3 py-1.5 text-xs font-medium text-[#615D59] shadow-2xs transition-colors hover:bg-[#F6F5F4] hover:text-[#111110] disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-full border border-black/[0.08] bg-white px-2.5 sm:px-3 py-1.5 text-xs font-medium text-[#615D59] shadow-2xs transition-colors hover:bg-[#F6F5F4] hover:text-[#111110] disabled:opacity-50"
               title="강제 갱신"
             >
               <RefreshCw className="h-3 w-3" />
@@ -481,7 +482,7 @@ function ChannelTalkInbox() {
               href="https://desk.channel.io"
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 rounded-full border border-black/[0.08] bg-white px-3 py-1.5 text-xs font-medium text-[#111110] shadow-2xs transition-colors hover:bg-[#F6F5F4]"
+              className="inline-flex items-center gap-1 rounded-full border border-black/[0.08] bg-white px-2.5 sm:px-3 py-1.5 text-xs font-medium text-[#111110] shadow-2xs transition-colors hover:bg-[#F6F5F4]"
             >
               <span>채널톡 데스크</span>
               <ExternalLink className="h-3 w-3 text-[#A39E98]" />
@@ -521,70 +522,70 @@ function ChannelTalkInbox() {
         {/* =========================================================================
             KPI METRIC STRIP (4대 현대적 지표 카드)
             ========================================================================= */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-6">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3.5 mb-6">
           {/* Card 1: 전체 상담 */}
-          <div className="rounded-[16px] border border-black/[0.08] bg-white p-4 shadow-2xs">
+          <div className="rounded-[16px] border border-black/[0.08] bg-white p-3.5 sm:p-4 shadow-2xs transition-shadow hover:shadow-xs">
             <div className="flex items-center justify-between text-[#615D59]">
-              <span className="text-[10.5px] font-semibold uppercase tracking-wider text-[#A39E98]">
+              <span className="text-[10px] sm:text-[10.5px] font-semibold uppercase tracking-wider text-[#A39E98]">
                 전체 상담
               </span>
-              <MessageSquare className="h-4 w-4 text-[#FF6B00]" />
+              <MessageSquare className="h-3.5 w-3.5 text-[#FF6B00]" />
             </div>
-            <p className="mt-2 text-2xl font-bold tracking-tight text-[#111110] tabular-nums">
+            <p className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-[#111110] tabular-nums">
               {stats?.total ?? 0}건
             </p>
-            <p className="mt-1 text-[11px] text-[#615D59]">
+            <p className="mt-1 text-[10.5px] sm:text-[11px] text-[#615D59] truncate">
               최근 7일 유입: <span className="font-semibold text-[#111110] tabular-nums">{stats?.last7Days ?? 0}건</span>
             </p>
           </div>
 
           {/* Card 2: 진행 중 */}
-          <div className="rounded-[16px] border border-[#084734]/20 bg-[#ECFDF5]/30 p-4 shadow-2xs">
+          <div className="rounded-[16px] border border-[#084734]/20 bg-[#ECFDF5]/30 p-3.5 sm:p-4 shadow-2xs transition-shadow hover:shadow-xs">
             <div className="flex items-center justify-between text-[#084734]">
-              <span className="text-[10.5px] font-semibold uppercase tracking-wider text-[#084734]">
+              <span className="text-[10px] sm:text-[10.5px] font-semibold uppercase tracking-wider text-[#084734]">
                 진행 중 상담
               </span>
-              <Clock className="h-4 w-4 text-[#084734]" />
+              <Clock className="h-3.5 w-3.5 text-[#084734]" />
             </div>
-            <p className="mt-2 text-2xl font-bold tracking-tight text-[#084734] tabular-nums">
+            <p className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-[#084734] tabular-nums">
               {stats?.byState.opened ?? 0}건
             </p>
-            <p className="mt-1 text-[11px] text-[#615D59]">
+            <p className="mt-1 text-[10.5px] sm:text-[11px] text-[#615D59] truncate">
               종료 {stats?.byState.closed ?? 0}건 · 보류 {stats?.byState.snoozed ?? 0}건
             </p>
           </div>
 
           {/* Card 3: CRM 리드 매칭 */}
-          <div className="rounded-[16px] border border-black/[0.08] bg-white p-4 shadow-2xs">
+          <div className="rounded-[16px] border border-black/[0.08] bg-white p-3.5 sm:p-4 shadow-2xs transition-shadow hover:shadow-xs">
             <div className="flex items-center justify-between text-[#615D59]">
-              <span className="text-[10.5px] font-semibold uppercase tracking-wider text-[#A39E98]">
+              <span className="text-[10px] sm:text-[10.5px] font-semibold uppercase tracking-wider text-[#A39E98]">
                 CRM 리드 매칭
               </span>
-              <Link2 className="h-4 w-4 text-[#084734]" />
+              <Link2 className="h-3.5 w-3.5 text-[#084734]" />
             </div>
-            <p className="mt-2 text-2xl font-bold tracking-tight text-[#111110] tabular-nums">
+            <p className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-[#111110] tabular-nums">
               {stats?.matchedLeads ?? 0}건
             </p>
             <div className="mt-1.5 flex items-center gap-2">
               <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-black/[0.06]">
                 <div className="h-full rounded-full bg-[#084734]" style={{ width: `${matchRate}%` }} />
               </div>
-              <span className="text-[10.5px] font-bold text-[#084734] tabular-nums">{matchRate}%</span>
+              <span className="text-[10px] sm:text-[10.5px] font-bold text-[#084734] tabular-nums">{matchRate}%</span>
             </div>
           </div>
 
           {/* Card 4: 챗봇 FAQ 후보 */}
-          <div className="rounded-[16px] border border-black/[0.08] bg-white p-4 shadow-2xs">
+          <div className="rounded-[16px] border border-black/[0.08] bg-white p-3.5 sm:p-4 shadow-2xs transition-shadow hover:shadow-xs">
             <div className="flex items-center justify-between text-[#615D59]">
-              <span className="text-[10.5px] font-semibold uppercase tracking-wider text-[#A39E98]">
+              <span className="text-[10px] sm:text-[10.5px] font-semibold uppercase tracking-wider text-[#A39E98]">
                 챗봇 FAQ 후보
               </span>
-              <Sparkles className="h-4 w-4 text-[#D4537E]" />
+              <Sparkles className="h-3.5 w-3.5 text-[#D4537E]" />
             </div>
-            <p className="mt-2 text-2xl font-bold tracking-tight text-[#111110] tabular-nums">
+            <p className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-[#111110] tabular-nums">
               {suggestions.length}건
             </p>
-            <p className="mt-1 text-[11px] text-[#615D59]">
+            <p className="mt-1 text-[10.5px] sm:text-[11px] text-[#615D59] truncate">
               골든셋 미커버 반복 질문 승격 대기
             </p>
           </div>
@@ -613,37 +614,38 @@ function ChannelTalkInbox() {
         {activeSub === "conversations" ? (
           <div>
             {/* Filter Toolbar: Search + State Pills + Tag Pills */}
-            <div className="mb-4 rounded-[16px] border border-black/[0.08] bg-white p-4 shadow-2xs space-y-3">
+            <div className="mb-4 rounded-[16px] border border-black/[0.08] bg-white p-3.5 sm:p-4 shadow-2xs space-y-3">
               {/* Top Row: Search & Status Filter */}
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 {/* Search Box */}
-                <div className="relative flex-1 max-w-md">
+                <div className="relative flex-1 w-full sm:max-w-md">
                   <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#A39E98]" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="고객명, 연락처, 기관, 대화 내용, 태그 검색..."
-                    className="w-full rounded-full border border-black/[0.08] bg-[#FAFAF8] py-1.5 pl-8 pr-3 text-xs text-[#111110] placeholder:text-[#A39E98] focus:border-[#084734] focus:bg-white focus:outline-hidden"
+                    className="w-full rounded-full border border-black/[0.08] bg-[#FAFAF8] py-1.5 pl-8 pr-8 text-xs text-[#111110] placeholder:text-[#A39E98] focus:border-[#084734] focus:bg-white focus:outline-hidden"
                   />
                   {searchQuery ? (
                     <button
                       type="button"
                       onClick={() => setSearchQuery("")}
                       className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#A39E98] hover:text-[#111110]"
+                      aria-label="검색어 지우기"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
                   ) : null}
                 </div>
 
-                {/* State Filter Pills */}
-                <div className="flex items-center gap-1 rounded-full border border-black/[0.08] bg-[#F6F5F4] p-0.5 text-xs">
+                {/* State Filter Pills with horizontal scroll safety */}
+                <div className="flex max-w-full overflow-x-auto rounded-full border border-black/[0.08] bg-[#F6F5F4] p-0.5 text-xs">
                   <button
                     type="button"
                     onClick={() => setStateFilter("all")}
                     className={cn(
-                      "rounded-full px-3 py-1 font-semibold transition-colors",
+                      "shrink-0 rounded-full px-2.5 sm:px-3 py-1 font-semibold transition-colors",
                       stateFilter === "all"
                         ? "bg-white text-[#111110] shadow-2xs"
                         : "text-[#615D59] hover:text-[#111110]"
@@ -655,7 +657,7 @@ function ChannelTalkInbox() {
                     type="button"
                     onClick={() => setStateFilter("opened")}
                     className={cn(
-                      "rounded-full px-3 py-1 font-semibold transition-colors",
+                      "shrink-0 rounded-full px-2.5 sm:px-3 py-1 font-semibold transition-colors",
                       stateFilter === "opened"
                         ? "bg-[#084734] text-white"
                         : "text-[#615D59] hover:text-[#111110]"
@@ -667,7 +669,7 @@ function ChannelTalkInbox() {
                     type="button"
                     onClick={() => setStateFilter("closed")}
                     className={cn(
-                      "rounded-full px-3 py-1 font-semibold transition-colors",
+                      "shrink-0 rounded-full px-2.5 sm:px-3 py-1 font-semibold transition-colors",
                       stateFilter === "closed"
                         ? "bg-white text-[#111110] shadow-2xs"
                         : "text-[#615D59] hover:text-[#111110]"
@@ -679,7 +681,7 @@ function ChannelTalkInbox() {
                     type="button"
                     onClick={() => setStateFilter("snoozed")}
                     className={cn(
-                      "rounded-full px-3 py-1 font-semibold transition-colors",
+                      "shrink-0 rounded-full px-2.5 sm:px-3 py-1 font-semibold transition-colors",
                       stateFilter === "snoozed"
                         ? "bg-[#A8741A] text-white"
                         : "text-[#615D59] hover:text-[#111110]"
@@ -701,7 +703,7 @@ function ChannelTalkInbox() {
                     type="button"
                     onClick={() => setTagFilter("all")}
                     className={cn(
-                      "rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors",
+                      "rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors",
                       tagFilter === "all"
                         ? "bg-[#111110] text-white"
                         : "bg-[#F6F5F4] text-[#615D59] hover:text-[#111110]"
@@ -718,7 +720,7 @@ function ChannelTalkInbox() {
                         type="button"
                         onClick={() => setTagFilter(isSelected ? "all" : tag)}
                         className={cn(
-                          "rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors",
+                          "rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors",
                           isSelected
                             ? "bg-[#084734] text-white"
                             : "bg-[#FAFAF8] text-[#615D59] border border-black/[0.06] hover:bg-[#F6F5F4] hover:text-[#111110]"
@@ -755,10 +757,10 @@ function ChannelTalkInbox() {
                   return (
                     <div
                       key={conversation.id}
-                      className="rounded-[16px] border border-black/[0.08] bg-white p-4 shadow-2xs transition-all hover:border-black/[0.16]"
+                      className="rounded-[16px] border border-black/[0.08] bg-white p-3.5 sm:p-4 shadow-2xs transition-all hover:border-black/[0.16]"
                     >
                       {/* Top Header Row */}
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex items-center gap-2.5">
                           {/* Avatar Initials */}
                           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#ECFDF5] font-bold text-[#084734] text-xs">
@@ -801,38 +803,40 @@ function ChannelTalkInbox() {
                         </div>
 
                         {/* Right Action & Timing */}
-                        <div className="flex items-center gap-2 text-xs">
+                        <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 text-xs pt-2 sm:pt-0 border-t sm:border-t-0 border-black/[0.04]">
                           <span className="text-[11px] text-[#A39E98] tabular-nums">
                             {conversation.messageCount}개 메시지 · {formatWhen(conversation.lastMessageAt)}
                           </span>
 
-                          {/* Quick Chat View Modal Trigger */}
-                          <button
-                            type="button"
-                            onClick={() => void openChatModal(conversation)}
-                            className="inline-flex items-center gap-1 rounded-full border border-black/[0.08] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#111110] shadow-2xs hover:bg-[#F6F5F4]"
-                          >
-                            <MessageCircle className="h-3 w-3 text-[#084734]" />
-                            <span>대화 전문</span>
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            {/* Quick Chat View Modal Trigger */}
+                            <button
+                              type="button"
+                              onClick={() => void openChatModal(conversation)}
+                              className="inline-flex items-center gap-1 rounded-full border border-black/[0.08] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#111110] shadow-2xs hover:bg-[#F6F5F4]"
+                            >
+                              <MessageCircle className="h-3 w-3 text-[#084734]" />
+                              <span>대화 전문</span>
+                            </button>
 
-                          {/* Cause Review Toggle */}
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setExpandedCauseReviewId((current) =>
-                                current === conversation.id ? null : conversation.id
-                              )
-                            }
-                            className="inline-flex items-center gap-1 rounded-full border border-black/[0.08] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#615D59] shadow-2xs hover:bg-[#F6F5F4] hover:text-[#111110]"
-                          >
-                            <span>원인 검토</span>
-                            {causeReviewOpen ? (
-                              <ChevronUp className="h-3 w-3" />
-                            ) : (
-                              <ChevronDown className="h-3 w-3" />
-                            )}
-                          </button>
+                            {/* Cause Review Toggle */}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedCauseReviewId((current) =>
+                                  current === conversation.id ? null : conversation.id
+                                )
+                              }
+                              className="inline-flex items-center gap-1 rounded-full border border-black/[0.08] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#615D59] shadow-2xs hover:bg-[#F6F5F4] hover:text-[#111110]"
+                            >
+                              <span>원인 검토</span>
+                              {causeReviewOpen ? (
+                                <ChevronUp className="h-3 w-3" />
+                              ) : (
+                                <ChevronDown className="h-3 w-3" />
+                              )}
+                            </button>
+                          </div>
                         </div>
                       </div>
 
@@ -841,7 +845,7 @@ function ChannelTalkInbox() {
                         {conversation.firstQuestion ? (
                           <div className="flex items-start gap-2">
                             <span className="shrink-0 font-semibold text-[#084734]">고객:</span>
-                            <p className="line-clamp-2 text-[#31302E]">
+                            <p className="line-clamp-2 text-[12.5px] sm:text-xs text-[#31302E] leading-relaxed">
                               “{conversation.firstQuestion}”
                             </p>
                           </div>
@@ -856,12 +860,12 @@ function ChannelTalkInbox() {
                       </div>
 
                       {/* Bottom CRM Registration Row */}
-                      <div className="mt-3 flex items-center justify-between border-t border-black/[0.04] pt-2.5 text-xs">
+                      <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-t border-black/[0.04] pt-2.5 text-xs">
                         <div className="text-[11px] text-[#A39E98]">
                           담당자 배정: <span className="font-semibold text-[#111110]">김민재 매니저 (CS/Ops)</span>
                         </div>
 
-                        <div>
+                        <div className="flex flex-wrap items-center gap-2">
                           {conversation.matchedLeadId ? (
                             <a
                               href={leadBoardDeepLink(conversation.matchedLeadId)}
@@ -883,7 +887,7 @@ function ChannelTalkInbox() {
                               type="button"
                               onClick={() => void registerConversationAsLead(conversation)}
                               disabled={registerBusy}
-                              className="inline-flex items-center gap-1 rounded-full bg-[#084734] px-3 py-1 text-[11px] font-bold text-white shadow-2xs transition-colors hover:bg-[#065c41] disabled:opacity-50"
+                              className="inline-flex items-center gap-1 rounded-full bg-[#084734] px-3.5 py-1 text-[11px] font-bold text-white shadow-2xs transition-colors hover:bg-[#065c41] disabled:opacity-50"
                             >
                               {registerBusy ? (
                                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -897,7 +901,7 @@ function ChannelTalkInbox() {
                           )}
 
                           {registerError ? (
-                            <span className="ml-2 text-[11px] text-[#8F2C2C]">{registerError}</span>
+                            <span className="text-[11px] text-[#8F2C2C]">{registerError}</span>
                           ) : null}
                         </div>
                       </div>
@@ -1148,21 +1152,21 @@ function ChannelTalkInbox() {
             ========================================================================= */}
         {selectedChatConversation ? (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-6 backdrop-blur-xs"
             onClick={() => setSelectedChatConversation(null)}
           >
             <div
-              className="flex flex-col h-[85vh] w-full max-w-2xl rounded-[20px] border border-black/[0.08] bg-white shadow-2xl overflow-hidden"
+              className="flex flex-col h-[88vh] sm:h-[85vh] w-[96vw] sm:max-w-5xl rounded-[20px] border border-black/[0.08] bg-white shadow-2xl overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Modal Top Profile Bar */}
-              <div className="flex items-center justify-between border-b border-black/[0.08] px-5 py-3.5 bg-[#FAFAF8]">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#084734] font-bold text-white text-xs">
+              <div className="flex items-center justify-between border-b border-black/[0.08] px-4 py-3 sm:px-5 sm:py-3.5 bg-[#FAFAF8]">
+                <div className="flex items-center gap-2.5 sm:gap-3">
+                  <div className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-full bg-[#084734] font-bold text-white text-xs">
                     {getInitialLetter(selectedChatConversation.name)}
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <h3 className="text-sm font-bold text-[#111110]">
                         {selectedChatConversation.name || "익명 고객"}
                       </h3>
@@ -1173,7 +1177,7 @@ function ChannelTalkInbox() {
                         {STATE_LABEL[selectedChatConversation.state]}
                       </span>
                     </div>
-                    <p className="text-[11px] text-[#A39E98]">
+                    <p className="text-[10.5px] sm:text-[11px] text-[#A39E98]">
                       {selectedChatConversation.phone || "연락처 미등록"} · 담당: 김민재 매니저 (CS/Ops)
                     </p>
                   </div>
@@ -1184,97 +1188,110 @@ function ChannelTalkInbox() {
                     type="button"
                     onClick={() => setSelectedChatConversation(null)}
                     className="rounded-full p-1.5 text-[#A39E98] hover:bg-[#F6F5F4] hover:text-[#111110]"
+                    aria-label="닫기"
                   >
                     <X className="h-4 w-4" />
                   </button>
                 </div>
               </div>
 
-              {/* Modal Chat Bubble Stream */}
-              <div className="flex-1 overflow-y-auto p-5 space-y-3.5 bg-[#F6F5F4]/40">
-                {transcriptLoading ? (
-                  <div className="flex h-full items-center justify-center text-xs text-[#A39E98]">
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin text-[#084734]" />
-                    대화 전문을 불러오는 중...
-                  </div>
-                ) : transcriptError ? (
-                  <div className="rounded-[12px] bg-[#FCE9E9] p-4 text-xs text-[#8F2C2C]">
-                    {transcriptError}
-                  </div>
-                ) : transcriptMessages.length === 0 ? (
-                  <div className="flex h-full flex-col items-center justify-center text-xs text-[#A39E98]">
-                    <p className="font-semibold text-[#111110]">저장된 대화 메시지가 없습니다.</p>
-                    <p className="mt-1">첫 질문: “{selectedChatConversation.firstQuestion || "질문 없음"}”</p>
-                  </div>
-                ) : (
-                  transcriptMessages.map((msg) => {
-                    const isCustomer = msg.author === "customer"
-                    const isAgent = msg.author === "agent"
-                    return (
-                      <div
-                        key={msg.id}
-                        className={cn(
-                          "flex flex-col max-w-[80%]",
-                          isAgent ? "ml-auto items-end" : isCustomer ? "mr-auto items-start" : "mx-auto items-center"
-                        )}
-                      >
-                        <span className="text-[10px] text-[#A39E98] mb-1">
-                          {isCustomer ? "고객" : isAgent ? "담당 매니저 (민재)" : "봇 안내"}
-                        </span>
-                        <div
-                          className={cn(
-                            "rounded-[16px] px-4 py-2.5 text-xs leading-relaxed shadow-2xs whitespace-pre-wrap",
-                            isAgent
-                              ? "bg-[#084734] text-white rounded-tr-xs"
-                              : isCustomer
-                                ? "bg-white text-[#111110] border border-black/[0.08] rounded-tl-xs"
-                                : "bg-[#FAFAF8] text-[#615D59] border border-black/[0.06] text-center text-[11px]"
-                          )}
-                        >
-                          {msg.text}
-                        </div>
-                        <span className="text-[9.5px] text-[#A39E98] mt-1 tabular-nums">
-                          {formatWhen(msg.at)}
-                        </span>
+              {/* Modal Body: Split 2 columns (Left: Chat stream, Right: Figma guide supporter) */}
+              <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
+                {/* Left Column: Chat Bubble Stream & Action Footer */}
+                <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
+                  <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 space-y-3 bg-[#F6F5F4]/40">
+                    {transcriptLoading ? (
+                      <div className="flex h-full items-center justify-center text-xs text-[#A39E98]">
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin text-[#084734]" />
+                        대화 전문을 불러오는 중...
                       </div>
-                    )
-                  })
-                )}
-              </div>
+                    ) : transcriptError ? (
+                      <div className="rounded-[12px] bg-[#FCE9E9] p-4 text-xs text-[#8F2C2C]">
+                        {transcriptError}
+                      </div>
+                    ) : transcriptMessages.length === 0 ? (
+                      <div className="flex h-full flex-col items-center justify-center text-xs text-[#A39E98]">
+                        <p className="font-semibold text-[#111110]">저장된 대화 메시지가 없습니다.</p>
+                        <p className="mt-1">첫 질문: “{selectedChatConversation.firstQuestion || "질문 없음"}”</p>
+                      </div>
+                    ) : (
+                      transcriptMessages.map((msg) => {
+                        const isCustomer = msg.author === "customer"
+                        const isAgent = msg.author === "agent"
+                        return (
+                          <div
+                            key={msg.id}
+                            className={cn(
+                              "flex flex-col max-w-[85%] sm:max-w-[75%]",
+                              isAgent ? "ml-auto items-end" : isCustomer ? "mr-auto items-start" : "mx-auto items-center"
+                            )}
+                          >
+                            <span className="text-[9.5px] sm:text-[10px] text-[#A39E98] mb-1">
+                              {isCustomer ? "고객" : isAgent ? "담당 매니저 (민재)" : "봇 안내"}
+                            </span>
+                            <div
+                              className={cn(
+                                "rounded-[16px] px-3.5 py-2.5 text-[12.5px] sm:text-xs leading-relaxed shadow-2xs whitespace-pre-wrap",
+                                isAgent
+                                  ? "bg-[#084734] text-white rounded-tr-xs"
+                                  : isCustomer
+                                    ? "bg-white text-[#111110] border border-black/[0.08] rounded-tl-xs"
+                                    : "bg-[#FAFAF8] text-[#615D59] border border-black/[0.06] text-center text-[11px]"
+                              )}
+                            >
+                              {msg.text}
+                            </div>
+                            <span className="text-[9.5px] text-[#A39E98] mt-1 tabular-nums">
+                              {formatWhen(msg.at)}
+                            </span>
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
 
-              {/* Modal Bottom Action Footer */}
-              <div className="flex items-center justify-between border-t border-black/[0.08] px-5 py-3.5 bg-white">
-                <div className="flex items-center gap-1.5 text-xs text-[#615D59]">
-                  <span>태그:</span>
-                  {(selectedChatConversation.tags ?? []).map((t) => (
-                    <span key={t} className="rounded-full bg-[#FAFAF8] px-2 py-0.5 text-[10.5px] font-semibold text-[#111110] border border-black/[0.06]">
-                      {t}
-                    </span>
-                  ))}
+                  {/* Modal Bottom Action Footer */}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 border-t border-black/[0.08] px-4 py-3 sm:px-5 sm:py-3 bg-white">
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-[#615D59]">
+                      <span className="text-[11px] text-[#A39E98]">태그:</span>
+                      {(selectedChatConversation.tags ?? []).map((t) => (
+                        <span key={t} className="rounded-full bg-[#FAFAF8] px-2 py-0.5 text-[10.5px] font-semibold text-[#111110] border border-black/[0.06]">
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2">
+                      <a
+                        href="https://desk.channel.io"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 rounded-full border border-black/[0.08] px-3 py-1.5 text-xs font-semibold text-[#111110] hover:bg-[#F6F5F4]"
+                      >
+                        <span>채널톡 데스크 열기</span>
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+
+                      {!selectedChatConversation.matchedLeadId && !registeredLeads[selectedChatConversation.id] && (
+                        <button
+                          type="button"
+                          onClick={() => void registerConversationAsLead(selectedChatConversation)}
+                          disabled={registeringId === selectedChatConversation.id}
+                          className="inline-flex items-center gap-1 rounded-full bg-[#084734] px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-[#065c41] disabled:opacity-50"
+                        >
+                          <UserPlus className="h-3 w-3" />
+                          <span>CRM 리드로 등록</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <a
-                    href="https://desk.channel.io"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 rounded-full border border-black/[0.08] px-3 py-1.5 text-xs font-semibold text-[#111110] hover:bg-[#F6F5F4]"
-                  >
-                    <span>채널톡 데스크 열기</span>
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-
-                  {!selectedChatConversation.matchedLeadId && !registeredLeads[selectedChatConversation.id] && (
-                    <button
-                      type="button"
-                      onClick={() => void registerConversationAsLead(selectedChatConversation)}
-                      disabled={registeringId === selectedChatConversation.id}
-                      className="inline-flex items-center gap-1 rounded-full bg-[#084734] px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-[#065c41] disabled:opacity-50"
-                    >
-                      <UserPlus className="h-3 w-3" />
-                      <span>CRM 리드로 등록</span>
-                    </button>
-                  )}
+                {/* Right Column: Figma Knowledge Supporter (107 guides) */}
+                <div className="hidden md:flex md:w-80 lg:w-96 flex-col min-h-0 border-l border-black/[0.08] bg-[#FAFAF8]">
+                  <FigmaKnowledgeSupporter
+                    contextText={`${selectedChatConversation.firstQuestion ?? ""} ${selectedChatConversation.lastMessageText ?? ""} ${(selectedChatConversation.tags ?? []).join(" ")}`}
+                  />
                 </div>
               </div>
             </div>

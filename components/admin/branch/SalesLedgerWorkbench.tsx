@@ -206,7 +206,7 @@ const RevMatrixFooterSkeleton = () => (
   </tfoot>
 )
 const CrmLinkedBadge = dynamic(() => import("./ledger/RevMatrix").then((m) => m.CrmLinkedBadge), { ssr: false, loading: () => null })
-const MatrixToneLegend = dynamic(() => import("./ledger/RevMatrix").then((m) => m.MatrixToneLegend), { ssr: false, loading: () => null })
+const MatrixHelpPopover = dynamic(() => import("./ledger/RevMatrix").then((m) => m.MatrixHelpPopover), { ssr: false, loading: () => null })
 const NeedsLinkBadge = dynamic(() => import("./ledger/RevMatrix").then((m) => m.NeedsLinkBadge), { ssr: false, loading: () => null })
 const RevMatrixCategoryRow = dynamic(() => import("./ledger/RevMatrix").then((m) => m.RevMatrixCategoryRow), {
   ssr: false,
@@ -346,7 +346,6 @@ import {
   FilterTag,
   fiscalYearLabel,
   handleRovingTabKeyDown,
-  hasConfirmedThroughMonth,
   isDraftOperation,
   isPinSeedEligible,
   LENSES,
@@ -455,8 +454,12 @@ export default function SalesLedgerWorkbench({
   const [expandedRevGroups, setExpandedRevGroups] = useState<Set<string>>(() => new Set())
   // 카테고리(HW/SW) 합산행 펼침 상태. 키=`${groupKey}::${category}`. 펼치면 그 카테고리 품목행(편집 가능) 노출.
   const [expandedRevCategories, setExpandedRevCategories] = useState<Set<string>>(() => new Set())
-  // 매트릭스: 월 헤더 클릭 시 그 달만 w1~w5 5칸으로 확장(기본은 전부 요약 1칸).
-  const [expandedRevMonths, setExpandedRevMonths] = useState<Set<string>>(() => new Set())
+  const [expandedRevMonths, setExpandedRevMonths] = useState<Set<string>>(() => {
+    const cur = ymKeyUtc(new Date())
+    return new Set([cur, shiftMonth(cur, 1)])
+  })
+  // 4~9월(상반기) 종합 요약 상태 (기본 펼침: true, 사용자가 접기를 누르면 1열 요약으로 접힘)
+  const [h1Expanded, setH1Expanded] = useState(true)
   // 1열 미연결 칩 팝오버(2단계 공개) — 열림은 매트릭스 전체에서 그룹키/행ID 1개만(동시 다중 열림 금지).
   // 토글/닫기 콜백은 안정 참조로 내려 memo 행 리렌더를 열림이 바뀐 행으로만 좁힌다.
   const [revLinkPopoverKey, setRevLinkPopoverKey] = useState<string | null>(null)
@@ -768,6 +771,16 @@ export default function SalesLedgerWorkbench({
   // 찍은 핀이 장부에도, 장부에서 찍은 핀이 개요에도 적용된다). ref로 이 컴포넌트 생애주기 동안
   // isPinSeedEligible 판정을 딱 1번만 소비한다 — 아래에서 즉시 true로 갱신하므로 이후 실행
   // (내비게이션·self-echo)은 항상 대상 밖이다.
+  // 사용자 요청: 로그인된 계정으로 디폴트(전체가 아니라), 지사장님은 전체로 잡기
+  const resolveInitialLedgerManager = (pinned: string | null): string | null => {
+    if (typeof window === "undefined") return pinned
+    const r = sessionStorage.getItem("admin_role")?.trim().toUpperCase()
+    const n = sessionStorage.getItem("admin_name")?.trim()
+    const isDir = r === "BRANCH" || r === "BRANCH_DIRECTOR" || n === "문준혁" || Boolean(n && n.includes("지사장"))
+    if (isDir) return null
+    if (n && n !== "Dev") return n
+    return pinned
+  }
   const pinSeedAttemptedRef = useRef(false)
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString())
@@ -804,6 +817,11 @@ export default function SalesLedgerWorkbench({
     if (pinSeedEligible && typeof window !== "undefined") {
       const pinnedManager = window.localStorage.getItem(PIPELINE_MANAGER_DEFAULT_STORAGE_KEY)
       if (pinnedManager) nextManagerFilter.add(pinnedManager)
+      const m = resolveInitialLedgerManager(pinnedManager)
+      if (m !== pinnedManager) {
+        nextManagerFilter.clear()
+        if (m) nextManagerFilter.add(m)
+      }
     }
     setManagerFilter((current) => replaceEquivalentSet(current, nextManagerFilter))
     const nextRegionFilter = parseMultiFilterParam(params.get("region"))
@@ -952,6 +970,9 @@ export default function SalesLedgerWorkbench({
     setRevSortDirection("desc")
     setRevPageSize(100)
     setRevPage(1)
+    const cur = ymKeyUtc(new Date())
+    setExpandedRevMonths(new Set([cur, shiftMonth(cur, 1)]))
+    setH1Expanded(false)
   }, [])
 
   useEffect(() => {
@@ -1733,11 +1754,19 @@ export default function SalesLedgerWorkbench({
     return grand
   }, [revMatrixColumns])
 
-  // 빈 상태 안내 셀 colSpan: 고객+상품+연간(3) + 월(요약 1칸 / 확장 5칸+월계 1칸).
-  const matrixColSpan = useMemo(
-    () => 3 + matrixMonths.reduce((sum, month) => sum + (expandedRevMonths.has(month) ? 6 : 1), 0),
-    [matrixMonths, expandedRevMonths],
-  )
+  const isH1Month = useCallback((m: string) => {
+    const mon = m.slice(5, 7)
+    return mon >= "04" && mon <= "09"
+  }, [])
+
+  // 빈 상태 안내 셀 colSpan: 고객+상품+연간(3) + 4~9월(종합 1칸 또는 펼침 시 각 월 칸) + 나머지 월.
+  const matrixColSpan = useMemo(() => {
+    if (!h1Expanded) {
+      const rest = matrixMonths.filter((m) => !isH1Month(m))
+      return 3 + 1 + rest.reduce((sum, month) => sum + (expandedRevMonths.has(month) ? 6 : 1), 0)
+    }
+    return 3 + matrixMonths.reduce((sum, month) => sum + (expandedRevMonths.has(month) ? 6 : 1), 0)
+  }, [matrixMonths, expandedRevMonths, h1Expanded, isH1Month])
 
   // 적용 전(new-row) 초안은 매트릭스에 행 자체가 없어 "초안 넣었는데 표에 없음"이 되던 사각 —
   // 표 상단 요약 스트립으로 노출한다(집계에는 미반영, 적용 후 정식 행으로 합류).
@@ -2950,14 +2979,16 @@ export default function SalesLedgerWorkbench({
                 ))}
               </select>
             )}
-            <button
-              type="button"
-              onClick={() => selectRailView("input")}
-              className="inline-flex min-h-9 items-center gap-2 rounded-md bg-[#084734] px-4 text-[13px] font-semibold text-white hover:bg-[#065c41]"
-            >
-              <Plus className="h-4 w-4" />
-              매출 입력
-            </button>
+            {lens !== "cockpit" && (
+              <button
+                type="button"
+                onClick={() => selectRailView("input")}
+                className="inline-flex min-h-9 items-center gap-2 rounded-md bg-[#084734] px-4 text-[13px] font-semibold text-white hover:bg-[#065c41]"
+              >
+                <Plus className="h-4 w-4" />
+                매출 입력
+              </button>
+            )}
             <button
               type="button"
               onClick={() => void onRefresh()}
@@ -3036,97 +3067,120 @@ export default function SalesLedgerWorkbench({
           </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[11px] text-[#615D59]">
-            <span className="flex items-center gap-1.5 font-bold text-[#111110]">
-              <Database className="h-3.5 w-3.5 text-[#084734]" />
-              원천
-            </span>
-            <span>
-              마지막 성공{" "}
-              <span
-                className="font-semibold text-[#111110]"
-                title={`마지막 성공 ${formatDateTime(summary.data?.sync_health?.rev.lastSuccessAt ?? summary.data?.lastSync)} · 마지막 시도 ${formatDateTime(summary.data?.lastSync)}`}
-              >
-                {relativeTimeFromNow(summary.data?.sync_health?.rev.lastSuccessAt ?? summary.data?.lastSync, sourceStripNow)}
+          {lens !== "cockpit" && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[11px] text-[#615D59]">
+              <span className="flex items-center gap-1.5 font-bold text-[#111110]">
+                <Database className="h-3.5 w-3.5 text-[#084734]" />
+                원천
               </span>
-            </span>
-            <span>
-              시트수정{" "}
-              <span className="font-semibold text-[#111110]" title={formatDateTime(summary.data?.sheetModifiedAt)}>
-                {relativeTimeFromNow(summary.data?.sheetModifiedAt, sourceStripNow)}
+              <span>
+                마지막 성공{" "}
+                <span
+                  className="font-semibold text-[#111110]"
+                  title={`마지막 성공 ${formatDateTime(summary.data?.sync_health?.rev.lastSuccessAt ?? summary.data?.lastSync)} · 마지막 시도 ${formatDateTime(summary.data?.lastSync)}`}
+                >
+                  {relativeTimeFromNow(summary.data?.sync_health?.rev.lastSuccessAt ?? summary.data?.lastSync, sourceStripNow)}
+                </span>
               </span>
-            </span>
-            {/* 품질 감사 2026-09-10 — #2(data_trust 핵심): sheetModifiedAt=null이 "시트에 값
-                없음"인지 "Drive 조회 자체가 실패"했는지 구분한다. 예전엔 permission/network 실패가
-                null로 삼켜져 isSheetAheadOfSync가 무조건 false를 반환, 아래 "시트가 더 새로움"
-                경고가 조용히 꺼졌다(REV 동기화 30일 정지 사고와 동일 실패 모드) — 이제 실패 자체를
-                별도 배지로 눈에 띄게 낸다. */}
-            {!summary.error && summary.data?.sheetFreshnessError && (
-              <span
-                className="rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[10.5px] font-semibold text-[#7A520F]"
-                title="Google Drive에서 시트 수정 시각을 가져오지 못했습니다(권한/네트워크). 시트가 DB보다 앞서 있어도 이 경고가 뜨지 않을 수 있습니다."
-              >
-                시트 신선도 확인 불가
+              <span>
+                시트수정{" "}
+                <span className="font-semibold text-[#111110]" title={formatDateTime(summary.data?.sheetModifiedAt)}>
+                  {relativeTimeFromNow(summary.data?.sheetModifiedAt, sourceStripNow)}
+                </span>
               </span>
-            )}
-            {/* 스테일 경고 공유화(품질 웨이브 4 — 항목 4) — SyncStatusBar와 같은 순수 판정
-                (lib/branch/sheet-freshness.ts)을 여기서도 써서 "시트수정"이 "sync"보다 눈에 띄게
-                앞서 있으면 동일 경고를 낸다(2026-07-16 사고 재발 감지력이 이 화면에도 있어야 한다). */}
-            {!summary.error && !summary.data?.sheetFreshnessError && isSheetAheadOfSync(summary.data?.sheetModifiedAt, summary.data?.lastSync) && (
-              <span className="rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[10.5px] font-semibold text-[#7A520F]">
-                시트가 더 새로움 — 동기화 필요
+              {!summary.error && summary.data?.sheetFreshnessError && (
+                <span
+                  className="rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[10.5px] font-semibold text-[#7A520F]"
+                  title="Google Drive에서 시트 수정 시각을 가져오지 못했습니다(권한/네트워크). 시트가 DB보다 앞서 있어도 이 경고가 뜨지 않을 수 있습니다."
+                >
+                  시트 신선도 확인 불가
+                </span>
+              )}
+              {!summary.error && !summary.data?.sheetFreshnessError && isSheetAheadOfSync(summary.data?.sheetModifiedAt, summary.data?.lastSync) && (
+                <span className="rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[10.5px] font-semibold text-[#7A520F]">
+                  시트가 더 새로움 — 동기화 필요
+                </span>
+              )}
+              <span>입력 큐 <span className="font-semibold text-[#111110]">{queueMode === "server" ? "서버" : "로컬"} · {openDrafts.length}건</span></span>
+              <span>내부 원장 <span className="font-semibold text-[#111110]">{ledgerHealth?.ok === false ? "준비 필요" : `${ledgerEntries.length}건`}</span></span>
+              <span className="flex items-center gap-1.5">
+                REV 원천{" "}
+                <span
+                  className="font-semibold text-[#111110]"
+                  title={dbImportInfo ? `액티브 DB 임포트 run ${dbImportInfo.runId} · ${formatDateTime(dbImportInfo.capturedAt)}` : undefined}
+                >
+                  {dbImportInfo
+                    ? `DB run ${dbImportInfo.runId.slice(0, 8)}${dbImportInfo.capturedAt ? ` · ${relativeTimeFromNow(dbImportInfo.capturedAt, sourceStripNow)}` : ""}`
+                    : dbNativeActive
+                      ? "DB 임포트 · run 미확인"
+                      : dbSourceServerState === "inactive"
+                        ? "시트 미러 (DB 임포트 비활성)"
+                        : "미확인 (시트 폴백 가능)"}
+                </span>
               </span>
-            )}
-            <span>입력 큐 <span className="font-semibold text-[#111110]">{queueMode === "server" ? "서버" : "로컬"} · {openDrafts.length}건</span></span>
-            <span>내부 원장 <span className="font-semibold text-[#111110]">{ledgerHealth?.ok === false ? "준비 필요" : `${ledgerEntries.length}건`}</span></span>
-            <span className="flex items-center gap-1.5">
-              REV 원천{" "}
-              <span
-                className="font-semibold text-[#111110]"
-                title={dbImportInfo ? `액티브 DB 임포트 run ${dbImportInfo.runId} · ${formatDateTime(dbImportInfo.capturedAt)}` : undefined}
-              >
-                {dbImportInfo
-                  ? `DB run ${dbImportInfo.runId.slice(0, 8)}${dbImportInfo.capturedAt ? ` · ${relativeTimeFromNow(dbImportInfo.capturedAt, sourceStripNow)}` : ""}`
-                  : dbNativeActive
-                    ? "DB 임포트 · run 미확인"
-                    : dbSourceServerState === "inactive"
-                      ? "시트 미러 (DB 임포트 비활성)"
-                      : "미확인 (시트 폴백 가능)"}
-              </span>
-            </span>
-            {(queueError || ledgerHealth?.ok === false) && (
-              <span className="rounded border border-[#ECD29C] bg-[#FBF1E0] px-1.5 py-0.5 text-[10px] font-semibold text-[#7A520F]">
-                ⚠ {queueError ?? ledgerHealth?.message ?? "내부 원장 준비 필요"}
-              </span>
-            )}
-            {(dbImportError || dbImportNotice) && (
-              <span
-                className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${
-                  dbImportError
-                    ? "border-[#F2B8B8] bg-[#FCE9E9] text-[#8F2C2C]"
-                    : "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]"
-                }`}
-              >
-                {dbImportError ? `⚠ 장부 임포트 재캡처 실패 — 이전 캡처 표시 중: ${dbImportError}` : dbImportNotice}
-              </span>
-            )}
-          </div>
+              {(queueError || ledgerHealth?.ok === false) && (
+                <span className="rounded border border-[#ECD29C] bg-[#FBF1E0] px-1.5 py-0.5 text-[10px] font-semibold text-[#7A520F]">
+                  ⚠ {queueError ?? ledgerHealth?.message ?? "내부 원장 준비 필요"}
+                </span>
+              )}
+              {(dbImportError || dbImportNotice) && (
+                <span
+                  className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${
+                    dbImportError
+                      ? "border-[#F2B8B8] bg-[#FCE9E9] text-[#8F2C2C]"
+                      : "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]"
+                  }`}
+                >
+                  {dbImportError ? `⚠ 장부 임포트 재캡처 실패 — 이전 캡처 표시 중: ${dbImportError}` : dbImportNotice}
+                </span>
+              )}
+            </div>
+          )}
         </aside>
 
         <section className="min-w-0 space-y-5">
           {lens === "rev" ? (
-            <div className="grid grid-cols-1 gap-4 border-b border-[rgba(0,0,0,0.08)] py-4 sm:grid-cols-3" aria-label="선택 월 매출 확도 요약">
+            <div className="flex flex-wrap items-start gap-x-8 sm:gap-x-12 gap-y-4 border-b border-[rgba(0,0,0,0.08)] py-3.5" aria-label="선택 월 매출 확도 요약">
               {([
                 ["confirmed", revMonthConfirmed],
                 ["high-confidence", revMonthHighConfidence],
                 ["expected", revMonthPlanned],
-              ] as const).map(([confidence, amount]) => (
-                <div key={confidence} className="sm:border-l sm:border-[rgba(0,0,0,0.08)] sm:pl-4 sm:first:border-l-0 sm:first:pl-0">
-                  <p className={`text-[13px] font-semibold ${CONFIDENCE_TOKENS[confidence].textClass}`}>{CONFIDENCE_TOKENS[confidence].label}</p>
-                  <p className="mt-2 text-[26px] font-bold tracking-[-0.02em] tabular-nums text-[#111110]">{pipeline.loading && !pipeline.data ? "–" : formatMoney(amount)}</p>
-                  <p className="mt-1 text-[11px] text-[#615D59]">{formatMonthLabel(selectedMonth)} · 현재 필터 기준</p>
+              ] as const).map(([confidence, amount], idx) => (
+                <div key={confidence} className={idx > 0 ? "sm:border-l sm:border-[rgba(0,0,0,0.08)] sm:pl-8 sm:lg:pl-10" : ""}>
+                  <p className={`text-[12.5px] font-semibold ${CONFIDENCE_TOKENS[confidence].textClass}`}>{CONFIDENCE_TOKENS[confidence].label}</p>
+                  <p className="mt-1.5 text-[24px] font-bold tracking-[-0.02em] tabular-nums text-[#111110]">{pipeline.loading && !pipeline.data ? "–" : formatMoney(amount)}</p>
+                  <p className="mt-0.5 text-[11px] text-[#615D59]">{formatMonthLabel(selectedMonth)} · 현재 필터 기준</p>
                 </div>
               ))}
+            </div>
+          ) : lens === "cockpit" ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.02)]" aria-label="선택 월 매출 확도 요약">
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                <span className="text-[12.5px] font-bold text-[#111110]">
+                  {formatMonthLabel(selectedMonth)} 현황
+                  {managerFilter.size > 0 && (
+                    <span className="ml-1.5 font-semibold text-[#084734]">
+                      ({Array.from(managerFilter).join(", ")})
+                    </span>
+                  )}
+                </span>
+                <span className="h-3.5 w-px bg-[rgba(0,0,0,0.08)]" aria-hidden />
+                <div className="flex items-center gap-1.5 text-[12px]">
+                  <span className="font-semibold text-[#084734]">확정</span>
+                  <span className="font-bold tabular-nums text-[#111110]">{pipeline.loading && !pipeline.data ? "–" : formatMoney(revMonthConfirmed)}</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-[12px]">
+                  <span className="font-semibold text-[#2563EB]">고확도</span>
+                  <span className="font-bold tabular-nums text-[#111110]">{pipeline.loading && !pipeline.data ? "–" : formatMoney(revMonthHighConfidence)}</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-[12px]">
+                  <span className="font-semibold text-[#A8741A]">예정</span>
+                  <span className="font-bold tabular-nums text-[#111110]">{pipeline.loading && !pipeline.data ? "–" : formatMoney(revMonthPlanned)}</span>
+                </div>
+              </div>
+              <div className="text-[12px] text-[#615D59]">
+                딜 <span className="font-bold tabular-nums text-[#111110]">{filteredRows.length.toLocaleString("ko-KR")}건</span> · 월 합계 <span className="font-bold tabular-nums text-[#111110]">{pipeline.loading && !pipeline.data ? "–" : formatMoney(revMonthTotal)}</span>
+              </div>
             </div>
           ) : (
           <div className={`grid gap-3 ${showLedgerInputTiles ? "sm:grid-cols-2 xl:grid-cols-5" : "sm:grid-cols-3"}`}>
@@ -3251,54 +3305,41 @@ export default function SalesLedgerWorkbench({
             )}
 
             {lens === "rev" && (
-              <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white">
-            <div className="flex flex-wrap items-center gap-3 border-b border-[rgba(0,0,0,0.08)] p-4">
-              <h2 className="mr-auto text-[15px] font-bold text-[#111110]">월별 매출</h2>
-              <label className="relative min-w-0 flex-1 basis-52 sm:max-w-xs">
-                <span className="sr-only">REV 매출 행 검색</span>
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A39E98]" />
-                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="고객·담당자·메모 검색" className="h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white pl-9 pr-3 text-[13px] outline-none focus:border-[#084734]" />
-              </label>
-              <select aria-label="매출 월 선택" value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)} className="h-10 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110]">
-                {matrixMonths.map((month) => <option key={month} value={month}>{formatMonthLabel(month)}</option>)}
-              </select>
-            </div>
-            <details className="border-b border-[rgba(0,0,0,0.08)]">
-              <summary className="cursor-pointer px-4 py-3 text-[12px] font-semibold text-[#615D59]">담당·상품 필터 / 정렬·표 보기{revControlsDirty ? " · 사용자 설정 적용 중" : ""}</summary>
-            <div className="border-b border-[rgba(0,0,0,0.08)] p-4">
-              <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                <div>
-                  <div className="flex items-center gap-3">
-                    <p className="flex items-center gap-2 text-[13px] font-bold text-[#111110]">
-                      <FileSpreadsheet className="h-4 w-4 text-[#084734]" />
-                      REV 매출 행
-                    </p>
-                    {/* 웨이브 5 — 항목 1(a): M/Q 토글이 아래 본표(12개월 매트릭스)를 좁힌다는 오인
-                        방지 — 본표 열 구성은 항상 FY 12개월 고정이고, M/Q/Y는 이 카드의 보조
-                        분석(목표대비·담당자별 등)과 아래 요약 타일에만 반영된다는 것을 명시한다. */}
+              <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-xs overflow-hidden">
+                {/* [Row 1] 타이틀, 회계월 네비게이션, 통합 검색창, 도움말 가이드 호버 */}
+                <div className="relative z-30 flex flex-col gap-3.5 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5 lg:flex-row lg:items-center lg:justify-between bg-[#FAFAF8]/50">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ECFDF5] text-[#084734]">
+                        <FileSpreadsheet className="h-4 w-4" />
+                      </div>
+                      <h2 className="text-[16px] font-bold text-[#111110] tracking-tight">REV 매출 장부</h2>
+                    </div>
+
                     <span
                       title="M/Q/Y 토글은 아래 요약 타일·보조 분석 기간만 바꿉니다. 이 표는 항상 회계연도 12개월 전체를 보여줍니다."
-                      className="inline-flex shrink-0 items-center rounded-full border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 py-0.5 text-[10px] font-bold text-[#615D59]"
+                      className="inline-flex shrink-0 items-center rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-0.5 text-[11px] font-semibold text-[#615D59]"
                     >
-                      본표는 FY 전체 12개월 고정
+                      FY 12개월 표 고정
                     </span>
-                    <div className="inline-flex items-center gap-0.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5">
+
+                    {/* 회계월 이동 스위처 */}
+                    <div className="inline-flex items-center gap-0.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-0.5 shadow-2xs">
                       <button
                         type="button"
                         onClick={() =>
                           setSelectedMonth((month) =>
-                            // 회계연도 밖 값(URL 주입 등)이면 달력 걷기 대신 FY 경계로 스냅한다.
                             matrixMonths.includes(month) ? shiftMonth(month, -1) : month < matrixMonths[0] ? matrixMonths[0] : matrixMonths[matrixMonths.length - 1],
                           )
                         }
                         disabled={matrixMonths.indexOf(selectedMonth) === 0}
                         aria-label="이전 달"
                         title="이전 달 (회계연도 안에서만 이동)"
-                        className="flex h-7 w-7 items-center justify-center rounded-md text-[#615D59] transition hover:bg-white hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="flex h-7 w-7 items-center justify-center rounded-md text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 disabled:cursor-not-allowed disabled:opacity-30"
                       >
-                        <ChevronLeft className="h-3.5 w-3.5" />
+                        <ChevronLeft className="h-4 w-4" />
                       </button>
-                      <span className="min-w-[64px] px-1 text-center text-[12px] font-bold text-[#111110]">
+                      <span className="min-w-[70px] px-1 text-center text-[13px] font-bold text-[#111110]">
                         {formatMonthLabel(selectedMonth)}
                       </span>
                       <button
@@ -3311,22 +3352,19 @@ export default function SalesLedgerWorkbench({
                         disabled={matrixMonths.indexOf(selectedMonth) === matrixMonths.length - 1}
                         aria-label="다음 달"
                         title="다음 달 (회계연도 안에서만 이동)"
-                        className="flex h-7 w-7 items-center justify-center rounded-md text-[#615D59] transition hover:bg-white hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="flex h-7 w-7 items-center justify-center rounded-md text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 disabled:cursor-not-allowed disabled:opacity-30"
                       >
-                        <ChevronRight className="h-3.5 w-3.5" />
+                        <ChevronRight className="h-4 w-4" />
                       </button>
                     </div>
-                    {/* 품질 감사 2026-09-10 — #9: 화살표만 있으면 몇 달 전을 보려면 3~6번 클릭해야
-                        한다(같은 화면의 CockpitEditor monthOptions <select>와 비대칭이었다) — FY 12개월
-                        중 직접 선택할 수 있는 드롭다운을 추가한다. 화살표는 그대로 둔다(연속 탐색 유지,
-                        기존 aria-label/disabled 회귀 없음) — 이 select는 원격 이동 전용 보조 수단. */}
+
                     <label className="sr-only" htmlFor="rev-matrix-month-jump">회계월 직접 선택</label>
                     <select
                       id="rev-matrix-month-jump"
                       value={selectedMonth}
                       onChange={(event) => setSelectedMonth(event.target.value)}
                       title="회계월 직접 선택"
-                      className="h-7 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-1.5 text-[11px] font-bold text-[#111110] outline-none"
+                      className="h-8 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[12px] font-semibold text-[#111110] shadow-2xs outline-none transition hover:border-[#084734]/40 focus:border-[#084734]"
                     >
                       {monthOptions.map((option) => (
                         <option key={option.value} value={option.value}>
@@ -3334,44 +3372,70 @@ export default function SalesLedgerWorkbench({
                         </option>
                       ))}
                     </select>
+
                     {selectedMonth !== ymKeyUtc(new Date()) && (
                       <button
                         type="button"
                         onClick={() => setSelectedMonth(ymKeyUtc(new Date()))}
-                        className="text-[11px] font-bold text-[#084734] underline-offset-2 hover:underline"
+                        className="rounded-md bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-bold text-[#084734] transition hover:bg-[#D1FAE5]"
                       >
                         이번 달로
                       </button>
                     )}
                   </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <p className="text-[11px] text-[#615D59]">
-                      검색 결과 {filteredRows.length.toLocaleString("ko-KR")}행 · 고객 {revCustomerGroups.length.toLocaleString("ko-KR")}곳 · {revRangeStart.toLocaleString("ko-KR")}-{revRangeEnd.toLocaleString("ko-KR")}곳 표시 · DB 신규 반영 {additiveAppliedDraftRows.length.toLocaleString("ko-KR")}건 포함
-                    </p>
-                    <MatrixToneLegend />
+
+                  {/* 우측: 통합 검색창 & 도움말 가이드 팝오버 */}
+                  <div className="flex items-center gap-2.5">
+                    <div className="relative min-w-0 flex-1 sm:w-72 lg:w-80">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A39E98]" />
+                      <input
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                        placeholder="고객, 담당자, 팀, 지역, 상태, 메모 검색"
+                        className="h-9 w-full rounded-lg border border-[rgba(0,0,0,0.08)] bg-white pl-9 pr-8 text-[13px] text-[#111110] placeholder:text-[#A39E98] shadow-2xs outline-none transition focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
+                      />
+                      {query && (
+                        <button
+                          type="button"
+                          onClick={() => setQuery("")}
+                          aria-label="검색어 지우기"
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-[#A39E98] hover:bg-[#F6F5F4] hover:text-[#111110]"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* 도움말 호버 (도움말 st) */}
+                    <MatrixHelpPopover />
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]" aria-label="상품군 필터">
-                    {REV_PRODUCT_FILTERS.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setProductFilter(item.id)}
-                        className={`rounded-md px-2.5 py-1.5 text-[11px] font-bold transition ${
-                          productFilter === item.id ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59] hover:text-[#111110]"
-                        }`}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-                  {/* 품질 웨이브 4 — 항목 9: 툴바를 탐색/표시/액션 3그룹으로 시각 구분(구분선+미세 라벨).
-                      컨트롤 자체(핸들러·disabled·aria-label 등)는 그대로 두고, 인접 배치와 얇은 라벨만
-                      더했다 — 그룹 안에서 초기화 버튼만 액션 그룹으로 옮겨 표시 그룹을 인접시켰다. */}
-                  <div className="flex flex-wrap items-center gap-2" role="group" aria-label="탐색">
-                    <span aria-hidden className="h-5 w-px shrink-0 bg-[rgba(0,0,0,0.08)]" />
-                    <span className="shrink-0 text-[9.5px] font-bold uppercase tracking-wider text-[#A39E98]">탐색</span>
+
+                {/* [Row 2] 사용자 작업 경로에 따른 필터 바 (상품군 탭 / 담당자 / 지역 / 고급 / 보기제어 / 초기화) */}
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3 bg-white">
+                  {/* 좌측: 상품군 + 담당자 + 지역 + 고급필터 */}
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    {/* 상품군 세그먼트 */}
+                    <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-0.5" aria-label="상품군 필터">
+                      {REV_PRODUCT_FILTERS.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setProductFilter(item.id)}
+                          className={`rounded-md px-3 py-1.5 text-[12px] font-bold transition ${
+                            productFilter === item.id
+                              ? "bg-white text-[#111110] shadow-xs"
+                              : "text-[#615D59] hover:text-[#111110]"
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <span aria-hidden className="h-5 w-px bg-[rgba(0,0,0,0.1)]" />
+
+                    {/* 담당자 MultiSelect */}
                     <MultiSelect
                       label="담당자"
                       options={managerOptions}
@@ -3379,23 +3443,25 @@ export default function SalesLedgerWorkbench({
                       onChange={setManagerFilter}
                       placeholder="전체"
                       width="w-48"
-                      // 라운드 3 P3 — "내 딜" 프리셋 핀. KR Team 개요(BranchDashboardClient)와
-                      // storageKey를 공유해 사람 단위 개인화가 화면 간에 일관되게 이어진다.
                       pinStorageKey={PIPELINE_MANAGER_DEFAULT_STORAGE_KEY}
                     />
+
+                    {/* 지역 MultiSelect */}
                     <MultiSelect
                       label="지역"
                       options={regionOptions}
                       selected={regionFilter}
                       onChange={setRegionFilter}
                       placeholder="전체"
-                      width="w-48"
+                      width="w-44"
                     />
+
+                    {/* 고급 필터 버튼 */}
                     <button
                       type="button"
                       onClick={() => setAdvancedFiltersOpen((value) => !value)}
                       aria-expanded={advancedFiltersOpen}
-                      className={`inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-[12px] font-bold transition ${
+                      className={`inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-[12px] font-bold transition ${
                         advancedFiltersOpen || revStatusFilter !== "ALL" || revDealTypeFilter !== "ALL" || revOriginFilter !== "all" || revForecastFilter !== "all"
                           ? "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]"
                           : "border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#111110]"
@@ -3405,28 +3471,32 @@ export default function SalesLedgerWorkbench({
                       고급
                     </button>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2" role="group" aria-label="표시">
-                    <span aria-hidden className="h-5 w-px shrink-0 bg-[rgba(0,0,0,0.08)]" />
-                    <span className="shrink-0 text-[9.5px] font-bold uppercase tracking-wider text-[#A39E98]">표시</span>
+
+                  {/* 우측: 표시 개수 / 펼치기 / 행 밀도 / 초기화 */}
+                  <div className="flex flex-wrap items-center gap-2">
                     <select
                       value={revPageSize}
                       onChange={(event) => setRevPageSize(Number(event.target.value) as RevPageSize)}
-                      className="h-9 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-semibold text-[#111110]"
+                      className="h-9 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[12px] font-semibold text-[#111110] shadow-2xs outline-none"
                       aria-label="REV 표시 개수"
                     >
-                      {REV_PAGE_SIZES.map((value) => <option key={value} value={value}>{value}개</option>)}
+                      {REV_PAGE_SIZES.map((value) => (
+                        <option key={value} value={value}>{value}개씩</option>
+                      ))}
                     </select>
+
                     <button
                       type="button"
                       onClick={toggleAllRevGroups}
                       disabled={multiRowGroupKeys.length === 0}
-                      className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
+                      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
                       aria-label={allRevGroupsExpanded ? "고객 묶음 모두 접기" : "고객 묶음 모두 펼치기"}
                     >
                       <ChevronRight className={`h-3.5 w-3.5 transition-transform ${allRevGroupsExpanded ? "rotate-90" : ""}`} />
                       {allRevGroupsExpanded ? "모두 접기" : "모두 펼치기"}
                     </button>
-                    <div className="inline-flex items-center gap-0.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]" aria-label="매트릭스 행 밀도">
+
+                    <div className="inline-flex items-center gap-0.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-0.5" aria-label="매트릭스 행 밀도">
                       {MATRIX_DENSITY_OPTIONS.map((option) => (
                         <button
                           key={option.id}
@@ -3434,23 +3504,24 @@ export default function SalesLedgerWorkbench({
                           onClick={() => setMatrixDensity(option.id)}
                           title={option.title}
                           aria-pressed={matrixDensity === option.id}
-                          className={`rounded-md px-2.5 py-1.5 text-[11px] font-bold transition ${
-                            matrixDensity === option.id ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59] hover:text-[#111110]"
+                          className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition ${
+                            matrixDensity === option.id
+                              ? "bg-white text-[#111110] shadow-xs"
+                              : "text-[#615D59] hover:text-[#111110]"
                           }`}
                         >
                           {option.label}
                         </button>
                       ))}
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2" role="group" aria-label="액션">
-                    <span aria-hidden className="h-5 w-px shrink-0 bg-[rgba(0,0,0,0.08)]" />
-                    <span className="shrink-0 text-[9.5px] font-bold uppercase tracking-wider text-[#A39E98]">액션</span>
+
+                    <span aria-hidden className="h-5 w-px bg-[rgba(0,0,0,0.1)]" />
+
                     <button
                       type="button"
                       onClick={resetRevFilters}
                       disabled={!revControlsDirty}
-                      className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
+                      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
                       aria-label="REV 검색, 필터, 정렬 초기화"
                     >
                       <RotateCcw className="h-3.5 w-3.5" />
@@ -3458,162 +3529,174 @@ export default function SalesLedgerWorkbench({
                     </button>
                   </div>
                 </div>
-              </div>
-              {advancedFiltersOpen && (
-                <div className="mt-3 grid gap-2 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-3 sm:grid-cols-2 xl:grid-cols-4">
-                  <label className="block text-[10.5px] font-bold text-[#615D59]">
-                    상태
-                    <select
-                      value={revStatusFilter}
-                      onChange={(event) => setRevStatusFilter(event.target.value)}
-                      className="mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
-                    >
-                      <option value="ALL">상태 전체</option>
-                      {revStatusOptions.map((value) => <option key={value} value={value}>{value}</option>)}
-                    </select>
-                  </label>
-                  <label className="block text-[10.5px] font-bold text-[#615D59]">
-                    유형
-                    <select
-                      value={revDealTypeFilter}
-                      onChange={(event) => setRevDealTypeFilter(event.target.value)}
-                      className="mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
-                    >
-                      <option value="ALL">유형 전체</option>
-                      {revDealTypeOptions.map((value) => <option key={value} value={value}>{value}</option>)}
-                    </select>
-                  </label>
-                  <label className="block text-[10.5px] font-bold text-[#615D59]">
-                    원천
-                    <select
-                      value={revOriginFilter}
-                      onChange={(event) => setRevOriginFilter(event.target.value as RevOriginFilter)}
-                      className="mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
-                    >
-                      {REV_ORIGIN_FILTERS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-                    </select>
-                  </label>
-                  <label className="block text-[10.5px] font-bold text-[#615D59]">
-                    주차/확도
-                    <select
-                      value={revForecastFilter}
-                      onChange={(event) => setRevForecastFilter(event.target.value as RevForecastFilter)}
-                      className="mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
-                    >
-                      {REV_FORECAST_FILTERS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-                    </select>
-                  </label>
-                </div>
-              )}
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-[#615D59]">
-                {/* 정렬 드롭다운 — 매트릭스 열 구조상 헤더 클릭 정렬(고객/연간합계)이 없는 5개 키까지
-                    포함해 9개 정렬 키 전부를 여기서 노출한다. onRevSort 재사용: 다른 키 선택은 그
-                    키 기본 방향으로, 같은 키(방향 버튼)는 토글로 — RevSortHeader와 동일 로직. */}
-                <div className="inline-flex items-center gap-0.5 rounded-full bg-[#F6F5F4] pl-2.5 pr-1 py-0.5">
-                  <label htmlFor="rev-sort-key" className="sr-only">정렬 기준</label>
-                  <select
-                    id="rev-sort-key"
-                    value={revSortKey}
-                    onChange={(event) => onRevSort(event.target.value as RevSortKey)}
-                    className="h-6 rounded-full border-0 bg-transparent pr-1 text-[11px] font-bold text-[#615D59] outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#084734]"
-                  >
-                    {(Object.keys(REV_SORT_LABELS) as RevSortKey[]).map((key) => (
-                      <option key={key} value={key}>{REV_SORT_LABELS[key]}</option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => onRevSort(revSortKey)}
-                    aria-label={`정렬 방향 전환 (현재 ${revSortDirection === "asc" ? "오름차순" : "내림차순"})`}
-                    title="정렬 방향 전환"
-                    className="flex h-6 w-6 items-center justify-center rounded-full text-[#615D59] transition hover:bg-white hover:text-[#111110] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#084734]"
-                  >
-                    {revSortDirection === "asc" ? (
-                      <ArrowUpNarrowWide className="h-3.5 w-3.5" aria-hidden="true" />
-                    ) : (
-                      <ArrowDownNarrowWide className="h-3.5 w-3.5" aria-hidden="true" />
-                    )}
-                  </button>
-                </div>
-                {/* 품질 웨이브 6 — 항목 3: 초기 sortKey="revenue"인데 aria-sort는 고객/연간합계 th에만
-                    붙어 있어(테이블 구조는 그대로 둔다) 스크린리더 사용자에게 "기본 정렬 없음"으로
-                    잘못 들린다. 정렬 드롭다운·방향 토글이 바뀔 때마다 실제 상태를 능동 고지. */}
-                <span className="text-[10px] font-semibold text-[#A39E98]" aria-live="polite">
-                  현재 정렬: {REV_SORT_LABELS[revSortKey]} {revSortDirection === "asc" ? "오름차순" : "내림차순"}
-                </span>
-                {query.trim() && <FilterTag label={`검색 ${query.trim()}`} onClear={() => setQuery("")} />}
-                {/* 품질 웨이브 7 — 항목 3: 멀티셀렉트 전환 — 선택값마다 칩 1개, 개별 해제(Set에서 그
-                    값만 delete) 가능. MultiSelect 버튼 자체의 "A 외 N" 요약과는 별개로, 툴바 아래
-                    활성 필터 칩 줄은 기존 관례(다른 필터도 전부 여기서 개별 해제)를 그대로 따른다. */}
-                {Array.from(managerFilter).map((name) => (
-                  <FilterTag
-                    key={`mgr-${name}`}
-                    label={`담당자 ${name}`}
-                    onClear={() => setManagerFilter((current) => {
-                      const next = new Set(current)
-                      next.delete(name)
-                      return next
-                    })}
-                  />
-                ))}
-                {Array.from(regionFilter).map((name) => (
-                  <FilterTag
-                    key={`region-${name}`}
-                    label={`지역 ${name}`}
-                    onClear={() => setRegionFilter((current) => {
-                      const next = new Set(current)
-                      next.delete(name)
-                      return next
-                    })}
-                  />
-                ))}
-                {productFilter !== "all" && (
-                  <FilterTag label={`상품 ${productCategoryMeta(productFilter).label}`} onClear={() => setProductFilter("all")} />
-                )}
-                {revStatusFilter !== "ALL" && <FilterTag label={`상태 ${revStatusFilter}`} onClear={() => setRevStatusFilter("ALL")} />}
-                {revDealTypeFilter !== "ALL" && <FilterTag label={`유형 ${revDealTypeFilter}`} onClear={() => setRevDealTypeFilter("ALL")} />}
-                {revOriginFilter !== "all" && (
-                  <FilterTag label={REV_ORIGIN_FILTERS.find((item) => item.id === revOriginFilter)?.label ?? "원천"} onClear={() => setRevOriginFilter("all")} />
-                )}
-                {revForecastFilter !== "all" && (
-                  <FilterTag label={REV_FORECAST_FILTERS.find((item) => item.id === revForecastFilter)?.label ?? "검수"} onClear={() => setRevForecastFilter("all")} />
-                )}
-                <span className="ml-auto flex flex-wrap items-center gap-1.5" aria-label="검수 인박스">
-                  {/* 편집→검수 큐 연결 고리: 셀 편집으로 쌓인 미적용 초안이 있으면 여기서 바로 큐를 연다 */}
-                  {openDrafts.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => selectRailView("queue")}
-                      title="체크 큐 열기 — 체크·적용 대기 초안"
-                      className="inline-flex h-6 items-center gap-1 rounded-full border border-[#ECD29C] bg-[#FFFCF5] px-2 text-[10px] font-bold tabular-nums text-[#7A520F] transition hover:bg-[#FBF1E0]"
-                    >
-                      미적용 초안 {openDrafts.length.toLocaleString("ko-KR")} → 체크 큐
-                    </button>
-                  )}
-                  {([
-                    ["week-mismatch", "불일치", revInboxCounts.weekMismatch, "border-[#F2B8B8] bg-[#FCE9E9] text-[#B43E3E]"],
-                    ["month-only", "월합계만", revInboxCounts.monthOnly, "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"],
-                    // 확도 잔여(예정/고확도 미전환) 칩 — 고확도 예외 토큰의 틴트 칩을 소비한다.
-                    ["open", "예정 남음", revInboxCounts.open, CONFIDENCE_TOKENS["high-confidence"].chipClass],
-                  ] as Array<[RevForecastFilter, string, number, string]>).map(([id, label, count, tone]) => (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => setRevForecastFilter((current) => (current === id ? "all" : id))}
-                      aria-pressed={revForecastFilter === id}
-                      title={`${label} 행만 보기 (다시 누르면 해제)`}
-                      className={`inline-flex h-6 items-center gap-1 rounded-full border px-2 text-[10px] font-bold tabular-nums transition ${
-                        revForecastFilter === id ? "ring-2 ring-[#084734]/25" : ""
-                      } ${count > 0 ? tone : "border-[rgba(0,0,0,0.08)] bg-white text-[#A39E98]"}`}
-                    >
-                      {label} {count.toLocaleString("ko-KR")}
-                    </button>
-                  ))}
-                </span>
-              </div>
-            </div>
 
-            </details>
+                {/* [고급 필터 옵션 패널] */}
+                {advancedFiltersOpen && (
+                  <div className="grid gap-3 border-b border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-4 sm:grid-cols-2 xl:grid-cols-4">
+                    <label className="block text-[11px] font-bold text-[#615D59]">
+                      상태
+                      <select
+                        value={revStatusFilter}
+                        onChange={(event) => setRevStatusFilter(event.target.value)}
+                        className="mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[12px] font-semibold text-[#111110] outline-none"
+                      >
+                        <option value="ALL">상태 전체</option>
+                        {revStatusOptions.map((value) => <option key={value} value={value}>{value}</option>)}
+                      </select>
+                    </label>
+                    <label className="block text-[11px] font-bold text-[#615D59]">
+                      유형
+                      <select
+                        value={revDealTypeFilter}
+                        onChange={(event) => setRevDealTypeFilter(event.target.value)}
+                        className="mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[12px] font-semibold text-[#111110] outline-none"
+                      >
+                        <option value="ALL">유형 전체</option>
+                        {revDealTypeOptions.map((value) => <option key={value} value={value}>{value}</option>)}
+                      </select>
+                    </label>
+                    <label className="block text-[11px] font-bold text-[#615D59]">
+                      원천
+                      <select
+                        value={revOriginFilter}
+                        onChange={(event) => setRevOriginFilter(event.target.value as RevOriginFilter)}
+                        className="mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[12px] font-semibold text-[#111110] outline-none"
+                      >
+                        {REV_ORIGIN_FILTERS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+                      </select>
+                    </label>
+                    <label className="block text-[11px] font-bold text-[#615D59]">
+                      주차/확도
+                      <select
+                        value={revForecastFilter}
+                        onChange={(event) => setRevForecastFilter(event.target.value as RevForecastFilter)}
+                        className="mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[12px] font-semibold text-[#111110] outline-none"
+                      >
+                        {REV_FORECAST_FILTERS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                )}
+
+                {/* [Row 3] 결과 요약 & 정렬 & 활성 필터 칩 & 상태 점검 알약 뱃지 */}
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-2.5 bg-[#FAFAF8]/40">
+                  {/* 좌측: 결과 통계 & 정렬 & 활성 칩들 */}
+                  <div className="flex flex-wrap items-center gap-2.5 text-[12px] font-semibold text-[#615D59]">
+                    <span>
+                      결과 <b className="text-[#111110]">{filteredRows.length.toLocaleString("ko-KR")}</b>행
+                      {" "}· 고객 <b className="text-[#111110]">{revCustomerGroups.length.toLocaleString("ko-KR")}</b>곳
+                      {" "}· {revRangeStart.toLocaleString("ko-KR")}-{revRangeEnd.toLocaleString("ko-KR")}곳 표시
+                      {additiveAppliedDraftRows.length > 0 && (
+                        <span className="ml-1.5 inline-flex items-center rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-bold text-[#084734]">
+                          DB 신규 반영 {additiveAppliedDraftRows.length.toLocaleString("ko-KR")}건
+                        </span>
+                      )}
+                    </span>
+
+                    <span aria-hidden className="h-4 w-px bg-[rgba(0,0,0,0.12)] mx-0.5" />
+
+                    {/* 정렬 드롭다운 & 방향 */}
+                    <div className="inline-flex items-center gap-1 rounded-full bg-white border border-[rgba(0,0,0,0.08)] pl-2.5 pr-1 py-0.5 shadow-2xs">
+                      <label htmlFor="rev-sort-key" className="sr-only">정렬 기준</label>
+                      <select
+                        id="rev-sort-key"
+                        value={revSortKey}
+                        onChange={(event) => onRevSort(event.target.value as RevSortKey)}
+                        className="h-6 rounded-full border-0 bg-transparent pr-1 text-[11.5px] font-bold text-[#615D59] outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#084734]"
+                      >
+                        {(Object.keys(REV_SORT_LABELS) as RevSortKey[]).map((key) => (
+                          <option key={key} value={key}>{REV_SORT_LABELS[key]}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => onRevSort(revSortKey)}
+                        aria-label={`정렬 방향 전환 (현재 ${revSortDirection === "asc" ? "오름차순" : "내림차순"})`}
+                        title="정렬 방향 전환"
+                        className="flex h-5 w-5 items-center justify-center rounded-full text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#084734]"
+                      >
+                        {revSortDirection === "asc" ? (
+                          <ArrowUpNarrowWide className="h-3.5 w-3.5" aria-hidden="true" />
+                        ) : (
+                          <ArrowDownNarrowWide className="h-3.5 w-3.5" aria-hidden="true" />
+                        )}
+                      </button>
+                    </div>
+
+                    {query.trim() && <FilterTag label={`검색 ${query.trim()}`} onClear={() => setQuery("")} />}
+
+                    {Array.from(managerFilter).map((name) => (
+                      <FilterTag
+                        key={`mgr-${name}`}
+                        label={`담당자 ${name}`}
+                        onClear={() => setManagerFilter((current) => {
+                          const next = new Set(current)
+                          next.delete(name)
+                          return next
+                        })}
+                      />
+                    ))}
+
+                    {Array.from(regionFilter).map((name) => (
+                      <FilterTag
+                        key={`region-${name}`}
+                        label={`지역 ${name}`}
+                        onClear={() => setRegionFilter((current) => {
+                          const next = new Set(current)
+                          next.delete(name)
+                          return next
+                        })}
+                      />
+                    ))}
+
+                    {productFilter !== "all" && (
+                      <FilterTag label={`상품 ${productCategoryMeta(productFilter).label}`} onClear={() => setProductFilter("all")} />
+                    )}
+                    {revStatusFilter !== "ALL" && <FilterTag label={`상태 ${revStatusFilter}`} onClear={() => setRevStatusFilter("ALL")} />}
+                    {revDealTypeFilter !== "ALL" && <FilterTag label={`유형 ${revDealTypeFilter}`} onClear={() => setRevDealTypeFilter("ALL")} />}
+                    {revOriginFilter !== "all" && (
+                      <FilterTag label={REV_ORIGIN_FILTERS.find((item) => item.id === revOriginFilter)?.label ?? "원천"} onClear={() => setRevOriginFilter("all")} />
+                    )}
+                    {revForecastFilter !== "all" && (
+                      <FilterTag label={REV_FORECAST_FILTERS.find((item) => item.id === revForecastFilter)?.label ?? "검수"} onClear={() => setRevForecastFilter("all")} />
+                    )}
+                    {h1Expanded && (
+                      <FilterTag label="4~9월 월별 펼침 (종합 접기)" onClear={() => setH1Expanded(false)} />
+                    )}
+                  </div>
+
+                  {/* 우측: 빠른 상태 검수 인박스 뱃지 */}
+                  <div className="flex flex-wrap items-center gap-1.5" aria-label="검수 인박스">
+                    {openDrafts.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => selectRailView("queue")}
+                        title="체크 큐 열기 — 체크·적용 대기 초안"
+                        className="inline-flex h-6.5 items-center gap-1 rounded-full border border-[#ECD29C] bg-[#FFFCF5] px-2.5 text-[11px] font-bold tabular-nums text-[#7A520F] transition hover:bg-[#FBF1E0]"
+                      >
+                        미적용 초안 {openDrafts.length.toLocaleString("ko-KR")} → 체크 큐
+                      </button>
+                    )}
+                    {([
+                      ["week-mismatch", "불일치", revInboxCounts.weekMismatch, "border-[#F2B8B8] bg-[#FCE9E9] text-[#B43E3E]"],
+                      ["month-only", "월합계만", revInboxCounts.monthOnly, "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"],
+                      ["open", "예정 남음", revInboxCounts.open, CONFIDENCE_TOKENS["high-confidence"].chipClass],
+                    ] as Array<[RevForecastFilter, string, number, string]>).map(([id, label, count, tone]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setRevForecastFilter((current) => (current === id ? "all" : id))}
+                        aria-pressed={revForecastFilter === id}
+                        title={`${label} 행만 보기 (다시 누르면 해제)`}
+                        className={`inline-flex h-6.5 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-bold tabular-nums transition ${
+                          revForecastFilter === id ? "ring-2 ring-[#084734]/25" : ""
+                        } ${count > 0 ? tone : "border-[rgba(0,0,0,0.08)] bg-white text-[#A39E98]"}`}
+                      >
+                        {label} {count.toLocaleString("ko-KR")}
+                      </button>
+                    ))}
+                  </div>
+                </div>
             {pipeline.loading && !pipeline.data ? (
               <div className="p-4"><LoadingPanel label="REV 행을 불러오는 중" /></div>
             ) : pipeline.error && !pipeline.data ? (
@@ -3705,36 +3788,42 @@ export default function SalesLedgerWorkbench({
                   onQuickInput={openQuickInputForRow}
                 />
 
-                {revTotalPages > 1 && (
-                  <div className="hidden items-center justify-between gap-2 border-b border-[rgba(0,0,0,0.08)] px-4 py-2 text-[11.5px] text-[#615D59] md:flex">
-                    <p className="font-semibold">
-                      {revRangeStart.toLocaleString("ko-KR")}-{revRangeEnd.toLocaleString("ko-KR")} / 고객 {revCustomerGroups.length.toLocaleString("ko-KR")}곳 · 행 {filteredRows.length.toLocaleString("ko-KR")}건
-                    </p>
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 py-2 text-[11.5px] text-[#615D59]">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-md border border-[#BDEFD8] bg-[#ECFDF5] px-2.5 py-1 font-bold text-[#084734]">
+                      <Users className="h-3.5 w-3.5 text-[#084734]" />
+                      고객 {revCustomerGroups.length.toLocaleString("ko-KR")}곳
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-1 font-semibold text-[#615D59] shadow-xs">
+                      총 {filteredRows.length.toLocaleString("ko-KR")}행 중 {revRangeStart.toLocaleString("ko-KR")}-{revRangeEnd.toLocaleString("ko-KR")} 표시
+                    </span>
+                  </div>
+                  {revTotalPages > 1 && (
                     <div className="flex items-center gap-1.5">
                       <button
                         type="button"
                         onClick={() => setRevPage((page) => Math.max(1, page - 1))}
                         disabled={clampedRevPage <= 1}
-                        className="inline-flex h-7 items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 font-bold transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
+                        className="inline-flex h-7 items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 font-bold transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40 shadow-xs"
                       >
-                        <ChevronLeft className="h-3 w-3" />
+                        <ChevronLeft className="h-3.5 w-3.5" />
                         이전
                       </button>
-                      <span className="min-w-[56px] text-center font-bold text-[#111110]">
+                      <span className="min-w-[56px] rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 py-0.5 text-center font-bold text-[#111110] shadow-xs">
                         {clampedRevPage} / {revTotalPages}
                       </span>
                       <button
                         type="button"
                         onClick={() => setRevPage((page) => Math.min(revTotalPages, page + 1))}
                         disabled={clampedRevPage >= revTotalPages}
-                        className="inline-flex h-7 items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 font-bold transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
+                        className="inline-flex h-7 items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 font-bold transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40 shadow-xs"
                       >
                         다음
-                        <ChevronRight className="h-3 w-3" />
+                        <ChevronRight className="h-3.5 w-3.5" />
                       </button>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
                 {/* 편집 바(§8.3 A안 대체) — 셀 팝오버가 이웃 셀·아래 행을 가리던 문제를 "셀 밖 상시 표면"으로
                     푼다. 스크롤 컨테이너 밖(위)에 두어 가로·세로 스크롤과 무관하게 항상 보이고, 매트릭스의
                     sticky z-서열(z-10/20/30/40)과도 겹치지 않는다. */}
@@ -3756,21 +3845,38 @@ export default function SalesLedgerWorkbench({
                 >
                   <table role="grid" aria-label="REV 매출 매트릭스" className="w-max min-w-full border-collapse text-left text-[12px]">
                     <thead className="text-[10px] uppercase tracking-[0.06em] text-[#615D59]">
-                      <tr role="row" className="h-8 bg-[#FAFAF8]">
+                      <tr role="row" className="h-auto border-b-2 border-[#D1D5DB] bg-[#F8F8F7]">
                         <th
                           aria-sort={revSortAriaValue(revSortKey === "customer", revSortDirection)}
-                          className="sticky left-0 top-0 z-40 border-r border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 text-left align-middle"
+                          className="sticky left-0 top-0 z-40 border-r border-[#E5E7EB] bg-[#F8F8F7] px-3 py-2 text-left align-middle shadow-[2px_0_5px_-2px_rgba(0,0,0,0.04)]"
                           style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
                         >
                           <RevSortHeader label="고객/계정" sortKey="customer" activeKey={revSortKey} direction={revSortDirection} onSort={onRevSort} />
                         </th>
                         <th
-                          className="sticky top-0 z-20 border-l border-[#E7E5E1] bg-[#FAFAF8] px-1 text-center align-middle"
+                          className="sticky top-0 z-20 border-l border-[#EDECE8] border-r border-[#EDECE8] bg-[#F8F8F7] px-1 py-2 text-center align-middle font-bold text-[11px] text-[#4B5563]"
                           style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }}
                         >
                           상품
                         </th>
-                        {revMatrixColumns.map((column) => {
+                        {!h1Expanded && (
+                          <th
+                            key="h1-summary"
+                            className="sticky top-0 z-20 border-l border-[#EDECE8] bg-[#F4F4F2] px-1 py-2 text-center align-middle"
+                            style={{ width: MATRIX_MONTH_W, minWidth: MATRIX_MONTH_W, maxWidth: MATRIX_MONTH_W }}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => setH1Expanded(true)}
+                              title="4~9월(상반기) 월별 실적으로 펼치기 (클릭)"
+                              className="inline-flex w-full items-center justify-center gap-1 rounded py-1 font-bold text-[#615D59] transition hover:bg-[#EBE9E5] hover:text-[#084734]"
+                            >
+                              <span className="text-[11px]">4~9월 종합</span>
+                              <ChevronRight className="h-3 w-3 shrink-0 text-[#084734]" />
+                            </button>
+                          </th>
+                        )}
+                        {(h1Expanded ? revMatrixColumns : revMatrixColumns.filter((col) => !isH1Month(col.month))).map((column) => {
                           const isExpanded = expandedRevMonths.has(column.month)
                           const width = isExpanded ? MATRIX_WEEK_W * 5 + MATRIX_MONTH_W : MATRIX_MONTH_W
                           // 웨이브 5 — 항목 1(b): "선택 기간"(M=선택월, Q=현재 분기) 컬럼을 오늘
@@ -3782,40 +3888,89 @@ export default function SalesLedgerWorkbench({
                             <th
                               key={column.month}
                               colSpan={isExpanded ? 6 : 1}
-                              className={`sticky top-0 z-20 border-l px-0.5 text-center align-middle ${
-                                column.current
-                                  ? "border-[#E7E5E1] bg-[#ECFDF5]"
-                                  : isPeriodColumn
-                                    ? "border-[#BDEFD8] bg-[#ECFDF5]/45"
-                                    : isExpanded
-                                      ? "border-[#E7E5E1] bg-[#F6F5F4]"
-                                      : "border-[#E7E5E1] bg-[#FAFAF8]"
-                              }`}
+                              className={`sticky top-0 z-20 border-l border-[#EDECE8] p-0 text-center align-middle ${
+                                isExpanded
+                                  ? "bg-[#F4F9F6]"
+                                  : column.current
+                                    ? "bg-[#ECFDF5]"
+                                    : isPeriodColumn
+                                      ? "bg-[#ECFDF5]/50"
+                                      : "bg-[#F8F8F7] hover:bg-[#F0EFEB]"
+                              } transition-colors`}
                               style={{ width, minWidth: width }}
                             >
-                              <button
-                                type="button"
-                                onClick={() => toggleRevMonth(column.month)}
-                                aria-expanded={isExpanded}
-                                title={`클릭: 주차(w1~w5) 펼치기/접기 · ${formatMonthLabel(column.month)} 합계 ${formatMoney(column.total)}${
-                                  isPeriodColumn ? ` · 현재 선택 기간(${periodLabelShort})` : ""
-                                }`}
-                                className={`inline-flex w-full items-center justify-center gap-0.5 rounded py-1 font-bold transition hover:bg-[#F0F0EC] hover:text-[#084734] ${
-                                  column.current || isPeriodColumn ? "text-[#084734]" : "text-[#615D59]"
-                                }`}
-                              >
-                                {column.label}
-                                <ChevronDown className={`h-2.5 w-2.5 shrink-0 text-[#A39E98] transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-                              </button>
-                              {isExpanded && (
-                                <div
-                                  className="grid gap-0 pb-0.5 text-[10px] font-bold normal-case tracking-normal text-[#615D59]"
-                                  style={{ gridTemplateColumns: `repeat(5, ${MATRIX_WEEK_W}px) ${MATRIX_MONTH_W}px` }}
-                                >
-                                  {["W1", "W2", "W3", "W4", "W5"].map((week) => (
-                                    <span key={week}>{week}</span>
-                                  ))}
-                                  <span className="text-[#084734]">월계</span>
+                              {isExpanded ? (
+                                <div className="flex flex-col">
+                                  {/* 상단: 월 타이틀 & 접기 버튼 */}
+                                  <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-[#BDEFD8]/70">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-bold text-[11.5px] text-[#084734]">{column.label}</span>
+                                      <span className="rounded bg-[#ECFDF5] border border-[#BDEFD8] px-1 py-0.2 text-[9px] font-bold text-[#084734]">
+                                        주차 상세
+                                      </span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleRevMonth(column.month)}
+                                      title={`${formatMonthLabel(column.month)} 주차 접기`}
+                                      className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9.5px] font-bold text-[#084734] bg-white border border-[#BDEFD8] hover:bg-[#ECFDF5] transition shadow-xs"
+                                    >
+                                      <span>접기</span>
+                                      <ChevronDown className="h-3 w-3 rotate-180 text-[#084734]" />
+                                    </button>
+                                  </div>
+                                  {/* 하단: W1~W5 및 월계 서브헤더 (하단 셀과 정확히 1:1 수직 라인 매칭) */}
+                                  <div
+                                    className="grid gap-0 text-[10px] font-bold normal-case tracking-normal"
+                                    style={{ gridTemplateColumns: `repeat(5, ${MATRIX_WEEK_W}px) ${MATRIX_MONTH_W}px` }}
+                                  >
+                                    {["W1", "W2", "W3", "W4", "W5"].map((week, idx) => (
+                                      <span
+                                        key={week}
+                                        className={`py-1 text-center text-[#4B5563] ${idx > 0 ? "border-l border-[#EDECE8]" : ""}`}
+                                      >
+                                        {week}
+                                      </span>
+                                    ))}
+                                    <span className="border-l border-[#BDEFD8] bg-[#ECFDF5] py-1 text-center font-bold text-[#084734]">
+                                      월계
+                                    </span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex h-full min-h-[46px] w-full flex-col items-center justify-center gap-1 px-1 py-1 font-bold">
+                                  {h1Expanded && column.month === "2026-04" && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        setH1Expanded(false)
+                                      }}
+                                      title="4~9월 종합 1열로 다시 접기"
+                                      className="inline-flex items-center gap-1 rounded-full border border-[#ECD29C] bg-[#FFFCF5] px-2 py-0.5 text-[9.5px] font-bold text-[#7A520F] shadow-xs transition hover:bg-[#FBF1E0] hover:text-[#084734]"
+                                    >
+                                      <ChevronLeft className="h-2.5 w-2.5" />
+                                      <span>종합 접기</span>
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleRevMonth(column.month)}
+                                    aria-expanded={false}
+                                    title={`클릭: 주차(w1~w5) 펼치기 · ${formatMonthLabel(column.month)} 합계 ${formatMoney(column.total)}${
+                                      isPeriodColumn ? ` · 현재 선택 기간(${periodLabelShort})` : ""
+                                    }`}
+                                    className="group/btn flex items-center justify-center gap-0.5 font-bold transition"
+                                  >
+                                    <span className={`text-[11.5px] font-bold transition-colors ${
+                                      column.current || isPeriodColumn ? "text-[#084734]" : "text-[#374151] group-hover/btn:text-[#084734]"
+                                    }`}>
+                                      {column.label}
+                                    </span>
+                                    <span className="inline-flex items-center text-[9px] text-[#9CA3AF] group-hover/btn:text-[#084734]">
+                                      <ChevronDown className="h-2.5 w-2.5" />
+                                    </span>
+                                  </button>
                                 </div>
                               )}
                             </th>
@@ -3823,7 +3978,7 @@ export default function SalesLedgerWorkbench({
                         })}
                         <th
                           aria-sort={revSortAriaValue(revSortKey === "annual", revSortDirection)}
-                          className="sticky right-0 top-0 z-40 border-l border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 text-right align-middle"
+                          className="sticky right-0 top-0 z-40 border-l border-[#E5E7EB] bg-[#F8F8F7] px-3 py-2 text-right align-middle shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.04)]"
                           style={{ width: MATRIX_ANNUAL_W, minWidth: MATRIX_ANNUAL_W, maxWidth: MATRIX_ANNUAL_W }}
                         >
                           <RevSortHeader label="연간합계" sortKey="annual" activeKey={revSortKey} direction={revSortDirection} onSort={onRevSort} align="right" />
@@ -3888,7 +4043,7 @@ export default function SalesLedgerWorkbench({
                                 expandedMonths={expandedRevMonths}
                                 expanded={expanded}
                                 selected={selectedGroup?.key === group.key}
-                                needsLink={isNeedsLink(group.customer) && hasConfirmedThroughMonth(group.monthlyTotals, ymKeyUtc(new Date()))}
+                                needsLink={false}
                                 linkPopoverOpen={revLinkPopoverKey === group.key}
                                 onLinkPopoverToggle={toggleRevLinkPopover}
                                 onLinkPopoverClose={closeRevLinkPopover}
@@ -3896,6 +4051,7 @@ export default function SalesLedgerWorkbench({
                                 onToggle={toggleRevGroup}
                                 density={matrixDensity}
                                 periodMonths={periodHighlightMonths}
+                                h1Expanded={h1Expanded}
                               />
                             ) : null}
                             {grouped
@@ -3924,8 +4080,10 @@ export default function SalesLedgerWorkbench({
                                         onOpen={() => selectRevGroup(group.key)}
                                         density={matrixDensity}
                                         periodMonths={periodHighlightMonths}
+                                        h1Expanded={h1Expanded}
                                       />
                                       {catExpanded &&
+                                        category !== "hardware" &&
                                         catRows.map((row) => {
                                           const view = revRowViews.get(row.id)
                                           if (!view) return null
@@ -3944,6 +4102,7 @@ export default function SalesLedgerWorkbench({
                                               pendingByCell={pendingByCell}
                                               density={matrixDensity}
                                               periodMonths={periodHighlightMonths}
+                                              h1Expanded={h1Expanded}
                                             />
                                           )
                                         })}
@@ -3959,7 +4118,7 @@ export default function SalesLedgerWorkbench({
                                       key={row.id}
                                       view={view}
                                       grouped={false}
-                                      needsLink={isNeedsLink(row.customer) && hasConfirmedThroughMonth(view.monthlyByMonth, ymKeyUtc(new Date()))}
+                                      needsLink={false}
                                       linkPopoverOpen={revLinkPopoverKey === row.id}
                                       onLinkPopoverToggle={toggleRevLinkPopover}
                                       onLinkPopoverClose={closeRevLinkPopover}
@@ -3972,6 +4131,7 @@ export default function SalesLedgerWorkbench({
                                       pendingByCell={pendingByCell}
                                       density={matrixDensity}
                                       periodMonths={periodHighlightMonths}
+                                      h1Expanded={h1Expanded}
                                     />
                                   )
                                 })}
@@ -3986,6 +4146,7 @@ export default function SalesLedgerWorkbench({
                         months={matrixMonths}
                         expandedMonths={expandedRevMonths}
                         periodMonths={periodHighlightMonths}
+                        h1Expanded={h1Expanded}
                       />
                     )}
                   </table>
@@ -4042,7 +4203,7 @@ export default function SalesLedgerWorkbench({
                 REV·보드와 동일한 loadDealDetail로 draftForm을 채운다(새 편집 경로 없음). 콕핏에서는 우측
                 플로팅 레일·FAB를 렌더하지 않는다(아래 조건에서 lens !== "cockpit"). */}
             {lens === "cockpit" && (
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] lg:items-start">
+              <div className="grid grid-cols-1 gap-5 lg:grid-cols-[380px_minmax(0,1fr)] xl:grid-cols-[400px_minmax(0,1fr)] lg:items-start">
                 <CockpitDealList
                   rows={filteredRows}
                   selectedMonth={selectedMonth}
@@ -4184,7 +4345,7 @@ export default function SalesLedgerWorkbench({
         {/* M3: 콕핏은 플로팅 레일·FAB를 숨기지만, 헤더 "체크 큐" 버튼으로 연 큐(railView==="queue")만
             예외로 이 패널을 허용한다 — 큐 진입은 헤더 버튼으로 일원화하고 FAB(위)는 계속 콕핏에서 숨긴다. */}
         {!sidePanelCollapsed && (lens !== "cockpit" || railView === "queue") && (
-        <aside className="fixed inset-x-3 bottom-3 top-auto z-50 max-h-[86dvh] overflow-y-auto rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2 shadow-[0_24px_70px_rgba(17,17,16,0.22)] sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-4 sm:w-[min(420px,calc(100vw-2rem))] sm:max-h-[calc(100dvh-2rem)] xl:sticky xl:inset-auto xl:top-6 xl:z-10 xl:col-start-2 xl:row-start-1 xl:max-h-[calc(100dvh-3rem)] xl:w-full xl:rounded-none xl:border-0 xl:border-l xl:bg-white xl:p-3 xl:shadow-none" aria-label="선택 매출 작업면">
+        <aside className="fixed inset-x-3 bottom-3 top-auto z-50 max-h-[86dvh] overflow-y-auto rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2 shadow-[0_24px_70px_rgba(17,17,16,0.22)] sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-4 sm:w-[min(440px,calc(100vw-2rem))] sm:max-h-[calc(100dvh-2rem)] xl:sticky xl:inset-auto xl:top-6 xl:z-10 xl:col-start-2 xl:row-start-1 xl:max-h-[calc(100dvh-3rem)] xl:w-full xl:rounded-none xl:border-0 xl:border-l xl:bg-white xl:p-2.5 xl:shadow-none" aria-label="선택 매출 작업면">
           <>
           <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-1.5">
             <div className="mb-1.5 flex items-center justify-between gap-2 px-1">
@@ -4618,13 +4779,16 @@ export default function SalesLedgerWorkbench({
             aria-labelledby="ledger-rail-tab-queue"
             className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white"
           >
-            <div className="border-b border-[rgba(0,0,0,0.08)] px-4 py-3">
-              <p className="flex items-center gap-2 text-[13px] font-bold text-[#111110]">
-                <AlertTriangle className="h-4 w-4 text-[#A8741A]" />
+            <div className="flex items-center justify-between border-b border-[rgba(0,0,0,0.08)] px-3 py-2 bg-[#FAFAF8]">
+              <p className="flex items-center gap-1.5 text-[12px] font-bold text-[#111110]">
+                <AlertTriangle className="h-3.5 w-3.5 text-[#A8741A]" />
                 체크 큐
               </p>
+              <span className="text-[11px] font-semibold text-[#615D59]">
+                {openDrafts.length > 0 ? `대기 ${openDrafts.length}건` : "대기 없음"}
+              </span>
             </div>
-            <div className="p-4">
+            <div className="p-2.5">
               <DraftQueue
                 drafts={drafts}
                 mode={queueMode}

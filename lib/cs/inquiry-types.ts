@@ -12,7 +12,7 @@ export interface CsCategoryInfo {
 }
 
 export interface CsChannelInfo {
-  channel: "channel_talk" | "homepage" | "chatbot"
+  channel: "channel_talk" | "homepage" | "chatbot" | "call_log"
   label: string
   count: number
   percentage: number
@@ -28,6 +28,7 @@ export interface CsTrendBucket {
   channelTalk: number
   homepage: number
   chatbot: number
+  callLog?: number
 }
 
 export interface CsFrequentIssue {
@@ -38,13 +39,13 @@ export interface CsFrequentIssue {
   count: number
   lastAskedAt: string | null
   sampleQuestions: string[]
-  source: "channel_talk" | "chatbot" | "homepage"
+  source: "channel_talk" | "chatbot" | "homepage" | "call_log"
   sourceLabel: string
 }
 
 export interface CsUnansweredInquiry {
   id: string
-  channel: "channel_talk" | "homepage" | "chatbot"
+  channel: "channel_talk" | "homepage" | "chatbot" | "call_log"
   channelLabel: string
   customerName: string
   customerOrg?: string
@@ -67,6 +68,7 @@ export interface CsConnectionStatus {
     hasWebhook: boolean
     lastSyncedAt: string | null
     totalCount: number
+    syncIntervalLabel?: string
   }
   homepage: {
     status: "connected" | "warning" | "error"
@@ -75,6 +77,20 @@ export interface CsConnectionStatus {
     smsConfigured: boolean
     lastInquiryAt: string | null
     totalCount: number
+  }
+  callLog?: {
+    status: "connected" | "warning" | "error"
+    activeToday: boolean
+    todayCount: number
+    lastLoggedAt: string | null
+    totalCount: number
+  }
+  knowledgeBase?: {
+    status: "connected" | "warning" | "error"
+    figmaGuidesCount: number
+    markdownDocsCount: number
+    lastIndexedAt: string | null
+    isSynced: boolean
   }
 }
 

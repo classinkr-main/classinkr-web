@@ -136,7 +136,7 @@ function generationConfig(model: string, mode: InternalCsModelMode) {
     maxOutputTokens: mode === "deep" ? 2_048 : 1_024,
     responseMimeType: "application/json",
   }
-  if (model.startsWith("gemini-3.5-flash")) {
+  if (model.startsWith("gemini-4") || model.startsWith("gemini-3.5-flash")) {
     config.thinkingConfig = { thinkingLevel: mode === "deep" ? "high" : "low" }
   } else if (model.startsWith("gemini-3.1-pro")) {
     config.thinkingConfig = { thinkingLevel: "high" }

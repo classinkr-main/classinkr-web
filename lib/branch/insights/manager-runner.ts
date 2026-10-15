@@ -9,7 +9,7 @@ export interface ManagerInsightResult {
   next_actions: Array<{ title: string; why: string; due?: string }>
 }
 
-const DEFAULT_FAST = "gemini-2.5-flash"
+const DEFAULT_FAST = "gemini-4.0-flash"
 const UNSUPPORTED = new Set(["gemini-3.1-pro"])
 
 function resolveFastModel(): string {

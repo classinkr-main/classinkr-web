@@ -8,8 +8,8 @@
 
 import "server-only"
 
-export const DEFAULT_GEMINI_MODEL = "gemini-2.5-pro"
-export const DEFAULT_GEMINI_FAST_MODEL = "gemini-2.5-flash"
+export const DEFAULT_GEMINI_MODEL = "gemini-4.0-pro"
+export const DEFAULT_GEMINI_FAST_MODEL = "gemini-4.0-flash"
 
 /** 존재하지 않거나 이 호출 형태(v1beta generateContent + responseSchema)를 지원하지 않는
  *  모델이 env 에 박혀도 404 로 죽지 않게 방어한다. */
@@ -55,7 +55,7 @@ export interface GeminiThinkingConfig {
  */
 export function thinkingConfigFor(model: string): GeminiThinkingConfig | undefined {
   const lower = model.toLowerCase()
-  if (lower.startsWith("gemini-3")) {
+  if (lower.startsWith("gemini-4") || lower.startsWith("gemini-3")) {
     return { thinkingLevel: lower.includes("pro") ? "low" : "minimal" }
   }
   if (lower.startsWith("gemini-2.5-flash")) return { thinkingBudget: 0 }

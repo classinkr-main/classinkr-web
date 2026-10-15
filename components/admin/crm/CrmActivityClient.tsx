@@ -13,10 +13,13 @@ import {
   Calendar,
   Clock,
   FileAudio,
+  FileText,
   Filter,
+  Layers,
   Plus,
   RefreshCw,
   Search,
+  Smile,
   UserRound,
 } from "lucide-react"
 
@@ -59,6 +62,21 @@ import {
 const PAGE_LIMIT = 50
 type ActivityScope = "work" | "all"
 const AUTOMATED_EVENT_SOURCES = new Set<SourceType>(["site_inflow", "external_crm", "sheet"])
+
+const SCOPE_TABS = [
+  {
+    key: "work" as const,
+    label: "업무 기록",
+    icon: FileText,
+    description: "사람이 남긴 메모·통화·회의·일정을 우선 표시",
+  },
+  {
+    key: "all" as const,
+    label: "전체 이벤트",
+    icon: Layers,
+    description: "유입·시트·외부 CRM 자동 이벤트 포함",
+  },
+] as const
 
 function listUrl(input: {
   query: string
@@ -440,6 +458,19 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
     [router]
   )
 
+  const handleScopeKeyDown = useCallback(
+    (event: React.KeyboardEvent, currentKey: ActivityScope) => {
+      if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+        event.preventDefault()
+        const nextKey: ActivityScope = currentKey === "work" ? "all" : "work"
+        setActivityScope(nextKey)
+        if (nextKey === "work" && AUTOMATED_EVENT_SOURCES.has(filterSource)) setFilterSource("all")
+        document.getElementById(`activity-scope-tab-${nextKey}`)?.focus()
+      }
+    },
+    [filterSource]
+  )
+
   const weekSummaryViewProps = {
     summary: weekSummary,
     partial: weekSummaryPartial,
@@ -519,48 +550,73 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
       <section className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.7fr)]">
         <div className="min-w-0 space-y-4">
           <section className="border-b border-[rgba(0,0,0,0.08)] bg-white pb-4">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <div className="inline-flex gap-2" role="group" aria-label="기록 범위">
-                {([
-                  { key: "work", label: "업무 기록" },
-                  { key: "all", label: "전체 이벤트" },
-                ] as const).map((option) => (
-                  <button
-                    key={option.key}
-                    type="button"
-                    onClick={() => {
-                      setActivityScope(option.key)
-                      if (option.key === "work" && AUTOMATED_EVENT_SOURCES.has(filterSource)) setFilterSource("all")
-                    }}
-                    aria-pressed={activityScope === option.key}
-                    className={`h-8 rounded-md px-3 text-[12px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] ${
-                      activityScope === option.key
-                        ? "text-[#084734] underline underline-offset-8"
-                        : "text-[#615D59] hover:text-[#111110]"
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
+            {/* 상단 기록 범위 탭 (업무 기록 vs 전체 이벤트) */}
+            <div className="mb-4 border-b border-[#e8e8e4]">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div
+                  role="tablist"
+                  aria-label="기록 범위"
+                  className="no-scrollbar -mx-4 flex gap-1 overflow-x-auto px-4 sm:mx-0 sm:px-0"
+                >
+                  {SCOPE_TABS.map((option) => {
+                    const isActive = activityScope === option.key
+                    const Icon = option.icon
+                    return (
+                      <button
+                        key={option.key}
+                        id={`activity-scope-tab-${option.key}`}
+                        type="button"
+                        role="tab"
+                        aria-selected={isActive}
+                        aria-controls="activity-scope-panel"
+                        tabIndex={isActive ? 0 : -1}
+                        onClick={() => {
+                          setActivityScope(option.key)
+                          if (option.key === "work" && AUTOMATED_EVENT_SOURCES.has(filterSource)) setFilterSource("all")
+                        }}
+                        onKeyDown={(e) => handleScopeKeyDown(e, option.key)}
+                        className={`-mb-px inline-flex min-h-11 shrink-0 items-center gap-2 border-b-2 px-3.5 py-2.5 text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] sm:min-h-0 ${
+                          isActive
+                            ? "border-[#084734] text-[#084734]"
+                            : "border-transparent text-[#615D59] hover:border-[#e8e8e4] hover:text-[#111110]"
+                        }`}
+                      >
+                        <Icon className={`h-4 w-4 ${isActive ? "text-[#084734]" : "text-[#1a1a1a]/35"}`} />
+                        <span>{option.label}</span>
+                        {isActive && data ? (
+                          <span className="rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-bold tabular-nums text-[#084734]">
+                            {data.summary.total.toLocaleString("ko-KR")}
+                          </span>
+                        ) : null}
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="hidden pb-1 text-[12px] text-[#1a1a1a]/45 sm:block">
+                  {activityScope === "work"
+                    ? "사람이 남긴 메모·통화·회의·일정을 우선 표시"
+                    : "유입·시트·외부 CRM 자동 이벤트 포함"}
+                </p>
               </div>
-              <p className="text-[11px] text-[#1a1a1a]/42">
-                {activityScope === "work" ? "사람이 남긴 메모·통화·회의·일정을 우선 표시" : "유입·시트·외부 CRM 자동 이벤트 포함"}
-              </p>
             </div>
 
             {/* A4 칩 행 2줄 — 기간(세션 state, URL 미반영)과 분위기(기존 filterSentiment와 동기화).
                 분위기는 칩 하나로 통일하고 아래 select 그리드에서는 뺐다(중복 컨트롤 금지). */}
             <div className="mb-2 flex flex-wrap items-center gap-1.5" role="group" aria-label="기간 필터">
+              <span className="mr-1 inline-flex items-center gap-1 text-[11px] font-semibold text-[#1a1a1a]/40">
+                <Calendar className="h-3 w-3" />
+                기간
+              </span>
               {ACTIVITY_PERIOD_PRESETS.map((option) => (
                 <button
                   key={option.key}
                   type="button"
                   onClick={() => setPeriod(option.key)}
                   aria-pressed={period === option.key}
-                  className={`inline-flex min-h-11 items-center justify-center rounded-md border px-3 text-[12px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] sm:min-h-0 sm:h-8 ${
+                  className={`inline-flex min-h-11 items-center justify-center rounded-lg border px-3 text-[12px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] sm:min-h-0 sm:h-7.5 ${
                     period === option.key
-                      ? "border-[#084734]/25 bg-[#ECFDF5] text-[#084734]"
-                      : "border-[#e8e8e4] bg-white text-[#615D59] hover:text-[#111110]"
+                      ? "border-[#084734]/30 bg-[#ECFDF5] text-[#084734]"
+                      : "border-[#e8e8e4] bg-white text-[#615D59] hover:border-[#d0d0cc] hover:text-[#111110]"
                   }`}
                 >
                   {option.label}
@@ -568,16 +624,20 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
               ))}
             </div>
             <div className="mb-3 flex flex-wrap items-center gap-1.5" role="group" aria-label="분위기 필터">
+              <span className="mr-1 inline-flex items-center gap-1 text-[11px] font-semibold text-[#1a1a1a]/40">
+                <Smile className="h-3 w-3" />
+                분위기
+              </span>
               {SENTIMENT_FILTERS.map((option) => (
                 <button
                   key={option.key}
                   type="button"
                   onClick={() => setFilterSentiment(option.key)}
                   aria-pressed={filterSentiment === option.key}
-                  className={`inline-flex min-h-11 items-center justify-center rounded-md border px-3 text-[12px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] sm:min-h-0 sm:h-8 ${
+                  className={`inline-flex min-h-11 items-center justify-center rounded-lg border px-3 text-[12px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] sm:min-h-0 sm:h-7.5 ${
                     filterSentiment === option.key
-                      ? "border-[#084734]/25 bg-[#ECFDF5] text-[#084734]"
-                      : "border-[#e8e8e4] bg-white text-[#615D59] hover:text-[#111110]"
+                      ? "border-[#084734]/30 bg-[#ECFDF5] text-[#084734]"
+                      : "border-[#e8e8e4] bg-white text-[#615D59] hover:border-[#d0d0cc] hover:text-[#111110]"
                   }`}
                 >
                   {option.label}
@@ -704,7 +764,13 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
             </div>
           ) : null}
 
-          <section className="space-y-4" aria-label="기록 목록">
+          <section
+            id="activity-scope-panel"
+            role="tabpanel"
+            aria-labelledby={`activity-scope-tab-${activityScope}`}
+            className="space-y-4"
+            aria-label="기록 목록"
+          >
             <ActivityDateGroups
               groups={dayGroups}
               renderRow={(event: CrmEventRecord) => <ActivityEventRow key={event.id} event={event} />}
