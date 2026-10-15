@@ -8,6 +8,8 @@
 import { useMemo, useState } from "react"
 import { CalendarRange } from "lucide-react"
 import { CONFIDENCE_TOKENS, type ConfidenceKey } from "@/lib/branch/confidence-tokens"
+import { MonthlyGoalBowlChart } from "../MonthlyGoalBowlChart"
+import type { MonthlyGoalPlan } from "@/lib/branch/monthly-goal-chart"
 import {
   ConfidenceStackBar,
   FORECAST_WEEK_RANGE_LABELS,
@@ -177,6 +179,11 @@ interface ForecastBoardProps {
   onSelectMonth: (month: string) => void
   onOpenRow: (row: LedgerRevenueRow) => void
   selectedRowId?: string | null
+  monthlyGoals?: MonthlyGoalPlan[]
+  todayMonth?: string
+  goalNote?: string
+  chartLoading?: boolean
+  chartError?: string | null
 }
 
 export function ForecastBoard({
@@ -186,6 +193,11 @@ export function ForecastBoard({
   onSelectMonth,
   onOpenRow,
   selectedRowId = null,
+  monthlyGoals = [],
+  todayMonth = new Date().toISOString().slice(0, 7),
+  goalNote,
+  chartLoading = false,
+  chartError = null,
 }: ForecastBoardProps) {
   const model = useMemo(() => buildForecastBoardModel(rows, selectedMonth), [rows, selectedMonth])
   const rowById = useMemo(() => new Map(rows.map((row) => [row.id, row])), [rows])
@@ -196,7 +208,7 @@ export function ForecastBoard({
   const openPct = Math.max(100 - confirmedPct - highPct, 0)
 
   return (
-    <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white">
+    <section className="min-w-0 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white">
       <div className="border-b border-[rgba(0,0,0,0.08)] p-4">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
           <div>
@@ -250,6 +262,17 @@ export function ForecastBoard({
               </span>
             </div>
           </>
+        )}
+      </div>
+
+      <div className="border-b border-[rgba(0,0,0,0.08)] p-4 sm:p-5">
+        {chartLoading && rows.length === 0 ? (
+          <p role="status" className="py-10 text-center text-xs text-[#615D59]">월별 목표·매출을 불러오는 중입니다.</p>
+        ) : chartError && rows.length === 0 ? (
+          <p role="alert" className="py-6 text-xs text-[#B43E3E]">월별 매출 조회 실패 · 0건이 아닙니다.</p>
+        ) : (
+          <MonthlyGoalBowlChart rows={rows} plans={monthlyGoals} selectedMonth={selectedMonth}
+            todayMonth={todayMonth} onSelectMonth={onSelectMonth} goalNote={goalNote} />
         )}
       </div>
 

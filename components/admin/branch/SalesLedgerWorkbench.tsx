@@ -4110,6 +4110,16 @@ export default function SalesLedgerWorkbench({
                 onSelectMonth={setSelectedMonth}
                 onOpenRow={(row) => void loadDealDetail(row)}
                 selectedRowId={selectedRow?.id ?? null}
+                monthlyGoals={monthOptions.map((option) => ({
+                  month: option.value,
+                  goal: revGoalComparable ? monthlySeriesRows.find((row) => row.month === option.value)?.goal ?? null : null,
+                }))}
+                todayMonth={defaultMonthRef.current}
+                goalNote={revGoalComparable
+                  ? "승인 DSH 목표 · 시트+적용 장부 기준. 미적용 초안은 제외합니다."
+                  : "검색·담당자 등 필터 중에는 팀 목표와 모집단이 달라 목표 비교를 생략합니다."}
+                chartLoading={pipeline.loading || summary.loading}
+                chartError={pipeline.error}
               />
             )}
 

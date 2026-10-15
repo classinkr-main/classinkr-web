@@ -68,7 +68,7 @@
 | 외부 네오CRM 되밀기 | 리드 등록, 콜·데모·방문·메모 쓰기, 승인 큐 | [네오CRM 되밀기 지침](neocrm-writeback-guide-2026-09-07.md) |
 | 공개 챗봇·CS 운영 | RAG, 공개 챗봇, 외부 CS 대시보드 | [챗봇 플레이북](playbook/05-chatbot.md), [CS 콘솔 IA](cs-admin-console-ia-2026-07-27.md) |
 | 플랫폼·데이터 | Supabase, migration, cron, 알림, Portal V2 | [플랫폼 플레이북](playbook/06-platform-data.md), [운영 장애·Cron·Webhook 지침](operational-failure-handling-guidelines.md), [ADR-010](../adr/ADR-010-operational-failure-containment.md), [DB 마이그레이션 런북](db-migration-runbook.md), [Supabase 운영 복구·하드닝 계획](supabase-operational-recovery-hardening-plan-2026-09-01.md) |
-| KR Team·매출 장부 | `/admin/branch`, `/admin/branch/ledger`, 동기화·정합성 | [Classin KR Team 스킬](../../.codex/skills/classin-kr-team/SKILL.md) |
+| KR Team·매출 장부 | `/admin/branch`, `/admin/branch/ledger`, 동기화·정합성 | [Classin KR Team 스킬](../../.codex/skills/classin-kr-team/SKILL.md), [월별 목표·채움 차트](revenue-monthly-goal-chart.md) |
 
 Admin 코어는 `app/api/admin/*`, `components/admin/*`, `lib/repositories/*` 전체를 소유하지 않는다.
 공용 인증·응답·저장소 규약은 Admin 코어가 관리하고, 도메인 로직과 도메인 테스트는 해당 작업면이

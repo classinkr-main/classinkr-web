@@ -17,6 +17,7 @@ import {
   type LedgerRevenueRow,
 } from "../ledger/shared"
 import type { BranchPipelineResponse, BranchSummaryResponse, Period, Team } from "../types"
+import { MonthlyGoalBowlChart } from "../MonthlyGoalBowlChart"
 
 interface RevenueFlowSectionProps {
   summary: BranchSummaryResponse | null
@@ -66,9 +67,17 @@ export default function RevenueFlowSection({
     const goal = (goals[index] ?? 0) - (index > 0 ? goals[index - 1] ?? 0 : 0)
     return goal > 0 ? goal : null
   }, [summary, selectedMonth])
+  const monthlyGoals = useMemo(() => {
+    const series = summary?.monthly_series
+    return (series?.months ?? []).map((month, index) => ({
+      month,
+      goal: (series?.goal_cum[index] ?? 0) - (index > 0 ? series?.goal_cum[index - 1] ?? 0 : 0),
+    }))
+  }, [summary])
+  const todayMonth = useMemo(() => new Date().toISOString().slice(0, 7), [])
 
   return (
-    <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+    <section className="min-w-0 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
       {/* 목표·실적·달성률 텍스트는 제거(항목 2) — 아래 PacingChart가 이미 목표선을 그리고,
           유일한 '목표 대비' 수치 표면은 개요 상단의 BranchHeroGauges다. */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5">
@@ -81,6 +90,18 @@ export default function RevenueFlowSection({
         >
           수치 검수 →
         </Link>
+      </div>
+
+      <div className="border-b border-[rgba(0,0,0,0.08)] p-4 sm:p-5">
+        {pipeline.data && summary ? (
+          <>
+            {pipeline.stale && <p role="status" className="mb-2 text-xs text-[#A8741A]">갱신 실패 — 저장된 REV 데이터 표시 중</p>}
+            <MonthlyGoalBowlChart rows={ledgerRows} plans={monthlyGoals} selectedMonth={selectedMonth}
+              todayMonth={todayMonth} goalNote="승인 DSH 목표 · 현재 팀의 REV 원천 기준. 장부 적용분은 매출 장부에서 별도 검수합니다." />
+          </>
+        ) : pipeline.error ? (
+          <p role="alert" className="py-5 text-xs text-[#B43E3E]">월별 매출 조회 실패 · 0건이 아닙니다.</p>
+        ) : <LoadingPanel label="월별 목표·매출을 불러오는 중" />}
       </div>
 
       <div className="grid gap-5 p-4 xl:grid-cols-2">
