@@ -3359,8 +3359,8 @@ export default function SalesLedgerWorkbench({
 
             {lens === "rev" && (
               <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-xs overflow-hidden">
-                {/* [Row 1] 타이틀, 회계월 네비게이션, 통합 검색창, 도움말 가이드 호버 */}
-                <div className="relative z-30 flex flex-col gap-3.5 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5 lg:flex-row lg:items-center lg:justify-between bg-[#FAFAF8]/50">
+                {/* [Row 1] 타이틀, 정렬 드롭다운 & 방향, 도움말 가이드 호버 */}
+                <div className="relative z-30 flex flex-wrap items-center justify-between gap-3.5 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5 bg-[#FAFAF8]/50">
                   <div className="flex items-center gap-2">
                     <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ECFDF5] text-[#084734]">
                       <FileSpreadsheet className="h-4 w-4" />
@@ -3368,26 +3368,34 @@ export default function SalesLedgerWorkbench({
                     <h2 className="text-[16px] font-bold text-[#111110] tracking-tight">REV 매출 장부</h2>
                   </div>
 
-                  {/* 우측: 통합 검색창 & 도움말 가이드 팝오버 */}
+                  {/* 우측: 정렬 & 도움말 가이드 팝오버 */}
                   <div className="flex items-center gap-2.5">
-                    <div className="relative min-w-0 flex-1 sm:w-72 lg:w-80">
-                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A39E98]" />
-                      <input
-                        value={query}
-                        onChange={(event) => setQuery(event.target.value)}
-                        placeholder="고객, 담당자, 팀, 지역, 상태, 메모 검색"
-                        className="h-9 w-full rounded-lg border border-[rgba(0,0,0,0.08)] bg-white pl-9 pr-8 text-[13px] text-[#111110] placeholder:text-[#A39E98] shadow-2xs outline-none transition focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
-                      />
-                      {query && (
-                        <button
-                          type="button"
-                          onClick={() => setQuery("")}
-                          aria-label="검색어 지우기"
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-[#A39E98] hover:bg-[#F6F5F4] hover:text-[#111110]"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      )}
+                    {/* 정렬 드롭다운 & 방향 */}
+                    <div className="inline-flex items-center gap-1 rounded-full bg-white border border-[rgba(0,0,0,0.08)] pl-2.5 pr-1 py-0.5 shadow-2xs">
+                      <label htmlFor="rev-sort-key" className="sr-only">정렬 기준</label>
+                      <select
+                        id="rev-sort-key"
+                        value={revSortKey}
+                        onChange={(event) => onRevSort(event.target.value as RevSortKey)}
+                        className="h-6 rounded-full border-0 bg-transparent pr-1 text-[11.5px] font-bold text-[#615D59] outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#084734]"
+                      >
+                        {(Object.keys(REV_SORT_LABELS) as RevSortKey[]).map((key) => (
+                          <option key={key} value={key}>{REV_SORT_LABELS[key]}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => onRevSort(revSortKey)}
+                        aria-label={`정렬 방향 전환 (현재 ${revSortDirection === "asc" ? "오름차순" : "내림차순"})`}
+                        title="정렬 방향 전환"
+                        className="flex h-5 w-5 items-center justify-center rounded-full text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#084734]"
+                      >
+                        {revSortDirection === "asc" ? (
+                          <ArrowUpNarrowWide className="h-3.5 w-3.5" aria-hidden="true" />
+                        ) : (
+                          <ArrowDownNarrowWide className="h-3.5 w-3.5" aria-hidden="true" />
+                        )}
+                      </button>
                     </div>
 
                     {/* 도움말 호버 (도움말 st) */}
@@ -3395,10 +3403,33 @@ export default function SalesLedgerWorkbench({
                   </div>
                 </div>
 
-                {/* [Row 2] 사용자 작업 경로에 따른 필터 바 (상품군 탭 / 담당자 / 지역 / 고급 / 보기제어 / 초기화) */}
+                {/* [Row 2] 사용자 작업 경로에 따른 통합 필터 바 (검색 / 상품군 / 담당자 / 지역 / 빠른 검수 토글 / 고급 / 초기화) */}
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3 bg-white">
-                  {/* 좌측: 상품군 + 담당자 + 지역 + 고급필터 */}
+                  {/* 좌측: 검색 -> 상품군 -> 담당자 -> 지역 -> 빠른 검수 토글 -> 고급필터 */}
                   <div className="flex flex-wrap items-center gap-2.5">
+                    {/* 통합 검색창 & 토글 */}
+                    <div className="relative flex items-center">
+                      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#A39E98]" />
+                      <input
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                        placeholder="고객·담당자·지역 검색"
+                        className="h-9 w-44 sm:w-56 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] pl-8 pr-7 text-[12px] font-semibold text-[#111110] placeholder:text-[#A39E98] outline-none transition focus:border-[#084734] focus:bg-white focus:ring-2 focus:ring-[#084734]/15 shadow-2xs"
+                      />
+                      {query && (
+                        <button
+                          type="button"
+                          onClick={() => setQuery("")}
+                          aria-label="검색어 지우기"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-[#A39E98] hover:bg-[#F6F5F4] hover:text-[#111110]"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    <span aria-hidden className="h-5 w-px bg-[rgba(0,0,0,0.1)]" />
+
                     {/* 상품군 세그먼트 */}
                     <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-0.5" aria-label="상품군 필터">
                       {REV_PRODUCT_FILTERS.map((item) => (
@@ -3426,7 +3457,7 @@ export default function SalesLedgerWorkbench({
                       selected={managerFilter}
                       onChange={setManagerFilter}
                       placeholder="전체"
-                      width="w-48"
+                      width="w-44"
                       pinStorageKey={PIPELINE_MANAGER_DEFAULT_STORAGE_KEY}
                     />
 
@@ -3437,8 +3468,42 @@ export default function SalesLedgerWorkbench({
                       selected={regionFilter}
                       onChange={setRegionFilter}
                       placeholder="전체"
-                      width="w-44"
+                      width="w-40"
                     />
+
+                    <span aria-hidden className="h-5 w-px bg-[rgba(0,0,0,0.1)]" />
+
+                    {/* 빠른 상태 검수 토글 뱃지들 */}
+                    <div className="flex flex-wrap items-center gap-1.5" aria-label="검수 인박스">
+                      {openDrafts.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => selectRailView("queue")}
+                          title="체크 큐 열기 — 체크·적용 대기 초안"
+                          className="inline-flex h-8 items-center gap-1 rounded-full border border-[#ECD29C] bg-[#FFFCF5] px-2.5 text-[11px] font-bold tabular-nums text-[#7A520F] transition hover:bg-[#FBF1E0]"
+                        >
+                          미적용 {openDrafts.length.toLocaleString("ko-KR")}
+                        </button>
+                      )}
+                      {([
+                        ["week-mismatch", "불일치", revInboxCounts.weekMismatch, "border-[#F2B8B8] bg-[#FCE9E9] text-[#B43E3E]"],
+                        ["month-only", "월합계만", revInboxCounts.monthOnly, "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"],
+                        ["open", "예정 남음", revInboxCounts.open, CONFIDENCE_TOKENS["high-confidence"].chipClass],
+                      ] as Array<[RevForecastFilter, string, number, string]>).map(([id, label, count, tone]) => (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setRevForecastFilter((current) => (current === id ? "all" : id))}
+                          aria-pressed={revForecastFilter === id}
+                          title={`${label} 행만 보기 (다시 누르면 해제)`}
+                          className={`inline-flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-bold tabular-nums transition ${
+                            revForecastFilter === id ? "ring-2 ring-[#084734]/25 shadow-xs" : ""
+                          } ${count > 0 ? tone : "border-[rgba(0,0,0,0.08)] bg-white text-[#A39E98]"}`}
+                        >
+                          {label} {count.toLocaleString("ko-KR")}
+                        </button>
+                      ))}
+                    </div>
 
                     {/* 고급 필터 버튼 */}
                     <button
@@ -3519,51 +3584,17 @@ export default function SalesLedgerWorkbench({
                   </div>
                 )}
 
-                {/* [Row 3] 결과 요약 & 정렬 & 활성 필터 칩 & 상태 점검 알약 뱃지 */}
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-2.5 bg-[#FAFAF8]/40">
-                  {/* 좌측: 결과 통계 & 정렬 & 활성 칩들 */}
-                  <div className="flex flex-wrap items-center gap-2.5 text-[12px] font-semibold text-[#615D59]">
-                    <span>
-                      결과 <b className="text-[#111110]">{filteredRows.length.toLocaleString("ko-KR")}</b>행
-                      {" "}· 고객 <b className="text-[#111110]">{revCustomerGroups.length.toLocaleString("ko-KR")}</b>곳
-                      {" "}· {revRangeStart.toLocaleString("ko-KR")}-{revRangeEnd.toLocaleString("ko-KR")}곳 표시
-                      {additiveAppliedDraftRows.length > 0 && (
-                        <span className="ml-1.5 inline-flex items-center rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-bold text-[#084734]">
-                          DB 신규 반영 {additiveAppliedDraftRows.length.toLocaleString("ko-KR")}건
-                        </span>
-                      )}
-                    </span>
-
-                    <span aria-hidden className="h-4 w-px bg-[rgba(0,0,0,0.12)] mx-0.5" />
-
-                    {/* 정렬 드롭다운 & 방향 */}
-                    <div className="inline-flex items-center gap-1 rounded-full bg-white border border-[rgba(0,0,0,0.08)] pl-2.5 pr-1 py-0.5 shadow-2xs">
-                      <label htmlFor="rev-sort-key" className="sr-only">정렬 기준</label>
-                      <select
-                        id="rev-sort-key"
-                        value={revSortKey}
-                        onChange={(event) => onRevSort(event.target.value as RevSortKey)}
-                        className="h-6 rounded-full border-0 bg-transparent pr-1 text-[11.5px] font-bold text-[#615D59] outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#084734]"
-                      >
-                        {(Object.keys(REV_SORT_LABELS) as RevSortKey[]).map((key) => (
-                          <option key={key} value={key}>{REV_SORT_LABELS[key]}</option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => onRevSort(revSortKey)}
-                        aria-label={`정렬 방향 전환 (현재 ${revSortDirection === "asc" ? "오름차순" : "내림차순"})`}
-                        title="정렬 방향 전환"
-                        className="flex h-5 w-5 items-center justify-center rounded-full text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#084734]"
-                      >
-                        {revSortDirection === "asc" ? (
-                          <ArrowUpNarrowWide className="h-3.5 w-3.5" aria-hidden="true" />
-                        ) : (
-                          <ArrowDownNarrowWide className="h-3.5 w-3.5" aria-hidden="true" />
-                        )}
-                      </button>
-                    </div>
-
+                {/* [활성 필터 태그 바] (적용된 필터가 있을 때만 노출) */}
+                {(query.trim() ||
+                  managerFilter.size > 0 ||
+                  regionFilter.size > 0 ||
+                  productFilter !== "all" ||
+                  revStatusFilter !== "ALL" ||
+                  revDealTypeFilter !== "ALL" ||
+                  revOriginFilter !== "all" ||
+                  revForecastFilter !== "all" ||
+                  h1Expanded) && (
+                  <div className="flex flex-wrap items-center gap-1.5 border-b border-[rgba(0,0,0,0.08)] px-5 py-2 bg-[#FAFAF8]/40">
                     {query.trim() && <FilterTag label={`검색 ${query.trim()}`} onClear={() => setQuery("")} />}
 
                     {Array.from(managerFilter).map((name) => (
@@ -3605,39 +3636,7 @@ export default function SalesLedgerWorkbench({
                       <FilterTag label="4~9월 월별 펼침 (종합 접기)" onClear={() => setH1Expanded(false)} />
                     )}
                   </div>
-
-                  {/* 우측: 빠른 상태 검수 인박스 뱃지 */}
-                  <div className="flex flex-wrap items-center gap-1.5" aria-label="검수 인박스">
-                    {openDrafts.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => selectRailView("queue")}
-                        title="체크 큐 열기 — 체크·적용 대기 초안"
-                        className="inline-flex h-6.5 items-center gap-1 rounded-full border border-[#ECD29C] bg-[#FFFCF5] px-2.5 text-[11px] font-bold tabular-nums text-[#7A520F] transition hover:bg-[#FBF1E0]"
-                      >
-                        미적용 초안 {openDrafts.length.toLocaleString("ko-KR")} → 체크 큐
-                      </button>
-                    )}
-                    {([
-                      ["week-mismatch", "불일치", revInboxCounts.weekMismatch, "border-[#F2B8B8] bg-[#FCE9E9] text-[#B43E3E]"],
-                      ["month-only", "월합계만", revInboxCounts.monthOnly, "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"],
-                      ["open", "예정 남음", revInboxCounts.open, CONFIDENCE_TOKENS["high-confidence"].chipClass],
-                    ] as Array<[RevForecastFilter, string, number, string]>).map(([id, label, count, tone]) => (
-                      <button
-                        key={id}
-                        type="button"
-                        onClick={() => setRevForecastFilter((current) => (current === id ? "all" : id))}
-                        aria-pressed={revForecastFilter === id}
-                        title={`${label} 행만 보기 (다시 누르면 해제)`}
-                        className={`inline-flex h-6.5 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-bold tabular-nums transition ${
-                          revForecastFilter === id ? "ring-2 ring-[#084734]/25" : ""
-                        } ${count > 0 ? tone : "border-[rgba(0,0,0,0.08)] bg-white text-[#A39E98]"}`}
-                      >
-                        {label} {count.toLocaleString("ko-KR")}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                )}
             {pipeline.loading && !pipeline.data ? (
               <div className="p-4"><LoadingPanel label="REV 행을 불러오는 중" /></div>
             ) : pipeline.error && !pipeline.data ? (
@@ -3729,42 +3728,6 @@ export default function SalesLedgerWorkbench({
                   onQuickInput={openQuickInputForRow}
                 />
 
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 py-2 text-[11.5px] text-[#615D59]">
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 rounded-md border border-[#BDEFD8] bg-[#ECFDF5] px-2.5 py-1 font-bold text-[#084734]">
-                      <Users className="h-3.5 w-3.5 text-[#084734]" />
-                      고객 {revCustomerGroups.length.toLocaleString("ko-KR")}곳
-                    </span>
-                    <span className="inline-flex items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-1 font-semibold text-[#615D59] shadow-xs">
-                      총 {filteredRows.length.toLocaleString("ko-KR")}행 중 {revRangeStart.toLocaleString("ko-KR")}-{revRangeEnd.toLocaleString("ko-KR")} 표시
-                    </span>
-                  </div>
-                  {revTotalPages > 1 && (
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setRevPage((page) => Math.max(1, page - 1))}
-                        disabled={clampedRevPage <= 1}
-                        className="inline-flex h-7 items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 font-bold transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40 shadow-xs"
-                      >
-                        <ChevronLeft className="h-3.5 w-3.5" />
-                        이전
-                      </button>
-                      <span className="min-w-[56px] rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 py-0.5 text-center font-bold text-[#111110] shadow-xs">
-                        {clampedRevPage} / {revTotalPages}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setRevPage((page) => Math.min(revTotalPages, page + 1))}
-                        disabled={clampedRevPage >= revTotalPages}
-                        className="inline-flex h-7 items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 font-bold transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40 shadow-xs"
-                      >
-                        다음
-                        <ChevronRight className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  )}
-                </div>
                 {/* 편집 바(§8.3 A안 대체) — 셀 팝오버가 이웃 셀·아래 행을 가리던 문제를 "셀 밖 상시 표면"으로
                     푼다. 스크롤 컨테이너 밖(위)에 두어 가로·세로 스크롤과 무관하게 항상 보이고, 매트릭스의
                     sticky z-서열(z-10/20/30/40)과도 겹치지 않는다. */}
@@ -4092,33 +4055,44 @@ export default function SalesLedgerWorkbench({
                     )}
                   </table>
                 </div>
-                <div className="flex flex-col gap-3 border-t border-[rgba(0,0,0,0.08)] px-4 py-3 text-[12px] text-[#615D59] sm:flex-row sm:items-center sm:justify-between">
-                  <p className="font-semibold">
-                    {revRangeStart.toLocaleString("ko-KR")}-{revRangeEnd.toLocaleString("ko-KR")} / 고객 {revCustomerGroups.length.toLocaleString("ko-KR")}곳 · 행 {filteredRows.length.toLocaleString("ko-KR")}건
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setRevPage((page) => Math.max(1, page - 1))}
-                      disabled={clampedRevPage <= 1}
-                      className="inline-flex h-8 items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      <ChevronLeft className="h-3.5 w-3.5" />
-                      이전
-                    </button>
-                    <span className="min-w-[72px] text-center font-bold text-[#111110]">
-                      {clampedRevPage} / {revTotalPages}
+                <div className="flex flex-col gap-3 border-t border-[rgba(0,0,0,0.08)] px-5 py-3 text-[12px] text-[#615D59] sm:flex-row sm:items-center sm:justify-between bg-white">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold text-[#615D59]">
+                      결과 <b className="text-[#111110]">{filteredRows.length.toLocaleString("ko-KR")}</b>행
+                      {" "}· 고객 <b className="text-[#111110]">{revCustomerGroups.length.toLocaleString("ko-KR")}</b>곳
+                      {" "}· {revRangeStart.toLocaleString("ko-KR")}-{revRangeEnd.toLocaleString("ko-KR")}곳 표시
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => setRevPage((page) => Math.min(revTotalPages, page + 1))}
-                      disabled={clampedRevPage >= revTotalPages}
-                      className="inline-flex h-8 items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      다음
-                      <ChevronRight className="h-3.5 w-3.5" />
-                    </button>
+                    {additiveAppliedDraftRows.length > 0 && (
+                      <span className="inline-flex items-center rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-bold text-[#084734]">
+                        DB 신규 반영 {additiveAppliedDraftRows.length.toLocaleString("ko-KR")}건
+                      </span>
+                    )}
                   </div>
+                  {revTotalPages > 1 && (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setRevPage((page) => Math.max(1, page - 1))}
+                        disabled={clampedRevPage <= 1}
+                        className="inline-flex h-8 items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40 shadow-xs"
+                      >
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                        이전
+                      </button>
+                      <span className="min-w-[64px] rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 py-1 text-center font-bold text-[#111110] shadow-xs">
+                        {clampedRevPage} / {revTotalPages}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setRevPage((page) => Math.min(revTotalPages, page + 1))}
+                        disabled={clampedRevPage >= revTotalPages}
+                        className="inline-flex h-8 items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40 shadow-xs"
+                      >
+                        다음
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </>
             )}
