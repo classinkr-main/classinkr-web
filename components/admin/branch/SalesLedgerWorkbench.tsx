@@ -19,6 +19,7 @@ import {
   Database,
   FileSpreadsheet,
   Gauge,
+  LayoutDashboard,
   LayoutList,
   ListChecks,
   Pencil,
@@ -2917,32 +2918,33 @@ export default function SalesLedgerWorkbench({
           <div className="flex flex-wrap items-center gap-2">
             <Link
               href="/admin/branch"
-              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-dashed border-[rgba(0,0,0,0.15)] bg-white px-3 text-[12px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] shadow-2xs transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
             >
-              대시보드 보기 →
+              <LayoutDashboard className="h-3.5 w-3.5 text-[#615D59]" />
+              대시보드
             </Link>
-            <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]">
+            <div className="inline-flex items-center rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-0.5 shadow-2xs" role="group" aria-label="팀 필터">
               {TEAMS.map((value) => (
                 <button
                   key={value}
                   type="button"
                   onClick={() => setTeam(value)}
-                  className={`rounded-md px-3 py-1.5 text-[12px] font-bold transition ${
-                    team === value ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59] hover:text-[#111110]"
+                  className={`rounded-md px-3 py-1.5 text-[12px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25 ${
+                    team === value ? "bg-white text-[#111110] shadow-xs" : "text-[#615D59] hover:text-[#111110]"
                   }`}
                 >
                   {value === "ALL" ? "KR 전체" : value}
                 </button>
               ))}
             </div>
-            <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]">
+            <div className="inline-flex items-center rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-0.5 shadow-2xs" role="group" aria-label="기간 필터">
               {PERIODS.map((value) => (
                 <button
                   key={value}
                   type="button"
                   onClick={() => setPeriod(value)}
-                  className={`rounded-md px-3 py-1.5 text-[12px] font-bold transition ${
-                    period === value ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59] hover:text-[#111110]"
+                  className={`rounded-md px-3 py-1.5 text-[12px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25 ${
+                    period === value ? "bg-white text-[#111110] shadow-xs" : "text-[#615D59] hover:text-[#111110]"
                   }`}
                 >
                   {value}
@@ -2953,7 +2955,7 @@ export default function SalesLedgerWorkbench({
               <select
                 value={selectedMonth}
                 onChange={(event) => setSelectedMonth(event.target.value)}
-                className="h-9 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#111110] outline-none"
+                className="h-9 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#111110] shadow-2xs outline-none transition hover:border-[#084734]/40 focus:border-[#084734] focus-visible:ring-2 focus-visible:ring-[#084734]/25"
                 aria-label="월 선택"
               >
                 {monthOptions.map((option) => (
@@ -2967,7 +2969,7 @@ export default function SalesLedgerWorkbench({
               <button
                 type="button"
                 onClick={() => selectRailView("input")}
-                className="inline-flex min-h-9 items-center gap-2 rounded-md bg-[#084734] px-4 text-[13px] font-semibold text-white hover:bg-[#065c41]"
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-[#084734] px-3.5 text-[12px] font-bold text-white shadow-2xs transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
               >
                 <Plus className="h-4 w-4" />
                 매출 입력
@@ -2977,7 +2979,7 @@ export default function SalesLedgerWorkbench({
               type="button"
               onClick={() => void onRefresh()}
               disabled={refreshing}
-              className="inline-flex h-9 items-center gap-2 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-semibold text-[#615D59] transition hover:bg-[#F6F5F4] disabled:opacity-60"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] shadow-2xs transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
               동기화
