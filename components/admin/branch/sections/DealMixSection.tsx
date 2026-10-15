@@ -121,8 +121,7 @@ function CompareCard({ title, desc, a, b, aTone, bTone, prevMeta }: {
             <span className="truncate text-[11.5px] font-semibold text-[#111110]">{LABELS[row.side.name] ?? row.side.name}</span>
           </div>
           <div className="text-right">
-            {/* 확정 매출 = 캐논 그린(CONFIDENCE_TOKENS.confirmed) — 빨강이 아니다.
-                시트 상 "빨간 글자=확정"은 입력 관례일 뿐 앱 표시 캐논은 그린. */}
+            {/* 실적 강조 색은 기존 캐논 그린을 유지하고, 수치 원천은 카드 설명에 표시한다. */}
             <p className="text-[13px] font-bold leading-none tracking-[-0.01em]" style={{ color: CONFIDENCE_TOKENS.confirmed.color }}>
               <MoneyValue value={row.side.actual} />
             </p>
@@ -162,8 +161,8 @@ export default function DealMixSection({ summary, loading, error }: { summary: B
     </div>
   )
 
-  const totalActual = slices.reduce((s, p) => s + p.a.actual + p.b.actual, 0) / slices.length
-  const totalGoal = slices.reduce((s, p) => s + p.a.goal + p.b.goal, 0) / slices.length
+  const totalActual = summary?.revenue.confirmed ?? 0
+  const totalGoal = summary?.revenue.goal ?? 0
   const gap = Math.max(0, totalGoal - totalActual)
 
   const cardCount = slices.length + (kaSme ? 1 : 0)
@@ -172,19 +171,19 @@ export default function DealMixSection({ summary, loading, error }: { summary: B
     <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
       <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5">
         <div>
-          <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">매출 분해 · 전체팀</h2>
-          <p className="mt-0.5 text-[11px] font-medium text-[#615D59]">제품 · 신규/갱신 · 채널 · 고객규모 — <span className={`font-semibold ${CONFIDENCE_TOKENS.confirmed.textClass}`}>그린 = 확정 매출</span></p>
+          <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">매출 분해</h2>
+          <p className="mt-0.5 text-[11px] font-medium text-[#615D59]">제품·신규/갱신·채널은 DSH 전사 실적, 고객규모는 선택 범위 REV 확정입니다.</p>
         </div>
         <div className="text-right">
           <p className="text-[18px] font-bold leading-none tracking-[-0.01em] text-[#111110]"><MoneyValue value={totalActual} /></p>
-          <p className="mt-1 text-[10.5px] text-[#615D59]">확정 평균 · 잔량 <MoneyValue value={gap} /></p>
+          <p className="mt-1 text-[10.5px] text-[#615D59]">선택 범위 REV 확정 · 목표 잔량 <MoneyValue value={gap} /></p>
         </div>
       </div>
       <div className={`grid gap-[18px] p-5 md:grid-cols-2 ${cardCount >= 4 ? "xl:grid-cols-4" : "lg:grid-cols-3"}`}>
-        {hwSw && <CompareCard title="HW / SW" desc="제품 라인 구분" a={hwSw.a} b={hwSw.b} aTone={COLORS.green} bTone={COLORS.amber} prevMeta={data.meta?.by_category} />}
-        {newRenew && <CompareCard title="New / Renew" desc="신규 계약 vs 갱신" a={newRenew.a} b={newRenew.b} aTone={COLORS.green} bTone={COLORS.neutral} prevMeta={data.meta?.by_status_type} />}
-        {channel && <CompareCard title="Direct / Channel" desc="직판 vs 파트너 경유" a={channel.a} b={channel.b} aTone={COLORS.green} bTone={COLORS.amber} prevMeta={data.meta?.by_channel} />}
-        {kaSme && <CompareCard title="KA / SME" desc="고객 규모별 매출" a={kaSme.a} b={kaSme.b} aTone={COLORS.neutral} bTone={COLORS.amber} prevMeta={data.meta?.by_segment} />}
+        {hwSw && <CompareCard title="HW / SW" desc="DSH 전사 실적 · 제품 라인" a={hwSw.a} b={hwSw.b} aTone={COLORS.green} bTone={COLORS.amber} prevMeta={data.meta?.by_category} />}
+        {newRenew && <CompareCard title="New / Renew" desc="DSH 전사 실적 · 신규/갱신" a={newRenew.a} b={newRenew.b} aTone={COLORS.green} bTone={COLORS.neutral} prevMeta={data.meta?.by_status_type} />}
+        {channel && <CompareCard title="Direct / Channel" desc="DSH 전사 실적 · 직판/파트너" a={channel.a} b={channel.b} aTone={COLORS.green} bTone={COLORS.amber} prevMeta={data.meta?.by_channel} />}
+        {kaSme && <CompareCard title="KA / SME" desc="REV 확정 · 고객 규모" a={kaSme.a} b={kaSme.b} aTone={COLORS.neutral} bTone={COLORS.amber} prevMeta={data.meta?.by_segment} />}
       </div>
     </section>
   )

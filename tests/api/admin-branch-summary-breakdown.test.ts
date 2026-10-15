@@ -109,11 +109,11 @@ describe("GET /api/admin/branch/summary — dsh_breakdown", () => {
     const deal = (id: string, total: number, confirmed: number, high: number) => ({
       id, sheet_row: 3, customer_name: "합성 검증 계정", branch_contact: null, team: "BD", manager: null,
       first_payment: null, status: "New", deal_type: "Direct", product_version: "Business", region: null,
-      contract_target: 0, importance: null, note: null, raw: {}, synced_at: "",
+      contract_target: 0, importance: "KA", note: null, raw: {}, synced_at: "",
       monthly_payments: { "2026-10": total }, monthly_confirmed: { "2026-10": confirmed },
       monthly_high_conf: { "2026-10": high }, monthly_red: {},
     })
-    readRevDealsPreferActiveWithSource.mockResolvedValue({ deals: [deal("paid", 100, 70, 30), deal("offset", 0, 10, -10)], source: { kind: "mirror", asOf: null } })
+    readRevDealsPreferActiveWithSource.mockResolvedValue({ deals: [{ ...deal("paid", 100, 70, 30), monthly_payments: { "2026-09": -5, "2026-10": 100 }, monthly_confirmed: { "2026-09": -5, "2026-10": 70 } }, deal("offset", 0, 10, -10)], source: { kind: "mirror", asOf: null } })
     const { GET } = await import("@/app/api/admin/branch/summary/route")
     const response = await GET(summaryRequest("?period=M&month=2026-10&view=overview"))
     expect(response.status).toBe(200)
@@ -122,6 +122,7 @@ describe("GET /api/admin/branch/summary — dsh_breakdown", () => {
     const index = data.monthly_series.months.indexOf("2026-10")
     expect(data.monthly_series.revenue_cum[index] - data.monthly_series.revenue_cum[index - 1]).toBe(80)
     expect(data.monthly_series.goal_cum[index] - data.monthly_series.goal_cum[index - 1]).toBe(100)
+    expect(data.deal_mix.by_segment.find((row: { name: string }) => row.name === "KA")).toMatchObject({ actual: 80, prev_actual: -5 })
   })
 
   it("선택한 월·분기의 영업 KPI 병목을 같은 기간으로 계산한다", async () => {

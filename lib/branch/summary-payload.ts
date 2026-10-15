@@ -407,15 +407,15 @@ export async function buildBranchSummaryPayload(query: BranchSummaryPayloadQuery
       if (!seg) continue
       for (const mo of periodMonths) {
         const amount = Number(deal.monthly_payments[mo] ?? 0)
-        if (!amount) continue
+        if (!Number.isFinite(amount)) continue
         acc[seg].goal += amount
-        if (deal.first_payment) acc[seg].actual += confirmedMonthAmount(deal, mo, amount)
+        acc[seg].actual += confirmedMonthAmount(deal, mo, amount)
       }
       if (prevPeriodMonths) {
         for (const mo of prevPeriodMonths) {
           const amount = Number(deal.monthly_payments[mo] ?? 0)
-          if (!amount) continue
-          if (deal.first_payment) acc[seg].prev_actual += confirmedMonthAmount(deal, mo, amount)
+          if (!Number.isFinite(amount)) continue
+          acc[seg].prev_actual += confirmedMonthAmount(deal, mo, amount)
         }
       }
     }
