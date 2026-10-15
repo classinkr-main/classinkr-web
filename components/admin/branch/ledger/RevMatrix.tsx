@@ -671,7 +671,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
               pendingConfidence
                 ? `font-bold ${CONFIDENCE_TOKENS[pendingConfidence].textStrongClass}`
                 : isMonthOnly
-                  ? "font-semibold text-[#92400E]"
+                  ? "font-semibold text-[#7A520F]"
                   : inferred
                     ? "font-semibold text-[#6B7280]"
                     : "font-bold text-[#111827]"
