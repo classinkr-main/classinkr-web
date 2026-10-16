@@ -93,7 +93,8 @@ export function isBlueText(fg: CellFormat | null | undefined): boolean {
 // "값 없음"과 "조회 실패"를 명시적으로 구분해 sheetFreshnessError 플래그로 승격한다.
 export async function getSheetModifiedTime(spreadsheetId: string): Promise<string | null> {
   return withRetry(async () => {
-    const res = await drive.files.get({ fileId: spreadsheetId, fields: "modifiedTime" })
+    // 공유 드라이브 파일은 이 옵션이 없으면 Sheets 읽기 권한이 있어도 Drive가 404를 반환한다.
+    const res = await drive.files.get({ fileId: spreadsheetId, fields: "modifiedTime", supportsAllDrives: true })
     return res.data.modifiedTime ?? null
   }, `drive.files.get(${spreadsheetId})`)
 }
