@@ -49,11 +49,13 @@ describe("② parseRev가 미래 주차 빨간 금액을 확정에서 뺀다", (
     expect(d.monthly_confirmed["2026-10"]).toBe(400)
     expect(d.monthly_red["2026-10"]).toBe(true)
     expect((d.raw.monthlyPending as Record<string, number>)["2026-10"]).toBe(46970)
+    expect((d.raw.pendingWeeks as Record<string, number[]>)["2026-10"]).toEqual([4, 5])
   })
   it("그 주가 오면 확정으로 올라간다(10/29 → 전부 확정, 예정 없음)", () => {
     const [d] = parseRev(g, { refFy: 2026, today: "2026-10-29" })
     expect(d.monthly_confirmed["2026-10"]).toBe(47370)
     expect(d.raw.monthlyPending).toEqual({})
+    expect(d.raw.pendingWeeks).toEqual({})
   })
   it("빨간 칸이 전부 예정이면 확정 0을 명시해 무색상 폴백(당월 전액 확정)을 막는다", () => {
     const [d] = parseRev(grid(plain(null), [plain(null), plain(null), plain(null), red(500), plain(null)]), {
@@ -72,6 +74,7 @@ describe("② parseRev가 미래 주차 빨간 금액을 확정에서 뺀다", (
     const [future] = parseRev(g2, { refFy: 2026, today: "2026-09-30" })
     expect(future.monthly_confirmed["2026-10"]).toBe(0)
     expect((future.raw.monthlyPending as Record<string, number>)["2026-10"]).toBe(9000)
+    expect((future.raw.pendingWeeks as Record<string, number[]>)["2026-10"]).toEqual([0])
   })
 })
 

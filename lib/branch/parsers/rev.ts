@@ -196,6 +196,8 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number; today
     const weekly_payments: Record<string, number[]> = {}
     // ADR-0062: 아직 오지 않은 주차의 빨간 금액(예정). DB 칼럼 없이 raw에만 싣는다.
     const monthly_pending: Record<string, number> = {}
+    // 예정 칸의 주차 번호(1~5, 월 합계 칸 = 0) — 화면이 "w4 시작 10/22에 확정 전환"을 말하는 근거.
+    const pending_weeks: Record<string, number[]> = {}
     for (const block of monthBlocks) {
       const totalCell = row[block.totalIdx]
       const total = asNumber(totalCell?.value)
@@ -212,6 +214,7 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number; today
       let hasHighConf = false
       let pending = 0
       let hasPending = false
+      const pendingWeekNos: number[] = []
       for (const [weekPos, weekIdx] of block.weekIdxs.entries()) {
         const cell = row[weekIdx]
         const n = cell ? asNumber(cell.value) : null
@@ -222,7 +225,7 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number; today
         weekSum += n
         // 운영 규칙: 빨간 글자 = 확정 매출 (과거 배경색 표기 호환), 파란 글자 = 클로징 임박(90%+)
         if (isRedText(cell.fg) || isRedBg(cell.bg)) {
-          if (isFutureLedgerCell(block.ym, weekPos + 1, today)) { pending += n; hasPending = true }
+          if (isFutureLedgerCell(block.ym, weekPos + 1, today)) { pending += n; hasPending = true; pendingWeekNos.push(weekPos + 1) }
           else { confirmed += n; hasConfirmed = true }
         }
         else if (isBlueText(cell.fg)) { highConf += n; hasHighConf = true }
@@ -234,7 +237,7 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number; today
       // 주차 입력 없이 월 합계 칸에만 적고 색을 칠한 행 호환
       if (!hasWeekValue && total != null && totalCell) {
         if (isRedText(totalCell.fg) || isRedBg(totalCell.bg)) {
-          if (isFutureLedgerCell(block.ym, 0, today)) { pending = monthTotal; hasPending = true }
+          if (isFutureLedgerCell(block.ym, 0, today)) { pending = monthTotal; hasPending = true; pendingWeekNos.push(0) }
           else { confirmed = monthTotal; hasConfirmed = true }
         }
         else if (isBlueText(totalCell.fg)) { highConf = monthTotal; hasHighConf = true }
@@ -246,7 +249,10 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number; today
         // 빨간 칸이 전부 예정이면 확정 0을 명시한다 — 비워 두면 캐논의 무색상 폴백이 당월 전액을 확정으로 올린다.
         monthly_confirmed[block.ym] = 0
       }
-      if (hasPending) monthly_pending[block.ym] = pending
+      if (hasPending) {
+        monthly_pending[block.ym] = pending
+        pending_weeks[block.ym] = pendingWeekNos
+      }
       if (hasHighConf) monthly_high_conf[block.ym] = highConf
     }
     out.push({
@@ -267,7 +273,7 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number; today
       // weeklyPayments도 raw에 실어 보낸다 — pipeline.ts의 weeklyPaymentsFromRaw가
       // deal.raw.weeklyPayments를 우선 사용하므로, 고정 오프셋 추정 폴백을 타지 않는다.
       // monthlyPending은 표시용 — 확정 집계(rev-confirmed.ts)에서는 예상(expected) 몫으로 남는다.
-      raw: { row: row.map((c) => c?.value ?? null), weeklyPayments: weekly_payments, monthlyPending: monthly_pending },
+      raw: { row: row.map((c) => c?.value ?? null), weeklyPayments: weekly_payments, monthlyPending: monthly_pending, pendingWeeks: pending_weeks },
     })
   }
   return out
