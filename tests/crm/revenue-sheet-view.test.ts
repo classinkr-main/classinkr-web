@@ -7,6 +7,7 @@ import {
   LEDGER_MANUAL_ENTRIES_HREF,
   buildLedgerEntryHref,
   buildRevenueSheetCsvRows,
+  formatPendingTransition,
   isRevenueSheetSyncStale,
   parseRevenueSheetUrlState,
   serializeRevenueSheetUrlState,
@@ -111,5 +112,20 @@ describe("isRevenueSheetSyncStale(S-6)", () => {
     expect(isRevenueSheetSyncStale("2026-09-22T09:00:00Z", now)).toBe(false)
     expect(isRevenueSheetSyncStale("2026-09-22T07:59:00Z", now)).toBe(true)
     expect(isRevenueSheetSyncStale(null, now)).toBe(true)
+  })
+})
+
+describe("확정 예정(ADR-0062) — 칩 툴팁·CSV", () => {
+  it("주차 예정은 'w4 시작 10/22에 확정 전환', 월 합계 칸 예정은 날짜만, 없으면 null", () => {
+    expect(formatPendingTransition({ pendingNextWeek: 4, pendingNextStart: "2026-10-22" })).toBe("w4 시작 10/22에 확정 전환")
+    expect(formatPendingTransition({ pendingNextWeek: 0, pendingNextStart: "2026-11-01" })).toBe("11/01에 확정 전환")
+    expect(formatPendingTransition({ pendingNextWeek: null, pendingNextStart: null })).toBeNull()
+  })
+  it("CSV 끝에 확정 예정(¥)·확정 전환일 열을 덧붙인다 — 기존 열 위치는 그대로", () => {
+    const rows = buildRevenueSheetCsvRows([row({ pendingAmount: 46_970.4, pendingNextWeek: 4, pendingNextStart: "2026-10-22" })])
+    const header = rows[0]
+    expect(header.slice(-2)).toEqual(["확정 예정(¥)", "확정 전환일"])
+    expect(header[9]).toBe("확정 표시(¥)")
+    expect(rows[1].slice(-2)).toEqual([46_970, "2026-10-22"])
   })
 })

@@ -59,3 +59,14 @@ describe("워크스페이스가 raw 전체가 아니라 예정 경로만 읽는�
     expect(src).not.toMatch(/monthly_high_conf, raw,/)
   })
 })
+
+describe("화면 계약 — 요약 타일·데스크톱 열·모바일 카드 모두 확정 예정을 보인다", () => {
+  const page = readFileSync("app/admin/crm/deals/rev-sheet/page.tsx", "utf8")
+  it("타일 라벨·열 머리글·칩 컴포넌트가 데스크톱/모바일 양쪽에 쓰인다", () => {
+    expect(page).toContain('label="확정 예정"')
+    expect(page).toContain('<th className="py-3 pr-4 text-right font-semibold">확정 예정</th>')
+    expect(page.match(/<PendingAmount row=\{row\} \/>/g)?.length).toBe(2)
+    expect(page).toContain("formatPendingTransition(row)")
+    expect(page).not.toContain("colSpan={10}")
+  })
+})

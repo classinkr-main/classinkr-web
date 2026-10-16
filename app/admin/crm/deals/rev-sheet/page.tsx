@@ -27,6 +27,7 @@ import {
   REVENUE_SHEET_STATUS_FILTERS,
   buildLedgerEntryHref,
   buildRevenueSheetCsvRows,
+  formatPendingTransition,
   isRevenueSheetSyncStale,
   parseRevenueSheetUrlState,
   serializeRevenueSheetUrlState,
@@ -133,6 +134,18 @@ function matchesStatusFilter(row: AdminCrmRevenueSheetRow, filter: StatusFilter)
   if (filter === "review") return row.linkStatus === null || row.linkStatus === "candidate" || row.linkStatus === "stale"
   if (filter === "unmatched") return row.linkStatus === null
   return row.linkStatus === filter
+}
+
+// ADR-0062 확정 예정 — 빨간 글자인데 주차가 아직 안 온 금액. 회색 칩 + 전환 시점 툴팁(읽기 전용).
+function PendingAmount({ row }: { row: AdminCrmRevenueSheetRow }) {
+  if (!(row.pendingAmount > 0)) return <span className="text-[#1a1a1a]/30">{formatCny(0)}</span>
+  const transition = formatPendingTransition(row)
+  return (
+    <span className="inline-flex items-center gap-1.5" title={transition ?? "주차 시작일 이후 동기화에서 확정 전환"}>
+      <span className="rounded-full border border-[#e8e8e4] bg-[#f5f5f2] px-1.5 py-px text-[10px] font-semibold text-[#1a1a1a]/50">예정</span>
+      <span className="text-[#1a1a1a]/60">{formatCny(row.pendingAmount)}</span>
+    </span>
+  )
 }
 
 function StatusBadge({ status }: { status: RevenueSheetLinkStatus }) {
@@ -514,12 +527,17 @@ export default function AdminCrmRevenueSheetPage() {
           scratchpad 보고서 참고). 화면이 "최신"으로 오인되지 않도록 항상 눈에 띄는 배지로 알린다. */}
       {data && data.manualLedgerGap.count > 0 ? <ManualLedgerGapBanner gap={data.manualLedgerGap} /> : null}
 
-      <section className="mb-8 grid gap-8 border-y border-[#f0f0ec] py-6 md:grid-cols-2 xl:grid-cols-5">
+      <section className="mb-8 grid gap-8 border-y border-[#f0f0ec] py-6 md:grid-cols-3 xl:grid-cols-6">
         {/* '확정' 두 의미 구분(CRM-6): 여기 '확정'=시트 확정 표시(¥) — 코크핏 '인식 매출'(딜리버리 인식 ₩)과 다른 기준 */}
         <MetricCard
           label="확정 표시"
           value={loading && !data ? <ValueSkeleton /> : formatCny(data?.summary.confirmedAmount)}
           hint="주차 칸 빨간 글자 합계 · 시트 전 월(FY)·동기화본 ¥ — 장부 '확정 매출'(선택 기간)·딜리버리 '인식 매출'(₩)과 다른 기준"
+        />
+        <MetricCard
+          label="확정 예정"
+          value={loading && !data ? <ValueSkeleton /> : formatCny(data?.summary.pendingAmount)}
+          hint="빨간 글자지만 주차 시작일이 아직 안 온 금액(ADR-0062) · 그 주가 오면 동기화에서 확정으로 전환"
         />
         <MetricCard
           label="확정 임박"
@@ -565,6 +583,7 @@ export default function AdminCrmRevenueSheetPage() {
               <div key={point.month} className="flex min-w-[46px] flex-1 flex-col items-stretch justify-end gap-1">
                 {[
                   ["confirmedAmount", CONFIDENCE_TOKENS.confirmed.bgClass],
+                  ["pendingAmount", "bg-[#c9c9c3]"],
                   ["highConfidenceAmount", CONFIDENCE_TOKENS["high-confidence"].bgClass],
                   ["expectedAmount", CONFIDENCE_TOKENS.expected.bgClass],
                   ["pastUnconfirmedAmount", "bg-[#B85C33]"],
@@ -586,6 +605,7 @@ export default function AdminCrmRevenueSheetPage() {
           </div>
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[#1a1a1a]/45">
             <span className="inline-flex items-center gap-1"><i className={`h-2 w-2 rounded-sm ${CONFIDENCE_TOKENS.confirmed.bgClass}`} />확정</span>
+            <span className="inline-flex items-center gap-1"><i className="h-2 w-2 rounded-sm bg-[#c9c9c3]" />확정 예정</span>
             <span className="inline-flex items-center gap-1"><i className={`h-2 w-2 rounded-sm ${CONFIDENCE_TOKENS["high-confidence"].bgClass}`} />임박</span>
             <span className="inline-flex items-center gap-1"><i className={`h-2 w-2 rounded-sm ${CONFIDENCE_TOKENS.expected.bgClass}`} />예정</span>
             <span className="inline-flex items-center gap-1"><i className="h-2 w-2 rounded-sm bg-[#B85C33]" />전환 대기</span>
@@ -712,6 +732,10 @@ export default function AdminCrmRevenueSheetPage() {
                     <span className="font-semibold text-[#084734]">{formatCny(row.confirmedAmount)}</span>
                   </p>
                   <p className="flex items-baseline justify-between gap-2">
+                    <span className="text-[#1a1a1a]/40">확정 예정</span>
+                    <PendingAmount row={row} />
+                  </p>
+                  <p className="flex items-baseline justify-between gap-2">
                     <span className="text-[#1a1a1a]/40">임박</span>
                     <span className={CONFIDENCE_TOKENS["high-confidence"].textClass}>{formatCny(row.highConfidenceAmount)}</span>
                   </p>
@@ -788,6 +812,7 @@ export default function AdminCrmRevenueSheetPage() {
                 <th className="py-3 pr-4 font-semibold">고객 / 담당</th>
                 <th className="py-3 pr-4 font-semibold">상태</th>
                 <th className="py-3 pr-4 text-right font-semibold">확정</th>
+                <th className="py-3 pr-4 text-right font-semibold">확정 예정</th>
                 <th className="py-3 pr-4 text-right font-semibold">임박</th>
                 <th className="py-3 pr-4 text-right font-semibold">예정</th>
                 <th className="py-3 pr-4 text-right font-semibold">대기</th>
@@ -799,14 +824,14 @@ export default function AdminCrmRevenueSheetPage() {
             <tbody className="divide-y divide-[#f0f0ec]">
               {loading && !data ? (
                 <tr>
-                  <td colSpan={10} className="py-16 text-center text-[13px] text-[#1a1a1a]/35">
+                  <td colSpan={11} className="py-16 text-center text-[13px] text-[#1a1a1a]/35">
                     <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
                     매출시트를 불러오는 중입니다.
                   </td>
                 </tr>
               ) : visibleRows.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-16 text-center text-[13px] text-[#1a1a1a]/35">
+                  <td colSpan={11} className="py-16 text-center text-[13px] text-[#1a1a1a]/35">
                     표시할 REV 행이 없습니다.
                   </td>
                 </tr>
@@ -829,6 +854,7 @@ export default function AdminCrmRevenueSheetPage() {
                       <p className="mt-1 text-[11px] text-[#1a1a1a]/35">초입금 {row.firstPayment ?? "-"}</p>
                     </td>
                     <td className="py-4 pr-4 text-right text-[12px] font-semibold text-[#084734]">{formatCny(row.confirmedAmount)}</td>
+                    <td className="py-4 pr-4 text-right text-[12px]"><PendingAmount row={row} /></td>
                     <td className={`py-4 pr-4 text-right text-[12px] ${CONFIDENCE_TOKENS["high-confidence"].textClass}`}>{formatCny(row.highConfidenceAmount)}</td>
                     <td className="py-4 pr-4 text-right text-[12px] text-[#1a1a1a]/60">{formatCny(row.expectedAmount)}</td>
                     <td className="py-4 pr-4 text-right text-[12px] font-semibold text-[#B85C33]">{formatCny(row.pastUnconfirmedAmount)}</td>

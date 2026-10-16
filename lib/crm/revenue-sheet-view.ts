@@ -89,6 +89,17 @@ export function revenueSheetLinkStatusLabel(status: RevenueSheetLinkStatus): str
  * 현재 필터 결과 → CSV 행(머리글 포함). 금액은 시트 통화(¥) 정수 그대로 — 화면의 만 단위 축약은 표시 전용이다.
  * 표시 상한(80행)과 무관하게 넘겨받은 행 전체를 담는다.
  */
+/**
+ * '확정 예정' 칩 툴팁(ADR-0062) — "w4 시작 10/22에 확정 전환". 월 합계 칸 예정(week 0)은 "10/01에 확정 전환".
+ * 빨간 글자인데 그 주가 아직 안 온 금액이라, 그 주 시작일 이후 첫 동기화에서 확정으로 올라간다.
+ */
+export function formatPendingTransition(row: Pick<AdminCrmRevenueSheetRow, "pendingNextWeek" | "pendingNextStart">): string | null {
+  const match = row.pendingNextStart?.match(/^\d{4}-(\d{2})-(\d{2})$/)
+  if (!match || row.pendingNextWeek == null) return null
+  const date = `${match[1]}/${match[2]}`
+  return row.pendingNextWeek > 0 ? `w${row.pendingNextWeek} 시작 ${date}에 확정 전환` : `${date}에 확정 전환`
+}
+
 export function buildRevenueSheetCsvRows(rows: ReadonlyArray<AdminCrmRevenueSheetRow>): DelimitedCell[][] {
   const header: DelimitedCell[] = [
     "시트 행",
@@ -109,6 +120,9 @@ export function buildRevenueSheetCsvRows(rows: ReadonlyArray<AdminCrmRevenueShee
     "신뢰도(%)",
     "메모",
     "동기화 시각",
+    // 뒤에 덧붙인다 — 기존 열 순서를 쓰는 스프레드시트 수식이 밀리지 않게.
+    "확정 예정(¥)",
+    "확정 전환일",
   ]
   const body = rows.map((row): DelimitedCell[] => [
     row.sheetRow,
@@ -129,6 +143,8 @@ export function buildRevenueSheetCsvRows(rows: ReadonlyArray<AdminCrmRevenueShee
     row.confidence == null ? null : Math.round(row.confidence * 100),
     row.note ?? row.productVersion,
     row.syncedAt,
+    Math.round(row.pendingAmount),
+    row.pendingNextStart,
   ])
   return [header, ...body]
 }
