@@ -60,3 +60,9 @@ export function branchMemberSearchHaystack(value: string | null | undefined): st
   const korean = MEMBER_KOREAN_ALIASES_BY_LOWER[canonical.toLowerCase()] ?? []
   return [raw, canonical, ...korean].join(" ").toLowerCase()
 }
+
+/** 계정·REV·Compass의 한국어/영문 표기를 동일 인물로 비교하는 기존 별칭이다. */
+export function branchMemberOwnerAliases(value: string): string[] {
+  const canonical = normalizeBranchMemberName(value) ?? value
+  return [...new Set([value, canonical, ...(MEMBER_KOREAN_ALIASES_BY_LOWER[canonical.toLowerCase()] ?? [])])]
+}

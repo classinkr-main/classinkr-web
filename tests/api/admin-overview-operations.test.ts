@@ -47,3 +47,5 @@ describe("GET /api/admin/overview/operations", () => {
     expect(await response.json()).toMatchObject({ demos: { status: "ready", data: { upcomingCount: 0 } }, installations: { status: "error", data: null } })
   })
 })
+
+vi.mock("@/lib/admin/data-owner", () => ({ dataOwnerFromRequest: async (url: URL) => url.searchParams.get("owner") === "" ? undefined : ["Somang"] }))

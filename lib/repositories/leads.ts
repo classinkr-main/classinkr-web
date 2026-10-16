@@ -1,3 +1,4 @@
+import { matchesDataOwner } from "@/lib/crm/personal-owner";
 /**
  * Leads Repository — JSON ↔ Supabase 듀얼 모드
  *
@@ -445,27 +446,27 @@ export async function getLeads(): Promise<LeadRecord[]> {
  * 화면에서 실제로 쓰는 필드만 가져온다. (overview 페이로드 축소용)
  * supabaseToLegacy는 미선택 컬럼을 `?? undefined`로 처리하므로 그대로 재사용 가능.
  */
-export async function getDashboardLeads(): Promise<LeadRecord[]> {
+export async function getDashboardLeads(ownerKeys?: readonly string[]): Promise<LeadRecord[]> {
   if (!USE_SUPABASE) {
     const { getLeads: jsonGetLeads } = await import("@/lib/db");
-    return jsonGetLeads();
+    return (await jsonGetLeads()).filter(lead => matchesDataOwner(lead.assigned_to, ownerKeys));
   }
 
   try {
     const rows = await fetchAllLeadRows(
-      "id, source, name, org, email, status, branch, created_at, confirmed_at",
+      "id, source, name, org, email, status, branch, created_at, confirmed_at, assigned_to",
       "대시보드 조회"
     );
-    return rows.map(supabaseToLegacy);
+    return rows.map(supabaseToLegacy).filter(lead => matchesDataOwner(lead.assigned_to, ownerKeys));
   } catch (error) {
     if (!(error instanceof LeadQueryError) || !isMissingLeadColumn(error.supabaseError, "confirmed_at")) {
       throw error;
     }
     const fallback = await fetchAllLeadRows(
-      "id, source, name, org, email, status, branch, created_at",
+      "id, source, name, org, email, status, branch, created_at, assigned_to",
       "대시보드 조회"
     );
-    return fallback.map(supabaseToLegacy);
+    return fallback.map(supabaseToLegacy).filter(lead => matchesDataOwner(lead.assigned_to, ownerKeys));
   }
 }
 
@@ -1295,7 +1296,7 @@ export async function getLeadStats() {
   };
 }
 
-export async function getLeadActionStats(now = new Date()): Promise<LeadActionStats> {
+export async function getLeadActionStats(now = new Date(), ownerKeys?: readonly string[]): Promise<LeadActionStats> {
   let leads: LeadRecord[];
   if (!USE_SUPABASE) {
     leads = await getLeads();
@@ -1303,7 +1304,7 @@ export async function getLeadActionStats(now = new Date()): Promise<LeadActionSt
     // 과거 구현은 KPI 하나를 위해 exact count 10개를 병렬 호출해 실제 214행에서도 약 3초가
     // 걸렸다. 경량 전량 조회 1회로 상태·SLA·팔로업·확인을 같은 스냅샷에서 접어 응답 속도와
     // 지표 일관성을 함께 지킨다. fetchAllLeadRows가 1천행 경계를 페이지네이션한다.
-    const columns = "id, source, name, org, email, status, created_at, follow_up_at, confirmed_at";
+    const columns = "id, source, name, org, email, status, created_at, follow_up_at, confirmed_at" + (ownerKeys ? ", assigned_to" : "");
     try {
       leads = (await fetchAllLeadRows(columns, "액션 KPI 조회")).map(supabaseToLegacy);
     } catch (error) {
@@ -1315,6 +1316,8 @@ export async function getLeadActionStats(now = new Date()): Promise<LeadActionSt
       ).map(supabaseToLegacy);
     }
   }
+
+  leads = leads.filter(lead => matchesDataOwner(lead.assigned_to, ownerKeys));
 
   const today = toLocalDateKey(now);
   const responseStatus = summarizeLeadResponseStatus(leads, now);

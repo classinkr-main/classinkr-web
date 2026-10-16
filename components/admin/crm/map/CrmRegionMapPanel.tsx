@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { useVisibleInterval } from "@/components/admin/branch/use-visible-interval"
@@ -128,16 +128,13 @@ export default function CrmRegionMapPanel() {
 
   // 담당자 필터: URL에 없으면 로그인한 사용자(CURRENT_OWNER_VALUE)를 디폴트로 잡는다
   const ownerParam = params.get("owner")?.trim()
-  const [owner, setOwner] = useState<string>(() => ownerParam ?? "")
-  const defaultOwnerAppliedRef = useRef(false)
-
-  useEffect(() => {
-    if (defaultOwnerAppliedRef.current) return
-    if (!params.has("owner") && currentOwner && !owner) {
-      defaultOwnerAppliedRef.current = true
-      setOwner(CURRENT_OWNER_VALUE)
-    }
-  }, [currentOwner, params, owner])
+  const [owner, setOwnerScope] = useState<string>(() => ownerParam ?? CURRENT_OWNER_VALUE)
+  const setOwner = useCallback((next: string) => {
+    setOwnerScope(next)
+    const nextParams = new URLSearchParams(params.toString())
+    nextParams.set("owner", next === "all" ? "" : next)
+    window.history.replaceState(null, "", `?${nextParams.toString()}`)
+  }, [params])
 
   useEffect(() => {
     let alive = true
@@ -213,7 +210,7 @@ export default function CrmRegionMapPanel() {
     }
     setSelectedRegion(params.get("region"))
     const pOwner = params.get("owner")
-    if (pOwner != null) setOwner(pOwner)
+    setOwnerScope(pOwner ?? CURRENT_OWNER_VALUE)
   }, [params])
 
   const sourceLayer = useMemo(
@@ -225,7 +222,7 @@ export default function CrmRegionMapPanel() {
   const effectiveOwnerName = useMemo(() => {
     if (!owner || owner === "all") return null
     if (owner === CURRENT_OWNER_VALUE) {
-      return currentOwner?.displayName ?? null
+      return currentOwner?.displayName ?? "__no_current_admin_owner__"
     }
     return owner
   }, [owner, currentOwner])

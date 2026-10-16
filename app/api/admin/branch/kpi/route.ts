@@ -1,3 +1,5 @@
+import { branchManagerFromRequest } from "@/lib/admin/personal-branch"
+import { branchManagerMatches } from "@/lib/branch/personal-scope"
 import { NextRequest, NextResponse } from "next/server"
 import { unstable_cache } from "next/cache"
 import { shareInFlightByArgs } from "@/lib/server/share-in-flight"
@@ -59,11 +61,11 @@ function dateFromMonthKey(key: string): Date {
  * 재사용한다 — 액티브 임포트 재캡처·DSH/KPI 미러 교체·REV 미러 교체 중 무엇이 일어나도 이
  * 조립 캐시가 함께 무효화된다.
  */
-async function assembleBranchKpiPayload(team: BranchTeam, period: BranchPeriod, monthKey: string) {
+async function assembleBranchKpiPayload(team: BranchTeam, period: BranchPeriod, monthKey: string, manager = "") {
   const now = dateFromMonthKey(monthKey)
   const teams = team === "ALL" ? ["BD", "MKT", "CSM"] : [team]
   const fy = fyOf(now)
-  const [dsh, kpiBlocks, deals] = await Promise.all([readDsh(fy), readKpiBlocks(fy), readRevDeals(fy, team)])
+  const [dsh, kpiBlocks, deals] = await Promise.all([readDsh(fy), readKpiBlocks(fy), readRevDeals(fy, manager ? "ALL" : team)])
   const kpiRows = selectKpiRows(kpiBlocks, period, now)
   const kpiRowsByMember = new Map(kpiRows.map((row) => [row.member, row]))
   const dealsByManager = new Map<string, typeof deals>()
@@ -73,8 +75,8 @@ async function assembleBranchKpiPayload(team: BranchTeam, period: BranchPeriod, 
     if (managerDeals) managerDeals.push(deal)
     else dealsByManager.set(deal.manager, [deal])
   }
-  const teamSummaries = teams.map((t) => ({ team: t, ...teamPacing(dsh, t, period, now) }))
-  const members = listMembersByTeam(dsh, team).map((member) => {
+  const teamSummaries = (manager ? [] : teams).map((t) => ({ team: t, ...teamPacing(dsh, t, period, now) }))
+  const members = listMembersByTeam(dsh, manager ? "ALL" : team).filter((member) => !manager || branchManagerMatches(member, manager)).map((member) => {
     const pace = memberPacing(dsh, member, period, now)
     const memberDeals = dealsByManager.get(member) ?? []
     const kpiRow = kpiRowsByMember.get(member)
@@ -98,7 +100,7 @@ async function assembleBranchKpiPayload(team: BranchTeam, period: BranchPeriod, 
       kpi,
     }
   })
-  return { teams: teamSummaries, members }
+  return { teams: teamSummaries, members, ...(manager ? { scope: { manager } } : {}) }
 }
 
 const getCachedBranchKpiPayload = unstable_cache(
@@ -124,7 +126,7 @@ export async function GET(req: NextRequest) {
   const now = resolvePeriodDate(period, url.searchParams.get("month"), new Date())
   if (!now) return NextResponse.json({ error: "Invalid month query" }, { status: 400 })
   try {
-    const payload = await getCachedBranchKpiPayload(team, period, monthKeyOf(now))
+    const payload = await getCachedBranchKpiPayload(team, period, monthKeyOf(now), (await branchManagerFromRequest(url, req)) ?? "")
     return adminCachedJson(payload)
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })

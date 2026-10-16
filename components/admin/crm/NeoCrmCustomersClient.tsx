@@ -1,6 +1,8 @@
 "use client"
 
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
+import { matchesDataOwner } from "@/lib/crm/personal-owner"
+import { branchMemberOwnerAliases } from "@/lib/branch/member-names"
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { AnimatePresence, motion } from "framer-motion"
@@ -472,7 +474,7 @@ export default function NeoCrmCustomersClient() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
-  const { currentOwner, owners: crmOwners } = useCrmOwners()
+  const { currentOwner, currentOwnerKeys, owners: crmOwners } = useCrmOwners()
 
   const deepLinkedAccountId = searchParams.get("account")?.trim() ?? ""
   const deepLinkedExpiring = searchParams.get("expiring") === "1"
@@ -488,16 +490,13 @@ export default function NeoCrmCustomersClient() {
 
   // 담당자 필터: URL에 없으면 로그인한 사용자(CURRENT_OWNER_VALUE)를 디폴트로 잡는다
   const ownerParam = searchParams.get("owner")?.trim()
-  const [ownerFilter, setOwnerFilter] = useState<string>(() => ownerParam ?? "")
-  const defaultOwnerAppliedRef = useRef(false)
-
-  useEffect(() => {
-    if (defaultOwnerAppliedRef.current) return
-    if (!searchParams.has("owner") && currentOwner && !ownerFilter) {
-      defaultOwnerAppliedRef.current = true
-      setOwnerFilter(CURRENT_OWNER_VALUE)
-    }
-  }, [currentOwner, searchParams, ownerFilter])
+  const [ownerFilter, setOwnerScope] = useState<string>(() => ownerParam ?? CURRENT_OWNER_VALUE)
+  const setOwnerFilter = useCallback((next: string) => {
+    setOwnerScope(next)
+    const nextParams = new URLSearchParams(searchParams.toString())
+    nextParams.set("owner", next === "all" ? "" : next)
+    window.history.replaceState(null, "", `?${nextParams.toString()}`)
+  }, [searchParams])
 
   const [sortKey, setSortKey] = useState<SortKey>("balance")
   const [expiringOnly, setExpiringOnly] = useState(deepLinkedExpiring)
@@ -612,34 +611,18 @@ export default function NeoCrmCustomersClient() {
   }, [neoData?.rows, leadsData])
 
   // 현재 활성 담당자 명칭 확인
-  const effectiveOwnerName = useMemo(() => {
-    if (!ownerFilter || ownerFilter === "all") return null
-    if (ownerFilter === CURRENT_OWNER_VALUE) {
-      return currentOwner?.displayName ?? null
-    }
-    return ownerFilter
-  }, [ownerFilter, currentOwner])
-
   // 필터링 및 정렬
   const filtered = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase()
-    const targetOwner = effectiveOwnerName?.toLowerCase()
+    const ownerKeys = !ownerFilter || ownerFilter === "all" ? undefined : ownerFilter === CURRENT_OWNER_VALUE ? currentOwnerKeys : branchMemberOwnerAliases(ownerFilter)
 
     const result = allUnifiedRows.filter((row) => {
       // 1. 소스 필터 (전체 / 원천 고객 / 리드)
       if (sourceFilter === "neo" && row.origin !== "neo") return false
       if (sourceFilter === "lead" && row.origin !== "lead") return false
 
-      // 2. 담당자 필터
-      if (targetOwner) {
-        const rowOwner = row.ownerName.toLowerCase()
-        const matches =
-          rowOwner.includes(targetOwner) ||
-          (ownerFilter === CURRENT_OWNER_VALUE &&
-            currentOwner &&
-            currentOwner.ownerAliases.some((a) => rowOwner.includes(a.toLowerCase())))
-        if (!matches) return false
-      }
+      // 담당자 별명을 동일 인물로 비교한다. 비슷한 이름을 부분 일치로 포함하지 않는다.
+      if (!matchesDataOwner(row.ownerName, ownerKeys)) return false
 
       // 3. 만료 임박만
       if (expiringOnly) {
@@ -679,7 +662,7 @@ export default function NeoCrmCustomersClient() {
           return 0
       }
     })
-  }, [allUnifiedRows, sourceFilter, ownerFilter, effectiveOwnerName, currentOwner, expiringOnly, deferredQuery, sortKey])
+  }, [allUnifiedRows, sourceFilter, ownerFilter, currentOwnerKeys, expiringOnly, deferredQuery, sortKey])
 
   const visibleRows = filtered.slice(0, visibleCount)
   const hasActiveFilters = Boolean(query.trim()) || ownerFilter !== "all" || expiringOnly || sourceFilter !== "all"
@@ -687,9 +670,9 @@ export default function NeoCrmCustomersClient() {
   const resetFilters = useCallback(() => {
     setQuery("")
     setSourceFilter("all")
-    setOwnerFilter("all")
+    setOwnerFilter(CURRENT_OWNER_VALUE)
     setExpiringOnly(false)
-  }, [])
+  }, [setOwnerFilter])
 
   const selectedRow = useMemo(
     () => (selectedAccountId ? neoData?.rows.find((row) => row.accountId === selectedAccountId) ?? null : null),
@@ -875,9 +858,7 @@ export default function NeoCrmCustomersClient() {
             className="h-8.5 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#111110] outline-none focus:border-[#084734]"
           >
             <option value="all">담당자 선택 (전체)</option>
-            {currentOwner ? (
-              <option value={CURRENT_OWNER_VALUE}>내 담당 · {currentOwner.displayName}</option>
-            ) : null}
+            <option value={CURRENT_OWNER_VALUE}>내 담당 · {currentOwner?.displayName ?? "담당자 연결 확인"}</option>
             {crmOwners.map((owner) => (
               <option key={owner.ownerKey} value={owner.displayName}>
                 {owner.displayName} ({owner.teamRoleLabel})

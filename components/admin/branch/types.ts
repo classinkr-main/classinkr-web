@@ -134,6 +134,7 @@ export interface BranchSyncHealth {
 }
 
 export interface BranchSummaryResponse {
+  scope?: { manager: string }
   team: Team
   period: Period
   revenue: { confirmed: number; goal: number; pacing_pct: number }
@@ -207,6 +208,7 @@ export interface BranchKpiMemberRow {
 }
 
 export interface BranchKpiResponse {
+  scope?: { manager: string }
   teams: BranchKpiTeamRow[]
   members: BranchKpiMemberRow[]
 }

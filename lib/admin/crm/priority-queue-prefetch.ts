@@ -1,4 +1,5 @@
 import "server-only"
+import { currentDataOwner } from "@/lib/admin/data-owner"
 
 import { CRM_STAFF_ADMIN_API_ROLES, hasAdminApiRole } from "@/lib/admin-auth"
 import { getVerifiedAdminContextForPage } from "@/lib/admin/page-auth"
@@ -42,6 +43,6 @@ export async function prefetchCrmPriorityQueueForHome(): Promise<DeferredPrefetc
   }
   if (!admin || !hasAdminApiRole(admin.role, CRM_STAFF_ADMIN_API_ROLES)) return null
 
-  // CrmPriorityQueuePanel의 기본(담당자 전체) 호출과 정확히 같은 조건.
-  return openPrefetchLane(() => getCrmPriorityQueue({ limit: QUEUE_POOL_LIMIT, source: "customer" }))
+  // CrmPriorityQueuePanel의 기본(접속자 개인) 호출과 정확히 같은 조건.
+  return openPrefetchLane(async () => getCrmPriorityQueue({ limit: QUEUE_POOL_LIMIT, source: "customer", ownerKeys: (await currentDataOwner(admin)).keys }))
 }

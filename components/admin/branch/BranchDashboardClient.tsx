@@ -1,4 +1,5 @@
 "use client"
+import { branchManagerMatches, initialBranchManager, UNMAPPED_BRANCH_MEMBER } from "@/lib/branch/personal-scope"
 import dynamic from "next/dynamic"
 import { useSearchParams } from "next/navigation"
 import type { KeyboardEvent } from "react"
@@ -12,7 +13,7 @@ import type { CompassKrTeamResult } from "@/lib/compass/kr-team-contract"
 import { adminFetchJsonCached } from "@/lib/admin-client"
 import { isPrefetchFresh } from "@/lib/admin/prefetch-freshness"
 import { buildCrmSyncSummary, type CrmSyncSummary, type RevSyncCoverageView } from "@/lib/crm/rev-sync-health"
-import { CURRENT_TEAM_FILTERS, PERIODS, PIPELINE_MANAGER_DEFAULT_STORAGE_KEY, TEAMS, type BranchKpiResponse, type BranchSummaryResponse, type Period, type Team } from "./types"
+import { CURRENT_TEAM_FILTERS, PERIODS, TEAMS, type BranchKpiResponse, type BranchSummaryResponse, type Period, type Team } from "./types"
 import { branchTeamLabel, isLegacyBranchTeam, LEGACY_BRANCH_TEAMS } from "@/lib/branch/current-organization"
 import { getBranchTabDataNeeds, type BranchTab } from "./tab-data-needs"
 import { ADMIN_NAV, ADMIN_NAV_SECTION_META } from "../admin-nav"
@@ -173,7 +174,9 @@ export interface BranchSummaryPrefetch {
 // 지금까지와 100% 동일하게 마운트 후 클라이언트 페치로만 채워진다.
 export default function BranchDashboardClient({
   initialData = null,
+  defaultManager = UNMAPPED_BRANCH_MEMBER,
 }: {
+  defaultManager?: string
   initialData?: BranchSummaryPrefetch | null
 }) {
   // 장부 등 외부에서 `?tab=pipeline&team=BD&period=M&month=2026-06` 딥링크로 진입할 수 있게
@@ -205,7 +208,7 @@ export default function BranchDashboardClient({
   // 장부(SalesLedgerWorkbench)의 pipelineHref가 q/mgr을 동봉해 보내오면(향후 확장) 파이프라인
   // 탭의 테이블/칸반 검색어·담당 필터로 그대로 주입한다.
   const initialPipelineQuery = searchParams.get("q") ?? ""
-  const initialPipelineManager = searchParams.get("mgr") ?? ""
+  const initialPipelineManager = initialBranchManager(searchParams, defaultManager)
   const [pipelineQuery, setPipelineQuery] = useState(initialPipelineQuery)
   const [pipelineManager, setPipelineManager] = useState(initialPipelineManager)
   const [pipelineFiltersReady, setPipelineFiltersReady] = useState(false)
@@ -247,23 +250,8 @@ export default function BranchDashboardClient({
     }
   }, [])
 
-  // URL > 저장된 담당 기본값 > 없음. 자식은 initialManager를 마운트 시 1회 읽으므로
-  // 복원이 끝난 뒤 마운트해 딥링크에서도 URL과 실제 필터가 일치하게 한다.
-  useEffect(() => {
-    try {
-      if (new URLSearchParams(window.location.search).get("mgr")) return
-      const stored = window.localStorage.getItem(PIPELINE_MANAGER_DEFAULT_STORAGE_KEY)
-      if (!stored) return
-      setPipelineManager(stored)
-      const url = new URL(window.location.href)
-      url.searchParams.set("mgr", stored)
-      window.history.replaceState(null, "", url.toString())
-    } catch {
-      // 저장된 기본값을 읽지 못하면 URL 초기값을 유지한다.
-    } finally {
-      setPipelineFiltersReady(true)
-    }
-  }, [])
+  // 계정 기본값은 서버에서 검증한 담당자다. 공용 브라우저의 예전 핀을 다른 계정에 적용하지 않는다.
+  useEffect(() => { setPipelineFiltersReady(true) }, [])
 
   // 탭 전환 시 URL도 동기화 — 뒤로가기 히스토리를 오염시키지 않게 replaceState 사용.
   const selectTab = useCallback((tab: BranchTab) => {
@@ -279,7 +267,9 @@ export default function BranchDashboardClient({
   // 기본값(ALL/Q/이번 달)일 땐 쿼리를 생략해 URL을 깨끗하게 유지한다.
   const selectTeam = useCallback((next: Team) => {
     setTeam(next)
+    setPipelineManager("")
     const url = new URL(window.location.href)
+    url.searchParams.set("mgr", "")
     if (next === "ALL") url.searchParams.delete("team")
     else url.searchParams.set("team", next)
     window.history.replaceState(null, "", url.toString())
@@ -315,10 +305,10 @@ export default function BranchDashboardClient({
     const url = new URL(window.location.href)
     if (next.query.trim()) url.searchParams.set("q", next.query)
     else url.searchParams.delete("q")
-    if (next.manager) url.searchParams.set("mgr", next.manager)
-    else url.searchParams.delete("mgr")
+    if (next.manager) url.searchParams.set("mgr", branchManagerMatches(next.manager, defaultManager) ? "__me" : next.manager)
+    else url.searchParams.set("mgr", "")
     window.history.replaceState(null, "", url.toString())
-  }, [])
+  }, [defaultManager])
 
   // 재시도(품질 웨이브 3 — 항목 3)를 위해 마지막으로 연 딜의 원본 row를 기억해둔다 —
   // selectedDeal(누적된 상세 필드 포함) 대신 이 최소 shape을 다시 넘겨 openDealLog를 그대로 재실행한다.
@@ -373,12 +363,13 @@ export default function BranchDashboardClient({
     if (row) void openDealLog(row)
   }, [openDealLog])
 
+  const managerQuery = pipelineManager ? `&manager=${encodeURIComponent(pipelineManager)}` : ""
   const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
   // 개요는 '다가오는 일정' 상위 8개만 쓰므로 전용 projection으로 전체 회계연도
   // 딜·행사·캠페인 타임라인 과전송을 막는다. 다른 탭과 장부는 기존 기본 계약 유지.
   const summaryViewQuery = activeTab === "overview" ? "&view=overview" : ""
-  const summaryUrl = `/api/admin/branch/summary?team=${team}&period=${period}${monthQuery}${summaryViewQuery}`
-  const kpiUrl = `/api/admin/branch/kpi?team=${team}&period=${period}${monthQuery}`
+  const summaryUrl = `/api/admin/branch/summary?team=${team}&period=${period}${monthQuery}${summaryViewQuery}${managerQuery}`
+  const kpiUrl = `/api/admin/branch/kpi?team=${team}&period=${period}${monthQuery}${managerQuery}`
   const dataNeeds = getBranchTabDataNeeds(activeTab)
   // 서버 프리페치 시드 — 페이지(app/admin/branch/page.tsx)가 라우트와 같은 조립 함수로
   // 만들어 둔 첫 화면 summary다. 지금 URL·refreshKey와 정확히 일치할 때만 쓰고, 그동안
@@ -425,7 +416,7 @@ export default function BranchDashboardClient({
   const kpi = useBranchJson<BranchKpiResponse>(kpiUrl, refreshKey, { enabled: dataNeeds.kpi })
   const [compassTick, setCompassTick] = useState(0)
   const compassEnabled = dataNeeds.kpi && !isLegacyBranchTeam(team)
-  const compass = useBranchJson<CompassKrTeamResult>(`/api/admin/branch/compass?month=${selectedMonth}`, refreshKey + compassTick, { enabled: compassEnabled })
+  const compass = useBranchJson<CompassKrTeamResult>(`/api/admin/branch/compass?month=${selectedMonth}${managerQuery}`, refreshKey + compassTick, { enabled: compassEnabled })
   useEffect(() => {
     if (!compassEnabled) return
     const refresh = () => { if (document.visibilityState === "visible") setCompassTick((tick) => tick + 1) }
@@ -631,6 +622,11 @@ export default function BranchDashboardClient({
           sheetFreshnessError={sheetFreshnessError}
         />
 
+        <div className="mt-4 flex flex-wrap items-center gap-2" role="group" aria-label="데이터 범위">
+          <button type="button" aria-pressed={pipelineManager === defaultManager} className="min-h-11 rounded-md border px-3 text-sm" onClick={() => { selectTeam("ALL"); onPipelineFilterChange({ query: pipelineQuery, manager: defaultManager }) }}>내 담당</button>
+          <button type="button" aria-pressed={!pipelineManager} className="min-h-11 rounded-md border px-3 text-sm" onClick={() => selectTeam("ALL")}>전체</button>
+          <span className="text-xs text-[#615D59]">{pipelineManager === UNMAPPED_BRANCH_MEMBER ? "로그인 계정의 담당자 연결이 필요합니다." : pipelineManager ? `${pipelineManager} · 개인 목표와 데이터` : "명시적으로 선택한 팀·전체 범위"}</span>
+        </div>
         <div className="mt-4 sm:mt-6">
           {activeTab === "pipeline" ? <div className="mb-5"><CompassTeamSection resource={compass} month={selectedMonth} onMonthChange={setSelectedMonth} team={team} /></div> : null}
           {activeTab === "overview" && (
@@ -641,6 +637,7 @@ export default function BranchDashboardClient({
               aria-busy={summary.loading && !summary.data}
             >
               <BranchOverviewPanel
+                manager={pipelineManager}
                 summary={summary}
                 kpi={kpi}
                 compass={compass}
@@ -682,10 +679,10 @@ export default function BranchDashboardClient({
                     // 품질 웨이브 4 — 항목 4. 이 카드가 이미 "파이프라인" 제목을 렌더하므로
                     // PipelineTable 자체의 "REV 고객별 매출" <h2>는 hideHeader로 숨겨 이중화를 없앤다
                     // (장부 링크·필터·표는 그대로 유지). 헤더가 필요한 히트맵 탭 사용처는 기본값 유지.
-                    <PipelineTable key={`pipeline-rev-${team}`} team={team} period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} onRowClick={openDealLog} hideHeader
+                    <PipelineTable scopeManager={pipelineManager} key={`pipeline-rev-${team}-${pipelineManager}`} team={team} period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} onRowClick={openDealLog} hideHeader
                       initialQuery={pipelineQuery} initialManager={pipelineManager} onFilterChange={onPipelineFilterChange} />
                   ) : (
-                    <BranchPipelineKanban
+                    <BranchPipelineKanban key={`kanban-${team}-${pipelineManager}`} scopeManager={pipelineManager}
                       team={team}
                       period={period}
                       selectedMonth={selectedMonth}
@@ -709,18 +706,18 @@ export default function BranchDashboardClient({
 
           {activeTab === "heatmap" && (
             <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="space-y-6">
-              <BranchRegionHeatmap team={team} period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} />
+              <BranchRegionHeatmap manager={pipelineManager} team={team} period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} />
               {/* 웨이브 7 — F3(히트맵 탭 이중 렌더 해소). 파이프라인 탭에 이미 전체 기능
                   테이블이 있으므로 여기서는 검색/필터 없는 요약(summaryMode)만 보여주고,
                   "전체 파이프라인에서 보기"는 같은 페이지의 파이프라인 탭으로 전환한다. */}
-              <PipelineTable key={`heatmap-rev-${team}`} team={team} period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} onRowClick={openDealLog}
+              <PipelineTable scopeManager={pipelineManager} key={`heatmap-rev-${team}-${pipelineManager}`} team={team} period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} onRowClick={openDealLog}
                 summaryMode onViewFullPipeline={() => selectTab("pipeline")} />
             </div>
           )}
 
           {activeTab === "ai" && (
             <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="space-y-6">
-              <BranchAiInsights team={team} refreshKey={refreshKey} summary={summary.data} canGenerate={canRunAdminOperations} />
+              <BranchAiInsights key={`${team}:${pipelineManager}`} manager={pipelineManager} team={team} refreshKey={refreshKey} summary={summary.data} canGenerate={canRunAdminOperations} />
             </div>
           )}
         </div>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
+import { dataOwnerFromRequest } from "@/lib/admin/data-owner"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { getLeadActionStats } from "@/lib/repositories/leads"
 
@@ -13,7 +14,7 @@ export async function GET(req: NextRequest) {
   if (admin instanceof NextResponse) return admin
 
   try {
-    return adminCachedJson({ leads: await getLeadActionStats() })
+    return adminCachedJson({ leads: await getLeadActionStats(new Date(), await dataOwnerFromRequest(new URL(req.url), admin)) })
   } catch (error) {
     console.error("[GET /api/admin/crm/action-kpis]", error)
     return NextResponse.json({ error: "Failed to fetch CRM action KPIs" }, { status: 500 })

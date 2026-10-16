@@ -53,12 +53,12 @@ const LeadRegisterModal = dynamic(() => import("@/components/admin/crm/LeadRegis
   loading: () => <div className="fixed inset-0 z-50 bg-black/20" aria-hidden />,
 })
 
-const CRM_ACTION_KPIS_URL = "/api/admin/crm/action-kpis"
+const CRM_ACTION_KPIS_URL = "/api/admin/crm/action-kpis?owner=__me"
 const CRM_OVERVIEW_URL = "/api/admin/crm/overview"
-const CRM_COMPASS_PIPELINE_URL = "/api/admin/crm/compass-pipeline"
+const CRM_COMPASS_PIPELINE_URL = "/api/admin/crm/compass-pipeline?owner=__me"
 // 월 키를 모듈 로드 시점에 굳히면, 탭을 켜 둔 채 달이 바뀐 세션이 지난달 KPI를 이번 달로
 // 계속 보여준다. 조회 시점마다 다시 계산한다.
-const branchKpiUrl = (month: string) => `/api/admin/branch/kpi?team=ALL&period=M&month=${month}`
+const branchKpiUrl = (month: string) => `/api/admin/branch/kpi?team=ALL&period=M&month=${month}&manager=__me`
 const CRM_HOME_TTL_MS = CRM_CACHE_TTL_MS
 const CRM_HOME_STALE_WHILE_REVALIDATE_MS = CRM_CACHE_SWR_MS
 
@@ -378,6 +378,7 @@ export default function CrmHomeClient({
     // CrmCustomerPicker 의 입력 안 '지우기'(h-5 absolute) 버튼까지 44px 로 부풀어 레이아웃이 깨진다.
     // 실제로 행 액션이 있는 컨테이너(빠른 실행 바·큐·최근/자주 접촉 칩 줄·주간 조망·바로 가기)에만 개별 스코프한다.
     <div>
+      <p className="mb-3 text-xs text-[#615D59]">내 담당 리드·Compass 활동 기준 · NEO 매출·수금과 연동 상태는 전사 참고</p>
       {/* 소스별 독립 Suspense 경계 — 서버가 openPrefetchLane으로 연 세 레인을 각각 형제
           <Suspense>로 감싼다(화면 전체를 하나로 감싸면 overview의 DB 왕복 30회가 리드 KPI·
           Compass 밴드까지 함께 막는다 — 이번 작업의 핵심 요건). 각 다리는 화면에 아무것도
@@ -606,7 +607,7 @@ export default function CrmHomeClient({
       {/* 실행 영역 다음에 참조 지표를 둔다. 원천·통화·실패 표시는 유지한다. */}
       <section aria-label="매출·수금 현황" className="mt-6">
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-[16px] font-semibold text-[#111110]">매출·수금 현황</h2>
+          <h2 className="text-[16px] font-semibold text-[#111110]">매출·수금 현황 · 전사 참고</h2>
           <p className={`text-[12px] ${SECONDARY_TEXT_CLASS}`}>자체 집계와 외부 CRM을 통화별로 확인</p>
         </div>
         <CrmCockpitHero

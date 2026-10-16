@@ -1,5 +1,6 @@
-﻿import { NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
+import { dataOwnerFromRequest } from "@/lib/admin/data-owner"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { getCachedOverviewLeadSummary } from "@/lib/admin/overview/lead-summary-cache"
 import { normalizePhoneKey } from "@/lib/compass/normalize"
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
     //   키("/api/admin/leads" 그대로)는 영향받지 않는다.
     const scope = new URL(req.url).searchParams.get("scope")
     if (scope === "overview") {
-      return adminCachedJson({ overview: await getCachedOverviewLeadSummary() })
+      return adminCachedJson({ overview: await getCachedOverviewLeadSummary(await dataOwnerFromRequest(new URL(req.url), admin)) })
     }
 
     const leads = scope === "dashboard"

@@ -155,16 +155,17 @@ function toSummaryActionRow(row: CompassLeadRow): CompassSummaryActionRow {
 export async function buildCompassSummary(
   periodKey: CompassSummaryPeriodKey,
   now: Date = new Date(),
+  ownerKeys?: readonly string[],
 ): Promise<CompassSummary> {
   const period = resolveCompassSummaryPeriod(periodKey, now)
   const generatedAt = now.toISOString()
   const todayKst = getBusinessDateParts(now).date
 
   const [slice, bdOpen, todayDemos, upcoming] = await Promise.all([
-    getCompassLeadSliceByInflowRange(period.since, period.until, { maxRows: COMPASS_SUMMARY_MAX_ROWS }),
-    getCompassBdOpenCount(),
-    getCompassDemos(todayKst, todayKst),
-    getCompassUpcomingActions(COMPASS_UPCOMING_ACTION_HOURS),
+    getCompassLeadSliceByInflowRange(period.since, period.until, { maxRows: COMPASS_SUMMARY_MAX_ROWS, ownerKeys }),
+    getCompassBdOpenCount(ownerKeys),
+    getCompassDemos(todayKst, todayKst, ownerKeys),
+    getCompassUpcomingActions(COMPASS_UPCOMING_ACTION_HOURS, ownerKeys),
   ])
 
   // 슬라이스가 죽으면 다른 조회가 살아 있어도 숫자를 신뢰하지 않는다 — 즉시 강등.

@@ -139,11 +139,12 @@ function annualRateCell(entry: { goal: DshNumbers | null; status: DshNumbers | n
 }
 
 interface DshTeamGridProps {
+  personalManager?: string
   rows: BranchDshRow[]
   loading?: boolean
 }
 
-export function DshTeamGrid({ rows, loading = false }: DshTeamGridProps) {
+export function DshTeamGrid({ rows, loading = false, personalManager }: DshTeamGridProps) {
   // 기본 뷰는 Status — 상시 달성률(연간) 열이 목표 대비 판정을 이미 깔고 있어,
   // 팀별 검수에서 먼저 확인하는 건 실적 절대치다(Goal은 토글 한 번).
   const [view, setView] = useState<DshGridView>("status")
@@ -167,7 +168,7 @@ export function DshTeamGrid({ rows, loading = false }: DshTeamGridProps) {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-4 py-3">
         <div>
           <p className="text-[13px] font-bold text-[#111110]">
-            팀 · 멤버 수치 <span className="font-semibold text-[#615D59]">(단위: 천 · 달성률 %)</span>
+            {personalManager ? "개인 DSH 수치" : "팀 · 멤버 수치"} <span className="font-semibold text-[#615D59]">(단위: 천 · 달성률 %)</span>
           </p>
         </div>
         <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]" role="group" aria-label="팀 그리드 Goal/Status/Gap/Rate 보기 전환">
@@ -230,7 +231,7 @@ export function DshTeamGrid({ rows, loading = false }: DshTeamGridProps) {
                 </tr>
               </thead>
               <tbody>
-                {teams.map((team) => (
+                {personalManager ? teams.flatMap(team => team.members).map(member => <MemberRow key={member.member} member={member} view={view} monthKeys={monthKeys} />) : teams.map((team) => (
                   <TeamRows
                     key={team.team}
                     team={team}

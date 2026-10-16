@@ -153,12 +153,10 @@ export default function CustomerSearchPanel({
             aria-label="담당자 필터"
           >
             <option value="">담당 전체</option>
-            {currentOwner ? (
-              <option value={CURRENT_OWNER_VALUE}>
-                내 담당 · {currentOwner.displayName}
-                {currentOwnerCount > 0 ? ` (${currentOwnerCount})` : ""}
-              </option>
-            ) : null}
+            <option value={CURRENT_OWNER_VALUE}>
+              내 담당 · {currentOwner?.displayName ?? "담당자 연결 확인"}
+              {currentOwnerCount > 0 ? ` (${currentOwnerCount})` : ""}
+            </option>
             {ownerOptions.map((option) => (
               <option key={option.ownerName} value={option.ownerName}>
                 {option.label}

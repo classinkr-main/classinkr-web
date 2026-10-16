@@ -1,4 +1,5 @@
 import "server-only"
+import { currentDataOwner } from "@/lib/admin/data-owner"
 
 import { CRM_STAFF_ADMIN_API_ROLES, hasAdminApiRole } from "@/lib/admin-auth"
 import { getVerifiedAdminContextForPage } from "@/lib/admin/page-auth"
@@ -44,8 +45,9 @@ export async function prefetchCrmActivityInitialData(): Promise<CrmActivityIniti
   if (!admin || !hasAdminApiRole(admin.role, CRM_STAFF_ADMIN_API_ROLES)) return null
 
   return {
-    events: openPrefetchLane(() =>
+    events: openPrefetchLane(async () =>
       listCrmCustomerEvents({
+        ownerKeys: (await currentDataOwner(admin)).keys,
         targetType: "all",
         sourceType: "all",
         sourceTypes: CRM_WORK_ACTIVITY_SOURCE_TYPES,

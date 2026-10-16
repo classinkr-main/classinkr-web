@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useBranchJson } from "../client-api"
 import { matchesTokens, tokenize } from "../search-tokens"
 import MultiSelect from "../MultiSelect"
-import { PIPELINE_MANAGER_DEFAULT_STORAGE_KEY, type BranchPipelineResponse, type BranchPipelineRow, type Team, type Period } from "../types"
+import { type BranchPipelineResponse, type BranchPipelineRow, type Team, type Period } from "../types"
 import { branchTeamLabel, CURRENT_BRANCH_TEAMS } from "@/lib/branch/current-organization"
 
 function fmt(n: number) { return new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 }).format(n) }
@@ -67,6 +67,7 @@ function SortableTh({
 }
 
 export default function PipelineTable({
+  scopeManager,
   team,
   period,
   selectedMonth,
@@ -80,6 +81,7 @@ export default function PipelineTable({
   summaryMode = false,
   onViewFullPipeline,
 }: {
+  scopeManager?: string
   team: Team
   period: Period
   selectedMonth: string
@@ -134,7 +136,7 @@ export default function PipelineTable({
   // (BranchRegionHeatmap의 동일 패턴 참조.)
   const [localRetry, setLocalRetry] = useState(0)
   const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
-  const pipeline = useBranchJson<BranchPipelineResponse>(`/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}`, refreshKey + localRetry)
+  const pipeline = useBranchJson<BranchPipelineResponse>(`/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}${scopeManager ? `&manager=${encodeURIComponent(scopeManager)}` : ""}`, refreshKey + localRetry)
   const pipelineRows = pipeline.data?.rows
   const rows = useMemo(() => pipeline.loading ? null : (pipelineRows ?? []), [pipeline.loading, pipelineRows])
   const teamOptions = team === "ALL" ? [...CURRENT_BRANCH_TEAMS] : [team]
@@ -318,7 +320,6 @@ export default function PipelineTable({
             onChange={(next) => { setSelectedManagers(next); setPage(1) }}
             placeholder="전체"
             width="w-44"
-            pinStorageKey={PIPELINE_MANAGER_DEFAULT_STORAGE_KEY}
           />
           <MultiSelect
             label="지역"

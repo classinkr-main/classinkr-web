@@ -131,8 +131,9 @@ function MemberRow({ member, viewMode, ledgerHref }: {
   )
 }
 
-function TeamRow({ team, members, defaultOpen, ledgerHref }: {
+function TeamRow({ team, members, defaultOpen, ledgerHref, scopeLabel }: {
   team: BranchKpiTeamRow
+  scopeLabel?: string
   members: BranchKpiMemberRow[]
   defaultOpen?: boolean
   ledgerHref: (extra?: Record<string, string>) => string
@@ -214,7 +215,7 @@ function TeamRow({ team, members, defaultOpen, ledgerHref }: {
           expandable ? "text-[#615D59]" : "text-transparent"
         } ${open ? "rotate-90" : ""}`} />
         <div>
-          <p className="text-[14px] font-bold text-[#111110]">{branchTeamLabel(team.team)}</p>
+          <p className="text-[14px] font-bold text-[#111110]">{scopeLabel ?? branchTeamLabel(team.team)}</p>
           <p className="mt-0.5 text-[11px] text-[#615D59]">
             {hasMembers ? `${members.length}명` : "팀 단위 집계"}
           </p>
@@ -299,6 +300,12 @@ export default function BranchKpiAccordion({
 
   const teamsWithMembers = useMemo(() => {
     if (!data) return []
+    if (data.scope?.manager) {
+      if (!data.members.length) return []
+      const goal = data.members.reduce((sum, member) => sum + member.goal, 0)
+      const status = data.members.reduce((sum, member) => sum + member.status, 0)
+      return [{ team: { team: data.members[0].team ?? "ALL", goal, status, pacing_pct: goal > 0 ? status / goal * 100 : 0 }, members: data.members }]
+    }
     return data.teams.filter((t) => isLegacyBranchTeam(team) ? t.team === team : isCurrentBranchTeam(t.team)).map((t) => ({
       team: t,
       members: data.members.filter((m) => m.team === t.team),
@@ -388,7 +395,8 @@ export default function BranchKpiAccordion({
               key={`${t.team.team}-${isSearching ? "search" : "all"}`}
               team={t.team}
               members={t.members}
-              defaultOpen={isSearching}
+              defaultOpen={isSearching || Boolean(data.scope?.manager)}
+              scopeLabel={data.scope?.manager ? `내 담당 · ${data.members.map(member => member.member).join(", ")}` : undefined}
               ledgerHref={ledgerHref}
             />
           ))

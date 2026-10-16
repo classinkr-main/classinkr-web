@@ -79,6 +79,7 @@ const SCOPE_TABS = [
 ] as const
 
 function listUrl(input: {
+  owner?: string
   query: string
   targetType: TargetType
   sourceType: SourceType
@@ -93,6 +94,7 @@ function listUrl(input: {
     limit: PAGE_LIMIT,
     offset: input.offset,
     query: input.query,
+    owner: input.owner,
     targetType: input.targetType,
     sourceType: input.sourceType,
     sentiment: input.sentiment,
@@ -286,6 +288,7 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
   const router = useRouter()
 
   const searchParams = useSearchParams()
+  const dataOwner = searchParams.get("owner") ?? "__me"
   const focusTargetId = (searchParams.get("targetId") ?? "").trim()
   const focusTargetTypeParam = (searchParams.get("targetType") ?? "").trim()
   const focusLabelFromQuery = (searchParams.get("targetLabel") ?? "").trim()
@@ -309,6 +312,7 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
       const { from, to } = resolveActivityPeriod(period, Date.now())
       const url = listUrl({
         query,
+        owner: focusTargetId && !searchParams.has("owner") ? "" : dataOwner,
         targetType: filterTarget,
         sourceType: filterSource,
         sentiment: filterSentiment,
@@ -384,7 +388,7 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
         }
       }
     },
-    [activityScope, filterSentiment, filterSource, filterTarget, query, period, focusTargetId]
+    [activityScope, filterSentiment, filterSource, filterTarget, query, period, focusTargetId, dataOwner, searchParams]
   )
 
   // P1a — 최초 로드는 아래 PrefetchSourceBridge(seedEvents)가 담당한다(프리페치가 없으면
@@ -419,7 +423,7 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
   // work·필터 전체·기간 전체)가 정확히 같은 URL을 계산해야 캐시가 적중한다.
   const seedEvents = useCallback(
     (value: ListCrmCustomerEventsResult | null) => {
-      if (value !== null) {
+      if (value !== null && dataOwner === "__me" && !focusTargetId) {
         seedAdminRequestCache(defaultActivityEventsUrl(), value, {
           ttlMs: CRM_CACHE_TTL_MS,
           staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
@@ -428,7 +432,7 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
       }
       void loadEvents(0)
     },
-    [loadEvents, initialData?.events.generatedAt]
+    [loadEvents, initialData?.events.generatedAt, dataOwner, focusTargetId]
   )
 
   // 이번 주 요약(A5) — 현재 필터로 불러온 목록 기준. 페이지가 더 있으면 하한값으로 표기한다.
@@ -550,6 +554,16 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
       <section className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.7fr)]">
         <div className="min-w-0 space-y-4">
           <section className="border-b border-[rgba(0,0,0,0.08)] bg-white pb-4">
+            <label className="mb-3 flex items-center gap-2 text-[12px] text-[#615D59]">
+              담당자 범위
+              <select aria-label="활동 담당자 범위" value={dataOwner} onChange={event => {
+                const params = new URLSearchParams(searchParams.toString())
+                params.set("owner", event.target.value)
+                router.replace(`?${params.toString()}`, { scroll: false })
+              }} className="min-h-11 rounded-lg border border-black/[0.08] px-3">
+                <option value="__me">내 담당 기록</option><option value="">전체 담당자 기록</option>
+              </select>
+            </label>
             {/* 상단 기록 범위 탭 (업무 기록 vs 전체 이벤트) */}
             <div className="mb-4 border-b border-[#e8e8e4]">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

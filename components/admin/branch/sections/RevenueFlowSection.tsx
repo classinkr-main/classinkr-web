@@ -20,6 +20,7 @@ import type { BranchPipelineResponse, BranchSummaryResponse, Period, Team } from
 import { MonthlyGoalBowlChart } from "../MonthlyGoalBowlChart"
 
 interface RevenueFlowSectionProps {
+  manager?: string
   summary: BranchSummaryResponse | null
   loading: boolean
   team: Team
@@ -29,6 +30,7 @@ interface RevenueFlowSectionProps {
 }
 
 export default function RevenueFlowSection({
+  manager,
   summary,
   loading,
   team,
@@ -39,7 +41,7 @@ export default function RevenueFlowSection({
   // 개요 탭엔 pipeline fetch가 없어 주차 프로젝션용 REV 행을 여기서 직접 가져온다.
   const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
   const pipeline = useBranchJson<BranchPipelineResponse>(
-    `/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}`,
+    `/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}${manager ? `&manager=${encodeURIComponent(manager)}` : ""}`,
     refreshKey,
   )
 
@@ -97,7 +99,7 @@ export default function RevenueFlowSection({
           <>
             {pipeline.stale && <p role="status" className="mb-2 text-xs text-[#A8741A]">갱신 실패 — 저장된 REV 데이터 표시 중</p>}
             <MonthlyGoalBowlChart rows={ledgerRows} plans={monthlyGoals} selectedMonth={selectedMonth}
-              todayMonth={todayMonth} goalNote="승인 DSH 목표 · 현재 팀의 REV 원천 기준. 장부 적용분은 매출 장부에서 별도 검수합니다." />
+              todayMonth={todayMonth} goalNote={manager ? "승인 개인 DSH 목표 · 동일 담당자의 REV 원천 기준" : "승인 DSH 목표 · 현재 팀의 REV 원천 기준. 장부 적용분은 매출 장부에서 별도 검수합니다."} />
           </>
         ) : pipeline.error ? (
           <p role="alert" className="py-5 text-xs text-[#B43E3E]">월별 매출 조회 실패 · 0건이 아닙니다.</p>

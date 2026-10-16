@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useBranchJson } from "../client-api"
 import { matchesTokens, tokenize } from "../search-tokens"
 import MultiSelect from "../MultiSelect"
-import { PIPELINE_MANAGER_DEFAULT_STORAGE_KEY, type BranchPipelineResponse, type BranchPipelineRow, type Period, type Team } from "../types"
+import { type BranchPipelineResponse, type BranchPipelineRow, type Period, type Team } from "../types"
 import { cny, cnyExact } from "@/lib/branch/money-format"
 import { CONFIDENCE_TOKENS, type ConfidenceKey } from "@/lib/branch/confidence-tokens"
 import { ledgerMonthSplit } from "@/lib/branch/computations/revenue-core"
@@ -206,8 +206,9 @@ const SORT_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
 ]
 
 export default function BranchPipelineKanban({
-  team, period, selectedMonth, refreshKey, onDealClick, initialQuery, initialManager, onFilterChange,
+  scopeManager, team, period, selectedMonth, refreshKey, onDealClick, initialQuery, initialManager, onFilterChange,
 }: {
+  scopeManager?: string
   team: Team
   period: Period
   selectedMonth: string
@@ -232,7 +233,7 @@ export default function BranchPipelineKanban({
   // 더해 로컬 카운터를 얹어 useBranchJson의 캐시키를 바꿔 재요청을 트리거).
   const [localRetry, setLocalRetry] = useState(0)
   const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
-  const pipeline = useBranchJson<BranchPipelineResponse>(`/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}`, refreshKey + localRetry)
+  const pipeline = useBranchJson<BranchPipelineResponse>(`/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}${scopeManager ? `&manager=${encodeURIComponent(scopeManager)}` : ""}`, refreshKey + localRetry)
   const pipelineRows = pipeline.data?.rows
   const rows = useMemo(() => pipeline.loading ? null : (pipelineRows ?? []), [pipeline.loading, pipelineRows])
 
@@ -398,7 +399,6 @@ export default function BranchPipelineKanban({
             placeholder="전체"
             align="right"
             width="w-44"
-            pinStorageKey={PIPELINE_MANAGER_DEFAULT_STORAGE_KEY}
           />
         </div>
       </div>

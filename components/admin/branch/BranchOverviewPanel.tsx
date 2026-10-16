@@ -17,6 +17,7 @@ import RevenueFlowSection from "./sections/RevenueFlowSection"
 import type { BranchKpiResponse, BranchSummaryResponse, Period, Team } from "./types"
 
 interface BranchOverviewPanelProps {
+  manager?: string
   summary: BranchJsonState<BranchSummaryResponse>
   kpi: BranchJsonState<BranchKpiResponse>
   compass: BranchJsonState<CompassKrTeamResult>
@@ -83,6 +84,7 @@ function StaleNotice({ summary, kpi }: {
 }
 
 export default function BranchOverviewPanel({
+  manager,
   summary,
   kpi,
   compass,
@@ -97,7 +99,7 @@ export default function BranchOverviewPanel({
 }: BranchOverviewPanelProps) {
   const [showOperations, setShowOperations] = useState(true)
   const evaluation = <CompassTeamSection resource={compass} month={selectedMonth} onMonthChange={onMonthChange} team={team} />
-  const settlement = <ChannelSettlementSection period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} />
+  const settlement = <div className="space-y-2"><p className="text-[12px] text-[#615D59]">채널 정산 · 전사 공용 참고</p><ChannelSettlementSection period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} /></div>
   if (summary.loading && !summary.data) {
     return (
       <div className="space-y-5">
@@ -164,7 +166,7 @@ export default function BranchOverviewPanel({
       <CoreKpiGrid data={summary.data} loading={false} error={null} />
       <DealMixSection summary={summary.data} loading={false} error={null} />
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]">
-        <RevenueFlowSection
+        <RevenueFlowSection manager={manager}
           summary={summary.data}
           loading={false}
           team={team}
@@ -181,7 +183,7 @@ export default function BranchOverviewPanel({
       </div>
       {settlement}
       <button type="button" aria-expanded={showOperations} aria-controls="branch-operations-detail" onClick={() => setShowOperations((open) => !open)} className="flex min-h-11 w-full items-center justify-between rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-5 py-3 text-[13px] font-semibold text-[#31302E] focus-visible:outline-2 focus-visible:outline-[#084734]">
-        캠페인 · 하드웨어 상세<span aria-hidden="true">{showOperations ? "−" : "+"}</span>
+        캠페인 · 하드웨어 상세 · 전사 공용<span aria-hidden="true">{showOperations ? "−" : "+"}</span>
       </button>
       {showOperations ? <div id="branch-operations-detail" className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(340px,0.8fr)]">
         <CampaignsSection rows={summary.data.campaigns_recent ?? null} loading={false} error={null} />

@@ -124,7 +124,7 @@ describe("prefetchCrmUnifiedInitialData 옵션 매핑 — 클라이언트 기본
       source: "all",
       lifecycle: "all",
       view: "all",
-      owner: undefined,
+      ownerKeys: ["Somang"],
       tag: undefined,
       includeUnconfirmed: false,
       limit: 50,
@@ -160,11 +160,11 @@ describe("prefetchCrmUnifiedInitialData 옵션 매핑 — 클라이언트 기본
     expect(getCrmUnifiedCustomers).toHaveBeenCalledWith(expect.objectContaining({ view: "all" }))
   })
 
-  it("my_owner는 문서화된 한계대로 all로 접는다(서버가 로그인 담당자 키를 풀지 않음)", async () => {
+  it("my_owner도 검증한 개인 담당자 범위로 프리페치한다", async () => {
     const { prefetchCrmUnifiedInitialData } = await loadPrefetchModule()
     await prefetchCrmUnifiedInitialData({ view: "my_owner" })
 
-    expect(getCrmUnifiedCustomers).toHaveBeenCalledWith(expect.objectContaining({ view: "all", owner: undefined }))
+    expect(getCrmUnifiedCustomers).toHaveBeenCalledWith(expect.objectContaining({ view: "all", ownerKeys: ["Somang"] }))
   })
 
   it("?tag= 를 클라이언트 tagFilter 초기값과 같은 규칙(normalizeTag)으로 정규화해 싣는다", async () => {
@@ -195,7 +195,7 @@ describe("프리페치 URL == 클라이언트 기본 URL (시드 정합 고정)"
     const { buildUnifiedListDefaultUrl } = await import("@/components/admin/crm/CrmUnifiedCustomersClient")
 
     expect(buildUnifiedPrefetchUrl()).toBe(buildUnifiedListDefaultUrl())
-    expect(buildUnifiedPrefetchUrl()).toBe("/api/admin/crm/customers/unified?limit=50&offset=0")
+    expect(buildUnifiedPrefetchUrl()).toBe("/api/admin/crm/customers/unified?limit=50&offset=0&owner=__me")
   })
 
   it("q·view가 있으면 두 함수 모두 같은 값을 반영한 같은 URL을 만든다", async () => {
@@ -219,7 +219,7 @@ describe("프리페치 URL == 클라이언트 기본 URL (시드 정합 고정)"
     expect(new URL(serverUrl, "http://x").searchParams.get("tag")).toBe("VIP")
     // 공백뿐인 라벨은 두 쪽 모두 싣지 않는다 — 기본 URL과 같다.
     expect(buildUnifiedPrefetchUrl({ tag: "  " })).toBe(buildUnifiedListDefaultUrl({ tag: "  " }))
-    expect(buildUnifiedPrefetchUrl({ tag: "  " })).toBe("/api/admin/crm/customers/unified?limit=50&offset=0")
+    expect(buildUnifiedPrefetchUrl({ tag: "  " })).toBe("/api/admin/crm/customers/unified?limit=50&offset=0&owner=__me")
   })
 
   it("시드는 마운트 레인만 — 칩·드로어 URL 변경이 서버 페이지를 다시 돌려 내려온 레인은 마운트 키에 심지 않는다", async () => {
@@ -256,6 +256,8 @@ describe("프리페치 URL == 클라이언트 기본 URL (시드 정합 고정)"
 
     expect(buildUnifiedPrefetchUrl({ view: "nope" })).toBe(buildUnifiedListDefaultUrl({ view: "nope" }))
     expect(buildUnifiedPrefetchUrl({ view: "my_owner" })).toBe(buildUnifiedListDefaultUrl({ view: "my_owner" }))
-    expect(buildUnifiedPrefetchUrl({ view: "my_owner" })).toBe("/api/admin/crm/customers/unified?limit=50&offset=0")
+    expect(buildUnifiedPrefetchUrl({ view: "my_owner" })).toBe("/api/admin/crm/customers/unified?limit=50&offset=0&owner=__me")
   })
 })
+
+vi.mock("@/lib/admin/data-owner", () => ({ PERSONAL_OWNER: "__me", currentDataOwner: async () => ({ keys: ["Somang"], owner: { ownerKey: "Somang", displayName: "진소망" } }) }))

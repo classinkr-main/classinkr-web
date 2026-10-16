@@ -69,10 +69,10 @@ export default function CoreKpiGrid({ data, loading, error }: { data: BranchSumm
         {/* 품질 웨이브 4 — 항목 5. 행사 건수는 상태(정상/부족/위험) 의미가 없는 단순 카운트라
             Danger 톤(빨강)은 장식 오용이었다 — 뉴트럴로 정리. */}
         <StatCard tone="neutral" icon={<Calendar className="h-[18px] w-[18px]" />}
-          label="행사 (30일)" value={`${data.events_30d.count}건`}
+          label="전사 공용 행사 (30일)" value={`${data.events_30d.count}건`}
           sub={`지역 ${data.events_30d.regions}개`} />
         <StatCard tone="green" icon={<Send className="h-[18px] w-[18px]" />}
-          label="캠페인 성과" value={`${data.campaigns_30d.count}건`}
+          label="전사 공용 캠페인 성과" value={`${data.campaigns_30d.count}건`}
           sub={`평균 오픈율 ${data.campaigns_30d.avg_open_pct.toFixed(0)}%`} />
       </div>
     </section>

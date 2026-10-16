@@ -402,7 +402,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
   // 기존 스트리밍 레인을 기다리지 않고 운영 두 소스를 독립 조회한다.
   useEffect(() => {
     let cancelled = false
-    void adminFetchJsonCached<OverviewOperationsSummary>("/api/admin/overview/operations", {
+    void adminFetchJsonCached<OverviewOperationsSummary>("/api/admin/overview/operations?owner=__me", {
       adminTimeoutMs: OVERVIEW_FETCH_TIMEOUT_MS,
     }, { ttlMs: 0, force: true, persist: false }).then((data) => {
       if (!cancelled) setOperations(data)
@@ -439,7 +439,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
       }
       void loadSourceQuiet<AdminLeadsOverviewResponse>(
         "leads",
-        "/api/admin/leads?scope=overview",
+        "/api/admin/leads?scope=overview&owner=__me",
         (data) => setLeadOverview(data.overview),
         setSourceStates,
         unmountedRef
@@ -488,7 +488,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
       }
       void loadSourceQuiet<BranchSummaryPayload>(
         "branch",
-        "/api/admin/branch/summary?team=ALL&period=Y",
+        "/api/admin/branch/summary?team=ALL&period=Y&manager=__me",
         setBranchSummary,
         setSourceStates,
         unmountedRef
@@ -522,7 +522,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
       }
       void loadSourceQuiet<{ leads: LeadActionKpisPayload }>(
         "leadActions",
-        "/api/admin/crm/action-kpis",
+        "/api/admin/crm/action-kpis?owner=__me",
         (data) => setLeadActionKpis(data.leads),
         setSourceStates,
         unmountedRef
@@ -544,7 +544,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
         setSourceStates(INITIAL_SOURCE_STATES)
         void loadSourceQuiet<BranchSummaryPayload>(
           "branch",
-          "/api/admin/branch/summary?team=ALL&period=Y",
+          "/api/admin/branch/summary?team=ALL&period=Y&manager=__me",
           setBranchSummary,
           setSourceStates,
           unmountedRef,
@@ -552,7 +552,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
         )
         void loadSourceQuiet<{ leads: LeadActionKpisPayload }>(
           "leadActions",
-          "/api/admin/crm/action-kpis",
+          "/api/admin/crm/action-kpis?owner=__me",
           (data) => setLeadActionKpis(data.leads),
           setSourceStates,
           unmountedRef,
@@ -629,7 +629,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
         // null이면 그쪽에서 이미 자기 몫의 클라이언트 폴백을 튼다) — 여기서 또 부르면
         // 이중 페치가 된다. 재시도(fresh=true)에서만 이 Promise.all의 일원으로 강제 조회한다.
         fresh
-          ? fetchJson<AdminLeadsOverviewResponse>("/api/admin/leads?scope=overview", { fresh })
+          ? fetchJson<AdminLeadsOverviewResponse>("/api/admin/leads?scope=overview&owner=__me", { fresh })
           : Promise.resolve<AdminLeadsOverviewResponse | null>(null),
         fetchJson<{ subscribers: unknown[]; total: number }>("/api/admin/subscribers?count=1", { fresh }),
         fetchJson<{ overview: AdminBlogOverviewSummary }>("/api/admin/blog?scope=overview", { fresh }),
@@ -833,7 +833,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
     setSourceStates((current) => ({ ...current, [key]: "loading" }))
     switch (key) {
       case "leads":
-        void fetchJson<AdminLeadsOverviewResponse>("/api/admin/leads?scope=overview", { fresh: true }).then(
+        void fetchJson<AdminLeadsOverviewResponse>("/api/admin/leads?scope=overview&owner=__me", { fresh: true }).then(
           (data) => {
             setLeadOverview(data?.overview ?? null)
             setSourceStates((current) => ({ ...current, leads: data?.overview ? "ready" : "error" }))
@@ -861,7 +861,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
         return
       }
       case "branch":
-        void fetchJson<BranchSummaryPayload>("/api/admin/branch/summary?team=ALL&period=Y", { fresh: true }).then(
+        void fetchJson<BranchSummaryPayload>("/api/admin/branch/summary?team=ALL&period=Y&manager=__me", { fresh: true }).then(
           (data) => {
             setBranchSummary(data)
             setSourceStates((current) => ({ ...current, branch: data ? "ready" : "error" }))
@@ -869,7 +869,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
         )
         return
       case "leadActions":
-        void fetchJson<{ leads: LeadActionKpisPayload }>("/api/admin/crm/action-kpis", { fresh: true }).then(
+        void fetchJson<{ leads: LeadActionKpisPayload }>("/api/admin/crm/action-kpis?owner=__me", { fresh: true }).then(
           (data) => {
             setLeadActionKpis(data?.leads ?? null)
             setSourceStates((current) => ({ ...current, leadActions: data ? "ready" : "error" }))
@@ -912,7 +912,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
     { id: "demo-results", group: "데모", label: "데모 완료 기록", value: `${demos?.truncated ? "≥" : ""}${demos?.doneThisMonth ?? 0}회`, note: `이번 달 · 결과 미기록 ${demos?.unrecordedThisMonth ?? 0}회`, reference: "Compass done 상태만", href: "https://mkt.classin.co.kr/leads", state: operationsState("demos"), tone: (demos?.unrecordedThisMonth ?? 0) > 0 ? "warning" : "neutral", onRetry: retryOperations },
     { id: "installations", group: "설치·배송", label: "설치·배송 예정", value: `${installations?.units ?? 0}대`, note: `미확정 출고 ${installations?.count ?? 0}건 · 품목 행 기준`, href: "/admin/hardware#hardware-section-planned", state: operationsState("installations"), onRetry: retryOperations },
     { id: "installation-dates", group: "설치·배송", label: "예정일 점검", value: `${(installations?.overdueCount ?? 0) + (installations?.undatedCount ?? 0)}건`, note: `날짜 경과 ${installations?.overdueCount ?? 0} / 미지정 ${installations?.undatedCount ?? 0}`, reference: "원장 예정일 기준", href: "/admin/hardware#hardware-section-planned", state: operationsState("installations"), tone: (installations?.overdueCount ?? 0) + (installations?.undatedCount ?? 0) > 0 ? "warning" : "neutral", onRetry: retryOperations },
-    metric({ id: "revenue", group: "매출·운영", label: "FY 확정 매출", value: `${fmtCny(branchSummary?.revenue.confirmed ?? 0)} CNY`, note: "4–3월 회계연도 · REV 확정 · 승인 목표", reference: `연간 ${fmtCny(branchSummary?.revenue.goal ?? 0)} CNY`, progress: branchSummary?.revenue.goal ? branchSummary.revenue.confirmed / branchSummary.revenue.goal * 100 : undefined, href: "/admin/branch/ledger?period=Y", state: sourceStates.branch, trend: <Sparkline data={sparkRevenue} /> }, "branch"),
+    metric({ id: "revenue", group: "매출·운영", label: "내 FY 확정 매출", value: `${fmtCny(branchSummary?.revenue.confirmed ?? 0)} CNY`, note: "내 담당 · REV 확정 · 승인 개인 목표", reference: `연간 ${fmtCny(branchSummary?.revenue.goal ?? 0)} CNY`, progress: branchSummary?.revenue.goal ? branchSummary.revenue.confirmed / branchSummary.revenue.goal * 100 : undefined, href: "/admin/branch/ledger?period=Y", state: sourceStates.branch, trend: <Sparkline data={sparkRevenue} /> }, "branch"),
     metric({ id: "pipeline", group: "매출·운영", label: "파이프 커버리지", value: pipelineCoverage == null ? "—" : `${pipelineCoverage.toFixed(1)}x`, note: "연간 예상 파이프 ÷ 잔여목표", reference: "2.0x 이상 권장", href: "/admin/branch/ledger?period=Y", state: sourceStates.branch, tone: pipelineCoverage != null && pipelineCoverage < 2 ? "warning" : "neutral" }, "branch"),
     metric({ id: "renewal", group: "매출·운영", label: "리뉴얼 D-60", value: `${osSummary?.renewal.expiringSoonCount ?? 0}건`, note: osSourceError("renewal") ?? "NEO · 60일 내 만료", href: "/admin/crm/customers/accounts?expiring=1", state: osSourceState("renewal"), tone: (osSummary?.renewal.expiringSoonCount ?? 0) > 0 ? "warning" : "neutral" }, "os"),
     metric({ id: "matching", group: "매출·운영", label: "링크 확정률", value: `${osSummary?.matching.coveragePct ?? 0}%`, note: osSourceError("matching") ?? `확정 ${osSummary?.matching.linked ?? 0}/${osSummary?.matching.total ?? 0} · 검토 ${osSummary?.matching.needsReview ?? 0}`, href: "/admin/crm/matching", state: osSourceState("matching"), progress: osSummary?.matching.coveragePct ?? undefined }, "os"),
@@ -961,7 +961,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
       {/* 헤더 — eyebrow·소개문은 제거(사이드바가 위치를, 섹션이 내용을 이미 말한다).
           확보한 공간은 숫자에게 주고, 우측은 상시 바로가기만 남긴다. */}
       <div className="relative mb-7 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">Overview</h1>
+        <div><h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">Overview</h1><p className="mt-2 text-xs text-[#615D59]">내 담당 리드·데모·설치·매출 기준 · 방문·콘텐츠·시스템 지표는 전사 공용</p></div>
         <div className="flex flex-wrap items-center gap-2">
           {[
             { href: "/admin/crm", label: "CRM" },

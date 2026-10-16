@@ -38,7 +38,7 @@ describe("Overview lead summary server cache", () => {
 
     expect(mocks.unstableCache).toHaveBeenCalledWith(
       expect.any(Function),
-      ["admin-leads-overview-v1"],
+      ["admin-leads-overview-v2"],
       { revalidate: 30, tags: ["admin-leads-overview"] }
     )
     expect(mocks.getDashboardLeads).toHaveBeenCalledTimes(1)

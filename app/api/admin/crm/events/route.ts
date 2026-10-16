@@ -1,3 +1,4 @@
+import { dataOwnerFromRequest } from "@/lib/admin/data-owner"
 import { NextRequest, NextResponse } from "next/server"
 
 import { adminCachedJson } from "@/lib/admin-api-response"
@@ -128,6 +129,7 @@ export async function GET(req: NextRequest) {
     const scope = url.searchParams.get("scope")
     const parsedSourceType = sourceType && SOURCE_TYPES.has(sourceType) ? (sourceType as CrmCustomerEventSourceType) : "all"
     const events = await listCrmCustomerEvents({
+      ownerKeys: url.searchParams.has("targetId") && !url.searchParams.has("owner") ? undefined : await dataOwnerFromRequest(url, admin),
       q: url.searchParams.get("q") ?? undefined,
       targetId: url.searchParams.get("targetId") ?? undefined,
       targetType: targetType && TARGET_TYPES.has(targetType) ? (targetType as CrmCustomerEventTargetType) : "all",

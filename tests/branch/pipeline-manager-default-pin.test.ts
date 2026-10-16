@@ -67,46 +67,18 @@ describe("웨이브 7 — Q5. MultiSelect 핀 토글", () => {
   })
 })
 
-describe("웨이브 7 — Q5. 담당 MultiSelect 소비처가 공유 키를 넘긴다", () => {
-  it("PipelineTable의 담당 필터가 PIPELINE_MANAGER_DEFAULT_STORAGE_KEY를 pinStorageKey로 넘긴다", () => {
-    const source = read(pipelineTablePath)
-    const managerBlockStart = source.indexOf('label="담당"')
-    expect(managerBlockStart).toBeGreaterThan(-1)
-    const managerBlockEnd = source.indexOf("/>", managerBlockStart)
-    const managerBlock = source.slice(managerBlockStart, managerBlockEnd)
-    expect(managerBlock).toContain("pinStorageKey={PIPELINE_MANAGER_DEFAULT_STORAGE_KEY}")
+describe("계정 기반 파이프라인 기본값", () => {
+  it("테이블과 칸반은 공용 브라우저의 담당자 핀을 기본값으로 제안하지 않는다", () => {
+    for (const path of [pipelineTablePath, kanbanPath]) {
+      expect(read(path)).not.toContain("pinStorageKey={PIPELINE_MANAGER_DEFAULT_STORAGE_KEY}")
+      expect(read(path)).toContain("scopeManager")
+    }
   })
-
-  it("BranchPipelineKanban의 담당 필터도 동일 키를 넘긴다", () => {
-    const source = read(kanbanPath)
-    const managerBlockStart = source.indexOf('label="담당"')
-    expect(managerBlockStart).toBeGreaterThan(-1)
-    const managerBlockEnd = source.indexOf("/>", managerBlockStart)
-    const managerBlock = source.slice(managerBlockStart, managerBlockEnd)
-    expect(managerBlock).toContain("pinStorageKey={PIPELINE_MANAGER_DEFAULT_STORAGE_KEY}")
-  })
-})
-
-describe("웨이브 7 — Q5. BranchDashboardClient 복원 우선순위(URL > localStorage > 없음)", () => {
-  it("URL에 mgr이 있으면 localStorage 복원을 건너뛴다", () => {
+  it("개요는 검증된 담당자를 기본값으로 사용하고 명시적 전체를 URL에 보존한다", () => {
     const source = read(dashboardClientPath)
-    const restoreEffectStart = source.indexOf("if (new URLSearchParams(window.location.search).get(\"mgr\")) return")
-    expect(restoreEffectStart).toBeGreaterThan(-1)
-  })
-
-  it("URL에 mgr이 없을 때만 localStorage 저장값으로 pipelineManager를 복원하고 URL도 동기화한다", () => {
-    const source = read(dashboardClientPath)
-    const idx = source.indexOf("window.localStorage.getItem(PIPELINE_MANAGER_DEFAULT_STORAGE_KEY)")
-    expect(idx).toBeGreaterThan(-1)
-    const nearby = source.slice(idx, idx + 300)
-    expect(nearby).toContain("setPipelineManager(stored)")
-    expect(nearby).toContain('url.searchParams.set("mgr", stored)')
-  })
-
-  it("복원 effect는 마운트 시 1회만 실행된다([] deps)", () => {
-    const source = read(dashboardClientPath)
-    const idx = source.indexOf("window.localStorage.getItem(PIPELINE_MANAGER_DEFAULT_STORAGE_KEY)")
-    const effectEnd = source.indexOf("}, [])", idx)
-    expect(effectEnd).toBeGreaterThan(idx)
+    expect(source).toContain("initialBranchManager(searchParams, defaultManager)")
+    expect(source).not.toContain("window.localStorage.getItem(PIPELINE_MANAGER_DEFAULT_STORAGE_KEY)")
+    expect(source).toContain('url.searchParams.set("mgr", "")')
+    expect(source).toContain('aria-label="데이터 범위"')
   })
 })

@@ -1,3 +1,4 @@
+import { withCompassOwner, compassOwnerCacheKey } from "@/lib/compass/owner-filter"
 // Compass 브리지 — 마케팅팀 앱(mkt.classin.co.kr)의 crm 스키마를 읽는 유일한 계층.
 // 원천은 supabase/migrations/20260828_compass_bridge_views.sql의 읽기 전용 뷰 7장.
 //
@@ -470,10 +471,10 @@ function copyCompassSliceResult<T>(result: CompassSliceResult<T>): CompassSliceR
 export async function getCompassLeadSliceByInflowRange(
   fromIso: string,
   toIso: string,
-  options?: { maxRows?: number },
+  options?: { maxRows?: number; ownerKeys?: readonly string[] },
 ): Promise<CompassSliceResult<CompassLeadSliceRow>> {
   const maxRows = options?.maxRows ?? COMPASS_SUMMARY_MAX_ROWS
-  const cacheKey = `leadSlice:${truncateIsoToMinute(fromIso)}:${truncateIsoToMinute(toIso)}:${maxRows}`
+  const cacheKey = `leadSlice:${truncateIsoToMinute(fromIso)}:${truncateIsoToMinute(toIso)}:${maxRows}:${compassOwnerCacheKey(options?.ownerKeys)}`
   try {
     return await memoize(
       cacheKey,
@@ -483,12 +484,12 @@ export async function getCompassLeadSliceByInflowRange(
         const paged = await fetchSupabasePages<CompassLeadSliceRow>({
           maxRows,
           fetchPage: (from, to) =>
-            sb
+            withCompassOwner(sb
               .from("compass_leads_v")
               .select(COMPASS_LEAD_SLICE_COLUMNS, from === 0 ? { count: "exact" } : undefined)
               .or(inflowFilter)
               .order("id", { ascending: true })
-              .range(from, to),
+              .range(from, to), options?.ownerKeys),
         })
         if (paged.error != null) return downSliceResult<CompassLeadSliceRow>(paged.error)
         return { rows: paged.data, down: false, truncated: paged.truncated }
@@ -710,8 +711,9 @@ export async function getCompassAdsetsDaily(
 export async function getCompassDemos(
   fromDay: string,
   toDay: string,
+  ownerKeys?: readonly string[],
 ): Promise<CompassResult<CompassDemoRow>> {
-  const cacheKey = `demos:${fromDay}:${toDay}`
+  const cacheKey = `demos:${fromDay}:${toDay}:${compassOwnerCacheKey(ownerKeys)}`
   try {
     return await memoize(
       cacheKey,
@@ -722,14 +724,14 @@ export async function getCompassDemos(
           maxRows: 5000,
           concurrent: true,
           fetchPage: (from, to) =>
-            sb
+            withCompassOwner(sb
               .from("compass_demos_v")
               .select("*", from === 0 ? { count: "exact" } : undefined)
               .gte("day", fromDay)
               .lte("day", toDay)
               .order("day", { ascending: true })
               .order("id", { ascending: true })
-              .range(from, to),
+              .range(from, to), ownerKeys, ["owner"]),
         })
         if (paged.error != null) return downResult(paged.error)
         return { ...ok(paged.data), truncated: paged.truncated }
@@ -835,8 +837,9 @@ function copyCountResult(result: CompassCountResult): CompassCountResult {
  *  "그때 시점 기준" 창이 재사용된다 — 다른 모든 60초 메모와 같은 수준의 신선도다. */
 export async function getCompassUpcomingActions(
   withinHours: number,
+  ownerKeys?: readonly string[],
 ): Promise<CompassResult<CompassLeadRow>> {
-  const cacheKey = `upcomingActions:${withinHours}`
+  const cacheKey = `upcomingActions:${withinHours}:${compassOwnerCacheKey(ownerKeys)}`
   try {
     return await memoize(
       cacheKey,
@@ -844,13 +847,13 @@ export async function getCompassUpcomingActions(
         const sb = createSupabaseAdminClient()
         const nowIso = new Date().toISOString()
         const untilIso = new Date(Date.now() + withinHours * 60 * 60 * 1000).toISOString()
-        const { data, error } = await sb
+        const { data, error } = await withCompassOwner(sb
           .from("compass_leads_v")
           .select("*")
           .gte("next_action_at", nowIso)
           .lte("next_action_at", untilIso)
           .order("next_action_at", { ascending: true })
-          .limit(500)
+          .limit(500), ownerKeys)
         if (error) return downResult(error)
         return ok((data ?? []) as CompassLeadRow[])
       },
@@ -863,17 +866,17 @@ export async function getCompassUpcomingActions(
 
 /** BD인계 진행 건수 — stage='bd' AND bd_paid_at IS NULL. CRM 홈 지휘대 밴드용.
  *  60초 메모(down은 10초) — 인자가 없어 키는 고정 문자열이다. */
-export async function getCompassBdOpenCount(): Promise<CompassCountResult> {
+export async function getCompassBdOpenCount(ownerKeys?: readonly string[]): Promise<CompassCountResult> {
   try {
     return await memoize(
-      "bdOpenCount",
+      `bdOpenCount:${compassOwnerCacheKey(ownerKeys)}`,
       async () => {
         const sb = createSupabaseAdminClient()
-        const { count, error } = await sb
+        const { count, error } = await withCompassOwner(sb
           .from("compass_leads_v")
           .select("id", { head: true, count: "exact" })
           .eq("stage", "bd")
-          .is("bd_paid_at", null)
+          .is("bd_paid_at", null), ownerKeys)
         if (error) return downCount(error)
         return { count: count ?? 0, down: false }
       },

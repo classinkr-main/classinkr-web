@@ -43,80 +43,18 @@ describe("isPinSeedEligible — pristine 1회 시드 판정 순수 함수", () =
   })
 })
 
-describe("SalesLedgerWorkbench 소스 — 담당자 MultiSelect가 핀 storageKey를 공유한다", () => {
-  it("types.ts의 PIPELINE_MANAGER_DEFAULT_STORAGE_KEY를 import한다(개요와 동일 키 — 신규 키 아님)", () => {
+describe("접속자 개인 기본값과 명시적 전체 선택", () => {
+  it("장부는 서버 담당자와 URL을 사용하며 공유 브라우저 핀을 복원하지 않는다", () => {
     const source = read(workbenchPath)
-    const importBlockStart = source.indexOf('from "./types"')
-    expect(importBlockStart).toBeGreaterThan(-1)
-    const importBlock = source.slice(0, importBlockStart)
-    expect(importBlock).toContain("PIPELINE_MANAGER_DEFAULT_STORAGE_KEY")
+    expect(source).toContain("initialBranchManager(params, defaultManager)")
+    expect(source).toContain('branchManagerMatches(Array.from(managerFilter)[0], defaultManager) ? "__me" : mgrParam ?? ""')
+    expect(source).not.toContain("pinSeedAttemptedRef")
+    expect(source).not.toContain("PIPELINE_MANAGER_DEFAULT_STORAGE_KEY")
   })
-
-  it("담당자 MultiSelect 블록이 pinStorageKey={PIPELINE_MANAGER_DEFAULT_STORAGE_KEY}를 넘긴다", () => {
+  it("담당자를 해석하기 전에는 전사 시드나 네트워크 조회를 열지 않는다", () => {
     const source = read(workbenchPath)
-    const managerBlockStart = source.indexOf('label="담당자"')
-    expect(managerBlockStart).toBeGreaterThan(-1)
-    const managerBlockEnd = source.indexOf("/>", managerBlockStart)
-    const managerBlock = source.slice(managerBlockStart, managerBlockEnd)
-    expect(managerBlock).toContain("pinStorageKey={PIPELINE_MANAGER_DEFAULT_STORAGE_KEY}")
-  })
-
-  it("지역 MultiSelect 블록에는 pinStorageKey가 없다(핀은 담당자 필터에만 붙는다 — 스코프 확인)", () => {
-    const source = read(workbenchPath)
-    const regionBlockStart = source.indexOf('label="지역"')
-    expect(regionBlockStart).toBeGreaterThan(-1)
-    const regionBlockEnd = source.indexOf("/>", regionBlockStart)
-    const regionBlock = source.slice(regionBlockStart, regionBlockEnd)
-    expect(regionBlock).not.toContain("pinStorageKey")
-  })
-})
-
-describe("SalesLedgerWorkbench 소스 — 복원 effect의 시드 게이트 배선", () => {
-  it("pinSeedAttemptedRef는 useRef(false)로 선언되어 컴포넌트 생애주기 동안 유지된다", () => {
-    const source = read(workbenchPath)
-    expect(source).toContain("const pinSeedAttemptedRef = useRef(false)")
-  })
-
-  it("self-echo 가드 다음, ref를 소비하기 전에 isPinSeedEligible을 호출한다(갱신 전 값을 읽어야 함)", () => {
-    const source = read(workbenchPath)
-    const selfEchoGuardIdx = source.indexOf("if (params.toString() === lastWrittenSearchRef.current) return")
-    const eligibleCallIdx = source.indexOf(
-      "const pinSeedEligible = isPinSeedEligible(pinSeedAttemptedRef.current, params.toString())",
-    )
-    const refConsumeIdx = source.indexOf("pinSeedAttemptedRef.current = true")
-    expect(selfEchoGuardIdx).toBeGreaterThan(-1)
-    expect(eligibleCallIdx).toBeGreaterThan(selfEchoGuardIdx)
-    expect(refConsumeIdx).toBeGreaterThan(eligibleCallIdx)
-  })
-
-  it("ref 소비(pinSeedAttemptedRef.current = true)는 lens 파싱보다 먼저 실행된다 — " +
-    "kpi 리다이렉트로 일찍 return하는 분기와 무관하게 이번 실행이 항상 1회로 카운트된다", () => {
-    const source = read(workbenchPath)
-    const refConsumeIdx = source.indexOf("pinSeedAttemptedRef.current = true")
-    const lensParamIdx = source.indexOf('const lensParam = params.get("lens")')
-    expect(refConsumeIdx).toBeGreaterThan(-1)
-    expect(lensParamIdx).toBeGreaterThan(refConsumeIdx)
-  })
-
-  it("핀 시드는 nextManagerFilter를 파싱한 뒤, setManagerFilter로 커밋하기 전에 pinSeedEligible로 게이팅된다", () => {
-    const source = read(workbenchPath)
-    const parseIdx = source.indexOf('const nextManagerFilter = parseMultiFilterParam(params.get("mgr"))')
-    const gateIdx = source.indexOf("if (pinSeedEligible && typeof window !== \"undefined\") {")
-    const commitIdx = source.indexOf(
-      "setManagerFilter((current) => replaceEquivalentSet(current, nextManagerFilter))",
-    )
-    expect(parseIdx).toBeGreaterThan(-1)
-    expect(gateIdx).toBeGreaterThan(parseIdx)
-    expect(commitIdx).toBeGreaterThan(gateIdx)
-  })
-
-  it("게이트 안에서 같은 storageKey(PIPELINE_MANAGER_DEFAULT_STORAGE_KEY)로 localStorage를 읽어 " +
-    "Set에 그대로 추가한다(현재 managerOptions 소속 여부는 검증하지 않는다)", () => {
-    const source = read(workbenchPath)
-    const gateIdx = source.indexOf("if (pinSeedEligible && typeof window !== \"undefined\") {")
-    expect(gateIdx).toBeGreaterThan(-1)
-    const gateBody = source.slice(gateIdx, gateIdx + 300)
-    expect(gateBody).toContain("window.localStorage.getItem(PIPELINE_MANAGER_DEFAULT_STORAGE_KEY)")
-    expect(gateBody).toContain("nextManagerFilter.add(pinnedManager)")
+    expect(source).toContain("urlReady && pipelineSeedLive")
+    expect(source).toContain("pipelineUrl === initialPipeline.url")
+    expect(source).toContain("enabled: urlReady && (pipelineSeed == null || !pipelineSeedFresh)")
   })
 })

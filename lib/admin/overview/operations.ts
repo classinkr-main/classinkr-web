@@ -1,4 +1,5 @@
 import "server-only"
+import { matchesDataOwner } from "@/lib/crm/personal-owner"
 
 import { getCompassDemos } from "@/lib/compass/bridge"
 import { getPlannedHardwareMovements } from "@/lib/repositories/hardware-inventory"
@@ -7,10 +8,10 @@ import {
   type OverviewOperationsSummary,
 } from "./operations-summary"
 
-export async function getOverviewOperations(canReadCrm: boolean, now = new Date()): Promise<OverviewOperationsSummary> {
+export async function getOverviewOperations(canReadCrm: boolean, now = new Date(), ownerKeys?: readonly string[]): Promise<OverviewOperationsSummary> {
   const { from, to } = overviewOperationsRange(now)
   const [demos, hardware] = await Promise.allSettled([
-    canReadCrm ? getCompassDemos(from, to) : Promise.resolve(null),
+    canReadCrm ? getCompassDemos(from, to, ownerKeys) : Promise.resolve(null),
     getPlannedHardwareMovements(),
   ])
   const demoResult = demos.status === "fulfilled" ? demos.value : null
@@ -23,7 +24,7 @@ export async function getOverviewOperations(canReadCrm: boolean, now = new Date(
         ? { status: "ready", data: summarizeOverviewDemos(demoResult.rows, now, demoResult.truncated) }
         : { status: "error", data: null },
     installations: hardware.status === "fulfilled"
-      ? { status: "ready", data: summarizeOverviewInstallations(hardware.value, now) }
+      ? { status: "ready", data: summarizeOverviewInstallations(hardware.value.filter(row => matchesDataOwner(row.owner, ownerKeys)), now) }
       : { status: "error", data: null },
   }
 }

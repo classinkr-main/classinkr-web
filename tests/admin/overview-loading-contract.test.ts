@@ -14,7 +14,7 @@ describe("admin overview loading and failure contract", () => {
   })
 
   it("uses the server-projected Overview lead contract instead of sending every lead row", () => {
-    expect(source).toContain('fetchJson<AdminLeadsOverviewResponse>("/api/admin/leads?scope=overview"')
+    expect(source).toContain('fetchJson<AdminLeadsOverviewResponse>("/api/admin/leads?scope=overview&owner=__me"')
     expect(source).not.toContain('scope=dashboard')
     expect(source).not.toContain('useState<LeadRecord[]>')
   })

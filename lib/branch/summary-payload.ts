@@ -1,5 +1,7 @@
 import "server-only"
 
+import { branchManagerMatches, scopeDshToManager } from "@/lib/branch/personal-scope"
+
 import { unstable_cache } from "next/cache"
 import { envSheetId, getSheetModifiedTime } from "@/lib/branch/google-sheets"
 import { resolveSheetFreshnessFromSettled, type SheetFreshnessResult } from "@/lib/branch/sheet-freshness"
@@ -271,6 +273,7 @@ export interface BranchSummaryPayloadQuery {
    * null, sheetFreshnessError는 false로 채운다 — "조회를 안 함"은 "조회했는데 실패함"과 달라
    * 실패 배지를 오발생시키지 않는다. Drive 왕복 2회를 HTML TTFB에 얹지 않는 편이 낫다.
    */
+  manager?: string
   skipSheetFreshness?: boolean
 }
 
@@ -282,17 +285,17 @@ export interface BranchSummaryPayloadQuery {
  * 쿼리 파싱·검증(team/period/month 400)과 인증·캐시 헤더는 각 호출부가 담당한다.
  */
 export async function buildBranchSummaryPayload(query: BranchSummaryPayloadQuery) {
-  const { team, period, periodDate, includeBreakdown, overviewView, now: currentDate, skipSheetFreshness = false } = query
+  const { team, period, periodDate, includeBreakdown, overviewView, now: currentDate, skipSheetFreshness = false, manager } = query
   const [dshResult, kpi, revResult, campaigns, runs, events, sheetFreshness] = await Promise.all([
-    readDshWithSource(fyOf(periodDate)), readKpi(fyOf(periodDate), period, periodDate), readRevDealsPreferActiveWithSource(fyOf(periodDate), { team }), summarizeCampaigns(currentDate), getRecentSyncRuns(3), listCachedPublicEvents(),
+    readDshWithSource(fyOf(periodDate)), readKpi(fyOf(periodDate), period, periodDate), readRevDealsPreferActiveWithSource(fyOf(periodDate), { team: manager ? "ALL" : team }), summarizeCampaigns(currentDate), getRecentSyncRuns(3), listCachedPublicEvents(),
     skipSheetFreshness ? Promise.resolve<SheetFreshnessResult>({ modifiedTime: null, failed: false }) : readSheetFreshness(),
   ])
   const sheetModifiedAt = sheetFreshness.modifiedTime
-  const dsh = dshResult.dsh
-  const deals = revResult.deals
+  const dsh = scopeDshToManager(dshResult.dsh, manager)
+  const deals = manager ? revResult.deals.filter((deal) => branchManagerMatches(deal.manager, manager)) : revResult.deals
   const teamMembers = new Set(listMembersByTeam(dsh, team))
-  const revenue = summarizeRevenue(dsh, deals, team, period, periodDate)
-  const bottle = bottleneckKpi(kpi, teamMembers)
+  const revenue = summarizeRevenue(dsh, deals, manager ? "ALL" : team, period, periodDate)
+  const bottle = bottleneckKpi(manager ? kpi.filter((row) => branchManagerMatches(row.member, manager)) : kpi, teamMembers)
   const closing = closingDeals(deals, currentDate)
   const events30 = events.filter((e) => {
     const t = new Date(e.startsAt).getTime()
@@ -327,7 +330,7 @@ export async function buildBranchSummaryPayload(query: BranchSummaryPayloadQuery
   const fy = fyOf(periodDate)
   const months: string[] = FISCAL_MONTH_ORDER.map((m) => `${m >= 4 ? fy : fy + 1}-${String(m).padStart(2, "0")}`)
 
-  const teamGoalRow = dsh.rows.find((r) => r.level === "team" && r.team === team && r.kind === "goal")
+  const teamGoalRow = dsh.rows.find((r) => r.level === "team" && r.team === (manager ? "ALL" : team) && r.kind === "goal")
   const monthGoal = (m: string) => team === "ALL" && !teamGoalRow
     ? (["BD", "MKT", "CSM"] as const).reduce((s, t) => {
         const g = dsh.rows.find((r) => r.level === "team" && r.team === t && r.kind === "goal")
@@ -448,7 +451,11 @@ export async function buildBranchSummaryPayload(query: BranchSummaryPayloadQuery
     const thisWk = aggregateWeekly(deals, thisWeekStart, thisWeekEnd, classify)
     const prevWk = aggregateWeekly(deals, prevWeekStart, thisWeekStart, classify)
     const weeklyAvailable = thisWk.mappedCount > 0 || prevWk.mappedCount > 0
-    const slices = buildMix(
+    const slices = manager ? (dim === "category" ? ["Hardware", "Software"] : dim === "status_type" ? ["New", "Renew"] : ["Direct", "Channel"]).map((name) => {
+      const scoped = deals.filter((deal) => classify(deal) === name)
+      const total = (keys: string[]) => scoped.reduce((sum, deal) => sum + keys.reduce((value, month) => value + confirmedMonthAmount(deal, month, Number(deal.monthly_payments[month] ?? 0)), 0), 0)
+      return { name, goal: 0, actual: total(periodMonths), pct: 0, prev_actual: prevPeriodMonths ? total(prevPeriodMonths) : null, week_actual: null, prev_week_actual: null }
+    }) : buildMix(
       breakdown, dim, period, periodDate,
       weeklyAvailable ? thisWk.totals : null,
       weeklyAvailable ? prevWk.totals : null,
@@ -482,6 +489,7 @@ export async function buildBranchSummaryPayload(query: BranchSummaryPayloadQuery
 
   return {
     team, period,
+    ...(manager ? { scope: { manager } } : {}),
     revenue, bottleneck: bottle, closing,
     events_30d: { count: events30.length, regions: new Set(events30.map((e) => e.location ?? "")).size },
     campaigns_30d: { count: campaigns.count_30d, avg_open_pct: campaigns.avg_open_pct },
@@ -520,6 +528,6 @@ export async function buildBranchSummaryPayload(query: BranchSummaryPayloadQuery
     // 팀·멤버 그리드(DshTeamGrid) 원천 — breakdown과 동일한 opt-in 플래그에 함께 태운다
     // (같은 소비처 한 곳뿐이라 별도 플래그를 늘리지 않는다). 추가 페이로드는 팀 8행+멤버
     // ~20행 수준으로 breakdown보다 훨씬 작고, 캐시 키 무변경 안전 근거도 위와 동일하다.
-    ...(includeBreakdown ? { dsh_breakdown: breakdown, dsh_rows: dsh.rows } : {}),
+    ...(includeBreakdown ? { dsh_breakdown: breakdown, dsh_rows: manager ? dsh.rows.filter((row) => row.level === "member") : dsh.rows } : {}),
   }
 }

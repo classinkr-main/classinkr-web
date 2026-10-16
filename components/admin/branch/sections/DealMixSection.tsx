@@ -72,7 +72,7 @@ function CompareCard({ title, desc, a, b, aTone, bTone, prevMeta }: {
         <div className="text-right">
           {hasData ? (
             <p className="whitespace-nowrap text-[10px] font-bold tracking-[0.04em] text-[#615D59]">
-              믹스 {mixShift >= 0 ? "+" : ""}{mixShift.toFixed(1)}%p
+              {goalSum > 0 ? <>믹스 {mixShift >= 0 ? "+" : ""}{mixShift.toFixed(1)}%p</> : "확정 매출 구성"}
             </p>
           ) : (
             <p className="whitespace-nowrap text-[10px] font-bold tracking-[0.04em] text-[#9B9690]">데이터 없음</p>
@@ -97,15 +97,15 @@ function CompareCard({ title, desc, a, b, aTone, bTone, prevMeta }: {
             style={{ width: `${bPct}%`, background: bTone }}>
             {bPct >= 18 && `${bPct.toFixed(0)}%`}
           </div>
-          {/* Goal mix marker — dashed vertical line at goal split */}
-          <div title={`목표 믹스 ${aGoalPct.toFixed(0)}% / ${(100 - aGoalPct).toFixed(0)}%`}
+          {/* 부문 목표가 원본에 있을 때만 목표선을 그린다. */}
+          {goalSum > 0 && <div title={`목표 믹스 ${aGoalPct.toFixed(0)}% / ${(100 - aGoalPct).toFixed(0)}%`}
             className="pointer-events-none absolute -top-1 -bottom-1 w-px"
             style={{
               left: `${aGoalPct}%`,
               backgroundImage: "linear-gradient(to bottom, rgba(0,0,0,0.5) 50%, transparent 50%)",
               backgroundSize: "1px 3px",
               backgroundRepeat: "repeat-y",
-            }} />
+            }} />}
         </div>
       ) : (
         <div className="mb-1.5 flex h-[22px] items-center justify-center rounded-md bg-[rgba(0,0,0,0.04)] text-[10px] font-semibold text-[#9B9690]">
@@ -125,7 +125,7 @@ function CompareCard({ title, desc, a, b, aTone, bTone, prevMeta }: {
             <p className="text-[13px] font-bold leading-none tracking-[-0.01em]" style={{ color: CONFIDENCE_TOKENS.confirmed.color }}>
               <MoneyValue value={row.side.actual} />
             </p>
-            <p className="mt-0.5 text-[9.5px] text-[#615D59]">목표 <MoneyValue value={row.side.goal} /></p>
+            <p className="mt-0.5 text-[9.5px] text-[#615D59]">{row.side.goal > 0 ? <>목표 <MoneyValue value={row.side.goal} /></> : "부문 목표 미설정"}</p>
           </div>
         </div>
       ))}
@@ -172,7 +172,7 @@ export default function DealMixSection({ summary, loading, error }: { summary: B
       <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5">
         <div>
           <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">매출 분해</h2>
-          <p className="mt-0.5 text-[11px] font-medium text-[#615D59]">제품·신규/갱신·채널은 DSH 전사 실적, 고객규모는 선택 범위 REV 확정입니다.</p>
+          <p className="mt-0.5 text-[11px] font-medium text-[#615D59]">{summary?.scope?.manager ? "선택 담당자의 REV 확정입니다. 원본에 없는 부문 목표는 배분하지 않습니다." : "제품·신규/갱신·채널은 DSH 전사 실적, 고객규모는 선택 범위 REV 확정입니다."}</p>
         </div>
         <div className="text-right">
           <p className="text-[18px] font-bold leading-none tracking-[-0.01em] text-[#111110]"><MoneyValue value={totalActual} /></p>
@@ -180,9 +180,9 @@ export default function DealMixSection({ summary, loading, error }: { summary: B
         </div>
       </div>
       <div className={`grid gap-[18px] p-5 md:grid-cols-2 ${cardCount >= 4 ? "xl:grid-cols-4" : "lg:grid-cols-3"}`}>
-        {hwSw && <CompareCard title="HW / SW" desc="DSH 전사 실적 · 제품 라인" a={hwSw.a} b={hwSw.b} aTone={COLORS.green} bTone={COLORS.amber} prevMeta={data.meta?.by_category} />}
-        {newRenew && <CompareCard title="New / Renew" desc="DSH 전사 실적 · 신규/갱신" a={newRenew.a} b={newRenew.b} aTone={COLORS.green} bTone={COLORS.neutral} prevMeta={data.meta?.by_status_type} />}
-        {channel && <CompareCard title="Direct / Channel" desc="DSH 전사 실적 · 직판/파트너" a={channel.a} b={channel.b} aTone={COLORS.green} bTone={COLORS.amber} prevMeta={data.meta?.by_channel} />}
+        {hwSw && <CompareCard title="HW / SW" desc={summary?.scope?.manager ? "개인 REV 확정 · 제품 라인" : "DSH 전사 실적 · 제품 라인"} a={hwSw.a} b={hwSw.b} aTone={COLORS.green} bTone={COLORS.amber} prevMeta={data.meta?.by_category} />}
+        {newRenew && <CompareCard title="New / Renew" desc={summary?.scope?.manager ? "개인 REV 확정 · 신규/갱신" : "DSH 전사 실적 · 신규/갱신"} a={newRenew.a} b={newRenew.b} aTone={COLORS.green} bTone={COLORS.neutral} prevMeta={data.meta?.by_status_type} />}
+        {channel && <CompareCard title="Direct / Channel" desc={summary?.scope?.manager ? "개인 REV 확정 · 직판/파트너" : "DSH 전사 실적 · 직판/파트너"} a={channel.a} b={channel.b} aTone={COLORS.green} bTone={COLORS.amber} prevMeta={data.meta?.by_channel} />}
         {kaSme && <CompareCard title="KA / SME" desc="REV 확정 · 고객 규모" a={kaSme.a} b={kaSme.b} aTone={COLORS.neutral} bTone={COLORS.amber} prevMeta={data.meta?.by_segment} />}
       </div>
     </section>

@@ -1,3 +1,4 @@
+import { withCompassOwner } from "@/lib/compass/owner-filter"
 import "server-only"
 
 import { createCrmRecordingSignedUrls } from "@/lib/storage/crm-recordings"
@@ -116,6 +117,7 @@ export interface CrmCustomerEventCreateInput {
 }
 
 export interface ListCrmCustomerEventsOptions {
+  ownerKeys?: readonly string[]
   q?: string
   targetType?: CrmCustomerEventTargetType | "all"
   sourceType?: CrmCustomerEventSourceType | "all"
@@ -410,6 +412,8 @@ export async function listCrmCustomerEvents(
   if (options.to) {
     query = query.lte("occurred_at", options.to)
   }
+
+  query = withCompassOwner(query, options.ownerKeys, ["owner_name", "created_by"])
 
   const search = safeSearch(options.q)
   if (search) {

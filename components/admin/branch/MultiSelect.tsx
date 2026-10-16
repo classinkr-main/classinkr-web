@@ -1,4 +1,5 @@
 "use client"
+import { branchManagerLabel } from "@/lib/branch/personal-scope"
 import { ChevronDown, Pin } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
@@ -76,8 +77,8 @@ export default function MultiSelect({
   const summary = selected.size === 0
     ? placeholder
     : selected.size === 1
-    ? Array.from(selected)[0]
-    : `${Array.from(selected)[0]} 외 ${selected.size - 1}`
+    ? branchManagerLabel(Array.from(selected)[0])
+    : `${branchManagerLabel(Array.from(selected)[0])} 외 ${selected.size - 1}`
 
   function toggle(option: string) {
     const next = new Set(selected)
@@ -167,7 +168,7 @@ export default function MultiSelect({
                   checked ? "bg-[#ECFDF5] text-[#084734]" : "text-[#111110]/75 hover:bg-[#FAFAF8]"
                 }`}
               >
-                <span className="truncate">{opt}</span>
+                <span className="truncate">{branchManagerLabel(opt)}</span>
                 <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
                   checked ? "border-[#084734] bg-[#084734] text-white" : "border-[#d8d8d4] bg-white"
                 }`}>

@@ -25,14 +25,14 @@ export interface CompassPipelineBand {
   generatedAt: string
 }
 
-export async function buildCompassPipelineBand(): Promise<CompassPipelineBand> {
+export async function buildCompassPipelineBand(ownerKeys?: readonly string[]): Promise<CompassPipelineBand> {
   // 오늘 KST 하루 — business-time.ts가 사내 KST 계약의 단일 진실원.
   const today = getBusinessDateParts().date
 
   const [demos, upcoming, bdOpen] = await Promise.all([
-    getCompassDemos(today, today),
-    getCompassUpcomingActions(UPCOMING_ACTION_WINDOW_HOURS),
-    getCompassBdOpenCount(),
+    getCompassDemos(today, today, ownerKeys),
+    getCompassUpcomingActions(UPCOMING_ACTION_WINDOW_HOURS, ownerKeys),
+    getCompassBdOpenCount(ownerKeys),
   ])
 
   return {

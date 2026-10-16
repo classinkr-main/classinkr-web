@@ -1,4 +1,5 @@
 "use client"
+import { branchManagerLabel, branchManagerMatches, initialBranchManager, UNMAPPED_BRANCH_MEMBER } from "@/lib/branch/personal-scope"
 
 import { Fragment, use, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import dynamic from "next/dynamic"
@@ -64,7 +65,6 @@ import {
 } from "@/lib/branch/product-category"
 import {
   PERIODS,
-  PIPELINE_MANAGER_DEFAULT_STORAGE_KEY,
   TEAMS,
   type BranchKpiResponse,
   type BranchPipelineResponse,
@@ -347,7 +347,6 @@ import {
   fiscalYearLabel,
   handleRovingTabKeyDown,
   isDraftOperation,
-  isPinSeedEligible,
   LENSES,
   loadStoredRevDbImport,
   MATRIX_TOAST_MAX,
@@ -355,7 +354,6 @@ import {
   MetricTile,
   parseMultiFilterParam,
   periodShortLabel,
-  pipelineUrlForSearchParams,
   relativeTimeFromNow,
   replaceEquivalentSet,
   REV_FORECAST_FILTERS,
@@ -417,7 +415,9 @@ type BranchSyncResponse = {
 
 export default function SalesLedgerWorkbench({
   initialPipeline = null,
+  defaultManager = UNMAPPED_BRANCH_MEMBER,
 }: {
+  defaultManager?: string
   initialPipeline?: LedgerPipelinePrefetch | null
 }) {
   const router = useRouter()
@@ -439,7 +439,7 @@ export default function SalesLedgerWorkbench({
   const [query, setQuery] = useState("")
   // 품질 웨이브 7 — 항목 3: 단일 select → MultiSelect(Set) 전환. 빈 Set === "전체"(기존 "ALL"과
   // 동일 의미) — 필터 로직·URL 직렬화·크로스링크 모두 Set 기준으로 다시 쓴다.
-  const [managerFilter, setManagerFilter] = useState<Set<string>>(() => new Set())
+  const [managerFilter, setManagerFilter] = useState<Set<string>>(() => new Set([defaultManager]))
   const [regionFilter, setRegionFilter] = useState<Set<string>>(() => new Set())
   const [productFilter, setProductFilter] = useState<RevProductCategory>("all")
   const [revStatusFilter, setRevStatusFilter] = useState("ALL")
@@ -767,30 +767,11 @@ export default function SalesLedgerWorkbench({
   const defaultMonthRef = useRef(ymKeyUtc(new Date()))
   const [urlReady, setUrlReady] = useState(false)
   const lastWrittenSearchRef = useRef<string | null>(null)
-  // 라운드 3 P3 — "내 딜" 담당자 프리셋 핀(웨이브 7 Q5와 storageKey 공유 — KR Team 개요에서
-  // 찍은 핀이 장부에도, 장부에서 찍은 핀이 개요에도 적용된다). ref로 이 컴포넌트 생애주기 동안
-  // isPinSeedEligible 판정을 딱 1번만 소비한다 — 아래에서 즉시 true로 갱신하므로 이후 실행
-  // (내비게이션·self-echo)은 항상 대상 밖이다.
-  // 사용자 요청: 로그인된 계정으로 디폴트(전체가 아니라), 지사장님은 전체로 잡기
-  const resolveInitialLedgerManager = (pinned: string | null): string | null => {
-    if (typeof window === "undefined") return pinned
-    const r = sessionStorage.getItem("admin_role")?.trim().toUpperCase()
-    const n = sessionStorage.getItem("admin_name")?.trim()
-    const isDir = r === "BRANCH" || r === "BRANCH_DIRECTOR" || n === "문준혁" || Boolean(n && n.includes("지사장"))
-    if (isDir) return null
-    if (n && n !== "Dev") return n
-    return pinned
-  }
-  const pinSeedAttemptedRef = useRef(false)
+  // 접속자 기본값은 검증된 서버 계정에서 온다. 역할·이름·브라우저 핀 예외는 없다.
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString())
     // writer가 방금 기록한 정규형과 같으면 상태가 이미 URL의 원천이므로 재적용하지 않는다.
     if (params.toString() === lastWrittenSearchRef.current) return
-    // pristine 진입(마운트 후 첫 실행 + URL 파라미터 0개) 여부를 지금 판정하고 ref를 즉시
-    // 소비한다 — 판정 자체는 순수 함수(isPinSeedEligible)에 위임해 "1회만" 규약을 이 실행
-    // 시점의 ref 상태로 직접 단위 테스트할 수 있게 한다.
-    const pinSeedEligible = isPinSeedEligible(pinSeedAttemptedRef.current, params.toString())
-    pinSeedAttemptedRef.current = true
     const lensParam = params.get("lens")
     // KPI 렌즈는 KR Team 파이프라인 탭으로 흡수됐다 — 옛 링크(?lens=kpi)는 그리로 리다이렉트.
     if (lensParam === "kpi") {
@@ -807,22 +788,7 @@ export default function SalesLedgerWorkbench({
     const teamParam = params.get("team")
     setTeam(teamParam && (TEAMS as string[]).includes(teamParam) ? (teamParam as Team) : "ALL")
     setQuery(params.get("q") ?? "")
-    const nextManagerFilter = parseMultiFilterParam(params.get("mgr"))
-    // pristine 1회 한정 핀 시드: params.toString() === ""가 이미 보장된 상태라 nextManagerFilter는
-    // 항상 빈 Set이다(mgr 파라미터 자체가 없으므로) — 핀 값 하나만 그대로 채워 넣으면 Set 1개
-    // 원소가 된다. 저장된 핀 담당자가 현재 managerOptions에 없어도 그대로 시드한다(옵션은 데이터
-    // 로드 후 채워지는 값이라 이 시점엔 검증 불가 — 필터 자체가 이름 문자열 매칭이라 무해하다).
-    // 별도 "핀으로 시드됨" 배지는 두지 않는다 — MultiSelect의 핀 아이콘(pinStorageKey prop, 아래
-    // 렌더부)이 이미 그 역할을 한다.
-    if (pinSeedEligible && typeof window !== "undefined") {
-      const pinnedManager = window.localStorage.getItem(PIPELINE_MANAGER_DEFAULT_STORAGE_KEY)
-      if (pinnedManager) nextManagerFilter.add(pinnedManager)
-      const m = resolveInitialLedgerManager(pinnedManager)
-      if (m !== pinnedManager) {
-        nextManagerFilter.clear()
-        if (m) nextManagerFilter.add(m)
-      }
-    }
+    const nextManagerFilter = params.has("mgr") && params.get("mgr") !== "__me" ? parseMultiFilterParam(params.get("mgr")) : new Set([initialBranchManager(params, defaultManager)].filter(Boolean))
     setManagerFilter((current) => replaceEquivalentSet(current, nextManagerFilter))
     const nextRegionFilter = parseMultiFilterParam(params.get("region"))
     setRegionFilter((current) => replaceEquivalentSet(current, nextRegionFilter))
@@ -845,7 +811,7 @@ export default function SalesLedgerWorkbench({
     const pageParam = Number(params.get("p"))
     setRevPage(Number.isInteger(pageParam) && pageParam > 1 ? pageParam : 1)
     setUrlReady(true)
-  }, [router, searchParams])
+  }, [defaultManager, router, searchParams])
 
   useEffect(() => {
     if (!urlReady) return
@@ -856,7 +822,7 @@ export default function SalesLedgerWorkbench({
     if (team !== "ALL") params.set("team", team)
     if (query.trim()) params.set("q", query.trim())
     const mgrParam = serializeMultiFilterParam(managerFilter)
-    if (mgrParam) params.set("mgr", mgrParam)
+    params.set("mgr", managerFilter.size === 1 && branchManagerMatches(Array.from(managerFilter)[0], defaultManager) ? "__me" : mgrParam ?? "")
     const regionParam = serializeMultiFilterParam(regionFilter)
     if (regionParam) params.set("region", regionParam)
     if (productFilter !== "all") params.set("prod", productFilter)
@@ -884,6 +850,7 @@ export default function SalesLedgerWorkbench({
     team,
     query,
     managerFilter,
+    defaultManager,
     regionFilter,
     productFilter,
     revStatusFilter,
@@ -958,7 +925,7 @@ export default function SalesLedgerWorkbench({
 
   const resetRevFilters = useCallback(() => {
     setQuery("")
-    setManagerFilter(new Set())
+    setManagerFilter(new Set([defaultManager]))
     setRegionFilter(new Set())
     setProductFilter("all")
     setRevStatusFilter("ALL")
@@ -973,7 +940,7 @@ export default function SalesLedgerWorkbench({
     const cur = ymKeyUtc(new Date())
     setExpandedRevMonths(new Set([cur, shiftMonth(cur, 1)]))
     setH1Expanded(false)
-  }, [])
+  }, [defaultManager])
 
   useEffect(() => {
     setRevPage(1)
@@ -1025,19 +992,21 @@ export default function SalesLedgerWorkbench({
     })
   }, [lens, editingDraftOperation, draftForm.operation, draftForm.weeklyMode, draftForm.week])
 
+  const scopedManager = managerFilter.size === 1 ? Array.from(managerFilter)[0] : ""
+  const managerQuery = scopedManager ? `&manager=${encodeURIComponent(scopedManager)}` : ""
   const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
   // DSH 팀 그리드만 상세 breakdown을 소비한다. 기본 REV 장부는 93%가 미사용인
   // breakdown payload를 받지 않고, DSH 렌즈로 전환할 때 같은 summary 계약을 확장한다.
   const summary = useBranchJson<BranchSummaryResponse>(
-    `/api/admin/branch/summary?team=${team}&period=${period}${monthQuery}${lens === "dsh" ? "&breakdown=1" : ""}`,
-    refreshKey
+    `/api/admin/branch/summary?team=${team}&period=${period}${monthQuery}${lens === "dsh" ? "&breakdown=1" : ""}${managerQuery}`,
+    refreshKey, { enabled: urlReady }
   )
   // KPI 응답은 이 화면에서 우측 레일 "행 상세"의 담당자 KPI 박스(selectedMember)에만 쓰인다 —
   // 마운트 즉시 fetch하면 접힌 레일만 보다 떠나는 세션에도 항상 요청이 나간다(코덱스 감사).
   // 레일 열림 + detail 보기 + 행 선택일 때만 시작한다(콕핏은 detail 레일을 렌더하지 않으므로 제외).
   const kpiNeeded = !sidePanelCollapsed && railView === "detail" && selectedRow != null && lens !== "cockpit"
-  const kpi = useBranchJson<BranchKpiResponse>(`/api/admin/branch/kpi?team=${team}&period=${period}${monthQuery}`, refreshKey, { enabled: kpiNeeded })
-  const pipelineUrl = `/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}`
+  const kpi = useBranchJson<BranchKpiResponse>(`/api/admin/branch/kpi?team=${team}&period=${period}${monthQuery}${managerQuery}`, refreshKey, { enabled: kpiNeeded && urlReady })
+  const pipelineUrl = `/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}${managerQuery}`
   // 서버 프리페치 시드 — 페이지(app/admin/branch/ledger/page.tsx)가 라우트와 같은 조립 함수로
   // 만들어 둔 첫 화면 rows다. 지금 URL·refreshKey와 정확히 일치할 때만 쓰고, 그동안
   // useBranchJson은 요청 자체를 만들지 않는다(enabled=false). 필터 변경·새로고침으로 키가 한
@@ -1053,12 +1022,12 @@ export default function SalesLedgerWorkbench({
   const [pipelineSeedLive, setPipelineSeedLive] = useState(
     () =>
       initialPipeline != null &&
-      pipelineUrlForSearchParams(searchParams.toString(), defaultMonthRef.current) === initialPipeline.url,
+      pipelineUrl === initialPipeline.url,
   )
   // 시드 후보 — 아직 promise를 풀지 않은 단계. 딥링크·필터 변경(=애초에 안 맞는 경우)이면
   // 아래 use()를 전혀 호출하지 않는다.
   const pipelineSeedCandidate =
-    pipelineSeedLive && initialPipeline && `0:${initialPipeline.url}` === pipelineStateKey
+    urlReady && pipelineSeedLive && initialPipeline && `0:${initialPipeline.url}` === pipelineStateKey
       ? initialPipeline
       : null
   // 횡단 인프라 개편(2026-09-10 스트리밍 전환) — pipelineSeedCandidate가 있을 때만 React
@@ -1067,8 +1036,8 @@ export default function SalesLedgerWorkbench({
   // 조합 콜드 진입)에서만 부모의 <Suspense>가 settle을 대신 기다린다.
   const pipelineSeedResolved = pipelineSeedCandidate ? use(pipelineSeedCandidate.promise) : null
   useEffect(() => {
-    if (pipelineSeedLive && pipelineSeedCandidate == null) setPipelineSeedLive(false)
-  }, [pipelineSeedLive, pipelineSeedCandidate])
+    if (urlReady && pipelineSeedLive && pipelineSeedCandidate == null) setPipelineSeedLive(false)
+  }, [urlReady, pipelineSeedLive, pipelineSeedCandidate])
   // promise가 null로 settle되면(비인증·역할 부족·ceilingMs 초과) 시드 없음과 동일하게 취급 —
   // 아래 useBranchJson이 기존 클라이언트 페치 경로를 그대로 탄다.
   const pipelineSeed =
@@ -1082,7 +1051,7 @@ export default function SalesLedgerWorkbench({
   // 그대로 돌아 캐시/네트워크가 최신 여부를 정하고, 응답이 도착하면 아래 병합이 그쪽으로 넘어간다.
   const pipelineSeedFresh = pipelineSeed != null && isPrefetchFresh(pipelineSeed.generatedAt)
   const pipelineFetched = useBranchJson<BranchPipelineResponse>(pipelineUrl, refreshKey, {
-    enabled: pipelineSeed == null || !pipelineSeedFresh,
+    enabled: urlReady && (pipelineSeed == null || !pipelineSeedFresh),
   })
   const pipeline: BranchJsonState<BranchPipelineResponse> =
     pipelineFetched.data != null || pipelineFetched.error != null
@@ -1330,7 +1299,7 @@ export default function SalesLedgerWorkbench({
     // 검색 대상에 없어 링크를 눌러도 검색 결과가 비었다).
     const tokens = tokenize(query)
     return rows
-      .filter((row) => managerFilter.size === 0 || (row.manager != null && managerFilter.has(row.manager)))
+      .filter((row) => managerFilter.size === 0 || Array.from(managerFilter).some((manager) => branchManagerMatches(row.manager, manager)))
       .filter((row) => regionFilter.size === 0 || (row.region != null && regionFilter.has(row.region)))
       .filter((row) => productFilter === "all" || rowProductCategory(row) === productFilter)
       .filter((row) => revStatusFilter === "ALL" || row.status === revStatusFilter)
@@ -1467,7 +1436,7 @@ export default function SalesLedgerWorkbench({
   // → 목표 비교를 생략하고 "필터 중 생략"을 표기한다. 팀·기간·선택월은 목표와 같은 축이라 허용.
   const revGoalComparable =
     query.trim() === "" &&
-    managerFilter.size === 0 &&
+    managerFilter.size <= 1 &&
     regionFilter.size === 0 &&
     productFilter === "all" &&
     revStatusFilter === "ALL" &&
@@ -2212,7 +2181,7 @@ export default function SalesLedgerWorkbench({
     const newRowInputs = newRowNames.length > 0
       ? buildPasteNewRowInputs(pastePlan, newRowNames, {
           team: defaultBranchDraftTeam(team),
-          manager: managerFilter.size === 1 ? Array.from(managerFilter)[0] : "",
+          manager: managerFilter.size === 1 && !managerFilter.has(UNMAPPED_BRANCH_MEMBER) ? Array.from(managerFilter)[0] : "",
           productCategory: "software",
           confidence: pasteConfidence,
           lens,
@@ -2928,7 +2897,7 @@ export default function SalesLedgerWorkbench({
                 <button
                   key={value}
                   type="button"
-                  onClick={() => setTeam(value)}
+                  onClick={() => { setTeam(value); setManagerFilter(new Set()) }}
                   className={`rounded-md px-3 py-1.5 text-[12px] font-bold transition ${
                     team === value ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59] hover:text-[#111110]"
                   }`}
@@ -3005,6 +2974,11 @@ export default function SalesLedgerWorkbench({
           </div>
         )}
       </header>
+      <div className="flex flex-wrap items-center gap-2 border-b border-black/[0.08] bg-white px-4 py-3 sm:px-6 lg:px-9" role="group" aria-label="장부 데이터 범위">
+        <button type="button" aria-pressed={scopedManager === defaultManager} onClick={() => { setTeam("ALL"); setManagerFilter(new Set([defaultManager])) }} className="min-h-11 rounded-lg border border-black/[0.08] px-3 text-xs font-semibold text-[#084734]">내 담당</button>
+        <button type="button" aria-pressed={managerFilter.size === 0} onClick={() => setManagerFilter(new Set())} className="min-h-11 rounded-lg border border-black/[0.08] px-3 text-xs font-semibold text-[#615D59]">전체 담당자</button>
+        <span className="text-xs text-[#615D59]">{scopedManager === UNMAPPED_BRANCH_MEMBER ? "로그인 계정의 담당자 연결이 필요합니다." : managerFilter.size ? `${Array.from(managerFilter).map(branchManagerLabel).join(", ")} · 개인 목표와 데이터` : "선택한 팀·전체 데이터"}</span>
+      </div>
 
       {/* Desktop: table and sticky detail/input pane share a grid. Smaller screens keep
           the existing floating panel; cockpit has its own editor, except when the queue opens. */}
@@ -3213,7 +3187,7 @@ export default function SalesLedgerWorkbench({
                   {formatMonthLabel(selectedMonth)} 현황
                   {managerFilter.size > 0 && (
                     <span className="ml-1.5 font-semibold text-[#084734]">
-                      ({Array.from(managerFilter).join(", ")})
+                      ({Array.from(managerFilter).map(branchManagerLabel).join(", ")})
                     </span>
                   )}
                 </span>
@@ -3336,6 +3310,7 @@ export default function SalesLedgerWorkbench({
                 />
 
                 <DshTeamGrid
+                  personalManager={scopedManager || undefined}
                   rows={summary.data?.dsh_rows ?? []}
                   loading={summary.loading && !summary.data}
                 />
@@ -3458,7 +3433,6 @@ export default function SalesLedgerWorkbench({
                       onChange={setManagerFilter}
                       placeholder="전체"
                       width="w-44"
-                      pinStorageKey={PIPELINE_MANAGER_DEFAULT_STORAGE_KEY}
                     />
 
                     {/* 지역 MultiSelect */}
@@ -3600,7 +3574,7 @@ export default function SalesLedgerWorkbench({
                     {Array.from(managerFilter).map((name) => (
                       <FilterTag
                         key={`mgr-${name}`}
-                        label={`담당자 ${name}`}
+                        label={`담당자 ${branchManagerLabel(name)}`}
                         onClear={() => setManagerFilter((current) => {
                           const next = new Set(current)
                           next.delete(name)

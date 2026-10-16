@@ -27,7 +27,6 @@ import UnconfirmedToggle from "./unified/UnconfirmedToggle"
 import { SORT_DEFAULT_DIRECTION, sortRows, type SortKey, type SortState } from "./unified/sort"
 import {
   CURRENT_OWNER_VALUE,
-  OWNER_STORAGE_KEY,
   PRIMARY_SAVED_VIEW_FILTERS,
   SAVED_VIEW_FILTERS,
   SECONDARY_SAVED_VIEW_FILTERS,
@@ -78,12 +77,12 @@ const RESOLVED_NULL_UNIFIED_CUSTOMERS_PROMISE: Promise<CrmUnifiedCustomers | nul
  * 같은 계산을 서버에서 반복해 같은 문자열을 만들어야 시드가 `loadPage(0)`의 캐시 조회에
  * 맞는다(tests/admin/crm-unified-prefetch.test.ts가 두 값을 직접 비교해 고정한다).
  *
- * "my_owner" 저장 뷰는 제외한다 — 서버 프리페치는 로그인한 담당자의 소유자 키를 풀지 않으므로
- * (unified-prefetch.ts 상단 주석의 한계) my_owner 딥링크의 URL을 여기서도 만들지 않는다.
+ * "my_owner"는 같은 개인 범위의 기본 목록 URL을 사용한다. 서버 프리페치도 검증된
+ * 로그인 계정의 담당자 키를 조회하므로 전사 데이터가 개인 시드에 섞이지 않는다.
  * 알 수 없는 view 값과 my_owner는 모두 "all"로 떨어진다. 라벨(?tag=)은 parseTagParam으로
  * 정규화한 값이 그대로 실린다 — 마운트 시 tagFilter 초기값도 같은 함수로 URL에서 읽는다.
  */
-export function buildUnifiedListDefaultUrl(overrides?: { query?: string; view?: string; tag?: string }): string {
+export function buildUnifiedListDefaultUrl(overrides?: { query?: string; view?: string; tag?: string; owner?: string }): string {
   const rawView = overrides?.view
   const view: SavedViewFilter =
     rawView && rawView !== "my_owner" && SAVED_VIEW_FILTERS.some((filter) => filter.key === rawView)
@@ -93,7 +92,7 @@ export function buildUnifiedListDefaultUrl(overrides?: { query?: string; view?: 
     query: overrides?.query?.trim() ?? "",
     source: "all",
     lifecycle: "all",
-    owner: "",
+    owner: overrides?.owner ?? CURRENT_OWNER_VALUE,
     view,
     tag: parseTagParam(overrides?.tag),
     includeUnconfirmed: false,
@@ -203,7 +202,7 @@ export default function CrmUnifiedCustomersClient({
   }, [query])
   const [source, setSource] = useState<SourceFilter>("all")
   const [lifecycle, setLifecycle] = useState<LifecycleFilter>("all")
-  const [owner, setOwner] = useState("")
+  const [owner, setOwner] = useState(searchParams.get("owner") ?? CURRENT_OWNER_VALUE)
   const [savedView, setSavedView] = useState<SavedViewFilter>("all")
   // 라벨 필터는 URL(?tag=) 상태다 — 태그 관리 화면 딥링크 착지의 첫 요청부터 라벨이 실리도록
   // 마운트 시점 URL로 초기화하고, 이후 동기화는 아래 ?tag= 착지 effect·changeTagFilter가 맡는다.
@@ -358,7 +357,7 @@ export default function CrmUnifiedCustomersClient({
     setSource("all")
     setLifecycle("all")
     setQuery("")
-    setOwner(view === "my_owner" ? CURRENT_OWNER_VALUE : "")
+    setOwner(view === "my_owner" ? CURRENT_OWNER_VALUE : searchParams.get("owner") ?? CURRENT_OWNER_VALUE)
   }, [searchParams])
 
   // 태그 관리 화면 딥링크(?tag=) ↔ 라벨 필터 — ?view=와 같은 규약: 값이 실제로 바뀔 때만 반영하고
@@ -366,6 +365,8 @@ export default function CrmUnifiedCustomersClient({
   // ref를 라우터 호출보다 먼저 갱신해 재발화하지 않는다. ?view=와 달리 파라미터가 사라지면
   // 라벨도 푼다 — 라벨은 URL이 정본이라, 같은 화면 안에서 ?tag= 없는 링크(서브내비·세그먼트)로
   // 이동했는데 이전 라벨이 조용히 남아 결과를 좁히는 일을 막는다.
+  useEffect(() => { setOwner(searchParams.get("owner") ?? CURRENT_OWNER_VALUE) }, [searchParams])
+
   const lastTagParamRef = useRef<string | null>(null)
   useEffect(() => {
     const tag = parseTagParam(searchParams.get("tag"))
@@ -381,7 +382,7 @@ export default function CrmUnifiedCustomersClient({
   // 저장 뷰·라벨을 함께 바꿀 때(필터 초기화)는 한 번의 replace로 묶는다 — 두 번 부르면 두 번째가
   // 같은 이전 searchParams에서 출발해 첫 변경을 되돌린다(patchUnifiedListParams 주석).
   const replaceListParams = useCallback(
-    (patch: { view?: SavedViewFilter; tag?: string }) => {
+    (patch: { view?: SavedViewFilter; tag?: string; owner?: string }) => {
       if (patch.view !== undefined) lastViewParamRef.current = patch.view === "all" ? null : patch.view
       if (patch.tag !== undefined) lastTagParamRef.current = parseTagParam(patch.tag)
       const qs = patchUnifiedListParams(searchParams.toString(), patch)
@@ -407,6 +408,7 @@ export default function CrmUnifiedCustomersClient({
   const [unifiedListDefaultUrl] = useState(() =>
     buildUnifiedListDefaultUrl({
       query: searchParams.get("q") ?? undefined,
+      owner: searchParams.get("owner") ?? CURRENT_OWNER_VALUE,
       view: searchParams.get("view") ?? undefined,
       tag: searchParams.get("tag") ?? undefined,
     })
@@ -544,38 +546,21 @@ export default function CrmUnifiedCustomersClient({
     void loadPage(0)
   }, [loadPage, customersReady])
 
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    // 세그먼트(?view=)·라벨(?tag=) 딥링크 착지 시에는 저장된 담당자 필터를 복원하지 않는다 — 칩 카운트(전역 기준)·
-    // 태그 관리 화면 건수와의 정합, 그리고 첫 요청이 서버 프리페치 시드(담당자 없음)와 맞게.
-    const landing = new URLSearchParams(window.location.search)
-    if (landing.get("view") || landing.get("tag")) return
-    const storedOwner = window.localStorage.getItem(OWNER_STORAGE_KEY)
-    if (storedOwner) setOwner(storedOwner)
-  }, [])
-
-  // 담당자 필터 영속화 — 사용자가 직접 바꿀 때만 기록한다.
-  // (딥링크 착지가 프로그램적으로 owner를 비울 때 저장된 선호가 지워지지 않도록 effect 영속화 대신 액션 시점에 호출.)
-  const persistOwner = useCallback((next: string) => {
-    if (typeof window === "undefined") return
-    if (next) window.localStorage.setItem(OWNER_STORAGE_KEY, next)
-    else window.localStorage.removeItem(OWNER_STORAGE_KEY)
-  }, [])
+  // 명시적 선택만 URL에 보존한다. 브라우저 공용 저장값을 다른 계정에 적용하지 않는다.
+  const persistOwner = useCallback((next: string) => replaceListParams({ owner: next }), [replaceListParams])
 
   const selectSavedView = (view: SavedViewFilter) => {
     if (view === "my_owner") {
       if (!currentOwner) return
       if (savedView === "my_owner") {
         setOwner("")
-        persistOwner("")
         setSavedView("all")
-        syncViewParam("all")
+        replaceListParams({ view: "all", owner: "" })
         return
       }
       setOwner(CURRENT_OWNER_VALUE)
-      persistOwner(CURRENT_OWNER_VALUE)
       setSavedView(view)
-      syncViewParam(view)
+      replaceListParams({ view, owner: CURRENT_OWNER_VALUE })
       setSource("all")
       setLifecycle("all")
       return
@@ -608,11 +593,11 @@ export default function CrmUnifiedCustomersClient({
   const exitQuickView = useCallback(() => {
     if (savedView === "my_owner") {
       setOwner("")
-      persistOwner("")
+
     }
     setSavedView("all")
-    syncViewParam("all")
-  }, [persistOwner, savedView, syncViewParam])
+    replaceListParams({ view: "all", ...(savedView === "my_owner" ? { owner: "" } : {}) })
+  }, [replaceListParams, savedView])
 
   // 빠른 보기 잔존 필터 힌트 — 숨김≠리셋 설계라 접힌 검색 패널의 검색어/담당/라벨이 남아
   // 결과를 조용히 좁힐 수 있다. 남은 필터를 스트립에 명시하고 '해제'로 뷰는 유지한 채 푼다.
@@ -654,14 +639,13 @@ export default function CrmUnifiedCustomersClient({
     setQuery("")
     setSource("all")
     setLifecycle("all")
-    setOwner("")
-    persistOwner("")
+    setOwner(CURRENT_OWNER_VALUE)
     setSavedView("all")
     setTagFilter("")
     // 저장 뷰·라벨 URL을 한 번의 replace로 함께 비운다(따로 부르면 두 번째가 첫 변경을 덮어쓴다).
-    replaceListParams({ view: "all", tag: "" })
+    replaceListParams({ view: "all", tag: "", owner: CURRENT_OWNER_VALUE })
     setIncludeUnconfirmed(false)
-  }, [persistOwner, replaceListParams])
+  }, [replaceListParams])
 
   const hiddenUnconfirmedCount = data?.summary.hiddenUnconfirmedCount ?? 0
 

@@ -65,14 +65,14 @@ describe("GET /api/admin/crm/compass-summary", () => {
     const { GET } = await loadRoute()
     await GET(new NextRequest("https://classin.kr/api/admin/crm/compass-summary"))
 
-    expect(mocks.buildCompassSummary).toHaveBeenCalledWith("7d")
+    expect(mocks.buildCompassSummary).toHaveBeenCalledWith("7d", expect.any(Date), ["Somang"])
   })
 
   it.each(["7d", "30d", "90d"])("유효한 period=%s를 그대로 전달한다", async (period) => {
     const { GET } = await loadRoute()
     await GET(new NextRequest(`https://classin.kr/api/admin/crm/compass-summary?period=${period}`))
 
-    expect(mocks.buildCompassSummary).toHaveBeenCalledWith(period)
+    expect(mocks.buildCompassSummary).toHaveBeenCalledWith(period, expect.any(Date), ["Somang"])
   })
 
   it("잘못된 period는 400을 반환하고 조회하지 않는다", async () => {
@@ -105,3 +105,5 @@ describe("GET /api/admin/crm/compass-summary", () => {
     expect(response.status).toBe(500)
   })
 })
+
+vi.mock("@/lib/admin/data-owner", () => ({ dataOwnerFromRequest: async () => ["Somang"] }))

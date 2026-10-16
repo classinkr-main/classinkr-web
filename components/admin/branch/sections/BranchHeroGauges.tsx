@@ -1,4 +1,5 @@
 "use client"
+import { branchManagerLabel } from "@/lib/branch/personal-scope"
 import { useMemo } from "react"
 import Link from "next/link"
 import type { BranchKpiResponse, BranchSummaryResponse } from "../types"
@@ -15,9 +16,10 @@ export default function BranchHeroGauges({ summary, kpi, loading, periodLabel, e
   summary: BranchSummaryResponse | null; kpi: BranchKpiResponse | null; loading: boolean; periodLabel: string; error?: string | null
 }) {
   const teams = useMemo(() => {
+    if (summary?.scope?.manager) return (kpi?.members ?? []).map((member) => ({ team: member.team ?? "ALL", label: member.member, goal: member.goal, status: member.status }))
     if (!kpi?.teams) return []
-    return kpi.teams.filter((t) => isLegacyBranchTeam(summary?.team) ? t.team === summary?.team : isCurrentBranchTeam(t.team))
-  }, [kpi, summary?.team])
+    return kpi.teams.filter((t) => isLegacyBranchTeam(summary?.team) ? t.team === summary?.team : isCurrentBranchTeam(t.team)).map((item) => ({ ...item, label: branchTeamLabel(item.team) }))
+  }, [kpi, summary?.scope?.manager, summary?.team])
 
   if (error && !summary) return (
     <div role="alert" className="rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-[13px] font-semibold text-[#8F2C2C]">{error}</div>
@@ -30,7 +32,7 @@ export default function BranchHeroGauges({ summary, kpi, loading, periodLabel, e
   const { confirmed: actual, goal, pacing_pct: pacing } = summary.revenue
   const domain = comparisonDomain([actual, goal])
   const teamDomain = comparisonDomain(teams.flatMap((item) => [item.status, item.goal]))
-  const scope = branchTeamLabel(summary.team)
+  const scope = summary.scope?.manager ? branchManagerLabel(summary.scope.manager) : branchTeamLabel(summary.team)
   const legacy = isLegacyBranchTeam(summary.team)
 
   return <section aria-label="매출 현황 요약" className="grid gap-6 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-5 md:p-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
@@ -53,7 +55,7 @@ export default function BranchHeroGauges({ summary, kpi, loading, periodLabel, e
     </div>
     <div className="min-w-0 border-t border-[rgba(0,0,0,0.08)] pt-5 xl:border-l xl:border-t-0 xl:pl-6 xl:pt-0">
       <div className="flex items-baseline justify-between gap-3">
-        <h3 className="text-[14px] font-semibold text-[#111110]">{legacy ? "이전 조직 매출 이력" : "현재 팀별 매출"}</h3>
+        <h3 className="text-[14px] font-semibold text-[#111110]">{summary.scope?.manager ? "개인 목표와 DSH 실적" : legacy ? "이전 조직 매출 이력" : "현재 팀별 매출"}</h3>
         <span className="text-[12px] text-[#615D59]">DSH · 실적 / 목표</span>
       </div>
       {loading && !kpi ? <p role="status" className="mt-4 text-[13px] text-[#615D59]">팀 KPI를 불러오는 중입니다.</p>
@@ -62,10 +64,10 @@ export default function BranchHeroGauges({ summary, kpi, loading, periodLabel, e
         : <div className="mt-4 grid grid-cols-2 gap-4">
           {teams.map((item) => <div key={item.team} className="min-w-0 rounded-lg bg-[#F6F5F4] p-3">
             <div className="mb-3 text-[13px]">
-              <strong style={{ color: TEAM_COLORS[item.team as TeamKey].color }}>{branchTeamLabel(item.team)}</strong>
+              <strong style={{ color: TEAM_COLORS[item.team as TeamKey]?.color ?? "#615D59" }}>{item.label}</strong>
             </div>
             <div className="mb-3 flex justify-center">
-              {item.goal > 0 ? <div role="img" aria-label={`${branchTeamLabel(item.team)} 매출 달성률 ${((item.status / item.goal) * 100).toFixed(1)}%`}>
+              {item.goal > 0 ? <div role="img" aria-label={`${item.label} 매출 달성률 ${((item.status / item.goal) * 100).toFixed(1)}%`}>
                 <GaugeRing value={item.status} goal={item.goal} size={96} />
               </div> : <p className="flex h-24 items-center text-[12px] text-[#615D59]">목표 미설정</p>}
             </div>
