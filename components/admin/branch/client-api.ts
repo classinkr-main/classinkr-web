@@ -2,11 +2,13 @@
 
 import { useEffect, useRef, useState } from "react"
 import {
+  adminFetch as sharedAdminFetch,
   adminFetchJson as sharedAdminFetchJson,
   adminFetchJsonCachedWithMeta,
   clearAdminRequestCache,
   type AdminFetchInit,
 } from "@/lib/admin-client"
+import { readSyncOutcomeResponse, type SyncOutcomeFields } from "@/lib/admin/sync-outcome"
 
 // 웨이브 7 2단(I4): 낙관적 잠금 409 응답 바디({error, draft})는 상태코드와 바디를 함께 읽어야
 // 구분할 수 있다 — adminFetchJson은 실패 시 Error(message)만 던지고 status를 버리므로, 원
@@ -131,3 +133,27 @@ export function useBranchJson<T>(url: string, refreshKey: number, options: UseBr
 
   return state
 }
+
+// 시트 동기화 응답 본문 중 화면이 읽는 부분 — 결과 계약(lib/admin/sync-outcome) + 장부 임포트 재캡처 결과
+// (lib/branch/sync/run-all.ts RunAllResult 미러).
+export type BranchSyncResponseBody = SyncOutcomeFields & {
+  revImport?:
+    | { status: "inactive" }
+    | { status: "captured" | "unchanged"; runId: string; capturedAt: string; lineCount: number }
+  revImportError?: string
+}
+
+// POST /api/admin/branch/sync — 성공(200)·잠김(200)·부분 실패(500) 어느 쪽이든 본문을 버리지 않고 돌려준다
+// (라운드 5 S-1·S-3). adminFetchJson은 2xx가 아니면 본문을 버리고 문자열만 던져, 부분 실패의 결과 종류·경고와
+// 권한 거부(403)를 구분할 수 없었다. 네트워크 예외는 그대로 던진다(호출부가 오류 배너로 보인다).
+export async function postBranchSync(
+  sources: Array<"rev" | "hw">,
+): Promise<{ status: number; body: BranchSyncResponseBody | null }> {
+  const response = await sharedAdminFetch("/api/admin/branch/sync", {
+    method: "POST",
+    body: JSON.stringify({ sources }),
+  })
+  const { status, body } = await readSyncOutcomeResponse(response)
+  return { status, body: body as BranchSyncResponseBody | null }
+}
+
