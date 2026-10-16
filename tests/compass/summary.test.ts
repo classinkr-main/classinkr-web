@@ -38,7 +38,7 @@ import {
 function leadsViewChain(config: {
   onRange?: (from: number, to: number) => { data?: unknown[] | null; error?: unknown }
   bdCount?: { count?: number | null; error?: unknown }
-  upcoming?: { data?: unknown[] | null; error?: unknown }
+  upcoming?: { data?: unknown[] | null; error?: unknown; count?: number }
 }): Chain {
   const chain: Chain = {}
   chain.select = vi.fn(() => chain)
@@ -426,6 +426,12 @@ describe("buildCompassSummary", () => {
       expect(summary.upcomingActionCount).toBe(0)
       expect(summary.error).toContain("action")
     })
+  })
+
+  it("다음 액션 목록이 잘려도 홈 밴드와 요약은 정확한 전체 건수를 쓴다", async () => {
+    leadsChain = leadsViewChain({ upcoming: { data: [upcomingRow()], count: 734, error: null } })
+    expect((await buildCompassSummary("7d", NOW)).upcomingActionCount).toBe(734)
+    expect((await buildCompassPipelineBand()).upcomingActionCount).toBe(734)
   })
 
   it("truncated가 슬라이스에서 그대로 전파된다", async () => {

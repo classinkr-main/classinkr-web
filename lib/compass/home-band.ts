@@ -38,7 +38,7 @@ export async function buildCompassPipelineBand(ownerKeys?: readonly string[]): P
   return {
     down: demos.down || upcoming.down || bdOpen.down,
     todayDemoCount: demos.rows.filter(isCountableCompassDemo).length,
-    upcomingActionCount: upcoming.rows.length,
+    upcomingActionCount: upcoming.total ?? upcoming.rows.length,
     bdOpenCount: bdOpen.count,
     generatedAt: new Date().toISOString(),
   }

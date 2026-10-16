@@ -201,11 +201,19 @@ interface MemoizeOptions<T> {
   copy: (value: T) => T
 }
 
-/** 엔트리 상한 — 초과하면(예: phone_key 배치 조합이 다양해 키가 폭증) 전체를 비운다.
- *  LRU 등 정교한 축출 대신 "가끔 캐시가 통째로 비는" 단순한 안전판을 택했다 — 60초 TTL
- *  자체가 짧아 전체 clear의 비용(다음 호출들의 캐시 미스)이 크지 않다. */
+/** 엔트리 상한 — 초과하면 가장 먼저 삽입된 한 건만 비운다. 진행 중 조회도 10초 안에
+ *  종료되므로 무응답 promise가 영구히 캐시를 점유하지 않는다. */
 const MEMO_MAX_ENTRIES = 200
+const MEMO_DEADLINE_MS = 10_000
 const memoStore = new Map<string, MemoEntry<unknown>>()
+
+/** 응답이 없는 의존성 때문에 pending 캐시가 영구히 남지 않게 한다. */
+function withMemoDeadline<T>(read: Promise<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("Compass read timeout")), MEMO_DEADLINE_MS)
+    read.then(resolve, reject).finally(() => clearTimeout(timer))
+  })
+}
 
 function memoize<T>(key: string, fn: () => Promise<T>, options: MemoizeOptions<T>): Promise<T> {
   const now = Date.now()
@@ -221,7 +229,7 @@ function memoize<T>(key: string, fn: () => Promise<T>, options: MemoizeOptions<T
     // 진행 중에는 Infinity로 두어 "항상 신선"하게 취급한다 — 그 사이 들어오는 동시 호출이
     // 전부 이 promise를 공유하게 한다(원격 조회는 한 번만 나간다).
     expiresAt: Infinity,
-    promise: fn().then(
+    promise: withMemoDeadline(fn()).then(
       (value) => {
         const down = options.isDown?.(value) ?? false
         entry.expiresAt = Date.now() + (down ? (options.downTtlMs ?? options.ttlMs) : options.ttlMs)
@@ -235,7 +243,11 @@ function memoize<T>(key: string, fn: () => Promise<T>, options: MemoizeOptions<T
     ),
   }
   memoStore.set(key, entry as MemoEntry<unknown>)
-  if (memoStore.size > MEMO_MAX_ENTRIES) memoStore.clear()
+  if (memoStore.size > MEMO_MAX_ENTRIES) {
+    // 전체 clear는 다른 담당자의 정상 캐시와 진행 중 조회까지 버려 재조회 폭주를 만든다.
+    const oldest = memoStore.keys().next().value
+    if (oldest !== undefined) memoStore.delete(oldest)
+  }
   return entry.promise.then(options.copy)
 }
 
@@ -847,15 +859,17 @@ export async function getCompassUpcomingActions(
         const sb = createSupabaseAdminClient()
         const nowIso = new Date().toISOString()
         const untilIso = new Date(Date.now() + withinHours * 60 * 60 * 1000).toISOString()
-        const { data, error } = await withCompassOwner(sb
+        const { data, error, count } = await withCompassOwner(sb
           .from("compass_leads_v")
-          .select("*")
+          .select("*", { count: "exact" })
           .gte("next_action_at", nowIso)
           .lte("next_action_at", untilIso)
           .order("next_action_at", { ascending: true })
+          .order("id", { ascending: true })
           .limit(500), ownerKeys)
         if (error) return downResult(error)
-        return ok((data ?? []) as CompassLeadRow[])
+        const rows = (data ?? []) as CompassLeadRow[]
+        return { ...ok(rows), total: count ?? rows.length, truncated: count == null ? rows.length >= 500 : count > rows.length }
       },
       { ttlMs: TTL_MS, downTtlMs: TTL_DOWN_MS, isDown: isCompassResultDown, copy: copyCompassResult },
     )

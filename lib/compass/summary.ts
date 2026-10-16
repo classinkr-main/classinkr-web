@@ -282,6 +282,6 @@ export async function buildCompassSummary(
     byOwner,
     lostReasons,
     upcomingActions,
-    upcomingActionCount: upcoming.down ? 0 : upcoming.rows.length,
+    upcomingActionCount: upcoming.down ? 0 : (upcoming.total ?? upcoming.rows.length),
   }
 }
