@@ -20,6 +20,11 @@ export interface AdminCrmRevenueSheetRow {
   confirmedAmount: number
   highConfidenceAmount: number
   expectedAmount: number
+  /** ADR-0062 확정 예정 — 빨간 글자인데 주차 시작일이 아직 안 온 금액. expectedAmount와 겹치지 않는다. */
+  pendingAmount: number
+  /** 가장 이른 예정 칸의 주차(1~5, 월 합계 칸 = 0)와 시작일(YYYY-MM-DD) — 예정이 없으면 null. */
+  pendingNextWeek: number | null
+  pendingNextStart: string | null
   pastUnconfirmedAmount: number
   monthCount: number
   linkId: string | null
@@ -43,6 +48,7 @@ export interface AdminCrmRevenueSheetSummary {
   confirmedAmount: number
   highConfidenceAmount: number
   expectedAmount: number
+  pendingAmount: number
   pastUnconfirmedAmount: number
   linkedAmount: number
   unmatchedAmount: number
@@ -65,6 +71,7 @@ export interface AdminCrmRevenueSheetMonthPoint {
   confirmedAmount: number
   highConfidenceAmount: number
   expectedAmount: number
+  pendingAmount: number
   pastUnconfirmedAmount: number
 }
 

@@ -5,6 +5,7 @@ import { getBranchRevSourceRecordKey, isPlaceholderCrmName } from "@/lib/crm-sou
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
 import { getCompassRevenue } from "@/lib/compass/bridge"
+import { nextPendingTransition, pendingMonthAmount } from "@/lib/crm/revenue-sheet-pending"
 import type {
   AdminCrmRevenueSheetBreakdownRow,
   AdminCrmRevenueSheetCompassCompare,
@@ -41,6 +42,9 @@ interface BranchRevDealRow {
   monthly_payments: Record<string, number> | null
   monthly_confirmed: Record<string, number> | null
   monthly_high_conf: Record<string, number> | null
+  // raw jsonb의 예정분만 경로 선택으로 읽는다(raw 전체는 행 원문이라 무겁다) — 파서가 없던 시기 행은 null.
+  pending?: Record<string, number> | null
+  pending_weeks?: Record<string, number[]> | null
   synced_at: string
 }
 
@@ -109,7 +113,7 @@ function emptyBreakdown(label: string): AdminCrmRevenueSheetBreakdownRow {
 function addToBreakdown(
   map: Map<string, AdminCrmRevenueSheetBreakdownRow>,
   key: string | null | undefined,
-  row: Pick<AdminCrmRevenueSheetRow, "scheduledAmount" | "confirmedAmount" | "highConfidenceAmount" | "expectedAmount">
+  row: Pick<AdminCrmRevenueSheetRow, "scheduledAmount" | "confirmedAmount" | "highConfidenceAmount" | "expectedAmount" | "pendingAmount">
 ) {
   const label = key?.trim() || "미지정"
   const current = map.get(label) ?? emptyBreakdown(label)
@@ -117,7 +121,8 @@ function addToBreakdown(
   current.scheduledAmount += row.scheduledAmount
   current.confirmedAmount += row.confirmedAmount
   current.highConfidenceAmount += row.highConfidenceAmount
-  current.expectedAmount += row.expectedAmount
+  // 분해 표는 열을 늘리지 않는다 — '예정'에 확정 예정(ADR-0062)을 합쳐 이전 합계를 유지한다.
+  current.expectedAmount += row.expectedAmount + row.pendingAmount
   map.set(label, current)
 }
 
@@ -136,6 +141,7 @@ function addMonth(
       confirmedAmount: 0,
       highConfidenceAmount: 0,
       expectedAmount: 0,
+      pendingAmount: 0,
       pastUnconfirmedAmount: 0,
     }
   current[field] += amount
@@ -218,7 +224,7 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
     sb
       .from("branch_rev_deals")
       .select(
-        "id, sheet_row, customer_name, branch_contact, team, manager, deal_type, status, first_payment, product_version, region, importance, note, contract_target, monthly_payments, monthly_confirmed, monthly_high_conf, synced_at"
+        "id, sheet_row, customer_name, branch_contact, team, manager, deal_type, status, first_payment, product_version, region, importance, note, contract_target, monthly_payments, monthly_confirmed, monthly_high_conf, pending:raw->monthlyPending, pending_weeks:raw->pendingWeeks, synced_at"
       )
       .order("sheet_row", { ascending: true })
       .limit(QUERY_LIMIT),
@@ -314,6 +320,8 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
     let confirmedAmount = 0
     let highConfidenceAmount = 0
     let expectedAmount = 0
+    let pendingAmount = 0
+    const pendingMonths: string[] = []
     let pastUnconfirmedAmount = 0
 
     for (const [month, rawAmount] of Object.entries(deal.monthly_payments ?? {})) {
@@ -334,11 +342,19 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
         pastUnconfirmedAmount += uncolored
         addMonth(monthMap, month, "pastUnconfirmedAmount", uncolored)
       } else if (uncolored > 0) {
-        expectedAmount += uncolored
-        addMonth(monthMap, month, "expectedAmount", uncolored)
+        // ADR-0062: 미확정분 중 빨간 예정 칸 몫은 '확정 예정'으로 떼고 나머지만 무색 예정으로 둔다.
+        const pending = pendingMonthAmount(deal, month, uncolored, currentMonth)
+        if (pending > 0) {
+          pendingAmount += pending
+          pendingMonths.push(month)
+          addMonth(monthMap, month, "pendingAmount", pending)
+        }
+        expectedAmount += uncolored - pending
+        addMonth(monthMap, month, "expectedAmount", uncolored - pending)
       }
     }
 
+    const nextTransition = nextPendingTransition(deal, pendingMonths)
     return {
       id: deal.id,
       sheetRow: deal.sheet_row,
@@ -359,6 +375,9 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
       confirmedAmount,
       highConfidenceAmount,
       expectedAmount,
+      pendingAmount,
+      pendingNextWeek: nextTransition?.week ?? null,
+      pendingNextStart: nextTransition?.start ?? null,
       pastUnconfirmedAmount,
       monthCount: Object.keys(deal.monthly_payments ?? {}).length,
       linkId: link?.id ?? null,
@@ -409,6 +428,7 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
       confirmedAmount: activeRows.reduce((sum, row) => sum + row.confirmedAmount, 0),
       highConfidenceAmount: activeRows.reduce((sum, row) => sum + row.highConfidenceAmount, 0),
       expectedAmount: activeRows.reduce((sum, row) => sum + row.expectedAmount, 0),
+      pendingAmount: activeRows.reduce((sum, row) => sum + row.pendingAmount, 0),
       pastUnconfirmedAmount: activeRows.reduce((sum, row) => sum + row.pastUnconfirmedAmount, 0),
       linkedAmount: linkedRows.reduce((sum, row) => sum + row.scheduledAmount, 0),
       unmatchedAmount: unmatchedRows.reduce((sum, row) => sum + row.scheduledAmount, 0),

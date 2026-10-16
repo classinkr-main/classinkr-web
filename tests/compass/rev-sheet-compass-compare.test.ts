@@ -16,6 +16,7 @@ function monthPoint(month: string, scheduledAmount: number) {
     confirmedAmount: 0,
     highConfidenceAmount: 0,
     expectedAmount: 0,
+    pendingAmount: 0,
     pastUnconfirmedAmount: 0,
   }
 }
