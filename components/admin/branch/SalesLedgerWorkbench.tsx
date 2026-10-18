@@ -3749,10 +3749,10 @@ export default function SalesLedgerWorkbench({
                 >
                   <table role="grid" aria-label="REV 매출 매트릭스" className="w-max min-w-full border-collapse text-left text-[12px]">
                     <thead className="text-[10px] uppercase tracking-[0.06em] text-[#615D59]">
-                      <tr role="row" className="h-auto border-b-2 border-[#D1D5DB] bg-[#F8F8F7]">
+                      <tr role="row" className="h-auto border-b border-[#CBD5E1] bg-[#F8F8F7]">
                         <th
                           aria-sort={revSortAriaValue(revSortKey === "customer", revSortDirection)}
-                          className="sticky left-0 top-0 z-40 border-r border-[#E5E7EB] bg-[#F8F8F7] px-3 py-2 text-left align-middle shadow-[2px_0_5px_-2px_rgba(0,0,0,0.04)]"
+                          className="sticky left-0 top-0 z-40 border-r border-[#E5E7EB] bg-[#F8F8F7] px-3 py-2 text-left align-middle shadow-[4px_0_12px_-2px_rgba(0,0,0,0.06)]"
                           style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
                         >
                           <RevSortHeader label="고객/계정" sortKey="customer" activeKey={revSortKey} direction={revSortDirection} onSort={onRevSort} />
@@ -3783,24 +3783,25 @@ export default function SalesLedgerWorkbench({
                         {(h1Expanded ? revMatrixColumns : revMatrixColumns.filter((col) => !isH1Month(col.month))).map((column) => {
                           const isExpanded = expandedRevMonths.has(column.month)
                           const width = isExpanded ? MATRIX_WEEK_W * 5 + MATRIX_MONTH_W : MATRIX_MONTH_W
-                          // 웨이브 5 — 항목 1(b): "선택 기간"(M=선택월, Q=현재 분기) 컬럼을 오늘
-                          // (column.current)과는 구분되는 옅은 톤으로 표시 — 기존 column.current
-                          // 강조 패턴(같은 그린 계열)을 확장한다. 컬럼 자체(폭·순서·개수)는 불변 —
-                          // 톤만 얹어 "지금 보조 분석/전기 대비 칩의 기준 컬럼"임을 알린다.
+                          const isSelectedMonth = column.month === selectedMonth
                           const isPeriodColumn = periodHighlightMonths.has(column.month)
                           return (
                             <th
                               key={column.month}
                               colSpan={isExpanded ? 6 : 1}
-                              className={`sticky top-0 z-20 border-l border-[#EDECE8] p-0 text-center align-middle ${
-                                isExpanded
-                                  ? "bg-[#F4F9F6]"
-                                  : column.current
-                                    ? "bg-[#ECFDF5]"
-                                    : isPeriodColumn
-                                      ? "bg-[#ECFDF5]/50"
-                                      : "bg-[#F8F8F7] hover:bg-[#F0EFEB]"
-                              } transition-colors`}
+                              className={`sticky top-0 z-20 border-l border-[#EDECE8] p-0 text-center align-middle transition-colors ${
+                                isSelectedMonth
+                                  ? isExpanded
+                                    ? "bg-[#E6F7F0] border-t-2 border-t-[#084734]"
+                                    : "bg-[#ECFDF5] border-t-2 border-t-[#084734]"
+                                  : isExpanded
+                                    ? "bg-[#F4F9F6]"
+                                    : column.current
+                                      ? "bg-[#F0FDF4]"
+                                      : isPeriodColumn
+                                        ? "bg-[#ECFDF5]/40"
+                                        : "bg-[#F8F8F7] hover:bg-[#F0EFEB]"
+                              }`}
                               style={{ width, minWidth: width }}
                             >
                               {isExpanded ? (
@@ -3808,7 +3809,14 @@ export default function SalesLedgerWorkbench({
                                   {/* 상단: 월 타이틀 & 접기 버튼 */}
                                   <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-[#BDEFD8]/70">
                                     <div className="flex items-center gap-1.5">
-                                      <span className="font-bold text-[11.5px] text-[#084734]">{column.label}</span>
+                                      <span className={`text-[11.5px] ${isSelectedMonth ? "font-extrabold text-[#084734]" : "font-bold text-[#084734]"}`}>
+                                        {column.label}
+                                      </span>
+                                      {isSelectedMonth && (
+                                        <span className="rounded-full bg-[#084734] px-1.5 py-0.2 text-[8px] font-extrabold text-white leading-tight">
+                                          기준
+                                        </span>
+                                      )}
                                       <span className="rounded bg-[#ECFDF5] border border-[#BDEFD8] px-1 py-0.2 text-[9px] font-bold text-[#084734]">
                                         주차 상세
                                       </span>
@@ -3862,16 +3870,32 @@ export default function SalesLedgerWorkbench({
                                     onClick={() => toggleRevMonth(column.month)}
                                     aria-expanded={false}
                                     title={`클릭: 주차(w1~w5) 펼치기 · ${formatMonthLabel(column.month)} 합계 ${formatMoney(column.total)}${
-                                      isPeriodColumn ? ` · 현재 선택 기간(${periodLabelShort})` : ""
+                                      isSelectedMonth ? " · 기준 월" : isPeriodColumn ? ` · 현재 선택 기간(${periodLabelShort})` : ""
                                     }`}
-                                    className="group/btn flex items-center justify-center gap-0.5 font-bold transition"
+                                    className="group/btn flex items-center justify-center gap-1 font-bold transition"
                                   >
-                                    <span className={`text-[11.5px] font-bold transition-colors ${
-                                      column.current || isPeriodColumn ? "text-[#084734]" : "text-[#374151] group-hover/btn:text-[#084734]"
+                                    <span className={`text-[11.5px] transition-colors ${
+                                      isSelectedMonth
+                                        ? "font-extrabold text-[#084734]"
+                                        : column.current
+                                          ? "font-bold text-[#166534]"
+                                          : isPeriodColumn
+                                            ? "font-bold text-[#084734]"
+                                            : "font-bold text-[#374151] group-hover/btn:text-[#084734]"
                                     }`}>
                                       {column.label}
                                     </span>
-                                    <span className="inline-flex items-center text-[9px] text-[#9CA3AF] group-hover/btn:text-[#084734]">
+                                    {isSelectedMonth && (
+                                      <span className="rounded-full bg-[#084734] px-1 py-0.2 text-[8px] font-extrabold text-white leading-tight">
+                                        기준
+                                      </span>
+                                    )}
+                                    {column.current && !isSelectedMonth && (
+                                      <span className="h-1.5 w-1.5 rounded-full bg-[#166534]" title="현재(당월)" />
+                                    )}
+                                    <span className={`inline-flex items-center text-[9px] ${
+                                      isSelectedMonth ? "text-[#084734]" : "text-[#9CA3AF] group-hover/btn:text-[#084734]"
+                                    }`}>
                                       <ChevronDown className="h-2.5 w-2.5" />
                                     </span>
                                   </button>
@@ -3882,7 +3906,7 @@ export default function SalesLedgerWorkbench({
                         })}
                         <th
                           aria-sort={revSortAriaValue(revSortKey === "annual", revSortDirection)}
-                          className="sticky right-0 top-0 z-40 border-l border-[#E5E7EB] bg-[#F8F8F7] px-3 py-2 text-right align-middle shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.04)]"
+                          className="sticky right-0 top-0 z-40 border-l border-[#E5E7EB] bg-[#F8F8F7] px-3 py-2 text-right align-middle shadow-[-4px_0_12px_-2px_rgba(0,0,0,0.06)]"
                           style={{ width: MATRIX_ANNUAL_W, minWidth: MATRIX_ANNUAL_W, maxWidth: MATRIX_ANNUAL_W }}
                         >
                           <RevSortHeader label="연간합계" sortKey="annual" activeKey={revSortKey} direction={revSortDirection} onSort={onRevSort} align="right" />
