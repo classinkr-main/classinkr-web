@@ -53,6 +53,7 @@ import {
   type AdminNavCategory,
   type AdminNavItem,
 } from "./admin-nav"
+import { ADMIN_AI_HREF, isAdminAiPreviewEnabled } from "@/lib/admin-ai/preview"
 
 /**
  * 렌더 자리는 두 곳뿐이다. "deny" 는 2026-09-10 전면 공개 전환으로 제거됐다 —
@@ -127,7 +128,9 @@ const NAV_PRESET_KEYS: readonly NavPresetKey[] = [
  * 이 목록은 앞의 두 범주(홈 + 고객·매출)를 그대로 집어 든 것과 같다. 덕분에 상시 목록도
  * 기타와 똑같이 범주 소제목으로 묶이면서 재정렬이 일어나지 않는다.
  *
- * 상시(9): Overview · AI 올인원 · 캘린더 · KR Team · 매출 장부 · CRM · 견적·문서 · 하드웨어 재고 · CS 콘솔
+ * 상시(8): Overview · 캘린더 · KR Team · 매출 장부 · CRM · 견적·문서 · 하드웨어 재고 · CS 콘솔.
+ *   시안 스위치(NEXT_PUBLIC_ADMIN_AI_PREVIEW=1, lib/admin-ai/preview.ts)를 켜면 Overview 바로 아래
+ *   AI 올인원이 더해져 9 — 꺼져 있으면(기본, 기획 D13) ADMIN_NAV 에도 이 목록에도 없다.
  * 기타(9 자리): 마케팅·분석 6(캠페인 3 · 콘텐츠 · 자료 퍼널 · Analytics) + 시스템 3(운영 상태 ·
  *          설정 · 개발 도구). 이 중 마케팅 프로젝트·운영 상태 2개는 기본 숨김
  *          (DEFAULT_HIDDEN_HREFS)이라 처음 보이는 기타는 7개다.
@@ -138,7 +141,7 @@ const NAV_PRESET_KEYS: readonly NavPresetKey[] = [
  */
 export const DEFAULT_PRIMARY_HREFS: readonly string[] = [
   "/admin/overview",
-  "/admin/ai",
+  ...(isAdminAiPreviewEnabled() ? [ADMIN_AI_HREF] : []),
   "/admin/calendar",
   "/admin/branch",
   "/admin/branch/ledger",

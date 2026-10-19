@@ -16,6 +16,7 @@ import {
 } from "@/components/admin/admin-nav-preferences-context"
 import { mergePinnedNavOverrides, pinNavOverrides } from "@/components/admin/my-nav-preferences"
 import { RouteTransition } from "@/components/transitions/RouteTransition"
+import { isAdminAiPreviewEnabled } from "@/lib/admin-ai/preview"
 import type { AdminShellSession } from "@/lib/admin-auth"
 import { clearAdminSessionStorage } from "@/lib/admin-client"
 import { isAdminAuthBypassEnabled } from "@/lib/admin-env"
@@ -135,9 +136,15 @@ export default function AdminShell({
   const isLoginPage = pathname === "/admin/login"
   // 갈매봇을 옆에 붙이면(xl 이상) 본문을 그 폭만큼 밀어낸다. AI 올인원 탭은 위젯의 전체
   // 화면판이라 위젯 자체가 뜨지 않는다.
+  // 시안 스위치가 꺼져 있으면(기본, 기획 D13 — lib/admin-ai/preview.ts) 런처를 올리지 않는다. 브라우저에
+  // 남은 "열림·옆에 붙임" 설정이 있어도 빈 자리만큼 본문을 밀지 않게 도킹 판정도 같은 스위치를 본다.
+  const aiPreview = isAdminAiPreviewEnabled()
   const adminAi = useAdminAiState()
   const aiDocked =
-    adminAi.open && adminAi.size === "docked" && !isAdminAiWidgetHidden(pathname ?? "")
+    aiPreview &&
+    adminAi.open &&
+    adminAi.size === "docked" &&
+    !isAdminAiWidgetHidden(pathname ?? "")
   const [session, setSession] = useState<SessionInfo | null>(() => {
     if (process.env.NEXT_PUBLIC_SKIP_ADMIN_AUTH === "true") {
       return {
@@ -414,7 +421,7 @@ export default function AdminShell({
             navOverrides={session.navOverrides}
           />
         ) : null}
-        {session ? <AdminAiLauncher /> : null}
+        {session && aiPreview ? <AdminAiLauncher /> : null}
       </div>
     </AdminNavPreferencesProvider>
   )

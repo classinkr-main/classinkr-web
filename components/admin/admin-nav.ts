@@ -21,6 +21,8 @@ import {
   Users,
 } from "lucide-react"
 
+import { ADMIN_AI_HREF, isAdminAiPreviewEnabled } from "@/lib/admin-ai/preview"
+
 /**
  * 운영 정본 역할은 SUPER_ADMIN / ADMIN / BRANCH 3종이다.
  * EDITOR / VIEWER / PARTNER는 기존 프로필·세션을 깨지 않기 위한 nav 호환 값이며,
@@ -85,6 +87,9 @@ export function normalizeAdminRole(role: string): AdminRole {
   return "ADMIN"
 }
 
+// AI 올인원 항목 — 시안 스위치가 켜졌을 때만 ADMIN_NAV 의 Overview 바로 아래에 들어간다(아래 배열 주석).
+const ADMIN_AI_NAV_ITEM: AdminNavItem = { href: ADMIN_AI_HREF, label: "AI 올인원", icon: Sparkles, section: "home", badge: "시안", category: "home", maturity: "wip", keywords: "ai 올인원 갈매봇 챗봇 어시스턴트 오더 원격 오더 오더함 카탈로그 assistant order" }
+
 // IA 재편(2026-07-04): 6섹션 → 4섹션 병합. "너무 세분화" 해소 — 비즈니스 분석(Analytics)은
 // marketing으로, 매출 성과(KR Team·매출 장부)는 sales로 옮겨 잡탕이던 "분석" 섹션을 해체.
 // 트래픽은 nav에서만 내렸고 /admin/traffic 독립 화면을 유지한다. Analytics가 그 화면으로 링크한다.
@@ -115,7 +120,9 @@ export const ADMIN_NAV: AdminNavItem[] = [
   // (2026-09-29) AI 올인원 — 갈매봇 대화·오더함·AI 도구 바로가기·오더 카탈로그. 어느 화면에서나 뜨는
   // 갈매봇 위젯(components/admin/ai)의 전체 화면판이다. home 범주 블록 안, Overview 바로 아래.
   // 서버 오더 엔진이 붙기 전이라 시안(샘플 데이터)으로 동작한다 — maturity "wip".
-  { href: "/admin/ai", label: "AI 올인원", icon: Sparkles, section: "home", badge: "시안", category: "home", maturity: "wip", keywords: "ai 올인원 갈매봇 챗봇 어시스턴트 오더 원격 오더 오더함 카탈로그 assistant order" },
+  // (2026-10-19 통합 병합) 기획 D13 — 시안 스위치(NEXT_PUBLIC_ADMIN_AI_PREVIEW=1)가 꺼져 있으면(기본)
+  // 이 항목은 배열에 없다(lib/admin-ai/preview.ts). 그때 상시는 8, 전체는 17이다.
+  ...(isAdminAiPreviewEnabled() ? [ADMIN_AI_NAV_ITEM] : []),
 
   { href: "/admin/calendar", label: "캘린더", icon: CalendarDays, section: "sales", category: "customer", keywords: "캘린더 일정 calendar schedule 행사 이벤트 event 웨비나 공개 행사" },
 

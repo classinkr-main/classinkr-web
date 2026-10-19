@@ -149,14 +149,15 @@ describe("최상위 격리 — crm: 키는 사이드바 배치에 영향이 없�
     expect(resolveAdminNavAccess(ctx({ overrides: HIDE_ALL_CRM }))).toEqual(resolveAdminNavAccess(ctx()))
   })
 
-  it("최상위 전부 숨김 + CRM 전부 숨김이어도 accessible 은 18 전부다", () => {
+  // 17 = 시안 스위치 꺼짐(기본, 기획 D13) 기준. 켜면 AI 올인원이 더해져 18(tests/admin/nav-ai-preview.test.tsx).
+  it("최상위 전부 숨김 + CRM 전부 숨김이어도 accessible 은 17 전부다", () => {
     const access = resolveAdminNavAccess(ctx({ overrides: { ...HIDE_EVERYTHING_TOP, ...HIDE_ALL_CRM } }))
     expect(getAccessibleAdminNavItems(access)).toHaveLength(ADMIN_NAV.length)
     expect(getAccessibleAdminNavItems(access).map((item) => item.href)).toEqual(ADMIN_NAV.map((item) => item.href))
-    expect(ADMIN_NAV).toHaveLength(18)
+    expect(ADMIN_NAV).toHaveLength(17)
   })
 
-  it("편집기 최상위 행은 18행 그대로다", () => {
+  it("편집기 최상위 행은 17행 그대로다", () => {
     const rows = buildNavPreferenceRows(ctx({ overrides: { ...HIDE_ALL_CRM } }))
     expect(rows).toHaveLength(ADMIN_NAV.length)
     expect(rows.filter((row) => row.isException)).toHaveLength(0)

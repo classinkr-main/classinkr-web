@@ -36,8 +36,8 @@ describe("admin nav — 기타 범주 메타", () => {
       "/admin/campaigns/manage": "growth",
       "/admin/campaigns/projects": "growth",
       "/admin/overview": "home",
-      // AI 올인원(2026-09-29)은 Overview 와 같은 home 범주 — 선언도 그 블록 안이다.
-      "/admin/ai": "home",
+      // AI 올인원(2026-09-29, home 범주)은 시안 스위치가 켜졌을 때만 ADMIN_NAV 에 있다 — 기본(꺼짐) 기준인
+      // 이 표에서는 빼고, 켜짐 쪽 범주·자리는 tests/admin/nav-ai-preview.test.tsx 가 본다(기획 D13).
       // CS 콘솔은 일상 고객 지원 업무면이라 customer(2026-08-18, 진입점 단일화와 함께 재범주화).
       "/admin/chatbot": "customer",
       "/admin/ops": "system",
@@ -125,11 +125,12 @@ const EVERY_ROLE = ["SUPER_ADMIN", "ADMIN", "BRANCH", "EDITOR", "VIEWER", "PARTN
 const EVERY_LEGACY_PRESET = ["staff", "sales", "marketing", "cs", "lead", "branch", "super"] as const
 
 describe("resolveNavPlacement — 전원 공통 배치", () => {
-  it("상시 9개는 DEFAULT_PRIMARY_HREFS 그대로다", () => {
+  // 시안 스위치 꺼짐(기본, 기획 D13) 기준 — 켜면 AI 올인원이 더해져 9(tests/admin/nav-ai-preview.test.tsx).
+  it("상시 8개는 DEFAULT_PRIMARY_HREFS 그대로다", () => {
     for (const href of DEFAULT_PRIMARY_HREFS) {
       expect(resolveNavPlacement(href, ctx()), href).toBe("primary")
     }
-    expect(DEFAULT_PRIMARY_HREFS).toHaveLength(9)
+    expect(DEFAULT_PRIMARY_HREFS).toHaveLength(8)
   })
 
   it("나머지 9개의 자리는 전부 기타다 — 그중 2개는 기본 숨김이라 처음엔 목록에 없다", () => {
@@ -197,11 +198,12 @@ describe("normalizeNavOverrides — 레거시 deny 처리", () => {
 })
 
 describe("resolveNavAccess", () => {
-  it("상시 9 / 기타 7 / 숨김 2(기본 숨김) 로 나눈다", () => {
+  it("상시 8 / 기타 7 / 숨김 2(기본 숨김) 로 나눈다", () => {
     // 2026-09-25 전까지는 "기타 9"였다 — 마케팅 프로젝트·운영 상태가 기본 숨김으로 빠졌다.
-    // 2026-09-29 AI 올인원이 상시에 더해져 상시 8 → 9. 세 칸을 합치면 여전히 18 전부다.
+    // 2026-09-29 AI 올인원이 상시에 더해졌지만 시안 스위치가 꺼져 있으면(기본, 기획 D13) 빠진다 —
+    // 상시 8, 세 칸을 합치면 17 전부다. 켜짐(상시 9·18)은 tests/admin/nav-ai-preview.test.tsx.
     const { primary, folded, hidden } = resolveNavAccess(ctx())
-    expect(primary).toHaveLength(9)
+    expect(primary).toHaveLength(8)
     expect(folded.flatMap((group) => group.items)).toHaveLength(7)
     expect(hidden.map((item) => item.href)).toEqual([
       "/admin/campaigns/projects",
@@ -228,7 +230,7 @@ describe("resolveNavAccess", () => {
     expect(folded.every((group) => group.items.length > 0)).toBe(true)
   })
 
-  it("상시 소제목을 켠다 — 9항목 2범주", () => {
+  it("상시 소제목을 켠다 — 8항목 2범주", () => {
     expect(resolveNavAccess(ctx()).showPrimaryHeaders).toBe(true)
   })
 })
@@ -238,7 +240,7 @@ describe("resolveAdminNavAccess", () => {
     getAccessibleAdminNavItems(resolveAdminNavAccess(ctx(over))).map((item) => item.href)
 
   // 전면 공개의 핵심 계약 — 어떤 역할도 항목을 잃지 않는다.
-  it("모든 역할이 18개 탭 전부에 도달한다", () => {
+  it("모든 역할이 17개 탭 전부에 도달한다", () => {
     for (const role of EVERY_ROLE) {
       expect(hrefs({ role }), role).toHaveLength(ADMIN_NAV.length)
       expect(hrefs({ role }), role).toContain("/admin/settings")
@@ -324,7 +326,7 @@ describe("개인 숨김 — 목록과 도달성", () => {
   })
 
   // 불변식의 핵심 — ⌘K·active 판정·모바일 헤더가 이 집합에 기댄다.
-  it("숨길 수 있는 걸 전부 숨겨도 accessible 은 18 전부다", () => {
+  it("숨길 수 있는 걸 전부 숨겨도 accessible 은 17 전부다", () => {
     for (const role of EVERY_ROLE) {
       const access = resolveAdminNavAccess(ctx({ role, overrides: HIDE_EVERYTHING }))
       expect(getAccessibleAdminNavItems(access), role).toHaveLength(ADMIN_NAV.length)
