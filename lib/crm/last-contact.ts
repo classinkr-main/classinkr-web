@@ -9,14 +9,15 @@
 //  - home_event : crm_customer_events 중 실제 접촉 종류(HOME_CONTACT_EVENT_SOURCE_TYPES)만.
 //                 내부 메모(manual_note)·동기화 소스는 연락이 아니다. 작성자 = created_by ?? owner_name.
 //  - compass    : Compass 사람 활동(COMPASS_CONTACT_KINDS) 중 자동 작성자(COMPASS_CONTACT_EXCLUDED_ACTORS)
-//                 제외. 조인 키는 전화 정규화 키 하나(contactPhoneKey) — 이름 추측 없음.
+//                 제외. 조인 키는 전화 정규화 키 하나(compassJoinPhoneKey) — 이름 추측 없음. 자리표시·더미 번호
+//                 (010-0000-0000·010-1234-5678 류)는 키가 아니다(lead-contact-sync 와 같은 joinableCompassPhoneKey).
 //  - home       : 세부(원천·채널·작성자)를 못 읽었을 때 lib/repositories/crm-events 의 시각만 아는 폴백.
 //
 // Compass 가 끊기면 Home 원천만으로 계산하고, 호출부가 응답 메타(compass: "down")로 화면에 알린다 —
 // "기록 없음"과 "Compass 연결 끊김"을 섞지 않는다.
 
 import { COMPASS_AUTOMATED_ACTORS, COMPASS_HUMAN_ACTIVITY_KINDS } from "@/lib/compass/lead-contact-sync"
-import { normalizePhoneKey } from "@/lib/compass/normalize"
+import { MIN_COMPASS_JOIN_PHONE_DIGITS, joinableCompassPhoneKey, normalizePhoneKey } from "@/lib/compass/normalize"
 
 export type LastContactSource = "home_log" | "home_event" | "compass" | "home"
 
@@ -40,9 +41,6 @@ export const HOME_CONTACT_EVENT_SOURCE_TYPES = ["call", "sms", "meeting_minutes"
 export const COMPASS_CONTACT_KINDS: readonly string[] = COMPASS_HUMAN_ACTIVITY_KINDS
 /** 사람이 아닌 Compass 작성자 — kind 가 note 여도 연락이 아니다(lead-contact-sync 와 같은 목록). */
 export const COMPASS_CONTACT_EXCLUDED_ACTORS: ReadonlySet<string> = COMPASS_AUTOMATED_ACTORS
-
-/** 전화 조인 키로 쓰는 최소 길이 — 지역번호 포함 9자리 미만은 잘못 붙는다(lead-contact-sync 와 같음). */
-const MIN_PHONE_KEY_LENGTH = 9
 
 const LOG_CHANNEL_LABELS: Record<string, string> = {
   call: "콜",
@@ -104,10 +102,25 @@ export function contactTargetKey(targetType: string, targetId: string): string {
   return `${targetType}:${targetId}`
 }
 
-/** 우리 쪽 원문 전화 → Compass 조인 키. 9자리 미만이면 null. */
+/**
+ * 우리 쪽 원문 전화 → 정규화 키(번호로 볼 수 있으면 — 9자리 이상). 자리표시·더미 번호도 키가 된다.
+ * **Compass 조인에는 쓰지 않는다** — 조인은 compassJoinPhoneKey. 세그먼트 발송 대상의 "전화만" 분류
+ * (lib/crm/segment-audience.ts)처럼 "전화 칸에 번호가 있는가"만 보는 곳이 쓴다.
+ */
 export function contactPhoneKey(phone: string | null | undefined): string | null {
   const key = normalizePhoneKey(phone)
-  return key && key.length >= MIN_PHONE_KEY_LENGTH ? key : null
+  return key && key.length >= MIN_COMPASS_JOIN_PHONE_DIGITS ? key : null
+}
+
+/**
+ * 우리 쪽 원문 전화 → Compass 조인 키. 정규화 후 9자리 미만이거나 자리표시·더미 번호(010-0000-0000·010-1234-5678·
+ * 010-1111-2222 류)면 null — 리드 상태 자동 반영(lead-contact-sync lookupKeyOf)과 같은 정본 규칙
+ * (joinableCompassPhoneKey, Compass ADR-0018). 더미를 친 고객이 같은 더미를 가진 **남의** Compass 리드의 활동·담당·
+ * 링크를 받지 않게 한다. 오늘 연락(today-contact-queue)·통합 고객(crm-unified-customers)의 Compass 리드·활동 조인은
+ * 전부 이 키로 붙인다. 저장 값은 바꾸지 않는다 — 키에서만 뺀다.
+ */
+export function compassJoinPhoneKey(phone: string | null | undefined): string | null {
+  return joinableCompassPhoneKey(normalizePhoneKey(phone))
 }
 
 export interface HomeContactLogRow {
@@ -166,20 +179,24 @@ export interface CompassLatestActivityLike {
   actor: string | null
 }
 
-/** Compass 키별 최신 활동 → 전화 키별 연락. 자동 작성자는 한 번 더 거른다(브리지가 이미 걸러도 안전). */
+/**
+ * Compass 키별 최신 활동 → 전화 키별 연락. 자동 작성자·조인할 수 없는 키(자리표시·더미·9자리 미만)는 한 번 더
+ * 거른다(브리지가 이미 걸러도 안전 — 자리표시 키의 활동은 어느 고객의 연락도 아니다).
+ */
 export function buildCompassContactIndex(rows: readonly CompassLatestActivityLike[]): Map<string, LastContactFact> {
   const index = new Map<string, LastContactFact>()
   for (const row of rows) {
     const actor = trimOrNull(row.actor)
     if (actor && COMPASS_CONTACT_EXCLUDED_ACTORS.has(actor)) continue
-    if (!row.phone_key || timeOf(row.occurred_at) == null) continue
-    const next = laterContact(index.get(row.phone_key), {
+    const key = joinableCompassPhoneKey(trimOrNull(row.phone_key))
+    if (!key || timeOf(row.occurred_at) == null) continue
+    const next = laterContact(index.get(key), {
       at: row.occurred_at,
       source: "compass",
       channel: trimOrNull(row.kind),
       actor,
     })
-    if (next) index.set(row.phone_key, next)
+    if (next) index.set(key, next)
   }
   return index
 }

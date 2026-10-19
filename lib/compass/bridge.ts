@@ -20,6 +20,7 @@ import { compassInflowWindowFilter } from "@/lib/compass/inflow-window"
 import { fetchSupabasePages } from "@/lib/supabase/pagination"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { COMPASS_SUMMARY_MAX_ROWS } from "@/lib/compass/summary-contract"
+import { isJoinableCompassPhoneKey } from "@/lib/compass/normalize"
 
 export { normalizePhoneKey, compassLeadUrl } from "@/lib/compass/normalize"
 
@@ -685,6 +686,10 @@ interface CompassActivityScanRow {
 /**
  * 전화 키 목록 → 키별 가장 최근 활동(occurred_at·kind·actor) — 통합 고객 "마지막 연락" 읽기 모델(CT8)용.
  *
+ *  * 조인할 수 없는 키(9자리 미만·자리표시·더미 번호 — isJoinableCompassPhoneKey, lead-contact-sync 와 같은 규칙)는
+ *    받아도 버린다. 더미 번호 키로 붙인 활동은 같은 더미를 친 **남의** Compass 리드 것이다(호출부 compassJoinPhoneKey 가
+ *    이미 거르지만 여기서도 막는다).
+ *
  *  * 필요한 컬럼만 읽는다 — 리드는 id·phone_key, 활동은 id·lead_id·kind·actor·created_at(본문 없음).
  *  * 전화 키 → 리드: compass_leads_v.phone_key 는 뷰 안의 정규식 계산 컬럼이라 `.in("phone_key", …)` 도
  *    호출마다 crm.leads 를 전부 훑는다. 키 수천 개를 300개씩 나눠 같은 스캔을 수십 번 도는 대신
@@ -700,7 +705,7 @@ export async function getCompassLatestActivityByPhoneKeys(
   phoneKeys: string[],
   options: { kinds: readonly string[]; excludeActors?: Iterable<string> },
 ): Promise<CompassResult<CompassLatestActivityRow>> {
-  const keys = [...new Set(phoneKeys.map((key) => key?.trim()).filter((key): key is string => Boolean(key)))].sort()
+  const keys = [...new Set(phoneKeys.map((key) => key?.trim()).filter(isJoinableCompassPhoneKey))].sort()
   const kinds = [...new Set(options.kinds.filter(Boolean))].sort()
   if (keys.length === 0 || kinds.length === 0) return ok([])
   const excluded = [...new Set(options.excludeActors ?? [])].sort()
@@ -1227,14 +1232,12 @@ const COMPASS_LEAD_INDEX_COLUMNS = [
   "last_inflow_at",
 ].join(", ")
 
-/** 전화 조인 키 최소 길이 — lib/crm/last-contact.ts contactPhoneKey·lead-contact-sync 와 같은 9자리. */
-const COMPASS_LEAD_INDEX_MIN_KEY_LENGTH = 9
-
 /**
  * 전화 키 목록 → 그 키를 가진 Compass 리드 전부(같은 키 다건 포함 — 대표 행은 호출부가 overlay.ts
  * pickRepresentativeCompassRow 로 고른다). `.in("phone_key", …)` 300개 청크 대신 compass_leads_v 슬림 칼럼을
  * id 순 range 로 한 번 훑고 우리 키 집합과의 교집합만 남긴다(키 수와 무관하게 1~2 왕복 — 약 900행).
- * 우리와 무관한 키는 결과·메모에 싣지 않는다. 9자리 미만 키는 버린다. 상한에 닿으면 truncated.
+ * 우리와 무관한 키는 결과·메모에 싣지 않는다. 조인할 수 없는 키(9자리 미만·자리표시·더미 번호 — isJoinableCompassPhoneKey,
+ * lib/crm/last-contact.ts compassJoinPhoneKey·lead-contact-sync 와 같은 규칙)는 버린다. 상한에 닿으면 truncated.
  * 60초 메모(down은 10초) — 키 집합(정렬·중복 제거)이 키다.
  */
 export async function getCompassLeadIndexByPhoneKeys(
@@ -1244,7 +1247,7 @@ export async function getCompassLeadIndexByPhoneKeys(
     ...new Set(
       phoneKeys
         .map((key) => key?.trim())
-        .filter((key): key is string => Boolean(key) && key.length >= COMPASS_LEAD_INDEX_MIN_KEY_LENGTH),
+        .filter(isJoinableCompassPhoneKey),
     ),
   ].sort()
   if (keys.length === 0) return ok([])

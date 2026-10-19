@@ -54,7 +54,7 @@ function pool(overrides: Record<string, unknown> = {}) {
         source: "contact_page",
         org: "가 학원",
         name: "김원장",
-        phone: "010-1111-2222",
+        phone: "010-1111-2002",
         timestamp: "2026-09-25T01:00:00.000Z",
         status: "new",
         assigned_to: "김담당",
@@ -67,7 +67,7 @@ function pool(overrides: Record<string, unknown> = {}) {
         name: "나 기관",
         ownerId: null,
         ownerName: "박담당",
-        phone: "010-3333-4444",
+        phone: "010-3333-4004",
         balance: 10,
         expireAt: "2026-09-27T00:00:00.000Z",
         lastClassAt: "2026-09-20T00:00:00.000Z",
@@ -96,7 +96,7 @@ function compassDue(id: number, overrides: Record<string, unknown> = {}) {
     id,
     academy: "다 학원",
     name: null,
-    phone_key: "01055556666",
+    phone_key: "01055556006",
     stage: "contact",
     owner: "이콤",
     caller: null,
@@ -163,7 +163,7 @@ describe("crm-today-contacts 원천 조립", () => {
     expect(result.sources).toMatchObject({ leadsOk: true, compass: "ok", homeContactsOk: true })
     expect(result.sources.neoSync).toEqual({ latestSyncedAt: "2026-08-28T00:00:00.000Z", stale: true })
     const keys = mocks.leadIndex.mock.calls[0][0] as string[]
-    expect([...keys].sort()).toEqual(["01011112222", "01033334444", "01055556666"])
+    expect([...keys].sort()).toEqual(["01011112002", "01033334004", "01055556006"])
     // Compass 다음 액션 — 목록 창 [오늘 00:00 KST − 14일, 오늘 끝(KST 23:59:59.999)] 과
     // 14일 넘은 건수 전용 조회(하한 ~ 창 시작, 최근 먼저)를 따로 읽는다(목록이 옛 행에 밀려 잘리지 않게).
     expect(mocks.nextActions).toHaveBeenCalledTimes(2)
@@ -175,7 +175,7 @@ describe("crm-today-contacts 원천 조립", () => {
     expect(result.sources.tasksOk).toBe(true)
     // 전화 키도, 원문 전화(하이픈 형식)도 응답에 싣지 않는다 — NEO 행 보조 줄은 지역·UID.
     const json = JSON.stringify(result)
-    for (const raw of ["01011112222", "010-1111-2222", "01033334444", "010-3333-4444", "3333-4444"]) {
+    for (const raw of ["01011112002", "010-1111-2002", "01033334004", "010-3333-4004", "3333-4444"]) {
       expect(json).not.toContain(raw)
     }
     expect(result.rows.find((row) => row.key === "neo:N1")?.subtitle).toBeNull()
@@ -363,7 +363,7 @@ describe("crm-today-contacts 원천 조립", () => {
       source: "contact_page",
       org: "종료 학원",
       name: null,
-      phone: "010-7777-8888",
+      phone: "010-7777-8008",
       timestamp: "2026-07-01T00:00:00.000Z",
       status: "closed",
     }
@@ -374,10 +374,10 @@ describe("crm-today-contacts 원천 조립", () => {
       truncated: false,
     })
     mocks.leadIndex.mockImplementation(async (keys: string[]) => ({
-      rows: keys.includes("01077778888")
+      rows: keys.includes("01077778008")
         ? [
             {
-              phone_key: "01077778888",
+              phone_key: "01077778008",
               id: 88,
               stage: "lost",
               owner: "이콤",
@@ -395,8 +395,8 @@ describe("crm-today-contacts 원천 조립", () => {
     }))
     const { getCrmTodayContacts } = await loadRepository()
     const result = await getCrmTodayContacts({ now: NOW })
-    expect(mocks.leadIndex.mock.calls[0][0]).toContain("01077778888")
-    expect(mocks.latestActivity.mock.calls[0][0]).toContain("01077778888")
+    expect(mocks.leadIndex.mock.calls[0][0]).toContain("01077778008")
+    expect(mocks.latestActivity.mock.calls[0][0]).toContain("01077778008")
     const row = result.rows.find((candidate) => candidate.key === "lead:L2")
     expect(row?.primaryAction).toBe("open_compass")
     expect(row?.compass?.leadId).toBe(88)

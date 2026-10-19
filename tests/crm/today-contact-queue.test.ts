@@ -135,10 +135,10 @@ function input(overrides: Partial<TodayContactQueueInput> = {}): TodayContactQue
   }
 }
 
-const PHONE_A = "010-1111-2222"
-const KEY_A = "01011112222"
-const PHONE_B = "010-3333-4444"
-const KEY_B = "01033334444"
+const PHONE_A = "010-1111-2002"
+const KEY_A = "01011112002"
+const PHONE_B = "010-3333-4004"
+const KEY_B = "01033334004"
 
 describe("오늘 연락 — 병합", () => {
   it("같은 리드의 팔로업·할 일·Compass 다음 액션을 한 행으로 합치고 사유를 기한 순으로 나열한다", () => {
@@ -180,7 +180,7 @@ describe("오늘 연락 — 병합", () => {
           dueActions: [
             due({ id: 1, phone_key: KEY_A }),
             due({ id: 2, phone_key: KEY_B, stage: "quote" }),
-            due({ id: 3, phone_key: "01099998888", next_action: longText, owner: "정마케" }),
+            due({ id: 3, phone_key: "01099998008", next_action: longText, owner: "정마케" }),
           ],
           leadIndex: [],
           latestContacts: new Map(),
@@ -324,13 +324,13 @@ describe("오늘 연락 — 연락처 원문 비노출", () => {
           lead({ id: "L1", org: "가 학원", name: none, phone: PHONE_A, email: "owner@ga.kr" }),
           lead({ id: "L2", org: none, name: none, phone: PHONE_B, timestamp: at(-3 * HOUR) }),
           lead({ id: "L3", org: none, name: none, email: "ab@naver.com", timestamp: at(-4 * HOUR) }),
-          lead({ id: "L4", org: "라 학원", name: "라원장", phone: "010-5555-6666", timestamp: at(-5 * HOUR) }),
+          lead({ id: "L4", org: "라 학원", name: "라원장", phone: "010-5555-6006", timestamp: at(-5 * HOUR) }),
         ],
       })
     )
     const byKey = new Map(result.rows.map((row) => [row.key, row]))
     expect(byKey.get("lead:L1")?.subtitle).toBeNull()
-    expect(byKey.get("lead:L2")?.title).toBe("이름 없는 리드 (010-****-4444)")
+    expect(byKey.get("lead:L2")?.title).toBe("이름 없는 리드 (010-****-4004)")
     expect(byKey.get("lead:L2")?.subtitle).toBeNull()
     expect(byKey.get("lead:L3")?.title).toBe("이름 없는 리드 (a***@naver.com)")
     expect(byKey.get("lead:L4")?.subtitle).toBe("라원장")
@@ -342,11 +342,11 @@ describe("오늘 연락 — 연락처 원문 비노출", () => {
       input({
         leads: [
           lead({ id: "L1", org: "가 학원", name: "김원장", phone: PHONE_A, email: "kim@ga.kr" }),
-          lead({ id: "L2", org: none, name: none, phone: "010-7777-8888", timestamp: at(-3 * HOUR) }),
+          lead({ id: "L2", org: none, name: none, phone: "010-7777-8008", timestamp: at(-3 * HOUR) }),
         ],
         neoRows: [neo({ accountId: "N1", phone: PHONE_B, expireAt: at(3 * DAY) })],
         compass: {
-          dueActions: [due({ id: 3, phone_key: "01099998888", next_action: "010-9999-8888 로 콜백, 메일 boss@da.kr" })],
+          dueActions: [due({ id: 3, phone_key: "01099998008", next_action: "010-9999-8008 로 콜백, 메일 boss@da.kr" })],
           leadIndex: [],
           latestContacts: new Map(),
         },
@@ -359,18 +359,18 @@ describe("오늘 연락 — 연락처 원문 비노출", () => {
       KEY_A,
       PHONE_B,
       KEY_B,
-      "3333-4444",
-      "010-7777-8888",
-      "01077778888",
-      "010-9999-8888",
-      "01099998888",
+      "3333-4004",
+      "010-7777-8008",
+      "01077778008",
+      "010-9999-8008",
+      "01099998008",
       "kim@ga.kr",
       "boss@da.kr",
     ]) {
       expect(json).not.toContain(raw)
     }
     const compassRow = result.rows.find((row) => row.key === "compass:3")!
-    expect(compassRow.reasons[0].detail).toBe("010-****-8888 로 콜백, 메일 ***@da.kr")
+    expect(compassRow.reasons[0].detail).toBe("010-****-8008 로 콜백, 메일 ***@da.kr")
   })
 
   it("maskTodayContactHandle — 전화 앞 3·끝 4, 이메일 앞 1~2글자", () => {
@@ -778,23 +778,23 @@ describe("오늘 연락 — 기록 위치 판정(360·리드 보드와 같은 �
   it("[24] 종료 리드도 할 일로 행이 되면 Compass 조회 키에 들어간다 — 전화 키 수집은 할 일 대상 리드를 상태와 무관하게", () => {
     const leads = [
       lead({ id: "L1", status: "contacted", confirmed_at: at(-9 * DAY), phone: PHONE_A }),
-      lead({ id: "L2", status: "closed", phone: "010-7777-8888", timestamp: at(-60 * DAY) }),
-      lead({ id: "L3", status: "closed", phone: "010-5555-6666", timestamp: at(-60 * DAY) }),
-      lead({ id: "L5", status: "converted", phone: "010-4444-3333", timestamp: at(-60 * DAY) }),
+      lead({ id: "L2", status: "closed", phone: "010-7777-8008", timestamp: at(-60 * DAY) }),
+      lead({ id: "L3", status: "closed", phone: "010-5555-6006", timestamp: at(-60 * DAY) }),
+      lead({ id: "L5", status: "converted", phone: "010-4444-3003", timestamp: at(-60 * DAY) }),
     ]
     const keys = collectTodayContactPhoneKeys({
       leads,
       neoRows: [neo({ accountId: "N1", phone: PHONE_B })],
       tasks: [task({ id: "T2", targetType: "lead", targetId: "L2" })],
       closedTasksToday: [task({ id: "T5", targetType: "lead", targetId: "L5", status: "done" })],
-      dueRows: [due({ id: 9, phone_key: "01099998888" })],
+      dueRows: [due({ id: 9, phone_key: "01099998008" })],
     })
     // 진행 중 리드 · 할 일 대상(종료·전환 포함) · NEO · 다음 액션 행. 할 일 없는 종료 리드(L3)는 넣지 않는다.
-    expect([...keys].sort()).toEqual(["01011112222", "01033334444", "01044443333", "01077778888", "01099998888"])
+    expect([...keys].sort()).toEqual(["01011112002", "01033334004", "01044443003", "01077778008", "01099998008"])
   })
 
   it("[24] 그 키로 찾은 Compass 매칭은 단계 무관 'Compass에서 열기' — Compass 에서 오늘 연락하면 처리됨", () => {
-    const leads = [lead({ id: "L2", status: "closed", phone: "010-7777-8888", timestamp: at(-60 * DAY) })]
+    const leads = [lead({ id: "L2", status: "closed", phone: "010-7777-8008", timestamp: at(-60 * DAY) })]
     const tasks = [task({ id: "T2", targetType: "lead", targetId: "L2", dueAt: at(6 * HOUR) })]
     const compassCall: LastContactFact = { at: at(-1 * HOUR), source: "compass", channel: "call", actor: "이콤" }
     const result = buildTodayContacts(
@@ -803,8 +803,8 @@ describe("오늘 연락 — 기록 위치 판정(360·리드 보드와 같은 �
         tasks,
         compass: {
           dueActions: [],
-          leadIndex: [indexRow({ id: 88, phone_key: "01077778888", stage: "lost" })],
-          latestContacts: new Map([["01077778888", compassCall]]),
+          leadIndex: [indexRow({ id: 88, phone_key: "01077778008", stage: "lost" })],
+          latestContacts: new Map([["01077778008", compassCall]]),
         },
       })
     )
@@ -830,8 +830,12 @@ describe("오늘 연락 — 전환 고객 할 일 링크", () => {
     expect(href.pathname).toBe("/admin/crm/customers/unified")
     expect(href.searchParams.get("source")).toBe("customer")
     expect(href.searchParams.get("q")).toBe("한빛 학원")
+    // 담당은 전체(`owner=` 빈 값) — 통합 목록은 owner 생략이 로그인 담당이고 전환 고객 행은 담당 키가 비어, 생략하면
+    // 이름 검색이 늘 빈 목록이 된다(2026-10-16 기본 담당 계약, lib/admin/data-owner.ts dataOwnerFromParams).
+    expect(href.searchParams.has("owner")).toBe(true)
+    expect(href.searchParams.get("owner")).toBe("")
     expect(row.primaryAction).toBe("record_outcome")
-    expect(todayContactCustomerHref("  ")).toBe("/admin/crm/customers/unified?source=customer")
+    expect(todayContactCustomerHref("  ")).toBe("/admin/crm/customers/unified?source=customer&owner=")
   })
 })
 
@@ -1238,5 +1242,86 @@ describe("오늘 연락 — Compass 첫 응답 행과 Home 할 일 일정(약한
 
     const future = task({ id: "T3", targetType: "lead", targetId: "L5", dueAt: at(2 * DAY), createdAt: at(-1 * DAY), updatedAt: at(-1 * DAY) })
     expect(buildTodayContacts(input({ leads: [homeLead], tasks: [future] })).rows).toHaveLength(0)
+  })
+})
+
+describe("오늘 연락 — 자리표시·더미 번호는 Compass 조인 키가 아니다(lead-contact-sync 와 같은 규칙 · Compass ADR-0018)", () => {
+  // 폼에 더미를 친 Home 리드(담당 김홈)와, 같은 더미 번호를 가진 **남의** Compass 리드(담당 남담당 · 오늘 콜).
+  const DUMMY_PHONES = ["010-0000-0000", "010-1234-5678", "010-1111-2222"]
+  const REAL_PHONE = "010-2222-0003"
+  const keyOf = (phone: string) => phone.replace(/\D/g, "")
+  const othersCall: LastContactFact = { at: at(-1 * HOUR), source: "compass", channel: "call", actor: "남담당" }
+  const sharedPhoneInput = (phone: string, overrides: Partial<TodayContactQueueInput> = {}) =>
+    input({
+      leads: [lead({ id: "L1", phone, assigned_to: "김홈" })],
+      compass: {
+        dueActions: [],
+        leadIndex: [indexRow({ id: 999, phone_key: keyOf(phone), owner: "남담당" })],
+        latestContacts: new Map([[keyOf(phone), othersCall]]),
+      },
+      ...overrides,
+    })
+
+  it.each(DUMMY_PHONES)("%s 리드는 남의 Compass 리드 링크·담당·오늘 콜을 받지 않는다 — 첫 응답 대기로 남는다", (phone) => {
+    const result = buildTodayContacts(sharedPhoneInput(phone))
+    const row = result.rows.find((candidate) => candidate.key === "lead:L1")
+    expect(row).toBeDefined()
+    expect(row!.compass).toBeNull()
+    expect(row!.primaryAction).toBe("record_outcome_lead")
+    expect(row!.handled).toBeNull()
+    expect(row!.lastContact).toBeNull()
+    expect(row!.ownerKeys).not.toContain("남담당")
+    expect(row!.reasons.map((reason) => reason.kind)).toContain("first_response")
+    expect(result.progress).toMatchObject({ total: 1, handled: 0 })
+    // 남의 Compass 담당의 '내 담당' 오늘 연락에 끼지 않는다.
+    const others = buildTodayContacts(sharedPhoneInput(phone, { ownerKeys: ["남담당"] }))
+    expect(others.rows.map((candidate) => candidate.key)).not.toContain("lead:L1")
+  })
+
+  it("대조 — 실번호면 같은 키의 Compass 리드에 붙는다(위 단언이 픽스처 탓에 통과하는 게 아님)", () => {
+    const row = buildTodayContacts(sharedPhoneInput(REAL_PHONE)).rows.find((candidate) => candidate.key === "lead:L1")
+    expect(row?.compass?.leadId).toBe(999)
+    expect(row?.primaryAction).toBe("open_compass")
+    expect(row?.handled).toMatchObject({ kind: "compass_activity", by: "남담당" })
+    expect(row?.ownerKeys).toContain("남담당")
+  })
+
+  it("더미 키의 Compass 다음 액션은 같은 더미의 Home 리드·NEO 계정에 붙지 않고, 같은 더미 Compass 리드끼리 한 행으로 접지도 않는다", () => {
+    const result = buildTodayContacts(
+      input({
+        leads: [lead({ id: "L1", phone: "010-0000-0000", assigned_to: "김홈" })],
+        neoRows: [neo({ accountId: "N1", phone: "010-0000-0000", expireAt: at(3 * DAY) })],
+        compass: {
+          dueActions: [
+            due({ id: 31, phone_key: "01000000000", owner: "남담당", academy: "남의 학원 가" }),
+            due({ id: 32, phone_key: "01000000000", owner: "북담당", academy: "남의 학원 나" }),
+          ],
+          leadIndex: [
+            indexRow({ id: 31, phone_key: "01000000000", owner: "남담당" }),
+            indexRow({ id: 32, phone_key: "01000000000", owner: "북담당" }),
+          ],
+          latestContacts: new Map(),
+        },
+      })
+    )
+    expect(result.rows.map((row) => row.key).sort()).toEqual(["compass:31", "compass:32", "lead:L1", "neo:N1"])
+    for (const key of ["lead:L1", "neo:N1"]) {
+      const row = result.rows.find((candidate) => candidate.key === key)!
+      expect(row.compass, key).toBeNull()
+      expect(row.reasons.map((reason) => reason.kind), key).not.toContain("compass_next_action")
+    }
+    expect(result.rows.find((row) => row.key === "compass:32")?.ownerKeys).toEqual(["북담당"])
+  })
+
+  it("Compass 조회 키 수집에서도 뺀다 — 더미 키로 조회해 남의 리드를 끌어오지 않는다(저장 값은 그대로)", () => {
+    const dummyLead = lead({ id: "L1", phone: "010-0000-0000" })
+    const keys = collectTodayContactPhoneKeys({
+      leads: [dummyLead, lead({ id: "L2", phone: REAL_PHONE })],
+      neoRows: [neo({ accountId: "N1", phone: "010-1234-5678" })],
+      tasks: [],
+      dueRows: [due({ id: 9, phone_key: "01011112222" })],
+    })
+    expect(keys).toEqual(["01022220003"])
+    expect(dummyLead.phone).toBe("010-0000-0000")
   })
 })

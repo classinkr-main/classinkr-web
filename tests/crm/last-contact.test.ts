@@ -9,6 +9,7 @@ import {
   HOME_CONTACT_EVENT_SOURCE_TYPES,
   buildCompassContactIndex,
   buildHomeContactIndex,
+  compassJoinPhoneKey,
   contactPhoneKey,
   contactTargetKey,
   describeLastContact,
@@ -94,19 +95,49 @@ describe("buildHomeContactIndex — 로그 + 사람 기록 이벤트", () => {
 describe("buildCompassContactIndex — 전화 키별, 자동 작성자 제외", () => {
   it("자동 작성자('BD시트' 등)는 연락이 아니다", () => {
     const index = buildCompassContactIndex([
-      { phone_key: "01011112222", occurred_at: iso(1), kind: "note", actor: "BD시트" },
-      { phone_key: "01011112222", occurred_at: iso(6), kind: "call", actor: "진소망" },
-      { phone_key: "01033334444", occurred_at: iso(2), kind: "sms", actor: null },
+      { phone_key: "01011112002", occurred_at: iso(1), kind: "note", actor: "BD시트" },
+      { phone_key: "01011112002", occurred_at: iso(6), kind: "call", actor: "진소망" },
+      { phone_key: "01033334004", occurred_at: iso(2), kind: "sms", actor: null },
     ])
-    expect(index.get("01011112222")).toEqual({ at: iso(6), source: "compass", channel: "call", actor: "진소망" })
-    expect(index.get("01033334444")?.channel).toBe("sms")
+    expect(index.get("01011112002")).toEqual({ at: iso(6), source: "compass", channel: "call", actor: "진소망" })
+    expect(index.get("01033334004")?.channel).toBe("sms")
   })
 
-  it("전화 조인 키 — Compass normPhone 과 같게, 9자리 미만은 조인하지 않는다", () => {
+  it("자리표시·더미 번호 키의 활동은 어느 고객의 연락도 아니다 — 인덱스에 싣지 않는다", () => {
+    const index = buildCompassContactIndex([
+      { phone_key: "01000000000", occurred_at: iso(0.1), kind: "call", actor: "남담당" },
+      { phone_key: "01012345678", occurred_at: iso(0.1), kind: "call", actor: "남담당" },
+      { phone_key: "01011112222", occurred_at: iso(0.1), kind: "call", actor: "남담당" },
+      { phone_key: "12345678", occurred_at: iso(0.1), kind: "call", actor: "남담당" },
+      { phone_key: " 01022220003 ", occurred_at: iso(1), kind: "call", actor: "진소망" },
+    ])
+    expect([...index.keys()]).toEqual(["01022220003"])
+  })
+
+  it("Compass 조인 키 — Compass normPhone 과 같게, 9자리 미만·자리표시·더미 번호는 조인하지 않는다(lead-contact-sync 와 같은 규칙)", () => {
+    expect(compassJoinPhoneKey("+82 10-2222-0003")).toBe("01022220003")
+    expect(compassJoinPhoneKey("010-2222-0003")).toBe("01022220003")
+    expect(compassJoinPhoneKey("02-555-6060")).toBe("025556060")
+    for (const dummy of ["010-0000-0000", "010-1234-5678", "+82 10-1234-5678", "010-1111-2222", "010-3333-4444", "010-0000-0001"]) {
+      expect(compassJoinPhoneKey(dummy), dummy).toBeNull()
+    }
+    expect(compassJoinPhoneKey("1234")).toBeNull()
+    expect(compassJoinPhoneKey(null)).toBeNull()
+  })
+
+  it("번호 키(contactPhoneKey)는 Compass 조인 키가 아니다 — 9자리 이상이면 자리표시도 번호로 본다(세그먼트 '전화만' 분류용)", () => {
     expect(contactPhoneKey("+82 10-1234-5678")).toBe("01012345678")
     expect(contactPhoneKey("010-1234-5678")).toBe("01012345678")
     expect(contactPhoneKey("1234")).toBeNull()
     expect(contactPhoneKey(null)).toBeNull()
+  })
+
+  it("오늘 연락·통합 고객의 Compass 조인은 compassJoinPhoneKey 로만 붙인다(contactPhoneKey 금지)", () => {
+    for (const file of ["lib/crm/today-contact-queue.ts", "lib/repositories/crm-unified-customers.ts"]) {
+      const source = readFileSync(resolve(process.cwd(), file), "utf8")
+      expect(source, file).toMatch(/\bcompassJoinPhoneKey\(/)
+      expect(source, file).not.toMatch(/\bcontactPhoneKey\b/)
+    }
   })
 })
 

@@ -193,25 +193,37 @@ describe("getCompassNextActionsInRange", () => {
 describe("getCompassLeadIndexByPhoneKeys", () => {
   it("한 번 훑고 우리 키와의 교집합만 돌려준다(같은 키 다건 포함) · 9자리 미만 키는 버린다", async () => {
     datasets.compass_leads_v = [
-      lead(1, { phone_key: "01011112222" }),
-      lead(2, { phone_key: "01011112222", last_inflow_at: "2026-09-20T00:00:00.000Z" }),
-      lead(3, { phone_key: "01099990000" }),
+      lead(1, { phone_key: "01011112002" }),
+      lead(2, { phone_key: "01011112002", last_inflow_at: "2026-09-20T00:00:00.000Z" }),
+      lead(3, { phone_key: "01099990090" }),
       lead(4, { phone_key: null }),
     ]
-    const result = await getCompassLeadIndexByPhoneKeys(["01011112222", " 01011112222 ", "12345", ""])
+    const result = await getCompassLeadIndexByPhoneKeys(["01011112002", " 01011112002 ", "12345", ""])
     expect(result.down).toBe(false)
     expect(result.rows.map((row) => row.id)).toEqual([1, 2])
-    expect(result.rows.every((row) => row.phone_key === "01011112222")).toBe(true)
+    expect(result.rows.every((row) => row.phone_key === "01011112002")).toBe(true)
     expect(logs).toHaveLength(1)
     expect(logs[0].selectColumns).not.toContain("academy")
     expect(logs[0].selectColumns).not.toContain("paid_amount")
+  })
+
+  it("자리표시·더미 번호 키(010-0000-0000·010-1234-5678 류)는 버린다 — 같은 더미의 남의 Compass 리드를 대표로 붙이지 않는다", async () => {
+    datasets.compass_leads_v = [
+      lead(1, { phone_key: "01011112002" }),
+      lead(7, { phone_key: "01000000000", owner: "남담당" }),
+      lead(8, { phone_key: "01012345678", owner: "남담당" }),
+    ]
+    expect(await getCompassLeadIndexByPhoneKeys(["01000000000", "01012345678"])).toEqual({ rows: [], down: false })
+    expect(logs).toHaveLength(0)
+    const result = await getCompassLeadIndexByPhoneKeys(["01000000000", "01012345678", "01011112002"])
+    expect(result.rows.map((row) => row.id)).toEqual([1])
   })
 
   it("키가 없으면 조회하지 않고, 실패는 down", async () => {
     expect(await getCompassLeadIndexByPhoneKeys(["123"])).toEqual({ rows: [], down: false })
     expect(logs).toHaveLength(0)
     failViews.add("compass_leads_v")
-    const failed = await getCompassLeadIndexByPhoneKeys(["01011112222"])
+    const failed = await getCompassLeadIndexByPhoneKeys(["01011112002"])
     expect(failed.down).toBe(true)
     expect(failed.rows).toEqual([])
   })

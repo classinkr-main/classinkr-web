@@ -140,15 +140,15 @@ afterEach(() => {
 
 const FIXTURE: LoadOptions = {
   leads: [
-    lead(L1, "010-1111-2222"),
+    lead(L1, "010-1111-2002"),
     // 미확인 신규 리드 — 기본 모집단(통합 목록 기본 화면)에서 빠진다.
-    lead(L2, "010-2222-3333", { status: "new", confirmed_at: null }),
+    lead(L2, "010-2222-3003", { status: "new", confirmed_at: null }),
     lead(L3, null, { status: "new", confirmed_at: ago(2) }),
   ],
   accounts: [
-    account("N1", "010-4444-5555", { expireAt: ahead(20), riskLevel: "urgent" }),
+    account("N1", "010-4444-5005", { expireAt: ahead(20), riskLevel: "urgent" }),
     account("N2", null, { expireAt: ahead(25) }),
-    account("N3", "010-6666-7777", { expireAt: ahead(20) }),
+    account("N3", "010-6666-7007", { expireAt: ahead(20) }),
     account("N4", null),
   ],
   logs: [{ lead_id: L1, type: "call", contacted_at: ago(5), contacted_by: "김담당" }],
@@ -231,9 +231,9 @@ describe("통합 행 Compass 참조(A안 'Compass에서 열기')", () => {
     const { repository, compassLeadsMock } = await loadRepository({
       ...FIXTURE,
       compassLeads: [
-        { id: 5, phone_key: "01011112222", stage: "new", created_at: ago(30), updated_at: ago(30), last_inflow_at: ago(30) },
-        { id: 9, phone_key: "01011112222", stage: "demo", created_at: ago(10), updated_at: ago(2), last_inflow_at: ago(3) },
-        { id: 12, phone_key: "01044445555", stage: "won", created_at: ago(100), updated_at: null, last_inflow_at: null },
+        { id: 5, phone_key: "01011112002", stage: "new", created_at: ago(30), updated_at: ago(30), last_inflow_at: ago(30) },
+        { id: 9, phone_key: "01011112002", stage: "demo", created_at: ago(10), updated_at: ago(2), last_inflow_at: ago(3) },
+        { id: 12, phone_key: "01044445005", stage: "won", created_at: ago(100), updated_at: null, last_inflow_at: null },
       ],
     })
     const result = await repository.getCrmUnifiedCustomers({ now: NOW, limit: 50 })
@@ -251,7 +251,7 @@ describe("통합 행 Compass 참조(A안 'Compass에서 열기')", () => {
     expect(JSON.stringify(result.rows.map((row) => row.compass))).not.toMatch(/0101111|0104444/)
     // 브리지에는 정규화 전화 키만(9자리 이상) 넘긴다.
     const requested = compassLeadsMock.mock.calls.flatMap(([keys]) => keys).sort()
-    expect(requested).toEqual(["01011112222", "01022223333", "01044445555", "01066667777"])
+    expect(requested).toEqual(["01011112002", "01022223003", "01044445005", "01066667007"])
   })
 
   it("Compass 가 끊기면 참조는 null(링크 없음) — 스냅샷 완성 판정에는 넣지 않는다", async () => {
@@ -264,11 +264,33 @@ describe("통합 행 Compass 참조(A안 'Compass에서 열기')", () => {
     expect(batch.sources.complete).toBe(true)
   })
 
+  it("자리표시·더미 번호 행은 같은 더미의 남의 Compass 리드 링크를 받지 않는다 — 브리지에 그 키를 넘기지도 않는다", async () => {
+    const { repository, compassLeadsMock } = await loadRepository({
+      leads: [lead(L1, "010-0000-0000")],
+      accounts: [
+        account("N1", "010-1234-5678", { expireAt: ahead(20) }),
+        account("N3", "010-2222-0003", { expireAt: ahead(20) }),
+      ],
+      compassLeads: [
+        { id: 70, phone_key: "01000000000", stage: "demo", created_at: ago(10), updated_at: ago(1), last_inflow_at: null },
+        { id: 71, phone_key: "01012345678", stage: "won", created_at: ago(10), updated_at: ago(1), last_inflow_at: null },
+        { id: 72, phone_key: "01022220003", stage: "quote", created_at: ago(10), updated_at: ago(1), last_inflow_at: null },
+      ],
+    })
+    const result = await repository.getCrmUnifiedCustomers({ now: NOW, limit: 50 })
+    const byKey = new Map(result.rows.map((row) => [row.key, row]))
+    expect(byKey.get(`lead:${L1}`)?.compass).toBeNull()
+    expect(byKey.get("neo:N1")?.compass).toBeNull()
+    // 대조 — 실번호 행은 같은 키의 Compass 리드에 붙는다.
+    expect(byKey.get("neo:N3")?.compass).toMatchObject({ leadId: 72, stageLabel: "미팅" })
+    expect(compassLeadsMock.mock.calls.flatMap(([keys]) => keys).sort()).toEqual(["01022220003"])
+  })
+
   it("리드를 확정 NEO 계정 행으로 접으면 계정 행이 리드의 Compass 참조를 승계한다", async () => {
     const { repository } = await loadRepository({
       ...FIXTURE,
       neoLinks: new Map([[L1, "N2"]]),
-      compassLeads: [{ id: 9, phone_key: "01011112222", stage: "quote", created_at: ago(10), updated_at: ago(2), last_inflow_at: null }],
+      compassLeads: [{ id: 9, phone_key: "01011112002", stage: "quote", created_at: ago(10), updated_at: ago(2), last_inflow_at: null }],
     })
     const result = await repository.getCrmUnifiedCustomers({ now: NOW, limit: 50 })
     const byKey = new Map(result.rows.map((row) => [row.key, row]))

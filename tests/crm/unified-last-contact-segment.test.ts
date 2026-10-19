@@ -129,14 +129,14 @@ afterEach(() => {
 describe("마지막 연락 읽기 모델(CT8)", () => {
   it("고객별 max(리드 연락 로그 · 사람 기록 이벤트 · Compass 활동) — 원천·채널·작성자까지 싣는다", async () => {
     const { repository, compassMock } = await loadRepository({
-      leads: [lead("L1", "010-1111-2222"), lead("L2", "010-5555-6666")],
-      accounts: [account("N1", "010-3333-4444"), account("N2", null)],
+      leads: [lead("L1", "010-1111-2002"), lead("L2", "010-5555-6006")],
+      accounts: [account("N1", "010-3333-4004"), account("N2", null)],
       logs: [{ lead_id: "L1", type: "call", contacted_at: ago(5), contacted_by: "김담당" }],
       events: [
         { target_type: "neo_account", target_id: "N1", source_type: "call", occurred_at: ago(10), created_by: "이담당", owner_name: null },
         { target_type: "lead", target_id: "L2", source_type: "manual_note", occurred_at: ago(1), created_by: "메모", owner_name: null },
       ],
-      compassRows: [{ phone_key: "01011112222", lead_id: 9, occurred_at: ago(2), kind: "call", actor: "진소망" }],
+      compassRows: [{ phone_key: "01011112002", lead_id: 9, occurred_at: ago(2), kind: "call", actor: "진소망" }],
     })
 
     const result = await repository.getCrmUnifiedCustomers({ now: NOW })
@@ -160,15 +160,40 @@ describe("마지막 연락 읽기 모델(CT8)", () => {
 
     // 브리지에는 9자리 이상 정규화 전화 키만, 사람 활동 kind 와 자동 작성자 제외 목록을 넘긴다.
     const [keys, bridgeOptions] = compassMock.mock.calls[0]
-    expect([...keys].sort()).toEqual(["01011112222", "01033334444", "01055556666"])
+    expect([...keys].sort()).toEqual(["01011112002", "01033334004", "01055556006"])
     expect(bridgeOptions.kinds).toContain("call")
     expect([...bridgeOptions.excludeActors]).toContain("BD시트")
+  })
+
+  it("자리표시·더미 번호 고객은 같은 더미를 가진 남의 Compass 활동을 마지막 연락으로 받지 않는다", async () => {
+    const { repository, compassMock } = await loadRepository({
+      leads: [lead("L1", "010-0000-0000"), lead("L2", "010-2222-0003")],
+      accounts: [account("N1", "010-1234-5678"), account("N2", "010-1111-2222")],
+      // 브리지 목은 받은 키와 무관하게 돌려준다 — 저장소가 더미 키로 조회하지도, 붙이지도 않아야 한다.
+      compassRows: [
+        { phone_key: "01000000000", lead_id: 70, occurred_at: ago(0.1), kind: "call", actor: "남담당" },
+        { phone_key: "01012345678", lead_id: 71, occurred_at: ago(0.1), kind: "call", actor: "남담당" },
+        { phone_key: "01011112222", lead_id: 72, occurred_at: ago(0.1), kind: "call", actor: "남담당" },
+        { phone_key: "01022220003", lead_id: 73, occurred_at: ago(2), kind: "call", actor: "진소망" },
+      ],
+    })
+
+    const result = await repository.getCrmUnifiedCustomers({ now: NOW })
+    const byKey = new Map(result.rows.map((row) => [row.key, row]))
+    for (const key of ["lead:L1", "neo:N1", "neo:N2"]) {
+      expect(byKey.get(key)?.lastContactSource ?? null, key).toBeNull()
+      expect(byKey.get(key)?.lastContactAt ?? null, key).toBeNull()
+    }
+    // 대조 — 실번호 고객은 같은 키의 Compass 활동을 받는다.
+    expect(byKey.get("lead:L2")).toMatchObject({ lastContactAt: ago(2), lastContactSource: "compass", lastContactActor: "진소망" })
+    const [keys] = compassMock.mock.calls[0]
+    expect([...keys]).toEqual(["01022220003"])
   })
 
   it("Compass 가 끊기면 Home 기록만으로 계산하고 meta.compass=down 으로 알린다(경고 배너는 늘리지 않음)", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
     const { repository } = await loadRepository({
-      leads: [lead("L1", "010-1111-2222")],
+      leads: [lead("L1", "010-1111-2002")],
       logs: [{ lead_id: "L1", type: "sms", contacted_at: ago(5), contacted_by: "김담당" }],
       compassDown: true,
     })
@@ -182,7 +207,7 @@ describe("마지막 연락 읽기 모델(CT8)", () => {
 
   it("Home 세부 조회가 실패해도 시각 지도 폴백('Home 기록')으로 마지막 연락을 잃지 않는다", async () => {
     const { repository } = await loadRepository({
-      leads: [lead("L1", "010-1111-2222")],
+      leads: [lead("L1", "010-1111-2002")],
       logs: [{ lead_id: "L1", type: "sms", contacted_at: ago(5), contacted_by: "김담당" }],
       homeContactFail: true,
     })
@@ -196,13 +221,13 @@ describe("마지막 연락 읽기 모델(CT8)", () => {
     const { repository } = await loadRepository({
       accounts: [
         // 동기화 시각은 90일 전이지만 Compass 연락은 3일 전 — 미접촉이 아니다.
-        account("RECENT", "010-3333-4444"),
-        account("STALE", "010-7777-8888"),
+        account("RECENT", "010-3333-4004"),
+        account("STALE", "010-7777-8008"),
         account("NONE", null),
       ],
       compassRows: [
-        { phone_key: "01033334444", lead_id: 1, occurred_at: ago(3), kind: "call", actor: "A" },
-        { phone_key: "01077778888", lead_id: 2, occurred_at: ago(45), kind: "call", actor: "B" },
+        { phone_key: "01033334004", lead_id: 1, occurred_at: ago(3), kind: "call", actor: "A" },
+        { phone_key: "01077778008", lead_id: 2, occurred_at: ago(45), kind: "call", actor: "B" },
       ],
     })
 
@@ -263,14 +288,14 @@ describe("NEO 신호(SG2)와 상태 라벨 정합(F4)", () => {
 describe("세그먼트 조건 AND(SG4) · 서버 정렬(C1) · 내보내기(SG8)", () => {
   async function fixture() {
     return loadRepository({
-      leads: [lead("L1", "010-1111-2222", { assigned_to: "김담당" })],
+      leads: [lead("L1", "010-1111-2002", { assigned_to: "김담당" })],
       accounts: [
         account("A", null, { expireAt: ahead(10), riskLevel: "urgent", billingMode: "consumption", depletionInDays: 5, balance: 20_000 }),
         account("B", null, { expireAt: ahead(20), riskLevel: "soon", billingMode: "subscription", regionLabel: "경기" }),
         account("C", null, { expireAt: ahead(50), riskLevel: "normal", billingMode: "consumption", ownerName: "최담당", ownerId: "neo-9" }),
       ],
       tags: { "neo_account:A": ["VIP", "재계약"], "neo_account:B": ["VIP"] },
-      compassRows: [{ phone_key: "01011112222", lead_id: 1, occurred_at: ago(40), kind: "call", actor: "A" }],
+      compassRows: [{ phone_key: "01011112002", lead_id: 1, occurred_at: ago(40), kind: "call", actor: "A" }],
     })
   }
 
@@ -342,9 +367,9 @@ describe("리뷰 수정(2026-09-25) — 칩·뷰 건수 정합 · NEO 미배정 
   it("'무연락 30일+' 칩 건수 = '30일+ 미접촉' 뷰 건수 — 종료 리드는 둘 다 뺀다", async () => {
     const { repository } = await loadRepository({
       leads: [
-        lead("OPEN", "010-1111-2222"),
-        lead("LOST", "010-2222-3333", { status: "lost" }),
-        lead("DONE", "010-3333-4444", { status: "converted" }),
+        lead("OPEN", "010-1111-2002"),
+        lead("LOST", "010-2222-3003", { status: "lost" }),
+        lead("DONE", "010-3333-4004", { status: "converted" }),
       ],
       accounts: [account("N1", null)],
     })
@@ -362,7 +387,7 @@ describe("리뷰 수정(2026-09-25) — 칩·뷰 건수 정합 · NEO 미배정 
 
   it("NEO 자리표시 담당('담당 미지정')은 미배정 — __none 조건이 잡고 선택지에 따로 나오지 않는다", async () => {
     const { repository } = await loadRepository({
-      leads: [lead("L1", "010-1111-2222", { assigned_to: null })],
+      leads: [lead("L1", "010-1111-2002", { assigned_to: null })],
       accounts: [account("NA", null, { ownerId: null, ownerName: "담당 미지정" }), account("NB", null)],
     })
 

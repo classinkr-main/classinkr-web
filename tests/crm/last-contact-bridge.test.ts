@@ -39,9 +39,9 @@ beforeEach(() => {
     id: index + 1,
     phone_key: `0109999${String(index).padStart(4, "0")}`,
   }))
-  leads.push({ id: 5001, phone_key: "01011112222" })
-  leads.push({ id: 5002, phone_key: "01011112222" }) // 같은 전화의 두 번째 Compass 리드
-  leads.push({ id: 5003, phone_key: "01033334444" })
+  leads.push({ id: 5001, phone_key: "01011112002" })
+  leads.push({ id: 5002, phone_key: "01011112002" }) // 같은 전화의 두 번째 Compass 리드
+  leads.push({ id: 5003, phone_key: "01033334004" })
   leads.push({ id: 5004, phone_key: null })
   datasets = {
     compass_leads_v: leads,
@@ -64,7 +64,7 @@ afterEach(() => {
 describe("getCompassLatestActivityByPhoneKeys", () => {
   it("키별 최신 사람 활동 — 같은 전화의 여러 Compass 리드를 접고 자동 작성자·다른 kind 는 뺀다", async () => {
     const { getCompassLatestActivityByPhoneKeys } = await loadBridge()
-    const result = await getCompassLatestActivityByPhoneKeys(["01011112222", "01033334444", "01055556666"], {
+    const result = await getCompassLatestActivityByPhoneKeys(["01011112002", "01033334004", "01055556006"], {
       kinds: KINDS,
       excludeActors: EXCLUDED,
     })
@@ -72,14 +72,14 @@ describe("getCompassLatestActivityByPhoneKeys", () => {
     expect(result.down).toBe(false)
     expect(result.truncated).toBe(false)
     expect(result.rows).toEqual([
-      { phone_key: "01011112222", lead_id: 5002, occurred_at: "2026-09-22T01:00:00.000Z", kind: "sms", actor: "김담당" },
-      { phone_key: "01033334444", lead_id: 5003, occurred_at: "2026-09-10T02:00:00.000Z", kind: "meeting", actor: null },
+      { phone_key: "01011112002", lead_id: 5002, occurred_at: "2026-09-22T01:00:00.000Z", kind: "sms", actor: "김담당" },
+      { phone_key: "01033334004", lead_id: 5003, occurred_at: "2026-09-10T02:00:00.000Z", kind: "meeting", actor: null },
     ])
   })
 
   it("필요한 컬럼만 range 페이지네이션으로 읽는다(리드 스캔은 count 로 끝까지, 본문 없음)", async () => {
     const { getCompassLatestActivityByPhoneKeys } = await loadBridge()
-    await getCompassLatestActivityByPhoneKeys(["01011112222"], { kinds: KINDS, excludeActors: EXCLUDED })
+    await getCompassLatestActivityByPhoneKeys(["01011112002"], { kinds: KINDS, excludeActors: EXCLUDED })
 
     const leadPages = logs.filter((log) => log.table === "compass_leads_v")
     expect(leadPages.map((log) => log.range?.from)).toEqual([0, 1000])
@@ -98,7 +98,7 @@ describe("getCompassLatestActivityByPhoneKeys", () => {
     failTables.add("compass_activities_v")
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
     const { getCompassLatestActivityByPhoneKeys } = await loadBridge()
-    const result = await getCompassLatestActivityByPhoneKeys(["01011112222"], { kinds: KINDS })
+    const result = await getCompassLatestActivityByPhoneKeys(["01011112002"], { kinds: KINDS })
 
     expect(result.down).toBe(true)
     expect(result.rows).toEqual([])
@@ -112,11 +112,37 @@ describe("getCompassLatestActivityByPhoneKeys", () => {
     expect(logs).toHaveLength(0)
   })
 
+  it("자리표시·더미 번호 키(010-0000-0000·010-1234-5678 류)는 조인하지 않는다 — 같은 더미를 친 남의 Compass 리드 활동이다", async () => {
+    datasets.compass_leads_v.push({ id: 6001, phone_key: "01000000000" }, { id: 6002, phone_key: "01012345678" })
+    datasets.compass_activities_v.push(
+      { id: 21, lead_id: 6001, kind: "call", actor: "남담당", created_at: "2026-09-24T05:00:00.000Z" },
+      { id: 22, lead_id: 6002, kind: "call", actor: "남담당", created_at: "2026-09-24T05:00:00.000Z" }
+    )
+    const { getCompassLatestActivityByPhoneKeys } = await loadBridge()
+
+    // 자리표시 키만이면 원격 조회를 하지 않는다.
+    expect(await getCompassLatestActivityByPhoneKeys(["01000000000", " 01012345678 "], { kinds: KINDS })).toEqual({
+      rows: [],
+      down: false,
+    })
+    expect(logs).toHaveLength(0)
+
+    // 섞여 있으면 붙여도 되는 키만 — Compass 에 같은 더미 키 리드·활동이 있어도 싣지 않는다.
+    const result = await getCompassLatestActivityByPhoneKeys(["01000000000", "01012345678", "01011112002"], {
+      kinds: KINDS,
+      excludeActors: EXCLUDED,
+    })
+    expect(result.down).toBe(false)
+    expect(result.rows.map((row) => row.phone_key)).toEqual(["01011112002"])
+    const activityPages = logs.filter((log) => log.table === "compass_activities_v")
+    expect(activityPages[0].filters).toContainEqual({ op: "in", column: "lead_id", value: [5001, 5002] })
+  })
+
   it("같은 키 집합은 60초 메모를 탄다(순서 무관)", async () => {
     const { getCompassLatestActivityByPhoneKeys } = await loadBridge()
-    await getCompassLatestActivityByPhoneKeys(["01033334444", "01011112222"], { kinds: KINDS, excludeActors: EXCLUDED })
+    await getCompassLatestActivityByPhoneKeys(["01033334004", "01011112002"], { kinds: KINDS, excludeActors: EXCLUDED })
     const before = logs.length
-    await getCompassLatestActivityByPhoneKeys(["01011112222", "01033334444"], { kinds: KINDS, excludeActors: EXCLUDED })
+    await getCompassLatestActivityByPhoneKeys(["01011112002", "01033334004"], { kinds: KINDS, excludeActors: EXCLUDED })
     expect(logs.length).toBe(before)
   })
 })

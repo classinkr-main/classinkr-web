@@ -46,7 +46,7 @@ import {
 } from "@/lib/crm/compass-demo-signal"
 import { pickNextContact, taskNextContactAt, type NextContactCandidate } from "@/lib/crm/customer-contact-summary"
 import {
-  contactPhoneKey,
+  compassJoinPhoneKey,
   contactTargetKey,
   lastContactChannelLabel,
   pickLatestContact,
@@ -421,11 +421,15 @@ function dealHref(id: string) {
  * 전환 고객(customer:) 대상 링크 — 360 은 lead·neo 키만 받아 열 수 없고, 맨 /admin/crm/customers 는 필터 없는 통합 목록으로
  * 가 어떤 고객인지 잃는다. 통합 고객 DB 를 원천 고객 + 이름 검색으로 연다(lib/crm/rev-sync-health.ts revLinkedTargetHref 와
  * 같은 "검색 착지" 기본형). 이름을 모르면 원천 고객 필터만.
+ * 담당은 늘 전체(`owner=`)로 싣는다 — 통합 목록은 owner 생략이 로그인 담당이고(2026-10-16 기본 담당 계약,
+ * lib/admin/data-owner.ts dataOwnerFromParams), 전환 고객 행은 담당 키가 비어(리드 접기로 물려받을 때만 채워진다)
+ * 내 담당으로 좁히면 이름 검색이 늘 빈 목록이 된다.
  */
 export function todayContactCustomerHref(label: string | null | undefined): string {
   const params = new URLSearchParams({ source: "customer" })
   const q = trimOrNull(label)
   if (q) params.set("q", q)
+  params.set("owner", "")
   return `/admin/crm/customers/unified?${params.toString()}`
 }
 
@@ -555,7 +559,7 @@ export function collectTodayContactPhoneKeys(input: {
 }): string[] {
   const keys = new Set<string>()
   const add = (value: string | null | undefined) => {
-    const key = contactPhoneKey(value)
+    const key = compassJoinPhoneKey(value)
     if (key) keys.add(key)
   }
   const leadById = new Map<string, Pick<LeadRecord, "id" | "status" | "phone">>()
@@ -615,7 +619,8 @@ export function buildTodayContacts(input: TodayContactQueueInput): CrmTodayConta
     else futureByKey.set(key, [candidate])
   }
 
-  // Compass 대표 행(전화 키 → 1건) — 칩·자동 상태 반영과 같은 대표 규칙(overlay.ts).
+  // Compass 대표 행(전화 키 → 1건) — 칩·자동 상태 반영과 같은 대표 규칙(overlay.ts). 찾는 쪽 키는 전부
+  // compassJoinPhoneKey 라 자리표시·더미 번호 키의 묶음은 어느 행에도 붙지 않는다.
   const compassRepByPhone = new Map<string, CompassLeadIndexRow>()
   if (compass.leadIndex) {
     const grouped = new Map<string, CompassLeadIndexRow[]>()
@@ -640,7 +645,7 @@ export function buildTodayContacts(input: TodayContactQueueInput): CrmTodayConta
     leadById.set(lead.id, lead)
     if (lead.status !== "new" && lead.status !== "contacted") continue
     if (isTestLead(lead)) continue
-    const key = contactPhoneKey(lead.phone)
+    const key = compassJoinPhoneKey(lead.phone)
     if (!key) continue
     const current = openLeadByPhone.get(key)
     if (!current || inflowMs(lead) > inflowMs(current) || (inflowMs(lead) === inflowMs(current) && lead.id > current.id)) {
@@ -651,7 +656,7 @@ export function buildTodayContacts(input: TodayContactQueueInput): CrmTodayConta
   const neoByPhone = new Map<string, NeoCrmCustomerRow>()
   for (const account of input.neoRows) {
     neoById.set(account.accountId, account)
-    const key = contactPhoneKey(account.phone)
+    const key = compassJoinPhoneKey(account.phone)
     if (key && !neoByPhone.has(key)) neoByPhone.set(key, account)
   }
 
@@ -663,7 +668,7 @@ export function buildTodayContacts(input: TodayContactQueueInput): CrmTodayConta
 
   // ── 엔티티 행 팩토리 ──
   const makeLeadRow = (lead: LeadRecord, item: CrmPriorityItem | null): RowAcc => {
-    const phoneKey = contactPhoneKey(lead.phone)
+    const phoneKey = compassJoinPhoneKey(lead.phone)
     const rep = phoneKey ? compassRepByPhone.get(phoneKey) : undefined
     const ownerKeys = new Set(lowerKeys([lead.assigned_to]))
     if (rep) for (const key of compassOwnerKeys(rep)) ownerKeys.add(key)
@@ -694,7 +699,7 @@ export function buildTodayContacts(input: TodayContactQueueInput): CrmTodayConta
   }
 
   const makeNeoRow = (account: NeoCrmCustomerRow, item: CrmPriorityItem | null): RowAcc => {
-    const phoneKey = contactPhoneKey(account.phone)
+    const phoneKey = compassJoinPhoneKey(account.phone)
     const rep = phoneKey ? compassRepByPhone.get(phoneKey) : undefined
     return {
       key: `neo:${account.accountId}`,
@@ -813,7 +818,7 @@ export function buildTodayContacts(input: TodayContactQueueInput): CrmTodayConta
     if (!item) continue
 
     const reasons: TodayContactReason[] = []
-    const phoneKey = contactPhoneKey(lead.phone)
+    const phoneKey = compassJoinPhoneKey(lead.phone)
     const createdMs = timeOf(lead.timestamp)
     const followMs = timeOf(lead.follow_up_at)
     const scheduledFuture = followMs != null && followMs >= todayEnd
@@ -1062,7 +1067,9 @@ export function buildTodayContacts(input: TodayContactQueueInput): CrmTodayConta
       const dueMs = timeOf(due.next_action_at)
       if (dueMs == null || dueMs >= todayEnd) continue
       if (countBeyond(due)) continue
-      listedDue.push({ due, dueMs, phoneKey: contactPhoneKey(due.phone_key) })
+      // 자리표시·더미 번호 키는 null — 같은 더미의 Home 리드·NEO 계정·다른 Compass 리드와 한 행으로 접지 않고, 전화 키로
+      // 모은 최신 활동(같은 더미를 친 남의 콜이 섞인다)으로 처리됨을 정하지 않는다(행은 compass:<id> 로 따로 선다).
+      listedDue.push({ due, dueMs, phoneKey: compassJoinPhoneKey(due.phone_key) })
     }
 
     // 할 일 등 다른 원천으로 이미 선 리드 행(종료 리드 등 — 진행 중 리드는 openLeadByPhone 이 맡는다) 중 기록 위치가
@@ -1221,7 +1228,7 @@ export function buildTodayContacts(input: TodayContactQueueInput): CrmTodayConta
       if (snoozedToday) existing.homeSnoozeTrace = leadSnoozeTrace(lead)
       continue
     }
-    const phoneKey = contactPhoneKey(lead.phone)
+    const phoneKey = compassJoinPhoneKey(lead.phone)
     const contact = lastContactFor(key, phoneKey)
     const contactMs = timeOf(contact?.at)
     if (!contact || contactMs == null || contactMs < todayStart) {

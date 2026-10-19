@@ -56,7 +56,7 @@ import {
   COMPASS_CONTACT_EXCLUDED_ACTORS,
   COMPASS_CONTACT_KINDS,
   buildCompassContactIndex,
-  contactPhoneKey,
+  compassJoinPhoneKey,
   contactTargetKey,
   pickLatestContact,
   type LastContactFact,
@@ -767,10 +767,11 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
       fallbackAt ? { at: fallbackAt, source: "home", channel: null, actor: null } : null
     )
   }
-  // 행 키 → Compass 조인 전화 키(9자리 이상 정규화 키만). 행에는 싣지 않는다(연락처는 contact 가 이미 갖는다).
+  // 행 키 → Compass 조인 전화 키(compassJoinPhoneKey — 9자리 이상 · 자리표시·더미 번호 아님). 더미를 친 고객이 같은 더미의
+  // 남의 Compass 리드 링크·마지막 연락을 받지 않는다. 행에는 싣지 않는다(연락처는 contact 가 이미 갖는다).
   const phoneKeyByRowKey = new Map<string, string>()
   const rememberPhone = (rowKey: string, phone: string | null | undefined) => {
-    const key = contactPhoneKey(phone)
+    const key = compassJoinPhoneKey(phone)
     if (key) phoneKeyByRowKey.set(rowKey, key)
   }
 
