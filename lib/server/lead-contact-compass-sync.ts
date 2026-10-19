@@ -120,7 +120,7 @@ export async function syncLeadContactFromCompass(
   }
 
   const needActivity = compassLeadIdsNeedingActivityCheck(leads, compassRows)
-  let touched = new Set<number>()
+  let touched: ReadonlyMap<number, number> = new Map()
   if (needActivity.length > 0) {
     const activity = await getCompassActivitySignals(needActivity, COMPASS_HUMAN_ACTIVITY_KINDS)
     if (activity.down) return { ...emptyReport(dryRun, "bridge_down", activity.error), scanned: leads.length }

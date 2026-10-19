@@ -594,12 +594,13 @@ export async function getBoardLeads(): Promise<LeadRecord[]> {
  * JSON 폴백 모드(로컬 픽스처)는 반영하지 않으므로 대상도 없다.
  */
 export async function getLeadsForCompassContactSync(): Promise<
-  Array<{ id: string; phone: string; status: LeadRecord["status"] }>
+  Array<{ id: string; phone: string; status: LeadRecord["status"]; created_at: string | null; last_inflow_at: string | null }>
 > {
   if (!USE_SUPABASE) return [];
 
-  const rows = await fetchAllLeadRows("id, phone, status", "MKT 연락 반영 대상 조회");
-  const targets: Array<{ id: string; phone: string; status: LeadRecord["status"] }> = [];
+  // created_at·last_inflow_at — 판정이 "이 문의보다 오래된 Compass 상태"를 거르는 기준(lib/compass/lead-contact-sync leadInflowAtMs).
+  const rows = await fetchAllLeadRows("id, phone, status, created_at, last_inflow_at", "MKT 연락 반영 대상 조회");
+  const targets: Array<{ id: string; phone: string; status: LeadRecord["status"]; created_at: string | null; last_inflow_at: string | null }> = [];
   // offset 페이지 사이에 새 리드가 끼면 경계 행이 두 번 올 수 있다 — 판정 건수가 부풀지 않게 접는다.
   const seen = new Set<string>();
   for (const row of rows) {
@@ -607,7 +608,13 @@ export async function getLeadsForCompassContactSync(): Promise<
     seen.add(row.id);
     if (row.status !== "new" && row.status !== "contacted") continue;
     if (!row.phone?.trim()) continue;
-    targets.push({ id: row.id, phone: row.phone, status: row.status });
+    targets.push({
+      id: row.id,
+      phone: row.phone,
+      status: row.status,
+      created_at: row.created_at ?? null,
+      last_inflow_at: (row as { last_inflow_at?: string | null }).last_inflow_at ?? null,
+    });
   }
   return targets;
 }

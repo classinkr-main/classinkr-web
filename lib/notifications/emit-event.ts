@@ -549,15 +549,33 @@ function resolveWebhookTarget(
   return { url: undefined, reason: WEBHOOK_NOT_CONFIGURED_REASON }
 }
 
+/**
+ * 발송 기록은 부가 정보다 — 기록 쓰기가 실패해도(알림 표 장애·권한 오류) 이미 나간 발송을 실패로 바꾸거나
+ * 발송 결과 전체를 던지지 않는다. 예전에는 기록 insert 가 throw 하면 Promise.all 이 통째로 거절돼
+ * 실제로 나간 WeCom 알림이 호출부에서 "실패"가 됐다(2026-10-12).
+ */
+async function recordDelivery(input: Parameters<typeof createDeliveryLog>[0]) {
+  try {
+    await createDeliveryLog(input)
+  } catch (error) {
+    console.error(
+      "[notifications] delivery log write failed:",
+      input.channel,
+      input.status,
+      error instanceof Error ? error.message : String(error)
+    )
+  }
+}
+
 async function deliverEmailChannel(
   input: EmitNotificationEventInput,
-  eventId: string,
+  eventId: string | null,
 ) {
   const settings = await getResolvedSettings()
   const recipients = settings.notificationDigestEmailList
 
   if (!recipients.length) {
-    await createDeliveryLog({
+    await recordDelivery({
       eventId,
       channel: "email",
       status: "skipped",
@@ -584,7 +602,7 @@ async function deliverEmailChannel(
     })
 
     const status = result.failed === recipients.length ? "failed" : "sent"
-    await createDeliveryLog({
+    await recordDelivery({
       eventId,
       channel: "email",
       status,
@@ -600,7 +618,7 @@ async function deliverEmailChannel(
     } satisfies NotificationDeliveryResult
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error"
-    await createDeliveryLog({
+    await recordDelivery({
       eventId,
       channel: "email",
       status: "failed",
@@ -618,7 +636,7 @@ async function deliverEmailChannel(
 async function deliverWebhookChannel(
   channel: Exclude<NotificationChannel, "in_app" | "email">,
   input: EmitNotificationEventInput,
-  eventId: string,
+  eventId: string | null,
 ) {
   const severity = input.severity ?? "info"
   const settings = await getResolvedSettings()
@@ -626,7 +644,7 @@ async function deliverWebhookChannel(
   const target = resolveWebhookTarget(channel, severity, settings)
 
   if (!target.url) {
-    await createDeliveryLog({
+    await recordDelivery({
       eventId,
       channel,
       status: "skipped",
@@ -650,7 +668,7 @@ async function deliverWebhookChannel(
     }
 
     if (!response.ok) {
-      await createDeliveryLog({
+      await recordDelivery({
         eventId,
         channel,
         status: "failed",
@@ -665,7 +683,7 @@ async function deliverWebhookChannel(
       } satisfies NotificationDeliveryResult
     }
 
-    await createDeliveryLog({
+    await recordDelivery({
       eventId,
       channel,
       status: "sent",
@@ -676,7 +694,7 @@ async function deliverWebhookChannel(
     return { channel, status: "sent" } satisfies NotificationDeliveryResult
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error"
-    await createDeliveryLog({
+    await recordDelivery({
       eventId,
       channel,
       status: "failed",
@@ -705,24 +723,47 @@ export async function emitNotificationEvent(input: EmitNotificationEventInput) {
     appearance: settings.notificationAppearance,
   })
 
-  const event = await createNotificationEvent({
-    eventType: input.eventType,
-    notificationType: input.notificationType,
-    categoryTag: input.categoryTag,
-    scopeTag,
-    severity,
-    title: input.title,
-    message: input.message,
-    routeUrl: input.routeUrl,
-    source: input.source,
-    sourceId: input.sourceId,
-    payload: input.payload,
-  })
+  const channels = (input.channels ?? []).filter(
+    (channel): channel is Exclude<NotificationChannel, "in_app"> =>
+      channel !== "in_app"
+  )
 
-  if (recipients.length) {
+  // 알림 표 쓰기가 실패해도 외부 채널(WeCom·이메일)은 보낸다 — 장애 알림이 가장 필요한 때가 바로 DB 쓰기가
+  // 거절될 때다(2026-09-01 PGRST303 같은 사건). 예전에는 이 insert 가 던지면 발송 단계까지 가지 못해
+  // 리드 저장 실패 incident 가 아무 방에도 안 나갔다. 인앱 알림은 이벤트 행이 있어야 하므로 이때는 건너뛴다.
+  // 설정 읽기(getResolvedSettings)는 위에서 이미 끝났다 — 설정 장애는 꺼둔 웹훅을 되살리지 않도록 여전히 던진다.
+  let event: Awaited<ReturnType<typeof createNotificationEvent>> | null = null
+  let eventStoreError: unknown = null
+  try {
+    event = await createNotificationEvent({
+      eventType: input.eventType,
+      notificationType: input.notificationType,
+      categoryTag: input.categoryTag,
+      scopeTag,
+      severity,
+      title: input.title,
+      message: input.message,
+      routeUrl: input.routeUrl,
+      source: input.source,
+      sourceId: input.sourceId,
+      payload: input.payload,
+    })
+  } catch (error) {
+    // 보낼 외부 채널이 없으면 이 알림은 아무에게도 닿지 못한다 — 예전처럼 호출부에 던진다.
+    if (channels.length === 0) throw error
+    eventStoreError = error
+    console.error(
+      "[notifications] event store failed; delivering external channels without in-app:",
+      input.eventType,
+      error instanceof Error ? error.message : String(error)
+    )
+  }
+  const eventId = event ? String(event.id) : null
+
+  if (event && recipients.length) {
     await createInAppNotifications(
       recipients.map((recipient) => ({
-        eventId: String(event.id),
+        eventId: String(event!.id),
         recipientType: recipient.recipientType,
         recipientId: recipient.recipientId,
         eventType: input.eventType,
@@ -740,18 +781,18 @@ export async function emitNotificationEvent(input: EmitNotificationEventInput) {
     )
   }
 
-  const channels = (input.channels ?? []).filter(
-    (channel): channel is Exclude<NotificationChannel, "in_app"> =>
-      channel !== "in_app"
-  )
-
   const deliveryResults = await Promise.all(
     channels.map((channel) =>
       channel === "email"
-        ? deliverEmailChannel(input, String(event.id))
-        : deliverWebhookChannel(channel, input, String(event.id))
+        ? deliverEmailChannel(input, eventId)
+        : deliverWebhookChannel(channel, input, eventId)
     )
   )
+
+  // 이벤트 행도 없고 외부 채널도 하나도 안 나갔으면 이 알림은 어디에도 닿지 않았다 — 원래 오류를 던진다.
+  if (eventStoreError && !deliveryResults.some((result) => result.status === "sent")) {
+    throw eventStoreError
+  }
 
   const unsuccessful = deliveryResults.filter((result) => result.status !== "sent")
   if (input.requireSuccessfulDelivery && unsuccessful.length > 0) {
@@ -765,5 +806,6 @@ export async function emitNotificationEvent(input: EmitNotificationEventInput) {
     )
   }
 
-  return { ...event, deliveryResults }
+  // 이벤트 행이 없으면 id 는 null — 호출부(아침 공지 실행 기록 등)는 null 을 그대로 저장한다.
+  return { ...(event ?? {}), id: event ? event.id : null, eventStored: event != null, deliveryResults }
 }

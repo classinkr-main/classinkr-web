@@ -46,6 +46,7 @@ function leadsViewChain(config: {
   chain.gte = vi.fn(() => chain)
   chain.lte = vi.fn(() => chain)
   chain.eq = vi.fn(() => chain)
+  chain.or = vi.fn(() => chain)
   chain.order = vi.fn(() => chain)
   chain.is = vi.fn(() => Promise.resolve(config.bdCount ?? { count: 0, error: null }))
   chain.range = vi.fn((from: number, to: number) =>
@@ -165,6 +166,20 @@ describe("getCompassLeadSliceByInflowRange", () => {
     expect(result.truncated).toBe(true)
     expect(result.rows).toHaveLength(2000)
     expect(leadsChain.range).toHaveBeenCalledTimes(2)
+  })
+
+  it("기간 필터는 created_at OR last_inflow_at 이고 정렬은 id 하나 — last_inflow_at 단독 필터는 신규 리드를 전부 뺀다(F12 재발)", async () => {
+    leadsChain = leadsViewChain({ onRange: () => ({ data: [], error: null }) })
+    fromMock = vi.fn(routeFrom)
+
+    await getCompassLeadSliceByInflowRange("2026-09-01T00:00:00+09:00", "2026-09-10T00:00:00.000Z")
+
+    expect(leadsChain.or).toHaveBeenCalledWith(
+      "and(created_at.gte.2026-08-31T15:00:00.000Z,created_at.lte.2026-09-10T00:00:00.000Z)," +
+        "and(last_inflow_at.gte.2026-08-31T15:00:00.000Z,last_inflow_at.lte.2026-09-10T00:00:00.000Z)"
+    )
+    expect(leadsChain.gte).not.toHaveBeenCalledWith("last_inflow_at", expect.anything())
+    expect(leadsChain.order.mock.calls.map(([column]) => column)).toEqual(["id"])
   })
 
   it("금액 컬럼(paid_amount·paid_month)을 select 하지 않는다", async () => {

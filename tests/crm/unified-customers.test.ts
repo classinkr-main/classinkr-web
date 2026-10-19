@@ -151,6 +151,7 @@ async function loadRepository(options?: {
       id: number
       lead_id: number | null
       day: string | null
+      kind: string | null
       status: string | null
       owner: string | null
       day_approx: boolean | null
@@ -762,7 +763,7 @@ describe("getCrmUnifiedCustomers", () => {
       // neoCustomer 의 전화(010-1111-2222)와 같은 정규화 키에만 붙는다.
       demoSource: {
         demos: [
-          { id: 1, lead_id: 900, day: "2026-06-27", status: "booked", owner: "진소망", day_approx: false },
+          { id: 1, lead_id: 900, day: "2026-06-27", kind: "demo", status: "booked", owner: "진소망", day_approx: false },
         ],
         phoneKeysByCompassLeadId: new Map([[900, ["01011112222"]]]),
         down: false,

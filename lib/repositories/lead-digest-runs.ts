@@ -149,7 +149,7 @@ export async function claimLeadDigestRun(input: {
 
 export async function markLeadDigestRunSent(input: {
   runId: string
-  notificationEventId: string
+  notificationEventId: string | null
 }) {
   const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase

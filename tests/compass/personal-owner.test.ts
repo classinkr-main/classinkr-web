@@ -32,8 +32,8 @@ describe("Compass 개인 집계와 캐시 격리", () => {
     expect(mocks.queries[1].join()).not.toContain("Junhyuk")
     expect(mocks.queries[2]).toEqual([])
     await getCompassUpcomingActions(48, ["Somang"])
-    expect(mocks.queries[3]).toHaveLength(2)
-    expect(mocks.queries[3][1]).toContain('owner.in.("Somang")')
+    // 종료된 고객관리 건 제외(care_stage) 필터와 담당자 필터가 둘 다 걸린다 — PostgREST 는 or 파라미터 여럿을 AND 로 묶는다.
+    expect(mocks.queries[3]).toEqual(["care_stage.is.null,care_stage.neq.closed", "limit", expect.stringContaining('owner.in.("Somang")')])
   })
   it("별명 순서와 중복은 같은 캐시이며 필터 값의 따옴표·역슬래시를 인용한다", () => {
     expect(compassOwnerCacheKey(["b", "a", "a"])).toBe(compassOwnerCacheKey(["a", "b"]))

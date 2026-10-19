@@ -72,7 +72,7 @@ export type LeadMorningBriefResult =
   | ({
       status: "sent"
       runId: string
-      eventId: string
+      eventId: string | null
       windowStart: string
       windowEnd: string
     } & LeadMorningBriefMetrics)
@@ -361,15 +361,17 @@ export async function sendLeadMorningBrief(
       requireSuccessfulDelivery: true,
     })
 
+    // 알림 표 쓰기만 실패하고 WeCom 은 나간 경우 event.id 는 null 이다 — 발송은 됐으니 sent 로 기록한다(재발송 방지).
+    const eventId = event.id == null ? null : String(event.id)
     await markLeadDigestRunSent({
       runId: claim.run.id,
-      notificationEventId: String(event.id),
+      notificationEventId: eventId,
     })
 
     return {
       status: "sent",
       runId: claim.run.id,
-      eventId: String(event.id),
+      eventId,
       windowStart: window.start.toISOString(),
       windowEnd: window.end.toISOString(),
       ...metrics,

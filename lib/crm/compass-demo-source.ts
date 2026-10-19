@@ -14,9 +14,9 @@
  */
 import "server-only"
 
-import { isCountableCompassDemo } from "@/lib/compass/demo"
-
+import { getBusinessDateParts } from "@/lib/business-time"
 import { getCompassDemos, getCompassLeadPhoneKeysByIds } from "@/lib/compass/bridge"
+import { isCountableCompassDemo } from "@/lib/compass/demo"
 import { normalizePhoneKey } from "@/lib/compass/normalize"
 import {
   EMPTY_COMPASS_DEMO_SOURCE,
@@ -28,9 +28,9 @@ import {
 const LOOKBACK_DAYS = 60
 const LOOKAHEAD_DAYS = 365
 
+/** 조회 창의 날짜 경계(KST) — lead_demos.day 가 KST 날짜라 서버 로컬이 아니라 KST 로 자른다. */
 function toDayString(ms: number) {
-  const date = new Date(ms)
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 10)
+  return getBusinessDateParts(new Date(ms)).date
 }
 
 /**
@@ -52,6 +52,7 @@ export async function loadCompassDemoSource(
     id: row.id,
     lead_id: row.lead_id,
     day: row.day,
+    kind: row.kind,
     status: row.status,
     owner: row.owner,
     day_approx: row.day_approx,

@@ -66,16 +66,69 @@ export const COMPASS_STAGE_LABEL: Record<string, string> = {
  */
 export const COMPASS_INBOUND_CHANNELS = ["channeltalk", "direct", "walkin", "referral"] as const
 
-/** Compass 가져오기 채널 — Compass CHANNELS(group='import'). NEO 스텁은 신규 광고 유입이 아니다. */
+/** Compass 가져오기(import) 채널 — 유입이 아니라 다른 시스템(NEO 한국팀)에서 **들여온** 스텁의 표식(Compass ADR-0015,
+ *  lib/taxonomy/defs.ts CHANNELS group='import'). Compass 는 이 채널도 mktLeadCond 에서 뺀다(lib/channels.ts
+ *  `INBOUND_CHANNELS ∪ IMPORT_CHANNELS`). 2026-10-12 전까지 이 사본에 빠져 있어 NEO 계정 동기화가 만든 스텁(created_at=오늘)이
+ *  어드민 「오늘 유입」 마케팅 신규로 잡혔다. */
 export const COMPASS_IMPORT_CHANNELS = ["neo"] as const
 
-/** Compass 마케팅 리드인가 — mktLeadCond 와 같은 규칙. 인바운드·가져오기는 제외하고
- * 채널 없음(null·빈 값, 메타 리드 등)과 프로모션(sms·email·expo)은 마케팅이다.
+/** 마케팅 집계에서 빼는 채널 전부 = Compass mktLeadCond 의 배열과 같은 목록(순서까지). */
+export const COMPASS_NON_MARKETING_CHANNELS = [...COMPASS_INBOUND_CHANNELS, ...COMPASS_IMPORT_CHANNELS] as const
+
+/** Compass 마케팅 리드인가 — mktLeadCond 와 같은 규칙. 채널 없음(null·빈 값, 메타 리드 등)과 프로모션(sms·email·expo)은 마케팅이다.
  *  SQL 과 같게 값을 다듬지 않고 그대로 비교한다. */
 export function isCompassMarketingChannel(channel: string | null | undefined): boolean {
-  return !(COMPASS_INBOUND_CHANNELS as readonly string[]).includes(channel ?? "")
-    && !(COMPASS_IMPORT_CHANNELS as readonly string[]).includes(channel ?? "")
+  return !(COMPASS_NON_MARKETING_CHANNELS as readonly string[]).includes(channel ?? "")
 }
+
+/* ── 전화 키를 다른 시스템 기록과 붙여도 되는가 — Compass scripts/phoneJoinKey.mjs 의 TS 사본 ───────────────
+ *  Compass 는 "0"·"010-0000-0000"·"010-1234-5678" 같은 자리표시·더미 번호를 동일인 키로 쓰지 않는다(ADR-0018, 동일인 키).
+ *  어드민 쪽은 길이 9 이상만 봤다 — 폼에 더미를 친 사람이 같은 더미를 가진 **남의** Compass 리드의 종료·활동에 붙어
+ *  자동 종료·연락함이 됐다(2026-10-12 브리지 감사 4번). 규칙·진리표는 Compass tests/phoneJoinKey.test.ts 와 같다
+ *  (tests/compass/normalize.test.ts 가 같은 표를 든다). 규칙을 바꾸면 Compass 쪽과 같이 바꾼다. */
+
+/** 조인에 쓰는 전화 키의 최소 자릿수 — 지역번호 포함 가장 짧은 국내 번호(02-123-4567)가 9자리. */
+export const MIN_COMPASS_JOIN_PHONE_DIGITS = 9
+
+/** 네 자리 블록이 "아무렇게나 친" 모양인가 — 전부 같은 숫자(1111) 또는 1씩 오르내리는 연속(1234·0123·9876·3210). */
+function isTrivialPhoneBlock(block: string): boolean {
+  if (/^(\d)\1{3}$/.test(block)) return true
+  const digits = [...block].map(Number)
+  const step = digits[1] - digits[0]
+  return (step === 1 || step === -1) && digits.every((value, index) => index === 0 || value - digits[index - 1] === step)
+}
+
+/**
+ * 자리표시·더미 번호인가 — 길이는 보지 않는다(호출부 몫). 숫자열이 아니면 true(붙이지 않는다).
+ *  - 전부 같은 숫자(000000000, 1111111111)
+ *  - 앞 3자리 뒤가 전부 0(010-0000-0000)
+ *  - 휴대폰 11자리 가운데·끝 네 자리가 **둘 다** 같은 숫자·연속(010-1234-5678, 010-1111-2222)
+ *  - 휴대폰 11자리 가입자 번호(뒤 8자리)에 0 아닌 숫자가 하나 이하(010-0000-0001)
+ * 대표번호·유선은 블록 규칙을 두지 않는다 — 실제로 쓰는 번호일 수 있다.
+ */
+export function isPlaceholderPhoneDigits(key: unknown): boolean {
+  if (typeof key !== "string" || !/^\d+$/.test(key)) return true
+  if (/^(\d)\1*$/.test(key)) return true
+  if (/^\d{3}0+$/.test(key)) return true
+  const mobile = /^01[016789](\d{4})(\d{4})$/.exec(key)
+  if (mobile) {
+    const [, mid, last] = mobile
+    if (isTrivialPhoneBlock(mid) && isTrivialPhoneBlock(last)) return true
+    if (/^0*[1-9]?0*$/.test(mid + last)) return true
+  }
+  return false
+}
+
+/** 다른 시스템 기록과 붙여도 되는 키인가 — 숫자열 · 9자리 이상 · 자리표시 아님. */
+export function isJoinableCompassPhoneKey(key: unknown): key is string {
+  if (typeof key !== "string" || !/^\d+$/.test(key)) return false
+  if (key.length < MIN_COMPASS_JOIN_PHONE_DIGITS) return false
+  return !isPlaceholderPhoneDigits(key)
+}
+
+/** 붙여도 되는 키면 그대로, 아니면 null. */
+export const joinableCompassPhoneKey = (key: string | null | undefined): string | null =>
+  isJoinableCompassPhoneKey(key) ? key : null
 
 /** 케어 사다리 한글 라벨 — crm.leads.care_stage 실측 어휘(member/leader/ceo/paid/closed). */
 export const COMPASS_CARE_STAGE_LABEL: Record<string, string> = {

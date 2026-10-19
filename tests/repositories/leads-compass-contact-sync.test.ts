@@ -128,7 +128,7 @@ describe("리드 상태 MKT 반영 저장소", () => {
   })
 
   describe("getLeadsForCompassContactSync", () => {
-    it("전화가 있는 신규·연락함 리드만 id·전화·상태로 돌려준다", async () => {
+    it("전화가 있는 신규·연락함 리드만 id·전화·상태·시각으로 돌려준다", async () => {
       const table = fakeLeadsTable([
         lead({ id: "new-with-phone" }),
         lead({ id: "contacted-with-phone", status: "contacted" }),
@@ -141,10 +141,12 @@ describe("리드 상태 MKT 반영 저장소", () => {
 
       const leads = await repo.getLeadsForCompassContactSync()
 
+      // created_at·last_inflow_at 도 싣는다 — 판정이 "문의보다 오래된 Compass 상태"를 거르는 기준(없으면 null).
       expect(leads).toEqual([
-        { id: "new-with-phone", phone: "010-1234-5678", status: "new" },
-        { id: "contacted-with-phone", phone: "010-1234-5678", status: "contacted" },
+        { id: "new-with-phone", phone: "010-1234-5678", status: "new", created_at: "2026-09-01T00:00:00.000Z", last_inflow_at: null },
+        { id: "contacted-with-phone", phone: "010-1234-5678", status: "contacted", created_at: "2026-09-01T00:00:00.000Z", last_inflow_at: null },
       ])
+      expect(table.from).toHaveBeenCalled()
     })
 
     it("페이지 경계에서 같은 행이 두 번 와도 한 번만 돌려준다", async () => {

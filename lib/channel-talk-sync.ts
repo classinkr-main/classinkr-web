@@ -17,6 +17,7 @@ import {
   type ChannelUserChat,
 } from "@/lib/channel-talk-api"
 import { redactPii } from "@/lib/chatbot/service"
+import { normalizePhoneKey } from "@/lib/compass/normalize"
 import { normalizeTopicTags } from "@/lib/chatbot/topic-crosswalk"
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import {
@@ -46,12 +47,6 @@ const ACTIVE_SYNC_STALE_MS = 10 * 60_000
 let activeSync:
   | { promise: Promise<ChannelSyncResult>; startedAt: number }
   | null = null
-
-function normalizePhone(value?: string): string | undefined {
-  if (!value) return undefined
-  const digits = value.replace(/\D/g, "")
-  return digits.length >= 9 ? digits : undefined
-}
 
 function toState(state?: string): ChannelConversationState {
   if (state === "opened" || state === "closed" || state === "snoozed") return state
@@ -142,12 +137,15 @@ interface LeadMatchIndex {
   byPhone: Map<string, LeadRecord>
 }
 
+/** 채널톡 프로필 전화 ↔ 홈페이지 리드 전화 매칭 키 — Compass normPhone 과 같은 규칙(lib/compass/normalize.ts).
+ *  예전엔 "숫자 9자리 이상"만 보는 사본이라 "+82 10-…"(채널톡 국제 표기)과 "010-…"(리드 저장값)이 다른 사람이 됐다
+ *  (compass-integration-2026-09-14 R6 B-3). 역브리지 뷰 home_channel_contacts_v 는 SQL norm_phone_key 로 같은 키를 쓴다. */
 function buildLeadIndex(leads: LeadRecord[]): LeadMatchIndex {
   const byEmail = new Map<string, LeadRecord>()
   const byPhone = new Map<string, LeadRecord>()
   for (const lead of leads) {
     if (lead.email) byEmail.set(lead.email.toLowerCase(), lead)
-    const phone = normalizePhone(lead.phone)
+    const phone = normalizePhoneKey(lead.phone)
     if (phone) byPhone.set(phone, lead)
   }
   return { byEmail, byPhone }
@@ -158,7 +156,7 @@ function matchLead(index: LeadMatchIndex, email?: string, phone?: string): LeadR
     const found = index.byEmail.get(email.toLowerCase())
     if (found) return found
   }
-  const normalized = normalizePhone(phone)
+  const normalized = normalizePhoneKey(phone)
   if (normalized) {
     const found = index.byPhone.get(normalized)
     if (found) return found

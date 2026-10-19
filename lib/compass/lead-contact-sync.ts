@@ -3,11 +3,17 @@
 //
 // 러프한 연동이다 — 콜 기록을 복제하지 않고 상태 한 칸만 MKT 처리 결과에 맞춘다.
 //  * 한 방향만: new → contacted, new·contacted → closed. 전환·종료는 건드리지 않고 되돌리지 않는다.
-//  * 매칭 키는 전화 정규화 키 하나(normalizePhoneKey = compass_leads_v.phone_key 식).
+//  * 매칭 키는 전화 정규화 키 하나(normalizePhoneKey = compass_leads_v.phone_key 식) — 자리표시·더미 번호는 키가 아니다
+//    (joinableCompassPhoneKey, Compass ADR-0018 과 같은 규칙).
 //  * 이탈 판정은 Compass 칩과 같은 대표 행(pickRepresentativeCompassRow) 기준이다.
+//  * **홈페이지 문의보다 오래된 Compass 상태는 근거가 아니다**(2026-10-12). 홈페이지 리드는 Compass 로 전달되지 않으므로
+//    Compass 의 종료(lost)·활동이 이 문의 **이전** 것이면 이 문의를 처리한 것이 아니다 — 종료된 고객의 재문의가 담당자 손길
+//    없이 다시 종료되고, 몇 달 전 콜 때문에 새 문의가 "연락중"이 되던 것을 막는다. 기준 시각은 리드의
+//    max(created_at, last_inflow_at)(leadInflowAtMs), Compass 쪽은 행 updated_at(없으면 created_at)·활동 created_at.
+//    리드 시각을 모르면(옛 호출) 예전처럼 시각을 따지지 않는다.
 //  * 서버 의존 없음 — 조회·쓰기는 lib/server/lead-contact-compass-sync.ts 가 한다.
 
-import { normalizePhoneKey } from "@/lib/compass/normalize"
+import { joinableCompassPhoneKey, normalizePhoneKey } from "@/lib/compass/normalize"
 import { pickRepresentativeCompassRow, type CompassOverlaySource } from "@/lib/compass/overlay"
 import type { LeadStatus } from "@/lib/supabase/database.types"
 
@@ -29,36 +35,66 @@ export const COMPASS_AUTOMATED_ACTORS: ReadonlySet<string> = new Set([
   "system",
 ])
 
-/** 이보다 짧은 전화 키는 매칭하지 않는다 — '0' 같은 잘못된 번호끼리 붙는 것을 막는다(지역번호 포함 최소 9자리). */
-const MIN_PHONE_KEY_LENGTH = 9
-
 export type LeadStatusFromCompass = "contacted" | "closed"
 
 export interface CompassSyncLead {
   id: string
   phone?: string | null
   status: LeadStatus
+  /** 홈페이지 리드 생성 시각 — 이 문의보다 오래된 Compass 근거를 거르는 기준의 재료. 없으면 시각을 따지지 않는다. */
+  created_at?: string | null
+  /** 재유입 축(자체 원천 재제출 시 갱신) — created_at 과 함께 max 를 기준 시각으로 쓴다. */
+  last_inflow_at?: string | null
 }
 
-/** 활동 판정에 필요한 최소 필드 — 본문은 싣지 않는다. */
+/** 활동 판정에 필요한 최소 필드 — 본문은 싣지 않는다. created_at 은 "문의 뒤의 활동인가" 판정에 쓴다. */
 export interface CompassActivitySignal {
   lead_id: number
   kind: string | null
   actor: string | null
+  created_at?: string | null
 }
 
 const HUMAN_KINDS: ReadonlySet<string> = new Set(COMPASS_HUMAN_ACTIVITY_KINDS)
 
-/** 사람 손 활동(사람 kind + 자동 작성자 아님)이 한 건이라도 있는 Compass lead id. */
-export function humanTouchedCompassLeadIds(activities: readonly CompassActivitySignal[]): Set<number> {
-  const touched = new Set<number>()
+function msOf(value: string | null | undefined): number | null {
+  if (!value) return null
+  const ms = new Date(value).getTime()
+  return Number.isNaN(ms) ? null : ms
+}
+
+/** 리드의 기준 시각 — max(created_at, last_inflow_at). 둘 다 없거나 깨졌으면 null(= 시각을 따지지 않는다). */
+export function leadInflowAtMs(lead: Pick<CompassSyncLead, "created_at" | "last_inflow_at">): number | null {
+  const created = msOf(lead.created_at)
+  const inflow = msOf(lead.last_inflow_at)
+  if (created == null) return inflow
+  if (inflow == null) return created
+  return Math.max(created, inflow)
+}
+
+/** Compass lead id → 사람 손 활동(사람 kind + 자동 작성자 아님)의 **가장 늦은** 시각(ms). 시각이 없는 활동은 0. */
+export function humanTouchedCompassLeadIds(activities: readonly CompassActivitySignal[]): Map<number, number> {
+  const touched = new Map<number, number>()
   for (const activity of activities) {
     if (!activity.kind || !HUMAN_KINDS.has(activity.kind)) continue
     const actor = activity.actor?.trim()
     if (actor && COMPASS_AUTOMATED_ACTORS.has(actor)) continue
-    touched.add(activity.lead_id)
+    const at = msOf(activity.created_at) ?? 0
+    const current = touched.get(activity.lead_id)
+    if (current == null || at > current) touched.set(activity.lead_id, at)
   }
   return touched
+}
+
+/** Compass 행이 처리된 시각 — updated_at(단계 이동·종료가 now() 로 찍는다)이 없으면 created_at. */
+function compassRowAtMs(row: CompassOverlaySource): number | null {
+  return msOf(row.updated_at) ?? msOf(row.created_at)
+}
+
+/** 이 Compass 근거(시각)가 리드 문의 뒤의 것인가 — 리드 시각을 모르면 참, 근거 시각을 모르면 거짓(보수적). */
+function afterInflow(atMs: number | null, inflowMs: number | null): boolean {
+  if (inflowMs == null) return true
+  return atMs != null && atMs >= inflowMs
 }
 
 export interface CompassLeadStatusSyncPlan {
@@ -81,31 +117,41 @@ function movedPastNew(row: CompassOverlaySource): boolean {
   return stage !== null && stage !== "new"
 }
 
+/** 단계만으로 "이 문의를 처리했다"가 되는 행 — 신규유입을 벗어났고, 그 처리가 문의 뒤다. */
+function handledByStageAfter(row: CompassOverlaySource, inflowMs: number | null): boolean {
+  return movedPastNew(row) && afterInflow(compassRowAtMs(row), inflowMs)
+}
+
 /**
  * 리드 한 건의 다음 상태. 바꿀 게 없으면 null.
  *
  * @param rows 같은 전화 키의 Compass 행들
- * @param touchedCompassLeadIds 사람 손 활동(COMPASS_HUMAN_ACTIVITY_KINDS)이 있는 Compass lead id
+ * @param touched Compass lead id → 사람 손 활동(COMPASS_HUMAN_ACTIVITY_KINDS)의 가장 늦은 시각(humanTouchedCompassLeadIds)
  */
 export function decideLeadStatusFromCompass(
-  lead: Pick<CompassSyncLead, "status">,
+  lead: Pick<CompassSyncLead, "status" | "created_at" | "last_inflow_at">,
   rows: readonly CompassOverlaySource[],
-  touchedCompassLeadIds: ReadonlySet<number>
+  touched: ReadonlyMap<number, number>
 ): LeadStatusFromCompass | null {
   if (lead.status !== "new" && lead.status !== "contacted") return null
   const representative = pickRepresentativeCompassRow(rows)
   if (!representative) return null
-  if (stageOf(representative) === "lost") return "closed"
+  const inflowMs = leadInflowAtMs(lead)
+  if (stageOf(representative) === "lost" && afterInflow(compassRowAtMs(representative), inflowMs)) return "closed"
   if (lead.status !== "new") return null
-  const handled = rows.some((row) => movedPastNew(row) || touchedCompassLeadIds.has(row.id))
+  const handled = rows.some((row) => {
+    if (handledByStageAfter(row, inflowMs)) return true
+    const touchedAt = touched.get(row.id)
+    return touchedAt != null && afterInflow(touchedAt, inflowMs)
+  })
   return handled ? "contacted" : null
 }
 
 function groupByPhoneKey(rows: readonly CompassOverlaySource[]): Map<string, CompassOverlaySource[]> {
   const groups = new Map<string, CompassOverlaySource[]>()
   for (const row of rows) {
-    const key = row.phone_key?.trim()
-    if (!key || key.length < MIN_PHONE_KEY_LENGTH) continue
+    const key = joinableCompassPhoneKey(row.phone_key?.trim())
+    if (!key) continue
     const group = groups.get(key)
     if (group) group.push(row)
     else groups.set(key, [row])
@@ -113,10 +159,9 @@ function groupByPhoneKey(rows: readonly CompassOverlaySource[]): Map<string, Com
   return groups
 }
 
-/** 매칭에 쓸 수 있는 전화 키 — 정규화 후 9자리 미만이면 null. */
+/** 매칭에 쓸 수 있는 전화 키 — 정규화 후 9자리 미만이거나 자리표시·더미 번호면 null. */
 function lookupKeyOf(lead: Pick<CompassSyncLead, "phone">): string | null {
-  const key = normalizePhoneKey(lead.phone)
-  return key && key.length >= MIN_PHONE_KEY_LENGTH ? key : null
+  return joinableCompassPhoneKey(normalizePhoneKey(lead.phone))
 }
 
 /** Compass 에 조회할 전화 키(중복 없음). 매칭에 못 쓰는 짧은 키로 조회해 행 상한을 채우지 않게 한다. */
@@ -141,7 +186,7 @@ function matchedGroup(
 export function planCompassLeadStatusSync(
   leads: readonly CompassSyncLead[],
   compassRows: readonly CompassOverlaySource[],
-  touchedCompassLeadIds: ReadonlySet<number>
+  touched: ReadonlyMap<number, number>
 ): CompassLeadStatusSyncPlan {
   const groups = groupByPhoneKey(compassRows)
   const plan: CompassLeadStatusSyncPlan = { scanned: leads.length, matched: 0, contacted: [], closed: [] }
@@ -149,7 +194,7 @@ export function planCompassLeadStatusSync(
     const group = matchedGroup(lead, groups)
     if (!group) continue
     plan.matched += 1
-    const next = decideLeadStatusFromCompass(lead, group, touchedCompassLeadIds)
+    const next = decideLeadStatusFromCompass(lead, group, touched)
     if (next === "contacted") plan.contacted.push(lead.id)
     if (next === "closed" && (lead.status === "new" || lead.status === "contacted")) {
       plan.closed.push({ id: lead.id, from: lead.status })
@@ -159,8 +204,9 @@ export function planCompassLeadStatusSync(
 }
 
 /**
- * 활동을 조회해야 판정이 끝나는 Compass lead id — 신규 리드 중 매칭 행 단계가 전부 신규유입인 경우만.
- * 나머지(단계 이동·이탈·이미 연락함)는 단계만으로 결론이 나서 활동 조회가 필요 없다.
+ * 활동을 조회해야 판정이 끝나는 Compass lead id — 신규 리드 중 "문의 뒤에 단계를 벗어난" 행이 하나도 없는 경우.
+ * 그런 행이 있으면(단계 이동·이탈) 단계만으로 결론이 나서 활동 조회가 필요 없다. 문의 **전에** 벗어난 행뿐이면
+ * 그 뒤의 사람 손 활동이 있는지 봐야 한다.
  */
 export function compassLeadIdsNeedingActivityCheck(
   leads: readonly CompassSyncLead[],
@@ -171,7 +217,9 @@ export function compassLeadIdsNeedingActivityCheck(
   for (const lead of leads) {
     if (lead.status !== "new") continue
     const group = matchedGroup(lead, groups)
-    if (!group || group.some(movedPastNew)) continue
+    if (!group) continue
+    const inflowMs = leadInflowAtMs(lead)
+    if (group.some((row) => handledByStageAfter(row, inflowMs))) continue
     for (const row of group) ids.add(row.id)
   }
   return [...ids].sort((a, b) => a - b)

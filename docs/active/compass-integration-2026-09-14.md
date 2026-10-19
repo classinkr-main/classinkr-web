@@ -170,7 +170,7 @@ R6 B-3 매칭 순서: ① `compass_lead_refs_v`(`system = 'home_lead'`, `externa
 
 ## 5. 이번에 하지 않은 것 / 미확인
 
-- `lib/channel-talk-sync.ts` 전화 정규화(국가번호 미처리) 교체 — R6 B-3 권고. 역브리지 뷰는 `norm_phone_key` 로 흡수하지만 채널톡→리드 매칭 코드는 그대로다.
+- ~~`lib/channel-talk-sync.ts` 전화 정규화(국가번호 미처리) 교체 — R6 B-3 권고~~ → 2026-10-12 교체: 채널톡→리드 매칭도 `lib/compass/normalize.ts` `normalizePhoneKey`(= Compass normPhone = SQL `norm_phone_key`)를 쓴다(`tests/channel-talk/channel-talk-sync.test.ts`).
 - `20260910_leads_contact_unique_dedupe.sql` 유니크 인덱스 — `saveLead` 재유입 업서트 전에는 적용 금지(재문의가 502·조용한 유실, R6 G8).
 - Meta leadgen 단일 수신 전환, `home_neo_leads_v`(NEO 리드 상태 역류), Compass "홈페이지 문의" 인박스 — R6 B-5 3주+ 단계.
 - 미확인: 마이그레이션은 로컬 임시 PG 17(스텁 테이블)로만 검증했다 — 서울 인스턴스(Supabase 기본 권한 포함)에서는 §2 확인 쿼리로 본다.

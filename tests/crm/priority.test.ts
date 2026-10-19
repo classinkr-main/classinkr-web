@@ -158,7 +158,7 @@ describe("CRM priority rules", () => {
       demoIndex: buildCompassDemoIndex(
         {
           demos: [
-            { id: 1, lead_id: 77, day: "2026-06-27", status: "booked", owner: "진소망", day_approx: false },
+            { id: 1, lead_id: 77, day: "2026-06-27", kind: "demo", status: "booked", owner: "진소망", day_approx: false },
           ],
           phoneKeysByCompassLeadId: new Map([[77, ["01012345678"]]]),
           down: false,
@@ -178,7 +178,7 @@ describe("CRM priority rules", () => {
       demoIndex: buildCompassDemoIndex(
         {
           demos: [
-            { id: 1, lead_id: 77, day: "2026-06-27", status: "booked", owner: null, day_approx: false },
+            { id: 1, lead_id: 77, day: "2026-06-27", kind: "demo", status: "booked", owner: null, day_approx: false },
           ],
           phoneKeysByCompassLeadId: new Map([[77, ["01012345678"]]]),
           down: false,
