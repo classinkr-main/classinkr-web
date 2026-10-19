@@ -175,7 +175,8 @@ async function assembleCacheableCalendarHealth(): Promise<SourceHealth[]> {
           source: "partner",
           count: partner.value.count,
           lastDate: partner.value.lastDate,
-          href: "/admin/partners",
+          // 구경로 /admin/partners 는 redirect 스텁(→ /admin/crm/deals/kpi)이라 최종 경로로 곧장 보낸다.
+          href: "/admin/crm/deals/kpi",
         })
       : unknownHealth("partner"),
     publicEvents.value

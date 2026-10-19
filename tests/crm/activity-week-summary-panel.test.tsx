@@ -275,11 +275,11 @@ describe("CrmActivityClient — 캐시 TTL SSOT(P2) + 요약 패널 배선(A5)",
     expect(source).toContain("staleIfError: !options?.force")
   })
 
-  it("요약 View 를 데스크톱 우측 카드 + 모바일 details 두 자리에 그리되 할 일 훅은 한 번만 부른다", () => {
+  it("요약은 데스크톱 입력 작업면 details와 모바일 details에 그리되 할 일 훅은 한 번만 부른다", () => {
     expect((source.match(/useWeekOpenTasks\(/g) ?? []).length).toBe(1)
     expect((source.match(/<ActivityWeekSummaryView/g) ?? []).length).toBe(2)
     expect(source).toContain('frame="plain"')
-    expect(source).toContain('frame="card"')
+    expect(source).toContain("이번 주 요약·할 일")
     expect(source).toContain("xl:hidden")
     expect(source).toContain("onFilterUnlinked: handleFilterUnlinked")
     expect(source).toContain("onOpenTask: handleOpenTask")

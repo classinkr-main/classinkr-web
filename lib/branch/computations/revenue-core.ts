@@ -62,7 +62,7 @@ export function ledgerRowHasColor(
 
 /**
  * 해당 월 금액(total) 중 확정 매출 — confirmedMonthAmount 캐논과 동일 산식.
- * total===0만 단락(빈 셀 다수인 12개월 매트릭스 순회 비용 절감 — 캐논도 0에는 0을 돌려준다).
+ * 순액 0에도 확정/고확도 상계가 있을 수 있으므로 금액만 보고 단락하지 않는다.
  * 음수 월(환불/차감)은 캐논에 위임한다 — 서버 파이프라인(pipeline.ts)이 음수를 캐논에 그대로
  * 넣으므로 여기서 0으로 자르면 모달·클라 합계가 서버 confirmed_revenue와 어긋난다(적대 리뷰 P2).
  * todayYm은 테스트 주입용(기본 = 오늘 YYYY-MM, UTC — 캐논 기본값 그대로).
@@ -73,7 +73,6 @@ export function ledgerMonthConfirmed(
   total: number,
   todayYm?: string,
 ): number {
-  if (total === 0) return 0
   const source = toRevConfidenceSource(row)
   return confirmedMonthAmountWithColor(source, month, total, ledgerRowHasColor(row, source), todayYm)
 }
@@ -85,8 +84,6 @@ export function ledgerMonthSplit(
   total: number,
   todayYm?: string,
 ): MonthConfidenceSplit {
-  // total===0만 단락 — 음수 월은 캐논 위임(ledgerMonthConfirmed 주석 참조).
-  if (total === 0) return { confirmed: 0, highConfidence: 0, expected: 0 }
   const source = toRevConfidenceSource(row)
   return splitMonthConfidence(source, month, total, ledgerRowHasColor(row, source), todayYm)
 }

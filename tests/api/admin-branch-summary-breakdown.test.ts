@@ -99,6 +99,74 @@ function summaryRequest(query = "") {
 }
 
 describe("GET /api/admin/branch/summary — dsh_breakdown", () => {
+  it("개인 승인 목표·확정액·차트·부문 구성은 과거 부서와 무관하게 같은 담당자를 쓴다", async () => {
+    mockHappyPath()
+    vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-15T00:00:00Z"))
+    readDshPreferDbWithSource.mockResolvedValue({ dsh: {
+      members: { Junhyuk: "BD", Somang: "CSM" }, breakdown: BREAKDOWN,
+      rows: [
+        { level: "team", team: "ALL", kind: "goal", annual: 1000, quarters: [0,0,1000,0], months: { "2026-10": 1000 } },
+        { level: "member", team: "BD", member: "Junhyuk", kind: "goal", annual: 100, quarters: [0,0,100,0], months: { "2026-10": 100 } },
+      ],
+    }, source: { kind: "mirror", asOf: null } })
+    const deal = (id: string, manager: string, team: string, amount: number) => ({
+      id, manager, team, sheet_row: 3, customer_name: "합성 검증", branch_contact: null, first_payment: null,
+      status: "New", deal_type: "Direct", product_version: "Business", region: null,
+      contract_target: 0, importance: "KA", note: null, raw: {}, synced_at: "",
+      monthly_payments: { "2026-10": amount }, monthly_confirmed: { "2026-10": amount }, monthly_high_conf: {}, monthly_red: {},
+    })
+    readRevDealsPreferActiveWithSource.mockResolvedValue({ deals: [deal("mine", "Junhyuk", "BD", 70), deal("other", "Somang", "MKT", 900)], source: { kind: "mirror", asOf: null } })
+    const { GET } = await import("@/app/api/admin/branch/summary/route")
+    const response = await GET(summaryRequest("?team=MKT&period=M&month=2026-10&manager=문준혁&breakdown=1"))
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body.revenue).toEqual({ confirmed: 70, goal: 100, pacing_pct: 70 })
+    expect(body.monthly_series.goal_cum[6]).toBe(100)
+    expect(body.monthly_series.revenue_cum[6]).toBe(70)
+    expect(body.dsh_breakdown).toEqual([])
+    expect(body.deal_mix.by_category.reduce((sum: number, row: { actual: number }) => sum + row.actual, 0)).toBe(70)
+    expect(body.deal_mix.by_category.every((row: { goal: number }) => row.goal === 0)).toBe(true)
+    const unmapped = await GET(summaryRequest("?period=M&month=2026-10&manager=__unmapped_current_user__"))
+    expect((await unmapped.json()).revenue).toEqual({ confirmed: 0, goal: 0, pacing_pct: 0 })
+  })
+
+  it("상단 확정액과 누적선은 첫결제일 공란·순액 0에서도 같은 REV 산식을 쓴다", async () => {
+    mockHappyPath()
+    vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-15T00:00:00Z"))
+    readDshPreferDbWithSource.mockResolvedValue({
+      dsh: { members: {}, rows: [{ level: "team", team: "ALL", kind: "goal", annual: 100, quarters: [0, 0, 100, 0], months: { "2026-10": 100 } }] },
+      source: { kind: "mirror", asOf: null },
+    })
+    const deal = (id: string, total: number, confirmed: number, high: number) => ({
+      id, sheet_row: 3, customer_name: "합성 검증 계정", branch_contact: null, team: "BD", manager: null,
+      first_payment: null, status: "New", deal_type: "Direct", product_version: "Business", region: null,
+      contract_target: 0, importance: "KA", note: null, raw: {}, synced_at: "",
+      monthly_payments: { "2026-10": total }, monthly_confirmed: { "2026-10": confirmed },
+      monthly_high_conf: { "2026-10": high }, monthly_red: {},
+    })
+    readRevDealsPreferActiveWithSource.mockResolvedValue({ deals: [{ ...deal("paid", 100, 70, 30), monthly_payments: { "2026-09": -5, "2026-10": 100 }, monthly_confirmed: { "2026-09": -5, "2026-10": 70 } }, deal("offset", 0, 10, -10)], source: { kind: "mirror", asOf: null } })
+    const { GET } = await import("@/app/api/admin/branch/summary/route")
+    const response = await GET(summaryRequest("?period=M&month=2026-10&view=overview"))
+    expect(response.status).toBe(200)
+    const data = await response.json()
+    expect(data.revenue).toEqual({ confirmed: 80, goal: 100, pacing_pct: 80 })
+    const index = data.monthly_series.months.indexOf("2026-10")
+    expect(data.monthly_series.revenue_cum[index] - data.monthly_series.revenue_cum[index - 1]).toBe(80)
+    expect(data.monthly_series.goal_cum[index] - data.monthly_series.goal_cum[index - 1]).toBe(100)
+    expect(data.deal_mix.by_segment.find((row: { name: string }) => row.name === "KA")).toMatchObject({ actual: 80, prev_actual: -5 })
+  })
+
+  it("선택한 월·분기의 영업 KPI 병목을 같은 기간으로 계산한다", async () => {
+    mockHappyPath()
+    vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-14T00:00:00Z"))
+    const row = (actual: number) => ({ member: "Han", pairs: Object.fromEntries(["LD", "ACC", "OPP", "SOL", "VST"].map((key) => [key, { goal: 10, actual }])) })
+    readKpiBlocksPreferDb.mockResolvedValue({ fy: [row(10)], months: { 10: [row(2)], 11: [row(8)] } })
+    const { GET } = await import("@/app/api/admin/branch/summary/route")
+    const monthly = await (await GET(summaryRequest("?period=M&month=2026-10"))).json()
+    const quarterly = await (await GET(summaryRequest("?period=Q"))).json()
+    expect(monthly.bottleneck.pct).toBe(20)
+    expect(quarterly.bottleneck.pct).toBe(50)
+  })
   afterEach(() => {
     vi.useRealTimers()
     vi.clearAllMocks()

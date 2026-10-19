@@ -102,14 +102,14 @@ describe("서버 프리페치 모듈의 generatedAt(T3) — 5개 예산제 프�
     // 횡단 인프라 개편(2026-09-10 스트리밍 전환) — KR Team도 openPrefetchLane으로 옮겨갔다.
     // generatedAt 계산은 page.tsx가 아니라 lib/admin/prefetch-budget.ts의 openPrefetchLane
     // 내부(레인을 연 시각)로 이동했다 — T3 계약(값이 실제로 개시된 시각)은 그대로 지켜진다.
-    expect(branchPage).toContain("openPrefetchLane(prefetchBranchSummary)")
+    expect(branchPage).toContain("openPrefetchLane(() => prefetchBranchSummary(defaultManager))")
     expect(branchPage).toContain("generatedAt: lane.generatedAt")
     expect(branchPage).not.toMatch(/import\s*\{\s*settleWithinBudget\s*\}/)
   })
 
   it("app/admin/branch/ledger/page.tsx", () => {
     // 횡단 인프라 개편(2026-09-10 스트리밍 전환) — 장부도 openPrefetchLane으로 옮겨갔다.
-    expect(ledgerPage).toContain("openPrefetchLane(prefetchLedgerRows)")
+    expect(ledgerPage).toContain("openPrefetchLane(() => prefetchLedgerRows(defaultManager))")
     expect(ledgerPage).toContain("generatedAt: lane.generatedAt")
     expect(ledgerPage).not.toMatch(/import\s*\{\s*settleWithinBudget\s*\}/)
   })
@@ -151,7 +151,8 @@ describe("KR Team·장부·하드웨어 — 첫 바이트가 소스를 기다리
     expect(pageFnBody).not.toMatch(/\bawait\b/)
     // 부모가 기존 라우트 스켈레톤(AdminRouteLoading)을 그대로 재사용해 새 로딩 UI를 발명하지
     // 않는다 — 화면 전체를 감싸는 단일 Suspense 경계(소스가 1개뿐이라 더 쪼갤 필요가 없다).
-    expect(pageFnBody).toMatch(new RegExp(`<Suspense fallback=\\{<AdminRouteLoading\\s*/>\\}>[\\s\\S]*<${clientName}[\\s\\S]*</Suspense>`))
+    const renderName = exportName === "BranchDashboardPage" ? "PersonalBranchDashboard" : exportName === "BranchSalesLedgerPage" ? "PersonalSalesLedger" : clientName
+    expect(pageFnBody).toMatch(new RegExp(`<Suspense fallback=\\{<AdminRouteLoading\\s*/>\\}>[\\s\\S]*<${renderName}[\\s\\S]*</Suspense>`))
   })
 })
 

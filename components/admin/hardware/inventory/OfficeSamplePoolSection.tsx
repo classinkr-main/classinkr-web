@@ -99,11 +99,11 @@ function gapDetail(row: OfficePoolCounts): string {
   const parts: string[] = []
   if (row.gaps.office !== 0) {
     parts.push(
-      `원장 사무실 잔량 ${formatNumber(row.ledger.office)} · 사무실 유닛 ${formatNumber(row.office.held)}(보관 ${formatNumber(row.office.available)} + 전시 ${formatNumber(row.office.showroom)})`
+      `원본 사무실 잔량 ${formatNumber(row.ledger.office)} · 사무실 유닛 ${formatNumber(row.office.held)}(보관 ${formatNumber(row.office.available)} + 전시 ${formatNumber(row.office.showroom)})`
     )
   }
   if (row.gaps.sample !== 0) {
-    parts.push(`원장 샘플 잔량 ${formatNumber(row.ledger.sample)} · 대여 유닛 ${formatNumber(row.loaned.count)}`)
+    parts.push(`원본 샘플 잔량 ${formatNumber(row.ledger.sample)} · 대여 유닛 ${formatNumber(row.loaned.count)}`)
   }
   return parts.join(" / ")
 }
@@ -394,15 +394,15 @@ function OfficeSamplePoolSection({
             사무실 · 샘플 재고
           </p>
           <p className="mt-1 text-[12px] text-[#615D59]">
-            유닛(관리번호) 기준입니다. 사무실 보관 = 가용, 대여 = 나간 샘플. 원장 수량은 교차 확인에만 씁니다.
+            유닛(관리번호) 기준입니다. 사무실 보관 = 가용, 대여 = 나간 샘플. 원본 수량은 교차 확인에만 씁니다.
           </p>
         </div>
         {unitsReady && pool.gapRowCount > 0 && (
           <span
             className="shrink-0 rounded-full border border-[#ECD29C] px-2.5 py-1 text-[11px] font-bold tabular-nums text-[#7A520F]"
-            title="원장 위치 잔량(사무실·샘플)과 유닛 수가 다른 품목 — 시트는 샘플 반출·회수를 늘 기록하지 않으므로 참고용입니다"
+            title="원본 위치 잔량(사무실·샘플)과 유닛 수가 다른 품목 — 시트는 샘플 반출·회수를 늘 기록하지 않으므로 참고용입니다"
           >
-            원장 차이 {formatNumber(pool.gapRowCount)}개 품목
+            원본 차이 {formatNumber(pool.gapRowCount)}개 품목
           </span>
         )}
       </div>
@@ -470,7 +470,7 @@ function OfficeSamplePoolSection({
           </div>
           {activityRows.length === 0 && (
             <p className="border-t border-[rgba(0,0,0,0.06)] px-5 py-6 text-center text-[12.5px] text-[#615D59] md:border-t-0">
-              사무실·샘플 유닛이나 원장 사무실·샘플 잔량이 있는 품목이 없습니다.
+              사무실·샘플 유닛이나 원본 사무실·샘플 잔량이 있는 품목이 없습니다.
             </p>
           )}
           <ul className="border-t border-[rgba(0,0,0,0.06)] md:border-t-0">
@@ -508,7 +508,7 @@ function OfficeSamplePoolSection({
                           title={gapDetail(row)}
                           className="shrink-0 rounded-full border border-[#ECD29C] px-2 py-0.5 text-[10.5px] font-bold tabular-nums text-[#7A520F]"
                         >
-                          원장과 {formatNumber(gapTotal)}대 차이
+                          원본과 {formatNumber(gapTotal)}대 차이
                         </span>
                       )}
                     </div>
@@ -588,7 +588,7 @@ function OfficeSamplePoolSection({
                     <div id={panelId} className="border-t border-[rgba(0,0,0,0.06)] bg-[#FAFAF8] px-5 py-3">
                       {gapTotal > 0 && (
                         <p className="mb-2 text-[11.5px] font-semibold text-[#7A520F]">
-                          원장 교차 확인 — {gapDetail(row)}. 시트는 샘플 반출·회수를 늘 기록하지 않아 참고용입니다.
+                          원본 교차 확인 — {gapDetail(row)}. 시트는 샘플 반출·회수를 늘 기록하지 않아 참고용입니다.
                         </p>
                       )}
                       {!unitsReady ? (

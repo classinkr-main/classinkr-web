@@ -106,7 +106,7 @@ export default function HwRevReconcilePanel() {
         </span>
         <span className="text-[13px] font-semibold text-[#111110]">출고 ↔ 매출 대사</span>
         <span className="text-[11px] text-[#1a1a1a]/40">
-          HW 출고 시트와 REV 원장을 계정 키로 대조 — 출고했는데 매출 미기재인 곳을 찾습니다
+          HW 출고 시트와 REV 원본을 계정 키로 대조 — 출고했는데 매출 미기재인 곳을 찾습니다
         </span>
         {data ? (
           <span className="ml-auto flex items-center gap-1.5 text-[11px]">
@@ -133,7 +133,7 @@ export default function HwRevReconcilePanel() {
             <>
               <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[#1a1a1a]/45">
                 <span>
-                  통화가 달라(출고 $, 원장 ¥) 금액 비교 없이 <b className="text-[#1a1a1a]/65">존재성만</b> 대조합니다.
+                  통화가 달라(출고 $, 원본 ¥) 금액 비교 없이 <b className="text-[#1a1a1a]/65">존재성만</b> 대조합니다.
                   배송예정·물류번호 누락은 실출고와 구분 표기.
                 </span>
                 {data.summary.grain === "account_month" ? (

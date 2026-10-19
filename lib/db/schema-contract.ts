@@ -177,6 +177,12 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   //   where source_detail = 'showroom_booking' or source_detail like 'checkout_request:%'
   //   group by source;
   "supabase/migrations/20260921_checkout_requests_lead_qualifiers.sql",
+  // Meta 리드애즈 단일 수신(2026-09-15) — 전환 스위치·미러 원장·수신 증인·폴백·건강 지표(기본 admin = 동작 불변).
+  "supabase/migrations/20260915_meta_leadgen_single_receiver.sql",
+  // CRM 저장 세그먼트(세그먼트 허브, C안 ②, 2026-09-25) — 설정 표 + 일별 건수·자동 태그 실행 기록.
+  // 두 표 모두 RLS deny-all(정책 없음 — service_role 만). 앱은 service role API 로만 읽고 쓴다.
+  // 미적용이어도 허브만 '미적용' 안내로 강등하고(쓰기 503) 매일 자동 태그 크론이 skipped 로 넘어간다.
+  "supabase/migrations/20260925_crm_saved_segments.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -586,7 +592,7 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     serviceRoleOnly: true,
     migration: "supabase/migrations/20260914_hardware_confirm_planned_v3.sql",
     impact:
-      "앱이 v2로 폴백하는데, v2는 lot_no 칸에서만 로트를 찾아 lot_no가 빈 예정 출고(운영 원장 전부)를 확정하지 못한다.",
+      "앱이 v2로 폴백하는데, v2는 lot_no 칸에서만 로트를 찾아 lot_no가 빈 예정 출고(운영 원본 전부)를 확정하지 못한다.",
   },
   // ── 결제 없는 도입 신청 접수(2026-07-27) ────────────────────────────────
   // 쇼룸 예약(위)은 테이블 프로브가 있었는데 같은 성격의 checkout_requests 는 계약에
@@ -652,6 +658,223 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     severity: "warning",
     impact:
       "없으면 재유입 병합이 원문/숫자만 비교 폴백으로 동작해 서식이 다른 같은 번호를 못 잡는다.",
+  },
+  // ── Meta 리드애즈 단일 수신(2026-09-15) ─────────────────────────────────
+  // 전부 warning — 적용 전에는 어드민이 모드를 못 읽어 'admin'(지금 경로)으로 돌고, Compass 는 뷰가 없으면
+  // witness 단계를 건너뛴다(동작 불변). compass_meta_* 두 뷰는 Compass 배포(crm.meta_leadgen_submissions·
+  // crm.meta_leadgen_failures 생성) 뒤 재실행해야 생긴다(to_regclass 가드).
+  // 함수 9개는 쓰기·잠금 함수(eligible 은 복합 타입 인자)라 실행하지 않고 카탈로그(pg_proc + EXECUTE 권한)로만 본다.
+  // 카탈로그 프로브는 SUPABASE_ACCESS_TOKEN 이 있어야 판정된다(없으면 warning 으로 남는다).
+  // 인자 없는 meta_lead_mirror_health() 는 카탈로그 프로브(빈 시그니처)로 표현할 수 없어 home_meta_receiver_health_v
+  // 프로브가 대신한다 — 그 뷰가 함수를 부르므로 함수 존재와 service_role EXECUTE 까지 함께 증명한다(읽기 전용).
+  {
+    kind: "table",
+    table: "meta_leadgen_cutover",
+    label: "Meta 리드 수신 전환 스위치(단일 행 — mode·mirror_since·부수효과·폴백 기한)",
+    columns: ["id", "mode", "shadow_since", "mirror_since", "compass_started_at", "compass_ended_at", "side_effects", "fallback_after_minutes", "updated_by"],
+    migration: "supabase/migrations/20260915_meta_leadgen_single_receiver.sql",
+    severity: "warning",
+    impact:
+      "어드민 웹훅이 모드를 읽지 못해 항상 admin(지금 경로)으로 돈다 — shadow·compass 전환 불가. 미러·폴백 크론(meta-lead-mirror)은 건너뛰지 않고 스위치 읽기 실패로 매 실행 failed(500)로 끝난다.",
+  },
+  {
+    kind: "table",
+    table: "meta_leadgen_cutover_history",
+    label: "Meta 리드 수신 전환 이력(추가만)",
+    columns: ["id", "at", "kind", "from_mode", "to_mode", "actor", "note", "snapshot"],
+    migration: "supabase/migrations/20260915_meta_leadgen_single_receiver.sql",
+    severity: "warning",
+    impact: "meta_leadgen_set_mode·set_options 가 이력을 남기지 못해 실패한다(전환 불가).",
+  },
+  {
+    kind: "table",
+    table: "meta_lead_mirror_state",
+    label: "Meta 리드 미러 크론 심장박동·경보 스로틀",
+    columns: ["id", "last_run_at", "last_run_status", "last_summary", "alert_state"],
+    migration: "supabase/migrations/20260915_meta_leadgen_single_receiver.sql",
+    severity: "warning",
+    impact: "미러 크론 심장박동이 기록되지 않아 Compass hourly-sync 가 compass 모드에서 크론 정지로 판정한다.",
+  },
+  {
+    kind: "table",
+    table: "meta_lead_mirror_ledger",
+    label: "Meta leadgen → public.leads 미러 원장(leadgen 당 최대 1행)",
+    columns: ["leadgen_id", "origin", "state", "public_lead_id", "compass_lead_id", "received_at", "attempts", "side_effects_done_at"],
+    migration: "supabase/migrations/20260915_meta_leadgen_single_receiver.sql",
+    severity: "warning",
+    impact: "Compass 제출 미러·어드민 폴백이 중복 없이 행을 만들 수 없다(compass 모드 전환 전제).",
+  },
+  {
+    kind: "table",
+    table: "meta_leadgen_receipts",
+    label: "어드민 앱 웹훅 수신 증인(leadgen id 만, PII 없음)",
+    columns: ["leadgen_id", "page_id", "form_id", "ad_id", "first_received_at", "deliveries", "mode_at_receipt"],
+    migration: "supabase/migrations/20260915_meta_leadgen_single_receiver.sql",
+    severity: "warning",
+    impact: "shadow·compass 모드의 증인 기록이 실패한다 — compass 모드면 웹훅이 인라인 저장으로 떨어지고 폴백·증인 공백 가져오기가 눈을 잃는다.",
+  },
+  {
+    kind: "table",
+    table: "compass_meta_submissions_v",
+    label: "Compass leadgen 제출 브리지 뷰(crm.meta_leadgen_submissions, form_answers 허용 키·45일)",
+    columns: ["leadgen_id", "lead_id", "outcome", "via", "ad_id", "ad_name", "adset_id", "adset_name", "campaign_id", "campaign_name", "form_id", "page_id", "platform", "submitted_at", "received_at", "form_answers"],
+    migration: "supabase/migrations/20260915_meta_leadgen_single_receiver.sql",
+    severity: "warning",
+    impact:
+      "미러가 Compass 제출을 읽지 못해 compass 모드에서 광고 리드 행이 생기지 않는다(폴백은 lead_refs 흔적 기준으로만 동작). Compass 배포 뒤 재실행이 필요하다.",
+  },
+  {
+    kind: "table",
+    table: "compass_meta_leadgen_failures_v",
+    label: "Compass leadgen 실패 보관 브리지 뷰(식별자·시각·시도 수만)",
+    columns: ["leadgen_id", "lead_specific", "first_seen_at", "last_seen_at", "attempts"],
+    migration: "supabase/migrations/20260915_meta_leadgen_single_receiver.sql",
+    severity: "warning",
+    impact: "건강 지표 h1b(Compass 실패 보관에 있는 증인)가 빠진다. Compass 배포 뒤 재실행이 필요하다.",
+  },
+  {
+    kind: "table",
+    table: "home_meta_leadgen_receipts_v",
+    label: "수신 증인 역브리지 뷰(어드민 → Compass)",
+    columns: ["leadgen_id", "page_id", "form_id", "first_received_at", "mode_at_receipt"],
+    migration: "supabase/migrations/20260915_meta_leadgen_single_receiver.sql",
+    severity: "warning",
+    impact: "Compass 가 자기가 못 받은 leadgen(증인 공백)을 실패 보관으로 가져오지 못한다.",
+  },
+  {
+    kind: "table",
+    table: "home_meta_receiver_health_v",
+    label: "Meta 리드 수신 건강 한 줄 역브리지 뷰(meta_lead_mirror_health() 포함)",
+    columns: ["mode", "heartbeat_at", "stale_minutes", "at_risk", "admin_only_saved", "mirror_backlog_30m"],
+    migration: "supabase/migrations/20260915_meta_leadgen_single_receiver.sql",
+    severity: "warning",
+    impact:
+      "Compass hourly-sync 가 at_risk·심장박동을 읽지 못한다 — 한 번이라도 shadow·compass 를 본 뒤라면 witnessOk:false 로 빨간불. 어드민 미러 크론의 건강 경보도 멈춘다.",
+  },
+  {
+    kind: "rpc",
+    functionName: "meta_leadgen_set_mode",
+    label: "모드 전환 함수(admin↔shadow→compass→admin)",
+    catalogIdentityTypes: "text, text, text, timestamp with time zone",
+    serviceRoleOnly: true,
+    migration: "supabase/migrations/20260915_meta_leadgen_single_receiver.sql",
+    severity: "warning",
+    impact: "SQL 로 모드를 바꿀 수 없다(전환·롤백 불가 — 롤백은 env META_LEADGEN_FORCE_ADMIN 만 남는다).",
+  },
+  {
+    kind: "rpc",
+    functionName: "meta_leadgen_set_options",
+    label: "부수효과 토글·폴백 기한 변경 함수",
+    catalogIdentityTypes: "jsonb, text, text",
+    serviceRoleOnly: true,
+    migration: "supabase/migrations/20260915_meta_leadgen_single_receiver.sql",
+    severity: "warning",
+    impact: "부수효과 토글·fallback_after_minutes 를 바꿀 수 없다(기본값으로만 돈다).",
+  },
+  {
+    kind: "rpc",
+    functionName: "meta_lead_mirror_eligible",
+    label: "미러 대상 창 판정 함수",
+    catalogIdentityTypes: "meta_leadgen_cutover, timestamp with time zone",
+    serviceRoleOnly: true,
+    migration: "supabase/migrations/20260915_meta_leadgen_single_receiver.sql",
+    severity: "warning",
+    impact: "미러 적용·건강 H2 가 실패한다.",
+  },
+  {
+    kind: "rpc",
+    functionName: "meta_leadgen_record_receipts",
+    label: "수신 증인 기록 RPC",
+    catalogIdentityTypes: "jsonb, text",
+    serviceRoleOnly: true,
+    migration: "supabase/migrations/20260915_meta_leadgen_single_receiver.sql",
+    severity: "warning",
+    impact: "shadow·compass 모드 웹훅의 증인 기록이 실패한다(compass 모드면 인라인 저장으로 떨어진다).",
+  },
+  {
+    kind: "rpc",
+    functionName: "meta_lead_mirror_adopt",
+    label: "어드민 웹훅 행 원장 편입 함수",
+    catalogIdentityTypes: "timestamp with time zone",
+    serviceRoleOnly: true,
+    migration: "supabase/migrations/20260915_meta_leadgen_single_receiver.sql",
+    severity: "warning",
+    impact: "미러·폴백이 경계 전 어드민 행을 흡수하지 못해 같은 leadgen 이 2행이 될 수 있다.",
+  },
+  {
+    kind: "rpc",
+    functionName: "meta_lead_mirror_apply",
+    label: "Compass 제출 미러 적용 RPC(한 호출 = 한 트랜잭션)",
+    catalogIdentityTypes: "jsonb",
+    serviceRoleOnly: true,
+    migration: "supabase/migrations/20260915_meta_leadgen_single_receiver.sql",
+    severity: "warning",
+    impact: "compass 모드에서 광고 리드가 public.leads 에 들어오지 않는다.",
+  },
+  {
+    kind: "rpc",
+    functionName: "meta_lead_fallback_claim",
+    label: "어드민 폴백 선점 RPC",
+    catalogIdentityTypes: "integer",
+    serviceRoleOnly: true,
+    migration: "supabase/migrations/20260915_meta_leadgen_single_receiver.sql",
+    severity: "warning",
+    impact: "Compass 에 흔적이 없는 증인을 어드민 토큰으로 저장하지 못한다(at_risk 가 쌓인다).",
+  },
+  {
+    kind: "rpc",
+    functionName: "meta_lead_fallback_finish",
+    label: "어드민 폴백 결과 기록 RPC",
+    catalogIdentityTypes: "text, text, uuid, text",
+    serviceRoleOnly: true,
+    migration: "supabase/migrations/20260915_meta_leadgen_single_receiver.sql",
+    severity: "warning",
+    impact: "폴백 결과를 원장에 닫지 못해 같은 증인을 다시 선점한다.",
+  },
+  {
+    kind: "rpc",
+    functionName: "meta_lead_mirror_mark_side_effects",
+    label: "미러 행 부수효과 완료 표시 RPC",
+    catalogIdentityTypes: "text[]",
+    serviceRoleOnly: true,
+    migration: "supabase/migrations/20260915_meta_leadgen_single_receiver.sql",
+    severity: "warning",
+    impact: "미러 행 부수효과가 끝나도 표시되지 않아 H6 경보가 계속 난다.",
+  },
+  // ── CRM 저장 세그먼트(세그먼트 허브, 2026-09-25) ────────────────────────
+  // 두 표 모두 RLS deny-all(정책 없음 — service_role 만 읽고 쓴다). '내 것은 소유자만'·'자동 태그는 관리자만'은 API 가
+  // 강제하고, 로그인 세션(authenticated)으로 PostgREST 를 직접 불러도 읽히거나 바뀌지 않는다.
+  // anon 프로브는 두지 않는다 — 빈 표에서는 '검증 불가' warning 이 나와 --strict 를 흔든다(crm_region_assignments 관례).
+  {
+    kind: "table",
+    table: "crm_saved_segments",
+    label: "CRM 저장 세그먼트(조건·공유 범위·자동 태그 설정)",
+    columns: [
+      "id",
+      "name",
+      "spec",
+      "spec_version",
+      "spec_hash",
+      "visibility",
+      "owner_user_id",
+      "auto_tag_enabled",
+      "auto_tag_label",
+      "auto_untag",
+      "last_count",
+      "last_evaluated_at",
+      "archived_at",
+    ],
+    migration: "supabase/migrations/20260925_crm_saved_segments.sql",
+    impact:
+      "세그먼트 허브가 '미적용' 안내로 내려가 저장·공유를 못 하고, 매일 자동 태그(디스패처 KST 06시 슬롯)가 건너뛴다. 통합 목록·조건 칩·CSV는 영향 없다.",
+  },
+  {
+    kind: "table",
+    table: "crm_saved_segment_daily",
+    label: "저장 세그먼트 일별 건수·자동 태그 실행 기록",
+    columns: ["segment_id", "snapshot_date", "total", "spec_hash", "flags", "auto_tag_status", "tagged", "untagged", "run_trigger"],
+    migration: "supabase/migrations/20260925_crm_saved_segments.sql",
+    impact: "8주 추이가 비고, 자동 태그 실행 결과(붙임·뗌·건너뛴 사유)가 남지 않는다.",
   },
 ]
 

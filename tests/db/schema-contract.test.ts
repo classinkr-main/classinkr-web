@@ -25,12 +25,17 @@ function stripSqlComments(sql: string): string {
     .join("\n")
 }
 
-const PG_TYPE_ALIASES: Record<string, string> = { int: "integer", int4: "integer", bool: "boolean" }
+const PG_TYPE_ALIASES: Record<string, string> = {
+  int: "integer",
+  int4: "integer",
+  bool: "boolean",
+  timestamptz: "timestamp with time zone",
+}
 
 /** SQL 인자 타입 목록을 pg_proc oidvectortypes 표기("integer, boolean")로 맞춘다. */
 function normalizeTypeList(types: string[]): string {
   return types
-    .map((type) => type.trim().toLowerCase().replace(/\s+/g, " "))
+    .map((type) => type.trim().toLowerCase().replace(/\s+/g, " ").replace(/^public\./, ""))
     .map((type) => PG_TYPE_ALIASES[type] ?? type)
     .join(", ")
 }
@@ -57,12 +62,14 @@ function identityTypesFromMigration(sql: string, functionName: string): string |
 /** 주어진 시그니처에 대해 REVOKE 된 역할 집합(여러 문장에 나뉘어 있어도 합친다). */
 function revokedRoles(sql: string, functionName: string, identityTypes: string): Set<string> {
   const roles = new Set<string>()
-  const pattern = new RegExp(
-    `revoke\\s+(?:all|execute)\\s+on\\s+function\\s+public\\.${functionName}\\s*\\(([^)]*)\\)\\s+from\\s+([^;]+);`,
-    "gi"
-  )
-  for (const match of stripSqlComments(sql).matchAll(pattern)) {
-    if (normalizeTypeList(match[1].split(",")) !== identityTypes) continue
+  // 한 REVOKE 문이 함수 여러 개를 쉼표로 나열할 수 있다 — 문장 단위로 잡고 그 안에서 이 함수를 찾는다.
+  const statement = /revoke\s+(?:all|execute)\s+on\s+function\s+([^;]+?)\s+from\s+([^;]+);/gi
+  const signature = new RegExp(`public\\.${functionName}\\s*\\(([^)]*)\\)`, "gi")
+  for (const match of stripSqlComments(sql).matchAll(statement)) {
+    const listed = [...match[1].matchAll(signature)].some(
+      (fn) => normalizeTypeList(fn[1].split(",")) === identityTypes
+    )
+    if (!listed) continue
     for (const role of match[2].split(",")) roles.add(role.trim().toLowerCase())
   }
   return roles

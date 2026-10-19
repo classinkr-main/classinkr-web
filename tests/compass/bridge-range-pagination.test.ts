@@ -91,6 +91,7 @@ import {
   getCompassAdsetsDaily,
   getCompassCalEvents,
   getCompassDemos,
+  getCompassRevenue,
   getCompassLeadPhoneKeysByIds,
 } from "@/lib/compass/bridge"
 
@@ -243,5 +244,28 @@ describe("getCompassLeadPhoneKeysByIds — 데모 역조회", () => {
     const result = await getCompassLeadPhoneKeysByIds([1])
     expect(result.down).toBe(true)
     expect(result.rows).toEqual([])
+  })
+})
+
+
+describe("getCompassRevenue — 매출 전체 대조", () => {
+  it("1000행을 넘는 원장도 환불·0원 행을 보존하여 모두 읽는다", async () => {
+    datasets.compass_revenue_v = Array.from({ length: 1201 }, (_, index) => ({
+      id: index + 1, month: "2026-10", amount: index === 1200 ? -250 : index === 1199 ? 0 : 100,
+    }))
+    const result = await getCompassRevenue(["2026-10"])
+    expect(result.down).toBe(false)
+    expect(result.rows).toHaveLength(1201)
+    expect(result.rows.find((row) => row.id === 1201)?.amount).toBe(-250)
+    expect(result.rows.find((row) => row.id === 1200)?.amount).toBe(0)
+    expect(logs[0].orders).toEqual([["id", { ascending: true }]])
+  })
+
+  it("폭주 방지 상한에서 잘리면 부분 합계를 정상 매출로 반환하지 않는다", async () => {
+    datasets.compass_revenue_v = Array.from({ length: 10001 }, (_, index) => ({
+      id: index + 1, month: "2026-10", amount: 100,
+    }))
+    const result = await getCompassRevenue(["2026-10"])
+    expect(result).toMatchObject({ down: true, rows: [], error: "Compass revenue scan incomplete" })
   })
 })

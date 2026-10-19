@@ -111,8 +111,8 @@ function HeroBody({
   prefix: string
 }) {
   const [hover, setHover] = useState<{ x: number; pct: number } | null>(null)
-  const pct = goal ? Math.min(120, (actual / goal) * 100) : 0
-  const safe = Math.min(100, pct)
+  const pct = goal > 0 ? (actual / goal) * 100 : 0
+  const safe = Math.max(0, Math.min(100, pct))
   const handleMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
     const x = e.clientX - rect.left
@@ -190,7 +190,7 @@ function HeroBody({
                       background: reached ? ROADMAP_COLORS.green : "rgba(0,0,0,0.14)",
                     }}
                   />
-                  <span className={`text-[10px] font-semibold ${reached ? "text-[#084734]" : "text-[#615D59]"}`}>
+                  <span className={`whitespace-nowrap text-[10px] font-semibold ${reached ? "text-[#084734]" : "text-[#615D59]"}`}>
                     {m.label}
                   </span>
                 </div>

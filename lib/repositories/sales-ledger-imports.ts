@@ -126,7 +126,7 @@ function toNumber(value: number | string | null | undefined) {
 }
 
 function addToNumberMap(target: Record<string, number>, key: string, value: number) {
-  if (!Number.isFinite(value) || value === 0) return
+  if (!Number.isFinite(value)) return
   target[key] = (target[key] ?? 0) + value
 }
 
@@ -140,7 +140,7 @@ function weekIndexFromLabel(label: string | null): number | null {
 
 function addWeeklyPayment(target: Record<string, number[]>, month: string, weekLabel: string | null, amount: number) {
   const index = weekIndexFromLabel(weekLabel)
-  if (index == null || !Number.isFinite(amount) || amount === 0) return
+  if (index == null || !Number.isFinite(amount)) return
   const values = target[month] ?? [0, 0, 0, 0, 0]
   values[index] = (values[index] ?? 0) + amount
   target[month] = values
@@ -346,7 +346,6 @@ async function readRevDealsForImportRun(importRunId: string, team: string): Prom
 
     for (const entry of entries) {
       const amount = toNumber(entry.amount)
-      if (!amount) continue
       addToNumberMap(monthlyPayments, entry.period_month, amount)
       addWeeklyPayment(weeklyPayments, entry.period_month, entry.source_week, amount)
 
@@ -384,7 +383,11 @@ async function readRevDealsForImportRun(importRunId: string, team: string): Prom
         ...(line.raw ?? {}),
         source_record_key: line.source_record_key,
         scale: line.scale,
-        weeklyPayments,
+        // Native captures carry the parser's exact week-column projection in raw. Monthly
+        // entries have no source_week and must not erase it with an empty reconstruction.
+        ...(Object.keys(weeklyPayments).length > 0 ? {
+          weeklyPayments: { ...((line.raw?.weeklyPayments ?? {}) as Record<string, unknown>), ...weeklyPayments },
+        } : {}),
       },
       synced_at: line.created_at,
     }

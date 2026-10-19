@@ -13,12 +13,15 @@ const NOW = new Date("2026-09-15T09:00:00.000Z")
 const mocks = vi.hoisted(() => ({
   unstableCache: vi.fn(),
   revalidateTag: vi.fn(),
+  tags: vi.fn(),
 }))
 
 vi.mock("next/cache", () => ({
   unstable_cache: mocks.unstableCache,
   revalidateTag: mocks.revalidateTag,
 }))
+
+vi.mock("@/lib/repositories/crm-customer-tags", () => ({ getAllCustomerTagsMap: mocks.tags }))
 
 const SNAPSHOT_TAG = "admin-crm-unified-snapshot"
 
@@ -65,9 +68,6 @@ const CACHED_SENTINEL_SNAPSHOT = {
 }
 
 function mockRealSourcesEmpty() {
-  vi.doMock("@/lib/repositories/crm-customer-tags", () => ({
-    getAllCustomerTagsMap: vi.fn().mockResolvedValue({}),
-  }))
   vi.doMock("@/lib/repositories/leads", () => ({ getLeads: vi.fn().mockResolvedValue([]) }))
   vi.doMock("@/lib/repositories/lead-activity", () => ({
     getLeadsActivitySummary: vi.fn().mockResolvedValue({}),
@@ -121,6 +121,7 @@ describe("getCrmUnifiedCustomers bypassCache 계약 (unified-01)", () => {
     mocks.unstableCache.mockReset()
     mocks.unstableCache.mockImplementation(() => vi.fn().mockResolvedValue(CACHED_SENTINEL_SNAPSHOT))
     mocks.revalidateTag.mockClear()
+    mocks.tags.mockResolvedValue({})
   })
 
   it("bypassCache 없이 부르면 캐시된 스냅샷(센티널)을 그대로 쓰고 태그를 만료하지 않는다", async () => {
@@ -154,9 +155,7 @@ describe("getCrmUnifiedCustomers bypassCache 계약 (unified-01)", () => {
     // 행의 라벨은 스냅샷이 아니라 요청마다 읽는 태그 맵(`<source>:<id>`)에서 붙는다.
     vi.resetModules()
     mockRealSourcesEmpty()
-    vi.doMock("@/lib/repositories/crm-customer-tags", () => ({
-      getAllCustomerTagsMap: vi.fn().mockResolvedValue({ "neo_account:sentinel": ["vip", "이탈  위험"] }),
-    }))
+    mocks.tags.mockResolvedValue({ "neo_account:sentinel": ["vip", "이탈  위험"] })
     const { getCrmUnifiedCustomers } = await import("@/lib/repositories/crm-unified-customers")
 
     expect((await getCrmUnifiedCustomers({ tag: "VIP" })).rows.map((row) => row.key)).toEqual(["neo:sentinel"])

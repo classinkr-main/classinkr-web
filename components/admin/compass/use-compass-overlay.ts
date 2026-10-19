@@ -2,11 +2,14 @@
 
 // Compass 오버레이 훅 — 화면에 로드된 리드의 전화 키를 한 번에 던져 마케팅팀 콜 상태 맵을 받는다.
 //
-//  * 리드 목록이 바뀔 때만 다시 던진다(필터·검색은 요청을 유발하지 않는다).
+//  * 키 집합 변경·1분 주기·화면 복귀·네트워크 복구 시 조회한다. 필터·검색은 요청을 유발하지 않는다.
 //  * 실패는 down으로 표면화한다 — 빈 맵을 "매칭 없음"으로 위장하면 이미 콜이 돌고 있는
 //    리드를 미접촉으로 오인한다. 화면은 down일 때 CompassBridgeDownNote를 띄운다.
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+
+import { useVisibleInterval } from "@/components/admin/branch/use-visible-interval"
+import { COMPASS_LIVE_REFRESH_MS } from "@/lib/compass/live-sync"
 
 import { adminFetchJson } from "@/lib/admin-client"
 import { normalizePhoneKey } from "@/lib/compass/normalize"
@@ -24,6 +27,7 @@ export interface CompassOverlayState {
   /** 매칭된 리드 수(0이면 배지를 띄우지 않는다 — 없는 숫자를 만들지 않는다). */
   matched: number
   loading: boolean
+  updatedAt: string | null
   /** 리드 한 건에 겹칠 Compass 항목. 전화가 없거나 매칭이 없으면 undefined. */
   lookup: (lead: { phone?: string | null }) => CompassOverlayEntry | undefined
 }
@@ -33,6 +37,8 @@ export function useCompassOverlay(leads: Array<{ phone?: string | null }>): Comp
   const [down, setDown] = useState(false)
   const [matched, setMatched] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null)
+  const refreshRef = useRef<(() => void) | null>(null)
 
   const phoneKeys = useMemo(() => toCompassPhoneKeys(leads), [leads])
   // 키 집합이 실제로 달라졌을 때만 재요청한다 — 배열 정체성만 보면 SWR 갱신마다 던지게 된다.
@@ -43,34 +49,52 @@ export function useCompassOverlay(leads: Array<{ phone?: string | null }>): Comp
       setOverlay({})
       setMatched(0)
       setDown(false)
+      setLoading(false)
+      setUpdatedAt(null)
+      refreshRef.current = null
       return
     }
     let cancelled = false
-    setLoading(true)
-    void (async () => {
+    let pending = false
+    const refresh = async () => {
+      if (pending || cancelled) return
+      pending = true
+      setLoading(true)
       try {
         const data = await adminFetchJson<CompassOverlayResponse>("/api/admin/compass/leads-overlay", {
           method: "POST",
           body: JSON.stringify({ phoneKeys: signature.split(",") }),
         })
         if (cancelled) return
-        setOverlay(data?.overlay ?? {})
-        setMatched(data?.matched ?? 0)
-        setDown(Boolean(data?.down))
+        if (!data || data.down) {
+          setDown(true)
+          return
+        }
+        setOverlay(data.overlay)
+        setMatched(data.matched)
+        setDown(false)
+        setUpdatedAt(new Date().toISOString())
       } catch {
         if (cancelled) return
         // 조회 자체가 실패한 경우도 화면에 미치는 결과는 같다 — 겹쳐 볼 수 없다.
-        setOverlay({})
-        setMatched(0)
         setDown(true)
       } finally {
+        pending = false
         if (!cancelled) setLoading(false)
       }
-    })()
+    }
+    refreshRef.current = () => { void refresh() }
+    void refresh()
+    const reconnect = () => { void refresh() }
+    window.addEventListener("online", reconnect)
     return () => {
       cancelled = true
+      refreshRef.current = null
+      window.removeEventListener("online", reconnect)
     }
   }, [signature])
+
+  useVisibleInterval(() => refreshRef.current?.(), COMPASS_LIVE_REFRESH_MS)
 
   return useMemo(
     () => ({
@@ -78,11 +102,12 @@ export function useCompassOverlay(leads: Array<{ phone?: string | null }>): Comp
       down,
       matched,
       loading,
+      updatedAt,
       lookup: (lead) => {
         const key = normalizePhoneKey(lead.phone)
         return key ? overlay[key] : undefined
       },
     }),
-    [overlay, down, matched, loading]
+    [overlay, down, matched, loading, updatedAt]
   )
 }

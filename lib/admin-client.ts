@@ -9,6 +9,8 @@ const STORAGE_KEYS = [
   "admin_branch",
   "admin_nav_preset",
   "admin_nav_overrides",
+  // 사이드바 편집 저장 직후 셸이 서버 캐시의 옛 값보다 로컬 값을 우선하는 창(AdminShell).
+  "admin_nav_overrides_pinned_until",
 ] as const
 
 // 정리·무효화 매칭용 고정 접두사. **여기에 배포 토큰을 섞지 않는다** — 프루너·스코프

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest"
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest"
 import { computeHeatmap } from "@/lib/branch/computations/heatmap"
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
 
@@ -13,6 +13,9 @@ const mk = (over: Partial<BranchRevDeal>): BranchRevDeal => ({
 describe("computeHeatmap", () => {
   const now = new Date("2026-05-15T00:00:00Z") // FY26 Q1, month index 2
 
+  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(now) })
+  afterEach(() => vi.useRealTimers())
+
   it("target = sum of contract_target (lifetime, period-independent)", () => {
     const out = computeHeatmap([
       mk({ region: "서울", contract_target: 1000 }),
@@ -24,17 +27,41 @@ describe("computeHeatmap", () => {
     expect(out[0].open_target).toBe(1000)
   })
 
-  it("future months become projection regardless of red flag", () => {
+  it("explicit future red follows the confirmed-revenue canon", () => {
     const out = computeHeatmap([
       mk({ region: "A", contract_target: 1000, first_payment: "2026-04-01",
         monthly_payments: { "2026-04": 400, "2026-06": 600 },
         monthly_red: { "2026-04": true, "2026-06": true } }),
     ], "Q", now)
     // 2026-04 past+red → confirmed (400)
-    // 2026-06 future → projection (600), red flag ignored
-    expect(out[0].revenue).toBe(400)
-    expect(out[0].projected).toBe(600)
+    // Explicit red data is authoritative even in a future month.
+    expect(out[0].revenue).toBe(1000)
+    expect(out[0].projected).toBe(0)
     expect(out[0].expected).toBe(1000)
+  })
+
+
+  it("confirms colored amounts without first_payment while retaining open-target stage metadata", () => {
+    const out = computeHeatmap([mk({ contract_target: 1000, first_payment: null,
+      monthly_payments: { "2026-05": 200 }, monthly_confirmed: { "2026-05": 150 }, monthly_high_conf: { "2026-05": 50 } })], "M", now)
+    expect(out[0]).toMatchObject({ revenue: 150, projected: 50, expected: 200, open_target: 1000, confirmed_count: 1 })
+  })
+
+  it("keeps negative confirmed refunds instead of discarding the signed amount", () => {
+    const out = computeHeatmap([mk({ monthly_payments: { "2026-05": -250 }, monthly_confirmed: { "2026-05": -250 } })], "M", now)
+    expect(out[0]).toMatchObject({ revenue: -250, projected: 0, expected: -250, confirmed_count: 1 })
+  })
+
+  it("retains confirmed/high-confidence offsets when monthly net amount is zero", () => {
+    const out = computeHeatmap([mk({ monthly_payments: { "2026-05": 0 }, monthly_confirmed: { "2026-05": 100 }, monthly_high_conf: { "2026-05": -100 } })], "M", now)
+    expect(out[0]).toMatchObject({ revenue: 100, projected: -100, expected: 0, confirmed_count: 1 })
+  })
+
+  it("accepts explicit future confirmed amounts but excludes completely uncolored future fallback", () => {
+    const explicit = mk({ customer_name: "explicit", monthly_payments: { "2026-06": 100 }, monthly_confirmed: { "2026-06": 60 } })
+    const uncolored = mk({ customer_name: "uncolored", monthly_payments: { "2026-06": 200 } })
+    const out = computeHeatmap([explicit, uncolored], "Q", now)
+    expect(out[0]).toMatchObject({ revenue: 60, projected: 240, expected: 300, confirmed_count: 1 })
   })
 
   it("past month without red flag is projection when red-flag system in use", () => {

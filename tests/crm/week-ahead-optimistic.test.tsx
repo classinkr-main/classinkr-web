@@ -163,3 +163,5 @@ describe("CrmWeekAheadPanel 콜드 렌더", () => {
     expect(html).toMatch(/<h2 tabindex="-1"[^>]*>이번 주 해야 할 일<\/h2>/)
   })
 })
+
+vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams() }))

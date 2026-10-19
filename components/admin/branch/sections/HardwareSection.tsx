@@ -126,7 +126,7 @@ function GaugeView({ rows }: { rows: StockRow[] }) {
 }
 
 export default function HardwareSection({ refreshKey }: { refreshKey: number }) {
-  const [view, setView] = useState<"table" | "gauge">("table")
+  const [view, setView] = useState<"table" | "gauge">("gauge")
   const hw = useBranchJson<HardwareResponse>("/api/admin/branch/hw", refreshKey)
   const data = hw.data
 
@@ -143,11 +143,11 @@ export default function HardwareSection({ refreshKey }: { refreshKey: number }) 
         <div className="flex items-center gap-2">
           <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">HW 재고</h2>
           {data.source === "ledger" ? (
-            <span className="rounded-full bg-[#ECFDF5] px-2 py-px text-[10px] font-semibold text-[#084734]" title="입출고 원장(hardware_movements) 기준 — 하드웨어 콘솔과 동일 수치 (재고 SSOT, 2026-07-10 결정)">
-              원장 기준
+            <span className="rounded-full bg-[#ECFDF5] px-2 py-px text-[10px] font-semibold text-[#084734]" title="입출고 원본(hardware_movements) 기준 — 하드웨어 콘솔과 동일 수치 (재고 SSOT, 2026-07-10 결정)">
+              원본 기준
             </span>
           ) : data.source === "sheet_staging" ? (
-            <span className="rounded-full bg-[#FBF1E0] px-2 py-px text-[10px] font-semibold text-[#7A520F]" title="원장 미구축 환경 — 시트 스테이징 계산 폴백. 원장 임포트 후 자동 전환됩니다">
+            <span className="rounded-full bg-[#FBF1E0] px-2 py-px text-[10px] font-semibold text-[#7A520F]" title="원본 미구축 환경 — 시트 스테이징 계산 폴백. 원본 임포트 후 자동 전환됩니다">
               시트 폴백
             </span>
           ) : null}
@@ -159,6 +159,7 @@ export default function HardwareSection({ refreshKey }: { refreshKey: number }) 
           <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]">
             {(["table", "gauge"] as const).map((v) => (
               <button key={v} type="button" onClick={() => setView(v)}
+                aria-pressed={view === v}
                 className={`min-h-11 min-w-11 rounded-[5px] px-2.5 py-1 text-[11px] font-semibold transition md:min-h-0 md:min-w-0 ${
                   view === v ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59]"
                 }`}>

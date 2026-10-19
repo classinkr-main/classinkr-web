@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 // getCompassActivitySignals — 리드 상태 자동 반영이 쓰는 Compass 활동 신호(lead_id·kind·actor) 조회.
 // @/lib/supabase/admin 만 목으로 세우고 브리지 구현을 그대로 통과시킨다(bridge-memo.test.ts 와 같은 층위).
 
-type Page = { data: unknown; error: unknown }
+type Page = { data: unknown; error: unknown; count?: number | null }
 
 let pages: Page[] = []
 let calls: Array<Record<string, unknown[]>> = []
@@ -56,7 +56,7 @@ describe("getCompassActivitySignals", () => {
     expect(fromMock).not.toHaveBeenCalled()
   })
 
-  it("lead_id·kind·actor 만 읽고(본문 미전송) kind 를 서버에서 거른다", async () => {
+  it("lead_id·kind·actor·created_at 만 읽고(본문 미전송) kind 를 서버에서 거른다", async () => {
     installChain()
     pages = [
       {
@@ -79,7 +79,7 @@ describe("getCompassActivitySignals", () => {
     })
     expect(calls).toHaveLength(1)
     expect(calls[0].from).toEqual(["compass_activities_v"])
-    expect(calls[0].select).toEqual(["lead_id, kind, actor"])
+    expect(calls[0].select).toEqual(["lead_id, kind, actor, created_at", { count: "exact" }])
     expect(calls[0].in).toEqual([
       ["lead_id", [2, 5, 9]],
       ["kind", ["call", "note"]],
@@ -104,6 +104,18 @@ describe("getCompassActivitySignals", () => {
       [1000, 1999],
     ])
     expect(calls[0].order).toEqual(["id", { ascending: true }])
+  })
+
+  it("서버가 1000보다 작은 페이지를 주어도 exact count에 도달할 때까지 이어 읽는다", async () => {
+    installChain()
+    pages = [
+      { data: [{ lead_id: 1, kind: "note", actor: "시스템" }], count: 2, error: null },
+      { data: [{ lead_id: 1, kind: "call", actor: "담당자" }], error: null },
+    ]
+    const result = await getCompassActivitySignals([1], KINDS)
+    expect(result.down).toBe(false)
+    expect(result.rows).toHaveLength(2)
+    expect(calls.map((call) => call.range)).toEqual([[0, 999], [1, 1]])
   })
 
   it("id 가 많으면 100개씩 나눠 조회한다 — URL 길이 상한 대비", async () => {

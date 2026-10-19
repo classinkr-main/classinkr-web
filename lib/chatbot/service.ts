@@ -79,6 +79,8 @@ export interface ChatbotRequestMeta {
   referrer?: string | null
 }
 
+export type ChatbotSourceVisibility = "public" | "unlisted" | "internal"
+
 export interface ChatbotSource {
   articleId?: string
   chunkId?: string
@@ -88,6 +90,11 @@ export interface ChatbotSource {
   category: string
   excerpt: string
   score: number
+  /**
+   * 문서 가시성. internal 은 내부 코파일럿(include_internal) 경로로만 들어온다 — 공개 경로 응답에는 값이 실리지 않는다.
+   * 내부 코파일럿은 이 값으로 "공개 가이드"와 "내부 전용 근거"를 갈라 외부 사용 경계를 적용한다.
+   */
+  visibility?: ChatbotSourceVisibility
 }
 
 export type HandoffIntent = "demo" | "support"
@@ -1514,6 +1521,60 @@ function scoreText(question: NormalizedQuestion, source: Omit<ChatbotSource, "sc
   return score
 }
 
+// metadata.symptoms(사용자가 실제로 쓰는 증상 표현)는 getMetadataStrings 로 extras 에 섞여 다른 메타와 같은 가중치만
+// 받았다. 증상 문구와 질문이 맞으면 작은 가산점을 더한다 — 증상 하나당 SYMPTOM_MATCH_BOOST, 최대 SYMPTOM_MATCH_MAX 개.
+// symptoms 가 없거나 비어 있는 행은 0 이라 기존 점수와 같다. 벡터 검색 경로는 건드리지 않는다.
+const SYMPTOM_MATCH_BOOST = 6
+const SYMPTOM_MATCH_MAX = 3
+
+// 증상 하나의 낱말(2자 이상) 중 질문 토큰과 맞는 것이 min(2, 낱말 수) 개 이상이면 그 증상이 맞은 것으로 본다.
+// 한국어 조사("소리가" ↔ "소리")를 받으려고 앞부분 일치(양방향 startsWith)로 비교한다.
+export function scoreSymptomMatches(
+  queryTokens: readonly string[],
+  metadata: Record<string, unknown> | null | undefined
+): number {
+  const symptoms = metadata?.symptoms
+  if (!Array.isArray(symptoms) || symptoms.length === 0 || queryTokens.length === 0) return 0
+
+  const seen = new Set<string>()
+  let matched = 0
+
+  for (const symptom of symptoms) {
+    if (typeof symptom !== "string") continue
+    const words = tokenize(symptom)
+    const key = words.join(" ")
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+
+    const hits = words.filter((word) =>
+      queryTokens.some((token) => token.startsWith(word) || word.startsWith(token))
+    ).length
+    if (hits >= Math.min(2, words.length)) {
+      matched += 1
+      if (matched >= SYMPTOM_MATCH_MAX) break
+    }
+  }
+
+  return matched * SYMPTOM_MATCH_BOOST
+}
+
+function scoreDocsChunkKeywords(
+  question: NormalizedQuestion,
+  source: Omit<ChatbotSource, "score">,
+  row: Pick<SupabaseChunkRow, "content" | "metadata">
+) {
+  const textScore = scoreText(question, source, [row.content, ...getMetadataStrings(row.metadata)])
+  return Math.max(1, textScore + scoreSymptomMatches(getScoringTokens(question), row.metadata))
+}
+
+export function __scoreDocsChunkKeywordsForTests(
+  rawQuestion: string,
+  source: Omit<ChatbotSource, "score">,
+  row: Pick<SupabaseChunkRow, "content" | "metadata">
+) {
+  return scoreDocsChunkKeywords(normalizeQuestion(rawQuestion), source, row)
+}
+
 function rerankSources(question: NormalizedQuestion, sources: ChatbotSource[]) {
   const suppressApiForComparison =
     isComparisonQuestion(question) && !isApiIntegrationQuestion(question)
@@ -1738,7 +1799,10 @@ function buildStaticSources(question: NormalizedQuestion, docs: DocArticle[]): C
   )
 }
 
-async function keywordSearchSupabaseSources(question: NormalizedQuestion): Promise<ChatbotSource[]> {
+async function keywordSearchSupabaseSources(
+  question: NormalizedQuestion,
+  options?: RetrievalOptions
+): Promise<ChatbotSource[]> {
   if (!hasSupabaseServerEnv()) return []
 
   const likeTokens = getRetrievalTokens(question).map(sanitizeLikeToken).filter(Boolean).slice(0, 10)
@@ -1748,18 +1812,27 @@ async function keywordSearchSupabaseSources(question: NormalizedQuestion): Promi
     .flatMap((token) => [`content.ilike.%${token}%`, `heading.ilike.%${token}%`])
     .join(",")
 
+  const visibilities = options?.includeInternalDocs
+    ? ["public", "unlisted", "internal"]
+    : ["public", "unlisted"]
+
   try {
     const supabase = createSupabaseAdminClient()
-    const { data, error } = await supabase
+    let query = supabase
       .from("docs_ai_chunks")
       .select(
         "id, article_id, heading, content, metadata, docs_articles!inner(id, category_id, slug, title, description, canonical_path, status, visibility, noindex)"
       )
       .eq("docs_articles.status", "published")
-      .in("docs_articles.visibility", ["public", "unlisted"])
-      .eq("docs_articles.noindex", false)
+      .in("docs_articles.visibility", visibilities)
       .or(orFilter)
       .limit(MAX_RETRIEVAL_CANDIDATES * 2)
+
+    if (!options?.includeInternalDocs) {
+      query = query.eq("docs_articles.noindex", false)
+    }
+
+    const { data, error } = await query
 
     if (error) {
       console.warn("[chatbot] docs chunk search failed:", error.message)
@@ -1785,13 +1858,7 @@ async function keywordSearchSupabaseSources(question: NormalizedQuestion): Promi
 
         return {
           ...source,
-          score: Math.max(
-            1,
-            scoreText(question, source, [
-              row.content,
-              ...getMetadataStrings(row.metadata),
-            ])
-          ),
+          score: scoreDocsChunkKeywords(question, source, row),
         }
       })
       .filter((source): source is ChatbotSource => source != null)
@@ -1831,6 +1898,20 @@ interface MatchChunkRow {
   similarity: number
 }
 
+// 내부 전용 문서 범주 — DB 트리거(20260717_docs_articles_internal_lock)가 visibility=internal 을 강제한다.
+const INTERNAL_ONLY_DOC_CATEGORIES = new Set(["internal-canon", "cs-knowledge"])
+
+// RPC 는 docs_articles.visibility 를 돌려주지 않는다. 청크 metadata.visibility(내부 적재 경로가 기록)와
+// 내부 잠금 범주로 internal 만 판정한다. 공개 문서는 undefined 로 둔다 — 공개 경로 응답(sources) 모양을 바꾸지 않기 위해서다.
+// 공개 RPC(include_internal=false)는 internal 행을 돌려주지 않으므로 공개 응답에 이 값이 실릴 일은 없다.
+export function resolveMatchChunkVisibility(
+  row: Pick<MatchChunkRow, "metadata" | "category_id">
+): ChatbotSourceVisibility | undefined {
+  if (row.metadata?.visibility === "internal") return "internal"
+  if (INTERNAL_ONLY_DOC_CATEGORIES.has(row.category_id)) return "internal"
+  return undefined
+}
+
 // Gemini 임베딩 기반 시맨틱 검색. 키·임베딩이 없거나 결과가 없으면 [] → 키워드 검색으로 폴백.
 async function vectorSearchSupabaseSources(
   question: NormalizedQuestion,
@@ -1856,16 +1937,20 @@ async function vectorSearchSupabaseSources(
 
     const sources = ((data ?? []) as MatchChunkRow[])
       .filter((row) => row.similarity >= VECTOR_SIMILARITY_FLOOR)
-      .map((row) => ({
-        articleId: row.article_id,
-        chunkId: row.id,
-        title: row.title,
-        heading: row.heading ?? undefined,
-        urlPath: row.canonical_path ?? `/docs/${row.category_id}/${row.slug}`,
-        category: getSourceCategoryFromDocCategory(row.category_id),
-        excerpt: compactText(row.content),
-        score: Math.max(1, row.similarity * 80),
-      }))
+      .map((row) => {
+        const visibility = resolveMatchChunkVisibility(row)
+        return {
+          articleId: row.article_id,
+          chunkId: row.id,
+          title: row.title,
+          heading: row.heading ?? undefined,
+          urlPath: row.canonical_path ?? `/docs/${row.category_id}/${row.slug}`,
+          category: getSourceCategoryFromDocCategory(row.category_id),
+          excerpt: compactText(row.content),
+          score: Math.max(1, row.similarity * 80),
+          ...(visibility ? { visibility } : {}),
+        }
+      })
       .sort((left, right) => right.score - left.score)
 
     return selectDiverseSources(
@@ -1926,7 +2011,7 @@ async function searchSupabaseSources(
   question: NormalizedQuestion,
   options?: RetrievalOptions
 ): Promise<ChatbotSource[]> {
-  const keywordPromise = keywordSearchSupabaseSources(question)
+  const keywordPromise = keywordSearchSupabaseSources(question, options)
   const embedding = await embedText(buildRetrievalQueryText(question), "RETRIEVAL_QUERY")
   const vectorSources = embedding
     ? await vectorSearchSupabaseSources(question, embedding, options)

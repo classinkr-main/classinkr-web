@@ -10,6 +10,7 @@ import { listCrmNeoCustomerSnapshots } from "@/lib/repositories/crm-neo-customer
 import { assertJsonSafeInDev } from "@/lib/server/json-safe"
 import { shareInFlight } from "@/lib/server/share-in-flight"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import type { CrmNeoBillingMode } from "@/lib/supabase/database.types"
 
 export interface NeoCrmCustomerRow {
   accountId: string
@@ -32,6 +33,8 @@ export interface NeoCrmCustomerRow {
   freshnessLabel?: string | null
   /** 소진 예상일. 표본이 부족하면 null — 라벨에서 재파생하지 말 것. */
   depletionInDays?: number | null
+  /** 과금 유형(매출시트 J열). 통합 목록 세그먼트 조건(과금 방식)의 원천 — 스냅샷 billing_mode. */
+  billingMode?: CrmNeoBillingMode | null
 }
 
 export interface NeoCrmCustomerOwnerOption {
@@ -98,6 +101,7 @@ export interface NeoCrmCustomerDetail {
   orders: NeoCrmCustomerMoneyItem[]
   collections: NeoCrmCustomerMoneyItem[]
   performances: NeoCrmCustomerMoneyItem[]
+  moneyWarnings?: string[]
 }
 
 function toIso(value: unknown): string | null {
@@ -212,6 +216,7 @@ async function computeNeoCrmCustomers(): Promise<NeoCrmCustomerList> {
       depletionInDays: row.depletionInDays,
       riskConfidence: row.riskConfidence,
       freshnessLabel: row.freshnessLabel,
+      billingMode: row.billingMode ?? null,
     })),
   }
 }
@@ -436,5 +441,13 @@ export async function getNeoCrmCustomerDetail(accountId: string): Promise<NeoCrm
     orders: ((orderResult.error ? [] : orderResult.data ?? []) as MoneyRecordRow[]).map(toMoneyItem),
     collections: ((collectionResult.error ? [] : collectionResult.data ?? []) as MoneyRecordRow[]).map(toMoneyItem),
     performances: ((performanceResult.error ? [] : performanceResult.data ?? []) as MoneyRecordRow[]).map(toMoneyItem),
+    moneyWarnings: [
+      ...(orderResult.error ? ["오더를 불러오지 못했습니다."] : []),
+      ...(collectionResult.error ? ["수금 기록을 불러오지 못했습니다."] : []),
+      ...(performanceResult.error ? ["성과 기록을 불러오지 못했습니다."] : []),
+      ...(shroffResult.error ? ["서비스 계정을 불러오지 못했습니다."] : []),
+      ...(orderResult.data?.length === DETAIL_LIMIT ? ["오더가 조회 상한 200건에 도달했습니다. 목록은 일부 기록입니다."] : []),
+      ...(collectionResult.data?.length === DETAIL_LIMIT ? ["수금이 조회 상한 200건에 도달했습니다. 목록은 일부 기록입니다."] : []),
+    ],
   }
 }

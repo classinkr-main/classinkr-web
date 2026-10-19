@@ -11,6 +11,7 @@ import {
 import { getNeoCrmTeamReport } from "@/lib/admin-crm-neo"
 import { getCrmSchemaContractReadiness } from "@/lib/admin-crm-schema-contract"
 import { ADMIN_CRM_OVERVIEW_CACHE_TAG } from "@/lib/admin/crm/cache-tags"
+import { classifySyncFailure, SYNC_FAILURE_CLASS_LABEL } from "@/lib/admin/sync-health"
 import { EXTERNAL_CRM_SNAPSHOT_OBJECT_KEYS } from "@/lib/external-crm/latest-synced-at"
 import { getExternalCrmObjectSnapshotTotals } from "@/lib/external-crm/object-snapshot"
 import { getXiaoshouyiSyncPreflight, getXiaoshouyiSyncSchemaReadiness } from "@/lib/external-crm/xiaoshouyi-sync"
@@ -1123,8 +1124,13 @@ async function getExternalSnapshotOverview(sb: SupabaseAdminClient): Promise<Adm
     ? latestRun.error.trim()
     : null
   const firstCountError = firstError([totalsResult.error, latestRunResult.error])
+  // "최신 동기화 시각"은 실제로 데이터를 가져온 시각이어야 한다. 건너뜀(skipped — env 누락 등)·실패
+  // 실행도 finished_at 을 남기므로, 그 값을 쓰면 크론이 매일 건너뛰기만 해도 NEO 수치가 오늘 것처럼
+  // 보였다(2026-09-25 발견: 자동 동기화 0회 성공인데 홈·검수 Snapshot 날짜는 매일 오늘). 성공 실행과
+  // 레코드 synced_at 만 쓴다 — 동기화 멈춤 경고(SyncHealthBanner)와 같은 기준.
+  const latestRunSucceeded = latestRun && typeof latestRun.status === "string" && latestRun.status === "success"
   const latestSyncedAt = maxDate([
-    latestRun && typeof latestRun.finished_at === "string" ? latestRun.finished_at : null,
+    latestRunSucceeded && typeof latestRun.finished_at === "string" ? latestRun.finished_at : null,
     totalsResult.latestSyncedAt,
   ])
 
@@ -1139,7 +1145,16 @@ async function getExternalSnapshotOverview(sb: SupabaseAdminClient): Promise<Adm
       firstCountError || latestRunFailed
         ? [
             firstCountError ? formatLabeledSupabaseError("external_crm_records overview", firstCountError) : null,
-            latestRunFailed ? `external_crm_sync_runs latest failed${latestRunError ? `: ${latestRunError}` : ""}` : null,
+            // 실행 기록의 원문 오류는 싣지 않는다 — CRM 홈에 "외부 CRM sync check: …"로 그대로 렌더되는데,
+            // 원문에는 키·토큰·내부 URL 이 섞일 수 있다. 동기화 경고 띠와 같은 분류 라벨로만 말한다
+            // (lib/admin/sync-health.ts 정직 규칙). 원문은 external_crm_sync_runs 에 남아 있다.
+            latestRunFailed
+              ? `external_crm_sync_runs latest failed${
+                  latestRunError
+                    ? `: ${SYNC_FAILURE_CLASS_LABEL[classifySyncFailure("neo", latestRunError).failureClass]}`
+                    : ""
+                }`
+              : null,
           ]
             .filter((message): message is string => Boolean(message))
             .join("; ")

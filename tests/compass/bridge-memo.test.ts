@@ -165,6 +165,30 @@ describe("getCompassLeadsByPhoneKeys — 메모이제이션", () => {
     expect(second.down).toBe(false) // 필드 재할당도 반영되지 않았다
     expect(second.rows).not.toBe(first.rows)
   })
+
+  it("무응답은 10초에 종료하고 같은 키의 재시도와 늦은 응답을 격리한다", async () => {
+    let resolveOld!: (value: { data: unknown[]; error: null }) => void
+    chain.in.mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve }))
+    const stuck = getCompassLeadsByPhoneKeys(["01000000001"])
+    const shared = getCompassLeadsByPhoneKeys(["01000000001"])
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(await stuck).toMatchObject({ down: true, error: "Compass read timeout" })
+    expect(await shared).toMatchObject({ down: true })
+    expect(chain.in).toHaveBeenCalledTimes(1)
+    expect((await getCompassLeadsByPhoneKeys(["01000000001"])).rows).toHaveLength(1)
+    resolveOld({ data: [{ id: 999 }], error: null })
+    await Promise.resolve()
+    expect((await getCompassLeadsByPhoneKeys(["01000000001"])).rows[0].id).toBe(1)
+    expect(chain.in).toHaveBeenCalledTimes(2)
+  })
+
+  it("캐시 상한에서도 최신 조회를 모두 버리지 않고 가장 오래된 한 건만 비운다", async () => {
+    for (let i = 0; i < 201; i++) await getCompassLeadsByPhoneKeys([`key-${i}`])
+    await getCompassLeadsByPhoneKeys(["key-200"])
+    expect(chain.in).toHaveBeenCalledTimes(201)
+    await getCompassLeadsByPhoneKeys(["key-0"])
+    expect(chain.in).toHaveBeenCalledTimes(202)
+  })
 })
 
 function countChain(result: { count?: number | null; error?: unknown }) {

@@ -115,7 +115,8 @@ describe("buildCrmMoneyLineItems — 합산·통화 분리·근거 판정·정�
     })
     expect(result.lineItems).toHaveLength(0)
     expect(result.unlinkedHwOutbound).toHaveLength(0)
-    expect(result.meta.note).toBe("예정 출고 2건 제외")
+    // 다른 고객의 예정 출고를 현재 고객의 대수처럼 표시하지 않는다.
+    expect(result.meta.note).toBe("예정 출고 1건 제외")
   })
 
   it("같은 품목·통화·근거는 한 행으로 수량을 합산하고 details에 건별로 남긴다", () => {

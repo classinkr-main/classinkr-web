@@ -324,6 +324,27 @@ function isPlannedStatus(status: string | null | undefined) {
   return /예정|예약|대기|planned/i.test(text)
 }
 
+export type PlannedHardwareMovement = Pick<HardwareMovement,
+  "id" | "product_name" | "quantity" | "occurred_at" | "owner" | "to_location">
+
+// Overview는 2,000행 대시보드 미리보기에서 예정 건수를 세지 않는다. 취소되지 않은 출고를
+// 키셋으로 전량 읽고 재고 원장과 같은 예정 판정을 적용한다. 가격·메모·연락처는 내려주지 않는다.
+export const getPlannedHardwareMovements = unstable_cache(async (): Promise<PlannedHardwareMovement[]> => {
+  const sb = createSupabaseAdminClient()
+  const rows = await fetchAllSupabaseRows<PlannedHardwareMovement & { status: string | null }>((afterId, limit) => {
+    let query = sb.from("hardware_movements")
+      .select("id,product_name,quantity,occurred_at,owner,to_location,status")
+      .eq("movement_type", "outbound").is("voided_at", null)
+      .order("id", { ascending: true }).limit(limit)
+    if (afterId) query = query.gt("id", afterId)
+    return query
+  })
+  return rows.filter((row) => isPlannedStatus(row.status)).map((row) => ({
+    id: row.id, product_name: row.product_name, quantity: row.quantity,
+    occurred_at: row.occurred_at, owner: row.owner, to_location: row.to_location,
+  }))
+}, ["hardware-planned-overview-v1"], { tags: [HARDWARE_INVENTORY_CACHE_TAG], revalidate: 60 })
+
 function movementLotKey(movement: Pick<HardwareMovement, "lot_no" | "source" | "reference_no">): string | null {
   const direct = cleanString(movement.lot_no)
   if (direct) return direct
@@ -1410,13 +1431,13 @@ export async function voidHardwareMovement(
     .eq("id", id)
     .maybeSingle()
   if (existingError) throw existingError
-  if (!existing) throw new Error("원장 기록을 찾을 수 없습니다.")
+  if (!existing) throw new Error("원본 기록을 찾을 수 없습니다.")
   const row = existing as { id: string; source: string; voided_at: string | null }
   if (row.source !== "admin_manual") {
     throw new Error("시트 이관 기록은 직접 취소할 수 없습니다. 수기 조정으로 보정하세요.")
   }
   if (row.voided_at) {
-    throw new Error("이미 취소되었거나 처리된 원장 기록입니다.")
+    throw new Error("이미 취소되었거나 처리된 원본 기록입니다.")
   }
 
   const { data, error } = await sb
@@ -1456,7 +1477,7 @@ export async function updateHardwareMovement(
     .eq("id", id)
     .maybeSingle()
   if (existingError) throw existingError
-  if (!existing) throw new Error("원장 기록을 찾을 수 없습니다.")
+  if (!existing) throw new Error("원본 기록을 찾을 수 없습니다.")
   const row = existing as {
     source: string
     movement_type: string
@@ -2454,9 +2475,9 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
         severity: "critical",
         itemId: row.itemId,
         product: row.product,
-        title: "원장 점검 필요",
+        title: "원본 점검 필요",
         detail: `창고 ${row.warehouseStock}대 · 가용 ${row.availableStock}대 — ${
-          isPromotedProduct(row.product) ? "promoted 판정 또는 시트 수치 정리 필요" : "원장 유형·시트 수치 정리 필요"
+          isPromotedProduct(row.product) ? "promoted 판정 또는 시트 수치 정리 필요" : "원본 유형·시트 수치 정리 필요"
         }`,
       })
     } else if (row.low) {

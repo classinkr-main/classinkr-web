@@ -1,7 +1,14 @@
 "use client"
 
 // ─── 리드 상세 드로어 ──────────────────────────────────────────
-// LeadsBoardClient.tsx 분해(2026-08-28)로 이동 — 로직 무변경.
+// LeadsBoardClient.tsx 분해(2026-08-28)로 이동.
+//
+// 2026-09-25 A안 "기록은 Compass에서": 보드의 Compass 오버레이(compassEntry)가 있으면 주 행동이 "Compass에서 열기"
+// (새 탭, 쓰기 없음)이고, Home 연락 기록 폼은 "Home에 따로 남기기"로만 연다(lib/crm/write-surface 판정).
+// 딥링크(?action=contact) 자동 열림은 오버레이 판정이 끝난 뒤 한 번만 정한다 — Compass 리드면 열지 않는다.
+// Compass 없는 리드·전환 리드·NEO 등록 확정 리드·오버레이 끊김은 지금처럼 Home 폼이 주 행동이다(끊김은 캡션).
+// 판정은 목록(LeadsConsoleList)과 같은 resolveLeadBoardWriteSurface 하나로 내고, NEO 등록 확정(crmRegistered)은
+// 고객 360 과 같은 원천(GET /api/admin/crm/leads/neo-registered)을 보드가 받아 넘긴다 — 화면마다 판정이 갈리지 않게.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
@@ -11,6 +18,15 @@ import {
   Plus, Save, ShieldCheck, Tag, Trash2, UserPlus, Users, X,
 } from "lucide-react"
 import LeadMessageCard from "@/components/admin/crm/LeadMessageCard"
+import { CompassLeadChip } from "@/components/admin/compass/CompassLeadChip"
+import CompassOpenLink from "@/components/admin/compass/CompassOpenLink"
+import type { CompassOverlayEntry } from "@/lib/compass/overlay"
+import {
+  COMPASS_DOWN_WRITE_CAPTION,
+  HOME_ONLY_CAPTION,
+  HOME_SEPARATE_LOG_LABEL,
+  resolveLeadBoardWriteSurface,
+} from "@/lib/crm/write-surface"
 import SaveStateCaption, { type SaveState } from "@/components/admin/crm/SaveStateCaption"
 import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
 import { useDialogFocus } from "@/components/admin/use-dialog-focus"
@@ -85,6 +101,10 @@ export default function LeadDrawer({
   onDeleteLog,
   onConvert,
   onConfirm,
+  compassEntry = null,
+  compassDown = false,
+  compassLoading = false,
+  crmRegistered = false,
 }: {
   lead: LeadRecord
   logs: ContactLogRecord[]
@@ -112,6 +132,14 @@ export default function LeadDrawer({
   onDeleteLog: (logId: string) => Promise<void>
   onConvert: (lead: LeadRecord) => Promise<void>
   onConfirm: (lead: LeadRecord) => Promise<void>
+  /** A안 — 보드 Compass 오버레이의 이 리드 항목(전화 키 매칭 대표 1건). 없으면 null. */
+  compassEntry?: CompassOverlayEntry | null
+  /** A안 — 오버레이 브리지 끊김("매칭 없음"과 다르다). */
+  compassDown?: boolean
+  /** A안 — 오버레이·NEO 등록 집합 조회 중. 딥링크 자동 열림은 이 동안 미룬다. */
+  compassLoading?: boolean
+  /** A안 — 리드 → NEO 계정 등록 확정(고객 360 crmRegistered 와 같은 원천). true 면 Compass 매칭이 있어도 Home 정본. */
+  crmRegistered?: boolean
 }) {
   const initial = parseEventToken(lead.notes)
   const [notes, setNotes] = useState(initial.body)
@@ -209,7 +237,21 @@ export default function LeadDrawer({
   // 핸들러가 읽는 시점에 아직 이전 렌더의 값일 수 있어(리액트 배치) 동기 판정에는 ref를 쓴다
   // (commitOwner의 ownerInFlightRef, ContactLogForm의 saveInFlightRef와 같은 규약).
   const followUpInFlightRef = useRef(false)
-  const [showLogForm, setShowLogForm] = useState(Boolean(initialContactForm))
+  // A안 — 기록 위치 판정(목록과 같은 공용 판정). Compass 에 매칭된 리드(단계 무관)면 주 행동이 Compass 링크다.
+  // 전환·NEO 등록 확정 리드는 360 과 같이 Home 정본이다.
+  const writeSurface = resolveLeadBoardWriteSurface({
+    leadStatus: lead.status,
+    compassHref: compassEntry?.url ?? null,
+    compassDown,
+    crmRegistered,
+  })
+  const compassPrimary = writeSurface.surface === "compass"
+  // 연락 기록 폼 열림. null = 사용자가 아직 조작하지 않음. 딥링크 자동 열림(initialContactForm)은 Compass 오버레이
+  // 판정이 끝난 뒤 한 번만 확정한다(렌더 중 파생 상태 확정 — effect 없음). 한 번 정해지면 오버레이가 다시
+  // 로딩돼도 열린 폼(작성 중 입력)을 닫지 않는다.
+  const [showLogForm, setShowLogForm] = useState<boolean | null>(null)
+  if (showLogForm === null && initialContactForm && !compassLoading) setShowLogForm(!compassPrimary)
+  const logFormOpen = showLogForm === true
   const [contactLogInitialType, setContactLogInitialType] = useState<ContactLogType>(initialContactType ?? "call")
   const [converting, setConverting] = useState(false)
   const [confirming, setConfirming] = useState(false)
@@ -607,6 +649,8 @@ export default function LeadDrawer({
                 </span>
               )}
               <ScoreBadge score={score} />
+              {/* 우리 상태 옆에 마케팅팀(Compass) 상태를 병기 — 덮어쓰지 않는다. 칩 자체가 Compass 새 탭 링크. */}
+              {compassEntry ? <CompassLeadChip entry={compassEntry} /> : null}
               {activity?.summary.authenticated && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-medium text-[#084734]">
                   <LogIn className="h-3 w-3" />
@@ -633,18 +677,37 @@ export default function LeadDrawer({
           <div className="border-b border-[#e8e8e4] px-4 py-4 sm:px-6">
             <div className="flex items-center justify-between mb-3">
               <p className="text-[11px] font-semibold text-[#1a1a1a]/30 uppercase tracking-wide">연락처</p>
-              {lead.phone && (
-                <a
-                  href={`tel:${lead.phone}`}
-                  onClick={() => {
-                    setContactLogInitialType("call")
-                    setShowLogForm(true)
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#084734] text-white text-[12px] font-medium hover:bg-[#065c41] transition-colors"
-                >
-                  <PhoneCall className="w-3.5 h-3.5" />전화걸기
-                </a>
-              )}
+              <div className="flex items-center gap-1.5">
+                {/* A안 — Compass 리드는 응대·기록이 Compass 에 있다(새 탭 링크뿐 — 교차 쓰기 0). */}
+                {compassPrimary && writeSurface.compassHref ? (
+                  <CompassOpenLink
+                    href={writeSurface.compassHref}
+                    name={getLeadDisplayName(lead)}
+                    variant="primary"
+                    className="h-8"
+                    testId="lead-drawer-open-compass"
+                  />
+                ) : null}
+                {lead.phone && (
+                  <a
+                    href={`tel:${lead.phone}`}
+                    onClick={() => {
+                      // Compass 리드는 Home 폼을 열지 않는다 — 통화 기록은 Compass 에 남긴다.
+                      if (!compassPrimary) {
+                        setContactLogInitialType("call")
+                        setShowLogForm(true)
+                      }
+                    }}
+                    className={
+                      compassPrimary
+                        ? "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#e8e8e4] bg-white text-[#111110] text-[12px] font-medium hover:bg-[#f5f5f2] transition-colors"
+                        : "flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#084734] text-white text-[12px] font-medium hover:bg-[#065c41] transition-colors"
+                    }
+                  >
+                    <PhoneCall className="w-3.5 h-3.5" />전화걸기
+                  </a>
+                )}
+              </div>
             </div>
             <div className="space-y-2">
               {lead.email && (
@@ -653,8 +716,10 @@ export default function LeadDrawer({
                   <a
                     href={`mailto:${lead.email}`}
                     onClick={() => {
-                      setContactLogInitialType("email")
-                      setShowLogForm(true)
+                      if (!compassPrimary) {
+                        setContactLogInitialType("email")
+                        setShowLogForm(true)
+                      }
                     }}
                     className="flex-1 truncate text-[13px] text-[#111110] underline-offset-2 hover:text-[#084734] hover:underline"
                   >
@@ -1093,15 +1158,25 @@ export default function LeadDrawer({
               </p>
               <button
                 type="button"
-                onClick={() => setShowLogForm((v) => !v)}
-                aria-expanded={showLogForm}
+                onClick={() => setShowLogForm(!logFormOpen)}
+                aria-expanded={logFormOpen}
                 className="flex items-center gap-1 text-[11px] font-medium text-[#084734] hover:text-[#065c41] transition-colors"
               >
-                <Plus className="w-3 h-3" />연락 추가
+                <Plus className="w-3 h-3" />
+                {compassPrimary ? HOME_SEPARATE_LOG_LABEL : "연락 추가"}
               </button>
             </div>
+            {compassPrimary ? (
+              <p data-testid="lead-drawer-home-only" className="-mt-1.5 mb-2 text-[11px] text-[#1a1a1a]/45">
+                응대 기록은 Compass에 남깁니다 · {HOME_ONLY_CAPTION}
+              </p>
+            ) : writeSurface.reason === "compass_down" ? (
+              <p data-testid="lead-drawer-compass-down" className={`-mt-1.5 mb-2 text-[11px] ${STATUS_TONE_TEXT_CLASS.warning}`}>
+                {COMPASS_DOWN_WRITE_CAPTION}
+              </p>
+            ) : null}
 
-            {showLogForm && (
+            {logFormOpen && (
               <div className="mb-3">
                 <ContactLogForm
                   key={contactLogInitialType}

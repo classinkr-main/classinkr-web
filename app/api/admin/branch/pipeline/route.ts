@@ -1,3 +1,4 @@
+import { branchManagerFromRequest } from "@/lib/admin/personal-branch"
 import { NextRequest, NextResponse } from "next/server"
 import { BRANCH_READ_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
@@ -38,7 +39,7 @@ export async function GET(req: NextRequest) {
       team,
       period,
       periodDate,
-      manager: url.searchParams.get("manager") ?? undefined,
+      manager: await branchManagerFromRequest(url, req),
       region: url.searchParams.get("region") ?? undefined,
     })
     return adminCachedJson({ rows })

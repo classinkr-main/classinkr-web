@@ -1,4 +1,18 @@
 const MEMBER_NAME_ALIASES: Record<string, string> = {
+  han: "Han",
+  wangchan: "Wangchan",
+  junhyuk: "Junhyuk",
+  gyusung: "Gyusung",
+  heesung: "Heesung",
+  chanwoo: "Chanwoo",
+  김민재: "Minjae",
+  진소망: "Somang",
+  황찬우: "Chanwoo",
+  문준혁: "Junhyuk",
+  정규성: "Gyusung",
+  신희성: "Heesung",
+  박한: "Han",
+  이왕찬: "Wangchan",
   "new 2": "Minjae",
   minjae: "Minjae",
   somang: "Somang",
@@ -16,6 +30,8 @@ export function normalizeBranchMemberName(value: string | null | undefined): str
 // 매니저 영문 정규명 → 한글 이름 별칭(전체명 + 이름만). 한글/영문 교차 검색용.
 // 출처: data/team-calendars.json — 박한=Han · 문준혁=Junhyuk · 진소망=Somang · 이왕찬=Wangchan · 김민재=Minjae · 황찬우=Chanwoo.
 const MEMBER_KOREAN_ALIASES: Record<string, string[]> = {
+  Gyusung: ["정규성", "규성"],
+  Heesung: ["신희성", "희성"],
   Han: ["박한", "한"],
   Junhyuk: ["문준혁", "준혁"],
   Somang: ["진소망", "소망"],
@@ -43,4 +59,10 @@ export function branchMemberSearchHaystack(value: string | null | undefined): st
   const canonical = normalizeBranchMemberName(raw) ?? raw
   const korean = MEMBER_KOREAN_ALIASES_BY_LOWER[canonical.toLowerCase()] ?? []
   return [raw, canonical, ...korean].join(" ").toLowerCase()
+}
+
+/** 계정·REV·Compass의 한국어/영문 표기를 동일 인물로 비교하는 기존 별칭이다. */
+export function branchMemberOwnerAliases(value: string): string[] {
+  const canonical = normalizeBranchMemberName(value) ?? value
+  return [...new Set([value, canonical, ...(MEMBER_KOREAN_ALIASES_BY_LOWER[canonical.toLowerCase()] ?? [])])]
 }

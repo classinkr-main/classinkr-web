@@ -1,0 +1,1502 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>갈매봇 위젯 · 원격 오더 시안</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  /* 라이트 단일 테마 — 어드민(DESIGN.md)이 라이트 전용이라 시안도 라이트로 고정한다.
+     갈매봇 이미지는 파랑·노랑이지만 화면 크롬(버튼·선·강조)은 Classin Green과 웜 뉴트럴만 쓴다. */
+  :root{
+    --ground:#FAFAF8; --panel:#FFFFFF; --strip:#F6F5F4; --line:#E8E8E4; --grid:#F0F0EC;
+    --ink:#111110; --dark:#31302E; --sub:#615D59; --muted:#A39E98;
+    --green:#084734; --green-hover:#065C41; --green-surface:#ECFDF5; --green-line:#BDEFD8;
+    --danger:#B43E3E; --danger-strong:#8F2C2C; --danger-tint:#FCE9E9; --danger-line:#F2B8B8;
+    --warn:#A8741A; --warn-strong:#7A520F; --warn-tint:#FBF1E0; --warn-line:#ECD29C;
+    --font:"Inter",-apple-system,system-ui,"Segoe UI",Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --shadow-card:rgba(0,0,0,0.04) 0 4px 18px, rgba(0,0,0,0.027) 0 2px 7.8px, rgba(0,0,0,0.02) 0 0.8px 2.9px, rgba(0,0,0,0.01) 0 0.175px 1px;
+    --shadow-deep:rgba(0,0,0,0.05) 0 23px 52px, rgba(0,0,0,0.04) 0 14px 28px, rgba(0,0,0,0.03) 0 6px 14px, rgba(0,0,0,0.02) 0 2px 5px, rgba(0,0,0,0.01) 0 0.5px 1.5px;
+    --bot:url("data:image/webp;base64,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");
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--ground); color:var(--ink); font-family:var(--font); font-size:13px; line-height:1.5;
+    -webkit-font-smoothing:antialiased; word-break:keep-all; overflow-wrap:anywhere;
+    padding-block:28px 72px; padding-inline:clamp(16px,3vw,40px);
+  }
+  a{color:inherit; text-decoration:none}
+  button{font:inherit; color:inherit; background:none; border:0; padding:0; cursor:pointer; text-align:inherit}
+  :is(a,button,input,[contenteditable]):focus-visible{outline:2px solid var(--green); outline-offset:2px; border-radius:6px}
+  svg.i{width:15px; height:15px; flex:none; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round}
+  .wrap{max-width:1320px; margin:0 auto; display:flex; flex-direction:column; gap:48px}
+  .num{font-variant-numeric:tabular-nums}
+  [hidden]{display:none !important}
+
+  /* ── 갈매봇 ── */
+  .bot{display:inline-block; flex:none; background:var(--bot) center/contain no-repeat}
+  .bot.face{border-radius:50%; background-color:#fff; background-size:160%; background-position:41.5% 15.9%; box-shadow:inset 0 0 0 1px var(--line)}
+  .bot.s22{width:22px; height:22px} .bot.s28{width:28px; height:28px} .bot.s36{width:36px; height:36px}
+  .bot.s52{width:52px; height:52px} .bot.s72{width:72px; height:72px} .bot.s104{width:104px; height:104px}
+
+  /* ── 시안 안내 ── */
+  .intro{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px 24px}
+  .intro .lead{display:flex; align-items:center; gap:16px; min-width:0}
+  .intro h1{font-size:24px; font-weight:700; letter-spacing:-0.02em; margin:4px 0 0; text-wrap:balance}
+  .intro p{margin:6px 0 0; color:var(--sub); max-width:70ch}
+  .eyebrow{font-size:10px; font-weight:600; letter-spacing:0.18em; text-transform:uppercase; color:var(--muted)}
+  .sample{display:inline-flex; align-items:center; gap:6px; font-size:11px; color:var(--warn); border:1px solid var(--warn-line); border-radius:6px; padding:3px 8px; background:var(--panel)}
+  .sample::before{content:""; width:6px; height:6px; border-radius:50%; background:var(--warn)}
+  .jump{display:flex; flex-wrap:wrap; gap:4px 18px; border-top:1px solid var(--line); padding-top:12px; margin-top:16px; font-size:12px; color:var(--sub)}
+  .jump a{display:inline-flex; gap:6px; padding:3px 0}
+  .jump a:hover{color:var(--green)}
+  .jump b{color:var(--ink); font-weight:600; font-family:var(--mono); font-size:11px}
+
+  /* ── 섹션 ── */
+  section{display:flex; flex-direction:column; gap:14px; scroll-margin-top:16px}
+  .sec-head{display:grid; grid-template-columns:auto minmax(0,1fr); align-items:baseline; gap:6px 10px}
+  .sec-head h2{margin:0; font-size:17px; font-weight:700; letter-spacing:-0.01em}
+  .sec-head .no{font-family:var(--mono); font-size:11px; color:var(--muted)}
+  .sec-head p{margin:0; color:var(--sub); grid-column:1 / -1; max-width:84ch}
+  .frame{background:var(--panel); border:1px solid var(--line); border-radius:16px; overflow:hidden; box-shadow:var(--shadow-card)}
+  .mark{display:inline-flex; width:20px; height:20px; flex:none; border-radius:50%; background:var(--green); color:#fff; font-size:11px; font-weight:700; align-items:center; justify-content:center}
+  .notes{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:10px 28px; margin:0; padding:0; list-style:none}
+  .notes li{display:flex; gap:10px; color:var(--sub)}
+  .notes b{color:var(--ink); font-weight:600}
+  kbd{font-family:var(--mono); font-size:10px; color:var(--sub); border:1px solid var(--line); border-radius:4px; padding:1px 5px; background:var(--panel)}
+
+  /* ── 버튼 ── */
+  .btn{display:inline-flex; align-items:center; justify-content:center; gap:6px; border-radius:6px; padding:7px 12px; font-size:12px; font-weight:600; border:1px solid var(--line); background:var(--panel); white-space:nowrap}
+  .btn:hover{background:var(--strip)}
+  .btn.primary{background:var(--green); color:#fff; border-color:var(--green)}
+  .btn.primary:hover{background:var(--green-hover)}
+  .btn.danger{background:var(--danger); color:#fff; border-color:var(--danger)}
+  .btn.ghost{border-color:transparent; color:var(--sub); background:none}
+  .btn.ghost:hover{background:var(--strip)}
+  .btn:active{transform:scale(0.97)}
+  .icon-btn{width:30px; height:30px; border-radius:6px; display:flex; align-items:center; justify-content:center; color:var(--sub)}
+  .icon-btn:hover,.icon-btn[aria-pressed="true"]{background:var(--strip); color:var(--ink)}
+
+  /* ── 어드민 셸 ── */
+  .shell{position:relative; display:grid; grid-template-columns:232px minmax(0,1fr); height:780px; background:var(--ground); overflow:hidden}
+  .side{background:var(--panel); border-right:1px solid var(--line); padding:20px 12px; display:flex; flex-direction:column; gap:2px; overflow:hidden}
+  .side .brand{padding:0 10px 16px; border-bottom:1px solid var(--line); margin-bottom:10px}
+  .side .brand small{display:block; font-size:10px; letter-spacing:0.16em; color:var(--muted); font-weight:600}
+  .side .brand strong{font-size:15px; letter-spacing:-0.01em}
+  .side .cat{font-size:10px; font-weight:600; letter-spacing:0.12em; color:var(--muted); padding:12px 10px 4px}
+  .nav{display:flex; align-items:center; gap:9px; padding:7px 10px; border-radius:8px; color:var(--sub); font-weight:500}
+  .nav.on{background:var(--strip); color:var(--ink); font-weight:600}
+  .nav.new{color:var(--ink); font-weight:600}
+  .nav .tag{margin-left:auto; font-size:10px; font-weight:600; color:var(--green); letter-spacing:0.04em}
+  .page{padding:26px 30px; overflow:hidden; display:flex; flex-direction:column; gap:16px; transition:margin-right .2s ease}
+  .page h3{margin:0; font-size:26px; font-weight:700; letter-spacing:-0.02em}
+  .page .crumbs{font-size:12px; color:var(--muted)}
+  .ghost-tabs{display:flex; gap:20px; border-bottom:1px solid var(--line); font-weight:600; color:var(--muted)}
+  .ghost-tabs span{padding:8px 0}
+  .ghost-tabs .on{color:var(--ink); box-shadow:inset 0 -2px 0 var(--ink)}
+  .list{background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden}
+  .row{display:grid; grid-template-columns:minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr) 90px; gap:12px; padding:11px 16px; border-bottom:1px solid var(--grid); align-items:center}
+  .row:last-child{border-bottom:0}
+  .row.head{font-size:11px; color:var(--muted); font-weight:600; background:var(--strip)}
+  .row.focus{box-shadow:inset 2px 0 0 var(--green); background:#FDFDFC}
+  .row .who{font-weight:600}
+  .row .meta{color:var(--sub); font-size:12px}
+  .row .st{font-size:12px; font-weight:600}
+  .st.ok{color:var(--green)} .st.wait{color:var(--warn)} .st.cold{color:var(--muted)}
+
+  /* ── 플로팅 버튼 ── */
+  .fab{position:absolute; right:22px; bottom:22px; z-index:5; width:56px; height:56px; border-radius:50%; background:#fff; border:1px solid var(--line); display:flex; align-items:center; justify-content:center; box-shadow:var(--shadow-deep); transition:transform .16s ease}
+  .fab:hover{transform:translateY(-2px)}
+  .fab .count{position:absolute; top:-3px; right:-3px; min-width:19px; height:19px; padding:0 5px; border-radius:10px; background:var(--warn); color:#fff; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 2px var(--ground)}
+  .shell.docked .fab{display:none}
+
+  /* ── 위젯 패널 ── */
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow-deep); display:flex; flex-direction:column; overflow:hidden; min-width:0}
+  .widget{position:absolute; right:22px; bottom:90px; z-index:5; width:408px; max-width:calc(100% - 28px); height:660px; max-height:calc(100% - 104px); transform-origin:bottom right; transition:opacity .16s ease, transform .16s ease}
+  .widget.closed{opacity:0; transform:translateY(8px) scale(0.98); pointer-events:none}
+  .shell.docked .widget{right:0; bottom:0; top:0; height:auto; max-height:none; width:420px; border-radius:0; border-width:0 0 0 1px; box-shadow:none}
+  .shell.docked .page{margin-right:420px}
+  .w-head{display:flex; align-items:center; gap:10px; padding:10px 10px 10px 14px; border-bottom:1px solid var(--line)}
+  .w-head .t{font-weight:700; font-size:14px; letter-spacing:-0.01em; line-height:1.2}
+  .w-head .s{font-size:11px; color:var(--muted)}
+  .w-head .sp{flex:1}
+  .w-tabs{display:flex; gap:18px; padding:0 16px; border-bottom:1px solid var(--line); font-weight:600; font-size:12px; color:var(--muted)}
+  .w-tabs button{padding:8px 0; display:inline-flex; gap:5px; align-items:center}
+  .w-tabs button[aria-selected="true"]{color:var(--ink); box-shadow:inset 0 -2px 0 var(--ink)}
+  .w-tabs .n{font-variant-numeric:tabular-nums; color:var(--warn)}
+  .ctx{display:flex; align-items:center; gap:8px; padding:7px 16px; background:var(--strip); border-bottom:1px solid var(--line); font-size:12px; color:var(--sub)}
+  .ctx b{color:var(--ink); font-weight:600}
+  .ctx .x{margin-left:auto; color:var(--muted); font-size:11px}
+  .ctx.off b{color:var(--muted); font-weight:500; text-decoration:line-through}
+  .w-body{flex:1; min-height:0; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; scroll-behavior:smooth}
+  .msg{max-width:92%}
+  .msg.me{align-self:flex-end; background:var(--green-surface); border:1px solid var(--green-line); border-radius:12px 12px 4px 12px; padding:9px 12px; color:var(--green)}
+  .turn{display:grid; grid-template-columns:22px minmax(0,1fr); gap:9px; align-items:start}
+  .turn > .stack{display:flex; flex-direction:column; gap:9px; min-width:0; color:var(--dark)}
+  .turn p{margin:0}
+  .chips{display:flex; flex-wrap:wrap; gap:6px; padding:0 16px 10px}
+  .chip{border:1px solid var(--line); border-radius:6px; padding:5px 9px; font-size:12px; color:var(--sub); background:var(--panel)}
+  .chip:hover{border-color:var(--green-line); color:var(--green)}
+  .w-input{display:flex; align-items:center; gap:8px; margin:0 12px 12px; padding:6px 6px 6px 12px; border:1px solid #E5E5E0; border-radius:8px}
+  .w-input:focus-within{outline:2px solid var(--green); outline-offset:-1px}
+  .w-input input{flex:1; min-width:0; border:0; outline:0; font:inherit; background:none; color:var(--ink)}
+  .w-input input::placeholder{color:var(--muted)}
+  .send{width:30px; height:30px; border-radius:6px; background:var(--green); color:#fff; display:flex; align-items:center; justify-content:center; flex:none}
+  .send:hover{background:var(--green-hover)}
+
+  /* 첫 화면 */
+  .home{display:flex; flex-direction:column; gap:14px; align-items:stretch}
+  .hello{display:flex; flex-direction:column; align-items:center; text-align:center; gap:2px; padding:6px 0 2px}
+  .hello b{font-size:16px; letter-spacing:-0.01em; margin-top:6px}
+  .hello span{color:var(--sub); font-size:12px}
+  .pending{display:flex; align-items:center; gap:8px; border:1px solid var(--warn-line); background:var(--panel); border-radius:8px; padding:8px 10px; font-size:12px; color:var(--warn-strong); box-shadow:inset 2px 0 0 var(--warn)}
+  .pending b{font-weight:600}
+  .pending span{margin-left:auto; color:var(--sub); font-weight:600}
+  .sugg{display:flex; flex-direction:column; border:1px solid var(--line); border-radius:12px; overflow:hidden}
+  .sugg h5{margin:0; padding:8px 12px; font-size:11px; color:var(--muted); font-weight:600; background:var(--strip); border-bottom:1px solid var(--line)}
+  .sugg button{display:flex; align-items:center; gap:10px; padding:10px 12px; border-bottom:1px solid var(--grid); width:100%}
+  .sugg button:last-child{border-bottom:0}
+  .sugg button:hover{background:#FDFDFC}
+  .sugg .rk{margin-left:auto}
+
+  /* 생각 중 */
+  .think{display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--sub)}
+  .think div{display:flex; align-items:center; gap:7px}
+  .think .done{color:var(--muted)}
+  .think .done svg{color:var(--green)}
+  .spin{width:12px; height:12px; border-radius:50%; border:1.5px solid var(--line); border-top-color:var(--green); animation:spin .8s linear infinite; flex:none}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* ── 오더 카드 ──
+     구조: 머리(무엇을·누구에게·등급) → 값(전/후) → 건드리지 않는 것 → 상태·남은 시간 → 행동 → 안내.
+     등급 표시는 머리 옆의 짧은 세로 막대 하나. 카드 모서리를 따라 휘는 선은 쓰지 않는다. */
+  .oc{position:relative; border:1px solid var(--line); border-radius:12px; background:var(--panel); min-width:0; --risk:var(--muted); container-type:inline-size}
+  .oc::before{content:""; position:absolute; left:-1px; top:13px; width:3px; height:30px; border-radius:0 3px 3px 0; background:var(--risk)}
+  .oc.r1{--risk:var(--green)} .oc.r2,.oc.r2s{--risk:var(--warn)} .oc.r3{--risk:var(--danger)} .oc.r4{--risk:var(--dark)}
+  .oc-h{position:relative; display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px; align-items:center; padding:12px 14px 11px 16px}
+  .oc-ic{width:30px; height:30px; border-radius:8px; background:var(--strip); display:flex; align-items:center; justify-content:center; color:var(--dark)}
+  .oc-t{min-width:0}
+  .oc-t b{display:block; font-size:13px; font-weight:600; line-height:1.3}
+  .oc-t > span{display:block; font-size:12px; color:var(--sub); line-height:1.4}
+  .oc-t strong{color:var(--ink); font-weight:600}
+  .oc-t .lk{width:11px; height:11px; vertical-align:-1px; margin-left:5px; color:var(--muted)}
+  .oc-rk{position:relative; align-self:start; padding-top:2px; font-size:11px; font-weight:600; color:var(--risk); white-space:nowrap; display:inline-flex; gap:4px}
+  .oc-rk b{font-family:var(--mono)}
+
+  .oc-b{padding:0 14px 12px 16px; display:flex; flex-direction:column; gap:10px}
+  .oc-text{margin:0; font-size:12px; color:var(--sub)}
+  .oc-rows{position:relative; margin:0; display:flex; flex-direction:column; border-top:1px solid var(--grid)}
+  .oc-r{display:grid; grid-template-columns:64px minmax(0,1fr); gap:10px; align-items:center; min-height:34px; padding:6px 0; border-bottom:1px solid var(--grid); font-size:12px}
+  .oc-r dt{color:var(--muted)}
+  .oc-r dd{margin:0; min-width:0; display:flex; flex-wrap:wrap; align-items:center; gap:2px 6px; color:var(--ink)}
+  .oc-r small{color:var(--muted); font-size:11px}
+  .oc-r .arr{width:12px; height:12px; color:var(--muted)}
+  .oc-r .okc{width:12px; height:12px; color:var(--green)}
+  .was{color:var(--muted)}
+  .now{font-weight:600; color:var(--ink)}
+  .ed{font-size:10px; font-weight:600; color:var(--green); letter-spacing:0.02em}
+  .oc-in{width:100%; font:inherit; font-size:12px; color:var(--ink); background:#fff; border:1px solid #E5E5E0; border-radius:6px; padding:5px 8px}
+  .oc-r dd .oc-in{flex:1 1 120px; width:auto; min-width:0}
+  .oc-in:focus{outline:2px solid var(--green); outline-offset:-1px; border-color:transparent}
+  textarea.oc-in{display:block; resize:vertical; min-height:84px; line-height:1.5}
+
+  .oc-amt{display:flex; align-items:flex-end; justify-content:space-between; gap:12px; padding:10px 12px; border:1px solid var(--grid); border-radius:8px; background:var(--ground)}
+  .oc-amt .l{font-size:11px; color:var(--muted)}
+  .oc-amt .l b{display:block; font-size:12px; font-weight:600; color:var(--ink)}
+  .oc-amt .v{text-align:right; line-height:1.25}
+  .oc-amt .cur{font-size:10px; font-weight:600; letter-spacing:0.06em; color:var(--muted); margin-right:4px}
+  .oc-amt .big{font-size:18px; font-weight:700; letter-spacing:-0.02em}
+  .oc-amt .was,.oc-amt .delta{display:block; font-size:11px}
+  .oc-amt .delta{color:var(--sub)}
+
+  .oc-msg{border:1px solid var(--grid); border-radius:8px; background:var(--ground); padding:9px 11px; font-size:12px; color:var(--dark)}
+  .oc-msg h6{margin:0 0 4px; font-size:10px; font-weight:600; letter-spacing:0.06em; color:var(--muted)}
+  .oc-msg p{margin:0}
+  .oc-keep{position:relative; margin:0; display:flex; gap:6px; align-items:flex-start; font-size:11px; color:var(--sub)}
+  .oc-keep svg{width:12px; height:12px; margin-top:2px; color:var(--muted)}
+  .oc-fail{display:flex; gap:8px; align-items:flex-start; padding:9px 11px; border-radius:8px; border:1px solid var(--danger-line); background:var(--danger-tint); color:var(--danger-strong); font-size:12px; font-weight:500}
+  .oc-fail svg{width:14px; height:14px; margin-top:1px}
+  .oc-opts{display:flex; flex-direction:column; gap:6px}
+  .oc-opt{display:flex; align-items:center; gap:8px; width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:8px; font-size:12px; font-weight:600}
+  .oc-opt small{font-weight:400; color:var(--muted)}
+  .oc-opt:hover{border-color:var(--green-line)}
+  .oc-opt.on{border-color:var(--green); box-shadow:inset 0 0 0 1px var(--green)}
+  .oc-opt.on svg{margin-left:auto; color:var(--green)}
+  .oc-opt.dim{color:var(--muted); font-weight:500}
+
+  .oc-f{position:relative; border-top:1px solid var(--grid); padding:10px 14px 12px 16px; display:flex; flex-direction:column; gap:9px}
+  .oc-st{position:relative; display:flex; align-items:center; gap:7px; min-height:20px; font-size:12px; font-weight:600; color:var(--sub)}
+  .oc-st .dot{width:6px; height:6px; border-radius:50%; background:currentColor; flex:none}
+  .oc-st svg{width:13px; height:13px}
+  .oc-st.wait{color:var(--warn-strong)} .oc-st.ok{color:var(--green)} .oc-st.bad{color:var(--danger-strong)} .oc-st.off{color:var(--muted)}
+  .oc-st .clock{margin-left:auto; font-size:11px; font-weight:500; color:var(--muted); white-space:nowrap}
+  .oc-act{position:relative; display:flex; flex-wrap:wrap; gap:6px}
+  .oc-act .btn .t{font-weight:500; opacity:0.75; margin-left:2px}
+  .oc-meta{position:relative; margin:0; display:flex; flex-wrap:wrap; align-items:center; gap:3px 6px; font-size:11px; color:var(--muted)}
+  .oc-meta svg{width:11px; height:11px}
+  .oc-meta .w{color:var(--warn-strong); font-weight:600}
+  .oc-meta i{width:2px; height:2px; border-radius:50%; background:var(--muted)}
+  .oc-bar{position:absolute; left:0; right:0; top:-1px; height:2px; background:var(--grid)}
+  .oc-bar i{display:block; height:100%; background:var(--danger); transform-origin:left; transition:transform 1s linear}
+
+  /* 좁은 자리(폭 300px 미만) — 아이콘을 빼고 이름표를 값 위로 올린다 */
+  @container (max-width:300px){
+    .oc-h{grid-template-columns:minmax(0,1fr) auto; padding-left:14px}
+    .oc-ic{display:none}
+    .oc-r{grid-template-columns:minmax(0,1fr); gap:1px; padding:7px 0}
+    .oc-r dt{font-size:11px}
+    .oc-b,.oc-f{padding-left:14px}
+    .oc-st .clock{display:none}
+  }
+
+  /* 닫힌 카드(취소·되돌림·만료) — 통째로 흐리게 하지 않고, 강조만 뺀다 */
+  .oc.closed{--risk:var(--line); background:#FDFDFC}
+  .oc.closed .oc-ic,.oc.closed .oc-rk{color:var(--muted)}
+  .oc.closed .oc-t b,.oc.closed .oc-t strong,.oc.closed .now,.oc.closed .oc-r dd,.oc.closed .oc-amt .big{color:var(--sub)}
+  .oc.closed .now{font-weight:500}
+  .oc.failed{--risk:var(--danger)}
+
+  /* 카드 안 표·기록 */
+  .mini{width:100%; border-collapse:collapse; font-size:12px}
+  .mini th{font-weight:600; color:var(--muted); font-size:11px; text-align:right; padding:3px 0}
+  .mini th:first-child,.mini td:first-child{text-align:left}
+  .mini td{padding:5px 0; border-top:1px solid var(--grid); text-align:right}
+  .mini .planned{color:var(--warn)}
+  .log{margin:0; padding:0; list-style:none; font-size:12px}
+  .log li{display:grid; grid-template-columns:58px minmax(0,1fr); gap:8px; padding:5px 0; border-top:1px solid var(--grid)}
+  .log time{color:var(--muted)}
+  .rk{font-family:var(--mono); font-size:11px; font-weight:600; white-space:nowrap}
+  .rk.r0{color:var(--muted)} .rk.r1{color:var(--green)} .rk.r2{color:var(--warn)} .rk.r3{color:var(--danger)} .rk.r4{color:var(--dark)}
+  .o-state{display:flex; align-items:center; gap:7px; font-size:12px; font-weight:600}
+  .o-state.ok{color:var(--green)} .o-state.bad{color:var(--danger)} .o-state.undo{color:var(--muted)} .o-state.wait{color:var(--warn)}
+  .o-state .dot{width:6px; height:6px; border-radius:50%; background:currentColor; flex:none}
+
+  /* 카드 해부 */
+  .anat{display:grid; grid-template-columns:minmax(0,440px) minmax(0,1fr); gap:28px 40px; padding:26px 22px 26px; align-items:start}
+  .anat .stage{padding:0 40px}
+  .anat .an{position:absolute; left:-38px; top:50%; transform:translateY(-50%)}
+  .anat .oc-rk .an{left:auto; right:-38px}
+  .anat .oc-h > .an{top:27px}
+  .anat ol{margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:10px}
+  .anat li{display:flex; gap:10px; color:var(--sub)}
+  .anat li b{color:var(--ink); font-weight:600}
+  .strip{border-top:1px solid var(--line); padding:22px; background:var(--strip); display:flex; flex-direction:column; gap:14px}
+  .strip-head{display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 10px}
+  .strip-head span{font-weight:600}
+  .strip-head small{color:var(--muted); font-size:12px}
+  .strip-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr)); gap:16px; align-items:start}
+  .strip-grid > div{display:flex; flex-direction:column; gap:8px; min-width:0}
+  .strip-grid h5{margin:0; font-size:12px; font-weight:600; display:flex; gap:8px; align-items:baseline}
+  .strip-grid h5 b{font-family:var(--mono); font-size:11px; color:var(--muted)}
+  .strip-grid p{margin:0; font-size:12px; color:var(--sub)}
+  @media (max-width:900px){ .anat{grid-template-columns:minmax(0,1fr)} }
+
+  /* ── 상태 갤러리 ── */
+  .gallery{display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr)); gap:18px; padding:22px; background:var(--strip)}
+  .state{display:flex; flex-direction:column; gap:8px; min-width:0}
+  .state > header{display:flex; align-items:baseline; gap:8px}
+  .state > header b{font-family:var(--mono); font-size:11px; color:var(--muted)}
+  .state > header span{font-weight:600}
+  .state .panel{height:470px; box-shadow:var(--shadow-card)}
+  .state .w-body{padding:14px}
+  .state > p{margin:0; font-size:12px; color:var(--sub)}
+
+  /* ── 등급 그리드 ── */
+  .grades{display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)); gap:16px; padding:22px; background:var(--strip)}
+  .grade{display:flex; flex-direction:column; gap:10px; min-width:0}
+  .grade > header{display:flex; align-items:baseline; gap:8px}
+  .grade > header b{font-family:var(--mono); font-size:12px}
+  .grade > header span{font-weight:600}
+  .grade > header small{color:var(--muted); margin-left:auto; font-size:11px}
+  .grade .say{font-size:12px; color:var(--sub); border-left:2px solid var(--line); padding-left:9px}
+  .sens{padding:22px; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:16px}
+  .sens-head{display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 10px}
+  .sens-head b{font-family:var(--mono); font-size:12px}
+  .sens-head span{font-weight:600}
+  .sens-head small{color:var(--muted); font-size:12px}
+
+  /* ── 배치 규칙 미니 프레임 ── */
+  .places{display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr)); gap:18px; padding:22px}
+  .place{display:flex; flex-direction:column; gap:8px; min-width:0}
+  .place b{font-weight:600}
+  .place p{margin:0; font-size:12px; color:var(--sub)}
+  .mf{position:relative; height:190px; border:1px solid var(--line); border-radius:12px; background:var(--ground); overflow:hidden}
+  .mf .sb{position:absolute; left:0; top:0; bottom:0; width:22%; background:var(--panel); border-right:1px solid var(--line)}
+  .mf .ln{position:absolute; left:28%; right:8%; height:9px; border-radius:4px; background:var(--grid)}
+  .mf .bt{position:absolute; width:30px; height:30px; border-radius:50%; background:#fff; border:1px solid var(--line); box-shadow:var(--shadow-card); background-image:var(--bot); background-size:160%; background-position:41.5% 15.9%}
+  .mf .own{position:absolute; height:26px; padding:0 10px; border-radius:13px; background:var(--green); color:#fff; font-size:10px; font-weight:700; display:flex; align-items:center}
+  .mf .dr{position:absolute; right:0; top:0; bottom:0; width:40%; background:var(--panel); border-left:1px solid var(--line); box-shadow:var(--shadow-card)}
+  .mf .bn{position:absolute; left:0; right:0; bottom:0; height:30px; background:var(--panel); border-top:1px solid var(--line); display:flex; justify-content:space-around; align-items:center}
+  .mf .bn i{width:16px; height:16px; border-radius:4px; background:var(--grid)}
+  .mf .ts{position:absolute; right:10px; bottom:10px; height:26px; padding:0 10px; border-radius:8px; background:var(--ink); color:#fff; font-size:10px; font-weight:600; display:flex; align-items:center}
+  .mf.narrow{width:150px; margin:0 auto}
+
+  /* ── ⌘K ── */
+  .pal-wrap{padding:36px 22px; background:rgba(17,17,16,0.06); display:flex; justify-content:center}
+  .pal{width:min(100%,560px); background:var(--panel); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow-deep); overflow:hidden}
+  .pal .q{display:flex; align-items:center; gap:10px; padding:13px 16px; border-bottom:1px solid var(--line); font-size:14px}
+  .pal .q span{flex:1}
+  .pal h5{margin:0; padding:9px 16px 4px; font-size:10px; letter-spacing:0.12em; color:var(--muted); font-weight:600}
+  .pal .it{display:flex; align-items:center; gap:10px; padding:9px 16px; color:var(--dark)}
+  .pal .it.on{background:var(--strip)}
+  .pal .it small{color:var(--muted)}
+  .pal .it kbd{margin-left:auto}
+  .pal .none{padding:6px 16px 8px; color:var(--muted); font-size:12px}
+
+  /* ── AI 올인원 탭 ── */
+  .adm-header{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:16px; padding:24px 32px 18px; background:var(--ground); border-bottom:1px solid var(--line)}
+  .adm-header .ttl{display:flex; align-items:center; gap:14px}
+  .adm-header h3{margin:0; font-size:30px; font-weight:700; letter-spacing:-0.02em; line-height:1.15}
+  .adm-header .sub{color:var(--muted); font-size:12px; margin-top:4px}
+  .tabbar{display:flex; flex-wrap:wrap; gap:4px; padding:8px 20px; background:var(--strip); border-bottom:1px solid var(--line)}
+  .tab{display:inline-flex; align-items:center; gap:7px; min-height:38px; padding:0 14px; border-radius:8px; font-size:13px; font-weight:600; color:rgba(26,26,26,0.55)}
+  .tab:hover{color:var(--ink)}
+  .tab[aria-selected="true"]{background:var(--ink); color:#fff}
+  .tab .n{font-size:11px; font-variant-numeric:tabular-nums; opacity:0.7}
+  .pane{min-height:560px}
+  .talk{display:grid; grid-template-columns:220px minmax(0,1fr) 300px; min-height:560px}
+  .talk > aside{padding:18px 14px; border-right:1px solid var(--line); display:flex; flex-direction:column; gap:2px}
+  .talk > aside:last-child{border-right:0; border-left:1px solid var(--line); gap:14px; padding:18px}
+  .talk h4{margin:0 0 6px; font-size:11px; letter-spacing:0.1em; color:var(--muted); font-weight:600}
+  .conv{padding:8px 10px; border-radius:8px; color:var(--sub)}
+  .conv.on{background:var(--strip); color:var(--ink); font-weight:600}
+  .conv small{display:block; font-weight:400; color:var(--muted); font-size:11px}
+  .talk-main{display:flex; flex-direction:column; min-width:0}
+  .talk-main .w-body{padding:24px clamp(16px,4vw,48px)}
+  .talk-main .msg,.talk-main .turn{max-width:620px}
+  .talk-main .order{max-width:520px}
+  .stat4{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:12px; overflow:hidden}
+  .stat4 div{background:var(--panel); padding:11px 12px}
+  .stat4 b{display:block; font-size:20px; letter-spacing:-0.02em; font-variant-numeric:tabular-nums}
+  .stat4 span{font-size:11px; color:var(--sub)}
+  .stat4 .w b{color:var(--warn)} .stat4 .d b{color:var(--danger)}
+  .recent{display:flex; flex-direction:column}
+  .recent a{display:flex; flex-direction:column; padding:8px 0; border-top:1px solid var(--grid)}
+  .recent a small{color:var(--muted); font-size:11px}
+  .tbl-wrap{overflow-x:auto; padding:20px 24px 28px}
+  table.tbl{width:100%; min-width:760px; border-collapse:collapse}
+  .tbl th{font-size:11px; font-weight:600; color:var(--muted); text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); white-space:nowrap}
+  .tbl td{padding:11px 10px; border-bottom:1px solid var(--grid); vertical-align:middle}
+  .tbl .act{text-align:right; white-space:nowrap}
+  .tbl .act .btn{padding:4px 9px}
+  .filters{display:flex; flex-wrap:wrap; gap:8px; padding:16px 24px 0; align-items:center}
+  .seg{display:inline-flex; border:1px solid var(--line); border-radius:8px; padding:3px}
+  .seg span{padding:4px 10px; border-radius:6px; font-size:12px; font-weight:600; color:var(--sub)}
+  .seg .on{background:var(--strip); color:var(--ink)}
+  .tools{display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:14px; padding:22px 24px 8px}
+  .tool{border:1px solid var(--line); border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:6px; background:var(--panel)}
+  .tool:hover{box-shadow:var(--shadow-card)}
+  .tool .where{font-family:var(--mono); font-size:11px; color:var(--muted)}
+  .tool b{font-size:14px}
+  .tool p{margin:0; color:var(--sub); font-size:12px}
+  .tool .go{margin-top:6px; color:var(--green); font-weight:600; font-size:12px; display:inline-flex; gap:4px; align-items:center}
+  .foot-note{padding:6px 24px 24px; color:var(--muted); font-size:12px}
+
+  /* ── 모바일 ── */
+  .duo{display:grid; grid-template-columns:auto minmax(0,1fr); gap:32px; align-items:start}
+  .phone{width:340px; height:680px; border:1px solid var(--line); border-radius:32px; background:var(--ground); position:relative; overflow:hidden; box-shadow:var(--shadow-card)}
+  .phone .top{height:52px; background:var(--panel); border-bottom:1px solid var(--line); display:flex; align-items:center; padding:0 16px; font-weight:700}
+  .phone .sk{margin:14px 16px; height:64px; border-radius:12px; background:var(--panel); border:1px solid var(--line)}
+  .phone .scrim{position:absolute; inset:0; background:rgba(17,17,16,0.28)}
+  .sheet{position:absolute; left:0; right:0; bottom:0; height:80%; background:var(--panel); border-radius:20px 20px 0 0; display:flex; flex-direction:column; box-shadow:var(--shadow-deep)}
+  .sheet .grab{width:36px; height:4px; border-radius:2px; background:var(--line); margin:8px auto 2px}
+  .sheet .w-body{padding:12px 14px}
+  .sheet .oc-act .btn{flex:1; padding:10px 12px}
+  .mnotes{display:flex; flex-direction:column; gap:12px; margin:0; padding:0; list-style:none}
+  .mnotes li{display:flex; gap:10px; color:var(--sub)}
+  .mnotes b{color:var(--ink); font-weight:600}
+
+  /* ── 수명주기 ── */
+  .flow{display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr)); gap:10px; padding:24px}
+  .step{min-width:0; border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:var(--panel)}
+  .step .k{font-family:var(--mono); font-size:10px; color:var(--muted)}
+  .step b{display:block; margin:2px 0 4px; font-size:13px}
+  .step p{margin:0; font-size:12px; color:var(--sub)}
+  .step.ai{background:var(--strip)}
+  .step.human{border-color:var(--green); box-shadow:inset 0 2px 0 var(--green)}
+  .step.ext{border-color:var(--danger-line); box-shadow:inset 0 2px 0 var(--danger)}
+  .legend{display:flex; flex-wrap:wrap; gap:6px 20px; padding:0 24px 22px; font-size:12px; color:var(--sub)}
+  .legend span{display:inline-flex; align-items:center; gap:7px}
+  .legend i{width:14px; height:3px; border-radius:2px; background:var(--line)}
+  .legend .h i{background:var(--green)} .legend .e i{background:var(--danger)} .legend .a i{background:var(--muted)}
+
+  @media (max-width:1000px){
+    .talk{grid-template-columns:minmax(0,1fr)}
+    .talk > aside{display:none}
+    .shell.docked .page{margin-right:0}
+  }
+  @media (max-width:820px){
+    .shell{grid-template-columns:minmax(0,1fr)}
+    .side{display:none}
+    .page{padding:20px 16px}
+    .row{grid-template-columns:minmax(0,1fr) 80px}
+    .row > :nth-child(2),.row > :nth-child(3){display:none}
+    .duo{grid-template-columns:minmax(0,1fr); justify-items:center}
+    .adm-header{padding:20px 18px 14px}
+    .adm-header h3{font-size:24px}
+    .intro .lead .bot{display:none}
+    [data-dock]{display:none}
+  }
+  @media (prefers-reduced-motion:reduce){ *{transition:none !important; animation:none !important} }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></symbol>
+  <symbol id="i-dock" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 0116 0z"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+  <symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H8l-5 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></symbol>
+  <symbol id="i-task" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 12l3 3 5-6"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0116 0"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></symbol>
+  <symbol id="i-pay" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></symbol>
+  <symbol id="i-amount" viewBox="0 0 24 24"><path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 114 2c-.9.6-1.5 1.1-1.5 2.2M12 17h.01"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M14 7l5 5-5 5"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9L2.4 18a2 2 0 001.7 3h15.8a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></symbol>
+</svg>
+
+<div class="wrap">
+
+  <header>
+    <div class="intro">
+      <div class="lead">
+        <span class="bot s72" role="img" aria-label="갈매봇"></span>
+        <div>
+          <div class="eyebrow">Mockup v3 · 2026-09-29</div>
+          <h1>갈매봇 위젯 · AI 올인원 탭 · 원격 오더</h1>
+          <p>화면에 직접 가지 않고 갈매봇에게 말로 시킨다. 갈매봇은 오더 티켓을 작성만 하고, 실행은 사람이 확인 버튼을 눌러야 일어난다. 상세는 <a href="../admin-ai-widget-remote-order-plan-2026-09-28.md" style="color:var(--green); font-weight:600">기획 문서</a>.</p>
+        </div>
+      </div>
+      <span class="sample">샘플 데이터 — 실제 고객·수치가 아님</span>
+    </div>
+    <nav class="jump" aria-label="시안 목차">
+      <a href="#s1"><b>01</b> 위젯 (직접 눌러 보기)</a>
+      <a href="#s2"><b>02</b> 위젯 상태</a>
+      <a href="#s3"><b>03</b> 오더 카드</a>
+      <a href="#s4"><b>04</b> 배치 규칙</a>
+      <a href="#s5"><b>05</b> ⌘K 연동</a>
+      <a href="#s6"><b>06</b> AI 올인원 탭</a>
+      <a href="#s7"><b>07</b> 모바일</a>
+      <a href="#s8"><b>08</b> 오더 수명주기</a>
+    </nav>
+  </header>
+
+  <!-- ───────── 01 위젯 데모 ───────── -->
+  <section id="s1">
+    <div class="sec-head">
+      <span class="no">01</span><h2>갈매봇 위젯 — 직접 눌러 보기</h2>
+      <p>CRM 고객DB에서 한빛수학학원 행을 보고 있는 상황. 추천 항목을 누르거나 입력창에 「재고」「할 일」「문자」「결제」「삭제」 같은 말을 넣으면 준비된 예시가 재생된다. <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>J</kbd>로 여닫는다.</p>
+    </div>
+    <div class="frame">
+      <div class="shell" id="shell">
+        <aside class="side" aria-hidden="true">
+          <div class="brand"><small>CLASSIN</small><strong>Admin</strong></div>
+          <div class="cat">홈</div>
+          <span class="nav">Overview</span>
+          <span class="nav new"><span class="bot face s22"></span>AI 올인원<span class="tag">NEW</span></span>
+          <div class="cat">고객·매출</div>
+          <span class="nav">캘린더</span>
+          <span class="nav">KR Team</span>
+          <span class="nav">매출 장부</span>
+          <span class="nav on">CRM</span>
+          <span class="nav">견적·문서</span>
+          <span class="nav">하드웨어 재고</span>
+          <span class="nav">CS 콘솔</span>
+          <div class="cat">기타</div>
+          <span class="nav">마케팅·분석</span>
+          <span class="nav">시스템</span>
+        </aside>
+
+        <div class="page" aria-hidden="true">
+          <div>
+            <div class="crumbs">CRM › 고객DB</div>
+            <h3>고객DB</h3>
+          </div>
+          <div class="ghost-tabs"><span>현황</span><span class="on">고객DB</span><span>기록</span><span>입력함</span><span>검수</span></div>
+          <div class="list">
+            <div class="row head"><span>고객</span><span>지역</span><span>최근 접점</span><span>상태</span></div>
+            <div class="row focus"><span class="who">한빛수학학원</span><span class="meta">서울 강남</span><span class="meta">데모 · 어제</span><span class="st ok">데모 완료</span></div>
+            <div class="row"><span class="who">도담영어</span><span class="meta">경기 분당</span><span class="meta">쇼룸 예약 · 3일 전</span><span class="st wait">상담 중</span></div>
+            <div class="row"><span class="who">새움에듀</span><span class="meta">부산 해운대</span><span class="meta">문의 · 5일 전</span><span class="st wait">상담 중</span></div>
+            <div class="row"><span class="who">가온학원</span><span class="meta">대구 수성</span><span class="meta">견적 발송 · 8일 전</span><span class="st cold">응답 없음</span></div>
+            <div class="row"><span class="who">늘봄국어</span><span class="meta">인천 송도</span><span class="meta">자료 다운로드 · 9일 전</span><span class="st cold">신규</span></div>
+            <div class="row"><span class="who">다온과학</span><span class="meta">서울 목동</span><span class="meta">전화 · 12일 전</span><span class="st wait">상담 중</span></div>
+            <div class="row"><span class="who">한결입시</span><span class="meta">광주 봉선</span><span class="meta">문의 · 14일 전</span><span class="st cold">응답 없음</span></div>
+          </div>
+        </div>
+
+        <div class="panel widget" id="widget" role="dialog" aria-label="갈매봇">
+          <div class="w-head">
+            <span class="bot face s36"></span>
+            <div><div class="t">갈매봇</div><div class="s">묻기 · 오더</div></div>
+            <span class="sp"></span>
+            <button class="icon-btn" data-new title="새 대화" aria-label="새 대화"><svg class="i"><use href="#i-plus"/></svg></button>
+            <button class="icon-btn" data-dock title="옆에 붙여 넓게 보기" aria-label="옆에 붙여 넓게 보기" aria-pressed="false"><svg class="i"><use href="#i-dock"/></svg></button>
+            <a class="icon-btn" href="#s6" title="AI 올인원 탭에서 열기" aria-label="AI 올인원 탭에서 열기"><svg class="i"><use href="#i-expand"/></svg></a>
+            <button class="icon-btn" data-toggle-widget title="닫기" aria-label="닫기"><svg class="i"><use href="#i-x"/></svg></button>
+          </div>
+          <div class="w-tabs" role="tablist">
+            <button role="tab" aria-selected="true" data-view="chat">대화</button>
+            <button role="tab" aria-selected="false" data-view="orders">확인 대기 <span class="n" data-pending>2</span></button>
+          </div>
+          <div class="ctx" id="ctx">
+            <svg class="i" style="width:13px; height:13px"><use href="#i-pin"/></svg>
+            <span>지금 화면 <b>CRM › 고객DB › 한빛수학학원</b></span>
+            <button class="x" data-ctx>맥락 끄기</button>
+          </div>
+
+          <!-- 대화 보기 -->
+          <div class="w-body" id="chat" data-viewpane="chat"></div>
+
+          <!-- 확인 대기 보기 -->
+          <div class="w-body" data-viewpane="orders" hidden>
+            <div data-card="due" data-state="draft" data-ttl="780"></div>
+            <div data-card="contact" data-state="draft" data-ttl="130"></div>
+            <p style="margin:0; font-size:12px; color:var(--muted)">확인하지 않은 오더는 15분 뒤 자동으로 만료된다. 전체 이력은 AI 올인원 탭의 오더함에서 본다.</p>
+          </div>
+
+          <div class="chips" id="chips" data-viewpane="chat">
+            <button class="chip" data-run="summary">이 고객 최근 기록 요약</button>
+            <button class="chip" data-run="stock">86형 재고</button>
+            <button class="chip" data-run="sms">쇼룸 안내 문자</button>
+            <button class="chip" data-run="pay">결제 확정</button>
+          </div>
+          <form class="w-input" id="ask" data-viewpane="chat" autocomplete="off">
+            <input type="text" id="askInput" placeholder="질문하거나 오더를 내려 보세요" aria-label="메시지 입력">
+            <kbd>⌘J</kbd>
+            <button class="send" type="submit" aria-label="보내기"><svg class="i"><use href="#i-send"/></svg></button>
+          </form>
+        </div>
+
+        <button class="fab" data-toggle-widget aria-label="갈매봇 열기/닫기" aria-expanded="true">
+          <span class="bot face s52" style="box-shadow:none"></span>
+          <span class="count" data-pending title="확인 대기 오더">2</span>
+        </button>
+      </div>
+    </div>
+    <ul class="notes">
+      <li><span class="mark">1</span><span><b>첫 화면.</b> 인사, 확인 대기 알림, 화면별 추천. 추천은 정적 목록이고 오른쪽 글자가 오더 등급이다.</span></li>
+      <li><span class="mark">2</span><span><b>화면 맥락.</b> 지금 보는 경로와 열린 대상을 읽어 「이 학원」을 해석한다. 「맥락 끄기」를 누르면 화면과 무관하게 묻는다.</span></li>
+      <li><span class="mark">3</span><span><b>진행 표시.</b> 답을 기다리는 동안 갈매봇이 지금 무엇을 하는지 한 줄씩 보여 준다.</span></li>
+      <li><span class="mark">4</span><span><b>카드 수정.</b> 「수정」을 누르면 값이 그 자리에서 편집된다. 다시 말로 설명하지 않아도 된다.</span></li>
+      <li><span class="mark">5</span><span><b>세 가지 크기.</b> 떠 있는 위젯 → 옆에 붙인 패널 → AI 올인원 탭. 머리말 오른쪽 버튼으로 바꾼다.</span></li>
+      <li><span class="mark">6</span><span><b>확인 대기 탭.</b> 버튼의 숫자와 같다. 다른 화면에서 만들어 둔 오더를 여기서 마저 처리한다.</span></li>
+    </ul>
+  </section>
+
+  <!-- ───────── 02 위젯 상태 ───────── -->
+  <section id="s2">
+    <div class="sec-head">
+      <span class="no">02</span><h2>위젯 상태</h2>
+      <p>구현할 때 빠뜨리기 쉬운 상태를 따로 펼쳤다. 데모에서 재현하기 어려운 장애·만료·권한 없음이 여기 있다.</p>
+    </div>
+    <div class="frame">
+      <div class="gallery">
+
+        <div class="state">
+          <header><b>A</b><span>생각 중</span></header>
+          <div class="panel">
+            <div class="w-body">
+              <div class="msg me">새움에듀 데모 끝났어. 상태 바꾸고 내가 맡을게.</div>
+              <div class="turn"><span class="bot face s22"></span><div class="stack">
+                <div class="think">
+                  <div class="done"><svg class="i" style="width:12px;height:12px"><use href="#i-check"/></svg>새움에듀 찾음 · 부산 해운대</div>
+                  <div class="done"><svg class="i" style="width:12px;height:12px"><use href="#i-check"/></svg>현재 상태 확인 · 상담 중</div>
+                  <div><span class="spin"></span>오더 작성 중</div>
+                </div>
+              </div></div>
+            </div>
+            <div class="w-input"><input type="text" placeholder="답변을 기다리는 중…" disabled aria-label="입력 잠김"><button class="btn ghost" style="padding:4px 8px">중지</button></div>
+          </div>
+          <p>단계가 끝날 때마다 줄이 추가된다. 기다리는 동안 입력은 잠기고 「중지」만 누를 수 있다.</p>
+        </div>
+
+        <div class="state">
+          <header><b>B</b><span>카드 수정 중</span></header>
+          <div class="panel">
+            <div class="w-body">
+              <div class="turn"><span class="bot face s22"></span><div class="stack">
+                <div data-card="task" data-state="editing"></div>
+              </div></div>
+            </div>
+          </div>
+          <p>대상(고객)은 수정 모드에서 바꾸지 못한다. 대상을 바꾸려면 새 오더를 낸다 — 엉뚱한 고객에 실행되는 것을 막는다.</p>
+        </div>
+
+        <div class="state">
+          <header><b>C</b><span>만료</span></header>
+          <div class="panel">
+            <div class="w-body">
+              <div class="turn"><span class="bot face s22"></span><div class="stack">
+                <div data-card="lead" data-state="expired"></div>
+                <p style="font-size:12px; color:var(--sub)">그 사이 데이터가 바뀌었을 수 있어 같은 카드를 되살리지 않고 새로 작성합니다.</p>
+              </div></div>
+            </div>
+          </div>
+          <p>오래된 카드의 확인 버튼이 남아 있으면 바뀐 데이터 위에 실행될 수 있다. 만료되면 버튼을 없앤다.</p>
+        </div>
+
+        <div class="state">
+          <header><b>D</b><span>실행 실패</span></header>
+          <div class="panel">
+            <div class="w-body">
+              <div class="turn"><span class="bot face s22"></span><div class="stack">
+                <div data-card="share" data-state="failed"></div>
+              </div></div>
+            </div>
+          </div>
+          <p>실패를 성공처럼 보이게 하지 않는다. 무엇이 나갔고 무엇이 안 나갔는지를 먼저 말한다.</p>
+        </div>
+
+        <div class="state">
+          <header><b>E</b><span>갈매봇 장애</span></header>
+          <div class="panel">
+            <div class="w-body">
+              <div class="msg me">이번 주 매출 요약해 줘.</div>
+              <div class="turn"><span class="bot face s22" style="filter:grayscale(1); opacity:0.7"></span><div class="stack">
+                <p>지금은 답변을 만들 수 없습니다. 화면으로 바로 이동할 수 있습니다.</p>
+                <div class="sugg">
+                  <button><span>매출 장부 열기</span><span class="rk r0">이동</span></button>
+                  <button><span>KR Team 열기</span><span class="rk r0">이동</span></button>
+                  <button><span>오더 카탈로그 보기</span><span class="rk r0">이동</span></button>
+                </div>
+              </div></div>
+            </div>
+            <div class="w-input"><input type="text" placeholder="다시 물어보기" aria-label="메시지 입력"><button class="send" aria-label="보내기"><svg class="i"><use href="#i-send"/></svg></button></div>
+          </div>
+          <p>AI가 멈춰도 위젯은 화면 이동 도구로 남는다. 확인 대기 오더의 실행·취소는 AI 없이도 동작한다.</p>
+        </div>
+
+        <div class="state">
+          <header><b>F</b><span>조회 권한 없음</span></header>
+          <div class="panel">
+            <div class="w-body">
+              <div class="msg me">이번 달 매출 얼마야?</div>
+              <div class="turn"><span class="bot face s22"></span><div class="stack">
+                <div data-card="nopermRev"></div>
+              </div></div>
+            </div>
+          </div>
+          <p>갈매봇은 그 사람이 화면에서 볼 수 있는 것만 답한다. 권한 밖의 숫자를 요약으로 흘리지 않는다.</p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── 03 등급별 카드 ───────── -->
+  <section id="s3">
+    <div class="sec-head">
+      <span class="no">03</span><h2>오더 카드 — 구조 · 상태 · 등급</h2>
+      <p>카드 한 장의 구조, 상태에 따른 변화, 등급별 차이 순서로 본다. 모든 카드는 눌러 볼 수 있다 — 수정, 실행, 되돌리기, 발송 유예까지.</p>
+    </div>
+    <div class="frame">
+      <div class="anat">
+        <div class="stage"><div data-card="lead" data-state="draft" data-anno data-frozen data-ttl="872"></div></div>
+        <ol>
+          <li><span class="mark">1</span><span><b>무엇을 · 누구에게.</b> 오더 이름 아래에 대상을 굵게 둔다. 대상이 첫 줄에 있어야 엉뚱한 고객에 실행하는 실수가 준다.</span></li>
+          <li><span class="mark">2</span><span><b>등급.</b> 글자(R2 변경)와 머리 옆 짧은 막대 색으로 두 번 알린다. 색만으로 구분하지 않는다.</span></li>
+          <li><span class="mark">3</span><span><b>값.</b> 바뀌는 값은 「이전 → 이후」 한 줄. 이전 값은 흐리게, 이후 값은 굵게. 취소선은 한글에서 읽기 어려워 쓰지 않는다.</span></li>
+          <li><span class="mark">4</span><span><b>건드리지 않는 것.</b> 이 오더가 바꾸지 않는 항목을 적는다. 「상태만 바꿨는데 메모가 날아갔다」는 걱정을 미리 없앤다.</span></li>
+          <li><span class="mark">5</span><span><b>상태와 남은 시간.</b> 확인하지 않으면 15분 뒤 만료된다. 남은 시간이 흐르는 것이 보인다.</span></li>
+          <li><span class="mark">6</span><span><b>행동.</b> 실행이 맨 앞, 취소가 맨 뒤. 확인 버튼에 자동 포커스를 주지 않는다.</span></li>
+          <li><span class="mark">7</span><span><b>안내.</b> 되돌릴 수 있는지와 필요한 권한. 되돌릴 수 없는 오더는 여기가 경고색이 된다.</span></li>
+        </ol>
+      </div>
+      <div class="strip">
+        <div class="strip-head"><span>한 카드의 상태 변화</span><small>같은 오더가 상태에 따라 어떻게 보이는지. 버튼은 모두 동작한다</small></div>
+        <div class="strip-grid">
+          <div><h5><b>1</b>확인 대기</h5><div data-card="lead" data-state="draft"></div><p>남은 시간이 흐른다. 0이 되면 만료로 바뀐다.</p></div>
+          <div><h5><b>2</b>수정 중</h5><div data-card="lead" data-state="editing"></div><p>바꿀 수 있는 값만 입력칸이 된다. 이전 값과 대상은 그대로 고정.</p></div>
+          <div><h5><b>3</b>완료</h5><div data-card="lead" data-state="done" data-undo="562"></div><p>되돌리기 버튼에 남은 시간. 10분이 지나면 버튼이 사라진다.</p></div>
+          <div><h5><b>4</b>되돌림</h5><div data-card="lead" data-state="undone"></div><p>강조를 빼고 값은 남긴다. 무엇을 되돌렸는지 읽을 수 있어야 한다.</p></div>
+          <div><h5><b>5</b>만료</h5><div data-card="lead" data-state="expired"></div><p>확인 버튼이 없다. 그 사이 데이터가 바뀌었을 수 있어 새로 작성한다.</p></div>
+          <div><h5><b>6</b>실패</h5><div data-card="lead" data-state="failed" data-fail="그 사이 다른 사람이 이 리드의 상태를 바꿨습니다." data-failnote="바뀐 것 없음"></div><p>사유를 면으로 강조한다. 무엇이 바뀌었고 안 바뀌었는지 먼저 말한다.</p></div>
+        </div>
+      </div>
+      <div class="grades">
+
+        <div class="grade">
+          <header><b class="rk r0">R0</b><span>조회</span><small>확인 없음</small></header>
+          <div class="say">“86형 재고 몇 대야?”</div>
+          <div data-card="stock"></div>
+        </div>
+
+        <div class="grade">
+          <header><b class="rk r1">R1</b><span>등록</span><small>1클릭 · 10분 되돌리기</small></header>
+          <div class="say">“도담영어 방금 통화했어. 다음 주에 다시 연락 달래.”</div>
+          <div data-card="contact" data-state="draft"></div>
+        </div>
+
+        <div class="grade">
+          <header><b class="rk r2">R2</b><span>변경</span><small>전/후 비교 + 확인</small></header>
+          <div class="say">“새움에듀 데모 끝났어. 상태 바꾸고 내가 맡을게.”</div>
+          <div data-card="lead" data-state="draft"></div>
+        </div>
+
+        <div class="grade">
+          <header><b class="rk r3">R3</b><span>발송</span><small>미리보기 + 30초 유예</small></header>
+          <div class="say">“도담영어 원장님한테 쇼룸 예약 안내 문자 보내 줘.”</div>
+          <div data-card="sms" data-state="draft"></div>
+        </div>
+
+        <div class="grade">
+          <header><b class="rk r4">R4</b><span>금지</span><small>거절 + 화면 안내</small></header>
+          <div class="say">“가온학원 리드 지워 줘.”</div>
+          <div data-card="del"></div>
+        </div>
+
+        <div class="grade">
+          <header><b class="rk r2">?</b><span>대상이 모호할 때</span><small>실행하지 않고 되묻기</small></header>
+          <div class="say">“한빛학원 상태 바꿔 줘.”</div>
+          <div data-card="which"></div>
+        </div>
+
+      </div>
+
+      <div class="sens">
+        <div class="sens-head"><b class="rk r2">R2 민감</b><span>돈·재고가 움직이는 변경</span><small>확인 방식은 R2와 같고, 권한·1건 단위·서버 재계산이 덧붙는다</small></div>
+        <div class="grades" style="padding:0; background:none">
+
+          <div class="grade">
+            <header><span>결제 확정</span><small>되돌리기 없음</small></header>
+            <div class="say">“한빛수학학원 1차 입금 들어왔어. 결제 확정해 줘.”</div>
+            <div data-card="pay" data-state="draft"></div>
+          </div>
+
+          <div class="grade">
+            <header><span>입출고 확정</span><small>취소는 재고 화면에서</small></header>
+            <div class="say">“도담영어 출고 예정 건 오늘 나갔어. 확정해.”</div>
+            <div data-card="ship" data-state="draft"></div>
+          </div>
+
+          <div class="grade">
+            <header><span>금액 변경</span><small>이전 버전 복귀 가능</small></header>
+            <div class="say">“가온학원 견적 10% 깎아 줘.”</div>
+            <div data-card="amount" data-state="draft"></div>
+          </div>
+
+          <div class="grade">
+            <header><span>권한이 없을 때</span><small>카드 대신 안내</small></header>
+            <div class="say">“한빛수학학원 결제 확정해 줘.”</div>
+            <div data-card="nopermPay"></div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── 04 배치 규칙 ───────── -->
+  <section id="s4">
+    <div class="sec-head">
+      <span class="no">04</span><h2>배치 규칙 — 다른 요소와 겹칠 때</h2>
+      <p>우하단은 이미 여러 화면이 쓰고 있다(하드웨어 재고의 빠른 기록 버튼, 매출 장부의 떠 있는 버튼, 저장 알림, 오른쪽 서랍). 갈매봇 버튼이 그 위를 덮지 않도록 자리를 정한다.</p>
+    </div>
+    <div class="frame">
+      <div class="places">
+        <div class="place">
+          <div class="mf"><div class="sb"></div><div class="ln" style="top:24px"></div><div class="ln" style="top:46px; right:30%"></div><div class="ln" style="top:68px"></div>
+            <div class="bt" style="right:12px; bottom:12px"></div></div>
+          <b>기본</b><p>우하단. 화면에 떠 있는 요소가 없을 때.</p>
+        </div>
+        <div class="place">
+          <div class="mf"><div class="sb"></div><div class="ln" style="top:24px"></div><div class="ln" style="top:46px; right:30%"></div>
+            <div class="own" style="right:12px; bottom:12px">+ 빠른 기록</div>
+            <div class="bt" style="right:12px; bottom:48px"></div></div>
+          <b>화면에 자체 버튼이 있을 때</b><p>화면의 버튼이 자리를 지키고 갈매봇이 그 위로 올라간다. 화면의 주 작업이 우선이다.</p>
+        </div>
+        <div class="place">
+          <div class="mf"><div class="sb"></div><div class="ln" style="top:24px; right:46%"></div><div class="ln" style="top:46px; right:52%"></div>
+            <div class="dr"></div>
+            <div class="bt" style="right:calc(40% + 12px); bottom:12px"></div></div>
+          <b>오른쪽 서랍이 열렸을 때</b><p>서랍 왼쪽으로 비켜난다. 서랍의 저장·닫기 버튼을 가리지 않는다.</p>
+        </div>
+        <div class="place">
+          <div class="mf"><div class="sb"></div><div class="ln" style="top:24px"></div><div class="ln" style="top:46px; right:30%"></div>
+            <div class="ts">저장했습니다</div>
+            <div class="bt" style="right:12px; bottom:46px"></div></div>
+          <b>알림이 뜰 때</b><p>알림이 떠 있는 몇 초 동안 위로 비켜났다가 돌아온다.</p>
+        </div>
+        <div class="place">
+          <div class="mf narrow"><div class="ln" style="left:10%; right:10%; top:20px"></div><div class="ln" style="left:10%; right:30%; top:42px"></div>
+            <div class="bn"><i></i><i></i><i></i><i></i></div>
+            <div class="bt" style="right:10px; bottom:40px"></div></div>
+          <b>모바일</b><p>하단 내비 위. 열면 하단 시트가 된다.</p>
+        </div>
+        <div class="place">
+          <div class="mf"><div class="sb"></div><div class="ln" style="top:24px; right:38%"></div><div class="ln" style="top:46px; right:46%"></div><div class="ln" style="top:68px; right:38%"></div>
+            <div class="dr" style="width:32%; box-shadow:none"></div></div>
+          <b>옆에 붙였을 때</b><p>버튼은 사라지고 패널이 본문을 밀어낸다. 표가 넓은 화면(매출 장부)에서는 붙이기를 막고 떠 있는 위젯만 쓴다.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── 05 ⌘K ───────── -->
+  <section id="s5">
+    <div class="sec-head">
+      <span class="no">05</span><h2>⌘K 연동</h2>
+      <p>⌘K는 어디로 갈지, 갈매봇은 무엇을 할지. 팔레트에 문장을 넣었는데 맞는 화면이 없으면 마지막 줄에서 갈매봇으로 넘긴다.</p>
+    </div>
+    <div class="frame">
+      <div class="pal-wrap">
+        <div class="pal">
+          <div class="q"><svg class="i"><use href="#i-search"/></svg><span>새움에듀 상태 데모 완료로</span><kbd>esc</kbd></div>
+          <h5>화면</h5>
+          <div class="none">맞는 화면이 없습니다</div>
+          <h5>고객</h5>
+          <div class="it"><span>새움에듀</span><small>리드 · 부산 해운대</small></div>
+          <h5>갈매봇</h5>
+          <div class="it on"><span class="bot face s22"></span><span>갈매봇에게 오더 — “새움에듀 상태 데모 완료로”</span><kbd>↵</kbd></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── 06 AI 올인원 탭 ───────── -->
+  <section id="s6">
+    <div class="sec-head">
+      <span class="no">06</span><h2>AI 올인원 탭 — /admin/ai</h2>
+      <p>위젯과 같은 대화를 넓게 쓰고, 오더 이력과 흩어진 AI 기능을 한곳에서 찾는다. 탭을 눌러 네 화면을 오갈 수 있다.</p>
+    </div>
+    <div class="frame">
+      <div class="adm-header">
+        <div class="ttl">
+          <span class="bot s52"></span>
+          <div>
+            <h3>AI 올인원</h3>
+            <div class="sub">갈매봇에게 묻기 · 오더 · AI 도구를 한 곳에서</div>
+          </div>
+        </div>
+        <button class="btn primary"><svg class="i"><use href="#i-plus"/></svg>새 대화</button>
+      </div>
+      <div class="tabbar" role="tablist" aria-label="AI 올인원 하위 탭">
+        <button class="tab" role="tab" aria-selected="true" data-pane="p-talk"><svg class="i"><use href="#i-msg"/></svg>대화</button>
+        <button class="tab" role="tab" aria-selected="false" data-pane="p-orders"><svg class="i"><use href="#i-list"/></svg>오더함 <span class="n">3</span></button>
+        <button class="tab" role="tab" aria-selected="false" data-pane="p-tools"><svg class="i"><use href="#i-grid"/></svg>AI 도구</button>
+        <button class="tab" role="tab" aria-selected="false" data-pane="p-catalog"><svg class="i"><use href="#i-lock"/></svg>오더 카탈로그</button>
+      </div>
+
+      <div class="pane" id="p-talk" role="tabpanel">
+        <div class="talk">
+          <aside>
+            <h4>최근 대화</h4>
+            <div class="conv on">이번 주 데모 고객 정리<small>방금</small></div>
+            <div class="conv">한빛수학학원 후속<small>14:32</small></div>
+            <div class="conv">86형 재고 확인<small>11:05</small></div>
+            <div class="conv">쇼룸 예약 안내 문자<small>어제</small></div>
+            <div class="conv">9월 3주 매출 요약<small>9월 25일</small></div>
+          </aside>
+          <div class="talk-main">
+            <div class="w-body">
+              <div class="msg me">이번 주에 데모한 곳 중에 아직 후속 기록 없는 데 알려 줘.</div>
+              <div class="turn"><span class="bot face s22"></span><div class="stack">
+                <p>이번 주 데모 5곳 중 후속 기록이 없는 곳은 2곳입니다.</p>
+                <div data-card="nofollow"></div>
+              </div></div>
+              <div class="msg me">새움에듀는 내가 맡을게. 상태도 데모 완료로.</div>
+              <div class="turn"><span class="bot face s22"></span><div class="stack">
+                <div data-card="lead" data-state="draft"></div>
+              </div></div>
+            </div>
+            <div class="w-input" style="margin:0 clamp(16px,4vw,48px) 20px">
+              <input type="text" placeholder="질문하거나 오더를 내려 보세요" aria-label="메시지 입력">
+              <button class="send" aria-label="보내기"><svg class="i"><use href="#i-send"/></svg></button>
+            </div>
+          </div>
+          <aside>
+            <div>
+              <h4>오늘의 오더</h4>
+              <div class="stat4">
+                <div class="w"><b>2</b><span>확인 대기</span></div>
+                <div class="d"><b>1</b><span>유예 중</span></div>
+                <div><b>7</b><span>완료</span></div>
+                <div class="d"><b>1</b><span>실패</span></div>
+              </div>
+            </div>
+            <div>
+              <h4>방금 실행</h4>
+              <div class="recent">
+                <a href="#s6"><span>리드 상태 변경 · 새움에듀</span><small>13:58 · 되돌리기 6분 남음</small></a>
+                <a href="#s6"><span>일정 등록 · 쇼룸 방문</span><small>11:40 · 담당 B</small></a>
+                <a href="#s6"><span>컨택 기록 추가 · 한빛수학학원</span><small>10:05 · 되돌림</small></a>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+
+      <div class="pane" id="p-orders" role="tabpanel" hidden>
+        <div class="filters">
+          <div class="seg"><span class="on">내 오더</span><span>전체</span></div>
+          <div class="seg"><span class="on">오늘</span><span>7일</span><span>30일</span></div>
+          <div class="seg"><span class="on">전 등급</span><span>R1</span><span>R2</span><span>R3</span></div>
+        </div>
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <thead><tr><th>시각</th><th>오더</th><th>대상</th><th>등급</th><th>상태</th><th>요청자</th><th></th></tr></thead>
+            <tbody>
+              <tr><td class="num">14:32</td><td><b>CRM 할 일 생성</b></td><td>한빛수학학원</td><td class="rk r1">R1</td><td><span class="o-state wait"><span class="dot"></span>확인 대기</span></td><td>나</td><td class="act"><button class="btn primary">확인</button> <button class="btn ghost">취소</button></td></tr>
+              <tr><td class="num">14:20</td><td><b>문자 1건 발송</b></td><td>도담영어</td><td class="rk r3">R3</td><td><span class="o-state bad num"><span class="dot"></span>유예 중 0:18</span></td><td>나</td><td class="act"><button class="btn">발송 취소</button></td></tr>
+              <tr><td class="num">14:02</td><td><b>할 일 기한 변경</b></td><td>가온학원</td><td class="rk r2">R2</td><td><span class="o-state wait"><span class="dot"></span>확인 대기</span></td><td>나</td><td class="act"><button class="btn primary">확인</button> <button class="btn ghost">취소</button></td></tr>
+              <tr><td class="num">13:58</td><td><b>리드 상태·담당 변경</b></td><td>새움에듀</td><td class="rk r2">R2</td><td><span class="o-state ok"><span class="dot"></span>완료</span></td><td>나</td><td class="act"><button class="btn">되돌리기 <span class="num" style="color:var(--muted); font-weight:400">6분</span></button></td></tr>
+              <tr><td class="num">13:20</td><td><b>결제(수납) 확정</b></td><td>한빛수학학원 · 1차</td><td class="rk r2">R2 민감</td><td><span class="o-state ok"><span class="dot"></span>완료</span></td><td>담당 A</td><td class="act"><a class="btn ghost" href="#s6">열기</a></td></tr>
+              <tr><td class="num">11:40</td><td><b>일정 등록</b></td><td>쇼룸 방문 · 도담영어</td><td class="rk r1">R1</td><td><span class="o-state ok"><span class="dot"></span>완료</span></td><td>담당 B</td><td class="act"><a class="btn ghost" href="#s6">열기</a></td></tr>
+              <tr><td class="num">11:12</td><td><b>견적 공유 링크 발송</b></td><td>가온학원</td><td class="rk r3">R3</td><td><span class="o-state bad"><span class="dot"></span>실패 — 수신 동의 없음</span></td><td>담당 A</td><td class="act"><a class="btn ghost" href="#s6">열기</a></td></tr>
+              <tr><td class="num">10:05</td><td><b>컨택 기록 추가</b></td><td>한빛수학학원</td><td class="rk r1">R1</td><td><span class="o-state undo"><span class="dot"></span>되돌림</span></td><td>나</td><td class="act"></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="foot-note">실행 · 되돌리기 · 실패는 모두 감사 로그에도 남는다. 실패한 오더의 재시도는 새 티켓으로 만든다.</div>
+      </div>
+
+      <div class="pane" id="p-tools" role="tabpanel" hidden>
+        <div class="tools">
+          <a class="tool" href="#s6"><span class="where">/admin/cs-chatbot</span><b>CS 코파일럿</b><p>상담 답변 초안과 검토 대기. 고객에게 나가는 답변은 계속 여기서 만든다.</p><span class="go">열기 <svg class="i"><use href="#i-send"/></svg></span></a>
+          <a class="tool" href="#s6"><span class="where">/admin/blog</span><b>블로그 글 보조</b><p>초안 생성, 제목·요약 다듬기.</p><span class="go">열기 <svg class="i"><use href="#i-send"/></svg></span></a>
+          <a class="tool" href="#s6"><span class="where">/admin/campaigns</span><b>마케팅 문구 · 소재 제안</b><p>캠페인 문구, 광고 소재 아이디어.</p><span class="go">열기 <svg class="i"><use href="#i-send"/></svg></span></a>
+          <a class="tool" href="#s6"><span class="where">/admin/branch</span><b>KR Team 인사이트</b><p>지사 성과 요약과 주간 해설.</p><span class="go">열기 <svg class="i"><use href="#i-send"/></svg></span></a>
+          <a class="tool" href="#s6"><span class="where">/admin/campaigns</span><b>마케팅 인사이트</b><p>채널별 성과 해설.</p><span class="go">열기 <svg class="i"><use href="#i-send"/></svg></span></a>
+          <a class="tool" href="#s6"><span class="where">/admin/docs?tab=gaps</span><b>문서 보강 초안</b><p>답하지 못한 질문에서 가이드 초안 만들기.</p><span class="go">열기 <svg class="i"><use href="#i-send"/></svg></span></a>
+        </div>
+        <div class="foot-note">바로가기 모음이다. 기능을 이 탭으로 옮기지 않으며 각 화면이 계속 정본이다.</div>
+      </div>
+
+      <div class="pane" id="p-catalog" role="tabpanel" hidden>
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <thead><tr><th>도메인</th><th>오더</th><th>등급</th><th>확인</th><th>되돌리기</th><th>필요 역할</th></tr></thead>
+            <tbody>
+              <tr><td>CRM</td><td><b>고객·리드 검색과 요약</b></td><td class="rk r0">R0 조회</td><td>없음</td><td>—</td><td>CRM 읽기</td></tr>
+              <tr><td>하드웨어</td><td><b>모델별 재고 조회</b></td><td class="rk r0">R0 조회</td><td>없음</td><td>—</td><td>읽기</td></tr>
+              <tr><td>매출</td><td><b>주간·월간 매출 요약</b></td><td class="rk r0">R0 조회</td><td>없음</td><td>—</td><td>읽기</td></tr>
+              <tr><td>CRM</td><td><b>할 일 생성</b></td><td class="rk r1">R1 등록</td><td>1클릭</td><td>10분</td><td>CRM 스태프</td></tr>
+              <tr><td>CRM</td><td><b>컨택 기록 추가</b></td><td class="rk r1">R1 등록</td><td>1클릭</td><td>10분</td><td>CRM 스태프</td></tr>
+              <tr><td>캘린더</td><td><b>일정 등록</b></td><td class="rk r1">R1 등록</td><td>1클릭</td><td>10분</td><td>스태프</td></tr>
+              <tr><td>CRM</td><td><b>리드 상태·담당 변경 (1건)</b></td><td class="rk r2">R2 변경</td><td>전/후 비교</td><td>10분</td><td>스태프</td></tr>
+              <tr><td>쇼룸</td><td><b>예약 확정·일정 변경</b></td><td class="rk r2">R2 변경</td><td>전/후 비교</td><td>10분</td><td>스태프</td></tr>
+              <tr><td>하드웨어</td><td><b>입출고 예정 등록</b></td><td class="rk r2">R2 변경</td><td>전/후 비교</td><td>10분</td><td>하드웨어 편집</td></tr>
+              <tr><td>결제</td><td><b>결제(수납) 확정</b></td><td class="rk r2">R2 민감</td><td>전/후 비교 · 1건</td><td>없음 <small style="color:var(--muted)">수납 취소 경로 신설 전</small></td><td>스태프 + 결제 확정 권한</td></tr>
+              <tr><td>하드웨어</td><td><b>입출고 확정</b></td><td class="rk r2">R2 민감</td><td>전/후 비교 · 1건</td><td>없음 <small style="color:var(--muted)">취소는 재고 화면에서</small></td><td>하드웨어 편집 + 확정 권한</td></tr>
+              <tr><td>견적</td><td><b>금액·단가 변경</b></td><td class="rk r2">R2 민감</td><td>전/후 비교 · 1건</td><td>이전 버전 복귀</td><td>스태프 + 금액 변경 권한</td></tr>
+              <tr><td>메시지</td><td><b>문자·알림톡 1건 발송</b></td><td class="rk r3">R3 발송</td><td>미리보기 + 30초 유예</td><td>유예 중 취소만</td><td>스태프</td></tr>
+              <tr><td>견적</td><td><b>기존 견적 공유 링크 발송</b></td><td class="rk r3">R3 발송</td><td>미리보기 + 30초 유예</td><td>유예 중 취소만</td><td>스태프</td></tr>
+              <tr><td>—</td><td style="color:var(--sub)">삭제 · 계약 서명 · 입출고 취소 · 매출 마감 · 대량 일괄 변경 · 권한·설정 변경 · 발행</td><td class="rk r4">R4 금지</td><td colspan="3" style="color:var(--sub)">오더로 실행하지 않음 — 해당 화면에서 직접</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="foot-note">「무엇을 시킬 수 있나」의 단일 기준. 내 역할로 실행할 수 없는 오더는 흐리게 표시한다.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── 07 모바일 ───────── -->
+  <section id="s7">
+    <div class="sec-head">
+      <span class="no">07</span><h2>모바일 — 하단 시트</h2>
+      <p>현장·이동 중에 가장 쓸모가 큰 면이다. 화면을 찾아 들어가지 않고 한 줄로 기록을 남긴다.</p>
+    </div>
+    <div class="duo">
+      <div class="phone" aria-label="모바일 위젯 시안">
+        <div class="top">CRM</div>
+        <div class="sk"></div><div class="sk"></div><div class="sk"></div>
+        <div class="scrim"></div>
+        <div class="sheet">
+          <div class="grab"></div>
+          <div class="w-head" style="padding-top:6px">
+            <span class="bot face s36"></span>
+            <div class="t">갈매봇</div><span class="sp"></span>
+            <span class="icon-btn"><svg class="i"><use href="#i-x"/></svg></span>
+          </div>
+          <div class="w-body">
+            <div class="msg me">도담영어 방금 통화했어. 다음 주에 다시 연락 달래.</div>
+            <div class="turn"><span class="bot face s22"></span><div class="stack">
+              <p>컨택 기록 1건을 남길까요?</p>
+              <div data-card="contact" data-state="draft"></div>
+              <p style="color:var(--sub); font-size:12px">다음 주 재연락 할 일도 필요하면 말씀해 주세요.</p>
+            </div></div>
+          </div>
+          <div class="w-input">
+            <input type="text" placeholder="질문하거나 오더 내리기" aria-label="메시지 입력">
+            <button class="send" aria-label="보내기"><svg class="i"><use href="#i-send"/></svg></button>
+          </div>
+        </div>
+      </div>
+      <ul class="mnotes">
+        <li><span class="mark">1</span><span><b>하단 시트 80% 높이.</b> 뒤 화면이 살짝 보여 어디서 열었는지 잊지 않는다. 손잡이를 내리면 닫힌다.</span></li>
+        <li><span class="mark">2</span><span><b>버튼은 가로 전체 폭.</b> 확인 버튼을 엄지로 누를 수 있는 자리에 둔다.</span></li>
+        <li><span class="mark">3</span><span><b>이어지는 작업은 알려만 준다.</b> 갈매봇이 다음 오더를 알아서 만들지 않는다. 사람이 말해야 카드가 나온다.</span></li>
+        <li><span class="mark">4</span><span><b>키보드가 올라오면</b> 시트가 화면 전체 높이로 늘어나고 입력창이 키보드 바로 위에 붙는다.</span></li>
+        <li><span class="mark">5</span><span><b>음성 입력은 뒤 단계.</b> 글자 입력으로 먼저 검증하고, 음성은 별도 기획으로 붙인다.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ───────── 08 수명주기 ───────── -->
+  <section id="s8">
+    <div class="sec-head">
+      <span class="no">08</span><h2>오더 수명주기</h2>
+      <p>갈매봇이 관여하는 구간과 사람이 결정하는 구간을 분리한다. 확인 API는 갈매봇이 호출할 수 없는 경로에 둔다.</p>
+    </div>
+    <div class="frame">
+      <div class="flow">
+        <div class="step"><span class="k">01</span><b>발화</b><p>사람이 위젯·탭에서 한 줄로 지시</p></div>
+        <div class="step ai"><span class="k">02 · 갈매봇</span><b>의도 해석</b><p>어떤 오더인지, 값은 무엇인지 제안만 한다</p></div>
+        <div class="step"><span class="k">03 · 서버</span><b>검증</b><p>스키마 · 역할 · 대상 존재 · 상한 · 중복</p></div>
+        <div class="step"><span class="k">04</span><b>오더 카드</b><p>실행 전 값과 전/후 차이를 보여 준다</p></div>
+        <div class="step human"><span class="k">05 · 사람</span><b>확인</b><p>버튼을 눌러야 다음으로 간다. 권한 재검사</p></div>
+        <div class="step ext"><span class="k">06 · R3만</span><b>30초 유예</b><p>외부로 나가기 전 마지막 취소 창</p></div>
+        <div class="step"><span class="k">07 · 서버</span><b>실행</b><p>도메인 함수 직접 호출 + 감사 로그</p></div>
+        <div class="step human"><span class="k">08 · 사람</span><b>되돌리기</b><p>R1·R2는 10분 안에 원복</p></div>
+      </div>
+      <div class="legend">
+        <span class="a"><i></i>갈매봇이 관여 — 제안까지만</span>
+        <span class="h"><i></i>사람이 결정</span>
+        <span class="e"><i></i>외부로 나가는 단계</span>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function(){
+  var shell = document.getElementById('shell');
+  var widget = document.getElementById('widget');
+  var chat = document.getElementById('chat');
+  var fab = document.querySelector('.fab');
+  var ctx = document.getElementById('ctx');
+  var busy = false;
+
+  /* ═════════ 오더 카드 ═════════ */
+  var TTL = 900, UNDO = 600, GRACE = 30;
+  var RISK = { r0:['R0','조회'], r1:['R1','등록'], r2:['R2','변경'], r2s:['R2','민감'], r3:['R3','발송'], r4:['R4','금지'] };
+  var CLOSED = { cancelled:1, undone:1, expired:1, aborted:1 };
+
+  var CARDS = {
+    task: { risk:'r1', icon:'i-task', title:'CRM 할 일 생성', target:['한빛수학학원','리드 · 서울 강남'],
+      rows:[ {k:'제목', v:'데모 후속 전화', edit:1}, {k:'기한', v:'2026-09-30 (수) 15:00', edit:1, num:1}, {k:'담당', v:'나', edit:1, sub:'로그인 계정'} ],
+      confirm:'오더 실행', done:'할 일을 만들었습니다', open:'할 일 열기', undo:1 },
+    contact: { risk:'r1', icon:'i-msg', title:'컨택 기록 추가', target:['도담영어','리드 · 경기 분당'],
+      rows:[ {k:'유형', v:'전화', edit:1}, {k:'내용', v:'다음 주 재연락 요청', edit:1} ],
+      confirm:'오더 실행', done:'기록을 남겼습니다', open:'기록 열기', undo:1 },
+    lead: { risk:'r2', icon:'i-user', title:'리드 상태·담당 변경', target:['새움에듀','리드 · 부산 해운대'],
+      rows:[ {k:'상태', from:'상담 중', v:'데모 완료', edit:1}, {k:'담당', from:'미배정', v:'나', edit:1} ],
+      keep:'메모 · 팔로업 일정', confirm:'변경 확인', done:'변경했습니다', open:'리드 열기', undo:1 },
+    due: { risk:'r2', icon:'i-cal', title:'할 일 기한 변경', target:['가온학원','견적 회신 확인'],
+      rows:[ {k:'기한', from:'9월 30일', v:'10월 2일', edit:1, num:1} ],
+      confirm:'변경 확인', done:'기한을 바꿨습니다', open:'할 일 열기', undo:1 },
+    sms: { risk:'r3', icon:'i-send', title:'문자 1건 발송', target:['도담영어 원장','010-****-1234'],
+      rows:[ {k:'채널', v:'알림톡', sub:'실패 시 문자로 대체'}, {k:'수신 동의', v:'확인됨', ok:1} ],
+      message:'[Classin] 쇼룸 방문 예약이 확정되었습니다. 10월 2일(금) 14:00, 강남 쇼룸. 변경은 이 번호로 회신해 주세요.',
+      confirm:'발송 확인', send:1, open:'고객 열기' },
+    share: { risk:'r3', icon:'i-send', title:'견적 공유 링크 발송', target:['가온학원 원장','Q-0142 · v2'],
+      rows:[ {k:'채널', v:'문자'} ], confirm:'발송 확인', send:1, open:'고객 열기',
+      fail:'수신 동의 기록이 없습니다. 동의를 받은 뒤 다시 오더를 내 주세요.', failNote:'나간 메시지 없음' },
+    pay: { risk:'r2s', icon:'i-pay', title:'결제(수납) 확정', target:['한빛수학학원','거래건 · S86 Pro 4대'],
+      amount:{ label:'1차 · 계약금', cur:'KRW', value:'13,200,000' },
+      rows:[ {k:'입금일', v:'2026-09-29', edit:1, num:1}, {k:'상태', from:'입금 대기', v:'결제 확정'} ],
+      confirm:'결제 확정', perm:'결제 확정', done:'결제를 확정했습니다', open:'거래건 열기', undo:0 },
+    ship: { risk:'r2s', icon:'i-box', title:'출고 확정', target:['S86 Pro','도담영어 · 경기 분당'],
+      rows:[ {k:'수량', from:'예정 3', v:'확정 3', num:1}, {k:'출고일', v:'2026-09-29', edit:1, num:1}, {k:'상태', from:'배송예정', v:'출고'}, {k:'가용 재고', from:'12', v:'9', num:1} ],
+      confirm:'출고 확정', perm:'입출고 확정', done:'출고를 확정했습니다', open:'재고 원장 열기', undo:0, undoNote:'취소는 재고 화면에서' },
+    amount: { risk:'r2s', icon:'i-amount', title:'견적 금액 변경', target:['가온학원','Q-0142 · v2 → v3 새 버전'],
+      amount:{ label:'합계', cur:'KRW', from:'38,000,000', value:'34,200,000', delta:'−3,800,000 (−10%)' },
+      rows:[ {k:'적용', v:'전 품목 일괄 할인 10%'} ],
+      keep:'v2는 그대로 남음 · 고객에게 자동 발송하지 않음',
+      confirm:'변경 확인', perm:'금액 변경', done:'v3을 만들었습니다', open:'견적 열기', undo:1, undoNote:'이전 버전으로 복귀' },
+
+    stock: { kind:'read', risk:'r0', icon:'i-box', title:'하드웨어 재고', target:['86형','방금 읽음'],
+      table:{ head:['모델','가용','예약','배송예정'], rows:[['S86 Pro','12','4','3'],['S86','5','1','0']], warn:3 },
+      note:'배송예정은 아직 들어오지 않은 수량', open:'하드웨어 재고에서 열기' },
+    summary: { kind:'read', risk:'r0', icon:'i-search', title:'최근 기록', target:['한빛수학학원','기록 3건 · 방금 읽음'],
+      log:[['9월 28일','데모 진행 · 86형 4대 관심'],['9월 22일','전화 · 데모 일정 확정'],['9월 17일','홈페이지 문의 접수']],
+      note:'기록 원문에서 뽑은 요약 · 추측 없음', open:'고객 화면에서 열기' },
+    today: { kind:'read', risk:'r0', icon:'i-cal', title:'오늘 후속조치', target:['3건','CRM 현황의 순서 그대로'],
+      table:{ head:['고객','할 일','기한'], rows:[['도담영어','쇼룸 안내','11:00'],['가온학원','견적 회신 확인','14:00'],['다온과학','재연락','17:00']], left:1 },
+      open:'CRM 현황에서 열기' },
+    nofollow: { kind:'read', risk:'r0', icon:'i-search', title:'데모 후 미후속 고객', target:['2곳','이번 주 데모 5곳 중'],
+      table:{ head:['고객','데모일','담당'], rows:[['새움에듀','9월 24일','미배정'],['다온과학','9월 25일','담당 A']], left:1 },
+      open:'CRM에서 열기' },
+
+    del: { kind:'deny', risk:'r4', icon:'i-lock', title:'삭제는 오더로 실행하지 않습니다', target:['가온학원','리드'],
+      text:'삭제, 계약 서명, 입출고 취소, 매출 마감, 대량 일괄 변경은 해당 화면에서 직접 합니다.', open:'고객 화면 열기', open2:'오더 카탈로그' },
+    nopermPay: { kind:'deny', risk:'r4', icon:'i-lock', title:'결제 확정 권한이 없습니다', target:['한빛수학학원','거래건'],
+      text:'이 오더는 결제 확정 권한이 있는 계정만 실행할 수 있습니다. 거래건을 열어 담당자에게 넘길 수 있습니다.', open:'거래건 열기' },
+    nopermRev: { kind:'deny', risk:'r4', icon:'i-lock', title:'매출 조회 권한이 없습니다', target:['매출 장부','이번 달'],
+      text:'이 계정으로는 매출 장부를 볼 수 없어 갈매봇도 답하지 않습니다.' },
+    which: { kind:'choice', risk:'r0', icon:'i-help', title:'어느 고객인가요?', target:['“한빛학원”','2곳이 검색됨'],
+      options:[['한빛수학학원','서울 강남 · 데모 완료'],['한빛영어학원','경기 일산 · 신규']], note:'이름이 겹치면 추측하지 않는다' }
+  };
+
+  function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function ico(id, cls){ return '<svg class="i' + (cls ? ' ' + cls : '') + '"><use href="#' + id + '"/></svg>'; }
+  function mmss(t){ t = Math.max(0, t); var m = Math.floor(t / 60), s = t % 60; return m + ':' + (s < 10 ? '0' : '') + s; }
+  function an(el, n){ return el._anno ? '<span class="mark an">' + n + '</span>' : ''; }
+
+  function rowHtml(r, i, editing){
+    var dd;
+    var cls = r.num ? ' class="num"' : '';
+    var value = editing && r.edit
+      ? '<input class="oc-in' + (r.num ? ' num' : '') + '" data-row="' + i + '" value="' + esc(r.v) + '" aria-label="' + esc(r.k) + '">'
+      : null;
+    if (r.from !== undefined){
+      dd = '<span class="was' + (r.num ? ' num' : '') + '">' + esc(r.from) + '</span>' + ico('i-arrow', 'arr')
+         + (value || '<span class="now' + (r.num ? ' num' : '') + '">' + esc(r.v) + '</span>');
+    } else {
+      dd = value || ('<span' + cls + '>' + esc(r.v) + '</span>');
+    }
+    if (!value){
+      if (r.ok) dd += ico('i-check', 'okc');
+      if (r.sub) dd += '<small>' + esc(r.sub) + '</small>';
+      if (r.edited) dd += '<span class="ed">수정됨</span>';
+    }
+    return '<div class="oc-r"><dt>' + esc(r.k) + '</dt><dd>' + dd + '</dd></div>';
+  }
+
+  function bodyHtml(el){
+    var sp = el._spec, st = el._state, editing = st === 'editing', out = '';
+    if (sp.text) out += '<p class="oc-text">' + esc(sp.text) + '</p>';
+    if (sp.amount){
+      var a = sp.amount;
+      out += '<div class="oc-amt"><div class="l">금액<b>' + esc(a.label) + '</b></div><div class="v num">'
+        + (a.from ? '<span class="was"><span class="cur">' + a.cur + '</span>' + a.from + '</span>' : '')
+        + '<span class="cur">' + a.cur + '</span><span class="big">' + a.value + '</span>'
+        + (a.delta ? '<span class="delta">' + a.delta + ' · 서버 계산</span>' : '')
+        + '</div></div>';
+    }
+    if (sp.rows && sp.rows.length){
+      out += '<dl class="oc-rows">' + an(el, 3) + sp.rows.map(function(r, i){ return rowHtml(r, i, editing); }).join('') + '</dl>';
+    }
+    if (sp.table){
+      var t = sp.table;
+      out += '<table class="mini' + (t.left ? '' : ' num') + '"><tr>' + t.head.map(function(x){ return '<th>' + x + '</th>'; }).join('') + '</tr>'
+        + t.rows.map(function(r){ return '<tr>' + r.map(function(c, j){ return '<td' + (t.warn === j ? ' class="planned"' : '') + (t.left && j ? ' style="text-align:left"' : '') + '>' + c + '</td>'; }).join('') + '</tr>'; }).join('')
+        + '</table>';
+      if (t.left) out = out.replace(/<th>/g, '<th style="text-align:left">');
+    }
+    if (sp.log){
+      out += '<ul class="log">' + sp.log.map(function(l){ return '<li><time>' + l[0] + '</time><span>' + l[1] + '</span></li>'; }).join('') + '</ul>';
+    }
+    if (sp.options){
+      out += '<div class="oc-opts">' + sp.options.map(function(o, i){
+        var on = sp.picked === i, dim = sp.picked !== undefined && !on;
+        return '<button class="oc-opt' + (on ? ' on' : '') + (dim ? ' dim' : '') + '" data-act="pick" data-i="' + i + '">' + o[0] + ' <small>' + o[1] + '</small>' + (on ? ico('i-check') : '') + '</button>';
+      }).join('') + '</div>';
+    }
+    if (sp.message !== undefined){
+      out += editing
+        ? '<textarea class="oc-in" data-msg aria-label="문구">' + esc(sp.message) + '</textarea>'
+        : '<div class="oc-msg"><h6>미리보기 · ' + sp.message.length + '자' + (sp.msgEdited ? ' · <span class="ed">수정됨</span>' : '') + '</h6><p>' + esc(sp.message) + '</p></div>';
+    }
+    if (st === 'failed' && sp.fail) out += '<div class="oc-fail">' + ico('i-alert') + '<span>' + esc(sp.fail) + '</span></div>';
+    if (sp.keep && !CLOSED[st] && st !== 'failed') out += '<p class="oc-keep">' + an(el, 4) + ico('i-shield') + '<span>건드리지 않음 · ' + esc(sp.keep) + '</span></p>';
+    if (sp.note) out += '<p class="oc-keep">' + ico('i-info') + '<span>' + esc(sp.note) + '</span></p>';
+    return out;
+  }
+
+  function canEdit(sp){
+    return sp.message !== undefined || (sp.rows || []).some(function(r){ return r.edit; });
+  }
+  function metaHtml(el){
+    var sp = el._spec, parts = [];
+    if (sp.perm) parts.push(ico('i-lock') + '<span>권한 · ' + sp.perm + '</span>');
+    if (sp.send) parts.push('<span>확인 뒤 30초 동안 취소할 수 있음</span>');
+    else if (sp.undo) parts.push('<span>' + (sp.undoNote ? '되돌리기 · ' + sp.undoNote : '실행 뒤 10분 동안 되돌릴 수 있음') + '</span>');
+    else parts.push('<span class="w">실행 뒤 되돌릴 수 없음</span>' + (sp.undoNote ? '<i></i><span>' + sp.undoNote + '</span>' : ''));
+    return '<p class="oc-meta">' + an(el, 7) + parts.join('<i></i>') + '</p>';
+  }
+  function st(cls, icon, text, clock){
+    return '<div class="oc-st ' + cls + '">' + (icon ? ico(icon) : '<span class="dot"></span>') + '<span>' + text + '</span>'
+      + (clock ? '<span class="clock num" data-clock>' + clock + '</span>' : '') + '</div>';
+  }
+  function openBtn(sp){ return sp.open ? '<a class="btn" href="#s3" data-noop>' + sp.open + '</a>' : ''; }
+
+  function footHtml(el){
+    var sp = el._spec, s = el._state, out = '';
+    if (sp.kind === 'choice') return '';
+    if (sp.kind === 'read' || sp.kind === 'deny'){
+      var b = openBtn(sp) + (sp.open2 ? '<a class="btn ghost" href="#s6" data-noop>' + sp.open2 + '</a>' : '');
+      return b ? '<footer class="oc-f"><div class="oc-act">' + b + '</div></footer>' : '';
+    }
+    if (s === 'draft'){
+      out = st('wait', '', '확인 대기', mmss(el._ttl) + ' 뒤 만료').replace('<div class="oc-st', '<div data-an5 class="oc-st')
+        + '<div class="oc-act">' + an(el, 6)
+        + '<button class="btn ' + (sp.send ? 'danger' : 'primary') + '" data-act="confirm">' + sp.confirm + '</button>'
+        + (canEdit(sp) ? '<button class="btn" data-act="edit">' + (sp.message !== undefined ? '문구 수정' : '수정') + '</button>' : '')
+        + '<button class="btn ghost" data-act="cancel">취소</button></div>'
+        + metaHtml(el);
+      if (el._anno) out = out.replace('data-an5 class="oc-st wait">', 'class="oc-st wait">' + an(el, 5));
+      else out = out.replace('data-an5 ', '');
+    } else if (s === 'editing'){
+      out = st('', 'i-pencil', '수정 중', '대상은 바꿀 수 없음')
+        + '<div class="oc-act"><button class="btn primary" data-act="save">수정 완료</button><button class="btn ghost" data-act="revert">수정 취소</button></div>';
+    } else if (s === 'grace'){
+      out = '<div class="oc-bar"><i data-bar></i></div>'
+        + st('bad', '', '<span class="num" data-clock>' + el._grace + '</span>초 뒤 발송')
+        + '<div class="oc-act"><button class="btn" data-act="abort">발송 취소</button></div>';
+    } else if (s === 'done'){
+      out = st('ok', 'i-check', '완료 · ' + sp.done)
+        + '<div class="oc-act">' + openBtn(sp)
+        + (sp.undo && el._undo > 0 ? '<button class="btn ghost" data-act="undo">' + ico('i-undo') + '되돌리기<span class="t num" data-clock>' + mmss(el._undo) + '</span></button>' : '')
+        + '</div>'
+        + (sp.undo ? '' : '<p class="oc-meta"><span>되돌릴 수 없음</span>' + (sp.undoNote ? '<i></i><span>' + sp.undoNote + '</span>' : '') + '</p>');
+    } else if (s === 'sent'){
+      out = st('ok', 'i-check', '발송됨') + '<div class="oc-act">' + openBtn(sp) + '</div><p class="oc-meta"><span>되돌릴 수 없음</span></p>';
+    } else if (s === 'failed'){
+      out = st('bad', 'i-alert', '실패' + (sp.failNote ? ' · ' + sp.failNote : ''))
+        + '<div class="oc-act">' + openBtn(sp) + '<button class="btn ghost" data-act="redo">다시 작성</button></div>';
+    } else {
+      var label = { cancelled:'취소됨 · 아무것도 바뀌지 않았습니다', undone:'되돌림 · 원래대로 돌렸습니다',
+                    aborted:'발송 취소됨 · 나간 메시지 없음', expired:'만료됨 · 15분 동안 확인하지 않음' }[s];
+      out = st('off', s === 'undone' ? 'i-undo' : (s === 'expired' ? 'i-clock' : ''), label)
+        + '<div class="oc-act"><button class="btn" data-act="redo">다시 작성</button></div>';
+    }
+    return '<footer class="oc-f">' + out + '</footer>';
+  }
+
+  function paint(el){
+    var sp = el._spec, s = el._state, rk = RISK[sp.risk];
+    el.className = 'oc ' + sp.risk + (CLOSED[s] ? ' closed' : '') + (s === 'failed' ? ' failed' : '');
+    el.dataset.state = s;
+    el.innerHTML =
+      '<header class="oc-h">' + an(el, 1)
+      + '<span class="oc-ic">' + ico(sp.icon) + '</span>'
+      + '<div class="oc-t"><b>' + esc(sp.title) + '</b><span><strong>' + esc(sp.target[0]) + '</strong> · ' + esc(sp.target[1])
+      + (s === 'editing' ? ico('i-lock', 'lk') : '') + '</span></div>'
+      + '<span class="oc-rk">' + an(el, 2) + '<b>' + rk[0] + '</b>' + rk[1] + '</span></header>'
+      + '<div class="oc-b">' + bodyHtml(el) + '</div>'
+      + footHtml(el);
+  }
+
+  function mount(el, key, state, o){
+    o = o || {};
+    el._spec = JSON.parse(JSON.stringify(CARDS[key]));
+    if (o.fail){ el._spec.fail = o.fail; el._spec.failNote = o.failnote || ''; }
+    el._state = state || 'draft';
+    el._ttl = o.ttl ? parseInt(o.ttl, 10) : TTL - 1;
+    el._undo = o.undo ? parseInt(o.undo, 10) : UNDO;
+    el._grace = GRACE;
+    el._anno = !!o.anno;
+    el._frozen = !!o.frozen;
+    paint(el);
+    return el;
+  }
+  function go(el, state){
+    if (state === 'done') el._undo = UNDO;
+    if (state === 'grace') el._grace = GRACE;
+    if (state === 'draft' && el._ttl <= 0) el._ttl = TTL - 1;
+    el._state = state; paint(el);
+  }
+
+  document.querySelectorAll('[data-card]').forEach(function(slot){
+    mount(slot, slot.dataset.card, slot.dataset.state, {
+      ttl: slot.dataset.ttl, undo: slot.dataset.undo, fail: slot.dataset.fail, failnote: slot.dataset.failnote,
+      anno: slot.hasAttribute('data-anno'), frozen: slot.hasAttribute('data-frozen')
+    });
+  });
+
+  function setPending(delta){
+    document.querySelectorAll('[data-pending]').forEach(function(x){
+      var n = Math.max(0, parseInt(x.textContent, 10) + delta);
+      x.textContent = n;
+      if (x.classList.contains('count')) x.hidden = n === 0;
+    });
+  }
+  function leaveQueue(el){
+    if (el._queued === undefined) el._queued = !!el.closest('[data-viewpane="orders"]');
+    if (el._queued){ el._queued = false; setPending(-1); }
+  }
+
+  document.addEventListener('click', function(e){
+    if (e.target.closest('[data-noop]')){ e.preventDefault(); return; }
+    var b = e.target.closest('[data-act]'); if (!b) return;
+    var el = b.closest('.oc'); if (!el || !el._spec) return;
+    var act = b.dataset.act, sp = el._spec;
+    if (act === 'confirm'){ leaveQueue(el); go(el, sp.send ? 'grace' : 'done'); }
+    else if (act === 'cancel'){ leaveQueue(el); go(el, 'cancelled'); }
+    else if (act === 'abort') go(el, 'aborted');
+    else if (act === 'undo') go(el, 'undone');
+    else if (act === 'redo'){ el._ttl = TTL - 1; go(el, 'draft'); }
+    else if (act === 'edit'){
+      el._back = JSON.stringify(sp); go(el, 'editing');
+      var f = el.querySelector('.oc-in'); if (f){ f.focus({preventScroll:true}); if (f.select) f.select(); }
+    }
+    else if (act === 'revert'){ el._spec = JSON.parse(el._back); go(el, 'draft'); }
+    else if (act === 'save'){
+      el.querySelectorAll('[data-row]').forEach(function(inp){
+        var r = sp.rows[parseInt(inp.dataset.row, 10)], v = inp.value.trim();
+        if (v && v !== r.v){ r.v = v; r.edited = 1; }
+      });
+      var m = el.querySelector('[data-msg]');
+      if (m && m.value.trim() && m.value.trim() !== sp.message){ sp.message = m.value.trim(); sp.msgEdited = 1; }
+      go(el, 'draft');
+    }
+    else if (act === 'pick'){ sp.picked = parseInt(b.dataset.i, 10); paint(el); }
+  });
+
+  /* 남은 시간 — 글자와 막대만 고친다(입력 중인 칸을 다시 그리지 않는다) */
+  setInterval(function(){
+    document.querySelectorAll('.oc').forEach(function(el){
+      if (!el._spec || el._frozen) return;
+      var c = el.querySelector('[data-clock]');
+      if (el._state === 'draft'){
+        el._ttl -= 1;
+        if (el._ttl <= 0){ leaveQueue(el); go(el, 'expired'); }
+        else if (c) c.textContent = mmss(el._ttl) + ' 뒤 만료';
+      } else if (el._state === 'done' && el._spec.undo && el._undo > 0){
+        el._undo -= 1;
+        if (el._undo <= 0) paint(el); else if (c) c.textContent = mmss(el._undo);
+      } else if (el._state === 'grace'){
+        el._grace -= 1;
+        var bar = el.querySelector('[data-bar]');
+        if (el._grace <= 0) go(el, 'sent');
+        else { if (c) c.textContent = el._grace; if (bar) bar.style.transform = 'scaleX(' + (el._grace / GRACE) + ')'; }
+      }
+    });
+  }, 1000);
+
+  /* ═════════ 위젯 대화 ═════════ */
+  var HOME = '<div class="home">'
+    + '<div class="hello"><span class="bot s104" role="img" aria-label="갈매봇"></span><b>무엇을 도와드릴까요?</b><span>물어보거나, 할 일을 시켜 주세요.</span></div>'
+    + '<button class="pending" data-view="orders"><b>확인을 기다리는 오더 <span data-pending>2</span>건</b><span>보기</span></button>'
+    + '<div class="sugg"><h5>이 화면에서 자주 하는 일</h5>'
+    + '<button data-run="task"><span>이 학원 후속 전화 할 일 잡기</span><span class="rk r1">R1 등록</span></button>'
+    + '<button data-run="summary"><span>이 고객 최근 기록 요약</span><span class="rk r0">R0 조회</span></button>'
+    + '<button data-run="today"><span>오늘 연락할 곳</span><span class="rk r0">R0 조회</span></button>'
+    + '</div></div>';
+
+  var SCN = {
+    task:    { say:'이 학원 내일 오후 3시에 데모 후속 전화 할 일 잡아 줘. 담당은 나.', steps:['한빛수학학원 확인','오더 작성'], text:'할 일 1건을 만들 준비가 됐습니다. 내용이 맞으면 실행해 주세요.' },
+    summary: { say:'이 고객 최근 기록 요약해 줘.', steps:['한빛수학학원 기록 읽기'], text:'최근 2주 동안 접점이 3번 있었고, 어제 데모 뒤로는 후속 기록이 없습니다.' },
+    today:   { say:'오늘 연락할 곳 알려 줘.', steps:['후속조치 목록 읽기'], text:'오늘 기한인 후속조치는 3건입니다.' },
+    stock:   { say:'86형 재고 몇 대야?', steps:['하드웨어 재고 읽기'], text:'86형은 지금 바로 나갈 수 있는 수량이 17대입니다.' },
+    sms:     { say:'도담영어 원장님한테 쇼룸 예약 안내 문자 보내 줘.', steps:['도담영어 확인','수신 동의 확인','문구 작성'], text:'받는 사람과 문구를 확인해 주세요.' },
+    pay:     { say:'이 학원 1차 입금 들어왔어. 결제 확정해 줘.', steps:['한빛수학학원 거래건 확인','1차 회차 금액 확인','결제 확정 권한 확인'], text:'금액과 회차를 확인해 주세요.' },
+    del:     { say:'가온학원 리드 지워 줘.', steps:['오더 카탈로그 확인'], text:'' }
+  };
+  var KEYS = [
+    [/지워|삭제/, 'del'], [/결제|입금|수납/, 'pay'], [/문자|알림톡|보내/, 'sms'], [/재고/, 'stock'],
+    [/할 ?일|전화|잡아/, 'task'], [/오늘|연락할/, 'today'], [/요약|기록/, 'summary']
+  ];
+  var pendingHome = 2;
+
+  function scroll(){ chat.scrollTop = chat.scrollHeight; }
+  function add(html){ var d = document.createElement('div'); d.innerHTML = html; var el = d.firstElementChild; chat.appendChild(el); scroll(); return el; }
+  function reset(){
+    chat.innerHTML = HOME; chat.scrollTop = 0; busy = false;
+    var tabN = widget.querySelector('.w-tabs [data-pending]');
+    chat.querySelectorAll('[data-pending]').forEach(function(x){ x.textContent = tabN ? tabN.textContent : pendingHome; });
+  }
+
+  function run(key, typed){
+    if (busy) return;
+    var s = SCN[key];
+    setView('chat');
+    var home = chat.querySelector('.home'); if (home) home.remove();
+    add('<div class="msg me">' + esc(typed || (s ? s.say : '')) + '</div>');
+    if (!s){
+      add('<div class="turn"><span class="bot face s22"></span><div class="stack"><p>시안이라 준비된 예시만 답합니다. 「재고」「할 일」「문자」「결제」「삭제」「요약」 중 하나를 넣어 보세요.</p></div></div>');
+      return;
+    }
+    busy = true;
+    var turn = add('<div class="turn"><span class="bot face s22"></span><div class="stack"><div class="think"></div></div></div>');
+    var think = turn.querySelector('.think'), stack = turn.querySelector('.stack');
+    var i = 0;
+    (function next(){
+      if (i > 0) think.lastElementChild.outerHTML = '<div class="done"><svg class="i" style="width:12px;height:12px"><use href="#i-check"/></svg>' + s.steps[i-1] + '</div>';
+      if (i < s.steps.length){
+        think.insertAdjacentHTML('beforeend', '<div><span class="spin"></span>' + s.steps[i] + ' 중</div>');
+        i++; scroll(); setTimeout(next, 520);
+      } else {
+        if (s.text) stack.insertAdjacentHTML('beforeend', '<p>' + s.text + '</p>');
+        var slot = document.createElement('div');
+        stack.appendChild(slot);
+        mount(slot, key, 'draft');
+        busy = false; scroll();
+      }
+    })();
+  }
+
+  /* ═════════ 위젯 보기 전환 ═════════ */
+  function setView(v){
+    widget.querySelectorAll('[data-viewpane]').forEach(function(el){ el.hidden = el.dataset.viewpane !== v; });
+    widget.querySelectorAll('.w-tabs [data-view]').forEach(function(t){ t.setAttribute('aria-selected', String(t.dataset.view === v)); });
+    ctx.hidden = v !== 'chat';
+  }
+  function toggle(open){
+    var willClose = open === undefined ? !widget.classList.contains('closed') : !open;
+    widget.classList.toggle('closed', willClose);
+    fab.setAttribute('aria-expanded', String(!willClose));
+    if (willClose){ shell.classList.remove('docked'); widget.querySelector('[data-dock]').setAttribute('aria-pressed', 'false'); }
+  }
+  widget.addEventListener('click', function(e){
+    var t;
+    if ((t = e.target.closest('[data-run]'))) run(t.dataset.run);
+    else if ((t = e.target.closest('[data-view]'))) setView(t.dataset.view);
+    else if (e.target.closest('[data-new]')){ setView('chat'); reset(); }
+    else if ((t = e.target.closest('[data-dock]'))){
+      var on = shell.classList.toggle('docked');
+      t.setAttribute('aria-pressed', String(on));
+    }
+    else if ((t = e.target.closest('[data-ctx]'))){
+      var off = ctx.classList.toggle('off');
+      t.textContent = off ? '맥락 켜기' : '맥락 끄기';
+    }
+  });
+  document.querySelectorAll('[data-toggle-widget]').forEach(function(b){
+    b.addEventListener('click', function(){ toggle(); });
+  });
+  document.getElementById('ask').addEventListener('submit', function(e){
+    e.preventDefault();
+    var input = document.getElementById('askInput'), v = input.value.trim();
+    if (!v || busy) return;
+    var key = null;
+    for (var i = 0; i < KEYS.length; i++){ if (KEYS[i][0].test(v)){ key = KEYS[i][1]; break; } }
+    input.value = '';
+    run(key, v);
+  });
+  document.addEventListener('keydown', function(e){
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j'){
+      e.preventDefault(); toggle();
+      if (!widget.classList.contains('closed')) document.getElementById('askInput').focus({preventScroll:true});
+    }
+  });
+
+  /* ═════════ AI 올인원 탭 전환 ═════════ */
+  var tabs = document.querySelectorAll('.tab[data-pane]');
+  tabs.forEach(function(tab){
+    tab.addEventListener('click', function(){
+      tabs.forEach(function(x){
+        var on = x === tab;
+        x.setAttribute('aria-selected', String(on));
+        document.getElementById(x.dataset.pane).hidden = !on;
+      });
+    });
+  });
+
+  reset();
+})();
+</script>
+</body>
+</html>

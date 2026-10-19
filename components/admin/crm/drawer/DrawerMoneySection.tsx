@@ -58,11 +58,11 @@ export default function DrawerMoneySection({
       </div>
       {productMatched ? (
         <p className="mt-1.5 text-[10px] text-[#1a1a1a]/35">
-          REV 원장 결제 누적 · 칠판 대수는 HW 출고(배송예정 제외) · 계정키 조인
+          REV 원본 결제 누적 · 칠판 대수는 HW 출고(배송예정 제외) · 계정키 조인
         </p>
       ) : (
         <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-[#fafaf8] px-2.5 py-1.5">
-          <span className="text-[11px] text-[#1a1a1a]/45">REV/HW 원장과 매칭된 기록이 없습니다.</span>
+          <span className="text-[11px] text-[#1a1a1a]/45">REV/HW 원본과 매칭된 기록이 없습니다.</span>
           <Link
             href={`/admin/crm/matching?name=${encodeURIComponent(displayName)}`}
             className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-semibold text-[#084734] hover:underline"

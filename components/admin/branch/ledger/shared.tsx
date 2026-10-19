@@ -687,11 +687,9 @@ export function WeeklySourceBadge({ source }: { source: RevWeeklySource }) {
   )
 }
 
-// 주차 셀용 축약 숫자 — 시트처럼 원시 수치를 그대로 읽을 수 있게 ¥ 기호 없이 표기.
-// 1만 미만은 콤마 정수, 이상은 "N.N만"(10만 이상은 소수 생략)으로 칸 폭을 지킨다.
+// 주차/월 매트릭스 셀용 수치 — "만" 축약 없이 원값 전체 자릿수를 콤마 포맷(예: 10,000)으로 표시.
 export function formatWeekAmount(value: number) {
-  if (value >= 100_000) return `${(value / 10_000).toLocaleString("ko-KR", { maximumFractionDigits: 0 })}만`
-  if (value >= 10_000) return `${(value / 10_000).toLocaleString("ko-KR", { maximumFractionDigits: 1 })}만`
+  if (!Number.isFinite(value) || value === 0) return "0"
   return value.toLocaleString("ko-KR", { maximumFractionDigits: 0 })
 }
 

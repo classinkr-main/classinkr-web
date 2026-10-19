@@ -46,7 +46,7 @@ export interface CompassPipelineKpis {
   generatedAt: string
 }
 
-export const COMPASS_PIPELINE_URL = "/api/admin/crm/compass-pipeline"
+export const COMPASS_PIPELINE_URL = "/api/admin/crm/compass-pipeline?owner=__me"
 
 function formatNumber(value: number | null | undefined) {
   return Number(value ?? 0).toLocaleString("ko-KR")
@@ -102,6 +102,58 @@ export function formatActionEta(nextActionAt: string | null, nowMs: number): str
   if (dayDiff === 1) return `내일 ${hhmm}`
   if (dayDiff === 2) return `모레 ${hhmm}`
   return `${dayDiff}일 후 ${hhmm}`
+}
+
+/** KST 오늘 끝(내일 00:00 KST)의 epoch ms. */
+export function kstTodayEndMs(nowMs: number): number {
+  return (kstDayIndex(nowMs) + 1) * DAY_MS - KST_OFFSET_MS
+}
+
+/**
+ * 임박 액션 목록에서 오늘·지난 것을 뺀다(2026-09-25 C안 ①) — CRM 홈에서는 오늘·지난 Compass 다음 액션을
+ * "오늘 연락"이 흡수하므로 같은 행동을 두 곳에 두지 않는다(플레이북 04 §3). 시각이 없는 행은 뺀다.
+ */
+export function filterActionsAfterToday<T extends { nextActionAt: string | null }>(rows: readonly T[], nowMs: number): T[] {
+  const end = kstTodayEndMs(nowMs)
+  return rows.filter((row) => {
+    const at = row.nextActionAt ? Date.parse(row.nextActionAt) : Number.NaN
+    return Number.isFinite(at) && at >= end
+  })
+}
+
+export interface ActionsAfterTodayView<T> {
+  /** 받은 목록 중 내일 이후 액션 */
+  rows: T[]
+  /** 48시간 안 내일 이후 액션 수 — null = 모름(서버가 자른 상위 N건 밖에 있어 셀 수 없다) */
+  count: number | null
+  /** 서버 상한(COMPASS_SUMMARY_ACTION_LIMIT)에서 잘려 받지 못한 액션 수(오늘·내일 섞임) */
+  beyondLimit: number
+}
+
+/**
+ * "내일 이후" 임박 목록·건수(2026-09-25 C안 ①). 서버 요약은 48시간 안 다음 액션을 next_action_at 오름차순으로
+ * 상위 N건만 싣는다(lib/compass/summary.ts) — 자른 뒤에 거르면 오늘 액션이 N건 이상일 때 내일 것이 다 빠진다.
+ * 그래서 "없음"과 "모름"을 가른다:
+ *  - 잘리지 않았으면(upcomingActionCount ≤ 받은 수) 거른 결과가 정확하다.
+ *  - 잘렸어도 받은 것 중 가장 늦은 액션이 오늘 끝 이후면, 오름차순이라 잘린 나머지도 전부 내일 이후다 → 정확한 건수.
+ *  - 받은 것이 모두 오늘 이전이면 잘린 나머지 중 내일 이후가 몇 건인지 모른다 → count null.
+ */
+export function summarizeActionsAfterToday<T extends { nextActionAt: string | null }>(
+  actions: readonly T[],
+  totalCount: number,
+  nowMs: number
+): ActionsAfterTodayView<T> {
+  const rows = filterActionsAfterToday(actions, nowMs)
+  const beyondLimit = Math.max(0, totalCount - actions.length)
+  if (beyondLimit === 0) return { rows, count: rows.length, beyondLimit }
+  const end = kstTodayEndMs(nowMs)
+  let latest = Number.NEGATIVE_INFINITY
+  for (const action of actions) {
+    const at = action.nextActionAt ? Date.parse(action.nextActionAt) : Number.NaN
+    if (Number.isFinite(at) && at > latest) latest = at
+  }
+  if (latest >= end) return { rows, count: rows.length + beyondLimit, beyondLimit }
+  return { rows, count: null, beyondLimit }
 }
 
 // ─── 요약 블록 하위 조각 ────────────────────────────────────────────────
@@ -213,18 +265,66 @@ function PlatformBars({ summary }: { summary: CompassSummary }) {
   )
 }
 
-function UpcomingActionsList({ summary, nowMs }: { summary: CompassSummary; nowMs: number }) {
-  const rows = summary.upcomingActions.slice(0, COMPASS_SUMMARY_ACTION_LIMIT)
+function UpcomingActionsList({
+  summary,
+  nowMs,
+  afterToday = false,
+}: {
+  summary: CompassSummary
+  nowMs: number
+  /** 오늘·지난 액션을 빼고 내일 이후만(CRM 홈 — 오늘 몫은 "오늘 연락"에) */
+  afterToday?: boolean
+}) {
+  const afterTodayView = afterToday
+    ? summarizeActionsAfterToday(summary.upcomingActions, summary.upcomingActionCount, nowMs)
+    : null
+  const source = afterTodayView ? afterTodayView.rows : summary.upcomingActions
+  const rows = source.slice(0, COMPASS_SUMMARY_ACTION_LIMIT)
+  // 내일 이후 건수를 모른다(받은 상위 N건이 모두 오늘 이전) — "없음"으로 말하지 않는다.
+  const afterTodayUnknown = afterTodayView != null && afterTodayView.count == null
+  const afterTodayRest = afterTodayView?.count != null ? Math.max(0, afterTodayView.count - rows.length) : 0
+  const compassLink = (
+    <a
+      href={COMPASS_UPCOMING_ACTIONS_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex min-h-8 items-center gap-1 text-[12px] font-semibold text-[#084734] underline underline-offset-2"
+    >
+      Compass 에서 다음 액션 보기
+      <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+    </a>
+  )
   return (
     <div>
       <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#1a1a1a]/30">
-        다음 액션 임박 {formatNumber(summary.upcomingActionCount)}건 · 상위 {COMPASS_SUMMARY_ACTION_LIMIT}
+        {afterTodayView
+          ? afterTodayView.count == null
+            ? "다음 액션 · 내일 이후 건수 확인 필요"
+            : `다음 액션 · 내일 이후 ${formatNumber(afterTodayView.count)}건${
+                afterTodayView.count > rows.length ? ` · 상위 ${formatNumber(rows.length)}` : ""
+              }`
+          : `다음 액션 임박 ${formatNumber(summary.upcomingActionCount)}건 · 상위 ${COMPASS_SUMMARY_ACTION_LIMIT}`}
       </p>
+      {afterToday ? (
+        // CRM 홈에서 "오늘 연락" 패널은 이 밴드보다 위에 있다 — 10월 줄기(f989a812)가 밴드를 실행 영역 뒤의 접힌
+        // "마케팅 파이프라인" 펼침으로 옮겼다(CrmHomeClient — 오늘 연락 → … → 밴드 순서).
+        <p className="-mt-2 mb-3 text-[11px] text-[#615D59]">오늘·지난 다음 액션은 위 &lsquo;오늘 연락&rsquo;에 있습니다.</p>
+      ) : null}
       {rows.length === 0 ? (
-        <EmptyState
-          title="48시간 내 예정된 액션 없음"
-          description="Compass 파이프라인에서 확인할 다음 액션이 없습니다."
-        />
+        afterTodayUnknown ? (
+          <EmptyState
+            title={`받은 상위 ${formatNumber(summary.upcomingActions.length)}건이 모두 오늘까지의 액션입니다`}
+            description={`48시간 안 다음 액션 ${formatNumber(summary.upcomingActionCount)}건 중 앞 ${formatNumber(
+              summary.upcomingActions.length
+            )}건만 받아 내일 이후 액션이 몇 건인지 여기서 셀 수 없습니다 — 없는 것이 아닙니다.`}
+            action={compassLink}
+          />
+        ) : (
+          <EmptyState
+            title={afterToday ? "내일 이후 48시간 안에 예정된 액션 없음" : "48시간 내 예정된 액션 없음"}
+            description="Compass 파이프라인에서 확인할 다음 액션이 없습니다."
+          />
+        )
       ) : (
         <ul className="space-y-2">
           {rows.map((action) => {
@@ -255,6 +355,12 @@ function UpcomingActionsList({ summary, nowMs }: { summary: CompassSummary; nowM
           })}
         </ul>
       )}
+      {afterTodayRest > 0 ? (
+        <p className="mt-2 flex flex-wrap items-center gap-x-2 text-[11px] text-[#615D59]">
+          <span>내일 이후 나머지 {formatNumber(afterTodayRest)}건은 이 목록에 없습니다</span>
+          {compassLink}
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -300,6 +406,8 @@ export interface CompassSummaryBlockProps {
   onRetry: () => void
   /** 테스트·고정 시각용(액션 목록 D-시간). 생략하면 이 컴포넌트가 마운트된 시각을 쓴다. */
   nowMs?: number
+  /** 임박 액션 목록을 내일 이후만(CRM 홈 — 오늘·지난 액션은 "오늘 연락"이 흡수). 기본 false. */
+  actionsAfterToday?: boolean
 }
 
 export function CompassSummaryBlock({
@@ -310,6 +418,7 @@ export function CompassSummaryBlock({
   onPeriodChange,
   onRetry,
   nowMs,
+  actionsAfterToday = false,
 }: CompassSummaryBlockProps) {
   const down = isCompassSummaryDown(summary, error)
   // react-hooks/purity: Date.now()는 렌더 중 직접 호출할 수 없다(react.dev/rules-of-react) —
@@ -382,7 +491,7 @@ export function CompassSummaryBlock({
             <PlatformBars summary={summary} />
           </div>
           <div className="lg:col-span-2">
-            <UpcomingActionsList summary={summary} nowMs={effectiveNowMs} />
+            <UpcomingActionsList summary={summary} nowMs={effectiveNowMs} afterToday={actionsAfterToday} />
           </div>
         </div>
       ) : null}
@@ -411,7 +520,8 @@ export function useCompassPipeline(refreshNonce: number) {
     setError(null)
     try {
       const response = await adminFetchJsonCached<CompassPipelineKpis>(
-        fresh ? `${COMPASS_PIPELINE_URL}?force=1` : COMPASS_PIPELINE_URL,
+        // COMPASS_PIPELINE_URL 은 기본 담당 쿼리(?owner=__me)를 이미 단다 — force 는 &로 잇는다.
+        fresh ? `${COMPASS_PIPELINE_URL}&force=1` : COMPASS_PIPELINE_URL,
         undefined,
         { ttlMs: 60_000, cacheKey: COMPASS_PIPELINE_URL, force: fresh, staleIfError: !fresh }
       )
@@ -448,7 +558,7 @@ export function useCompassPipeline(refreshNonce: number) {
 // 위 3숫자가 죽어도 요약은 살아있을 수 있고 그 반대도 마찬가지다.
 // 밴드 본체에서 떼어 둔 이유: 훅은 조건부로 부를 수 없으므로, 한눈에 층(quiet)에서 요약 조회
 // 자체를 하지 않으려면 상태·조회를 별도 컴포넌트가 쥐고 있어야 한다.
-function CompassSummarySection({ refreshKey }: { refreshKey?: number }) {
+function CompassSummarySection({ refreshKey, actionsAfterToday = false }: { refreshKey?: number; actionsAfterToday?: boolean }) {
   const [period, setPeriod] = useState<CompassSummaryPeriodKey>(COMPASS_SUMMARY_DEFAULT_PERIOD)
   const [summary, setSummary] = useState<CompassSummary | null>(null)
   const [summaryLoading, setSummaryLoading] = useState(true)
@@ -514,6 +624,7 @@ function CompassSummarySection({ refreshKey }: { refreshKey?: number }) {
       period={period}
       onPeriodChange={setPeriod}
       onRetry={handleSummaryRetry}
+      actionsAfterToday={actionsAfterToday}
     />
   )
 }
@@ -530,6 +641,7 @@ export default function CompassPipelineBand({
   onRetry,
   refreshKey,
   quiet = false,
+  actionsAfterToday = false,
 }: {
   data: CompassPipelineKpis | null
   loading: boolean
@@ -542,6 +654,12 @@ export default function CompassPipelineBand({
    * 세 숫자만 보여주는 자리라 §13 D2 요약 블록은 그리지도 조회하지도 않는다.
    */
   quiet?: boolean
+  /**
+   * 요약 블록의 임박 액션 목록을 내일 이후만(2026-09-25 C안 ①) — CRM 홈은 오늘·지난 Compass 다음 액션을
+   * "오늘 연락" 목록이 실제로 담았을 때만 true 를 넘긴다(담당 필터·Compass 끊김/일부 실패·잘림·목록 실패면 false —
+   * 오늘 몫을 숨기면 홈 어디에도 없게 된다, 도달성 불변). 위 3숫자(오늘 데모·임박 건수·BD)는 참조 숫자라 그대로다.
+   */
+  actionsAfterToday?: boolean
 }) {
   const showDown = (error && !data) || data?.down
   // 칸 구분선 — 한눈에 층은 한 단 물린 카드(#f0f0ec 테두리)에 맞추고, CRM 홈은 UX 라운드 1 대비 기준(#e8e8e4)을 쓴다.
@@ -603,7 +721,7 @@ export default function CompassPipelineBand({
           소스라 독립된 loading/error/down으로 그린다. 한눈에 층(quiet)은 세 숫자만 둔다. */}
       {quiet ? null : (
         <div className="mt-4 border-t border-[#e8e8e4] pt-4">
-          <CompassSummarySection refreshKey={refreshKey} />
+          <CompassSummarySection refreshKey={refreshKey} actionsAfterToday={actionsAfterToday} />
         </div>
       )}
     </section>

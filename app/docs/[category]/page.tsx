@@ -49,8 +49,8 @@ export async function generateMetadata({
 
   if (!category) {
     return {
-      title: "문서 카테고리를 찾을 수 없습니다",
-      description: "요청하신 문서 카테고리를 찾을 수 없습니다.",
+      title: "가이드 주제를 찾을 수 없습니다",
+      description: "주소가 바뀌었거나 없어진 주제입니다. 가이드 홈에서 다시 찾아보세요.",
     }
   }
 
@@ -141,7 +141,7 @@ export default async function DocsCategoryPage({
             name="q"
             defaultValue={q ?? ""}
             aria-label={`${category.title} 검색`}
-            placeholder="이 주제에서 궁금한 내용 검색"
+            placeholder="이 주제 안에서 검색"
             className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#A39E98]"
           />
           <button
@@ -159,7 +159,7 @@ export default async function DocsCategoryPage({
             </>
           ) : (
             <>
-              이 주제의 안내 {articleSummaries.length}개
+              이 주제의 가이드 {articleSummaries.length}개
             </>
           )}
         </p>
@@ -195,10 +195,11 @@ export default async function DocsCategoryPage({
           {(query ? filteredDocs : articleSummaries).length === 0 && (
             <div className="my-6 rounded-lg border border-black/[0.08] bg-white p-5">
               <p className="text-[15px] font-semibold text-[#111110]">
-                이 주제에서는 일치하는 안내를 찾지 못했습니다.
+                이 주제에는 맞는 가이드가 없습니다.
               </p>
               <p className="mt-2 text-sm leading-6 text-[#615D59]">
-                전체 가이드에서 한 번 더 찾아보거나, 상황을 남겨주시면 문서 보강과 상담으로 이어드릴게요.
+                다른 주제에 있을 수 있으니 전체 가이드에서 다시 찾아보세요. 그래도 없으면 상황을
+                남겨 주세요. 담당 매니저가 연락드립니다.
               </p>
               <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                 <Link

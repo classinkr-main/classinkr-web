@@ -12,7 +12,9 @@ import type { LeadActivityBadge } from "@/lib/repositories/lead-activity"
 import type { LeadPriority } from "@/lib/crm/lead-ranking"
 import { isTestLead } from "@/lib/crm/lead-attribution"
 import { CompassLeadChip } from "@/components/admin/compass/CompassLeadChip"
+import CompassOpenLink from "@/components/admin/compass/CompassOpenLink"
 import type { useCompassOverlay } from "@/components/admin/compass/use-compass-overlay"
+import { COMPASS_RECORD_LABEL, resolveLeadBoardWriteSurface } from "@/lib/crm/write-surface"
 import {
   StatusPill,
   toLocalDateKey,
@@ -58,6 +60,8 @@ export default function LeadsConsoleList({
   today,
   now,
   compassLookup,
+  compassDown = false,
+  isCrmRegistered,
   allVisibleSelected,
   selectedVisibleCount,
   visibleIds,
@@ -89,6 +93,10 @@ export default function LeadsConsoleList({
   today: string
   now: Date
   compassLookup: ReturnType<typeof useCompassOverlay>["lookup"]
+  /** A안 — Compass 오버레이 끊김("매칭 없음"과 다르다). 판정 입력을 리드 드로어와 맞춘다. */
+  compassDown?: boolean
+  /** A안 — 리드 → NEO 계정 등록 확정 여부(고객 360 crmRegistered 와 같은 원천). 없으면 미등록으로 본다. */
+  isCrmRegistered?: (leadId: string) => boolean
   allVisibleSelected: boolean
   selectedVisibleCount: number
   visibleIds: string[]
@@ -177,6 +185,14 @@ export default function LeadsConsoleList({
             const sourceSegment = getLeadSourceSegment(lead)
             const priority = priorityMap.get(lead.id)
             const compassEntry = compassLookup(lead)
+            // A안 — 리드 드로어와 같은 공용 판정. 전환·NEO 등록 확정 리드는 Compass 매칭이 있어도 Home 정본이다.
+            const writeSurface = resolveLeadBoardWriteSurface({
+              leadStatus: lead.status,
+              compassHref: compassEntry?.url ?? null,
+              compassDown,
+              crmRegistered: isCrmRegistered?.(lead.id) === true,
+            })
+            const compassPrimary = writeSurface.surface === "compass"
 
             return (
               <div
@@ -300,7 +316,7 @@ export default function LeadsConsoleList({
                   ) : null}
                 </div>
 
-                <div className="mt-3 flex gap-2">
+                <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={() => onSelect(lead)}
@@ -308,14 +324,28 @@ export default function LeadsConsoleList({
                   >
                     상세 보기
                   </button>
+                  {/* A안 — Compass 에서 응대 중인 리드(판정 compass)는 주 행동이 Compass 새 탭 링크(쓰기 없음). 전화는
+                      보조로 남기되 Home 연락 기록 폼을 열지 않는다(기록은 Compass 에 남긴다). */}
+                  {compassPrimary && writeSurface.compassHref ? (
+                    <CompassOpenLink
+                      href={writeSurface.compassHref}
+                      name={getLeadDisplayName(lead)}
+                      variant="primary"
+                      testId="lead-card-open-compass"
+                    />
+                  ) : null}
                   {lead.phone ? (
                     <a
                       href={`tel:${lead.phone}`}
                       onClick={(event) => {
                         event.stopPropagation()
-                        onContactAction(lead, "call")
+                        if (!compassPrimary) onContactAction(lead, "call")
                       }}
-                      className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md bg-[#084734] px-3 text-[12px] font-medium text-white"
+                      className={
+                        compassPrimary
+                          ? "inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md border border-[#e8e8e4] bg-white px-3 text-[12px] font-medium text-[#111110]"
+                          : "inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md bg-[#084734] px-3 text-[12px] font-medium text-white"
+                      }
                     >
                       <PhoneCall className="h-3.5 w-3.5" />
                       Call
@@ -326,13 +356,23 @@ export default function LeadsConsoleList({
                       href={`mailto:${lead.email}`}
                       onClick={(event) => {
                         event.stopPropagation()
-                        onContactAction(lead, "email")
+                        if (!compassPrimary) onContactAction(lead, "email")
                       }}
                       className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md border border-[#e8e8e4] bg-white px-3 text-[12px] font-medium text-[#111110]"
                     >
                       <Mail className="h-3.5 w-3.5" />
                       Email
                     </a>
+                  ) : null}
+                  {/* 전환·NEO 등록 확정 리드(Home 정본)도 같은 전화의 Compass 기록은 보조 링크로 남긴다(360 과 같은 말). */}
+                  {!compassPrimary && writeSurface.secondaryCompassHref ? (
+                    <CompassOpenLink
+                      href={writeSurface.secondaryCompassHref}
+                      name={getLeadDisplayName(lead)}
+                      variant="secondary"
+                      label={COMPASS_RECORD_LABEL}
+                      testId="lead-card-compass-record"
+                    />
                   ) : null}
                 </div>
               </div>
@@ -380,6 +420,14 @@ export default function LeadsConsoleList({
               const sourceSegment = getLeadSourceSegment(lead)
               const priority = priorityMap.get(lead.id)
               const compassEntry = compassLookup(lead)
+              // A안 — 모바일 카드·리드 드로어와 같은 공용 판정.
+              const compassPrimary =
+                resolveLeadBoardWriteSurface({
+                  leadStatus: lead.status,
+                  compassHref: compassEntry?.url ?? null,
+                  compassDown,
+                  crmRegistered: isCrmRegistered?.(lead.id) === true,
+                }).surface === "compass"
               return (
                 <tr
                   key={lead.id}
@@ -508,7 +556,9 @@ export default function LeadsConsoleList({
                         115건이 전부 new 로 남아 있었고(2026-08-05 실측), 컨택 신호가
                         우선순위에서 아무 일도 하지 못했다. 목록에서 한 번에 넘긴다.
                       */}
-                      {lead.status === "new" && !isTestLead(lead) && (
+                      {/* A안 — 판정이 compass 인 리드는 바로 옆 칩이 Compass 링크라 Home 연락 기록 알약을 내놓지 않는다.
+                          NEO 등록 확정 리드는 Compass 매칭이 있어도 Home 정본이라 알약을 그대로 둔다. */}
+                      {lead.status === "new" && !isTestLead(lead) && !compassPrimary && (
                         <button
                           type="button"
                            onClick={(event) => {

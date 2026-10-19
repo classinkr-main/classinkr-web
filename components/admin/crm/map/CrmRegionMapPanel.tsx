@@ -1,7 +1,23 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-import { AlertTriangle, RefreshCw } from "lucide-react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import Link from "next/link"
+import { useSearchParams } from "next/navigation"
+import { useVisibleInterval } from "@/components/admin/branch/use-visible-interval"
+import {
+  AlertTriangle,
+  Building2,
+  CheckCircle2,
+  ChevronRight,
+  MapPin,
+  RefreshCw,
+  Search,
+  Sparkles,
+  TrendingUp,
+  User,
+  Users,
+  X,
+} from "lucide-react"
 
 import { adminFetchJsonCached, clearAdminRequestCache } from "@/lib/admin-client"
 import { CRM_CACHE_SWR_MS, CRM_CACHE_TTL_MS } from "@/lib/crm/client-cache"
@@ -10,9 +26,68 @@ import {
   KOREA_PROVINCE_SHAPES,
   KOREA_PROVINCE_VIEWBOX,
 } from "@/lib/branch/korea-province-map"
-import type { CrmRegionLayer, CrmRegionLayerKey, CrmRegionMap } from "@/lib/repositories/crm-region-map"
+import { isIncompleteRegionMap, scopeRegionLayer } from "@/lib/crm/region-map-summary"
+import { useCrmOwners } from "@/components/admin/crm/useCrmOwners"
+import type {
+  CrmRegionCustomerItem,
+  CrmRegionLayer,
+  CrmRegionLayerKey,
+  CrmRegionMap,
+} from "@/lib/repositories/crm-region-map"
 
 const ENDPOINT = "/api/admin/crm/region-map"
+const CACHE_KEY = `${ENDPOINT}:owner-scope-v1`
+const CURRENT_OWNER_VALUE = "__me"
+const PARTIAL_REVALIDATION_MESSAGE = "일부 지역 원천을 읽지 못했습니다"
+
+/**
+ * 새로고침·60초 갱신·'다시 시도'가 부를 주소. 서버 force(?force=1)는 부분 지도(원천 실패·절단)면 던져 화면의
+ * 확인된 분포를 지킨다 — 그래서 force는 화면에 완전한 분포가 떠 있을 때만 붙인다. 분포가 없거나(오류 화면) 이미
+ * 부분 지도면 캐시 경로로 부른다: 서버가 "모름"·"부분값" 표시를 단 지도를 돌려줘, 원천 하나가 복구될 때까지
+ * 오류 화면에 갇히지 않는다(lib/repositories/crm-region-map.ts getCrmRegionMap 주석).
+ */
+export function regionMapRefreshUrl(current: CrmRegionMap | null): string {
+  return current && !isIncompleteRegionMap(current) ? `${ENDPOINT}?force=1` : ENDPOINT
+}
+
+/** 레이어 원천 상태 배지 — failed: 원천을 못 읽음(0건이 아니라 모름) · truncated: 상한에 걸려 일부만 셈. */
+export function regionLayerStateLabel(layer: Pick<CrmRegionLayer, "failed" | "truncated">): "모름" | "부분값" | null {
+  if (layer.failed) return "모름"
+  if (layer.truncated) return "부분값"
+  return null
+}
+
+/**
+ * 부분 지도는 화면에는 보이되 요청 캐시에 남기지 않는다 — 서버는 no-store 로 주지만 adminFetchJsonCached 는 응답
+ * 헤더를 보지 않고 저장해, 그대로 두면 TTL·SWR 창 동안 재방문·탭 복귀가 같은 부분 지도를 재사용한다(오늘 연락
+ * dropDegradedTodayContacts 와 같은 패턴). 부분 지도였으면 true.
+ */
+export function dropIncompleteRegionMap(
+  value: CrmRegionMap | null | undefined,
+  clear: (scope: string) => void = clearAdminRequestCache
+): boolean {
+  if (!isIncompleteRegionMap(value)) return false
+  clear(CACHE_KEY)
+  return true
+}
+
+/** 건수 표기 — 원천을 못 읽은 레이어는 0 대신 "—"(모름)로 보인다. */
+export function regionCountText(layer: Pick<CrmRegionLayer, "failed">, count: number): string {
+  return layer.failed ? "—" : count.toLocaleString("ko-KR")
+}
+
+function LayerStateBadge({ layer }: { layer: Pick<CrmRegionLayer, "failed" | "truncated"> }) {
+  const label = regionLayerStateLabel(layer)
+  if (!label) return null
+  return (
+    <span
+      title={label === "모름" ? "원천을 읽지 못했습니다. 0건이 아니라 모름입니다." : "조회 상한에 걸려 일부만 셌습니다. 분포·커버리지는 부분값입니다."}
+      className="ml-1 rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-1.5 py-px text-[10.5px] font-semibold text-[#7A520F]"
+    >
+      {label}
+    </span>
+  )
+}
 
 // 뉴트럴 → 딥 포레스트 단색 램프. 넓은 면은 뉴트럴로 두고 진한 쪽에만 그린을 준다
 // (파스텔 채움 지양 — DESIGN 규약). 0건 시도는 램프에 들어가지 않고 빈 칸으로 남긴다.
@@ -24,7 +99,7 @@ const RAMP: Array<[number, number, number]> = [
 ]
 
 function rampColor(t: number) {
-  if (!Number.isFinite(t) || t <= 0) return "#F7F7F4"
+  if (!Number.isFinite(t) || t <= 0) return "#F6F5F4"
   const clamped = Math.min(1, t)
   const span = RAMP.length - 1
   const pos = clamped * span
@@ -45,9 +120,9 @@ function rampColor(t: number) {
 function labelStyle(t: number) {
   const dark = t >= 0.5
   return {
-    fill: dark ? "#FFFFFF" : "rgba(26,26,26,0.72)",
+    fill: dark ? "#FFFFFF" : "rgba(26,26,26,0.78)",
     paintOrder: "stroke" as const,
-    stroke: dark ? "rgba(0,0,0,0.28)" : "rgba(255,255,255,0.9)",
+    stroke: dark ? "rgba(0,0,0,0.32)" : "rgba(255,255,255,0.92)",
     strokeWidth: 0.5,
   }
 }
@@ -56,7 +131,7 @@ function pct(value: number) {
   return `${Math.round(value * 1000) / 10}%`
 }
 
-function LayerTab({
+export function LayerTab({
   layer,
   active,
   onSelect,
@@ -72,39 +147,127 @@ function LayerTab({
       aria-pressed={active}
       className={`flex min-h-11 flex-1 flex-col items-start gap-0.5 rounded-xl border px-3 py-2 text-left transition-colors sm:min-h-0 ${
         active
-          ? "border-[#084734] bg-[#084734] text-white"
+          ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
           : "border-[#e8e8e4] bg-white text-[#111110] hover:border-[#c8c8c4] hover:bg-[#fafaf8]"
       }`}
     >
-      <span className="text-[12px] font-semibold">{layer.label}</span>
-      <span className={`text-[11px] tabular-nums ${active ? "text-white/70" : "text-[#1a1a1a]/45"}`}>
-        {layer.located.toLocaleString("ko-KR")} / {layer.total.toLocaleString("ko-KR")}
-        <span className="ml-1">· {pct(layer.coverage)}</span>
+      <span className="text-[12px] font-semibold">
+        {layer.label}
+        <LayerStateBadge layer={layer} />
+      </span>
+      <span className={`text-[11px] tabular-nums ${active ? "text-[#084734]" : "text-[#615D59]"}`}>
+        {layer.failed ? (
+          "원천 조회 실패"
+        ) : (
+          <>
+            {layer.located.toLocaleString("ko-KR")} / {layer.total.toLocaleString("ko-KR")}
+            <span className="ml-1">· {pct(layer.coverage)}</span>
+          </>
+        )}
       </span>
     </button>
   )
 }
 
+/** 커버리지 정보 바 — 원천을 못 읽은 레이어는 0건·커버리지 0%가 아니라 "모름"으로, 절단 레이어는 "부분값"으로 보인다. */
+export function RegionCoverageBar({ layer }: { layer: CrmRegionLayer }) {
+  return (
+    <div className="mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 rounded-xl border border-[#f0f0ec] bg-[#fafaf8] px-3.5 py-2.5 text-[12px]">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[#615D59]">
+        <span>
+          지역 확인 <strong className="font-semibold tabular-nums text-[#111110]">{regionCountText(layer, layer.located)}</strong>{layer.failed ? null : "건"}
+        </span>
+        <span>
+          지역 미상 <strong className="font-semibold tabular-nums text-[#111110]">{regionCountText(layer, layer.unknown)}</strong>{layer.failed ? null : "건"}
+        </span>
+        {!layer.failed && layer.nonGeo > 0 ? (
+          <span>
+            비지역(온라인·해외) <strong className="font-semibold tabular-nums text-[#111110]">{layer.nonGeo.toLocaleString("ko-KR")}</strong>건
+          </span>
+        ) : null}
+      </div>
+
+      {layer.failed ? (
+        <span role="status" className="inline-flex items-center gap-1 rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2.5 py-0.5 text-[11px] font-semibold text-[#7A520F]">
+          <AlertTriangle className="h-3 w-3" />
+          모름 · 원천을 읽지 못했습니다(0건이 아닙니다)
+        </span>
+      ) : (
+        <span className="inline-flex flex-wrap items-center gap-2">
+          {layer.truncated ? (
+            <span role="status" className="inline-flex items-center gap-1 rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2.5 py-0.5 text-[11px] font-semibold text-[#7A520F]">
+              <AlertTriangle className="h-3 w-3" />
+              부분값 · 조회 상한에 걸려 일부만 셌습니다
+            </span>
+          ) : null}
+          {layer.coverage < 0.5 ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2.5 py-0.5 text-[11px] font-semibold text-[#7A520F]">
+              <AlertTriangle className="h-3 w-3" />
+              커버리지 {pct(layer.coverage)} — 표본 데이터
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-[11px] text-[#084734]">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              지역 커버리지 {pct(layer.coverage)}
+            </span>
+          )}
+        </span>
+      )}
+    </div>
+  )
+}
+
 export default function CrmRegionMapPanel() {
+  const params = useSearchParams()
+  const { currentOwner, owners: crmOwners } = useCrmOwners()
+
   const [data, setData] = useState<CrmRegionMap | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
-  const [layerKey, setLayerKey] = useState<CrmRegionLayerKey>("deal")
+  const [layerKey, setLayerKey] = useState<CrmRegionLayerKey>(() =>
+    ["deal", "target", "lead", "customer", "compass"].includes(params.get("layer") ?? "")
+      ? (params.get("layer") as CrmRegionLayerKey)
+      : "deal"
+  )
+  const [selectedRegion, setSelectedRegion] = useState<string | null>(params.get("region"))
   const [hovered, setHovered] = useState<string | null>(null)
+
+  // 담당자 필터: URL에 없으면 로그인한 사용자(CURRENT_OWNER_VALUE)를 디폴트로 잡는다
+  const ownerParam = params.get("owner")?.trim()
+  const [owner, setOwnerScope] = useState<string>(() => ownerParam ?? CURRENT_OWNER_VALUE)
+  const setOwner = useCallback((next: string) => {
+    setOwnerScope(next)
+    const nextParams = new URLSearchParams(params.toString())
+    nextParams.set("owner", next === "all" ? "" : next)
+    window.history.replaceState(null, "", `?${nextParams.toString()}`)
+  }, [params])
 
   useEffect(() => {
     let alive = true
+    // 이 effect 가 화면에 올린 값 — 갱신 사이 새로고침이 있으면 캐시 무효화로 onRevalidated 가 오지 않는다.
+    let shown: CrmRegionMap | null = null
     adminFetchJsonCached<CrmRegionMap>(ENDPOINT, undefined, {
-      cacheKey: ENDPOINT,
+      cacheKey: CACHE_KEY,
       ttlMs: CRM_CACHE_TTL_MS,
       staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
       onRevalidated: ({ data: fresh }) => {
-        if (alive && fresh) setData(fresh)
+        if (!alive || !fresh) return
+        const partial = dropIncompleteRegionMap(fresh)
+        // 화면에 캐시의 완전한 분포가 떠 있으면 부분 지도로 덮지 않는다(요청 캐시에서는 방금 지웠다).
+        if (partial && shown && !isIncompleteRegionMap(shown)) {
+          setError(PARTIAL_REVALIDATION_MESSAGE)
+          return
+        }
+        shown = fresh
+        setData(fresh)
       },
     })
       .then((next) => {
         if (!alive) return
+        // 첫 읽기 — 지킬 확인값이 없으니 부분 지도라도 "모름"·"부분값" 표시와 함께 그대로 보인다(캐시에는 남기지 않는다).
+        dropIncompleteRegionMap(next)
+        shown = next
         setData(next)
         setError(null)
       })
@@ -121,13 +284,16 @@ export default function CrmRegionMapPanel() {
 
   const refresh = async () => {
     setRefreshing(true)
+    // force(?force=1)는 화면에 완전한 분포가 있을 때만 — 없거나 부분 지도면 캐시 경로(regionMapRefreshUrl).
+    const url = regionMapRefreshUrl(data)
     clearAdminRequestCache(ENDPOINT)
     try {
-      const next = await adminFetchJsonCached<CrmRegionMap>(`${ENDPOINT}?force=1`, undefined, {
-        cacheKey: ENDPOINT,
+      const next = await adminFetchJsonCached<CrmRegionMap>(url, undefined, {
+        cacheKey: CACHE_KEY,
         ttlMs: CRM_CACHE_TTL_MS,
         force: true,
       })
+      dropIncompleteRegionMap(next)
       setData(next)
       setError(null)
     } catch (err) {
@@ -137,32 +303,113 @@ export default function CrmRegionMapPanel() {
     }
   }
 
-  const layer = useMemo(
+  useVisibleInterval(() => {
+    if (!refreshing) void refresh()
+  }, 60_000)
+
+  const select = (nextLayer: CrmRegionLayerKey, region: string | null, nextOwner = owner) => {
+    setLayerKey(nextLayer)
+    setSelectedRegion(region)
+    const next = new URLSearchParams(window.location.search)
+    next.set("layer", nextLayer)
+    if (region) next.set("region", region)
+    else next.delete("region")
+    if (nextOwner) next.set("owner", nextOwner)
+    else next.delete("owner")
+    window.history.replaceState(null, "", `${window.location.pathname}?${next}`)
+  }
+
+  const handleOwnerChange = (newOwner: string) => {
+    setOwner(newOwner)
+    select(layerKey, selectedRegion, newOwner)
+  }
+
+  useEffect(() => {
+    const nextLayer = params.get("layer")
+    if (["deal", "target", "lead", "customer", "compass"].includes(nextLayer ?? "")) {
+      setLayerKey(nextLayer as CrmRegionLayerKey)
+    } else {
+      setLayerKey("deal")
+    }
+    setSelectedRegion(params.get("region"))
+    const pOwner = params.get("owner")
+    setOwnerScope(pOwner ?? CURRENT_OWNER_VALUE)
+  }, [params])
+
+  const sourceLayer = useMemo(
     () => data?.layers.find((item) => item.key === layerKey) ?? data?.layers[0] ?? null,
     [data, layerKey]
   )
 
+  // 현재 활성 담당자 키/이름 계산
+  const effectiveOwnerName = useMemo(() => {
+    if (!owner || owner === "all") return null
+    if (owner === CURRENT_OWNER_VALUE) {
+      return currentOwner?.displayName ?? "__no_current_admin_owner__"
+    }
+    return owner
+  }, [owner, currentOwner])
+
+  const ownerNames = useMemo(() => {
+    if (!effectiveOwnerName) return null
+    const profile = owner === CURRENT_OWNER_VALUE ? currentOwner : crmOwners.find(item =>
+      [item.displayName, item.ownerKey, ...item.ownerAliases].some(name => name.trim().toLowerCase() === effectiveOwnerName.trim().toLowerCase()))
+    return profile ? [profile.displayName, profile.ownerKey, ...profile.ownerAliases, ...(profile.neoOwnerId ? [profile.neoOwnerId] : [])] : [effectiveOwnerName]
+  }, [effectiveOwnerName, owner, currentOwner, crmOwners])
+  const layer = useMemo(() => sourceLayer ? scopeRegionLayer(sourceLayer, ownerNames) : null, [sourceLayer, ownerNames])
+  const displayRegions = useMemo(() => layer?.regions ?? {}, [layer])
+
+  // 순위 목록
   const ranked = useMemo(() => {
-    if (!layer) return []
-    return Object.entries(layer.regions)
-      .map(([label, count]) => ({ label, count }))
+    if (!data?.provinces) return []
+    return data.provinces
+      .map((label) => ({
+        label,
+        count: displayRegions[label] ?? 0,
+      }))
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "ko"))
-  }, [layer])
+  }, [data?.provinces, displayRegions])
 
   const max = ranked[0]?.count ?? 0
+  const totalLocated = useMemo(
+    () => Object.values(displayRegions).reduce((acc, v) => acc + v, 0),
+    [displayRegions]
+  )
+
+  const selected =
+    selectedRegion && data?.provinces.includes(selectedRegion) ? selectedRegion : null
+  const focusRegion = hovered ?? selected
+
+  // 지도·커버리지·고객 목록은 같은 원천과 담당자 범위를 사용한다.
+  const topCustomers = useMemo<CrmRegionCustomerItem[]>(() =>
+    selected ? layer?.topCustomersByRegion?.[selected] ?? [] : [], [selected, layer])
+  const nationalTopCustomers = useMemo<CrmRegionCustomerItem[]>(() =>
+    Object.values(layer?.topCustomersByRegion ?? {}).flat()
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "ko"))
+      .slice(0, 5), [layer])
+
+  // 선택된 시도의 순위와 비중
+  const selectedRankInfo = useMemo(() => {
+    if (!selected) return null
+    const index = ranked.findIndex((item) => item.label === selected)
+    const count = displayRegions[selected] ?? 0
+    const rank = index >= 0 ? index + 1 : null
+    const share = totalLocated > 0 ? count / totalLocated : 0
+    return { rank, count, share }
+  }, [selected, ranked, displayRegions, totalLocated])
 
   if (loading && !data) {
-    return <div className="mb-4 h-[420px] animate-pulse rounded-2xl bg-[#f0f0ec]" />
+    return <div className="mb-4 h-[520px] animate-pulse rounded-2xl bg-[#f0f0ec]" />
   }
 
   if (error && !data) {
     return (
-      <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
-        <p className="text-[13px] text-[#1a1a1a]/60">{error}</p>
+      <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-5">
+        <p className="text-[13px] text-[#615D59]">{error}</p>
         <button
           type="button"
           onClick={refresh}
-          className="mt-2 inline-flex h-8 items-center rounded-lg border border-[#e8e8e4] px-3 text-[12px] font-semibold text-[#111110] hover:bg-[#f5f5f2]"
+          className="mt-3 inline-flex h-8 items-center rounded-lg border border-[#e8e8e4] px-3 text-[12px] font-semibold text-[#111110] hover:bg-[#f5f5f2]"
         >
           다시 시도
         </button>
@@ -173,163 +420,507 @@ export default function CrmRegionMapPanel() {
   if (!data || !layer) return null
 
   return (
-    <section className="mb-5 rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-5">
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+    <section className="mb-6 rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-6 shadow-sm">
+      {/* ─── 상단 헤더: 타이틀, 담당자 필터, 새로고침 ─── */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/30">Region</p>
-          <h2 className="mt-0.5 text-[17px] font-bold tracking-[-0.02em] text-[#111110]">지역 분포</h2>
-          <p className="mt-1 text-[12px] text-[#1a1a1a]/45">
-            17개 시도 기준 · {layer.unit}
+          <div className="flex items-center gap-2">
+            <h2 className="text-[19px] font-bold tracking-[-0.02em] text-[#111110]">
+              지역별 고객·영업 분석
+            </h2>
+            <span className="rounded-full bg-[#ECFDF5] px-2.5 py-0.5 text-[11px] font-semibold text-[#084734]">
+              17개 시도 실시간
+            </span>
+          </div>
+          <p className="mt-1 text-[12.5px] text-[#615D59]">
+            {effectiveOwnerName
+              ? `${effectiveOwnerName} 담당 · ${layer.label} · ${layer.failed ? "원천 조회 실패(모름)" : `지역 확인 ${totalLocated.toLocaleString("ko-KR")}건`}`
+              : `전국 ${layer.label} 기준 · ${layer.unit} · 지역을 클릭하면 상세 고객 순위를 확인합니다`}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={refresh}
-          disabled={refreshing}
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-          새로고침
-        </button>
+
+        {/* 담당자 필터 & 새로고침 */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* 내 담당 칩 (디폴트) */}
+          {currentOwner ? (
+            <button
+              type="button"
+              onClick={() => handleOwnerChange(owner === CURRENT_OWNER_VALUE ? "all" : CURRENT_OWNER_VALUE)}
+              aria-pressed={owner === CURRENT_OWNER_VALUE}
+              className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[12px] font-semibold transition-all ${
+                owner === CURRENT_OWNER_VALUE
+                  ? "border-[#084734] bg-[#ECFDF5] text-[#084734] shadow-xs"
+                  : "border-[#e8e8e4] bg-white text-[#615D59] hover:border-[#c8c8c4] hover:bg-[#fafaf8]"
+              }`}
+            >
+              <User className="h-3.5 w-3.5" />
+              <span>내 담당</span>
+              <span className="text-[11px] opacity-75">({currentOwner.displayName})</span>
+            </button>
+          ) : null}
+
+          {/* 전체 담당자 칩 */}
+          <button
+            type="button"
+            onClick={() => handleOwnerChange("all")}
+            aria-pressed={!owner || owner === "all"}
+            className={`inline-flex h-8 items-center gap-1 rounded-lg border px-2.5 text-[12px] font-semibold transition-all ${
+              !owner || owner === "all"
+                ? "border-[#084734] bg-[#084734] text-white"
+                : "border-[#e8e8e4] bg-white text-[#615D59] hover:border-[#c8c8c4] hover:bg-[#fafaf8]"
+            }`}
+          >
+            <Users className="h-3.5 w-3.5" />
+            <span>전체 담당자</span>
+          </button>
+
+          {/* 담당자 드롭다운 */}
+          {crmOwners.length > 0 ? (
+            <select
+              aria-label="담당자 선택"
+              value={owner === CURRENT_OWNER_VALUE ? CURRENT_OWNER_VALUE : owner}
+              onChange={(e) => handleOwnerChange(e.target.value)}
+              className="h-8 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-medium text-[#111110] focus-visible:outline-2 focus-visible:outline-[#084734]"
+            >
+              <option value="all">전체 담당자</option>
+              {currentOwner ? (
+                <option value={CURRENT_OWNER_VALUE}>
+                  내 담당 · {currentOwner.displayName}
+                </option>
+              ) : null}
+              {crmOwners.map((opt) => (
+                <option key={opt.ownerKey} value={opt.displayName}>
+                  {opt.displayName} ({opt.teamRoleLabel})
+                </option>
+              ))}
+            </select>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={refresh}
+            disabled={refreshing}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+            새로고침
+          </button>
+        </div>
       </div>
 
-      <div className="mb-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      {/* ─── 레이어 탭 (거래, 타깃, 리드, 고객, Compass) ─── */}
+      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         {data.layers.map((item) => (
           <LayerTab
             key={item.key}
-            layer={item}
+            layer={scopeRegionLayer(item, ownerNames)}
             active={item.key === layer.key}
-            onSelect={() => setLayerKey(item.key)}
+            onSelect={() => select(item.key, selected)}
           />
         ))}
       </div>
 
-      {/* 분모를 숨기지 않는다 — 커버리지가 낮은 레이어는 '분포'가 아니라 '표본'이다. */}
-      <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-[#f0f0ec] bg-[#fafaf8] px-3 py-2 text-[12px]">
-        <span className="text-[#1a1a1a]/45">
-          지역 확인 <strong className="font-semibold tabular-nums text-[#111110]">{layer.located.toLocaleString("ko-KR")}</strong>
-        </span>
-        <span className="text-[#1a1a1a]/45">
-          지역 미상 <strong className="font-semibold tabular-nums text-[#111110]">{layer.unknown.toLocaleString("ko-KR")}</strong>
-        </span>
-        {layer.nonGeo > 0 ? (
-          <span className="text-[#1a1a1a]/45">
-            비지역(온라인·해외) <strong className="font-semibold tabular-nums text-[#111110]">{layer.nonGeo.toLocaleString("ko-KR")}</strong>
-          </span>
-        ) : null}
-        {layer.coverage < 0.5 ? (
-          <span className="inline-flex items-center gap-1 rounded-full border border-[#E9D8B4] bg-[#FFF9ED] px-2 py-0.5 text-[11px] font-semibold text-[#8B5E14]">
-            <AlertTriangle className="h-3 w-3" />
-            커버리지 {pct(layer.coverage)} — 분포가 아니라 표본입니다
-          </span>
-        ) : null}
-      </div>
+      {/* ─── 커버리지 정보 바 ─── */}
+      <RegionCoverageBar layer={layer} />
 
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,320px)]">
-        {/* items-start가 없으면 그리드가 오른쪽 순위표 높이에 맞춰 SVG를 늘여
-            (preserveAspectRatio 기본값 탓에) 지도가 위아래로 레터박스된 채 작아진다. */}
-        <div className="relative flex justify-center">
-          <svg
-            viewBox={KOREA_PROVINCE_VIEWBOX}
-            role="img"
-            aria-label={`${layer.label} 시도별 분포 지도`}
-            className="h-auto w-full max-w-[460px]"
-          >
-            {KOREA_PROVINCE_SHAPES.map((shape) => {
-              const count = layer.regions[shape.label] ?? 0
-              const t = max > 0 ? count / max : 0
-              const isHovered = hovered === shape.label
-              return (
-                <path
-                  key={shape.label}
-                  d={shape.path}
-                  fill={rampColor(t)}
-                  stroke={isHovered ? "#111110" : "#FFFFFF"}
-                  strokeWidth={isHovered ? 0.6 : 0.3}
-                  onMouseEnter={() => setHovered(shape.label)}
-                  onMouseLeave={() => setHovered(null)}
-                >
-                  <title>{`${shape.label} · ${count.toLocaleString("ko-KR")}`}</title>
-                </path>
-              )
-            })}
-            {/* 라벨은 도형 전체를 그린 뒤 한 층 위에 올린다 — 인접 도형이 나중에 그려지며
-                라벨을 덮는 일이 없게 한다. */}
-            <g pointerEvents="none">
+      {/* ─── 메인 뷰: 대형 지도 (좌) + 순위 & 해당 고객 순위 (우) ─── */}
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(380px,1fr)] xl:grid-cols-[minmax(0,1.4fr)_minmax(420px,1fr)]">
+        {/* [좌측] 대형 인터랙티브 한반도 지도 */}
+        <div className="relative flex flex-col items-center justify-center rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4 sm:p-6 min-h-[500px]">
+          {/* 플로팅 인터랙티브 헤더 배너 */}
+          {focusRegion ? (
+            <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 z-10 flex items-center gap-2 rounded-xl border border-[#e8e8e4] bg-white/95 px-3.5 py-1.5 shadow-md backdrop-blur-sm">
+              <MapPin className="h-4 w-4 text-[#084734]" />
+              <span className="font-bold text-[#111110]">{focusRegion}</span>
+              <span className="font-bold tabular-nums text-[#084734]">
+                {regionCountText(layer, displayRegions[focusRegion] ?? 0)}
+              </span>
+              <span className="text-[11px] text-[#615D59]">
+                {effectiveOwnerName ? "건 (선택 담당자)" : layer.unit}
+              </span>
+              {selected === focusRegion ? (
+                <span className="ml-1 rounded-sm bg-[#ECFDF5] px-1.5 py-0.5 text-[10px] font-semibold text-[#084734]">
+                  선택됨
+                </span>
+              ) : null}
+            </div>
+          ) : (
+            <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 z-10 rounded-xl border border-[#e8e8e4]/60 bg-white/80 px-3 py-1 text-[11.5px] text-[#615D59] shadow-xs">
+              지도의 시도를 클릭하여 지역별 고객 순위를 확인하세요
+            </div>
+          )}
+
+          {/* 대형 지도 SVG (충분한 너비와 선명한 가독성) */}
+          <div className="w-full flex justify-center py-2">
+            <svg
+              viewBox={KOREA_PROVINCE_VIEWBOX}
+              role="group"
+              aria-label={`${layer.label} 시도별 분포 지도`}
+              className="h-auto w-full max-w-[580px] max-h-[640px] drop-shadow-sm select-none"
+            >
               {KOREA_PROVINCE_SHAPES.map((shape) => {
-                const count = layer.regions[shape.label] ?? 0
+                const count = displayRegions[shape.label] ?? 0
                 const t = max > 0 ? count / max : 0
-                const nudge = KOREA_PROVINCE_LABEL_NUDGE[shape.label] ?? { dx: 0, dy: 0 }
+                const isHovered = focusRegion === shape.label
+                const isSelected = selected === shape.label
+
                 return (
-                  <text
+                  <path
                     key={shape.label}
-                    x={shape.x + nudge.dx}
-                    y={shape.y + nudge.dy}
-                    textAnchor="middle"
-                    fontSize={2.9}
-                    fontWeight={700}
-                    opacity={hovered && hovered !== shape.label ? 0.5 : 1}
-                    style={labelStyle(t)}
+                    d={shape.path}
+                    fill={rampColor(t)}
+                    stroke={isSelected ? "#084734" : isHovered ? "#111110" : "#FFFFFF"}
+                    strokeWidth={isSelected ? 1.4 : isHovered ? 0.8 : 0.35}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={layer.failed ? `${shape.label} 모름(원천 조회 실패)` : `${shape.label} ${count.toLocaleString("ko-KR")}건 비교`}
+                    aria-pressed={isSelected}
+                    className="cursor-pointer transition-all duration-150 hover:opacity-95"
+                    onClick={() => select(layer.key, isSelected ? null : shape.label)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault()
+                        select(layer.key, isSelected ? null : shape.label)
+                      }
+                    }}
+                    onFocus={() => setHovered(shape.label)}
+                    onBlur={() => setHovered(null)}
+                    onMouseEnter={() => setHovered(shape.label)}
+                    onMouseLeave={() => setHovered(null)}
                   >
-                    {shape.label}
-                  </text>
+                    <title>{layer.failed ? `${shape.label} · 모름` : `${shape.label} · ${count.toLocaleString("ko-KR")}건`}</title>
+                  </path>
                 )
               })}
-            </g>
-          </svg>
-          {hovered ? (
-            <div className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2 rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-1 text-[12px] shadow-sm">
-              <span className="font-semibold text-[#111110]">{hovered}</span>
-              <span className="ml-2 font-semibold tabular-nums text-[#084734]">
-                {(layer.regions[hovered] ?? 0).toLocaleString("ko-KR")}
-              </span>
-              <span className="ml-1 text-[#1a1a1a]/40">{layer.unit}</span>
+
+              {/* 시도 라벨 */}
+              <g pointerEvents="none">
+                {KOREA_PROVINCE_SHAPES.map((shape) => {
+                  const count = displayRegions[shape.label] ?? 0
+                  const t = max > 0 ? count / max : 0
+                  const nudge = KOREA_PROVINCE_LABEL_NUDGE[shape.label] ?? { dx: 0, dy: 0 }
+                  const isSelected = selected === shape.label
+                  const isHovered = focusRegion === shape.label
+
+                  return (
+                    <text
+                      key={shape.label}
+                      x={shape.x + nudge.dx}
+                      y={shape.y + nudge.dy}
+                      textAnchor="middle"
+                      fontSize={isSelected ? 3.3 : 2.9}
+                      fontWeight={isSelected || isHovered ? 800 : 700}
+                      opacity={focusRegion && focusRegion !== shape.label ? 0.6 : 1}
+                      style={labelStyle(t)}
+                    >
+                      {shape.label}
+                    </text>
+                  )
+                })}
+              </g>
+            </svg>
+          </div>
+
+          {/* 지도 하단: 범례 및 팁 */}
+          <div className="mt-2 flex w-full flex-wrap items-center justify-between gap-2 border-t border-[#f0f0ec] pt-3 text-[11px] text-[#615D59]">
+            <div className="flex items-center gap-1.5">
+              <span>적음</span>
+              <div className="flex h-2.5 w-24 overflow-hidden rounded-md border border-[#e8e8e4]">
+                <div className="flex-1 bg-[#F6F5F4]" />
+                <div className="flex-1 bg-[#C8D6CB]" />
+                <div className="flex-1 bg-[#789E85]" />
+                <div className="flex-1 bg-[#084734]" />
+              </div>
+              <span>많음</span>
             </div>
-          ) : null}
+            {selected ? (
+              <button
+                type="button"
+                onClick={() => select(layer.key, null)}
+                className="inline-flex items-center gap-1 font-medium text-[#084734] hover:underline"
+              >
+                <X className="h-3 w-3" />
+                선택 해제 (전체 시도 보기)
+              </button>
+            ) : (
+              <span>시도를 선택하면 해당 고객 순위가 우측에 표시됩니다</span>
+            )}
+          </div>
         </div>
 
-        <div>
-          <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.1em] text-[#1a1a1a]/30">
-            <span>시도</span>
-            <span>{layer.unit}</span>
-          </div>
-          {ranked.length === 0 ? (
-            <p className="rounded-xl bg-[#fafaf8] px-3 py-6 text-center text-[12px] text-[#1a1a1a]/35">
-              지역이 확인된 건이 없습니다.
-            </p>
-          ) : (
-            <ul className="space-y-1">
-              {ranked.map((row) => (
-                <li
-                  key={row.label}
-                  onMouseEnter={() => setHovered(row.label)}
-                  onMouseLeave={() => setHovered(null)}
-                  className={`relative overflow-hidden rounded-lg px-2.5 py-1.5 transition-colors ${
-                    hovered === row.label ? "bg-[#f0f0ec]" : ""
-                  }`}
-                >
-                  <span
-                    aria-hidden
-                    className="absolute inset-y-0 left-0 rounded-lg bg-[#ECFDF5]"
-                    style={{ width: `${max > 0 ? (row.count / max) * 100 : 0}%` }}
-                  />
-                  <span className="relative flex items-center justify-between text-[12.5px]">
-                    <span className="font-medium text-[#111110]">{row.label}</span>
-                    <span className="font-semibold tabular-nums text-[#111110]">
-                      {row.count.toLocaleString("ko-KR")}
-                    </span>
+        {/* [우측] 시도 순위 및 해당 고객 순위 패널 */}
+        <div className="flex flex-col gap-4">
+          {/* ─── (A) 특정 시도 선택 상태 ─── */}
+          {selected ? (
+            <div className="space-y-4">
+              {/* 시도 히어로 카드 */}
+              <div className="rounded-2xl border border-[#084734]/20 bg-[#ECFDF5]/50 p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-md bg-[#084734] px-2 py-0.5 text-[11px] font-bold text-white">
+                        {selectedRankInfo?.rank ? `전국 ${selectedRankInfo.rank}위` : "선택됨"}
+                      </span>
+                      <h3 className="text-[18px] font-bold text-[#111110]">{selected}</h3>
+                    </div>
+                    <p className="mt-1 text-[13px] text-[#084734] font-medium">
+                      총 <strong className="text-[17px] font-bold tabular-nums">{regionCountText(layer, displayRegions[selected] ?? 0)}</strong>{layer.failed ? " (모름)" : "건"}
+                      <span className="ml-1 text-[12px] opacity-80">
+                        (전체의 {pct(selectedRankInfo?.share ?? 0)})
+                      </span>
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => select(layer.key, null)}
+                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-medium text-[#615D59] hover:bg-[#fafaf8]"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    전체 보기
+                  </button>
+                </div>
+
+                {/* 5대 원천별 건수 미니 비교 */}
+                <div role="group" aria-label="선택 지역 원천별 건수" className="mt-3 grid grid-cols-2 gap-2 border-t border-[#084734]/10 pt-3 sm:grid-cols-3">
+                  {data.layers.map((item) => (
+                    <div key={item.key} className="rounded-lg bg-white/80 p-2 text-left border border-black/5">
+                      <p className="text-[11px] text-[#615D59]">
+                        {item.label}
+                        <LayerStateBadge layer={item} />
+                      </p>
+                      <p className="text-[15px] font-bold tabular-nums text-[#111110]">
+                        {regionCountText(item, scopeRegionLayer(item, ownerNames).regions[selected] ?? 0)}
+                        <span className="ml-0.5 text-[11px] font-normal text-[#615D59]">{item.failed ? "모름" : "건"}</span>
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ★ 핵심: 해당 지역 고객 순위 (Top Customers) ★ */}
+              <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="h-4 w-4 text-[#084734]" />
+                    <h4 className="text-[14px] font-bold text-[#111110]">
+                      {selected} 주요 고객 순위
+                    </h4>
+                  </div>
+                  <span className="text-[11px] text-[#615D59]">
+                    {topCustomers.length > 0 ? `상위 ${topCustomers.length}곳` : layer.failed ? "모름" : "기록 없음"}
                   </span>
-                </li>
-              ))}
-            </ul>
+                </div>
+
+                {topCustomers.length === 0 ? (
+                  <div className="rounded-xl bg-[#fafaf8] py-8 text-center text-[12.5px] text-[#615D59]">
+                    <Building2 className="mx-auto mb-2 h-6 w-6 opacity-40" />
+                    {layer.failed
+                      ? `${layer.label} 원천을 읽지 못해 ${selected} 지역 고객을 모릅니다(0건이 아닙니다).`
+                      : effectiveOwnerName
+                      ? `${effectiveOwnerName} 담당으로 확인된 ${selected} 지역 고객이 없습니다.`
+                      : `${selected} 지역에 확인된 주요 고객 정보가 없습니다.`}
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
+                    {topCustomers.map((cust, idx) => (
+                      <Link
+                        key={`${cust.id}-${idx}`}
+                        href={`/admin/crm/customers/unified?q=${encodeURIComponent(cust.name)}`}
+                        className="group flex items-center justify-between rounded-xl border border-[#f0f0ec] bg-[#fafaf8] p-2.5 transition-all hover:border-[#084734]/30 hover:bg-white hover:shadow-xs"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {/* 순위 배지 */}
+                          <span
+                            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold ${
+                              idx === 0
+                                ? "bg-[#084734] text-white"
+                                : idx < 3
+                                ? "bg-[#ECFDF5] text-[#084734]"
+                                : "bg-[#f0f0ec] text-[#615D59]"
+                            }`}
+                          >
+                            {idx + 1}
+                          </span>
+
+                          {/* 고객사명 & 담당자 */}
+                          <div className="min-w-0">
+                            <p className="truncate text-[13px] font-semibold text-[#111110] group-hover:text-[#084734]">
+                              {cust.name}
+                            </p>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-[#615D59]">
+                              {cust.manager ? (
+                                <span className="inline-flex items-center gap-0.5 rounded-sm bg-white px-1.5 py-0.2 border border-[#e8e8e4]">
+                                  <User className="h-2.5 w-2.5" />
+                                  {cust.manager}
+                                </span>
+                              ) : null}
+                              {cust.status ? <span>· {cust.status}</span> : null}
+                              {cust.detail ? <span>· {cust.detail}</span> : null}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 우측: 건수 칩 & 화살표 */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="rounded-md bg-white border border-[#e8e8e4] px-2 py-0.5 text-[12px] font-bold tabular-nums text-[#084734]">
+                            {cust.count}건
+                          </span>
+                          <ChevronRight className="h-4 w-4 text-[#A39E98] group-hover:text-[#084734]" />
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+
+                {/* 하단 통합 바로가기 액션 */}
+                <div className="mt-3.5 flex flex-wrap gap-2 border-t border-[#f0f0ec] pt-3">
+                  <Link
+                    href={`/admin/crm/customers/unified?q=${encodeURIComponent(selected)}`}
+                    className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-[#fafaf8] px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-white"
+                  >
+                    <Search className="h-3.5 w-3.5 text-[#084734]" />
+                    고객DB에서 {selected} 검색
+                  </Link>
+                  <Link
+                    href={`/admin/crm/customers/leads?branch=${encodeURIComponent(selected)}`}
+                    className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-[#fafaf8] px-3 text-[12px] font-semibold text-[#615D59] transition-colors hover:bg-white"
+                  >
+                    리드 보드 보기 →
+                  </Link>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* ─── (B) 시도 미선택 상태: 시도별 순위표 ─── */
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <TrendingUp className="h-4 w-4 text-[#084734]" />
+                    <h3 className="text-[14px] font-bold text-[#111110]">
+                      시도별 순위 (전국 17개 시도)
+                    </h3>
+                  </div>
+                  <span className="text-[11px] text-[#615D59]">
+                    {effectiveOwnerName ? `${effectiveOwnerName} 기준` : layer.unit}
+                  </span>
+                </div>
+
+                {layer.failed ? (
+                  <p role="status" className="rounded-xl bg-[#fafaf8] px-3 py-6 text-center text-[12px] text-[#615D59]">
+                    {layer.label} 원천을 읽지 못해 시도별 분포를 모릅니다. 0건이 아닙니다.
+                  </p>
+                ) : ranked.length === 0 ? (
+                  <p className="rounded-xl bg-[#fafaf8] px-3 py-6 text-center text-[12px] text-[#615D59]">
+                    지역이 확인된 건이 없습니다.
+                  </p>
+                ) : (
+                  <ul className="space-y-1.5 max-h-[460px] overflow-y-auto pr-1">
+                    {ranked.map((row, index) => {
+                      const share = totalLocated > 0 ? (row.count / totalLocated) * 100 : 0
+                      const isFocused = focusRegion === row.label
+
+                      return (
+                        <li
+                          key={row.label}
+                          onMouseEnter={() => setHovered(row.label)}
+                          onMouseLeave={() => setHovered(null)}
+                          className={`relative overflow-hidden rounded-xl transition-all ${
+                            isFocused ? "ring-2 ring-[#084734]/30" : ""
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            aria-pressed={selected === row.label}
+                            onClick={() => select(layer.key, row.label)}
+                            className="relative block min-h-10 w-full px-3 py-2 text-left focus-visible:outline-2 focus-visible:outline-[#084734]"
+                          >
+                            {/* 막대 그래프 프로그레스 배경 */}
+                            <span
+                              aria-hidden
+                              className="absolute inset-y-0 left-0 rounded-xl bg-[#ECFDF5] transition-all"
+                              style={{ width: `${max > 0 ? (row.count / max) * 100 : 0}%` }}
+                            />
+
+                            <span className="relative flex items-center justify-between text-[13px]">
+                              <span className="flex items-center gap-2">
+                                <span
+                                  className={`flex h-5 w-5 items-center justify-center rounded-md text-[10.5px] font-bold ${
+                                    index === 0
+                                      ? "bg-[#084734] text-white"
+                                      : index < 3
+                                      ? "bg-[#084734]/15 text-[#084734]"
+                                      : "bg-[#f0f0ec] text-[#615D59]"
+                                  }`}
+                                >
+                                  {index + 1}
+                                </span>
+                                <span className="font-semibold text-[#111110]">{row.label}</span>
+                              </span>
+
+                              <span className="flex items-center gap-2 font-semibold tabular-nums text-[#111110]">
+                                <span>{row.count.toLocaleString("ko-KR")}건</span>
+                                <span className="text-[11px] font-normal text-[#615D59] w-12 text-right">
+                                  {share.toFixed(1)}%
+                                </span>
+                                <ChevronRight className="h-3.5 w-3.5 text-[#A39E98]" />
+                              </span>
+                            </span>
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </div>
+
+              {/* 전국 상위 고객 Top 5 미리보기 */}
+              {nationalTopCustomers.length > 0 ? (
+                <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
+                  <div className="mb-2.5 flex items-center justify-between">
+                    <span className="text-[12.5px] font-bold text-[#111110]">
+                      전국 주요 상위 고객 미리보기
+                    </span>
+                    <span className="text-[11px] text-[#615D59]">대표 5곳</span>
+                  </div>
+                  <div className="space-y-1">
+                    {nationalTopCustomers.map((cust, idx) => (
+                      <Link
+                        key={`nat-${cust.id}-${idx}`}
+                        href={`/admin/crm/customers/unified?q=${encodeURIComponent(cust.name)}`}
+                        className="flex items-center justify-between rounded-lg bg-white p-2 text-[12px] border border-[#f0f0ec] hover:border-[#084734]/30"
+                      >
+                        <span className="font-medium text-[#111110] truncate max-w-[200px]">
+                          {cust.name}
+                        </span>
+                        <span className="text-[11px] text-[#615D59] flex items-center gap-1.5">
+                          <span className="rounded-xs bg-[#f0f0ec] px-1.5 py-0.2 text-[10px]">
+                            {cust.region}
+                          </span>
+                          <strong className="font-semibold text-[#084734]">
+                            {cust.count}건
+                          </strong>
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           )}
         </div>
       </div>
 
+      {error ? (
+        <p role="status" className="mt-3 text-[13px] text-[#B43E3E]">
+          {error} · 최근 확인한 분포를 유지합니다.
+        </p>
+      ) : null}
+
       {layer.notes.length > 0 ? (
-        <ul className="mt-4 space-y-1 border-t border-[#f0f0ec] pt-3">
+        <ul className="mt-5 space-y-1 border-t border-[#f0f0ec] pt-3">
           {layer.notes.map((note) => (
-            <li key={note} className="text-[11.5px] leading-relaxed text-[#1a1a1a]/45">
+            <li key={note} className="text-[11.5px] leading-relaxed text-[#615D59]">
               · {note}
             </li>
           ))}

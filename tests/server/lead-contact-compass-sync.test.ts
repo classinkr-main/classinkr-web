@@ -25,6 +25,8 @@ interface Fixture {
 
 const CONFIRMED_AT = "2026-09-14T10:00:00.000Z"
 
+// 리드 픽스처에 created_at 이 없으니 판정은 시각을 따지지 않는다(옛 동작) — 시각 규칙은 tests/compass/lead-contact-sync.test.ts.
+// 번호는 자리표시 규칙(010-1111-1111 류는 더미)에 걸리지 않는 모양을 쓴다.
 function row(id: number, phoneKey: string, stage: string) {
   return { id, phone_key: phoneKey, stage, created_at: "2026-09-01T00:00:00.000Z" }
 }
@@ -97,19 +99,19 @@ async function loadSync(fixture: Fixture) {
 
 const BASE: Fixture = {
   leads: [
-    { id: "a", phone: "010-1111-1111", status: "new" },
-    { id: "b", phone: "010-2222-2222", status: "new" },
-    { id: "c", phone: "+82 10-3333-3333", status: "new" },
-    { id: "d", phone: "010-4444-4444", status: "new" },
-    { id: "e", phone: "010-5555-5555", status: "contacted" },
-    { id: "f", phone: "010-9999-9999", status: "new" },
+    { id: "a", phone: "010-2041-7731", status: "new" },
+    { id: "b", phone: "010-2052-7732", status: "new" },
+    { id: "c", phone: "+82 10-2063-7733", status: "new" },
+    { id: "d", phone: "010-2074-7734", status: "new" },
+    { id: "e", phone: "010-2085-7735", status: "contacted" },
+    { id: "f", phone: "010-2096-7736", status: "new" },
   ],
   compassRows: [
-    row(1, "01011111111", "demo"),
-    row(2, "01022222222", "lost"),
-    row(3, "01033333333", "new"),
-    row(4, "01044444444", "new"),
-    row(5, "01055555555", "lost"),
+    row(1, "01020417731", "demo"),
+    row(2, "01020527732", "lost"),
+    row(3, "01020637733", "new"),
+    row(4, "01020747734", "new"),
+    row(5, "01020857735", "lost"),
   ],
   activities: [
     { lead_id: 3, kind: "call", actor: "황찬우" },
@@ -199,7 +201,7 @@ describe("syncLeadContactFromCompass", () => {
   it("Compass 리드 조회가 행 상한(1000)에 닿으면 잘렸을 수 있어 전체를 건너뛴다 — 대표 행이 바뀌어 잘못 종료되지 않게", async () => {
     const sync = await loadSync({
       ...BASE,
-      readRowsOverride: () => Array.from({ length: 1000 }, (_, index) => row(index + 1, "01011111111", "lost")),
+      readRowsOverride: () => Array.from({ length: 1000 }, (_, index) => row(index + 1, "01020417731", "lost")),
     })
 
     const report = await sync.syncLeadContactFromCompass()

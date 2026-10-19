@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react"
 import { Building2, Check, CircleAlert, Info, Loader2, PanelsTopLeft, ShieldCheck, UserRound } from "lucide-react"
 
-import { type NavPlacement } from "@/components/admin/admin-nav-access"
+import { type NavOverrideValue } from "@/components/admin/admin-nav-access"
 import MemberNavAccessDrawer from "@/components/admin/settings/MemberNavAccessDrawer"
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 
@@ -39,7 +39,7 @@ const CAPABILITY_OPTIONS = [
   {
     key: "hardware.finalize",
     label: "하드웨어 최종 확정 · 이왕찬 담당",
-    description: "모든 팀원은 일반 편집이 가능하며, 이 권한은 계획 출고 확정과 입출고 원장 취소만 제한합니다.",
+    description: "모든 팀원은 일반 편집이 가능하며, 이 권한은 계획 출고 확정과 입출고 원본 취소만 제한합니다.",
   },
 ] as const
 
@@ -294,7 +294,7 @@ export function MembersPanel() {
   // 프리셋은 드로어가 항상 null로 밀므로 여기서도 함께 비운다(레거시 값 정리).
   const handleNavAccessSaved = (
     targetUserId: string,
-    navOverrides: Record<string, NavPlacement>
+    navOverrides: Record<string, NavOverrideValue>
   ) => {
     const updateUsers = (users: AdminUser[]) =>
       users.map((item) =>

@@ -14,30 +14,23 @@ import {
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import {
-  Users,
-  TrendingUp,
-  CheckCircle2,
   Mail,
   FileText,
   Eye,
   AlertCircle,
   ArrowUpRight,
-  Bot,
   CalendarDays,
   ChevronDown,
   ChevronRight,
   ChevronUp,
-  Inbox,
   Link2,
   RotateCw,
   Send,
-  ShieldAlert,
 } from "lucide-react"
 import { adminFetchJsonCached } from "@/lib/admin-client"
 import { StatCard } from "@/components/admin/StatCard"
 import {
   EmptyState,
-  KpiSkeleton,
   MiniFunnel,
   SectionCard,
   SectionSkeleton,
@@ -78,6 +71,8 @@ import type { AdminBlogOverviewSummary } from "@/lib/admin/overview/blog-summary
 import type { EmailCampaign } from "@/lib/marketing-types"
 import type { BugReport } from "@/lib/bugs-data"
 import type { PatchNote } from "@/lib/patch-notes-data"
+import { OverviewBriefing, OverviewOperationsPanels, OverviewScorecard, type OverviewMetric } from "@/components/admin/overview/OverviewWorkspace"
+import type { OverviewOperationsSummary } from "@/lib/admin/overview/operations-summary"
 
 const OVERVIEW_FETCH_TIMEOUT_MS = 12_000
 
@@ -224,34 +219,6 @@ function KpiUnavailable({
   )
 }
 
-function OsDetailUnavailable({
-  label,
-  detail,
-  onRetry,
-}: {
-  label: string
-  detail?: string | null
-  onRetry: () => void
-}) {
-  return (
-    <div role="alert" className="flex min-h-11 items-center gap-2 rounded-lg border border-[#F6D5C5] bg-[#FEF9F6] px-3 py-2">
-      <AlertCircle className="h-3.5 w-3.5 shrink-0 text-[#B85C33]" aria-hidden="true" />
-      <span className="min-w-0 flex-1 text-[11px] leading-relaxed text-[#8F2C2C]">
-        {label} 조회 실패<span className="sr-only">. {detail ?? "0건이 아닙니다."}</span>
-      </span>
-      <button
-        type="button"
-        onClick={onRetry}
-        aria-label={`${label} 지표 다시 시도`}
-        className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-lg px-2 text-[11px] font-semibold text-[#8F2C2C] transition-colors hover:bg-white"
-      >
-        <RotateCw className="h-3.5 w-3.5" aria-hidden="true" />
-        다시 시도
-      </button>
-    </div>
-  )
-}
-
 function statusToneClasses(tone: OverviewSignalTone) {
   switch (tone) {
     case "info":
@@ -319,16 +286,6 @@ const PUBLISH_STATUS_COLOR: Record<BlogPostStatus, string> = {
   archived: "bg-[#f0f0ec] text-[#1a1a1a]/40",
 }
 const COMPACT_NUMBER = new Intl.NumberFormat("ko-KR", { notation: "compact", maximumFractionDigits: 1 })
-
-// KPI 스트립 공통 레이아웃 — 모바일에서도 카드가 잘리지 않도록 가로 스크롤 대신 세로 그리드로 비교한다.
-// Tailwind grid-cols-*는 minmax(0,1fr)라 min-w-0 규약을 만족한다(우측 삐져나옴 방지).
-const KPI_STRIP_CLASS =
-  "grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5"
-// 타일 래퍼 — 모든 뷰포트에서 컨테이너 폭을 넘지 않고 내부 카드/스켈레톤의 높이를 맞춘다.
-const KPI_TILE_CLASS = "min-w-0 [&>*]:h-full"
-// 인바운드 요약 스트립 — 3타일 전용(KPI_STRIP_CLASS는 5열 고정이라 재사용 불가).
-const INBOUND_STRIP_CLASS =
-  "grid grid-cols-1 gap-3 sm:grid-cols-3"
 
 // 챗봇 stats 응답의 from 파라미터용 로컬 날짜(YYYY-MM-DD).
 function localDateOnly(date: Date) {
@@ -437,6 +394,25 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
   const [loading, setLoading] = useState(true)
   const [chartRange, setChartRange] = useState<7 | 30>(7)
   const [alertsExpanded, setAlertsExpanded] = useState(false)
+  const [operations, setOperations] = useState<OverviewOperationsSummary | null>(null)
+  const [operationsLoading, setOperationsLoading] = useState(true)
+  const [operationsRefreshKey, setOperationsRefreshKey] = useState(0)
+  const retryOperations = () => { setOperationsLoading(true); setOperationsRefreshKey((value) => value + 1) }
+
+  // 기존 스트리밍 레인을 기다리지 않고 운영 두 소스를 독립 조회한다.
+  useEffect(() => {
+    let cancelled = false
+    void adminFetchJsonCached<OverviewOperationsSummary>("/api/admin/overview/operations?owner=__me", {
+      adminTimeoutMs: OVERVIEW_FETCH_TIMEOUT_MS,
+    }, { ttlMs: 0, force: true, persist: false }).then((data) => {
+      if (!cancelled) setOperations(data)
+    }).catch(() => {
+      if (!cancelled) setOperations(null)
+    }).finally(() => {
+      if (!cancelled) setOperationsLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [refreshKey, operationsRefreshKey])
 
   // loadSourceQuiet의 안전판 — 언마운트 뒤 도착하는 레인/폴백 페치 결과가 setState를
   // 부르지 않게 한다(15초 ceiling까지 살아있는 레인이 있어, 사용자가 이미 다른 탭으로
@@ -463,7 +439,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
       }
       void loadSourceQuiet<AdminLeadsOverviewResponse>(
         "leads",
-        "/api/admin/leads?scope=overview",
+        "/api/admin/leads?scope=overview&owner=__me",
         (data) => setLeadOverview(data.overview),
         setSourceStates,
         unmountedRef
@@ -512,7 +488,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
       }
       void loadSourceQuiet<BranchSummaryPayload>(
         "branch",
-        "/api/admin/branch/summary?team=ALL&period=Y",
+        "/api/admin/branch/summary?team=ALL&period=Y&manager=__me",
         setBranchSummary,
         setSourceStates,
         unmountedRef
@@ -546,7 +522,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
       }
       void loadSourceQuiet<{ leads: LeadActionKpisPayload }>(
         "leadActions",
-        "/api/admin/crm/action-kpis",
+        "/api/admin/crm/action-kpis?owner=__me",
         (data) => setLeadActionKpis(data.leads),
         setSourceStates,
         unmountedRef
@@ -568,7 +544,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
         setSourceStates(INITIAL_SOURCE_STATES)
         void loadSourceQuiet<BranchSummaryPayload>(
           "branch",
-          "/api/admin/branch/summary?team=ALL&period=Y",
+          "/api/admin/branch/summary?team=ALL&period=Y&manager=__me",
           setBranchSummary,
           setSourceStates,
           unmountedRef,
@@ -576,7 +552,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
         )
         void loadSourceQuiet<{ leads: LeadActionKpisPayload }>(
           "leadActions",
-          "/api/admin/crm/action-kpis",
+          "/api/admin/crm/action-kpis?owner=__me",
           (data) => setLeadActionKpis(data.leads),
           setSourceStates,
           unmountedRef,
@@ -653,7 +629,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
         // null이면 그쪽에서 이미 자기 몫의 클라이언트 폴백을 튼다) — 여기서 또 부르면
         // 이중 페치가 된다. 재시도(fresh=true)에서만 이 Promise.all의 일원으로 강제 조회한다.
         fresh
-          ? fetchJson<AdminLeadsOverviewResponse>("/api/admin/leads?scope=overview", { fresh })
+          ? fetchJson<AdminLeadsOverviewResponse>("/api/admin/leads?scope=overview&owner=__me", { fresh })
           : Promise.resolve<AdminLeadsOverviewResponse | null>(null),
         fetchJson<{ subscribers: unknown[]; total: number }>("/api/admin/subscribers?count=1", { fresh }),
         fetchJson<{ overview: AdminBlogOverviewSummary }>("/api/admin/blog?scope=overview", { fresh }),
@@ -713,13 +689,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
     convRate,
     todayLeads,
     thisWeekLeads,
-    weekTrend,
-    thisMonthLeads,
-    convertedThisMonth,
-    convertedTrend,
-    homepageToday,
     homepageThisWeek,
-    homepageTotal,
     homepageUnconfirmed,
   } = leadOverview?.metrics ?? {
     newLeads: 0,
@@ -770,14 +740,6 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
   const instagramViews = instagramDashboard?.summary.totalViews ?? 0
   const instagramMediaCount = instagramDashboard?.summary.mediaCount ?? 0
   const instagramAverageViews = instagramDashboard?.summary.averageViews ?? 0
-  const visitorTodayIndex =
-    visitorStats?.daily.findIndex((day) => day.date === visitorStats.today.date) ?? -1
-  const visitorYesterday =
-    visitorStats && visitorTodayIndex > 0 ? visitorStats.daily[visitorTodayIndex - 1] : null
-  const homeVisitorTrend = visitorStats
-    ? visitorStats.today.homeVisitors - (visitorYesterday?.homeVisitors ?? 0)
-    : 0
-
   // 연동 상태 카드 — 외부 전송 경로 4종. 미연결 판정은 insights.deriveConnections 소유(오탐 방지 규칙 포함).
   const { connections, missingConnections } = deriveConnections(integrationStatus)
 
@@ -808,7 +770,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
   )
 
   // 오늘 할 일 / 주의 신호 — 우선순위·tone·임계값 판정은 insights.buildOperationalAlerts 소유.
-  const { alerts: operationalAlerts, actionableAlertCount: actionableOperationalAlertCount } =
+  const { alerts: baseOperationalAlerts, actionableAlertCount: baseActionableAlertCount } =
     buildOperationalAlerts({
       unrespondedCount: unrespondedSignal?.unrespondedCount ?? 0,
       unresponded24hCount: unrespondedSignal?.unresponded24hCount ?? 0,
@@ -849,13 +811,16 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
           .filter(([, health]) => health.status === "error")
           .map(([key]) => OS_SOURCE_STATE_LABEL[key])
       : []
-  const failedSourceLabels = [...failedRequestSourceLabels, ...failedOsSourceLabels]
+  const failedOperationsLabels = !operationsLoading
+    ? [operations?.demos.status !== "ready" ? "데모" : null, operations?.installations.status !== "ready" ? "설치·배송" : null].filter((label): label is string => Boolean(label))
+    : []
+  const failedSourceLabels = [...failedRequestSourceLabels, ...failedOsSourceLabels, ...failedOperationsLabels]
   const osSourceState = (key: OsSummarySourceKey): OverviewSourceState => {
     if (sourceStates.os !== "ready") return sourceStates.os
     return osSummary?.sources?.[key]?.status === "ready" ? "ready" : "error"
   }
   const osSourceError = (key: OsSummarySourceKey) => osSummary?.sources?.[key]?.error ?? undefined
-  const retryOverview = () => setRefreshKey((current) => current + 1)
+  const retryOverview = () => { setOperationsLoading(true); setRefreshKey((current) => current + 1) }
 
   // 위젯 단위 재시도 — retryOverview("전체 다시 시도")는 14개 소스를 전부 force로 다시 부르는
   // 넓은 폴백으로 상단 배너에만 남겨 두고, 개별 KPI 카드의 "다시 시도"는 실패한 소스 하나만
@@ -868,7 +833,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
     setSourceStates((current) => ({ ...current, [key]: "loading" }))
     switch (key) {
       case "leads":
-        void fetchJson<AdminLeadsOverviewResponse>("/api/admin/leads?scope=overview", { fresh: true }).then(
+        void fetchJson<AdminLeadsOverviewResponse>("/api/admin/leads?scope=overview&owner=__me", { fresh: true }).then(
           (data) => {
             setLeadOverview(data?.overview ?? null)
             setSourceStates((current) => ({ ...current, leads: data?.overview ? "ready" : "error" }))
@@ -896,7 +861,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
         return
       }
       case "branch":
-        void fetchJson<BranchSummaryPayload>("/api/admin/branch/summary?team=ALL&period=Y", { fresh: true }).then(
+        void fetchJson<BranchSummaryPayload>("/api/admin/branch/summary?team=ALL&period=Y&manager=__me", { fresh: true }).then(
           (data) => {
             setBranchSummary(data)
             setSourceStates((current) => ({ ...current, branch: data ? "ready" : "error" }))
@@ -904,7 +869,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
         )
         return
       case "leadActions":
-        void fetchJson<{ leads: LeadActionKpisPayload }>("/api/admin/crm/action-kpis", { fresh: true }).then(
+        void fetchJson<{ leads: LeadActionKpisPayload }>("/api/admin/crm/action-kpis?owner=__me", { fresh: true }).then(
           (data) => {
             setLeadActionKpis(data?.leads ?? null)
             setSourceStates((current) => ({ ...current, leadActions: data ? "ready" : "error" }))
@@ -920,8 +885,51 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
     }
   }, [])
 
+  const demos = operations?.demos.data ?? null
+  const installations = operations?.installations.data ?? null
+  const operationsAlerts = [
+    ...(installations && installations.overdueCount + installations.undatedCount > 0 ? [{
+      id: "installation-dates", scope: "설치·배송", tone: "warning" as const, meta: "미확정 출고 원본", title: "설치·배송 예정일 확인",
+      description: `예정일 경과 ${installations.overdueCount}건 · 날짜 미지정 ${installations.undatedCount}건. 완료 여부와 일정을 확인하세요.`, href: "/admin/hardware#hardware-section-planned", action: "예정 큐",
+    }] : []),
+    ...(demos && demos.unrecordedThisMonth > 0 ? [{
+      id: "demo-results", scope: "데모", tone: "warning" as const, meta: "Compass · 이번 달", title: "지난 데모 결과 확인",
+      description: `예정일이 지났지만 예약 상태인 회차 ${demos.unrecordedThisMonth}건. 완료·노쇼 여부를 원천에서 확인하세요.`, href: "https://mkt.classin.co.kr/leads", action: "Compass",
+    }] : []),
+  ]
+  const operationalAlerts = [...baseOperationalAlerts.filter((item) => item.tone === "danger"), ...operationsAlerts, ...baseOperationalAlerts.filter((item) => item.tone !== "danger")]
+  const actionableOperationalAlertCount = baseActionableAlertCount + operationsAlerts.length
+  const operationsState = (source: "demos" | "installations"): OverviewSourceState =>
+    operationsLoading ? "loading" : operations?.[source].status === "ready" ? "ready" : "error"
+  const metric = (row: Omit<OverviewMetric, "onRetry">, source: OverviewSourceKey): OverviewMetric =>
+    ({ ...row, onRetry: () => retrySource(source) })
+  const metrics: OverviewMetric[] = [
+    metric({ id: "leads", group: "리드", label: "진행 중 리드", value: `${activePipelineLeads.toLocaleString()}건`, note: `테스트·미확인 제외 · 신규 ${newLeads} / 연락중 ${contactedLeads}`, href: "/admin/crm/customers/leads", state: sourceStates.leads, trend: <Sparkline data={sparkLeads} /> }, "leads"),
+    metric({ id: "response", group: "리드", label: "24h+ 신규 상태", value: `${unrespondedSignal?.unresponded24hCount ?? 0}건`, note: "응답 이벤트 대리 지표 · 운영 리드 · 테스트 제외", href: "/admin/crm/customers/leads?filter=unresponded_24h&focus=risk", state: unrespondedSignal ? "ready" : sourceStates.leadActions, reference: "24시간 이내 후속 확인", tone: (unrespondedSignal?.unresponded24hCount ?? 0) > 0 ? "danger" : "neutral" }, "leadActions"),
+    metric({ id: "inflow", group: "리드", label: "이번 주 유입", value: `${thisWeekLeads}건`, note: `오늘 ${todayLeads}건 · 테스트 제외`, href: "/admin/crm/customers/leads", state: sourceStates.leads, trend: <Sparkline data={sparkLeads.slice(7)} /> }, "leads"),
+    metric({ id: "conversion", group: "리드", label: "리드 전환율", value: `${convRate}%`, note: `현재 누적 · 전환 ${converted}건`, href: "/admin/crm/customers/leads?filter=converted", state: sourceStates.leads }, "leads"),
+    { id: "demos", group: "데모", label: "데모 예정", value: `${demos?.truncated ? "≥" : ""}${demos?.upcomingCount ?? 0}회`, note: `오늘부터 30일 · 오늘 ${demos?.todayCount ?? 0} / 7일 ${demos?.next7Count ?? 0}`, href: "https://mkt.classin.co.kr/leads", state: operationsState("demos"), onRetry: retryOperations },
+    { id: "demo-results", group: "데모", label: "데모 완료 기록", value: `${demos?.truncated ? "≥" : ""}${demos?.doneThisMonth ?? 0}회`, note: `이번 달 · 결과 미기록 ${demos?.unrecordedThisMonth ?? 0}회`, reference: "Compass done 상태만", href: "https://mkt.classin.co.kr/leads", state: operationsState("demos"), tone: (demos?.unrecordedThisMonth ?? 0) > 0 ? "warning" : "neutral", onRetry: retryOperations },
+    { id: "installations", group: "설치·배송", label: "설치·배송 예정", value: `${installations?.units ?? 0}대`, note: `미확정 출고 ${installations?.count ?? 0}건 · 품목 행 기준`, href: "/admin/hardware#hardware-section-planned", state: operationsState("installations"), onRetry: retryOperations },
+    { id: "installation-dates", group: "설치·배송", label: "예정일 점검", value: `${(installations?.overdueCount ?? 0) + (installations?.undatedCount ?? 0)}건`, note: `날짜 경과 ${installations?.overdueCount ?? 0} / 미지정 ${installations?.undatedCount ?? 0}`, reference: "원본 예정일 기준", href: "/admin/hardware#hardware-section-planned", state: operationsState("installations"), tone: (installations?.overdueCount ?? 0) + (installations?.undatedCount ?? 0) > 0 ? "warning" : "neutral", onRetry: retryOperations },
+    metric({ id: "revenue", group: "매출·운영", label: "내 FY 확정 매출", value: `${fmtCny(branchSummary?.revenue.confirmed ?? 0)} CNY`, note: "내 담당 · REV 확정 · 승인 개인 목표", reference: `연간 ${fmtCny(branchSummary?.revenue.goal ?? 0)} CNY`, progress: branchSummary?.revenue.goal ? branchSummary.revenue.confirmed / branchSummary.revenue.goal * 100 : undefined, href: "/admin/branch/ledger?period=Y", state: sourceStates.branch, trend: <Sparkline data={sparkRevenue} /> }, "branch"),
+    metric({ id: "pipeline", group: "매출·운영", label: "파이프 커버리지", value: pipelineCoverage == null ? "—" : `${pipelineCoverage.toFixed(1)}x`, note: "연간 예상 파이프 ÷ 잔여목표", reference: "2.0x 이상 권장", href: "/admin/branch/ledger?period=Y", state: sourceStates.branch, tone: pipelineCoverage != null && pipelineCoverage < 2 ? "warning" : "neutral" }, "branch"),
+    metric({ id: "renewal", group: "매출·운영", label: "리뉴얼 D-60", value: `${osSummary?.renewal.expiringSoonCount ?? 0}건`, note: osSourceError("renewal") ?? "NEO · 60일 내 만료", href: "/admin/crm/customers/accounts?expiring=1", state: osSourceState("renewal"), tone: (osSummary?.renewal.expiringSoonCount ?? 0) > 0 ? "warning" : "neutral" }, "os"),
+    metric({ id: "matching", group: "매출·운영", label: "링크 확정률", value: `${osSummary?.matching.coveragePct ?? 0}%`, note: osSourceError("matching") ?? `확정 ${osSummary?.matching.linked ?? 0}/${osSummary?.matching.total ?? 0} · 검토 ${osSummary?.matching.needsReview ?? 0}`, href: "/admin/crm/matching", state: osSourceState("matching"), progress: osSummary?.matching.coveragePct ?? undefined }, "os"),
+    metric({ id: "hardware", group: "매출·운영", label: "86보드 실판매 출고", value: `${osSummary?.hw.boards86 ?? 0}대`, note: osSourceError("hw") ?? "샘플·프로모션·A/S·예정 제외", reference: `기존 운영 기준 ${osSummary?.hw.target ?? "—"}대`, href: "/admin/hardware", state: osSourceState("hw"), progress: osSummary?.hw.target ? (osSummary.hw.boards86 ?? 0) / osSummary.hw.target * 100 : undefined }, "os"),
+    metric({ id: "visitors", group: "유입·콘텐츠", label: "홈페이지 방문", value: `${visitorStats?.totals.homeVisitors.toLocaleString() ?? 0}명`, note: "최근 7일 · 홈페이지 방문자", href: "/admin/traffic", state: sourceStates.visitor, trend: <Sparkline data={sparkVisitors} /> }, "visitor"),
+    metric({ id: "homepage", group: "유입·콘텐츠", label: "홈페이지 유입", value: `${homepageThisWeek}건`, note: `최근 7일 · 누적 미확인 ${homepageUnconfirmed}건은 확인 게이트와 별도`, href: "/admin/crm/customers/leads?group=homepage&unconfirmed=1", state: sourceStates.leads }, "leads"),
+    metric({ id: "chatbot", group: "유입·콘텐츠", label: "챗봇 문의", value: `${chatbotStats?.totals.questionCount ?? 0}건`, note: `최근 7일 · 미해결 ${chatbotStats?.totals.unresolvedCount ?? 0} / 상담연결 ${chatbotStats?.totals.handoffCount ?? 0}`, href: "/admin/chatbot", state: sourceStates.chatbot }, "chatbot"),
+    metric({ id: "content", group: "유입·콘텐츠", label: "공개 블로그", value: `${osSummary?.content.blogPublished ?? 0}건`, note: osSourceError("content") ?? "현재 공개 상태", reference: `기존 운영 기준 ${osSummary?.content.target ?? "—"}건`, href: "/admin/blog", state: osSourceState("content"), progress: osSummary?.content.target ? (osSummary.content.blogPublished ?? 0) / osSummary.content.target * 100 : undefined }, "os"),
+    metric({ id: "events", group: "유입·콘텐츠", label: "공개 행사", value: `${osSummary?.events.count ?? 0}건`, note: osSourceError("events") ?? "현재 공개 상태", reference: `기존 운영 기준 ${osSummary?.events.target ?? "—"}건`, href: "/admin/events", state: osSourceState("events"), progress: osSummary?.events.target ? (osSummary.events.count ?? 0) / osSummary.events.target * 100 : undefined }, "os"),
+  ]
+  const heroMetrics = [metrics[0], metrics[4], metrics[6], {
+    ...metrics[8], label: "연간 매출 달성", value: branchSummary?.revenue.goal ? `${Math.round(branchSummary.revenue.confirmed / branchSummary.revenue.goal * 100)}%` : "—",
+    note: `확정 ${fmtCny(branchSummary?.revenue.confirmed ?? 0)} / 승인 목표 ${fmtCny(branchSummary?.revenue.goal ?? 0)} · CNY`,
+  }]
+
   return (
-    <div className="relative overflow-hidden px-4 pt-6 pb-16 sm:px-6 sm:pt-8 lg:px-8 lg:pb-20 [&_a]:min-h-11 [&_button]:min-h-11 [&_a]:focus-visible:outline-none [&_a]:focus-visible:ring-2 [&_a]:focus-visible:ring-[#084734] [&_a]:focus-visible:ring-offset-2 [&_button]:focus-visible:outline-none [&_button]:focus-visible:ring-2 [&_button]:focus-visible:ring-[#084734] [&_button]:focus-visible:ring-offset-2">
+    <div className="relative mx-auto max-w-[1440px] px-4 pt-6 pb-16 sm:px-6 sm:pt-8 lg:px-8 lg:pb-20 [&_a]:min-h-11 [&_button]:min-h-11 [&_a]:focus-visible:outline-none [&_a]:focus-visible:ring-2 [&_a]:focus-visible:ring-[#084734] [&_a]:focus-visible:ring-offset-2 [&_button]:focus-visible:outline-none [&_button]:focus-visible:ring-2 [&_button]:focus-visible:ring-[#084734] [&_button]:focus-visible:ring-offset-2">
       {/* 소스별 독립 Suspense 경계 — 서버가 openPrefetchLane으로 연 6개 레인을 각각
           형제 <Suspense>로 감싼다(화면 전체를 하나로 감싸면 가장 느린 소스가 전체를 막아
           스트리밍 이점이 사라진다 — 이번 작업의 핵심 요건). 각 다리(PrefetchSourceBridge)는
@@ -952,15 +960,14 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
       ) : null}
       {/* 헤더 — eyebrow·소개문은 제거(사이드바가 위치를, 섹션이 내용을 이미 말한다).
           확보한 공간은 숫자에게 주고, 우측은 상시 바로가기만 남긴다. */}
-      <div className="relative mb-6 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">Overview</h1>
+      <div className="relative mb-7 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div><h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">Overview</h1><p className="mt-2 text-xs text-[#615D59]">내 담당 리드·데모·설치·매출 기준 · 방문·콘텐츠·시스템 지표는 전사 공용</p></div>
         <div className="flex flex-wrap items-center gap-2">
           {[
             { href: "/admin/crm", label: "CRM" },
             { href: "/admin/campaigns", label: "캠페인" },
             { href: "/admin/branch/ledger", label: "매출 장부" },
             { href: "/admin/calendar", label: "캘린더" },
-            { href: "/admin/settings", label: "설정" },
           ].map((link) => (
             <Link
               key={link.href}
@@ -995,396 +1002,32 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
         </div>
       ) : null}
 
-      {/* 인바운드 — 홈페이지 방문·문의(contact)·챗봇 질문을 최상단에 고정한다
-          ('관망 지표 하강 배치' 규칙의 명시적 예외). 세 타일 모두 '최근 7일' 단일 창. */}
-      <section
-        className="relative mb-6"
-        aria-labelledby="overview-inbound-heading"
-        aria-busy={
-          sourceStates.visitor === "loading" ||
-          sourceStates.leads === "loading" ||
-          sourceStates.chatbot === "loading"
-        }
-      >
-        <div className="mb-3 flex items-baseline gap-2">
-          <h2 id="overview-inbound-heading" className="text-[14px] font-semibold text-[#111110]">인바운드</h2>
-          <span className="text-[11px] text-[#1a1a1a]/40">최근 7일</span>
+      <OverviewBriefing metrics={heroMetrics} summary={<>
+        {unrespondedSignal ? unrespondedSignal.unresponded24hCount > 0 ? <>24시간 넘게 신규 상태인 리드 <span className="text-[#B43E3E]">{unrespondedSignal.unresponded24hCount}건</span>을 확인하세요. </> : <>24시간 이상 신규 상태로 남은 운영 리드는 없습니다. </> : <>리드 후속 현황을 확인하고 있습니다. </>}
+        {demos ? <>앞으로 7일 데모 <span className="text-[#084734]">{demos.truncated ? "최소 " : ""}{demos.next7Count}회</span>, </> : <>{operationsLoading ? "데모 일정을 불러오는 중입니다. " : "데모 원천 확인이 필요합니다. "}</>}
+        {installations ? <>설치·배송 예정 <span className="text-[#084734]">{installations.units}대</span>가 대기 중입니다.</> : <>{operationsLoading ? "설치·배송 현황을 불러오는 중입니다." : "설치·배송 원천 확인이 필요합니다."}</>}
+      </>} />
+
+      <section className="mb-10" aria-labelledby="overview-focus-heading">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 id="overview-focus-heading" className="text-xl font-bold tracking-[-0.025em] text-[#111110]">먼저 볼 {Math.min(3, operationalAlerts.length)}가지</h2>
+          <span className="text-xs text-[#615D59]">주의 {actionableOperationalAlertCount} · 기존 운영 우선순위</span>
         </div>
-        <div className={INBOUND_STRIP_CLASS}>
-          <div className={KPI_TILE_CLASS}>
-            {sourceStates.visitor === "ready" && visitorStats ? (
-              <StatCard
-                icon={<Eye className="h-4 w-4" />}
-                label="홈페이지 방문"
-                value={`${visitorStats.totals.homeVisitors.toLocaleString("ko-KR")}명`}
-                sub={`오늘 ${visitorStats.today.homeVisitors} · PV ${visitorStats.totals.homePageViews.toLocaleString("ko-KR")}`}
-                tone="neutral"
-                valueSize="lg"
-                sparkline={sparkVisitors.length ? <Sparkline data={sparkVisitors} /> : undefined}
-                href="/admin/traffic"
-              />
-            ) : sourceStates.visitor === "error" ? (
-              <KpiUnavailable label="방문 지표" onRetry={() => retrySource("visitor")} />
-            ) : (
-              <KpiSkeleton />
-            )}
-          </div>
-          <div className={KPI_TILE_CLASS}>
-            {sourceStates.leads === "loading" ? (
-              <KpiSkeleton />
-            ) : sourceStates.leads === "error" ? (
-              <KpiUnavailable label="문의 지표" onRetry={() => retrySource("leads")} />
-            ) : (
-              <StatCard
-                icon={<Inbox className="h-4 w-4" />}
-                label="홈페이지 유입"
-                value={`${homepageThisWeek}건`}
-                sub={
-                  // 누적 옆에 미확인 건수를 같이 낸다. 이 타일은 확인 게이트를 안 걸고 세는데
-                  // 눌러서 착지하는 리드 보드는 걸기 때문에, 이 수를 안 밝히면 "타일 4건 →
-                  // 목록 3건"이 아무 설명 없이 어긋난다. 링크도 게이트를 연 채로 착지시킨다.
-                  homepageUnconfirmed > 0
-                    ? `오늘 ${homepageToday} · 누적 ${homepageTotal} · 미확인 ${homepageUnconfirmed}`
-                    : `오늘 ${homepageToday} · 누적 ${homepageTotal}`
-                }
-                tone="neutral"
-                valueSize="lg"
-                href="/admin/crm/customers/leads?group=homepage&unconfirmed=1"
-              />
-            )}
-          </div>
-          <div className={KPI_TILE_CLASS}>
-            {sourceStates.chatbot === "ready" && chatbotStats ? (
-              <StatCard
-                icon={<Bot className="h-4 w-4" />}
-                label="챗봇 문의"
-                value={`${chatbotStats.totals.questionCount.toLocaleString("ko-KR")}건`}
-                sub={`미해결 ${chatbotStats.totals.unresolvedCount} · 상담연결 ${chatbotStats.totals.handoffCount}`}
-                tone="neutral"
-                valueSize="lg"
-                href="/admin/chatbot"
-              />
-            ) : sourceStates.chatbot === "error" ? (
-              <KpiUnavailable label="챗봇 지표" onRetry={() => retrySource("chatbot")} />
-            ) : (
-              <KpiSkeleton />
-            )}
-          </div>
+        <div className="overflow-hidden rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white" aria-busy={loading || sourceStates.leads === "loading"}>
+          {loading ? <div className="p-6"><SectionSkeleton rows={3} /></div> : operationalAlerts.length === 0 ? <div className="p-6"><EmptyState title="확인된 운영 주의 신호가 없습니다." description="조회 실패한 원천은 아래 지표에서 따로 확인하세요." /></div> : <>
+            <div id="overview-operational-alerts" className="divide-y divide-[rgba(0,0,0,0.08)]">
+              {(alertsExpanded ? operationalAlerts : operationalAlerts.slice(0, 3)).map((item, index) => <Link key={item.id} href={item.href} className="group grid grid-cols-[2rem_minmax(0,1fr)] items-center gap-3 px-5 py-5 hover:bg-[#FAFAF8] sm:grid-cols-[2.5rem_minmax(0,1fr)_auto] sm:gap-5 sm:px-7">
+                <span className="text-2xl font-bold tabular-nums text-[#D5D2CB]">{String(index + 1).padStart(2, "0")}</span>
+                <span className="min-w-0"><span className="block text-[15px] font-semibold text-[#111110]">{item.title}</span><span className="mt-1 block text-xs leading-relaxed text-[#615D59]">{item.description}</span><span className={`mt-2 block text-[11px] ${item.tone === "danger" ? "text-[#B43E3E]" : item.tone === "warning" ? "text-[#A8741A]" : "text-[#615D59]"}`}>{item.scope} · {item.meta}</span></span>
+                <span className="col-start-2 inline-flex items-center gap-1 text-xs font-semibold text-[#084734] sm:col-auto">{item.action}<ChevronRight className="h-3.5 w-3.5" aria-hidden="true" /></span>
+              </Link>)}
+            </div>
+            {operationalAlerts.length > 3 && <button type="button" onClick={() => setAlertsExpanded((value) => !value)} aria-expanded={alertsExpanded} aria-controls="overview-operational-alerts" className="flex w-full items-center justify-center gap-1 border-t border-[rgba(0,0,0,0.08)] text-xs font-semibold text-[#615D59]">{alertsExpanded ? "접기" : `신호 ${operationalAlerts.length - 3}개 더 보기`}{alertsExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}</button>}
+          </>}
         </div>
       </section>
 
-      {/* (a) 운영 OS 커맨드 바 — 이 표면의 존재 이유. 신호는 필터드 딥링크로 행동에 직결한다.
-          콜드로드: 각 타일은 자기 원천(fetch)이 null이면 '…' 대신 레이아웃 일치 KpiSkeleton을 렌더한다. */}
-      <section
-        className="relative mb-6 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-4 sm:p-5"
-        aria-labelledby="overview-os-heading"
-        aria-busy={
-          sourceStates.leadActions === "loading" ||
-          sourceStates.branch === "loading" ||
-          sourceStates.os === "loading"
-        }
-      >
-        <div className="mb-4 flex items-baseline gap-2">
-          <h2 id="overview-os-heading" className="text-[14px] font-semibold text-[#111110]">운영 OS</h2>
-          <span className="text-[11px] text-[#1a1a1a]/45">지금 잡아야 할 신호</span>
-        </div>
-        <div className={`${KPI_STRIP_CLASS} -mx-4 px-4 sm:-mx-5 sm:px-5 md:mx-0 md:px-0`}>
-          <div className={KPI_TILE_CLASS}>
-            {unrespondedSignal ? (
-              <StatCard
-                icon={<AlertCircle className="h-4 w-4" />}
-                label="24h+ 신규 상태"
-                value={`${unrespondedSignal.unresponded24hCount}건`}
-                // 산정 기준 캡션 — 주의신호 카드와 동일 어휘·동일 기준(미응답 리드=데모·문의·Meta 신규).
-                sub="응답 이벤트 대리 지표 · 운영 리드 · 테스트 제외"
-                tone={unrespondedSignal.unresponded24hCount > 0 ? "danger" : "neutral"}
-                valueSize="lg"
-                href="/admin/crm/customers/leads?filter=unresponded_24h&focus=risk"
-              />
-            ) : sourceStates.leadActions === "error" && sourceStates.leads === "error" ? (
-              <KpiUnavailable label="CRM 후속 지표" onRetry={() => retrySource("leadActions")} />
-            ) : (
-              <KpiSkeleton />
-            )}
-          </div>
-          <div className={KPI_TILE_CLASS}>
-            {sourceStates.branch === "ready" && branchSummary ? (
-              <StatCard
-                icon={<TrendingUp className="h-4 w-4" />}
-                label="파이프 커버리지"
-                value={pipelineCoverage != null ? `${pipelineCoverage.toFixed(1)}x` : "—"}
-                sub="예상 파이프 ÷ 잔여목표 (≥2.0x 권장)"
-                tone={pipelineCoverage != null && pipelineCoverage < 2.0 ? "danger" : "neutral"}
-                valueSize="lg"
-                // 이 카드는 /api/admin/branch/summary?period=Y(연간) 값으로 계산된다 — 쿼리 없이
-                // 착지하면 장부 페이지 기본값(period=Q)이 열려 방금 본 숫자와 다른 화면이 뜬다
-                // (components/admin/branch/ledger/workbench-shared.tsx의 period 기본값 확인,
-                // 그 파일은 이 작업 소유 밖이라 읽기만 했다).
-                href="/admin/branch/ledger?period=Y"
-              />
-            ) : sourceStates.branch === "error" ? (
-              <KpiUnavailable label="매출 지표" onRetry={() => retrySource("branch")} />
-            ) : (
-              <KpiSkeleton />
-            )}
-          </div>
-          <div className={KPI_TILE_CLASS}>
-            {osSourceState("renewal") === "ready" && osSummary?.renewal.expiringSoonCount != null ? (
-              <StatCard
-                icon={<CalendarDays className="h-4 w-4" />}
-                // 원천 임계값이 60일(crm-neo-customer-snapshots)이므로 라벨도 D-60로 고정한다.
-                label="리뉴얼 D-60"
-                value={`${osSummary.renewal.expiringSoonCount}건`}
-                sub="60일 이내 만료 · 선제 대응"
-                tone={osSummary.renewal.expiringSoonCount > 0 ? "caution" : "neutral"}
-                valueSize="lg"
-                href="/admin/crm/customers/accounts?expiring=1"
-              />
-            ) : osSourceState("renewal") === "error" ? (
-              <KpiUnavailable label="리뉴얼 지표" detail={osSourceError("renewal")} onRetry={() => retrySource("os")} />
-            ) : (
-              <KpiSkeleton />
-            )}
-          </div>
-          <div className={KPI_TILE_CLASS}>
-            {osSourceState("matching") === "ready" &&
-            osSummary?.matching.coveragePct != null &&
-            osSummary.matching.linked != null &&
-            osSummary.matching.total != null &&
-            osSummary.matching.needsReview != null ? (
-              <StatCard
-                icon={<Link2 className="h-4 w-4" />}
-                label="링크 확정률"
-                value={`${osSummary.matching.coveragePct}%`}
-                sub={`확정 ${osSummary.matching.linked}/${osSummary.matching.total} · 검토 대기 ${osSummary.matching.needsReview}`}
-                tone={osSummary.matching.coveragePct < 80 ? "caution" : "neutral"}
-                valueSize="lg"
-                href="/admin/crm/matching"
-              />
-            ) : osSourceState("matching") === "error" ? (
-              <KpiUnavailable label="매칭 지표" detail={osSourceError("matching")} onRetry={() => retrySource("os")} />
-            ) : (
-              <KpiSkeleton />
-            )}
-          </div>
-          <div className={KPI_TILE_CLASS}>
-            {osSourceState("hw") === "ready" && osSummary?.hw.boards86 != null ? (
-              <StatCard
-                icon={<CheckCircle2 className="h-4 w-4" />}
-                label="진척 · HW"
-                value={`${osSummary.hw.boards86}/${osSummary.hw.target}`}
-                sub={
-                  // boards86은 실판매만 집계 — 배송예정분은 별도 캡션으로 병기(구 캐시엔 필드 없음).
-                  (osSummary.hw.plannedBoards86 ?? 0) > 0
-                    ? `86보드 실판매 기준 · 배송예정 ${osSummary.hw.plannedBoards86}대`
-                    : "86보드 실판매 기준"
-                }
-                tone="neutral"
-                valueSize="lg"
-                href="/admin/hardware"
-              />
-            ) : osSourceState("hw") === "error" ? (
-              <KpiUnavailable label="하드웨어 지표" detail={osSourceError("hw")} onRetry={() => retrySource("os")} />
-            ) : (
-              <KpiSkeleton />
-            )}
-          </div>
-        </div>
-        {/* 진척 세부(콘텐츠·행사)는 타일에서 분리해 도메인별 딥링크로 제공한다. */}
-        {sourceStates.os !== "loading" ? (
-          <div className="mt-3 border-t border-[rgba(0,0,0,0.08)] pt-3">
-            <span className="mb-2 block text-[11px] text-[#1a1a1a]/35">진척 상세</span>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {osSourceState("content") === "ready" && osSummary?.content.blogPublished != null ? (
-                <Link
-                  href="/admin/blog"
-                  className="inline-flex min-h-11 items-center justify-between gap-2 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[11px] font-medium text-[#1a1a1a]/55 transition-colors hover:text-[#111110]"
-                >
-                  <span>블로그 {osSummary.content.blogPublished}/{osSummary.content.target}</span>
-                  <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
-                </Link>
-              ) : (
-                <OsDetailUnavailable label="블로그" detail={osSourceError("content")} onRetry={() => retrySource("os")} />
-              )}
-              {osSourceState("events") === "ready" && osSummary?.events.count != null ? (
-                <Link
-                  href="/admin/events"
-                  className="inline-flex min-h-11 items-center justify-between gap-2 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[11px] font-medium text-[#1a1a1a]/55 transition-colors hover:text-[#111110]"
-                >
-                  <span>행사 {osSummary.events.count}/{osSummary.events.target}</span>
-                  <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
-                </Link>
-              ) : (
-                <OsDetailUnavailable label="행사" detail={osSourceError("events")} onRetry={() => retrySource("os")} />
-              )}
-            </div>
-          </div>
-        ) : null}
-      </section>
-
-      {/* (b) 오늘 할 일 / 주의 신호 — 배너·시그널칩·리스크 통합 */}
-      <div className="mb-6">
-        <SectionCard
-          title="오늘 할 일 / 주의 신호"
-          action={
-            <span
-              className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusToneClasses(
-                actionableOperationalAlertCount > 0 ? "warning" : operationalAlerts.length > 0 ? "info" : "success"
-              )}`}
-            >
-              {actionableOperationalAlertCount > 0
-                ? `주의 ${actionableOperationalAlertCount}`
-                : operationalAlerts.length > 0
-                  ? `최근 ${operationalAlerts.length}`
-                  : "정상"}
-            </span>
-          }
-        >
-          {loading ? (
-            <SectionSkeleton rows={4} />
-          ) : operationalAlerts.length === 0 ? (
-            <EmptyState
-              title="지금은 운영 주의 신호가 없습니다."
-              description="문의, 캠페인, 연동, 일정, 배포 변경이 안정 상태면 이 영역은 비어 있습니다."
-            />
-          ) : (
-            <>
-              <div id="overview-operational-alerts" className="grid gap-3 md:grid-cols-2">
-                {(alertsExpanded ? operationalAlerts : operationalAlerts.slice(0, 6)).map((item) => (
-                  <Link
-                    key={item.id}
-                    href={item.href}
-                    className="group flex items-start gap-3 rounded-xl border border-[#e8e8e4] bg-white px-4 py-3 transition-all hover:-translate-y-0.5 hover:border-[#c8c8c4] hover:shadow-[0_10px_24px_rgba(17,17,16,0.04)]"
-                  >
-                    <div className={`mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl border ${statusToneClasses(item.tone)}`}>
-                      <ShieldAlert className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${statusToneClasses(item.tone)}`}>
-                          {item.scope}
-                        </span>
-                        <span className="text-[11px] text-[#1a1a1a]/35">{item.meta}</span>
-                      </div>
-                      <p className="mt-1 truncate text-[13px] font-semibold text-[#111110]">{item.title}</p>
-                      <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/40">{item.description}</p>
-                    </div>
-                    <span className="flex shrink-0 items-center gap-1 text-[12px] font-medium text-[#1a1a1a]/35 group-hover:text-[#111110]">
-                      {item.action}
-                      <ChevronRight className="h-3 w-3" />
-                    </span>
-                  </Link>
-                ))}
-              </div>
-              {operationalAlerts.length > 6 ? (
-                <button
-                  type="button"
-                  onClick={() => setAlertsExpanded((prev) => !prev)}
-                  aria-expanded={alertsExpanded}
-                  aria-controls="overview-operational-alerts"
-                  className="mt-3 flex w-full items-center justify-center gap-1 rounded-lg text-[12px] font-semibold text-[#1a1a1a]/45 transition-colors hover:text-[#111110]"
-                >
-                  {alertsExpanded ? "접기" : `더보기 (${operationalAlerts.length - 6})`}
-                  {alertsExpanded ? <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" /> : <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />}
-                </button>
-              ) : null}
-            </>
-          )}
-        </SectionCard>
-      </div>
-
-      {/* (c) 흐름 지표 — 관망 지표는 신호 아래로 하강 배치. 정상 상태는 중립 톤(신호색 예산제). */}
-      <section
-        className="mb-6"
-        aria-labelledby="overview-flow-heading"
-        aria-busy={sourceStates.leads === "loading"}
-      >
-        <div className="mb-3">
-          <h2 id="overview-flow-heading" className="text-[14px] font-semibold text-[#111110]">흐름 지표</h2>
-        </div>
-        {sourceStates.leads === "error" ? (
-          <KpiUnavailable label="리드 흐름" onRetry={() => retrySource("leads")} />
-        ) : sourceStates.leads === "loading" ? (
-          <div className={KPI_STRIP_CLASS}>
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className={KPI_TILE_CLASS}>
-                <KpiSkeleton />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className={KPI_STRIP_CLASS}>
-            <div className={KPI_TILE_CLASS}>
-              <StatCard
-                icon={<Users className="h-4 w-4" />}
-                label="세일즈 파이프라인"
-                value={activePipelineLeads}
-                sub={`신규 ${newLeads} · 연락중 ${contactedLeads}`}
-                tone={newLeads > 0 ? "caution" : "neutral"}
-                sparkline={<Sparkline data={sparkLeads} tone={newLeads > 0 ? "caution" : "brand"} />}
-                href="/admin/crm/customers/leads"
-              />
-            </div>
-            <div className={KPI_TILE_CLASS}>
-              <StatCard
-                icon={<TrendingUp className="h-4 w-4" />}
-                label="이번 주 유입"
-                value={thisWeekLeads}
-                sub={`오늘 +${todayLeads} · 이번 달 ${thisMonthLeads}`}
-                trend={{ value: weekTrend, label: "지난주 대비" }}
-                sparkline={<Sparkline data={sparkLeads.slice(7)} />}
-                href="/admin/crm/customers/leads"
-              />
-            </div>
-            <div className={KPI_TILE_CLASS}>
-              <StatCard
-                icon={<CheckCircle2 className="h-4 w-4" />}
-                label="전환율"
-                value={`${convRate}%`}
-                sub={`전환 ${converted}건 · 이번 달 ${convertedThisMonth}건`}
-                trend={{ value: convertedTrend, label: "지난달 대비" }}
-                href="/admin/crm/customers/leads?filter=converted"
-              />
-            </div>
-            <div className={KPI_TILE_CLASS}>
-              {sourceStates.visitor === "ready" && visitorStats ? (
-                <StatCard
-                  icon={<Eye className="h-4 w-4" />}
-                  label="오늘 홈 방문자"
-                  value={visitorStats.today.homeVisitors}
-                  sub={`7일 ${visitorStats.totals.homeVisitors}명 · PV ${visitorStats.today.homePageViews}`}
-                  trend={{ value: homeVisitorTrend, label: "전일 대비" }}
-                  sparkline={sparkVisitors.length ? <Sparkline data={sparkVisitors} /> : undefined}
-                  href="/admin/traffic"
-                />
-              ) : sourceStates.visitor === "error" ? (
-                <KpiUnavailable label="방문 지표" onRetry={() => retrySource("visitor")} />
-              ) : (
-                <KpiSkeleton />
-              )}
-            </div>
-            <div className={KPI_TILE_CLASS}>
-              {sourceStates.branch === "ready" && branchSummary ? (
-                <StatCard
-                  icon={<TrendingUp className="h-4 w-4" />}
-                  label="매출 페이싱(연)"
-                  value={`${Math.round(branchSummary.revenue.pacing_pct)}%`}
-                  sub={`확정 ${fmtCny(branchSummary.revenue.confirmed)} / 목표 ${fmtCny(branchSummary.revenue.goal)} · CNY`}
-                  sparkline={sparkRevenue.length ? <Sparkline data={sparkRevenue} /> : undefined}
-                  // period=Y 없이 착지하면 장부 페이지 기본값(period=Q)이 열려 방금 본 연간
-                  // 페이싱%과 다른 숫자가 뜬다 — 이 카드가 소비하는 branchSummary 자체가
-                  // ?period=Y 호출 결과다.
-                  href="/admin/branch/ledger?period=Y"
-                />
-              ) : sourceStates.branch === "error" ? (
-                <KpiUnavailable label="매출 지표" onRetry={() => retrySource("branch")} />
-              ) : (
-                <KpiSkeleton />
-              )}
-            </div>
-          </div>
-        )}
-      </section>
+      <OverviewOperationsPanels leadState={sourceStates.leads} onLeadRetry={() => retrySource("leads")} leads={sourceStates.leads === "ready" ? { new: newLeads, contacted: contactedLeads, converted, closed: closedLeads } : null} operations={operations} loading={operationsLoading} onRetry={retryOperations} />
 
       <div className="grid grid-cols-1 gap-6 mb-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <section
@@ -1553,6 +1196,8 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
             </>
         )}
       </div>
+
+      <OverviewScorecard metrics={metrics} />
 
       {/* (e) 드릴다운 그리드 — 일정 / 콘텐츠 / 캠페인 */}
       <div className="grid grid-cols-1 gap-6 mt-6 xl:grid-cols-3">

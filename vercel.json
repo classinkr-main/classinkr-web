@@ -17,7 +17,11 @@
     },
     {
       "path": "/api/cron/lead-contact-sync",
-      "schedule": "50 0,1,4,6,8 * * 1-5"
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/meta-lead-mirror",
+      "schedule": "*/10 * * * *"
     },
     {
       "path": "/api/cron/sync-branch",
@@ -33,7 +37,7 @@
     },
     {
       "path": "/api/cron/channel-talk-sync",
-      "schedule": "15 0 * * *"
+      "schedule": "*/30 0-9 * * 1-5"
     },
     {
       "path": "/api/cron/ledger-weekly-close",

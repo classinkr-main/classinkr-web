@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest"
 import fixture from "../fixtures/rev-sample.json"
 import { parseRev, normalizeMonthHeader, normalizeTeam, resolveRevColumns } from "@/lib/branch/parsers/rev"
 import type { FormattedCell } from "@/lib/branch/google-sheets"
+import { splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
 
 const grid = fixture as unknown as FormattedCell[][]
 
@@ -154,5 +155,55 @@ describe("parseRev", () => {
     const out = parseRev([makeRow({ 0: "title" }, 19), header, dataRow], { refFy: 2026 })
     expect(out[0].monthly_payments["2026-04"]).toBe(5000)
     expect(out[0].weekly_payments["2026-04"]).toBeUndefined()
+  })
+
+  it.each([
+    { total: null, first: 100, second: -100, confirmed: 100, highConfidence: -100 },
+    { total: 0, first: -100, second: 100, confirmed: -100, highConfidence: 100 },
+    { total: -300, first: -100, second: -200, confirmed: -100, highConfidence: -200 },
+  ])("preserves signed color buckets and net-zero weekly activity", ({ total, first, second, confirmed, highConfidence }) => {
+    const header = makeRow({ 13: "4", 14: "w1", 15: "w2" }, 16)
+    const data = makeRow({ 0: "환불 상계", 13: total, 14: first, 15: second }, 16)
+    data[14].fg = { red: 1, green: 0, blue: 0 }
+    data[15].fg = { red: 0, green: 0, blue: 1 }
+    const parsed = parseRev([[], header, data], { refFy: 2026 })[0]
+    const amount = total ?? first + second
+    expect(parsed.monthly_payments["2026-04"]).toBe(amount)
+    expect(parsed.weekly_payments["2026-04"]).toEqual([first, second])
+    expect(parsed.monthly_confirmed["2026-04"]).toBe(confirmed)
+    expect(parsed.monthly_high_conf["2026-04"]).toBe(highConfidence)
+    expect(splitMonthConfidence(parsed, "2026-04", amount, true, "2026-10")).toEqual({ confirmed, highConfidence, expected: 0 })
+  })
+
+  it("preserves colored zero and offsetting confirmed entries without treating blank cells as zero activity", () => {
+    const header = makeRow({ 13: "4", 14: "w1", 15: "w2", 16: "5", 17: "w1", 18: "6", 19: "w1", 20: "7" }, 21)
+    const data = makeRow({ 0: "명시 0", 13: 500, 14: 100, 15: -100, 17: 0, 20: 0 }, 21)
+    for (const index of [14, 15, 17, 19]) data[index].fg = { red: 1, green: 0, blue: 0 }
+    const parsed = parseRev([[], header, data], { refFy: 2026 })[0]
+    expect(parsed.monthly_payments).toEqual({ "2026-04": 500, "2026-05": 0, "2026-07": 0 })
+    expect(parsed.monthly_confirmed).toEqual({ "2026-04": 0, "2026-05": 0 })
+    expect(parsed.weekly_payments).toEqual({ "2026-04": [100, -100], "2026-05": [0] })
+    expect(splitMonthConfidence(parsed, "2026-04", 500, true, "2026-10")).toEqual({ confirmed: 0, highConfidence: 0, expected: 500 })
+  })
+
+  it.each(["confirmed", "highConfidence"])("uses signed total-only %s coloring when there are no weekly values", (bucket) => {
+    const header = makeRow({ 13: "4", 14: "w1" }, 15)
+    const data = makeRow({ 0: "월 환불", 13: -250 }, 15)
+    data[13].fg = bucket === "confirmed" ? { red: 1, green: 0, blue: 0 } : { red: 0, green: 0, blue: 1 }
+    const parsed = parseRev([[], header, data], { refFy: 2026 })[0]
+    const split = splitMonthConfidence(parsed, "2026-04", -250, true, "2026-10")
+    expect(split[bucket as "confirmed" | "highConfidence"]).toBe(-250)
+    expect(parsed.weekly_payments).toEqual({})
+  })
+
+  it("does not let a colored month total overwrite mixed weekly colors", () => {
+    const header = makeRow({ 13: "4", 14: "w1", 15: "w2" }, 16)
+    const data = makeRow({ 0: "주차 확도", 13: 0, 14: 100, 15: -100 }, 16)
+    data[13].fg = { red: 1, green: 0, blue: 0 }
+    data[14].fg = { red: 0, green: 0, blue: 1 }
+    data[15].fg = { red: 1, green: 0, blue: 0 }
+    const parsed = parseRev([[], header, data], { refFy: 2026 })[0]
+    expect(parsed.monthly_confirmed["2026-04"]).toBe(-100)
+    expect(parsed.monthly_high_conf["2026-04"]).toBe(100)
   })
 })

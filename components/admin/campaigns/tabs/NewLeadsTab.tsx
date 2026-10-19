@@ -29,7 +29,7 @@ import { Skeleton } from "@/components/admin/viz"
 import { formatRelativeTime } from "@/components/admin/campaigns/perf/format"
 import { CompassBridgeDownNote, CompassLeadChip } from "@/components/admin/compass/CompassLeadChip"
 import { useCompassOverlay } from "@/components/admin/compass/use-compass-overlay"
-import { buildReinflowIndex, countReinflow } from "@/lib/crm/lead-reinflow"
+import { buildReinflowIndex } from "@/lib/crm/lead-reinflow"
 import { getLeadMagnetTitle } from "@/lib/lead-magnets"
 import { useUrlState } from "@/lib/use-url-state"
 import {
@@ -44,10 +44,12 @@ import {
 import {
   NEW_LEAD_RANGE_PRESETS,
   countBySourceGroup,
-  filterNewLeads,
+  countNewLeadReinflow,
+  filterNewLeadRows,
   isNewLeadRangePreset,
   kstDateKey,
   kstToday,
+  newLeadReinflowKind,
   parseSourceGroupParam,
   resolveLeadDateRange,
   serializeSourceGroupParam,
@@ -127,15 +129,17 @@ export default function NewLeadsTab({ leads, loading, error, embedded = false }:
   // inRange: 기간만 적용(진짜 없음 vs 필터 때문 구분용)
   // scoped : 그룹을 제외한 나머지 필터 적용(칩 건수 — 그룹을 고르면 다른 칩이 0이 되지 않게)
   // visible: 전체 필터 적용
-  const inRange = useMemo(() => filterNewLeads(leads, range), [leads, range])
+  // 기간은 생성 시각이 아니라 유입 시각(생성 또는 재문의 — lib/crm/lead-reinflow leadInflowInWindow)으로
+  // 자른다(F12). 재문의는 새 행 없이 기존 리드에 합쳐지므로, 생성 시각으로만 자르면 이번 기간의 재문의가 빠진다.
+  const inRange = useMemo(() => filterNewLeadRows(leads, range), [leads, range])
   const scoped = useMemo(
-    () => filterNewLeads(leads, { ...range, query: deferredQuery, onlyUncontacted }),
+    () => filterNewLeadRows(leads, { ...range, query: deferredQuery, onlyUncontacted }),
     [leads, range, deferredQuery, onlyUncontacted]
   )
-  const groupCounts = useMemo(() => countBySourceGroup(scoped), [scoped])
+  const groupCounts = useMemo(() => countBySourceGroup(scoped.map((row) => row.lead)), [scoped])
   const visible = useMemo(
     () =>
-      filterNewLeads(leads, {
+      filterNewLeadRows(leads, {
         ...range,
         groups: selectedGroups,
         query: deferredQuery,
@@ -152,7 +156,7 @@ export default function NewLeadsTab({ leads, loading, error, embedded = false }:
   // 재유입 축 — 판정은 **전량**에서 하고(기간 밖 선행 유입을 놓치지 않게), 세는 것만 화면 집합으로 한다.
   const reinflowIndex = useMemo(() => buildReinflowIndex(leads), [leads])
   const reinflowVisible = useMemo(
-    () => countReinflow(visible, reinflowIndex),
+    () => countNewLeadReinflow(visible, reinflowIndex),
     [visible, reinflowIndex]
   )
 
@@ -187,19 +191,20 @@ export default function NewLeadsTab({ leads, loading, error, embedded = false }:
   // 필터 적용 건수를 따로 말하므로 역할이 겹치지 않는다.
   // 값은 전부 이미 가진 배열에서 세기만 한다 — 새로 만들어 내는 수치는 없다.
   const headStats = useMemo(() => {
-    const uncontacted = inRange.filter((lead) => !isContactedLead(lead)).length
+    const uncontacted = inRange.filter((row) => !isContactedLead(row.lead)).length
     // 기간이 오늘을 품을 때만 "오늘"이 의미 있다. 과거 구간을 골라 놓고 "오늘 0건"을 띄우면
-    // 참이지만 쓸모없는 숫자다 — 그때는 마지막 유입일을 대신 보여 준다(inRange 는 최신순).
+    // 참이지만 쓸모없는 숫자다 — 그때는 마지막 유입일을 대신 보여 준다(inRange 는 최신 유입순).
+    // "유입"은 이 기간의 유입 시각(신규=생성, 재문의=last_inflow_at)이다.
     const coversToday = range.since <= today && today <= range.until
     const third = coversToday
       ? {
           label: "오늘 유입",
-          value: inRange.filter((lead) => kstDateKey(lead.timestamp) === today).length.toLocaleString("ko-KR"),
+          value: inRange.filter((row) => kstDateKey(row.inflow.at) === today).length.toLocaleString("ko-KR"),
           hint: today,
         }
       : {
           label: "마지막 유입",
-          value: inRange[0] ? (kstDateKey(inRange[0].timestamp) ?? "—") : "—",
+          value: inRange[0] ? (kstDateKey(inRange[0].inflow.at) ?? "—") : "—",
           hint: "이 기간 안에서",
         }
     return [
@@ -416,10 +421,11 @@ export default function NewLeadsTab({ leads, loading, error, embedded = false }:
               {range.since} ~ {range.until} ·{" "}
               <span className="tabular-nums text-[#111110]">{visible.length.toLocaleString("ko-KR")}</span>건
               {onlyUncontacted ? " (미연락)" : ""}
-              {/* 재유입 = 같은 전화·이메일의 더 이른 리드가 이미 있는 건. 0이면 아예 말하지 않는다. */}
+              {/* 재유입 = 재문의(기존 리드에 합쳐진 다시 문의) + 같은 전화·이메일의 더 이른 리드가 이미 있는 건.
+                  0이면 아예 말하지 않는다. */}
               {reinflowVisible > 0 ? (
                 <span
-                  title="같은 전화·이메일로 더 이른 리드가 이미 있는 건수입니다. 자체 리드는 재제출 시 행을 새로 만들기 때문에 같은 학원이 여러 행으로 남습니다."
+                  title="첫 유입이 아닌 건수입니다 — 기존 리드에 합쳐진 재문의와, 같은 전화·이메일로 더 이른 리드가 이미 있는 건(자료 다운로드처럼 병합 대상이 아닌 소스는 행을 새로 만든다)을 함께 셉니다."
                   className="ml-1.5 inline-flex items-center rounded-md border border-[#e8e8e4] bg-white px-1.5 py-0.5 text-[10.5px] font-medium tabular-nums text-[#84827a]"
                 >
                   재유입 {reinflowVisible.toLocaleString("ko-KR")} 포함
@@ -430,13 +436,15 @@ export default function NewLeadsTab({ leads, loading, error, embedded = false }:
           </div>
 
           <ul className="mt-1.5 divide-y divide-[#f0f0ec] overflow-hidden rounded-xl border border-[#e8e8e4] bg-white">
-            {rows.map((lead) => {
+            {rows.map((row) => {
+              const { lead, inflow } = row
               const group = getLeadSourceGroup(lead)
               const contacted = isContactedLead(lead)
               const adLabel = adLabelOf(lead)
               const contact = lead.phone?.trim() || lead.email?.trim() || null
               const compassEntry = compass.lookup(lead)
-              const reinflow = reinflowIndex.has(lead.id)
+              const reinflowKind = newLeadReinflowKind(row, reinflowIndex)
+              const firstInflowDay = kstDateKey(lead.timestamp)
 
               return (
                 <li key={lead.id} className="px-3.5 py-2.5">
@@ -453,7 +461,15 @@ export default function NewLeadsTab({ leads, loading, error, embedded = false }:
                           <SourceDot group={group} />
                           {SOURCE_GROUP_LABEL[group]}
                         </span>
-                        {reinflow && (
+                        {reinflowKind === "reinquiry" && (
+                          <span
+                            title={`다시 문의한 리드입니다${firstInflowDay ? ` — 처음 유입 ${firstInflowDay}` : ""}. 재문의는 새 행 없이 기존 리드에 합쳐집니다.`}
+                            className="inline-flex items-center rounded-md border border-[#e8e8e4] bg-white px-1.5 py-0.5 text-[10.5px] font-medium text-[#84827a]"
+                          >
+                            재문의
+                          </span>
+                        )}
+                        {reinflowKind === "repeat_contact" && (
                           <span
                             title="같은 전화·이메일의 더 이른 리드가 이미 있습니다(첫 유입이 아님)."
                             className="inline-flex items-center rounded-md border border-[#e8e8e4] bg-white px-1.5 py-0.5 text-[10.5px] font-medium text-[#84827a]"
@@ -463,7 +479,8 @@ export default function NewLeadsTab({ leads, loading, error, embedded = false }:
                         )}
                       </div>
                       <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[#A39E98]">
-                        <span className="tabular-nums">{formatRelativeTime(lead.timestamp)}</span>
+                        {/* 행 시각 = 이 기간의 유입 시각(재문의면 재문의 시각) — 목록 정렬 기준과 같다. */}
+                        <span className="tabular-nums">{formatRelativeTime(inflow.at)}</span>
                         {adLabel && (
                           <>
                             <span aria-hidden>·</span>

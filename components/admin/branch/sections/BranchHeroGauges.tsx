@@ -1,106 +1,85 @@
 "use client"
+import { branchManagerLabel } from "@/lib/branch/personal-scope"
 import { useMemo } from "react"
+import Link from "next/link"
 import type { BranchKpiResponse, BranchSummaryResponse } from "../types"
+import { comparisonDomain } from "@/lib/branch/compass-overview"
+import { TEAM_COLORS, type TeamKey } from "@/lib/branch/team-colors"
+import { cny, cnyExact } from "@/lib/branch/money-format"
+import { branchTeamLabel, isCurrentBranchTeam, isLegacyBranchTeam } from "@/lib/branch/current-organization"
 import { GaugeRing } from "../../viz/GaugeRing"
 import { ProgressRoadmap } from "../../viz/ProgressRoadmap"
-import { cny } from "@/lib/branch/money-format"
 import MoneyValue from "../MoneyValue"
+import ComparisonBar from "./ComparisonBar"
 
-const TEAM_LABEL: Record<string, { name: string; full: string }> = {
-  BD: { name: "BD", full: "Business Development" },
-  MKT: { name: "MKT", full: "Marketing" },
-  CSM: { name: "CSM", full: "Customer Success" },
-}
-
-export default function BranchHeroGauges({
-  summary, kpi, loading, periodLabel, error,
-}: {
-  summary: BranchSummaryResponse | null
-  kpi: BranchKpiResponse | null
-  loading: boolean
-  periodLabel: string
-  error?: string | null
+export default function BranchHeroGauges({ summary, kpi, loading, periodLabel, error }: {
+  summary: BranchSummaryResponse | null; kpi: BranchKpiResponse | null; loading: boolean; periodLabel: string; error?: string | null
 }) {
   const teams = useMemo(() => {
+    if (summary?.scope?.manager) return (kpi?.members ?? []).map((member) => ({ team: member.team ?? "ALL", label: member.member, goal: member.goal, status: member.status }))
     if (!kpi?.teams) return []
-    return kpi.teams.filter((t) => TEAM_LABEL[t.team])
-  }, [kpi])
+    return kpi.teams.filter((t) => isLegacyBranchTeam(summary?.team) ? t.team === summary?.team : isCurrentBranchTeam(t.team)).map((item) => ({ ...item, label: branchTeamLabel(item.team) }))
+  }, [kpi, summary?.scope?.manager, summary?.team])
 
-  // 에러를 영구 스켈레톤으로 위장하지 않는다(품질 웨이브 5 — 항목 2) — summary fetch가
-  // 실패하면 summary는 항상 null이라 아래 !summary 스켈레톤 분기가 계속 돌고 있었다.
   if (error && !summary) return (
-    <div role="alert" className="rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-[12px] font-semibold text-[#8F2C2C]">
-      {error}
-    </div>
+    <div role="alert" className="rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-[13px] font-semibold text-[#8F2C2C]">{error}</div>
   )
-  if (loading && !summary) return <div className="h-56 animate-pulse rounded-xl bg-[#f0f0ec]" />
+  if (loading && !summary) return <div className="h-56 animate-pulse rounded-xl bg-[#F6F5F4]" />
   if (!summary) return (
-    <div role="status" className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4 text-[12px] text-[#615D59]">
-      표시할 매출 목표 데이터가 없습니다.
+    <div role="status" className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4 text-[13px] text-[#615D59]">표시할 매출 목표 데이터가 없습니다.</div>
+  )
+
+  const { confirmed: actual, goal, pacing_pct: pacing } = summary.revenue
+  const domain = comparisonDomain([actual, goal])
+  const teamDomain = comparisonDomain(teams.flatMap((item) => [item.status, item.goal]))
+  const scope = summary.scope?.manager ? branchManagerLabel(summary.scope.manager) : branchTeamLabel(summary.team)
+  const legacy = isLegacyBranchTeam(summary.team)
+
+  return <section aria-label="매출 현황 요약" className="grid gap-6 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-5 md:p-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+    <div className="min-w-0">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-[16px] font-bold text-[#111110]">확정 매출</h2>
+        <span className="text-[12px] text-[#615D59]">{scope} · {periodLabel} · CNY</span>
+      </div>
+      <div className="mt-4 flex flex-wrap items-baseline gap-x-4 gap-y-2">
+        <strong className="text-[34px] font-bold leading-tight tracking-[-0.03em] text-[#111110] md:text-[40px]"><MoneyValue value={actual} /></strong>
+        <span className="text-[24px] font-semibold tabular-nums text-[#084734]">{goal > 0 ? pacing.toFixed(1) + "%" : "목표 기준 없음"}</span>
+      </div>
+      <p className="mt-2 text-[13px] text-[#615D59]">목표 <MoneyValue value={goal} />{goal > 0 ? <span> · {actual >= goal ? "목표 초과 " : "목표까지 "}<MoneyValue value={Math.abs(goal - actual)} /></span> : null}</p>
+      <div className="mt-5"><ComparisonBar value={actual} target={goal > 0 ? goal : null} domain={domain} label={"확정 매출 " + cnyExact(actual) + " CNY, 목표 " + cnyExact(goal) + " CNY"} /></div>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[12px] text-[#615D59]">
+        <p>확정액: REV 장부 · 목표: 1. DSH · 점선: 목표</p>
+        <Link href="/admin/branch/ledger?lens=rev" className="inline-flex min-h-11 items-center text-[#084734] underline underline-offset-2">장부에서 열기 ↗</Link>
+      </div>
+      <p className="mt-1 text-[11px] text-[#615D59]">미승인 조정안(0. DSH_NEW_TEMP)은 목표·달성률에서 제외합니다.</p>
     </div>
-  )
-
-  const actual = summary.revenue.confirmed
-  const goal = summary.revenue.goal
-  const pacing = summary.revenue.pacing_pct
-
-  return (
-    <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-      <div
-        className={`grid items-center gap-6 ${teams.length > 0 ? "grid-cols-1 lg:grid-cols-[1.6fr_1fr_1fr_1fr]" : "grid-cols-1"}`}
-      >
-        <div className="min-w-0">
-          <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#615D59]">
-            {periodLabel} · KR 지사 전체팀 통합
-          </p>
-          <div className="mt-2 flex flex-wrap items-baseline gap-2.5">
-            <span className="whitespace-nowrap text-[40px] font-bold leading-none tracking-[-0.03em] text-[#111110]">
-              <MoneyValue value={actual} />
-            </span>
-            <span className="whitespace-nowrap text-[13px] text-[#615D59]">/ <MoneyValue value={goal} prefix="" /></span>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <span className="inline-flex items-center gap-1 rounded-full bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-semibold text-[#084734]">
-              ↗ {pacing.toFixed(0)}% 달성
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-[rgba(0,0,0,0.05)] px-2.5 py-1 text-[11px] font-semibold text-[#111110]">
-              {periodLabel} 기준
-            </span>
-          </div>
-        </div>
-        {loading && !kpi ? (
-          <div role="status" aria-live="polite" className="rounded-lg bg-[#F6F5F4] p-4 text-[11px] text-[#615D59] lg:col-span-3">
-            팀 KPI를 불러오는 중입니다.
-          </div>
-        ) : error && !kpi ? (
-          <div role="alert" className="rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-[11px] font-semibold text-[#8F2C2C] lg:col-span-3">
-            팀 KPI를 불러오지 못했습니다 · {error}
-          </div>
-        ) : !kpi || teams.length === 0 ? (
-          <div role="status" className="rounded-lg bg-[#F6F5F4] p-4 text-[11px] text-[#615D59] lg:col-span-3">
-            표시할 팀 KPI 데이터가 없습니다.
-          </div>
-        ) : teams.map((t) => {
-          const meta = TEAM_LABEL[t.team]
-          if (!meta) return null
-          return (
-            <div key={t.team} className="flex flex-col items-center gap-2 border-l border-[rgba(0,0,0,0.08)] pl-5">
-              <div className="w-full self-start">
-                <p className="text-[12px] font-bold tracking-[0.02em] text-[#111110]">{meta.name}</p>
-                <p className="mt-0.5 text-[10.5px] text-[#615D59]">{meta.full}</p>
-              </div>
-              <GaugeRing value={t.status} goal={t.goal} />
-              <p className="whitespace-nowrap text-center text-[11px] text-[#615D59]">
-                <span className="text-[13px] font-bold text-[#111110]"><MoneyValue value={t.status} /></span>
-                <span> / <MoneyValue value={t.goal} prefix="" /></span>
-              </p>
+    <div className="min-w-0 border-t border-[rgba(0,0,0,0.08)] pt-5 xl:border-l xl:border-t-0 xl:pl-6 xl:pt-0">
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className="text-[14px] font-semibold text-[#111110]">{summary.scope?.manager ? "개인 목표와 DSH 실적" : legacy ? "이전 조직 매출 이력" : "현재 팀별 매출"}</h3>
+        <span className="text-[12px] text-[#615D59]">DSH · 실적 / 목표</span>
+      </div>
+      {loading && !kpi ? <p role="status" className="mt-4 text-[13px] text-[#615D59]">팀 KPI를 불러오는 중입니다.</p>
+        : error && !kpi ? <p role="alert" className="mt-4 text-[13px] text-[#8F2C2C]">팀 KPI를 불러오지 못했습니다 · {error}</p>
+        : !kpi || teams.length === 0 ? <p role="status" className="mt-4 text-[13px] text-[#615D59]">표시할 팀 KPI 데이터가 없습니다.</p>
+        : <div className="mt-4 grid grid-cols-2 gap-4">
+          {teams.map((item) => <div key={item.team} className="min-w-0 rounded-lg bg-[#F6F5F4] p-3">
+            <div className="mb-3 text-[13px]">
+              <strong style={{ color: TEAM_COLORS[item.team as TeamKey]?.color ?? "#615D59" }}>{item.label}</strong>
             </div>
-          )
-        })}
-      </div>
-      <div className="mt-5 border-t border-[rgba(0,0,0,0.08)] pt-5">
-        <ProgressRoadmap variant="hero" label="매출 로드맵" actual={actual} goal={goal} formatValue={cny} />
-      </div>
-    </section>
-  )
+            <div className="mb-3 flex justify-center">
+              {item.goal > 0 ? <div role="img" aria-label={`${item.label} 매출 달성률 ${((item.status / item.goal) * 100).toFixed(1)}%`}>
+                <GaugeRing value={item.status} goal={item.goal} size={96} />
+              </div> : <p className="flex h-24 items-center text-[12px] text-[#615D59]">목표 미설정</p>}
+            </div>
+            <p className="mb-3 text-center text-[13px] tabular-nums text-[#31302E]"><MoneyValue value={item.status} /><span className="text-[11px] text-[#615D59]"> / <MoneyValue value={item.goal} /></span></p>
+            <ComparisonBar value={item.status} target={item.goal > 0 ? item.goal : null} domain={teamDomain} label={item.team + " DSH 실적 " + cnyExact(item.status) + " CNY, 목표 " + cnyExact(item.goal) + " CNY"} />
+          </div>)}
+        </div>}
+    </div>
+    {goal > 0 ? <div className="min-w-0 border-t border-[rgba(0,0,0,0.08)] px-2 pt-5 xl:col-span-2">
+      <ProgressRoadmap actual={actual} goal={goal} label="매출 로드맵" formatValue={cny} milestones={[
+        { pct: 25, label: "25%" }, { pct: 50, label: "50%" }, { pct: 75, label: "75%" }, { pct: 100, label: "목표 100%" },
+      ]} />
+    </div> : null}
+  </section>
 }

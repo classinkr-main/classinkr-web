@@ -102,6 +102,10 @@ export async function updateBugReport(
     warnJsonFallback("update", error);
     return updateJsonBugReport(id, patch);
   }
+  // .single() 이 0행이면 PGRST116 — 그건 "없음"(null). 그 밖의 오류는 장애라 던진다(라우트가 500 으로).
+  if (error && (error as SupabaseLikeError).code !== "PGRST116") {
+    throw new Error(`[bugs] 수정 실패: ${error.message}`);
+  }
   if (error || !row) return null;
   return rowToLegacy(row);
 }

@@ -5,6 +5,11 @@
 // 2. 같은 고객·같은 사유는 쿨다운 안에 다시 보내지 않는다. dedupeKey 가 그 기준이다.
 // 3. 최신 데이터에서만 만든다 — 동기화 체인 끝에서 호출한다. 22일 묵은 잔액으로 알림을
 //    쏘면 이미 연장한 고객에게 "연장하세요"가 가고, 진짜 소진 고객은 조용하다.
+//
+// "만료 임박"의 창은 통합 뷰·행 플래그와 같은 SSOT(lib/crm/customer-segment-spec.ts
+// EXPIRING_SOON_DAYS — 오늘~30일, 이미 지난 만료 제외)를 쓴다(F1).
+
+import { EXPIRING_SOON_DAYS, isExpiringSoonInDays } from "@/lib/crm/customer-segment-spec"
 
 export type RenewalAlertKind = "expiring" | "recharge_due" | "depleted"
 
@@ -48,13 +53,13 @@ export interface RenewalAlertDigest {
 }
 
 export interface BuildRenewalAlertsOptions {
-  /** 만료를 며칠 전부터 알릴지. */
+  /** 만료를 며칠 전부터 알릴지. 기본은 "만료 임박" SSOT(EXPIRING_SOON_DAYS). */
   expiringWithinDays?: number
   /** 담당자 한 명에게 한 번에 보여줄 최대 건수. */
   maxItemsPerOwner?: number
 }
 
-const DEFAULT_EXPIRING_WITHIN_DAYS = 30
+const DEFAULT_EXPIRING_WITHIN_DAYS = EXPIRING_SOON_DAYS
 const DEFAULT_MAX_ITEMS_PER_OWNER = 20
 
 function hasReason(row: RenewalAlertRow, code: string) {
@@ -66,7 +71,7 @@ function hasReason(row: RenewalAlertRow, code: string) {
  * 만료 > 소진 > 재충전 임박 순 — 앞의 것일수록 서비스가 이미 멈췄거나 곧 멈춘다.
  */
 function classify(row: RenewalAlertRow, expiringWithin: number): RenewalAlertItem | null {
-  if (row.expireInDays != null && row.expireInDays >= 0 && row.expireInDays <= expiringWithin) {
+  if (isExpiringSoonInDays(row.expireInDays, expiringWithin)) {
     return {
       accountId: row.accountId,
       accountName: row.accountName,

@@ -169,6 +169,6 @@ describe("A2·A3 핸들러 배선(소스 계약)", () => {
     const keyHandler = SOURCE.slice(SOURCE.indexOf("const onBodyKeyDown"), SOURCE.indexOf("const appliedTemplate"))
     expect(keyHandler).toContain("event.metaKey || event.ctrlKey")
     expect(keyHandler).toContain("void handleSubmit()")
-    expect((SOURCE.match(/onKeyDown=\{onBodyKeyDown\}/g) ?? []).length).toBe(2)
+    expect((SOURCE.match(/onKeyDown=\{onBodyKeyDown\}/g) ?? []).length).toBe(3)
   })
 })

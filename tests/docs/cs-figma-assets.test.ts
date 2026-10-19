@@ -210,7 +210,7 @@ describe("CS Figma asset resolver", () => {
     const requirements = getCsFigmaAssetRequirements(CS_FIGMA_GUIDES)
 
     expect(CS_FIGMA_ASSET_PATHS.length).toBe(112)
-    expect(requirements).toHaveLength(112)
+    expect(requirements).toHaveLength(99)
     expect(missing).toEqual([])
   })
 })

@@ -1,6 +1,7 @@
 "use client"
 import { useState } from "react"
 import { RefreshCw, AlertTriangle, CheckCircle2, Clock, Database } from "lucide-react"
+import { classifySyncFailure, SYNC_FAILURE_CLASS_LABEL } from "@/lib/admin/sync-health"
 import { isImportStale } from "@/lib/branch/data-source-freshness"
 import { isSheetAheadOfSync } from "@/lib/branch/sheet-freshness"
 import { formatCNY } from "@/lib/crm/money-format"
@@ -8,9 +9,34 @@ import type { CrmSyncSummary, RevSyncHealth } from "@/lib/crm/rev-sync-health"
 import { useVisibleInterval } from "./use-visible-interval"
 import type { BranchDataSourceInfo, BranchDataSources } from "./types"
 
+/**
+ * lastError 의 출처. run — 마지막 동기화 실행 기록(branch_sync_runs)이 실패로 남았다(원천 갱신이 실제로 실패).
+ * request — 이 화면의 요청(수동 동기화 POST·요약 GET, 타임아웃 포함)이 실패했다. 시트 동기화는 멀쩡할 수 있다.
+ */
+export type SyncStatusErrorOrigin = "run" | "request"
+
+/**
+ * KR Team 대시보드가 상태 줄에 넘길 오류와 그 출처. 화면 요청 오류(수동 동기화 → 요약 불러오기)가 실행 기록 오류보다
+ * 앞선다 — 보이는 오류의 출처가 곧 origin 이다. "원천 갱신 실패" 머리말은 run 일 때만 붙는다.
+ */
+export function pickSyncStatusError(input: {
+  syncError: string | null
+  summaryError: string | null | undefined
+  runError: string | null | undefined
+}): { lastError: string | null; lastErrorOrigin: SyncStatusErrorOrigin | null } {
+  const requestError = input.syncError ?? input.summaryError ?? null
+  if (requestError != null) return { lastError: requestError, lastErrorOrigin: "request" }
+  const runError = input.runError ?? null
+  if (runError != null) return { lastError: runError, lastErrorOrigin: "run" }
+  return { lastError: null, lastErrorOrigin: null }
+}
+
 interface SyncStatusBarProps {
   lastSync: string | null
+  lastSyncStartedAt?: string | null
   lastError: string | null
+  /** lastError 의 출처(pickSyncStatusError). 생략하면 request — 실행 기록으로 확인되지 않은 실패를 원천 갱신 실패로 단정하지 않는다. */
+  lastErrorOrigin?: SyncStatusErrorOrigin | null
   sheetModifiedAt?: string | null
   dataSources?: BranchDataSources | null
   onRefresh: () => Promise<void>
@@ -53,7 +79,7 @@ function sourceLabel(source: BranchDataSourceInfo, now: number): string {
   return "라이브 시트"
 }
 
-export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, dataSources, onRefresh, syncEnabled = true, staleSince = null, crmSync = null, sheetFreshnessError = false }: SyncStatusBarProps) {
+export default function SyncStatusBar({ lastSync, lastSyncStartedAt, lastError, lastErrorOrigin = null, sheetModifiedAt, dataSources, onRefresh, syncEnabled = true, staleSince = null, crmSync = null, sheetFreshnessError = false }: SyncStatusBarProps) {
   const [busy, setBusy] = useState(false)
   // Tick once a minute so relative timestamps stay current without a refetch.
   // visibility-aware(코덱스 감사 #15): 백그라운드 탭에서는 멈추고 복귀 즉시 1회 따라잡는다.
@@ -64,12 +90,17 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
   // "장부 원천 스트립"도 같은 함수로 동일 경고를 낸다.
   const sheetAhead = !lastError && isSheetAheadOfSync(sheetModifiedAt, lastSync)
 
+  // 오류 분류 라벨 — 상태 줄 본문과 "실패 원인 보기" 펼침이 같은 값을 쓴다. 원문(lastError)은 화면에 싣지 않는다.
+  const lastErrorLabel = lastError ? SYNC_FAILURE_CLASS_LABEL[classifySyncFailure("sheets", lastError).failureClass] : null
+  // 실행 기록으로 확인된 실패만 "원천 갱신 실패"다 — 요약 불러오기 타임아웃 등 화면 요청 오류는 시트가 멀쩡할 수 있다.
+  const runFailed = Boolean(lastError) && lastErrorOrigin === "run"
+
   // 임포트 원천이 시트 동기화보다 오래됐는지 — 2026-07-16 사고(7/3 스테일 임포트가 13일간
   // 최신 시트를 가림) 재발 시 이 배너로 드러난다. sheetAhead(시트가 미러보다 앞섬)와는
   // 별개 신호다: sheetAhead는 라이브 시트 대 미러 동기화 시각을 비교하고, 이건 "서빙 중인
   // 임포트 런"이 그 미러 동기화보다도 뒤처졌는지를 본다.
-  const revImportStale = dataSources?.rev.kind === "import" && isImportStale(dataSources.rev.asOf, lastSync)
-  const dshImportStale = dataSources?.dsh.kind === "import" && isImportStale(dataSources.dsh.asOf, lastSync)
+  const revImportStale = dataSources?.rev.kind === "import" && isImportStale(dataSources.rev.asOf, lastSync, lastSyncStartedAt)
+  const dshImportStale = dataSources?.dsh.kind === "import" && isImportStale(dataSources.dsh.asOf, lastSync, lastSyncStartedAt)
   const importStale = Boolean(revImportStale || dshImportStale)
 
   // 갱신 실패 배너(staleSince) — GET 요청이 실패해 adminFetchJsonCachedWithMeta가 오래된
@@ -98,7 +129,7 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
     <div className={`sticky top-0 z-30 border-b ${tone.border} ${tone.bg} px-4 py-3 text-[12px]`}>
       <div className="mx-auto max-w-screen-2xl">
         <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             {lastError
               ? <AlertTriangle className="h-4 w-4 text-[#B43E3E]" />
               : staleRefresh
@@ -110,9 +141,17 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
                     : sheetAhead
                       ? <Clock className="h-4 w-4 text-[#A8741A]" />
                       : <CheckCircle2 className="h-4 w-4 text-[#084734]" />}
-            <span className="text-[#1a1a1a]/75">
+            <span role={lastError ? "alert" : "status"} className="text-[#1a1a1a]/75">
               {lastError
-                ? lastError
+                ? // 원문 오류(예: 시트 API 의 권한 문구)는 키·내부 URL 이 섞일 수 있어 싣지 않고, 동기화 경고 띠와
+                  // 같은 분류로 말한다(lib/admin/sync-health.ts 정직 규칙).
+                  // lastError 에는 동기화 실패만 오지 않는다 — 수동 동기화 요청 실패(권한·타임아웃 포함)·요약
+                  // 불러오기 실패·마지막 실행 기록 오류가 섞여 온다(BranchDashboardClient pickSyncStatusError).
+                  // 머리말 "원천 갱신 실패"(10-14 KR Team 정리)는 실행 기록 오류(run)에만 붙인다 — 화면 요청 오류는
+                  // "동기화 실패"로도 "원천 갱신 실패"로도 단정하지 않는다(09-mooni 3cb0e382).
+                  runFailed
+                    ? `원천 갱신 실패 · 동기화 실행 오류 — ${lastErrorLabel}`
+                    : `불러오기·동기화 오류 — ${lastErrorLabel}`
                 : staleRefresh
                   ? `갱신 실패 — ${relativeTime(new Date(staleSince as number).toISOString(), now)} 데이터 표시 중`
                   : importStale
@@ -123,7 +162,7 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
                         ? `시트가 ${relativeTime(sheetModifiedAt!, now)} 수정 — DB는 ${relativeTime(lastSync!, now)} 동기화`
                         : `동기화 ${lastSync ? relativeTime(lastSync, now) : "없음"}`}
             </span>
-            {importStale && (
+            {importStale && !lastError && (
               <a
                 href="/admin/branch/ledger"
                 className="ml-2 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full bg-[#ECD29C]/40 px-2 py-0.5 text-[10.5px] font-semibold text-[#7A520F] underline underline-offset-2 hover:bg-[#ECD29C]/60 md:min-h-0 md:min-w-0"
@@ -157,6 +196,19 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
             {busy ? (syncEnabled ? "동기화 중..." : "불러오는 중...") : (syncEnabled ? "지금 동기화" : "다시 불러오기")}
           </button>
         </div>
+        {lastError ? <details className="mt-1 text-[#615D59]">
+          <summary className="inline-flex min-h-11 cursor-pointer items-center text-[12px] underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-[#084734] md:min-h-0">실패 원인 보기</summary>
+          {/* 10-14 의 펼침은 원문을 보여 줬지만, 09-25 정직 규칙(원문에 키·내부 URL 이 섞일 수 있음)에 따라
+              분류와 출처만 알린다. 원문을 보여 주는 화면은 없다 — 운영 상태(/admin/ops)도 분류만 보이므로 그곳을
+              가리키지 않는다. 실행 기록 오류의 원문은 DB(branch_sync_runs.error)에만, 화면 요청 오류는 어디에도
+              저장되지 않는다. */}
+          <p className="mt-2 break-words">
+            {runFailed
+              ? `분류: ${lastErrorLabel}. 마지막 동기화 실행 기록의 오류입니다. 원문은 키·내부 주소가 섞일 수 있어 화면에 싣지 않고 DB 실행 기록(branch_sync_runs.error)에만 남습니다.`
+              : `분류: ${lastErrorLabel}. 이 화면의 요청(요약 불러오기·수동 동기화 요청)에서 받은 오류라 시트 원천의 문제로 단정하지 않습니다. 원문은 키·내부 주소가 섞일 수 있어 화면에 싣지 않습니다. 다시 불러와도 계속되면 개발 담당에게 알려 주세요.`}
+          </p>
+          {importStale ? <a href="/admin/branch/ledger" className="inline-flex min-h-11 items-center text-[#7A520F] underline underline-offset-2">장부에서 재동기화 →</a> : null}
+        </details> : null}
         {(dataSources || crmSync) && (
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 pl-6 text-[10.5px]">
             <span className="inline-flex items-center gap-1 font-semibold text-[#615D59]">

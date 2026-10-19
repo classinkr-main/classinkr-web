@@ -47,12 +47,12 @@ export interface RevMatrixColumn extends RevMonthlyBucket {
   goal: number | null
 }
 
-// 다중월 밀도 매트릭스 열 폭(px). 요약 셀 12칸×64 + 고객 200 + 상품 56 + 연간 96 ≈ 1120.
+// 다중월 밀도 매트릭스 열 폭(px). 해당 월과 다음 달 주차를 넓게(W1~W5 66px, 월계 84px) 배치하여 바로 연간 합계가 보이고 2달 뒤부터 스크롤되도록 맞춤.
 export const MATRIX_CUSTOMER_W = 200
 export const MATRIX_PRODUCT_W = 56
-export const MATRIX_MONTH_W = 64
-export const MATRIX_WEEK_W = 52 // 월 확장(상세시트) 시 w1~w5 각 칸 — 금액 가독성 위해 넓게(가로 스크롤 허용)
-export const MATRIX_ANNUAL_W = 96
+export const MATRIX_MONTH_W = 84
+export const MATRIX_WEEK_W = 66
+export const MATRIX_ANNUAL_W = 108
 
 // 매트릭스 행 밀도(표시만 — 셀 폭·편집 로직 불변). localStorage에 저장해 재방문 시 복원.
 export type MatrixDensity = "condensed" | "regular" | "relaxed"

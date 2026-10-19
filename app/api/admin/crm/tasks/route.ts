@@ -1,9 +1,10 @@
+import { dataOwnerFromRequest } from "@/lib/admin/data-owner"
 import { NextRequest, NextResponse } from "next/server"
 
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
+import { parseTaskDueAt } from "@/lib/crm/task-due-at"
 import {
-  CURRENT_ADMIN_OWNER_TOKEN,
   findAdminCrmOwner,
   listAdminUserDirectory,
 } from "@/lib/repositories/admin-users"
@@ -47,16 +48,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const url = new URL(req.url)
-    const ownerParam = url.searchParams.get("owner") ?? undefined
-    const isMine = ownerParam === CURRENT_ADMIN_OWNER_TOKEN
-    const currentOwner = isMine ? findAdminCrmOwner(await listAdminUserDirectory(), admin) : null
-    const ownerKeys = isMine
-      ? currentOwner?.ownerKeys.length
-        ? currentOwner.ownerKeys
-        : ["__no_current_admin_owner__"]
-      : ownerParam
-        ? [ownerParam]
-        : undefined
+    const ownerKeys = await dataOwnerFromRequest(url, admin)
 
     const status = url.searchParams.get("status")
     const taskType = url.searchParams.get("taskType")
@@ -110,6 +102,10 @@ export async function POST(req: NextRequest) {
       ownerNameSnapshot = currentOwner.owner?.displayName ?? ownerNameSnapshot ?? admin.name ?? null
     }
 
+    // 기한은 PATCH update와 같은 파서를 쓴다 — 해석 못 하는 값을 "기한 없음"으로 조용히 저장하지 않고 400.
+    const due = parseTaskDueAt(raw.dueAt)
+    if (!due.ok) return NextResponse.json({ error: due.error }, { status: 400 })
+
     const targetTypeRaw = typeof raw.targetType === "string" ? raw.targetType : undefined
     const taskTypeRaw = typeof raw.taskType === "string" ? raw.taskType : undefined
     const priorityRaw = typeof raw.priority === "string" ? raw.priority : undefined
@@ -124,7 +120,7 @@ export async function POST(req: NextRequest) {
       taskType: taskTypeRaw && TASK_TYPES.has(taskTypeRaw) ? (taskTypeRaw as CrmTaskType) : "call",
       title,
       detail: optionalString(raw.detail),
-      dueAt: optionalString(raw.dueAt),
+      dueAt: due.dueAt ?? null,
       priority: priorityRaw && PRIORITIES.has(priorityRaw) ? (priorityRaw as CrmTaskPriority) : "normal",
       sourceEventId: optionalString(raw.sourceEventId),
       createdBy: actor,

@@ -12,9 +12,14 @@ import {
   ClipboardList,
   LayoutGrid,
   ListChecks,
+  ListFilter,
+  Inbox,
+  MapPinned,
   Package,
+  PanelLeft,
   PhoneCall,
   Search,
+  Tags,
   Target,
   Truck,
   Users,
@@ -22,17 +27,23 @@ import {
 
 import { adminFetchJsonCached } from "@/lib/admin-client"
 import { useDialogFocus } from "@/components/admin/use-dialog-focus"
+import { ADMIN_OPEN_NAV_EDITOR_EVENT } from "@/components/admin/my-nav-preferences"
 import { leadSegment, leadSegmentHref } from "@/lib/crm/lead-segments"
 
 // 스크린리더 combobox 연결용 고정 id — AdminCommandPalette와 동일 패턴.
 const CRM_PALETTE_LISTBOX_ID = "crm-command-palette-listbox"
 const crmPaletteOptionId = (index: number) => `crm-command-palette-option-${index}`
 
+// 사이드바 편집 드로어를 여는 전역 이벤트 — 정본은 my-nav-preferences.ts(전역 팔레트와 같은 값).
+export const CRM_PALETTE_OPEN_NAV_EDITOR_EVENT = ADMIN_OPEN_NAV_EDITOR_EVENT
+
 // CRM 내비 라우트 인덱스 — ⌘K "이동" 명령. AdminSidebar의 CRM 확장과 동일 라우트
 // + 머니 표면(매출 장부·하드웨어 재고) 점프를 함께 인덱싱한다.
 // export: 단위 테스트(tests/crm/command-palette-segments.test.tsx)가 세그먼트 이동 명령의
 // label/sub/href를 렌더 없이 직접 검증한다 — AdminCommandPalette의 ADMIN_COMMANDS와 동일 패턴.
-export const NAV_CMDS: Array<{ label: string; sub: string; href: string; icon: ReactNode; keywords?: string }> = [
+// event 가 있는 명령은 이동 대신 그 이벤트를 쏜다(예: 내 사이드바 편집 — CRM 라우트에서는 이 팔레트가
+// 전역 팔레트를 대신하므로 같은 명령을 여기에도 둔다).
+export const NAV_CMDS: Array<{ label: string; sub: string; href: string; icon: ReactNode; keywords?: string; event?: string }> = [
   { label: "현황 · 홈", sub: "코크핏·작업대", href: "/admin/crm", icon: <LayoutGrid className="h-4 w-4" /> },
   { label: "통합 고객", sub: "운영 목록", href: "/admin/crm/customers/unified", icon: <Users className="h-4 w-4" /> },
   { label: "리드 보드", sub: "리드 관리", href: "/admin/crm/customers/leads", icon: <PhoneCall className="h-4 w-4" /> },
@@ -68,8 +79,22 @@ export const NAV_CMDS: Array<{ label: string; sub: string; href: string; icon: R
     keywords: "고객 전환 세그먼트",
   },
   { label: "원천 고객", sub: "NEO 어카운트", href: "/admin/crm/customers/accounts", icon: <Building2 className="h-4 w-4" /> },
-  { label: "매출 대시보드", sub: "자체 원장·견적·정합성", href: "/admin/crm/deals", icon: <CircleDollarSign className="h-4 w-4" /> },
-  { label: "REV 스냅샷", sub: "DB 저장본·매칭 검수", href: "/admin/crm/deals/rev-sheet", icon: <BookOpenCheck className="h-4 w-4" /> },
+  // 세그먼트 허브(C안 ②, 2026-09-25) — 고객DB 보조 탭과 같은 라벨. 위의 "리드 세그먼트" 4종(리드 보드
+  // 필터)과 다른 화면이라 부제로 구분한다. 리드 보드 바로 뒤 4개 순서(테스트 고정)를 깨지 않게 여기에 둔다.
+  {
+    label: "세그먼트",
+    sub: "저장 조건·건수·일괄 행동",
+    href: "/admin/crm/customers/segments",
+    icon: <ListFilter className="h-4 w-4" />,
+    keywords: "segment segments 세그먼트 허브 저장 조건 빌더 자동 태그 오늘 연락",
+  },
+  // 지도 — 고객DB 보조 탭 중 여기에만 빠져 있었다. CRM 라우트에서는 이 팔레트가 전역 ⌘K 를 대신하므로
+  // 보조 탭을 숨겨도 찾히려면 전부 있어야 한다(tests/admin/nav-crm-subnav.test.ts).
+  { label: "지도", sub: "고객 지역 분포", href: "/admin/crm/customers/map", icon: <MapPinned className="h-4 w-4" />, keywords: "map region 지역 분포 원천" },
+  { label: "태그 관리", sub: "태그·건수·이름 변경", href: "/admin/crm/customers/tags", icon: <Tags className="h-4 w-4" />, keywords: "tag tags 라벨" },
+  { label: "접수", sub: "쇼룸 예약·도입 신청", href: "/admin/crm/customers/intake", icon: <Inbox className="h-4 w-4" />, keywords: "intake 쇼룸 도입 신청 예약" },
+  { label: "매출 대시보드", sub: "자체 원본·견적·정합성", href: "/admin/crm/deals", icon: <CircleDollarSign className="h-4 w-4" /> },
+  { label: "매출시트", sub: "REV 저장본·매칭 검수", href: "/admin/crm/deals/rev-sheet", icon: <BookOpenCheck className="h-4 w-4" />, keywords: "REV 스냅샷 rev sheet" },
   { label: "오더·설치", sub: "파트너 포털·설치 일정", href: "/admin/crm/deals/orders", icon: <Truck className="h-4 w-4" /> },
   { label: "워크스페이스", sub: "계약·정산 큐", href: "/admin/crm/deals/kpi", icon: <Target className="h-4 w-4" /> },
   { label: "매출 장부", sub: "DSH·REV·KPI 콕핏", href: "/admin/branch/ledger", icon: <BookOpenCheck className="h-4 w-4" /> },
@@ -77,7 +102,16 @@ export const NAV_CMDS: Array<{ label: string; sub: string; href: string; icon: R
   { label: "기록 · 활동", sub: "타임라인", href: "/admin/crm/activity", icon: <Activity className="h-4 w-4" /> },
   { label: "인사이트", sub: "분석", href: "/admin/crm/insights", icon: <BarChart3 className="h-4 w-4" /> },
   { label: "매칭 검수", sub: "매칭 인박스", href: "/admin/crm/matching", icon: <ListChecks className="h-4 w-4" /> },
-  { label: "참석자 입력", sub: "Capture", href: "/admin/crm/capture", icon: <ClipboardList className="h-4 w-4" /> },
+  // 탭 이름(입력함)으로도 찾혀야 한다 — 입력함은 기본 숨김 탭이라 ⌘K 가 주 진입로다(2026-09-25).
+  { label: "참석자 입력", sub: "Capture", href: "/admin/crm/capture", icon: <ClipboardList className="h-4 w-4" />, keywords: "입력함 capture 참석자 명함 붙여넣기" },
+  {
+    label: "내 사이드바 편집",
+    sub: "탭 상시·기타·숨김 — 숨겨도 ⌘K로 열림",
+    href: "/admin/crm",
+    icon: <PanelLeft className="h-4 w-4" />,
+    keywords: "사이드바 편집 탭 숨기기 숨김 배치 sidebar nav hide",
+    event: CRM_PALETTE_OPEN_NAV_EDITOR_EVENT,
+  },
 ]
 
 /**
@@ -104,12 +138,21 @@ interface UnifiedResponse {
 }
 
 type CmdItem =
-  | { kind: "nav"; id: string; label: string; sub: string; icon: ReactNode; href: string }
+  | { kind: "nav"; id: string; label: string; sub: string; icon: ReactNode; href: string; event?: string }
   | { kind: "customer"; id: string; label: string; sub: string; icon: ReactNode; key: string; href?: string }
 
 interface CrmCommandPaletteProps {
   /** 지연 런처가 첫 입력을 잃지 않고 곧바로 열린 팔레트를 마운트할 때 사용한다. */
   initiallyOpen?: boolean
+}
+
+/**
+ * 고객 검색 URL — 전체 담당(`owner=`)에서 이름으로 찾는다. 라우트는 owner 생략이 로그인 담당이라(2026-10-16 기본 담당
+ * 계약, lib/admin/data-owner.ts dataOwnerFromParams) 담당을 빼면 동료 담당 고객이 검색되지 않는다. 담당 선택이 없는
+ * 화면이라 범위를 호출부에서 밝힌다(CrmCustomerPicker customerPickerQuery 와 같은 규칙).
+ */
+export function commandPaletteCustomerSearchUrl(term: string): string {
+  return `/api/admin/crm/customers/unified?q=${encodeURIComponent(term)}&owner=&limit=6`
 }
 
 export default function CrmCommandPalette({ initiallyOpen = false }: CrmCommandPaletteProps) {
@@ -173,7 +216,7 @@ export default function CrmCommandPalette({ initiallyOpen = false }: CrmCommandP
     const handle = setTimeout(async () => {
       try {
         const data = await adminFetchJsonCached<UnifiedResponse>(
-          `/api/admin/crm/customers/unified?q=${encodeURIComponent(term)}&limit=6`,
+          commandPaletteCustomerSearchUrl(term),
           undefined,
           { cacheKey: `cmdk:${term}`, ttlMs: 30_000, staleWhileRevalidateMs: 60_000 }
         )
@@ -198,11 +241,12 @@ export default function CrmCommandPalette({ initiallyOpen = false }: CrmCommandP
     const q = query.trim().toLowerCase()
     const navItems: CmdItem[] = NAV_CMDS.filter((nav) => matchesNavCommand(nav, query)).map((nav) => ({
       kind: "nav",
-      id: `nav:${nav.href}`,
+      id: nav.event ? `nav:event:${nav.event}` : `nav:${nav.href}`,
       label: nav.label,
       sub: nav.sub,
       icon: nav.icon,
       href: nav.href,
+      event: nav.event,
     }))
     // 빈 쿼리일 때는 직전 고객 결과를 노출하지 않는다.
     const custItems: CmdItem[] = q
@@ -227,7 +271,8 @@ export default function CrmCommandPalette({ initiallyOpen = false }: CrmCommandP
     (item: CmdItem | undefined) => {
       if (!item) return
       setOpen(false)
-      if (item.kind === "nav") router.push(item.href)
+      if (item.kind === "nav" && item.event) window.dispatchEvent(new CustomEvent(item.event))
+      else if (item.kind === "nav") router.push(item.href)
       else router.push(item.href ?? `/admin/crm/customers/${encodeURIComponent(item.key)}`)
     },
     [router]
@@ -299,7 +344,7 @@ export default function CrmCommandPalette({ initiallyOpen = false }: CrmCommandP
         {/* 세그먼트 이동 명령 발견성 — 검색 중에는 결과 공간을 가리지 않도록 idle일 때만 보인다. */}
         {!hasQuery ? (
           <p className="border-b border-[#f0f0ec] px-4 py-2 text-[11px] text-[#1a1a1a]/40">
-            리드 세그먼트는 메타, 인계로 검색
+            세그먼트 허브는 &lsquo;세그먼트&rsquo;, 리드 세그먼트는 메타·인계로 검색 · 숨긴 탭도 여기서 열립니다
           </p>
         ) : null}
         <div
@@ -336,7 +381,7 @@ export default function CrmCommandPalette({ initiallyOpen = false }: CrmCommandP
                   <span className="block truncate text-[11px] text-[#1a1a1a]/45">{item.sub}</span>
                 </span>
                 <span className="shrink-0 rounded bg-[#fafaf8] px-2 py-0.5 text-[10px] font-semibold text-[#1a1a1a]/40">
-                  {item.kind === "nav" ? "이동" : "고객"}
+                  {item.kind === "nav" ? (item.event ? "열기" : "이동") : "고객"}
                 </span>
               </button>
             ))

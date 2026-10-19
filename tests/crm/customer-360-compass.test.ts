@@ -2,6 +2,14 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 const NOW = new Date("2026-08-28T00:00:00.000Z")
 
+/** PostgREST 빌더 흉내 — 어떤 체인이든 빈 결과로 끝난다. */
+function emptyQuery(): Record<string, unknown> {
+  const query: Record<string, unknown> = {}
+  for (const method of ["select", "eq", "in", "order", "limit"]) query[method] = () => query
+  query.then = (resolve: (value: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(resolve)
+  return query
+}
+
 function emptyList(extra: Record<string, unknown> = {}) {
   return {
     generatedAt: NOW.toISOString(),
@@ -15,7 +23,14 @@ function emptyList(extra: Record<string, unknown> = {}) {
 
 async function loadRepository(options?: {
   phone?: string | null
-  compassLeads?: Array<{ id: number; phone_key: string | null }>
+  compassLeads?: Array<{
+    id: number
+    phone_key: string | null
+    stage?: string | null
+    last_inflow_at?: string | null
+    updated_at?: string | null
+    created_at?: string | null
+  }>
   compassLeadsDown?: boolean
   compassActivities?: Array<{
     id: number
@@ -46,6 +61,7 @@ async function loadRepository(options?: {
     getNeoCrmCustomerDetail: vi.fn().mockResolvedValue({ ok: false, error: null, account: null }),
   }))
   vi.doMock("@/lib/repositories/crm-events", () => ({
+    LEAD_CONTACT_MIRROR_SOURCE_TYPES: ["lead_contact_log", "call", "sms"],
     listCrmCustomerEvents: vi.fn().mockResolvedValue(
       emptyList({
         summary: { total: 1, returned: 1, recordings: 0, risks: 0, openNextActions: 0 },
@@ -132,6 +148,10 @@ async function loadRepository(options?: {
       lineItemsMeta: { truncated: false, sources: [] },
       unmatchedOutbound: [],
     }),
+  }))
+  // CT9 — 360 이 연락 로그 원본(lead_contact_logs)을 직접 읽는다. 이 하네스는 로그가 없는 고객이다.
+  vi.doMock("@/lib/supabase/admin", () => ({
+    createSupabaseAdminClient: () => ({ from: () => emptyQuery() }),
   }))
   vi.doMock("@/lib/compass/bridge", () => ({
     getCompassLeadsByPhoneKeys: vi.fn().mockResolvedValue({
@@ -249,6 +269,34 @@ describe("고객 360 — Compass 활동 병합", () => {
     expect(result.compass.down).toBe(true)
     expect(result.compass.entries).toEqual([])
     expect(result.health.ok).toBe(true)
+    // CT9 — 헤더 요약도 "Compass 연결 끊김 — Home 기록만"으로 0 과 구분한다.
+    expect(result.contactSummary.compassDown).toBe(true)
+  })
+
+  it("CT9 — Compass 콜이 가장 최근 사람 연락이면 마지막 연락 원천은 Compass 다(알림톡·우리 메모는 연락이 아니다)", async () => {
+    const { getCrmCustomer360 } = await loadRepository({
+      compassLeads: [{ id: 77, phone_key: "01012345678" }],
+      compassActivities: [
+        activity(1, "alimtalk", "2026-08-27T00:00:00.000Z"),
+        activity(2, "call", "2026-08-25T00:00:00.000Z"),
+      ],
+    })
+
+    const result = await getCrmCustomer360(
+      { source: "lead", entityId: "lead-1", targetType: "lead" },
+      { now: NOW }
+    )
+
+    // 우리 기록(crm-1)은 manual_note(8/22), Compass 알림톡(8/27)은 자동 발송 → Compass 콜(8/25).
+    expect(result.contactSummary.last).toMatchObject({
+      origin: "compass",
+      source: "compass",
+      channelLabel: "Compass 콜",
+      actor: "진소망",
+      daysAgo: 3,
+    })
+    expect(result.contactSummary.compassDown).toBe(false)
+    expect(result.linkedLeads.down).toBe(false)
   })
 
   it("활동 조회만 끊기면 리드 링크는 남기고 down 만 올린다", async () => {
@@ -264,5 +312,72 @@ describe("고객 360 — Compass 활동 병합", () => {
 
     expect(result.compass.down).toBe(true)
     expect(result.compass.href).toBe("https://mkt.classin.co.kr/leads?open=77")
+  })
+})
+
+// A안(2026-09-25) — 기록 위치 판정(lib/crm/write-surface)이 쓰는 additive 필드와 대표 링크.
+describe("고객 360 — 기록 위치 판정 입력(A안)", () => {
+  it("같은 전화에 Compass 리드가 여러 건이면 href 는 리드 보드 칩과 같은 대표(최근 유입) 리드다", async () => {
+    const { getCrmCustomer360 } = await loadRepository({
+      // 조회 순서상 앞에 오는 행(12)이 더 오래됐다 — leadIds[0] 을 쓰면 칩과 다른 리드를 연다.
+      compassLeads: [
+        { id: 12, phone_key: "01012345678", stage: "lost", last_inflow_at: "2026-07-01T00:00:00.000Z" },
+        { id: 34, phone_key: "01012345678", stage: "demo", last_inflow_at: "2026-08-20T00:00:00.000Z" },
+      ],
+    })
+
+    const result = await getCrmCustomer360(
+      { source: "lead", entityId: "lead-1", targetType: "lead" },
+      { now: NOW }
+    )
+
+    expect(result.compass.leadIds).toEqual([12, 34])
+    expect(result.compass.href).toBe("https://mkt.classin.co.kr/leads?open=34")
+    expect(result.compass.stage).toBe("demo")
+  })
+
+  it("리드 360 은 leadStatus 원값을 싣는다(전환 리드는 Home 정본 판정용)", async () => {
+    const { getCrmCustomer360 } = await loadRepository({
+      compassLeads: [{ id: 77, phone_key: "01012345678" }],
+    })
+    const { resolveCrmWriteSurface } = await import("@/lib/crm/write-surface")
+
+    const result = await getCrmCustomer360(
+      { source: "lead", entityId: "lead-1", targetType: "lead" },
+      { now: NOW }
+    )
+
+    expect(result.leadStatus).toBe("new")
+    expect(
+      resolveCrmWriteSurface({
+        source: result.source,
+        found: result.found,
+        compassHref: result.compass.href,
+        compassDown: result.compass.down,
+        leadStatus: result.leadStatus,
+        crmRegistered: result.crmRegistered,
+      })
+    ).toMatchObject({ surface: "compass", reason: "compass_lead", compassHref: "https://mkt.classin.co.kr/leads?open=77" })
+  })
+
+  it("리드 목록 조회가 끊기면 href 없이 down — 판정은 compass_down(Home + 캡션)", async () => {
+    const { getCrmCustomer360 } = await loadRepository({ compassLeadsDown: true })
+    const { resolveCrmWriteSurface } = await import("@/lib/crm/write-surface")
+
+    const result = await getCrmCustomer360(
+      { source: "lead", entityId: "lead-1", targetType: "lead" },
+      { now: NOW }
+    )
+
+    expect(result.compass.href).toBeNull()
+    expect(
+      resolveCrmWriteSurface({
+        source: result.source,
+        found: result.found,
+        compassHref: result.compass.href,
+        compassDown: result.compass.down,
+        leadStatus: result.leadStatus,
+      }).reason
+    ).toBe("compass_down")
   })
 })

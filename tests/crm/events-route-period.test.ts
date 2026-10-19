@@ -80,3 +80,5 @@ describe("GET /api/admin/crm/events from/to 파싱 (A4)", () => {
     )
   })
 })
+
+vi.mock("@/lib/admin/data-owner", () => ({ dataOwnerFromRequest: async (url: URL) => url.searchParams.get("owner") === "" ? undefined : ["Somang"] }))

@@ -40,8 +40,10 @@ import { createClient } from "@supabase/supabase-js"
 const DOCUMENT_API_BASE = "https://document-api.channel.io/open/v1"
 const DEFAULT_LANGUAGE = "ko"
 const CATEGORY_ID = "admin"
-const CATEGORY_TITLE = "[관리자] 사용 가이드"
-const CATEGORY_DESCRIPTION = "기관(학원) 관리자를 위한 대시보드 전반의 사용 방법을 안내합니다."
+// lib/docs.ts docsCategories 의 admin 항목과 같은 문구로 유지한다(동기화가 docs_categories 행을 이 값으로 덮어쓴다).
+const CATEGORY_TITLE = "관리자 가이드"
+const CATEGORY_DESCRIPTION =
+  "원장·실장이 관리자 대시보드에서 하는 일을 순서대로 담았습니다. 유료 계정 전환과 기관 설정, 교사·학생 추가, 코스 개설, 스토리지, 수업 모니터링과 통계까지 있습니다."
 const UPDATED_BY = "sync-channel-documents"
 const CURATED_SOURCE = "classin-korea-curated-channel-docs"
 const MAX_CHUNK_CHARS = 1800

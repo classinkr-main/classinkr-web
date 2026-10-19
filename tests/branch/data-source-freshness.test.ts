@@ -26,4 +26,17 @@ describe("isImportStale", () => {
     expect(isImportStale("not-a-date", "2026-07-16T09:00:00Z")).toBe(false)
     expect(isImportStale("2026-07-03T00:00:00Z", "not-a-date")).toBe(false)
   })
+
+  it("recognizes a capture during the same completed sync without a time tolerance", () => {
+    expect(isImportStale("2026-10-15T02:58:42.741Z", "2026-10-15T02:58:49.279Z", "2026-10-15T02:58:30Z")).toBe(false)
+    expect(isImportStale("2026-10-15T02:58:30Z", "2026-10-15T02:58:49.279Z", "2026-10-15T02:58:30Z")).toBe(false)
+    // A capture even 1ms before this sync began is still old.
+    expect(isImportStale("2026-10-15T02:58:29.999Z", "2026-10-15T02:58:49.279Z", "2026-10-15T02:58:30Z")).toBe(true)
+  })
+
+  it("keeps the conservative completed-time comparison for missing or inconsistent starts", () => {
+    for (const startedAt of [null, undefined, "invalid", "2026-10-15T02:59:00Z"]) {
+      expect(isImportStale("2026-10-15T02:58:42.741Z", "2026-10-15T02:58:49.279Z", startedAt)).toBe(true)
+    }
+  })
 })

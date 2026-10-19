@@ -82,7 +82,12 @@ describe("POST /api/admin/cs-chat/messages/[messageId]/promote-knowledge", () =>
     conversation_id: "conv-1",
     role: "assistant",
     review_state: "approved",
+    reviewed_at: "2026-09-29T01:02:03.000Z",
     corrected_content: "  환불은 계약 조건 확인 후 안내합니다.  ",
+    metadata: {
+      citations: [{ id: "pricing-contract-refund", verificationStatus: "hq_confirmation_required", externalUse: "confirmation_required" }],
+      curatedKnowledgeStatuses: [{ id: "cs-tone", status: "confirmed", externalUse: "reviewed_summary_allowed" }],
+    },
   }
 
   it("requires an authorized CS/admin session", async () => {
@@ -157,6 +162,12 @@ describe("POST /api/admin/cs-chat/messages/[messageId]/promote-knowledge", () =>
         messageId: "assistant-1",
         conversationId: "conv-1",
         correctedContent: "환불은 계약 조건 확인 후 안내합니다.",
+        // 원 답변의 근거 상태 중 가장 보수적인 값과 검토 시각이 승격 문서로 넘어간다.
+        knowledge: {
+          status: "hq_confirmation_required",
+          externalUse: "confirmation_required",
+          asOf: "2026-09-29T01:02:03.000Z",
+        },
         embed: expect.any(Function),
       }
     )

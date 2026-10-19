@@ -13,7 +13,7 @@ export * from "./rev-matrix-logic"
 
 import { Fragment, memo, useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { AlertTriangle, ChevronRight, Link2Off, Lock } from "lucide-react"
+import { AlertTriangle, ChevronRight, Info, Link2Off, Lock } from "lucide-react"
 
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { useDialogFocus } from "../../use-dialog-focus"
@@ -25,6 +25,7 @@ import {
   formatWeekAmount,
   productCategoryMeta,
   ProductCategoryPill,
+  rowProductCategory,
   rowWeeklyMismatch,
   rowWeeklySplit,
   type DraftConfidence,
@@ -34,6 +35,7 @@ import {
   type RevProductCategory,
   type RevRowView,
 } from "./shared"
+import { addMonthlyBucket, emptyMonthlyBucket } from "./workbench-shared"
 import {
   computeWeekCellStates,
   EMPTY_BUCKET,
@@ -55,16 +57,16 @@ import {
   type RevMatrixColumn,
 } from "./rev-matrix-logic"
 
-// 그룹 소계행(기본 h-8)·딜행(기본 h-7) 높이 클래스. 셀 내부 폰트 크기·패딩·sticky 배경은 그대로 둔다.
+// 그룹 소계행·딜행 높이 클래스 (사용자 요청: 행별 높이 ~15% 증가로 가독성 및 클릭성 향상)
 const MATRIX_GROUP_ROW_HEIGHT: Record<MatrixDensity, string> = {
-  condensed: "h-6",
-  regular: "h-8",
-  relaxed: "h-9",
+  condensed: "h-7",
+  regular: "h-[38px]", // 기존 h-8(32px) 대비 약 18% 증가 (38px)
+  relaxed: "h-10",
 }
 const MATRIX_DEAL_ROW_HEIGHT: Record<MatrixDensity, string> = {
-  condensed: "h-6",
-  regular: "h-7",
-  relaxed: "h-9",
+  condensed: "h-7",
+  regular: "h-[33px]", // 기존 h-7(28px) 대비 약 18% 증가 (33px)
+  relaxed: "h-10",
 }
 // isMatrixDensity는 ledger/rev-matrix-logic.ts로 이동(위 export * 재수출로 이 파일에서도 계속 사용 가능).
 
@@ -124,6 +126,150 @@ export function MatrixToneLegend() {
       {/* 13인치(lg~xl) 랩탑에서도 단축키 힌트가 보이도록 xl→lg 하향. 편집 진입 시엔 팝오버가 셀 인근 힌트를 재노출한다. */}
       <span className="hidden text-[#A39E98] lg:inline">· Enter 편집 · Tab 이동 · Ctrl+D 아래 복사 · Ctrl+V 엑셀 붙여넣기 · E/H/C 확도(예정·고확도·확정) · Esc 취소</span>
     </span>
+  )
+}
+
+/**
+ * 매출 확도 및 스프레드시트 단축키 안내 팝오버 (호버 및 클릭 지원)
+ * 사용자 요청: "확정 고확도 예정 이런것들 오른쪽이나 i 상단 호버로 (도움말 st)"
+ */
+export function MatrixHelpPopover() {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const handleMouseEnter = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+    setOpen(true)
+  }
+
+  const handleMouseLeave = () => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => {
+      setOpen(false)
+    }, 120)
+  }
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!open) return
+    const onDocClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", onDocClick)
+    return () => document.removeEventListener("mousedown", onDocClick)
+  }, [open])
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative inline-block"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-expanded={open}
+        aria-label="장부 확도 및 단축키 안내"
+        className={`inline-flex h-9 items-center gap-1.5 rounded-lg border bg-white px-2.5 text-[12px] font-semibold transition ${
+          open
+            ? "border-[#084734]/40 text-[#084734]"
+            : "border-[rgba(0,0,0,0.08)] text-[#615D59] hover:border-[#084734]/30 hover:text-[#084734]"
+        }`}
+      >
+        <Info className="h-4 w-4 text-[#084734]" />
+        <span>가이드</span>
+      </button>
+
+      {open && (
+        <div
+          role="tooltip"
+          className="absolute right-0 top-full z-50 pt-1.5 w-84 text-left"
+        >
+          <div className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4 shadow-xl">
+          <div className="flex items-center justify-between border-b border-[rgba(0,0,0,0.08)] pb-2.5 mb-3">
+            <span className="text-[13px] font-bold text-[#111110]">REV 장부 가이드 & 단축키</span>
+            <span className="text-[10px] font-semibold text-[#A39E98]">도움말</span>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <p className="text-[11px] font-bold text-[#615D59] uppercase tracking-wider mb-2">매출 확도 구분</p>
+              <div className="grid grid-cols-2 gap-2 text-[12px]">
+                {MATRIX_TONE_LEGEND_ITEMS.map((item) => (
+                  <div key={item.label} className="flex items-center gap-2">
+                    {item.tint ? (
+                      <span
+                        aria-hidden
+                        className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px]"
+                        style={{ backgroundColor: item.tint }}
+                      >
+                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />
+                      </span>
+                    ) : (
+                      <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
+                    )}
+                    <span className="font-semibold text-[#111110]">{item.label}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-2.5 space-y-1.5 text-[11px] text-[#615D59] bg-[#FAFAF8] p-2 rounded-md">
+                <p className="flex items-center gap-1.5">
+                  <Lock className="h-3 w-3 text-[#A39E98] shrink-0" />
+                  <span><b>잠금 셀</b>: 시트 확정 / 장부 반영 완료 (수정 불가)</span>
+                </p>
+                <p className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-[#D97706] shrink-0" />
+                  <span><b>합산 셀 주황</b>: 여러 확도가 혼합된 요약 셀</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="border-t border-[rgba(0,0,0,0.08)] pt-2.5">
+              <p className="text-[11px] font-bold text-[#615D59] uppercase tracking-wider mb-2">스프레드시트 단축키</p>
+              <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[11px]">
+                <div className="flex items-center justify-between bg-[#F6F5F4] rounded px-2 py-1">
+                  <span className="text-[#615D59]">셀 편집</span>
+                  <kbd className="font-mono font-bold text-[#111110]">Enter</kbd>
+                </div>
+                <div className="flex items-center justify-between bg-[#F6F5F4] rounded px-2 py-1">
+                  <span className="text-[#615D59]">다음 셀</span>
+                  <kbd className="font-mono font-bold text-[#111110]">Tab</kbd>
+                </div>
+                <div className="flex items-center justify-between bg-[#F6F5F4] rounded px-2 py-1">
+                  <span className="text-[#615D59]">아래 복사</span>
+                  <kbd className="font-mono font-bold text-[#111110]">Ctrl+D</kbd>
+                </div>
+                <div className="flex items-center justify-between bg-[#F6F5F4] rounded px-2 py-1">
+                  <span className="text-[#615D59]">붙여넣기</span>
+                  <kbd className="font-mono font-bold text-[#111110]">Ctrl+V</kbd>
+                </div>
+                <div className="flex items-center justify-between bg-[#F6F5F4] rounded px-2 py-1 col-span-2">
+                  <span className="text-[#615D59]">원클릭 확도</span>
+                  <span className="font-mono font-bold text-[#084734]">E(예정) · H(고확도) · C(확정)</span>
+                </div>
+                <div className="flex items-center justify-between bg-[#F6F5F4] rounded px-2 py-1 col-span-2">
+                  <span className="text-[#615D59]">편집 취소</span>
+                  <kbd className="font-mono font-bold text-[#111110]">Esc</kbd>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -292,14 +438,16 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
   // "강조는 한 곳만" 위계를 지킨다. 색은 CONFIDENCE_TOKENS['high-confidence'].tintBg(#EFF6FF) SSOT.
   // 불일치(빨강)·미검수 초안은 운영상 더 급한 신호라 틴트보다 우선한다.
   const highTint = !mismatch && !pending && tone === "high"
-  const bg = mismatch ? "bg-[#FCE9E9]" : highTint ? "bg-[#EFF6FF]" : bgClass
-  const cellClassName = `relative px-1.5 text-right align-middle tabular-nums ${
+  const bg = mismatch ? "bg-[#FEF2F2]" : highTint ? "bg-[#EFF6FF]" : bgClass
+  const cellClassName = `relative px-2 py-1.5 text-right align-middle tabular-nums border-l border-[#EDECE8] ${
     mismatch
-      ? "border-l-2 border-l-[#B43E3E]"
+      ? "border-l-2 border-l-[#EF4444]"
       : periodHighlighted
-        ? "border-l-2 border-l-[#084734]/25"
-        : "border-l border-[#F2F1EE]"
-  } ${bg} ${interactive && editable ? "cursor-cell" : ""} ${selected ? "ring-2 ring-inset ring-[#084734]/40" : ""} focus-visible:outline-none`
+        ? "border-l-2 border-l-[#084734]/30"
+        : ""
+  } ${bg} ${interactive && editable ? "cursor-cell" : ""} ${
+    selected ? "ring-2 ring-inset ring-[#084734] z-10 shadow-[0_0_0_1px_#084734]" : ""
+  } focus-visible:outline-none transition-colors`
 
   const interactiveHandlers = interactive
     ? {
@@ -349,17 +497,20 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
         />
       )}
       {bucket.total > 0 ? (
-        <span
-          className={`inline-flex items-center justify-end gap-0.5 leading-none ${
-            bucket.total < 10000 ? "text-[10px] opacity-75" : "text-[11px]"
-          } ${pending ? `font-bold ${CONFIDENCE_TOKENS[pending.confidence].textStrongClass}` : MATRIX_TONE[tone]}`}
-        >
-          {locked && <Lock className="h-2.5 w-2.5 shrink-0 text-[#A39E98]" aria-label={lockLabel} />}
-          {mismatch && !locked && <AlertTriangle className="h-2.5 w-2.5 shrink-0" />}
-          {formatWeekAmount(bucket.total)}
-        </span>
+        <div className="flex items-center justify-between w-full leading-none">
+          <span className="text-[9.5px] font-medium text-[#A39E98] select-none pl-0.5">¥</span>
+          <span
+            className={`inline-flex items-center gap-1 tabular-nums text-[11.5px] ${
+              pending ? `font-bold ${CONFIDENCE_TOKENS[pending.confidence].textStrongClass}` : MATRIX_TONE[tone]
+            }`}
+          >
+            {locked && <Lock className="h-2.5 w-2.5 shrink-0 text-[#9CA3AF]" aria-label={lockLabel} />}
+            {mismatch && !locked && <AlertTriangle className="h-2.5 w-2.5 shrink-0 text-[#EF4444]" />}
+            {formatWeekAmount(bucket.total)}
+          </span>
+        </div>
       ) : (
-        <span className={`text-[11px] leading-none ${editable ? "text-[#C9C5BF]" : MATRIX_TONE.empty}`}>·</span>
+        <span className={`text-[11px] leading-none select-none ${editable ? "text-[#D1D5DB]" : MATRIX_TONE.empty}`}>·</span>
       )}
     </td>
   )
@@ -460,11 +611,11 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
   // 우선한다(월 우세 확도로 뭉개면 같은 달 안 다른 주차의 확도가 묻힌다 — UX 감사 2026-09-20).
   const pendingConfidence = pending ? pending.weeklyConfidence?.[weekIndex] ?? pending.confidence : null
 
-  const cellClassName = `relative px-1.5 text-right align-middle tabular-nums ${
-    periodHighlighted ? "border-l-2 border-l-[#084734]/25" : "border-l border-[#F2F1EE]"
+  const cellClassName = `relative px-1 py-1.5 text-right align-middle tabular-nums border-l border-[#EDECE8] ${
+    periodHighlighted ? "border-l-2 border-l-[#084734]/30" : ""
   } ${bgClass} ${
     interactive && editable ? "cursor-cell" : ""
-  } ${selected ? "ring-2 ring-inset ring-[#084734]/40" : ""} focus-visible:outline-none`
+  } ${selected ? "ring-2 ring-inset ring-[#084734] z-10 shadow-[0_0_0_1px_#084734]" : ""} focus-visible:outline-none transition-colors`
 
   const interactiveHandlers = interactive
     ? {
@@ -512,27 +663,27 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
           style={{ backgroundColor: CONFIDENCE_TOKENS[pendingConfidence].color }}
         />
       )}
-      {/* 1만 미만(원시 위안) 값은 저대비·소형으로 강등 — 월 셀(RevMatrixMonthCell)과 동일 규약(SL-7). */}
-      <span
-        className={`inline-flex items-center gap-0.5 leading-none tabular-nums ${
-          display > 0 && display < 10000 ? "text-[10px] opacity-75" : "text-[11.5px]"
-        } ${
-          pendingConfidence
-            ? `font-bold ${CONFIDENCE_TOKENS[pendingConfidence].textStrongClass}`
-            : display > 0
-              ? isMonthOnly
-                ? "font-semibold text-[#7A520F]"
-                : inferred
-                  ? "font-semibold text-[#615D59]"
-                  : "font-bold text-[#111110]"
-              : editable
-                ? "text-[#C9C5BF]"
-                : "text-[#DDD9D3]"
-        }`}
-      >
-        {locked && display > 0 && <Lock className="h-2.5 w-2.5 shrink-0 text-[#A39E98]" aria-label={lockLabel} />}
-        {display > 0 ? formatWeekAmount(display) : "·"}
-      </span>
+      {display > 0 ? (
+        <div className="flex items-center justify-between w-full leading-none">
+          <span className="text-[9.5px] font-medium text-[#A39E98] select-none pl-0.5">¥</span>
+          <span
+            className={`inline-flex items-center gap-0.5 tabular-nums text-[11.5px] ${
+              pendingConfidence
+                ? `font-bold ${CONFIDENCE_TOKENS[pendingConfidence].textStrongClass}`
+                : isMonthOnly
+                  ? "font-semibold text-[#7A520F]"
+                  : inferred
+                    ? "font-semibold text-[#6B7280]"
+                    : "font-bold text-[#111827]"
+            }`}
+          >
+            {locked && <Lock className="h-2.5 w-2.5 shrink-0 text-[#9CA3AF]" aria-label={lockLabel} />}
+            {formatWeekAmount(display)}
+          </span>
+        </div>
+      ) : (
+        <span className="select-none text-[#D1D5DB]">·</span>
+      )}
     </td>
   )
 })
@@ -637,9 +788,8 @@ function RevMatrixMonthStrip({
   expandedMonths,
   bgClass,
   editContext = null,
-  // 웨이브 5 — 항목 1(b): "선택 기간"(M/Q) 달 집합. undefined/빈 Set이면 아무 셀도 강조하지 않는다
-  // (period === "Y"거나 아직 계산 전인 초기 렌더 등) — 부모(그룹/딜/카테고리 행)가 안정 참조로 내려준다.
   periodMonths,
+  h1Expanded = false,
 }: {
   monthlyByRowOrGroup: Record<string, RevMonthlyBucket>
   weeklyByMonth: (month: string) => { weeks: number[]; inferred: boolean; monthOnlyAmount: number; mismatch: boolean } | null
@@ -648,10 +798,45 @@ function RevMatrixMonthStrip({
   bgClass: string
   editContext?: RevMatrixEditContext | null
   periodMonths?: Set<string>
+  h1Expanded?: boolean
 }) {
+  const isH1Month = (m: string) => {
+    const mon = m.slice(5, 7)
+    return mon >= "04" && mon <= "09"
+  }
+  const h1Months = months.filter(isH1Month)
+  const displayMonths = h1Expanded ? months : months.filter((m) => !isH1Month(m))
+
+  const h1Bucket = emptyMonthlyBucket()
+  if (!h1Expanded && h1Months.length > 0) {
+    for (const m of h1Months) {
+      const b = monthlyByRowOrGroup[m]
+      if (b) addMonthlyBucket(h1Bucket, b)
+    }
+  }
+
   return (
     <>
-      {months.map((month) => {
+      {!h1Expanded && h1Months.length > 0 && (
+        <td
+          key="h1-summary"
+          title={`4~9월 종합 합계 ${formatMoney(h1Bucket.total)} · 확정 ${formatMoney(h1Bucket.confirmed)} · 고확도 ${formatMoney(h1Bucket.high)} · 예정 ${formatMoney(h1Bucket.open)}`}
+          className={`relative px-1.5 py-1 text-right align-middle tabular-nums border-l border-[#F2F1EE] ${bgClass}`}
+          style={{ width: 80, minWidth: 80, maxWidth: 80 }}
+        >
+          {h1Bucket.total > 0 ? (
+            <div className="flex items-center justify-between w-full leading-none">
+              <span className="text-[9.5px] font-medium text-[#A39E98] select-none pl-0.5">¥</span>
+              <span className={`text-[11.5px] font-bold tabular-nums ${MATRIX_TONE[matrixBucketTone(h1Bucket)]}`}>
+                {formatWeekAmount(h1Bucket.total)}
+              </span>
+            </div>
+          ) : (
+            <span className={`text-[11px] leading-none ${MATRIX_TONE.empty}`}>·</span>
+          )}
+        </td>
+      )}
+      {displayMonths.map((month) => {
         const bucket = monthlyByRowOrGroup[month] ?? EMPTY_BUCKET
         const periodHighlighted = periodMonths?.has(month) ?? false
         if (expandedMonths.has(month)) {
@@ -749,25 +934,29 @@ export function NeedsLinkChip({
         aria-haspopup="dialog"
         aria-label={`${customer} — CRM 미연결`}
         title={`${customer} — CRM 미연결 · 클릭하면 연결 안내가 열립니다`}
-        className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-[#A8741A] transition hover:bg-[#FBF1E0] hover:text-[#7A520F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+        className="inline-flex h-4 items-center gap-0.5 rounded px-1 text-[9px] font-semibold text-[#B45309] bg-[#FEF3C7] border border-[#FDE68A] hover:bg-[#FDE68A] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#084734]"
       >
-        <Link2Off className="h-3 w-3 shrink-0" aria-hidden />
+        <Link2Off className="h-2.5 w-2.5 shrink-0" aria-hidden />
+        <span className="hidden sm:inline">미연결</span>
       </button>
       {open && (
         <div
           role="dialog"
           aria-label={`${customer} CRM 연결 안내`}
-          className="absolute left-0 top-full z-40 mt-1 w-60 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-2.5 text-left shadow-lg"
+          className="absolute left-0 top-full z-40 mt-1 w-64 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-3 text-left shadow-xl"
         >
-          <p className="truncate text-[11.5px] font-bold text-[#111110]">{customer}</p>
-          <p className="mt-1 text-[10.5px] font-semibold leading-relaxed text-[#615D59]">
-            CRM 미연결 — 매출·활동이 CRM 고객과 이어져 있지 않습니다.
+          <div className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-[#D97706]" />
+            <p className="truncate text-[12px] font-bold text-[#111110]">{customer}</p>
+          </div>
+          <p className="mt-1.5 text-[10.5px] font-medium leading-relaxed text-[#615D59]">
+            CRM 미연결 상태입니다. 매출과 영업 활동이 CRM 고객과 자동 연동되도록 연결할 수 있습니다.
           </p>
           <Link
             href={`/admin/crm/matching?name=${encodeURIComponent(customer)}`}
-            className="mt-2 flex items-center justify-center rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-2 py-1 text-[10.5px] font-bold text-[#7A520F] transition hover:bg-[#ECD29C]/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+            className="mt-2.5 flex items-center justify-center rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-2.5 py-1.5 text-[11px] font-bold text-[#7A520F] transition hover:bg-[#ECD29C]/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
           >
-            매칭 인박스에서 연결 ↗
+            매칭 인박스에서 연결하기 ↗
           </Link>
         </div>
       )}
@@ -1084,6 +1273,7 @@ export const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
   onToggle,
   density = "regular",
   periodMonths,
+  h1Expanded = false,
 }: {
   group: RevCustomerGroup
   months: string[]
@@ -1098,8 +1288,9 @@ export const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
   onToggle: (key: string) => void
   density?: MatrixDensity
   periodMonths?: Set<string> // 웨이브 5 — 항목 1(b): 선택 기간 열 accent
+  h1Expanded?: boolean
 }) {
-  const rowBg = selected ? "bg-[#ECFDF5]" : "bg-white group-hover:bg-[#FAFAF8]"
+  const rowBg = selected ? "bg-[#ECFDF5]" : "bg-white group-hover:bg-[#F9F9F8]"
   const annual = group.annualTotal
   const annualTone = matrixBucketTone(annual)
   const weeklyByMonth = (month: string) => {
@@ -1122,19 +1313,15 @@ export const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
       role="row"
       title="클릭: 우측 요약 · ▸ 펼치기: 하위 딜행"
       aria-label={`${group.customer} ${group.rows.length}건 — 우측 요약 열기`}
-      className={`group ${MATRIX_GROUP_ROW_HEIGHT[density]} cursor-pointer border-t border-[#EDECE8] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 ${
-        selected ? "bg-[#ECFDF5]" : "hover:bg-[#FAFAF8]"
+      className={`group ${MATRIX_GROUP_ROW_HEIGHT[density]} cursor-pointer border-t border-[#EDECE8] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 ${
+        selected ? "bg-[#ECFDF5]" : "hover:bg-[#F9F9F8]"
       }`}
     >
-      {/* 1열 다이어트(Ledger-1a): 항상 보이는 것 = 셰브론 + 고객명 + 서브라인 + 미연결 트리거뿐.
-          건수·장부 필·불일치 아이콘은 1열에서 뺀다 — 건수·불일치는 우측 레일 그룹 요약이, 불일치는
-          펼친 딜행 월 셀(빨강 배경+삼각형)이 이미 보여준다. 팝오버가 열린 셀만 z-30으로 승격해
-          sticky 1열(z-10)·sticky 푸터(z-20) 위에 뜨게 한다(헤더 코너 z-40 아래). */}
       <td
-        className={`sticky left-0 ${linkPopoverOpen ? "z-30" : "z-10"} border-r border-[rgba(0,0,0,0.08)] px-2 ${rowBg}`}
+        className={`sticky left-0 ${linkPopoverOpen ? "z-30" : "z-10"} border-r border-[#E5E7EB] px-2.5 py-1.5 ${rowBg} shadow-[4px_0_12px_-2px_rgba(0,0,0,0.06)]`}
         style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
       >
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={(event) => {
@@ -1143,22 +1330,21 @@ export const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
             }}
             aria-expanded={expanded}
             aria-label={`${group.customer} 하위 ${group.rows.length}건 ${expanded ? "접기" : "펼치기"}`}
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-[#615D59] transition hover:bg-[#F0F0EC] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[#615D59] transition hover:bg-black/5 hover:text-[#111110] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#084734]"
           >
-            <ChevronRight className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-90" : ""}`} />
+            <ChevronRight className={`h-3.5 w-3.5 transition-transform duration-200 ${expanded ? "rotate-90 text-[#084734]" : ""}`} />
           </button>
           <div className="min-w-0 flex-1">
-            <span className="block truncate text-[12px] font-bold text-[#111110]">{group.customer}</span>
+            <span className="block truncate text-[12px] font-bold text-[#111110] group-hover:text-[#084734] transition-colors">{group.customer}</span>
             {(group.managers.length > 0 || group.regions.length > 0) && (
               <span
                 title={[group.managers.join(", "), group.teams.join(", "), group.regions.join(", ")].filter(Boolean).join(" · ")}
-                className="block truncate text-[9.5px] font-semibold text-[#A39E98]"
+                className="block truncate text-[10px] font-medium text-[#8C8782]"
               >
                 {[group.managers.join("·"), group.regions.join("·")].filter(Boolean).join(" · ") || "-"}
               </span>
             )}
           </div>
-          {/* 칩을 이름 옆이 아니라 행 우측 끝에 고정 — 이름 길이와 무관하게 열 우측 정렬(단독 딜행과 동일 규약). */}
           {needsLink && onLinkPopoverToggle && onLinkPopoverClose && (
             <NeedsLinkChip
               customer={group.customer}
@@ -1169,18 +1355,27 @@ export const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
           )}
         </div>
       </td>
-      <td className="border-l border-[#F2F1EE] px-1.5 text-right" style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }}>
-        <div className="flex flex-wrap items-center justify-end gap-x-1">
-          {/* 접힌 고객 헤더에는 링크를 걸지 않는다 — ▸로 펼친 뒤 카테고리/품목 행에서 하드웨어로 이동. */}
-          {group.categories.map((category) => (
-            <span
-              key={category}
-              title={`${productCategoryMeta(category).label} ${formatMoney(group.categoryTotals[category])}`}
-              className={`text-[10px] font-semibold ${category === "hardware" ? "text-[#7A520F]" : "text-[#615D59]"}`}
-            >
-              {productCategoryMeta(category).shortLabel}
-            </span>
-          ))}
+      <td className="border-l border-[#EDECE8] px-2 py-1.5 text-right align-middle" style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }}>
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          {group.categories.map((category) => {
+            const isHw = category === "hardware"
+            const isSw = category === "software"
+            return (
+              <span
+                key={category}
+                title={`${productCategoryMeta(category).label} ${formatMoney(group.categoryTotals[category])}`}
+                className={`text-[10.5px] font-bold ${
+                  isHw
+                    ? "text-[#7A520F]"
+                    : isSw
+                      ? "text-[#084734]"
+                      : "text-[#615D59]"
+                }`}
+              >
+                {productCategoryMeta(category).shortLabel}
+              </span>
+            )
+          })}
         </div>
       </td>
       <RevMatrixMonthStrip
@@ -1190,20 +1385,24 @@ export const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
         expandedMonths={expandedMonths}
         bgClass={rowBg}
         periodMonths={periodMonths}
+        h1Expanded={h1Expanded}
       />
       <td
-        className={`sticky right-0 z-10 border-l border-[rgba(0,0,0,0.08)] px-2 text-right align-middle tabular-nums ${rowBg}`}
+        className={`sticky right-0 z-10 border-l border-[#E5E7EB] px-2.5 py-1.5 text-right align-middle tabular-nums ${rowBg} shadow-[-4px_0_12px_-2px_rgba(0,0,0,0.06)]`}
         style={{ width: MATRIX_ANNUAL_W, minWidth: MATRIX_ANNUAL_W, maxWidth: MATRIX_ANNUAL_W }}
       >
         {annual.total > 0 ? (
           <>
-            <span className={`block text-[11.5px] leading-tight ${MATRIX_TONE[annualTone]}`}>{formatWeekAmount(annual.total)}</span>
+            <div className="flex items-center justify-between w-full leading-tight">
+              <span className="text-[9.5px] font-medium text-[#A39E98] select-none pl-0.5">¥</span>
+              <span className={`text-[12px] font-bold ${MATRIX_TONE[annualTone]}`}>{formatWeekAmount(annual.total)}</span>
+            </div>
             {annual.confirmed > 0 && (
-              <span className="block text-[9px] font-semibold leading-tight text-[#084734]">확정 {formatWeekAmount(annual.confirmed)}</span>
+              <span className="block text-[9.5px] font-semibold leading-tight text-[#084734]">확정 {formatWeekAmount(annual.confirmed)}</span>
             )}
           </>
         ) : (
-          <span className="text-[11px] font-semibold text-[#C9C5BF]">–</span>
+          <span className="text-[11px] font-medium text-[#C9C5BF]">–</span>
         )}
       </td>
     </tr>
@@ -1234,6 +1433,7 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
   pendingByCell = null,
   density = "regular",
   periodMonths,
+  h1Expanded = false,
 }: {
   view: RevRowView
   grouped: boolean
@@ -1255,6 +1455,7 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
   pendingByCell?: Map<string, MatrixPendingDraft> | null
   density?: MatrixDensity
   periodMonths?: Set<string> // 웨이브 5 — 항목 1(b): 선택 기간 열 accent
+  h1Expanded?: boolean
 }) {
   const { row, draftRow, monthlyByMonth } = view
   const rowBg = active
@@ -1309,36 +1510,29 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
       }
     : null
   return (
-    <tr role="row" className={`group ${MATRIX_DEAL_ROW_HEIGHT[density]} border-t border-[#F2F1EE] transition ${active ? "bg-[#ECFDF5]" : draftRow ? "bg-[#FFFCF5] hover:bg-[#FBF1E0]" : grouped ? "bg-[#FBFBFA] hover:bg-[#FAFAF8]" : "hover:bg-[#FAFAF8]"}`}>
-      {/* 1열 다이어트(Ledger-1a): 이름 + 서브라인 + (단독 미연결 행만) 트리거뿐. ⓘ 계보는 우측
-          레일 행 상세 헤더 아래 뮤트 라인으로 이동, SW/HW 라벨·HW ↗ 링크는 제거(상품 칼럼이
-          SW/HW를 이미 말하고, 하드웨어 ↗는 레일 상세·카테고리 합산행에 있다). 팝오버가 열린
-          셀만 z-30 승격 — 그룹 소계행과 동일 규약. */}
+    <tr role="row" className={`group ${MATRIX_DEAL_ROW_HEIGHT[density]} border-t border-[#EDECE8] transition-colors ${active ? "bg-[#ECFDF5]" : draftRow ? "bg-[#FFFCF5] hover:bg-[#FBF1E0]" : grouped ? "bg-[#FAFAF8] hover:bg-[#F4F4F2]" : "hover:bg-[#F9F9F8]"}`}>
       <td
-        className={`sticky left-0 ${linkPopoverOpen ? "z-30" : "z-10"} border-r border-[rgba(0,0,0,0.08)] pr-2 ${nested ? "border-l-2 border-l-[#CBD9D2] pl-12" : grouped ? "border-l-2 border-l-[#DDE7E2] pl-7" : "pl-2"} ${rowBg}`}
+        className={`sticky left-0 ${linkPopoverOpen ? "z-30" : "z-10"} border-r border-[#E5E7EB] pr-2.5 py-1.5 ${nested ? "border-l-2 border-l-[#CBD9D2] pl-10" : grouped ? "border-l-2 border-l-[#DDE7E2] pl-7" : "pl-2.5"} ${rowBg} shadow-[4px_0_12px_-2px_rgba(0,0,0,0.06)]`}
         style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
       >
-        <div className="flex items-center gap-1">
-          {/* 단독 딜행(비그룹·비중첩)은 그룹 소계행의 셰브론 폭(h-6 w-6)을 빈 자리로 예약한다 —
-              토글 유무로 고객명 시작 위치가 흔들리지 않도록 1열 정렬을 고정한다. */}
-          {!grouped && !nested && <span className="h-6 w-6 shrink-0" aria-hidden="true" />}
+        <div className="flex items-center gap-1.5">
+          {!grouped && !nested && <span className="h-5 w-5 shrink-0" aria-hidden="true" />}
           <div className="min-w-0 flex-1">
             <button
               type="button"
               onClick={() => void onOpen(row)}
               title={`${row.customer} 상세 열기`}
-              className="block max-w-full truncate text-left text-[11.5px] font-bold text-[#111110] underline-offset-2 hover:text-[#084734] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+              className="block max-w-full truncate text-left text-[12px] font-bold text-[#111110] hover:text-[#084734] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#084734]"
               aria-label={`${row.customer} 상세 열기`}
             >
               {grouped ? row.productVersion || row.customer : row.customer}
             </button>
             {subLine && (
-              <span title={subLine} className={`block truncate text-[9.5px] font-semibold ${draftRow ? "text-[#7A520F]" : "text-[#A39E98]"}`}>
+              <span title={subLine} className={`block truncate text-[10px] font-medium ${draftRow ? "text-[#92400E]" : "text-[#8C8782]"}`}>
                 {subLine}
               </span>
             )}
           </div>
-          {/* 그룹 고객은 그룹 소계행이 트리거를 가진다 — 단독 딜행에만(중복 노출 방지). */}
           {!grouped && needsLink && onLinkPopoverToggle && onLinkPopoverClose && (
             <NeedsLinkChip
               customer={row.customer}
@@ -1349,11 +1543,27 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
           )}
         </div>
       </td>
-      <td className="border-l border-[#F2F1EE] px-1.5 text-right align-middle" style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }}>
-        {/* 품질 웨이브 4 — 항목 8: "시트/장부" 원천 라벨도 실데이터라 #615D59로 승격. */}
-        <span className={`text-[10px] font-semibold ${draftRow ? "text-[#A8741A]" : "text-[#615D59]"}`}>
-          {draftRow ? "장부" : "시트"}
-        </span>
+      <td className="border-l border-[#EDECE8] px-2 py-1.5 text-right align-middle" style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }}>
+        {(() => {
+          const category = rowProductCategory(row)
+          const shortLabel = category === "hardware" ? "HW" : category === "software" ? "SW" : ""
+          if (!shortLabel) return null
+          const isHw = category === "hardware"
+          const isSw = category === "software"
+          return (
+            <span
+              className={`text-[10.5px] font-bold ${
+                isHw
+                  ? "text-[#7A520F]"
+                  : isSw
+                    ? "text-[#084734]"
+                    : "text-[#615D59]"
+              }`}
+            >
+              {shortLabel}
+            </span>
+          )
+        })()}
       </td>
       <RevMatrixMonthStrip
         monthlyByRowOrGroup={monthlyByMonth}
@@ -1363,15 +1573,19 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
         bgClass={rowBg}
         editContext={editContext}
         periodMonths={periodMonths}
+        h1Expanded={h1Expanded}
       />
       <td
-        className={`sticky right-0 z-10 border-l border-[rgba(0,0,0,0.08)] px-2 text-right align-middle tabular-nums ${rowBg}`}
+        className={`sticky right-0 z-10 border-l border-[#E5E7EB] px-2.5 py-1.5 text-right align-middle tabular-nums ${rowBg} shadow-[-4px_0_12px_-2px_rgba(0,0,0,0.06)]`}
         style={{ width: MATRIX_ANNUAL_W, minWidth: MATRIX_ANNUAL_W, maxWidth: MATRIX_ANNUAL_W }}
       >
         {annual.total > 0 ? (
-          <span className={`block text-[11px] leading-tight ${MATRIX_TONE[annualTone]}`}>{formatWeekAmount(annual.total)}</span>
+          <div className="flex items-center justify-between w-full leading-tight">
+            <span className="text-[9.5px] font-medium text-[#A39E98] select-none pl-0.5">¥</span>
+            <span className={`text-[12px] font-bold ${MATRIX_TONE[annualTone]}`}>{formatWeekAmount(annual.total)}</span>
+          </div>
         ) : (
-          <span className="text-[11px] font-semibold text-[#C9C5BF]">–</span>
+          <span className="text-[11px] font-medium text-[#C9C5BF]">–</span>
         )}
       </td>
     </tr>
@@ -1396,6 +1610,7 @@ export const RevMatrixCategoryRow = memo(function RevMatrixCategoryRow({
   onOpen,
   density = "regular",
   periodMonths,
+  h1Expanded = false,
 }: {
   category: Exclude<RevProductCategory, "all">
   customer: string
@@ -1412,6 +1627,7 @@ export const RevMatrixCategoryRow = memo(function RevMatrixCategoryRow({
   onOpen: () => void
   density?: MatrixDensity
   periodMonths?: Set<string> // 웨이브 5 — 항목 1(b): 선택 기간 열 accent
+  h1Expanded?: boolean
 }) {
   const rowBg = category === "hardware" ? "bg-[#FFFCF5] group-hover:bg-[#FBF6EC]" : "bg-[#FBFBFA] group-hover:bg-[#FAFAF8]"
   const annualTone = matrixBucketTone(annual)
@@ -1436,48 +1652,52 @@ export const RevMatrixCategoryRow = memo(function RevMatrixCategoryRow({
     return { weeks, inferred: !hasExplicit && hasInferred, monthOnlyAmount, mismatch: false }
   }
   return (
-    <tr role="row" className={`group ${MATRIX_DEAL_ROW_HEIGHT[density]} border-t border-[#F2F1EE] transition ${
-      category === "hardware" ? "bg-[#FFFCF5] hover:bg-[#FBF6EC]" : "bg-[#FBFBFA] hover:bg-[#FAFAF8]"
+    <tr role="row" className={`group ${MATRIX_DEAL_ROW_HEIGHT[density]} border-t border-[#EDECE8] transition-colors ${
+      category === "hardware" ? "bg-[#FFFDF7] hover:bg-[#FBF6EC]" : "bg-[#FBFBFA] hover:bg-[#F5F5F3]"
     }`}>
       <td
-        className={`sticky left-0 z-10 border-l-2 border-l-[#DDE7E2] border-r border-[rgba(0,0,0,0.08)] pl-5 pr-2 ${rowBg}`}
+        className={`sticky left-0 z-10 border-l-2 border-l-[#DDE7E2] border-r border-[#E5E7EB] pl-5 pr-2.5 py-1.5 ${rowBg} shadow-[4px_0_12px_-2px_rgba(0,0,0,0.06)]`}
         style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
       >
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={onToggle}
-            aria-expanded={expanded}
-            title={expanded ? "품목 접기" : editable ? "품목 펼쳐 엑셀식 편집" : "품목 보기 (전부 확정·잠금)"}
-            aria-label={`${productCategoryMeta(category).label} 품목 ${expanded ? "접기" : "펼치기"}`}
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-[#615D59] transition hover:bg-[#F0F0EC] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
-          >
-            <ChevronRight className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-90" : ""}`} />
-          </button>
+        <div className="flex items-center gap-1.5">
+          {category !== "hardware" ? (
+            <button
+              type="button"
+              onClick={onToggle}
+              aria-expanded={expanded}
+              title={expanded ? "품목 접기" : editable ? "품목 펼쳐 엑셀식 편집" : "품목 보기 (전부 확정·잠금)"}
+              aria-label={`${productCategoryMeta(category).label} 품목 ${expanded ? "접기" : "펼치기"}`}
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[#615D59] transition hover:bg-black/5 hover:text-[#111110] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#084734]"
+            >
+              <ChevronRight className={`h-3.5 w-3.5 transition-transform duration-200 ${expanded ? "rotate-90 text-[#084734]" : ""}`} />
+            </button>
+          ) : (
+            <span className="h-5 w-5 shrink-0" aria-hidden="true" />
+          )}
           <button
             type="button"
             onClick={onOpen}
             title={`${productCategoryMeta(category).label} 합산 · ${products.join(", ") || "-"} · 상세 열기`}
-            className="flex min-w-0 flex-1 items-center gap-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/30"
+            className="flex min-w-0 flex-1 items-center gap-1.5 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#084734]"
           >
             <ProductCategoryPill category={category} compact />
             <span className="min-w-0 truncate text-[11px] font-semibold text-[#615D59]">{subLine || productCategoryMeta(category).label}</span>
           </button>
         </div>
       </td>
-      <td className="border-l border-[#F2F1EE] px-1.5 text-right align-middle" style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }}>
+      <td className="border-l border-[#EDECE8] px-2 py-1.5 text-right align-middle" style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }}>
         {category === "hardware" && hardwareLinked ? (
-          // 펼친 뒤 나오는 HW 합산행 → 하드웨어 원장 역링크(연결된 고객만).
           <Link
             href={`/admin/hardware?customer=${encodeURIComponent(customer)}`}
             title={`${customer} 하드웨어 거래이력 열기`}
-            className="text-[10px] font-semibold text-[#7A520F] underline-offset-2 transition hover:text-[#A8741A] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+            className="inline-flex items-center rounded px-1.5 py-0.5 text-[9.5px] font-bold bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A] hover:bg-[#FDE68A] transition-colors"
           >
             HW ↗
           </Link>
         ) : (
-          // 품질 웨이브 4 — 항목 8: "합산"도 실데이터 라벨이라 #615D59로 승격.
-          <span className="text-[10px] font-semibold text-[#615D59]">합산</span>
+          <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[9.5px] font-medium bg-[#F3F4F6] text-[#6B7280] border border-[#E5E7EB]">
+            합산
+          </span>
         )}
       </td>
       <RevMatrixMonthStrip
@@ -1487,15 +1707,19 @@ export const RevMatrixCategoryRow = memo(function RevMatrixCategoryRow({
         expandedMonths={expandedMonths}
         bgClass={rowBg}
         periodMonths={periodMonths}
+        h1Expanded={h1Expanded}
       />
       <td
-        className={`sticky right-0 z-10 border-l border-[rgba(0,0,0,0.08)] px-2 text-right align-middle tabular-nums ${rowBg}`}
+        className={`sticky right-0 z-10 border-l border-[#E5E7EB] px-2.5 py-1.5 text-right align-middle tabular-nums ${rowBg} shadow-[-4px_0_12px_-2px_rgba(0,0,0,0.06)]`}
         style={{ width: MATRIX_ANNUAL_W, minWidth: MATRIX_ANNUAL_W, maxWidth: MATRIX_ANNUAL_W }}
       >
         {annual.total > 0 ? (
-          <span className={`block text-[11px] leading-tight ${MATRIX_TONE[annualTone]}`}>{formatWeekAmount(annual.total)}</span>
+          <div className="flex items-center justify-between w-full leading-tight">
+            <span className="text-[9.5px] font-medium text-[#A39E98] select-none pl-0.5">¥</span>
+            <span className={`text-[12px] font-bold ${MATRIX_TONE[annualTone]}`}>{formatWeekAmount(annual.total)}</span>
+          </div>
         ) : (
-          <span className="text-[11px] font-semibold text-[#C9C5BF]">–</span>
+          <span className="text-[11px] font-medium text-[#C9C5BF]">–</span>
         )}
       </td>
     </tr>
@@ -1509,27 +1733,64 @@ export const RevMatrixFooter = memo(function RevMatrixFooter({
   months,
   expandedMonths,
   periodMonths,
+  h1Expanded = false,
 }: {
   columns: RevMatrixColumn[]
   grand: RevMonthlyBucket
   months: string[]
   expandedMonths: Set<string>
   periodMonths?: Set<string> // 웨이브 5 — 항목 1(b): 선택 기간 열 accent(본문·헤더와 동일한 시각 언어)
+  h1Expanded?: boolean
 }) {
   const columnByMonth = new Map(columns.map((column) => [column.month, column]))
   const hasAnyGoal = columns.some((column) => column.goal !== null)
+
+  const isH1Month = (m: string) => {
+    const mon = m.slice(5, 7)
+    return mon >= "04" && mon <= "09"
+  }
+  const h1Months = months.filter(isH1Month)
+  const displayMonths = h1Expanded ? months : months.filter((m) => !isH1Month(m))
+
+  const h1Total = emptyMonthlyBucket()
+  for (const m of h1Months) {
+    const col = columnByMonth.get(m)
+    if (col) addMonthlyBucket(h1Total, col)
+  }
+  const h1Goal = h1Months.reduce((sum, m) => sum + (columnByMonth.get(m)?.goal ?? 0), 0)
+  const h1Pct = h1Goal > 0 ? (h1Total.confirmed / h1Goal) * 100 : null
+  const h1Tone = h1Pct === null ? "text-[#C9C5BF]" : h1Pct >= 100 ? "text-[#084734]" : h1Pct >= 60 ? "text-[#A8741A]" : "text-[#B43E3E]"
+
   return (
-    <tfoot className="sticky bottom-0 z-20">
+    <tfoot className="sticky bottom-0 z-20 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
       {/* 월별 확정/고확도/예정 스택 */}
-      <tr role="row" className="h-9 border-t-2 border-[#111110]/15 bg-[#F6F5F4]">
+      <tr role="row" className="h-10 border-t-2 border-[#D1D5DB] bg-[#F6F5F4]">
         <td
-          className="sticky left-0 z-10 border-r border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-2 text-[10px] font-bold uppercase tracking-[0.06em] text-[#615D59]"
+          className="sticky left-0 z-10 border-r border-[#E5E7EB] bg-[#F6F5F4] px-2.5 text-[11px] font-bold uppercase tracking-[0.05em] text-[#374151] shadow-[4px_0_12px_-2px_rgba(0,0,0,0.06)]"
           style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
         >
           월 합계 (확정·고확도·예정)
         </td>
-        <td className="border-l border-[#E7E5E1] bg-[#F6F5F4]" style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }} />
-        {months.map((month) => {
+        <td className="border-l border-[#EDECE8] bg-[#F6F5F4]" style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }} />
+        {!h1Expanded && h1Months.length > 0 && (
+          <td
+            key="h1-summary"
+            title={`4~9월 종합 합계 ${formatMoney(h1Total.total)} · 확정 ${formatMoney(h1Total.confirmed)} · 고확도 ${formatMoney(h1Total.high)} · 예정 ${formatMoney(h1Total.open)}`}
+            className="px-1.5 py-1 text-right align-middle tabular-nums bg-[#F6F5F4] border-l border-[#EDECE8]"
+            style={{ width: 80, minWidth: 80, maxWidth: 80 }}
+          >
+            {h1Total.total > 0 ? (
+              <span className="flex flex-col items-end leading-none">
+                <span className={`text-[10.5px] font-bold ${CONFIDENCE_TOKENS.confirmed.textClass}`}>{formatWeekAmount(h1Total.confirmed)}</span>
+                <span className={`text-[9px] font-semibold ${CONFIDENCE_TOKENS["high-confidence"].textClass}`}>{formatWeekAmount(h1Total.high)}</span>
+                <span className={`text-[9px] font-semibold ${CONFIDENCE_TOKENS.expected.textClass}`}>{formatWeekAmount(h1Total.open)}</span>
+              </span>
+            ) : (
+              <span className="text-[11px] text-[#DDD9D3]">·</span>
+            )}
+          </td>
+        )}
+        {displayMonths.map((month) => {
           const column = columnByMonth.get(month) ?? null
           const bucket = column ?? EMPTY_BUCKET
           const span = expandedMonths.has(month) ? 6 : 1
@@ -1540,45 +1801,56 @@ export const RevMatrixFooter = memo(function RevMatrixFooter({
               key={month}
               colSpan={span}
               title={column ? `${formatMonthLabel(month)} 합계 ${formatMoney(bucket.total)} · 확정 ${formatMoney(bucket.confirmed)} · 고확도 ${formatMoney(bucket.high)} · 예정 ${formatMoney(bucket.open)}` : undefined}
-              className={`px-1.5 py-1 text-right align-middle tabular-nums bg-[#F6F5F4] ${
-                periodHighlighted ? "border-l-2 border-l-[#084734]/25" : "border-l border-[#E7E5E1]"
+              className={`px-2 py-1.5 text-right align-middle tabular-nums bg-[#F6F5F4] ${
+                periodHighlighted ? "border-l-2 border-l-[#084734]/30" : "border-l border-[#EDECE8]"
               }`}
               style={{ width, minWidth: width }}
             >
               {bucket.total > 0 ? (
-                <span className="flex flex-col items-end leading-none">
-                  <span className={`text-[10.5px] font-bold ${CONFIDENCE_TOKENS.confirmed.textClass}`}>{formatWeekAmount(bucket.confirmed)}</span>
-                  <span className={`text-[9px] font-semibold ${CONFIDENCE_TOKENS["high-confidence"].textClass}`}>{formatWeekAmount(bucket.high)}</span>
-                  <span className={`text-[9px] font-semibold ${CONFIDENCE_TOKENS.expected.textClass}`}>{formatWeekAmount(bucket.open)}</span>
+                <span className="flex flex-col items-end gap-0.5 leading-none">
+                  <span className={`text-[11px] font-bold ${CONFIDENCE_TOKENS.confirmed.textClass}`}>{formatWeekAmount(bucket.confirmed)}</span>
+                  <span className={`text-[9.5px] font-semibold ${CONFIDENCE_TOKENS["high-confidence"].textClass}`}>{formatWeekAmount(bucket.high)}</span>
+                  <span className={`text-[9.5px] font-semibold ${CONFIDENCE_TOKENS.expected.textClass}`}>{formatWeekAmount(bucket.open)}</span>
                 </span>
               ) : (
-                <span className="text-[11px] text-[#DDD9D3]">·</span>
+                <span className="text-[11px] text-[#D1D5DB]">·</span>
               )}
             </td>
           )
         })}
         <td
-          className="sticky right-0 z-10 border-l border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-2 py-1 text-right align-middle tabular-nums"
+          className="sticky right-0 z-10 border-l border-[#E5E7EB] bg-[#F6F5F4] px-2.5 py-1.5 text-right align-middle tabular-nums shadow-[-4px_0_12px_-2px_rgba(0,0,0,0.06)]"
           style={{ width: MATRIX_ANNUAL_W, minWidth: MATRIX_ANNUAL_W, maxWidth: MATRIX_ANNUAL_W }}
         >
-          <span className="flex flex-col items-end leading-none">
-            <span className={`text-[11px] font-bold ${CONFIDENCE_TOKENS.confirmed.textClass}`}>{formatWeekAmount(grand.confirmed)}</span>
-            <span className={`text-[9px] font-semibold ${CONFIDENCE_TOKENS["high-confidence"].textClass}`}>{formatWeekAmount(grand.high)}</span>
-            <span className={`text-[9px] font-semibold ${CONFIDENCE_TOKENS.expected.textClass}`}>{formatWeekAmount(grand.open)}</span>
+          <span className="flex flex-col items-end gap-0.5 leading-none">
+            <span className={`text-[12px] font-bold ${CONFIDENCE_TOKENS.confirmed.textClass}`}>{formatWeekAmount(grand.confirmed)}</span>
+            <span className={`text-[9.5px] font-semibold ${CONFIDENCE_TOKENS["high-confidence"].textClass}`}>{formatWeekAmount(grand.high)}</span>
+            <span className={`text-[9.5px] font-semibold ${CONFIDENCE_TOKENS.expected.textClass}`}>{formatWeekAmount(grand.open)}</span>
           </span>
         </td>
       </tr>
       {/* 월 목표 대비 % (DSH 월 목표 시리즈가 있을 때만) */}
       {hasAnyGoal && (
-        <tr role="row" className="h-7 border-t border-[#E7E5E1] bg-[#FAFAF8]">
+        <tr role="row" className="h-8 border-t border-[#E5E7EB] bg-[#FAF9F8]">
           <td
-            className="sticky left-0 z-10 border-r border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 text-[10px] font-bold uppercase tracking-[0.06em] text-[#615D59]"
+            className="sticky left-0 z-10 border-r border-[#E5E7EB] bg-[#FAF9F8] px-2.5 text-[10.5px] font-bold uppercase tracking-[0.05em] text-[#615D59] shadow-[4px_0_12px_-2px_rgba(0,0,0,0.06)]"
             style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
           >
             월 목표 대비 (확정)
           </td>
-          <td className="border-l border-[#E7E5E1] bg-[#FAFAF8]" style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }} />
-          {months.map((month) => {
+          <td className="border-l border-[#EDECE8] bg-[#FAF9F8]" style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }} />
+          {!h1Expanded && h1Months.length > 0 && (
+            <td
+              key="h1-goal"
+              className="px-2 py-1 text-right align-middle tabular-nums bg-[#FAF9F8] border-l border-[#EDECE8]"
+              style={{ width: 80, minWidth: 80, maxWidth: 80 }}
+            >
+              <span className={`text-[10px] font-bold ${h1Tone}`}>
+                {h1Pct !== null ? `${Math.round(h1Pct)}%` : "·"}
+              </span>
+            </td>
+          )}
+          {displayMonths.map((month) => {
             const column = columnByMonth.get(month) ?? null
             const span = expandedMonths.has(month) ? 6 : 1
             const width = span === 6 ? MATRIX_WEEK_W * 5 + MATRIX_MONTH_W : MATRIX_MONTH_W
@@ -1590,18 +1862,18 @@ export const RevMatrixFooter = memo(function RevMatrixFooter({
                 key={month}
                 colSpan={span}
                 title={column && column.goal ? `${formatMonthLabel(month)} 목표 ${formatMoney(column.goal)} · 확정 ${formatMoney(column.confirmed)}` : "월 목표 미설정"}
-                className={`px-1.5 text-right align-middle tabular-nums bg-[#FAFAF8] ${
-                  periodHighlighted ? "border-l-2 border-l-[#084734]/25" : "border-l border-[#E7E5E1]"
+                className={`px-2 py-1 text-right align-middle tabular-nums bg-[#FAF9F8] ${
+                  periodHighlighted ? "border-l-2 border-l-[#084734]/30" : "border-l border-[#EDECE8]"
                 }`}
                 style={{ width, minWidth: width }}
               >
                 {/* % 자리수는 formatPercent SSOT(최대 1자리) — 보조 분석·레일 KPI 달성률과 동일 규칙. */}
-                <span className={`text-[10px] font-bold ${tone}`}>{pct === null ? "·" : formatPercent(pct)}</span>
+                <span className={`text-[10.5px] font-bold ${tone}`}>{pct === null ? "·" : formatPercent(pct)}</span>
               </td>
             )
           })}
           <td
-            className="sticky right-0 z-10 border-l border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 text-right align-middle tabular-nums"
+            className="sticky right-0 z-10 border-l border-[#E5E7EB] bg-[#FAF9F8] px-2.5 py-1 text-right align-middle tabular-nums shadow-[-4px_0_12px_-2px_rgba(0,0,0,0.06)]"
             style={{ width: MATRIX_ANNUAL_W, minWidth: MATRIX_ANNUAL_W, maxWidth: MATRIX_ANNUAL_W }}
           >
             {(() => {

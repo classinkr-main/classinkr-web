@@ -180,6 +180,7 @@ describe("prefetchOverviewInitialData — 스트리밍 계약(레인 반환, awa
 
     expect(buildBranchSummaryPayload).toHaveBeenCalledWith({
       team: "ALL",
+      manager: "Somang",
       period: "Y",
       periodDate: NOW,
       includeBreakdown: false,
@@ -259,3 +260,5 @@ describe("prefetchOverviewInitialData — 스트리밍 계약(레인 반환, awa
     expect(leadActionKpis).toEqual({ unrespondedCount: 4, unresponded24hCount: 2 })
   })
 })
+
+vi.mock("@/lib/admin/data-owner", () => ({ currentDataOwner: async () => ({ keys: ["Somang"], owner: { ownerKey: "Somang", displayName: "진소망" } }) }))

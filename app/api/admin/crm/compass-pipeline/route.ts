@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
+import { dataOwnerFromRequest } from "@/lib/admin/data-owner"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { buildCompassPipelineBand } from "@/lib/compass/home-band"
 
@@ -11,7 +12,7 @@ export async function GET(req: NextRequest) {
   if (admin instanceof NextResponse) return admin
 
   try {
-    return adminCachedJson(await buildCompassPipelineBand())
+    return adminCachedJson(await buildCompassPipelineBand(await dataOwnerFromRequest(new URL(req.url), admin)))
   } catch (error) {
     console.error("[GET /api/admin/crm/compass-pipeline]", error)
     return NextResponse.json({ error: "Failed to fetch Compass pipeline band" }, { status: 500 })

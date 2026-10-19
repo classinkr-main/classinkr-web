@@ -4,10 +4,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 const runAll = vi.hoisted(() => vi.fn())
 const runBranchRevLinkMaintenance = vi.hoisted(() => vi.fn())
 
+vi.mock("@/lib/branch/sync/failure-alert", () => ({ notifyBranchSyncFailureStreaks: vi.fn().mockResolvedValue([]) }))
+vi.mock("next/cache", () => ({ revalidateTag: vi.fn() }))
+vi.mock("@/lib/admin-crm-revenue", () => ({ ADMIN_CRM_REVENUE_CACHE_TAG: "admin-crm-revenue" }))
+vi.mock("@/lib/admin-crm-revenue-sheet", () => ({ ADMIN_CRM_REVENUE_SHEET_CACHE_TAG: "admin-crm-revenue-sheet" }))
+vi.mock("@/lib/repositories/branch-hw", () => ({ BRANCH_HW_CACHE_TAG: "branch-hw" }))
+vi.mock("@/lib/repositories/branch-deals", () => ({ BRANCH_REV_DEALS_CACHE_TAG: "branch-rev-deals" }))
 vi.mock("@/lib/branch/sync/run-all", () => ({ runAll }))
 vi.mock("@/lib/repositories/crm-source-links", () => ({ runBranchRevLinkMaintenance }))
 
 import { GET } from "@/app/api/cron/sync-branch/route"
+import { revalidateTag } from "next/cache"
 
 const ORIGINAL_ENV = { ...process.env }
 
@@ -21,6 +28,7 @@ beforeEach(() => {
   process.env.CRON_SECRET = "cron-test-secret"
   runAll.mockReset()
   runBranchRevLinkMaintenance.mockReset()
+  vi.mocked(revalidateTag).mockClear()
 })
 
 afterEach(() => {
@@ -69,5 +77,15 @@ describe("sync-branch cron", () => {
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toEqual({ ok: false, skipped: true })
     expect(runBranchRevLinkMaintenance).not.toHaveBeenCalled()
+    expect(revalidateTag).not.toHaveBeenCalled()
+  })
+
+  it("REV 성공·HW 실패 시에도 CRM 링크와 매출 시트 캐시를 갱신한다", async () => {
+    runAll.mockResolvedValue({ ok: false, revOk: true, rev: 3, error: "hw: unavailable" })
+    runBranchRevLinkMaintenance.mockResolvedValue({ reattach: 1 })
+    const response = await GET(cronRequest("Bearer cron-test-secret"))
+    expect((await response.json()).crmLinks).toEqual({ reattach: 1 })
+    expect(revalidateTag).toHaveBeenCalledWith("admin-crm-revenue-sheet", "max")
+    expect(revalidateTag).not.toHaveBeenCalledWith("branch-hw", "max")
   })
 })

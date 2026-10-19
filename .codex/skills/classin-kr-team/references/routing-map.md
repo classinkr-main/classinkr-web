@@ -11,6 +11,7 @@
 | AI 인사이트 | `sections/BranchAiInsights.tsx` | `app/api/admin/branch/insights/route.ts`, `lib/branch/insights/` | `tests/branch/insights/` |
 | 매출 장부 | `app/admin/branch/ledger/page.tsx`, `components/admin/branch/ledger/` | `SalesLedgerWorkbench.tsx`, `app/api/admin/branch/ledger/`, `lib/repositories/sales-ledger-*` | `tests/branch/ledger-*`, `tests/repositories/sales-ledger-*` |
 | 동기화·정합성 | `SyncStatusBar.tsx`, `IntegrityStrip.tsx`, `CrmSyncStrip.tsx` | `app/api/admin/branch/sync/route.ts`, `data-quality/route.ts`, `lib/repositories/branch-sync.ts`, `lib/branch/data-source-freshness.ts` | `tests/branch/data-source-freshness.test.ts`, `crm-sync-*.test.ts`, `tests/api/branch-sync-partial-failure-cache.test.ts` |
+| 조직·목표·교차 원천 | `docs/active/kr-data-source-contract.md`, `lib/branch/current-organization.ts`, `lib/compass/kr-team-contract.ts` | 현재 명부는 Compass 설정, 본사 실적은 `lib/admin-crm-neo.ts`, 연결은 `lib/crm-source-linking.ts` | `tests/branch/current-organization.test.tsx`, `tests/branch/compass-overview.test.ts`, `tests/external-crm/query-response.test.ts` |
 
 ## 계약 경계
 

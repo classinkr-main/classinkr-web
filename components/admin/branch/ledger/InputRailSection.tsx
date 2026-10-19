@@ -29,7 +29,7 @@ import {
 } from "./shared"
 import { findCustomerSpellingMatch } from "./customer-suggest"
 import { WeeklyAmountGrid } from "./WeeklyAmountGrid"
-import { TEAMS } from "../types"
+import { branchDraftTeamOptions, branchTeamLabel } from "@/lib/branch/current-organization"
 
 interface InputRailSectionProps {
   editingDraft: LedgerDraft | null
@@ -285,7 +285,7 @@ export function InputRailSection({
                     onChange={(event) => setDraftForm((current) => ({ ...current, team: event.target.value }))}
                     className="mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
                   >
-                    {TEAMS.filter((value) => value !== "ALL").map((value) => <option key={value} value={value}>{value}</option>)}
+                    {branchDraftTeamOptions(draftForm.team).map((value) => <option key={value} value={value}>{branchTeamLabel(value)}</option>)}
                   </select>
                 </label>
               </div>

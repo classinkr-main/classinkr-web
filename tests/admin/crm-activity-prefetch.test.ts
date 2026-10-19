@@ -106,6 +106,7 @@ describe("prefetchCrmActivityInitialData 데이터 조립 — 스트리밍 계�
     expect(listCrmCustomerEvents).toHaveBeenCalledTimes(1)
     const [args] = listCrmCustomerEvents.mock.calls[0]
     expect(args).toMatchObject({
+      ownerKeys: ["Somang"],
       targetType: "all",
       sourceType: "all",
       sentiment: "all",
@@ -118,7 +119,7 @@ describe("prefetchCrmActivityInitialData 데이터 조립 — 스트리밍 계�
     expect(args.sourceTypes.length).toBeGreaterThan(0)
 
     // defaultActivityEventsUrl()이 참조 가능해야 한다(빌드 타임 계약 — 존재 자체를 확인).
-    expect(defaultActivityEventsUrl()).toBe("/api/admin/crm/events?limit=50&offset=0&scope=work")
+    expect(defaultActivityEventsUrl()).toBe("/api/admin/crm/events?limit=50&offset=0&owner=__me&scope=work")
   })
 
   it("조회 자체가 실패해도 레인은 null로 settle된다(500 없음)", async () => {
@@ -135,3 +136,5 @@ describe("prefetchCrmActivityInitialData 데이터 조립 — 스트리밍 계�
     errorSpy.mockRestore()
   })
 })
+
+vi.mock("@/lib/admin/data-owner", () => ({ currentDataOwner: async () => ({ keys: ["Somang"], owner: { ownerKey: "Somang", displayName: "진소망" } }) }))

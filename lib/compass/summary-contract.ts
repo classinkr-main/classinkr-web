@@ -94,7 +94,7 @@ export interface CompassSummary {
   bdOpen: number
   /** 오늘 데모 건수 — getCompassDemos(today, today) */
   todayDemoCount: number
-  /** total 내림차순 상위 COMPASS_SUMMARY_OWNER_LIMIT, "미배정" 은 맨 뒤 */
+  /** "미배정"을 뺀 담당 total 내림차순 상위 COMPASS_SUMMARY_OWNER_LIMIT(동률은 이름순) + 미배정이 있으면 맨 뒤 1행(최대 N+1행) */
   byOwner: CompassSummaryOwnerRow[]
   /** 이탈 사유 상위 COMPASS_SUMMARY_LOST_REASON_LIMIT (비어 있으면 "사유 없음") */
   lostReasons: CompassSummaryCount[]
@@ -110,5 +110,5 @@ export function isCompassSummaryDown(data: CompassSummary | null | undefined, er
 }
 
 export function compassSummaryUrl(period: CompassSummaryPeriodKey): string {
-  return `/api/admin/crm/compass-summary?period=${period}`
+  return `/api/admin/crm/compass-summary?period=${period}&owner=__me`
 }

@@ -478,6 +478,26 @@ function getSectionsForChunking(article: DocsArticleForReindexRow): DocsChunkSec
   ]
 }
 
+// 요약 청크(chunk_index 0) 본문. 임베딩·키워드 매칭 대상이므로 사용자가 실제로 쓰는 증상 표현(symptoms)도 싣는다.
+// metadata.symptoms 는 그대로 두고(검색 가중치 입력), 본문에는 사람이 읽을 수 있는 한 줄로 넣는다.
+export function buildDocsSummaryChunkContent(
+  article: Pick<
+    DocsArticleForReindexRow,
+    "title" | "description" | "chatbot_summary" | "keywords" | "symptoms" | "audience"
+  >
+): string {
+  return [
+    article.title,
+    article.description,
+    article.chatbot_summary,
+    article.keywords?.length ? `키워드: ${article.keywords.join(", ")}` : null,
+    article.symptoms?.length ? `증상: ${article.symptoms.join(", ")}` : null,
+    article.audience?.length ? `대상: ${article.audience.join(", ")}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n\n")
+}
+
 function buildChunkRows(
   articles: DocsArticleForReindexRow[],
   versionByArticleId: Map<string, DocsArticleVersionRow>
@@ -500,15 +520,7 @@ function buildChunkRows(
       audience: article.audience ?? [],
     }
 
-    const summaryContent = [
-      article.title,
-      article.description,
-      article.chatbot_summary,
-      article.keywords?.length ? `키워드: ${article.keywords.join(", ")}` : null,
-      article.audience?.length ? `대상: ${article.audience.join(", ")}` : null,
-    ]
-      .filter(Boolean)
-      .join("\n\n")
+    const summaryContent = buildDocsSummaryChunkContent(article)
 
     const summaryChunk = {
       article_id: article.id,

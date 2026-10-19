@@ -187,7 +187,12 @@ interface DocsArticleTemplate {
   id: string
   label: string
   description: string
-  categoryId: string
+  /**
+   * 템플릿이 강제할 카테고리. 생략하면 에디터에서 지금 고른 카테고리를 유지한다.
+   * 공개 카테고리(`docsCategories`)만 넣는다 — 2026-05-14 마이그레이션이 숨긴 옛 6종
+   * (quick-start/guides/manual/help/troubleshooting/updates)은 공개 사이트에서 렌더되지 않는다.
+   */
+  categoryId?: string
   slugBase: string
   title: string
   articleDescription: string
@@ -207,7 +212,6 @@ const DOC_TEMPLATES: DocsArticleTemplate[] = [
     id: "operations-guide",
     label: "운영 가이드",
     description: "상황, 순서, 체크리스트, 안내문을 한 번에 잡습니다.",
-    categoryId: "guides",
     slugBase: "operations-guide",
     title: "새 운영 가이드",
     articleDescription: "운영팀이 같은 순서로 따라 할 수 있는 실행 가이드입니다.",
@@ -257,7 +261,6 @@ const DOC_TEMPLATES: DocsArticleTemplate[] = [
     id: "feature-manual",
     label: "기능 매뉴얼",
     description: "화면, 권한, 입력값, 확인 결과를 기능 기준으로 씁니다.",
-    categoryId: "manual",
     slugBase: "feature-manual",
     title: "새 기능 매뉴얼",
     articleDescription: "특정 기능을 설정하고 확인하는 방법을 설명합니다.",
@@ -299,7 +302,6 @@ const DOC_TEMPLATES: DocsArticleTemplate[] = [
     id: "faq",
     label: "FAQ",
     description: "반복 문의를 질문과 답변 단위로 빠르게 정리합니다.",
-    categoryId: "help",
     slugBase: "faq",
     title: "새 FAQ",
     articleDescription: "자주 묻는 질문에 대한 짧고 정확한 답변입니다.",
@@ -334,7 +336,6 @@ const DOC_TEMPLATES: DocsArticleTemplate[] = [
     id: "troubleshooting",
     label: "문제 해결",
     description: "증상, 빠른 복구, 이관 기준을 수업 중 대응 순서로 씁니다.",
-    categoryId: "troubleshooting",
     slugBase: "troubleshooting",
     title: "새 문제 해결 문서",
     articleDescription: "수업 중 발생할 수 있는 증상을 빠르게 복구하는 안내입니다.",
@@ -377,7 +378,6 @@ const DOC_TEMPLATES: DocsArticleTemplate[] = [
     id: "release-note",
     label: "업데이트",
     description: "무엇이 바뀌었고 운영팀이 무엇을 확인할지 정리합니다.",
-    categoryId: "updates",
     slugBase: "release-note",
     title: "새 업데이트 안내",
     articleDescription: "제품 또는 운영 정책 변경 사항과 권장 조치를 안내합니다.",
@@ -1507,9 +1507,11 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
   }
 
   function applyTemplate(template: DocsArticleTemplate) {
-    const categoryId = categories.some((category) => category.id === template.categoryId)
-      ? template.categoryId
-      : categories[0]?.id ?? form.categoryId
+    const templateCategoryId = template.categoryId
+    const categoryId =
+      templateCategoryId && categories.some((category) => category.id === templateCategoryId)
+        ? templateCategoryId
+        : form.categoryId || categories[0]?.id || ""
 
     setForm((previous) => ({
       ...previous,

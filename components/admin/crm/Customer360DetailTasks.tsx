@@ -20,8 +20,8 @@ import {
   TASK_TYPE_LABEL,
 } from "./Customer360DetailShared"
 
-// 되돌리기 배너가 살아 있는 시간(UX 규약 — CrmPriorityQueuePanel.QUEUE_UNDO_WINDOW_MS와 같은 값).
-// 이 파일은 그 컴포넌트를 소유하지 않아(홈·큐 파트 소유) 상수만 로컬로 맞춘다.
+// 되돌리기 배너가 살아 있는 시간(UX 규약 — 홈 "오늘 연락" CrmTodayContactsPanel.TODAY_CONTACTS_UNDO_WINDOW_MS와 같은 값).
+// 이 파일은 그 컴포넌트를 소유하지 않아(홈 파트 소유) 상수만 로컬로 맞춘다.
 const QUICK_ADD_UNDO_WINDOW_MS = 8_000
 
 function statusClass(status: string): string {
@@ -165,7 +165,7 @@ export default function Customer360DetailTasks({
     setNotice(next)
     if (next.undo) {
       // 되돌리기 창이 닫히면 버튼만 거둔다 — 성공 문구는 다음 처리·닫기 전까지 남긴다
-      // (CrmPriorityQueuePanel.showNotice와 같은 패턴).
+      // (홈 "오늘 연락" CrmTodayContactsPanel.offerUndo와 같은 패턴).
       noticeTimerRef.current = setTimeout(() => {
         setNotice((current) => (current === next ? { tone: next.tone, message: next.message } : current))
       }, QUICK_ADD_UNDO_WINDOW_MS)

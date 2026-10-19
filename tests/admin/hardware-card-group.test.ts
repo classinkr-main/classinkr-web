@@ -77,7 +77,8 @@ describe("elapsedDaysSince", () => {
   })
 
   it("counts whole days from a past date key", () => {
-    const past = new Date(Date.now() - 40 * 86400000).toISOString().slice(0, 10)
+    // 날짜 키는 KST 기준이어야 한다 — UTC 로 자르면 KST 00~09시에 하루가 어긋나 41로 계산된다.
+    const past = new Date(Date.now() + 9 * 3600000 - 40 * 86400000).toISOString().slice(0, 10)
     expect(elapsedDaysSince(past)).toBe(40)
   })
 })

@@ -22,6 +22,18 @@ describe("runDataQuality", () => {
     expect(out.find((i) => i.id === "DQ-7")).toBeTruthy()
   })
 
+  it("requires current BD/MKT rows without resurrecting the retired CSM team", () => {
+    const rows: DshOutput["rows"] = ["BD", "MKT"].map((team) => ({
+      level: "team", team, kind: "goal", annual: 100,
+      quarters: [25, 25, 25, 25], months: {},
+    }))
+    const out = runDataQuality({
+      deals: [], dsh: { rows, members: {} }, kpi: [], seg: [],
+      hwInbound: [], hwOutbound: [], hwStock: [],
+    })
+    expect(out.filter((issue) => issue.id === "DQ-7")).toEqual([])
+  })
+
   // REV_RANGE 상한(현재 '2. REV'!A1:CF1000 → 1000행) 사용률 규칙(DQ-15).
   describe("DQ-15 REV range usage", () => {
     it("does not fire below the 90% warn threshold", () => {

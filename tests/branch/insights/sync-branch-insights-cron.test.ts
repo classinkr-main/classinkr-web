@@ -91,6 +91,21 @@ describe("sync-branch-insights cron self-defense", () => {
     expect(runInsights).not.toHaveBeenCalled()
   })
 
+  it("accepts a REV-only sheet sync success (recorded as source rev since 2026-09-25)", async () => {
+    getRecentSyncRuns.mockResolvedValue([runAt(2, { source: "rev" })])
+    const response = await GET(cronRequest())
+    const body = await response.json()
+    expect(body.skipped).toBeUndefined()
+    expect(runInsights).toHaveBeenCalled()
+  })
+
+  it("does not accept an HW-only run — insights read the sheets, not hardware", async () => {
+    getRecentSyncRuns.mockResolvedValue([runAt(2, { source: "hw" })])
+    const response = await GET(cronRequest())
+    await expect(response.json()).resolves.toMatchObject({ ok: false, skipped: true })
+    expect(runInsights).not.toHaveBeenCalled()
+  })
+
   it("ignores a successful run from a different source (e.g. insights itself)", async () => {
     getRecentSyncRuns.mockResolvedValue([runAt(2, { source: "insights" })])
 
@@ -106,11 +121,11 @@ describe("sync-branch-insights cron self-defense", () => {
     const response = await GET(cronRequest())
 
     expect(response.status).toBe(200)
-    expect(runInsights).toHaveBeenCalledTimes(4)
+    expect(runInsights).toHaveBeenCalledTimes(3)
     expect(runInsights).toHaveBeenCalledWith("ALL", true)
     expect(runInsights).toHaveBeenCalledWith("BD", true)
     expect(runInsights).toHaveBeenCalledWith("MKT", true)
-    expect(runInsights).toHaveBeenCalledWith("CSM", true)
+    expect(runInsights).not.toHaveBeenCalledWith("CSM", true)
     const body = await response.json()
     expect(body).toMatchObject({ ALL: { from: "cache", error: null } })
   })

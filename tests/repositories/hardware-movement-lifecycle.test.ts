@@ -375,7 +375,7 @@ describe("voidHardwareMovement", () => {
     existingRow = { data: null, error: null }
     const { voidHardwareMovement } = await loadRepository()
 
-    await expect(voidHardwareMovement("missing", {})).rejects.toThrow("원장 기록을 찾을 수 없습니다.")
+    await expect(voidHardwareMovement("missing", {})).rejects.toThrow("원본 기록을 찾을 수 없습니다.")
     expect(operations.some((op) => op.method === "update")).toBe(false)
   })
 
@@ -396,7 +396,7 @@ describe("voidHardwareMovement", () => {
     }
     const { voidHardwareMovement } = await loadRepository()
 
-    await expect(voidHardwareMovement("m1", {})).rejects.toThrow("이미 취소되었거나 처리된 원장 기록입니다.")
+    await expect(voidHardwareMovement("m1", {})).rejects.toThrow("이미 취소되었거나 처리된 원본 기록입니다.")
     expect(operations.some((op) => op.method === "update")).toBe(false)
   })
 
@@ -467,7 +467,7 @@ describe("updateHardwareMovement", () => {
   it("throws when the movement does not exist", async () => {
     existingRow = { data: null, error: null }
     const { updateHardwareMovement } = await loadRepository()
-    await expect(updateHardwareMovement("missing", validInput)).rejects.toThrow("원장 기록을 찾을 수 없습니다.")
+    await expect(updateHardwareMovement("missing", validInput)).rejects.toThrow("원본 기록을 찾을 수 없습니다.")
   })
 
   it("refuses to edit a sheet-imported movement", async () => {

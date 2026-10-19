@@ -14,8 +14,10 @@ import { describe, expect, it } from "vitest"
 
 import CustomerSearchPanel from "@/components/admin/crm/unified/CustomerSearchPanel"
 import {
+  CURRENT_OWNER_VALUE,
   UNIFIED_CUSTOMERS_PATH,
   listUrl,
+  parseOwnerParam,
   parseTagParam,
   patchUnifiedListParams,
   tagChipsWithActive,
@@ -103,6 +105,33 @@ describe("patchUnifiedListParams — 화면 URL 상태(?view= · ?tag=) 패치",
     expect(patchUnifiedListParams("view=priority&tag=VIP&account=neo%3A9", { view: "all", tag: "" })).toBe(
       "account=neo%3A9"
     )
+  })
+})
+
+describe("?owner= 화면 URL 상태 — 생략=내 담당, 빈 값=전체(2026-10-16 기본 담당 계약 × F6)", () => {
+  it("parseOwnerParam — 파라미터가 없으면 로그인 담당(__me), 있으면 trim, 빈 값·공백은 전체(\"\")", () => {
+    expect(parseOwnerParam(null)).toBe(CURRENT_OWNER_VALUE)
+    expect(parseOwnerParam(undefined)).toBe(CURRENT_OWNER_VALUE)
+    expect(parseOwnerParam("")).toBe("")
+    expect(parseOwnerParam("  ")).toBe("")
+    expect(parseOwnerParam(" 김담당 ")).toBe("김담당")
+    expect(parseOwnerParam("__me")).toBe(CURRENT_OWNER_VALUE)
+  })
+
+  it("담당 전체(빈 값)는 ?owner= 를 지우지 않고 owner= 로 남긴다 — 지우면 다음 착지가 내 담당으로 돌아간다", () => {
+    const next = new URLSearchParams(patchUnifiedListParams("owner=%EA%B9%80&tag=VIP&account=neo%3A1", { owner: "" }))
+    expect(next.has("owner")).toBe(true)
+    expect(next.get("owner")).toBe("")
+    expect(parseOwnerParam(next.get("owner"))).toBe("")
+    expect(next.get("tag")).toBe("VIP")
+    expect(next.get("account")).toBe("neo:1")
+    expect(new URLSearchParams(patchUnifiedListParams("", { owner: " 김담당 " })).get("owner")).toBe("김담당")
+  })
+
+  it("목록 API URL 은 담당을 늘 싣는다 — 전체는 owner= (서버 dataOwnerFromRequest 의 명시적 빈 값)", () => {
+    const base = { query: "", source: "all" as const, lifecycle: "all" as const, view: "all" as const, tag: "", offset: 0 }
+    expect(new URL(listUrl({ ...base, owner: "" }), "https://x").searchParams.get("owner")).toBe("")
+    expect(new URL(listUrl({ ...base, owner: CURRENT_OWNER_VALUE }), "https://x").searchParams.get("owner")).toBe("__me")
   })
 })
 
@@ -230,10 +259,28 @@ describe("CrmUnifiedCustomersClient ?tag= URL 상태 계약(소스)", () => {
     expect(clientSource).not.toContain("window.history.replaceState")
   })
 
-  it("필터 초기화는 저장 뷰·라벨 URL을 한 번의 replace로 비운다", () => {
+  it("담당은 URL(?owner=)만 정본 — 브라우저 저장값(localStorage)으로 복원·영속하지 않는다(다른 계정에 새지 않게)", () => {
+    expect(clientSource).toContain('const [owner, setOwner] = useState(() => parseOwnerParam(searchParams.get("owner")))')
+    expect(clientSource).not.toMatch(/\blocalStorage\.(getItem|setItem|removeItem)\b/)
+    expect(clientSource).not.toMatch(/\bOWNER_STORAGE_KEY\b/)
+    // 담당 변경은 state 와 URL 을 한 경로(changeOwner)로 함께 바꾼다.
+    const start = clientSource.indexOf("const changeOwner = useCallback(")
+    expect(start).toBeGreaterThan(-1)
+    const block = clientSource.slice(start, clientSource.indexOf("[replaceListParams]", start))
+    expect(block).toContain("setOwner(next)")
+    expect(block).toContain("replaceListParams({ owner: next })")
+  })
+
+  it("필터 초기화는 저장 뷰·라벨·조건(AND·OR) URL을 비우고 담당을 기본(내 담당)으로 — 한 번의 replace로", () => {
     const start = clientSource.indexOf("const resetFilters = useCallback(")
     const block = clientSource.slice(start, clientSource.indexOf("}, [", start))
-    expect(block).toContain('replaceListParams({ view: "all", tag: "" })')
+    // 저장 뷰·라벨·조건(AND·OR)은 비우고, 담당은 "전체"가 아니라 기본값(로그인 담당 `__me`)으로 되돌린다(2026-10-16).
+    expect(block).toContain(
+      'replaceListParams({ view: "all", tag: "", owner: CURRENT_OWNER_VALUE, segment: {}, orGroups: [] })'
+    )
+    expect(block).toContain("setOwner(CURRENT_OWNER_VALUE)")
     expect(block).not.toContain("syncViewParam(")
+    expect(block).toContain("setSegmentSpec({})")
+    expect(block).toContain("setOrGroups([])")
   })
 })

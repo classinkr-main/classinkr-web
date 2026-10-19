@@ -1,6 +1,6 @@
 # Docs Index
 
-기준 시점: 2026-09-21
+기준 시점: 2026-09-25
 문서 목적: 현재 저장소에서 무엇을 먼저 읽어야 하는지, 어떤 문서를 믿어야 하는지, 어떤 문서가 역사 기록인지 빠르게 구분한다.
 
 ## Admin OS 정본 우선순위
@@ -60,6 +60,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - 어드민 → 지사 운영 OS(ERP) 청사진 & 실행 로드맵(Account 360 스파인·귀속·노션 캘린더 라이브 연동·거버넌스 결정)
 - [active/marketing-tab-dashboard-restructure-2026-09-14.md](./active/marketing-tab-dashboard-restructure-2026-09-14.md)
   - **마케팅 허브(/admin/campaigns) 실행 로드맵.** 한눈에·상세·데이터 3층 IA, 컴포넌트 재배치표, 개선 후보 ID(G/D/T/N), 확정 결정, 진척 기록. Compass(mkt.classin.co.kr)와의 역할 경계 정본
+- [active/admin-usage-triage-2026-09-25.md](./active/admin-usage-triage-2026-09-25.md)
+  - **어드민 사용 실측·탭 정리.** 운영 DB 읽기 전용 집계로 본 화면별 사람 사용 흔적(Home 어드민 쓰기 ≈0, 매니저 업무는 Compass), 멈춘 원천(NEO env 누락·시트 권한), 기본 숨김·매니저별 숨기기, 심폐소생 Top 5, 결정 대기 D1~D8
 - [active/crm-tab-develop-plan-2026-09-12.md](./active/crm-tab-develop-plan-2026-09-12.md)
   - **CRM 탭 실행 로드맵.** 5작업면·돈흐름·데이터층의 현황 진단, 정책-코드 불일치 총괄, 개선 후보 ID(H/C/R/D)와 4 Wave 실행 순서, 사용자 결정 항목, 문서 정리 제안
 - [active/internal-crm-backend-operating-plan-2026-06-26.md](./active/internal-crm-backend-operating-plan-2026-06-26.md)
@@ -68,6 +70,14 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - 내부 CS 캡처·사진 분석, 담당자 검토, 서명된 AI/MCP 수신·송신 계약과 운영 경계
 - [active/internal-cs-content-arrangement-2026-07-15.md](./active/internal-cs-content-arrangement-2026-07-15.md)
   - 기존 정본과 전달 자료의 중복·충돌을 정리한 내부 CS 지식 등급, 소통 템플릿, 태그·자산 적용 기준
+- [active/cs-error-cases-index-2026-10-02.md](./active/cs-error-cases-index-2026-10-02.md)
+  - **기술지원 오류 케이스 인덱스.** 2026-06 ~ 2026-09 발생 장애·오류 76건의 증상·원인·HQ 담당자·조치·진단 패턴 목록
+- [active/cs-error-cases-workflow-rules-2026-10-02.md](./active/cs-error-cases-workflow-rules-2026-10-02.md)
+  - **기술지원 업무 규칙과 확인 흐름.** 사실과 추정 분리 원칙, 고객 안내문 작성 규칙, HQ 에스컬레이션 템플릿, 5대 증상별(네트워크·녹화·카메라·HW·계정) 확인 흐름
+- [active/cs-error-cases-supplementary-records-2026-10-02.md](./active/cs-error-cases-supplementary-records-2026-10-02.md)
+  - 케이스 문서가 따로 없던 현장·고객 건(S-01~S-40) 및 내부 테스트 건(T-01~T-05) 상세 기록
+- [active/cs-troubleshooting/README.md](./active/cs-troubleshooting/README.md)
+  - **기술지원 트러블슈팅 지식(내부 전용).** 증상별 플레이북 12편, HQ 보고 템플릿, 조회표, 비식별 케이스 표. 내부 CS 코파일럿 적재용이며 공개 문서로 쓰지 않는다. 상태는 2026-09-29 기준 스냅샷
 - [active/admin-3-revenue-sheet-workspace-plan-2026-06-29.md](./active/admin-3-revenue-sheet-workspace-plan-2026-06-29.md)
   - REV/매출 시트를 Admin CRM 안의 별도 매출시트 탭으로 승격하고, 이후 자체 매출 원장으로 옮기는 실행안
 
@@ -79,6 +89,10 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - 파트너 포털 기능 재배치, 견적 문서 라이프사이클, Admin Hardware 편입 기준
 - [active/partner-portal-master-spec.md](./active/partner-portal-master-spec.md)
   - 파트너 포털 도메인 모델과 거래건 중심 UX 상세 근거
+- [active/admin-ai-widget-remote-order-plan-2026-09-28.md](./active/admin-ai-widget-remote-order-plan-2026-09-28.md)
+  - **갈매봇(어드민 전역 AI 위젯)·AI 올인원 탭·원격 오더 기획.** 오더 등급(R0~R4), 오더 카드 사양, 안전 설계, 프론트 구현 현황과 서버 연결 지점
+- [active/admin-ai-structure-worklist-2026-09-29.md](./active/admin-ai-structure-worklist-2026-09-29.md)
+  - **갈매봇 실행 로드맵.** 서버 구조(조율기·오더 레지스트리·확인 API), 조회·쓰기 후보 함수와 되돌리기 가능 여부, 단계별 작업 id(S0~S5, F)와 완료 기준
 - [active/internal-crm-backend-operating-plan-2026-06-26.md](./active/internal-crm-backend-operating-plan-2026-06-26.md)
   - 내부 동료가 매일 쓰는 자체 CRM의 기록 입력, 회의록/녹음 모으기, 고객 360, 다음 액션 운영 기준
 - [active/admin-3-revenue-sheet-workspace-plan-2026-06-29.md](./active/admin-3-revenue-sheet-workspace-plan-2026-06-29.md)
@@ -118,6 +132,10 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - Compass 마케팅 앱과 공유하는 Supabase DB의 동기화·스키마·거버넌스 감사, 도메인별 통폐합 판정과 4단계 로드맵
 - [active/compass-integration-2026-09-14.md](./active/compass-integration-2026-09-14.md)
   - **Compass ↔ 어드민 리드·CRM 연동 2차.** 전화 키 함수·링크/연락/역브리지 뷰 마이그레이션 적용 순서(Compass 배포 → 서울 적용 → 20260902 재실행), NEO lead 생성 닫기, 연락 상태 동기화 정렬 메모
+- [active/compass-kr-team-sync.md](./active/compass-kr-team-sync.md)
+  - KR Team의 Compass 월별 과정지표·현재 팀 명부·매출 조정 읽기 계약, 전용 토큰 설정과 검증·배포 순서
+- [active/kr-data-source-contract.md](./active/kr-data-source-contract.md)
+  - **NEO·Compass·Admin 데이터 연결 기준.** 현재 BD/MKT 조직과 CSM 이력, 본사 실적·장부·활동·평가의 원본 경계, 노션 개정 목표의 대조·반영 절차, 기존 스킬·보류 설계의 적용 범위
 - [active/admin-performance-plan-2026-09-02.md](./active/admin-performance-plan-2026-09-02.md)
   - Admin 속도 가설 판정(인증 왕복·팬아웃·메모이제이션·플랜), 적용한 조치와 측정 방법, 운영 확인 목록
 - [active/admin-performance-round2-2026-09-04.md](./active/admin-performance-round2-2026-09-04.md)

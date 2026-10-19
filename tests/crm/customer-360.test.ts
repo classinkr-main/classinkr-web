@@ -5,6 +5,7 @@ import {
   buildLeadHeader,
   buildNeoHeader,
   computeCustomer360Risk,
+  normalizeUnifiedCustomerKeyParam,
   parseUnifiedCustomerKey,
   summarizeNeoMoney,
 } from "@/lib/repositories/crm-customer-360"
@@ -53,6 +54,31 @@ describe("parseUnifiedCustomerKey", () => {
   it("parses lead and neo keys", () => {
     expect(parseUnifiedCustomerKey("lead:abc")).toEqual({ source: "lead", entityId: "abc", targetType: "lead" })
     expect(parseUnifiedCustomerKey("neo:xyz")).toEqual({ source: "neo", entityId: "xyz", targetType: "neo_account" })
+  })
+
+  it("accepts percent-encoded route segments (Next 16.2 passes page params encoded — 2026-09-29 404)", () => {
+    expect(parseUnifiedCustomerKey("lead%3A39f2b68c-6920-4b78-8ba5-516561a88954")).toEqual({
+      source: "lead",
+      entityId: "39f2b68c-6920-4b78-8ba5-516561a88954",
+      targetType: "lead",
+    })
+    expect(parseUnifiedCustomerKey("neo%3A3738042464338638")).toEqual({
+      source: "neo",
+      entityId: "3738042464338638",
+      targetType: "neo_account",
+    })
+    expect(parseUnifiedCustomerKey("neo%3Aa%3Ab")).toEqual({ source: "neo", entityId: "a:b", targetType: "neo_account" })
+    expect(parseUnifiedCustomerKey("lead%3A")).toBeNull()
+  })
+
+  it("normalizeUnifiedCustomerKeyParam decodes once and keeps malformed input as-is", () => {
+    expect(normalizeUnifiedCustomerKeyParam("lead:abc")).toBe("lead:abc")
+    expect(normalizeUnifiedCustomerKeyParam("lead%3Aabc")).toBe("lead:abc")
+    expect(normalizeUnifiedCustomerKeyParam("lead%253Aabc")).toBe("lead%3Aabc")
+    expect(normalizeUnifiedCustomerKeyParam("lead%E0%A4%A")).toBe("lead%E0%A4%A")
+    // 이미 ':' 가 있으면 디코드된 모양 — id 안의 % 표현은 다시 풀지 않는다(이중 디코드 방지, 10월 줄기 규칙).
+    expect(normalizeUnifiedCustomerKeyParam("neo:account%3Aone")).toBe("neo:account%3Aone")
+    expect(parseUnifiedCustomerKey("neo:account%3Aone")?.entityId).toBe("account%3Aone")
   })
 
   it("splits only on the first colon so account ids containing colons survive", () => {
@@ -183,6 +209,14 @@ function okEventsResult() {
   }
 }
 
+/** PostgREST 빌더 흉내 — 어떤 체인이든 빈 결과로 끝난다(CT9 연락 로그·계정→리드 링크 조회용). */
+function emptyQuery(): Record<string, unknown> {
+  const query: Record<string, unknown> = {}
+  for (const method of ["select", "eq", "in", "order", "limit"]) query[method] = () => query
+  query.then = (resolve: (value: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(resolve)
+  return query
+}
+
 function okTasksResult() {
   return {
     generatedAt: NOW.toISOString(),
@@ -225,6 +259,7 @@ async function loadCustomer360(options?: {
     findConfirmedLeadNeoLink,
   }))
   vi.doMock("@/lib/repositories/crm-events", () => ({
+    LEAD_CONTACT_MIRROR_SOURCE_TYPES: ["lead_contact_log", "call", "sms"],
     listCrmCustomerEvents: vi.fn().mockResolvedValue(okEventsResult()),
   }))
   vi.doMock("@/lib/repositories/crm-tasks", () => ({
@@ -261,6 +296,15 @@ async function loadCustomer360(options?: {
   vi.doMock("@/lib/repositories/crm-customer-tags", () => ({
     getCustomerTags: vi.fn().mockResolvedValue([]),
   }))
+  // 이 하네스는 연결·신원·신선도를 검증한다. Compass 활동은 전용 통합 테스트에서 검증한다.
+  vi.doMock("@/lib/compass/bridge", () => ({
+    getCompassLeadsByPhoneKeys: vi.fn().mockResolvedValue({ rows: [], down: false }),
+    getCompassActivitiesByLeadIds: vi.fn().mockResolvedValue({ rows: [], down: false }),
+  }))
+  // CT9 — 연락 로그 원본·계정→리드 확정 링크를 직접 읽는다. 이 하네스는 둘 다 없는 고객이다.
+  vi.doMock("@/lib/supabase/admin", () => ({
+    createSupabaseAdminClient: () => ({ from: () => emptyQuery() }),
+  }))
 
   const loaded = await import("@/lib/repositories/crm-customer-360")
   return { getCrmCustomer360: loaded.getCrmCustomer360, findConfirmedLeadNeoLink }
@@ -276,9 +320,11 @@ describe("getCrmCustomer360 (mocked harness)", () => {
   })
 
   it("wires origin/crmRegistered/neoAccountId for a site lead with a confirmed NEO link", async () => {
+    const linkedDetail = makeNeoDetail({ orders: [{ id: "linked-order", title: "ClassIn 구독", amount: 99, occurredAt: NOW.toISOString(), ownerName: "담당", status: null }] })
     const { getCrmCustomer360, findConfirmedLeadNeoLink } = await loadCustomer360({
       lead: makeLead({ source: "demo_modal" }),
       neoLink: { targetId: "neo-acc-77" },
+      neoDetail: linkedDetail,
     })
 
     const result = await getCrmCustomer360(LEAD_KEY, { now: NOW })
@@ -289,9 +335,14 @@ describe("getCrmCustomer360 (mocked harness)", () => {
     expect(result.origin).toBe("site")
     expect(result.crmRegistered).toBe(true)
     expect(result.neoAccountId).toBe("neo-acc-77")
+    expect(result.money.orders).toEqual(linkedDetail.orders)
     expect(result.health.ok).toBe(true)
     // 수기 라벨은 360 페이로드에 additive로 동승한다(드로어 온-오픈 별도 fetch 제거).
     expect(result.tags).toEqual([])
+    // CT9 — 연락 기록이 없는 리드: 마지막 연락 없음(조회 실패가 아니라 0건), 리드 360 은 연결 리드 없음.
+    expect(result.contactSummary.last).toBeNull()
+    expect(result.contactSummary.leadHistoryDown).toBe(false)
+    expect(result.linkedLeads).toEqual({ leadIds: [], truncated: false, mergedCount: 0, down: false })
   })
 
   it("classifies ad-click leads as origin ad and stays unregistered without a link", async () => {

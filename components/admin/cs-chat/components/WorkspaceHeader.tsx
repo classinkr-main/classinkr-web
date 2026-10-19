@@ -1,7 +1,8 @@
 "use client"
 
-import { HelpCircle, RefreshCcw, Sparkles } from "lucide-react"
+import { HelpCircle, RefreshCcw } from "lucide-react"
 
+import { ClassInInternalAIIcon } from "@/components/ui/ClassInInternalAIIcon"
 import { cn } from "@/lib/utils"
 
 import { CONSOLE_CONTENT_CLASS } from "../constants"
@@ -30,8 +31,8 @@ export default function WorkspaceHeader({
       <header className="shrink-0 border-b border-black/[0.08] bg-white">
         <div className={cn(CONSOLE_CONTENT_CLASS, "flex items-center justify-between gap-3 py-2.5")}>
           <div className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#31302E] text-white">
-              <Sparkles className="h-4 w-4" />
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#084734] text-white shadow-xs">
+              <ClassInInternalAIIcon size={18} variant="white" />
             </span>
             <div className="min-w-0">
               <h1 className="truncate text-[15px] font-semibold tracking-[-0.02em]">CS 코파일럿</h1>

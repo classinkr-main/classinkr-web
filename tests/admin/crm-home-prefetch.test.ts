@@ -125,3 +125,5 @@ describe("prefetchCrmHomeInitialData 데이터 조립 — 스트리밍 계약(�
     errorSpy.mockRestore()
   })
 })
+
+vi.mock("@/lib/admin/data-owner", () => ({ currentDataOwner: async () => ({ keys: ["Somang"], owner: { ownerKey: "Somang", displayName: "진소망" } }) }))

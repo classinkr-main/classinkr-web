@@ -220,10 +220,13 @@ describe("revLinkedTargetHref — target_type → href 규칙", () => {
     ).toBe(`/admin/crm/customers/unified?q=${encodeURIComponent("가나학원")}`)
   })
 
-  it("partner_account는 파트너 상세 경로", () => {
+  it("partner_account는 현재 파트너 상세 경로(/admin/crm/deals/kpi/{id}) — 구경로 redirect 스텁을 거치지 않는다(D7)", () => {
     expect(
       revLinkedTargetHref({ targetType: "partner_account", targetId: "p 1/2", label: null, name: "하하파트너" })
-    ).toBe(`/admin/crm/partners/${encodeURIComponent("p 1/2")}`)
+    ).toBe(`/admin/crm/deals/kpi/${encodeURIComponent("p 1/2")}`)
+    // 스텁이 실제로 보내는 곳과 같아야 한다 — 스텁 소스의 redirect 대상 고정.
+    const stub = read("app/admin/crm/partners/[id]/page.tsx")
+    expect(stub).toContain("redirect(`/admin/crm/deals/kpi/${id}")
   })
 
   it("deal은 상세 라우트가 없어 링크 생략(null) — 빈 target_id도 null", () => {
@@ -263,7 +266,8 @@ describe("SalesLedgerWorkbench — CRM ↗ 배선(레일 전용, 1열 무변경)
     expect(matrix).toContain("export function CrmLinkedBadge")
     expect(matrix).not.toContain("<CrmLinkedBadge")
     // 미연결 팝오버(1열 트리거)·레일 미연결 배지는 현행 유지.
-    expect(matrix).toContain("CRM 미연결 — 매출·활동이 CRM 고객과 이어져 있지 않습니다.")
+    expect(matrix).toContain("CRM 미연결 상태입니다. 매출과 영업 활동이 CRM 고객과 자동 연동되도록 연결할 수 있습니다.")
     expect(matrix).toContain("매칭 인박스에서 연결 ↗")
+    expect(matrix).toContain("매칭 인박스에서 연결하기 ↗")
   })
 })

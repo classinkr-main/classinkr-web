@@ -13,6 +13,7 @@ function createChain(result: { data?: unknown; error: unknown; count?: unknown }
   chain.gte = vi.fn(() => chain)
   chain.lte = vi.fn(() => chain)
   chain.eq = vi.fn(() => chain)
+  chain.or = vi.fn(() => chain)
   chain.order = vi.fn(() => chain)
   chain.is = vi.fn(() => chain)
   chain.limit = vi.fn(() => Promise.resolve(result))
@@ -50,6 +51,13 @@ describe("getCompassUpcomingActions — 임박 경계", () => {
     expect(chain.lte).toHaveBeenCalledWith("next_action_at", "2026-08-30T03:00:00.000Z")
   })
 
+  it("종료된 고객관리 건(care_stage='closed')은 빼고, care_stage 가 null 인 행은 남긴다 — Compass 알림과 같은 조건", async () => {
+    const { getCompassUpcomingActions } = await import("@/lib/compass/bridge")
+    await getCompassUpcomingActions(48)
+
+    expect(chain.or).toHaveBeenCalledWith("care_stage.is.null,care_stage.neq.closed")
+  })
+
   it("withinHours가 다르면 상한 경계만 늘어난다(gte는 항상 now)", async () => {
     const { getCompassUpcomingActions } = await import("@/lib/compass/bridge")
     await getCompassUpcomingActions(1)
@@ -78,6 +86,16 @@ describe("getCompassUpcomingActions — 임박 경계", () => {
     const result = await getCompassUpcomingActions(48)
     expect(result.down).toBe(false)
     expect(result.rows).toHaveLength(1)
+  })
+
+  it("목록 상한을 넘는 정확한 전체 건수와 안정적인 동률 정렬을 보존한다", async () => {
+    chain.limit.mockResolvedValue({ data: Array.from({ length: 500 }, (_, id) => ({ id })), count: 734, error: null })
+    const { getCompassUpcomingActions } = await import("@/lib/compass/bridge")
+    const result = await getCompassUpcomingActions(48)
+    expect(result).toMatchObject({ down: false, total: 734, truncated: true })
+    expect(chain.select).toHaveBeenCalledWith("*", { count: "exact" })
+    expect(chain.order).toHaveBeenNthCalledWith(2, "id", { ascending: true })
+    expect(result.rows).toHaveLength(500)
   })
 
   it("supabase가 에러를 돌려주면 down=true, rows=[]로 강등한다(무음 실패 금지)", async () => {

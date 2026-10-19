@@ -1,8 +1,11 @@
 "use client"
 
-// CRM 기록 표면 — 좌: 컴포저(ActivityQuickForm composer)+필터+타임라인, 우: 이번 주 요약(A5)+CrmActionRail(hideForm·hideRecent — 오늘 할 일).
+// CRM 기록 작업면 — 좌: 검색·날짜별 기록, 우: 입력. 주간 요약과 할 일은 접어서 참조한다.
 // 기록 생성 폼 SSOT는 rail/ActivityQuickForm — 이 파일은 폼을 직접 들고 있지 않는다.
 // 캐시 창(TTL·SWR)은 lib/crm/client-cache.ts SSOT 를 쓴다(P2) — 이 파일에 로컬 TTL 상수를 두지 않는다.
+// A안(2026-09-25) — 리드 대상 포커스(?targetType=lead&targetId=)면 360 드로어와 같은 기록 위치 판정
+// (lib/crm/write-surface)으로 "기록은 Compass에서" 안내 바를 컴포저 위에 둔다. 판정 원천은 드로어와 같은 360
+// 캐시 키라 드로어에서 넘어오면 추가 요청이 없다. 안내일 뿐 컴포저·쓰기 경로는 바꾸지 않는다(교차 쓰기 0).
 
 import { Suspense, use, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
@@ -13,9 +16,13 @@ import {
   Calendar,
   Clock,
   FileAudio,
+  FileText,
   Filter,
+  Layers,
+  Plus,
   RefreshCw,
   Search,
+  Smile,
   UserRound,
 } from "lucide-react"
 
@@ -31,6 +38,9 @@ import {
 import { buildActivityEventsUrl, defaultActivityEventsUrl } from "@/lib/crm/activity-events-url"
 import type { CrmActivityInitialData } from "@/lib/admin/crm/activity-prefetch"
 import type { ListCrmCustomerEventsResult } from "@/lib/repositories/crm-events"
+import type { Customer360 } from "@/lib/repositories/crm-customer-360"
+import { resolveCrmWriteSurface, type CrmWriteSurfaceResult } from "@/lib/crm/write-surface"
+import C360WriteSurfaceBar, { CompassDownWriteCaption, HomeOnlyCaption } from "./drawer/C360WriteSurfaceBar"
 import Pager from "@/components/admin/ui/Pager"
 import FreshnessCaption from "./FreshnessCaption"
 import { ActivityWeekSummaryView, useWeekOpenTasks } from "./activity/ActivityWeekSummary"
@@ -43,6 +53,7 @@ import {
   SENTIMENT_FILTERS,
   SOURCE_FILTERS,
   TARGET_OPTIONS,
+  activityFocusBackHref,
   formatDateTime,
   formatFileSize,
   isActivityTargetType,
@@ -56,10 +67,93 @@ import {
 } from "./rail/activity-contract"
 
 const PAGE_LIMIT = 50
+
+/** 360 드로어(Customer360Drawer load)와 같은 URL·캐시 키 — 드로어에서 넘어오면 캐시 적중. */
+export function leadFocus360Url(leadId: string): string {
+  return `/api/admin/crm/customers/${encodeURIComponent(`lead:${leadId}`)}/360`
+}
+
+/**
+ * A안 — 리드 대상 포커스의 기록 위치 안내. Compass 에서 응대 중인 리드면 "기록은 Compass에서" 바 + Compass 링크 +
+ * "Home에만 저장" 캡션, Compass 연결 끊김이면 그 사실만. 판정 조회 실패는 안내를 생략한다(컴포저는 그대로 쓸 수 있다).
+ */
+function LeadFocusWriteSurface({ leadId, name }: { leadId: string; name: string }) {
+  const [resolved, setResolved] = useState<{ leadId: string; surface: CrmWriteSurfaceResult } | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const url = leadFocus360Url(leadId)
+    adminFetchJsonCachedWithMeta<Customer360>(url, undefined, {
+      cacheKey: url,
+      ttlMs: CRM_CACHE_TTL_MS,
+      staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
+    })
+      .then(({ data }) => {
+        if (cancelled || !data) return
+        setResolved({
+          leadId,
+          surface: resolveCrmWriteSurface({
+            source: data.source,
+            found: data.found,
+            compassHref: data.compass?.href,
+            compassDown: data.compass?.down,
+            leadStatus: data.leadStatus,
+            crmRegistered: data.crmRegistered,
+          }),
+        })
+      })
+      .catch(() => {
+        // 안내 바는 보조 표시 — 판정을 못 하면 그리지 않는다(지금 화면과 같다).
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [leadId])
+
+  const surface = resolved?.leadId === leadId ? resolved.surface : null
+  if (!surface) return null
+  if (surface.surface === "compass") {
+    return (
+      <div
+        data-testid="crm-activity-lead-write-surface"
+        className="rounded-xl border border-[#e8e8e4] bg-white px-3 py-2.5"
+      >
+        <C360WriteSurfaceBar
+          compassHref={surface.compassHref}
+          name={name}
+          showOpenLink
+          standalone
+          testId="crm-activity-write-surface-bar"
+        />
+        <HomeOnlyCaption className="mt-1.5" />
+      </div>
+    )
+  }
+  if (surface.reason === "compass_down") {
+    return <CompassDownWriteCaption className="px-1" />
+  }
+  return null
+}
 type ActivityScope = "work" | "all"
 const AUTOMATED_EVENT_SOURCES = new Set<SourceType>(["site_inflow", "external_crm", "sheet"])
 
+const SCOPE_TABS = [
+  {
+    key: "work" as const,
+    label: "업무 기록",
+    icon: FileText,
+    description: "사람이 남긴 메모·통화·회의·일정을 우선 표시",
+  },
+  {
+    key: "all" as const,
+    label: "전체 이벤트",
+    icon: Layers,
+    description: "유입·시트·외부 CRM 자동 이벤트 포함",
+  },
+] as const
+
 function listUrl(input: {
+  owner?: string
   query: string
   targetType: TargetType
   sourceType: SourceType
@@ -74,6 +168,7 @@ function listUrl(input: {
     limit: PAGE_LIMIT,
     offset: input.offset,
     query: input.query,
+    owner: input.owner,
     targetType: input.targetType,
     sourceType: input.sourceType,
     sentiment: input.sentiment,
@@ -267,6 +362,7 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
   const router = useRouter()
 
   const searchParams = useSearchParams()
+  const dataOwner = searchParams.get("owner") ?? "__me"
   const focusTargetId = (searchParams.get("targetId") ?? "").trim()
   const focusTargetTypeParam = (searchParams.get("targetType") ?? "").trim()
   const focusLabelFromQuery = (searchParams.get("targetLabel") ?? "").trim()
@@ -282,7 +378,12 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
   }, [focusLabelFromQuery, focusTargetId, data])
 
   const focusName = focusLabel || "선택한 고객"
-  const backHref = backParam || `/admin/crm/customers/unified?account=${encodeURIComponent(focusTargetId)}`
+  const backHref = activityFocusBackHref({
+    back: backParam,
+    targetType: focusTargetType,
+    targetId: focusTargetId,
+    label: focusLabel,
+  })
 
   const loadEvents = useCallback(
     async (offset: number, options?: { force?: boolean; append?: boolean }) => {
@@ -290,6 +391,7 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
       const { from, to } = resolveActivityPeriod(period, Date.now())
       const url = listUrl({
         query,
+        owner: focusTargetId && !searchParams.has("owner") ? "" : dataOwner,
         targetType: filterTarget,
         sourceType: filterSource,
         sentiment: filterSentiment,
@@ -365,7 +467,7 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
         }
       }
     },
-    [activityScope, filterSentiment, filterSource, filterTarget, query, period, focusTargetId]
+    [activityScope, filterSentiment, filterSource, filterTarget, query, period, focusTargetId, dataOwner, searchParams]
   )
 
   // P1a — 최초 로드는 아래 PrefetchSourceBridge(seedEvents)가 담당한다(프리페치가 없으면
@@ -400,7 +502,7 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
   // work·필터 전체·기간 전체)가 정확히 같은 URL을 계산해야 캐시가 적중한다.
   const seedEvents = useCallback(
     (value: ListCrmCustomerEventsResult | null) => {
-      if (value !== null) {
+      if (value !== null && dataOwner === "__me" && !focusTargetId) {
         seedAdminRequestCache(defaultActivityEventsUrl(), value, {
           ttlMs: CRM_CACHE_TTL_MS,
           staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
@@ -409,7 +511,7 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
       }
       void loadEvents(0)
     },
-    [loadEvents, initialData?.events.generatedAt]
+    [loadEvents, initialData?.events.generatedAt, dataOwner, focusTargetId]
   )
 
   // 이번 주 요약(A5) — 현재 필터로 불러온 목록 기준. 페이지가 더 있으면 하한값으로 표기한다.
@@ -439,6 +541,19 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
     [router]
   )
 
+  const handleScopeKeyDown = useCallback(
+    (event: React.KeyboardEvent, currentKey: ActivityScope) => {
+      if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+        event.preventDefault()
+        const nextKey: ActivityScope = currentKey === "work" ? "all" : "work"
+        setActivityScope(nextKey)
+        if (nextKey === "work" && AUTOMATED_EVENT_SOURCES.has(filterSource)) setFilterSource("all")
+        document.getElementById(`activity-scope-tab-${nextKey}`)?.focus()
+      }
+    },
+    [filterSource]
+  )
+
   const weekSummaryViewProps = {
     summary: weekSummary,
     partial: weekSummaryPartial,
@@ -466,9 +581,17 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
         <div>
           <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">기록</h1>
           <p className="mt-1 text-[13px] text-[#1a1a1a]/45">
-            녹음·회의록·메모 → 고객 DB 운영 기록
+            고객과의 기록을 모아 보고, 다음 액션까지 바로 입력합니다.
           </p>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => {
+          const field = document.getElementById("crm-workspace-body")
+          field?.scrollIntoView({ block: "center" })
+          field?.focus({ preventScroll: true })
+        }} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-[#084734] px-4 text-[13px] font-semibold text-white hover:bg-[#065c41]">
+          <Plus className="h-4 w-4" /> 기록 추가
+        </button>
         <button
           type="button"
           onClick={forceReload}
@@ -478,6 +601,7 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
           <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
           새로고침
         </button>
+        </div>
       </div>
 
       {focusTargetId ? (
@@ -504,62 +628,93 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
         </div>
       ) : null}
 
-      {/* 좌: 컴포저+필터+타임라인(minmax(0,1fr), 2행 span) · 우: 이번 주 요약(1행) + 액션 레일(2행, 독립 스크롤, hideForm).
-          모바일은 컴포저 → 필터 → 신선도 캡션 → 이번 주 요약(접힌 details) → 타임라인 → 레일 순 스택.
-          요약 View 는 두 자리에 그리지만 할 일 fetch(useWeekOpenTasks)는 위에서 한 번만 한다. */}
-      <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="min-w-0 space-y-4 xl:col-start-1 xl:row-span-2 xl:row-start-1">
-          <ActivityQuickForm
-            variant="composer"
-            defaultTargetType={focusTargetType}
-            defaultTargetId={focusTargetId || undefined}
-            defaultTargetLabel={focusLabel || undefined}
-            onSaved={handleRailSaved}
-          />
+      {/* A안 — 리드 대상 포커스면 기록 위치 안내(Compass 에서 응대 중인 리드는 "기록은 Compass에서"). */}
+      {focusTargetId && focusTargetType === "lead" ? (
+        <LeadFocusWriteSurface key={focusTargetId} leadId={focusTargetId} name={focusName} />
+      ) : null}
 
-          <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <div className="inline-flex rounded-lg border border-[#e8e8e4] bg-[#F6F5F4] p-1" role="group" aria-label="기록 범위">
-                {([
-                  { key: "work", label: "업무 기록" },
-                  { key: "all", label: "전체 이벤트" },
-                ] as const).map((option) => (
-                  <button
-                    key={option.key}
-                    type="button"
-                    onClick={() => {
-                      setActivityScope(option.key)
-                      if (option.key === "work" && AUTOMATED_EVENT_SOURCES.has(filterSource)) setFilterSource("all")
-                    }}
-                    aria-pressed={activityScope === option.key}
-                    className={`h-8 rounded-md px-3 text-[12px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] ${
-                      activityScope === option.key
-                        ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
-                        : "text-[#615D59] hover:text-[#111110]"
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
+      {/* Desktop: list + input workspace. Mobile: list, then input; the header action focuses
+          the composer. Both summary presentations share one useWeekOpenTasks query. */}
+      <section className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.7fr)]">
+        <div className="min-w-0 space-y-4">
+          <section className="border-b border-[rgba(0,0,0,0.08)] bg-white pb-4">
+            <label className="mb-3 flex items-center gap-2 text-[12px] text-[#615D59]">
+              담당자 범위
+              <select aria-label="활동 담당자 범위" value={dataOwner} onChange={event => {
+                const params = new URLSearchParams(searchParams.toString())
+                params.set("owner", event.target.value)
+                router.replace(`?${params.toString()}`, { scroll: false })
+              }} className="min-h-11 rounded-lg border border-black/[0.08] px-3">
+                <option value="__me">내 담당 기록</option><option value="">전체 담당자 기록</option>
+              </select>
+            </label>
+            {/* 상단 기록 범위 탭 (업무 기록 vs 전체 이벤트) */}
+            <div className="mb-4 border-b border-[#e8e8e4]">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div
+                  role="tablist"
+                  aria-label="기록 범위"
+                  className="no-scrollbar -mx-4 flex gap-1 overflow-x-auto px-4 sm:mx-0 sm:px-0"
+                >
+                  {SCOPE_TABS.map((option) => {
+                    const isActive = activityScope === option.key
+                    const Icon = option.icon
+                    return (
+                      <button
+                        key={option.key}
+                        id={`activity-scope-tab-${option.key}`}
+                        type="button"
+                        role="tab"
+                        aria-selected={isActive}
+                        aria-controls="activity-scope-panel"
+                        tabIndex={isActive ? 0 : -1}
+                        onClick={() => {
+                          setActivityScope(option.key)
+                          if (option.key === "work" && AUTOMATED_EVENT_SOURCES.has(filterSource)) setFilterSource("all")
+                        }}
+                        onKeyDown={(e) => handleScopeKeyDown(e, option.key)}
+                        className={`-mb-px inline-flex min-h-11 shrink-0 items-center gap-2 border-b-2 px-3.5 py-2.5 text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] sm:min-h-0 ${
+                          isActive
+                            ? "border-[#084734] text-[#084734]"
+                            : "border-transparent text-[#615D59] hover:border-[#e8e8e4] hover:text-[#111110]"
+                        }`}
+                      >
+                        <Icon className={`h-4 w-4 ${isActive ? "text-[#084734]" : "text-[#1a1a1a]/35"}`} />
+                        <span>{option.label}</span>
+                        {isActive && data ? (
+                          <span className="rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-bold tabular-nums text-[#084734]">
+                            {data.summary.total.toLocaleString("ko-KR")}
+                          </span>
+                        ) : null}
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="hidden pb-1 text-[12px] text-[#1a1a1a]/45 sm:block">
+                  {activityScope === "work"
+                    ? "사람이 남긴 메모·통화·회의·일정을 우선 표시"
+                    : "유입·시트·외부 CRM 자동 이벤트 포함"}
+                </p>
               </div>
-              <p className="text-[11px] text-[#1a1a1a]/42">
-                {activityScope === "work" ? "사람이 남긴 메모·통화·회의·일정을 우선 표시" : "유입·시트·외부 CRM 자동 이벤트 포함"}
-              </p>
             </div>
 
             {/* A4 칩 행 2줄 — 기간(세션 state, URL 미반영)과 분위기(기존 filterSentiment와 동기화).
                 분위기는 칩 하나로 통일하고 아래 select 그리드에서는 뺐다(중복 컨트롤 금지). */}
             <div className="mb-2 flex flex-wrap items-center gap-1.5" role="group" aria-label="기간 필터">
+              <span className="mr-1 inline-flex items-center gap-1 text-[11px] font-semibold text-[#1a1a1a]/40">
+                <Calendar className="h-3 w-3" />
+                기간
+              </span>
               {ACTIVITY_PERIOD_PRESETS.map((option) => (
                 <button
                   key={option.key}
                   type="button"
                   onClick={() => setPeriod(option.key)}
                   aria-pressed={period === option.key}
-                  className={`inline-flex min-h-11 items-center justify-center rounded-full border px-3 text-[12px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] sm:min-h-0 sm:h-8 ${
+                  className={`inline-flex min-h-11 items-center justify-center rounded-lg border px-3 text-[12px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] sm:min-h-0 sm:h-7.5 ${
                     period === option.key
-                      ? "border-[#084734]/25 bg-[#ECFDF5] text-[#084734]"
-                      : "border-[#e8e8e4] bg-white text-[#615D59] hover:text-[#111110]"
+                      ? "border-[#084734]/30 bg-[#ECFDF5] text-[#084734]"
+                      : "border-[#e8e8e4] bg-white text-[#615D59] hover:border-[#d0d0cc] hover:text-[#111110]"
                   }`}
                 >
                   {option.label}
@@ -567,16 +722,20 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
               ))}
             </div>
             <div className="mb-3 flex flex-wrap items-center gap-1.5" role="group" aria-label="분위기 필터">
+              <span className="mr-1 inline-flex items-center gap-1 text-[11px] font-semibold text-[#1a1a1a]/40">
+                <Smile className="h-3 w-3" />
+                분위기
+              </span>
               {SENTIMENT_FILTERS.map((option) => (
                 <button
                   key={option.key}
                   type="button"
                   onClick={() => setFilterSentiment(option.key)}
                   aria-pressed={filterSentiment === option.key}
-                  className={`inline-flex min-h-11 items-center justify-center rounded-full border px-3 text-[12px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] sm:min-h-0 sm:h-8 ${
+                  className={`inline-flex min-h-11 items-center justify-center rounded-lg border px-3 text-[12px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] sm:min-h-0 sm:h-7.5 ${
                     filterSentiment === option.key
-                      ? "border-[#084734]/25 bg-[#ECFDF5] text-[#084734]"
-                      : "border-[#e8e8e4] bg-white text-[#615D59] hover:text-[#111110]"
+                      ? "border-[#084734]/30 bg-[#ECFDF5] text-[#084734]"
+                      : "border-[#e8e8e4] bg-white text-[#615D59] hover:border-[#d0d0cc] hover:text-[#111110]"
                   }`}
                 >
                   {option.label}
@@ -703,7 +862,13 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
             </div>
           ) : null}
 
-          <section className="space-y-4" aria-label="기록 목록">
+          <section
+            id="activity-scope-panel"
+            role="tabpanel"
+            aria-labelledby={`activity-scope-tab-${activityScope}`}
+            className="space-y-4"
+            aria-label="기록 목록"
+          >
             <ActivityDateGroups
               groups={dayGroups}
               renderRow={(event: CrmEventRecord) => <ActivityEventRow key={event.id} event={event} />}
@@ -735,21 +900,23 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
           </section>
         </div>
 
-        <ActivityWeekSummaryView
-          {...weekSummaryViewProps}
-          frame="card"
-          className="hidden xl:col-start-2 xl:row-start-1 xl:block"
-        />
-
-        <CrmActionRail
-          hideForm
-          hideRecent
-          defaultTargetType={focusTargetType}
-          defaultTargetId={focusTargetId || undefined}
-          customerName={focusLabel || undefined}
-          onActivitySaved={handleRailSaved}
-          className="xl:col-start-2 xl:row-start-2"
-        />
+        <aside className="min-w-0 border-b border-[rgba(0,0,0,0.08)] bg-white pb-6 xl:sticky xl:top-6 xl:max-h-[calc(100dvh-3rem)] xl:overflow-y-auto xl:border-b-0 xl:border-l xl:pl-6" aria-label="기록 입력 작업면">
+          <ActivityQuickForm
+            variant="workspace"
+            bodyFieldId="crm-workspace-body"
+            defaultTargetType={focusTargetType}
+            defaultTargetId={focusTargetId || undefined}
+            defaultTargetLabel={focusLabel || undefined}
+            onSaved={handleRailSaved}
+          />
+          <details className="mt-6 border-t border-[rgba(0,0,0,0.08)] pt-4">
+            <summary className="cursor-pointer text-[13px] font-semibold text-[#615D59]">이번 주 요약·할 일</summary>
+            <div className="mt-4 space-y-4">
+              <div className="hidden xl:block"><ActivityWeekSummaryView {...weekSummaryViewProps} frame="plain" /></div>
+              <CrmActionRail hideForm hideRecent defaultTargetType={focusTargetType} defaultTargetId={focusTargetId || undefined} customerName={focusLabel || undefined} onActivitySaved={handleRailSaved} />
+            </div>
+          </details>
+        </aside>
       </section>
     </div>
   )

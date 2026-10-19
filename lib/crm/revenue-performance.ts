@@ -63,9 +63,9 @@ function dealMonthly(deal: BranchRevDeal): Record<string, number> {
   const result: Record<string, number> = {}
   for (const [month, rawAmount] of Object.entries(deal.monthly_payments ?? {})) {
     const total = Number(rawAmount) || 0
-    if (!total) continue
+    // 월 순액 0이어도 확정/고확도 상계가 남을 수 있어 캐논 판정을 거친다.
     const confirmed = confirmedMonthAmountWithColor(deal, month, total, hasColor)
-    if (confirmed > 0) result[month] = confirmed
+    if (confirmed !== 0) result[month] = confirmed
   }
   return result
 }
@@ -102,12 +102,8 @@ export async function getCrmRevenuePerformance(months = 6): Promise<CrmRevenuePe
   const monthKeys = recentMonthKeys(safeMonths)
   const indexByMonth = new Map(monthKeys.map((month, index) => [month, index]))
 
-  let deals: BranchRevDeal[] = []
-  try {
-    deals = await readRevDealsPreferActive(fyOf(new Date()))
-  } catch {
-    deals = []
-  }
+  // 조회 장애를 정상 빈 매출로 캐시하지 않는다. 상위 API의 오류 응답으로 전달한다.
+  const deals = await readRevDealsPreferActive(fyOf(new Date()))
 
   const monthTotals = new Array<number>(safeMonths).fill(0)
   const teamMap = new Map<string, number[]>()
@@ -155,12 +151,12 @@ export async function getCrmRevenuePerformance(months = 6): Promise<CrmRevenuePe
 
   const byTeam: CrmPerfGroup[] = Array.from(teamMap.entries())
     .map(([name, monthly]) => ({ name, team: name, total: sumArr(monthly), monthly }))
-    .filter((group) => group.total > 0)
+    .filter((group) => group.monthly.some((amount) => amount !== 0))
     .sort((a, b) => b.total - a.total)
 
   const byMember: CrmPerfGroup[] = Array.from(memberMap.entries())
     .map(([name, value]) => ({ name, team: value.team, total: sumArr(value.monthly), monthly: value.monthly }))
-    .filter((group) => group.total > 0)
+    .filter((group) => group.monthly.some((amount) => amount !== 0))
     .sort((a, b) => b.total - a.total)
 
   return {

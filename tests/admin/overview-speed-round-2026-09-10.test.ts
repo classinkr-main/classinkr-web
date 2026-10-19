@@ -10,7 +10,7 @@ const source = readFileSync(join(process.cwd(), "app/admin/overview/OverviewClie
 
 describe("위젯 단위 재시도 — retryOverview와 분리(감사 P2)", () => {
   it("retryOverview는 상단 배너의 전체 재시도로만 남아있다", () => {
-    expect(source).toContain("const retryOverview = () => setRefreshKey")
+    expect(source).toContain("setRefreshKey((current) => current + 1)")
     expect(source).toContain("전체 다시 시도")
     // 상단 배너의 onClick만 여전히 retryOverview를 직접 쓴다.
     expect(source).toContain("onClick={retryOverview}")
@@ -31,7 +31,7 @@ describe("위젯 단위 재시도 — retryOverview와 분리(감사 P2)", () =>
     for (const key of ["renewal", "matching", "hw", "content", "events"]) {
       expect(source).toContain(`osSourceError("${key}")`)
     }
-    expect(source.match(/onRetry={\(\) => retrySource\("os"\)}/g)?.length).toBe(5)
+    expect(source.match(/}, "os"\)/g)?.length).toBe(5)
   })
 })
 
@@ -65,7 +65,7 @@ describe("branch/summary·chatbot/stats 서버 프리페치 합류(첫 화면 �
 
 describe("매출 딥링크 기간 쿼리(감사 P2 — 착지 화면 불일치)", () => {
   it("두 매출 카드 모두 /admin/branch/ledger?period=Y로 착지한다(장부 기본값 Q와 어긋나지 않게)", () => {
-    expect(source.match(/href="\/admin\/branch\/ledger\?period=Y"/g)?.length).toBe(2)
+    expect(source.match(/href: "\/admin\/branch\/ledger\?period=Y"/g)?.length).toBe(2)
     expect(source).not.toContain('href="/admin/branch/ledger"')
   })
 })

@@ -245,7 +245,12 @@ const CRM_ROUTE_HANDLER_MATRIX: Record<string, Partial<Record<HttpMethod, Handle
   "customers-neo/[accountId]/route.ts": { GET: CRM_STAFF },
   "customers-neo/route.ts": { GET: CRM_STAFF },
   "customers/[key]/360/route.ts": { GET: CRM_STAFF },
+  "customers/[key]/timeline/route.ts": { GET: CRM_STAFF },
   "customers/[key]/tags/route.ts": { GET: CRM_STAFF, POST: CRM_STAFF, DELETE: CRM_STAFF },
+  // 세그먼트 → 메시지 발송 1단계: 저장 전 조건의 대상 미리보기(건수만, 쓰기 0 — 2026-09-25).
+  "customers/audience-preview/route.ts": { POST: CRM_STAFF },
+  // 현재 조건 전체 CSV(개인정보 포함) — 관리자 전용(2026-09-25).
+  "customers/export/route.ts": { GET: STAFF_EXPLICIT },
   "customers/unified/route.ts": { GET: CRM_STAFF },
   "deals-lite/[id]/route.ts": { PATCH: CRM_STAFF },
   "deals-lite/route.ts": { POST: CRM_STAFF },
@@ -254,9 +259,14 @@ const CRM_ROUTE_HANDLER_MATRIX: Record<string, Partial<Record<HttpMethod, Handle
   "external-sync/route.ts": { GET: CRM_STAFF, POST: VERIFY_ADMIN_BY_DEFAULT },
   "health-distribution/route.ts": { GET: CRM_STAFF },
   "home/priority-queue/route.ts": { GET: CRM_STAFF },
+  // 현황 "오늘 연락"(C안 ①, 2026-09-25) — 목록 + 결과 기록·되돌리기(Home 자기 테이블만).
+  "home/today-contacts/outcome/route.ts": { POST: CRM_STAFF, DELETE: CRM_STAFF },
+  "home/today-contacts/route.ts": { GET: CRM_STAFF },
   "insights/route.ts": { GET: CRM_STAFF },
   "lead-channels/route.ts": { GET: CRM_STAFF },
   "leads/neo-link/route.ts": { POST: CRM_STAFF },
+  // 리드 보드 기록 위치 판정 입력(NEO 등록 확정 리드 id, 읽기 전용 — A안, 2026-09-25).
+  "leads/neo-registered/route.ts": { GET: CRM_STAFF },
   "manager-report/route.ts": { GET: CRM_STAFF },
   "map-source/link/route.ts": { POST: CRM_STAFF },
   "map-source/route.ts": { GET: CRM_STAFF, POST: STAFF_EXPLICIT },
@@ -273,6 +283,12 @@ const CRM_ROUTE_HANDLER_MATRIX: Record<string, Partial<Record<HttpMethod, Handle
   "revenue-sheet/route.ts": { GET: CRM_STAFF },
   "revenue-target/route.ts": { GET: CRM_STAFF, POST: VERIFY_ADMIN_BY_DEFAULT },
   "revenue/route.ts": { GET: CRM_STAFF },
+  // 세그먼트 허브(C안 ②, 2026-09-25) — 세부 권한(소유자·관리자 전용 자동 태그)은 라우트 안에서 판정한다.
+  "segments/[id]/audience-preview/route.ts": { GET: CRM_STAFF },
+  "segments/[id]/members/route.ts": { GET: CRM_STAFF },
+  "segments/[id]/route.ts": { GET: CRM_STAFF, PATCH: CRM_STAFF, DELETE: CRM_STAFF },
+  "segments/[id]/run/route.ts": { POST: CRM_STAFF },
+  "segments/route.ts": { GET: CRM_STAFF, POST: CRM_STAFF },
   "source-links/[id]/route.ts": { PATCH: CRM_STAFF },
   "source-links/bulk/route.ts": { PATCH: CRM_STAFF },
   "source-links/generate/route.ts": { POST: CRM_STAFF },
@@ -280,7 +296,9 @@ const CRM_ROUTE_HANDLER_MATRIX: Record<string, Partial<Record<HttpMethod, Handle
   "source-links/manual/route.ts": { POST: CRM_STAFF },
   "source-links/targets/route.ts": { GET: CRM_STAFF },
   "tasks/[id]/route.ts": { GET: CRM_STAFF, PATCH: CRM_STAFF, DELETE: CRM_STAFF },
+  "tags/bulk/route.ts": { POST: CRM_STAFF },
   "tags/route.ts": { GET: CRM_STAFF, PATCH: CRM_STAFF },
+  "tasks/bulk/route.ts": { POST: CRM_STAFF },
   "tasks/route.ts": { GET: CRM_STAFF, POST: CRM_STAFF },
   "write-requests/[id]/execute/route.ts": { POST: STAFF_EXPLICIT },
   "write-requests/[id]/route.ts": { GET: CRM_STAFF, PATCH: STAFF_EXPLICIT },
@@ -288,10 +306,11 @@ const CRM_ROUTE_HANDLER_MATRIX: Record<string, Partial<Record<HttpMethod, Handle
 }
 
 // 매트릭스 합계 — 라우트가 늘거나 역할이 바뀌면 여기와 기획 문서(D3)를 함께 갱신한다.
-const EXPECTED_HANDLER_TOTAL = 68
+// 10월 줄기 +1(customers/[key]/timeline GET) · 09-mooni +16(세그먼트·오늘 연락·일괄 태그/할 일·CSV 등) = 68 + 1 + 16.
+const EXPECTED_HANDLER_TOTAL = 85
 const EXPECTED_ROLE_DISTRIBUTION: Record<RoleSpec, number> = {
-  CRM_STAFF_ADMIN_API_ROLES: 62,
-  STAFF_ADMIN_API_ROLES: 3,
+  CRM_STAFF_ADMIN_API_ROLES: 78,
+  STAFF_ADMIN_API_ROLES: 4,
   DEFAULT_BY_METHOD: 3,
 }
 

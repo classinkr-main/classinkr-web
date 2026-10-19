@@ -72,7 +72,7 @@ function SnapshotRestorePanel({ canFinalize, onRestored }: SnapshotRestorePanelP
         { method: "POST" }
       )
       setRestoreNotice(
-        `${formatDate(target.createdAt)} 스냅샷으로 복원했습니다 — 시트 이관 원장 ${formatNumber(result.restore.restoredCount)}행.`
+        `${formatDate(target.createdAt)} 스냅샷으로 복원했습니다 — 시트 이관 원본 ${formatNumber(result.restore.restoredCount)}행.`
       )
       setConfirmTarget(null)
       setLoaded(false)
@@ -171,7 +171,7 @@ function SnapshotRestorePanel({ canFinalize, onRestored }: SnapshotRestorePanelP
             <div className="border-b border-[rgba(0,0,0,0.08)] px-5 py-4">
               <h2 className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">백업으로 되돌리기</h2>
               <p className="mt-1 text-[12px] leading-relaxed text-[#615D59]">
-                {formatDate(confirmTarget.createdAt)} 백업으로 되돌립니다. 지금의 시트 이관 원장(이 백업 이후 이관분)은
+                {formatDate(confirmTarget.createdAt)} 백업으로 되돌립니다. 지금의 시트 이관 원본(이 백업 이후 이관분)은
                 사라지고 {formatNumber(confirmTarget.previousMovementCount)}행으로 대체됩니다. 수기 기록(admin_manual)은
                 영향받지 않습니다. 되돌릴 수 없는 동작입니다.
               </p>

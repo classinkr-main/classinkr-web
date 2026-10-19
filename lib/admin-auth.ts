@@ -469,6 +469,18 @@ type AdminShellSessionEntry = {
 }
 const adminShellSessionCache = new Map<string, AdminShellSessionEntry>()
 
+/**
+ * 셸 세션 캐시를 비운다 — admin_profiles 의 nav_overrides 를 바꾼 라우트가 부른다
+ * (PATCH /api/admin/me/nav, PATCH /api/admin/users). 캐시 키가 쿠키라 사람별로 골라 지울 수
+ * 없어 통째로 비운다(최대 200엔트리, 다음 렌더가 한 번 더 조회할 뿐이다).
+ *
+ * 한계: 이 서버 인스턴스의 Map 만 비운다. 다른 인스턴스는 최대 60초(TTL) 옛 값을 줄 수 있어,
+ * 클라이언트 셸(AdminShell)이 저장 직후 65초 동안 자기 값을 우선한다(mergePinnedNavOverrides).
+ */
+export function invalidateAdminShellSessionCache() {
+  adminShellSessionCache.clear()
+}
+
 type AdminShellProfileRow = Pick<AdminProfile, "display_name" | "role" | "status"> &
   Partial<Pick<AdminProfile, "nav_preset" | "nav_overrides">>
 

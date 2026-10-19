@@ -10,6 +10,12 @@ import {
 } from "@/lib/internal-cs-chat/consultation-search"
 import type { InternalCsSourceRef } from "@/lib/internal-cs-chat/gemini"
 import {
+  formatIncidentEvidence,
+  incidentSourceRefs,
+  searchIncidentEvidence,
+  type IncidentEvidence,
+} from "@/lib/internal-cs-chat/incident-search"
+import {
   selectInternalCsKnowledge,
   type InternalCsExternalUse,
   type InternalCsKnowledgeStatus,
@@ -36,6 +42,7 @@ export interface InternalCsCopilotContext {
     reviewRequired: boolean
     reviewReasons: string[]
   }
+  incidentEvidence?: IncidentEvidence[]
 }
 
 export interface BuildInternalCsCopilotContextOptions {
@@ -113,13 +120,20 @@ function statusLabel(status: InternalCsKnowledgeStatus) {
   }
 }
 
+export function isInternalDocSource(source: Pick<ChatbotSource, "visibility">) {
+  return source.visibility === "internal"
+}
+
 function sourceRef(source: ChatbotSource): InternalCsSourceRef {
   const anchor = source.heading ? `#${compact(source.heading, 100)}` : ""
-  return {
-    id: source.articleId || `${source.urlPath}${anchor}`,
-    label: compact([source.title, source.heading].filter(Boolean).join(" · "), 200),
-    kind: "public_doc",
+  const id = source.articleId || `${source.urlPath}${anchor}`
+  const label = compact([source.title, source.heading].filter(Boolean).join(" · "), 200)
+  // 내부 전용 문서(cs-knowledge·internal-canon)는 공개 문서와 같은 RPC 로 들어오지만 외부 사용 경계가 다르다.
+  // kind 와 externalUse 를 따로 찍어야 지시문의 사용 범위 규칙이 적용되고, 검토 UI 가 잠금으로 보여 준다.
+  if (isInternalDocSource(source)) {
+    return { id, label: `[내부] ${label}`.slice(0, 200), kind: "internal_doc", externalUse: "internal_only" }
   }
+  return { id, label, kind: "public_doc" }
 }
 
 function dedupeSourceRefs(sourceRefs: InternalCsSourceRef[]) {
@@ -162,7 +176,8 @@ function formatConsultationEvidence(evidence: ConsultationEvidence[]) {
 }
 
 function formatPublicEvidence(answer: string | null, sources: ChatbotSource[], warning?: string) {
-  const sections = sources.slice(0, 4).map((source, index) => [
+  const publicSources = sources.filter((source) => !isInternalDocSource(source))
+  const sections = publicSources.slice(0, 4).map((source, index) => [
     `${index + 1}. ${compact(source.title, 160)}${source.heading ? ` / ${compact(source.heading, 120)}` : ""}`,
     `   공개 경로: ${source.urlPath}`,
     `   근거: ${compact(source.excerpt, 900)}`,
@@ -174,6 +189,24 @@ function formatPublicEvidence(answer: string | null, sources: ChatbotSource[], w
     sections.length > 0 ? sections.join("\n") : "일치하는 공개 문서 근거 없음",
     warning ? `검색 경고: ${compact(warning, 300)}` : "",
   ].filter(Boolean).join("\n")
+}
+
+// 내부 전용 문서 근거는 공개 가이드와 다른 블록으로 싣는다. 같은 블록에 섞이면 모델이 "공개 경로"로 읽어
+// 고객 초안에 그대로 옮길 수 있다(externalUse 규칙이 적용되지 않는 경로였다).
+function formatInternalDocEvidence(sources: ChatbotSource[]) {
+  const internalSources = sources.filter(isInternalDocSource)
+  if (internalSources.length === 0) return ""
+  const sections = internalSources.slice(0, 4).map((source, index) => [
+    `${index + 1}. ${compact(source.title, 160)}${source.heading ? ` / ${compact(source.heading, 120)}` : ""}`,
+    "   사용 범위: 내부 전용 — 고객 초안에는 요지만 옮기고 원문·내부 경로·식별 정보는 싣지 않는다",
+    `   근거: ${compact(source.excerpt, 900)}`,
+  ].join("\n"))
+
+  return [
+    "[내부 전용 문서 근거]",
+    "내부 담당자 답변에만 사용한다. 고객 전달 초안에서는 외부 사용 경계에 따라 제외하거나 '확인 필요'로 표시한다.",
+    ...sections,
+  ].join("\n")
 }
 
 function requestedBoardModel(question: string) {
@@ -232,11 +265,13 @@ function buildDeterministicFallback({
   publicEvidence,
   selectedFacts,
   consultationCount,
+  incidentEvidence = [],
 }: {
   question: string
   publicEvidence: InternalCsCopilotContext["publicEvidence"]
   selectedFacts: ReturnType<typeof selectInternalCsKnowledge>["entries"]
   consultationCount: number
+  incidentEvidence?: IncidentEvidence[]
 }) {
   const focusedWeightAnswer = relevantWeightEvidence(question, publicEvidence)
   const directAnswer = focusedWeightAnswer || [
@@ -252,11 +287,17 @@ function buildDeterministicFallback({
         ...selectedFacts.map((entry) => `- **${statusLabel(entry.status)} · ${entry.title}:** ${entry.summary}`),
       ].join("\n")
     : ""
+  const incidentSummary = incidentEvidence.length > 0
+    ? [
+        "## 선례 오류 케이스 및 점검 흐름",
+        ...incidentEvidence.slice(0, 3).map((entry) => `- **${entry.title}:** ${entry.summary}`),
+      ].join("\n")
+    : ""
   const consultationSummary = consultationCount > 0
     ? `## 참고 사례\n과거 유사 상담 ${consultationCount}건이 검색됐습니다. 최신 정책·계약·사양과 대조한 뒤 사용하세요.`
     : ""
 
-  return [directAnswer, evidenceSummary, consultationSummary].filter(Boolean).join("\n\n")
+  return [directAnswer, evidenceSummary, incidentSummary, consultationSummary].filter(Boolean).join("\n\n")
 }
 
 async function getPublicEvidence(
@@ -303,16 +344,19 @@ export async function buildInternalCsCopilotContext(
   options: BuildInternalCsCopilotContextOptions = {}
 ): Promise<InternalCsCopilotContext> {
   const curated = selectInternalCsKnowledge(question, options.queueTags)
-  // 공개 근거와 과거 상담 사례를 병렬 조회한다. 둘 다 never-throw 지만 방어적으로 빈 배열 폴백을 둔다.
-  const [publicEvidence, consultationEvidence] = await Promise.all([
+  // 공개 근거, 과거 상담 사례, 오류 선례/확인 흐름을 병렬 조회한다. 모두 never-throw 지만 방어적으로 빈 배열 폴백을 둔다.
+  const [publicEvidence, consultationEvidence, incidentEvidence] = await Promise.all([
     getPublicEvidence(question, { includeInternalDocs: options.includeInternalDocs }),
     searchConsultationEvidence(question).catch(() => [] as ConsultationEvidence[]),
+    Promise.resolve(searchIncidentEvidence(question)).catch(() => [] as IncidentEvidence[]),
   ])
   const publicSourceRefs = publicEvidence.sources.map(sourceRef)
   const consultationBlock = formatConsultationEvidence(consultationEvidence)
+  const incidentBlock = formatIncidentEvidence(incidentEvidence)
   const sourceRefs = dedupeSourceRefs([
     ...INTERNAL_GUIDE_REFS,
     ...curated.sourceRefs,
+    ...incidentSourceRefs(incidentEvidence),
     ...publicSourceRefs,
     ...consultationSourceRefs(consultationEvidence),
   ])
@@ -329,12 +373,15 @@ export async function buildInternalCsCopilotContext(
     publicEvidence,
     selectedFacts,
     consultationCount: consultationEvidence.length,
+    incidentEvidence,
   })
 
   return {
     internalContext: [
       formatPublicEvidence(publicEvidence.answer, publicEvidence.sources, publicEvidence.warning),
+      formatInternalDocEvidence(publicEvidence.sources),
       curated.internalContext,
+      incidentBlock,
       consultationBlock,
       INTERNAL_OPERATING_GUIDE,
       HQ_COMMUNICATION_GUIDE,
@@ -354,5 +401,6 @@ export async function buildInternalCsCopilotContext(
       reviewRequired: reviewReasons.length > 0,
       reviewReasons,
     },
+    incidentEvidence,
   }
 }

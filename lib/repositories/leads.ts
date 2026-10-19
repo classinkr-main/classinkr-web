@@ -1,3 +1,4 @@
+import { matchesDataOwner } from "@/lib/crm/personal-owner";
 /**
  * Leads Repository — JSON ↔ Supabase 듀얼 모드
  *
@@ -8,7 +9,11 @@
 import "server-only";
 
 import { revalidateTag } from "next/cache";
-import { ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG } from "@/lib/admin/crm/cache-tags";
+import {
+  ADMIN_CRM_PRIORITY_QUEUE_SNAPSHOT_CACHE_TAG,
+  ADMIN_CRM_REGION_MAP_CACHE_TAG,
+  ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG,
+} from "@/lib/admin/crm/cache-tags";
 import { normalizePhoneKey } from "@/lib/compass/normalize";
 import { summarizeLeadResponseStatus } from "@/lib/crm/lead-response-status";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -100,6 +105,12 @@ function invalidateLeadReadCaches() {
   // 자체 mutationScopeAt으로 재조회하므로 "max"(하드 만료 아님)가 맞는 톤이다
   // (docs/active/admin-performance-plan-2026-09-02.md §4.4).
   revalidateTag(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, "max");
+  // CRM 홈 우선순위 큐 소스 스냅샷도 인스턴스 간 공유 Data Cache다. 아래 구독(onLeadsMutated)은
+  // 큐 모듈을 로드한 인스턴스에만 걸려 있어 쓰기가 다른 인스턴스에서 일어나면 리스너가 0개다 —
+  // 태그를 직접 SWR 무효화한다(cache-tags 모듈만 import — 큐 모듈을 import하면 순환이 된다).
+  revalidateTag(ADMIN_CRM_PRIORITY_QUEUE_SNAPSHOT_CACHE_TAG, "max");
+  // 지역 지도(getCrmRegionMap)의 리드층은 leads.branch·message(폼 답변 지역)·담당을 읽는다 — 리드 쓰기가 그 태그도 무효화한다.
+  revalidateTag(ADMIN_CRM_REGION_MAP_CACHE_TAG, "max");
   leadRowsMemo.clear();
   for (const listener of leadMutationListeners) listener();
 }
@@ -445,27 +456,27 @@ export async function getLeads(): Promise<LeadRecord[]> {
  * 화면에서 실제로 쓰는 필드만 가져온다. (overview 페이로드 축소용)
  * supabaseToLegacy는 미선택 컬럼을 `?? undefined`로 처리하므로 그대로 재사용 가능.
  */
-export async function getDashboardLeads(): Promise<LeadRecord[]> {
+export async function getDashboardLeads(ownerKeys?: readonly string[]): Promise<LeadRecord[]> {
   if (!USE_SUPABASE) {
     const { getLeads: jsonGetLeads } = await import("@/lib/db");
-    return jsonGetLeads();
+    return (await jsonGetLeads()).filter(lead => matchesDataOwner(lead.assigned_to, ownerKeys));
   }
 
   try {
     const rows = await fetchAllLeadRows(
-      "id, source, name, org, email, status, branch, created_at, confirmed_at",
+      "id, source, name, org, email, status, branch, created_at, confirmed_at, assigned_to",
       "대시보드 조회"
     );
-    return rows.map(supabaseToLegacy);
+    return rows.map(supabaseToLegacy).filter(lead => matchesDataOwner(lead.assigned_to, ownerKeys));
   } catch (error) {
     if (!(error instanceof LeadQueryError) || !isMissingLeadColumn(error.supabaseError, "confirmed_at")) {
       throw error;
     }
     const fallback = await fetchAllLeadRows(
-      "id, source, name, org, email, status, branch, created_at",
+      "id, source, name, org, email, status, branch, created_at, assigned_to",
       "대시보드 조회"
     );
-    return fallback.map(supabaseToLegacy);
+    return fallback.map(supabaseToLegacy).filter(lead => matchesDataOwner(lead.assigned_to, ownerKeys));
   }
 }
 
@@ -593,12 +604,13 @@ export async function getBoardLeads(): Promise<LeadRecord[]> {
  * JSON 폴백 모드(로컬 픽스처)는 반영하지 않으므로 대상도 없다.
  */
 export async function getLeadsForCompassContactSync(): Promise<
-  Array<{ id: string; phone: string; status: LeadRecord["status"] }>
+  Array<{ id: string; phone: string; status: LeadRecord["status"]; created_at: string | null; last_inflow_at: string | null }>
 > {
   if (!USE_SUPABASE) return [];
 
-  const rows = await fetchAllLeadRows("id, phone, status", "MKT 연락 반영 대상 조회");
-  const targets: Array<{ id: string; phone: string; status: LeadRecord["status"] }> = [];
+  // created_at·last_inflow_at — 판정이 "이 문의보다 오래된 Compass 상태"를 거르는 기준(lib/compass/lead-contact-sync leadInflowAtMs).
+  const rows = await fetchAllLeadRows("id, phone, status, created_at, last_inflow_at", "MKT 연락 반영 대상 조회");
+  const targets: Array<{ id: string; phone: string; status: LeadRecord["status"]; created_at: string | null; last_inflow_at: string | null }> = [];
   // offset 페이지 사이에 새 리드가 끼면 경계 행이 두 번 올 수 있다 — 판정 건수가 부풀지 않게 접는다.
   const seen = new Set<string>();
   for (const row of rows) {
@@ -606,7 +618,13 @@ export async function getLeadsForCompassContactSync(): Promise<
     seen.add(row.id);
     if (row.status !== "new" && row.status !== "contacted") continue;
     if (!row.phone?.trim()) continue;
-    targets.push({ id: row.id, phone: row.phone, status: row.status });
+    targets.push({
+      id: row.id,
+      phone: row.phone,
+      status: row.status,
+      created_at: row.created_at ?? null,
+      last_inflow_at: (row as { last_inflow_at?: string | null }).last_inflow_at ?? null,
+    });
   }
   return targets;
 }
@@ -1295,7 +1313,7 @@ export async function getLeadStats() {
   };
 }
 
-export async function getLeadActionStats(now = new Date()): Promise<LeadActionStats> {
+export async function getLeadActionStats(now = new Date(), ownerKeys?: readonly string[]): Promise<LeadActionStats> {
   let leads: LeadRecord[];
   if (!USE_SUPABASE) {
     leads = await getLeads();
@@ -1303,7 +1321,7 @@ export async function getLeadActionStats(now = new Date()): Promise<LeadActionSt
     // 과거 구현은 KPI 하나를 위해 exact count 10개를 병렬 호출해 실제 214행에서도 약 3초가
     // 걸렸다. 경량 전량 조회 1회로 상태·SLA·팔로업·확인을 같은 스냅샷에서 접어 응답 속도와
     // 지표 일관성을 함께 지킨다. fetchAllLeadRows가 1천행 경계를 페이지네이션한다.
-    const columns = "id, source, name, org, email, status, created_at, follow_up_at, confirmed_at";
+    const columns = "id, source, name, org, email, status, created_at, follow_up_at, confirmed_at" + (ownerKeys ? ", assigned_to" : "");
     try {
       leads = (await fetchAllLeadRows(columns, "액션 KPI 조회")).map(supabaseToLegacy);
     } catch (error) {
@@ -1315,6 +1333,8 @@ export async function getLeadActionStats(now = new Date()): Promise<LeadActionSt
       ).map(supabaseToLegacy);
     }
   }
+
+  leads = leads.filter(lead => matchesDataOwner(lead.assigned_to, ownerKeys));
 
   const today = toLocalDateKey(now);
   const responseStatus = summarizeLeadResponseStatus(leads, now);

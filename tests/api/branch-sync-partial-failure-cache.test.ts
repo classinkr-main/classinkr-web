@@ -35,6 +35,21 @@ describe("POST /api/admin/branch/sync — 부분 실패 시 캐시 무효화 (�
     vi.clearAllMocks()
   })
 
+  it("후속 연결 유지보수가 예외여도 반영 성공과 경고를 구분하고 캐시를 갱신한다", async () => {
+    verifyAdmin.mockResolvedValue(null)
+    runAll.mockResolvedValue({ ok: true, revOk: true, rev: 1, warnings: ["기존 경고"] })
+    runBranchRevLinkMaintenance.mockRejectedValueOnce(new Error("private provider error"))
+    const { POST } = await import("@/app/api/admin/branch/sync/route")
+    const response = await POST(syncRequest({ sources: ["rev"] }))
+    const body = await response.json()
+    expect(response.status).toBe(200)
+    expect(body.ok).toBe(true)
+    expect(body.warnings).toHaveLength(2)
+    expect(body.warnings[0]).toBe("기존 경고")
+    expect(JSON.stringify(body)).not.toContain("private provider error")
+    expect(revalidateTag).toHaveBeenCalledWith("admin-crm-revenue-sheet", "max")
+  })
+
   it("rev 성공 + hw 실패(ok=false)에서도 branch-seg는 무효화하지만, hw 전용 태그는 무효화하지 않는다", async () => {
     verifyAdmin.mockResolvedValue(null)
     runAll.mockResolvedValue({ ok: false, error: "hw: boom", rev: 42, hw: undefined })
@@ -157,7 +172,8 @@ describe("POST /api/admin/branch/sync — 부분 실패 시 캐시 무효화 (�
 
     expect(response.status).toBe(500)
     const tags = revalidateTag.mock.calls.map((call) => call[0])
-    expect(tags).toEqual(expect.arrayContaining(["branch-rev-deals", "admin-crm-revenue", "branch-dsh", "branch-kpi"]))
+    expect(tags).toEqual(expect.arrayContaining(["branch-rev-deals", "admin-crm-revenue", "admin-crm-revenue-sheet", "branch-dsh", "branch-kpi"]))
     expect(tags).not.toContain("branch-hw")
+    expect(runBranchRevLinkMaintenance).toHaveBeenCalledTimes(1)
   })
 })

@@ -359,26 +359,27 @@ export function DraftQueue({
     <>
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${
+        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold ${
           mode === "server" ? "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]" : "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
         }`}>
+          <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${mode === "server" ? "bg-[#084734]" : "bg-[#D97706]"}`} />
           {modeLabel}
         </span>
         <button
           type="button"
           onClick={onReload}
-          className="inline-flex h-7 items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] px-2 text-[10px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4]"
+          className="inline-flex h-6.5 items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[10px] font-bold text-[#615D59] shadow-2xs transition hover:bg-[#F6F5F4] hover:text-[#111110]"
         >
           <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
           새로고침
         </button>
       </div>
       {error && (
-        <div className="rounded-lg border border-[#ECD29C] bg-[#FBF1E0] p-3 text-[11px] leading-relaxed text-[#7A520F]">
+        <div className="rounded-lg border border-[#ECD29C] bg-[#FBF1E0] p-2.5 text-[11px] leading-relaxed text-[#7A520F]">
           {error}
         </div>
       )}
-      <div className="space-y-2 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2">
+      <div className="space-y-1.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2">
         <label className="relative block">
           <span className="sr-only">체크 큐 검색</span>
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#A39E98]" />
@@ -386,38 +387,38 @@ export function DraftQueue({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="고객, 담당자, 메모 검색"
-            className="h-8 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white pl-8 pr-2 text-[11px] font-semibold text-[#111110] outline-none focus:border-[#084734]"
+            className="h-7.5 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white pl-8 pr-2 text-[11px] font-semibold text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734]"
           />
         </label>
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           {DRAFT_STATUS_FILTERS.map((item) => (
             <button
               key={item.id}
               type="button"
               onClick={() => setStatusFilter(item.id)}
-              className={`rounded-md px-2 py-1 text-[10px] font-bold transition ${
+              className={`rounded-md px-2 py-0.5 text-[10px] font-bold transition ${
                 statusFilter === item.id
-                  ? "bg-[#111110] text-white"
-                  : "border border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:text-[#111110]"
+                  ? "bg-[#111110] text-white shadow-2xs"
+                  : "border border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#111110]"
               }`}
             >
               {item.label}
             </button>
           ))}
-          <span className="ml-auto px-1 py-1 text-[10px] font-bold text-[#615D59]">
+          <span className="ml-auto text-[10px] font-semibold text-[#8C8782]">
             {visibleDrafts.length}/{drafts.length}건
           </span>
         </div>
         {(onBulkCheck || onBulkApply) && (bulkCheckPlan.count > 0 || bulkApplyPlan.count > 0 || bulkResult) && (
-          <div className="flex flex-wrap items-center gap-1.5 border-t border-[rgba(0,0,0,0.08)] pt-2">
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-[rgba(0,0,0,0.08)] pt-1.5">
             {onBulkCheck && bulkCheckPlan.count > 0 && (
               <button
                 type="button"
                 onClick={() => void runBulkCheck()}
                 disabled={bulkBusy !== null}
-                className="inline-flex min-h-11 items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[10.5px] font-bold text-[#111110] transition hover:bg-[#F6F5F4] disabled:cursor-not-allowed disabled:opacity-50 md:min-h-7"
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[10.5px] font-bold text-[#111110] shadow-2xs transition hover:bg-[#F6F5F4] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {bulkBusy === "check" ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+                {bulkBusy === "check" ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3 text-[#084734]" />}
                 보이는 초안 {bulkCheckPlan.count}건 체크
               </button>
             )}
@@ -426,9 +427,9 @@ export function DraftQueue({
                 type="button"
                 onClick={() => setBulkApplyConfirm(true)}
                 disabled={bulkBusy !== null}
-                className="inline-flex min-h-11 items-center gap-1 rounded-md border border-[#084734] bg-white px-2 text-[10.5px] font-bold text-[#084734] transition hover:bg-[#F6F5F4] disabled:cursor-not-allowed disabled:opacity-50 md:min-h-7"
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-[#084734] bg-white px-2 text-[10.5px] font-bold text-[#084734] shadow-2xs transition hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Send className="h-3 w-3" />
+                <Send className="h-3 w-3 text-[#084734]" />
                 체크된 {bulkApplyPlan.count}건 적용
               </button>
             )}
@@ -440,7 +441,7 @@ export function DraftQueue({
                   type="button"
                   onClick={() => void runBulkApply()}
                   disabled={bulkBusy !== null}
-                  className="inline-flex min-h-11 items-center gap-1 rounded-md bg-[#084734] px-2 text-white transition hover:bg-[#065c41] disabled:opacity-50 md:min-h-7"
+                  className="inline-flex h-7 items-center gap-1 rounded-md bg-[#084734] px-2 text-white shadow-2xs transition hover:bg-[#065c41] disabled:opacity-50"
                 >
                   {bulkBusy === "apply" ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                   적용
@@ -449,7 +450,7 @@ export function DraftQueue({
                   type="button"
                   onClick={() => setBulkApplyConfirm(false)}
                   disabled={bulkBusy === "apply"}
-                  className="inline-flex min-h-11 items-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[#615D59] md:min-h-7"
+                  className="inline-flex h-7 items-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[#615D59]"
                 >
                   취소
                 </button>
@@ -467,58 +468,72 @@ export function DraftQueue({
         </div>
       )}
       {visibleDrafts.map((draft) => (
-        <div key={draft.id} className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${draftStatusMeta(draft.status, reversedDraftIds.has(draft.id)).className}`}>
-                  {draftStatusMeta(draft.status, reversedDraftIds.has(draft.id)).label}
+        <div key={draft.id} className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-2.5 transition-shadow hover:shadow-xs">
+          {/* 상단: 상태 배지 + 자가체크 + 수정/신규 + REV행 + 우측 정렬된 금액 */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-1">
+              <span className={`rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${draftStatusMeta(draft.status, reversedDraftIds.has(draft.id)).className}`}>
+                {draftStatusMeta(draft.status, reversedDraftIds.has(draft.id)).label}
+              </span>
+              {/* 자가 체크(입력 속도 라운드 4 P0-2): 매트릭스 셀 커밋은 저장 시점에 체크까지 끝난다 —
+                  남(검수자)의 체크와 구분되게 created_by===checked_by 파생 배지를 상태 배지 옆에 단다. */}
+              {isSelfCheckedDraft(draft) && (
+                <span
+                  title={SELF_CHECK_BADGE_TITLE}
+                  className="rounded-md border border-[#BDEFD8] bg-white px-1.5 py-0.5 text-[10px] font-bold text-[#084734]"
+                >
+                  {SELF_CHECK_BADGE_LABEL}
                 </span>
-                {/* 자가 체크(입력 속도 라운드 4 P0-2): 매트릭스 셀 커밋은 저장 시점에 체크까지 끝난다 —
-                    남(검수자)의 체크와 구분되게 created_by===checked_by 파생 배지를 상태 배지 옆에 단다. */}
-                {isSelfCheckedDraft(draft) && (
-                  <span
-                    title={SELF_CHECK_BADGE_TITLE}
-                    className="rounded-full border border-[#BDEFD8] bg-white px-2 py-0.5 text-[10px] font-bold text-[#084734]"
-                  >
-                    {SELF_CHECK_BADGE_LABEL}
-                  </span>
-                )}
-                <span className="rounded-full border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 py-0.5 text-[10px] font-bold text-[#615D59]">
-                  {draft.kind === "edit-row" ? "수정" : "신규 입력"}
+              )}
+              <span className="rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-1.5 py-0.5 text-[10px] font-bold text-[#615D59]">
+                {draft.kind === "edit-row" ? "수정" : "신규"}
+              </span>
+              {draft.sourceSheetRow ? (
+                <span className="rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-1.5 py-0.5 text-[10px] font-bold text-[#8C8782]">
+                  REV row {draft.sourceSheetRow}
                 </span>
-                {draft.sourceSheetRow ? (
-                  <span className="rounded-full border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 py-0.5 text-[10px] font-bold text-[#615D59]">
-                    REV row {draft.sourceSheetRow}
-                  </span>
-                ) : null}
-              </div>
-              <p className="mt-2 truncate text-[13px] font-bold text-[#111110]">{draft.customer || "고객명 미입력"}</p>
-              <p className="mt-1 text-[11px] text-[#615D59]">
-                {formatMonthLabel(draft.month)} · {draft.manager || "-"} · {draft.team || "-"} · {formatMoney(draft.amount)}
-              </p>
-              <WeeklyConfidenceDots metadata={draft.metadata} />
-              {/* 주차 셀 초안 고지: 병합(metadata.weekly 보존) vs 레거시 단일값(월 전체 대체) 구분 */}
-              {draft.kind === "edit-row" &&
-                /^w[1-5]$/.test(metadataString(draft.metadata, "week") ?? "") &&
-                draft.status !== "applied" &&
-                draft.status !== "cancelled" &&
-                (mergedWeeklyFromMetadata(draft.metadata) ? (
-                  <p className="mt-1.5 rounded border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 py-1 text-[10.5px] font-semibold leading-relaxed text-[#615D59]">
-                    주차 병합 초안 — 적용 시 {formatMonthLabel(draft.month)} 금액이 주차 합계 {formatMoney(draft.amount)}로 재기재됩니다 (기존 주차 보존)
-                  </p>
-                ) : (
-                  <p className="mt-1.5 rounded border border-[#ECD29C] bg-[#FBF1E0] px-2 py-1 text-[10.5px] font-bold leading-relaxed text-[#7A520F]">
-                    주차 셀 초안 — 적용 시 {formatMonthLabel(draft.month)} 금액 전체가 이 값으로 대체됩니다 (다른 주차 값 소멸)
-                  </p>
-                ))}
-              {draft.note && <p className="mt-1.5 line-clamp-2 text-[11.5px] leading-relaxed text-[#615D59]">{draft.note}</p>}
+              ) : null}
             </div>
-            {/* 입력 속도 라운드(2026-09-20) §8.4/§8.5 "레일·큐": 6개가 전부 h-8 w-8 동일 크기라
-                "지금 눌러야 할 버튼"이 아이콘 색으로만 구분됐다 — 체크·적용만 라벨을 상시 노출해
-                다음 할 일을 텍스트로도 읽히게 한다(편집·되돌리기·취소·삭제는 그대로). 폭이 늘어난
-                버튼 2개 때문에 좁은 화면에서 넘치지 않도록 이 행에 flex-wrap을 더한다. */}
-            <div className="flex shrink-0 flex-wrap items-center gap-1">
+            <span className="shrink-0 text-[13px] font-bold tabular-nums text-[#111110]">
+              {formatMoney(draft.amount)}
+            </span>
+          </div>
+
+          {/* 본문: 고객명 + 메타데이터 */}
+          <div className="mt-1.5 min-w-0">
+            <p className="truncate text-[12.5px] font-bold text-[#111110]">{draft.customer || "고객명 미입력"}</p>
+            <p className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-[#615D59]">
+              <span className="font-semibold text-[#111110]">{formatMonthLabel(draft.month)}</span>
+              <span className="text-[#DDD9D3]">·</span>
+              <span>{draft.manager || "-"}</span>
+              {draft.team && (
+                <>
+                  <span className="text-[#DDD9D3]">·</span>
+                  <span className="text-[#8C8782]">{draft.team}</span>
+                </>
+              )}
+            </p>
+            <WeeklyConfidenceDots metadata={draft.metadata} />
+            {/* 주차 셀 초안 고지: 병합(metadata.weekly 보존) vs 레거시 단일값(월 전체 대체) 구분 */}
+            {draft.kind === "edit-row" &&
+              /^w[1-5]$/.test(metadataString(draft.metadata, "week") ?? "") &&
+              draft.status !== "applied" &&
+              draft.status !== "cancelled" &&
+              (mergedWeeklyFromMetadata(draft.metadata) ? (
+                <p className="mt-1.5 rounded border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 py-0.5 text-[10px] font-semibold leading-relaxed text-[#615D59]">
+                  주차 병합 초안 — 적용 시 {formatMonthLabel(draft.month)} 금액이 주차 합계 {formatMoney(draft.amount)}로 재기재됩니다 (기존 주차 보존)
+                </p>
+              ) : (
+                <p className="mt-1.5 rounded border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[10px] font-bold leading-relaxed text-[#7A520F]">
+                  주차 셀 초안 — 적용 시 {formatMonthLabel(draft.month)} 금액 전체가 이 값으로 대체됩니다 (다른 주차 값 소멸)
+                </p>
+              ))}
+            {draft.note && <p className="mt-1.5 line-clamp-2 text-[11px] leading-relaxed text-[#615D59]">{draft.note}</p>}
+          </div>
+
+          {/* 하단: 액션 버튼 바 (좌측 보조 4개 / 우측 주요 2개) */}
+          <div className="mt-2.5 flex items-center justify-between gap-1 border-t border-[rgba(0,0,0,0.06)] pt-2">
+            <div className="flex items-center gap-1">
               <button
                 type="button"
                 onClick={() => onEdit(draft)}
@@ -527,33 +542,7 @@ export function DraftQueue({
                 aria-label={`${draft.customer || "초안"} 편집`}
                 title="초안 편집"
               >
-                <Pencil className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => void runToggle(draft.id)}
-                disabled={draft.status === "applied" || draft.status === "cancelled" || isRowBusy(draft.id)}
-                className="flex h-9 min-w-[72px] items-center justify-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] px-2.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-35"
-                aria-label="초안 체크 상태 변경"
-                title="초안 체크 상태 변경"
-              >
-                {rowActionBusy?.id === draft.id && rowActionBusy.action === "toggle" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <CheckCircle2 className="h-4 w-4" />
-                )}
-                {draft.status === "checked" ? "체크 해제" : "체크"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirmApplyDraft(draft)}
-                disabled={draft.status !== "checked" || mode !== "server" || draft.id.startsWith("local-") || isRowBusy(draft.id)}
-                className="flex h-9 min-w-[72px] items-center justify-center gap-1 rounded-md border border-[#BDEFD8] px-2.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-35"
-                aria-label={`${draft.customer || "초안"} 적용`}
-                title="체크 완료 초안 적용"
-              >
-                {applyingId === draft.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                적용
+                <Pencil className="h-3.5 w-3.5" />
               </button>
               <button
                 type="button"
@@ -569,23 +558,20 @@ export function DraftQueue({
                 aria-label={`${draft.customer || "초안"} 적용 되돌리기`}
                 title={reversedDraftIds.has(draft.id) ? "이미 상쇄된 적용입니다" : "적용 되돌리기"}
               >
-                {reversingId === draft.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                {reversingId === draft.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
               </button>
-              {/* 품질 감사 2026-09-10 — #8: draft/checked 전용 "취소" — 삭제(하드 DELETE)와 달리 행이
-                  DB에 cancelled로 남아 감사 추적이 보존된다. applied/cancelled는 대상이 아니다
-                  (applied는 되돌리기, cancelled는 이미 최종 상태). */}
               <button
                 type="button"
                 onClick={() => setConfirmCancelDraft(draft)}
                 disabled={draft.status === "applied" || draft.status === "cancelled" || isRowBusy(draft.id)}
-                className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] text-[#615D59] transition hover:bg-[#F6F5F4] disabled:cursor-not-allowed disabled:opacity-35"
+                className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#B43E3E] disabled:cursor-not-allowed disabled:opacity-35"
                 aria-label={`${draft.customer || "초안"} 취소`}
                 title="초안 취소(감사 기록 보존)"
               >
                 {rowActionBusy?.id === draft.id && rowActionBusy.action === "cancel" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  <XCircle className="h-4 w-4" />
+                  <XCircle className="h-3.5 w-3.5" />
                 )}
               </button>
               <button
@@ -597,13 +583,43 @@ export function DraftQueue({
                 title="초안 삭제"
               >
                 {rowActionBusy?.id === draft.id && rowActionBusy.action === "delete" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-3.5 w-3.5" />
                 )}
               </button>
             </div>
+
+            <div className="flex shrink-0 flex-wrap items-center gap-1">
+              <button
+                type="button"
+                onClick={() => void runToggle(draft.id)}
+                disabled={draft.status === "applied" || draft.status === "cancelled" || isRowBusy(draft.id)}
+                className="flex h-9 min-w-[72px] items-center justify-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-35"
+                aria-label="초안 체크 상태 변경"
+                title="초안 체크 상태 변경"
+              >
+                {rowActionBusy?.id === draft.id && rowActionBusy.action === "toggle" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
+                )}
+                {draft.status === "checked" ? "체크 해제" : "체크"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmApplyDraft(draft)}
+                disabled={draft.status !== "checked" || mode !== "server" || draft.id.startsWith("local-") || isRowBusy(draft.id)}
+                className="flex h-9 min-w-[72px] items-center justify-center gap-1 rounded-md border border-[#BDEFD8] bg-[#ECFDF5] px-2.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#084734] hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+                aria-label={`${draft.customer || "초안"} 적용`}
+                title="체크 완료 초안 적용"
+              >
+                {applyingId === draft.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                적용
+              </button>
+            </div>
           </div>
+
           {/* 품질 웨이브 7 — 항목 2: 레코드별 에러(404 등) — 큐 전체를 로컬로 강등하지 않고 이
               행에만 배지+새로고침 유도를 낸다. */}
           {recordErrors.get(draft.id) && (
@@ -640,7 +656,7 @@ export function DraftQueue({
             </p>
           </div>
           <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#FBF1E0] px-4 py-3 text-[11.5px] font-semibold leading-relaxed text-[#7A520F]">
-            적용하면 장부 원장에 기록됩니다 — 초안 1건. 이 작업은 되돌릴 수 없습니다.
+            적용하면 장부 원본에 기록됩니다 — 초안 1건. 이 작업은 되돌릴 수 없습니다.
           </div>
           <div className="flex items-center justify-end gap-2 bg-[#FAFAF8] px-4 py-3">
             <button

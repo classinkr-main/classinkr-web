@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 
 import { SCHEMA_CONTRACT_MIGRATIONS, SCHEMA_PROBES } from "@/lib/db/schema-contract"
+import { MIN_COMPASS_JOIN_PHONE_DIGITS } from "@/lib/compass/normalize"
 
 // Compass 연동 브리지 2차 마이그레이션 계약(2026-09-14, 아직 미적용).
 //
@@ -154,13 +155,9 @@ const FIXTURES: Array<[string | null, string | null]> = (() => {
   )
 })()
 
-/** 어드민 동기화(lib/compass/lead-contact-sync.ts)의 매칭 최소 키 길이 — 소스에서 읽어 경계를 맞춘다(export 되지 않은 상수). */
-const MIN_PHONE_KEY_LENGTH = (() => {
-  const source = readFileSync(join(process.cwd(), "lib/compass/lead-contact-sync.ts"), "utf8")
-  const match = source.match(/const MIN_PHONE_KEY_LENGTH = (\d+)/)
-  if (!match) throw new Error("MIN_PHONE_KEY_LENGTH not found in lib/compass/lead-contact-sync.ts")
-  return Number(match[1])
-})()
+/** 어드민 동기화의 매칭 최소 키 길이 — 정본은 lib/compass/normalize.ts MIN_COMPASS_JOIN_PHONE_DIGITS
+ *  (2026-10-12 전에는 lib/compass/lead-contact-sync.ts 의 비공개 상수 MIN_PHONE_KEY_LENGTH 를 소스에서 읽었다). */
+const MIN_PHONE_KEY_LENGTH = MIN_COMPASS_JOIN_PHONE_DIGITS
 
 /** 뷰·인덱스의 조인 가능 키 가드를 옮긴 JS 에뮬레이션 — 9자리 미만 키는 null(어느 phone_key 와도 같지 않다). */
 function sqlJoinablePhoneKey(p: string | null): string | null {
@@ -272,7 +269,7 @@ describe("public.norm_phone_key — Compass normPhone 등가", () => {
 describe("조인 가능 키 가드 — 자리표시 번호는 전화 키로 붙지 않는다", () => {
   const guards = [...code.matchAll(/length\(public\.norm_phone_key\((?:\w\.)?phone\)\) >= (\d+)/g)]
 
-  it("가드 경계는 어드민 동기화 MIN_PHONE_KEY_LENGTH 와 같다", () => {
+  it("가드 경계는 어드민 동기화 MIN_COMPASS_JOIN_PHONE_DIGITS 와 같다", () => {
     expect(MIN_PHONE_KEY_LENGTH).toBe(9)
     expect(guards.length).toBeGreaterThanOrEqual(6)
     for (const guard of guards) expect(Number(guard[1]), guard[0]).toBe(MIN_PHONE_KEY_LENGTH)

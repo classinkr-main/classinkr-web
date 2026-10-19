@@ -33,11 +33,21 @@
 | 관리자 API 응답 | `lib/admin-api-response.ts` |
 | 관리자 계정 조회 | `lib/repositories/admin-users.ts` |
 
-사이드바는 2026-09-10부터 **전원 동일**하다. 모든 관리자가 같은 17개 탭을 보고, 배치만
-`DEFAULT_PRIMARY_HREFS`가 정한다 — 상시 8개(홈 + 고객·매출), 접힌 "기타" 9개(마케팅·분석 +
-시스템). 역할로 항목을 거르지 않으며 "차단(deny)" 배치는 타입에서 제거됐다.
+사이드바는 2026-09-10부터 **전원 동일**하다. 모든 관리자가 같은 18개 탭에 도달하고, 배치만
+정해진다 — 상시 9개(홈 2개 Overview·AI 올인원 + 고객·매출, `DEFAULT_PRIMARY_HREFS` — AI 올인원은
+2026-09-29 갈매봇 위젯과 함께 상시에 추가), 접힌 "기타" 7개(마케팅·분석 + 시스템), 기본 숨김 2개
+(마케팅 프로젝트·운영 상태, `DEFAULT_HIDDEN_HREFS`, 2026-09-25). 역할로
+항목을 거르지 않으며 "차단(deny)" 배치는 타입에서 제거됐다.
 
-`admin_profiles.nav_overrides`는 그 두 자리를 사람별로 바꾸는 취향 설정으로만 남는다.
+**배치는 두 자리(상시·기타) + 개인 숨김이다. 숨김은 도달성을 바꾸지 않는다** — 숨긴 탭도 ⌘K·주소로
+열리고, `getAccessibleAdminNavItems`는 항상 18개 전체를 돌려준다(⌘K·active 판정·모바일 헤더가 의존).
+Overview는 로그인·`/admin` 착지 화면이라 숨길 수 없다(`UNHIDEABLE_NAV_HREFS`).
+
+`admin_profiles.nav_overrides`(`primary`·`folded`·`hidden`)는 그 자리를 사람별로 바꾸는 취향 설정이다.
+CRM 하위 탭은 같은 컬럼에 `crm:<href>` 키(`hidden`·`shown`)로 저장한다 — 기록·입력함·태그가 전원 기본 숨김이고,
+현황·고객DB(통합)·검수는 숨길 수 없다([탭 재구성 §16](admin-tab-restructure-2026-07-29.md)).
+본인은 사이드바의 "사이드바 편집"(또는 ⌘K "내 사이드바 편집", `PATCH /api/admin/me/nav`)으로,
+SUPER_ADMIN은 설정 › 회원으로 편집한다. 레거시 `deny` 값은 `folded`로 읽는다(숨김으로 옮기지 않는다).
 `nav_preset` 컬럼은 레거시다 — 값은 검증만 하고 화면을 가르지 않는다.
 
 실제 보안 경계는 각 API의 `verifyAdmin()` 또는 `requireVerifiedAdminContext()` 역할 검사와
@@ -67,8 +77,9 @@
 | CRM·그로스 | CRM, 캠페인(마케팅 허브), 리드, Branch, 캘린더 | [그로스 플레이북](playbook/04-growth-crm.md), 마케팅 허브는 [마케팅 탭 재구성 기획](marketing-tab-dashboard-restructure-2026-09-14.md) |
 | 외부 네오CRM 되밀기 | 리드 등록, 콜·데모·방문·메모 쓰기, 승인 큐 | [네오CRM 되밀기 지침](neocrm-writeback-guide-2026-09-07.md) |
 | 공개 챗봇·CS 운영 | RAG, 공개 챗봇, 외부 CS 대시보드 | [챗봇 플레이북](playbook/05-chatbot.md), [CS 콘솔 IA](cs-admin-console-ia-2026-07-27.md) |
+| 갈매봇·원격 오더 | 어드민 전역 AI 위젯, `/admin/ai`, 오더 카드·오더 등급 | [갈매봇 위젯·원격 오더 기획](admin-ai-widget-remote-order-plan-2026-09-28.md). 셸 연결은 Admin 코어, 대화는 챗봇/CS, 오더 핸들러는 해당 도메인 |
 | 플랫폼·데이터 | Supabase, migration, cron, 알림, Portal V2 | [플랫폼 플레이북](playbook/06-platform-data.md), [운영 장애·Cron·Webhook 지침](operational-failure-handling-guidelines.md), [ADR-010](../adr/ADR-010-operational-failure-containment.md), [DB 마이그레이션 런북](db-migration-runbook.md), [Supabase 운영 복구·하드닝 계획](supabase-operational-recovery-hardening-plan-2026-09-01.md) |
-| KR Team·매출 장부 | `/admin/branch`, `/admin/branch/ledger`, 동기화·정합성 | [Classin KR Team 스킬](../../.codex/skills/classin-kr-team/SKILL.md) |
+| KR Team·매출 장부 | `/admin/branch`, `/admin/branch/ledger`, 동기화·정합성 | [Classin KR Team 스킬](../../.codex/skills/classin-kr-team/SKILL.md), [월별 목표·채움 차트](revenue-monthly-goal-chart.md) |
 
 Admin 코어는 `app/api/admin/*`, `components/admin/*`, `lib/repositories/*` 전체를 소유하지 않는다.
 공용 인증·응답·저장소 규약은 Admin 코어가 관리하고, 도메인 로직과 도메인 테스트는 해당 작업면이
@@ -82,6 +93,10 @@ Admin 코어는 `app/api/admin/*`, `components/admin/*`, `lib/repositories/*` �
   Analytics는 해당 화면으로 연결한다.
 - `/admin/chatbot`은 외부 공개 챗봇의 CS 운영 대시보드다. 문서 보강과 품질 검수는
   `/admin/docs`의 해당 탭에서 수행한다.
+- `/admin/ai`(AI 올인원)는 갈매봇 위젯의 전체 화면판이다. 기존 AI 기능(CS 코파일럿, 블로그·마케팅
+  보조, 인사이트)은 이 탭으로 옮기지 않고 바로가기만 둔다 — 각 화면이 계속 정본이다.
+- 갈매봇은 오더 티켓을 작성만 한다. 쓰기는 사람이 확인 버튼을 눌러야 실행되고, 오더 등급(R0~R4)은
+  코드에 고정한다.
 - `/admin/branch`는 성과·탐색, `/admin/branch/ledger`는 입력·검수·마감 작업면이다.
 - Notion 마케팅 캘린더 원천은 라이브 읽기 전용이다. 이 규칙은 Admin 자체 일정 엔티티의 DB
   저장을 금지하는 것이 아니라, Notion 원천 이벤트를 별도 정본으로 복제하거나 양방향 쓰기하지
@@ -111,3 +126,7 @@ npm run build
 - 플레이북과 에이전트 프롬프트에는 현재 백로그·브랜치·배포 상태를 복사하지 않는다.
 - 기준 문서에는 repo-relative 링크만 사용하고 로컬 절대경로, 실제 비밀번호, 작업 브랜치명을
   남기지 않는다.
+
+## Overview 운영 브리핑
+
+`/admin/overview`의 브리핑·리드/데모/설치 현황·전체 지표 구성과 원천별 집계·권한 기준은 [Admin Overview 운영 브리핑](admin-overview-workspace.md)을 따른다.

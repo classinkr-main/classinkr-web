@@ -89,6 +89,7 @@ import type {
   RegressionEvalSkippedItem,
   RegressionOutcome,
   ReviewChecks,
+  ReviewState,
   WorkspaceTab,
 } from "./types"
 
@@ -924,7 +925,7 @@ function InternalCsChatWorkspaceInner() {
       const proMessage: InternalCsMessage = {
         ...DEMO_MESSAGES[1],
         id: `preview-pro-${Date.now()}`,
-        content: "검토 전 심층 초안\n\n정책·계약·프로모션 조건이 서로 다를 수 있으므로 환불을 확정하지 않습니다. 결제 원장, 계약 조건, 프로모션 적용 여부를 대조하고 본사에는 적용 시장과 효력일을 포함해 확인을 요청해 주세요.",
+        content: "검토 전 심층 초안\n\n정책·계약·프로모션 조건이 서로 다를 수 있으므로 환불을 확정하지 않습니다. 결제 원본, 계약 조건, 프로모션 적용 여부를 대조하고 본사에는 적용 시장과 효력일을 포함해 확인을 요청해 주세요.",
         model_name: "gemini-3.1-pro-preview",
         model_mode: "deep",
         created_at: now,
@@ -1041,6 +1042,74 @@ function InternalCsChatWorkspaceInner() {
     })
   }
 
+  // 코파일럿 제안 카드에서 1클릭으로 즉시 승인(허가)하는 고속 편의 액션
+  function handleQuickApprove(messageId: string) {
+    if (!detail || isPending) return
+    const targetMsg = detail.messages.find((m) => m.id === messageId)
+    if (!targetMsg) return
+
+    const draftText = targetMsg.corrected_content || targetMsg.content || ""
+    const now = new Date().toISOString()
+    const nextStatus: ConversationStatus = "resolved"
+
+    if (demoMode) {
+      setDetail((current) => {
+        if (!current) return current
+        return {
+          conversation: {
+            ...current.conversation,
+            status: nextStatus,
+          },
+          messages: current.messages.map((message) =>
+            message.id === messageId
+              ? {
+                  ...message,
+                  review_state: "approved" as ReviewState,
+                  corrected_content: draftText,
+                  reviewed_by: "CS 담당자",
+                  reviewed_at: now,
+                }
+              : message
+          ),
+        }
+      })
+      setConversations((current) =>
+        current.map((conversation) =>
+          conversation.id === detail.conversation.id
+            ? { ...conversation, status: nextStatus, updated_at: now, last_message_at: now }
+            : conversation
+        )
+      )
+      void copyText(draftText, "초안 승인(허가) 완료 — 최종 답변을 복사했습니다.")
+      setReviewOpen(false)
+      return
+    }
+
+    setError(null)
+    startTransition(async () => {
+      try {
+        await adminFetchJson<{ message: InternalCsMessage }>(
+          `/api/admin/cs-chat/conversations/${detail.conversation.id}/messages/${messageId}`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({
+              decision: "approved",
+              correctedContent: draftText,
+              feedbackLabels: ["human_approved", "quick_approved"],
+              regressionOutcome: "not_evaluated",
+              conversationAction: "resolve",
+            }),
+          }
+        )
+        await copyText(draftText, "초안 승인(허가) 완료 — 외부 전달이 허용되었습니다.")
+        setReviewOpen(false)
+        await loadConversations(detail.conversation.id)
+      } catch (reviewError) {
+        setError(reviewError instanceof Error ? reviewError.message : "검토 승인을 저장하지 못했습니다.")
+      }
+    })
+  }
+
   // ── 본사 확인 태그 전이(§6) ────────────────────────────────────────────────
   // 티켓 엔티티를 만들지 않는다. 상태는 tags[] 하나에 살고, 쓰기는 이미 있는
   // PATCH /api/admin/cs-chat/conversations/[id] { action:"update", tags } 하나뿐이다.
@@ -1097,6 +1166,14 @@ function InternalCsChatWorkspaceInner() {
       setActiveTab("hq")
       return
     }
+
+    // 대화 내 미승인(pending) AI 답변이 있는 경우: 담당자 검토 및 승인(허가)을 먼저 진행하도록 가드
+    if (detail?.conversation.id === conversation.id && pendingMessage) {
+      setReviewOpen(true)
+      setError("본사 확인 요청 전 AI 답변을 먼저 검토·승인(허가)해 주세요.")
+      return
+    }
+
     setHqPendingActionId(conversation.id)
     setError(null)
     try {
@@ -1265,6 +1342,13 @@ function InternalCsChatWorkspaceInner() {
 
   function archiveConversation() {
     if (!detail || isPending) return
+
+    // 대화 내 검토 대기(pending) 답변이 남아있는 경우: 승인(허가) 또는 수정 요청 완료 후 아카이브 가능하도록 보호
+    if (pendingMessage) {
+      setReviewOpen(true)
+      setError("검토 대기 중인 AI 답변이 있습니다. 승인(허가) 또는 수정 요청을 완료한 후 아카이브할 수 있습니다.")
+      return
+    }
     if (demoMode) {
       setDetail((current) => current ? { ...current, conversation: { ...current.conversation, status: "archived" } } : current)
       setConversations((current) => current.map((item) => item.id === detail.conversation.id ? { ...item, status: "archived" } : item))
@@ -1372,6 +1456,8 @@ function InternalCsChatWorkspaceInner() {
           assetError={assetError}
           composer={composer}
           setComposer={setComposer}
+          onQuickApprove={handleQuickApprove}
+          onSelectAlternativeIssue={(promptText) => setComposer(promptText)}
         />
       ) : null}
 

@@ -756,23 +756,70 @@ export async function getEventsByMonth(year: number, month: number): Promise<Cal
  * 하는 임시방편을 썼지만, 그 장치는 제거했다.
  */
 export async function getEventsByRange(from: string, to: string): Promise<CalendarEvent[]> {
-  const months = enumerateMonths({ from, to })
-  if (months.length === 0) return []
+  return (await getEventsByRangeWithDiagnostics(from, to)).events
+}
 
-  const perMonthResults = await Promise.all(
+/**
+ * getEventsByRange 와 같은 경로 — 걸치는 달들의 소스별 진단까지 합쳐 돌려준다.
+ *
+ * Compass 미러(/api/compass/calendar)가 "이 소스는 지금 확정본이 아니다"를 알아야
+ * 빈 결과로 기존 미러를 덮어쓰지 않는다. 합치는 규칙은 mergeMonthResults 에 못박아 둔다.
+ */
+export async function getEventsByRangeWithDiagnostics(
+  from: string,
+  to: string
+): Promise<CalendarMonthResult> {
+  const months = enumerateMonths({ from, to })
+  if (months.length === 0) return { events: [], diagnostics: [] }
+
+  const perMonth = await Promise.all(
     months.map(({ year, month }) => getEventsByMonthWithDiagnostics(year, month))
   )
-  const perMonth = perMonthResults.map((result) => result.events)
 
+  return mergeMonthResults(perMonth, { from, to })
+}
+
+/** 걸치는 달들의 결과를 기간 하나로 합친다(순수 — tests/admin/calendar-range-diagnostics.test.ts). */
+export function mergeMonthResults(
+  perMonth: CalendarMonthResult[],
+  range: { from: string; to: string }
+): CalendarMonthResult {
   // 멀티데이 일정은 걸치는 달마다 중복해서 나오므로 id 로 한 번 눌러준다.
   const byId = new Map<string, CalendarEvent>()
-  for (const events of perMonth) {
-    for (const event of events) byId.set(event.id, event)
+  for (const result of perMonth) {
+    for (const event of result.events) byId.set(event.id, event)
   }
 
-  return Array.from(byId.values())
-    .filter((event) => overlapsRange(event, { from, to }))
-    .sort(compareEvents)
+  // 소스별 진단을 하나로 접는다. 합치는 규칙을 여기서 못박아 둔다:
+  //   count      합  — 걸치는 달에 나뉘어 들어온다
+  //   durationMs 최대 — 가장 느린 달이 이 호출의 콜드 비용이다
+  //   degraded   OR  — 한 달이라도 확정본이 아니면 그 기간 전체가 확정본이 아니다
+  //   ageMs      최대 — 가장 오래된 캐시가 이 응답의 나이다. 하나라도 null(캐시 없음)이면 null
+  const bySource = new Map<EventSource, CalendarSourceDiagnostic>()
+  for (const result of perMonth) {
+    for (const d of result.diagnostics) {
+      const prev = bySource.get(d.source)
+      bySource.set(
+        d.source,
+        prev
+          ? {
+              source: d.source,
+              count: prev.count + d.count,
+              durationMs: Math.max(prev.durationMs, d.durationMs),
+              degraded: prev.degraded || d.degraded,
+              ageMs: prev.ageMs === null || d.ageMs === null ? null : Math.max(prev.ageMs, d.ageMs),
+            }
+          : { ...d }
+      )
+    }
+  }
+
+  return {
+    events: Array.from(byId.values())
+      .filter((event) => overlapsRange(event, range))
+      .sort(compareEvents),
+    diagnostics: Array.from(bySource.values()),
+  }
 }
 
 function toErrorMessage(error: unknown) {

@@ -34,10 +34,10 @@ describe("CS Figma guide source", () => {
       ]),
     })
     expect(guide?.steps.slice(0, 4)).toEqual([
-      "수업을 진행할 코스에 입장합니다.",
-      "우측 새로 만들기에서 학습 활동 유형 수업을 선택합니다.",
-      "수업 옵션에서 온스테이지 인원수를 1V0으로 설정하고 현장 녹화 토글을 켭니다.",
-      "등록 후 생성된 수업의 교실 입장 버튼을 누릅니다.",
+      "수업할 코스에 들어갑니다.",
+      "오른쪽 위 [새로 만들기]를 누르고 학습 활동 유형에서 [수업]을 선택합니다.",
+      "수업 시간을 정하고, 수업 옵션에서 온스테이지 인원수를 1V0으로 바꾼 뒤 [현장 녹화] 토글을 켜고 [등록]을 누릅니다.",
+      "수업이 만들어지면 그 수업의 [교실 입장]을 누릅니다. 강사는 수업 시작 20분 전부터 들어갈 수 있습니다.",
     ])
   })
 
@@ -55,9 +55,9 @@ describe("CS Figma guide source", () => {
       heading: "사용 순서 안내",
       urlPath: "/docs/teacher/cs-field-recording-camera-setup",
     })
-    expect(result.answer).toContain("1. 수업을 진행할 코스에 입장합니다.")
-    expect(result.answer).toContain("2. 우측 새로 만들기에서 학습 활동 유형 수업을 선택합니다.")
-    expect(result.answer).toContain("확인 포인트")
+    expect(result.answer).toContain("1. 수업할 코스에 들어갑니다.")
+    expect(result.answer).toContain("2. 오른쪽 위 [새로 만들기]를 누르고 학습 활동 유형에서 [수업]을 선택합니다.")
+    expect(result.answer).toContain("함께 확인할 것")
     expect(result.answer).not.toContain("원본 캡처:")
   })
 
@@ -152,7 +152,7 @@ describe("CS Figma guide source", () => {
       heading: "사용 순서 안내",
       urlPath: "/docs/admin/cs-transfer-student-registration",
     })
-    expect(result.answer).toContain("3. 코스 상세 화면에서 편입생 항목을 선택하고 추가를 누릅니다.")
+    expect(result.answer).toContain("3. 코스 상세 화면에서 [편입생] 항목을 선택하고 [추가]를 누릅니다.")
     expect(result.answer).not.toMatch(/Figma|캡처|고객사/i)
   })
 
@@ -272,7 +272,7 @@ describe("CS Figma guide source", () => {
       heading: "사용 순서 안내",
       urlPath: "/docs/admin/cs-figma-digest-1054",
     })
-    expect(result.answer).toContain("먼저 학생이 해당 수업이 끝난 뒤 코스에 가입했는지 확인해 주세요.")
+    expect(result.answer).toContain("그 수업이 끝난 뒤에 코스에 들어온 학생인지부터 확인해 주세요.")
     expect(result.answer).toContain("새로 참여한 학생은 이전 수업 데이터를 볼 수 있습니다")
     expect(result.answer).toContain("대상 학생을 코스에서 내보낸 뒤 다시 추가")
     expect(result.answer).toContain("위 순서로도 해결되지 않으면 담당자 상담으로 연결해 드릴 수 있어요.")
@@ -314,7 +314,7 @@ describe("CS Figma guide source", () => {
       urlPath: "/docs/admin/cs-figma-digest-1195",
     })
     expect(result.answer).toContain("1. 화면 좌측 상단의 코스 이름을 클릭해 주세요")
-    expect(result.answer).toContain("3단계 CS 주의사항과 안내 화면")
+    expect(result.answer).toContain("3단계 주의사항과 안내 화면")
     expect(result.sources[0]?.title).toBe("코스 내 초대 활성화(QR, Link 등)")
   })
 
@@ -356,8 +356,8 @@ describe("CS Figma guide source", () => {
       title: "시험 문제 대량 업로드와 시험 추가",
       urlPath: "/docs/teacher/cs-bulk-exam-upload",
     })
-    expect(result.answer).toContain("7. 필요하면 내 문제 은행에도 저장하기를 체크합니다.")
-    expect(result.answer).toContain("8. 확인 후 시험 세부 설정을 마치고 게시를 누릅니다.")
+    expect(result.answer).toContain("7. 필요하면 [내 문제 은행에도 저장하기]를 체크합니다.")
+    expect(result.answer).toContain("8. [확인]을 눌러 문제를 넣고, 시험 세부 설정을 마친 뒤 [게시]를 누릅니다.")
   })
 
   it("formats guide answers without public URLs or raw source filenames", () => {

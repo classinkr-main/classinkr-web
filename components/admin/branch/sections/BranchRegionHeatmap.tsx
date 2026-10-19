@@ -604,7 +604,7 @@ function MapSourceStrip({ source, href, loading }: { source: HeatmapMapSource | 
         )}
         <div className="min-w-0">
           <p className="text-[11px] font-bold text-[#111110]">
-            {unavailable ? "CRM 지도 원천 연결 확인 필요" : `CRM 지도 기회 ${fmt(summary.active)}곳 · ${summary.regions.length}개 지역`}
+            {unavailable ? "CRM 지도 원천 연결 확인 필요" : `전사 공용 CRM 지도 기회 ${fmt(summary.active)}곳 · ${summary.regions.length}개 지역`}
           </p>
           <p className="mt-0.5 text-[10.5px] leading-4 text-[#615D59]">
             {unavailable
@@ -665,14 +665,14 @@ function RegionMapSourcePanel({
   )
 }
 
-export default function BranchRegionHeatmap({ team, period, selectedMonth, refreshKey }: { team: Team; period: Period; selectedMonth: string; refreshKey: number }) {
+export default function BranchRegionHeatmap({ team, period, selectedMonth, refreshKey, manager }: { manager?: string; team: Team; period: Period; selectedMonth: string; refreshKey: number }) {
   const searchParams = useSearchParams()
   const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
   // 로컬 재시도 넛지 — 상위 refreshKey(전역 새로고침, 강제 스크롤 동반)에 기대지 않고
   // 이 섹션만 useBranchJson의 기존 캐시키 재계산 경로(refreshKey:url)를 재사용해 다시 요청한다.
   const [localRetry, setLocalRetry] = useState(0)
   const requestKey = refreshKey + localRetry
-  const heatmap = useBranchJson<{ rows?: Row[] }>(`/api/admin/branch/heatmap?team=${team}&period=${period}${monthQuery}`, requestKey)
+  const heatmap = useBranchJson<{ rows?: Row[] }>(`/api/admin/branch/heatmap?team=${team}&period=${period}${monthQuery}${manager ? `&manager=${encodeURIComponent(manager)}` : ""}`, requestKey)
   // REV와 독립 요청으로 시작한다. 지도 199곳 전체 매칭이 느려도 히트맵 본체는 먼저 렌더된다.
   const mapSourceRequest = useBranchJson<HeatmapMapSource>(
     "/api/admin/branch/heatmap/map-source",

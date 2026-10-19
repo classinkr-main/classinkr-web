@@ -102,3 +102,5 @@ describe("GET /api/admin/leads overview scope", () => {
     expect(mocks.getDashboardLeads).toHaveBeenCalledTimes(1)
   })
 })
+
+vi.mock("@/lib/admin/data-owner", () => ({ dataOwnerFromRequest: async (url: URL) => url.searchParams.get("owner") === "" ? undefined : ["Somang"] }))

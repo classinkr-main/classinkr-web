@@ -4,6 +4,7 @@ import { revalidateTag } from "next/cache"
 import { isNavPresetKey, normalizeNavOverrides } from "@/components/admin/admin-nav-access"
 import { normalizeAdminCapabilities } from "@/lib/admin-capabilities"
 import {
+  invalidateAdminShellSessionCache,
   requireVerifiedAdminContext,
   STAFF_ADMIN_API_ROLES,
 } from "@/lib/admin-auth"
@@ -73,6 +74,8 @@ export async function PATCH(req: NextRequest) {
     // admin_profiles를 바꿨으니 120초 사용자 디렉터리 캐시(deals-lite "assignToMe" 등
     // owner-lookup 소비처)도 즉시 무효화한다 — 안 하면 배치 후 최대 120초간 옛 매핑을 본다.
     revalidateTag(ADMIN_USER_DIRECTORY_CACHE_TAG, "max")
+    // 대상자의 셸 세션(사이드바)도 nav_overrides 를 60초 캐시한다 — 이 인스턴스 캐시를 비운다.
+    invalidateAdminShellSessionCache()
 
     return NextResponse.json({ user: data })
   }

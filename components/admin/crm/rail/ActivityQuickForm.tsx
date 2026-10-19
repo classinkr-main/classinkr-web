@@ -49,8 +49,10 @@ import {
 export interface ActivityQuickFormProps {
   /** true면 레일 장착용 컴팩트 변형(헤더 생략·모드 필 선택기). 필드 구성·계약은 동일. */
   compact?: boolean
-  /** composer = 한 줄 컴포저(기록 탭·드로어 pin용). 미지정 시 compact 여부로 결정. */
-  variant?: "full" | "compact" | "composer"
+  /** workspace = 기록 화면 입력 작업면, composer = 한 줄 입력. 미지정 시 compact 여부로 결정. */
+  variant?: "full" | "compact" | "composer" | "workspace"
+  /** 고객 상세 좌측 작업면: 간격 축소·템플릿 접기. 입력/저장 계약은 동일하다. */
+  compactWorkspace?: boolean
   /** composer에서 대상 피커 숨김(드로어처럼 대상이 고정된 컨텍스트) */
   lockTarget?: boolean
   /** 고객 프리셀렉트 — 대상 타입 (홈/고객DB/기록 딥링크 장착용) */
@@ -59,6 +61,7 @@ export interface ActivityQuickFormProps {
   defaultTargetId?: string
   /** 고객 프리셀렉트 — 표시 이름 */
   defaultTargetLabel?: string
+  defaultOwnerName?: string
   /** 본문 textarea에 부여할 DOM id — 부모 CTA가 getElementById(...).focus()로 포커스를 옮길 때 사용 */
   bodyFieldId?: string
   /** 저장 성공 후 콜백(타임라인 refresh 등). tasksCreated = 함께 생성된 할 일 수 */
@@ -166,6 +169,34 @@ export function buildContactChips(recents: RecentCustomer[], today: TodayContact
 }
 
 /**
+ * 저장은 됐지만 일부 단계가 실패한 부분 성공 경고 — POST /api/admin/crm/events 응답의 두 칸을 읽는다. 순수 함수.
+ * - warning: 컴포저 리드 콜·문자(연락 로그 경로)에서 연락중 전환·CRM 타임라인 미러가 실패했다.
+ * - taskQueueWarning: 다음 액션을 할 일로 올리지 못했다(일반 기록·연락 경로 공통).
+ * 성공 토스트만 내고 이 칸을 버리면 리드가 '신규'로 남거나 다음 액션이 빠진 것을 아무도 모른다(병합 검토 37c02226 지적 8).
+ */
+export function activitySaveWarnings(payload: unknown): string[] {
+  if (!payload || typeof payload !== "object") return []
+  const raw = payload as Record<string, unknown>
+  return [raw.warning, raw.taskQueueWarning].filter(
+    (value): value is string => typeof value === "string" && value.trim().length > 0
+  )
+}
+
+/** 부분 성공 경고 — 모든 변형에서 같은 role="alert" 문단으로 보인다. 경고가 없으면 아무것도 그리지 않는다. */
+export function ActivitySaveWarnings({ warnings }: { warnings: readonly string[] }) {
+  if (warnings.length === 0) return null
+  return (
+    <div className="grid gap-1" data-testid="activity-save-warnings">
+      {warnings.map((warning) => (
+        <p key={warning} role="alert" className="text-[13px] text-[#B43E3E]">
+          {warning}
+        </p>
+      ))}
+    </div>
+  )
+}
+
+/**
  * 인라인 확인 블록(템플릿 덮어쓰기·미연결 경고)의 공통 닫힘 규칙 — 바깥 클릭(mousedown)·Esc 에 닫힌다.
  * 열리는 클릭의 mousedown 은 리스너 등록 전에 이미 지나갔으므로 열자마자 닫히지 않는다.
  */
@@ -197,18 +228,20 @@ function useDismissOnOutside(ref: RefObject<HTMLElement | null>, active: boolean
 }
 
 export default function ActivityQuickForm({
+  compactWorkspace = false,
   compact = false,
   variant,
   lockTarget = false,
   defaultTargetType,
   defaultTargetId,
   defaultTargetLabel,
+  defaultOwnerName,
   bodyFieldId,
   onSaved,
   onDirtyChange,
 }: ActivityQuickFormProps) {
   // 변형 정규화 — 명시 variant 우선, 없으면 기존 compact prop으로 결정(기존 호출부 무수정).
-  const resolvedVariant: "full" | "compact" | "composer" = variant ?? (compact ? "compact" : "full")
+  const resolvedVariant: NonNullable<ActivityQuickFormProps["variant"]> = variant ?? (compact ? "compact" : "full")
   const isComposer = resolvedVariant === "composer"
   const isCompact = resolvedVariant === "compact"
 
@@ -218,9 +251,10 @@ export default function ActivityQuickForm({
   const [targetType, setTargetType] = useState<TargetType>(presetTargetType)
   const [targetLabel, setTargetLabel] = useState(defaultTargetLabel ?? "")
   const [targetId, setTargetId] = useState(defaultTargetId ?? "")
+  const bodyRef = useRef<HTMLTextAreaElement | null>(null)
   const [title, setTitle] = useState("")
   const [occurredAt, setOccurredAt] = useState(() => toLocalDateTimeInput(new Date()))
-  const [ownerName, setOwnerName] = useState("")
+  const [ownerName, setOwnerName] = useState(defaultOwnerName ?? "")
   const [attendees, setAttendees] = useState("")
   const [meetingPurpose, setMeetingPurpose] = useState("")
   const [summary, setSummary] = useState("")
@@ -235,6 +269,7 @@ export default function ActivityQuickForm({
   const [tags, setTags] = useState("")
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [recordingName, setRecordingName] = useState<string | null>(null)
+  const [saveWarnings, setSaveWarnings] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   // A2 — 템플릿 칩. pendingTemplate = 본문이 이미 있어 덮어쓰기 확인을 기다리는 템플릿,
@@ -334,14 +369,16 @@ export default function ActivityQuickForm({
   }, [isDirty])
 
   const resetForm = () => {
-    setMode("manual_note")
-    // 프리셀렉트가 있으면 초기화 후에도 그 고객으로 돌아온다(레일 장착 UX).
-    setTargetType(presetTargetType)
-    setTargetLabel(defaultTargetLabel ?? "")
-    setTargetId(defaultTargetId ?? "")
+    // 연속 입력 작업면은 선택한 고객·종류·담당자를 유지한다.
+    if (resolvedVariant !== "workspace") {
+      setMode("manual_note")
+      setTargetType(presetTargetType)
+      setTargetLabel(defaultTargetLabel ?? "")
+      setTargetId(defaultTargetId ?? "")
+      setOwnerName(defaultOwnerName ?? "")
+    }
     setTitle("")
     setOccurredAt(toLocalDateTimeInput(new Date()))
-    setOwnerName("")
     setAttendees("")
     setMeetingPurpose("")
     setSummary("")
@@ -452,12 +489,14 @@ export default function ActivityQuickForm({
       const response = await adminFetch(EVENTS_URL, { method: "POST", body: formData })
       const payload = await response.json().catch(() => null)
       if (!response.ok) throw new Error(payload?.error ?? "CRM 기록 저장에 실패했습니다.")
+      setSaveWarnings(activitySaveWarnings(payload))
       const tasksCreated = typeof payload?.tasksCreated === "number" ? payload.tasksCreated : 0
       setToast({
         msg: tasksCreated > 0 ? `CRM 기록 저장 · 할 일 ${tasksCreated}건 생성` : "CRM 기록을 저장했습니다.",
         type: "success",
       })
       resetForm()
+      if (resolvedVariant === "workspace") window.requestAnimationFrame(() => bodyRef.current?.focus())
       onSaved?.({ tasksCreated })
     } catch (err) {
       setToast({ msg: err instanceof Error ? err.message : "CRM 기록 저장에 실패했습니다.", type: "error" })
@@ -852,7 +891,7 @@ export default function ActivityQuickForm({
         </div>
       ) : null}
 
-      {showField("nextAction") ? (
+      {showField("nextAction") && resolvedVariant !== "workspace" ? (
         <div className="rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-3">
           <p className="mb-2 text-[12px] font-bold text-[#111110]">다음 액션</p>
           <div className="grid gap-2">
@@ -930,12 +969,60 @@ export default function ActivityQuickForm({
     </>
   )
 
+  // The workspace uses the same state, submit gate and serialization as other variants.
+  if (resolvedVariant === "workspace") {
+    return (
+      <fieldset disabled={saving} aria-label="고객 기록 입력" className={`min-w-0 ${compactWorkspace ? "space-y-3" : "space-y-5"} [&_input]:min-w-0 [&_input]:max-w-full`}>
+        {toast ? <Toast msg={toast.msg} type={toast.type} /> : null}
+        {ownerDatalist}
+        <ActivitySaveWarnings warnings={saveWarnings} />
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <h2 className="text-[18px] font-bold text-[#111110]">기록 추가</h2>
+          <span className={`text-[11px] ${saving ? "text-[#615D59]" : isDirty ? "text-[#A8741A]" : "text-[#615D59]"}`} role="status">
+            {saving ? "저장 중" : isDirty ? "입력 중 · 저장 전" : "새 기록"}
+          </span>
+        </div>
+        {!lockTarget ? <label className="block text-[12px] font-semibold text-[#615D59]">고객 선택<div className="mt-2">{customerPicker}</div></label> : null}
+        <div className="flex flex-wrap gap-3 border-b border-[rgba(0,0,0,0.08)]" role="group" aria-label="기록 종류 선택">
+          {MODE_OPTIONS.map((option) => (
+            <button key={option.key} type="button" aria-pressed={mode === option.key} onClick={() => { setMode(option.key); setShowAdvanced(false) }} className={`min-h-11 border-b-2 px-1 text-[13px] font-semibold focus-visible:outline-2 focus-visible:outline-[#084734] ${mode === option.key ? "border-[#084734] text-[#084734]" : "border-transparent text-[#615D59] hover:text-[#111110]"}`}>
+              {option.label}
+            </button>
+          ))}
+        </div>
+        {compactWorkspace && templateChipRow ? <details><summary className="min-h-8 cursor-pointer py-1 text-[12px] text-[#615D59]">기록 템플릿</summary><div className="pt-2">{templateChipRow}</div></details> : templateChipRow}
+        {recordingField}
+        <label className="block text-[12px] font-semibold text-[#615D59]">
+          내용
+          <textarea ref={bodyRef} id={bodyFieldId} aria-label="기록 내용" value={body} onChange={(event) => setBody(event.target.value)} onKeyDown={onBodyKeyDown} rows={9} placeholder={targetLabel ? `${targetLabel} 기록 남기기` : "통화·미팅·메모 내용을 입력하세요"} className="mt-2 min-h-[240px] w-full resize-y rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-3 text-[16px] font-normal leading-7 text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734]" />
+        </label>
+        {ownerHealthNotice}
+        {metaFields}
+        <div className="space-y-3 border-t border-[rgba(0,0,0,0.08)] pt-4">
+          <label className="block text-[12px] font-semibold text-[#615D59]">다음 액션 (선택)<input aria-label="다음 액션" value={nextActionTitle} onChange={(event) => setNextActionTitle(event.target.value)} placeholder="견적 발송, 설치 일정 확인 등" className="mt-2 h-11 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] font-normal text-[#111110] outline-none focus:border-[#084734]" /></label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-[12px] font-semibold text-[#615D59]">액션 예정일<input aria-label="액션 예정일" type="datetime-local" value={nextActionDueAt} onChange={(event) => setNextActionDueAt(event.target.value)} className="mt-2 h-11 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[12px] text-[#111110]" /></label>
+            <label className="text-[12px] font-semibold text-[#615D59]">액션 담당자<input aria-label="액션 담당자" list={ownerListId} value={nextActionOwner} onChange={(event) => setNextActionOwner(event.target.value)} placeholder="담당자" className="mt-2 h-11 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110]" /></label>
+          </div>
+        </div>
+        <button type="button" aria-expanded={showAdvanced} onClick={() => setShowAdvanced((value) => !value)} className="min-h-11 text-[12px] font-semibold text-[#615D59] underline underline-offset-4">{showAdvanced ? "상세 접기" : "제목·요약·상세 옵션"}</button>
+        {showAdvanced ? <div className="grid gap-3">{titleField}{summaryField}{advancedFieldStack}</div> : null}
+        {unlinkedWarningBlock}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[rgba(0,0,0,0.08)] pt-4">
+          <p className="text-[11px] text-[#615D59]">⌘/Ctrl + Enter 저장</p>
+          <button type="button" onClick={() => void handleSubmit()} disabled={saving} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-[#084734] px-5 text-[13px] font-semibold text-white hover:bg-[#065c41] disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}저장하고 계속 입력</button>
+        </div>
+      </fieldset>
+    )
+  }
+
   // ---- composer: 한 줄 컴포저(모드 칩 → 대상+본문+저장 → 힌트/상세 토글 → 상세 스택) ----
   if (isComposer) {
     return (
       <div>
         {toast ? <Toast msg={toast.msg} type={toast.type} /> : null}
         {ownerDatalist}
+        {saveWarnings.length > 0 ? <div className="mb-2"><ActivitySaveWarnings warnings={saveWarnings} /></div> : null}
 
         <div className="rounded-2xl border border-[#e8e8e4] bg-white p-2.5">
           <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="기록 종류 선택">
@@ -1037,6 +1124,7 @@ export default function ActivityQuickForm({
   return (
     <div>
       {toast ? <Toast msg={toast.msg} type={toast.type} /> : null}
+      {saveWarnings.length > 0 ? <div className="mb-2"><ActivitySaveWarnings warnings={saveWarnings} /></div> : null}
 
       {!isCompact ? (
         <div className="mb-4 flex items-center justify-between gap-3">

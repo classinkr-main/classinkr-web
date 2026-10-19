@@ -1,8 +1,9 @@
 /**
  * H2 — 큐 소비처의 source 정책.
  *
- * 홈 "오늘 전화" 큐(CrmPriorityQueuePanel)는 source=customer(리드 + ClassIn 고객)로 조회한다.
- * 인사이트 "우선 연락" 숫자가 홈 큐와 같으려면 getCrmInsights도 같은 source를 써야 한다.
+ * 옛 홈 "오늘 전화" 큐(CrmPriorityQueuePanel — 2026-10-19 09-mooni 병합에서 "오늘 연락"으로 바뀌며 지웠다)는
+ * source=customer(리드 + ClassIn 고객)로 조회했다. 인사이트 "우선 연락"은 그 범위를 그대로 쓴다 — getCrmInsights도
+ * 같은 source다(지금 홈 "오늘 연락" 숫자와는 목록이 달라 같지 않다, lib/repositories/crm-insights.ts 주석).
  * 매니저 리포트는 task 항목을 overdue_task로 매핑하므로 의도적으로 source=all을 유지한다.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest"
@@ -58,7 +59,7 @@ describe("우선순위 큐 소비처 source 정책 (H2)", () => {
     mocks.createSupabaseAdminClient.mockReturnValue(emptyQueryBuilder())
   })
 
-  it("getCrmInsights는 홈 큐와 같은 source=customer로 큐를 부르고 그 total을 '우선 연락'에 쓴다", async () => {
+  it("getCrmInsights는 옛 홈 큐와 같은 source=customer로 큐를 부르고 그 total을 '우선 연락'에 쓴다", async () => {
     const { getCrmInsights } = await import("@/lib/repositories/crm-insights")
 
     const insights = await getCrmInsights()

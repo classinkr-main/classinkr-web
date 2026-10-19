@@ -117,7 +117,7 @@ export default function Account360Lens() {
         <Layers className="h-4 w-4 shrink-0 text-[#084734]" />
         <span className="text-[13px] font-bold text-[#111110]">Account 360</span>
         <span className="text-[12px] text-[#1a1a1a]/42">
-          REV 원장 기준 매출 계정 스파인
+          REV 원본 기준 매출 계정 스파인
         </span>
         <ChevronDown
           className={`ml-auto h-4 w-4 shrink-0 text-[#1a1a1a]/35 transition-transform ${open ? "rotate-180" : ""}`}
