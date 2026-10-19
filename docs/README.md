@@ -68,6 +68,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - 내부 CS 캡처·사진 분석, 담당자 검토, 서명된 AI/MCP 수신·송신 계약과 운영 경계
 - [active/internal-cs-content-arrangement-2026-07-15.md](./active/internal-cs-content-arrangement-2026-07-15.md)
   - 기존 정본과 전달 자료의 중복·충돌을 정리한 내부 CS 지식 등급, 소통 템플릿, 태그·자산 적용 기준
+- [active/cs-troubleshooting/README.md](./active/cs-troubleshooting/README.md)
+  - **기술지원 트러블슈팅 지식(내부 전용).** 증상별 플레이북 12편, HQ 보고 템플릿, 조회표, 비식별 케이스 표. 내부 CS 코파일럿 적재용이며 공개 문서로 쓰지 않는다. 상태는 2026-09-29 기준 스냅샷
 - [active/admin-3-revenue-sheet-workspace-plan-2026-06-29.md](./active/admin-3-revenue-sheet-workspace-plan-2026-06-29.md)
   - REV/매출 시트를 Admin CRM 안의 별도 매출시트 탭으로 승격하고, 이후 자체 매출 원장으로 옮기는 실행안
 
