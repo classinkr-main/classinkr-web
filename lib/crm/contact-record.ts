@@ -29,6 +29,7 @@ import {
   hasLeadContactEvent,
   LEAD_CONTACT_MIRROR_SOURCE_TYPES,
   type CrmCustomerEventRecord,
+  type CrmEventNextAction,
 } from "@/lib/repositories/crm-events"
 import { createTasksFromEventNextActions } from "@/lib/repositories/crm-tasks"
 import { updateLead, type LeadRecord } from "@/lib/repositories/leads"
@@ -76,7 +77,10 @@ export type RecordLeadContactResult =
   | {
       ok: true
       log: ContactLogRecord
-      /** 같은 내용·같은 연락 시각의 로그가 이미 있어 새로 저장하지 않았다(재전송·더블 클릭). */
+      /**
+       * 같은 내용·같은 연락 시각의 로그가 이미 있어 새로 저장하지 않았다(재전송·더블 클릭). 컴포저 저장은 그 로그의
+       * 미러 다음 액션까지 같아야 중복이다 — 다르면 별개 기록으로 새로 저장한다(f989a812 규칙).
+       */
       duplicate: boolean
       statusSync: LeadContactStatusSync
       event: CrmCustomerEventRecord | null
@@ -101,6 +105,29 @@ export interface RecordLeadContactInput {
 }
 
 /**
+ * 다음 액션 비교 키 — 기록 저장소의 쓰기(buildCrmCustomerEventInsert: 제목·담당자 trim, 예정일 ISO)와
+ * 읽기(nextActionsFromJson: 제목 없는 항목 제외, done 불리언)와 같은 정규화를 거친 뒤 키 순서를 고정해 비교한다.
+ * 저장된 미러 쪽에 다시 걸어도 값이 바뀌지 않는다(멱등) — 예정일 표기 차이(Z vs .000Z)는 같은 값이다.
+ */
+export function leadContactNextActionsKey(actions: readonly CrmEventNextAction[] | null | undefined): string {
+  return JSON.stringify(
+    (actions ?? [])
+      .map((action) => {
+        const title = typeof action?.title === "string" ? action.title.trim() : ""
+        const ownerName = typeof action?.ownerName === "string" && action.ownerName.trim() ? action.ownerName.trim() : null
+        const dueMs = typeof action?.dueAt === "string" && action.dueAt.trim() ? Date.parse(action.dueAt) : Number.NaN
+        return {
+          title,
+          ownerName,
+          dueAt: Number.isFinite(dueMs) ? new Date(dueMs).toISOString() : null,
+          done: action?.done === true,
+        }
+      })
+      .filter((action) => action.title)
+  )
+}
+
+/**
  * 리드 연락 1건을 기록한다 — 로그가 1차 증거라 로그 저장 실패만 던지고(아무것도 바뀌지 않는다),
  * 그 뒤 단계(연락중 전환·기록 미러·할 일)는 fail-soft로 결과에 상태만 싣는다. 로그를 저장한 뒤
  * 500을 돌려주면 클라이언트 재시도로 같은 연락이 두 번 쌓인다.
@@ -108,11 +135,33 @@ export interface RecordLeadContactInput {
 export async function recordLeadContact(input: RecordLeadContactInput): Promise<RecordLeadContactResult> {
   const { lead, entry } = input
   const now = input.now ?? new Date()
+  const leadLabel = lead.org || lead.name || null
+  const composer = input.composer ?? null
 
   const timeError = leadContactTimeError(lead.timestamp, entry.contacted_at, now.getTime())
   if (timeError) return { ok: false, reason: timeError }
 
-  const existing = await findDuplicateContactLog(lead.id, entry)
+  let existing = await findDuplicateContactLog(lead.id, entry)
+  // 중복 판정 중에 찾은(없으면 만든) 그 로그의 미러 — 아래 미러 단계가 다시 부르지 않는다.
+  let checkedMirror: { record: CrmCustomerEventRecord; created: boolean } | null = null
+  if (existing && composer && !entry.id) {
+    // f989a812 규칙(lib/repositories/crm-events.ts findRecentDuplicateEvent) — 같은 메모·같은 시각이라도 다음 액션이
+    // 다르면 별개 기록이다(연속 입력에서 같은 메모에 다른 할 일을 붙인 경우). 로그 중복 판정(findDuplicateContactLog)은
+    // 채널·결과·메모·담당자·시각만 보고 다음 액션을 모르므로, 그 로그의 미러에 저장된 다음 액션과 이번 입력을 맞대 본다.
+    // 요청 키(entry.id)는 그 자체가 멱등 키라 재전송이 확실하다 — 비교하지 않는다.
+    const mirrorInput = buildLeadContactMirrorInput(existing, leadLabel, composer)
+    try {
+      const found = await getOrCreateCrmCustomerEventBySource(mirrorInput)
+      if (found.created || leadContactNextActionsKey(found.record.nextActions) === leadContactNextActionsKey(mirrorInput.nextActions)) {
+        checkedMirror = found
+      } else {
+        existing = null
+      }
+    } catch (error) {
+      // 판정할 수 없으면 로그 중복 판정을 따른다(같은 연락을 두 번 쌓지 않는다). 미러 단계가 다시 시도하고 실패를 싣는다.
+      console.error("[contact-record] mirror lookup for duplicate check", error)
+    }
+  }
   const log = existing ?? (await addContactLog(lead.id, entry))
 
   let statusSync: LeadContactStatusSync = "unchanged"
@@ -133,10 +182,8 @@ export async function recordLeadContact(input: RecordLeadContactInput): Promise<
   let mirror: LeadContactMirrorState = "failed"
   let eventCreated = false
   try {
-    const leadLabel = lead.org || lead.name || null
-    const mirrored = await getOrCreateCrmCustomerEventBySource(
-      buildLeadContactMirrorInput(log, leadLabel, input.composer ?? null)
-    )
+    const mirrored =
+      checkedMirror ?? (await getOrCreateCrmCustomerEventBySource(buildLeadContactMirrorInput(log, leadLabel, composer)))
     event = mirrored.record
     eventCreated = mirrored.created
     mirror = mirrored.created ? "created" : "existing"

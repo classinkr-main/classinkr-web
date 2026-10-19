@@ -160,6 +160,7 @@ async function saveLeadContactFromComposer(
 
   if (!recorded.ok) return contactTimeErrorResponse(recorded.reason)
 
+  // 부분 성공(로그는 저장됨) — 기록 입력 폼이 warning·taskQueueWarning 을 activitySaveWarnings 로 읽어 role=alert 로 보인다.
   const warnings = [
     recorded.statusSync === "failed" ? "리드 상태를 연락중으로 맞추지 못했습니다." : null,
     recorded.mirror === "failed" ? "CRM 기록 타임라인에 올리지 못했습니다." : null,

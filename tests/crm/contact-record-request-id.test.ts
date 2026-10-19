@@ -78,4 +78,21 @@ describe("recordLeadContact — 요청 키 로그 id", () => {
     expect(mocks.updateLead).not.toHaveBeenCalled()
     expect(result).toMatchObject({ ok: true, duplicate: true, statusSync: "unchanged", log: { id: LOG_ID } })
   })
+
+  it("요청 키가 있으면 컴포저 다음 액션이 미러와 달라도 재전송이다 — 다음 액션 비교(f989a812 규칙)는 내용 기반 중복에만 건다", async () => {
+    mocks.findDuplicateContactLog.mockResolvedValue(LOG)
+    mocks.getOrCreateCrmCustomerEventBySource.mockResolvedValue({
+      created: false,
+      record: { id: "ME1", nextActions: [{ title: "견적 발송", ownerName: null, dueAt: null, done: false }] },
+    })
+    const result = await recordLeadContact({
+      lead: { id: "L1", status: "contacted", timestamp: "2026-09-24T00:00:00.000Z", org: "가", name: "김원장" },
+      entry: { id: LOG_ID, type: "call", result: "no_answer", contacted_by: "김운영", contacted_at: NOW.toISOString() },
+      composer: { sourceType: "call", nextActions: [{ title: "설치 일정 확인", ownerName: null, dueAt: null, done: false }] },
+      now: NOW,
+    })
+    expect(mocks.addContactLog).not.toHaveBeenCalled()
+    expect(mocks.getOrCreateCrmCustomerEventBySource).toHaveBeenCalledTimes(1)
+    expect(result).toMatchObject({ ok: true, duplicate: true, log: { id: LOG_ID }, mirror: "existing", tasksCreated: 0 })
+  })
 })

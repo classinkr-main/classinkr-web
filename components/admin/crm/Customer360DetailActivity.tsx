@@ -353,10 +353,11 @@ export function ownActivityCursor(
   if (pagination.nextOffset != null) return pagination.nextOffset
   if (!pagination.hasMore) return null
   // 연락 로그 원본 행(id `lead-contact-log:{로그 id}`)과 리드 시절 행은 자기 기록 페이지에 없다.
-  const ownRows = activity.rows.filter(
+  // 창 안 자기 행이 0건이어도(첫 창이 전부 리드 시절·연락 로그 원본) 커서는 0 이다 — null 로 두면 그보다 오래된
+  // 자기 기록에 닿을 길이 없다. 자기 기록이 정말 없으면 /timeline 이 빈 페이지(nextOffset=null)를 돌려 더 보기가 닫힌다.
+  return activity.rows.filter(
     (row) => !row.id.startsWith("lead-contact-log:") && !isLeadEraRow(customerSource, row.targetType)
   ).length
-  return ownRows > 0 ? ownRows : null
 }
 
 export default function Customer360DetailActivity({

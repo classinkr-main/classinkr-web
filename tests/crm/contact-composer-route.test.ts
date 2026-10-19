@@ -173,6 +173,20 @@ describe("POST /api/admin/crm/events — 리드 대상 콜·문자 = 연락 로�
     expect(mocks.createCrmCustomerEvent).not.toHaveBeenCalled()
   })
 
+  it("연락중 전환이 실패하면 201 + warning 으로 알린다 — 기록 입력 폼(activitySaveWarnings)이 이 칸을 role=alert 로 보인다", async () => {
+    mocks.updateLead.mockRejectedValueOnce(new Error("status down"))
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    const response = await POST(jsonRequest({ sourceType: "call", targetType: "lead", targetId: "lead-1", body: "통화" }))
+    const json = await response.json()
+
+    expect(response.status).toBe(201)
+    expect(json.contact).toMatchObject({ recorded: true, statusSync: "failed", mirror: "created" })
+    expect(json.warning).toBe("연락 기록은 저장됐지만 리드 상태를 연락중으로 맞추지 못했습니다.")
+    expect(json).not.toHaveProperty("taskQueueWarning")
+    consoleError.mockRestore()
+  })
+
   it("녹음 첨부 콜의 연락 시각이 미래면 업로드 전에 400 — 녹음 파일이 스토리지에 고아로 남지 않는다", async () => {
     const formData = new FormData()
     formData.append("sourceType", "call")
@@ -276,5 +290,108 @@ describe("POST /api/admin/crm/events — 리드 대상 콜·문자 = 연락 로�
     const response = await POST(jsonRequest({ sourceType: "call", targetType: "lead", targetId: "lead-1" }))
     expect(response.status).toBe(400)
     expect(mocks.addContactLog).not.toHaveBeenCalled()
+  })
+})
+
+// 병합 검토 후속(37c02226 지적 6) — 10월 f989a812 의 findRecentDuplicateEvent 규칙("같은 메모라도 다음 액션이 다르면
+// 별개 기록")이 컴포저 리드 콜·문자(recordLeadContact) 경로에서도 지켜지는지. 로그 중복 판정(findDuplicateContactLog)은
+// 채널·결과·메모·담당자·시각만 보므로, 같은 분·같은 메모로 다음 액션만 바꿔 연속 입력하면 두 번째 다음 액션·할 일이 사라졌다.
+describe("POST /api/admin/crm/events — 컴포저 리드 연락의 중복 판정은 다음 액션까지 본다", () => {
+  const OCCURRED_AT = "2026-10-19T01:00:00.000Z"
+  const EXISTING_LOG = {
+    id: "log-1",
+    lead_id: "lead-1",
+    type: "call",
+    result: null,
+    notes: "부재",
+    contacted_at: OCCURRED_AT,
+    contacted_by: "운영 관리자",
+  }
+  const CONTACTED_LEAD = { ...LEAD, status: "contacted" }
+
+  function existingMirror(nextActions: Array<Record<string, unknown>>) {
+    mocks.getOrCreateCrmCustomerEventBySource.mockImplementation(async (input: Record<string, unknown>) =>
+      input.sourceId === "log-1"
+        ? { created: false, record: { id: "event-1", sourceType: "call", sourceId: "log-1", nextActions } }
+        : { created: true, record: { id: "event-9", ...input, nextActions: input.nextActions ?? [] } }
+    )
+  }
+
+  function composerCall(nextActionTitle: string, nextActionDueAt?: string) {
+    return formRequest({
+      sourceType: "call",
+      targetType: "lead",
+      targetId: "lead-1",
+      occurredAt: OCCURRED_AT,
+      body: "부재",
+      nextActionTitle,
+      ...(nextActionDueAt ? { nextActionDueAt } : {}),
+      sentiment: "neutral",
+    })
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ now: new Date("2026-10-19T01:00:30.000Z"), toFake: ["Date"] })
+    mocks.getLeadById.mockResolvedValue(CONTACTED_LEAD)
+    mocks.findDuplicateContactLog.mockResolvedValue(EXISTING_LOG)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("같은 분·같은 메모라도 다음 액션이 다르면 새 로그·새 미러(created)·새 할 일로 저장한다", async () => {
+    existingMirror([{ title: "견적 발송", ownerName: null, dueAt: null, done: false }])
+    mocks.createTasksFromEventNextActions.mockResolvedValueOnce([{ id: "task-9" }])
+
+    const response = await POST(composerCall("설치 일정 확인"))
+    const json = await response.json()
+
+    expect(response.status).toBe(201)
+    expect(mocks.addContactLog).toHaveBeenCalledTimes(1)
+    expect(mocks.addContactLog).toHaveBeenCalledWith("lead-1", expect.objectContaining({ type: "call", notes: "부재", contacted_at: OCCURRED_AT }))
+    expect(mocks.getOrCreateCrmCustomerEventBySource).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sourceId: "log-9", nextActions: [expect.objectContaining({ title: "설치 일정 확인" })] })
+    )
+    expect(mocks.createTasksFromEventNextActions).toHaveBeenCalledTimes(1)
+    expect(mocks.createTasksFromEventNextActions).toHaveBeenCalledWith(expect.objectContaining({ id: "event-9" }), {
+      createdBy: "운영 관리자",
+    })
+    expect(json).toMatchObject({
+      event: { id: "event-9" },
+      tasksCreated: 1,
+      contact: { recorded: true, logId: "log-9", duplicate: false, mirror: "created" },
+    })
+  })
+
+  it("다음 액션까지 같으면(재전송) 새로 쓰지 않고 미러도 한 번만 찾는다 — 예정일 표기 차이는 같은 값", async () => {
+    existingMirror([{ title: "견적 발송", ownerName: null, dueAt: "2026-10-20T05:00:00Z", done: false }])
+
+    const response = await POST(composerCall("견적 발송", "2026-10-20T05:00:00.000Z"))
+    const json = await response.json()
+
+    expect(response.status).toBe(201)
+    expect(mocks.addContactLog).not.toHaveBeenCalled()
+    expect(mocks.getOrCreateCrmCustomerEventBySource).toHaveBeenCalledTimes(1)
+    expect(mocks.createTasksFromEventNextActions).not.toHaveBeenCalled()
+    expect(json).toMatchObject({
+      event: { id: "event-1" },
+      tasksCreated: 0,
+      contact: { recorded: true, logId: "log-1", duplicate: true, mirror: "existing" },
+    })
+  })
+
+  it("미러 조회가 실패해 판정할 수 없으면 로그 중복 판정을 따른다(같은 연락을 두 번 쌓지 않는다) — 실패는 경고로 싣는다", async () => {
+    mocks.getOrCreateCrmCustomerEventBySource.mockRejectedValue(new Error("events down"))
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    const response = await POST(composerCall("설치 일정 확인"))
+    const json = await response.json()
+
+    expect(response.status).toBe(201)
+    expect(mocks.addContactLog).not.toHaveBeenCalled()
+    expect(json.contact).toMatchObject({ logId: "log-1", duplicate: true, mirror: "failed" })
+    expect(json.warning).toBe("연락 기록은 저장됐지만 CRM 기록 타임라인에 올리지 못했습니다.")
+    consoleError.mockRestore()
   })
 })

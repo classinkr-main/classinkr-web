@@ -48,8 +48,17 @@ describe("ownActivityCursor", () => {
     expect(ownActivityCursor(result(rows, { hasMore: true, nextOffset: null }), "lead")).toBe(2)
   })
 
-  it("창에 자기 행이 하나도 없으면 커서를 지어내지 않는다", () => {
-    const rows = [row("lead-contact-log:log-1", "lead")]
-    expect(ownActivityCursor(result(rows, { hasMore: true, nextOffset: null }), "lead")).toBeNull()
+  // 병합 검토 후속(37c02226 지적 7) — 첫 창(50건)이 전부 리드 시절·연락 로그 원본이면 자기 행이 0건이다. 이때 null 로
+  // 두면 그보다 오래된 NEO 계정 자기 기록이 상세 화면에서 영영 안 보인다(병합 전 10월 줄기는 nextOffset 으로 닿았다).
+  it("창에 자기 행이 하나도 없어도 더 볼 것이 있으면 자기 기록을 처음(0)부터 잇는다", () => {
+    const leadRows = [row("lead-contact-log:log-1", "lead")]
+    expect(ownActivityCursor(result(leadRows, { hasMore: true, nextOffset: null }), "lead")).toBe(0)
+    const neoRows = [row("lead-era-1", "lead"), row("lead-contact-log:log-2", "lead")]
+    expect(ownActivityCursor(result(neoRows, { hasMore: true, nextOffset: null }), "neo_account")).toBe(0)
+  })
+
+  it("자기 행이 0건이어도 더 볼 것이 없으면 null(더 보기 없음)", () => {
+    const rows = [row("lead-era-1", "lead")]
+    expect(ownActivityCursor(result(rows, { hasMore: false, nextOffset: null }), "neo_account")).toBeNull()
   })
 })

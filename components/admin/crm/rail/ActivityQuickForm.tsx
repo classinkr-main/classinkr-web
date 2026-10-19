@@ -169,6 +169,34 @@ export function buildContactChips(recents: RecentCustomer[], today: TodayContact
 }
 
 /**
+ * 저장은 됐지만 일부 단계가 실패한 부분 성공 경고 — POST /api/admin/crm/events 응답의 두 칸을 읽는다. 순수 함수.
+ * - warning: 컴포저 리드 콜·문자(연락 로그 경로)에서 연락중 전환·CRM 타임라인 미러가 실패했다.
+ * - taskQueueWarning: 다음 액션을 할 일로 올리지 못했다(일반 기록·연락 경로 공통).
+ * 성공 토스트만 내고 이 칸을 버리면 리드가 '신규'로 남거나 다음 액션이 빠진 것을 아무도 모른다(병합 검토 37c02226 지적 8).
+ */
+export function activitySaveWarnings(payload: unknown): string[] {
+  if (!payload || typeof payload !== "object") return []
+  const raw = payload as Record<string, unknown>
+  return [raw.warning, raw.taskQueueWarning].filter(
+    (value): value is string => typeof value === "string" && value.trim().length > 0
+  )
+}
+
+/** 부분 성공 경고 — 모든 변형에서 같은 role="alert" 문단으로 보인다. 경고가 없으면 아무것도 그리지 않는다. */
+export function ActivitySaveWarnings({ warnings }: { warnings: readonly string[] }) {
+  if (warnings.length === 0) return null
+  return (
+    <div className="grid gap-1" data-testid="activity-save-warnings">
+      {warnings.map((warning) => (
+        <p key={warning} role="alert" className="text-[13px] text-[#B43E3E]">
+          {warning}
+        </p>
+      ))}
+    </div>
+  )
+}
+
+/**
  * 인라인 확인 블록(템플릿 덮어쓰기·미연결 경고)의 공통 닫힘 규칙 — 바깥 클릭(mousedown)·Esc 에 닫힌다.
  * 열리는 클릭의 mousedown 은 리스너 등록 전에 이미 지나갔으므로 열자마자 닫히지 않는다.
  */
@@ -241,7 +269,7 @@ export default function ActivityQuickForm({
   const [tags, setTags] = useState("")
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [recordingName, setRecordingName] = useState<string | null>(null)
-  const [taskQueueWarning, setTaskQueueWarning] = useState<string | null>(null)
+  const [saveWarnings, setSaveWarnings] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   // A2 — 템플릿 칩. pendingTemplate = 본문이 이미 있어 덮어쓰기 확인을 기다리는 템플릿,
@@ -461,7 +489,7 @@ export default function ActivityQuickForm({
       const response = await adminFetch(EVENTS_URL, { method: "POST", body: formData })
       const payload = await response.json().catch(() => null)
       if (!response.ok) throw new Error(payload?.error ?? "CRM 기록 저장에 실패했습니다.")
-      setTaskQueueWarning(typeof payload?.taskQueueWarning === "string" ? payload.taskQueueWarning : null)
+      setSaveWarnings(activitySaveWarnings(payload))
       const tasksCreated = typeof payload?.tasksCreated === "number" ? payload.tasksCreated : 0
       setToast({
         msg: tasksCreated > 0 ? `CRM 기록 저장 · 할 일 ${tasksCreated}건 생성` : "CRM 기록을 저장했습니다.",
@@ -947,7 +975,7 @@ export default function ActivityQuickForm({
       <fieldset disabled={saving} aria-label="고객 기록 입력" className={`min-w-0 ${compactWorkspace ? "space-y-3" : "space-y-5"} [&_input]:min-w-0 [&_input]:max-w-full`}>
         {toast ? <Toast msg={toast.msg} type={toast.type} /> : null}
         {ownerDatalist}
-        {taskQueueWarning ? <p role="alert" className="text-[13px] text-[#B43E3E]">{taskQueueWarning}</p> : null}
+        <ActivitySaveWarnings warnings={saveWarnings} />
         <div className="flex flex-wrap items-start justify-between gap-2">
           <h2 className="text-[18px] font-bold text-[#111110]">기록 추가</h2>
           <span className={`text-[11px] ${saving ? "text-[#615D59]" : isDirty ? "text-[#A8741A]" : "text-[#615D59]"}`} role="status">
@@ -994,6 +1022,7 @@ export default function ActivityQuickForm({
       <div>
         {toast ? <Toast msg={toast.msg} type={toast.type} /> : null}
         {ownerDatalist}
+        {saveWarnings.length > 0 ? <div className="mb-2"><ActivitySaveWarnings warnings={saveWarnings} /></div> : null}
 
         <div className="rounded-2xl border border-[#e8e8e4] bg-white p-2.5">
           <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="기록 종류 선택">
@@ -1095,6 +1124,7 @@ export default function ActivityQuickForm({
   return (
     <div>
       {toast ? <Toast msg={toast.msg} type={toast.type} /> : null}
+      {saveWarnings.length > 0 ? <div className="mb-2"><ActivitySaveWarnings warnings={saveWarnings} /></div> : null}
 
       {!isCompact ? (
         <div className="mb-4 flex items-center justify-between gap-3">
