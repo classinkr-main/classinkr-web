@@ -18,7 +18,10 @@ describe("REV sheet mobile interaction contract", () => {
 
   it("limits the mobile DOM without silently hiding the remaining review queue", () => {
     expect(source).toContain("const MOBILE_VISIBLE_ROWS = 25")
-    expect(source).toContain("visibleRows.slice(0, MOBILE_VISIBLE_ROWS)")
+    // 라운드 5: 첫 화면은 25건, "더 보기"로 25건씩 늘린다(필터가 바뀌면 다시 25건).
+    expect(source).toContain("useState(MOBILE_VISIBLE_ROWS)")
+    expect(source).toContain("visibleRows.slice(0, mobileVisibleLimit)")
+    expect(source).toContain("setMobileVisibleLimit((limit) => limit + MOBILE_VISIBLE_ROWS)")
     expect(source).toContain("나머지")
     expect(source).toContain("검색·필터로 좁혀 확인하세요")
   })

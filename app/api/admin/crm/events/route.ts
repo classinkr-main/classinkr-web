@@ -1,3 +1,4 @@
+import { dataOwnerFromRequest } from "@/lib/admin/data-owner"
 import { NextRequest, NextResponse } from "next/server"
 
 import { adminCachedJson } from "@/lib/admin-api-response"
@@ -24,13 +25,15 @@ type CreatedCrmEvent = Awaited<ReturnType<typeof createCrmCustomerEvent>>
 // task 생성 실패가 기록 저장 자체를 깨뜨리면 안 되므로 fail-soft.
 async function respondWithCreatedEvent(event: CreatedCrmEvent, createdBy: string) {
   let tasksCreated = 0
+  let taskQueueWarning: string | undefined
   try {
     const tasks = await createTasksFromEventNextActions(event, { createdBy })
     tasksCreated = tasks.length
   } catch (error) {
     console.error("[POST /api/admin/crm/events] auto-task creation", error)
+    taskQueueWarning = "기록은 저장됐지만 다음 액션을 할 일에 추가하지 못했습니다. 전체 로그에서 다음 액션을 확인해 주세요."
   }
-  return NextResponse.json({ event, tasksCreated }, { status: 201 })
+  return NextResponse.json({ event, tasksCreated, ...(taskQueueWarning ? { taskQueueWarning } : {}) }, { status: 201 })
 }
 
 const SOURCE_TYPES = new Set<string>(CRM_EVENT_SOURCE_TYPES)
@@ -126,6 +129,7 @@ export async function GET(req: NextRequest) {
     const scope = url.searchParams.get("scope")
     const parsedSourceType = sourceType && SOURCE_TYPES.has(sourceType) ? (sourceType as CrmCustomerEventSourceType) : "all"
     const events = await listCrmCustomerEvents({
+      ownerKeys: url.searchParams.has("targetId") && !url.searchParams.has("owner") ? undefined : await dataOwnerFromRequest(url, admin),
       q: url.searchParams.get("q") ?? undefined,
       targetId: url.searchParams.get("targetId") ?? undefined,
       targetType: targetType && TARGET_TYPES.has(targetType) ? (targetType as CrmCustomerEventTargetType) : "all",

@@ -25,6 +25,12 @@ vi.mock("@/lib/admin-auth", () => ({
   verifyAdmin: mocks.verifyAdmin,
 }))
 
+// 질문 매핑의 회귀 전파만 검증한다. 별도 문서 재색인이 실제 DB·임베딩을 호출하거나
+// 그 실패 로그가 전파 실패 관측 횟수에 섞이지 않도록 외부 보조 경계를 격리한다.
+vi.mock("@/app/api/admin/docs/articles/_reindex", () => ({
+  reindexDocsArticleServerSide: vi.fn().mockResolvedValue(undefined),
+}))
+
 vi.mock("@/lib/chatbot/service", async () => {
   const actual = await vi.importActual<typeof import("@/lib/chatbot/service")>(
     "@/lib/chatbot/service"

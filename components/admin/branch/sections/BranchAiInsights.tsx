@@ -175,12 +175,12 @@ function ExternalReport({ summary, lang }: { summary: BranchSummaryResponse | nu
         <h3 className="text-[15px] font-bold text-[#111110]">{t.sectionDeals}</h3>
         <div className="mt-3 grid grid-cols-2 gap-3 text-[12px]">
           <div className="rounded-lg bg-[#F6F5F4] p-3">
-            <p className="text-[10.5px] text-[#615D59]">{t.eventsLabel}</p>
+            <p className="text-[10.5px] text-[#615D59]">{t.eventsLabel} · {lang === "zh" ? "全公司参考" : "전사 참고"}</p>
             <p className="mt-1 text-[16px] font-bold text-[#111110]">{summary.events_30d.count}{lang === "zh" ? "次" : "건"}</p>
             <p className="mt-0.5 text-[10.5px] text-[#615D59]">{lang === "zh" ? `${summary.events_30d.regions} 个地区` : `${summary.events_30d.regions}개 지역`}</p>
           </div>
           <div className="rounded-lg bg-[#F6F5F4] p-3">
-            <p className="text-[10.5px] text-[#615D59]">{t.campaignsLabel}</p>
+            <p className="text-[10.5px] text-[#615D59]">{t.campaignsLabel} · {lang === "zh" ? "全公司参考" : "전사 참고"}</p>
             <p className="mt-1 text-[16px] font-bold text-[#111110]">{summary.campaigns_30d.count}{lang === "zh" ? "次" : "건"}</p>
             <p className="mt-0.5 text-[10.5px] text-[#615D59]">{t.openRate} {summary.campaigns_30d.avg_open_pct.toFixed(0)}%</p>
           </div>
@@ -213,13 +213,14 @@ function ExternalReport({ summary, lang }: { summary: BranchSummaryResponse | nu
   )
 }
 
-export default function BranchAiInsights({ team, refreshKey, summary, canGenerate = true }: {
+export default function BranchAiInsights({ team, refreshKey, summary, canGenerate = true, manager }: {
   team: Team
   refreshKey: number
   summary: BranchSummaryResponse | null
   canGenerate?: boolean
+  manager?: string
 }) {
-  const [view, setView] = useState<View>("internal")
+  const [view, setView] = useState<View>(manager || summary?.scope?.manager ? "external" : "internal")
   const [lang, setLang] = useState<Lang>("ko")
   const [insight, setInsight] = useState<InsightPayload | null>(null)
   const [loading, setLoading] = useState(false)
@@ -231,6 +232,7 @@ export default function BranchAiInsights({ team, refreshKey, summary, canGenerat
   const stale = stateKey !== requestKey
 
   useEffect(() => {
+    if (view !== "internal") return
     let cancelled = false
     setLoading(true); setErrorMsg(null)
     void adminFetchJson<InsightResp>(`/api/admin/branch/insights?team=${team}`)
@@ -243,7 +245,7 @@ export default function BranchAiInsights({ team, refreshKey, summary, canGenerat
       })
       .catch((e) => { if (!cancelled) { setErrorMsg(e instanceof Error ? e.message : String(e)); setLoading(false); setStateKey(requestKey) } })
     return () => { cancelled = true }
-  }, [requestKey, team])
+  }, [requestKey, team, view])
 
   const handleRegenerate = async () => {
     if (!canGenerate) return
@@ -268,8 +270,8 @@ export default function BranchAiInsights({ team, refreshKey, summary, canGenerat
           {(["internal", "external"] as const).map((v) => {
             const active = view === v
             const labels = v === "internal"
-              ? { label: "내부용 · 운영 인사이트", sub: "액션 중심" }
-              : { label: "외부용 · 본사 보고", sub: "리포트 형식" }
+              ? { label: "팀 공용 · 운영 인사이트", sub: "액션 중심" }
+              : { label: summary?.scope?.manager ? "내 담당 · 매출 보고" : "외부용 · 본사 보고", sub: "리포트 형식" }
             return (
               <button key={v} type="button" onClick={() => setView(v)}
                 className={`flex flex-col items-start gap-0 rounded-md px-4 py-2 text-left transition ${
@@ -301,7 +303,7 @@ export default function BranchAiInsights({ team, refreshKey, summary, canGenerat
               })}
             </div>
           )}
-          {canGenerate && (
+          {canGenerate && view === "internal" && (
             <button type="button" onClick={handleRegenerate} disabled={refreshing}
               className="inline-flex items-center gap-1.5 rounded-md bg-[#084734] px-3.5 py-2 text-[12px] font-bold text-white transition hover:bg-[#065c41] disabled:opacity-60">
               {refreshing ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
@@ -338,7 +340,7 @@ export default function BranchAiInsights({ team, refreshKey, summary, canGenerat
       {errorMsg && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] p-3 text-[12px] text-[#B43E3E]">
           <span>{errorMsg}</span>
-          {canGenerate && (
+          {canGenerate && view === "internal" && (
             <button type="button" onClick={handleRegenerate} disabled={refreshing}
               className="inline-flex items-center gap-1 rounded-md border border-[#F2B8B8] bg-white px-2.5 py-1 text-[11px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9] disabled:opacity-60">
               <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" />

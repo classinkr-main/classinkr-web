@@ -16,6 +16,6 @@ export const QUEUE_POOL_LIMIT = 50
 export function queueUrl(owner: string, limit: number) {
   // v=3: 레인·시점 파라미터를 제거한 "오늘 전화" 페이로드 — 이전 캐시와 섞이지 않게 버전 분리.
   const params = new URLSearchParams({ limit: String(limit), source: "customer", v: "3" })
-  if (owner) params.set("owner", owner)
+  params.set("owner", owner)
   return `/api/admin/crm/home/priority-queue?${params.toString()}`
 }

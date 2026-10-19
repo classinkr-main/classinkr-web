@@ -5,9 +5,14 @@ import { Building, CheckCircle2, ChevronRight, Clock, Copy, Loader2, MessageSqua
 import { cn } from "@/lib/utils"
 
 import StatusBadge from "../components/StatusBadge"
+import EscalationWhoBadge from "../components/EscalationWhoBadge"
 import { CONSOLE_CONTENT_CLASS } from "../constants"
 import { buildHqTemplate, formatDay } from "../formatters"
 import { formatWaitingElapsed, hqWaitingSince, isHqStale } from "../hq-desk"
+import {
+  buildSmartHqDraft,
+  extractEscalationContext,
+} from "@/lib/internal-cs-chat/escalation-routing"
 import type { ConversationDetailResponse, InternalCsConversation } from "../types"
 
 // 본사 확인(§6) — 신규 테이블·API 없이 tags[]만으로 세운 화면.
@@ -124,48 +129,77 @@ export default function HqPanel({
 
                 {expanded ? (
                   <div className="border-t border-black/[0.06] bg-[#FAFAF8] px-4 py-4 sm:px-6">
-                    {rowDetail ? (
-                      <>
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#31302E]">
-                            본사 요청 초안 · 6항목 고정 포맷
-                          </h3>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => onCopy(buildHqTemplate(rowDetail), "본사 확인 초안을 복사했습니다.")}
-                              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-2.5 text-[11px] font-semibold hover:bg-[#F6F5F4]"
-                            >
-                              <Copy className="h-3 w-3" />
-                              초안 복사
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onOpenConversation(conversation)}
-                              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-2.5 text-[11px] font-semibold text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#31302E]"
-                            >
-                              <MessageSquare className="h-3 w-3" />
-                              대화 열기
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onResolve(conversation)}
-                              disabled={busy}
-                              className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#084734] px-3 text-[11px] font-semibold text-white transition-colors hover:bg-[#065C41] disabled:cursor-not-allowed disabled:bg-[#A39E98]"
-                            >
-                              {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
-                              본사 확인 완료
-                            </button>
+                    {rowDetail ? (() => {
+                      const hqContext = extractEscalationContext(
+                        rowDetail.messages.map((m) => m.content).join("\n"),
+                        {
+                          title: rowDetail.conversation.title,
+                          tags: rowDetail.conversation.tags,
+                          assigneeName: rowDetail.conversation.assignee_name,
+                        }
+                      )
+                      return (
+                        <>
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#31302E]">
+                                본사 요청 초안
+                              </h3>
+                              <EscalationWhoBadge
+                                contact={hqContext.contact}
+                                issueTypeTag={hqContext.issueTypeTag}
+                                compact
+                              />
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onCopy(buildSmartHqDraft(hqContext), "스마트 WeCom 초안을 복사했습니다.")
+                                }
+                                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[#084734]/30 bg-[#ECFDF5] px-2.5 text-[11px] font-semibold text-[#084734] hover:bg-[#D5F7E8]"
+                              >
+                                <Copy className="h-3 w-3" />
+                                스마트 WeCom 복사
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onCopy(buildHqTemplate(rowDetail), "본사 확인 초안을 복사했습니다.")
+                                }
+                                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-2.5 text-[11px] font-semibold hover:bg-[#F6F5F4]"
+                              >
+                                <Copy className="h-3 w-3" />
+                                고정 초안 복사
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onOpenConversation(conversation)}
+                                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-2.5 text-[11px] font-semibold text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#31302E]"
+                              >
+                                <MessageSquare className="h-3 w-3" />
+                                대화 열기
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onResolve(conversation)}
+                                disabled={busy}
+                                className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#084734] px-3 text-[11px] font-semibold text-white transition-colors hover:bg-[#065C41] disabled:cursor-not-allowed disabled:bg-[#A39E98]"
+                              >
+                                {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+                                본사 확인 완료
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                        <pre className="mt-3 max-h-[420px] overflow-auto whitespace-pre-wrap rounded-md border border-black/[0.08] bg-white px-3.5 py-3 font-sans text-[11.5px] leading-5 text-[#31302E]">
-                          {buildHqTemplate(rowDetail)}
-                        </pre>
-                        <p className="mt-2 text-[10.5px] leading-4 text-[#A39E98]">
-                          회신을 받으면 본사 확인 완료를 눌러 주세요 — 근거 태그가 확정으로 바뀌고 이 목록에서 빠집니다.
-                        </p>
-                      </>
-                    ) : (
+                          <pre className="mt-3 max-h-[420px] overflow-auto whitespace-pre-wrap rounded-md border border-black/[0.08] bg-white px-3.5 py-3 font-sans text-[11.5px] leading-5 text-[#31302E]">
+                            {buildSmartHqDraft(hqContext)}
+                          </pre>
+                          <p className="mt-2 text-[10.5px] leading-4 text-[#A39E98]">
+                            회신을 받으면 본사 확인 완료를 눌러 주세요 — 근거 태그가 확정으로 바뀌고 이 목록에서 빠집니다.
+                          </p>
+                        </>
+                      )
+                    })() : (
                       <p className="flex items-center gap-2 py-3 text-[12px] text-[#615D59]">
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         본사 요청 초안을 준비하는 중입니다.

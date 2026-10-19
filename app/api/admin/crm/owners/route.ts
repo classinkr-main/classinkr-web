@@ -1,3 +1,4 @@
+import { branchMemberOwnerAliases } from "@/lib/branch/member-names"
 import { NextRequest, NextResponse } from "next/server"
 
 import { adminCachedJson } from "@/lib/admin-api-response"
@@ -10,14 +11,14 @@ export async function GET(req: NextRequest) {
 
   try {
     const directory = await listAdminUserDirectory()
-    const current = findAdminCrmOwner(directory, admin)
+    const current = findAdminCrmOwner({ crmOwners: directory.users }, admin)
     return adminCachedJson({
       generatedAt: directory.generatedAt,
       source: directory.source,
       health: directory.health,
       owners: directory.crmOwners,
       currentOwner: current.owner,
-      currentOwnerKeys: current.ownerKeys,
+      currentOwnerKeys: [...new Set([...current.ownerKeys.flatMap(branchMemberOwnerAliases), ...(admin.userId ? [admin.userId] : [])])],
       summary: {
         total: directory.crmOwners.length,
         branchDirectors: directory.crmOwners.filter((owner) => owner.teamRole === "branch_director").length,

@@ -1,4 +1,5 @@
 import "server-only"
+import { currentDataOwner } from "@/lib/admin/data-owner"
 
 import { CRM_STAFF_ADMIN_API_ROLES, hasAdminApiRole } from "@/lib/admin-auth"
 import { getAdminCrmOverview } from "@/lib/admin-crm-overview"
@@ -80,8 +81,8 @@ export async function prefetchCrmHomeInitialData(): Promise<CrmHomeInitialData |
   // 기다리지 않는다. "미검증 요청에는 데이터가 실리지 않는다"는 보안 불변식은 위 역할
   // 체크가 이미 지킨다(레인을 여는 시점엔 이미 인증·역할이 확인된 뒤다).
   return {
-    leadActionKpis: openPrefetchLane(() => getLeadActionStats()),
+    leadActionKpis: openPrefetchLane(async () => getLeadActionStats(new Date(), (await currentDataOwner(admin)).keys)),
     overview: openPrefetchLane(() => getAdminCrmOverview()),
-    compassPipeline: openPrefetchLane(() => buildCompassPipelineBand()),
+    compassPipeline: openPrefetchLane(async () => buildCompassPipelineBand((await currentDataOwner(admin)).keys)),
   }
 }

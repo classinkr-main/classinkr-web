@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest"
 import {
   COMPASS_CARE_STAGE_LABEL,
   COMPASS_INBOUND_CHANNELS,
+  COMPASS_IMPORT_CHANNELS,
   COMPASS_STAGE_LABEL,
   compassLeadUrl,
   isCompassMarketingChannel,
@@ -175,12 +176,18 @@ describe("compassLeadUrl", () => {
   })
 })
 
-describe("Compass 인바운드 채널 — mktLeadCond 등가", () => {
+describe("Compass 마케팅 채널 — mktLeadCond 등가", () => {
   it("인바운드 목록은 Compass lib/taxonomy/defs.ts CHANNELS(group='inbound')와 같다", () => {
     expect([...COMPASS_INBOUND_CHANNELS]).toEqual(["channeltalk", "direct", "walkin", "referral"])
   })
 
+  it("가져오기 목록은 Compass CHANNELS(group=import)와 같다", () => {
+    expect([...COMPASS_IMPORT_CHANNELS]).toEqual(["neo"])
+  })
+
   it.each([
+    ["neo", false],
+    ["expo", true],
     ["channeltalk", false],
     ["direct", false],
     ["walkin", false],

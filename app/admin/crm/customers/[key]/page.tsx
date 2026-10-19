@@ -6,8 +6,13 @@ import Customer360DetailClient from "@/components/admin/crm/Customer360DetailCli
 import { getCrmCustomer360, parseUnifiedCustomerKey } from "@/lib/repositories/crm-customer-360"
 
 interface AdminCrmCustomerDetailPageProps {
-  // Next 16: params is a Promise — await it. URL 세그먼트는 자동 디코드됨(`lead:123` 등).
+  // Next 16: params is a Promise — await it. RSC 탐색에서는 key가 인코딩된 채 들어오기도 하므로 저장소 파서에서 정규화한다.
   params: Promise<{ key: string }>
+}
+
+function canonicalKey(key: string) {
+  const parsed = parseUnifiedCustomerKey(key)
+  return parsed ? `${parsed.source}:${parsed.entityId}` : key
 }
 
 // generateMetadata와 본문이 같은 360 페이로드를 각각 부른다 → 요청 스코프 cache()로 1회 fetch로 합침.
@@ -25,7 +30,7 @@ export async function generateMetadata({
   params,
 }: AdminCrmCustomerDetailPageProps): Promise<Metadata> {
   const { key } = await params
-  const data = await loadCustomer360(key)
+  const data = await loadCustomer360(canonicalKey(key))
   const name = data?.found ? data.header?.name : null
   return { title: name ? `${name} · 고객 360 | Admin CRM` : "고객 360 | Admin CRM" }
 }
@@ -34,12 +39,12 @@ export default async function AdminCrmCustomerDetailPage({
   params,
 }: AdminCrmCustomerDetailPageProps) {
   const { key } = await params
-  const data = await loadCustomer360(key)
+  const data = await loadCustomer360(canonicalKey(key))
   if (!data || !data.found) notFound()
 
   return (
     <Suspense fallback={null}>
-      <Customer360DetailClient data={data} customerKey={key} />
+      <Customer360DetailClient key={data.key} data={data} customerKey={data.key} />
     </Suspense>
   )
 }

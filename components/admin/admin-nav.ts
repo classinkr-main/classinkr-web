@@ -130,7 +130,7 @@ export const ADMIN_NAV: AdminNavItem[] = [
   // (AdminCommandPalette의 PALETTE_CHILD_COMMANDS)로 두 화면을 계속 노출한다.
   // /admin/chatbot은 외부(고객)·내부(사내) 두 축을 잇는 콘솔의 첫 화면이라 진입점으로 삼는다.
   // category가 customer인 이유 — CS는 일상 고객 지원 업무면이지 시스템 관리면이 아니다.
-  { href: "/admin/chatbot", label: "CS 콘솔", icon: Bot, section: "cs", category: "customer", keywords: "cs 콘솔 고객 지원 챗봇 운영 지표 골든셋 품질 평가 알파 준비도 chatbot ops console 채널톡 상담 문의 채팅 channel talk chat inbox 보강 큐 미해결 gaps 질문 패턴 가이드 문서 docs guide faq 추천질문 카테고리 리디렉트 내부 cs 상담 도우미 대기열 본사 확인 운영 도구 internal support assistant" },
+  { href: "/admin/chatbot", label: "CS 콘솔", icon: Bot, section: "cs", category: "customer", keywords: "cs 문의 cs 문의 탭 cs 문의 대시보드 cs 콘솔 고객 지원 챗봇 운영 지표 골든셋 품질 평가 알파 준비도 chatbot ops console 채널톡 상담 문의 채팅 channel talk chat inbox 보강 큐 미해결 gaps 질문 패턴 가이드 문서 docs guide faq 추천질문 카테고리 리디렉트 내부 cs 상담 도우미 대기열 본사 확인 운영 도구 internal support assistant" },
 
   // 마케팅·분석 — 캠페인·콘텐츠·리드 + 웹/비즈니스 분석
   // 메시지 발송 허브(이메일·문자·카카오, /admin/marketing)는 캠페인의 "메시지" 탭으로 흡수 — 라우트는 redirect 유지.
@@ -178,7 +178,7 @@ export interface CrmChildNavItem {
 
 // CRM 진입 시 사이드바에서 펼치는 하위 섹션(= 기존 상단 탭의 이전). 활성 판별은 경로 prefix.
 // CRM 핵심 탭 — 현황(후속조치+분석+시각화) · 고객(DB·360·연락입력·라벨링) · 기록(전체 로그) · 참석자 입력
-// · 검수(매칭 인박스·인사이트·매출시트 = 백오피스 표면의 상설 진입점, top-nav 재팽창 없이 하위탭으로만).
+// · 검수(매칭 인박스·매출시트 = 백오피스 표면의 상설 진입점, top-nav 재팽창 없이 하위탭으로만).
 // 돈흐름(deals)은 어드민(딜보드·견적)과 겹쳐 최상위에서 내림 — 라우트는 보존, active는 현황 탭 귀속.
 export const CRM_CHILD_NAV: CrmChildNavItem[] = [
   {
@@ -187,6 +187,7 @@ export const CRM_CHILD_NAV: CrmChildNavItem[] = [
     keywords: "crm 현황 후속조치 인사이트 딜 매출",
     match: (p) =>
       p === "/admin/crm" ||
+      p.startsWith("/admin/crm/insights") ||
       (p.startsWith("/admin/crm/deals") && !p.startsWith("/admin/crm/deals/rev-sheet")) ||
       p.startsWith("/admin/crm/revenue") ||
       (p.startsWith("/admin/crm/partners") && !p.startsWith("/admin/crm/partners/customers")),
@@ -209,14 +210,13 @@ export const CRM_CHILD_NAV: CrmChildNavItem[] = [
     keywords: "입력함 참석자 입력 캡처 capture 행사 명함 붙여넣기",
     match: (p) => p.startsWith("/admin/crm/capture"),
   },
-  // 검수·백오피스 — 매칭 인박스가 홈. 강등 표면(매칭/인사이트/매출시트)의 상설 도달 경로(CRM-4).
+  // 검수·백오피스 — 매칭 인박스가 홈. 검수 표면(매칭/매출시트)의 상설 도달 경로(CRM-4).
   {
     href: "/admin/crm/matching",
     label: "검수",
-    keywords: "검수 매칭 인박스 데이터 점검 matching 인사이트 insights 매출시트 rev sheet 백오피스",
+    keywords: "검수 매칭 인박스 데이터 점검 matching 매출시트 rev sheet 백오피스",
     match: (p) =>
       p.startsWith("/admin/crm/matching") ||
-      p.startsWith("/admin/crm/insights") ||
       p.startsWith("/admin/crm/deals/rev-sheet"),
   },
 ]

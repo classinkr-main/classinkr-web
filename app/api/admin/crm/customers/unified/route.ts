@@ -2,11 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
-import {
-  CURRENT_ADMIN_OWNER_TOKEN,
-  findAdminCrmOwner,
-  listAdminUserDirectory,
-} from "@/lib/repositories/admin-users"
+import { dataOwnerFromRequest } from "@/lib/admin/data-owner"
 import {
   getCrmUnifiedCustomers,
   type CrmUnifiedSavedView,
@@ -70,14 +66,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const url = new URL(req.url)
-    const ownerParam = url.searchParams.get("owner") ?? undefined
-    const isMine = ownerParam === CURRENT_ADMIN_OWNER_TOKEN
-    const currentOwner = isMine ? findAdminCrmOwner(await listAdminUserDirectory(), admin) : null
-    const ownerKeys = isMine
-      ? currentOwner?.ownerKeys.length
-        ? currentOwner.ownerKeys
-        : ["__no_current_admin_owner__"]
-      : undefined
+    const ownerKeys = await dataOwnerFromRequest(url, admin)
     // 새로고침(?force=1) — 홈 우선순위 큐 라우트와 같은 계약(파라미터 존재 여부로 판정).
     // 서버 소스 스냅샷 Data Cache(60초)를 우회해 방금 등록한 리드·동기화 결과를 즉시 반영하고,
     // 응답도 브라우저 프라이빗 캐시에 남기지 않는다(no-store).
@@ -87,7 +76,6 @@ export async function GET(req: NextRequest) {
       source: parseSource(url.searchParams.get("source")),
       lifecycle: parseLifecycle(url.searchParams.get("lifecycle")),
       view: parseSavedView(url.searchParams.get("view")),
-      owner: isMine ? undefined : ownerParam,
       ownerKeys,
       tag: url.searchParams.get("tag") ?? undefined,
       includeUnconfirmed: parseIncludeUnconfirmed(url.searchParams.get("includeUnconfirmed")),

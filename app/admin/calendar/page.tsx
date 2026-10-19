@@ -326,11 +326,11 @@ export default function AdminCalendarPage() {
   useEffect(() => {
     let cancelled = false
     adminFetchJsonCached<{ leads: LeadActionKpisPayload }>(
-      "/api/admin/crm/action-kpis",
+      "/api/admin/crm/action-kpis?owner=__me",
       undefined,
       // CRM 홈(app/admin/crm/page.tsx CRM_ACTION_KPIS_URL)과 동일한 URL 키를 써서
       // 같은 엔드포인트를 두 화면이 각자 다른 캐시 슬롯으로 이중 적재하지 않게 한다.
-      { cacheKey: "/api/admin/crm/action-kpis", ttlMs: 120_000, staleWhileRevalidateMs: 300_000 }
+      { cacheKey: "/api/admin/crm/action-kpis?owner=__me", ttlMs: 120_000, staleWhileRevalidateMs: 300_000 }
     )
       .then((data) => {
         if (!cancelled) setLeadActionKpis(data?.leads ?? null)

@@ -1,0 +1,22 @@
+<svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="shieldGrad" x1="4.5" y1="2.5" x2="19.5" y2="21.8" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#084734"/>
+      <stop offset="1" stop-color="#065C41"/>
+    </linearGradient>
+    <linearGradient id="coreGrad" x1="8" y1="7.2" x2="16" y2="16.4" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#10B981"/>
+      <stop offset="1" stop-color="#084734"/>
+    </linearGradient>
+  </defs>
+  <!-- Background Shield Fill -->
+  <path d="M12 2.5L4.5 5.8V11.2C4.5 16.1 7.7 20.3 12 21.8C16.3 20.3 19.5 16.1 19.5 11.2V5.8L12 2.5Z" fill="#ECFDF5" fill-opacity="0.9"/>
+  <!-- Outer Shield Border -->
+  <path d="M12 2.5L4.5 5.8V11.2C4.5 16.1 7.7 20.3 12 21.8C16.3 20.3 19.5 16.1 19.5 11.2V5.8L12 2.5Z" stroke="url(#shieldGrad)" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Central AI Copilot Star -->
+  <path d="M12 7.2C12 9.5 10.3 11.3 8 11.8C10.3 12.3 12 14.1 12 16.4C12 14.1 13.7 12.3 16 11.8C13.7 11.3 12 9.5 12 7.2Z" fill="url(#coreGrad)"/>
+  <!-- Assist Gold Sparkle -->
+  <path d="M16.5 6C16.5 6.8 15.9 7.4 15.1 7.7C15.9 8 16.5 8.6 16.5 9.4C16.5 8.6 17.1 8 17.9 7.7C17.1 7.4 16.5 6.8 16.5 6Z" fill="#D97706"/>
+  <!-- Knowledge / Support Node Dot -->
+  <circle cx="12" cy="18.8" r="1.1" fill="#059669"/>
+</svg>

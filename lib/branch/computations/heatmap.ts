@@ -19,8 +19,8 @@ export interface RegionRow {
   // scaled by period; the period bites into the numerator instead.
   target: number
   revenue: number
-  // Future-month estimate. Past/current confirmed go into revenue; future
-  // months and past-non-confirmed months go into projected.
+  // Unconfirmed remainder after the shared REV canon, including future fallback.
+  // Explicit future confirmed amounts and signed refunds remain in revenue.
   projected: number
   expected: number
   progress: number
@@ -47,11 +47,6 @@ function inScope(ym: string, scope: Period, now: Date): boolean {
   if (scope === "Y") return true
   if (scope === "M") return ym === ymKey(now)
   return fiscalQuarter(m) === fiscalQuarter(now.getUTCMonth() + 1)
-}
-
-function compareYm(ym: string, now: Date): number {
-  const nowKey = ymKey(now)
-  return ym < nowKey ? -1 : ym > nowKey ? 1 : 0
 }
 
 export function computeHeatmap(deals: BranchRevDeal[], scope: Period, now: Date, teamFilter?: string): RegionRow[] {
@@ -90,29 +85,14 @@ export function computeHeatmap(deals: BranchRevDeal[], scope: Period, now: Date,
 
     for (const [ym, amtRaw] of Object.entries(d.monthly_payments)) {
       const amt = Number(amtRaw)
-      if (!Number.isFinite(amt) || amt === 0) continue
+      if (!Number.isFinite(amt)) continue
       if (!inScope(ym, scope, now)) continue
 
-      const isFuture = compareYm(ym, now) > 0
-
-      if (isFuture) {
-        // Future months are always projection regardless of any flag.
-        dealProjected += amt
-        continue
-      }
-      if (!d.first_payment) {
-        // Past/current with no first_payment — treat as projection.
-        dealProjected += amt
-        continue
-      }
-      // first_payment is set. Confirmed = 색 기반 월별 확정 금액
-      // (monthly_confirmed 우선, 구버전 monthly_red/무색 fallback 포함) —
-      // 같은 달 안의 미확정 잔여분은 projection으로 분리한다.
+      // REV's shared canon owns confidence, including signed/net-zero amounts.
+      // first_payment describes the business stage; it is not a revenue gate.
       const confirmed = confirmedMonthAmount(d, ym, amt)
-      if (confirmed > 0) {
-        dealRevenue += confirmed
-        countedAsConfirmed = true
-      }
+      dealRevenue += confirmed
+      if (confirmed !== 0) countedAsConfirmed = true
       dealProjected += amt - confirmed
     }
 

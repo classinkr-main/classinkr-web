@@ -184,7 +184,7 @@ export function listUrl(input: {
   if (input.source !== "all") params.set("source", input.source)
   if (input.lifecycle !== "all") params.set("lifecycle", input.lifecycle)
   if (input.view !== "all") params.set("view", input.view)
-  if (input.owner) params.set("owner", input.owner)
+  params.set("owner", input.owner)
   if (input.tag) params.set("tag", input.tag)
   if (input.includeUnconfirmed) params.set("includeUnconfirmed", "1")
   return `/api/admin/crm/customers/unified?${params.toString()}`
@@ -220,9 +220,10 @@ export function unifiedCustomersTagHref(tag: string): string {
  */
 export function patchUnifiedListParams(
   current: string,
-  patch: { view?: SavedViewFilter; tag?: string }
+  patch: { view?: SavedViewFilter; tag?: string; owner?: string }
 ): string {
   const params = new URLSearchParams(current)
+  if (patch.owner !== undefined) params.set("owner", patch.owner)
   if (patch.view !== undefined) {
     if (patch.view === "all") params.delete("view")
     else params.set("view", patch.view)

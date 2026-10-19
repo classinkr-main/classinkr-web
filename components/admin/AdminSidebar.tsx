@@ -95,7 +95,7 @@ export const NAV_WARMUP_REQUESTS: Record<string, WarmupEntry[] | (() => WarmupEn
     // overview 페이지가 실제 호출하는 URL과 캐시 키를 맞춰야 hover-warm이 적중한다.
     // leads?scope=overview는 app/admin/overview/page.tsx의 RSC 프리페치(lib/admin/overview/
     // prefetch.ts)가 이미 서버에서 계산한다 — CLICK_SKIP_WARMUP_URLS에 등록해 click만 건너뛴다.
-    "/api/admin/leads?scope=overview",
+    "/api/admin/leads?scope=overview&owner=__me",
     "/api/admin/subscribers?count=1",
     "/api/admin/blog?scope=overview",
     // email·patch-notes는 OverviewClient가 요약 스코프로만 부른다(T5-B) — 전체 응답 키를 데우면 미스다.
@@ -115,8 +115,8 @@ export const NAV_WARMUP_REQUESTS: Record<string, WarmupEntry[] | (() => WarmupEn
     // meta/instagram 만 여전히 RSC 예산 밖이다("외부 API라 핵심 대시보드와 분리 로드").
     "/api/admin/visitor-stats?range=7",
     "/api/admin/os-summary?contract=v3",
-    "/api/admin/crm/action-kpis",
-    "/api/admin/branch/summary?team=ALL&period=Y",
+    "/api/admin/crm/action-kpis?owner=__me",
+    "/api/admin/branch/summary?team=ALL&period=Y&manager=__me",
     overviewChatbotStatsUrl(),
     "/api/admin/meta/instagram?datePreset=last_30d&limit=25",
   ],
@@ -131,7 +131,7 @@ export const NAV_WARMUP_REQUESTS: Record<string, WarmupEntry[] | (() => WarmupEn
     // 다시 태우는 네비게이션으로 이어지므로 클릭 시점 예열은 서버 이중 계산만 낳는다
     // (CLICK_SKIP_WARMUP_URLS에 등록). hover/focus/pointerdown은 그대로 예열해 RSC가 예산
     // 초과·미인증으로 비었을 때의 클라이언트 폴백 값을 살린다.
-    "/api/admin/crm/action-kpis",
+    "/api/admin/crm/action-kpis?owner=__me",
     "/api/admin/crm/overview",
     // crm/neo(팀 KPI)는 제거 — CrmHomeReportSection.tsx의 접힌 리포트 아코디언에서 "팀 KPI"
     // 탭을 열어야 마운트되는 NeoCrmTeamPanel(dynamic())만 쓴다. CRM 홈 첫 화면(스크롤 없이
@@ -205,7 +205,7 @@ export const NAV_WARMUP_REQUESTS: Record<string, WarmupEntry[] | (() => WarmupEn
     buildAdminCalendarUrl(getDefaultAdminCalendarRange()),
     buildAdminCalendarUrl(getAdminCalendarWeekStripRange()),
     // CRM 홈과 같은 슬롯을 쓰도록 페이지가 cacheKey를 URL로 고정해 뒀다 — 문자열 항목으로 충분.
-    "/api/admin/crm/action-kpis",
+    "/api/admin/crm/action-kpis?owner=__me",
     // 연동 상태는 cacheKey가 URL과 다르다 — 객체 항목이 아니면 조용히 빗나간다.
     { url: "/api/admin/calendar/health", cacheKey: "calendar:source-health" },
   ],
@@ -222,7 +222,7 @@ export const NAV_WARMUP_REQUESTS: Record<string, WarmupEntry[] | (() => WarmupEn
     { url: "/api/admin/marketing/perf?period=30d", cacheKey: "marketing-perf:30d" },
     { url: "/api/admin/marketing/insights", cacheKey: "marketing-insights" },
     { url: "/api/admin/marketing/intake-today", cacheKey: "marketing-intake-today" },
-    "/api/admin/crm/compass-pipeline",
+    "/api/admin/crm/compass-pipeline?owner=__me",
   ],
   "/admin/lead-magnets": [
     "/api/admin/lead-magnets",
@@ -353,14 +353,14 @@ const CLICK_SKIP_WARMUP_URLS: Record<string, string[]> = {
   // (2026-09-10) 프리페치가 6소스로 늘었다 — action-kpis·branch/summary·chatbot/stats 가
   // 합류했으므로 click 예열에서 함께 빼야 서버 이중 계산이 생기지 않는다.
   "/admin/overview": [
-    "/api/admin/leads?scope=overview",
+    "/api/admin/leads?scope=overview&owner=__me",
     "/api/admin/visitor-stats?range=7",
     "/api/admin/os-summary?contract=v3",
-    "/api/admin/crm/action-kpis",
-    "/api/admin/branch/summary?team=ALL&period=Y",
+    "/api/admin/crm/action-kpis?owner=__me",
+    "/api/admin/branch/summary?team=ALL&period=Y&manager=__me",
   ],
   // lib/admin/crm/home-prefetch.ts → prefetchCrmHomeInitialData
-  "/admin/crm": ["/api/admin/crm/action-kpis", "/api/admin/crm/overview"],
+  "/admin/crm": ["/api/admin/crm/action-kpis?owner=__me", "/api/admin/crm/overview"],
   // app/admin/branch/page.tsx → prefetchBranchSummary(buildBranchSummaryPayload)
   "/admin/branch": ["/api/admin/branch/summary?team=ALL&period=Q&view=overview"],
   // app/admin/branch/ledger/page.tsx → prefetchLedgerPipeline(readBranchPipelineRows)
@@ -740,17 +740,17 @@ function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
                               }}
                               className={`flex min-h-11 items-center gap-3 rounded-md px-3 text-[14px] font-medium transition-colors ${
                                 isActive
-                                  ? "bg-[#111110] text-white"
+                                  ? "bg-[#ECFDF5] text-[#084734]"
                                   : "text-[#1a1a1a]/65 hover:bg-[#f5f5f2] hover:text-[#111110]"
                               }`}
                             >
-                              <span className={isActive ? "text-white" : "text-[#1a1a1a]/40"}>
+                              <span className={isActive ? "text-[#084734]" : "text-[#1a1a1a]/40"}>
                                 <item.icon className="h-4 w-4" />
                               </span>
                               <span className="min-w-0 flex-1 truncate">{item.label}</span>
                               {item.badge ? (
                                 <span className={`rounded px-1.5 py-0.5 text-[10px] font-normal ${
-                                  isActive ? "bg-white/15 text-white/80" : "bg-[#e8e8e4] text-[#1a1a1a]/50"
+                                  isActive ? "bg-[#D1FAE5] text-[#084734]" : "bg-[#e8e8e4] text-[#1a1a1a]/50"
                                 }`}>
                                   {item.badge}
                                 </span>
@@ -806,13 +806,13 @@ function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
                                     }}
                                     className={`flex min-h-11 items-center gap-3 rounded-md px-3 text-[14px] font-medium transition-colors ${
                                       isActive
-                                        ? "bg-[#111110] text-white"
+                                        ? "bg-[#ECFDF5] text-[#084734]"
                                         : isWip
                                           ? "text-[#1a1a1a]/40 hover:bg-[#f5f5f2] hover:text-[#1a1a1a]/65"
                                           : "text-[#1a1a1a]/65 hover:bg-[#f5f5f2] hover:text-[#111110]"
                                     }`}
                                   >
-                                    <span className={isActive ? "text-white" : "text-[#1a1a1a]/40"}>
+                                    <span className={isActive ? "text-[#084734]" : "text-[#1a1a1a]/40"}>
                                       <item.icon className="h-4 w-4" />
                                     </span>
                                     <span className="min-w-0 flex-1 truncate">{item.label}</span>
@@ -868,11 +868,11 @@ function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
               onClick={() => warmAdminTab(item.href, "click")}
               className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-md px-1 text-[10px] font-medium leading-none transition-colors ${
                 isActive
-                  ? "bg-[#111110] text-white"
+                  ? "bg-[#ECFDF5] text-[#084734]"
                   : "text-[#1a1a1a]/55 hover:bg-[#f5f5f2] hover:text-[#111110]"
               }`}
             >
-              <span className={isActive ? "text-white" : "text-[#1a1a1a]/40"}>
+              <span className={isActive ? "text-[#084734]" : "text-[#1a1a1a]/40"}>
                 <item.icon className="h-4 w-4" />
               </span>
               <span className="max-w-full truncate">{item.label}</span>
@@ -887,11 +887,11 @@ function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
           aria-pressed={mobileMoreActive}
           className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-md px-1 text-[10px] font-medium leading-none transition-colors ${
             mobileMoreActive
-              ? "bg-[#111110] text-white"
+              ? "bg-[#ECFDF5] text-[#084734]"
               : "text-[#1a1a1a]/55 hover:bg-[#f5f5f2] hover:text-[#111110]"
           }`}
         >
-          <MoreHorizontal className={`h-4 w-4 ${mobileMoreActive ? "text-white" : "text-[#1a1a1a]/40"}`} />
+          <MoreHorizontal className={`h-4 w-4 ${mobileMoreActive ? "text-[#084734]" : "text-[#1a1a1a]/40"}`} />
           <span>More</span>
         </button>
       </div>
@@ -989,11 +989,11 @@ function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
                             effectiveCollapsed ? "justify-center px-2 py-2.5" : "px-3 py-2"
                           } ${
                             isActive
-                              ? "bg-[#111110] text-white"
+                              ? "bg-[#ECFDF5] text-[#084734]"
                               : "text-[#1a1a1a]/60 hover:bg-[#f5f5f2] hover:text-[#111110]"
                           }`}
                         >
-                          <span className={isActive ? "text-white" : "text-[#1a1a1a]/40 group-hover:text-[#111110]"}>
+                          <span className={isActive ? "text-[#084734]" : "text-[#1a1a1a]/40 group-hover:text-[#111110]"}>
                             <item.icon className="h-4 w-4" />
                           </span>
                           {!effectiveCollapsed && (
@@ -1001,7 +1001,7 @@ function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
                               <span className="flex-1">{item.label}</span>
                               {item.badge && (
                                 <span className={`rounded px-1.5 py-0.5 text-[10px] font-normal ${
-                                  isActive ? "bg-white/15 text-white/80" : "bg-[#e8e8e4] text-[#1a1a1a]/50"
+                                  isActive ? "bg-[#D1FAE5] text-[#084734]" : "bg-[#e8e8e4] text-[#1a1a1a]/50"
                                 }`}>
                                   {item.badge}
                                 </span>
@@ -1061,13 +1061,13 @@ function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
                                 onClick={() => warmAdminTab(item.href, "click")}
                                 className={`group flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
                                   isActive
-                                    ? "bg-[#111110] text-white"
+                                    ? "bg-[#ECFDF5] text-[#084734]"
                                     : isWip
                                       ? "text-[#1a1a1a]/35 hover:bg-[#f5f5f2] hover:text-[#1a1a1a]/60"
                                       : "text-[#1a1a1a]/60 hover:bg-[#f5f5f2] hover:text-[#111110]"
                                 }`}
                               >
-                                <span className={isActive ? "text-white" : "text-[#1a1a1a]/30"}>
+                                <span className={isActive ? "text-[#084734]" : "text-[#1a1a1a]/30"}>
                                   <item.icon className="h-4 w-4" />
                                 </span>
                                 <span className="flex-1">{item.label}</span>

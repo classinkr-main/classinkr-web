@@ -42,7 +42,7 @@ describe("KPI 요청 지연(레일 상세에서만)", () => {
     expect(source).toContain(
       'const kpiNeeded = !sidePanelCollapsed && railView === "detail" && selectedRow != null && lens !== "cockpit"',
     )
-    expect(source).toContain("{ enabled: kpiNeeded }")
+    expect(source).toContain("{ enabled: kpiNeeded && urlReady }")
   })
 })
 

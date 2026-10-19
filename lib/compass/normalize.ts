@@ -62,15 +62,19 @@ export const COMPASS_STAGE_LABEL: Record<string, string> = {
 /**
  * Compass 인바운드 유입 경로(crm.leads.channel) — 고객이 먼저 온 것(채널톡·다이렉트·워크인·소개).
  * 정본은 Compass lib/taxonomy/defs.ts CHANNELS 중 group = 'inbound'. Compass 는 이 경로를 일반 트랙으로 보고
- * **마케팅 성과·마케팅 유입 집계에서 뺀다**(lib/channels.ts mktLeadCond:
- * `coalesce(channel,'') <> all (array['channeltalk','direct','walkin','referral'])`).
+ * 마케팅 성과·마케팅 유입 집계에서 뺀다(lib/channels.ts mktLeadCond).
  */
 export const COMPASS_INBOUND_CHANNELS = ["channeltalk", "direct", "walkin", "referral"] as const
 
-/** Compass 마케팅 리드인가 — mktLeadCond 와 같은 규칙. 채널 없음(null·빈 값, 메타 리드 등)과 프로모션(sms·email)은 마케팅이다.
+/** Compass 가져오기 채널 — Compass CHANNELS(group='import'). NEO 스텁은 신규 광고 유입이 아니다. */
+export const COMPASS_IMPORT_CHANNELS = ["neo"] as const
+
+/** Compass 마케팅 리드인가 — mktLeadCond 와 같은 규칙. 인바운드·가져오기는 제외하고
+ * 채널 없음(null·빈 값, 메타 리드 등)과 프로모션(sms·email·expo)은 마케팅이다.
  *  SQL 과 같게 값을 다듬지 않고 그대로 비교한다. */
 export function isCompassMarketingChannel(channel: string | null | undefined): boolean {
   return !(COMPASS_INBOUND_CHANNELS as readonly string[]).includes(channel ?? "")
+    && !(COMPASS_IMPORT_CHANNELS as readonly string[]).includes(channel ?? "")
 }
 
 /** 케어 사다리 한글 라벨 — crm.leads.care_stage 실측 어휘(member/leader/ceo/paid/closed). */

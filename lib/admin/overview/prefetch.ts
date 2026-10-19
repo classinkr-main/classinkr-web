@@ -1,4 +1,6 @@
 import "server-only"
+import { currentDataOwner } from "@/lib/admin/data-owner"
+import { resolvePersonalBranchManager } from "@/lib/admin/personal-branch"
 
 import {
   BRANCH_READ_ADMIN_API_ROLES,
@@ -141,12 +143,12 @@ export async function prefetchOverviewInitialData(): Promise<OverviewInitialData
   const now = new Date()
 
   return {
-    leadOverview: crmAllowed ? openPrefetchLane(() => getCachedOverviewLeadSummary()) : deniedLane(),
+    leadOverview: crmAllowed ? openPrefetchLane(async () => getCachedOverviewLeadSummary((await currentDataOwner(admin)).keys)) : deniedLane(),
     // 클라이언트가 부르는 URL은 ?range=7 — parseVisitorStatsRange("7")과 같은 값을 넘긴다.
     visitorStats: readAllowed ? openPrefetchLane(() => getAdminVisitorStats(7)) : deniedLane(),
     leadActionKpis: crmAllowed
       ? openPrefetchLane(async () => {
-          const stats = await getLeadActionStats()
+          const stats = await getLeadActionStats(new Date(), (await currentDataOwner(admin)).keys)
           return { unrespondedCount: stats.unrespondedCount, unresponded24hCount: stats.unresponded24hCount }
         })
       : deniedLane(),
@@ -163,6 +165,7 @@ export async function prefetchOverviewInitialData(): Promise<OverviewInitialData
       ? openPrefetchLane(async () => {
           const summary = await buildBranchSummaryPayload({
             team: "ALL",
+            manager: await resolvePersonalBranchManager(admin),
             period: "Y",
             periodDate: resolvePeriodDate("Y", null, now) ?? now,
             includeBreakdown: false,

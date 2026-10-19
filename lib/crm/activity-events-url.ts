@@ -8,6 +8,7 @@
 export const CRM_EVENTS_URL = "/api/admin/crm/events"
 
 export interface ActivityEventsUrlInput {
+  owner?: string
   query?: string
   targetType?: string
   sourceType?: string
@@ -24,6 +25,7 @@ export function buildActivityEventsUrl(input: ActivityEventsUrlInput = {}): stri
   const limit = input.limit ?? 50
   const offset = input.offset ?? 0
   const params = new URLSearchParams({ limit: String(limit), offset: String(offset) })
+  if (input.owner !== undefined) params.set("owner", input.owner)
   if (input.query?.trim()) params.set("q", input.query.trim())
   if (input.targetType && input.targetType !== "all") params.set("targetType", input.targetType)
   if (input.sourceType && input.sourceType !== "all") params.set("sourceType", input.sourceType)
@@ -41,5 +43,5 @@ export function buildActivityEventsUrl(input: ActivityEventsUrlInput = {}): stri
  * 서버 프리페치(prefetchCrmActivityInitialData)가 만드는 첫 페이지와 같은 캐시 키다.
  */
 export function defaultActivityEventsUrl(): string {
-  return buildActivityEventsUrl({ scope: "work" })
+  return buildActivityEventsUrl({ scope: "work", owner: "__me" })
 }

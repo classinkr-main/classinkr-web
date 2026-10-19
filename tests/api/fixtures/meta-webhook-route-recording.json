@@ -1,0 +1,467 @@
+{
+  "single-lead-ok": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": {
+      "ok": true,
+      "received": 1,
+      "processed": 1,
+      "failed": 0
+    },
+    "events": [
+      "graph:9100000000000011",
+      "capture:9100000000000011"
+    ],
+    "graphUrls": [
+      "https://graph.facebook.com/v25.0/9100000000000011?fields=id%2Ccreated_time%2Cad_id%2Cad_name%2Cadset_id%2Cadset_name%2Ccampaign_id%2Ccampaign_name%2Cform_id%2Cfield_data&appsecret_proof=ffba3b466a63455560b6566364c021de9ac32af3197c9888c07b0b1929866dc1"
+    ],
+    "capturePayloads": [
+      {
+        "source": "meta_lead_ads",
+        "name": "합성 원장 11",
+        "org": "합성 학원 11",
+        "email": "lead-11@example.com",
+        "phone": "010-0000-0011",
+        "message": "Meta Lead Ads\nleadgen_id=9100000000000011\npage_id=100000000000001\nform_id=form-11\ncampaign=합성 캠페인 11\nadset=합성 세트 11\nad=합성 광고 11\nfields=full_name: 합성 원장 11 / phone_number: 010-0000-0011 / email: lead-11@example.com / company_name: 합성 학원 11 / marketing_consent: yes",
+        "marketingConsent": true,
+        "sourceDetail": "합성 광고 11",
+        "utmSource": "meta",
+        "utmMedium": "lead_ads",
+        "utmCampaign": "합성 캠페인 11",
+        "utmTerm": "합성 세트 11",
+        "utmContent": "합성 광고 11"
+      }
+    ],
+    "consoleErrors": []
+  },
+  "two-leads-one-capture-400": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": {
+      "ok": true,
+      "received": 2,
+      "processed": 1,
+      "failed": 1
+    },
+    "events": [
+      "graph:9100000000000021",
+      "graph:9100000000000022",
+      "capture:9100000000000021",
+      "capture:9100000000000022"
+    ],
+    "graphUrls": [
+      "https://graph.facebook.com/v25.0/9100000000000021?fields=id%2Ccreated_time%2Cad_id%2Cad_name%2Cadset_id%2Cadset_name%2Ccampaign_id%2Ccampaign_name%2Cform_id%2Cfield_data&appsecret_proof=ffba3b466a63455560b6566364c021de9ac32af3197c9888c07b0b1929866dc1",
+      "https://graph.facebook.com/v25.0/9100000000000022?fields=id%2Ccreated_time%2Cad_id%2Cad_name%2Cadset_id%2Cadset_name%2Ccampaign_id%2Ccampaign_name%2Cform_id%2Cfield_data&appsecret_proof=ffba3b466a63455560b6566364c021de9ac32af3197c9888c07b0b1929866dc1"
+    ],
+    "capturePayloads": [
+      {
+        "source": "meta_lead_ads",
+        "name": "합성 원장 21",
+        "org": "합성 학원 21",
+        "email": "lead-21@example.com",
+        "phone": "010-0000-0021",
+        "message": "Meta Lead Ads\nleadgen_id=9100000000000021\npage_id=100000000000001\nform_id=form-21\ncampaign=합성 캠페인 21\nadset=합성 세트 21\nad=합성 광고 21\nfields=full_name: 합성 원장 21 / phone_number: 010-0000-0021 / email: lead-21@example.com / company_name: 합성 학원 21 / marketing_consent: yes",
+        "marketingConsent": true,
+        "sourceDetail": "합성 광고 21",
+        "utmSource": "meta",
+        "utmMedium": "lead_ads",
+        "utmCampaign": "합성 캠페인 21",
+        "utmTerm": "합성 세트 21",
+        "utmContent": "합성 광고 21"
+      },
+      {
+        "source": "meta_lead_ads",
+        "name": "합성 원장 22",
+        "org": "합성 학원 22",
+        "email": "lead-22@example.com",
+        "phone": "010-0000-0022",
+        "message": "Meta Lead Ads\nleadgen_id=9100000000000022\npage_id=100000000000001\nform_id=form-22\ncampaign=합성 캠페인 22\nadset=합성 세트 22\nad=합성 광고 22\nfields=full_name: 합성 원장 22 / phone_number: 010-0000-0022 / email: lead-22@example.com / company_name: 합성 학원 22 / marketing_consent: yes",
+        "marketingConsent": true,
+        "sourceDetail": "합성 광고 22",
+        "utmSource": "meta",
+        "utmMedium": "lead_ads",
+        "utmCampaign": "합성 캠페인 22",
+        "utmTerm": "합성 세트 22",
+        "utmContent": "합성 광고 22"
+      }
+    ],
+    "consoleErrors": []
+  },
+  "graph-500-still-captures": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": {
+      "ok": true,
+      "received": 1,
+      "processed": 1,
+      "failed": 0
+    },
+    "events": [
+      "graph:9100000000000031",
+      "capture:9100000000000031"
+    ],
+    "graphUrls": [
+      "https://graph.facebook.com/v25.0/9100000000000031?fields=id%2Ccreated_time%2Cad_id%2Cad_name%2Cadset_id%2Cadset_name%2Ccampaign_id%2Ccampaign_name%2Cform_id%2Cfield_data&appsecret_proof=ffba3b466a63455560b6566364c021de9ac32af3197c9888c07b0b1929866dc1"
+    ],
+    "capturePayloads": [
+      {
+        "source": "meta_lead_ads",
+        "message": "Meta Lead Ads\nleadgen_id=9100000000000031\npage_id=100000000000001\nform_id=form-31\nad=ad-31",
+        "marketingConsent": false,
+        "utmSource": "meta",
+        "utmMedium": "lead_ads",
+        "utmContent": "ad-31"
+      }
+    ],
+    "consoleErrors": [
+      [
+        "[meta/webhook] lead detail fetch failed:",
+        "Error: Meta lead fetch failed: 500 합성 upstream down"
+      ]
+    ]
+  },
+  "graph-network-error-still-captures": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": {
+      "ok": true,
+      "received": 1,
+      "processed": 1,
+      "failed": 0
+    },
+    "events": [
+      "graph:9100000000000032",
+      "capture:9100000000000032"
+    ],
+    "graphUrls": [
+      "https://graph.facebook.com/v25.0/9100000000000032?fields=id%2Ccreated_time%2Cad_id%2Cad_name%2Cadset_id%2Cadset_name%2Ccampaign_id%2Ccampaign_name%2Cform_id%2Cfield_data&appsecret_proof=ffba3b466a63455560b6566364c021de9ac32af3197c9888c07b0b1929866dc1"
+    ],
+    "capturePayloads": [
+      {
+        "source": "meta_lead_ads",
+        "message": "Meta Lead Ads\nleadgen_id=9100000000000032\npage_id=100000000000001\nform_id=form-32\nad=ad-32",
+        "marketingConsent": false,
+        "utmSource": "meta",
+        "utmMedium": "lead_ads",
+        "utmContent": "ad-32"
+      }
+    ],
+    "consoleErrors": [
+      [
+        "[meta/webhook] lead detail fetch failed:",
+        "Error: 합성 socket hang up"
+      ]
+    ]
+  },
+  "capture-throws": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": {
+      "ok": true,
+      "received": 1,
+      "processed": 0,
+      "failed": 1
+    },
+    "events": [
+      "graph:9100000000000041",
+      "capture:9100000000000041"
+    ],
+    "graphUrls": [
+      "https://graph.facebook.com/v25.0/9100000000000041?fields=id%2Ccreated_time%2Cad_id%2Cad_name%2Cadset_id%2Cadset_name%2Ccampaign_id%2Ccampaign_name%2Cform_id%2Cfield_data&appsecret_proof=ffba3b466a63455560b6566364c021de9ac32af3197c9888c07b0b1929866dc1"
+    ],
+    "capturePayloads": [
+      {
+        "source": "meta_lead_ads",
+        "name": "합성 원장 41",
+        "org": "합성 학원 41",
+        "email": "lead-41@example.com",
+        "phone": "010-0000-0041",
+        "message": "Meta Lead Ads\nleadgen_id=9100000000000041\npage_id=100000000000001\nform_id=form-41\ncampaign=합성 캠페인 41\nadset=합성 세트 41\nad=합성 광고 41\nfields=full_name: 합성 원장 41 / phone_number: 010-0000-0041 / email: lead-41@example.com / company_name: 합성 학원 41 / marketing_consent: yes",
+        "marketingConsent": true,
+        "sourceDetail": "합성 광고 41",
+        "utmSource": "meta",
+        "utmMedium": "lead_ads",
+        "utmCampaign": "합성 캠페인 41",
+        "utmTerm": "합성 세트 41",
+        "utmContent": "합성 광고 41"
+      }
+    ],
+    "consoleErrors": []
+  },
+  "capture-502-not-stored": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": {
+      "ok": true,
+      "received": 1,
+      "processed": 0,
+      "failed": 1
+    },
+    "events": [
+      "graph:9100000000000042",
+      "capture:9100000000000042"
+    ],
+    "graphUrls": [
+      "https://graph.facebook.com/v25.0/9100000000000042?fields=id%2Ccreated_time%2Cad_id%2Cad_name%2Cadset_id%2Cadset_name%2Ccampaign_id%2Ccampaign_name%2Cform_id%2Cfield_data&appsecret_proof=ffba3b466a63455560b6566364c021de9ac32af3197c9888c07b0b1929866dc1"
+    ],
+    "capturePayloads": [
+      {
+        "source": "meta_lead_ads",
+        "name": "합성 원장 42",
+        "org": "합성 학원 42",
+        "email": "lead-42@example.com",
+        "phone": "010-0000-0042",
+        "message": "Meta Lead Ads\nleadgen_id=9100000000000042\npage_id=100000000000001\nform_id=form-42\ncampaign=합성 캠페인 42\nadset=합성 세트 42\nad=합성 광고 42\nfields=full_name: 합성 원장 42 / phone_number: 010-0000-0042 / email: lead-42@example.com / company_name: 합성 학원 42 / marketing_consent: yes",
+        "marketingConsent": true,
+        "sourceDetail": "합성 광고 42",
+        "utmSource": "meta",
+        "utmMedium": "lead_ads",
+        "utmCampaign": "합성 캠페인 42",
+        "utmTerm": "합성 세트 42",
+        "utmContent": "합성 광고 42"
+      }
+    ],
+    "consoleErrors": []
+  },
+  "no-token-captures-without-detail": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": {
+      "ok": true,
+      "received": 1,
+      "processed": 1,
+      "failed": 0
+    },
+    "events": [
+      "capture:9100000000000051"
+    ],
+    "graphUrls": [],
+    "capturePayloads": [
+      {
+        "source": "meta_lead_ads",
+        "message": "Meta Lead Ads\nleadgen_id=9100000000000051\npage_id=100000000000001\nform_id=form-51\nad=ad-51",
+        "marketingConsent": false,
+        "utmSource": "meta",
+        "utmMedium": "lead_ads",
+        "utmContent": "ad-51"
+      }
+    ],
+    "consoleErrors": [
+      [
+        "[meta/webhook] lead detail fetch failed:",
+        "Error: META_PAGE_ACCESS_TOKEN or META_ACCESS_TOKEN is required."
+      ]
+    ]
+  },
+  "mixed-changes-and-entries": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": {
+      "ok": true,
+      "received": 2,
+      "processed": 2,
+      "failed": 0
+    },
+    "events": [
+      "graph:9100000000000061",
+      "graph:9100000000000062",
+      "capture:9100000000000061",
+      "capture:9100000000000062"
+    ],
+    "graphUrls": [
+      "https://graph.facebook.com/v25.0/9100000000000061?fields=id%2Ccreated_time%2Cad_id%2Cad_name%2Cadset_id%2Cadset_name%2Ccampaign_id%2Ccampaign_name%2Cform_id%2Cfield_data&appsecret_proof=ffba3b466a63455560b6566364c021de9ac32af3197c9888c07b0b1929866dc1",
+      "https://graph.facebook.com/v25.0/9100000000000062?fields=id%2Ccreated_time%2Cad_id%2Cad_name%2Cadset_id%2Cadset_name%2Ccampaign_id%2Ccampaign_name%2Cform_id%2Cfield_data&appsecret_proof=ffba3b466a63455560b6566364c021de9ac32af3197c9888c07b0b1929866dc1"
+    ],
+    "capturePayloads": [
+      {
+        "source": "meta_lead_ads",
+        "name": "합성 원장 61",
+        "org": "합성 학원 61",
+        "email": "lead-61@example.com",
+        "phone": "010-0000-0061",
+        "message": "Meta Lead Ads\nleadgen_id=9100000000000061\npage_id=100000000000001\nform_id=form-61\ncampaign=합성 캠페인 61\nadset=합성 세트 61\nad=합성 광고 61\nfields=full_name: 합성 원장 61 / phone_number: 010-0000-0061 / email: lead-61@example.com / company_name: 합성 학원 61 / marketing_consent: yes",
+        "marketingConsent": true,
+        "sourceDetail": "합성 광고 61",
+        "utmSource": "meta",
+        "utmMedium": "lead_ads",
+        "utmCampaign": "합성 캠페인 61",
+        "utmTerm": "합성 세트 61",
+        "utmContent": "합성 광고 61"
+      },
+      {
+        "source": "meta_lead_ads",
+        "name": "합성 원장 62",
+        "org": "합성 학원 62",
+        "email": "lead-62@example.com",
+        "phone": "010-0000-0062",
+        "message": "Meta Lead Ads\nleadgen_id=9100000000000062\npage_id=100000000000002\nform_id=form-62\ncampaign=합성 캠페인 62\nadset=합성 세트 62\nad=합성 광고 62\nfields=full_name: 합성 원장 62 / phone_number: 010-0000-0062 / email: lead-62@example.com / company_name: 합성 학원 62 / marketing_consent: yes",
+        "marketingConsent": true,
+        "sourceDetail": "합성 광고 62",
+        "utmSource": "meta",
+        "utmMedium": "lead_ads",
+        "utmCampaign": "합성 캠페인 62",
+        "utmTerm": "합성 세트 62",
+        "utmContent": "합성 광고 62"
+      }
+    ],
+    "consoleErrors": []
+  },
+  "duplicate-leadgen-in-one-payload": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": {
+      "ok": true,
+      "received": 2,
+      "processed": 2,
+      "failed": 0
+    },
+    "events": [
+      "graph:9100000000000071",
+      "graph:9100000000000071",
+      "capture:9100000000000071",
+      "capture:9100000000000071"
+    ],
+    "graphUrls": [
+      "https://graph.facebook.com/v25.0/9100000000000071?fields=id%2Ccreated_time%2Cad_id%2Cad_name%2Cadset_id%2Cadset_name%2Ccampaign_id%2Ccampaign_name%2Cform_id%2Cfield_data&appsecret_proof=ffba3b466a63455560b6566364c021de9ac32af3197c9888c07b0b1929866dc1",
+      "https://graph.facebook.com/v25.0/9100000000000071?fields=id%2Ccreated_time%2Cad_id%2Cad_name%2Cadset_id%2Cadset_name%2Ccampaign_id%2Ccampaign_name%2Cform_id%2Cfield_data&appsecret_proof=ffba3b466a63455560b6566364c021de9ac32af3197c9888c07b0b1929866dc1"
+    ],
+    "capturePayloads": [
+      {
+        "source": "meta_lead_ads",
+        "name": "합성 원장 71",
+        "org": "합성 학원 71",
+        "email": "lead-71@example.com",
+        "phone": "010-0000-0071",
+        "message": "Meta Lead Ads\nleadgen_id=9100000000000071\npage_id=100000000000001\nform_id=form-71\ncampaign=합성 캠페인 71\nadset=합성 세트 71\nad=합성 광고 71\nfields=full_name: 합성 원장 71 / phone_number: 010-0000-0071 / email: lead-71@example.com / company_name: 합성 학원 71 / marketing_consent: yes",
+        "marketingConsent": true,
+        "sourceDetail": "합성 광고 71",
+        "utmSource": "meta",
+        "utmMedium": "lead_ads",
+        "utmCampaign": "합성 캠페인 71",
+        "utmTerm": "합성 세트 71",
+        "utmContent": "합성 광고 71"
+      },
+      {
+        "source": "meta_lead_ads",
+        "name": "합성 원장 71",
+        "org": "합성 학원 71",
+        "email": "lead-71@example.com",
+        "phone": "010-0000-0071",
+        "message": "Meta Lead Ads\nleadgen_id=9100000000000071\npage_id=100000000000001\nform_id=form-71\ncampaign=합성 캠페인 71\nadset=합성 세트 71\nad=합성 광고 71\nfields=full_name: 합성 원장 71 / phone_number: 010-0000-0071 / email: lead-71@example.com / company_name: 합성 학원 71 / marketing_consent: yes",
+        "marketingConsent": true,
+        "sourceDetail": "합성 광고 71",
+        "utmSource": "meta",
+        "utmMedium": "lead_ads",
+        "utmCampaign": "합성 캠페인 71",
+        "utmTerm": "합성 세트 71",
+        "utmContent": "합성 광고 71"
+      }
+    ],
+    "consoleErrors": []
+  },
+  "page-without-leadgen": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": {
+      "ok": true,
+      "received": 0,
+      "processed": 0,
+      "failed": 0
+    },
+    "events": [],
+    "graphUrls": [],
+    "capturePayloads": [],
+    "consoleErrors": []
+  },
+  "page-empty-entry": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": {
+      "ok": true,
+      "received": 0,
+      "processed": 0,
+      "failed": 0
+    },
+    "events": [],
+    "graphUrls": [],
+    "capturePayloads": [],
+    "consoleErrors": []
+  },
+  "object-not-page": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": {
+      "ok": true,
+      "ignored": "user"
+    },
+    "events": [],
+    "graphUrls": [],
+    "capturePayloads": [],
+    "consoleErrors": []
+  },
+  "object-missing": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": {
+      "ok": true,
+      "ignored": "unknown"
+    },
+    "events": [],
+    "graphUrls": [],
+    "capturePayloads": [],
+    "consoleErrors": []
+  },
+  "invalid-signature": {
+    "status": 403,
+    "contentType": "application/json",
+    "body": {
+      "error": "Invalid Meta signature."
+    },
+    "events": [],
+    "graphUrls": [],
+    "capturePayloads": [],
+    "consoleErrors": []
+  },
+  "missing-signature": {
+    "status": 403,
+    "contentType": "application/json",
+    "body": {
+      "error": "Invalid Meta signature."
+    },
+    "events": [],
+    "graphUrls": [],
+    "capturePayloads": [],
+    "consoleErrors": []
+  },
+  "invalid-json": {
+    "status": 400,
+    "contentType": "application/json",
+    "body": {
+      "error": "Invalid JSON."
+    },
+    "events": [],
+    "graphUrls": [],
+    "capturePayloads": [],
+    "consoleErrors": []
+  },
+  "get-verify-ok": {
+    "status": 200,
+    "contentType": "text/plain;charset=UTF-8",
+    "body": "recording-challenge-123",
+    "events": [],
+    "graphUrls": [],
+    "capturePayloads": [],
+    "consoleErrors": []
+  },
+  "get-verify-fail": {
+    "status": 403,
+    "contentType": "application/json",
+    "body": {
+      "error": "Meta webhook verification failed."
+    },
+    "events": [],
+    "graphUrls": [],
+    "capturePayloads": [],
+    "consoleErrors": []
+  }
+}

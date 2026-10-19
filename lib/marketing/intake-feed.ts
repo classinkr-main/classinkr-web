@@ -263,7 +263,7 @@ export function buildIntakeFeed({
   }
 
   for (const lead of compassLeads ?? []) {
-    // 인바운드(고객이 먼저 온) Compass 리드는 마케팅 유입이 아니다 — Compass mktLeadCond 와 같은 규칙.
+    // 인바운드·가져오기(NEO 스텁) Compass 리드는 마케팅 유입이 아니다 — Compass mktLeadCond 와 같은 규칙.
     // 같은 전화의 어드민 리드가 있으면 그 리드는 어드민 원천으로 그대로 센다(접기 상대만 없어진다).
     if (!isCompassMarketingChannel(lead.channel)) continue
     // 오늘·어제 창을 따로 판정한다 — 어제 생성되고 오늘 재유입한 리드는 어제엔 신규, 오늘엔 재유입으로

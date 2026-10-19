@@ -102,3 +102,5 @@ describe("GET /api/admin/crm/customers/unified force 관통 (unified-01)", () =>
     await expect(response.json()).resolves.toEqual({ error: "통합 고객 목록을 불러오지 못했습니다." })
   })
 })
+
+vi.mock("@/lib/admin/data-owner", () => ({ dataOwnerFromRequest: async (url: URL) => url.searchParams.get("owner") === "" ? undefined : ["Somang"] }))

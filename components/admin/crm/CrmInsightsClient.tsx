@@ -4,11 +4,11 @@ import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { AlertTriangle, CalendarClock, ChevronDown, ExternalLink, FileText, RefreshCw, ShieldCheck, TrendingUp } from "lucide-react"
 
-import { EmptyState, MiniFunnel, type FunnelStage } from "@/components/admin/viz"
+import { EmptyState } from "@/components/admin/viz"
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import { CRM_CACHE_SWR_MS, CRM_CACHE_TTL_MS } from "@/lib/crm/client-cache"
 import type { CustomerHealthBand } from "@/lib/crm/customer-health"
-import type { StageFunnelResult } from "@/lib/crm/stage-funnel"
+import { stageDistributionCounts, type StageFunnelResult } from "@/lib/crm/stage-funnel"
 import type {
   CrmInsightListItem,
   CrmInsights,
@@ -21,6 +21,7 @@ import type {
 } from "@/lib/repositories/crm-unified-customers"
 import CompassPipelineSection from "./insights/CompassPipelineSection"
 import CrmManagerReportPanel from "./CrmManagerReportPanel"
+import { useVisibleInterval } from "@/components/admin/branch/use-visible-interval"
 import { ScoreKindTable } from "./ScoreKind"
 
 const INSIGHTS_URL = "/api/admin/crm/insights"
@@ -61,18 +62,7 @@ const STAGE_FUNNEL_HREF: Record<string, string> = {
   lead_converted: "/admin/crm/customers/leads?filter=converted",
 }
 
-function formatStageFunnelPct(value: number) {
-  const fixed = value.toFixed(1)
-  return fixed.endsWith(".0") ? fixed.slice(0, -2) : fixed
-}
-
-/**
- * 단계 퍼널(T1) — 리드 상태 4 + 딜 단계 7을 한 축으로 이은 9단계(리드 신규→연락중→전환→
- * 딜 상담→데모→견적→결정→주문→결제). MiniFunnel(bar, 단일 브랜드 색)이 막대와 "이전 단계
- * 대비 N% 전환" 캡션을 이미 그리므로 여기서 전환율을 다시 쓰지 않는다(중복 금지).
- * 병목 구간은 MiniFunnel이 단계별 배지를 지원하지 않아 퍼널 아래 별도 줄에 Warning 배지 +
- * 단계명 텍스트로 표시한다(색만으로 구분하지 않는다). 리드 종료·딜 이탈은 퍼널 밖 캡션.
- */
+/** 원천별 현재 단계의 건수. 서로 다른 리드·딜 집단을 한 전환 퍼널로 연결하지 않는다. */
 export function CrmStageFunnelSection({
   stageFunnel,
   generatedAt,
@@ -83,29 +73,17 @@ export function CrmStageFunnelSection({
   loading: boolean
 }) {
   const clock = formatClock(generatedAt)
-  const bottleneckStage = stageFunnel?.bottleneck
-    ? stageFunnel.stages.find((stage) => stage.key === stageFunnel.bottleneck?.key)
-    : null
-
-  const funnelStages: FunnelStage[] =
-    stageFunnel?.stages.map((stage) => ({
-      key: stage.key,
-      label: stage.label,
-      value: stage.value,
-      tone: "brand" as const,
-      href: STAGE_FUNNEL_HREF[stage.key],
-    })) ?? []
+  const distribution = stageFunnel ? stageDistributionCounts(stageFunnel) : []
 
   return (
     <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4" aria-labelledby="crm-stage-funnel-title">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
         <div>
           <h2 id="crm-stage-funnel-title" className="text-[15px] font-bold text-[#111110]">
-            단계 퍼널 · 리드 → 딜
+            현재 단계 분포 · 리드·딜
           </h2>
           <p className="mt-0.5 text-[11px] text-[#615D59]">
-            리드 신규·연락중·전환은 상태 분포를 &ldquo;이상 도달&rdquo;로 순차 누적한 값(각 리드는 상태
-            하나에만 있다) · 딜 6단계는 현재 단계 이상 누적(lost 제외)
+            현재 상태 기준 · 리드와 딜을 각각 집계
             {clock ? ` · 기준 ${clock}` : ""}
           </p>
         </div>
@@ -113,28 +91,26 @@ export function CrmStageFunnelSection({
 
       {stageFunnel ? (
         <>
-          <MiniFunnel stages={funnelStages} variant="bar" />
-          {bottleneckStage && stageFunnel.bottleneck ? (
-            <p className="mt-3 flex flex-wrap items-center gap-2">
-              <span
-                className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-bold"
-                style={{ color: "#7A520F", backgroundColor: "#FBF1E0", borderColor: "#ECD29C" }}
-              >
-                병목 · 전환 {formatStageFunnelPct(stageFunnel.bottleneck.conversion)}%
-              </span>
-              <span className="text-[12px] text-[#615D59]">
-                {bottleneckStage.label} 구간의 전환율이 가장 낮습니다
-              </span>
-            </p>
-          ) : null}
-          <p className="mt-3 text-[10px] text-[#1a1a1a]/35">
+          <div className="grid gap-5 sm:grid-cols-2">
+            {(["lead", "deal"] as const).map(group => {
+              const rows = distribution.filter(stage => stage.group === group)
+              const max = Math.max(1, ...rows.map(stage => stage.value))
+              return <section key={group} aria-label={group === "lead" ? "리드 상태 건수" : "딜 단계 건수"}>
+                <h3 className="mb-3 text-[13px] font-semibold text-[#615D59]">{group === "lead" ? "리드 상태" : "딜 단계"}</h3>
+                <ul className="space-y-3">{rows.map(stage => {
+                  const content = <><div className="mb-1 flex items-center justify-between gap-2 text-[12px]"><span className="text-[#111110]">{stage.label}</span><span data-stage={stage.key} data-count={stage.value} className="font-semibold tabular-nums text-[#111110]">{stage.value.toLocaleString("ko-KR")}건</span></div><div className="h-2 overflow-hidden rounded-sm bg-[#F6F5F4]"><div className="h-full bg-[#084734]" style={{ width: `${stage.value / max * 100}%` }} /></div></>
+                  return <li key={stage.key}>{STAGE_FUNNEL_HREF[stage.key] ? <Link href={STAGE_FUNNEL_HREF[stage.key]} className="block min-h-11 rounded-md hover:bg-[#F6F5F4]">{content}</Link> : <div>{content}</div>}</li>
+                })}</ul>
+              </section>
+            })}
+          </div>
+          <p className="mt-3 text-[10px] text-[#615D59]">
             리드 종료 <span className="tabular-nums">{stageFunnel.closed.toLocaleString("ko-KR")}</span>건 · 딜
-            이탈 <span className="tabular-nums">{stageFunnel.lost.toLocaleString("ko-KR")}</span>건 — 퍼널 밖 별도
-            집계
+            이탈 <span className="tabular-nums">{stageFunnel.lost.toLocaleString("ko-KR")}</span>건 · 종료 상태 별도 집계
           </p>
         </>
       ) : loading ? (
-        <div className="rounded-xl bg-[#fafaf8] px-3 py-6 text-center text-[13px] text-[#1a1a1a]/40">계산 중입니다...</div>
+        <div className="rounded-xl bg-[#fafaf8] px-3 py-6 text-center text-[13px] text-[#615D59]">계산 중입니다...</div>
       ) : (
         <EmptyState
           title="딜 단계 집계를 가져오지 못했습니다."
@@ -247,11 +223,11 @@ export function CrmHealthByOwnerSection({
           })}
         </ol>
       ) : loading && !distribution ? (
-        <div className="rounded-xl bg-[#fafaf8] px-3 py-6 text-center text-[13px] text-[#1a1a1a]/40">계산 중입니다...</div>
+        <div className="rounded-xl bg-[#fafaf8] px-3 py-6 text-center text-[13px] text-[#615D59]">계산 중입니다...</div>
       ) : (
         <EmptyState title="담당자별 건강도를 표시할 활성 고객이 없습니다." description="NEO 활성 고객이 동기화되면 담당자별 안전·주의·위험 건수가 여기에 쌓입니다." />
       )}
-      <p className="mt-2 text-[10px] text-[#1a1a1a]/35">
+      <p className="mt-2 text-[10px] text-[#615D59]">
         건강도 = 100 감점식(75 이상 안전 · 55 이상 주의 · 그 아래 위험) · 막대 길이는 담당 중 최다 건수 대비 · 금액 합산 없음
       </p>
     </section>
@@ -264,7 +240,7 @@ export function CrmScoreKindDefinitionsSection() {
     <details open className="group mb-4 rounded-2xl border border-[#e8e8e4] bg-white">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-[13px] font-bold text-[#111110] [&::-webkit-details-marker]:hidden">
         <span>점수 3종 정의</span>
-        <ChevronDown className="h-4 w-4 shrink-0 text-[#1a1a1a]/35 transition-transform group-open:rotate-0 -rotate-90" />
+        <ChevronDown className="h-4 w-4 shrink-0 text-[#615D59] transition-transform group-open:rotate-0 -rotate-90" />
       </summary>
       <div className="border-t border-[#e8e8e4] px-4 pb-4 pt-3">
         <p className="mb-2 text-[11px] text-[#615D59]">
@@ -277,10 +253,10 @@ export function CrmScoreKindDefinitionsSection() {
 }
 
 function toneClass(tone: CrmInsightTone) {
-  if (tone === "risk") return "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]"
-  if (tone === "warn") return "border-[#F1E2B8] bg-[#FFF8E6] text-[#8D6C1F]"
+  if (tone === "risk") return "border-[#F2B8B8] bg-[#FCE9E9] text-[#B43E3E]"
+  if (tone === "warn") return "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
   if (tone === "ok") return "border-[#D7EBDD] bg-[#ECFDF5] text-[#084734]"
-  return "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/55"
+  return "border-[#e8e8e4] bg-[#fafaf8] text-[#615D59]"
 }
 
 function InsightList({
@@ -299,7 +275,7 @@ function InsightList({
   return (
     <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
       <div className="mb-3 flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#fafaf8] text-[#1a1a1a]/45">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#fafaf8] text-[#615D59]">
           {icon}
         </span>
         <h2 className="text-[15px] font-bold text-[#111110]">{title}</h2>
@@ -311,14 +287,14 @@ function InsightList({
               <span className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full border ${toneClass(item.tone)}`} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[13px] font-bold text-[#111110]">{item.title}</span>
-                <span className="mt-0.5 block truncate text-[12px] text-[#1a1a1a]/45">{item.detail}</span>
+                <span className="mt-0.5 block truncate text-[12px] text-[#615D59]">{item.detail}</span>
               </span>
               <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#1a1a1a]/25 group-hover:text-[#111110]" />
             </Link>
           ))}
         </div>
       ) : (
-        <div className="rounded-xl bg-[#fafaf8] px-3 py-6 text-center text-[13px] text-[#1a1a1a]/40">
+        <div className="rounded-xl bg-[#fafaf8] px-3 py-6 text-center text-[13px] text-[#615D59]">
           {loading ? "계산 중입니다..." : emptyLabel}
         </div>
       )}
@@ -369,6 +345,8 @@ export default function CrmInsightsClient() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [channelError, setChannelError] = useState<string | null>(null)
+  const [healthError, setHealthError] = useState<string | null>(null)
   const [channels, setChannels] = useState<LeadChannelStat[]>([])
   const [healthDistribution, setHealthDistribution] = useState<HealthDistributionResponse | null>(null)
   const [healthLoading, setHealthLoading] = useState(true)
@@ -426,9 +404,9 @@ export default function CrmInsightsClient() {
       force: secondaryRefreshKey > 0,
     })
       .then((d) => {
-        if (alive) setChannels(d?.channels ?? [])
+        if (alive) { setChannels(d?.channels ?? []); setChannelError(null) }
       })
-      .catch(() => {})
+      .catch(() => { if (alive) setChannelError("채널별 집계를 확인하지 못했습니다.") })
     return () => {
       alive = false
     }
@@ -448,9 +426,9 @@ export default function CrmInsightsClient() {
       },
     })
       .then((d) => {
-        if (alive) setHealthDistribution(d ?? null)
+        if (alive) { setHealthDistribution(d ?? null); setHealthError(null) }
       })
-      .catch(() => {})
+      .catch(() => { if (alive) setHealthError("고객 건강도 집계를 확인하지 못했습니다.") })
       .finally(() => {
         if (alive) setHealthLoading(false)
       })
@@ -458,6 +436,8 @@ export default function CrmInsightsClient() {
       alive = false
     }
   }, [secondaryRefreshKey])
+
+  useVisibleInterval(() => { if (!refreshing) { void load({ force: true }); setSecondaryRefreshKey(value => value + 1) } }, 60_000)
 
   const initialLoading = loading && !data
   const partialWarnings = data?.health.status === "partial" ? data.health.warnings : []
@@ -471,9 +451,9 @@ export default function CrmInsightsClient() {
     <div className="mx-auto max-w-7xl">
       <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">CRM 인사이트</h1>
-          <p className="mt-1 text-[13px] text-[#1a1a1a]/42">
-            리스크·기회를 운영 액션으로 묶어 봅니다.
+          <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">전체 분석</h1>
+          <p className="mt-1 text-[13px] text-[#615D59]">
+            영업 흐름·고객 건강도·Compass·지역 현황을 비교합니다. · 1분 자동 갱신
           </p>
         </div>
         <button
@@ -490,6 +470,83 @@ export default function CrmInsightsClient() {
         </button>
       </div>
 
+      {error ? (
+        <div className="mb-4 rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] px-3 py-2 text-[12px] font-medium text-[#B43E3E]">
+          {error}
+        </div>
+      ) : null}
+      {!error && partialWarnings.length > 0 ? (
+        <div className="mb-4 rounded-xl border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2 text-[12px] font-medium text-[#7A520F]">
+          일부 CRM 원천 확인이 제한됩니다. {partialWarnings[0]}
+        </div>
+      ) : null}
+      {!error && coverageState === "no_data" ? (
+        <div className="mb-4 rounded-xl border border-[#e8e8e4] bg-white px-3 py-2 text-[12px] font-medium text-[#615D59]">
+          연결 데이터가 없어 동기화 정합성을 0%로 표시하지 않습니다.
+        </div>
+      ) : null}
+
+      <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="rounded-xl bg-[#fafaf8] p-3">
+            <p className="text-[11px] font-semibold text-[#615D59]">우선 연락</p>
+            <p className="mt-1 text-2xl font-bold text-[#111110]">
+              {kpiValue({ data, loading, source: "priority", value: data?.kpis.priorityTotal })}
+            </p>
+            <p className="mt-1 text-[11px] text-[#615D59]">
+              {priorityUnavailable
+                ? "우선 연락 확인 필요"
+                : `긴급 ${formatCount(data?.kpis.criticalPriorityCount)}건`}
+            </p>
+          </div>
+          <div className="rounded-xl bg-[#fafaf8] p-3">
+            <p className="text-[11px] font-semibold text-[#615D59]">미수 리스크</p>
+            <p className="mt-1 text-2xl font-bold text-[#B43E3E]">
+              {kpiValue({ data, loading, source: "business", value: data?.kpis.paymentRiskCount })}
+            </p>
+            <p className="mt-1 text-[11px] text-[#615D59]">
+              {businessUnavailable ? "고객 DB 집계 확인 필요" : "돈흐름 확인 필요"}
+            </p>
+          </div>
+          <div className="rounded-xl bg-[#fafaf8] p-3">
+            <p className="text-[11px] font-semibold text-[#615D59]">링크 확정률</p>
+            <p
+              className={`mt-1 text-2xl font-bold ${
+                coverageState === "failed"
+                  ? "text-[#B43E3E]"
+                  : coverageState === "no_data"
+                    ? "text-[#7A520F]"
+                    : "text-[#084734]"
+              }`}
+            >
+              {kpiValue({ data, loading, source: "coverage", value: data?.kpis.coveragePct, suffix: "%" })}
+            </p>
+            <p className="mt-1 text-[11px] text-[#615D59]">
+              {coverageState === "no_data"
+                ? "연결 원천 없음"
+                : coverageState === "failed"
+                  ? "정합성 확인 필요"
+                  : `검토 대기 ${formatCount(data?.kpis.needsReviewCount)}건`}
+            </p>
+          </div>
+          <div className="rounded-xl bg-[#fafaf8] p-3">
+            <p className="text-[11px] font-semibold text-[#615D59]">이번 주 일정</p>
+            <p className="mt-1 text-2xl font-bold text-[#111110]">
+              {kpiValue({ data, loading, source: "business", value: data?.kpis.upcomingThisWeekCount })}
+            </p>
+            <p className="mt-1 text-[11px] text-[#615D59]">
+              {businessUnavailable ? "일정 집계 확인 필요" : "설치·방문 예정"}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <nav aria-label="분석 바로 가기" className="mb-4 flex flex-wrap gap-x-5 gap-y-2 text-[13px] font-medium text-[#084734]">
+        <a href="#crm-stage-funnel-title" className="inline-flex min-h-11 items-center">영업 흐름</a>
+        <a href="#crm-health-by-owner-title" className="inline-flex min-h-11 items-center">담당별 고객 건강도</a>
+        <a href="#crm-compass-pipeline-title" className="inline-flex min-h-11 items-center">Compass 분석</a>
+        <Link href="/admin/crm/customers/map?layer=compass" className="inline-flex min-h-11 items-center">Compass 지역 비교 →</Link>
+      </nav>
       <button
         type="button"
         onClick={() => setReportOpen((value) => !value)}
@@ -497,15 +554,16 @@ export default function CrmInsightsClient() {
         aria-expanded={reportOpen}
       >
         <span className="flex items-center gap-2 text-[13px] font-bold text-[#111110]">
-          <FileText className="h-4 w-4 text-[#1a1a1a]/40" />
+          <FileText className="h-4 w-4 text-[#615D59]" />
           지사장 주간 점검 · 리포트
         </span>
         <ChevronDown
-          className={`h-4 w-4 shrink-0 text-[#1a1a1a]/35 transition-transform ${reportOpen ? "" : "-rotate-90"}`}
+          className={`h-4 w-4 shrink-0 text-[#615D59] transition-transform ${reportOpen ? "" : "-rotate-90"}`}
         />
       </button>
       {reportOpen ? <CrmManagerReportPanel /> : null}
 
+      <div className="grid items-start gap-4 xl:grid-cols-2">
       <CrmStageFunnelSection
         stageFunnel={data?.stageFunnel ?? null}
         generatedAt={data?.stageFunnelGeneratedAt ?? null}
@@ -516,35 +574,37 @@ export default function CrmInsightsClient() {
         <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
           <div className="mb-3 flex items-center justify-between gap-2">
             <h2 className="text-[15px] font-bold text-[#111110]">채널별 전환율</h2>
-            <span className="text-[11px] text-[#1a1a1a]/35">유입 경로 · 전환 / 전체</span>
+            <span className="text-[11px] text-[#615D59]">유입 경로 · 전환 / 전체</span>
           </div>
           <div className="space-y-2">
             {channels.map((ch) => (
               <Link
                 key={ch.source}
                 href={`/admin/crm/customers/leads?source=${encodeURIComponent(ch.source)}`}
-                className="-mx-1 flex items-center gap-3 rounded-md px-1 py-0.5 transition-colors hover:bg-[#fafaf8]"
+                className="-mx-1 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md px-1 py-2 sm:grid-cols-[100px_minmax(0,1fr)_120px] transition-colors hover:bg-[#fafaf8]"
               >
-                <span className="w-28 shrink-0 truncate text-[12px] font-semibold text-[#111110]" title={ch.source}>
+                <span className="min-w-0 truncate text-[12px] font-semibold text-[#111110]" title={ch.source}>
                   {ch.source}
                 </span>
-                <div className="h-6 flex-1 overflow-hidden rounded-md bg-[#fafaf8]">
+                <div className="col-span-2 row-start-2 h-3 overflow-hidden rounded-md bg-[#F6F5F4] sm:col-span-1 sm:col-start-2 sm:row-start-1 sm:h-5">
                   <div
                     className="h-full rounded-md bg-[#084734]"
-                    style={{ width: `${Math.max(2, ch.rate * 100)}%` }}
+                    style={{ width: `${Math.min(100, Math.max(0, ch.rate * 100))}%` }}
                   />
                 </div>
-                <span className="w-28 shrink-0 text-right text-[11px] tabular-nums text-[#1a1a1a]/55">
+                <span className="text-right text-[12px] tabular-nums text-[#615D59]">
                   <b className="text-[#084734]">{Math.round(ch.rate * 100)}%</b> ·{" "}
                   {ch.converted.toLocaleString("ko-KR")}/{ch.total.toLocaleString("ko-KR")}
                 </span>
               </Link>
             ))}
           </div>
-          <p className="mt-2 text-[10px] text-[#1a1a1a]/35">전환율 = 전환 리드 / 전체 리드(채널별) · 건수 상위 8개</p>
+          <p className="mt-2 text-[10px] text-[#615D59]">전환율 = 전환 리드 / 전체 리드(채널별) · 건수 상위 8개</p>
         </section>
       ) : null}
 
+      </div>
+      {channelError || healthError ? <p role="status" className="mb-4 text-[13px] text-[#B43E3E]">{[channelError, healthError].filter(Boolean).join(" · ")} 최근 확인한 값이 있으면 유지합니다.</p> : null}
       <CrmHealthByOwnerSection
         distribution={healthDistribution?.distribution ?? null}
         generatedAt={healthDistribution?.generatedAt ?? null}
@@ -552,77 +612,6 @@ export default function CrmInsightsClient() {
       />
       <CompassPipelineSection />
       <CrmScoreKindDefinitionsSection />
-
-      {error ? (
-        <div className="mb-4 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] font-medium text-[#B85C33]">
-          {error}
-        </div>
-      ) : null}
-      {!error && partialWarnings.length > 0 ? (
-        <div className="mb-4 rounded-xl border border-[#F1E2B8] bg-[#FFF8E6] px-3 py-2 text-[12px] font-medium text-[#8D6C1F]">
-          일부 CRM 원천 확인이 제한됩니다. {partialWarnings[0]}
-        </div>
-      ) : null}
-      {!error && coverageState === "no_data" ? (
-        <div className="mb-4 rounded-xl border border-[#e8e8e4] bg-white px-3 py-2 text-[12px] font-medium text-[#1a1a1a]/55">
-          연결 데이터가 없어 동기화 정합성을 0%로 표시하지 않습니다.
-        </div>
-      ) : null}
-
-      <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl bg-[#fafaf8] p-3">
-            <p className="text-[11px] font-semibold text-[#1a1a1a]/35">우선 연락</p>
-            <p className="mt-1 text-2xl font-bold text-[#111110]">
-              {kpiValue({ data, loading, source: "priority", value: data?.kpis.priorityTotal })}
-            </p>
-            <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
-              {priorityUnavailable
-                ? "우선 연락 확인 필요"
-                : `긴급 ${formatCount(data?.kpis.criticalPriorityCount)}건`}
-            </p>
-          </div>
-          <div className="rounded-xl bg-[#fafaf8] p-3">
-            <p className="text-[11px] font-semibold text-[#1a1a1a]/35">미수 리스크</p>
-            <p className="mt-1 text-2xl font-bold text-[#B85C33]">
-              {kpiValue({ data, loading, source: "business", value: data?.kpis.paymentRiskCount })}
-            </p>
-            <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
-              {businessUnavailable ? "고객 DB 집계 확인 필요" : "돈흐름 확인 필요"}
-            </p>
-          </div>
-          <div className="rounded-xl bg-[#fafaf8] p-3">
-            <p className="text-[11px] font-semibold text-[#1a1a1a]/35">링크 확정률</p>
-            <p
-              className={`mt-1 text-2xl font-bold ${
-                coverageState === "failed"
-                  ? "text-[#B85C33]"
-                  : coverageState === "no_data"
-                    ? "text-[#8D6C1F]"
-                    : "text-[#084734]"
-              }`}
-            >
-              {kpiValue({ data, loading, source: "coverage", value: data?.kpis.coveragePct, suffix: "%" })}
-            </p>
-            <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
-              {coverageState === "no_data"
-                ? "연결 원천 없음"
-                : coverageState === "failed"
-                  ? "정합성 확인 필요"
-                  : `검토 대기 ${formatCount(data?.kpis.needsReviewCount)}건`}
-            </p>
-          </div>
-          <div className="rounded-xl bg-[#fafaf8] p-3">
-            <p className="text-[11px] font-semibold text-[#1a1a1a]/35">이번 주 일정</p>
-            <p className="mt-1 text-2xl font-bold text-[#111110]">
-              {kpiValue({ data, loading, source: "business", value: data?.kpis.upcomingThisWeekCount })}
-            </p>
-            <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
-              {businessUnavailable ? "일정 집계 확인 필요" : "설치·방문 예정"}
-            </p>
-          </div>
-        </div>
-      </section>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <InsightList
@@ -649,7 +638,7 @@ export default function CrmInsightsClient() {
       </div>
 
       {initialLoading ? (
-        <div className="mt-4 rounded-xl border border-[#e8e8e4] bg-white p-6 text-center text-[13px] text-[#1a1a1a]/40">
+        <div className="mt-4 rounded-xl border border-[#e8e8e4] bg-white p-6 text-center text-[13px] text-[#615D59]">
           인사이트를 계산 중입니다...
         </div>
       ) : null}

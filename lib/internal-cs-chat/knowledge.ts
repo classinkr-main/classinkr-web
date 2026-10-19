@@ -365,6 +365,110 @@ const KNOWLEDGE_ENTRIES: readonly InternalCsCuratedKnowledgeEntry[] = [
       },
     ],
   },
+  {
+    id: "incident-handling-rules",
+    title: "기술지원 오류 대응 규칙과 사실·추정 분리",
+    status: "confirmed",
+    externalUse: "internal_only",
+    summary:
+      "고객이 쓴 말('업로드 오류' 등)을 그대로 받지 않고 로그로 실제 현상을 재정의한다. 확인된 사실과 추정을 분리하고, 복구 불가는 원인 설명과 함께 안내하며 단독 통보하지 않는다. 오류 코드, 서버명, IP, 계정 ID는 고객 안내에서 제외한다.",
+    handling: [
+      "고객의 현상 표현(업로드 오류, 인터넷 끊김, 녹음 안 됨)을 그대로 단정하지 않고 콘솔과 화면으로 실제 일어난 일을 재정의한다(D-04, S-09).",
+      "원인 확정 전에는 '확인 중'까지만 안내하고, HQ 답변의 应该(아마), 按理说(이론상)은 확정 사실로 옮기지 않는다(D-05, D-16).",
+      "복구 불가는 원인 설명과 함께 전하고, 단독 통보는 피한다. 고객 안내문에는 오류 코드·서버명·IP·계정 ID를 노출하지 않는다(D-04, D-21).",
+      "고객에게 캡처를 보낼 때는 백오피스 경로, Media Server명, Port를 가리고, HQ 중국어 화면은 한국어 UI로 다시 찍어 주석을 단다(D-04, D-21).",
+    ],
+    keywords: ["오류 대응", "장애 접수", "고객 안내", "응대 규칙", "사실 추정", "복구 불가", "캡처 가리기", "에스컬레이션 규칙", "장애 처리"],
+    recommendedTags: ["area:software", "intent:incident", "evidence:confirmed"],
+    sourceRefs: [
+      {
+        id: "docs/active/cs-error-cases-workflow-rules-2026-10-02.md",
+        label: "기술지원 업무 규칙과 확인 흐름",
+      },
+      {
+        id: "docs/active/cs-error-cases-index-2026-10-02.md",
+        label: "오류 케이스 인덱스",
+      },
+    ],
+  },
+  {
+    id: "network-interruption-diagnostics",
+    title: "접속 끊김 코드 56·57 및 재접속 판정",
+    status: "confirmed",
+    externalUse: "reviewed_summary_allowed",
+    summary:
+      "코드 56은 서버-클라이언트 네트워크 단절, 코드 57은 서버 하트비트 유실이다. 이탈 직후 신규 로그인이 있으면 프로세스 종료/절전(57), 없으면 회선 단절(56)이다. 재입실 시 교사 화면 최대화가 풀리는 것은 정상 메커니즘이다.",
+    handling: [
+      "코드 56은 회선 단절이다. User Gateway(공유기) 정상이면서 Gateway 2nd(외부망)만 저하면 공유기 바깥 회선 불안정이다(D-20).",
+      "코드 56으로 재접속되면 교사 화면 최대화가 저절로 스테이지 기본 배치로 풀린다(D-20).",
+      "코드 57은 하트비트 유실이다. 직후 신규 로그인 기록이 있으면 크래시·프리즈 또는 PC 절전·전원 차단이며, 신규 로그인이 없으면 회선 단절이다(D-18).",
+      "모바일/태블릿(Android)에서 반복 퇴장(코드 56) 시 LTE 핫스팟 재현 여부를 확인하고, 기기 1대만 로그인했는지 점검한다(D-19).",
+    ],
+    keywords: ["코드 56", "코드 57", "code 56", "code 57", "네트워크 끊김", "하트비트", "최대화 풀림", "최대화 해제", "재입실", "반복 퇴장", "강제 종료", "튕김"],
+    recommendedTags: ["area:software", "topic:network", "intent:incident", "evidence:confirmed"],
+    sourceRefs: [
+      {
+        id: "docs/active/cs-error-cases-index-2026-10-02.md#1-접속네트워크-끊김",
+        label: "오류 인덱스: 접속·네트워크 끊김",
+      },
+      {
+        id: "docs/active/cs-error-cases-workflow-rules-2026-10-02.md#5-1-네트워크-수업-중-끊김-코드-56-57",
+        label: "네트워크 끊김 확인 흐름",
+      },
+    ],
+  },
+  {
+    id: "recording-error-diagnostics",
+    title: "수업·현장 녹화 미생성 및 에러코드 4001 진단",
+    status: "confirmed",
+    externalUse: "reviewed_summary_allowed",
+    summary:
+      "녹화 미생성은 ①설정 미활성(Recording Settings: Disable)과 ②시작 후 에러(error code 4001, 카메라 미지정)로 구분된다. 코스 목록의 녹색 '현장 녹화가 시작되었습니다'는 시작 이벤트일 뿐 실제 파일 생성을 보장하지 않는다.",
+    handling: [
+      "수업 녹화가 아예 안 남았을 때는 같은 계정의 정상 수업과 Recording Settings, Status History를 대조한다(가경관형 D-04).",
+      "녹화 시작 이벤트는 있으나 파일이 없을 때는 error code 4001(카메라 미지정) 여부를 본다. [카메라 녹화] 창 톱니바퀴에서 카메라를 선택하지 않으면 10분 뒤 자동 시작되어도 파일이 생성되지 않는다(D-21).",
+      "Android 호스트 기기는 네트워크 단절 시 로컬 녹화 전환(isSwitchToLocal)을 지원하지 않아 녹화가 누락될 수 있으므로 중요한 수업은 PC 호스트를 권장한다(S-03).",
+      "녹화본이 생성되지 않아 복구 불가를 안내할 때는 남아 있는 수업 스크린샷 잔존 여부를 함께 확인해 안내한다(D-21).",
+    ],
+    keywords: ["녹화 안 됨", "녹화 미생성", "녹화 오류", "에러코드 4001", "error code 4001", "현장 녹화", "카메라 녹화", "카메라 미지정", "로컬 녹화", "녹화 복구", "영상 업로드 오류"],
+    recommendedTags: ["area:software", "topic:recording", "intent:incident", "evidence:confirmed"],
+    sourceRefs: [
+      {
+        id: "docs/active/cs-error-cases-index-2026-10-02.md#2-녹화",
+        label: "오류 인덱스: 녹화 케이스",
+      },
+      {
+        id: "docs/active/cs-error-cases-workflow-rules-2026-10-02.md#5-2-녹화-녹화본-미생성-녹화-오류",
+        label: "녹화 오류 확인 흐름",
+      },
+    ],
+  },
+  {
+    id: "camera-network-troubleshooting",
+    title: "카메라 NIC 오지정·PoE·RTSP 직결 진단",
+    status: "confirmed",
+    externalUse: "reviewed_summary_allowed",
+    summary:
+      "카메라 전용 고정 IP(192.168.1.222)는 카메라가 물린 정확한 NIC에 지정해야 한다. CameraCMS에서 검색은 되나 접속 실패 시 IP 대역/어댑터를 확인한다. RTSP 직결 시 rtsp:// 슬래시 누락을 방지하고 T1 녹화 상한은 1080p 고정이다.",
+    handling: [
+      "CameraCMS에서 카메라는 검색되나 접속 실패 시, 고정 IP(192.168.1.222)가 다른 비활성 어댑터나 엉뚱한 USB NIC에 지정되지 않았는지 확인한다(D-15). 어댑터를 끄고 CMS 재검색해 연결된 NIC을 판별한다.",
+      "카메라 이더넷 '케이블 언플러그됨' 시 PoE 인젝터의 Data+Power(카메라행)와 Data In(PC행) 역결선 여부를 먼저 확인한다(S-34).",
+      "ClassIn X에 네트워크 카메라 RTSP 직결 시 rtsp://의 //가 빠지면 OBS에서는 통과해도 ClassIn X는 안내 없이 거부한다(D-06).",
+      "T1 트래킹 카메라는 1080p 고정이며 녹화 상한도 1080p이다. 4K는 파노라마 스트림에만 적용된다(D-16).",
+    ],
+    keywords: ["카메라 인식", "cameracms", "카메라 고정 ip", "192.168.1.222", "poe 인젝터", "rtsp 직결", "rtsp", "t1 화질", "t1 녹화", "카메라 끊김", "카메라 케이블"],
+    recommendedTags: ["area:camera", "topic:audio_video", "intent:incident", "evidence:confirmed"],
+    sourceRefs: [
+      {
+        id: "docs/active/cs-error-cases-index-2026-10-02.md#3-카메라",
+        label: "오류 인덱스: 카메라 케이스",
+      },
+      {
+        id: "docs/active/cs-error-cases-workflow-rules-2026-10-02.md#5-3-카메라-미인식-접속-실패",
+        label: "카메라 오류 확인 흐름",
+      },
+    ],
+  },
 ]
 
 const STATUS_LABELS: Record<InternalCsKnowledgeStatus, string> = {

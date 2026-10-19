@@ -131,17 +131,17 @@ describe("레일 탭 a11y — role=tab/tabpanel 연결(§8.4 '레일·상세')",
 })
 
 describe("<main> 폭 보정 — 레일이 매트릭스 우측 열을 덮는 문제(§8.4 'REV 레일 겹침')", () => {
-  it("xl:pr-[440px]가 sidePanelCollapsed·lens !== \"cockpit\" 조건에 걸려 있다", () => {
+  it("표·작업면 그리드가 sidePanelCollapsed·lens !== \"cockpit\" 조건에 걸려 있다", () => {
     const source = read(workbenchPath)
     const mainIndex = source.indexOf("<main")
     expect(mainIndex, "<main 태그를 찾지 못함").toBeGreaterThan(-1)
     const mainOpenEnd = source.indexOf(">", mainIndex)
     const mainOpenTag = source.slice(mainIndex, mainOpenEnd)
-    expect(mainOpenTag).toContain("xl:pr-[440px]")
+    expect(mainOpenTag).toContain("xl:grid-cols-[minmax(0,1fr)_360px]")
     expect(mainOpenTag).toContain("!sidePanelCollapsed")
     expect(mainOpenTag).toContain('lens !== "cockpit"')
     // 기존 반응형 여백(px-4/sm:px-6/lg:px-9)은 그대로 유지된다(회귀 방지).
-    expect(mainOpenTag).toContain("space-y-5 px-4 pt-5 sm:px-6 lg:px-9")
+    expect(mainOpenTag).toContain("px-4 pt-5 sm:px-6 lg:px-9")
   })
 
   it("<main>은 문서 내에 정확히 1개뿐이다(다른 <main> 신설 방지)", () => {

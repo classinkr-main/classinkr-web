@@ -81,6 +81,20 @@ describe("createCrmCustomerEvent 중복 방지", () => {
     expect(calls.some((c) => c.method === "maybeSingle")).toBe(true)
   })
 
+  it("같은 메모라도 다음 액션이 다르면 빠른 연속 입력을 중복으로 버리지 않는다", async () => {
+    const base = { target_type: "lead", target_id: "lead-1", source_type: "manual_note", title: "상담 메모", body: "가격 문의", recording_storage_path: null }
+    const { builder, calls } = makeQueryBuilder({
+      maybeSingleResult: { data: { ...base, id: "old", next_actions: [{ title: "견적 발송", done: false }] }, error: null },
+      insertResult: { data: { ...base, id: "new", next_actions: [{ title: "내일 재통화", done: false }] }, error: null },
+    })
+    vi.doMock("@/lib/supabase/admin", () => ({ createSupabaseAdminClient: () => ({ from: () => builder }) }))
+    vi.doMock("@/lib/storage/crm-recordings", () => ({ createCrmRecordingSignedUrls: async () => new Map() }))
+    const { createCrmCustomerEvent } = await import("@/lib/repositories/crm-events")
+    const result = await createCrmCustomerEvent({ targetType: "lead", targetId: "lead-1", sourceType: "manual_note", title: "상담 메모", body: "가격 문의", nextActions: [{ title: "내일 재통화", ownerName: null, dueAt: null, done: false }] })
+    expect(result.id).toBe("new")
+    expect(calls.some(call => call.method === "insert")).toBe(true)
+  })
+
   it("중복이 없으면 평소처럼 INSERT로 새 기록을 만든다", async () => {
     const insertedRow = {
       id: "evt-new",

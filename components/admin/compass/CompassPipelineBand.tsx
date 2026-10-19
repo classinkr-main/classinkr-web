@@ -46,7 +46,7 @@ export interface CompassPipelineKpis {
   generatedAt: string
 }
 
-export const COMPASS_PIPELINE_URL = "/api/admin/crm/compass-pipeline"
+export const COMPASS_PIPELINE_URL = "/api/admin/crm/compass-pipeline?owner=__me"
 
 function formatNumber(value: number | null | undefined) {
   return Number(value ?? 0).toLocaleString("ko-KR")

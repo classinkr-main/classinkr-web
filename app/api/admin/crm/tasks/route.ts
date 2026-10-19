@@ -1,9 +1,9 @@
+import { dataOwnerFromRequest } from "@/lib/admin/data-owner"
 import { NextRequest, NextResponse } from "next/server"
 
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import {
-  CURRENT_ADMIN_OWNER_TOKEN,
   findAdminCrmOwner,
   listAdminUserDirectory,
 } from "@/lib/repositories/admin-users"
@@ -47,16 +47,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const url = new URL(req.url)
-    const ownerParam = url.searchParams.get("owner") ?? undefined
-    const isMine = ownerParam === CURRENT_ADMIN_OWNER_TOKEN
-    const currentOwner = isMine ? findAdminCrmOwner(await listAdminUserDirectory(), admin) : null
-    const ownerKeys = isMine
-      ? currentOwner?.ownerKeys.length
-        ? currentOwner.ownerKeys
-        : ["__no_current_admin_owner__"]
-      : ownerParam
-        ? [ownerParam]
-        : undefined
+    const ownerKeys = await dataOwnerFromRequest(url, admin)
 
     const status = url.searchParams.get("status")
     const taskType = url.searchParams.get("taskType")

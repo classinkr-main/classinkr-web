@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { CalendarClock, CheckCircle2, Clock3, Filter, ListTodo, RefreshCw } from "lucide-react"
 
 import { adminFetchJson, adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
@@ -236,8 +237,13 @@ export default function CrmWeekAheadPanel({
 
   // 사용자가 직접 고르기 전(null)에는 해석 결과에서 기본 담당(내 담당)을 파생한다 —
   // "해석 후 setOwner 왕복"이 사라져 최종 owner URL이 한 번에 선다.
-  const [ownerChoice, setOwnerChoice] = useState<string | null>(null)
-  const owner = ownerChoice ?? (currentOwner ? CURRENT_OWNER_VALUE : "")
+  const ownerParams = useSearchParams()
+  const owner = ownerParams.get("owner") ?? CURRENT_OWNER_VALUE
+  const setOwnerChoice = (next: string) => {
+    const params = new URLSearchParams(ownerParams.toString())
+    params.set("owner", next)
+    window.history.replaceState(null, "", `?${params.toString()}`)
+  }
   const [data, setData] = useState<ListCrmTasksResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -258,7 +264,7 @@ export default function CrmWeekAheadPanel({
 
   const url = useMemo(() => {
     const params = new URLSearchParams({ status: "active", limit: String(FETCH_LIMIT) })
-    if (owner) params.set("owner", owner)
+    params.set("owner", owner)
     return `/api/admin/crm/tasks?${params.toString()}`
   }, [owner])
 
@@ -569,7 +575,7 @@ export default function CrmWeekAheadPanel({
               className="h-full bg-transparent text-[12px] font-semibold text-[#111110] outline-none"
               aria-label="담당자 필터"
             >
-              {currentOwner ? <option value={CURRENT_OWNER_VALUE}>내 담당</option> : null}
+              <option value={CURRENT_OWNER_VALUE}>내 담당{currentOwner ? ` · ${currentOwner.displayName}` : " · 담당자 연결 확인"}</option>
               <option value="">전체</option>
               {ownerOptions.map((option) => (
                 <option key={option.ownerName} value={option.ownerName}>

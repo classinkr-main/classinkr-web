@@ -20,6 +20,7 @@ import {
   getCompassLeadSliceByInflowRange,
 } from "@/lib/compass/bridge"
 import { buildCompassSummary } from "@/lib/compass/summary"
+import { buildCompassPipelineBand } from "@/lib/compass/home-band"
 import { compassLeadUrl } from "@/lib/compass/normalize"
 import {
   COMPASS_CARE_STAGES,
@@ -31,16 +32,17 @@ import {
 // ---------------------------------------------------------------------------
 // 체인 팩토리 — compass_leads_v는 세 갈래(슬라이스 .range / BD카운트 .is / 다음액션 .limit)로
 // 갈리므로 종단 메서드 이름이 겹치지 않아 하나의 체인으로 셋 다 서빙할 수 있다.
-// compass_demos_v는 별도(select→gte→lte→order, 종단이 .order).
+// compass_demos_v는 별도(select→gte→lte→order→range, 종단이 .range).
 // ---------------------------------------------------------------------------
 
 function leadsViewChain(config: {
   onRange?: (from: number, to: number) => { data?: unknown[] | null; error?: unknown }
   bdCount?: { count?: number | null; error?: unknown }
-  upcoming?: { data?: unknown[] | null; error?: unknown }
+  upcoming?: { data?: unknown[] | null; error?: unknown; count?: number }
 }): Chain {
   const chain: Chain = {}
   chain.select = vi.fn(() => chain)
+  chain.or = vi.fn(() => chain)
   chain.gte = vi.fn(() => chain)
   chain.lte = vi.fn(() => chain)
   chain.eq = vi.fn(() => chain)
@@ -56,9 +58,11 @@ function leadsViewChain(config: {
 function demosViewChain(result: { data?: unknown[] | null; error?: unknown }): Chain {
   const chain: Chain = {}
   chain.select = vi.fn(() => chain)
+  chain.or = vi.fn(() => chain)
   chain.gte = vi.fn(() => chain)
   chain.lte = vi.fn(() => chain)
-  chain.order = vi.fn(() => Promise.resolve(result))
+  chain.order = vi.fn(() => chain)
+  chain.range = vi.fn(() => Promise.resolve({ ...result, count: result.data?.length ?? 0 }))
   return chain
 }
 
@@ -197,6 +201,21 @@ describe("getCompassLeadSliceByInflowRange", () => {
 // buildCompassSummary — 집계(lib/compass/summary.ts)
 // ---------------------------------------------------------------------------
 describe("buildCompassSummary", () => {
+  it("오늘 데모는 예약·완료 회차만 세고 미팅·취소·노쇼는 제외한다", async () => {
+    leadsChain = leadsViewChain({ onRange: () => ({ data: [], error: null }) })
+    demosChain = demosViewChain({ data: [
+      { id: 1, kind: "demo", status: "booked" },
+      { id: 2, kind: "demo", status: "done" },
+      { id: 3, kind: "demo", status: "canceled" },
+      { id: 4, kind: "demo", status: "no_show" },
+      { id: 5, kind: "meeting", status: "booked" },
+      { id: 6, kind: null, status: "booked" },
+    ], error: null })
+    fromMock = vi.fn(routeFrom)
+    expect((await buildCompassSummary("7d", NOW)).todayDemoCount).toBe(2)
+    expect((await buildCompassPipelineBand()).todayDemoCount).toBe(2)
+  })
+
   it("기간을 KST 기준 오늘-(days-1) 00:00 ~ now로 계산한다", async () => {
     leadsChain = leadsViewChain({ onRange: () => ({ data: [], error: null }) })
     demosChain = demosViewChain({ data: [], error: null })
@@ -407,6 +426,12 @@ describe("buildCompassSummary", () => {
       expect(summary.upcomingActionCount).toBe(0)
       expect(summary.error).toContain("action")
     })
+  })
+
+  it("다음 액션 목록이 잘려도 홈 밴드와 요약은 정확한 전체 건수를 쓴다", async () => {
+    leadsChain = leadsViewChain({ upcoming: { data: [upcomingRow()], count: 734, error: null } })
+    expect((await buildCompassSummary("7d", NOW)).upcomingActionCount).toBe(734)
+    expect((await buildCompassPipelineBand()).upcomingActionCount).toBe(734)
   })
 
   it("truncated가 슬라이스에서 그대로 전파된다", async () => {

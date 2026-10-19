@@ -26,7 +26,8 @@ export function dealHasColorData(d: RevConfidenceSource): boolean {
 }
 
 // 해당 월(ym) 납부액(total) 중 확정 매출로 집계할 금액.
-// 1순위: monthly_confirmed 금액(월 합계로 클램프) → 한 달 안의 확정/예상 혼재를 분리
+// 1순위: 명시 monthly_confirmed 금액(0·환불 포함). 양수 전용 자료만 월 합계로 클램프한다.
+// 음수·순액 0 상계에서는 색별 금액이 순액을 넘을 수 있어 원본 부호를 보존한다.
 // 2순위: monthly_red=true 면 그 달 전액 확정 (금액 컬럼 도입 전 동기화분 호환)
 // 3순위: 색 데이터가 전혀 없는 행은 과거~당월분만 전액 확정 fallback.
 //   미래 월까지 확정으로 올리면 매출이 부풀려진다 — 2026-07-10 실측: 미러 398행 중
@@ -46,11 +47,24 @@ export function confirmedMonthAmountWithColor(
   hasColor: boolean,
   todayYm: string = ymKey(new Date()),
 ): number {
-  const fromMap = Math.min(total, Number(d.monthly_confirmed?.[ym]) || 0)
-  if (fromMap > 0) return fromMap
+  const fromMap = monthAmount(d.monthly_confirmed, ym)
+  if (fromMap != null) return hasSignedAmounts(d, ym, total) ? fromMap : Math.min(total, fromMap)
   if (d.monthly_red?.[ym]) return total
   if (!hasColor && ym <= todayYm) return total
   return 0
+}
+
+function monthAmount(values: Record<string, number> | null | undefined, ym: string): number | null {
+  const value = values?.[ym]
+  if (value == null) return null
+  const amount = Number(value)
+  return Number.isFinite(amount) ? amount : null
+}
+
+function hasSignedAmounts(d: RevConfidenceSource, ym: string, total: number): boolean {
+  const confirmed = monthAmount(d.monthly_confirmed, ym) ?? 0
+  const highConfidence = monthAmount(d.monthly_high_conf, ym) ?? 0
+  return total < 0 || confirmed < 0 || highConfidence < 0 || (total === 0 && (confirmed !== 0 || highConfidence !== 0))
 }
 
 export interface MonthConfidenceSplit {
@@ -60,7 +74,8 @@ export interface MonthConfidenceSplit {
 }
 
 // 한 달 납부액(total)의 확도 3분해 — confirmed는 위 캐논, highConfidence는 확정을 뺀
-// 잔여를 넘지 않게 클램프, 나머지가 expected. 주간마감 스냅샷·CRM 매출 병기·rev-sheet
+// 잔여를 넘지 않게 클램프, 나머지가 expected. 음수·순액 0 상계는 원본 부호와 합계를 보존한다.
+// 주간마감 스냅샷·CRM 매출 병기·rev-sheet
 // 워크스페이스가 공용으로 쓴다(각자 재구현하면 클램프 규칙이 갈라진다).
 export function splitMonthConfidence(
   d: RevConfidenceSource,
@@ -70,6 +85,10 @@ export function splitMonthConfidence(
   todayYm?: string,
 ): MonthConfidenceSplit {
   const confirmed = confirmedMonthAmountWithColor(d, ym, total, hasColor, todayYm)
+  if (hasSignedAmounts(d, ym, total)) {
+    const highConfidence = monthAmount(d.monthly_high_conf, ym) ?? 0
+    return { confirmed, highConfidence, expected: total - confirmed - highConfidence }
+  }
   const highConfidence = Math.min(
     Math.max(0, total - confirmed),
     Number(d.monthly_high_conf?.[ym]) || 0,

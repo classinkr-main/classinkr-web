@@ -22,6 +22,7 @@ export interface CrmMoneyLineItemDetail {
   at: string | null
   quantity: number
   serials: string[]
+  outboundType?: string | null
 }
 
 export interface CrmMoneyLineItem {
@@ -94,6 +95,7 @@ export interface MoneyHwOutboundRow {
   isPlanned: boolean
   /** crm_source_links 확정 링크의 target_id(NEO 계정 id). 없으면 null. */
   confirmedAccountId: string | null
+  outboundType?: string | null
 }
 
 export interface MoneyLineItemAccountContext {
@@ -155,6 +157,7 @@ interface RawLineItemRow {
   ref: string
   at: string | null
   serials: string[]
+  outboundType?: string | null
 }
 
 function groupKeyOf(row: RawLineItemRow): string {
@@ -183,7 +186,7 @@ export function buildCrmMoneyLineItems(
   options: { truncated?: boolean } = {}
 ): BuildCrmMoneyLineItemsResult {
   const accountKey = normalizedAccountKey(account.accountName)
-  const plannedExcludedCount = input.hwOutbound.filter((row) => row.isPlanned).length
+  const plannedExcludedCount = input.hwOutbound.filter(row => row.isPlanned && (row.confirmedAccountId ? row.confirmedAccountId === account.accountId : accountKey && normalizedAccountKey(row.destination) === accountKey)).length
   const activeHw = input.hwOutbound.filter((row) => !row.isPlanned)
 
   const linkedHw: Array<{ row: MoneyHwOutboundRow; evidence: CrmMoneyLineItemEvidence }> = []
@@ -236,6 +239,7 @@ export function buildCrmMoneyLineItems(
         ref: row.ref,
         at: row.outboundDate,
         serials: row.serials,
+        outboundType: row.outboundType,
       }
     }),
   ]
@@ -257,7 +261,7 @@ export function buildCrmMoneyLineItems(
         : (rows.find((row) => row.unitPrice != null)?.unitPrice ?? null)
     const lastAt = rows.reduce<string | null>((latest, row) => laterIso(latest, row.at), null)
     const details: CrmMoneyLineItemDetail[] = rows
-      .map((row) => ({ ref: row.ref, at: row.at, quantity: row.quantity, serials: row.serials }))
+      .map((row) => ({ ref: row.ref, at: row.at, quantity: row.quantity, serials: row.serials, ...(row.outboundType ? { outboundType: row.outboundType } : {}) }))
       .sort((a, b) => {
         if (!a.at && !b.at) return 0
         if (!a.at) return 1

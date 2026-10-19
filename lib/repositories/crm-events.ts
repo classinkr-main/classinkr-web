@@ -1,3 +1,4 @@
+import { withCompassOwner } from "@/lib/compass/owner-filter"
 import "server-only"
 
 import { createCrmRecordingSignedUrls } from "@/lib/storage/crm-recordings"
@@ -116,6 +117,7 @@ export interface CrmCustomerEventCreateInput {
 }
 
 export interface ListCrmCustomerEventsOptions {
+  ownerKeys?: readonly string[]
   q?: string
   targetType?: CrmCustomerEventTargetType | "all"
   sourceType?: CrmCustomerEventSourceType | "all"
@@ -387,6 +389,7 @@ export async function listCrmCustomerEvents(
     .from("crm_customer_events")
     .select("*", { count: "exact" })
     .order("occurred_at", { ascending: false })
+    .order("id", { ascending: false })
     .range(offset, offset + limit - 1)
 
   if (options.targetType && options.targetType !== "all") {
@@ -409,6 +412,8 @@ export async function listCrmCustomerEvents(
   if (options.to) {
     query = query.lte("occurred_at", options.to)
   }
+
+  query = withCompassOwner(query, options.ownerKeys, ["owner_name", "created_by"])
 
   const search = safeSearch(options.q)
   if (search) {
@@ -592,7 +597,11 @@ async function findRecentDuplicateEvent(
 
   const { data, error } = await query.order("created_at", { ascending: false }).limit(1).maybeSingle()
   if (error || !data) return null
-  return data as CrmCustomerEvent
+  const candidate = data as CrmCustomerEvent
+  // 연속 입력에서 같은 메모에 다른 할 일을 붙인 경우는 별도 기록이다.
+  // JSONB의 키 순서 차이는 읽기 파서로 정규화한 뒤 비교한다.
+  if (JSON.stringify(nextActionsFromJson(candidate.next_actions)) !== JSON.stringify(nextActionsFromJson(insert.next_actions))) return null
+  return candidate
 }
 
 export async function createCrmCustomerEvent(input: CrmCustomerEventCreateInput) {

@@ -68,7 +68,7 @@ describe("ledgerMonthConfirmed — 시트행 캐논 패리티", () => {
     expect(ledgerMonthConfirmed(row, "2026-08", 1000, TODAY)).toBe(0)
   })
 
-  it("total===0만 단락, 음수 월(환불/차감)은 캐논에 위임한다 — 서버 파이프라인과 합계 일치", () => {
+  it("빈 0과 음수 월(환불/차감)은 캐논에 위임한다 — 서버 파이프라인과 합계 일치", () => {
     expect(ledgerMonthConfirmed(sheetRow({ monthlyRed: { "2026-05": true } }), "2026-05", 0, TODAY)).toBe(0)
     // red 음수 월: 캐논은 전액(음수)을 확정으로 돌려준다 — pipeline.ts의 confirmed_revenue와 동일.
     expect(ledgerMonthConfirmed(sheetRow({ monthlyRed: { "2026-05": true } }), "2026-05", -500, TODAY)).toBe(
@@ -126,12 +126,18 @@ describe("ledgerMonthSplit — 캐논 3분해 패리티", () => {
     expect(split.confirmed + split.highConfidence + split.expected).toBe(1000)
   })
 
-  it("total<=0은 zero 분해를 돌려준다", () => {
+  it("활동 없는 0은 zero 분해를 돌려준다", () => {
     expect(ledgerMonthSplit(sheetRow(), "2026-05", 0, TODAY)).toEqual({
       confirmed: 0,
       highConfidence: 0,
       expected: 0,
     })
+  })
+
+  it("순액 0의 색별 상계는 빈 월로 단락하지 않는다", () => {
+    const row = sheetRow({ monthlyConfirmed: { "2026-05": 100 }, monthlyHighConfidence: { "2026-05": -100 } })
+    expect(ledgerMonthConfirmed(row, "2026-05", 0, TODAY)).toBe(100)
+    expect(ledgerMonthSplit(row, "2026-05", 0, TODAY)).toEqual({ confirmed: 100, highConfidence: -100, expected: 0 })
   })
 })
 

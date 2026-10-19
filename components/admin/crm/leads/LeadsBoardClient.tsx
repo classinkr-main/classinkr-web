@@ -20,6 +20,8 @@ import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
 import CrmNoticeBanner, { type CrmNoticeTone } from "@/components/admin/crm/CrmNoticeBanner"
 import FreshnessCaption from "@/components/admin/crm/FreshnessCaption"
 import LeadTrackingPanel from "@/components/admin/crm/leads/LeadTrackingPanel"
+import { matchesDataOwner } from "@/lib/crm/personal-owner"
+import { branchMemberOwnerAliases } from "@/lib/branch/member-names"
 import { useCrmOwners } from "@/components/admin/crm/useCrmOwners"
 import { useVisibleCount } from "@/components/admin/ui/ShowMore"
 import { MOBILE_TOUCH_TARGET_CLASS } from "@/components/admin/crm/home/shared"
@@ -203,7 +205,7 @@ export default function LeadsBoardClient() {
   // 뷰 축 — 콘솔이 기본이라 URL에서 생략된다. 전환은 어떤 상태도 리셋하지 않는다(설계 §2).
   const initialView: LeadsView = readLeadsView(searchParams.get("view"))
 
-  const [leads, setLeads] = useState<LeadRecord[]>([])
+  const [allLeads, setLeads] = useState<LeadRecord[]>([])
   const [leadModalOpen, setLeadModalOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [filter, setFilter] = useState<LeadFilter>(initialFilter)
@@ -304,7 +306,12 @@ export default function LeadsBoardClient() {
   // 추정치가 아니라 실제 렌더된 상단 좌표 위에 얹기 위해 각 패널의 DOM 노드를 잡는다(리뷰 발견 3).
   const convertResultPanelRef = useRef<HTMLDivElement>(null)
   const toastMeasureRef = useRef<HTMLDivElement>(null)
-  const { owners: crmOwners, health: crmOwnerHealth, currentOwner: crmCurrentOwner } = useCrmOwners()
+  const { owners: crmOwners, health: crmOwnerHealth, currentOwner: crmCurrentOwner, currentOwnerKeys } = useCrmOwners()
+  const dataOwner = searchParams.get("owner") ?? "__me"
+  const leads = useMemo(() => {
+    const keys = dataOwner === "" ? undefined : dataOwner === "__me" ? (currentOwnerKeys.length ? currentOwnerKeys : ["__no_current_admin_owner__"]) : branchMemberOwnerAliases(dataOwner)
+    return allLeads.filter(lead => matchesDataOwner(lead.assigned_to, keys))
+  }, [allLeads, currentOwnerKeys, dataOwner])
   // Compass(마케팅팀 앱) 콜 상태 병기 — 읽기 전용 오버레이. 우리 리드 상태는 건드리지 않는다.
   const compass = useCompassOverlay(leads)
 
@@ -1929,6 +1936,19 @@ export default function LeadsBoardClient() {
         />
       )}
 
+      <label className="mb-3 flex flex-wrap items-center gap-2 text-[12px] text-[#615D59]">
+        데이터 범위
+        <select aria-label="리드 담당자 범위" value={dataOwner} onChange={event => {
+          const params = new URLSearchParams(searchParams.toString())
+          params.set("owner", event.target.value)
+          window.history.replaceState(null, "", `?${params.toString()}`)
+        }} className="min-h-11 rounded-lg border border-black/[0.08] bg-white px-3">
+          <option value="__me">내 담당{crmCurrentOwner ? ` · ${crmCurrentOwner.displayName}` : " · 계정 연결 확인"}</option>
+          <option value="">전체 담당자</option>
+          {crmOwners.map(owner => <option key={owner.ownerKey} value={owner.ownerKey}>{owner.displayName}</option>)}
+        </select>
+      </label>
+
       {/* 세그먼트 칩(S1, Compass 정리 라운드 2026-09-20) — 필터 카드 위, 검색·다른 필터와 AND.
           "메타 광고/인계/기존/고객"을 한 번에 고른다. 인계·기존은 Compass 오버레이가 있어야
           판정되므로 끊기면 칩을 비활성 + "연결 끊김"으로 낮춘다(0건으로 보이면 안 된다).
@@ -2268,6 +2288,8 @@ export default function LeadsBoardClient() {
           onSelectSafeTargets={(safeLeadIds) => setSelectedLeadIds(new Set(safeLeadIds))}
         />
       )}
+
+      {compass.updatedAt && !compass.down ? <p className="mb-2 text-[12px] text-[#615D59]">Compass 연결됨 · 1분 자동 갱신 · 확인 {new Date(compass.updatedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Seoul" })}</p> : null}
 
       {/* Compass 브리지 장애 — 칩이 사라진 이유를 말한다(칩 없음 ≠ 마케팅팀 미접촉). */}
       {compass.down && leads.length > 0 ? <CompassBridgeDownNote className="mb-2 px-0.5" /> : null}

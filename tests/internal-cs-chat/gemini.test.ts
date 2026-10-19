@@ -24,7 +24,7 @@ afterEach(() => {
 })
 
 describe("internal CS Gemini model routing", () => {
-  it("uses the verified 2026-07-15 official defaults", () => {
+  it("uses the account-verified CS defaults", () => {
     vi.stubEnv("INTERNAL_CS_GEMINI_FAST_MODEL", "")
     vi.stubEnv("INTERNAL_CS_GEMINI_DEEP_MODEL", "")
     vi.stubEnv("INTERNAL_CS_GEMINI_BACKUP_MODEL", "")
@@ -54,6 +54,8 @@ describe("internal CS Gemini model routing", () => {
     )
 
     expect(isSafeGeminiModelId("gemini-2.5-flash")).toBe(true)
+    expect(isSafeGeminiModelId("gemini-4.0-flash")).toBe(false)
+    expect(isSafeGeminiModelId("gemini-4.0-pro")).toBe(false)
     expect(isSafeGeminiModelId("gemini-company-fast-001")).toBe(false)
     expect(isSafeGeminiModelId("gemini-3.1-pro")).toBe(false)
     expect(isSafeGeminiModelId("models/gemini-3.5-flash")).toBe(false)

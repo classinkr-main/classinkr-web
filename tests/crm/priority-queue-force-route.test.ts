@@ -77,3 +77,5 @@ describe("GET /api/admin/crm/home/priority-queue force 관통 (H1)", () => {
     expect(response.headers.get("Cache-Control")).toBe("private, max-age=30, stale-while-revalidate=120")
   })
 })
+
+vi.mock("@/lib/admin/data-owner", () => ({ dataOwnerFromRequest: async (url: URL) => url.searchParams.get("owner") === "" ? undefined : ["Somang"] }))

@@ -6,8 +6,10 @@ export default defineConfig({
     environment: "node",
     exclude: [
       ...configDefaults.exclude,
+      "**/company-work/**",
       "**/.worktrees/**",
       "**/.claude/worktrees/**",
+      "**/tmp/**",
     ],
   },
   resolve: {

@@ -261,6 +261,11 @@ async function loadCustomer360(options?: {
   vi.doMock("@/lib/repositories/crm-customer-tags", () => ({
     getCustomerTags: vi.fn().mockResolvedValue([]),
   }))
+  // 이 하네스는 연결·신원·신선도를 검증한다. Compass 활동은 전용 통합 테스트에서 검증한다.
+  vi.doMock("@/lib/compass/bridge", () => ({
+    getCompassLeadsByPhoneKeys: vi.fn().mockResolvedValue({ rows: [], down: false }),
+    getCompassActivitiesByLeadIds: vi.fn().mockResolvedValue({ rows: [], down: false }),
+  }))
 
   const loaded = await import("@/lib/repositories/crm-customer-360")
   return { getCrmCustomer360: loaded.getCrmCustomer360, findConfirmedLeadNeoLink }
@@ -276,9 +281,11 @@ describe("getCrmCustomer360 (mocked harness)", () => {
   })
 
   it("wires origin/crmRegistered/neoAccountId for a site lead with a confirmed NEO link", async () => {
+    const linkedDetail = makeNeoDetail({ orders: [{ id: "linked-order", title: "ClassIn 구독", amount: 99, occurredAt: NOW.toISOString(), ownerName: "담당", status: null }] })
     const { getCrmCustomer360, findConfirmedLeadNeoLink } = await loadCustomer360({
       lead: makeLead({ source: "demo_modal" }),
       neoLink: { targetId: "neo-acc-77" },
+      neoDetail: linkedDetail,
     })
 
     const result = await getCrmCustomer360(LEAD_KEY, { now: NOW })
@@ -289,6 +296,7 @@ describe("getCrmCustomer360 (mocked harness)", () => {
     expect(result.origin).toBe("site")
     expect(result.crmRegistered).toBe(true)
     expect(result.neoAccountId).toBe("neo-acc-77")
+    expect(result.money.orders).toEqual(linkedDetail.orders)
     expect(result.health.ok).toBe(true)
     // 수기 라벨은 360 페이로드에 additive로 동승한다(드로어 온-오픈 별도 fetch 제거).
     expect(result.tags).toEqual([])

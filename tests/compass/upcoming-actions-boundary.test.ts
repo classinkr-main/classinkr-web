@@ -80,6 +80,16 @@ describe("getCompassUpcomingActions — 임박 경계", () => {
     expect(result.rows).toHaveLength(1)
   })
 
+  it("목록 상한을 넘는 정확한 전체 건수와 안정적인 동률 정렬을 보존한다", async () => {
+    chain.limit.mockResolvedValue({ data: Array.from({ length: 500 }, (_, id) => ({ id })), count: 734, error: null })
+    const { getCompassUpcomingActions } = await import("@/lib/compass/bridge")
+    const result = await getCompassUpcomingActions(48)
+    expect(result).toMatchObject({ down: false, total: 734, truncated: true })
+    expect(chain.select).toHaveBeenCalledWith("*", { count: "exact" })
+    expect(chain.order).toHaveBeenNthCalledWith(2, "id", { ascending: true })
+    expect(result.rows).toHaveLength(500)
+  })
+
   it("supabase가 에러를 돌려주면 down=true, rows=[]로 강등한다(무음 실패 금지)", async () => {
     // 실제 supabase-js PostgrestError는 Error를 상속한다(downResult의 instanceof Error 분기가
     // 이걸 전제로 message를 꺼낸다) — 평범한 객체 리터럴을 쓰면 대신 "[object Object]"가 나와

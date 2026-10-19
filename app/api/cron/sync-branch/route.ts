@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { notifyBranchSyncFailureStreaks } from "@/lib/branch/sync/failure-alert"
 import { checkCronAuth } from "@/lib/server/cron-auth"
 import { runAll } from "@/lib/branch/sync/run-all"
-import { runBranchRevLinkMaintenance } from "@/lib/repositories/crm-source-links"
+import { completeBranchSync } from "@/lib/branch/sync/complete"
 
 export async function GET(req: NextRequest) {
   // 인증은 아래 CRON_SECRET Bearer 하나뿐이다. 예전에 그 앞에 x-vercel-cron 헤더를
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 })
   }
   const result = await runAll({ trigger: "cron" })
-  const crmLinks = result.ok ? await runBranchRevLinkMaintenance() : undefined
+  const completed = await completeBranchSync(result)
   // 연속 실패 알림은 하루 1회 도는 이 크론에서만 판정한다(수동 재시도마다 판정하면 같은 날 중복 발송).
   // 알림 경로의 오류가 동기화 응답을 500으로 바꾸지 않게 가둔다.
   let failureAlerts: Awaited<ReturnType<typeof notifyBranchSyncFailureStreaks>> | undefined
@@ -28,5 +28,5 @@ export async function GET(req: NextRequest) {
       console.error("[cron/sync-branch] failure streak check failed", error)
     }
   }
-  return NextResponse.json({ ...result, crmLinks, ...(failureAlerts ? { failureAlerts } : {}) })
+  return NextResponse.json({ ...completed, ...(failureAlerts ? { failureAlerts } : {}) })
 }

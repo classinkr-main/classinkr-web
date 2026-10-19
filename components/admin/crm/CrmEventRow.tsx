@@ -40,16 +40,16 @@ export default function CrmEventRow({ event, children }: { event: CrmEventRecord
 
   return (
     <article
-      className={`overflow-hidden rounded-xl border bg-white transition-colors ${open ? "border-[#d8d8d2]" : "border-[#e8e8e4] hover:border-[#d8d8d2]"}`}
+      className={`overflow-hidden border-l-2 transition-colors ${open ? "border-[#084734] bg-[#ECFDF5]" : "border-transparent bg-white hover:bg-[#F6F5F4]"}`}
     >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full flex-col gap-1 px-3.5 py-2.5 text-left"
+        className="flex w-full flex-col gap-2 px-3.5 py-4 text-left"
       >
         <span className="flex items-center gap-2.5">
-          <span className="shrink-0 rounded-full border border-[#e8e8e4] bg-[#fafaf8] px-2 py-0.5 text-[11px] font-bold text-[#1a1a1a]/55">
+          <span className="shrink-0 text-[12px] font-semibold text-[#084734]">
             {sourceLabel(event.sourceType)}
           </span>
           <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-[#111110]">{event.title}</span>
@@ -59,7 +59,7 @@ export default function CrmEventRow({ event, children }: { event: CrmEventRecord
             </span>
           ) : null}
           {openActions ? (
-            <span className="shrink-0 rounded-full border border-[#D7EBDD] bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-bold text-[#084734]">
+            <span className="shrink-0 text-[11px] font-semibold text-[#084734]">
               액션 {openActions}
             </span>
           ) : null}
@@ -89,7 +89,7 @@ export default function CrmEventRow({ event, children }: { event: CrmEventRecord
         </span>
 
         {event.summary ? (
-          <span className="line-clamp-2 text-[12px] leading-4 text-[#1a1a1a]/50">{event.summary}</span>
+          <span className="line-clamp-2 text-[13px] leading-5 text-[#615D59]">{event.summary}</span>
         ) : null}
       </button>
       {open ? (

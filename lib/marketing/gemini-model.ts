@@ -8,6 +8,7 @@
 
 import "server-only"
 
+// 2026-10-15 운영 계정 models.list 확인: gemini-4.0-pro/flash는 제공되지 않는다.
 export const DEFAULT_GEMINI_MODEL = "gemini-2.5-pro"
 export const DEFAULT_GEMINI_FAST_MODEL = "gemini-2.5-flash"
 
@@ -55,7 +56,7 @@ export interface GeminiThinkingConfig {
  */
 export function thinkingConfigFor(model: string): GeminiThinkingConfig | undefined {
   const lower = model.toLowerCase()
-  if (lower.startsWith("gemini-3")) {
+  if (lower.startsWith("gemini-4") || lower.startsWith("gemini-3")) {
     return { thinkingLevel: lower.includes("pro") ? "low" : "minimal" }
   }
   if (lower.startsWith("gemini-2.5-flash")) return { thinkingBudget: 0 }

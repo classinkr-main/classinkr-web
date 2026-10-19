@@ -24,7 +24,7 @@ function warmupCacheKeys(href: string) {
 
 describe("admin nav warm-up cache-key parity", () => {
   it("warms the compact Overview lead contract used by the page", () => {
-    expect(warmupUrls("/admin/overview")).toContain("/api/admin/leads?scope=overview")
+    expect(warmupUrls("/admin/overview")).toContain("/api/admin/leads?scope=overview&owner=__me")
     expect(warmupUrls("/admin/overview")).not.toContain("/api/admin/leads?scope=dashboard")
   })
 
@@ -74,7 +74,7 @@ describe("admin nav warm-up cache-key parity", () => {
       ])
     )
     // Compass 파이프라인 3칸 — CRM 홈과 같은 URL·cacheKey(문자열 항목)라 두 화면이 한 슬롯을 쓴다.
-    expect(warmupUrls("/admin/campaigns")).toContain("/api/admin/crm/compass-pipeline")
+    expect(warmupUrls("/admin/campaigns")).toContain("/api/admin/crm/compass-pipeline?owner=__me")
     // 소재별 CPL 은 상세 층으로 갔다(2026-09-14) — 기본 진입에서 데우지 않는다.
     expect(warmupUrls("/admin/campaigns")).not.toContain("/api/admin/compass/ads?period=30d")
     // 상세·데이터·메시지 층 전용 — 기본 진입에서는 호출되지 않는다.
@@ -97,7 +97,7 @@ describe("admin nav warm-up cache-key parity", () => {
     const weekUrl = buildAdminCalendarUrl(getAdminCalendarWeekStripRange())
     expect(monthUrl).not.toEqual(weekUrl)
     expect(warmupUrls("/admin/calendar")).toEqual(
-      expect.arrayContaining([monthUrl, weekUrl, "/api/admin/crm/action-kpis"])
+      expect.arrayContaining([monthUrl, weekUrl, "/api/admin/crm/action-kpis?owner=__me"])
     )
     expect(warmupCacheKeys("/admin/calendar")).toContain("calendar:source-health")
   })

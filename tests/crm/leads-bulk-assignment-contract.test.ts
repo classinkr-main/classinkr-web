@@ -19,7 +19,7 @@ describe("CRM lead bulk assignment UX contract", () => {
     expect(source).toContain('import type { CrmOwnerOption } from "@/components/admin/crm/useCrmOwners"')
     // §13 Q4: 드로어의 "나" 빠른 배정 칩을 위해 currentOwner 도 같은 검증된 디렉터리 훅에서 꺼낸다.
     expect(source).toContain(
-      "const { owners: crmOwners, health: crmOwnerHealth, currentOwner: crmCurrentOwner } = useCrmOwners()"
+      "const { owners: crmOwners, health: crmOwnerHealth, currentOwner: crmCurrentOwner, currentOwnerKeys } = useCrmOwners()"
     )
     expect(source).toContain('id="bulk-lead-assignment"')
     expect(source).toContain("담당자를 선택하세요")

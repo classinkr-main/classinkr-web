@@ -24,15 +24,15 @@ export function GaugeRing({
   size?: number
   stroke?: number
 }) {
-  const pct = goal ? Math.min(120, (value / goal) * 100) : 0
+  const pct = goal > 0 ? (value / goal) * 100 : 0
   const r = (size - stroke) / 2
   const c = 2 * Math.PI * r
-  const safePct = Math.min(100, pct)
-  const overshoot = Math.max(0, pct - 100) // 0..20
+  const safePct = Math.max(0, Math.min(100, pct))
+  const overshoot = Math.min(20, Math.max(0, pct - 100)) // 그림만 0..20; 실제 달성률은 보존
   const offset = c - (safePct / 100) * c
   const overshootOffset = c - (overshoot / 100) * c
   const stop = pct >= 100 ? RING_COLORS.green : pct >= 70 ? RING_COLORS.green : pct >= 40 ? RING_COLORS.olive : RING_COLORS.amber
-  const angle = (pct / 100) * 2 * Math.PI // uncapped — wraps past 2π for >100%
+  const angle = ((safePct + overshoot) / 100) * 2 * Math.PI
   const dotSize = stroke + 6
   const dotX = size / 2 + r * Math.sin(angle)
   const dotY = size / 2 - r * Math.cos(angle)

@@ -88,7 +88,7 @@ function extractTag(html: string, tagName: string, attrMatch: string) {
 describe("CompassPipelineSectionView — 헤더", () => {
   it("제목과 기간 칩 3종을 그린다", () => {
     const html = renderView()
-    expect(html).toContain("Compass 파이프라인 · 마케팅팀 CRM 정리")
+    expect(html).toContain("Compass 파이프라인 · 내 담당 CRM 정리")
     expect(html).toContain("7일")
     expect(html).toContain("30일")
     expect(html).toContain("90일")

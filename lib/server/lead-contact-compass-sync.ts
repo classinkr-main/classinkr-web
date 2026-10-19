@@ -1,7 +1,7 @@
-// 리드 상태 MKT(Compass) 매시간 반영 — 조회 → 판정 → 조건부 반영 → 감사 기록.
+// 리드 상태 MKT(Compass) 5분 주기 반영 — 조회 → 판정 → 조건부 반영 → 감사 기록.
 // 설계: docs/superpowers/specs/2026-09-14-lead-contact-compass-sync-design.md
 //
-// 실행 자리는 전용 크론 app/api/cron/lead-contact-sync 다(평일 근무 시간 하루 5회, vercel.json).
+// 실행 자리는 전용 크론 app/api/cron/lead-contact-sync 다(매일 5분 간격, vercel.json).
 //  * 쓰기 범위는 public.leads 뿐이다. Compass 는 브리지 뷰로 읽기만 한다.
 //  * 브리지 조회가 하나라도 끊기거나 행 상한에 닿으면 이번 실행 전체를 건너뛴다 — 반쪽 결과로
 //    판정하면 처리된 리드를 흘려보내거나(누락) 대표 행이 바뀌어 잘못 종료한다. 다음 실행이 따라잡는다.

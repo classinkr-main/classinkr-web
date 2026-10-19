@@ -5,6 +5,7 @@ import { getBranchRevSourceRecordKey, isPlaceholderCrmName } from "@/lib/crm-sou
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
 import { getCompassRevenue } from "@/lib/compass/bridge"
+import { nextPendingTransition, pendingMonthAmount } from "@/lib/crm/revenue-sheet-pending"
 import type {
   AdminCrmRevenueSheetBreakdownRow,
   AdminCrmRevenueSheetCompassCompare,
@@ -18,6 +19,9 @@ import type {
 interface BranchSalesLedgerEntryAmountRow {
   amount: number | string | null
   applied_at: string | null
+  // manual-new(장부에서 새로 만든 행) | manual-edit(시트 행 정정). 구 호출·테스트 입력에는 없을 수 있다 —
+  // 없으면 신규로 센다(정정으로 세면 빠진 매출을 숨기게 되므로 보수적인 쪽).
+  entry_type?: string | null
 }
 
 interface BranchRevDealRow {
@@ -38,6 +42,9 @@ interface BranchRevDealRow {
   monthly_payments: Record<string, number> | null
   monthly_confirmed: Record<string, number> | null
   monthly_high_conf: Record<string, number> | null
+  // raw jsonb의 예정분만 경로 선택으로 읽는다(raw 전체는 행 원문이라 무겁다) — 파서가 없던 시기 행은 null.
+  pending?: Record<string, number> | null
+  pending_weeks?: Record<string, number[]> | null
   synced_at: string
 }
 
@@ -106,7 +113,7 @@ function emptyBreakdown(label: string): AdminCrmRevenueSheetBreakdownRow {
 function addToBreakdown(
   map: Map<string, AdminCrmRevenueSheetBreakdownRow>,
   key: string | null | undefined,
-  row: Pick<AdminCrmRevenueSheetRow, "scheduledAmount" | "confirmedAmount" | "highConfidenceAmount" | "expectedAmount">
+  row: Pick<AdminCrmRevenueSheetRow, "scheduledAmount" | "confirmedAmount" | "highConfidenceAmount" | "expectedAmount" | "pendingAmount">
 ) {
   const label = key?.trim() || "미지정"
   const current = map.get(label) ?? emptyBreakdown(label)
@@ -114,7 +121,8 @@ function addToBreakdown(
   current.scheduledAmount += row.scheduledAmount
   current.confirmedAmount += row.confirmedAmount
   current.highConfidenceAmount += row.highConfidenceAmount
-  current.expectedAmount += row.expectedAmount
+  // 분해 표는 열을 늘리지 않는다 — '예정'에 확정 예정(ADR-0062)을 합쳐 이전 합계를 유지한다.
+  current.expectedAmount += row.expectedAmount + row.pendingAmount
   map.set(label, current)
 }
 
@@ -133,6 +141,7 @@ function addMonth(
       confirmedAmount: 0,
       highConfidenceAmount: 0,
       expectedAmount: 0,
+      pendingAmount: 0,
       pastUnconfirmedAmount: 0,
     }
   current[field] += amount
@@ -188,9 +197,15 @@ function getTargetLabel(
 // 품질 감사 2026-09-10 — #1(P0, 이중 진실): 순수 집계 함수로 분리해 단위 테스트 가능하게 한다
 // (tests/branch/crm-revenue-sheet-manual-ledger-gap.test.ts). applied_at 오름차순이 아니어도
 // 안전하도록 매번 Date 비교로 최댓값을 찾는다 — 빈 배열이면 count/amount 0, latestAppliedAt null.
+// 라운드 5 S-7: 신규(manual-new)와 정정(manual-edit)을 나눠 센다. 정정은 시트 행의 그 달 값을 "대체"하는 값이라
+// 금액을 더하면 빠진 매출이 아니라 대체값 총액이 된다 — 장부의 "장부 가감" 타일(신규만 더함)과 정의를 맞춘다.
 export function computeManualLedgerGap(rows: BranchSalesLedgerEntryAmountRow[]): AdminCrmRevenueSheetManualLedgerGap {
+  const newRows = rows.filter((row) => row.entry_type !== "manual-edit")
   return {
     count: rows.length,
+    newCount: newRows.length,
+    newAmount: newRows.reduce((sum, row) => sum + numberValue(row.amount), 0),
+    editCount: rows.length - newRows.length,
     amount: rows.reduce((sum, row) => sum + numberValue(row.amount), 0),
     latestAppliedAt: rows.reduce<string | null>((latest, row) => {
       if (!row.applied_at) return latest
@@ -209,7 +224,7 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
     sb
       .from("branch_rev_deals")
       .select(
-        "id, sheet_row, customer_name, branch_contact, team, manager, deal_type, status, first_payment, product_version, region, importance, note, contract_target, monthly_payments, monthly_confirmed, monthly_high_conf, synced_at"
+        "id, sheet_row, customer_name, branch_contact, team, manager, deal_type, status, first_payment, product_version, region, importance, note, contract_target, monthly_payments, monthly_confirmed, monthly_high_conf, pending:raw->monthlyPending, pending_weeks:raw->pendingWeeks, synced_at"
       )
       .order("sheet_row", { ascending: true })
       .limit(QUERY_LIMIT),
@@ -228,7 +243,7 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
     // 구조적으로 볼 수 없다. 서버 병합(row 단위 매칭) 대신 규모만 세어 배지로 알린다.
     sb
       .from("branch_sales_ledger_entries")
-      .select("amount, applied_at")
+      .select("amount, applied_at, entry_type")
       .eq("entry_status", "active")
       .limit(QUERY_LIMIT),
   ])
@@ -249,7 +264,7 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
     )
   }
   const manualLedgerGap: AdminCrmRevenueSheetManualLedgerGap = manualLedgerResult.error
-    ? { count: 0, amount: 0, latestAppliedAt: null }
+    ? { count: 0, amount: 0, latestAppliedAt: null, newCount: 0, newAmount: 0, editCount: 0 }
     : computeManualLedgerGap((manualLedgerResult.data ?? []) as BranchSalesLedgerEntryAmountRow[])
 
   // 상한에 정확히 닿았다면 그 뒤가 잘렸을 수 있다. 형제 모듈(admin-crm-revenue)은 같은 위험을
@@ -305,6 +320,8 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
     let confirmedAmount = 0
     let highConfidenceAmount = 0
     let expectedAmount = 0
+    let pendingAmount = 0
+    const pendingMonths: string[] = []
     let pastUnconfirmedAmount = 0
 
     for (const [month, rawAmount] of Object.entries(deal.monthly_payments ?? {})) {
@@ -325,11 +342,19 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
         pastUnconfirmedAmount += uncolored
         addMonth(monthMap, month, "pastUnconfirmedAmount", uncolored)
       } else if (uncolored > 0) {
-        expectedAmount += uncolored
-        addMonth(monthMap, month, "expectedAmount", uncolored)
+        // ADR-0062: 미확정분 중 빨간 예정 칸 몫은 '확정 예정'으로 떼고 나머지만 무색 예정으로 둔다.
+        const pending = pendingMonthAmount(deal, month, uncolored, currentMonth)
+        if (pending > 0) {
+          pendingAmount += pending
+          pendingMonths.push(month)
+          addMonth(monthMap, month, "pendingAmount", pending)
+        }
+        expectedAmount += uncolored - pending
+        addMonth(monthMap, month, "expectedAmount", uncolored - pending)
       }
     }
 
+    const nextTransition = nextPendingTransition(deal, pendingMonths)
     return {
       id: deal.id,
       sheetRow: deal.sheet_row,
@@ -350,6 +375,9 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
       confirmedAmount,
       highConfidenceAmount,
       expectedAmount,
+      pendingAmount,
+      pendingNextWeek: nextTransition?.week ?? null,
+      pendingNextStart: nextTransition?.start ?? null,
       pastUnconfirmedAmount,
       monthCount: Object.keys(deal.monthly_payments ?? {}).length,
       linkId: link?.id ?? null,
@@ -400,6 +428,7 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
       confirmedAmount: activeRows.reduce((sum, row) => sum + row.confirmedAmount, 0),
       highConfidenceAmount: activeRows.reduce((sum, row) => sum + row.highConfidenceAmount, 0),
       expectedAmount: activeRows.reduce((sum, row) => sum + row.expectedAmount, 0),
+      pendingAmount: activeRows.reduce((sum, row) => sum + row.pendingAmount, 0),
       pastUnconfirmedAmount: activeRows.reduce((sum, row) => sum + row.pastUnconfirmedAmount, 0),
       linkedAmount: linkedRows.reduce((sum, row) => sum + row.scheduledAmount, 0),
       unmatchedAmount: unmatchedRows.reduce((sum, row) => sum + row.scheduledAmount, 0),

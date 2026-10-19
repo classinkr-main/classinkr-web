@@ -53,7 +53,7 @@ describe("crm-region-map getCrmRegionMap 캐시 배선", () => {
     expect(mocks.unstableCache).toHaveBeenCalledTimes(1)
     const [fn, keyParts, options] = mocks.unstableCache.mock.calls[0]
     expect(typeof fn).toBe("function")
-    expect(keyParts).toEqual(["admin-crm-region-map-v1"])
+    expect(keyParts).toEqual(["admin-crm-region-map-v3"])
     expect(options).toEqual({ revalidate: 60, tags: ["admin-crm-region-map"] })
   })
 

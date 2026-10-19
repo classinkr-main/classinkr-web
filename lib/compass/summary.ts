@@ -1,5 +1,7 @@
 import "server-only"
 
+import { isCountableCompassDemo } from "@/lib/compass/demo"
+
 import { getBusinessDateParts, toBusinessStorageDateTime } from "@/lib/business-time"
 import {
   getCompassBdOpenCount,
@@ -153,16 +155,17 @@ function toSummaryActionRow(row: CompassLeadRow): CompassSummaryActionRow {
 export async function buildCompassSummary(
   periodKey: CompassSummaryPeriodKey,
   now: Date = new Date(),
+  ownerKeys?: readonly string[],
 ): Promise<CompassSummary> {
   const period = resolveCompassSummaryPeriod(periodKey, now)
   const generatedAt = now.toISOString()
   const todayKst = getBusinessDateParts(now).date
 
   const [slice, bdOpen, todayDemos, upcoming] = await Promise.all([
-    getCompassLeadSliceByInflowRange(period.since, period.until, { maxRows: COMPASS_SUMMARY_MAX_ROWS }),
-    getCompassBdOpenCount(),
-    getCompassDemos(todayKst, todayKst),
-    getCompassUpcomingActions(COMPASS_UPCOMING_ACTION_HOURS),
+    getCompassLeadSliceByInflowRange(period.since, period.until, { maxRows: COMPASS_SUMMARY_MAX_ROWS, ownerKeys }),
+    getCompassBdOpenCount(ownerKeys),
+    getCompassDemos(todayKst, todayKst, ownerKeys),
+    getCompassUpcomingActions(COMPASS_UPCOMING_ACTION_HOURS, ownerKeys),
   ])
 
   // 슬라이스가 죽으면 다른 조회가 살아 있어도 숫자를 신뢰하지 않는다 — 즉시 강등.
@@ -275,10 +278,10 @@ export async function buildCompassSummary(
     won,
     careStages,
     bdOpen: bdOpen.down ? 0 : bdOpen.count,
-    todayDemoCount: todayDemos.down ? 0 : todayDemos.rows.length,
+    todayDemoCount: todayDemos.down ? 0 : todayDemos.rows.filter(isCountableCompassDemo).length,
     byOwner,
     lostReasons,
     upcomingActions,
-    upcomingActionCount: upcoming.down ? 0 : upcoming.rows.length,
+    upcomingActionCount: upcoming.down ? 0 : (upcoming.total ?? upcoming.rows.length),
   }
 }

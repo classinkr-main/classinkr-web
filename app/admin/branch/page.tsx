@@ -1,3 +1,4 @@
+import { resolvePersonalBranchManager } from "@/lib/admin/personal-branch"
 import { Suspense } from "react"
 import AdminRouteLoading from "@/components/admin/AdminRouteLoading"
 import BranchDashboardClient, { type BranchSummaryPrefetch } from "@/components/admin/branch/BranchDashboardClient"
@@ -34,7 +35,7 @@ const INITIAL_SUMMARY_URL = `/api/admin/branch/summary?team=${INITIAL_TEAM}&peri
  * 안으로 들어왔다 — page.tsx는 이제 아무것도 기다리지 않는다(TTFB 0ms). 요청자 컨텍스트는 매
  * 요청 이 run() 콜백 안에서 새로 평가된다(캐시 밖).
  */
-async function prefetchBranchSummary(): Promise<BranchSummaryResponse | null> {
+async function prefetchBranchSummary(manager: string): Promise<BranchSummaryResponse | null> {
   const admin = await getVerifiedAdminContextForPage()
   if (!admin || !hasAdminApiRole(admin.role, BRANCH_READ_ADMIN_API_ROLES)) return null
 
@@ -43,6 +44,7 @@ async function prefetchBranchSummary(): Promise<BranchSummaryResponse | null> {
   if (!periodDate) return null
 
   return buildBranchSummaryPayload({
+    manager,
     team: INITIAL_TEAM,
     period: INITIAL_PERIOD,
     periodDate,
@@ -53,15 +55,17 @@ async function prefetchBranchSummary(): Promise<BranchSummaryResponse | null> {
   })
 }
 
-export default function BranchDashboardPage() {
+async function PersonalBranchDashboard() {
+  const admin = await getVerifiedAdminContextForPage()
+  const defaultManager = await resolvePersonalBranchManager(admin && hasAdminApiRole(admin.role, BRANCH_READ_ADMIN_API_ROLES) ? admin : null)
   // openPrefetchLane은 run()을 기다리지 않고 즉시 {promise, generatedAt}을 돌려준다 —
   // buildBranchSummaryPayload 콜드 미스가 아무리 느려도 TTFB에 1ms도 얹지 않는다. 예전
   // settleWithinBudget은 1.2초 예산을 다 기다린 뒤에야 null을 반환했고, 그 null을 받은
   // 클라이언트가 다시 같은 데이터를 요청해 "1.2초 낭비 + 클라이언트 왕복"의 이중비용이 났다
   // (tmp/admin-overhaul-2026-09-10/platform.md §2.0). 이제 그 대기 자체가 없다.
-  const lane = openPrefetchLane(prefetchBranchSummary)
+  const lane = openPrefetchLane(() => prefetchBranchSummary(defaultManager))
   const initialData: BranchSummaryPrefetch = {
-    url: INITIAL_SUMMARY_URL,
+    url: `${INITIAL_SUMMARY_URL}&manager=${encodeURIComponent(defaultManager)}`,
     promise: lane.promise,
     generatedAt: lane.generatedAt,
   }
@@ -71,8 +75,10 @@ export default function BranchDashboardPage() {
   // Suspense가 걸리지 않는다. fallback은 이 라우트의 기존 loading.tsx와 같은 AdminRouteLoading을
   // 재사용해 새 로딩 UI를 만들지 않는다.
   return (
-    <Suspense fallback={<AdminRouteLoading />}>
-      <BranchDashboardClient initialData={initialData} />
-    </Suspense>
+    <BranchDashboardClient initialData={initialData} defaultManager={defaultManager} />
   )
+}
+
+export default function BranchDashboardPage() {
+  return <Suspense fallback={<AdminRouteLoading />}><PersonalBranchDashboard /></Suspense>
 }

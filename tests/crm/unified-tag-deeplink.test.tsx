@@ -233,7 +233,7 @@ describe("CrmUnifiedCustomersClient ?tag= URL 상태 계약(소스)", () => {
   it("필터 초기화는 저장 뷰·라벨 URL을 한 번의 replace로 비운다", () => {
     const start = clientSource.indexOf("const resetFilters = useCallback(")
     const block = clientSource.slice(start, clientSource.indexOf("}, [", start))
-    expect(block).toContain('replaceListParams({ view: "all", tag: "" })')
+    expect(block).toContain('replaceListParams({ view: "all", tag: "", owner: CURRENT_OWNER_VALUE })')
     expect(block).not.toContain("syncViewParam(")
   })
 })

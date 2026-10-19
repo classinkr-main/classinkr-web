@@ -106,11 +106,11 @@ describe("sync-branch-insights cron self-defense", () => {
     const response = await GET(cronRequest())
 
     expect(response.status).toBe(200)
-    expect(runInsights).toHaveBeenCalledTimes(4)
+    expect(runInsights).toHaveBeenCalledTimes(3)
     expect(runInsights).toHaveBeenCalledWith("ALL", true)
     expect(runInsights).toHaveBeenCalledWith("BD", true)
     expect(runInsights).toHaveBeenCalledWith("MKT", true)
-    expect(runInsights).toHaveBeenCalledWith("CSM", true)
+    expect(runInsights).not.toHaveBeenCalledWith("CSM", true)
     const body = await response.json()
     expect(body).toMatchObject({ ALL: { from: "cache", error: null } })
   })

@@ -2,9 +2,7 @@
 
 import { memo } from "react"
 import type { ReactNode } from "react"
-import { AlertTriangle } from "lucide-react"
 
-import { judgeImportFreshness } from "./ImportFreshnessStrip"
 import { formatNumber, type HardwareDashboard } from "./shared"
 
 interface SummaryBandProps {
@@ -25,34 +23,10 @@ interface SummaryBandProps {
 function SummaryBand({ data, plannedMovementQuantity, plannedStaleGroupCount }: SummaryBandProps) {
   const totals = data?.totals ?? null
   const plannedCount = data?.plannedMovements.length ?? 0
-  const shortageCount = (totals?.lowItems ?? 0) + (totals?.orderRecommended ?? 0)
-  // 이관 신선도 임계값은 ImportFreshnessStrip이 이미 갖고 있다 — 여기서 새로 발명하지 않고
-  // 그 판정 함수를 그대로 불러 같은 결과를 보장한다(두 곳이 다른 기준으로 어긋나는 사고 방지).
-  const freshness = judgeImportFreshness(data?.importRun ?? null)
-
-  const freshnessHeadline =
-    freshness.level === "none"
-      ? "기록 없음"
-      : freshness.failed
-        ? "이관 실패"
-        : freshness.daysAgo == null
-          ? "-"
-          : freshness.daysAgo === 0
-            ? "오늘"
-            : `${formatNumber(freshness.daysAgo)}일 전`
-  const freshnessDetail =
-    freshness.level === "danger"
-      ? "재고 수치가 실물과 다를 수 있습니다"
-      : freshness.level === "warning"
-        ? "갱신 검토가 필요합니다"
-        : freshness.level === "none"
-          ? "시트 이관을 시작하세요"
-          : "정상 범위입니다"
-  const freshnessToneClass =
-    freshness.level === "danger" ? "text-[#B43E3E]" : freshness.level === "warning" ? "text-[#A8741A]" : "text-[#111110]"
+  const shortageCount = data?.stock.filter(row => row.low || row.orderRecommended).length ?? 0
 
   return (
-    <section aria-label="하드웨어 재고 요약" className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+    <section aria-label="하드웨어 재고 요약" className="grid grid-cols-2 gap-y-4 bg-[#F6F5F4] py-5 xl:grid-cols-4">
       <SummaryTile href="#hardware-section-stock" label="창고 재고" title="현재 재고 섹션으로 이동">
         <Headline value={formatNumber(totals?.warehouseStock ?? 0)} unit="대" negative={(totals?.warehouseStock ?? 0) < 0} />
       </SummaryTile>
@@ -79,27 +53,15 @@ function SummaryBand({ data, plannedMovementQuantity, plannedStaleGroupCount }: 
         </p>
       </SummaryTile>
 
-      <SummaryTile href="#hardware-section-freshness" label="시트 이관 신선도" title="이관 신선도 안내로 이동">
-        <p className="mt-2 flex items-center gap-1.5">
-          {/* 아이콘은 danger일 때만 — 평소엔 소음, 정말 오래 묵었을 때만 시선을 끈다(요청사항 ③.2). */}
-          {freshness.level === "danger" && <AlertTriangle aria-hidden className="h-[18px] w-[18px] shrink-0 text-[#B43E3E]" />}
-          <span className={`text-[22px] font-bold leading-none tracking-[-0.02em] tabular-nums ${freshnessToneClass}`}>
-            {freshnessHeadline}
-          </span>
-        </p>
-        <p className={`mt-2 text-[11px] font-semibold ${freshness.level === "ok" ? "text-[#615D59]" : freshnessToneClass}`}>
-          {freshnessDetail}
-        </p>
-      </SummaryTile>
     </section>
   )
 }
 
 function Headline({ value, unit, negative }: { value: string; unit: string; negative?: boolean }) {
   return (
-    <p className="mt-2 flex items-baseline gap-1.5">
+    <p className="mt-3 flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
       {/* 음수 = 원장 이상 신호 — CategoryCardsSection·StockLevelsSection과 같은 규칙(Danger 텍스트만). */}
-      <span className={`text-[26px] font-bold leading-none tracking-[-0.03em] tabular-nums ${negative ? "text-[#B43E3E]" : "text-[#111110]"}`}>
+      <span className={`text-[34px] font-bold leading-none tracking-[-0.04em] tabular-nums ${negative ? "text-[#B43E3E]" : "text-[#111110]"}`}>
         {value}
       </span>
       <span className="text-[12px] font-semibold text-[#615D59]">{unit}</span>
@@ -114,7 +76,7 @@ function SummaryTile({ href, label, title, children }: { href: string; label: st
     <a
       href={href}
       title={title}
-      className="group flex min-w-0 flex-col rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition hover:border-[#084734]/30 hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+      className="group flex min-w-0 flex-col border-l border-[rgba(0,0,0,0.08)] px-5 first:border-l-0 hover:text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
     >
       <p className="text-[11px] font-bold tracking-[0.04em] text-[#615D59]">{label}</p>
       {children}

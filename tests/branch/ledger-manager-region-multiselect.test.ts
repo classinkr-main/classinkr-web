@@ -61,7 +61,7 @@ describe("serializeMultiFilterParam — Set → URL 직렬화", () => {
 describe("장부 필터 로직 — Set 포함 검사로 전환(소스 스캔, 품질 웨이브 7 항목 3)", () => {
   it("revBaseFilteredRows가 담당자/지역 필터를 managerFilter.has/regionFilter.has로 판정한다", () => {
     const source = workbenchSource()
-    expect(source).toContain("managerFilter.size === 0 || (row.manager != null && managerFilter.has(row.manager))")
+    expect(source).toContain("managerFilter.size === 0 || Array.from(managerFilter).some((manager) => branchManagerMatches(row.manager, manager))")
     expect(source).toContain("regionFilter.size === 0 || (row.region != null && regionFilter.has(row.region))")
   })
 
@@ -88,7 +88,7 @@ describe("장부 필터 로직 — Set 포함 검사로 전환(소스 스캔, �
 
   it("URL 파싱 effect는 mgr/region을 parseMultiFilterParam으로 Set에 채운다(반응형 절대 계약 — 부재 시 기본값 리셋)", () => {
     const source = workbenchSource()
-    expect(source).toContain('const nextManagerFilter = parseMultiFilterParam(params.get("mgr"))')
+    expect(source).toContain('const nextManagerFilter = params.has("mgr") && params.get("mgr") !== "__me" ? parseMultiFilterParam(params.get("mgr")) : new Set([initialBranchManager(params, defaultManager)].filter(Boolean))')
     expect(source).toContain("setManagerFilter((current) => replaceEquivalentSet(current, nextManagerFilter))")
     expect(source).toContain('const nextRegionFilter = parseMultiFilterParam(params.get("region"))')
     expect(source).toContain("setRegionFilter((current) => replaceEquivalentSet(current, nextRegionFilter))")

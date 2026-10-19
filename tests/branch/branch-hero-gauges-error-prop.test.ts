@@ -45,7 +45,7 @@ describe("BranchOverviewPanel -> BranchHeroGauges request state (항목 2)", () 
   it("팀 KPI의 로딩·오류·데이터 없음 상태를 서로 구분한다", () => {
     const source = heroGaugesSource()
     expect(source).toContain("if (!kpi?.teams) return []")
-    expect(source).toContain("return kpi.teams.filter((t) => TEAM_LABEL[t.team])")
+    expect(source).toContain("isCurrentBranchTeam(t.team)")
     expect(source).toContain("loading && !kpi")
     expect(source).toContain("error && !kpi")
     expect(source).toContain("!kpi || teams.length === 0")

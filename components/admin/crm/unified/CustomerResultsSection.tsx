@@ -5,6 +5,7 @@
 // CrmUnifiedCustomersClient.tsx 분해(2026-08-28)로 이동 — 로직 무변경.
 
 import Link from "next/link"
+import { customerDetailHref } from "@/lib/crm/customer-navigation"
 import { type MouseEvent } from "react"
 import { ChevronLeft, ChevronRight, ExternalLink, MapPin, PhoneCall, UserPlus } from "lucide-react"
 import type { CrmUnifiedCustomerRow } from "@/lib/repositories/crm-unified-customers"
@@ -40,6 +41,7 @@ export default function CustomerResultsSection({
   onRowDoubleClick,
   onLoadPage,
   onOpenLeadModal,
+  selectedKey = null,
 }: {
   data: CrmUnifiedCustomers | null
   rows: CrmUnifiedCustomerRow[]
@@ -56,12 +58,13 @@ export default function CustomerResultsSection({
   onRowDoubleClick: (event: MouseEvent<HTMLElement>, row: CrmUnifiedCustomerRow) => void
   onLoadPage: (offset: number) => void
   onOpenLeadModal: () => void
+  selectedKey?: string | null
 }) {
   const loadedCount = data?.rows.length ?? rows.length
   const scopeCaption = sortScopeCaption(loadedCount)
   return (
     <section
-      className="rounded-2xl border border-[#e8e8e4] bg-white"
+      className="min-w-0 border-y border-[rgba(0,0,0,0.08)] bg-white"
       aria-label="통합 고객 검색 결과"
       aria-busy={loading || loadingMore || refreshing}
     >
@@ -99,9 +102,12 @@ export default function CustomerResultsSection({
           ) : null}
         </div>
       </div>
-      <div className="hidden overflow-hidden lg:block">
-        <table className="w-full border-collapse text-left">
+      <div className="hidden overflow-x-auto lg:block">
+        <table className="w-full min-w-[640px] table-fixed border-collapse text-left">
           <caption className="sr-only">통합 고객 검색 결과 목록</caption>
+          <colgroup>
+            {[27, 12, 17, 17, 12, 15].map((width, index) => <col key={index} style={{ width: `${width}%` }} />)}
+          </colgroup>
           <thead className="bg-[#fafaf8] text-[11px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/35">
             <tr>
               <SortableHeaderCell label="고객" sortKey="name" sort={sort} onToggle={onToggleSort} />
@@ -146,8 +152,9 @@ export default function CustomerResultsSection({
               <tr
                 key={row.key}
                 onDoubleClick={(event) => onRowDoubleClick(event, row)}
-                title={row.source === "customer" ? undefined : "더블클릭 — 고객 카드 열기"}
-                className="transition-colors hover:bg-[#fafaf8]"
+                title={row.source === "customer" ? undefined : "더블클릭 — 고객 전용 페이지 열기"}
+                aria-selected={selectedKey === row.key}
+                className={`transition-colors ${selectedKey === row.key ? "bg-[#ECFDF5]" : "hover:bg-[#F6F5F4]"}`}
               >
                 <td className="px-4 py-3">
                   <div className="flex min-w-0 items-center gap-2">
@@ -158,27 +165,26 @@ export default function CustomerResultsSection({
                           <p className="truncate text-[13px] font-bold text-[#111110] group-hover:underline">{row.name}</p>
                         </Link>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => onOpenDrawer(row.key, row.name)}
-                          className="group block max-w-full text-left"
-                        >
+                        <Link href={customerDetailHref(row.key)} prefetch={false} className="group block max-w-full text-left">
                           <p className="truncate text-[13px] font-bold text-[#111110] group-hover:underline">{row.name}</p>
-                        </button>
+                        </Link>
                       )}
-                      <CrmContactValue value={row.contact} className="mt-0.5" />
-                      <p className={`mt-1 inline-flex items-center gap-1 text-[11px] font-semibold ${row.regionLabel ? "text-[#084734]" : "text-[#1a1a1a]/30"}`}>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <CrmContactValue value={row.contact} />
+                      <p className={`inline-flex items-center gap-1 text-[11px] font-semibold ${row.regionLabel ? "text-[#084734]" : "text-[#1a1a1a]/30"}`}>
                         <MapPin className="h-3 w-3" />
                         {row.regionLabel ?? "지역 미지정"}
                       </p>
+                      </div>
                       <div className="mt-1 flex flex-wrap items-center gap-1 empty:hidden">
                         <CrmCustomerFlags flags={rowToFlags(row)} max={4} />
                         <LeadRowBadges row={row} />
                       </div>
                       <TagChips tags={row.tags} />
                     </div>
+                    {row.source !== "customer" ? <button type="button" onClick={() => onOpenDrawer(row.key, row.name)} className="min-h-11 shrink-0 px-2 text-[12px] font-medium text-[#615D59] hover:text-[#084734]">빠른 보기</button> : null}
                     <Link
-                      href={row.source === "customer" ? row.href : `/admin/crm/customers/${encodeURIComponent(row.key)}`}
+                      href={row.source === "customer" ? row.href : customerDetailHref(row.key)}
                       className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[#1a1a1a]/35 transition-colors hover:bg-[#fafaf8] hover:text-[#111110]"
                       aria-label={`${row.name} 고객 상세 페이지 열기`}
                     >
@@ -230,12 +236,7 @@ export default function CustomerResultsSection({
             {row.source === "customer" ? (
               <Link href={row.href} aria-label={`${row.name} 상세 보기`} className="absolute inset-0 z-0" />
             ) : (
-              <button
-                type="button"
-                onClick={() => onOpenDrawer(row.key, row.name)}
-                aria-label={`${row.name} 상세 보기`}
-                className="absolute inset-1 z-0 rounded-xl focus-visible:ring-inset"
-              />
+              <Link href={customerDetailHref(row.key)} prefetch={false} aria-label={`${row.name} 고객 전용 페이지 열기`} className="absolute inset-1 z-0 rounded-xl focus-visible:ring-inset" />
             )}
             <div className="pointer-events-none relative z-10 p-4">
               <div className="mb-2 flex items-start justify-between gap-3">

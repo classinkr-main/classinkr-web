@@ -110,5 +110,5 @@ export function isCompassSummaryDown(data: CompassSummary | null | undefined, er
 }
 
 export function compassSummaryUrl(period: CompassSummaryPeriodKey): string {
-  return `/api/admin/crm/compass-summary?period=${period}`
+  return `/api/admin/crm/compass-summary?period=${period}&owner=__me`
 }

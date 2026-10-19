@@ -12,6 +12,7 @@ import { createHash } from "crypto"
 
 import { normalizeCrmName } from "@/lib/crm-source-linking"
 import { resolveXiaoshouyiOrderBy } from "@/lib/external-crm/sync-query"
+import { parseXiaoshouyiQueryRecords } from "@/lib/external-crm/query-response"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 type ExternalCrmSyncTrigger = "manual" | "cron" | "import"
@@ -470,20 +471,6 @@ export async function getXiaoshouyiSyncRuntimePreflight(): Promise<ExternalCrmSy
   }
 }
 
-function getRecordArray(payload: unknown): Array<Record<string, unknown>> {
-  const value = payload as {
-    result?: { records?: unknown }
-    data?: { records?: unknown } | unknown
-    records?: unknown
-  }
-  const records =
-    value.result?.records ??
-    (value.data as { records?: unknown } | undefined)?.records ??
-    value.records
-
-  return Array.isArray(records) ? records.filter((record): record is Record<string, unknown> => Boolean(record && typeof record === "object")) : []
-}
-
 function formatSupabaseError(error: { code?: string; details?: string; hint?: string; message?: string } | null) {
   if (!error) return "unknown database error"
   const parts = [error.message, error.details, error.hint, error.code]
@@ -654,7 +641,7 @@ async function queryXiaoshouyiRecords(
     throw new Error(`Xiaoshouyi query failed (${object.objectApiKey}): ${response.status} ${body.slice(0, 200)}`)
   }
 
-  return getRecordArray(await response.json())
+  return parseXiaoshouyiQueryRecords(await response.json(), object.objectApiKey)
 }
 
 function toExternalRecord(

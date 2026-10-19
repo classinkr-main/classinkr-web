@@ -10,6 +10,7 @@ import type { BranchDataSourceInfo, BranchDataSources } from "./types"
 
 interface SyncStatusBarProps {
   lastSync: string | null
+  lastSyncStartedAt?: string | null
   lastError: string | null
   sheetModifiedAt?: string | null
   dataSources?: BranchDataSources | null
@@ -53,7 +54,7 @@ function sourceLabel(source: BranchDataSourceInfo, now: number): string {
   return "라이브 시트"
 }
 
-export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, dataSources, onRefresh, syncEnabled = true, staleSince = null, crmSync = null, sheetFreshnessError = false }: SyncStatusBarProps) {
+export default function SyncStatusBar({ lastSync, lastSyncStartedAt, lastError, sheetModifiedAt, dataSources, onRefresh, syncEnabled = true, staleSince = null, crmSync = null, sheetFreshnessError = false }: SyncStatusBarProps) {
   const [busy, setBusy] = useState(false)
   // Tick once a minute so relative timestamps stay current without a refetch.
   // visibility-aware(코덱스 감사 #15): 백그라운드 탭에서는 멈추고 복귀 즉시 1회 따라잡는다.
@@ -68,8 +69,8 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
   // 최신 시트를 가림) 재발 시 이 배너로 드러난다. sheetAhead(시트가 미러보다 앞섬)와는
   // 별개 신호다: sheetAhead는 라이브 시트 대 미러 동기화 시각을 비교하고, 이건 "서빙 중인
   // 임포트 런"이 그 미러 동기화보다도 뒤처졌는지를 본다.
-  const revImportStale = dataSources?.rev.kind === "import" && isImportStale(dataSources.rev.asOf, lastSync)
-  const dshImportStale = dataSources?.dsh.kind === "import" && isImportStale(dataSources.dsh.asOf, lastSync)
+  const revImportStale = dataSources?.rev.kind === "import" && isImportStale(dataSources.rev.asOf, lastSync, lastSyncStartedAt)
+  const dshImportStale = dataSources?.dsh.kind === "import" && isImportStale(dataSources.dsh.asOf, lastSync, lastSyncStartedAt)
   const importStale = Boolean(revImportStale || dshImportStale)
 
   // 갱신 실패 배너(staleSince) — GET 요청이 실패해 adminFetchJsonCachedWithMeta가 오래된
@@ -98,7 +99,7 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
     <div className={`sticky top-0 z-30 border-b ${tone.border} ${tone.bg} px-4 py-3 text-[12px]`}>
       <div className="mx-auto max-w-screen-2xl">
         <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             {lastError
               ? <AlertTriangle className="h-4 w-4 text-[#B43E3E]" />
               : staleRefresh
@@ -110,9 +111,9 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
                     : sheetAhead
                       ? <Clock className="h-4 w-4 text-[#A8741A]" />
                       : <CheckCircle2 className="h-4 w-4 text-[#084734]" />}
-            <span className="text-[#1a1a1a]/75">
+            <span role={lastError ? "alert" : "status"} className="text-[#1a1a1a]/75">
               {lastError
-                ? lastError
+                ? "원천 갱신 실패 · 원인 확인 필요"
                 : staleRefresh
                   ? `갱신 실패 — ${relativeTime(new Date(staleSince as number).toISOString(), now)} 데이터 표시 중`
                   : importStale
@@ -123,7 +124,7 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
                         ? `시트가 ${relativeTime(sheetModifiedAt!, now)} 수정 — DB는 ${relativeTime(lastSync!, now)} 동기화`
                         : `동기화 ${lastSync ? relativeTime(lastSync, now) : "없음"}`}
             </span>
-            {importStale && (
+            {importStale && !lastError && (
               <a
                 href="/admin/branch/ledger"
                 className="ml-2 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full bg-[#ECD29C]/40 px-2 py-0.5 text-[10.5px] font-semibold text-[#7A520F] underline underline-offset-2 hover:bg-[#ECD29C]/60 md:min-h-0 md:min-w-0"
@@ -157,6 +158,11 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
             {busy ? (syncEnabled ? "동기화 중..." : "불러오는 중...") : (syncEnabled ? "지금 동기화" : "다시 불러오기")}
           </button>
         </div>
+        {lastError ? <details className="mt-1 text-[#615D59]">
+          <summary className="inline-flex min-h-11 cursor-pointer items-center text-[12px] underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-[#084734] md:min-h-0">실패 원인 보기</summary>
+          <p className="mt-2 break-words">{lastError}</p>
+          {importStale ? <a href="/admin/branch/ledger" className="inline-flex min-h-11 items-center text-[#7A520F] underline underline-offset-2">장부에서 재동기화 →</a> : null}
+        </details> : null}
         {(dataSources || crmSync) && (
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 pl-6 text-[10.5px]">
             <span className="inline-flex items-center gap-1 font-semibold text-[#615D59]">

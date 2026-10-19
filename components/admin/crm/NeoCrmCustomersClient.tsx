@@ -1,25 +1,22 @@
 "use client"
 
+import { matchesDataOwner } from "@/lib/crm/personal-owner"
+import { branchMemberOwnerAliases } from "@/lib/branch/member-names"
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react"
-import type { ReactNode } from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { AnimatePresence, motion } from "framer-motion"
 import {
   AlertTriangle,
-  Award,
   Building2,
   CalendarClock,
-  ChevronDown,
-  ChevronRight,
-  ChevronUp,
   ClipboardList,
-  Coins,
-  Loader2,
-  Plus,
-  Receipt,
+  Layers,
+  PhoneCall,
   RefreshCw,
   Search,
+  User,
+  Users,
   Wallet,
   X,
 } from "lucide-react"
@@ -27,30 +24,31 @@ import {
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { formatCNY, formatUSD } from "@/lib/crm/money-format"
 import { formatAgeHours } from "@/lib/crm/sync-freshness"
-import { CRM_EVENT_SOURCE_TYPES, eventSourceIcon, eventSourceLabel } from "./event-source-meta"
+import { useCrmOwners } from "@/components/admin/crm/useCrmOwners"
 import type {
   NeoCrmCustomerDetail,
   NeoCrmCustomerListResponse,
   NeoCrmCustomerListRow,
   NeoCrmCustomerMoneyItem,
 } from "@/lib/admin-crm-customers-neo"
+import type { LeadRecord } from "@/lib/repositories/leads"
 import type { CrmCustomerEventRecord, ListCrmCustomerEventsResult } from "@/lib/repositories/crm-events"
 import AdminErrorBanner from "@/components/admin/ui/AdminErrorBanner"
 
 type SortKey = "balance" | "expire" | "order" | "lastClass" | "name"
+type SourceFilter = "all" | "neo" | "lead"
 
 const SORT_OPTIONS: Array<{ key: SortKey; label: string }> = [
   { key: "balance", label: "잔액순" },
+  { key: "lastClass", label: "최근활동순" },
   { key: "expire", label: "만료임박" },
   { key: "order", label: "오더순" },
-  { key: "lastClass", label: "최근수업" },
   { key: "name", label: "이름순" },
 ]
 
+const CURRENT_OWNER_VALUE = "__me"
 const PAGE_SIZE = 50
 const DAY_MS = 24 * 60 * 60 * 1000
-
-// 금액 표기는 lib/crm/money-format SSOT에 위임 — 잔액·수금·성과=위안화(¥), 오더=달러($).
 
 function formatNumber(value: number | null | undefined) {
   return new Intl.NumberFormat("ko-KR").format(Number(value ?? 0))
@@ -75,9 +73,6 @@ function formatDateTime(value: string | null | undefined) {
     minute: "2-digit",
   }).format(date)
 }
-
-// formatAgeHours는 lib/crm/sync-freshness.ts SSOT — CRM 홈 배지(CrmOperationsDashboard·
-// CrmTeamKpiBoard)와 같은 상대시간 문구를 쓴다(2026-09-07 감사 #1).
 
 function daysUntil(value: string | null | undefined) {
   if (!value) return null
@@ -107,8 +102,6 @@ function ExpiryBadge({ expireAt }: { expireAt: string | null }) {
   return <span className="text-[12px] text-[#1a1a1a]/55">{formatDay(expireAt)}</span>
 }
 
-// 슬라이드오버 내부 돈 흐름 섹션 — 기본 5건, 더보기로 확장.
-// 오더는 USD, 수금/성과는 CNY라 섹션별 통화 포맷을 받는다.
 function MoneySection({
   title,
   items,
@@ -118,75 +111,55 @@ function MoneySection({
   title: string
   items: NeoCrmCustomerMoneyItem[]
   emptyLabel: string
-  format: (value: number | null | undefined) => string
+  format: (val: number | null | undefined) => string
 }) {
   const [expanded, setExpanded] = useState(false)
   const visible = expanded ? items : items.slice(0, 5)
-
+  if (items.length === 0) {
+    return <p className="rounded-xl border border-[#f0f0ec] py-8 text-center text-[12px] text-[#1a1a1a]/30">{emptyLabel}</p>
+  }
   return (
-    <div className="rounded-xl border border-[#f0f0ec] p-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <h4 className="text-[13px] font-semibold text-[#111110]">{title}</h4>
-        <span className="text-[11px] text-[#1a1a1a]/35">{formatNumber(items.length)}건</span>
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <h4 className="text-[12px] font-bold text-[#111110]">{title}</h4>
+        <span className="text-[11px] text-[#1a1a1a]/40">{items.length}건</span>
       </div>
-      {items.length === 0 ? (
-        <p className="py-3 text-center text-[12px] text-[#1a1a1a]/30">{emptyLabel}</p>
-      ) : (
-        <div className="divide-y divide-[#f0f0ec]">
-          {visible.map((item) => (
-            <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_96px] gap-2 py-2">
-              <div className="min-w-0">
-                <p className="truncate text-[12px] font-medium text-[#111110]">{item.title}</p>
-                <p className="truncate text-[11px] text-[#1a1a1a]/40">
-                  {item.ownerName}
-                  {item.status ? ` · ${item.status}` : ""}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-[12px] font-semibold text-[#111110]">
-                  {item.amount == null ? "-" : format(item.amount)}
-                </p>
-                <p className="text-[10px] text-[#1a1a1a]/35">{formatDay(item.occurredAt)}</p>
-              </div>
+      <div className="divide-y divide-[#f0f0ec] rounded-xl border border-[#f0f0ec] px-3">
+        {visible.map((item) => (
+          <div key={item.id} className="flex items-center justify-between py-2 text-[12px]">
+            <div className="min-w-0 pr-2">
+              <p className="truncate font-medium text-[#111110]">{item.title}</p>
+              <p className="text-[11px] text-[#1a1a1a]/40">
+                {formatDay(item.occurredAt)} · {item.ownerName}
+              </p>
             </div>
-          ))}
-          {items.length > 5 ? (
-            <button
-              type="button"
-              onClick={() => setExpanded((prev) => !prev)}
-              className="flex w-full items-center justify-center gap-1 pt-2 text-[12px] font-semibold text-[#1a1a1a]/45 transition-colors hover:text-[#111110]"
-            >
-              {expanded ? "접기" : `더보기 (${formatNumber(items.length - 5)})`}
-              {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-            </button>
-          ) : null}
-        </div>
+            <span className="shrink-0 font-semibold text-[#084734]">{format(item.amount)}</span>
+          </div>
+        ))}
+      </div>
+      {items.length > 5 && (
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="w-full text-center text-[11.5px] font-semibold text-[#084734] hover:underline"
+        >
+          {expanded ? "접기" : `더보기 (+${items.length - 5}건)`}
+        </button>
       )}
     </div>
   )
 }
 
-type DetailTab = "activity" | "eeo" | "orders" | "collections" | "performances"
-
 function SummaryChip({ label, value, tone = "text-[#111110]" }: { label: string; value: string; tone?: string }) {
   return (
-    <div className="rounded-lg bg-[#fafaf8] px-2.5 py-1.5">
-      <p className="text-[10px] text-[#1a1a1a]/40">{label}</p>
-      <p className={`mt-0.5 text-[13px] font-bold tracking-[-0.02em] ${tone}`}>{value}</p>
+    <div className="rounded-lg bg-[#fafaf8] p-2 text-center border border-[#e8e8e4]/60">
+      <p className="text-[10.5px] text-[#615D59]">{label}</p>
+      <p className={`mt-0.5 text-[13px] font-bold truncate ${tone}`}>{value}</p>
     </div>
   )
 }
 
-// 타임라인 한 줄을 만드는 메타(출처 라벨·아이콘). crm 이벤트 출처는 event-source-meta SSOT에서
-// 파생하고, NEO 파생(오더/수금/성과)만 여기서 tone=neo로 추가 표기한다.
-const TIMELINE_META: Record<string, { label: string; icon: ReactNode; tone?: "neo" }> = {
-  ...Object.fromEntries(
-    CRM_EVENT_SOURCE_TYPES.map((type) => [type, { label: eventSourceLabel(type), icon: eventSourceIcon(type) }])
-  ),
-  order: { label: "오더 · NEO", icon: <Receipt className="h-3.5 w-3.5" />, tone: "neo" },
-  collection: { label: "수금 · NEO", icon: <Coins className="h-3.5 w-3.5" />, tone: "neo" },
-  performance: { label: "성과 · NEO", icon: <Award className="h-3.5 w-3.5" />, tone: "neo" },
-}
+type DetailTab = "activity" | "eeo" | "orders" | "collections" | "performances"
 
 interface TimelineEntry {
   id: string
@@ -198,48 +171,14 @@ interface TimelineEntry {
   neo: boolean
 }
 
-function moneyLine(item: NeoCrmCustomerMoneyItem, format: (value: number | null | undefined) => string) {
-  const amount = item.amount == null ? null : format(item.amount)
-  return [amount, item.ownerName].filter(Boolean).join(" · ") || null
-}
-
-// crm_customer_events + NEO 머니(오더/수금/성과)를 한 타임라인으로 시간순 병합한다.
-function buildTimeline(events: CrmCustomerEventRecord[], detail: NeoCrmCustomerDetail | null): TimelineEntry[] {
-  const entries: TimelineEntry[] = []
-
-  for (const event of events) {
-    entries.push({
-      id: `ev:${event.id}`,
-      kind: event.sourceType,
-      date: event.occurredAt,
-      title: event.title,
-      subtitle: event.summary ?? event.body,
-      risk: event.sentiment === "risk",
-      neo: false,
-    })
-  }
-  for (const order of detail?.orders ?? []) {
-    entries.push({ id: `o:${order.id}`, kind: "order", date: order.occurredAt, title: order.title || "오더 확정", subtitle: moneyLine(order, formatUSD), risk: false, neo: true })
-  }
-  for (const collection of detail?.collections ?? []) {
-    entries.push({ id: `c:${collection.id}`, kind: "collection", date: collection.occurredAt, title: collection.title || "수금", subtitle: moneyLine(collection, formatCNY), risk: false, neo: true })
-  }
-  for (const performance of detail?.performances ?? []) {
-    entries.push({ id: `p:${performance.id}`, kind: "performance", date: performance.occurredAt, title: performance.title || "성과", subtitle: moneyLine(performance, formatCNY), risk: false, neo: true })
-  }
-
-  // 날짜 내림차순, 날짜 없는 항목은 맨 뒤로.
-  entries.sort((a, b) => {
-    if (!a.date && !b.date) return 0
-    if (!a.date) return 1
-    if (!b.date) return -1
-    return b.date.localeCompare(a.date)
-  })
-  return entries
+const TIMELINE_META: Record<string, { label: string; tone: "normal" | "neo"; icon: React.ReactNode }> = {
+  order: { label: "오더", tone: "neo", icon: <Wallet className="h-3.5 w-3.5" /> },
+  collection: { label: "수금", tone: "neo", icon: <Building2 className="h-3.5 w-3.5" /> },
+  performance: { label: "성과", tone: "neo", icon: <CalendarClock className="h-3.5 w-3.5" /> },
 }
 
 function TimelineRow({ entry }: { entry: TimelineEntry }) {
-  const meta = TIMELINE_META[entry.kind] ?? { label: "기록", icon: <ClipboardList className="h-3.5 w-3.5" /> }
+  const meta = TIMELINE_META[entry.kind] ?? { label: "기록", tone: "normal", icon: <ClipboardList className="h-3.5 w-3.5" /> }
   const iconClass = entry.risk
     ? "bg-[#FEF3EE] text-[#B85C33]"
     : meta.tone === "neo"
@@ -278,7 +217,7 @@ function CustomerDetailPanel({
 }) {
   const [detail, setDetail] = useState<NeoCrmCustomerDetail | null>(null)
   const [events, setEvents] = useState<CrmCustomerEventRecord[]>([])
-  const [eventsLoaded, setEventsLoaded] = useState(false)
+  const [timelineLoading, setTimelineLoading] = useState(true)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<DetailTab>("activity")
@@ -286,10 +225,6 @@ function CustomerDetailPanel({
   const [posting, setPosting] = useState(false)
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
 
-  const eventsUrl = `/api/admin/crm/events?targetType=neo_account&targetId=${encodeURIComponent(accountId)}&limit=50`
-  const eventsCacheKey = `crm-events:neo:${accountId}`
-
-  // 패널은 accountId를 key로 리마운트되므로 초기 상태가 곧 리셋이다.
   useEffect(() => {
     let cancelled = false
     adminFetchJsonCached<NeoCrmCustomerDetail>(`/api/admin/crm/customers-neo/${accountId}`, undefined, {
@@ -298,115 +233,86 @@ function CustomerDetailPanel({
       .then((next) => {
         if (cancelled) return
         setDetail(next)
-        if (!next.ok && next.error) setError(next.error)
+        setLoading(false)
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "고객 상세를 불러오지 못했습니다.")
+        if (cancelled) return
+        setError(err instanceof Error ? err.message : "상세 데이터를 불러오지 못했습니다.")
+        setLoading(false)
       })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
+
+    const eventsUrl = `/api/admin/crm/events?targetType=neo_account&targetId=${encodeURIComponent(accountId)}&limit=50`
+    adminFetchJsonCached<ListCrmCustomerEventsResult>(eventsUrl, undefined, { ttlMs: 30_000 })
+      .then((res) => {
+        if (cancelled) return
+        setEvents(res.rows)
+        setTimelineLoading(false)
       })
+      .catch(() => {
+        if (cancelled) return
+        setTimelineLoading(false)
+      })
+
     return () => {
       cancelled = true
     }
   }, [accountId])
 
-  // 활동 기록(crm_customer_events)은 머니 데이터와 별개로 병렬 조회 — 타임라인이 먼저 채워진다.
-  useEffect(() => {
-    let cancelled = false
-    adminFetchJsonCached<ListCrmCustomerEventsResult>(eventsUrl, undefined, {
-      cacheKey: eventsCacheKey,
-      ttlMs: 30_000,
-    })
-      .then((next) => {
-        if (!cancelled) setEvents(next.rows ?? [])
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setEventsLoaded(true)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [eventsUrl, eventsCacheKey])
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose()
-    }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [onClose])
-
-  useEffect(() => {
-    if (!savedMsg) return
-    const timer = setTimeout(() => setSavedMsg(null), 2000)
-    return () => clearTimeout(timer)
-  }, [savedMsg])
-
-  const account = detail?.account
-  const displayName = account?.name ?? seedName ?? "고객"
-  const displayOwner = account?.ownerName ?? seedOwner ?? null
-  const eeoAccounts = detail?.eeoAccounts ?? []
-  const totalBalance = eeoAccounts.reduce((sum, eeo) => sum + (eeo.balance ?? 0), 0)
-  const totalOrder = (detail?.orders ?? []).reduce((sum, item) => sum + (item.amount ?? 0), 0)
-  const totalPerformance = (detail?.performances ?? []).reduce((sum, item) => sum + (item.amount ?? 0), 0)
-  const earliestExpiry = eeoAccounts
-    .map((eeo) => eeo.expireAt)
-    .filter((value): value is string => Boolean(value))
-    .sort()[0]
-  const latestClass = eeoAccounts
-    .map((eeo) => eeo.lastClassAt)
-    .filter((value): value is string => Boolean(value))
-    .sort()
-    .at(-1)
-
-  const timeline = useMemo(() => buildTimeline(events, detail), [events, detail])
-  const visibleTimeline = useMemo(() => timeline.slice(0, 50), [timeline])
-  const timelineLoading = (loading && !detail) || !eventsLoaded
-
-  const reloadEvents = useCallback(async () => {
-    try {
-      const next = await adminFetchJsonCached<ListCrmCustomerEventsResult>(eventsUrl, undefined, {
-        cacheKey: eventsCacheKey,
-        ttlMs: 30_000,
-        force: true,
-      })
-      setEvents(next.rows ?? [])
-    } catch {
-      // 실패 시 현재 타임라인 유지
-    }
-  }, [eventsUrl, eventsCacheKey])
-
-  const handleAddNote = useCallback(async () => {
-    const body = note.trim()
-    if (!body || posting) return
+  const handleAddNote = async () => {
+    if (!note.trim() || posting) return
     setPosting(true)
-    setError(null)
     try {
-      await adminFetchJson("/api/admin/crm/events", {
+      await adminFetchJson(`/api/admin/crm/events`, {
         method: "POST",
         body: JSON.stringify({
           targetType: "neo_account",
           targetId: accountId,
-          targetLabel: displayName,
-          sourceType: "manual_note",
-          body,
+          sourceType: "internal_note",
+          title: "수기 메모",
+          body: note.trim(),
         }),
       })
       setNote("")
-      setSavedMsg("기록을 저장했어요")
-      await reloadEvents()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "기록 저장에 실패했습니다.")
+      setSavedMsg("메모가 저장되었습니다.")
+      setTimeout(() => setSavedMsg(null), 2500)
+    } catch {
+      alert("메모 저장 실패")
     } finally {
       setPosting(false)
     }
-  }, [note, posting, accountId, displayName, reloadEvents])
+  }
+
+  const name = detail?.account?.name ?? seedName ?? "고객 상세"
+  const owner = detail?.account?.ownerName ?? seedOwner ?? "-"
+  const totalBalance = detail?.eeoAccounts.reduce((sum, item) => sum + (item.balance ?? 0), 0) ?? 0
+  const totalOrder = detail?.orders.reduce((sum, item) => sum + (item.amount ?? 0), 0) ?? 0
+  const totalPerformance = detail?.performances.reduce((sum, item) => sum + (item.amount ?? 0), 0) ?? 0
+
+  const timeline = useMemo(() => {
+    const entries: TimelineEntry[] = []
+    for (const ev of events) {
+      entries.push({
+        id: `ev:${ev.id}`,
+        kind: ev.sourceType,
+        date: ev.occurredAt,
+        title: ev.title,
+        subtitle: ev.body ?? ev.summary,
+        risk: ev.sentiment === "risk",
+        neo: false,
+      })
+    }
+    for (const o of detail?.orders ?? []) {
+      entries.push({ id: `o:${o.id}`, kind: "order", date: o.occurredAt, title: o.title || "오더 확정", subtitle: formatUSD(o.amount), risk: false, neo: true })
+    }
+    for (const c of detail?.collections ?? []) {
+      entries.push({ id: `c:${c.id}`, kind: "collection", date: c.occurredAt, title: c.title || "수금", subtitle: formatCNY(c.amount), risk: false, neo: true })
+    }
+    return entries.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))
+  }, [events, detail])
 
   const tabs: Array<{ key: DetailTab; label: string; count: number }> = [
     { key: "activity", label: "활동", count: timeline.length },
-    { key: "eeo", label: "EEO", count: eeoAccounts.length },
+    { key: "eeo", label: "EEO", count: detail?.eeoAccounts.length ?? 0 },
     { key: "orders", label: "오더", count: detail?.orders.length ?? 0 },
     { key: "collections", label: "수금", count: detail?.collections.length ?? 0 },
     { key: "performances", label: "성과", count: detail?.performances.length ?? 0 },
@@ -414,143 +320,88 @@ function CustomerDetailPanel({
 
   return (
     <motion.div
-      className="fixed inset-0 z-50 flex justify-end overflow-hidden"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
+      className="fixed inset-0 z-50 flex justify-end bg-black/30 backdrop-blur-xs"
+      onClick={onClose}
     >
-      <button type="button" aria-label="닫기" onClick={onClose} className="absolute inset-0 bg-black/25" />
       <motion.aside
         initial={{ x: "100%" }}
         animate={{ x: 0 }}
         exit={{ x: "100%" }}
-        transition={{ type: "tween", ease: [0.32, 0.72, 0, 1], duration: 0.34 }}
-        className="relative flex h-full w-full max-w-[480px] flex-col bg-white shadow-2xl"
+        transition={{ type: "spring", damping: 28, stiffness: 280 }}
+        onClick={(e) => e.stopPropagation()}
+        className="relative flex h-full w-full max-w-lg flex-col bg-white shadow-2xl"
       >
-        <div className="shrink-0 border-b border-[#f0f0ec] bg-white px-5 py-4">
+        <div className="border-b border-[#e8e8e4] p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Customer Sync Source</p>
-              <h3 className="mt-1 truncate text-[18px] font-bold text-[#111110]">{displayName}</h3>
-              <p className="mt-1 truncate text-[12px] text-[#1a1a1a]/45">
-                {displayOwner ?? "담당 미지정"}
-                {account?.phone ? ` · ${account.phone}` : ""}
-              </p>
-              {/* 빠른 보기 → 고객 360 상세 페이지 진입로(모바일 카드 진입 포함) —
-                  키 규약은 unified 드로어 '자세히 보기'와 동일(neo:{accountId}). */}
-              <Link
-                href={`/admin/crm/customers/${encodeURIComponent(`neo:${accountId}`)}`}
-                className="mt-1.5 inline-flex items-center text-[11px] font-semibold text-[#084734] underline-offset-2 hover:underline"
-              >
-                고객 360 자세히 보기 →
-              </Link>
+            <div>
+              <span className="rounded-xs bg-[#f0f0ec] px-1.5 py-0.5 text-[10.5px] font-semibold text-[#615D59]">
+                외부 CRM 연동 원천
+              </span>
+              <h3 className="mt-1 text-[17px] font-bold text-[#111110]">{name}</h3>
+              <p className="mt-0.5 text-[12px] text-[#615D59]">담당: {owner}</p>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#e8e8e4] text-[#111110] transition-colors hover:bg-[#f5f5f2]"
-              aria-label="닫기"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#e8e8e4] text-[#111110] hover:bg-[#f5f5f2]"
             >
               <X className="h-4 w-4" />
             </button>
           </div>
 
-          {/* 요약 칩 — 헤더에 고정 노출(스크롤해도 유지) */}
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <SummaryChip label="잔액" value={detail ? formatCNY(totalBalance) : "…"} tone="text-[#084734]" />
-            <SummaryChip label="오더" value={detail ? formatUSD(totalOrder) : "…"} />
-            <SummaryChip label="성과" value={detail ? formatCNY(totalPerformance) : "…"} tone="text-[#084734]" />
-            <SummaryChip
-              label="만료 / 최근"
-              value={
-                detail
-                  ? `${earliestExpiry ? formatDay(earliestExpiry) : "-"} / ${latestClass ? formatDay(latestClass) : "-"}`
-                  : "…"
-              }
-            />
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            <SummaryChip label="잔액" value={formatCNY(totalBalance)} tone="text-[#084734]" />
+            <SummaryChip label="오더" value={formatUSD(totalOrder)} />
+            <SummaryChip label="성과" value={formatCNY(totalPerformance)} tone="text-[#084734]" />
           </div>
 
-          {/* 탭 — 활동(기본) + 결제 내역(EEO/오더/수금/성과) */}
           <div className="mt-3 flex gap-1 rounded-lg bg-[#fafaf8] p-1">
             {tabs.map((item) => (
               <button
                 key={item.key}
                 type="button"
                 onClick={() => setTab(item.key)}
-                className={`flex-1 rounded-md px-2 py-1.5 text-[12px] font-semibold transition-colors ${
-                  tab === item.key ? "bg-white text-[#111110] shadow-sm" : "text-[#1a1a1a]/50 hover:text-[#111110]"
+                className={`flex-1 rounded-md px-2 py-1.5 text-[11.5px] font-semibold transition-colors ${
+                  tab === item.key ? "bg-white text-[#111110] shadow-xs" : "text-[#615D59] hover:text-[#111110]"
                 }`}
               >
                 {item.label}
-                <span className="ml-1 text-[11px] text-[#1a1a1a]/35">{item.count}</span>
+                <span className="ml-1 text-[10px] opacity-70">{item.count}</span>
               </button>
             ))}
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4">
-          {error ? (
-            <p className="mb-3 rounded-xl bg-[#FEF3EE] px-3 py-2 text-[12px] leading-relaxed text-[#B85C33]">{error}</p>
-          ) : null}
-
-          {tab === "activity" ? (
-            timelineLoading && timeline.length === 0 ? (
-              <div className="space-y-3">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="flex gap-2.5">
-                    <div className="h-6 w-6 shrink-0 animate-pulse rounded-lg bg-[#f0f0ec]" />
-                    <div className="flex-1 space-y-1.5">
-                      <div className="h-3 w-1/3 animate-pulse rounded bg-[#f0f0ec]" />
-                      <div className="h-3 w-2/3 animate-pulse rounded bg-[#f5f5f2]" />
-                    </div>
-                  </div>
-                ))}
-              </div>
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5">
+          {error ? <p className="mb-3 text-[12px] text-[#B85C33]">{error}</p> : null}
+          {loading && !detail ? (
+            <div className="py-8 text-center text-[12px] text-[#615D59]">고객 상세 정보를 불러오는 중...</div>
+          ) : tab === "activity" ? (
+            timelineLoading ? (
+              <div className="py-8 text-center text-[12px] text-[#615D59]">로딩 중...</div>
             ) : timeline.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-[#e8e8e4] py-8 text-center">
-                <ClipboardList className="mx-auto mb-2 h-5 w-5 text-[#1a1a1a]/20" />
-                <p className="text-[12px] text-[#1a1a1a]/40">아직 기록된 활동이 없습니다.</p>
-                <p className="mt-0.5 text-[11px] text-[#1a1a1a]/30">아래에서 첫 활동 기록을 남겨보세요.</p>
-              </div>
+              <div className="py-8 text-center text-[12px] text-[#615D59]">활동 기록이 없습니다.</div>
             ) : (
-              <ul className="space-y-2.5">
-                {visibleTimeline.map((entry) => (
+              <ul className="space-y-3">
+                {timeline.map((entry) => (
                   <TimelineRow key={entry.id} entry={entry} />
                 ))}
-                {timeline.length > visibleTimeline.length ? (
-                  <li className="pt-1 text-center text-[11px] text-[#1a1a1a]/35">
-                    최근 {visibleTimeline.length}건 표시 · 전체 {timeline.length}건
-                  </li>
-                ) : null}
               </ul>
             )
-          ) : loading && !detail ? (
-            <div className="space-y-3">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="h-12 animate-pulse rounded-xl bg-[#f5f5f2]" />
-              ))}
-            </div>
           ) : tab === "eeo" ? (
-            eeoAccounts.length === 0 ? (
-              <p className="rounded-xl border border-[#f0f0ec] py-8 text-center text-[12px] text-[#1a1a1a]/30">
-                연결된 EEO 계정이 없습니다.
-              </p>
+            detail?.eeoAccounts.length === 0 ? (
+              <p className="py-8 text-center text-[12px] text-[#615D59]">EEO 계정이 없습니다.</p>
             ) : (
-              <div className="divide-y divide-[#f0f0ec] rounded-xl border border-[#f0f0ec] px-3">
-                {eeoAccounts.map((eeo) => (
-                  <div key={eeo.id} className="grid grid-cols-[minmax(0,1fr)_110px] gap-2 py-2.5">
-                    <div className="min-w-0">
-                      <p className="truncate text-[12px] font-medium text-[#111110]">{eeo.name}</p>
-                      <p className="truncate text-[11px] text-[#1a1a1a]/40">
-                        {eeo.uid ? `UID ${eeo.uid}` : "-"}
-                        {eeo.lastClassAt ? ` · 최근수업 ${formatDay(eeo.lastClassAt)}` : ""}
-                      </p>
-                    </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <p className="text-[12px] font-semibold text-[#084734]">
-                        {eeo.balance == null ? "-" : formatCNY(eeo.balance)}
-                      </p>
+              <div className="space-y-2">
+                {detail?.eeoAccounts.map((eeo) => (
+                  <div key={eeo.id} className="rounded-lg border border-[#f0f0ec] p-3">
+                    <p className="text-[13px] font-semibold text-[#111110]">{eeo.name}</p>
+                    <p className="text-[11px] text-[#615D59]">UID: {eeo.uid || "-"}</p>
+                    <div className="mt-2 flex justify-between text-[12px]">
+                      <span className="font-semibold text-[#084734]">{formatCNY(eeo.balance)}</span>
                       <ExpiryBadge expireAt={eeo.expireAt} />
                     </div>
                   </div>
@@ -566,38 +417,29 @@ function CustomerDetailPanel({
           )}
         </div>
 
-        {/* 활동 탭 전용 빠른 기록 입력 — 하단 고정 */}
         {tab === "activity" ? (
-          <div className="shrink-0 border-t border-[#f0f0ec] bg-white px-5 py-3">
-            <div className="flex items-end gap-2">
-              <textarea
-                value={note}
-                onChange={(event) => setNote(event.target.value)}
-                onKeyDown={(event) => {
-                  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") void handleAddNote()
-                }}
-                placeholder="빠른 메모 입력 후 저장 (⌘+Enter)"
-                rows={1}
-                className="min-h-[38px] flex-1 resize-none rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-2 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
-              />
-              <button
-                type="button"
-                onClick={() => void handleAddNote()}
-                disabled={!note.trim() || posting}
-                className="inline-flex h-[38px] shrink-0 items-center gap-1 rounded-lg bg-[#084734] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
-              >
-                {posting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-                활동 기록
-              </button>
-            </div>
+          <div className="border-t border-[#f0f0ec] bg-white p-3 flex gap-2">
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="빠른 메모 입력..."
+              rows={1}
+              className="flex-1 resize-none rounded-lg border border-[#e8e8e4] p-2 text-[12px] outline-none focus:border-[#084734]"
+            />
+            <button
+              type="button"
+              onClick={handleAddNote}
+              disabled={posting || !note.trim()}
+              className="rounded-lg bg-[#084734] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
+            >
+              저장
+            </button>
           </div>
         ) : null}
 
         {savedMsg ? (
-          <div className="pointer-events-none absolute bottom-20 left-1/2 z-20 -translate-x-1/2">
-            <div className="rounded-full bg-[#084734] px-3.5 py-2 text-[12px] font-semibold text-white shadow-lg">
-              {savedMsg}
-            </div>
+          <div className="absolute bottom-16 left-1/2 -translate-x-1/2 rounded-full bg-[#084734] px-3 py-1 text-[11px] text-white">
+            {savedMsg}
           </div>
         ) : null}
       </motion.aside>
@@ -605,101 +447,83 @@ function CustomerDetailPanel({
   )
 }
 
-// 빈 상태 — 다음 행동 안내(필터 초기화 / 통합 고객 DB 딥링크). 데스크톱 표·모바일 카드 공용.
-// 조회 실패와 "고객 없음"은 다른 상태다. 실패를 빈 목록으로 그리면 화면이 "동기화된 고객이
-// 아직 없습니다"라고 단언해, 장애를 데이터 없음으로 오인시킨다.
-function CustomersLoadFailed({ message, onRetry }: { message: string | null; onRetry: () => void }) {
-  return (
-    <div className="py-14 text-center">
-      <AlertTriangle className="mx-auto mb-2 h-5 w-5 text-[#B85C33]/60" />
-      <p className="text-[13px] font-medium text-[#111110]">고객 목록을 불러오지 못했습니다.</p>
-      <p className="mt-1 text-[12px] text-[#1a1a1a]/40">{message ?? "잠시 후 다시 시도해 주세요."}</p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="mt-4 inline-flex h-8 items-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
-      >
-        다시 시도
-      </button>
-    </div>
-  )
-}
+// ─── 통합 행 인터페이스: 원천 고객(NEO) + 리드(Lead) ───
+export type CustomerAccountOrigin = "neo" | "lead"
 
-function EmptyCustomers({ hasFilters, onReset }: { hasFilters: boolean; onReset: () => void }) {
-  return (
-    <div className="py-14 text-center">
-      <Building2 className="mx-auto mb-2 h-5 w-5 text-[#1a1a1a]/20" />
-      <p className="text-[13px] font-medium text-[#111110]">조건에 맞는 고객이 없습니다.</p>
-      <p className="mt-1 text-[12px] text-[#1a1a1a]/40">
-        {hasFilters
-          ? "검색어·필터를 초기화하고 다시 확인해 보세요."
-          : "동기화된 고객이 아직 없습니다. 통합 고객 DB에서 리드·고객을 확인하세요."}
-      </p>
-      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-        {hasFilters ? (
-          <button
-            type="button"
-            onClick={onReset}
-            className="inline-flex h-8 items-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
-          >
-            필터 초기화
-          </button>
-        ) : null}
-        <Link
-          href="/admin/crm/customers/unified"
-          className="inline-flex h-8 items-center gap-1 rounded-lg bg-[#084734] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
-        >
-          통합 고객 DB 열기
-          <ChevronRight className="h-3.5 w-3.5" />
-        </Link>
-      </div>
-    </div>
-  )
-}
-
-function KpiTile({ icon, label, value, hint, tone = "text-[#111110]" }: { icon: React.ReactNode; label: string; value: string; hint: string; tone?: string }) {
-  return (
-    <div className="rounded-xl bg-[#fafaf8] px-3 py-3">
-      <div className="flex items-center gap-1.5 text-[#1a1a1a]/40">
-        {icon}
-        <p className="text-[11px] font-semibold uppercase tracking-[0.1em]">{label}</p>
-      </div>
-      <p className={`mt-2 text-2xl font-bold tracking-[-0.04em] ${tone}`}>{value}</p>
-      <p className="mt-1 text-[11px] leading-relaxed text-[#1a1a1a]/40">{hint}</p>
-    </div>
-  )
+export interface CustomerAccountUnifiedRow {
+  key: string
+  id: string
+  origin: CustomerAccountOrigin
+  name: string
+  subText: string
+  ownerName: string
+  ownerId: string | null
+  balance: number | null
+  expireAt: string | null
+  lastClassAt: string | null
+  orderAmount: number
+  orderCount: number
+  statusText?: string | null
+  tagLabel: string
+  detailHref: string
+  rawNeo?: NeoCrmCustomerListRow
+  rawLead?: LeadRecord
 }
 
 export default function NeoCrmCustomersClient() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
+  const { currentOwner, currentOwnerKeys, owners: crmOwners } = useCrmOwners()
+
   const deepLinkedAccountId = searchParams.get("account")?.trim() ?? ""
-  // ?expiring=1 딥링크 — Overview 리뉴얼 타일에서 '만료 임박만' 필터가 켜진 채 착지한다.
   const deepLinkedExpiring = searchParams.get("expiring") === "1"
-  const [data, setData] = useState<NeoCrmCustomerListResponse | null>(null)
+
+  const [neoData, setNeoData] = useState<NeoCrmCustomerListResponse | null>(null)
+  const [leadsData, setLeadsData] = useState<LeadRecord[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState("")
-  const [ownerFilter, setOwnerFilter] = useState<string>("all")
+
+  // 원천 고객, 리드 전부 다 포함할 수 있는 소스 필터
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all")
+
+  // 담당자 필터: URL에 없으면 로그인한 사용자(CURRENT_OWNER_VALUE)를 디폴트로 잡는다
+  const ownerParam = searchParams.get("owner")?.trim()
+  const [ownerFilter, setOwnerScope] = useState<string>(() => ownerParam ?? CURRENT_OWNER_VALUE)
+  const setOwnerFilter = useCallback((next: string) => {
+    setOwnerScope(next)
+    const nextParams = new URLSearchParams(searchParams.toString())
+    nextParams.set("owner", next === "all" ? "" : next)
+    window.history.replaceState(null, "", `?${nextParams.toString()}`)
+  }, [searchParams])
+
   const [sortKey, setSortKey] = useState<SortKey>("balance")
   const [expiringOnly, setExpiringOnly] = useState(deepLinkedExpiring)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
   const [dismissedDeepLinkedAccountId, setDismissedDeepLinkedAccountId] = useState<string | null>(null)
 
+  // 원천 고객(NEO) + 리드(Leads) 데이터 동시 적재
   const load = useCallback(async (options?: { force?: boolean }) => {
     setLoading(true)
     setError(null)
     try {
-      const next = await adminFetchJsonCached<NeoCrmCustomerListResponse>(`/api/admin/crm/customers-neo`, undefined, {
-        ttlMs: 60_000,
-        force: options?.force,
-      })
-      setData(next)
-      if (!next.ok && next.error) setError(next.error)
+      const [neoRes, leadsRes] = await Promise.all([
+        adminFetchJsonCached<NeoCrmCustomerListResponse>(`/api/admin/crm/customers-neo`, undefined, {
+          ttlMs: 60_000,
+          force: options?.force,
+        }),
+        adminFetchJsonCached<{ leads: LeadRecord[] }>(`/api/admin/leads`, undefined, {
+          ttlMs: 60_000,
+          force: options?.force,
+        }),
+      ])
+      setNeoData(neoRes)
+      setLeadsData(leadsRes.leads ?? [])
+      if (!neoRes.ok && neoRes.error) setError(neoRes.error)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "고객 데이터를 불러오지 못했습니다.")
+      setError(err instanceof Error ? err.message : "고객 및 리드 데이터를 불러오지 못했습니다.")
     } finally {
       setLoading(false)
     }
@@ -719,9 +543,6 @@ export default function NeoCrmCustomersClient() {
     setSelectedAccountId(deepLinkedAccountId)
   }, [deepLinkedAccountId, dismissedDeepLinkedAccountId, selectedAccountId])
 
-  // raw history API는 useSearchParams와 desync된다(CrmUnifiedCustomersClient가 같은 이유로 금지).
-  // 주소창에서는 ?account=가 사라졌는데 useSearchParams는 계속 옛 값을 돌려줘, 현재 쿼리를
-  // 이어 붙이는 다른 경로가 닫은 고객을 되살릴 수 있다. 라우터를 경유해 한 곳에서 상태를 맞춘다.
   const closeSelectedAccount = useCallback(() => {
     setSelectedAccountId(null)
     if (deepLinkedAccountId) setDismissedDeepLinkedAccountId(deepLinkedAccountId)
@@ -734,41 +555,105 @@ export default function NeoCrmCustomersClient() {
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE)
-  }, [query, ownerFilter, sortKey, expiringOnly])
+  }, [query, sourceFilter, ownerFilter, sortKey, expiringOnly])
 
-  // 서버가 한 번에 최대 1만 건을 내려주고 "더보기"로 누적 렌더한다. 매 키 입력마다 전체를
-  // 다시 걸러 정렬하면 입력이 눈에 띄게 밀린다(통합 목록은 이미 같은 이유로 지연값을 쓴다).
   const deferredQuery = useDeferredValue(query)
 
+  // 원천 고객과 리드를 하나의 통합 목록으로 조립
+  const allUnifiedRows = useMemo<CustomerAccountUnifiedRow[]>(() => {
+    const list: CustomerAccountUnifiedRow[] = []
+
+    // 1. 원천 고객 (NEO)
+    for (const row of neoData?.rows ?? []) {
+      list.push({
+        key: `neo:${row.accountId}`,
+        id: row.accountId,
+        origin: "neo",
+        name: row.name,
+        subText: [row.uid ? `UID ${row.uid}` : "EEO 미연결", row.phone].filter(Boolean).join(" · "),
+        ownerName: row.ownerName || "미배정",
+        ownerId: row.ownerId,
+        balance: row.balance,
+        expireAt: row.expireAt,
+        lastClassAt: row.lastClassAt,
+        orderAmount: row.orderAmount,
+        orderCount: row.orderCount,
+        tagLabel: "원천 고객",
+        detailHref: `/admin/crm/customers/${encodeURIComponent(`neo:${row.accountId}`)}`,
+        rawNeo: row,
+      })
+    }
+
+    // 2. 리드 (Leads)
+    for (const lead of leadsData ?? []) {
+      const leadName = lead.org?.trim() || lead.name?.trim() || "리드 고객"
+      list.push({
+        key: `lead:${lead.id}`,
+        id: lead.id,
+        origin: "lead",
+        name: leadName,
+        subText: [lead.phone, lead.source, lead.branch].filter(Boolean).join(" · "),
+        ownerName: lead.assigned_to || "미배정",
+        ownerId: lead.assigned_to ?? null,
+        balance: null,
+        expireAt: null,
+        lastClassAt: lead.timestamp,
+        orderAmount: 0,
+        orderCount: 0,
+        statusText: lead.status,
+        tagLabel: "리드",
+        detailHref: `/admin/crm/customers/leads?lead=${encodeURIComponent(lead.id)}`,
+        rawLead: lead,
+      })
+    }
+
+    return list
+  }, [neoData?.rows, leadsData])
+
+  // 현재 활성 담당자 명칭 확인
+  // 필터링 및 정렬
   const filtered = useMemo(() => {
-    const rows = data?.rows ?? []
     const q = deferredQuery.trim().toLowerCase()
-    const result = rows.filter((row) => {
-      if (ownerFilter !== "all" && row.ownerId !== ownerFilter) return false
+    const ownerKeys = !ownerFilter || ownerFilter === "all" ? undefined : ownerFilter === CURRENT_OWNER_VALUE ? currentOwnerKeys : branchMemberOwnerAliases(ownerFilter)
+
+    const result = allUnifiedRows.filter((row) => {
+      // 1. 소스 필터 (전체 / 원천 고객 / 리드)
+      if (sourceFilter === "neo" && row.origin !== "neo") return false
+      if (sourceFilter === "lead" && row.origin !== "lead") return false
+
+      // 담당자 별명을 동일 인물로 비교한다. 비슷한 이름을 부분 일치로 포함하지 않는다.
+      if (!matchesDataOwner(row.ownerName, ownerKeys)) return false
+
+      // 3. 만료 임박만
       if (expiringOnly) {
+        if (row.origin !== "neo") return false
         const d = daysUntil(row.expireAt)
         if (d === null || d > 60) return false
       }
+
+      // 4. 검색어 (학원명·UID·전화·담당자·리드)
       if (!q) return true
       return (
         row.name.toLowerCase().includes(q) ||
-        (row.uid ?? "").toLowerCase().includes(q) ||
-        (row.phone ?? "").toLowerCase().includes(q) ||
+        row.subText.toLowerCase().includes(q) ||
         row.ownerName.toLowerCase().includes(q)
       )
     })
-    const sorted = result.slice().sort((a, b) => {
+
+    return result.slice().sort((a, b) => {
       switch (sortKey) {
         case "balance":
-          return (b.balance ?? 0) - (a.balance ?? 0)
+          return (b.balance ?? -1) - (a.balance ?? -1)
         case "order":
           return b.orderAmount - a.orderAmount
-        case "lastClass":
-          return (b.lastClassAt ?? "").localeCompare(a.lastClassAt ?? "")
+        case "lastClass": {
+          const av = a.lastClassAt ?? ""
+          const bv = b.lastClassAt ?? ""
+          return bv.localeCompare(av)
+        }
         case "name":
           return a.name.localeCompare(b.name, "ko-KR")
         case "expire": {
-          // 만료일 빠른 순, 없는 건 뒤로.
           const av = a.expireAt ?? "9999"
           const bv = b.expireAt ?? "9999"
           return av.localeCompare(bv)
@@ -777,283 +662,450 @@ export default function NeoCrmCustomersClient() {
           return 0
       }
     })
-    return sorted
-  }, [data, deferredQuery, ownerFilter, sortKey, expiringOnly])
+  }, [allUnifiedRows, sourceFilter, ownerFilter, currentOwnerKeys, expiringOnly, deferredQuery, sortKey])
 
   const visibleRows = filtered.slice(0, visibleCount)
-  const hasActiveFilters = Boolean(query.trim()) || ownerFilter !== "all" || expiringOnly
+  const hasActiveFilters = Boolean(query.trim()) || ownerFilter !== "all" || expiringOnly || sourceFilter !== "all"
+
   const resetFilters = useCallback(() => {
     setQuery("")
-    setOwnerFilter("all")
+    setSourceFilter("all")
+    setOwnerFilter(CURRENT_OWNER_VALUE)
     setExpiringOnly(false)
-  }, [])
+  }, [setOwnerFilter])
+
   const selectedRow = useMemo(
-    () => (selectedAccountId ? data?.rows.find((row) => row.accountId === selectedAccountId) ?? null : null),
-    [data, selectedAccountId]
+    () => (selectedAccountId ? neoData?.rows.find((row) => row.accountId === selectedAccountId) ?? null : null),
+    [neoData, selectedAccountId]
   )
-  const summary = data?.summary
-  const syncHealth = data?.syncHealth
+
+  const summary = neoData?.summary
+  const syncHealth = neoData?.syncHealth
+
+  const totalNeoCount = neoData?.rows.length ?? 0
+  const totalLeadsCount = leadsData?.length ?? 0
+  const grandTotal = totalNeoCount + totalLeadsCount
 
   return (
-    <div>
-      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div className="space-y-4">
+      {/* ─── 상단 헤더: 타이틀, 콤팩트 설명, 새로고침 (세로 길이 대폭 압축) ─── */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Customer Sync · 외부 CRM</p>
-          <h1 className="mt-2 text-2xl font-bold tracking-[-0.02em] text-[#111110]">고객 원천 데이터</h1>
-          <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/45">
-            외부 CRM 동기화 참고자료 — ClassIn 고객 DB 보조 원천. 검색·등록 확정·기록은{" "}
-            <Link href="/admin/crm/customers/unified" className="font-semibold text-[#084734] underline-offset-2 hover:underline">
-              통합 고객DB
+          <div className="flex items-center gap-2">
+            <h1 className="text-[20px] font-bold tracking-[-0.02em] text-[#111110]">
+              고객 원천 데이터 (외부 CRM & 리드)
+            </h1>
+            <span className="rounded-full bg-[#ECFDF5] px-2.5 py-0.5 text-[11px] font-semibold text-[#084734]">
+              원천 동기화
+            </span>
+          </div>
+          <p className="mt-0.5 text-[12.5px] text-[#615D59]">
+            외부 CRM(NEO) 계정과 인바운드 리드를 전부 포함한 원천 데이터베이스입니다. ·{" "}
+            <Link
+              href="/admin/crm/customers/unified"
+              className="font-medium text-[#084734] underline-offset-2 hover:underline"
+            >
+              통합 고객DB 열기 →
             </Link>
-            에서, 이 화면은 잔액·만료·오더 등 외부 CRM 원본 수치를 확인할 때만 씁니다.
-          </p>
-          <p className="mt-1 text-[11px] text-[#1a1a1a]/35">
-            잔액·만료 원천 sync {formatDateTime(syncHealth?.shroffAccountSyncedAt)}
-            {syncHealth ? ` · ${formatAgeHours(syncHealth.shroffAccountAgeHours)}` : ""}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void load({ force: true })}
-          disabled={loading}
-          className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          새로고침
-        </button>
+
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-[#A39E98] hidden lg:inline">
+            sync {formatDateTime(syncHealth?.shroffAccountSyncedAt)}
+          </span>
+          <button
+            type="button"
+            onClick={() => void load({ force: true })}
+            disabled={loading}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+            새로고침
+          </button>
+        </div>
       </div>
 
-      {error ? <AdminErrorBanner message={error} className="mb-6" /> : null}
+      {error ? <AdminErrorBanner message={error} className="mb-2" /> : null}
+
+      {/* 콤팩트 알림 스트립 (15일 전 데이터 알림 슬림화) */}
       {syncHealth?.isShroffAccountStale ? (
-        <div className="mb-6 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2 text-[12px] leading-relaxed text-[#7A520F]">
-          잔액·만료 원천 데이터가 {formatAgeHours(syncHealth.shroffAccountAgeHours)} 데이터입니다. 만료일·잔액이 외부 CRM과
-          다를 수 있으니 외부 CRM 동기화 후 확인하세요.
+        <div className="flex items-center justify-between rounded-xl border border-[#ECD29C] bg-[#FBF1E0] px-3.5 py-1.5 text-[12px] text-[#7A520F]">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+            <span>
+              잔액·만료 원천 데이터가 {formatAgeHours(syncHealth.shroffAccountAgeHours)} 데이터입니다. 외부 CRM 동기화 후 최신 수치를 확인하세요.
+            </span>
+          </div>
+          <span className="text-[11px] opacity-75 hidden sm:inline">동기화 권장</span>
         </div>
       ) : null}
 
-      <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiTile
-          icon={<Building2 className="h-4 w-4" />}
-          label="동기화 고객"
-          value={loading && !data ? "..." : formatNumber(summary?.totalCount)}
-          hint={`EEO 연결 ${formatNumber(summary?.withEeoCount)}`}
-        />
-        <KpiTile
-          icon={<CalendarClock className="h-4 w-4" />}
-          label="만료 임박"
-          value={loading && !data ? "..." : formatNumber(summary?.expiringSoonCount)}
-          hint="60일 이내 만료 고객"
-          tone={(summary?.expiringSoonCount ?? 0) > 0 ? "text-[#B85C33]" : "text-[#111110]"}
-        />
-        <KpiTile
-          icon={<Wallet className="h-4 w-4" />}
-          label="총 잔액"
-          value={loading && !data ? "..." : formatCNY(summary?.totalBalance)}
-          hint="EEO 계정 잔액 합 (CNY)"
-          tone="text-[#084734]"
-        />
-        <KpiTile
-          icon={<Wallet className="h-4 w-4" />}
-          label="총 오더"
-          value={loading && !data ? "..." : formatUSD(summary?.totalOrderAmount)}
-          hint="외부 CRM 오더 금액 합 (USD)"
-        />
-      </section>
-
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#1a1a1a]/35" />
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="학원명·UID·전화·담당자"
-            className="h-9 w-[220px] rounded-lg border border-[#e8e8e4] bg-white pl-8 pr-2 text-[13px] text-[#111110] outline-none transition-colors focus:border-[#111110]"
-          />
+      {/* ─── 가로 슬림 요약 스트립 (콤팩트 KPI: 세로 공간 100px 이상 절약) ─── */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-2.5 text-[12.5px]">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+          <span className="text-[#615D59]">
+            전체 원천 <strong className="font-bold tabular-nums text-[#111110]">{loading ? "…" : formatNumber(grandTotal)}</strong>곳
+          </span>
+          <span className="text-[#615D59]">
+            원천 고객 <strong className="font-semibold tabular-nums text-[#084734]">{loading ? "…" : formatNumber(summary?.totalCount)}</strong>곳
+            <span className="ml-1 text-[11px] opacity-75">(EEO {formatNumber(summary?.withEeoCount)})</span>
+          </span>
+          <span className="text-[#615D59]">
+            리드 <strong className="font-semibold tabular-nums text-[#084734]">{loading ? "…" : formatNumber(totalLeadsCount)}</strong>건
+          </span>
+          <span className="text-[#615D59]">
+            만료 임박 <strong className="font-semibold tabular-nums text-[#B85C33]">{loading ? "…" : formatNumber(summary?.expiringSoonCount)}</strong>곳
+          </span>
         </div>
-        <select
-          value={ownerFilter}
-          onChange={(event) => setOwnerFilter(event.target.value)}
-          className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[13px] text-[#111110] outline-none transition-colors focus:border-[#111110]"
-        >
-          <option value="all">담당자 전체</option>
-          {(data?.owners ?? []).map((owner) => (
-            <option key={owner.ownerId} value={owner.ownerId}>
-              {owner.ownerName} ({owner.count})
-            </option>
-          ))}
-        </select>
-        <select
-          value={sortKey}
-          onChange={(event) => setSortKey(event.target.value as SortKey)}
-          className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[13px] text-[#111110] outline-none transition-colors focus:border-[#111110]"
-        >
-          {SORT_OPTIONS.map((option) => (
-            <option key={option.key} value={option.key}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          onClick={() => setExpiringOnly((prev) => !prev)}
-          className={`inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-[12px] font-semibold transition-colors ${
-            expiringOnly
-              ? "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
-              : "border-[#e8e8e4] bg-white text-[#111110] hover:bg-[#f5f5f2]"
-          }`}
-        >
-          <AlertTriangle className="h-3.5 w-3.5" />
-          만료 임박만
-        </button>
-        <span className="ml-auto text-[11px] text-[#1a1a1a]/35">{formatNumber(filtered.length)}곳 표시</span>
+
+        <div className="flex flex-wrap items-center gap-x-4 text-[12px] font-medium text-[#615D59]">
+          <span>총 잔액 <strong className="text-[#084734] font-bold">{loading ? "…" : formatCNY(summary?.totalBalance)}</strong></span>
+          <span>총 오더 <strong className="text-[#111110] font-bold">{loading ? "…" : formatUSD(summary?.totalOrderAmount)}</strong></span>
+        </div>
       </div>
 
-      {/* 모바일 카드 폴백 — 넓은 표(min-w 920)는 sm 미만에서 존재신호 중심 카드로 대체 */}
-      <div className="sm:hidden">
-        {loading && !data ? (
-          <div className="divide-y divide-[#f0f0ec]">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={`msk-${i}`} className="py-4">
-                <div className="h-4 w-40 animate-pulse rounded bg-[#f0f0ec]" />
-                <div className="mt-1.5 h-3 w-24 animate-pulse rounded bg-[#f5f5f2]" />
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <div className="h-8 animate-pulse rounded-lg bg-[#f5f5f2]" />
-                  <div className="h-8 animate-pulse rounded-lg bg-[#f5f5f2]" />
-                </div>
-              </div>
+      {/* ─── 필터 바: 소스 탭, 검색, 담당자(내 담당 디폴트), 정렬, 만료 임박 ─── */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        {/* 좌측: 소스 선택 세그먼트 (전체 / 원천 고객 / 리드 전부 다 포함) */}
+        <div className="flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-0.5 text-[12px] font-semibold">
+          <button
+            type="button"
+            onClick={() => setSourceFilter("all")}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 transition-colors ${
+              sourceFilter === "all" ? "bg-white text-[#084734] shadow-xs" : "text-[#615D59] hover:text-[#111110]"
+            }`}
+          >
+            <Layers className="h-3.5 w-3.5" />
+            <span>전체</span>
+            <span className="text-[11px] opacity-75">({grandTotal})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSourceFilter("neo")}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 transition-colors ${
+              sourceFilter === "neo" ? "bg-white text-[#084734] shadow-xs" : "text-[#615D59] hover:text-[#111110]"
+            }`}
+          >
+            <Building2 className="h-3.5 w-3.5" />
+            <span>원천 고객</span>
+            <span className="text-[11px] opacity-75">({totalNeoCount})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSourceFilter("lead")}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 transition-colors ${
+              sourceFilter === "lead" ? "bg-white text-[#084734] shadow-xs" : "text-[#615D59] hover:text-[#111110]"
+            }`}
+          >
+            <PhoneCall className="h-3.5 w-3.5" />
+            <span>리드</span>
+            <span className="text-[11px] opacity-75">({totalLeadsCount})</span>
+          </button>
+        </div>
+
+        {/* 우측: 검색, 담당자(내 담당 기본), 정렬, 필터 칩 */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* 검색 입력 */}
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#A39E98]" />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="학원명·UID·전화·담당자·리드"
+              className="h-8.5 w-[210px] rounded-lg border border-[#e8e8e4] bg-white pl-8 pr-2.5 text-[12.5px] text-[#111110] outline-none transition-colors focus:border-[#084734]"
+            />
+          </div>
+
+          {/* 내 담당 칩 (디폴트) */}
+          {currentOwner ? (
+            <button
+              type="button"
+              onClick={() => setOwnerFilter(ownerFilter === CURRENT_OWNER_VALUE ? "all" : CURRENT_OWNER_VALUE)}
+              aria-pressed={ownerFilter === CURRENT_OWNER_VALUE}
+              className={`inline-flex h-8.5 items-center gap-1.5 rounded-lg border px-2.5 text-[12px] font-semibold transition-all ${
+                ownerFilter === CURRENT_OWNER_VALUE
+                  ? "border-[#084734] bg-[#ECFDF5] text-[#084734] shadow-xs"
+                  : "border-[#e8e8e4] bg-white text-[#615D59] hover:bg-[#fafaf8]"
+              }`}
+            >
+              <User className="h-3 w-3" />
+              <span>내 담당</span>
+              <span className="text-[11px] opacity-70">({currentOwner.displayName})</span>
+            </button>
+          ) : null}
+
+          {/* 담당자 전체 칩 */}
+          <button
+            type="button"
+            onClick={() => setOwnerFilter("all")}
+            aria-pressed={ownerFilter === "all" || !ownerFilter}
+            className={`inline-flex h-8.5 items-center gap-1 rounded-lg border px-2 text-[12px] font-semibold transition-all ${
+              ownerFilter === "all" || !ownerFilter
+                ? "border-[#084734] bg-[#084734] text-white"
+                : "border-[#e8e8e4] bg-white text-[#615D59] hover:bg-[#fafaf8]"
+            }`}
+          >
+            <Users className="h-3 w-3" />
+            <span>전체</span>
+          </button>
+
+          {/* 담당자 드롭다운 */}
+          <select
+            value={ownerFilter === CURRENT_OWNER_VALUE ? CURRENT_OWNER_VALUE : ownerFilter}
+            onChange={(e) => setOwnerFilter(e.target.value)}
+            className="h-8.5 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#111110] outline-none focus:border-[#084734]"
+          >
+            <option value="all">담당자 선택 (전체)</option>
+            <option value={CURRENT_OWNER_VALUE}>내 담당 · {currentOwner?.displayName ?? "담당자 연결 확인"}</option>
+            {crmOwners.map((owner) => (
+              <option key={owner.ownerKey} value={owner.displayName}>
+                {owner.displayName} ({owner.teamRoleLabel})
+              </option>
+            ))}
+          </select>
+
+          {/* 정렬 드롭다운 */}
+          <select
+            value={sortKey}
+            onChange={(e) => setSortKey(e.target.value as SortKey)}
+            className="h-8.5 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#111110] outline-none focus:border-[#084734]"
+          >
+            {SORT_OPTIONS.map((option) => (
+              <option key={option.key} value={option.key}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+
+          {/* 만료 임박만 버튼 */}
+          <button
+            type="button"
+            onClick={() => setExpiringOnly((prev) => !prev)}
+            className={`inline-flex h-8.5 items-center gap-1.5 rounded-lg border px-2.5 text-[12px] font-semibold transition-colors ${
+              expiringOnly
+                ? "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
+                : "border-[#e8e8e4] bg-white text-[#111110] hover:bg-[#f5f5f2]"
+            }`}
+          >
+            <AlertTriangle className="h-3 w-3" />
+            만료 임박
+          </button>
+
+          <span className="text-[11.5px] font-medium text-[#615D59]">
+            {formatNumber(filtered.length)}곳
+          </span>
+        </div>
+      </div>
+
+      {/* ─── 모바일 카드 리스트 ─── */}
+      <div className="sm:hidden divide-y divide-[#f0f0ec] rounded-2xl border border-[#e8e8e4] bg-white">
+        {loading && !neoData ? (
+          <div className="p-4 space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-16 animate-pulse rounded-lg bg-[#f5f5f2]" />
             ))}
           </div>
-        ) : !data ? (
-          <CustomersLoadFailed message={error} onRetry={() => void load({ force: true })} />
-        ) : visibleRows.length === 0 ? (
-          <EmptyCustomers hasFilters={hasActiveFilters} onReset={resetFilters} />
+        ) : filtered.length === 0 ? (
+          <div className="py-12 text-center text-[13px] text-[#615D59]">
+            조건에 맞는 고객 또는 리드가 없습니다.
+          </div>
         ) : (
-          <div className="divide-y divide-[#f0f0ec]">
-            {visibleRows.map((row: NeoCrmCustomerListRow) => (
-              <button
-                key={`m-${row.accountId}`}
-                type="button"
-                onClick={() => setSelectedAccountId(row.accountId)}
-                className="block w-full py-4 text-left transition-colors hover:bg-[#fafaf8]"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-[13px] font-semibold text-[#111110]">{row.name}</p>
-                    <p className="mt-0.5 truncate text-[11px] text-[#1a1a1a]/35">
-                      {row.uid ? `UID ${row.uid}` : "EEO 미연결"}
-                      {row.phone ? ` · ${row.phone}` : ""}
-                    </p>
+          visibleRows.map((row) => (
+            <div
+              key={row.key}
+              onClick={() => {
+                if (row.origin === "neo") setSelectedAccountId(row.id)
+              }}
+              className="p-3.5 transition-colors hover:bg-[#fafaf8]"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`rounded-xs px-1.5 py-0.2 text-[10px] font-bold ${
+                        row.origin === "neo"
+                          ? "bg-[#f0f0ec] text-[#615D59]"
+                          : "bg-[#ECFDF5] text-[#084734]"
+                      }`}
+                    >
+                      {row.tagLabel}
+                    </span>
+                    <p className="truncate text-[13.5px] font-semibold text-[#111110]">{row.name}</p>
                   </div>
-                  <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-[#1a1a1a]/25" />
+                  <p className="mt-0.5 truncate text-[11.5px] text-[#A39E98]">{row.subText}</p>
                 </div>
-                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]">
-                  <span className="font-semibold text-[#084734]">
-                    잔액 {row.balance == null ? "-" : formatCNY(row.balance)}
-                  </span>
-                  <span className="text-[#1a1a1a]/45">오더 {formatUSD(row.orderAmount)}</span>
-                  <span className="text-[#1a1a1a]/45">{row.ownerName}</span>
+                <Link
+                  href={row.detailHref}
+                  className="shrink-0 text-[11px] font-semibold text-[#084734] underline"
+                >
+                  상세 ↗
+                </Link>
+              </div>
+
+              <div className="mt-2 flex flex-wrap items-center justify-between text-[12px]">
+                <div className="flex items-center gap-2">
+                  {row.origin === "neo" ? (
+                    <span className="font-bold text-[#084734]">
+                      {row.balance == null ? "-" : formatCNY(row.balance)}
+                    </span>
+                  ) : (
+                    <span className="rounded-xs bg-[#f0f0ec] px-1.5 py-0.2 text-[11px] text-[#111110]">
+                      {row.statusText || "신규 리드"}
+                    </span>
+                  )}
+                  <span className="text-[#A39E98]">· {row.ownerName}</span>
                 </div>
-                <div className="mt-1.5">
-                  <ExpiryBadge expireAt={row.expireAt} />
-                </div>
-              </button>
-            ))}
-          </div>
+                {row.origin === "neo" && <ExpiryBadge expireAt={row.expireAt} />}
+              </div>
+            </div>
+          ))
         )}
       </div>
 
-      <div className="hidden overflow-x-auto sm:block">
+      {/* ─── 데스크톱 통합 테이블 ─── */}
+      <div className="hidden overflow-x-auto rounded-2xl border border-[#e8e8e4] bg-white sm:block">
         <table className="min-w-[920px] w-full text-left">
-          <thead className="text-[11px] uppercase tracking-[0.12em] text-[#1a1a1a]/35">
+          <thead className="border-b border-[#f0f0ec] bg-[#fafaf8] text-[11px] font-semibold uppercase tracking-[0.08em] text-[#615D59]">
             <tr>
-              <th className="py-3 pr-4 font-semibold">학원</th>
-              <th className="py-3 pr-4 font-semibold">담당자</th>
-              <th className="py-3 pr-4 text-right font-semibold">잔액</th>
-              <th className="py-3 pr-4 font-semibold">만료</th>
-              <th className="py-3 pr-4 font-semibold">최근수업</th>
-              <th className="py-3 pl-4 text-right font-semibold">오더</th>
+              <th className="py-2.5 pl-4 pr-3">구분 · 고객/학원명</th>
+              <th className="py-2.5 pr-3">담당자</th>
+              <th className="py-2.5 pr-3 text-right">잔액 (CNY)</th>
+              <th className="py-2.5 pr-3">만료일 / 리드상태</th>
+              <th className="py-2.5 pr-3">최근수업 / 접수일</th>
+              <th className="py-2.5 pl-3 pr-4 text-right">오더 (USD) / 바로가기</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#f0f0ec]">
-            {loading && !data ? (
+          <tbody className="divide-y divide-[#f0f0ec] text-[12.5px]">
+            {loading && !neoData ? (
               Array.from({ length: 8 }).map((_, i) => (
                 <tr key={`sk-${i}`}>
-                  {Array.from({ length: 6 }).map((__, j) => (
-                    <td key={j} className="py-4 pr-4">
-                      <div className="h-4 animate-pulse rounded bg-[#f0f0ec]" />
-                    </td>
-                  ))}
+                  <td colSpan={6} className="py-3 px-4">
+                    <div className="h-5 animate-pulse rounded bg-[#f5f5f2]" />
+                  </td>
                 </tr>
               ))
-            ) : !data ? (
+            ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={6}>
-                  <CustomersLoadFailed message={error} onRetry={() => void load({ force: true })} />
-                </td>
-              </tr>
-            ) : visibleRows.length === 0 ? (
-              <tr>
-                <td colSpan={6}>
-                  <EmptyCustomers hasFilters={hasActiveFilters} onReset={resetFilters} />
+                <td colSpan={6} className="py-12 text-center text-[13px] text-[#615D59]">
+                  {hasActiveFilters ? "검색 조건에 맞는 고객 또는 리드가 없습니다." : "등록된 고객 또는 리드가 없습니다."}
+                  {hasActiveFilters && (
+                    <button
+                      type="button"
+                      onClick={resetFilters}
+                      className="ml-2 font-semibold text-[#084734] underline"
+                    >
+                      필터 초기화
+                    </button>
+                  )}
                 </td>
               </tr>
             ) : (
-              visibleRows.map((row: NeoCrmCustomerListRow) => (
-                <tr
-                  key={row.accountId}
-                  onClick={() => setSelectedAccountId(row.accountId)}
-                  className="cursor-pointer align-top transition-colors hover:bg-[#fafaf8]"
-                >
-                  <td className="py-4 pr-4">
-                    <p className="flex items-center gap-1 text-[13px] font-semibold text-[#111110]">
-                      {row.name}
-                      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#1a1a1a]/25" />
-                      {/* 행 클릭(빠른 보기 패널)과 별개로 고객 360 상세 페이지 직행 딥링크 —
-                          키 규약은 unified 드로어 '자세히 보기'와 동일(neo:{accountId}). */}
-                      <Link
-                        href={`/admin/crm/customers/${encodeURIComponent(`neo:${row.accountId}`)}`}
-                        onClick={(event) => event.stopPropagation()}
-                        title="고객 360 자세히 보기"
-                        className="shrink-0 text-[11px] font-semibold text-[#084734] underline-offset-2 hover:underline"
-                      >
-                        상세 ↗
-                      </Link>
-                    </p>
-                    <p className="mt-1 text-[11px] text-[#1a1a1a]/35">
-                      {row.uid ? `UID ${row.uid}` : "EEO 미연결"}
-                      {row.phone ? ` · ${row.phone}` : ""}
-                    </p>
-                  </td>
-                  <td className="py-4 pr-4 text-[12px] text-[#1a1a1a]/55">{row.ownerName}</td>
-                  <td className="py-4 pr-4 text-right text-[13px] font-semibold text-[#084734]">
-                    {row.balance == null ? "-" : formatCNY(row.balance)}
-                  </td>
-                  <td className="py-4 pr-4">
-                    <ExpiryBadge expireAt={row.expireAt} />
-                  </td>
-                  <td className="py-4 pr-4 text-[12px] text-[#1a1a1a]/45">{formatDay(row.lastClassAt)}</td>
-                  <td className="py-4 pl-4 text-right">
-                    <p className="text-[12px] font-semibold text-[#111110]">{formatUSD(row.orderAmount)}</p>
-                    <p className="text-[11px] text-[#1a1a1a]/35">{formatNumber(row.orderCount)}건</p>
-                  </td>
-                </tr>
-              ))
+              visibleRows.map((row) => {
+                const isNeo = row.origin === "neo"
+
+                return (
+                  <tr
+                    key={row.key}
+                    onClick={() => {
+                      if (isNeo) setSelectedAccountId(row.id)
+                    }}
+                    className="cursor-pointer align-middle transition-colors hover:bg-[#fafaf8]"
+                  >
+                    {/* 고객/학원명 */}
+                    <td className="py-2.5 pl-4 pr-3">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`shrink-0 rounded-xs px-1.5 py-0.2 text-[10.5px] font-bold ${
+                            isNeo
+                              ? "bg-[#f0f0ec] text-[#615D59]"
+                              : "bg-[#ECFDF5] text-[#084734]"
+                          }`}
+                        >
+                          {row.tagLabel}
+                        </span>
+                        <p className="truncate font-semibold text-[#111110]">{row.name}</p>
+                      </div>
+                      <p className="mt-0.5 truncate text-[11px] text-[#A39E98] pl-0.5">{row.subText}</p>
+                    </td>
+
+                    {/* 담당자 */}
+                    <td className="py-2.5 pr-3 text-[#111110]">
+                      <span className={row.ownerName === currentOwner?.displayName ? "font-bold text-[#084734]" : ""}>
+                        {row.ownerName}
+                      </span>
+                    </td>
+
+                    {/* 잔액 (CNY) */}
+                    <td className="py-2.5 pr-3 text-right font-semibold text-[#084734] tabular-nums">
+                      {isNeo ? (row.balance == null ? "-" : formatCNY(row.balance)) : <span className="text-[#A39E98] font-normal">-</span>}
+                    </td>
+
+                    {/* 만료일 / 리드상태 */}
+                    <td className="py-2.5 pr-3">
+                      {isNeo ? (
+                        <ExpiryBadge expireAt={row.expireAt} />
+                      ) : (
+                        <span className="inline-flex rounded-sm bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-semibold text-[#084734]">
+                          {row.statusText || "신규 리드"}
+                        </span>
+                      )}
+                    </td>
+
+                    {/* 최근수업 / 접수일 */}
+                    <td className="py-2.5 pr-3 text-[#615D59] tabular-nums">
+                      {formatDay(row.lastClassAt)}
+                    </td>
+
+                    {/* 오더 / 상세 딥링크 */}
+                    <td className="py-2.5 pl-3 pr-4 text-right">
+                      {isNeo ? (
+                        <div className="flex items-center justify-end gap-2">
+                          <div className="text-right tabular-nums">
+                            <span className="font-semibold text-[#111110]">{formatUSD(row.orderAmount)}</span>
+                            {row.orderCount > 0 ? (
+                              <span className="ml-1 text-[11px] text-[#A39E98]">({row.orderCount}건)</span>
+                            ) : null}
+                          </div>
+                          <Link
+                            href={row.detailHref}
+                            onClick={(e) => e.stopPropagation()}
+                            className="rounded-md border border-[#e8e8e4] px-1.5 py-0.5 text-[11px] font-semibold text-[#084734] hover:bg-[#ECFDF5]"
+                          >
+                            상세 ↗
+                          </Link>
+                        </div>
+                      ) : (
+                        <Link
+                          href={row.detailHref}
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 rounded-md border border-[#e8e8e4] bg-white px-2 py-0.5 text-[11.5px] font-semibold text-[#084734] hover:bg-[#ECFDF5]"
+                        >
+                          리드 관리 ↗
+                        </Link>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })
             )}
           </tbody>
         </table>
       </div>
 
+      {/* 더보기 버튼 */}
       {filtered.length > visibleRows.length ? (
         <button
           type="button"
           onClick={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
-          className="mt-4 w-full rounded-lg border border-[#e8e8e4] bg-white py-2.5 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+          className="w-full rounded-xl border border-[#e8e8e4] bg-white py-2 text-[12.5px] font-semibold text-[#111110] transition-colors hover:bg-[#fafaf8]"
         >
-          더보기 ({formatNumber(filtered.length - visibleRows.length)})
+          더보기 ({formatNumber(filtered.length - visibleRows.length)}곳 남음)
         </button>
       ) : null}
 
+      {/* 원천 고객 상세 슬라이드오버 드로어 */}
       <AnimatePresence>
         {selectedAccountId ? (
           <CustomerDetailPanel

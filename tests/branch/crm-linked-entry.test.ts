@@ -263,7 +263,7 @@ describe("SalesLedgerWorkbench — CRM ↗ 배선(레일 전용, 1열 무변경)
     expect(matrix).toContain("export function CrmLinkedBadge")
     expect(matrix).not.toContain("<CrmLinkedBadge")
     // 미연결 팝오버(1열 트리거)·레일 미연결 배지는 현행 유지.
-    expect(matrix).toContain("CRM 미연결 — 매출·활동이 CRM 고객과 이어져 있지 않습니다.")
+    expect(matrix).toContain("CRM 미연결 상태입니다. 매출과 영업 활동이 CRM 고객과 자동 연동되도록 연결할 수 있습니다.")
     expect(matrix).toContain("매칭 인박스에서 연결 ↗")
   })
 })

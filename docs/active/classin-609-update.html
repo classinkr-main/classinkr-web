@@ -1,0 +1,1690 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>ClassIn 6.0.9 & AI 강의평가(수업 품질 진단) 공식 업데이트 가이드 | 클래스인</title>
+  <meta name="description" content="AI 칠판 고도화(STEM 수식 인식·실시간 채점), 교실 안 AgentIn 대화, 수업 녹화본 기반 AI 강의 품질 진단 4대 영역 11개 지표 리포트 등 ClassIn 6.0.9의 모든 최신 기능과 활용 가이드.">
+  <meta property="og:title" content="ClassIn 6.0.9 & AI 강의평가 최신 업데이트 안내">
+  <meta property="og:description" content="수업 중 실시간 AI 채점부터 데이터 기반 AI 강의 품질 진단까지! 교사의 수업 준비 부담을 덜고 학생 성취도를 높이는 최신 기능을 확인하세요.">
+  <meta property="og:image" content="/images/updates/609/eval_01_3a695856.png">
+  <meta property="og:type" content="article">
+  <link rel="canonical" href="https://classin.co.kr/classin-609-update.html">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "ClassIn 6.0.9 & AI 강의평가(수업 품질 진단) 공식 업데이트 가이드",
+    "description": "AI 칠판 고도화(STEM 수식 인식·실시간 채점), 교실 안 AgentIn 대화, 수업 녹화본 기반 AI 강의 품질 진단 4대 영역 11개 지표 리포트 등 ClassIn 6.0.9의 모든 최신 기능과 활용 가이드.",
+    "image": "https://classin.co.kr/images/updates/609/eval_01_3a695856.png",
+    "author": {
+      "@type": "Organization",
+      "name": "ClassIn Korea",
+      "url": "https://classin.co.kr"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "ClassIn Korea",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://classin.co.kr/images/logo.png"
+      }
+    },
+    "datePublished": "2026-09-21",
+    "dateModified": "2026-10-14"
+  }
+  </script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+  <style>
+    :root {
+      --green: #084734;
+      --green-dark: #053325;
+      --green-hover: #065c41;
+      --green-surface: #ECFDF5;
+      --green-border: rgba(8, 71, 52, 0.16);
+      --green-accent: #10B981;
+      --bg: #FAFAF8;
+      --surface: #FFFFFF;
+      --surface-subtle: #F6F5F4;
+      --ink: #111110;
+      --body: #3E3B38;
+      --muted: #736F6B;
+      --line: rgba(0, 0, 0, 0.08);
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 22px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
+      --shadow-md: 0 6px 20px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.03);
+      --font: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font);
+      background-color: var(--bg);
+      color: var(--body);
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+      padding-bottom: 96px;
+    }
+
+    /* Container */
+    .container {
+      width: 100%;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Top Nav */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(250, 250, 248, 0.94);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--line);
+    }
+    .header-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--ink);
+    }
+    .brand-logo {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: var(--green);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .brand-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 9px;
+      border-radius: 9999px;
+      background: var(--green-surface);
+      color: var(--green);
+      font-size: 11px;
+      font-weight: 700;
+      border: 1px solid var(--green-border);
+    }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 9999px;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.15s ease;
+      cursor: pointer;
+      border: 1px solid transparent;
+      user-select: none;
+    }
+    .btn-outline {
+      background: var(--surface);
+      border-color: var(--line);
+      color: var(--ink);
+    }
+    .btn-outline:hover {
+      background: var(--surface-subtle);
+      border-color: rgba(0,0,0,0.15);
+    }
+    .btn-primary {
+      background: var(--green);
+      color: #FFFFFF;
+    }
+    .btn-primary:hover {
+      background: var(--green-hover);
+    }
+
+    /* Hero */
+    .hero {
+      padding: 56px 0 32px;
+      text-align: center;
+    }
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--green-surface);
+      color: var(--green);
+      border: 1px solid var(--green-border);
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      margin-bottom: 20px;
+    }
+    .hero-title {
+      font-size: clamp(30px, 4.4vw, 48px);
+      font-weight: 800;
+      color: var(--ink);
+      letter-spacing: -0.035em;
+      line-height: 1.18;
+      margin-bottom: 16px;
+    }
+    .hero-title .highlight {
+      color: var(--green);
+      position: relative;
+      display: inline-block;
+    }
+    .hero-desc {
+      font-size: clamp(15px, 1.8vw, 18px);
+      color: var(--muted);
+      max-width: 740px;
+      margin: 0 auto 28px;
+      line-height: 1.6;
+    }
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .hero-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .hero-meta-item strong {
+      color: var(--ink);
+    }
+
+    /* Sticky Subnav */
+    .tab-bar-wrap {
+      position: sticky;
+      top: 64px;
+      z-index: 90;
+      background: rgba(250, 250, 248, 0.95);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 40px;
+    }
+    .tab-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 10px 0;
+      scrollbar-width: none;
+    }
+    .tab-bar::-webkit-scrollbar { display: none; }
+    .tab-btn {
+      white-space: nowrap;
+      padding: 8px 18px;
+      border-radius: 9999px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted);
+      text-decoration: none;
+      background: transparent;
+      border: 1px solid transparent;
+      transition: all 0.15s ease;
+      cursor: pointer;
+    }
+    .tab-btn:hover {
+      color: var(--ink);
+      background: var(--surface-subtle);
+    }
+    .tab-btn.active {
+      color: var(--green);
+      background: var(--green-surface);
+      border-color: var(--green-border);
+      font-weight: 700;
+    }
+
+    /* Reading Progress Bar */
+    .progress-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--green), #10B981);
+      z-index: 1000;
+      width: 0%;
+      transition: width 0.08s ease-out;
+    }
+
+    /* Filter & Search Bar */
+    .filter-bar {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 32px;
+      padding: 16px 20px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
+    }
+    .search-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+    }
+    .search-box {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .search-box svg {
+      position: absolute;
+      left: 14px;
+      color: var(--muted);
+      pointer-events: none;
+    }
+    .search-input {
+      width: 100%;
+      padding: 10px 38px 10px 40px;
+      font-size: 14px;
+      font-family: inherit;
+      border: 1px solid var(--line);
+      border-radius: 9999px;
+      background: var(--surface-subtle);
+      color: var(--ink);
+      outline: none;
+      transition: all 0.15s ease;
+    }
+    .search-input:focus {
+      background: #FFFFFF;
+      border-color: var(--green);
+      box-shadow: 0 0 0 3px rgba(8, 71, 52, 0.08);
+    }
+    .search-clear {
+      position: absolute;
+      right: 12px;
+      background: transparent;
+      border: none;
+      font-size: 18px;
+      color: var(--muted);
+      cursor: pointer;
+      line-height: 1;
+      padding: 4px;
+    }
+    .search-clear:hover { color: var(--ink); }
+    .search-status {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--green);
+      white-space: nowrap;
+    }
+    .chips-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .filter-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      margin-right: 4px;
+    }
+    .chip {
+      padding: 5px 14px;
+      border-radius: 9999px;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--body);
+      background: var(--surface-subtle);
+      border: 1px solid var(--line);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .chip:hover {
+      background: #ECEBE9;
+      color: var(--ink);
+    }
+    .chip.active {
+      background: var(--green);
+      color: #FFF;
+      border-color: var(--green);
+      font-weight: 700;
+    }
+
+    /* Comparison Matrix */
+    .compare-section {
+      margin-top: 28px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+    .compare-header {
+      padding: 16px 20px;
+      background: var(--surface-subtle);
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .compare-title {
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--ink);
+    }
+    .compare-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+    }
+    .compare-table th, .compare-table td {
+      padding: 12px 18px;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+      vertical-align: middle;
+    }
+    .compare-table tr:last-child td { border-bottom: none; }
+    .compare-feature { font-weight: 700; color: var(--ink); width: 22%; }
+    .compare-prev { color: var(--muted); width: 38%; }
+    .compare-next { color: var(--green); font-weight: 600; background: rgba(236, 253, 245, 0.45); width: 40%; }
+
+    /* Section common */
+    .section {
+      padding: 36px 0 56px;
+      scroll-margin-top: 130px;
+    }
+    .section-header {
+      margin-bottom: 28px;
+    }
+    .section-tag {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--green);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 6px;
+    }
+    .section-title {
+      font-size: clamp(24px, 3vw, 32px);
+      font-weight: 800;
+      color: var(--ink);
+      letter-spacing: -0.03em;
+      line-height: 1.25;
+      margin-bottom: 10px;
+    }
+    .section-desc {
+      font-size: 15px;
+      color: var(--muted);
+      max-width: 680px;
+      line-height: 1.6;
+    }
+
+    /* Grid & Cards */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      padding: 24px;
+      box-shadow: var(--shadow-sm);
+      transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .card:hover {
+      border-color: rgba(8,71,52,0.22);
+      box-shadow: var(--shadow-md);
+    }
+    .card-header-flex {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .card-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: var(--green-surface);
+      color: var(--green);
+    }
+    .target-pill {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: var(--surface-subtle);
+      color: var(--muted);
+    }
+    .card-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 8px;
+      letter-spacing: -0.02em;
+    }
+    .card-body {
+      font-size: 14px;
+      color: var(--body);
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+    .card-img-wrap {
+      width: 100%;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      border: 1px solid var(--line);
+      background: #ECEBE8;
+      position: relative;
+    }
+    .card-img {
+      width: 100%;
+      height: auto;
+      display: block;
+      cursor: zoom-in;
+      transition: transform 0.2s ease, opacity 0.2s ease;
+    }
+    .card-img:hover {
+      opacity: 0.95;
+    }
+    .card-list {
+      list-style: none;
+      font-size: 13.5px;
+      color: var(--body);
+      margin-top: 14px;
+    }
+    .card-list li {
+      position: relative;
+      padding-left: 18px;
+      margin-bottom: 6px;
+      line-height: 1.5;
+    }
+    .card-list li::before {
+      content: "";
+      position: absolute;
+      left: 4px;
+      top: 8px;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--green);
+    }
+
+    /* Highlight Banner Box */
+    .callout-box {
+      background: var(--green-surface);
+      border: 1px solid var(--green-border);
+      border-radius: var(--radius-md);
+      padding: 24px 28px;
+      margin-bottom: 32px;
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+    .callout-icon {
+      flex-shrink: 0;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--green);
+      color: #FFF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: bold;
+    }
+    .callout-content h4 {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--green-dark);
+      margin-bottom: 6px;
+    }
+    .callout-content p {
+      font-size: 14px;
+      color: var(--body);
+      line-height: 1.6;
+    }
+
+    /* Step Timeline */
+    .step-item {
+      display: grid;
+      grid-template-columns: 84px 1fr;
+      gap: 20px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow-sm);
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    @media (max-width: 640px) {
+      .step-item {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+    }
+    .step-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 36px;
+      background: var(--green);
+      color: #FFFFFF;
+      font-size: 12px;
+      font-weight: 800;
+      border-radius: 8px;
+      letter-spacing: 0.05em;
+    }
+    .step-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 6px;
+    }
+    .step-desc {
+      font-size: 14.5px;
+      color: var(--body);
+      line-height: 1.6;
+      margin-bottom: 14px;
+    }
+
+    /* AI Analysis Interactive Rubric Cards */
+    .rubric-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 16px;
+      margin: 20px 0 32px;
+    }
+    .rubric-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+    .rubric-card:hover {
+      border-color: var(--green);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+    .rubric-card.active {
+      border-color: var(--green);
+      background: #F8FEFA;
+    }
+    .rubric-card-num {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--green);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .rubric-card-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 8px;
+    }
+    .rubric-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-bottom: 10px;
+    }
+    .rubric-tag {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: var(--green-surface);
+      color: var(--green);
+    }
+    .rubric-detail {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* AI Analysis Metric Table */
+    .metric-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      margin: 20px 0;
+      font-size: 14px;
+      box-shadow: var(--shadow-sm);
+    }
+    .metric-table th, .metric-table td {
+      padding: 14px 18px;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+    }
+    .metric-table th {
+      background: var(--surface-subtle);
+      color: var(--ink);
+      font-weight: 700;
+      font-size: 13px;
+    }
+    .metric-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* Image Gallery Grid */
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-top: 20px;
+    }
+    .gallery-item {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+    .gallery-item img {
+      width: 100%;
+      height: 180px;
+      object-fit: cover;
+      display: block;
+      cursor: zoom-in;
+      background: #ECEBE8;
+    }
+    .gallery-caption {
+      padding: 10px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink);
+      background: #FFF;
+      border-top: 1px solid var(--line);
+    }
+
+    /* Lightbox Modal */
+    .lightbox {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.88);
+      z-index: 2000;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    .lightbox.active {
+      display: flex;
+    }
+    .lightbox-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      max-width: 94vw;
+      max-height: 94vh;
+      position: relative;
+    }
+    .lightbox-inner img {
+      max-width: 92vw;
+      max-height: 82vh;
+      border-radius: var(--radius-sm);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+      object-fit: contain;
+      background: #111;
+    }
+    .lightbox-caption {
+      margin-top: 14px;
+      color: #F3F4F6;
+      font-size: 14px;
+      font-weight: 600;
+      background: rgba(20, 20, 20, 0.75);
+      padding: 6px 18px;
+      border-radius: 9999px;
+      border: 1px solid rgba(255,255,255,0.15);
+      max-width: 80vw;
+      text-align: center;
+      letter-spacing: -0.01em;
+    }
+    .lightbox-close {
+      position: absolute;
+      top: -36px;
+      right: 0;
+      color: #fff;
+      font-size: 28px;
+      font-weight: 300;
+      cursor: pointer;
+      line-height: 1;
+      padding: 4px;
+      opacity: 0.8;
+      transition: opacity 0.15s;
+    }
+    .lightbox-close:hover { opacity: 1; }
+
+    /* Floating Toast */
+    .toast {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: #111110;
+      color: #FFFFFF;
+      padding: 12px 24px;
+      border-radius: 9999px;
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+      z-index: 1000;
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s;
+      opacity: 0;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    /* Floating Back-to-Top Button */
+    .btn-totop {
+      position: fixed;
+      bottom: 28px;
+      right: 28px;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      box-shadow: var(--shadow-md);
+      cursor: pointer;
+      z-index: 80;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.2s ease;
+    }
+    .btn-totop.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .btn-totop:hover {
+      background: var(--green-surface);
+      color: var(--green);
+      border-color: var(--green-border);
+    }
+
+    /* CTA Section */
+    .cta-banner {
+      background: linear-gradient(135deg, var(--green-dark) 0%, var(--green) 100%);
+      color: #FFFFFF;
+      border-radius: var(--radius-lg);
+      padding: 48px 36px;
+      text-align: center;
+      margin-top: 60px;
+      box-shadow: 0 20px 40px rgba(8, 71, 52, 0.16);
+    }
+    .cta-banner h3 {
+      font-size: clamp(22px, 3vw, 32px);
+      font-weight: 800;
+      margin-bottom: 12px;
+      letter-spacing: -0.02em;
+    }
+    .cta-banner p {
+      font-size: 16px;
+      color: rgba(255,255,255,0.85);
+      max-width: 620px;
+      margin: 0 auto 28px;
+      line-height: 1.6;
+    }
+    .cta-btn-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+    }
+    .btn-cta-white {
+      background: #FFFFFF;
+      color: var(--green-dark);
+      font-weight: 700;
+      padding: 12px 28px;
+      font-size: 15px;
+    }
+    .btn-cta-white:hover {
+      background: #F0FDF4;
+      transform: translateY(-1px);
+    }
+    .btn-cta-outline {
+      border: 1px solid rgba(255,255,255,0.4);
+      color: #FFFFFF;
+      padding: 12px 24px;
+      font-size: 15px;
+    }
+    .btn-cta-outline:hover {
+      background: rgba(255,255,255,0.1);
+      border-color: #FFF;
+    }
+
+    /* Print Styles */
+    @media print {
+      .header, .tab-bar-wrap, .filter-bar, .btn, .btn-totop, .cta-banner { display: none !important; }
+      body { background: #FFF; padding-bottom: 0; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .card, .step-item { box-shadow: none !important; border: 1px solid #DDD !important; break-inside: avoid; margin-bottom: 16px; }
+      .section { padding: 16px 0; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Reading Progress Bar -->
+  <div id="progress-bar" class="progress-bar"></div>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="container header-inner">
+      <a href="https://classin.co.kr" class="brand" target="_blank">
+        <span class="brand-logo">ClassIn</span>
+        <span class="brand-badge">v6.0.9 Release & AI Eval</span>
+      </a>
+      <div class="header-actions">
+        <button type="button" class="btn btn-outline" onclick="copyShareUrl()">🔗 링크 복사</button>
+        <button type="button" class="btn btn-outline" onclick="window.print()">📄 PDF/인쇄</button>
+        <a href="https://classin.co.kr/contact" target="_blank" class="btn btn-primary">도입 문의</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-eyebrow">ClassIn 2026 Autumn Major Update</div>
+      <h1 class="hero-title">
+        수업 중 실시간 AI 채점부터<br>
+        <span class="highlight">데이터 기반 AI 강의평가</span>까지
+      </h1>
+      <p class="hero-desc">
+        교실 안 AgentIn 대화와 AI 칠판의 STEM 수식 인식 고도화, 그리고 수업 녹화본을 바탕으로 4개 영역 11개 지표를 자동 진단하는 AI 강의 분석 기능이 새롭게 공개되었습니다.
+      </p>
+      <div class="hero-meta">
+        <div class="hero-meta-item">
+          <span>배포 버전:</span> <strong>ClassIn 6.0.9</strong>
+        </div>
+        <div class="hero-meta-item">
+          <span>정식 배포일:</span> <strong>2026년 9월 21일</strong>
+        </div>
+        <div class="hero-meta-item">
+          <span>적용 방식:</span> <strong>비강제 업데이트 (무료 및 유료 전 고객)</strong>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Sticky Subnav -->
+  <div class="tab-bar-wrap">
+    <div class="container">
+      <nav class="tab-bar">
+        <a href="#overview" class="tab-btn active">🌟 6.0.9 한눈에 보기</a>
+        <a href="#ai-blackboard" class="tab-btn">✍️ AI 칠판 가이드</a>
+        <a href="#ai-eval" class="tab-btn">📊 AI 강의 분석 (품질 진단)</a>
+        <a href="#student-ui" class="tab-btn">📱 학생 태블릿 화면</a>
+        <a href="#faq" class="tab-btn">❓ 자주 묻는 질문</a>
+      </nav>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <!-- 활성화 안내 Callout -->
+    <div class="callout-box">
+      <div class="callout-icon">💡</div>
+      <div class="callout-content">
+        <h4>별도 활성화가 필요한 AI 기능 안내</h4>
+        <p>
+          <strong>교실 안 AgentIn 대화</strong>, <strong>AI 칠판</strong>, <strong>실시간 자막 번역</strong>, <strong>AI 강의 분석</strong>은 기관별 맞춤 설정을 위해 기본 비활성화되어 있습니다. 무료 체험 및 사용 활성화를 원하시는 학원/학교 관리자분께서는 담당 매니저 또는 고객센터로 간편하게 활성화를 요청해 주세요 😊
+        </p>
+      </div>
+    </div>
+
+    <!-- Quick Filter & Live Search Bar -->
+    <div class="filter-bar">
+      <div class="search-row">
+        <div class="search-box">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="live-search" class="search-input" placeholder="기능명, 키워드 실시간 검색 (예: 수식, 채점, 녹화, 루브릭, 자막, AgentIn, LaTeX, 드라이브)..." oninput="handleSearch(this.value)">
+          <button type="button" id="search-clear-btn" class="search-clear" onclick="clearSearch()" style="display:none;" aria-label="검색어 지우기">&times;</button>
+        </div>
+        <div id="search-status" class="search-status"></div>
+      </div>
+      <div class="chips-row">
+        <span class="filter-title">빠른 필터:</span>
+        <button type="button" class="chip active" onclick="filterCards('all', this)">전체 보기</button>
+        <button type="button" class="chip" onclick="filterCards('agent', this)">🤖 교실 AgentIn</button>
+        <button type="button" class="chip" onclick="filterCards('blackboard', this)">✍️ AI 칠판</button>
+        <button type="button" class="chip" onclick="filterCards('grading', this)">📝 과제/채점</button>
+        <button type="button" class="chip" onclick="filterCards('eval', this)">📊 AI 강의분석</button>
+        <button type="button" class="chip" onclick="filterCards('infra', this)">☁ 드라이브/영상</button>
+      </div>
+    </div>
+
+    <!-- Part 1: 6.0.9 핵심 업데이트 10대 개선점 -->
+    <section id="overview" class="section">
+      <div class="section-header">
+        <div class="section-tag">Release Overview</div>
+        <h2 class="section-title">1. ClassIn 6.0.9 핵심 업데이트 10선</h2>
+        <p class="section-desc">
+          AI 수업 도구의 실시간 상호작용 강화와 대용량 클라우드 연동, 과제 일괄 채점 등 현장 교사와 운영진의 피드백을 집대성했습니다.
+        </p>
+      </div>
+
+      <div class="grid-2">
+        <!-- 1. 교실 안 AgentIn -->
+        <div class="card" data-category="agent">
+          <div class="card-header-flex">
+            <span class="card-badge">신규 AI 도구</span>
+            <span class="target-pill">교사 / 학생</span>
+          </div>
+          <h3 class="card-title">1. 교실 안에서 AgentIn 직접 활용</h3>
+          <p class="card-body">
+            수업 도중 예시나 설명, 연습 문항이 필요할 때 교실을 이탈하지 않고 화면 우측 툴바에서 AI 에이전트와 바로 텍스트로 대화할 수 있습니다.
+          </p>
+          <div class="card-img-wrap">
+            <img src="/images/updates/609/rel_01_3e495856.png" alt="교실 안 AgentIn 사용 화면" class="card-img" loading="lazy" decoding="async" onclick="openLightbox(this.src)">
+          </div>
+          <ul class="card-list">
+            <li><strong>에이전트 스토어:</strong> 교실에서 필요한 과목별 전문 에이전트를 추가/관리</li>
+            <li><strong>학생 사용 권한 제어:</strong> 학생 사용 허용 여부를 교사가 직접 지정</li>
+          </ul>
+        </div>
+
+        <!-- 2. AI 칠판 개선 -->
+        <div class="card" data-category="blackboard">
+          <div class="card-header-flex">
+            <span class="card-badge">인식률 대폭 향상</span>
+            <span class="target-pill">교사 / 학생</span>
+          </div>
+          <h3 class="card-title">2. AI 칠판 STEM 인식 및 출제 간소화</h3>
+          <p class="card-body">
+            수식, 연산 기호, 손글씨 풀이 과정 인식 정확도가 획기적으로 향상되었습니다. 긴 지문도 화면을 가리지 않으며 모범 답안 없이도 즉시 문항을 배포할 수 있습니다.
+          </p>
+          <div class="card-img-wrap">
+            <img src="/images/updates/609/rel_03_3e495856.png" alt="AI 칠판 문항 작성 화면" class="card-img" loading="lazy" decoding="async" onclick="openLightbox(this.src)">
+          </div>
+          <ul class="card-list">
+            <li><strong>실시간 생성 진행 표시:</strong> 채점 기준·지도 제안이 실시간 스트리밍으로 표시</li>
+            <li><strong>유형 기억:</strong> 마지막 사용한 문항 유형을 기억해 출제 시간 단축</li>
+          </ul>
+        </div>
+
+        <!-- 3. AI 요약 에이전트 -->
+        <div class="card" data-category="agent">
+          <div class="card-header-flex">
+            <span class="card-badge">맞춤형 수업 정리</span>
+            <span class="target-pill">교사 / 학생</span>
+          </div>
+          <h3 class="card-title">3. AI 요약 — 과목별 에이전트 선택</h3>
+          <p class="card-body">
+            수업 생성 시 과목과 성격에 맞는 AI 에이전트를 지정하면, 녹화본 종료 후 수업 성격에 꼭 맞는 요약본과 핵심 개념 정리가 자동으로 추출됩니다.
+          </p>
+          <div class="card-img-wrap">
+            <img src="/images/updates/609/rel_05_3e495856.png" alt="AI 요약 에이전트 설정" class="card-img" loading="lazy" decoding="async" onclick="openLightbox(this.src)">
+          </div>
+          <ul class="card-list">
+            <li>코스 그룹 내 교사 간 에이전트 목록 공유 및 일관된 요약 퀄리티 보장</li>
+          </ul>
+        </div>
+
+        <!-- 4. 과제 연속 채점 -->
+        <div class="card" data-category="grading">
+          <div class="card-header-flex">
+            <span class="card-badge">교사 피로도 경감</span>
+            <span class="target-pill">교사 / 관리자</span>
+          </div>
+          <h3 class="card-title">4. 과제 채점: 임시저장 후 일괄 발표</h3>
+          <p class="card-body">
+            채점 도중 학생을 전환해도 입력 내용이 유실되지 않고 임시저장됩니다. 모든 학생의 피드백이 끝난 뒤 [성적 발표] 버튼 한 번으로 학부모·학생에게 일괄 전달됩니다.
+          </p>
+          <div class="card-img-wrap">
+            <img src="/images/updates/609/rel_06_3e495856.png" alt="과제 임시저장 및 연속 채점" class="card-img" loading="lazy" decoding="async" onclick="openLightbox(this.src)">
+          </div>
+          <ul class="card-list">
+            <li><strong>연속 채점 모드:</strong> 목록으로 돌아가지 않고 바로 다음 학생 채점으로 이동</li>
+          </ul>
+        </div>
+
+        <!-- 5. 실시간 자막 번역 -->
+        <div class="card" data-category="infra">
+          <div class="card-header-flex">
+            <span class="card-badge">글로벌 수업</span>
+            <span class="target-pill">교사 / 학생</span>
+          </div>
+          <h3 class="card-title">5. 실시간 자막 음성인식 및 다국어 번역</h3>
+          <p class="card-body">
+            교사의 음성을 실시간 문자로 변환하고 선택한 언어로 즉시 번역합니다. 학생은 창을 위로 올려 놓친 수업 내용을 다시 볼 수 있습니다.
+          </p>
+          <div class="card-img-wrap">
+            <img src="/images/updates/609/rel_07_3e495856.png" alt="실시간 자막 번역 화면" class="card-img" loading="lazy" decoding="async" onclick="openLightbox(this.src)">
+          </div>
+          <ul class="card-list">
+            <li>글자 크기, 번역 언어, 원문-번역문 이중 언어 병기 지원 (분당 3.5 RMB + 크레딧)</li>
+          </ul>
+        </div>
+
+        <!-- 6. 무료 혜택 확대 & 드라이브 -->
+        <div class="card" data-category="infra">
+          <div class="card-header-flex">
+            <span class="card-badge">운영 편의</span>
+            <span class="target-pill">전체 고객</span>
+          </div>
+          <h3 class="card-title">6. 무료 혜택 확대 & 클라우드 드라이브 연동</h3>
+          <p class="card-body">
+            계정당 50회 누적 무료 수업과 수업 녹화, AI 강의 분석, AI 내용 요약, AI 스크립트 4종을 기본 무료 제공합니다. 또한 외부 클라우드 드라이브와 직접 연동됩니다.
+          </p>
+          <div class="grid-2" style="margin-top:12px;">
+            <div style="background:var(--surface-subtle); padding:12px; border-radius:8px;">
+              <strong style="color:var(--green); font-size:13px;">외부 드라이브 연결</strong>
+              <p style="font-size:12px; color:var(--muted); margin-top:4px;">Google Drive, OneDrive, Dropbox 파일을 교실에서 바로 열기</p>
+            </div>
+            <div style="background:var(--surface-subtle); padding:12px; border-radius:8px;">
+              <strong style="color:var(--green); font-size:13px;">8GB 대용량 업로드</strong>
+              <p style="font-size:12px; color:var(--muted); margin-top:4px;">백그라운드 업로드 및 끊김 시 이어받기 완벽 지원</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Comparison Matrix: 6.0.8 vs 6.0.9 & AI Edition -->
+      <div class="compare-section">
+        <div class="compare-header">
+          <div class="compare-title">⚡ 이전 버전 대비 주요 진화 및 차이점 한눈에 보기</div>
+          <span class="card-badge">Version 6.0.8 → 6.0.9</span>
+        </div>
+        <table class="compare-table">
+          <thead>
+            <tr>
+              <th style="width:22%; background:var(--surface-subtle); color:var(--ink);">주요 영역</th>
+              <th style="width:38%; background:var(--surface-subtle); color:var(--muted);">이전 버전 (ClassIn 6.0.8)</th>
+              <th style="width:40%; background:var(--green-surface); color:var(--green);">ClassIn 6.0.9 & AI Edition</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="compare-feature">수업 품질 진단</td>
+              <td class="compare-prev">수동 참관 및 주관적 피드백에 의존</td>
+              <td class="compare-next"><strong>수업 녹화본 멀티모달 AI 분석</strong> (4대 영역 11개 지표 리포트)</td>
+            </tr>
+            <tr>
+              <td class="compare-feature">AI 칠판 & 수식 채점</td>
+              <td class="compare-prev">단순 펜 판서 및 교사 수동 첨삭</td>
+              <td class="compare-next"><strong>손글씨 STEM 수식 실시간 인식</strong>, AI 자동 채점 및 1:1 맞춤 피드백</td>
+            </tr>
+            <tr>
+              <td class="compare-feature">교실 내 AI 상호작용</td>
+              <td class="compare-prev">외부 브라우저나 타 도구 별도 실행</td>
+              <td class="compare-next"><strong>교실 도구함 일체형 AgentIn</strong> 실시간 대화 및 예시 문항 생성</td>
+            </tr>
+            <tr>
+              <td class="compare-feature">과제 채점 워크플로우</td>
+              <td class="compare-prev">학생별 단건 저장 후 다시 목록 복귀</td>
+              <td class="compare-next"><strong>임시저장 지원</strong> 및 이전/다음 학생 원클릭 <strong>연속 채점</strong></td>
+            </tr>
+            <tr>
+              <td class="compare-feature">다국어 수업 지원</td>
+              <td class="compare-prev">기본 앱 UI 번역만 지원</td>
+              <td class="compare-next"><strong>20+ 언어 실시간 음성인식 번역 자막</strong> (글로벌 수업 최적화)</td>
+            </tr>
+            <tr>
+              <td class="compare-feature">클라우드 미디어 재생</td>
+              <td class="compare-prev">2GB 초과 고화질 영상 재생 제한</td>
+              <td class="compare-next"><strong>2GB 이상 대용량 비디오</strong> 교실 내 끊김 없는 스트리밍</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Part 2: AI 칠판 가이드 -->
+    <section id="ai-blackboard" class="section">
+      <div class="section-header">
+        <div class="section-tag">Feature Deep Dive</div>
+        <h2 class="section-title">2. AI 칠판 완벽 활용 가이드 (6.0.9)</h2>
+        <p class="section-desc">
+          교사가 문항을 제시하면 AI가 채점 기준을 세우고, 학생의 풀이를 실시간으로 모니터링하여 AI 평가 및 학급 취약 요소 분석까지 원스톱으로 처리합니다.
+        </p>
+      </div>
+
+      <!-- Steps 1 to 6 -->
+      <div class="step-item" data-category="blackboard">
+        <div class="step-badge">STEP 01</div>
+        <div>
+          <h3 class="step-title">AI 칠판 도구 열기</h3>
+          <p class="step-desc">
+            교실 우측 툴바의 <strong>도구상자(🧰) → 수업 도구 → 하단 펼치기(▼) → AI 칠판</strong>을 선택합니다.
+          </p>
+          <div class="card-img-wrap" style="max-width:540px;">
+            <img src="/images/updates/609/bb_01_3e395856.png" alt="AI 칠판 열기" class="card-img" loading="lazy" decoding="async" onclick="openLightbox(this.src)">
+          </div>
+        </div>
+      </div>
+
+      <div class="step-item" data-category="blackboard">
+        <div class="step-badge">STEP 02</div>
+        <div>
+          <h3 class="step-title">문항 작성 (주관식 / 객관식 / 말하기)</h3>
+          <p class="step-desc">
+            타이핑뿐만 아니라 <strong>음성 입력(🎤), 화면 영역 캡처, 교재 카메라 촬영(📷), 이미지 파일, 클라우드(.edbx)</strong> 등 다양한 방법으로 손쉽게 출제할 수 있습니다.
+          </p>
+          <div class="card-img-wrap" style="max-width:680px;">
+            <img src="/images/updates/609/bb_02_3e395856.png" alt="문항 작성 및 AI 에이전트 선택" class="card-img" loading="lazy" decoding="async" onclick="openLightbox(this.src)">
+          </div>
+        </div>
+      </div>
+
+      <div class="step-item" data-category="blackboard">
+        <div class="step-badge">STEP 03</div>
+        <div>
+          <h3 class="step-title">AI 답안 및 채점 기준 자동 생성</h3>
+          <p class="step-desc">
+            우측 상단 <strong>[모범 답안] → [AI 답안 생성]</strong>을 클릭하면, AI가 주관식 참고 답안과 배점 기준표를 3초 만에 생성합니다. 필요 시 교사가 최대 3,000자까지 자유롭게 수정할 수 있습니다.
+          </p>
+          <div class="card-img-wrap" style="max-width:680px;">
+            <img src="/images/updates/609/bb_03_3e395856.png" alt="AI 답안 및 채점 기준 자동 생성" class="card-img" loading="lazy" decoding="async" onclick="openLightbox(this.src)">
+          </div>
+        </div>
+      </div>
+
+      <div class="step-item" data-category="blackboard">
+        <div class="step-badge">STEP 04</div>
+        <div>
+          <h3 class="step-title">학생 답안 실시간 모니터링 (답안 상세)</h3>
+          <p class="step-desc">
+            문항을 게시하면 학생별 카드에 <strong>시작 전 / 답변 중(작성 중인 손글씨·타이핑 실시간 스트리밍) / 제출됨</strong> 상태가 표시됩니다. 카드를 클릭하면 학생의 풀이 과정을 고화질로 확대해 확인할 수 있습니다.
+          </p>
+          <div class="grid-2">
+            <div class="card-img-wrap">
+              <img src="/images/updates/609/bb_04_3e395856.png" alt="학생 답안 실시간 카드 그리드" class="card-img" loading="lazy" decoding="async" onclick="openLightbox(this.src)">
+            </div>
+            <div class="card-img-wrap">
+              <img src="/images/updates/609/bb_05_3e395856.png" alt="학생 손글씨 풀이 과정 확대 화면" class="card-img" loading="lazy" decoding="async" onclick="openLightbox(this.src)">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-item" data-category="blackboard">
+        <div class="step-badge">STEP 05</div>
+        <div>
+          <h3 class="step-title">AI 자동 채점 및 피드백 (판정 / 상세 분석 / 종합 제안)</h3>
+          <p class="step-desc">
+            학생이 제출하는 즉시 AI가 풀이 과정과 답안을 채점 기준표에 맞춰 정밀 채점합니다. 단순 정오답을 넘어 <strong>어디서 개념 오개념이 발생했는지</strong> 상세 피드백을 제공합니다.
+          </p>
+          <div class="card-img-wrap" style="max-width:680px;">
+            <img src="/images/updates/609/bb_06_3e395856.png" alt="AI 채점 상세 피드백" class="card-img" loading="lazy" decoding="async" onclick="openLightbox(this.src)">
+          </div>
+        </div>
+      </div>
+
+      <div class="step-item" data-category="blackboard">
+        <div class="step-badge">STEP 06</div>
+        <div>
+          <h3 class="step-title">답안 현황 분석 (반 전체 성취도 & AI 지도 제안)</h3>
+          <p class="step-desc">
+            학급 전체의 <strong>평균 점수, 점수 구간별 분포, 본 문항의 세부 학습 요소별 정답률</strong>을 시각화합니다. AI가 다음 수업에서 어떤 보충 설명을 진행해야 하는지 지도 제안까지 도출합니다.
+          </p>
+          <div class="card-img-wrap" style="max-width:680px;">
+            <img src="/images/updates/609/bb_07_3e395856.png" alt="학급 답안 현황 및 학습 요소 분석" class="card-img" loading="lazy" decoding="async" onclick="openLightbox(this.src)">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Part 3: AI 강의 분석 (품질 진단 및 강의평가) -->
+    <section id="ai-eval" class="section">
+      <div class="section-header">
+        <div class="section-tag">Institutional Intelligence</div>
+        <h2 class="section-title">3. AI 강의 분석 — 수업 품질 자동 진단</h2>
+        <p class="section-desc">
+          관리자가 모든 수업을 일일이 참관하지 않아도, AI가 실시간 수업 녹화본을 바탕으로 교사의 발화 점유율, 상호작용 균형, 수업 분위기, 교육학적 스캐폴딩을 정량 분석합니다.
+        </p>
+      </div>
+
+      <!-- 리포트 배너 -->
+      <div style="background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-md); padding:24px; margin-bottom:32px; box-shadow:var(--shadow-sm);" data-category="eval">
+        <div class="card-img-wrap">
+          <img src="/images/updates/609/eval_01_3a695856.png" alt="AI 강의 분석 리포트 대시보드" class="card-img" loading="lazy" decoding="async" onclick="openLightbox(this.src)">
+        </div>
+        <p style="font-size:13px; color:var(--muted); text-align:center; margin-top:12px;">
+          ▲ 실제 AI 강의 분석 종합 리포트 화면 (수업 개요, 전체 점수, 4대 영역 레이더 차트)
+        </p>
+      </div>
+
+      <!-- 4대 영역 11개 지표 인터랙티브 카드 -->
+      <h3 style="font-size:20px; font-weight:800; color:var(--ink); margin-bottom:12px; letter-spacing:-0.02em;">
+        🎯 AI 채점 기준 (4대 평가 영역 · 11개 세부 지표)
+      </h3>
+      <div class="rubric-grid">
+        <div class="rubric-card active" onclick="highlightRubric(0, this)">
+          <div class="rubric-card-num">Area 01</div>
+          <div class="rubric-card-title">수업 전달 (Delivery)</div>
+          <div class="rubric-tags">
+            <span class="rubric-tag">효과성</span>
+            <span class="rubric-tag">흥미·몰입도</span>
+            <span class="rubric-tag">스캐폴딩</span>
+          </div>
+          <p class="rubric-detail">개념 전달의 명확성, 학생 주의 환기, 스스로 해결하도록 돕는 단계별 발판(Scaffolding) 제공 여부</p>
+        </div>
+
+        <div class="rubric-card" onclick="highlightRubric(1, this)">
+          <div class="rubric-card-num">Area 02</div>
+          <div class="rubric-card-title">수업 분위기 (Climate)</div>
+          <div class="rubric-tags">
+            <span class="rubric-tag">적극적 참여</span>
+            <span class="rubric-tag">협업</span>
+            <span class="rubric-tag">정서적 안전감</span>
+          </div>
+          <p class="rubric-detail">자발적 발화 유도, 동료 간 질문 및 오답에도 위축되지 않는 심리적 안전 환경</p>
+        </div>
+
+        <div class="rubric-card" onclick="highlightRubric(2, this)">
+          <div class="rubric-card-num">Area 03</div>
+          <div class="rubric-card-title">상호작용 (Interaction)</div>
+          <div class="rubric-tags">
+            <span class="rubric-tag">공평성</span>
+            <span class="rubric-tag">반응성·평등성</span>
+            <span class="rubric-tag">자율성</span>
+          </div>
+          <p class="rubric-detail">소외 없는 질문 분배, 학생 답변에 대한 교사의 즉각적 피드백 및 선택권 보장</p>
+        </div>
+
+        <div class="rubric-card" onclick="highlightRubric(3, this)">
+          <div class="rubric-card-num">Area 04</div>
+          <div class="rubric-card-title">언어 표현 (Language)</div>
+          <div class="rubric-tags">
+            <span class="rubric-tag">명료성·유창성</span>
+            <span class="rubric-tag">표현력·전달력</span>
+          </div>
+          <p class="rubric-detail">정확한 어휘 구사, 일정한 발화 속도, 불필요한 군더더기 말 최소화 및 명확한 딕션</p>
+        </div>
+      </div>
+
+      <!-- 설정 및 확인 위치 2단 카드 -->
+      <div class="grid-2" style="margin-top:28px;" data-category="eval">
+        <div class="card">
+          <span class="card-badge">관리자 설정</span>
+          <h4 class="card-title">기능 활성화 방법</h4>
+          <p class="card-body">
+            <strong>계정 정보 → 일반 설정 → 부가가치 서비스 → AI 강의 분석</strong>을 켠 뒤, 수업을 만들 때 [AI 강의 분석] 옵션을 체크합니다.
+          </p>
+          <div class="card-img-wrap">
+            <img src="/images/updates/609/eval_02_34595856.png" alt="AI 강의 분석 활성화 경로" class="card-img" loading="lazy" decoding="async" onclick="openLightbox(this.src)">
+          </div>
+        </div>
+
+        <div class="card">
+          <span class="card-badge">리포트 열람</span>
+          <h4 class="card-title">리포트 확인 위치</h4>
+          <p class="card-body">
+            관리자는 <strong>[학습 관리] → [교사 개발 옵션]</strong>에서 원 전체 교사의 수업 리포트를 PDF로 다운로드하거나 세션별 추이를 열람할 수 있습니다. (교사는 앱의 [수업 다시보기]에서 본인 수업 확인)
+          </p>
+          <div class="card-img-wrap">
+            <img src="/images/updates/609/eval_04_34595856.png" alt="관리자 교사 개발 리포트 위치" class="card-img" loading="lazy" decoding="async" onclick="openLightbox(this.src)">
+          </div>
+        </div>
+      </div>
+
+      <!-- 세부 리포트 갤러리 -->
+      <div style="margin-top:36px;" data-category="eval">
+        <h4 style="font-size:18px; font-weight:700; color:var(--ink); margin-bottom:12px;">📊 세부 분석 리포트 화면 예시</h4>
+        <div class="gallery-grid">
+          <div class="gallery-item">
+            <img src="/images/updates/609/eval_05_34595856.png" alt="종합 평가 점수표" loading="lazy" decoding="async" onclick="openLightbox(this.src)">
+            <div class="gallery-caption">종합 평가 점수표 및 강점/개선점</div>
+          </div>
+          <div class="gallery-item">
+            <img src="/images/updates/609/eval_06_34595856.png" alt="수업 전달 영역 분석" loading="lazy" decoding="async" onclick="openLightbox(this.src)">
+            <div class="gallery-caption">수업 전달 영역 세부 평가지표</div>
+          </div>
+          <div class="gallery-item">
+            <img src="/images/updates/609/eval_07_34595856.png" alt="수업 분위기 분석" loading="lazy" decoding="async" onclick="openLightbox(this.src)">
+            <div class="gallery-caption">수업 분위기 및 참여 몰입도 진단</div>
+          </div>
+          <div class="gallery-item">
+            <img src="/images/updates/609/eval_08_34595856.png" alt="수업 상호작용 분석" loading="lazy" decoding="async" onclick="openLightbox(this.src)">
+            <div class="gallery-caption">상호작용 공평성 및 발화 분포</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Part 4: 학생 태블릿 화면 UI -->
+    <section id="student-ui" class="section">
+      <div class="section-header">
+        <div class="section-tag">Student Experience</div>
+        <h2 class="section-title">4. 학생 화면 안내 (태블릿 / iPad)</h2>
+        <p class="section-desc">
+          강사가 문항을 출제하면 학생 화면에 AI 칠판 창이 자동으로 팝업되며, 애플펜슬이나 스타일러스 펜을 이용해 손글씨로 직접 풀이 과정을 작성합니다.
+        </p>
+      </div>
+
+      <div class="grid-3">
+        <div class="card" data-category="blackboard">
+          <span class="card-badge">입력 도구</span>
+          <h4 class="card-title">① 문항 수신 및 그림판 풀이</h4>
+          <p class="card-body">타이핑, 카메라 촬영, 음성, ✍️ 그림판 손글씨를 지원하여 수학 수식이나 도형 증명도 자유롭게 풀 수 있습니다.</p>
+          <div class="card-img-wrap">
+            <img src="/images/updates/609/bb_13_3e395856.png" alt="학생 손글씨 그림판 풀이" class="card-img" loading="lazy" decoding="async" onclick="openLightbox(this.src)">
+          </div>
+        </div>
+
+        <div class="card" data-category="blackboard">
+          <span class="card-badge">실시간 진단</span>
+          <h4 class="card-title">② 즉시 AI 피드백 확인</h4>
+          <p class="card-body">제출 즉시 AI가 손글씨 풀이를 인식하여 판정, 상세 분석, 보충 지도 코멘트를 학생 화면에 바로 띄워줍니다.</p>
+          <div class="card-img-wrap">
+            <img src="/images/updates/609/bb_15_3e395856.png" alt="학생 AI 채점 결과 확인" class="card-img" loading="lazy" decoding="async" onclick="openLightbox(this.src)">
+          </div>
+        </div>
+
+        <div class="card" data-category="blackboard">
+          <span class="card-badge">말하기 문항</span>
+          <h4 class="card-title">③ 음성 답변 (스피킹)</h4>
+          <p class="card-body">외국어 말하기 문항은 음성 파형을 보며 녹음하고 제출하여 발음 및 유창성 AI 피드백을 실시간으로 확인합니다.</p>
+          <div class="card-img-wrap">
+            <img src="/images/updates/609/bb_20_3e395856.png" alt="학생 말하기 녹음 및 음성 피드백" class="card-img" loading="lazy" decoding="async" onclick="openLightbox(this.src)">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Part 5: FAQ -->
+    <section id="faq" class="section">
+      <div class="section-header">
+        <div class="section-tag">FAQ</div>
+        <h2 class="section-title">5. 자주 묻는 질문</h2>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h4 class="card-title">Q. AI 칠판과 AI 강의 분석 메뉴가 보이지 않아요.</h4>
+          <p class="card-body">
+            두 기능 모두 부가가치 서비스로 기본 비활성화되어 있습니다. 기관의 전담 매니저에게 활성화를 요청해 주시면 즉시 열어드립니다. 강사와 학생 모두 6.0.9 이상 버전이어야 정상 작동합니다.
+          </p>
+        </div>
+        <div class="card">
+          <h4 class="card-title">Q. 출제 시 모범 답안을 꼭 입력해야 하나요?</h4>
+          <p class="card-body">
+            아닙니다! 6.0.9 버전부터는 모범 답안 없이도 경고 없이 즉시 문항을 게시할 수 있습니다. 단, AI 채점 기준표를 자동으로 생성해 두면 AI가 더욱 정교하게 부분 점수를 산출합니다.
+          </p>
+        </div>
+        <div class="card">
+          <h4 class="card-title">Q. AI 강의 분석은 수동으로 올린 녹화 영상도 가능한가요?</h4>
+          <p class="card-body">
+            현재 AI 강의 분석은 ClassIn 실시간 라이브 수업 중 생성된 녹화본에 한해 제공됩니다. 외부에서 인코딩되어 수동 업로드된 영상에는 지원되지 않습니다.
+          </p>
+        </div>
+        <div class="card">
+          <h4 class="card-title">Q. 무료 계정에서도 AI 기능을 써볼 수 있나요?</h4>
+          <p class="card-body">
+            네! 6.0.9 버전부터 월별 초기화 없는 계정당 누적 50회의 무료 수업과 수업 녹화, AI 강의 분석, AI 내용 요약, AI 스크립트 4종을 기본 무료 혜택으로 체험하실 수 있습니다.
+          </p>
+        </div>
+        <div class="card">
+          <h4 class="card-title">Q. 실시간 자막 번역은 어떤 언어가 지원되나요?</h4>
+          <p class="card-body">
+            한국어, 영어, 일본어, 중국어, 스페인어, 프랑스어, 베트남어 등 20개 이상의 언어를 실시간 음성인식 및 쌍방향 자막 번역으로 지원합니다. 글로벌 원어민 수업이나 다문화 학생 참여에 최적화되어 있습니다.
+          </p>
+        </div>
+        <div class="card">
+          <h4 class="card-title">Q. 6.0.9 버전 업데이트는 어떻게 설치하나요?</h4>
+          <p class="card-body">
+            기존 클래스인 앱을 실행하면 자동으로 업데이트 알림 팝업이 표시되며, '지금 업데이트'를 클릭하면 1~2분 내로 간편하게 설치됩니다. 공식 웹사이트의 다운로드 메뉴에서도 최신 설치 파일을 언제든 다운로드하실 수 있습니다.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA Banner -->
+    <section class="cta-banner">
+      <h3>스마트 교육의 미래, 지금 클래스인과 함께하세요</h3>
+      <p>
+        교사의 수업 준비 부담을 덜어주는 AI 칠판과 학원 수업 품질을 체계적으로 끌어올리는 AI 강의 분석 리포트를 지금 바로 무료 데모로 체험해 보세요.
+      </p>
+      <div class="cta-btn-group">
+        <a href="https://classin.co.kr/contact" target="_blank" class="btn btn-cta-white">도입 상담 및 체험 신청</a>
+        <a href="https://classin.co.kr/docs/updates/classin-609-update" target="_blank" class="btn btn-cta-outline">공식 업데이트 문서 보기</a>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Lightbox Modal -->
+  <div id="lightbox" class="lightbox" onclick="closeLightbox()">
+    <div class="lightbox-inner" onclick="event.stopPropagation()">
+      <span class="lightbox-close" onclick="closeLightbox()">&times;</span>
+      <img id="lightbox-img" src="" alt="확대 이미지">
+      <div id="lightbox-caption" class="lightbox-caption"></div>
+    </div>
+  </div>
+
+  <!-- Floating Toast -->
+  <div id="toast" class="toast">
+    <span>✓ 링크가 클립보드에 복사되었습니다!</span>
+  </div>
+
+  <!-- Floating To Top Button -->
+  <button id="btn-totop" class="btn-totop" onclick="window.scrollTo({top: 0, behavior: 'smooth'})" aria-label="맨 위로">
+    ↑
+  </button>
+
+  <script>
+    // Global state
+    let activeCategory = "all";
+    let activeQuery = "";
+
+    // Lightbox with Caption & Global Image Click
+    function openLightbox(src, caption) {
+      const lb = document.getElementById("lightbox");
+      const img = document.getElementById("lightbox-img");
+      const cap = document.getElementById("lightbox-caption");
+      img.src = src;
+      img.alt = caption || "확대 스크린샷";
+      if (cap) {
+        cap.textContent = caption || "스크린샷 상세 보기 (클릭 또는 ESC로 닫기)";
+      }
+      lb.classList.add("active");
+    }
+    function closeLightbox() {
+      document.getElementById("lightbox").classList.remove("active");
+    }
+    document.addEventListener("keydown", function(e) {
+      if (e.key === "Escape") closeLightbox();
+    });
+
+    // Auto-bind click to all screenshot images
+    document.addEventListener("click", function(e) {
+      const target = e.target;
+      if (target && target.tagName === "IMG" && !target.closest("#lightbox")) {
+        openLightbox(target.src, target.alt);
+      }
+    });
+
+    // Copy share link
+    function copyShareUrl() {
+      const url = window.location.href;
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(url).then(showToast);
+      } else {
+        const input = document.createElement("input");
+        input.value = url;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand("copy");
+        document.body.removeChild(input);
+        showToast();
+      }
+    }
+    function showToast() {
+      const t = document.getElementById("toast");
+      t.classList.add("show");
+      setTimeout(() => t.classList.remove("show"), 2500);
+    }
+
+    // Category filter
+    function filterCards(category, btn) {
+      activeCategory = category;
+      document.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+      if (btn) btn.classList.add("active");
+      applyFilters();
+    }
+
+    // Live search handler
+    function handleSearch(query) {
+      activeQuery = query.trim().toLowerCase();
+      const clearBtn = document.getElementById("search-clear-btn");
+      if (clearBtn) {
+        clearBtn.style.display = activeQuery.length > 0 ? "block" : "none";
+      }
+      applyFilters();
+    }
+
+    function clearSearch() {
+      const input = document.getElementById("live-search");
+      if (input) input.value = "";
+      activeQuery = "";
+      const clearBtn = document.getElementById("search-clear-btn");
+      if (clearBtn) clearBtn.style.display = "none";
+      applyFilters();
+    }
+
+    // Master filter function combining category & search
+    function applyFilters() {
+      const cards = document.querySelectorAll(".card[data-category], .step-item[data-category]");
+      const status = document.getElementById("search-status");
+      let visibleCount = 0;
+      let totalCount = cards.length;
+
+      cards.forEach(card => {
+        const cardCat = card.getAttribute("data-category");
+        const categoryMatch = (activeCategory === "all" || cardCat === activeCategory);
+        let searchMatch = true;
+
+        if (activeQuery) {
+          const text = (card.textContent || "").toLowerCase();
+          searchMatch = text.includes(activeQuery);
+        }
+
+        if (categoryMatch && searchMatch) {
+          card.style.display = "";
+          visibleCount++;
+        } else {
+          card.style.display = "none";
+        }
+      });
+
+      if (status) {
+        if (activeQuery) {
+          if (visibleCount === 0) {
+            status.textContent = "일치하는 기능이 없습니다";
+            status.style.color = "#DC2626";
+          } else {
+            status.textContent = `${visibleCount}개 기능 일치`;
+            status.style.color = "var(--green)";
+          }
+        } else if (activeCategory !== "all") {
+          status.textContent = `${visibleCount}개 항목 표시`;
+          status.style.color = "var(--muted)";
+        } else {
+          status.textContent = "";
+        }
+      }
+    }
+
+    // Rubric card highlight
+    function highlightRubric(idx, card) {
+      document.querySelectorAll(".rubric-card").forEach(c => c.classList.remove("active"));
+      card.classList.add("active");
+    }
+
+    // Scroll listeners: Progress Bar, Top Button, Sticky Subnav
+    const progressBar = document.getElementById("progress-bar");
+    const toTopBtn = document.getElementById("btn-totop");
+    const tabs = document.querySelectorAll(".tab-btn");
+    const sections = document.querySelectorAll("section[id]");
+
+    window.addEventListener("scroll", () => {
+      const scrollY = window.pageYOffset;
+      const docHeight = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+
+      // Reading progress bar
+      if (progressBar && docHeight > 0) {
+        const pct = Math.min(100, Math.max(0, (scrollY / docHeight) * 100));
+        progressBar.style.width = pct + "%";
+      }
+
+      // To-top button
+      if (scrollY > 300) {
+        toTopBtn.classList.add("show");
+      } else {
+        toTopBtn.classList.remove("show");
+      }
+
+      // Sticky active subnav tab
+      let current = "";
+      sections.forEach(section => {
+        const sectionTop = section.offsetTop - 160;
+        if (scrollY >= sectionTop) {
+          current = section.getAttribute("id");
+        }
+      });
+      tabs.forEach(tab => {
+        tab.classList.remove("active");
+        if (tab.getAttribute("href") === "#" + current) {
+          tab.classList.add("active");
+        }
+      });
+    }, { passive: true });
+  </script>
+</body>
+</html>

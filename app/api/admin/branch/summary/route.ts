@@ -1,3 +1,4 @@
+import { branchManagerFromRequest } from "@/lib/admin/personal-branch"
 import { NextRequest, NextResponse } from "next/server"
 import { BRANCH_READ_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
@@ -43,7 +44,7 @@ export async function GET(req: NextRequest) {
   if (!periodDate) return NextResponse.json({ error: "Invalid month query" }, { status: 400 })
   try {
     return adminCachedJson(
-      await buildBranchSummaryPayload({ team, period, periodDate, includeBreakdown, overviewView, now: currentDate })
+      await buildBranchSummaryPayload({ team, period, periodDate, includeBreakdown, overviewView, manager: await branchManagerFromRequest(url, req), now: currentDate })
     )
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })

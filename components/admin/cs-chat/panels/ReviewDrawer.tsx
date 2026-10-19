@@ -169,7 +169,7 @@ export default function ReviewDrawer({
           </div>
           <p className="mt-3 flex items-start gap-2 text-[10px] leading-4 text-[#615D59]">
             <LockKeyhole className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            승인하면 최종 답변으로 고정되고 클립보드에 복사됩니다. 자동 외부 전송은 하지 않습니다.
+            승인(허가)하면 최종 답변으로 고정되고 클립보드에 복사되며, 소통 초안 복사 및 후속 작업이 허가됩니다. 자동 외부 전송은 하지 않습니다.
           </p>
         </div>
       </aside>

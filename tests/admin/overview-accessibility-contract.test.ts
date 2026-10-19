@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest"
 
 // page.tsx는 서버 프리페치 래퍼만 남았고 화면 로직은 전부 OverviewClient로 옮겨졌다.
 const overviewSource = readFileSync(join(process.cwd(), "app/admin/overview/OverviewClient.tsx"), "utf8")
+const workspaceSource = readFileSync(join(process.cwd(), "components/admin/overview/OverviewWorkspace.tsx"), "utf8")
 const statCardSource = readFileSync(join(process.cwd(), "components/admin/StatCard.tsx"), "utf8")
 
 describe("admin overview accessibility contract", () => {
@@ -24,7 +25,7 @@ describe("admin overview accessibility contract", () => {
 
   it("announces asynchronous section state without removing semantic links", () => {
     expect(overviewSource).toContain('aria-live="polite"')
-    expect(overviewSource.match(/aria-busy=/g)?.length).toBeGreaterThanOrEqual(4)
+    expect((overviewSource + workspaceSource).match(/aria-busy=/g)?.length).toBeGreaterThanOrEqual(4)
     expect(statCardSource).toContain("href={href}")
     expect(statCardSource).toContain("<StatTile")
   })

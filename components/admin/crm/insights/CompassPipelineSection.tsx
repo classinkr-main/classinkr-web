@@ -1,6 +1,8 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { useVisibleInterval } from "@/components/admin/branch/use-visible-interval"
+import { COMPASS_LIVE_REFRESH_MS } from "@/lib/compass/live-sync"
 
 import { EmptyState, Skeleton } from "@/components/admin/viz"
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
@@ -250,7 +252,7 @@ export function CompassPipelineSectionView({
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h2 id="crm-compass-pipeline-title" className="text-[15px] font-bold text-[#111110]">
-            Compass 파이프라인 · 마케팅팀 CRM 정리
+            Compass 파이프라인 · 내 담당 CRM 정리
           </h2>
           <FreshnessCaption
             generatedAt={summary?.generatedAt ?? null}
@@ -382,6 +384,8 @@ function useCompassPipelineSummary() {
   const onRefresh = useCallback(() => {
     void load(period, { force: true })
   }, [load, period])
+
+  useVisibleInterval(() => { if (!refreshing) void load(period, { force: true }) }, COMPASS_LIVE_REFRESH_MS)
 
   return { summary, loading, refreshing, error, period, onPeriodChange: setPeriod, onRefresh }
 }

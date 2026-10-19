@@ -14,10 +14,11 @@ import {
   type MoneyDealLineItemRow,
   type MoneyHwOutboundRow,
 } from "@/lib/crm/money-line-items"
-import { listBranchRevDeals, type BranchRevDeal } from "@/lib/repositories/branch-deals"
+import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
 import { listHwOutbound, type HwOutbound } from "@/lib/repositories/branch-hw"
 import { listConfirmedHwOutboundAccountLinks } from "@/lib/repositories/crm-source-links"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { fetchSupabasePages } from "@/lib/supabase/pagination"
 
 // ── 고객 360 제품 매출 요약 (계정키 조인) ────────────────────────────────────
 //
@@ -37,6 +38,9 @@ export interface CrmAccountProductSummary {
   hwBoardCount: number | null
   /** 계정키로 REV/HW 원장에 연결된 행이 하나라도 있으면 true */
   matched: boolean
+  /** 판매(Sales)로 실출고된 HW 품목 수량. 샘플·프로모션·A/S·예정은 제외한다. */
+  hwQuantity?: number | null
+  hwProducts?: Array<{ product: string; quantity: number }>
 }
 
 export const EMPTY_CRM_ACCOUNT_PRODUCT_SUMMARY: CrmAccountProductSummary = {
@@ -83,13 +87,15 @@ export async function getCrmAccountProductSummary(
   if (!accountKey) return EMPTY_CRM_ACCOUNT_PRODUCT_SUMMARY
 
   const [revDeals, hwOutbound] = await Promise.all([
-    listBranchRevDeals().catch(() => [] as BranchRevDeal[]),
-    listHwOutbound().catch(() => [] as HwOutbound[]),
+    listBranchRevDeals(),
+    listHwOutbound(),
   ])
 
   let swCumulativeCNY = 0
   let hwCumulativeCNY = 0
   let revMatchedRows = 0
+  let swRevRows = 0
+  let hwRevRows = 0
   for (const deal of revDeals) {
     if (normalizedAccountKey(deal.customer_name) !== accountKey) continue
     if (isInactiveSheetStatus(deal.status) || isPlaceholderCrmName(deal.customer_name)) continue
@@ -100,25 +106,36 @@ export async function getCrmAccountProductSummary(
       account: deal.deal_type,
       rawText: deal.note,
     })
-    if (category === "hardware") hwCumulativeCNY += amount
-    else swCumulativeCNY += amount
+    if (category === "hardware") { hwCumulativeCNY += amount; hwRevRows += 1 }
+    else { swCumulativeCNY += amount; swRevRows += 1 }
   }
 
   let hwBoardCount = 0
   let hwMatchedRows = 0
+  const hwProducts = new Map<string, number>()
   for (const row of hwOutbound) {
     if (normalizedAccountKey(row.destination) !== accountKey) continue
     hwMatchedRows += 1
     if (isPlannedOutbound(row)) continue
-    if (!isBoardProduct(row.product)) continue
     const qty = Number(row.quantity)
-    if (Number.isFinite(qty)) hwBoardCount += qty
+    if (!Number.isFinite(qty) || qty <= 0) continue
+    if (isBoardProduct(row.product)) hwBoardCount += qty
+    if (/^(sales|판매)$/i.test(row.type?.trim() ?? "")) {
+      const product = row.product?.trim() || "품목 미등록"
+      hwProducts.set(product, (hwProducts.get(product) ?? 0) + qty)
+    }
   }
 
   const matched = revMatchedRows > 0 || hwMatchedRows > 0
   if (!matched) return EMPTY_CRM_ACCOUNT_PRODUCT_SUMMARY
 
-  return { swCumulativeCNY, hwCumulativeCNY, hwBoardCount, matched: true }
+  return {
+    swCumulativeCNY: swRevRows ? swCumulativeCNY : null,
+    hwCumulativeCNY: hwRevRows ? hwCumulativeCNY : null,
+    hwBoardCount, matched: true,
+    hwQuantity: [...hwProducts.values()].reduce((sum, quantity) => sum + quantity, 0),
+    hwProducts: [...hwProducts].map(([product, quantity]) => ({ product, quantity })),
+  }
 }
 
 // ── 360 M2·M4 — 품목별 대수 표 · 미매칭 출고 후보 ─────────────────────────
@@ -179,21 +196,20 @@ interface PortalDealLineItemsSnapshot {
 // 계정이 많을 때 URL 길이 상한(수천 UUID)을 피하기 위해서다 — 전량을 60초 캐시로 재사용한다.
 async function listPortalDealLineItemsUncached(): Promise<PortalDealLineItemsSnapshot> {
   const sb = createSupabaseAdminClient()
-  const { data, error } = await sb
-    .from("deal_line_items")
-    .select(
-      "id, deal_id, product_name, quantity, unit_price, amount, updated_at, deals!inner(id, deal_code, customer_id, customers!inner(id, name, campus_name, contact_name))"
-    )
-    .limit(PORTAL_DEAL_LINE_ITEM_QUERY_LIMIT)
-
-  if (error) throw error
-  const rows = ((data ?? []) as unknown[]) as PortalDealLineItemJoinRow[]
-  return { rows, truncated: rows.length >= PORTAL_DEAL_LINE_ITEM_QUERY_LIMIT }
+  const result = await fetchSupabasePages<PortalDealLineItemJoinRow>({
+    maxRows: PORTAL_DEAL_LINE_ITEM_QUERY_LIMIT,
+    fetchPage: (from, to) => sb.from("deal_line_items").select(
+      "id, deal_id, product_name, quantity, unit_price, amount, updated_at, deals!inner(id, deal_code, customer_id, customers!inner(id, name, campus_name, contact_name))",
+      { count: from === 0 ? "exact" : undefined },
+    ).order("id", { ascending: true }).range(from, to),
+  })
+  if (result.error) throw result.error
+  return { rows: result.data, truncated: result.truncated }
 }
 
 const listCachedPortalDealLineItems = unstable_cache(
   listPortalDealLineItemsUncached,
-  ["crm-money-line-items-portal-deals"],
+  ["crm-money-line-items-portal-deals-v2"],
   { revalidate: CRM_MONEY_LINE_ITEMS_REVALIDATE_SECONDS, tags: [CRM_MONEY_LINE_ITEMS_CACHE_TAG] }
 )
 
@@ -229,9 +245,9 @@ export async function getCrmMoneyLineItemsSummary(input: {
   }
 
   const [portalSnapshot, hwOutbound, confirmedHwLinks] = await Promise.all([
-    listCachedPortalDealLineItems().catch(() => ({ rows: [], truncated: false }) as PortalDealLineItemsSnapshot),
-    listHwOutbound().catch(() => [] as HwOutbound[]),
-    listConfirmedHwOutboundAccountLinks().catch(() => new Map<string, string>()),
+    listCachedPortalDealLineItems(),
+    listHwOutbound(),
+    listConfirmedHwOutboundAccountLinks(),
   ])
 
   const dealLineItems: MoneyDealLineItemRow[] = []
@@ -268,6 +284,7 @@ export async function getCrmMoneyLineItemsSummary(input: {
     outboundDate: row.outbound_date,
     isPlanned: isPlannedOutbound(row),
     confirmedAccountId: confirmedHwLinks.get(`hw:outbound:${row.id}`) ?? null,
+    outboundType: row.type,
   }))
 
   const built = buildCrmMoneyLineItems(

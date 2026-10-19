@@ -83,7 +83,7 @@ describe("웨이브 7 — F3. BranchDashboardClient 탭별 배선", () => {
 
   it("파이프라인 탭의 PipelineTable 호출은 이번 변경으로 건드리지 않는다(불변)", () => {
     const source = dashboardClientSource()
-    expect(source).toContain('<PipelineTable key={`pipeline-rev-${team}`} team={team} period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} onRowClick={openDealLog} hideHeader')
+    expect(source).toContain('<PipelineTable scopeManager={pipelineManager} key={`pipeline-rev-${team}-${pipelineManager}`} team={team} period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} onRowClick={openDealLog} hideHeader')
     const pipelineBlockStart = source.indexOf('activeTab === "pipeline"')
     const pipelineBlockEnd = source.indexOf('activeTab === "heatmap"')
     const pipelineBlock = source.slice(pipelineBlockStart, pipelineBlockEnd)

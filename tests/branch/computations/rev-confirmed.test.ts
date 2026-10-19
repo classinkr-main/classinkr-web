@@ -49,6 +49,16 @@ describe("confirmedMonthAmount 캐논", () => {
       confirmedMonthAmountWithColor(colored, "2026-05", 1000, dealHasColorData(colored)),
     )
   })
+
+  it("금액 맵의 음수 환불은 red 호환 플래그가 없어도 확정으로 보존한다", () => {
+    const d = deal({ monthly_confirmed: { "2026-05": -250 } })
+    expect(confirmedMonthAmountWithColor(d, "2026-05", -250, true, TODAY)).toBe(-250)
+  })
+
+  it("명시 확정 0은 red 플래그로 월 전체 금액으로 되살리지 않는다", () => {
+    const d = deal({ monthly_confirmed: { "2026-05": 0 }, monthly_red: { "2026-05": true } })
+    expect(confirmedMonthAmountWithColor(d, "2026-05", 500, true, TODAY)).toBe(0)
+  })
 })
 
 describe("splitMonthConfidence 3분해", () => {
@@ -100,5 +110,24 @@ describe("splitMonthConfidence 3분해", () => {
       highConfidence: 0,
       expected: 0,
     })
+  })
+
+  it.each([
+    { total: -250, confirmed: -250, highConfidence: 0, expected: 0 },
+    { total: -300, confirmed: -100, highConfidence: -50, expected: -150 },
+    { total: 0, confirmed: 100, highConfidence: -100, expected: 0 },
+    { total: 0, confirmed: -100, highConfidence: 100, expected: 0 },
+    { total: 500, confirmed: 1000, highConfidence: -500, expected: 0 },
+    { total: 0, confirmed: 100, highConfidence: 0, expected: -100 },
+  ])("색별 부호·상계를 보존하고 합계는 $total이다", ({ total, confirmed, highConfidence, expected }) => {
+    const d = deal({ monthly_confirmed: { "2026-05": confirmed }, monthly_high_conf: { "2026-05": highConfidence } })
+    const split = splitMonthConfidence(d, "2026-05", total, true, TODAY)
+    expect(split).toEqual({ confirmed, highConfidence, expected })
+    expect(split.confirmed + split.highConfidence + split.expected).toBe(total)
+  })
+
+  it("무색상 음수의 과거 확정·미래 예상 폴백을 유지한다", () => {
+    expect(splitMonthConfidence({}, "2026-05", -100, false, TODAY)).toEqual({ confirmed: -100, highConfidence: 0, expected: 0 })
+    expect(splitMonthConfidence({}, "2026-08", -100, false, TODAY)).toEqual({ confirmed: 0, highConfidence: 0, expected: -100 })
   })
 })

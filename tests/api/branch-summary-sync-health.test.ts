@@ -53,6 +53,7 @@ describe("GET /api/admin/branch/summary — sync_health", () => {
     const json = await (await GET(new NextRequest("https://classin.kr/api/admin/branch/summary"))).json()
 
     expect(json.lastSync).toBe("2026-09-13T08:38:05Z") // 기존 계약 유지
+    expect(json.lastSyncStartedAt).toBe("2026-09-13T08:38:00Z") // 종료 시각과 같은 run
     expect(json.sync_health.rev).toEqual({
       failedDays: 3,
       lastSuccessAt: "2026-08-18T02:30:52Z",

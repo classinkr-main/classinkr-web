@@ -532,181 +532,16 @@ export async function submitLeadCapture(
       }
     }
 
-    const deliveryTasks: Promise<void>[] = []
-
-    if (settings.googleSheetWebhookUrl && isWebhookEnabled(settings.webhookEnabled, "googleSheetWebhookUrl")) {
-      deliveryTasks.push(sendToGoogleSheet(body, settings.googleSheetWebhookUrl))
-    }
-
-    if (settings.leadWebhookUrl && isWebhookEnabled(settings.webhookEnabled, "leadWebhookUrl")) {
-      deliveryTasks.push(sendToWebhook(body, settings.leadWebhookUrl))
-    }
-
-    if (settings.channelTalkWebhookUrl && isWebhookEnabled(settings.webhookEnabled, "channelTalkWebhookUrl")) {
-      deliveryTasks.push(sendToChannelTalk(body, settings.channelTalkWebhookUrl))
-    }
-
-    if (body.email && body.marketingConsent === true) {
-      deliveryTasks.push(syncToSubscriberDB(body))
-    }
-
-    const results = await Promise.allSettled(deliveryTasks)
-    const errors = results
-      .filter((result) => result.status === "rejected")
-      .map((result) => (result as PromiseRejectedResult).reason?.message)
-      .filter(Boolean)
-
-    if (body.email) {
-      void triggerOnSubmitRules({
-        email: body.email,
-        name: body.name,
-        org: body.org,
-        role: body.role,
-        source: body.source,
-      }).catch((error) => {
-        console.error("[lead-capture] triggerOnSubmitRules error:", error)
-      })
-    }
-
-    if (stored) {
-      void sendServerConversion({
-        eventId: conversionEventId ?? `lead:${savedLeadId}`,
-        metaEventName:
-          body.source === "newsletter" ? "CompleteRegistration" : "Lead",
-        ga4EventName: "generate_lead",
-        requestMeta: context.requestMeta ?? null,
-        sourceUrl: body.currentPage ?? body.landingPage ?? context.requestMeta?.sourceUrl,
-        user: {
-          email: body.email,
-          phone: body.phone,
-          externalId: savedLeadId,
-          allowHashedUserData: body.marketingConsent === true,
-        },
-        customData: {
-          lead_id: savedLeadId,
-          source: body.source,
-          source_detail: body.sourceDetail,
-          lead_magnet: body.leadMagnet,
-          event_slug: body.eventSlug,
-        },
-      }).catch((error) => {
-        console.warn("[lead-capture] server conversion failed:", error)
-      })
-
-      const emitLeadCreatedNotification = async () => {
-        await emitNotificationEvent({
-          eventType: "lead.created",
-          notificationType: "action_required",
-          categoryTag: "lead",
-          severity: "info",
-          scopeTag: "org_admin",
-          // 재유입 병합이면 "이건 새 문의가 아니라 재문의다"를 관리자가 제목만 보고 알 수 있게 접두어를 붙인다.
-          title: (merged ? "재문의 · " : "") + buildLeadNotificationTitle(body),
-          message: buildLeadNotificationMessage(body),
-          routeUrl: "/admin/crm",
-          source: "lead",
-          sourceId: savedLeadId,
-          payload: {
-            leadId: savedLeadId,
-            source: body.source,
-            sourceDetail: body.sourceDetail,
-            leadMagnet: body.leadMagnet,
-            name: body.name,
-            org: body.org,
-            role: body.role,
-            size: body.size,
-            email: body.email,
-            phone: body.phone,
-            message: body.message,
-            utmSource: body.utmSource,
-            utmMedium: body.utmMedium,
-            utmCampaign: body.utmCampaign,
-            utmTerm: body.utmTerm,
-            utmContent: body.utmContent,
-            gclid: body.gclid,
-            fbclid: body.fbclid,
-            msclkid: body.msclkid,
-            ttclid: body.ttclid,
-            landingPage: body.landingPage,
-            currentPage: body.currentPage,
-            referrer: body.referrer,
-            naverAd: body.naverAd,
-          },
-          // 개별 리드는 관리자 인앱에 즉시 남기되 WeCom은 10:10 일일 카드로 묶는다.
-          channels: [],
-        })
-      }
-      const emitLeadCreatedNotificationSafely = async () => {
-        try {
-          await emitLeadCreatedNotification()
-        } catch (error) {
-          console.error("[lead-capture] notification emit failed:", error)
-        }
-      }
-
-      // 상위 플로우가 알림을 소유하면 건너뛴다 — 여기서 또 보내면 ops 방에 2건이 뜬다.
-      if (!context.suppressLeadCreatedNotification) {
-        if (context.deferTask) {
-          context.deferTask(emitLeadCreatedNotificationSafely)
-        } else {
-          void emitLeadCreatedNotificationSafely()
-        }
-      }
-
-      // 홈페이지 유입 자동 타임라인 이벤트 — 실패해도 리드 저장에 영향 없음(스펙 §D).
-      //
-      // 판정은 폼 출처(source) 하나로만 한다. 예전에는 광고 클릭 식별자가 있으면 건너뛰었는데,
-      // 그러면 광고를 타고 들어와 홈페이지 폼을 채운 문의가 CRM 타임라인에 한 줄도 안 남았다.
-      // 유료 트래픽이 대부분이라 사실상 홈페이지 문의 대부분이 사라지던 경로다(2026-09-01 실측).
-      //
-      // 재유입 병합 시에는 위에서 이미 "재문의(재유입)" site_inflow 이벤트를 남겼다 — 여기서
-      // 또 만들면 같은 제출에 site_inflow 이벤트가 두 번(신규용 문구 + 재유입용 문구) 남으므로
-      // merged면 건너뛴다.
-      if (savedLeadId && !merged && isSiteFormLead(body.source)) {
-        void createCrmCustomerEvent({
-          targetType: "lead",
-          targetId: savedLeadId,
-          targetLabel: body.org || body.name || body.email || "홈페이지 리드",
-          sourceType: "site_inflow",
-          title: "홈페이지 상담 신청",
-          summary: [SITE_INFLOW_SOURCE_LABELS[body.source] ?? body.source, body.currentPage ?? body.landingPage]
-            .filter(Boolean)
-            .join(" · "),
-          occurredAt: new Date().toISOString(),
-        }).catch((error) => {
-          console.error("[lead-capture] site_inflow event insert failed:", error)
-        })
-      }
-    }
-
-    if (storageError || errors.length > 0) {
-      void emitNotificationEvent({
-        eventType: "integration.webhook_failed",
-        notificationType: "incident",
-        categoryTag: "system",
-        severity: storageError ? "critical" : "warning",
-        scopeTag: "critical_control",
-        title: storageError
-          ? "리드 저장 또는 전달 실패"
-          : "리드 전달 경고가 발생했습니다",
-        message: [storageError, ...errors]
-          .filter(Boolean)
-          .slice(0, 3)
-          .join(" | "),
-        routeUrl: "/admin/settings",
-        source: "lead",
-        sourceId: savedLeadId,
-        payload: {
-          leadId: savedLeadId,
-          source: body.source,
-          errors,
-          storageError,
-        },
-        channels: ["wecom_webhook", "email"],
-      }).catch((error) => {
-        console.error("[lead-capture] incident notification emit failed:", error)
-      })
-    }
+    const { errors } = await runLeadCaptureEffects(body, {
+      settings,
+      stored,
+      savedLeadId,
+      conversionEventId,
+      storageError,
+      merged,
+      toggles: ALL_LEAD_CAPTURE_EFFECTS,
+      context,
+    })
 
     if (!stored) {
       clearSubmission(submissionKey)
@@ -743,6 +578,255 @@ export async function submitLeadCapture(
       },
     }
   }
+}
+
+/**
+ * runLeadCaptureEffects 가 켜고 끄는 저장 뒤 부수효과.
+ *
+ * 앞의 네 키는 public.meta_leadgen_cutover.side_effects 의 키와 이름이 같다(미러 토글을 그대로
+ * 넘길 수 있게). submitLeadCapture 는 항상 ALL_LEAD_CAPTURE_EFFECTS(전부 켜짐)로 부른다.
+ * 저장·전달 실패 인시던트는 토글이 없다 — storageError 나 전달 오류가 있으면 항상 낸다.
+ */
+export interface LeadCaptureEffectToggles {
+  /** 구글시트·리드 웹훅·채널톡 전달(설정에 URL 이 있고 켜진 것만) */
+  externalForwards: boolean
+  /** 이메일 + 마케팅 동의일 때 구독자 upsert */
+  subscriberUpsert: boolean
+  /** 이메일이 있을 때 자동화 on_submit 규칙 */
+  automationOnSubmit: boolean
+  /** 인앱 lead.created 알림(context.suppressLeadCreatedNotification 도 계속 따른다) */
+  leadCreatedNotification: boolean
+  /** Meta CAPI·GA4 서버 전환(저장됐을 때) */
+  serverConversion: boolean
+  /** 홈페이지 폼 리드의 CRM site_inflow 타임라인 이벤트(저장됐을 때) */
+  siteInflow: boolean
+}
+
+export const ALL_LEAD_CAPTURE_EFFECTS: Readonly<LeadCaptureEffectToggles> = Object.freeze({
+  externalForwards: true,
+  subscriberUpsert: true,
+  automationOnSubmit: true,
+  leadCreatedNotification: true,
+  serverConversion: true,
+  siteInflow: true,
+})
+
+export interface LeadCaptureEffectsOptions {
+  settings: Pick<
+    Awaited<ReturnType<typeof getResolvedSettings>>,
+    "googleSheetWebhookUrl" | "leadWebhookUrl" | "channelTalkWebhookUrl" | "webhookEnabled"
+  >
+  /** 리드 행 저장 성공 여부 — 서버 전환·lead.created·site_inflow 는 true 일 때만 */
+  stored: boolean
+  savedLeadId?: string
+  conversionEventId?: string
+  storageError?: string
+  /** 재유입 병합(기존 리드에 합침) — lead.created 제목에 "재문의"를 붙이고 site_inflow 중복을 막는다 */
+  merged?: boolean
+  toggles: LeadCaptureEffectToggles
+  context: LeadCaptureContext
+}
+
+/**
+ * 리드 저장 뒤 부수효과 — 외부 전달 3종·구독자 upsert(모두 끝날 때까지 기다림) → 자동화 →
+ * 서버 전환 → lead.created → site_inflow → 저장·전달 실패 인시던트(나머지는 던져 두고 기다리지 않음).
+ *
+ * submitLeadCapture 의 저장 뒤 블록을 순서·인자 그대로 옮긴 것이다(설계 META-RECEIVER-FINAL
+ * §4-2 H3). 호출 순서는 tests/server/lead-capture-effects.golden.test.ts 가 잠근다.
+ * 돌려주는 errors 는 기다린 전달 작업의 거절 메시지다(응답 warnings·details 에 쓴다).
+ */
+export async function runLeadCaptureEffects(
+  body: LeadPayload,
+  {
+    settings,
+    stored,
+    savedLeadId,
+    conversionEventId,
+    storageError,
+    merged = false,
+    toggles,
+    context,
+  }: LeadCaptureEffectsOptions
+): Promise<{ errors: string[] }> {
+  const deliveryTasks: Promise<void>[] = []
+
+  if (toggles.externalForwards && settings.googleSheetWebhookUrl && isWebhookEnabled(settings.webhookEnabled, "googleSheetWebhookUrl")) {
+    deliveryTasks.push(sendToGoogleSheet(body, settings.googleSheetWebhookUrl))
+  }
+
+  if (toggles.externalForwards && settings.leadWebhookUrl && isWebhookEnabled(settings.webhookEnabled, "leadWebhookUrl")) {
+    deliveryTasks.push(sendToWebhook(body, settings.leadWebhookUrl))
+  }
+
+  if (toggles.externalForwards && settings.channelTalkWebhookUrl && isWebhookEnabled(settings.webhookEnabled, "channelTalkWebhookUrl")) {
+    deliveryTasks.push(sendToChannelTalk(body, settings.channelTalkWebhookUrl))
+  }
+
+  if (toggles.subscriberUpsert && body.email && body.marketingConsent === true) {
+    deliveryTasks.push(syncToSubscriberDB(body))
+  }
+
+  const results = await Promise.allSettled(deliveryTasks)
+  const errors = results
+    .filter((result) => result.status === "rejected")
+    .map((result) => (result as PromiseRejectedResult).reason?.message)
+    .filter(Boolean)
+
+  if (toggles.automationOnSubmit && body.email) {
+    void triggerOnSubmitRules({
+      email: body.email,
+      name: body.name,
+      org: body.org,
+      role: body.role,
+      source: body.source,
+    }).catch((error) => {
+      console.error("[lead-capture] triggerOnSubmitRules error:", error)
+    })
+  }
+
+  if (stored) {
+    if (toggles.serverConversion) {
+      void sendServerConversion({
+        eventId: conversionEventId ?? `lead:${savedLeadId}`,
+        metaEventName:
+          body.source === "newsletter" ? "CompleteRegistration" : "Lead",
+        ga4EventName: "generate_lead",
+        requestMeta: context.requestMeta ?? null,
+        sourceUrl: body.currentPage ?? body.landingPage ?? context.requestMeta?.sourceUrl,
+        user: {
+          email: body.email,
+          phone: body.phone,
+          externalId: savedLeadId,
+          allowHashedUserData: body.marketingConsent === true,
+        },
+        customData: {
+          lead_id: savedLeadId,
+          source: body.source,
+          source_detail: body.sourceDetail,
+          lead_magnet: body.leadMagnet,
+          event_slug: body.eventSlug,
+        },
+      }).catch((error) => {
+        console.warn("[lead-capture] server conversion failed:", error)
+      })
+    }
+
+    const emitLeadCreatedNotification = async () => {
+      await emitNotificationEvent({
+        eventType: "lead.created",
+        notificationType: "action_required",
+        categoryTag: "lead",
+        severity: "info",
+        scopeTag: "org_admin",
+        // 재유입 병합이면 "이건 새 문의가 아니라 재문의다"를 관리자가 제목만 보고 알 수 있게 접두어를 붙인다.
+        title: (merged ? "재문의 · " : "") + buildLeadNotificationTitle(body),
+        message: buildLeadNotificationMessage(body),
+        routeUrl: "/admin/crm",
+        source: "lead",
+        sourceId: savedLeadId,
+        payload: {
+          leadId: savedLeadId,
+          source: body.source,
+          sourceDetail: body.sourceDetail,
+          leadMagnet: body.leadMagnet,
+          name: body.name,
+          org: body.org,
+          role: body.role,
+          size: body.size,
+          email: body.email,
+          phone: body.phone,
+          message: body.message,
+          utmSource: body.utmSource,
+          utmMedium: body.utmMedium,
+          utmCampaign: body.utmCampaign,
+          utmTerm: body.utmTerm,
+          utmContent: body.utmContent,
+          gclid: body.gclid,
+          fbclid: body.fbclid,
+          msclkid: body.msclkid,
+          ttclid: body.ttclid,
+          landingPage: body.landingPage,
+          currentPage: body.currentPage,
+          referrer: body.referrer,
+          naverAd: body.naverAd,
+        },
+        // 개별 리드는 관리자 인앱에 즉시 남기되 WeCom은 10:10 일일 카드로 묶는다.
+        channels: [],
+      })
+    }
+    const emitLeadCreatedNotificationSafely = async () => {
+      try {
+        await emitLeadCreatedNotification()
+      } catch (error) {
+        console.error("[lead-capture] notification emit failed:", error)
+      }
+    }
+
+    // 상위 플로우가 알림을 소유하면 건너뛴다 — 여기서 또 보내면 ops 방에 2건이 뜬다.
+    if (toggles.leadCreatedNotification && !context.suppressLeadCreatedNotification) {
+      if (context.deferTask) {
+        context.deferTask(emitLeadCreatedNotificationSafely)
+      } else {
+        void emitLeadCreatedNotificationSafely()
+      }
+    }
+
+    // 홈페이지 유입 자동 타임라인 이벤트 — 실패해도 리드 저장에 영향 없음(스펙 §D).
+    //
+    // 판정은 폼 출처(source) 하나로만 한다. 예전에는 광고 클릭 식별자가 있으면 건너뛰었는데,
+    // 그러면 광고를 타고 들어와 홈페이지 폼을 채운 문의가 CRM 타임라인에 한 줄도 안 남았다.
+    // 유료 트래픽이 대부분이라 사실상 홈페이지 문의 대부분이 사라지던 경로다(2026-09-01 실측).
+    //
+    // 재유입 병합 시에는 submitLeadCapture 가 이미 "재문의(재유입)" site_inflow 이벤트를 남겼다 — 여기서
+    // 또 만들면 같은 제출에 site_inflow 이벤트가 두 번(신규용 문구 + 재유입용 문구) 남으므로
+    // merged면 건너뛴다.
+    if (toggles.siteInflow && savedLeadId && !merged && isSiteFormLead(body.source)) {
+      void createCrmCustomerEvent({
+        targetType: "lead",
+        targetId: savedLeadId,
+        targetLabel: body.org || body.name || body.email || "홈페이지 리드",
+        sourceType: "site_inflow",
+        title: "홈페이지 상담 신청",
+        summary: [SITE_INFLOW_SOURCE_LABELS[body.source] ?? body.source, body.currentPage ?? body.landingPage]
+          .filter(Boolean)
+          .join(" · "),
+        occurredAt: new Date().toISOString(),
+      }).catch((error) => {
+        console.error("[lead-capture] site_inflow event insert failed:", error)
+      })
+    }
+  }
+
+  if (storageError || errors.length > 0) {
+    void emitNotificationEvent({
+      eventType: "integration.webhook_failed",
+      notificationType: "incident",
+      categoryTag: "system",
+      severity: storageError ? "critical" : "warning",
+      scopeTag: "critical_control",
+      title: storageError
+        ? "리드 저장 또는 전달 실패"
+        : "리드 전달 경고가 발생했습니다",
+      message: [storageError, ...errors]
+        .filter(Boolean)
+        .slice(0, 3)
+        .join(" | "),
+      routeUrl: "/admin/settings",
+      source: "lead",
+      sourceId: savedLeadId,
+      payload: {
+        leadId: savedLeadId,
+        source: body.source,
+        errors,
+        storageError,
+      },
+      channels: ["wecom_webhook", "email"],
+    }).catch((error) => {
+      console.error("[lead-capture] incident notification emit failed:", error)
+    })
+  }
+
+  return { errors }
 }
 
 async function sendToGoogleSheet(data: LeadPayload, url?: string) {

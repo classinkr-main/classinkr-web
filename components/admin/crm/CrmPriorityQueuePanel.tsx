@@ -2,6 +2,7 @@
 
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
+import { priorityCustomerHref } from "@/lib/crm/customer-navigation"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { CalendarClock, CheckCircle2, Clock3, ExternalLink, Filter, RefreshCw, XCircle } from "lucide-react"
 
@@ -298,14 +299,14 @@ export default function CrmPriorityQueuePanel({
   const [showMore, setShowMore] = useState(false)
   // 담당자 필터 → URL(?owner=) 착지 복원. 2026-08-06 감사 지적(필터가 새로고침·공유
   // 링크에서 유실) 최소 대응 — CrmUnifiedCustomersClient의 syncViewParam과 같은 패턴.
-  const initialOwner = searchParams.get("owner")?.trim() ?? ""
+  const initialOwner = searchParams.get("owner")?.trim() ?? CURRENT_OWNER_VALUE
   const [owner, setOwnerState] = useState(initialOwner)
   // 서버 프리페치는 owner 필터가 없을 때만 유효하다 — 필터가 이미 걸려 있으면 범위가 달라
   // 그 레인을 쓰지 않는다. use()는 조건부로 호출할 수 없으므로(hooks 규칙), "안 쓴다"는
   // 판단을 promise 자체를 이미 resolve된 값(RESOLVED_NULL_PROMISE)으로 바꿔 표현한다.
   // `initialData != null`을 조건식 안에 직접 써서 TypeScript가 참 분기에서 initialData를
   // non-null로 좁히게 한다(단언 없이).
-  const prefetchPromise = !initialOwner && initialData != null ? initialData.promise : RESOLVED_NULL_PROMISE
+  const prefetchPromise = initialOwner === CURRENT_OWNER_VALUE && initialData != null ? initialData.promise : RESOLVED_NULL_PROMISE
   // use()는 이 promise가 settle될 때까지 컴포넌트 렌더를 서스펜드한다 — 그 뒤로는 항상
   // 동기 값처럼 즉시 반환된다. 덕분에 아래 useState들은 "나중에 도착할 수도 있는 값"이
   // 아니라 "이미 확정된 값"으로 초기화된다(예전 hasUsableInitialData/skippedInitialLoadRef
@@ -342,22 +343,21 @@ export default function CrmPriorityQueuePanel({
   const listRef = useRef<HTMLDivElement | null>(null)
   const closeCancelRef = useRef<HTMLButtonElement | null>(null)
   const [focusRequest, setFocusRequest] = useState<{ itemId: string | null; seq: number } | null>(null)
-
   const lastOwnerParamRef = useRef<string | null>(searchParams.get("owner"))
   useEffect(() => {
     const param = searchParams.get("owner")
     if (param === lastOwnerParamRef.current) return
     lastOwnerParamRef.current = param
-    setOwnerState(param?.trim() ?? "")
+    setOwnerState(param?.trim() ?? CURRENT_OWNER_VALUE)
   }, [searchParams])
 
   const setOwner = useCallback(
     (next: string) => {
       setOwnerState(next)
-      lastOwnerParamRef.current = next || null
+      lastOwnerParamRef.current = next
       const params = new URLSearchParams(Array.from(searchParams.entries()))
       if (next) params.set("owner", next)
-      else params.delete("owner")
+      else params.set("owner", "")
       const qs = params.toString()
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
     },
@@ -852,9 +852,7 @@ export default function CrmPriorityQueuePanel({
               aria-label="담당자 필터"
             >
               <option value="">담당 전체</option>
-              {currentOwner ? (
-                <option value={CURRENT_OWNER_VALUE}>내 담당 · {currentOwner.displayName}</option>
-              ) : null}
+              <option value={CURRENT_OWNER_VALUE}>내 담당 · {currentOwner?.displayName ?? "담당자 연결 확인"}</option>
               {ownerOptions.map((option) => (
                 <option key={option.ownerName} value={option.ownerName}>
                   {option.label}
@@ -980,7 +978,7 @@ export default function CrmPriorityQueuePanel({
                       <span className={`inline-flex h-[22px] shrink-0 items-center rounded-full px-2 text-[11px] font-semibold ${SLOT_CHIP_CLASS[call.slot]}`}>
                         {call.slotLabel}
                       </span>
-                      <Link href={item.href} className="group inline-flex min-w-0 items-center gap-1.5">
+                      <Link href={priorityCustomerHref(item)} className="group inline-flex min-w-0 items-center gap-1.5">
                         <span className="truncate text-[14px] font-bold text-[#111110]">{item.title}</span>
                         <ExternalLink className="h-3.5 w-3.5 shrink-0 text-[#1a1a1a]/25 group-hover:text-[#111110]" />
                       </Link>
@@ -1048,7 +1046,7 @@ export default function CrmPriorityQueuePanel({
                         </>
                       ) : null}
                       <Link
-                        href={item.href}
+                        href={priorityCustomerHref(item)}
                         className={`inline-flex h-7 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[11px] font-semibold transition-colors hover:bg-[#f5f5f2] hover:text-[#111110] ${INTERACTIVE_TEXT_CLASS}`}
                       >
                         열기
@@ -1338,7 +1336,7 @@ export default function CrmPriorityQueuePanel({
             return (
               <Link
                 key={item.id}
-                href={item.href}
+                href={priorityCustomerHref(item)}
                 className="inline-flex h-[22px] max-w-[160px] items-center gap-1 rounded-full border border-[#e8e8e4] bg-white px-2 text-[11px] font-medium text-[#111110] transition-colors hover:border-[#c8c8c4]"
               >
                 <span className="truncate">{item.title}</span>

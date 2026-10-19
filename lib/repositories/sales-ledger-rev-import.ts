@@ -5,7 +5,7 @@ import { createHash } from "node:crypto"
 import { revalidateTag, unstable_cache } from "next/cache"
 
 import { normalizedAccountKey } from "@/lib/branch/account-key"
-import { confirmedMonthAmount } from "@/lib/branch/computations/rev-confirmed"
+import { splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
 import { listBranchRevDealsFresh, type BranchRevDeal } from "@/lib/repositories/branch-deals"
 import { SALES_LEDGER_IMPORTS_CACHE_TAG } from "@/lib/repositories/sales-ledger-imports"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
@@ -90,7 +90,9 @@ function revImportChecksum(deals: BranchRevDeal[]): string {
       raw: deal.raw ?? {},
     }))
     .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : a.row - b.row))
-  return createHash("sha256").update(`rev-native:${JSON.stringify(canonical)}`).digest("hex")
+  // v2 preserves signed confidence components and explicit zeroes. A v1 run of the same
+  // mirror can have lost these values, so it must not be reused after this correction.
+  return createHash("sha256").update(`rev-native:v2:${JSON.stringify(canonical)}`).digest("hex")
 }
 
 // 유니크 인덱스: sales_ledger_import_runs_checksum_idx
@@ -290,15 +292,18 @@ export async function captureRevDbImport(actor: string, options?: { activate?: b
       for (const [month, rawAmount] of Object.entries(deal.monthly_payments ?? {})) {
         if (!FISCAL_MONTH_RE.test(month)) continue
         const amount = toNumber(rawAmount)
-        if (amount === 0) continue
-        // 확도 분해는 시트폴백과 동일 규칙(confirmedMonthAmount: 금액맵 → red-불리언 전액 → 무색상 전액)을
+        // 확도 분해는 시트폴백과 동일 규칙(금액맵 → red-불리언 전액 → 무색상 전액)을
         // 쓴다. 금액맵만 보면 색 금액 도입 전 동기화분(red=true, 맵 비어 있음)·무색상 레거시 행의 확정이
         // expected로 강등돼, DB-native 전환 직후 확정 합계가 시트폴백 대비 급감한다.
-        const confirmed = Math.min(Math.max(confirmedMonthAmount(deal, month, amount), 0), Math.max(amount, 0))
-        const high = Math.min(Math.max(toNumber(deal.monthly_high_conf?.[month]), 0), Math.max(amount - confirmed, 0))
-        const expected = amount - confirmed - high
+        // 환불·순액 0 상계의 색별 금액은 순액보다 클 수 있다. 양수로 다시 클램프하지 않는다.
+        const { confirmed, highConfidence: high, expected } = splitMonthConfidence(deal, month, amount)
+        const monthEntriesStart = entryRows.length
         for (const [confidence, amt] of [["confirmed", confirmed], ["high_confidence", high], ["expected", expected]] as const) {
-          if (amt === 0) continue
+          const explicitZero = confidence === "confirmed"
+            ? deal.monthly_confirmed?.[month] === 0
+            : confidence === "high_confidence" && deal.monthly_high_conf?.[month] === 0
+          // 명시 확정 0은 legacy red=true의 전액 확정 폴백을 막는 정보다.
+          if (amt === 0 && !explicitZero) continue
           entryRows.push({
             import_run_id: runId,
             rev_line_id: lineId,
@@ -308,6 +313,11 @@ export async function captureRevDbImport(actor: string, options?: { activate?: b
             confidence,
             source_row: deal.sheet_row,
           })
+        }
+        // 값이 입력된 0월과 빈 월을 구분한다(주차별 +매출/-환불이 상계될 수 있다).
+        if (entryRows.length === monthEntriesStart) {
+          entryRows.push({ import_run_id: runId, rev_line_id: lineId, fiscal_year: fiscalYear,
+            period_month: month, amount: 0, confidence: "expected", source_row: deal.sheet_row })
         }
       }
     }

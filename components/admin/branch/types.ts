@@ -1,7 +1,11 @@
+import { CURRENT_BRANCH_TEAMS, LEGACY_BRANCH_TEAMS } from "@/lib/branch/current-organization"
+
 export type Team = "ALL" | "BD" | "MKT" | "CSM"
 export type Period = "M" | "Q" | "Y"
 
-export const TEAMS: Team[] = ["ALL", "BD", "MKT", "CSM"]
+// 파서·장부·과거 링크의 허용 값. 현재 조직 선택에는 CURRENT_TEAM_FILTERS를 사용한다.
+export const TEAMS: Team[] = ["ALL", ...CURRENT_BRANCH_TEAMS, ...LEGACY_BRANCH_TEAMS]
+export const CURRENT_TEAM_FILTERS: Team[] = ["ALL", ...CURRENT_BRANCH_TEAMS]
 export const PERIODS: Period[] = ["M", "Q", "Y"]
 
 // 웨이브 7 — Q5(개인화 라이트). 파이프라인 탭(테이블·칸반이 공유하는 BranchDashboardClient의
@@ -130,6 +134,7 @@ export interface BranchSyncHealth {
 }
 
 export interface BranchSummaryResponse {
+  scope?: { manager: string }
   team: Team
   period: Period
   revenue: { confirmed: number; goal: number; pacing_pct: number }
@@ -146,6 +151,8 @@ export interface BranchSummaryResponse {
    *  이 값으로 "마지막 성공"과 "며칠째 실패"를 따로 보여준다. 구버전 응답은 undefined. */
   sync_health?: { rev: BranchSyncHealth; hw: BranchSyncHealth }
   lastSync: string | null
+  /** lastSync와 같은 동기화 런의 시작 시각. 구버전 응답에는 없음. */
+  lastSyncStartedAt?: string | null
   lastError: string | null
   sheetModifiedAt: string | null
   /** 품질 감사 2026-09-10 — #2: true면 sheetModifiedAt=null이 "시트에 값 없음"이 아니라
@@ -201,6 +208,7 @@ export interface BranchKpiMemberRow {
 }
 
 export interface BranchKpiResponse {
+  scope?: { manager: string }
   teams: BranchKpiTeamRow[]
   members: BranchKpiMemberRow[]
 }

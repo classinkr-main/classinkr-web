@@ -58,6 +58,42 @@ describe("internal CS curated knowledge", () => {
     expect(result.internalContext).toContain("CS 담당자의 검토 상태")
   })
 
+  it("matches network interruption questions to code 56/57 diagnostics", () => {
+    const result = selectInternalCsKnowledge("수업 중 코드 56 오류로 끊기고 최대화가 풀려요")
+    const entry = result.entries.find((e) => e.id === "network-interruption-diagnostics")
+
+    expect(entry).toMatchObject({
+      status: "confirmed",
+      externalUse: "reviewed_summary_allowed",
+    })
+    expect(entry?.summary).toContain("코드 56은 서버-클라이언트 네트워크 단절")
+    expect(result.recommendedTags).toContain("topic:network")
+  })
+
+  it("routes recording failure questions to error code 4001 and disable diagnostics", () => {
+    const result = selectInternalCsKnowledge("현장 녹화가 시작되었다고 뜨는데 파일이 없어요 error code 4001")
+    const entry = result.entries.find((e) => e.id === "recording-error-diagnostics")
+
+    expect(entry).toMatchObject({
+      status: "confirmed",
+      externalUse: "reviewed_summary_allowed",
+    })
+    expect(entry?.summary).toContain("error code 4001")
+    expect(result.recommendedTags).toContain("topic:recording")
+  })
+
+  it("surfaces camera network troubleshooting for IP conflict and CameraCMS issues", () => {
+    const result = selectInternalCsKnowledge("CameraCMS에서 카메라는 검색되는데 192.168.1.222 접속 실패해요")
+    const entry = result.entries.find((e) => e.id === "camera-network-troubleshooting")
+
+    expect(entry).toMatchObject({
+      status: "confirmed",
+      externalUse: "reviewed_summary_allowed",
+    })
+    expect(entry?.summary).toContain("192.168.1.222")
+    expect(result.recommendedTags).toContain("area:camera")
+  })
+
   it("keeps every curated entry linked to repository-relative evidence", () => {
     for (const entry of getInternalCsKnowledgeEntries()) {
       expect(entry.sourceRefs.length).toBeGreaterThan(0)

@@ -6,9 +6,11 @@ import {
   AlertCircle,
   ArrowRight,
   CheckCircle2,
+  Download,
   FileSpreadsheet,
   Filter,
   Loader2,
+  PencilLine,
   RefreshCw,
   Search,
   Sparkles,
@@ -16,6 +18,23 @@ import {
 
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { StatTile } from "@/components/admin/viz"
+import { postBranchSync } from "@/components/admin/branch/client-api"
+import { SyncOutcomeNotice } from "@/components/admin/branch/SyncOutcomeNotice"
+import { describeSyncOutcome, type SyncOutcomeNotice as SyncOutcomeNoticeValue } from "@/lib/admin/sync-outcome"
+import { SESSION_CRM_STAFF_ROLES, SESSION_SHEET_SYNC_ROLES, sessionRoleIn } from "@/lib/admin/session-role"
+import {
+  LEDGER_MANUAL_ENTRIES_HREF,
+  REVENUE_SHEET_STATUS_FILTERS,
+  buildLedgerEntryHref,
+  buildRevenueSheetCsvRows,
+  formatPendingTransition,
+  isRevenueSheetSyncStale,
+  parseRevenueSheetUrlState,
+  serializeRevenueSheetUrlState,
+  type RevenueSheetStatusFilter,
+} from "@/lib/crm/revenue-sheet-view"
+import { downloadCsvFile } from "@/lib/export/browser-download"
+import { fileDateStamp, toCsv } from "@/lib/export/delimited"
 // 고확도(임박) 금액 색은 확도 신호 토큰 SSOT — 원시 sky 리터럴 재정의 금지(DESIGN.md 확도 신호 토큰 절).
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import type {
@@ -27,17 +46,9 @@ import type {
   RevenueSheetLinkStatus,
 } from "@/lib/admin-crm-revenue-sheet-types"
 
-type StatusFilter = "all" | "review" | "confirmed" | "candidate" | "stale" | "rejected" | "unmatched"
-
-const STATUS_FILTERS: Array<{ key: StatusFilter; label: string }> = [
-  { key: "review", label: "검토 필요" },
-  { key: "all", label: "전체" },
-  { key: "confirmed", label: "확정" },
-  { key: "candidate", label: "후보" },
-  { key: "stale", label: "재검수" },
-  { key: "unmatched", label: "미매칭" },
-  { key: "rejected", label: "제외" },
-]
+// 상태 필터 목록·URL 보존·장부 딥링크·CSV 조립은 lib/crm/revenue-sheet-view.ts(순수, 테스트 대상)가 정본이다.
+type StatusFilter = RevenueSheetStatusFilter
+const STATUS_FILTERS = REVENUE_SHEET_STATUS_FILTERS
 
 const STATUS_LABEL: Record<Exclude<RevenueSheetLinkStatus, null>, string> = {
   candidate: "후보",
@@ -85,6 +96,18 @@ function formatPercent(value: number | null | undefined) {
   return `${Math.round(value * 100)}%`
 }
 
+// 기준 시각을 "N분 전"으로 — 절대 시각은 title로 병기한다(S-6).
+function formatRelative(value: string | null | undefined, now: number) {
+  if (!value) return "기록 없음"
+  const time = Date.parse(value)
+  if (!Number.isFinite(time)) return "기록 없음"
+  const diff = Math.max(0, now - time)
+  if (diff < 60_000) return "방금"
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}분 전`
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}시간 전`
+  return `${Math.floor(diff / 86_400_000)}일 전`
+}
+
 function getStatusLabel(status: RevenueSheetLinkStatus) {
   return status ? STATUS_LABEL[status] : "미매칭"
 }
@@ -111,6 +134,18 @@ function matchesStatusFilter(row: AdminCrmRevenueSheetRow, filter: StatusFilter)
   if (filter === "review") return row.linkStatus === null || row.linkStatus === "candidate" || row.linkStatus === "stale"
   if (filter === "unmatched") return row.linkStatus === null
   return row.linkStatus === filter
+}
+
+// ADR-0062 확정 예정 — 빨간 글자인데 주차가 아직 안 온 금액. 회색 칩 + 전환 시점 툴팁(읽기 전용).
+function PendingAmount({ row }: { row: AdminCrmRevenueSheetRow }) {
+  if (!(row.pendingAmount > 0)) return <span className="text-[#1a1a1a]/30">{formatCny(0)}</span>
+  const transition = formatPendingTransition(row)
+  return (
+    <span className="inline-flex items-center gap-1.5" title={transition ?? "주차 시작일 이후 동기화에서 확정 전환"}>
+      <span className="rounded-full border border-[#e8e8e4] bg-[#f5f5f2] px-1.5 py-px text-[10px] font-semibold text-[#1a1a1a]/50">예정</span>
+      <span className="text-[#1a1a1a]/60">{formatCny(row.pendingAmount)}</span>
+    </span>
+  )
 }
 
 function StatusBadge({ status }: { status: RevenueSheetLinkStatus }) {
@@ -166,15 +201,32 @@ function ValueSkeleton({ className = "h-6 w-24" }: { className?: string }) {
 // 품질 감사 2026-09-10 — #1(P0): 장부 수기 입력·정정이 이 화면에 반영되지 않는 이중 진실을
 // 운영자가 항상 인지하게 하는 배지. 위 warnings 배너(데이터 조회 실패 등)와 톤은 같은 amber
 // 계열이지만 문구·아이콘(AlertCircle)을 분리해 "조회 실패"와 "구조적 미반영"을 혼동하지 않게 한다.
+// 라운드 5 S-7: 신규(장부에서 만든 행 — 이 화면에 아예 없는 매출)와 정정(시트 행 대체값 — 이 화면은 정정 전
+// 값을 보임)을 나눠 말한다. 예전엔 정정 대체값까지 금액에 더해 "빠진 매출"이 과대하게 읽혔고, 장부의
+// "장부 가감" 타일(신규만)과 정의가 달랐다. 링크는 장부의 적용 초안 원천만·회계연도 전체로 연다.
 function ManualLedgerGapBanner({ gap }: { gap: AdminCrmRevenueSheetManualLedgerGap }) {
+  const newCount = gap.newCount ?? gap.count
+  const editCount = gap.editCount ?? 0
+  const newAmount = gap.newAmount ?? gap.amount
   return (
     <div role="status" className="mb-6 flex flex-wrap items-center gap-2 border-l-2 border-amber-200 bg-amber-50/60 px-3 py-2 text-[13px] text-amber-800">
       <AlertCircle className="h-4 w-4 shrink-0" />
       <span>
-        장부 수기 입력·정정 <strong className="font-bold">{formatNumber(gap.count)}건</strong>({formatCny(gap.amount)})이
-        이 화면에 반영되지 않았습니다 — 최근 적용 {formatDate(gap.latestAppliedAt)}.
+        장부에서 적용한 수기 입력이 이 화면에 반영되지 않았습니다 —{" "}
+        {newCount > 0 ? (
+          <>
+            신규 <strong className="font-bold">{formatNumber(newCount)}건</strong>({formatCny(newAmount)} 이 화면 합계 밖)
+          </>
+        ) : null}
+        {newCount > 0 && editCount > 0 ? " · " : null}
+        {editCount > 0 ? (
+          <>
+            정정 <strong className="font-bold">{formatNumber(editCount)}건</strong>(이 화면은 정정 전 값)
+          </>
+        ) : null}
+        {" "}· 최근 적용 {formatDate(gap.latestAppliedAt)}.
       </span>
-      <Link href="/admin/branch/ledger" className="ml-auto inline-flex items-center gap-1 font-semibold underline underline-offset-2 hover:text-amber-900">
+      <Link href={LEDGER_MANUAL_ENTRIES_HREF} className="ml-auto inline-flex items-center gap-1 font-semibold underline underline-offset-2 hover:text-amber-900">
         장부에서 확인 <ArrowRight className="h-3.5 w-3.5" />
       </Link>
     </div>
@@ -228,7 +280,50 @@ export default function AdminCrmRevenueSheetPage() {
   const [teamFilter, setTeamFilter] = useState("all")
   const [query, setQuery] = useState("")
   const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
+  // 동기화·매칭 결과 한 줄 — 완료·이미 실행 중·일부 성공을 구분한다(라운드 5 S-1, 오류는 error 배너).
+  const [notice, setNotice] = useState<SyncOutcomeNoticeValue | null>(null)
+  // 눌러도 403만 날 버튼은 미리 숨긴다(S-5) — 보안 경계가 아니라 표시 판정이다(서버가 다시 검사한다).
+  const [canSync, setCanSync] = useState(false)
+  const [canGenerateLinks, setCanGenerateLinks] = useState(false)
+  // 표시 상한 — "더 보기"로 늘린다(필터가 바뀌면 처음 상한으로).
+  const [visibleLimit, setVisibleLimit] = useState(MAX_VISIBLE_ROWS)
+  const [mobileVisibleLimit, setMobileVisibleLimit] = useState(MOBILE_VISIBLE_ROWS)
+  const [now, setNow] = useState(() => Date.now())
+  const [urlReady, setUrlReady] = useState(false)
+
+  useEffect(() => {
+    setCanSync(sessionRoleIn(SESSION_SHEET_SYNC_ROLES))
+    setCanGenerateLinks(sessionRoleIn(SESSION_CRM_STAFF_ROLES))
+  }, [])
+
+  // 필터 URL 보존(S-9) — 새로고침·링크 공유·뒤로가기에서 검색어·상태·팀이 유지된다. 복원은 마운트 1회,
+  // 기록은 replaceState(기록 스택을 늘리지 않음). 기본값은 URL에 적지 않는다(장부 워크벤치와 같은 규약).
+  useEffect(() => {
+    const restored = parseRevenueSheetUrlState(window.location.search)
+    setStatusFilter(restored.status)
+    setTeamFilter(restored.team)
+    setQuery(restored.q)
+    setUrlReady(true)
+  }, [])
+
+  useEffect(() => {
+    if (!urlReady) return
+    const search = serializeRevenueSheetUrlState({ status: statusFilter, team: teamFilter, q: query })
+    const nextUrl = `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    if (nextUrl !== currentUrl) window.history.replaceState(window.history.state, "", nextUrl)
+  }, [query, statusFilter, teamFilter, urlReady])
+
+  useEffect(() => {
+    setVisibleLimit(MAX_VISIBLE_ROWS)
+    setMobileVisibleLimit(MOBILE_VISIBLE_ROWS)
+  }, [query, statusFilter, teamFilter])
+
+  // 기준 시각 상대 표기("N분 전")가 멈춰 보이지 않게 1분마다 갱신한다.
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   const load = useCallback(async (options?: { force?: boolean }) => {
     setLoading(true)
@@ -251,16 +346,17 @@ export default function AdminCrmRevenueSheetPage() {
     void load()
   }, [load])
 
+  // REV 동기화 — 응답을 결과 계약으로 읽는다(라운드 5 S-1). 예전엔 응답을 보지 않고 "완료했습니다"를 띄워,
+  // 다른 동기화가 도는 중이라 건너뛴 200 { skipped } 응답도 완료로 보였다. 부분 실패(500)의 경고도 살린다.
   const syncSheet = useCallback(async () => {
     setSyncing(true)
     setError(null)
     setNotice(null)
     try {
-      await adminFetchJson("/api/admin/branch/sync", {
-        method: "POST",
-        body: JSON.stringify({ sources: ["rev"] }),
-      })
-      setNotice("REV 시트 동기화와 매칭 유지보수를 완료했습니다.")
+      const { status, body } = await postBranchSync(["rev"])
+      const outcome = describeSyncOutcome(body, { httpStatus: status })
+      if (outcome.tone === "error") setError(outcome.message)
+      else setNotice(outcome)
       await load({ force: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : "REV 시트 동기화에 실패했습니다.")
@@ -278,7 +374,7 @@ export default function AdminCrmRevenueSheetPage() {
         method: "POST",
         body: JSON.stringify({ source: "branch_rev_sheet" }),
       })
-      setNotice("REV 행 기준 매칭 후보를 다시 생성했습니다.")
+      setNotice({ tone: "success", message: "REV 행 기준 매칭 후보를 다시 생성했습니다." })
       await load({ force: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : "매칭 후보 생성에 실패했습니다.")
@@ -322,6 +418,15 @@ export default function AdminCrmRevenueSheetPage() {
       })
   }, [data?.rows, query, statusFilter, teamFilter])
 
+  const exportCsv = useCallback(() => {
+    if (visibleRows.length === 0) return
+    downloadCsvFile(`매출시트_REV_${fileDateStamp()}.csv`, toCsv(buildRevenueSheetCsvRows(visibleRows)))
+    setNotice({ tone: "success", message: `현재 필터 결과 ${formatNumber(visibleRows.length)}행을 CSV로 내려받았습니다.` })
+  }, [visibleRows])
+
+  // 행 → 장부의 그 행(라운드 4 P2-10). 월은 이 화면의 당월(서버 기준) — 행 데이터에 월별 금액이 없다.
+  const ledgerMonth = data?.currentMonth ?? ""
+
   const maxMonthlyAmount = useMemo(() => {
     const values = (data?.monthly ?? []).flatMap((point) => [
       point.confirmedAmount,
@@ -349,6 +454,21 @@ export default function AdminCrmRevenueSheetPage() {
           <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/45">
             동기화본 기준 운영 — 매칭·통계·CRM 연결 안정화 후 자체 원장으로 승격 예정
           </p>
+          {/* 기준 시각(S-6) — 이 화면의 모든 숫자는 REV 시트 동기화본 기준이다. 하루 한 번 크론이라 26시간을
+              넘기면 "어제 크론도 실패했다"는 뜻 — 경고 톤으로 보인다(행마다 반복되던 동기화 시각의 요약). */}
+          {data ? (
+            <p
+              className={`mt-1.5 text-[12px] ${
+                isRevenueSheetSyncStale(data.summary.latestSyncedAt, now) ? "font-semibold text-amber-800" : "text-[#1a1a1a]/45"
+              }`}
+              title={`시트 동기화 ${formatDate(data.summary.latestSyncedAt)} · 화면 생성 ${formatDate(data.generatedAt)}`}
+            >
+              시트 동기화 {formatRelative(data.summary.latestSyncedAt, now)} 기준
+              {isRevenueSheetSyncStale(data.summary.latestSyncedAt, now)
+                ? " — 하루 넘게 동기화되지 않았습니다. 장부 상단 상태 줄에서 동기화 실패 사유를 확인하세요."
+                : null}
+            </p>
+          ) : null}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -361,28 +481,35 @@ export default function AdminCrmRevenueSheetPage() {
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             새로고침
           </button>
-          <button
-            type="button"
-            onClick={() => void generateLinks()}
-            disabled={generatingLinks || loading}
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
-          >
-            {generatingLinks ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            매칭 후보
-          </button>
-          <button
-            type="button"
-            onClick={() => void syncSheet()}
-            disabled={syncing || loading}
-            className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#084734] px-3 text-[13px] font-semibold text-white transition-colors hover:bg-[#065c41] disabled:opacity-50"
-          >
-            {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
-            REV 동기화
-          </button>
+          {canGenerateLinks ? (
+            <button
+              type="button"
+              onClick={() => void generateLinks()}
+              disabled={generatingLinks || loading}
+              title="REV 행 기준으로 CRM 매칭 후보를 다시 만듭니다 — 확정은 매칭 인박스에서"
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
+            >
+              {generatingLinks ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              매칭 후보
+            </button>
+          ) : null}
+          {canSync ? (
+            <button
+              type="button"
+              onClick={() => void syncSheet()}
+              disabled={syncing || loading}
+              aria-busy={syncing}
+              title="REV 시트를 다시 읽어 이 화면과 매출 장부에 반영합니다 — 보통 수십 초 걸립니다"
+              className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#084734] px-3 text-[13px] font-semibold text-white transition-colors hover:bg-[#065c41] disabled:opacity-50"
+            >
+              {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+              {syncing ? "동기화 중…" : "REV 동기화"}
+            </button>
+          ) : null}
         </div>
       </div>
 
-      {notice ? <div role="status" aria-live="polite" className="mb-6 border-l-2 border-[#D6EFE5] pl-3 text-[13px] text-[#084734]">{notice}</div> : null}
+      <SyncOutcomeNotice notice={notice} onDismiss={() => setNotice(null)} className="mb-6" />
       {error ? <div role="alert" className="mb-6 border-l-2 border-[#F6D5C5] pl-3 text-[13px] text-[#B85C33]">{error}</div> : null}
 
       {(data?.warnings.length ?? 0) > 0 ? (
@@ -400,27 +527,32 @@ export default function AdminCrmRevenueSheetPage() {
           scratchpad 보고서 참고). 화면이 "최신"으로 오인되지 않도록 항상 눈에 띄는 배지로 알린다. */}
       {data && data.manualLedgerGap.count > 0 ? <ManualLedgerGapBanner gap={data.manualLedgerGap} /> : null}
 
-      <section className="mb-8 grid gap-8 border-y border-[#f0f0ec] py-6 md:grid-cols-2 xl:grid-cols-5">
+      <section className="mb-8 grid gap-8 border-y border-[#f0f0ec] py-6 md:grid-cols-3 xl:grid-cols-6">
         {/* '확정' 두 의미 구분(CRM-6): 여기 '확정'=시트 확정 표시(¥) — 코크핏 '인식 매출'(딜리버리 인식 ₩)과 다른 기준 */}
         <MetricCard
           label="확정 표시"
           value={loading && !data ? <ValueSkeleton /> : formatCny(data?.summary.confirmedAmount)}
-          hint="주차 칸 빨간 글자 합계 · 시트 확정 표시 ¥ — 딜리버리 '인식 매출'(₩)과 다른 기준"
+          hint="주차 칸 빨간 글자 합계 · 시트 전 월(FY)·동기화본 ¥ — 장부 '확정 매출'(선택 기간)·딜리버리 '인식 매출'(₩)과 다른 기준"
+        />
+        <MetricCard
+          label="확정 예정"
+          value={loading && !data ? <ValueSkeleton /> : formatCny(data?.summary.pendingAmount)}
+          hint="빨간 글자지만 주차 시작일이 아직 안 온 금액(ADR-0062) · 그 주가 오면 동기화에서 확정으로 전환"
         />
         <MetricCard
           label="확정 임박"
           value={loading && !data ? <ValueSkeleton /> : formatCny(data?.summary.highConfidenceAmount)}
-          hint="주차 칸 파란 글자 합계 · 시트 기준 ¥"
+          hint="주차 칸 파란 글자 합계 · 시트 전 월(FY) ¥"
         />
         <MetricCard
           label="예정"
           value={loading && !data ? <ValueSkeleton /> : formatCny(data?.summary.expectedAmount)}
-          hint="당월 이후 무색 예정 금액 · 시트 기준 ¥"
+          hint="당월 이후 무색 예정 금액 · 시트 전 월(FY) ¥"
         />
         <MetricCard
           label="전환 대기"
           value={loading && !data ? <ValueSkeleton /> : formatCny(data?.summary.pastUnconfirmedAmount)}
-          hint="지난달 이전 무색 예정 금액 · 시트 기준 ¥"
+          hint="지난달 이전 무색 예정 금액 · 시트 전 월(FY) ¥"
         />
         <MetricCard
           label="매칭 커버리지"
@@ -451,6 +583,7 @@ export default function AdminCrmRevenueSheetPage() {
               <div key={point.month} className="flex min-w-[46px] flex-1 flex-col items-stretch justify-end gap-1">
                 {[
                   ["confirmedAmount", CONFIDENCE_TOKENS.confirmed.bgClass],
+                  ["pendingAmount", "bg-[#c9c9c3]"],
                   ["highConfidenceAmount", CONFIDENCE_TOKENS["high-confidence"].bgClass],
                   ["expectedAmount", CONFIDENCE_TOKENS.expected.bgClass],
                   ["pastUnconfirmedAmount", "bg-[#B85C33]"],
@@ -472,6 +605,7 @@ export default function AdminCrmRevenueSheetPage() {
           </div>
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[#1a1a1a]/45">
             <span className="inline-flex items-center gap-1"><i className={`h-2 w-2 rounded-sm ${CONFIDENCE_TOKENS.confirmed.bgClass}`} />확정</span>
+            <span className="inline-flex items-center gap-1"><i className="h-2 w-2 rounded-sm bg-[#c9c9c3]" />확정 예정</span>
             <span className="inline-flex items-center gap-1"><i className={`h-2 w-2 rounded-sm ${CONFIDENCE_TOKENS["high-confidence"].bgClass}`} />임박</span>
             <span className="inline-flex items-center gap-1"><i className={`h-2 w-2 rounded-sm ${CONFIDENCE_TOKENS.expected.bgClass}`} />예정</span>
             <span className="inline-flex items-center gap-1"><i className="h-2 w-2 rounded-sm bg-[#B85C33]" />전환 대기</span>
@@ -504,6 +638,7 @@ export default function AdminCrmRevenueSheetPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="고객, 담당, 메모 검색"
+                aria-label="REV 행 검색 — 고객·담당·상태·지역·메모"
                 className="h-full w-44 bg-transparent text-[13px] text-[#111110] outline-none placeholder:text-[#1a1a1a]/30"
               />
             </div>
@@ -512,12 +647,26 @@ export default function AdminCrmRevenueSheetPage() {
               <select
                 value={teamFilter}
                 onChange={(event) => setTeamFilter(event.target.value)}
+                aria-label="팀 필터"
                 className="h-full bg-transparent text-[13px] font-semibold text-[#111110] outline-none"
               >
                 <option value="all">전체 팀</option>
+                {/* URL로 들어온 팀이 목록에 없어도(동기화 뒤 사라진 팀 등) 선택 상태가 보이게 남긴다. */}
+                {teamFilter !== "all" && !teams.includes(teamFilter) ? <option value={teamFilter}>{teamFilter}</option> : null}
                 {teams.map((team) => <option key={team} value={team}>{team}</option>)}
               </select>
             </div>
+            {/* 출력(B3) — 표시 상한과 무관하게 현재 필터 결과 전체를 ¥ 정수로. 엑셀 한글 호환(BOM). */}
+            <button
+              type="button"
+              onClick={exportCsv}
+              disabled={loading || visibleRows.length === 0}
+              title="현재 필터·검색 결과 전체를 CSV로 내려받습니다 — 표시 상한과 무관, 금액은 시트 통화(¥) 정수"
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
+            >
+              <Download className="h-4 w-4" />
+              CSV {visibleRows.length > 0 ? `${formatNumber(visibleRows.length)}행` : ""}
+            </button>
           </div>
         </div>
 
@@ -563,7 +712,7 @@ export default function AdminCrmRevenueSheetPage() {
               표시할 REV 행이 없습니다.
             </p>
           ) : (
-            visibleRows.slice(0, MOBILE_VISIBLE_ROWS).map((row) => (
+            visibleRows.slice(0, mobileVisibleLimit).map((row) => (
               <div key={row.id} className="rounded-xl border border-[#e8e8e4] bg-white p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -581,6 +730,10 @@ export default function AdminCrmRevenueSheetPage() {
                   <p className="flex items-baseline justify-between gap-2">
                     <span className="text-[#1a1a1a]/40">확정</span>
                     <span className="font-semibold text-[#084734]">{formatCny(row.confirmedAmount)}</span>
+                  </p>
+                  <p className="flex items-baseline justify-between gap-2">
+                    <span className="text-[#1a1a1a]/40">확정 예정</span>
+                    <PendingAmount row={row} />
                   </p>
                   <p className="flex items-baseline justify-between gap-2">
                     <span className="text-[#1a1a1a]/40">임박</span>
@@ -621,17 +774,34 @@ export default function AdminCrmRevenueSheetPage() {
                       연결하기
                     </Link>
                   )}
-                  <span className="text-[10.5px] text-[#1a1a1a]/30">{formatDate(row.syncedAt)}</span>
+                  {/* 입력이 필요하면 장부의 이 행으로(라운드 4 P2-10) — 매출시트는 읽기 표면이라 금액 입력을 두지 않는다. */}
+                  <Link
+                    href={buildLedgerEntryHref(row, ledgerMonth)}
+                    prefetch={false}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#111110] hover:underline"
+                  >
+                    <PencilLine className="h-3.5 w-3.5" aria-hidden />
+                    장부에서 입력
+                  </Link>
                 </div>
               </div>
             ))
           )}
         </div>
 
-        {visibleRows.length > MOBILE_VISIBLE_ROWS ? (
-          <p className="mt-4 border-t border-[#f0f0ec] pt-3 text-center text-[12px] text-[#1a1a1a]/40 sm:hidden">
-            우선순위 상위 {formatNumber(MOBILE_VISIBLE_ROWS)}건을 표시합니다. 나머지 {formatNumber(visibleRows.length - MOBILE_VISIBLE_ROWS)}건은 검색·필터로 좁혀 확인하세요.
-          </p>
+        {visibleRows.length > mobileVisibleLimit ? (
+          <div className="mt-4 flex flex-col items-center gap-2 border-t border-[#f0f0ec] pt-3 text-center text-[12px] text-[#1a1a1a]/40 sm:hidden">
+            <p>
+              우선순위 상위 {formatNumber(mobileVisibleLimit)}건을 표시합니다. 나머지 {formatNumber(visibleRows.length - mobileVisibleLimit)}건은 이어서 보거나 검색·필터로 좁혀 확인하세요.
+            </p>
+            <button
+              type="button"
+              onClick={() => setMobileVisibleLimit((limit) => limit + MOBILE_VISIBLE_ROWS)}
+              className="inline-flex min-h-11 items-center rounded-lg border border-[#e8e8e4] bg-white px-4 text-[13px] font-semibold text-[#111110]"
+            >
+              {formatNumber(Math.min(MOBILE_VISIBLE_ROWS, visibleRows.length - mobileVisibleLimit))}건 더 보기
+            </button>
+          </div>
         ) : null}
 
         <div className="hidden overflow-x-auto sm:block">
@@ -642,30 +812,31 @@ export default function AdminCrmRevenueSheetPage() {
                 <th className="py-3 pr-4 font-semibold">고객 / 담당</th>
                 <th className="py-3 pr-4 font-semibold">상태</th>
                 <th className="py-3 pr-4 text-right font-semibold">확정</th>
+                <th className="py-3 pr-4 text-right font-semibold">확정 예정</th>
                 <th className="py-3 pr-4 text-right font-semibold">임박</th>
                 <th className="py-3 pr-4 text-right font-semibold">예정</th>
                 <th className="py-3 pr-4 text-right font-semibold">대기</th>
                 <th className="py-3 pr-4 font-semibold">CRM 연결</th>
                 <th className="py-3 pr-4 font-semibold">메모</th>
-                <th className="py-3 text-right font-semibold">Sync</th>
+                <th className="py-3 text-right font-semibold">작업 · Sync</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#f0f0ec]">
               {loading && !data ? (
                 <tr>
-                  <td colSpan={10} className="py-16 text-center text-[13px] text-[#1a1a1a]/35">
+                  <td colSpan={11} className="py-16 text-center text-[13px] text-[#1a1a1a]/35">
                     <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
                     매출시트를 불러오는 중입니다.
                   </td>
                 </tr>
               ) : visibleRows.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-16 text-center text-[13px] text-[#1a1a1a]/35">
+                  <td colSpan={11} className="py-16 text-center text-[13px] text-[#1a1a1a]/35">
                     표시할 REV 행이 없습니다.
                   </td>
                 </tr>
               ) : (
-                visibleRows.slice(0, MAX_VISIBLE_ROWS).map((row) => (
+                visibleRows.slice(0, visibleLimit).map((row) => (
                   <tr key={row.id} className="align-top">
                     <td className="py-4 pr-4">
                       <p className="text-[12px] font-semibold text-[#111110]">#{row.sheetRow}</p>
@@ -683,6 +854,7 @@ export default function AdminCrmRevenueSheetPage() {
                       <p className="mt-1 text-[11px] text-[#1a1a1a]/35">초입금 {row.firstPayment ?? "-"}</p>
                     </td>
                     <td className="py-4 pr-4 text-right text-[12px] font-semibold text-[#084734]">{formatCny(row.confirmedAmount)}</td>
+                    <td className="py-4 pr-4 text-right text-[12px]"><PendingAmount row={row} /></td>
                     <td className={`py-4 pr-4 text-right text-[12px] ${CONFIDENCE_TOKENS["high-confidence"].textClass}`}>{formatCny(row.highConfidenceAmount)}</td>
                     <td className="py-4 pr-4 text-right text-[12px] text-[#1a1a1a]/60">{formatCny(row.expectedAmount)}</td>
                     <td className="py-4 pr-4 text-right text-[12px] font-semibold text-[#B85C33]">{formatCny(row.pastUnconfirmedAmount)}</td>
@@ -699,17 +871,29 @@ export default function AdminCrmRevenueSheetPage() {
                       </p>
                     </td>
                     <td className="py-4 text-right">
-                      {row.linkStatus === "confirmed" ? (
-                        <CheckCircle2 className="ml-auto h-4 w-4 text-[#084734]" />
-                      ) : (
+                      <div className="flex flex-col items-end gap-1.5">
+                        {row.linkStatus === "confirmed" ? (
+                          <CheckCircle2 className="h-4 w-4 text-[#084734]" aria-label="CRM 연결 확정" />
+                        ) : (
+                          <Link
+                            // 행 고객명을 인박스 이름 필터로 프리필 — 이탈+재검색 없는 핸드오프(CRM-1).
+                            href={`/admin/crm/matching?name=${encodeURIComponent(row.customerName)}`}
+                            className="text-[11px] font-semibold text-[#084734] hover:underline"
+                          >
+                            연결하기
+                          </Link>
+                        )}
+                        {/* 입력이 필요하면 장부의 이 행으로(라운드 4 P2-10) — 당월·REV 렌즈·고객명 검색으로 착지. */}
                         <Link
-                          // 행 고객명을 인박스 이름 필터로 프리필 — 이탈+재검색 없는 핸드오프(CRM-1).
-                          href={`/admin/crm/matching?name=${encodeURIComponent(row.customerName)}`}
-                          className="text-[11px] font-semibold text-[#084734] hover:underline"
+                          href={buildLedgerEntryHref(row, ledgerMonth)}
+                          prefetch={false}
+                          title={`매출 장부에서 ${row.customerName} 행을 열어 금액을 입력·정정합니다`}
+                          className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-semibold text-[#111110] hover:underline"
                         >
-                          연결하기
+                          <PencilLine className="h-3 w-3" aria-hidden />
+                          장부에서 입력
                         </Link>
-                      )}
+                      </div>
                       <p className="mt-1 text-[10.5px] text-[#1a1a1a]/30">{formatDate(row.syncedAt)}</p>
                     </td>
                   </tr>
@@ -719,10 +903,19 @@ export default function AdminCrmRevenueSheetPage() {
           </table>
         </div>
 
-        {visibleRows.length > MAX_VISIBLE_ROWS ? (
-          <p className="mt-4 hidden border-t border-[#f0f0ec] pt-3 text-center text-[12px] text-[#1a1a1a]/40 sm:block">
-            외 {formatNumber(visibleRows.length - MAX_VISIBLE_ROWS)}건은 표시하지 않았습니다. 검색/필터로 좁혀 확인하세요.
-          </p>
+        {visibleRows.length > visibleLimit ? (
+          <div className="mt-4 hidden items-center justify-center gap-3 border-t border-[#f0f0ec] pt-3 text-[12px] text-[#1a1a1a]/40 sm:flex">
+            <span>
+              외 {formatNumber(visibleRows.length - visibleLimit)}건은 아직 표시하지 않았습니다 — 검색·필터로 좁히거나 이어서 보세요.
+            </span>
+            <button
+              type="button"
+              onClick={() => setVisibleLimit((limit) => limit + MAX_VISIBLE_ROWS)}
+              className="inline-flex h-8 items-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+            >
+              {formatNumber(Math.min(MAX_VISIBLE_ROWS, visibleRows.length - visibleLimit))}건 더 보기
+            </button>
+          </div>
         ) : null}
       </section>
     </div>
