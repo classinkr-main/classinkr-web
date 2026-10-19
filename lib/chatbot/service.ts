@@ -1521,6 +1521,60 @@ function scoreText(question: NormalizedQuestion, source: Omit<ChatbotSource, "sc
   return score
 }
 
+// metadata.symptoms(사용자가 실제로 쓰는 증상 표현)는 getMetadataStrings 로 extras 에 섞여 다른 메타와 같은 가중치만
+// 받았다. 증상 문구와 질문이 맞으면 작은 가산점을 더한다 — 증상 하나당 SYMPTOM_MATCH_BOOST, 최대 SYMPTOM_MATCH_MAX 개.
+// symptoms 가 없거나 비어 있는 행은 0 이라 기존 점수와 같다. 벡터 검색 경로는 건드리지 않는다.
+const SYMPTOM_MATCH_BOOST = 6
+const SYMPTOM_MATCH_MAX = 3
+
+// 증상 하나의 낱말(2자 이상) 중 질문 토큰과 맞는 것이 min(2, 낱말 수) 개 이상이면 그 증상이 맞은 것으로 본다.
+// 한국어 조사("소리가" ↔ "소리")를 받으려고 앞부분 일치(양방향 startsWith)로 비교한다.
+export function scoreSymptomMatches(
+  queryTokens: readonly string[],
+  metadata: Record<string, unknown> | null | undefined
+): number {
+  const symptoms = metadata?.symptoms
+  if (!Array.isArray(symptoms) || symptoms.length === 0 || queryTokens.length === 0) return 0
+
+  const seen = new Set<string>()
+  let matched = 0
+
+  for (const symptom of symptoms) {
+    if (typeof symptom !== "string") continue
+    const words = tokenize(symptom)
+    const key = words.join(" ")
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+
+    const hits = words.filter((word) =>
+      queryTokens.some((token) => token.startsWith(word) || word.startsWith(token))
+    ).length
+    if (hits >= Math.min(2, words.length)) {
+      matched += 1
+      if (matched >= SYMPTOM_MATCH_MAX) break
+    }
+  }
+
+  return matched * SYMPTOM_MATCH_BOOST
+}
+
+function scoreDocsChunkKeywords(
+  question: NormalizedQuestion,
+  source: Omit<ChatbotSource, "score">,
+  row: Pick<SupabaseChunkRow, "content" | "metadata">
+) {
+  const textScore = scoreText(question, source, [row.content, ...getMetadataStrings(row.metadata)])
+  return Math.max(1, textScore + scoreSymptomMatches(getScoringTokens(question), row.metadata))
+}
+
+export function __scoreDocsChunkKeywordsForTests(
+  rawQuestion: string,
+  source: Omit<ChatbotSource, "score">,
+  row: Pick<SupabaseChunkRow, "content" | "metadata">
+) {
+  return scoreDocsChunkKeywords(normalizeQuestion(rawQuestion), source, row)
+}
+
 function rerankSources(question: NormalizedQuestion, sources: ChatbotSource[]) {
   const suppressApiForComparison =
     isComparisonQuestion(question) && !isApiIntegrationQuestion(question)
@@ -1792,13 +1846,7 @@ async function keywordSearchSupabaseSources(question: NormalizedQuestion): Promi
 
         return {
           ...source,
-          score: Math.max(
-            1,
-            scoreText(question, source, [
-              row.content,
-              ...getMetadataStrings(row.metadata),
-            ])
-          ),
+          score: scoreDocsChunkKeywords(question, source, row),
         }
       })
       .filter((source): source is ChatbotSource => source != null)

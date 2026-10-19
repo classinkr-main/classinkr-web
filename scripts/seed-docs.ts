@@ -178,6 +178,7 @@ function getArticleNoindex(doc: DocArticle, status: ArticleStatus) {
   return doc.noindex ?? status !== "published"
 }
 
+// 정적 문서에는 증상 필드가 없어 비워 둔다. symptoms 는 요약 청크 본문과 챗봇 키워드 점수(scoreSymptomMatches)에 쓰이므로 어드민에서 채운다.
 function inferSymptoms() {
   return []
 }
