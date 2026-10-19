@@ -9,7 +9,11 @@ import { matchesDataOwner } from "@/lib/crm/personal-owner";
 import "server-only";
 
 import { revalidateTag } from "next/cache";
-import { ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG } from "@/lib/admin/crm/cache-tags";
+import {
+  ADMIN_CRM_PRIORITY_QUEUE_SNAPSHOT_CACHE_TAG,
+  ADMIN_CRM_REGION_MAP_CACHE_TAG,
+  ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG,
+} from "@/lib/admin/crm/cache-tags";
 import { normalizePhoneKey } from "@/lib/compass/normalize";
 import { summarizeLeadResponseStatus } from "@/lib/crm/lead-response-status";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -101,6 +105,12 @@ function invalidateLeadReadCaches() {
   // 자체 mutationScopeAt으로 재조회하므로 "max"(하드 만료 아님)가 맞는 톤이다
   // (docs/active/admin-performance-plan-2026-09-02.md §4.4).
   revalidateTag(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, "max");
+  // CRM 홈 우선순위 큐 소스 스냅샷도 인스턴스 간 공유 Data Cache다. 아래 구독(onLeadsMutated)은
+  // 큐 모듈을 로드한 인스턴스에만 걸려 있어 쓰기가 다른 인스턴스에서 일어나면 리스너가 0개다 —
+  // 태그를 직접 SWR 무효화한다(cache-tags 모듈만 import — 큐 모듈을 import하면 순환이 된다).
+  revalidateTag(ADMIN_CRM_PRIORITY_QUEUE_SNAPSHOT_CACHE_TAG, "max");
+  // 지역 지도(getCrmRegionMap)의 리드층은 leads.branch·message(폼 답변 지역)·담당을 읽는다 — 리드 쓰기가 그 태그도 무효화한다.
+  revalidateTag(ADMIN_CRM_REGION_MAP_CACHE_TAG, "max");
   leadRowsMemo.clear();
   for (const listener of leadMutationListeners) listener();
 }

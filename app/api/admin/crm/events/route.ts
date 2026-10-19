@@ -4,6 +4,13 @@ import { NextRequest, NextResponse } from "next/server"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import {
+  channelCarriesResult,
+  isContactLogResult,
+  resolveComposerContactChannel,
+} from "@/lib/crm/contact-log"
+import { leadContactTimeError, recordLeadContact, type LeadContactTimeError } from "@/lib/crm/contact-record"
+import { getLeadById } from "@/lib/repositories/leads"
+import {
   CRM_EVENT_SENTIMENTS,
   CRM_EVENT_SOURCE_TYPES,
   CRM_EVENT_TARGET_TYPES,
@@ -20,10 +27,21 @@ import { createTasksFromEventNextActions } from "@/lib/repositories/crm-tasks"
 import { uploadCrmRecording } from "@/lib/storage/crm-recordings"
 
 type CreatedCrmEvent = Awaited<ReturnType<typeof createCrmCustomerEvent>>
+type CrmEventInput = Parameters<typeof createCrmCustomerEvent>[0]
 
 // 기록 저장 후 열린 다음 액션을 crm_tasks로 자동 승격한다(§7.2).
 // task 생성 실패가 기록 저장 자체를 깨뜨리면 안 되므로 fail-soft.
-async function respondWithCreatedEvent(event: CreatedCrmEvent, createdBy: string) {
+/**
+ * 기록은 저장됐는데 다음 액션 → 할 일 승격만 실패한 부분 성공(f989a812). 일반 기록 저장과 컴포저 리드 콜·문자
+ * (recordLeadContact 경로, 8b3d7fde)가 같은 문구를 싣는다 — 기록 입력 폼(ActivityQuickForm)이 이 칸을 읽는다.
+ */
+const TASK_QUEUE_WARNING = "기록은 저장됐지만 다음 액션을 할 일에 추가하지 못했습니다. 전체 로그에서 다음 액션을 확인해 주세요."
+
+async function respondWithCreatedEvent(
+  event: CreatedCrmEvent,
+  createdBy: string,
+  extra: Record<string, unknown> = {}
+) {
   let tasksCreated = 0
   let taskQueueWarning: string | undefined
   try {
@@ -31,9 +49,138 @@ async function respondWithCreatedEvent(event: CreatedCrmEvent, createdBy: string
     tasksCreated = tasks.length
   } catch (error) {
     console.error("[POST /api/admin/crm/events] auto-task creation", error)
-    taskQueueWarning = "기록은 저장됐지만 다음 액션을 할 일에 추가하지 못했습니다. 전체 로그에서 다음 액션을 확인해 주세요."
+    taskQueueWarning = TASK_QUEUE_WARNING
   }
-  return NextResponse.json({ event, tasksCreated, ...(taskQueueWarning ? { taskQueueWarning } : {}) }, { status: 201 })
+  return NextResponse.json(
+    { event, tasksCreated, ...(taskQueueWarning ? { taskQueueWarning } : {}), ...extra },
+    { status: 201 }
+  )
+}
+
+function isoOrUndefined(value: string | null | undefined) {
+  if (!value) return undefined
+  const ms = Date.parse(value)
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : undefined
+}
+
+function firstText(...values: Array<string | null | undefined>) {
+  for (const value of values) {
+    const trimmed = value?.trim()
+    if (trimmed) return trimmed
+  }
+  return undefined
+}
+
+function contactTimeErrorResponse(reason: LeadContactTimeError): NextResponse {
+  return NextResponse.json(
+    {
+      error:
+        reason === "future"
+          ? "연락 시각이 현재보다 미래입니다. 기록 시각을 확인해 주세요."
+          : "연락 시각이 리드 접수 시각보다 이릅니다. 기록 시각을 확인해 주세요.",
+    },
+    { status: 400 }
+  )
+}
+
+interface ComposerContactRequest {
+  channel?: unknown
+  result?: unknown
+}
+
+/**
+ * 멀티파트(녹음 첨부) 컴포저 요청의 리드 연락 시각을 업로드 전에 검사한다 — saveLeadContactFromComposer 와 같은
+ * 판정(leadContactTimeError)을 앞당긴 것이다. 연락이 아니거나 리드를 못 찾으면 null(이후 흐름이 그대로 처리).
+ */
+async function precheckComposerContactTime(formData: FormData, hasRecording: boolean): Promise<NextResponse | null> {
+  const targetType = parseTargetType(formText(formData, "targetType"))
+  const leadId = targetType === "lead" ? formText(formData, "targetId")?.trim() : ""
+  if (!leadId) return null
+  const sourceType = parseSourceType(formText(formData, "sourceType"), hasRecording)
+  if (!resolveComposerContactChannel(sourceType, formText(formData, "contactChannel"))) return null
+  const lead = await getLeadById(leadId)
+  if (!lead) return null
+  const reason = leadContactTimeError(lead.timestamp, isoOrUndefined(formText(formData, "occurredAt")))
+  return reason ? contactTimeErrorResponse(reason) : null
+}
+
+/**
+ * 기록 컴포저의 리드 대상 콜·문자(카톡·이메일)는 "연락"이다 — 이벤트만 쓰던 것을 연락 로그 경로
+ * (lib/crm/contact-record.ts)로 보내 리드 드로어·연락중 전환·우선순위 큐·참여 신호가 같은 한 건을 본다.
+ * 미러 기록은 그 함수가 로그당 한 번 만든다 — 여기서 createCrmCustomerEvent를 따로 부르지 않는다
+ * (부르면 같은 연락이 기록 두 건이 된다). 리드를 못 찾으면 이전처럼 기록만 남긴다.
+ * 연락이 아니면 null — 호출부가 기존 기록 저장으로 진행한다.
+ */
+async function saveLeadContactFromComposer(
+  input: CrmEventInput,
+  contact: ComposerContactRequest,
+  createdBy: string
+): Promise<NextResponse | null> {
+  const channel = resolveComposerContactChannel(input.sourceType, contact.channel)
+  const leadId = input.targetType === "lead" ? input.targetId?.trim() : ""
+  if (!channel || !leadId) return null
+  // resolveComposerContactChannel은 call·sms 모드에서만 채널을 돌려준다.
+  const sourceType = input.sourceType === "call" ? "call" : "sms"
+
+  const lead = await getLeadById(leadId)
+  if (!lead) {
+    const event = await createCrmCustomerEvent(input)
+    return respondWithCreatedEvent(event, createdBy, { contact: { recorded: false, reason: "lead_not_found" } })
+  }
+
+  const recorded = await recordLeadContact({
+    lead,
+    entry: {
+      type: channel,
+      result: isContactLogResult(contact.result) && channelCarriesResult(channel) ? contact.result : undefined,
+      notes: firstText(input.body, input.summary, input.title),
+      contacted_by: firstText(input.ownerName) ?? createdBy,
+      contacted_at: isoOrUndefined(input.occurredAt),
+    },
+    composer: {
+      sourceType,
+      targetLabel: input.targetLabel,
+      title: input.title,
+      summary: input.summary,
+      body: input.body,
+      meetingPurpose: input.meetingPurpose,
+      ownerName: input.ownerName,
+      attendees: input.attendees,
+      decisions: input.decisions,
+      blockers: input.blockers,
+      nextActions: input.nextActions,
+      sentiment: input.sentiment,
+      stageSignal: input.stageSignal,
+      tags: input.tags,
+      recording: input.recording,
+      createdBy: input.createdBy,
+    },
+    taskCreatedBy: createdBy,
+  })
+
+  if (!recorded.ok) return contactTimeErrorResponse(recorded.reason)
+
+  const warnings = [
+    recorded.statusSync === "failed" ? "리드 상태를 연락중으로 맞추지 못했습니다." : null,
+    recorded.mirror === "failed" ? "CRM 기록 타임라인에 올리지 못했습니다." : null,
+  ].filter(Boolean)
+  return NextResponse.json(
+    {
+      event: recorded.event,
+      tasksCreated: recorded.tasksCreated,
+      contact: {
+        recorded: true,
+        logId: recorded.log.id,
+        channel,
+        duplicate: recorded.duplicate,
+        statusSync: recorded.statusSync,
+        mirror: recorded.mirror,
+      },
+      ...(warnings.length > 0 ? { warning: `연락 기록은 저장됐지만 ${warnings.join(" ")}` } : {}),
+      ...(recorded.taskQueueFailed ? { taskQueueWarning: TASK_QUEUE_WARNING } : {}),
+    },
+    { status: 201 }
+  )
 }
 
 const SOURCE_TYPES = new Set<string>(CRM_EVENT_SOURCE_TYPES)
@@ -109,6 +256,21 @@ function hasUsefulContent(input: {
   )
 }
 
+// 리드 대상 콜·문자에 통화 결과(contactResult)만 고른 저장("부재" 한 번 누르기)은 본문이 없어도 연락 기록이다.
+function isLeadContactResultOnly(
+  input: { sourceType?: string; targetType?: string; targetId?: string | null },
+  contact: ComposerContactRequest
+) {
+  const channel = resolveComposerContactChannel(input.sourceType, contact.channel)
+  return Boolean(
+    channel &&
+      channelCarriesResult(channel) &&
+      isContactLogResult(contact.result) &&
+      input.targetType === "lead" &&
+      input.targetId?.trim()
+  )
+}
+
 function isCrmEventsNotReadyError(error: unknown): error is Error {
   return error instanceof Error && error.message.includes("CRM 기록 DB 마이그레이션")
 }
@@ -162,6 +324,11 @@ export async function POST(req: NextRequest) {
 
       const fileValue = formData.get("recording")
       const file = fileValue instanceof File && fileValue.size > 0 ? fileValue : null
+      // 리드 연락 시각 검사는 녹음 업로드보다 먼저 — 업로드 뒤에 400을 내면 녹음 파일이 스토리지에 고아로 남는다.
+      if (file) {
+        const timeRejection = await precheckComposerContactTime(formData, true)
+        if (timeRejection) return timeRejection
+      }
       const upload = file ? await uploadCrmRecording(file) : null
       if (upload && !upload.ok) {
         if (upload.error.kind === "bad_type") {
@@ -212,9 +379,16 @@ export async function POST(req: NextRequest) {
         createdBy,
       }
 
-      if (!hasUsefulContent(input)) {
+      const contact: ComposerContactRequest = {
+        channel: formText(formData, "contactChannel"),
+        result: formText(formData, "contactResult"),
+      }
+      if (!hasUsefulContent(input) && !isLeadContactResultOnly(input, contact)) {
         return NextResponse.json({ error: "제목, 요약, 메모, 다음 액션 또는 녹음파일 중 하나는 필요합니다." }, { status: 400 })
       }
+
+      const contactResponse = await saveLeadContactFromComposer(input, contact, createdBy)
+      if (contactResponse) return contactResponse
 
       const event = await createCrmCustomerEvent(input)
       return await respondWithCreatedEvent(event, createdBy)
@@ -269,9 +443,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid CRM event field" }, { status: 400 })
     }
 
-    if (!hasUsefulContent(input)) {
+    const contact: ComposerContactRequest = { channel: raw.contactChannel, result: raw.contactResult }
+    if (!hasUsefulContent(input) && !isLeadContactResultOnly(input, contact)) {
       return NextResponse.json({ error: "제목, 요약, 메모 또는 다음 액션 중 하나는 필요합니다." }, { status: 400 })
     }
+
+    const contactResponse = await saveLeadContactFromComposer(input, contact, createdBy)
+    if (contactResponse) return contactResponse
 
     const event = await createCrmCustomerEvent(input)
     return await respondWithCreatedEvent(event, createdBy)

@@ -1,5 +1,6 @@
 import "server-only"
 
+import { NEO_UNASSIGNED_OWNER_NAME } from "@/lib/crm/customer-segment-spec"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { fetchSupabasePages } from "@/lib/supabase/pagination"
 
@@ -81,7 +82,8 @@ async function computeXiaoshouyiOwnerNameMap(sb: SupabaseAdminClient): Promise<M
 
 export function resolveOwnerName(ownerId: string | null | undefined, ownerNames: Map<string, string>) {
   const id = ownerId?.trim() || ""
-  if (!id) return "담당 미지정"
+  // 자리표시 이름은 세그먼트 스펙이 "미배정"으로 읽는 상수와 같아야 한다(isUnassignedOwnerKey).
+  if (!id) return NEO_UNASSIGNED_OWNER_NAME
   return ownerNames.get(id) ?? id
 }
 

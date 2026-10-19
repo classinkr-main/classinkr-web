@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest"
 
+import { buildReinflowIndex } from "@/lib/crm/lead-reinflow"
 import {
   LEAD_ACTION_FALLBACK_MESSAGE,
   describeLeadActionError,
   countBySourceGroup,
+  countNewLeadReinflow,
+  filterNewLeadRows,
   filterNewLeads,
   kstDateKey,
+  leadDateRangeWindow,
+  newLeadReinflowKind,
   resolveLeadDateRange,
 } from "@/lib/marketing/new-leads"
 import type { LeadRecord } from "@/lib/repositories/leads"
@@ -155,6 +160,155 @@ describe("filterNewLeads", () => {
       makeLead({ id: "mid", timestamp: "2026-08-05T03:00:00.000Z" }),
     ]
     expect(filterNewLeads(leads, range).map((lead) => lead.id)).toEqual(["newest", "mid", "old"])
+  })
+})
+
+// F12 — 창은 생성 시각이 아니라 유입 시각(생성 또는 재문의 last_inflow_at)으로 자른다.
+describe("filterNewLeadRows — 유입 시각 창(재문의 병합 반영)", () => {
+  const range = { since: "2026-08-01", until: "2026-08-10" }
+
+  it("기간 전에 생성되고 기간 안에 재문의한 리드를 재유입 행으로 포함하고, 재문의 시각으로 정렬한다", () => {
+    const leads = [
+      makeLead({ id: "fresh", timestamp: "2026-08-05T03:00:00.000Z" }),
+      makeLead({
+        id: "reinquiry",
+        timestamp: "2026-07-10T03:00:00.000Z", // 기간 전 생성
+        last_inflow_at: "2026-08-08T03:00:00.000Z", // 기간 안 재문의
+      }),
+      makeLead({
+        id: "old-only",
+        timestamp: "2026-07-10T03:00:00.000Z",
+        last_inflow_at: "2026-07-10T03:00:00.000Z", // 백필(생성과 같음) — 재문의 아님
+      }),
+    ]
+    const rows = filterNewLeadRows(leads, range)
+    expect(rows.map((row) => row.lead.id)).toEqual(["reinquiry", "fresh"])
+    expect(rows[0].inflow).toMatchObject({ kind: "reinflow", at: "2026-08-08T03:00:00.000Z" })
+    expect(rows[1].inflow).toMatchObject({ kind: "new", at: "2026-08-05T03:00:00.000Z" })
+    // 호환 래퍼도 같은 집합·순서
+    expect(filterNewLeads(leads, range).map((lead) => lead.id)).toEqual(["reinquiry", "fresh"])
+  })
+
+  it("재문의가 기간 밖이면 제외하고, KST 하루 경계를 반열린 창으로 자른다", () => {
+    const leads = [
+      makeLead({
+        id: "reinquiry-after",
+        timestamp: "2026-07-10T03:00:00.000Z",
+        last_inflow_at: "2026-08-10T15:00:00.000Z", // KST 08-11 00:00 — 창 밖
+      }),
+      makeLead({
+        id: "reinquiry-edge",
+        timestamp: "2026-07-10T03:00:00.000Z",
+        last_inflow_at: "2026-08-10T14:59:59.000Z", // KST 08-10 23:59:59 — 창 안
+      }),
+    ]
+    expect(filterNewLeadRows(leads, range).map((row) => row.lead.id)).toEqual(["reinquiry-edge"])
+  })
+
+  it("기간 안에 생성되고 기간 안에 재문의까지 한 리드는 1행(신규, 생성 시각)이다", () => {
+    const leads = [
+      makeLead({
+        id: "both",
+        timestamp: "2026-08-02T03:00:00.000Z",
+        last_inflow_at: "2026-08-09T03:00:00.000Z",
+      }),
+    ]
+    const rows = filterNewLeadRows(leads, range)
+    expect(rows).toHaveLength(1)
+    expect(rows[0].inflow).toMatchObject({ kind: "new", at: "2026-08-02T03:00:00.000Z" })
+  })
+
+  it("깨진 범위는 빈 목록 — 임의 보정하지 않는다", () => {
+    const leads = [makeLead({ id: "x", timestamp: "2026-08-05T03:00:00.000Z" })]
+    expect(filterNewLeadRows(leads, { since: "2026-08-10", until: "2026-08-01" })).toEqual([])
+    expect(filterNewLeadRows(leads, { since: "20260801", until: "2026-08-10" })).toEqual([])
+  })
+})
+
+describe("leadDateRangeWindow", () => {
+  it("KST 00:00 시작 ~ 종료 다음날 KST 00:00(반열린)", () => {
+    expect(leadDateRangeWindow({ since: "2026-08-01", until: "2026-08-10" })).toEqual({
+      fromMs: Date.parse("2026-07-31T15:00:00.000Z"),
+      toMs: Date.parse("2026-08-10T15:00:00.000Z"),
+    })
+  })
+})
+
+describe("newLeadReinflowKind / countNewLeadReinflow", () => {
+  const range = { since: "2026-08-01", until: "2026-08-10" }
+
+  it("재문의 행은 reinquiry, 같은 연락처의 더 이른 행이 있으면 repeat_contact, 첫 유입이면 null", () => {
+    const leads = [
+      makeLead({
+        id: "reinquiry",
+        phone: "010-1111-1111",
+        timestamp: "2026-07-10T03:00:00.000Z",
+        last_inflow_at: "2026-08-08T03:00:00.000Z",
+      }),
+      makeLead({ id: "earlier", phone: "010-2222-2222", timestamp: "2026-07-01T03:00:00.000Z" }),
+      makeLead({ id: "repeat", phone: "010-2222-2222", timestamp: "2026-08-04T03:00:00.000Z" }),
+      makeLead({ id: "first", phone: "010-3333-3333", timestamp: "2026-08-03T03:00:00.000Z" }),
+      makeLead({
+        id: "new-then-again",
+        phone: "010-4444-4444",
+        timestamp: "2026-08-02T03:00:00.000Z",
+        last_inflow_at: "2026-08-09T03:00:00.000Z",
+      }),
+    ]
+    const index = buildReinflowIndex(leads)
+    const rows = filterNewLeadRows(leads, range)
+    const kinds = Object.fromEntries(rows.map((row) => [row.lead.id, newLeadReinflowKind(row, index)]))
+
+    expect(kinds).toEqual({
+      reinquiry: "reinquiry",
+      repeat: "repeat_contact",
+      first: null,
+      // 생성이 기간 안이면 이 기간의 첫 유입이다 — 같은 기간 안의 재문의는 한 행(신규)으로 접힌다
+      // (leadInflowInWindow·tallyLeadInflow 와 같은 축). "재유입 N 포함"에도 세지 않는다.
+      "new-then-again": null,
+    })
+    expect(countNewLeadReinflow(rows, index)).toBe(2)
+  })
+
+  it("기간 안 생성·기간 뒤 재문의한 리드는 그 기간에서 첫 유입 — '재문의' 배지·재유입 건수에 넣지 않는다(리뷰 2026-09-25)", () => {
+    const leads = [
+      makeLead({
+        id: "later-reinquiry",
+        phone: "010-5555-5555",
+        timestamp: "2026-09-03T03:00:00.000Z", // 09-03 생성(기간 안)
+        last_inflow_at: "2026-09-20T03:00:00.000Z", // 09-20 재문의(기간 밖)
+      }),
+    ]
+    const index = buildReinflowIndex(leads)
+    expect(index.get("later-reinquiry")).toBe("inflow_stamp")
+
+    const firstWeek = filterNewLeadRows(leads, { since: "2026-09-01", until: "2026-09-07" })
+    expect(firstWeek).toHaveLength(1)
+    expect(firstWeek[0].inflow.kind).toBe("new")
+    expect(newLeadReinflowKind(firstWeek[0], index)).toBeNull()
+    expect(countNewLeadReinflow(firstWeek, index)).toBe(0)
+
+    // 재문의가 들어온 기간에서는 그 행이 재문의다.
+    const reinquiryWeek = filterNewLeadRows(leads, { since: "2026-09-15", until: "2026-09-21" })
+    expect(reinquiryWeek[0].inflow).toMatchObject({ kind: "reinflow", at: "2026-09-20T03:00:00.000Z" })
+    expect(newLeadReinflowKind(reinquiryWeek[0], index)).toBe("reinquiry")
+    expect(countNewLeadReinflow(reinquiryWeek, index)).toBe(1)
+  })
+
+  it("같은 연락처의 더 이른 행이 있는 기간 안 생성 행은 여전히 '재유입'(repeat_contact)", () => {
+    const leads = [
+      makeLead({ id: "old", phone: "010-6666-6666", timestamp: "2026-08-15T03:00:00.000Z" }),
+      makeLead({
+        id: "again",
+        phone: "010-6666-6666",
+        timestamp: "2026-09-03T03:00:00.000Z",
+        last_inflow_at: "2026-09-20T03:00:00.000Z",
+      }),
+    ]
+    const index = buildReinflowIndex(leads)
+    const rows = filterNewLeadRows(leads, { since: "2026-09-01", until: "2026-09-07" })
+    expect(rows.map((row) => row.lead.id)).toEqual(["again"])
+    expect(newLeadReinflowKind(rows[0], index)).toBe("repeat_contact")
   })
 })
 

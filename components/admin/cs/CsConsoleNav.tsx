@@ -147,10 +147,16 @@ export function resolveCsConsoleMode(pathname: string): CsConsoleMode {
  * 판정 축이 `roles` 배열에서 `(role, preset, overrides) → placement`로 바뀐다.
  * 그때 **이 함수 본문만** 갈아끼운다 — 호출부는 그대로 둔다.
  *
- *   import { resolveNavPlacement } from "../admin-nav-access"   // 그쪽 신규 모듈
- *   // href의 쿼리를 떼야 한다 — 그쪽 placement 키는 nav href(`/admin/docs`)이고
- *   // 콘솔 href는 탭 딥링크(`/admin/docs?tab=gaps`)라 문자열이 다르다.
- *   return resolveNavPlacement(item.href.split("?")[0], ctx) !== "deny"
+ * (2026-09-25 갱신) 사이드바 쪽 오버라이드에는 "deny"가 없다(2026-09-10 전면 공개). 세 번째
+ * 값 "hidden"은 개인 목록 정리일 뿐 **접근 제한이 아니다** — 숨긴 탭도 ⌘K·주소로 그대로 열리고
+ * getAccessibleAdminNavItems 는 항상 전체를 돌려준다(admin-nav-access.ts 불변식). 그래서 콘솔
+ * 메뉴 가시성을 hidden 으로 거르면 안 된다. 콘솔 하위 메뉴를 개인 숨김에 태우는 일은 2단계
+ * 결정이다 — 사이드바 키(`/admin/chatbot`, `/admin/docs`)와 충돌하므로 `cs:` 같은 접두 키
+ * 네임스페이스가 먼저 필요하고, 콘솔 진입 탭은 숨길 수 없어야 한다. 그때 쓸 모양:
+ *
+ *   import { isNavHidden } from "../admin-nav-access"
+ *   // 콘솔 href는 탭 딥링크(`/admin/docs?tab=gaps`)라 사이드바 href와 문자열이 다르다 — 접두 키로 분리.
+ *   return !isNavHidden(`cs:${item.href}`, ctx)   // 숨김 = 콘솔 메뉴에서만 치움, 라우트는 그대로
  *
  * 지금 `roles`를 미리 좁히지 않는 이유 두 가지.
  *  1. 그쪽 §5.3-1이 `nav_preset` NULL이면 기존 roles 동작을 유지하도록 못 박았고

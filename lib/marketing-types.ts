@@ -148,12 +148,21 @@ export interface NewsletterUnsubscribeRequest {
 
 /** 이메일 발송 요청 (관리자 → /api/admin/email/send) */
 export interface SendEmailRequest extends EmailComposerDraft {
+  /**
+   * 발송 방식 — campaign(기본) · test(지정 주소 1건).
+   * 고객 세그먼트(CRM) 발송은 아직 열지 않았다(2026-09-25 발송 1단계 = 대상 미리보기만): 본문에 segmentId 가 있거나
+   * mode 가 "segment" 면 서버가 수신자를 해석하기 전에 400 { code: "segment_send_not_enabled", sentCount: 0 } 로
+   * 거절한다(모르는 필드를 버리고 태그 [] = 전체 활성 구독자 분기로 떨어지는 사고 차단). 그래서 이 타입에는 그 필드를 두지 않는다.
+   */
   mode?: "campaign" | "test"
   /** true면 10분 내 같은 제목 재발송 서버 가드(409)를 통과한다 */
   force?: boolean
   testEmail?: string
   aiPersonalized?: PersonalizedEmailRecipient[]
-  /** 직접 입력한 이메일 주소 목록 — 구독자 DB 밖의 수신자 */
+  /**
+   * 직접 입력한 이메일 주소 목록 — 구독자 DB 밖의 수신자. 수신거부(해지)한 주소는 서버가 빼고
+   * 응답에 excludedUnsubscribed(건수)로 알린다. 수신거부 목록을 못 읽으면 503(consent_unavailable)으로 보내지 않는다.
+   */
   directEmails?: string[]
 }
 

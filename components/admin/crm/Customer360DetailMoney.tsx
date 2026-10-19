@@ -9,9 +9,10 @@
 // lib/crm/money-line-items.ts가 이미 분리해 두므로 여기서 다시 합치지 않는다.
 
 import { useMemo, useState, type ReactNode } from "react"
-import { ChevronDown, Coins, Handshake, Link2, Receipt, TrendingUp, Wallet } from "lucide-react"
+import { ChevronDown, Coins, Download, Handshake, Link2, Receipt, TrendingUp, Wallet } from "lucide-react"
 
 import { EmptyState, Panel, StatTile, TableEmpty } from "@/components/admin/viz"
+import { buildCsv, csvFileName, downloadCsvInBrowser, type CsvColumn } from "@/lib/crm/csv"
 import { CRM_CURRENCY_BADGE, formatCrmMoney, formatCNY, formatKRWAbbrev, formatUSD, type CrmCurrency } from "@/lib/crm/money-format"
 import {
   buildMoneyTimeline,
@@ -298,6 +299,82 @@ function LineItemRow({
 
 const LINE_ITEM_TABLE_HEADERS = ["품목", "구분", "수량", "단가", "금액", "최근", "근거"] as const
 
+// ── M5 · 품목별 대수 CSV ───────────────────────────────────────────────
+// 통화 정책을 파일에서도 지킨다: 단가·금액은 통화별 열(KRW/USD/CNY)로 나눠 그 행의 통화 열에만 값을
+// 넣는다. 행·열 어디에서도 통화를 넘나들며 더하지 않는다(합계 행 없음). 근거(확정/추정)와 그 설명을
+// 열로 남겨 파일만 받은 사람도 "이름 일치 추정"을 확정 대수로 오독하지 않게 한다.
+// 이스케이프·BOM·수식 주입 방어는 lib/crm/csv.ts(buildCsv)가 맡는다.
+
+const LINE_ITEM_CSV_CURRENCIES: CrmCurrency[] = ["KRW", "USD", "CNY"]
+
+const LINE_ITEM_SOURCE_LABEL: Record<CrmMoneyLineItem["source"], string> = {
+  deal_line_items: "딜 라인아이템",
+  hw_outbound: "HW 출고",
+}
+
+/** 근거 설명 — lib/crm/money-line-items.ts buildCrmMoneyLineItems 의 판정 규칙을 사람 말로 옮긴 것. */
+export function lineItemEvidenceBasis(item: Pick<CrmMoneyLineItem, "source" | "evidence">): string {
+  if (item.evidence === "estimated") return "추정 · 출고 목적지 이름 일치(확정 링크 없음)"
+  return item.source === "deal_line_items" ? "확정 · 이 고객의 딜 품목" : "확정 · 계정 확정 링크"
+}
+
+function toKstDate(iso: string | null | undefined): string {
+  if (!iso) return ""
+  const ms = new Date(iso).getTime()
+  if (Number.isNaN(ms)) return ""
+  return new Date(ms + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+}
+
+function currencyCell(item: CrmMoneyLineItem, currency: CrmCurrency, field: "unitPrice" | "amount") {
+  return item.currency === currency ? item[field] : null
+}
+
+/** 품목 한 행 → CSV 열 정의(순수). 통화별 단가·금액 열을 따로 둔다. */
+export const LINE_ITEM_CSV_COLUMNS: ReadonlyArray<CsvColumn<CrmMoneyLineItem>> = [
+  { header: "품목", value: (item) => item.product },
+  { header: "구분", value: (item) => LINE_ITEM_CATEGORY_LABEL[item.category] },
+  { header: "수량", value: (item) => item.quantity },
+  { header: "통화", value: (item) => item.currency ?? "" },
+  ...LINE_ITEM_CSV_CURRENCIES.flatMap((currency): Array<CsvColumn<CrmMoneyLineItem>> => [
+    { header: `단가(${currency})`, value: (item) => currencyCell(item, currency, "unitPrice") },
+    { header: `금액(${currency})`, value: (item) => currencyCell(item, currency, "amount") },
+  ]),
+  { header: "출처", value: (item) => LINE_ITEM_SOURCE_LABEL[item.source] },
+  { header: "근거", value: (item) => (item.evidence === "confirmed" ? "확정" : "추정") },
+  { header: "근거 설명", value: (item) => lineItemEvidenceBasis(item) },
+  { header: "최근 일자(KST)", value: (item) => toKstDate(item.lastAt) },
+  { header: "참조", value: (item) => item.details.map((detail) => detail.ref).filter(Boolean).join("; ") },
+  { header: "시리얼", value: (item) => item.details.flatMap((detail) => detail.serials).join("; ") },
+]
+
+/** 품목 목록 → CSV 본문(BOM·CRLF·수식 주입 방어 포함). */
+export function buildLineItemsCsv(items: readonly CrmMoneyLineItem[]): string {
+  return buildCsv(items, LINE_ITEM_CSV_COLUMNS)
+}
+
+/** 내려받기 파일명 — `품목별대수-<고객명>-YYYY-MM-DD.csv`(KST). */
+export function lineItemsCsvFileName(customerName: string | null | undefined, now: Date = new Date()): string {
+  const name = customerName?.trim()
+  return csvFileName(name ? `품목별대수-${name}` : "품목별대수", now)
+}
+
+function LineItemsCsvButton({ items, customerName }: { items: CrmMoneyLineItem[]; customerName: string | null }) {
+  const disabled = items.length === 0
+  return (
+    <button
+      type="button"
+      data-testid="line-items-csv-export"
+      disabled={disabled}
+      title={disabled ? "내보낼 품목이 없습니다." : "품목별 대수를 CSV로 내려받습니다(통화별 열 분리 · 근거 포함)."}
+      onClick={() => downloadCsvInBrowser(lineItemsCsvFileName(customerName), buildLineItemsCsv(items))}
+      className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg border border-[#E8E8E4] bg-white px-2.5 text-[12px] font-semibold text-[#31302E] transition-colors hover:bg-[#F6F5F4] disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-8"
+    >
+      <Download className="h-3.5 w-3.5" aria-hidden="true" />
+      CSV 내보내기
+    </button>
+  )
+}
+
 function LineItemsTable({
   items,
   truncated,
@@ -579,6 +656,7 @@ export default function Customer360DetailMoney({
   deals,
   accountId,
   onRelinked,
+  customerName = null,
 }: {
   money: Customer360Money
   /**
@@ -593,6 +671,8 @@ export default function Customer360DetailMoney({
   accountId?: string | null
   /** M4 연결 성공 후 상위가 360 데이터를 다시 불러오고 싶을 때(선택). */
   onRelinked?: () => void
+  /** M5 — CSV 파일명에 넣을 고객명(선택). 없으면 `품목별대수-YYYY-MM-DD.csv`. */
+  customerName?: string | null
 }) {
   const dealRows = useMemo(() => deals?.rows ?? [], [deals])
   const timeline = useMemo(
@@ -764,7 +844,12 @@ export default function Customer360DetailMoney({
       <Panel
         title="품목별 대수"
         description="딜 라인아이템·HW 출고를 품목으로 합산 · 통화가 다른 금액은 더하지 않음"
-        action={<TotalTag>{lineItems.length.toLocaleString("ko-KR")}개 품목</TotalTag>}
+        action={
+          <span className="flex flex-wrap items-center justify-end gap-2">
+            <TotalTag>{lineItems.length.toLocaleString("ko-KR")}개 품목</TotalTag>
+            <LineItemsCsvButton items={lineItems} customerName={customerName} />
+          </span>
+        }
       >
         <LineItemsTable
           items={lineItems}

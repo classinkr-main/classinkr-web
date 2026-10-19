@@ -287,13 +287,21 @@ export default function CampaignManageClient() {
           </div>
         </div>
 
-        <div className="mt-4">
+        {/* 마케팅 프로젝트는 사이드바 기본 숨김이라(admin-nav-access DEFAULT_HIDDEN_HREFS) 이 보조 링크가
+            ⌘K 와 함께 화면 쪽 도달 경로다. 프로젝트 화면 헤더의 "캠페인 관리 →"와 짝을 이룬다. */}
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1">
           <Link
             href="/admin/campaigns"
             className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#615D59] transition-colors hover:text-[#111110]"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             캠페인 허브로
+          </Link>
+          <Link
+            href="/admin/campaigns/projects"
+            className="text-[12px] font-medium text-[#615D59] transition-colors hover:text-[#111110]"
+          >
+            마케팅 프로젝트 →
           </Link>
         </div>
       </header>

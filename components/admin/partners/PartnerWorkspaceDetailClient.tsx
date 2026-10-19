@@ -712,7 +712,7 @@ function DocumentFormDialog({
             placeholder="https://drive.google.com/..."
           />
           <p className="text-[12px] leading-5 text-[#1a1a1a]/45">
-            고객에게 공유한 Google Drive, Notion, 공개 견적 링크가 있으면 문서 원장과 함께 보관합니다.
+            고객에게 공유한 Google Drive, Notion, 공개 견적 링크가 있으면 문서 원본과 함께 보관합니다.
           </p>
         </div>
         <DialogFooter>

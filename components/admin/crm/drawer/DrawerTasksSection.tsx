@@ -2,6 +2,11 @@
 
 // 열린 할 일 + 빠른 추가 폼 + CS 원클릭 동선 — 폼 상태·mutation은 부모(드로어 본체)가 소유한다.
 // Customer360Drawer.tsx 분해(2026-08-28)로 이동 — 로직 무변경.
+//
+// A안(2026-09-25 "기록은 Compass에서") — Compass 가 주 쓰기 면인 리드(드로어의 resolveCrmWriteSurface 결과
+// surface=compass = compassPrimary)에서도 할 일 추가는 그대로 둔다(오늘 연락이 Home 할 일을 읽는다). 대신 추가 폼에
+// HomeOnlyCaption 을 붙여 이 할 일이 Home 에만 남고 Compass 담당자에게 가지 않는다는 사실을 밝힌다 — 컴포저·추천 카드와
+// 같은 캡션(2026-09-26 교차 리뷰 후속). 판정은 드로어가 한 번만 하고 prop 으로 받는다(여기서 다시 계산하지 않는다).
 
 import { useMemo, useState } from "react"
 import { CalendarClock, CheckCircle2, ListChecks, Plus } from "lucide-react"
@@ -13,6 +18,10 @@ import { getBusinessDateParts } from "@/lib/business-time"
 import { useCrmOwners, type CrmOwnerOption } from "@/components/admin/crm/useCrmOwners"
 import { formatDay, SectionTitle, TASK_TYPE_OPTIONS } from "./shared"
 import { TASKS_SECTION_HEADING_ID, taskCompleteButtonId } from "./c360-local-patch"
+import { HomeOnlyCaption } from "./C360WriteSurfaceBar"
+
+/** 할 일 추가 폼의 Home 전용 캡션 id — 제목 입력·추가 버튼의 aria-describedby 가 가리킨다. */
+export const TASK_HOME_ONLY_CAPTION_ID = "c360-task-home-only"
 
 // "YYYY-MM-DD" → "M/D"(선행 0 제거) — 파싱 미리보기 한 줄용.
 function toMonthDay(iso: string): string {
@@ -45,6 +54,7 @@ export default function DrawerTasksSection({
   onAddTask,
   onCompleteTask,
   onCsMotion,
+  compassPrimary = false,
 }: {
   data: Customer360
   actingId: string | null
@@ -62,6 +72,11 @@ export default function DrawerTasksSection({
   onAddTask: () => void
   onCompleteTask: (taskId: string) => void
   onCsMotion: (motion: CsMotion) => void
+  /**
+   * Compass 가 주 쓰기 면인 리드(드로어 resolveCrmWriteSurface → surface=compass)인가. true 면 할 일 추가 폼에
+   * HomeOnlyCaption 을 붙인다. 생략하면 false(지금 화면 그대로 — Home 정본).
+   */
+  compassPrimary?: boolean
 }) {
   const { owners } = useCrmOwners()
 
@@ -190,9 +205,16 @@ export default function DrawerTasksSection({
       <div className="border-t border-[#f0f0ec] pt-3">
         {taskFormOpen ? (
           <div className="flex flex-col gap-2">
+            {/* 제목 입력이 autoFocus 라 캡션을 건너뛰기 쉽다 — 입력·추가 버튼이 aria-describedby 로 가리킨다. */}
+            {compassPrimary ? (
+              <div id={TASK_HOME_ONLY_CAPTION_ID}>
+                <HomeOnlyCaption />
+              </div>
+            ) : null}
             <input
               value={rawTitle}
               aria-label="새 할 일 제목"
+              aria-describedby={compassPrimary ? TASK_HOME_ONLY_CAPTION_ID : undefined}
               onChange={(event) => handleTitleInputChange(event.target.value)}
               placeholder="새 할 일 제목"
               autoFocus
@@ -224,6 +246,7 @@ export default function DrawerTasksSection({
                 onClick={onAddTask}
                 disabled={!taskTitle.trim() || actingId === "task"}
                 aria-busy={actingId === "task" ? true : undefined}
+                aria-describedby={compassPrimary ? TASK_HOME_ONLY_CAPTION_ID : undefined}
                 className="inline-flex h-9 flex-1 items-center justify-center gap-1 rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
               >
                 <Plus className="h-3.5 w-3.5" />

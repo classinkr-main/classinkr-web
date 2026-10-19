@@ -1,5 +1,6 @@
 "use client"
 
+import dynamic from "next/dynamic"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 // PrefetchKind는 next/navigation이 재수출하지 않는 런타임 enum이라 내부 경로에서 직접 가져온다
@@ -10,10 +11,12 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import {
   ChevronLeft,
   ChevronRight,
+  EyeOff,
   LogOut,
   Menu,
   MoreHorizontal,
   Search,
+  SlidersHorizontal,
   SquareChevronLeft,
   SquareChevronRight,
   X,
@@ -24,6 +27,7 @@ import {
   getAdminCalendarWeekStripRange,
   getDefaultAdminCalendarRange,
 } from "@/lib/admin/calendar-range"
+import { TODAY_CONTACTS_DEFAULT_OWNER, todayContactsUrl } from "@/lib/crm/today-contacts-request"
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 import AdminNotificationsBell from "./AdminNotificationsBell"
@@ -38,12 +42,24 @@ import { resolveCrmRouteLabel } from "./crm-route-labels"
 // resolveAdminNavAccess를 호출해야 사이드바·모바일·팔레트·권한 미리보기가 어긋나지 않는다.
 import {
   getAccessibleAdminNavItems,
+  getVisibleAdminNavItems,
   normalizeNavOverrides,
   resolveAdminNavAccess,
+  resolveNavPlacement,
+  setNavOverride,
+  type NavOverrideValue,
 } from "./admin-nav-access"
+// 본인 사이드바 편집 — 편집기 열기 이벤트(admin:open-nav-editor, ⌘K 명령이 쏜다)와 저장 호출.
+import { ADMIN_OPEN_NAV_EDITOR_EVENT, saveMyNavOverrides } from "./my-nav-preferences"
 // active 판정은 nav-active.ts로 추출됨 — CS 콘솔
 // 가로 메뉴(cs/CsConsoleNav)와 같은 판정을 공유한다. 여기서는 클로저 인자만 채워 넘긴다.
 import { isNavActive as matchNavActive } from "./nav-active"
+
+// 본인 사이드바 편집 드로어 — 열 때만 내려받는다(사이드바는 모든 어드민 화면에 실린다).
+const MyNavEditorDrawer = dynamic(() => import("./settings/MyNavEditorDrawer"), {
+  ssr: false,
+  loading: () => null,
+})
 
 // NAV(섹션·항목·롤·뱃지)·SECTION_META·CRM 하위 nav는 admin-nav.ts(SSOT)로 추출됨 —
 // 커맨드 팔레트(AdminCommandPalette)와 공유한다. 이 파일은 렌더링·warm-up 등 동작만 담당.
@@ -120,9 +136,10 @@ export const NAV_WARMUP_REQUESTS: Record<string, WarmupEntry[] | (() => WarmupEn
     overviewChatbotStatsUrl(),
     "/api/admin/meta/instagram?datePreset=last_30d&limit=25",
   ],
-  // CRM 홈은 첫 화면에서 8건을 띄우는데 서버 프리페치는 셋(action-kpis·overview·
-  // compass-pipeline)만 덮는다 — 나머지는 여기서 데워야 콜드를 면한다. 우선순위 큐가 이
-  // 화면의 주 작업대라 가장 중요하다(URL은 CrmPriorityQueuePanel의 조립 결과와 문자 일치).
+  // CRM 홈은 첫 화면에서 8건을 띄우는데 서버 프리페치는 넷(action-kpis·overview·
+  // compass-pipeline·오늘 연락)만 덮는다 — 나머지는 여기서 데워야 콜드를 면한다. "오늘 연락"이 이
+  // 화면의 주 작업대라 가장 중요하다(URL은 CrmTodayContactsPanel의 기본 조립 결과와 문자 일치 —
+  // 2026-09-25 옛 우선순위 큐 패널을 대체, 기본 담당은 로그인 사용자 ?owner=__me).
   // neo(외부 집계)는 뺐다 — 소비처 NeoCrmTeamPanel은 기본 접힌 리포트 아코디언의 team 탭에서만
   // 렌더돼(기본 탭 revenue) 진입만으로는 청크조차 안 내려온다. 비싼 축을 hover마다 태우던 낭비다.
   "/admin/crm": [
@@ -141,13 +158,20 @@ export const NAV_WARMUP_REQUESTS: Record<string, WarmupEntry[] | (() => WarmupEn
     // 아래 다섯은 CRM 홈 첫 화면이 무조건 마운트하는 하위 컴포넌트의 fetch — 지금까지 예열
     // 목록에 없어 매 진입마다 콜드 페치였다(각 컴포넌트에서 cacheKey=URL로 확인).
     "/api/admin/crm/coverage", // CrmCoverageStrip
-    "/api/admin/crm/home/priority-queue?limit=50&source=customer&v=3", // CrmPriorityQueuePanel
-    "/api/admin/crm/owners", // CrmPriorityQueuePanel(useCrmOwners)·CrmWeekAheadPanel
-    "/api/admin/crm/tasks?status=active&limit=100", // CrmWeekAheadPanel(compact)
+    // 현황 "오늘 연락"(C안 ①, 2026-09-25) — 패널의 기본(내 담당) 호출 todayContactsUrl("__me")와 문자 단위로 같아야
+    // 적중한다(10월 줄기 3f5f0a21: ?owner 없음 = 로그인 사용자). 같은 빌더로 만들어 어긋날 길을 없앤다.
+    todayContactsUrl(TODAY_CONTACTS_DEFAULT_OWNER), // CrmTodayContactsPanel
+    "/api/admin/crm/owners", // CrmTodayContactsPanel(useCrmOwners)·CrmWeekAheadPanel
+    // CrmWeekAheadPanel(compact) — 기본 담당(?owner 없음 = __me)을 늘 URL 에 싣는다(3f5f0a21).
+    "/api/admin/crm/tasks?status=active&limit=100&owner=__me",
     "/api/admin/crm/health-distribution", // CrmHealthDonut
   ],
+  // 세그먼트 허브(C안 ②) — 첫 목록 GET(segmentsListUrl("all", false)).
+  "/admin/crm/customers/segments": ["/api/admin/crm/segments"],
   "/admin/crm/customers/unified": [
-    "/api/admin/crm/customers/unified?limit=50&offset=0",
+    // 기본 진입(?owner= 없음 = 로그인 담당 `__me`, 3f5f0a21)의 첫 요청 — buildUnifiedListDefaultUrl()·서버 프리페치
+    // 시드(buildUnifiedPrefetchUrl())와 문자 단위로 같아야 적중한다. 담당은 늘 실린다(전체는 `owner=`).
+    "/api/admin/crm/customers/unified?limit=50&offset=0&owner=__me",
     "/api/admin/crm/owners",
   ],
   // 기본 필터가 scope=work 라 실호출에는 &scope=work 가 붙는다 — 이 조각이 빠져 100% 미스였다.
@@ -395,6 +419,11 @@ interface Props {
   name: string
   email: string
   navOverrides: Record<string, string>
+  /**
+   * 본인 편집(편집 드로어·"다시 표시")이 저장에 성공하면 서버가 정규화한 값을 넘긴다.
+   * 셸(AdminShell)이 세션 상태·sessionStorage 를 갱신하고 짧게 핀을 건다.
+   */
+  onNavOverridesChange?: (next: Record<string, NavOverrideValue>) => void
 }
 
 export default function AdminSidebar(props: Props) {
@@ -408,7 +437,7 @@ export default function AdminSidebar(props: Props) {
   )
 }
 
-function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
+function AdminSidebarContent({ role, name, email, navOverrides, onNavOverridesChange }: Props) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -436,10 +465,28 @@ function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
     if (localStorage.getItem("admin_sidebar_other_open") !== "true") return
     queueMicrotask(() => setOtherOpen(true))
   }, [])
+  // "숨긴 탭 N · 보기" 묶음 펼침 — 저장하지 않는다(숨긴 탭은 드물게 여는 곳이라 매번 접혀 시작).
+  // 현재 경로가 숨긴 항목이면 아래 hiddenHasActiveItem 이 강제로 펼친다.
+  const [hiddenOpen, setHiddenOpen] = useState(false)
+  // 본인 사이드바 편집 드로어 — 사용자 블록·모바일 메뉴의 "사이드바 편집" 버튼과
+  // ⌘K 명령(window 이벤트 "admin:open-nav-editor")이 연다.
+  const [navEditorOpen, setNavEditorOpen] = useState(false)
+  // 숨긴 탭 "다시 표시" 저장 상태.
+  const [restoringHref, setRestoringHref] = useState<string | null>(null)
+  const [restoreError, setRestoreError] = useState<string | null>(null)
   const mobileDrawerCloseRef = useRef<HTMLButtonElement | null>(null)
   // 모바일 드로어 접근성(품질 웨이브 3 — 항목 5) — Escape 닫기 + 열릴 때 닫기 버튼으로
   // 포커스 이동 · 닫힐 때 이전 포커스 복귀. DealModal과 동일한 공용 훅.
   useDialogFocus(mobileMenuOpen, () => setMobileMenuOpen(false), mobileDrawerCloseRef)
+
+  useEffect(() => {
+    const openNavEditor = () => {
+      setMobileMenuOpen(false)
+      setNavEditorOpen(true)
+    }
+    window.addEventListener(ADMIN_OPEN_NAV_EDITOR_EVENT, openNavEditor)
+    return () => window.removeEventListener(ADMIN_OPEN_NAV_EDITOR_EVENT, openNavEditor)
+  }, [])
 
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)")
@@ -481,6 +528,23 @@ function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
     })
   }
 
+  const toggleHidden = () => {
+    // 기타와 같은 규칙 — 접힌 사이드바에서는 먼저 사이드바를 펼치고 묶음도 함께 연다.
+    if (effectiveCollapsed) {
+      setCollapsed(false)
+      localStorage.setItem("admin_sidebar_collapsed", "false")
+      setHiddenOpen(true)
+      return
+    }
+
+    setHiddenOpen((prev) => !prev)
+  }
+
+  const openNavEditor = () => {
+    setMobileMenuOpen(false)
+    setNavEditorOpen(true)
+  }
+
   const handleLogout = async () => {
     clearAdminSessionStorage()
 
@@ -496,18 +560,23 @@ function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
   }
 
   const normalizedRole = normalizeAdminRole(role)
-  // 상시/기타 배치는 반드시 resolveAdminNavAccess를 통해서만 계산한다 — 사이드바가 자체 계산을
-  // 하면 권한 설정 화면의 미리보기와 어긋난다. 2026-09-10 전면 공개 이후 목록 자체는 전원
-  // 동일하고, 사람별 오버라이드만 항목의 상시/기타 자리를 옮긴다.
+  const normalizedOverrides = useMemo(() => normalizeNavOverrides(navOverrides), [navOverrides])
+  // 상시/기타/숨김 배치는 반드시 resolveAdminNavAccess를 통해서만 계산한다 — 사이드바가 자체
+  // 계산을 하면 편집기 미리보기와 어긋난다. 2026-09-10 전면 공개 이후 목록 자체는 전원 동일하고,
+  // 사람별 오버라이드는 항목의 상시/기타 자리를 옮기거나 내 목록에서 숨길 뿐이다.
   const navAccess = useMemo(
     () =>
       resolveAdminNavAccess({
         role: normalizedRole,
-        overrides: normalizeNavOverrides(navOverrides),
+        overrides: normalizedOverrides,
       }),
-    [normalizedRole, navOverrides]
+    [normalizedRole, normalizedOverrides]
   )
+  // accessibleNav 는 숨긴 항목까지 포함한 전체다(admin-nav-access 불변식) — active 판정의 형제
+  // 목록과 모바일 헤더 라벨은 숨긴 화면에 있을 때도 맞아야 하므로 이것을 쓴다.
   const accessibleNav = useMemo(() => getAccessibleAdminNavItems(navAccess), [navAccess])
+  // visibleNav 는 목록에 실제로 그리는 상시 + 기타 — 모바일 하단 바로가기·유휴 프리페치 기준.
+  const visibleNav = useMemo(() => getVisibleAdminNavItems(navAccess), [navAccess])
   const isNavActive = (href: string) =>
     matchNavActive(href, { pathname, searchParams, siblings: accessibleNav })
   const currentNavItem = accessibleNav.find((item) => isNavActive(item.href)) ?? accessibleNav[0]
@@ -517,15 +586,35 @@ function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
     group.items.some((item) => isNavActive(item.href))
   )
   const otherExpanded = otherOpen || foldedHasActiveItem
+  // 숨긴 탭도 같은 규칙 — 주소·⌘K 로 숨긴 화면에 들어왔으면 그 묶음을 펼쳐 현재 위치를 보인다.
+  const hiddenHasActiveItem = navAccess.hidden.some((item) => isNavActive(item.href))
+  const hiddenExpanded = hiddenOpen || hiddenHasActiveItem
   const currentCrmRouteLabel = inCrm ? resolveCrmRouteLabel(pathname ?? "") : null
   const mobilePrimaryNav = useMemo(
     () =>
       MOBILE_PRIMARY_NAV.flatMap(({ href, label }) => {
-        const item = accessibleNav.find((entry) => entry.href === href)
+        const item = visibleNav.find((entry) => entry.href === href)
         return item ? [{ ...item, label }] : []
       }),
-    [accessibleNav]
+    [visibleNav]
   )
+
+  // 숨긴 탭 "다시 표시" — 그 항목의 기본 자리(상시/기타)로 돌려 저장한다. 기본 숨김 항목이면
+  // 그 자리가 이 사람의 오버라이드로 남는다(setNavOverride 는 기본값과 같을 때만 키를 지운다).
+  const restoreHiddenItem = async (href: string) => {
+    const seat = resolveNavPlacement(href, { role: normalizedRole, overrides: normalizedOverrides })
+    const next = setNavOverride(normalizedOverrides, href, seat)
+    setRestoringHref(href)
+    setRestoreError(null)
+    try {
+      const saved = await saveMyNavOverrides(next)
+      onNavOverridesChange?.(saved)
+    } catch (error) {
+      setRestoreError(error instanceof Error ? error.message : "다시 표시하지 못했습니다.")
+    } finally {
+      setRestoringHref(null)
+    }
+  }
   const mobilePrimaryActiveHref = mobilePrimaryNav.find((item) => isNavActive(item.href))?.href ?? null
   const mobileMoreActive = Boolean(currentNavItem && mobilePrimaryActiveHref === null)
   const mobileBottomColumns = Math.min(mobilePrimaryNav.length + 1, 5)
@@ -626,7 +715,8 @@ function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
     if (!currentNavItem) return
 
     const run = () => {
-      const sectionItems = accessibleNav.filter((item) => item.section === currentNavItem.section)
+      // 이웃은 목록에 보이는 항목에서만 고른다 — 숨긴 탭을 유휴 시간에 내려받을 이유가 없다.
+      const sectionItems = visibleNav.filter((item) => item.section === currentNavItem.section)
       const index = sectionItems.findIndex((item) => item.href === currentNavItem.href)
       if (index === -1) return
       for (const neighbor of [sectionItems[index - 1], sectionItems[index + 1]]) {
@@ -645,7 +735,96 @@ function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
 
     const timeoutId = window.setTimeout(run, 650)
     return () => window.clearTimeout(timeoutId)
-  }, [accessibleNav, currentNavItem, prefetchAdminRoute])
+  }, [visibleNav, currentNavItem, prefetchAdminRoute])
+
+  // 기타 아래 "숨긴 탭 N · 보기" 묶음. 숨긴 항목도 링크 그대로 열리고(도달성 불변), 행마다
+  // "다시 표시"로 기본 자리에 되돌린다. 모바일 드로어와 데스크톱이 같은 마크업을 쓰되 터치 높이만 다르다.
+  const renderHiddenGroup = (variant: "mobile" | "desktop") => {
+    if (navAccess.hidden.length === 0) return null
+
+    const mobile = variant === "mobile"
+    const collapsedDesktop = !mobile && effectiveCollapsed
+    const hasFolded = navAccess.folded.length > 0
+
+    return (
+      <div className={hasFolded ? "mt-2" : "mt-5 border-t border-[#f0f0ec] pt-4"}>
+        <button
+          type="button"
+          onClick={toggleHidden}
+          aria-expanded={hiddenExpanded}
+          title={collapsedDesktop ? `숨긴 탭 ${navAccess.hidden.length}` : undefined}
+          className={`flex w-full items-center gap-1.5 text-[#1a1a1a]/40 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110] ${
+            mobile
+              ? "min-h-11 rounded-md px-3 text-[12.5px]"
+              : `rounded-lg py-1.5 text-[11.5px] ${collapsedDesktop ? "justify-center px-2" : "px-3"}`
+          }`}
+        >
+          <EyeOff className="h-3.5 w-3.5 shrink-0" />
+          {!collapsedDesktop && (
+            <span className="flex-1 text-left">
+              숨긴 탭 <span className="tabular-nums">{navAccess.hidden.length}</span> ·{" "}
+              {hiddenExpanded ? "접기" : "보기"}
+            </span>
+          )}
+        </button>
+
+        {hiddenExpanded && !collapsedDesktop && (
+          <div className={`mt-1 ${mobile ? "space-y-1" : "space-y-0.5"}`}>
+            {navAccess.hidden.map((item) => {
+              const isActive = isNavActive(item.href)
+              const restoring = restoringHref === item.href
+
+              return (
+                <div key={`${variant}-hidden-${item.href}`} className="flex items-center gap-1">
+                  <Link
+                    aria-current={isActive ? "page" : undefined}
+                    href={item.href}
+                    onFocus={() => warmAdminTab(item.href)}
+                    onMouseEnter={() => scheduleWarmAdminTab(item.href)}
+                    onMouseLeave={cancelWarmAdminTab}
+                    onPointerDown={() => warmAdminTab(item.href)}
+                    onTouchStart={() => warmAdminTab(item.href)}
+                    onClick={() => {
+                      warmAdminTab(item.href, "click")
+                      if (mobile) setMobileMenuOpen(false)
+                    }}
+                    className={`group flex min-w-0 flex-1 items-center gap-2.5 font-medium transition-colors ${
+                      mobile ? "min-h-11 rounded-md px-3 text-[14px]" : "rounded-lg px-3 py-2 text-[13px]"
+                    } ${
+                      isActive
+                        ? "bg-[#ECFDF5] text-[#084734]"
+                        : "text-[#1a1a1a]/40 hover:bg-[#f5f5f2] hover:text-[#1a1a1a]/65"
+                    }`}
+                  >
+                    <span className={isActive ? "text-[#084734]" : "text-[#1a1a1a]/30"}>
+                      <item.icon className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => void restoreHiddenItem(item.href)}
+                    disabled={restoringHref !== null}
+                    aria-label={`${item.label} 다시 표시`}
+                    className={`shrink-0 rounded-md px-2 text-[11px] font-medium text-[#615D59] transition-colors hover:bg-[#f5f5f2] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-50 ${
+                      mobile ? "min-h-11" : "py-1.5"
+                    }`}
+                  >
+                    {restoring ? "표시 중..." : "다시 표시"}
+                  </button>
+                </div>
+              )
+            })}
+            {restoreError ? (
+              <p role="alert" className="px-3 pt-1 text-[11px] leading-snug text-[#B43E3E]">
+                {restoreError}
+              </p>
+            ) : null}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <>
@@ -704,6 +883,15 @@ function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
             <p className="truncate text-[11px] text-[#1a1a1a]/40">
               {ROLE_LABEL[normalizedRole]}{email ? ` - ${email}` : ""}
             </p>
+            <button
+              type="button"
+              onClick={openNavEditor}
+              aria-haspopup="dialog"
+              className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-md px-1 text-[12px] font-medium text-[#615D59] transition-colors hover:text-[#111110]"
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              사이드바 편집
+            </button>
           </div>
 
           <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4">
@@ -831,6 +1019,8 @@ function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
                     )}
                   </div>
                 )}
+
+                {renderHiddenGroup("mobile")}
               </>
             )}
           </nav>
@@ -929,6 +1119,16 @@ function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
           <p className="text-[11px] text-[#1a1a1a]/40">
             {ROLE_LABEL[normalizedRole]}{email ? ` - ${email}` : ""}
           </p>
+          {/* 본인 사이드바 편집 — 설정 여부와 무관하게 항상 렌더한다(찾을 수 있어야 쓴다). */}
+          <button
+            type="button"
+            onClick={openNavEditor}
+            aria-haspopup="dialog"
+            className="-ml-1 mt-1.5 inline-flex items-center gap-1.5 rounded-md px-1 py-0.5 text-[11px] font-medium text-[#615D59] transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            사이드바 편집
+          </button>
         </div>
       )}
 
@@ -1086,6 +1286,8 @@ function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
                 )}
               </div>
             )}
+
+            {renderHiddenGroup("desktop")}
           </>
         )}
       </nav>
@@ -1095,6 +1297,19 @@ function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
           aria-hidden
           className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-gradient-to-t from-white to-transparent"
         />
+        {/* 접힌 사이드바에는 사용자 블록이 없다 — 편집 진입점을 아이콘으로 남긴다. */}
+        {effectiveCollapsed ? (
+          <button
+            type="button"
+            onClick={openNavEditor}
+            aria-haspopup="dialog"
+            aria-label="사이드바 편집"
+            title="사이드바 편집"
+            className="mb-1 flex w-full items-center justify-center rounded-lg px-2 py-2.5 text-[#1a1a1a]/40 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+          >
+            <SlidersHorizontal className="h-4 w-4 shrink-0" />
+          </button>
+        ) : null}
         <button
           onClick={handleLogout}
           title={effectiveCollapsed ? "로그아웃" : undefined}
@@ -1130,6 +1345,19 @@ function AdminSidebarContent({ role, name, email, navOverrides }: Props) {
         </span>
       </button>
     </aside>
+
+    {navEditorOpen ? (
+      <MyNavEditorDrawer
+        role={role}
+        name={name}
+        initialOverrides={navOverrides}
+        onClose={() => setNavEditorOpen(false)}
+        onSaved={(saved) => {
+          onNavOverridesChange?.(saved)
+          setNavEditorOpen(false)
+        }}
+      />
+    ) : null}
     </>
   )
 }

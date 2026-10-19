@@ -112,6 +112,72 @@ describe("LeadDrawer 렌더 (SSR)", () => {
   })
 })
 
+// A안(2026-09-25) "기록은 Compass에서" — 보드 오버레이 항목을 받으면 주 행동이 Compass 새 탭 링크다.
+describe("LeadDrawer — Compass 리드 기록 위치 (A안)", () => {
+  const compassEntry = {
+    compassLeadId: 77,
+    academy: "테스트 학원",
+    name: "홍길동",
+    stage: "contact",
+    careStage: null,
+    owner: null,
+    caller: "진소망",
+    bdOwner: null,
+    nextActionAt: null,
+    demoAt: null,
+    neocrmRegisteredAt: null,
+    lastInflowAt: null,
+    url: "https://mkt.classin.co.kr/leads?open=77",
+  }
+
+  it("Compass 리드: 'Compass에서 열기'(새 탭) + 상태 칩, Home 폼 토글은 'Home에 따로 남기기' + Home 전용 캡션", () => {
+    const html = render({ compassEntry })
+    expect(html).toContain('data-testid="lead-drawer-open-compass"')
+    expect(html).toContain(`href="${compassEntry.url}"`)
+    expect(html).toContain('target="_blank"')
+    expect(html).toContain("Compass에서 열기")
+    expect(html).toContain("Home에 따로 남기기")
+    expect(html).not.toContain(">연락 추가<")
+    expect(html).toContain('data-testid="lead-drawer-home-only"')
+    expect(html).toContain("Compass 담당자에게는 보이지 않습니다")
+    // 헤더에 Compass 상태 칩(병기)
+    expect(html).toContain("Compass 컨택")
+    // 전화걸기는 보조로 남는다.
+    expect(html).toContain("전화걸기")
+  })
+
+  it("딥링크(initialContactForm)여도 Compass 리드면 Home 연락 폼을 자동으로 열지 않는다", () => {
+    const html = render({ compassEntry, initialContactForm: true })
+    expect(html).not.toContain('aria-label="연락 기록 저장"')
+  })
+
+  it("오버레이 조회 중에는 판정이 끝날 때까지 자동 열림을 미룬다", () => {
+    const html = render({ initialContactForm: true, compassLoading: true })
+    expect(html).not.toContain('aria-label="연락 기록 저장"')
+  })
+
+  it("Compass 에 없는 리드(판정 완료)는 지금처럼 딥링크가 Home 연락 폼을 연다", () => {
+    const html = render({ initialContactForm: true })
+    expect(html).toContain('aria-label="연락 기록 저장"')
+    expect(html).toContain(">연락 추가<")
+    expect(html).not.toContain("lead-drawer-open-compass")
+  })
+
+  it("오버레이 끊김 + 매칭 없음은 Home 기록 + 끊김 캡션(0 과 구분)", () => {
+    const html = render({ compassDown: true })
+    expect(html).toContain('data-testid="lead-drawer-compass-down"')
+    expect(html).toContain("Compass 연결 끊김")
+    expect(html).not.toContain("lead-drawer-open-compass")
+  })
+
+  it("전환 리드는 Compass 매칭이 있어도 Home 정본 — 주 링크 없이 칩만", () => {
+    const html = render({ compassEntry, lead: { ...lead, status: "converted" } as LeadRecord })
+    expect(html).not.toContain("lead-drawer-open-compass")
+    expect(html).toContain(">연락 추가<")
+    expect(html).toContain("Compass 컨택")
+  })
+})
+
 describe("LeadDrawer 소스 계약", () => {
   it("'전환' 버튼은 onStatusChange 를 직접 부르지 않고 resolveStatusButtonAction → onConvert 로 간다 (leads-03)", () => {
     expect(source).toContain("resolveStatusButtonAction(s, lead.status)")

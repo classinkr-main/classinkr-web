@@ -3,6 +3,9 @@
 // CRM 기록 작업면 — 좌: 검색·날짜별 기록, 우: 입력. 주간 요약과 할 일은 접어서 참조한다.
 // 기록 생성 폼 SSOT는 rail/ActivityQuickForm — 이 파일은 폼을 직접 들고 있지 않는다.
 // 캐시 창(TTL·SWR)은 lib/crm/client-cache.ts SSOT 를 쓴다(P2) — 이 파일에 로컬 TTL 상수를 두지 않는다.
+// A안(2026-09-25) — 리드 대상 포커스(?targetType=lead&targetId=)면 360 드로어와 같은 기록 위치 판정
+// (lib/crm/write-surface)으로 "기록은 Compass에서" 안내 바를 컴포저 위에 둔다. 판정 원천은 드로어와 같은 360
+// 캐시 키라 드로어에서 넘어오면 추가 요청이 없다. 안내일 뿐 컴포저·쓰기 경로는 바꾸지 않는다(교차 쓰기 0).
 
 import { Suspense, use, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
@@ -35,6 +38,9 @@ import {
 import { buildActivityEventsUrl, defaultActivityEventsUrl } from "@/lib/crm/activity-events-url"
 import type { CrmActivityInitialData } from "@/lib/admin/crm/activity-prefetch"
 import type { ListCrmCustomerEventsResult } from "@/lib/repositories/crm-events"
+import type { Customer360 } from "@/lib/repositories/crm-customer-360"
+import { resolveCrmWriteSurface, type CrmWriteSurfaceResult } from "@/lib/crm/write-surface"
+import C360WriteSurfaceBar, { CompassDownWriteCaption, HomeOnlyCaption } from "./drawer/C360WriteSurfaceBar"
 import Pager from "@/components/admin/ui/Pager"
 import FreshnessCaption from "./FreshnessCaption"
 import { ActivityWeekSummaryView, useWeekOpenTasks } from "./activity/ActivityWeekSummary"
@@ -47,6 +53,7 @@ import {
   SENTIMENT_FILTERS,
   SOURCE_FILTERS,
   TARGET_OPTIONS,
+  activityFocusBackHref,
   formatDateTime,
   formatFileSize,
   isActivityTargetType,
@@ -60,6 +67,73 @@ import {
 } from "./rail/activity-contract"
 
 const PAGE_LIMIT = 50
+
+/** 360 드로어(Customer360Drawer load)와 같은 URL·캐시 키 — 드로어에서 넘어오면 캐시 적중. */
+export function leadFocus360Url(leadId: string): string {
+  return `/api/admin/crm/customers/${encodeURIComponent(`lead:${leadId}`)}/360`
+}
+
+/**
+ * A안 — 리드 대상 포커스의 기록 위치 안내. Compass 에서 응대 중인 리드면 "기록은 Compass에서" 바 + Compass 링크 +
+ * "Home에만 저장" 캡션, Compass 연결 끊김이면 그 사실만. 판정 조회 실패는 안내를 생략한다(컴포저는 그대로 쓸 수 있다).
+ */
+function LeadFocusWriteSurface({ leadId, name }: { leadId: string; name: string }) {
+  const [resolved, setResolved] = useState<{ leadId: string; surface: CrmWriteSurfaceResult } | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const url = leadFocus360Url(leadId)
+    adminFetchJsonCachedWithMeta<Customer360>(url, undefined, {
+      cacheKey: url,
+      ttlMs: CRM_CACHE_TTL_MS,
+      staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
+    })
+      .then(({ data }) => {
+        if (cancelled || !data) return
+        setResolved({
+          leadId,
+          surface: resolveCrmWriteSurface({
+            source: data.source,
+            found: data.found,
+            compassHref: data.compass?.href,
+            compassDown: data.compass?.down,
+            leadStatus: data.leadStatus,
+            crmRegistered: data.crmRegistered,
+          }),
+        })
+      })
+      .catch(() => {
+        // 안내 바는 보조 표시 — 판정을 못 하면 그리지 않는다(지금 화면과 같다).
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [leadId])
+
+  const surface = resolved?.leadId === leadId ? resolved.surface : null
+  if (!surface) return null
+  if (surface.surface === "compass") {
+    return (
+      <div
+        data-testid="crm-activity-lead-write-surface"
+        className="rounded-xl border border-[#e8e8e4] bg-white px-3 py-2.5"
+      >
+        <C360WriteSurfaceBar
+          compassHref={surface.compassHref}
+          name={name}
+          showOpenLink
+          standalone
+          testId="crm-activity-write-surface-bar"
+        />
+        <HomeOnlyCaption className="mt-1.5" />
+      </div>
+    )
+  }
+  if (surface.reason === "compass_down") {
+    return <CompassDownWriteCaption className="px-1" />
+  }
+  return null
+}
 type ActivityScope = "work" | "all"
 const AUTOMATED_EVENT_SOURCES = new Set<SourceType>(["site_inflow", "external_crm", "sheet"])
 
@@ -304,7 +378,12 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
   }, [focusLabelFromQuery, focusTargetId, data])
 
   const focusName = focusLabel || "선택한 고객"
-  const backHref = backParam || `/admin/crm/customers/unified?account=${encodeURIComponent(focusTargetId)}`
+  const backHref = activityFocusBackHref({
+    back: backParam,
+    targetType: focusTargetType,
+    targetId: focusTargetId,
+    label: focusLabel,
+  })
 
   const loadEvents = useCallback(
     async (offset: number, options?: { force?: boolean; append?: boolean }) => {
@@ -547,6 +626,11 @@ function CrmActivityClientInner({ initialData }: { initialData?: CrmActivityInit
             </Link>
           </div>
         </div>
+      ) : null}
+
+      {/* A안 — 리드 대상 포커스면 기록 위치 안내(Compass 에서 응대 중인 리드는 "기록은 Compass에서"). */}
+      {focusTargetId && focusTargetType === "lead" ? (
+        <LeadFocusWriteSurface key={focusTargetId} leadId={focusTargetId} name={focusName} />
       ) : null}
 
       {/* Desktop: list + input workspace. Mobile: list, then input; the header action focuses

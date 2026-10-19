@@ -9,14 +9,22 @@ interface CrmRouteLabelRule {
   label: string
 }
 
+// 순서가 곧 우선순위다(find). 고객 보조 탭은 반드시 "/admin/crm/customers"(= 고객 360 상세
+// [key]) 규칙보다 위에 둔다 — 아래로 내려가면 그 화면이 모바일 헤더에 "고객 360"으로 뜬다
+// (접수·태그가 실제로 그랬다, 2026-09-25 수정). 라벨은 고객 보조 탭 정본
+// (admin-nav.ts CRM_CUSTOMERS_CHILD_NAV)의 라벨과 맞춘다 — tests/admin/crm-route-labels.test.ts 가 대조한다.
 const CRM_ROUTE_LABEL_RULES: readonly CrmRouteLabelRule[] = [
   { prefix: "/admin/crm/customers/unified", label: "통합 고객" },
   { prefix: "/admin/crm/customers/leads", label: "리드" },
+  { prefix: "/admin/crm/customers/intake", label: "접수" },
   { prefix: "/admin/crm/customers/accounts", label: "원천 고객" },
+  // 세그먼트 허브(2026-09-25) — 정적 세그먼트라 고객 360([key])보다 먼저 잡혀야 한다.
+  { prefix: "/admin/crm/customers/segments", label: "세그먼트" },
   { prefix: "/admin/crm/customers/map", label: "지도" },
+  { prefix: "/admin/crm/customers/tags", label: "태그" },
   { prefix: "/admin/crm/customers", label: "고객 360" },
   { prefix: "/admin/crm/partners/customers", label: "원천 고객" },
-  { prefix: "/admin/crm/deals/rev-sheet", label: "REV 스냅샷" },
+  { prefix: "/admin/crm/deals/rev-sheet", label: "매출시트" },
   { prefix: "/admin/crm/deals/orders", label: "오더·설치" },
   { prefix: "/admin/crm/deals/kpi", label: "워크스페이스" },
   { prefix: "/admin/crm/deals", label: "매출" },

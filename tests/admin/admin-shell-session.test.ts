@@ -97,7 +97,9 @@ vi.mock("@supabase/ssr", () => ({
   },
 }))
 
-const { encodeSession, resolveAdminShellSession } = await import("@/lib/admin-auth")
+const { encodeSession, invalidateAdminShellSessionCache, resolveAdminShellSession } = await import(
+  "@/lib/admin-auth"
+)
 
 const ACTIVE_PROFILE = {
   display_name: "왕찬",
@@ -206,6 +208,25 @@ describe("resolveAdminShellSession", () => {
     expect(second).toEqual(first)
     expect(counters.getClaims).toBe(1)
     expect(counters.extendedSelect).toBe(1)
+  })
+
+  // 사이드바 편집 저장(PATCH /api/admin/me/nav·/api/admin/users) 직후 같은 쿠키의 다음 렌더는
+  // 60초 캐시가 아니라 DB 의 새 nav_overrides 를 읽어야 한다.
+  it("re-queries after invalidateAdminShellSessionCache() so a saved sidebar shows up", async () => {
+    config = { claims: { sub: "user-1" }, profile: ACTIVE_PROFILE }
+    useSupabaseCookie()
+
+    await resolveAdminShellSession()
+    config = {
+      claims: { sub: "user-1" },
+      profile: { ...ACTIVE_PROFILE, nav_overrides: { "/admin/quotes": "hidden" } },
+    }
+    expect((await resolveAdminShellSession())?.navOverrides).toEqual({ "/admin/crm": "primary" })
+
+    invalidateAdminShellSessionCache()
+
+    expect((await resolveAdminShellSession())?.navOverrides).toEqual({ "/admin/quotes": "hidden" })
+    expect(counters.extendedSelect).toBe(2)
   })
 
   it("shares one in-flight lookup across concurrent renders", async () => {

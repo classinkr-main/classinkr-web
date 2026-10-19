@@ -452,7 +452,7 @@ export default function AdminCrmRevenueSheetPage() {
           <p className="text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Admin 3.0 Revenue Sheet</p>
           <h1 className="mt-2 text-2xl font-bold tracking-[-0.02em] text-[#111110]">매출시트</h1>
           <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/45">
-            동기화본 기준 운영 — 매칭·통계·CRM 연결 안정화 후 자체 원장으로 승격 예정
+            동기화본 기준 운영 — 매칭·통계·CRM 연결 안정화 후 자체 원본으로 승격 예정
           </p>
           {/* 기준 시각(S-6) — 이 화면의 모든 숫자는 REV 시트 동기화본 기준이다. 하루 한 번 크론이라 26시간을
               넘기면 "어제 크론도 실패했다"는 뜻 — 경고 톤으로 보인다(행마다 반복되던 동기화 시각의 요약). */}
@@ -612,7 +612,7 @@ export default function AdminCrmRevenueSheetPage() {
           </div>
           {data?.compass && !data.compass.down ? (
             <p className="mt-2 text-[10.5px] leading-relaxed text-[#1a1a1a]/35">
-              두 앱이 같은 원장을 읽지만 셀 색 해석이 달라 차이가 날 수 있음 · 시간당 동기화분
+              두 앱이 같은 원본을 읽지만 셀 색 해석이 달라 차이가 날 수 있음 · 시간당 동기화분
             </p>
           ) : null}
         </div>

@@ -24,6 +24,7 @@ import {
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { formatCNY, formatUSD } from "@/lib/crm/money-format"
 import { formatAgeHours } from "@/lib/crm/sync-freshness"
+import { NEO_SOURCE_EXPIRING_WINDOW_DAYS } from "@/lib/crm/customer-segment-spec"
 import { useCrmOwners } from "@/components/admin/crm/useCrmOwners"
 import type {
   NeoCrmCustomerDetail,
@@ -41,7 +42,8 @@ type SourceFilter = "all" | "neo" | "lead"
 const SORT_OPTIONS: Array<{ key: SortKey; label: string }> = [
   { key: "balance", label: "잔액순" },
   { key: "lastClass", label: "최근활동순" },
-  { key: "expire", label: "만료임박" },
+  // "만료 임박"(통합 목록 SSOT 30일)과 다른 뜻이라 같은 단어를 쓰지 않는다 — 만료일이 가까운 순 정렬이다.
+  { key: "expire", label: "만료일순" },
   { key: "order", label: "오더순" },
   { key: "name", label: "이름순" },
 ]
@@ -93,7 +95,7 @@ function ExpiryBadge({ expireAt }: { expireAt: string | null }) {
         만료 {formatDay(expireAt)}
       </span>
     )
-  if (days <= 60)
+  if (days <= NEO_SOURCE_EXPIRING_WINDOW_DAYS)
     return (
       <span className="inline-flex items-center gap-1 rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[11px] font-semibold text-[#7A520F]">
         D-{days} · {formatDay(expireAt)}
@@ -477,6 +479,8 @@ export default function NeoCrmCustomersClient() {
   const { currentOwner, currentOwnerKeys, owners: crmOwners } = useCrmOwners()
 
   const deepLinkedAccountId = searchParams.get("account")?.trim() ?? ""
+  // ?expiring=1 딥링크 — Overview "리뉴얼 D-60" 타일에서 '60일 내 만료만' 필터가 켜진 채 착지한다.
+  // 기준은 요약 타일(summary.expiringSoonCount)과 같은 창(오늘~60일, 지난 만료 제외)이라 착지 건수가 타일과 맞는다.
   const deepLinkedExpiring = searchParams.get("expiring") === "1"
 
   const [neoData, setNeoData] = useState<NeoCrmCustomerListResponse | null>(null)
@@ -624,11 +628,11 @@ export default function NeoCrmCustomersClient() {
       // 담당자 별명을 동일 인물로 비교한다. 비슷한 이름을 부분 일치로 포함하지 않는다.
       if (!matchesDataOwner(row.ownerName, ownerKeys)) return false
 
-      // 3. 만료 임박만
+      // 3. 60일 내 만료만(원천 고객 창 — 통합 목록의 "만료 임박" 30일과 다른 뜻)
       if (expiringOnly) {
         if (row.origin !== "neo") return false
         const d = daysUntil(row.expireAt)
-        if (d === null || d > 60) return false
+        if (d === null || d < 0 || d > NEO_SOURCE_EXPIRING_WINDOW_DAYS) return false
       }
 
       // 4. 검색어 (학원명·UID·전화·담당자·리드)
@@ -754,8 +758,11 @@ export default function NeoCrmCustomersClient() {
           <span className="text-[#615D59]">
             리드 <strong className="font-semibold tabular-nums text-[#084734]">{loading ? "…" : formatNumber(totalLeadsCount)}</strong>건
           </span>
-          <span className="text-[#615D59]">
-            만료 임박 <strong className="font-semibold tabular-nums text-[#B85C33]">{loading ? "…" : formatNumber(summary?.expiringSoonCount)}</strong>곳
+          <span
+            className="text-[#615D59]"
+            title={`오늘~${NEO_SOURCE_EXPIRING_WINDOW_DAYS}일 안에 만료되는 고객(지난 만료 제외)`}
+          >
+            {NEO_SOURCE_EXPIRING_WINDOW_DAYS}일 내 만료 <strong className="font-semibold tabular-nums text-[#B85C33]">{loading ? "…" : formatNumber(summary?.expiringSoonCount)}</strong>곳
           </span>
         </div>
 
@@ -765,7 +772,7 @@ export default function NeoCrmCustomersClient() {
         </div>
       </div>
 
-      {/* ─── 필터 바: 소스 탭, 검색, 담당자(내 담당 디폴트), 정렬, 만료 임박 ─── */}
+      {/* ─── 필터 바: 소스 탭, 검색, 담당자(내 담당 디폴트), 정렬, 60일 내 만료 ─── */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         {/* 좌측: 소스 선택 세그먼트 (전체 / 원천 고객 / 리드 전부 다 포함) */}
         <div className="flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-0.5 text-[12px] font-semibold">
@@ -879,7 +886,7 @@ export default function NeoCrmCustomersClient() {
             ))}
           </select>
 
-          {/* 만료 임박만 버튼 */}
+          {/* 60일 내 만료만 버튼 */}
           <button
             type="button"
             onClick={() => setExpiringOnly((prev) => !prev)}
@@ -890,7 +897,7 @@ export default function NeoCrmCustomersClient() {
             }`}
           >
             <AlertTriangle className="h-3 w-3" />
-            만료 임박
+            {NEO_SOURCE_EXPIRING_WINDOW_DAYS}일 내 만료만
           </button>
 
           <span className="text-[11.5px] font-medium text-[#615D59]">

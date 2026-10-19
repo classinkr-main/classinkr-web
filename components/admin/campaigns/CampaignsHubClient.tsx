@@ -17,6 +17,7 @@ import type { MarketingGlanceInitialData } from "@/lib/marketing/glance-initial-
 import { CAMPAIGN_TABS, resolveCampaignTab, type CampaignTab } from "@/lib/marketing/hub-tabs"
 import { PERF_PERIOD_KEYS, PERF_PERIOD_LABEL, isPerfPeriodKey, type PerfPeriodKey } from "@/lib/marketing/perf"
 import { parseMessagePrefill, stripMessagePrefillParams, type MessagePrefill } from "@/lib/message-prefill"
+import { parseSegmentHandoff, stripSegmentHandoffParams, type SegmentHandoff } from "@/lib/crm/segment-handoff"
 import { useUrlState } from "@/lib/use-url-state"
 import type { LeadRecord } from "@/lib/db"
 import type { EventCategory, EventStatus, PublicEvent } from "@/lib/types/public-events"
@@ -163,6 +164,8 @@ export default function CampaignsHubClient({ initialData }: { initialData: Marke
 
   // 고객 360 딥링크(?message_to=&message_name=) 수신자 프리필 — 마운트 시 1회 소모
   const [messagePrefill, setMessagePrefill] = useState<MessagePrefill | null>(null)
+  // CRM 세그먼트 허브 딥링크(?segment=<uuid>) — 세그먼트 id 만 받는다(연락처·조건 원문 없음). 마운트 시 1회 소모.
+  const [segmentHandoff, setSegmentHandoff] = useState<SegmentHandoff | null>(null)
   const [events, setEvents] = useState<PublicEvent[]>([])
   const [leads, setLeads] = useState<LeadRecord[]>([])
   const [metricsMap, setMetricsMap] = useState<Record<string, EventMetrics>>({})
@@ -245,7 +248,9 @@ export default function CampaignsHubClient({ initialData }: { initialData: Marke
     // message_to 프리필 딥링크는 첫 렌더가 어느 탭이어도 곧바로 email 탭으로 전환된다(아래 효과).
     // 그 한 사이클에서 코어 fetch가 새어나가지 않도록 URL의 프리필 파라미터도 함께 게이트한다.
     const pendingMessagePrefill = parseMessagePrefill(window.location.search) !== null
-    if (!needsCore || pendingMessagePrefill) {
+    // 세그먼트 넘김(?segment=)도 곧바로 email 탭으로 전환되므로 같은 이유로 게이트한다.
+    const pendingSegmentHandoff = parseSegmentHandoff(window.location.search) !== null
+    if (!needsCore || pendingMessagePrefill || pendingSegmentHandoff) {
       // 코어를 로드하지 않는 경로에서는 초기 loading=true를 내려 헤더 동기화 버튼이 영구 비활성으로 잠기지 않게 한다.
       if (!coreLoadRequestedRef.current) setLoading(false)
       return
@@ -267,6 +272,20 @@ export default function CampaignsHubClient({ initialData }: { initialData: Marke
   }, [router, selectTab])
 
   const consumeMessagePrefill = useCallback(() => setMessagePrefill(null), [])
+
+  // CRM 세그먼트 넘김 소모 (segment) — message_to 와 같은 일회성 패턴: 캡처 → email 탭 → 파라미터 제거.
+  useEffect(() => {
+    const handoff = parseSegmentHandoff(window.location.search)
+    if (!handoff) return
+    setSegmentHandoff(handoff)
+    selectTab("email")
+    // 위 message_to 효과가 먼저 캡처했으므로 두 파라미터를 함께 지운다 — router.replace 가 비동기라 한쪽만 지우면
+    // 다른 효과가 지운 파라미터를 되살릴 수 있다.
+    const rest = stripMessagePrefillParams(stripSegmentHandoffParams(window.location.search))
+    router.replace(rest ? `${window.location.pathname}?${rest}` : window.location.pathname, { scroll: false })
+  }, [router, selectTab])
+
+  const consumeSegmentHandoff = useCallback(() => setSegmentHandoff(null), [])
 
   // 기간 프리셋 연속 변경 가드 — 시퀀스 번호로 "마지막 요청"만 화면에 반영한다.
   const metaRequestSeqRef = useRef(0)
@@ -631,7 +650,12 @@ export default function CampaignsHubClient({ initialData }: { initialData: Marke
         aria-label={`${CAMPAIGN_TABS.find((tab) => tab.id === activeTab)?.label ?? activeTab} 탭`}
       >
         {activeTab === "email" ? (
-          <EmailTab recipientPrefill={messagePrefill} onRecipientPrefillConsumed={consumeMessagePrefill} />
+          <EmailTab
+            recipientPrefill={messagePrefill}
+            onRecipientPrefillConsumed={consumeMessagePrefill}
+            segmentHandoff={segmentHandoff}
+            onSegmentHandoffConsumed={consumeSegmentHandoff}
+          />
         ) : (
           <div className="px-4 pt-6 sm:px-6 lg:px-9">
             {activeTab === "summary" && (

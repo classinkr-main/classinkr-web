@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
 
     if (parsed.stats.lots.length === 0 && parsed.outbound.length === 0) {
       return NextResponse.json(
-        { error: "per-lot 원장 형식(H1~H8 등의 물량번호 탭)을 찾지 못했습니다. 'Hardware Ledger' 파일이 맞는지 확인하세요." },
+        { error: "per-lot 원본 형식(H1~H8 등의 물량번호 탭)을 찾지 못했습니다. 'Hardware Ledger' 파일이 맞는지 확인하세요." },
         { status: 400 }
       )
     }
@@ -95,6 +95,6 @@ export async function POST(req: NextRequest) {
       import: importResult,
     })
   } catch (error) {
-    return toErrorResponse(error, "원장 파일 가져오기 실패")
+    return toErrorResponse(error, "원본 파일 가져오기 실패")
   }
 }

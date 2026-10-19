@@ -1,6 +1,6 @@
 # Docs Index
 
-기준 시점: 2026-09-21
+기준 시점: 2026-09-25
 문서 목적: 현재 저장소에서 무엇을 먼저 읽어야 하는지, 어떤 문서를 믿어야 하는지, 어떤 문서가 역사 기록인지 빠르게 구분한다.
 
 ## Admin OS 정본 우선순위
@@ -60,6 +60,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - 어드민 → 지사 운영 OS(ERP) 청사진 & 실행 로드맵(Account 360 스파인·귀속·노션 캘린더 라이브 연동·거버넌스 결정)
 - [active/marketing-tab-dashboard-restructure-2026-09-14.md](./active/marketing-tab-dashboard-restructure-2026-09-14.md)
   - **마케팅 허브(/admin/campaigns) 실행 로드맵.** 한눈에·상세·데이터 3층 IA, 컴포넌트 재배치표, 개선 후보 ID(G/D/T/N), 확정 결정, 진척 기록. Compass(mkt.classin.co.kr)와의 역할 경계 정본
+- [active/admin-usage-triage-2026-09-25.md](./active/admin-usage-triage-2026-09-25.md)
+  - **어드민 사용 실측·탭 정리.** 운영 DB 읽기 전용 집계로 본 화면별 사람 사용 흔적(Home 어드민 쓰기 ≈0, 매니저 업무는 Compass), 멈춘 원천(NEO env 누락·시트 권한), 기본 숨김·매니저별 숨기기, 심폐소생 Top 5, 결정 대기 D1~D8
 - [active/crm-tab-develop-plan-2026-09-12.md](./active/crm-tab-develop-plan-2026-09-12.md)
   - **CRM 탭 실행 로드맵.** 5작업면·돈흐름·데이터층의 현황 진단, 정책-코드 불일치 총괄, 개선 후보 ID(H/C/R/D)와 4 Wave 실행 순서, 사용자 결정 항목, 문서 정리 제안
 - [active/internal-crm-backend-operating-plan-2026-06-26.md](./active/internal-crm-backend-operating-plan-2026-06-26.md)
@@ -85,6 +87,10 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - 파트너 포털 기능 재배치, 견적 문서 라이프사이클, Admin Hardware 편입 기준
 - [active/partner-portal-master-spec.md](./active/partner-portal-master-spec.md)
   - 파트너 포털 도메인 모델과 거래건 중심 UX 상세 근거
+- [active/admin-ai-widget-remote-order-plan-2026-09-28.md](./active/admin-ai-widget-remote-order-plan-2026-09-28.md)
+  - **갈매봇(어드민 전역 AI 위젯)·AI 올인원 탭·원격 오더 기획.** 오더 등급(R0~R4), 오더 카드 사양, 안전 설계, 프론트 구현 현황과 서버 연결 지점
+- [active/admin-ai-structure-worklist-2026-09-29.md](./active/admin-ai-structure-worklist-2026-09-29.md)
+  - **갈매봇 실행 로드맵.** 서버 구조(조율기·오더 레지스트리·확인 API), 조회·쓰기 후보 함수와 되돌리기 가능 여부, 단계별 작업 id(S0~S5, F)와 완료 기준
 - [active/internal-crm-backend-operating-plan-2026-06-26.md](./active/internal-crm-backend-operating-plan-2026-06-26.md)
   - 내부 동료가 매일 쓰는 자체 CRM의 기록 입력, 회의록/녹음 모으기, 고객 360, 다음 액션 운영 기준
 - [active/admin-3-revenue-sheet-workspace-plan-2026-06-29.md](./active/admin-3-revenue-sheet-workspace-plan-2026-06-29.md)

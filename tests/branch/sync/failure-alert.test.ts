@@ -41,6 +41,40 @@ describe("notifyBranchSyncFailureStreaks", () => {
     expect(outcomes).toEqual([{ source: "rev", failedDays: 2, delivered: true }])
   })
 
+  // 2026-09-25 동작 변화 고정 — REV만 돌린 수동 새로고침(source="rev")은 HW 연속 실패를 끊지 않는다.
+  // 예전(모든 런이 "all")에는 그 성공이 HW 성공으로 읽혀 HW 2일째 알림이 나가지 않았다.
+  it("still alerts HW on day 2 when someone refreshed REV only in between", async () => {
+    const HW_DOWN = "hw: 503 Service Unavailable"
+    listRecentSyncRunsFresh.mockResolvedValue([
+      { started_at: "2026-09-10T08:38:00Z", status: "failed", error: HW_DOWN, source: "all" }, // 오늘 크론
+      { started_at: "2026-09-09T11:00:00Z", status: "success", error: null, source: "rev" }, // 어제 장부 새로고침
+      { started_at: "2026-09-09T08:38:00Z", status: "failed", error: HW_DOWN, source: "all" }, // 어제 크론
+      { started_at: "2026-09-08T08:38:00Z", status: "success", error: null, source: "all" },
+    ])
+    emitNotificationEvent.mockResolvedValue({ deliveryResults: [{ channel: "wecom_webhook", status: "sent" }] })
+    const { notifyBranchSyncFailureStreaks } = await import("@/lib/branch/sync/failure-alert")
+
+    const outcomes = await notifyBranchSyncFailureStreaks(new Date("2026-09-10T08:40:00Z"))
+
+    expect(outcomes).toEqual([{ source: "hw", failedDays: 2, delivered: true }])
+    expect(emitNotificationEvent).toHaveBeenCalledWith(expect.objectContaining({
+      sourceId: "hw",
+      payload: expect.objectContaining({ failedDays: 2, failedRuns: 2, lastSuccessAt: "2026-09-08T08:38:00Z" }),
+    }))
+  })
+
+  it("legacy 'all' rows keep the old reading — a successful all-run still resets both sources", async () => {
+    listRecentSyncRunsFresh.mockResolvedValue([
+      { started_at: "2026-09-10T08:38:00Z", status: "failed", error: "hw: boom", source: "all" },
+      { started_at: "2026-09-09T11:00:00Z", status: "success", error: null, source: "all" },
+      { started_at: "2026-09-09T08:38:00Z", status: "failed", error: "hw: boom", source: "all" },
+    ])
+    const { notifyBranchSyncFailureStreaks } = await import("@/lib/branch/sync/failure-alert")
+
+    expect(await notifyBranchSyncFailureStreaks(new Date("2026-09-10T08:40:00Z"))).toEqual([])
+    expect(emitNotificationEvent).not.toHaveBeenCalled()
+  })
+
   it("stays quiet on day 3 (next reminder is day 5)", async () => {
     listRecentSyncRunsFresh.mockResolvedValue(failedDays(3))
     const { notifyBranchSyncFailureStreaks } = await import("@/lib/branch/sync/failure-alert")

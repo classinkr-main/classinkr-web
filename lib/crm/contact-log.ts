@@ -15,6 +15,37 @@ export function channelCarriesResult(type: ContactLogType): boolean {
   return CONTACT_LOG_RESULT_CHANNELS.has(type)
 }
 
+/** 연락 로그 채널 4종 — DB CHECK(20260409_schema_fixes.sql)와 같은 상한. */
+export const CONTACT_LOG_TYPES: readonly ContactLogType[] = ["call", "sms", "kakao", "email"]
+/** 통화 결과 4종 — DB CHECK와 같은 상한. */
+export const CONTACT_LOG_RESULTS: readonly ContactLogResult[] = ["answered", "no_answer", "callback", "meeting_set"]
+
+export function isContactLogType(value: unknown): value is ContactLogType {
+  return typeof value === "string" && (CONTACT_LOG_TYPES as readonly string[]).includes(value)
+}
+
+export function isContactLogResult(value: unknown): value is ContactLogResult {
+  return typeof value === "string" && (CONTACT_LOG_RESULTS as readonly string[]).includes(value)
+}
+
+/**
+ * 기록 컴포저(POST /api/admin/crm/events)의 어떤 저장이 "리드에게 실제로 연락한 것"인지와 그 채널을 정한다.
+ *
+ * - 콜 모드(sourceType "call") = 전화.
+ * - 문자 모드(sourceType "sms", 폼 설명 "문자·카톡 발신/회신") = 문자. 요청이 contactChannel로
+ *   kakao·email을 명시하면 그 채널로 좁힌다(전화로는 바꾸지 않는다 — 콜은 콜 모드로만).
+ * - 메모·회의록·녹음 등 그 밖의 모드는 연락 로그 채널이 아니다(null) — 기존처럼 기록만 남는다.
+ */
+export function resolveComposerContactChannel(
+  sourceType: string | null | undefined,
+  requestedChannel?: unknown
+): ContactLogType | null {
+  if (sourceType === "call") return "call"
+  if (sourceType !== "sms") return null
+  if (requestedChannel === "kakao" || requestedChannel === "email") return requestedChannel
+  return "sms"
+}
+
 export type ContactLogDraft = {
   type: ContactLogType
   result?: ContactLogResult

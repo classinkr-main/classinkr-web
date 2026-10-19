@@ -3,6 +3,7 @@ import "server-only"
 import { getNeoCrmCustomerDetail } from "@/lib/admin-crm-customers-neo"
 import { getCompassActivityPage, getCompassLeadsByPhoneKeys } from "@/lib/compass/bridge"
 import { compassLeadUrl, normalizePhoneKey } from "@/lib/compass/normalize"
+import { pickRepresentativeCompassRow } from "@/lib/compass/overlay"
 import { toCompassTimelineEntries } from "@/lib/crm/compass-timeline"
 import type { Customer360Compass, ParsedCustomerKey } from "./crm-customer-360"
 import { listCrmCustomerEvents, type ListCrmCustomerEventsResult } from "./crm-events"
@@ -38,9 +39,11 @@ export async function getCrmCustomerTimeline(
     const ids = leads.rows.map((row) => row.id)
     if (!ids.length) return empty
     const activities = await getCompassActivityPage(ids, { offset: options.compassOffset, limit: 50, before: options.before })
+    // 대표 행 — 360 첫 창(loadCompassActivity)과 같은 규칙(최근성 → id). 정렬 없는 ids[0] 은 같은 전화의 다른 리드를 열 수 있다.
+    const representative = pickRepresentativeCompassRow(leads.rows)
     return {
       leadIds: ids,
-      href: compassLeadUrl(ids[0]),
+      href: compassLeadUrl(representative?.id ?? ids[0]),
       entries: toCompassTimelineEntries(activities.rows),
       down: activities.down,
       pagination: {

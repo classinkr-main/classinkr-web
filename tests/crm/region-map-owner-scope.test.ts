@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { emptyRegionTally, scopeRegionLayer, tallyRegionValue, toRegionLayer } from "@/lib/crm/region-map-summary"
+import { emptyRegionTally, scopeRegionLayer, tallyDerivedRegion, tallyRegionValue, toRegionLayer } from "@/lib/crm/region-map-summary"
 
 function fixture() {
   const deal = emptyRegionTally()
@@ -44,5 +44,29 @@ describe("지역 지도 담당자·원천 범위", () => {
     const layer = toRegionLayer("deal", "거래", "REV 딜 건수", tally)
     expect(layer.topCustomersByRegion?.서울.some(row => row.manager === "Alice")).toBe(false)
     expect(scopeRegionLayer(layer, ["Alice"]).topCustomersByRegion?.서울.map(row => row.name)).toEqual(["후순위 내 학원"])
+  })
+
+  it("리드층의 해석된 지역(tallyDerivedRegion)도 상위 고객·담당자 범위에 같은 규칙으로 들어간다", () => {
+    const tally = emptyRegionTally()
+    // branch는 비었지만 폼 답변에서 "부산"으로 해석된 리드
+    tallyDerivedRegion(tally, "부산", null, { id: "l1", name: "폼 학원", manager: "Alice" })
+    tallyDerivedRegion(tally, null, "온라인", { id: "l2", name: "온라인 학원", manager: "Alice" })
+    tallyDerivedRegion(tally, null, null, { id: "l3", name: "미상 학원", manager: "Bob" })
+    const layer = toRegionLayer("lead", "리드", "유입 리드 건수", tally)
+    expect(layer).toMatchObject({ total: 3, located: 1, nonGeo: 1, unknown: 1, regions: { 부산: 1 } })
+    expect(layer.topCustomersByRegion?.부산.map(row => row.name)).toEqual(["폼 학원"])
+    expect(scopeRegionLayer(layer, ["alice"])).toMatchObject({ total: 2, located: 1, nonGeo: 1, unknown: 0, regions: { 부산: 1 } })
+    expect(scopeRegionLayer(layer, ["bob"])).toMatchObject({ total: 1, located: 0, unknown: 1, regions: {} })
+  })
+
+  it("원천이 실패한 레이어를 담당자 범위로 좁혀도 '모름' 표시와 경고가 남는다", () => {
+    const tally = emptyRegionTally()
+    const layer = toRegionLayer("customer", "고객", "NEO 고객 계정", tally, ["원천 설명"], { failed: true })
+    const scoped = scopeRegionLayer(layer, ["alice"])
+    expect(scoped.failed).toBe(true)
+    expect(scoped.truncated).toBeUndefined()
+    expect(scoped.notes).toEqual(layer.notes)
+    expect(scoped.notes[0]).toContain("모름")
+    expect(scoped.notes).toHaveLength(2)
   })
 })

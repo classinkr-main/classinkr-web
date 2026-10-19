@@ -52,10 +52,10 @@ export function DocsArticleFeedback({
       }
 
       setStatus("saved")
-      toast.success("가이드 피드백을 저장했어요")
+      toast.success("의견을 보냈어요. 고마워요")
     } catch {
       setStatus("idle")
-      toast.error("피드백 저장에 실패했어요")
+      toast.error("의견을 보내지 못했어요. 잠시 후 다시 눌러 주세요")
     }
   }
 
@@ -87,7 +87,7 @@ export function DocsArticleFeedback({
         </div>
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between md:pl-12">
           <p className="text-sm leading-6 text-[#615D59]">
-            남겨주신 의견은 더 이해하기 쉬운 가이드를 만드는 데 사용됩니다.
+            보내 주신 의견은 이 문서를 고칠 때 참고합니다.
           </p>
           <div className="flex min-w-0 gap-4 md:shrink-0 md:justify-end">
             <button
@@ -131,7 +131,7 @@ export function DocsArticleFeedback({
       {rating === "not_helpful" && !isSaved ? (
         <div className="mt-5 border-t border-black/[0.08] pt-5">
           <label htmlFor="docs-feedback-comment" className="text-sm font-bold text-[#111110]">
-            보완이 필요한 부분
+            어떤 점이 부족했나요?
           </label>
           <textarea
             id="docs-feedback-comment"
@@ -140,7 +140,7 @@ export function DocsArticleFeedback({
             maxLength={500}
             rows={3}
             className="mt-2 w-full resize-none border-b border-black/[0.08] bg-transparent px-0 py-3 text-sm leading-6 text-[#111110] outline-none transition-colors placeholder:text-[#A39E98] focus:border-[#084734]/40"
-            placeholder="빠진 내용이나 찾기 어려웠던 부분을 알려주세요"
+            placeholder="빠진 단계, 실제 화면과 다른 부분, 찾기 어려웠던 내용을 적어 주세요"
           />
           <div className="mt-3 flex items-center justify-between gap-3">
             <span className="text-xs font-medium text-[#A39E98]">{comment.length}/500</span>
@@ -151,7 +151,7 @@ export function DocsArticleFeedback({
               className="inline-flex min-h-11 origin-center items-center justify-center gap-2 border-b border-[#084734] px-0 text-sm font-semibold text-[#084734] transition-all duration-150 hover:text-[#065c41] active:scale-[0.97] disabled:cursor-wait disabled:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
             >
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
-              피드백 보내기
+              의견 보내기
             </button>
           </div>
         </div>

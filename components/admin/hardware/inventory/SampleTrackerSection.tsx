@@ -163,7 +163,7 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
             productName: line.productName,
             count: line.count,
             status: line.status,
-            memo: "초기 등록(원장 잔량 백필)",
+            memo: "초기 등록(원본 잔량 백필)",
           }),
         })
       }
@@ -187,7 +187,7 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           {integrity && integrity.overCount > 0 && (
-            <span className="rounded-full bg-[#FBF1E0] px-2.5 py-1 text-[11px] font-bold text-[#A8741A]" title="유닛 수가 원장 잔량보다 많습니다 — 폐기/전환 처리로 정리하세요">
+            <span className="rounded-full bg-[#FBF1E0] px-2.5 py-1 text-[11px] font-bold text-[#A8741A]" title="유닛 수가 원본 잔량보다 많습니다 — 폐기/전환 처리로 정리하세요">
               정합 확인 {formatNumber(integrity.overCount)}대
             </span>
           )}
@@ -196,11 +196,11 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
               type="button"
               onClick={() => setRegisterConfirmOpen(true)}
               disabled={registering}
-              title="원장 잔량과 등록 유닛 수의 차이입니다 — 등록 전에 품목별 수량을 확인합니다"
+              title="원본 잔량과 등록 유닛 수의 차이입니다 — 등록 전에 품목별 수량을 확인합니다"
               className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-[#084734] bg-white px-3 py-2 text-[12px] font-bold text-[#084734] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:opacity-60"
             >
               <PackagePlus className={`h-3.5 w-3.5 ${registering ? "animate-pulse" : ""}`} />
-              {registering ? "등록 중" : `원장 차이 ${formatNumber(integrity.missingCount)}대 확인`}
+              {registering ? "등록 중" : `원본 차이 ${formatNumber(integrity.missingCount)}대 확인`}
             </button>
           )}
         </div>
@@ -212,10 +212,10 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
         onConfirm={() => void registerMissing()}
         loading={registering}
         destructive={false}
-        title="원장 차이만큼 유닛 등록"
+        title="원본 차이만큼 유닛 등록"
         description={
           <>
-            원장 위치 잔량이 등록된 유닛보다 많은 품목입니다. 원장 수치는 시트 기록을 따른 추정이라, 실물을 확인한 수량만
+            원본 위치 잔량이 등록된 유닛보다 많은 품목입니다. 원본 수치는 시트 기록을 따른 추정이라, 실물을 확인한 수량만
             등록하세요.
             <span className="mt-2 block space-y-0.5 font-mono text-[12px] text-[#615D59]">
               {(integrity?.plan ?? []).map((line) => (

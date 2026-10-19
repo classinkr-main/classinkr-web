@@ -34,3 +34,16 @@ export interface VariableBlockDef {
   example: string
   emptyCount?: number
 }
+
+/**
+ * 받는 사람 모드 — 태그 필터 · 직접 입력 · 고객 세그먼트(CRM, 발송 1단계).
+ * segment 는 CRM 세그먼트 허브에서 넘겨받았을 때(?segment=<uuid>)만 나타나고, 대상 미리보기와 테스트 발송만 된다 —
+ * 캠페인 실발송 CTA 는 비활성이고 서버 email/send 도 세그먼트 요청을 400 으로 거절한다.
+ */
+export type AudienceMode = "tags" | "direct" | "segment"
+
+/**
+ * 고객 세그먼트(CRM) 대상 미리보기 상태 — SegmentAudienceCard 가 발송 센터에 알린다.
+ * 로드 중과 실패를 구분해 최종 확인 레일이 "0명"과 "모름"을 섞지 않게 한다(presend-review.ts).
+ */
+export type SegmentPreviewStatus = "loading" | "ready" | "error"

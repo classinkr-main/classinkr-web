@@ -127,10 +127,10 @@ export const PUBLIC_FAQ_CATEGORIES: PublicFaqCategory[] = [
   {
     key: "usage",
     label: "사용법",
-    eyebrow: "CS Guide FAQ",
-    title: "실제 CS 캡처 순서로 보는 사용법",
+    eyebrow: "How-to FAQ",
+    title: "화면 순서대로 보는 사용법",
     description:
-      "Figma `CS용 캡쳐 모음`에서 정리한 화면 순서와 버튼명을 기준으로, 현장에서 바로 묻는 사용법을 짧게 정리했습니다.",
+      "현장 녹화, QR 초대, 숙제 제출처럼 수업하면서 자주 막히는 사용법입니다. 실제 화면에 나오는 순서와 버튼 이름 그대로 적었습니다.",
     highlights: ["현장 녹화", "QR 초대", "숙제 제출"],
     items: [
       {

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
 
 import { NAV_WARMUP_REQUESTS } from "@/components/admin/AdminSidebar"
+import { listUrl, parseOwnerParam } from "@/components/admin/crm/unified/shared"
+import { todayContactsUrl } from "@/lib/crm/today-contacts-request"
 import {
   buildAdminCalendarUrl,
   getAdminCalendarWeekStripRange,
@@ -42,8 +44,22 @@ describe("admin nav warm-up cache-key parity", () => {
   })
 
   it("warms the exact first unified-customer page instead of a different page size", () => {
-    expect(warmupUrls("/admin/crm/customers/unified")).toContain(
-      "/api/admin/crm/customers/unified?limit=50&offset=0"
+    // 기본 진입은 로그인 담당(?owner= 생략 = __me, 3f5f0a21) — 담당은 늘 URL 에 실린다.
+    const defaultFirstPage = listUrl({
+      query: "",
+      source: "all",
+      lifecycle: "all",
+      owner: parseOwnerParam(null),
+      view: "all",
+      tag: "",
+      offset: 0,
+    })
+    expect(defaultFirstPage).toBe("/api/admin/crm/customers/unified?limit=50&offset=0&owner=__me")
+    expect(warmupUrls("/admin/crm/customers/unified")).toContain(defaultFirstPage)
+    // 담당이 빠진 옛 URL·담당 전체 URL·다른 페이지 크기는 첫 화면이 쓰지 않는 슬롯이다.
+    expect(warmupUrls("/admin/crm/customers/unified")).not.toContain("/api/admin/crm/customers/unified?limit=50&offset=0")
+    expect(warmupUrls("/admin/crm/customers/unified")).not.toContain(
+      "/api/admin/crm/customers/unified?limit=50&offset=0&owner="
     )
     expect(warmupUrls("/admin/crm/customers/unified")).not.toContain(
       "/api/admin/crm/customers/unified?limit=100&offset=0"
@@ -103,9 +119,15 @@ describe("admin nav warm-up cache-key parity", () => {
   })
 
   it("warms the CRM home panels the server prefetch does not cover", () => {
-    expect(warmupUrls("/admin/crm")).toContain(
-      "/api/admin/crm/home/priority-queue?limit=50&source=customer&v=3"
-    )
+    // 현황 "오늘 연락" 패널의 기본 호출(내 담당 — todayContactsUrl("__me")) — 옛 우선순위 큐 URL 은 더 이상 예열하지 않는다.
+    // 기본 담당이 로그인 사용자라(3f5f0a21) 담당 전체 URL(owner=)을 데우면 첫 화면이 쓰지 않는 슬롯만 찬다.
+    expect(warmupUrls("/admin/crm")).toContain(todayContactsUrl("__me"))
+    expect(todayContactsUrl("__me")).toBe("/api/admin/crm/home/today-contacts?limit=60&v=1&owner=__me")
+    expect(warmupUrls("/admin/crm")).not.toContain(todayContactsUrl(""))
+    expect(warmupUrls("/admin/crm").some((url) => url.includes("/home/priority-queue"))).toBe(false)
+    // 주간 할 일(compact)도 기본 담당을 URL 에 싣는다 — CrmWeekAheadPanel 의 조립 결과와 문자 일치.
+    expect(warmupUrls("/admin/crm")).toContain("/api/admin/crm/tasks?status=active&limit=100&owner=__me")
+    expect(warmupUrls("/admin/crm/customers/segments")).toContain("/api/admin/crm/segments")
     // NEO 집계는 기본 접힌 아코디언의 비활성 탭 전용 — 비싼 축이라 데우지 않는다.
     expect(warmupUrls("/admin/crm").some((url) => url.startsWith("/api/admin/crm/neo"))).toBe(false)
   })

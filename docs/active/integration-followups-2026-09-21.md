@@ -104,7 +104,7 @@
 
 - [x] (2026-09-21 완료: 라우트가 `dueAt` 3상태(키 없음=그대로·null/빈 문자열=지움·날짜=설정)를 받고 해석 못 하는 값은 400. "내일로" 되돌리기는 기한이 없던 할 일도 `dueAt: null`로 정확히 복원한다.) 할 일 PATCH가 `dueAt: null`을 못 받아 기한 삭제·"내일로" 되돌리기가 안 된다(`app/api/admin/crm/tasks/[id]/route.ts`가
   `optionalString(raw.dueAt)`로만 받는다. CRM 기획 §10).
-  (같은 절의 "우선순위 큐 무효화 함수에 호출자가 없다"는 이미 해소됐다 — `crm-priority-queue.ts`가 리드·할 일·연락 기록 변이에 등록한다.)
+  (같은 절의 "우선순위 큐 무효화 함수에 호출자가 없다"는 부분 해소였다 — `crm-priority-queue.ts`의 구독은 큐 모듈을 로드한 인스턴스에만 걸려 다른 인스턴스의 쓰기를 놓쳤다. 2026-09-25에 리드·할 일·연락 로그 쓰기 경로가 스냅샷 태그를 직접 무효화하도록 고쳤다 — CRM 기획 §10 "§15 운영 실측 라운드".)
 - [x] (2026-09-21 완료: `unstable_cache` 60초 + `compass-adsets` 태그, `fresh=1`은 태그 즉시 만료, 절단 판정은 브리지 `truncated`.) `compass/adsets` 라우트는 아직 route-local 메모 + 행 수 근사 절단 판정이다. 같은 계열 `compass/ads`는 Data Cache +
   브리지 `truncated`로 옮겨졌다 — 같은 패턴으로 맞춘다.
 - [x] (2026-09-21 제거: 계약 테스트는 `tests/crm/lead-attribution-payload.test.ts`로 옮기고, 수집기 결과를 폼 본문에
@@ -118,6 +118,14 @@
   신선도 캡션 생략(`generatedAt` 없음) — CRM 기획 §10의 라운드별 "후속".
 - [x] (2026-09-21: `site_settings` 컬럼·overview 카탈로그 프로브 추가, CHECK 전용 `lead_digest_runs`는 주석의 제약 조회로 대체. 서울에서 `check:db --strict` 통과, 제약 정의에 `'daily'`·overview 3인자 한 줄만 있음을 SQL로 확인.) `schema-contract.ts`에 프로브가 없는 최근 마이그레이션 3건(런북 "프로브가 없던 최근 파일").
 
+- [ ] (2026-09-29 발견) 빌드의 타입 검사가 실패한다 — `app/api/admin/cs-chat/conversations/[id]/generate/route.ts`가 라우트 핸들러가 아닌
+  `buildInternalCsAssetEvidence`를 내보낸다. `npm run typecheck`는 생성된 라우트 검사 타입을 보지 않아 통과하고 빌드에서만 걸린다.
+  함수를 `lib/internal-cs-chat/`으로 옮긴다. ([갈매봇 작업 리스트](./admin-ai-structure-worklist-2026-09-29.md) S0-3)
+- [ ] (2026-09-29 발견) `/admin/crm` 하이드레이션 오류 — 우선순위 큐의 "기준 시각"이 서버에서는 "AM", 브라우저에서는 "오전"으로 찍힌다.
+  로케일 데이터에 기대지 않는 시각 표기로 바꾼다.
+- [ ] (2026-09-29 발견) `tests/api/admin-leads-bulk-assign.test.ts`의 "guarded RPC 저장을 한 번 호출한다"가 409로 실패한다(기대 200).
+  갈매봇 변경과 무관하게 같은 커밋에서 재현된다 — 원인 미확인.
+
 ## 3. P2 — 결정 대기
 
 | 결정 | 질문 | 근거 |
@@ -130,6 +138,7 @@
 | 퍼널 | `/checkout`에 GTM·Pixel·동의 배너 복구(D11, 미결), 쇼룸 헤더 진입 방식(D14), 부가세 표기(D6, 세무 확인), 문의 폼 `role` select 승격(D13 — 결정됐으나 미구현) | [퍼널 기획](./contact-showroom-checkout-develop-round2-2026-09-20.md) §8 |
 | 마케팅 허브 | `/admin/marketing` 라우트 정본화(N3) 진행 여부 | [marketing-tab-dashboard-restructure](./marketing-tab-dashboard-restructure-2026-09-14.md) §6 |
 | 내부 CS 승인 흐름 | 승인 때 AI 초안을 미리 채우지 않고 고객 전달용 최종 답변을 따로 쓰게 할 것인가(라우트 400 포함), 답변 생성의 첨부 이미지 근거를 담당자 승인 분석만으로 좁힐 것인가(좁히면 캡처를 올리고 바로 만든 초안에 이미지가 빠진다). 구현은 브랜치 `feat/0921-cs-approval-customer-answer`에 있다 — 상담원 작업 방식이 바뀌므로 CS 담당과 정한다 | §6 |
+| 갈매봇·원격 오더 | "결제 확정"의 대상(거래건 수납 등록 vs 도입 신청), 신설 권한 2개의 부여 대상, 수납 취소 경로, R2 민감 변경의 확인 강도, 컨택 기록 되돌리기 범위, 발송 유예 중 브라우저를 닫았을 때의 동작, BRANCH 역할 범위, 대화 보관 기간, 갈매봇 그림의 디자인 규칙 예외 — 9건. 조회 단계(S1)는 BRANCH 범위 하나만 걸린다 | [갈매봇 작업 리스트](./admin-ai-structure-worklist-2026-09-29.md) §5 |
 | 알림 발송 시각 UI | "시" 단위만 고르게 한 설계는 Hobby 플랜 전제였다 — Pro에서 분 단위를 열 것인가 | [admin-settings-webhook-toggles](./admin-settings-webhook-toggles-and-schedule-2026-09-07.md) |
 
 ## 4. P3 — 백로그 (정본은 각 문서)
@@ -140,6 +149,7 @@
 - 퍼널: Phase D 전체(캘린더 상태 표시·접근성·상태 전이 알림·스켈레톤·문의 화면 재구성·디자인 가드·폼 계약 테스트). [퍼널 기획](./contact-showroom-checkout-develop-round2-2026-09-20.md) §4
 - 마케팅: Wave 3, Compass 광고 성과표의 Google·네이버 반영, 기타 채널(카카오·YouTube·오프라인)은 수기 입력만. [ad-channel-activation-runbook](./ad-channel-activation-runbook-2026-09-14.md) §6
 - Compass↔Admin 교차 이식 미착수 5건(일부는 Compass 저장소 소유). [compass-admin-feature-exchange](./compass-admin-feature-exchange-2026-09-02.md) §6
+- 갈매봇: 프론트 1차(시안 모드)는 작업 브랜치에 있고 병합 전이다 — 서버 1단계(S1 조회)가 붙은 뒤 병합한다. 남은 순서는 S0 준비 → S1 조회 → S2 오더 저장·R1 → S3 R2 → S4 R2 민감 → S5 발송, 프론트 잔여 F-1~F-6. [갈매봇 작업 리스트](./admin-ai-structure-worklist-2026-09-29.md) §4
 - 플랫폼: Admin 속도 3라운드 잔여(문서 §7 표의 완료/미완 상충부터 정리), 사장 테이블 드롭 여부, 초기 마이그레이션 5종 멱등성. [admin-performance-round3](./admin-performance-round3-2026-09-10.md), [런북](./db-migration-runbook.md)
 
 ## 5. 합치며 내린 판단 (재발 방지 기록)

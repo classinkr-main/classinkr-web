@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, Briefcase, ClipboardList, Coins, ExternalLink, LayoutDashboard, ListChecks, NotebookPen, RefreshCw } from "lucide-react"
@@ -13,8 +13,12 @@ import { useVisibleInterval } from "@/components/admin/branch/use-visible-interv
 import ActivityQuickForm from "./rail/ActivityQuickForm"
 import CrmContactValue from "./CrmContactValue"
 
+import CompassOpenLink from "@/components/admin/compass/CompassOpenLink"
+import C360WriteSurfaceBar, { CompassDownWriteCaption, HomeOnlyCaption } from "./drawer/C360WriteSurfaceBar"
+import { COMPASS_RECORD_LABEL, HOME_SEPARATE_LOG_LABEL, resolveCrmWriteSurface } from "@/lib/crm/write-surface"
 import type { Customer360 } from "@/lib/repositories/crm-customer-360"
 
+import Customer360ContactSummary from "./Customer360ContactSummary"
 import Customer360DetailActivity from "./Customer360DetailActivity"
 import Customer360DetailDeals from "./Customer360DetailDeals"
 import Customer360DetailMoney from "./Customer360DetailMoney"
@@ -24,6 +28,10 @@ import Customer360PurchaseSummary from "./Customer360PurchaseSummary"
 import { SEVERITY_CLASS, SEVERITY_LABEL } from "./Customer360DetailShared"
 
 export type Customer360DetailTab = "overview" | "money" | "deals" | "activity" | "tasks"
+
+/** 상세 페이지 Home 기록 입력 칸 — "기록 입력" 버튼·A안 접기 토글이 가리킨다(드로어 컴포저 id 와 겹치지 않게). */
+const DETAIL_COMPOSER_BODY_ID = "customer-record-body"
+const DETAIL_HOME_COMPOSER_ID = "c360-detail-home-composer"
 type TabKey = Customer360DetailTab
 
 const TABS: Array<{ key: TabKey; label: string; icon: React.ReactNode; count?: (data: Customer360) => number }> = [
@@ -58,9 +66,25 @@ function MoneyTabWithRelink({ data }: { data: Customer360 }) {
       money={data.money}
       deals={data.deals}
       accountId={accountId}
+      customerName={data.header?.name ?? null}
       onRelinked={() => router.refresh()}
     />
   )
+}
+
+/**
+ * A안(2026-09-25) — 기록 위치 판정을 360 페이로드에서 한 번에 만든다(lib/crm/write-surface). 헤더 링크와
+ * 활동 탭 안내 문구가 같은 판정을 쓴다. 순수 함수(테스트 고정).
+ */
+export function detailWriteSurface(data: Customer360) {
+  return resolveCrmWriteSurface({
+    source: data.source,
+    found: data.found,
+    compassHref: data.compass?.href,
+    compassDown: data.compass?.down,
+    leadStatus: data.leadStatus,
+    crmRegistered: data.crmRegistered,
+  })
 }
 
 function renderTabBody(tab: TabKey, data: Customer360) {
@@ -70,7 +94,17 @@ function renderTabBody(tab: TabKey, data: Customer360) {
     case "deals":
       return <Customer360DetailDeals deals={data.deals} />
     case "activity":
-      return <Customer360DetailActivity activity={data.activity} compass={data.compass} customerKey={data.key} generatedAt={data.generatedAt} />
+      return (
+        <Customer360DetailActivity
+          activity={data.activity}
+          compass={data.compass}
+          customerKey={data.key}
+          generatedAt={data.generatedAt}
+          customerSource={data.source}
+          linkedLeads={data.linkedLeads}
+          writeSurface={detailWriteSurface(data).surface}
+        />
+      )
     case "tasks":
       return <Customer360DetailTasks tasks={data.tasks} customerKey={data.key} targetLabel={data.header?.name ?? null} />
     case "overview":
@@ -154,6 +188,8 @@ export default function Customer360DetailClient({ data: initialData, customerKey
   const [recents, setRecents] = useState<RecentCustomer[]>([])
   const [refreshing, setRefreshing] = useState(false)
   const [refreshError, setRefreshError] = useState<string | null>(null)
+  const [homeComposerOpen, setHomeComposerOpen] = useState(false)
+  const [composerDirty, setComposerDirty] = useState(false)
   const refreshInFlight = useRef(false)
   if (seed !== initialData) { setSeed(initialData); setData(initialData) }
   const refresh = useCallback(async () => {
@@ -248,6 +284,29 @@ export default function Customer360DetailClient({ data: initialData, customerKey
   const originHref = isLead
     ? `/admin/crm/customers/leads?lead=${encodeURIComponent(data.entityId)}`
     : `/admin/crm/customers/accounts?account=${encodeURIComponent(data.entityId)}`
+  // A안 — Compass 에서 응대 중인 리드는 헤더 주 행동이 Compass 새 탭 링크, Home 정본(NEO·전환)은 보조 링크.
+  const writeSurface = useMemo(() => detailWriteSurface(data), [data])
+  // A안 — Compass 리드의 Home 기록 입력 칸은 "기록은 Compass에서" 바 뒤로 접어 둔다(드로어와 같은 규칙).
+  // 작성을 시작하면 펼친 채로 두고, 작성 중(composerDirty)이면 절대 숨기지 않는다. 고객이 바뀌면 page.tsx 의
+  // key 로 이 컴포넌트가 다시 마운트돼 접힌 상태로 돌아간다.
+  const compassPrimary = writeSurface.surface === "compass"
+  const composerVisible = !compassPrimary || homeComposerOpen || composerDirty
+  const handleComposerDirtyChange = useCallback((dirty: boolean) => {
+    setComposerDirty(dirty)
+    if (dirty) setHomeComposerOpen(true)
+  }, [])
+  // 접힌 입력 칸(hidden)은 포커스를 받지 못하므로 먼저 펼치고, 커밋 뒤 프레임에서 포커스한다.
+  const focusComposer = useCallback(() => {
+    setHomeComposerOpen(true)
+    window.requestAnimationFrame(() => document.getElementById(DETAIL_COMPOSER_BODY_ID)?.focus())
+  }, [])
+  const toggleHomeComposer = useCallback(() => {
+    if (composerVisible) {
+      if (!composerDirty) setHomeComposerOpen(false)
+      return
+    }
+    focusComposer()
+  }, [composerVisible, composerDirty, focusComposer])
 
   return (
     <div className="mx-auto max-w-7xl" data-customer-key={customerKey}>
@@ -278,15 +337,38 @@ export default function Customer360DetailClient({ data: initialData, customerKey
               <CrmContactValue value={data.contacts?.phone ?? null} />
               {data.contacts?.email ? <CrmContactValue value={data.contacts.email} /> : null}
             </div>
+            {/* CT9 — 마지막 연락 · 다음 연락(원천 표시, 서버 조립 시각 기준). 좁으면 두 줄로 쌓는다. */}
+            <Customer360ContactSummary summary={data.contactSummary} className="mt-1.5" />
             {header?.nextActionLabel || data.tags.length || data.risk.reasons.length ? <p className="mt-1 text-[12px] leading-5 text-[#615D59]">{[header?.nextActionLabel, ...data.risk.reasons, ...data.tags.map(tag => `#${tag}`)].filter(Boolean).join(" · ")}</p> : null}
           </div>
-          <Link
-            href={originHref}
-            className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
-          >
-            원천에서 관리
-            <ExternalLink className="h-3.5 w-3.5" />
-          </Link>
+          {/* A안 — Compass 에서 응대 중인 리드는 주 행동이 Compass 새 탭 링크, Home 정본(NEO·전환)은 보조 링크. */}
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {writeSurface.surface === "compass" && writeSurface.compassHref ? (
+              <CompassOpenLink
+                href={writeSurface.compassHref}
+                name={displayName}
+                variant="primary"
+                className="h-11 sm:h-8"
+                testId="c360-detail-open-compass"
+              />
+            ) : writeSurface.secondaryCompassHref ? (
+              <CompassOpenLink
+                href={writeSurface.secondaryCompassHref}
+                name={displayName}
+                variant="secondary"
+                label={COMPASS_RECORD_LABEL}
+                className="h-11 sm:h-8"
+                testId="c360-detail-compass-record"
+              />
+            ) : null}
+            <Link
+              href={originHref}
+              className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+            >
+              원본 화면에서 관리
+              <ExternalLink className="h-3.5 w-3.5" />
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -308,14 +390,31 @@ export default function Customer360DetailClient({ data: initialData, customerKey
             <summary className="cursor-pointer px-2 py-2 text-[12px] text-[#615D59]">최근 고객</summary>
             <nav aria-label="최근 본 고객" className="absolute right-0 z-10 min-w-48 rounded-lg border border-black/[0.08] bg-white p-2 shadow-sm">{recents.map(item => <Link key={item.key} href={customerDetailHref(item.key)} prefetch={false} className="flex min-h-11 items-center px-2 text-[13px] text-[#111110] hover:text-[#084734]">{item.name}</Link>)}</nav>
           </details> : null}
-          {data.compass.href ? <a href={data.compass.href} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 px-2 text-[12px] text-[#084734]">Compass<ExternalLink className="h-3 w-3" /></a> : null}
-          <button type="button" onClick={() => document.getElementById("customer-record-body")?.focus()} className="inline-flex min-h-11 items-center gap-2 rounded-md bg-[#084734] px-4 text-[13px] font-semibold text-white hover:bg-[#065c41]"><NotebookPen className="h-4 w-4" />기록 입력</button>
+          {/* Compass 새 탭 링크는 헤더(A안 주·보조 링크) 한 곳에서 그린다 — 같은 링크를 두 번 두지 않는다. */}
+          <button type="button" onClick={focusComposer} className={`inline-flex min-h-11 items-center gap-2 rounded-md px-4 text-[13px] font-semibold ${compassPrimary ? "border border-[#e8e8e4] bg-white text-[#084734] hover:bg-[#F6F5F4]" : "bg-[#084734] text-white hover:bg-[#065c41]"}`}><NotebookPen className="h-4 w-4" />{compassPrimary ? HOME_SEPARATE_LOG_LABEL : "기록 입력"}</button>
           <button type="button" disabled={refreshing} onClick={() => void refresh()} aria-label="고객 정보 새로고침" className="inline-flex min-h-11 items-center gap-2 rounded-md border border-[#e8e8e4] bg-white px-3 text-[13px] text-[#615D59] disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />새로고침</button>
         </div>
       </div>
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(320px,0.9fr)_minmax(0,1.6fr)]">
         <section className="min-w-0 xl:sticky xl:top-4" aria-label="고객 기록 입력 영역">
-          <ActivityQuickForm key={customerKey} variant="workspace" compactWorkspace lockTarget defaultTargetType={data.source} defaultTargetId={data.entityId} defaultTargetLabel={displayName} defaultOwnerName={header?.ownerName ?? ""} bodyFieldId="customer-record-body" onSaved={() => void refresh()} />
+          {compassPrimary ? (
+            <div className="mb-3 rounded-xl border border-[#e8e8e4] bg-white px-3 py-2.5">
+              <C360WriteSurfaceBar
+                name={displayName}
+                open={composerVisible}
+                onToggle={toggleHomeComposer}
+                canCollapse={!composerDirty}
+                controlsId={DETAIL_HOME_COMPOSER_ID}
+                standalone
+                testId="c360-detail-write-surface-bar"
+              />
+            </div>
+          ) : null}
+          {writeSurface.reason === "compass_down" ? <CompassDownWriteCaption className="mb-1.5" /> : null}
+          <div id={DETAIL_HOME_COMPOSER_ID} hidden={!composerVisible}>
+            {compassPrimary ? <HomeOnlyCaption className="mb-1.5" /> : null}
+            <ActivityQuickForm key={customerKey} variant="workspace" compactWorkspace lockTarget defaultTargetType={data.source} defaultTargetId={data.entityId} defaultTargetLabel={displayName} defaultOwnerName={header?.ownerName ?? ""} bodyFieldId={DETAIL_COMPOSER_BODY_ID} onDirtyChange={handleComposerDirtyChange} onSaved={() => void refresh()} />
+          </div>
         </section>
         <div className="min-w-0">
       {/* 탭 — 로컬 전환(서버 재요청 없음). role=tablist/aria-selected로 현재 탭을 보조기술에도 알린다. */}
@@ -360,7 +459,17 @@ export default function Customer360DetailClient({ data: initialData, customerKey
 
       <Customer360DetailTabPanels data={data} activeTab={activeTab} visitedTabs={visitedTabs} persistentHistory />
       <section id="c360-detail-tabpanel-activity" role={activeTab === "activity" ? "tabpanel" : "region"} aria-labelledby="c360-detail-tab-activity" aria-label="고객 로그·구매 기록 큐" className="mt-5 scroll-mt-4">
-        <Customer360DetailActivity activity={data.activity} compass={data.compass} money={data.money} deals={data.deals} customerKey={data.key} generatedAt={data.generatedAt} />
+        <Customer360DetailActivity
+          activity={data.activity}
+          compass={data.compass}
+          money={data.money}
+          deals={data.deals}
+          customerKey={data.key}
+          generatedAt={data.generatedAt}
+          customerSource={data.source}
+          linkedLeads={data.linkedLeads}
+          writeSurface={writeSurface.surface}
+        />
       </section>
         </div>
       </div>

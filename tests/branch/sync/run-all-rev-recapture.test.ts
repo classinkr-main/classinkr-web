@@ -67,6 +67,31 @@ describe("runAll — REV 장부 임포트 자동 재캡처", () => {
     expect(result.warnings?.some((w) => w.includes("장부 임포트 재캡처 실패") && w.includes("line 삽입 실패"))).toBe(true)
   })
 
+  // 2026-09-25 — 실행 기록(branch_sync_runs.source)에 실제로 돌린 원천을 남긴다. 늘 "all"이면 REV만
+  // 새로고침한 성공이 HW 성공으로 읽혀 HW 연속 실패(경고 띠·크론 알림)가 0이 됐다.
+  it.each([
+    [undefined, "all"],
+    [[] as Array<"rev" | "hw">, "all"],
+    [["rev", "hw"] as Array<"rev" | "hw">, "all"],
+    [["rev"] as Array<"rev" | "hw">, "rev"],
+    [["hw"] as Array<"rev" | "hw">, "hw"],
+  ])("sources=%j 이면 실행 기록 source=%s", async (sources, recorded) => {
+    const { runAll } = await import("@/lib/branch/sync/run-all")
+
+    await runAll({ trigger: "manual", sources })
+
+    expect(startSyncRun).toHaveBeenCalledWith(recorded, "manual")
+  })
+
+  it("빈 sources 는 전부로 본다 — 아무것도 안 돌린 런이 성공으로 남지 않는다", async () => {
+    const { runAll } = await import("@/lib/branch/sync/run-all")
+
+    await runAll({ trigger: "manual", sources: [] })
+
+    expect(syncRev).toHaveBeenCalledTimes(1)
+    expect(syncHw).toHaveBeenCalledTimes(1)
+  })
+
   it("hw만 동기화하면 재캡처하지 않는다", async () => {
     const { runAll } = await import("@/lib/branch/sync/run-all")
 

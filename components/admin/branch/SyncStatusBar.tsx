@@ -1,6 +1,7 @@
 "use client"
 import { useState } from "react"
 import { RefreshCw, AlertTriangle, CheckCircle2, Clock, Database } from "lucide-react"
+import { classifySyncFailure, SYNC_FAILURE_CLASS_LABEL } from "@/lib/admin/sync-health"
 import { isImportStale } from "@/lib/branch/data-source-freshness"
 import { isSheetAheadOfSync } from "@/lib/branch/sheet-freshness"
 import { formatCNY } from "@/lib/crm/money-format"
@@ -65,6 +66,9 @@ export default function SyncStatusBar({ lastSync, lastSyncStartedAt, lastError, 
   // "장부 원천 스트립"도 같은 함수로 동일 경고를 낸다.
   const sheetAhead = !lastError && isSheetAheadOfSync(sheetModifiedAt, lastSync)
 
+  // 오류 분류 라벨 — 상태 줄 본문과 "실패 원인 보기" 펼침이 같은 값을 쓴다. 원문(lastError)은 화면에 싣지 않는다.
+  const lastErrorLabel = lastError ? SYNC_FAILURE_CLASS_LABEL[classifySyncFailure("sheets", lastError).failureClass] : null
+
   // 임포트 원천이 시트 동기화보다 오래됐는지 — 2026-07-16 사고(7/3 스테일 임포트가 13일간
   // 최신 시트를 가림) 재발 시 이 배너로 드러난다. sheetAhead(시트가 미러보다 앞섬)와는
   // 별개 신호다: sheetAhead는 라이브 시트 대 미러 동기화 시각을 비교하고, 이건 "서빙 중인
@@ -113,7 +117,13 @@ export default function SyncStatusBar({ lastSync, lastSyncStartedAt, lastError, 
                       : <CheckCircle2 className="h-4 w-4 text-[#084734]" />}
             <span role={lastError ? "alert" : "status"} className="text-[#1a1a1a]/75">
               {lastError
-                ? "원천 갱신 실패 · 원인 확인 필요"
+                ? // 원문 오류(예: 시트 API 의 권한 문구)는 키·내부 URL 이 섞일 수 있어 싣지 않고, 동기화 경고 띠와
+                  // 같은 분류로 말한다(lib/admin/sync-health.ts 정직 규칙). 원문은 실행 기록(DB)에 남아 있다.
+                  // lastError 에는 동기화 실패만 오지 않는다 — 수동 동기화 요청 실패(권한·타임아웃 포함)·요약
+                  // 불러오기 실패·마지막 실행 기록 오류가 섞여 온다(BranchDashboardClient). 그래서 "동기화
+                  // 실패"로 단정하지 않고 둘 다를 가리키는 라벨로 말한다. 머리말 "원천 갱신 실패"(10-14 KR Team
+                  // 정리)는 그대로 두고 뒤에 분류를 붙인다 — 두 줄기의 경고 문구를 함께 살린 병합.
+                  `원천 갱신 실패 · 불러오기·동기화 오류 — ${lastErrorLabel}`
                 : staleRefresh
                   ? `갱신 실패 — ${relativeTime(new Date(staleSince as number).toISOString(), now)} 데이터 표시 중`
                   : importStale
@@ -160,7 +170,9 @@ export default function SyncStatusBar({ lastSync, lastSyncStartedAt, lastError, 
         </div>
         {lastError ? <details className="mt-1 text-[#615D59]">
           <summary className="inline-flex min-h-11 cursor-pointer items-center text-[12px] underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-[#084734] md:min-h-0">실패 원인 보기</summary>
-          <p className="mt-2 break-words">{lastError}</p>
+          {/* 10-14 의 펼침은 원문을 보여 줬지만, 09-25 정직 규칙(원문에 키·내부 URL 이 섞일 수 있음)에 따라
+              분류와 원문을 볼 수 있는 곳만 알린다. */}
+          <p className="mt-2 break-words">분류: {lastErrorLabel}. 원문 오류는 키·내부 주소가 섞일 수 있어 화면에 싣지 않습니다. 동기화 실행의 원문은 운영 상태(/admin/ops) 실행 기록에서 확인합니다.</p>
           {importStale ? <a href="/admin/branch/ledger" className="inline-flex min-h-11 items-center text-[#7A520F] underline underline-offset-2">장부에서 재동기화 →</a> : null}
         </details> : null}
         {(dataSources || crmSync) && (

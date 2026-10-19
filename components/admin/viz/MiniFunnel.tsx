@@ -32,6 +32,19 @@ function formatPct(value: number | null) {
   return `${value.toFixed(value >= 100 || value === 0 ? 0 : 1)}%`
 }
 
+/** bar 변형의 단계별 불투명도 하한 — 이보다 옅으면 막대가 배경(#f0f0ec)에 묻혀 값이 안 읽힌다. */
+export const MINI_FUNNEL_MIN_OPACITY = 0.35
+const MINI_FUNNEL_OPACITY_STEP = 0.14
+
+/**
+ * bar 변형 i번째 단계의 막대 불투명도. 단계가 깊을수록 옅어지되 하한에서 멈춘다(F9).
+ * 예전 `1 - i * 0.14`는 8단계째(i=7)에 0.02, 9단계째(i=8)에 음수가 돼 막대가 사라졌다.
+ */
+export function miniFunnelBarOpacity(index: number): number {
+  const raw = 1 - Math.max(0, index) * MINI_FUNNEL_OPACITY_STEP
+  return Math.max(MINI_FUNNEL_MIN_OPACITY, Math.round(raw * 100) / 100)
+}
+
 export function MiniFunnel({
   stages,
   variant = "bar",
@@ -66,7 +79,7 @@ function FunnelBarsBody({ stages }: { stages: FunnelStage[] }) {
             <div className="h-2.5 overflow-hidden rounded-full bg-[#f0f0ec]">
               <div
                 className="h-full rounded-full transition-all"
-                style={{ width: `${width}%`, background: TONE[tone].fg, opacity: 1 - i * 0.14 }}
+                style={{ width: `${width}%`, background: TONE[tone].fg, opacity: miniFunnelBarOpacity(i) }}
               />
             </div>
             {conv != null && <p className="mt-1 text-[10px] text-[#1a1a1a]/40">이전 단계 대비 {conv}% 전환</p>}

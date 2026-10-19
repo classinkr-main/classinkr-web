@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
+import { createFakePostgrest } from "./unified-fake-postgrest"
+
 const NOW = new Date("2026-06-26T09:00:00.000Z")
 
 type TestLeadStatus = "new" | "contacted" | "converted" | "closed"
@@ -164,6 +166,18 @@ async function loadRepository(options?: {
 }) {
   vi.resetModules()
 
+  // 마지막 연락 원천(CT8) — Home 연락 세부 두 테이블은 빈 가짜 PostgREST, Compass 는 활동 없음.
+  // 목을 세우지 않으면 실제 Supabase 클라이언트(env)를 찾으러 간다.
+  const fakeDb = createFakePostgrest({ lead_contact_logs: [], crm_customer_events: [] })
+  vi.doMock("@/lib/supabase/admin", () => ({ createSupabaseAdminClient: () => fakeDb.client }))
+  vi.doMock("@/lib/compass/bridge", () => ({
+    getCompassLatestActivityByPhoneKeys: vi.fn().mockResolvedValue({ rows: [], down: false, truncated: false }),
+  }))
+  // 이 스위트는 태그 저장소를 검증하지 않는다. 목록 조립의 보조 조회가 실DB에 닿지 않게 한다.
+  vi.doMock("@/lib/repositories/crm-customer-tags", () => ({
+    getAllCustomerTagsMap: vi.fn().mockResolvedValue({}),
+  }))
+
   vi.doMock("@/lib/repositories/leads", () => ({
     getLeads: vi.fn().mockResolvedValue(options?.leads ?? []),
   }))
@@ -178,10 +192,6 @@ async function loadRepository(options?: {
       : vi.fn().mockResolvedValue(
           options?.demoSource ?? { demos: [], phoneKeysByCompassLeadId: new Map(), down: false }
         ),
-  }))
-  // 이 스위트는 태그 저장소를 검증하지 않는다. 목록 조립의 보조 조회가 실DB에 닿지 않게 한다.
-  vi.doMock("@/lib/repositories/crm-customer-tags", () => ({
-    getAllCustomerTagsMap: vi.fn().mockResolvedValue({}),
   }))
   vi.doMock("@/lib/portal/repositories/customers", () => ({
     listAllCustomerListItemsLite: options?.portalCustomersFail

@@ -1047,7 +1047,7 @@ export default function QuickRecordSheet(props: QuickRecordSheetProps) {
                         </span>
                         {sampleReturnPool.length === 0 ? (
                           <p className="mt-1.5 text-[11px] text-[#A39E98]">
-                            이 품목의 대여중 유닛이 없습니다 — 트래커 미등록 반환은 원장에만 기록됩니다.
+                            이 품목의 대여중 유닛이 없습니다 — 트래커 미등록 반환은 원본에만 기록됩니다.
                           </p>
                         ) : (
                           <div className="mt-1.5 flex flex-wrap gap-1.5">

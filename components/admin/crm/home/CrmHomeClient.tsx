@@ -10,15 +10,16 @@ import { adminFetchJsonCached, getCachedAdminJson, seedAdminRequestCache } from 
 import { useVisibleInterval } from "@/components/admin/branch/use-visible-interval"
 import { Button } from "@/components/ui/button"
 import CrmCoverageStrip from "@/components/admin/crm/CrmCoverageStrip"
-import CrmPriorityQueuePanel, {
-  CrmPriorityQueuePanelSkeleton,
-} from "@/components/admin/crm/CrmPriorityQueuePanel"
+import CrmTodayContactsPanel, {
+  CrmTodayContactsPanelSkeleton,
+} from "@/components/admin/crm/home/CrmTodayContactsPanel"
 import CrmWeekAheadPanel from "@/components/admin/crm/CrmWeekAheadPanel"
 import CrmCustomerPicker from "@/components/admin/crm/CrmCustomerPicker"
 import type { CrmHomeInitialData } from "@/lib/admin/crm/home-prefetch"
 import type { DeferredPrefetch } from "@/lib/admin/prefetch-budget"
 import { CRM_CACHE_SWR_MS, CRM_CACHE_TTL_MS } from "@/lib/crm/client-cache"
-import type { CrmPriorityQueue } from "@/lib/repositories/crm-priority-queue"
+import type { WeekAheadBucket } from "@/lib/crm/week-ahead"
+import type { CrmTodayContacts } from "@/lib/crm/today-contact-types"
 import { getRecentCustomers, type RecentCustomer } from "@/lib/crm/recent-customers"
 import { Toast } from "@/components/admin/crm/leads/shared"
 import LeadSummaryPanel from "@/components/admin/crm/home/LeadSummaryPanel"
@@ -46,9 +47,9 @@ import {
 // 섹션 컴포넌트·타입은 components/admin/crm/home/* 로 분해(2026-08-28) — 이 파일은
 // fetch 오케스트레이션과 첫 화면 레이아웃 조립만 소유한다.
 
-// 360 드로어·리드 등록 모달 코드 스플리팅(41af51a4 패턴) — 현황 첫 로드에서 청크를 제외하고
-// 고객 클릭/리드 등록 클릭 시점에만 내려받는다. 열림 상태에서만 렌더하므로 로딩 폴백이
-// 닫힌 화면에 노출될 일은 없다. 폴백은 unified와 동일한 드로어 골격 스켈레톤을 공유한다.
+// 리드 등록 모달 코드 스플리팅(41af51a4 패턴) — 현황 첫 로드에서 청크를 제외하고
+// 리드 등록 클릭 시점에만 내려받는다. 열림 상태에서만 렌더하므로 로딩 폴백이
+// 닫힌 화면에 노출될 일은 없다. (고객 클릭은 360 드로어 대신 고객 360 상세 페이지로 간다 — f989a812.)
 const LeadRegisterModal = dynamic(() => import("@/components/admin/crm/LeadRegisterModal"), {
   loading: () => <div className="fixed inset-0 z-50 bg-black/20" aria-hidden />,
 })
@@ -61,6 +62,11 @@ const CRM_COMPASS_PIPELINE_URL = "/api/admin/crm/compass-pipeline?owner=__me"
 const branchKpiUrl = (month: string) => `/api/admin/branch/kpi?team=ALL&period=M&month=${month}&manager=__me`
 const CRM_HOME_TTL_MS = CRM_CACHE_TTL_MS
 const CRM_HOME_STALE_WHILE_REVALIDATE_MS = CRM_CACHE_SWR_MS
+// 새로고침 쿼리 — 기본 담당(?owner=__me)이 이미 쿼리를 단 URL 에 "?force=1"을 또 붙이면 owner 값이
+// "__me?force=1"로 깨지고 force 도 서버에 닿지 않는다. 구분자를 URL 모양에 맞춘다.
+function withForceParam(url: string) {
+  return `${url}${url.includes("?") ? "&" : "?"}force=1`
+}
 
 function getKstMonthKey(date: Date) {
   const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000)
@@ -71,6 +77,9 @@ function getKstMonthKey(date: Date) {
 // 아래 세 다리에게 "레인 없음"을 표현하는 안정된 싱글턴. React use()는 매 렌더 새 promise를
 // 주면 무한 서스펜스로 보일 수 있으므로, 모듈 스코프 상수 하나를 항상 재사용한다.
 const RESOLVED_NULL_PROMISE: Promise<null> = Promise.resolve(null)
+
+// 홈 주간 패널에서 뺄 버킷 — 지난·오늘 할 일은 "오늘 연락"이 흡수한다(모듈 상수: 매 렌더 새 배열 금지).
+const HOME_WEEK_AHEAD_HIDDEN_BUCKETS: WeekAheadBucket[] = ["overdue", "today"]
 
 // '고객 찾기' 헤더 <h2> 와 CrmCustomerPicker 콤보박스를 aria-labelledby 로 잇는 id(home-08).
 const CRM_HOME_CUSTOMER_SEARCH_HEADING_ID = "crm-home-customer-search-heading"
@@ -105,17 +114,17 @@ function PrefetchSourceBridge<T>({
 // ─── 메인 화면 ─────────────────────────────────────────────────
 export default function CrmHomeClient({
   initialData,
-  initialPriorityQueue,
+  initialTodayContacts,
 }: {
   initialData?: CrmHomeInitialData | null
   /**
-   * 우선순위 큐(담당 전체 기준) 서버 프리페치 — home-prefetch.ts의 CrmHomeInitialData와
-   * 별도 prop인 이유는 lib/admin/crm/priority-queue-prefetch.ts 상단 주석 참고. 2026-09-10
-   * 스트리밍 전환으로 값이 아니라 레인({promise, generatedAt})이 온다 — CrmPriorityQueuePanel
-   * 이 이 promise를 직접 React use()로 푼다(패널이 화면에 한 곳뿐이라 다리 컴포넌트 없이
-   * 패널 자신이 소비하는 쪽이 더 단순하다).
+   * "오늘 연락"(C안 ①, 접속자 개인 기준 — ?owner 없음 = 내 담당) 서버 프리페치 — home-prefetch.ts의 CrmHomeInitialData와
+   * 별도 prop인 이유는 lib/admin/crm/today-contacts-prefetch.ts 상단 주석 참고. 값이 아니라
+   * 레인({promise, generatedAt})이 온다 — CrmTodayContactsPanel 이 이 promise를 직접 React use()로
+   * 푼다(패널이 화면에 한 곳뿐이라 다리 컴포넌트 없이 패널 자신이 소비하는 쪽이 더 단순하다).
+   * 2026-09-25: 옛 우선순위 큐(initialPriorityQueue · CrmPriorityQueuePanel)를 대체했다.
    */
-  initialPriorityQueue?: DeferredPrefetch<CrmPriorityQueue> | null
+  initialTodayContacts?: DeferredPrefetch<CrmTodayContacts> | null
 }) {
   const router = useRouter()
   // 스트리밍 전환(2026-09-10 2라운드) — initialData.X는 이제 동기 값이 아니라
@@ -153,6 +162,14 @@ export default function CrmHomeClient({
   const [neoCrmRefreshKey, setNeoCrmRefreshKey] = useState(0)
   // 백그라운드 자동 갱신용 키 — 패널은 이 값이 바뀌면 force 없이 load()만 다시 부른다(TTL 존중).
   const [softRefreshKey, setSoftRefreshKey] = useState(0)
+  // "오늘 연락"이 지난·오늘 할 일을 빠짐없이 담았는가(CrmTodayContactsPanel onCoverageChange). 아니면(목록 잘림·
+  // 할 일 원천 실패·담당 필터·목록 실패) 주간 패널이 숨긴 버킷을 다시 보인다 — 홈에서 그 할 일에 닿을 곳이 사라지지
+  // 않게(도달성 불변, admin-guidance-map §2). 목록에 담긴 할 일은 모두 행에서 닫을 수 있다(Compass 행의 보조 "할 일
+  // 완료"·처리됨 행의 남은 할 일 포함). 첫 응답 전에는 숨김(깜빡임 방지).
+  const [todayCoversTasks, setTodayCoversTasks] = useState(true)
+  // 같은 규칙을 Compass 밴드 임박 목록에도 — "오늘 연락"이 오늘·지난 Compass 다음 액션을 실제로 담았을 때만
+  // (담당 전체·Compass 조회 정상·잘리지 않음) 밴드가 오늘 몫을 뺀다(onCompassCoverageChange).
+  const [todayCoversCompass, setTodayCoversCompass] = useState(true)
 
   // 언마운트 후 setState(경고) 방지 + 토스트가 연달아 뜰 때 이전 타이머가 새 토스트를 지우지 않게.
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -167,7 +184,7 @@ export default function CrmHomeClient({
   }, [])
 
   const fetchLeadKpis = useCallback(async (options?: { force?: boolean }) => {
-    const requestUrl = options?.force ? `${CRM_ACTION_KPIS_URL}?force=1` : CRM_ACTION_KPIS_URL
+    const requestUrl = options?.force ? withForceParam(CRM_ACTION_KPIS_URL) : CRM_ACTION_KPIS_URL
     const hasCached = Boolean(
       getCachedAdminJson<{ leads: LeadActionKpis }>(CRM_ACTION_KPIS_URL, {
         cacheKey: CRM_ACTION_KPIS_URL,
@@ -200,7 +217,7 @@ export default function CrmHomeClient({
   // M7 — Compass 브리지가 죽어도 다른 밴드를 물들이지 않도록 별도 상태·에러 채널로 분리.
   // down=true는 API 응답 필드(요청 자체는 성공)이므로 catch가 아니라 setCompassPipeline에서 처리한다.
   const fetchCompassPipeline = useCallback(async (options?: { force?: boolean }) => {
-    const requestUrl = options?.force ? `${CRM_COMPASS_PIPELINE_URL}?force=1` : CRM_COMPASS_PIPELINE_URL
+    const requestUrl = options?.force ? withForceParam(CRM_COMPASS_PIPELINE_URL) : CRM_COMPASS_PIPELINE_URL
     const hasCached = Boolean(
       getCachedAdminJson<CompassPipelineKpis>(CRM_COMPASS_PIPELINE_URL, {
         cacheKey: CRM_COMPASS_PIPELINE_URL,
@@ -227,7 +244,7 @@ export default function CrmHomeClient({
   }, [])
 
   const fetchCrmOverview = useCallback(async (options?: { force?: boolean }) => {
-    const requestUrl = options?.force ? `${CRM_OVERVIEW_URL}?force=1` : CRM_OVERVIEW_URL
+    const requestUrl = options?.force ? withForceParam(CRM_OVERVIEW_URL) : CRM_OVERVIEW_URL
     const hasCached = Boolean(
       getCachedAdminJson<AdminCrmOverview>(CRM_OVERVIEW_URL, {
         cacheKey: CRM_OVERVIEW_URL,
@@ -357,7 +374,7 @@ export default function CrmHomeClient({
   )
 
   // Compass AutoRefresh 이식 — 탭이 보일 때만 60초마다 조용히 갱신한다(숨김 탭은 멈추고,
-  // 복귀 시 즉시 1회). 우선순위 큐처럼 켜 두고 보는 화면이 손으로 새로고침하지 않아도 따라온다.
+  // 복귀 시 즉시 1회). 오늘 연락처럼 켜 두고 보는 화면이 손으로 새로고침하지 않아도 따라온다.
   useVisibleInterval(() => {
     if (!pageRefreshing) refreshAll({ background: true })
   }, 60_000)
@@ -465,16 +482,21 @@ export default function CrmHomeClient({
         onRetry={() => void fetchLeadKpis({ force: true })}
       />
 
-      {/* 리드 요약 다음에 오늘의 행동 큐를 붙여 숫자 확인 → 처리 흐름을 한 축으로 만든다.
-          CrmPriorityQueuePanel이 initialData(레인)를 React use()로 직접 소비하므로 이 자리가
+      {/* 리드 요약 다음에 "오늘 연락"(C안 ①)을 붙여 숫자 확인 → 처리 흐름을 한 축으로 만든다.
+          여러 원천(엔진 추천·팔로업·할 일·Compass 다음 액션·NEO 만료/소진·재문의)을 서버가 한 목록으로
+          합친다. CrmTodayContactsPanel이 initialData(레인)를 React use()로 직접 소비하므로 이 자리가
           그 Suspense 경계다 — fallback은 패널 자신의 로딩 크롬을 재사용한 스켈레톤.
-          softRefreshKey 는 60초 백그라운드 갱신 틱 — force 없이 TTL 지난 것만 다시 받는다. */}
+          softRefreshKey 는 60초 백그라운드 갱신 틱 — force 없이 TTL 지난 것만 다시 받는다.
+          행 제목(리드·NEO 계정)은 고객 360 상세 페이지(?tab=activity — customerDetailHref)로 간다(드로어는 10월에 걷었다).
+          담당 기본값은 로그인 사용자(?owner 없음 = 내 담당) — 전체로 바꾸면 owner="" 가 URL 에 남는다. */}
       <div className={MOBILE_TOUCH_TARGET_CLASS}>
-        <Suspense fallback={<CrmPriorityQueuePanelSkeleton />}>
-          <CrmPriorityQueuePanel
+        <Suspense fallback={<CrmTodayContactsPanelSkeleton />}>
+          <CrmTodayContactsPanel
             refreshKey={neoCrmRefreshKey}
             softRefreshKey={softRefreshKey}
-            initialData={initialPriorityQueue ?? null}
+            initialData={initialTodayContacts ?? null}
+            onCoverageChange={setTodayCoversTasks}
+            onCompassCoverageChange={setTodayCoversCompass}
           />
         </Suspense>
       </div>
@@ -535,8 +557,14 @@ export default function CrmHomeClient({
 
       {/* 주간 조망 밴드 — 우측 aside에서 본문으로 이동(H4: 우측 열은 액션 레일 전용) · 기능 보존 */}
       <div className={`mb-4 grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3 ${MOBILE_TOUCH_TARGET_CLASS}`}>
-        {/* 이번 주 할 일 — 주간 일정·버킷 조망 */}
-        <CrmWeekAheadPanel compact refreshKey={neoCrmRefreshKey} softRefreshKey={softRefreshKey} />
+        {/* 이번 주 할 일 — 홈에서는 "내일 이후 예정"만. 지난·오늘 할 일은 위 "오늘 연락"이 흡수한다(중복 배치 금지).
+            단 "오늘 연락"이 그 할 일을 다 담지 못하면(잘림·할 일 원천 실패·담당 필터·목록 실패) 숨기지 않는다(도달성 불변). */}
+        <CrmWeekAheadPanel
+          compact
+          refreshKey={neoCrmRefreshKey}
+          softRefreshKey={softRefreshKey}
+          hideBuckets={todayCoversTasks ? HOME_WEEK_AHEAD_HIDDEN_BUCKETS : undefined}
+        />
 
         {/* 설치·방문 일정 — upcomingThisWeek(install|visit) 상위 3건 */}
         <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
@@ -638,6 +666,9 @@ export default function CrmHomeClient({
             error={compassPipelineError}
             onRetry={() => void fetchCompassPipeline({ force: true })}
             refreshKey={neoCrmRefreshKey}
+            // 오늘·지난 Compass 다음 액션은 위 "오늘 연락"이 흡수한다 — 밴드 임박 목록은 내일 이후만(중복 배치 금지).
+            // 단 "오늘 연락"이 그 액션을 다 담지 못하면(담당 필터·Compass 끊김/일부 실패·잘림·목록 실패) 오늘 몫도 보인다.
+            actionsAfterToday={todayCoversCompass}
           />
         </div>
       </details>

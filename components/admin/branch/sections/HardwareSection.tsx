@@ -143,11 +143,11 @@ export default function HardwareSection({ refreshKey }: { refreshKey: number }) 
         <div className="flex items-center gap-2">
           <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">HW 재고</h2>
           {data.source === "ledger" ? (
-            <span className="rounded-full bg-[#ECFDF5] px-2 py-px text-[10px] font-semibold text-[#084734]" title="입출고 원장(hardware_movements) 기준 — 하드웨어 콘솔과 동일 수치 (재고 SSOT, 2026-07-10 결정)">
-              원장 기준
+            <span className="rounded-full bg-[#ECFDF5] px-2 py-px text-[10px] font-semibold text-[#084734]" title="입출고 원본(hardware_movements) 기준 — 하드웨어 콘솔과 동일 수치 (재고 SSOT, 2026-07-10 결정)">
+              원본 기준
             </span>
           ) : data.source === "sheet_staging" ? (
-            <span className="rounded-full bg-[#FBF1E0] px-2 py-px text-[10px] font-semibold text-[#7A520F]" title="원장 미구축 환경 — 시트 스테이징 계산 폴백. 원장 임포트 후 자동 전환됩니다">
+            <span className="rounded-full bg-[#FBF1E0] px-2 py-px text-[10px] font-semibold text-[#7A520F]" title="원본 미구축 환경 — 시트 스테이징 계산 폴백. 원본 임포트 후 자동 전환됩니다">
               시트 폴백
             </span>
           ) : null}

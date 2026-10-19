@@ -245,7 +245,7 @@ Notion 구조 × Apple 공백 × Classin Green.
 
 ## 6. 마케팅 엔진 — 채널 인벤토리와 각 역할·현황
 
-**운영 철학(Growth OS, 2026-03-20):** 관리자 앱은 CMS가 아니라 `콘텐츠+리드+캠페인+사이트전환`을 묶는 운영 시스템. 핵심 퍼널: **Campaign → Landing/Blog/Event → CTA → Form Submit → Lead Pipeline → Follow-up → Outcome → Report**(끊기면 단순 CMS로 전락). 제품 비중 CMS 30%/CRM-lite 25%/Site Control 20%/Campaign Ops 15%/Reports·Settings 10%. 2.201 세일즈 옵스=개인 TODO 앱 아닌 **팀 전체가 같은 숫자·상태를 보는 운영 관제실**, 급한 것은 지연·위험·실패·누락 리스크로 표시. AI는 전역 어시스턴트 아닌 캠페인 문구·견적 문안 생성 보조에만 제한(자동 의사결정·우선순위 추천 제외).
+**운영 철학(Growth OS, 2026-03-20):** 관리자 앱은 CMS가 아니라 `콘텐츠+리드+캠페인+사이트전환`을 묶는 운영 시스템. 핵심 퍼널: **Campaign → Landing/Blog/Event → CTA → Form Submit → Lead Pipeline → Follow-up → Outcome → Report**(끊기면 단순 CMS로 전락). 제품 비중 CMS 30%/CRM-lite 25%/Site Control 20%/Campaign Ops 15%/Reports·Settings 10%. 2.201 세일즈 옵스=개인 TODO 앱 아닌 **팀 전체가 같은 숫자·상태를 보는 운영 관제실**, 급한 것은 지연·위험·실패·누락 리스크로 표시. AI는 스스로 판단해 운영 데이터를 바꾸지 않는다 — 허용은 사람 지시를 오더 티켓으로 옮기기·조회·요약·캠페인 문구와 견적 문안 생성 보조까지, 자동 의사결정·우선순위 추천·사람 확인 없는 쓰기는 계속 제외(2026-09-29 개정: 전역 위젯 갈매봇 허용, 범위는 `docs/active/admin-ai-widget-remote-order-plan-2026-09-28.md` §2).
 
 | 채널 | 위치 | 역할·현황 |
 |------|------|-----------|

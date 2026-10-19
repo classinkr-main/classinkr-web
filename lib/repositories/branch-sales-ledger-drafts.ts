@@ -18,7 +18,7 @@ export type BranchSalesLedgerEntryType = (typeof BRANCH_SALES_LEDGER_ENTRY_TYPES
 export type BranchSalesLedgerEntryStatus = (typeof BRANCH_SALES_LEDGER_ENTRY_STATUSES)[number]
 
 const NOT_READY_MESSAGE = "매출 장부 입력 큐 DB 마이그레이션이 아직 적용되지 않았습니다."
-const INTERNAL_LEDGER_NOT_READY_MESSAGE = "매출 장부 내부 원장 DB 마이그레이션이 아직 적용되지 않았습니다."
+const INTERNAL_LEDGER_NOT_READY_MESSAGE = "매출 장부 내부 원본 DB 마이그레이션이 아직 적용되지 않았습니다."
 
 // 웨이브7(I1) — new-row 이중 제출 방어 창(더블클릭/더블탭). new-row는 forecast-add 누적처럼
 // 같은 딜·월에 여러 건이 정당하게 공존할 수 있어 하드 유니크 제약을 걸 수 없다 — 대신 짧은

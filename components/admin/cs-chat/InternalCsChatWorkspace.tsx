@@ -925,7 +925,7 @@ function InternalCsChatWorkspaceInner() {
       const proMessage: InternalCsMessage = {
         ...DEMO_MESSAGES[1],
         id: `preview-pro-${Date.now()}`,
-        content: "검토 전 심층 초안\n\n정책·계약·프로모션 조건이 서로 다를 수 있으므로 환불을 확정하지 않습니다. 결제 원장, 계약 조건, 프로모션 적용 여부를 대조하고 본사에는 적용 시장과 효력일을 포함해 확인을 요청해 주세요.",
+        content: "검토 전 심층 초안\n\n정책·계약·프로모션 조건이 서로 다를 수 있으므로 환불을 확정하지 않습니다. 결제 원본, 계약 조건, 프로모션 적용 여부를 대조하고 본사에는 적용 시장과 효력일을 포함해 확인을 요청해 주세요.",
         model_name: "gemini-3.1-pro-preview",
         model_mode: "deep",
         created_at: now,

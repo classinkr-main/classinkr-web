@@ -19,7 +19,7 @@ import {
   __resetCompassBridgeMemoForTests,
   getCompassLeadSliceByInflowRange,
 } from "@/lib/compass/bridge"
-import { buildCompassSummary } from "@/lib/compass/summary"
+import { buildCompassSummary, rankCompassOwnerRows } from "@/lib/compass/summary"
 import { buildCompassPipelineBand } from "@/lib/compass/home-band"
 import { compassLeadUrl } from "@/lib/compass/normalize"
 import {
@@ -346,6 +346,48 @@ describe("buildCompassSummary", () => {
     expect(summary.byOwner[0].owner).toBe("담당0") // total이 가장 큰 담당자
   })
 
+  // F7 — 미배정은 상위 N 칸을 차지하지도, 잘려 사라지지도 않는다.
+  it("byOwner: 미배정이 가장 커도 담당자 상위 N칸을 빼앗지 않고 끝에 붙는다(최대 N+1행)", async () => {
+    const owners = Array.from({ length: COMPASS_SUMMARY_OWNER_LIMIT + 2 }, (_, i) => `담당${i}`)
+    const rows = [
+      ...owners.flatMap((owner, ownerIndex) =>
+        Array.from({ length: owners.length - ownerIndex }, (_, i) => sliceRow({ id: ownerIndex * 100 + i, owner }))
+      ),
+      // 미배정 50건 — 어느 담당자보다 크다.
+      ...Array.from({ length: 50 }, (_, i) => sliceRow({ id: 9000 + i, owner: null, caller: null })),
+    ]
+    leadsChain = leadsViewChain({ onRange: (from) => (from === 0 ? { data: rows, error: null } : { data: [], error: null }) })
+    demosChain = demosViewChain({ data: [], error: null })
+    fromMock = vi.fn(routeFrom)
+
+    const summary = await buildCompassSummary("7d", NOW)
+
+    expect(summary.byOwner).toHaveLength(COMPASS_SUMMARY_OWNER_LIMIT + 1)
+    expect(summary.byOwner.slice(0, COMPASS_SUMMARY_OWNER_LIMIT).map((o) => o.owner)).toEqual(
+      owners.slice(0, COMPASS_SUMMARY_OWNER_LIMIT)
+    )
+    expect(summary.byOwner[COMPASS_SUMMARY_OWNER_LIMIT]).toMatchObject({ owner: "미배정", total: 50 })
+  })
+
+  it("byOwner: 미배정이 가장 작아도 잘려 사라지지 않고 끝에 붙는다", async () => {
+    const owners = Array.from({ length: COMPASS_SUMMARY_OWNER_LIMIT + 3 }, (_, i) => `담당${i}`)
+    const rows = [
+      ...owners.flatMap((owner, ownerIndex) =>
+        Array.from({ length: owners.length - ownerIndex + 1 }, (_, i) => sliceRow({ id: ownerIndex * 100 + i, owner }))
+      ),
+      sliceRow({ id: 9999, owner: null, caller: null }),
+    ]
+    leadsChain = leadsViewChain({ onRange: (from) => (from === 0 ? { data: rows, error: null } : { data: [], error: null }) })
+    demosChain = demosViewChain({ data: [], error: null })
+    fromMock = vi.fn(routeFrom)
+
+    const summary = await buildCompassSummary("7d", NOW)
+
+    expect(summary.byOwner).toHaveLength(COMPASS_SUMMARY_OWNER_LIMIT + 1)
+    expect(summary.byOwner[summary.byOwner.length - 1]).toMatchObject({ owner: "미배정", total: 1 })
+    expect(summary.byOwner.filter((o) => o.owner === "미배정")).toHaveLength(1)
+  })
+
   it("careStages는 COMPASS_CARE_STAGES 5단계를 0건 포함 고정 순서로 낸다", async () => {
     const rows = [sliceRow({ id: 1, care_stage: "member" }), sliceRow({ id: 2, care_stage: "paid" })]
     leadsChain = leadsViewChain({ onRange: (from) => (from === 0 ? { data: rows, error: null } : { data: [], error: null }) })
@@ -460,5 +502,27 @@ describe("buildCompassSummary", () => {
 
     expect(summary.truncated).toBe(true)
     expect(summary.inflowTotal).toBe(5000)
+  })
+})
+
+describe("rankCompassOwnerRows (F7)", () => {
+  it("미배정을 빼고 상위 limit, 동률은 이름순, 미배정은 끝", () => {
+    const ranked = rankCompassOwnerRows(
+      [
+        { owner: "미배정", total: 99 },
+        { owner: "나", total: 3 },
+        { owner: "가", total: 3 },
+        { owner: "다", total: 5 },
+        { owner: "라", total: 1 },
+      ],
+      3
+    )
+    expect(ranked.map((row) => row.owner)).toEqual(["다", "가", "나", "미배정"])
+  })
+
+  it("미배정이 없으면 limit행까지만", () => {
+    expect(rankCompassOwnerRows([{ owner: "가", total: 2 }, { owner: "나", total: 1 }], 1)).toEqual([
+      { owner: "가", total: 2 },
+    ])
   })
 })

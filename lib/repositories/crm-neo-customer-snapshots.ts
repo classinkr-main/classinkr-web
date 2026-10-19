@@ -12,8 +12,10 @@ import {
 } from "@/lib/external-crm/owner-names"
 import { normalizeRegionLabel } from "@/lib/regions/korea-regions"
 import { CRM_SYNC_STALE_AFTER_HOURS, hoursSinceIso } from "@/lib/crm/sync-freshness"
+import { NEO_SOURCE_EXPIRING_WINDOW_DAYS } from "@/lib/crm/customer-segment-spec"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import type {
+  CrmNeoBillingMode,
   CrmNeoCustomerSnapshot,
   CrmNeoCustomerSnapshotInsert,
 } from "@/lib/supabase/database.types"
@@ -26,6 +28,8 @@ const OPPORTUNITY_OBJECT_API_KEY = "opportunity"
 const FINANCIAL_OBJECT_API_KEY = "FinancialInformation__c"
 const REFRESH_SCAN_LIMIT = 20_000
 const LIST_LIMIT = 10_000
+/** 목록 조회 한 페이지 — PostgREST 기본 max-rows(1000)와 같다(lib/supabase/pagination.ts). */
+const LIST_PAGE_SIZE = 1_000
 const UPSERT_CHUNK_SIZE = 500
 // SSOT는 lib/crm/sync-freshness.ts — CRM 홈 배지(클라이언트)도 같은 임계값을 쓴다
 // (2026-09-07 감사 #1). 이 파일 안 이름은 유지해 아래 호출부 diff를 최소화한다.
@@ -123,6 +127,8 @@ export interface CrmNeoCustomerSnapshotRecord {
   phone: string | null
   uid: string | null
   regionLabel: string | null
+  /** 과금 유형(매출시트 J열) — 통합 목록 세그먼트 조건(과금 방식)의 원천. */
+  billingMode: CrmNeoBillingMode
   balance: number | null
   expireAt: string | null
   lastClassAt: string | null
@@ -731,6 +737,7 @@ export function toCrmNeoCustomerSnapshotRecord(row: CrmNeoCustomerSnapshot): Crm
     phone: row.phone,
     uid: row.uid,
     regionLabel: row.region_label,
+    billingMode: row.billing_mode,
     balance: row.balance,
     expireAt: row.expire_at,
     lastClassAt: row.last_class_at,
@@ -783,6 +790,7 @@ function snapshotInsertToRecord(
     phone: row.phone,
     uid: row.uid,
     regionLabel: row.region_label,
+    billingMode: row.billing_mode,
     balance: row.balance,
     expireAt: row.expire_at,
     lastClassAt: row.last_class_at,
@@ -828,7 +836,8 @@ function buildSnapshotListResult(
   totalCount: number
 ): ListCrmNeoCustomerSnapshotsResult {
   const nowMs = Date.now()
-  const expiringThresholdMs = nowMs + 60 * 24 * 60 * 60 * 1000
+  // 원천 화면의 "60일 내 만료"(오늘~60일) — 통합 목록 "만료 임박"(30일)과 다른 창이라 상수도 따로 둔다.
+  const expiringThresholdMs = nowMs + NEO_SOURCE_EXPIRING_WINDOW_DAYS * 24 * 60 * 60 * 1000
   const ownerCounts = new Map<string, { ownerName: string; count: number }>()
   let withEeoCount = 0
   let expiringSoonCount = 0
@@ -962,31 +971,44 @@ export async function listCrmNeoCustomerSnapshots(
   const limit = clampInteger(options.limit, LIST_LIMIT, 1, LIST_LIMIT)
   const offset = clampInteger(options.offset, 0, 0, 100_000)
 
-  let query = sb
-    .from("crm_neo_customer_snapshots")
-    .select("*", { count: "exact" })
-    .eq("source_system", sourceSystem)
-    .order("risk_level", { ascending: true })
-    .order("expire_at", { ascending: true, nullsFirst: false })
-    .order("source_synced_at", { ascending: false, nullsFirst: false })
-    .range(offset, offset + limit - 1)
-
-  if (!options.includeStale) query = query.eq("is_stale", false)
-  if (options.ownerKeys && options.ownerKeys.length > 0) query = query.in("owner_id", options.ownerKeys)
   const search = safeSearch(options.q)
-  if (search) {
-    query = query.or(
-      `account_name.ilike.%${search}%,phone.ilike.%${search}%,uid.ilike.%${search}%,owner_name.ilike.%${search}%,region_label.ilike.%${search}%`
-    )
+
+  // F5 — 예전엔 단일 `.range(offset, offset + 9_999)` 한 번이었다. PostgREST max-rows(1000)가 그 요청을
+  // 오류 없이 1000행에서 잘라, 고객이 1000곳을 넘으면 뒤쪽 고객이 통합 목록·우선순위 큐에서 조용히 빠졌다.
+  // 1,000행 페이지로 끝까지 읽고(전진 간격 = 실제 받은 행 수), 정렬 끝에 PK(account_id)를 타이브레이커로
+  // 둔다 — 같은 위험·만료·동기화 시각 행이 페이지 경계에서 겹치거나 빠지지 않는다.
+  const buildPageQuery = (from: number, to: number) => {
+    let query = sb
+      .from("crm_neo_customer_snapshots")
+      .select("*", from === 0 ? { count: "exact" } : undefined)
+      .eq("source_system", sourceSystem)
+    if (!options.includeStale) query = query.eq("is_stale", false)
+    if (options.ownerKeys && options.ownerKeys.length > 0) query = query.in("owner_id", options.ownerKeys)
+    if (search) {
+      query = query.or(
+        `account_name.ilike.%${search}%,phone.ilike.%${search}%,uid.ilike.%${search}%,owner_name.ilike.%${search}%,region_label.ilike.%${search}%`
+      )
+    }
+    return query
+      .order("risk_level", { ascending: true })
+      .order("expire_at", { ascending: true, nullsFirst: false })
+      .order("source_synced_at", { ascending: false, nullsFirst: false })
+      .order("account_id", { ascending: true })
+      .range(offset + from, offset + to)
   }
 
-  const { data, error, count } = await query
-  if (error) {
-    if (isMissingSnapshotsTableError(error)) return listCrmNeoCustomerSnapshotsFromExternalRecords(options)
-    throw new Error(`[crm-neo-customer-snapshots] 조회 실패: ${error.message}`)
+  const paged = await fetchSupabasePages<CrmNeoCustomerSnapshot>({
+    maxRows: limit,
+    pageSize: LIST_PAGE_SIZE,
+    fetchPage: (from, to) => buildPageQuery(from, to),
+  })
+  if (paged.error) {
+    if (isMissingSnapshotsTableError(paged.error)) return listCrmNeoCustomerSnapshotsFromExternalRecords(options)
+    throw new Error(`[crm-neo-customer-snapshots] 조회 실패: ${paged.error.message}`)
   }
 
-  const rows = ((data ?? []) as CrmNeoCustomerSnapshot[]).map(toCrmNeoCustomerSnapshotRecord)
-  const totalCount = count ?? rows.length
+  const rows = paged.data.map(toCrmNeoCustomerSnapshotRecord)
+  // count 는 offset 과 무관한 전체 건수다(첫 페이지 exact). 모르면 받은 만큼 + offset 으로 하한을 둔다.
+  const totalCount = paged.count ?? offset + rows.length
   return buildSnapshotListResult(rows, totalCount)
 }

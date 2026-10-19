@@ -827,7 +827,7 @@ function InboundSheetPanel({
                 </p>
                 {doneBanner.sampleError ? (
                   <p className="mt-1 text-[12px] font-semibold text-[#8F2C2C]">
-                    샘플 유닛 등록은 실패했습니다: {doneBanner.sampleError} — 홈 › 샘플 유닛의 ‘원장 차이 확인’에서 다시 등록할 수 있습니다.
+                    샘플 유닛 등록은 실패했습니다: {doneBanner.sampleError} — 홈 › 샘플 유닛의 ‘원본 차이 확인’에서 다시 등록할 수 있습니다.
                   </p>
                 ) : null}
               </div>

@@ -46,6 +46,10 @@ export interface CrmRegionLayer {
   topCustomersByRegion?: Record<string, CrmRegionCustomerItem[]>
   /** 담당자 범위도 같은 원천의 전체 행에서 집계한다. */
   ownerLayers?: Record<string, CrmRegionLayer>
+  /** 원천 행이 조회 상한을 넘어 일부만 셌다(C9). 구 응답에는 없다. */
+  truncated?: boolean
+  /** 원천 조회가 실패했다 — total 0은 "0건"이 아니라 "모름"이다. 구 응답에는 없다. */
+  failed?: boolean
 }
 
 export interface RegionCustomerRecord {
@@ -80,32 +84,60 @@ export function emptyRegionTally(): RegionTally {
   }
 }
 
+/** 한 행의 지역 판정 — 세 갈래(located·nonGeo·unknown) 중 하나. */
+type RegionResolution = { kind: "located"; label: string } | { kind: "nonGeo" } | { kind: "unknown" }
+
+function isNonGeo(raw: string | null | undefined): boolean {
+  const trimmed = raw?.trim() ?? ""
+  return Boolean(trimmed) && NON_GEO_TOKENS.has(trimmed.toLowerCase())
+}
+
+/** 자유 텍스트 지역값을 시도로 접는다. 온라인·해외가 먼저다(정규화가 이 값을 지명으로 오인하지 않게). */
+function resolveRawRegion(raw: string | null | undefined): RegionResolution {
+  if (isNonGeo(raw)) return { kind: "nonGeo" }
+  const label = normalizeRegionLabel(raw?.trim() ?? "")
+  return label ? { kind: "located", label } : { kind: "unknown" }
+}
+
+/** 이미 시도 라벨로 해석된 값. 해석 실패(null)일 때만 원문으로 온라인·해외와 미상을 가른다. */
+function resolveDerivedRegion(
+  derivedLabel: string | null | undefined,
+  raw: string | null | undefined
+): RegionResolution {
+  if (derivedLabel) return { kind: "located", label: derivedLabel }
+  return isNonGeo(raw) ? { kind: "nonGeo" } : { kind: "unknown" }
+}
+
+/** 행 하나를 전체 집계와 담당자 집계(같은 원천 안) 양쪽에 센다. */
+function tallyResolved(tally: RegionTally, resolution: RegionResolution, customer?: RegionCustomerRecord) {
+  addResolvedRegion(tally, resolution, customer)
+  const ownerKey = customer?.manager?.trim().toLowerCase()
+  if (ownerKey) {
+    tally.ownerTallies ??= Object.create(null) as Record<string, RegionTally>
+    const ownerTally = tally.ownerTallies[ownerKey] ??= emptyRegionTally()
+    addResolvedRegion(ownerTally, resolution, customer)
+  }
+}
+
 export function tallyRegionValue(
   tally: RegionTally,
   raw: string | null | undefined,
   customer?: RegionCustomerRecord
 ) {
-  addRegionValue(tally, raw, customer)
-  const ownerKey = customer?.manager?.trim().toLowerCase()
-  if (ownerKey) {
-    tally.ownerTallies ??= Object.create(null) as Record<string, RegionTally>
-    const ownerTally = tally.ownerTallies[ownerKey] ??= emptyRegionTally()
-    addRegionValue(ownerTally, raw, customer)
-  }
+  tallyResolved(tally, resolveRawRegion(raw), customer)
 }
 
-function addRegionValue(tally: RegionTally, raw: string | null | undefined, customer?: RegionCustomerRecord) {
+function addResolvedRegion(tally: RegionTally, resolution: RegionResolution, customer?: RegionCustomerRecord) {
   tally.total += 1
-  const trimmed = raw?.trim() ?? ""
-  if (trimmed && NON_GEO_TOKENS.has(trimmed.toLowerCase())) {
+  if (resolution.kind === "nonGeo") {
     tally.nonGeo += 1
     return
   }
-  const label = normalizeRegionLabel(trimmed)
-  if (!label) {
+  if (resolution.kind === "unknown") {
     tally.unknown += 1
     return
   }
+  const label = resolution.label
   tally.located += 1
   tally.regions[label] = (tally.regions[label] ?? 0) + 1
 
@@ -146,12 +178,38 @@ export function tallyRegionValues(values: ReadonlyArray<string | null | undefine
   return tally
 }
 
+/**
+ * 이미 시도 라벨로 해석된 값을 센다(C9 — 리드층). 리드의 지역은 통합 고객 목록·360·리드 드로어가
+ * 쓰는 deriveLeadRegionLabel(branch + 메타 폼 답변 + 영문 도시명)로 정한다. 지도가 leads.branch만
+ * 자유 텍스트로 접으면 같은 리드가 목록에선 "서울", 지도에선 "미상"으로 갈렸다.
+ * 해석 실패(null)일 때만 원문으로 온라인·해외(nonGeo)와 미상(unknown)을 가른다.
+ * 상위 고객·담당자 범위(customer)는 tallyRegionValue와 같은 규칙으로 함께 센다.
+ */
+export function tallyDerivedRegion(
+  tally: RegionTally,
+  derivedLabel: string | null | undefined,
+  raw: string | null | undefined,
+  customer?: RegionCustomerRecord
+) {
+  tallyResolved(tally, resolveDerivedRegion(derivedLabel, raw), customer)
+}
+
+export interface RegionLayerSourceState {
+  /** 원천 행이 조회 상한을 넘었다 — 일부만 셌다. */
+  truncated?: boolean
+  /** 원천 조회 실패 — 세지 못했다. */
+  failed?: boolean
+  /** truncated일 때 문구에 쓸 상한(행). */
+  rowLimit?: number
+}
+
 export function toRegionLayer(
   key: CrmRegionLayerKey,
   label: string,
   unit: string,
   tally: RegionTally,
-  notes: string[] = []
+  notes: string[] = [],
+  state: RegionLayerSourceState = {}
 ): CrmRegionLayer {
   const topCustomersByRegion: Record<string, CrmRegionCustomerItem[]> = {}
   if (tally.customersByRegion) {
@@ -175,6 +233,14 @@ export function toRegionLayer(
     }
   }
 
+  const stateNotes: string[] = []
+  if (state.failed) {
+    stateNotes.push("이 레이어의 원천을 읽지 못했다 — 표시된 0건은 실제 0건이 아니라 '모름'이다.")
+  } else if (state.truncated) {
+    stateNotes.push(
+      `원천 행이 조회 상한${state.rowLimit ? `(${state.rowLimit.toLocaleString("ko-KR")}행)` : ""}을 넘어 일부만 셌다 — 분포·커버리지는 부분값이다.`
+    )
+  }
   return {
     key,
     label,
@@ -185,10 +251,14 @@ export function toRegionLayer(
     nonGeo: tally.nonGeo,
     coverage: tally.total === 0 ? 0 : tally.located / tally.total,
     regions: tally.regions,
-    notes,
+    // 상태 경고가 먼저 — 화면이 notes를 위에서부터 읽으므로 "부분값/모름"을 원천 설명보다 앞에 둔다.
+    notes: [...stateNotes, ...notes],
     topCustomersByRegion,
+    // 담당자 층은 원천 설명만 싣는다 — 상태(실패·절단)는 scopeRegionLayer가 바깥 레이어에서 옮겨 단다.
     ...(tally.ownerTallies ? { ownerLayers: Object.fromEntries(Object.entries(tally.ownerTallies)
       .map(([owner, ownerTally]) => [owner, toRegionLayer(key, label, unit, ownerTally, notes)])) } : {}),
+    ...(state.truncated ? { truncated: true } : {}),
+    ...(state.failed ? { failed: true } : {}),
   }
 }
 
@@ -196,7 +266,11 @@ export function toRegionLayer(
 export function scopeRegionLayer(layer: CrmRegionLayer, ownerNames: readonly string[] | null): CrmRegionLayer {
   if (ownerNames === null) return layer
   const keys = new Set(ownerNames.map(name => name.trim().toLowerCase()).filter(Boolean))
+  // layer.notes에는 상태 경고(모름·부분값)가 이미 앞에 붙어 있다 — 그대로 옮기고, 표시도 같이 단다.
+  // 원천이 실패·절단된 레이어를 담당자 범위로 좁혀도 "0건"·"전체"로 읽히면 안 된다.
   const scoped = toRegionLayer(layer.key, layer.label, layer.unit, emptyRegionTally(), layer.notes)
+  if (layer.truncated) scoped.truncated = true
+  if (layer.failed) scoped.failed = true
   const customers = new Map<string, CrmRegionCustomerItem>()
   for (const key of keys) {
     const owner = Object.hasOwn(layer.ownerLayers ?? {}, key) ? layer.ownerLayers?.[key] : undefined

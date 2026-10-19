@@ -26,7 +26,7 @@ import { useCrmOwners } from "@/components/admin/crm/useCrmOwners"
 import { useVisibleCount } from "@/components/admin/ui/ShowMore"
 import { MOBILE_TOUCH_TARGET_CLASS } from "@/components/admin/crm/home/shared"
 
-import { adminFetch, adminFetchJsonCached, adminFetchJsonCachedWithMeta } from "@/lib/admin-client"
+import { adminFetch, adminFetchJson, adminFetchJsonCached, adminFetchJsonCachedWithMeta } from "@/lib/admin-client"
 import { CRM_CACHE_SWR_MS, CRM_CACHE_TTL_MS } from "@/lib/crm/client-cache"
 import type { LeadActivity, LeadActivityBadge } from "@/lib/repositories/lead-activity"
 import type { LeadRecord, LeadStatus } from "@/lib/repositories/leads"
@@ -187,6 +187,36 @@ type BulkNotice = {
   failedIds?: string[]
 }
 
+/**
+ * A안 — NEO 계정 등록 확정 리드 id 집합(GET /api/admin/crm/leads/neo-registered, 고객 360 crmRegistered 와 같은 원천).
+ * 마운트 때 한 번 읽는다. 실패는 미등록으로 폴백한다 — 360 도 같은 조회 실패를 미등록(경고만)으로 두므로
+ * 두 화면의 판정이 장애 때도 같은 쪽으로 떨어진다. loading 은 딥링크 자동 열림을 미루는 데만 쓴다.
+ */
+function useLeadNeoRegistered(): { has: (leadId: string) => boolean; loading: boolean } {
+  const [ids, setIds] = useState<ReadonlySet<string>>(() => new Set())
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const data = await adminFetchJson<{ leadIds?: unknown }>("/api/admin/crm/leads/neo-registered")
+        if (cancelled) return
+        const leadIds = Array.isArray(data?.leadIds)
+          ? data.leadIds.filter((id): id is string => typeof id === "string" && id.length > 0)
+          : []
+        setIds(new Set(leadIds))
+      } catch {
+        /* 미등록 폴백 — 위 설명 */
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+  const has = useCallback((leadId: string) => ids.has(leadId), [ids])
+  return useMemo(() => ({ has, loading }), [has, loading])
+}
+
 // ─── 리드 보드 ─────────────────────────────────────────────────
 // 현황(/admin/crm)에서 추출한 리드 관리 보드 전체. ?filter=·?focus=risk 딥링크 지원.
 export default function LeadsBoardClient() {
@@ -314,6 +344,9 @@ export default function LeadsBoardClient() {
   }, [allLeads, currentOwnerKeys, dataOwner])
   // Compass(마케팅팀 앱) 콜 상태 병기 — 읽기 전용 오버레이. 우리 리드 상태는 건드리지 않는다.
   const compass = useCompassOverlay(leads)
+  // A안 — 리드 → NEO 계정 등록 확정 리드 id(고객 360 crmRegistered 와 같은 링크 집합). 목록·드로어가 360 과 같은
+  // 기록 위치 판정을 내도록 넘긴다(360 에서 'NEO 등록 연결'만 하고 상태는 그대로인 리드가 Compass 정본으로 갈리지 않게).
+  const neoRegistered = useLeadNeoRegistered()
 
   // "/" 로 검색창 포커스 — 목록을 훑다가 손을 옮기지 않고 바로 좁힐 수 있게.
   useEffect(() => {
@@ -2315,6 +2348,8 @@ export default function LeadsBoardClient() {
           today={today}
           now={now}
           compassLookup={compass.lookup}
+          compassDown={compass.down}
+          isCrmRegistered={neoRegistered.has}
           allVisibleSelected={allVisibleSelected}
           selectedVisibleCount={selectedVisibleCount}
           visibleIds={visibleIds}
@@ -2371,6 +2406,12 @@ export default function LeadsBoardClient() {
           activityLoading={activityLoading}
           initialContactForm={contactDraft?.leadId === selected.id}
           initialContactType={contactDraft?.leadId === selected.id ? contactDraft.type : undefined}
+          // A안 — 목록 칩과 같은 오버레이·NEO 등록 집합(드로어용 추가 fetch 없음). 드로어가 목록과 같은 공용 판정으로
+          // 기록 위치(Compass/Home)를 정한다. 딥링크 자동 열림은 두 조회가 끝난 뒤 한 번만 정한다.
+          compassEntry={compass.down ? null : (compass.lookup(selected) ?? null)}
+          compassDown={compass.down}
+          compassLoading={compass.loading || neoRegistered.loading}
+          crmRegistered={neoRegistered.has(selected.id)}
           crmOwners={crmOwners}
           crmOwnerHealth={crmOwnerHealth}
           currentOwner={crmCurrentOwner}

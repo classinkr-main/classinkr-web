@@ -481,9 +481,14 @@ describe("loadSyncHealthReport — 실패는 원천별 확인 불가, 던지지 
 // ─── 장착 계약(소스) ────────────────────────────────────────────
 
 describe("경고 띠 장착 — 페이지 셸이 별도 Suspense로 얹는다(첫 바이트를 기다리지 않음)", () => {
-  // 이 브랜치에는 매출시트 띠만 이식했다(다른 화면 장착은 09-mooni-home4.7 쪽 작업).
+  // 09-mooni-home4.7 병합으로 여섯 화면 장착이 모두 들어왔다(10월 줄기는 매출시트 띠만 먼저 이식했었다 — 714869c7).
   const cases: Array<[string, string]> = [
+    ["app/admin/branch/page.tsx", 'sources={["sheets", "hw"]}'],
+    ["app/admin/branch/ledger/page.tsx", 'sources={["sheets"]}'],
+    ["app/admin/crm/customers/accounts/page.tsx", 'sources={["neo"]}'],
     ["app/admin/crm/deals/rev-sheet/layout.tsx", 'sources={["sheets"]}'],
+    ["app/admin/crm/matching/page.tsx", 'sources={["neo", "sheets"]}'],
+    ["app/admin/ops/page.tsx", 'variant="summary"'],
   ]
 
   it.each(cases)("%s", (path, needle) => {

@@ -24,8 +24,8 @@ import type {
  * 왜 이 셋인가: 홈은 마운트에서 클라이언트 fetch 8개를 띄우는데, 그중 이 셋이 첫 화면
  * 위쪽을 그린다. 특히 overview는 서버에서 DB 왕복이 30회에 가까워 가장 늦게 도착한다.
  *
- * 우선순위 큐("오늘 전화할 N건") 프리페치는 여기 없다 — 별도 파일
- * lib/admin/crm/priority-queue-prefetch.ts로 뺐다. 이유: tests/admin/crm-home-prefetch.test.ts
+ * "오늘 연락"(옛 우선순위 큐 "오늘 전화할 N건") 프리페치는 여기 없다 — 별도 파일
+ * lib/admin/crm/today-contacts-prefetch.ts로 뺐다(2026-09-25, 옛 priority-queue-prefetch 는 삭제). 이유: tests/admin/crm-home-prefetch.test.ts
  * (admin-core 소유였던 계약 — 이번 스트리밍 전환으로 CrmHomeInitialData 필드 타입 자체가
  * 바뀌어 함께 갱신했다)가 CrmHomeInitialData의 필드 **집합**을 고정하고 있어, 이 인터페이스에
  * 새 필드를 얹으면 그 테스트가 깨진다. app/admin/crm/page.tsx가 두 프리페치 함수를

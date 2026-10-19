@@ -162,7 +162,7 @@ function withDerivedMovementViews(response: HardwareDashboardResponse): Hardware
 const HARDWARE_TABS: Array<{ id: HardwareTab; label: string; description: string }> = [
   { id: "home", label: "홈", description: "현황 · 예상 출고" },
   { id: "entry", label: "입출고", description: "입고 · 출고 기록" },
-  { id: "history", label: "내역", description: "전체 원장" },
+  { id: "history", label: "내역", description: "전체 원본" },
 ]
 
 const DEFAULT_OPEN_SECTIONS: Record<HardwareSectionKey, boolean> = {
@@ -2749,7 +2749,7 @@ export default function HardwareInventoryClient({
           : "",
       ].join("")
       setNotice(
-        `시트 강제 싱크와 백업 후 이관 완료: 원장 ${formatNumber(result.import.imported)}건 반영${snapshotHint}. 기존 시트 이관분은 최신 백업 기준으로 갱신되었습니다.${sheetWinsHint}`
+        `시트 강제 싱크와 백업 후 이관 완료: 원본 ${formatNumber(result.import.imported)}건 반영${snapshotHint}. 기존 시트 이관분은 최신 백업 기준으로 갱신되었습니다.${sheetWinsHint}`
       )
       await refresh()
     } catch (err) {
@@ -2764,7 +2764,7 @@ export default function HardwareInventoryClient({
       setError(".xlsx 파일만 업로드할 수 있습니다.")
       return
     }
-    if (!window.confirm(`"${file.name}" 원장으로 하드웨어 입출고 내역을 교체합니다. (자동 백업 후 진행) 계속할까요?`)) {
+    if (!window.confirm(`"${file.name}" 원본으로 하드웨어 입출고 내역을 교체합니다. (자동 백업 후 진행) 계속할까요?`)) {
       return
     }
     setBusy("ledger")
@@ -2785,7 +2785,7 @@ export default function HardwareInventoryClient({
         .join(" · ")
       const warnHint = result.warnings.length > 0 ? ` · 경고 ${formatNumber(result.warnings.length)}건` : ""
       setNotice(
-        `원장 가져오기 완료: 물량번호 ${formatNumber(result.parsed.lots.length)}개 · 입고 ${formatNumber(result.parsed.inboundRows)} · 출고 ${formatNumber(result.parsed.outboundRows)} (${typeHint}) → 원장 ${formatNumber(result.import.imported)}건 반영${snapshotHint}${warnHint}.`
+        `원본 가져오기 완료: 물량번호 ${formatNumber(result.parsed.lots.length)}개 · 입고 ${formatNumber(result.parsed.inboundRows)} · 출고 ${formatNumber(result.parsed.outboundRows)} (${typeHint}) → 원본 ${formatNumber(result.import.imported)}건 반영${snapshotHint}${warnHint}.`
       )
       await refresh()
     } catch (err) {
@@ -3202,7 +3202,7 @@ export default function HardwareInventoryClient({
         try {
           await syncSampleTracker(draft, saveResult?.movement?.id ?? null)
         } catch (syncErr) {
-          sampleSyncError = `원장은 저장됐지만 샘플 트래커 기록에 실패했습니다: ${
+          sampleSyncError = `원본은 저장됐지만 샘플 트래커 기록에 실패했습니다: ${
             syncErr instanceof Error ? syncErr.message : String(syncErr)
           } — 샘플 트래커에서 수동으로 정정하세요.`
         }

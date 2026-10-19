@@ -22,7 +22,12 @@ import { onLeadsMutated, type LeadRecord } from "@/lib/repositories/leads"
 import { listCrmTasks, onCrmTasksMutated, type CrmTaskRecord } from "@/lib/repositories/crm-tasks"
 import { onContactLogsMutated } from "@/lib/repositories/contact-logs"
 import type { LeadActivityBadge } from "@/lib/repositories/lead-activity"
-import { buildCompassDemoIndex, hydrateCompassDemoSource, type CompassDemoSourceJson } from "@/lib/crm/compass-demo-signal"
+import {
+  buildCompassDemoIndex,
+  hydrateCompassDemoSource,
+  type CompassDemoIndex,
+  type CompassDemoSourceJson,
+} from "@/lib/crm/compass-demo-signal"
 // 리드·NEO 고객·참여 신호·Compass 데모 원본 수집은 통합 고객DB(crm-unified-customers.ts)와
 // 공유한다(2026-09-07 감사 #7) — 아래 loadSourceSnapshot 참고.
 import { getCrmCoreSourceSnapshot, type CrmCoreSourceSnapshot } from "@/lib/repositories/crm-shared-source-snapshot"
@@ -262,6 +267,12 @@ interface CrmPrioritySourceSnapshot {
   engagements: Record<string, LeadActivityBadge> | null
   /** Data Cache(JSON) 경계라 Map 대신 엔트리 배열 형태 — 읽는 쪽이 hydrateCompassDemoSource로 되돌린다. */
   demoSource: CompassDemoSourceJson
+  /**
+   * NEO 스냅샷 신선도(2026-09-25 오늘 연락 — 계정 행 "NEO 값 MM-DD 기준" 캡션). 캐시 키를 올리지 않고 옵셔널로
+   * 더했다 — 이 필드가 없던 옛 엔트리는 읽는 쪽이 null·stale 로 다룬다(최대 60초).
+   */
+  neoLatestSyncedAt?: string | null
+  neoIsShroffAccountStale?: boolean
   warnings: string[]
   complete: boolean
 }
@@ -297,7 +308,11 @@ export function invalidateCrmPrioritySourceSnapshot() {
 }
 
 async function getSourceSnapshot(bypassCache: boolean): Promise<CrmPrioritySourceSnapshot> {
-  if (bypassCache) return loadSourceSnapshot()
+  // 우회 읽기(force·고정 now)는 할 일도 할 일 Data Cache 를 거치지 않는다 — unstable_cache 밖에서 부르는 listCrmTasks 는
+  // 자기 캐시(admin-crm-tasks, 쓰기 뒤 SWR)를 그대로 읽어 새로고침에도 방금 미룬·완료한 할 일의 옛 값이 나왔다
+  // (2026-09-26 교차 리뷰 [Q2-15]). 캐시 경로(아래 getCachedSourceSnapshot 콜백)는 중첩 unstable_cache 라 Next 가
+  // 안쪽 캐시 읽기를 이미 건너뛴다.
+  if (bypassCache) return loadSourceSnapshot({ bypassTaskCache: true })
 
   try {
     return await getCachedSourceSnapshot()
@@ -321,7 +336,7 @@ const EMPTY_CORE_SNAPSHOT: CrmCoreSourceSnapshot = {
   complete: false,
 }
 
-async function loadSourceSnapshot(): Promise<CrmPrioritySourceSnapshot> {
+async function loadSourceSnapshot(options: { bypassTaskCache?: boolean } = {}): Promise<CrmPrioritySourceSnapshot> {
   const warnings: string[] = []
   let tasksOk = true
 
@@ -330,7 +345,9 @@ async function loadSourceSnapshot(): Promise<CrmPrioritySourceSnapshot> {
   // Promise.allSettled로 모으던 걸 걷어냈다. 이 큐만 필요한 할 일(tasks)은 그대로 별도 수집.
   const [coreResult, taskResult] = await Promise.allSettled([
     getCrmCoreSourceSnapshot(),
-    listCrmTasks({ status: "active", limit: 200 }),
+    listCrmTasks(
+      options.bypassTaskCache ? { status: "active", limit: 200, bypassCache: true } : { status: "active", limit: 200 }
+    ),
   ])
 
   const core = coreResult.status === "fulfilled" ? coreResult.value : EMPTY_CORE_SNAPSHOT
@@ -359,14 +376,43 @@ async function loadSourceSnapshot(): Promise<CrmPrioritySourceSnapshot> {
     // core가 이미 JSON 안전 형태(CompassDemoSourceJson)로 반환한다 — 여기서 다시 접지 않는다.
     // unstable_cache는 JSON으로 저장한다 — Map을 그대로 넣으면 적중 뒤 `.get`이 터진다(2026-09-04 500 사고).
     demoSource: core.demoSource,
+    neoLatestSyncedAt: core.neoLatestSyncedAt ?? null,
+    neoIsShroffAccountStale: core.neoIsShroffAccountStale ?? true,
     warnings,
     complete: leadsOk && neoAccountsOk && tasksOk,
   }
 }
 
-export async function getCrmPriorityQueue(
-  options: CrmPriorityQueueOptions = {}
-): Promise<CrmPriorityQueue> {
+/**
+ * 우선순위 후보 풀 — 소스 스냅샷(위 unstable_cache, 태그·60초·complete 게이트 불변) + 요청 시각(now)으로 다시 계산한
+ * 엔진 항목 전체(정렬만, 필터·limit 전). getCrmPriorityQueue(홈 큐·인사이트·매니저 리포트)와 현황 "오늘 연락"
+ * (lib/repositories/crm-today-contacts.ts, 2026-09-25)이 같은 캐시·같은 엔진 판정을 공유하려고 뽑아냈다.
+ * 원본(leads·neoRows·tasks·engagements·demoIndex)도 함께 돌려준다 — 오늘 연락은 엔진 항목을 원천별 사유로
+ * 다시 나누려면 원본 필드가 필요하다.
+ */
+export interface CrmPriorityCandidatePool {
+  now: Date
+  leads: LeadRecord[]
+  leadsOk: boolean
+  neoRows: NeoCrmCustomerRow[]
+  neoAccountsOk: boolean
+  /** NEO 스냅샷 최신 동기화 시각(없으면 null — 신선도 미확인). */
+  neoLatestSyncedAt: string | null
+  /** 원장 동기화가 멈췄는가(값이 없으면 보수적으로 true). */
+  neoStale: boolean
+  /** 활성(open·snoozed) 할 일 — 소스 스냅샷과 같은 200건 상한. */
+  tasks: CrmTaskRecord[]
+  tasksOk: boolean
+  engagements: Record<string, LeadActivityBadge> | null
+  demoIndex: CompassDemoIndex
+  /** 엔진 항목 전체(리드·NEO·할 일) — sortPriorityItems 순서. */
+  items: CrmPriorityItem[]
+  warnings: string[]
+}
+
+export async function getCrmPriorityCandidatePool(
+  options: { now?: Date; force?: boolean } = {}
+): Promise<CrmPriorityCandidatePool> {
   const now = options.now ?? new Date()
   const force = options.force === true
   const snapshot = await getSourceSnapshot(options.now != null || force)
@@ -377,8 +423,6 @@ export async function getCrmPriorityQueue(
     // 실패한 재수집 결과를 캐시에 쓰는 일은 없다 — force 경로는 unstable_cache를 거치지 않는다.
     revalidateTag(ADMIN_CRM_PRIORITY_QUEUE_SNAPSHOT_CACHE_TAG, { expire: 0 })
   }
-  const { leadsOk, neoAccountsOk, tasksOk } = snapshot
-  const warnings = [...snapshot.warnings]
 
   const items: CrmPriorityItem[] = []
   const engagements = snapshot.engagements
@@ -402,7 +446,32 @@ export async function getCrmPriorityQueue(
     if (item) items.push(item)
   }
 
-  const sorted = sortPriorityItems(items)
+  return {
+    now,
+    leads: snapshot.leads,
+    leadsOk: snapshot.leadsOk,
+    neoRows: snapshot.neoRows,
+    neoAccountsOk: snapshot.neoAccountsOk,
+    neoLatestSyncedAt: snapshot.neoLatestSyncedAt ?? null,
+    neoStale: snapshot.neoIsShroffAccountStale ?? true,
+    tasks: snapshot.tasks,
+    tasksOk: snapshot.tasksOk,
+    engagements,
+    demoIndex,
+    items: sortPriorityItems(items),
+    warnings: [...snapshot.warnings],
+  }
+}
+
+export async function getCrmPriorityQueue(
+  options: CrmPriorityQueueOptions = {}
+): Promise<CrmPriorityQueue> {
+  const pool = await getCrmPriorityCandidatePool({ now: options.now, force: options.force })
+  const now = pool.now
+  const { leadsOk, neoAccountsOk, tasksOk, demoIndex } = pool
+  const warnings = pool.warnings
+
+  const sorted = pool.items
   const baseFiltered = applyBaseFilters(sorted, options)
   const filtered = applyFilters(sorted, options)
   const ownerScoped = applyOwnerFilter(sorted, options)

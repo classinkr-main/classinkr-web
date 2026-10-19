@@ -95,7 +95,7 @@ function CrmOrderBacklogSection({ canWrite, onRegistered }: CrmOrderBacklogSecti
         ...current,
         [entry.id]: {
           ok: false,
-          message: `원장에 같은 고객사·품목 출고 ${formatNumber(entry.ledgerOverlap!.quantity)}대가 이미 있습니다. 시트가 실어 온 물량이면 등록하지 마세요 — 다시 누르면 그래도 등록합니다.`,
+          message: `원본에 같은 고객사·품목 출고 ${formatNumber(entry.ledgerOverlap!.quantity)}대가 이미 있습니다. 시트가 실어 온 물량이면 등록하지 마세요 — 다시 누르면 그래도 등록합니다.`,
         },
       }))
       return
@@ -170,7 +170,7 @@ function CrmOrderBacklogSection({ canWrite, onRegistered }: CrmOrderBacklogSecti
             ) : null}
           </span>
           <span className="mt-0.5 block text-[11.5px] text-[#615D59]">
-            CRM·견적에 있는데 원장에 없는 출고를 그 자리에서 배송 예정으로 등록합니다.
+            CRM·견적에 있는데 원본에 없는 출고를 그 자리에서 배송 예정으로 등록합니다.
           </span>
         </span>
         <ChevronDown className={`h-4 w-4 shrink-0 text-[#A39E98] transition ${expanded ? "rotate-180" : ""}`} />
@@ -180,7 +180,7 @@ function CrmOrderBacklogSection({ canWrite, onRegistered }: CrmOrderBacklogSecti
         <div className="border-t border-[rgba(0,0,0,0.06)] px-4 py-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-[11.5px] font-semibold text-[#615D59]">
-              참조번호가 원장에 이미 있으면 목록에서 빠집니다. 시트 이관 행은 딜 참조가 없어 대사되지 않으므로, 고객사·품목이 겹치면 배지로 알립니다.
+              참조번호가 원본에 이미 있으면 목록에서 빠집니다. 시트 이관 행은 딜 참조가 없어 대사되지 않으므로, 고객사·품목이 겹치면 배지로 알립니다.
             </p>
             <button type="button" onClick={() => void load()} disabled={loading} className={GHOST_BUTTON_CLASS}>
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
@@ -213,7 +213,7 @@ function CrmOrderBacklogSection({ canWrite, onRegistered }: CrmOrderBacklogSecti
             <p className="mt-3 text-[12px] font-semibold text-[#A39E98]">불러오는 중…</p>
           ) : null}
           {loaded && entries.length === 0 && !listError ? (
-            <p className="mt-3 text-[12px] font-semibold text-[#A39E98]">원장에 없는 CRM 오더가 없습니다.</p>
+            <p className="mt-3 text-[12px] font-semibold text-[#A39E98]">원본에 없는 CRM 오더가 없습니다.</p>
           ) : null}
 
           <ul className="mt-2 divide-y divide-[rgba(0,0,0,0.06)]">
@@ -230,7 +230,7 @@ function CrmOrderBacklogSection({ canWrite, onRegistered }: CrmOrderBacklogSecti
                       <span className="tabular-nums text-[#615D59]">{formatNumber(entry.quantity ?? 0)}대</span>
                       {entry.ledgerOverlap ? (
                         <span className="rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[10.5px] font-bold text-[#7A520F]">
-                          원장에 겹침 의심 {formatNumber(entry.ledgerOverlap.quantity)}대
+                          원본에 겹침 의심 {formatNumber(entry.ledgerOverlap.quantity)}대
                         </span>
                       ) : null}
                     </p>

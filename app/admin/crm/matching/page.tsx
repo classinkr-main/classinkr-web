@@ -1,5 +1,7 @@
+import { Suspense } from "react"
 import Link from "next/link"
 
+import SyncHealthBannerServer from "@/components/admin/SyncHealthBannerServer"
 import CrmDataCheckPanelLoader from "@/components/admin/crm/CrmDataCheckPanelLoader"
 import CrmMatchingWorkspace from "@/components/admin/crm/matching/CrmMatchingWorkspace"
 
@@ -30,6 +32,11 @@ export default async function AdminCrmMatchingPage({
         </Link>
         에서 합니다.
       </p>
+      {/* 매칭 후보는 REV 시트·NEO 동기화 결과로 만들어진다 — 둘 중 하나가 멈추면 후보도 그 시점에 멈춘다.
+          별도 Suspense라 인박스 스트리밍을 기다리게 하지 않고, 정상이면 아무것도 그리지 않는다. */}
+      <Suspense fallback={null}>
+        <SyncHealthBannerServer sources={["neo", "sheets"]} className="mb-4" />
+      </Suspense>
       <CrmMatchingWorkspace initialNameFilter={initialNameFilter} />
       {/* 링크 확정 인박스가 이 화면의 주 작업이다. 정합성 진단은 하단 참조 표면으로 내려
           첫 화면과 서버 스트리밍을 막지 않는다. */}
