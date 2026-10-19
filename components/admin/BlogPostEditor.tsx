@@ -14,8 +14,10 @@ import {
 } from "react"
 import { useRouter } from "next/navigation"
 import {
+  AlertCircle,
   ArrowLeft,
   Check,
+  ChevronDown,
   Copy,
   Eye,
   Highlighter,
@@ -30,7 +32,7 @@ import {
   Quote,
   Redo2,
   Save,
-  Search,
+  SlidersHorizontal,
   Sparkles,
   Type,
   Undo2,
@@ -40,9 +42,6 @@ import {
   X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import { SafeBlogImage } from "@/components/blog/SafeBlogImage"
 import { type RichMarkdownEditorHandle } from "@/components/admin/RichMarkdownEditor"
@@ -246,6 +245,8 @@ type AiMediaReplacement = {
 }
 
 const HISTORY_LIMIT = 50
+// 편집 내용은 700ms 디바운스로 localStorage(draftStorageKey)에 계속 남는다 — 서버 저장 실패를 알릴 때 함께 안내한다.
+const LOCAL_DRAFT_NOTICE = "작성 중인 내용은 이 브라우저에 임시 보관돼 있습니다."
 const MAX_IMAGE_UPLOAD_BYTES = 5 * 1024 * 1024
 const SOFT_INPUT_CLASS =
   "shadow-[0_1px_2px_rgba(17,17,16,0.04)] transition-all duration-150 hover:border-[#D8D8D2] hover:shadow-[0_3px_10px_rgba(17,17,16,0.05)] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/10 focus:shadow-[0_0_0_3px_rgba(8,71,52,0.05)]"
@@ -253,11 +254,6 @@ const SOFT_TEXTAREA_CLASS =
   `w-full resize-none rounded-xl border border-[#e8e8e4] bg-white px-4 py-3 text-sm outline-none placeholder:text-[#1a1a1a]/25 ${SOFT_INPUT_CLASS}`
 const SOFT_SELECT_CLASS =
   `w-full rounded-xl border border-[#e8e8e4] bg-white px-3 text-sm outline-none ${SOFT_INPUT_CLASS}`
-const BLOG_COVER_PREVIEWS = [
-  { label: "상세 히어로", ratio: "16:10", className: "aspect-[16/10]" },
-  { label: "추천 카드", ratio: "4:3", className: "aspect-[4/3]" },
-  { label: "목록 썸네일", ratio: "16:11", className: "aspect-[16/11]" },
-] as const
 type LeadMagnetOption = (typeof leadMagnetOptions)[number]
 
 function escapeRegExp(value: string) {
@@ -315,6 +311,23 @@ function cloneSnapshot(snapshot: EditorSnapshot): EditorSnapshot {
   }
 }
 
+// 새 글의 기본 본문. 본문이 이 값 그대로일 때만 "어떻게 시작할까요?" 안내(템플릿·AI 초안)를 띄운다.
+const EMPTY_DRAFT_MARKDOWN = [
+  "## 문제",
+  "",
+  "독자가 현재 겪고 있는 문제를 한 문단으로 정리해보세요.",
+  "",
+  "## 핵심 포인트",
+  "",
+  "- 바로 적용할 수 있는 포인트 1",
+  "- 바로 적용할 수 있는 포인트 2",
+  "- 바로 적용할 수 있는 포인트 3",
+  "",
+  "## 다음 액션",
+  "",
+  "이 글을 읽고 나서 어떤 행동을 해야 하는지 적어보세요.",
+].join("\n")
+
 function createEmptyDraft(): BlogPostInput {
   const today = new Date()
     .toLocaleDateString("ko-KR", {
@@ -325,21 +338,7 @@ function createEmptyDraft(): BlogPostInput {
     .replace(/\./g, ". ")
     .trim()
 
-  const contentMarkdown = [
-    "## 문제",
-    "",
-    "독자가 현재 겪고 있는 문제를 한 문단으로 정리해보세요.",
-    "",
-    "## 핵심 포인트",
-    "",
-    "- 바로 적용할 수 있는 포인트 1",
-    "- 바로 적용할 수 있는 포인트 2",
-    "- 바로 적용할 수 있는 포인트 3",
-    "",
-    "## 다음 액션",
-    "",
-    "이 글을 읽고 나서 어떤 행동을 해야 하는지 적어보세요.",
-  ].join("\n")
+  const contentMarkdown = EMPTY_DRAFT_MARKDOWN
 
   return {
     slug: "",
@@ -434,22 +433,62 @@ function ToolbarButton({
   )
 }
 
-function FieldBadge({ required }: { required?: boolean }) {
-  return (
-    <span
-      className={`ml-2 inline-flex h-5 items-center rounded-full px-2 text-[10px] font-semibold ${
-        required
-          ? "border border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]"
-          : "border border-[#e8e8e4] bg-[#F6F5F4] text-[#615D59]"
-      }`}
-    >
-      {required ? "필수" : "선택"}
-    </span>
-  )
-}
+// 글 머리 속성 표(문서형 편집) — 평소엔 텍스트처럼 보이고 hover·focus 때만 입력칸 테두리가 드러난다.
+// PropertyRow는 컨테이너 폭으로 배치를 바꾼다(@container): 본문 칼럼에선 라벨 | 값 두 칸, 좁은 상세 설정 패널에선 위아래.
+const PROP_INPUT_CLASS =
+  "w-full min-w-0 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-[14px] text-[#111110] outline-none transition-colors placeholder:text-[#A39E98] hover:bg-[#F6F5F4] focus:border-[#084734] focus:bg-white"
+const SETTINGS_TABS = [
+  { id: "classify", label: "분류" },
+  { id: "seo", label: "검색 노출" },
+  { id: "convert", label: "전환" },
+  { id: "display", label: "표시 · 발행" },
+] as const
+type SettingsTab = (typeof SETTINGS_TABS)[number]["id"]
 
-function FieldHint({ children }: { children: ReactNode }) {
-  return <p className="text-[11px] leading-relaxed text-[#1a1a1a]/40">{children}</p>
+const PROP_INPUT_INVALID_CLASS = "border-[#F2B8B8] bg-[#FCE9E9] text-[#8F2C2C] hover:bg-[#FCE9E9]"
+
+function PropertyRow({
+  label,
+  htmlFor,
+  required,
+  error,
+  hint,
+  children,
+}: {
+  label: string
+  htmlFor?: string
+  required?: boolean
+  error?: string
+  hint?: ReactNode
+  children: ReactNode
+}) {
+  const labelText = (
+    <>
+      {label}
+      {required && <span className="ml-1 text-[11px]">· 필수</span>}
+    </>
+  )
+  return (
+    <div className="grid gap-0.5 py-1 @lg:grid-cols-[120px_minmax(0,1fr)] @lg:items-start @lg:gap-3">
+      {htmlFor ? (
+        <label htmlFor={htmlFor} className="px-2 text-[13px] text-[#615D59] @lg:px-0 @lg:pt-2">
+          {labelText}
+        </label>
+      ) : (
+        <span className="px-2 text-[13px] text-[#615D59] @lg:px-0 @lg:pt-2">{labelText}</span>
+      )}
+      <div className="min-w-0">
+        {children}
+        {error ? (
+          <p id={htmlFor ? `${htmlFor}-error` : undefined} className="px-2 pt-1 text-[12px] text-[#8F2C2C]">
+            {error}
+          </p>
+        ) : hint ? (
+          <p className="px-2 pt-1 text-[11px] leading-relaxed text-[#615D59]">{hint}</p>
+        ) : null}
+      </div>
+    </div>
+  )
 }
 
 const RichMarkdownEditor = dynamic(() => import("@/components/admin/RichMarkdownEditor"), {
@@ -483,8 +522,19 @@ export default function BlogPostEditor({
   const [confirmDeleteTemplateId, setConfirmDeleteTemplateId] = useState<string | null>(null)
   const [slugEdited, setSlugEdited] = useState(Boolean(initialPost?.slug))
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
-  const [showInlineDraft, setShowInlineDraft] = useState(false)
-  const [inlineDraftTopic, setInlineDraftTopic] = useState("")
+  const [showPublishPanel, setShowPublishPanel] = useState(false)
+  const [publishTiming, setPublishTiming] = useState<"now" | "schedule">(() =>
+    initialPost?.publishedAt && new Date(initialPost.publishedAt).getTime() > Date.now() ? "schedule" : "now"
+  )
+  const [showSettings, setShowSettings] = useState(false)
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("classify")
+  const settingsTriggerRef = useRef<HTMLButtonElement>(null)
+  const [showValidation, setShowValidation] = useState(false)
+  const [showAiTools, setShowAiTools] = useState(false)
+  const [startPanelDismissed, setStartPanelDismissed] = useState(false)
+  const publishPanelRef = useRef<HTMLDivElement>(null)
+  // 상세 설정 패널 안의 칸으로 "고치기"·"보기"를 누르면 패널·탭을 연 뒤 다음 렌더에서 포커스한다.
+  const pendingFocusIdRef = useRef<string | null>(null)
   const [leadOptions, setLeadOptions] = useState<readonly LeadMagnetOption[]>(leadMagnetOptions)
   const formRef = useRef(form)
   const tagsInputRef = useRef(tagsInput)
@@ -551,19 +601,31 @@ export default function BlogPostEditor({
   const authorInitial = form.author.trim().slice(0, 1) || "C"
   const tagKeywords = useMemo(() => parseTags(tagsInput), [tagsInput])
   const requiredItems = [
-    { label: "제목", done: Boolean(form.title.trim()) },
-    { label: "요약", done: Boolean(form.excerpt.trim()) },
-    { label: "카테고리", done: Boolean(form.category.trim()) },
+    { label: "제목", fieldId: "title", done: Boolean(form.title.trim()) },
+    { label: "요약", fieldId: "excerpt", done: Boolean(form.excerpt.trim()) },
+    { label: "카테고리", fieldId: "category", done: Boolean(form.category.trim()) },
   ]
-  const requiredDone = requiredItems.filter((item) => item.done).length
   const contentCharacterCount = form.contentMarkdown.trim().length
   const blogStatusLabel = BLOG_STATUS_OPTIONS.find((option) => option.value === form.status)?.label ?? form.status
   const blogStatusTone =
     form.status === "published"
-      ? "border-emerald-100 bg-emerald-50 text-[#084734]"
+      ? "bg-[#ECFDF5] text-[#084734]"
       : form.status === "draft"
-      ? "border-amber-100 bg-amber-50 text-amber-700"
-      : "border-[#e8e8e4] bg-white text-[#615D59]"
+      ? "bg-[#FBF1E0] text-[#7A520F]"
+      : "bg-[#F6F5F4] text-[#615D59]"
+  // 저장 시 서버가 같은 slug를 거절한다(lib/repositories/blog.ts assertBlogSlugAvailable).
+  // 발행 창에서 미리 막고 대체 주소를 제안하기 위해 화면에 있는 글 목록으로 먼저 확인한다.
+  const effectiveSlug = form.slug.trim() || form.title.trim() ? slugify(form.slug.trim() || form.title.trim()) : ""
+  const slugConflictPost = effectiveSlug
+    ? filteredPosts.find((post) => post.slug === effectiveSlug)
+    : undefined
+  const suggestedSlug = useMemo(() => {
+    if (!slugConflictPost) return ""
+    const taken = new Set(filteredPosts.map((post) => post.slug))
+    let suffix = 2
+    while (taken.has(`${effectiveSlug}-${suffix}`)) suffix += 1
+    return `${effectiveSlug}-${suffix}`
+  }, [effectiveSlug, filteredPosts, slugConflictPost])
   const headings = useMemo(
     () => extractMarkdownHeadings(form.contentMarkdown),
     [form.contentMarkdown]
@@ -915,6 +977,7 @@ export default function BlogPostEditor({
     editorRef.current?.flush()
     const payload = buildPayload(nextStatus, options)
     if (!payload.title || !payload.excerpt || !payload.category) {
+      setShowValidation(true)
       setNotice("제목, 요약, 카테고리는 꼭 입력해주세요.")
       return
     }
@@ -932,7 +995,7 @@ export default function BlogPostEditor({
       if (response.status === 401) { startTransition(() => router.replace("/admin/login")); return }
       if (!response.ok) {
         const data = (await response.json().catch(() => null)) as { error?: string } | null
-        setNotice(data?.error || "저장 중 문제가 발생했습니다.")
+        setNotice(`${data?.error || "저장 중 문제가 발생했습니다."} ${LOCAL_DRAFT_NOTICE}`)
         return
       }
       const data = (await response.json()) as { post: BlogPost }
@@ -955,7 +1018,7 @@ export default function BlogPostEditor({
         router.refresh()
       })
     } catch {
-      setNotice("저장 중 문제가 발생했습니다.")
+      setNotice(`저장 중 문제가 발생했습니다. 네트워크 연결을 확인해주세요. ${LOCAL_DRAFT_NOTICE}`)
     } finally {
       setIsSubmitting(false)
     }
@@ -1039,6 +1102,190 @@ export default function BlogPostEditor({
     "reels": "릴스 스크립트",
     "optimize": "본문 다듬기",
     "draft": "초안 생성",
+  }
+  const isAiBusy = aiState?.status === "loading" || aiState?.status === "streaming"
+
+  const applyTemplate = (template: BlogTemplate) => {
+    updateEditor((snapshot) => ({
+      ...snapshot,
+      form: {
+        ...snapshot.form,
+        contentMarkdown: template.data.contentMarkdown,
+        benefitItems: template.data.benefitItems,
+        targetReader: template.data.targetReader,
+        category: template.data.category,
+        cta: { ...template.data.cta },
+      },
+    }))
+    setNotice("템플릿을 불러왔습니다.")
+  }
+
+  const removeCoverImage = () => {
+    updateEditor((snapshot) => ({
+      ...snapshot,
+      form: { ...snapshot.form, imageUrl: "", heroImageUrl: "" },
+    }))
+  }
+
+  const closeSettings = () => {
+    setShowSettings(false)
+    settingsTriggerRef.current?.focus()
+  }
+
+  const focusField = (fieldId: string, options: { settingsTab?: SettingsTab } = {}) => {
+    setShowPublishPanel(false)
+    setShowValidation(true)
+    const target = document.getElementById(fieldId)
+    if (target) {
+      target.scrollIntoView({ block: "center", behavior: "smooth" })
+      target.focus({ preventScroll: true })
+      return
+    }
+    if (options.settingsTab) {
+      pendingFocusIdRef.current = fieldId
+      setSettingsTab(options.settingsTab)
+      setShowSettings(true)
+    }
+  }
+
+  // 패널을 열면 선택된 탭으로 포커스를 옮긴다. 특정 칸으로 가는 중(pendingFocusIdRef)이면 그 칸이 우선이라
+  // 아래 포커스 effect보다 먼저 선언한다.
+  useEffect(() => {
+    if (!showSettings || pendingFocusIdRef.current) return
+    document.getElementById(`settings-tab-${settingsTab}`)?.focus()
+    // 탭을 바꿀 때마다 포커스를 옮기지 않도록 열릴 때만 실행한다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showSettings])
+
+  useEffect(() => {
+    if (!showSettings) return
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || showPublishPanel) return
+      setShowSettings(false)
+      settingsTriggerRef.current?.focus()
+    }
+    document.addEventListener("keydown", handleEscape)
+    return () => document.removeEventListener("keydown", handleEscape)
+  }, [showSettings, showPublishPanel])
+
+  useEffect(() => {
+    const fieldId = pendingFocusIdRef.current
+    if (!fieldId) return
+    const target = document.getElementById(fieldId)
+    if (!target) return
+    pendingFocusIdRef.current = null
+    target.scrollIntoView({ block: "center", behavior: "smooth" })
+    target.focus({ preventScroll: true })
+  })
+
+  useEffect(() => {
+    if (!showPublishPanel) return
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!publishPanelRef.current?.contains(event.target as Node)) setShowPublishPanel(false)
+    }
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowPublishPanel(false)
+    }
+    document.addEventListener("mousedown", handlePointerDown)
+    document.addEventListener("keydown", handleEscape)
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown)
+      document.removeEventListener("keydown", handleEscape)
+    }
+  }, [showPublishPanel])
+
+  type PublishCheck = {
+    id: string
+    label: string
+    detail?: string
+    state: "ok" | "blocker" | "advice"
+    action?: { label: string; fieldId: string; settingsTab?: SettingsTab }
+  }
+  const seoPassedCount = seoAnalysis.checks.filter((check) => check.ok).length
+  const publishChecks: PublishCheck[] = [
+    ...requiredItems.map((item): PublishCheck => ({
+      id: item.fieldId,
+      label: item.label,
+      detail: item.done ? undefined : "필수",
+      state: item.done ? "ok" : "blocker",
+      action: item.done ? undefined : { label: "고치기", fieldId: item.fieldId },
+    })),
+    {
+      id: "slug",
+      label: "URL",
+      detail: slugConflictPost ? "다른 글과 겹침" : effectiveSlug ? `/blog/${effectiveSlug}` : undefined,
+      state: slugConflictPost ? "blocker" : "ok",
+      action: slugConflictPost ? { label: "고치기", fieldId: "slug" } : undefined,
+    },
+    {
+      id: "cover",
+      label: "대표 이미지",
+      detail: coverPreviewUrl ? undefined : "권장",
+      state: coverPreviewUrl ? "ok" : "advice",
+      action: coverPreviewUrl ? undefined : { label: "추가", fieldId: "blog-cover-upload" },
+    },
+    {
+      id: "seo",
+      label: `SEO ${seoAnalysis.score}`,
+      detail: `${seoPassedCount}/${seoAnalysis.checks.length} 통과`,
+      state: seoAnalysis.score >= 80 ? "ok" : "advice",
+      action:
+        seoAnalysis.score >= 80
+          ? undefined
+          : { label: "보기", fieldId: "seoTitle", settingsTab: "seo" },
+    },
+  ]
+  const publishBlockerCount = publishChecks.filter((check) => check.state === "blocker").length
+  const scheduledLabel = form.publishedAt
+    ? new Date(form.publishedAt).toLocaleString("ko-KR", {
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : ""
+  const publishButtonLabel =
+    publishBlockerCount > 0
+      ? "필수 항목을 채우면 발행할 수 있어요"
+      : publishTiming === "schedule"
+      ? scheduledLabel
+        ? `${scheduledLabel}에 발행 예약`
+        : "공개 시각을 정해주세요"
+      : "지금 발행"
+
+  const handlePublish = () => {
+    if (publishBlockerCount > 0) {
+      setShowValidation(true)
+      return
+    }
+    if (publishTiming === "schedule") {
+      const scheduledAt = formRef.current.publishedAt
+      if (!scheduledAt || new Date(scheduledAt).getTime() <= Date.now()) {
+        setNotice("예약 시각을 다시 입력해주세요. 지금 이후여야 합니다.")
+        return
+      }
+      setShowPublishPanel(false)
+      void handleSubmit("published")
+      return
+    }
+    setShowPublishPanel(false)
+    void handleSubmit("published", { publishNow: true })
+  }
+
+  const draftStatusText =
+    draftState === "dirty"
+      ? "수정됨"
+      : draftState === "saving"
+      ? "저장 중…"
+      : lastSavedAt
+      ? `${lastSavedAt.getHours().toString().padStart(2, "0")}:${lastSavedAt.getMinutes().toString().padStart(2, "0")} 임시 저장`
+      : "임시 저장됨"
+  const showStartPanel =
+    mode === "create" && !startPanelDismissed && form.contentMarkdown === EMPTY_DRAFT_MARKDOWN
+  const invalid = {
+    title: showValidation && !form.title.trim(),
+    excerpt: showValidation && !form.excerpt.trim(),
+    category: showValidation && !form.category.trim(),
   }
 
   return (
@@ -1615,49 +1862,48 @@ export default function BlogPostEditor({
         </div>
       )}
 
-      {/* ── Sticky header ── */}
-      <header ref={headerRef} className="sticky top-0 z-20 border-b border-[#e8e8e4] bg-[#FAFAF8]/95 backdrop-blur">
-        <div className="flex flex-col gap-3 px-6 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <Button variant="ghost" size="sm" asChild className="shrink-0">
-              <Link href="/admin/blog">
-                <ArrowLeft className="mr-1.5 h-4 w-4" />
-                목록
-              </Link>
-            </Button>
-            <div className="min-w-0">
-              <p className="text-[10px] font-medium uppercase tracking-[0.24em] text-[#1a1a1a]/30">
-                Blog Editor
-              </p>
-              <h1 className="truncate text-base font-semibold tracking-[-0.02em] text-[#111110]">
-                {mode === "create" ? "새 글 작성" : form.title || "글 수정"}
-              </h1>
-            </div>
-            <div className="hidden items-center gap-2 sm:flex">
-              <span className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
-                draftState === "dirty" ? "border-amber-100 bg-amber-50 text-amber-600" :
-                draftState === "saving" ? "border-[#e8e8e4] bg-white text-[#1a1a1a]/40" :
-                "border-emerald-100 bg-emerald-50 text-emerald-600"
-              }`}>
-                {draftState === "dirty" ? "수정됨" :
-                 draftState === "saving" ? "저장 중…" :
-                 lastSavedAt
-                   ? `${lastSavedAt.getHours().toString().padStart(2, "0")}:${lastSavedAt.getMinutes().toString().padStart(2, "0")} 저장됨`
-                   : "자동저장됨"}
-              </span>
-              <span className="rounded-full border border-[#e8e8e4] bg-white px-2.5 py-1 text-[11px] text-[#1a1a1a]/40">
-                {computedReadTime}
-              </span>
-            </div>
+      {/* ── Sticky header ──
+          backdrop-blur를 쓰지 않는다: backdrop-filter가 fixed 자식의 기준 박스를 헤더로 바꿔
+          모바일 발행 바텀시트(fixed bottom-0)가 헤더 안에 갇힌다.
+          lg 미만에서는 문서가 스크롤되고 어드민 셸의 고정 상단바(h-16, z-40)가 위에 있으므로 top-16에 붙인다.
+          발행 창이 열리면 셸의 상단바·하단 탭(z-40)보다 위로 올린다 — 바텀시트가 헤더의 쌓임 맥락 안에 있다. */}
+      <header
+        ref={headerRef}
+        className={`sticky top-16 border-b border-[#e8e8e4] bg-[#FAFAF8] lg:top-0 ${showPublishPanel ? "z-[70]" : "z-30"}`}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2.5 sm:px-6">
+          <div className="flex w-full min-w-0 items-center gap-2 text-[13px] text-[#615D59] sm:w-auto sm:flex-1">
+            <Link
+              href="/admin/blog"
+              className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-md px-2 transition-colors hover:bg-[#F6F5F4] hover:text-[#111110]"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              블로그
+            </Link>
+            <span aria-hidden="true">/</span>
+            <h1 className="min-w-0 truncate text-[14px] font-semibold text-[#111110]">
+              {form.title.trim() || (mode === "create" ? "새 글" : "제목 없음")}
+            </h1>
+            <span className={`hidden shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold sm:inline-flex ${blogStatusTone}`}>
+              {blogStatusLabel}
+            </span>
+            <span className="hidden shrink-0 items-center gap-1.5 text-[12px] sm:inline-flex" role="status">
+              <span
+                aria-hidden="true"
+                className={`h-1.5 w-1.5 rounded-full ${draftState === "saved" ? "bg-[#084734]" : "bg-[#A8741A]"}`}
+              />
+              {draftStatusText}
+            </span>
           </div>
 
-          <div className="flex min-w-0 shrink-0 items-center gap-1 overflow-x-auto pb-1 sm:overflow-visible sm:pb-0">
+          <div className="ml-auto flex shrink-0 items-center gap-1">
             <Button
               variant="ghost" size="sm"
               onClick={handleUndo}
               disabled={isSubmitting || undoStackRef.current.length === 0}
               title="되돌리기 (Ctrl/Cmd + Z)"
-              className="h-8 w-8 p-0"
+              aria-label="되돌리기"
+              className="hidden h-9 w-9 p-0 sm:inline-flex"
             >
               <Undo2 className="h-4 w-4" />
             </Button>
@@ -1666,32 +1912,187 @@ export default function BlogPostEditor({
               onClick={handleRedo}
               disabled={isSubmitting || redoStackRef.current.length === 0}
               title="다시 실행 (Ctrl/Cmd + Shift + Z)"
-              className="h-8 w-8 p-0"
+              aria-label="다시 실행"
+              className="hidden h-9 w-9 p-0 sm:inline-flex"
             >
               <Redo2 className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => setShowTemplateModal(true)} title="템플릿" className="relative h-8 w-8 p-0">
+            <Button
+              variant="ghost" size="sm"
+              onClick={() => { setTemplateTab("load"); setShowTemplateModal(true) }}
+              title="템플릿"
+              aria-label="템플릿"
+              className="relative hidden h-9 w-9 p-0 sm:inline-flex"
+            >
               <LayoutTemplate className="h-3.5 w-3.5" />
               {templates.length > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#084734] text-[9px] font-bold text-white leading-none">
+                <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#084734] text-[9px] font-bold leading-none text-white">
                   {templates.length}
                 </span>
               )}
             </Button>
-            <div className="mx-1.5 h-4 w-px bg-[#e8e8e4]" />
-            <Button variant="ghost" size="sm" onClick={() => setShowPreview(true)}>
+            <span className="mx-1 hidden h-4 w-px bg-[#e8e8e4] sm:block" aria-hidden="true" />
+            <Button variant="ghost" size="sm" onClick={() => setShowPreview(true)} className="h-9">
               <Eye className="mr-1.5 h-3.5 w-3.5" />
               미리보기
             </Button>
-            <Button variant="outline" size="sm" onClick={() => handleSubmit()} disabled={isSubmitting} title="저장 (Ctrl/Cmd + S)">
+            <Button variant="outline" size="sm" onClick={() => handleSubmit()} disabled={isSubmitting} title="저장 (Ctrl/Cmd + S)" className="h-9">
               {isSubmitting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
               저장
             </Button>
-            <Button size="sm" onClick={() => handleSubmit("published", { publishNow: true })} disabled={isSubmitting}
-              className="bg-[#084734] hover:bg-[#084734]/90 text-white active:scale-[0.97] transition-all duration-75">
-              {isSubmitting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
-              발행
-            </Button>
+
+            <div ref={publishPanelRef} className="relative">
+              <Button
+                size="sm"
+                onClick={() => setShowPublishPanel((open) => !open)}
+                disabled={isSubmitting}
+                aria-haspopup="dialog"
+                aria-expanded={showPublishPanel}
+                aria-controls="blog-publish-panel"
+                className="h-9 bg-[#084734] text-white transition-colors hover:bg-[#065c41]"
+              >
+                {isSubmitting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+                발행
+                <ChevronDown className="ml-1 h-3.5 w-3.5" />
+              </Button>
+
+              {showPublishPanel && (
+                <>
+                  {/* 모바일에서는 바텀시트 + 배경, sm 이상에서는 버튼 아래 팝오버. */}
+                  <button
+                    type="button"
+                    aria-label="발행 창 닫기"
+                    onClick={() => setShowPublishPanel(false)}
+                    className="fixed inset-0 z-40 bg-[#111110]/35 sm:hidden"
+                  />
+                  <div
+                    id="blog-publish-panel"
+                    role="dialog"
+                    aria-label="발행"
+                    className="fixed inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-2xl border border-[#e8e8e4] bg-white p-5 pb-[max(env(safe-area-inset-bottom),1.25rem)] sm:pb-5 shadow-[0_-8px_24px_rgba(17,17,16,0.12)] sm:absolute sm:inset-x-auto sm:bottom-auto sm:right-0 sm:top-[calc(100%+8px)] sm:w-[380px] sm:rounded-xl sm:shadow-[0_12px_32px_rgba(17,17,16,0.12)]"
+                  >
+                    <div aria-hidden="true" className="mx-auto mb-3 h-1 w-9 rounded-full bg-[#D5D2CB] sm:hidden" />
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-[15px] font-semibold text-[#111110]">
+                        {publishBlockerCount > 0 ? "발행 전 확인" : "발행 준비"}
+                      </p>
+                      <span
+                        className={`rounded-full px-2.5 py-0.5 text-[12px] font-semibold ${
+                          publishBlockerCount > 0 ? "bg-[#FCE9E9] text-[#8F2C2C]" : "bg-[#ECFDF5] text-[#084734]"
+                        }`}
+                      >
+                        {publishBlockerCount > 0 ? `${publishBlockerCount}개 남음` : "모두 준비됨"}
+                      </span>
+                    </div>
+
+                    <ul className="mt-3">
+                      {publishChecks.map((check) => (
+                        <li key={check.id} className="flex min-h-11 items-center gap-2.5 border-t border-[#F0F0EC] text-[13px]">
+                          {check.state === "ok" ? (
+                            <Check className="h-4 w-4 shrink-0 text-[#084734]" aria-label="완료" />
+                          ) : check.state === "blocker" ? (
+                            <X className="h-4 w-4 shrink-0 text-[#B43E3E]" aria-label="필요" />
+                          ) : (
+                            <AlertCircle className="h-4 w-4 shrink-0 text-[#A8741A]" aria-label="권장" />
+                          )}
+                          <span className="min-w-0 flex-1 truncate text-[#111110]">
+                            {check.label}
+                            {check.detail && (
+                              <span
+                                className={`ml-1.5 text-[12px] ${
+                                  check.state === "blocker" ? "text-[#8F2C2C]" : "text-[#615D59]"
+                                }`}
+                              >
+                                {check.detail}
+                              </span>
+                            )}
+                          </span>
+                          {check.action && (
+                            <button
+                              type="button"
+                              onClick={() => focusField(check.action!.fieldId, { settingsTab: check.action!.settingsTab })}
+                              className={`inline-flex min-h-8 shrink-0 items-center rounded-md border bg-white px-2.5 text-[12px] font-semibold transition-colors ${
+                                check.state === "blocker"
+                                  ? "border-[#F2B8B8] text-[#8F2C2C] hover:bg-[#FCE9E9]"
+                                  : "border-[#ECD29C] text-[#7A520F] hover:bg-[#FBF1E0]"
+                              }`}
+                            >
+                              {check.action.label}
+                            </button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+
+                    <fieldset className="mt-4">
+                      <legend className="mb-2 text-[12px] font-medium text-[#615D59]">공개 시점</legend>
+                      <div className="grid grid-cols-2 gap-2">
+                        {(["now", "schedule"] as const).map((value) => (
+                          <label
+                            key={value}
+                            className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-3 text-[13px] ${
+                              publishTiming === value
+                                ? "border-2 border-[#084734] font-semibold text-[#111110]"
+                                : "border border-[#e8e8e4] text-[#31302E]"
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="blog-publish-timing"
+                              value={value}
+                              checked={publishTiming === value}
+                              onChange={() => setPublishTiming(value)}
+                              className="accent-[#084734]"
+                            />
+                            {value === "now" ? "지금" : "예약"}
+                          </label>
+                        ))}
+                      </div>
+                      {publishTiming === "schedule" ? (
+                        <div className="mt-3">
+                          <label htmlFor="publish-schedule-at" className="mb-1 block text-[12px] text-[#615D59]">
+                            공개 시각
+                          </label>
+                          <input
+                            id="publish-schedule-at"
+                            type="datetime-local"
+                            value={isoToLocalInput(form.publishedAt)}
+                            onChange={(event) =>
+                              updateForm(
+                                "publishedAt",
+                                event.target.value ? new Date(event.target.value).toISOString() : ""
+                              )
+                            }
+                            className={`h-10 ${SOFT_SELECT_CLASS}`}
+                          />
+                          <p className="mt-1.5 text-[11px] leading-relaxed text-[#615D59]">
+                            발행 상태로 저장되지만 이 시각 전까지 공개 화면에 보이지 않습니다.
+                          </p>
+                        </div>
+                      ) : form.status === "published" ? (
+                        <p className="mt-2 text-[11px] leading-relaxed text-[#615D59]">
+                          이미 공개된 글입니다. 지금 발행하면 공개일이 현재 시각으로 바뀝니다. 날짜를 유지하려면 ‘저장’을 쓰세요.
+                        </p>
+                      ) : null}
+                    </fieldset>
+
+                    <button
+                      type="button"
+                      onClick={handlePublish}
+                      disabled={
+                        isSubmitting ||
+                        publishBlockerCount > 0 ||
+                        (publishTiming === "schedule" && !form.publishedAt)
+                      }
+                      className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-md bg-[#084734] px-4 text-[14px] font-semibold text-white transition-colors hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                      {publishButtonLabel}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1700,19 +2101,21 @@ export default function BlogPostEditor({
           return (
             <div
               role="status"
-              className={`flex animate-in items-center justify-between gap-3 border-t px-6 py-2.5 shadow-[0_8px_22px_rgba(17,17,16,0.05)] fade-in-0 slide-in-from-top-1 duration-200 ${
-                isError ? "border-[#F6D5C5] bg-[#FEF3EE]" : "border-emerald-100 bg-emerald-50"
+              className={`flex animate-in items-center justify-between gap-3 border-t px-4 py-2.5 fade-in-0 slide-in-from-top-1 duration-200 sm:px-6 ${
+                isError ? "border-[#F2B8B8] bg-[#FCE9E9]" : "border-[#BDEFD8] bg-[#ECFDF5]"
               }`}
             >
-              <span className={`inline-flex items-center gap-2 text-[13px] ${isError ? "text-[#B85C33]" : "text-emerald-800"}`}>
-                {isError ? <X className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
+              <span className={`inline-flex items-center gap-2 text-[13px] ${isError ? "text-[#8F2C2C]" : "text-[#084734]"}`}>
+                {isError ? <X className="h-3.5 w-3.5 shrink-0" /> : <Check className="h-3.5 w-3.5 shrink-0" />}
                 {notice}
               </span>
               <button
                 type="button"
                 aria-label="알림 닫기"
                 onClick={() => setNotice("")}
-                className={`${isError ? "text-[#B85C33] hover:text-[#9A4A27]" : "text-emerald-500 hover:text-emerald-800"}`}
+                className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${
+                  isError ? "text-[#8F2C2C] hover:bg-[#F2B8B8]/40" : "text-[#084734] hover:bg-[#BDEFD8]/50"
+                }`}
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -1721,159 +2124,222 @@ export default function BlogPostEditor({
         })()}
       </header>
 
-      {/* ── Main layout ── */}
-      <div className="grid gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1fr)_380px]">
-
-        {/* Left: content */}
-        <section className="min-w-0 space-y-5">
-          <div className="rounded-[24px] border border-[#e8e8e4] bg-white p-4 shadow-sm md:p-5">
-            <div className="grid gap-3 md:grid-cols-4">
-              <div className="rounded-xl border border-[#dcebd9] bg-[#ECFDF5] p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#084734]/75">필수 입력</p>
-                <p className="mt-2 text-2xl font-bold tabular-nums text-[#084734]">{requiredDone}/{requiredItems.length}</p>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {requiredItems.map((item) => (
-                    <span
-                      key={item.label}
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                        item.done ? "bg-[#084734] text-white" : "border border-[#F6D5C5] bg-white text-[#B85C33]"
+      {/* ── Document layout: 왼쪽 목차 레일 + 가운데 한 칼럼(대표 이미지 → 제목 → 속성 표 → 본문) ── */}
+      <div className="flex gap-8 px-4 pb-24 pt-8 sm:px-6">
+        <nav aria-label="목차" className="hidden w-[200px] shrink-0 xl:block">
+          <div className="sticky top-[calc(var(--editor-header-h)+32px)] space-y-4">
+            <div>
+              <p className="mb-2 text-[11px] font-semibold tracking-[0.08em] text-[#615D59]">목차</p>
+              {headings.length === 0 ? (
+                <p className="text-[12px] leading-5 text-[#615D59]">
+                  ## 소제목을 추가하면 목차가 생깁니다. 상세 페이지 사이드바에도 같은 목차가 나옵니다.
+                </p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {headings.map((heading) => (
+                    <li
+                      key={heading.id}
+                      className={`text-[12px] leading-5 ${
+                        heading.level === 3 ? "pl-3 text-[#615D59]" : "font-medium text-[#31302E]"
                       }`}
                     >
-                      {item.label}
-                    </span>
+                      {heading.text}
+                    </li>
                   ))}
-                </div>
-              </div>
-              <div
-                className="rounded-xl border p-4"
-                style={{ borderColor: seoAnalysis.scoreBorder, backgroundColor: seoAnalysis.scoreBg }}
-              >
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: seoAnalysis.scoreColor }}>
-                  SEO 점수
-                </p>
-                <p className="mt-2 text-2xl font-bold tabular-nums" style={{ color: seoAnalysis.scoreColor }}>
-                  {seoAnalysis.score}
-                </p>
-                <p className="mt-1 text-[12px]" style={{ color: seoAnalysis.scoreColor }}>
-                  {seoAnalysis.scoreLabel}
-                </p>
-              </div>
-              <div className="rounded-xl border border-[#e8e8e4] bg-[#FAFAF8] p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#615D59]">본문 구조</p>
-                <p className="mt-2 text-2xl font-bold tabular-nums text-[#111110]">{headings.length}개</p>
-                <p className="mt-1 text-[12px] text-[#615D59]">
-                  {computedReadTime} · {contentCharacterCount.toLocaleString("ko-KR")}자
-                </p>
-              </div>
-              <div className={`rounded-xl border p-4 ${blogStatusTone}`}>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] opacity-75">발행 상태</p>
-                <p className="mt-2 text-2xl font-bold">{blogStatusLabel}</p>
-                <button
-                  type="button"
-                  onClick={() => setShowPreview(true)}
-                  className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-lg bg-white px-2.5 text-[12px] font-semibold text-[#111110] shadow-sm transition-colors hover:bg-[#F6F5F4]"
-                >
-                  <Eye className="h-3.5 w-3.5" />
-                  미리보기
-                </button>
-              </div>
+                </ul>
+              )}
+            </div>
+            <div className="border-t border-[#e8e8e4] pt-3 text-[12px] leading-6 text-[#615D59]">
+              <p>{contentCharacterCount.toLocaleString("ko-KR")}자 · {computedReadTime}</p>
+              <p>SEO {seoAnalysis.score} · {seoAnalysis.scoreLabel}</p>
             </div>
           </div>
+        </nav>
 
-          {/* 기본 정보 */}
-          <div className="rounded-[24px] border border-[#e8e8e4] bg-white p-6 shadow-sm">
-            <div className="mb-5 flex flex-col gap-3 border-b border-[#e8e8e4] pb-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold text-[#111110]">기본 정보</p>
-                <p className="mt-0.5 text-[12px] text-[#1a1a1a]/40">
-                  필수 입력을 채우면 저장과 발행 흐름이 안정적으로 진행됩니다.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="rounded-full border border-[#dcebd9] bg-[#ECFDF5] px-3 py-1 text-[12px] font-semibold text-[#084734]">
-                  필수 {requiredDone}/{requiredItems.length}
-                </span>
-                {requiredItems.map((item) => (
-                  <span
-                    key={item.label}
-                    className={`rounded-full px-2.5 py-1 text-[11px] ${
-                      item.done
-                        ? "bg-[#084734] text-white"
-                        : "border border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]"
-                    }`}
-                  >
-                    {item.label}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="title">
-                    제목
-                    <FieldBadge required />
-                  </Label>
-                  <span className={`text-[11px] tabular-nums ${
-                    form.title.length > 60 ? "text-[#B85C33]" :
-                    form.title.length >= 30 ? "text-emerald-600" :
-                    "text-[#1a1a1a]/30"
-                  }`}>
-                    {form.title.length} / 60
-                  </span>
-                </div>
-                <Input
-                  id="title"
-                  value={form.title}
-                  onChange={(event) => {
-                    const nextTitle = event.target.value
-                    updateEditor((snapshot) => ({
-                      ...snapshot,
-                      form: {
-                        ...snapshot.form,
-                        title: nextTitle,
-                        seoTitle: snapshot.form.seoTitle || nextTitle,
-                        slug: snapshot.slugEdited ? snapshot.form.slug : slugify(nextTitle),
-                      },
-                    }))
-                  }}
-                  placeholder="독자가 클릭하고 싶어지는 제목을 적어주세요"
-                  className="h-11 rounded-xl text-[15px]"
-                />
-                <FieldHint>검색과 공유 카드에 노출됩니다. 권장 길이는 30-60자입니다.</FieldHint>
-              </div>
+        <main className="min-w-0 flex-1">
+          <div className="mx-auto max-w-[760px]">
 
-              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_240px]">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="excerpt">
-                      한 줄 요약
-                      <FieldBadge required />
-                    </Label>
-                    <span className={`text-[11px] tabular-nums ${
-                      form.excerpt.length > 160 ? "text-[#B85C33]" :
-                      form.excerpt.length >= 80 ? "text-emerald-600" :
-                      "text-[#1a1a1a]/30"
-                    }`}>
-                      {form.excerpt.length} / 160
-                    </span>
-                  </div>
-                  <textarea
-                    id="excerpt"
-                    rows={3}
-                    value={form.excerpt}
-                    onChange={(event) => updateForm("excerpt", event.target.value)}
-                    placeholder="글을 읽기 전에 핵심 메시지를 한 번에 파악할 수 있도록 적어주세요"
-                    className={`min-h-[88px] ${SOFT_TEXTAREA_CLASS}`}
+            {/* 대표 이미지 */}
+            <section aria-label="대표 이미지" className="mb-7">
+              {coverPreviewUrl ? (
+                <div className="relative aspect-[16/10] overflow-hidden rounded-xl bg-[#f0f0ec]">
+                  <Image
+                    src={coverPreviewUrl}
+                    alt={form.heroImageAlt || "대표 이미지 미리보기"}
+                    fill
+                    className="object-cover"
+                    sizes="(min-width: 768px) 760px, 100vw"
+                    unoptimized
                   />
-                  <FieldHint>목록 카드, 검색 설명, SEO 설명의 기본값으로 재사용됩니다.</FieldHint>
+                  <div className="absolute right-3 top-3 flex items-center gap-1.5">
+                    <label className="relative inline-flex min-h-9 cursor-pointer items-center justify-center gap-1.5 rounded-md bg-white/95 px-3 text-[12px] font-semibold text-[#084734] shadow-sm transition-colors focus-within:ring-2 focus-within:ring-[#084734] hover:bg-white">
+                      {uploadingField ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                      바꾸기
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        className="sr-only"
+                        disabled={uploadingField !== null}
+                        onChange={(event) => {
+                          const file = event.target.files?.[0]
+                          if (file) void handleImageUpload("heroImageUrl", file)
+                          event.target.value = ""
+                        }}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={removeCoverImage}
+                      className="inline-flex min-h-9 items-center justify-center rounded-md bg-white/95 px-3 text-[12px] font-medium text-[#615D59] shadow-sm transition-colors hover:bg-[#FCE9E9] hover:text-[#8F2C2C]"
+                    >
+                      제거
+                    </button>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="slug">
-                    URL 슬러그
-                    <FieldBadge />
-                  </Label>
-                  <Input
+              ) : (
+                <label
+                  htmlFor="blog-cover-upload"
+                  className="flex min-h-16 cursor-pointer flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-xl border border-dashed border-[#D5D2CB] bg-[#FAFAF8] px-4 py-3 text-center text-[13px] text-[#615D59] transition-colors focus-within:border-[#084734] hover:border-[#084734] hover:text-[#084734]"
+                >
+                  {uploadingField ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
+                  <span className="font-medium">대표 이미지 추가</span>
+                  <span className="text-[12px]">상세 16:10 · 추천 4:3 · 목록 16:11로 자동 크롭 · JPG·PNG·WebP·GIF 최대 5MB</span>
+                  <input
+                    id="blog-cover-upload"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="sr-only"
+                    disabled={uploadingField !== null}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0]
+                      if (file) void handleImageUpload("heroImageUrl", file)
+                      event.target.value = ""
+                    }}
+                  />
+                </label>
+              )}
+            </section>
+
+            {/* 제목 */}
+            <label htmlFor="title" className="sr-only">제목</label>
+            <textarea
+              id="title"
+              rows={1}
+              value={form.title}
+              onChange={(event) => {
+                const nextTitle = event.target.value.replace(/\n/g, " ")
+                updateEditor((snapshot) => ({
+                  ...snapshot,
+                  form: {
+                    ...snapshot.form,
+                    title: nextTitle,
+                    seoTitle: snapshot.form.seoTitle || nextTitle,
+                    slug: snapshot.slugEdited ? snapshot.form.slug : slugify(nextTitle),
+                  },
+                }))
+              }}
+              onKeyDown={(event) => {
+                // 제목은 한 줄이다. 한글 IME 조합 중 Enter는 조합 확정이므로 건드리지 않는다.
+                if (event.key !== "Enter" || event.nativeEvent.isComposing) return
+                event.preventDefault()
+                document.getElementById("excerpt")?.focus()
+              }}
+              placeholder="제목 없음"
+              aria-invalid={invalid.title || undefined}
+              aria-describedby="title-meta"
+              className={`block w-full resize-none rounded-md border-0 bg-transparent px-0 text-[30px] font-bold leading-[1.3] tracking-[-0.03em] text-[#111110] outline-none [field-sizing:content] placeholder:text-[#A39E98] sm:text-[40px] ${
+                invalid.title ? "bg-[#FCE9E9] px-2" : ""
+              }`}
+            />
+            <p
+              id="title-meta"
+              className={`mt-2 text-[12px] ${
+                invalid.title
+                  ? "text-[#8F2C2C]"
+                  : form.title.length > 60
+                  ? "text-[#7A520F]"
+                  : "text-[#615D59]"
+              }`}
+            >
+              {invalid.title
+                ? "발행하려면 제목이 필요합니다."
+                : `${form.title.length} / 60 · 검색과 공유 카드에 노출됩니다`}
+            </p>
+
+            {/* 글 속성 */}
+            <section aria-label="글 속성" className="@container mt-6 border-y border-[#F0F0EC] py-2">
+              <PropertyRow
+                label="카테고리"
+                htmlFor="category"
+                required
+                error={invalid.category ? "발행하려면 카테고리가 필요합니다." : undefined}
+              >
+                <select
+                  id="category"
+                  value={form.category}
+                  onChange={(event) => updateForm("category", event.target.value)}
+                  aria-invalid={invalid.category || undefined}
+                  aria-describedby={invalid.category ? "category-error" : undefined}
+                  className={`${PROP_INPUT_CLASS} ${invalid.category ? PROP_INPUT_INVALID_CLASS : ""}`}
+                >
+                  {CATEGORIES.filter((c) => c !== "전체").map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </PropertyRow>
+
+              <PropertyRow
+                label="요약"
+                htmlFor="excerpt"
+                required
+                error={invalid.excerpt ? "발행하려면 요약이 필요합니다." : undefined}
+                hint={`${form.excerpt.length} / 160 · 목록 카드와 검색 설명의 기본값으로 쓰입니다`}
+              >
+                <textarea
+                  id="excerpt"
+                  rows={2}
+                  value={form.excerpt}
+                  onChange={(event) => updateForm("excerpt", event.target.value)}
+                  placeholder="글을 읽기 전에 핵심 메시지를 한 번에 파악할 수 있게 적어주세요"
+                  aria-invalid={invalid.excerpt || undefined}
+                  aria-describedby={invalid.excerpt ? "excerpt-error" : undefined}
+                  className={`resize-none leading-relaxed [field-sizing:content] ${PROP_INPUT_CLASS} ${
+                    invalid.excerpt ? PROP_INPUT_INVALID_CLASS : ""
+                  }`}
+                />
+              </PropertyRow>
+
+              <PropertyRow
+                label="태그"
+                htmlFor="tags"
+                hint={tagKeywords.length > 0 ? undefined : "쉼표로 구분 · SEO 체크와 목록 필터에 바로 반영됩니다"}
+              >
+                <input
+                  id="tags"
+                  value={tagsInput}
+                  onChange={(event) => updateTagsInput(event.target.value)}
+                  placeholder="학원 운영, 상담 전환"
+                  className={PROP_INPUT_CLASS}
+                />
+                {tagKeywords.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 px-2 pt-1">
+                    {tagKeywords.slice(0, 8).map((tag) => (
+                      <span key={tag} className="rounded bg-[#ECFDF5] px-2 py-0.5 text-[12px] font-semibold text-[#084734]">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </PropertyRow>
+
+              <PropertyRow label="URL" htmlFor="slug">
+                <div
+                  className={`flex items-center rounded-md border transition-colors focus-within:border-[#084734] focus-within:bg-white ${
+                    slugConflictPost ? "border-[#F2B8B8] bg-[#FCE9E9]" : "border-transparent hover:bg-[#F6F5F4]"
+                  }`}
+                >
+                  <span className="shrink-0 pl-2 text-[14px] text-[#615D59]">/blog/</span>
+                  <input
                     id="slug"
                     value={form.slug}
                     onChange={(event) => {
@@ -1883,1026 +2349,272 @@ export default function BlogPostEditor({
                         form: { ...snapshot.form, slug: slugify(event.target.value) },
                       }))
                     }}
-                    placeholder="blog-v2-guide"
-                    className="h-11 rounded-xl"
+                    placeholder="제목에서 자동 생성"
+                    aria-invalid={slugConflictPost ? true : undefined}
+                    aria-describedby={slugConflictPost ? "slug-error" : undefined}
+                    className="w-full min-w-0 bg-transparent py-1.5 pr-2 text-[14px] text-[#111110] outline-none placeholder:text-[#A39E98]"
                   />
-                  <FieldHint>/blog/{form.slug || "your-slug"}</FieldHint>
                 </div>
-              </div>
-            </div>
-          </div>
+                {slugConflictPost && (
+                  <p id="slug-error" className="px-2 pt-1 text-[12px] text-[#8F2C2C]">
+                    이미 「{slugConflictPost.title}」에서 쓰는 주소입니다.
+                  </p>
+                )}
+                {slugConflictPost && suggestedSlug && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateEditor((snapshot) => ({
+                        ...snapshot,
+                        slugEdited: true,
+                        form: { ...snapshot.form, slug: suggestedSlug },
+                      }))
+                    }
+                    className="ml-2 mt-1 inline-flex min-h-8 items-center rounded-md border border-[#BDEFD8] bg-white px-2.5 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#ECFDF5]"
+                  >
+                    {suggestedSlug}로 바꾸기
+                  </button>
+                )}
+              </PropertyRow>
 
-          {/* Editor */}
-          <div className="rounded-[24px] border border-[#e8e8e4] bg-white p-6 shadow-sm">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-[#111110]">본문 작성</p>
-                <p className="mt-0.5 text-[12px] text-[#1a1a1a]/40">
-                  Markdown 기반 · 상세 페이지에 동일하게 렌더링됩니다
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {/* 헤딩 */}
+              <PropertyRow label="작성자" htmlFor="author">
+                <div className="grid grid-cols-2 gap-1">
+                  <input
+                    id="author"
+                    value={form.author}
+                    onChange={(event) => updateForm("author", event.target.value)}
+                    placeholder="이름"
+                    className={PROP_INPUT_CLASS}
+                  />
+                  <input
+                    aria-label="작성자 역할"
+                    value={form.authorRole}
+                    onChange={(event) => updateForm("authorRole", event.target.value)}
+                    placeholder="역할 / 직책"
+                    className={PROP_INPUT_CLASS}
+                  />
+                </div>
+              </PropertyRow>
+
+              <PropertyRow label="하단 CTA" htmlFor="cta-button-label">
+                <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-1">
+                  <input
+                    id="cta-button-label"
+                    value={form.cta.buttonLabel}
+                    onChange={(event) => updateCta("buttonLabel", event.target.value)}
+                    placeholder={DEFAULT_BLOG_CTA.buttonLabel}
+                    className={PROP_INPUT_CLASS}
+                  />
+                  <input
+                    aria-label="하단 CTA 이동 경로"
+                    value={form.cta.buttonHref}
+                    onChange={(event) => updateCta("buttonHref", event.target.value)}
+                    placeholder={DEFAULT_BLOG_CTA.buttonHref}
+                    className={PROP_INPUT_CLASS}
+                  />
+                </div>
+              </PropertyRow>
+
+              <button
+                ref={settingsTriggerRef}
+                type="button"
+                onClick={() => setShowSettings(true)}
+                aria-haspopup="dialog"
+                aria-expanded={showSettings}
+                aria-controls="blog-settings-panel"
+                className="mt-1 inline-flex min-h-9 items-center gap-1.5 rounded-md px-2 text-left text-[12px] font-medium text-[#31302E] transition-colors hover:bg-[#F6F5F4] hover:text-[#111110]"
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5 shrink-0 text-[#084734]" />
+                상세 설정
+                <span className="font-normal text-[#615D59]">
+                  · 상태 · SEO {seoAnalysis.score} · 리드 마그넷 · 추천 글 · 레이아웃 · 발행일 · 이미지
+                </span>
+              </button>
+            </section>
+
+            {/* 새 글 시작 안내 — 기본 본문 그대로일 때만 */}
+            {showStartPanel && (
+              <section aria-labelledby="blog-start-heading" className="mt-8 rounded-xl border border-[#e8e8e4] bg-white p-4 sm:p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h2 id="blog-start-heading" className="text-[14px] font-semibold text-[#111110]">어떻게 시작할까요?</h2>
+                    <p className="mt-0.5 text-[12px] text-[#615D59]">
+                      템플릿을 고르거나 AI 초안으로 시작하세요. 아래 기본 구조에 바로 써도 됩니다.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setStartPanelDismissed(true)}
+                    aria-label="시작 안내 닫기"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[#615D59] transition-colors hover:bg-[#F6F5F4] hover:text-[#111110]"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  {DEFAULT_TEMPLATES.map((template) => (
+                    <button
+                      key={template.id}
+                      type="button"
+                      onClick={() => {
+                        applyTemplate(template)
+                        setStartPanelDismissed(true)
+                      }}
+                      className="flex min-h-[88px] flex-col items-start gap-1 rounded-lg border border-[#e8e8e4] bg-white p-3 text-left transition-colors hover:border-[#BDEFD8] hover:bg-[#ECFDF5]"
+                    >
+                      <span className="text-[13px] font-semibold text-[#111110]">{template.name}</span>
+                      <span className="line-clamp-2 text-[11px] leading-relaxed text-[#615D59]">
+                        {template.data.category} · {template.data.contentMarkdown.replace(/#{1,6}\s|[*_`>|-]/g, "").slice(0, 60)}
+                      </span>
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => { setTemplateTab("load"); setShowTemplateModal(true) }}
+                    className="flex min-h-[88px] flex-col items-start gap-1 rounded-lg border border-dashed border-[#D5D2CB] bg-[#FAFAF8] p-3 text-left transition-colors hover:border-[#084734]"
+                  >
+                    <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#111110]">
+                      <LayoutTemplate className="h-3.5 w-3.5 text-[#084734]" />
+                      내 템플릿
+                    </span>
+                    <span className="text-[11px] leading-relaxed text-[#615D59]">
+                      {templates.length > 0 ? `저장한 템플릿 ${templates.length}개 보기` : "지금 글을 템플릿으로 저장하고 다시 쓰기"}
+                    </span>
+                  </button>
+                </div>
+                <form
+                  className="mt-4 rounded-lg bg-[#F6F5F4] p-3 sm:p-4"
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    if (!draftInput.topic.trim() || isAiBusy) return
+                    void handleAiAction("draft", { ...draftInput })
+                  }}
+                >
+                  <p className="mb-2 text-[13px] font-semibold text-[#111110]">AI 초안으로 시작</p>
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div className="min-w-0 flex-[999_1_240px]">
+                      <label htmlFor="start-draft-topic" className="mb-1 block text-[12px] text-[#615D59]">주제</label>
+                      <input
+                        id="start-draft-topic"
+                        type="text"
+                        value={draftInput.topic}
+                        onChange={(event) => setDraftInput((prev) => ({ ...prev, topic: event.target.value }))}
+                        placeholder="예: 학원 운영 효율화 방법, 학부모 소통 노하우"
+                        className={`h-10 px-3 ${SOFT_SELECT_CLASS}`}
+                      />
+                    </div>
+                    <div className="min-w-0 flex-[1_1_120px]">
+                      <label htmlFor="start-draft-tone" className="mb-1 block text-[12px] text-[#615D59]">톤</label>
+                      <select
+                        id="start-draft-tone"
+                        value={draftInput.tone}
+                        onChange={(event) => setDraftInput((prev) => ({ ...prev, tone: event.target.value }))}
+                        className={`h-10 ${SOFT_SELECT_CLASS}`}
+                      >
+                        <option value="전문적">전문적</option>
+                        <option value="친근한">친근한</option>
+                        <option value="스토리텔링">스토리텔링</option>
+                        <option value="설득형">설득형</option>
+                        <option value="정보형">정보형</option>
+                      </select>
+                    </div>
+                    <div className="min-w-0 flex-[1_1_140px]">
+                      <label htmlFor="start-draft-length" className="mb-1 block text-[12px] text-[#615D59]">분량</label>
+                      <select
+                        id="start-draft-length"
+                        value={draftInput.length}
+                        onChange={(event) => setDraftInput((prev) => ({ ...prev, length: event.target.value }))}
+                        className={`h-10 ${SOFT_SELECT_CLASS}`}
+                      >
+                        <option value="short">짧게 (~500자)</option>
+                        <option value="medium">보통 (~1200자)</option>
+                        <option value="long">길게 (~2500자)</option>
+                      </select>
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={!draftInput.topic.trim() || isAiBusy}
+                      className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md bg-[#084734] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {aiState?.action === "draft" && isAiBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                      초안 만들기
+                    </button>
+                  </div>
+                  <p className="mt-2 text-[11px] text-[#615D59]">
+                    결과를 창에서 확인한 뒤 ‘에디터에 적용’을 눌러야 본문에 들어갑니다.
+                  </p>
+                </form>
+              </section>
+            )}
+
+            {/* 본문 */}
+            <section aria-label="본문" className="mt-8">
+              <div
+                role="toolbar"
+                aria-label="본문 서식"
+                className="sticky top-[calc(var(--editor-header-h)+4rem)] z-20 -mx-2 mb-3 lg:top-[var(--editor-header-h)] flex flex-wrap items-center gap-1.5 bg-[#FAFAF8] px-2 py-2"
+              >
                 <ToolbarButton onClick={() => editorRef.current?.setHeading(2)}>H2</ToolbarButton>
                 <ToolbarButton onClick={() => editorRef.current?.setHeading(3)}>H3</ToolbarButton>
-                <span className="h-4 w-px bg-[#e8e8e4] mx-0.5" aria-hidden="true" />
-                {/* 인라인 서식 */}
+                <span className="mx-0.5 h-4 w-px bg-[#e8e8e4]" aria-hidden="true" />
                 <ToolbarButton onClick={() => editorRef.current?.toggleBold()} icon={<Type className="h-3 w-3" />}>굵게</ToolbarButton>
                 <ToolbarButton onClick={() => editorRef.current?.toggleItalic()} icon={<Italic className="h-3 w-3" />}>기울이기</ToolbarButton>
                 <ToolbarButton onClick={() => editorRef.current?.toggleHighlight()} icon={<Highlighter className="h-3 w-3" />}>강조색</ToolbarButton>
                 <ToolbarButton onClick={() => editorRef.current?.wrapBrandColor()} icon={<Sparkles className="h-3 w-3" />}>브랜드색</ToolbarButton>
-                <span className="h-4 w-px bg-[#e8e8e4] mx-0.5" aria-hidden="true" />
-                {/* 블록 */}
+                <span className="mx-0.5 h-4 w-px bg-[#e8e8e4]" aria-hidden="true" />
                 <ToolbarButton onClick={() => editorRef.current?.toggleBlockquote()} icon={<Quote className="h-3 w-3" />}>인용</ToolbarButton>
                 <ToolbarButton onClick={() => editorRef.current?.toggleBulletList()} icon={<List className="h-3 w-3" />}>리스트</ToolbarButton>
                 <ToolbarButton onClick={() => editorRef.current?.toggleOrderedList()} icon={<ListOrdered className="h-3 w-3" />}>번호</ToolbarButton>
-                <span className="h-4 w-px bg-[#e8e8e4] mx-0.5" aria-hidden="true" />
-                {/* 삽입 */}
+                <span className="mx-0.5 h-4 w-px bg-[#e8e8e4]" aria-hidden="true" />
                 <ToolbarButton onClick={() => editorRef.current?.insertLink()} icon={<Link2 className="h-3 w-3" />}>링크</ToolbarButton>
                 <ToolbarButton onClick={() => editorRef.current?.insertImage()} icon={<ImageIcon className="h-3 w-3" />}>이미지</ToolbarButton>
                 <ToolbarButton onClick={() => editorRef.current?.insertDivider()} icon={<Minus className="h-3 w-3" />}>구분선</ToolbarButton>
-              </div>
-            </div>
-
-            <Tabs defaultValue="write">
-              <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-[#e8e8e4] bg-[#FAFAF8] p-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex flex-wrap gap-2 text-[12px] text-[#615D59]">
-                  <span className="rounded-full bg-white px-3 py-1 font-semibold text-[#111110]">
-                    {contentCharacterCount.toLocaleString("ko-KR")}자
-                  </span>
-                  <span className="rounded-full bg-white px-3 py-1 font-semibold text-[#111110]">
-                    목차 {headings.length}개
-                  </span>
-                  <span className="rounded-full bg-white px-3 py-1 font-semibold text-[#111110]">
-                    {computedReadTime}
-                  </span>
-                  <span
-                    className="rounded-full border px-3 py-1 font-semibold"
-                    style={{ borderColor: seoAnalysis.scoreBorder, backgroundColor: seoAnalysis.scoreBg, color: seoAnalysis.scoreColor }}
-                  >
-                    SEO {seoAnalysis.score}
-                  </span>
-                </div>
-                <TabsList className="bg-white">
-                  <TabsTrigger value="write">작성</TabsTrigger>
-                  <TabsTrigger value="preview">
-                    <Eye className="mr-1.5 h-3.5 w-3.5" />
-                    미리보기
-                  </TabsTrigger>
-                </TabsList>
-              </div>
-
-              <TabsContent value="write" className="mt-0">
-                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
-                  <RichMarkdownEditor
-                    ref={editorRef}
-                    value={form.contentMarkdown}
-                    onChange={(markdown) => updateForm("contentMarkdown", markdown)}
-                    placeholder="본문을 작성해주세요"
-                    imageUploadEndpoint="/api/admin/upload"
-                    onTemplateClick={() => { setTemplateTab("load"); setShowTemplateModal(true) }}
-                    onAiDraftClick={() => setShowInlineDraft(true)}
-                    onSelectionOptimize={(text) => handleAiAction("optimize", undefined, text || undefined)}
-                  />
-                  <div className="space-y-4 rounded-2xl border border-[#e8e8e4] bg-[#fcfcfb] p-4">
-                    <div className="grid grid-cols-3 gap-2">
-                      {[
-                        { label: "필수", value: `${requiredDone}/${requiredItems.length}` },
-                        { label: "SEO", value: `${seoAnalysis.score}` },
-                        { label: "목차", value: `${headings.length}` },
-                      ].map((item) => (
-                        <div key={item.label} className="rounded-xl bg-white px-2.5 py-2 text-center">
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/35">{item.label}</p>
-                          <p className="mt-1 text-[14px] font-bold tabular-nums text-[#111110]">{item.value}</p>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="h-px bg-[#e8e8e4]" />
-
-                    {/* 자동 목차 */}
-                    <div>
-                      <p className="text-sm font-semibold text-[#111110]">자동 목차</p>
-                      <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
-                        H2, H3가 상세 페이지 사이드바에 표시됩니다.
-                      </p>
-                    </div>
-                    <div className="space-y-1.5">
-                      {headings.length === 0 ? (
-                        <p className="text-[12px] text-[#1a1a1a]/30">
-                          ## 소제목을 추가하면 목차가 생성됩니다.
-                        </p>
-                      ) : (
-                        headings.map((heading) => (
-                          <div
-                            key={heading.id}
-                            className={`text-[12px] text-[#1a1a1a]/60 ${
-                              heading.level === 3 ? "pl-3 text-[#1a1a1a]/40" : "font-medium"
-                            }`}
-                          >
-                            {heading.level === 3 ? "└ " : "· "}
-                            {heading.text}
-                          </div>
-                        ))
-                      )}
-                    </div>
-
-                    {/* 구분선 */}
-                    <div className="h-px bg-[#e8e8e4]" />
-
-                    {/* 템플릿 */}
-                    <div>
-                      <div className="mb-2 flex items-center justify-between">
-                        <p className="text-[12px] font-semibold text-[#111110]">템플릿</p>
-                        <button
-                          type="button"
-                          onClick={() => { setTemplateTab("load"); setShowTemplateModal(true) }}
-                          className="text-[11px] text-[#084734] hover:underline"
-                        >
-                          전체 보기 →
-                        </button>
-                      </div>
-                      {(() => {
-                        const quickList = [
-                          ...templates.slice(0, 3),
-                          ...DEFAULT_TEMPLATES.slice(0, Math.max(0, 3 - templates.length)),
-                        ]
-                        return (
-                          <div className="space-y-1">
-                            {quickList.map((t) => (
-                              <div key={t.id} className="flex items-center justify-between gap-1.5 rounded-lg px-2 py-1.5 hover:bg-[#f0f0ec]">
-                                <span className="truncate text-[11px] text-[#1a1a1a]/70">
-                                  {t.name}
-                                  {t.id.startsWith("default-") && (
-                                    <span className="ml-1 text-[9px] text-[#1a1a1a]/30">기본</span>
-                                  )}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    updateForm("contentMarkdown", t.data.contentMarkdown)
-                                    if (t.data.benefitItems) updateForm("benefitItems", t.data.benefitItems)
-                                    if (t.data.targetReader) updateForm("targetReader", t.data.targetReader)
-                                    if (t.data.category) updateForm("category", t.data.category)
-                                    if (t.data.cta) updateForm("cta", t.data.cta)
-                                  }}
-                                  className="shrink-0 text-[10px] font-medium text-[#084734] hover:underline"
-                                >
-                                  적용
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        )
-                      })()}
-                    </div>
-
-                    {/* 구분선 */}
-                    <div className="h-px bg-[#e8e8e4]" />
-
-                    {/* AI 다듬기 */}
-                    <div>
-                      <div className="mb-2 flex items-center gap-1.5">
-                        <Wand2 className="h-3 w-3 text-[#084734]" />
-                        <p className="text-[12px] font-semibold text-[#111110]">AI</p>
-                      </div>
-                      {/* 순서: 초안 생성 → 본문 다듬기.
-                          빈 글에서 시작하는 동작이 먼저 오는 게 실제 작업 순서다
-                          (2026-07-29 회의: "본문 다듬기 초안 생성 먼저 아니에요"). */}
-                      <div className="space-y-1.5">
-                        {!showInlineDraft ? (
-                          <button
-                            type="button"
-                            onClick={() => setShowInlineDraft(true)}
-                            className="flex w-full items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-2 text-[11px] font-medium text-[#111110] hover:bg-[#f0f0ec] transition-colors"
-                          >
-                            <Type className="h-3 w-3 shrink-0 text-[#084734]" />
-                            초안 생성
-                          </button>
-                        ) : (
-                          <div className="space-y-1.5 rounded-lg border border-[#e8e8e4] bg-white p-2.5">
-                            {/* 입력 배경은 흰색이어야 한다. 회색(#f8f8f6)이던 시절 회의에서
-                                "저도 이거 못 바꾸는 줄 알았어"라는 반응이 나왔다 — 회색 입력은
-                                비활성으로 읽힌다. */}
-                            <input
-                              autoFocus
-                              type="text"
-                              value={inlineDraftTopic}
-                              onChange={(e) => setInlineDraftTopic(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter" && inlineDraftTopic.trim()) {
-                                  handleAiAction("draft", { topic: inlineDraftTopic, tone: "전문적", length: "medium", reference: "" })
-                                  setShowInlineDraft(false)
-                                  setInlineDraftTopic("")
-                                }
-                                if (e.key === "Escape") { setShowInlineDraft(false); setInlineDraftTopic("") }
-                              }}
-                              placeholder="주제를 입력하세요"
-                              className="w-full rounded-md border border-[#e8e8e4] bg-white px-2 py-1.5 text-[11px] outline-none focus:border-[#084734]"
-                            />
-                            <div className="flex gap-1">
-                              <button
-                                type="button"
-                                disabled={!inlineDraftTopic.trim() || (aiState?.status === "loading" || aiState?.status === "streaming")}
-                                onClick={() => {
-                                  handleAiAction("draft", { topic: inlineDraftTopic, tone: "전문적", length: "medium", reference: "" })
-                                  setShowInlineDraft(false)
-                                  setInlineDraftTopic("")
-                                }}
-                                className="flex-1 rounded-md bg-[#084734] px-2 py-1 text-[10px] font-semibold text-white hover:bg-[#065c41] disabled:opacity-40 transition-colors"
-                              >
-                                생성
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => { setShowInlineDraft(false); setInlineDraftTopic("") }}
-                                className="rounded-md border border-[#e8e8e4] px-2 py-1 text-[10px] text-[#1a1a1a]/50 hover:bg-[#f0f0ec] transition-colors"
-                              >
-                                취소
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        <button
-                          type="button"
-                          disabled={aiState?.status === "loading" || aiState?.status === "streaming"}
-                          onClick={() => handleAiAction("optimize")}
-                          className="flex w-full items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-2 text-[11px] font-medium text-[#111110] hover:bg-[#f0f0ec] disabled:opacity-40 transition-colors"
-                        >
-                          {aiState?.action === "optimize" && (aiState.status === "loading" || aiState.status === "streaming") ? (
-                            <Loader2 className="h-3 w-3 shrink-0 animate-spin text-[#084734]" />
-                          ) : (
-                            <Sparkles className="h-3 w-3 shrink-0 text-[#084734]" />
-                          )}
-                          본문 다듬기
-                        </button>
-                        {/* 이 버튼은 옵션 선택 없이 전체 본문을 보내고 결과를 바로 적용한다
-                            (handleAiAction의 shouldAutoApplyOptimize). 회의에서 "아무것도 안 눌렀는데
-                            그냥 다듬기 들어가네"라는 반응이 나온 지점이라 무엇이 일어나는지 미리 알린다.
-                            구간만 다듬으려면 에디터에서 텍스트를 선택한 뒤 "선택 구간 다듬기"를 쓴다. */}
-                        <p className="px-0.5 text-[10px] leading-tight text-[#1a1a1a]/35">
-                          전체 본문에 바로 적용됩니다
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* 구분선 */}
-                    <div className="h-px bg-[#e8e8e4]" />
-
-                    {/* 문법 팁 */}
-                    <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3.5">
-                      <p className="text-[12px] font-semibold text-[#084734]">문법 팁</p>
-                      <div className="mt-2 space-y-1.5 text-[11px] leading-5 text-[#084734]/75">
-                        <p>**굵게** · *기울임* · ==강조==</p>
-                        <p>{"{{green:브랜드색}} · [링크](url)"}</p>
-                        <p>![설명](/images/example.png) · {">"} 인용</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="preview" className="mt-0">
-                <div className="rounded-[24px] border border-[#e8e8e4] bg-[#fcfcfb] p-8">
-                  <BlogMarkdownRenderer markdown={form.contentMarkdown} />
-                </div>
-              </TabsContent>
-            </Tabs>
-          </div>
-
-          {/* Benefits */}
-          <div className="rounded-[24px] border border-[#e8e8e4] bg-white p-6 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-[#111110]">
-                  이 글을 읽으면 좋은 점
-                  <FieldBadge />
-                </p>
-                <p className="mt-0.5 text-[12px] text-[#1a1a1a]/40">상세 페이지 상단에 노출되는 포인트</p>
-              </div>
-              <span className="rounded-full bg-[#f5f6f1] px-3 py-1 text-[12px] text-[#084734]">최대 3개</span>
-            </div>
-            <div className="space-y-2.5">
-              {form.benefitItems.map((benefit, index) => (
-                <Input
-                  key={index}
-                  value={benefit}
-                  onChange={(event) => updateBenefit(index, event.target.value)}
-                  placeholder={`좋은 점 ${index + 1}`}
-                />
-              ))}
-              <Input
-                value={form.targetReader || ""}
-                onChange={(event) => updateForm("targetReader", event.target.value)}
-                placeholder="추천 독자: 예) 상담 전환율을 높이고 싶은 학원 원장"
-              />
-            </div>
-          </div>
-        </section>
-
-        {/* Right: tabbed sidebar */}
-        <aside className="self-start">
-          <div className="pb-6 lg:pr-1">
-            <Tabs defaultValue="settings" className="w-full">
-              <div className="z-10 bg-[#FAFAF8] pb-3">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="settings">설정</TabsTrigger>
-                  <TabsTrigger value="seo" className="gap-1.5">
-                    <Search className="h-3.5 w-3.5" />
-                    SEO
-                    {seoAnalysis.score > 0 && (
-                      <span
-                        className="ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums"
-                        style={{ backgroundColor: seoAnalysis.scoreBg, color: seoAnalysis.scoreColor }}
-                      >
-                        {seoAnalysis.score}
-                      </span>
-                    )}
-                  </TabsTrigger>
-                  <TabsTrigger value="ai" className="gap-1.5">
-                    <Wand2 className="h-3.5 w-3.5" />
-                    AI
-                  </TabsTrigger>
-                </TabsList>
-              </div>
-
-              {/* ── Settings Tab ── */}
-              <TabsContent value="settings" className="mt-0 space-y-4">
-
-                {/* 페이지 레이아웃 템플릿 */}
-                <div className="rounded-[20px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
-                  <div className="mb-3.5 flex items-center justify-between">
-                    <p className="text-sm font-semibold text-[#111110]">페이지 레이아웃</p>
-                    <button
-                      type="button"
-                      onClick={() => setShowPreview(true)}
-                      className="flex items-center gap-1 text-[12px] text-[#084734] hover:text-[#084734]/70 transition-colors"
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                      미리보기
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {(
-                      [
-                        {
-                          value: "standard" as const,
-                          label: "기본",
-                          desc: "사이드 목차 + 콘텐츠",
-                          preview: (
-                            <div className="mb-2.5 flex gap-1">
-                              <div className="h-10 w-[28%] rounded-md bg-[#f0f0ec]" />
-                              <div className="flex h-10 flex-1 flex-col gap-1 rounded-md bg-[#f0f0ec] p-1.5">
-                                <div className="h-1.5 w-3/4 rounded bg-[#d8d8d2]" />
-                                <div className="h-1.5 w-full rounded bg-[#d8d8d2]" />
-                                <div className="h-1.5 w-2/3 rounded bg-[#d8d8d2]" />
-                              </div>
-                            </div>
-                          ),
-                        },
-                        {
-                          value: "minimal" as const,
-                          label: "미니멀",
-                          desc: "중앙 정렬 단일 컬럼",
-                          preview: (
-                            <div className="mb-2.5 mx-auto w-3/4 rounded-md bg-[#f0f0ec] p-1.5 flex flex-col gap-1">
-                              <div className="h-1.5 w-3/4 rounded bg-[#d8d8d2]" />
-                              <div className="h-1.5 w-full rounded bg-[#d8d8d2]" />
-                              <div className="h-1.5 w-5/6 rounded bg-[#d8d8d2]" />
-                              <div className="h-1.5 w-2/3 rounded bg-[#d8d8d2]" />
-                            </div>
-                          ),
-                        },
-                      ] as const
-                    ).map(({ value, label, desc, preview }) => (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => updateForm("pageLayout", value)}
-                        className={`rounded-2xl border p-3 text-left transition-colors ${
-                          form.pageLayout === value
-                            ? "border-[#084734] bg-[#f0f7f4]"
-                            : "border-[#e8e8e4] bg-white hover:border-[#084734]/30"
-                        }`}
-                      >
-                        {preview}
-                        <p className={`text-[13px] font-semibold ${form.pageLayout === value ? "text-[#084734]" : "text-[#111110]"}`}>{label}</p>
-                        <p className="text-[11px] text-[#1a1a1a]/45">{desc}</p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 발행 설정 */}
-                <div className="rounded-[20px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
-                  <p className="mb-3.5 text-sm font-semibold text-[#111110]">발행 설정</p>
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1.5">
-                        <Label htmlFor="status" className="text-[12px]">
-                          상태
-                          <FieldBadge required />
-                        </Label>
-                        <select
-                          id="status"
-                          value={form.status}
-                          onChange={(event) => updateForm("status", event.target.value as BlogPostStatus)}
-                          className={`h-9 ${SOFT_SELECT_CLASS}`}
-                        >
-                          {BLOG_STATUS_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>{opt.label}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="category" className="text-[12px]">
-                          카테고리
-                          <FieldBadge required />
-                        </Label>
-                        <select
-                          id="category"
-                          value={form.category}
-                          onChange={(event) => updateForm("category", event.target.value)}
-                          className={`h-9 ${SOFT_SELECT_CLASS}`}
-                        >
-                          {CATEGORIES.filter((c) => c !== "전체").map((c) => (
-                            <option key={c} value={c}>{c}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="tags" className="text-[12px]">
-                        키워드/태그
-                        <FieldBadge />
-                      </Label>
-                      <Input
-                        id="tags"
-                        value={tagsInput}
-                        onChange={(event) => updateTagsInput(event.target.value)}
-                        placeholder="AI 교육, 학원 운영, 상담 전환"
-                        className="h-10 rounded-xl"
-                      />
-                      {tagKeywords.length > 0 ? (
-                        <div className="flex flex-wrap gap-1.5 pt-1">
-                          {tagKeywords.slice(0, 8).map((tag) => (
-                            <span
-                              key={tag}
-                              className="animate-in rounded-full border border-[#dcebd9] bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-medium text-[#084734] fade-in-0 zoom-in-95 duration-150"
-                            >
-                              #{tag}
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <FieldHint>쉼표로 구분하면 SEO 체크와 목록 필터에 바로 반영됩니다.</FieldHint>
-                      )}
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="leadMagnet" className="text-[12px]">
-                        리드 마그넷 (글 하단 자료 다운로드 블록)
-                        <FieldBadge />
-                      </Label>
-                      <select
-                        id="leadMagnet"
-                        value={form.leadMagnetSlug ?? ""}
-                        onChange={(event) => updateForm("leadMagnetSlug", event.target.value)}
-                        className={`h-9 ${SOFT_SELECT_CLASS}`}
-                      >
-                        <option value="">표시 안 함</option>
-                        {leadOptions.map((opt) => (
-                          <option key={opt.slug} value={opt.slug}>
-                            {opt.title} · {getLeadMagnetGateLabel(opt.gate)} · {getLeadMagnetStatusLabel(opt.status)}
-                            {opt.published ? "" : " · 검토 중"}
-                          </option>
-                        ))}
-                      </select>
-                      <FieldHint>
-                        선택하면 본문 하단에 이메일 수집 블록이 노출되고, 신청자는
-                        해당 마그넷 태그로 구독자 DB에 기록됩니다.
-                      </FieldHint>
-                    </div>
-                    <label className="flex cursor-pointer items-center gap-2.5 text-sm text-[#1a1a1a]/65">
-                      <input
-                        type="checkbox"
-                        checked={form.featured ?? false}
-                        onChange={(event) => updateForm("featured", event.target.checked)}
-                        className="h-4 w-4 rounded border-[#d8d8d2] accent-[#084734]"
-                      />
-                      목록 상단 Featured로 노출
-                    </label>
-                  </div>
-                </div>
-
-                {/* 고급 설정 */}
-                <div className="rounded-[20px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
-                  <div className="mb-3.5 flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-[#111110]">고급 설정</p>
-                      <p className="mt-1 text-[12px] leading-5 text-[#1a1a1a]/45">
-                        공개일을 직접 보정하거나 미래 예약 발행 시각을 지정합니다.
-                      </p>
-                    </div>
-                    <span className="shrink-0 rounded-full border border-[#e8e8e4] bg-[#FAFAF8] px-2.5 py-1 text-[11px] font-semibold text-[#1a1a1a]/45">
-                      선택
-                    </span>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <Label htmlFor="advanced-published-at" className="text-[12px]">
-                        발행 날짜
-                        <FieldBadge />
-                      </Label>
-                      {form.publishedAt ? (
-                        <button
-                          type="button"
-                          onClick={() => updateForm("publishedAt", "")}
-                          className="text-[11px] font-semibold text-[#1a1a1a]/35 transition-colors hover:text-[#B85C33]"
-                        >
-                          비우기
-                        </button>
-                      ) : null}
-                    </div>
-                    <Input
-                      id="advanced-published-at"
-                      type="datetime-local"
-                      value={isoToLocalInput(form.publishedAt)}
-                      onChange={(event) =>
-                        updateForm(
-                          "publishedAt",
-                          event.target.value ? new Date(event.target.value).toISOString() : ""
-                        )
-                      }
-                      className="h-10 rounded-xl"
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => updateForm("publishedAt", new Date().toISOString())}
-                        className="inline-flex h-9 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F4]"
-                      >
-                        지금으로 설정
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!initialPost?.publishedAt) return
-                          updateForm("publishedAt", initialPost.publishedAt)
-                        }}
-                        disabled={!initialPost?.publishedAt}
-                        className="inline-flex h-9 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F4] disabled:cursor-not-allowed disabled:opacity-35"
-                      >
-                        기존 날짜 복원
-                      </button>
-                    </div>
-                    <FieldHint>
-                      과거 시각은 공개 화면의 발행일로 쓰이고, 미래 시각은 발행 상태여도 그 시각 전까지 숨깁니다.
-                      상단 발행 버튼은 지금 즉시 공개하는 용도라 현재 시각으로 덮어씁니다.
-                    </FieldHint>
-                  </div>
-                </div>
-
-                {/* 비주얼 */}
-                <div className="rounded-[20px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
-                  <p className="mb-3.5 text-sm font-semibold text-[#111110]">비주얼</p>
-                  <div className="space-y-3">
-                    {(["imageUrl", "heroImageUrl"] as const).map((field) => (
-                      <div key={field} className="space-y-1.5">
-                        <Label className="text-[12px]">
-                          {field === "imageUrl" ? "썸네일 이미지 URL" : "상단 배너 이미지 URL"}
-                        </Label>
-                        <div className="flex gap-1.5">
-                          <Input
-                            value={form[field]}
-                            onChange={(event) => updateForm(field, event.target.value)}
-                            placeholder="/images/blog/thumb.png"
-                            className="flex-1"
-                          />
-                          <label className="relative flex cursor-pointer items-center gap-1.5 rounded-md border border-[#e8e8e4] bg-white px-2.5 py-1.5 text-[12px] font-medium text-[#615D59] hover:bg-[#F6F5F4] transition-colors">
-                            {uploadingField === field ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Upload className="h-3.5 w-3.5" />
-                            )}
-                            업로드
-                            <input
-                              type="file"
-                              accept="image/jpeg,image/png,image/webp,image/gif"
-                              className="absolute inset-0 cursor-pointer opacity-0"
-                              disabled={uploadingField !== null}
-                              onChange={(e) => {
-                                const file = e.target.files?.[0]
-                                if (file) void handleImageUpload(field, file)
-                                e.target.value = ""
-                              }}
-                            />
-                          </label>
-                        </div>
-                      </div>
-                    ))}
-                    <p className="text-[11px] text-[#1a1a1a]/35">
-                      JPG, PNG, WebP, GIF · 최대 5MB
-                    </p>
-                    {coverPreviewUrl && (
-                      <div className="rounded-xl border border-[#e8e8e4] bg-[#fcfcfb] p-3">
-                        <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-[#1a1a1a]/35">
-                          공개 화면 크롭 미리보기
-                        </p>
-                        <div className="grid grid-cols-3 gap-2">
-                          {BLOG_COVER_PREVIEWS.map((preview) => (
-                            <div key={preview.label} className="min-w-0">
-                              <div className={`relative overflow-hidden rounded-lg bg-[#f0f0ec] ${preview.className}`}>
-                                <Image
-                                  src={coverPreviewUrl}
-                                  alt={`${preview.label} 미리보기`}
-                                  fill
-                                  className="object-cover"
-                                  sizes="(min-width: 1024px) 110px, 33vw"
-                                  unoptimized
-                                />
-                              </div>
-                              <p className="mt-1 truncate text-[10px] font-medium text-[#1a1a1a]/45">
-                                {preview.label}
-                              </p>
-                              <p className="text-[10px] text-[#1a1a1a]/28">{preview.ratio}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1.5">
-                        <Label className="text-[12px]">썸네일 alt</Label>
-                        <Input
-                          value={form.thumbnailAlt}
-                          onChange={(event) => updateForm("thumbnailAlt", event.target.value)}
-                          placeholder="이미지 설명"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-[12px]">배너 alt</Label>
-                        <Input
-                          value={form.heroImageAlt}
-                          onChange={(event) => updateForm("heroImageAlt", event.target.value)}
-                          placeholder="이미지 설명"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 작성자 */}
-                <div className="rounded-[20px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
-                  <p className="mb-3.5 text-sm font-semibold text-[#111110]">작성자</p>
-                  <div className="space-y-2.5">
-                    <div className="grid grid-cols-2 gap-2">
-                      <Input
-                        value={form.author}
-                        onChange={(event) => updateForm("author", event.target.value)}
-                        placeholder="이름"
-                      />
-                      <Input
-                        value={form.authorRole}
-                        onChange={(event) => updateForm("authorRole", event.target.value)}
-                        placeholder="역할 / 직책"
-                      />
-                    </div>
-                    <Input
-                      value={form.authorAvatarUrl || ""}
-                      onChange={(event) => updateForm("authorAvatarUrl", event.target.value)}
-                      placeholder="아바타 이미지 URL"
-                    />
-                    {form.authorAvatarUrl && (
-                      <div className="flex items-center gap-3 rounded-xl border border-[#e8e8e4] bg-[#fcfcfb] p-3">
-                        <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-full bg-[#f0f0ec]">
-                          {authorAvatarSrc ? (
-                            <SafeBlogImage
-                              src={authorAvatarSrc}
-                              alt={`${form.author || "작성자"} 아바타 미리보기`}
-                              fill
-                              className="object-cover"
-                              sizes="56px"
-                              fallbackIndex={initialPost?.id ?? 0}
-                            />
-                          ) : (
-                            <div className="flex h-full items-center justify-center text-base font-semibold text-[#084734]">
-                              {authorInitial}
-                            </div>
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[12px] font-medium text-[#111110]">작성자 공개 프로필</p>
-                          <p className={`text-[11px] ${authorAvatarSrc ? "text-[#1a1a1a]/35" : "text-[#B85C33]"}`}>
-                            {authorAvatarSrc ? "1:1 원형 크롭" : "표시할 수 없는 이미지 URL입니다."}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                    <textarea
-                      rows={3}
-                      value={form.authorBio}
-                      onChange={(event) => updateForm("authorBio", event.target.value)}
-                      placeholder="작성자 소개"
-                      className={`min-h-[80px] ${SOFT_TEXTAREA_CLASS}`}
-                    />
-                  </div>
-                </div>
-
-                {/* 추천 글 */}
-                <div className="rounded-[20px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
-                  <p className="mb-3.5 text-sm font-semibold text-[#111110]">추천 글</p>
-                  <div className="space-y-1.5">
-                    {filteredPosts.length === 0 ? (
-                      <p className="text-[12px] text-[#1a1a1a]/35">추천할 다른 글이 아직 없습니다.</p>
-                    ) : (
-                      filteredPosts.slice(0, 8).map((post) => (
-                        <label
-                          key={post.id}
-                          className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-[#f0f0ec] px-3 py-2.5 transition-colors hover:border-[#e0e0da] hover:bg-[#fafafa]"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={form.relatedPostIds.includes(post.id)}
-                            onChange={() => toggleRelatedPost(post.id)}
-                            className="mt-0.5 h-4 w-4 shrink-0 rounded border-[#d8d8d2] accent-[#084734]"
-                          />
-                          <span className="line-clamp-2 text-[13px] text-[#1a1a1a]/65">{post.title}</span>
-                        </label>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {/* 하단 CTA */}
-                <div className="rounded-[20px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
-                  <p className="mb-3.5 text-sm font-semibold text-[#111110]">하단 CTA</p>
-                  <div className="space-y-2.5">
-                    <Input
-                      value={form.cta.eyebrow}
-                      onChange={(event) => updateCta("eyebrow", event.target.value)}
-                      placeholder="CTA 상단 문구"
-                    />
-                    <Input
-                      value={form.cta.title}
-                      onChange={(event) => updateCta("title", event.target.value)}
-                      placeholder="CTA 제목"
-                    />
-                    <textarea
-                      rows={3}
-                      value={form.cta.description}
-                      onChange={(event) => updateCta("description", event.target.value)}
-                      placeholder="CTA 설명"
-                      className={`min-h-[80px] ${SOFT_TEXTAREA_CLASS}`}
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                      <Input
-                        value={form.cta.buttonLabel}
-                        onChange={(event) => updateCta("buttonLabel", event.target.value)}
-                        placeholder="버튼 문구"
-                      />
-                      <Input
-                        value={form.cta.buttonHref}
-                        onChange={(event) => updateCta("buttonHref", event.target.value)}
-                        placeholder="/contact"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </TabsContent>
-
-              {/* ── SEO Tab ── */}
-              <TabsContent value="seo" className="mt-0 space-y-4">
-
-                {/* Score card */}
-                <div
-                  className="rounded-[20px] border p-5 shadow-sm transition-all duration-200"
-                  style={{ borderColor: seoAnalysis.scoreBorder, backgroundColor: seoAnalysis.scoreBg }}
+                <button
+                  type="button"
+                  onClick={() => setShowAiTools((open) => !open)}
+                  aria-expanded={showAiTools}
+                  aria-controls="blog-ai-tools"
+                  className={`ml-auto inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                    showAiTools
+                      ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                      : "border-[#e8e8e4] bg-white text-[#31302E] hover:border-[#084734]/30"
+                  }`}
                 >
-                  <div className="flex items-center gap-4">
-                    <div
-                      className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-[3px] text-xl font-bold tracking-[-0.02em] tabular-nums"
-                      style={{ borderColor: seoAnalysis.scoreColor, color: seoAnalysis.scoreColor }}
-                    >
-                      {seoAnalysis.score}
-                    </div>
+                  <Wand2 className="h-3 w-3" />
+                  AI 도구
+                </button>
+              </div>
+
+              {showAiTools && (
+                <div id="blog-ai-tools" className="mb-4 grid gap-4 rounded-xl border border-[#e8e8e4] bg-white p-4 md:grid-cols-2">
+                  <form
+                    className="space-y-2.5"
+                    onSubmit={(event) => {
+                      event.preventDefault()
+                      if (!draftInput.topic.trim() || isAiBusy) return
+                      void handleAiAction("draft", { ...draftInput })
+                    }}
+                  >
+                    <p className="text-[13px] font-semibold text-[#111110]">초안 생성</p>
                     <div>
-                      <p className="text-base font-semibold" style={{ color: seoAnalysis.scoreColor }}>
-                        SEO {seoAnalysis.scoreLabel}
-                      </p>
-                      <p className="text-[13px] text-[#1a1a1a]/50">
-                        {seoAnalysis.checks.filter((c) => c.ok).length} / {seoAnalysis.checks.length} 항목 통과
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Search previews */}
-                <div className="rounded-[20px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
-                  <p className="mb-4 text-[11px] font-semibold uppercase tracking-wider text-[#1a1a1a]/35">
-                    검색 결과 미리보기
-                  </p>
-
-                  {/* Google */}
-                  <div className="mb-4">
-                    <div className="mb-2 flex items-center gap-1.5">
-                      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" aria-hidden="true">
-                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                      </svg>
-                      <span className="text-[11px] font-medium text-[#1a1a1a]/40">Google</span>
-                    </div>
-                    <div className="rounded-xl border border-[#e8e8e4] bg-[#fafafa] px-4 py-3 space-y-0.5">
-                      <p className="text-[12px] text-[#202124]/60">
-                        classin.co.kr › blog › {form.slug || "your-slug"}
-                      </p>
-                      <p className="text-[15px] font-medium leading-snug text-[#1a0dab] line-clamp-2">
-                        {seoAnalysis.effectiveTitle || "SEO 제목을 입력하세요"}
-                      </p>
-                      <p className="text-[13px] leading-relaxed text-[#4d5156] line-clamp-3">
-                        {seoAnalysis.effectiveDesc || "메타 설명을 입력하세요. 요약문이 없으면 이곳에 설명이 표시됩니다."}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Naver */}
-                  <div>
-                    <div className="mb-2 flex items-center gap-1.5">
-                      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" aria-hidden="true">
-                        <path fill="#03C75A" d="M13.75 12.6L10.12 7H7v10h3.25V11.4L14.88 17H18V7h-3.25z"/>
-                      </svg>
-                      <span className="text-[11px] font-medium text-[#1a1a1a]/40">Naver</span>
-                    </div>
-                    <div className="rounded-xl border border-[#e8e8e4] bg-[#fafafa] px-4 py-3 space-y-1">
-                      <p className="text-[15px] font-medium leading-snug text-[#1a6edb] line-clamp-2">
-                        {seoAnalysis.effectiveTitle || "SEO 제목을 입력하세요"}
-                      </p>
-                      <p className="text-[13px] leading-relaxed text-[#555] line-clamp-2">
-                        {seoAnalysis.effectiveDesc || "메타 설명을 입력하세요."}
-                      </p>
-                      <p className="text-[12px] text-[#888]">
-                        classin.co.kr › blog › {form.slug || "your-slug"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Checklist */}
-                <div className="rounded-[20px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
-                  <p className="mb-3.5 text-sm font-semibold text-[#111110]">SEO 체크리스트</p>
-                  <div className="space-y-3">
-                    {seoAnalysis.checks.map((check) => (
-                      <div key={check.id} className="flex items-start gap-3 rounded-xl px-2 py-1.5 transition-all duration-150 hover:bg-[#F6F5F4]">
-                        <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
-                          check.ok ? "bg-emerald-100" : "bg-[#FEF3EE]"
-                        }`}>
-                          {check.ok
-                            ? <Check className="h-3 w-3 text-emerald-600" />
-                            : <X className="h-3 w-3 text-[#B85C33]" />
-                          }
-                        </div>
-                        <div className="min-w-0">
-                          <p className={`text-[13px] font-medium ${check.ok ? "text-[#111110]" : "text-[#1a1a1a]/60"}`}>
-                            {check.label}
-                          </p>
-                          <p className="text-[11px] text-[#1a1a1a]/40">{check.detail}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* SEO inputs */}
-                <div className="rounded-[20px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
-                  <div className="mb-3.5 flex items-center justify-between">
-                    <p className="text-sm font-semibold text-[#111110]">SEO 메타 태그</p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (form.title) updateForm("seoTitle", form.title.slice(0, 60))
-                        if (form.excerpt) updateForm("seoDescription", form.excerpt.slice(0, 160))
-                      }}
-                      disabled={!form.title && !form.excerpt}
-                      className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-[#084734] hover:bg-[#ECFDF5] disabled:opacity-30 transition-colors"
-                    >
-                      <Sparkles className="h-3 w-3" />
-                      제목·요약에서 자동완성
-                    </button>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-[12px]">
-                          SEO 제목
-                          <FieldBadge />
-                        </Label>
-                        <span className={`text-[11px] tabular-nums ${
-                          form.seoTitle.length > 60 ? "text-[#B85C33]" :
-                          form.seoTitle.length >= 30 ? "text-emerald-600" :
-                          "text-[#1a1a1a]/30"
-                        }`}>
-                          {form.seoTitle.length} / 60
-                        </span>
-                      </div>
-                      <Input
-                        value={form.seoTitle}
-                        onChange={(event) => updateForm("seoTitle", event.target.value)}
-                        placeholder={form.title || "SEO 제목 (비워두면 제목으로 대체)"}
-                        className="h-10 rounded-xl"
-                      />
-                      <FieldHint>비우면 기본 제목을 사용합니다. 검색 결과에서는 짧고 구체적인 문장이 좋습니다.</FieldHint>
-                    </div>
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-[12px]">
-                          메타 설명
-                          <FieldBadge />
-                        </Label>
-                        <span className={`text-[11px] tabular-nums ${
-                          form.seoDescription.length > 160 ? "text-[#B85C33]" :
-                          form.seoDescription.length >= 120 ? "text-emerald-600" :
-                          "text-[#1a1a1a]/30"
-                        }`}>
-                          {form.seoDescription.length} / 160
-                        </span>
-                      </div>
-                      <textarea
-                        rows={4}
-                        value={form.seoDescription}
-                        onChange={(event) => updateForm("seoDescription", event.target.value)}
-                        placeholder={form.excerpt || "검색 결과에 보일 설명 (비워두면 요약문으로 대체)"}
-                        className={`min-h-[100px] ${SOFT_TEXTAREA_CLASS}`}
-                      />
-                      <FieldHint>비우면 한 줄 요약을 사용합니다. 권장 길이는 120-160자입니다.</FieldHint>
-                    </div>
-                    <div className="space-y-1.5 rounded-2xl border border-[#e8e8e4] bg-[#fcfcfb] p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <Label htmlFor="seo-keywords" className="text-[12px]">
-                          검색 키워드
-                          <FieldBadge />
-                        </Label>
-                        <span className={`text-[11px] tabular-nums ${tagKeywords.length > 0 ? "text-emerald-600" : "text-[#B85C33]"}`}>
-                          {tagKeywords.length}개
-                        </span>
-                      </div>
-                      <Input
-                        id="seo-keywords"
-                        value={tagsInput}
-                        onChange={(event) => updateTagsInput(event.target.value)}
-                        placeholder="학원 운영, AI 교육, 클래스인"
-                        className="h-10 rounded-xl"
-                      />
-                      <div className="flex min-h-7 flex-wrap gap-1.5 pt-1">
-                        {tagKeywords.length > 0 ? (
-                          tagKeywords.slice(0, 10).map((tag) => (
-                            <span
-                              key={tag}
-                              className="animate-in rounded-full border border-[#dcebd9] bg-white px-2.5 py-1 text-[11px] font-medium text-[#084734] shadow-[0_1px_2px_rgba(8,71,52,0.05)] fade-in-0 zoom-in-95 duration-150"
-                            >
-                              #{tag}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-[11px] text-[#1a1a1a]/35">
-                            키워드를 1개 이상 넣으면 SEO 체크리스트가 통과됩니다.
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </TabsContent>
-
-              {/* ── AI Tab ── */}
-              <TabsContent value="ai" className="mt-0 space-y-4">
-
-                {/* 초안 빠른 생성 */}
-                <div className="rounded-[20px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
-                  <p className="text-sm font-semibold text-[#111110]">초안 빠른 생성</p>
-                  <p className="mt-1 text-[12px] text-[#1a1a1a]/45">
-                    주제와 스타일을 입력하면 블로그 초안을 처음부터 작성해드립니다.
-                  </p>
-                  <div className="mt-4 space-y-3">
-                    <div>
-                      <label className="text-[12px] font-medium text-[#1a1a1a]/60">주제</label>
+                      <label htmlFor="ai-draft-topic" className="mb-1 block text-[12px] text-[#615D59]">주제</label>
                       <input
+                        id="ai-draft-topic"
                         type="text"
-                        placeholder="예: 학원 운영 효율화 방법, 학부모 소통 노하우…"
                         value={draftInput.topic}
-                        onChange={(e) => setDraftInput((prev) => ({ ...prev, topic: e.target.value }))}
-                        className={`mt-1.5 px-3 py-2 placeholder:text-[#1a1a1a]/25 ${SOFT_SELECT_CLASS}`}
+                        onChange={(event) => setDraftInput((prev) => ({ ...prev, topic: event.target.value }))}
+                        placeholder="예: 학원 운영 효율화 방법, 학부모 소통 노하우…"
+                        className={`h-10 px-3 ${SOFT_SELECT_CLASS}`}
                       />
                     </div>
-                    <div className="grid grid-cols-2 gap-2.5">
+                    <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="text-[12px] font-medium text-[#1a1a1a]/60">톤</label>
+                        <label htmlFor="ai-draft-tone" className="mb-1 block text-[12px] text-[#615D59]">톤</label>
                         <select
+                          id="ai-draft-tone"
                           value={draftInput.tone}
-                          onChange={(e) => setDraftInput((prev) => ({ ...prev, tone: e.target.value }))}
-                          className={`mt-1.5 px-3 py-2 appearance-none ${SOFT_SELECT_CLASS}`}
+                          onChange={(event) => setDraftInput((prev) => ({ ...prev, tone: event.target.value }))}
+                          className={`h-10 ${SOFT_SELECT_CLASS}`}
                         >
                           <option value="전문적">전문적</option>
                           <option value="친근한">친근한</option>
@@ -2912,11 +2624,12 @@ export default function BlogPostEditor({
                         </select>
                       </div>
                       <div>
-                        <label className="text-[12px] font-medium text-[#1a1a1a]/60">분량</label>
+                        <label htmlFor="ai-draft-length" className="mb-1 block text-[12px] text-[#615D59]">분량</label>
                         <select
+                          id="ai-draft-length"
                           value={draftInput.length}
-                          onChange={(e) => setDraftInput((prev) => ({ ...prev, length: e.target.value }))}
-                          className={`mt-1.5 px-3 py-2 appearance-none ${SOFT_SELECT_CLASS}`}
+                          onChange={(event) => setDraftInput((prev) => ({ ...prev, length: event.target.value }))}
+                          className={`h-10 ${SOFT_SELECT_CLASS}`}
                         >
                           <option value="short">짧게 (~500자)</option>
                           <option value="medium">보통 (~1200자)</option>
@@ -2925,66 +2638,53 @@ export default function BlogPostEditor({
                       </div>
                     </div>
                     <div>
-                      <label className="text-[12px] font-medium text-[#1a1a1a]/60">
-                        참고 자료
-                        <span className="ml-1 font-normal text-[#1a1a1a]/35">(선택)</span>
+                      <label htmlFor="ai-draft-reference" className="mb-1 block text-[12px] text-[#615D59]">
+                        참고 자료 <span className="text-[#A39E98]">(선택)</span>
                       </label>
                       <textarea
-                        rows={4}
-                        placeholder={"세부 내용, 통계, 링크, 핵심 포인트 등을 자유롭게 붙여넣으세요.\n예) 클래스인 사용 학원 85%가 출석 관리 시간 50% 단축\nhttps://example.com/article"}
+                        id="ai-draft-reference"
+                        rows={3}
                         value={draftInput.reference}
-                        onChange={(e) => setDraftInput((prev) => ({ ...prev, reference: e.target.value }))}
-                        className={`mt-1.5 min-h-[112px] px-3 py-2 leading-relaxed placeholder:text-[#1a1a1a]/25 ${SOFT_TEXTAREA_CLASS}`}
+                        onChange={(event) => setDraftInput((prev) => ({ ...prev, reference: event.target.value }))}
+                        placeholder={"세부 내용, 통계, 링크, 핵심 포인트 등을 붙여넣으세요."}
+                        className={`min-h-[84px] px-3 py-2 leading-relaxed ${SOFT_TEXTAREA_CLASS}`}
                       />
                     </div>
                     <button
-                      type="button"
-                      disabled={!draftInput.topic.trim() || (aiState?.action === "draft" && aiState.status !== "done" && aiState.status !== "error")}
-                      onClick={() => handleAiAction("draft", { topic: draftInput.topic, tone: draftInput.tone, length: draftInput.length, reference: draftInput.reference })}
-                      className="group mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-[#084734] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#084734]/90 disabled:cursor-not-allowed disabled:opacity-50"
+                      type="submit"
+                      disabled={!draftInput.topic.trim() || isAiBusy}
+                      className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-md bg-[#084734] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {aiState?.action === "draft" && aiState.status !== "done" && aiState.status !== "error"
-                        ? <Loader2 className="h-4 w-4 animate-spin" />
-                        : <Sparkles className="h-4 w-4" />
-                      }
+                      {aiState?.action === "draft" && isAiBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                       초안 생성
                     </button>
-                  </div>
-                </div>
+                  </form>
 
-                <div className="rounded-[20px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
-                  <p className="text-sm font-semibold text-[#111110]">AI 콘텐츠 변환</p>
-                  <p className="mt-1 text-[12px] text-[#1a1a1a]/45">
-                    블로그 내용을 다듬거나 다양한 포맷으로 자동 변환합니다.
-                  </p>
-                  <div className="mt-4 space-y-2.5">
-
+                  <div className="space-y-2">
+                    <p className="text-[13px] font-semibold text-[#111110]">이 글로 만들기</p>
                     {(
                       [
                         {
+                          action: "optimize" as AiAction,
+                          label: "본문 다듬기",
+                          desc: "기존 이미지 유지 · 전체 본문에 바로 적용됩니다",
+                          icon: <Wand2 className="h-4 w-4 text-[#084734]" />,
+                        },
+                        {
                           action: "card-news" as AiAction,
                           label: "카드뉴스 생성",
-                          desc: "표지 + 6~8장 슬라이드 구성안 자동 생성",
-                          icon: <LayoutTemplate className="h-[18px] w-[18px] text-[#084734]" />,
-                          bg: "bg-[#ECFDF5]",
+                          desc: "표지 + 6~8장 슬라이드 구성안",
+                          icon: <LayoutTemplate className="h-4 w-4 text-[#084734]" />,
                         },
                         {
                           action: "reels" as AiAction,
                           label: "릴스 스크립트",
-                          desc: "Hook 3초 + 핵심 포인트 + CTA 자막 생성",
-                          icon: <Video className="h-[18px] w-[18px] text-[#615D59]" />,
-                          bg: "bg-[#F6F5F4]",
-                        },
-                        {
-                          action: "optimize" as AiAction,
-                          label: "본문 다듬기",
-                          desc: "기존 이미지 유지 · 문장과 구조를 다듬어 바로 적용",
-                          icon: <Wand2 className="h-[18px] w-[18px] text-emerald-600" />,
-                          bg: "bg-emerald-50",
+                          desc: "Hook 3초 + 핵심 포인트 + CTA 자막",
+                          icon: <Video className="h-4 w-4 text-[#615D59]" />,
                         },
                       ] as const
-                    ).map(({ action, label, desc, icon, bg }) => {
-                      const isRunning = aiState?.action === action && aiState.status !== "done" && aiState.status !== "error"
+                    ).map(({ action, label, desc, icon }) => {
+                      const isRunning = aiState?.action === action && isAiBusy
                       const noContent = !form.title && !form.contentMarkdown
                       return (
                         <button
@@ -2992,36 +2692,489 @@ export default function BlogPostEditor({
                           type="button"
                           onClick={() => handleAiAction(action)}
                           disabled={isRunning || noContent}
-                          className="group w-full rounded-2xl border border-[#e8e8e4] bg-white p-4 text-left transition-colors hover:border-[#084734]/25 hover:bg-[#f9faf8] active:scale-[0.97] duration-75 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="flex w-full items-center gap-3 rounded-lg border border-[#e8e8e4] bg-white p-3 text-left transition-colors hover:border-[#084734]/25 hover:bg-[#FAFAF8] disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          <div className="flex items-center gap-3">
-                            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${bg}`}>
-                              {isRunning ? <Loader2 className="h-[18px] w-[18px] animate-spin text-[#084734]" /> : icon}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-semibold text-[#111110]">{label}</p>
-                              <p className="text-[12px] text-[#1a1a1a]/45">{desc}</p>
-                            </div>
-                            <Sparkles className="h-4 w-4 shrink-0 text-[#1a1a1a]/20 transition-colors group-hover:text-[#084734]/40" />
-                          </div>
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F6F5F4]">
+                            {isRunning ? <Loader2 className="h-4 w-4 animate-spin text-[#084734]" /> : icon}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-[13px] font-semibold text-[#111110]">{label}</span>
+                            <span className="block text-[11px] text-[#615D59]">{desc}</span>
+                          </span>
                         </button>
                       )
                     })}
-
-                  </div>
-
-                  {(!form.title && !form.contentMarkdown) && (
-                    <p className="mt-3 text-center text-[11px] text-[#1a1a1a]/35">
-                      제목과 본문을 먼저 작성해주세요.
+                    <p className="text-[11px] leading-relaxed text-[#615D59]">
+                      구간만 다듬으려면 본문에서 텍스트를 선택한 뒤 아래 ‘선택 구간 다듬기’를 쓰세요.
                     </p>
-                  )}
+                  </div>
                 </div>
-              </TabsContent>
+              )}
 
-            </Tabs>
+              <RichMarkdownEditor
+                ref={editorRef}
+                value={form.contentMarkdown}
+                onChange={(markdown) => updateForm("contentMarkdown", markdown)}
+                placeholder="본문을 작성해주세요"
+                imageUploadEndpoint="/api/admin/upload"
+                onTemplateClick={() => { setTemplateTab("load"); setShowTemplateModal(true) }}
+                onAiDraftClick={() => setShowAiTools(true)}
+                onSelectionOptimize={(text) => handleAiAction("optimize", undefined, text || undefined)}
+              />
+              <p className="mt-3 px-1 text-[11px] leading-5 text-[#615D59]">
+                문법 · **굵게** · *기울임* · ==강조== · {"{{green:브랜드색}}"} · [링크](url) · ![설명](/images/example.png) · {">"} 인용
+              </p>
+            </section>
           </div>
-        </aside>
+        </main>
       </div>
+
+      {/* ── 상세 설정 패널 — 오른쪽에서 열리는 탭형 패널. 글 머리 속성 표에는 자주 쓰는 6개만 둔다. ── */}
+      {showSettings && (
+        <>
+          <button
+            type="button"
+            aria-label="상세 설정 닫기"
+            onClick={closeSettings}
+            className="fixed inset-0 z-[65] bg-[#111110]/25 lg:hidden"
+          />
+          <aside
+            id="blog-settings-panel"
+            role="dialog"
+            aria-labelledby="blog-settings-title"
+            className="fixed inset-y-0 right-0 z-[70] flex w-full max-w-[440px] flex-col border-l border-[#e8e8e4] bg-white shadow-[-12px_0_32px_rgba(17,17,16,0.10)]"
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-[#F0F0EC] px-5 py-3">
+              <h2 id="blog-settings-title" className="text-[15px] font-semibold text-[#111110]">상세 설정</h2>
+              <button
+                type="button"
+                onClick={closeSettings}
+                aria-label="상세 설정 닫기"
+                className="flex h-9 w-9 items-center justify-center rounded-md text-[#615D59] transition-colors hover:bg-[#F6F5F4] hover:text-[#111110]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div
+              role="tablist"
+              aria-label="상세 설정 항목"
+              className="flex gap-1 overflow-x-auto border-b border-[#F0F0EC] px-3"
+              onKeyDown={(event) => {
+                if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return
+                event.preventDefault()
+                const index = SETTINGS_TABS.findIndex((tab) => tab.id === settingsTab)
+                const step = event.key === "ArrowRight" ? 1 : -1
+                const next = SETTINGS_TABS[(index + step + SETTINGS_TABS.length) % SETTINGS_TABS.length]
+                setSettingsTab(next.id)
+                document.getElementById(`settings-tab-${next.id}`)?.focus()
+              }}
+            >
+              {SETTINGS_TABS.map((tab) => {
+                const selected = settingsTab === tab.id
+                return (
+                  <button
+                    key={tab.id}
+                    id={`settings-tab-${tab.id}`}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    aria-controls="blog-settings-tabpanel"
+                    tabIndex={selected ? 0 : -1}
+                    onClick={() => setSettingsTab(tab.id)}
+                    className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 px-3 text-[13px] font-semibold transition-colors ${
+                      selected
+                        ? "text-[#084734] shadow-[inset_0_-2px_0_#084734]"
+                        : "text-[#615D59] hover:text-[#111110]"
+                    }`}
+                  >
+                    {tab.label}
+                    {tab.id === "seo" && (
+                      <span
+                        className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${
+                          seoAnalysis.score >= 80 ? "bg-[#ECFDF5] text-[#084734]" : "bg-[#FBF1E0] text-[#7A520F]"
+                        }`}
+                      >
+                        {seoAnalysis.score}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+            <div
+              id="blog-settings-tabpanel"
+              role="tabpanel"
+              aria-labelledby={`settings-tab-${settingsTab}`}
+              className="@container min-h-0 flex-1 overflow-y-auto px-3 pb-8 pt-3"
+            >
+              {settingsTab === "classify" && (
+                <>
+              <PropertyRow label="상태" htmlFor="status">
+                <select
+                  id="status"
+                  value={form.status}
+                  onChange={(event) => updateForm("status", event.target.value as BlogPostStatus)}
+                  className={PROP_INPUT_CLASS}
+                >
+                  {BLOG_STATUS_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </PropertyRow>
+              <PropertyRow label="목록 노출" htmlFor="featured">
+                <label className="flex min-h-9 cursor-pointer items-center gap-2.5 px-2 text-[14px] text-[#31302E]">
+                  <input
+                    id="featured"
+                    type="checkbox"
+                    checked={form.featured ?? false}
+                    onChange={(event) => updateForm("featured", event.target.checked)}
+                    className="h-4 w-4 rounded border-[#d8d8d2] accent-[#084734]"
+                  />
+                  목록 상단 Featured로 노출
+                </label>
+              </PropertyRow>
+              <PropertyRow label="추천 독자" htmlFor="targetReader">
+                <input
+                  id="targetReader"
+                  value={form.targetReader || ""}
+                  onChange={(event) => updateForm("targetReader", event.target.value)}
+                  placeholder="예) 상담 전환율을 높이고 싶은 학원 원장"
+                  className={PROP_INPUT_CLASS}
+                />
+              </PropertyRow>
+              <PropertyRow label="읽으면 좋은 점" htmlFor="benefit-0" hint="상세 페이지 상단에 노출 · 최대 3개">
+                <div className="space-y-0.5">
+                  {form.benefitItems.map((benefit, index) => (
+                    <input
+                      key={index}
+                      id={`benefit-${index}`}
+                      aria-label={`좋은 점 ${index + 1}`}
+                      value={benefit}
+                      onChange={(event) => updateBenefit(index, event.target.value)}
+                      placeholder={`좋은 점 ${index + 1}`}
+                      className={PROP_INPUT_CLASS}
+                    />
+                  ))}
+                </div>
+              </PropertyRow>
+                </>
+              )}
+              {settingsTab === "seo" && (
+                <>
+              <PropertyRow
+                label="SEO 제목"
+                htmlFor="seoTitle"
+                hint={`${form.seoTitle.length} / 60 · 비우면 제목을 씁니다`}
+              >
+                <input
+                  id="seoTitle"
+                  value={form.seoTitle}
+                  onChange={(event) => updateForm("seoTitle", event.target.value)}
+                  placeholder={form.title || "SEO 제목"}
+                  className={PROP_INPUT_CLASS}
+                />
+              </PropertyRow>
+              <PropertyRow
+                label="메타 설명"
+                htmlFor="seoDescription"
+                hint={`${form.seoDescription.length} / 160 · 비우면 요약을 씁니다 · 권장 120~160자`}
+              >
+                <textarea
+                  id="seoDescription"
+                  rows={2}
+                  value={form.seoDescription}
+                  onChange={(event) => updateForm("seoDescription", event.target.value)}
+                  placeholder={form.excerpt || "검색 결과에 보일 설명"}
+                  className={`resize-none leading-relaxed [field-sizing:content] ${PROP_INPUT_CLASS}`}
+                />
+              </PropertyRow>
+              <div className="py-2">
+                <div className="min-w-0 space-y-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (form.title) updateForm("seoTitle", form.title.slice(0, 60))
+                      if (form.excerpt) updateForm("seoDescription", form.excerpt.slice(0, 160))
+                    }}
+                    disabled={!form.title && !form.excerpt}
+                    className="inline-flex min-h-8 items-center gap-1 rounded-md px-2 text-[12px] font-medium text-[#084734] transition-colors hover:bg-[#ECFDF5] disabled:opacity-40"
+                  >
+                    <Sparkles className="h-3 w-3" />
+                    제목·요약에서 자동완성
+                  </button>
+                  <div className="rounded-lg border border-[#e8e8e4] bg-white px-4 py-3">
+                    <p className="text-[11px] text-[#615D59]">classin.co.kr › blog › {effectiveSlug || "your-slug"}</p>
+                    <p className="mt-1 line-clamp-2 text-[15px] font-semibold leading-snug text-[#084734]">
+                      {seoAnalysis.effectiveTitle || "SEO 제목을 입력하세요"}
+                    </p>
+                    <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-[#615D59]">
+                      {seoAnalysis.effectiveDesc || "메타 설명을 입력하세요. 비우면 요약이 표시됩니다."}
+                    </p>
+                  </div>
+                  <ul>
+                    {seoAnalysis.checks.map((check) => (
+                      <li key={check.id} className="flex min-h-8 items-center gap-2 text-[12px]">
+                        {check.ok ? (
+                          <Check className="h-3.5 w-3.5 shrink-0 text-[#084734]" aria-label="통과" />
+                        ) : (
+                          <X className="h-3.5 w-3.5 shrink-0 text-[#B43E3E]" aria-label="미통과" />
+                        )}
+                        <span className="text-[#31302E]">{check.label}</span>
+                        <span className="truncate text-[#615D59]">{check.detail}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+                </>
+              )}
+              {settingsTab === "convert" && (
+                <>
+              <PropertyRow
+                label="리드 마그넷"
+                htmlFor="leadMagnet"
+                hint="선택하면 본문 하단에 이메일 수집 블록이 노출되고, 신청자는 해당 마그넷 태그로 구독자 DB에 기록됩니다."
+              >
+                <select
+                  id="leadMagnet"
+                  value={form.leadMagnetSlug ?? ""}
+                  onChange={(event) => updateForm("leadMagnetSlug", event.target.value)}
+                  className={PROP_INPUT_CLASS}
+                >
+                  <option value="">표시 안 함</option>
+                  {leadOptions.map((opt) => (
+                    <option key={opt.slug} value={opt.slug}>
+                      {opt.title} · {getLeadMagnetGateLabel(opt.gate)} · {getLeadMagnetStatusLabel(opt.status)}
+                      {opt.published ? "" : " · 검토 중"}
+                    </option>
+                  ))}
+                </select>
+              </PropertyRow>
+              <PropertyRow label="CTA 문구" htmlFor="cta-eyebrow">
+                <div className="space-y-0.5">
+                  <input
+                    id="cta-eyebrow"
+                    value={form.cta.eyebrow}
+                    onChange={(event) => updateCta("eyebrow", event.target.value)}
+                    placeholder={`상단 문구 · ${DEFAULT_BLOG_CTA.eyebrow}`}
+                    className={PROP_INPUT_CLASS}
+                  />
+                  <input
+                    aria-label="CTA 제목"
+                    value={form.cta.title}
+                    onChange={(event) => updateCta("title", event.target.value)}
+                    placeholder={`제목 · ${DEFAULT_BLOG_CTA.title}`}
+                    className={PROP_INPUT_CLASS}
+                  />
+                  <textarea
+                    aria-label="CTA 설명"
+                    rows={2}
+                    value={form.cta.description}
+                    onChange={(event) => updateCta("description", event.target.value)}
+                    placeholder={`설명 · ${DEFAULT_BLOG_CTA.description}`}
+                    className={`resize-none leading-relaxed [field-sizing:content] ${PROP_INPUT_CLASS}`}
+                  />
+                </div>
+              </PropertyRow>
+              <PropertyRow label="추천 글">
+                {filteredPosts.length === 0 ? (
+                  <p className="px-2 py-1.5 text-[13px] text-[#615D59]">추천할 다른 글이 아직 없습니다.</p>
+                ) : (
+                  <div className="space-y-0.5">
+                    {filteredPosts.slice(0, 8).map((post) => (
+                      <label
+                        key={post.id}
+                        className="flex min-h-9 cursor-pointer items-center gap-2.5 rounded-md px-2 transition-colors hover:bg-[#F6F5F4]"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={form.relatedPostIds.includes(post.id)}
+                          onChange={() => toggleRelatedPost(post.id)}
+                          className="h-4 w-4 shrink-0 rounded border-[#d8d8d2] accent-[#084734]"
+                        />
+                        <span className="line-clamp-1 text-[13px] text-[#31302E]">{post.title}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </PropertyRow>
+                </>
+              )}
+              {settingsTab === "display" && (
+                <>
+              <PropertyRow label="레이아웃">
+                <div className="flex flex-wrap gap-1.5 px-2 py-1">
+                  {(
+                    [
+                      { value: "standard" as const, label: "기본", desc: "사이드 목차 + 콘텐츠" },
+                      { value: "minimal" as const, label: "미니멀", desc: "중앙 정렬 단일 컬럼" },
+                    ] as const
+                  ).map(({ value, label, desc }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => updateForm("pageLayout", value)}
+                      aria-pressed={form.pageLayout === value}
+                      className={`min-h-9 rounded-md border px-3 text-left text-[13px] transition-colors ${
+                        form.pageLayout === value
+                          ? "border-[#084734] bg-[#ECFDF5] font-semibold text-[#084734]"
+                          : "border-[#e8e8e4] bg-white text-[#31302E] hover:border-[#084734]/30"
+                      }`}
+                    >
+                      {label}
+                      <span className="ml-1.5 text-[11px] font-normal text-[#615D59]">{desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </PropertyRow>
+              <PropertyRow
+                label="발행일"
+                htmlFor="advanced-published-at"
+                hint="과거 시각은 공개 화면의 발행일로 쓰이고, 미래 시각은 발행 상태여도 그 시각 전까지 숨깁니다. 발행 창의 ‘지금’은 현재 시각으로 덮어씁니다."
+              >
+                <div className="flex flex-wrap items-center gap-1">
+                  <input
+                    id="advanced-published-at"
+                    type="datetime-local"
+                    value={isoToLocalInput(form.publishedAt)}
+                    onChange={(event) =>
+                      updateForm(
+                        "publishedAt",
+                        event.target.value ? new Date(event.target.value).toISOString() : ""
+                      )
+                    }
+                    className={`w-auto ${PROP_INPUT_CLASS}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => updateForm("publishedAt", new Date().toISOString())}
+                    className="inline-flex min-h-8 items-center rounded-md px-2 text-[12px] font-medium text-[#31302E] transition-colors hover:bg-[#F6F5F4]"
+                  >
+                    지금으로
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!initialPost?.publishedAt) return
+                      updateForm("publishedAt", initialPost.publishedAt)
+                    }}
+                    disabled={!initialPost?.publishedAt}
+                    className="inline-flex min-h-8 items-center rounded-md px-2 text-[12px] font-medium text-[#31302E] transition-colors hover:bg-[#F6F5F4] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    기존 날짜 복원
+                  </button>
+                  {form.publishedAt ? (
+                    <button
+                      type="button"
+                      onClick={() => updateForm("publishedAt", "")}
+                      className="inline-flex min-h-8 items-center rounded-md px-2 text-[12px] font-medium text-[#615D59] transition-colors hover:bg-[#FCE9E9] hover:text-[#8F2C2C]"
+                    >
+                      비우기
+                    </button>
+                  ) : null}
+                </div>
+              </PropertyRow>
+              {(["imageUrl", "heroImageUrl"] as const).map((field) => (
+                <PropertyRow
+                  key={field}
+                  label={field === "imageUrl" ? "썸네일 이미지" : "상단 배너 이미지"}
+                  htmlFor={`blog-${field}`}
+                >
+                  <div className="flex items-center gap-1">
+                    <input
+                      id={`blog-${field}`}
+                      value={form[field]}
+                      onChange={(event) => updateForm(field, event.target.value)}
+                      placeholder="/images/blog/thumb.png"
+                      className={PROP_INPUT_CLASS}
+                    />
+                    <label className="relative inline-flex min-h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-medium text-[#615D59] transition-colors focus-within:border-[#084734] hover:bg-[#F6F5F4]">
+                      {uploadingField === field ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                      업로드
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        className="sr-only"
+                        disabled={uploadingField !== null}
+                        onChange={(event) => {
+                          const file = event.target.files?.[0]
+                          if (file) void handleImageUpload(field, file)
+                          event.target.value = ""
+                        }}
+                      />
+                    </label>
+                  </div>
+                </PropertyRow>
+              ))}
+              <PropertyRow label="이미지 설명" htmlFor="thumbnailAlt" hint="비우면 제목으로 채웁니다">
+                <div className="grid grid-cols-2 gap-1">
+                  <input
+                    id="thumbnailAlt"
+                    value={form.thumbnailAlt}
+                    onChange={(event) => updateForm("thumbnailAlt", event.target.value)}
+                    placeholder="썸네일 설명"
+                    className={PROP_INPUT_CLASS}
+                  />
+                  <input
+                    aria-label="배너 이미지 설명"
+                    value={form.heroImageAlt}
+                    onChange={(event) => updateForm("heroImageAlt", event.target.value)}
+                    placeholder="배너 설명"
+                    className={PROP_INPUT_CLASS}
+                  />
+                </div>
+              </PropertyRow>
+              <PropertyRow
+                label="작성자 프로필"
+                htmlFor="authorAvatarUrl"
+                hint={
+                  form.authorAvatarUrl && !authorAvatarSrc
+                    ? "표시할 수 없는 이미지 URL입니다. 사이트 내부 경로, Supabase Storage, Unsplash 이미지만 쓸 수 있습니다."
+                    : undefined
+                }
+              >
+                <div className="flex items-start gap-2">
+                  <div className="relative mt-1 h-9 w-9 shrink-0 overflow-hidden rounded-full bg-[#f0f0ec]">
+                    {authorAvatarSrc ? (
+                      <SafeBlogImage
+                        src={authorAvatarSrc}
+                        alt={`${form.author || "작성자"} 아바타 미리보기`}
+                        fill
+                        className="object-cover"
+                        sizes="36px"
+                        fallbackIndex={initialPost?.id ?? 0}
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-[13px] font-semibold text-[#084734]">
+                        {authorInitial}
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <input
+                      id="authorAvatarUrl"
+                      value={form.authorAvatarUrl || ""}
+                      onChange={(event) => updateForm("authorAvatarUrl", event.target.value)}
+                      placeholder="아바타 이미지 URL"
+                      className={PROP_INPUT_CLASS}
+                    />
+                    <textarea
+                      aria-label="작성자 소개"
+                      rows={2}
+                      value={form.authorBio}
+                      onChange={(event) => updateForm("authorBio", event.target.value)}
+                      placeholder="작성자 소개"
+                      className={`resize-none leading-relaxed [field-sizing:content] ${PROP_INPUT_CLASS}`}
+                    />
+                  </div>
+                </div>
+              </PropertyRow>
+                </>
+              )}
+            </div>
+          </aside>
+        </>
+      )}
     </div>
   )
 }
