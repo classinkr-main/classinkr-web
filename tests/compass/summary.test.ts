@@ -46,7 +46,6 @@ function leadsViewChain(config: {
   chain.gte = vi.fn(() => chain)
   chain.lte = vi.fn(() => chain)
   chain.eq = vi.fn(() => chain)
-  chain.or = vi.fn(() => chain)
   chain.order = vi.fn(() => chain)
   chain.is = vi.fn(() => Promise.resolve(config.bdCount ?? { count: 0, error: null }))
   chain.range = vi.fn((from: number, to: number) =>

@@ -277,6 +277,6 @@ describe("isCountableCompassDemo — 「오늘 데모」·우선순위 신호로
     expect(isCountableCompassDemo({ kind: null, status: "booked" })).toBe(false)
     expect(isCountableCompassDemo({ kind: "demo", status: null })).toBe(false)
     expect(isCountableCompassDemo({ kind: "demo", status: "pending" })).toBe(false)
-    expect(isCountableCompassDemo({})).toBe(false)
+    expect(isCountableCompassDemo({ kind: null, status: null })).toBe(false)
   })
 })

@@ -8,6 +8,6 @@
 export const COMPASS_DEMO_COUNTED_STATUSES = ["booked", "done"] as const
 
 /** 회차 원장은 취소·노쇼·미팅도 보존한다. 데모 건수(「오늘 데모」)·업무 신호(우선순위)는 유효 회차만 사용한다. */
-export function isCountableCompassDemo(row: { kind?: string | null; status?: string | null }): boolean {
+export function isCountableCompassDemo(row: { kind: string | null; status: string | null }): boolean {
   return row.kind === "demo" && (COMPASS_DEMO_COUNTED_STATUSES as readonly string[]).includes(row.status ?? "")
 }
