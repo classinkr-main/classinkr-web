@@ -14,7 +14,7 @@ export default function StockAvailabilityGauge({ warehouse, available, planned, 
   const invalid = ![warehouse, available, planned].every(Number.isFinite) || warehouse < 0 || planned < 0 || available > warehouse
   const overbooked = !invalid && available < 0
   const ratio = !invalid && warehouse > 0 ? Math.max(0, Math.min(100, available / warehouse * 100)) : 0
-  const label = invalid ? "원장 점검 필요" : overbooked ? `예정 초과 ${formatNumber(-available)}대` : warehouse === 0 ? "창고 재고 없음" : `가용률 ${Math.round(ratio)}%`
+  const label = invalid ? "원본 점검 필요" : overbooked ? `예정 초과 ${formatNumber(-available)}대` : warehouse === 0 ? "창고 재고 없음" : `가용률 ${Math.round(ratio)}%`
   const description = `창고 ${formatNumber(warehouse)}대 · 가용 ${formatNumber(available)}대 · 예정 ${formatNumber(planned)}대. ${label}`
 
   return (

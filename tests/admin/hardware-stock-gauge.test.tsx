@@ -24,10 +24,10 @@ describe("재고 게이지의 수량 의미", () => {
     expect(html).not.toContain("가용률")
   })
 
-  it("음수 창고와 과다 가용 값은 원장 점검으로 표시한다", () => {
+  it("음수 창고와 과다 가용 값은 원본 점검으로 표시한다", () => {
     for (const [warehouse, available, planned] of [[-3, -5, 2], [3, 5, 0]]) {
       const html = renderToStaticMarkup(<StockAvailabilityGauge warehouse={warehouse} available={available} planned={planned} />)
-      expect(html).toContain("원장 점검 필요")
+      expect(html).toContain("원본 점검 필요")
       expect(html).not.toContain("가용률")
     }
   })

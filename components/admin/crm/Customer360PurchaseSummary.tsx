@@ -23,7 +23,7 @@ export default function Customer360PurchaseSummary({ data }: { data: Customer360
         <h2 className="text-[12px] font-semibold text-[#615D59]">누적 하드웨어 구매량</h2>
         <p className="mt-1 text-[24px] font-semibold tabular-nums tracking-tight text-[#084734]">{hwValue == null ? "—" : hwValue.toLocaleString("ko-KR")}<span className="ml-1 text-[12px] font-normal text-[#615D59]">{hwValue == null ? "수량 미확인" : summary.hwQuantity == null ? "대 · 전자칠판" : "개 · 실출고"}</span></p>
         <details className="mt-1"><summary className="min-h-8 cursor-pointer py-1 text-[12px] text-[#615D59]">품목·원천 자세히</summary>
-        <p className="mt-2 text-[13px] text-[#615D59]">원장 누적 금액 {summary.hwCumulativeCNY == null ? "미확인" : formatCNY(summary.hwCumulativeCNY)}</p>
+        <p className="mt-2 text-[13px] text-[#615D59]">원본 누적 금액 {summary.hwCumulativeCNY == null ? "미확인" : formatCNY(summary.hwCumulativeCNY)}</p>
         {hardwareOrdersNeo.length ? <p className="mt-1 text-[13px] text-[#615D59]">NEO 오더 {hardwareUsd == null ? "금액 미확인" : formatUSD(hardwareUsd)} · {hardwareOrdersNeo.length}건</p> : null}
         {summary.hwProducts?.length ? <ul className="mt-3 space-y-1 border-t border-black/[0.08] pt-3 text-[13px] text-[#111110]">{summary.hwProducts.map(item => <li key={item.product} className="flex justify-between gap-3"><span className="min-w-0 break-words">{item.product}</span><span className="shrink-0 tabular-nums">{item.quantity.toLocaleString("ko-KR")}개</span></li>)}</ul> : null}
         {hardwareOrders.length ? <p className="mt-3 text-[12px] text-[#615D59]">주문 품목: {hardwareOrders.map(item => `${item.product} ${item.quantity}개`).join(" · ")} · 출고 수량과 별도</p> : null}
@@ -34,7 +34,7 @@ export default function Customer360PurchaseSummary({ data }: { data: Customer360
         <h2 className="text-[12px] font-semibold text-[#615D59]">누적 소프트웨어 구매량</h2>
         <p className="mt-1 text-[24px] font-semibold tabular-nums tracking-tight text-[#084734]">{summary.swCumulativeCNY == null ? softwareUsd == null ? "—" : formatUSD(softwareUsd) : formatCNY(summary.swCumulativeCNY)}</p>
         <details className="mt-1"><summary className="min-h-8 cursor-pointer py-1 text-[12px] text-[#615D59]">품목·원천 자세히</summary>
-        <p className="mt-2 text-[13px] text-[#615D59]">{summary.swCumulativeCNY == null && softwareUsd != null ? "NEO 오더 금액 · USD" : "REV 원장 누적 금액 · CNY"}</p>
+        <p className="mt-2 text-[13px] text-[#615D59]">{summary.swCumulativeCNY == null && softwareUsd != null ? "NEO 오더 금액 · USD" : "REV 원본 누적 금액 · CNY"}</p>
         {softwareOrdersNeo.length ? <p className="mt-1 text-[13px] text-[#615D59]">NEO 오더 {softwareUsd == null ? "금액 미확인" : formatUSD(softwareUsd)} · {softwareOrdersNeo.length}건 · REV와 별도</p> : null}
         {software.length ? <ul className="mt-3 space-y-1 border-t border-black/[0.08] pt-3 text-[13px] text-[#111110]">{software.map(item => <li key={item.key} className="flex justify-between gap-3"><span className="min-w-0 break-words">{item.product}</span><span className="shrink-0 tabular-nums">{item.quantity.toLocaleString("ko-KR")}개 · 주문 수량</span></li>)}</ul> : <p className="mt-3 text-[12px] text-[#615D59]">라이선스·좌석 수량은 등록된 주문 품목이 있을 때 표시합니다.</p>}
         <p className="mt-3 text-[12px] text-[#615D59]">상품별 단위가 달라 품목 수량은 서로 더하지 않습니다.</p>
