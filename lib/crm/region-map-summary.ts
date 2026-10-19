@@ -262,6 +262,16 @@ export function toRegionLayer(
   }
 }
 
+/**
+ * 원천 하나라도 실패·절단된 지도(부분 지도)인가. 서버(정상 캐시에 넣지 않음·force 면 던짐)·라우트(no-store)·
+ * 화면(요청 캐시에 남기지 않음·확인된 분포를 덮지 않음)이 같은 판정을 쓴다.
+ */
+export function isIncompleteRegionMap(
+  map: { layers: ReadonlyArray<Pick<CrmRegionLayer, "failed" | "truncated">> } | null | undefined
+): boolean {
+  return Boolean(map?.layers.some((layer) => layer.failed || layer.truncated))
+}
+
 /** 필터에 맞는 행이 없으면 빈 범위다. 다른 담당자·원천으로 폴백하지 않는다. */
 export function scopeRegionLayer(layer: CrmRegionLayer, ownerNames: readonly string[] | null): CrmRegionLayer {
   if (ownerNames === null) return layer

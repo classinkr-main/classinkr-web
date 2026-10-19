@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest"
 import SyncStatusBar from "@/components/admin/branch/SyncStatusBar"
 import type { BranchDataSources } from "@/components/admin/branch/types"
 
-function renderBar(asOf: string, extra: { sheetFreshnessError?: boolean; lastError?: string } = {}) {
+function renderBar(asOf: string, extra: { sheetFreshnessError?: boolean; lastError?: string; lastErrorOrigin?: "run" | "request" } = {}) {
   const dataSources: BranchDataSources = {
     rev: { kind: "import", asOf }, dsh: { kind: "mirror", asOf: "2026-10-15T02:58:49.279Z" },
   }
@@ -31,6 +31,7 @@ describe("SyncStatusBar import capture window", () => {
   })
 
   it("keeps the failed sync warning when source access fails", () => {
-    expect(renderBar("2026-08-28T00:00:00Z", { lastError: "rev: permission denied" })).toContain("원천 갱신 실패")
+    // 실행 기록(branch_sync_runs)의 실패만 원천 갱신 실패다 — 출처는 pickSyncStatusError 가 정한다.
+    expect(renderBar("2026-08-28T00:00:00Z", { lastError: "rev: permission denied", lastErrorOrigin: "run" })).toContain("원천 갱신 실패")
   })
 })

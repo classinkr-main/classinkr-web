@@ -1,4 +1,6 @@
-import { readFileSync } from "node:fs"
+import { spawnSync } from "node:child_process"
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
 import path from "node:path"
 
 import { NextRequest } from "next/server"
@@ -121,6 +123,23 @@ describe("vercel.json — 리드 연락 반영 일정", () => {
     const entries = config.crons.filter((cron) => cron.path === "/api/cron/lead-contact-sync")
     expect(entries).toHaveLength(1)
     expect(entries[0].schedule).toBe("*/5 * * * *")
-    expect(24 * 60 / 5).toBeLessThanOrEqual(288)
+
+    // 하루 288회 상한은 상수식이 아니라 실제 일정(entries[0])을 prebuild 크론 가드(scripts/check-vercel-crons.mjs —
+    // 분·시 필드를 풀어 하루 실행 수를 센다)로 돌려 확인한다. 가드는 cwd 의 vercel.json·app 라우트를 읽으므로 이 항목
+    // 하나만 담은 임시 디렉터리에서 실행한다.
+    const dir = mkdtempSync(path.join(tmpdir(), "lead-contact-cron-"))
+    try {
+      writeFileSync(path.join(dir, "vercel.json"), JSON.stringify({ crons: [entries[0]] }))
+      mkdirSync(path.join(dir, "app/api/cron/lead-contact-sync"), { recursive: true })
+      writeFileSync(path.join(dir, "app/api/cron/lead-contact-sync/route.ts"), "export {}\n")
+      const guard = spawnSync(process.execPath, [path.join(process.cwd(), "scripts/check-vercel-crons.mjs")], {
+        cwd: dir,
+        encoding: "utf8",
+      })
+      expect(`${guard.stdout}${guard.stderr}`).toContain("Vercel cron safety check passed")
+      expect(guard.status).toBe(0)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

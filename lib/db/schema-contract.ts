@@ -675,7 +675,7 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     migration: "supabase/migrations/20260915_meta_leadgen_single_receiver.sql",
     severity: "warning",
     impact:
-      "어드민 웹훅이 모드를 읽지 못해 항상 admin(지금 경로)으로 돈다 — shadow·compass 전환 불가. 미러·폴백 크론은 건너뛴다.",
+      "어드민 웹훅이 모드를 읽지 못해 항상 admin(지금 경로)으로 돈다 — shadow·compass 전환 불가. 미러·폴백 크론(meta-lead-mirror)은 건너뛰지 않고 스위치 읽기 실패로 매 실행 failed(500)로 끝난다.",
   },
   {
     kind: "table",

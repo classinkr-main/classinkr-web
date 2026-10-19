@@ -8,6 +8,7 @@ import { deriveLeadRegionLabel } from "@/lib/crm/lead-message"
 import { NAVER_MAP_SOURCE_OBJECT, NAVER_MAP_SOURCE_SYSTEM } from "@/lib/crm/naver-map-source"
 import {
   emptyRegionTally,
+  isIncompleteRegionMap,
   tallyDerivedRegion,
   tallyRegionValue,
   toRegionLayer,
@@ -124,11 +125,6 @@ function sourceState<T>(result: RegionSourceRows<T>) {
     truncated: !result.error && result.truncated,
     rowLimit: REGION_MAP_SOURCE_ROW_LIMIT,
   }
-}
-
-/** 원천 하나라도 실패·절단된 지도 — 정상 값으로 캐시하지 않고, 새로고침이면 최근 확인값을 덮지 않는다. */
-function isIncompleteRegionMap(map: CrmRegionMap): boolean {
-  return map.layers.some((layer) => layer.failed || layer.truncated)
 }
 
 async function buildCrmRegionMap(): Promise<CrmRegionMap> {
@@ -394,11 +390,14 @@ const getCachedCrmRegionMap = unstable_cache(
 )
 
 /**
- * 원천이 실패·절단됐을 때의 두 경로:
- *  - force(새로고침·60초 갱신·다시 시도 — 화면에 이미 분포가 있다): 던진다. 라우트가 500을 내고
- *    화면은 "최근 확인한 분포를 유지"한다 — 부분 합계로 확인값을 덮지 않는다.
- *  - 캐시 경로(첫 읽기 — 화면에 아직 아무것도 없다): 캐시에 넣지 않고, 실패 레이어는 "모름"·절단 레이어는
- *    "부분값" 표시(failed·truncated·notes)를 단 지도를 그대로 돌려준다. 나머지 레이어는 정상으로 보인다.
+ * 원천이 실패·절단됐을 때(isIncompleteRegionMap)의 두 경로:
+ *  - force(?force=1): 던진다. 라우트가 500을 내고 화면은 "최근 확인한 분포를 유지"한다 — 부분 합계로 확인값을
+ *    덮지 않는다. 패널(CrmRegionMapPanel regionMapRefreshUrl)은 화면에 완전한 분포가 떠 있을 때만 force를
+ *    붙인다(새로고침·60초 갱신).
+ *  - 캐시 경로: 첫 읽기, 그리고 지킬 확인값이 없을 때의 갱신(오류 화면의 '다시 시도'·60초 갱신, 부분 지도가 떠
+ *    있을 때의 새로고침). 캐시에 넣지 않고, 실패 레이어는 "모름"·절단 레이어는 "부분값" 표시(failed·truncated·
+ *    notes)를 단 지도를 그대로 돌려준다 — 라우트는 no-store로 내보내고 화면은 요청 캐시에 남기지 않는다.
+ *    여기서도 던지면 원천 하나가 복구될 때까지 '다시 시도'가 오류 화면에 갇힌다.
  */
 export async function getCrmRegionMap(options: { force?: boolean } = {}): Promise<CrmRegionMap> {
   if (options.force) {

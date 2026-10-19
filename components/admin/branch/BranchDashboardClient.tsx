@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation"
 import type { KeyboardEvent } from "react"
 import { useState, useCallback, useEffect, useMemo, useRef, use } from "react"
 import { AlertTriangle, CalendarDays, ChevronLeft, RefreshCw } from "lucide-react"
-import SyncStatusBar from "./SyncStatusBar"
+import SyncStatusBar, { pickSyncStatusError } from "./SyncStatusBar"
 import type { DealModalDeal } from "./sections/DealModal"
 import { adminFetchJson, clearBranchRequestCache, useBranchJson, type BranchJsonState } from "./client-api"
 import CompassTeamSection from "./sections/CompassTeamSection"
@@ -444,7 +444,13 @@ export default function BranchDashboardClient({
   }, [canRunAdminOperations])
 
   const lastSync = summary.data?.lastSync ?? null
-  const lastError = syncError ?? summary.error ?? summary.data?.lastError ?? null
+  // 화면 요청 오류(수동 동기화 POST → 요약 GET)가 실행 기록 오류보다 앞선다. 출처(origin)로 "원천 갱신 실패"
+  // 머리말을 실행 기록 오류에만 붙인다(SyncStatusBar).
+  const { lastError, lastErrorOrigin } = pickSyncStatusError({
+    syncError,
+    summaryError: summary.error,
+    runError: summary.data?.lastError,
+  })
   const sheetModifiedAt = summary.data?.sheetModifiedAt ?? null
   // 품질 감사 2026-09-10 — #2: summary GET 자체가 실패한 경우(summary.error)는 SyncStatusBar가
   // lastError로 이미 앰버/빨강 배지를 낸다 — sheetFreshnessError는 "요청은 성공했지만 Drive
@@ -613,6 +619,7 @@ export default function BranchDashboardClient({
           lastSync={lastSync}
           lastSyncStartedAt={summary.data?.lastSyncStartedAt}
           lastError={lastError}
+          lastErrorOrigin={lastErrorOrigin}
           sheetModifiedAt={sheetModifiedAt}
           dataSources={dataSources}
           onRefresh={onRefresh}

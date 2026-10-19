@@ -9,10 +9,34 @@ import type { CrmSyncSummary, RevSyncHealth } from "@/lib/crm/rev-sync-health"
 import { useVisibleInterval } from "./use-visible-interval"
 import type { BranchDataSourceInfo, BranchDataSources } from "./types"
 
+/**
+ * lastError 의 출처. run — 마지막 동기화 실행 기록(branch_sync_runs)이 실패로 남았다(원천 갱신이 실제로 실패).
+ * request — 이 화면의 요청(수동 동기화 POST·요약 GET, 타임아웃 포함)이 실패했다. 시트 동기화는 멀쩡할 수 있다.
+ */
+export type SyncStatusErrorOrigin = "run" | "request"
+
+/**
+ * KR Team 대시보드가 상태 줄에 넘길 오류와 그 출처. 화면 요청 오류(수동 동기화 → 요약 불러오기)가 실행 기록 오류보다
+ * 앞선다 — 보이는 오류의 출처가 곧 origin 이다. "원천 갱신 실패" 머리말은 run 일 때만 붙는다.
+ */
+export function pickSyncStatusError(input: {
+  syncError: string | null
+  summaryError: string | null | undefined
+  runError: string | null | undefined
+}): { lastError: string | null; lastErrorOrigin: SyncStatusErrorOrigin | null } {
+  const requestError = input.syncError ?? input.summaryError ?? null
+  if (requestError != null) return { lastError: requestError, lastErrorOrigin: "request" }
+  const runError = input.runError ?? null
+  if (runError != null) return { lastError: runError, lastErrorOrigin: "run" }
+  return { lastError: null, lastErrorOrigin: null }
+}
+
 interface SyncStatusBarProps {
   lastSync: string | null
   lastSyncStartedAt?: string | null
   lastError: string | null
+  /** lastError 의 출처(pickSyncStatusError). 생략하면 request — 실행 기록으로 확인되지 않은 실패를 원천 갱신 실패로 단정하지 않는다. */
+  lastErrorOrigin?: SyncStatusErrorOrigin | null
   sheetModifiedAt?: string | null
   dataSources?: BranchDataSources | null
   onRefresh: () => Promise<void>
@@ -55,7 +79,7 @@ function sourceLabel(source: BranchDataSourceInfo, now: number): string {
   return "라이브 시트"
 }
 
-export default function SyncStatusBar({ lastSync, lastSyncStartedAt, lastError, sheetModifiedAt, dataSources, onRefresh, syncEnabled = true, staleSince = null, crmSync = null, sheetFreshnessError = false }: SyncStatusBarProps) {
+export default function SyncStatusBar({ lastSync, lastSyncStartedAt, lastError, lastErrorOrigin = null, sheetModifiedAt, dataSources, onRefresh, syncEnabled = true, staleSince = null, crmSync = null, sheetFreshnessError = false }: SyncStatusBarProps) {
   const [busy, setBusy] = useState(false)
   // Tick once a minute so relative timestamps stay current without a refetch.
   // visibility-aware(코덱스 감사 #15): 백그라운드 탭에서는 멈추고 복귀 즉시 1회 따라잡는다.
@@ -68,6 +92,8 @@ export default function SyncStatusBar({ lastSync, lastSyncStartedAt, lastError, 
 
   // 오류 분류 라벨 — 상태 줄 본문과 "실패 원인 보기" 펼침이 같은 값을 쓴다. 원문(lastError)은 화면에 싣지 않는다.
   const lastErrorLabel = lastError ? SYNC_FAILURE_CLASS_LABEL[classifySyncFailure("sheets", lastError).failureClass] : null
+  // 실행 기록으로 확인된 실패만 "원천 갱신 실패"다 — 요약 불러오기 타임아웃 등 화면 요청 오류는 시트가 멀쩡할 수 있다.
+  const runFailed = Boolean(lastError) && lastErrorOrigin === "run"
 
   // 임포트 원천이 시트 동기화보다 오래됐는지 — 2026-07-16 사고(7/3 스테일 임포트가 13일간
   // 최신 시트를 가림) 재발 시 이 배너로 드러난다. sheetAhead(시트가 미러보다 앞섬)와는
@@ -118,12 +144,14 @@ export default function SyncStatusBar({ lastSync, lastSyncStartedAt, lastError, 
             <span role={lastError ? "alert" : "status"} className="text-[#1a1a1a]/75">
               {lastError
                 ? // 원문 오류(예: 시트 API 의 권한 문구)는 키·내부 URL 이 섞일 수 있어 싣지 않고, 동기화 경고 띠와
-                  // 같은 분류로 말한다(lib/admin/sync-health.ts 정직 규칙). 원문은 실행 기록(DB)에 남아 있다.
+                  // 같은 분류로 말한다(lib/admin/sync-health.ts 정직 규칙).
                   // lastError 에는 동기화 실패만 오지 않는다 — 수동 동기화 요청 실패(권한·타임아웃 포함)·요약
-                  // 불러오기 실패·마지막 실행 기록 오류가 섞여 온다(BranchDashboardClient). 그래서 "동기화
-                  // 실패"로 단정하지 않고 둘 다를 가리키는 라벨로 말한다. 머리말 "원천 갱신 실패"(10-14 KR Team
-                  // 정리)는 그대로 두고 뒤에 분류를 붙인다 — 두 줄기의 경고 문구를 함께 살린 병합.
-                  `원천 갱신 실패 · 불러오기·동기화 오류 — ${lastErrorLabel}`
+                  // 불러오기 실패·마지막 실행 기록 오류가 섞여 온다(BranchDashboardClient pickSyncStatusError).
+                  // 머리말 "원천 갱신 실패"(10-14 KR Team 정리)는 실행 기록 오류(run)에만 붙인다 — 화면 요청 오류는
+                  // "동기화 실패"로도 "원천 갱신 실패"로도 단정하지 않는다(09-mooni 3cb0e382).
+                  runFailed
+                    ? `원천 갱신 실패 · 동기화 실행 오류 — ${lastErrorLabel}`
+                    : `불러오기·동기화 오류 — ${lastErrorLabel}`
                 : staleRefresh
                   ? `갱신 실패 — ${relativeTime(new Date(staleSince as number).toISOString(), now)} 데이터 표시 중`
                   : importStale
@@ -171,8 +199,14 @@ export default function SyncStatusBar({ lastSync, lastSyncStartedAt, lastError, 
         {lastError ? <details className="mt-1 text-[#615D59]">
           <summary className="inline-flex min-h-11 cursor-pointer items-center text-[12px] underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-[#084734] md:min-h-0">실패 원인 보기</summary>
           {/* 10-14 의 펼침은 원문을 보여 줬지만, 09-25 정직 규칙(원문에 키·내부 URL 이 섞일 수 있음)에 따라
-              분류와 원문을 볼 수 있는 곳만 알린다. */}
-          <p className="mt-2 break-words">분류: {lastErrorLabel}. 원문 오류는 키·내부 주소가 섞일 수 있어 화면에 싣지 않습니다. 동기화 실행의 원문은 운영 상태(/admin/ops) 실행 기록에서 확인합니다.</p>
+              분류와 출처만 알린다. 원문을 보여 주는 화면은 없다 — 운영 상태(/admin/ops)도 분류만 보이므로 그곳을
+              가리키지 않는다. 실행 기록 오류의 원문은 DB(branch_sync_runs.error)에만, 화면 요청 오류는 어디에도
+              저장되지 않는다. */}
+          <p className="mt-2 break-words">
+            {runFailed
+              ? `분류: ${lastErrorLabel}. 마지막 동기화 실행 기록의 오류입니다. 원문은 키·내부 주소가 섞일 수 있어 화면에 싣지 않고 DB 실행 기록(branch_sync_runs.error)에만 남습니다.`
+              : `분류: ${lastErrorLabel}. 이 화면의 요청(요약 불러오기·수동 동기화 요청)에서 받은 오류라 시트 원천의 문제로 단정하지 않습니다. 원문은 키·내부 주소가 섞일 수 있어 화면에 싣지 않습니다. 다시 불러와도 계속되면 개발 담당에게 알려 주세요.`}
+          </p>
           {importStale ? <a href="/admin/branch/ledger" className="inline-flex min-h-11 items-center text-[#7A520F] underline underline-offset-2">장부에서 재동기화 →</a> : null}
         </details> : null}
         {(dataSources || crmSync) && (
