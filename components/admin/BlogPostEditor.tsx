@@ -254,11 +254,6 @@ const SOFT_TEXTAREA_CLASS =
   `w-full resize-none rounded-xl border border-[#e8e8e4] bg-white px-4 py-3 text-sm outline-none placeholder:text-[#1a1a1a]/25 ${SOFT_INPUT_CLASS}`
 const SOFT_SELECT_CLASS =
   `w-full rounded-xl border border-[#e8e8e4] bg-white px-3 text-sm outline-none ${SOFT_INPUT_CLASS}`
-const BLOG_COVER_PREVIEWS = [
-  { label: "상세 히어로", ratio: "16:10", className: "aspect-[16/10]" },
-  { label: "추천 카드", ratio: "4:3", className: "aspect-[4/3]" },
-  { label: "목록 썸네일", ratio: "16:11", className: "aspect-[16/11]" },
-] as const
 type LeadMagnetOption = (typeof leadMagnetOptions)[number]
 
 function escapeRegExp(value: string) {
@@ -2167,57 +2162,38 @@ export default function BlogPostEditor({
             {/* 대표 이미지 */}
             <section aria-label="대표 이미지" className="mb-7">
               {coverPreviewUrl ? (
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <div className="relative aspect-[16/10] min-w-0 flex-1 overflow-hidden rounded-xl bg-[#f0f0ec]">
-                    <Image
-                      src={coverPreviewUrl}
-                      alt={form.heroImageAlt || "대표 이미지 미리보기"}
-                      fill
-                      className="object-cover"
-                      sizes="(min-width: 768px) 620px, 100vw"
-                      unoptimized
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 sm:flex sm:w-[120px] sm:shrink-0 sm:flex-col">
-                    {BLOG_COVER_PREVIEWS.slice(1).map((preview) => (
-                      <div key={preview.label} className="min-w-0">
-                        <div className={`relative overflow-hidden rounded-md bg-[#f0f0ec] ${preview.className}`}>
-                          <Image
-                            src={coverPreviewUrl}
-                            alt={`${preview.label} 미리보기`}
-                            fill
-                            className="object-cover"
-                            sizes="120px"
-                            unoptimized
-                          />
-                        </div>
-                        <p className="mt-1 text-[11px] text-[#615D59]">{preview.label} {preview.ratio}</p>
-                      </div>
-                    ))}
-                    <div className="col-span-2 flex items-center gap-1 sm:mt-auto sm:flex-col sm:items-stretch">
-                      <label className="relative inline-flex min-h-9 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#084734] transition-colors focus-within:border-[#084734] hover:bg-[#F6F5F4]">
-                        {uploadingField ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                        바꾸기
-                        <input
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp,image/gif"
-                          className="sr-only"
-                          disabled={uploadingField !== null}
-                          onChange={(event) => {
-                            const file = event.target.files?.[0]
-                            if (file) void handleImageUpload("heroImageUrl", file)
-                            event.target.value = ""
-                          }}
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        onClick={removeCoverImage}
-                        className="inline-flex min-h-9 items-center justify-center rounded-md px-2.5 text-[12px] text-[#615D59] transition-colors hover:bg-[#FCE9E9] hover:text-[#8F2C2C]"
-                      >
-                        제거
-                      </button>
-                    </div>
+                <div className="relative aspect-[16/10] overflow-hidden rounded-xl bg-[#f0f0ec]">
+                  <Image
+                    src={coverPreviewUrl}
+                    alt={form.heroImageAlt || "대표 이미지 미리보기"}
+                    fill
+                    className="object-cover"
+                    sizes="(min-width: 768px) 760px, 100vw"
+                    unoptimized
+                  />
+                  <div className="absolute right-3 top-3 flex items-center gap-1.5">
+                    <label className="relative inline-flex min-h-9 cursor-pointer items-center justify-center gap-1.5 rounded-md bg-white/95 px-3 text-[12px] font-semibold text-[#084734] shadow-sm transition-colors focus-within:ring-2 focus-within:ring-[#084734] hover:bg-white">
+                      {uploadingField ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                      바꾸기
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        className="sr-only"
+                        disabled={uploadingField !== null}
+                        onChange={(event) => {
+                          const file = event.target.files?.[0]
+                          if (file) void handleImageUpload("heroImageUrl", file)
+                          event.target.value = ""
+                        }}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={removeCoverImage}
+                      className="inline-flex min-h-9 items-center justify-center rounded-md bg-white/95 px-3 text-[12px] font-medium text-[#615D59] shadow-sm transition-colors hover:bg-[#FCE9E9] hover:text-[#8F2C2C]"
+                    >
+                      제거
+                    </button>
                   </div>
                 </div>
               ) : (
