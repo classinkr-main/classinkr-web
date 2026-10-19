@@ -35,6 +35,7 @@ import {
   runSkipReason,
   segmentExportUrl,
   segmentPreviewUrl,
+  segmentTagListHref,
   segmentTaskTitle,
   segmentsListUrl,
   splitMemberKeys,
@@ -44,6 +45,7 @@ import {
   validateSegmentDraft,
 } from "@/components/admin/crm/segments/segment-hub-api"
 import type { SavedSegmentListItem } from "@/lib/crm/saved-segment-api"
+import { CURRENT_OWNER_VALUE, parseOwnerParam, parseTagParam } from "@/components/admin/crm/unified/shared"
 
 const LEAD_A = "11111111-1111-4111-8111-111111111111"
 const LEAD_B = "22222222-2222-4222-8222-222222222222"
@@ -225,6 +227,22 @@ describe("URL — 미리보기·CSV·통합 목록 딥링크(or 반복 규약)",
     expect(new URL(unifiedListHref(orFilter) ?? "", "https://x").searchParams.getAll("or")).toHaveLength(2)
     expect(unifiedListHref({ risk: ["urgent"] })).toBe("/admin/crm/customers/unified?owner=&risk=urgent")
     expect(unifiedListHref({})).toBe("/admin/crm/customers/unified?owner=")
+  })
+
+  it("태그 확인 링크 — 허브가 붙인 라벨로 좁힌 통합 목록, 전체 담당(owner=)·라벨 정규화", () => {
+    // 태그 붙이기·자동 태그는 담당과 무관한 전체 기준 — 통합 목록은 owner 생략이 로그인 담당이라 전체를 밝힌다.
+    expect(segmentTagListHref("VIP")).toBe("/admin/crm/customers/unified?owner=&tag=VIP")
+    const url = new URL(segmentTagListHref("  이탈   위험 "), "https://x")
+    expect(url.pathname).toBe("/admin/crm/customers/unified")
+    expect(url.searchParams.get("owner")).toBe("")
+    expect(url.searchParams.get("tag")).toBe("이탈 위험")
+    // 착지 해석 — 목록 화면의 같은 파서로 읽으면 전체 담당(""), 로그인 담당(`__me`)이 아니다. 라벨은 그대로.
+    expect(parseOwnerParam(url.searchParams.get("owner"))).toBe("")
+    expect(parseOwnerParam(url.searchParams.get("owner"))).not.toBe(CURRENT_OWNER_VALUE)
+    expect(parseTagParam(url.searchParams.get("tag"))).toBe("이탈 위험")
+    // 빈 라벨은 목록 그대로(태그 필터·담당 없이).
+    expect(segmentTagListHref("  ")).toBe("/admin/crm/customers/unified")
+    expect(segmentTagListHref(null)).toBe("/admin/crm/customers/unified")
   })
 
   it("목록 URL — 기본(전체·활성)은 파라미터 없음", () => {

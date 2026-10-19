@@ -41,7 +41,6 @@ import {
   downloadUnifiedCustomersCsv,
   readSessionAdminRole,
 } from "../unified/export-csv"
-import { unifiedCustomersTagHref } from "../unified/shared"
 import {
   CRM_TAG_ADMIN_PATH,
   CRM_TODAY_CONTACTS_PATH,
@@ -57,6 +56,7 @@ import {
   memberTruncationNote,
   previewLeadAssignment,
   segmentExportUrl,
+  segmentTagListHref,
   segmentTaskTitle,
   splitMemberKeys,
   type LeadAssignmentPreview,
@@ -115,7 +115,7 @@ export interface SegmentActionResultState {
 export function segmentActionResultLinks(result: SegmentActionResultState): Array<{ label: string; href: string }> {
   if (result.kind === "tag") {
     const links: Array<{ label: string; href: string }> = []
-    if (result.label) links.push({ label: "목록에서 보기", href: unifiedCustomersTagHref(result.label) })
+    if (result.label) links.push({ label: "목록에서 보기", href: segmentTagListHref(result.label) })
     links.push({ label: "태그 관리", href: CRM_TAG_ADMIN_PATH })
     return links
   }

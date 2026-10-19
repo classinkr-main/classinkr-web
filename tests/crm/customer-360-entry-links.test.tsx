@@ -31,10 +31,16 @@ describe("activityFocusBackHref", () => {
     )
   })
 
-  it("드로어로 열 수 없는 대상은 이름 검색으로, 이름도 없으면 목록으로 착지한다", () => {
+  it("드로어로 열 수 없는 대상은 전체 담당 이름 검색으로, 이름도 없으면 목록으로 착지한다", () => {
+    // 통합 목록은 owner 생략이 로그인 담당(2026-10-16) — 담당 키 없는 전환 고객 행이 빠지지 않게 전체(owner=)를 밝힌다.
     expect(activityFocusBackHref({ back: "", targetType: "customer", targetId: "c-1", label: "큰 학원" })).toBe(
-      "/admin/crm/customers/unified?q=%ED%81%B0%20%ED%95%99%EC%9B%90"
+      "/admin/crm/customers/unified?owner=&q=%ED%81%B0%20%ED%95%99%EC%9B%90"
     )
+    const deal = new URL(activityFocusBackHref({ back: "", targetType: "deal", targetId: "d-1", label: " 가나 학원 " }), "http://x")
+    expect(deal.pathname).toBe("/admin/crm/customers/unified")
+    expect(deal.searchParams.has("owner")).toBe(true)
+    expect(deal.searchParams.get("owner")).toBe("")
+    expect(deal.searchParams.get("q")).toBe("가나 학원")
     expect(activityFocusBackHref({ back: "", targetType: undefined, targetId: "abc", label: "" })).toBe(
       "/admin/crm/customers/unified"
     )

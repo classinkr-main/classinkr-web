@@ -146,6 +146,15 @@ interface CrmCommandPaletteProps {
   initiallyOpen?: boolean
 }
 
+/**
+ * 고객 검색 URL — 전체 담당(`owner=`)에서 이름으로 찾는다. 라우트는 owner 생략이 로그인 담당이라(2026-10-16 기본 담당
+ * 계약, lib/admin/data-owner.ts dataOwnerFromParams) 담당을 빼면 동료 담당 고객이 검색되지 않는다. 담당 선택이 없는
+ * 화면이라 범위를 호출부에서 밝힌다(CrmCustomerPicker customerPickerQuery 와 같은 규칙).
+ */
+export function commandPaletteCustomerSearchUrl(term: string): string {
+  return `/api/admin/crm/customers/unified?q=${encodeURIComponent(term)}&owner=&limit=6`
+}
+
 export default function CrmCommandPalette({ initiallyOpen = false }: CrmCommandPaletteProps) {
   const router = useRouter()
   const [open, setOpen] = useState(initiallyOpen)
@@ -207,7 +216,7 @@ export default function CrmCommandPalette({ initiallyOpen = false }: CrmCommandP
     const handle = setTimeout(async () => {
       try {
         const data = await adminFetchJsonCached<UnifiedResponse>(
-          `/api/admin/crm/customers/unified?q=${encodeURIComponent(term)}&limit=6`,
+          commandPaletteCustomerSearchUrl(term),
           undefined,
           { cacheKey: `cmdk:${term}`, ttlMs: 30_000, staleWhileRevalidateMs: 60_000 }
         )

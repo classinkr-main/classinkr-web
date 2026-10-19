@@ -12,7 +12,7 @@ import { NextRequest } from "next/server"
 const mocks = vi.hoisted(() => ({
   requireVerifiedAdminContext: vi.fn(),
   getCrmUnifiedCustomers: vi.fn(),
-  listAdminUserDirectory: vi.fn(),
+  listAdminUserDirectoryCached: vi.fn(),
   findAdminCrmOwner: vi.fn(),
 }))
 
@@ -20,14 +20,17 @@ vi.mock("@/lib/admin-auth", () => ({
   CRM_STAFF_ADMIN_API_ROLES: ["admin"],
   requireVerifiedAdminContext: mocks.requireVerifiedAdminContext,
 }))
+// 담당 해석은 실제 lib/admin/data-owner.ts(dataOwnerFromParams)·별칭표(lib/branch/member-names.ts)를 태운다 —
+// 목은 그 아래의 계정 디렉터리(admin-users)뿐이다. 로그인 계정 admin-1 은 담당 "Somang" 에 매핑돼 있다.
 vi.mock("@/lib/repositories/admin-users", () => ({
-  CURRENT_ADMIN_OWNER_TOKEN: "__me",
-  listAdminUserDirectory: mocks.listAdminUserDirectory,
+  listAdminUserDirectoryCached: mocks.listAdminUserDirectoryCached,
   findAdminCrmOwner: mocks.findAdminCrmOwner,
 }))
 vi.mock("@/lib/repositories/crm-unified-customers", () => ({
   getCrmUnifiedCustomers: mocks.getCrmUnifiedCustomers,
 }))
+
+const SOMANG_OWNER = { userId: "admin-1", displayName: "진소망", ownerKey: "Somang", ownerAliases: [] as string[] }
 
 const CUSTOMERS_STUB = {
   generatedAt: "2026-09-15T00:00:00.000Z",
@@ -48,6 +51,13 @@ describe("GET /api/admin/crm/customers/unified force 관통 (unified-01)", () =>
     vi.clearAllMocks()
     mocks.requireVerifiedAdminContext.mockResolvedValue({ userId: "admin-1", role: "ADMIN" })
     mocks.getCrmUnifiedCustomers.mockResolvedValue(CUSTOMERS_STUB)
+    mocks.listAdminUserDirectoryCached.mockResolvedValue({ users: [SOMANG_OWNER], crmOwners: [SOMANG_OWNER] })
+    mocks.findAdminCrmOwner.mockImplementation(
+      (directory: { crmOwners: Array<typeof SOMANG_OWNER> }, admin: { userId?: string | null }) => {
+        const owner = directory.crmOwners.find((candidate) => candidate.userId === admin.userId) ?? null
+        return { owner, ownerKeys: owner ? [owner.ownerKey] : [] }
+      }
+    )
   })
 
   it("?force=1 이면 리포지토리에 bypassCache=true를 넘기고 Cache-Control: no-store로 응답한다", async () => {
@@ -103,24 +113,62 @@ describe("GET /api/admin/crm/customers/unified force 관통 (unified-01)", () =>
     expect(mocks.getCrmUnifiedCustomers.mock.lastCall?.[0].segment).toEqual({ expDays: 30 })
   })
 
-  it("담당 범위 — owner 생략은 로그인 담당 키, owner= 빈 값은 전체, 담당 해석은 data-owner 하나(2026-10-16)", async () => {
-    const { GET } = await loadRoute()
+  describe("담당 범위 — 실제 data-owner 하나로 푼다(생략=로그인 담당, owner= 빈 값=전체, 이름=별칭 키 · 2026-10-16)", () => {
+    const lastOptions = () => mocks.getCrmUnifiedCustomers.mock.lastCall?.[0]
+    // 로그인 담당 "Somang" 의 별칭 확장(branchMemberOwnerAliases) + 계정 userId.
+    const SOMANG_SELF_KEYS = ["Somang", "진소망", "소망", "admin-1"]
 
-    await GET(new NextRequest("https://classin.kr/api/admin/crm/customers/unified?limit=50"))
-    expect(mocks.getCrmUnifiedCustomers.mock.lastCall?.[0]).toMatchObject({ ownerKeys: ["Somang"] })
-    expect(mocks.getCrmUnifiedCustomers.mock.lastCall?.[0].owner).toBeUndefined()
+    it("owner 생략·__me 는 디렉터리에서 로그인 담당을 찾아 별칭·userId 키로 넘긴다", async () => {
+      const { GET } = await loadRoute()
 
-    // 세그먼트 조건과 함께 와도 전체(owner=)는 담당 키 없이 넘긴다 — 공용 파서의 나머지 조건은 그대로.
-    await GET(new NextRequest("https://classin.kr/api/admin/crm/customers/unified?owner=&expDays=30"))
-    expect(mocks.getCrmUnifiedCustomers.mock.lastCall?.[0].ownerKeys).toBeUndefined()
-    expect(mocks.getCrmUnifiedCustomers.mock.lastCall?.[0].segment).toEqual({ expDays: 30 })
+      await GET(new NextRequest("https://classin.kr/api/admin/crm/customers/unified?limit=50"))
+      expect(lastOptions().ownerKeys).toEqual(SOMANG_SELF_KEYS)
+      expect(lastOptions().owner).toBeUndefined()
+      expect(mocks.listAdminUserDirectoryCached).toHaveBeenCalledTimes(1)
+      expect(mocks.findAdminCrmOwner).toHaveBeenLastCalledWith(
+        expect.objectContaining({ crmOwners: [SOMANG_OWNER] }),
+        expect.objectContaining({ userId: "admin-1" })
+      )
 
-    // 담당 이름·__me 는 owner 문자열로 새지 않고 ownerKeys 로만 간다. 공용 파서의 __me 디렉터리 조회는 돌지 않는다.
-    await GET(new NextRequest("https://classin.kr/api/admin/crm/customers/unified?owner=__me"))
-    await GET(new NextRequest(`https://classin.kr/api/admin/crm/customers/unified?owner=${encodeURIComponent("진소망")}`))
-    expect(mocks.getCrmUnifiedCustomers.mock.lastCall?.[0]).toMatchObject({ ownerKeys: ["Somang"] })
-    expect(mocks.getCrmUnifiedCustomers.mock.lastCall?.[0].owner).toBeUndefined()
-    expect(mocks.listAdminUserDirectory).not.toHaveBeenCalled()
+      await GET(new NextRequest("https://classin.kr/api/admin/crm/customers/unified?owner=__me"))
+      expect(lastOptions().ownerKeys).toEqual(SOMANG_SELF_KEYS)
+      expect(lastOptions().owner).toBeUndefined()
+      expect(mocks.listAdminUserDirectoryCached).toHaveBeenCalledTimes(2)
+    })
+
+    it("매핑 없는 계정(userId 도 없음)은 UNMAPPED_OWNER 하나 — 남의 담당·전체로 넓어지지 않는다", async () => {
+      mocks.requireVerifiedAdminContext.mockResolvedValue({ role: "ADMIN" })
+      const { GET } = await loadRoute()
+
+      await GET(new NextRequest("https://classin.kr/api/admin/crm/customers/unified"))
+      expect(lastOptions().ownerKeys).toEqual(["__no_current_admin_owner__"])
+    })
+
+    it("owner= 빈 값은 전체 — 담당 키 없이 넘기고 디렉터리를 보지 않는다(세그먼트 조건은 그대로)", async () => {
+      const { GET } = await loadRoute()
+
+      await GET(new NextRequest("https://classin.kr/api/admin/crm/customers/unified?owner=&expDays=30"))
+      expect(lastOptions().ownerKeys).toBeUndefined()
+      expect(lastOptions().owner).toBeUndefined()
+      expect(lastOptions().segment).toEqual({ expDays: 30 })
+      expect(mocks.listAdminUserDirectoryCached).not.toHaveBeenCalled()
+    })
+
+    it("담당 이름은 별칭표로 확장한 키로만 간다 — owner 문자열로 새지 않고 디렉터리를 보지 않는다", async () => {
+      const { GET } = await loadRoute()
+
+      await GET(new NextRequest(`https://classin.kr/api/admin/crm/customers/unified?owner=${encodeURIComponent("진소망")}`))
+      expect(lastOptions().ownerKeys).toEqual(["진소망", "Somang", "소망"])
+      expect(lastOptions().owner).toBeUndefined()
+
+      await GET(new NextRequest("https://classin.kr/api/admin/crm/customers/unified?owner=Wangchan"))
+      expect(lastOptions().ownerKeys).toEqual(["Wangchan", "이왕찬", "왕찬"])
+
+      // 별칭표에 없는 이름은 그 이름 하나.
+      await GET(new NextRequest(`https://classin.kr/api/admin/crm/customers/unified?owner=${encodeURIComponent("박담당")}`))
+      expect(lastOptions().ownerKeys).toEqual(["박담당"])
+      expect(mocks.listAdminUserDirectoryCached).not.toHaveBeenCalled()
+    })
   })
 
   it("리포지토리 실패는 500 + 한국어 고정 문구로 내려 배너가 그대로 띄울 수 있다 (unified-10)", async () => {
@@ -134,8 +182,3 @@ describe("GET /api/admin/crm/customers/unified force 관통 (unified-01)", () =>
     await expect(response.json()).resolves.toEqual({ error: "통합 고객 목록을 불러오지 못했습니다." })
   })
 })
-
-// 담당 해석은 공용 파서(lib/crm/unified-query-options.ts)가 data-owner 의 dataOwnerFromParams 로 한다(라우트 직접 호출 없음).
-vi.mock("@/lib/admin/data-owner", () => ({
-  dataOwnerFromParams: async (params: URLSearchParams) => (params.get("owner") === "" ? undefined : ["Somang"]),
-}))

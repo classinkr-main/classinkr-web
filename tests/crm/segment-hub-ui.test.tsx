@@ -536,8 +536,16 @@ describe("행동 바 — 태그·오늘 연락·CSV·담당 배정(리드만), �
       expect(html).toContain('role="status"')
       expect(html).toContain('data-testid="segment-action-result"')
       expect(html).toContain("31명에 #VIP 를 붙였어요")
-      expect(html).toContain('href="/admin/crm/customers/unified?tag=VIP"')
+      // 태그는 담당과 무관한 전체에 붙었다 — 목록 착지도 전체 담당(owner=)이라야 붙인 건수가 그대로 보인다.
+      expect(html).toContain('href="/admin/crm/customers/unified?owner=&amp;tag=VIP"')
       expect(html).toContain("목록에서 보기")
+      const listLink = segmentActionResultLinks({ kind: "tag", tone: "success", message: "x", label: "VIP" }).find(
+        (link) => link.label === "목록에서 보기"
+      )
+      const listUrl = new URL(listLink?.href ?? "", "http://x")
+      expect(listUrl.pathname).toBe("/admin/crm/customers/unified")
+      expect(listUrl.searchParams.get("owner")).toBe("")
+      expect(listUrl.searchParams.get("tag")).toBe("VIP")
       expect(html).toContain('href="/admin/crm/customers/tags"')
       expect(html).toContain("태그 관리")
     })
@@ -583,7 +591,11 @@ describe("행동 바 — 태그·오늘 연락·CSV·담당 배정(리드만), �
         />
       )
       expect(html).toContain('data-testid="segment-auto-tag-links"')
-      expect(html).toContain(`href="/admin/crm/customers/unified?tag=${encodeURIComponent("이탈 위험")}"`)
+      const autoTagHref = html.match(/href="([^"]*customers\/unified[^"]*)"/)?.[1]?.replace(/&amp;/g, "&")
+      expect(autoTagHref).toBe(`/admin/crm/customers/unified?owner=&tag=${encodeURIComponent("이탈 위험")}`)
+      const autoTagUrl = new URL(autoTagHref ?? "", "http://x")
+      expect(autoTagUrl.searchParams.get("owner")).toBe("")
+      expect(autoTagUrl.searchParams.get("tag")).toBe("이탈 위험")
       expect(html).toContain("#이탈 위험 붙은 고객 보기")
       expect(html).toContain('href="/admin/crm/customers/tags"')
       const off = renderToStaticMarkup(

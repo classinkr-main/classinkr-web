@@ -253,7 +253,8 @@ const UNIFIED_CUSTOMERS_PATH = "/admin/crm/customers/unified"
  * 기록 화면 포커스의 "{고객명} 상세로" 링크. 통합 고객 드로어(?account=)는 `lead:`·`neo:` 접두어가 붙은 키만
  * 열 수 있다 — 예전 폴백은 원시 targetId(uuid·숫자)를 그대로 실어 360 API 가 400(Invalid customer key)을 냈다
  * (2026-09-29). back 파라미터는 어드민 내부 경로만 따른다. 드로어로 열 수 없는 대상(customer·deal·unknown)은
- * 이름 검색으로 목록에 착지한다.
+ * 이름 검색으로 목록에 착지한다 — 전체 담당(`owner=`)으로. 통합 목록은 owner 생략이 로그인 담당이라(2026-10-16
+ * 기본 담당 계약, lib/admin/data-owner.ts) 담당 키가 없는 전환 고객 행·동료 담당 고객이 검색에서 빠져 빈 목록이 된다.
  */
 export function activityFocusBackHref(input: {
   back: string
@@ -273,5 +274,5 @@ export function activityFocusBackHref(input: {
         : null
   if (key) return `${UNIFIED_CUSTOMERS_PATH}?account=${encodeURIComponent(key)}`
   const label = input.label.trim()
-  return label ? `${UNIFIED_CUSTOMERS_PATH}?q=${encodeURIComponent(label)}` : UNIFIED_CUSTOMERS_PATH
+  return label ? `${UNIFIED_CUSTOMERS_PATH}?owner=&q=${encodeURIComponent(label)}` : UNIFIED_CUSTOMERS_PATH
 }

@@ -57,7 +57,7 @@ import {
 import { parseUnifiedCustomerTargetKey } from "@/lib/crm/unified-customer-key"
 import type { CrmUnifiedCustomerSource } from "@/lib/crm/unified-view-rules"
 import { BULK_TAG_MAX_KEYS, BULK_TAG_MAX_LENGTH, BULK_TASK_MAX_KEYS, BULK_TASK_TITLE_MAX_LENGTH } from "../unified/bulk-actions"
-import { UNIFIED_CUSTOMERS_PATH } from "../unified/shared"
+import { UNIFIED_CUSTOMERS_PATH, parseTagParam } from "../unified/shared"
 
 // ── 경로·상수 ────────────────────────────────────────────────────────────────
 
@@ -379,13 +379,23 @@ function mutationSegment(body: unknown): SavedSegmentListItem {
 // ── OR 필터(기본 AND ∧ 그룹 OR) ────────────────────────────────────────────
 // 정규화·URL·문구·신호 판정은 서버와 같은 순수 모듈(lib/crm/customer-segment-filter.ts)을 그대로 쓴다 — 사본을 두지 않는다.
 
-// 담당: 세그먼트 건수는 전체 기준이라 세 URL 모두 전체 담당(`owner=`)을 밝힌다 — 통합 목록·API·CSV 는 owner 생략이
+// 담당: 세그먼트 건수는 전체 기준이라 네 URL 모두 전체 담당(`owner=`)을 밝힌다 — 통합 목록·API·CSV 는 owner 생략이
 // 로그인 담당이다(2026-10-16 기본 담당 계약, lib/crm/saved-segment-api.ts withSegmentAllOwners).
 
 /** 통합 목록 딥링크 — 같은 조건(AND + or= 반복)·전체 담당. */
 export function unifiedListHref(filter: CustomerSegmentFilter | null | undefined): string | null {
   // 통합 목록은 or= 를 받아 같은 결과를 보이고 OR 안내를 띄운다(편집은 AND 만) — OR 세그먼트도 링크를 준다.
   return `${UNIFIED_CUSTOMERS_PATH}?${withSegmentAllOwners(segmentFilterQueryString(filter))}`
+}
+
+/**
+ * 허브가 붙인 태그의 확인 링크(행동 바 "목록에서 보기"·자동 태그 "#라벨 붙은 고객 보기") — 그 라벨로 좁힌 통합 목록,
+ * 전체 담당. 태그 붙이기·자동 태그는 담당과 무관한 전체 회원 기준이라 owner 를 빼면 내 담당 몫만(매핑 없으면 0건) 보인다.
+ * 라벨 정규화는 목록 착지와 같은 parseTagParam. 태그 관리 화면의 링크(unifiedCustomersTagHref)는 따로 둔다.
+ */
+export function segmentTagListHref(label: string | null | undefined): string {
+  const value = parseTagParam(label)
+  return value ? `${UNIFIED_CUSTOMERS_PATH}?${withSegmentAllOwners(`tag=${encodeURIComponent(value)}`)}` : UNIFIED_CUSTOMERS_PATH
 }
 
 /** 허브 미리보기 — 통합 목록 GET(추천순 앞 50행 + 조건 요약), 전체 담당. */

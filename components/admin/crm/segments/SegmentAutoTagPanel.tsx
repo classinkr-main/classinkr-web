@@ -29,7 +29,6 @@ import {
 } from "@/lib/crm/customer-segment-filter"
 import { STATUS_TONE_TEXT_CLASS } from "@/lib/crm/status-tone"
 
-import { unifiedCustomersTagHref } from "../unified/shared"
 import {
   CRM_TAG_ADMIN_PATH,
   SEGMENT_AUTO_TAG_LABEL_MAX,
@@ -42,6 +41,7 @@ import {
   formatRunAt,
   runSavedSegment,
   runSkipReason,
+  segmentTagListHref,
   updateSavedSegment,
   validateAutoTagLabel,
   type HubTone,
@@ -360,7 +360,7 @@ export default function SegmentAutoTagPanel({
       {enabled && segment.autoTag.label ? (
         <p className="flex flex-wrap items-center gap-x-3 text-[12px]" data-testid="segment-auto-tag-links">
           <Link
-            href={unifiedCustomersTagHref(segment.autoTag.label)}
+            href={segmentTagListHref(segment.autoTag.label)}
             prefetch={false}
             className="inline-flex min-h-11 items-center gap-0.5 font-semibold text-[#084734] underline-offset-2 hover:underline sm:min-h-0"
           >

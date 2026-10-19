@@ -59,6 +59,16 @@ export function shouldCloseOnFocusOut(wrapper: Node | null, relatedTarget: Event
   return !wrapper.contains(relatedTarget)
 }
 
+/**
+ * 통합 목록 API 쿼리 — 검색어가 있으면 전체 담당(`owner=`)에서 이름으로 찾고, 비었으면 로그인 담당(`owner=__me`) 앞 8행.
+ * 라우트는 owner 생략이 로그인 담당이라(2026-10-16 기본 담당 계약, lib/admin/data-owner.ts dataOwnerFromParams) 검색에서
+ * 담당을 빼면 동료 담당 고객이 이름을 정확히 쳐도 안 나와 기록을 연결하지 못한다 — 검색 범위를 호출부에서 밝힌다.
+ */
+export function customerPickerQuery(term: string, sources?: "lead" | "neo_account"): string {
+  const base = term ? `q=${encodeURIComponent(term)}&owner=&limit=8` : `owner=__me&limit=8`
+  return sources ? `${base}&source=${sources}` : base
+}
+
 function rowFromRecent(recent: RecentCustomer): PickerRow {
   return { key: recent.key, name: recent.name, contact: null, sourceLabel: recent.sourceLabel, source: recent.source }
 }
@@ -99,10 +109,7 @@ export default function CrmCustomerPicker({ label, linkedId, onPick, onFreeText,
     setLoading(true)
     const handle = setTimeout(async () => {
       try {
-        const base = term
-          ? `q=${encodeURIComponent(term)}&limit=8`
-          : `owner=__me&limit=8`
-        const query = sources ? `${base}&source=${sources}` : base
+        const query = customerPickerQuery(term, sources)
         const data = await adminFetchJsonCached<UnifiedResponse>(`/api/admin/crm/customers/unified?${query}`, undefined, {
           cacheKey: `picker:${query}`,
           ttlMs: 30_000,
