@@ -32,6 +32,7 @@ import {
   Quote,
   Redo2,
   Save,
+  SlidersHorizontal,
   Sparkles,
   Type,
   Undo2,
@@ -438,8 +439,17 @@ function ToolbarButton({
 }
 
 // 글 머리 속성 표(문서형 편집) — 평소엔 텍스트처럼 보이고 hover·focus 때만 입력칸 테두리가 드러난다.
+// PropertyRow는 컨테이너 폭으로 배치를 바꾼다(@container): 본문 칼럼에선 라벨 | 값 두 칸, 좁은 상세 설정 패널에선 위아래.
 const PROP_INPUT_CLASS =
   "w-full min-w-0 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-[14px] text-[#111110] outline-none transition-colors placeholder:text-[#A39E98] hover:bg-[#F6F5F4] focus:border-[#084734] focus:bg-white"
+const SETTINGS_TABS = [
+  { id: "classify", label: "분류" },
+  { id: "seo", label: "검색 노출" },
+  { id: "convert", label: "전환" },
+  { id: "display", label: "표시 · 발행" },
+] as const
+type SettingsTab = (typeof SETTINGS_TABS)[number]["id"]
+
 const PROP_INPUT_INVALID_CLASS = "border-[#F2B8B8] bg-[#FCE9E9] text-[#8F2C2C] hover:bg-[#FCE9E9]"
 
 function PropertyRow({
@@ -464,13 +474,13 @@ function PropertyRow({
     </>
   )
   return (
-    <div className="grid gap-0.5 py-1 sm:grid-cols-[120px_minmax(0,1fr)] sm:items-start sm:gap-3">
+    <div className="grid gap-0.5 py-1 @lg:grid-cols-[120px_minmax(0,1fr)] @lg:items-start @lg:gap-3">
       {htmlFor ? (
-        <label htmlFor={htmlFor} className="px-2 text-[13px] text-[#615D59] sm:px-0 sm:pt-2">
+        <label htmlFor={htmlFor} className="px-2 text-[13px] text-[#615D59] @lg:px-0 @lg:pt-2">
           {labelText}
         </label>
       ) : (
-        <span className="px-2 text-[13px] text-[#615D59] sm:px-0 sm:pt-2">{labelText}</span>
+        <span className="px-2 text-[13px] text-[#615D59] @lg:px-0 @lg:pt-2">{labelText}</span>
       )}
       <div className="min-w-0">
         {children}
@@ -484,10 +494,6 @@ function PropertyRow({
       </div>
     </div>
   )
-}
-
-function PropertyGroupLabel({ children }: { children: ReactNode }) {
-  return <p className="pb-1 pt-5 text-[11px] font-semibold tracking-[0.08em] text-[#615D59]">{children}</p>
 }
 
 const RichMarkdownEditor = dynamic(() => import("@/components/admin/RichMarkdownEditor"), {
@@ -525,12 +531,14 @@ export default function BlogPostEditor({
   const [publishTiming, setPublishTiming] = useState<"now" | "schedule">(() =>
     initialPost?.publishedAt && new Date(initialPost.publishedAt).getTime() > Date.now() ? "schedule" : "now"
   )
-  const [showAllProperties, setShowAllProperties] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("classify")
+  const settingsTriggerRef = useRef<HTMLButtonElement>(null)
   const [showValidation, setShowValidation] = useState(false)
   const [showAiTools, setShowAiTools] = useState(false)
   const [startPanelDismissed, setStartPanelDismissed] = useState(false)
   const publishPanelRef = useRef<HTMLDivElement>(null)
-  // 접혀 있던 속성으로 "고치기"를 누르면 펼친 뒤 다음 렌더에서 포커스한다.
+  // 상세 설정 패널 안의 칸으로 "고치기"·"보기"를 누르면 패널·탭을 연 뒤 다음 렌더에서 포커스한다.
   const pendingFocusIdRef = useRef<string | null>(null)
   const [leadOptions, setLeadOptions] = useState<readonly LeadMagnetOption[]>(leadMagnetOptions)
   const formRef = useRef(form)
@@ -1124,7 +1132,12 @@ export default function BlogPostEditor({
     }))
   }
 
-  const focusField = (fieldId: string, options: { expandProperties?: boolean } = {}) => {
+  const closeSettings = () => {
+    setShowSettings(false)
+    settingsTriggerRef.current?.focus()
+  }
+
+  const focusField = (fieldId: string, options: { settingsTab?: SettingsTab } = {}) => {
     setShowPublishPanel(false)
     setShowValidation(true)
     const target = document.getElementById(fieldId)
@@ -1133,11 +1146,32 @@ export default function BlogPostEditor({
       target.focus({ preventScroll: true })
       return
     }
-    if (options.expandProperties) {
+    if (options.settingsTab) {
       pendingFocusIdRef.current = fieldId
-      setShowAllProperties(true)
+      setSettingsTab(options.settingsTab)
+      setShowSettings(true)
     }
   }
+
+  // 패널을 열면 선택된 탭으로 포커스를 옮긴다. 특정 칸으로 가는 중(pendingFocusIdRef)이면 그 칸이 우선이라
+  // 아래 포커스 effect보다 먼저 선언한다.
+  useEffect(() => {
+    if (!showSettings || pendingFocusIdRef.current) return
+    document.getElementById(`settings-tab-${settingsTab}`)?.focus()
+    // 탭을 바꿀 때마다 포커스를 옮기지 않도록 열릴 때만 실행한다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showSettings])
+
+  useEffect(() => {
+    if (!showSettings) return
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || showPublishPanel) return
+      setShowSettings(false)
+      settingsTriggerRef.current?.focus()
+    }
+    document.addEventListener("keydown", handleEscape)
+    return () => document.removeEventListener("keydown", handleEscape)
+  }, [showSettings, showPublishPanel])
 
   useEffect(() => {
     const fieldId = pendingFocusIdRef.current
@@ -1170,7 +1204,7 @@ export default function BlogPostEditor({
     label: string
     detail?: string
     state: "ok" | "blocker" | "advice"
-    action?: { label: string; fieldId: string; expandProperties?: boolean }
+    action?: { label: string; fieldId: string; settingsTab?: SettingsTab }
   }
   const seoPassedCount = seoAnalysis.checks.filter((check) => check.ok).length
   const publishChecks: PublishCheck[] = [
@@ -1203,7 +1237,7 @@ export default function BlogPostEditor({
       action:
         seoAnalysis.score >= 80
           ? undefined
-          : { label: "보기", fieldId: "seoTitle", expandProperties: true },
+          : { label: "보기", fieldId: "seoTitle", settingsTab: "seo" },
     },
   ]
   const publishBlockerCount = publishChecks.filter((check) => check.state === "blocker").length
@@ -1981,7 +2015,7 @@ export default function BlogPostEditor({
                           {check.action && (
                             <button
                               type="button"
-                              onClick={() => focusField(check.action!.fieldId, { expandProperties: check.action!.expandProperties })}
+                              onClick={() => focusField(check.action!.fieldId, { settingsTab: check.action!.settingsTab })}
                               className={`inline-flex min-h-8 shrink-0 items-center rounded-md border bg-white px-2.5 text-[12px] font-semibold transition-colors ${
                                 check.state === "blocker"
                                   ? "border-[#F2B8B8] text-[#8F2C2C] hover:bg-[#FCE9E9]"
@@ -2257,7 +2291,7 @@ export default function BlogPostEditor({
             </p>
 
             {/* 글 속성 */}
-            <section aria-label="글 속성" className="mt-6 border-y border-[#F0F0EC] py-2">
+            <section aria-label="글 속성" className="@container mt-6 border-y border-[#F0F0EC] py-2">
               <PropertyRow
                 label="카테고리"
                 htmlFor="category"
@@ -2406,380 +2440,20 @@ export default function BlogPostEditor({
               </PropertyRow>
 
               <button
+                ref={settingsTriggerRef}
                 type="button"
-                onClick={() => setShowAllProperties((open) => !open)}
-                aria-expanded={showAllProperties}
-                aria-controls="blog-more-properties"
-                className="mt-1 inline-flex min-h-9 items-center gap-1 rounded-md px-2 text-left text-[12px] font-medium text-[#615D59] transition-colors hover:bg-[#F6F5F4] hover:text-[#111110]"
+                onClick={() => setShowSettings(true)}
+                aria-haspopup="dialog"
+                aria-expanded={showSettings}
+                aria-controls="blog-settings-panel"
+                className="mt-1 inline-flex min-h-9 items-center gap-1.5 rounded-md px-2 text-left text-[12px] font-medium text-[#31302E] transition-colors hover:bg-[#F6F5F4] hover:text-[#111110]"
               >
-                <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${showAllProperties ? "rotate-180" : ""}`} />
-                {showAllProperties
-                  ? "속성 접기"
-                  : "속성 더 보기 · 상태 · 검색 노출 · 리드 마그넷 · 추천 글 · 레이아웃 · 발행일 · 이미지"}
+                <SlidersHorizontal className="h-3.5 w-3.5 shrink-0 text-[#084734]" />
+                상세 설정
+                <span className="font-normal text-[#615D59]">
+                  · 상태 · SEO {seoAnalysis.score} · 리드 마그넷 · 추천 글 · 레이아웃 · 발행일 · 이미지
+                </span>
               </button>
-
-              {showAllProperties && (
-                <div id="blog-more-properties" className="pb-2">
-                  <PropertyGroupLabel>분류 · 독자</PropertyGroupLabel>
-                  <PropertyRow label="상태" htmlFor="status">
-                    <select
-                      id="status"
-                      value={form.status}
-                      onChange={(event) => updateForm("status", event.target.value as BlogPostStatus)}
-                      className={PROP_INPUT_CLASS}
-                    >
-                      {BLOG_STATUS_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                  </PropertyRow>
-                  <PropertyRow label="목록 노출" htmlFor="featured">
-                    <label className="flex min-h-9 cursor-pointer items-center gap-2.5 px-2 text-[14px] text-[#31302E]">
-                      <input
-                        id="featured"
-                        type="checkbox"
-                        checked={form.featured ?? false}
-                        onChange={(event) => updateForm("featured", event.target.checked)}
-                        className="h-4 w-4 rounded border-[#d8d8d2] accent-[#084734]"
-                      />
-                      목록 상단 Featured로 노출
-                    </label>
-                  </PropertyRow>
-                  <PropertyRow label="추천 독자" htmlFor="targetReader">
-                    <input
-                      id="targetReader"
-                      value={form.targetReader || ""}
-                      onChange={(event) => updateForm("targetReader", event.target.value)}
-                      placeholder="예) 상담 전환율을 높이고 싶은 학원 원장"
-                      className={PROP_INPUT_CLASS}
-                    />
-                  </PropertyRow>
-                  <PropertyRow label="읽으면 좋은 점" htmlFor="benefit-0" hint="상세 페이지 상단에 노출 · 최대 3개">
-                    <div className="space-y-0.5">
-                      {form.benefitItems.map((benefit, index) => (
-                        <input
-                          key={index}
-                          id={`benefit-${index}`}
-                          aria-label={`좋은 점 ${index + 1}`}
-                          value={benefit}
-                          onChange={(event) => updateBenefit(index, event.target.value)}
-                          placeholder={`좋은 점 ${index + 1}`}
-                          className={PROP_INPUT_CLASS}
-                        />
-                      ))}
-                    </div>
-                  </PropertyRow>
-
-                  <div id="blog-seo-section">
-                    <PropertyGroupLabel>검색 노출 · SEO {seoAnalysis.score}</PropertyGroupLabel>
-                  </div>
-                  <PropertyRow
-                    label="SEO 제목"
-                    htmlFor="seoTitle"
-                    hint={`${form.seoTitle.length} / 60 · 비우면 제목을 씁니다`}
-                  >
-                    <input
-                      id="seoTitle"
-                      value={form.seoTitle}
-                      onChange={(event) => updateForm("seoTitle", event.target.value)}
-                      placeholder={form.title || "SEO 제목"}
-                      className={PROP_INPUT_CLASS}
-                    />
-                  </PropertyRow>
-                  <PropertyRow
-                    label="메타 설명"
-                    htmlFor="seoDescription"
-                    hint={`${form.seoDescription.length} / 160 · 비우면 요약을 씁니다 · 권장 120~160자`}
-                  >
-                    <textarea
-                      id="seoDescription"
-                      rows={2}
-                      value={form.seoDescription}
-                      onChange={(event) => updateForm("seoDescription", event.target.value)}
-                      placeholder={form.excerpt || "검색 결과에 보일 설명"}
-                      className={`resize-none leading-relaxed [field-sizing:content] ${PROP_INPUT_CLASS}`}
-                    />
-                  </PropertyRow>
-                  <div className="grid gap-3 py-2 sm:grid-cols-[120px_minmax(0,1fr)] sm:gap-3">
-                    <div className="hidden sm:block" />
-                    <div className="min-w-0 space-y-3">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (form.title) updateForm("seoTitle", form.title.slice(0, 60))
-                          if (form.excerpt) updateForm("seoDescription", form.excerpt.slice(0, 160))
-                        }}
-                        disabled={!form.title && !form.excerpt}
-                        className="inline-flex min-h-8 items-center gap-1 rounded-md px-2 text-[12px] font-medium text-[#084734] transition-colors hover:bg-[#ECFDF5] disabled:opacity-40"
-                      >
-                        <Sparkles className="h-3 w-3" />
-                        제목·요약에서 자동완성
-                      </button>
-                      <div className="rounded-lg border border-[#e8e8e4] bg-white px-4 py-3">
-                        <p className="text-[11px] text-[#615D59]">classin.co.kr › blog › {effectiveSlug || "your-slug"}</p>
-                        <p className="mt-1 line-clamp-2 text-[15px] font-semibold leading-snug text-[#084734]">
-                          {seoAnalysis.effectiveTitle || "SEO 제목을 입력하세요"}
-                        </p>
-                        <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-[#615D59]">
-                          {seoAnalysis.effectiveDesc || "메타 설명을 입력하세요. 비우면 요약이 표시됩니다."}
-                        </p>
-                      </div>
-                      <ul className="grid gap-x-4 sm:grid-cols-2">
-                        {seoAnalysis.checks.map((check) => (
-                          <li key={check.id} className="flex min-h-8 items-center gap-2 text-[12px]">
-                            {check.ok ? (
-                              <Check className="h-3.5 w-3.5 shrink-0 text-[#084734]" aria-label="통과" />
-                            ) : (
-                              <X className="h-3.5 w-3.5 shrink-0 text-[#B43E3E]" aria-label="미통과" />
-                            )}
-                            <span className="text-[#31302E]">{check.label}</span>
-                            <span className="truncate text-[#615D59]">{check.detail}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-
-                  <PropertyGroupLabel>전환</PropertyGroupLabel>
-                  <PropertyRow
-                    label="리드 마그넷"
-                    htmlFor="leadMagnet"
-                    hint="선택하면 본문 하단에 이메일 수집 블록이 노출되고, 신청자는 해당 마그넷 태그로 구독자 DB에 기록됩니다."
-                  >
-                    <select
-                      id="leadMagnet"
-                      value={form.leadMagnetSlug ?? ""}
-                      onChange={(event) => updateForm("leadMagnetSlug", event.target.value)}
-                      className={PROP_INPUT_CLASS}
-                    >
-                      <option value="">표시 안 함</option>
-                      {leadOptions.map((opt) => (
-                        <option key={opt.slug} value={opt.slug}>
-                          {opt.title} · {getLeadMagnetGateLabel(opt.gate)} · {getLeadMagnetStatusLabel(opt.status)}
-                          {opt.published ? "" : " · 검토 중"}
-                        </option>
-                      ))}
-                    </select>
-                  </PropertyRow>
-                  <PropertyRow label="CTA 문구" htmlFor="cta-eyebrow">
-                    <div className="space-y-0.5">
-                      <input
-                        id="cta-eyebrow"
-                        value={form.cta.eyebrow}
-                        onChange={(event) => updateCta("eyebrow", event.target.value)}
-                        placeholder={`상단 문구 · ${DEFAULT_BLOG_CTA.eyebrow}`}
-                        className={PROP_INPUT_CLASS}
-                      />
-                      <input
-                        aria-label="CTA 제목"
-                        value={form.cta.title}
-                        onChange={(event) => updateCta("title", event.target.value)}
-                        placeholder={`제목 · ${DEFAULT_BLOG_CTA.title}`}
-                        className={PROP_INPUT_CLASS}
-                      />
-                      <textarea
-                        aria-label="CTA 설명"
-                        rows={2}
-                        value={form.cta.description}
-                        onChange={(event) => updateCta("description", event.target.value)}
-                        placeholder={`설명 · ${DEFAULT_BLOG_CTA.description}`}
-                        className={`resize-none leading-relaxed [field-sizing:content] ${PROP_INPUT_CLASS}`}
-                      />
-                    </div>
-                  </PropertyRow>
-                  <PropertyRow label="추천 글">
-                    {filteredPosts.length === 0 ? (
-                      <p className="px-2 py-1.5 text-[13px] text-[#615D59]">추천할 다른 글이 아직 없습니다.</p>
-                    ) : (
-                      <div className="space-y-0.5">
-                        {filteredPosts.slice(0, 8).map((post) => (
-                          <label
-                            key={post.id}
-                            className="flex min-h-9 cursor-pointer items-center gap-2.5 rounded-md px-2 transition-colors hover:bg-[#F6F5F4]"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={form.relatedPostIds.includes(post.id)}
-                              onChange={() => toggleRelatedPost(post.id)}
-                              className="h-4 w-4 shrink-0 rounded border-[#d8d8d2] accent-[#084734]"
-                            />
-                            <span className="line-clamp-1 text-[13px] text-[#31302E]">{post.title}</span>
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                  </PropertyRow>
-
-                  <PropertyGroupLabel>표시 · 발행</PropertyGroupLabel>
-                  <PropertyRow label="레이아웃">
-                    <div className="flex flex-wrap gap-1.5 px-2 py-1">
-                      {(
-                        [
-                          { value: "standard" as const, label: "기본", desc: "사이드 목차 + 콘텐츠" },
-                          { value: "minimal" as const, label: "미니멀", desc: "중앙 정렬 단일 컬럼" },
-                        ] as const
-                      ).map(({ value, label, desc }) => (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() => updateForm("pageLayout", value)}
-                          aria-pressed={form.pageLayout === value}
-                          className={`min-h-9 rounded-md border px-3 text-left text-[13px] transition-colors ${
-                            form.pageLayout === value
-                              ? "border-[#084734] bg-[#ECFDF5] font-semibold text-[#084734]"
-                              : "border-[#e8e8e4] bg-white text-[#31302E] hover:border-[#084734]/30"
-                          }`}
-                        >
-                          {label}
-                          <span className="ml-1.5 text-[11px] font-normal text-[#615D59]">{desc}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </PropertyRow>
-                  <PropertyRow
-                    label="발행일"
-                    htmlFor="advanced-published-at"
-                    hint="과거 시각은 공개 화면의 발행일로 쓰이고, 미래 시각은 발행 상태여도 그 시각 전까지 숨깁니다. 발행 창의 ‘지금’은 현재 시각으로 덮어씁니다."
-                  >
-                    <div className="flex flex-wrap items-center gap-1">
-                      <input
-                        id="advanced-published-at"
-                        type="datetime-local"
-                        value={isoToLocalInput(form.publishedAt)}
-                        onChange={(event) =>
-                          updateForm(
-                            "publishedAt",
-                            event.target.value ? new Date(event.target.value).toISOString() : ""
-                          )
-                        }
-                        className={`w-auto ${PROP_INPUT_CLASS}`}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => updateForm("publishedAt", new Date().toISOString())}
-                        className="inline-flex min-h-8 items-center rounded-md px-2 text-[12px] font-medium text-[#31302E] transition-colors hover:bg-[#F6F5F4]"
-                      >
-                        지금으로
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!initialPost?.publishedAt) return
-                          updateForm("publishedAt", initialPost.publishedAt)
-                        }}
-                        disabled={!initialPost?.publishedAt}
-                        className="inline-flex min-h-8 items-center rounded-md px-2 text-[12px] font-medium text-[#31302E] transition-colors hover:bg-[#F6F5F4] disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        기존 날짜 복원
-                      </button>
-                      {form.publishedAt ? (
-                        <button
-                          type="button"
-                          onClick={() => updateForm("publishedAt", "")}
-                          className="inline-flex min-h-8 items-center rounded-md px-2 text-[12px] font-medium text-[#615D59] transition-colors hover:bg-[#FCE9E9] hover:text-[#8F2C2C]"
-                        >
-                          비우기
-                        </button>
-                      ) : null}
-                    </div>
-                  </PropertyRow>
-                  {(["imageUrl", "heroImageUrl"] as const).map((field) => (
-                    <PropertyRow
-                      key={field}
-                      label={field === "imageUrl" ? "썸네일 이미지" : "상단 배너 이미지"}
-                      htmlFor={`blog-${field}`}
-                    >
-                      <div className="flex items-center gap-1">
-                        <input
-                          id={`blog-${field}`}
-                          value={form[field]}
-                          onChange={(event) => updateForm(field, event.target.value)}
-                          placeholder="/images/blog/thumb.png"
-                          className={PROP_INPUT_CLASS}
-                        />
-                        <label className="relative inline-flex min-h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-medium text-[#615D59] transition-colors focus-within:border-[#084734] hover:bg-[#F6F5F4]">
-                          {uploadingField === field ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                          업로드
-                          <input
-                            type="file"
-                            accept="image/jpeg,image/png,image/webp,image/gif"
-                            className="sr-only"
-                            disabled={uploadingField !== null}
-                            onChange={(event) => {
-                              const file = event.target.files?.[0]
-                              if (file) void handleImageUpload(field, file)
-                              event.target.value = ""
-                            }}
-                          />
-                        </label>
-                      </div>
-                    </PropertyRow>
-                  ))}
-                  <PropertyRow label="이미지 설명" htmlFor="thumbnailAlt" hint="비우면 제목으로 채웁니다">
-                    <div className="grid grid-cols-2 gap-1">
-                      <input
-                        id="thumbnailAlt"
-                        value={form.thumbnailAlt}
-                        onChange={(event) => updateForm("thumbnailAlt", event.target.value)}
-                        placeholder="썸네일 설명"
-                        className={PROP_INPUT_CLASS}
-                      />
-                      <input
-                        aria-label="배너 이미지 설명"
-                        value={form.heroImageAlt}
-                        onChange={(event) => updateForm("heroImageAlt", event.target.value)}
-                        placeholder="배너 설명"
-                        className={PROP_INPUT_CLASS}
-                      />
-                    </div>
-                  </PropertyRow>
-                  <PropertyRow
-                    label="작성자 프로필"
-                    htmlFor="authorAvatarUrl"
-                    hint={
-                      form.authorAvatarUrl && !authorAvatarSrc
-                        ? "표시할 수 없는 이미지 URL입니다. 사이트 내부 경로, Supabase Storage, Unsplash 이미지만 쓸 수 있습니다."
-                        : undefined
-                    }
-                  >
-                    <div className="flex items-start gap-2">
-                      <div className="relative mt-1 h-9 w-9 shrink-0 overflow-hidden rounded-full bg-[#f0f0ec]">
-                        {authorAvatarSrc ? (
-                          <SafeBlogImage
-                            src={authorAvatarSrc}
-                            alt={`${form.author || "작성자"} 아바타 미리보기`}
-                            fill
-                            className="object-cover"
-                            sizes="36px"
-                            fallbackIndex={initialPost?.id ?? 0}
-                          />
-                        ) : (
-                          <div className="flex h-full items-center justify-center text-[13px] font-semibold text-[#084734]">
-                            {authorInitial}
-                          </div>
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1 space-y-0.5">
-                        <input
-                          id="authorAvatarUrl"
-                          value={form.authorAvatarUrl || ""}
-                          onChange={(event) => updateForm("authorAvatarUrl", event.target.value)}
-                          placeholder="아바타 이미지 URL"
-                          className={PROP_INPUT_CLASS}
-                        />
-                        <textarea
-                          aria-label="작성자 소개"
-                          rows={2}
-                          value={form.authorBio}
-                          onChange={(event) => updateForm("authorBio", event.target.value)}
-                          placeholder="작성자 소개"
-                          className={`resize-none leading-relaxed [field-sizing:content] ${PROP_INPUT_CLASS}`}
-                        />
-                      </div>
-                    </div>
-                  </PropertyRow>
-                </div>
-              )}
             </section>
 
             {/* 새 글 시작 안내 — 기본 본문 그대로일 때만 */}
@@ -3078,6 +2752,453 @@ export default function BlogPostEditor({
           </div>
         </main>
       </div>
+
+      {/* ── 상세 설정 패널 — 오른쪽에서 열리는 탭형 패널. 글 머리 속성 표에는 자주 쓰는 6개만 둔다. ── */}
+      {showSettings && (
+        <>
+          <button
+            type="button"
+            aria-label="상세 설정 닫기"
+            onClick={closeSettings}
+            className="fixed inset-0 z-[65] bg-[#111110]/25 lg:hidden"
+          />
+          <aside
+            id="blog-settings-panel"
+            role="dialog"
+            aria-labelledby="blog-settings-title"
+            className="fixed inset-y-0 right-0 z-[70] flex w-full max-w-[440px] flex-col border-l border-[#e8e8e4] bg-white shadow-[-12px_0_32px_rgba(17,17,16,0.10)]"
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-[#F0F0EC] px-5 py-3">
+              <h2 id="blog-settings-title" className="text-[15px] font-semibold text-[#111110]">상세 설정</h2>
+              <button
+                type="button"
+                onClick={closeSettings}
+                aria-label="상세 설정 닫기"
+                className="flex h-9 w-9 items-center justify-center rounded-md text-[#615D59] transition-colors hover:bg-[#F6F5F4] hover:text-[#111110]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div
+              role="tablist"
+              aria-label="상세 설정 항목"
+              className="flex gap-1 overflow-x-auto border-b border-[#F0F0EC] px-3"
+              onKeyDown={(event) => {
+                if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return
+                event.preventDefault()
+                const index = SETTINGS_TABS.findIndex((tab) => tab.id === settingsTab)
+                const step = event.key === "ArrowRight" ? 1 : -1
+                const next = SETTINGS_TABS[(index + step + SETTINGS_TABS.length) % SETTINGS_TABS.length]
+                setSettingsTab(next.id)
+                document.getElementById(`settings-tab-${next.id}`)?.focus()
+              }}
+            >
+              {SETTINGS_TABS.map((tab) => {
+                const selected = settingsTab === tab.id
+                return (
+                  <button
+                    key={tab.id}
+                    id={`settings-tab-${tab.id}`}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    aria-controls="blog-settings-tabpanel"
+                    tabIndex={selected ? 0 : -1}
+                    onClick={() => setSettingsTab(tab.id)}
+                    className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 px-3 text-[13px] font-semibold transition-colors ${
+                      selected
+                        ? "text-[#084734] shadow-[inset_0_-2px_0_#084734]"
+                        : "text-[#615D59] hover:text-[#111110]"
+                    }`}
+                  >
+                    {tab.label}
+                    {tab.id === "seo" && (
+                      <span
+                        className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${
+                          seoAnalysis.score >= 80 ? "bg-[#ECFDF5] text-[#084734]" : "bg-[#FBF1E0] text-[#7A520F]"
+                        }`}
+                      >
+                        {seoAnalysis.score}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+            <div
+              id="blog-settings-tabpanel"
+              role="tabpanel"
+              aria-labelledby={`settings-tab-${settingsTab}`}
+              className="@container min-h-0 flex-1 overflow-y-auto px-3 pb-8 pt-3"
+            >
+              {settingsTab === "classify" && (
+                <>
+              <PropertyRow label="상태" htmlFor="status">
+                <select
+                  id="status"
+                  value={form.status}
+                  onChange={(event) => updateForm("status", event.target.value as BlogPostStatus)}
+                  className={PROP_INPUT_CLASS}
+                >
+                  {BLOG_STATUS_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </PropertyRow>
+              <PropertyRow label="목록 노출" htmlFor="featured">
+                <label className="flex min-h-9 cursor-pointer items-center gap-2.5 px-2 text-[14px] text-[#31302E]">
+                  <input
+                    id="featured"
+                    type="checkbox"
+                    checked={form.featured ?? false}
+                    onChange={(event) => updateForm("featured", event.target.checked)}
+                    className="h-4 w-4 rounded border-[#d8d8d2] accent-[#084734]"
+                  />
+                  목록 상단 Featured로 노출
+                </label>
+              </PropertyRow>
+              <PropertyRow label="추천 독자" htmlFor="targetReader">
+                <input
+                  id="targetReader"
+                  value={form.targetReader || ""}
+                  onChange={(event) => updateForm("targetReader", event.target.value)}
+                  placeholder="예) 상담 전환율을 높이고 싶은 학원 원장"
+                  className={PROP_INPUT_CLASS}
+                />
+              </PropertyRow>
+              <PropertyRow label="읽으면 좋은 점" htmlFor="benefit-0" hint="상세 페이지 상단에 노출 · 최대 3개">
+                <div className="space-y-0.5">
+                  {form.benefitItems.map((benefit, index) => (
+                    <input
+                      key={index}
+                      id={`benefit-${index}`}
+                      aria-label={`좋은 점 ${index + 1}`}
+                      value={benefit}
+                      onChange={(event) => updateBenefit(index, event.target.value)}
+                      placeholder={`좋은 점 ${index + 1}`}
+                      className={PROP_INPUT_CLASS}
+                    />
+                  ))}
+                </div>
+              </PropertyRow>
+                </>
+              )}
+              {settingsTab === "seo" && (
+                <>
+              <PropertyRow
+                label="SEO 제목"
+                htmlFor="seoTitle"
+                hint={`${form.seoTitle.length} / 60 · 비우면 제목을 씁니다`}
+              >
+                <input
+                  id="seoTitle"
+                  value={form.seoTitle}
+                  onChange={(event) => updateForm("seoTitle", event.target.value)}
+                  placeholder={form.title || "SEO 제목"}
+                  className={PROP_INPUT_CLASS}
+                />
+              </PropertyRow>
+              <PropertyRow
+                label="메타 설명"
+                htmlFor="seoDescription"
+                hint={`${form.seoDescription.length} / 160 · 비우면 요약을 씁니다 · 권장 120~160자`}
+              >
+                <textarea
+                  id="seoDescription"
+                  rows={2}
+                  value={form.seoDescription}
+                  onChange={(event) => updateForm("seoDescription", event.target.value)}
+                  placeholder={form.excerpt || "검색 결과에 보일 설명"}
+                  className={`resize-none leading-relaxed [field-sizing:content] ${PROP_INPUT_CLASS}`}
+                />
+              </PropertyRow>
+              <div className="py-2">
+                <div className="min-w-0 space-y-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (form.title) updateForm("seoTitle", form.title.slice(0, 60))
+                      if (form.excerpt) updateForm("seoDescription", form.excerpt.slice(0, 160))
+                    }}
+                    disabled={!form.title && !form.excerpt}
+                    className="inline-flex min-h-8 items-center gap-1 rounded-md px-2 text-[12px] font-medium text-[#084734] transition-colors hover:bg-[#ECFDF5] disabled:opacity-40"
+                  >
+                    <Sparkles className="h-3 w-3" />
+                    제목·요약에서 자동완성
+                  </button>
+                  <div className="rounded-lg border border-[#e8e8e4] bg-white px-4 py-3">
+                    <p className="text-[11px] text-[#615D59]">classin.co.kr › blog › {effectiveSlug || "your-slug"}</p>
+                    <p className="mt-1 line-clamp-2 text-[15px] font-semibold leading-snug text-[#084734]">
+                      {seoAnalysis.effectiveTitle || "SEO 제목을 입력하세요"}
+                    </p>
+                    <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-[#615D59]">
+                      {seoAnalysis.effectiveDesc || "메타 설명을 입력하세요. 비우면 요약이 표시됩니다."}
+                    </p>
+                  </div>
+                  <ul>
+                    {seoAnalysis.checks.map((check) => (
+                      <li key={check.id} className="flex min-h-8 items-center gap-2 text-[12px]">
+                        {check.ok ? (
+                          <Check className="h-3.5 w-3.5 shrink-0 text-[#084734]" aria-label="통과" />
+                        ) : (
+                          <X className="h-3.5 w-3.5 shrink-0 text-[#B43E3E]" aria-label="미통과" />
+                        )}
+                        <span className="text-[#31302E]">{check.label}</span>
+                        <span className="truncate text-[#615D59]">{check.detail}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+                </>
+              )}
+              {settingsTab === "convert" && (
+                <>
+              <PropertyRow
+                label="리드 마그넷"
+                htmlFor="leadMagnet"
+                hint="선택하면 본문 하단에 이메일 수집 블록이 노출되고, 신청자는 해당 마그넷 태그로 구독자 DB에 기록됩니다."
+              >
+                <select
+                  id="leadMagnet"
+                  value={form.leadMagnetSlug ?? ""}
+                  onChange={(event) => updateForm("leadMagnetSlug", event.target.value)}
+                  className={PROP_INPUT_CLASS}
+                >
+                  <option value="">표시 안 함</option>
+                  {leadOptions.map((opt) => (
+                    <option key={opt.slug} value={opt.slug}>
+                      {opt.title} · {getLeadMagnetGateLabel(opt.gate)} · {getLeadMagnetStatusLabel(opt.status)}
+                      {opt.published ? "" : " · 검토 중"}
+                    </option>
+                  ))}
+                </select>
+              </PropertyRow>
+              <PropertyRow label="CTA 문구" htmlFor="cta-eyebrow">
+                <div className="space-y-0.5">
+                  <input
+                    id="cta-eyebrow"
+                    value={form.cta.eyebrow}
+                    onChange={(event) => updateCta("eyebrow", event.target.value)}
+                    placeholder={`상단 문구 · ${DEFAULT_BLOG_CTA.eyebrow}`}
+                    className={PROP_INPUT_CLASS}
+                  />
+                  <input
+                    aria-label="CTA 제목"
+                    value={form.cta.title}
+                    onChange={(event) => updateCta("title", event.target.value)}
+                    placeholder={`제목 · ${DEFAULT_BLOG_CTA.title}`}
+                    className={PROP_INPUT_CLASS}
+                  />
+                  <textarea
+                    aria-label="CTA 설명"
+                    rows={2}
+                    value={form.cta.description}
+                    onChange={(event) => updateCta("description", event.target.value)}
+                    placeholder={`설명 · ${DEFAULT_BLOG_CTA.description}`}
+                    className={`resize-none leading-relaxed [field-sizing:content] ${PROP_INPUT_CLASS}`}
+                  />
+                </div>
+              </PropertyRow>
+              <PropertyRow label="추천 글">
+                {filteredPosts.length === 0 ? (
+                  <p className="px-2 py-1.5 text-[13px] text-[#615D59]">추천할 다른 글이 아직 없습니다.</p>
+                ) : (
+                  <div className="space-y-0.5">
+                    {filteredPosts.slice(0, 8).map((post) => (
+                      <label
+                        key={post.id}
+                        className="flex min-h-9 cursor-pointer items-center gap-2.5 rounded-md px-2 transition-colors hover:bg-[#F6F5F4]"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={form.relatedPostIds.includes(post.id)}
+                          onChange={() => toggleRelatedPost(post.id)}
+                          className="h-4 w-4 shrink-0 rounded border-[#d8d8d2] accent-[#084734]"
+                        />
+                        <span className="line-clamp-1 text-[13px] text-[#31302E]">{post.title}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </PropertyRow>
+                </>
+              )}
+              {settingsTab === "display" && (
+                <>
+              <PropertyRow label="레이아웃">
+                <div className="flex flex-wrap gap-1.5 px-2 py-1">
+                  {(
+                    [
+                      { value: "standard" as const, label: "기본", desc: "사이드 목차 + 콘텐츠" },
+                      { value: "minimal" as const, label: "미니멀", desc: "중앙 정렬 단일 컬럼" },
+                    ] as const
+                  ).map(({ value, label, desc }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => updateForm("pageLayout", value)}
+                      aria-pressed={form.pageLayout === value}
+                      className={`min-h-9 rounded-md border px-3 text-left text-[13px] transition-colors ${
+                        form.pageLayout === value
+                          ? "border-[#084734] bg-[#ECFDF5] font-semibold text-[#084734]"
+                          : "border-[#e8e8e4] bg-white text-[#31302E] hover:border-[#084734]/30"
+                      }`}
+                    >
+                      {label}
+                      <span className="ml-1.5 text-[11px] font-normal text-[#615D59]">{desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </PropertyRow>
+              <PropertyRow
+                label="발행일"
+                htmlFor="advanced-published-at"
+                hint="과거 시각은 공개 화면의 발행일로 쓰이고, 미래 시각은 발행 상태여도 그 시각 전까지 숨깁니다. 발행 창의 ‘지금’은 현재 시각으로 덮어씁니다."
+              >
+                <div className="flex flex-wrap items-center gap-1">
+                  <input
+                    id="advanced-published-at"
+                    type="datetime-local"
+                    value={isoToLocalInput(form.publishedAt)}
+                    onChange={(event) =>
+                      updateForm(
+                        "publishedAt",
+                        event.target.value ? new Date(event.target.value).toISOString() : ""
+                      )
+                    }
+                    className={`w-auto ${PROP_INPUT_CLASS}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => updateForm("publishedAt", new Date().toISOString())}
+                    className="inline-flex min-h-8 items-center rounded-md px-2 text-[12px] font-medium text-[#31302E] transition-colors hover:bg-[#F6F5F4]"
+                  >
+                    지금으로
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!initialPost?.publishedAt) return
+                      updateForm("publishedAt", initialPost.publishedAt)
+                    }}
+                    disabled={!initialPost?.publishedAt}
+                    className="inline-flex min-h-8 items-center rounded-md px-2 text-[12px] font-medium text-[#31302E] transition-colors hover:bg-[#F6F5F4] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    기존 날짜 복원
+                  </button>
+                  {form.publishedAt ? (
+                    <button
+                      type="button"
+                      onClick={() => updateForm("publishedAt", "")}
+                      className="inline-flex min-h-8 items-center rounded-md px-2 text-[12px] font-medium text-[#615D59] transition-colors hover:bg-[#FCE9E9] hover:text-[#8F2C2C]"
+                    >
+                      비우기
+                    </button>
+                  ) : null}
+                </div>
+              </PropertyRow>
+              {(["imageUrl", "heroImageUrl"] as const).map((field) => (
+                <PropertyRow
+                  key={field}
+                  label={field === "imageUrl" ? "썸네일 이미지" : "상단 배너 이미지"}
+                  htmlFor={`blog-${field}`}
+                >
+                  <div className="flex items-center gap-1">
+                    <input
+                      id={`blog-${field}`}
+                      value={form[field]}
+                      onChange={(event) => updateForm(field, event.target.value)}
+                      placeholder="/images/blog/thumb.png"
+                      className={PROP_INPUT_CLASS}
+                    />
+                    <label className="relative inline-flex min-h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-medium text-[#615D59] transition-colors focus-within:border-[#084734] hover:bg-[#F6F5F4]">
+                      {uploadingField === field ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                      업로드
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        className="sr-only"
+                        disabled={uploadingField !== null}
+                        onChange={(event) => {
+                          const file = event.target.files?.[0]
+                          if (file) void handleImageUpload(field, file)
+                          event.target.value = ""
+                        }}
+                      />
+                    </label>
+                  </div>
+                </PropertyRow>
+              ))}
+              <PropertyRow label="이미지 설명" htmlFor="thumbnailAlt" hint="비우면 제목으로 채웁니다">
+                <div className="grid grid-cols-2 gap-1">
+                  <input
+                    id="thumbnailAlt"
+                    value={form.thumbnailAlt}
+                    onChange={(event) => updateForm("thumbnailAlt", event.target.value)}
+                    placeholder="썸네일 설명"
+                    className={PROP_INPUT_CLASS}
+                  />
+                  <input
+                    aria-label="배너 이미지 설명"
+                    value={form.heroImageAlt}
+                    onChange={(event) => updateForm("heroImageAlt", event.target.value)}
+                    placeholder="배너 설명"
+                    className={PROP_INPUT_CLASS}
+                  />
+                </div>
+              </PropertyRow>
+              <PropertyRow
+                label="작성자 프로필"
+                htmlFor="authorAvatarUrl"
+                hint={
+                  form.authorAvatarUrl && !authorAvatarSrc
+                    ? "표시할 수 없는 이미지 URL입니다. 사이트 내부 경로, Supabase Storage, Unsplash 이미지만 쓸 수 있습니다."
+                    : undefined
+                }
+              >
+                <div className="flex items-start gap-2">
+                  <div className="relative mt-1 h-9 w-9 shrink-0 overflow-hidden rounded-full bg-[#f0f0ec]">
+                    {authorAvatarSrc ? (
+                      <SafeBlogImage
+                        src={authorAvatarSrc}
+                        alt={`${form.author || "작성자"} 아바타 미리보기`}
+                        fill
+                        className="object-cover"
+                        sizes="36px"
+                        fallbackIndex={initialPost?.id ?? 0}
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-[13px] font-semibold text-[#084734]">
+                        {authorInitial}
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <input
+                      id="authorAvatarUrl"
+                      value={form.authorAvatarUrl || ""}
+                      onChange={(event) => updateForm("authorAvatarUrl", event.target.value)}
+                      placeholder="아바타 이미지 URL"
+                      className={PROP_INPUT_CLASS}
+                    />
+                    <textarea
+                      aria-label="작성자 소개"
+                      rows={2}
+                      value={form.authorBio}
+                      onChange={(event) => updateForm("authorBio", event.target.value)}
+                      placeholder="작성자 소개"
+                      className={`resize-none leading-relaxed [field-sizing:content] ${PROP_INPUT_CLASS}`}
+                    />
+                  </div>
+                </div>
+              </PropertyRow>
+                </>
+              )}
+            </div>
+          </aside>
+        </>
+      )}
     </div>
   )
 }
