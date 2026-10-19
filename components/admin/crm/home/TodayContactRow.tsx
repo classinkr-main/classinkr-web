@@ -18,8 +18,8 @@
 // 링크를 사유 줄에 둔다(360·리드 보드와 같은 규칙 — lib/crm/write-surface.ts COMPASS_RECORD_LABEL).
 // 처리된 행은 제자리에서 "처리됨 · 콜 · 부재 → 다음 09/28" 한 줄로 접히고, 이번 세션에서 저장한 행만 8초 동안
 // "되돌리기"를 단다. 제목은 고객 360 상세 페이지(리드·NEO 계정 — customerDetailHref ?tab=activity, 10월 줄기 f989a812 가
-// 드로어를 전용 페이지로 바꿨다 · 큐 패널 priorityCustomerHref 와 같은 규칙), 아이콘 보조 링크도 같은 고객 링크
-// (todayContactHomeHref — 리드·NEO 계정은 360 상세, 그 밖은 row.href: 전환 고객 검색·딜·할 일)다. 호출부가
+// 드로어를 전용 페이지로 바꿨다), 아이콘 보조 링크도 같은 고객 링크(todayContactHomeHref — 규칙 정본은
+// lib/crm/customer-navigation customerHomeHref: 리드·NEO 계정은 360 상세, 그 밖은 row.href: 전환 고객 검색·딜·할 일)다. 호출부가
 // onOpenCustomer 를 넘기면(드로어를 쓰는 화면) 제목만 그 버튼으로 연다. Compass 매칭 리드 행의 주 행동
 // "Compass에서 열기"는 그대로다(A안).
 
@@ -28,7 +28,7 @@ import Link from "next/link"
 import { CheckCircle2, Clock3, ExternalLink } from "lucide-react"
 
 import CompassOpenLink, { resolveCompassOpenHref } from "@/components/admin/compass/CompassOpenLink"
-import { customerDetailHref } from "@/lib/crm/customer-navigation"
+import { customerHomeHref, isCustomer360Key } from "@/lib/crm/customer-navigation"
 import { lastContactCalendarDays, relativeDaysLabel } from "@/lib/crm/last-contact"
 import { STATUS_TONE_TEXT_CLASS, STATUS_TONE_TEXT_STRONG_CLASS } from "@/lib/crm/status-tone"
 import { COMPASS_RECORD_LABEL } from "@/lib/crm/write-surface"
@@ -174,18 +174,18 @@ export function describeTodayContactLast(
   return { when: relativeDaysLabel(days), detail, stale: days >= LAST_CONTACT_WARNING_DAYS }
 }
 
-/** 고객 360(상세 페이지·드로어)으로 열 수 있는 행 — 360 이 받는 키는 lead:·neo: 뿐. */
+/** 고객 360(상세 페이지·드로어)으로 열 수 있는 행 — 360 이 받는 키는 lead:·neo: 뿐(isCustomer360Key). */
 export function canOpenCustomerDrawer(row: Pick<TodayContactRow, "key">): boolean {
-  return row.key.startsWith("lead:") || row.key.startsWith("neo:")
+  return isCustomer360Key(row.key)
 }
 
 /**
  * 행의 Home 고객 링크 — 리드·NEO 계정(lead:·neo: 키)은 고객 360 상세(?tab=activity)로, 그 밖(전환 고객 검색 착지·딜·
- * 할 일·Compass 전용 외부 URL)은 빌더가 만든 row.href 그대로(lib/crm/customer-navigation priorityCustomerHref 와 같은 규칙 —
- * 10월 줄기가 큐 패널에 넣은 고객 링크를 "오늘 연락"으로 옮겼다).
+ * 할 일·Compass 전용 외부 URL)은 빌더가 만든 row.href 그대로. 규칙은 lib/crm/customer-navigation customerHomeHref
+ * 하나에 맡긴다(10월 줄기가 큐 패널에 넣은 고객 링크를 "오늘 연락"으로 옮겼다 — 사본을 두지 않는다).
  */
 export function todayContactHomeHref(row: Pick<TodayContactRow, "key" | "href">): string {
-  return canOpenCustomerDrawer(row) ? customerDetailHref(row.key) : row.href
+  return customerHomeHref(row)
 }
 
 /** Home 안 경로인가 — Compass 전용 행의 href 가 외부 URL 이면 next/link 로 같은 탭 이동시키지 않는다. */

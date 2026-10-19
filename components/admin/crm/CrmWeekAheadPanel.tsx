@@ -255,7 +255,7 @@ export default function CrmWeekAheadPanel({
 }) {
   const [expanded, setExpanded] = useState(false)
   const { owners: crmOwners, currentOwner } = useCrmOwners()
-  // 홈 큐(CrmPriorityQueuePanel)와 같은 디렉터리 기반 담당자 목록 — 할 일 응답에는 담당자 집계가
+  // 홈 "오늘 연락"(CrmTodayContactsPanel)과 같은 디렉터리 기반 담당자 목록 — 할 일 응답에는 담당자 집계가
   // 없으므로 건수 없이 이름·역할만 쓴다. 값(ownerKey)은 /api/admin/crm/tasks?owner= 가 그대로
   // owner_key 필터로 받는다.
   const ownerOptions = useMemo(() => buildOwnerSelectOptions(undefined, crmOwners), [crmOwners])

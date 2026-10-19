@@ -1700,7 +1700,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                   {tag}
                   {/* hover:text-[#B43E3E] === STATUS_TONE.danger.text(lib/crm/status-tone.ts) — Tailwind
                       정적 스캔 때문에 hover: variant는 리터럴이어야 한다(동적 템플릿 불가). STATUS_TONE.danger.text가
-                      바뀌면 이 리터럴도 같이 고친다(같은 패턴: LeadDrawer.tsx, CrmPriorityQueuePanel.tsx). */}
+                      바뀌면 이 리터럴도 같이 고친다(같은 패턴: LeadDrawer.tsx, CustomerTagChips.tsx). */}
                   <button
                     type="button"
                     onClick={() => void handleRemoveTag(tag)}

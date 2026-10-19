@@ -93,8 +93,9 @@ export async function getCrmInsights(): Promise<CrmInsights> {
   const generatedAt = new Date().toISOString()
   const [priorityResult, coverageResult, overviewResult, leadStatsResult, dealStageCountsResult] =
     await Promise.allSettled([
-      // 홈 "오늘 전화" 큐(CrmPriorityQueuePanel)와 같은 source="customer"(리드 + ClassIn 고객)로
-      // 센다 — 기본 "all"이면 할 일까지 섞여 "우선 연락" 숫자가 홈 큐와 달라진다(H2).
+      // source="customer"(리드 + ClassIn 고객)로 센다 — 기본 "all"이면 할 일까지 섞여 "우선 연락"이 고객 수가
+      // 아니게 된다(H2). 옛 홈 "오늘 전화" 큐와 맞추던 범위다 — 그 패널은 2026-10-19 09-mooni 병합에서 "오늘 연락"
+      // (할 일·Compass 다음 액션까지 담는 다른 목록)으로 바뀌어 지금 홈 숫자와 같지 않다.
       getCrmPriorityQueue({ limit: 12, source: "customer" }),
       getCrmSourceLinkCoverage(),
       getAdminCrmOverview(),

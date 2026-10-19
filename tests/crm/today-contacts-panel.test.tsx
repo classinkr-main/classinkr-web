@@ -22,8 +22,15 @@ vi.mock("@/lib/admin-client", () => ({
   getCachedAdminJson: vi.fn(() => null),
   seedAdminRequestCache: vi.fn(),
 }))
+// ownersMock — 기본은 담당자 응답 없음(currentOwner null · health null = "담당자 연결 확인"). 내 담당이 풀린 상태를
+// 보는 테스트만 withOwners 로 바꾼다(끝나면 되돌린다).
+type OwnersMockState = {
+  currentOwner: { userId: string | null; displayName: string; teamRoleLabel: string; branchName: string | null; ownerKey: string; ownerAliases: string[]; neoOwnerId: string | null } | null
+  health: { ok: boolean; message: string | null } | null
+}
+const ownersMock = vi.hoisted((): OwnersMockState => ({ currentOwner: null, health: null }))
 vi.mock("@/components/admin/crm/useCrmOwners", () => ({
-  useCrmOwners: () => ({ owners: [], currentOwner: null, health: null }),
+  useCrmOwners: () => ({ owners: [], currentOwner: ownersMock.currentOwner, health: ownersMock.health }),
   buildOwnerSelectOptions: () => [],
 }))
 
@@ -78,6 +85,7 @@ import TodayContactRowView, {
 } from "@/components/admin/crm/home/TodayContactRow"
 import { INTERACTIVE_TEXT_CLASS, SECONDARY_TEXT_CLASS } from "@/components/admin/crm/home/shared"
 import { compassLeadUrl } from "@/lib/compass/normalize"
+import { customerHomeHref, isCustomer360Key, priorityCustomerHref } from "@/lib/crm/customer-navigation"
 import { todayContactCustomerHref } from "@/lib/crm/today-contact-queue"
 import type {
   CrmTodayContacts,
@@ -198,6 +206,28 @@ function renderRow(row: TodayContactRow, props: Partial<Parameters<typeof TodayC
       <TodayContactRowView row={row} basisMs={NOW} neoStale={false} {...props} />
     </ul>
   )
+}
+
+const RESOLVED_OWNER: NonNullable<OwnersMockState["currentOwner"]> = {
+  userId: "u-1",
+  displayName: "이서연",
+  teamRoleLabel: "매니저",
+  branchName: null,
+  ownerKey: "이서연",
+  ownerAliases: [],
+  neoOwnerId: null,
+}
+
+async function withOwners<T>(state: OwnersMockState, run: () => Promise<T>): Promise<T> {
+  const prev = { currentOwner: ownersMock.currentOwner, health: ownersMock.health }
+  ownersMock.currentOwner = state.currentOwner
+  ownersMock.health = state.health
+  try {
+    return await run()
+  } finally {
+    ownersMock.currentOwner = prev.currentOwner
+    ownersMock.health = prev.health
+  }
 }
 
 async function renderPanel(data: CrmTodayContacts) {
@@ -1174,8 +1204,8 @@ describe("오늘 연락 패널(prerender)", () => {
     expect(html).toContain("14일 넘게 지난 Compass 다음 액션 4건")
   })
 
-  it("대상이 없으면 '없음'을 데이터 누락과 구분해 말한다", async () => {
-    const html = await renderPanel(makeData([]))
+  it("대상이 없으면 '없음'을 데이터 누락과 구분해 말한다(내 담당이 CRM 담당자로 풀린 상태)", async () => {
+    const html = await withOwners({ currentOwner: RESOLVED_OWNER, health: { ok: true, message: null } }, () => renderPanel(makeData([])))
     expect(html).toContain("오늘 연락할 대상이 없습니다")
     expect(html).toContain("데이터 누락이 아닙니다")
     expect(html).toContain('data-today-contacts-empty="none"')
@@ -1252,27 +1282,67 @@ describe("10월 줄기 이식 — 기본 담당 = 로그인 사용자 · 리드/
   })
 
   it("빈 목록 문구 — 담당 전체는 옛 문구 그대로, 내 담당은 범위를 밝히되 '없음'(데이터 누락 아님)·'모름' 구분은 같다", () => {
-    expect(todayContactsEmptyCopy({ unknown: false, filtered: false, owner: "" })).toEqual({
+    expect(todayContactsEmptyCopy({ unknown: false, filtered: false, owner: "", ownerResolved: false })).toEqual({
+      kind: "none",
       title: "오늘 연락할 대상이 없습니다",
       detail: "처리할 연락이 없다는 뜻입니다 — 데이터 누락이 아닙니다.",
     })
-    expect(todayContactsEmptyCopy({ unknown: true, filtered: false, owner: "" }).title).toBe("오늘 연락 목록이 비어 있습니다")
-    const mineNone = todayContactsEmptyCopy({ unknown: false, filtered: false, owner: "__me" })
+    expect(todayContactsEmptyCopy({ unknown: true, filtered: false, owner: "", ownerResolved: true }).title).toBe("오늘 연락 목록이 비어 있습니다")
+    const mineNone = todayContactsEmptyCopy({ unknown: false, filtered: false, owner: "__me", ownerResolved: true })
+    expect(mineNone.kind).toBe("none")
     expect(mineNone.title).toBe("내 담당 중 오늘 연락할 대상이 없습니다")
     expect(mineNone.detail).toContain("데이터 누락이 아닙니다")
     expect(mineNone.detail).toContain("담당 전체로 넓히면")
-    const mineUnknown = todayContactsEmptyCopy({ unknown: true, filtered: false, owner: "__me" })
+    const mineUnknown = todayContactsEmptyCopy({ unknown: true, filtered: false, owner: "__me", ownerResolved: true })
     expect(mineUnknown.title).toBe("내 담당 오늘 연락 목록이 비어 있습니다")
     expect(mineUnknown.detail).not.toContain("데이터 누락이 아닙니다")
-    expect(todayContactsEmptyCopy({ unknown: false, filtered: false, owner: "박담당" }).title).toBe("선택한 담당자의 오늘 연락이 없습니다")
-    expect(todayContactsEmptyCopy({ unknown: true, filtered: false, owner: "박담당" }).title).toBe("선택한 담당자의 오늘 연락이 보이지 않습니다")
-    expect(todayContactsEmptyCopy({ unknown: false, filtered: true, owner: "__me" }).title).toBe("이 조건에 남은 연락이 없습니다")
+    expect(todayContactsEmptyCopy({ unknown: false, filtered: false, owner: "박담당", ownerResolved: true }).title).toBe("선택한 담당자의 오늘 연락이 없습니다")
+    expect(todayContactsEmptyCopy({ unknown: true, filtered: false, owner: "박담당", ownerResolved: true }).title).toBe("선택한 담당자의 오늘 연락이 보이지 않습니다")
+    expect(todayContactsEmptyCopy({ unknown: false, filtered: true, owner: "__me", ownerResolved: true }).title).toBe("이 조건에 남은 연락이 없습니다")
   })
 
-  it("기본(내 담당) 빈 목록은 '담당 전체로 보기'를 준다", async () => {
-    const html = await renderPanelAt("", makeData([]))
+  it("내 담당이 CRM 담당자로 안 풀렸으면 빈 목록을 '없음'(데이터 누락 아님)이라 단언하지 않는다 — '모름'으로 말한다", () => {
+    const unresolved = todayContactsEmptyCopy({ unknown: false, filtered: false, owner: "__me", ownerResolved: false })
+    expect(unresolved).toEqual({
+      kind: "owner_unresolved",
+      title: "내 담당 오늘 연락 목록이 비어 있습니다",
+      detail: "로그인 계정과 CRM 담당자 연결을 확인하지 못해 내 담당 목록이 비어 보일 수 있습니다 — 대상이 없다는 뜻이 아닙니다. 담당 전체로 넓혀 확인하세요.",
+    })
+    expect(unresolved.detail).not.toContain("데이터 누락이 아닙니다")
+    // 연결 여부는 내 담당("__me")에만 걸린다 — 담당 전체·이름 별칭 범위는 그대로.
+    expect(todayContactsEmptyCopy({ unknown: false, filtered: false, owner: "", ownerResolved: false }).kind).toBe("none")
+    expect(todayContactsEmptyCopy({ unknown: false, filtered: false, owner: "박담당", ownerResolved: false }).title).toBe("선택한 담당자의 오늘 연락이 없습니다")
+    // 원천 실패("모름")·필터로 비움이 먼저다.
+    expect(todayContactsEmptyCopy({ unknown: true, filtered: false, owner: "__me", ownerResolved: false }).kind).toBe("unknown")
+    expect(todayContactsEmptyCopy({ unknown: false, filtered: true, owner: "__me", ownerResolved: false }).kind).toBe("filtered")
+  })
+
+  it("기본(내 담당) 빈 목록은 '담당 전체로 보기'를 준다 — 담당자로 풀렸으면 '없음'을 단언한다", async () => {
+    const html = await withOwners({ currentOwner: RESOLVED_OWNER, health: { ok: true, message: null } }, () => renderPanelAt("", makeData([])))
+    expect(html).toMatch(/<option value="__me" selected="">내 담당 · 이서연<\/option>/)
     expect(html).toContain("내 담당 중 오늘 연락할 대상이 없습니다")
+    expect(html).toContain("데이터 누락이 아닙니다")
+    expect(html).toContain('data-today-contacts-empty="none"')
     expect(html).toMatch(/>담당 전체로 보기<\/button>/)
+  })
+
+  it("기본(내 담당) 빈 목록 — 담당자 연결 확인 상태(currentOwner 없음)면 '없음'을 단언하지 않고 담당 전체로 넓히는 길을 준다", async () => {
+    const html = await renderPanelAt("", makeData([]))
+    expect(html).toMatch(/<option value="__me" selected="">내 담당 · 담당자 연결 확인<\/option>/)
+    expect(html).toContain('data-today-contacts-empty="owner_unresolved"')
+    expect(html).toContain("로그인 계정과 CRM 담당자 연결을 확인하지 못해 내 담당 목록이 비어 보일 수 있습니다")
+    expect(html).not.toContain("데이터 누락이 아닙니다")
+    expect(html).not.toContain("내 담당 중 오늘 연락할 대상이 없습니다")
+    expect(html).toMatch(/>담당 전체로 보기<\/button>/)
+  })
+
+  it("기본(내 담당) 빈 목록 — 담당자는 찾았어도 디렉터리가 비정상(health.ok=false)이면 '없음'을 단언하지 않는다", async () => {
+    const html = await withOwners(
+      { currentOwner: RESOLVED_OWNER, health: { ok: false, message: "CRM 담당자 매핑 마이그레이션이 아직 적용되지 않아 기본 관리자 이름으로 표시합니다." } },
+      () => renderPanelAt("", makeData([]))
+    )
+    expect(html).toContain('data-today-contacts-empty="owner_unresolved"')
+    expect(html).not.toContain("데이터 누락이 아닙니다")
   })
 
   it("todayContactHomeHref — 리드·NEO 계정은 고객 360 상세(?tab=activity), 그 밖은 빌더 href", () => {
@@ -1283,6 +1353,49 @@ describe("10월 줄기 이식 — 기본 담당 = 로그인 사용자 · 리드/
     )
     expect(todayContactHomeHref({ key: "task:t", href: "/admin/crm/activity" })).toBe("/admin/crm/activity")
     expect(todayContactHomeHref({ key: "compass:7", href: "https://mkt.classin.co.kr/leads/7" })).toBe("https://mkt.classin.co.kr/leads/7")
+  })
+
+  it("고객 링크 규칙은 lib/crm/customer-navigation customerHomeHref 하나 — 오늘 연락 행·옛 큐 별칭이 같은 답을 낸다", () => {
+    const cases = [
+      { key: "lead:a", href: "/admin/crm/customers/leads?lead=a" },
+      { key: "neo:b", href: "/admin/crm/customers/accounts?account=b" },
+      { key: "customer:c", href: "/admin/crm/customers/unified?source=customer&q=c" },
+      { key: "task:t", href: "/admin/crm/activity" },
+      { key: "compass:7", href: "https://mkt.classin.co.kr/leads/7" },
+    ]
+    for (const item of cases) {
+      const expected = customerHomeHref(item)
+      expect(todayContactHomeHref(item)).toBe(expected)
+      expect(priorityCustomerHref({ id: item.key, source: item.key.split(":")[0], href: item.href })).toBe(expected)
+      expect(canOpenCustomerDrawer(item)).toBe(isCustomer360Key(item.key))
+    }
+    expect(isCustomer360Key("lead:a")).toBe(true)
+    expect(isCustomer360Key("neo:b")).toBe(true)
+    expect(isCustomer360Key("customer:c")).toBe(false)
+  })
+
+  it("소스 계약 — 오늘 연락 행·옛 큐 별칭은 lead:·neo: 판정을 따로 들고 있지 않고 정본을 부른다", () => {
+    const fnBody = (source: string, signature: string) => {
+      const start = source.indexOf(signature)
+      expect(start, signature).toBeGreaterThanOrEqual(0)
+      const end = source.indexOf("\n}\n", start)
+      expect(end, signature).toBeGreaterThan(start)
+      return source.slice(start + signature.length, end)
+    }
+    const row = readFileSync(join(process.cwd(), "components/admin/crm/home/TodayContactRow.tsx"), "utf8")
+    const navSource = readFileSync(join(process.cwd(), "lib/crm/customer-navigation.ts"), "utf8")
+    const homeHref = fnBody(row, "export function todayContactHomeHref(")
+    expect(homeHref).toMatch(/\bcustomerHomeHref\(row\)/)
+    expect(homeHref).not.toMatch(/startsWith\(|\bcustomerDetailHref\(/)
+    const drawer = fnBody(row, "export function canOpenCustomerDrawer(")
+    expect(drawer).toMatch(/\bisCustomer360Key\(row\.key\)/)
+    expect(drawer).not.toMatch(/startsWith\(/)
+    const legacy = fnBody(navSource, "export function priorityCustomerHref(")
+    expect(legacy).toMatch(/\bcustomerHomeHref\(/)
+    expect(legacy).not.toMatch(/startsWith\(|\bcustomerDetailHref\(|\bsource\s*===/)
+    // lead:·neo: 접두 판정은 정본 isCustomer360Key 한 곳에만 있다
+    expect(row).not.toMatch(/startsWith\("lead:"\)|startsWith\("neo:"\)/)
+    expect(navSource.match(/startsWith\("lead:"\)/g)?.length).toBe(1)
   })
 
   it("드로어 없이(홈) 리드·NEO 행 제목과 보조 링크는 고객 360 상세로 — 리드 보드·계정 화면 링크로 새지 않는다", () => {

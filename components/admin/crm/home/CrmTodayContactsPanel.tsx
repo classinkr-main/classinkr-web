@@ -398,11 +398,15 @@ export function todayContactsCoverCompassActions(
 }
 
 /**
- * 빈 목록 문구 — "없음"(데이터 누락 아님)·"모름"(원천 일부 실패)·"필터로 비움"을 가르고, 담당 범위를 밝힌다.
- * 기본 담당(내 담당 "__me" — 10월 줄기)은 "내 담당" 범위라고 말하되 "없음"의 단언(데이터 누락 아님)은 그대로 두고,
- * 담당 전체로 넓히는 길을 함께 알린다(버튼 "담당 전체로 보기"는 owner 가 있을 때 패널이 단다).
+ * 빈 목록 문구 — "없음"(데이터 누락 아님)·"모름"(원천 일부 실패·내 담당 연결 미확인)·"필터로 비움"을 가르고, 담당
+ * 범위를 밝힌다. 기본 담당(내 담당 "__me" — 10월 줄기)은 "내 담당" 범위라고 말하고, 담당 전체로 넓히는 길을 함께
+ * 알린다(버튼 "담당 전체로 보기"는 owner 가 있을 때 패널이 단다). "없음"의 단언(데이터 누락 아님)은 로그인 계정이 CRM
+ * 담당자로 풀렸을 때(ownerResolved — 패널: currentOwner 있음·담당자 디렉터리 정상)만 한다. 못 풀리면 서버가 내 담당을
+ * 매칭되지 않는 키(lib/admin/data-owner.ts currentDataOwner — userId·UNMAPPED_OWNER)로 걸러 빈 목록이 나오므로 "모름"
+ * (kind "owner_unresolved")이다 — 담당 선택이 "내 담당 · 담당자 연결 확인"을 보이는 것과 같은 상태다.
  */
-export function todayContactsEmptyCopy(input: { unknown: boolean; filtered: boolean; owner: string }): {
+export function todayContactsEmptyCopy(input: { unknown: boolean; filtered: boolean; owner: string; ownerResolved: boolean }): {
+  kind: "none" | "unknown" | "filtered" | "owner_unresolved"
   title: string
   detail: string
 } {
@@ -410,6 +414,7 @@ export function todayContactsEmptyCopy(input: { unknown: boolean; filtered: bool
   const mine = owner === CURRENT_OWNER_VALUE
   if (input.unknown) {
     return {
+      kind: "unknown",
       title: !owner
         ? "오늘 연락 목록이 비어 있습니다"
         : mine
@@ -419,18 +424,26 @@ export function todayContactsEmptyCopy(input: { unknown: boolean; filtered: bool
     }
   }
   if (input.filtered) {
-    return { title: "이 조건에 남은 연락이 없습니다", detail: "원천 필터·처리됨 숨기기를 풀면 다른 행이 보입니다." }
+    return { kind: "filtered", title: "이 조건에 남은 연락이 없습니다", detail: "원천 필터·처리됨 숨기기를 풀면 다른 행이 보입니다." }
   }
   if (!owner) {
-    return { title: "오늘 연락할 대상이 없습니다", detail: "처리할 연락이 없다는 뜻입니다 — 데이터 누락이 아닙니다." }
+    return { kind: "none", title: "오늘 연락할 대상이 없습니다", detail: "처리할 연락이 없다는 뜻입니다 — 데이터 누락이 아닙니다." }
+  }
+  if (mine && !input.ownerResolved) {
+    return {
+      kind: "owner_unresolved",
+      title: "내 담당 오늘 연락 목록이 비어 있습니다",
+      detail: "로그인 계정과 CRM 담당자 연결을 확인하지 못해 내 담당 목록이 비어 보일 수 있습니다 — 대상이 없다는 뜻이 아닙니다. 담당 전체로 넓혀 확인하세요.",
+    }
   }
   if (mine) {
     return {
+      kind: "none",
       title: "내 담당 중 오늘 연락할 대상이 없습니다",
       detail: "처리할 연락이 없다는 뜻입니다 — 데이터 누락이 아닙니다. 담당 전체로 넓히면 다른 담당자의 연락이 보일 수 있습니다.",
     }
   }
-  return { title: "선택한 담당자의 오늘 연락이 없습니다", detail: "담당 전체로 넓히면 다른 담당자의 연락이 보일 수 있습니다." }
+  return { kind: "none", title: "선택한 담당자의 오늘 연락이 없습니다", detail: "담당 전체로 넓히면 다른 담당자의 연락이 보일 수 있습니다." }
 }
 
 /**
@@ -1604,7 +1617,10 @@ export default function CrmTodayContactsPanel({
   const filterActive = sourceFilter !== "all" || hideHandled
   // 빈 목록인데 원천 일부를 못 읽었다 — "대상 없음"이 아니라 "모름"(필터로 비운 경우는 제외).
   const emptyIsUnknown = sourcesIncomplete && !(filterActive && allRows.length > 0)
-  const emptyCopy = todayContactsEmptyCopy({ unknown: emptyIsUnknown, filtered: filterActive && allRows.length > 0, owner })
+  // 내 담당이 실제 CRM 담당자로 풀렸는가 — 못 풀리면(매핑 없음·디렉터리 비정상·담당자 응답 전) 빈 목록을 "없음"이라 단언하지 않는다.
+  const ownerResolved = currentOwner != null && ownerHealth?.ok !== false
+  const emptyCopy = todayContactsEmptyCopy({ unknown: emptyIsUnknown, filtered: filterActive && allRows.length > 0, owner, ownerResolved })
+  const emptyIsOwnerUnresolved = emptyCopy.kind === "owner_unresolved"
   const slotSummary = TODAY_CALL_SLOTS.map((slot) => `${slot.label} ${slot.quota}`).join(" · ")
   const moreLabel = todayContactsMoreLabel({ hiddenCount, unloadedCount, canLoadMore, filterActive })
 
@@ -1943,9 +1959,15 @@ export default function CrmTodayContactsPanel({
           ) : null}
         </>
       ) : (
-        <div className="border-y border-[#f0f0ec] px-4 py-6 text-center" data-today-contacts-empty={emptyIsUnknown ? "unknown" : "none"}>
-          {/* 원천 일부를 못 읽었으면 빈 목록은 "없음"이 아니라 "모름"이다 — 위 경고 배너와 모순되는 단언을 하지 않는다. */}
-          <p className={`text-[13px] font-semibold ${emptyIsUnknown ? STATUS_TONE_TEXT_STRONG_CLASS.warning : "text-[#111110]"}`}>
+        <div
+          className="border-y border-[#f0f0ec] px-4 py-6 text-center"
+          data-today-contacts-empty={emptyIsUnknown ? "unknown" : emptyIsOwnerUnresolved ? "owner_unresolved" : "none"}
+        >
+          {/* 원천 일부를 못 읽었거나 내 담당 연결을 확인하지 못했으면 빈 목록은 "없음"이 아니라 "모름"이다 — 위 경고 배너·
+              담당 선택("담당자 연결 확인")과 모순되는 단언을 하지 않는다. */}
+          <p
+            className={`text-[13px] font-semibold ${emptyIsUnknown || emptyIsOwnerUnresolved ? STATUS_TONE_TEXT_STRONG_CLASS.warning : "text-[#111110]"}`}
+          >
             {emptyCopy.title}
           </p>
           <p className={`mt-1 text-[12px] ${SECONDARY_TEXT_CLASS}`}>{emptyCopy.detail}</p>
