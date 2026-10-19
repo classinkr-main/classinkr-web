@@ -1,7 +1,8 @@
 /**
  * H1 — GET /api/admin/crm/home/priority-queue 의 force 관통 계약.
  *
- * 클라이언트(CrmPriorityQueuePanel)는 새로고침에 `&force=1`을 붙인다. 라우트는 overview 라우트와
+ * 옛 클라이언트(CrmPriorityQueuePanel — 2026-10-19 09-mooni 병합에서 "오늘 연락"으로 바뀌며 지웠다)는 새로고침에
+ * `&force=1`을 붙였다. 라우트는 남아 있고 overview 라우트와
  * 같은 규칙(파라미터 존재 여부)으로 이를 읽어 리포지토리에 force를 넘기고, 응답은 브라우저
  * 프라이빗 캐시에 남기지 않는다(no-store).
  */

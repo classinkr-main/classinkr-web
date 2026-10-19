@@ -380,7 +380,7 @@ export default function CrmHomeClient({
   }, 60_000)
 
   // 기록 입력은 /activity의 단일 컴포저가 소유한다. 홈 우측 레일과 기록 화면에 같은 폼을
-  // 중복 노출하면 우선순위 큐가 좁아지고 사용자는 저장 위치를 다시 판단해야 한다.
+  // 중복 노출하면 "오늘 연락" 목록이 좁아지고 사용자는 저장 위치를 다시 판단해야 한다.
   const focusQuickRecord = useCallback(() => {
     router.push("/admin/crm/activity")
   }, [router])

@@ -85,7 +85,7 @@ import TodayContactRowView, {
 } from "@/components/admin/crm/home/TodayContactRow"
 import { INTERACTIVE_TEXT_CLASS, SECONDARY_TEXT_CLASS } from "@/components/admin/crm/home/shared"
 import { compassLeadUrl } from "@/lib/compass/normalize"
-import { customerHomeHref, isCustomer360Key, priorityCustomerHref } from "@/lib/crm/customer-navigation"
+import { customerHomeHref, isCustomer360Key } from "@/lib/crm/customer-navigation"
 import { todayContactCustomerHref } from "@/lib/crm/today-contact-queue"
 import type {
   CrmTodayContacts,
@@ -1355,7 +1355,7 @@ describe("10월 줄기 이식 — 기본 담당 = 로그인 사용자 · 리드/
     expect(todayContactHomeHref({ key: "compass:7", href: "https://mkt.classin.co.kr/leads/7" })).toBe("https://mkt.classin.co.kr/leads/7")
   })
 
-  it("고객 링크 규칙은 lib/crm/customer-navigation customerHomeHref 하나 — 오늘 연락 행·옛 큐 별칭이 같은 답을 낸다", () => {
+  it("고객 링크 규칙은 lib/crm/customer-navigation customerHomeHref 하나 — 오늘 연락 행이 같은 답을 낸다", () => {
     const cases = [
       { key: "lead:a", href: "/admin/crm/customers/leads?lead=a" },
       { key: "neo:b", href: "/admin/crm/customers/accounts?account=b" },
@@ -1366,7 +1366,6 @@ describe("10월 줄기 이식 — 기본 담당 = 로그인 사용자 · 리드/
     for (const item of cases) {
       const expected = customerHomeHref(item)
       expect(todayContactHomeHref(item)).toBe(expected)
-      expect(priorityCustomerHref({ id: item.key, source: item.key.split(":")[0], href: item.href })).toBe(expected)
       expect(canOpenCustomerDrawer(item)).toBe(isCustomer360Key(item.key))
     }
     expect(isCustomer360Key("lead:a")).toBe(true)
@@ -1374,7 +1373,7 @@ describe("10월 줄기 이식 — 기본 담당 = 로그인 사용자 · 리드/
     expect(isCustomer360Key("customer:c")).toBe(false)
   })
 
-  it("소스 계약 — 오늘 연락 행·옛 큐 별칭은 lead:·neo: 판정을 따로 들고 있지 않고 정본을 부른다", () => {
+  it("소스 계약 — 오늘 연락 행은 lead:·neo: 판정을 따로 들고 있지 않고 정본을 부른다(옛 큐 별칭은 없다)", () => {
     const fnBody = (source: string, signature: string) => {
       const start = source.indexOf(signature)
       expect(start, signature).toBeGreaterThanOrEqual(0)
@@ -1390,9 +1389,9 @@ describe("10월 줄기 이식 — 기본 담당 = 로그인 사용자 · 리드/
     const drawer = fnBody(row, "export function canOpenCustomerDrawer(")
     expect(drawer).toMatch(/\bisCustomer360Key\(row\.key\)/)
     expect(drawer).not.toMatch(/startsWith\(/)
-    const legacy = fnBody(navSource, "export function priorityCustomerHref(")
-    expect(legacy).toMatch(/\bcustomerHomeHref\(/)
-    expect(legacy).not.toMatch(/startsWith\(|\bcustomerDetailHref\(|\bsource\s*===/)
+    // 옛 우선순위 큐 링크 함수(priorityCustomerHref)는 운영 호출부가 없어 지웠다 — 두 번째 규칙이 다시 생기지 않게
+    expect(fnBody(navSource, "export function customerHomeHref(")).toMatch(/\bisCustomer360Key\(item\.key\)/)
+    expect(navSource).not.toMatch(/\bpriorityCustomerHref\b/)
     // lead:·neo: 접두 판정은 정본 isCustomer360Key 한 곳에만 있다
     expect(row).not.toMatch(/startsWith\("lead:"\)|startsWith\("neo:"\)/)
     expect(navSource.match(/startsWith\("lead:"\)/g)?.length).toBe(1)

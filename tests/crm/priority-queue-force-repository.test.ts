@@ -1,7 +1,7 @@
 /**
  * H1 — getCrmPriorityQueue({ force }) 계약.
  *
- * 클라이언트 새로고침(CrmPriorityQueuePanel의 `&force=1`)이 서버까지 관통하려면 리포지토리가
+ * 새로고침(`&force=1` — 옛 CrmPriorityQueuePanel이 붙였고 라우트는 남아 있다)이 서버까지 관통하려면 리포지토리가
  * force를 받아 소스 스냅샷 Data Cache를 우회하고, 재수집 뒤 태그를 즉시 하드 만료해야 한다
  * (lib/admin-crm-overview.ts getAdminCrmOverview({ force })와 같은 컨벤션).
  * 모킹 패턴은 tests/repositories/crm-priority-queue-snapshot-cache.test.ts를 따른다.

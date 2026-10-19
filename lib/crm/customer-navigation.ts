@@ -15,11 +15,3 @@ export function isCustomer360Key(key: string): boolean {
 export function customerHomeHref(item: { key: string; href: string }): string {
   return isCustomer360Key(item.key) ? customerDetailHref(item.key) : item.href
 }
-
-/**
- * 옛 우선순위 큐 항목 모양(id = lead:{id}·neo:{accountId})의 별칭 — 큐 패널은 2026-10-19 09-mooni 병합에서 지웠고
- * 운영 호출부는 없다. 규칙을 따로 들고 있지 않고 customerHomeHref 에 맡긴다(두 규칙이 갈라지지 않게).
- */
-export function priorityCustomerHref(item: { id: string; source: string; href: string }): string {
-  return customerHomeHref({ key: item.id, href: item.href })
-}

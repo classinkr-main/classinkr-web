@@ -29,7 +29,7 @@ const NONE_DISMISSED: DismissedBanners = { all: false, business: false, neo: fal
 
 // 코크핏 KPI 히어로 — 흩어진 핵심 지표를 상단 한 밴드로 합성(B 코크핏 이식). snapshot 필드만 재배치(추가 fetch 0).
 // 통화 3종이 인접하므로 카드마다 통화 칩을 강제: 인식매출·미수=₩(자체집계), 오더=$(USD), 동기화=¥(CNY).
-// 아침 지휘대 재배치(H3) — 우선순위 큐가 첫 화면 주인공이 되도록 컴팩트 밴드로 축소(값·캡션 불변).
+// 아침 지휘대 재배치(H3) — 작업 목록(지금은 "오늘 연락")이 첫 화면 주인공이 되도록 컴팩트 밴드로 축소(값·캡션 불변).
 export default function CrmCockpitHero({
   overview,
   loading,
@@ -98,7 +98,7 @@ export default function CrmCockpitHero({
 
   return (
     <div className="mb-4">
-      {/* 기준 시각·출처 캡션(UX 규약 4) — 우선순위 큐의 `기준 {generatedAt}` 캡션과 같은 포맷. */}
+      {/* 기준 시각·출처 캡션(UX 규약 4) — "오늘 연락"의 `기준 {generatedLabel}` 캡션과 같은 포맷. */}
       <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
         <span className={totalFailure ? STATUS_TONE_TEXT_CLASS.danger : SECONDARY_TEXT_CLASS}>
           {pending ? (

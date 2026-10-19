@@ -215,7 +215,8 @@ interface OrderHandler<Input, Snapshot = unknown> {
 
 ### S1. 조회 (R0) — 서버 1단계
 
-쓰기와 테이블이 없다. 여기까지 끝나면 병합할 수 있다(기획 D13).
+쓰기와 테이블이 없다. 여기까지 끝나면 운영에서 켤 수 있다(기획 D13). 시안 코드는 2026-10-19 통합 병합으로 먼저 들어갔지만
+노출 스위치 `NEXT_PUBLIC_ADMIN_AI_PREVIEW` 가 꺼져 있어(기본) 화면에 나오지 않는다 — 판정은 `lib/admin-ai/preview.ts` 하나(기획 D13 이행).
 
 | id | 작업 | 파트 | 선행 | 끝났다는 기준 |
 |---|---|---|---|---|
@@ -290,7 +291,7 @@ interface OrderHandler<Input, Snapshot = unknown> {
 ### 순서
 
 ```
-S0 ─▶ S1 ─▶ (병합 가능) ─▶ S2 ─▶ S3 ─▶ S4 ─▶ S5
+S0 ─▶ S1 ─▶ (운영에서 켜기 가능) ─▶ S2 ─▶ S3 ─▶ S4 ─▶ S5
 F-1 · F-2 · F-3 은 S1 과 나란히 진행할 수 있다. F-1 은 S1-7 의 품질을 올린다.
 ```
 

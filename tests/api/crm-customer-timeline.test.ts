@@ -6,7 +6,7 @@ vi.mock("@/lib/admin-auth", () => ({ CRM_STAFF_ADMIN_API_ROLES: ["ADMIN", "BRANC
 vi.mock("@/lib/repositories/crm-customer-timeline", () => ({ getCrmCustomerTimeline: mocks.timeline }))
 import { GET } from "@/app/api/admin/crm/customers/[key]/timeline/route"
 import { parseUnifiedCustomerKey } from "@/lib/repositories/crm-customer-360"
-import { customerDetailHref, priorityCustomerHref } from "@/lib/crm/customer-navigation"
+import { customerDetailHref, customerHomeHref } from "@/lib/crm/customer-navigation"
 
 const request = (query = "") => new NextRequest(`https://classin.co.kr/api/admin/crm/customers/lead%3Aa/timeline${query}`)
 const params = (key = "lead:a") => ({ params: Promise.resolve({ key }) })
@@ -18,8 +18,8 @@ describe("고객 전용 페이지와 전체 로그", () => {
     expect(parseUnifiedCustomerKey("neo:account%3Aone")?.entityId).toBe("account%3Aone")
     expect(parseUnifiedCustomerKey("%invalid")).toBeNull()
     expect(customerDetailHref("lead:a")).toBe("/admin/crm/customers/lead%3Aa?tab=activity")
-    expect(priorityCustomerHref({ source: "neo_account", id: "neo:a", href: "/old" })).toContain("neo%3Aa?tab=activity")
-    expect(priorityCustomerHref({ source: "task", id: "task:a", href: "/tasks" })).toBe("/tasks")
+    expect(customerHomeHref({ key: "neo:a", href: "/old" })).toBe("/admin/crm/customers/neo%3Aa?tab=activity")
+    expect(customerHomeHref({ key: "task:a", href: "/tasks" })).toBe("/tasks")
   })
   it("인증이 거부되면 기록을 조회하지 않는다", async () => {
     mocks.auth.mockResolvedValue(NextResponse.json({ error: "Unauthorized" }, { status: 401 }))

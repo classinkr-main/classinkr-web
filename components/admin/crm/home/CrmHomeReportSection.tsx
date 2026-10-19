@@ -32,7 +32,7 @@ const NeoCrmTeamPanel = dynamic(() => import("@/components/admin/crm/NeoCrmTeamP
 // 매출 상세 / 성과 분석 / 리드 분석 / 팀 KPI / 수납·로그가 각각 최상위 섹션으로 쌓여
 // 아침 화면 아래쪽이 다섯 덩어리였다. 전부 "보고서를 볼 때 여는" 참조 표면이라 한 아코디언
 // 안의 탭으로 접는다. 기본 접힘 + 선택한 탭만 렌더 — Recharts 청크(성과·리드)가 첫 페인트에서
-// 아예 빠지고, 작업대(우선순위 큐)가 화면의 주인공으로 남는다.
+// 아예 빠지고, 작업대("오늘 연락")가 화면의 주인공으로 남는다.
 export type CrmReportTab = "revenue" | "performance" | "leads" | "team" | "ops"
 
 const CRM_REPORT_TABS: Array<{ key: CrmReportTab; label: string; hint: string }> = [
