@@ -13,6 +13,8 @@
 import { createHash } from "node:crypto"
 import { type SupabaseClient } from "@supabase/supabase-js"
 
+import type { InternalCsExternalUse, InternalCsKnowledgeStatus } from "@/lib/internal-cs-chat/knowledge"
+
 export const INTERNAL_CANON_CATEGORY = "internal-canon"
 export const INTERNAL_CANON_UPDATED_BY = "seed-internal-canon"
 export const CS_KNOWLEDGE_CATEGORY = "cs-knowledge"
@@ -132,6 +134,96 @@ export function csKnowledgeSlug(messageId: string): string {
   return `cs-${normalized || "unknown"}`
 }
 
+// ─── 지식 메타(확신도·외부 사용 범위·기준일) ────────────────────
+
+/**
+ * 승격 문서가 들고 가는 근거 상태. 원 답변의 상태·externalUse 가 승격에서 사라지면 확신도 없는 지식이 쌓이므로
+ * content_json 과 청크 metadata 양쪽에 같은 값을 적는다(검색 청크가 모델에 실릴 때 외부 사용 경계가 붙는다).
+ */
+export interface InternalKnowledgeMeta {
+  status: InternalCsKnowledgeStatus
+  externalUse: InternalCsExternalUse
+  /** 이 지식이 사실이었던 기준 시각(ISO). 검토 시각 → 없으면 승격 시각. */
+  asOf: string
+}
+
+const STATUS_SEVERITY: Record<InternalCsKnowledgeStatus, number> = {
+  confirmed: 0,
+  conditional: 1,
+  hq_confirmation_required: 2,
+  conflicting_sources: 3,
+}
+
+const EXTERNAL_USE_SEVERITY: Record<InternalCsExternalUse, number> = {
+  reviewed_summary_allowed: 0,
+  confirmation_required: 1,
+  internal_only: 2,
+}
+
+function isKnowledgeStatus(value: unknown): value is InternalCsKnowledgeStatus {
+  return typeof value === "string" && value in STATUS_SEVERITY
+}
+
+function isExternalUse(value: unknown): value is InternalCsExternalUse {
+  return typeof value === "string" && value in EXTERNAL_USE_SEVERITY
+}
+
+function collectStatusCandidates(metadata: Record<string, unknown>) {
+  const statuses: InternalCsKnowledgeStatus[] = []
+  const externalUses: InternalCsExternalUse[] = []
+  const lists = [metadata.citations, metadata.curatedKnowledgeStatuses]
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue
+    for (const item of list) {
+      if (!item || typeof item !== "object") continue
+      const record = item as Record<string, unknown>
+      const status = record.verificationStatus ?? record.status
+      if (isKnowledgeStatus(status)) statuses.push(status)
+      if (isExternalUse(record.externalUse)) externalUses.push(record.externalUse)
+    }
+  }
+  return { statuses, externalUses }
+}
+
+/**
+ * 생성 라우트가 메시지 metadata 에 남긴 근거 상태(citations[].verificationStatus, curatedKnowledgeStatuses[])에서
+ * 승격 문서의 상태를 뽑는다. 여러 근거가 섞이면 가장 보수적인 값(자료 충돌 > 본사 확인 > 조건부 > 확정,
+ * 내부 전용 > 확인 필요 > 검토 후 안내 가능)을 택한다. 근거 상태가 하나도 없으면 "조건부 · 확인 필요"다 —
+ * 사람이 승인한 답이라도 근거 등급이 기록되지 않았으면 확정으로 올리지 않는다.
+ */
+export function deriveKnowledgeMetaFromMessage(input: {
+  metadata: Record<string, unknown> | null | undefined
+  reviewedAt?: string | null
+  now?: Date
+}): InternalKnowledgeMeta {
+  const { statuses, externalUses } = collectStatusCandidates(input.metadata ?? {})
+  const status = statuses.length > 0
+    ? statuses.reduce((worst, current) => (STATUS_SEVERITY[current] > STATUS_SEVERITY[worst] ? current : worst))
+    : "conditional"
+  const externalUse = externalUses.length > 0
+    ? externalUses.reduce((worst, current) =>
+        EXTERNAL_USE_SEVERITY[current] > EXTERNAL_USE_SEVERITY[worst] ? current : worst
+      )
+    : "confirmation_required"
+  const asOf = input.reviewedAt && !Number.isNaN(Date.parse(input.reviewedAt))
+    ? new Date(input.reviewedAt).toISOString()
+    : (input.now ?? new Date()).toISOString()
+  return { status, externalUse, asOf }
+}
+
+export const KNOWLEDGE_DEFAULT_H2 = "## 바로 답변"
+
+/**
+ * 승격 본문이 H2 없이 들어오면 기본 H2 를 앞에 붙인다. 청커가 헤딩 단위로 자르므로 H2 가 있어야 검색 단위(heading)가
+ * 생기고, 트러블슈팅 플레이북의 고정 H2 템플릿(증상 표현/진단 흐름/원인 후보와 확신도/고객 안내 문구 …)과 같은 모양으로
+ * 검색된다. 이미 H2 가 있는 본문은 건드리지 않는다.
+ */
+export function ensureKnowledgeHeading(markdown: string): string {
+  const trimmed = markdown.trim()
+  if (/^##\s+\S/m.test(trimmed)) return trimmed
+  return `${KNOWLEDGE_DEFAULT_H2}\n\n${trimmed}`
+}
+
 // ─── DB 쓰기 (SupabaseClient 주입) ──────────────────────────
 
 export type InternalDocsSupabase = Pick<SupabaseClient, "from">
@@ -222,6 +314,13 @@ export interface UpsertInternalArticleInput {
   updatedBy: string
   // 제공 시에만 content_json 을 갱신한다(승격 백링크). seed 는 넘기지 않아 기존 content_json 을 건드리지 않는다.
   contentJson?: Record<string, unknown>
+  /** 기본 reference. 트러블슈팅 플레이북 적재는 troubleshooting 을 넘긴다. */
+  docType?: "guide" | "manual" | "faq" | "troubleshooting" | "release_note" | "reference"
+  /** 기본 general. */
+  productArea?: string
+  /** 증상 어휘 — 요약 청크·키워드 점수에 반영된다(W0-4). */
+  symptoms?: string[]
+  keywords?: string[]
 }
 
 export async function upsertInternalArticle(
@@ -233,8 +332,8 @@ export async function upsertInternalArticle(
     slug: input.slug,
     title: input.title,
     description: input.description,
-    product_area: "general",
-    doc_type: "reference",
+    product_area: input.productArea ?? "general",
+    doc_type: input.docType ?? "reference",
     difficulty: "advanced",
     status: "published",
     visibility: "internal",
@@ -244,6 +343,8 @@ export async function upsertInternalArticle(
     updated_by: input.updatedBy,
   }
   if (input.contentJson !== undefined) payload.content_json = input.contentJson
+  if (input.symptoms !== undefined) payload.symptoms = input.symptoms
+  if (input.keywords !== undefined) payload.keywords = input.keywords
 
   const { data, error } = await supabase
     .from("docs_articles")
@@ -265,6 +366,8 @@ export interface SyncArticleChunksOptions {
   source: string
   embed?: (text: string) => Promise<number[] | null>
   throttleMs?: number
+  /** 모든 청크 metadata 에 합쳐 적는 값(확신도·외부 사용 범위·기준일 등). source/visibility 는 덮어쓸 수 없다. */
+  metadata?: Record<string, unknown>
 }
 
 export async function syncArticleChunks(
@@ -325,7 +428,7 @@ export async function syncArticleChunks(
         content: chunk.content,
         content_hash: hash,
         token_count: Math.max(1, Math.ceil(embedInput.length / 4)),
-        metadata: { source: options.source, visibility: "internal" },
+        metadata: { ...(options.metadata ?? {}), source: options.source, visibility: "internal" },
         embedding_model: values ? embedModel : null,
         embedding: values ? JSON.stringify(values) : null,
         embedding_updated_at: values ? new Date().toISOString() : null,
@@ -390,6 +493,8 @@ export interface PromoteMessageToInternalArticleInput {
   messageId: string
   conversationId: string
   correctedContent: string
+  /** 원 답변의 근거 상태. 라우트가 deriveKnowledgeMetaFromMessage 로 뽑아 넘긴다. 없으면 보수적 기본값. */
+  knowledge?: Partial<InternalKnowledgeMeta>
   now?: Date
   embed?: (text: string) => Promise<number[] | null>
   throttleMs?: number
@@ -432,10 +537,17 @@ export async function promoteMessageToInternalArticle(
   const existing = await findInternalArticleBySourceMessageId(supabase, input.messageId)
   const reused = existing !== null
   const slug = existing?.slug ?? csKnowledgeSlug(input.messageId)
-  const markdown = input.correctedContent
-  const title = deriveArticleTitle(markdown)
-  const description = descriptionFromMarkdown(markdown, title)
+  // 제목은 원문(H1 포함)에서 뽑고, 저장 본문은 H2 가 보장된 형태로 둔다(청크 heading 단위 검색).
+  const title = deriveArticleTitle(input.correctedContent)
+  const markdown = ensureKnowledgeHeading(input.correctedContent)
+  const description = descriptionFromMarkdown(input.correctedContent, title)
   const promotedAt = (input.now ?? new Date()).toISOString()
+  const defaults = deriveKnowledgeMetaFromMessage({ metadata: null, now: input.now })
+  const knowledge: InternalKnowledgeMeta = {
+    status: input.knowledge?.status ?? defaults.status,
+    externalUse: input.knowledge?.externalUse ?? defaults.externalUse,
+    asOf: input.knowledge?.asOf ?? promotedAt,
+  }
 
   const articleId = await upsertInternalArticle(supabase, {
     categoryId: CS_KNOWLEDGE_CATEGORY,
@@ -443,13 +555,16 @@ export async function promoteMessageToInternalArticle(
     title,
     description,
     markdown,
-    tags: ["cs-knowledge", "internal"],
+    tags: ["cs-knowledge", "internal", `evidence:${knowledge.status}`],
     updatedBy: CS_KNOWLEDGE_UPDATED_BY,
     contentJson: {
       source: CS_KNOWLEDGE_UPDATED_BY,
       sourceMessageId: input.messageId,
       sourceConversationId: input.conversationId,
       promotedAt,
+      status: knowledge.status,
+      externalUse: knowledge.externalUse,
+      asOf: knowledge.asOf,
     },
   })
 
@@ -458,6 +573,11 @@ export async function promoteMessageToInternalArticle(
     source: CS_KNOWLEDGE_UPDATED_BY,
     embed: input.embed,
     throttleMs: input.throttleMs,
+    metadata: {
+      verificationStatus: knowledge.status,
+      externalUse: knowledge.externalUse,
+      asOf: knowledge.asOf,
+    },
   })
 
   // 문서 저장 자체는 임베딩 실패와 무관하게 유지한다(청크는 embedding=null 로 남음).

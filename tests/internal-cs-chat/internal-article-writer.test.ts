@@ -4,6 +4,8 @@ import {
   chunkMarkdown,
   csKnowledgeSlug,
   deriveArticleTitle,
+  deriveKnowledgeMetaFromMessage,
+  ensureKnowledgeHeading,
   promoteMessageToInternalArticle,
   slugFromRelativePath,
   writeInternalCanonDoc,
@@ -92,6 +94,46 @@ describe("pure markdown helpers (seed 추출 무회귀)", () => {
   })
 })
 
+describe("knowledge meta helpers", () => {
+  it("ensureKnowledgeHeading prepends the default H2 only when no H2 exists (H1 or H3 alone do not count)", () => {
+    expect(ensureKnowledgeHeading("본문만")).toBe("## 바로 답변\n\n본문만")
+    expect(ensureKnowledgeHeading("# 제목\n본문")).toBe("## 바로 답변\n\n# 제목\n본문")
+    expect(ensureKnowledgeHeading("### 소제목\n본문")).toBe("## 바로 답변\n\n### 소제목\n본문")
+    expect(ensureKnowledgeHeading("## 증상 표현\n\n본문")).toBe("## 증상 표현\n\n본문")
+  })
+
+  it("deriveKnowledgeMetaFromMessage picks the most conservative status and external-use across citations", () => {
+    const meta = deriveKnowledgeMetaFromMessage({
+      metadata: {
+        citations: [
+          { id: "a", verificationStatus: "confirmed", externalUse: "reviewed_summary_allowed" },
+          { id: "b", verificationStatus: "hq_confirmation_required" },
+        ],
+        curatedKnowledgeStatuses: [{ id: "c", status: "conditional", externalUse: "internal_only" }],
+      },
+      reviewedAt: "2026-09-29T01:02:03.000Z",
+    })
+    expect(meta).toEqual({
+      status: "hq_confirmation_required",
+      externalUse: "internal_only",
+      asOf: "2026-09-29T01:02:03.000Z",
+    })
+  })
+
+  it("deriveKnowledgeMetaFromMessage falls back to conditional · confirmation_required · now when nothing is recorded", () => {
+    const meta = deriveKnowledgeMetaFromMessage({
+      metadata: { citations: [{ id: "x" }], curatedKnowledgeStatuses: "garbage" },
+      reviewedAt: "not-a-date",
+      now: new Date("2026-10-19T00:00:00.000Z"),
+    })
+    expect(meta).toEqual({
+      status: "conditional",
+      externalUse: "confirmation_required",
+      asOf: "2026-10-19T00:00:00.000Z",
+    })
+  })
+})
+
 describe("promoteMessageToInternalArticle", () => {
   function resolvers(findData: unknown) {
     return {
@@ -133,21 +175,83 @@ describe("promoteMessageToInternalArticle", () => {
       noindex: true,
       status: "published",
       updated_by: "cs-knowledge-promotion",
-      tags: ["cs-knowledge", "internal"],
+      // 근거 상태를 안 넘기면 보수적 기본값(조건부 · 확인 필요)이다 — 사람이 승인했어도 확정으로 올리지 않는다.
+      tags: ["cs-knowledge", "internal", "evidence:conditional"],
       content_json: {
         source: "cs-knowledge-promotion",
         sourceMessageId: "3f2a1b2c-4d5e-6f70-8192-a3b4c5d6e7f8",
         sourceConversationId: "conv-1",
         promotedAt: "2026-07-16T00:00:00.000Z",
+        status: "conditional",
+        externalUse: "confirmation_required",
+        asOf: "2026-07-16T00:00:00.000Z",
       },
     })
 
-    // 임베딩되어 청크가 적재되고, 청크 metadata 도 승격 출처로 태깅된다.
+    // 임베딩되어 청크가 적재되고, 청크 metadata 도 승격 출처·근거 상태로 태깅된다(검색 청크에 외부 사용 경계가 붙는다).
     expect(embed).toHaveBeenCalled()
     const chunkUpsert = upsertPayload(supabase.chainsByTable.docs_ai_chunks[1])
     expect(chunkUpsert).toMatchObject({
-      metadata: { source: "cs-knowledge-promotion", visibility: "internal" },
+      metadata: {
+        source: "cs-knowledge-promotion",
+        visibility: "internal",
+        verificationStatus: "conditional",
+        externalUse: "confirmation_required",
+        asOf: "2026-07-16T00:00:00.000Z",
+      },
     })
+  })
+
+  it("carries the message's evidence status, external-use boundary and review time into the article", async () => {
+    const supabase = fakeSupabase(resolvers(null))
+
+    await promoteMessageToInternalArticle(asSupabase(supabase), {
+      messageId: "msg-meta",
+      conversationId: "conv-meta",
+      correctedContent: "## 바로 답변\n\n카메라 NIC 는 192.168.1.222 고정이 규격입니다.",
+      knowledge: { status: "confirmed", externalUse: "reviewed_summary_allowed", asOf: "2026-09-29T00:00:00.000Z" },
+      embed: vi.fn(async () => [0.1]),
+      throttleMs: 0,
+      now: new Date("2026-10-19T00:00:00.000Z"),
+    })
+
+    const articleUpsert = upsertPayload(supabase.chainsByTable.docs_articles[1])
+    expect(articleUpsert).toMatchObject({
+      tags: ["cs-knowledge", "internal", "evidence:confirmed"],
+      content_json: expect.objectContaining({
+        status: "confirmed",
+        externalUse: "reviewed_summary_allowed",
+        asOf: "2026-09-29T00:00:00.000Z",
+        promotedAt: "2026-10-19T00:00:00.000Z",
+      }),
+    })
+    const chunkUpsert = upsertPayload(supabase.chainsByTable.docs_ai_chunks[1])
+    expect(chunkUpsert).toMatchObject({
+      heading: "바로 답변",
+      metadata: expect.objectContaining({
+        verificationStatus: "confirmed",
+        externalUse: "reviewed_summary_allowed",
+        asOf: "2026-09-29T00:00:00.000Z",
+      }),
+    })
+  })
+
+  it("guarantees an H2 so every promoted chunk has a heading, without touching bodies that already have one", async () => {
+    const supabase = fakeSupabase(resolvers(null))
+
+    await promoteMessageToInternalArticle(asSupabase(supabase), {
+      messageId: "msg-h2",
+      conversationId: "conv-h2",
+      correctedContent: "환불은 계약 조건 확인 후 안내합니다.",
+      embed: vi.fn(async () => [0.1]),
+      throttleMs: 0,
+    })
+
+    const articleUpsert = upsertPayload(supabase.chainsByTable.docs_articles[1])
+    expect(articleUpsert.content_markdown).toBe("## 바로 답변\n\n환불은 계약 조건 확인 후 안내합니다.")
+    expect(articleUpsert.title).toBe("환불은 계약 조건 확인 후 안내합니다.")
+    const chunkUpsert = upsertPayload(supabase.chainsByTable.docs_ai_chunks[1])
+    expect(chunkUpsert).toMatchObject({ heading: "바로 답변" })
   })
 
   it("reuses the existing article (reused=true) when the backlink already exists", async () => {

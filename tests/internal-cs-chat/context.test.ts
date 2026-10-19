@@ -64,6 +64,78 @@ describe("buildInternalCsCopilotContext", () => {
     expect(result.deterministicFallback).toContain("## 확인 상태")
   })
 
+  it("separates internal-only docs from public guide evidence and marks them internal_only", async () => {
+    mocks.evaluateChatbotQuery.mockResolvedValue({
+      answer: null,
+      sources: [
+        {
+          articleId: "article-public",
+          title: "녹화 관리",
+          heading: "관리자 확인",
+          urlPath: "/docs/admin/recording",
+          category: "admin",
+          excerpt: "관리자는 녹화 목록과 권한을 확인합니다.",
+          score: 42,
+        },
+        {
+          articleId: "article-internal",
+          title: "녹화본이 없다 — 진단 흐름",
+          heading: "원인 후보와 확신도",
+          urlPath: "/docs/cs-knowledge/recording-missing",
+          category: "classroom",
+          excerpt: "Recording Settings 가 Disable 이고 Start 이벤트가 없으면 생성 시점에 꺼진 것이다(확정).",
+          score: 40,
+          visibility: "internal",
+        },
+      ],
+    })
+
+    const result = await buildInternalCsCopilotContext("녹화본이 없어요", { includeInternalDocs: true })
+
+    const [publicBlock, internalBlock] = [
+      result.internalContext.split("[내부 전용 문서 근거]")[0],
+      result.internalContext.split("[내부 전용 문서 근거]")[1] ?? "",
+    ]
+    // 공개 블록에는 공개 문서만, 내부 블록에는 내부 문서만 실린다. 내부 문서가 "공개 경로"로 표기되지 않는다.
+    expect(publicBlock).toContain("[공개 가이드 검색 결과]")
+    expect(publicBlock).toContain("공개 경로: /docs/admin/recording")
+    expect(publicBlock).not.toContain("녹화본이 없다 — 진단 흐름")
+    expect(internalBlock).toContain("녹화본이 없다 — 진단 흐름")
+    expect(internalBlock).toContain("사용 범위: 내부 전용")
+    expect(internalBlock).not.toContain("공개 경로: /docs/cs-knowledge")
+
+    expect(result.sourceRefs).toContainEqual({
+      id: "article-public",
+      label: "녹화 관리 · 관리자 확인",
+      kind: "public_doc",
+    })
+    expect(result.sourceRefs).toContainEqual({
+      id: "article-internal",
+      label: "[내부] 녹화본이 없다 — 진단 흐름 · 원인 후보와 확신도",
+      kind: "internal_doc",
+      externalUse: "internal_only",
+    })
+  })
+
+  it("does not emit an internal evidence block when every source is public", async () => {
+    mocks.evaluateChatbotQuery.mockResolvedValue({
+      answer: null,
+      sources: [{
+        articleId: "article-public",
+        title: "녹화 관리",
+        urlPath: "/docs/admin/recording",
+        category: "admin",
+        excerpt: "공개 문서.",
+        score: 10,
+      }],
+    })
+
+    const result = await buildInternalCsCopilotContext("녹화")
+
+    expect(result.internalContext).not.toContain("[내부 전용 문서 근거]")
+    expect(result.sourceRefs.every((source) => source.kind !== "internal_doc")).toBe(true)
+  })
+
   it("remains usable when public document retrieval fails", async () => {
     mocks.evaluateChatbotQuery.mockRejectedValue(new Error("docs unavailable"))
 

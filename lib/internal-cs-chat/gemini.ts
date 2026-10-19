@@ -23,7 +23,7 @@ export type InternalCsRiskLevel = "low" | "medium" | "high"
 export interface InternalCsSourceRef {
   id: string
   label?: string
-  kind?: "public_doc" | "internal_guide" | "curated_knowledge" | "internal_asset"
+  kind?: "public_doc" | "internal_doc" | "internal_guide" | "curated_knowledge" | "internal_asset"
   verificationStatus?: "confirmed" | "conditional" | "conflicting_sources" | "hq_confirmation_required"
   externalUse?: "reviewed_summary_allowed" | "internal_only" | "confirmation_required"
   reviewState?: "pending" | "approved" | "changes_requested" | "rejected"
@@ -229,7 +229,7 @@ function normalizeSourceRefs(sourceRefs: InternalCsSourceRef[] | undefined) {
     normalized.push({
       id,
       ...(source.label ? { label: trimTo(source.label, 200) } : {}),
-      ...(["public_doc", "internal_guide", "curated_knowledge", "internal_asset"].includes(source.kind ?? "")
+      ...(["public_doc", "internal_doc", "internal_guide", "curated_knowledge", "internal_asset"].includes(source.kind ?? "")
         ? { kind: source.kind }
         : {}),
       ...(["confirmed", "conditional", "conflicting_sources", "hq_confirmation_required"].includes(source.verificationStatus ?? "")
