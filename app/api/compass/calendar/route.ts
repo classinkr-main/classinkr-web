@@ -1,25 +1,30 @@
-import { timingSafeEqual } from "node:crypto"
 import { NextRequest, NextResponse } from "next/server"
 
 import { daysBetween, isDateString } from "@/lib/admin-calendar/range"
-import { getEventsByRangeWithDiagnostics } from "@/lib/calendar-data"
+import { getEventsByRangeWithDiagnostics, type CalendarEvent } from "@/lib/calendar-data"
+import { checkCronAuth } from "@/lib/server/cron-auth"
 
 /**
  * Compass(mkt.classin.co.kr) 전용 읽기 전용 캘린더 피드.
  *
+ * Compass 의 calendar-sync 크론(crm lib/adminCal.ts fetchAdminCalendar)이 매시 두 구간
+ * (−60~+30일, +31~+90일)을 받아 crm.cal_events_ext 에 미러하고, 미션 달력(/tasks)이 그 표를 그린다.
+ *
  * 왜 /api/admin/calendar 를 그냥 못 쓰나: 그쪽은 verifyAdmin → getVerifiedAdminContext 가
- * **어드민 세션 쿠키**를 요구한다. 크론에는 세션이 없고, 기계가 어드민 세션을 흉내내게
- * 만들면 그 앱의 인증 모델이 무너진다. 그래서 전용 Bearer 토큰을 쓴다.
+ * **어드민 세션 쿠키**를 요구한다. 크론에는 세션이 없고, 기계가 어드민 세션을 흉내 내게
+ * 만들면 이 앱의 인증 모델이 무너진다. 그래서 전용 Bearer 토큰을 쓴다.
  *
  * CRON_SECRET 을 재사용하지 않는다 — 그 값 하나가 /api/cron/* 를 전부 연다. 달력 하나 때문에
- * 그 권한을 넘길 이유가 없고, 나중에 Compass 쪽만 회수할 수도 없어진다.
+ * 그 권한을 넘길 이유가 없고, 나중에 Compass 쪽만 회수할 수도 없어진다. 비교는 checkCronAuth 의
+ * timing-safe 판정을 시크릿만 바꿔 쓴다. Compass 는 같은 값을 ADMIN_CALENDAR_TOKEN 으로 보관한다.
  *
- * 비교는 timingSafeEqual 이다. 이웃 크론 라우트들은 아직 `!==` 를 쓰지만 그건 고칠 대상이지
- * 따라할 대상이 아니다(응답 시간으로 비밀값을 한 글자씩 맞춰 볼 여지가 있다).
+ * 소스는 **allowlist** 다(Compass lib/calSources.ts 의 origin: "admin" 일곱 개 = ADMIN_SOURCE_IDS 와 같다).
+ * 빼는 방식이 아니라 일곱 개만 통과시키므로, 어드민에 새 소스가 생겨도 조용히 Compass 로 흘러들지 않는다.
+ * - compass_demo: 원본이 Compass 자신(public.compass_cal_events_v)이라 돌려주면 자기가 보낸 것을 되받는다.
+ * - team_event: 2026-09-30 부터 Compass 가 팀원 구글 캘린더를 직접 읽고 쓴다(crm.member_cal_events).
  *
- * 소스는 **allowlist** 다. `compass_demo` 만 빼는 blocklist 로 하면 어드민에 열 번째 소스가
- * 생겼을 때 조용히 Compass 로 흘러든다. compass_demo 를 빼는 이유는 그 소스의 원본이
- * Compass 자신이기 때문이다(public.compass_cal_events_v) — 돌려주면 자기가 보낸 것을 되받는다.
+ * 필드도 Compass 가 쓰는 것만 내보낸다(crm AdminEvent·AdminDiagnostic) — description·구글 동기화
+ * 오류 문구 같은 건 미러에 필요 없다.
  */
 export const dynamic = "force-dynamic"
 // 콜드 호출은 걸치는 달마다 외부 소스를 긁는다(소스별 9초 하드 마감). 기본값으로는 잘릴 수 있다.
@@ -28,36 +33,47 @@ export const maxDuration = 60
 const MAX_RANGE_DAYS = 120
 
 /** Compass 가 미러하는 소스. 여기 없는 것은 내려가지 않는다. */
-const MIRRORED = new Set([
+const COMPASS_MIRRORED_SOURCES: ReadonlySet<string> = new Set([
   "calendar",
   "partner",
   "event",
   "notion",
   "showroom",
   "showroom_booking",
-  "team_event",
   "holiday",
 ])
 
-function tokenOk(header: string | null): boolean {
+function compassTokenOk(req: NextRequest): boolean {
+  // checkCronAuth 의 두 번째 인자는 undefined 면 기본값 CRON_SECRET 으로 바뀐다. 토큰이 비었을 때
+  // 그대로 넘기면 CRON_SECRET 이 이 피드를 연다 — 비어 있으면 여기서 먼저 닫는다(fail-closed).
   const secret = process.env.COMPASS_CALENDAR_TOKEN
-  if (!secret || !header) return false
-  const got = Buffer.from(header, "utf8")
-  const want = Buffer.from(`Bearer ${secret}`, "utf8")
-  // timingSafeEqual 은 길이가 다르면 던진다 — 길이만 드러나고 내용은 드러나지 않는다
-  if (got.length !== want.length) return false
-  return timingSafeEqual(got, want)
+  if (!secret) return false
+  return checkCronAuth(req, secret) === "ok"
+}
+
+function toFeedEvent(e: CalendarEvent) {
+  return {
+    id: e.id,
+    title: e.title,
+    date: e.date,
+    endDate: e.endDate,
+    time: e.time,
+    endTime: e.endTime,
+    allDay: e.allDay,
+    source: e.source,
+    sourceLabel: e.sourceLabel,
+    assignees: e.assignees,
+    href: e.href,
+  }
 }
 
 export async function GET(req: NextRequest) {
-  if (!tokenOk(req.headers.get("authorization"))) {
+  if (!compassTokenOk(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 })
   }
 
-  const { searchParams } = req.nextUrl
-  const from = searchParams.get("from")
-  const to = searchParams.get("to")
-
+  const from = req.nextUrl.searchParams.get("from")
+  const to = req.nextUrl.searchParams.get("to")
   if (!isDateString(from) || !isDateString(to)) {
     return NextResponse.json({ error: "from/to 는 YYYY-MM-DD 형식이어야 합니다." }, { status: 400 })
   }
@@ -73,19 +89,24 @@ export async function GET(req: NextRequest) {
     const { events, diagnostics } = await getEventsByRangeWithDiagnostics(from, to)
     return NextResponse.json(
       {
-        events: events.filter((e) => e.source && MIRRORED.has(e.source)),
-        // Compass 의 보존 규칙이 degraded 를 본다 — "0건"과 "지금 못 읽었다"를 구별해야
-        // 타임아웃 한 번에 그쪽 미러가 비워지지 않는다.
-        diagnostics: diagnostics.filter((d) => MIRRORED.has(d.source)),
+        events: events
+          .filter((e) => e.source !== undefined && COMPASS_MIRRORED_SOURCES.has(e.source))
+          .map(toFeedEvent),
+        // Compass 는 diagnostics 에 있고 · degraded 가 아니고 · 1건 이상일 때만 그 소스 미러를 교체한다.
+        // "0건"과 "지금 못 읽었다"를 구별해야 타임아웃 한 번에 그쪽 미러가 비워지지 않으므로,
+        // 소스별 진단을 빠짐없이 같이 내린다.
+        diagnostics: diagnostics
+          .filter((d) => COMPASS_MIRRORED_SOURCES.has(d.source))
+          .map((d) => ({ source: d.source, count: d.count, durationMs: d.durationMs, degraded: d.degraded, ageMs: d.ageMs })),
       },
-      // 미러는 브라우저가 아니다. adminCachedJson 의 private/max-age 규약을 쓰지 않는다 —
-      // 서버 쪽 60초 unstable_cache 가 이미 중복 계산을 막는다.
+      // 받는 쪽은 브라우저가 아니라 서버 크론이다. adminCachedJson 의 private/max-age 규약을 쓰지 않는다 —
+      // 중복 계산은 월 단위 unstable_cache(60초)가 이미 막는다.
       { headers: { "cache-control": "no-store" } }
     )
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "캘린더 조회에 실패했습니다." },
-      { status: 500 }
-    )
+    // 실패를 빈 배열로 눕히지 않는다 — Compass 가 "0건"으로 오해하면 미러를 지운다. 내부 오류 문구는
+    // 바깥 호출자에게 내보내지 않고 서버 로그에만 남긴다(Compass 는 !res.ok 만 본다).
+    console.error("[compass-calendar] 조회 실패", error instanceof Error ? error.message : error)
+    return NextResponse.json({ error: "캘린더 조회 실패" }, { status: 500 })
   }
 }
