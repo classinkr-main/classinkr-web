@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import {
+  deriveKnowledgeMetaFromMessage,
   embedInternalText,
   promoteMessageToInternalArticle,
 } from "@/lib/internal-cs-chat/internal-article-writer"
@@ -40,10 +41,16 @@ export async function POST(req: NextRequest, context: Context) {
     }
 
     const supabase = createSupabaseAdminClient()
+    // 원 답변의 근거 상태(확신도·외부 사용 범위)와 검토 시각을 승격 문서로 넘긴다 — 없으면 확신도 없는 지식이 쌓인다.
+    const knowledge = deriveKnowledgeMetaFromMessage({
+      metadata: message.metadata,
+      reviewedAt: message.reviewed_at,
+    })
     const result = await promoteMessageToInternalArticle(supabase, {
       messageId: message.id,
       conversationId: message.conversation_id,
       correctedContent,
+      knowledge,
       // 임베딩 API 도 외부 모델이다 — 청크 원문은 그대로 저장하되 임베딩 입력만 PII 를 가린다.
       // (질의 쪽도 redacted 질문으로 임베딩하므로 같은 토큰 공간에서 매칭된다.) internal-article-writer 는
       // seed 스크립트가 tsx 로 직접 실행해 server-only 경계를 import 할 수 없어 라우트에서 주입한다.

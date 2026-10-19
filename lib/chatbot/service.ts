@@ -79,6 +79,8 @@ export interface ChatbotRequestMeta {
   referrer?: string | null
 }
 
+export type ChatbotSourceVisibility = "public" | "unlisted" | "internal"
+
 export interface ChatbotSource {
   articleId?: string
   chunkId?: string
@@ -88,6 +90,11 @@ export interface ChatbotSource {
   category: string
   excerpt: string
   score: number
+  /**
+   * 문서 가시성. internal 은 내부 코파일럿(include_internal) 경로로만 들어온다 — 공개 경로 응답에는 값이 실리지 않는다.
+   * 내부 코파일럿은 이 값으로 "공개 가이드"와 "내부 전용 근거"를 갈라 외부 사용 경계를 적용한다.
+   */
+  visibility?: ChatbotSourceVisibility
 }
 
 export type HandoffIntent = "demo" | "support"
@@ -1831,6 +1838,20 @@ interface MatchChunkRow {
   similarity: number
 }
 
+// 내부 전용 문서 범주 — DB 트리거(20260717_docs_articles_internal_lock)가 visibility=internal 을 강제한다.
+const INTERNAL_ONLY_DOC_CATEGORIES = new Set(["internal-canon", "cs-knowledge"])
+
+// RPC 는 docs_articles.visibility 를 돌려주지 않는다. 청크 metadata.visibility(내부 적재 경로가 기록)와
+// 내부 잠금 범주로 internal 만 판정한다. 공개 문서는 undefined 로 둔다 — 공개 경로 응답(sources) 모양을 바꾸지 않기 위해서다.
+// 공개 RPC(include_internal=false)는 internal 행을 돌려주지 않으므로 공개 응답에 이 값이 실릴 일은 없다.
+export function resolveMatchChunkVisibility(
+  row: Pick<MatchChunkRow, "metadata" | "category_id">
+): ChatbotSourceVisibility | undefined {
+  if (row.metadata?.visibility === "internal") return "internal"
+  if (INTERNAL_ONLY_DOC_CATEGORIES.has(row.category_id)) return "internal"
+  return undefined
+}
+
 // Gemini 임베딩 기반 시맨틱 검색. 키·임베딩이 없거나 결과가 없으면 [] → 키워드 검색으로 폴백.
 async function vectorSearchSupabaseSources(
   question: NormalizedQuestion,
@@ -1856,16 +1877,20 @@ async function vectorSearchSupabaseSources(
 
     const sources = ((data ?? []) as MatchChunkRow[])
       .filter((row) => row.similarity >= VECTOR_SIMILARITY_FLOOR)
-      .map((row) => ({
-        articleId: row.article_id,
-        chunkId: row.id,
-        title: row.title,
-        heading: row.heading ?? undefined,
-        urlPath: row.canonical_path ?? `/docs/${row.category_id}/${row.slug}`,
-        category: getSourceCategoryFromDocCategory(row.category_id),
-        excerpt: compactText(row.content),
-        score: Math.max(1, row.similarity * 80),
-      }))
+      .map((row) => {
+        const visibility = resolveMatchChunkVisibility(row)
+        return {
+          articleId: row.article_id,
+          chunkId: row.id,
+          title: row.title,
+          heading: row.heading ?? undefined,
+          urlPath: row.canonical_path ?? `/docs/${row.category_id}/${row.slug}`,
+          category: getSourceCategoryFromDocCategory(row.category_id),
+          excerpt: compactText(row.content),
+          score: Math.max(1, row.similarity * 80),
+          ...(visibility ? { visibility } : {}),
+        }
+      })
       .sort((left, right) => right.score - left.score)
 
     return selectDiverseSources(
