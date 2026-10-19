@@ -1318,7 +1318,7 @@ export const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
       }`}
     >
       <td
-        className={`sticky left-0 ${linkPopoverOpen ? "z-30" : "z-10"} border-r border-[#E5E7EB] px-2.5 py-1.5 ${rowBg} shadow-[2px_0_5px_-2px_rgba(0,0,0,0.04)]`}
+        className={`sticky left-0 ${linkPopoverOpen ? "z-30" : "z-10"} border-r border-[#E5E7EB] px-2.5 py-1.5 ${rowBg} shadow-[4px_0_12px_-2px_rgba(0,0,0,0.06)]`}
         style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
       >
         <div className="flex items-center gap-1.5">
@@ -1388,7 +1388,7 @@ export const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
         h1Expanded={h1Expanded}
       />
       <td
-        className={`sticky right-0 z-10 border-l border-[#E5E7EB] px-2.5 py-1.5 text-right align-middle tabular-nums ${rowBg} shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.04)]`}
+        className={`sticky right-0 z-10 border-l border-[#E5E7EB] px-2.5 py-1.5 text-right align-middle tabular-nums ${rowBg} shadow-[-4px_0_12px_-2px_rgba(0,0,0,0.06)]`}
         style={{ width: MATRIX_ANNUAL_W, minWidth: MATRIX_ANNUAL_W, maxWidth: MATRIX_ANNUAL_W }}
       >
         {annual.total > 0 ? (
@@ -1512,7 +1512,7 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
   return (
     <tr role="row" className={`group ${MATRIX_DEAL_ROW_HEIGHT[density]} border-t border-[#EDECE8] transition-colors ${active ? "bg-[#ECFDF5]" : draftRow ? "bg-[#FFFCF5] hover:bg-[#FBF1E0]" : grouped ? "bg-[#FAFAF8] hover:bg-[#F4F4F2]" : "hover:bg-[#F9F9F8]"}`}>
       <td
-        className={`sticky left-0 ${linkPopoverOpen ? "z-30" : "z-10"} border-r border-[#E5E7EB] pr-2.5 py-1.5 ${nested ? "border-l-2 border-l-[#CBD9D2] pl-10" : grouped ? "border-l-2 border-l-[#DDE7E2] pl-7" : "pl-2.5"} ${rowBg} shadow-[2px_0_5px_-2px_rgba(0,0,0,0.04)]`}
+        className={`sticky left-0 ${linkPopoverOpen ? "z-30" : "z-10"} border-r border-[#E5E7EB] pr-2.5 py-1.5 ${nested ? "border-l-2 border-l-[#CBD9D2] pl-10" : grouped ? "border-l-2 border-l-[#DDE7E2] pl-7" : "pl-2.5"} ${rowBg} shadow-[4px_0_12px_-2px_rgba(0,0,0,0.06)]`}
         style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
       >
         <div className="flex items-center gap-1.5">
@@ -1576,7 +1576,7 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
         h1Expanded={h1Expanded}
       />
       <td
-        className={`sticky right-0 z-10 border-l border-[#E5E7EB] px-2.5 py-1.5 text-right align-middle tabular-nums ${rowBg} shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.04)]`}
+        className={`sticky right-0 z-10 border-l border-[#E5E7EB] px-2.5 py-1.5 text-right align-middle tabular-nums ${rowBg} shadow-[-4px_0_12px_-2px_rgba(0,0,0,0.06)]`}
         style={{ width: MATRIX_ANNUAL_W, minWidth: MATRIX_ANNUAL_W, maxWidth: MATRIX_ANNUAL_W }}
       >
         {annual.total > 0 ? (
@@ -1656,7 +1656,7 @@ export const RevMatrixCategoryRow = memo(function RevMatrixCategoryRow({
       category === "hardware" ? "bg-[#FFFDF7] hover:bg-[#FBF6EC]" : "bg-[#FBFBFA] hover:bg-[#F5F5F3]"
     }`}>
       <td
-        className={`sticky left-0 z-10 border-l-2 border-l-[#DDE7E2] border-r border-[#E5E7EB] pl-5 pr-2.5 py-1.5 ${rowBg} shadow-[2px_0_5px_-2px_rgba(0,0,0,0.04)]`}
+        className={`sticky left-0 z-10 border-l-2 border-l-[#DDE7E2] border-r border-[#E5E7EB] pl-5 pr-2.5 py-1.5 ${rowBg} shadow-[4px_0_12px_-2px_rgba(0,0,0,0.06)]`}
         style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
       >
         <div className="flex items-center gap-1.5">
@@ -1710,7 +1710,7 @@ export const RevMatrixCategoryRow = memo(function RevMatrixCategoryRow({
         h1Expanded={h1Expanded}
       />
       <td
-        className={`sticky right-0 z-10 border-l border-[#E5E7EB] px-2.5 py-1.5 text-right align-middle tabular-nums ${rowBg} shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.04)]`}
+        className={`sticky right-0 z-10 border-l border-[#E5E7EB] px-2.5 py-1.5 text-right align-middle tabular-nums ${rowBg} shadow-[-4px_0_12px_-2px_rgba(0,0,0,0.06)]`}
         style={{ width: MATRIX_ANNUAL_W, minWidth: MATRIX_ANNUAL_W, maxWidth: MATRIX_ANNUAL_W }}
       >
         {annual.total > 0 ? (
@@ -1766,7 +1766,7 @@ export const RevMatrixFooter = memo(function RevMatrixFooter({
       {/* 월별 확정/고확도/예정 스택 */}
       <tr role="row" className="h-10 border-t-2 border-[#D1D5DB] bg-[#F6F5F4]">
         <td
-          className="sticky left-0 z-10 border-r border-[#E5E7EB] bg-[#F6F5F4] px-2.5 text-[11px] font-bold uppercase tracking-[0.05em] text-[#374151] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.04)]"
+          className="sticky left-0 z-10 border-r border-[#E5E7EB] bg-[#F6F5F4] px-2.5 text-[11px] font-bold uppercase tracking-[0.05em] text-[#374151] shadow-[4px_0_12px_-2px_rgba(0,0,0,0.06)]"
           style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
         >
           월 합계 (확정·고확도·예정)
@@ -1819,7 +1819,7 @@ export const RevMatrixFooter = memo(function RevMatrixFooter({
           )
         })}
         <td
-          className="sticky right-0 z-10 border-l border-[#E5E7EB] bg-[#F6F5F4] px-2.5 py-1.5 text-right align-middle tabular-nums shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.04)]"
+          className="sticky right-0 z-10 border-l border-[#E5E7EB] bg-[#F6F5F4] px-2.5 py-1.5 text-right align-middle tabular-nums shadow-[-4px_0_12px_-2px_rgba(0,0,0,0.06)]"
           style={{ width: MATRIX_ANNUAL_W, minWidth: MATRIX_ANNUAL_W, maxWidth: MATRIX_ANNUAL_W }}
         >
           <span className="flex flex-col items-end gap-0.5 leading-none">
@@ -1833,7 +1833,7 @@ export const RevMatrixFooter = memo(function RevMatrixFooter({
       {hasAnyGoal && (
         <tr role="row" className="h-8 border-t border-[#E5E7EB] bg-[#FAF9F8]">
           <td
-            className="sticky left-0 z-10 border-r border-[#E5E7EB] bg-[#FAF9F8] px-2.5 text-[10.5px] font-bold uppercase tracking-[0.05em] text-[#615D59] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.04)]"
+            className="sticky left-0 z-10 border-r border-[#E5E7EB] bg-[#FAF9F8] px-2.5 text-[10.5px] font-bold uppercase tracking-[0.05em] text-[#615D59] shadow-[4px_0_12px_-2px_rgba(0,0,0,0.06)]"
             style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
           >
             월 목표 대비 (확정)
@@ -1873,7 +1873,7 @@ export const RevMatrixFooter = memo(function RevMatrixFooter({
             )
           })}
           <td
-            className="sticky right-0 z-10 border-l border-[#E5E7EB] bg-[#FAF9F8] px-2.5 py-1 text-right align-middle tabular-nums shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.04)]"
+            className="sticky right-0 z-10 border-l border-[#E5E7EB] bg-[#FAF9F8] px-2.5 py-1 text-right align-middle tabular-nums shadow-[-4px_0_12px_-2px_rgba(0,0,0,0.06)]"
             style={{ width: MATRIX_ANNUAL_W, minWidth: MATRIX_ANNUAL_W, maxWidth: MATRIX_ANNUAL_W }}
           >
             {(() => {
