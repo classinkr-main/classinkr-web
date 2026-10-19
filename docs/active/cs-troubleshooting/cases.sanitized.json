@@ -1,0 +1,3311 @@
+{
+ "meta": {
+  "generated": "2026-10-19",
+  "as_of": "2026-09-29",
+  "source": "사내 원문 cases.json(2026-10-02 생성, 78행/76건)을 비식별화한 것. 원본 케이스 문서·대화 기록은 이 저장소 밖에 있다.",
+  "row_count": 78,
+  "base_id_count": 76,
+  "sanitization": {
+   "policy": "고객 식별정보 미저장, HQ 담당자는 역할명으로만 표기(README 식별정보 정책)",
+   "removed": [
+    "개인 이름(고객 담당자·교사·학생·사내 직원)",
+    "전화번호·계정",
+    "이메일",
+    "Account ID/UID/SID(기관 UID 포함)",
+    "课节ID/Lesson ID/courseId/classId",
+    "공인 IP·고객 사설 IP",
+    "Device ID·deviceName",
+    "시리얼 번호·MAC",
+    "결제 금액·카드 정보·결제링크",
+    "사내 테스트 계정",
+    "TAPD 번호",
+    "HQ 담당자 실명"
+   ],
+   "removed_fields": [
+    "pii_present",
+    "pii_types"
+   ],
+   "kept": [
+    "고객사(학원) 상호",
+    "제품 사양 값(카메라 NIC 192.168.1.222/255.255.255.0, T1 기본 192.168.1.180, APIPA 169.254.x.x)",
+    "클라이언트 버전 번호",
+    "오류 코드·화면 문구",
+    "claude.ai 대화 링크(내부 참조, source_chat_urls)"
+   ],
+   "transformed": {
+    "hq_contact": "실명 → 역할명(중복 제거)",
+    "customer": "식별자·개인명 부분 제거",
+    "cause_confidence": "원문 유지 + confidence_normalized 추가(D-19=conflicting, 표기 없음 W-01~W-06=suspected·untagged_downgraded)"
+   },
+   "replacement_counts": {
+    "TAPD 번호": 1,
+    "고객 필드 식별자·개인명": 3,
+    "HQ 실명(hq_contact)": 61,
+    "pii_types 필드": 173,
+    "HQ 실명": 22,
+    "고객 측 개인 이름": 1,
+    "결제 금액 정보": 1,
+    "Account ID/UID": 1,
+    "deviceName": 2,
+    "이메일": 1
+   }
+  },
+  "field_conventions": {
+   "customer_message_sent": "true=발송 확인, false=초안만·미발송·발송 보류가 명시됨, null=발송 불명 또는 해당 없음",
+   "escalated_to_hq": "true=HQ(또는 HQ 채널의 EEO 베트남 기술지원)에 실제 문의·회신 기록, false=에스컬레이션 없음·불요·미제출 명시, null=초안만 있고 발송 불명 또는 기록 없음",
+   "cause_confidence": "원문 태그 기준. W-01~W-06은 원문이 단정형이라 구분이 없어 null",
+   "product_area": "인덱스 장 기준. AI 기능(8장)·클라우드 드라이브(9장)·SMS는 허용 목록에 없어 '기타'",
+   "source_doc": "D·W = index(케이스 원문은 미제공), S·T = both(인덱스 표 + 보충기록 상세)",
+   "confidence_normalized": "confirmed | suspected | unresolved | conflicting (README 근거 상태 어휘)",
+   "untagged_downgraded": "원문에 확신도 표기가 없어 suspected로 강등한 행이면 true",
+   "playbook": "주 플레이북 파일명(확장자 제외). 다른 플레이북의 관련 선례 표에도 참조로 나올 수 있다",
+   "tags": "area:/topic:/intent:/evidence: 어휘(README 태그 어휘)",
+   "source_chat_urls": "S·T 건의 원 대화 링크(내부 참조). D·W 건은 원본이 사내 문서라 없다",
+   "status": "원문 상태(2026-09-29 이전 갱신 기준). 이후 진행은 반영되지 않음"
+  }
+ },
+ "cases": [
+  {
+   "id": "D-01",
+   "base_id": "D-01",
+   "date": "2026-08-05",
+   "customer": "Rami English(라미잉글리쉬)",
+   "product_area": "수업·LMS",
+   "index_chapter": "7. 수업·LMS·교실 기능",
+   "symptom": "숙제 상세 화면에서 번호 목록이 전부 \"1.\"로 표시, 줄간격 벌어짐(iPhone, iPad 휴대폰 모드)",
+   "real_phenomenon": null,
+   "cause": "애플 계열 기기 브라우저 커널 차이로 리치텍스트 컴포넌트의 `<ol>` 호환 처리 누락",
+   "cause_confidence": "확정",
+   "resolution_type": "제품버그",
+   "status": "종결",
+   "status_supplement": null,
+   "hq_contact": [
+    "HQ 담당자(역할 미확정)"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": false,
+   "error_codes": [],
+   "reusable_pattern": "플랫폼 × 기능 재현 매트릭스와 단일 변수 대조(휴대폰 모드 토글)로 좁힌다. WeCom 붙여넣기는 HTML 태그가 지워지므로 실제 제출·로그로 전달하고, HQ가 '建议'로 분류하면 '缺陷'로 정정한다.",
+   "related_ids": [
+    "S-07"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "내부전용",
+   "notes": "(확정, HQ). TAPD 버그 픽스 반영, 수정 버전 미기재. 고객사 안내·정상 동작 확인은 후속 미완. 지사 초기 가설(`<ol>` 분해) 기각.",
+   "confidence_normalized": "confirmed",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "09-lms-classroom",
+   "tags": [
+    "area:lms",
+    "area:software",
+    "intent:incident",
+    "evidence:confirmed"
+   ]
+  },
+  {
+   "id": "D-02a",
+   "base_id": "D-02",
+   "date": "2026-07-30",
+   "customer": "정율사관 온라인 B3 교실",
+   "product_area": "접속·네트워크",
+   "index_chapter": "1. 접속·네트워크 끊김",
+   "symptom": "수업 중 네트워크 끊김 (콘솔 UDB 4,419ms, TCP 7,972ms)",
+   "real_phenomenon": "메인 NIC(ASIX) 고정 IP가 다른 기기와 충돌해 유선이 마비되고 Wi-Fi로 폴백",
+   "cause": "메인 NIC 고정 IP 충돌",
+   "cause_confidence": "확정",
+   "resolution_type": "고객환경(네트워크·배선)",
+   "status": "조치 완료",
+   "status_supplement": null,
+   "hq_contact": [
+    "HQ 네트워크·접속·메모리 담당"
+   ],
+   "escalated_to_hq": null,
+   "customer_message_sent": null,
+   "error_codes": [
+    "54",
+    "56",
+    "57",
+    "Duplicate"
+   ],
+   "reusable_pattern": "`ipconfig /all` 원문을 먼저 보고, `Duplicate` 표시는 배선이 정상이라는 반증으로 읽는다. 설치 규격(메인 NIC 자동 IP, 카메라 NIC 192.168.1.222 고정)에서 벗어난 설정을 1순위로 의심한다.",
+   "related_ids": [
+    "D-02b",
+    "S-31",
+    "S-40",
+    "D-12",
+    "D-22"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "내부전용",
+   "notes": "DHCP 전환으로 유선 단독 동작 확인(08-13). 문서에 종결 표기는 없고 중복 IP 기기 식별 등 후속 확인이 남음. hq_contact는 D-02 문서 공통 표기이며 B3 건 자체의 HQ 문의 여부는 명시 없음.",
+   "confidence_normalized": "confirmed",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "01-class-disconnect",
+   "tags": [
+    "area:network",
+    "topic:disconnect",
+    "topic:network",
+    "intent:incident",
+    "evidence:confirmed",
+    "evidence:field_verified",
+    "evidence:customer_unreplied"
+   ]
+  },
+  {
+   "id": "D-02b",
+   "base_id": "D-02",
+   "date": "2026-08-08",
+   "customer": "정율사관 온라인 B4 교실",
+   "product_area": "접속·네트워크",
+   "index_chapter": "1. 접속·네트워크 끊김",
+   "symptom": "ClassIn 강제 종료 2회 (고객 표현은 \"인터넷 끊김\")",
+   "real_phenomenon": "네트워크 끊김이 아니라 강제 종료(闪退) 2회",
+   "cause": "RAM 8GB 메모리 부족(HQ 회신)",
+   "cause_confidence": "추정",
+   "resolution_type": "하드웨어",
+   "status": "대기",
+   "status_supplement": null,
+   "hq_contact": [
+    "HQ 네트워크·접속·메모리 담당",
+    "HQ 하드웨어 1차·원격 지원 담당"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "고객이 '끊김'이라 해도 실제 강제 종료면 메모리를 본다. RAM 8GB OPS는 가상 메모리를 물리 RAM × 1.5(12,288MB, 초기=최대)로 잡되, HQ에는 값이 아니라 산정 기준을 묻는다.",
+   "related_ids": [
+    "D-02a"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "내부전용",
+   "notes": "원문 원인에 (확정)/(추정) 표기 없음 — HQ 회신 기반이며 재발 모니터링 대기라 '추정'으로 분류. 가상 메모리 12,288MB는 HQ 승인 후 설정.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "01-class-disconnect",
+   "tags": [
+    "area:network",
+    "topic:disconnect",
+    "topic:network",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:suspected",
+    "evidence:hq_pending",
+    "evidence:customer_unreplied"
+   ]
+  },
+  {
+   "id": "D-03",
+   "base_id": "D-03",
+   "date": "2026-08-12",
+   "customer": "이미숙국어, NS 과학수학",
+   "product_area": "전자칠판HW",
+   "index_chapter": "4. 전자칠판 하드웨어·OPS",
+   "symptom": "화면 표면 백색 잔류물(구름·줄무늬) + 터치 민감도·인식률 소폭 저하",
+   "real_phenomenon": null,
+   "cause": "1순위 생산 배치 260318, 2순위 보관 환경(창고 결로) 등 — 배치와 보관 변수 미분리",
+   "cause_confidence": "추정",
+   "resolution_type": "하드웨어",
+   "status": "미해결",
+   "status_supplement": null,
+   "hq_contact": [
+    "HQ 소프트웨어·필기 담당",
+    "HQ 담당자(역할 미확정)",
+    "HQ 하드웨어 1차·원격 지원 담당"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": true,
+   "error_codes": [],
+   "reusable_pattern": "사실과 가설을 표로 나누고 붙어 있는 변수를 가르는 실험을 설계한다. 마른 극세사로만 닦고(세정제 금지), 증거는 정면·전체 검정 화면·반사 없음·세정 전후로 촬영한다.",
+   "related_ids": [],
+   "source_doc": "index",
+   "chatbot_suitability": "부적합",
+   "notes": "(추정, 미확정). 고객사에는 '확인 중'까지만 안내. HQ 하드웨어 1차·원격 지원 담당 앞 상세 메시지 미발송, 보증·리콜 범위 협의 미결. 문서에 HQ 대응 전략 내부 서술 있음.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "07-board-hardware",
+   "tags": [
+    "area:board",
+    "topic:warranty",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:suspected",
+    "evidence:hq_pending"
+   ]
+  },
+  {
+   "id": "D-04",
+   "base_id": "D-04",
+   "date": "2026-08-13",
+   "customer": "이미숙국어 가경관",
+   "product_area": "녹화",
+   "index_chapter": "2. 녹화",
+   "symptom": "2시간 54분 수업 녹화본 없음 (고객 표현 \"영상 업로드 오류\")",
+   "real_phenomenon": "업로드 오류가 아니라 녹화 미생성(`Start Lesson-recording` 이벤트 부재)",
+   "cause": "해당 회차 생성 시점에 녹화 옵션 비활성(Disable)",
+   "cause_confidence": "확정",
+   "resolution_type": "설정·사용법",
+   "status": "대기",
+   "status_supplement": null,
+   "hq_contact": [],
+   "escalated_to_hq": false,
+   "customer_message_sent": true,
+   "error_codes": [
+    "Recording Settings: Disable"
+   ],
+   "reusable_pattern": "같은 계정의 정상 수업과 Recording Settings, Status History, Reason 문자열을 대조한다. 녹화 설정은 회차 생성 시점에 정해지므로 课节ID 대역으로 생성 배치를 추정한다. 복구 불가는 원인 설명과 함께 전한다.",
+   "related_ids": [
+    "D-21",
+    "S-08"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "외부FAQ가능",
+   "notes": "08-19 원인·복구 불가 회신. 옵션을 끈 주체 미확인(고객에게 주체를 말하지 않는 규칙). 접수 시각이 수업 시작보다 앞서게 적힘(오기 가능성).",
+   "confidence_normalized": "confirmed",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "02-recording",
+   "tags": [
+    "area:software",
+    "topic:recording",
+    "intent:incident",
+    "evidence:confirmed"
+   ]
+  },
+  {
+   "id": "D-05",
+   "base_id": "D-05",
+   "date": "2026-08-14",
+   "customer": "쉴라의 영어 다이아그램",
+   "product_area": "전자칠판HW",
+   "index_chapter": "4. 전자칠판 하드웨어·OPS",
+   "symptom": "전자칠판 2대를 약 10cm 간격으로 나란히 두면 고스트 터치 10개 이상 간헐 발생",
+   "real_phenomenon": null,
+   "cause": "IR 간섭(HQ 판정이나 설명만 듣고 내린 판단)",
+   "cause_confidence": "추정",
+   "resolution_type": "하드웨어",
+   "status": "미해결",
+   "status_supplement": null,
+   "hq_contact": [
+    "HQ 서비스 1차 접점(小助手)",
+    "HQ 하드웨어 1차·원격 지원 담당"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": true,
+   "error_codes": [],
+   "reusable_pattern": "1대 전원 차단이라는 단일 변수 실험으로 '2대 간 간섭'과 '기기 이상·외부 적외선원'을 가른다. HQ의 '정상 범위' 수치만 떼어 고객에게 인용하지 않는다.",
+   "related_ids": [
+    "S-21"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "내부전용",
+   "notes": "(추정, 미확정). 임시로 15~20cm 이격·사선 배치, HQ는 완만한 V자 권고. 고객 안내 정정(NFC → IR) 필요 — 기존 안내가 나간 것으로 보아 customer_message_sent=true.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "07-board-hardware",
+   "tags": [
+    "area:board",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:suspected",
+    "evidence:hq_pending"
+   ]
+  },
+  {
+   "id": "D-06",
+   "base_id": "D-06",
+   "date": "2026-08-21",
+   "customer": "과사람",
+   "product_area": "카메라",
+   "index_chapter": "3. 카메라",
+   "symptom": "일부 교실만 네트워크 카메라 직결 가능, 나머지는 OBS 가상 카메라 우회(지연 3~4초)",
+   "real_phenomenon": "ClassIn X가 잘못된 RTSP 주소를 오류 안내 없이 거부",
+   "cause": "RTSP 주소에서 `rtsp://`의 `//` 누락(포트 미기재)",
+   "cause_confidence": "확정",
+   "resolution_type": "설정·사용법",
+   "status": "대기(확산 중)",
+   "status_supplement": null,
+   "hq_contact": [],
+   "escalated_to_hq": null,
+   "customer_message_sent": false,
+   "error_codes": [],
+   "reusable_pattern": "'OBS에서는 되는데 ClassIn X 직결은 안 됨'이면 주소 표기부터 본다. 표준형 `rtsp://계정:비밀번호@IP:554/stream1`, 비밀번호의 `@`는 `%40`, 카메라 IP는 고정(DHCP 예약).",
+   "related_ids": [
+    "S-18"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "외부FAQ가능",
+   "notes": "문제 제기 2026-07 하순, 케이스 오픈 2026-08-21. 고객사 안내 발송은 팀장 승인 후 예정(미완). 지점 UID 매핑 미확정.",
+   "confidence_normalized": "confirmed",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "03-camera-not-detected",
+   "tags": [
+    "area:camera",
+    "topic:audio_video",
+    "intent:incident",
+    "evidence:confirmed"
+   ]
+  },
+  {
+   "id": "D-07",
+   "base_id": "D-07",
+   "date": "2026-08-25",
+   "customer": "캐슬에듀",
+   "product_area": "미러링·보조화면",
+   "index_chapter": "5. 미러링·화면 출력",
+   "symptom": "같은 네트워크인데 미러링 간헐 실패 \"장치가 동일한 LAN에 연결되어 있지 않습니다\"",
+   "real_phenomenon": "단말 간 ping 양방향 100% 손실, 게이트웨이 손실 0%",
+   "cause": "공유기의 AP 클라이언트 격리(유력 후보, 간헐성은 미설명)",
+   "cause_confidence": "추정",
+   "resolution_type": "고객환경(네트워크·배선)",
+   "status": "미해결",
+   "status_supplement": null,
+   "hq_contact": [
+    "HQ 담당자(역할 미확정)"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [
+    "장치가 동일한 LAN에 연결되어 있지 않습니다"
+   ],
+   "reusable_pattern": "GW 주소 대조 → GW MAC 대조(`arp -a`) → 양방향 ping → 유선 단말 ping → 코드 입력 순. 양방향 실패면 AP 격리, 한 방향만 성공이면 호스트 방화벽. 칠판에서는 조회 전용 명령만 쓴다.",
+   "related_ids": [
+    "D-08",
+    "S-33",
+    "S-29"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "내부전용",
+   "notes": "고객 네트워크 장비 변경 금지로 당사 조치 없음. 본사 상급 채널 발송은 승인 대기. 고객 안내 시나리오는 작성만.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "05-mirroring",
+   "tags": [
+    "area:display",
+    "topic:mirroring",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:suspected",
+    "evidence:hq_pending",
+    "evidence:customer_unreplied"
+   ]
+  },
+  {
+   "id": "D-08",
+   "base_id": "D-08",
+   "date": "2026-08-25",
+   "customer": "캐슬에듀 5F",
+   "product_area": "미러링·보조화면",
+   "index_chapter": "5. 미러링·화면 출력",
+   "symptom": "전자칠판 1대 + TV 2대에 같은 화면을 띄우는 구성에서 화면 지연",
+   "real_phenomenon": "지연 전량이 노트북→칠판 화면공유(네트워크) 구간 1.0~1.5초. 칠판→TV HDMI 구간은 0.1~0.2초로 정상",
+   "cause": "노트북→칠판 무선 화면공유 구간 지연(실측)",
+   "cause_confidence": "확정",
+   "resolution_type": "HQ정책·사양",
+   "status": "대기",
+   "status_supplement": null,
+   "hq_contact": [
+    "HQ 하드웨어 1차·원격 지원 담당"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "밀리초 스톱워치를 모든 화면에 띄워 동시에 촬영해 구간별 지연을 분리한다. 무선 화면공유 지연 기준값은 1.0~1.5초, S86 2세대는 루프아웃 미지원.",
+   "related_ids": [
+    "D-07"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "내부전용",
+   "notes": "실측 08-25, 리허설 08-27, 행사 08-28. HQ 'HW 개선 방안 없음' 회신. 유선 경로 3곳 모두 사망.",
+   "confidence_normalized": "confirmed",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "06-rear-display-and-latency",
+   "tags": [
+    "area:display",
+    "topic:mirroring",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:confirmed",
+    "evidence:hq_pending",
+    "evidence:field_verified",
+    "evidence:customer_unreplied"
+   ]
+  },
+  {
+   "id": "D-09",
+   "base_id": "D-09",
+   "date": "2026-08-31",
+   "customer": "윤유경플러스학원",
+   "product_area": "카메라",
+   "index_chapter": "3. 카메라",
+   "symptom": "학원 내부 위치 이동 후 카메라 미인식(교실 5곳, 3유형)",
+   "real_phenomenon": null,
+   "cause": "물리 배선 계층(포트 뒤바뀜, PoE 미공급, 카메라망 IP 충돌, OPS 모듈·USB 랜카드 탈락 가설)",
+   "cause_confidence": "추정",
+   "resolution_type": "고객환경(네트워크·배선)",
+   "status": "종결(원인 미확정)",
+   "status_supplement": null,
+   "hq_contact": [],
+   "escalated_to_hq": null,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "자료 수집 표준은 `ncpa.cpl` 사진과 `ipconfig` 사진이다. 어댑터 역할은 이름으로 판별하지 않고, 위치 이동 이력이 있으면 배선 계층을 먼저 의심한다.",
+   "related_ids": [
+    "D-15a"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "내부전용",
+   "notes": "고객이 내부 네트워크 조정과 케이블 재체결로 당일 전 교실 복구. UID/SID 미기입.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "03-camera-not-detected",
+   "tags": [
+    "area:camera",
+    "topic:camera_nic",
+    "intent:incident",
+    "evidence:suspected",
+    "evidence:customer_unreplied"
+   ]
+  },
+  {
+   "id": "D-10",
+   "base_id": "D-10",
+   "date": "2026-09-04",
+   "customer": "창원 차준호국어",
+   "product_area": "수업·LMS",
+   "index_chapter": "7. 수업·LMS·교실 기능",
+   "symptom": "제목 표시줄 로고 이미지를 50KB 이하로 줄여도 계속 반려",
+   "real_phenomenon": "용량이 아니라 높이가 반려 조건",
+   "cause": "이미지 높이가 정확히 24px이 아님",
+   "cause_confidence": "확정",
+   "resolution_type": "설정·사용법",
+   "status": "종결",
+   "status_supplement": null,
+   "hq_contact": [],
+   "escalated_to_hq": false,
+   "customer_message_sent": true,
+   "error_codes": [
+    "이미지 크기가 요구 사항을 충족하지 않음!"
+   ],
+   "reusable_pattern": "규격은 높이 정확히 24px / 너비 1280px 이하 / 50KB 이하 / PNG·JPG. 최빈 원인은 Figma 2x Export → 비율 유지 축소 → 메신저 재압축이며, 예시 파일은 성공하고 고객 파일만 실패하면 파일 규격 문제로 확정한다.",
+   "related_ids": [
+    "S-20"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "외부FAQ가능",
+   "notes": "경로: 콘솔 → 일반 설정 → 교실 설정 → 스킨 설정 → 제목 표시줄 설정 → 사용자 정의 이미지. 예시 파일 sample_titlebar_1280x24.png 전달.",
+   "confidence_normalized": "confirmed",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "09-lms-classroom",
+   "tags": [
+    "area:lms",
+    "topic:titlebar_image",
+    "intent:incident",
+    "evidence:confirmed"
+   ]
+  },
+  {
+   "id": "D-11",
+   "base_id": "D-11",
+   "date": "2026-09-04",
+   "customer": "사내 발견",
+   "product_area": "기타",
+   "index_chapter": "8. AI 기능",
+   "symptom": "한국어 음성 녹화 수업(동영상 업로드형) 3건의 AI 요약·스크립트가 중국어로 생성(2건은 주제도 무관)",
+   "real_phenomenon": null,
+   "cause": "한국어 음성의 언어 판정 실패",
+   "cause_confidence": "추정",
+   "resolution_type": "제품버그",
+   "status": "대기",
+   "status_supplement": null,
+   "hq_contact": [
+    "HQ 하드웨어 총괄·OPS 이미지 담당",
+    "HQ AI 교실·AI 녹화 제품 담당",
+    "HQ 담당자(역할 미확정)"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "재요약 신청은 课节id 또는 机构ID + 班级名 + 课节名으로 하고, '동영상 업로드형'임을 매번 명시한다.",
+   "related_ids": [
+    "T-01",
+    "T-02",
+    "T-03"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "내부전용",
+   "notes": "HQ 하드웨어 총괄·OPS 이미지 담당(라우팅) '한국어 요약은 2026년 3월부터 지원' 회신 — 2월 생성분으로 정리했으나 2025-04 정상 건이 있어 시기 한정으로 단정하지 않음. 9/7 재요약 신청, HQ 담당자(역할 미확정) 수동 일괄 처리 가능 확인(9/11). 내용상 현지화·언어 성격이나 인덱스 8장(AI 기능)에 있음.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "11-localization-chinese-ui",
+   "tags": [
+    "area:software",
+    "topic:localization",
+    "area:ai",
+    "topic:recording",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:suspected",
+    "evidence:hq_pending"
+   ]
+  },
+  {
+   "id": "D-12",
+   "base_id": "D-12",
+   "date": "2026-09-07",
+   "customer": "정율사관 온라인",
+   "product_area": "수업·LMS",
+   "index_chapter": "7. 수업·LMS·교실 기능",
+   "symptom": "단원 추가 시 상한 안내가 뜨며 게시·초안 저장 불가",
+   "real_phenomenon": null,
+   "cause": "과정(课程)당 단원(单元) 최대 100개 사양",
+   "cause_confidence": "확정",
+   "resolution_type": "HQ정책·사양",
+   "status": "대기",
+   "status_supplement": null,
+   "hq_contact": [
+    "HQ 서비스 1차 접점(小助手)",
+    "HQ 담당자(역할 미확정)",
+    "HQ LMS·AgentIn 담당"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": true,
+   "error_codes": [
+    "단원의 수가 상한선인 100개를 초과하여 단원을 게시하거나, 초안으로 저장할 수 없습니다.",
+    "Maximum of 100 units can be added"
+   ],
+   "reusable_pattern": "LMS 구조·상한 문의는 小助手를 거치지 않고 HQ LMS·AgentIn 담당에게 직행한다. 1차 안내는 과정 분할 운영.",
+   "related_ids": [
+    "D-02a"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "외부FAQ가능",
+   "notes": "(확정, 본사). 문서 분류는 '기능 제한 해제 문의'(경계 건). 고객 필요 200개, 특정 기관 상한 조정 HQ LMS·AgentIn 담당 에스컬레이션 진행 중(9/11 메모). 중간에 역할 미확정 HQ 담당자 오안내 경유.",
+   "confidence_normalized": "confirmed",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "09-lms-classroom",
+   "tags": [
+    "area:lms",
+    "topic:unit_limit",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:confirmed",
+    "evidence:hq_pending"
+   ]
+  },
+  {
+   "id": "D-13",
+   "base_id": "D-13",
+   "date": "2026-09-09",
+   "customer": "철의국어",
+   "product_area": "미러링·보조화면",
+   "index_chapter": "5. 미러링·화면 출력",
+   "symptom": "확장 모드에서 2차 화면 좌우 검은 띠",
+   "real_phenomenon": "ClassIn 결함 아님 — 2차 화면 데스크톱 모드 해상도 문제",
+   "cause": "2차 화면 데스크톱 모드가 2560×1600(16:10)이라 16:9 패널에 레터박스",
+   "cause_confidence": "확정",
+   "resolution_type": "설정·사용법",
+   "status": "종결",
+   "status_supplement": null,
+   "hq_contact": [],
+   "escalated_to_hq": false,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "「설정 > 시스템 > 디스플레이 > 고급 디스플레이」에서 디스플레이 1/2 캡처를 받아 데스크톱 모드와 활성 신호 모드의 화면비를 대조한다.",
+   "related_ids": [
+    "D-15a",
+    "S-36"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "외부FAQ가능",
+   "notes": "디스플레이 2 해상도 3840×2160, 배율 100%로 변경해 해소(당일 종결). 고객 채널 이메일(영문). D-15 고객사와 동일한지 미확인.",
+   "confidence_normalized": "confirmed",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "06-rear-display-and-latency",
+   "tags": [
+    "area:display",
+    "topic:display_ratio",
+    "intent:incident",
+    "evidence:confirmed",
+    "evidence:customer_unreplied"
+   ]
+  },
+  {
+   "id": "D-14",
+   "base_id": "D-14",
+   "date": "2026-09-10",
+   "customer": "모나르떼",
+   "product_area": "수업·LMS",
+   "index_chapter": "7. 수업·LMS·교실 기능",
+   "symptom": "채팅에 '코스를 떠났습니다'가 떴는데 구성원 명단에 같은 이름이 남음",
+   "real_phenomenon": "기관 계정 2개(메인·하위)에 동명 코스, 동명 학생 계정 2개 — 퇴장한 계정(B)과 남은 계정(A)이 다름",
+   "cause": "동명 코스·동명 계정(플랫폼 버그 아님)",
+   "cause_confidence": "확정",
+   "resolution_type": "설정·사용법",
+   "status": "대기",
+   "status_supplement": null,
+   "hq_contact": [],
+   "escalated_to_hq": false,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "'나갔는데 명단에 남아 있다'는 동명 계정 중복을 먼저 의심하고 계정 식별자(휴대폰/이메일) 단위로 대조한다. 하위 계정 보유 고객은 동명 코스 존재를 기본 점검한다.",
+   "related_ids": [
+    "S-01"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "외부FAQ가능",
+   "notes": "학생 1인 1계정 분리 권고. 안내문 발송 여부 문서상 불명확. A·B 동일인 여부 미확인.",
+   "confidence_normalized": "confirmed",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "09-lms-classroom",
+   "tags": [
+    "area:lms",
+    "topic:course_member",
+    "intent:incident",
+    "evidence:confirmed",
+    "evidence:customer_unreplied"
+   ]
+  },
+  {
+   "id": "D-15a",
+   "base_id": "D-15",
+   "date": "2026-09-14",
+   "customer": "철의국어입시학원",
+   "product_area": "카메라",
+   "index_chapter": "3. 카메라",
+   "symptom": "CameraCMS에서 카메라 검색은 되는데 접속 실패",
+   "real_phenomenon": "카메라가 연결된 NIC(Realtek)는 자동 IP라 APIPA로 떨어짐",
+   "cause": "카메라 전용 고정 IP가 카메라가 물리지 않은 다른 NIC에 설정됨",
+   "cause_confidence": "확정",
+   "resolution_type": "설정·사용법",
+   "status": "현장 해소",
+   "status_supplement": null,
+   "hq_contact": [],
+   "escalated_to_hq": null,
+   "customer_message_sent": null,
+   "error_codes": [
+    "Connection failed",
+    "Search:0"
+   ],
+   "reusable_pattern": "어댑터 하나를 끄고 CMS를 재검색해 `Search:0`이면 카메라는 끈 쪽에 물려 있다. '검색은 되는데 접속 실패'는 IP 대역 불일치 신호다. IP는 기존 어댑터에서 먼저 지우고 새 어댑터에 넣은 뒤 CMS 항목을 Delete 후 재등록한다.",
+   "related_ids": [
+    "D-15b",
+    "T-05",
+    "D-09",
+    "D-22",
+    "D-13"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "내부전용",
+   "notes": "종결 처리는 미완.",
+   "confidence_normalized": "confirmed",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "03-camera-not-detected",
+   "tags": [
+    "area:camera",
+    "topic:camera_nic",
+    "intent:incident",
+    "evidence:confirmed",
+    "evidence:field_verified",
+    "evidence:customer_unreplied"
+   ]
+  },
+  {
+   "id": "D-15b",
+   "base_id": "D-15",
+   "date": "2026-09-14",
+   "customer": "철의국어입시학원",
+   "product_area": "카메라",
+   "index_chapter": "3. 카메라",
+   "symptom": "메인 유선망 링크(100Mbps)는 되는데 수신 0패킷, DHCP 무응답",
+   "real_phenomenon": "인터넷은 Wi-Fi가 대행해 문제가 가려짐",
+   "cause": "배선·스위치·어댑터(칠판 선과 단말기 선이 다른 선, 랜툴 시공 불량, 스위치 포트 MAC 정책, USB 랜어댑터 불량 후보)",
+   "cause_confidence": "추정",
+   "resolution_type": "고객환경(네트워크·배선)",
+   "status": "미해결",
+   "status_supplement": null,
+   "hq_contact": [],
+   "escalated_to_hq": null,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "링크는 있는데 수신 0패킷이면 배선·스위치·어댑터 쪽이다. 같은 자리에 노트북 USB-LAN을 직결해 IP를 받는지로 기기 쪽과 배선 쪽을 가른다.",
+   "related_ids": [
+    "D-15a"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "내부전용",
+   "notes": "양쪽 어댑터 모두 Fast Ethernet 100Mbps라 권장 최소 170Mbps 미달. 내용상 '전자칠판네트워크'에 가깝지만 인덱스 3장(카메라)에 있음.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "04-board-network",
+   "tags": [
+    "area:ops",
+    "area:network",
+    "topic:network",
+    "area:board",
+    "intent:incident",
+    "evidence:suspected",
+    "evidence:customer_unreplied"
+   ]
+  },
+  {
+   "id": "D-16",
+   "base_id": "D-16",
+   "date": "2026-09-21",
+   "customer": "아이온영어",
+   "product_area": "카메라",
+   "index_chapter": "3. 카메라",
+   "symptom": "\"4K라더니 녹화 화질이 나쁘다\"(판서 글자 흐림, 흰 바탕 가독성 저하)",
+   "real_phenomenon": "녹화 파일 기준 문제(트래킹 + 파노라마 동시 사용)",
+   "cause": "ClassIn X 녹화 상한 1080p, T1 트래킹 1080p 고정(4K는 파노라마만). 판서 흐림·흰 바탕 과노출은 추정",
+   "cause_confidence": "확정",
+   "resolution_type": "HQ정책·사양",
+   "status": "대기",
+   "status_supplement": null,
+   "hq_contact": [
+    "HQ 하드웨어 1차·원격 지원 담당",
+    "HQ 카메라 원격 디버깅 담당"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "실시간 화면인지 녹화 파일인지, 트래킹인지 파노라마인지부터 확인한다. 흰 바탕이 안 보이면 과노출을 의심해 카메라 단에서 조정한다. OBS 경유는 한 화면만 가능하고 자동 실행이 안 된다.",
+   "related_ids": [],
+   "source_doc": "index",
+   "chatbot_suitability": "내부전용",
+   "notes": "(확정, HQ). HQ 카메라 원격 디버깅 담당이 SunLogin 원격으로 흰 바탕 가독성 조정. 판매 시점 '4K' 안내 범위는 영업 확인 필요 — 고객 대면 답변에 민감.",
+   "confidence_normalized": "confirmed",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "02-recording",
+   "tags": [
+    "area:software",
+    "topic:recording",
+    "area:camera",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:confirmed",
+    "evidence:hq_pending",
+    "evidence:customer_unreplied"
+   ]
+  },
+  {
+   "id": "D-17",
+   "base_id": "D-17",
+   "date": "2026-09-21",
+   "customer": "광주 ALCC",
+   "product_area": "수업·LMS",
+   "index_chapter": "7. 수업·LMS·교실 기능",
+   "symptom": "필기 획이 붓(毛笔)처럼 굵기가 변하며 표시",
+   "real_phenomenon": null,
+   "cause": "필기 효과 설정 — iPad 내부 테스트에서 '판서 붓끝 효과'와 '펜 필압 감지' 두 토글을 모두 꺼야 균일해짐을 확인. 고객 기기에서는 미확인",
+   "cause_confidence": "추정",
+   "resolution_type": "설정·사용법",
+   "status": "대기",
+   "status_supplement": null,
+   "hq_contact": [
+    "HQ 서비스 1차 접점(小助手)"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "사용 기기부터 확인한다(PC+펜 태블릿 / iPad+Apple Pencil / 전자칠판 / Android). iPad는 토글 2개, PC는 1개(계정 및 설정 → 교실 설정 → 펜 필압 감지 효과).",
+   "related_ids": [
+    "S-36"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "외부FAQ가능",
+   "notes": "원문 원인에 (확정)/(추정) 표기 없음 — 고객 기기 미확인이라 '추정'. 문서 분류는 '기능 문의'(경계 건). 안내문·이미지 준비, 발송 기록 없음. 전자칠판 붓 효과 원인 미해결.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "09-lms-classroom",
+   "tags": [
+    "area:lms",
+    "area:software",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:suspected",
+    "evidence:hq_pending",
+    "evidence:customer_unreplied"
+   ]
+  },
+  {
+   "id": "D-18",
+   "base_id": "D-18",
+   "date": "2026-09-22",
+   "customer": "Sook's coaching",
+   "product_area": "접속·네트워크",
+   "index_chapter": "1. 접속·네트워크 끊김",
+   "symptom": "수업 중 교사 2회 이탈 (코드 57)",
+   "real_phenomenon": "두 이탈 직후 모두 신규 '로그인 성공' 기록 — 회선 단절이 아니라 클라이언트 프로세스 종료·재실행",
+   "cause": "클라이언트 프로세스 비정상 종료(크래시·프리즈 또는 PC 절전·전원 차단)",
+   "cause_confidence": "추정",
+   "resolution_type": "원인미확정",
+   "status": "진행(HQ·고객 회신 대기)",
+   "status_supplement": null,
+   "hq_contact": [],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [
+    "57"
+   ],
+   "reusable_pattern": "이탈 직후 신규 로그인이 있으면 프로세스 종료·재실행(크래시, 절전), 없으면 자동 재연결(회선 단절)이다. 콘솔은 5분 단위 집계라 수 초 단위 순간 단절은 드러나지 않을 수 있다.",
+   "related_ids": [
+    "S-19"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "내부전용",
+   "notes": "HQ는 'WeCom 본사 기술팀(담당자 미기재)'. 고객 안내 발송 여부가 문서상 엇갈림. 접수 2026-09-29.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "01-class-disconnect",
+   "tags": [
+    "area:network",
+    "topic:disconnect",
+    "topic:network",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:suspected",
+    "evidence:hq_pending",
+    "evidence:customer_unreplied"
+   ]
+  },
+  {
+   "id": "D-19",
+   "base_id": "D-19",
+   "date": "2026-09-22",
+   "customer": "12inedu",
+   "product_area": "접속·네트워크",
+   "index_chapter": "1. 접속·네트워크 끊김",
+   "symptom": "학생 41회 재입실, 매번 1~12초 만에 끊김 (코드 56)",
+   "real_phenomenon": "User Gateway·Gateway 2nd는 Excellent 100%인데 서버 연결만 Poor. 교사는 정상",
+   "cause": "HQ 1차 답변 '학생 네트워크 불안정'. 지사는 통신사→서버 구간·세션·서버 측 가능성도 열어 둠",
+   "cause_confidence": "미확정",
+   "resolution_type": "원인미확정",
+   "status": "대기",
+   "status_supplement": null,
+   "hq_contact": [
+    "HQ 서비스 1차 접점(小助手)"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [
+    "56"
+   ],
+   "reusable_pattern": "핫스팟(LTE)에서도 재현되는지가 가장 결정적이다. 게이트웨이 구간이 정상인데 서버 연결만 Poor면 통신사→서버 구간을 의심하고, 끊김 간격이 초 단위로 규칙적이면 클라이언트·세션·서버 원인도 의심한다.",
+   "related_ids": [
+    "S-13"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "내부전용",
+   "notes": "원문 원인에 (확정)/(추정) 표기 없음 — HQ와 지사 견해가 갈려 '미확정'으로 분류. 고객 안내 초안은 발송 기록 없음. HQ 미답변 항목 다수.",
+   "confidence_normalized": "conflicting",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "01-class-disconnect",
+   "tags": [
+    "area:network",
+    "topic:disconnect",
+    "topic:network",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:conflict",
+    "evidence:hq_pending",
+    "evidence:customer_unreplied"
+   ]
+  },
+  {
+   "id": "D-20",
+   "base_id": "D-20",
+   "date": "2026-09-20",
+   "customer": "KJ영재센터 사직",
+   "product_area": "접속·네트워크",
+   "index_chapter": "1. 접속·네트워크 끊김",
+   "symptom": "최대화한 교사 화면이 저절로 스테이지 기본 배치로 복귀",
+   "real_phenomenon": "교사 PC가 코드 56으로 두 차례 끊겨 자동 재입장했고, 재접속 시 최대화가 풀림",
+   "cause": "코드 56 재접속 시 최대화 해제(확정, 자체 재현). 끊김 자체는 공유기 바깥 회선(Gateway 2nd) 불안정 추정",
+   "cause_confidence": "확정",
+   "resolution_type": "고객환경(네트워크·배선)",
+   "status": "대기",
+   "status_supplement": null,
+   "hq_contact": [],
+   "escalated_to_hq": false,
+   "customer_message_sent": true,
+   "error_codes": [
+    "56",
+    "Connection break"
+   ],
+   "reusable_pattern": "'화면이 저절로 돌아간다'는 해당 시각 코드 56 끊김·재입장부터 확인한다. User Gateway 정상 + Gateway 2nd만 저하면 공유기 바깥 회선을 의심한다. 카메라 녹화만 켜진 수업은 레이아웃을 확인할 수 없다.",
+   "related_ids": [
+    "S-39",
+    "S-31",
+    "D-21",
+    "S-09"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "내부전용",
+   "notes": "자체 재현 영상 첨부해 고객 안내 발송, HQ 미문의. 끊김의 회선 원인은 (추정).",
+   "confidence_normalized": "confirmed",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "01-class-disconnect",
+   "tags": [
+    "area:network",
+    "topic:disconnect",
+    "topic:network",
+    "intent:incident",
+    "evidence:confirmed"
+   ]
+  },
+  {
+   "id": "D-21",
+   "base_id": "D-21",
+   "date": "2026-09-22",
+   "customer": "KJ영재센터 창원",
+   "product_area": "녹화",
+   "index_chapter": "2. 녹화",
+   "symptom": "카메라 녹화 시작 표시는 있는데 파일 없음 (4001)",
+   "real_phenomenon": "카메라 녹화가 시작 직후 오류로 중단. 코스 목록의 녹색 \"현장 녹화가 시작되었습니다\"는 시작 이벤트만 반영",
+   "cause": "녹화 시작 시점에 카메라 미지정(`Camera Name` 공란) → error code 4001",
+   "cause_confidence": "확정",
+   "resolution_type": "설정·사용법",
+   "status": "종결",
+   "status_supplement": null,
+   "hq_contact": [
+    "HQ 서비스 1차 접점(小助手)"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": true,
+   "error_codes": [
+    "4001"
+   ],
+   "reusable_pattern": "녹화 미생성은 두 유형 — Disable + Start 없음(D-04형)과 Enable + Start 있음 + Error(이 건형). 카메라 녹화 패널은 카운트다운 뒤 자동 시작하므로 톱니바퀴에서 카메라를 먼저 선택한다. 수업 스크린샷은 별도로 남는다.",
+   "related_ids": [
+    "D-04",
+    "D-20",
+    "S-09",
+    "S-39"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "외부FAQ가능",
+   "notes": "(확정, HQ). 카메라 드롭다운 기본값이 '사용 안 함'일 가능성은 추정. 앱 빌드 6.0.5.4001과 에러코드 4001은 별개.",
+   "confidence_normalized": "confirmed",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "02-recording",
+   "tags": [
+    "area:software",
+    "topic:recording",
+    "area:camera",
+    "intent:incident",
+    "evidence:confirmed"
+   ]
+  },
+  {
+   "id": "D-22",
+   "base_id": "D-22",
+   "date": "2026-09-07",
+   "customer": "철의국어입시 외 3곳(탄탄한국어, 부천 유튜엠, 정율사관학원)",
+   "product_area": "결제",
+   "index_chapter": "11. 결제·SMS·콘솔",
+   "symptom": "KRW로 발행한 Airwallex 결제링크가 EUR로 자동 표기, 국내 결제수단 미노출",
+   "real_phenomenon": "정율사관 8월분은 KRW→EUR→KRW 이중 환전으로 청구액보다 초과 결제",
+   "cause": "근본 원인 미규명(Airwallex CS는 고객 위치 기반이라 설명, 본사 재현 불가)",
+   "cause_confidence": "미확정",
+   "resolution_type": "원인미확정",
+   "status": "미해결",
+   "status_supplement": null,
+   "hq_contact": [
+    "HQ 결제·인보이스 담당"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "우회 절차: '다른 통화로 결제' → KRW 선택, '카드'가 아닌 '한국 카드 결제(Local Card)' 선택. 금액 보상·환불 방침은 지사가 정하지 않는다.",
+   "related_ids": [
+    "S-27"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "부적합",
+   "notes": "ClassIn 제품이 아닌 결제 시스템 건(경계). 최초 HQ 전달 09-07, 정율사관 클레임 09-29. 초과분 처리 방침 미결. 우회 절차 자체는 고객 안내 가능하나 건 전체는 환불 쟁점으로 부적합. HQ 결제 담당 표기가 문서마다 다름.",
+   "confidence_normalized": "unresolved",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "12-payment",
+   "tags": [
+    "area:billing",
+    "topic:payment_currency",
+    "topic:refund",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:hq_pending",
+    "evidence:customer_unreplied"
+   ]
+  },
+  {
+   "id": "D-23",
+   "base_id": "D-23",
+   "date": "2026-06",
+   "customer": "플라잉글리쉬",
+   "product_area": "기타",
+   "index_chapter": "8. AI 기능",
+   "symptom": "따라읽기(跟读) 단어 발음 오디오 결함(16개 중 9개 — 어말 파열음 탈락, 어두 s 탈락, 무음)",
+   "real_phenomenon": null,
+   "cause": "실시간 합성이 아닌 단어별 사전 생성·캐싱 음원의 끝단 잘림 또는 생성 실패(HQ 확인 없음)",
+   "cause_confidence": "추정",
+   "resolution_type": "제품버그",
+   "status": "미해결",
+   "status_supplement": null,
+   "hq_contact": [],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": null,
+   "related_ids": [
+    "S-17"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "내부전용",
+   "notes": "1차 문의 6월(일자 미기입), 2차 테스트 2026-08-05. 6월 문의 후 지적 단어만 일부 개선. 재보고 초안(중·영·한) 발송 대기 — HQ 소프트웨어·필기 담당 1차 접점 권장(예정). 인덱스에 재사용 패턴 기재 없음. 원본에 자리표시자 남음.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "09-lms-classroom",
+   "tags": [
+    "area:lms",
+    "area:ai",
+    "topic:audio_video",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:suspected",
+    "evidence:hq_pending",
+    "evidence:customer_unreplied"
+   ]
+  },
+  {
+   "id": "S-01",
+   "base_id": "S-01",
+   "date": "2026-06",
+   "customer": null,
+   "product_area": "수업·LMS",
+   "index_chapter": "7. 수업·LMS·교실 기능",
+   "symptom": "코스에서 삭제한 학생이 수업 3건 기록에 '청강생'으로 남음",
+   "real_phenomenon": null,
+   "cause": "「학생이 코스를 떠났거나 해체돼도 코스 자료 열람 허용」 옵션이 켜진 상태에서 삭제하면 완료 수업의 학생 신분이 유지됨(插班生/Transfer)",
+   "cause_confidence": "확정",
+   "resolution_type": "정상동작",
+   "status": "HQ 결론 수령",
+   "status_supplement": "HQ 결론 수령(정상 동작). 이후 확인 질문에는 회신 없음",
+   "hq_contact": [
+    "HQ 담당자(역할 미확정)"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "'삭제했는데 남아 있다'는 코스 생성 옵션부터 확인한다. 고객이 준 계정 정보는 콘솔로 대조한 뒤 HQ에 넘긴다.",
+   "related_ids": [
+    "W-08",
+    "D-14"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "외부FAQ가능",
+   "notes": "(확정, HQ). 한국어 UI '청강생'이 插班生/Transfer와 같은지 미확인. 고객 카톡 안내문 발송 여부 불명. 고객 접수일 미기재(HQ 회신 07-01).",
+   "confidence_normalized": "confirmed",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "09-lms-classroom",
+   "tags": [
+    "area:lms",
+    "topic:course_member",
+    "intent:incident",
+    "evidence:confirmed",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/f4f9ae58-6ddb-4d22-8546-84685dd49c04"
+   ]
+  },
+  {
+   "id": "S-02",
+   "base_id": "S-02",
+   "date": "2026-06-26",
+   "customer": null,
+   "product_area": "기타",
+   "index_chapter": "9. 클라우드 드라이브·파일",
+   "symptom": "여러 파일 업로드 시 파일 사이에서 1~2분 정지(대시보드·ClassIn SW 동일)",
+   "real_phenomenon": null,
+   "cause": "서버 또는 계정 측",
+   "cause_confidence": "추정",
+   "resolution_type": "원인미확정",
+   "status": "대기",
+   "status_supplement": "대기(HQ 회신 없음)",
+   "hq_contact": [
+    "HQ 담당자(역할 미확정)"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "대시보드와 클라이언트에서 모두 나오면 서버·계정 측으로 분류한다. 파일 수·크기, 상시/간헐 여부를 같이 적어야 왕복이 준다.",
+   "related_ids": [],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "고객사 미기재. 발생 시각은 China time 표기.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "09-lms-classroom",
+   "tags": [
+    "area:lms",
+    "area:cloud_drive",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:suspected",
+    "evidence:hq_pending",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/fa9edb31-4b5b-47db-bda8-87f3034cfa7f"
+   ]
+  },
+  {
+   "id": "S-03",
+   "base_id": "S-03",
+   "date": "2026-06-30",
+   "customer": "에듀온픽",
+   "product_area": "녹화",
+   "index_chapter": "2. 녹화",
+   "symptom": "Android 호스트 수업 녹화본이 2분·2초짜리만 남음",
+   "real_phenomenon": "수업 중 접속이 끊긴 뒤 서버 녹화본이 2개(2분, 2초)만 저장",
+   "cause": "Android 기기는 네트워크 단절 시 로컬 녹화 전환을 지원하지 않음(HQ 1차 회신, 재확인 없음)",
+   "cause_confidence": "추정",
+   "resolution_type": "HQ정책·사양",
+   "status": "미해결",
+   "status_supplement": null,
+   "hq_contact": [
+    "HQ 서비스 1차 접점(小助手)"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": true,
+   "error_codes": [],
+   "reusable_pattern": "HQ가 다른 수업을 확인하는 일이 있으니 계정·수업명·시각(시간대)을 메시지 맨 위에 적는다. 녹화가 중요한 수업은 PC 호스트를 권한다.",
+   "related_ids": [],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "고객에게 1차 '정상 저장됨'(오안내) 발송, 최종 안내 불명. 신규 HQ 담당자(이름 미기재) 앞 재확인 메시지 작성.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "02-recording",
+   "tags": [
+    "area:software",
+    "topic:recording",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:suspected",
+    "evidence:hq_pending"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/d6b8de99-f18e-42df-b49e-ea490c10be00"
+   ]
+  },
+  {
+   "id": "S-04",
+   "base_id": "S-04",
+   "date": "2026-07-03",
+   "customer": "2개 고객사(기관명 미기재)",
+   "product_area": "콘솔·관리",
+   "index_chapter": "11. 결제·SMS·콘솔",
+   "symptom": "리뉴얼 관리자 대시보드 진입 시 자동 번역이 켜져 UI가 틀리게 표시",
+   "real_phenomenon": "Mac·Windows 고객이 따로 접수, 내부 계정으로 재현",
+   "cause": "브라우저 내장 자동 번역이 리뉴얼 대시보드에서 발동",
+   "cause_confidence": "추정",
+   "resolution_type": "설정·사용법",
+   "status": "대기",
+   "status_supplement": "대기(HQ 결론 없음)",
+   "hq_contact": [],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "OS·브라우저가 달라도 같은 증상이면 페이지 측 문제로 보고하고, 비교 이미지와 재현 계정을 같이 준다.",
+   "related_ids": [],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "날짜 07-03·07-06 두 건. 보충기록은 '미확정. (추정)…'으로 표기. HQ 수신자 미기재, 내부 계정 비밀번호 요청은 거절.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "11-localization-chinese-ui",
+   "tags": [
+    "area:software",
+    "topic:localization",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:suspected",
+    "evidence:hq_pending",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/82f19d73-2253-47d0-8242-a35517a746a9"
+   ]
+  },
+  {
+   "id": "S-05",
+   "base_id": "S-05",
+   "date": "2026-07-07",
+   "customer": "에듀온픽",
+   "product_area": "기타",
+   "index_chapter": "9. 클라우드 드라이브·파일",
+   "symptom": "수업 중 드라이브 PDF 224MB 업로드 32~50KB/s로 저하, 21% 부근 실패",
+   "real_phenomenon": "콘솔 Network Excellent 100%, UDB 84~96 — 네트워크 배제. 내부 테스트 평균 5~6MB/s",
+   "cause": "녹화 또는 드라이브 서버 측",
+   "cause_confidence": "추정",
+   "resolution_type": "원인미확정",
+   "status": "대기",
+   "status_supplement": "대기(HQ 회신 없음)",
+   "hq_contact": [],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": null,
+   "related_ids": [
+    "S-25"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "HQ 수신자 미기재. HQ 보고 템플릿 작성 예시 A에 발송문만 있음. 보충기록에 '진단 패턴' 항목 없음.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "09-lms-classroom",
+   "tags": [
+    "area:lms",
+    "area:cloud_drive",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:suspected",
+    "evidence:hq_pending",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/5105bf81-e270-49b9-9b2c-3e532b9c4596"
+   ]
+  },
+  {
+   "id": "S-06",
+   "base_id": "S-06",
+   "date": "2026-07-15",
+   "customer": "지사 재고(입고 검수)",
+   "product_area": "전자칠판HW",
+   "index_chapter": "4. 전자칠판 하드웨어·OPS",
+   "symptom": "Win11 OPS 작업 표시줄 터치 무반응",
+   "real_phenomenon": "'ClassIn 자체 최소화' + '다른 프로그램 최대화'가 동시에 충족되면 작업 표시줄 일부가 터치에 무반응(마우스 정상, 재현율 100%)",
+   "cause": "ClassIn 판서 오버레이의 터치 좌표 판정(HQ: 일부 Win11 버전 기지 이슈)",
+   "cause_confidence": "추정",
+   "resolution_type": "제품버그",
+   "status": "종결(7/20 패치)",
+   "status_supplement": "종결(7/20 패치, 회피책)",
+   "hq_contact": [
+    "HQ 소프트웨어·필기 담당",
+    "HQ 하드웨어 총괄·OPS 이미지 담당"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [
+    "0x80004002"
+   ],
+   "reusable_pattern": "HQ의 '재현 안 됨'은 재현 절차가 같은지부터 확인한다. 마우스와 터치, ClassIn 종료 후 재현으로 책임 범위를 가른다.",
+   "related_ids": [],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "HQ 임시 조치 '작업 표시줄 아래쪽 누르기'는 실측과 반대라 고객 안내 금지. 0x80004002(FOD 설치 실패)는 별건, 실사용 영향 없음.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "07-board-hardware",
+   "tags": [
+    "area:board",
+    "area:ops",
+    "intent:incident",
+    "evidence:suspected",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/9e54af61-c703-47ab-8355-5912a0de0279"
+   ]
+  },
+  {
+   "id": "S-07",
+   "base_id": "S-07",
+   "date": "2026-07-22",
+   "customer": "Rami English",
+   "product_area": "전자칠판HW",
+   "index_chapter": "4. 전자칠판 하드웨어·OPS",
+   "symptom": "86\" 전자칠판 화면 전체를 관통하는 파란 세로줄(재시작 후에도 지속)",
+   "real_phenomenon": null,
+   "cause": "패널 또는 케이블 측 하드웨어",
+   "cause_confidence": "추정",
+   "resolution_type": "하드웨어",
+   "status": "대기",
+   "status_supplement": "대기(발송·회신 불명)",
+   "hq_contact": [
+    "HQ 전자칠판 2세대 담당",
+    "HQ 전자칠판 3세대 담당"
+   ],
+   "escalated_to_hq": null,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "부팅 로고에서도 보이면 패널·T-CON, 안드로이드 진입 후에만 보이면 신호 쪽이다. S/N과 설치일은 HQ가 반드시 요구하고, 보증 기간 내인지 명시한다.",
+   "related_ids": [
+    "D-01"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "부적합",
+   "notes": "HQ 보고문은 세대·S/N·세로줄 범위가 비어 있음. hq_contact는 대상 담당자(발송 불명). 보증 관련.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "07-board-hardware",
+   "tags": [
+    "area:board",
+    "topic:warranty",
+    "intent:incident",
+    "evidence:suspected",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/657f4eda-7ff6-4c26-8c7a-4f6e7642f118"
+   ]
+  },
+  {
+   "id": "S-08",
+   "base_id": "S-08",
+   "date": "2026-07-25",
+   "customer": "이미숙국어 가경관",
+   "product_area": "앱실행·로그인·소리",
+   "index_chapter": "6. 앱 실행·로그인·오디오",
+   "symptom": "학생 노트북에서 ClassIn 실행 안 됨(휴대폰은 정상)",
+   "real_phenomenon": "설치 후 더블클릭해도 무반응. 학생 PC에 인강용 Kollus Player v3 설치 확인",
+   "cause": "Kollus Player v3·NSD류의 카메라·마이크 접근 차단이 메시지 없이 실행을 막음",
+   "cause_confidence": "추정",
+   "resolution_type": "고객환경(네트워크·배선)",
+   "status": "대기",
+   "status_supplement": "대기(최종 안내 초안 단계)",
+   "hq_contact": [],
+   "escalated_to_hq": false,
+   "customer_message_sent": true,
+   "error_codes": [],
+   "reusable_pattern": "'모바일 정상 + PC 무반응'이면 인강 DRM·보안 플레이어 설치 여부를 먼저 묻는다.",
+   "related_ids": [
+    "D-04"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "날짜는 수업명 기준 추정(첫 카톡 날짜 표기 없음). resolution_type은 고객 PC 소프트웨어 충돌이라 '고객환경'으로 분류(네트워크·배선은 아님). 최종 안내는 초안 단계.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "08-app-launch-login-audio",
+   "tags": [
+    "area:software",
+    "topic:login",
+    "intent:incident",
+    "evidence:suspected"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/5fe266a7-4ec4-4636-81f6-e8fb527ee0af"
+   ]
+  },
+  {
+   "id": "S-09",
+   "base_id": "S-09",
+   "date": "2026-07-26",
+   "customer": "KJ영재센터",
+   "product_area": "녹화",
+   "index_chapter": "2. 녹화",
+   "symptom": "수업 녹화에 \"녹음이 안 됨\"",
+   "real_phenomenon": "녹화 시작·업로드는 정상(Pushflow 100%). 영상 자체가 없는지 소리만 없는지 미확인. 구성은 교실 녹화 OFF, 카메라 녹화 ON, Audio mode ClassIn Audio",
+   "cause": "카메라 녹화만 켜진 구성 + ClassIn Audio라 외부 음향이 녹화에 담기지 않았을 가능성",
+   "cause_confidence": "추정",
+   "resolution_type": "설정·사용법",
+   "status": "대기",
+   "status_supplement": "대기(고객 확인 필요)",
+   "hq_contact": [],
+   "escalated_to_hq": false,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "녹화 문의는 Configuration Information의 Reason / Video Scope / Audio mode부터 본다. Pushflow가 100%인데 재생본이 없으면 HQ로 넘긴다.",
+   "related_ids": [
+    "D-20",
+    "D-21",
+    "S-39"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": null,
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "02-recording",
+   "tags": [
+    "area:software",
+    "topic:recording",
+    "topic:audio_video",
+    "intent:incident",
+    "evidence:suspected",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/502bb4db-5146-4d1b-918d-da19cb424b54"
+   ]
+  },
+  {
+   "id": "S-10",
+   "base_id": "S-10",
+   "date": "2026-07-28",
+   "customer": "킹콩수학학원",
+   "product_area": "녹화",
+   "index_chapter": "2. 녹화",
+   "symptom": "내부 공사 후 수업 녹화 반복 실패 (54, 2001)",
+   "real_phenomenon": "이상 수업 전부에 54번 재접속 3~7회, TCP 지연 1510~1657, Gateway 2nd 저하. 유선 NIC 인터넷 없음 + Wi-Fi 동시 연결",
+   "cause": "공사 후 유·무선 이중 인터페이스로 시그널링·게이트웨이가 반복 단절돼 녹화 태스크 중단(2001 카메라 캡처 요인 미배제)",
+   "cause_confidence": "추정",
+   "resolution_type": "고객환경(네트워크·배선)",
+   "status": "미해결",
+   "status_supplement": "미해결(HQ 회신 없음)",
+   "hq_contact": [],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [
+    "54",
+    "2001",
+    "클라우드 녹화에 실패하였습니다. 로컬 녹화로 전환해주세요",
+    "현장 녹화가 실패했습니다, 인터넷 설정을 확인하세요"
+   ],
+   "reusable_pattern": "미디어 Network 차트가 좋아도 Gateway(시그널링)가 나쁘면 녹화가 끊긴다. 정상 대조 수업을 반드시 붙이고, 공사·정전 뒤에는 유선 NIC 상태와 이중 연결부터 본다.",
+   "related_ids": [],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "HQ 1차 '교사 인터넷 문제' 회신은 시각 불일치로 반문. HQ 수신자 미기재.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "02-recording",
+   "tags": [
+    "area:software",
+    "topic:recording",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:suspected",
+    "evidence:hq_pending",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/0571f226-d633-4109-966b-ec2ff4fe2d13",
+    "https://claude.ai/chat/e2809897-ca5d-4ffc-b312-4663df5c120d"
+   ]
+  },
+  {
+   "id": "S-11",
+   "base_id": "S-11",
+   "date": "2026-07-30",
+   "customer": "에스키어학원",
+   "product_area": "기타",
+   "index_chapter": "8. AI 기능",
+   "symptom": "AI 답안지(Generate Answer Sheet) 생성 시 정답이 자동 선택되지 않음",
+   "real_phenomenon": "정답 포함 PDF를 올려도 문항 구조만 생성",
+   "cause": "미확정(정상 동작 범위인지가 질문)",
+   "cause_confidence": "미확정",
+   "resolution_type": "원인미확정",
+   "status": "대기",
+   "status_supplement": "대기(HQ LMS·AgentIn 담당 앞 재발송은 주간로그 출처, 회신 기록 없음)",
+   "hq_contact": [
+    "HQ AI LMS PM",
+    "HQ LMS·AgentIn 담당"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "버그와 기능 문의를 한 메시지에 섞지 않고, 업로드 파일 형식을 명시한다. 담당자가 바뀌면 첨부를 처음부터 다시 보낸다.",
+   "related_ids": [
+    "S-12"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "AgentIn 답안지 데이터 소스 지원 여부는 별도 기능 문의.",
+   "confidence_normalized": "unresolved",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "09-lms-classroom",
+   "tags": [
+    "area:lms",
+    "area:ai",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:hq_pending",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/5d74d79a-fe66-4154-9fe1-e4684fdb8bc1"
+   ]
+  },
+  {
+   "id": "S-12",
+   "base_id": "S-12",
+   "date": "2026-08-04",
+   "customer": "5곳 이상(기관명 미기재)",
+   "product_area": "기타",
+   "index_chapter": "8. AI 기능",
+   "symptom": "AgentIn 사용자 신분이 'Student'로 표시돼 일부 에이전트가 안 보임",
+   "real_phenomenon": null,
+   "cause": "미확정",
+   "cause_confidence": "미확정",
+   "resolution_type": "원인미확정",
+   "status": "대기",
+   "status_supplement": "대기(8/4 3개 국어 에스컬레이션 발송은 주간로그 출처, 회신 불명)",
+   "hq_contact": [],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "'에이전트가 안 보인다'면 AgentIn 좌하단 신분 표시부터 확인한다(좌하단 전환 아이콘으로 사용자가 직접 바꿀 가능성).",
+   "related_ids": [
+    "T-03",
+    "S-11"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "HQ 수신자 미기재.",
+   "confidence_normalized": "unresolved",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "09-lms-classroom",
+   "tags": [
+    "area:lms",
+    "area:ai",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:hq_pending",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/20647c40-4604-4c7e-898a-986c5f76b1f6"
+   ]
+  },
+  {
+   "id": "S-13",
+   "base_id": "S-13",
+   "date": "2026-08-04",
+   "customer": "12inedu",
+   "product_area": "접속·네트워크",
+   "index_chapter": "1. 접속·네트워크 끊김",
+   "symptom": "\"수업이 갑자기 종료됨\"",
+   "real_phenomenon": "예정 종료(19:50:00) 약 27초 뒤 'The customer actively leave the classroom'으로 퇴장. 네트워크 Excellent 100%",
+   "cause": "설정된 50분 종료에 따른 정상 종료",
+   "cause_confidence": "추정",
+   "resolution_type": "정상동작",
+   "status": "대기",
+   "status_supplement": "대기(계정·기대 길이 확인 필요)",
+   "hq_contact": [],
+   "escalated_to_hq": false,
+   "customer_message_sent": null,
+   "error_codes": [
+    "The customer actively leave the classroom"
+   ],
+   "reusable_pattern": "고객이 준 번호와 콘솔 조회 계정을 먼저 대조하고, 퇴장 시각을 예정 종료 시각과 비교한다.",
+   "related_ids": [
+    "D-19"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "고객 제공 계정과 콘솔 조회 계정이 서로 다름. 교사 계정 로그·기대 수업 길이 미확인.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "01-class-disconnect",
+   "tags": [
+    "area:network",
+    "topic:disconnect",
+    "topic:network",
+    "intent:incident",
+    "evidence:suspected",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/4c76774c-93ee-46c6-b39b-b2b27a633b17"
+   ]
+  },
+  {
+   "id": "S-14",
+   "base_id": "S-14",
+   "date": "2026-08-05",
+   "customer": null,
+   "product_area": "녹화",
+   "index_chapter": "2. 녹화",
+   "symptom": "녹화본 끊김 2건",
+   "real_phenomenon": "네트워크 정상. 교사의 교실 이탈(약 18분 41초 공백)과 휴대폰→PC 기기 전환(약 25분 누락)으로 녹화가 분할",
+   "cause": "교사 이탈·기기 전환으로 녹화 분할(로그 기준)",
+   "cause_confidence": "확정",
+   "resolution_type": "정상동작",
+   "status": "대기",
+   "status_supplement": null,
+   "hq_contact": [],
+   "escalated_to_hq": false,
+   "customer_message_sent": null,
+   "error_codes": [
+    "120",
+    "Information from server",
+    "The customer actively leave the classroom"
+   ],
+   "reusable_pattern": "녹화 공백은 Status History의 입·퇴장 시각과 Start Lesson-recording 횟수를 먼저 대조한다. 5분 미만 세션은 Pushflow 기록이 없고 아주 짧은 세션은 파일이 안 생길 수 있다.",
+   "related_ids": [],
+   "source_doc": "both",
+   "chatbot_suitability": "외부FAQ가능",
+   "notes": "고객사 미기재. 날짜는 접수일(수업 일자 미기재). 코드 120 정의 미확정(중복 로그인 추정).",
+   "confidence_normalized": "confirmed",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "02-recording",
+   "tags": [
+    "area:software",
+    "topic:recording",
+    "intent:incident",
+    "evidence:confirmed",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/9b5c38d9-5f94-4cab-b4ee-19c648c326fb"
+   ]
+  },
+  {
+   "id": "S-15",
+   "base_id": "S-15",
+   "date": "2026-08-06",
+   "customer": "The Solution Edu",
+   "product_area": "앱실행·로그인·소리",
+   "index_chapter": "6. 앱 실행·로그인·오디오",
+   "symptom": "학생이 교사 음성을 못 들음(교사 마이크 표시는 움직임)",
+   "real_phenomenon": "네트워크 지표 Excellent 86.5~89.6%. 학생 iPad가 블루투스 이어폰 + Device List [Unknown]",
+   "cause": "iPad 블루투스 오디오 출력 라우팅 또는 앱 권한",
+   "cause_confidence": "추정",
+   "resolution_type": "설정·사용법",
+   "status": "종결로 보임",
+   "status_supplement": "종결로 보임(정상화 여부 미확인)",
+   "hq_contact": [],
+   "escalated_to_hq": false,
+   "customer_message_sent": true,
+   "error_codes": [],
+   "reusable_pattern": "완전 무음은 네트워크가 아니라 출력 라우팅 문제다. 같은 수업의 다른 학생 청취 여부가 분기점이다.",
+   "related_ids": [],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "원장에게 블루투스 해제·재설치·권한 허용 안내 발송, 학생용 안내문은 초안.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "08-app-launch-login-audio",
+   "tags": [
+    "area:software",
+    "topic:audio_video",
+    "intent:incident",
+    "evidence:suspected"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/64e659b3-8f9d-4391-b17b-f4a23922e18f"
+   ]
+  },
+  {
+   "id": "S-16",
+   "base_id": "S-16",
+   "date": "2026-08-06",
+   "customer": "The Solution Edu",
+   "product_area": "녹화",
+   "index_chapter": "2. 녹화",
+   "symptom": "실시간은 정상인데 녹화본에서만 하울링·에코",
+   "real_phenomenon": "교실 장치 정상·변경 없음. 08-06에는 Start Lesson-recording 이벤트 자체가 없어 이중 기록 가설 기각",
+   "cause": "서버 측 녹화 믹싱 단계(콘솔로 확인 불가)",
+   "cause_confidence": "추정",
+   "resolution_type": "제품버그",
+   "status": "미해결",
+   "status_supplement": "미해결(본사 제출은 주간로그 출처, 회신 불명)",
+   "hq_contact": [
+    "HQ 서비스 1차 접점(小助手)",
+    "HQ 소프트웨어·필기 담당"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": false,
+   "error_codes": [
+    "56"
+   ],
+   "reusable_pattern": "'녹화본에서만'이면 교실 음향이 아니라 믹싱 경로다. 대조군은 녹화 Enable 회차로 잡고, 미확정 가설은 고객 문안에 넣지 않는다.",
+   "related_ids": [],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "고객 안내는 초안만(지사장 검토 전). '56'은 08-05 별건 이력. HQ 소프트웨어·필기 담당이 대안 창구.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "02-recording",
+   "tags": [
+    "area:software",
+    "topic:recording",
+    "topic:audio_video",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:suspected",
+    "evidence:hq_pending"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/40be26be-9d2a-413b-8bf4-fff1bde40f7f"
+   ]
+  },
+  {
+   "id": "S-17",
+   "base_id": "S-17",
+   "date": "2026-08-06",
+   "customer": null,
+   "product_area": "수업·LMS",
+   "index_chapter": "7. 수업·LMS·교실 기능",
+   "symptom": "흰 배경에서 펜 기본 색이 흰색이라 필기가 안 보임",
+   "real_phenomenon": null,
+   "cause": "펜 색은 고정값이 아니라 해당 기기에서 마지막에 쓴 색을 이어받는 것으로 보임(내부 테스트)",
+   "cause_confidence": "추정",
+   "resolution_type": "정상동작",
+   "status": "대기",
+   "status_supplement": "대기(2문항 발송은 주간로그 출처, 회신 불명)",
+   "hq_contact": [
+    "HQ 서비스 1차 접점(小助手)"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "로컬 저장이라면 OPS 배포 이미지에 사전 설정할 수 있는지가 확인 대상이다.",
+   "related_ids": [
+    "D-23"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "고객사·식별정보 미기재. 공장 기본값·저장 위치 미확인.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "09-lms-classroom",
+   "tags": [
+    "area:lms",
+    "area:software",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:suspected",
+    "evidence:hq_pending",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/bb91152b-2247-4231-8743-f0edef33415e"
+   ]
+  },
+  {
+   "id": "S-18",
+   "base_id": "S-18",
+   "date": "2026-08-07",
+   "customer": "과사람 WP타워",
+   "product_area": "전자칠판HW",
+   "index_chapter": "4. 전자칠판 하드웨어·OPS",
+   "symptom": "전자칠판 액정(유리) 파손 — 하단 중앙부에서 방사형",
+   "real_phenomenon": null,
+   "cause": "외부 점 충격(사진만으로 확정 불가)",
+   "cause_confidence": "추정",
+   "resolution_type": "하드웨어",
+   "status": "종결(8/21 교환)",
+   "status_supplement": null,
+   "hq_contact": [],
+   "escalated_to_hq": false,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "파손 건은 전원 차단·접근 통제 같은 안전 안내가 먼저다. 귀책 문제가 있어 원인 판단을 고객에게 먼저 말하지 않는다.",
+   "related_ids": [
+    "D-06"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "부적합",
+   "notes": "교환 완료는 주간로그 출처. IR 터치라 깨져도 동작해 계속 쓸 위험. 귀책·교환 관련으로 민감.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "07-board-hardware",
+   "tags": [
+    "area:board",
+    "topic:warranty",
+    "intent:incident",
+    "evidence:suspected",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/c7137908-af01-4b37-9d45-695b3554b6df"
+   ]
+  },
+  {
+   "id": "S-19",
+   "base_id": "S-19",
+   "date": "2026-08-10",
+   "customer": "Sook's coaching(쏙쏙언어코칭)",
+   "product_area": "API·연동",
+   "index_chapter": "10. API·연동",
+   "symptom": "API addCourse 호출 시 errno 102 (createClass는 101002005 Signature error)",
+   "real_phenomenon": "콘솔에서는 코스 생성 성공, API는 102. 조회 API(getTopFolderId)는 safeKey 오류여도 성공해 대조군이 안 됨",
+   "cause": "미확정 — 102가 권한 없음(쓰기 인터페이스 미활성)인지 보안 검증 실패인지 HQ 백엔드 판정 필요",
+   "cause_confidence": "미확정",
+   "resolution_type": "원인미확정",
+   "status": "미해결",
+   "status_supplement": "미해결(HQ 회신 대기)",
+   "hq_contact": [
+    "EEO 베트남 기술지원(HQ 공식 입장 아님)"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [
+    "errno 102",
+    "Permission denied",
+    "101002005"
+   ],
+   "reusable_pattern": "102는 ① API 실존 ② safeKey/timeStamp ③ 쓰기 권한 순으로 본다. 조회 API 성공은 서명 정상의 근거가 아니다. HQ에는 콘솔 API 로그 ID로 요청을 지목하고 프로브 요청은 미리 알린다.",
+   "related_ids": [
+    "W-04",
+    "D-18"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "createClass 오류는 고객이 sid·timeStamp 누락과 form→JSON 전환으로 자체 해결. 9/11 프로젝트 메모의 '읽기 성공=서명 정상' 근거는 진단 경과상 무효화된 논리. register 미시도.",
+   "confidence_normalized": "unresolved",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "10-api",
+   "tags": [
+    "area:api",
+    "topic:permission",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:hq_pending",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/0a13f8dd-32f7-4355-8d48-3d4cff7b0dd5"
+   ]
+  },
+  {
+   "id": "S-20",
+   "base_id": "S-20",
+   "date": "2026-08-11",
+   "customer": "차준호국어",
+   "product_area": "전자칠판HW",
+   "index_chapter": "4. 전자칠판 하드웨어·OPS",
+   "symptom": "신규 납품 전자칠판 좌측 '화면 하강' 터치 센서 완전 무반응",
+   "real_phenomenon": null,
+   "cause": "하드웨어 불량 아님 — 8/19 SW 업데이트 후 정상 작동(어떤 업데이트인지 미기재)",
+   "cause_confidence": "확정",
+   "resolution_type": "제품버그",
+   "status": "종결",
+   "status_supplement": null,
+   "hq_contact": [
+    "HQ 전자칠판 2세대 담당"
+   ],
+   "escalated_to_hq": null,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "신품에서 한쪽 센서만 완전 무반응이어도 교체 전에 SW 업데이트부터 한다. 3손가락 제스처가 되면 SW 경로는 정상이다.",
+   "related_ids": [
+    "D-10"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "원인 (확정)은 주간로그 출처. HQ 보고는 대화상 발송, 주간로그상 '발송 전 취소'로 엇갈려 escalated=null. 베트남 측 유사 사례 참고.",
+   "confidence_normalized": "confirmed",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "07-board-hardware",
+   "tags": [
+    "area:board",
+    "intent:incident",
+    "evidence:confirmed",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/037b0152-cf1f-4f5e-ba54-dc709b3ec0a3"
+   ]
+  },
+  {
+   "id": "S-21",
+   "base_id": "S-21",
+   "date": "2026-08-12",
+   "customer": "쉴라의 영어 다이아그램",
+   "product_area": "전자칠판HW",
+   "index_chapter": "4. 전자칠판 하드웨어·OPS",
+   "symptom": "수업 중 간헐적 터치 프리징(시간이 지나면 저절로 복구)",
+   "real_phenomenon": null,
+   "cause": "미확정",
+   "cause_confidence": "미확정",
+   "resolution_type": "원인미확정",
+   "status": "종결",
+   "status_supplement": null,
+   "hq_contact": [
+    "HQ 담당자(역할 미확정)",
+    "HQ 소프트웨어·필기 담당"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": true,
+   "error_codes": [],
+   "reusable_pattern": "전체 먹통인지 특정 영역만인지 먼저 가르고, 수업을 OPS에서 하는지 안드로이드에서 하는지 확인한 뒤 리셋을 안내한다. 재부팅 전에 로그를 확보한다.",
+   "related_ids": [
+    "D-05"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "8/21 재시작 후 미재발, SN·로그 미확보로 종결(주간로그 출처). 8/12 WeCom에 '다른 기기도 발생'으로 잘못 나감(실제 1대). 최초 제보일 8/12(S-21) vs 8/13(D-05 문서).",
+   "confidence_normalized": "unresolved",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "07-board-hardware",
+   "tags": [
+    "area:board",
+    "intent:incident"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/37ada86f-5e0e-41e2-ae3d-217f46f927df"
+   ]
+  },
+  {
+   "id": "S-22",
+   "base_id": "S-22",
+   "date": "2026-08-12",
+   "customer": "에듀온픽",
+   "product_area": "녹화",
+   "index_chapter": "2. 녹화",
+   "symptom": "녹화본 13분대부터 화면 정지 (-5801)",
+   "real_phenomenon": "실시간 수업과 정지 구간 음성은 정상, 녹화 영상만 정지(포인터는 움직임). 네트워크 전 구간 Excellent",
+   "cause": "녹화 또는 트랜스코딩 측(-5801 의미 미확인)",
+   "cause_confidence": "추정",
+   "resolution_type": "제품버그",
+   "status": "미해결",
+   "status_supplement": "미해결(HQ 발송 불명)",
+   "hq_contact": [],
+   "escalated_to_hq": null,
+   "customer_message_sent": true,
+   "error_codes": [
+    "-5801",
+    "Classroom closed, force to leave"
+   ],
+   "reusable_pattern": "실시간 정상 + 음성 정상 + 영상만 정지면 녹화·트랜스코딩 쪽이다. 디바이스 히스토리는 수업 당일로 조회하고, 의미를 모르는 필드는 고객에게 전달하지 않는다.",
+   "related_ids": [],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "고객에게 확인 질문 발송, 결과 안내 불명. 같은 계정 Mac 동시 로그인(인과 미확정).",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "02-recording",
+   "tags": [
+    "area:software",
+    "topic:recording",
+    "intent:incident",
+    "evidence:suspected"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/9de33637-523f-438b-b107-21e1e7dd7e99"
+   ]
+  },
+  {
+   "id": "S-23",
+   "base_id": "S-23",
+   "date": "2026-08-14",
+   "customer": "국풍온(국풍H&C)",
+   "product_area": "전자칠판HW",
+   "index_chapter": "4. 전자칠판 하드웨어·OPS",
+   "symptom": "OPS에서 Microsoft Store 앱(Samsung Flow) 설치 불가",
+   "real_phenomenon": "Store 앱이 구버전이고 자체 업데이트 실패. OPS는 지사 조치로 Windows Update 비활성 상태",
+   "cause": "Windows Update 비활성으로 Store 자체 업데이트 불가",
+   "cause_confidence": "추정",
+   "resolution_type": "설정·사용법",
+   "status": "대기",
+   "status_supplement": "대기(문의 초안 완성, 발송 여부 불명)",
+   "hq_contact": [
+    "HQ 전자칠판 2세대 담당",
+    "HQ 하드웨어 총괄·OPS 이미지 담당"
+   ],
+   "escalated_to_hq": null,
+   "customer_message_sent": false,
+   "error_codes": [
+    "Pardon the interruption - Before you can shop, we need to update Microsoft Store",
+    "브라우저가 최신 상태가 아닙니다"
+   ],
+   "reusable_pattern": "Store 오류에서 Edge 설치는 의미가 없다. 업데이트 제한이 지사 조치임을 HQ에 먼저 밝힌다.",
+   "related_ids": [],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "고객 안내는 보류(초안만). 조치 미실행.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "07-board-hardware",
+   "tags": [
+    "area:board",
+    "area:ops",
+    "intent:incident",
+    "evidence:suspected"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/3327f18d-0456-4a6a-bd39-1f531c47734c"
+   ]
+  },
+  {
+   "id": "S-24",
+   "base_id": "S-24",
+   "date": "2026-08-14",
+   "customer": null,
+   "product_area": "미러링·보조화면",
+   "index_chapter": "5. 미러링·화면 출력",
+   "symptom": "후면 TV 'no signal', ClassIn Video wall에서 미인식",
+   "real_phenomenon": "Windows 디스플레이 검색에서도 안 잡힘(OS가 못 보므로 ClassIn 문제 아님). 케이블이 패널 HDMI 포트에 꽂혀 있음",
+   "cause": "HDMI를 패널 HDMI IN(입력 전용)에 꽂은 오배선(OPS HDMI 출력 불량 미배제)",
+   "cause_confidence": "추정",
+   "resolution_type": "고객환경(네트워크·배선)",
+   "status": "대기",
+   "status_supplement": "대기(방문 검증 예정)",
+   "hq_contact": [],
+   "escalated_to_hq": false,
+   "customer_message_sent": null,
+   "error_codes": [
+    "no signal"
+   ],
+   "reusable_pattern": "노트북→TV 테스트는 TV 입력단만 검증한다. Win+P·디스플레이 검색으로 OS 레벨과 ClassIn 레벨을 가르고, 방문 시 예비 모니터를 챙긴다.",
+   "related_ids": [
+    "S-40"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "고객사 미기재. HQ 에스컬레이션 보류.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "06-rear-display-and-latency",
+   "tags": [
+    "area:display",
+    "topic:audio_video",
+    "intent:incident",
+    "evidence:suspected",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/8a71a0bd-e2f4-4ba1-b5db-012a16b45e6c"
+   ]
+  },
+  {
+   "id": "S-25",
+   "base_id": "S-25",
+   "date": "2026-08-18",
+   "customer": "미소에듀(부산)",
+   "product_area": "기타",
+   "index_chapter": "9. 클라우드 드라이브·파일",
+   "symptom": "클라우드 PDF 교재를 전자칠판으로 불러오는 속도 30~50KB/s(처음엔 '업로드'로 접수)",
+   "real_phenomenon": "업로드가 아니라 불러오기(다운로드) 구간. 같은 계정의 다른 PDF는 정상, 고객 회선 실측 정상",
+   "cause": "신규 파일이 Akamai 엣지에 캐시되지 않은 캐시 미스(HQ) — 그 정도 저속은 캐시 미스만으로 미해명",
+   "cause_confidence": "추정",
+   "resolution_type": "원인미확정",
+   "status": "미해결",
+   "status_supplement": "미해결(HQ 조사 중)",
+   "hq_contact": [
+    "HQ 담당자(역할 미확정)",
+    "HQ 서비스 1차 접점(小助手)",
+    "HQ 하드웨어 1차·원격 지원 담당"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "업로드 구간인지 다운로드 구간인지 먼저 확정한다. HQ가 준 도메인·진단 수치는 nslookup·ping·Speedtest 실측으로 대조하고, 파일 삭제·재업로드는 증거를 없애므로 피한다.",
+   "related_ids": [
+    "S-05"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "(추정, HQ). 속도 단위가 8/18 대화는 KB/s, 8/25 대화·HQ 문안은 kbps. 원격 다음 날 교사가 정상 속도 회신. 임시 조치는 수업 전 자료 미리 열기.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "09-lms-classroom",
+   "tags": [
+    "area:lms",
+    "area:cloud_drive",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:suspected",
+    "evidence:hq_pending",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/1342b005-4249-49ed-bf0e-d02e701905e8",
+    "https://claude.ai/chat/dff51147-931b-4647-bf8f-1366f07814e7"
+   ]
+  },
+  {
+   "id": "S-26",
+   "base_id": "S-26",
+   "date": "2026-08-19",
+   "customer": null,
+   "product_area": "카메라",
+   "index_chapter": "3. 카메라",
+   "symptom": "CameraCMS 설치 오류창 글자가 전부 ?로 깨짐",
+   "real_phenomenon": "글자 깨짐과 설치 실패는 별개. 백그라운드 Office 설치 진행 중",
+   "cause": "시스템 로캘·UTF-8 베타 옵션 불일치로 글자 깨짐(설치 실패 원인은 미확인)",
+   "cause_confidence": "추정",
+   "resolution_type": "설정·사용법",
+   "status": "미해결",
+   "status_supplement": "미해결(결과 없음)",
+   "hq_contact": [],
+   "escalated_to_hq": false,
+   "customer_message_sent": null,
+   "error_codes": [
+    "????"
+   ],
+   "reusable_pattern": "깨진 오류창은 원문부터 복원한다. 중문판 기반 OPS는 로캘 변경 시 HW 유틸 표시가 깨질 수 있어 UTF-8 베타 해제를 먼저 한다.",
+   "related_ids": [
+    "S-27"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "고객사·기기 미기재. 조치는 제안 단계.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "08-app-launch-login-audio",
+   "tags": [
+    "area:software",
+    "area:camera",
+    "topic:localization",
+    "intent:incident",
+    "evidence:suspected",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/b1c0b59c-41df-49c6-842c-84990fe967b3"
+   ]
+  },
+  {
+   "id": "S-27",
+   "base_id": "S-27",
+   "date": "2026-08-21",
+   "customer": null,
+   "product_area": "결제",
+   "index_chapter": "11. 결제·SMS·콘솔",
+   "symptom": "ClassIn 충전 결제 실패(ISP/페이북 무한 대기), 결제창·인증서 창 글자가 ◆로 깨짐",
+   "real_phenomenon": "실패 지점은 Smartro 이후 BC ISP 구간(Airwallex·ClassIn 아님)",
+   "cause": "Windows UTF-8 베타 옵션(코드페이지 65001) + 법인카드 공동인증서 관문(고객 PC 미검증)",
+   "cause_confidence": "추정",
+   "resolution_type": "설정·사용법",
+   "status": "대기",
+   "status_supplement": "대기(고객 적용 결과 없음)",
+   "hq_contact": [],
+   "escalated_to_hq": false,
+   "customer_message_sent": null,
+   "error_codes": [
+    "◆ (U+FFFD)",
+    "서비스 로딩중입니다"
+   ],
+   "reusable_pattern": "깨진 글자가 정적 UI인지 로컬 저장 데이터인지 구분하고 chcp(949/65001)를 확인한다. 결제부터 살리고(간편결제·카드사 앱결제 우회) 디버깅은 그다음이다.",
+   "related_ids": [
+    "D-22",
+    "S-26"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "부적합",
+   "notes": "고객사 미확인. 카톡 가이드·전화 대본 작성, 발송 불명. HQ 문의안 미작성. 결제 건이라 민감.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "12-payment",
+   "tags": [
+    "area:billing",
+    "topic:payment_currency",
+    "intent:incident",
+    "evidence:suspected",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/58f07548-5e78-4ee3-b7b2-fa5417eb227f"
+   ]
+  },
+  {
+   "id": "S-28",
+   "base_id": "S-28",
+   "date": "2026-08-24",
+   "customer": "사내 재현(고객 건 아님)",
+   "product_area": "현지화·언어",
+   "index_chapter": "12. 내부 테스트·사내 세팅 중 발견한 건",
+   "symptom": "학생 모바일 뷰에서 트로피 리본 문구가 중국어판(`恭喜你获得一次奖励！`)",
+   "real_phenomenon": "같은 화면 토스트는 한국어 — 사양상 영문판이 나와야 함(缺陷)",
+   "cause": "미확정(로케일 폴백 누락 등은 가능성만)",
+   "cause_confidence": "미확정",
+   "resolution_type": "제품버그",
+   "status": "대기(HQ 미제출)",
+   "status_supplement": null,
+   "hq_contact": [],
+   "escalated_to_hq": false,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "결함 보고(잘못된 판)와 한국어판 요청(需求)을 분리한다 — 섞으면 建议로 내려간다. 다른 기관·다른 기기 캡처는 증거로 쓸 수 없다.",
+   "related_ids": [],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "9/11 주간 취합 '진전 없음'. 증거 7항목 보완 후 제출 예정.",
+   "confidence_normalized": "unresolved",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "11-localization-chinese-ui",
+   "tags": [
+    "area:software",
+    "topic:localization",
+    "intent:incident"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/fdd65c2e-9b1d-47ce-b9b9-152f3a66ec67"
+   ]
+  },
+  {
+   "id": "S-29",
+   "base_id": "S-29",
+   "date": "2026-08-25",
+   "customer": "공통(설치 약 270대)",
+   "product_area": "전자칠판HW",
+   "index_chapter": "4. 전자칠판 하드웨어·OPS",
+   "symptom": "전자칠판·OPS Windows 시계가 약 1분/45일 지연",
+   "real_phenomenon": "약 15ppm으로 RTC 정상 오차 범위 — 하드웨어 결함이 아니라 시간 동기화가 안 걸리는 상태",
+   "cause": "NTP 미동기화(기본 주기 7일, UDP 123 차단, w32time 미자동 후보)",
+   "cause_confidence": "추정",
+   "resolution_type": "설정·사용법",
+   "status": "진행",
+   "status_supplement": "진행(현장 미검증)",
+   "hq_contact": [],
+   "escalated_to_hq": false,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "시계가 밀린 교실은 NTP가 막힌 망이라는 지표다. `w32tm /query /status`, `sc qc w32time`, `w32tm /stripchart`로 판별 후 국내 NTP를 지정하고, 로그 시각 대조 시 오진에 주의한다.",
+   "related_ids": [
+    "D-07"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "특정 고객 아님. HQ 미문의(대상 후보 HQ 하드웨어 총괄·OPS 이미지 담당, HQ 하드웨어 1차·원격 지원 담당).",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "04-board-network",
+   "tags": [
+    "area:ops",
+    "area:network",
+    "topic:network",
+    "area:board",
+    "intent:incident",
+    "evidence:suspected",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/fab32925-649b-411b-88ed-19eeacc63266"
+   ]
+  },
+  {
+   "id": "S-30",
+   "base_id": "S-30",
+   "date": "2026-09-01",
+   "customer": "에듀온픽",
+   "product_area": "앱실행·로그인·소리",
+   "index_chapter": "6. 앱 실행·로그인·오디오",
+   "symptom": "학생 Galaxy Tab S6 Lite에서 앱 실행 직후 종료",
+   "real_phenomenon": "8/27 같은 기기 정상 입실 이력, 같은 계정 다른 기기 정상 — 버전·계정 문제 배제",
+   "cause": "미확정(저사양·가용 메모리 정황은 있으나 단정 불가)",
+   "cause_confidence": "미확정",
+   "resolution_type": "원인미확정",
+   "status": "대기",
+   "status_supplement": "대기(화면 녹화 확보 대기)",
+   "hq_contact": [],
+   "escalated_to_hq": false,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "Account Quick Check는 입실 세션만 보여주므로 실행 즉시 종료는 HQ 크래시 업로드나 인증 로그로 확인한다. 화면 녹화로 종료 시점(스플래시, 로그인, 아이콘)을 먼저 특정한다.",
+   "related_ids": [
+    "S-35"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "8/27 테스트 이후 발생, 9/1 접수. 대화 속 KST 환산(23:26)은 오류 — 콘솔 시각은 이미 KST. HQ 미발송, 고객 카톡 초안 발송 불명.",
+   "confidence_normalized": "unresolved",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "08-app-launch-login-audio",
+   "tags": [
+    "area:software",
+    "topic:login",
+    "intent:incident",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/8a9792f5-50d3-44fe-9f31-f3e16b3a39d1"
+   ]
+  },
+  {
+   "id": "S-31",
+   "base_id": "S-31",
+   "date": "2026-09-01",
+   "customer": "KJ영재센터 사직",
+   "product_area": "접속·네트워크",
+   "index_chapter": "1. 접속·네트워크 끊김",
+   "symptom": "수업 중 끊김, \"Network is malfunctioning\" 팝업",
+   "real_phenomenon": "다른 교실은 정상, ClassIn X 재시작으로 복구 — 해당 강의실·기기 요인 가능성",
+   "cause": "미확정, 해당 강의실 기기 측 추정",
+   "cause_confidence": "미확정",
+   "resolution_type": "원인미확정",
+   "status": "대기",
+   "status_supplement": "대기(재발 이력 회신 대기)",
+   "hq_contact": [],
+   "escalated_to_hq": null,
+   "customer_message_sent": true,
+   "error_codes": [
+    "Network is malfunctioning"
+   ],
+   "reusable_pattern": "restart(전원 재인가)와 reset(공장 초기화)을 구분해 안내한다. '다른 교실 정상 + 앱 재시작으로 복구'면 그 기기의 `ipconfig /all`(APIPA, Duplicate)을 먼저 본다.",
+   "related_ids": [
+    "D-02a",
+    "D-20"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "HQ 서비스 채팅(담당자명 없음)이 '공유기 재시작' 안내. 지사 경유 에스컬레이션인지 불명. 로그 수치 검증 없음, 课节ID·기기 미확인.",
+   "confidence_normalized": "unresolved",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "01-class-disconnect",
+   "tags": [
+    "area:network",
+    "topic:disconnect",
+    "topic:network",
+    "intent:incident"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/cf4295fe-233b-48d2-b62e-9f63525777ec"
+   ]
+  },
+  {
+   "id": "S-32",
+   "base_id": "S-32",
+   "date": "2026-09-10",
+   "customer": "에듀온픽",
+   "product_area": "접속·네트워크",
+   "index_chapter": "1. 접속·네트워크 끊김",
+   "symptom": "강사 녹화·카메라·마이크 끊김 (코드 56, 54)",
+   "real_phenomenon": "17개 세션 중 3건에서 품질 지표 정상인데 세션이 끊기고 포트 전환·TCP 폴백 동반, 문제 세션에서만 CPU 급등. 카메라 끊김 근거는 로그에 없음",
+   "cause": "UDP 세션 간헐 단절(공유기·Wi-Fi 환경 변화) + CPU 급등",
+   "cause_confidence": "추정",
+   "resolution_type": "고객환경(네트워크·배선)",
+   "status": "대기",
+   "status_supplement": "대기(고객·HQ 회신 대기)",
+   "hq_contact": [
+    "HQ 네트워크·접속·메모리 담당"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": true,
+   "error_codes": [
+    "56",
+    "54",
+    "Connection break"
+   ],
+   "reusable_pattern": "Identity 칸으로 계정 성격을 먼저 확정하고, 문제 세션과 정상 세션을 전수 대조(CPU, 포트 전환, serviceType)한다. Device ID 뒤 MAC 변화로 네트워크 환경 변경을 감지한다.",
+   "related_ids": [],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "발생 9/2·9/9, 접수 9/10. HQ 발송·고객 카톡 확인 요청은 9/11 주간 취합 기재 기준, 회신 불명.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "01-class-disconnect",
+   "tags": [
+    "area:network",
+    "topic:disconnect",
+    "topic:network",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:suspected",
+    "evidence:hq_pending"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/c86c093a-ce5d-4ecf-844c-08632790bf63"
+   ]
+  },
+  {
+   "id": "S-33",
+   "base_id": "S-33",
+   "date": "2026-09-14",
+   "customer": null,
+   "product_area": "미러링·보조화면",
+   "index_chapter": "5. 미러링·화면 출력",
+   "symptom": "전자칠판 미러링이 갑자기 안 됨(고객: 네트워크 동일, 변경 없음)",
+   "real_phenomenon": null,
+   "cause": "미확정",
+   "cause_confidence": "미확정",
+   "resolution_type": "원인미확정",
+   "status": "대기",
+   "status_supplement": "대기(결과 미확인)",
+   "hq_contact": [],
+   "escalated_to_hq": false,
+   "customer_message_sent": true,
+   "error_codes": [],
+   "reusable_pattern": "'갑자기'라면 설정이 아니라 상태 변화를 찾는다. 칠판 핫스팟(`ClassInX-…`) 연결과 미러링 코드 직접 입력으로 망과 기기·앱을 가른다.",
+   "related_ids": [
+    "D-07"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "고객사·식별정보 없음. 앱 최신화·캐시 삭제 안내 발송 확인.",
+   "confidence_normalized": "unresolved",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "05-mirroring",
+   "tags": [
+    "area:display",
+    "topic:mirroring",
+    "intent:incident"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/d84c72ef-1d9f-421f-810c-f1b2d0a6e8b4"
+   ]
+  },
+  {
+   "id": "S-34",
+   "base_id": "S-34",
+   "date": "2026-09-15",
+   "customer": "KJ영재센터",
+   "product_area": "카메라",
+   "index_chapter": "3. 카메라",
+   "symptom": "카메라용 이더넷이 계속 \"네트워크 케이블 언플러그됨\"(USB-A를 꽂으면 링크, 빼면 언플러그)",
+   "real_phenomenon": "PoE 급전 실패",
+   "cause": "PoE 인젝터의 LAN(Data In)과 PoE Out 케이블이 서로 바뀌어 있었음(역결선)",
+   "cause_confidence": "확정",
+   "resolution_type": "고객환경(네트워크·배선)",
+   "status": "현장 해소",
+   "status_supplement": "현장 해소(잔여 확인 있음)",
+   "hq_contact": [],
+   "escalated_to_hq": false,
+   "customer_message_sent": false,
+   "error_codes": [
+    "네트워크 케이블 언플러그됨"
+   ],
+   "reusable_pattern": "'USB를 꽂으면 되고 빼면 안 됨'은 PoE 급전 실패 신호다. 카메라 NIC만 언플러그면 인젝터 AC 전원, 포트 방향, 케이블 순으로 보고, USB-A 상시 급전은 하지 않는다.",
+   "related_ids": [
+    "T-05"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "외부FAQ가능",
+   "notes": "고객 안내는 초안만. PoE 단독 동작·ClassIn X 화면 검증 등 잔여 확인 있음. 케이스 문서가 대화에서 만들어졌으나 프로젝트 미등록.",
+   "confidence_normalized": "confirmed",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "03-camera-not-detected",
+   "tags": [
+    "area:camera",
+    "topic:camera_nic",
+    "intent:incident",
+    "evidence:confirmed",
+    "evidence:field_verified"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/a7ec70f1-50e1-49f7-a7f0-aa2bdc334a83"
+   ]
+  },
+  {
+   "id": "S-35",
+   "base_id": "S-35",
+   "date": "2026-09-15",
+   "customer": "에듀온픽",
+   "product_area": "앱실행·로그인·소리",
+   "index_chapter": "6. 앱 실행·로그인·오디오",
+   "symptom": "학생 iPad 로그인 후 흰 화면에서 멈춤(재설치·재부팅·망 변경 무효)",
+   "real_phenomenon": "9/15 20:02~20:11 'Login succeeded' 6건인데 입실 기록 없음. 기기 측 OS·앱·IP 변화 없음",
+   "cause": "서버 측 또는 계정 데이터 변화로 홈 화면 로딩 실패",
+   "cause_confidence": "추정",
+   "resolution_type": "원인미확정",
+   "status": "미해결",
+   "status_supplement": "미해결(HQ 기술팀 확인 대기)",
+   "hq_contact": [
+    "HQ 서비스 1차 접점(小助手)",
+    "EEO 베트남 기술지원(HQ 공식 입장 아님)"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "입실 전 장애는 콘솔 수업 기록에 남지 않으므로 로그인 이력(History)으로 버전과 노드 변화를 본다. 같은 기기/다른 계정, 같은 계정/다른 기기 교차 테스트로 가른다.",
+   "related_ids": [
+    "S-30"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "HQ 서비스 1차 접점(小助手) '네트워크 불안정' → 반박 초안. EEO 베트남 기술지원 '베트남은 유사 건 해결'(방식 미확인, HQ 공식 입장 아님). 임시로 다른 기기 입실 권고.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "08-app-launch-login-audio",
+   "tags": [
+    "area:software",
+    "topic:login",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:suspected",
+    "evidence:hq_pending",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/7d7dc5c2-84d3-48ac-82ee-eae8ee865e71"
+   ]
+  },
+  {
+   "id": "S-36",
+   "base_id": "S-36",
+   "date": "2026-09-22",
+   "customer": "광주 ALCC",
+   "product_area": "미러링·보조화면",
+   "index_chapter": "5. 미러링·화면 출력",
+   "symptom": "무선 미러링 시 좌우(및 상단) 검은 여백 (16:10 노트북)",
+   "real_phenomenon": "1920×1080으로 바꾸고 재연결·전체화면을 해도 여백 잔존, 사내 16:10 노트북으로 재현",
+   "cause": "ClassIn 미러링 송출·수신 처리 쪽 문제(HQ 미확인)",
+   "cause_confidence": "추정",
+   "resolution_type": "제품버그",
+   "status": "대기",
+   "status_supplement": "대기(HQ BBS 접수 예정)",
+   "hq_contact": [
+    "HQ 서비스 1차 접점(小助手)"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "배율은 송출 해상도를 바꾸지 않는다. 해상도 변경 후 미러링을 재연결하고, 16:9 소스로도 여백이 남으면 사용법이 아니라 결함 후보(疑似缺陷)로 올린다.",
+   "related_ids": [
+    "D-13",
+    "D-17"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "HQ 1차 'HDMI 유선 사용'. 대안은 칠판에서 자료 직접 열기. 고객 안내 초안, 발송 불명.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "05-mirroring",
+   "tags": [
+    "area:display",
+    "topic:mirroring",
+    "topic:display_ratio",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:suspected",
+    "evidence:hq_pending",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/3b0a5901-6615-4e1d-8100-6a030ffef68d"
+   ]
+  },
+  {
+   "id": "S-37",
+   "base_id": "S-37",
+   "date": "2026-09-22",
+   "customer": null,
+   "product_area": "녹화",
+   "index_chapter": "2. 녹화",
+   "symptom": "녹화 영상이 학생에게 안 보임(원장 본인은 보임)",
+   "real_phenomenon": "원장이 학생 없이 수업을 만들어 혼자 녹화한 뒤 학생 추가를 시도했으나 초대가 안 됨",
+   "cause": "미확정",
+   "cause_confidence": "미확정",
+   "resolution_type": "원인미확정",
+   "status": "미해결",
+   "status_supplement": "미해결(고객 정보 수령 전)",
+   "hq_contact": [],
+   "escalated_to_hq": false,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "'녹화수업'이 라이브 녹화인지 녹화 수업(录播) 활동인지 먼저 구분하고, 회차 명단 → 재생 열람자 설정 → 학생 추가 시점 순으로 본다.",
+   "related_ids": [],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "고객사·식별정보 없음. 코스명·학생 계정 요청 회신 초안만 있음.",
+   "confidence_normalized": "unresolved",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "02-recording",
+   "tags": [
+    "area:software",
+    "topic:recording",
+    "intent:incident",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/b89c5195-89ab-4010-ae16-0f1ada795b10"
+   ]
+  },
+  {
+   "id": "S-38",
+   "base_id": "S-38",
+   "date": "2026-09-29",
+   "customer": "리아잉글리쉬",
+   "product_area": "수업·LMS",
+   "index_chapter": "7. 수업·LMS·교실 기능",
+   "symptom": "숙제 사진 1장 제출 뒤 추가 업로드·수정 불가(\"지난번엔 됐다\")",
+   "real_phenomenon": "마감 전이지만 교사가 채점 완료·'모두 공개'한 뒤라 `변경` 버튼이 사라짐",
+   "cause": "채점 완료·공개 시 제출물이 잠기는 설계 동작",
+   "cause_confidence": "확정",
+   "resolution_type": "정상동작",
+   "status": "종결",
+   "status_supplement": "종결(설계 동작, 해결 절차 확정)",
+   "hq_contact": [],
+   "escalated_to_hq": false,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "제출물 잠금 조건은 ① 채점 완료·공개 ② 마감 경과 + '마감 후에도 추가 제출 허용' OFF 두 가지다. 교사가 [재채점] → [수정에 대한 콜백] 체크 → [완료 후 공개]로 다시 열어 준다.",
+   "related_ids": [],
+   "source_doc": "both",
+   "chatbot_suitability": "외부FAQ가능",
+   "notes": "카톡 2종·안내 이미지 3장 제작, 발송 불명. 웹으로는 숙제 제출 불가.",
+   "confidence_normalized": "confirmed",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "09-lms-classroom",
+   "tags": [
+    "area:lms",
+    "topic:homework_lock",
+    "intent:incident",
+    "evidence:confirmed",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/99deca7a-ecc3-4d83-b1a9-35261e8491e2"
+   ]
+  },
+  {
+   "id": "S-39",
+   "base_id": "S-39",
+   "date": "2026-09-29",
+   "customer": "KJ영재센터 센텀",
+   "product_area": "녹화",
+   "index_chapter": "2. 녹화",
+   "symptom": "녹화본 음성 잡음·끊김·싱크 밀림 (한 교실만)",
+   "real_phenomenon": "실시간은 정상, 녹화본만 이상. 네트워크·CPU·푸시 정상. 문제 단말만 6.0.9.1671",
+   "cause": "6.0.9.1671 카메라 녹화 오디오 인코딩 회귀",
+   "cause_confidence": "추정",
+   "resolution_type": "제품버그",
+   "status": "대기",
+   "status_supplement": "대기(HQ 발송 전)",
+   "hq_contact": [],
+   "escalated_to_hq": false,
+   "customer_message_sent": null,
+   "error_codes": [
+    "Device Plugged",
+    "56"
+   ],
+   "reusable_pattern": "'실시간 정상, 녹화만 이상'이면 전송이 아니라 녹화 인코딩·트랜스코딩 경로다. 같은 모델 단말 간 클라이언트 버전을 Device Information으로 대조하고, 계정 아이콘의 단말 정보는 IP와 시각으로 검증한다.",
+   "related_ids": [
+    "D-20",
+    "D-21",
+    "S-09",
+    "T-01"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "수업 9/22·9/28, 접수 9/29. '56'은 부수 관찰(9/22 사직 단말 2대 동시 끊김). HQ 초안·고객 카톡 초안만 작성.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "02-recording",
+   "tags": [
+    "area:software",
+    "topic:recording",
+    "topic:audio_video",
+    "intent:incident",
+    "evidence:suspected",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/7fcee455-bee6-4dea-b62c-765ff032b302"
+   ]
+  },
+  {
+   "id": "S-40",
+   "base_id": "S-40",
+   "date": "2026-10-02",
+   "customer": "정율사관 W3 교실",
+   "product_area": "카메라",
+   "index_chapter": "3. 카메라",
+   "symptom": "T1 두 스트림 미리보기 실패 + 벤큐 후면 모니터 미인식",
+   "real_phenomenon": "카메라는 ping·554 포트는 살아 있고 CMS에서도 `0*0 0.0fps 0Kbps` — 영상 송출만 정지. 벤큐는 Windows가 디스플레이 1개만 인식",
+   "cause": "카메라 송출 정지(추정, 멈춘 이유 미확인). 벤큐는 미확정(입력 소스, HDMI 선, OPS HDMI 출력 후보)",
+   "cause_confidence": "추정",
+   "resolution_type": "원인미확정",
+   "status": "카메라 종결 / 벤큐 미해결",
+   "status_supplement": "카메라 종결, 벤큐 미해결",
+   "hq_contact": [],
+   "escalated_to_hq": false,
+   "customer_message_sent": null,
+   "error_codes": [
+    "0*0 0.0fps 0Kbps"
+   ],
+   "reusable_pattern": "ping → 554 포트 → CMS fps 순서로 전원, 서비스, 앱을 가른다. 'ping과 554는 되는데 CMS도 0fps'면 로그·설정 캡처 후 CMS에서 Reboot(Reset 아님)하고, 재등록보다 재부팅을 먼저 한다.",
+   "related_ids": [
+    "D-02a",
+    "S-24"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "접수 9/30, 원격 점검 10/02(인덱스는 10-02로 표기). cause_confidence는 카메라 부분 기준, 벤큐는 미확정. 고객 안내는 초안, 최종 문구 불명.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "03-camera-not-detected",
+   "tags": [
+    "area:camera",
+    "topic:audio_video",
+    "area:display",
+    "intent:incident",
+    "evidence:suspected",
+    "evidence:customer_unreplied"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/ac990e9a-e521-4051-8dbd-ad21f3501963"
+   ]
+  },
+  {
+   "id": "W-01",
+   "base_id": "W-01",
+   "date": "2026-03-18",
+   "customer": null,
+   "product_area": "API·연동",
+   "index_chapter": "10. API·연동",
+   "symptom": "학생이 참관만 되고 상호작용 불가",
+   "real_phenomenon": null,
+   "cause": "API 링크가 아니라 모니터 섹션에서 auditor로 입장",
+   "cause_confidence": null,
+   "resolution_type": "설정·사용법",
+   "status": "결론 기재(상태 표기 없음)",
+   "status_supplement": null,
+   "hq_contact": [],
+   "escalated_to_hq": null,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": null,
+   "related_ids": [],
+   "source_doc": "index",
+   "chatbot_suitability": "외부FAQ가능",
+   "notes": "출처 20260911_ClassIn_API_WeCom.md §7. 연도는 원문 표기 '03-18'에 2026년을 가정. 원문이 단정형이라 확정/추정 구분 없음 → cause_confidence=null.",
+   "untagged_downgraded": true,
+   "confidence_normalized": "suspected",
+   "as_of": "2026-09-29",
+   "playbook": "10-api",
+   "tags": [
+    "area:api",
+    "intent:incident",
+    "evidence:suspected",
+    "evidence:customer_unreplied"
+   ]
+  },
+  {
+   "id": "W-02",
+   "base_id": "W-02",
+   "date": "2026-06-10",
+   "customer": "고객사명 미기재(API 연동 고객)",
+   "product_area": "API·연동",
+   "index_chapter": "10. API·연동",
+   "symptom": "Datasub 승인 지연",
+   "real_phenomenon": null,
+   "cause": "HQ 내부 시스템 장애",
+   "cause_confidence": null,
+   "resolution_type": "제품버그",
+   "status": "종결(6/11 승인)",
+   "status_supplement": null,
+   "hq_contact": [],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": null,
+   "related_ids": [],
+   "source_doc": "index",
+   "chatbot_suitability": "부적합",
+   "notes": "확정/추정 구분 없음(단정형). resolution_type은 HQ 측 장애라 '제품버그'로 근사 분류. 일회성.",
+   "untagged_downgraded": true,
+   "confidence_normalized": "suspected",
+   "as_of": "2026-09-29",
+   "playbook": "10-api",
+   "tags": [
+    "area:api",
+    "topic:permission",
+    "intent:incident",
+    "evidence:suspected",
+    "evidence:customer_unreplied"
+   ]
+  },
+  {
+   "id": "W-03",
+   "base_id": "W-03",
+   "date": "2026-07-10",
+   "customer": "Renewgen",
+   "product_area": "API·연동",
+   "index_chapter": "10. API·연동",
+   "symptom": "웹훅(Datasub) 수신 실패",
+   "real_phenomenon": null,
+   "cause": "엔드포인트 응답 포맷 미충족",
+   "cause_confidence": null,
+   "resolution_type": "설정·사용법",
+   "status": "종결",
+   "status_supplement": null,
+   "hq_contact": [
+    "EEO 베트남 기술지원(HQ 공식 입장 아님)"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "웹훅 수신 실패는 응답 포맷부터 본다 — 응답을 `{ \"error_info\": { \"errno\": 1, ... } }` 형식으로 맞춘다(문서 §4-2: 에러 10003 = 응답 포맷 오류).",
+   "related_ids": [
+    "W-04"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "외부FAQ가능",
+   "notes": "확정/추정 구분 없음(단정형, 수정 후 정상). EEO 베트남 기술지원(HQ 공식 입장 아님) 발언 인용. Renewgen UID·SID 없음.",
+   "untagged_downgraded": true,
+   "confidence_normalized": "suspected",
+   "as_of": "2026-09-29",
+   "playbook": "10-api",
+   "tags": [
+    "area:api",
+    "intent:incident",
+    "evidence:suspected",
+    "evidence:customer_unreplied"
+   ]
+  },
+  {
+   "id": "W-04",
+   "base_id": "W-04",
+   "date": "2026-07-13",
+   "customer": "Renewgen",
+   "product_area": "API·연동",
+   "index_chapter": "10. API·연동",
+   "symptom": "`getStudentList`, `getCourseList` 호출 시 errno 102",
+   "real_phenomenon": "고객이 AI 생성 코드로 엔드포인트를 추정해 호출",
+   "cause": "존재하지 않는 API 호출",
+   "cause_confidence": null,
+   "resolution_type": "설정·사용법",
+   "status": "결론 기재(상태 표기 없음)",
+   "status_supplement": null,
+   "hq_contact": [
+    "EEO 베트남 기술지원(HQ 공식 입장 아님)"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [
+    "errno 102",
+    "No Permission"
+   ],
+   "reusable_pattern": "errno 102는 ① 호출 API 실존 여부 ② safeKey/timeStamp 생성 로직 ③ 쓰기 권한 순으로 점검하고, 공식 문서(docs.eeo.cn/api/en/) 기준으로 연동하게 안내한다.",
+   "related_ids": [
+    "S-19",
+    "W-03"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "외부FAQ가능",
+   "notes": "확정/추정 구분 없음(단정형). hq_contact는 인덱스 부록 C(API 경로) 기준.",
+   "untagged_downgraded": true,
+   "confidence_normalized": "suspected",
+   "as_of": "2026-09-29",
+   "playbook": "10-api",
+   "tags": [
+    "area:api",
+    "topic:permission",
+    "intent:incident",
+    "evidence:suspected",
+    "evidence:customer_unreplied"
+   ]
+  },
+  {
+   "id": "W-05",
+   "base_id": "W-05",
+   "date": "2026-09-08",
+   "customer": null,
+   "product_area": "API·연동",
+   "index_chapter": "10. API·연동",
+   "symptom": "콜백 URL DNS 해석 실패",
+   "real_phenomenon": null,
+   "cause": "본사 측 DNS 해석 실패(Supabase Edge Functions 도메인)",
+   "cause_confidence": null,
+   "resolution_type": "HQ정책·사양",
+   "status": "종결",
+   "status_supplement": null,
+   "hq_contact": [],
+   "escalated_to_hq": null,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "콜백 URL은 등록 전에 본사 측에서 해석되는지 먼저 확인하고, URL 변경은 이메일(HQ API 요청 전용 메일함, 주소는 사내 원문)로 요청한다.",
+   "related_ids": [],
+   "source_doc": "index",
+   "chatbot_suitability": "내부전용",
+   "notes": "URL 교체 후 해소. 확정/추정 구분 없음(단정형). resolution_type은 HQ 측 해석 제약이라 'HQ정책·사양'으로 근사 분류.",
+   "untagged_downgraded": true,
+   "confidence_normalized": "suspected",
+   "as_of": "2026-09-29",
+   "playbook": "10-api",
+   "tags": [
+    "area:api",
+    "intent:incident",
+    "evidence:suspected",
+    "evidence:customer_unreplied"
+   ]
+  },
+  {
+   "id": "W-06",
+   "base_id": "W-06",
+   "date": "2026-03",
+   "customer": "5곳 이상(고객사명 미기재)",
+   "product_area": "기타",
+   "index_chapter": "11. 결제·SMS·콘솔",
+   "symptom": "한국 고객 SMS(인증번호·초기 비밀번호) 미수신",
+   "real_phenomenon": null,
+   "cause": "해외 SMS 업체 발송분이 한국 단말에서 해외 발신으로 인식돼 스팸 차단",
+   "cause_confidence": null,
+   "resolution_type": "HQ정책·사양",
+   "status": "미해결(SENS 전환 진행)",
+   "status_supplement": null,
+   "hq_contact": [
+    "HQ SMS 담당",
+    "HQ 인프라·데이터 저장 담당"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "임시 안내는 통신사 해외 문자 차단 해제와 스팸 보관함 확인. 근본 조치는 +82 발송을 국내 발신사(네이버 클라우드 SENS)로 전환.",
+   "related_ids": [
+    "W-07",
+    "T-02"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "내부전용",
+   "notes": "날짜는 '03월~'. 원문 단정형이나 HQ·통신사 검증 기록 없음 → cause_confidence=null. EEO 베트남 기술지원 자문. SMS 장은 허용 product_area에 없어 '기타'.",
+   "untagged_downgraded": true,
+   "confidence_normalized": "suspected",
+   "as_of": "2026-09-29",
+   "playbook": "08-app-launch-login-audio",
+   "tags": [
+    "area:software",
+    "area:sms",
+    "topic:login",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:suspected",
+    "evidence:hq_pending",
+    "evidence:customer_unreplied"
+   ]
+  },
+  {
+   "id": "W-07",
+   "base_id": "W-07",
+   "date": "2026-09-23",
+   "customer": null,
+   "product_area": "기타",
+   "index_chapter": "11. 결제·SMS·콘솔",
+   "symptom": "하나의 문의에 대해 App과 AI Risk Monitor가 서로 다른 해외 번호로 SMS 발송",
+   "real_phenomenon": null,
+   "cause": null,
+   "cause_confidence": "미확정",
+   "resolution_type": "원인미확정",
+   "status": "에스컬레이션(상태 표기 없음)",
+   "status_supplement": null,
+   "hq_contact": [
+    "EEO 베트남 기술지원(HQ 공식 입장 아님)"
+   ],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": null,
+   "related_ids": [
+    "T-02",
+    "W-06"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "부적합",
+   "notes": "원인 '미기재'. 2026-09-23 EEO 베트남 기술지원에 에스컬레이션, 이후 조치·상태 문서에 없음.",
+   "confidence_normalized": "unresolved",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "08-app-launch-login-audio",
+   "tags": [
+    "area:software",
+    "area:sms",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:hq_pending",
+    "evidence:customer_unreplied"
+   ]
+  },
+  {
+   "id": "W-08",
+   "base_id": "W-08",
+   "date": "2026-07-15",
+   "customer": "고객사명 미상(API 연동 고객 계정)",
+   "product_area": "콘솔·관리",
+   "index_chapter": "11. 결제·SMS·콘솔",
+   "symptom": "콘솔 \"코스 관리\" 진입 시 앱 전체가 흰색 에러 페이지(하루 수 회)",
+   "real_phenomenon": null,
+   "cause": "`.enabled` 설정 객체가 API 생성 리소스에서 초기화되지 않음",
+   "cause_confidence": "추정",
+   "resolution_type": "제품버그",
+   "status": "결과 미기재",
+   "status_supplement": null,
+   "hq_contact": [],
+   "escalated_to_hq": null,
+   "customer_message_sent": null,
+   "error_codes": [
+    "Unexpected Application Error! — Cannot read properties of undefined (reading 'enabled') (TypeError)"
+   ],
+   "reusable_pattern": null,
+   "related_ids": [
+    "S-01"
+   ],
+   "source_doc": "index",
+   "chatbot_suitability": "부적합",
+   "notes": "출처는 HQ_Error_Report_Template_v2.md 작성 예시 B — 발송문만 있고 결과·원 대화 없음.",
+   "confidence_normalized": "suspected",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "10-api",
+   "tags": [
+    "area:api",
+    "intent:incident",
+    "evidence:suspected",
+    "evidence:customer_unreplied"
+   ]
+  },
+  {
+   "id": "T-01",
+   "base_id": "T-01",
+   "date": "2026-09-11",
+   "customer": "사내(ClassIn 6.0.9 신규 버전 테스트)",
+   "product_area": "현지화·언어",
+   "index_chapter": "12. 내부 테스트·사내 세팅 중 발견한 건",
+   "symptom": "교실 내 에이전트 목록 현지화 누락, 실시간 자막 번역 \"연결 실패\"(서비스 결함/회선 미구분)",
+   "real_phenomenon": "자막 번역 실패 당시 지연 3036ms, 손실률 6%, 네트워크 '아주 나쁨'",
+   "cause": "미확정",
+   "cause_confidence": "미확정",
+   "resolution_type": "제품버그",
+   "status": "미전달",
+   "status_supplement": "결론 없이 종료. 9/11 주간 취합에서 '현지화 소관'으로 분류",
+   "hq_contact": [],
+   "escalated_to_hq": false,
+   "customer_message_sent": null,
+   "error_codes": [
+    "연결 실패"
+   ],
+   "reusable_pattern": "신버전 직후의 이상은 같은 현장 다른 기기의 버전과 대조한다(업무규칙 6장). 자막 번역 실패는 회선이 '아주 나쁨'인 상태에서 나 서비스 결함과 구분되지 않았고 정상 회선 재현 결과가 없다.",
+   "related_ids": [
+    "S-39",
+    "D-11"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "6.0.9 그레이 9/14, 정식 9/21. AgentIn 활성화 창구 HQ AI 교실·AI 녹화 제품 담당(이 대화 접촉 기록 없음). resolution_type은 현지화 누락을 '제품버그'로 근사.",
+   "confidence_normalized": "unresolved",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "11-localization-chinese-ui",
+   "tags": [
+    "area:software",
+    "topic:localization",
+    "intent:incident"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/e9cf8afc-39fd-4a65-a578-6bd058b57cac"
+   ]
+  },
+  {
+   "id": "T-02",
+   "base_id": "T-02",
+   "date": "2026-09-07",
+   "customer": "사내(AI 리스크 모니터링 v6.0.9 테스트)",
+   "product_area": "현지화·언어",
+   "index_chapter": "12. 내부 테스트·사내 세팅 중 발견한 건",
+   "symptom": "AI 분석 중국어 출력, SMS 분할·발신번호 파편화, 번역 키 노출 외(12개 이슈)",
+   "real_phenomenon": null,
+   "cause": "항목별로 현지화·서버 사이드·사양 미구분",
+   "cause_confidence": "미확정",
+   "resolution_type": "제품버그",
+   "status": "일부 초안, 발송 불명",
+   "status_supplement": "EEO 베트남 기술지원용 패키지 완성에서 종료, HQ 담당자(역할 미확정)용 발송 세트는 준비 전",
+   "hq_contact": [
+    "HQ 담당자(역할 미확정)",
+    "HQ SMS 담당",
+    "EEO 베트남 기술지원(HQ 공식 입장 아님)"
+   ],
+   "escalated_to_hq": null,
+   "customer_message_sent": null,
+   "error_codes": [
+    "riskMonitor.common.classUnit"
+   ],
+   "reusable_pattern": null,
+   "related_ids": [
+    "W-06",
+    "W-07",
+    "D-11"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "정상 확인: 크레딧 차감, 알림 임계값, 오탐 세트 0점. 태그 비활성화 불가는 HQ 담당자(역할 미확정) 확정. 대화에서 케이스 문서가 만들어졌으나 프로젝트 미등록.",
+   "confidence_normalized": "unresolved",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "11-localization-chinese-ui",
+   "tags": [
+    "area:software",
+    "topic:localization",
+    "area:ai",
+    "area:sms",
+    "intent:incident"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/de6e0e0a-bd8a-47ef-ae46-7d012e64e53b"
+   ]
+  },
+  {
+   "id": "T-03",
+   "base_id": "T-03",
+   "date": "2026-08-04",
+   "customer": "사내(AgentIn 커스텀 에이전트 수업 분석 테스트)",
+   "product_area": "현지화·언어",
+   "index_chapter": "12. 내부 테스트·사내 세팅 중 발견한 건",
+   "symptom": "템플릿 기본값 미로딩, 차트 4종 미렌더·AI Eval. 0점, 보고서 하단 중국어 고지문, PDF 번호 목록 밀림 외",
+   "real_phenomenon": null,
+   "cause": "항목별로 미확정·추정 혼재(차트는 설정 칸이 구조화 형식 요구 추정, 고지문은 현지화)",
+   "cause_confidence": "미확정",
+   "resolution_type": "제품버그",
+   "status": "본사 미전달",
+   "status_supplement": "결론 없이 종료. 본사로 보낸 메시지 없음",
+   "hq_contact": [],
+   "escalated_to_hq": false,
+   "customer_message_sent": null,
+   "error_codes": [
+    "AI Eval. 0점",
+    "0/6000"
+   ],
+   "reusable_pattern": "템플릿이 안 보이면 좌측 'ClassIn' 대신 '모두' > '수업 분석' 경로로 선택한다(카테고리 필터 차이).",
+   "related_ids": [
+    "S-12",
+    "D-11"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "9개 이슈 묶음. resolution_type은 결함·현지화 혼재라 '제품버그'로 근사. 고지문은 9월 변경 예정이었으나 실제 변경 미확인.",
+   "confidence_normalized": "unresolved",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "11-localization-chinese-ui",
+   "tags": [
+    "area:software",
+    "topic:localization",
+    "area:ai",
+    "intent:incident"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/aeb488cf-3372-4a31-adde-ad9facfb756a",
+    "https://claude.ai/chat/d1a2ffd9-3835-4a4f-a43f-ca698c1fef38"
+   ]
+  },
+  {
+   "id": "T-04",
+   "base_id": "T-04",
+   "date": "2026-07-30",
+   "customer": "사내(콘솔 API 메뉴·GitBook)",
+   "product_area": "현지화·언어",
+   "index_chapter": "12. 내부 테스트·사내 세팅 중 발견한 건",
+   "symptom": "콘솔 API 연동 페이지(API对接密钥 / API后台日志)와 GitBook이 중국어 전용, 언어 전환 불가",
+   "real_phenomenon": null,
+   "cause": null,
+   "cause_confidence": "미확정",
+   "resolution_type": "원인미확정",
+   "status": "대기(HQ 회신 대기)",
+   "status_supplement": "대기. HQ 회신 대기(9/11 시점에도 미체크)",
+   "hq_contact": [],
+   "escalated_to_hq": true,
+   "customer_message_sent": null,
+   "error_codes": [],
+   "reusable_pattern": "콘솔 API 메뉴 대신 영문 공식 문서(docs.eeo.cn/api/en/)를 안내한다.",
+   "related_ids": [],
+   "source_doc": "both",
+   "chatbot_suitability": "외부FAQ가능",
+   "notes": "원인 '미기재'. 출처 20260911_ClassIn_API_WeCom.md §7·§8.",
+   "confidence_normalized": "unresolved",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "10-api",
+   "tags": [
+    "area:api",
+    "topic:localization",
+    "intent:incident",
+    "intent:hq_confirmation",
+    "evidence:hq_pending"
+   ]
+  },
+  {
+   "id": "T-05",
+   "base_id": "T-05",
+   "date": "2026-09-16",
+   "customer": "사내(박람회 자사 부스)",
+   "product_area": "카메라",
+   "index_chapter": "3. 카메라",
+   "symptom": "T1 CameraCMS `Search:1`인데 \"Connection failed\"",
+   "real_phenomenon": "Realtek NIC에 고정 IP가 적용되지 않아 APIPA(169.254.x.x)",
+   "cause": "카메라 NIC 고정 IP 미적용(APIPA)",
+   "cause_confidence": "확정",
+   "resolution_type": "설정·사용법",
+   "status": "해소",
+   "status_supplement": null,
+   "hq_contact": [],
+   "escalated_to_hq": null,
+   "customer_message_sent": null,
+   "error_codes": [
+    "Connection failed",
+    "Search:1"
+   ],
+   "reusable_pattern": "어댑터를 '사용 안 함 → 사용'으로 껐다 켜 192.168.1.222를 적용하고, ping 192.168.1.180 확인 후 CMS 재시작·Delete·Refresh·Add to client. 카메라 랜선은 칠판 하단 LAN이 아니라 OPS 본체 LAN에 꽂는다.",
+   "related_ids": [
+    "D-15a",
+    "S-34"
+   ],
+   "source_doc": "both",
+   "chatbot_suitability": "내부전용",
+   "notes": "고객 건 아님. T1을 USB로 연결하면 PoE 없이 USB 카메라로 인식(실측). T1 USB 급전 관련 HQ 중문 문의 작성, 발송·회신 불명. 인덱스 3장과 12장 양쪽에 등재.",
+   "confidence_normalized": "confirmed",
+   "untagged_downgraded": false,
+   "as_of": "2026-09-29",
+   "playbook": "03-camera-not-detected",
+   "tags": [
+    "area:camera",
+    "topic:camera_nic",
+    "intent:incident",
+    "evidence:confirmed",
+    "evidence:field_verified"
+   ],
+   "source_chat_urls": [
+    "https://claude.ai/chat/36c7a49f-6c9e-4e76-bdb7-008f3957435f"
+   ]
+  }
+ ]
+}

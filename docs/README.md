@@ -76,6 +76,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - **기술지원 업무 규칙과 확인 흐름.** 사실과 추정 분리 원칙, 고객 안내문 작성 규칙, HQ 에스컬레이션 템플릿, 5대 증상별(네트워크·녹화·카메라·HW·계정) 확인 흐름
 - [active/cs-error-cases-supplementary-records-2026-10-02.md](./active/cs-error-cases-supplementary-records-2026-10-02.md)
   - 케이스 문서가 따로 없던 현장·고객 건(S-01~S-40) 및 내부 테스트 건(T-01~T-05) 상세 기록
+- [active/cs-troubleshooting/README.md](./active/cs-troubleshooting/README.md)
+  - **기술지원 트러블슈팅 지식(내부 전용).** 증상별 플레이북 12편, HQ 보고 템플릿, 조회표, 비식별 케이스 표. 내부 CS 코파일럿 적재용이며 공개 문서로 쓰지 않는다. 상태는 2026-09-29 기준 스냅샷
 - [active/admin-3-revenue-sheet-workspace-plan-2026-06-29.md](./active/admin-3-revenue-sheet-workspace-plan-2026-06-29.md)
   - REV/매출 시트를 Admin CRM 안의 별도 매출시트 탭으로 승격하고, 이후 자체 매출 원장으로 옮기는 실행안
 
