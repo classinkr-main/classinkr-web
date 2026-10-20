@@ -459,8 +459,8 @@ export default function SalesLedgerWorkbench({
     const cur = ymKeyUtc(new Date())
     return new Set([cur, shiftMonth(cur, 1)])
   })
-  // 4~9월(상반기) 종합 요약 상태 (기본 펼침: true, 사용자가 접기를 누르면 1열 요약으로 접힘)
-  const [h1Expanded, setH1Expanded] = useState(true)
+  // 지난 4~9월은 기본 1열 종합으로 접고 필요할 때 월별로 펼친다.
+  const [h1Expanded, setH1Expanded] = useState(false)
   // 1열 미연결 칩 팝오버(2단계 공개) — 열림은 매트릭스 전체에서 그룹키/행ID 1개만(동시 다중 열림 금지).
   // 토글/닫기 콜백은 안정 참조로 내려 memo 행 리렌더를 열림이 바뀐 행으로만 좁힌다.
   const [revLinkPopoverKey, setRevLinkPopoverKey] = useState<string | null>(null)
@@ -904,6 +904,10 @@ export default function SalesLedgerWorkbench({
 
   const selectLens = useCallback((nextLens: LedgerLens) => {
     setLens(nextLens)
+    if (nextLens === "cockpit" && lens !== "cockpit") {
+      setTeam("ALL")
+      setManagerFilter(new Set([defaultManager]))
+    }
 
     if (typeof window === "undefined") return
 
@@ -913,7 +917,7 @@ export default function SalesLedgerWorkbench({
         block: "start",
       })
     })
-  }, [])
+  }, [defaultManager, lens])
 
   const onRevSort = useCallback((nextKey: RevSortKey) => {
     setRevSortDirection((currentDirection) => {

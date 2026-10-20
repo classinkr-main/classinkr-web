@@ -1,5 +1,6 @@
 import type { DshOutput } from "./parsers/dsh"
 import { normalizeBranchMemberName } from "./member-names"
+import { isCurrentBranchTeam, isLegacyBranchTeam } from "./current-organization"
 
 export const UNMAPPED_BRANCH_MEMBER = "__unmapped_current_user__"
 
@@ -23,9 +24,10 @@ export function scopeDshToManager(dsh: DshOutput, manager?: string | null): DshO
   }
 }
 
-/** 명시된 빈 담당/팀 선택은 전체 보기다. 기간·탭만 있는 링크도 개인 기본값을 유지한다. */
+/** 빈 담당·특정 팀은 명시적 전체 보기다. 기본 ALL 팀·기간·탭 링크는 개인 기본값을 유지한다. */
 export function initialBranchManager(params: Pick<URLSearchParams, "has" | "get">, ownManager: string) {
   if (params.has("mgr")) return params.get("mgr") === "__me" ? ownManager : normalizeBranchMemberName(params.get("mgr")) ?? ""
-  if (params.has("team")) return ""
+  const team = params.get("team")
+  if (isCurrentBranchTeam(team) || isLegacyBranchTeam(team)) return ""
   return ownManager
 }

@@ -27,6 +27,15 @@ describe("개인 기본 범위", () => {
     expect(initialBranchManager(new URLSearchParams("lens=board&period=M"), "Somang")).toBe("Somang")
     expect(initialBranchManager(new URLSearchParams(), UNMAPPED_BRANCH_MEMBER)).toBe(UNMAPPED_BRANCH_MEMBER)
   })
+  it("기본 ALL 팀 쿼리가 개인 담당 기본값을 단체 보기로 넓히지 않는다", () => {
+    for (const lens of ["rev", "cockpit"]) {
+      expect(initialBranchManager(new URLSearchParams(`lens=${lens}&team=ALL`), "Junhyuk")).toBe("Junhyuk")
+      expect(initialBranchManager(new URLSearchParams(`lens=${lens}&team=ALL`), UNMAPPED_BRANCH_MEMBER)).toBe(UNMAPPED_BRANCH_MEMBER)
+    }
+    expect(initialBranchManager(new URLSearchParams("team="), "Somang")).toBe("Somang")
+    expect(initialBranchManager(new URLSearchParams("team=unknown"), "Somang")).toBe("Somang")
+    expect(initialBranchManager(new URLSearchParams("team=ALL&mgr="), "Junhyuk")).toBe("")
+  })
   it("명시적 전체·팀·다른 담당자 링크를 보존한다", () => {
     expect(initialBranchManager(new URLSearchParams("mgr="), "Junhyuk")).toBe("")
     expect(initialBranchManager(new URLSearchParams("mgr=__me"), "Junhyuk")).toBe("Junhyuk")
