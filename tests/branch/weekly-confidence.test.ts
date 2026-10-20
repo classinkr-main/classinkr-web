@@ -387,6 +387,6 @@ describe("matrixCellConfidence — 주차 슬롯 우선(소스 스캔)", () => {
 
   it("워크벤치 pendingByCell은 인라인 사본 없이 순수 함수를 소비한다(드리프트 차단)", () => {
     const workbench = read("components/admin/branch/SalesLedgerWorkbench.tsx")
-    expect(workbench).toContain("useMemo(() => buildMatrixPendingByCell(drafts, visibleDealRows), [drafts, visibleDealRows])")
+    expect(workbench).toContain("useMemo(() => buildMatrixPendingByCell(drafts, cellLookupRows), [drafts, cellLookupRows])")
   })
 })

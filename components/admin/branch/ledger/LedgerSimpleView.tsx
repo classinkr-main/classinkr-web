@@ -1,12 +1,13 @@
 "use client"
 
-import { Fragment, useMemo, useState, type ReactNode } from "react"
+import { Fragment, useCallback, useMemo, useRef, useState, type ReactNode } from "react"
 
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { cny, cnyExact } from "@/lib/branch/money-format"
 import { branchManagerLabel } from "@/lib/branch/personal-scope"
+import { ApprovalBar, CellEditPopover, type CellEditTarget, type LedgerCellEditApi } from "./LedgerSimpleEdit"
 import { dominantCellConfidence } from "./rev-matrix-logic"
-import type { DraftConfidence, LedgerRevenueRow, RevMonthlyBucket } from "./shared"
+import { rowMonthAmount, type DraftConfidence, type LedgerDraft, type LedgerRevenueRow, type RevMonthlyBucket } from "./shared"
 import {
   buildManagerRollup,
   buildSimpleColumns,
@@ -102,26 +103,66 @@ function SegButtons<T extends string>({ label, value, options, onChange }: { lab
   )
 }
 
-function AmountCell({ bucket, current, strong }: { bucket: RevMonthlyBucket; current?: boolean; strong?: boolean }) {
-  const base = `whitespace-nowrap px-3 py-2.5 text-right tabular-nums ${current ? "bg-[#FBFCFB]" : ""}`
-  if (bucket.total <= 0) return <td className={`${base} text-[#C5C0B8]`}>–</td>
+function AmountCell({ bucket, current, pendingAmount, label, onEdit }: {
+  bucket: RevMonthlyBucket
+  current?: boolean
+  /** 이 칸에 대기 중인 변경이 있으면 그 금액(점선으로 표시). */
+  pendingAmount?: number | null
+  /** 수정 가능한 칸이면 칸 이름(스크린리더용)과 열기 함수. */
+  label?: string
+  onEdit?: (anchor: HTMLElement) => void
+}) {
+  const base = `whitespace-nowrap px-1.5 py-1 text-right tabular-nums ${current ? "bg-[#FBFCFB]" : ""}`
   const kind = dominantCellConfidence(bucket)
+  const pending = pendingAmount != null
+  const shown = pending ? pendingAmount : bucket.total
+  const tone = pending ? "font-semibold text-[#111110]" : bucket.total <= 0 ? "text-[#C5C0B8]" : kind === "confirmed" ? "font-semibold text-[#111110]" : kind === "expected" ? "text-[#615D59]" : "text-[#111110]"
+  const title = pending ? `대기 중 변경 ${exact(shown)} (지금 장부 ${exact(bucket.total)})` : bucket.total > 0 ? bucketTitle(bucket) : undefined
+  const content = shown > 0 || pending
+    ? <span className="inline-flex items-center gap-1.5">{pending ? null : <Mark kind={kind} />}{money(shown)}</span>
+    : "–"
+  const box = `inline-flex min-h-9 w-full items-center justify-end rounded-md px-1.5 ${pending ? "outline-dashed outline-1 outline-[#37352F]" : ""}`
   return (
-    <td className={`${base} ${strong || kind === "confirmed" ? "font-semibold text-[#111110]" : kind === "expected" ? "text-[#615D59]" : "text-[#111110]"}`} title={bucketTitle(bucket)}>
-      <span className="inline-flex items-center gap-1.5"><Mark kind={kind} />{money(bucket.total)}</span>
+    <td className={`${base} ${tone}`} title={title}>
+      {onEdit ? (
+        <button
+          type="button"
+          aria-label={`${label} ${pending ? `대기 중 ${money(shown)}` : shown > 0 ? money(shown) : "비어 있음"} — 수정`}
+          onClick={(event) => onEdit(event.currentTarget)}
+          className={`${box} cursor-text hover:bg-[#F3F6F4] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#084734]`}
+        >
+          {content}
+        </button>
+      ) : (
+        <span className={box}>{content}</span>
+      )}
     </td>
   )
 }
 
-function DealTable({ rows, months, currentMonth, monthlyGoals, groupBy, expandPast, onOpenRow }: {
+/** 칸 → 고칠 딜 후보. 그 달에 금액(또는 대기 변경)이 있는 딜을 먼저, 없으면 수정 가능한 딜 전부. */
+function cellCandidates(rows: LedgerRevenueRow[], month: string, edit: LedgerCellEditApi) {
+  const editable = rows.filter((row) => edit.editable(row, month))
+  const filled = editable.filter((row) => rowMonthAmount(row, month) > 0 || edit.pending(row, month))
+  return filled.length > 0 ? filled : editable
+}
+
+function DealTable({ rows, months, currentMonth, monthlyGoals, groupBy, expandPast, edit, onOpenRow }: {
   rows: LedgerRevenueRow[]
   months: string[]
   currentMonth: string
   monthlyGoals: Map<string, number> | null
   groupBy: SimpleGroupBy
   expandPast: boolean
+  edit: LedgerCellEditApi | null
   onOpenRow: (row: LedgerRevenueRow) => void
 }) {
+  const [target, setTarget] = useState<CellEditTarget | null>(null)
+  const returnFocus = useRef<HTMLElement | null>(null)
+  const closeEditor = useCallback(() => {
+    setTarget(null)
+    returnFocus.current?.focus()
+  }, [])
   const columns = useMemo(() => buildSimpleColumns(months, currentMonth, expandPast), [months, currentMonth, expandPast])
   const ledger = useMemo(() => buildSimpleLedger(rows, columns, groupBy), [rows, columns, groupBy])
   const grouped = groupBy !== "none"
@@ -176,7 +217,26 @@ function DealTable({ rows, months, currentMonth, monthlyGoals, groupBy, expandPa
                       </button>
                     </th>
                     <td className="whitespace-nowrap px-3 py-2.5 text-[12px] text-[#615D59]">{line.tag || "–"}</td>
-                    {line.cells.map((bucket, index) => <AmountCell key={index} bucket={bucket} current={ledger.columns[index].current} />)}
+                    {line.cells.map((bucket, index) => {
+                      const column = ledger.columns[index]
+                      const month = column.months.length === 1 ? column.months[0] : null
+                      if (!edit || !month) return <AmountCell key={index} bucket={bucket} current={column.current} />
+                      const hasPending = line.rows.some((row) => edit.pending(row, month))
+                      const candidates = cellCandidates(line.rows, month, edit)
+                      return (
+                        <AmountCell
+                          key={index}
+                          bucket={bucket}
+                          current={column.current}
+                          pendingAmount={hasPending ? line.rows.reduce((sum, row) => sum + edit.value(row, month), 0) : null}
+                          label={`${line.label} ${column.label}`}
+                          onEdit={candidates.length > 0 ? (anchor) => {
+                            returnFocus.current = anchor
+                            setTarget({ customer: line.label, month, monthLabel: column.label, candidates, anchor: anchor.getBoundingClientRect() })
+                          } : undefined}
+                        />
+                      )
+                    })}
                     <td className="whitespace-nowrap px-3 py-2.5 pr-5 text-right font-semibold tabular-nums" title={bucketTitle(line.total)}>{money(line.total.total)}</td>
                   </tr>
                 ))}
@@ -212,6 +272,18 @@ function DealTable({ rows, months, currentMonth, monthlyGoals, groupBy, expandPa
           </tfoot>
         </table>
       </div>
+      {target && edit ? (
+        <CellEditPopover
+          key={`${target.customer}:${target.month}`}
+          target={target}
+          edit={edit}
+          onClose={closeEditor}
+          onMore={(row) => {
+            setTarget(null)
+            onOpenRow(row)
+          }}
+        />
+      ) : null}
     </section>
   )
 }
@@ -310,11 +382,19 @@ export interface LedgerSimpleViewProps {
   managerGoals: Array<{ member: string; team: string | null; goal: number }>
   /** 장부 행·목표를 아직 받는 중 — 빈 표·"목표 미등록"을 사실처럼 보이지 않게 한다. */
   loading: boolean
+  /** 칸 수정 계약(없으면 읽기 전용). */
+  edit: LedgerCellEditApi | null
+  /** 이 범위의 대기 변경(초안·확인됨). */
+  pendingDrafts: LedgerDraft[]
+  serverQueue: boolean
+  onCheckDrafts: (ids: string[]) => Promise<{ done: number; failed: number }>
+  onApplyDrafts: (ids: string[]) => Promise<{ done: number; failed: number }>
+  onShowQueue: () => void
   onOpenRow: (row: LedgerRevenueRow) => void
   onOpenManager: (manager: string) => void
 }
 
-export default function LedgerSimpleView({ rows, months, currentMonth, monthlyGoals, personal, managerGoals, loading, onOpenRow, onOpenManager }: LedgerSimpleViewProps) {
+export default function LedgerSimpleView({ rows, months, currentMonth, monthlyGoals, personal, managerGoals, loading, edit, pendingDrafts, serverQueue, onCheckDrafts, onApplyDrafts, onShowQueue, onOpenRow, onOpenManager }: LedgerSimpleViewProps) {
   const [groupBy, setGroupBy] = useState<SimpleGroupBy>("none")
   const [teamView, setTeamView] = useState<"members" | "deals">("members")
   const [chips, setChips] = useState<Set<string>>(() => new Set())
@@ -379,11 +459,14 @@ export default function LedgerSimpleView({ rows, months, currentMonth, monthlyGo
       ) : showMembers ? (
         <ManagerTable rows={shown} months={months} currentMonth={currentMonth} managerGoals={managerGoals} pace={pace} onOpenManager={onOpenManager} />
       ) : (
-        <DealTable rows={shown} months={months} currentMonth={currentMonth} monthlyGoals={goals} groupBy={groupBy} expandPast={expandPast} onOpenRow={onOpenRow} />
+        <DealTable rows={shown} months={months} currentMonth={currentMonth} monthlyGoals={goals} groupBy={groupBy} expandPast={expandPast} edit={edit} onOpenRow={onOpenRow} />
       )}
       <p className="text-[12px] text-[#615D59]">
-        {showMembers ? "담당자 이름을 누르면 그 사람 장부로 바뀝니다." : "고객 이름을 누르면 오른쪽에 상세·수정이 열립니다. 주차·칸 단위 편집은 REV 탭에서 합니다."}
+        {showMembers
+          ? "담당자 이름을 누르면 그 사람 장부로 바뀝니다."
+          : "금액 칸을 누르면 바로 고칩니다(E·H·C로 확도, Enter 저장). 지난달 묶음 칸과 전액 확정된 칸은 고칠 수 없습니다. 고객 이름은 상세를 엽니다."}
       </p>
+      <ApprovalBar drafts={pendingDrafts} serverQueue={serverQueue} onCheck={onCheckDrafts} onApply={onApplyDrafts} onShowAll={onShowQueue} />
     </div>
   )
 }

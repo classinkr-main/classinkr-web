@@ -52,6 +52,7 @@ import { normalizedAccountKey } from "@/lib/branch/account-key"
 import { revLinkedTargetHref } from "@/lib/crm/rev-sync-health"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import LedgerSimpleView from "./ledger/LedgerSimpleView"
+import type { LedgerCellEditApi } from "./ledger/LedgerSimpleEdit"
 import { ledgerRowHasColor } from "@/lib/branch/computations/revenue-core"
 import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
 import { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
@@ -1782,20 +1783,24 @@ export default function SalesLedgerWorkbench({
     return list
   }, [visibleGroups, expandedRevGroups, expandedRevCategories])
 
+  // 칸 편집이 찾는 행 범위. REV 매트릭스는 렌더된 품목 잎 행만, 장부 화면은 접힌 고객의 품목까지
+  // 고치므로 범위·검색 필터 반영 행 전체(filteredRows) — 여기서 빠진 행은 저장이 무음으로 실패하고,
+  // pendingByCell 에서 빠지면 같은 칸 재편집이 PATCH 대신 새 초안이 되어 이중 계상된다.
+  const cellLookupRows = lens === "ledger" ? filteredRows : visibleDealRows
   const rowById = useMemo(() => {
     const map = new Map<string, LedgerRevenueRow>()
-    for (const row of visibleDealRows) map.set(row.id, row)
+    for (const row of cellLookupRows) map.set(row.id, row)
     return map
-  }, [visibleDealRows])
+  }, [cellLookupRows])
 
   // dealKey(row.sourceDealId ?? row.id) → 그 행(품질 웨이브 3, 항목 3). pendingByCell의 dealKey
   // 판정과 동일 규약 — saveEditedDraft가 editingDraft의 딜 정체성만으로 대응 행을 찾을 때 쓴다
   // (큐에서 바로 "수정" 진입하면 selectedRow가 그 딜과 무관할 수 있어 selectedRow에 기댈 수 없다).
   const rowByDealKey = useMemo(() => {
     const map = new Map<string, LedgerRevenueRow>()
-    for (const row of visibleDealRows) map.set(row.sourceDealId ?? row.id, row)
+    for (const row of cellLookupRows) map.set(row.sourceDealId ?? row.id, row)
     return map
-  }, [visibleDealRows])
+  }, [cellLookupRows])
 
   // 편집가능 셀 좌표(렌더 순서: 행 위→아래, 월 좌→우, 확장월은 w1→w5). 잠금 셀은 제외.
   // 방향키/Tab 순회의 단일 소스. matrixMonths는 4→3 회계연도 순.
@@ -1825,7 +1830,7 @@ export default function SalesLedgerWorkbench({
   // 순수 함수(ledger/RevMatrix buildMatrixPendingByCell) 단일 소스 — 회귀 테스트(셀 dedup·relock)가
   // 검증하는 그 함수를 그대로 소비한다. 이전엔 동일 로직 인라인 사본이 있어 드리프트 위험이 있었다
   // (라운드 4 최적화에서 통합 — 주차별 확도 weeklyConfidence 동봉도 순수 함수 한 곳에서만 관리).
-  const pendingByCell = useMemo(() => buildMatrixPendingByCell(drafts, visibleDealRows), [drafts, visibleDealRows])
+  const pendingByCell = useMemo(() => buildMatrixPendingByCell(drafts, cellLookupRows), [drafts, cellLookupRows])
 
   // 커밋 기준값(원 단위): 편집 진입 초기값·fill-down·중복 판정 소스.
   // 그 셀에 미검수(draft|checked) 초안이 있으면 시트 원값 대신 그 초안 금액을 우선한다 — 그래야
@@ -2085,6 +2090,15 @@ export default function SalesLedgerWorkbench({
     // 하다 — 다시 바꾸면 그 테스트의 마커도 함께 갱신할 것.
     [buildCellDraftInput, createDraft, pushMatrixToast, undoCellDraft, updateDraft],
   )
+
+  // 장부 화면(A안) 칸 수정 계약 — 매트릭스 칸 커밋과 같은 값·확도·잠금·저장 경로를 그대로 쓴다.
+  const ledgerCellEdit = useMemo<LedgerCellEditApi>(() => ({
+    editable: (row, month) => isMatrixCellEditable(row, month, editRowOverrideMonths.get(row.id)),
+    value: (row, month) => matrixCellValue({ rowId: row.id, month }),
+    confidence: (row, month) => matrixCellConfidence({ rowId: row.id, month }),
+    pending: (row, month) => lookupMatrixPending(pendingByCell, { rowId: row.id, month }),
+    commit: (rowId, month, amount, confidence) => onCommitCell(rowId, month, amount, confidence),
+  }), [editRowOverrideMonths, matrixCellConfidence, matrixCellValue, onCommitCell, pendingByCell])
 
   const onMatrixAmountClamped = useCallback(() => {
     pushMatrixToast({ kind: "info", text: "음수는 0으로 처리됩니다 — 감액은 장부 가감 입력 사용" })
@@ -3307,6 +3321,14 @@ export default function SalesLedgerWorkbench({
                 currentMonth={defaultMonthRef.current}
                 monthlyGoals={revGoalComparable ? new Map(monthlySeriesRows.map((row) => [row.month, row.goal])) : null}
                 loading={(pipeline.loading && rows.length === 0) || (summary.loading && !summary.data)}
+                edit={ledgerCellEdit}
+                pendingDrafts={openDrafts.filter((draft) =>
+                  scopedManager ? branchManagerMatches(draft.manager, scopedManager) : team === "ALL" || draft.team === team,
+                )}
+                serverQueue={queueMode === "server"}
+                onCheckDrafts={checkDrafts}
+                onApplyDrafts={applyDrafts}
+                onShowQueue={() => selectRailView("queue")}
                 personal={managerFilter.size === 1}
                 managerGoals={ledgerManagerGoals}
                 onOpenRow={(row) => void loadDealDetail(row)}

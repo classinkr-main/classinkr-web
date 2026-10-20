@@ -73,3 +73,20 @@ describe("장부 기본 화면 집계", () => {
     expect(fiscalPace(MONTHS, "2027-05")).toBe(1)
   })
 })
+
+describe("장부 칸 수정 입력", () => {
+  it("E·H·C(한글 자판 ㄷ·ㅗ·ㅊ 포함)는 확도로, 나머지 글자는 무시한다", async () => {
+    const { confidenceFromKey } = await import("@/components/admin/branch/ledger/LedgerSimpleEdit")
+    expect(confidenceFromKey("E")).toBe("expected")
+    expect(confidenceFromKey("ㅗ")).toBe("high-confidence")
+    expect(confidenceFromKey("c")).toBe("confirmed")
+    expect(confidenceFromKey("5")).toBeNull()
+  })
+
+  it("금액은 ¥·콤마를 빼고 원 단위로, 숫자가 없으면 저장하지 않는다", async () => {
+    const { parseAmountInput } = await import("@/components/admin/branch/ledger/LedgerSimpleEdit")
+    expect(parseAmountInput("¥48,000")).toBe(48000)
+    expect(parseAmountInput("0")).toBe(0)
+    expect(parseAmountInput("")).toBeNull()
+  })
+})
