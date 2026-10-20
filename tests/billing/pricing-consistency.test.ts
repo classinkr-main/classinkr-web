@@ -153,14 +153,54 @@ describe("하드웨어·수트형·소프트웨어 가격 정합성 검증", () 
       expect(enterprise.monthly?.amount).toBe(299)
       expect(enterprise.yearly?.amount).toBe(2990)
     })
+
+    it("Business 충전형 템플릿 기본 단가는 2,000,000원이며 금액 직접 수정 및 200만원 미만 예외 발행이 지원된다", () => {
+      const defaults = getStandardQuoteDefaultSelections("business_recharge")
+      const defaultQuote = buildConfigurableStandardQuoteDetails({
+        templateId: "business_recharge",
+        optionSelections: defaults,
+      })
+
+      const mainLine = defaultQuote.lineItems?.find((l) => l.itemCode === "classin-business-recharge")
+      expect(mainLine?.unitPrice).toBe(2_000_000)
+      expect(mainLine?.priceLocked).toBe(false)
+      expect(defaultQuote.subtotalAmount).toBe(2_000_000)
+      expect(defaultQuote.grandTotalAmount).toBe(2_000_000)
+
+      // 100만원 소액 예외 발행 시
+      const custom100 = buildConfigurableStandardQuoteDetails({
+        templateId: "business_recharge",
+        input: {
+          lineItems: [
+            {
+              ...mainLine!,
+              unitPrice: 1_000_000,
+              lineSupplyAmount: 1_000_000,
+            },
+          ],
+        },
+        optionSelections: defaults,
+      })
+      const customLine = custom100.lineItems?.find((l) => l.itemCode === "classin-business-recharge")
+      expect(customLine?.unitPrice).toBe(1_000_000)
+      expect(custom100.subtotalAmount).toBe(1_000_000)
+      expect(custom100.grandTotalAmount).toBe(1_000_000)
+
+      // 조건 행 생성 확인
+      const conditionLine = custom100.lineItems?.find((l) => l.itemCode === "business-recharge-condition")
+      expect(conditionLine?.itemDescription).toContain("충전일로부터 1년간 유효")
+      expect(conditionLine?.itemDescription).toContain("초기 기관 세팅 및 교사 교육 포함")
+    })
   })
 
   describe("4. 공급자 법인 스냅샷 정합성 (SW 클래스인 vs HW 퀴드러닝)", () => {
     it("소프트웨어 견적은 공급처가 이이오클래스인코리아 유한회사로 확정된다", () => {
-      const swSupplier = resolveQuoteSupplier("online_suite")
-      expect(swSupplier.supplierBusinessName).toBe("이이오클래스인코리아 유한회사")
-      expect(swSupplier.supplierBusinessRegistrationNumber).toBe("724-88-02403")
-      expect(swSupplier.supplierRepresentativeName).toBe("GU YAN(구엔)")
+      for (const swId of ["business_recharge", "online_suite"]) {
+        const swSupplier = resolveQuoteSupplier(swId)
+        expect(swSupplier.supplierBusinessName).toBe("이이오클래스인코리아 유한회사")
+        expect(swSupplier.supplierBusinessRegistrationNumber).toBe("724-88-02403")
+        expect(swSupplier.supplierRepresentativeName).toBe("GU YAN(구엔)")
+      }
     })
 
     it("하드웨어 견적은 공급처가 퀴드러닝(사업자 170-07-03305, 대표 조혜리)으로 확정된다", () => {

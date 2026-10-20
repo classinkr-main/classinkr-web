@@ -197,8 +197,8 @@ function QuoteCreateButtons({
         {/* SW/HW 는 공급자·품목 체계가 다른 별개 견적이라 진입 버튼을 분리해 둔다. */}
         <button
           type="button"
-          onClick={() => onSelect("online_suite")}
-          title="구독형 AI Suite 견적서 작성 (공급자: 클래스인)"
+          onClick={() => onSelect("business_recharge")}
+          title="ClassIn Business 충전 견적서 작성 (공급자: 클래스인)"
           className="inline-flex h-9 items-center gap-1.5 bg-[#084734] px-3.5 text-[13px] font-semibold text-white transition-colors hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-1"
         >
           <Plus className="h-4 w-4" />

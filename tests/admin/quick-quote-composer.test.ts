@@ -97,6 +97,26 @@ describe("admin quick quote composer shell", () => {
     // 작성 푸터의 발송 + 공유 시트의 완료, 두 개뿐이어야 한다.
     expect(solidGreenButtons).toHaveLength(2)
   })
+
+  it("distinguishes standalone SW from packages and provides recharge price edit with under-2M confirmation modal", () => {
+    // 패키지 상품 분리 (online_suite, recording_studio, bundle은 package)
+    expect(source).toContain('group: "package"')
+    expect(source).toContain('group: "software"')
+    expect(source).toContain('badge: "학원 패키지"')
+    expect(source).toContain('badge: "SW 단독"')
+
+    // ClassIn Business 충전형 전용 직접 금액 수정 카드
+    expect(source).toContain("충전 금액 설정")
+    expect(source).toContain("가격 직접 수정 가능")
+    expect(source).toContain("requestSetRechargeAmount")
+    expect(source).toContain("applyRechargeAmount")
+
+    // 200만원 미만 예외 발행 확인 모달
+    expect(source).toContain("200만원 미만 예외 발행 확인")
+    expect(source).toContain("underMinModalOpen")
+    expect(source).toContain("confirmUnderMinRecharge")
+    expect(source).toContain("cancelUnderMinRecharge")
+  })
 })
 
 describe("admin quotes shell — SW/HW 일급 개념", () => {
@@ -116,7 +136,7 @@ describe("admin quotes shell — SW/HW 일급 개념", () => {
   it("작성 진입은 SW/HW 명시 버튼 2개 + HW 프리셋 드롭다운이다", () => {
     expect(pageSource).toContain("SW 견적서")
     expect(pageSource).toContain("HW 견적서")
-    expect(pageSource).toContain('onSelect("online_suite")')
+    expect(pageSource).toContain('onSelect("business_recharge")')
     expect(pageSource).toContain('onSelect("new")')
     expect(pageSource).toContain("HARDWARE_QUOTE_PRESETS")
     expect(pageSource).toContain('aria-label="HW 견적 템플릿 선택"')

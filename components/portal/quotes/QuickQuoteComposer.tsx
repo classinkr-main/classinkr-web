@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import {
   AlertCircle,
+  AlertTriangle,
   Check,
   Copy,
   Eye,
@@ -188,11 +189,12 @@ type QuickAddRailItemId =
   | "camera_t1"
   | "recording_studio"
   | "online_suite"
+  | "business_recharge"
   | "stand"
   | "wall_mount"
   | "bundle_86_t1_wall"
 
-type QuickAddRailGroup = "suite" | "panel" | "accessory"
+type QuickAddRailGroup = "package" | "software" | "panel" | "accessory"
 
 type QuickAddRailItem = {
   id: QuickAddRailItemId
@@ -205,22 +207,13 @@ type QuickAddRailItem = {
 }
 
 const QUICK_ADD_RAIL_ITEMS: QuickAddRailItem[] = [
-  // ── 수트 · 패키지 ──────────────────────────────────────────
-  {
-    id: "online_suite",
-    label: "구독형 AI Suite",
-    description: "월 구독",
-    price: getProductBySku("online-suite-monthly")?.unit_price ?? 400_000,
-    group: "suite",
-    badge: "SW 수트",
-    priceUnit: "/월",
-  },
+  // ── 패키지 상품 (수트 · 번들 · 세트) ─────────────────────────
   {
     id: "recording_studio",
     label: "올인원 녹화 세트",
     description: "OMO 830",
     price: getProductBySku("ai-studio-recording-set")?.unit_price ?? 8_300_000,
-    group: "suite",
+    group: "package",
     badge: "녹화 패키지",
   },
   {
@@ -228,8 +221,26 @@ const QUICK_ADD_RAIL_ITEMS: QuickAddRailItem[] = [
     label: '86" 번들',
     description: '86" + T1 + 벽걸이',
     price: getProductBySku("bundle-86-t1-wall")?.unit_price ?? 8_000_000,
-    group: "suite",
+    group: "package",
     badge: "인기 번들",
+  },
+  {
+    id: "online_suite",
+    label: "구독형 AI Suite",
+    description: "월 구독",
+    price: getProductBySku("online-suite-monthly")?.unit_price ?? 400_000,
+    group: "package",
+    badge: "학원 패키지",
+    priceUnit: "/월",
+  },
+  // ── 소프트웨어(SW) 단독 ────────────────────────────────────
+  {
+    id: "business_recharge",
+    label: "ClassIn Business 충전",
+    description: "크레딧 충전형 (수정 가능)",
+    price: 2_000_000,
+    group: "software",
+    badge: "SW 단독",
   },
   // ── 전자칠판 패널 ──────────────────────────────────────────
   {
@@ -506,7 +517,13 @@ function buildDefaultDealTitle({
 }) {
   const template = getStandardQuoteTemplate(templateId)
   const quantityUnit =
-    templateId === "online_suite" ? "월" : templateId === "recording_studio" ? "세트" : "대"
+    templateId === "online_suite"
+      ? "월"
+      : templateId === "recording_studio"
+        ? "세트"
+        : templateId === "business_recharge"
+          ? "건"
+          : "대"
   const subject = `${template.label} ${Math.max(1, quantity)}${quantityUnit}`
   return customerName?.trim() ? `${customerName.trim()} ${subject}` : subject
 }
@@ -860,6 +877,13 @@ export default function QuickQuoteComposer({
   const [noteLineOpen, setNoteLineOpen] = useState(false)
   const [noteLineTitle, setNoteLineTitle] = useState("")
   const [noteLineText, setNoteLineText] = useState("")
+  // 3대/4대 카테고리 필터 ("all" | "package" | "software" | "panel" | "accessory")
+  const [selectedRailCategory, setSelectedRailCategory] = useState<"all" | QuickAddRailGroup>("all")
+  // ClassIn Business 충전형: 200만원 미만 예외 발행 확인 모달 상태
+  const [underMinModalOpen, setUnderMinModalOpen] = useState(false)
+  const [pendingRechargeAmount, setPendingRechargeAmount] = useState<number | null>(null)
+  const [underMinConfirmed, setUnderMinConfirmed] = useState(false)
+  const [pendingSubmitAction, setPendingSubmitAction] = useState<CreateAction | null>(null)
 
   const isSoftwareQuote = isSoftwareQuoteTemplate(templateId)
   const activeProductLine: QuoteProductLine = isSoftwareQuote ? "software" : "hardware"
@@ -1013,6 +1037,10 @@ export default function QuickQuoteComposer({
   const baseLine = getBaseLine(quote)
   const baseQuantity = Math.max(1, Number(baseLine?.quantity ?? 1))
   const lineItemCount = quote.lineItems?.length ?? 0
+  const filteredRailItems = useMemo(() => {
+    if (selectedRailCategory === "all") return QUICK_ADD_RAIL_ITEMS
+    return QUICK_ADD_RAIL_ITEMS.filter((item) => item.group === selectedRailCategory)
+  }, [selectedRailCategory])
   const activeCustomerName =
     customerMode === "existing" ? selectedCustomerName ?? "" : newCustomerName.trim()
   const activeDealTitle = selectedDeal?.title ?? (newDealTitle.trim() || "새 거래 자동 생성")
@@ -1032,9 +1060,21 @@ export default function QuickQuoteComposer({
     customerMode === "existing" ? Boolean(fallbackExistingCustomer) : newCustomerName.trim().length > 0
   const canCreateQuote = customerReady && lineItemCount > 0
   const quantityUnitLabel =
-    templateId === "online_suite" ? "월" : templateId === "recording_studio" ? "세트" : "대"
+    templateId === "online_suite"
+      ? "월"
+      : templateId === "recording_studio"
+        ? "세트"
+        : templateId === "business_recharge"
+          ? "건"
+          : "대"
   const quantityHeading =
-    templateId === "online_suite" ? "구독 수량" : templateId === "recording_studio" ? "세트 수량" : "본체 수량"
+    templateId === "online_suite"
+      ? "구독 수량"
+      : templateId === "recording_studio"
+        ? "세트 수량"
+        : templateId === "business_recharge"
+          ? "충전 건수"
+          : "본체 수량"
   const readyChecks = [
     { label: "고객", value: activeCustomerName || "미선택", done: customerReady },
     { label: "거래", value: activeDealTitle, done: true },
@@ -1134,6 +1174,11 @@ export default function QuickQuoteComposer({
     setNoteLineOpen(false)
     setNoteLineTitle("")
     setNoteLineText("")
+    setSelectedRailCategory("all")
+    setUnderMinModalOpen(false)
+    setPendingRechargeAmount(null)
+    setUnderMinConfirmed(false)
+    setPendingSubmitAction(null)
     setError(null)
   }, [hasPrefillTarget, initialTemplateId, open, prefill?.customerId, prefill?.customerName, prefill?.dealId, today])
 
@@ -1274,7 +1319,108 @@ export default function QuickQuoteComposer({
     )
   }
 
+  const rechargeLine = (quote.lineItems ?? []).find(
+    (line) => line.itemCode === "classin-business-recharge" || line.optionGroupId === "main_product"
+  )
+  const currentRechargeAmount = rechargeLine?.unitPrice ?? 2_000_000
+
+  function applyRechargeAmount(amount: number, isConfirmed = false) {
+    const safeAmount = Math.max(0, amount)
+    if (safeAmount >= 2_000_000) {
+      setUnderMinConfirmed(false)
+    } else if (isConfirmed) {
+      setUnderMinConfirmed(true)
+    }
+
+    setQuote((current) => {
+      const currentItems = current.lineItems ?? []
+      const nextItems = currentItems.map((line) => {
+        if (line.itemCode === "classin-business-recharge" || line.optionGroupId === "main_product") {
+          const qty = line.quantity ?? 1
+          return {
+            ...line,
+            unitPrice: safeAmount,
+            lineSupplyAmount: safeAmount * qty,
+          }
+        }
+        return line
+      })
+      return finalizeStandardQuoteDetails(
+        {
+          ...current,
+          lineItems: nextItems,
+        },
+        templateId
+      )
+    })
+  }
+
+  function requestSetRechargeAmount(amount: number) {
+    const safeAmount = Math.max(0, amount)
+    if (safeAmount < 2_000_000) {
+      if (underMinConfirmed && currentRechargeAmount === safeAmount) return
+      setPendingRechargeAmount(safeAmount)
+      setUnderMinModalOpen(true)
+    } else {
+      applyRechargeAmount(safeAmount, false)
+    }
+  }
+
+  function confirmUnderMinRecharge() {
+    setUnderMinModalOpen(false)
+    if (pendingRechargeAmount != null) {
+      applyRechargeAmount(pendingRechargeAmount, true)
+    } else {
+      setUnderMinConfirmed(true)
+    }
+    const targetAction = pendingSubmitAction
+    setPendingRechargeAmount(null)
+    setPendingSubmitAction(null)
+
+    if (targetAction) {
+      setTimeout(() => {
+        void executeSubmit(targetAction)
+      }, 0)
+    }
+  }
+
+  function cancelUnderMinRecharge() {
+    setUnderMinModalOpen(false)
+    setPendingRechargeAmount(null)
+    setUnderMinConfirmed(false)
+    setPendingSubmitAction(null)
+    applyRechargeAmount(2_000_000, false)
+  }
+
+  function handleRechargeInputChange(rawValue: string) {
+    const parsed = parseNumericInput(rawValue) ?? 0
+    applyRechargeAmount(parsed, underMinConfirmed && parsed < 2_000_000)
+  }
+
+  function handleRechargeInputBlur(rawValue: string) {
+    const parsed = parseNumericInput(rawValue) ?? 0
+    if (parsed > 0 && parsed < 2_000_000 && !underMinConfirmed) {
+      setPendingRechargeAmount(parsed)
+      setUnderMinModalOpen(true)
+    }
+  }
+
   function handleQuickAdd(itemId: QuickAddRailItemId) {
+    if (itemId === "business_recharge") {
+      const preset = getStandardQuoteQuickPresets("business_recharge")[0]
+      const nextSelections = {
+        ...getStandardQuoteDefaultSelections("business_recharge"),
+        ...(preset?.optionSelections ?? {}),
+      }
+      updateTemplateShortcut(
+        "business_recharge",
+        nextSelections,
+        1,
+        preset?.id ?? "recharge_200"
+      )
+      return
+    }
+
     if (itemId === "recording_studio") {
       const preset = getStandardQuoteQuickPresets("recording_studio")[0]
       const nextSelections = {
@@ -1714,6 +1860,24 @@ export default function QuickQuoteComposer({
   }
 
   async function handleSubmit(action: CreateAction) {
+    if (submittingAction) return
+
+    // ClassIn Business 충전형이면서 200만원 미만이고 아직 확인 승인을 받지 않은 경우 확인 창 팝업
+    if (
+      templateId === "business_recharge" &&
+      currentRechargeAmount < 2_000_000 &&
+      !underMinConfirmed
+    ) {
+      setPendingRechargeAmount(currentRechargeAmount)
+      setPendingSubmitAction(action)
+      setUnderMinModalOpen(true)
+      return
+    }
+
+    await executeSubmit(action)
+  }
+
+  async function executeSubmit(action: CreateAction) {
     if (submittingAction) return
 
     const previewWindow = action === "save_and_preview" ? prepareQuotePreviewWindow() : null
@@ -2188,12 +2352,39 @@ export default function QuickQuoteComposer({
                     </div>
                   }
                 />
-                <div className="mt-2.5 space-y-2">
+                <div className="mt-2.5 space-y-2.5">
+                  <div className="flex flex-wrap items-center gap-1 border-b border-black/[0.06] pb-2">
+                    {[
+                      { id: "all", label: "전체" },
+                      { id: "package", label: "📦 패키지 상품" },
+                      { id: "software", label: "💻 SW 단독" },
+                      { id: "panel", label: "🖥️ 전자칠판" },
+                      { id: "accessory", label: "🎥 카메라·거치" },
+                    ].map((cat) => {
+                      const active = selectedRailCategory === cat.id
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => setSelectedRailCategory(cat.id as typeof selectedRailCategory)}
+                          className={`h-7 rounded-full px-2.5 text-[11px] font-semibold transition-colors ${
+                            active
+                              ? "bg-[#111110] text-white"
+                              : "bg-[#FAF9F5] text-[#615D59] hover:bg-[#f0efeb] hover:text-[#111110]"
+                          }`}
+                        >
+                          {cat.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+
                   <div className="flex flex-wrap items-center gap-1.5">
-                    {QUICK_ADD_RAIL_ITEMS.map((item) => {
+                    {filteredRailItems.map((item) => {
                       const active =
                         (item.id === "recording_studio" && templateId === "recording_studio") ||
                         (item.id === "online_suite" && templateId === "online_suite") ||
+                        (item.id === "business_recharge" && templateId === "business_recharge") ||
                         (item.id === "board_86" && templateId === "board_86" && !isBundleSelected) ||
                         (item.id === "board_75" && templateId === "board_75") ||
                         (item.id === "camera_t1" && templateId === "camera_t1") ||
@@ -2222,7 +2413,7 @@ export default function QuickQuoteComposer({
                               className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
                                 active
                                   ? "bg-[#084734] text-white"
-                                  : item.group === "suite"
+                                  : item.group === "software" || item.group === "package"
                                     ? "bg-[#ECFDF5] text-[#084734]"
                                     : "bg-[#f6f5f2] text-[#615D59]"
                               }`}
@@ -2235,12 +2426,145 @@ export default function QuickQuoteComposer({
                             <span className="hidden text-[11px] text-[#A39E98] sm:inline">{item.description}</span>
                           )}
                           <span className={`text-[11px] font-medium tabular-nums ${active ? "text-[#084734]" : "text-[#615D59]"}`}>
-                            {formatQuickAddPrice(item.price, item.priceUnit)}
+                            {item.id === "business_recharge" && templateId === "business_recharge"
+                              ? formatQuickAddPrice(currentRechargeAmount)
+                              : formatQuickAddPrice(item.price, item.priceUnit)}
                           </span>
                         </button>
                       )
                     })}
                   </div>
+
+                  {/* ClassIn Business 충전형 선택 시 전용 가격 직접 수정 & 빠른 금액 카드 */}
+                  {templateId === "business_recharge" && (
+                    <div className="rounded-[10px] border border-[#BDEFD8] bg-[#FAF9F5] p-3 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[12px] font-semibold text-[#111110]">충전 금액 설정</span>
+                          <span className="rounded-full bg-[#ECFDF5] border border-[#BDEFD8] px-2 py-0.5 text-[10px] font-bold text-[#084734]">
+                            가격 직접 수정 가능
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-[#A39E98]">
+                          최소 200만 · 50만 단위 권장
+                        </span>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5">
+                          <div className="relative flex-1">
+                            <Input
+                              type="number"
+                              min={100000}
+                              max={50000000}
+                              step={500000}
+                              value={currentRechargeAmount || ""}
+                              onChange={(e) => handleRechargeInputChange(e.target.value)}
+                              onBlur={(e) => handleRechargeInputBlur(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault()
+                                  handleRechargeInputBlur((e.target as HTMLInputElement).value)
+                                }
+                              }}
+                              className="h-9 pr-8 text-right font-mono text-[13px] font-bold tabular-nums text-[#111110]"
+                            />
+                            <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-[#615D59]">
+                              원
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => requestSetRechargeAmount(Math.max(100000, currentRechargeAmount - 500000))}
+                            className="h-9 rounded-[6px] border border-black/[0.08] bg-white px-2.5 text-[12px] font-semibold text-[#615D59] transition-colors hover:bg-[#F6F5F4] hover:text-[#111110]"
+                          >
+                            -50만
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => requestSetRechargeAmount(currentRechargeAmount + 500000)}
+                            className="h-9 rounded-[6px] border border-black/[0.08] bg-white px-2.5 text-[12px] font-semibold text-[#615D59] transition-colors hover:bg-[#F6F5F4] hover:text-[#111110]"
+                          >
+                            +50만
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => requestSetRechargeAmount(currentRechargeAmount + 1000000)}
+                            className="h-9 rounded-[6px] border border-black/[0.08] bg-white px-2.5 text-[12px] font-semibold text-[#615D59] transition-colors hover:bg-[#F6F5F4] hover:text-[#111110]"
+                          >
+                            +100만
+                          </button>
+                        </div>
+
+                        <div className="flex items-center justify-between px-0.5 text-[11px]">
+                          {currentRechargeAmount < 2000000 ? (
+                            underMinConfirmed ? (
+                              <span className="flex items-center gap-1 font-semibold text-[#A8741A]">
+                                <AlertTriangle className="h-3 w-3 shrink-0" />
+                                200만원 미만 예외 발행 건 (확인 승인 완료)
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 font-semibold text-[#B43E3E]">
+                                <AlertTriangle className="h-3 w-3 shrink-0" />
+                                기본 최소 기준(200만) 미만 금액 (확인 창 승인 필요)
+                              </span>
+                            )
+                          ) : currentRechargeAmount % 500000 !== 0 ? (
+                            <span className="font-semibold text-[#A8741A]">
+                              ⚠️ 500,000원 단위 권장 (정규 충전 단위)
+                            </span>
+                          ) : currentRechargeAmount > 50000000 ? (
+                            <span className="font-semibold text-[#B43E3E]">
+                              ⚠️ 최대 충전 상한은 50,000,000원입니다.
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 font-semibold text-[#084734]">
+                              <Check className="h-3 w-3 shrink-0" />
+                              유효한 충전 금액입니다 (50만원 단위)
+                            </span>
+                          )}
+                          <span className="text-[#A39E98]">최대 5,000만</span>
+                        </div>
+                      </div>
+
+                      <div className="border-t border-black/[0.06] pt-2">
+                        <div className="mb-1.5 flex items-center justify-between text-[11px]">
+                          <span className="text-[#A39E98]">빠른 금액 선택:</span>
+                          <span className="font-semibold text-[#A8741A]">
+                            200만 미만은 확인 창 1회 승인 필요
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[
+                            { label: "50만 (소액)", amount: 500000, isUnderMin: true },
+                            { label: "100만 (소액)", amount: 1000000, isUnderMin: true },
+                            { label: "200만 기본", amount: 2000000, isUnderMin: false },
+                            { label: "350만", amount: 3500000, isUnderMin: false },
+                            { label: "500만", amount: 5000000, isUnderMin: false },
+                            { label: "1,000만", amount: 10000000, isUnderMin: false },
+                          ].map((preset) => {
+                            const isSelected = currentRechargeAmount === preset.amount
+                            return (
+                              <button
+                                key={preset.amount}
+                                type="button"
+                                onClick={() => requestSetRechargeAmount(preset.amount)}
+                                className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                                  isSelected
+                                    ? "border-[#084734] bg-[#ECFDF5] text-[#084734] ring-1 ring-[#084734]/25"
+                                    : preset.isUnderMin
+                                      ? "border-[#ECD29C] bg-[#FBF1E0] text-[#A8741A] hover:bg-[#F8E8CA]"
+                                      : "border-black/[0.08] bg-white text-[#615D59] hover:border-[#BDEFD8] hover:text-[#111110]"
+                                }`}
+                              >
+                                {preset.label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-2.5 grid gap-2 sm:grid-cols-2">
@@ -3024,6 +3348,66 @@ export default function QuickQuoteComposer({
               >
                 <X className="h-4 w-4" />
               </button>
+            </div>
+          </div>
+        )}
+        {/* ── 200만원 미만 예외 발행 확인 모달 ────────────────── */}
+        {underMinModalOpen && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="under-min-modal-title"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs"
+          >
+            <div className="w-full max-w-md rounded-2xl border border-black/[0.08] bg-white p-5 shadow-2xl space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#FBF1E0] text-[#A8741A]">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
+                <div>
+                  <h4 id="under-min-modal-title" className="text-sm font-bold text-[#111110]">
+                    200만원 미만 예외 발행 확인
+                  </h4>
+                  <p className="mt-0.5 text-[11px] text-[#A39E98]">
+                    ClassIn Business 충전형 최소 기준 안내
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-[#ECD29C] bg-[#FAF9F5] p-3.5 text-xs text-[#615D59] space-y-2">
+                <p>
+                  설정하신 금액{" "}
+                  <strong className="font-bold text-[#084734] tabular-nums">
+                    {formatStandardQuoteCurrency(pendingRechargeAmount ?? currentRechargeAmount)}원
+                  </strong>
+                  은 ClassIn Business 충전형의 기본 최소 기준(2,000,000원) 미만입니다.
+                </p>
+                <p className="text-[11px] leading-relaxed text-[#A39E98]">
+                  • 소액 테스트 도입, 파일럿 학원, 추가 보충 충전 등 특별 승인 건인 경우 예외 발행이 가능합니다.
+                  <br />
+                  • 승인 시 고객 견적서에 해당 금액으로 정상 조판되어 발급됩니다.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs text-[#615D59]"
+                  onClick={cancelUnderMinRecharge}
+                >
+                  취소 (200만원으로 복원)
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-8 bg-[#084734] px-3.5 text-xs font-bold text-white transition-colors hover:bg-[#065c41]"
+                  onClick={confirmUnderMinRecharge}
+                >
+                  예외 발행 승인 및 계속
+                </Button>
+              </div>
             </div>
           </div>
         )}
