@@ -5,6 +5,7 @@ import {
   buildSimpleColumns,
   buildSimpleLedger,
   fiscalPace,
+  rowMatchesChips,
 } from "@/components/admin/branch/ledger/ledger-simple-logic"
 import type { LedgerRevenueRow } from "@/components/admin/branch/ledger/shared"
 
@@ -30,6 +31,17 @@ describe("장부 기본 화면 집계", () => {
     expect(columns[0].months).toHaveLength(6)
     expect(columns[1].current).toBe(true)
     expect(buildSimpleColumns(MONTHS, "2027-05")).toHaveLength(12)
+    const expanded = buildSimpleColumns(MONTHS, "2026-10", true)
+    expect(expanded).toHaveLength(12)
+    expect(expanded.filter((c) => c.past)).toHaveLength(6)
+  })
+
+  it("칩 필터는 같은 기준 안에서 OR, 기준끼리 AND", () => {
+    const pick = (keys: string[]) => rows.filter((r) => rowMatchesChips(r, new Set(keys))).map((r) => r.id)
+    expect(pick([])).toEqual(["sw", "hw", "b"])
+    expect(pick(["product:HW"])).toEqual(["hw"])
+    expect(pick(["contract:신규", "contract:갱신"])).toEqual(["sw", "hw", "b"])
+    expect(pick(["contract:신규", "channel:직접"])).toEqual(["b"])
   })
 
   it("묶기 없음은 고객 한 줄, 확도 합은 총액과 같다", () => {

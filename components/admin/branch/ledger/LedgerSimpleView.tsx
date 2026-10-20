@@ -11,7 +11,10 @@ import {
   buildManagerRollup,
   buildSimpleColumns,
   buildSimpleLedger,
+  chipKey,
   fiscalPace,
+  rowMatchesChips,
+  SIMPLE_FILTER_CHIPS,
   SIMPLE_GROUP_BY_OPTIONS,
   type SimpleGroupBy,
 } from "./ledger-simple-logic"
@@ -110,15 +113,16 @@ function AmountCell({ bucket, current, strong }: { bucket: RevMonthlyBucket; cur
   )
 }
 
-function DealTable({ rows, months, currentMonth, monthlyGoals, groupBy, onOpenRow }: {
+function DealTable({ rows, months, currentMonth, monthlyGoals, groupBy, expandPast, onOpenRow }: {
   rows: LedgerRevenueRow[]
   months: string[]
   currentMonth: string
   monthlyGoals: Map<string, number> | null
   groupBy: SimpleGroupBy
+  expandPast: boolean
   onOpenRow: (row: LedgerRevenueRow) => void
 }) {
-  const columns = useMemo(() => buildSimpleColumns(months, currentMonth), [months, currentMonth])
+  const columns = useMemo(() => buildSimpleColumns(months, currentMonth, expandPast), [months, currentMonth, expandPast])
   const ledger = useMemo(() => buildSimpleLedger(rows, columns, groupBy), [rows, columns, groupBy])
   const grouped = groupBy !== "none"
   const columnGoal = (months: string[]) => (monthlyGoals ? months.reduce((sum, month) => sum + (monthlyGoals.get(month) ?? 0), 0) : 0)
@@ -313,14 +317,25 @@ export interface LedgerSimpleViewProps {
 export default function LedgerSimpleView({ rows, months, currentMonth, monthlyGoals, personal, managerGoals, loading, onOpenRow, onOpenManager }: LedgerSimpleViewProps) {
   const [groupBy, setGroupBy] = useState<SimpleGroupBy>("none")
   const [teamView, setTeamView] = useState<"members" | "deals">("members")
+  const [chips, setChips] = useState<Set<string>>(() => new Set())
+  const [expandPast, setExpandPast] = useState(false)
   const pace = fiscalPace(months, currentMonth)
-  const total = useMemo(() => buildSimpleLedger(rows, buildSimpleColumns(months, currentMonth), "none").total, [rows, months, currentMonth])
-  const fyGoal = monthlyGoals ? months.reduce((sum, month) => sum + (monthlyGoals.get(month) ?? 0), 0) : 0
+  const shown = useMemo(() => rows.filter((row) => rowMatchesChips(row, chips)), [rows, chips])
+  const total = useMemo(() => buildSimpleLedger(shown, buildSimpleColumns(months, currentMonth), "none").total, [shown, months, currentMonth])
+  // 칩 필터는 목표(DSH)와 모집단이 달라진다 — 워크벤치 필터와 같은 규칙으로 목표 비교를 끈다.
+  const goals = chips.size > 0 ? null : monthlyGoals
+  const fyGoal = goals ? months.reduce((sum, month) => sum + (goals.get(month) ?? 0), 0) : 0
+  const hasPast = months.indexOf(currentMonth) > 0
+  const toggleChip = (key: string) => setChips((current) => {
+    const next = new Set(current)
+    if (!next.delete(key)) next.add(key)
+    return next
+  })
   const showMembers = !personal && teamView === "members"
 
   return (
     <div className="space-y-4">
-      <SummaryBand bucket={total} goal={fyGoal > 0 ? fyGoal : null} pace={pace} goalNote={loading ? "불러오는 중" : monthlyGoals ? "목표 미등록" : "필터 중 — 목표 비교 생략"} />
+      <SummaryBand bucket={total} goal={fyGoal > 0 ? fyGoal : null} pace={pace} goalNote={loading ? "불러오는 중" : goals ? "목표 미등록" : "필터 중 — 목표 비교 생략"} />
       <div className="flex flex-wrap items-center gap-2">
         {!personal ? <SegButtons label="표 형태" value={teamView} options={[{ id: "members", label: "담당자별" }, { id: "deals", label: "딜 전체" }]} onChange={setTeamView} /> : null}
         {!showMembers ? (
@@ -328,6 +343,30 @@ export default function LedgerSimpleView({ rows, months, currentMonth, monthlyGo
             <span className="text-[12.5px] text-[#615D59]">묶기</span>
             <SegButtons label="묶기 기준" value={groupBy} options={SIMPLE_GROUP_BY_OPTIONS} onChange={setGroupBy} />
           </>
+        ) : null}
+        <span className="mx-1 hidden h-5 w-px bg-[rgba(0,0,0,0.12)] sm:block" aria-hidden />
+        <div role="group" aria-label="필터" className="flex flex-wrap items-center gap-1.5">
+          {SIMPLE_FILTER_CHIPS.map((chip) => {
+            const key = chipKey(chip)
+            const on = chips.has(key)
+            return (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={on}
+                onClick={() => toggleChip(key)}
+                className={`min-h-8 rounded-full border px-3 text-[12.5px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25 ${on ? "border-[#084734] font-semibold text-[#084734]" : "border-[rgba(0,0,0,0.12)] text-[#37352F] hover:border-[rgba(0,0,0,0.3)]"}`}
+              >
+                {chip.label}
+              </button>
+            )
+          })}
+          {chips.size > 0 ? <button type="button" onClick={() => setChips(new Set())} className="min-h-8 px-2 text-[12.5px] text-[#084734] underline-offset-2 hover:underline">초기화</button> : null}
+        </div>
+        {!showMembers && hasPast ? (
+          <button type="button" aria-pressed={expandPast} onClick={() => setExpandPast((value) => !value)} className="min-h-8 px-2 text-[12.5px] text-[#615D59] underline-offset-2 hover:text-[#111110] hover:underline">
+            {expandPast ? "지난달 접기" : "지난달 펼치기"}
+          </button>
         ) : null}
         <span className="ml-auto flex items-center gap-3 text-[12px] text-[#615D59]">
           <span className="inline-flex items-center gap-1.5"><Mark kind="confirmed" />확정</span>
@@ -338,9 +377,9 @@ export default function LedgerSimpleView({ rows, months, currentMonth, monthlyGo
       {loading ? (
         <p role="status" className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white px-6 py-10 text-center text-[13px] text-[#615D59]">장부를 불러오는 중입니다.</p>
       ) : showMembers ? (
-        <ManagerTable rows={rows} months={months} currentMonth={currentMonth} managerGoals={managerGoals} pace={pace} onOpenManager={onOpenManager} />
+        <ManagerTable rows={shown} months={months} currentMonth={currentMonth} managerGoals={managerGoals} pace={pace} onOpenManager={onOpenManager} />
       ) : (
-        <DealTable rows={rows} months={months} currentMonth={currentMonth} monthlyGoals={monthlyGoals} groupBy={groupBy} onOpenRow={onOpenRow} />
+        <DealTable rows={shown} months={months} currentMonth={currentMonth} monthlyGoals={goals} groupBy={groupBy} expandPast={expandPast} onOpenRow={onOpenRow} />
       )}
       <p className="text-[12px] text-[#615D59]">
         {showMembers ? "담당자 이름을 누르면 그 사람 장부로 바뀝니다." : "고객 이름을 누르면 오른쪽에 상세·수정이 열립니다. 주차·칸 단위 편집은 REV 탭에서 합니다."}

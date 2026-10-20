@@ -50,9 +50,9 @@ function monthNumber(month: string) {
   return Number(month.split("-")[1])
 }
 
-/** 지난달(이번 달 이전)은 한 열로 접는다. 이번 달이 FY 밖이면(지난 FY 조회) 12개월을 그대로 둔다. */
-export function buildSimpleColumns(months: string[], currentMonth: string): SimpleColumn[] {
-  const currentIndex = months.indexOf(currentMonth)
+/** 지난달(이번 달 이전)은 한 열로 접는다(expandPast면 펼침). 이번 달이 FY 밖이면(지난 FY 조회) 12개월을 그대로 둔다. */
+export function buildSimpleColumns(months: string[], currentMonth: string, expandPast = false): SimpleColumn[] {
+  const currentIndex = expandPast ? -1 : months.indexOf(currentMonth)
   const columns: SimpleColumn[] = []
   if (currentIndex > 0) {
     const past = months.slice(0, currentIndex)
@@ -61,7 +61,8 @@ export function buildSimpleColumns(months: string[], currentMonth: string): Simp
     columns.push({ key: "past", label: past.length === 1 ? `${first}월` : `${first}–${last}월`, months: past, current: false, past: true })
   }
   for (const month of currentIndex > 0 ? months.slice(currentIndex) : months) {
-    columns.push({ key: month, label: `${monthNumber(month)}월`, months: [month], current: month === currentMonth, past: false })
+    const past = months.indexOf(month) < months.indexOf(currentMonth)
+    columns.push({ key: month, label: `${monthNumber(month)}월`, months: [month], current: month === currentMonth, past })
   }
   return columns
 }
@@ -83,6 +84,26 @@ export function channelLabel(row: Pick<LedgerRevenueRow, "dealType">) {
 export function productLabel(row: Pick<LedgerRevenueRow, "customer" | "productVersion" | "draftMetadata">) {
   const category = rowProductCategory(row)
   return category === "hardware" ? "HW" : category === "software" ? "SW" : "미분류"
+}
+
+export const SIMPLE_FILTER_CHIPS: Array<{ dimension: Exclude<SimpleGroupBy, "none">; label: string }> = [
+  { dimension: "product", label: "SW" },
+  { dimension: "product", label: "HW" },
+  { dimension: "contract", label: "신규" },
+  { dimension: "contract", label: "갱신" },
+  { dimension: "channel", label: "직접" },
+  { dimension: "channel", label: "채널" },
+]
+
+export const chipKey = (chip: { dimension: string; label: string }) => `${chip.dimension}:${chip.label}`
+
+/** 같은 기준 안에서는 OR, 기준끼리는 AND. 비어 있으면 전부 통과. */
+export function rowMatchesChips(row: LedgerRevenueRow, chips: Set<string>) {
+  if (chips.size === 0) return true
+  return (["product", "contract", "channel"] as const).every((dimension) => {
+    const picked = SIMPLE_FILTER_CHIPS.filter((chip) => chip.dimension === dimension && chips.has(chipKey(chip)))
+    return picked.length === 0 || picked.some((chip) => chip.label === groupLabel(row, dimension))
+  })
 }
 
 function groupLabel(row: LedgerRevenueRow, groupBy: SimpleGroupBy) {
