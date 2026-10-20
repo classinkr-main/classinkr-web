@@ -88,7 +88,7 @@ export default function RevenueFlowSection({
         </div>
         <Link
           href="/admin/branch/ledger"
-          className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-md border border-dashed border-[rgba(0,0,0,0.15)] bg-white px-2.5 py-1.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] md:min-h-0 md:min-w-0"
+          className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-1.5 text-[11px] font-bold text-[#084734] shadow-xs transition hover:border-[#084734]/25 hover:bg-[#F2FAF6] md:min-h-0 md:min-w-0"
         >
           수치 검수 →
         </Link>
@@ -132,7 +132,7 @@ export default function RevenueFlowSection({
               {formatMonthLabel(selectedMonth)} 주차별 확정·고확도·예정
             </p>
             {peakWeek && peakWeek.total > 0 && (
-              <span className="rounded-full border border-[#BDEFD8] bg-[#ECFDF5] px-2.5 py-0.5 text-[10.5px] font-bold text-[#084734]">
+              <span className="rounded-full border border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E7F6EE] px-2.5 py-0.5 text-[10.5px] font-bold text-[#084734] shadow-[0_1px_2px_rgba(8,71,52,0.04),inset_0_1px_0_rgba(255,255,255,0.7)]">
                 피크 {peakWeek.week} · {formatMoney(peakWeek.total)}
               </span>
             )}

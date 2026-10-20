@@ -129,7 +129,7 @@ export default function MultiSelect({
           title={isPinned ? "기본값 해제" : "현재 선택을 기본값으로 저장"}
           className={`inline-flex h-11 min-h-11 w-11 min-w-11 shrink-0 items-center justify-center rounded-full border transition disabled:cursor-not-allowed disabled:opacity-40 md:h-8 md:min-h-0 md:w-8 md:min-w-0 ${
             isPinned
-              ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+              ? "border-[#084734] bg-gradient-to-b from-[#F2FAF6] to-[#E8F6EF] text-[#084734] shadow-xs"
               : "border-[rgba(0,0,0,0.08)] bg-white text-[#111110]/35 hover:text-[#111110]/70"
           }`}
         >
@@ -149,7 +149,7 @@ export default function MultiSelect({
             aria-selected={selected.size === 0}
             onClick={() => onChange(new Set())}
             className={`flex min-h-11 w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[12px] transition md:min-h-0 ${
-              selected.size === 0 ? "bg-[#ECFDF5] text-[#084734]" : "text-[#111110]/65 hover:bg-[#FAFAF8]"
+              selected.size === 0 ? "bg-[#E8F6EF] font-bold text-[#084734]" : "text-[#111110]/65 hover:bg-[#FAFAF8]"
             }`}
           >
             <span>전체 보기</span>
@@ -165,7 +165,7 @@ export default function MultiSelect({
                 aria-selected={checked}
                 onClick={() => toggle(opt)}
                 className={`flex min-h-11 w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] transition md:min-h-0 ${
-                  checked ? "bg-[#ECFDF5] text-[#084734]" : "text-[#111110]/75 hover:bg-[#FAFAF8]"
+                  checked ? "bg-[#E8F6EF] font-bold text-[#084734]" : "text-[#111110]/75 hover:bg-[#FAFAF8]"
                 }`}
               >
                 <span className="truncate">{branchManagerLabel(opt)}</span>

@@ -38,21 +38,35 @@ export function GaugeRing({
   const dotY = size / 2 - r * Math.cos(angle)
   const isOver = overshoot > 0
   const dotBorder = isOver ? OVERSHOOT_COLOR : stop
+  const gradId = `gauge-grad-${Math.round(value)}-${Math.round(goal)}-${size}`
+
   return (
     <div className="relative" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(0,0,0,0.055)" strokeWidth={stroke} />
+      <svg width={size} height={size} className="-rotate-90 overflow-visible">
+        <defs>
+          <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor={isOver ? OVERSHOOT_COLOR : stop === RING_COLORS.green ? "#065C41" : stop} />
+            <stop offset="100%" stopColor={isOver ? "#D97706" : stop} />
+          </linearGradient>
+          <filter id={`gauge-shadow-${size}`} x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="1.5" stdDeviation="2.5" floodColor={isOver ? "rgba(245,158,11,0.3)" : "rgba(8,71,52,0.22)"} />
+          </filter>
+        </defs>
+        {/* Track */}
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#F0EFEA" strokeWidth={stroke} />
+        {/* Progress Arc */}
         <circle
           cx={size / 2}
           cy={size / 2}
           r={r}
           fill="none"
-          stroke={stop}
+          stroke={`url(#${gradId})`}
           strokeWidth={stroke}
           strokeDasharray={c}
           strokeDashoffset={offset}
           strokeLinecap="round"
-          style={{ transition: "stroke-dashoffset .8s cubic-bezier(.4,0,.2,1)" }}
+          filter={`url(#gauge-shadow-${size})`}
+          style={{ transition: "stroke-dashoffset 1s cubic-bezier(.16,1,.3,1)" }}
         />
         {isOver && (
           <circle
@@ -66,10 +80,11 @@ export function GaugeRing({
             strokeDashoffset={overshootOffset}
             strokeLinecap="round"
             className="gauge-overshoot-arc"
-            style={{ transition: "stroke-dashoffset .8s cubic-bezier(.4,0,.2,1)" }}
+            style={{ transition: "stroke-dashoffset 1s cubic-bezier(.16,1,.3,1)" }}
           />
         )}
       </svg>
+      {/* Indicator Dot */}
       <div
         className={`pointer-events-none absolute rounded-full bg-white ${isOver ? "gauge-overshoot-dot" : ""}`}
         style={{
@@ -79,16 +94,19 @@ export function GaugeRing({
           height: dotSize,
           transform: "translate(-50%, -50%)",
           border: `2.5px solid ${dotBorder}`,
-          transition: "left .8s cubic-bezier(.4,0,.2,1), top .8s cubic-bezier(.4,0,.2,1), border-color .4s ease",
+          boxShadow: isOver
+            ? "0 2px 8px rgba(245,158,11,0.4), 0 0 0 1px rgba(255,255,255,0.9)"
+            : "0 2px 6px rgba(0,0,0,0.18), 0 0 0 1px rgba(255,255,255,0.9)",
+          transition: "left 1s cubic-bezier(.16,1,.3,1), top 1s cubic-bezier(.16,1,.3,1), border-color .4s ease, box-shadow .4s ease",
         }}
       />
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span
-          className="text-[22px] font-bold leading-none tracking-[-0.02em]"
+          className="text-[22px] font-bold leading-none tracking-[-0.03em] tabular-nums"
           style={{ color: isOver ? OVERSHOOT_COLOR : "#111110" }}
         >
           {Math.round(pct)}
-          <span className="ml-px text-[11px] text-[#615D59]">%</span>
+          <span className="ml-0.5 text-[11px] font-semibold text-[#615D59]">%</span>
         </span>
       </div>
     </div>

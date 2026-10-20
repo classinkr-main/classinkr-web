@@ -318,7 +318,7 @@ export function CockpitDealList({
                     aria-pressed={selected}
                     className={`w-full rounded-lg border px-3.5 py-2.5 text-left transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 ${
                       selected
-                        ? "border-[#BDEFD8] border-l-[3.5px] border-l-[#084734] bg-[#ECFDF5] shadow-[0_1px_3px_rgba(8,71,52,0.06)]"
+                        ? "border-[#084734]/20 border-l-[3.5px] border-l-[#084734] bg-gradient-to-r from-[#F2FAF6] to-[#E8F6EF] shadow-[0_2px_4px_rgba(8,71,52,0.06),inset_0_1px_0_rgba(255,255,255,0.8)]"
                         : "border-[rgba(0,0,0,0.08)] border-l-[3.5px] border-l-transparent bg-white hover:border-[rgba(0,0,0,0.15)] hover:bg-[#FAFAF8]"
                     }`}
                   >

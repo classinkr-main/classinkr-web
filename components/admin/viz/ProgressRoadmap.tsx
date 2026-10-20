@@ -135,26 +135,27 @@ function HeroBody({
             </span>
           </div>
         </div>
-        <span className="inline-flex items-center gap-1 rounded-full bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-semibold text-[#084734]">
+        <span className="inline-flex items-center gap-1 rounded-full border border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] px-2.5 py-1 text-[11px] font-bold text-[#084734] shadow-[0_1px_2px_rgba(8,71,52,0.04),inset_0_1px_0_rgba(255,255,255,0.7)]">
           ↗ {Math.round(pct)}%
         </span>
       </div>
       <div className="relative pb-7">
         <div
-          className="group relative h-[14px] overflow-visible rounded-[7px] bg-[rgba(0,0,0,0.045)]"
+          className="group relative h-[14px] overflow-visible rounded-[7px] bg-[#EAE8E3] shadow-[inset_0_1px_2px_rgba(0,0,0,0.08)]"
           onMouseMove={showHoverTooltip ? handleMove : undefined}
           onMouseLeave={showHoverTooltip ? () => setHover(null) : undefined}
         >
           <div
-            className="absolute inset-y-0 left-0 rounded-[7px] transition-[width] duration-700"
+            className="absolute inset-y-0 left-0 rounded-[7px] transition-[width] duration-1000 ease-[cubic-bezier(0.16,1,0.3,1)]"
             style={{
               width: `${safe}%`,
               background: `linear-gradient(90deg, ${ROADMAP_COLORS.amber} 0%, #C99044 18%, ${ROADMAP_COLORS.olive} 38%, #5C9C4F 58%, ${ROADMAP_COLORS.green} 80%, ${ROADMAP_COLORS.greenHover} 100%)`,
+              boxShadow: "0 1px 3px rgba(8,71,52,0.25)",
             }}
           />
           <div
-            className="absolute -top-[3px] h-5 w-5 -translate-x-1/2 rounded-full border-[2.5px] border-[#084734] bg-white"
-            style={{ left: `${safe}%`, transition: "left .8s cubic-bezier(.4,0,.2,1)" }}
+            className="absolute -top-[3px] h-5 w-5 -translate-x-1/2 rounded-full border-[2.5px] border-[#084734] bg-white shadow-[0_2px_6px_rgba(0,0,0,0.22),0_0_0_1px_rgba(255,255,255,0.8)]"
+            style={{ left: `${safe}%`, transition: "left 1s cubic-bezier(.16,1,.3,1)" }}
           />
           {showHoverTooltip && hover && (
             <>
@@ -163,7 +164,7 @@ function HeroBody({
                 style={{ left: hover.x }}
               />
               <div
-                className="pointer-events-none absolute -top-9 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#111110] px-2 py-1 text-[10.5px] font-semibold text-white shadow-[0_2px_8px_rgba(0,0,0,0.18)]"
+                className="pointer-events-none absolute -top-10 -translate-x-1/2 whitespace-nowrap rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#111110]/95 px-2.5 py-1 text-[11px] font-bold text-white shadow-[0_4px_16px_rgba(0,0,0,0.2)] backdrop-blur-sm"
                 style={{ left: hover.x }}
               >
                 {hover.pct.toFixed(1)}% · {prefix}

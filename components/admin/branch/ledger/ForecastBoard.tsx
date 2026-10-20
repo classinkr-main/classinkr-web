@@ -167,7 +167,7 @@ export function buildForecastBoardModel(rows: LedgerRevenueRow[], month: string)
 // 좌측 확도 보더 색은 클래스 리터럴 대신 CONFIDENCE_TOKENS[…].color를 인라인 스타일로
 // 소비한다(확도 색 리터럴 재정의 금지 — confidence-tokens SSOT·디자인 토큰 가드 규약).
 const CARD_TONE_CLASS: Record<ConfidenceKey, string> = {
-  confirmed: "border border-[#BDEFD8] border-l-[3px] bg-[#ECFDF5]",
+  confirmed: "border border-[#084734]/15 border-l-[3px] bg-gradient-to-r from-[#F2FAF6] to-[#E8F6EF]",
   "high-confidence": "border border-[#BFDBFE] border-l-[3px] bg-[#EFF6FF]",
   expected: "border border-dashed border-[#ECD29C] bg-white",
 }
@@ -290,7 +290,7 @@ export function ForecastBoard({
                 title={formatMonthLabel(month.value)}
                 className={`flex-1 border-b border-[rgba(0,0,0,0.08)] px-0 py-3 text-center text-[12px] font-bold transition last:border-b-0 ${
                   active
-                    ? "border-l-2 border-l-[#084734] bg-[#ECFDF5] text-[#084734]"
+                    ? "border-l-2 border-l-[#084734] bg-gradient-to-r from-[#F2FAF6] to-[#E8F6EF] text-[#084734]"
                     : "text-[#A39E98] hover:bg-[#F6F5F4] hover:text-[#615D59]"
                 }`}
               >

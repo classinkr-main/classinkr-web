@@ -1004,7 +1004,7 @@ export function CrmLinkedBadge({
       className={
         variant === "inline"
           ? "shrink-0 text-[10px] font-bold text-[#7A520F] underline-offset-2 transition hover:text-[#A8741A] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
-          : "inline-flex shrink-0 items-center rounded-full border border-[#BDEFD8] bg-[#ECFDF5] px-1.5 text-[9px] font-bold leading-4 text-[#084734] underline-offset-2 transition hover:bg-[#BDEFD8]/40 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+          : "inline-flex shrink-0 items-center rounded-full border border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] px-1.5 text-[9px] font-bold leading-4 text-[#084734] shadow-2xs underline-offset-2 transition hover:bg-[#E2F4EB] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
       }
     >
       CRM ↗
@@ -1101,7 +1101,7 @@ export function RevMatrixPasteDialog({
             </p>
           )}
           <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] font-bold">
-            <span className="rounded-full border border-[#BDEFD8] bg-[#ECFDF5] px-2 py-0.5 text-[#084734]">
+            <span className="rounded-full border border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] px-2 py-0.5 text-[#084734] shadow-2xs">
               생성 {plan.applyCount.toLocaleString("ko-KR")}
             </span>
             {plan.lockedCount > 0 && (
@@ -1290,7 +1290,7 @@ export const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
   periodMonths?: Set<string> // 웨이브 5 — 항목 1(b): 선택 기간 열 accent
   h1Expanded?: boolean
 }) {
-  const rowBg = selected ? "bg-[#ECFDF5]" : "bg-white group-hover:bg-[#F9F9F8]"
+  const rowBg = selected ? "bg-[#EAF6F0]" : "bg-white group-hover:bg-[#F9F9F8]"
   const annual = group.annualTotal
   const annualTone = matrixBucketTone(annual)
   const weeklyByMonth = (month: string) => {
@@ -1314,7 +1314,7 @@ export const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
       title="클릭: 우측 요약 · ▸ 펼치기: 하위 딜행"
       aria-label={`${group.customer} ${group.rows.length}건 — 우측 요약 열기`}
       className={`group ${MATRIX_GROUP_ROW_HEIGHT[density]} cursor-pointer border-t border-[#EDECE8] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 ${
-        selected ? "bg-[#ECFDF5]" : "hover:bg-[#F9F9F8]"
+        selected ? "bg-[#EAF6F0]" : "hover:bg-[#F9F9F8]"
       }`}
     >
       <td
@@ -1459,7 +1459,7 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
 }) {
   const { row, draftRow, monthlyByMonth } = view
   const rowBg = active
-    ? "bg-[#ECFDF5]"
+    ? "bg-[#EAF6F0]"
     : draftRow
       ? "bg-[#FFFCF5] group-hover:bg-[#FBF1E0]"
       : grouped
@@ -1510,7 +1510,7 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
       }
     : null
   return (
-    <tr role="row" className={`group ${MATRIX_DEAL_ROW_HEIGHT[density]} border-t border-[#EDECE8] transition-colors ${active ? "bg-[#ECFDF5]" : draftRow ? "bg-[#FFFCF5] hover:bg-[#FBF1E0]" : grouped ? "bg-[#FAFAF8] hover:bg-[#F4F4F2]" : "hover:bg-[#F9F9F8]"}`}>
+    <tr role="row" className={`group ${MATRIX_DEAL_ROW_HEIGHT[density]} border-t border-[#EDECE8] transition-colors ${active ? "bg-[#EAF6F0]" : draftRow ? "bg-[#FFFCF5] hover:bg-[#FBF1E0]" : grouped ? "bg-[#FAFAF8] hover:bg-[#F4F4F2]" : "hover:bg-[#F9F9F8]"}`}>
       <td
         className={`sticky left-0 ${linkPopoverOpen ? "z-30" : "z-10"} border-r border-[#E5E7EB] pr-2.5 py-1.5 ${nested ? "border-l-2 border-l-[#CBD9D2] pl-10" : grouped ? "border-l-2 border-l-[#DDE7E2] pl-7" : "pl-2.5"} ${rowBg} shadow-[4px_0_12px_-2px_rgba(0,0,0,0.06)]`}
         style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}

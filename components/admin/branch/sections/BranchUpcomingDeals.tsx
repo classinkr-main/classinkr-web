@@ -79,9 +79,9 @@ export default function BranchUpcomingDeals({
               const day = d.getDate()
               // 캠페인 태그는 확도 신호가 아니므로 확도 예외 파랑(#1E5DA8) 대신 뉴트럴로.
               const tone =
-                it.kind === "deal" ? { bg: "#ECFDF5", fg: "#084734", label: "딜" }
-                : it.kind === "event" ? { bg: "#FBF1E0", fg: "#A8741A", label: "행사" }
-                : { bg: "#F6F5F4", fg: "#615D59", label: "캠페인" }
+                it.kind === "deal" ? { bg: "#E8F6EF", fg: "#084734", label: "딜", border: "rgba(8,71,52,0.18)" }
+                : it.kind === "event" ? { bg: "#FBF1E0", fg: "#A8741A", label: "행사", border: "rgba(168,116,26,0.2)" }
+                : { bg: "#F6F5F4", fg: "#615D59", label: "캠페인", border: "rgba(0,0,0,0.08)" }
               const clickable = it.kind === "deal" && typeof it.amount === "number" && onDealClick
               const handleClick = clickable
                 ? () => onDealClick({ id: `upcoming-${i}`, customer: it.title, date: it.date, amount: it.amount as number })
@@ -100,13 +100,13 @@ export default function BranchUpcomingDeals({
                   tabIndex={clickable ? 0 : undefined}
                   className={`grid min-h-11 items-center gap-3 rounded-lg px-2 py-2 md:min-h-0 ${clickable ? "cursor-pointer outline-none hover:bg-[#F6F5F4] focus-visible:ring-2 focus-visible:ring-[#084734]/40" : "hover:bg-[#FAFAF8]"}`}
                   style={{ gridTemplateColumns: "44px 1fr auto" }}>
-                  <div className="rounded-md py-1 text-center" style={{ background: tone.bg, color: tone.fg }}>
+                  <div className="rounded-md border py-1 text-center shadow-2xs" style={{ background: tone.bg, color: tone.fg, borderColor: tone.border }}>
                     <p className="text-[9px] font-semibold">{m}월</p>
                     <p className="text-[14px] font-bold leading-none">{day}</p>
                   </div>
                   <div className="min-w-0">
-                    <span className="inline-block rounded-full px-2 py-0.5 text-[9.5px] font-bold"
-                      style={{ background: tone.bg, color: tone.fg }}>{tone.label}</span>
+                    <span className="inline-block rounded-full border px-2 py-0.5 text-[9.5px] font-bold shadow-2xs"
+                      style={{ background: tone.bg, color: tone.fg, borderColor: tone.border }}>{tone.label}</span>
                     <p className="mt-1 truncate text-[12.5px] font-semibold text-[#111110]">{it.title}</p>
                   </div>
                   <div className="text-right">

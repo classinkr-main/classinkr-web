@@ -635,7 +635,6 @@ export default function BranchDashboardClient({
           <span className="text-xs text-[#615D59]">{pipelineManager === UNMAPPED_BRANCH_MEMBER ? "로그인 계정의 담당자 연결이 필요합니다." : pipelineManager ? `${pipelineManager} · 개인 목표와 데이터` : "명시적으로 선택한 팀·전체 범위"}</span>
         </div>
         <div className="mt-4 sm:mt-6">
-          {activeTab === "pipeline" ? <div className="mb-5"><CompassTeamSection resource={compass} month={selectedMonth} onMonthChange={setSelectedMonth} team={team} /></div> : null}
           {activeTab === "overview" && (
             <div
               id={activePanelId}
@@ -708,6 +707,7 @@ export default function BranchDashboardClient({
                   )}
                 </div>
               </section>
+              <CompassTeamSection resource={compass} month={selectedMonth} onMonthChange={setSelectedMonth} team={team} />
             </div>
           )}
 

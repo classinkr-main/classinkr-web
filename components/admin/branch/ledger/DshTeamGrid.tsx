@@ -266,9 +266,9 @@ function TeamRows({
   const isAll = team.team === "ALL"
   // Team KR(ALL) 행은 기존 Team KR · Total 행 스타일로 강조 — 달성률 셀은 판정 색을
   // 유지해야 해서 배경 강조만 공유한다.
-  const emphasis = isAll ? "bg-[#ECFDF5] font-extrabold" : ""
+  const emphasis = isAll ? "bg-[#EAF6F0] font-extrabold" : ""
   const labelClass = isAll
-    ? `${DSH_CELL} sticky left-0 z-[1] bg-[#ECFDF5] text-left font-extrabold text-[#084734]`
+    ? `${DSH_CELL} sticky left-0 z-[1] bg-[#EAF6F0] text-left font-extrabold text-[#084734]`
     : `${DSH_CELL} sticky left-0 z-[1] bg-white text-left font-semibold`
   const hasMembers = team.members.length > 0
   const cells =

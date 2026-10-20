@@ -558,7 +558,7 @@ export function InputRailSection({
                   role="status"
                   className={`rounded-md border px-3 py-2 text-[11px] font-semibold leading-relaxed ${
                     feedback.kind === "success"
-                      ? "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]"
+                      ? "border-[#084734]/15 bg-gradient-to-r from-[#F2FAF6] via-[#EBF7F1] to-[#F2FAF6] text-[#084734] shadow-xs"
                       : feedback.kind === "warning"
                         ? "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
                         : "border-[#F2B8B8] bg-[#FCE9E9] text-[#8F2C2C]"
@@ -605,7 +605,7 @@ export function InputRailSection({
                       void runSave(() => saveDraft("edit-row"))
                     }}
                     disabled={draftSaving || !canCreateEditDraft || draftFormInvalid || blockedByLock}
-                    className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-[#BDEFD8] bg-[#ECFDF5] px-3 text-[12px] font-bold text-[#084734] transition hover:bg-[#D1FAE5] disabled:cursor-not-allowed disabled:opacity-45"
+                    className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-[#084734]/20 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] px-3 text-[12px] font-bold text-[#084734] shadow-xs transition hover:bg-[#E2F4EB] disabled:cursor-not-allowed disabled:opacity-45"
                   >
                     {draftSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                     수정 초안

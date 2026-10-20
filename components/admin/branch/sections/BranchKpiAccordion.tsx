@@ -67,7 +67,7 @@ function MemberRow({ member, viewMode, ledgerHref }: {
       className="-mx-1.5 grid items-center gap-4 rounded-lg border-t border-[rgba(0,0,0,0.05)] px-1.5 py-2.5 transition hover:bg-white"
       style={{ gridTemplateColumns: "minmax(160px,180px) 1fr 1.3fr" }}>
       <div className="flex items-center gap-2.5">
-        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#ECFDF5] text-[12px] font-bold text-[#084734]">
+        <div className="flex h-7 w-7 items-center justify-center rounded-full border border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] text-[12px] font-bold text-[#084734] shadow-2xs">
           {member.member.slice(0, 1)}
         </div>
         <div className="min-w-0">

@@ -162,8 +162,6 @@ export default function BranchOverviewPanel({
         error={kpi.error}
       />
       <IntegrityStrip refreshKey={refreshKey} canRunAdminOperations={canRunAdminOperations} />
-      {evaluation}
-      <CoreKpiGrid data={summary.data} loading={false} error={null} />
       <DealMixSection summary={summary.data} loading={false} error={null} />
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]">
         <RevenueFlowSection manager={manager}
@@ -181,6 +179,8 @@ export default function BranchOverviewPanel({
           onDealClick={openUpcomingDeal}
         />
       </div>
+      <CoreKpiGrid data={summary.data} loading={false} error={null} />
+      {evaluation}
       {settlement}
       <button type="button" aria-expanded={showOperations} aria-controls="branch-operations-detail" onClick={() => setShowOperations((open) => !open)} className="flex min-h-11 w-full items-center justify-between rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-5 py-3 text-[13px] font-semibold text-[#31302E] focus-visible:outline-2 focus-visible:outline-[#084734]">
         캠페인 · 하드웨어 상세 · 전사 공용<span aria-hidden="true">{showOperations ? "−" : "+"}</span>

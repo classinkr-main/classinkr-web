@@ -57,7 +57,7 @@ interface SyncStatusBarProps {
 const CRM_CHIP_TONE: Record<RevSyncHealth, { border: string; text: string; dot: string }> = {
   low: { border: "border-[#EFC9B8]", text: "text-[#8A3F1D]", dot: "bg-[#B85C33]" },
   partial: { border: "border-[#ECD29C]", text: "text-[#7A520F]", dot: "bg-[#A8741A]" },
-  healthy: { border: "border-[#BDEFD8]", text: "text-[#084734]", dot: "bg-[#084734]" },
+  healthy: { border: "border-[#084734]/20", text: "text-[#084734]", dot: "bg-[#084734]" },
 }
 
 function relativeTime(iso: string, now: number): string {

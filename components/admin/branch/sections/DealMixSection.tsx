@@ -88,27 +88,41 @@ function CompareCard({ title, desc, a, b, aTone, bTone, prevMeta }: {
       {/* Stacked compare bar with goal-mix marker — 데이터 없을 땐 0%/100% 막대 대신
           중립 placeholder만 보여준다. */}
       {hasData ? (
-        <div className="relative mb-1.5 flex h-[22px] overflow-hidden rounded-md bg-[rgba(0,0,0,0.04)]">
-          <div className="flex items-center justify-end pr-1.5 text-[10px] font-bold text-white transition-[width] duration-700"
-            style={{ width: `${aPct}%`, background: aTone }}>
-            {aPct >= 18 && `${aPct.toFixed(0)}%`}
+        <div className="relative mb-2 flex h-[24px] overflow-hidden rounded-lg bg-[rgba(0,0,0,0.06)] shadow-[inset_0_1px_2px_rgba(0,0,0,0.08)]">
+          <div
+            className="relative flex items-center justify-end pr-2 text-[10px] font-bold text-white transition-[width] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
+            style={{
+              width: `${aPct}%`,
+              background: `linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 100%), ${aTone}`,
+            }}
+          >
+            {aPct >= 16 && <span className="drop-shadow-[0_1px_1px_rgba(0,0,0,0.3)]">{aPct.toFixed(0)}%</span>}
           </div>
-          <div className="flex items-center justify-start pl-1.5 text-[10px] font-bold text-white transition-[width] duration-700"
-            style={{ width: `${bPct}%`, background: bTone }}>
-            {bPct >= 18 && `${bPct.toFixed(0)}%`}
+          <div
+            className="relative flex items-center justify-start pl-2 text-[10px] font-bold text-white transition-[width] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
+            style={{
+              width: `${bPct}%`,
+              background: `linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 100%), ${bTone}`,
+            }}
+          >
+            {bPct >= 16 && <span className="drop-shadow-[0_1px_1px_rgba(0,0,0,0.3)]">{bPct.toFixed(0)}%</span>}
           </div>
           {/* 부문 목표가 원본에 있을 때만 목표선을 그린다. */}
-          {goalSum > 0 && <div title={`목표 믹스 ${aGoalPct.toFixed(0)}% / ${(100 - aGoalPct).toFixed(0)}%`}
-            className="pointer-events-none absolute -top-1 -bottom-1 w-px"
-            style={{
-              left: `${aGoalPct}%`,
-              backgroundImage: "linear-gradient(to bottom, rgba(0,0,0,0.5) 50%, transparent 50%)",
-              backgroundSize: "1px 3px",
-              backgroundRepeat: "repeat-y",
-            }} />}
+          {goalSum > 0 && (
+            <div
+              title={`목표 믹스 ${aGoalPct.toFixed(0)}% / ${(100 - aGoalPct).toFixed(0)}%`}
+              className="pointer-events-none absolute -bottom-1 -top-1 z-10 w-px"
+              style={{
+                left: `${aGoalPct}%`,
+                backgroundImage: "linear-gradient(to bottom, rgba(17,17,16,0.7) 50%, transparent 50%)",
+                backgroundSize: "1px 3px",
+                backgroundRepeat: "repeat-y",
+              }}
+            />
+          )}
         </div>
       ) : (
-        <div className="mb-1.5 flex h-[22px] items-center justify-center rounded-md bg-[rgba(0,0,0,0.04)] text-[10px] font-semibold text-[#9B9690]">
+        <div className="mb-2 flex h-[24px] items-center justify-center rounded-lg bg-[rgba(0,0,0,0.04)] text-[10px] font-semibold text-[#9B9690]">
           데이터 없음
         </div>
       )}

@@ -51,13 +51,13 @@ export const DRAFT_STATUS_FILTERS: Array<{ id: DraftStatusFilter; label: string 
 // 통일했다(톤/className은 이 함수 소관, 라벨 텍스트만 draftStatusLabel에 위임).
 export function draftStatusMeta(status: DraftStatus, reversed = false) {
   if (status === "checked") {
-    return { label: draftStatusLabel(status), className: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]" }
+    return { label: draftStatusLabel(status), className: "border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] text-[#084734] shadow-xs" }
   }
   if (status === "applied") {
     if (reversed) {
       return { label: draftStatusLabel(status, true), className: "border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] text-[#615D59]" }
     }
-    return { label: draftStatusLabel(status), className: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]" }
+    return { label: draftStatusLabel(status), className: "border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] text-[#084734] shadow-xs" }
   }
   if (status === "cancelled") {
     // (미사용) — DB CHECK 제약(20260630_branch_sales_ledger_drafts.sql)엔 유효 상태지만
@@ -360,7 +360,7 @@ export function DraftQueue({
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold ${
-          mode === "server" ? "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]" : "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
+          mode === "server" ? "border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] text-[#084734] shadow-xs" : "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
         }`}>
           <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${mode === "server" ? "bg-[#084734]" : "bg-[#D97706]"}`} />
           {modeLabel}
@@ -427,7 +427,7 @@ export function DraftQueue({
                 type="button"
                 onClick={() => setBulkApplyConfirm(true)}
                 disabled={bulkBusy !== null}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-[#084734] bg-white px-2 text-[10.5px] font-bold text-[#084734] shadow-2xs transition hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-[#084734] bg-white px-2 text-[10.5px] font-bold text-[#084734] shadow-2xs transition hover:bg-[#F2FAF6] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Send className="h-3 w-3 text-[#084734]" />
                 체크된 {bulkApplyPlan.count}건 적용
@@ -480,7 +480,7 @@ export function DraftQueue({
               {isSelfCheckedDraft(draft) && (
                 <span
                   title={SELF_CHECK_BADGE_TITLE}
-                  className="rounded-md border border-[#BDEFD8] bg-white px-1.5 py-0.5 text-[10px] font-bold text-[#084734]"
+                  className="rounded-md border border-[#084734]/15 bg-white px-1.5 py-0.5 text-[10px] font-bold text-[#084734] shadow-2xs"
                 >
                   {SELF_CHECK_BADGE_LABEL}
                 </span>
@@ -595,7 +595,7 @@ export function DraftQueue({
                 type="button"
                 onClick={() => void runToggle(draft.id)}
                 disabled={draft.status === "applied" || draft.status === "cancelled" || isRowBusy(draft.id)}
-                className="flex h-9 min-w-[72px] items-center justify-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-35"
+                className="flex h-9 min-w-[72px] items-center justify-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#F2FAF6] disabled:cursor-not-allowed disabled:opacity-35"
                 aria-label="초안 체크 상태 변경"
                 title="초안 체크 상태 변경"
               >
@@ -610,7 +610,7 @@ export function DraftQueue({
                 type="button"
                 onClick={() => setConfirmApplyDraft(draft)}
                 disabled={draft.status !== "checked" || mode !== "server" || draft.id.startsWith("local-") || isRowBusy(draft.id)}
-                className="flex h-9 min-w-[72px] items-center justify-center gap-1 rounded-md border border-[#BDEFD8] bg-[#ECFDF5] px-2.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#084734] hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+                className="flex h-9 min-w-[72px] items-center justify-center gap-1 rounded-md border border-[#084734]/20 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] px-2.5 text-[11px] font-bold text-[#084734] shadow-xs transition hover:bg-[#084734] hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
                 aria-label={`${draft.customer || "초안"} 적용`}
                 title="체크 완료 초안 적용"
               >

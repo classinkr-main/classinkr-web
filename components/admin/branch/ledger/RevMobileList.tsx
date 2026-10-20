@@ -90,7 +90,7 @@ export function RevMobileList({
                               <div
                                 key={row.id}
                                 className={`px-3 py-2.5 ${grouped ? "border-t border-[#F0F0EC]" : ""} ${
-                                  active ? "bg-[#ECFDF5]" : draftRow ? "bg-[#FFFCF5]" : ""
+                                  active ? "bg-[#EAF6F0]" : draftRow ? "bg-[#FFFCF5]" : ""
                                 }`}
                               >
                                 <div className="flex items-start justify-between gap-2">
@@ -134,7 +134,7 @@ export function RevMobileList({
                                     <button
                                       type="button"
                                       onClick={() => void loadDealDetail(row)}
-                                      className="mt-1 inline-flex items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 py-1 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+                                      className="mt-1 inline-flex items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 py-1 text-[11px] font-bold text-[#084734] transition hover:bg-[#F2FAF6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
                                       aria-label={`${row.customer} 상세 열기`}
                                     >
                                       상세

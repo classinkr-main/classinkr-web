@@ -593,7 +593,9 @@ function MapSourceStrip({ source, href, loading }: { source: HeatmapMapSource | 
   return (
     <div
       className={`flex flex-col gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3 sm:flex-row sm:items-center sm:justify-between ${
-        unavailable || source.isStale ? "bg-[#FFF9ED]" : "bg-[#ECFDF5]"
+        unavailable || source.isStale
+          ? "bg-[#FFF9ED]"
+          : "bg-gradient-to-r from-[#F2FAF6] via-[#EBF7F1] to-[#F2FAF6]"
       }`}
     >
       <div className="flex min-w-0 items-start gap-2.5">
@@ -616,7 +618,7 @@ function MapSourceStrip({ source, href, loading }: { source: HeatmapMapSource | 
       </div>
       <a
         href={href}
-        className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-md border border-[#B7DEC4] bg-white px-3 text-[11px] font-bold text-[#084734] transition hover:bg-[#F6F5F4]"
+        className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-md border border-[#084734]/20 bg-white/95 px-3 text-[11px] font-bold text-[#084734] shadow-xs transition hover:bg-[#F2FAF6]"
       >
         지도 원천 검수
         <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
@@ -639,7 +641,7 @@ function RegionMapSourcePanel({
     source.summary.regions.find((candidate) => candidate.label === region) ?? null
 
   return (
-    <div className="rounded-lg border border-[#D7EBDD] bg-[#ECFDF5] p-3">
+    <div className="rounded-xl border border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E8F6EF] p-3.5 shadow-[0_1px_3px_rgba(8,71,52,0.04),inset_0_1px_0_rgba(255,255,255,0.8)]">
       <div className="flex items-center justify-between gap-3">
         <p className="flex items-center gap-1.5 text-[11px] font-bold text-[#084734]">
           <Link2 className="h-3.5 w-3.5" aria-hidden="true" />

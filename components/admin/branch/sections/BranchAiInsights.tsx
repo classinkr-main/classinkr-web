@@ -29,7 +29,7 @@ type View = "internal" | "external"
 
 const TONE = {
   risk:        { bg: "#FCE9E9", fg: "#B43E3E", label: "리스크" },
-  opportunity: { bg: "#ECFDF5", fg: "#084734", label: "기회" },
+  opportunity: { bg: "#E8F6EF", fg: "#084734", label: "기회" },
   // "팀" 태그는 코칭/교육 등 팀 운영 액션 카테고리 — MKT 팀 자체를 가리키는 건
   // 아니지만, 기존에 쓰던 값이 팀 아이덴티티 올리브와 같아 SSOT(team-colors.ts)로
   // 일원화한다. 새 색을 만들지 않고 기존 시각을 그대로 승계.
@@ -321,8 +321,8 @@ export default function BranchAiInsights({ team, refreshKey, summary, canGenerat
       </div>
 
       {/* AI banner */}
-      <div className="flex items-center gap-3.5 rounded-[10px] border border-[#A7F3D0] bg-[#ECFDF5] px-4 py-3.5">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] bg-[#084734] text-[16px] font-bold text-white">AI</div>
+      <div className="flex items-center gap-3.5 rounded-xl border border-[#084734]/15 bg-gradient-to-r from-[#F2FAF6] via-[#EBF7F1] to-[#F2FAF6] px-4 py-3.5 shadow-[0_1px_3px_rgba(8,71,52,0.05),inset_0_1px_0_rgba(255,255,255,0.8)]">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] bg-gradient-to-b from-[#084734] to-[#063b2b] text-[15px] font-bold text-white shadow-[0_2px_6px_rgba(8,71,52,0.25)]">AI</div>
         <div className="flex-1">
           <p className="text-[13px] font-bold text-[#111110]">
             {view === "internal"

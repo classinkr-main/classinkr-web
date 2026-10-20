@@ -29,6 +29,53 @@ function compareText(a: string | null | undefined, b: string | null | undefined)
   return String(a ?? "").localeCompare(String(b ?? ""), "ko", { numeric: true, sensitivity: "base" })
 }
 
+function PacingChartTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ dataKey: string; name: string; value: number }>; label?: string }) {
+  if (!active || !payload?.length) return null
+  const actual = payload.find((p) => p.dataKey === "actual")?.value ?? 0
+  const goal = payload.find((p) => p.dataKey === "goal")?.value ?? 0
+  const trend = payload.find((p) => p.dataKey === "trend")?.value ?? 0
+  const pacingPct = goal > 0 ? (actual / goal) * 100 : null
+  return (
+    <div className="min-w-[190px] rounded-xl border border-[rgba(0,0,0,0.08)] bg-white/95 px-3.5 py-2.5 text-[11px] shadow-[0_12px_32px_rgba(17,17,16,0.14)] backdrop-blur-sm">
+      <div className="flex items-center justify-between border-b border-[rgba(0,0,0,0.06)] pb-1.5">
+        <span className="font-bold text-[#111110]">{label} 누적</span>
+        {pacingPct != null && (
+          <span className="rounded-full border border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] px-2 py-0.5 text-[10px] font-bold text-[#084734] shadow-2xs">
+            달성률 {pacingPct.toFixed(1)}%
+          </span>
+        )}
+      </div>
+      <div className="mt-2 space-y-1.5">
+        <div className="flex items-center justify-between">
+          <span className="inline-flex items-center gap-1.5 font-medium text-[#615D59]">
+            <span className="h-2 w-2 rounded-full bg-[#084734]" />
+            실적
+          </span>
+          <span className="font-bold tabular-nums text-[#111110]">{formatMoney(actual)}</span>
+        </div>
+        {trend > 0 && trend !== actual && (
+          <div className="flex items-center justify-between">
+            <span className="inline-flex items-center gap-1.5 font-medium text-[#615D59]">
+              <span className="h-2 w-2 rounded-full bg-[#A8741A]" />
+              예상 포함
+            </span>
+            <span className="font-bold tabular-nums text-[#A8741A]">{formatMoney(trend)}</span>
+          </div>
+        )}
+        {goal > 0 && (
+          <div className="flex items-center justify-between">
+            <span className="inline-flex items-center gap-1.5 font-medium text-[#615D59]">
+              <span className="h-2 w-2 rounded-full bg-[#A39E98]" />
+              목표
+            </span>
+            <span className="font-bold tabular-nums text-[#615D59]">{formatMoney(goal)}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function PacingChart({ summary }: { summary: BranchSummaryResponse | null }) {
   const data = useMemo(() => {
     const months = summary?.monthly_series?.months ?? []
@@ -56,24 +103,23 @@ export function PacingChart({ summary }: { summary: BranchSummaryResponse | null
       <AreaChart data={data} margin={{ top: 10, right: 18, left: -8, bottom: 0 }}>
         <defs>
           <linearGradient id="ledgerActual" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="5%" stopColor="#084734" stopOpacity={0.22} />
-            <stop offset="95%" stopColor="#084734" stopOpacity={0.02} />
+            <stop offset="0%" stopColor="#084734" stopOpacity={0.34} />
+            <stop offset="50%" stopColor="#084734" stopOpacity={0.10} />
+            <stop offset="100%" stopColor="#084734" stopOpacity={0.00} />
           </linearGradient>
           <linearGradient id="ledgerTrend" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="5%" stopColor="#A8741A" stopOpacity={0.2} />
-            <stop offset="95%" stopColor="#A8741A" stopOpacity={0.02} />
+            <stop offset="0%" stopColor="#A8741A" stopOpacity={0.24} />
+            <stop offset="65%" stopColor="#A8741A" stopOpacity={0.05} />
+            <stop offset="100%" stopColor="#A8741A" stopOpacity={0.00} />
           </linearGradient>
         </defs>
-        <CartesianGrid stroke="#E8E8E4" strokeDasharray="3 5" vertical={false} />
+        <CartesianGrid stroke="#ECEBE7" strokeDasharray="3 5" vertical={false} />
         <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#615D59" }} axisLine={false} tickLine={false} />
         <YAxis tick={{ fontSize: 11, fill: "#615D59" }} axisLine={false} tickLine={false} tickFormatter={(v) => formatMoney(Number(v))} width={58} />
-        <Tooltip
-          formatter={(value) => formatMoney(Number(value))}
-          contentStyle={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: 8, fontSize: 12 }}
-        />
-        <Area type="monotone" dataKey="goal" name="목표" stroke="#A39E98" strokeWidth={2} fill="transparent" strokeDasharray="4 4" />
-        <Area type="monotone" dataKey="trend" name="예상 포함" stroke="#A8741A" strokeWidth={2} fill="url(#ledgerTrend)" />
-        <Area type="monotone" dataKey="actual" name="실적" stroke="#084734" strokeWidth={2.4} fill="url(#ledgerActual)" />
+        <Tooltip content={<PacingChartTooltip />} cursor={{ stroke: "rgba(8,71,52,0.2)", strokeWidth: 1, strokeDasharray: "3 3" }} />
+        <Area type="monotone" dataKey="goal" name="목표" stroke="#A39E98" strokeWidth={1.75} fill="transparent" strokeDasharray="4 4" animationDuration={1000} animationEasing="ease-out" />
+        <Area type="monotone" dataKey="trend" name="예상 포함" stroke="#A8741A" strokeWidth={2} fill="url(#ledgerTrend)" animationDuration={1100} animationEasing="ease-out" activeDot={{ r: 4, stroke: "#FFFFFF", strokeWidth: 1.5, fill: "#A8741A" }} />
+        <Area type="monotone" dataKey="actual" name="실적" stroke="#084734" strokeWidth={2.5} fill="url(#ledgerActual)" animationDuration={1200} animationEasing="ease-out" activeDot={{ r: 5, stroke: "#FFFFFF", strokeWidth: 2, fill: "#084734" }} />
       </AreaChart>
     </ResponsiveContainer>
   )
@@ -260,7 +306,7 @@ function makeWeekTotalLabel(peakValue: number) {
       const pillY = y - 23
       return (
         <g>
-          <rect x={x - pillW / 2} y={pillY} width={pillW} height={pillH} rx={8} fill="#ECFDF5" stroke="#BDEFD8" />
+          <rect x={x - pillW / 2} y={pillY} width={pillW} height={pillH} rx={8} fill="#E8F6EF" stroke="#084734" strokeOpacity={0.2} />
           <text
             x={x}
             y={pillY + pillH / 2}

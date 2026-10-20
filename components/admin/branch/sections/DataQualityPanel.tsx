@@ -137,8 +137,8 @@ const SEVERITY_TONE: Record<Severity, {
   info: {
     label: "참고",
     dot: "bg-[#084734]",
-    chip: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]",
-    row: "border-[#BDEFD8] bg-[#ECFDF5]/70 text-[#084734]",
+    chip: "border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] text-[#084734] shadow-xs",
+    row: "border-[#084734]/15 bg-gradient-to-r from-[#F2FAF6]/90 via-[#EBF7F1]/70 to-[#F2FAF6]/90 text-[#084734]",
   },
 }
 
@@ -307,7 +307,7 @@ export default function DataQualityPanel({
               <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">
                 {isDev ? "지사 데이터 품질 점검" : "데이터 품질 점검"}
               </h2>
-              <span className="inline-flex items-center gap-1 rounded-full border border-[#BDEFD8] bg-[#ECFDF5] px-2 py-0.5 text-[10.5px] font-bold text-[#084734]">
+              <span className="inline-flex items-center gap-1 rounded-full border border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] px-2.5 py-0.5 text-[10.5px] font-bold text-[#084734] shadow-[0_1px_2px_rgba(8,71,52,0.04),inset_0_1px_0_rgba(255,255,255,0.8)]">
                 <CheckCircle2 className="h-3 w-3" />
                 통과 {counts.passed}
               </span>
@@ -381,7 +381,7 @@ export default function DataQualityPanel({
         )}
 
         {(effIssues ?? []).length === 0 && !effError && (
-          <div className="rounded-lg border border-[#BDEFD8] bg-[#ECFDF5] p-4 text-[12px] leading-relaxed text-[#084734]">
+          <div className="rounded-xl border border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E8F6EF] p-4 text-[12px] leading-relaxed text-[#084734] shadow-[0_1px_3px_rgba(8,71,52,0.04),inset_0_1px_0_rgba(255,255,255,0.8)]">
             현재 검출된 데이터 품질 이슈가 없습니다. 분석 입력 데이터가 정상 범위로 보입니다.
           </div>
         )}

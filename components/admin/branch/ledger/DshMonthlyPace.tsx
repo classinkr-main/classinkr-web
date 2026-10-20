@@ -111,7 +111,7 @@ export function DshMonthlyPace({ breakdown, loading = false }: DshMonthlyPacePro
   // 현재 회계월 열 배경 — 헤더는 진하게, 본문 셀은 같은 틴트로 세로 스트립을 만든다
   // (좁은 1열이라 그린 액센트 허용 범위).
   const currentColumnClass = (month: DshMonthPace, base: string) =>
-    month.isCurrent ? `${base} bg-[#ECFDF5]` : base
+    month.isCurrent ? `${base} bg-[#EAF6F0]` : base
 
   let annualSummary: ReactNode = null
   if (pace) {
@@ -174,7 +174,7 @@ export function DshMonthlyPace({ breakdown, loading = false }: DshMonthlyPacePro
                     <th
                       key={month.ym}
                       className={`${DSH_CELL} font-bold ${
-                        month.isCurrent ? "bg-[#ECFDF5] text-[#084734]" : "bg-[#F6F5F4]"
+                        month.isCurrent ? "bg-[#EAF6F0] text-[#084734]" : "bg-[#F6F5F4]"
                       }`}
                       title={month.isCurrent ? `${month.ym} — 현재 회계월` : month.ym}
                     >

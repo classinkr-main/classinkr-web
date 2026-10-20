@@ -93,7 +93,7 @@ export default function ActivityBottleneckSection({
         </div>
         <Link
           href={legacy ? "/admin/branch/ledger?team=CSM" : "/admin/branch/ledger"}
-          className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-md border border-dashed border-[rgba(0,0,0,0.15)] bg-white px-2.5 py-1.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] md:min-h-0 md:min-w-0"
+          className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-md border border-dashed border-[rgba(0,0,0,0.15)] bg-white px-2.5 py-1.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#F2FAF6] md:min-h-0 md:min-w-0"
         >
           딜 수치 편집 →
         </Link>

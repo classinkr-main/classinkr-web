@@ -3094,7 +3094,7 @@ export default function SalesLedgerWorkbench({
                   className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${
                     dbImportError
                       ? "border-[#F2B8B8] bg-[#FCE9E9] text-[#8F2C2C]"
-                      : "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]"
+                      : "border-[#084734]/15 bg-gradient-to-r from-[#F2FAF6] via-[#EBF7F1] to-[#F2FAF6] text-[#084734] shadow-xs"
                   }`}
                 >
                   {dbImportError ? `⚠ 장부 임포트 재캡처 실패 — 이전 캡처 표시 중: ${dbImportError}` : dbImportNotice}
@@ -3163,7 +3163,7 @@ export default function SalesLedgerWorkbench({
                     <button
                       type="button"
                       onClick={() => setSelectedMonth(ymKeyUtc(new Date()))}
-                      className="rounded-md bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-bold text-[#084734] transition hover:bg-[#D1FAE5]"
+                      className="rounded-md border border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] px-2.5 py-1 text-[11px] font-bold text-[#084734] shadow-2xs transition hover:bg-[#E2F4EB]"
                     >
                       이번 달로
                     </button>
@@ -3343,7 +3343,7 @@ export default function SalesLedgerWorkbench({
                 {/* [Row 1] 타이틀, 정렬 드롭다운 & 방향, 도움말 가이드 호버 */}
                 <div className="relative z-30 flex flex-wrap items-center justify-between gap-3.5 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5 bg-[#FAFAF8]/50">
                   <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ECFDF5] text-[#084734]">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] text-[#084734] shadow-2xs">
                       <FileSpreadsheet className="h-4 w-4" />
                     </div>
                     <h2 className="text-[16px] font-bold text-[#111110] tracking-tight">REV 매출 장부</h2>
@@ -3492,7 +3492,7 @@ export default function SalesLedgerWorkbench({
                       aria-expanded={advancedFiltersOpen}
                       className={`inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-[12px] font-bold transition ${
                         advancedFiltersOpen || revStatusFilter !== "ALL" || revDealTypeFilter !== "ALL" || revOriginFilter !== "all" || revForecastFilter !== "all"
-                          ? "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]"
+                          ? "border-[#084734]/20 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] text-[#084734] shadow-xs"
                           : "border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#111110]"
                       }`}
                     >
@@ -3773,13 +3773,13 @@ export default function SalesLedgerWorkbench({
                                 isSelectedMonth
                                   ? isExpanded
                                     ? "bg-[#E6F7F0] border-t-2 border-t-[#084734]"
-                                    : "bg-[#ECFDF5] border-t-2 border-t-[#084734]"
+                                    : "bg-gradient-to-b from-[#F2FAF6] to-[#E8F6EF] border-t-2 border-t-[#084734]"
                                   : isExpanded
                                     ? "bg-[#F4F9F6]"
                                     : column.current
                                       ? "bg-[#F0FDF4]"
                                       : isPeriodColumn
-                                        ? "bg-[#ECFDF5]/40"
+                                        ? "bg-[#F2FAF6]/60"
                                         : "bg-[#F8F8F7] hover:bg-[#F0EFEB]"
                               }`}
                               style={{ width, minWidth: width }}
@@ -3787,7 +3787,7 @@ export default function SalesLedgerWorkbench({
                               {isExpanded ? (
                                 <div className="flex flex-col">
                                   {/* 상단: 월 타이틀 & 접기 버튼 */}
-                                  <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-[#BDEFD8]/70">
+                                  <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-[#084734]/15">
                                     <div className="flex items-center gap-1.5">
                                       <span className={`text-[11.5px] ${isSelectedMonth ? "font-extrabold text-[#084734]" : "font-bold text-[#084734]"}`}>
                                         {column.label}
@@ -3797,7 +3797,7 @@ export default function SalesLedgerWorkbench({
                                           기준
                                         </span>
                                       )}
-                                      <span className="rounded bg-[#ECFDF5] border border-[#BDEFD8] px-1 py-0.2 text-[9px] font-bold text-[#084734]">
+                                      <span className="rounded border border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] px-1 py-0.2 text-[9px] font-bold text-[#084734] shadow-2xs">
                                         주차 상세
                                       </span>
                                     </div>
@@ -3805,7 +3805,7 @@ export default function SalesLedgerWorkbench({
                                       type="button"
                                       onClick={() => toggleRevMonth(column.month)}
                                       title={`${formatMonthLabel(column.month)} 주차 접기`}
-                                      className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9.5px] font-bold text-[#084734] bg-white border border-[#BDEFD8] hover:bg-[#ECFDF5] transition shadow-xs"
+                                      className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9.5px] font-bold text-[#084734] bg-white border border-[#084734]/20 hover:bg-[#F2FAF6] transition shadow-xs"
                                     >
                                       <span>접기</span>
                                       <ChevronDown className="h-3 w-3 rotate-180 text-[#084734]" />
@@ -3824,7 +3824,7 @@ export default function SalesLedgerWorkbench({
                                         {week}
                                       </span>
                                     ))}
-                                    <span className="border-l border-[#BDEFD8] bg-[#ECFDF5] py-1 text-center font-bold text-[#084734]">
+                                    <span className="border-l border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E8F6EF] py-1 text-center font-bold text-[#084734]">
                                       월계
                                     </span>
                                   </div>
@@ -4067,7 +4067,7 @@ export default function SalesLedgerWorkbench({
                       {" "}· {revRangeStart.toLocaleString("ko-KR")}-{revRangeEnd.toLocaleString("ko-KR")}곳 표시
                     </span>
                     {additiveAppliedDraftRows.length > 0 && (
-                      <span className="inline-flex items-center rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-bold text-[#084734]">
+                      <span className="inline-flex items-center rounded-full border border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] px-2 py-0.5 text-[11px] font-bold text-[#084734] shadow-2xs">
                         DB 신규 반영 {additiveAppliedDraftRows.length.toLocaleString("ko-KR")}건
                       </span>
                     )}
@@ -4340,7 +4340,7 @@ export default function SalesLedgerWorkbench({
                 <div>
                   <div className="flex items-start justify-between gap-3">
                     <p className="min-w-0 truncate text-[15px] font-bold tracking-[-0.01em] text-[#111110]">{selectedGroup.customer}</p>
-                    <span className="shrink-0 rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[10.5px] font-bold text-[#084734]">
+                    <span className="shrink-0 rounded-full border border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] px-2 py-0.5 text-[10.5px] font-bold text-[#084734] shadow-2xs">
                       {selectedGroup.rows.length}건 통합
                     </span>
                   </div>
@@ -4551,7 +4551,7 @@ export default function SalesLedgerWorkbench({
                         team/period 컨텍스트를 동봉(항목 9) — 필터를 좁혀 보던 도중에도 그대로 이어진다. */}
                     <Link
                       href={pipelineHref}
-                      className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-[#BDEFD8] bg-[#ECFDF5] px-3 text-[11px] font-bold text-[#084734] transition hover:bg-[#D1FAE5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
+                      className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-[#084734]/20 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] px-3 text-[11px] font-bold text-[#084734] shadow-xs transition hover:bg-[#E2F4EB] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
                     >
                       <Users className="h-3.5 w-3.5" />
                       KPI 보기 →
@@ -4631,9 +4631,9 @@ export default function SalesLedgerWorkbench({
                   </div>
 
                   {selectedMember && (
-                    <div className="mt-3 rounded-lg border border-[#BDEFD8] bg-[#ECFDF5] p-3">
+                    <div className="mt-3 rounded-xl border border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E8F6EF] p-3 shadow-[0_1px_3px_rgba(8,71,52,0.04),inset_0_1px_0_rgba(255,255,255,0.8)]">
                       <p className="text-[12px] font-bold text-[#084734]">{selectedMember.member} KPI</p>
-                      <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-[#084734]">
+                      <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] font-semibold text-[#084734]">
                         <span>달성률 {formatPercent(selectedMember.achievement_pct)}</span>
                         <span>딜 {selectedMember.deals_confirmed}/{selectedMember.deals_total}</span>
                         <span>신규 {selectedMember.new_renew.new}</span>
@@ -4656,7 +4656,7 @@ export default function SalesLedgerWorkbench({
                           }))}
                           className={`rounded-md border px-2 py-2 text-left transition ${
                             draftForm.month === month.value
-                              ? "border-[#084734] bg-[#ECFDF5]"
+                              ? "border-[#084734] bg-gradient-to-b from-[#F2FAF6] to-[#E8F6EF] shadow-2xs"
                               : month.amount > 0
                                 ? "border-[rgba(0,0,0,0.08)] bg-white hover:bg-[#FAFAF8]"
                                 : "border-[rgba(0,0,0,0.05)] bg-[#FAFAF8] text-[#A39E98]"

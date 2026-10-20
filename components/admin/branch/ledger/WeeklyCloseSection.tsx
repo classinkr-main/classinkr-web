@@ -72,7 +72,9 @@ export function WeeklyCloseSection({
 
                   {(wcNotice || wcError) && (
                     <div className={`mb-3 rounded-md border px-3 py-2 text-[11.5px] font-semibold ${
-                      wcError ? "border-[#F2B8B8] bg-[#FCE9E9] text-[#8F2C2C]" : "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]"
+                      wcError
+                        ? "border-[#F2B8B8] bg-[#FCE9E9] text-[#8F2C2C]"
+                        : "border-[#084734]/15 bg-gradient-to-r from-[#F2FAF6] via-[#EBF7F1] to-[#F2FAF6] text-[#084734] shadow-xs"
                     }`}>
                       {wcError ?? wcNotice}
                     </div>

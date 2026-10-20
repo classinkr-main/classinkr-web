@@ -400,7 +400,7 @@ export function productCategoryMeta(category: RevProductCategory) {
     return {
       label: "SW",
       shortLabel: "SW",
-      className: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]",
+      className: "border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] text-[#084734] shadow-xs",
       color: "#084734",
     }
   }
@@ -421,7 +421,7 @@ export function productCategoryMeta(category: RevProductCategory) {
     return {
       label: "SW",
       shortLabel: "SW",
-      className: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]",
+      className: "border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] text-[#084734] shadow-xs",
       color: "#084734",
     }
   }
@@ -443,7 +443,7 @@ export function ProductCategoryPill({ category, compact = false }: { category: R
 }
 
 export function kpiStatusTone(pct: number) {
-  if (pct >= 100) return { label: "초과", className: "bg-[#ECFDF5] text-[#084734]" }
+  if (pct >= 100) return { label: "초과", className: "bg-[#E8F6EF] text-[#084734] font-bold" }
   if (pct >= 75) return { label: "순항", className: "bg-[#F6F5F4] text-[#615D59]" }
   return { label: "주의", className: "bg-[#FBF1E0] text-[#7A520F]" }
 }
@@ -675,7 +675,7 @@ export function buildRevWeekProjection(rows: LedgerRevenueRow[], month: string):
 
 export function WeeklySourceBadge({ source }: { source: RevWeeklySource }) {
   const meta: Record<RevWeeklySource, { label: string; className: string }> = {
-    explicit: { label: "주차 입력", className: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]" },
+    explicit: { label: "주차 입력", className: "border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] text-[#084734] shadow-xs" },
     inferred: { label: "일자 추정", className: "border-[#D9D6D0] bg-[#F6F5F4] text-[#615D59]" },
     "month-only": { label: "월합계만", className: "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]" },
     empty: { label: "금액 없음", className: "border-[rgba(0,0,0,0.08)] bg-white text-[#615D59]" },
@@ -980,7 +980,7 @@ export function BreakdownNumbersTable({
               <tr
                 key={row.id}
                 className={`border-t border-[#F0F0EC] ${clickable ? "cursor-pointer hover:bg-[#FAFAF8]" : ""} ${
-                  active ? "bg-[#ECFDF5]" : ""
+                  active ? "bg-[#EAF6F0]" : ""
                 } ${clickable ? "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40" : ""}`}
                 {...(clickable
                   ? {
@@ -1072,7 +1072,7 @@ export function RevWeekNumbersTable({
               <th key={week.week} className={`px-2 py-2 font-bold ${index === peakIndex ? "text-[#084734]" : ""}`}>
                 {week.week}
                 {index === peakIndex && (
-                  <span className="ml-1 rounded-full bg-[#ECFDF5] px-1.5 py-0.5 text-[9px] text-[#084734]">피크</span>
+                  <span className="ml-1 rounded-full border border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] px-1.5 py-0.5 text-[9px] font-bold text-[#084734] shadow-2xs">피크</span>
                 )}
               </th>
             ))}
@@ -1255,7 +1255,7 @@ export function DshMonthlyNumbersTable({ rows, selectedMonth }: { rows: MonthlyP
                   ? "text-[#111110]"
                   : "text-[#A8741A]"
             return (
-              <tr key={row.month} className={`border-t border-[#F0F0EC] ${selected ? "bg-[#ECFDF5]" : ""}`}>
+              <tr key={row.month} className={`border-t border-[#F0F0EC] ${selected ? "bg-[#EAF6F0]" : ""}`}>
                 <td className="py-2 pr-2 text-left">
                   <span className="font-bold text-[#111110]">{formatMonthLabel(row.month)}</span>
                   {selected && <span className="ml-1.5 rounded-full bg-white px-1.5 py-0.5 text-[9px] font-bold text-[#084734]">선택</span>}

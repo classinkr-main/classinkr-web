@@ -249,7 +249,7 @@ export function RevAuxAnalysisSection({
                           REV w1-w5 입력 기준 · 월합계만 입력된 행은 W5 열에 합산 · 주차 흐름 차트는 KR Team 개요
                         </p>
                       </div>
-                      <span className="rounded-full border border-[#BDEFD8] bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-bold text-[#084734]">
+                      <span className="rounded-full border border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] px-2.5 py-1 text-[11px] font-bold text-[#084734] shadow-xs">
                         피크 {revPeakWeek?.week ?? "-"} · {formatMoney(revPeakWeek?.total)}
                       </span>
                     </div>

@@ -296,7 +296,7 @@ export function DshNumericGrid({ breakdown, view, onViewChange, loading = false 
               title={rawToggleDisabled ? undefined : "셀을 hover하지 않아도 반올림 없는 원값을 표에서 바로 확인합니다."}
               className={`rounded-md border px-3 py-1.5 text-[12px] font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${
                 showRawValue && !rawToggleDisabled
-                  ? "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]"
+                  ? "border-[#084734]/20 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] text-[#084734] shadow-xs"
                   : "border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:text-[#111110]"
               }`}
             >
@@ -322,7 +322,7 @@ export function DshNumericGrid({ breakdown, view, onViewChange, loading = false 
           </div>
           <Link
             href="/admin/branch"
-            className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-[rgba(0,0,0,0.15)] bg-white px-3 py-1.5 text-[12px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
+            className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-[rgba(0,0,0,0.15)] bg-white px-3 py-1.5 text-[12px] font-bold text-[#084734] transition hover:bg-[#F2FAF6] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
           >
             차트로 보기 → KR Team 개요
           </Link>

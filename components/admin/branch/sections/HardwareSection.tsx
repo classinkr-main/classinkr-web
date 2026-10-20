@@ -29,7 +29,7 @@ const COLORS = {
 // not a threshold; previously deriving status from io/sheet ratio gave false
 // "critical" for healthy items (e.g., IFP86 io=10 sheet=1477 was wrongly flagged).
 const STATUS_TONE = {
-  ok:  { bg: "#ECFDF5", fg: "#084734", label: "정상" },
+  ok:  { bg: "#E8F6EF", fg: "#084734", label: "정상" },
   low: { bg: "#FCE9E9", fg: "#B43E3E", label: "부족" },
 } as const
 
@@ -143,7 +143,7 @@ export default function HardwareSection({ refreshKey }: { refreshKey: number }) 
         <div className="flex items-center gap-2">
           <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">HW 재고</h2>
           {data.source === "ledger" ? (
-            <span className="rounded-full bg-[#ECFDF5] px-2 py-px text-[10px] font-semibold text-[#084734]" title="입출고 원본(hardware_movements) 기준 — 하드웨어 콘솔과 동일 수치 (재고 SSOT, 2026-07-10 결정)">
+            <span className="rounded-full border border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] px-2 py-0.5 text-[10px] font-semibold text-[#084734] shadow-2xs" title="입출고 원본(hardware_movements) 기준 — 하드웨어 콘솔과 동일 수치 (재고 SSOT, 2026-07-10 결정)">
               원본 기준
             </span>
           ) : data.source === "sheet_staging" ? (
@@ -153,7 +153,7 @@ export default function HardwareSection({ refreshKey }: { refreshKey: number }) 
           ) : null}
         </div>
         <div className="flex items-center gap-2">
-          <Link href="/admin/hardware" className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-1 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] md:min-h-0 md:min-w-0">
+          <Link href="/admin/hardware" className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-1 text-[11px] font-bold text-[#084734] transition hover:bg-[#F2FAF6] md:min-h-0 md:min-w-0">
             운영 열기
           </Link>
           <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]">

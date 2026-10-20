@@ -8,7 +8,7 @@ import type { SyncOutcomeNotice as SyncOutcomeNoticeValue } from "@/lib/admin/sy
 // 오류 톤은 화면마다 이미 있는 빨간 오류 배너가 맡으므로 여기서는 성공·안내·경고만 그린다.
 // 색은 DESIGN.md 운영 상태 스케일(Success·Warning)과 웜 뉴트럴만 쓴다 — 새 색 없음.
 const TONE_CLASS: Record<Exclude<SyncOutcomeNoticeValue["tone"], "error">, string> = {
-  success: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]",
+  success: "border-[#084734]/15 bg-gradient-to-r from-[#F2FAF6] via-[#EBF7F1] to-[#F2FAF6] text-[#084734] shadow-xs",
   info: "border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] text-[#31302E]",
   warning: "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]",
 }

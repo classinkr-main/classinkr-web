@@ -27,7 +27,7 @@ export const CRM_SYNC_TONE: Record<
 > = {
   low: { border: "border-[#EFC9B8]", bg: "bg-[#FBEAE2]", text: "text-[#8A3F1D]", dot: "bg-[#B85C33]" },
   partial: { border: "border-[#ECD29C]", bg: "bg-[#FBF1E0]", text: "text-[#7A520F]", dot: "bg-[#A8741A]" },
-  healthy: { border: "border-[#BDEFD8]", bg: "bg-[#ECFDF5]", text: "text-[#084734]", dot: "bg-[#084734]" },
+  healthy: { border: "border-[#084734]/15", bg: "bg-gradient-to-b from-[#F2FAF6] to-[#E8F6EF]", text: "text-[#084734]", dot: "bg-[#084734]" },
 }
 
 export interface CrmCoverageResponse {

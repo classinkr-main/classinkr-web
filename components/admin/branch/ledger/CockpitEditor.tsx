@@ -409,7 +409,7 @@ export function CockpitEditor({
             role="status"
             className={`rounded-lg border px-3.5 py-2.5 text-[11px] font-semibold leading-relaxed ${
               feedback.kind === "success"
-                ? "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]"
+                ? "border-[#084734]/15 bg-gradient-to-r from-[#F2FAF6] via-[#EBF7F1] to-[#F2FAF6] text-[#084734] shadow-xs"
                 : feedback.kind === "warning"
                   ? "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
                   : "border-[#F2B8B8] bg-[#FCE9E9] text-[#8F2C2C]"
