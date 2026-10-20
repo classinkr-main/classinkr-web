@@ -131,7 +131,7 @@ describe("SalesLedgerWorkbench — 보드 렌즈 배선 규약(소스 스캔)", 
 
   it("LENSES에 board 렌즈가 있고 URL ?lens=board 복원을 허용한다", () => {
     expect(workbenchSource).toContain('{ id: "board", label: "보드"')
-    expect(workbenchSource).toContain('lensParam === "board"')
+    expect(workbenchSource).toContain('value === "board"')
   })
 
   it("board 렌즈 패널은 REV와 같은 filteredRows 모집단으로 ForecastBoard를 렌더한다", () => {

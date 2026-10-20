@@ -51,6 +51,7 @@ import { matchesTokens, tokenize } from "./search-tokens"
 import { normalizedAccountKey } from "@/lib/branch/account-key"
 import { revLinkedTargetHref } from "@/lib/crm/rev-sync-health"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
+import LedgerSimpleView from "./ledger/LedgerSimpleView"
 import { ledgerRowHasColor } from "@/lib/branch/computations/revenue-core"
 import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
 import { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
@@ -414,6 +415,10 @@ type BranchSyncResponse = {
   revImportError?: string
 }
 
+function lensFromParam(value: string | null): LedgerLens {
+  return value === "dsh" || value === "rev" || value === "board" || value === "cockpit" ? value : "ledger"
+}
+
 export default function SalesLedgerWorkbench({
   initialPipeline = null,
   defaultManager = UNMAPPED_BRANCH_MEMBER,
@@ -426,7 +431,8 @@ export default function SalesLedgerWorkbench({
   const [team, setTeam] = useState<Team>("ALL")
   const [period, setPeriod] = useState<Period>("Q")
   const [selectedMonth, setSelectedMonth] = useState(() => ymKeyUtc(new Date()))
-  const [lens, setLens] = useState<LedgerLens>("rev")
+  // 첫 렌더부터 딥링크 렌즈(?lens=rev 등)로 — 기본 장부 화면이 한 번 그려졌다가 바뀌지 않게.
+  const [lens, setLens] = useState<LedgerLens>(() => lensFromParam(searchParams.get("lens")))
   // DSH 수치 그리드의 Goal/Status/Gap 토글 — 렌즈 로컬 상태.
   const [dshGridView, setDshGridView] = useState<DshGridView>("goal")
   const lensPanelRef = useRef<HTMLDivElement | null>(null)
@@ -779,7 +785,7 @@ export default function SalesLedgerWorkbench({
       router.replace("/admin/branch?tab=pipeline")
       return
     }
-    setLens(lensParam === "dsh" || lensParam === "board" || lensParam === "cockpit" ? lensParam : "rev")
+    setLens(lensFromParam(lensParam))
     const monthParam = params.get("month")
     setSelectedMonth(
       monthParam && /^\d{4}-(0[1-9]|1[0-2])$/.test(monthParam) ? monthParam : defaultMonthRef.current,
@@ -817,7 +823,7 @@ export default function SalesLedgerWorkbench({
   useEffect(() => {
     if (!urlReady) return
     const params = new URLSearchParams()
-    if (lens !== "rev") params.set("lens", lens)
+    if (lens !== "ledger") params.set("lens", lens)
     if (selectedMonth !== defaultMonthRef.current) params.set("month", selectedMonth)
     if (period !== "Q") params.set("period", period)
     if (team !== "ALL") params.set("team", team)
@@ -1011,6 +1017,12 @@ export default function SalesLedgerWorkbench({
   // 레일 열림 + detail 보기 + 행 선택일 때만 시작한다(콕핏은 detail 레일을 렌더하지 않으므로 제외).
   const kpiNeeded = !sidePanelCollapsed && railView === "detail" && selectedRow != null && lens !== "cockpit"
   const kpi = useBranchJson<BranchKpiResponse>(`/api/admin/branch/kpi?team=${team}&period=${period}${monthQuery}${managerQuery}`, refreshKey, { enabled: kpiNeeded && urlReady })
+  // 장부 기본 화면의 팀·전체 보기(담당자별 합계)만 쓰는 FY 개인 목표 — 개인 범위에서는 요청하지 않는다.
+  const ledgerKpi = useBranchJson<BranchKpiResponse>(`/api/admin/branch/kpi?team=${team}&period=Y`, refreshKey, { enabled: lens === "ledger" && managerFilter.size !== 1 && urlReady })
+  const ledgerManagerGoals = useMemo(
+    () => (ledgerKpi.data?.members ?? []).map((member) => ({ member: member.member, team: member.team, goal: member.goal })),
+    [ledgerKpi.data?.members],
+  )
   const pipelineUrl = `/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}${managerQuery}`
   // 서버 프리페치 시드 — 페이지(app/admin/branch/ledger/page.tsx)가 라우트와 같은 조립 함수로
   // 만들어 둔 첫 화면 rows다. 지금 URL·refreshKey와 정확히 일치할 때만 쓰고, 그동안
@@ -3025,7 +3037,7 @@ export default function SalesLedgerWorkbench({
                 <span className={`flex h-6 w-6 items-center justify-center rounded-md ${
                   lens === item.id ? "text-[#084734]" : "text-[#615D59]"
                 }`}>
-                  {item.id === "dsh" ? <Gauge className="h-3.5 w-3.5" /> : item.id === "rev" ? <Table2 className="h-3.5 w-3.5" /> : item.id === "board" ? <Columns3 className="h-3.5 w-3.5" /> : <LayoutList className="h-3.5 w-3.5" />}
+                  {item.id === "ledger" ? <FileSpreadsheet className="h-3.5 w-3.5" /> : item.id === "dsh" ? <Gauge className="h-3.5 w-3.5" /> : item.id === "rev" ? <Table2 className="h-3.5 w-3.5" /> : item.id === "board" ? <Columns3 className="h-3.5 w-3.5" /> : <LayoutList className="h-3.5 w-3.5" />}
                 </span>
                 {item.label}
               </button>
@@ -3033,7 +3045,7 @@ export default function SalesLedgerWorkbench({
           </div>
           </div>
 
-          {lens !== "cockpit" && (
+          {lens !== "cockpit" && lens !== "ledger" && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[11px] text-[#615D59]">
               <span className="flex items-center gap-1.5 font-bold text-[#111110]">
                 <Database className="h-3.5 w-3.5 text-[#084734]" />
@@ -3105,7 +3117,7 @@ export default function SalesLedgerWorkbench({
         </aside>
 
         <section className="min-w-0 space-y-5">
-          {lens === "rev" ? (
+          {lens === "ledger" ? null : lens === "rev" ? (
             <div className="border-b border-[rgba(0,0,0,0.08)] py-3.5 space-y-3.5" aria-label="선택 월 매출 확도 요약">
               {/* 회계월 이동 스위처 바 */}
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -3288,6 +3300,20 @@ export default function SalesLedgerWorkbench({
             tabIndex={-1}
             className="scroll-mt-24 space-y-5 focus:outline-none"
           >
+            {lens === "ledger" && (
+              <LedgerSimpleView
+                rows={filteredRows}
+                months={matrixMonths}
+                currentMonth={defaultMonthRef.current}
+                monthlyGoals={revGoalComparable ? new Map(monthlySeriesRows.map((row) => [row.month, row.goal])) : null}
+                loading={(pipeline.loading && rows.length === 0) || (summary.loading && !summary.data)}
+                personal={managerFilter.size === 1}
+                managerGoals={ledgerManagerGoals}
+                onOpenRow={(row) => void loadDealDetail(row)}
+                onOpenManager={(manager) => setManagerFilter(new Set([manager]))}
+              />
+            )}
+
             {lens === "dsh" && (
               <div className="space-y-5">
                 {/* DSH 렌즈 배치(2026-07-27 디벨롭): 지표 밴드 → 수치 그리드 → 월별 페이스 →

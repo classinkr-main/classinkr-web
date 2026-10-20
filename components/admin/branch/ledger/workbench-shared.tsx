@@ -34,7 +34,7 @@ import {
   type RevWeekPoint,
 } from "./shared"
 
-type LedgerLens = "dsh" | "rev" | "board" | "cockpit"
+type LedgerLens = "ledger" | "dsh" | "rev" | "board" | "cockpit"
 type RailView = "detail" | "input" | "queue"
 type RevSortKey = "customer" | "product" | "manager" | "team" | "region" | "month" | "revenue" | "annual" | "origin"
 type RevSortDirection = "asc" | "desc"
@@ -156,6 +156,7 @@ const MATRIX_TOAST_MAX = 3
 // 하이라이트를 소비하는 매트릭스 행 메모(RevMatrixGroupRow 등)가 불필요하게 리렌더된다(웨이브 5, 항목 1).
 const EMPTY_MONTH_SET: Set<string> = new Set()
 const LENSES: Array<{ id: LedgerLens; label: string; description: string }> = [
+  { id: "ledger", label: "장부", description: "기본 · 내 담당 확정/고확도/예정 한 화면, 팀·전체는 담당자별 합계" },
   { id: "dsh", label: "DSH", description: "수치 상세 · 목표/실적 그리드" },
   { id: "rev", label: "REV", description: "주차·목표 수치 검수와 행 상세" },
   { id: "board", label: "보드", description: "주차 Forecast 칸반 · 확정/고확도/예정 카드 검수" },
