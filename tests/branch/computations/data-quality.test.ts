@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest"
 import { runDataQuality } from "@/lib/branch/computations/data-quality"
 import type { DshOutput } from "@/lib/branch/parsers/dsh"
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
+import type { KpiRow } from "@/lib/branch/parsers/kpi"
 
 const emptyDsh: DshOutput = { rows: [], members: {} }
 
@@ -14,6 +15,39 @@ const mk = (over: Partial<BranchRevDeal>): BranchRevDeal => ({
 })
 
 describe("runDataQuality", () => {
+  const check = (deals: BranchRevDeal[] = [], currentKpiMembers?: string[]) => runDataQuality({
+    deals, dsh: emptyDsh, kpi: ["Minjae", "Han"].map((member) => ({ member, pairs: {} } as KpiRow)),
+    seg: [], hwInbound: [], hwOutbound: [], hwStock: [], currentKpiMembers,
+  })
+
+  it("preserves zero-revenue history outside the imported fiscal months", () => {
+    const monthly_payments = { "2026-04": 0, "2027-03": 0 }
+    expect(check([
+      mk({ first_payment: "2026-03-31", monthly_payments }),
+      mk({ first_payment: "2027-04-01", monthly_payments }),
+      mk({ first_payment: "2019-06-18", monthly_payments }),
+    ]).find((i) => i.id === "DQ-2")).toBeUndefined()
+  })
+
+  it.each(["2026-04-01", "2027-03-31"])("still warns for zero payments after first payment within the imported months: %s", (first_payment) => {
+    expect(check([mk({ first_payment, monthly_payments: { "2026-04": 0, "2027-03": 0 } })])
+      .find((i) => i.id === "DQ-2")?.severity).toBe("warn")
+  })
+
+  it("does not mistake a refund offset for absent monthly payments", () => {
+    expect(check([mk({ first_payment: "2026-04-01", monthly_payments: { "2026-04": 100, "2026-05": -100 } })])
+      .find((i) => i.id === "DQ-2")).toBeUndefined()
+  })
+
+  it("checks mapping only for the current Compass roster using canonical aliases", () => {
+    expect(check([], ["박한"]).find((i) => i.id === "DQ-13")?.samples).toEqual(["Han"])
+    expect(check([], []).find((i) => i.id === "DQ-13")).toBeUndefined()
+  })
+
+  it("keeps mapping warnings if the current roster could not be read", () => {
+    expect(check().find((i) => i.id === "DQ-13")?.samples).toEqual(["Minjae", "Han"])
+  })
+
   it("flags missing DSH team", () => {
     const dsh: DshOutput = { rows: [], members: {} }
     const out = runDataQuality({

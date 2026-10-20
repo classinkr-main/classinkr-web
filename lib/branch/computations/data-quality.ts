@@ -7,6 +7,7 @@ import { REV_RANGE } from "@/lib/branch/parsers/rev"
 import { parseRangeLastRow } from "@/lib/branch/sync/range-truncation"
 import { CURRENT_BRANCH_TEAMS } from "@/lib/branch/current-organization"
 import type { HwInbound, HwOutbound, HwStock } from "@/lib/repositories/branch-hw"
+import { normalizeBranchMemberName } from "@/lib/branch/member-names"
 
 export type Severity = "info" | "warn" | "error"
 // sheetRow는 선택 필드다 — 이슈가 특정 REV 시트 행에 닻을 내릴 수 있을 때만(현재 DQ-15)
@@ -22,6 +23,8 @@ const REV_RANGE_USAGE_WARN_RATIO = 0.9
 export interface DqInputs {
   deals: BranchRevDeal[]; dsh: DshOutput; kpi: KpiRow[]; seg: SegRow[]
   hwInbound: HwInbound[]; hwOutbound: HwOutbound[]; hwStock: HwStock[]
+  /** Compass 현재 명부. 미설정·조회 실패일 때는 생략해 기존 매핑 경고를 유지한다. */
+  currentKpiMembers?: readonly string[]
 }
 
 const HW_PRODUCT_PATTERNS = [/86[""]?\s*IFP/i, /75[""]?\s*IFP/i, /T1\s*카메라|카메라\s*T1/i, /S1\s*카메라|카메라\s*S1/i, /\bOPS\b/i]
@@ -29,8 +32,11 @@ const HW_PRODUCT_PATTERNS = [/86[""]?\s*IFP/i, /75[""]?\s*IFP/i, /T1\s*카메라
 export function runDataQuality(inp: DqInputs): DqIssue[] {
   const issues: DqIssue[] = []
 
-  const ghost = inp.deals.filter((d) => d.first_payment && Object.values(d.monthly_payments).every((v) => !v))
-  if (ghost.length) issues.push({ id: "DQ-2", severity: "warn", message: `firstPayment 있는데 월별 납부 0인 딜 ${ghost.length}건`, samples: ghost.slice(0, 5).map((d) => d.customer_name) })
+  // 첫결제는 전년도 이력일 수 있다. 실제 REV 월 헤더에 포함된 첫결제만 납부 누락 후보로 본다.
+  const ghost = inp.deals.filter((d) => d.first_payment
+    && Object.hasOwn(d.monthly_payments, d.first_payment.slice(0, 7))
+    && Object.values(d.monthly_payments).every((v) => !v))
+  if (ghost.length) issues.push({ id: "DQ-2", severity: "warn", message: `조회 연도에 첫결제가 있지만 월별 납부 0인 딜 ${ghost.length}건`, samples: ghost.slice(0, 5).map((d) => d.customer_name) })
 
   const seen = new Map<string, Set<string>>()
   for (const d of inp.deals) { const m = (d.manager ?? "").trim(); if (!m) continue; const k = m.toLowerCase(); if (!seen.has(k)) seen.set(k, new Set()); seen.get(k)!.add(m) }
@@ -55,7 +61,10 @@ export function runDataQuality(inp: DqInputs): DqIssue[] {
   const segIdent = inp.seg.filter((s) => s.goal > 0 && s.goal === s.status).map((s) => s.region)
   if (segIdent.length) issues.push({ id: "DQ-11", severity: "info", message: "SEG 의 status==goal 지역 (히트맵 미사용 사유)", samples: segIdent })
 
-  const unmapped = inp.kpi.map((r) => r.member).filter((m) => !inp.dsh.members[m])
+  const currentMembers = inp.currentKpiMembers == null ? null
+    : new Set(inp.currentKpiMembers.map(normalizeBranchMemberName))
+  const unmapped = inp.kpi.map((r) => r.member).filter((m) => !inp.dsh.members[m]
+    && (currentMembers == null || currentMembers.has(normalizeBranchMemberName(m))))
   if (unmapped.length) issues.push({ id: "DQ-13", severity: "warn", message: "KPI 멤버 중 DSH 팀 매핑 누락", samples: unmapped })
 
   // REV_RANGE 상한 사용률 — Sheets API는 선언된 범위를 넘는 행을 에러 없이 조용히 잘라낸다.

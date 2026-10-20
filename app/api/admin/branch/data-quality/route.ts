@@ -10,6 +10,8 @@ import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
 import { listHwInbound, listHwOutbound, listHwStock } from "@/lib/repositories/branch-hw"
 import { DATA_QUALITY_RULE_COUNT, runDataQuality } from "@/lib/branch/computations/data-quality"
 import { fyOf } from "@/lib/branch/fiscal"
+import { readCompassKrTeam } from "@/lib/compass/kr-team"
+import { getBusinessDateParts } from "@/lib/business-time"
 
 // ── 시트 QC 레인 ──────────────────────────────────────────────────────────────
 // 이 라우트의 점검(DQ-2/3/4/10: REV 색·월 헤더 추출, DQ-7/13: DSH/KPI 구조)은
@@ -50,16 +52,21 @@ export async function GET(req: NextRequest) {
     // deals도 시트 미러(branch_rev_deals)를 직접 읽는다 — REV 매출 집계용이 아니라
     // 시트 추출 품질(색 데이터·월 헤더) 검사 대상이기 때문. 매출 수치가 필요해지면
     // lib/branch/read-rev-deals.ts의 readRevDealsPreferActive를 써야 한다.
-    const [dsh, seg, kpi, deals, hwInbound, hwOutbound, hwStock] = await Promise.all([
+    const month = getBusinessDateParts(new Date()).date.slice(0, 7)
+    const [dsh, seg, kpi, deals, hwInbound, hwOutbound, hwStock, compass] = await Promise.all([
       readDsh(), readSeg(), readKpi(), listBranchRevDeals(), listHwInbound(), listHwOutbound(), listHwStock(),
+      readCompassKrTeam(month),
     ])
-    const issues = runDataQuality({ deals, dsh, kpi, seg, hwInbound, hwOutbound, hwStock })
+    const issues = runDataQuality({ deals, dsh, kpi, seg, hwInbound, hwOutbound, hwStock,
+      currentKpiMembers: compass.state === "ready" ? compass.snapshot.roster.map((p) => p.name) : undefined,
+    })
     return adminCachedJson({
       issues,
       checkedAt: new Date().toISOString(),
       ruleCount: DATA_QUALITY_RULE_COUNT,
-      // 이 라우트의 소스는 전부 시트 레인이다(위 주석 참조) — 소비자가 오해하지 않게 명시
+      // 검사값은 시트 레인이며 현재 대상 여부만 Compass 명부와 대조한다.
       lane: "sheet-qc",
+      currentRosterState: compass.state,
       sourceCounts: {
         deals: deals.length,
         dshRows: dsh.rows.length,
