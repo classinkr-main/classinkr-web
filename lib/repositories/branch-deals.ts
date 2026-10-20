@@ -114,10 +114,10 @@ export async function listBranchRevDeals(
   return listCachedBranchRevDeals(filter?.team && filter.team !== "ALL" ? filter.team : "ALL", opts?.withRaw ?? false)
 }
 
-// 캐시를 거치지 않는 전량 읽기 — 미러를 스냅샷으로 굳히는 쓰기 경로(REV DB 임포트 캡처) 전용.
+// 캐시를 거치지 않는 전량 읽기 — REV DB 임포트 캡처와 라이브 원본을 대조하는 시트 QC용.
 // replaceBranchRevDeals의 revalidateTag(…, "max")는 stale-while-revalidate라, 동기화 직후
 // 같은 요청에서 listBranchRevDeals를 부르면 동기화 이전 미러가 돌아올 수 있다. 화면 읽기는
-// 계속 캐시판을 쓴다.
+// 일반 화면 읽기는 계속 캐시판을 쓴다. 시트 QC는 옛 미러와 최신 시트 비교로 오탐하지 않게 이 함수를 쓴다.
 export async function listBranchRevDealsFresh(opts?: { withRaw?: boolean }): Promise<BranchRevDeal[]> {
   return fetchBranchRevDeals("ALL", opts?.withRaw ?? false)
 }

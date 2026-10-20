@@ -1,5 +1,5 @@
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
-import { dealHasColorData } from "@/lib/branch/computations/rev-confirmed"
+import type { RevConfidenceSource } from "@/lib/branch/computations/rev-confirmed"
 import type { DshOutput } from "@/lib/branch/parsers/dsh"
 import type { KpiRow } from "@/lib/branch/parsers/kpi"
 import type { SegRow } from "@/lib/branch/parsers/seg"
@@ -8,6 +8,7 @@ import { parseRangeLastRow } from "@/lib/branch/sync/range-truncation"
 import { CURRENT_BRANCH_TEAMS } from "@/lib/branch/current-organization"
 import type { HwInbound, HwOutbound, HwStock } from "@/lib/repositories/branch-hw"
 import { normalizeBranchMemberName } from "@/lib/branch/member-names"
+import { normalizeLedgerProduct } from "@/lib/branch/parsers/hw-ledger"
 
 export type Severity = "info" | "warn" | "error"
 // sheetRow는 선택 필드다 — 이슈가 특정 REV 시트 행에 닻을 내릴 수 있을 때만(현재 DQ-15)
@@ -25,9 +26,21 @@ export interface DqInputs {
   hwInbound: HwInbound[]; hwOutbound: HwOutbound[]; hwStock: HwStock[]
   /** Compass 현재 명부. 미설정·조회 실패일 때는 생략해 기존 매핑 경고를 유지한다. */
   currentKpiMembers?: readonly string[]
+  hardwareCatalog?: readonly { name: string; source_aliases: readonly string[] }[] | null
+  revColorSource?: readonly (RevConfidenceSource & { sheet_row: number; customer_name: string })[] | null
 }
 
-const HW_PRODUCT_PATTERNS = [/86[""]?\s*IFP/i, /75[""]?\s*IFP/i, /T1\s*카메라|카메라\s*T1/i, /S1\s*카메라|카메라\s*S1/i, /\bOPS\b/i]
+const productKey = (name: string) => normalizeLedgerProduct(name).toLowerCase()
+const COLOR_FIELDS = ["monthly_red", "monthly_confirmed", "monthly_high_conf"] as const
+
+function sameColorAmounts(left: RevConfidenceSource, right: RevConfidenceSource): boolean {
+  return COLOR_FIELDS.every((field) => {
+    const a = left[field] ?? {}
+    const b = right[field] ?? {}
+    return Object.keys(a).length === Object.keys(b).length
+      && Object.entries(a).every(([month, value]) => b[month] === value)
+  })
+}
 
 export function runDataQuality(inp: DqInputs): DqIssue[] {
   const issues: DqIssue[] = []
@@ -50,13 +63,31 @@ export function runDataQuality(inp: DqInputs): DqIssue[] {
   for (const t of CURRENT_BRANCH_TEAMS) if (!teams.has(t)) issues.push({ id: "DQ-7", severity: "error", message: `DSH 에 ${t} 팀 행 없음` })
 
   const allHw = [...inp.hwInbound, ...inp.hwOutbound]
-  const unknown = allHw.filter((row) => !HW_PRODUCT_PATTERNS.some((p) => p.test(row.product))).map((r) => r.product)
-  if (unknown.length) issues.push({ id: "DQ-9", severity: "warn", message: "HW 입출고 제품명 카탈로그 불일치", samples: [...new Set(unknown)].slice(0, 8) })
+  if (inp.hardwareCatalog === null) {
+    issues.push({ id: "DQ-9", severity: "warn", message: "HW 제품명 대조 미완료 — 운영 카탈로그 조회 실패" })
+  } else if (inp.hardwareCatalog) {
+    // 카드 분류(기타 포함)와 제품 등록 여부는 다르다. 실제 운영 카탈로그·별칭이 정본이다.
+    const names = new Set(inp.hardwareCatalog.flatMap((item) => [item.name, ...item.source_aliases]).map(productKey))
+    const unknown = allHw.filter((row) => !names.has(productKey(row.product))).map((r) => r.product)
+    if (unknown.length) issues.push({ id: "DQ-9", severity: "warn", message: "HW 입출고 제품명 카탈로그 불일치", samples: [...new Set(unknown)].slice(0, 8) })
+  }
 
-  // 빨강(확정)·파랑(임박) 어느 색 데이터도 없으면 formatRuns 추출 실패를 의심한다.
-  // 파란 글자만 있는 행은 monthly_red가 비어 있어도 정상 추출이므로 제외.
-  const noColor = inp.deals.filter((d) => d.first_payment && Object.values(d.monthly_payments).some((v) => v) && !dealHasColorData(d))
-  if (noColor.length) issues.push({ id: "DQ-10", severity: "error", message: "색 셀 추출 실패 의심 (formatRuns 비어 있음)", samples: noColor.slice(0,5).map((d) => d.customer_name) })
+  if (inp.revColorSource === null) {
+    issues.push({ id: "DQ-10", severity: "warn", message: "REV 색상 대조 미완료 — 원본 시트 조회 실패" })
+  } else if (inp.revColorSource) {
+    // 무색상 예정액은 정상이다. 원본을 같은 파서로 읽은 결과와 미러를 실제 대조한다.
+    // 원본 편집·주차 경과 후 미동기화도 가능하므로 추출 실패로 단정하지 않는다.
+    const sourceByRow = new Map(inp.revColorSource.map((row) => [row.sheet_row, row]))
+    const mirrorByRow = new Map(inp.deals.map((row) => [row.sheet_row, row]))
+    const mismatched = [
+      ...inp.revColorSource.filter((source) => {
+        const mirror = mirrorByRow.get(source.sheet_row)
+        return !mirror || source.customer_name !== mirror.customer_name || !sameColorAmounts(source, mirror)
+      }),
+      ...inp.deals.filter((row) => !sourceByRow.has(row.sheet_row)),
+    ]
+    if (mismatched.length) issues.push({ id: "DQ-10", severity: "warn", message: `REV 원본과 동기화 결과 불일치 ${mismatched.length}건 — 색상·행 대조 후 재동기화 확인`, samples: mismatched.slice(0, 5).map((d) => d.customer_name) })
+  }
 
   const segIdent = inp.seg.filter((s) => s.goal > 0 && s.goal === s.status).map((s) => s.region)
   if (segIdent.length) issues.push({ id: "DQ-11", severity: "info", message: "SEG 의 status==goal 지역 (히트맵 미사용 사유)", samples: segIdent })
