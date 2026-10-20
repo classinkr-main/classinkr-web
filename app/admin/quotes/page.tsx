@@ -278,11 +278,23 @@ export default function QuotesPage() {
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href)
       url.searchParams.set("tab", tab)
+      url.searchParams.delete("type")
       url.searchParams.delete("action")
       url.searchParams.delete("quick")
       window.history.replaceState(null, "", url.toString())
     }
   }
+
+  // 브라우저 뒤로가기/앞으로가기 시 URL의 탭 상태와 동기화
+  useEffect(() => {
+    const handlePopState = () => {
+      setActiveTab(tabFromSearch())
+    }
+    window.addEventListener("popstate", handlePopState)
+    return () => {
+      window.removeEventListener("popstate", handlePopState)
+    }
+  }, [])
 
   const openHardwareQuickAction = (action: HardwareQuoteQuickAction) => {
     quickActionSequenceRef.current += 1

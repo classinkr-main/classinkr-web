@@ -10,6 +10,7 @@ import {
   FileText,
   Link2,
   Loader2,
+  Plus,
   RefreshCw,
   Search,
   Send,
@@ -101,16 +102,18 @@ const PRODUCT_LINE_OPTIONS: Array<{ key: QuoteProductLine | "all"; label: string
   { key: "hardware", label: "하드웨어" },
 ]
 
-const PRODUCT_LINE_BADGE: Record<QuoteProductLine, { label: string; className: string; title: string }> = {
+const PRODUCT_LINE_BADGE: Record<QuoteProductLine, { label: string; supplier: string; className: string; title: string }> = {
   software: {
     label: "SW",
+    supplier: "클래스인",
     className: "bg-[#ECFDF5] text-[#084734] ring-[#BDEFD8]",
-    title: "소프트웨어 견적 (공급자: 클래스인)",
+    title: "소프트웨어 견적 (공급처: 이이오클래스인코리아)",
   },
   hardware: {
     label: "HW",
+    supplier: "퀴드러닝",
     className: "bg-[#f6f5f2] text-[#615D59] ring-[#e8e8e4]",
-    title: "하드웨어 견적 (공급자: 퀴드러닝)",
+    title: "하드웨어 견적 (공급처: 퀴드러닝)",
   },
 }
 
@@ -684,6 +687,83 @@ export default function HardwareQuotesPanel({
         </div>
       )}
 
+      {/* 실무 작업 우선순위 요약 KPI 스트립 */}
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3">
+        <button
+          type="button"
+          onClick={() => setActiveFilter("all")}
+          className={`flex flex-col rounded-xl border p-3 text-left transition-all ${
+            activeFilter === "all"
+              ? "border-[#111110] bg-white shadow-xs"
+              : "border-[#e8e8e4] bg-white hover:border-[#c8c8c4]"
+          }`}
+        >
+          <span className="text-[11px] font-medium text-[#1a1a1a]/50">전체 견적</span>
+          <span className="mt-1 text-lg font-bold tracking-tight text-[#111110] tabular-nums sm:text-xl">
+            {summary.total}
+            <span className="ml-1 text-xs font-normal text-[#1a1a1a]/40">건</span>
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveFilter("needs_action")}
+          className={`flex flex-col rounded-xl border p-3 text-left transition-all ${
+            activeFilter === "needs_action"
+              ? "border-[#A8741A] bg-[#FBF1E0]/50 shadow-xs ring-1 ring-[#A8741A]"
+              : summary.needsAction > 0
+                ? "border-[#ECD29C] bg-[#FBF1E0]/30 hover:bg-[#FBF1E0]/50"
+                : "border-[#e8e8e4] bg-white hover:border-[#c8c8c4]"
+          }`}
+        >
+          <span className="flex items-center gap-1.5 text-[11px] font-semibold text-[#A8741A]">
+            {summary.needsAction > 0 && <span className="h-1.5 w-1.5 rounded-full bg-[#A8741A]" />}
+            후속 필요
+          </span>
+          <span className="mt-1 text-lg font-bold tracking-tight text-[#7A520F] tabular-nums sm:text-xl">
+            {summary.needsAction}
+            <span className="ml-1 text-xs font-normal text-[#A8741A]/70">건</span>
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveFilter("accepted")}
+          className={`flex flex-col rounded-xl border p-3 text-left transition-all ${
+            activeFilter === "accepted"
+              ? "border-[#084734] bg-[#ECFDF5] shadow-xs ring-1 ring-[#084734]"
+              : summary.accepted > 0
+                ? "border-[#BDEFD8] bg-[#ECFDF5]/50 hover:bg-[#ECFDF5]"
+                : "border-[#e8e8e4] bg-white hover:border-[#c8c8c4]"
+          }`}
+        >
+          <span className="flex items-center gap-1.5 text-[11px] font-semibold text-[#084734]">
+            {summary.accepted > 0 && <span className="h-1.5 w-1.5 rounded-full bg-[#084734]" />}
+            동의 완료
+          </span>
+          <span className="mt-1 text-lg font-bold tracking-tight text-[#084734] tabular-nums sm:text-xl">
+            {summary.accepted}
+            <span className="ml-1 text-xs font-normal text-[#084734]/70">건 (계약 전환)</span>
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveFilter("shared")}
+          className={`flex flex-col rounded-xl border p-3 text-left transition-all ${
+            activeFilter === "shared"
+              ? "border-[#111110] bg-white shadow-xs"
+              : "border-[#e8e8e4] bg-white hover:border-[#c8c8c4]"
+          }`}
+        >
+          <span className="text-[11px] font-medium text-[#1a1a1a]/50">발송/열람 대기</span>
+          <span className="mt-1 text-lg font-bold tracking-tight text-[#111110] tabular-nums sm:text-xl">
+            {summary.shared}
+            <span className="ml-1 text-xs font-normal text-[#1a1a1a]/40">건</span>
+          </span>
+        </button>
+      </div>
+
       <div className="overflow-hidden rounded-lg border border-[#e8e8e4] bg-white">
         <div className="flex flex-wrap items-center gap-2 border-b border-[#f0f0ec] px-4 py-2.5 sm:px-5">
           <span className="text-[11px] font-semibold text-[#1a1a1a]/45">유형</span>
@@ -825,6 +905,17 @@ export default function HardwareQuotesPanel({
             <p className="mt-1 text-xs text-[#1a1a1a]/45">
               견적서 작성 후 이 목록에서 발송 링크와 응답 상태를 확인할 수 있습니다.
             </p>
+            <button
+              type="button"
+              onClick={() => {
+                setComposerTemplateId("board_86")
+                setComposerOpen(true)
+              }}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[#084734] px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#065c41]"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              첫 견적서 작성
+            </button>
           </div>
         ) : visibleQuotes.length === 0 ? (
           <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
@@ -850,6 +941,7 @@ export default function HardwareQuotesPanel({
               const responseMeta = getResponseMeta(quote)
               const responseRelativeTime = formatRelativeTime(getLatestInteractionAt(quote))
               const unresponsiveDays = getUnresponsiveDays(quote)
+              const badgeMeta = PRODUCT_LINE_BADGE[quote.productLine]
 
               return (
                 <div
@@ -860,10 +952,11 @@ export default function HardwareQuotesPanel({
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-xs text-[#1a1a1a]/45">{quote.quoteNumber}</span>
                       <span
-                        title={PRODUCT_LINE_BADGE[quote.productLine].title}
-                        className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ${PRODUCT_LINE_BADGE[quote.productLine].className}`}
+                        title={badgeMeta.title}
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ${badgeMeta.className}`}
                       >
-                        {PRODUCT_LINE_BADGE[quote.productLine].label}
+                        <span>{badgeMeta.label}</span>
+                        <span className="font-normal opacity-70 text-[10px]">· {badgeMeta.supplier}</span>
                       </span>
                       <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${statusMeta.className}`}>
                         {statusMeta.label}
@@ -876,7 +969,7 @@ export default function HardwareQuotesPanel({
                           onClick={() => void handleConvertToContract(quote)}
                           disabled={convertingQuoteId === quote.id}
                           title="이 견적으로 연결된 계약서를 생성하고 딜 단계를 '계약'으로 전진시킵니다."
-                          className="inline-flex items-center gap-1 rounded-full border border-[#084734]/25 bg-[#ECFDF5] px-2.5 py-0.5 text-[11px] font-semibold text-[#084734] transition-colors hover:bg-[#d8f3e8] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+                          className="inline-flex items-center gap-1 rounded-full border border-[#084734]/25 bg-[#ECFDF5] px-2.5 py-0.5 text-[11px] font-semibold text-[#084734] transition-colors hover:bg-[#D1FAE5] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
                         >
                           {convertingQuoteId === quote.id ? (
                             <Loader2 className="h-3 w-3 animate-spin" />

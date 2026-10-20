@@ -1411,22 +1411,22 @@ export default function PartnerWorkspaceShell({
                     <p className="text-[11px] font-medium uppercase tracking-wide text-[#1a1a1a]/35">전체 문서</p>
                     <p className="mt-1 text-[20px] font-bold tracking-[-0.03em] text-[#111110]">{workspace.documents.length}</p>
                   </div>
-                  <div className="rounded-2xl bg-amber-50 p-4">
-                    <p className="text-[11px] font-medium uppercase tracking-wide text-amber-800/55">전달 대기</p>
-                    <p className="mt-1 text-[20px] font-bold tracking-[-0.03em] text-amber-900">{pendingDocuments.length}</p>
+                  <div className="rounded-2xl bg-[#FBF1E0] p-4">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-[#A8741A]/70">전달 대기</p>
+                    <p className="mt-1 text-[20px] font-bold tracking-[-0.03em] text-[#7A520F]">{pendingDocuments.length}</p>
                   </div>
                   <div className="rounded-2xl bg-[#FEF3EE] p-4">
-                    <p className="text-[11px] font-medium uppercase tracking-wide text-[#B85C33]/55">연체/만료</p>
-                    <p className="mt-1 text-[20px] font-bold tracking-[-0.03em] text-[#9A4A27]">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-[#B85C33]/70">연체/만료</p>
+                    <p className="mt-1 text-[20px] font-bold tracking-[-0.03em] text-[#B85C33]">
                       {overdueDocuments.length + docsRequiringAttention.filter((document) => {
                         const latestDelivery = getDocumentLatestDelivery(document)
                         return latestDelivery?.status === "expired"
                       }).length}
                     </p>
                   </div>
-                  <div className="rounded-2xl bg-emerald-50 p-4">
-                    <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-800/55">정상 완료</p>
-                    <p className="mt-1 text-[20px] font-bold tracking-[-0.03em] text-emerald-900">{signedDocuments.length}</p>
+                  <div className="rounded-2xl bg-[#ECFDF5] p-4">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-[#084734]/70">정상 완료</p>
+                    <p className="mt-1 text-[20px] font-bold tracking-[-0.03em] text-[#084734]">{signedDocuments.length}</p>
                   </div>
                 </div>
 

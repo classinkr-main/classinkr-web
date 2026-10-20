@@ -1,11 +1,12 @@
 "use client"
 
 import React, { useEffect, useMemo, useState } from "react"
-import { Ban, Copy, Loader2, Plus, RefreshCw, Ticket, Trash2 } from "lucide-react"
+import { AlertCircle, Ban, Check, Copy, Loader2, Plus, RefreshCw, Ticket, Trash2, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { adminFetch } from "@/lib/admin-client"
 import { BUSINESS_RECHARGE, formatRechargeKrw } from "@/lib/billing/recharge"
 
 type QuoteCodeKind = "business_recharge" | "subscription"
@@ -55,20 +56,6 @@ const KIND_LABEL: Record<QuoteCodeKind, string> = {
 const COMPACT_INPUT_CLASS = "h-9 text-[13px]"
 const AMOUNT_INPUT_CLASS = "text-[15px] font-semibold"
 
-function adminFetch(url: string, options?: RequestInit) {
-  const token =
-    typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null
-
-  return fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token ?? ""}`,
-      ...options?.headers,
-    },
-  })
-}
-
 function toNumber(value: number | string | null) {
   if (value == null) return null
   if (typeof value === "number") return value
@@ -114,7 +101,7 @@ function statusMeta(code: QuoteCodeRow) {
     return { label: "만료", color: "bg-[#f0f0ec] text-[#1a1a1a]/50" }
   }
 
-  return { label: "활성", color: "bg-[#FEF9C3] text-[#7B3F00]" }
+  return { label: "활성", color: "bg-[#FBF1E0] text-[#A8741A]" }
 }
 
 export default function SoftwareQuoteCodesPanel() {
@@ -123,6 +110,7 @@ export default function SoftwareQuoteCodesPanel() {
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
 
   const sorted = useMemo(() => {
@@ -159,6 +147,16 @@ export default function SoftwareQuoteCodesPanel() {
   const resetForm = () => {
     setForm(EMPTY_FORM)
     setError(null)
+  }
+
+  function handleAddKrw(delta: number) {
+    const current = Number.parseInt(form.amountKrw.replace(/[^0-9]/g, ""), 10) || 0
+    const next = Math.max(BUSINESS_RECHARGE.baseMinKrw, current + delta)
+    setForm((prev) => ({ ...prev, amountKrw: String(Math.min(BUSINESS_RECHARGE.maxKrw, next)) }))
+  }
+
+  function handleSetPresetKrw(val: number) {
+    setForm((prev) => ({ ...prev, amountKrw: String(val) }))
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -223,26 +221,32 @@ export default function SoftwareQuoteCodesPanel() {
 
     if (!response.ok) {
       const payloadErr = (await response.json().catch(() => ({}))) as { error?: string }
-      window.alert(payloadErr.error ?? "삭제 실패")
+      setNotice({ tone: "error", message: payloadErr.error ?? "코드 삭제에 실패했습니다." })
       return
     }
 
+    setNotice({ tone: "success", message: "코드가 삭제되었습니다." })
     await load()
   }
 
   function copyCheckoutUrl(code: string, kind: QuoteCodeKind) {
     if (typeof window === "undefined") return
 
+    if (kind === "subscription") {
+      setNotice({
+        tone: "error",
+        message: "구독형 견적 코드는 셀프서브 결제가 지원되지 않으며, 견적서·계약서 기반 청구 대상입니다.",
+      })
+      return
+    }
+
     const base = `${window.location.origin}/checkout`
-    const url =
-      kind === "business_recharge"
-        ? `${base}?mode=business&quote=${encodeURIComponent(code)}`
-        : `${base}?mode=subscription&quote=${encodeURIComponent(code)}`
+    const url = `${base}?mode=business&quote=${encodeURIComponent(code)}`
 
     void navigator.clipboard
       .writeText(url)
       .then(() => {
-        window.alert(`결제 링크가 클립보드에 복사되었습니다.\n${url}`)
+        setNotice({ tone: "success", message: `결제 링크가 복사되었습니다: ${url}` })
       })
       .catch(() => {
         window.prompt("다음 URL을 복사하세요.", url)
@@ -250,9 +254,14 @@ export default function SoftwareQuoteCodesPanel() {
   }
 
   function copyCode(code: string) {
-    void navigator.clipboard.writeText(code).then(() => {
-      window.alert(`코드 ${code} 가 복사되었습니다.`)
-    })
+    void navigator.clipboard
+      .writeText(code)
+      .then(() => {
+        setNotice({ tone: "success", message: `코드 ${code} 가 복사되었습니다.` })
+      })
+      .catch(() => {
+        window.prompt("다음 코드를 복사하세요.", code)
+      })
   }
 
   const closeForm = () => {
@@ -262,6 +271,27 @@ export default function SoftwareQuoteCodesPanel() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 p-4 sm:px-6 sm:py-5">
+      {notice && (
+        <div
+          className={`flex items-start gap-2 rounded-lg border px-4 py-3 text-sm ${
+            notice.tone === "success"
+              ? "border-[#D1FAE5] bg-[#ECFDF5] text-[#084734]"
+              : "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]"
+          }`}
+        >
+          {notice.tone === "success" ? <Check className="mt-0.5 h-4 w-4" /> : <AlertCircle className="mt-0.5 h-4 w-4" />}
+          <span className="flex-1">{notice.message}</span>
+          <button
+            type="button"
+            onClick={() => setNotice(null)}
+            className="text-current opacity-60 hover:opacity-100"
+            aria-label="알림 닫기"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-medium text-[#615D59] ring-1 ring-[#e8e8e4]">
           {loading ? "불러오는 중" : `${sorted.length}건`}
@@ -352,15 +382,24 @@ export default function SoftwareQuoteCodesPanel() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
-                          <button
-                            type="button"
-                            onClick={() => copyCheckoutUrl(code.code, code.kind)}
-                            className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs text-[#084734] hover:bg-[#ECFDF5]"
-                            title="결제 링크 복사"
-                          >
-                            <Copy className="h-3.5 w-3.5" />
-                            결제 링크
-                          </button>
+                          {code.kind === "business_recharge" ? (
+                            <button
+                              type="button"
+                              onClick={() => copyCheckoutUrl(code.code, code.kind)}
+                              className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs text-[#084734] hover:bg-[#ECFDF5]"
+                              title="결제 링크 복사"
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                              결제 링크
+                            </button>
+                          ) : (
+                            <span
+                              className="inline-flex h-7 items-center rounded-md px-2 text-xs text-[#1a1a1a]/40"
+                              title="구독형 코드는 견적서·계약서 기반 청구 대상입니다."
+                            >
+                              계약 청구
+                            </span>
+                          )}
                           {!code.redeemedAt ? (
                             <button
                               type="button"
@@ -402,7 +441,7 @@ export default function SoftwareQuoteCodesPanel() {
                   소프트웨어 견적 코드 발급
                 </h2>
                 <p className="mt-1 text-xs text-[#1a1a1a]/55">
-                  발급된 코드는 /checkout 결제 화면에서 입력해 지정 금액으로 결제합니다.
+                  충전형 코드는 /checkout 결제 화면에서 지정 금액으로 결제합니다. (구독형 코드는 견적서·계약서 참조용)
                 </p>
               </div>
               <button
@@ -411,7 +450,7 @@ export default function SoftwareQuoteCodesPanel() {
                 className="text-[#1a1a1a]/45 hover:text-[#1a1a1a]"
                 aria-label="닫기"
               >
-                ×
+                <X className="h-5 w-5" />
               </button>
             </div>
 
@@ -450,6 +489,34 @@ export default function SoftwareQuoteCodesPanel() {
                     placeholder={String(BUSINESS_RECHARGE.baseMinKrw)}
                     className={AMOUNT_INPUT_CLASS}
                   />
+                  {/* 퀵 프리셋 및 증분 칩 */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span className="text-[11px] text-[#1a1a1a]/40 mr-0.5">빠른 선택:</span>
+                    {BUSINESS_RECHARGE.presetsKrw.map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => handleSetPresetKrw(p)}
+                        className="rounded-md border border-[#e8e8e4] bg-[#fafaf8] px-2 py-0.5 text-[11px] font-medium text-[#1a1a1a]/70 hover:bg-[#ECFDF5] hover:text-[#084734] hover:border-[#BDEFD8]"
+                      >
+                        {p >= 10_000_000 ? `${p / 10_000_000}천만` : `${p / 10_000}만`}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => handleAddKrw(500_000)}
+                      className="rounded-md border border-[#e8e8e4] bg-[#fafaf8] px-2 py-0.5 text-[11px] font-medium text-[#084734] hover:bg-[#ECFDF5]"
+                    >
+                      +50만
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAddKrw(1_000_000)}
+                      className="rounded-md border border-[#e8e8e4] bg-[#fafaf8] px-2 py-0.5 text-[11px] font-medium text-[#084734] hover:bg-[#ECFDF5]"
+                    >
+                      +100만
+                    </button>
+                  </div>
                   <p className="text-[11px] text-[#1a1a1a]/45">
                     최초 {formatRechargeKrw(BUSINESS_RECHARGE.baseMinKrw)} 이상, 이후{" "}
                     {formatRechargeKrw(BUSINESS_RECHARGE.incrementKrw)} 단위만 허용합니다 (1회 상한{" "}

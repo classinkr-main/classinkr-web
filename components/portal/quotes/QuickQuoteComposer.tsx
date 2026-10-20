@@ -50,6 +50,7 @@ import {
   createInformationalQuoteLine,
   finalizeStandardQuoteDetails,
   formatStandardQuoteCurrency,
+  getOnlineSuiteTermMonths,
   getQuoteNotePresets,
   getStandardQuoteDefaultSelections,
   getStandardQuoteOptionGroups,
@@ -191,61 +192,81 @@ type QuickAddRailItemId =
   | "wall_mount"
   | "bundle_86_t1_wall"
 
+type QuickAddRailGroup = "suite" | "panel" | "accessory"
+
 type QuickAddRailItem = {
   id: QuickAddRailItemId
   label: string
   description: string
   price: number
+  group: QuickAddRailGroup
+  badge?: string
+  priceUnit?: string
 }
 
 const QUICK_ADD_RAIL_ITEMS: QuickAddRailItem[] = [
-  {
-    id: "recording_studio",
-    label: "녹화 세트",
-    description: "OMO 830",
-    price: getProductBySku("ai-studio-recording-set")?.unit_price ?? 8_300_000,
-  },
+  // ── 수트 · 패키지 ──────────────────────────────────────────
   {
     id: "online_suite",
-    label: "AI Suite",
+    label: "구독형 AI Suite",
     description: "월 구독",
     price: getProductBySku("online-suite-monthly")?.unit_price ?? 400_000,
+    group: "suite",
+    badge: "SW 수트",
+    priceUnit: "/월",
   },
+  {
+    id: "recording_studio",
+    label: "올인원 녹화 세트",
+    description: "OMO 830",
+    price: getProductBySku("ai-studio-recording-set")?.unit_price ?? 8_300_000,
+    group: "suite",
+    badge: "녹화 패키지",
+  },
+  {
+    id: "bundle_86_t1_wall",
+    label: '86" 번들',
+    description: '86" + T1 + 벽걸이',
+    price: getProductBySku("bundle-86-t1-wall")?.unit_price ?? 8_000_000,
+    group: "suite",
+    badge: "인기 번들",
+  },
+  // ── 전자칠판 패널 ──────────────────────────────────────────
   {
     id: "board_86",
     label: '전자칠판 86"',
-    description: "",
+    description: "대형 패널",
     price: getProductBySku("board-86")?.unit_price ?? 6_300_000,
+    group: "panel",
   },
   {
     id: "board_75",
     label: '전자칠판 75"',
-    description: "",
+    description: "중형 패널",
     price: getProductBySku("board-75")?.unit_price ?? 5_400_000,
+    group: "panel",
   },
+  // ── 카메라 & 거치 옵션 ─────────────────────────────────────
   {
     id: "camera_t1",
     label: "T1 카메라",
-    description: "",
+    description: "모션트래킹",
     price: getProductBySku("camera-t1")?.unit_price ?? 1_200_000,
+    group: "accessory",
   },
   {
     id: "stand",
     label: "스탠드",
-    description: "",
+    description: "이동형 거치",
     price: getProductBySku("stand")?.unit_price ?? 500_000,
+    group: "accessory",
   },
   {
     id: "wall_mount",
     label: "벽걸이",
-    description: "",
+    description: "벽면 설치",
     price: getProductBySku("wall-mount")?.unit_price ?? 500_000,
-  },
-  {
-    id: "bundle_86_t1_wall",
-    label: "번들",
-    description: '86" + T1 + 벽걸이',
-    price: getProductBySku("bundle-86-t1-wall")?.unit_price ?? 8_000_000,
+    group: "accessory",
   },
 ]
 
@@ -451,8 +472,9 @@ function addDays(dateValue: string, days: number) {
   return base.toISOString().slice(0, 10)
 }
 
-function formatQuickAddPrice(value: number) {
-  return `${Math.round(value / 10_000).toLocaleString("ko-KR")}만`
+function formatQuickAddPrice(value: number, unit?: string) {
+  const formatted = `${Math.round(value / 10_000).toLocaleString("ko-KR")}만`
+  return unit ? `${formatted}${unit}` : formatted
 }
 
 function getBaseLine(quote: PartnerQuoteDetailsInput) {
@@ -2166,44 +2188,59 @@ export default function QuickQuoteComposer({
                     </div>
                   }
                 />
-                <div className="mt-2.5 flex flex-wrap gap-1.5">
-                  {QUICK_ADD_RAIL_ITEMS.map((item) => {
-                    const active =
-                      (item.id === "recording_studio" && templateId === "recording_studio") ||
-                      (item.id === "online_suite" && templateId === "online_suite") ||
-                      (item.id === "board_86" && templateId === "board_86" && !isBundleSelected) ||
-                      (item.id === "board_75" && templateId === "board_75") ||
-                      (item.id === "camera_t1" && templateId === "camera_t1") ||
-                      (item.id === "stand" &&
-                        (templateId === "board_86" || templateId === "board_75") &&
-                        optionSelections.mounting_option === "stand") ||
-                      (item.id === "wall_mount" &&
-                        (templateId === "board_86" || templateId === "board_75") &&
-                        optionSelections.mounting_option === "wall_mount") ||
-                      (item.id === "bundle_86_t1_wall" && isBundleSelected)
+                <div className="mt-2.5 space-y-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {QUICK_ADD_RAIL_ITEMS.map((item) => {
+                      const active =
+                        (item.id === "recording_studio" && templateId === "recording_studio") ||
+                        (item.id === "online_suite" && templateId === "online_suite") ||
+                        (item.id === "board_86" && templateId === "board_86" && !isBundleSelected) ||
+                        (item.id === "board_75" && templateId === "board_75") ||
+                        (item.id === "camera_t1" && templateId === "camera_t1") ||
+                        (item.id === "stand" &&
+                          (templateId === "board_86" || templateId === "board_75") &&
+                          optionSelections.mounting_option === "stand") ||
+                        (item.id === "wall_mount" &&
+                          (templateId === "board_86" || templateId === "board_75") &&
+                          optionSelections.mounting_option === "wall_mount") ||
+                        (item.id === "bundle_86_t1_wall" && isBundleSelected)
 
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        title={item.description ? `${item.label} · ${item.description}` : item.label}
-                        onClick={() => handleQuickAdd(item.id)}
-                        className={`${COMPACT_CHIP_CLASS} ${
-                          active
-                            ? "border-[#084734] bg-[#ECFDF5]"
-                            : "border-black/[0.08] bg-white hover:border-[#BDEFD8] hover:bg-[#f8fbf9]"
-                        }`}
-                      >
-                        <span className="font-semibold text-[#111110]">{item.label}</span>
-                        {item.description && (
-                          <span className="hidden text-[11px] text-[#A39E98] sm:inline">{item.description}</span>
-                        )}
-                        <span className="text-[11px] font-medium tabular-nums text-[#615D59]">
-                          {formatQuickAddPrice(item.price)}
-                        </span>
-                      </button>
-                    )
-                  })}
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          title={item.description ? `${item.label} · ${item.description}` : item.label}
+                          onClick={() => handleQuickAdd(item.id)}
+                          className={`${COMPACT_CHIP_CLASS} ${
+                            active
+                              ? "border-[#084734] bg-[#ECFDF5] text-[#084734] shadow-xs ring-1 ring-[#084734]/25"
+                              : "border-black/[0.08] bg-white text-[#615D59] hover:border-[#BDEFD8] hover:bg-[#f8fbf9] hover:text-[#111110]"
+                          }`}
+                        >
+                          {item.badge && (
+                            <span
+                              className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                                active
+                                  ? "bg-[#084734] text-white"
+                                  : item.group === "suite"
+                                    ? "bg-[#ECFDF5] text-[#084734]"
+                                    : "bg-[#f6f5f2] text-[#615D59]"
+                              }`}
+                            >
+                              {item.badge}
+                            </span>
+                          )}
+                          <span className="font-semibold text-[#111110]">{item.label}</span>
+                          {item.description && (
+                            <span className="hidden text-[11px] text-[#A39E98] sm:inline">{item.description}</span>
+                          )}
+                          <span className={`text-[11px] font-medium tabular-nums ${active ? "text-[#084734]" : "text-[#615D59]"}`}>
+                            {formatQuickAddPrice(item.price, item.priceUnit)}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
 
                 <div className="mt-2.5 grid gap-2 sm:grid-cols-2">
@@ -2432,6 +2469,31 @@ export default function QuickQuoteComposer({
                   <span className="text-[12px] font-medium text-[#615D59]">원</span>
                 </div>
               </div>
+              {templateId === "online_suite" && (() => {
+                const termMonths = getOnlineSuiteTermMonths(optionSelections.contract_term as string)
+                if (!termMonths) return null
+                const committedTotal = (totals.subtotalAmount ?? 0) * termMonths
+                return (
+                  <div className="mt-1.5 flex items-center justify-between gap-2 rounded-lg bg-[#ECFDF5] px-3 py-1.5 text-xs text-[#084734] ring-1 ring-[#BDEFD8]">
+                    <span className="font-medium">
+                      약정 기간: <strong className="font-semibold">{termMonths}개월</strong>
+                    </span>
+                    <span className="font-semibold tabular-nums">
+                      약정 총 공급가: {formatStandardQuoteCurrency(committedTotal)}원
+                      <span className="ml-1 text-[10px] font-normal text-[#084734]/70">(VAT 별도)</span>
+                    </span>
+                  </div>
+                )
+              })()}
+              {templateId === "recording_studio" && optionSelections.payment_plan === "12_month" && (
+                <div className="mt-1.5 flex items-center justify-between gap-2 rounded-lg bg-[#FBF1E0] px-3 py-1.5 text-xs text-[#7A520F] ring-1 ring-[#ECD29C]">
+                  <span className="font-medium">12개월 분할 납부 제안 시</span>
+                  <span className="font-semibold tabular-nums">
+                    월 약 {formatStandardQuoteCurrency(Math.round((totals.grandTotalAmount ?? 0) / 12))}원
+                    <span className="ml-1 text-[10px] font-normal text-[#A8741A]">(VAT 포함)</span>
+                  </span>
+                </div>
+              )}
               {totals.hasPendingAmounts && (
                 <p className="mt-1 text-[11px] leading-5 text-[#B85C33]">{totals.pendingAmountNote}</p>
               )}
@@ -2439,7 +2501,7 @@ export default function QuickQuoteComposer({
 
               <section className={COMPACT_CARD_CLASS}>
                 <SectionHeading step="03" title="조건" hint="발행 · 유효기한 · 세금 · 우리 쪽 담당자" />
-                <div className="mt-2.5 grid gap-2.5 md:grid-cols-3">
+                <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2 md:grid-cols-4">
                   <div className="grid gap-1.5">
                     <FieldLabel htmlFor="quote-issued-at">발행일</FieldLabel>
                     <Input
@@ -2557,54 +2619,76 @@ export default function QuickQuoteComposer({
                     />
                   </div>
 
-                  <div className="grid gap-1.5 md:col-span-2">
-                    <FieldLabel
-                      htmlFor="quote-supplier-manager"
-                      hint={isSoftwareQuote ? "클래스인 명의" : "퀴드러닝 명의"}
-                    >
-                      공급자 담당자
-                    </FieldLabel>
-                    <div className={`grid gap-1.5 ${managerManualMode && hasManagerOptions ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
-                      {hasManagerOptions && (
-                        <select
-                          id="quote-supplier-manager"
-                          value={managerSelection}
-                          onChange={(event) => handleManagerSelectionChange(event.target.value)}
-                          className={COMPACT_SELECT_CLASS}
+                  {/* 공식 공급처(명의) 스냅샷 & 담당자 카드 */}
+                  <div className="col-span-full rounded-[10px] border border-black/[0.08] bg-[#FAF9F5] p-3 text-[12px]">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/[0.06] pb-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ${
+                            isSoftwareQuote
+                              ? "bg-[#ECFDF5] text-[#084734] ring-[#BDEFD8]"
+                              : "bg-white text-[#615D59] ring-[#e8e8e4]"
+                          }`}
                         >
-                          <option value="">
-                            {supplierDefaults.supplierContactName
-                              ? `기본 담당자 (${supplierDefaults.supplierContactName})`
-                              : "담당자 선택"}
-                          </option>
-                          {managerOptions.map((option) => (
-                            <option key={option.name} value={option.name}>
-                              {option.label ?? option.name}
-                            </option>
-                          ))}
-                          <option value={MANAGER_CUSTOM_VALUE}>직접 입력</option>
-                        </select>
-                      )}
-                      {managerManualMode && (
-                        <Input
-                          value={managerContactName}
-                          onChange={(event) => setManagerContactName(event.target.value)}
-                          placeholder="담당자명"
-                          className={COMPACT_INPUT_CLASS}
-                          aria-label="공급자 담당자명"
-                        />
-                      )}
-                      <Input
-                        value={managerContactPhone}
-                        onChange={(event) => setManagerContactPhone(event.target.value)}
-                        placeholder={supplierDefaults.supplierContactPhone || "연락처 (010-0000-0000)"}
-                        className={COMPACT_INPUT_CLASS}
-                        aria-label="공급자 담당자 연락처"
-                      />
+                          {isSoftwareQuote ? "SW 공식 공급처" : "HW 공식 총판"}
+                        </span>
+                        <span className="font-semibold text-[#111110]">
+                          {resolvedSupplier.supplierBusinessName}
+                        </span>
+                        {resolvedSupplier.supplierRepresentativeName && (
+                          <span className="text-[11px] text-[#615D59]">
+                            대표 {resolvedSupplier.supplierRepresentativeName}
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-mono text-[11px] text-[#A39E98]">
+                        사업자번호: {resolvedSupplier.supplierBusinessRegistrationNumber || "-"}
+                      </span>
                     </div>
-                    <p className="text-[11px] text-[#A39E98]">
-                      견적서 표기: {resolvedSupplier.supplierContactName || "-"} / {resolvedSupplier.supplierContactPhone || "-"}
-                    </p>
+
+                    <div className="mt-2.5 grid gap-2 sm:grid-cols-[120px_minmax(0,1fr)] sm:items-center">
+                      <FieldLabel htmlFor="quote-supplier-manager" hint="견적서 표기">
+                        공급자 담당자
+                      </FieldLabel>
+                      <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
+                        {hasManagerOptions && (
+                          <select
+                            id="quote-supplier-manager"
+                            value={managerSelection}
+                            onChange={(event) => handleManagerSelectionChange(event.target.value)}
+                            className={`${COMPACT_SELECT_CLASS} max-w-[170px]`}
+                          >
+                            <option value="">
+                              {supplierDefaults.supplierContactName
+                                ? `기본 (${supplierDefaults.supplierContactName})`
+                                : "담당자 선택"}
+                            </option>
+                            {managerOptions.map((option) => (
+                              <option key={option.name} value={option.name}>
+                                {option.label ?? option.name}
+                              </option>
+                            ))}
+                            <option value={MANAGER_CUSTOM_VALUE}>직접 입력</option>
+                          </select>
+                        )}
+                        {managerManualMode && (
+                          <Input
+                            value={managerContactName}
+                            onChange={(event) => setManagerContactName(event.target.value)}
+                            placeholder="담당자명"
+                            className={`${COMPACT_INPUT_CLASS} w-24`}
+                            aria-label="공급자 담당자명"
+                          />
+                        )}
+                        <Input
+                          value={managerContactPhone}
+                          onChange={(event) => setManagerContactPhone(event.target.value)}
+                          placeholder={supplierDefaults.supplierContactPhone || "연락처 (010-0000-0000)"}
+                          className={`${COMPACT_INPUT_CLASS} w-36`}
+                          aria-label="공급자 담당자 연락처"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </section>

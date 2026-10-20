@@ -11,6 +11,7 @@ export type StandardQuoteTemplateId =
   | "board_86"
   | "recording_studio"
   | "online_suite"
+  | "business_recharge"
 export type StandardQuoteOptionSelections = Record<string, QuoteOptionSelectionValue | undefined>
 
 type TemplateLinePreset = {
@@ -93,8 +94,11 @@ export const CLASSIN_QUOTE_SUPPLIER = {
   contactEmail: "",
 } as const
 
-// 소프트웨어(구독형) 템플릿 목록. SW 견적은 공급자가 클래스인.
-const SOFTWARE_QUOTE_TEMPLATE_IDS: StandardQuoteTemplateId[] = ["online_suite"]
+// 소프트웨어(충전형/구독형) 템플릿 목록. SW 견적은 공급자가 클래스인.
+const SOFTWARE_QUOTE_TEMPLATE_IDS: StandardQuoteTemplateId[] = [
+  "business_recharge",
+  "online_suite",
+]
 
 export function isSoftwareQuoteTemplate(templateId?: string | null): boolean {
   return SOFTWARE_QUOTE_TEMPLATE_IDS.includes(templateId as StandardQuoteTemplateId)
@@ -568,7 +572,87 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
       },
     ],
   },
+  {
+    id: "business_recharge",
+    label: "ClassIn Business 충전",
+    description: "가상교실 및 스토리지 이용 크레딧 충전형 (금액 직접 수정 가능)",
+    lines: [
+      {
+        itemType: "service",
+        itemCode: "classin-business-recharge",
+        itemName: "ClassIn Business 수업 크레딧 충전",
+        itemDescription: "대화형 가상교실 및 클라우드 스토리지 이용 크레딧 (1크레딧 = 1원)",
+        quantity: 1,
+        quantityUnit: "식",
+        unitPrice: 2_000_000,
+        quantityEditable: false,
+        priceEditable: true,
+      },
+    ],
+    optionGroups: [
+      {
+        id: "credit_validity",
+        label: "크레딧 유효기간",
+        description: "충전 크레딧 사용 유효기간을 견적서에 표시합니다.",
+        control: "radio",
+        defaultValue: "1_year",
+        options: [
+          { value: "1_year", label: "1년 (기본)", description: "충전일로부터 1년간 유효" },
+          { value: "2_year", label: "2년", description: "충전일로부터 2년간 유효" },
+          { value: "custom", label: "협의", description: "유효기간 별도 상호 협의" },
+        ],
+      },
+      {
+        id: "support_setup",
+        label: "초기 기관 세팅",
+        description: "기관 전용 마스터 계정 세팅 및 교사 교육 포함 안내",
+        control: "toggle",
+        defaultValue: true,
+        enabledLabel: "포함",
+        disabledLabel: "제외",
+      },
+    ],
+    quickPresets: [
+      {
+        id: "recharge_200",
+        label: "200만 기본",
+        description: "최소 기본 충전 금액",
+        templateId: "business_recharge",
+        optionSelections: {
+          credit_validity: "1_year",
+          support_setup: true,
+        },
+      },
+      {
+        id: "recharge_400",
+        label: "400만 패키지",
+        description: "중형 학원 권장 충전",
+        templateId: "business_recharge",
+        optionSelections: {
+          credit_validity: "1_year",
+          support_setup: true,
+        },
+      },
+      {
+        id: "recharge_1000",
+        label: "1,000만 패키지",
+        description: "대형 기관 일괄 충전",
+        templateId: "business_recharge",
+        optionSelections: {
+          credit_validity: "2_year",
+          support_setup: true,
+        },
+      },
+    ],
+  },
 ]
+
+/** AI Suite 계약 기간 옵션 → 개월 수. 협의(custom)·미지정은 null. */
+export function getOnlineSuiteTermMonths(contractTerm?: string | null): number | null {
+  if (contractTerm === "36_month") return 36
+  if (contractTerm === "12_month") return 12
+  return null
+}
 
 type BuildConfigurableStandardQuoteInput = {
   templateId?: string | null
@@ -651,6 +735,7 @@ function getExistingLineMap(existingItems: PartnerQuoteDetailsInput["lineItems"]
 }
 
 function inferTemplateIdFromItemCode(itemCode?: string | null): StandardQuoteTemplateId {
+  if (itemCode === "classin-business-recharge") return "business_recharge"
   if (itemCode === "ai-studio-recording-set") return "recording_studio"
   if (itemCode === "online-suite-monthly") return "online_suite"
   if (itemCode === "board-75") return "board_75"
@@ -936,15 +1021,21 @@ export function buildConfigurableStandardQuoteDetails({
       priceLocked?: boolean
       quantityLocked?: boolean
       remark?: string
+      /** 여러 옵션·단가에서 파생되는 조건 행 — 사용자 편집과 무관하게 매번 문구를 다시 만든다. */
+      alwaysRegenerateText?: boolean
     }
   ) => {
     const existingLine = existingMap.get(code)
+    // 같은 옵션이 유지될 때만 작성자가 고친 이름·설명을 살린다. 옵션이 바뀌었는데 옛 문구를
+    // 남기면 "별도 청구 예정"이라 적힌 행이 0원 포함으로 합계에 잡히는 식으로 문구와 금액이 어긋난다.
+    const keepEditedText =
+      !config.alwaysRegenerateText && existingLine?.optionId === config.optionId
     generatedItems.push({
       id: existingLine?.id,
       itemType: config.itemType,
       itemCode: code,
-      itemName: existingLine?.itemName ?? config.itemName,
-      itemDescription: existingLine?.itemDescription ?? config.itemDescription,
+      itemName: (keepEditedText ? existingLine?.itemName : undefined) ?? config.itemName,
+      itemDescription: (keepEditedText ? existingLine?.itemDescription : undefined) ?? config.itemDescription,
       quantity: config.quantity,
       quantityUnit: config.quantityUnit ?? "식",
       unitPrice:
@@ -973,27 +1064,39 @@ export function buildConfigurableStandardQuoteDetails({
     const paymentPlan = readSelectionString(selections, "payment_plan", "one_time")
     const deliveryIncluded = readSelectionBoolean(selections, "delivery_policy", true)
 
+    // 할부 여부와 설치 배송비 정책은 서로 독립이다. 예전에는 12개월 할부를 고르면
+    // 배송비 토글을 무시하고 항상 "설치 배송비 포함"이라고 적었다.
+    const deliveryText = deliveryIncluded ? "설치 배송비 포함" : "설치 배송비 별도 협의"
     addOptionalLine("recording-studio-condition", {
       itemType: "note_only",
       itemName: paymentPlan === "12_month" ? "12개월 할부 안내" : "납품 조건",
       itemDescription: paymentPlan === "12_month"
-        ? "설치 배송비 포함 · 12개월 할부 가능"
-        : deliveryIncluded
-          ? "설치 배송비 포함"
-          : "설치 배송비 별도 협의",
+        ? `${deliveryText} · 12개월 할부 가능`
+        : deliveryText,
       quantity: 1,
       unitPrice: 0,
       lineStatus: "informational",
       optionGroupId: "payment_plan",
       optionId: paymentPlan,
       priceLocked: true,
+      alwaysRegenerateText: true,
     })
   } else if (resolvedTemplateId === "online_suite") {
     const contractTerm = readSelectionString(selections, "contract_term", "36_month")
     const includeLanding = readSelectionBoolean(selections, "landing_page", true)
     const includeAuthorization = readSelectionBoolean(selections, "authorization_support", true)
+    // 월 단가 라인 하나만 있으면 고객은 약정 총액을 따로 계산해야 한다 — 기간이 정해진
+    // 경우 총액을 조건 행에 함께 적는다(합계에는 넣지 않는 정보성 문구).
+    const termMonths = getOnlineSuiteTermMonths(contractTerm)
+    const monthlyPrice = Number(mainExisting?.unitPrice ?? mainTemplateLine.unitPrice ?? 0)
+    const termText = termMonths
+      ? `${termMonths}개월 ${contractTerm === "12_month" ? "파일럿" : "구독/할부"} 기준` +
+        (monthlyPrice > 0
+          ? ` (월 ${formatStandardQuoteCurrency(monthlyPrice)}원 × ${termMonths}개월 = 약정 총액 ${formatStandardQuoteCurrency(monthlyPrice * termMonths)}원)`
+          : "")
+      : "계약 기간 별도 협의"
     const notes = [
-      contractTerm === "36_month" ? "36개월 구독/할부 기준" : contractTerm === "12_month" ? "12개월 파일럿 기준" : "계약 기간 별도 협의",
+      termText,
       includeLanding ? "랜딩페이지 제작 포함" : "랜딩페이지 제작 제외",
       includeAuthorization ? "온라인 관련 사업자 인가 대행 포함" : "인가 대행 제외",
       "설치 배송비 별도",
@@ -1009,6 +1112,29 @@ export function buildConfigurableStandardQuoteDetails({
       optionGroupId: "contract_term",
       optionId: contractTerm,
       priceLocked: true,
+      alwaysRegenerateText: true,
+    })
+  } else if (resolvedTemplateId === "business_recharge") {
+    const validity = readSelectionString(selections, "credit_validity", "1_year")
+    const supportSetup = readSelectionBoolean(selections, "support_setup", true)
+    const validityText =
+      validity === "1_year"
+        ? "충전일로부터 1년간 유효"
+        : validity === "2_year"
+          ? "충전일로부터 2년간 유효"
+          : "크레딧 유효기간 별도 협의"
+
+    addOptionalLine("business-recharge-condition", {
+      itemType: "note_only",
+      itemName: "충전 조건",
+      itemDescription: `${validityText} · ${supportSetup ? "초기 기관 세팅 및 교사 교육 포함" : "자체 세팅 기준"}`,
+      quantity: 1,
+      unitPrice: 0,
+      lineStatus: "informational",
+      optionGroupId: "credit_validity",
+      optionId: validity,
+      priceLocked: true,
+      alwaysRegenerateText: true,
     })
   } else if (resolvedTemplateId === "camera_t1") {
     if (installationMode === "included_quote") {
@@ -1200,7 +1326,7 @@ export function buildStandardQuoteFileLabel(quoteDetails: PartnerQuoteDetailsInp
 
 export type QuoteProductLine = "software" | "hardware"
 
-export const DEFAULT_SOFTWARE_QUOTE_TEMPLATE_ID: StandardQuoteTemplateId = "online_suite"
+export const DEFAULT_SOFTWARE_QUOTE_TEMPLATE_ID: StandardQuoteTemplateId = "business_recharge"
 export const DEFAULT_HARDWARE_QUOTE_TEMPLATE_ID: StandardQuoteTemplateId = "board_86"
 
 /**
@@ -1210,6 +1336,9 @@ export const DEFAULT_HARDWARE_QUOTE_TEMPLATE_ID: StandardQuoteTemplateId = "boar
 const SOFTWARE_QUOTE_TEXT_HINTS = [
   "소프트웨어",
   "software",
+  "충전",
+  "크레딧",
+  "business",
   "ai suite",
   "구독형",
   "enterprise",

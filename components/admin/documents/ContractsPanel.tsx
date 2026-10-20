@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { Plus, RefreshCw, Trash2, X, PenLine, Copy, Check, Send, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
+import { adminFetch, adminFetchJsonCached, clearAdminRequestCache } from "@/lib/admin-client"
 import { useUrlState } from "@/lib/use-url-state"
 import type { Contract, ContractStatus, Partner } from "@/lib/supabase/database.types"
 
@@ -33,7 +33,7 @@ const STATUS_LABEL: Record<ContractStatus, string> = {
 const STATUS_COLOR: Record<ContractStatus, string> = {
   draft: "bg-[#f0f0ec] text-[#1a1a1a]/50",
   sent: "bg-[#ECFDF5] text-[#084734]",
-  partner_signed: "bg-yellow-50 text-yellow-700",
+  partner_signed: "bg-[#FBF1E0] text-[#A8741A]",
   admin_signed: "bg-[#D1FAE5] text-[#065c41]",
   completed: "bg-[#D1FAE5] text-[#065c41] font-semibold",
   cancelled: "bg-[#FEF3EE] text-[#B85C33]",
@@ -48,6 +48,63 @@ const STATUS_FILTERS: Array<ContractStatus | "all"> = [
   "completed",
   "cancelled",
 ]
+
+function SignatureStepBadge({
+  partnerSignedAt,
+  adminSignedAt,
+  status,
+}: {
+  partnerSignedAt: string | null
+  adminSignedAt: string | null
+  status: ContractStatus
+}) {
+  if (status === "completed" || (partnerSignedAt && adminSignedAt)) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-[#ECFDF5] px-2.5 py-0.5 text-[11px] font-semibold text-[#084734] ring-1 ring-[#BDEFD8]">
+        <Check className="h-3 w-3" />
+        체결 완료
+      </span>
+    )
+  }
+
+  if (partnerSignedAt) {
+    return (
+      <span
+        title={`파트너 서명 완료 (${new Date(partnerSignedAt).toLocaleDateString("ko")}) · 어드민 서명 대기`}
+        className="inline-flex items-center gap-1 rounded-full bg-[#FBF1E0] px-2.5 py-0.5 text-[11px] font-medium text-[#A8741A] ring-1 ring-[#ECD29C]"
+      >
+        <span className="inline-flex items-center text-[#084734] font-semibold">
+          <Check className="mr-0.5 h-3 w-3" />
+          파트너
+        </span>
+        <span className="text-[#A8741A]/50">→</span>
+        <span className="font-semibold text-[#7A520F]">어드민 서명 대기</span>
+      </span>
+    )
+  }
+
+  if (status === "draft") {
+    return (
+      <span className="inline-flex items-center rounded-full bg-[#f0f0ec] px-2 py-0.5 text-[11px] text-[#1a1a1a]/50">
+        초안 (미발송)
+      </span>
+    )
+  }
+
+  if (status === "cancelled") {
+    return (
+      <span className="inline-flex items-center rounded-full bg-[#FEF3EE] px-2 py-0.5 text-[11px] text-[#B85C33]">
+        취소됨
+      </span>
+    )
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-[#fafaf8] px-2 py-0.5 text-[11px] text-[#A8741A] ring-1 ring-[#e8e8e4]">
+      파트너 서명 대기
+    </span>
+  )
+}
 
 function SignatureCanvas({ onSave }: { onSave: (dataUrl: string) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -190,6 +247,7 @@ export function ContractsPanel() {
       }
       setShowCreate(false)
       setCreateForm(EMPTY_CREATE_FORM)
+      clearAdminRequestCache("/api/admin/contracts")
       void load()
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : "계약서 생성에 실패했습니다.")
@@ -234,7 +292,10 @@ export function ContractsPanel() {
       method: "PUT",
       body: JSON.stringify({ status: "sent" }),
     })
-    if (res.ok) load()
+    if (res.ok) {
+      clearAdminRequestCache("/api/admin/contracts")
+      load()
+    }
   }
 
   async function handleAdminSign(dataUrl: string) {
@@ -245,6 +306,7 @@ export function ContractsPanel() {
       body: JSON.stringify({ signature_data: dataUrl, admin_user_id: "" }),
     })
     if (res.ok) {
+      clearAdminRequestCache("/api/admin/contracts")
       setShowSign(false)
       setSelected(null)
       load()
@@ -258,6 +320,7 @@ export function ContractsPanel() {
   async function handleDelete(id: string) {
     if (!confirm("이 계약을 삭제할까요?")) return
     await adminFetch(`/api/admin/contracts/${id}`, { method: "DELETE" })
+    clearAdminRequestCache("/api/admin/contracts")
     load()
   }
 
@@ -350,26 +413,18 @@ export function ContractsPanel() {
                     </div>
                     <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${STATUS_COLOR[c.status]}`}>{STATUS_LABEL[c.status]}</span>
                   </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                  <div className="mt-3 flex items-center justify-between border-t border-[#f0f0ec] pt-2.5 text-xs">
                     <div>
-                      <p className="text-[#1a1a1a]/32">금액</p>
+                      <p className="text-[11px] text-[#1a1a1a]/40">계약 금액</p>
                       <p className="mt-0.5 font-semibold tabular-nums text-[#111110]">{c.total_amount.toLocaleString("ko-KR")}원</p>
                     </div>
-                    <div>
-                      <p className="text-[#1a1a1a]/32">파트너 서명</p>
-                      {c.partner_signed_at ? (
-                        <p className="mt-0.5 font-medium text-green-600">완료 {new Date(c.partner_signed_at).toLocaleDateString("ko")}</p>
-                      ) : (
-                        <p className="mt-0.5 text-[#1a1a1a]/35">대기</p>
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-[#1a1a1a]/32">어드민 서명</p>
-                      {c.admin_signed_at ? (
-                        <p className="mt-0.5 font-medium text-green-600">완료 {new Date(c.admin_signed_at).toLocaleDateString("ko")}</p>
-                      ) : (
-                        <p className="mt-0.5 text-[#1a1a1a]/35">대기</p>
-                      )}
+                    <div className="text-right">
+                      <p className="mb-1 text-[11px] text-[#1a1a1a]/40">서명 진행</p>
+                      <SignatureStepBadge
+                        partnerSignedAt={c.partner_signed_at}
+                        adminSignedAt={c.admin_signed_at}
+                        status={c.status}
+                      />
                     </div>
                   </div>
                   <div className="mt-3 flex flex-col gap-2 sm:flex-row">
@@ -381,7 +436,7 @@ export function ContractsPanel() {
                     )}
                     {["sent", "draft"].includes(c.status) && c.sign_token && (
                       <Button variant="outline" size="sm" className="w-full" onClick={() => copySignLink(c)}>
-                        {copied === c.id ? <Check className="mr-1 h-3.5 w-3.5 text-green-500" /> : <Copy className="mr-1 h-3.5 w-3.5" />}
+                        {copied === c.id ? <Check className="mr-1 h-3.5 w-3.5 text-[#084734]" /> : <Copy className="mr-1 h-3.5 w-3.5" />}
                         링크 복사
                       </Button>
                     )}
@@ -412,7 +467,7 @@ export function ContractsPanel() {
               <table className="w-full text-sm">
                 <thead className="bg-[#f7f7f5] border-b border-[#e8e8e4]">
                   <tr>
-                    {["번호", "파트너", "제목", "금액", "상태", "파트너 서명", "어드민 서명", ""].map((h) => (
+                    {["번호", "파트너", "제목", "금액", "상태", "서명 진행", ""].map((h) => (
                       <th key={h} className="px-4 py-3 text-left font-medium text-[#1a1a1a]/60 text-xs">
                         {h}
                       </th>
@@ -430,18 +485,11 @@ export function ContractsPanel() {
                         <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLOR[c.status]}`}>{STATUS_LABEL[c.status]}</span>
                       </td>
                       <td className="px-4 py-3 text-xs">
-                        {c.partner_signed_at ? (
-                          <span className="text-green-600">완료 {new Date(c.partner_signed_at).toLocaleDateString("ko")}</span>
-                        ) : (
-                          <span className="text-[#1a1a1a]/30">대기</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-xs">
-                        {c.admin_signed_at ? (
-                          <span className="text-green-600">완료 {new Date(c.admin_signed_at).toLocaleDateString("ko")}</span>
-                        ) : (
-                          <span className="text-[#1a1a1a]/30">대기</span>
-                        )}
+                        <SignatureStepBadge
+                          partnerSignedAt={c.partner_signed_at}
+                          adminSignedAt={c.admin_signed_at}
+                          status={c.status}
+                        />
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
@@ -453,7 +501,7 @@ export function ContractsPanel() {
                           )}
                           {["sent", "draft"].includes(c.status) && c.sign_token && (
                             <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => copySignLink(c)}>
-                              {copied === c.id ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                              {copied === c.id ? <Check className="w-3.5 h-3.5 text-[#084734]" /> : <Copy className="w-3.5 h-3.5" />}
                             </Button>
                           )}
                           {c.status === "partner_signed" && (
@@ -510,7 +558,7 @@ export function ContractsPanel() {
                     required
                     value={createForm.partner_id}
                     onChange={(e) => setCreateForm({ ...createForm, partner_id: e.target.value })}
-                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#1a1a1a]"
+                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#084734]"
                   >
                     <option value="">선택</option>
                     {partners.map((p) => (
@@ -527,7 +575,7 @@ export function ContractsPanel() {
                     value={createForm.title}
                     onChange={(e) => setCreateForm({ ...createForm, title: e.target.value })}
                     placeholder="예: 86형 전자칠판 공급 계약"
-                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#1a1a1a]"
+                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#084734]"
                   />
                 </div>
                 <div className="sm:col-span-2">
@@ -538,7 +586,7 @@ export function ContractsPanel() {
                     min={0}
                     value={createForm.total_amount || ""}
                     onChange={(e) => setCreateForm({ ...createForm, total_amount: Math.max(0, Math.round(+e.target.value || 0)) })}
-                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm tabular-nums focus:outline-none focus:border-[#1a1a1a]"
+                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm tabular-nums focus:outline-none focus:border-[#084734]"
                   />
                 </div>
                 <div className="sm:col-span-2">
@@ -548,7 +596,7 @@ export function ContractsPanel() {
                     onChange={(e) => setCreateForm({ ...createForm, notes: e.target.value })}
                     rows={2}
                     placeholder="근거 견적 번호, 특이 조건 등"
-                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#1a1a1a] resize-none"
+                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#084734] resize-none"
                   />
                 </div>
               </div>

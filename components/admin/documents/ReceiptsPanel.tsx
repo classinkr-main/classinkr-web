@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { Plus, RefreshCw, Trash2, X, Download, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
+import { adminFetch, adminFetchJsonCached, clearAdminRequestCache } from "@/lib/admin-client"
 import { useUrlState } from "@/lib/use-url-state"
 import type { Receipt, Partner, PaymentMethod } from "@/lib/supabase/database.types"
 
@@ -79,6 +79,7 @@ export function ReceiptsPanel() {
     }
     const res = await adminFetch("/api/admin/receipts", { method: "POST", body: JSON.stringify(payload) })
     if (res.ok) {
+      clearAdminRequestCache("/api/admin/receipts")
       setShowForm(false)
       setForm(EMPTY_FORM)
       load()
@@ -89,6 +90,7 @@ export function ReceiptsPanel() {
   async function handleDelete(id: string) {
     if (!confirm("이 영수증을 삭제할까요?")) return
     await adminFetch(`/api/admin/receipts/${id}`, { method: "DELETE" })
+    clearAdminRequestCache("/api/admin/receipts")
     load()
   }
 
@@ -265,7 +267,7 @@ export function ReceiptsPanel() {
                     required
                     value={form.partner_id}
                     onChange={(e) => setForm({ ...form, partner_id: e.target.value })}
-                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#1a1a1a]"
+                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#084734]"
                   >
                     <option value="">선택</option>
                     {partners.map((p) => (
@@ -276,34 +278,37 @@ export function ReceiptsPanel() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">결제수단</label>
-                  <select
-                    value={form.payment_method}
-                    onChange={(e) => setForm({ ...form, payment_method: e.target.value as PaymentMethod })}
-                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#1a1a1a]"
-                  >
-                    <option value="bank_transfer">계좌이체</option>
-                    <option value="card">카드</option>
-                    <option value="cash">현금</option>
-                  </select>
+                  <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1.5 block">결제수단</label>
+                  <div className="grid grid-cols-3 gap-1 rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-1">
+                    {(["bank_transfer", "card", "cash"] as PaymentMethod[]).map((method) => {
+                      const active = form.payment_method === method
+                      return (
+                        <button
+                          key={method}
+                          type="button"
+                          onClick={() => setForm((prev) => ({ ...prev, payment_method: method }))}
+                          className={`rounded-md py-1.5 text-xs font-medium transition-all ${
+                            active
+                              ? "bg-white text-[#111110] shadow-xs"
+                              : "text-[#615D59] hover:text-[#111110]"
+                          }`}
+                        >
+                          {METHOD_LABEL[method]}
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">공급가액 *</label>
+                  <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">공급가액 (원) *</label>
                   <input
                     type="number"
                     required
                     min={0}
                     value={form.amount || ""}
                     onChange={(e) => handleAmountChange(+e.target.value)}
-                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#1a1a1a]"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">합계 (VAT 포함)</label>
-                  <input
-                    readOnly
-                    value={`${form.total_amount.toLocaleString("ko-KR")}원`}
-                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm tabular-nums bg-[#f7f7f5] text-[#1a1a1a]/60"
+                    placeholder="0"
+                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm tabular-nums focus:outline-none focus:border-[#084734]"
                   />
                 </div>
                 <div>
@@ -312,8 +317,24 @@ export function ReceiptsPanel() {
                     type="date"
                     value={form.paid_at}
                     onChange={(e) => setForm({ ...form, paid_at: e.target.value })}
-                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#1a1a1a]"
+                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#084734]"
                   />
+                </div>
+
+                {/* 실시간 계산 영수증 요약 카드 */}
+                <div className="sm:col-span-2 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-3 text-xs">
+                  <div className="flex justify-between text-[#1a1a1a]/60">
+                    <span>공급가액</span>
+                    <span className="font-mono tabular-nums">{form.amount.toLocaleString("ko-KR")}원</span>
+                  </div>
+                  <div className="mt-1 flex justify-between text-[#1a1a1a]/60">
+                    <span>부가세 (10%)</span>
+                    <span className="font-mono tabular-nums">{form.tax_amount.toLocaleString("ko-KR")}원</span>
+                  </div>
+                  <div className="mt-2 flex justify-between border-t border-[#e8e8e4] pt-2 text-sm font-semibold text-[#111110]">
+                    <span>발행 합계 (VAT 포함)</span>
+                    <span className="font-mono text-[#084734] tabular-nums">{form.total_amount.toLocaleString("ko-KR")}원</span>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 pt-5">
                   <input
@@ -334,7 +355,7 @@ export function ReceiptsPanel() {
                       <select
                         value={form.cash_receipt_type}
                         onChange={(e) => setForm({ ...form, cash_receipt_type: e.target.value })}
-                        className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#1a1a1a]"
+                        className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#084734]"
                       >
                         <option value="personal">개인</option>
                         <option value="business">사업자</option>
@@ -346,7 +367,7 @@ export function ReceiptsPanel() {
                         value={form.cash_receipt_number}
                         onChange={(e) => setForm({ ...form, cash_receipt_number: e.target.value })}
                         placeholder="사업자번호 또는 휴대폰번호"
-                        className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#1a1a1a]"
+                        className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#084734]"
                       />
                     </div>
                   </>
@@ -357,7 +378,7 @@ export function ReceiptsPanel() {
                     value={form.notes}
                     onChange={(e) => setForm({ ...form, notes: e.target.value })}
                     rows={2}
-                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#1a1a1a] resize-none"
+                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#084734] resize-none"
                   />
                 </div>
               </div>
