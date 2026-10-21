@@ -1,11 +1,12 @@
 "use client"
 
 // components/admin/campaigns/projects/ProjectDetailPanel.tsx
-// 마케팅 프로젝트 상세(D3-3) — 우측 슬라이드오버. 롤업 카드(멤버 캠페인 롤업 + 예산 소진 바 + 정직 캡션)
-// + 멤버 캠페인 목록(각 "제외") + "캠페인 추가" 피커. GET /[id] 로 프로젝트 + 롤업 + 멤버 캠페인을 조회한다.
+// 마케팅 프로젝트 상세(D3-3) — 우측 슬라이드오버. 예산 페이싱 카드(기간 경과 vs 소진 + 오늘 눈금 +
+// 소진·배정·잔여) + 롤업 요약 + 멤버 캠페인(상태별 묶음, 각 "제외") + "캠페인 추가" 피커.
+// GET /[id] 로 프로젝트 + 롤업 + 멤버 캠페인을 조회한다.
 // 마이그 미적용이면 API 가 500/404 → 크래시 없이 에러 카드/자동 닫힘으로 강등(그레이스풀).
 // "편집"은 ProjectFormDrawer 를 재사용한다(리빌드 금지).
-// 정직 규칙: 예산 소진은 행사 KRW 광고비만(Meta USD·이메일·문자 제외) — 요약 카드가 ProjectBudgetCaveat 로 1회 명시.
+// 정직 규칙: 예산 소진은 행사 KRW 광고비만(Meta USD·이메일·문자 제외) — 페이싱 카드가 ProjectBudgetCaveat 로 1회 명시.
 // DESIGN.md 팔레트만 사용.
 
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -16,12 +17,14 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  User,
   X,
 } from "lucide-react"
 
 import { adminFetch, adminFetchJson } from "@/lib/admin-client"
 import { useToast } from "@/components/ui/toast"
 import { useDialogFocus } from "@/components/admin/use-dialog-focus"
+import { computeProjectPacing, type ProjectPacing } from "@/lib/marketing/project-pacing"
 import type {
   CampaignWithLinks,
   MarketingProject,
@@ -29,13 +32,25 @@ import type {
   ProjectWithRollup,
 } from "@/lib/types/marketing-campaign"
 
-import { channelLabel } from "../manage/CampaignRow"
+import {
+  CAMPAIGN_STATUS_RAIL,
+  channelLabel,
+  formatBudget,
+  formatCampaignPeriod,
+  formatDotDate,
+} from "../manage/CampaignRow"
 import { ProjectFormDrawer } from "./ProjectFormDrawer"
 import {
-  ProjectBudgetBlock,
+  DDAY_TONE_TEXT,
+  PACE_TONE_TEXT,
+  PROJECT_STATUS_ORDER,
+  PacingBar,
   ProjectBudgetCaveat,
   ProjectRollupStats,
   ProjectStatusChip,
+  ProjectStatusGroupHeading,
+  budgetSpendView,
+  formatWon,
 } from "./ProjectCard"
 
 type DetailResponse = {
@@ -46,8 +61,130 @@ type DetailResponse = {
 
 interface ProjectDetailPanelProps {
   project: ProjectWithRollup // 리스트 요약 — 즉시 헤더 + 롤업 폴백. 상세는 GET /[id] 로 새로 조회.
+  today: string // 페이싱 기준일(KST YYYY-MM-DD) — 리스트와 같은 날로 판정한다.
   onClose: () => void // 부모에서 memoized(안정) — load 의 deps 로 안전하게 쓰인다.
   onListChanged: () => void | Promise<void> // 부모 리스트 리페치(멤버 수·롤업·필드 변경 반영).
+}
+
+/* ── 예산 페이싱 카드(순수·프레젠테이션) ──────────────────────── */
+
+// 하단 3분할 수치 — 라벨은 조역, 금액이 주역.
+function PacingFigure({
+  label,
+  value,
+  valueClass,
+  divide = false,
+}: {
+  label: string
+  value: string
+  valueClass: string
+  divide?: boolean
+}) {
+  return (
+    <div
+      className={`flex min-w-0 flex-col gap-1 ${
+        divide ? "border-l border-[rgba(0,0,0,0.08)] pl-3.5" : ""
+      }`}
+    >
+      <span className="text-[10.5px] text-[#A39E98]">{label}</span>
+      <b className={`text-[14px] font-bold tabular-nums sm:text-[15px] ${valueClass}`}>{value}</b>
+    </div>
+  )
+}
+
+/**
+ * 기간 경과와 예산 소진을 같은 폭 4px 미터 두 줄로 겹쳐 비교한다. 진행 기간 안이면 "오늘" 눈금이
+ * 두 줄을 가로지른다 — 소진 막대 끝이 눈금보다 앞서면 빠름, 뒤면 느림. 눈금 길이(-34px)는
+ * 미터 줄 높이(h-4)와 줄 간격(gap-3)에 맞춘 값이라 셋을 함께 바꾼다(위아래로 6px씩 삐져나온다).
+ */
+function ProjectPacingSection({
+  project,
+  rollup,
+  pacing,
+  today,
+}: {
+  project: MarketingProject
+  rollup: ProjectRollup
+  pacing: ProjectPacing
+  today: string
+}) {
+  const spend = budgetSpendView(rollup)
+  const remain = rollup.budgetAllocated == null ? null : rollup.budgetAllocated - rollup.budgetSpent
+
+  return (
+    <section className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-4 sm:p-5">
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <h3 className="text-[13px] font-bold text-[#111110]">예산 페이싱</h3>
+        <span className={`text-[11px] font-semibold ${PACE_TONE_TEXT[pacing.pace.tone]}`}>
+          {pacing.pace.label}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-[60px_minmax(0,1fr)_48px] items-center gap-3">
+        <span aria-hidden />
+        <div className="flex justify-between gap-2 text-[10.5px] tabular-nums text-[#A39E98]">
+          <span>{project.startsAt ? formatDotDate(project.startsAt) : "시작일 미정"}</span>
+          <span>{project.endsAt ? formatDotDate(project.endsAt) : "종료일 미정"}</span>
+        </div>
+        <span aria-hidden />
+
+        <span className="text-[11px] text-[#615D59]">기간 경과</span>
+        <div className="flex h-4 items-center">
+          <PacingBar
+            pct={pacing.elapsedPct ?? 0}
+            fillClass="bg-[#A39E98]"
+            empty={pacing.elapsedPct == null}
+            className="h-1 w-full"
+          >
+            {pacing.todayInRange && (
+              <span
+                className="absolute -bottom-[34px] -top-1.5 w-px bg-[#111110]/35"
+                style={{ left: `${pacing.elapsedPct ?? 0}%` }}
+              />
+            )}
+          </PacingBar>
+        </div>
+        <span className="text-right text-[13px] font-semibold tabular-nums text-[#615D59]">
+          {pacing.elapsedPct == null ? "—" : `${pacing.elapsedPct}%`}
+        </span>
+
+        <span className="text-[11px] text-[#615D59]">예산 소진</span>
+        <div className="flex h-4 items-center">
+          <PacingBar
+            pct={spend.barPct}
+            fillClass={spend.fillClass}
+            empty={!spend.hasBudget}
+            className="h-1 w-full"
+          />
+        </div>
+        <span className={`text-right text-[13px] font-bold tabular-nums ${spend.pctClass}`}>
+          {spend.pctText}
+        </span>
+      </div>
+
+      <div className="mt-[18px] grid grid-cols-3 border-t border-[rgba(0,0,0,0.08)] pt-3.5">
+        <PacingFigure label="소진" value={formatWon(rollup.budgetSpent)} valueClass="text-[#111110]" />
+        <PacingFigure
+          label="배정"
+          value={formatBudget(rollup.budgetAllocated)}
+          valueClass="text-[#31302E]"
+          divide
+        />
+        {/* 예산 미배정이면 잔여를 만들지 않는다(—). 음수는 "초과"로 이름을 바꿔 절댓값으로 말한다. */}
+        <PacingFigure
+          label={remain != null && remain < 0 ? "초과" : "잔여"}
+          value={remain == null ? "—" : formatWon(Math.abs(remain))}
+          valueClass={
+            remain == null ? "text-[#A39E98]" : remain < 0 ? "text-[#A8741A]" : "text-[#111110]"
+          }
+          divide
+        />
+      </div>
+
+      {/* 정직 캐비앗 — 이 패널은 프로젝트 1개짜리라 여기서 1회만 나온다. */}
+      <ProjectBudgetCaveat today={today} className="mt-3" />
+    </section>
+  )
 }
 
 /* ── 멤버 캠페인 행(순수·프레젠테이션) ────────────────────────── */
@@ -61,34 +198,54 @@ function MemberCampaignRow({
   removing: boolean
   onRemove: () => void
 }) {
+  const rail = CAMPAIGN_STATUS_RAIL[campaign.status]
   return (
-    <div className="flex items-start justify-between gap-2 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#fafaf8] px-2.5 py-2">
+    <div className="relative flex items-start justify-between gap-2 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#fafaf8] py-2 pl-3 pr-2.5">
+      {/* 상태 레일 — 진행/일시중지만(캠페인 관리 행과 같은 위계). */}
+      {rail && <span aria-hidden className={`absolute inset-y-2 left-0 w-[3px] rounded-r-full ${rail}`} />}
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="truncate text-[12px] font-semibold text-[#111110]">{campaign.name}</span>
+          <span
+            className={`truncate text-[12px] font-semibold ${
+              campaign.status === "done" ? "text-[#615D59]" : "text-[#111110]"
+            }`}
+          >
+            {campaign.name}
+          </span>
           <ProjectStatusChip status={campaign.status} />
         </div>
-        {campaign.channels.length > 0 && (
-          <div className="mt-1 flex flex-wrap items-center gap-1">
-            {campaign.channels.map((channel) => (
-              <span
-                key={channel}
-                className="inline-flex items-center rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-1.5 py-0.5 text-[10px] font-medium text-[#615D59]"
-              >
-                {channelLabel(channel)}
-              </span>
-            ))}
-          </div>
-        )}
+        <div className="mt-1 flex flex-wrap items-center gap-1">
+          {campaign.channels.map((channel) => (
+            <span
+              key={channel}
+              className="inline-flex items-center rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-1.5 py-0.5 text-[10px] font-medium text-[#615D59]"
+            >
+              {channelLabel(channel)}
+            </span>
+          ))}
+          <span className="pl-1 text-[10.5px] tabular-nums text-[#A39E98]">
+            {formatCampaignPeriod(campaign.startsAt, campaign.endsAt)}
+          </span>
+        </div>
       </div>
-      <button
-        type="button"
-        onClick={onRemove}
-        disabled={removing}
-        className="shrink-0 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 py-1 text-[11px] font-medium text-[#615D59] transition hover:border-[#F2B8B8] hover:bg-[#FCE9E9] hover:text-[#B43E3E] disabled:opacity-50"
-      >
-        {removing ? "제외 중..." : "제외"}
-      </button>
+      <div className="flex shrink-0 items-center gap-2">
+        {/* 예산 미정은 "값"이 아니라 부재 — 숫자와 같은 무게로 읽히지 않게 낮춘다. */}
+        <span
+          className={`text-[11.5px] font-semibold tabular-nums ${
+            campaign.budget == null ? "text-[#A39E98]" : "text-[#31302E]"
+          }`}
+        >
+          {formatBudget(campaign.budget)}
+        </span>
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={removing}
+          className="rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 py-1 text-[11px] font-medium text-[#615D59] transition hover:border-[#F2B8B8] hover:bg-[#FCE9E9] hover:text-[#B43E3E] disabled:opacity-50"
+        >
+          {removing ? "제외 중..." : "제외"}
+        </button>
+      </div>
     </div>
   )
 }
@@ -240,6 +397,7 @@ function AssignCampaignPicker({
 
 export default function ProjectDetailPanel({
   project,
+  today,
   onClose,
   onListChanged,
 }: ProjectDetailPanelProps) {
@@ -301,6 +459,10 @@ export default function ProjectDetailPanel({
   const head = data?.project ?? project
   const rollup = data?.rollup ?? project.rollup
   const campaigns = data?.campaigns ?? []
+  const pacing = computeProjectPacing(
+    { status: head.status, startsAt: head.startsAt, endsAt: head.endsAt, spentPct: rollup.spentPct },
+    today,
+  )
 
   async function handleEditSuccess(message: string) {
     setEditing(false)
@@ -332,6 +494,11 @@ export default function ProjectDetailPanel({
   }
 
   const memberCount = campaigns.length
+  // 멤버 캠페인도 리스트와 같은 상태 순서로 묶는다 — 묶음 안은 API 순서(최근 생성순).
+  const memberGroups = PROJECT_STATUS_ORDER.map((status) => ({
+    status,
+    items: campaigns.filter((c) => c.status === status),
+  })).filter((group) => group.items.length > 0)
 
   return (
     <>
@@ -348,7 +515,7 @@ export default function ProjectDetailPanel({
           aria-label={`프로젝트 상세: ${head.name}`}
         >
           {/* 헤더(고정) */}
-          <div className="shrink-0 border-b border-[rgba(0,0,0,0.08)] bg-white px-4 py-4 sm:px-5">
+          <div className="shrink-0 border-b border-[rgba(0,0,0,0.08)] bg-white px-4 py-4 leading-tight sm:px-5">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[#615D59]">
@@ -359,6 +526,27 @@ export default function ProjectDetailPanel({
                   <ProjectStatusChip status={head.status} />
                 </div>
                 {head.objective && <p className="mt-1 text-[12px] text-[#615D59]">{head.objective}</p>}
+                {/* 기간 · 담당 · D-day */}
+                <div className="mt-2 flex flex-wrap items-center gap-1 text-[11px] tabular-nums text-[#615D59]">
+                  <span>{formatCampaignPeriod(head.startsAt, head.endsAt)}</span>
+                  {head.owner && (
+                    <>
+                      <span className="text-[#A39E98]" aria-hidden>
+                        ·
+                      </span>
+                      <span className="inline-flex items-center gap-0.5">
+                        <User className="h-2.5 w-2.5 text-[#A39E98]" aria-hidden />
+                        {head.owner}
+                      </span>
+                    </>
+                  )}
+                  <span className="text-[#A39E98]" aria-hidden>
+                    ·
+                  </span>
+                  <span className={`font-semibold ${DDAY_TONE_TEXT[pacing.dday.tone]}`}>
+                    {pacing.dday.label}
+                  </span>
+                </div>
               </div>
               <button
                 ref={closeButtonRef}
@@ -393,11 +581,12 @@ export default function ProjectDetailPanel({
           </div>
 
           {/* 본문(스크롤) */}
-          <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-5">
+          <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 leading-tight sm:px-5">
             {loading && !data ? (
               <div className="space-y-3" aria-busy="true">
-                <div className="h-[150px] animate-pulse rounded-2xl border border-[rgba(0,0,0,0.08)] bg-[#f0f0ec]" />
-                <div className="h-[120px] animate-pulse rounded-2xl border border-[rgba(0,0,0,0.08)] bg-[#f0f0ec]" />
+                <div className="h-[210px] animate-pulse rounded-2xl border border-[rgba(0,0,0,0.08)] bg-[#f0f0ec]" />
+                <div className="h-[72px] animate-pulse rounded-2xl border border-[rgba(0,0,0,0.08)] bg-[#f0f0ec]" />
+                <div className="h-[140px] animate-pulse rounded-2xl border border-[rgba(0,0,0,0.08)] bg-[#f0f0ec]" />
               </div>
             ) : error ? (
               <div className="rounded-2xl border border-[#F2B8B8] bg-[#FCE9E9] px-4 py-5">
@@ -422,19 +611,15 @@ export default function ProjectDetailPanel({
               </div>
             ) : (
               <>
-                {/* 롤업 카드 — 멤버 캠페인 롤업 + 예산 소진 바 + 정직 캡션 */}
+                <ProjectPacingSection project={head} rollup={rollup} pacing={pacing} today={today} />
+
+                {/* 롤업 요약 — 멤버 캠페인 수·채널·행사 */}
                 <section className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-4 sm:p-5">
                   <div className="mb-3 flex items-center justify-between gap-2">
                     <h3 className="text-[13px] font-bold text-[#111110]">프로젝트 요약</h3>
                     <span className="text-[11px] text-[#615D59]">읽기 시점 롤업</span>
                   </div>
                   <ProjectRollupStats rollup={rollup} />
-                  <div className="mt-3 flex items-baseline justify-between gap-3 border-t border-[rgba(0,0,0,0.08)] pt-3">
-                    <span className="text-[11.5px] text-[#615D59]">배정 대비 소진</span>
-                    <ProjectBudgetBlock rollup={rollup} meterClassName="w-20" />
-                  </div>
-                  {/* 정직 캐비앗 — 이 패널은 프로젝트 1개짜리라 여기서 1회만 나온다. */}
-                  <ProjectBudgetCaveat className="mt-2" />
                 </section>
 
                 {/* 멤버 캠페인 */}
@@ -471,14 +656,25 @@ export default function ProjectDetailPanel({
                       아직 소속된 캠페인이 없습니다. “캠페인 추가”로 캠페인을 이 프로젝트에 묶어보세요.
                     </p>
                   ) : (
-                    <div className="space-y-1.5">
-                      {campaigns.map((c) => (
-                        <MemberCampaignRow
-                          key={c.id}
-                          campaign={c}
-                          removing={removingId === c.id}
-                          onRemove={() => void handleRemove(c.id)}
-                        />
+                    <div className="flex flex-col gap-3.5">
+                      {memberGroups.map((group) => (
+                        <div key={group.status}>
+                          <ProjectStatusGroupHeading
+                            status={group.status}
+                            count={group.items.length}
+                            size="sm"
+                          />
+                          <div className="flex flex-col gap-1.5">
+                            {group.items.map((c) => (
+                              <MemberCampaignRow
+                                key={c.id}
+                                campaign={c}
+                                removing={removingId === c.id}
+                                onRemove={() => void handleRemove(c.id)}
+                              />
+                            ))}
+                          </div>
+                        </div>
                       ))}
                     </div>
                   )}
