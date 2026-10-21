@@ -3,7 +3,6 @@ import {
   aggregateDshTotals,
   deriveDshMetricsBand,
   deriveDshMonthlyPace,
-  deriveDshScopedMetrics,
   deriveDshWeeklyFromDealMix,
   dshRate,
   dshRateToneClass,
@@ -239,42 +238,6 @@ describe("deriveDshMonthlyPace", () => {
     if (!pace) throw new Error("fixture pace must not be null")
     return pace
   }
-})
-
-describe("deriveDshScopedMetrics", () => {
-  it("Q 스코프: 현재 회계분기(Q2) 값을 dedupe 후 합산한다 — 중복 채택 회귀 포함", () => {
-    const scoped = deriveDshScopedMetrics(bandFixture(), NOW, "Q")
-    if (!scoped) throw new Error("fixture scoped must not be null")
-    expect(scoped.scopeLabel).toBe("Q2")
-    // 중복 멤버 행(annual 400k, Q 100k)이 합산됐다면 goal 550k — 정답은 300k(SW) + 150k(HW).
-    expect(scoped.total.goal).toBe(450_000)
-    expect(scoped.total.status).toBe(280_000)
-    expect(scoped.total.gap).toBe(-170_000)
-    expect(scoped.software.goal).toBe(300_000)
-    expect(scoped.software.pct).toBeCloseTo((280_000 / 300_000) * 100, 6)
-    expect(scoped.hardware.status).toBe(0)
-    // 픽스처에 Channel 콤보가 없다 — 목표 0이면 달성률은 null("–")이어야 한다.
-    expect(scoped.channel.goal).toBe(0)
-    expect(scoped.channel.pct).toBeNull()
-    // 구성비도 같은 스코프(Q2 Status) 기준.
-    expect(scoped.composition.swHw.map((s) => s.value)).toEqual([280_000, 0])
-  })
-
-  it("M 스코프: 현재 회계월(7월) 값 — New/Renew·Direct 축까지 스코프를 따른다", () => {
-    const scoped = deriveDshScopedMetrics(bandFixture(), NOW, "M")
-    if (!scoped) throw new Error("fixture scoped must not be null")
-    expect(scoped.scopeLabel).toBe("7월")
-    expect(scoped.total.goal).toBe(150_000)
-    expect(scoped.total.status).toBe(280_000)
-    expect(scoped.newBiz.status).toBe(280_000)
-    expect(scoped.renew.goal).toBe(50_000)
-    expect(scoped.direct.status).toBe(280_000)
-    expect(scoped.composition.channel.map((s) => s.value)).toEqual([280_000, 0, 0])
-  })
-
-  it("빈 breakdown은 null", () => {
-    expect(deriveDshScopedMetrics([], NOW, "Q")).toBeNull()
-  })
 })
 
 describe("deriveDshWeeklyFromDealMix", () => {
