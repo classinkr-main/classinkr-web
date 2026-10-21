@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { AlertCircle, CalendarCheck, Check, Loader2 } from "lucide-react"
+import { AlertCircle, CalendarCheck, Check } from "lucide-react"
 
-import { DesiredDateCalendar } from "@/components/checkout/DesiredDateCalendar"
+import {
+  DesiredDateCalendar,
+  type DesiredDateAnnotation,
+} from "@/components/checkout/DesiredDateCalendar"
 import { formatDesiredDateLabel } from "@/components/checkout/request-date"
 import { SlotPicker } from "@/components/showroom/SlotPicker"
 import { ACADEMY_SIZE_OPTIONS } from "@/lib/contact/academy-size"
@@ -41,11 +44,20 @@ interface Availability {
   maxIso: string
   days: ShowroomDayAvailability[]
   slotDurationMinutes: number
-  /** 원천 설정 상태. 구버전 응답을 대비해 선택 필드로 둔다. */
-  sources?: { holidays?: boolean; showroomCalendar?: boolean }
 }
 
 const EMPTY_DAYS: ShowroomDayAvailability[] = []
+
+/**
+ * 막힌 사유별 표기. `full` 만 tone 을 달리한다 — 나머지는 "원래 안 여는 날"이지만
+ * 마감은 **열렸다가 찬 날**이라, 다른 날짜를 볼지 판단하는 근거가 다르다.
+ */
+const BLOCKED_ANNOTATIONS: Record<string, DesiredDateAnnotation> = {
+  full: { label: "마감", tone: "full" },
+  holiday: { label: "공휴일 휴무" },
+  weekend: { label: "주말 휴무" },
+  too_soon: { label: "최소 2영업일 전까지 예약 가능" },
+}
 
 /** 가용성 1회 조회. 상태를 건드리지 않아 최초 로드와 409 재조회가 같은 함수를 쓴다. */
 async function fetchAvailability(signal?: AbortSignal): Promise<Availability | null> {
@@ -254,6 +266,9 @@ export function ShowroomBookingForm({ interests }: Props) {
   // 더블 클릭·엔터 연타가 두 건으로 나가지 않게 상태 갱신 전에 잠근다.
   const submitLock = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
+  /** 날짜 선택 직후 한 번만 시간 블록으로 옮긴다. */
+  const pendingTimeFocus = useRef(false)
+  const timeSectionRef = useRef<HTMLDivElement | null>(null)
 
   /**
    * 가용성 조회. 마운트와 "다시 불러오기" 둘 다 이 경로를 쓴다.
@@ -280,6 +295,14 @@ export function ShowroomBookingForm({ interests }: Props) {
     return () => controller.abort()
   }, [reloadAvailability])
 
+  useEffect(() => {
+    if (!pendingTimeFocus.current) return
+    if (availabilityStatus !== "ready" || !form.visitDate) return
+    pendingTimeFocus.current = false
+    timeSectionRef.current?.focus()
+    timeSectionRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" })
+  }, [availabilityStatus, form.visitDate])
+
   // 언마운트 중 진행 중인 제출을 끊는다 — 늦게 온 응답이 사라진 폼을 갱신하지 않게.
   useEffect(() => {
     return () => {
@@ -289,6 +312,40 @@ export function ShowroomBookingForm({ interests }: Props) {
   }, [])
 
   const days = availability?.days ?? EMPTY_DAYS
+  /**
+   * 달력 칸에 붙는 보조 표시.
+   *
+   * 서버는 날짜마다 막힌 사유와 슬롯 상태를 다 주는데 화면은 전부 같은 회색으로만
+   * 그렸다 — "원래 안 여는 날"인지 "찼던 날"인지 구분이 안 되고, 남은 자리를 알려면
+   * 날짜를 하나씩 눌러봐야 했다.
+   */
+  const dayAnnotations = useMemo(() => {
+    const map = new Map<string, DesiredDateAnnotation>()
+
+    for (const day of days) {
+      if (day.bookable) {
+        const openCount = day.slots.filter((slot) => slot.state === "open").length
+        if (openCount === 0) continue
+        map.set(day.date, {
+          label: `예약 가능한 시간 ${openCount}개`,
+          hint: day.slots.map((slot) => (
+            <span
+              key={slot.time}
+              className={`h-[3px] w-[3px] rounded-full ${
+                slot.state === "open" ? "bg-[#084734]" : "bg-[#D5D2CB]"
+              }`}
+            />
+          )),
+        })
+        continue
+      }
+
+      const annotation = BLOCKED_ANNOTATIONS[day.blockedReason ?? ""]
+      if (annotation) map.set(day.date, annotation)
+    }
+
+    return map
+  }, [days])
   // 렌더마다 새 Set 을 만들면 캘린더의 range 메모가 매번 깨진다 — days 가 바뀔 때만 만든다.
   const disabledIsoDates = useMemo(() => toDisabledIsoDates(days), [days])
   const dayByDate = useMemo(
@@ -326,6 +383,9 @@ export function ShowroomBookingForm({ interests }: Props) {
   function selectDate(iso: string) {
     // 날짜가 바뀌면 이전 날짜의 시각은 의미가 없다 — 함께 비운다.
     setForm((current) => ({ ...current, visitDate: iso, visitTime: "" }))
+    // 시간 블록은 날짜를 고른 뒤에야 나타난다. 알림도 포커스 이동도 없으면 모바일에서는
+    // 화면 아래에 새 블록이 생긴 줄 모르고, 스크린리더는 아무것도 듣지 못한다.
+    pendingTimeFocus.current = true
     setErrors((current) => {
       const next = { ...current }
       delete next.visitDate
@@ -562,11 +622,30 @@ export function ShowroomBookingForm({ interests }: Props) {
           </div>
 
           {availabilityStatus === "loading" ? (
-            <div className="flex h-[292px] items-center justify-center rounded-xl border border-black/[0.08] bg-[#F6F5F4]">
-              <span className="inline-flex items-center gap-2 text-[13px] text-[#615D59]">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                예약 가능한 날짜를 불러오는 중입니다
-              </span>
+            /* 스피너 한 장이 아니라 달력 모양으로 채운다 — 고정 높이 박스에서 격자로
+               바뀌면 레이아웃이 튀고, 그 순간 아래 내용이 밀려 내려간다. */
+            <div
+              role="status"
+              aria-busy="true"
+              aria-label="예약 가능한 날짜를 불러오는 중입니다"
+              className="animate-pulse rounded-xl border border-black/[0.08] bg-white p-3"
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <span className="h-9 w-9 rounded-md bg-[#F0F0EC]" />
+                <span className="h-4 w-24 rounded bg-[#F0F0EC]" />
+                <span className="h-9 w-9 rounded-md bg-[#F0F0EC]" />
+              </div>
+              <div className="grid grid-cols-7 gap-[4px]">
+                {Array.from({ length: 7 }).map((_, index) => (
+                  <span key={`head-${index}`} className="h-4 rounded bg-[#F0F0EC]" />
+                ))}
+                {Array.from({ length: 42 }).map((_, index) => (
+                  <span
+                    key={`cell-${index}`}
+                    className="h-10 rounded-md bg-[#F0F0EC] sm:h-9"
+                  />
+                ))}
+              </div>
             </div>
           ) : availabilityStatus === "error" || !calendarMinIso || !calendarMaxIso ? (
             <div className="rounded-xl border border-black/[0.08] bg-[#F6F5F4] px-4 py-6 text-center">
@@ -597,22 +676,16 @@ export function ShowroomBookingForm({ interests }: Props) {
                 minIso={calendarMinIso}
                 maxIso={calendarMaxIso}
                 disabledIsoDates={disabledIsoDates}
+                annotations={dayAnnotations}
                 invalid={Boolean(errors.visitDate)}
                 labelledById="showroom-date-label"
                 describedById="showroom-date-hint"
               />
               <p id="showroom-date-hint" className="text-[11px] text-[#A39E98]">
-                평일만 운영하며, 담당자 배정과 자료 준비를 위해 최소 2영업일 전부터 예약을
-                받습니다. 회색 날짜는 휴무이거나 이미 마감된 날입니다.
+                평일만 운영하며 공휴일은 쉽니다. 담당자 배정과 자료 준비를 위해 최소 2영업일
+                전부터 예약을 받습니다. 날짜 아래 점은 그날 남은 자리이고, 취소선은 이미 마감된
+                날입니다.
               </p>
-              {/* 공휴일 원천이 꺼져 있으면 달력이 연휴를 열어 둔다. 요청형이라 담당자가
-                  확정 단계에서 거를 수 있지만, 화면이 아는 척하지는 않는다. */}
-              {availability?.sources?.holidays === false ? (
-                <p className="text-[11px] text-[#A8741A]">
-                  공휴일은 자동 반영되지 않습니다. 연휴에 걸친 날짜를 고르셨다면 담당자가 확인
-                  단계에서 함께 조정해 드립니다.
-                </p>
-              ) : null}
             </>
           )}
 
@@ -623,10 +696,22 @@ export function ShowroomBookingForm({ interests }: Props) {
 
         {/* 2. 시간 */}
         {availabilityStatus === "ready" && form.visitDate ? (
-          <div className="space-y-2">
+          <div
+            ref={timeSectionRef}
+            tabIndex={-1}
+            className="space-y-2 focus-visible:outline-none"
+          >
             <span id="showroom-time-label" className="block text-[12px] font-medium text-[#44514A]">
               방문 시간
             </span>
+            {/* 날짜를 고른 결과를 스크린리더에도 알린다 — 지금까지는 블록이 조용히 생겼다. */}
+            <p role="status" aria-live="polite" className="sr-only">
+              {selectedDay?.bookable
+                ? `${dateLabel} 예약 가능한 시간 ${
+                    selectedDay.slots.filter((slot) => slot.state === "open").length
+                  }개`
+                : `${dateLabel} 예약할 수 있는 시간이 없습니다`}
+            </p>
 
             {selectedDay && selectedDay.bookable ? (
               <>
