@@ -8,7 +8,7 @@ import { planBulkApply, planBulkCheck } from "./draft-bulk-plan"
 import { productLabel } from "./ledger-simple-logic"
 import type { DraftConfidence, LedgerDraft, LedgerRevenueRow } from "./shared"
 
-// 장부(A안) 입력·수정 — 칸 안에서 바로(금액 + 작은 확도 띠) + 시안 3(확인·반영을 하단 한 줄로).
+// 장부(A안) 입력·수정 — 칸 안에서 바로(금액 + 확도 글자 띠 예·고·확) + 시안 3(확인·반영을 하단 한 줄로).
 // 저장은 워크벤치의 onCommitCell(매트릭스 칸 커밋과 같은 경로: 셀당 초안 1건, 같은 칸 재편집은 PATCH,
 // 자가 체크)로, 확인·반영은 체크 큐의 checkDrafts/applyDrafts 로 간다 — 새 저장 경로를 만들지 않는다.
 
@@ -38,12 +38,6 @@ export function parseAmountInput(value: string): number | null {
   return digits ? Number(digits) : null
 }
 
-function Swatch({ kind }: { kind: DraftConfidence }) {
-  if (kind === "expected") {
-    return <span aria-hidden className="inline-block h-2.5 w-2.5 border-[1.5px] border-dashed" style={{ borderColor: CONFIDENCE_TOKENS.expected.color }} />
-  }
-  return <span aria-hidden className={`inline-block h-2.5 w-2.5 ${CONFIDENCE_TOKENS[kind].bgClass}`} />
-}
 
 const formatInput = (value: number) => (value > 0 ? value.toLocaleString("en-US") : "")
 
@@ -164,9 +158,10 @@ export function InlineCellEditor({ label, month, candidates, edit, onClose, onMo
               // 누를 때 입력칸 포커스를 뺏지 않는다 — 이어서 숫자·Enter 를 칠 수 있게.
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => setConfidence(item.id)}
-              className={`grid h-6 w-6 place-items-center rounded transition ${confidence === item.id ? "bg-[rgba(17,17,16,0.06)] ring-1 ring-[#37352F]" : "hover:bg-[#F1EFEA]"}`}
+              className={`grid h-6 min-w-6 place-items-center rounded px-1 text-[11.5px] font-bold transition ${CONFIDENCE_TOKENS[item.id].textStrongClass} ${confidence === item.id ? "ring-1 ring-current" : "opacity-60 hover:opacity-100"}`}
+              style={confidence === item.id ? { backgroundColor: CONFIDENCE_TOKENS[item.id].tintBg } : undefined}
             >
-              <Swatch kind={item.id} />
+              {item.label.slice(0, 1)}
             </button>
           ))}
         </div>

@@ -29,12 +29,12 @@ const exact = (value: number) => `¥${cnyExact(value)}`
 const pct = (value: number, goal: number | null) => (goal && goal > 0 ? Math.round((value / goal) * 100) : null)
 
 /** 표 칸 금액 — ¥ 는 칸 왼쪽, 숫자는 오른쪽. 0 이면 "–". */
-function Yen({ value, sign, children }: { value: number; sign?: string; children?: ReactNode }) {
+function Yen({ value, sign }: { value: number; sign?: string }) {
   if (!value && !sign) return <span className="block text-right">–</span>
   return (
     <span className="flex items-center justify-between gap-2">
       <span aria-hidden className="text-[11.5px] font-normal text-[#8A857D]">¥</span>
-      <span className="inline-flex items-center gap-1.5">{children}<span className="sr-only">¥</span>{sign}{cny(value)}</span>
+      <span><span className="sr-only">¥</span>{sign}{cny(value)}</span>
     </span>
   )
 }
@@ -52,11 +52,15 @@ function HeaderBar({ bucket, scale }: { bucket: RevMonthlyBucket; scale: number 
   )
 }
 
-function Mark({ kind }: { kind: DraftConfidence }) {
-  if (kind === "expected") {
-    return <span aria-hidden className="inline-block h-2.5 w-2.5 shrink-0 border-[1.5px] border-dashed" style={{ borderColor: CONFIDENCE_TOKENS.expected.color }} />
-  }
-  return <span aria-hidden className={`inline-block h-2.5 w-2.5 shrink-0 ${CONFIDENCE_TOKENS[kind].bgClass}`} />
+/** 확도는 아이콘 없이 글자색으로 — 확정 초록·고확도 파랑·예정 호박(CONFIDENCE_TOKENS, 예정은 밀도 표용 강조색). */
+const CONF_TEXT: Record<DraftConfidence, string> = {
+  confirmed: CONFIDENCE_TOKENS.confirmed.textStrongClass,
+  "high-confidence": CONFIDENCE_TOKENS["high-confidence"].textStrongClass,
+  expected: CONFIDENCE_TOKENS.expected.textStrongClass,
+}
+
+function ConfText({ kind, children }: { kind: DraftConfidence; children: ReactNode }) {
+  return <span className={`font-semibold ${CONF_TEXT[kind]}`}>{children}</span>
 }
 
 function bucketTitle(bucket: RevMonthlyBucket) {
@@ -87,13 +91,13 @@ function SummaryBand({ bucket, goal, pace, goalNote }: { bucket: RevMonthlyBucke
   const tiles: Array<{ label: ReactNode; value: string; note: string; tone?: string }> = [
     { label: "FY 목표", value: goal ? money(goal) : "—", note: goal ? `오늘 페이스 ${pacePct}% = ${money(goal * pace)}` : goalNote },
     {
-      label: <><Mark kind="confirmed" />확정</>,
+      label: <><ConfText kind="confirmed">확정</ConfText></>,
       value: money(bucket.confirmed),
       note: cPct === null ? "목표 비교 없음" : `${cPct}% · 페이스보다 ${Math.abs(pacePct - cPct)}%p ${cPct >= pacePct ? "앞" : "뒤"}`,
       tone: CONFIDENCE_TOKENS.confirmed.textClass,
     },
-    { label: <><Mark kind="high-confidence" />고확도</>, value: money(bucket.high), note: goal ? `더하면 ${pct(bucket.confirmed + bucket.high, goal)}%` : "확정 전 단계" },
-    { label: <><Mark kind="expected" />예정</>, value: money(bucket.open), note: goal ? `전부 들어오면 ${pct(bucket.total, goal)}%` : "입금 예정" },
+    { label: <><ConfText kind="high-confidence">고확도</ConfText></>, value: money(bucket.high), note: goal ? `더하면 ${pct(bucket.confirmed + bucket.high, goal)}%` : "확정 전 단계" },
+    { label: <><ConfText kind="expected">예정</ConfText></>, value: money(bucket.open), note: goal ? `전부 들어오면 ${pct(bucket.total, goal)}%` : "입금 예정" },
     { label: "새로 만들어야 할 매출", value: gap === null ? "—" : money(gap), note: "예정까지 다 넣어도 모자란 금액" },
   ]
   return (
@@ -146,10 +150,11 @@ function AmountCell({ bucket, current, pendingAmount, label, cellKey, onEdit }: 
   const shown = pending ? pendingAmount : bucket.total
   // 전액 확정(입금 끝) 칸 — 배경으로 구분한다. 대기 변경이 걸린 칸은 점선이 우선.
   const settled = !pending && bucket.total > 0 && bucket.confirmed >= bucket.total
-  const tone = pending ? "font-semibold text-[#111110]" : bucket.total <= 0 ? "text-[#C5C0B8]" : kind === "confirmed" ? "font-semibold text-[#111110]" : kind === "expected" ? "text-[#615D59]" : "text-[#111110]"
+  // 확도 = 숫자 글자색(셀 안 아이콘 없음). 대기 변경은 먹색 굵게 + 점선, 빈 칸은 연회색.
+  const tone = pending ? "font-semibold text-[#111110]" : bucket.total <= 0 ? "text-[#C5C0B8]" : `${kind === "expected" ? "font-medium" : "font-semibold"} ${CONF_TEXT[kind]}`
   const title = pending ? `대기 중 변경 ${exact(shown)} (지금 장부 ${exact(bucket.total)})` : bucket.total > 0 ? `${settled ? "전액 확정 · " : ""}${bucket.total > 0 ? bucketTitle(bucket) : ""}` : undefined
   const content = shown > 0 || pending
-    ? <Yen value={shown}>{pending ? null : <Mark kind={kind} />}</Yen>
+    ? <Yen value={shown} />
     : <span className="block text-right">–</span>
   const box = `relative block min-h-9 w-full rounded-md px-1.5 py-2 ${pending ? "outline-dashed outline-[1.5px] -outline-offset-2 outline-[#37352F]" : ""}`
   const dot = pending ? <span aria-hidden className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-[#37352F]" /> : null
@@ -307,7 +312,7 @@ function DealTable({ rows, months, currentMonth, monthlyGoals, groupBy, expandPa
           <tfoot className="text-[#615D59]">
             {footRows.map((foot, footIndex) => (
               <tr key={foot.kind} className={footIndex === 0 ? "border-t border-[rgba(0,0,0,0.12)]" : ""}>
-                <th scope="row" colSpan={2} className="px-3 py-2 pl-5 text-left font-normal"><span className="inline-flex items-center gap-2"><Mark kind={foot.kind} />{foot.label}</span></th>
+                <th scope="row" colSpan={2} className="px-3 py-2 pl-5 text-left font-normal"><span className="inline-flex items-center gap-2"><ConfText kind={foot.kind}>{foot.label}</ConfText></span></th>
                 {ledger.cells.map((bucket, index) => (
                   <td key={index} className={`px-3 py-2 tabular-nums ${foot.kind === "confirmed" ? "font-semibold text-[#111110]" : ""}`}><Yen value={foot.pick(bucket)} /></td>
                 ))}
@@ -379,9 +384,9 @@ function ManagerTable({ rows, months, currentMonth, managerGoals, pace, onOpenMa
             <tr className="border-b border-[rgba(0,0,0,0.08)] text-[12px] text-[#615D59]">
               <th scope="col" className="px-3 py-2.5 pl-5 text-left font-medium">담당</th>
               <th scope="col" className="px-3 py-2.5 text-right font-medium">FY 목표</th>
-              <th scope="col" className="px-3 py-2.5 text-right font-medium"><span className="inline-flex items-center gap-1.5"><Mark kind="confirmed" />확정</span></th>
-              <th scope="col" className="px-3 py-2.5 text-right font-medium"><span className="inline-flex items-center gap-1.5"><Mark kind="high-confidence" />고확도</span></th>
-              <th scope="col" className="px-3 py-2.5 text-right font-medium"><span className="inline-flex items-center gap-1.5"><Mark kind="expected" />예정</span></th>
+              <th scope="col" className="px-3 py-2.5 text-right font-medium"><span className="inline-flex items-center gap-1.5"><ConfText kind="confirmed">확정</ConfText></span></th>
+              <th scope="col" className="px-3 py-2.5 text-right font-medium"><span className="inline-flex items-center gap-1.5"><ConfText kind="high-confidence">고확도</ConfText></span></th>
+              <th scope="col" className="px-3 py-2.5 text-right font-medium"><span className="inline-flex items-center gap-1.5"><ConfText kind="expected">예정</ConfText></span></th>
               <th scope="col" className="px-3 py-2.5 text-left font-medium">진행 <span className="text-[11px]">(세로선 = 오늘 페이스 {pacePct}%)</span></th>
               <th scope="col" className="px-3 py-2.5 text-right font-medium">확정률</th>
               <th scope="col" className="px-3 py-2.5 text-right font-medium">확정+고확도</th>
@@ -498,9 +503,9 @@ export default function LedgerSimpleView({ rows, months, currentMonth, monthlyGo
           </button>
         ) : null}
         <span className="ml-auto flex items-center gap-3 text-[12px] text-[#615D59]">
-          <span className="inline-flex items-center gap-1.5"><Mark kind="confirmed" />확정</span>
-          <span className="inline-flex items-center gap-1.5"><Mark kind="high-confidence" />고확도</span>
-          <span className="inline-flex items-center gap-1.5"><Mark kind="expected" />예정</span>
+          <span className="inline-flex items-center gap-1.5"><ConfText kind="confirmed">확정</ConfText></span>
+          <span className="inline-flex items-center gap-1.5"><ConfText kind="high-confidence">고확도</ConfText></span>
+          <span className="inline-flex items-center gap-1.5"><ConfText kind="expected">예정</ConfText></span>
           <span className="inline-flex items-center gap-1.5"><span aria-hidden className="inline-block h-3 w-4 rounded-sm border border-[rgba(0,0,0,0.08)]" style={{ backgroundColor: CONFIDENCE_TOKENS.confirmed.tintBg }} />전액 확정</span>
         </span>
       </div>

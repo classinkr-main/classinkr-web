@@ -70,18 +70,18 @@ const MATRIX_DEAL_ROW_HEIGHT: Record<MatrixDensity, string> = {
 }
 // isMatrixDensity는 ledger/rev-matrix-logic.ts로 이동(위 export * 재수출로 이 파일에서도 계속 사용 가능).
 
-// 확도 = 글자색(배경 아님). 셀 배경은 흰색 고정, 확정/고확도/불일치는 bold.
-// 확도 3색은 CONFIDENCE_TOKENS SSOT 소비 — 리터럴 재정의 금지(불일치·빈 셀은 확도 아님).
+// 확도 = 숫자 글자색(셀 안 아이콘 없음). 장부 렌즈(LedgerSimpleView)와 같은 표시이고,
+// 전액 확정 칸만 확정 틴트 배경을 깐다. 확도 3색은 CONFIDENCE_TOKENS SSOT 소비 — 리터럴 재정의 금지.
 const MATRIX_TONE = {
   confirmed: `font-bold ${CONFIDENCE_TOKENS.confirmed.textClass}`,
   high: `font-bold ${CONFIDENCE_TOKENS["high-confidence"].textClass}`,
-  open: `font-semibold ${CONFIDENCE_TOKENS.expected.textClass}`,
-  mixed: `font-semibold ${CONFIDENCE_TOKENS.expected.textClass}`,
+  open: `font-semibold ${CONFIDENCE_TOKENS.expected.textStrongClass}`,
+  mixed: `font-semibold ${CONFIDENCE_TOKENS.expected.textStrongClass}`,
   mismatch: "font-bold text-[#B43E3E]",
   empty: "text-[#DDD9D3]",
 } as const
 
-// 셀 단일 금액의 지배 확도로 글자색을 고른다. 혼재(여러 확도 합산)면 예정 톤(월합계 요약 성격).
+// 셀 단일 금액의 확도 톤. 혼재(여러 확도 합산)면 mixed — 예정 톤(월합계 요약 성격).
 function matrixBucketTone(bucket: RevMonthlyBucket): keyof typeof MATRIX_TONE {
   if (bucket.total <= 0) return "empty"
   if (bucket.confirmed === bucket.total) return "confirmed"
@@ -90,37 +90,24 @@ function matrixBucketTone(bucket: RevMonthlyBucket): keyof typeof MATRIX_TONE {
   return "mixed"
 }
 
-// 매트릭스 확도 색 레전드. 셀 글자색(MATRIX_TONE)과 1:1 대응 — 값 자체는 바꾸지 않는다.
-// tint가 있는 항목은 셀에도 같은 배경이 깔린다는 뜻 — 범례 스와치를 그 틴트 위에 얹어 대응을 보여준다.
-const MATRIX_TONE_LEGEND_ITEMS: Array<{ label: string; color: string; tint?: string }> = [
-  { label: CONFIDENCE_TOKENS.confirmed.label, color: CONFIDENCE_TOKENS.confirmed.color },
-  {
-    label: CONFIDENCE_TOKENS["high-confidence"].label,
-    color: CONFIDENCE_TOKENS["high-confidence"].color,
-    tint: CONFIDENCE_TOKENS["high-confidence"].tintBg,
-  },
-  { label: CONFIDENCE_TOKENS.expected.label, color: CONFIDENCE_TOKENS.expected.color },
-  { label: "불일치", color: "#B43E3E" },
-]
+// 매트릭스 확도 범례 — 셀 숫자 글자색·전액 확정 틴트·불일치와 1:1.
+const MATRIX_TONE_LEGEND_ITEMS: DraftConfidence[] = ["confirmed", "high-confidence", "expected"]
 export function MatrixToneLegend() {
   return (
-    <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-[#615D59]">
-      {MATRIX_TONE_LEGEND_ITEMS.map((item) => (
-        <span key={item.label} className="inline-flex items-center gap-1">
-          {item.tint ? (
-            <span
-              aria-hidden
-              className="inline-flex h-3 w-3 shrink-0 items-center justify-center rounded-[3px]"
-              style={{ backgroundColor: item.tint }}
-            >
-              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: item.color }} />
-            </span>
-          ) : (
-            <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
-          )}
-          {item.label}
+    <span className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[10px] text-[#615D59]">
+      {MATRIX_TONE_LEGEND_ITEMS.map((kind) => (
+        <span key={kind} className={`font-bold ${CONFIDENCE_TOKENS[kind].textStrongClass}`}>
+          {CONFIDENCE_TOKENS[kind].label}
         </span>
       ))}
+      <span className="inline-flex items-center gap-1">
+        <span aria-hidden className="inline-block h-2.5 w-3.5 rounded-[2px] border border-[rgba(0,0,0,0.08)]" style={{ backgroundColor: CONFIDENCE_TOKENS.confirmed.tintBg }} />
+        전액 확정
+      </span>
+      <span className="inline-flex items-center gap-1">
+        <AlertTriangle aria-hidden className="h-2.5 w-2.5 text-[#B43E3E]" />
+        불일치
+      </span>
       <span>· 잠금=시트확정/장부반영</span>
       <span className="hidden lg:inline">· 합산 셀 주황=확도 혼합 포함</span>
       {/* 13인치(lg~xl) 랩탑에서도 단축키 힌트가 보이도록 xl→lg 하향. 편집 진입 시엔 팝오버가 셀 인근 힌트를 재노출한다. */}
@@ -207,22 +194,20 @@ export function MatrixHelpPopover() {
             <div>
               <p className="text-[11px] font-bold text-[#615D59] uppercase tracking-wider mb-2">매출 확도 구분</p>
               <div className="grid grid-cols-2 gap-2 text-[12px]">
-                {MATRIX_TONE_LEGEND_ITEMS.map((item) => (
-                  <div key={item.label} className="flex items-center gap-2">
-                    {item.tint ? (
-                      <span
-                        aria-hidden
-                        className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px]"
-                        style={{ backgroundColor: item.tint }}
-                      >
-                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />
-                      </span>
-                    ) : (
-                      <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
-                    )}
-                    <span className="font-semibold text-[#111110]">{item.label}</span>
+                {MATRIX_TONE_LEGEND_ITEMS.map((kind) => (
+                  <div key={kind} className="flex items-center gap-2">
+                    <span className={`font-bold tabular-nums ${CONFIDENCE_TOKENS[kind].textStrongClass}`}>¥12.3만</span>
+                    <span className="font-semibold text-[#111110]">{CONFIDENCE_TOKENS[kind].label}</span>
                   </div>
                 ))}
+                <div className="flex items-center gap-2">
+                  <span aria-hidden className="inline-block h-3 w-4 shrink-0 rounded-[3px] border border-[rgba(0,0,0,0.08)]" style={{ backgroundColor: CONFIDENCE_TOKENS.confirmed.tintBg }} />
+                  <span className="font-semibold text-[#111110]">전액 확정</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <AlertTriangle aria-hidden className="h-3 w-3 shrink-0 text-[#B43E3E]" />
+                  <span className="font-semibold text-[#111110]">불일치</span>
+                </div>
               </div>
               <div className="mt-2.5 space-y-1.5 text-[11px] text-[#615D59] bg-[#FAFAF8] p-2 rounded-md">
                 <p className="flex items-center gap-1.5">
@@ -298,36 +283,32 @@ const RevMatrixEditPopover = memo(function RevMatrixEditPopover({
       className="absolute left-0 top-full z-40 mt-0.5 flex flex-col gap-0.5 rounded-md border border-[rgba(0,0,0,0.12)] bg-white p-0.5 shadow-lg"
       onMouseDown={(event) => event.preventDefault()} // input 포커스 유지(blur 커밋 방지)
     >
-      {/* UX 감사 2026-09-20: 가장 많이 쓰는 이 팝오버가 6종 크기 중 가장 작았다(버튼 높이 ≈14px,
-          WCAG 2.5.8 최소 24px의 58%) — 라벨 자연폭 + min-w로 키우고, 색만으로 상태를 전하지
-          않도록 radiogroup/radio 시맨틱을 더한다. */}
+      {/* 작은 확도 띠 — 확도색 글자 한 자(예·고·확) 버튼(28px, WCAG 2.5.8 최소 24px 이상)만. 색만으로
+          상태를 전하지 않도록 radiogroup/radio 시맨틱과 aria-label(확도 이름·단축키)을 둔다. */}
       <div className="flex items-center gap-0.5" role="radiogroup" aria-label="확도">
         {DRAFT_CONFIDENCE_OPTIONS.map((option) => {
-          const activeColor = CONFIDENCE_TOKENS[option.id].color
           const active = option.id === confidence
+          const key = option.id === "expected" ? "E" : option.id === "high-confidence" ? "H" : "C"
           return (
             <button
               key={option.id}
               type="button"
               role="radio"
               aria-checked={active}
-              title={`확도: ${option.label}`}
+              aria-label={`확도 ${option.label} (${key})`}
+              title={`${option.label} · ${key}`}
               onClick={() => onPickConfidence(option.id)}
-              className="min-w-[40px] rounded-md px-2.5 py-1.5 text-[11px] font-bold leading-none transition"
-              style={
-                active
-                  ? { backgroundColor: activeColor, color: "#FFFFFF" }
-                  : { color: activeColor, backgroundColor: "transparent" }
-              }
+              className={`grid h-7 w-7 place-items-center rounded text-[12px] font-bold transition ${CONFIDENCE_TOKENS[option.id].textStrongClass} ${active ? "ring-1 ring-current" : "opacity-60 hover:opacity-100"}`}
+              style={active ? { backgroundColor: CONFIDENCE_TOKENS[option.id].tintBg } : undefined}
             >
-              {option.label}
+              {option.label.slice(0, 1)}
             </button>
           )
         })}
       </div>
       {/* 편집 진입 시 셀 인근 단축키 힌트 — 치트시트가 안 보이는 좁은 화면에서도 조작법이 손끝에 남게. */}
       <p className="px-1 pb-0.5 text-left text-[9px] font-semibold leading-none text-[#A39E98]">
-        Enter 저장 · Tab 다음 칸 · Esc 취소 · E/H/C 확도
+        ↵ 저장 · Esc · E/H/C
       </p>
       {warning && (
         <p className="max-w-[168px] whitespace-normal rounded bg-[#FBF1E0] px-1.5 py-1 text-left text-[9px] font-bold leading-snug text-[#7A520F]">
@@ -434,11 +415,10 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
     )
   }
 
-  // 고확도(90%+ 마감임박) 셀만 은은한 파란 틴트를 깐다 — 확정(그린)·예정(앰버)은 글자색만 유지해
-  // "강조는 한 곳만" 위계를 지킨다. 색은 CONFIDENCE_TOKENS['high-confidence'].tintBg(#EFF6FF) SSOT.
+  // 전액 확정(입금 끝) 칸만 확정 틴트 배경 — 장부 렌즈와 같은 규칙. 색은 CONFIDENCE_TOKENS.confirmed.tintBg SSOT.
   // 불일치(빨강)·미검수 초안은 운영상 더 급한 신호라 틴트보다 우선한다.
-  const highTint = !mismatch && !pending && tone === "high"
-  const bg = mismatch ? "bg-[#FEF2F2]" : highTint ? "bg-[#EFF6FF]" : bgClass
+  const settled = !mismatch && !pending && tone === "confirmed"
+  const bg = mismatch ? "bg-[#FEF2F2]" : settled ? "" : bgClass
   const cellClassName = `relative px-2 py-1.5 text-right align-middle tabular-nums border-l border-[#EDECE8] ${
     mismatch
       ? "border-l-2 border-l-[#EF4444]"
@@ -484,6 +464,7 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
         width: MATRIX_MONTH_W,
         minWidth: MATRIX_MONTH_W,
         maxWidth: MATRIX_MONTH_W,
+        ...(settled ? { backgroundColor: CONFIDENCE_TOKENS.confirmed.tintBg } : {}),
         // 미검수 밑줄도 확도별 색 — 확도 무관 앰버 고정(UX 감사 2026-09-20)이던 것을 CONFIDENCE_TOKENS로.
         ...(pending ? { boxShadow: `inset 0 -2px 0 0 ${CONFIDENCE_TOKENS[pending.confidence].color}` } : {}),
       }}
