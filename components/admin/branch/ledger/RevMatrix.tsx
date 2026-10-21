@@ -77,7 +77,8 @@ const MATRIX_TONE = {
   high: `font-bold ${CONFIDENCE_TOKENS["high-confidence"].textClass}`,
   open: `font-semibold ${CONFIDENCE_TOKENS.expected.textStrongClass}`,
   mixed: `font-semibold ${CONFIDENCE_TOKENS.expected.textStrongClass}`,
-  mismatch: "font-bold text-[#B43E3E]",
+  // 불일치: 확정(크림슨)과 헷갈리지 않게 숫자는 먹색, 신호는 빨간 ⚠ 아이콘·왼쪽 빨간 선·회색 배경.
+  mismatch: "font-bold text-[#111110]",
   empty: "text-[#DDD9D3]",
 } as const
 
@@ -391,7 +392,7 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
   if (isEditingCell && interactive) {
     return (
       <td
-        className={`relative px-0.5 text-right align-middle ${mismatch ? "bg-[#FCE9E9]" : bgClass} ring-2 ring-inset ring-[#084734]/40`}
+        className={`relative px-0.5 text-right align-middle ${mismatch ? "bg-[#F1EFEA]" : bgClass} ring-2 ring-inset ring-[#084734]/40`}
         style={{ width: MATRIX_MONTH_W, minWidth: MATRIX_MONTH_W, maxWidth: MATRIX_MONTH_W }}
       >
         <input
@@ -418,7 +419,7 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
   // 전액 확정(입금 끝) 칸만 확정 틴트 배경 — 장부 렌즈와 같은 규칙. 색은 CONFIDENCE_TOKENS.confirmed.tintBg SSOT.
   // 불일치(빨강)·미검수 초안은 운영상 더 급한 신호라 틴트보다 우선한다.
   const settled = !mismatch && !pending && tone === "confirmed"
-  const bg = mismatch ? "bg-[#FEF2F2]" : settled ? "" : bgClass
+  const bg = mismatch ? "bg-[#F1EFEA]" : settled ? "" : bgClass
   const cellClassName = `relative px-2 py-1.5 text-right align-middle tabular-nums border-l border-[#EDECE8] ${
     mismatch
       ? "border-l-2 border-l-[#EF4444]"
@@ -1379,7 +1380,7 @@ export const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
               <span className={`text-[12px] font-bold ${MATRIX_TONE[annualTone]}`}>{formatWeekAmount(annual.total)}</span>
             </div>
             {annual.confirmed > 0 && (
-              <span className="block text-[9.5px] font-semibold leading-tight text-[#084734]">확정 {formatWeekAmount(annual.confirmed)}</span>
+              <span className={`block text-[9.5px] font-semibold leading-tight ${CONFIDENCE_TOKENS.confirmed.textClass}`}>확정 {formatWeekAmount(annual.confirmed)}</span>
             )}
           </>
         ) : (

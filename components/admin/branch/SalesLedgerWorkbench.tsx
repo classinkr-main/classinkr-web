@@ -3225,7 +3225,7 @@ export default function SalesLedgerWorkbench({
                 </span>
                 <span className="h-3.5 w-px bg-[rgba(0,0,0,0.08)]" aria-hidden />
                 <div className="flex items-center gap-1.5 text-[12px]">
-                  <span className="font-semibold text-[#084734]">확정</span>
+                  <span className={`font-semibold ${CONFIDENCE_TOKENS.confirmed.textClass}`}>확정</span>
                   <span className="font-bold tabular-nums text-[#111110]">{pipeline.loading && !pipeline.data ? "–" : formatMoney(revMonthConfirmed)}</span>
                 </div>
                 <div className="flex items-center gap-1.5 text-[12px]">
@@ -4432,7 +4432,7 @@ export default function SalesLedgerWorkbench({
                       </div>
                       <div className="flex items-center justify-between gap-2 text-[11px]">
                         <span className="font-semibold text-[#615D59]">확정</span>
-                        <span className="font-bold tabular-nums text-[#084734]">{formatMoney(selectedGroup.monthConfirmed)}</span>
+                        <span className={`font-bold tabular-nums ${CONFIDENCE_TOKENS.confirmed.textClass}`}>{formatMoney(selectedGroup.monthConfirmed)}</span>
                       </div>
                       <div className="flex items-center justify-between gap-2 text-[11px]">
                         <span className="font-semibold text-[#615D59]">실적 합계</span>
