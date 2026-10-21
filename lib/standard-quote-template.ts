@@ -283,11 +283,11 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
         label: "거치 방식",
         description: "현장 방식에 맞춰 부자재를 추가합니다.",
         control: "radio",
-        defaultValue: "wall_mount",
+        defaultValue: "none",
         options: [
           { value: "wall_mount", label: "벽걸이", description: "기본 거치 방식" },
           { value: "stand", label: "스탠드", description: "이동형 스탠드 포함" },
-          { value: "none", label: "미정", description: "거치 방식 추후 확정" },
+          { value: "none", label: "추가 없음", description: "벽걸이·스탠드는 필요 시 별도 선택" },
         ],
       },
       {
@@ -313,11 +313,11 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
       {
         id: "board_75_classroom",
         label: "교실 기본형",
-        description: "벽걸이 + 설치 포함",
+        description: "전자칠판 + 초기 운영 교육",
         templateId: "board_75",
         optionSelections: {
           installation_mode: "included_quote",
-          mounting_option: "wall_mount",
+          mounting_option: "none",
           camera_bundle: false,
           support_package: true,
         },
@@ -382,11 +382,11 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
         label: "거치 방식",
         description: "현장 방식에 맞춰 부자재를 추가합니다.",
         control: "radio",
-        defaultValue: "wall_mount",
+        defaultValue: "none",
         options: [
           { value: "wall_mount", label: "벽걸이", description: "기본 거치 방식" },
           { value: "stand", label: "스탠드", description: "이동형 스탠드 포함" },
-          { value: "none", label: "미정", description: "거치 방식 추후 확정" },
+          { value: "none", label: "추가 없음", description: "벽걸이·스탠드는 필요 시 별도 선택" },
         ],
       },
       {
@@ -412,11 +412,11 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
       {
         id: "board_86_classroom",
         label: "교실 기본형",
-        description: "벽걸이 + 설치 포함",
+        description: "전자칠판 + 초기 운영 교육",
         templateId: "board_86",
         optionSelections: {
           installation_mode: "included_quote",
-          mounting_option: "wall_mount",
+          mounting_option: "none",
           camera_bundle: false,
           support_package: true,
         },

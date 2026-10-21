@@ -11,6 +11,7 @@ import {
   buildConfigurableStandardQuoteDetails,
   getOnlineSuiteTermMonths,
   getStandardQuoteDefaultSelections,
+  getStandardQuoteQuickPresets,
   resolveQuoteSupplier,
 } from "@/lib/standard-quote-template"
 
@@ -28,6 +29,25 @@ describe("하드웨어·수트형·소프트웨어 가격 정합성 검증", () 
       const template = getProductBySku("board-75")
       expect(catalog?.priceKrw).toBe(5_400_000)
       expect(template?.unit_price).toBe(catalog?.priceKrw)
+    })
+
+    it.each([
+      ["board_75", 5_400_000],
+      ["board_86", 6_300_000],
+    ] as const)("%s 기본 견적·교실 기본형은 거치비 50만원을 자동 가산하지 않는다", (templateId, price) => {
+      const defaults = getStandardQuoteDefaultSelections(templateId)
+      const classroom = getStandardQuoteQuickPresets(templateId).find((preset) => preset.id === `${templateId}_classroom`)
+      expect(classroom).toBeDefined()
+      for (const optionSelections of [defaults, { ...defaults, ...classroom!.optionSelections }]) {
+        const quote = buildConfigurableStandardQuoteDetails({ templateId, optionSelections })
+        expect(quote.grandTotalAmount).toBe(price)
+        expect(quote.lineItems?.some((line) => ["wall-mount", "stand"].includes(line.itemCode ?? ""))).toBe(false)
+      }
+      // 거치 옵션을 명시적으로 추가한 견적은 기존 유료 옵션 계산을 유지한다.
+      for (const mounting_option of ["wall_mount", "stand"]) {
+        const quote = buildConfigurableStandardQuoteDetails({ templateId, optionSelections: { ...defaults, mounting_option } })
+        expect(quote.grandTotalAmount).toBe(price + HARDWARE_INSTALL_PRICE_KRW)
+      }
     })
 
     it("T1 카메라 단가가 하드웨어 카탈로그와 견적 템플릿 간 일치한다", () => {
