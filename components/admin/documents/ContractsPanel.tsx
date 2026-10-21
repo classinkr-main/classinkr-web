@@ -1,11 +1,37 @@
 "use client"
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
-import { Plus, RefreshCw, Trash2, X, PenLine, Copy, Check, Send, Search } from "lucide-react"
+import { AlertCircle, Check, Copy, FileSignature, PenLine, Plus, Send, Trash2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { adminFetch, adminFetchJsonCached, clearAdminRequestCache } from "@/lib/admin-client"
 import { useUrlState } from "@/lib/use-url-state"
-import type { Contract, ContractStatus, Partner } from "@/lib/supabase/database.types"
+import type { Contract, Partner, Receipt } from "@/lib/supabase/database.types"
+import {
+  CONTRACT_QUEUE_GROUPS,
+  getContractQueueKey,
+  getContractSteps,
+  groupContracts,
+  type ContractQueueKey,
+} from "./document-queues"
+import {
+  DANGER_GHOST_BUTTON,
+  DetailHeader,
+  DocChain,
+  GHOST_BUTTON,
+  NextActionBox,
+  NoMatch,
+  QueueEmptyState,
+  QueueGroupHeader,
+  QueueLayout,
+  QueueListItem,
+  QueueLoading,
+  QueueTimeline,
+  QueueToolbar,
+  SOLID_BUTTON,
+  formatDay,
+  formatMan,
+  formatWon,
+} from "./queue-ui"
 
 // GET /api/admin/partners는 { partners }가 아니라 { workspaces }/{ summaries }를 반환한다.
 // 패널은 파트너명 표시에 id/name만 필요하므로 summary 응답을 최소 형태로 매핑해 쓴다.
@@ -19,91 +45,6 @@ const EMPTY_CREATE_FORM = {
   title: "",
   total_amount: 0,
   notes: "",
-}
-
-const STATUS_LABEL: Record<ContractStatus, string> = {
-  draft: "작성 중",
-  sent: "발송됨",
-  partner_signed: "파트너 서명",
-  admin_signed: "어드민 서명",
-  completed: "완료",
-  cancelled: "취소",
-}
-
-const STATUS_COLOR: Record<ContractStatus, string> = {
-  draft: "bg-[#f0f0ec] text-[#1a1a1a]/50",
-  sent: "bg-[#ECFDF5] text-[#084734]",
-  partner_signed: "bg-[#FBF1E0] text-[#A8741A]",
-  admin_signed: "bg-[#D1FAE5] text-[#065c41]",
-  completed: "bg-[#D1FAE5] text-[#065c41] font-semibold",
-  cancelled: "bg-[#FEF3EE] text-[#B85C33]",
-}
-
-const STATUS_FILTERS: Array<ContractStatus | "all"> = [
-  "all",
-  "draft",
-  "sent",
-  "partner_signed",
-  "admin_signed",
-  "completed",
-  "cancelled",
-]
-
-function SignatureStepBadge({
-  partnerSignedAt,
-  adminSignedAt,
-  status,
-}: {
-  partnerSignedAt: string | null
-  adminSignedAt: string | null
-  status: ContractStatus
-}) {
-  if (status === "completed" || (partnerSignedAt && adminSignedAt)) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-[#ECFDF5] px-2.5 py-0.5 text-[11px] font-semibold text-[#084734] ring-1 ring-[#BDEFD8]">
-        <Check className="h-3 w-3" />
-        체결 완료
-      </span>
-    )
-  }
-
-  if (partnerSignedAt) {
-    return (
-      <span
-        title={`파트너 서명 완료 (${new Date(partnerSignedAt).toLocaleDateString("ko")}) · 어드민 서명 대기`}
-        className="inline-flex items-center gap-1 rounded-full bg-[#FBF1E0] px-2.5 py-0.5 text-[11px] font-medium text-[#A8741A] ring-1 ring-[#ECD29C]"
-      >
-        <span className="inline-flex items-center text-[#084734] font-semibold">
-          <Check className="mr-0.5 h-3 w-3" />
-          파트너
-        </span>
-        <span className="text-[#A8741A]/50">→</span>
-        <span className="font-semibold text-[#7A520F]">어드민 서명 대기</span>
-      </span>
-    )
-  }
-
-  if (status === "draft") {
-    return (
-      <span className="inline-flex items-center rounded-full bg-[#f0f0ec] px-2 py-0.5 text-[11px] text-[#1a1a1a]/50">
-        초안 (미발송)
-      </span>
-    )
-  }
-
-  if (status === "cancelled") {
-    return (
-      <span className="inline-flex items-center rounded-full bg-[#FEF3EE] px-2 py-0.5 text-[11px] text-[#B85C33]">
-        취소됨
-      </span>
-    )
-  }
-
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-[#fafaf8] px-2 py-0.5 text-[11px] text-[#A8741A] ring-1 ring-[#e8e8e4]">
-      파트너 서명 대기
-    </span>
-  )
 }
 
 function SignatureCanvas({ onSave }: { onSave: (dataUrl: string) => void }) {
@@ -185,8 +126,11 @@ function SignatureCanvas({ onSave }: { onSave: (dataUrl: string) => void }) {
 export function ContractsPanel() {
   const [contracts, setContracts] = useState<Contract[]>([])
   const [partners, setPartners] = useState<PartnerOption[]>([])
+  const [receipts, setReceipts] = useState<Receipt[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Contract | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showSign, setShowSign] = useState(false)
   const [signing, setSigning] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
@@ -195,21 +139,25 @@ export function ContractsPanel() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [query, setQuery] = useUrlState("contract_q", "")
-  const [statusFilter, setStatusFilter] = useUrlState("contract_status", "all")
 
   const load = useCallback(async () => {
     setLoading(true)
+    setLoadError(null)
     try {
-      const [cData, pData] = await Promise.all([
+      const [cData, pData, rData] = await Promise.all([
         adminFetchJsonCached<{ contracts?: Contract[] }>("/api/admin/contracts"),
         adminFetchJsonCached<{ summaries?: Array<{ partnerId: string; partnerName: string }> }>(
           "/api/admin/partners?view=summary"
         ),
+        // 연결 문서 줄(계약 → 영수증)용. 실패해도 계약 목록은 보여 준다.
+        adminFetchJsonCached<{ receipts?: Receipt[] }>("/api/admin/receipts").catch(() => ({ receipts: [] })),
       ])
       setContracts(cData.contracts ?? [])
       setPartners((pData.summaries ?? []).map((s) => ({ id: s.partnerId, name: s.partnerName })))
-    } catch {
+      setReceipts(rData.receipts ?? [])
+    } catch (error) {
       // 기존 데이터 유지 — 일시적 네트워크 오류 시 빈 화면 방지
+      setLoadError(error instanceof Error ? error.message : "계약 목록을 불러오지 못했습니다.")
     } finally {
       setLoading(false)
     }
@@ -247,6 +195,7 @@ export function ContractsPanel() {
       }
       setShowCreate(false)
       setCreateForm(EMPTY_CREATE_FORM)
+      if (data?.contract?.id) setSelectedId(data.contract.id)
       clearAdminRequestCache("/api/admin/contracts")
       void load()
     } catch (error) {
@@ -257,28 +206,26 @@ export function ContractsPanel() {
   }
 
   const partnerName = useCallback(
-    (id: string) => partners.find((p) => p.id === id)?.name ?? id,
+    (id: string) => partners.find((p) => p.id === id)?.name ?? "파트너 미지정",
     [partners]
   )
 
-  const statusCounts = useMemo(() => {
-    const counts = new Map<ContractStatus, number>()
-    for (const c of contracts) counts.set(c.status, (counts.get(c.status) ?? 0) + 1)
-    return counts
-  }, [contracts])
-
-  const filtered = useMemo(() => {
+  // 다음 할 일 기준 묶음. 그룹 순서 = 처리 우선순위, 그룹 안은 최근 변경순.
+  const groups = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return contracts.filter((c) => {
-      if (statusFilter !== "all" && c.status !== statusFilter) return false
-      if (!q) return true
-      return (
-        c.contract_number.toLowerCase().includes(q) ||
-        c.title.toLowerCase().includes(q) ||
-        partnerName(c.partner_id).toLowerCase().includes(q)
-      )
-    })
-  }, [contracts, query, statusFilter, partnerName])
+    const visible = q
+      ? contracts.filter(
+          (c) =>
+            c.contract_number.toLowerCase().includes(q) ||
+            c.title.toLowerCase().includes(q) ||
+            partnerName(c.partner_id).toLowerCase().includes(q)
+        )
+      : contracts
+    return groupContracts(visible)
+  }, [contracts, query, partnerName])
+
+  const visibleContracts = groups.flatMap((group) => group.items)
+  const current = visibleContracts.find((c) => c.id === selectedId) ?? visibleContracts[0] ?? null
 
   function copySignLink(contract: Contract) {
     const url = `${window.location.origin}/share/contract/${contract.sign_token}`
@@ -324,213 +271,247 @@ export function ContractsPanel() {
     load()
   }
 
-  return (
-    <div className="mx-auto max-w-6xl space-y-4 p-4 sm:px-6 sm:py-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative w-full sm:max-w-xs">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1a1a1a]/30" />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="번호 · 제목 · 파트너 검색"
-            className="w-full rounded-lg border border-[#e8e8e4] bg-white py-2 pl-9 pr-3 text-sm text-[#1a1a1a] placeholder:text-[#1a1a1a]/30 focus:border-[#084734]/40 focus:outline-none"
-          />
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {STATUS_FILTERS.map((s) => {
-            const active = statusFilter === s
-            const count = s === "all" ? contracts.length : statusCounts.get(s) ?? 0
-            if (s !== "all" && count === 0) return null
-            return (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setStatusFilter(s)}
-                className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
-                  active
-                    ? "border-[#084734] bg-[#ECFDF5] font-medium text-[#084734]"
-                    : "border-[#e8e8e4] bg-white text-[#1a1a1a]/55 hover:bg-[#f7f7f5]"
-                }`}
-              >
-                {s === "all" ? "전체" : STATUS_LABEL[s]} {count}
-              </button>
-            )
-          })}
-        </div>
-        <div className="flex items-center gap-2 sm:ml-auto">
-          <span className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-medium text-[#615D59] ring-1 ring-[#e8e8e4]">
-            {loading ? "불러오는 중" : `${filtered.length}/${contracts.length}`}
-          </span>
-          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          </Button>
-          <Button size="sm" onClick={openCreateForm}>
-            <Plus className="mr-1 h-4 w-4" />
-            계약서 작성
-          </Button>
-        </div>
-      </div>
+  function getListStatus(c: Contract, key: ContractQueueKey) {
+    switch (key) {
+      case "sign":
+        return { text: `고객 서명 ${formatDay(c.partner_signed_at) ?? ""}`, tone: "go" as const }
+      case "await":
+        return { text: `서명 대기 · ${formatDay(c.updated_at) ?? ""}`, tone: "warn" as const }
+      case "draft":
+        return { text: `작성 ${formatDay(c.created_at) ?? ""}`, tone: "warn" as const }
+      case "done":
+        return { text: `완료 ${formatDay(c.admin_signed_at ?? c.updated_at) ?? ""}`, tone: "neutral" as const }
+      default:
+        return { text: "취소", tone: "muted" as const }
+    }
+  }
 
-      <div className="border border-[#e8e8e4] rounded-xl overflow-hidden bg-white">
-        {loading ? (
-          <div className="py-16 text-center text-sm text-[#1a1a1a]/40">불러오는 중...</div>
-        ) : contracts.length === 0 ? (
-          <div className="py-16 text-center text-sm text-[#1a1a1a]/40">
-            <p>등록된 계약이 없습니다.</p>
-            <button
-              type="button"
-              onClick={openCreateForm}
-              className="mt-2 text-xs font-medium text-[#084734] underline underline-offset-2"
-            >
-              첫 계약서 작성
-            </button>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="py-16 text-center text-sm text-[#1a1a1a]/40">
-            <p>조건에 맞는 계약이 없습니다.</p>
+  function renderCopyLink(c: Contract, className: string) {
+    if (!c.sign_token) return null
+    return (
+      <button type="button" onClick={() => copySignLink(c)} className={className}>
+        {copied === c.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+        {copied === c.id ? "복사됨" : "서명 링크 복사"}
+      </button>
+    )
+  }
+
+  function renderNextAction(c: Contract, key: ContractQueueKey, receipt: Receipt | undefined) {
+    const tone = CONTRACT_QUEUE_GROUPS.find((group) => group.key === key)?.tone ?? "neutral"
+    switch (key) {
+      case "sign":
+        return (
+          <NextActionBox
+            tone={tone}
+            label="우리 서명 필요"
+            description={`고객이 ${formatDay(c.partner_signed_at) ?? ""} 서명했습니다 — 우리가 서명하면 계약이 확정됩니다.`}
+          >
             <button
               type="button"
               onClick={() => {
-                setQuery("")
-                setStatusFilter("all")
+                setSelected(c)
+                setShowSign(true)
               }}
-              className="mt-2 text-xs font-medium text-[#084734] underline underline-offset-2"
+              className={SOLID_BUTTON}
             >
-              필터 초기화
+              <PenLine className="h-3.5 w-3.5" />
+              서명하기
             </button>
-          </div>
-        ) : (
-          <>
-            <div className="divide-y divide-[#f0f0ec] md:hidden">
-              {filtered.map((c) => (
-                <div key={`mobile-${c.id}`} className="px-4 py-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-mono text-xs text-[#1a1a1a]/45">{c.contract_number}</p>
-                      <p className="mt-1 line-clamp-2 text-sm font-semibold text-[#111110]">{c.title}</p>
-                      <p className="mt-1 truncate text-xs text-[#1a1a1a]/45">{partnerName(c.partner_id)}</p>
-                    </div>
-                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${STATUS_COLOR[c.status]}`}>{STATUS_LABEL[c.status]}</span>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between border-t border-[#f0f0ec] pt-2.5 text-xs">
-                    <div>
-                      <p className="text-[11px] text-[#1a1a1a]/40">계약 금액</p>
-                      <p className="mt-0.5 font-semibold tabular-nums text-[#111110]">{c.total_amount.toLocaleString("ko-KR")}원</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="mb-1 text-[11px] text-[#1a1a1a]/40">서명 진행</p>
-                      <SignatureStepBadge
-                        partnerSignedAt={c.partner_signed_at}
-                        adminSignedAt={c.admin_signed_at}
-                        status={c.status}
-                      />
-                    </div>
-                  </div>
-                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                    {c.status === "draft" && (
-                      <Button variant="outline" size="sm" className="w-full text-[#084734]" onClick={() => handleSend(c)}>
-                        <Send className="mr-1 h-3.5 w-3.5" />
-                        발송
-                      </Button>
-                    )}
-                    {["sent", "draft"].includes(c.status) && c.sign_token && (
-                      <Button variant="outline" size="sm" className="w-full" onClick={() => copySignLink(c)}>
-                        {copied === c.id ? <Check className="mr-1 h-3.5 w-3.5 text-[#084734]" /> : <Copy className="mr-1 h-3.5 w-3.5" />}
-                        링크 복사
-                      </Button>
-                    )}
-                    {c.status === "partner_signed" && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full text-[#615D59]"
-                        onClick={() => {
-                          setSelected(c)
-                          setShowSign(true)
-                        }}
-                      >
-                        <PenLine className="mr-1 h-3.5 w-3.5" />
-                        서명
-                      </Button>
-                    )}
-                    <Button variant="outline" size="sm" className="w-full text-[#B85C33]" onClick={() => handleDelete(c.id)}>
-                      <Trash2 className="mr-1 h-3.5 w-3.5" />
-                      삭제
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
+          </NextActionBox>
+        )
+      case "await":
+        return (
+          <NextActionBox
+            tone={tone}
+            label="고객 서명 대기"
+            description={
+              c.admin_signed_at
+                ? "우리 서명은 끝났습니다 — 고객 서명을 기다리는 중이니 서명 링크를 다시 안내하세요."
+                : "발송했지만 고객 서명 전입니다 — 서명 링크를 다시 보내 안내하세요."
+            }
+          >
+            {renderCopyLink(c, SOLID_BUTTON)}
+          </NextActionBox>
+        )
+      case "draft":
+        return (
+          <NextActionBox tone={tone} label="발송 전" description="조건을 확인한 뒤 발송 처리하고, 서명 링크를 고객에게 보내세요.">
+            {renderCopyLink(c, GHOST_BUTTON)}
+            <button type="button" onClick={() => void handleSend(c)} className={SOLID_BUTTON}>
+              <Send className="h-3.5 w-3.5" />
+              발송 처리
+            </button>
+          </NextActionBox>
+        )
+      case "done":
+        return (
+          <NextActionBox
+            tone={tone}
+            label="완료"
+            description={
+              receipt
+                ? `양측 서명 완료 · 영수증 ${receipt.receipt_number} 발행됨`
+                : "양측 서명 완료 — 입금이 확인되면 영수증 탭에서 영수증을 발행하세요."
+            }
+          />
+        )
+      default:
+        return <NextActionBox tone={tone} label="취소" description="취소된 계약입니다. 기록용으로 남아 있습니다." />
+    }
+  }
 
-            <div className="hidden overflow-x-auto md:block">
-              <table className="w-full text-sm">
-                <thead className="bg-[#f7f7f5] border-b border-[#e8e8e4]">
-                  <tr>
-                    {["번호", "파트너", "제목", "금액", "상태", "서명 진행", ""].map((h) => (
-                      <th key={h} className="px-4 py-3 text-left font-medium text-[#1a1a1a]/60 text-xs">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((c) => (
-                    <tr key={c.id} className="border-b border-[#f0f0ec] hover:bg-[#fafafa] transition-colors">
-                      <td className="px-4 py-3 font-mono text-xs text-[#1a1a1a]/60">{c.contract_number}</td>
-                      <td className="px-4 py-3 text-[#1a1a1a]/70">{partnerName(c.partner_id)}</td>
-                      <td className="px-4 py-3 font-medium text-[#1a1a1a]">{c.title}</td>
-                      <td className="px-4 py-3 font-medium tabular-nums">{c.total_amount.toLocaleString("ko-KR")}원</td>
-                      <td className="px-4 py-3">
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLOR[c.status]}`}>{STATUS_LABEL[c.status]}</span>
-                      </td>
-                      <td className="px-4 py-3 text-xs">
-                        <SignatureStepBadge
-                          partnerSignedAt={c.partner_signed_at}
-                          adminSignedAt={c.admin_signed_at}
-                          status={c.status}
+  function renderDetail(c: Contract) {
+    const key = getContractQueueKey(c)
+    const receipt = receipts.find((r) => r.contract_id === c.id)
+    const stepDetails = [
+      formatDay(c.created_at),
+      key === "draft" ? "아직 발송 전" : null,
+      formatDay(c.partner_signed_at) ?? (key === "await" ? "서명 대기 중" : null),
+      formatDay(c.admin_signed_at),
+      key === "done" ? "계약 확정" : null,
+    ]
+    const steps = getContractSteps(c).map((step, index) => ({
+      label: step.label,
+      done: step.done,
+      detail: stepDetails[index],
+      warn: index === 2 && key === "await" && !step.done,
+    }))
+    const period =
+      c.valid_from || c.valid_until ? `${formatDay(c.valid_from) ?? "—"} ~ ${formatDay(c.valid_until) ?? "—"}` : "—"
+
+    return (
+      <section aria-live="polite" aria-label="계약 상세" className="flex min-w-0 flex-col gap-6 px-7 py-6">
+        <DetailHeader
+          mono={c.contract_number}
+          title={`${partnerName(c.partner_id)} · ${c.title}`}
+          meta={`${formatDay(c.created_at) ?? ""} 작성${c.version > 1 ? ` · v${c.version}` : ""}`}
+          amount={formatWon(c.total_amount)}
+          amountNote="계약 금액"
+        />
+
+        <DocChain
+          links={[
+            { label: "견적", value: c.quote_id ? "연결됨" : null },
+            { label: "계약", value: c.contract_number, current: true },
+            { label: "영수증", value: receipt?.receipt_number ?? null },
+          ]}
+        />
+
+        {renderNextAction(c, key, receipt)}
+
+        <div className="grid gap-7 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+          <QueueTimeline title="서명" steps={steps} />
+          <div>
+            <h3 className="mb-2 text-[11.5px] font-semibold text-[#78736D]">계약 정보</h3>
+            <dl className="grid grid-cols-[72px_1fr] gap-x-2.5 gap-y-1.5 text-xs">
+              <dt className="text-[#78736D]">파트너</dt>
+              <dd className="text-[#31302E]">{partnerName(c.partner_id)}</dd>
+              <dt className="text-[#78736D]">계약 기간</dt>
+              <dd className="text-[#31302E]">{period}</dd>
+              <dt className="text-[#78736D]">메모</dt>
+              <dd className="whitespace-pre-wrap text-[#31302E]">{c.notes?.trim() || "—"}</dd>
+            </dl>
+          </div>
+        </div>
+
+        <div className="flex justify-end border-t border-[#f0f0ec] pt-4">
+          <button type="button" onClick={() => void handleDelete(c.id)} className={DANGER_GHOST_BUTTON}>
+            <Trash2 className="h-3.5 w-3.5" />
+            삭제
+          </button>
+        </div>
+      </section>
+    )
+  }
+
+  const createButton = (
+    <button type="button" onClick={openCreateForm} className={`${GHOST_BUTTON} shrink-0`}>
+      <Plus className="h-3.5 w-3.5" />
+      직접 작성
+    </button>
+  )
+
+  return (
+    <div className="mx-auto max-w-7xl space-y-4 p-4 sm:px-6 sm:py-5">
+      {loadError && contracts.length === 0 ? (
+        <QueueEmptyState
+          icon={<AlertCircle className="h-5 w-5 text-[#B43E3E]" />}
+          title="계약 목록을 불러오지 못했습니다."
+          description={loadError}
+          action={
+            <button type="button" onClick={() => void load()} className={GHOST_BUTTON}>
+              다시 시도
+            </button>
+          }
+        />
+      ) : loading && contracts.length === 0 ? (
+        <QueueLoading label="계약서를 불러오는 중입니다." />
+      ) : contracts.length === 0 ? (
+        <QueueEmptyState
+          icon={<FileSignature className="h-5 w-5" />}
+          title="아직 계약서가 없습니다."
+          description="계약서를 만들면 여기서 서명 단계 순서로 정리되고, 지금 할 일이 맨 위에 옵니다."
+          action={
+            <button type="button" onClick={openCreateForm} className={SOLID_BUTTON}>
+              <Plus className="h-3.5 w-3.5" />
+              첫 계약서 작성
+            </button>
+          }
+        />
+      ) : (
+        <QueueLayout
+          label="다음 할 일별 계약"
+          list={
+            <>
+              <QueueToolbar
+                query={query}
+                onQueryChange={setQuery}
+                placeholder="계약번호, 파트너, 제목"
+                loading={loading}
+                onRefresh={() => void load()}
+                action={createButton}
+              />
+              {groups.length === 0 ? (
+                <NoMatch label="조건에 맞는 계약이 없습니다." onReset={() => setQuery("")} />
+              ) : (
+                groups.map((group) => (
+                  <section key={group.key} className="border-b border-[#f0f0ec] pb-1.5 last:border-b-0">
+                    <QueueGroupHeader
+                      tone={group.tone}
+                      label={group.label}
+                      count={group.items.length}
+                      aside={`${formatMan(group.items.reduce((sum, c) => sum + c.total_amount, 0))}원`}
+                    />
+                    {group.items.map((c) => {
+                      const status = getListStatus(c, group.key)
+                      return (
+                        <QueueListItem
+                          key={c.id}
+                          selected={c.id === current?.id}
+                          onSelect={() => setSelectedId(c.id)}
+                          title={partnerName(c.partner_id)}
+                          subtitle={c.title}
+                          amount={formatMan(c.total_amount)}
+                          mono={c.contract_number}
+                          status={status.text}
+                          statusTone={status.tone}
                         />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          {c.status === "draft" && (
-                            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-[#084734]" onClick={() => handleSend(c)}>
-                              <Send className="w-3.5 h-3.5 mr-1" />
-                              발송
-                            </Button>
-                          )}
-                          {["sent", "draft"].includes(c.status) && c.sign_token && (
-                            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => copySignLink(c)}>
-                              {copied === c.id ? <Check className="w-3.5 h-3.5 text-[#084734]" /> : <Copy className="w-3.5 h-3.5" />}
-                            </Button>
-                          )}
-                          {c.status === "partner_signed" && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2 text-xs text-[#615D59]"
-                              onClick={() => {
-                                setSelected(c)
-                                setShowSign(true)
-                              }}
-                            >
-                              <PenLine className="w-3.5 h-3.5 mr-1" />
-                              서명
-                            </Button>
-                          )}
-                          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-[#B85C33]" onClick={() => handleDelete(c.id)}>
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
-      </div>
+                      )
+                    })}
+                  </section>
+                ))
+              )}
+            </>
+          }
+          detail={
+            current ? (
+              renderDetail(current)
+            ) : (
+              <p className="px-7 py-16 text-center text-sm text-[#78736D]">왼쪽에서 계약을 고르세요.</p>
+            )
+          }
+        />
+      )}
 
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-0 sm:items-center sm:p-4">

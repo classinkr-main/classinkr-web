@@ -3,9 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
   AlertCircle,
-  ArrowRight,
   Check,
-  Copy,
   ExternalLink,
   FileText,
   Link2,
@@ -13,7 +11,6 @@ import {
   Plus,
   RefreshCw,
   Search,
-  Send,
 } from "lucide-react"
 
 import { useCrmOwners } from "@/components/admin/crm/useCrmOwners"
@@ -21,8 +18,18 @@ import QuickQuoteComposer, {
   type QuickQuoteCreatedPayload,
   type QuickQuoteManagerOption,
   type QuickQuotePrefill,
+  type QuickQuoteTeamTemplate,
 } from "@/components/portal/quotes/QuickQuoteComposer"
+import { adminFetchJson } from "@/lib/admin-client"
+import type { PartnerQuoteDetailsInput } from "@/lib/partners-types"
+import {
+  quoteDetailsToTeamTemplateInput,
+  teamTemplateViewToQuoteDetails,
+} from "@/lib/quote-team-template-composer"
+import type { QuoteTemplateView } from "@/lib/quote-team-templates"
+import type { QuoteTemplateCatalogResponse } from "@/lib/repositories/quote-team-templates"
 import { portalFetch } from "@/lib/portal/portal-fetch"
+import { getQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
 import type { PartnerDocumentListItem } from "@/lib/portal/types"
 import {
   DEFAULT_HARDWARE_QUOTE_TEMPLATE_ID,
@@ -30,6 +37,14 @@ import {
   type QuoteProductLine,
   type StandardQuoteTemplateId,
 } from "@/lib/standard-quote-template"
+import {
+  getQuoteQueueKey,
+  getQuoteSentDays,
+  getQuoteStage,
+  QUOTE_QUEUE_GROUPS,
+  QUOTE_STAGE_LABELS,
+  type QuoteQueueKey,
+} from "./quote-queue"
 
 type HardwareQuoteRow = {
   id: string
@@ -49,9 +64,8 @@ type HardwareQuoteRow = {
   acceptedAt: string | null
   shareUrl: string | null
   updatedAt: string
-  /** SW/HW 제품군. 목록 API가 templateId를 주지 않아 제목·거래명 기준 추정이다(불명확하면 HW). */
+  /** SW/HW 제품군. 목록 API의 templateId 우선, 없으면 제목·거래명 기준 추정(불명확하면 HW). */
   productLine: QuoteProductLine
-  createdAction?: QuickQuoteCreatedPayload["action"]
 }
 
 type DocumentsPayload = {
@@ -66,8 +80,18 @@ type SharePayload = {
   }
 }
 
-type QuoteFilter = "all" | "draft" | "shared" | "accepted" | "needs_action"
-type QuoteSortKey = "recent" | "amount" | "response"
+type ViewerPayload = {
+  version?: {
+    structured_json: Record<string, unknown> | null
+    valid_until: string | null
+  }
+  error?: string
+}
+
+type QuoteDetailLine = { key: string; name: string; description: string | null; quantity: string; amount: string }
+type QuoteDetail = { lines: QuoteDetailLine[]; supplier: string | null; validUntil: string | null }
+type DetailState = { status: "loading" } | { status: "ready"; detail: QuoteDetail } | { status: "error"; message: string }
+
 type HardwareQuoteQuickAction = "new" | StandardQuoteTemplateId
 
 type HardwareQuoteQuickActionRequest = {
@@ -82,88 +106,45 @@ type HardwareQuotesPanelProps = {
   prefill?: QuickQuotePrefill | null
 }
 
-const ACTION_LABEL: Record<QuickQuoteCreatedPayload["action"], string> = {
-  save: "저장됨",
-  save_and_preview: "미리보기",
-  save_and_send: "전송 준비",
-}
-
-const FILTER_OPTIONS: Array<{ key: QuoteFilter; label: string }> = [
-  { key: "all", label: "전체" },
-  { key: "needs_action", label: "후속 필요" },
-  { key: "draft", label: "작성 중" },
-  { key: "shared", label: "발송됨" },
-  { key: "accepted", label: "동의 완료" },
-]
-
 const PRODUCT_LINE_OPTIONS: Array<{ key: QuoteProductLine | "all"; label: string }> = [
   { key: "all", label: "전체" },
-  { key: "software", label: "소프트웨어" },
-  { key: "hardware", label: "하드웨어" },
+  { key: "software", label: "SW" },
+  { key: "hardware", label: "HW" },
 ]
 
-const PRODUCT_LINE_BADGE: Record<QuoteProductLine, { label: string; supplier: string; className: string; title: string }> = {
-  software: {
-    label: "SW",
-    supplier: "클래스인",
-    className: "bg-[#ECFDF5] text-[#084734] ring-[#BDEFD8]",
-    title: "소프트웨어 견적 (공급처: 이이오클래스인코리아)",
-  },
-  hardware: {
-    label: "HW",
-    supplier: "퀴드러닝",
-    className: "bg-[#f6f5f2] text-[#615D59] ring-[#e8e8e4]",
-    title: "하드웨어 견적 (공급처: 퀴드러닝)",
-  },
+const PRODUCT_LINE_META: Record<QuoteProductLine, { label: string; supplier: string }> = {
+  software: { label: "SW", supplier: "클래스인" },
+  hardware: { label: "HW", supplier: "퀴드러닝" },
 }
 
-const SORT_OPTIONS: Array<{ key: QuoteSortKey; label: string }> = [
-  { key: "recent", label: "최신순" },
-  { key: "amount", label: "금액 높은순" },
-  { key: "response", label: "응답 최신순" },
-]
-
-const STATUS_META: Record<string, { label: string; className: string }> = {
-  pending_approval: {
-    label: "승인 대기",
-    className: "bg-[#FFF7ED] text-[#B85C33] ring-[#FED7AA]",
-  },
-  draft: {
-    label: "작성 중",
-    className: "bg-[#f6f5f2] text-[#615D59] ring-[#e8e8e4]",
-  },
-  shared: {
-    label: "발송됨",
-    className: "bg-[#ECFDF5] text-[#084734] ring-[#D1FAE5]",
-  },
-  accepted: {
-    label: "동의 완료",
-    className: "bg-[#D1FAE5] text-[#065c41] ring-[#B7E8D1]",
-  },
-  expired: {
-    label: "만료",
-    className: "bg-[#FEF3EE] text-[#B85C33] ring-[#F6D5C5]",
-  },
-  archived: {
-    label: "보관",
-    className: "bg-white text-[#1a1a1a]/45 ring-[#e8e8e4]",
-  },
+const STATUS_LABEL: Record<string, string> = {
+  expired: "만료",
+  archived: "보관",
 }
+
+// 신호색은 점·작은 글자에만(DESIGN.md 운영 상태 스케일). 채움 배경은 쓰지 않는다.
+const TONE_DOT: Record<"go" | "warn" | "neutral" | "muted", string> = {
+  go: "bg-[#084734]",
+  warn: "bg-[#A8741A]",
+  neutral: "bg-[#31302E]",
+  muted: "bg-[#C9C6C0]",
+}
+
+const DESKTOP_QUERY = "(min-width: 1024px)"
 
 function formatMoney(value: number) {
   return `${Math.round(value).toLocaleString("ko-KR")}원`
 }
 
-function formatDateTime(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
+function formatMan(value: number) {
+  return `${(Math.round(value / 1000) / 10).toLocaleString("ko-KR")}만`
+}
 
-  return new Intl.DateTimeFormat("ko-KR", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date)
+function formatDay(value: string | null) {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  return new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric" }).format(date)
 }
 
 async function copyTextToClipboard(text: string) {
@@ -251,119 +232,134 @@ function mapDocumentToQuoteRow(document: PartnerDocumentListItem): HardwareQuote
   }
 }
 
-function getStatusMeta(status: string) {
-  return STATUS_META[status] ?? {
-    label: status,
-    className: "bg-white text-[#1a1a1a]/50 ring-[#e8e8e4]",
+/** 견적 제목·거래명은 보통 "고객명 …"으로 시작한다 — 고객명 옆에 붙일 때 앞머리를 뗀다. */
+function withoutCustomerPrefix(value: string, customerName: string) {
+  const trimmed = value.trim()
+  if (customerName && trimmed.startsWith(customerName)) {
+    const rest = trimmed.slice(customerName.length).trim()
+    if (rest) return rest
+  }
+  return trimmed
+}
+
+/** 목록 2번째 줄 오른쪽 — 그 단계에서 제일 중요한 사실 한 가지. */
+function getQueueStatus(quote: HardwareQuoteRow, key: QuoteQueueKey) {
+  const sentDays = getQuoteSentDays(quote)
+  switch (key) {
+    case "convert":
+      return { text: `동의 · ${formatDay(quote.acceptedAt) ?? "확인됨"}`, className: "font-semibold text-[#084734]" }
+    case "remind":
+      return sentDays !== null
+        ? { text: `발송 ${sentDays}일째 미열람`, className: "font-semibold text-[#7A520F]" }
+        : { text: "열람 대기", className: "text-[#78736D]" }
+    case "send":
+      return { text: `작성 중 · ${formatDay(quote.updatedAt) ?? ""}`, className: "font-semibold text-[#7A520F]" }
+    case "terms":
+      return { text: `열람 ${quote.viewCount}회 · ${formatDay(quote.lastViewedAt) ?? ""}`, className: "text-[#78736D]" }
+    case "close":
+      return { text: `검토 확인 · ${formatDay(quote.reviewConfirmedAt) ?? ""}`, className: "text-[#78736D]" }
+    default:
+      return { text: STATUS_LABEL[quote.status] ?? quote.status, className: "text-[#78736D]" }
   }
 }
 
-function getResponseMeta(quote: HardwareQuoteRow) {
-  if (quote.acceptedAt || quote.status === "accepted") {
-    return { label: "동의 확인", dotClassName: "bg-[#084734]", textClassName: "text-[#084734]" }
+function getNextActionCopy(quote: HardwareQuoteRow, key: QuoteQueueKey) {
+  const sentDays = getQuoteSentDays(quote)
+  switch (key) {
+    case "convert":
+      return { label: "계약 전환", description: "고객 동의 완료 — 계약서를 만들고 딜 단계를 '계약'으로 넘깁니다." }
+    case "remind":
+      return {
+        label: "열람 리마인드",
+        description:
+          sentDays !== null
+            ? `발송 ${sentDays}일째 미열람 — 링크를 다시 보내 안내하세요.`
+            : "발송했지만 아직 열람 전입니다.",
+      }
+    case "send":
+      return { label: "검토 후 발송", description: "작성 중 — 금액·조건을 확인한 뒤 링크를 보내세요." }
+    case "terms":
+      return { label: "조건 확인", description: `열람 ${quote.viewCount}회, 검토 확인 전 — 조건에 질문이 있는지 확인하세요.` }
+    case "close":
+      return { label: "동의 요청", description: "검토 확인 완료 — 최종 동의를 요청하세요." }
+    default:
+      return { label: STATUS_LABEL[quote.status] ?? "종료", description: "만료되었거나 보관된 견적입니다." }
   }
-  if (quote.reviewConfirmedAt) {
-    return { label: "검토 확인", dotClassName: "bg-[#084734]", textClassName: "text-[#084734]" }
-  }
-  if (quote.status === "expired") {
-    return { label: "만료됨", dotClassName: "bg-[#B85C33]", textClassName: "text-[#B85C33]" }
-  }
-  if (quote.lastViewedAt) {
-    return { label: `열람 ${quote.viewCount}회`, dotClassName: "bg-[#084734]", textClassName: "text-[#111110]" }
-  }
-  if (quote.status === "shared" || quote.shareCount > 0 || quote.shareUrl) {
-    return { label: "열람 대기", dotClassName: "bg-[#A8741A]", textClassName: "text-[#A8741A]" }
-  }
-  return { label: "미발송", dotClassName: "bg-[#c9c7c2]", textClassName: "text-[#1a1a1a]/45" }
 }
 
-/** 마지막 고객 반응(동의 > 검토 > 열람 > 발송) 시점 — 로그 라인의 상대시간 표기에 사용. */
-function getLatestInteractionAt(quote: HardwareQuoteRow) {
-  return quote.acceptedAt ?? quote.reviewConfirmedAt ?? quote.lastViewedAt ?? quote.latestShareCreatedAt
+function getTimeline(quote: HardwareQuoteRow) {
+  const stage = getQuoteStage(quote)
+  const sentDays = getQuoteSentDays(quote)
+  const sentAt = formatDay(quote.latestShareCreatedAt)
+  const details: Array<{ text: string | null; warn?: boolean }> = [
+    { text: `v${quote.latestVersionNumber ?? quote.versionCount} · ${formatDay(quote.updatedAt) ?? ""} 수정` },
+    { text: stage >= 2 ? `${sentAt ?? "발송됨"}${quote.shareCount > 1 ? ` · 링크 ${quote.shareCount}회` : ""}` : "아직 발송 전" },
+    {
+      text:
+        quote.viewCount > 0
+          ? `${quote.viewCount}회${quote.lastViewedAt ? ` · 마지막 ${formatDay(quote.lastViewedAt)}` : ""}`
+          : sentDays !== null
+            ? `${sentDays}일째 미열람`
+            : null,
+      warn: quote.viewCount === 0 && sentDays !== null,
+    },
+    { text: formatDay(quote.reviewConfirmedAt) },
+    { text: formatDay(quote.acceptedAt) },
+  ]
+
+  return QUOTE_STAGE_LABELS.map((label, index) => ({
+    label,
+    done: index + 1 <= stage,
+    won: index === 4 && stage === 5,
+    ...details[index],
+  }))
 }
 
-const UNRESPONSIVE_WARN_DAYS = 3
-
-/** 발송 후 미열람 상태로 경과한 일수. 경고 기준 미만이거나 반응이 있으면 null. */
-function getUnresponsiveDays(quote: HardwareQuoteRow) {
-  if (quote.acceptedAt || quote.reviewConfirmedAt || quote.lastViewedAt) return null
-  if (!isQuoteShared(quote) || !quote.latestShareCreatedAt) return null
-
-  const sharedAt = Date.parse(quote.latestShareCreatedAt)
-  if (Number.isNaN(sharedAt)) return null
-
-  const days = Math.floor((Date.now() - sharedAt) / 86_400_000)
-  return days >= UNRESPONSIVE_WARN_DAYS ? days : null
-}
-
-function formatRelativeTime(value: string | null) {
-  if (!value) return null
-  const time = Date.parse(value)
-  if (Number.isNaN(time)) return null
-
-  const diffMinutes = Math.floor((Date.now() - time) / 60_000)
-  if (diffMinutes < 1) return "방금"
-  if (diffMinutes < 60) return `${diffMinutes}분 전`
-  const diffHours = Math.floor(diffMinutes / 60)
-  if (diffHours < 24) return `${diffHours}시간 전`
-  const diffDays = Math.floor(diffHours / 24)
-  if (diffDays < 7) return `${diffDays}일 전`
-
-  return new Intl.DateTimeFormat("ko-KR", { month: "short", day: "numeric" }).format(new Date(time))
-}
-
-function getInteractionHint(quote: HardwareQuoteRow) {
-  if (quote.acceptedAt) return `${formatDateTime(quote.acceptedAt)} 동의`
-  if (quote.reviewConfirmedAt) return `${formatDateTime(quote.reviewConfirmedAt)} 검토`
-  if (quote.lastViewedAt) return `${formatDateTime(quote.lastViewedAt)} 마지막 열람`
-  if (quote.latestShareCreatedAt) return `${formatDateTime(quote.latestShareCreatedAt)} 발송`
-  return quote.shareCount > 0 || quote.shareUrl ? "링크 발송됨" : "링크 미생성"
-}
-
-function isQuoteShared(quote: HardwareQuoteRow) {
-  return quote.status === "shared" || quote.shareCount > 0 || Boolean(quote.shareUrl)
-}
-
-function needsQuoteFollowUp(quote: HardwareQuoteRow) {
-  if (quote.status === "accepted" || quote.acceptedAt) return false
-  if (quote.status === "draft" || quote.status === "pending_approval") return true
-  if (isQuoteShared(quote) && !quote.lastViewedAt && !quote.reviewConfirmedAt) return true
-  if (quote.lastViewedAt && !quote.reviewConfirmedAt) return true
-  return false
-}
-
-function getNextActionMeta(quote: HardwareQuoteRow) {
-  if (quote.status === "accepted" || quote.acceptedAt) {
-    return { label: "계약 전환", textClassName: "text-[#084734]" }
+async function fetchQuoteDetail(quoteId: string): Promise<QuoteDetail> {
+  const response = await portalFetch(`/api/portal/quotes/${quoteId}?include=viewer`)
+  const payload = (await response.json().catch(() => null)) as ViewerPayload | null
+  if (!response.ok || !payload?.version) {
+    throw new Error(payload?.error ?? "견적 상세를 불러오지 못했습니다.")
   }
 
-  if (quote.status === "draft" || quote.status === "pending_approval") {
-    return { label: "검토 후 발송", textClassName: "text-[#A8741A]" }
+  const details = getQuoteDetailsFromStructuredJson(payload.version.structured_json, {
+    validUntil: payload.version.valid_until,
+  })
+  const lines = (details?.lineItems ?? []).map((line, index) => {
+    const amount = line.lineSupplyAmount ?? (line.unitPrice != null ? line.unitPrice * (line.quantity ?? 1) : null)
+    return {
+      key: line.id ?? `${index}`,
+      name: line.itemName,
+      description: line.itemDescription ?? null,
+      quantity: line.quantity != null ? `×${line.quantity}${line.quantityUnit && line.quantityUnit !== "대" ? line.quantityUnit : ""}` : "",
+      amount: amount != null ? formatMoney(amount) : "—",
+    }
+  })
+
+  return {
+    lines,
+    supplier: details?.supplierBusinessName ?? null,
+    validUntil: formatDay(payload.version.valid_until),
   }
-
-  if (isQuoteShared(quote) && !quote.lastViewedAt) {
-    return { label: "열람 리마인드", textClassName: "text-[#A8741A]" }
-  }
-
-  if (quote.lastViewedAt && !quote.reviewConfirmedAt) {
-    return { label: "조건 확인", textClassName: "text-[#615D59]" }
-  }
-
-  return { label: "기록 확인", textClassName: "text-[#1a1a1a]/45" }
-}
-
-function getResponseTime(quote: HardwareQuoteRow) {
-  return Math.max(
-    Date.parse(quote.acceptedAt ?? "") || 0,
-    Date.parse(quote.reviewConfirmedAt ?? "") || 0,
-    Date.parse(quote.lastViewedAt ?? "") || 0,
-    Date.parse(quote.latestShareCreatedAt ?? "") || 0,
-    Date.parse(quote.updatedAt) || 0
-  )
 }
 
 function templateIdFromQuickAction(action: HardwareQuoteQuickAction): StandardQuoteTemplateId {
   return action === "new" ? DEFAULT_HARDWARE_QUOTE_TEMPLATE_ID : action
+}
+
+const GHOST_BUTTON =
+  "inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-[#e8e8e4] bg-white px-3 text-[12.5px] font-semibold text-[#31302E] transition-colors hover:border-[#c8c8c4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-60"
+const SOLID_BUTTON =
+  "inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[#084734] px-3.5 text-[12.5px] font-semibold text-white transition-colors hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-60"
+const OUTLINE_STRONG_BUTTON =
+  "inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-[#31302E] bg-white px-3.5 text-[12.5px] font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F2] disabled:cursor-not-allowed disabled:opacity-60"
+
+const QUOTE_TEMPLATES_API = "/api/admin/quote-templates"
+
+/** 브라우저 현지 날짜(KST) — 팀 템플릿 유효기한 계산 기준. */
+function getLocalDateValue() {
+  const now = new Date()
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10)
 }
 
 export default function HardwareQuotesPanel({
@@ -382,9 +378,9 @@ export default function HardwareQuotesPanel({
   const [convertingQuoteId, setConvertingQuoteId] = useState<string | null>(null)
   const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
-  const [activeFilter, setActiveFilter] = useState<QuoteFilter>("all")
   const [productLineFilter, setProductLineFilter] = useState<QuoteProductLine | "all">("all")
-  const [sortKey, setSortKey] = useState<QuoteSortKey>("recent")
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [details, setDetails] = useState<Record<string, DetailState>>({})
   const handledQuickActionKeyRef = useRef<string | null>(null)
 
   // 견적 작성기의 "공급자 담당자" 드롭다운 후보. 어드민 전용 훅이라 여기서 읽어 주입한다
@@ -409,69 +405,67 @@ export default function HardwareQuotesPanel({
     return options
   }, [crmOwners])
 
-  const summary = useMemo(() => {
-    return {
-      total: quotes.length,
-      draft: quotes.filter((quote) => quote.status === "draft" || quote.status === "pending_approval").length,
-      shared: quotes.filter((quote) => isQuoteShared(quote)).length,
-      accepted: quotes.filter((quote) => quote.status === "accepted" || quote.acceptedAt).length,
-      needsAction: quotes.filter((quote) => needsQuoteFollowUp(quote)).length,
-    }
-  }, [quotes])
-
-  const filterCounts: Record<QuoteFilter, number> = {
-    all: summary.total,
-    needs_action: summary.needsAction,
-    draft: summary.draft,
-    shared: summary.shared,
-    accepted: summary.accepted,
-  }
-
   const productLineCounts: Record<QuoteProductLine | "all", number> = {
     all: quotes.length,
     software: quotes.filter((quote) => quote.productLine === "software").length,
     hardware: quotes.filter((quote) => quote.productLine === "hardware").length,
   }
 
-  const visibleQuotes = useMemo(() => {
+  // 다음 할 일 기준 묶음. 그룹 순서 = 처리 우선순위, 그룹 안은 최근 수정순.
+  const groups = useMemo(() => {
     const normalizedQuery = searchTerm.trim().toLowerCase()
-
-    return quotes
+    const visible = quotes
       .filter((quote) => {
         if (productLineFilter !== "all" && quote.productLine !== productLineFilter) return false
-        if (activeFilter === "draft" && quote.status !== "draft" && quote.status !== "pending_approval") return false
-        if (activeFilter === "shared" && !isQuoteShared(quote)) return false
-        if (activeFilter === "accepted" && quote.status !== "accepted" && !quote.acceptedAt) return false
-        if (activeFilter === "needs_action" && !needsQuoteFollowUp(quote)) return false
-
         if (!normalizedQuery) return true
-
-        return [
-          quote.quoteNumber,
-          quote.title,
-          quote.customerName,
-          quote.dealTitle,
-          quote.status,
-        ].some((value) => String(value ?? "").toLowerCase().includes(normalizedQuery))
+        return [quote.quoteNumber, quote.title, quote.customerName, quote.dealTitle].some((value) =>
+          String(value ?? "").toLowerCase().includes(normalizedQuery)
+        )
       })
-      .sort((left, right) => {
-        if (sortKey === "amount") return right.totalAmount - left.totalAmount
-        if (sortKey === "response") return getResponseTime(right) - getResponseTime(left)
-        return (Date.parse(right.updatedAt) || 0) - (Date.parse(left.updatedAt) || 0)
-      })
-  }, [activeFilter, productLineFilter, quotes, searchTerm, sortKey])
+      .sort((left, right) => (Date.parse(right.updatedAt) || 0) - (Date.parse(left.updatedAt) || 0))
 
-  const hasActiveControls =
-    activeFilter !== "all" ||
-    productLineFilter !== "all" ||
-    searchTerm.trim().length > 0 ||
-    sortKey !== "recent"
+    return QUOTE_QUEUE_GROUPS.map((group) => {
+      const items = visible.filter((quote) => getQuoteQueueKey(quote) === group.key)
+      return { ...group, items, amount: items.reduce((sum, quote) => sum + quote.totalAmount, 0) }
+    }).filter((group) => group.items.length > 0)
+  }, [productLineFilter, quotes, searchTerm])
 
-  function resetListControls() {
-    setSearchTerm("")
-    setActiveFilter("all")
-    setProductLineFilter("all")
-    setSortKey("recent")
+  const visibleCount = groups.reduce((sum, group) => sum + group.items.length, 0)
+  const selectedQuote =
+    groups.flatMap((group) => group.items).find((quote) => quote.id === selectedId) ?? groups[0]?.items[0] ?? null
+  const selectedDetail = selectedQuote ? details[selectedQuote.id] : undefined
+
+  // 작성기 '템플릿' 칸의 팀 템플릿. 표가 없거나 API 가 실패하면 빈 목록 — 기본 템플릿(코드 상수)만으로 동작한다.
+  const [teamTemplates, setTeamTemplates] = useState<QuickQuoteTeamTemplate[]>([])
+
+  async function loadTeamTemplates() {
+    try {
+      const catalog = await adminFetchJson<QuoteTemplateCatalogResponse>(QUOTE_TEMPLATES_API, { cache: "no-store" })
+      const today = getLocalDateValue()
+      setTeamTemplates(
+        (catalog?.team ?? []).flatMap((view) => {
+          const details = teamTemplateViewToQuoteDetails(view, today)
+          return details ? [{ id: view.id, label: view.name, details }] : []
+        })
+      )
+    } catch (error) {
+      console.warn("[quotes] 팀 템플릿을 불러오지 못해 기본 템플릿만 씁니다", error)
+      setTeamTemplates([])
+    }
+  }
+
+  useEffect(() => {
+    if (composerOpen) void loadTeamTemplates()
+  }, [composerOpen])
+
+  async function handleSaveTemplate(draft: { name: string; details: PartnerQuoteDetailsInput }) {
+    const input = quoteDetailsToTeamTemplateInput(draft.name, draft.details)
+    if (!input) throw new Error("템플릿에 담을 카탈로그 품목이 없습니다.")
+    await adminFetchJson<{ template: QuoteTemplateView }>(QUOTE_TEMPLATES_API, {
+      method: "POST",
+      body: JSON.stringify(input),
+    })
+    await loadTeamTemplates()
   }
 
   const recentQuotes = useMemo(
@@ -506,6 +500,8 @@ export default function HardwareQuotesPanel({
 
       const nextQuotes = (Array.isArray(payload?.documents) ? payload.documents : []).map(mapDocumentToQuoteRow)
       setQuotes(nextQuotes)
+      // 목록이 바뀌면 상세(품목)도 다시 받는다 — 버전이 올라갔을 수 있다.
+      setDetails({})
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "견적서 목록을 불러오지 못했습니다.")
     } finally {
@@ -561,6 +557,22 @@ export default function HardwareQuotesPanel({
     void loadQuotes()
   }, [])
 
+  // 선택한 견적의 품목·공급자는 목록 API에 없어 상세를 한 번 받아 캐시한다.
+  // id 별 캐시라 응답이 늦게 와도 다른 견적에 섞이지 않는다 — 취소 없이 한 번만 받는다.
+  const selectedQuoteId = selectedQuote?.id ?? null
+  useEffect(() => {
+    if (!selectedQuoteId || details[selectedQuoteId]) return
+    setDetails((current) => ({ ...current, [selectedQuoteId]: { status: "loading" } }))
+    fetchQuoteDetail(selectedQuoteId)
+      .then((detail) => {
+        setDetails((current) => ({ ...current, [selectedQuoteId]: { status: "ready", detail } }))
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : "견적 상세를 불러오지 못했습니다."
+        setDetails((current) => ({ ...current, [selectedQuoteId]: { status: "error", message } }))
+      })
+  }, [selectedQuoteId, details])
+
   useEffect(() => {
     if (!quickAction) return
     if (handledQuickActionKeyRef.current === quickAction.key) return
@@ -596,13 +608,13 @@ export default function HardwareQuotesPanel({
         title: payload.version.title,
         dealTitle: payload.deal.title,
       }),
-      createdAction: payload.action,
     }
 
     setQuotes((current) => [
       nextQuote,
       ...current.filter((item) => item.id !== payload.document.id),
     ])
+    setSelectedId(payload.document.id)
   }
 
   async function ensureShareUrl(quote: HardwareQuoteRow) {
@@ -672,14 +684,241 @@ export default function HardwareQuotesPanel({
     }
   }
 
+  function handleSelect(quote: HardwareQuoteRow) {
+    // 좁은 화면에는 상세 패널이 없다 — 기존 직접 보기로 연다.
+    if (typeof window !== "undefined" && !window.matchMedia(DESKTOP_QUERY).matches) {
+      openAdminQuoteView(quote.id)
+      return
+    }
+    setSelectedId(quote.id)
+  }
+
+  function renderNextActionButtons(quote: HardwareQuoteRow, key: QuoteQueueKey) {
+    const sharing = sharingQuoteId === quote.id
+    const viewButton = (
+      <button type="button" onClick={() => openAdminQuoteView(quote.id)} className={GHOST_BUTTON}>
+        <FileText className="h-3.5 w-3.5" />
+        문서 보기
+      </button>
+    )
+
+    if (key === "convert") {
+      const converting = convertingQuoteId === quote.id
+      return (
+        <>
+          {viewButton}
+          <button
+            type="button"
+            onClick={() => void handleConvertToContract(quote)}
+            disabled={converting}
+            title="이 견적으로 연결된 계약서를 생성하고 딜 단계를 '계약'으로 전진시킵니다."
+            className={SOLID_BUTTON}
+          >
+            {converting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {converting ? "전환 중…" : "계약서 만들기 →"}
+          </button>
+        </>
+      )
+    }
+
+    if (key === "closed") return viewButton
+
+    const copyButton = (
+      <button
+        type="button"
+        onClick={() => void handleCopyShareLink(quote)}
+        disabled={sharing}
+        className={key === "remind" || key === "send" ? SOLID_BUTTON : OUTLINE_STRONG_BUTTON}
+      >
+        {sharing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
+        {key === "send" ? "발송 링크 복사" : "링크 복사"}
+      </button>
+    )
+
+    if (key === "remind") {
+      return (
+        <>
+          <button type="button" onClick={() => void handleOpenShareLink(quote)} disabled={sharing} className={GHOST_BUTTON}>
+            <ExternalLink className="h-3.5 w-3.5" />
+            고객 화면
+          </button>
+          {copyButton}
+        </>
+      )
+    }
+
+    return (
+      <>
+        {viewButton}
+        {copyButton}
+      </>
+    )
+  }
+
+  function renderDetail(quote: HardwareQuoteRow) {
+    const key = getQuoteQueueKey(quote)
+    const group = QUOTE_QUEUE_GROUPS.find((item) => item.key === key)
+    const nextAction = getNextActionCopy(quote, key)
+    const lineMeta = PRODUCT_LINE_META[quote.productLine]
+    const timeline = getTimeline(quote)
+    const sharing = sharingQuoteId === quote.id
+
+    return (
+      <section aria-live="polite" aria-label="견적 상세" className="flex min-w-0 flex-col gap-6 px-7 py-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[11.5px] text-[#78736D]">{quote.quoteNumber}</span>
+              <span
+                className={`rounded border px-1.5 text-[11px] font-semibold tracking-wide ${
+                  quote.productLine === "software" ? "border-[#084734]/35 text-[#084734]" : "border-[#e8e8e4] text-[#615D59]"
+                }`}
+              >
+                {lineMeta.label} · {lineMeta.supplier}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => openAdminQuoteView(quote.id)}
+              className="mt-1.5 block max-w-full truncate text-left text-lg font-bold tracking-[-0.02em] text-[#111110] underline-offset-2 hover:text-[#084734] hover:underline"
+            >
+              {quote.customerName} · {withoutCustomerPrefix(quote.title, quote.customerName)}
+            </button>
+            <p className="mt-0.5 text-xs text-[#615D59]">
+              {withoutCustomerPrefix(quote.dealTitle, quote.customerName)} · v{quote.latestVersionNumber ?? quote.versionCount} · {formatDay(quote.updatedAt)} 수정
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-2xl font-bold tracking-[-0.02em] tabular-nums text-[#111110]">{formatMoney(quote.totalAmount)}</p>
+            <p className="text-[11.5px] text-[#78736D]">VAT 별도</p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-[#e8e8e4] px-4 py-3.5">
+          <div className="min-w-0 flex-[1_1_240px]">
+            <p className="flex items-center gap-2 text-[13.5px] font-bold text-[#111110]">
+              <span className={`h-[7px] w-[7px] rounded-full ${TONE_DOT[group?.tone ?? "neutral"]}`} />
+              {nextAction.label}
+            </p>
+            <p className="mt-0.5 text-xs text-[#615D59]">{nextAction.description}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">{renderNextActionButtons(quote, key)}</div>
+        </div>
+
+        <div className="grid gap-7 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+          <div>
+            <h3 className="mb-3 text-[11.5px] font-semibold text-[#78736D]">고객 반응</h3>
+            <ol>
+              {timeline.map((step, index) => (
+                <li key={step.label} className="flex gap-2.5">
+                  <span aria-hidden className="flex w-3 shrink-0 flex-col items-center pt-1">
+                    <span
+                      className={`h-[9px] w-[9px] rounded-full border-[1.5px] ${
+                        step.won
+                          ? "border-[#084734] bg-[#084734]"
+                          : step.done
+                            ? "border-[#31302E] bg-[#31302E]"
+                            : "border-[#CFCBC5] bg-white"
+                      }`}
+                    />
+                    {index < timeline.length - 1 && (
+                      <span
+                        className={`mt-[3px] min-h-5 w-[1.5px] flex-1 ${
+                          timeline[index + 1].done ? "bg-[#31302E]" : "bg-[#e8e8e4]"
+                        }`}
+                      />
+                    )}
+                  </span>
+                  <span className="pb-3.5">
+                    <span className={`block text-[13px] ${step.done ? "font-semibold text-[#111110]" : "text-[#78736D]"}`}>
+                      {step.label}
+                    </span>
+                    {step.text && (
+                      <span className={`block text-[11.5px] ${step.warn ? "font-semibold text-[#7A520F]" : "text-[#78736D]"}`}>
+                        {step.text}
+                      </span>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          <div>
+            <h3 className="mb-1.5 text-[11.5px] font-semibold text-[#78736D]">품목</h3>
+            {!selectedDetail || selectedDetail.status === "loading" ? (
+              <p className="flex items-center gap-2 py-3 text-xs text-[#78736D]">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                품목을 불러오는 중
+              </p>
+            ) : selectedDetail.status === "error" ? (
+              <p className="py-3 text-xs text-[#B43E3E]">{selectedDetail.message}</p>
+            ) : (
+              <>
+                {selectedDetail.detail.lines.length === 0 ? (
+                  <p className="py-3 text-xs text-[#78736D]">저장된 품목 정보가 없습니다 — 문서 보기에서 확인하세요.</p>
+                ) : (
+                  selectedDetail.detail.lines.map((line) => (
+                    <div
+                      key={line.key}
+                      className="grid grid-cols-[minmax(0,1fr)_48px_112px] gap-2 border-b border-[#f0f0ec] py-2 text-[12.5px]"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate">{line.name}</span>
+                        {line.description && <span className="block truncate text-[11px] text-[#78736D]">{line.description}</span>}
+                      </span>
+                      <span className="text-right tabular-nums text-[#78736D]">{line.quantity}</span>
+                      <span className="text-right font-semibold tabular-nums">{line.amount}</span>
+                    </div>
+                  ))
+                )}
+                <div className="grid grid-cols-[minmax(0,1fr)_112px] gap-2 border-t border-[#31302E] pt-2.5 text-[12.5px] font-bold">
+                  <span>합계</span>
+                  <span className="text-right tabular-nums">{formatMoney(quote.totalAmount)}</span>
+                </div>
+                <dl className="mt-4 grid grid-cols-[72px_1fr] gap-x-2.5 gap-y-1.5 text-xs">
+                  <dt className="text-[#78736D]">공급자</dt>
+                  <dd className="text-[#31302E]">{selectedDetail.detail.supplier ?? lineMeta.supplier}</dd>
+                  <dt className="text-[#78736D]">유효기한</dt>
+                  <dd className="text-[#31302E]">{selectedDetail.detail.validUntil ?? "—"}</dd>
+                </dl>
+              </>
+            )}
+
+            <h3 className="mb-2 mt-5 text-[11.5px] font-semibold text-[#78736D]">공유 링크</h3>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void handleCopyShareLink(quote)}
+                disabled={sharing}
+                className={GHOST_BUTTON}
+              >
+                {sharing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
+                {quote.shareCount > 0 || quote.shareUrl ? "링크 복사" : "링크 만들고 복사"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleOpenShareLink(quote)}
+                disabled={sharing}
+                className={GHOST_BUTTON}
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                고객 화면 열기
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
   return (
     <div className="mx-auto max-w-7xl space-y-4 p-4 sm:px-6 sm:py-5">
       {notice && (
         <div
-          className={`flex items-start gap-2 rounded-lg border px-4 py-3 text-sm ${
-            notice.tone === "success"
-              ? "border-[#D1FAE5] bg-[#ECFDF5] text-[#084734]"
-              : "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]"
+          role="status"
+          className={`flex items-start gap-2 rounded-lg border bg-white px-4 py-3 text-sm ${
+            notice.tone === "success" ? "border-[#084734]/30 text-[#084734]" : "border-[#F2B8B8] text-[#B43E3E]"
           }`}
         >
           {notice.tone === "success" ? <Check className="mt-0.5 h-4 w-4" /> : <AlertCircle className="mt-0.5 h-4 w-4" />}
@@ -687,414 +926,157 @@ export default function HardwareQuotesPanel({
         </div>
       )}
 
-      {/* 실무 작업 우선순위 요약 KPI 스트립 */}
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3">
-        <button
-          type="button"
-          onClick={() => setActiveFilter("all")}
-          className={`flex flex-col rounded-xl border p-3 text-left transition-all ${
-            activeFilter === "all"
-              ? "border-[#111110] bg-white shadow-xs"
-              : "border-[#e8e8e4] bg-white hover:border-[#c8c8c4]"
-          }`}
-        >
-          <span className="text-[11px] font-medium text-[#1a1a1a]/50">전체 견적</span>
-          <span className="mt-1 text-lg font-bold tracking-tight text-[#111110] tabular-nums sm:text-xl">
-            {summary.total}
-            <span className="ml-1 text-xs font-normal text-[#1a1a1a]/40">건</span>
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveFilter("needs_action")}
-          className={`flex flex-col rounded-xl border p-3 text-left transition-all ${
-            activeFilter === "needs_action"
-              ? "border-[#A8741A] bg-[#FBF1E0]/50 shadow-xs ring-1 ring-[#A8741A]"
-              : summary.needsAction > 0
-                ? "border-[#ECD29C] bg-[#FBF1E0]/30 hover:bg-[#FBF1E0]/50"
-                : "border-[#e8e8e4] bg-white hover:border-[#c8c8c4]"
-          }`}
-        >
-          <span className="flex items-center gap-1.5 text-[11px] font-semibold text-[#A8741A]">
-            {summary.needsAction > 0 && <span className="h-1.5 w-1.5 rounded-full bg-[#A8741A]" />}
-            후속 필요
-          </span>
-          <span className="mt-1 text-lg font-bold tracking-tight text-[#7A520F] tabular-nums sm:text-xl">
-            {summary.needsAction}
-            <span className="ml-1 text-xs font-normal text-[#A8741A]/70">건</span>
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveFilter("accepted")}
-          className={`flex flex-col rounded-xl border p-3 text-left transition-all ${
-            activeFilter === "accepted"
-              ? "border-[#084734] bg-[#ECFDF5] shadow-xs ring-1 ring-[#084734]"
-              : summary.accepted > 0
-                ? "border-[#BDEFD8] bg-[#ECFDF5]/50 hover:bg-[#ECFDF5]"
-                : "border-[#e8e8e4] bg-white hover:border-[#c8c8c4]"
-          }`}
-        >
-          <span className="flex items-center gap-1.5 text-[11px] font-semibold text-[#084734]">
-            {summary.accepted > 0 && <span className="h-1.5 w-1.5 rounded-full bg-[#084734]" />}
-            동의 완료
-          </span>
-          <span className="mt-1 text-lg font-bold tracking-tight text-[#084734] tabular-nums sm:text-xl">
-            {summary.accepted}
-            <span className="ml-1 text-xs font-normal text-[#084734]/70">건 (계약 전환)</span>
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveFilter("shared")}
-          className={`flex flex-col rounded-xl border p-3 text-left transition-all ${
-            activeFilter === "shared"
-              ? "border-[#111110] bg-white shadow-xs"
-              : "border-[#e8e8e4] bg-white hover:border-[#c8c8c4]"
-          }`}
-        >
-          <span className="text-[11px] font-medium text-[#1a1a1a]/50">발송/열람 대기</span>
-          <span className="mt-1 text-lg font-bold tracking-tight text-[#111110] tabular-nums sm:text-xl">
-            {summary.shared}
-            <span className="ml-1 text-xs font-normal text-[#1a1a1a]/40">건</span>
-          </span>
-        </button>
-      </div>
-
-      <div className="overflow-hidden rounded-lg border border-[#e8e8e4] bg-white">
-        <div className="flex flex-wrap items-center gap-2 border-b border-[#f0f0ec] px-4 py-2.5 sm:px-5">
-          <span className="text-[11px] font-semibold text-[#1a1a1a]/45">유형</span>
-          <div className="inline-flex items-center rounded-full border border-[#e8e8e4] bg-[#fafaf8] p-0.5">
-            {PRODUCT_LINE_OPTIONS.map((option) => {
-              const active = productLineFilter === option.key
-
-              return (
-                <button
-                  key={option.key}
-                  type="button"
-                  onClick={() => setProductLineFilter(option.key)}
-                  aria-pressed={active}
-                  className={`inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors ${
-                    active ? "bg-white text-[#111110] shadow-sm" : "text-[#615D59] hover:text-[#111110]"
-                  }`}
-                >
-                  {option.label}
-                  <span className={`tabular-nums ${active ? "text-[#1a1a1a]/40" : "text-[#1a1a1a]/35"}`}>
-                    {productLineCounts[option.key]}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-          <span className="text-[11px] text-[#1a1a1a]/35">
-            SW = 구독형(클래스인) · HW = 장비(퀴드러닝)
-          </span>
+      {loadError ? (
+        <div className="flex flex-col items-center justify-center rounded-lg border border-[#e8e8e4] bg-white px-6 py-14 text-center">
+          <AlertCircle className="h-5 w-5 text-[#B43E3E]" />
+          <p className="mt-3 text-sm font-medium text-[#111110]">견적서 목록을 불러오지 못했습니다.</p>
+          <p className="mt-1 text-xs text-[#B43E3E]">{loadError}</p>
+          <button type="button" onClick={() => void loadQuotes()} className={`${GHOST_BUTTON} mt-4`}>
+            다시 시도
+          </button>
         </div>
-
-        <div className="admin-scroll-snap-x no-scrollbar flex items-center gap-1.5 overflow-x-auto border-b border-[#f0f0ec] px-4 py-3 sm:px-5">
-          {FILTER_OPTIONS.map((option) => {
-            const count = filterCounts[option.key]
-            const active = activeFilter === option.key
-            const emphasize = option.key === "needs_action" && count > 0 && !active
-
-            return (
-              <button
-                key={option.key}
-                type="button"
-                onClick={() => setActiveFilter(option.key)}
-                aria-pressed={active}
-                className={`inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-medium ring-1 transition-colors ${
-                  active
-                    ? "bg-[#111110] text-white ring-[#111110]"
-                    : emphasize
-                      ? "bg-[#FBF1E0] text-[#A8741A] ring-[#ECD29C] hover:text-[#7A520F]"
-                      : "bg-white text-[#615D59] ring-[#e8e8e4] hover:text-[#111110]"
-                }`}
-              >
-                {option.key === "needs_action" && count > 0 && (
-                  <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-white" : "bg-[#A8741A]"}`} />
-                )}
-                <span>{option.label}</span>
-                <span
-                  className={`tabular-nums ${
-                    active ? "text-white/65" : emphasize ? "text-[#A8741A]/70" : "text-[#1a1a1a]/40"
-                  }`}
-                >
-                  {count}
-                </span>
-              </button>
-            )
-          })}
+      ) : loading && quotes.length === 0 ? (
+        <div className="flex items-center justify-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-6 py-14 text-sm text-[#615D59]">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          견적서를 불러오는 중입니다.
         </div>
-
-        <div className="flex flex-col gap-2 border-b border-[#f0f0ec] bg-[#fafaf8] px-4 py-3 sm:flex-row sm:items-center sm:px-5">
-          <label className="relative block flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1a1a1a]/35" />
-            <input
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="견적번호, 고객사, 거래명 검색"
-              className="h-9 w-full rounded-md border border-[#e8e8e4] bg-white pl-9 pr-3 text-sm outline-none transition-colors placeholder:text-[#1a1a1a]/30 focus:border-[#084734]"
-            />
-          </label>
-
-          <div className="flex items-center gap-2">
-            <select
-              value={sortKey}
-              onChange={(event) => setSortKey(event.target.value as QuoteSortKey)}
-              className="h-9 rounded-md border border-[#e8e8e4] bg-white px-3 text-xs font-medium text-[#615D59] outline-none focus:border-[#084734]"
-            >
-              {SORT_OPTIONS.map((option) => (
-                <option key={option.key} value={option.key}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            {hasActiveControls && (
-              <button
-                type="button"
-                onClick={resetListControls}
-                className="h-9 shrink-0 rounded-md border border-[#e8e8e4] bg-white px-3 text-xs font-medium text-[#615D59] transition-colors hover:text-[#111110]"
-              >
-                초기화
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                void loadQuotes()
-              }}
-              disabled={loading}
-              title="새로고침"
-              aria-label="새로고침"
-              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-[#e8e8e4] bg-white px-3 text-xs font-medium text-[#615D59] transition-colors hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-              <span className="hidden sm:inline">새로고침</span>
-            </button>
-            <span className="ml-auto shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-[#615D59] ring-1 ring-[#e8e8e4] sm:ml-1">
-              {loading ? "불러오는 중" : `${visibleQuotes.length}/${quotes.length}`}
-            </span>
-          </div>
+      ) : quotes.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-lg border border-[#e8e8e4] bg-white px-6 py-16 text-center">
+          <FileText className="h-5 w-5 text-[#615D59]" />
+          <p className="mt-3 text-sm font-medium text-[#111110]">저장된 견적서가 없습니다.</p>
+          <p className="mt-1 text-xs text-[#78736D]">견적서를 만들면 여기서 다음 할 일 순서로 정리됩니다.</p>
+          <button
+            type="button"
+            onClick={() => {
+              setComposerTemplateId("board_86")
+              setComposerOpen(true)
+            }}
+            className={`${SOLID_BUTTON} mt-4`}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            첫 견적서 작성
+          </button>
         </div>
-
-        {loadError ? (
-          <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
-            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-[#FEF3EE] text-[#B85C33]">
-              <AlertCircle className="h-5 w-5" />
-            </div>
-            <p className="mt-4 text-sm font-medium text-[#111110]">견적서 목록을 불러오지 못했습니다.</p>
-            <p className="mt-1 text-xs text-[#B85C33]">{loadError}</p>
-          </div>
-        ) : loading && quotes.length === 0 ? (
-          <div className="flex items-center justify-center gap-2 px-6 py-14 text-sm text-[#615D59]">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            견적서를 불러오는 중입니다.
-          </div>
-        ) : quotes.length === 0 ? (
-          <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[#f6f5f2] text-[#615D59]">
-              <FileText className="h-5 w-5" />
-            </div>
-            <p className="mt-4 text-sm font-medium text-[#111110]">
-              저장된 견적서가 없습니다.
-            </p>
-            <p className="mt-1 text-xs text-[#1a1a1a]/45">
-              견적서 작성 후 이 목록에서 발송 링크와 응답 상태를 확인할 수 있습니다.
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                setComposerTemplateId("board_86")
-                setComposerOpen(true)
-              }}
-              className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[#084734] px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#065c41]"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              첫 견적서 작성
-            </button>
-          </div>
-        ) : visibleQuotes.length === 0 ? (
-          <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[#f6f5f2] text-[#615D59]">
-              <Search className="h-5 w-5" />
-            </div>
-            <p className="mt-4 text-sm font-medium text-[#111110]">조건에 맞는 견적서가 없습니다.</p>
-            <p className="mt-1 text-xs text-[#1a1a1a]/45">유형·상태 필터나 검색어를 조정해 보세요.</p>
-            <button
-              type="button"
-              onClick={resetListControls}
-              className="mt-4 rounded-md border border-[#e8e8e4] bg-white px-3 py-2 text-xs font-medium text-[#615D59] hover:text-[#111110]"
-            >
-              전체 보기
-            </button>
-          </div>
-        ) : (
-          <div className="divide-y divide-[#f0f0ec]">
-            {visibleQuotes.map((quote) => {
-              const statusMeta = getStatusMeta(quote.status)
-              const sharing = sharingQuoteId === quote.id
-              const nextAction = getNextActionMeta(quote)
-              const responseMeta = getResponseMeta(quote)
-              const responseRelativeTime = formatRelativeTime(getLatestInteractionAt(quote))
-              const unresponsiveDays = getUnresponsiveDays(quote)
-              const badgeMeta = PRODUCT_LINE_BADGE[quote.productLine]
-
-              return (
-                <div
-                  key={quote.id}
-                  className="group grid gap-3 px-4 py-4 transition-colors hover:bg-[#fafaf8] sm:px-5 lg:grid-cols-[minmax(0,1fr)_320px_250px] lg:items-center"
-                >
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-xs text-[#1a1a1a]/45">{quote.quoteNumber}</span>
-                      <span
-                        title={badgeMeta.title}
-                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ${badgeMeta.className}`}
-                      >
-                        <span>{badgeMeta.label}</span>
-                        <span className="font-normal opacity-70 text-[10px]">· {badgeMeta.supplier}</span>
-                      </span>
-                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${statusMeta.className}`}>
-                        {statusMeta.label}
-                      </span>
-                      {/* V2 정본 전환: /api/portal/quotes/[id]/convert — 딜·고객 FK 연결 + stage 전진 + 태스크 완료.
-                          레거시 V1 수동 폼 프리필 브리지(onConvertToContract)는 이 경로로 대체·폐기됨. */}
-                      {quote.status === "accepted" || quote.acceptedAt ? (
-                        <button
-                          type="button"
-                          onClick={() => void handleConvertToContract(quote)}
-                          disabled={convertingQuoteId === quote.id}
-                          title="이 견적으로 연결된 계약서를 생성하고 딜 단계를 '계약'으로 전진시킵니다."
-                          className="inline-flex items-center gap-1 rounded-full border border-[#084734]/25 bg-[#ECFDF5] px-2.5 py-0.5 text-[11px] font-semibold text-[#084734] transition-colors hover:bg-[#D1FAE5] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
-                        >
-                          {convertingQuoteId === quote.id ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            <ArrowRight className="h-3 w-3" />
-                          )}
-                          {convertingQuoteId === quote.id ? "전환 중…" : nextAction.label}
-                        </button>
-                      ) : (
-                        <span className={`inline-flex items-center gap-0.5 text-[11px] font-medium ${nextAction.textClassName}`}>
-                          <ArrowRight className="h-3 w-3" />
-                          {nextAction.label}
-                        </span>
-                      )}
-                      {quote.createdAction && (
-                        <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-[#1a1a1a]/45 ring-1 ring-[#e8e8e4]">
-                          {ACTION_LABEL[quote.createdAction]}
-                        </span>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        openAdminQuoteView(quote.id)
-                      }}
-                      className="mt-1 block max-w-full truncate text-left text-sm font-semibold text-[#111110] transition-colors hover:text-[#084734] hover:underline underline-offset-2 focus-visible:text-[#084734] focus-visible:outline-none"
-                    >
-                      {quote.title}
-                    </button>
-                    <p className="mt-1 truncate text-xs text-[#1a1a1a]/45">
-                      {quote.customerName} · {quote.dealTitle} · {formatDateTime(quote.updatedAt)}
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 text-xs lg:grid-cols-[minmax(0,1fr)_36px_150px] lg:items-baseline lg:gap-3">
-                    <div>
-                      <p className="text-[#1a1a1a]/35 lg:hidden">금액</p>
-                      <p className="mt-0.5 text-[13px] font-semibold tabular-nums text-[#111110] lg:mt-0 lg:text-right">
-                        {formatMoney(quote.totalAmount)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[#1a1a1a]/35 lg:hidden">버전</p>
-                      <p className="mt-0.5 font-medium text-[#1a1a1a]/50 lg:mt-0">
-                        {quote.latestVersionNumber ? `v${quote.latestVersionNumber}` : `${quote.versionCount}개`}
-                      </p>
-                    </div>
-                    <div className="min-w-0" title={getInteractionHint(quote)}>
-                      <p className="text-[#1a1a1a]/35 lg:hidden">응답</p>
-                      <p className="mt-0.5 flex items-center gap-1.5 whitespace-nowrap lg:mt-0">
-                        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${responseMeta.dotClassName}`} />
-                        <span className={`font-semibold ${responseMeta.textClassName}`}>{responseMeta.label}</span>
-                        {unresponsiveDays !== null ? (
-                          <span className="truncate text-[11px] font-medium text-[#A8741A]" title={`발송 후 ${unresponsiveDays}일째 무반응`}>
-                            · 발송 {unresponsiveDays}일째
-                          </span>
-                        ) : responseRelativeTime ? (
-                          <span className="truncate text-[11px] font-normal text-[#1a1a1a]/40">
-                            · {responseRelativeTime}
-                          </span>
-                        ) : null}
-                      </p>
-                      <p className="mt-0.5 truncate text-[11px] text-[#1a1a1a]/35 lg:hidden">{getInteractionHint(quote)}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-1.5 lg:flex-nowrap lg:justify-end">
-                    {quote.shareCount > 0 && (
-                      <span
-                        title={`공유 ${quote.shareCount}회`}
-                        className="inline-flex h-9 items-center gap-1 rounded-md bg-[#ECFDF5] px-2 text-xs font-medium text-[#084734]"
-                      >
-                        <Send className="h-3.5 w-3.5" />
-                        <span className="tabular-nums">{quote.shareCount}</span>
-                      </span>
-                    )}
-                    {/* 데스크톱에서는 hover/focus 시에만 노출해 기본 목록을 조용하게.
-                        공유 진행 중(sharing)에는 마우스가 벗어나도 스피너가 보이도록 유지. */}
-                    <div
-                      className={`flex items-center gap-1.5 lg:transition-opacity lg:group-focus-within:opacity-100 lg:group-hover:opacity-100 ${
-                        sharing ? "" : "lg:opacity-0"
-                      }`}
-                    >
+      ) : (
+        <div className="flex overflow-hidden rounded-[10px] border border-[#e8e8e4] bg-white">
+          <aside aria-label="다음 할 일별 견적" className="w-full min-w-0 shrink-0 border-[#e8e8e4] lg:w-[400px] lg:border-r">
+            <div className="flex flex-col gap-2.5 border-b border-[#e8e8e4] px-3.5 py-3">
+              <label className="relative block">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A39E98]" />
+                <input
+                  type="search"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="견적번호, 고객사, 거래명"
+                  aria-label="견적 검색"
+                  className="h-9 w-full rounded-md border border-[#e8e8e4] bg-white pl-9 pr-3 text-[13px] outline-none placeholder:text-[#A39E98] focus:border-[#084734]"
+                />
+              </label>
+              <div className="flex items-center gap-4">
+                <div role="group" aria-label="유형" className="flex gap-4">
+                  {PRODUCT_LINE_OPTIONS.map((option) => {
+                    const active = productLineFilter === option.key
+                    return (
                       <button
+                        key={option.key}
                         type="button"
-                        onClick={() => {
-                          openAdminQuoteView(quote.id)
-                        }}
-                        className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-[#e8e8e4] bg-white px-3 text-xs font-medium text-[#1a1a1a]/70 transition-colors hover:border-[#c8c8c4] hover:text-[#111110]"
+                        onClick={() => setProductLineFilter(option.key)}
+                        aria-pressed={active}
+                        className={`py-1.5 text-[12.5px] ${
+                          active ? "font-semibold text-[#111110] shadow-[inset_0_-1.5px_0_#111110]" : "text-[#615D59] hover:text-[#111110]"
+                        }`}
                       >
-                        <FileText className="h-3.5 w-3.5" />
-                        직접 보기
+                        {option.label} <span className="font-normal tabular-nums text-[#78736D]">{productLineCounts[option.key]}</span>
                       </button>
-                      <button
-                        type="button"
-                        disabled={sharing}
-                        onClick={() => {
-                          void handleCopyShareLink(quote)
-                        }}
-                        title="공유 링크 복사"
-                        aria-label="공유 링크 복사"
-                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[#e8e8e4] bg-white text-[#1a1a1a]/60 transition-colors hover:border-[#c8c8c4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {sharing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : quote.shareUrl ? <Copy className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={sharing}
-                        onClick={() => {
-                          void handleOpenShareLink(quote)
-                        }}
-                        title="공유 링크 열기"
-                        aria-label="공유 링크 열기"
-                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/60 transition-colors hover:border-[#c8c8c4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
+                    )
+                  })}
                 </div>
-              )
-            })}
+                <span className="flex-1" />
+                <button
+                  type="button"
+                  onClick={() => void loadQuotes()}
+                  disabled={loading}
+                  title="새로고침"
+                  aria-label="새로고침"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[#615D59] hover:bg-[#f0f0ec] hover:text-[#111110] disabled:opacity-60"
+                >
+                  {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                </button>
+              </div>
+            </div>
+
+            {visibleCount === 0 ? (
+              <div className="px-6 py-12 text-center">
+                <p className="text-sm font-medium text-[#111110]">조건에 맞는 견적서가 없습니다.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchTerm("")
+                    setProductLineFilter("all")
+                  }}
+                  className={`${GHOST_BUTTON} mt-3`}
+                >
+                  전체 보기
+                </button>
+              </div>
+            ) : (
+              groups.map((group) => (
+                <section key={group.key} className="border-b border-[#f0f0ec] pb-1.5 last:border-b-0">
+                  <h2 className="flex items-baseline justify-between px-4 pb-1.5 pt-3.5 text-[11.5px] font-semibold text-[#31302E]">
+                    <span className="flex items-center gap-1.5">
+                      <span className={`h-1.5 w-1.5 rounded-full ${TONE_DOT[group.tone]}`} />
+                      {group.label}
+                      <span className="font-normal tabular-nums text-[#78736D]">{group.items.length}</span>
+                    </span>
+                    <span className="font-normal tabular-nums text-[#78736D]">{formatMan(group.amount)}원</span>
+                  </h2>
+                  {group.items.map((quote) => {
+                    const selected = quote.id === selectedQuote?.id
+                    const status = getQueueStatus(quote, group.key)
+                    return (
+                      <button
+                        key={quote.id}
+                        type="button"
+                        onClick={() => handleSelect(quote)}
+                        aria-pressed={selected}
+                        className={`block w-full py-2.5 pl-[18px] pr-4 text-left transition-colors ${
+                          selected ? "bg-[#F6F5F2] shadow-[inset_2px_0_0_#084734]" : "hover:bg-[#FCFCFA]"
+                        }`}
+                      >
+                        <span className="flex items-baseline justify-between gap-2.5">
+                          <span className="truncate font-semibold text-[13px] text-[#111110]">
+                            {quote.customerName}{" "}
+                            <span className="font-normal text-[#615D59]">
+                              · {withoutCustomerPrefix(quote.dealTitle, quote.customerName)}
+                            </span>
+                          </span>
+                          <span className="shrink-0 text-[13px] font-semibold tabular-nums text-[#111110]">
+                            {formatMan(quote.totalAmount)}
+                          </span>
+                        </span>
+                        <span className="mt-0.5 flex justify-between gap-2 text-[11.5px] text-[#78736D]">
+                          <span>
+                            <span className="font-mono text-[11px]">{quote.quoteNumber}</span> · {PRODUCT_LINE_META[quote.productLine].label}
+                          </span>
+                          <span className={`whitespace-nowrap ${status.className}`}>{status.text}</span>
+                        </span>
+                      </button>
+                    )
+                  })}
+                </section>
+              ))
+            )}
+          </aside>
+
+          <div className="hidden min-w-0 flex-1 lg:block">
+            {selectedQuote ? (
+              renderDetail(selectedQuote)
+            ) : (
+              <p className="px-7 py-16 text-center text-sm text-[#78736D]">왼쪽에서 견적을 고르세요.</p>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <QuickQuoteComposer
         open={composerOpen}
@@ -1103,6 +1085,8 @@ export default function HardwareQuotesPanel({
         apiBase="/api/portal"
         initialTemplateId={composerTemplateId}
         supplierManagerOptions={supplierManagerOptions}
+        teamTemplates={teamTemplates}
+        onSaveTemplate={handleSaveTemplate}
         prefill={prefill}
         onCreated={handleCreated}
       />

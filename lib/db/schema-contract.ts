@@ -183,6 +183,7 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // 두 표 모두 RLS deny-all(정책 없음 — service_role 만). 앱은 service role API 로만 읽고 쓴다.
   // 미적용이어도 허브만 '미적용' 안내로 강등하고(쓰기 503) 매일 자동 태그 크론이 skipped 로 넘어간다.
   "supabase/migrations/20260925_crm_saved_segments.sql",
+  "supabase/migrations/20261021_quote_team_templates.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -875,6 +876,18 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     columns: ["segment_id", "snapshot_date", "total", "spec_hash", "flags", "auto_tag_status", "tagged", "untagged", "run_trigger"],
     migration: "supabase/migrations/20260925_crm_saved_segments.sql",
     impact: "8주 추이가 비고, 자동 태그 실행 결과(붙임·뗌·건너뛴 사유)가 남지 않는다.",
+  },
+  {
+    kind: "table",
+    table: "quote_team_templates",
+    label: "견적 팀 템플릿(품목·기본 조건·공유 범위)",
+    columns: [
+      "id", "name", "product_line", "source_template_id", "items", "defaults", "scope", "show_in_menu",
+      "owner_user_id", "owner_name", "archived_at", "archived_by", "created_by", "updated_by", "created_at", "updated_at",
+    ],
+    migration: "supabase/migrations/20261021_quote_team_templates.sql",
+    severity: "warning",
+    impact: "기본 견적은 유지되지만 팀 템플릿 저장·수정·보관은 503으로 차단된다.",
   },
 ]
 

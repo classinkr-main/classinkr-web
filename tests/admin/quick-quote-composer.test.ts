@@ -22,34 +22,78 @@ describe("admin quick quote composer shell", () => {
     expect(source).toContain("document.body.style.overflow = previousBodyOverflow")
   })
 
-  it("keeps mobile footer actions compact", () => {
-    expect(source).toContain("grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex sm:flex-wrap")
-    // 미리보기 진입은 상단 바의 xl:hidden 버튼 하나로 모은다 —
-    // 상시 숨김이던 푸터 중복 버튼('hidden xl:hidden')은 제거했다.
-    expect(source).not.toContain('className="hidden xl:hidden"')
-    expect(source).toContain("화면 미리보기")
+  it("keeps header actions compact on mobile", () => {
+    expect(source).toContain("grid w-full grid-cols-3 gap-2 sm:w-auto sm:flex sm:flex-wrap")
+    // 종이 자체가 화면이라 별도 미리보기 패널/모바일 미리보기 오버레이는 없다.
+    expect(source).not.toContain("QuotePreviewPanel")
+    expect(source).not.toContain("mobilePreviewOpen")
   })
 
-  it("uses the compact field tokens instead of the old h-10 form controls", () => {
-    expect(source).toContain('const COMPACT_INPUT_CLASS = "h-9 text-[13px]"')
-    expect(source).toContain("const COMPACT_SELECT_CLASS =")
-    expect(source).not.toContain("h-10 w-full rounded-md border border-input")
-    expect(source).not.toContain("flex h-10 w-full rounded-md border border-input")
+  it("edits the quote directly on the paper (수신·참조·발행일·유효기한·품목·세부내역·기타사항)", () => {
+    expect(source).toContain('aria-label="견적서"')
+    expect(source).toContain('aria-label="수신 고객사"')
+    expect(source).toContain('aria-label="참조"')
+    expect(source).toContain('aria-label="발행일"')
+    expect(source).toContain('aria-label="유효기한"')
+    expect(source).toContain('aria-label="품목명"')
+    expect(source).toContain('aria-label="세부 내역"')
+    expect(source).toContain('label="기타사항"')
+    // 수신 칸 하나로 기존 고객(자동완성 일치)과 새 고객을 가른다.
+    expect(source).toContain('list="quick-quote-customer-options"')
+    expect(source).toContain("function handleRecipientChange(")
   })
 
-  it("orders the left column by the writing flow (01 고객 → 02 구성 → 03 조건 → 04 메모)", () => {
-    const steps = ['step="01"', 'step="02"', 'step="03"', 'step="04"'].map((marker) =>
+  it("shows a pre-send check line with missing values in amber", () => {
+    expect(source).toContain('aria-label="발송 전 확인"')
+    expect(source).toContain('"수신 비어 있음"')
+    expect(source).toContain('font-semibold text-[#7A520F]')
+  })
+
+  it("has the 4-part left rail: 최근 견적 복제 → 빠른 조합 → 템플릿 → 품목", () => {
+    const sections = ["최근 견적 복제", "빠른 조합", "템플릿</p>", "품목 · 눌러서 추가"].map((marker) =>
       source.indexOf(marker)
     )
-    expect(steps.every((index) => index > 0)).toBe(true)
-    expect([...steps].sort((left, right) => left - right)).toEqual(steps)
-    expect(source).toContain('title="고객 · 거래"')
-    expect(source).toContain('title="구성 · 품목"')
-    expect(source).toContain('title="조건"')
-    expect(source).toContain('title="메모"')
+    expect(sections.every((index) => index > 0)).toBe(true)
+    expect([...sections].sort((left, right) => left - right)).toEqual(sections)
+    expect(source).toContain('"녹화 세트 + AI Suite"')
+    expect(source).toContain("STANDARD_QUOTE_TEMPLATES.map(")
+    // 팀 템플릿(DB)은 목록만 꽂을 자리
+    expect(source).toContain("teamTemplates?: QuickQuoteTeamTemplate[]")
+    expect(source).toContain("function handleCatalogAdd(")
   })
 
-  it("keeps the running total visible in the left column", () => {
+  it("clones a recent quote but clears only the customer, with stale-price reset", () => {
+    expect(source).toContain("async function handleReuseQuote(")
+    expect(source).toContain('setRecipientInput("")')
+    expect(source).toContain("border border-[#084734] bg-white")
+    expect(source).toContain("옛 단가 {staleLines.length}건 → 지금 정가로")
+  })
+
+  it("marks manual unit prices against list price without an approval step", () => {
+    expect(source).toContain("function getListPrice(")
+    expect(source).toContain("% 할인`")
+    expect(source).toContain("% 인상`")
+    expect(source).toContain("· 정가로")
+  })
+
+  it("splits SW/HW into one sheet per supplier and saves one quote per sheet", () => {
+    expect(source).toContain("function withSheet(")
+    expect(source).toContain("resolveQuoteSupplier(sheet.templateId)")
+    expect(source).toContain("for (const { sheet, quote } of targets)")
+    expect(source).toContain("견적서가 <b className=\"text-[#111110]\">2장</b>으로 나뉩니다")
+    // 묶음 링크 1개는 미결정 — 링크 2개를 한 메시지에 담는다.
+    expect(source).toContain("links: ShareLink[]")
+    expect(source).toContain("function buildQuoteShareText(")
+  })
+
+  it("keeps the save contract (structured_json.quoteDetails + finalize)", () => {
+    expect(source).toContain("structured_json: {")
+    expect(source).toContain("quoteDetails: preparedQuote,")
+    expect(source).toContain("finalizeStandardQuoteDetails(")
+    expect(source).toContain("templateId: sheet.templateId,")
+  })
+
+  it("keeps the running total visible on each sheet", () => {
     expect(source).toContain("text-[19px] font-bold leading-none tabular-nums text-[#111110]")
     expect(source).toContain("totals.grandTotalAmount")
   })
@@ -65,7 +109,7 @@ describe("admin quick quote composer shell", () => {
 
   it("keeps validity and VAT as compact selects", () => {
     expect(source).toContain('aria-label="유효기한 빠른 선택"')
-    expect(source).toContain('id="quote-vat-policy"')
+    expect(source).toContain('id={index === 0 ? "quote-vat-policy" : undefined}')
     expect(source).toContain("validityPresetValue")
   })
 
@@ -78,23 +122,10 @@ describe("admin quick quote composer shell", () => {
     expect(source).toContain("function QuoteNoteField(")
   })
 
-  it("exposes a SW/HW segment in the composer header", () => {
-    expect(source).toContain('aria-label="견적 유형"')
-    expect(source).toContain("function handleProductLineChange(")
-    expect(source).toContain("lastHardwareTemplateRef")
-    // 전환 결과를 한 줄로 알린다(품목만 리셋, 고객·거래 유지).
-    expect(source).toContain("고객·거래 입력은 유지됩니다")
-    // 진행 스트립 · 푸터 타이틀에 현재 유형 표기
-    expect(source).toContain('isSoftwareQuote ? "SW 견적" : "HW 견적"')
-    expect(source).toContain('isSoftwareQuote ? "SW" : "HW"')
-    // 저장 payload 로 유형이 전달돼 목록이 추정 없이 배지를 그린다.
-    expect(source).toContain("templateId,")
-  })
-
-  it("reserves the solid green button for 발송 only", () => {
+  it("reserves the solid green button for 보내기 only", () => {
     expect(source).toContain('variant="ghost"')
     const solidGreenButtons = source.match(/h-9 bg-\[#084734\] text-\[13px\] text-white/g) ?? []
-    // 작성 푸터의 발송 + 공유 시트의 완료, 두 개뿐이어야 한다.
+    // 헤더의 보내기 + 보내기 줄의 완료, 두 개뿐이어야 한다.
     expect(solidGreenButtons).toHaveLength(2)
   })
 
@@ -105,7 +136,7 @@ describe("admin quick quote composer shell", () => {
     expect(source).toContain('badge: "학원 패키지"')
     expect(source).toContain('badge: "SW 단독"')
 
-    // ClassIn Business 충전형 전용 직접 금액 수정 카드
+    // ClassIn Business 충전형 전용 직접 금액 수정
     expect(source).toContain("충전 금액 설정")
     expect(source).toContain("가격 직접 수정 가능")
     expect(source).toContain("requestSetRechargeAmount")
@@ -147,11 +178,39 @@ describe("admin quotes shell — SW/HW 일급 개념", () => {
 
   it("목록에 유형 필터와 행 배지가 있다", () => {
     expect(panelSource).toContain("PRODUCT_LINE_OPTIONS")
-    expect(panelSource).toContain('{ key: "software", label: "소프트웨어" }')
-    expect(panelSource).toContain('{ key: "hardware", label: "하드웨어" }')
+    expect(panelSource).toContain('{ key: "software", label: "SW" }')
+    expect(panelSource).toContain('{ key: "hardware", label: "HW" }')
     expect(panelSource).toContain("productLineFilter")
-    expect(panelSource).toContain("PRODUCT_LINE_BADGE[quote.productLine]")
+    expect(panelSource).toContain("PRODUCT_LINE_META[quote.productLine]")
     expect(panelSource).toContain("resolveQuoteProductLine")
     expect(panelSource).not.toContain("저장된 하드웨어 견적서가 없습니다")
+  })
+})
+
+describe("admin quotes shell — 팀 템플릿 연결", () => {
+  const composerSource = readFileSync(
+    join(process.cwd(), "components/portal/quotes/QuickQuoteComposer.tsx"),
+    "utf8"
+  )
+  const panelSource = readFileSync(
+    join(process.cwd(), "components/admin/documents/HardwareQuotesPanel.tsx"),
+    "utf8"
+  )
+
+  it("작성기는 저장을 주입받은 콜백으로만 한다(어드민 클라이언트 import 없음)", () => {
+    expect(composerSource).toContain("onSaveTemplate?: (draft: { name: string; details: PartnerQuoteDetailsInput }) => Promise<void>")
+    expect(composerSource).toContain("이 구성을 템플릿으로 저장")
+    // 템플릿은 공급자 1곳 기준 — 2장으로 나뉘면 저장을 막는다.
+    expect(composerSource).toContain("disabled={isSplit || sheets.length === 0}")
+    expect(composerSource).not.toContain("@/lib/admin-client")
+  })
+
+  it("패널이 팀 템플릿을 불러와 넘기고, 실패하면 기본 템플릿만 쓴다", () => {
+    expect(panelSource).toContain('const QUOTE_TEMPLATES_API = "/api/admin/quote-templates"')
+    expect(panelSource).toContain("teamTemplateViewToQuoteDetails(view, today)")
+    expect(panelSource).toContain("setTeamTemplates([])")
+    expect(panelSource).toContain("quoteDetailsToTeamTemplateInput(draft.name, draft.details)")
+    expect(panelSource).toContain("teamTemplates={teamTemplates}")
+    expect(panelSource).toContain("onSaveTemplate={handleSaveTemplate}")
   })
 })

@@ -325,6 +325,7 @@ export default function QuotesPage() {
             </h1>
           </div>
           <div className="flex items-center gap-2">
+            <a href="/admin/quotes/templates" className="inline-flex h-9 items-center rounded-md border border-[#e8e8e4] bg-white px-3 text-[12px] font-medium text-[#1a1a1a]/60 transition-colors hover:border-[#c8c8c4] hover:text-[#111110]">템플릿 관리</a>
             <a
               href="/admin/crm"
               className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[#e8e8e4] bg-white px-3 text-[12px] font-medium text-[#1a1a1a]/60 transition-colors hover:border-[#c8c8c4] hover:text-[#111110]"
