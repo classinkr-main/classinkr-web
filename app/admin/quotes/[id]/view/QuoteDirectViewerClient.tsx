@@ -118,8 +118,8 @@ export default function QuoteDirectViewerClient({ quoteId }: { quoteId: string }
   })
 
   return (
-    <main className="min-h-screen bg-[#F6F5F4] px-4 py-10 print:bg-white print:px-0 print:py-0 sm:px-6 sm:py-16">
-      <article className="mx-auto max-w-3xl overflow-hidden rounded-2xl border border-black/8 bg-white shadow-sm print:max-w-none print:rounded-none print:border-0 print:shadow-none">
+    <main data-quote-viewer="true" className="min-h-screen bg-[#F6F5F4] px-4 py-10 print:bg-white print:px-0 print:py-0 sm:px-6 sm:py-16">
+      <article className="mx-auto max-w-[210mm] overflow-hidden rounded-2xl border border-black/8 bg-white shadow-sm print:max-w-none print:rounded-none print:border-0 print:shadow-none">
         <header className="border-b border-black/8 px-6 py-6 sm:px-10 sm:py-8">
           <div className="flex items-center justify-between gap-4">
             <span className="rounded-full bg-[#ECFDF5] px-3 py-1 text-xs font-medium text-[#084734]">견적서</span>
@@ -156,7 +156,7 @@ export default function QuoteDirectViewerClient({ quoteId }: { quoteId: string }
           ) : null}
         </section>
 
-        {version.content_html ? (
+        {!quoteDetails && version.content_html ? (
           <section className="border-t border-black/8 px-6 py-6 sm:px-10 sm:py-8">
             <div
               className="prose prose-sm max-w-none text-[#1a1a1a]/85"
@@ -165,7 +165,7 @@ export default function QuoteDirectViewerClient({ quoteId }: { quoteId: string }
           </section>
         ) : null}
 
-        {!version.content_html && quoteDetails ? (
+        {quoteDetails ? (
           <QuoteDocumentPreview
             quote={quoteDetails}
             documentNumber={document.quote_number}

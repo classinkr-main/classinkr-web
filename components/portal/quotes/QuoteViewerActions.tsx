@@ -129,8 +129,18 @@ export default function QuoteViewerActions({
     }
   }
 
-  function handlePrint() {
-    window.print()
+  async function handlePrint() {
+    setError(null)
+    try {
+      await Promise.all([
+        document.fonts.load('400 9.5pt "ClassIn Quote Paperlogy"'),
+        document.fonts.load('600 12pt "ClassIn Quote Paperlogy"'),
+      ])
+      await document.fonts.ready
+      window.print()
+    } catch {
+      setError("견적서 폰트를 불러오지 못했습니다. 새로고침 후 다시 출력해 주세요.")
+    }
   }
 
   // 이메일 미입력 상태에서도 버튼을 disabled로 죽이지 않는다 — 클릭 시

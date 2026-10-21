@@ -30,7 +30,7 @@ describe("admin quick quote composer shell", () => {
   })
 
   it("edits the quote directly on the paper (수신·참조·발행일·유효기한·품목·세부내역·기타사항)", () => {
-    expect(source).toContain('aria-label="견적서"')
+    expect(source).toContain("<QuoteDocumentPreview")
     expect(source).toContain('aria-label="수신 고객사"')
     expect(source).toContain('aria-label="참조"')
     expect(source).toContain('aria-label="발행일"')
@@ -94,7 +94,7 @@ describe("admin quick quote composer shell", () => {
   })
 
   it("keeps the running total visible on each sheet", () => {
-    expect(source).toContain("text-[19px] font-bold leading-none tabular-nums text-[#111110]")
+    expect(source).toContain("quote={quote}")
     expect(source).toContain("totals.grandTotalAmount")
   })
 

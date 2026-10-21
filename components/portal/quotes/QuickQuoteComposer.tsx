@@ -20,6 +20,9 @@ import {
   X,
 } from "lucide-react"
 
+import QuoteDocumentPreview from "./QuoteDocumentPreview"
+import paperStyles from "./quote-paper.module.css"
+
 import { Button } from "@/components/ui/button"
 import { normalizeQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
 import { portalFetch } from "@/lib/portal/portal-fetch"
@@ -1957,7 +1960,7 @@ export default function QuickQuoteComposer({
       <div
         key={`${line.itemCode ?? line.itemName}-${line.lineNumber}`}
         role="row"
-        className="group grid grid-cols-[24px_minmax(0,1fr)_112px_92px_104px_24px] items-center gap-2 border-b border-[#F0F0EC] py-2"
+        className={`group ${paperStyles.itemGrid}`}
       >
         <span role="cell" className="tabular-nums text-[#78736D]">{line.lineNumber}</span>
         <span role="cell" className="grid min-w-0">
@@ -2177,22 +2180,50 @@ export default function QuickQuoteComposer({
           </div>
         )}
 
-        <article
-          aria-label="견적서"
-          className="bg-white px-5 pb-8 pt-8 text-[12.5px] text-[#31302E] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_40px_rgba(0,0,0,0.06)] sm:px-14 sm:pb-10 sm:pt-12"
-        >
-          <div className="flex items-baseline justify-between">
-            <span className="w-[60px]" />
-            <span className="text-[24px] font-bold tracking-[0.4em] text-[#111110]">견 적 서</span>
-            <span className="w-[60px] text-right text-[11.5px] text-[#78736D]">
-              {isSplit ? `${index + 1} / ${sheets.length}` : ""}
-            </span>
-          </div>
-
-          <div className="mt-7 grid gap-6 md:grid-cols-2 md:gap-8">
-            <div className="grid grid-cols-[56px_minmax(0,1fr)] items-baseline gap-x-2.5 gap-y-2">
-              <label htmlFor={`quote-recipient-${sheet.line}`} className="text-[#78736D]">수신</label>
-              <div className="grid min-w-0">
+        <div className="grid grid-cols-[56px_minmax(0,1fr)] items-baseline gap-2 px-1 text-xs">
+              {/* 거래 연결 — 견적서에는 찍히지 않는 내부 정보 */}
+              <span className="text-[11px] text-[#A39E98]">거래</span>
+              <div className="flex min-w-0 flex-wrap items-center gap-1 text-[11.5px]">
+                {availableDeals.length > 0 && (
+                  <select
+                    aria-label="거래 연결"
+                    value={selectedDealId}
+                    onChange={(event) => setSelectedDealId(event.target.value)}
+                    className={`${PAPER_SELECT_CLASS} max-w-full text-[11.5px]`}
+                  >
+                    <option value="">새 거래로 생성</option>
+                    {availableDeals.map((deal) => (
+                      <option key={deal.id} value={deal.id}>
+                        {deal.title}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {!selectedDealId && (
+                  <input
+                    aria-label="새 거래 제목"
+                    value={newDealTitle}
+                    onChange={(event) => setNewDealTitle(event.target.value)}
+                    placeholder={`비우면 "${buildDefaultDealTitle(sheets, activeCustomerName || null)}"`}
+                    className={`${EDITABLE_CLASS} min-w-[180px] flex-1 text-[11.5px] text-[#615D59]`}
+                  />
+                )}
+              </div>
+        </div>
+        <QuoteDocumentPreview
+          quote={quote}
+          editing
+          slots={{
+            issuedAt: (<input
+                id={`quote-issued-at-${sheet.line}`}
+                type="date"
+                aria-label="발행일"
+                value={shared.issuedAt}
+                onChange={(event) => patchShared({ issuedAt: event.target.value })}
+                className={`${EDITABLE_CLASS} w-fit`}
+              />),
+            recipient: (<div className={paperStyles.fields}>
+              <div className="col-span-2 grid min-w-0">
                 <input
                   id={`quote-recipient-${sheet.line}`}
                   aria-label="수신 고객사"
@@ -2200,7 +2231,7 @@ export default function QuickQuoteComposer({
                   value={recipientInput}
                   onChange={(event) => handleRecipientChange(event.target.value)}
                   placeholder="고객명 입력"
-                  className={`${EDITABLE_CLASS} w-full text-[15px] font-bold text-[#111110] ${
+                  className={`${EDITABLE_CLASS} w-full text-[12pt] font-semibold text-[#111110] ${
                     customerReady ? "" : "border-b-[1.5px] border-solid border-[#084734]"
                   }`}
                 />
@@ -2222,15 +2253,6 @@ export default function QuickQuoteComposer({
                 onChange={(event) => patchShared({ referenceName: event.target.value })}
                 placeholder="담당자명 (선택)"
                 className={`${EDITABLE_CLASS} w-full`}
-              />
-              <label htmlFor={`quote-issued-at-${sheet.line}`} className="text-[#78736D]">발행일</label>
-              <input
-                id={`quote-issued-at-${sheet.line}`}
-                type="date"
-                aria-label="발행일"
-                value={shared.issuedAt}
-                onChange={(event) => patchShared({ issuedAt: event.target.value })}
-                className={`${EDITABLE_CLASS} w-fit`}
               />
               <label htmlFor={`quote-valid-until-${sheet.line}`} className="text-[#78736D]">유효기한</label>
               <div className="flex min-w-0 flex-wrap items-center gap-1">
@@ -2269,39 +2291,8 @@ export default function QuickQuoteComposer({
                   <option value="none">기한 없음</option>
                 </select>
               </div>
-              {/* 거래 연결 — 견적서에는 찍히지 않는 내부 정보 */}
-              <span className="text-[11px] text-[#A39E98]">거래</span>
-              <div className="flex min-w-0 flex-wrap items-center gap-1 text-[11.5px]">
-                {availableDeals.length > 0 && (
-                  <select
-                    aria-label="거래 연결"
-                    value={selectedDealId}
-                    onChange={(event) => setSelectedDealId(event.target.value)}
-                    className={`${PAPER_SELECT_CLASS} max-w-full text-[11.5px]`}
-                  >
-                    <option value="">새 거래로 생성</option>
-                    {availableDeals.map((deal) => (
-                      <option key={deal.id} value={deal.id}>
-                        {deal.title}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                {!selectedDealId && (
-                  <input
-                    aria-label="새 거래 제목"
-                    value={newDealTitle}
-                    onChange={(event) => setNewDealTitle(event.target.value)}
-                    placeholder={`비우면 "${buildDefaultDealTitle(sheets, activeCustomerName || null)}"`}
-                    className={`${EDITABLE_CLASS} min-w-[180px] flex-1 text-[11.5px] text-[#615D59]`}
-                  />
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-[72px_minmax(0,1fr)] items-baseline gap-x-2.5 gap-y-2 md:border-l md:border-[#E8E8E4] md:pl-5">
-              <span className="text-[#78736D]">공급자</span>
-              <span className="font-bold text-[#111110]">{supplier.supplierBusinessName}</span>
+</div>),
+            supplier: (<div className={paperStyles.fields}>              <p className="col-span-2 mb-1 text-[10.5pt] font-semibold text-[#111110]">{supplier.supplierBusinessName}</p>
               <span className="text-[#78736D]">사업자번호</span>
               <span className="tabular-nums">{supplier.supplierBusinessRegistrationNumber || "-"}</span>
               <span className="text-[#78736D]">대표</span>
@@ -2341,20 +2332,17 @@ export default function QuickQuoteComposer({
                     aria-label="공급자 담당자명"
                   />
                 )}
+
+              </div>
+              <span className="text-[#78736D]">연락처</span>
                 <input
                   value={manager.phone}
                   onChange={(event) => setManagerField(sheet.line, "phone", event.target.value)}
                   placeholder={supplierDefaults.supplierContactPhone || "연락처"}
                   className={`${EDITABLE_CLASS} w-[118px] tabular-nums`}
                   aria-label="공급자 담당자 연락처"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="mb-2.5 mt-7 flex flex-wrap items-baseline justify-between gap-2 text-[#615D59]">
-            <span>{quote.subjectText}</span>
-            <select
+                /></div>),
+            vatPolicy: (            <select
               id={index === 0 ? "quote-vat-policy" : undefined}
               aria-label="부가세 기준"
               value={shared.vatIncluded ? "included" : "excluded"}
@@ -2363,20 +2351,18 @@ export default function QuickQuoteComposer({
             >
               <option value="included">단위: 원 · VAT 포함</option>
               <option value="excluded">단위: 원 · VAT 별도</option>
-            </select>
-          </div>
-
-          <div role="table" aria-label="품목" className="overflow-x-auto border-t-[1.5px] border-[#111110]">
+            </select>),
+            items: (          <div role="table" aria-label="품목" className="overflow-x-auto">
             <div className="min-w-[560px]">
               <div
                 role="row"
-                className="grid grid-cols-[24px_minmax(0,1fr)_112px_92px_104px_24px] gap-2 border-b border-[#E8E8E4] py-2 text-[11.5px] text-[#78736D]"
+                className={`${paperStyles.itemGrid} ${paperStyles.itemHead}`}
               >
                 <span role="columnheader">No</span>
-                <span role="columnheader">품목</span>
+                <span role="columnheader">품목 / 세부내역</span>
                 <span role="columnheader" className="text-right">단가</span>
                 <span role="columnheader" className="text-center">수량</span>
-                <span role="columnheader" className="text-right">공급가</span>
+                <span role="columnheader" className="text-right">공급가액</span>
                 <span />
               </div>
               {(quote.lineItems ?? []).map((line, lineIndex) => renderLineRow(sheet, line, lineIndex))}
@@ -2431,26 +2417,8 @@ export default function QuickQuoteComposer({
                 </button>
               )}
             </div>
-          </div>
-
-          <div className="grid justify-end gap-1 pt-3 text-[12.5px]">
-            <div className="flex justify-end gap-7">
-              <span className="text-[#78736D]">공급가 합계</span>
-              <span className="min-w-[110px] text-right tabular-nums">{formatStandardQuoteCurrency(totals.subtotalAmount)}</span>
-            </div>
-            <div className="flex justify-end gap-7">
-              <span className="text-[#78736D]">부가세</span>
-              <span className="min-w-[110px] text-right tabular-nums">
-                {shared.vatIncluded ? "포함" : formatStandardQuoteCurrency(totals.vatAmount)}
-              </span>
-            </div>
-            <div className="mt-2 flex items-baseline justify-end gap-7 border-t border-[#E8E8E4] pt-2.5 text-[#111110]">
-              <span className="text-[15px] font-bold">총액</span>
-              <span className="min-w-[110px] text-right text-[19px] font-bold leading-none tabular-nums text-[#111110]">
-                {formatStandardQuoteCurrency(totals.grandTotalAmount)}
-                <span className="ml-0.5 text-[13px] font-semibold">원</span>
-              </span>
-            </div>
+          </div>),
+            addenda: (<>
             {termMonths && (
               <p className="text-right text-[11.5px] text-[#615D59]">
                 약정 {termMonths}개월 · 약정 총 공급가{" "}
@@ -2468,13 +2436,8 @@ export default function QuickQuoteComposer({
                 </b>{" "}
                 (VAT 포함)
               </p>
-            )}
-            {totals.hasPendingAmounts && (
-              <p className="text-right text-[11.5px] text-[#7A520F]">{totals.pendingAmountNote}</p>
-            )}
-          </div>
-
-          <div className="mt-7 grid gap-4">
+            )}</>),
+            notes: (<div className="grid gap-4">
             <QuoteNoteField
               id={`quote-general-notes-${sheet.line}`}
               label="기타사항"
@@ -2490,8 +2453,9 @@ export default function QuickQuoteComposer({
               placeholder="필요한 경우에만 입력합니다."
               onChange={(next) => patchShared({ specialTerms: next })}
             />
-          </div>
-        </article>
+          </div>),
+          }}
+        />
       </section>
     )
   }

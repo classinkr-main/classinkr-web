@@ -191,3 +191,7 @@ P2
 - 별도 컬럼 도입 여부 검토
 - view_count / accepted_version_id materialization
 - 리마인드 및 후속 자동화 연결
+
+### 견적서 문서 디자인 (2026-10-21)
+
+작성 화면, 관리자 미리보기, 고객 공유 견적서는 `QuoteDocumentPreview`와 `quote-paper.module.css`를 공통으로 사용한다. 성남여고 승인 견적서의 Paperlogy Regular/SemiBold, A4 여백, 수신처·공급자 두 열, 품목 표와 녹색 합계 영역을 기준으로 한다. 폰트는 `public/fonts/paperlogy/`에 포함하며 PDF 출력은 폰트 로드 후 실행한다. 인쇄 시 관리자·사이트 UI를 제외하고 문서와 페이지 번호만 출력한다. 구조화된 견적 데이터가 없는 기존 HTML 문서는 기존 본문을 유지한다. 공급자, 금액, VAT 정책은 각 견적의 저장값을 유지한다.

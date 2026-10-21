@@ -1,0 +1,125 @@
+@font-face {
+  font-family: "ClassIn Quote Paperlogy";
+  src: url("/fonts/paperlogy/Paperlogy-4Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "ClassIn Quote Paperlogy";
+  src: url("/fonts/paperlogy/Paperlogy-6SemiBold.ttf") format("truetype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+.paper {
+  font-family: "ClassIn Quote Paperlogy", sans-serif;
+  font-size: 9.5pt;
+  font-weight: 400;
+  font-synthesis: none;
+  color: #111110;
+  background: #fff;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 210mm;
+  min-height: 297mm;
+  margin: 0 auto;
+  padding: 48pt 46pt 22pt;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.paper strong, .paper h2, .paper h3 { font-weight: 600; }
+.paper input, .paper select, .paper textarea, .paper button { font-family: inherit; }
+.header { border-bottom: .8pt solid #111110; padding-bottom: 16pt; }
+.brandRow { display: flex; align-items: center; justify-content: space-between; gap: 12pt; color: #615D59; font-size: 9pt; }
+.logo { width: 58pt; height: auto; }
+.titleRow { display: flex; align-items: baseline; justify-content: space-between; gap: 12pt; margin-top: 20pt; }
+.titleRow h2 { font-size: 20pt; line-height: 1.2; margin: 0; letter-spacing: 0; }
+.issued { color: #615D59; font-size: 9.5pt; display: flex; align-items: baseline; gap: 4pt; }
+.parties { display: grid; grid-template-columns: minmax(0,.95fr) minmax(0,1.05fr); gap: 24pt; min-height: 203pt; padding: 16pt 0 12pt; border-bottom: .6pt solid rgba(0,0,0,.08); }
+.party h3 { color: #084734; font-size: 9pt; margin: 0 0 12pt; }
+.recipientName { font-size: 12pt; font-weight: 600; margin: 0 0 10pt; }
+.supplierName { font-size: 10.5pt; font-weight: 600; margin: 0 0 12pt; }
+.fields { display: grid; grid-template-columns: 60pt minmax(0,1fr); column-gap: 8pt; row-gap: 9pt; margin: 0; font-size: 8.5pt; align-items: baseline; }
+.fields dt { color: #615D59; }
+.fields dd { margin: 0; white-space: pre-line; }
+.intro { display: flex; align-items: baseline; justify-content: space-between; gap: 12pt; margin: 15pt 0 18pt; }
+.intro > :last-child { color: #615D59; font-size: 8.5pt; white-space: nowrap; }
+.items { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 9.5pt; }
+.items th { background: #F6F5F4; color: #615D59; font-size: 8.5pt; font-weight: 600; height: 29pt; padding: 6pt; text-align: center; }
+.items td { padding: 15pt 6pt; border-bottom: .6pt solid rgba(0,0,0,.08); vertical-align: middle; height: 65pt; }
+.items td:first-child, .items td:nth-child(3) { text-align: center; }
+.items td:nth-child(4), .items td:nth-child(5), .items th:nth-child(4), .items th:nth-child(5) { text-align: right; font-variant-numeric: tabular-nums; }
+.items td:last-child, .items th:last-child { padding-right: 12pt; }
+.items strong { font-size: 10pt; }
+.items p { margin: 5pt 0 0; color: #615D59; font-size: 8.5pt; white-space: pre-line; }
+.totals { padding-top: 7pt; break-inside: avoid; }
+.totals > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12pt; padding: 5pt 12pt 5pt 10pt; min-height: 26pt; }
+.totals > div > :first-child { color: #615D59; }
+.totals > div > :last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.totals .grandTotal { margin-top: 7pt; padding-top: 9pt; padding-bottom: 9pt; border-top: .8pt solid #084734; background: #ECFDF5; color: #084734; }
+.totals .grandTotal > :first-child { color: #084734; font-size: 10pt; }
+.grandTotal > :last-child { font-size: 12pt; }
+.pending { color: #B85C33; font-size: 8.5pt; text-align: right; }
+.notes { margin: 26pt 0 30pt; }
+.notes section + section { margin-top: 16pt; }
+.notes h3 { margin: 0 0 8pt; font-size: 9.5pt; }
+.notes p { margin: 0; color: #615D59; white-space: pre-line; line-height: 1.9; font-size: 9pt; }
+.footer { margin-top: auto; border-top: .6pt solid rgba(0,0,0,.08); padding-top: 10pt; display: flex; justify-content: space-between; gap: 12pt; color: #615D59; font-size: 8pt; }
+.itemGrid { display: grid; grid-template-columns: 24px minmax(0,1fr) 78px 96px 104px 24px; align-items: center; column-gap: 5px; min-height: 65pt; border-bottom: 1px solid rgba(0,0,0,.08); padding: 12pt 0; }
+.itemGrid > :nth-child(3) { grid-column: 4; grid-row: 1; }
+.itemGrid > :nth-child(4) { grid-column: 3; grid-row: 1; }
+.itemGrid > :nth-child(5) { grid-column: 5; grid-row: 1; }
+.itemGrid > :nth-child(6) { grid-column: 6; grid-row: 1; }
+.itemHead { background: #F6F5F4; min-height: 29pt; padding: 6pt 0; font-size: 8.5pt; color: #615D59; font-weight: 600; }
+@media screen and (max-width: 640px) {
+  .paper { padding: 28px 20px; min-height: auto; }
+  .parties { grid-template-columns: 1fr; min-height: auto; gap: 24px; }
+  .intro { flex-wrap: wrap; gap: 4px; }
+  .items { font-size: 8pt; }
+  .items th, .items td { padding-left: 3px; padding-right: 3px; }
+  .items td:last-child, .items th:last-child { padding-right: 3px; }
+  .items strong { font-size: 8.5pt; }
+}
+@page classin-quote {
+  size: A4;
+  margin: 48pt 46pt 32pt;
+  @top-left { content: ""; }
+  @top-center { content: ""; }
+  @top-right { content: ""; }
+  @bottom-left { content: ""; }
+  @bottom-center { content: ""; }
+  @bottom-right { content: counter(page) " / " counter(pages); font-family: "ClassIn Quote Paperlogy", sans-serif; font-size: 8pt; color: #615D59; }
+}
+@media print {
+  .paper { page: classin-quote; width: auto; max-width: none; min-height: 748pt; padding: 0; margin: 0; box-shadow: none; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .paper section, .paper table { break-inside: auto; }
+  .paper .header, .paper .parties, .paper tr, .paper .totals, .paper .footer { break-inside: avoid; }
+  .paper[data-multiple-items] { display: block; min-height: 0; }
+  .paper[data-multiple-items] .footer { margin-top: 30pt; }
+  .items thead { display: table-header-group; }
+  .paper .notes { break-inside: avoid; break-after: avoid; }
+}
+@media print {
+  /* Keep only the actual document, and release the admin shell's fixed-height scroll containers. */
+  :global(html:has([data-quote-viewer]):has([data-quote-paper])),
+  :global(body:has([data-quote-viewer]):has([data-quote-paper])) { page: classin-quote; height: auto !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; }
+  :global(body:has([data-quote-viewer]):has([data-quote-paper]) *:not([data-quote-paper]):not([data-quote-paper] *):not(:has([data-quote-paper]))) { display: none !important; }
+  :global(body:has([data-quote-viewer]):has([data-quote-paper]) *:has([data-quote-paper])) {
+    page: classin-quote;
+    display: block !important;
+    width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+}
