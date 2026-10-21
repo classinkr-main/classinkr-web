@@ -6,16 +6,19 @@ import { readRangeWithFormat, envSheetId } from "@/lib/branch/google-sheets"
 import { parseDsh, DSH_RANGE } from "@/lib/branch/parsers/dsh"
 import { parseSeg, SEG_RANGE } from "@/lib/branch/parsers/seg"
 import { parseKpi, KPI_RANGE } from "@/lib/branch/parsers/kpi"
-import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
+import { listBranchRevDealsFresh } from "@/lib/repositories/branch-deals"
 import { listHwInbound, listHwOutbound, listHwStock } from "@/lib/repositories/branch-hw"
 import { DATA_QUALITY_RULE_COUNT, runDataQuality } from "@/lib/branch/computations/data-quality"
 import { fyOf } from "@/lib/branch/fiscal"
 import { readCompassKrTeam } from "@/lib/compass/kr-team"
 import { getBusinessDateParts } from "@/lib/business-time"
+import { listHardwareItems } from "@/lib/repositories/hardware-inventory"
+import { parseRev, REV_RANGE } from "@/lib/branch/parsers/rev"
 
 // ── 시트 QC 레인 ──────────────────────────────────────────────────────────────
 // 이 라우트의 점검(DQ-2/3/4/10: REV 색·월 헤더 추출, DQ-7/13: DSH/KPI 구조)은
-// "시트 동기화 산출물"의 품질 검사다. summary/kpi처럼 DB 액티브 임포트를 우선하면
+// "시트 동기화 산출물"의 품질 검사다. DQ-9는 운영 제품 카탈로그, DQ-10은 라이브 REV
+// 색상·행과 미러를 대조한다. summary/kpi처럼 DB 액티브 임포트를 우선하면
 // 다음 캡처의 원천이 될 시트 미러를 검사할 수 없으므로 의도적으로 시트만 파싱한다.
 // 캐시 키를 summary/kpi의 DB-우선 readDsh(키 ["branch-dsh"] 등)와 공유하면 먼저
 // 워밍한 쪽의 데이터셋이 서빙될 수 있어 시트 QC 전용 키로 분리한다.
@@ -45,6 +48,10 @@ const readKpi = unstable_cache(
   async () => parseKpi(await readRangeWithFormat(envSheetId("dashboard"), KPI_RANGE)),
   ["branch-kpi-sheet-qc"], { revalidate: 300, tags: ["branch-kpi"] },
 )
+// 갓 동기화한 미러와 캐시에 남은 이전 시트 색상을 비교해 오탐하지 않도록 직접 읽는다.
+async function readRevColors(fy: number, today: string) {
+  return parseRev(await readRangeWithFormat(envSheetId("dashboard"), REV_RANGE), { refFy: fy, today })
+}
 
 export async function GET(req: NextRequest) {
   const err = await verifyAdmin(req); if (err) return err
@@ -52,13 +59,20 @@ export async function GET(req: NextRequest) {
     // deals도 시트 미러(branch_rev_deals)를 직접 읽는다 — REV 매출 집계용이 아니라
     // 시트 추출 품질(색 데이터·월 헤더) 검사 대상이기 때문. 매출 수치가 필요해지면
     // lib/branch/read-rev-deals.ts의 readRevDealsPreferActive를 써야 한다.
-    const month = getBusinessDateParts(new Date()).date.slice(0, 7)
-    const [dsh, seg, kpi, deals, hwInbound, hwOutbound, hwStock, compass] = await Promise.all([
-      readDsh(), readSeg(), readKpi(), listBranchRevDeals(), listHwInbound(), listHwOutbound(), listHwStock(),
+    const now = new Date()
+    const today = getBusinessDateParts(now).date
+    const month = today.slice(0, 7)
+    const [dsh, seg, kpi, deals, hwInbound, hwOutbound, hwStock, compass, hardwareCatalog, revColors] = await Promise.all([
+      readDsh(), readSeg(), readKpi(), listBranchRevDealsFresh(), listHwInbound(), listHwOutbound(), listHwStock(),
       readCompassKrTeam(month),
+      listHardwareItems().catch(() => null),
+      readRevColors(fyOf(now), today).catch(() => null),
     ])
+    // 원본이 비었는데 기존 미러의 색상 검사가 성공한 것처럼 보이지 않게 한다.
+    const revColorSource = revColors?.length === 0 && deals.length > 0 ? null : revColors
     const issues = runDataQuality({ deals, dsh, kpi, seg, hwInbound, hwOutbound, hwStock,
       currentKpiMembers: compass.state === "ready" ? compass.snapshot.roster.map((p) => p.name) : undefined,
+      hardwareCatalog, revColorSource,
     })
     return adminCachedJson({
       issues,
@@ -67,6 +81,7 @@ export async function GET(req: NextRequest) {
       // 검사값은 시트 레인이며 현재 대상 여부만 Compass 명부와 대조한다.
       lane: "sheet-qc",
       currentRosterState: compass.state,
+      checkSources: { hardwareCatalog: hardwareCatalog ? "ready" : "unavailable", revColors: revColorSource ? "ready" : "unavailable" },
       sourceCounts: {
         deals: deals.length,
         dshRows: dsh.rows.length,
