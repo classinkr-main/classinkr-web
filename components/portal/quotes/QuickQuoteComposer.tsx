@@ -1313,7 +1313,7 @@ export default function QuickQuoteComposer({
   /** 품목 카탈로그: 해당 공급자 견적서가 없으면 새 장을 열고, 있으면 그 표에 행을 더한다. */
   function handleCatalogAdd(item: QuickAddRailItem) {
     // AI Suite는 장비까지 포함한 단일 패키지. 기존 HW 장에 SW 장을 덧붙이지 않는다.
-    if (item.templateId === "online_suite") {
+    if (item.templateId === "online_suite" && (sheets.length !== 1 || sheets[0].templateId !== "online_suite")) {
       applyTemplate("online_suite")
       return
     }
