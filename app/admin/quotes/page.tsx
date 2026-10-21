@@ -17,6 +17,7 @@ import { ContractsPanel } from "@/components/admin/documents/ContractsPanel"
 import { ReceiptsPanel } from "@/components/admin/documents/ReceiptsPanel"
 import type { QuickQuotePrefill } from "@/components/portal/quotes/QuickQuoteComposer"
 import type { StandardQuoteTemplateId } from "@/lib/standard-quote-template"
+import { clearQuoteComposerIntent, normalizeQuoteQuickAction } from "@/lib/quote-composer-navigation"
 import AdminTabs, { type AdminTabItem } from "@/components/admin/AdminTabs"
 
 type DocumentTab = "hardware" | "software" | "contracts" | "receipts"
@@ -108,18 +109,7 @@ function normalizeDocumentTab(raw: string | null): DocumentTab {
 }
 
 function normalizeHardwareQuoteAction(raw: string | null): HardwareQuoteQuickAction | null {
-  if (!raw) return null
-  if (raw === "new" || raw === "quick" || raw === "quote") return "new"
-  if (
-    raw === "recording_studio" ||
-    raw === "online_suite" ||
-    raw === "board_86" ||
-    raw === "board_75" ||
-    raw === "camera_t1"
-  ) {
-    return raw
-  }
-  return null
+  return normalizeQuoteQuickAction(raw)
 }
 
 function tabFromParams(params: Pick<URLSearchParams, "get">) {
@@ -193,7 +183,7 @@ function QuoteCreateButtons({
 
   return (
     <div ref={containerRef} className="relative">
-      <div className="flex items-stretch overflow-hidden rounded-md">
+      <div className="flex flex-wrap items-stretch overflow-hidden rounded-md">
         {/* SW/HW 는 공급자·품목 체계가 다른 별개 견적이라 진입 버튼을 분리해 둔다. */}
         <button
           type="button"
@@ -202,7 +192,7 @@ function QuoteCreateButtons({
           className="inline-flex h-9 items-center gap-1.5 bg-[#084734] px-3.5 text-[13px] font-semibold text-white transition-colors hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-1"
         >
           <Plus className="h-4 w-4" />
-          SW 견적서
+          SW 단독 견적서
         </button>
         <button
           type="button"
@@ -212,6 +202,15 @@ function QuoteCreateButtons({
         >
           <Plus className="h-4 w-4" />
           HW 견적서
+        </button>
+        <button
+          type="button"
+          onClick={() => onSelect("online_suite")}
+          title="장비와 소프트웨어가 포함된 AI Suite 통합 견적서 1장"
+          className="inline-flex h-9 items-center gap-1.5 border-l border-white/20 bg-[#084734] px-3.5 text-[13px] font-semibold text-white transition-colors hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-1"
+        >
+          <Plus className="h-4 w-4" />
+          AI Suite 견적서
         </button>
         <button
           type="button"
@@ -353,7 +352,10 @@ export default function QuotesPage() {
         {activeTab === "hardware" && (
           <HardwareQuotesPanel
             quickAction={hardwareQuickAction}
-            onQuickActionConsumed={() => setHardwareQuickAction(null)}
+            onQuickActionConsumed={() => {
+              setHardwareQuickAction(null)
+              window.history.replaceState(window.history.state, "", clearQuoteComposerIntent(new URL(window.location.href)))
+            }}
             prefill={prefill}
           />
         )}

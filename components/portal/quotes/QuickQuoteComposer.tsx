@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button"
 import { normalizeQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
 import { portalFetch } from "@/lib/portal/portal-fetch"
 import { getProductBySku } from "@/lib/product-templates"
+import { quoteComposerMode } from "@/lib/quote-composer-navigation"
 import type {
   CustomerListItem,
   DealListItem,
@@ -357,28 +358,12 @@ const QUICK_ADD_RAIL_ITEMS: QuickAddRailItem[] = [
   },
 ]
 
-/** 빠른 조합 — SW·HW 가 섞이면 공급자별 견적서 2장으로 나뉜다. */
+/** 별도 장비 구매 + Business 충전은 공급자가 달라 2장. AI Suite는 장비 포함 통합 상품이다. */
 const QUICK_COMBOS: Array<{
   id: string
   label: string
   parts: Array<{ templateId: StandardQuoteTemplateId; presetId: string }>
 }> = [
-  {
-    id: "combo_recording_suite",
-    label: "녹화 세트 + AI Suite",
-    parts: [
-      { templateId: "recording_studio", presetId: "recording_studio_default" },
-      { templateId: "online_suite", presetId: "online_suite_default" },
-    ],
-  },
-  {
-    id: "combo_86_suite",
-    label: '86" + AI Suite',
-    parts: [
-      { templateId: "board_86", presetId: "board_86_classroom" },
-      { templateId: "online_suite", presetId: "online_suite_default" },
-    ],
-  },
   {
     id: "combo_bundle_recharge",
     label: '86" 번들 + Business 충전',
@@ -845,6 +830,7 @@ export default function QuickQuoteComposer({
   const today = getTodayDateValue()
   const isPortalApi = apiBase === "/api/portal"
   const [portalMounted, setPortalMounted] = useState(false)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
   const [customers, setCustomers] = useState<CustomerListItem[]>([])
   const [deals, setDeals] = useState<DealListItem[]>([])
   const [loadingOptions, setLoadingOptions] = useState(false)
@@ -899,6 +885,13 @@ export default function QuickQuoteComposer({
   useEffect(() => {
     setPortalMounted(true)
   }, [])
+
+  useEffect(() => {
+    if (!open || !portalMounted) return
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    closeButtonRef.current?.focus()
+    return () => previousFocus?.focus()
+  }, [open, portalMounted])
 
   useEffect(() => {
     if (!open) return
@@ -1012,6 +1005,10 @@ export default function QuickQuoteComposer({
     return { sheet, quote, totals: calculateStandardQuoteTotals(quote.lineItems, quote.vatIncluded ?? true) }
   })
   const isSplit = sheets.length > 1
+  const composerMode = quoteComposerMode(sheets[0]?.templateId ?? initialTemplateId)
+  const visibleTemplates = STANDARD_QUOTE_TEMPLATES.filter((template) => quoteComposerMode(template.id) === composerMode)
+  const visibleCatalogItems = QUICK_ADD_RAIL_ITEMS.filter((item) => quoteComposerMode(item.templateId) === composerMode)
+  const visibleTeamTemplates = (teamTemplates ?? []).filter((template) => quoteComposerMode(inferStandardQuoteTemplateId(template.details)) === composerMode)
   const grandTotalAll = composedSheets.reduce((sum, entry) => sum + entry.totals.grandTotalAmount, 0)
   const lineItemCount = sheets.reduce((sum, sheet) => sum + (sheet.quote.lineItems?.length ?? 0), 0)
   const canCreateQuote = customerReady && lineItemCount > 0
@@ -1315,6 +1312,11 @@ export default function QuickQuoteComposer({
 
   /** 품목 카탈로그: 해당 공급자 견적서가 없으면 새 장을 열고, 있으면 그 표에 행을 더한다. */
   function handleCatalogAdd(item: QuickAddRailItem) {
+    // AI Suite는 장비까지 포함한 단일 패키지. 기존 HW 장에 SW 장을 덧붙이지 않는다.
+    if (item.templateId === "online_suite") {
+      applyTemplate("online_suite")
+      return
+    }
     setActivePick(null)
     const line = sheetLineOf(item.templateId)
     const sheet = sheets.find((entry) => entry.line === line)
@@ -2076,11 +2078,11 @@ export default function QuickQuoteComposer({
     const noteLineOpen = noteLineOpenFor === sheet.line
 
     return (
-      <section key={sheet.line} aria-label={`${sheet.line === "software" ? "SW" : "HW"} 견적서`} className="grid gap-2">
+      <section key={sheet.line} aria-label={`${sheet.templateId === "online_suite" ? "AI Suite 통합" : sheet.line === "software" ? "SW" : "HW"} 견적서`} className="grid gap-2">
         {/* 구성 옵션 — 종이에 찍히지 않는 편집 도구 */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-1 text-[12px]">
           <span className="font-semibold text-[#111110]">
-            {sheet.line === "software" ? "SW" : "HW"} · {SUPPLIER_SHORT_LABEL[sheet.line]}
+            {sheet.templateId === "online_suite" ? "AI Suite · HW+SW" : sheet.line === "software" ? "SW 단독" : "HW"} · {SUPPLIER_SHORT_LABEL[sheet.line]}
           </span>
           <span className="text-[#78736D]">{getStandardQuoteTemplate(sheet.templateId).label} 구성</span>
           {optionGroups.map((group) => (
@@ -2505,9 +2507,30 @@ export default function QuickQuoteComposer({
         role="dialog"
         aria-modal="true"
         aria-labelledby="quick-quote-composer-title"
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && !event.defaultPrevented && !submittingAction && !underMinModalOpen) {
+            event.preventDefault()
+            event.stopPropagation()
+            onOpenChange(false)
+          }
+          if (event.key === "Tab") {
+            const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(
+              'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]'
+            )).filter((element) => element.getClientRects().length > 0)
+            const first = controls[0]
+            const last = controls[controls.length - 1]
+            if (event.shiftKey && document.activeElement === first) {
+              event.preventDefault()
+              last?.focus()
+            } else if (!event.shiftKey && document.activeElement === last) {
+              event.preventDefault()
+              first?.focus()
+            }
+          }
+        }}
         className="relative flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden rounded-none bg-[#F3F2EF] text-[13px] text-[#111110] shadow-[0_24px_80px_rgba(17,17,16,0.28)] sm:h-[calc(100dvh-32px)] sm:max-w-[1480px] sm:rounded-2xl"
       >
-        <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-[#E8E8E4] bg-white px-4 py-3 sm:px-6">
+        <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-[#E8E8E4] bg-white px-4 py-3 sm:px-6">
           <h2 id="quick-quote-composer-title" className="text-[16px] font-bold">
             새 견적
           </h2>
@@ -2524,14 +2547,18 @@ export default function QuickQuoteComposer({
           <span className="flex-1" />
           <div className="grid w-full grid-cols-3 gap-2 sm:w-auto sm:flex sm:flex-wrap">
             <Button
+              ref={closeButtonRef}
               type="button"
-              variant="ghost"
+              variant="outline"
               size="sm"
+              aria-label="견적 작성 닫기"
+              title="작성 화면 나가기 (Esc)"
               className="h-9 text-[13px] text-[#615D59] hover:text-[#111110] hover:no-underline"
               onClick={() => onOpenChange(false)}
               disabled={Boolean(submittingAction)}
             >
-              닫기
+              <X className="h-4 w-4" />
+              나가기
             </Button>
             <Button
               type="button"
@@ -2686,6 +2713,27 @@ export default function QuickQuoteComposer({
           </div>
         )}
 
+        <div role="group" aria-label="견적 유형" className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#E8E8E4] bg-white px-4 py-2 sm:px-6">
+          {([
+            { id: "business_recharge", mode: "software", label: "SW 단독" },
+            { id: "board_86", mode: "hardware", label: "HW" },
+            { id: "online_suite", mode: "suite", label: "AI Suite · HW+SW 통합" },
+          ] as const).map((choice) => (
+            <button
+              key={choice.id}
+              type="button"
+              aria-pressed={!isSplit && composerMode === choice.mode}
+              disabled={Boolean(submittingAction)}
+              onClick={() => applyTemplate(choice.id)}
+              className={`rounded-md border px-3 py-1.5 text-[12px] font-semibold ${!isSplit && composerMode === choice.mode ? "border-[#084734] bg-[#ECFDF5] text-[#084734]" : "border-[#E8E8E4] text-[#615D59]"}`}
+            >
+              {choice.label}
+            </button>
+          ))}
+          <span className="text-[11px] text-[#615D59]">
+            {composerMode === "suite" ? "전자칠판·카메라·소프트웨어 포함 · 견적서 1장" : "유형 선택 시 품목 구성이 바뀝니다. 수신 정보는 유지됩니다."}
+          </span>
+        </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           <main className="flex flex-wrap items-start justify-center gap-7 p-4 sm:p-6">
             <nav
@@ -2725,8 +2773,8 @@ export default function QuickQuoteComposer({
               )}
 
               <div className="border-t border-[#E3E0DB] pt-3.5">
-                <p className={RAIL_HEADING_CLASS}>빠른 조합</p>
-                {QUICK_COMBOS.map((combo) => (
+                {composerMode === "hardware" && <p className={RAIL_HEADING_CLASS}>빠른 조합</p>}
+                {(composerMode === "hardware" ? QUICK_COMBOS : []).map((combo) => (
                   <button
                     key={combo.id}
                     type="button"
@@ -2742,7 +2790,7 @@ export default function QuickQuoteComposer({
                 ))}
 
                 <p className={`${RAIL_HEADING_CLASS} mt-3`}>템플릿</p>
-                {STANDARD_QUOTE_TEMPLATES.map((template) => {
+                {visibleTemplates.map((template) => {
                   const pickId = `template:${template.id}`
                   return (
                     <button
@@ -2760,7 +2808,7 @@ export default function QuickQuoteComposer({
                     </button>
                   )
                 })}
-                {(teamTemplates ?? []).map((template) => {
+                {visibleTeamTemplates.map((template) => {
                   const pickId = `team:${template.id}`
                   return (
                     <button
@@ -2804,7 +2852,11 @@ export default function QuickQuoteComposer({
                               event.preventDefault()
                               void handleSaveTemplate()
                             }
-                            if (event.key === "Escape") setTemplateDraftName(null)
+                            if (event.key === "Escape") {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              setTemplateDraftName(null)
+                            }
                           }}
                           className={`${EDITABLE_CLASS} min-w-0 flex-1 border-[#CFCBC5]`}
                         />
@@ -2840,7 +2892,7 @@ export default function QuickQuoteComposer({
 
               <div className="border-t border-[#E3E0DB] pt-3.5">
                 <p className={RAIL_HEADING_CLASS}>품목 · 눌러서 추가</p>
-                {QUICK_ADD_RAIL_ITEMS.map((item) => (
+                {visibleCatalogItems.map((item) => (
                   <button
                     key={item.id}
                     type="button"
@@ -2851,7 +2903,7 @@ export default function QuickQuoteComposer({
                     <span className="min-w-0 flex-1">
                       <span className="text-[12.5px] font-semibold">{item.label}</span>{" "}
                       <span className="text-[10.5px] text-[#78736D]">
-                        {isSoftwareQuoteTemplate(item.templateId) ? "SW" : "HW"}
+                        {item.templateId === "online_suite" ? "HW+SW" : isSoftwareQuoteTemplate(item.templateId) ? "SW" : "HW"}
                         {item.badge ? ` · ${item.badge}` : ""}
                       </span>
                       <span className="block text-[11.5px] tabular-nums text-[#78736D]">

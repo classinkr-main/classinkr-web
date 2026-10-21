@@ -55,8 +55,8 @@ describe("admin quick quote composer shell", () => {
     )
     expect(sections.every((index) => index > 0)).toBe(true)
     expect([...sections].sort((left, right) => left - right)).toEqual(sections)
-    expect(source).toContain('"녹화 세트 + AI Suite"')
-    expect(source).toContain("STANDARD_QUOTE_TEMPLATES.map(")
+    expect(source).not.toContain('"녹화 세트 + AI Suite"')
+    expect(source).toContain("visibleTemplates.map(")
     // 팀 템플릿(DB)은 목록만 꽂을 자리
     expect(source).toContain("teamTemplates?: QuickQuoteTeamTemplate[]")
     expect(source).toContain("function handleCatalogAdd(")
@@ -123,7 +123,7 @@ describe("admin quick quote composer shell", () => {
   })
 
   it("reserves the solid green button for 보내기 only", () => {
-    expect(source).toContain('variant="ghost"')
+    expect(source).toContain('aria-label="견적 작성 닫기"')
     const solidGreenButtons = source.match(/h-9 bg-\[#084734\] text-\[13px\] text-white/g) ?? []
     // 헤더의 보내기 + 보내기 줄의 완료, 두 개뿐이어야 한다.
     expect(solidGreenButtons).toHaveLength(2)
@@ -164,14 +164,15 @@ describe("admin quotes shell — SW/HW 일급 개념", () => {
     expect(pageSource).toContain('label: "SW 견적 코드"')
   })
 
-  it("작성 진입은 SW/HW 명시 버튼 2개 + HW 프리셋 드롭다운이다", () => {
-    expect(pageSource).toContain("SW 견적서")
+  it("작성 진입은 SW 단독/HW/AI Suite와 HW 프리셋 드롭다운이다", () => {
+    expect(pageSource).toContain("SW 단독 견적서")
     expect(pageSource).toContain("HW 견적서")
     expect(pageSource).toContain('onSelect("business_recharge")')
     expect(pageSource).toContain('onSelect("new")')
+    expect(pageSource).toContain('onSelect("online_suite")')
     expect(pageSource).toContain("HARDWARE_QUOTE_PRESETS")
     expect(pageSource).toContain('aria-label="HW 견적 템플릿 선택"')
-    // 유형이 드러나지 않던 단일 분할 버튼(QuoteCreateButton)은 2버튼 구성으로 대체됐다.
+    // 유형이 드러나지 않던 단일 버튼은 유형별 진입으로 대체됐다.
     expect(pageSource).toContain("function QuoteCreateButtons(")
     expect(pageSource).not.toContain("function QuoteCreateButton(")
   })
