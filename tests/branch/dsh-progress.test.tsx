@@ -5,13 +5,14 @@ import {
   deriveDshProgress,
   deriveDshSegments,
   deriveDshTeamProgress,
+  deriveDshWeeklyFromDealMix,
   dshElapsed,
   dshTotalsFromRows,
 } from "@/components/admin/branch/ledger/dsh-derive"
-import { DshProgressOverview } from "@/components/admin/branch/ledger/DshProgressOverview"
+import { DshProgressOverview, DshWeeklyHeroBody } from "@/components/admin/branch/ledger/DshProgressOverview"
 import { weeklySnapshotSummary } from "@/components/admin/branch/ledger/DshDetailFolds"
 import type { WeeklyCloseDiffView, WeeklyCloseRunView } from "@/components/admin/branch/ledger/shared"
-import type { BranchDshBreakdownRow, BranchDshRow } from "@/components/admin/branch/types"
+import type { BranchDealMix, BranchDshBreakdownRow, BranchDshRow } from "@/components/admin/branch/types"
 
 // DSH 진도 개요(시안 "매출시트 DSH 1a") 파생·렌더 계약 — 시안의 예시 수치(오늘 = 2026-10-21)를
 // 그대로 픽스처로 쓴다: 월 목표 G·실적 S(¥백만), 구성 7조합, 팀 BD/MKT/CSM.
@@ -140,9 +141,9 @@ describe("deriveDshProgress — 시안 수치", () => {
   })
 })
 
-describe("deriveDshSegments — 구성별 연간 달성", () => {
+describe("deriveDshSegments — 구성별 달성", () => {
   it("중복 제거 후 Software → Hardware, New → Renew, Direct → Channel → 그 외 순서로 묶는다", () => {
-    const groups = deriveDshSegments(breakdownFixture())
+    const groups = deriveDshSegments(breakdownFixture(), NOW, "Y")
     expect(groups.map((group) => group.category)).toEqual(["Software", "Hardware"])
     expect(groups[0].rows.map((row) => row.label)).toEqual([
       "New · Direct",
@@ -158,8 +159,22 @@ describe("deriveDshSegments — 구성별 연간 달성", () => {
     expect(groups[1].pct).toBeCloseTo((4.5 / 12) * 100, 6)
   })
 
+  it("분기·월 전환은 Q3·10월 값을 고르고, 행 구성은 연간 기준 그대로 둔다", () => {
+    const keys = (groups: ReturnType<typeof deriveDshSegments>) => groups.map((group) => group.rows.map((row) => row.key))
+    const yearly = deriveDshSegments(breakdownFixture(), NOW, "Y")
+    const quarterly = deriveDshSegments(breakdownFixture(), NOW, "Q")
+    const monthly = deriveDshSegments(breakdownFixture(), NOW, "M")
+    expect(keys(quarterly)).toEqual(keys(yearly))
+    expect(keys(monthly)).toEqual(keys(yearly))
+    // 시안 분포: 목표 Q3 = 12.8/48, 10월 = 4.0/48 · 실적 Q3 = 2.16/23.49, 10월 = 1.92/23.49.
+    expect(quarterly[0].goal).toBeCloseTo((36e6 * 12.8) / 48, 0)
+    expect(quarterly[0].status).toBeCloseTo((18.99e6 * 2.16) / 23.49, 0)
+    expect(monthly[0].goal).toBeCloseTo((36e6 * 4) / 48, 0)
+    expect(monthly[0].status).toBeCloseTo((18.99e6 * 1.92) / 23.49, 0)
+  })
+
   it("빈 breakdown은 빈 배열", () => {
-    expect(deriveDshSegments([])).toEqual([])
+    expect(deriveDshSegments([], NOW, "Y")).toEqual([])
   })
 })
 
@@ -276,6 +291,9 @@ describe("DshProgressOverview 렌더", () => {
     expect(html).toContain("분기 경과 23%")
     expect(html).toContain("11월 선반영 ¥24만 포함")
     expect(html).toContain("구성별 연간 달성")
+    expect(html).toContain('aria-label="구성별 달성 기간 전환"')
+    // 구성별·팀 카드가 같은 기대 진도 기준선을 밝힌다.
+    expect(html.split("세로선 = 기대 진도 56% (연 경과)").length - 1).toBe(2)
     expect(html).toContain("New · Direct")
     expect(html).toContain("Renew · (미구분)")
     expect(html).toContain("SW : HW")
@@ -303,6 +321,8 @@ describe("DshProgressOverview 렌더", () => {
     expect(html).toContain("개인 DSH · 김지훈")
     expect(html).toContain("60.4%")
     expect(html).toContain("개인 범위에는 구성별")
+    // 구성별 분해가 없으면 기간 전환도 두지 않는다.
+    expect(html).not.toContain("구성별 달성 기간 전환")
     expect(html).toContain("개인 연간 달성")
     expect(html).not.toContain("행을 누르면 멤버 펼침")
   })
@@ -310,5 +330,34 @@ describe("DshProgressOverview 렌더", () => {
   it("데이터가 없으면 빈 상태 문구", () => {
     const html = renderToStaticMarkup(<DshProgressOverview breakdown={[]} rows={[]} now={NOW} />)
     expect(html).toContain("DSH 진도를 계산할 데이터가 없습니다")
+  })
+
+  it("주 보기: 확정 합계·전주 대비에 구성별 주간 확정액·구성비를 축별로 붙인다(지표 밴드 주간 타일 승계)", () => {
+    const slice = (name: string, week: number, prevWeek: number) => ({
+      name,
+      goal: 0,
+      actual: 0,
+      pct: 0,
+      week_actual: week,
+      prev_week_actual: prevWeek,
+    })
+    const dealMix: BranchDealMix = {
+      by_category: [slice("Software", 300_000, 100_000), slice("Hardware", 700_000, 400_000)],
+      by_status_type: [slice("New", 600_000, 0), slice("Renew", 400_000, 0)],
+      by_channel: [slice("Direct", 550_000, 0), slice("Channel", 200_000, 0)],
+    }
+    const weekly = deriveDshWeeklyFromDealMix(dealMix)
+    if (!weekly) throw new Error("fixture weekly must not be null")
+    const html = renderToStaticMarkup(<DshWeeklyHeroBody weekly={weekly} />)
+    expect(html).toContain("¥100만")
+    expect(html).toContain("¥50만")
+    expect(html).toContain("+¥50만")
+    // 축 순서(SW/HW → New/Renew → Direct/Channel)대로 금액과 주간 합계 대비 구성비를 보인다.
+    const order = ["Software", "¥30만", "30.0%", "Hardware", "¥70만", "70.0%", "New", "¥60만", "Renew", "Direct", "¥55만", "55.0%", "Channel", "¥20만", "20.0%"]
+    const positions = order.map((text) => html.indexOf(text))
+    expect(positions.every((position) => position >= 0)).toBe(true)
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions)
+    // 채널 축은 매핑된 딜만이라 합(¥75만)이 합계보다 작다 — 문구로 밝힌다.
+    expect(html).toContain("채널 축은 Direct·Channel로")
   })
 })

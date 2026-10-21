@@ -1,7 +1,8 @@
 // 장부 DSH 렌즈 공용 순수 파생 모듈 — 진도 개요(DshProgressOverview)·월별 페이스(DshMonthlyPace)·
 // 팀·멤버 그리드(DshTeamGrid)·수치 그리드(DshNumericGrid의 집계/Rate 뷰)가 공유한다.
 // JSX·컴포넌트 의존 없이 순수 함수와 표기 규약 상수만 둔다 — vitest가 직접 단위 테스트한다
-// (tests/branch/dsh-derive.test.ts · dsh-team-grid.test.ts · dsh-numeric-grid-aggregate.test.ts).
+// (tests/branch/dsh-derive.test.ts · dsh-progress.test.tsx · dsh-team-grid.test.ts ·
+// dsh-numeric-grid-aggregate.test.ts).
 //
 // 절대 규칙(3중 계상 방지): breakdown에는 같은 (kind, category, status_type, channel) 콤보가
 // 스코프별로 반복된다(전사 + 팀/멤버 섹션 — 파서가 시트의 모든 섹션을 훑고, 액티브 임포트
@@ -59,15 +60,9 @@ export function subtractDshNumbers(status: DshNumbersLike, goal: DshNumbersLike,
 export { dedupeDshByKind }
 export type { DshDedupeResult } from "@/lib/branch/dsh-dedupe"
 
-function sumRows(
-  rows: Iterable<BranchDshBreakdownRow>,
-  pred?: (row: BranchDshBreakdownRow) => boolean,
-): DshNumbers {
+function sumRows(rows: Iterable<BranchDshBreakdownRow>): DshNumbers {
   const total = emptyDshNumbers()
-  for (const row of rows) {
-    if (pred && !pred(row)) continue
-    addDshNumbers(total, row)
-  }
+  for (const row of rows) addDshNumbers(total, row)
   return total
 }
 
@@ -148,7 +143,7 @@ export function dshFiscalYearLabel(fy: number): string {
   return `FY${startYY}-${endYY}`
 }
 
-// ── 지표 밴드 파생 ───────────────────────────────────────────────────────────
+// ── 지표 공통 형태 ───────────────────────────────────────────────────────────
 
 export interface DshMetricTriple {
   goal: number
@@ -161,116 +156,55 @@ export interface DshCompositionSegment {
   value: number
 }
 
-export interface DshMetricsBandData {
-  monthKeys: string[]
-  fiscalYear: number
-  currentQuarter: 1 | 2 | 3 | 4
-  /** ymKey(now)가 breakdown 회계월 창 안에 있을 때만 채워진다(창 밖이면 null → 월 타일 "–"). */
-  currentMonthKey: string | null
-  annual: DshMetricTriple & { gap: number }
-  quarter: DshMetricTriple
-  month: DshMetricTriple
-  software: DshMetricTriple
-  hardware: DshMetricTriple
-  newBiz: DshMetricTriple
-  renew: DshMetricTriple
-  remaining: {
-    /** 연간 목표 − 연간 실적(시트 annual 그대로) — 음수면 이미 초과 달성. */
-    amount: number
-    /** 당월 포함 잔여 회계월 수 — monthKeys 중 ymKey(now) 이상인 달의 개수. */
-    monthsLeft: number
-    /** amount>0 && monthsLeft>0 → amount/monthsLeft. amount≤0 → 0(이미 달성).
-        monthsLeft=0(회계연도 종료 후 조회) → null(페이스 산정 불가). */
-    monthlyNeeded: number | null
-  }
-  /** 실적(Status) 연간 기준 구성비 — 첫 항목이 그린 액센트, 나머지는 뉴트럴 단계로 그린다. */
-  composition: {
-    swHw: DshCompositionSegment[]
-    newRenew: DshCompositionSegment[]
-    channel: DshCompositionSegment[]
-  }
+/** 실적(Status) 구성비 — 축마다 항목 순서가 고정이다(채널 축은 "(미구분)"이 끝). */
+export interface DshComposition {
+  swHw: DshCompositionSegment[]
+  newRenew: DshCompositionSegment[]
+  channel: DshCompositionSegment[]
+}
+
+export interface DshRemainingPace {
+  /** 연간 목표 − 연간 실적(시트 annual 그대로) — 음수면 이미 초과 달성. */
+  amount: number
+  /** 당월 포함 잔여 회계월 수 — monthKeys 중 ymKey(now) 이상인 달의 개수. */
+  monthsLeft: number
+  /** amount>0 && monthsLeft>0 → amount/monthsLeft. amount≤0 → 0(이미 달성).
+      monthsLeft=0(회계연도 종료 후 조회) → null(페이스 산정 불가). */
+  monthlyNeeded: number | null
 }
 
 // 남은 목표·필요 페이스 — 잔여 회계월은 당월 포함(미래 FY를 보고 있으면 12개 전부, 종료된 FY면
-// 0개). 지표 밴드와 진도 개요(deriveDshProgress)가 공유한다.
-function remainingPace(goalAnnual: number, statusAnnual: number, monthKeys: string[], nowYm: string) {
+// 0개). 진도 개요(deriveDshProgress)가 쓴다.
+function remainingPace(goalAnnual: number, statusAnnual: number, monthKeys: string[], nowYm: string): DshRemainingPace {
   const monthsLeft = monthKeys.filter((ym) => ym >= nowYm).length
   const amount = goalAnnual - statusAnnual
   const monthlyNeeded = amount <= 0 ? 0 : monthsLeft > 0 ? amount / monthsLeft : null
   return { amount, monthsLeft, monthlyNeeded }
 }
 
-// 지표 밴드 파생 — 전부 breakdown에서 클라이언트 계산(신규 fetch 없음). now는 UTC 기준으로
-// 해석한다(fiscal.ts·summary 라우트와 동일 규약 — KST 자정 부근 월 경계 표류를 서버와 맞춘다).
-export function deriveDshMetricsBand(breakdown: BranchDshBreakdownRow[], now: Date): DshMetricsBandData | null {
-  if (breakdown.length === 0) return null
-  const deduped = dedupeDshByKind(breakdown)
-  const { monthKeys } = deduped
-  const goalAll = sumRows(deduped.goal.values())
-  const statusAll = sumRows(deduped.status.values())
-
-  const currentQuarter = fiscalQuarter(now.getUTCMonth() + 1)
-  const nowYm = ymKey(now)
-  const currentMonthKey = monthKeys.includes(nowYm) ? nowYm : null
-
-  const triple = (goal: number, status: number): DshMetricTriple => ({ goal, status, pct: dshRate(status, goal) })
-  // 차원 타일(SW/HW/New/Renew)은 연간 기준 — 중복 제거된 콤보를 술어로 걸러 합산한다.
-  const dim = (pred: (row: BranchDshBreakdownRow) => boolean): DshMetricTriple =>
-    triple(sumRows(deduped.goal.values(), pred).annual, sumRows(deduped.status.values(), pred).annual)
-  const segment = (label: string, pred: (row: BranchDshBreakdownRow) => boolean): DshCompositionSegment => ({
-    label,
-    value: sumRows(deduped.status.values(), pred).annual,
-  })
-
-  const quarterIndex = currentQuarter - 1
-
-  return {
-    monthKeys,
-    // FY는 breakdown 창의 첫 달(4월)에서 읽는다 — 창이 비면(월 키 없는 극단) 오늘 기준 폴백.
-    fiscalYear: monthKeys.length > 0 ? Number(monthKeys[0].slice(0, 4)) : fyOf(now),
-    currentQuarter,
-    currentMonthKey,
-    annual: { ...triple(goalAll.annual, statusAll.annual), gap: statusAll.annual - goalAll.annual },
-    quarter: triple(goalAll.quarters[quarterIndex] ?? 0, statusAll.quarters[quarterIndex] ?? 0),
-    month: triple(
-      currentMonthKey ? goalAll.months[currentMonthKey] ?? 0 : 0,
-      currentMonthKey ? statusAll.months[currentMonthKey] ?? 0 : 0,
-    ),
-    software: dim((row) => row.category === "Software"),
-    hardware: dim((row) => row.category === "Hardware"),
-    newBiz: dim((row) => row.status_type === "New"),
-    renew: dim((row) => row.status_type === "Renew"),
-    remaining: remainingPace(goalAll.annual, statusAll.annual, monthKeys, nowYm),
-    composition: {
-      swHw: [
-        segment("SW", (row) => row.category === "Software"),
-        segment("HW", (row) => row.category === "Hardware"),
-      ],
-      newRenew: [
-        segment("New", (row) => row.status_type === "New"),
-        segment("Renew", (row) => row.status_type === "Renew"),
-      ],
-      channel: [
-        segment("Direct", (row) => row.channel === "Direct"),
-        segment("Channel", (row) => row.channel === "Channel"),
-        // "(미구분)" = 파서가 채널 공란 행을 버리지 않고 채택한 값(dsh.ts 2차 패스 주석 참조).
-        segment("(미구분)", (row) => row.channel !== "Direct" && row.channel !== "Channel"),
-      ],
-    },
-  }
-}
-
 // ── 기간 스코프 ──────────────────────────────────────────────────────────────
+// now는 UTC 기준으로 해석한다(fiscal.ts·summary 라우트와 동일 규약 — KST 자정 부근 월 경계
+// 표류를 서버와 맞춘다). 분기·월 스코프는 "오늘"이 속한 현재 회계분기/회계월 고정이다 —
+// 과거 기간 탐색은 월별 페이스·수치 그리드가 담당한다.
 
 // 진도 히어로 기간 토글 스코프. W(주)는 DSH 시트에 주 단위 목표/실적이 없어 breakdown이 아니라
 // summary deal_mix의 주간 실적(deriveDshWeeklyFromDealMix)을 쓴다 — 아래 주석 참조.
 export type DshBandScope = "W" | "M" | "Q" | "Y"
 
+// 구성별·팀/멤버 달성 기간 토글 스코프(연간/현재 분기/현재 월).
+export type DshProgressScope = "M" | "Q" | "Y"
+
 // 연간/현재 분기/현재 월 값 하나를 고른다 — 월 키가 창 밖(null)이면 0.
-export function pickScopedValue(row: DshNumbersLike, scope: "M" | "Q" | "Y", quarterIndex: number, ym: string | null): number {
+export function pickScopedValue(row: DshNumbersLike, scope: DshProgressScope, quarterIndex: number, ym: string | null): number {
   if (scope === "Y") return row.annual
   if (scope === "Q") return row.quarters[quarterIndex] ?? 0
   return ym ? row.months[ym] ?? 0 : 0
+}
+
+// pickScopedValue 좌표 — 현재 회계분기 인덱스(0~3)와, 오늘이 회계월 창 안일 때만 현재 월 키.
+function scopeCoordinates(monthKeys: string[], now: Date): { quarterIndex: number; ym: string | null } {
+  const nowYm = ymKey(now)
+  return { quarterIndex: fiscalQuarter(now.getUTCMonth() + 1) - 1, ym: monthKeys.includes(nowYm) ? nowYm : null }
 }
 
 // ── 주간 지표 파생 (deal_mix 원천) ───────────────────────────────────────────
@@ -289,7 +223,7 @@ export interface DshWeeklyDealMetrics {
   renew: DshWeeklyDimension
   direct: DshWeeklyDimension
   channel: DshWeeklyDimension
-  composition: DshMetricsBandData["composition"]
+  composition: DshComposition
 }
 
 // 주간 뷰의 데이터 진실: DSH 시트에는 주 단위 목표/실적이 없다. summary deal_mix의
@@ -548,7 +482,7 @@ function quarterStartMonth(now: Date): number {
   return [3, 6, 9, 0][fiscalQuarter(now.getUTCMonth() + 1) - 1]
 }
 
-// 연도는 데이터의 회계연도 기준, 분기·월은 오늘이 속한 기간 기준(deriveDshMetricsBand와 같은 기준).
+// 연도는 데이터의 회계연도 기준, 분기·월은 오늘이 속한 기간 기준(기간 스코프 규약과 같은 기준).
 export function dshElapsed(now: Date, fiscalYear: number): DshElapsed {
   const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) / DAY_MS
   const year = now.getUTCFullYear()
@@ -576,7 +510,7 @@ export interface DshProgress {
   annual: DshMetricTriple
   quarter: DshMetricTriple
   month: DshMetricTriple
-  remaining: DshMetricsBandData["remaining"]
+  remaining: DshRemainingPace
   months: DshMonthPace[]
   /** 회계연도 첫 달 → 당월 누적. 당월이 창 밖이면 null. */
   toDate: DshMetricTriple | null
@@ -590,7 +524,7 @@ export function deriveDshProgress(totals: DshTotals, now: Date): DshProgress {
   const nowYm = ymKey(now)
   const currentQuarter = fiscalQuarter(now.getUTCMonth() + 1)
   const currentMonthKey = monthKeys.includes(nowYm) ? nowYm : null
-  // FY는 창의 첫 달(4월)에서 읽는다 — 창이 비면 오늘 기준 폴백(deriveDshMetricsBand와 같은 규약).
+  // FY는 창의 첫 달(4월)에서 읽는다 — 창이 비면(월 키 없는 극단) 오늘 기준 폴백.
   const fiscalYear = monthKeys.length > 0 ? Number(monthKeys[0].slice(0, 4)) : fyOf(now)
   const triple = (goalValue: number, statusValue: number): DshMetricTriple => ({
     goal: goalValue,
@@ -648,12 +582,19 @@ function orderRank(order: readonly string[], value: string): number {
   return index === -1 ? order.length : index
 }
 
-// 구성별 연간 달성 — 중복 제거된 콤보(category × status_type × channel)를 카테고리로 묶는다.
-// 목표·실적이 모두 0인 콤보는 시트의 빈 조합이라 행을 만들지 않는다. 순서는 시트 배치와 같다:
-// Software → Hardware, New → Renew, Direct → Channel → 그 외("(미구분)" 등은 이름순).
-export function deriveDshSegments(breakdown: BranchDshBreakdownRow[]): DshSegmentGroup[] {
+// 구성별 달성 — 중복 제거된 콤보(category × status_type × channel)를 카테고리로 묶고 스코프 값(연간/
+// 현재 분기/현재 월)을 고른다. 행 구성은 연간 기준으로 고정한다 — 연간 목표·실적이 모두 0인 콤보
+// (시트의 빈 조합)만 빼므로 스코프를 바꿔도 행이 들고 나지 않는다(그 기간 목표가 없으면 달성률 "–").
+// 순서는 시트 배치와 같다: Software → Hardware, New → Renew, Direct → Channel → 그 외("(미구분)" 등은
+// 이름순).
+export function deriveDshSegments(
+  breakdown: BranchDshBreakdownRow[],
+  now: Date,
+  scope: DshProgressScope,
+): DshSegmentGroup[] {
   const deduped = dedupeDshByKind(breakdown)
-  type Combo = { category: string; statusType: string; channel: string; goal: number; status: number }
+  const { quarterIndex, ym } = scopeCoordinates(deduped.monthKeys, now)
+  type Combo = { category: string; statusType: string; channel: string; goal: number; status: number; inSheet: boolean }
   const combos = new Map<string, Combo>()
   for (const kind of ["goal", "status"] as const) {
     for (const [key, row] of deduped[kind]) {
@@ -663,13 +604,15 @@ export function deriveDshSegments(breakdown: BranchDshBreakdownRow[]): DshSegmen
         channel: row.channel,
         goal: 0,
         status: 0,
+        inSheet: false,
       }
-      combo[kind] = row.annual
+      combo[kind] = pickScopedValue(row, scope, quarterIndex, ym)
+      combo.inSheet ||= row.annual !== 0
       combos.set(key, combo)
     }
   }
   const sorted = [...combos.entries()]
-    .filter(([, combo]) => combo.goal !== 0 || combo.status !== 0)
+    .filter(([, combo]) => combo.inSheet)
     .sort(
       ([, a], [, b]) =>
         orderRank(CATEGORY_ORDER, a.category) - orderRank(CATEGORY_ORDER, b.category) ||
@@ -700,7 +643,31 @@ export function deriveDshSegments(breakdown: BranchDshBreakdownRow[]): DshSegmen
   return groups
 }
 
-export type DshProgressScope = "M" | "Q" | "Y"
+// 실적(Status) 구성비 — 중복 제거된 Status 콤보의 스코프 값을 축별로 합산한다. "(미구분)" = 파서가
+// 채널 공란 행을 버리지 않고 채택한 값(lib/branch/parsers/dsh.ts 2차 패스 주석 참조).
+export function deriveDshComposition(
+  breakdown: BranchDshBreakdownRow[],
+  now: Date,
+  scope: DshProgressScope,
+): DshComposition | null {
+  if (breakdown.length === 0) return null
+  const deduped = dedupeDshByKind(breakdown)
+  const { quarterIndex, ym } = scopeCoordinates(deduped.monthKeys, now)
+  const segment = (label: string, pred: (row: BranchDshBreakdownRow) => boolean): DshCompositionSegment => {
+    let value = 0
+    for (const row of deduped.status.values()) if (pred(row)) value += pickScopedValue(row, scope, quarterIndex, ym)
+    return { label, value }
+  }
+  return {
+    swHw: [segment("SW", (row) => row.category === "Software"), segment("HW", (row) => row.category === "Hardware")],
+    newRenew: [segment("New", (row) => row.status_type === "New"), segment("Renew", (row) => row.status_type === "Renew")],
+    channel: [
+      segment("Direct", (row) => row.channel === "Direct"),
+      segment("Channel", (row) => row.channel === "Channel"),
+      segment("(미구분)", (row) => row.channel !== "Direct" && row.channel !== "Channel"),
+    ],
+  }
+}
 
 export interface DshScopedPair {
   /** 해당 kind가 시트에 없으면 null("–") — 0으로 합성하지 않는다. */
@@ -718,9 +685,7 @@ export interface DshTeamProgress extends DshScopedPair {
 // 현재 월)을 고른다. 월 스코프에서 오늘이 회계월 창 밖이면 값이 없다(전부 "–").
 export function deriveDshTeamProgress(rows: BranchDshRow[], now: Date, scope: DshProgressScope): DshTeamProgress[] {
   const { monthKeys, teams } = buildDshTeamGrid(rows)
-  const quarterIndex = fiscalQuarter(now.getUTCMonth() + 1) - 1
-  const nowYm = ymKey(now)
-  const ym = monthKeys.includes(nowYm) ? nowYm : null
+  const { quarterIndex, ym } = scopeCoordinates(monthKeys, now)
   const outOfRange = scope === "M" && ym == null
   const pick = (numbers: DshNumbers | null) =>
     numbers == null || outOfRange ? null : pickScopedValue(numbers, scope, quarterIndex, ym)

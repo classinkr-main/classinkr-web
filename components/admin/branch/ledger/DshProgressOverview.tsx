@@ -4,11 +4,11 @@
 // 놓는 시각 요약. 지표 밴드(DshMetricsBand)를 대체한다.
 //  ① 연간 진도 히어로 — 기대 진도(기간 경과율) 대비 달성률 + 남은 목표·당월까지 누적
 //  ② 월별 목표 대비 실적 막대 + 이번 달·현재 분기 카드
-//  ③ 구성별 연간 달성(SW/HW × New/Renew × Direct/Channel) + 실적 구성비
+//  ③ 구성별 달성(SW/HW × New/Renew × Direct/Channel — 연간 기본, 분기/월 전환) + 실적 구성비
 //  ④ 팀·멤버 달성(월/분기/연간 — 팀 행을 누르면 멤버 펼침)
 // 파생은 전부 dsh-derive 순수 함수(최대-annual 채택 — 3중 계상 방지)를 쓴다.
 // 지표 밴드의 주/월/분기/연도 토글은 히어로 기간 전환으로 보존했다 — 주는 시트에 주 목표가 없어
-// summary deal_mix의 REV 확정액만 보여준다(달성률·기대 진도 합성 금지).
+// summary deal_mix의 REV 확정액(합계·구성별)만 보여준다(달성률·기대 진도 합성 금지).
 // 개인 범위(내 담당)는 summary가 breakdown을 비우므로(scopeDshToManager) 시트 개인 행으로
 // 히어로·월별·기간 카드를 그리고, 개인 단위 데이터가 없는 구성별 분해는 생략한다.
 
@@ -22,7 +22,7 @@ import { branchManagerLabel } from "@/lib/branch/personal-scope"
 import type { BranchDataSourceInfo, BranchDealMix, BranchDshBreakdownRow, BranchDshRow, Team } from "../types"
 import {
   aggregateDshTotals,
-  deriveDshMetricsBand,
+  deriveDshComposition,
   deriveDshProgress,
   deriveDshSegments,
   deriveDshTeamProgress,
@@ -43,6 +43,8 @@ import {
   type DshProgress,
   type DshProgressScope,
   type DshScopedPair,
+  type DshWeeklyDealMetrics,
+  type DshWeeklyDimension,
 } from "./dsh-derive"
 import { dshSourceLabel } from "./DshNumericGrid"
 import { formatSignedMoney, LoadingPanel } from "./shared"
@@ -239,6 +241,66 @@ function HeroAnnualStats({ progress, scope }: { progress: DshProgress; scope: Ds
   )
 }
 
+// 히어로 "주" 본문 — 확정 합계·전주 대비 + 구성별 주간 확정액(지표 밴드의 주간 타일을 이어받음).
+// 열 = 축(SW/HW · New/Renew · Direct/Channel), 구성비는 주간 합계 대비. 채널 축은 매핑된 딜만
+// 잡혀(deriveDshWeeklyFromDealMix ③) 두 값의 합이 합계보다 작을 수 있다.
+export function DshWeeklyHeroBody({ weekly }: { weekly: DshWeeklyDealMetrics }) {
+  const delta = weekly.total.actual - weekly.total.prevActual
+  const dimensions: Array<[string, DshWeeklyDimension]> = [
+    ["Software", weekly.software],
+    ["Hardware", weekly.hardware],
+    ["New", weekly.newBiz],
+    ["Renew", weekly.renew],
+    ["Direct", weekly.direct],
+    ["Channel", weekly.channel],
+  ]
+  return (
+    <div>
+      <div className="flex flex-wrap items-baseline gap-x-3.5 gap-y-2">
+        <span
+          className="text-[44px] font-bold leading-none tracking-[-0.03em] tabular-nums text-[#111110] sm:text-[56px]"
+          title={dshExactTitle(weekly.total.actual)}
+        >
+          {formatMoney(weekly.total.actual)}
+        </span>
+        <span className="text-[15px] tabular-nums text-[#615D59]">
+          전주{" "}
+          <b className="cursor-help text-[#111110]" title={dshExactTitle(weekly.total.prevActual)}>
+            {formatMoney(weekly.total.prevActual)}
+          </b>
+          {" · "}
+          <b className={`cursor-help ${delta < 0 ? "text-[#B43E3E]" : "text-[#084734]"}`} title={dshExactTitle(delta)}>
+            {formatSignedMoney(delta)}
+          </b>
+        </span>
+      </div>
+      <dl className="mt-5 grid grid-flow-col grid-cols-3 grid-rows-2 gap-x-4 gap-y-3 border-t border-[rgba(0,0,0,0.08)] pt-4">
+        {dimensions.map(([label, dimension]) => (
+          <div key={label} className="min-w-0">
+            <dt className="text-[11px] font-bold text-[#615D59]">{label}</dt>
+            <dd
+              className="mt-1 truncate text-[16px] font-bold tabular-nums text-[#111110]"
+              title={dshExactTitle(dimension.actual)}
+            >
+              {formatMoney(dimension.actual)}
+            </dd>
+            <dd className="mt-0.5 text-[11px] tabular-nums text-[#615D59]">
+              구성비{" "}
+              <span className="font-semibold text-[#111110]">
+                {dimension.share == null ? "–" : `${formatPp(dimension.share)}%`}
+              </span>
+            </dd>
+          </div>
+        ))}
+      </dl>
+      <p className="mt-3.5 text-[12px] leading-relaxed text-[#615D59]">
+        시트에 주 단위 목표가 없어 달성률·기대 진도는 없습니다 — 확정 금액만 봅니다. 채널 축은 Direct·Channel로
+        매핑된 딜만 집계합니다.
+      </p>
+    </div>
+  )
+}
+
 function ProgressHero({
   progress,
   now,
@@ -313,32 +375,7 @@ function ProgressHero({
             </div>
           </div>
         ) : weekly ? (
-          <div>
-            <div className="flex flex-wrap items-baseline gap-x-3.5 gap-y-2">
-              <span
-                className="text-[44px] font-bold leading-none tracking-[-0.03em] tabular-nums text-[#111110] sm:text-[56px]"
-                title={dshExactTitle(weekly.total.actual)}
-              >
-                {formatMoney(weekly.total.actual)}
-              </span>
-              <span className="text-[15px] tabular-nums text-[#615D59]">
-                전주{" "}
-                <b className="cursor-help text-[#111110]" title={dshExactTitle(weekly.total.prevActual)}>
-                  {formatMoney(weekly.total.prevActual)}
-                </b>
-                {" · "}
-                <b
-                  className={`cursor-help ${weekly.total.actual - weekly.total.prevActual < 0 ? "text-[#B43E3E]" : "text-[#084734]"}`}
-                  title={dshExactTitle(weekly.total.actual - weekly.total.prevActual)}
-                >
-                  {formatSignedMoney(weekly.total.actual - weekly.total.prevActual)}
-                </b>
-              </span>
-            </div>
-            <p className="mt-4 text-[12px] leading-relaxed text-[#615D59]">
-              시트에 주 단위 목표가 없어 달성률·기대 진도는 없습니다 — 확정 금액만 봅니다.
-            </p>
-          </div>
+          <DshWeeklyHeroBody weekly={weekly} />
         ) : (
           <p className="py-6 text-[12px] leading-relaxed text-[#615D59]">
             이번 주·전주에 첫결제로 잡힌 확정 딜이 없거나 주간 집계를 사용할 수 없습니다 — 월/분기/연도 보기를 이용하세요.
@@ -569,19 +606,23 @@ function compositionText(segments: DshCompositionSegment[]): { text: string; tit
   }
 }
 
+// 구성별 달성 — 시안은 연간 고정이지만, 대체된 지표 밴드의 월·분기 구성별 타일을 잃지 않도록 팀·멤버
+// 카드와 같은 기간 전환을 둔다(기본 연간 = 시안 그대로).
 function SegmentSection({
   breakdown,
   now,
-  expected,
+  progress,
   personal,
 }: {
   breakdown: BranchDshBreakdownRow[]
   now: Date
-  expected: number
+  progress: DshProgress
   personal: boolean
 }) {
-  const groups = useMemo(() => deriveDshSegments(breakdown), [breakdown])
-  const composition = useMemo(() => deriveDshMetricsBand(breakdown, now)?.composition ?? null, [breakdown, now])
+  const [scope, setScope] = useState<DshProgressScope>("Y")
+  const groups = useMemo(() => deriveDshSegments(breakdown, now, scope), [breakdown, now, scope])
+  const composition = useMemo(() => deriveDshComposition(breakdown, now, scope), [breakdown, now, scope])
+  const view = scopeView(scope, progress, now)
   const axes = composition
     ? [
         { label: "SW : HW", value: compositionText(composition.swHw) },
@@ -592,10 +633,17 @@ function SegmentSection({
 
   return (
     <section className={`${CARD} min-w-0 px-5 py-5 sm:px-6`}>
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-[15px] font-bold text-[#111110]">구성별 연간 달성</h3>
-        <span className="text-[11.5px] text-[#615D59]">세로선 = 기대 진도 {Math.round(expected)}%</span>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-[15px] font-bold text-[#111110]">구성별 {view.title}</h3>
+        {groups.length > 0 && (
+          <SegmentedControl label="구성별 달성 기간 전환" options={TEAM_SCOPES} value={scope} onChange={setScope} />
+        )}
       </div>
+      {groups.length > 0 && (
+        <p className="mt-2.5 text-[11.5px] text-[#615D59]">
+          세로선 = 기대 진도 {Math.round(view.expected)}% ({view.basis})
+        </p>
+      )}
       {groups.length === 0 ? (
         <p className="py-8 text-center text-[12px] text-[#615D59]">
           {personal
@@ -610,12 +658,12 @@ function SegmentSection({
                 <BulletRow
                   label={group.category}
                   pair={group}
-                  expected={expected}
+                  expected={view.expected}
                   tone="group"
                   divider={groupIndex === 0 ? "none" : "line"}
                 />
                 {group.rows.map((row) => (
-                  <BulletRow key={row.key} label={row.label} pair={row} expected={expected} tone="row" divider="soft" />
+                  <BulletRow key={row.key} label={row.label} pair={row} expected={view.expected} tone="row" divider="soft" />
                 ))}
               </div>
             ))}
@@ -633,6 +681,26 @@ function SegmentSection({
       )}
     </section>
   )
+}
+
+// 구성별·팀 카드 기간 전환의 제목·기대 진도 — 분기·월은 오늘이 속한 현재 기간이다.
+function scopeView(scope: DshProgressScope, progress: DshProgress, now: Date): { title: string; expected: number; basis: string } {
+  if (scope === "Q") {
+    const [first, , last] = dshCurrentQuarterMonths(now)
+    return {
+      title: `Q${progress.currentQuarter} 달성 (${Number(first.slice(5))}–${Number(last.slice(5))}월)`,
+      expected: progress.elapsed.quarter.pct,
+      basis: "분기 경과",
+    }
+  }
+  if (scope === "M") {
+    return {
+      title: progress.currentMonthKey ? `${dshMonthLabel(progress.currentMonthKey)} 달성` : "현재 월 달성 (범위 밖)",
+      expected: progress.elapsed.month.pct,
+      basis: "월 경과",
+    }
+  }
+  return { title: "연간 달성", expected: progress.elapsed.year.pct, basis: "연 경과" }
 }
 
 function teamName(team: string): string {
@@ -657,18 +725,7 @@ function TeamSection({
   const defaultOpen = teams.find((team) => team.team !== "ALL" && team.members.length > 0)?.team ?? null
   const openTeam = openChoice === undefined ? defaultOpen : openChoice
 
-  const quarterMonths = dshCurrentQuarterMonths(now)
-  const scopeTitle =
-    scope === "Y"
-      ? "연간 달성"
-      : scope === "Q"
-        ? `Q${progress.currentQuarter} 달성 (${Number(quarterMonths[0].slice(5))}–${Number(quarterMonths[2].slice(5))}월)`
-        : progress.currentMonthKey
-          ? `${dshMonthLabel(progress.currentMonthKey)} 달성`
-          : "현재 월 달성 (범위 밖)"
-  const expected =
-    scope === "Y" ? progress.elapsed.year.pct : scope === "Q" ? progress.elapsed.quarter.pct : progress.elapsed.month.pct
-  const expectedBasis = scope === "Y" ? "연 경과" : scope === "Q" ? "분기 경과" : "월 경과"
+  const { title: scopeTitle, expected, basis: expectedBasis } = scopeView(scope, progress, now)
   const members = personal ? teams.flatMap((team) => team.members) : []
 
   return (
@@ -824,7 +881,7 @@ export function DshProgressOverview({
       </div>
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,520px),1fr))] gap-5">
-        <SegmentSection breakdown={breakdown} now={now} expected={progress.elapsed.year.pct} personal={personal} />
+        <SegmentSection breakdown={breakdown} now={now} progress={progress} personal={personal} />
         <TeamSection rows={rows} now={now} progress={progress} personal={personal} />
       </div>
     </div>
