@@ -156,7 +156,7 @@ for (const [slug, row] of slugToRow) {
   if (error) {
     console.error(`   ! update failed: ${error.message}`);
   } else {
-    console.log(`   ~ updated id=${row.id} (status stays ${row.status})`);
+    console.log(`   ~ updated id=${row.id} (status 는 바꾸지 않음)`);
     applied += 1;
   }
 }
