@@ -1,5 +1,5 @@
 import "server-only"
-import { startSyncRun, finishSyncRun, isAnyRunning, type SyncTrigger } from "@/lib/repositories/branch-sync"
+import { startSyncRun, finishSyncRun, findActiveSyncRun, type SyncTrigger } from "@/lib/repositories/branch-sync"
 import { syncRev } from "./sync-rev"
 import { syncHw } from "./sync-hw"
 import { recaptureActiveRevImport, type RevImportRecaptureResult } from "@/lib/repositories/sales-ledger-rev-import"
@@ -15,7 +15,9 @@ export interface RunAllResult {
   // 재캡처를 시도했지만 실패한 경우의 원인. warnings에도 같은 내용이 사람이 읽는 문장으로 실린다.
   revImportError?: string
   error?: string
+  // 다른 실행이 잠금을 잡고 있어 아무것도 하지 않았다. startedAt은 그 실행의 시작 시각.
   skipped?: boolean
+  startedAt?: string
   // 실패로 간주하지 않는 소스별 경고(예: REV 범위 상한 도달 가능성). ok=true여도 있을 수 있다.
   warnings?: string[]
 }
@@ -54,7 +56,8 @@ export function syncRunSourceFor(sources: ReadonlyArray<"rev" | "hw">): "all" | 
 }
 
 export async function runAll(opts: { trigger: SyncTrigger; sources?: Array<"rev"|"hw"> }): Promise<RunAllResult> {
-  if (await isAnyRunning()) return { ok: false, skipped: true }
+  const activeRun = await findActiveSyncRun()
+  if (activeRun) return { ok: false, skipped: true, startedAt: activeRun.started_at }
   // 빈 배열은 "전부"로 본다 — 아무것도 돌리지 않은 런이 성공("all")으로 남아 두 원천의 연속 실패를
   // 지우는 일이 없게 한다(수동 동기화 라우트도 빈 배열을 undefined로 넘긴다).
   const sources: Array<"rev" | "hw"> = opts.sources && opts.sources.length > 0 ? opts.sources : ["rev", "hw"]
