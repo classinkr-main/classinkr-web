@@ -32,7 +32,7 @@
       "schedule": "30 9 * * *"
     },
     {
-      "path": "/api/cron/hardware-sheet-import",
+      "path": "/api/cron/link-hourly",
       "schedule": "20 * * * *"
     },
     {

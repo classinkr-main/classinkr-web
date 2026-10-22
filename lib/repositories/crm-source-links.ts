@@ -1065,16 +1065,20 @@ export async function previewExternalCrmLinkCandidates(): Promise<PreviewExterna
 }
 
 async function runLeadLinkCandidateGeneration(
-  dryRun: boolean
+  dryRun: boolean,
+  options: { leadIds?: readonly string[] } = {}
 ): Promise<GenerateLeadLinkCandidatesResult> {
   const sb = createSupabaseAdminClient()
 
+  // leadIds 가 오면 그 리드만 본다(매시간 최근 리드 자동 연결). 없으면 예전처럼 열린 리드 전체(최대 2000).
+  const leadQuery = sb
+    .from("leads")
+    .select("id, name, org, phone, email, status, assigned_to, created_at")
+    .neq("status", "closed")
+  const leadsQuery = options.leadIds ? leadQuery.in("id", [...options.leadIds]) : leadQuery.limit(2000)
+
   const [leadsResult, partnerAccountsResult, customersResult, dealsResult, linksResult, aliases, autoConfirmPolicies] = await Promise.all([
-    sb
-      .from("leads")
-      .select("id, name, org, phone, email, status, assigned_to, created_at")
-      .neq("status", "closed")
-      .limit(2000),
+    leadsQuery,
     sb
       .from("partner_accounts")
       .select("id, name, status, owner_name")
@@ -1261,6 +1265,20 @@ async function runLeadLinkCandidateGeneration(
 
 export async function generateLeadLinkCandidates(): Promise<GenerateLeadLinkCandidatesResult> {
   return runLeadLinkCandidateGeneration(false)
+}
+
+/**
+ * 지정한 리드만 고객 연결 후보를 만들고, 자동 확정 정책(crm_source_priorities — 기본 신뢰도 0.92·
+ * 2위와 차이 0.15 이상, 고객만)을 넘는 것은 바로 확정한다. 매시간 최근 리드 자동 연결이 쓴다.
+ * 빈 배열이면 아무것도 읽지 않는다.
+ */
+export async function generateLeadLinkCandidatesForLeads(
+  leadIds: readonly string[]
+): Promise<GenerateLeadLinkCandidatesResult> {
+  if (leadIds.length === 0) {
+    return { scannedLeads: 0, generatedCandidates: 0, insertedCandidates: 0, skippedExisting: 0, autoConfirmed: 0 }
+  }
+  return runLeadLinkCandidateGeneration(false, { leadIds })
 }
 
 export async function previewLeadLinkCandidates(): Promise<PreviewLeadLinkCandidatesResult> {

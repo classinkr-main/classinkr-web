@@ -1,4 +1,3 @@
-import { NextRequest } from "next/server"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const syncHw = vi.hoisted(() => vi.fn())
@@ -23,7 +22,6 @@ import {
   isHardwareSheetAutoImportEnabled,
   runHardwareSheetAutoImport,
 } from "@/lib/hardware/sheet-auto-import"
-import { GET } from "@/app/api/cron/hardware-sheet-import/route"
 
 const ORIGINAL_ENV = { ...process.env }
 
@@ -136,59 +134,5 @@ describe("runHardwareSheetAutoImport", () => {
       stage: "import",
       error: "hardware sheet import snapshot does not match",
     })
-  })
-})
-
-function cronRequest(authorization?: string) {
-  return new NextRequest("https://classin.kr/api/cron/hardware-sheet-import", {
-    headers: authorization ? { authorization } : {},
-  })
-}
-
-describe("GET /api/cron/hardware-sheet-import", () => {
-  it("rejects a missing CRON_SECRET", async () => {
-    delete process.env.CRON_SECRET
-
-    const response = await GET(cronRequest("Bearer whatever"))
-
-    expect(response.status).toBe(401)
-    expect(isAnyRunning).not.toHaveBeenCalled()
-  })
-
-  it("rejects a wrong bearer", async () => {
-    const response = await GET(cronRequest("Bearer wrong"))
-
-    expect(response.status).toBe(401)
-    await expect(response.json()).resolves.toEqual({ error: "unauthorized" })
-    expect(isAnyRunning).not.toHaveBeenCalled()
-  })
-
-  it("returns 200 with the outcome when unchanged", async () => {
-    importIfChanged.mockResolvedValue({ status: "unchanged", runId: "run-prev", sourceChecksum: "x", checkedAt: "t" })
-
-    const response = await GET(cronRequest("Bearer cron-test-secret"))
-
-    expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toEqual({ ok: true, status: "unchanged", runId: "run-prev", checkedAt: "t" })
-  })
-
-  it("returns 500 when the sheet read fails so the cron log shows it", async () => {
-    syncHw.mockRejectedValue(new Error("403"))
-
-    const response = await GET(cronRequest("Bearer cron-test-secret"))
-
-    expect(response.status).toBe(500)
-    await expect(response.json()).resolves.toMatchObject({ ok: false, status: "failed", stage: "sheet_sync" })
-  })
-
-  it("returns 500 without the raw error when the precheck itself throws", async () => {
-    isAnyRunning.mockRejectedValue(new Error("connection refused at 10.0.0.1"))
-    vi.spyOn(console, "error").mockImplementation(() => undefined)
-
-    const response = await GET(cronRequest("Bearer cron-test-secret"))
-
-    expect(response.status).toBe(500)
-    const body = await response.json()
-    expect(body).toEqual({ ok: false, status: "failed", stage: "precheck" })
   })
 })

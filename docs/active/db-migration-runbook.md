@@ -158,6 +158,15 @@ npm run check:db --  --strict
 `CRON_SECRET`)의 `segmentsPreview`. NEO 동기화가 오래됐으면 NEO 조건 세그먼트는 `skipped_neo_stale` 로 멈추는 것이
 의도된 동작이다.
 
+### 2026-10-22 하드웨어·오더·매출 연결 S1·S2 — 서울 프로젝트 미적용
+
+[연결 로직](./hardware-order-revenue-link-plan-2026-10-22.md) 1·2단계. 둘 다 스키마를 늘리지 않아 `check:db` 프로브로는 확인할 수 없다. 아래 조회로 확인한다(읽기 전용).
+
+| 파일 | 하는 일 | 미적용 시 | 확인 |
+| --- | --- | --- | --- |
+| `20261022_hw_rev_matches_exclude_planned.sql` | 출고↔REV 대사 뷰 `v_hardware_rev_matches`가 배송 예정·예약·대기를 실출고에서 뺀다(`CREATE OR REPLACE`, 열 구성 같음) | 날짜가 있는 배송 예정이 실출고로 잡혀 대사에 "출고 있음"으로 나온다. 다른 화면 영향 없음 | `select pg_get_viewdef('public.v_hardware_rev_matches'::regclass) ilike '%예정%';` → `true` |
+| `20261022_crm_lead_auto_confirm.sql` | `crm_source_priorities`의 `lead` 자동 확정을 켠다(임계값 0.92·0.15 그대로) | 매시간 리드 자동 연결(`/api/cron/link-hourly`)이 후보만 만들고 확정은 하지 않는다 — 매칭함에서 사람이 확정 | `select auto_confirm_enabled from public.crm_source_priorities where source_system = 'lead';` → `true` |
+
 ## 적용 보류 중인 마이그레이션
 
 `check:db`에 걸리지 않는(프로브가 없는) 파일이라도, 아래 파일은 **파일명 순서대로 일괄 적용하지 않는다.**

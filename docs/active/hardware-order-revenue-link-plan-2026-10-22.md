@@ -1,7 +1,7 @@
 # 하드웨어 · 오더 · 매출 연결 로직 — 과도기와 시스템 편입
 
 기준 시점: 2026-10-22
-상태: 운영자 결정 반영 · S1 구현(2026-10-22), S2~S4 진행 전, S5 보류
+상태: 운영자 결정 반영 · S1·S2 구현(2026-10-22), S3·S4 진행 전, S5 보류
 관련: [하드웨어 SCM 탭 기준](./hardware-scm-tab-reference.md) · [하드웨어 입력 가속 기획](./hardware-input-speed-plan-2026-09-20.md) · [Admin OS 운영 결정](./admin-os-operating-decisions-2026-07-11.md) · [매출시트 워크스페이스 기획](./admin-3-revenue-sheet-workspace-plan-2026-06-29.md) · [어드민 머니 클러스터 정비](./admin-money-mesh-2026-07-03.md) · [운영 캐논](./classin-operating-canon-2026-07-02.md)
 
 리드 → 고객 → 견적 → 오더 → 출고 → 매출을 앱 안 데이터로 한 줄에 묶는다. 하드웨어 시트와 매출(REV) 시트는
@@ -70,7 +70,7 @@
  └ 같은 학교·학원(전화·이름)이면 기존 고객에 자동 연결. 애매하면 확인 목록으로
 
 견적 작성
- └ 딜 자동 생성(리드에서 시작했으면 고객도 같이). 견적 품목을 딜 품목으로 복사
+ └ 고객·딜 자동 생성(견적 작성 화면에 이미 있음)
 
 고객이 견적 승인
  └ 하드웨어가 들어 있으면 '하드웨어 승인 대기'로 올리고 이왕찬·지사장에게 알림
@@ -92,19 +92,21 @@
  └ 시트 '2.입고 현황'을 매시간 자동 반영 → 재고 증가. 리드·오더와는 무관
 ```
 
-### 4-1. 리드 → 고객
+### 4-1. 리드 → 고객 (S2 구현)
 
-- 트리거: 리드 저장(`lib/server/lead-capture.ts`) 직후.
-- 비교 키: 전화는 `normalizePhoneKey`(= SQL `norm_phone_key`), 이름은 고객 이름 정규화 하나로 통일한다.
-- 정확히 한 고객과 맞으면 자동 연결(`crm_source_links` confirmed). 후보가 여럿이거나 이름만 맞으면 `/admin/crm/matching` 확인 목록으로 보낸다.
+- 트리거: 매시간(`/api/cron/link-hourly`의 둘째 잡). 최근 3시간에 들어오거나 재문의한(`last_inflow_at`) 열린 리드, 회차당 최대 200건(`lib/server/lead-customer-autolink.ts`).
+  - 공개 리드 저장 경로에는 일을 더하지 않았다. 저장 경로는 부수 효과를 골든 테스트로 묶어 둔 곳이라, 연결 실패가 접수에 영향을 줄 여지를 만들지 않는다.
+- 매칭은 기존 엔진을 그대로 쓴다(`lib/repositories/crm-source-links.ts`의 리드 후보 생성, 지정 리드만 보는 `generateLeadLinkCandidatesForLeads`). 지금 비교 키는 기관명(정규화)이다. 전화번호 비교는 아직 엔진에 없다.
+- 자동 확정은 고객 대상·신뢰도 0.92 이상·2위와 0.15 이상 차이일 때만(`crm_source_priorities` 정책). lead 는 원래 수동이어서 `20261022_crm_lead_auto_confirm.sql`로 켰다. 애매하면 `/admin/crm/matching` 후보로 남는다. 자동 확정 행은 `metadata.auto_confirmed = true`라 구분·되돌리기가 된다.
 - 맞는 고객이 없으면 리드로 둔다. 고객은 견적을 만들 때 생긴다(§4-2).
 - 리드 상태·담당·팔로업은 건드리지 않는다(재유입 병합 규칙과 같은 원칙).
 
-### 4-2. 견적 작성 → 딜
+### 4-2. 견적 작성 → 딜 (이미 있음)
 
-- 지금 `quote_documents.deal_id`는 필수라서 견적은 딜 없이 못 만든다. 견적 작성 화면이 고객(또는 리드)만 받고, 딜은 그때 자동으로 만든다.
-- 딜 담당은 리드 담당을 따른다(없으면 견적 작성자).
-- 견적 품목 중 하드웨어 줄을 `deal_line_items`로 복사한다. 품목 이름은 SKU로 맞춘다(`product_catalog_items.sku` ↔ `hardware_items.sku` 매핑표를 이 단계에서 만든다).
+- 견적 작성 화면(`components/portal/quotes/QuickQuoteComposer.tsx`)이 고객을 고르거나 새로 만들고, 기존 딜을 고르지 않으면 `quote` 단계 딜을 새로 만든다(`resolveDeal`). 그래서 이 단계는 새로 만들지 않았다.
+- 견적 품목을 `deal_line_items`로 복사하지 **않는다**. CRM 오더 대사(`lib/repositories/hardware-crm-orders.ts`)가 딜 줄과 견적 줄을 둘 다 읽어서, 복사하면 같은 품목이 두 번 뜬다. 오더의 품목 줄은 승인된 견적 버전에서 바로 가져온다(§4-3).
+- 견적 품목 이름(`전자칠판 86"`)과 재고 품목 이름(`86" IFP`)을 잇는 매핑은 오더를 만들 때 필요하므로 S3에서 만든다.
+- 남은 차이: 딜 담당은 견적 작성자가 된다(리드 담당을 따르지 않는다).
 
 ### 4-3. 견적 승인 → 하드웨어 승인 → 오더 + 배송 예정
 
@@ -154,8 +156,8 @@ T3에서 "출고가 매출을 만든다"로 바뀌므로, §4-5의 짝짓기 로
 
 | 단계 | 내용 | 주요 위치 |
 | --- | --- | --- |
-| S1 ✅ | 시트 매시간 자동 가져오기(무변경이면 건너뜀), 출고 시트 오더번호 열 읽기, 대사 뷰 배송 예정 버그 수정 — **2026-10-22 구현**. 운영 반영은 마이그레이션 `20261022_hw_rev_matches_exclude_planned.sql` 적용 + 운영 배포 후 | `app/api/cron/hardware-sheet-import/route.ts`, `lib/hardware/sheet-auto-import.ts`, `lib/branch/parsers/hw.ts`, `lib/repositories/hardware-inventory.ts`, `vercel.json` |
-| S2 | 리드 → 고객 자동 연결, 견적 작성 시 딜 자동 생성, 견적 품목 → 딜 품목 복사, SKU 매핑 | `lib/server/lead-capture.ts`, `lib/crm/lead-conversion.ts`, 견적 API |
+| S1 ✅ | 시트 매시간 자동 가져오기(무변경이면 건너뜀), 출고 시트 오더번호 열 읽기, 대사 뷰 배송 예정 버그 수정 — **2026-10-22 구현**. 운영 반영은 마이그레이션 `20261022_hw_rev_matches_exclude_planned.sql` 적용 + 운영 배포 후 | `app/api/cron/link-hourly/route.ts`, `lib/hardware/sheet-auto-import.ts`, `lib/branch/parsers/hw.ts`, `lib/repositories/hardware-inventory.ts`, `vercel.json` |
+| S2 ✅ | 리드 → 고객 자동 연결 — **2026-10-22 구현**. 견적 작성 시 고객·딜 자동 생성은 이미 있다(`QuickQuoteComposer`의 `resolveDeal`). 운영 반영은 마이그레이션 `20261022_crm_lead_auto_confirm.sql` 적용 + 운영 배포 후 | `lib/server/lead-customer-autolink.ts`, `lib/repositories/crm-source-links.ts`, `app/api/cron/link-hourly/route.ts` |
 | S3 | 견적 승인 → 하드웨어 승인 대기(이왕찬·지사장) → 오더번호 + 배송 예정 자동 등록. 멤버 설정의 권한 이름을 "하드웨어 승인·최종 확정 · 이왕찬·지사장"으로 바꾼다 | 견적 승인 라우트, `lib/admin-auth.ts`, `components/admin/settings/MembersPanel.tsx`, `lib/repositories/hardware-inventory.ts` |
 | S4 | 시트 출고 줄 ↔ 오더 연결, 앱 예약 대체, 딜 단계 이동, 오더번호 없는 출고의 "승인 확인 필요" 목록 | 시트 가져오기, Portal V2 딜 |
 | S5 | 출고 ↔ REV 짝짓기 + 누락 목록 — **확장할 때만(보류)** | `lib/repositories/hw-rev-reconcile.ts`, 대사 뷰 |
