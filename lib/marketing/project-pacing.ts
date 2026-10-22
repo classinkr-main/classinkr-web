@@ -1,6 +1,7 @@
 // lib/marketing/project-pacing.ts
 // 마케팅 프로젝트 페이싱 — 기간 경과 대비 예산 소진(순수 함수, DB 접근·부수효과 없음).
 // 갤러리 카드(ProjectGalleryCard)와 상세 패널의 "예산 페이싱" 섹션이 같은 판정을 공유한다(SSOT).
+// 캠페인 갤러리 카드(CampaignGalleryCard)는 소진 원천이 없어 기간 진행(computeScheduleProgress)만 쓴다.
 //
 // 판정 규칙:
 //  - 기간 경과 = (오늘 − 시작) / (종료 − 시작), 0~100 으로 클램프. 시작·종료 중 하나라도 없으면 null.
@@ -68,6 +69,28 @@ function ddayOf(
   }
 }
 
+export type ScheduleInput = Pick<ProjectPacingInput, "status" | "startsAt" | "endsAt">
+export type ScheduleProgress = Pick<ProjectPacing, "elapsedPct" | "todayInRange" | "dday">
+
+/**
+ * 기간 진행만 — 경과율·오늘 위치·D-day. 예산 소진 원천이 없는 캠페인 갤러리 카드가 쓰고,
+ * 프로젝트 페이싱(computeProjectPacing)도 같은 계산을 공유한다(SSOT).
+ */
+export function computeScheduleProgress(input: ScheduleInput, today: string): ScheduleProgress {
+  const t = dayNumber(today)
+  if (t == null) {
+    return { elapsedPct: null, todayInRange: false, dday: { label: "—", tone: "muted" } }
+  }
+  const start = dayNumber(input.startsAt)
+  const end = dayNumber(input.endsAt)
+  const hasPeriod = start != null && end != null
+  return {
+    elapsedPct: hasPeriod ? elapsedBetween(start, end, t) : null,
+    todayInRange: hasPeriod && start <= t && t <= end,
+    dday: ddayOf(input.status, start, end, t),
+  }
+}
+
 /**
  * 프로젝트 1건의 페이싱 판정. today 는 KST "YYYY-MM-DD"(lib/business-time getBusinessDateParts().date).
  * 판정 우선순위: 완료 → 예산 미배정 → 기간 미정 → 시작 전 → 예산 초과 → 빠름/느림/정상.
@@ -76,19 +99,14 @@ export function computeProjectPacing(input: ProjectPacingInput, today: string): 
   const t = dayNumber(today)
   if (t == null) {
     return {
-      elapsedPct: null,
-      todayInRange: false,
-      dday: { label: "—", tone: "muted" },
+      ...computeScheduleProgress(input, today),
       pace: { label: "—", tone: "muted" },
     }
   }
 
   const start = dayNumber(input.startsAt)
   const end = dayNumber(input.endsAt)
-  const hasPeriod = start != null && end != null
-  const elapsedPct = hasPeriod ? elapsedBetween(start, end, t) : null
-  const todayInRange = hasPeriod && start <= t && t <= end
-  const dday = ddayOf(input.status, start, end, t)
+  const { elapsedPct, todayInRange, dday } = computeScheduleProgress(input, today)
   const { spentPct } = input
 
   let pace: ProjectPacing["pace"]

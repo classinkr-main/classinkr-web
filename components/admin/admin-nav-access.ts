@@ -91,16 +91,13 @@ export const UNHIDEABLE_NAV_HREFS: readonly string[] = ["/admin/overview"]
 
 /**
  * 전원 기본값이 숨김인 항목 — 거의 안 쓰는 탭(2026-09-24 운영 조사).
- *  - 마케팅 프로젝트: 운영 행 0건·인바운드 링크 0, 7/29 회의 "일단 숨기고"
- *    (docs/active/admin-tab-restructure-2026-07-29.md §4.2). 캠페인 관리·⌘K 로 도달한다.
  *  - 운영 상태: 설정 › 외부 연동과 같은 API(/api/admin/settings/integrations/status)를 읽는다.
  *    60일 커밋 0·인바운드 0.
+ * (마케팅 프로젝트도 2026-09-25 부터 여기 있었으나, 2026-10 캠페인 관리의 "프로젝트" 탭으로 합쳐지며
+ *  사이드바 항목 자체가 없어졌다. 그 href 를 가진 개인 오버라이드는 정규화가 조용히 버린다.)
  * 숨겨도 ⌘K·주소로는 그대로 열린다. 사람이 "다시 표시"하면 그 사람 오버라이드가 이긴다.
  */
-export const DEFAULT_HIDDEN_HREFS: readonly string[] = [
-  "/admin/campaigns/projects",
-  "/admin/ops",
-]
+export const DEFAULT_HIDDEN_HREFS: readonly string[] = ["/admin/ops"]
 
 /**
  * 레거시 프리셋 키. 배치에는 더 이상 영향을 주지 않지만 두 가지 이유로 타입을 남긴다.
@@ -131,9 +128,9 @@ const NAV_PRESET_KEYS: readonly NavPresetKey[] = [
  * 상시(8): Overview · 캘린더 · KR Team · 매출 장부 · CRM · 견적·문서 · 하드웨어 재고 · CS 콘솔.
  *   시안 스위치(NEXT_PUBLIC_ADMIN_AI_PREVIEW=1, lib/admin-ai/preview.ts)를 켜면 Overview 바로 아래
  *   AI 올인원이 더해져 9 — 꺼져 있으면(기본, 기획 D13) ADMIN_NAV 에도 이 목록에도 없다.
- * 기타(9 자리): 마케팅·분석 6(캠페인 3 · 콘텐츠 · 자료 퍼널 · Analytics) + 시스템 3(운영 상태 ·
- *          설정 · 개발 도구). 이 중 마케팅 프로젝트·운영 상태 2개는 기본 숨김
- *          (DEFAULT_HIDDEN_HREFS)이라 처음 보이는 기타는 7개다.
+ * 기타(8 자리): 마케팅·분석 5(마케팅 허브 · 캠페인 관리 · 콘텐츠 · 자료 퍼널 · Analytics) + 시스템 3
+ *          (운영 상태 · 설정 · 개발 도구). 이 중 운영 상태 1개는 기본 숨김(DEFAULT_HIDDEN_HREFS)이라
+ *          처음 보이는 기타는 7개다. (마케팅 프로젝트는 2026-10 캠페인 관리의 탭이 되며 자리에서 빠졌다.)
  *
  * 견적·문서와 CS 콘솔을 상시에 남긴 이유 — 견적은 하드웨어 재고와 한 흐름(견적 산출물 →
  * 재고 검증)이라 떼면 둘 다 나빠지고, CS 콘솔은 가이드 문서·내부 CS 를 품은 **유일한 CS

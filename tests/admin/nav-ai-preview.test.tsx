@@ -117,11 +117,12 @@ describe("isAdminAiPreviewEnabled — 글자 그대로 \"1\" 만 켠다", () => 
 })
 
 describe("꺼짐(기본) — 시안이 운영 화면 어디에도 드러나지 않는다", () => {
-  it("ADMIN_NAV·상시 목록에 AI 올인원이 없다 — 17개, 상시 8", async () => {
+  it("ADMIN_NAV·상시 목록에 AI 올인원이 없다 — 16개, 상시 8", async () => {
     const { nav, access } = await loadWithFlag("")
     const hrefs = nav.ADMIN_NAV.map((item) => item.href)
     expect(hrefs).not.toContain("/admin/ai")
-    expect(nav.ADMIN_NAV).toHaveLength(17)
+    // 2026-10 마케팅 프로젝트가 캠페인 관리의 탭이 되며 17 → 16.
+    expect(nav.ADMIN_NAV).toHaveLength(16)
     expect(access.DEFAULT_PRIMARY_HREFS).not.toContain("/admin/ai")
     expect(access.DEFAULT_PRIMARY_HREFS).toHaveLength(8)
   })
@@ -140,7 +141,7 @@ describe("꺼짐(기본) — 시안이 운영 화면 어디에도 드러나지 �
       "/admin/chatbot",
     ])
     const accessible = access.getAccessibleAdminNavItems(resolved).map((item) => item.href)
-    expect(accessible).toHaveLength(17)
+    expect(accessible).toHaveLength(16)
     expect(accessible).not.toContain("/admin/ai")
     const rows = access.buildNavPreferenceRows({ role: "SUPER_ADMIN", overrides: {} })
     expect(rows.map((row) => row.item.href)).not.toContain("/admin/ai")
@@ -170,9 +171,9 @@ describe("꺼짐(기본) — 시안이 운영 화면 어디에도 드러나지 �
 })
 
 describe("켜짐(NEXT_PUBLIC_ADMIN_AI_PREVIEW=1) — 시안 미리보기", () => {
-  it("AI 올인원이 Overview 바로 아래 home 범주로 들어온다 — 18개, 범주 연속 블록 유지", async () => {
+  it("AI 올인원이 Overview 바로 아래 home 범주로 들어온다 — 17개, 범주 연속 블록 유지", async () => {
     const { nav } = await loadWithFlag("1")
-    expect(nav.ADMIN_NAV).toHaveLength(18)
+    expect(nav.ADMIN_NAV).toHaveLength(17)
     expect(nav.ADMIN_NAV.slice(0, 2).map((item) => item.href)).toEqual(["/admin/overview", "/admin/ai"])
     const ai = nav.ADMIN_NAV[1]
     expect(ai?.category).toBe("home")
@@ -186,7 +187,7 @@ describe("켜짐(NEXT_PUBLIC_ADMIN_AI_PREVIEW=1) — 시안 미리보기", () =>
     expect(blocks).toEqual(["home", "customer", "growth", "system"])
   })
 
-  it("상시 9 / 기타 7 / 숨김 2 — 상시 첫 묶음(home)이 Overview·AI 올인원이다", async () => {
+  it("상시 9 / 기타 7 / 숨김 1 — 상시 첫 묶음(home)이 Overview·AI 올인원이다", async () => {
     const { access } = await loadWithFlag("1")
     expect(access.DEFAULT_PRIMARY_HREFS).toHaveLength(9)
     expect(access.DEFAULT_PRIMARY_HREFS[1]).toBe("/admin/ai")
@@ -197,7 +198,7 @@ describe("켜짐(NEXT_PUBLIC_ADMIN_AI_PREVIEW=1) — 시안 미리보기", () =>
       "/admin/ai",
     ])
     expect(resolved.folded.flatMap((group) => group.items)).toHaveLength(7)
-    expect(resolved.hidden).toHaveLength(2)
+    expect(resolved.hidden).toHaveLength(1)
     expect(access.getAccessibleAdminNavItems(resolved).map((item) => item.href)).toContain("/admin/ai")
   })
 

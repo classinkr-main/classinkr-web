@@ -1,6 +1,6 @@
 // components/admin/campaigns/projects/ProjectCard.tsx
 // 마케팅 프로젝트(D3-3) 리스트의 순수 프레젠테이션 조각 — 상태·데이터 fetch 없음.
-// ProjectsClient(리스트)·ProjectDetailPanel(상세)·렌더 테스트가 함께 import 한다(SSOT, 로컬 재구현 금지).
+// ProjectsPane(캠페인 관리 › 프로젝트 탭)·ProjectDetailPanel(상세)·렌더 테스트가 함께 import 한다(SSOT, 로컬 재구현 금지).
 // DESIGN.md §2 팔레트만 사용(AI 파스텔 금지).
 //
 // 보기 두 가지(갤러리형 1b 시안, 2026-10):

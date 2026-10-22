@@ -9,7 +9,6 @@ import {
   CalendarDays,
   Code2,
   FileText,
-  FolderKanban,
   Layers,
   LayoutDashboard,
   Magnet,
@@ -112,8 +111,8 @@ const ADMIN_AI_NAV_ITEM: AdminNavItem = { href: ADMIN_AI_HREF, label: "AI 올인
 // 선언 순서로 그룹을 내보내므로 Overview의 그룹이 항상 첫 그룹으로 렌더된다.
 // (2026-09-10 전면 공개) 항목별 roles 필드를 제거했다 — 모든 매니저가 같은 목록을 본다.
 // 배치만 남는다: 앞의 두 범주(홈 + 고객·매출) 8개가 상시, 뒤의 두 범주(마케팅·분석 + 시스템)
-// 9개가 "기타" 후보다 — 그중 마케팅 프로젝트·운영 상태 2개는 기본 숨김(2026-09-25, 기타 7 + 숨김 2,
-// 숨겨도 ⌘K·주소로 열림). 경계는 admin-nav-access.ts의 DEFAULT_PRIMARY_HREFS·DEFAULT_HIDDEN_HREFS가 정본이며,
+// 8개가 "기타" 후보다 — 그중 운영 상태 1개는 기본 숨김(2026-09-25 숨김 2 → 2026-10 마케팅 프로젝트가
+// 캠페인 관리 탭으로 들어가며 숨김 1, 기타 7 + 숨김 1, 숨겨도 ⌘K·주소로 열림). 경계는 admin-nav-access.ts의 DEFAULT_PRIMARY_HREFS·DEFAULT_HIDDEN_HREFS가 정본이며,
 // **이 배열의 선언 순서를 바꾸면 그 경계도 함께 흔들린다** — 범주 연속 블록을 깨지 말 것.
 export const ADMIN_NAV: AdminNavItem[] = [
   { href: "/admin/overview", label: "Overview", icon: LayoutDashboard, section: "home", category: "home", keywords: "홈 대시보드 overview home" },
@@ -150,9 +149,9 @@ export const ADMIN_NAV: AdminNavItem[] = [
   // (2026-09-14) 라벨 "캠페인" → "마케팅": 허브가 한눈에·상세·데이터 3층의 마케팅 홈이 됐다. 라우트는 그대로(N3 보류).
   { href: "/admin/campaigns", label: "마케팅", icon: Megaphone, section: "marketing", category: "growth", keywords: "마케팅 marketing 한눈에 대시보드 dashboard 캠페인 이메일 campaign email 메시지 발송 문자 sms 카카오 kakao 알림톡 솔라피 solapi 광고비 리드 cpl 퍼널" },
   // 크로스채널 캠페인 관리 — 이메일·문자·행사·Meta 실행을 하나의 캠페인 개체로 묶고 롤업(D1).
-  { href: "/admin/campaigns/manage", label: "캠페인 관리", icon: Layers, section: "marketing", category: "growth", keywords: "캠페인 관리 크로스채널 통합 롤업 연결 campaign manage cross-channel rollup" },
-  // 마케팅 프로젝트 — 여러 캠페인을 묶는 상위 개체. 멤버 캠페인 롤업 + 예산 소진(D3).
-  { href: "/admin/campaigns/projects", label: "마케팅 프로젝트", icon: FolderKanban, section: "marketing", category: "growth", keywords: "마케팅 프로젝트 캠페인 묶음 롤업 예산 소진 project rollup budget" },
+  // (2026-10) 마케팅 프로젝트(D3, 캠페인을 묶는 상위 개체)가 이 화면의 "프로젝트" 탭으로 들어왔다 —
+  // 예전 /admin/campaigns/projects 항목은 내렸고 그 주소는 ?view=projects 로 넘긴다(⌘K 는 허브 자식 명령).
+  { href: "/admin/campaigns/manage", label: "캠페인 관리", icon: Layers, section: "marketing", category: "growth", keywords: "캠페인 관리 크로스채널 통합 롤업 연결 마케팅 프로젝트 묶음 예산 소진 campaign manage cross-channel rollup project budget" },
   { href: "/admin/blog", label: "콘텐츠", icon: FileText, section: "marketing", category: "growth", keywords: "블로그 콘텐츠 blog content" },
   { href: "/admin/lead-magnets", label: "자료 퍼널", icon: Magnet, section: "marketing", category: "growth", keywords: "자료 퍼널 리드마그넷 material funnel download lead magnet" },
   // (2026-07-29 탭 재구성) 공개 행사(/admin/events)는 캘린더 항목으로 흡수됐다 —

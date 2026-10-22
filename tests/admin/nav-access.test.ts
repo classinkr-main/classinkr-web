@@ -34,7 +34,6 @@ describe("admin nav — 기타 범주 메타", () => {
       "/admin/lead-magnets": "growth",
       "/admin/analytics": "growth",
       "/admin/campaigns/manage": "growth",
-      "/admin/campaigns/projects": "growth",
       "/admin/overview": "home",
       // AI 올인원(2026-09-29, home 범주)은 시안 스위치가 켜졌을 때만 ADMIN_NAV 에 있다 — 기본(꺼짐) 기준인
       // 이 표에서는 빼고, 켜짐 쪽 범주·자리는 tests/admin/nav-ai-preview.test.tsx 가 본다(기획 D13).
@@ -133,11 +132,12 @@ describe("resolveNavPlacement — 전원 공통 배치", () => {
     expect(DEFAULT_PRIMARY_HREFS).toHaveLength(8)
   })
 
-  it("나머지 9개의 자리는 전부 기타다 — 그중 2개는 기본 숨김이라 처음엔 목록에 없다", () => {
+  it("나머지 8개의 자리는 전부 기타다 — 그중 1개는 기본 숨김이라 처음엔 목록에 없다", () => {
+    // 2026-10 마케팅 프로젝트가 캠페인 관리의 탭이 되며 9 → 8, 기본 숨김 2 → 1.
     const rest = ADMIN_NAV.map((item) => item.href).filter(
       (href) => !DEFAULT_PRIMARY_HREFS.includes(href)
     )
-    expect(rest).toHaveLength(9)
+    expect(rest).toHaveLength(8)
     // resolveNavPlacement 는 "보일 때 앉는 자리"다 — 기본 숨김 항목도 다시 표시하면 기타로 간다.
     for (const href of rest) {
       expect(resolveNavPlacement(href, ctx()), href).toBe("folded")
@@ -198,17 +198,15 @@ describe("normalizeNavOverrides — 레거시 deny 처리", () => {
 })
 
 describe("resolveNavAccess", () => {
-  it("상시 8 / 기타 7 / 숨김 2(기본 숨김) 로 나눈다", () => {
+  it("상시 8 / 기타 7 / 숨김 1(기본 숨김) 로 나눈다", () => {
     // 2026-09-25 전까지는 "기타 9"였다 — 마케팅 프로젝트·운영 상태가 기본 숨김으로 빠졌다.
+    // 2026-10 마케팅 프로젝트는 캠페인 관리의 "프로젝트" 탭이 되며 항목 자체가 빠졌다(숨김 2 → 1).
     // 2026-09-29 AI 올인원이 상시에 더해졌지만 시안 스위치가 꺼져 있으면(기본, 기획 D13) 빠진다 —
-    // 상시 8, 세 칸을 합치면 17 전부다. 켜짐(상시 9·18)은 tests/admin/nav-ai-preview.test.tsx.
+    // 상시 8, 세 칸을 합치면 16 전부다. 켜짐(상시 9·17)은 tests/admin/nav-ai-preview.test.tsx.
     const { primary, folded, hidden } = resolveNavAccess(ctx())
     expect(primary).toHaveLength(8)
     expect(folded.flatMap((group) => group.items)).toHaveLength(7)
-    expect(hidden.map((item) => item.href)).toEqual([
-      "/admin/campaigns/projects",
-      "/admin/ops",
-    ])
+    expect(hidden.map((item) => item.href)).toEqual(["/admin/ops"])
     expect(primary.length + 7 + hidden.length).toBe(ADMIN_NAV.length)
   })
 
@@ -240,7 +238,7 @@ describe("resolveAdminNavAccess", () => {
     getAccessibleAdminNavItems(resolveAdminNavAccess(ctx(over))).map((item) => item.href)
 
   // 전면 공개의 핵심 계약 — 어떤 역할도 항목을 잃지 않는다.
-  it("모든 역할이 17개 탭 전부에 도달한다", () => {
+  it("모든 역할이 16개 탭 전부에 도달한다", () => {
     for (const role of EVERY_ROLE) {
       expect(hrefs({ role }), role).toHaveLength(ADMIN_NAV.length)
       expect(hrefs({ role }), role).toContain("/admin/settings")
@@ -303,10 +301,14 @@ describe("normalizeNavOverrides — hidden", () => {
   })
 
   it("기본 숨김 항목이라도 사람이 고른 folded/primary 는 그대로 이긴다(deny 만 버린다)", () => {
-    expect(normalizeNavOverrides({ "/admin/ops": "folded", "/admin/campaigns/projects": "primary" })).toEqual({
-      "/admin/ops": "folded",
-      "/admin/campaigns/projects": "primary",
-    })
+    expect(normalizeNavOverrides({ "/admin/ops": "folded" })).toEqual({ "/admin/ops": "folded" })
+    expect(normalizeNavOverrides({ "/admin/ops": "primary" })).toEqual({ "/admin/ops": "primary" })
+  })
+
+  it("사이드바에서 빠진 마케팅 프로젝트 항목의 옛 오버라이드는 조용히 버린다(2026-10 캠페인 관리 탭 통합)", () => {
+    expect(
+      normalizeNavOverrides({ "/admin/campaigns/projects": "primary", "/admin/ops": "folded" })
+    ).toEqual({ "/admin/ops": "folded" })
   })
 })
 
@@ -326,7 +328,7 @@ describe("개인 숨김 — 목록과 도달성", () => {
   })
 
   // 불변식의 핵심 — ⌘K·active 판정·모바일 헤더가 이 집합에 기댄다.
-  it("숨길 수 있는 걸 전부 숨겨도 accessible 은 17 전부다", () => {
+  it("숨길 수 있는 걸 전부 숨겨도 accessible 은 16 전부다", () => {
     for (const role of EVERY_ROLE) {
       const access = resolveAdminNavAccess(ctx({ role, overrides: HIDE_EVERYTHING }))
       expect(getAccessibleAdminNavItems(access), role).toHaveLength(ADMIN_NAV.length)
@@ -342,7 +344,7 @@ describe("개인 숨김 — 목록과 도달성", () => {
   it("숨김 판정도 역할·레거시 프리셋과 무관하다", () => {
     const overrides: Record<string, NavOverrideValue> = { "/admin/hardware": "hidden", "/admin/ops": "folded" }
     const expected = resolveAdminNavAccess(ctx({ overrides })).hidden.map((item) => item.href)
-    expect(expected).toEqual(["/admin/hardware", "/admin/campaigns/projects"])
+    expect(expected).toEqual(["/admin/hardware"])
     for (const role of EVERY_ROLE) {
       for (const preset of EVERY_LEGACY_PRESET) {
         expect(
@@ -369,7 +371,7 @@ describe("기본 숨김 목록", () => {
       expect(UNHIDEABLE_NAV_HREFS, href).not.toContain(href)
       expect(resolveDefaultNavPreference(href), href).toBe("hidden")
     }
-    expect([...DEFAULT_HIDDEN_HREFS].sort()).toEqual(["/admin/campaigns/projects", "/admin/ops"])
+    expect([...DEFAULT_HIDDEN_HREFS].sort()).toEqual(["/admin/ops"])
   })
 
   it("사람이 다시 표시하면 그 사람 오버라이드(folded)가 기본 숨김을 이긴다", () => {

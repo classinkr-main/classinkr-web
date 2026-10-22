@@ -64,6 +64,10 @@ interface ProjectDetailPanelProps {
   today: string // 페이싱 기준일(KST YYYY-MM-DD) — 리스트와 같은 날로 판정한다.
   onClose: () => void // 부모에서 memoized(안정) — load 의 deps 로 안전하게 쓰인다.
   onListChanged: () => void | Promise<void> // 부모 리스트 리페치(멤버 수·롤업·필드 변경 반영).
+  // 캠페인 관리 통합 화면(2026-10)에서만 넘어온다 — 멤버 캠페인 이름 → 캠페인 상세로 바로 넘어가기.
+  onOpenCampaign?: (campaign: CampaignWithLinks) => void
+  // 이 프로젝트로 좁힌 캠페인 탭으로 넘어가기(통합 화면의 프로젝트 필터).
+  onShowCampaigns?: () => void
 }
 
 /* ── 예산 페이싱 카드(순수·프레젠테이션) ──────────────────────── */
@@ -193,25 +197,36 @@ function MemberCampaignRow({
   campaign,
   removing,
   onRemove,
+  onOpen,
 }: {
   campaign: CampaignWithLinks
   removing: boolean
   onRemove: () => void
+  onOpen?: () => void
 }) {
   const rail = CAMPAIGN_STATUS_RAIL[campaign.status]
+  const nameClass = `truncate text-[12px] font-semibold ${
+    campaign.status === "done" ? "text-[#615D59]" : "text-[#111110]"
+  }`
   return (
     <div className="relative flex items-start justify-between gap-2 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#fafaf8] py-2 pl-3 pr-2.5">
       {/* 상태 레일 — 진행/일시중지만(캠페인 관리 행과 같은 위계). */}
       {rail && <span aria-hidden className={`absolute inset-y-2 left-0 w-[3px] rounded-r-full ${rail}`} />}
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
-          <span
-            className={`truncate text-[12px] font-semibold ${
-              campaign.status === "done" ? "text-[#615D59]" : "text-[#111110]"
-            }`}
-          >
-            {campaign.name}
-          </span>
+          {/* 이름이 곧 캠페인 상세로 가는 길(통합 화면) — 행 전체가 아니라 이름만 눌린다("제외"와 겹치지 않게). */}
+          {onOpen ? (
+            <button
+              type="button"
+              onClick={onOpen}
+              title="캠페인 상세 열기"
+              className={`${nameClass} min-w-0 text-left underline-offset-2 hover:text-[#084734] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]`}
+            >
+              {campaign.name}
+            </button>
+          ) : (
+            <span className={nameClass}>{campaign.name}</span>
+          )}
           <ProjectStatusChip status={campaign.status} />
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-1">
@@ -400,6 +415,8 @@ export default function ProjectDetailPanel({
   today,
   onClose,
   onListChanged,
+  onOpenCampaign,
+  onShowCampaigns,
 }: ProjectDetailPanelProps) {
   const toast = useToast()
   const [data, setData] = useState<DetailResponse | null>(null)
@@ -630,15 +647,26 @@ export default function ProjectDetailPanel({
                       멤버 캠페인
                       <span className="tabular-nums text-[#615D59]">{memberCount}</span>
                     </h3>
-                    <button
-                      type="button"
-                      onClick={() => setPickerOpen((v) => !v)}
-                      aria-expanded={pickerOpen}
-                      className="inline-flex items-center gap-1.5 rounded-md bg-[#084734] px-2.5 py-1.5 text-[12px] font-bold text-white transition hover:bg-[#065c41]"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      캠페인 추가
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {onShowCampaigns && memberCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={onShowCampaigns}
+                          className="text-[12px] font-medium text-[#615D59] underline-offset-2 transition-colors hover:text-[#084734] hover:underline"
+                        >
+                          캠페인 탭에서 보기 →
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setPickerOpen((v) => !v)}
+                        aria-expanded={pickerOpen}
+                        className="inline-flex items-center gap-1.5 rounded-md bg-[#084734] px-2.5 py-1.5 text-[12px] font-bold text-white transition hover:bg-[#065c41]"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        캠페인 추가
+                      </button>
+                    </div>
                   </div>
 
                   {pickerOpen && (
@@ -671,6 +699,7 @@ export default function ProjectDetailPanel({
                                 campaign={c}
                                 removing={removingId === c.id}
                                 onRemove={() => void handleRemove(c.id)}
+                                onOpen={onOpenCampaign ? () => onOpenCampaign(c) : undefined}
                               />
                             ))}
                           </div>
