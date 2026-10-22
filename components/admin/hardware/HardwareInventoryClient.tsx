@@ -622,7 +622,8 @@ export default function HardwareInventoryClient({
   const [voidReason, setVoidReason] = useState("")
   const [editingId, setEditingId] = useState<string | null>(null)
   const [confirmQtys, setConfirmQtys] = useState<Record<string, string>>({})
-  const [entrySub, setEntrySub] = useState<"inbound" | "outbound">("inbound")
+  // 입출고 탭 기본 보기는 출고 — 홈 빠른 기록(preset "sale")과 같은 기본값.
+  const [entrySub, setEntrySub] = useState<"inbound" | "outbound">("outbound")
   const [outPeriod, setOutPeriod] = useState<PeriodGranularity>("month")
   const [openPeriods, setOpenPeriods] = useState<Record<string, boolean>>({})
   const [inboundSearch, setInboundSearch] = useState("")
