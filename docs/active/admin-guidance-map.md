@@ -80,6 +80,7 @@ SUPER_ADMIN은 설정 › 회원으로 편집한다. 레거시 `deny` 값은 `fo
 | 갈매봇·원격 오더 | 어드민 전역 AI 위젯, `/admin/ai`, 오더 카드·오더 등급 | [갈매봇 위젯·원격 오더 기획](admin-ai-widget-remote-order-plan-2026-09-28.md). 셸 연결은 Admin 코어, 대화는 챗봇/CS, 오더 핸들러는 해당 도메인 |
 | 플랫폼·데이터 | Supabase, migration, cron, 알림, Portal V2 | [플랫폼 플레이북](playbook/06-platform-data.md), [운영 장애·Cron·Webhook 지침](operational-failure-handling-guidelines.md), [ADR-010](../adr/ADR-010-operational-failure-containment.md), [DB 마이그레이션 런북](db-migration-runbook.md), [Supabase 운영 복구·하드닝 계획](supabase-operational-recovery-hardening-plan-2026-09-01.md) |
 | KR Team·매출 장부 | `/admin/branch`, `/admin/branch/ledger`, 동기화·정합성 | [Classin KR Team 스킬](../../.codex/skills/classin-kr-team/SKILL.md), [월별 목표·채움 차트](revenue-monthly-goal-chart.md) |
+| 하드웨어 재고·입출고 | `/admin/hardware`, 시트 가져오기, 오더·매출 연결 | [하드웨어 SCM 탭 기준](hardware-scm-tab-reference.md), [하드웨어·오더·매출 연결 로직](hardware-order-revenue-link-plan-2026-10-22.md) |
 
 Admin 코어는 `app/api/admin/*`, `components/admin/*`, `lib/repositories/*` 전체를 소유하지 않는다.
 공용 인증·응답·저장소 규약은 Admin 코어가 관리하고, 도메인 로직과 도메인 테스트는 해당 작업면이
