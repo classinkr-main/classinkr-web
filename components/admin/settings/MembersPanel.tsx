@@ -38,8 +38,9 @@ type CapabilitySaveState =
 const CAPABILITY_OPTIONS = [
   {
     key: "hardware.finalize",
-    label: "하드웨어 최종 확정 · 이왕찬 담당",
-    description: "모든 팀원은 일반 편집이 가능하며, 이 권한은 계획 출고 확정과 입출고 원본 취소만 제한합니다.",
+    label: "하드웨어 승인·최종 확정 · 이왕찬 담당",
+    description:
+      "모든 팀원은 일반 편집이 가능하며, 이 권한은 하드웨어 오더 승인·반려, 계획 출고 확정, 입출고 원본 취소만 제한합니다. 지사장(슈퍼 어드민)은 이 권한 없이도 할 수 있습니다.",
   },
 ] as const
 

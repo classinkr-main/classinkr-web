@@ -12,6 +12,10 @@ import {
   getResolvableQuoteVersion,
   updateQuoteDocument,
 } from "@/lib/portal/repositories/quote-documents";
+import {
+  ensureSalesOrderForAcceptedQuoteSafely,
+  notifyHardwareOrderApprovalRequested,
+} from "@/lib/repositories/sales-orders";
 import type { UpdateQuoteDocument } from "@/lib/supabase/database.types.v2";
 
 function hasOwn(input: Record<string, unknown>, key: string) {
@@ -109,7 +113,19 @@ export async function PUT(
     }
 
     const doc = await updateQuoteDocument(id, patch);
-    return NextResponse.json({ quote: doc });
+
+    // 담당자가 고객 확답을 받고 "승인됨"으로 바꾼 견적도 오더가 된다(2026-10-22 연결 로직 §4-3).
+    // 하드웨어가 들어 있으면 승인 대기로 올라가 이왕찬·지사장에게 알리고, 오더 생성 실패가 상태 변경을 막지 않는다.
+    const result =
+      patch.status === "accepted" && existing.status !== "accepted"
+        ? await ensureSalesOrderForAcceptedQuoteSafely({
+            quoteDocumentId: id,
+            acceptedVia: "staff",
+            actor: ctx.type === "admin" ? ctx.name ?? ctx.userId ?? null : ctx.userId,
+          })
+        : null;
+    if (result?.created) notifyHardwareOrderApprovalRequested(result.order);
+    return NextResponse.json(result ? { quote: doc, order: result.order } : { quote: doc });
   } catch (err) {
     console.error("[portal/quotes/[id]] PUT error:", err);
     return NextResponse.json({ error: "견적서 수정 실패" }, { status: 500 });

@@ -184,6 +184,10 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // 미적용이어도 허브만 '미적용' 안내로 강등하고(쓰기 503) 매일 자동 태그 크론이 skipped 로 넘어간다.
   "supabase/migrations/20260925_crm_saved_segments.sql",
   "supabase/migrations/20261021_quote_team_templates.sql",
+  // 하드웨어·오더·매출 연결(2026-10-22). 같은 날의 20261022_hw_rev_matches_exclude_planned.sql(뷰 정의 교체)과
+  // 20261022_crm_lead_auto_confirm.sql(정책 값 1줄 UPDATE)은 REST 프로브로 확인할 대상이 없어 계약에 넣지 않는다 —
+  // 적용 확인은 docs/active/db-migration-runbook.md 의 2026-10-22 절 확인 쿼리로 한다.
+  "supabase/migrations/20261022_sales_orders.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -888,6 +892,20 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     migration: "supabase/migrations/20261021_quote_team_templates.sql",
     severity: "warning",
     impact: "기본 견적은 유지되지만 팀 템플릿 저장·수정·보관은 503으로 차단된다.",
+  },
+  {
+    kind: "table",
+    table: "sales_orders",
+    label: "오더(견적 승인 → 하드웨어 승인 → 오더번호·배송 예정)",
+    columns: [
+      "id", "order_no", "status", "needs_hardware_approval", "quote_document_id", "quote_version_id", "quote_number",
+      "deal_id", "customer_id", "customer_name", "lines", "total_amount", "currency", "accepted_via",
+      "requested_by", "requested_at", "decided_by", "decided_at", "decision_reason", "planned_movement_ids",
+    ],
+    migration: "supabase/migrations/20261022_sales_orders.sql",
+    severity: "warning",
+    impact:
+      "견적 승인은 그대로 되지만 오더가 만들어지지 않아 하드웨어 승인 대기·오더번호·배송 예정 자동 생성이 멈춘다(하드웨어 탭은 '미적용' 안내).",
   },
 ]
 

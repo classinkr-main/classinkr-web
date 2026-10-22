@@ -126,6 +126,17 @@
   - 품목 이름은 완전 일치를 우선하고 부분일치는 네 글자 이상일 때만 본다 — `T1`이 `DT1` 출고에 걸려 등록을 막던 오탐을 없앤다. 다시 조회하면 경고 이력도 함께 비운다(두 번 누르기 보호가 목록보다 오래 살지 않는다).
 - 읽기 권한 계정(VIEWER)은 목록은 보지만 등록 버튼이 비활성이다(`viewer.canWrite`, 강제는 서버 게이트).
 - 같은 CRM 오더를 두 번 등록하는 것은 서버가 막는다(`ensureNoDuplicateCrmMovement`).
+- 오더(`sales_orders`)가 잡은 견적의 줄은 목록에 오르지 않는다 — 하드웨어 승인 대기(§2-9)가 맡는다. 여기서 따로 등록하면 이왕찬·지사장 승인을 건너뛰기 때문이다. 오더 조회가 실패하면 포털 견적 줄을 숨기고 경고를 띄운다.
+
+### 2-9. 하드웨어 승인 대기 (`OrderApprovalSection`)
+
+홈 CRM 오더 대사 **바로 위**. 견적이 승인된(고객 공유 링크 "진행" 또는 담당자 "승인됨") 하드웨어 오더를 이왕찬·지사장이 승인한다([연결 로직](./hardware-order-revenue-link-plan-2026-10-22.md) §4-3).
+
+- 기본 펼침, 화면을 열 때 승인 대기 목록을 한 번 조회한다. 상태 칸: 승인 대기 / 승인됨 / 반려·취소.
+- 줄마다 고객·견적번호·승인 경로·합계(KRW)·재고 품목 요약(`86" IFP ×2`)을 보인다. 재고 품목을 못 찾은 견적 줄은 "품목 확인 필요" 배지 — 배송 예정에 들어가지 않으니 승인 뒤 직접 등록한다.
+- `[승인]`: 오더번호 `ORD-YYMM-NNN` 발급 + 견적 줄마다 배송 예정 생성 + 딜 확정 단계 이동. `[반려]`·`[오더 취소]`는 사유 필수. 취소는 아직 배송 예정인 줄만 정리하고, 출고 확정된 줄이 있으면 막는다.
+- 버튼은 `hardware.finalize` 권한자(이왕찬)와 슈퍼 어드민(지사장)에게만 보인다(`viewer.canApprove`, 강제는 서버 게이트). 다른 편집 역할은 목록만 본다.
+- `20261022_sales_orders.sql` 미적용이면 "DB 업데이트 적용 후" 안내 한 줄로 내려간다.
 ---
 
 ## 3. 기능 (Functions)
@@ -243,7 +254,7 @@
 
 ## 4. 데이터 모델 / API (요약)
 
-테이블: `hardware_items` · `hardware_movements` · `hardware_import_runs` · `hardware_sheet_import_snapshots` · `hardware_sample_units` · `hardware_sample_events` · `branch_hw_inbound|outbound|stock`(시트 미러).
+테이블: `hardware_items` · `hardware_movements` · `hardware_import_runs` · `hardware_sheet_import_snapshots` · `hardware_sample_units` · `hardware_sample_events` · `sales_orders`(오더, 2026-10-22) · `branch_hw_inbound|outbound|stock`(시트 미러).
 
 `hardware_movements` 주요 컬럼: `item_id, product_name, movement_type(inbound|outbound|return|transfer|repair|adjust), quantity, occurred_at, from_location, to_location, owner, status, reference_no, memo, serials[], lot_no, unit_price, amount_usd, amount_cny, storage_location, importer, source(admin_manual|sheet_import), import_run_id, raw, voided_*, converted_from/to_movement_id`.
 
@@ -257,6 +268,8 @@ API
 - `PATCH /api/admin/hardware/movements/[id]` — `{action: confirm-planned | void | update}`(confirm은 `confirmQty` 옵션)
 - `POST /api/admin/hardware/import-sheet` — 싱크·백업 후 이관
 - `GET|POST /api/admin/hardware/samples` — 유닛 목록·타임라인 / 등록(`action:"register"`)·이벤트(`action:"event"`, adjust는 `nextStatus`)
+- `GET /api/admin/hardware/orders?status=pending|approved|closed|all` — 오더 목록 + `viewer.canApprove`(§2-9). 테이블 미적용이면 503 `available:false`
+- `POST /api/admin/hardware/orders/[id]` — `{action: approve | reject | cancel, reason?}`. `hardware.finalize` 필수, 감사 로그 `hardware.order.*`
 - `GET /api/admin/hardware/crm-orders` — 출고 시 CRM 후보(`productName`·`quantity`·`customer`). `scope=backlog`는 원장에 없는 CRM 오더 목록과 겹침 의심을 돌려준다(§2-8). 고객사가 맞는 후보는 신뢰도를 올려 맨 위로 온다(2026-09-20). 다른 고객사의 후보를 지우지는 않는다 — CRM 표기가 다른 오프라인 건을 숨기면 찾을 길이 없다. 자동 링크·무음 저장은 없다.
 
 ---
@@ -296,6 +309,7 @@ API
 | `20260701_hardware_restore_snapshot_guard.sql` | 빈 스냅샷으로 복원하면 거부하는 가드. 같은 파일 Item 2는 `crm_neo_customer_snapshots` 권한 정리 | 빈 스냅샷 1건(2026-06-27)이 있다. 복원 목록 기본 10개 밖이라 화면에서는 안 보인다. `crm_neo_customer_snapshots`는 anon·authenticated에 전 권한이 남아 있지만 RLS(`is_active_admin()`)로 막혀 있다 |
 | `20260915_hardware_sample_showroom_status.sql` | 샘플 유닛 status에 `showroom`, 이벤트에 `showcase`·`store`를 더한다(값 집합만 넓힘, 데이터 변경 없음) | "전시로"·"사무실 보관으로"(수리→보관 포함)·"상태 정정 → 전시"가 "전시 상태는 DB 업데이트 적용 후 사용할 수 있습니다."로 막힌다. 롤백 절차는 파일 머리 주석에 있다 |
 | `20261022_hw_rev_matches_exclude_planned.sql` | 출고↔REV 대사 뷰 `v_hardware_rev_matches`가 배송 예정·예약·대기 상태를 실출고에서 뺀다(열 구성 같음, `CREATE OR REPLACE`) | 날짜가 있는 배송 예정이 실출고로 잡혀, 예정만 있는 고객·월이 대사에 "출고 있음"으로 나온다 |
+| `20261022_sales_orders.sql` | 오더 테이블 `sales_orders`와 원장 `raw->>'order_no'` 인덱스(§2-9) | 견적 승인은 되지만 오더가 안 생겨 하드웨어 승인 대기·오더번호·배송 예정 자동 생성이 멈춘다. `check:db` 프로브가 경고로 알린다 |
 
 - 대사 뷰 수리 적용 확인(읽기 전용). 결과에 `예정`이 보이면 적용된 것이다.
 
