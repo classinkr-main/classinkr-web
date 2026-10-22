@@ -7,13 +7,18 @@
  *   node --env-file=.env.local scripts/import-naver-blog-posts.mjs --dry
  *   node --env-file=.env.local scripts/import-naver-blog-posts.mjs
  *   node --env-file=.env.local scripts/import-naver-blog-posts.mjs --update
+ *   node --env-file=.env.local scripts/import-naver-blog-posts.mjs --local --since=2026-07-01
  *
  * Imports as DRAFT so the public blog can review and publish later.
+ *
+ * --local: DB에 쓰지 않는다. 새 글의 이미지를 내려받고 원문 마크다운을
+ *   data/_naver-pull/<slug>.md 에, 넣을 행을 data/_naver-pull/pending-inserts.json 에 남긴다.
+ *   data/_naver-dev/<slug>.md 로 다듬은 뒤 apply-naver-dev.mjs --write 가 DRAFT 로 넣는다.
  */
 
 import { createClient } from "@supabase/supabase-js";
 import { JSDOM } from "jsdom";
-import { existsSync, mkdirSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, extname, join } from "path";
 import { fileURLToPath } from "url";
 
@@ -26,6 +31,9 @@ const imagePublicPrefix = "/images/blog/naver";
 const args = new Set(process.argv.slice(2));
 const DRY_RUN = args.has("--dry");
 const UPDATE_EXISTING = args.has("--update");
+const LOCAL_ONLY = args.has("--local");
+const pullDirAbs = join(projectRoot, "data", "_naver-pull");
+const pendingInsertsPath = join(pullDirAbs, "pending-inserts.json");
 const sinceArg = process.argv.find((arg) => arg.startsWith("--since="));
 const SINCE_DATE = sinceArg ? sinceArg.slice("--since=".length) : "2025-12-05";
 
@@ -637,7 +645,7 @@ async function fetchTargetPosts() {
 }
 
 async function run() {
-  console.log(`[mode] ${DRY_RUN ? "DRY-RUN" : "WRITE"}${UPDATE_EXISTING ? " UPDATE" : ""} since=${SINCE_DATE}`);
+  console.log(`[mode] ${DRY_RUN ? "DRY-RUN" : LOCAL_ONLY ? "LOCAL" : "WRITE"}${UPDATE_EXISTING ? " UPDATE" : ""} since=${SINCE_DATE}`);
   const posts = await fetchTargetPosts();
   console.log(`[fetch] target posts=${posts.length}`);
 
@@ -650,6 +658,7 @@ async function run() {
 
   const inserts = [];
   const updates = [];
+  const localRecords = [];
   let skipped = 0;
   let totalImages = 0;
 
@@ -668,6 +677,18 @@ async function run() {
     const record = createRecord(post, parsed);
     console.log(`   markdown=${record.content_markdown.length} chars images=${parsed.imageCount} read=${record.read_time}`);
 
+    if (LOCAL_ONLY) {
+      if (existsId) {
+        console.log("   ! --local 은 새 글만 다룬다. 기존 글은 건너뜀");
+        continue;
+      }
+      // 로컬 원고는 템플릿 요약 틀 없이 원문만 남긴다(다듬은 본문은 data/_naver-dev 에서 쓴다).
+      const rawMarkdown = [parsed.markdown, "", "---", "", `원문: [네이버 블로그](${parsed.sourceUrl})`].join("\n");
+      localRecords.push({ record: { ...record, content_markdown: rawMarkdown }, rawMarkdown });
+      inserts.push(record);
+      continue;
+    }
+
     if (existsId) {
       updates.push({ id: existsId, record });
     } else {
@@ -678,6 +699,20 @@ async function run() {
   console.log(`\n[summary] insert=${inserts.length} update=${updates.length} skip=${skipped} images=${totalImages}`);
   if (DRY_RUN) {
     console.log("[dry] DB 변경 없음");
+    return;
+  }
+
+  if (LOCAL_ONLY) {
+    mkdirSync(pullDirAbs, { recursive: true });
+    const pending = existsSync(pendingInsertsPath) ? JSON.parse(readFileSync(pendingInsertsPath, "utf8")) : [];
+    const bySlug = new Map(pending.map((row) => [row.slug, row]));
+    for (const { record, rawMarkdown } of localRecords) {
+      writeFileSync(join(pullDirAbs, `${record.slug}.md`), `${rawMarkdown}\n`);
+      bySlug.set(record.slug, record);
+      console.log(`  > data/_naver-pull/${record.slug}.md`);
+    }
+    writeFileSync(pendingInsertsPath, `${JSON.stringify([...bySlug.values()], null, 2)}\n`);
+    console.log(`[local] pending-inserts=${bySlug.size} (DB 변경 없음)`);
     return;
   }
 
