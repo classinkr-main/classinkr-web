@@ -20,6 +20,8 @@ let sheetSourceRows: Row[] = []
 let rpcCalls: string[] = []
 // 시트가 이번에 실어 온 출고 — 같은 품목·고객사가 다시 들어와야 어드민 확정을 취소한다.
 let outboundSheetRows: Row[] = []
+// 오더번호 연결(연결 로직 §4-4)은 자체 테스트(tests/orders/sheet-order-sync.test.ts)가 있어 여기선 호출만 본다.
+const linkSheetOutboundToOrders = vi.fn(async (..._args: unknown[]) => ({ appRowsReplaced: 0, dealsAdvanced: 0, error: null as string | null }))
 
 function movementsTable() {
   return {
@@ -105,6 +107,7 @@ async function loadRepository() {
 
   vi.doMock("next/cache", () => ({ revalidateTag: vi.fn(), unstable_cache: (fn: unknown) => fn }))
   vi.doMock("@/lib/supabase/admin", () => ({ createSupabaseAdminClient: vi.fn(() => client) }))
+  vi.doMock("@/lib/orders/sheet-order-sync", () => ({ linkSheetOutboundToOrders }))
   vi.doMock("@/lib/repositories/branch-hw", () => ({
     fetchAllSupabaseRows: vi.fn(async () => []),
     listFreshHwInbound: vi.fn(async () => [
@@ -137,6 +140,7 @@ describe("importHardwareFromBranchSheets — 시트가 이긴다(§8-6)", () => 
   beforeEach(() => {
     updates.length = 0
     rpcCalls = []
+    linkSheetOutboundToOrders.mockClear()
     adminConvertedRows = []
     sheetSourceRows = []
     outboundSheetRows = [
@@ -214,6 +218,20 @@ describe("importHardwareFromBranchSheets — 시트가 이긴다(§8-6)", () => 
     expect(result.sheetWinsVoided).toBe(0)
     expect(result.sheetWinsKept).toBe(1)
     expect(updates).toHaveLength(0)
+  })
+
+  it("교체가 끝난 뒤 오더번호 연결을 돌리고 결과를 돌려준다 — 시트 줄의 오더번호가 그대로 넘어간다", async () => {
+    outboundSheetRows = [{ ...outboundSheetRows[0], raw: { order_no: "ORD-2610-002" } }]
+
+    const { importHardwareFromBranchSheets } = await loadRepository()
+    const result = await importHardwareFromBranchSheets({ actor: "ops@classin.kr" })
+
+    expect(rpcCalls).toContain("replace_hardware_sheet_import")
+    expect(linkSheetOutboundToOrders).toHaveBeenCalledTimes(1)
+    const [rows, options] = linkSheetOutboundToOrders.mock.calls[0] as [Array<{ movement_type: string; raw: unknown }>, unknown]
+    expect(rows.find((row) => row.movement_type === "outbound")?.raw).toMatchObject({ order_no: "ORD-2610-002" })
+    expect(options).toEqual({ actor: "ops@classin.kr" })
+    expect(result.orderLink).toEqual({ appRowsReplaced: 0, dealsAdvanced: 0, error: null })
   })
 
   it("취소할 것이 없으면 아무것도 건드리지 않는다", async () => {

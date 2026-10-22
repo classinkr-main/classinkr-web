@@ -136,6 +136,8 @@
 - 줄마다 고객·견적번호·승인 경로·합계(KRW)·재고 품목 요약(`86" IFP ×2`)을 보인다. 재고 품목을 못 찾은 견적 줄은 "품목 확인 필요" 배지 — 배송 예정에 들어가지 않으니 승인 뒤 직접 등록한다.
 - `[승인]`: 오더번호 `ORD-YYMM-NNN` 발급 + 견적 줄마다 배송 예정 생성 + 딜 확정 단계 이동. `[반려]`·`[오더 취소]`는 사유 필수. 취소는 아직 배송 예정인 줄만 정리하고, 출고 확정된 줄이 있으면 막는다.
 - 버튼은 `hardware.finalize` 권한자(이왕찬)와 슈퍼 어드민(지사장)에게만 보인다(`viewer.canApprove`, 강제는 서버 게이트). 다른 편집 역할은 목록만 본다.
+- 승인됨 칸은 품목별 "출고 1/2 · 예정 1"을 보인다(원장에서 같은 오더번호를 센다 — 시트 줄 포함).
+- **시트 확인** 칸: 첫 오더 요청일 이후 시트에 적힌 고객 출고 줄 중 오더번호 없음·없는 번호·취소된 오더·오더에 없는 품목·수량 초과인 줄. 읽기 전용, 시트에 승인된 오더번호를 적으면 다음 가져오기 뒤 사라진다([연결 로직](./hardware-order-revenue-link-plan-2026-10-22.md) §4-4).
 - `20261022_sales_orders.sql` 미적용이면 "DB 업데이트 적용 후" 안내 한 줄로 내려간다.
 ---
 
@@ -197,7 +199,7 @@
     - 시트 읽기가 실패하면 실패한 가져오기 기록을 남겨 화면에 보이고, 크론 응답은 500이다.
     - 끄기: 환경 변수 `HARDWARE_SHEET_AUTO_IMPORT=0`. 버튼 가져오기는 그대로 쓸 수 있다(항상 실행, 변경 여부와 무관).
     - 따라서 §8-6 "시트가 이긴다" 정리도 버튼을 누를 때가 아니라 시트가 바뀐 다음 회차에 일어난다. 과도기에는 출고 확정을 시트에서 한다.
-  - 출고 탭의 **오더번호** 열(헤더 이름으로 찾음)은 `raw.order_no`로 원장까지 실린다. 기존 A~M열 사이에 끼우면 값이 밀리므로 그때는 동기화를 멈추고 오류를 낸다 — 비고 열 오른쪽(N열 이후)에 둔다([연결 로직](./hardware-order-revenue-link-plan-2026-10-22.md) §4-4).
+  - 출고 탭의 **오더번호** 열(헤더 이름으로 찾음)은 대소문자·공백을 정리해 `raw.order_no`로 원장까지 실린다. 가져오기 직후 같은 오더번호·품목의 앱 예정·앱 확정 출고를 취소하고(시트가 이긴다), 실제 출고가 실린 오더의 딜을 설치 단계로 올린다 — 결과는 실행 기록 `raw.order_link`. 기존 A~M열 사이에 끼우면 값이 밀리므로 그때는 동기화를 멈추고 오류를 낸다 — 비고 열 오른쪽(N열 이후)에 둔다([연결 로직](./hardware-order-revenue-link-plan-2026-10-22.md) §4-4).
   - 가져오기 전 스냅샷은 홈 맨 아래 "스냅샷 복원"에서 되돌릴 수 있다.
   - **가져오기 뒤 정리(§8-6)**: 시트 행에서 전환된 어드민 확정을 사유와 함께 취소한다(교체 모드만). 결과 문구에 건수가 붙는다.
 - **재고 파생**: 원장에서 위치별 잔량·예상 가용(예정 차감)·30일 출고·주문 시점(리드타임 반영)을 계산한다(`computeHardwareStockRow`).
@@ -268,7 +270,8 @@ API
 - `PATCH /api/admin/hardware/movements/[id]` — `{action: confirm-planned | void | update}`(confirm은 `confirmQty` 옵션)
 - `POST /api/admin/hardware/import-sheet` — 싱크·백업 후 이관
 - `GET|POST /api/admin/hardware/samples` — 유닛 목록·타임라인 / 등록(`action:"register"`)·이벤트(`action:"event"`, adjust는 `nextStatus`)
-- `GET /api/admin/hardware/orders?status=pending|approved|closed|all` — 오더 목록 + `viewer.canApprove`(§2-9). 테이블 미적용이면 503 `available:false`
+- `GET /api/admin/hardware/orders?status=pending|approved|closed|all` — 오더 목록 + `viewer.canApprove`(§2-9). 승인됨·전체는 `fulfillment`(품목별 주문·출고·예정)를 붙인다. 테이블 미적용이면 503 `available:false`
+- `GET /api/admin/hardware/orders/sheet-check` — 시트 확인 필요 목록(`since`, `checks[]`)
 - `POST /api/admin/hardware/orders/[id]` — `{action: approve | reject | cancel, reason?}`. `hardware.finalize` 필수, 감사 로그 `hardware.order.*`
 - `GET /api/admin/hardware/crm-orders` — 출고 시 CRM 후보(`productName`·`quantity`·`customer`). `scope=backlog`는 원장에 없는 CRM 오더 목록과 겹침 의심을 돌려준다(§2-8). 고객사가 맞는 후보는 신뢰도를 올려 맨 위로 온다(2026-09-20). 다른 고객사의 후보를 지우지는 않는다 — CRM 표기가 다른 오프라인 건을 숨기면 찾을 길이 없다. 자동 링크·무음 저장은 없다.
 

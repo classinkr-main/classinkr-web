@@ -4,15 +4,23 @@
 import { NextRequest } from "next/server"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-const { requireVerifiedAdminContext, logAdminAudit, listSalesOrders, approveSalesOrder, rejectSalesOrder, cancelApprovedSalesOrder } =
-  vi.hoisted(() => ({
-    requireVerifiedAdminContext: vi.fn(),
-    logAdminAudit: vi.fn(),
-    listSalesOrders: vi.fn(),
-    approveSalesOrder: vi.fn(),
-    rejectSalesOrder: vi.fn(),
-    cancelApprovedSalesOrder: vi.fn(),
-  }))
+const {
+  requireVerifiedAdminContext,
+  logAdminAudit,
+  listSalesOrders,
+  listSheetOrderChecks,
+  approveSalesOrder,
+  rejectSalesOrder,
+  cancelApprovedSalesOrder,
+} = vi.hoisted(() => ({
+  requireVerifiedAdminContext: vi.fn(),
+  logAdminAudit: vi.fn(),
+  listSalesOrders: vi.fn(),
+  listSheetOrderChecks: vi.fn(),
+  approveSalesOrder: vi.fn(),
+  rejectSalesOrder: vi.fn(),
+  cancelApprovedSalesOrder: vi.fn(),
+}))
 
 vi.mock("@/lib/admin-auth", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/admin-auth")>()),
@@ -27,11 +35,12 @@ vi.mock("@/lib/repositories/sales-orders", async () => {
       this.status = status
     }
   }
-  return { SalesOrderError, listSalesOrders, approveSalesOrder, rejectSalesOrder, cancelApprovedSalesOrder }
+  return { SalesOrderError, listSalesOrders, listSheetOrderChecks, approveSalesOrder, rejectSalesOrder, cancelApprovedSalesOrder }
 })
 
 import { GET } from "@/app/api/admin/hardware/orders/route"
 import { POST } from "@/app/api/admin/hardware/orders/[id]/route"
+import { GET as GET_SHEET_CHECK } from "@/app/api/admin/hardware/orders/sheet-check/route"
 import { SalesOrderError } from "@/lib/repositories/sales-orders"
 
 const EDITOR = { source: "supabase", role: "ADMIN", name: "운영 담당", userId: "admin-1", capabilities: [] }
@@ -65,12 +74,16 @@ describe("GET /api/admin/hardware/orders", () => {
     const body = await response.json()
 
     expect(response.status).toBe(200)
-    expect(listSalesOrders).toHaveBeenCalledWith({ statuses: ["pending_approval"], limit: 100 })
+    expect(listSalesOrders).toHaveBeenCalledWith({ statuses: ["pending_approval"], limit: 100, withFulfillment: false })
     expect(body).toEqual({ orders: [{ id: "so_1" }], viewer: { canApprove: false } })
 
     requireVerifiedAdminContext.mockResolvedValue(FINALIZER)
     expect((await (await GET(listRequest("?status=closed"))).json()).viewer.canApprove).toBe(true)
-    expect(listSalesOrders).toHaveBeenLastCalledWith({ statuses: ["rejected", "cancelled"], limit: 100 })
+    expect(listSalesOrders).toHaveBeenLastCalledWith({ statuses: ["rejected", "cancelled"], limit: 100, withFulfillment: false })
+
+    // 승인된 오더에는 출고·예정 대수를 붙인다.
+    await GET(listRequest("?status=approved"))
+    expect(listSalesOrders).toHaveBeenLastCalledWith({ statuses: ["approved"], limit: 100, withFulfillment: true })
   })
 
   it("모르는 status 는 400", async () => {
@@ -142,5 +155,31 @@ describe("POST /api/admin/hardware/orders/[id]", () => {
     expect(logAdminAudit).not.toHaveBeenCalled()
 
     expect((await POST(actionRequest({ action: "delete" }), params)).status).toBe(400)
+  })
+})
+
+describe("GET /api/admin/hardware/orders/sheet-check", () => {
+  it("편집 역할 누구나 읽고, canApprove 를 함께 돌려준다", async () => {
+    requireVerifiedAdminContext.mockResolvedValue(EDITOR)
+    listSheetOrderChecks.mockResolvedValue({ since: "2026-10-22", checks: [{ kind: "missing_order_no" }] })
+
+    const response = await GET_SHEET_CHECK(listRequest("/sheet-check"))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      since: "2026-10-22",
+      checks: [{ kind: "missing_order_no" }],
+      viewer: { canApprove: false },
+    })
+  })
+
+  it("테이블 미적용(503)은 available:false", async () => {
+    requireVerifiedAdminContext.mockResolvedValue(FINALIZER)
+    listSheetOrderChecks.mockRejectedValue(new SalesOrderError("오더 기능은 DB 업데이트 적용 후 사용할 수 있습니다.", 503))
+
+    const response = await GET_SHEET_CHECK(listRequest("/sheet-check"))
+
+    expect(response.status).toBe(503)
+    expect(await response.json()).toMatchObject({ available: false })
   })
 })

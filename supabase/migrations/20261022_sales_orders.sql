@@ -74,6 +74,8 @@ REVOKE ALL ON TABLE public.sales_orders FROM anon, authenticated;
 GRANT ALL ON TABLE public.sales_orders TO service_role;
 
 -- 원장에서 오더번호로 찾기(시트 출고 줄·앱이 만든 배송 예정 모두 raw.order_no).
+-- 부분 인덱스 조건은 IS NOT NULL 이어야 한다 — 앱 조회(raw->>'order_no' = / IN)에서 플래너가 이 조건을
+-- 추론할 수 있다. `raw ? 'order_no'` 로 두면 추론하지 못해 인덱스를 쓰지 않는다(로컬 PG16 EXPLAIN 확인).
 CREATE INDEX IF NOT EXISTS hardware_movements_order_no_idx
   ON public.hardware_movements ((raw->>'order_no'))
-  WHERE raw ? 'order_no';
+  WHERE (raw->>'order_no') IS NOT NULL;

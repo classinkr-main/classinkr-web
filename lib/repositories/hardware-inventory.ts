@@ -14,6 +14,7 @@ import {
   type HwOutbound,
   type HwStock,
 } from "@/lib/repositories/branch-hw"
+import { linkSheetOutboundToOrders, type SheetOrderLinkResult } from "@/lib/orders/sheet-order-sync"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 export const HARDWARE_INVENTORY_CACHE_TAG = "hardware-inventory"
@@ -246,6 +247,8 @@ export interface HardwareSheetImportResult {
   sheetWinsKept: number
   /** 정리 자체가 실패했을 때의 문구. 가져오기는 이미 성공했다. */
   sheetWinsError: string | null
+  /** 오더번호가 적힌 시트 출고 줄 ↔ 오더 연결(연결 로직 §4-4) — 대체된 앱 기록 수·설치 단계로 올린 딜 수. */
+  orderLink?: SheetOrderLinkResult
 }
 
 const DEFAULT_STOCK_LOCATION = "창고"
@@ -2160,6 +2163,10 @@ async function runHardwareSheetImport(
       sheetWinsError = getErrorMessage(cleanupError)
     }
 
+    // 오더번호가 적힌 시트 출고 줄을 오더에 묶는다 — 같은 오더·품목의 앱 예정·출고 대체 + 딜 설치 단계.
+    // 실패는 결과에 문구로만 남긴다(교체는 이미 커밋됐다).
+    const orderLink = await linkSheetOutboundToOrders(rows, { actor: options.actor })
+
     await finishImportRun(runId, {
       status: "success",
       rowsImported: imported,
@@ -2176,6 +2183,11 @@ async function runHardwareSheetImport(
         sheet_wins_voided: sheetWinsVoided,
         sheet_wins_kept: sheetWinsKeptRows.length,
         sheet_wins_error: sheetWinsError,
+        order_link: {
+          app_rows_replaced: orderLink.appRowsReplaced,
+          deals_advanced: orderLink.dealsAdvanced,
+          error: orderLink.error,
+        },
       },
     })
     revalidateTag(HARDWARE_INVENTORY_CACHE_TAG, "max")
@@ -2189,6 +2201,7 @@ async function runHardwareSheetImport(
       sheetWinsVoided,
       sheetWinsKept: sheetWinsKeptRows.length,
       sheetWinsError,
+      orderLink,
     }
   } catch (error) {
     await finishImportRun(runId, {

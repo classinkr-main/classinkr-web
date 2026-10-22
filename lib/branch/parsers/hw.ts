@@ -1,5 +1,6 @@
 import type { CellFormat, FormattedCell } from "@/lib/branch/google-sheets"
 import { FISCAL_MONTH_ORDER } from "@/lib/branch/fiscal"
+import { normalizeOrderNo } from "@/lib/orders/sheet-order-check"
 
 // 입고·출고 탭은 행 끝을 열어 둔다 — 고정 500행이면 시트가 넘치는 순간 가장 최근 행부터 에러 없이
 // 잘린다(2026-09-14 실측: 출고 409행, 37일에 94행 증가 → 약 한 달 뒤 500행 도달).
@@ -122,7 +123,8 @@ export function parseOutbound(grid: FormattedCell[][]): HwOutboundParsed[] {
     if (explicitDestination) lastDestination = explicitDestination
     const plannedByColor = isPlannedOutboundBg(row[10]?.bg)
     const progress = s(row[10]?.value) ?? (plannedByColor ? "배송 예정" : null)
-    const orderNo = orderNoCol == null ? null : s(row[orderNoCol]?.value)
+    // 손으로 적는 칸이라 대소문자·공백을 정리해 둔다(`ord - 2610-002` → `ORD-2610-002`) — 원장에서 오더와 그대로 맞춘다.
+    const orderNo = orderNoCol == null ? null : normalizeOrderNo(s(row[orderNoCol]?.value))
     out.push({
       logistics_no: s(row[0]?.value), outbound_date: date(row[1]?.value),
       owner: s(row[2]?.value), product, quantity: n(row[4]?.value) ?? 0,

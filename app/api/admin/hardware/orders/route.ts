@@ -30,7 +30,12 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const orders = await listSalesOrders({ statuses: STATUS_FILTERS[filter], limit: 100 })
+    // 승인된 오더에는 원장 기준 출고·예정 대수를 붙인다(시트 줄 포함).
+    const orders = await listSalesOrders({
+      statuses: STATUS_FILTERS[filter],
+      limit: 100,
+      withFulfillment: filter === "approved" || filter === "all",
+    })
     return NextResponse.json({
       orders,
       viewer: { canApprove: hasAdminCapability(admin, HARDWARE_FINALIZE_CAPABILITY) },

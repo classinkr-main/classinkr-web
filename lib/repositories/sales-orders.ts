@@ -14,8 +14,19 @@ import {
   type SalesOrderLine,
   type SalesOrderStatus,
 } from "@/lib/orders/order-lines"
+import {
+  classifySheetOrderChecks,
+  isPlannedLedgerStatus,
+  normalizeOrderNo,
+  rawOrderNo,
+  summarizeOrderFulfillment,
+  type SalesOrderFulfillmentLine,
+  type SheetOrderCheck,
+  type SheetOutboundRow,
+} from "@/lib/orders/sheet-order-check"
 import { getCustomer } from "@/lib/portal/repositories/customers"
-import { getDeal, updateDeal } from "@/lib/portal/repositories/deals"
+import { advanceDealStageSafely } from "@/lib/orders/deal-stage"
+import { getDeal } from "@/lib/portal/repositories/deals"
 import { getQuoteDocument, getResolvableQuoteVersion } from "@/lib/portal/repositories/quote-documents"
 import { normalizeQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
 import {
@@ -74,21 +85,6 @@ const WAREHOUSE = "창고"
 function rethrow(error: { code?: string; message?: string } | null): never {
   if (error?.code === "42P01" || error?.code === "PGRST205") throw new SalesOrderError(MISSING_TABLE_MESSAGE, 503)
   throw error ?? new Error("오더를 처리하지 못했습니다.")
-}
-
-// 오더번호가 붙으면 딜을 확정(confirmed)으로 올린다 — 전진만, 그 앞 단계(contact·quote·contract)일 때만.
-// 견적 → 계약 전환 라우트와 같은 원칙이다. 실패해도 오더는 그대로 둔다(로그만).
-const DEAL_STAGES_BEFORE_CONFIRMED = new Set(["contact", "quote", "contract"])
-
-async function advanceDealToConfirmed(dealId: string | null) {
-  if (!dealId) return
-  try {
-    const deal = await getDeal(dealId)
-    if (!deal || !DEAL_STAGES_BEFORE_CONFIRMED.has(deal.current_stage)) return
-    await updateDeal(dealId, { current_stage: "confirmed" })
-  } catch (error) {
-    console.error("[sales-orders] deal stage advance skipped:", error instanceof Error ? error.message : "Error")
-  }
 }
 
 function toSalesOrder(row: SalesOrderRow): SalesOrder {
@@ -232,7 +228,7 @@ export async function ensureSalesOrderForAcceptedQuote(input: {
     const { data, error } = await sb.from("sales_orders").insert(insert).select("*").single()
     if (!error) {
       const order = toSalesOrder(data as SalesOrderRow)
-      if (order.status === "approved") await advanceDealToConfirmed(order.dealId)
+      if (order.status === "approved") await advanceDealStageSafely(order.dealId, "confirmed")
       return { order, created: true }
     }
     if (!isUniqueViolation(error)) rethrow(error)
@@ -305,13 +301,109 @@ export function notifyHardwareOrderApprovalRequested(order: SalesOrder) {
   })
 }
 
-export async function listSalesOrders(options: { statuses?: SalesOrderStatus[]; limit?: number } = {}): Promise<SalesOrder[]> {
+export type SalesOrderWithFulfillment = SalesOrder & { fulfillment?: SalesOrderFulfillmentLine[] }
+
+export async function listSalesOrders(
+  options: { statuses?: SalesOrderStatus[]; limit?: number; withFulfillment?: boolean } = {}
+): Promise<SalesOrderWithFulfillment[]> {
   const sb = createSupabaseAdminClient()
   let query = sb.from("sales_orders").select("*").order("requested_at", { ascending: false }).limit(options.limit ?? 100)
   if (options.statuses?.length) query = query.in("status", options.statuses)
   const { data, error } = await query
   if (error) rethrow(error)
-  return ((data ?? []) as SalesOrderRow[]).map(toSalesOrder)
+  const orders = ((data ?? []) as SalesOrderRow[]).map(toSalesOrder)
+  if (!options.withFulfillment) return orders
+
+  // 오더 대비 출고 — 원장(시트 줄·앱 예정·앱 확정)에서 같은 오더번호를 센다. 실패해도 목록은 돌려준다.
+  const orderNos = orders.map((order) => order.orderNo).filter((value): value is string => Boolean(value))
+  if (orderNos.length === 0) return orders
+  const { data: movements, error: movementsError } = await sb
+    .from("hardware_movements")
+    .select("product_name,quantity,status,raw")
+    .eq("movement_type", "outbound")
+    .is("voided_at", null)
+    .in("raw->>order_no", orderNos)
+  if (movementsError) {
+    console.error("[sales-orders] fulfillment lookup failed:", movementsError.message)
+    return orders
+  }
+  const ledger = ((movements ?? []) as Array<{ product_name: string | null; quantity: number | string; status: string | null; raw: unknown }>).map(
+    (movement) => ({
+      orderNo: rawOrderNo(movement.raw),
+      productName: movement.product_name,
+      quantity: Number(movement.quantity) || 0,
+      status: movement.status,
+    })
+  )
+  return orders.map((order) => (order.orderNo ? { ...order, fulfillment: summarizeOrderFulfillment(order, ledger) } : order))
+}
+
+// 창고·샘플·사무실·수리로 간 줄은 고객 출고가 아니다 — 시트 확인 대상에서 뺀다(원장 위치 정규화 어휘).
+const NON_CUSTOMER_LOCATIONS = new Set(["창고", "샘플", "사무실", "수리"])
+const SHEET_CHECK_SCAN_LIMIT = 1000
+
+function seoulDateKey(value: string): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(
+    new Date(value)
+  )
+}
+
+/**
+ * 시트 확인 필요 — 오더 기능을 쓰기 시작한 날(첫 오더 요청일, 한국 시간) 이후의 시트 고객 출고 줄 중
+ * 오더번호가 없거나, 모르는 번호거나, 승인 안 된(취소된) 오더거나, 오더에 없는 품목·수량 초과인 줄.
+ * 날짜 없는 예정 줄도 본다. 오더가 하나도 없으면 빈 목록(기능을 아직 안 쓰는 중).
+ */
+export async function listSheetOrderChecks(): Promise<{ since: string | null; checks: SheetOrderCheck[] }> {
+  const sb = createSupabaseAdminClient()
+  const { data: first, error: firstError } = await sb
+    .from("sales_orders")
+    .select("requested_at")
+    .order("requested_at", { ascending: true })
+    .limit(1)
+  if (firstError) rethrow(firstError)
+  const firstRequestedAt = ((first ?? []) as Array<{ requested_at: string }>)[0]?.requested_at
+  if (!firstRequestedAt) return { since: null, checks: [] }
+  const since = seoulDateKey(firstRequestedAt)
+
+  const { data: movements, error: movementsError } = await sb
+    .from("hardware_movements")
+    .select("id,product_name,quantity,occurred_at,status,to_location,raw")
+    .eq("source", "sheet_import")
+    .eq("movement_type", "outbound")
+    .is("voided_at", null)
+    .or(`occurred_at.gte.${since},occurred_at.is.null`)
+    .order("occurred_at", { ascending: false, nullsFirst: true })
+    .limit(SHEET_CHECK_SCAN_LIMIT)
+  if (movementsError) throw movementsError
+
+  const rows: SheetOutboundRow[] = ((movements ?? []) as Array<{
+    id: string
+    product_name: string | null
+    quantity: number | string
+    occurred_at: string | null
+    status: string | null
+    to_location: string | null
+    raw: unknown
+  }>)
+    .filter((movement) => !NON_CUSTOMER_LOCATIONS.has((movement.to_location ?? "").trim()))
+    .map((movement) => ({
+      id: movement.id,
+      productName: movement.product_name ?? "",
+      quantity: Number(movement.quantity) || 0,
+      occurredAt: movement.occurred_at,
+      status: movement.status,
+      customer: movement.to_location,
+      orderNoRaw: rawOrderNo(movement.raw),
+    }))
+
+  const orderNos = Array.from(new Set(rows.map((row) => normalizeOrderNo(row.orderNoRaw)).filter(Boolean))) as string[]
+  let orders: SalesOrder[] = []
+  if (orderNos.length > 0) {
+    const { data, error } = await sb.from("sales_orders").select("*").in("order_no", orderNos)
+    if (error) rethrow(error)
+    orders = ((data ?? []) as SalesOrderRow[]).map(toSalesOrder)
+  }
+  return { since, checks: classifySheetOrderChecks(rows, orders) }
 }
 
 function plannedMovementInputs(order: SalesOrderRow, orderNo: string, actor: string | null): CreateHardwareMovementInput[] {
@@ -404,7 +496,8 @@ export async function approveSalesOrder(id: string, input: { actor: string | nul
       console.error("[sales-orders] planned_movement_ids update failed:", error.message)
     }
   }
-  await advanceDealToConfirmed(claimed.deal_id)
+  // 오더번호가 붙었으니 딜을 확정으로 올린다(전진만).
+  await advanceDealStageSafely(claimed.deal_id, "confirmed")
   revalidateTag(HARDWARE_INVENTORY_CACHE_TAG, "max")
   return toSalesOrder(claimed)
 }
@@ -455,6 +548,20 @@ export async function cancelApprovedSalesOrder(
   const row = await getSalesOrderRow(id)
   if (row.status !== "approved") throw new SalesOrderError("승인된 오더만 취소할 수 있습니다.", 409)
   const sb = createSupabaseAdminClient()
+  if (row.order_no) {
+    // 시트 출고 줄이 이 오더번호로 실렸거나(앱 예정은 그때 대체돼 취소된다) 앱에서 출고 확정했으면 이미 나간 오더다.
+    const { data: carried, error: carriedError } = await sb
+      .from("hardware_movements")
+      .select("id,status")
+      .eq("movement_type", "outbound")
+      .eq("raw->>order_no", row.order_no)
+      .is("voided_at", null)
+      .limit(50)
+    if (carriedError) throw carriedError
+    if (((carried ?? []) as Array<{ status: string | null }>).some((movement) => !isPlannedLedgerStatus(movement.status))) {
+      throw new SalesOrderError("이미 출고된 줄이 있어 오더를 취소할 수 없습니다. 출고 기록(시트 포함)을 먼저 정리해 주세요.", 409)
+    }
+  }
   const movementIds = row.planned_movement_ids ?? []
   if (movementIds.length) {
     // 배송 예정을 출고 확정하면 실제 출고 줄이 converted_from_movement_id 로 예정 줄을 가리킨다(전량 확정이면

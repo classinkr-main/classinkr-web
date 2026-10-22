@@ -19,6 +19,7 @@ import {
   requireVerifiedAdminContext,
 } from "@/lib/admin-auth"
 import { logAdminAudit } from "@/lib/auth/audit"
+import { advanceDealForShippedMovementSafely } from "@/lib/orders/deal-stage"
 import {
   confirmPlannedHardwareMovement,
   HARDWARE_MOVEMENT_TYPES,
@@ -49,6 +50,8 @@ export async function PATCH(
         confirmQty: readOptionalNonNegativeInt(body, "confirmQty", "확정 수량"),
         actor: admin.name ?? admin.userId ?? admin.role,
       })
+      // 오더로 만든 배송 예정이면 그 딜을 설치 단계로 올린다(전진만, 실패해도 확정은 그대로).
+      await advanceDealForShippedMovementSafely(movement)
       await logAdminAudit({
         admin,
         action: "hardware.movement.finalize",

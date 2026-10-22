@@ -70,6 +70,16 @@ describe("hw parsers", () => {
     expect(out[1]).toMatchObject({ product: "STD1", destination: "성남여자고등학교", progress: "배송 예정" })
   })
 
+  it("outbound normalizes a hand-typed 오더번호 so the ledger matches the app order exactly", () => {
+    const header = [...Array(13).fill(c("")), c("오더번호")]
+    const grid: FormattedCell[][] = [
+      header,
+      [c("C3"), c("2026. 10. 23"), c("Minji"), c('86" IFP'), c(1), c(""), c(""), c(""), c("한빛학원"), c(""), c("출고"), c("Sales"), c(""), c("ord - 2610-014")],
+    ]
+
+    expect(parseOutbound(grid)[0].raw).toMatchObject({ order_no: "ORD-2610-014" })
+  })
+
   it("outbound without an 오더번호 column keeps raw unchanged", () => {
     const grid: FormattedCell[][] = [
       Array(13).fill(c("")),

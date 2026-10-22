@@ -40,6 +40,10 @@ function makeBuilder(table: string) {
     in: vi.fn(filter("in")),
     is: vi.fn(filter("is")),
     like: vi.fn(filter("like")),
+    or: vi.fn((expression: string) => {
+      current?.filters.push(["or", expression, null])
+      return b
+    }),
     order: vi.fn(() => b),
     limit: vi.fn(() => b),
     single: vi.fn(() => b),
@@ -90,6 +94,7 @@ import {
   ensureSalesOrderForAcceptedQuote,
   ensureSalesOrderForAcceptedQuoteSafely,
   listSalesOrders,
+  listSheetOrderChecks,
   notifyHardwareOrderApprovalRequested,
   rejectSalesOrder,
   SalesOrderError,
@@ -413,14 +418,26 @@ describe("cancelApprovedSalesOrder", () => {
 
   it("출고 확정된 줄이 하나라도 있으면 막는다", async () => {
     queue.push({ data: [approved()], error: null })
+    queue.push({ data: [{ id: "mv_1", status: "배송 예정" }], error: null }) // 오더번호가 실린 줄 — 아직 예정뿐
     queue.push({ data: [{ id: "mv_actual" }], error: null })
 
     await expect(cancelApprovedSalesOrder("so_1", { actor: "이왕찬", reason: "고객 취소" })).rejects.toMatchObject({ status: 409 })
     expect(voidHardwareMovement).not.toHaveBeenCalled()
   })
 
+  it("시트에 같은 오더번호로 실제 출고가 실렸으면 막는다", async () => {
+    queue.push({ data: [approved()], error: null })
+    queue.push({ data: [{ id: "sheet_1", status: "설치 완료" }], error: null })
+
+    await expect(cancelApprovedSalesOrder("so_1", { actor: "이왕찬", reason: "고객 취소" })).rejects.toMatchObject({ status: 409 })
+    const carried = calls[1]
+    expect(carried.filters).toContainEqual(["eq", "raw->>order_no", "ORD-2610-002"])
+    expect(voidHardwareMovement).not.toHaveBeenCalled()
+  })
+
   it("남은 배송 예정만 취소하고 오더번호는 남긴다", async () => {
     queue.push({ data: [approved()], error: null })
+    queue.push({ data: [{ id: "mv_1", status: "배송 예정" }], error: null }) // 오더번호가 실린 줄 — 예정뿐
     queue.push({ data: [], error: null }) // 출고 확정 없음
     queue.push({ data: [{ id: "mv_1", voided_at: null }, { id: "mv_2", voided_at: "2026-10-21T00:00:00Z" }], error: null })
     queue.push({ data: [approved()].map((row) => ({ ...row, status: "cancelled" })), error: null })
@@ -449,6 +466,74 @@ describe("listSalesOrders", () => {
 
     expect(orders[0].totalAmount).toBe(6_930_000)
     expect(calls[0].filters).toContainEqual(["in", "status", ["pending_approval"]])
+  })
+})
+
+describe("listSalesOrders — 오더 대비 출고", () => {
+  it("원장에서 같은 오더번호의 출고·예정을 품목별로 센다(시트 줄 포함)", async () => {
+    queue.push({ data: [orderRow({ status: "approved", order_no: "ORD-2610-002" })], error: null })
+    queue.push({
+      data: [
+        { product_name: '86" IFP', quantity: 1, status: "설치 완료", raw: { order_no: "ORD-2610-002" } },
+        { product_name: '86" IFP', quantity: "1", status: "배송 예정", raw: { order_no: "ORD-2610-002", sales_order_id: "so_1" } },
+      ],
+      error: null,
+    })
+
+    const [order] = await listSalesOrders({ statuses: ["approved"], withFulfillment: true })
+
+    expect(order.fulfillment).toEqual([{ product: '86" IFP', ordered: 2, shipped: 1, planned: 1 }])
+    expect(calls[1].filters).toContainEqual(["in", "raw->>order_no", ["ORD-2610-002"]])
+  })
+
+  it("원장 조회가 실패해도 목록은 그대로 돌려준다", async () => {
+    queue.push({ data: [orderRow({ status: "approved", order_no: "ORD-2610-002" })], error: null })
+    queue.push({ data: null, error: { message: "timeout" } })
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined)
+
+    const orders = await listSalesOrders({ withFulfillment: true })
+
+    expect(orders).toHaveLength(1)
+    expect(orders[0].fulfillment).toBeUndefined()
+    errorLog.mockRestore()
+  })
+})
+
+describe("listSheetOrderChecks — 시트 확인 필요", () => {
+  it("오더가 하나도 없으면 대조하지 않는다", async () => {
+    queue.push({ data: [], error: null })
+
+    await expect(listSheetOrderChecks()).resolves.toEqual({ since: null, checks: [] })
+    expect(calls).toHaveLength(1)
+  })
+
+  it("첫 오더 날(한국 시간) 이후 고객 출고만 대조하고, 창고·샘플로 간 줄은 뺀다", async () => {
+    queue.push({ data: [{ requested_at: "2026-10-21T16:30:00Z" }], error: null }) // 서울 10/22 01:30
+    queue.push({
+      data: [
+        { id: "r1", product_name: '86" IFP', quantity: 1, occurred_at: "2026-10-23", status: "출고", to_location: "한빛학원", raw: {} },
+        { id: "r2", product_name: '86" IFP', quantity: 2, occurred_at: "2026-10-23", status: "출고", to_location: "샘플", raw: {} },
+        {
+          id: "r3",
+          product_name: '86" IFP',
+          quantity: 2,
+          occurred_at: null,
+          status: "배송 예정",
+          to_location: "한빛학원",
+          raw: { order_no: "ORD-2610-002" },
+        },
+      ],
+      error: null,
+    })
+    queue.push({ data: [orderRow({ status: "approved", order_no: "ORD-2610-002" })], error: null })
+
+    const result = await listSheetOrderChecks()
+
+    expect(result.since).toBe("2026-10-22")
+    expect(calls[1].filters).toContainEqual(["eq", "source", "sheet_import"])
+    expect(calls[1].filters).toContainEqual(["or", "occurred_at.gte.2026-10-22,occurred_at.is.null", null])
+    expect(result.checks.map((check) => [check.kind, check.row.id])).toEqual([["missing_order_no", "r1"]])
+    expect(calls[2].filters).toContainEqual(["in", "order_no", ["ORD-2610-002"]])
   })
 })
 

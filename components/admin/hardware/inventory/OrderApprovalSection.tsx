@@ -6,14 +6,23 @@
 //
 // 읽기는 하드웨어 편집 역할 전원, 버튼은 viewer.canApprove 일 때만 — 강제는 서버 게이트다.
 // 테이블 미적용(503)이면 안내 한 줄로 강등한다.
+//
+// "시트 확인"(§4-4): 오더 기능을 쓰기 시작한 뒤 시트에 적힌 고객 출고 중 오더번호가 없거나 승인 안 된 번호인 줄.
+// 과도기에는 시트 출고가 앱 승인을 우회할 수 있어 이 목록이 승인 규칙을 지키는 장치다.
 import { memo, useCallback, useEffect, useState } from "react"
 import { Check, ChevronDown, ExternalLink, RefreshCw, X } from "lucide-react"
 
 import { adminFetch, adminFetchJson } from "@/lib/admin-client"
 import { summarizeSalesOrderProducts, type SalesOrder } from "@/lib/orders/order-lines"
-import { formatCurrency, formatNumber } from "./shared"
+import {
+  SHEET_ORDER_CHECK_LABELS,
+  type SalesOrderFulfillmentLine,
+  type SheetOrderCheck,
+} from "@/lib/orders/sheet-order-check"
+import { formatCurrency, formatDate, formatNumber } from "./shared"
 
-type OrderFilter = "pending" | "approved" | "closed"
+type OrderFilter = "pending" | "approved" | "closed" | "sheet"
+type OrderView = SalesOrder & { fulfillment?: SalesOrderFulfillmentLine[] }
 
 interface OrderApprovalSectionProps {
   /** 승인으로 배송 예정이 생기면 부모가 원장을 다시 받는다(HardwareInventoryClient의 refresh). */
@@ -24,6 +33,7 @@ const FILTERS: Array<{ key: OrderFilter; label: string }> = [
   { key: "pending", label: "승인 대기" },
   { key: "approved", label: "승인됨" },
   { key: "closed", label: "반려·취소" },
+  { key: "sheet", label: "시트 확인" },
 ]
 
 const SECTION_CARD_CLASS = "rounded-lg border border-[rgba(0,0,0,0.08)] bg-white"
@@ -58,8 +68,11 @@ function statusLabel(order: SalesOrder) {
 function OrderApprovalSection({ onChanged }: OrderApprovalSectionProps) {
   const [expanded, setExpanded] = useState(true)
   const [filter, setFilter] = useState<OrderFilter>("pending")
-  const [orders, setOrders] = useState<SalesOrder[]>([])
+  const [orders, setOrders] = useState<OrderView[]>([])
   const [pendingCount, setPendingCount] = useState<number | null>(null)
+  const [sheetChecks, setSheetChecks] = useState<SheetOrderCheck[]>([])
+  const [sheetSince, setSheetSince] = useState<string | null>(null)
+  const [sheetCount, setSheetCount] = useState<number | null>(null)
   const [canApprove, setCanApprove] = useState(false)
   const [loading, setLoading] = useState(false)
   const [unavailable, setUnavailable] = useState<string | null>(null)
@@ -71,13 +84,49 @@ function OrderApprovalSection({ onChanged }: OrderApprovalSectionProps) {
   const [reasonFor, setReasonFor] = useState<{ id: string; action: "reject" | "cancel" } | null>(null)
   const [reason, setReason] = useState("")
 
+  const loadSheetChecks = useCallback(async (showLoading: boolean) => {
+    if (showLoading) {
+      setLoading(true)
+      setListError(null)
+    }
+    try {
+      const response = await adminFetch("/api/admin/hardware/orders/sheet-check")
+      const body = (await response.json().catch(() => null)) as {
+        since?: string | null
+        checks?: SheetOrderCheck[]
+        viewer?: { canApprove?: boolean }
+        error?: string
+        available?: boolean
+      } | null
+      if (!response.ok) {
+        if (body?.available === false) {
+          setUnavailable(body.error ?? "오더 기능은 DB 업데이트 적용 후 사용할 수 있습니다.")
+          return
+        }
+        throw new Error(body?.error ?? `${response.status} ${response.statusText}`.trim())
+      }
+      setSheetChecks(body?.checks ?? [])
+      setSheetSince(body?.since ?? null)
+      setSheetCount((body?.checks ?? []).length)
+      setCanApprove(body?.viewer?.canApprove === true)
+    } catch (err) {
+      if (showLoading) setListError(err instanceof Error ? err.message : String(err))
+    } finally {
+      if (showLoading) setLoading(false)
+    }
+  }, [])
+
   const load = useCallback(async (nextFilter: OrderFilter) => {
+    if (nextFilter === "sheet") {
+      await loadSheetChecks(true)
+      return
+    }
     setLoading(true)
     setListError(null)
     try {
       const response = await adminFetch(`/api/admin/hardware/orders?status=${nextFilter}`)
       const body = (await response.json().catch(() => null)) as {
-        orders?: SalesOrder[]
+        orders?: OrderView[]
         viewer?: { canApprove?: boolean }
         error?: string
         available?: boolean
@@ -100,11 +149,16 @@ function OrderApprovalSection({ onChanged }: OrderApprovalSectionProps) {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [loadSheetChecks])
 
   useEffect(() => {
     void load(filter)
   }, [filter, load])
+
+  // 시트 확인 건수는 탭을 열기 전에도 배지로 보인다 — 처음 한 번만 조용히 센다.
+  useEffect(() => {
+    void loadSheetChecks(false)
+  }, [loadSheetChecks])
 
   const act = async (order: SalesOrder, action: "approve" | "reject" | "cancel", actionReason?: string) => {
     setBusyId(order.id)
@@ -197,6 +251,9 @@ function OrderApprovalSection({ onChanged }: OrderApprovalSectionProps) {
                   }`}
                 >
                   {option.label}
+                  {option.key === "sheet" && sheetCount ? (
+                    <span className="ml-1 tabular-nums text-[#A8741A]">{formatNumber(sheetCount)}</span>
+                  ) : null}
                 </button>
               ))}
             </div>
@@ -221,16 +278,20 @@ function OrderApprovalSection({ onChanged }: OrderApprovalSectionProps) {
               {listError}
             </p>
           ) : null}
-          {loading && orders.length === 0 ? (
+          {filter === "sheet" ? (
+            <SheetCheckList checks={sheetChecks} since={sheetSince} loading={loading} hasError={Boolean(listError)} />
+          ) : null}
+
+          {filter !== "sheet" && loading && orders.length === 0 ? (
             <p className="mt-3 text-[12px] font-semibold text-[#A39E98]">불러오는 중…</p>
           ) : null}
-          {!loading && orders.length === 0 && !listError ? (
+          {filter !== "sheet" && !loading && orders.length === 0 && !listError ? (
             <p className="mt-3 text-[12px] font-semibold text-[#A39E98]">
               {filter === "pending" ? "승인을 기다리는 하드웨어 오더가 없습니다." : "해당하는 오더가 없습니다."}
             </p>
           ) : null}
 
-          <ul className="mt-2 divide-y divide-[rgba(0,0,0,0.06)]">
+          <ul className={`mt-2 divide-y divide-[rgba(0,0,0,0.06)] ${filter === "sheet" ? "hidden" : ""}`}>
             {orders.map((order) => {
               const products = summarizeSalesOrderProducts(order.lines)
               const unmapped = order.lines.filter((line) => line.unmappedHardware)
@@ -276,6 +337,17 @@ function OrderApprovalSection({ onChanged }: OrderApprovalSectionProps) {
                           </span>
                         ))}
                       </p>
+                      {order.fulfillment?.length ? (
+                        <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11.5px] text-[#615D59]">
+                          {order.fulfillment.map((line) => (
+                            <span key={line.product} className="tabular-nums">
+                              <span className="font-bold text-[#31302E]">{line.product}</span> 출고 {formatNumber(line.shipped)}/
+                              {formatNumber(line.ordered)}
+                              {line.planned > 0 ? ` · 예정 ${formatNumber(line.planned)}` : ""}
+                            </span>
+                          ))}
+                        </p>
+                      ) : null}
                       {order.decidedBy || order.decisionReason ? (
                         <p className="mt-1 text-[11.5px] text-[#615D59]">
                           {order.decidedBy ? `${order.decidedBy} · ${formatDateTime(order.decidedAt)}` : ""}
@@ -375,6 +447,58 @@ function OrderApprovalSection({ onChanged }: OrderApprovalSectionProps) {
         </div>
       ) : null}
     </section>
+  )
+}
+
+function SheetCheckList({
+  checks,
+  since,
+  loading,
+  hasError,
+}: {
+  checks: SheetOrderCheck[]
+  since: string | null
+  loading: boolean
+  hasError: boolean
+}) {
+  if (loading && checks.length === 0) {
+    return <p className="mt-3 text-[12px] font-semibold text-[#A39E98]">불러오는 중…</p>
+  }
+  if (hasError) return null
+  return (
+    <div className="mt-2">
+      <p className="text-[11.5px] text-[#615D59]">
+        {since
+          ? `${since} 이후 시트 '3.출고 현황'에 적힌 고객 출고 중 오더와 맞지 않는 줄입니다. 오더번호 열(N열 이후)에 승인된 오더번호를 적으면 다음 가져오기에서 사라집니다.`
+          : "아직 만들어진 오더가 없어 확인할 줄이 없습니다. 첫 오더가 생긴 날부터 시트 출고 줄을 대조합니다."}
+      </p>
+      {since && checks.length === 0 ? (
+        <p className="mt-3 text-[12px] font-semibold text-[#A39E98]">오더와 어긋난 시트 출고 줄이 없습니다.</p>
+      ) : null}
+      <ul className="mt-2 divide-y divide-[rgba(0,0,0,0.06)]">
+        {checks.map((check) => (
+          <li key={`${check.kind}:${check.row.id}`} className="flex flex-wrap items-start justify-between gap-2 py-2.5">
+            <div className="min-w-0 flex-1">
+              <p className="flex flex-wrap items-center gap-1.5 text-[12.5px] font-bold text-[#111110]">
+                <span className="truncate">{check.row.customer ?? "고객 미상"}</span>
+                <span className="text-[#A39E98]">·</span>
+                <span className="truncate">{check.row.productName}</span>
+                <span className="tabular-nums text-[#615D59]">{formatNumber(check.row.quantity)}대</span>
+                <span className="rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[10.5px] font-bold text-[#7A520F]">
+                  {SHEET_ORDER_CHECK_LABELS[check.kind]}
+                </span>
+              </p>
+              <p className="mt-0.5 text-[11.5px] text-[#615D59]">
+                {check.row.occurredAt ? formatDate(check.row.occurredAt) : "날짜 없음"}
+                {check.row.status ? ` · ${check.row.status}` : ""}
+                {check.row.orderNoRaw ? ` · 시트 오더번호 ${check.row.orderNoRaw}` : ""}
+              </p>
+              <p className="mt-0.5 text-[11.5px] font-semibold text-[#7A520F]">{check.message}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 
