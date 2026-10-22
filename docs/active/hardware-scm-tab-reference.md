@@ -180,7 +180,13 @@
 ### 3-6. 시트 가져오기 · 재고 계산 · 알림
 
 - **가져오기**: 헤더의 "싱크·백업 후 가져오기"가 Google 시트 강제 싱크 → 스냅샷 백업 → `hardware_movements`의 시트 이관분 교체를 한다.
-  - 자동이 아니다. 크론은 시트 → `branch_hw_*` 미러까지만 매일 돌고, 원장 반영은 이 버튼을 눌러야 일어난다.
+  - **매시간 자동(2026-10-22)**: `/api/cron/hardware-sheet-import`(매시 20분 UTC)가 시트 → 미러 → 원장을 이어서 돌린다(`lib/hardware/sheet-auto-import.ts`).
+    - 시트 내용(미러의 id·synced_at 을 뺀 지문)이 마지막 성공 가져오기와 같으면 원장을 건드리지 않고 그 기록에 `last_checked_at`만 남긴다. 신선도 표시는 이 확인 시각을 쓴다.
+    - 하루 한 번 전체 동기화(sync-branch)나 버튼 가져오기가 도는 중이면 그 회차를 건너뛴다. `branch_sync_runs`에는 기록하지 않는다(매출 시트 연속 실패 판정의 최근 60회 창을 밀어내지 않게).
+    - 시트 읽기가 실패하면 실패한 가져오기 기록을 남겨 화면에 보이고, 크론 응답은 500이다.
+    - 끄기: 환경 변수 `HARDWARE_SHEET_AUTO_IMPORT=0`. 버튼 가져오기는 그대로 쓸 수 있다(항상 실행, 변경 여부와 무관).
+    - 따라서 §8-6 "시트가 이긴다" 정리도 버튼을 누를 때가 아니라 시트가 바뀐 다음 회차에 일어난다. 과도기에는 출고 확정을 시트에서 한다.
+  - 출고 탭의 **오더번호** 열(헤더 이름으로 찾음)은 `raw.order_no`로 원장까지 실린다. 기존 A~M열 사이에 끼우면 값이 밀리므로 그때는 동기화를 멈추고 오류를 낸다 — 비고 열 오른쪽(N열 이후)에 둔다([연결 로직](./hardware-order-revenue-link-plan-2026-10-22.md) §4-4).
   - 가져오기 전 스냅샷은 홈 맨 아래 "스냅샷 복원"에서 되돌릴 수 있다.
   - **가져오기 뒤 정리(§8-6)**: 시트 행에서 전환된 어드민 확정을 사유와 함께 취소한다(교체 모드만). 결과 문구에 건수가 붙는다.
 - **재고 파생**: 원장에서 위치별 잔량·예상 가용(예정 차감)·30일 출고·주문 시점(리드타임 반영)을 계산한다(`computeHardwareStockRow`).
@@ -289,6 +295,13 @@ API
 | `20260630_hardware_sheet_import_merge_costing.sql` | 머지 가져오기도 금액을 넣게 한다 | 플래그 off라 현재 경로가 아니다 |
 | `20260701_hardware_restore_snapshot_guard.sql` | 빈 스냅샷으로 복원하면 거부하는 가드. 같은 파일 Item 2는 `crm_neo_customer_snapshots` 권한 정리 | 빈 스냅샷 1건(2026-06-27)이 있다. 복원 목록 기본 10개 밖이라 화면에서는 안 보인다. `crm_neo_customer_snapshots`는 anon·authenticated에 전 권한이 남아 있지만 RLS(`is_active_admin()`)로 막혀 있다 |
 | `20260915_hardware_sample_showroom_status.sql` | 샘플 유닛 status에 `showroom`, 이벤트에 `showcase`·`store`를 더한다(값 집합만 넓힘, 데이터 변경 없음) | "전시로"·"사무실 보관으로"(수리→보관 포함)·"상태 정정 → 전시"가 "전시 상태는 DB 업데이트 적용 후 사용할 수 있습니다."로 막힌다. 롤백 절차는 파일 머리 주석에 있다 |
+| `20261022_hw_rev_matches_exclude_planned.sql` | 출고↔REV 대사 뷰 `v_hardware_rev_matches`가 배송 예정·예약·대기 상태를 실출고에서 뺀다(열 구성 같음, `CREATE OR REPLACE`) | 날짜가 있는 배송 예정이 실출고로 잡혀, 예정만 있는 고객·월이 대사에 "출고 있음"으로 나온다 |
+
+- 대사 뷰 수리 적용 확인(읽기 전용). 결과에 `예정`이 보이면 적용된 것이다.
+
+  ```sql
+  select pg_get_viewdef('public.v_hardware_rev_matches'::regclass) ilike '%예정%' as applied;
+  ```
 
 - 금액·복원 3종의 적용 순서: inbound_costing → merge_costing → restore_guard. restore_guard는 inbound_costing의 restore 본문에 가드를 더한 것이다.
 - 전시 상태 적용 확인(제약 조회, 읽기 전용). `showroom`·`showcase`·`store`가 보이면 적용된 것이다.

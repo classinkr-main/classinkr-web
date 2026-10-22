@@ -221,6 +221,8 @@ export interface HardwareDashboard {
     rows_imported: number | null
     rows_skipped: number | null
     error: string | null
+    /** 매시간 자동 가져오기가 시트 변경 없음을 마지막으로 확인한 시각. 확인 기록이 없으면 null/없음. */
+    last_checked_at?: string | null
   } | null
   // 감사(2026-09-07 #1): replace_hardware_sheet_import RPC가 구버전(20260630 마이그레이션 미적용)이면
   // amount_usd/amount_cny/unit_price/importer 컬럼을 못 채우고 recoverMoneyFromRaw가 raw JSON에서
@@ -547,7 +549,8 @@ async function getLatestImportRun(): Promise<HardwareDashboard["importRun"]> {
   const sb = createSupabaseAdminClient()
   const { data, error } = await sb
     .from("hardware_import_runs")
-    .select("id,status,started_at,finished_at,rows_imported,rows_skipped,error")
+    // last_checked_at: 매시간 자동 가져오기가 "시트 변경 없음"을 확인한 마지막 시각(raw에만 있다).
+    .select("id,status,started_at,finished_at,rows_imported,rows_skipped,error,last_checked_at:raw->>last_checked_at")
     .eq("source", "branch_hw_sheet")
     .order("started_at", { ascending: false })
     .limit(1)
@@ -1642,6 +1645,12 @@ interface ImportMovementRow {
 // lines get distinct keys that survive reorder; source_digest = content hash so the
 // additive merge can tell an edited row from an unchanged one. Stock-reconciliation
 // (adjust) rows are keyed product-only (one official figure per product).
+/** 시트 출고 줄에 적힌 오더번호(파서가 raw.order_no에 싣는다). 없으면 null. */
+export function sheetRowOrderNo(raw: unknown): string | null {
+  if (!isRecord(raw)) return null
+  return cleanString(typeof raw.order_no === "string" ? raw.order_no : null)
+}
+
 function sheetIdentityTiebreak(row: ImportMovementRow): string {
   return JSON.stringify([(row.serials ?? []).join("|"), row.memo ?? "", row.quantity, JSON.stringify(row.raw ?? {})])
 }
@@ -1663,10 +1672,14 @@ function assignSheetImportIdentity(rows: ImportMovementRow[]) {
     })
     bucket.forEach((row, ordinal) => {
       row.source_key = hashSourceKey([row.source_table, row.product_name, row.occurred_at ?? "", row.reference_no ?? "", ordinal])
+      // 오더번호(시트 '3.출고 현황'의 오더번호 열)는 값이 있을 때만 더한다 — 열이 없던 행의 digest가
+      // 바뀌면 추가형 머지가 전 행을 "수정됨"으로 잘못 본다.
+      const orderNo = sheetRowOrderNo(row.raw)
       row.source_digest = hashSourceKey([
         row.quantity, row.status ?? "", row.from_location ?? "", row.to_location ?? "",
         row.owner ?? "", (row.serials ?? []).join("|"), row.memo ?? "", row.reference_no ?? "",
         String(row.unit_price ?? ""), String(row.amount_usd ?? ""),
+        ...(orderNo ? [orderNo] : []),
       ])
     })
   }
@@ -1902,17 +1915,177 @@ async function createHardwareSheetImportSnapshot(input: {
   return data as HardwareSheetImportSnapshot
 }
 
+/** 가져오기를 누가 시작했는지 — 사람(버튼·파일)인지 매시간 자동 가져오기인지. 실행 기록 raw.trigger에 남는다. */
+export type HardwareSheetImportTrigger = "manual" | "auto"
+
+interface HardwareSheetSource {
+  inbound: HwInbound[]
+  outbound: HwOutbound[]
+  stock: HwStock[]
+}
+
+async function readHardwareSheetSource(): Promise<HardwareSheetSource> {
+  const [inbound, outbound, stock] = await Promise.all([
+    listFreshHwInbound(),
+    listFreshHwOutbound(),
+    listFreshHwStock(),
+  ])
+  return { inbound, outbound, stock }
+}
+
+/**
+ * 시트 미러(입고·출고·재고현황) 내용의 지문. 매시간 자동 가져오기가 "시트가 바뀌었는가"를 이걸로 본다.
+ *
+ * 미러는 동기화 때마다 행을 지우고 다시 넣어 id·synced_at 이 늘 바뀌고, id 순서도 매번 달라진다.
+ * 그래서 두 열을 빼고 행을 내용 기준으로 정렬한 뒤 해시한다 — 같은 시트면 같은 값이 나온다.
+ */
+export function checksumHardwareSheetSource(source: {
+  inbound: readonly HwInbound[]
+  outbound: readonly HwOutbound[]
+  stock: readonly HwStock[]
+}): string {
+  const canonical = (rows: readonly object[]) =>
+    rows
+      .map((row) => {
+        const content: Record<string, unknown> = { ...(row as Record<string, unknown>) }
+        delete content.id
+        delete content.synced_at
+        return safeStringify(content)
+      })
+      .sort()
+  return checksumImportSnapshot({
+    inbound: canonical(source.inbound),
+    outbound: canonical(source.outbound),
+    stock: canonical(source.stock),
+  })
+}
+
 export async function importHardwareFromBranchSheets(
+  options: { actor?: string | null; trigger?: HardwareSheetImportTrigger } = {}
+): Promise<HardwareSheetImportResult> {
+  return runHardwareSheetImport(options, null)
+}
+
+export type HardwareSheetImportIfChangedResult =
+  | { status: "unchanged"; runId: string; sourceChecksum: string; checkedAt: string }
+  | { status: "imported"; sourceChecksum: string; result: HardwareSheetImportResult }
+
+interface HardwareImportRunState {
+  id: string
+  status: string
+  rows_imported: number | null
+  rows_skipped: number | null
+  raw: unknown
+}
+
+function importRunSourceChecksum(run: HardwareImportRunState): string | null {
+  return isRecord(run.raw) && typeof run.raw.source_checksum === "string" ? run.raw.source_checksum : null
+}
+
+/**
+ * 매시간 자동 가져오기용 — 시트가 마지막 성공 가져오기 때와 같으면 원장을 건드리지 않는다.
+ *
+ * 왜 건너뛰나: 교체 가져오기는 시트 이관분을 통째로 다시 싣고 §8-6(시트가 이긴다) 정리까지 돈다. 시트가
+ * 그대로인데 매시간 다시 실으면 스냅샷만 쌓이고, 그사이 사람이 한 확정이 의미 없이 다시 정리된다.
+ * 바뀐 게 없을 때는 "확인했다"는 시각만 남긴다 — 신선도 표시(ImportFreshnessStrip)가 그 시각을 쓴다.
+ */
+export async function importHardwareFromBranchSheetsIfChanged(
   options: { actor?: string | null } = {}
+): Promise<HardwareSheetImportIfChangedResult> {
+  const source = await readHardwareSheetSource()
+  const sourceChecksum = checksumHardwareSheetSource(source)
+
+  const sb = createSupabaseAdminClient()
+  const { data: runData, error: runError } = await sb
+    .from("hardware_import_runs")
+    .select("id,status,rows_imported,rows_skipped,raw")
+    .eq("source", "branch_hw_sheet")
+    .order("started_at", { ascending: false })
+    .limit(20)
+  if (runError) throw runError
+  const runs = (runData ?? []) as HardwareImportRunState[]
+  const latest = runs[0] ?? null
+  const lastSuccess = runs.find((run) => run.status === "success") ?? null
+
+  if (lastSuccess && importRunSourceChecksum(lastSuccess) === sourceChecksum) {
+    const checkedAt = new Date().toISOString()
+    if (latest?.id === lastSuccess.id) {
+      const { error } = await sb
+        .from("hardware_import_runs")
+        .update({ raw: { ...(isRecord(lastSuccess.raw) ? lastSuccess.raw : {}), last_checked_at: checkedAt } })
+        .eq("id", lastSuccess.id)
+      if (error) throw error
+      return { status: "unchanged", runId: lastSuccess.id, sourceChecksum, checkedAt }
+    }
+    // 마지막 기록이 실패(시트 읽기 일시 오류 등)라면, 원장은 여전히 그 전 성공 가져오기 상태다. 실패가
+    // 화면 맨 위에 계속 남지 않게 "변경 없음 확인" 성공 행을 하나 남긴다(행 수는 그 성공 가져오기 값).
+    const { data, error } = await sb
+      .from("hardware_import_runs")
+      .insert({
+        source: "branch_hw_sheet",
+        status: "success",
+        started_at: checkedAt,
+        finished_at: checkedAt,
+        rows_imported: lastSuccess.rows_imported,
+        rows_skipped: lastSuccess.rows_skipped,
+        raw: {
+          mode: "unchanged",
+          trigger: "auto",
+          source_checksum: sourceChecksum,
+          matched_run_id: lastSuccess.id,
+          last_checked_at: checkedAt,
+        },
+      })
+      .select("id")
+      .single()
+    if (error) throw error
+    return { status: "unchanged", runId: String(data.id), sourceChecksum, checkedAt }
+  }
+
+  const result = await runHardwareSheetImport({ actor: options.actor, trigger: "auto" }, source)
+  return { status: "imported", sourceChecksum, result }
+}
+
+// 버튼 가져오기가 도는 중이면 자동 가져오기는 이번 회차를 건너뛴다. 중간에 죽은 실행이 "running"으로
+// 남아도 영원히 막지 않게 최근 15분 안의 것만 본다(branch_sync_runs의 isAnyRunning과 같은 방식).
+const HARDWARE_IMPORT_RUNNING_WINDOW_MS = 15 * 60_000
+
+export async function isHardwareSheetImportRunning(now: number = Date.now()): Promise<boolean> {
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("hardware_import_runs")
+    .select("id")
+    .eq("source", "branch_hw_sheet")
+    .eq("status", "running")
+    .gte("started_at", new Date(now - HARDWARE_IMPORT_RUNNING_WINDOW_MS).toISOString())
+    .limit(1)
+  if (error) throw error
+  return (data ?? []).length > 0
+}
+
+/** 시트 읽기(미러 동기화) 단계에서 실패한 자동 가져오기를 기록한다 — 하드웨어 화면의 신선도 표시가 실패를 보여 준다. */
+export async function recordHardwareSheetImportFailure(
+  message: string,
+  options: { trigger?: HardwareSheetImportTrigger } = {}
+): Promise<string> {
+  const runId = await startImportRun()
+  await finishImportRun(runId, {
+    status: "failed",
+    error: message,
+    raw: { trigger: options.trigger ?? "manual", stage: "sheet_sync" },
+  })
+  return runId
+}
+
+async function runHardwareSheetImport(
+  options: { actor?: string | null; trigger?: HardwareSheetImportTrigger },
+  preloaded: HardwareSheetSource | null
 ): Promise<HardwareSheetImportResult> {
   const runId = await startImportRun()
 
   try {
-    const [inbound, outbound, stock] = await Promise.all([
-      listFreshHwInbound(),
-      listFreshHwOutbound(),
-      listFreshHwStock(),
-    ])
+    const { inbound, outbound, stock } = preloaded ?? (await readHardwareSheetSource())
+    const sourceChecksum = checksumHardwareSheetSource({ inbound, outbound, stock })
     const outboundOrInboundProducts = new Set<string>()
     const productInputs: Array<{ name: string; category?: string | null }> = []
 
@@ -1993,6 +2166,9 @@ export async function importHardwareFromBranchSheets(
       rowsSkipped: skipped,
       raw: {
         mode: additiveMerge ? "additive_merge" : "replace",
+        trigger: options.trigger ?? "manual",
+        // 다음 자동 가져오기가 "시트가 그대로인가"를 이 값과 비교한다.
+        source_checksum: sourceChecksum,
         merge: mergeCounts,
         snapshot_id: snapshot.id,
         snapshot_checksum: snapshot.checksum,

@@ -133,6 +133,8 @@ export interface HardwareDashboard {
     rows_imported: number | null
     rows_skipped: number | null
     error: string | null
+    /** 매시간 자동 가져오기가 시트 변경 없음을 마지막으로 확인한 시각. optional은 구버전 응답 호환. */
+    last_checked_at?: string | null
   } | null
   // 감사(2026-09-07 #1) — 시트 이관 RPC가 구버전(20260630 마이그레이션 미적용)이면 금액 컬럼이
   // raw JSON 백업에서 복구된다. recoveredFromRawCount > 0이면 그 상태가 지금도 살아 있다는 뜻.

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { HW_RANGES, parseInbound, parseOutbound, parseStock, parseSalesMonthly } from "@/lib/branch/parsers/hw"
+import { HW_RANGES, findOutboundOrderNoColumn, parseInbound, parseOutbound, parseStock, parseSalesMonthly } from "@/lib/branch/parsers/hw"
 import type { FormattedCell } from "@/lib/branch/google-sheets"
 
 const c = (value: unknown, bg: FormattedCell["bg"] = null): FormattedCell => ({ value: value as string | number | null, bg })
@@ -51,6 +51,45 @@ describe("hw parsers", () => {
       remarks: "메모",
     })
     expect(out[0].serials).toEqual(["S1", "S2"])
+  })
+
+  it("outbound reads the 오더번호 column by header name into raw.order_no", () => {
+    const header = [...Array(13).fill(c("")), c(" 오더 번호 ")]
+    const grid: FormattedCell[][] = [
+      header,
+      [c("C3"), c("2026. 10. 23"), c("Minji"), c('86" IFP'), c(3), c(""), c(5850), c(""), c("성남여자고등학교"), c(""), c("배송 예정"), c("Sales"), c(""), c(" ORD-2610-014 ")],
+      [c("C3"), c("2026. 10. 23"), c("Minji"), c("STD1"), c(3), c(""), c(540), c(""), c(""), c(""), c("배송 예정"), c("Sales"), c(""), c("")],
+    ]
+
+    const out = parseOutbound(grid)
+
+    expect(out[0].raw).toMatchObject({ order_no: "ORD-2610-014" })
+    // 빈 칸은 키 자체를 싣지 않는다 — 열이 없던 시절의 raw와 같게 남는다.
+    expect(out[1].raw).not.toHaveProperty("order_no")
+    // 기존 열 위치는 그대로 읽힌다.
+    expect(out[1]).toMatchObject({ product: "STD1", destination: "성남여자고등학교", progress: "배송 예정" })
+  })
+
+  it("outbound without an 오더번호 column keeps raw unchanged", () => {
+    const grid: FormattedCell[][] = [
+      Array(13).fill(c("")),
+      [c("H8"), c("2026. 4. 27"), c("Wangchan"), c('86" IFP'), c(2), c(2500), c(5000), c(""), c("홍성 프라임수학"), c(""), c("출고"), c("Sales"), c("")],
+    ]
+
+    expect(parseOutbound(grid)[0].raw).not.toHaveProperty("order_no")
+  })
+
+  it("outbound stops instead of shifting values when 오더번호 is inserted between the fixed columns", () => {
+    const header = Array(14).fill(c(""))
+    header[8] = c("오더번호")
+
+    expect(() => parseOutbound([header])).toThrow(/I열.*N열 이후/)
+  })
+
+  it("finds the order number header in its English and spaced forms", () => {
+    expect(findOutboundOrderNoColumn([c("물류No"), c("Order No.")])).toBe(1)
+    expect(findOutboundOrderNoColumn([c("오더 번호")])).toBe(0)
+    expect(findOutboundOrderNoColumn([c("오더"), c("번호")])).toBeNull()
   })
 
   it("outbound fills merged destination cells down so matching customers sync for each product row", () => {
