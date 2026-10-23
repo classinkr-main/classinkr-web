@@ -56,6 +56,15 @@ npm run check:db --  --strict
 유지하고 팀 템플릿 조회는 적용 안내를 표시하며, 저장·수정·보관은 503으로 응답한다.
 테이블은 RLS를 활성화하고 정책을 두지 않아 서버의 관리자 인증을 거친 service role API에서만 접근한다.
 
+### 총판 정산
+
+[20261023_distributor_settlements.sql](../../supabase/migrations/20261023_distributor_settlements.sql)은
+견적별 총판 정산(총판용 견적서 금액·발행 스냅샷·미수 상태), 총판 입금 기록, 총판 단가 템플릿을 저장한다.
+운영 적용 여부는 `npm run check:db`의 `distributor_settlements`·`distributor_settlement_payments`·
+`distributor_price_templates` 프로브로 확인한다. 미적용이면 고객 견적 작성·공유·동의는 그대로 동작하고,
+견적 상세의 총판 정산 영역과 총판 미수금 탭은 적용 안내를 표시하며 쓰기는 503으로 응답한다.
+세 표 모두 RLS를 활성화하고 정책을 두지 않는다.
+
 ### 공통 적용 기준
 
 **마이그레이션을 먼저 적용하고 코드를 배포한다.** 다만 순서가 뒤집혀도 공개 표면이 죽지 않도록

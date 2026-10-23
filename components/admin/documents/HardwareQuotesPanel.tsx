@@ -45,6 +45,7 @@ import {
   QUOTE_STAGE_LABELS,
   type QuoteQueueKey,
 } from "./quote-queue"
+import DistributorSettlementSection from "./DistributorSettlementSection"
 
 type HardwareQuoteRow = {
   id: string
@@ -379,7 +380,10 @@ export default function HardwareQuotesPanel({
   const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [productLineFilter, setProductLineFilter] = useState<QuoteProductLine | "all">("all")
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  // ?quote=<id> 딥링크(총판 미수금 탭·알림)로 들어오면 그 견적을 먼저 연다. 목록이 비동기로 오므로 첫 렌더 마크업은 같다.
+  const [selectedId, setSelectedId] = useState<string | null>(() =>
+    typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("quote")
+  )
   const [details, setDetails] = useState<Record<string, DetailState>>({})
   const handledQuickActionKeyRef = useRef<string | null>(null)
 
@@ -908,6 +912,8 @@ export default function HardwareQuotesPanel({
             </div>
           </div>
         </div>
+
+        <DistributorSettlementSection key={quote.id} quoteId={quote.id} />
       </section>
     )
   }

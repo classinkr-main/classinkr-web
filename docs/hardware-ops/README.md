@@ -25,6 +25,7 @@
 7. [상태 흐름과 전이 규칙](./state-flow.md)
 8. [운영 건 상세 화면](./operation-case-workspace.md)
 9. [열린 질문과 다음 결정](./open-questions.md)
+10. [총판 정산 — 총판용 견적서와 미수금](./distributor-settlement.md)
 
 ## 4. 기존 문서와 연결
 

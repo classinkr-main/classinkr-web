@@ -9,8 +9,10 @@ import {
   Plus,
   Ticket,
   Users,
+  Wallet,
 } from "lucide-react"
 
+import DistributorReceivablesPanel from "@/components/admin/documents/DistributorReceivablesPanel"
 import HardwareQuotesPanel from "@/components/admin/documents/HardwareQuotesPanel"
 import SoftwareQuoteCodesPanel from "@/components/admin/documents/SoftwareQuoteCodesPanel"
 import { ContractsPanel } from "@/components/admin/documents/ContractsPanel"
@@ -20,7 +22,7 @@ import type { StandardQuoteTemplateId } from "@/lib/standard-quote-template"
 import { clearQuoteComposerIntent, normalizeQuoteQuickAction } from "@/lib/quote-composer-navigation"
 import AdminTabs, { type AdminTabItem } from "@/components/admin/AdminTabs"
 
-type DocumentTab = "hardware" | "software" | "contracts" | "receipts"
+type DocumentTab = "hardware" | "software" | "contracts" | "receipts" | "receivables"
 type HardwareQuoteQuickAction = "new" | StandardQuoteTemplateId
 type HardwareQuoteQuickActionRequest = {
   key: string
@@ -58,6 +60,12 @@ const DOCUMENT_TABS: DocumentTabItem[] = [
     label: "영수증",
     description: "수납 확인, 현금영수증, PDF 발행 기록",
     icon: <ClipboardList className="h-4 w-4" />,
+  },
+  {
+    key: "receivables",
+    label: "총판 미수금",
+    description: "총판용 견적서 발행분의 입금 현황과 총판 단가 템플릿",
+    icon: <Wallet className="h-4 w-4" />,
   },
   // "공유 링크"(links) coming-soon 탭은 제거 — 열람수·발송 상태는 하드웨어 견적 행 단위로 이미 제공된다.
   // 구 딥링크(tab=links|shares)는 normalizeDocumentTab의 hardware 폴백이 흡수한다.
@@ -104,6 +112,7 @@ function normalizeDocumentTab(raw: string | null): DocumentTab {
   if (raw === "software" || raw === "software-code" || raw === "sw") return "software"
   if (raw === "contract" || raw === "contracts") return "contracts"
   if (raw === "receipt" || raw === "receipts") return "receipts"
+  if (raw === "receivables" || raw === "distributor") return "receivables"
 
   return "hardware"
 }
@@ -362,6 +371,7 @@ export default function QuotesPage() {
         {activeTab === "software" && <SoftwareQuoteCodesPanel />}
         {activeTab === "contracts" && <ContractsPanel />}
         {activeTab === "receipts" && <ReceiptsPanel />}
+        {activeTab === "receivables" && <DistributorReceivablesPanel />}
       </div>
     </div>
   )
