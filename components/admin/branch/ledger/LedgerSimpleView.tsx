@@ -422,6 +422,8 @@ function ManagerTable({ rows, months, currentMonth, managerGoals, pace, onOpenMa
 }
 
 export interface LedgerSimpleViewProps {
+  /** 숫자가 틀리거나 빠질 수 있는 상황(큐 오류·목록 상한·원본을 못 찾은 정정) — 표 위에 그대로 보여 준다. */
+  notices?: string[]
   /** 범위·검색 필터가 반영된 장부 행(워크벤치 filteredRows). */
   rows: LedgerRevenueRow[]
   /** 회계연도 12개월(YYYY-MM). */
@@ -448,7 +450,7 @@ export interface LedgerSimpleViewProps {
   onOpenManager: (manager: string) => void
 }
 
-export default function LedgerSimpleView({ rows, months, currentMonth, monthlyGoals, personal, managerGoals, loading, edit, pendingDrafts, serverQueue, onCheckDrafts, onApplyDrafts, onShowQueue, onOpenRow, onOpenManager }: LedgerSimpleViewProps) {
+export default function LedgerSimpleView({ notices = [], rows, months, currentMonth, monthlyGoals, personal, managerGoals, loading, edit, pendingDrafts, serverQueue, onCheckDrafts, onApplyDrafts, onShowQueue, onOpenRow, onOpenManager }: LedgerSimpleViewProps) {
   const [groupBy, setGroupBy] = useState<SimpleGroupBy>("none")
   const [teamView, setTeamView] = useState<"members" | "deals">("members")
   const [chips, setChips] = useState<Set<string>>(() => new Set())
@@ -469,6 +471,11 @@ export default function LedgerSimpleView({ rows, months, currentMonth, monthlyGo
 
   return (
     <div className="space-y-4">
+      {notices.length > 0 ? (
+        <div role="status" className="space-y-1 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-4 py-2.5 text-[12.5px] font-semibold text-[#7A520F]">
+          {notices.map((notice) => <p key={notice}>⚠ {notice}</p>)}
+        </div>
+      ) : null}
       <SummaryBand bucket={total} goal={fyGoal > 0 ? fyGoal : null} pace={pace} goalNote={loading ? "불러오는 중" : goals ? "목표 미등록" : "필터 중 — 목표 비교 생략"} />
       <div className="flex flex-wrap items-center gap-2">
         {!personal ? <SegButtons label="표 형태" value={teamView} options={[{ id: "members", label: "담당자별" }, { id: "deals", label: "딜 전체" }]} onChange={setTeamView} /> : null}

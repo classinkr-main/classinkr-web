@@ -164,6 +164,7 @@ import {
   pendingCellAmount,
   railDedupTarget,
   resolveDraftEditTargetRow,
+  rowCommitKind,
   storeMatrixConfidence,
   useMatrixEditor,
   weeklyEditLockMask,
@@ -335,6 +336,7 @@ export type {
 import {
   addMonthlyBucket,
   aggregatePeriodManagerSummaries,
+  alignOpenDraftsToSheetRows,
   appliedDraftConfidenceMaps,
   buildFiscalMonthOptions,
   buildPeriodMonths,
@@ -359,6 +361,7 @@ import {
   periodShortLabel,
   relativeTimeFromNow,
   replaceEquivalentSet,
+  resolveCorrectionTargets,
   REV_FORECAST_FILTERS,
   REV_ORIGIN_FILTERS,
   REV_PAGE_SIZES,
@@ -1235,19 +1238,13 @@ export default function SalesLedgerWorkbench({
     return appliedDraftRows.filter((row) => row.draftKind === "edit-row")
   }, [appliedDraftRows])
   // 적용된 수정(edit-row) 초안은 원본 시트행의 "그 달"을 대체한다(신규 추가가 아니라 정정).
-  // sourceDealId===시트행 id, draftMonth===대상 월. (dealId→월집합)으로 모아둔다.
-  const editRowOverrideMonths = useMemo(() => {
-    const map = new Map<string, Set<string>>()
-    for (const row of replacementAppliedDraftRows) {
-      const dealId = row.sourceDealId
-      const month = row.draftMonth
-      if (!dealId || !month) continue
-      const months = map.get(dealId) ?? new Set<string>()
-      months.add(month)
-      map.set(dealId, months)
-    }
-    return map
-  }, [replacementAppliedDraftRows])
+  // (원본 시트행 id→월집합). 시트를 다시 가져오면 행 id 가 바뀌므로 행 번호·고객·상품으로도 원본을 찾는다
+  // (resolveCorrectionTargets) — 못 찾은 정정은 장부 화면이 경고한다.
+  const correctionTargets = useMemo(
+    () => resolveCorrectionTargets(replacementAppliedDraftRows, sheetRows),
+    [replacementAppliedDraftRows, sheetRows],
+  )
+  const editRowOverrideMonths = correctionTargets.overrides
   // 원본 시트행 + 적용초안행을 합치되, 수정초안이 가리키는 (딜, 월) 셀은 원본에서 제거한다.
   // 안 그러면 원본 금액 + 정정 금액이 그 달의 월·연간·그룹·합계행에 이중 계상된다
   // (amount-change=대체, forecast-add=원본 0이라 무영향 — 둘 다 안전).
@@ -1830,7 +1827,9 @@ export default function SalesLedgerWorkbench({
   // 순수 함수(ledger/RevMatrix buildMatrixPendingByCell) 단일 소스 — 회귀 테스트(셀 dedup·relock)가
   // 검증하는 그 함수를 그대로 소비한다. 이전엔 동일 로직 인라인 사본이 있어 드리프트 위험이 있었다
   // (라운드 4 최적화에서 통합 — 주차별 확도 weeklyConfidence 동봉도 순수 함수 한 곳에서만 관리).
-  const pendingByCell = useMemo(() => buildMatrixPendingByCell(drafts, cellLookupRows), [drafts, cellLookupRows])
+  // 시트를 다시 가져와 행 id 가 바뀌어도 열린 수정 초안이 지금 행에 걸리도록 원천 딜 id 를 맞춘 사본으로 매칭한다.
+  const pendingMatchDrafts = useMemo(() => alignOpenDraftsToSheetRows(drafts, sheetRows), [drafts, sheetRows])
+  const pendingByCell = useMemo(() => buildMatrixPendingByCell(pendingMatchDrafts, cellLookupRows), [pendingMatchDrafts, cellLookupRows])
 
   // 커밋 기준값(원 단위): 편집 진입 초기값·fill-down·중복 판정 소스.
   // 그 셀에 미검수(draft|checked) 초안이 있으면 시트 원값 대신 그 초안 금액을 우선한다 — 그래야
@@ -1839,9 +1838,10 @@ export default function SalesLedgerWorkbench({
   // pending이 없으면 기존 규약: 주차 셀은 그 주차의 현재 표시값, 아니면 그 달 표시 금액.
   const matrixCellValue = useCallback(
     (coord: MatrixCellCoord) => {
-      const pending = lookupMatrixPending(pendingByCell, coord)
-      if (pending) return pendingCellAmount(pending, coord.week)
       const row = rowById.get(coord.rowId)
+      // 이 칸 커밋과 같은 종류의 초안만 시작값이 된다 — 이름으로 걸린 신규 초안 금액이 기존 딜 칸 값처럼 보이지 않게.
+      const pending = lookupMatrixPending(pendingByCell, coord, row ? rowCommitKind(row) : undefined)
+      if (pending) return pendingCellAmount(pending, coord.week)
       if (!row) return 0
       if (coord.week != null) return rowWeeklySplit(row, coord.month).weeks[coord.week] ?? 0
       return rowMonthAmount(row, coord.month)
@@ -1855,7 +1855,8 @@ export default function SalesLedgerWorkbench({
   // 확도가 기록된 셀을 재편집할 때 기본값이 이웃 주차의 우세치로 뭉개지지 않는다.
   const matrixCellConfidence = useCallback(
     (coord: MatrixCellCoord): DraftConfidence => {
-      const pending = lookupMatrixPending(pendingByCell, coord)
+      const kindRow = rowById.get(coord.rowId)
+      const pending = lookupMatrixPending(pendingByCell, coord, kindRow ? rowCommitKind(kindRow) : undefined)
       if (pending) {
         if (coord.week != null) {
           const slot = pending.weeklyConfidence?.[coord.week]
@@ -1982,7 +1983,8 @@ export default function SalesLedgerWorkbench({
           sourceDealId: sourceDealId ?? null,
         },
       }
-      const existingId = lookupMatrixPending(pendingByCell, { rowId, month, week })?.id ?? null
+      // 같은 종류(수정이면 수정, 신규면 신규)의 대기 초안만 PATCH 대상 — 이름으로 걸린 신규 초안을 수정으로 덮지 않는다.
+      const existingId = lookupMatrixPending(pendingByCell, { rowId, month, week }, kind)?.id ?? null
       return { input, existingId }
     },
     [lens, pendingByCell, period, rowById, team],
@@ -2096,7 +2098,7 @@ export default function SalesLedgerWorkbench({
     editable: (row, month) => isMatrixCellEditable(row, month, editRowOverrideMonths.get(row.id)),
     value: (row, month) => matrixCellValue({ rowId: row.id, month }),
     confidence: (row, month) => matrixCellConfidence({ rowId: row.id, month }),
-    pending: (row, month) => lookupMatrixPending(pendingByCell, { rowId: row.id, month }),
+    pending: (row, month) => lookupMatrixPending(pendingByCell, { rowId: row.id, month }, rowCommitKind(row)),
     commit: (rowId, month, amount, confidence) => onCommitCell(rowId, month, amount, confidence),
   }), [editRowOverrideMonths, matrixCellConfidence, matrixCellValue, onCommitCell, pendingByCell])
 
@@ -3316,6 +3318,12 @@ export default function SalesLedgerWorkbench({
           >
             {lens === "ledger" && (
               <LedgerSimpleView
+                notices={[
+                  queueError ?? (ledgerHealth?.ok === false ? ledgerHealth.message ?? "내부 원본 준비 필요" : null),
+                  correctionTargets.unresolved.length > 0
+                    ? `장부에서 반영한 수정 ${correctionTargets.unresolved.length}건의 원래 시트 행을 찾지 못했습니다 — 시트에서 행이 지워졌거나 고객명·상품이 바뀌었을 수 있어, 이 수정은 원래 금액과 따로 더해져 보입니다. 체크 큐에서 확인하세요.`
+                    : null,
+                ].filter((notice): notice is string => Boolean(notice))}
                 rows={filteredRows}
                 months={matrixMonths}
                 currentMonth={defaultMonthRef.current}

@@ -33,6 +33,7 @@ import {
   rowProductCategory,
   weeklyConfidenceFromMetadata,
   type DraftConfidence,
+  type DraftKind,
   type LedgerDraft,
   type LedgerRevenueRow,
   type RevMonthlyBucket,
@@ -84,12 +85,33 @@ function matrixSameColumn(a: MatrixCellCoord, b: MatrixCellCoord): boolean {
   return a.month === b.month && (a.week ?? -1) === (b.week ?? -1)
 }
 
+// 이 행의 칸을 고치면 어떤 초안이 되는가 — 원천 딜이 있는 행(시트 행·수정 초안 파생 행)은 그 딜의 수정(edit-row),
+// 원천 딜이 없는 행(신규 초안 파생 행)은 신규(new-row). buildCellDraftInput 과 같은 판정의 단일 소스.
+export function rowCommitKind(row: Pick<LedgerRevenueRow, "sourceDealId" | "ledgerOrigin" | "id">): DraftKind {
+  return (row.sourceDealId ?? (row.ledgerOrigin === "sheet" ? row.id : undefined)) ? "edit-row" : "new-row"
+}
+
+// 대기 초안이 이 종류 커밋의 "편집 대상"이 될 수 있는가. 신규 초안은 고객명으로 기존 시트 행 칸에도 걸리지만
+// 적용되면 별도 행으로 더해지는 값이다 — 기존 딜 칸 재편집(수정 초안)이 그 신규 초안을 PATCH 하면 신규가 수정으로
+// 바뀌거나 금액이 섞인다. kind 가 없는 요약(과거 호출부·테스트)은 수정으로 본다.
+export function pendingMatchesKind(pending: Pick<MatrixPendingDraft, "kind">, kind: DraftKind): boolean {
+  return kind === "new-row" ? pending.kind === "new-row" : pending.kind !== "new-row"
+}
+
 // 좌표 → 그 셀에 걸린 미검수 초안(있으면). 주차 좌표면 주차 키 우선, 없으면 월 키로 폴백
 // (월 단위로만 걸린 초안도 주차 칸 재편집 시 "이미 이 달에 초안이 있다"는 신호로 쓴다).
 // matrixCellValue(재편집 시작값)·matrixCellConfidence·onCommitCell(PATCH-vs-POST 타겟)이 공유.
-export function lookupMatrixPending(pendingByCell: Map<string, MatrixPendingDraft>, coord: MatrixCellCoord): MatrixPendingDraft | null {
+// kind 를 주면 그 종류 커밋의 편집 대상이 될 수 있는 초안만 돌려준다(pendingMatchesKind) — 값·확도·저장 대상
+// 판정은 항상 kind 를 준다. 표시(점)만 쓰는 호출부는 kind 없이 어떤 초안이든 받는다.
+export function lookupMatrixPending(
+  pendingByCell: Map<string, MatrixPendingDraft>,
+  coord: MatrixCellCoord,
+  kind?: DraftKind,
+): MatrixPendingDraft | null {
+  const accept = (pending: MatrixPendingDraft | undefined) =>
+    pending && (!kind || pendingMatchesKind(pending, kind)) ? pending : null
   const weekKey = coord.week != null ? matrixCoordKey(coord) : null
-  return (weekKey ? pendingByCell.get(weekKey) : null) ?? pendingByCell.get(matrixCoordKey({ rowId: coord.rowId, month: coord.month })) ?? null
+  return (weekKey ? accept(pendingByCell.get(weekKey)) : null) ?? accept(pendingByCell.get(matrixCoordKey({ rowId: coord.rowId, month: coord.month }))) ?? null
 }
 
 // metadata.week 문자열("w1".."w5") → 0~4 인덱스. "month"/그 외/누락이면 null.
@@ -127,6 +149,9 @@ export function weeklyPaymentsFromDraftMetadata(
 // 있으면 주차별 금액 조회에 쓴다(없으면 amount가 곧 그 셀 금액, 주차 단일대체 규약과 동일).
 export interface MatrixPendingDraft {
   id: string
+  /** 초안 종류 — 신규(new-row)는 기존 행 칸에 이름으로 걸려도 그 칸의 편집 대상이 아니다(pendingMatchesKind).
+      없으면(과거 호출부) 수정으로 본다. */
+  kind?: DraftKind
   amount: number
   confidence: DraftConfidence
   weekly: number[] | null
@@ -156,10 +181,11 @@ export function railDedupTarget(
   month: string,
   weekToken: string | null | undefined,
   excludeDraftId: string | null,
+  kind: DraftKind = "edit-row",
 ): MatrixPendingDraft | null {
   const weekIdx = weekIndexFromToken(weekToken)
   const coord: MatrixCellCoord = weekIdx == null ? { rowId, month } : { rowId, month, week: weekIdx }
-  const pending = lookupMatrixPending(pendingByCell, coord)
+  const pending = lookupMatrixPending(pendingByCell, coord, kind)
   if (!pending || pending.id === excludeDraftId) return null
   return pending
 }
@@ -192,6 +218,8 @@ export function findOpenNewRowDuplicate(
 //   - 월 키: 그 달에 걸린 최신 초안(주차 초안 포함) → 접힌 월 셀 앰버 점 + 월 단위 재편집 타겟.
 //   - 주차 키: metadata.week가 wN인 초안만 → 확장 주차 칸 앰버 점 + 그 주차 재편집 타겟.
 // 같은 키에 여러 초안이 있으면 가장 최근(drafts 배열 앞쪽) 것을 표시 — 컴포넌트는 항상 최신순으로 prepend한다.
+// 단 같은 칸에 수정 초안과 (고객명으로 걸린) 신규 초안이 함께 있으면 수정 초안이 그 칸을 차지한다 — 신규가 앞서면
+// 그 칸의 재편집이 기존 수정 초안을 못 찾아 새 수정 초안을 만들고, 둘 다 적용되면 이중 계상된다.
 // 순수 함수로 분리(useMemo 밖) — 컴포넌트 렌더 없이 회귀 테스트(같은 셀 재편집 시 초안 1건 유지) 가능.
 export function buildMatrixPendingByCell(
   drafts: LedgerDraft[],
@@ -206,18 +234,20 @@ export function buildMatrixPendingByCell(
       if (draft.kind === "edit-row" ? draftDealId !== dealKey : draft.customer.trim() !== row.customer.trim()) continue
       const summary: MatrixPendingDraft = {
         id: draft.id,
+        kind: draft.kind,
         amount: draft.amount,
         confidence: draftConfidenceFromMetadata(draft.metadata),
         weekly: mergedWeeklyFromMetadata(draft.metadata),
         weeklyConfidence: weeklyConfidenceFromMetadata(draft.metadata),
       }
-      const monthKey = matrixCoordKey({ rowId: row.id, month: draft.month })
-      if (!map.has(monthKey)) map.set(monthKey, summary) // 월 셀: 첫(=최신) 초안
-      const weekIdx = weekIndexFromToken(metadataString(draft.metadata, "week"))
-      if (weekIdx != null) {
-        const weekKey = matrixCoordKey({ rowId: row.id, month: draft.month, week: weekIdx })
-        if (!map.has(weekKey)) map.set(weekKey, summary) // 주차 칸: 그 주차 첫(=최신) 초안
+      // 비어 있거나, 먼저 들어온 것이 신규 초안인데 이번 것이 수정 초안이면 이번 것으로(수정 우선).
+      const claim = (key: string) => {
+        const current = map.get(key)
+        if (!current || (current.kind === "new-row" && draft.kind === "edit-row")) map.set(key, summary)
       }
+      claim(matrixCoordKey({ rowId: row.id, month: draft.month })) // 월 셀: 첫(=최신) 초안
+      const weekIdx = weekIndexFromToken(metadataString(draft.metadata, "week"))
+      if (weekIdx != null) claim(matrixCoordKey({ rowId: row.id, month: draft.month, week: weekIdx })) // 주차 칸
     }
   }
   return map

@@ -127,14 +127,15 @@ describe("persistDraftsBatch — 여러 건 생성/수정을 배치 POST로 묶�
     expect(after404).toContain("draft: null, error: result.error")
   })
 
-  it("성공(ok && draft)에서는 create면 맨 앞 삽입+50건 슬라이스, update면 교체 후 clearRecordError를 부른다", () => {
+  it("성공(ok && draft)에서는 create면 맨 앞 삽입 후 목록 상한(capLedgerDrafts — 열린 초안은 자르지 않음), update면 교체 후 clearRecordError를 부른다", () => {
     const body = persistDraftsBatchBody()
     const okIndex = body.indexOf("if (result.ok && result.draft)")
     const status400Index = body.indexOf("if (result.status === 400)")
     expect(okIndex).toBeGreaterThan(-1)
     expect(status400Index).toBeGreaterThan(okIndex)
     const okBranch = body.slice(okIndex, status400Index)
-    expect(okBranch).toContain(".slice(0, 50)")
+    expect(okBranch).toContain("capLedgerDrafts([nextDraft, ...current.filter((draft) => draft.id !== nextDraft.id)])")
+    expect(okBranch).not.toContain(".slice(0, 50)")
     expect(okBranch).toContain("clearRecordError(nextDraft.id)")
   })
 

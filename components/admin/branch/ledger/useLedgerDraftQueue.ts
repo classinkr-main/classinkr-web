@@ -73,7 +73,29 @@ interface LedgerDraftsResponse {
   // 별도 전달된다(app/api/admin/branch/ledger-drafts/route.ts GET). loadDrafts가 이를
   // reversedDraftIds 클라 상태의 서버 진실 소스로 시드한다.
   reversedDraftIds?: string[]
+  // 목록 상한(서버 LEDGER_LIST_MAX)에 닿았는지 — 닿았으면 일부가 화면·합계에서 빠질 수 있어 경고한다.
+  truncated?: { openDrafts?: boolean; entries?: boolean }
   error?: string
+}
+
+// 화면에 들고 있는 초안 목록 상한. 열린 초안(draft·checked)과 아직 서버에 못 올린 local-* 초안은 자르지 않고,
+// 끝난 초안(applied·cancelled) 이력만 최근 closedLimit 건으로 자른다 — 열린 초안이 잘리면 결재 바 건수와
+// 같은 칸 재편집(PATCH vs 새 초안) 판정에서 빠져 이중 계상·누락이 생긴다.
+// 서버 목록이 상한에 닿았을 때의 경고 문구(없으면 null). 조용히 잘리면 합계가 틀려도 아무도 모른다.
+export function ledgerTruncationNotice(truncated: LedgerDraftsResponse["truncated"]): string | null {
+  const parts: string[] = []
+  if (truncated?.openDrafts) parts.push("열린 초안이 1,000건을 넘어 일부만 보입니다 — 체크 큐에서 먼저 반영·취소하세요")
+  if (truncated?.entries) parts.push("장부 반영값이 1,000건을 넘어 오래된 반영분이 합계에서 빠질 수 있습니다")
+  return parts.length > 0 ? parts.join(" · ") : null
+}
+
+export function capLedgerDrafts(drafts: LedgerDraft[], closedLimit = 50): LedgerDraft[] {
+  let closed = 0
+  return drafts.filter((draft) => {
+    if (draft.status === "draft" || draft.status === "checked" || draft.id.startsWith("local-")) return true
+    closed += 1
+    return closed <= closedLimit
+  })
 }
 
 interface LedgerDraftResponse {
@@ -178,7 +200,7 @@ function readLocalDrafts() {
 
 function writeLocalDrafts(drafts: LedgerDraft[]) {
   if (typeof window === "undefined") return
-  localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(drafts.slice(0, 50)))
+  localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(capLedgerDrafts(drafts)))
 }
 
 function makeLocalDraft(input: LedgerDraftInput): LedgerDraft {
@@ -296,7 +318,7 @@ export function useLedgerDraftQueue() {
 
   const updateLocalDrafts = useCallback((updater: (current: LedgerDraft[]) => LedgerDraft[]) => {
     setDrafts((current) => {
-      const next = updater(current).slice(0, 50)
+      const next = capLedgerDrafts(updater(current))
       writeLocalDrafts(next)
       return next
     })
@@ -359,7 +381,7 @@ export function useLedgerDraftQueue() {
         })
         writeLocalDrafts(stillLocal)
         setUnsyncedLocalCount(stillLocal.length)
-        setDrafts([...resent, ...stillLocal, ...(data.drafts ?? [])].slice(0, 50))
+        setDrafts(capLedgerDrafts([...resent, ...stillLocal, ...(data.drafts ?? [])]))
         setQueueError(
           stillLocal.length > 0
             ? `로컬 초안 ${stillLocal.length}건을 서버로 재전송하지 못했습니다 — 재연결 후 다시 시도하세요.`
@@ -369,6 +391,8 @@ export function useLedgerDraftQueue() {
       setLedgerEntries(data.entries ?? [])
       setLedgerHealth(data.ledgerHealth ?? null)
       setQueueMode("server")
+      const truncatedNotice = ledgerTruncationNotice(data.truncated)
+      if (truncatedNotice) setQueueError((current) => (current ? `${current} · ${truncatedNotice}` : truncatedNotice))
     } catch (error) {
       setDrafts(readLocalDrafts())
       setLedgerEntries([])
@@ -407,7 +431,7 @@ export function useLedgerDraftQueue() {
         }
         if (!data?.draft) throw new Error(data?.error ?? "초안 저장 응답이 비어 있습니다.")
         const nextDraft = data.draft
-        setDrafts((current) => [nextDraft, ...current.filter((draft) => draft.id !== nextDraft.id)].slice(0, 50))
+        setDrafts((current) => capLedgerDrafts([nextDraft, ...current.filter((draft) => draft.id !== nextDraft.id)]))
         setQueueError(null)
         return { draft: nextDraft, dedupedRecent: data.dedupedRecent === true }
       } catch (error) {
@@ -827,7 +851,7 @@ export function useLedgerDraftQueue() {
             if (item.id) {
               setDrafts((current) => current.map((draft) => (draft.id === item.id ? nextDraft : draft)))
             } else {
-              setDrafts((current) => [nextDraft, ...current.filter((draft) => draft.id !== nextDraft.id)].slice(0, 50))
+              setDrafts((current) => capLedgerDrafts([nextDraft, ...current.filter((draft) => draft.id !== nextDraft.id)]))
             }
             clearRecordError(nextDraft.id)
             results[itemIndex] = { draft: nextDraft, dedupedRecent: result.dedupedRecent === true }
