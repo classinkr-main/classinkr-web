@@ -16,6 +16,7 @@ import {
   listActiveTasksForDealByType,
 } from "@/lib/repositories/crm-tasks"
 import type { QuoteDocument, QuoteDocumentVersion } from "@/lib/portal/types"
+import { issueDistributorSettlementOnAcceptSafely } from "@/lib/server/distributor-settlement-issue"
 import { isCrossOriginRequest } from "@/lib/server/same-origin"
 
 // 고객이 "이 견적으로 진행"을 누르면 담당자가 바로 계약 전환에 착수해야 하므로
@@ -203,6 +204,8 @@ export async function POST(
         document,
         customerName: customer_name,
       })
+      // 총판 견적서 자동 발행도 재보장한다(이미 발행됐으면 조회 한 번으로 끝난다).
+      await issueDistributorSettlementOnAcceptSafely({ quoteDocumentId: document.id, origin: req.nextUrl.origin })
       return NextResponse.json({ acceptedAt: existing.acceptedAt })
     }
 
@@ -242,6 +245,10 @@ export async function POST(
     })
 
     await markDocumentAccepted(document.id, document.status)
+
+    // 정산 설정이 '고객 동의 시 발행'이면 같은 양식·원가의 총판용 견적서를 발행·발송한다.
+    // 실패는 삼키고(동의 응답 우선) 재확인 알림으로 넘긴다.
+    await issueDistributorSettlementOnAcceptSafely({ quoteDocumentId: document.id, origin: req.nextUrl.origin })
 
     notifyQuoteAccepted({
       dealId: document.deal_id,

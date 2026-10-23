@@ -215,10 +215,22 @@ describe("POST /api/share/quote/[token]/accept — 담당자 알림", () => {
       createCrmTask: vi.fn().mockResolvedValue({ id: "task_1" }),
       listActiveTasksForDealByType: vi.fn().mockResolvedValue([]),
     }))
+    const issueDistributorSettlementOnAcceptSafely = vi.fn().mockResolvedValue({ status: "not_configured" })
+    vi.doMock("@/lib/server/distributor-settlement-issue", () => ({ issueDistributorSettlementOnAcceptSafely }))
 
     const route = await import("@/app/api/share/quote/[token]/accept/route")
-    return { route, emitNotificationEvent, ensureQuoteInteractionLog }
+    return { route, emitNotificationEvent, ensureQuoteInteractionLog, issueDistributorSettlementOnAcceptSafely }
   }
+
+  it("수락하면 총판 견적서 자동 발행을 시도한다(정산 설정이 없으면 서비스가 건너뛴다)", async () => {
+    const { route, issueDistributorSettlementOnAcceptSafely } = await loadRoute({})
+
+    const response = await route.POST(buildRequest(), { params: Promise.resolve({ token: "tok123" }) })
+
+    expect(response.status).toBe(200)
+    expect(issueDistributorSettlementOnAcceptSafely).toHaveBeenCalledTimes(1)
+    expect(issueDistributorSettlementOnAcceptSafely.mock.calls[0][0]).toMatchObject({ quoteDocumentId: DOCUMENT.id })
+  })
 
   it("최초 수락이면 어드민에게 action_required 알림을 보낸다", async () => {
     const { route, emitNotificationEvent } = await loadRoute({})

@@ -184,6 +184,8 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // 미적용이어도 허브만 '미적용' 안내로 강등하고(쓰기 503) 매일 자동 태그 크론이 skipped 로 넘어간다.
   "supabase/migrations/20260925_crm_saved_segments.sql",
   "supabase/migrations/20261021_quote_team_templates.sql",
+  // 총판 정산(2026-10-23) — 원가 템플릿·견적별 총판 정산·입금 기록. 세 표 모두 RLS deny-all.
+  "supabase/migrations/20261023_distributor_settlements.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -888,6 +890,38 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     migration: "supabase/migrations/20261021_quote_team_templates.sql",
     severity: "warning",
     impact: "기본 견적은 유지되지만 팀 템플릿 저장·수정·보관은 503으로 차단된다.",
+  },
+  {
+    kind: "table",
+    table: "distributor_settlements",
+    label: "총판 정산(총판용 견적서·미수금)",
+    columns: [
+      "id", "quote_document_id", "deal_id", "fulfillment_mode", "source_version_id", "issued_version_id", "distributor_name",
+      "distributor_email", "issue_trigger", "auto_email", "lines", "total_amount", "customer_total_amount",
+      "status", "paid_amount", "due_date", "issued_at", "issue_reason", "share_token", "email_status",
+      "review_required_reason", "cancelled_at", "installed_at", "updated_at",
+    ],
+    migration: "supabase/migrations/20261023_distributor_settlements.sql",
+    severity: "warning",
+    impact: "고객 견적은 유지되지만 원가 설정·총판 견적서 발행·미수금 추적이 503으로 차단된다.",
+  },
+  {
+    kind: "table",
+    table: "distributor_settlement_payments",
+    label: "총판 입금 기록",
+    columns: ["id", "settlement_id", "amount", "paid_on", "memo", "created_by", "created_at"],
+    migration: "supabase/migrations/20261023_distributor_settlements.sql",
+    severity: "warning",
+    impact: "총판 입금 기록이 503으로 차단돼 미수금이 줄지 않는다.",
+  },
+  {
+    kind: "table",
+    table: "distributor_price_templates",
+    label: "원가 템플릿",
+    columns: ["id", "name", "rules", "notes", "archived_at", "updated_at"],
+    migration: "supabase/migrations/20261023_distributor_settlements.sql",
+    severity: "warning",
+    impact: "원가은 직접 입력만 되고 템플릿 저장·적용이 503으로 차단된다.",
   },
 ]
 
