@@ -33,6 +33,21 @@ function isIsoTimestamp(v: unknown): v is string {
   return typeof v === "string" && v.length > 0 && v.length <= 40 && !Number.isNaN(Date.parse(v))
 }
 
+/**
+ * 파이프라인(computations/pipeline.ts normalizedWeeklyPayments)은 weeklyPayments 를 늘 5칸으로 채워 보낸다.
+ * 칸이 4개인 달(2월)은 시트 칸 수와 달라 서버 비교(plan.ts sameWeeks)가 길이에서 어긋나 늘 conflict 가 된다.
+ * weeklyColors[month] 의 글자 수가 그 달 실제 주차 칸 수(parseRev 가 머리로 찾은 열)이므로, 그보다 긴 배열의
+ * 뒤가 전부 0(채운 칸)일 때만 그 길이로 자른다. 뒤에 값이 있으면 자르지 않는다 — 서버가 conflict 로 막는다(안전 쪽).
+ */
+function trimToSheetWeeks(rawWeeks: unknown[], colors: string): unknown[] {
+  // 글자가 없으면(재동기화 전 레거시 행) 0칸으로 본다 — 값이 전부 0이면 []("값 없던 달", 칸 수는 서버가 live 로),
+  // 값이 있으면 그대로(칸 수를 모른다 — 서버가 conflict 로 막는다).
+  const sheetWeekCount = colors.length
+  if (sheetWeekCount >= rawWeeks.length) return rawWeeks
+  const padded = rawWeeks.slice(sheetWeekCount)
+  return padded.every((raw) => Number(raw) === 0) ? rawWeeks.slice(0, sheetWeekCount) : rawWeeks
+}
+
 export function buildSheetBaseline(
   row: {
     rowId?: string | null
@@ -54,7 +69,7 @@ export function buildSheetBaseline(
     if (!Array.isArray(rawWeeks) || rawWeeks.length > MAX_WEEKS) return null
     const colors = row.weeklyColors?.[month] ?? ""
     weeks = []
-    for (const [index, raw] of rawWeeks.entries()) {
+    for (const [index, raw] of trimToSheetWeeks(rawWeeks, colors).entries()) {
       const value = Number(raw)
       if (!isWeekValue(value)) return null
       const mark = colors[index]

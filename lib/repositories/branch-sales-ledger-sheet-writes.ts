@@ -9,6 +9,10 @@ import "server-only"
 
 import { revalidateTag } from "next/cache"
 
+import {
+  SHEET_WRITE_ATTEMPT_STATUSES,
+  type SheetWriteAttemptStatus,
+} from "@/lib/branch/sheet-writeback/ledger-rules"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 export const BRANCH_SALES_LEDGER_SHEET_WRITES_CACHE_TAG = "branch-sales-ledger-sheet-writes"
@@ -18,8 +22,9 @@ const NOT_READY_MESSAGE = "매출 장부 시트 쓰기 기록 DB 마이그레이
 const DRAFT_ID_CHUNK = 100
 const ERROR_TEXT_LIMIT = 500
 
-export const SHEET_WRITE_STATUSES = ["sending", "written", "refused", "failed", "unknown"] as const
-export type SheetWriteStatus = (typeof SHEET_WRITE_STATUSES)[number]
+// 닫힌 목록의 정본은 ledger-rules.ts(클라이언트 겸용) — 화면도 같은 배열로 판독한다.
+export const SHEET_WRITE_STATUSES = SHEET_WRITE_ATTEMPT_STATUSES
+export type SheetWriteStatus = SheetWriteAttemptStatus
 
 export interface SheetWriteRecord {
   id: string

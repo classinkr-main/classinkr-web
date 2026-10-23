@@ -65,6 +65,13 @@ export const SHEET_WRITE_MESSAGES: Record<SheetWriteCode, string> = {
   not_applied: "장부 반영 안 됨 — 시트는 그대로입니다",
 }
 
+/**
+ * 시트에 쓴 정정의 장부 되돌리기를 막을 때의 문구(라우트 409·큐 버튼 title 이 같은 상수를 쓴다).
+ * 판정은 ledger-rules.ts sheetWriteBlocksReverse.
+ */
+export const SHEET_WRITTEN_REVERSE_MESSAGE =
+  "시트에 반영된 항목입니다 — 시트에서 직접 되돌리거나 원래 값으로 다시 입력해 주세요"
+
 export function isSheetWriteCode(v: unknown): v is SheetWriteCode {
   return typeof v === "string" && (SHEET_WRITE_CODES as readonly string[]).includes(v)
 }

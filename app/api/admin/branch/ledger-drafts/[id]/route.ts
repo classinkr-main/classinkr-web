@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { isLedgerDraftBodyError, parseLedgerDraftUpdateBody } from "@/lib/branch/ledger-draft-body"
 import { applyLedgerDraftsWithSheetWrite } from "@/lib/branch/sheet-writeback/apply-service"
+import { sheetWriteBlocksReverse } from "@/lib/branch/sheet-writeback/ledger-rules"
+import { SHEET_WRITTEN_REVERSE_MESSAGE } from "@/lib/branch/sheet-writeback/messages"
 import {
   deleteBranchSalesLedgerDraft,
   isBranchSalesLedgerDraftsNotReadyError,
@@ -20,9 +22,6 @@ import {
 // REV 시트 쓰기(ADR-011) — action=apply 는 시트 다시 읽기(8s) + 쓰기·되읽기(8s) + 되돌리기(8s) + DB 를 한 요청에서
 // 돈다(lib/branch/sheet-writeback/apply-service.ts). 그 최악 합이 이 상한 안에 든다.
 export const maxDuration = 60
-
-const SHEET_WRITTEN_REVERSE_MESSAGE =
-  "시트에 반영된 항목입니다 — 시트에서 직접 되돌리거나 원래 값으로 다시 입력해 주세요"
 
 function adminActorName(admin: { name?: string; userId?: string; role: string }) {
   return admin.name?.trim() || admin.userId || admin.role
@@ -112,9 +111,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       // REV 시트 쓰기(ADR-011) — 시트에 쓴 정정을 장부에서만 상쇄하면 시트에는 새 값이 남아 화면(미러)이 되돌린
       // 줄 모르게 된다. 시트가 정본이므로 되돌리기는 시트에서 직접 하거나 원래 값으로 다시 입력해 반영한다.
       // "sending" 도 막는다 — 장부 항목은 시트 쓰기를 되읽어 확인한 뒤에만 생기므로, 항목이 있는데 시도가 sending 이면
-      // 시트에는 쓰였고 감사 행 갱신만 실패한 것이다(항목이 없으면 어차피 상쇄할 것이 없다).
+      // 시트에는 쓰였고 감사 행 갱신만 실패한 것이다(항목이 없으면 어차피 상쇄할 것이 없다). 판정 정본은 ledger-rules.ts.
       const sheetWrite = await latestSheetWrite(id)
-      if (sheetWrite?.status === "written" || sheetWrite?.status === "sending") {
+      if (sheetWriteBlocksReverse(sheetWrite?.status)) {
         return NextResponse.json({ error: SHEET_WRITTEN_REVERSE_MESSAGE, reason: "sheet-written" }, { status: 409 })
       }
 

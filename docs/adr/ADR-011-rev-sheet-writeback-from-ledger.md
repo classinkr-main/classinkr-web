@@ -47,6 +47,11 @@ Date: 2026-10-23
      4칸인 달(2월)은 마지막 칸으로 자른다.
    - 값 있는 주차가 2칸 이상인데 금액이 바뀌면 막는다(`week_ambiguous`).
    - 확도만 바꾸고 금액이 그대로면 값 있는 칸을 전부 그 색으로 바꾼다.
+   - 초안이 주차 하나를 가리키면(`metadata.week` `w1`~`w5`, 주차별 값 없음 — 매트릭스 주차 칸·레일의 주차 고르기)
+     빈 달은 첫 결제일·오늘 주차보다 그 주차를 먼저 고른다. 장부가 그 주차에 두기 때문이다.
+     값 있는 칸이 다른 주차 1칸이면 장부는 그 달 값을 고른 주차로 옮기므로 시트도 원래 칸을 비워야 한다 → 막는다(`clear_not_supported`).
+   - 칸이 4개인 달(2월)의 baseline은 시트 칸 수로 자른다. 파이프라인이 주차 값을 늘 5칸으로 채워 보내기 때문이다
+     ([baseline.ts](../../lib/branch/sheet-writeback/baseline.ts) `buildSheetBaseline`).
 5. **충돌은 시트 우선**: 초안은 만들 때 본 그 달 주차 칸 값·색(baseline, `sourceSnapshot.sheetBaseline`)을 싣는다.
    서버는 쓰기 직전에 시트를 다시 읽어 같을 때만 쓴다. 다르면 쓰지 않는다(`conflict`).
    다만 시트가 이미 의도한 값이면 쓰지 않고 장부만 기록한다(`already_written`). 결과를 모르던 이전 시도를 마무리하는 경로다.
@@ -83,7 +88,9 @@ Date: 2026-10-23
 - 바뀌는 것: 스위치가 켜지면 edit-row 반영이 시트의 주차 칸도 바꾼다. ADR-008 Consequences의 "without immediately changing
   source revenue totals"는 이 경우 성립하지 않는다. 시트가 바뀌고, 다음 REV 동기화부터 서버 집계가 그 값을 본다.
 - 이중 집계 처리: 시트 쓰기가 written이고 그 뒤 성공한 REV 동기화가 있으면, 장부 화면은 그 초안의 오버레이를 빼고
-  미러 값을 쓴다(`isSheetWriteAbsorbed`). 미반영 배너도 그 항목을 미반영에서 뺀다.
+  미러 값을 쓴다. 미반영 배너도 그 항목을 미반영에서 뺀다. 두 곳은 같은 함수
+  ([ledger-rules.ts](../../lib/branch/sheet-writeback/ledger-rules.ts) `isSheetWriteAbsorbed`)를 쓴다. 되돌리기 가드
+  (`sheetWriteBlocksReverse` — written·sending이면 409)도 같은 파일이다.
 
 ### Compass를 바꾸지 않는 근거
 
@@ -111,7 +118,9 @@ Compass 저장소 `lib/revenue.ts`(읽기 확인, 2026-10-23)의 동작은 이�
   그 두 행은 쓰기가 거절된다(`row_id_duplicate`). 동기화 경고로 드러나고, 사람이 복사본 칸을 비운 뒤 스크립트를 다시 돌린다.
   새로 끼운 행은 ID가 없어 스크립트를 다시 돌리기 전까지 거절된다(`no_row_id`).
 - **서버 집계는 다음 동기화 때 반영**: KR Team·KPI·매출시트 화면처럼 미러를 읽는 집계는 다음 REV 동기화 뒤에 새 값을 본다.
-  장부 화면은 그 사이 초안 오버레이로 같은 값을 보인다.
+  장부 화면은 그 사이 초안 오버레이로 같은 값을 보인다. 매출시트 미반영 배지도 다음 동기화 뒤에 그 정정을 뺀다.
+- **반영 직후 같은 달 다시 고치기**: 초안 baseline은 미러 값으로 만든다. 시트에 쓴 뒤 다음 REV 동기화 전에 같은 행·달을
+  다시 고치면 baseline이 옛 값이라 `conflict`로 막힌다(안전 쪽). 동기화를 한 번 돌린 뒤 다시 입력한다.
 - **지난 주차·삭제는 시트에서**: 지난 주차, 칸 비우기, 달 전체 삭제, 주차가 여럿인 달의 금액 변경, 수식 칸은 앱으로 못 한다.
   시트에서 직접 고친다.
 - **켜기 전 사본 확인이 필요한 가정**: 아래 두 가지는 원본 시트에 쓰지 않는 원칙 때문에 실측하지 않았다.
@@ -126,7 +135,7 @@ Compass 저장소 `lib/revenue.ts`(읽기 확인, 2026-10-23)의 동작은 이�
 - [DB 마이그레이션 런북](../active/db-migration-runbook.md)
 - [ADR-008 Korea Sales Ledger 운영 정본](ADR-008-korea-sales-ledger-operating-record.md)
 - [ADR-010 예약 작업·외부 의존성 장애 격리](ADR-010-operational-failure-containment.md)
-- [lib/branch/sheet-writeback/](../../lib/branch/sheet-writeback/config.ts) — config·row-id·colors·baseline·layout·month-formula·target·messages·plan·requests·verify·sheets-client·apply-service
+- [lib/branch/sheet-writeback/](../../lib/branch/sheet-writeback/config.ts) — config·row-id·colors·baseline·layout·month-formula·target·messages·ledger-rules·plan·requests·verify·sheets-client·apply-service
 - [lib/repositories/branch-sales-ledger-sheet-writes.ts](../../lib/repositories/branch-sales-ledger-sheet-writes.ts)
 - [supabase/migrations/20261023_branch_rev_sheet_writes.sql](../../supabase/migrations/20261023_branch_rev_sheet_writes.sql)
 - [lib/branch/parsers/rev.ts](../../lib/branch/parsers/rev.ts) — Row ID·주차 색 읽기

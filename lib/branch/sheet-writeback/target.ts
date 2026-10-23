@@ -5,6 +5,9 @@
 //  - 지난 주차는 손대지 않는다: 쓰는 칸의 시작일(1·8·15·22·29일)이 이번 주차 시작일보다 앞이면 거절.
 //  - 월 칸 수정(주차 없음): 값 있는 주차 1칸 → 그 칸, 0칸 → 첫 결제일 주차 → 이번 달이면 오늘 주차 → w1,
 //    2칸 이상 + 금액 변경 → 거절(week_ambiguous). 확도만 바꾸면 값 있는 칸 전부를 그 색으로.
+//  - 주차 칸 하나를 가리킨 초안(metadata.week "w1".."w5", weekly 없음 — 매트릭스 주차 칸·레일의 주차 고르기):
+//    빈 달이면 그 주차에 쓴다(장부도 그 주차에 둔다). 값 있는 칸이 다른 주차 1칸이면 장부는 그 달 값을 고른 주차로
+//    옮기므로 시트도 원래 칸을 비워야 한다 → 거절(clear_not_supported).
 //  - 빈 칸에 새로 쓸 때는 색을 반드시 명시한다(빈 칸에도 빨강·파랑이 숨어 있다).
 // 주차 시작일 규칙은 parsers/rev.ts ledgerCellStart 와 같다(w1 1일 · w2 8일 · w3 15일 · w4 22일 · w5 29일).
 
@@ -43,6 +46,11 @@ export interface PlanWeekWritesInput {
   firstPayment: string | null
   /** KST YYYY-MM-DD */
   today: string
+  /**
+   * 초안이 가리킨 주차(metadata.week "w1".."w5" → 0-based). 월 칸 수정이면 null·생략.
+   * weekly 가 있으면(주차 단위 초안) 보지 않는다. 칸이 4개인 달은 마지막 칸으로 자른다.
+   */
+  draftWeek?: number | null
 }
 
 export type PlanWeekWritesResult =
@@ -114,6 +122,12 @@ function pickEmptyMonthWeek(month: string, weekCount: number, firstPayment: stri
   return 0
 }
 
+/** 초안이 가리킨 주차(0-based) — 0~4 정수만. 칸 수를 넘으면(4칸 달의 w5) 마지막 칸. */
+function pickedWeekIndex(draftWeek: number | null | undefined, weekCount: number): number | null {
+  if (draftWeek == null || !Number.isInteger(draftWeek) || draftWeek < 0 || draftWeek > 4) return null
+  return Math.min(draftWeek, weekCount - 1)
+}
+
 function weekLabel(index: number): string {
   return `W${index + 1}`
 }
@@ -160,6 +174,7 @@ export function planWeekWrites(input: PlanWeekWritesInput): PlanWeekWritesResult
     if (!isWriteAmount(input.draftAmount)) return { ok: false, refusal: "amount_invalid" }
     const total = baselineWeeks.reduce((sum, week) => sum + week.value, 0)
     const valued = baselineWeeks.flatMap((week, index) => (week.value > 0 ? [index] : []))
+    const pickedWeek = pickedWeekIndex(input.draftWeek, weekCount)
 
     if (input.draftAmount === total) {
       if (input.confidenceTouched) {
@@ -169,9 +184,11 @@ export function planWeekWrites(input: PlanWeekWritesInput): PlanWeekWritesResult
         }
       }
     } else if (valued.length === 1) {
+      // 고른 주차가 값 있는 칸과 다르면 장부는 금액을 고른 주차로 옮긴다 — 시트는 원래 칸을 비워야 하므로 쓰지 않는다.
+      if (pickedWeek != null && pickedWeek !== valued[0]) return { ok: false, refusal: "clear_not_supported" }
       writes.push({ weekIndex: valued[0], value: input.draftAmount, color: input.confidenceTouched ? draftColor : null })
     } else if (valued.length === 0) {
-      const index = pickEmptyMonthWeek(month, weekCount, input.firstPayment, today)
+      const index = pickedWeek ?? pickEmptyMonthWeek(month, weekCount, input.firstPayment, today)
       writes.push({ weekIndex: index, value: input.draftAmount, color: draftColor })
     } else {
       return { ok: false, refusal: "week_ambiguous" }

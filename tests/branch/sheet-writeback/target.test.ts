@@ -105,6 +105,40 @@ describe("planWeekWrites — 월 칸(weekly 없음)", () => {
   })
 })
 
+describe("planWeekWrites — 주차 칸을 가리킨 초안(metadata.week, weekly 없음)", () => {
+  it("빈 달 → 첫 결제일·오늘 주차보다 고른 주차가 먼저(장부와 같은 칸)", () => {
+    const picked = planWeekWrites(input({ firstPayment: "2026-11-17", draftWeek: 4, draftConfidence: "confirmed" }))
+    expect(picked).toEqual({ ok: true, writes: [{ weekIndex: 4, value: 100, color: "r" }], note: "시트 W5에 씁니다" })
+    // 고른 주차가 없으면(월 칸) 지금처럼 첫 결제일 주차.
+    expect(planWeekWrites(input({ firstPayment: "2026-11-17", draftWeek: null }))).toMatchObject({ ok: true, writes: [{ weekIndex: 2 }] })
+  })
+
+  it("4칸 달(2월)에 w5 를 고르면 마지막 칸(w4)", () => {
+    const feb = planWeekWrites(input({ month: "2027-02", baselineWeeks: [k(), k(), k(), k()], draftWeek: 4 }))
+    expect(feb).toMatchObject({ ok: true, writes: [{ weekIndex: 3 }] })
+  })
+
+  it("값 있는 칸이 같은 주차 1칸이면 그 칸, 다른 주차 1칸이면 clear_not_supported(원래 칸을 비워야 한다)", () => {
+    expect(planWeekWrites(input({ baselineWeeks: [k(), r(300), k(), k(), k()], draftAmount: 500, draftWeek: 1 })))
+      .toMatchObject({ ok: true, writes: [{ weekIndex: 1, value: 500 }] })
+    expect(planWeekWrites(input({ baselineWeeks: [k(), r(300), k(), k(), k()], draftAmount: 500, draftWeek: 3 })))
+      .toEqual({ ok: false, refusal: "clear_not_supported" })
+  })
+
+  it("고른 주차가 지난 주차면 past_week", () => {
+    expect(planWeekWrites(input({ month: "2026-10", draftWeek: 1 }))).toEqual({ ok: false, refusal: "past_week" })
+  })
+
+  it.each([5, -1, 1.5, Number.NaN])("주차 %s 는 무시한다(월 칸 규칙)", (draftWeek) => {
+    expect(planWeekWrites(input({ month: "2026-12", draftWeek }))).toMatchObject({ ok: true, writes: [{ weekIndex: 0 }] })
+  })
+
+  it("weekly 가 있으면 고른 주차는 보지 않는다", () => {
+    const result = planWeekWrites(input({ draftWeekly: [0, 0, 100, 0, 0], draftAmount: 100, draftWeek: 4 }))
+    expect(result).toMatchObject({ ok: true, writes: [{ weekIndex: 2, value: 100 }] })
+  })
+})
+
 describe("planWeekWrites — 주차 단위(weekly 있음)", () => {
   it("바뀐 칸만 값을 쓰고, 빈 칸에 새로 쓰면 초안 확도 색", () => {
     const result = planWeekWrites(input({

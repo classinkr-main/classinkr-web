@@ -12,7 +12,6 @@ import {
   LEDGER_DRAFT_APPLY_LIMIT,
   parseSheetWrites,
   parseSheetWriteState,
-  SHEET_WRITTEN_REVERSE_MESSAGE,
   sheetAbsorbedDraftIds,
   sheetBaselineForRow,
   sheetWriteBadge,
@@ -305,8 +304,10 @@ describe("되돌리기 가드 — 시트에 쓴 정정은 장부에서만 상쇄
     expect(button).toMatch(/isRowBusy\(draft\.id\) \|\|\n\s+sheetBlocksReverse\(draft\.id\)\n/)
     expect(button).toMatch(/sheetBlocksReverse\(draft\.id\) \? SHEET_WRITTEN_REVERSE_MESSAGE/)
     expect(queue).toMatch(/const sheetBlocksReverse = \(id: string\) => blocksLedgerReverse\(sheetWrites\?\.\[id\]\)/)
+    // 문구는 라우트 409 와 같은 상수(messages.ts) — 라우트가 같은 상수를 import 해 쓰는지는
+    // tests/branch/sheet-writeback/ledger-rules.test.ts 가 본다.
     const route = readFileSync(join(process.cwd(), "app/api/admin/branch/ledger-drafts/[id]/route.ts"), "utf8")
-    expect(route).toContain(`"${SHEET_WRITTEN_REVERSE_MESSAGE}"`)
+    expect(route).toMatch(/\{ error: SHEET_WRITTEN_REVERSE_MESSAGE, reason: "sheet-written" \}/)
   })
 })
 

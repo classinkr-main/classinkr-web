@@ -6,6 +6,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
 import { getCompassRevenue } from "@/lib/compass/bridge"
 import { nextPendingTransition, pendingMonthAmount } from "@/lib/crm/revenue-sheet-pending"
+import { isSheetWriteAbsorbed } from "@/lib/branch/sheet-writeback/ledger-rules"
 import {
   isSheetWritesNotReadyError,
   lastSuccessfulRevSyncStartedAt,
@@ -234,18 +235,13 @@ export function computeManualLedgerGap(
 }
 
 /**
- * 시트에 쓴 정정이 미러에 들어왔는가 — 감사 행이 written 이고, 그 뒤에 시작한 REV 동기화가 성공했으면 미러가
- * 그 값을 읽었다. 장부 화면의 같은 규칙(components/admin/branch/ledger 의 isSheetWriteAbsorbed)과 같다.
+ * 시트에 쓴 정정이 미러에 들어왔는가 — 정본은 lib/branch/sheet-writeback/ledger-rules.ts isSheetWriteAbsorbed
+ * (장부 화면 오버레이와 같은 함수). 이 이름은 매출시트 쪽 호출·테스트를 위한 별칭이다.
  */
-export function isSheetWriteAbsorbedByMirror(
+export const isSheetWriteAbsorbedByMirror: (
   record: Pick<SheetWriteRecord, "status" | "writtenAt">,
   lastRevSyncStartedAt: string | null,
-): boolean {
-  if (record.status !== "written" || !record.writtenAt || !lastRevSyncStartedAt) return false
-  const writtenAt = Date.parse(record.writtenAt)
-  const syncStartedAt = Date.parse(lastRevSyncStartedAt)
-  return Number.isFinite(writtenAt) && Number.isFinite(syncStartedAt) && writtenAt < syncStartedAt
-}
+) => boolean = isSheetWriteAbsorbed
 
 /**
  * 미러에 이미 들어온 "시트에 쓴 정정"의 초안 id. 시트 쓰기는 기존 행 정정(manual-edit)만 하므로 그 항목만 본다.

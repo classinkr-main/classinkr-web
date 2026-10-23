@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 
+import { buildSheetBaseline } from "@/lib/branch/sheet-writeback/baseline"
 import { planDraftWrites, type DraftPlan } from "@/lib/branch/sheet-writeback/plan"
 
 import {
@@ -189,6 +190,36 @@ describe("planDraftWrites — 계획", () => {
       expect.objectContaining({ draftId: "late", action: "write" }),
       { draftId: "early", action: "refuse", code: "conflict" },
     ])
+  })
+
+  it("주차 칸을 가리킨 초안(metadata.week w3, weekly 없음)은 빈 달에서 첫 결제일 주차가 아니라 그 주차에 쓴다", () => {
+    const row: RowSpec = { rowId: ROW_A, customer: "가나학원", months: {} }
+    const baseline = baselineFor(ROW_A, "가나학원", "2026-11", [])
+    const draft = editDraft({
+      month: "2026-11",
+      amount: 700,
+      baseline,
+      sourceSnapshot: { sheetBaseline: baseline, row: { firstPayment: "2026-11-02" } },
+      metadata: { confidence: "expected", week: "w3", weekly: null, confidenceTouched: false },
+    })
+    const result = only(plan([row], [draft]))
+    expect(result).toMatchObject({ action: "write" })
+    if (result.action === "write") expect(result.cells.map((cell) => cell.col)).toEqual([block("2026-11").weekCols[2]])
+    // 월 칸("month")이면 첫 결제일 주차(w1).
+    const monthCell = only(plan([row], [{ ...draft, metadata: { ...draft.metadata, week: "month" } }]))
+    if (monthCell.action === "write") expect(monthCell.cells.map((cell) => cell.col)).toEqual([block("2026-11").weekCols[0]])
+    expect(monthCell).toMatchObject({ action: "write" })
+  })
+
+  it("2월(4칸): buildSheetBaseline 이 5칸 파이프라인 값을 잘라 live 와 맞는다(conflict 아님)", () => {
+    const row: RowSpec = { rowId: ROW_A, customer: "가나학원", months: { "2027-02": [{ v: 100, fg: RED }, {}, {}, {}] } }
+    const baseline = buildSheetBaseline(
+      { rowId: ROW_A, customer: "가나학원", weeklyPayments: { "2027-02": [100, 0, 0, 0, 0] }, weeklyColors: { "2027-02": "r---" } },
+      "2027-02",
+      "2026-10-23T01:00:00.000Z",
+    )
+    const result = only(plan([row], [editDraft({ month: "2027-02", amount: 400, baseline })]))
+    expect(result).toMatchObject({ action: "write", cells: [{ col: block("2027-02").weekCols[0], after: { value: 400, color: "r" } }] })
   })
 
   it("확도만 바꾼 월 칸 → 값 있는 칸 색만", () => {

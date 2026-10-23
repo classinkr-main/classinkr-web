@@ -94,6 +94,53 @@ describe("baseline", () => {
     expect(parseSheetBaseline(JSON.parse(JSON.stringify(baseline)))).toEqual(baseline)
   })
 
+  it("파이프라인이 5칸으로 채운 2월은 weeklyColors 글자 수(시트 실제 칸 4)로 자른다 — 안 자르면 서버 비교가 길이에서 어긋난다", () => {
+    const feb = buildSheetBaseline(
+      { ...row, weeklyPayments: { "2027-02": [100, 0, 0, 300, 0] }, weeklyColors: { "2027-02": "r--k" } },
+      "2027-02",
+      "2026-10-23T01:00:00.000Z",
+    )
+    expect(feb?.weeks).toEqual([
+      { value: 100, color: "r" },
+      { value: 0, color: "k" },
+      { value: 0, color: "k" },
+      { value: 300, color: "k" },
+    ])
+    // 값이 0인 칸만 있는 2월도 4칸("----").
+    expect(
+      buildSheetBaseline(
+        { ...row, weeklyPayments: { "2027-02": [0, 0, 0, 0, 0] }, weeklyColors: { "2027-02": "----" } },
+        "2027-02",
+        "2026-10-23T01:00:00.000Z",
+      )?.weeks,
+    ).toHaveLength(4)
+  })
+
+  it("잘라낼 뒤 칸에 값이 있으면 자르지 않는다(값을 버리지 않는다 — 서버가 conflict 로 막는 안전 쪽)", () => {
+    const odd = buildSheetBaseline(
+      { ...row, weeklyPayments: { "2027-02": [100, 0, 0, 0, 70] }, weeklyColors: { "2027-02": "r---" } },
+      "2027-02",
+      "2026-10-23T01:00:00.000Z",
+    )
+    expect(odd?.weeks.map((week) => week.value)).toEqual([100, 0, 0, 0, 70])
+    // 글자가 없으면(재동기화 전 레거시 행) 값이 있는 배열은 그대로 둔다.
+    expect(
+      buildSheetBaseline(
+        { ...row, weeklyPayments: { "2027-02": [100, 0, 0, 0, 0] }, weeklyColors: {} },
+        "2027-02",
+        "2026-10-23T01:00:00.000Z",
+      )?.weeks,
+    ).toHaveLength(5)
+    // 값이 전부 0이면 "값 없던 달"([])과 같다 — 칸 수는 서버가 live 로 정한다(2월 레거시 행도 conflict 아님).
+    expect(
+      buildSheetBaseline(
+        { ...row, weeklyPayments: { "2027-02": [0, 0, 0, 0, 0] }, weeklyColors: {} },
+        "2027-02",
+        "2026-10-23T01:00:00.000Z",
+      )?.weeks,
+    ).toEqual([])
+  })
+
   it("그 달 값이 없던 행은 weeks [] — 칸 수는 서버가 live 로 정한다", () => {
     expect(buildSheetBaseline(row, "2026-11", "2026-10-23T01:00:00.000Z")?.weeks).toEqual([])
   })

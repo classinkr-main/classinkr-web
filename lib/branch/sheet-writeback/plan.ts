@@ -6,7 +6,7 @@
 //   baseline 없음 → no_baseline / 행 ID 없음 → no_row_id / 행 ID 0행 → row_not_found · 2행+ → row_id_duplicate
 //   A열 고객 바뀜 → identity_changed / 그 달 블록 없음 → month_not_in_sheet
 //   baseline 과 live 주차 칸이 다름 → (live 가 이미 의도한 결과면 already_written, 아니면 conflict)
-//   planWeekWrites 거절 → 그 코드 / 대상 칸 수식(상수 산식 포함)·글자 → formula_cell
+//   planWeekWrites 거절 → 그 코드(주차 토큰 metadata.week 도 넘긴다) / 대상 칸 수식(상수 산식 포함)·글자 → formula_cell
 //   월 합계 수식 불규칙 → month_formula_irregular / 같은 (행 ID, 달) 두 건 → 늦게 고친 것만, 나머지 conflict
 //   바꿀 칸 없음 → noop
 
@@ -128,6 +128,12 @@ function draftWeeklyConfidence(metadata: Record<string, unknown>): Array<DraftCo
   return states.some((value) => value != null) ? states : null
 }
 
+/** metadata.week 의 주차 토큰("w1".."w5") → 0-based. "month"·없음·그 밖은 null(월 칸 수정). */
+function draftWeekToken(metadata: Record<string, unknown>): number | null {
+  const match = typeof metadata.week === "string" ? /^w([1-5])$/.exec(metadata.week.trim()) : null
+  return match ? Number(match[1]) - 1 : null
+}
+
 function draftFirstPayment(draft: DraftForWrite): string | null {
   const candidates = [
     (draft.sourceSnapshot.row as Record<string, unknown> | undefined)?.firstPayment,
@@ -234,6 +240,7 @@ function evaluateEditDraft(
     confidenceTouched: draft.metadata.confidenceTouched === true,
     firstPayment: draftFirstPayment(draft),
     today,
+    draftWeek: draftWeekToken(draft.metadata),
   }
 
   // baseline 에 그 달 값이 없었으면(weeks []) 칸 수는 live 로 정하고 값은 전부 0 이었던 것으로 본다.

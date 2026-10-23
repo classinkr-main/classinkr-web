@@ -11,7 +11,18 @@
 import { buildSheetBaseline, type SheetBaselineV1 } from "@/lib/branch/sheet-writeback/baseline"
 import type { DraftConfidenceLike, WeekColor } from "@/lib/branch/sheet-writeback/colors"
 import { REV_WRITE_MAX_DRAFTS, type SheetWriteMode } from "@/lib/branch/sheet-writeback/config"
-import { isSheetWriteCode, SHEET_WRITE_MESSAGES, type SheetWriteCode } from "@/lib/branch/sheet-writeback/messages"
+import {
+  isSheetWriteAbsorbed,
+  SHEET_WRITE_ATTEMPT_STATUSES,
+  sheetWriteBlocksReverse,
+  type SheetWriteAttemptStatus,
+} from "@/lib/branch/sheet-writeback/ledger-rules"
+import {
+  isSheetWriteCode,
+  SHEET_WRITE_MESSAGES,
+  SHEET_WRITTEN_REVERSE_MESSAGE,
+  type SheetWriteCode,
+} from "@/lib/branch/sheet-writeback/messages"
 import { isValidRowId } from "@/lib/branch/sheet-writeback/row-id"
 import { sheetWriteHint } from "@/lib/branch/sheet-writeback/target"
 
@@ -26,9 +37,9 @@ export const LEDGER_DRAFT_APPLY_LIMIT = REV_WRITE_MAX_DRAFTS
  */
 export const LEDGER_APPLY_CLIENT_TIMEOUT_MS = 65_000
 
-export type SheetWriteStatus = "sending" | "written" | "refused" | "failed" | "unknown"
+export type SheetWriteStatus = SheetWriteAttemptStatus
 
-const SHEET_WRITE_STATUSES: readonly SheetWriteStatus[] = ["sending", "written", "refused", "failed", "unknown"]
+const SHEET_WRITE_STATUSES: readonly SheetWriteStatus[] = SHEET_WRITE_ATTEMPT_STATUSES
 
 /** GET /api/admin/branch/ledger-drafts 의 sheetWrites[draftId] — 그 초안의 가장 최근 시트 쓰기 시도. */
 export interface SheetWriteView {
@@ -90,20 +101,10 @@ export function parseSheetWrites(raw: unknown): Record<string, SheetWriteView> {
 }
 
 /**
- * 시트에 쓴 정정을 미러가 이미 읽었는가 — 시도가 written 이고 그 뒤에 시작한 REV 동기화가 성공했으면
- * branch_rev_deals(장부의 시트 행)가 그 값을 갖고 있다. 그 초안을 오버레이에 또 얹으면 같은 금액이
- * 시트 행 값과 적용 초안 양쪽에서 읽혀 정정 뒤 값이 이중으로 쓰인다(시트가 정본 — 미러를 믿는다).
- * 서버 미반영 배너(lib/admin-crm-revenue-sheet.ts isSheetWriteAbsorbedByMirror)와 같은 규칙이다.
+ * 시트에 쓴 정정을 미러가 이미 읽었는가 — 그 초안을 오버레이에 또 얹으면 같은 금액이 시트 행 값과 적용 초안
+ * 양쪽에서 읽힌다. 정본은 lib/branch/sheet-writeback/ledger-rules.ts(서버 미반영 배너와 같은 함수)다.
  */
-export function isSheetWriteAbsorbed(
-  sw: Pick<SheetWriteView, "status" | "writtenAt"> | null | undefined,
-  lastRevSyncStartedAt: string | null,
-): boolean {
-  if (!sw || sw.status !== "written" || !sw.writtenAt || !lastRevSyncStartedAt) return false
-  const writtenAt = Date.parse(sw.writtenAt)
-  const syncStartedAt = Date.parse(lastRevSyncStartedAt)
-  return Number.isFinite(writtenAt) && Number.isFinite(syncStartedAt) && writtenAt < syncStartedAt
-}
+export { isSheetWriteAbsorbed }
 
 export function sheetAbsorbedDraftIds(
   sheetWrites: Readonly<Record<string, SheetWriteView>>,
@@ -135,9 +136,8 @@ export interface SheetRowLike {
 }
 
 /**
- * 초안에 싣는 baseline(sourceSnapshot.sheetBaseline). 파이프라인은 weeklyPayments 를 늘 5칸으로 채워
- * 보내므로(computations/pipeline.ts) 칸이 4개인 달(2월)은 시트 칸 수와 다르다 — weeklyColors 의 글자 수가
- * 그 달 실제 주차 칸 수(parseRev 가 머리로 찾은 열)라 그 길이로 자른다. 칸 수가 다르면 서버가 conflict 로 막는다.
+ * 초안에 싣는 baseline(sourceSnapshot.sheetBaseline). 행이 없으면 null. 칸이 4개인 달(2월)을 시트 칸 수로
+ * 자르는 일은 buildSheetBaseline(core) 이 한다 — 여기서 따로 자르지 않는다(사본 금지).
  */
 export function sheetBaselineForRow(
   row: SheetRowLike | null | undefined,
@@ -145,18 +145,13 @@ export function sheetBaselineForRow(
   capturedAt: string,
 ): SheetBaselineV1 | null {
   if (!row) return null
-  const weeks = row.weeklyPayments?.[month]
-  const marks = row.weeklyColors?.[month]
-  const trimmed = Array.isArray(weeks) && typeof marks === "string" && marks.length > 0 && marks.length < weeks.length
-    ? weeks.slice(0, marks.length)
-    : weeks
   return buildSheetBaseline(
     {
       rowId: row.rowId ?? null,
       sheetRow: row.sheetRow ?? null,
       customer: row.customer,
-      weeklyPayments: trimmed ? { [month]: trimmed } : undefined,
-      weeklyColors: typeof marks === "string" ? { [month]: marks } : undefined,
+      weeklyPayments: row.weeklyPayments,
+      weeklyColors: row.weeklyColors,
     },
     month,
     capturedAt,
@@ -336,16 +331,15 @@ export function sheetWriteBadge(view: SheetWriteView): SheetWriteBadge {
 }
 
 /**
- * 시트에 쓴 정정은 장부에서만 상쇄하지 않는다 — 서버(PATCH action=reverse)가 409 로 막는 조건과 같다
- * (written, 또는 쓰고 나서 결과를 못 적은 sending). 큐의 되돌리기 버튼을 미리 끄고 이유를 title 로 보인다.
+ * 시트에 쓴 정정은 장부에서만 상쇄하지 않는다 — 서버(PATCH action=reverse)가 409 로 막는 조건과 같은 함수
+ * (ledger-rules.ts sheetWriteBlocksReverse). 큐의 되돌리기 버튼을 미리 끄고 이유를 title 로 보인다.
  */
 export function blocksLedgerReverse(view: Pick<SheetWriteView, "status"> | null | undefined): boolean {
-  return view?.status === "written" || view?.status === "sending"
+  return sheetWriteBlocksReverse(view?.status)
 }
 
-/** 서버 되돌리기 가드 문구(app/api/admin/branch/ledger-drafts/[id]/route.ts)와 같은 문장. */
-export const SHEET_WRITTEN_REVERSE_MESSAGE =
-  "시트에 반영된 항목입니다 — 시트에서 직접 되돌리거나 원래 값으로 다시 입력해 주세요"
+/** 서버 되돌리기 가드 문구 — 라우트와 같은 상수(messages.ts). */
+export { SHEET_WRITTEN_REVERSE_MESSAGE }
 
 /** 장부 상단 한 줄 — 켜짐일 때만. */
 export const SHEET_WRITE_ON_NOTICE = "반영하면 '2. REV' 시트에도 씁니다 · 지난 주차는 시트에서 직접"
