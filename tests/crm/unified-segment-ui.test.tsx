@@ -401,9 +401,16 @@ describe("목록·내보내기 URL — 기본값은 싣지 않는다(담당만 �
   })
 
   it("NEO '휴면' 플래그는 동기화 시각이 아니라 최근 수업일로 본다", () => {
-    const stale = row({ updatedAt: ago(90), lastClassAt: ago(2) })
-    expect(rowToFlags(stale)).not.toContain("dormant")
-    expect(rowToFlags(row({ updatedAt: ago(1), lastClassAt: ago(60) }))).toContain("dormant")
+    // 휴면 판정(deriveCustomerFlags)은 지금 시각(Date.now)을 기준으로 센다 — ago() 의 기준(GENERATED_AT)에 시계를
+    // 고정하지 않으면 실행 날짜가 GENERATED_AT 에서 멀어질수록 ago(2) 가 30일+ 이 되어 결과가 뒤집힌다.
+    vi.setSystemTime(GENERATED_AT)
+    try {
+      const stale = row({ updatedAt: ago(90), lastClassAt: ago(2) })
+      expect(rowToFlags(stale)).not.toContain("dormant")
+      expect(rowToFlags(row({ updatedAt: ago(1), lastClassAt: ago(60) }))).toContain("dormant")
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 
