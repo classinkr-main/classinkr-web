@@ -13,6 +13,15 @@ import { matchesTokens, tokenize } from "../search-tokens"
 import { useDialogFocus } from "../../use-dialog-focus"
 import { planBulkApply, planBulkCheck } from "./draft-bulk-plan"
 import { isSelfCheckedDraft, SELF_CHECK_BADGE_LABEL, SELF_CHECK_BADGE_TITLE } from "./self-check"
+import {
+  blocksLedgerReverse,
+  SHEET_WRITTEN_REVERSE_MESSAGE,
+  sheetWriteBadge,
+  summarizeApplyOutcomes,
+  type ApplySheetOutcome,
+  type SheetWriteBadgeTone,
+  type SheetWriteView,
+} from "./sheet-write-view"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import {
   DRAFT_STATUS_LABELS,
@@ -66,6 +75,14 @@ export function draftStatusMeta(status: DraftStatus, reversed = false) {
     return { label: draftStatusLabel(status), className: "border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] text-[#615D59]" }
   }
   return { label: draftStatusLabel(status), className: "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]" }
+}
+
+// REV 시트 쓰기(ADR-011) 배지 톤 — DESIGN.md 운영 상태 스케일(Success·Warning·Danger)과 중립.
+const SHEET_WRITE_BADGE_CLASS: Record<SheetWriteBadgeTone, string> = {
+  success: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]",
+  warning: "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]",
+  danger: "border-[#F2B8B8] bg-[#FCE9E9] text-[#8F2C2C]",
+  neutral: "border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] text-[#615D59]",
 }
 
 function draftMatchesFilter(draft: LedgerDraft, filter: DraftStatusFilter) {
@@ -122,6 +139,7 @@ export function DraftQueue({
   error,
   reversedDraftIds,
   recordErrors,
+  sheetWrites,
   onReload,
   onEdit,
   onToggle,
@@ -142,10 +160,15 @@ export function DraftQueue({
   // 품질 웨이브 7 — 항목 2: draft id → 그 행에 국한된 에러 메시지(404 레코드 소실 등). 전역
   // queueError/mode와 별개 — 큐 전체를 로컬로 내리지 않고 그 행에만 배지+새로고침 유도를 낸다.
   recordErrors: Map<string, string>
+  // REV 시트 쓰기(ADR-011) — draft id → 가장 최근 시트 쓰기 시도(GET sheetWrites). 행 배지(시트 반영됨·충돌·
+  // 확인 중·실패·장부에만)와 실패 사유 한 줄(messages.ts 문구)에 쓴다. 없으면 배지 없음.
+  sheetWrites?: Record<string, SheetWriteView>
   onReload: () => void
   onEdit: (draft: LedgerDraft) => void
   onToggle: (id: string) => void | Promise<void>
-  onApply: (id: string) => void | Promise<void>
+  // REV 시트 쓰기: 훅의 applyDraft 가 결과(ApplySheetOutcome)를 돌려준다 — 큐 카드는 쓰지 않는다(상태는 drafts·
+  // sheetWrites 재조회로 반영). onCancel 과 같은 이유로 반환 타입을 넓힌다.
+  onApply: (id: string) => void | Promise<unknown>
   // 품질 감사 2026-09-10 — #8: draft/checked → cancelled 전이. 삭제(onDelete, 하드 DELETE·감사
   // 추적 없음)와 달리 행이 DB에 그대로 남는다 — "취소했다"는 사실 자체가 감사 대상일 때 이걸 쓴다.
   // 라운드 4 P1-6: 훅의 cancelDraft가 성공 여부(boolean)를 돌려주게 되면서 반환 타입을 넓힌다 —
@@ -155,7 +178,7 @@ export function DraftQueue({
   onReverse: (id: string, reason?: string) => Promise<unknown> | void
   // 일괄 체크·적용(2026-09-14) — 지금 보이는 목록 기준. 3단계는 그대로이고 누르는 횟수만 줄인다.
   onBulkCheck?: (ids: string[]) => Promise<{ done: number; failed: number }>
-  onBulkApply?: (ids: string[]) => Promise<{ done: number; failed: number }>
+  onBulkApply?: (ids: string[]) => Promise<{ done: number; failed: number; sheetResults?: ApplySheetOutcome[] }>
 }) {
   const modeLabel = mode === "server" ? "서버 큐" : "로컬 fallback"
   const [query, setQuery] = useState("")
@@ -184,7 +207,9 @@ export function DraftQueue({
     setBulkBusy("apply")
     try {
       const result = await onBulkApply(bulkApplyPlan.ids)
-      setBulkResult(`적용 ${result.done}건${result.failed ? ` · 실패 ${result.failed}건` : ""}`)
+      // 시트 쓰기 결과가 있으면 코드별 건수로(ApprovalBar 결과 줄과 같은 문구), 꺼짐이면 지금 문구.
+      const sheet = summarizeApplyOutcomes(result.sheetResults ?? [])
+      setBulkResult(sheet ? sheet.text : `적용 ${result.done}건${result.failed ? ` · 실패 ${result.failed}건` : ""}`)
     } finally {
       setBulkBusy(null)
       setBulkApplyConfirm(false)
@@ -239,6 +264,8 @@ export function DraftQueue({
   // 한 초안에 동시에 한 동작만(토글 중 삭제 클릭 등 이중 요청 방지) 진행되게 버튼도 함께 잠근다.
   const [rowActionBusy, setRowActionBusy] = useState<{ id: string; action: "toggle" | "cancel" | "delete" } | null>(null)
   const isRowBusy = (id: string) => rowActionBusy?.id === id || applyingId === id || reversingId === id
+  // REV 시트 쓰기(ADR-011): 시트에도 쓴 정정은 장부에서만 상쇄하지 않는다(서버가 409 로 막는 조건과 같다).
+  const sheetBlocksReverse = (id: string) => blocksLedgerReverse(sheetWrites?.[id])
   const runToggle = async (id: string) => {
     setRowActionBusy({ id, action: "toggle" })
     try {
@@ -493,6 +520,21 @@ export function DraftQueue({
                   REV row {draft.sourceSheetRow}
                 </span>
               ) : null}
+              {(() => {
+                const sheetWrite = sheetWrites?.[draft.id]
+                if (!sheetWrite) return null
+                const badge = sheetWriteBadge(sheetWrite)
+                return (
+                  <span
+                    data-sheet-write-badge={badge.tone}
+                    title={badge.message}
+                    aria-label={`시트 쓰기 ${badge.label} — ${badge.message}`}
+                    className={`rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${SHEET_WRITE_BADGE_CLASS[badge.tone]}`}
+                  >
+                    {badge.label}
+                  </span>
+                )
+              })()}
             </div>
             <span className="shrink-0 text-[13px] font-bold tabular-nums text-[#111110]">
               {formatMoney(draft.amount)}
@@ -529,6 +571,22 @@ export function DraftQueue({
                 </p>
               ))}
             {draft.note && <p className="mt-1.5 line-clamp-2 text-[11px] leading-relaxed text-[#615D59]">{draft.note}</p>}
+            {/* 시트 쓰기가 막혔거나 결과를 모를 때는 무엇을 하면 되는지(messages.ts 문구)를 한 줄로 보인다.
+                목록 전체에 남는 기록이라 alert 로 읽히게 하지 않는다(방금 누른 반영의 결과는 결과 줄·배너가 알린다). */}
+            {(() => {
+              const sheetWrite = sheetWrites?.[draft.id]
+              if (!sheetWrite) return null
+              const badge = sheetWriteBadge(sheetWrite)
+              if (badge.tone !== "danger" && badge.tone !== "warning") return null
+              return (
+                <p
+                  data-sheet-write-reason
+                  className={`mt-1.5 rounded border px-2 py-0.5 text-[10.5px] font-semibold leading-relaxed ${SHEET_WRITE_BADGE_CLASS[badge.tone]}`}
+                >
+                  {badge.message}
+                </p>
+              )
+            })()}
           </div>
 
           {/* 하단: 액션 버튼 바 (좌측 보조 4개 / 우측 주요 2개) */}
@@ -552,11 +610,12 @@ export function DraftQueue({
                   mode !== "server" ||
                   draft.id.startsWith("local-") ||
                   reversedDraftIds.has(draft.id) ||
-                  isRowBusy(draft.id)
+                  isRowBusy(draft.id) ||
+                  sheetBlocksReverse(draft.id)
                 }
                 className="flex h-8 w-8 items-center justify-center rounded-md border border-[#ECD29C] text-[#7A520F] transition hover:bg-[#FBF1E0] disabled:cursor-not-allowed disabled:opacity-35"
                 aria-label={`${draft.customer || "초안"} 적용 되돌리기`}
-                title={reversedDraftIds.has(draft.id) ? "이미 상쇄된 적용입니다" : "적용 되돌리기"}
+                title={reversedDraftIds.has(draft.id) ? "이미 상쇄된 적용입니다" : sheetBlocksReverse(draft.id) ? SHEET_WRITTEN_REVERSE_MESSAGE : "적용 되돌리기"}
               >
                 {reversingId === draft.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
               </button>

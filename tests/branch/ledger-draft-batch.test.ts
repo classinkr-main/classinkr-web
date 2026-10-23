@@ -69,9 +69,12 @@ describe("checkDrafts/applyDrafts — 단건 순차 PATCH 대신 배치 엔드�
     expect(body).not.toContain("ledger-drafts/${encodeURIComponent(id)}")
   })
 
-  it("두 함수 모두 청크 단위(LEDGER_DRAFT_BATCH_LIMIT)로 나눠 순차 전송한다", () => {
+  // REV 시트 쓰기(ADR-011): 반영은 서버가 켜짐일 때 한 번에 50건(REV_WRITE_MAX_DRAFTS)까지만 시트로 보내므로
+  // applyDrafts 는 그 크기(LEDGER_DRAFT_APPLY_LIMIT)로 나눈다. 체크는 그대로 LEDGER_DRAFT_BATCH_LIMIT.
+  it("두 함수 모두 청크 단위로 나눠 순차 전송한다(체크 LEDGER_DRAFT_BATCH_LIMIT · 반영 LEDGER_DRAFT_APPLY_LIMIT)", () => {
     expect(checkDraftsBody()).toContain("start += LEDGER_DRAFT_BATCH_LIMIT")
-    expect(applyDraftsBody()).toContain("start += LEDGER_DRAFT_BATCH_LIMIT")
+    expect(applyDraftsBody()).toMatch(/start \+= LEDGER_DRAFT_APPLY_LIMIT\b/)
+    expect(applyDraftsBody()).toMatch(/serverIds\.slice\(start, start \+ LEDGER_DRAFT_APPLY_LIMIT\)/)
   })
 
   it("청크 요청 자체가 실패하면 그 청크를 전부 failed로 집계하고 중단하되, 큐를 강등하지 않는다(기존 계약 유지)", () => {

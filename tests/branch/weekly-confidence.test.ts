@@ -287,7 +287,7 @@ describe("SalesLedgerWorkbench — weeklyConfidence 배선 규약(소스 스캔)
     const body = sliceBetween(
       source,
       "const buildDraftInput = useCallback",
-      "}, [detail, draftForm, lens, period, selectedMonth, selectedRow, team])",
+      "}, [detail, draftForm, lens, period, selectedMonth, selectedRow, sheetRowById, team])",
     )
     expect(body).toContain("weeklyConfidence: weeklyContract ? weeklyContract.weeklyConfidence : null")
     expect(body).toContain("confidence: weeklyContract ? weeklyContract.dominantConfidence : draftForm.confidence")

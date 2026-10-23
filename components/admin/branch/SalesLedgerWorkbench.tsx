@@ -53,6 +53,14 @@ import { revLinkedTargetHref } from "@/lib/crm/rev-sync-health"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import LedgerSimpleView from "./ledger/LedgerSimpleView"
 import type { LedgerCellEditApi } from "./ledger/LedgerSimpleEdit"
+// REV 시트 쓰기(ADR-011) — 초안 baseline·칸 아래 힌트·이중 집계 제외의 순수 헬퍼.
+import {
+  cellSheetWriteHint,
+  excludeSheetAbsorbedRows,
+  sheetAbsorbedDraftIds,
+  sheetBaselineForRow,
+} from "./ledger/sheet-write-view"
+import { getBusinessDateParts } from "@/lib/business-time"
 import { ledgerRowHasColor } from "@/lib/branch/computations/revenue-core"
 import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
 import { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
@@ -556,6 +564,8 @@ export default function SalesLedgerWorkbench({
     ledgerEntries,
     reversedDraftIds,
     ledgerHealth,
+    sheetWrite,
+    sheetWrites,
     queueMode,
     queueLoading,
     queueError,
@@ -1219,15 +1229,29 @@ export default function SalesLedgerWorkbench({
         sourceDealId: draft.sourceDealId,
       }))
   }, [drafts, matrixMonths, team, reversedDraftIds])
+  // REV 시트 쓰기(ADR-011) — 반영 때 '2. REV' 에도 쓴 정정은, 쓴 뒤에 시작한 REV 동기화가 성공하면 시트 행
+  // (미러)이 이미 그 값을 갖는다. 그 초안을 오버레이에 또 얹으면 같은 칸을 시트 값과 정정 값이 함께 맡는다 —
+  // 미러가 읽은 초안은 오버레이(그리고 그 초안이 만드는 editRowOverrideMonths)에서 뺀다(시트가 정본).
+  const sheetAbsorbedIds = useMemo(
+    () => sheetAbsorbedDraftIds(sheetWrites, sheetWrite.lastRevSyncStartedAt),
+    [sheetWrites, sheetWrite.lastRevSyncStartedAt],
+  )
   const appliedDraftRows = useMemo<LedgerRevenueRow[]>(() => {
-    if (ledgerEntryRows.length === 0) return appliedDraftFallbackRows
+    if (ledgerEntryRows.length === 0) return excludeSheetAbsorbedRows(appliedDraftFallbackRows, sheetAbsorbedIds)
 
     const entryDraftIds = new Set(ledgerEntryRows.map((row) => row.draftId).filter(Boolean))
-    return [
+    return excludeSheetAbsorbedRows([
       ...ledgerEntryRows,
       ...appliedDraftFallbackRows.filter((row) => !row.draftId || !entryDraftIds.has(row.draftId)),
-    ]
-  }, [appliedDraftFallbackRows, ledgerEntryRows])
+    ], sheetAbsorbedIds)
+  }, [appliedDraftFallbackRows, ledgerEntryRows, sheetAbsorbedIds])
+  // 초안 baseline(sourceSnapshot.sheetBaseline)은 오버레이를 얹기 전 시트 행(미러) 그대로에서 만든다 —
+  // 반영 직전에 서버가 다시 읽는 '2. REV' 칸과 같은 출처여야 비교가 맞는다. 필터와 무관하게 전 행.
+  const sheetRowById = useMemo(() => {
+    const map = new Map<string, LedgerRevenueRow>()
+    for (const row of sheetRows) map.set(row.id, row)
+    return map
+  }, [sheetRows])
   const additiveAppliedDraftRows = useMemo(() => {
     return appliedDraftRows.filter((row) => row.draftKind !== "edit-row" && !row.draftId?.startsWith("local-"))
   }, [appliedDraftRows])
@@ -1898,6 +1922,12 @@ export default function SalesLedgerWorkbench({
   // 반환: null이면 행 없음. existingId는 같은 셀(월/주차)에 이미 대기 중(draft|checked)인 초안 id —
   // sourceDealId+month에 DB 유일성이 없어, 재편집 때마다 새 초안을 만들면 둘 다 적용됐을 때 같은 셀
   // 매출이 이중 계상된다(P0). 호출부는 있으면 updateDraft(PATCH), 없으면 createDraft(POST)로 나눈다.
+  //
+  // REV 시트 쓰기(ADR-011): edit-row 면 그 시트 행(미러)의 그 달 주차 칸을 sourceSnapshot.sheetBaseline 으로
+  // 싣는다 — 반영 직전에 서버가 시트를 다시 읽어 이 값과 같을 때만 쓴다(시트 우선). confidenceTouched 는
+  // 사용자가 확도를 직접 골랐는지(metadata.confidenceTouched) — 고르지 않았으면 서버가 칸 색을 그대로 둔다.
+  // 모르는 호출부(매트릭스 팝오버·붙여넣기 — 사용자가 확도를 고르는 화면)는 true. 첫 결제일
+  // (row.firstPayment)도 싣는다 — 빈 달 주차 고르기에서 칸 아래 힌트와 서버가 같은 주차를 고른다.
   const buildCellDraftInput = useCallback(
     (
       rowId: string,
@@ -1905,11 +1935,15 @@ export default function SalesLedgerWorkbench({
       amount: number,
       confidence: DraftConfidence,
       week?: number,
+      confidenceTouched = true,
     ): { input: LedgerDraftInput; existingId: string | null } | null => {
       const row = rowById.get(rowId)
       if (!row) return null
       const sourceDealId = row.sourceDealId ?? (row.ledgerOrigin === "sheet" ? row.id : undefined)
       const kind: DraftKind = sourceDealId ? "edit-row" : "new-row"
+      const sheetBaseline = kind === "edit-row" && sourceDealId
+        ? sheetBaselineForRow(sheetRowById.get(sourceDealId), month, new Date().toISOString())
+        : null
       const weekToken = week != null ? `w${week + 1}` : "month"
       const weekSplit = week != null ? rowWeeklySplit(row, month) : null
       const priorAmount = week != null ? (weekSplit?.weeks[week] ?? 0) : rowMonthAmount(row, month)
@@ -1950,8 +1984,10 @@ export default function SalesLedgerWorkbench({
             team: row.team,
             region: row.region,
             productVersion: row.productVersion,
+            firstPayment: row.firstPayment ?? null,
             monthAmount: priorAmount, // 주차 커밋이면 그 주차의 직전 값
           },
+          ...(sheetBaseline ? { sheetBaseline } : {}),
         },
         customer: row.customer.trim(),
         manager: (row.manager ?? "").trim(),
@@ -1978,6 +2014,7 @@ export default function SalesLedgerWorkbench({
           confidence: mergedWeekly && mergedWeeklyConfidence
             ? dominantWeeklyConfidence(mergedWeekly, mergedWeeklyConfidence)
             : confidence,
+          confidenceTouched,
           quantity: null,
           sourceDealId: sourceDealId ?? null,
         },
@@ -1985,7 +2022,7 @@ export default function SalesLedgerWorkbench({
       const existingId = lookupMatrixPending(pendingByCell, { rowId, month, week })?.id ?? null
       return { input, existingId }
     },
-    [lens, pendingByCell, period, rowById, team],
+    [lens, pendingByCell, period, rowById, sheetRowById, team],
   )
 
   // 실행 취소(입력 속도 라운드 4 P1-6) — cancelDraft(useLedgerDraftQueue)는 drafts를 의존성으로 갖고
@@ -2019,6 +2056,7 @@ export default function SalesLedgerWorkbench({
   // buildCellDraftInput — 붙여넣기 배치(confirmMatrixPaste)와 공유한다.
   // 반환값: 서버에 실제로 반영됐으면 true, 로컬 폴백(장부 적용 불가)이면 false — 상위 집계용.
   // options.silent=true면 개별 실패 토스트를 억제한다(상위에서 집계 토스트를 낼 때).
+  // options.confidenceTouched(REV 시트 쓰기): 사용자가 확도를 직접 골랐는지 — 생략하면 true(buildCellDraftInput 주석).
   const onCommitCell = useCallback(
     (
       rowId: string,
@@ -2026,9 +2064,9 @@ export default function SalesLedgerWorkbench({
       amount: number,
       confidence: DraftConfidence,
       week?: number,
-      options?: { silent?: boolean },
+      options?: { silent?: boolean; confidenceTouched?: boolean },
     ): Promise<boolean> => {
-      const built = buildCellDraftInput(rowId, month, amount, confidence, week)
+      const built = buildCellDraftInput(rowId, month, amount, confidence, week, options?.confidenceTouched ?? true)
       if (!built) return Promise.resolve(false)
       const persist = built.existingId ? updateDraft(built.existingId, built.input) : createDraft(built.input)
       return persist.then((result) => {
@@ -2092,13 +2130,31 @@ export default function SalesLedgerWorkbench({
   )
 
   // 장부 화면(A안) 칸 수정 계약 — 매트릭스 칸 커밋과 같은 값·확도·잠금·저장 경로를 그대로 쓴다.
+  // sheetHint(REV 시트 쓰기): 켜짐일 때만 — 서버 반영과 같은 판정(planWeekWrites)을 미러 값으로 미리 돌려
+  // 칸 아래 한 줄로 보인다. 꺼짐이면 넘기지 않는다(지금과 같은 화면).
+  const sheetWriteOn = sheetWrite.mode === "on"
   const ledgerCellEdit = useMemo<LedgerCellEditApi>(() => ({
     editable: (row, month) => isMatrixCellEditable(row, month, editRowOverrideMonths.get(row.id)),
     value: (row, month) => matrixCellValue({ rowId: row.id, month }),
     confidence: (row, month) => matrixCellConfidence({ rowId: row.id, month }),
     pending: (row, month) => lookupMatrixPending(pendingByCell, { rowId: row.id, month }),
-    commit: (rowId, month, amount, confidence) => onCommitCell(rowId, month, amount, confidence),
-  }), [editRowOverrideMonths, matrixCellConfidence, matrixCellValue, onCommitCell, pendingByCell])
+    commit: (rowId, month, amount, confidence, confidenceTouched) =>
+      onCommitCell(rowId, month, amount, confidence, undefined, { confidenceTouched }),
+    sheetHint: sheetWriteOn
+      ? (row, month, amount, confidence, confidenceTouched) => {
+          const sourceDealId = row.sourceDealId ?? (row.ledgerOrigin === "sheet" ? row.id : undefined)
+          return cellSheetWriteHint({
+            kind: sourceDealId ? "edit-row" : "new-row",
+            sheetRow: sourceDealId ? sheetRowById.get(sourceDealId) : null,
+            month,
+            amount,
+            confidence,
+            confidenceTouched,
+            today: getBusinessDateParts().date,
+          })
+        }
+      : undefined,
+  }), [editRowOverrideMonths, matrixCellConfidence, matrixCellValue, onCommitCell, pendingByCell, sheetRowById, sheetWriteOn])
 
   const onMatrixAmountClamped = useCallback(() => {
     pushMatrixToast({ kind: "info", text: "음수는 0으로 처리됩니다 — 감액은 장부 가감 입력 사용" })
@@ -2543,7 +2599,11 @@ export default function SalesLedgerWorkbench({
   }, [applySyncRevImport, canRunAdminOperations])
 
   const buildDraftInput = useCallback((kind: DraftKind, base?: LedgerDraft | null): LedgerDraftInput => {
-    const sourceSnapshot = kind === "edit-row" && selectedRow ? {
+    const sourceDealId = kind === "edit-row" ? (selectedRow?.sourceDealId ?? selectedRow?.id ?? base?.sourceDealId) : undefined
+    // REV 시트 쓰기(ADR-011): 레일이 가리키는 시트 행(미러)의 대상 달 주차 칸을 baseline 으로 싣는다 — 저장할 때마다
+    // 다시 잡는다(재편집에서 달을 바꿔도 그 달 기준). 시트 행이 아니면 싣지 않는다(서버가 no_baseline 으로 막는다).
+    const sheetBaseline = sourceDealId ? sheetBaselineForRow(sheetRowById.get(sourceDealId), draftForm.month, new Date().toISOString()) : null
+    const snapshot = kind === "edit-row" && selectedRow ? {
       capturedAt: new Date().toISOString(),
       selectedMonth,
       row: selectedRow,
@@ -2563,6 +2623,7 @@ export default function SalesLedgerWorkbench({
         monthAmount: Number(detail.monthly_payments?.[draftForm.month] ?? 0),
       } : null,
     } : base?.sourceSnapshot
+    const sourceSnapshot = sheetBaseline ? { ...(snapshot ?? {}), sheetBaseline } : snapshot
 
     // 주차 분해 저장 계약(shared.draftWeeklySaveContract): weeklyMode + 지원 작업 유형(forecast-add·
     // amount-change 한정 — 기간 이동/수량 변경은 단일 금액 UX 유지) + 주차 합>0이면
@@ -2571,7 +2632,7 @@ export default function SalesLedgerWorkbench({
     const weeklyContract = draftWeeklySaveContract(draftForm)
     return {
       kind,
-      sourceDealId: kind === "edit-row" ? (selectedRow?.sourceDealId ?? selectedRow?.id ?? base?.sourceDealId) : undefined,
+      sourceDealId,
       sourceSheetRow: kind === "edit-row" ? (selectedRow?.sheetRow ?? detail?.sheet_row ?? base?.sourceSheetRow ?? null) : null,
       sourceSnapshot,
       customer: draftForm.customer.trim(),
@@ -2599,10 +2660,12 @@ export default function SalesLedgerWorkbench({
         // 주차 분해 저장의 초안 단위 확도는 우세 확도(금액 합 최대 버킷, 동률은 낮은 확도) 자동 기록 —
         // 큐 배지·매트릭스 pending 등 기존 metadata.confidence 소비자의 의미를 보존한다.
         confidence: weeklyContract ? weeklyContract.dominantConfidence : draftForm.confidence,
+        // REV 시트 쓰기: 레일은 사용자가 확도를 고르는 화면이라 늘 직접 고른 것으로 본다(칸 색도 그 확도로 쓴다).
+        confidenceTouched: true,
         quantity: draftForm.quantity.trim() ? safeAmount(draftForm.quantity) : null,
       },
     }
-  }, [detail, draftForm, lens, period, selectedMonth, selectedRow, team])
+  }, [detail, draftForm, lens, period, selectedMonth, selectedRow, sheetRowById, team])
 
   // 반환값(DraftSaveResult): persisted는 서버에 실제로 저장됐으면 true, 로컬 폴백(장부 적용 불가)이면
   // false — InputRailSection이 이 값으로 저장 성공/실패 인라인 메시지를 낸다(항목 5). deduped는
@@ -3326,6 +3389,8 @@ export default function SalesLedgerWorkbench({
                   scopedManager ? branchManagerMatches(draft.manager, scopedManager) : team === "ALL" || draft.team === team,
                 )}
                 serverQueue={queueMode === "server"}
+                sheetWriteMode={sheetWrite.mode}
+                sheetWriteHealthMessage={sheetWrite.healthMessage}
                 onCheckDrafts={checkDrafts}
                 onApplyDrafts={applyDrafts}
                 onShowQueue={() => selectRailView("queue")}
@@ -4773,6 +4838,7 @@ export default function SalesLedgerWorkbench({
                 error={queueError}
                 reversedDraftIds={reversedDraftIds}
                 recordErrors={recordErrors}
+                sheetWrites={sheetWrites}
                 onReload={() => void reloadDrafts()}
                 onEdit={editDraft}
                 onToggle={toggleDraft}
