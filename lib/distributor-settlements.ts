@@ -1,13 +1,20 @@
 import type { PartnerQuoteDetailsInput, PartnerQuoteLineItemInput } from "@/lib/partners-types"
-import { finalizeStandardQuoteDetails } from "@/lib/standard-quote-template"
+import {
+  CLASSIN_QUOTE_SUPPLIER,
+  STANDARD_QUOTE_SUPPLIER,
+  finalizeStandardQuoteDetails,
+} from "@/lib/standard-quote-template"
 
 // 총판 정산(2026-10-23) — 고객 견적 1장에 붙는 '총판용 견적서'와 미수금의 순수 규칙.
+// 정본 설명: docs/hardware-ops/distributor-settlement.md
 //
-// C1 물량: 회사가 하드웨어를 원가(구입가)로 미리 사 둔다. 고객은 총액을 하드웨어 총판에게 내고,
-// 총판이 그중 원가를 회사로 입금한다(예: 고객 630만원 → 총판이 회사로 530~550만원).
-// 그래서 총판용 견적서는 고객 견적과 같은 양식이고 금액(원가 = 총판 입금가)만 다르다.
-// 회사 매출은 설치 시점이 아니라 총판 입금 확인 시점에 잡는다(lib/admin/handoff/distributor-payment-to-ledger-draft.ts).
-// (이전 방식 — 총판이 먼저 사 두고 회사는 받을 돈만 챙기며 설치 즉시 매출 — 은 이 흐름 밖이다.)
+// 하드웨어 물량은 견적마다 두 방식 중 하나다(로트 이름의 첫 글자와 같다 — C1 로트 / H1~H8 로트).
+//  - C방식: 회사가 하드웨어를 원가(구입가)로 미리 사 둔다. 고객은 총액을 하드웨어 총판(퀴드러닝)에게 내고,
+//    총판이 그중 원가를 회사로 입금한다(예: 고객 630만원 → 총판이 회사로 530~550만원).
+//    총판용 견적서는 고객 견적과 같은 양식이고 금액(원가 = 총판 입금가)만 다르다. 공급자 = 회사, 수신 = 총판.
+//    회사 매출은 총판 입금 확인 시점(lib/admin/handoff/distributor-payment-to-ledger-draft.ts).
+//  - H방식: 총판이 먼저 사 둔(수입한) 물량이다. 총판용 견적서·원가 미수가 없고, 직원이 설치 완료를 누르면
+//    그 시점에 매출을 잡는다.
 //
 //  - 대상 품목 기본값: itemType=hardware + AI Suite(online-suite-monthly). 설치·소프트웨어 등은 기본 제외(직접 포함 가능).
 //  - 원가(코드상 unitPrice): 직접 입력 또는 원가 템플릿(품목 코드 × 최소 수량 구간). 구매 대수·고객마다 달라 견적마다 덮어쓸 수 있다.
@@ -18,10 +25,35 @@ import { finalizeStandardQuoteDetails } from "@/lib/standard-quote-template"
 
 export const AI_SUITE_ITEM_CODE = "online-suite-monthly"
 
+export const DISTRIBUTOR_FULFILLMENT_MODES = ["C", "H"] as const
+export type DistributorFulfillmentMode = (typeof DISTRIBUTOR_FULFILLMENT_MODES)[number]
+
+export const DISTRIBUTOR_MODE_LABELS: Record<DistributorFulfillmentMode, { title: string; summary: string }> = {
+  C: {
+    title: "C방식 · 회사 선매입",
+    summary: "회사가 원가로 미리 사 둔 물량. 고객은 총액을 총판에 내고, 총판이 원가를 회사로 입금 — 입금 확인 시 매출.",
+  },
+  H: {
+    title: "H방식 · 총판 선매입",
+    summary: "총판이 먼저 사 둔 물량. 총판 견적서·원가 미수 없음 — 직원이 설치 완료를 누르면 매출.",
+  },
+}
+
+/**
+ * 하드웨어 총판 기본값 — 퀴드러닝(배철웅 대표). 하드웨어 고객 견적의 표준 공급자와 같은 회사다.
+ * 처음 정산을 만들 때만 채우고, 이후에는 마지막에 저장한 총판 정보를 쓴다.
+ */
+export const DEFAULT_HARDWARE_DISTRIBUTOR = {
+  distributorName: STANDARD_QUOTE_SUPPLIER.businessName,
+  distributorContactName: `${STANDARD_QUOTE_SUPPLIER.contactName} 대표`,
+  distributorEmail: STANDARD_QUOTE_SUPPLIER.contactEmail || null,
+  distributorPhone: STANDARD_QUOTE_SUPPLIER.contactPhone,
+} as const
+
 export const DISTRIBUTOR_SETTLEMENT_TRIGGERS = ["on_accept", "on_install", "manual"] as const
 export type DistributorSettlementTrigger = (typeof DISTRIBUTOR_SETTLEMENT_TRIGGERS)[number]
 
-export const DISTRIBUTOR_SETTLEMENT_STATUSES = ["draft", "issued", "partial", "paid", "cancelled"] as const
+export const DISTRIBUTOR_SETTLEMENT_STATUSES = ["draft", "issued", "partial", "paid", "completed", "cancelled"] as const
 export type DistributorSettlementStatus = (typeof DISTRIBUTOR_SETTLEMENT_STATUSES)[number]
 
 export type DistributorIssueReason = "customer_accepted" | "installation_completed" | "manual"
@@ -38,6 +70,7 @@ export const DISTRIBUTOR_STATUS_LABELS: Record<DistributorSettlementStatus, stri
   issued: "입금 대기",
   partial: "일부 입금",
   paid: "입금 완료",
+  completed: "설치 완료 · 매출",
   cancelled: "취소",
 }
 
@@ -92,6 +125,7 @@ export interface DistributorSettlementRecord {
   id: string
   quoteDocumentId: string
   dealId: string | null
+  fulfillmentMode: DistributorFulfillmentMode
   sourceVersionId: string | null
   issuedVersionId: string | null
   distributorName: string
@@ -119,6 +153,8 @@ export interface DistributorSettlementRecord {
   reviewRequiredReason: string | null
   notes: string | null
   cancelledAt: string | null
+  /** H방식 설치 완료 시각(= 매출 인식 시점). */
+  installedAt: string | null
   createdAt: string
   updatedAt: string
 }
@@ -245,7 +281,9 @@ export function getDistributorIssueBlocker(input: {
 /* ─── 총판용 견적서 ───────────────────────────────────────── */
 
 /**
- * 고객 견적서와 같은 양식의 총판용 견적서. 수신처만 총판으로 바꾸고, 포함 품목을 원가로 다시 계산한다.
+ * 고객 견적서와 같은 양식(성남여고 승인 디자인, QuoteDocumentPreview)의 총판용 견적서.
+ * C방식에서는 회사가 총판에게 하드웨어를 공급하므로 공급자 = 회사(클래스인), 수신처 = 총판이다
+ * (고객 견적의 공급자는 총판이라 그대로 두면 '총판 → 총판' 문서가 된다). 포함 품목을 원가로 다시 계산하고,
  * 참조란에 고객사를 적어 어느 고객 건인지 알 수 있게 한다.
  */
 export function buildDistributorQuoteDetails(
@@ -282,6 +320,15 @@ export function buildDistributorQuoteDetails(
     recipientPhone: settlement.distributorPhone ?? undefined,
     recipientEmail: settlement.distributorEmail ?? undefined,
     referenceName: customerName ? `고객사 ${customerName}` : customer.referenceName,
+    // 공급자 블록은 통째로 회사(클래스인)로 바꾼다 — 담당자·연락처는 회사 표준 정보가 없어 비워 둔다.
+    supplierBusinessName: CLASSIN_QUOTE_SUPPLIER.businessName,
+    supplierBusinessRegistrationNumber: CLASSIN_QUOTE_SUPPLIER.businessRegistrationNumber,
+    supplierRepresentativeName: CLASSIN_QUOTE_SUPPLIER.representativeName,
+    supplierAddress: CLASSIN_QUOTE_SUPPLIER.address,
+    supplierContactName: undefined,
+    supplierContactPhone: undefined,
+    supplierContactEmail: CLASSIN_QUOTE_SUPPLIER.contactEmail || undefined,
+    footerContactText: CLASSIN_QUOTE_SUPPLIER.businessName,
     vatIncluded: settlement.vatIncluded,
     // 고객 쪽 VAT 문구를 그대로 끌고 오면 총판 VAT 설정과 어긋날 수 있어 기본 문구로 다시 정한다.
     vatPolicyLabel: undefined,
@@ -298,14 +345,14 @@ export function deriveSettlementStatus(input: {
   totalAmount: number
   paidAmount: number
 }): DistributorSettlementStatus {
-  if (input.status === "draft" || input.status === "cancelled") return input.status
+  if (input.status === "draft" || input.status === "cancelled" || input.status === "completed") return input.status
   if (input.paidAmount <= 0) return "issued"
   if (input.paidAmount >= input.totalAmount) return "paid"
   return "partial"
 }
 
 export function getOutstandingAmount(record: Pick<DistributorSettlementRecord, "status" | "totalAmount" | "paidAmount">) {
-  if (record.status === "draft" || record.status === "cancelled") return 0
+  if (record.status !== "issued" && record.status !== "partial" && record.status !== "paid") return 0
   return Math.max(0, record.totalAmount - record.paidAmount)
 }
 
@@ -374,6 +421,7 @@ export function normalizeDistributorLines(raw: unknown): DistributorSettlementLi
 }
 
 export interface DistributorSettlementInput {
+  fulfillmentMode: DistributorFulfillmentMode
   distributorName: string
   distributorContactName: string | null
   distributorEmail: string | null
@@ -395,7 +443,12 @@ export function validateDistributorSettlementInput(body: unknown): Validated<Dis
   if (distributorEmail && !EMAIL_RE.test(distributorEmail)) {
     return { ok: false, error: "총판 이메일 형식이 올바르지 않습니다." }
   }
-  const issueTrigger = DISTRIBUTOR_SETTLEMENT_TRIGGERS.find((value) => value === body.issueTrigger) ?? "on_accept"
+  const fulfillmentMode = DISTRIBUTOR_FULFILLMENT_MODES.find((value) => value === body.fulfillmentMode) ?? "C"
+  // H방식은 총판 견적서를 발행하지 않는다 — 설치 완료(직원 버튼)가 유일한 진행 시점이다.
+  const issueTrigger =
+    fulfillmentMode === "H"
+      ? "on_install"
+      : DISTRIBUTOR_SETTLEMENT_TRIGGERS.find((value) => value === body.issueTrigger) ?? "on_accept"
   const lines = normalizeDistributorLines(body.lines)
   if (!lines) return { ok: false, error: "총판 품목 형식이 올바르지 않습니다." }
   const dueDate = optionalText(body.dueDate, 10)
@@ -405,6 +458,7 @@ export function validateDistributorSettlementInput(body: unknown): Validated<Dis
   return {
     ok: true,
     value: {
+      fulfillmentMode,
       distributorName,
       distributorContactName: optionalText(body.distributorContactName, 80),
       distributorEmail,

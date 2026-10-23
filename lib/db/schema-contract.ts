@@ -896,10 +896,10 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     table: "distributor_settlements",
     label: "총판 정산(총판용 견적서·미수금)",
     columns: [
-      "id", "quote_document_id", "deal_id", "source_version_id", "issued_version_id", "distributor_name",
+      "id", "quote_document_id", "deal_id", "fulfillment_mode", "source_version_id", "issued_version_id", "distributor_name",
       "distributor_email", "issue_trigger", "auto_email", "lines", "total_amount", "customer_total_amount",
       "status", "paid_amount", "due_date", "issued_at", "issue_reason", "share_token", "email_status",
-      "review_required_reason", "cancelled_at", "updated_at",
+      "review_required_reason", "cancelled_at", "installed_at", "updated_at",
     ],
     migration: "supabase/migrations/20261023_distributor_settlements.sql",
     severity: "warning",

@@ -10,6 +10,10 @@ import {
   type DistributorIssueReason,
   type DistributorSettlementRecord,
 } from "@/lib/distributor-settlements"
+import {
+  proposeLedgerDraftForInstallation,
+  type DistributorLedgerProposal,
+} from "@/lib/admin/handoff/distributor-payment-to-ledger-draft"
 import { sendEmail, wrapNotificationHtml } from "@/lib/email"
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import { getCustomer } from "@/lib/portal/repositories/customers"
@@ -21,6 +25,7 @@ import {
   DistributorSettlementsNotReadyError,
   flagDistributorSettlementReview,
   getDistributorSettlementByQuote,
+  markDistributorSettlementInstalled,
   markDistributorSettlementIssued,
   recordDistributorEmailResult,
 } from "@/lib/repositories/distributor-settlements"
@@ -199,6 +204,10 @@ export async function issueDistributorSettlement(params: {
   }
   const settlement = read.value
   if (!settlement || settlement.status === "cancelled") return { status: "not_configured" }
+  // H방식(총판 선매입)은 총판 견적서를 발행하지 않는다 — 설치 완료는 completeHModeInstallation 으로 간다.
+  if (settlement.fulfillmentMode === "H") {
+    return { status: "skipped", reason: "H방식은 총판 견적서를 발행하지 않습니다. 설치 완료로 매출을 잡습니다." }
+  }
   if (settlement.status !== "draft") return { status: "already_issued", settlement }
 
   if (params.mode === "auto") {
@@ -282,4 +291,47 @@ export async function issueDistributorSettlementOnAcceptSafely(input: {
     )
     return null
   }
+}
+
+/* ─── H방식: 설치 완료 ─────────────────────────────────────── */
+
+export type HModeInstallationOutcome =
+  | { status: "completed"; settlement: DistributorSettlementRecord; ledger: DistributorLedgerProposal }
+  | { status: "already_completed"; settlement: DistributorSettlementRecord }
+  | { status: "not_h_mode" }
+  | { status: "not_configured" }
+
+/**
+ * H방식(총판이 먼저 사 둔 물량) — 직원이 설치 완료를 누르면 정산을 completed 로 바꾸고,
+ * 그 시점으로 매출 원장 입력 큐에 초안을 올린다. 총판 견적서·원가 미수는 없다.
+ */
+export async function completeHModeInstallation(params: {
+  quoteDocumentId: string
+  actor: string
+}): Promise<HModeInstallationOutcome> {
+  const read = await getDistributorSettlementByQuote(params.quoteDocumentId)
+  if (!read.available) throw new DistributorSettlementsNotReadyError()
+  const settlement = read.value
+  if (!settlement || settlement.status === "cancelled") return { status: "not_configured" }
+  if (settlement.fulfillmentMode !== "H") return { status: "not_h_mode" }
+  if (settlement.status !== "draft") return { status: "already_completed", settlement }
+
+  const context = await loadQuoteContext(params.quoteDocumentId)
+  const completed = await markDistributorSettlementInstalled({
+    id: settlement.id,
+    customerTotalAmount: context?.version.total_amount ?? settlement.customerTotalAmount,
+    actor: params.actor,
+  })
+  if (!completed) {
+    const latest = await getDistributorSettlementByQuote(params.quoteDocumentId)
+    return latest.value ? { status: "already_completed", settlement: latest.value } : { status: "not_configured" }
+  }
+
+  const ledger = await proposeLedgerDraftForInstallation({
+    settlement: completed,
+    customerName: context?.customerName ?? null,
+    quoteNumber: context?.document.quote_number ?? null,
+  })
+  if (ledger.status === "error") console.error("[distributor-settlement] H방식 매출 초안 실패:", ledger.error)
+  return { status: "completed", settlement: completed, ledger }
 }

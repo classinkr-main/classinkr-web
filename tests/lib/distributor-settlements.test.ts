@@ -13,9 +13,11 @@ import {
   validateDistributorPaymentInput,
   validateDistributorPriceTemplateInput,
   validateDistributorSettlementInput,
+  DEFAULT_HARDWARE_DISTRIBUTOR,
   type DistributorPriceRule,
 } from "@/lib/distributor-settlements"
 import type { PartnerQuoteDetailsInput, PartnerQuoteLineItemInput } from "@/lib/partners-types"
+import { CLASSIN_QUOTE_SUPPLIER, STANDARD_QUOTE_SUPPLIER } from "@/lib/standard-quote-template"
 
 const CUSTOMER_LINES: PartnerQuoteLineItemInput[] = [
   { sortOrder: 1, lineNumber: 1, itemType: "hardware", itemCode: "board-86", itemName: '86" 전자칠판', quantity: 2, unitPrice: 6_300_000 },
@@ -104,7 +106,10 @@ describe("distributor quote document", () => {
     expect(details.recipientCompanyName).toBe("하드웨어 총판")
     expect(details.recipientContactName).toBe("김담당")
     expect(details.referenceName).toBe("고객사 테스트 학원")
-    expect(details.supplierBusinessName).toBe("퀴드러닝")
+    // C방식: 회사가 총판에게 공급한다 — 고객 견적의 공급자(총판)를 그대로 쓰면 '총판 → 총판' 문서가 된다.
+    expect(details.supplierBusinessName).toBe(CLASSIN_QUOTE_SUPPLIER.businessName)
+    expect(details.supplierRepresentativeName).toBe(CLASSIN_QUOTE_SUPPLIER.representativeName)
+    expect(details.supplierContactName).toBe("")
     expect(details.lineItems?.map((line) => [line.itemCode, line.unitPrice, line.lineSupplyAmount])).toEqual([
       ["board-86", 5_500_000, 11_000_000],
       ["online-suite-monthly", 300_000, 3_600_000],
@@ -157,6 +162,15 @@ describe("distributor input validation", () => {
     ).toBe(false)
     const unknownTrigger = validateDistributorSettlementInput({ distributorName: "총판", issueTrigger: "x", lines: [] })
     expect(unknownTrigger.ok && unknownTrigger.value.issueTrigger).toBe("on_accept")
+    expect(unknownTrigger.ok && unknownTrigger.value.fulfillmentMode).toBe("C")
+    // H방식은 총판 견적서를 발행하지 않으므로 발행 시점이 설치 완료로 고정된다.
+    const hMode = validateDistributorSettlementInput({
+      fulfillmentMode: "H",
+      distributorName: "총판",
+      issueTrigger: "on_accept",
+      lines: [],
+    })
+    expect(hMode.ok && hMode.value).toMatchObject({ fulfillmentMode: "H", issueTrigger: "on_install" })
   })
 
   it("validates payments and price templates", () => {
@@ -170,5 +184,19 @@ describe("distributor input validation", () => {
     })
     expect(template.ok && template.value.rules[0].minQuantity).toBe(1)
     expect(validateDistributorPriceTemplateInput({ name: "총판가", rules: [] }).ok).toBe(false)
+  })
+})
+
+describe("hardware distributor defaults", () => {
+  it("defaults to 퀴드러닝 · 배철웅 대표 (the standard hardware supplier)", () => {
+    expect(DEFAULT_HARDWARE_DISTRIBUTOR.distributorName).toBe(STANDARD_QUOTE_SUPPLIER.businessName)
+    expect(DEFAULT_HARDWARE_DISTRIBUTOR.distributorName).toBe("퀴드러닝")
+    expect(DEFAULT_HARDWARE_DISTRIBUTOR.distributorContactName).toBe("배철웅 대표")
+    expect(DEFAULT_HARDWARE_DISTRIBUTOR.distributorPhone).toBe(STANDARD_QUOTE_SUPPLIER.contactPhone)
+  })
+
+  it("keeps completed (H방식) settlements out of receivables", () => {
+    expect(getOutstandingAmount({ status: "completed", totalAmount: 100, paidAmount: 0 })).toBe(0)
+    expect(deriveSettlementStatus({ status: "completed", totalAmount: 100, paidAmount: 0 })).toBe("completed")
   })
 })

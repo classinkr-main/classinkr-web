@@ -1,8 +1,11 @@
 -- 총판 정산(2026-10-23) — 고객 견적과 함께 하드웨어 총판에게 보낼 '총판용 견적서'와 그 미수금.
 --
--- 흐름(C1 물량): 회사가 하드웨어를 원가로 미리 사 두고, 고객은 총액을 하드웨어 총판에게 내며, 총판이 원가를
--- 회사로 입금한다. 회사 매출은 총판 입금 확인 시점이다. 견적마다 원가를 미리 정해 두고(직접 입력 또는 템플릿),
--- 고객 동의 또는 설치 완료 시점에 같은 양식·다른 금액의 총판용 견적서를 발행하고 입금을 추적한다.
+-- 방식은 견적마다 둘 중 하나다(docs/hardware-ops/distributor-settlement.md).
+--  - C방식(C1 물량): 회사가 하드웨어를 원가로 미리 사 두고, 고객은 총액을 하드웨어 총판에게 내며, 총판이 원가를
+--    회사로 입금한다. 회사 매출은 총판 입금 확인 시점이다. 견적마다 원가를 미리 정해 두고(직접 입력 또는 템플릿),
+--    고객 동의 또는 설치 완료 시점에 같은 양식·다른 금액의 총판용 견적서를 발행하고 입금을 추적한다.
+--  - H방식(H 로트 물량): 총판이 먼저 사 둔 물량이다. 총판용 견적서·원가 미수가 없고, 직원이 설치 완료를 누르면
+--    그 시점에 매출을 잡는다(status=completed, installed_at).
 --
 --  - distributor_price_templates : 원가 템플릿(품목 코드 × 최소 수량 구간 → 원가).
 --  - distributor_settlements     : 견적 1장당 총판 정산 1건(설정 + 발행 스냅샷 + 미수 상태).
@@ -42,6 +45,8 @@ CREATE TABLE IF NOT EXISTS public.distributor_settlements (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   quote_document_id UUID NOT NULL UNIQUE REFERENCES public.quote_documents(id) ON DELETE CASCADE,
   deal_id UUID REFERENCES public.deals(id) ON DELETE SET NULL,
+  -- C = 회사 선매입·총판 원가 입금·입금 확인 시 매출, H = 총판 선매입·설치 완료 시 매출.
+  fulfillment_mode TEXT NOT NULL DEFAULT 'C',
   -- 원가을 정할 때 본 고객 견적 버전. 자동 발행 시 현재 버전과 다르면 발행하지 않고 재확인을 요청한다.
   source_version_id UUID REFERENCES public.quote_document_versions(id) ON DELETE SET NULL,
   issued_version_id UUID REFERENCES public.quote_document_versions(id) ON DELETE SET NULL,
@@ -73,13 +78,17 @@ CREATE TABLE IF NOT EXISTS public.distributor_settlements (
   review_required_reason TEXT,
   notes TEXT,
   cancelled_at TIMESTAMPTZ,
+  -- H방식: 직원이 설치 완료를 누른 시각(= 매출 인식 시점).
+  installed_at TIMESTAMPTZ,
   created_by TEXT,
   updated_by TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT distributor_settlements_name_check CHECK (char_length(btrim(distributor_name)) BETWEEN 1 AND 80),
+  CONSTRAINT distributor_settlements_mode_check CHECK (fulfillment_mode IN ('C', 'H')),
   CONSTRAINT distributor_settlements_trigger_check CHECK (issue_trigger IN ('on_accept', 'on_install', 'manual')),
-  CONSTRAINT distributor_settlements_status_check CHECK (status IN ('draft', 'issued', 'partial', 'paid', 'cancelled')),
+  CONSTRAINT distributor_settlements_status_check CHECK (
+    status IN ('draft', 'issued', 'partial', 'paid', 'completed', 'cancelled')),
   CONSTRAINT distributor_settlements_issue_reason_check CHECK (
     issue_reason IS NULL OR issue_reason IN ('customer_accepted', 'installation_completed', 'manual')),
   CONSTRAINT distributor_settlements_email_status_check CHECK (email_status IN ('not_sent', 'sent', 'failed', 'skipped')),
@@ -87,9 +96,14 @@ CREATE TABLE IF NOT EXISTS public.distributor_settlements (
     jsonb_typeof(lines) = 'array' AND jsonb_array_length(lines) <= 60),
   CONSTRAINT distributor_settlements_amounts_check CHECK (
     subtotal_amount >= 0 AND vat_amount >= 0 AND total_amount >= 0 AND paid_amount >= 0),
-  -- 발행된 건은 공유 토큰과 발행 시각이 반드시 있다.
+  -- C방식 발행 건은 공유 토큰과 발행 시각이 반드시 있다.
   CONSTRAINT distributor_settlements_issued_check CHECK (
-    status IN ('draft', 'cancelled') OR (share_token IS NOT NULL AND issued_at IS NOT NULL))
+    status IN ('draft', 'cancelled', 'completed') OR (share_token IS NOT NULL AND issued_at IS NOT NULL)),
+  -- 설치 완료(completed)는 H방식에만 있고 설치 시각이 반드시 있다. H방식은 총판 견적서를 발행하지 않는다.
+  CONSTRAINT distributor_settlements_completed_check CHECK (
+    status <> 'completed' OR (fulfillment_mode = 'H' AND installed_at IS NOT NULL)),
+  CONSTRAINT distributor_settlements_h_mode_check CHECK (
+    fulfillment_mode = 'C' OR status IN ('draft', 'completed', 'cancelled'))
 );
 
 -- 미수금 목록: 발행됐고 아직 다 받지 못한 건을 기한순으로.

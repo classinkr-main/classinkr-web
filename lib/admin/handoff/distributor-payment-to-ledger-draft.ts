@@ -9,7 +9,9 @@ import {
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 /**
- * C1 매출 인식(2026-10-23) — 하드웨어 총판의 원가 입금이 확인되면 그 입금분을 매출로 잡는다.
+ * 하드웨어 매출 인식(2026-10-23) — 방식(C/H)에 따라 매출을 잡는 시점이 다르다.
+ *  - C방식: 하드웨어 총판의 원가 입금이 확인되면 그 입금분을 매출로 잡는다(입금 1건 = 초안 1건).
+ *  - H방식: 직원이 설치 완료를 누르면 그 시점에 매출로 잡는다(정산 1건 = 초안 1건, 아래 proposeLedgerDraftForInstallation).
  *
  * C1 물량: 회사가 하드웨어를 원가로 미리 사 두고, 고객은 총액을 총판에게 내고, 총판이 원가(구입가)를
  * 회사로 입금한다. 그래서 회사 매출은 설치 시점이 아니라 '총판 입금 확인' 시점이다.
@@ -150,4 +152,92 @@ export async function listLedgerDraftStatusesForSettlement(
     if (typeof paymentId === "string") statuses[paymentId] = row.status
   }
   return statuses
+}
+
+/* ─── H방식: 설치 완료 시 매출 ─────────────────────────────── */
+
+const INSTALL_OPERATION = "hmode-installation-confirmed"
+
+/** KST(UTC+9) 기준 YYYY-MM. */
+function kstMonth(iso: string): string {
+  const kst = new Date(new Date(iso).getTime() + 9 * 60 * 60 * 1000)
+  return `${kst.getUTCFullYear()}-${String(kst.getUTCMonth() + 1).padStart(2, "0")}`
+}
+
+/**
+ * H방식(총판 선매입 물량) — 직원이 설치 완료를 누른 시점에 매출 원장 입력 큐에 초안을 올린다.
+ * C방식과 같은 원칙: draft 까지만, CNY 환산 없음(amount 0, 고객 견적 KRW 합계는 참고), 정산당 1건.
+ */
+export async function proposeLedgerDraftForInstallation(input: {
+  settlement: DistributorSettlementRecord
+  customerName: string | null
+  quoteNumber: string | null
+}): Promise<DistributorLedgerProposal> {
+  const { settlement } = input
+  try {
+    try {
+      const { data, error } = await createSupabaseAdminClient()
+        .from("branch_sales_ledger_drafts")
+        .select("id")
+        .eq("metadata->>operation", INSTALL_OPERATION)
+        .eq("metadata->>sourceDistributorSettlementId", settlement.id)
+        .limit(1)
+      if (error) throw new Error(error.message)
+      if ((data ?? []).length > 0) return { status: "skipped", reason: "ledger-draft-already-exists-for-installation" }
+    } catch (dedupError) {
+      return {
+        status: "skipped",
+        reason: dedupError instanceof Error ? `dedup-unavailable: ${dedupError.message}` : "dedup-unavailable",
+      }
+    }
+
+    const installedAt = settlement.installedAt ?? new Date().toISOString()
+    const { draft, dedupedRecent } = await createBranchSalesLedgerDraft(
+      {
+        kind: "new-row",
+        sourceDealId: settlement.dealId,
+        customer: input.customerName?.trim() || "고객명 미입력",
+        month: kstMonth(installedAt),
+        amount: 0,
+        currency: "CNY",
+        note: [
+          `H방식 설치 완료 — 고객 견적 합계 ${won(settlement.customerTotalAmount)}`,
+          input.quoteNumber ? `견적 ${input.quoteNumber}` : null,
+          "KRW 금액은 참고용, CNY 금액은 검수자가 입력",
+        ].filter(Boolean).join(" · "),
+        metadata: {
+          operation: INSTALL_OPERATION,
+          confidence: "confirmed",
+          handoff: "hmode-installation",
+          fulfillmentMode: "H",
+          sourceDistributorSettlementId: settlement.id,
+          sourceQuoteDocumentId: settlement.quoteDocumentId,
+          sourceDealId: settlement.dealId,
+          sourceAmount: settlement.customerTotalAmount,
+          sourceAmountCurrency: "KRW",
+          installedAt,
+        },
+      },
+      DISTRIBUTOR_PAYMENT_HANDOFF_ACTOR,
+    )
+    if (dedupedRecent) return { status: "skipped", reason: `merged-into-recent-draft:${draft.id}` }
+    return { status: "created", draftId: draft.id }
+  } catch (error) {
+    return { status: "error", error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+/** H방식 정산의 설치 매출 초안 상태. 없으면 null. */
+export async function getInstallationLedgerDraftStatus(settlementId: string): Promise<BranchSalesLedgerDraftStatus | null> {
+  const { data, error } = await createSupabaseAdminClient()
+    .from("branch_sales_ledger_drafts")
+    .select("status")
+    .eq("metadata->>operation", INSTALL_OPERATION)
+    .eq("metadata->>sourceDistributorSettlementId", settlementId)
+    .limit(1)
+  if (error) {
+    console.warn("[distributor-payment-handoff] 설치 매출 초안 조회 생략:", error.message)
+    return null
+  }
+  return ((data ?? []) as Array<{ status: BranchSalesLedgerDraftStatus }>)[0]?.status ?? null
 }

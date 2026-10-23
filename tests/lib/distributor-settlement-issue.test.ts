@@ -13,6 +13,7 @@ const SETTLEMENT: DistributorSettlementRecord = {
   id: "ds_1",
   quoteDocumentId: "qd_1",
   dealId: "deal_1",
+  fulfillmentMode: "C",
   sourceVersionId: "qv_1",
   issuedVersionId: null,
   distributorName: "하드웨어 총판",
@@ -51,6 +52,7 @@ const SETTLEMENT: DistributorSettlementRecord = {
   reviewRequiredReason: null,
   notes: null,
   cancelledAt: null,
+  installedAt: null,
   createdAt: "2026-10-23T00:00:00.000Z",
   updatedAt: "2026-10-23T00:00:00.000Z",
 }
@@ -78,6 +80,13 @@ async function loadService(options: {
     emailStatus: result.status,
   }))
   const flagDistributorSettlementReview = vi.fn().mockResolvedValue(undefined)
+  const markDistributorSettlementInstalled = vi.fn(async () => ({
+    ...SETTLEMENT,
+    ...settlement,
+    status: "completed" as const,
+    installedAt: "2026-11-02T03:00:00.000Z",
+  }))
+  const proposeLedgerDraftForInstallation = vi.fn().mockResolvedValue({ status: "created", draftId: "ld_9" })
   const emitNotificationEvent = vi.fn().mockResolvedValue({ id: "evt" })
   const sendEmail = vi.fn().mockResolvedValue(options.emailResult ?? { provider: "resend", sent: 1, failed: 0 })
 
@@ -85,9 +94,11 @@ async function loadService(options: {
     DistributorSettlementsNotReadyError: class extends Error {},
     getDistributorSettlementByQuote: vi.fn().mockResolvedValue({ available: true, warning: null, value: settlement }),
     markDistributorSettlementIssued,
+    markDistributorSettlementInstalled,
     recordDistributorEmailResult,
     flagDistributorSettlementReview,
   }))
+  vi.doMock("@/lib/admin/handoff/distributor-payment-to-ledger-draft", () => ({ proposeLedgerDraftForInstallation }))
   vi.doMock("@/lib/portal/repositories/quote-documents", () => ({
     getQuoteDocument: vi.fn().mockResolvedValue({ id: "qd_1", deal_id: "deal_1", quote_number: "Q-2026-001" }),
     getResolvableQuoteVersion: vi.fn().mockResolvedValue({
@@ -115,6 +126,8 @@ async function loadService(options: {
     flagDistributorSettlementReview,
     emitNotificationEvent,
     sendEmail,
+    markDistributorSettlementInstalled,
+    proposeLedgerDraftForInstallation,
   }
 }
 
@@ -224,5 +237,39 @@ describe("issueDistributorSettlement", () => {
     })
     expect(outcome.status).toBe("issued")
     expect(ctx.recordDistributorEmailResult).toHaveBeenCalledWith("ds_1", { status: "failed", error: "bounce" })
+  })
+})
+
+describe("H방식(총판 선매입)", () => {
+  it("never issues a distributor quote, even on customer accept", async () => {
+    const ctx = await loadService({ settlement: { fulfillmentMode: "H", issueTrigger: "on_install" } })
+    const outcome = await ctx.service.issueDistributorSettlement({
+      quoteDocumentId: "qd_1",
+      reason: "customer_accepted",
+      mode: "auto",
+      actor: "system",
+    })
+    expect(outcome.status).toBe("skipped")
+    expect(ctx.markDistributorSettlementIssued).not.toHaveBeenCalled()
+    expect(ctx.sendEmail).not.toHaveBeenCalled()
+  })
+
+  it("records revenue at installation completion pressed by staff", async () => {
+    const ctx = await loadService({ settlement: { fulfillmentMode: "H", issueTrigger: "on_install" } })
+    const outcome = await ctx.service.completeHModeInstallation({ quoteDocumentId: "qd_1", actor: "운영자" })
+    expect(outcome.status).toBe("completed")
+    expect(ctx.markDistributorSettlementInstalled).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "ds_1", customerTotalAmount: 6_300_000 })
+    )
+    expect(ctx.proposeLedgerDraftForInstallation).toHaveBeenCalledWith(
+      expect.objectContaining({ customerName: "테스트 학원", quoteNumber: "Q-2026-001" })
+    )
+  })
+
+  it("leaves C방식 installation to the distributor quote flow", async () => {
+    const ctx = await loadService({})
+    const outcome = await ctx.service.completeHModeInstallation({ quoteDocumentId: "qd_1", actor: "운영자" })
+    expect(outcome.status).toBe("not_h_mode")
+    expect(ctx.markDistributorSettlementInstalled).not.toHaveBeenCalled()
   })
 })

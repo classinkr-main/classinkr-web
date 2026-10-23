@@ -2,6 +2,7 @@ import "server-only"
 
 import { isMissingTableMessage } from "@/lib/db/schema-contract"
 import {
+  DISTRIBUTOR_FULFILLMENT_MODES,
   DISTRIBUTOR_SETTLEMENT_STATUSES,
   DISTRIBUTOR_SETTLEMENT_TRIGGERS,
   deriveSettlementStatus,
@@ -29,12 +30,12 @@ const PAYMENTS = "distributor_settlement_payments"
 const TEMPLATES = "distributor_price_templates"
 
 const SETTLEMENT_COLUMNS = [
-  "id", "quote_document_id", "deal_id", "source_version_id", "issued_version_id", "distributor_name",
+  "id", "quote_document_id", "deal_id", "fulfillment_mode", "source_version_id", "issued_version_id", "distributor_name",
   "distributor_contact_name", "distributor_email", "distributor_phone", "issue_trigger", "auto_email",
   "price_template_id", "lines", "vat_included", "subtotal_amount", "vat_amount", "total_amount",
   "customer_total_amount", "status", "paid_amount", "due_date", "issued_at", "issue_reason", "share_token",
   "email_status", "emailed_at", "email_error", "review_required_reason", "notes", "cancelled_at",
-  "created_at", "updated_at",
+  "installed_at", "created_at", "updated_at",
 ].join(", ")
 const PAYMENT_COLUMNS = "id, settlement_id, amount, paid_on, memo, created_by, created_at"
 const TEMPLATE_COLUMNS = "id, name, rules, notes, updated_at"
@@ -75,6 +76,7 @@ interface SettlementRow {
   id: string
   quote_document_id: string
   deal_id: string | null
+  fulfillment_mode: string | null
   source_version_id: string | null
   issued_version_id: string | null
   distributor_name: string
@@ -102,6 +104,7 @@ interface SettlementRow {
   review_required_reason: string | null
   notes: string | null
   cancelled_at: string | null
+  installed_at: string | null
   created_at: string
   updated_at: string
 }
@@ -120,6 +123,7 @@ export function toDistributorSettlementRecord(row: SettlementRow): DistributorSe
     id: row.id,
     quoteDocumentId: row.quote_document_id,
     dealId: row.deal_id,
+    fulfillmentMode: DISTRIBUTOR_FULFILLMENT_MODES.find((value) => value === row.fulfillment_mode) ?? "C",
     sourceVersionId: row.source_version_id,
     issuedVersionId: row.issued_version_id,
     distributorName: row.distributor_name,
@@ -151,6 +155,7 @@ export function toDistributorSettlementRecord(row: SettlementRow): DistributorSe
     reviewRequiredReason: row.review_required_reason,
     notes: row.notes,
     cancelledAt: row.cancelled_at,
+    installedAt: row.installed_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -249,6 +254,7 @@ export async function saveDistributorSettlementDraft(params: {
   const supabase = createSupabaseAdminClient()
   const columns = {
     deal_id: params.dealId,
+    fulfillment_mode: params.input.fulfillmentMode,
     source_version_id: params.sourceVersionId,
     distributor_name: params.input.distributorName,
     distributor_contact_name: params.input.distributorContactName,
@@ -330,6 +336,34 @@ export async function markDistributorSettlementIssued(params: {
     .select(SETTLEMENT_COLUMNS)
     .maybeSingle()
   if (error) throwDbError(error, "총판 견적서를 발행하지 못했습니다.")
+  return data ? toDistributorSettlementRecord(data as unknown as SettlementRow) : null
+}
+
+/**
+ * H방식 설치 완료 — 발행 전(draft) → completed. 이 시각이 매출 인식 시점이다.
+ * 조건부 UPDATE 라 두 번 눌러도 한 번만 성공한다(이미 완료면 null).
+ */
+export async function markDistributorSettlementInstalled(params: {
+  id: string
+  customerTotalAmount: number
+  actor: string
+}): Promise<DistributorSettlementRecord | null> {
+  const { data, error } = await createSupabaseAdminClient()
+    .from(SETTLEMENTS)
+    .update({
+      status: "completed",
+      installed_at: new Date().toISOString(),
+      issue_reason: "installation_completed",
+      customer_total_amount: params.customerTotalAmount,
+      review_required_reason: null,
+      updated_by: params.actor,
+    })
+    .eq("id", params.id)
+    .eq("fulfillment_mode", "H")
+    .eq("status", "draft")
+    .select(SETTLEMENT_COLUMNS)
+    .maybeSingle()
+  if (error) throwDbError(error, "설치 완료를 기록하지 못했습니다.")
   return data ? toDistributorSettlementRecord(data as unknown as SettlementRow) : null
 }
 

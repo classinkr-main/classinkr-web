@@ -2,15 +2,20 @@ import "server-only"
 
 import { NextResponse } from "next/server"
 
-import { listLedgerDraftStatusesForSettlement } from "@/lib/admin/handoff/distributor-payment-to-ledger-draft"
+import {
+  getInstallationLedgerDraftStatus,
+  listLedgerDraftStatusesForSettlement,
+} from "@/lib/admin/handoff/distributor-payment-to-ledger-draft"
 import type { VerifiedAdminContext } from "@/lib/admin-auth"
 import {
+  DEFAULT_HARDWARE_DISTRIBUTOR,
   buildDistributorLinesFromQuote,
   type DistributorPriceTemplate,
   type DistributorSettlementLine,
   type DistributorSettlementPayment,
   type DistributorSettlementRecord,
 } from "@/lib/distributor-settlements"
+import type { PartnerQuoteDetailsInput } from "@/lib/partners-types"
 import { getQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
 import type { BranchSalesLedgerDraftStatus } from "@/lib/repositories/branch-sales-ledger-drafts"
 import {
@@ -58,8 +63,12 @@ export interface DistributorSettlementPayload {
   quote: DistributorSettlementQuoteSummary
   settlement: DistributorSettlementRecord | null
   payments: DistributorSettlementPayment[]
-  /** 입금별 매출 원장 초안 상태(paymentId → draft/checked/applied/cancelled). C1 매출 = 총판 입금 확인 시점. */
+  /** 입금별 매출 원장 초안 상태(paymentId → draft/checked/applied/cancelled). C방식 매출 = 총판 입금 확인 시점. */
   ledgerStatuses: Record<string, BranchSalesLedgerDraftStatus>
+  /** H방식 설치 완료 매출 초안 상태. 없으면 null. */
+  installationLedgerStatus: BranchSalesLedgerDraftStatus | null
+  /** 고객 견적 본문 — 편집 중 총판 견적서 미리보기(같은 승인 양식)를 그리는 데 쓴다. */
+  customerQuoteDetails: PartnerQuoteDetailsInput | null
   /** 발행 전 편집용 줄 — 현재 고객 견적 품목 기준(저장된 포함 여부·원가를 이어받는다). */
   draftLines: DistributorSettlementLine[]
   /** 저장 후 고객 견적 버전이 바뀌었는지. true 면 다시 저장해야 발행된다. */
@@ -105,6 +114,8 @@ export async function loadDistributorSettlementPayload(
       settlement: null,
       payments: [],
       ledgerStatuses: {},
+      installationLedgerStatus: null,
+      customerQuoteDetails: customerDetails,
       draftLines: buildDistributorLinesFromQuote(customerDetails?.lineItems),
       versionChanged: false,
       defaults: { distributorName: null, distributorContactName: null, distributorEmail: null, distributorPhone: null },
@@ -114,11 +125,12 @@ export async function loadDistributorSettlementPayload(
   }
 
   const settlement = read.value
-  const [payments, templates, latest, ledgerStatuses] = await Promise.all([
+  const [payments, templates, latest, ledgerStatuses, installationLedgerStatus] = await Promise.all([
     settlement ? listDistributorPayments(settlement.id) : Promise.resolve([]),
     listDistributorPriceTemplates(),
     settlement ? Promise.resolve(null) : getLatestDistributorContact(),
     settlement ? listLedgerDraftStatusesForSettlement(settlement.id) : Promise.resolve({}),
+    settlement?.status === "completed" ? getInstallationLedgerDraftStatus(settlement.id) : Promise.resolve(null),
   ])
 
   return {
@@ -128,16 +140,21 @@ export async function loadDistributorSettlementPayload(
     settlement,
     payments,
     ledgerStatuses,
+    installationLedgerStatus,
+    customerQuoteDetails: customerDetails,
     draftLines: buildDistributorLinesFromQuote(customerDetails?.lineItems, { previous: settlement?.lines }),
     versionChanged: Boolean(
       settlement && settlement.status === "draft" && settlement.sourceVersionId && settlement.sourceVersionId !== context.version.id
     ),
-    defaults: {
-      distributorName: settlement?.distributorName ?? latest?.distributorName ?? null,
-      distributorContactName: settlement?.distributorContactName ?? latest?.distributorContactName ?? null,
-      distributorEmail: settlement?.distributorEmail ?? latest?.distributorEmail ?? null,
-      distributorPhone: settlement?.distributorPhone ?? latest?.distributorPhone ?? null,
-    },
+    // 처음 만드는 정산은 하드웨어 총판(퀴드러닝 · 배철웅 대표)을 기본으로 채운다.
+    defaults: settlement
+      ? {
+          distributorName: settlement.distributorName,
+          distributorContactName: settlement.distributorContactName,
+          distributorEmail: settlement.distributorEmail,
+          distributorPhone: settlement.distributorPhone,
+        }
+      : latest ?? { ...DEFAULT_HARDWARE_DISTRIBUTOR },
     templates: templates.value ?? [],
     shareUrl: settlement?.shareToken ? distributorShareUrl(settlement.shareToken, origin) : null,
   }

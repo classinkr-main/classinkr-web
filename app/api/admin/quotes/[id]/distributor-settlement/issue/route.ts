@@ -6,6 +6,7 @@ import type { DistributorIssueReason } from "@/lib/distributor-settlements"
 import { getDistributorSettlementByQuote } from "@/lib/repositories/distributor-settlements"
 import { distributorActor, distributorWriteError, readJsonObject } from "@/lib/server/distributor-settlement-api"
 import {
+  completeHModeInstallation,
   distributorShareUrl,
   issueDistributorSettlement,
   loadQuoteContext,
@@ -17,6 +18,8 @@ import {
 // POST {reason: "installation_completed" | "manual"} — 사람이 발행한다(설치 완료 처리 또는 지금 발행).
 //      201 {settlement, shareUrl} · 409 이미 발행 · 422 발행 불가 사유(단가 미입력·견적 버전 변경 등) · 503 표 미적용.
 // POST {action: "resend_email"} — 발행된 건의 총판 이메일을 다시 보낸다. 200 {settlement}.
+// H방식(총판 선매입) 정산에 {reason: "installation_completed"} — 총판 견적서 없이 설치 완료로 기록하고
+//      매출 원장 초안을 올린다. 201 {settlement, ledger} · 409 이미 완료.
 
 type RouteParams = { params: Promise<{ id: string }> }
 
@@ -60,6 +63,30 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const reason = MANUAL_REASONS.has(body.reason as DistributorIssueReason)
       ? (body.reason as DistributorIssueReason)
       : "manual"
+
+    if (reason === "installation_completed") {
+      const installation = await completeHModeInstallation({ quoteDocumentId: id, actor })
+      if (installation.status === "completed") {
+        await logAdminAudit({
+          admin,
+          action: "quotes.distributor_settlement.hmode_installed",
+          targetType: "distributor_settlement",
+          targetId: installation.settlement.id,
+          payload: { quoteDocumentId: id, ledgerDraft: installation.ledger.status },
+        })
+        return NextResponse.json({ settlement: installation.settlement, ledger: installation.ledger }, { status: 201 })
+      }
+      if (installation.status === "already_completed") {
+        return NextResponse.json(
+          { error: "이미 설치 완료로 처리된 건입니다.", settlement: installation.settlement },
+          { status: 409 }
+        )
+      }
+      if (installation.status === "not_configured") {
+        return NextResponse.json({ error: "방식(C/H)을 먼저 저장해 주세요." }, { status: 404 })
+      }
+      // not_h_mode → C방식: 설치 완료 시점에 총판 견적서를 발행한다(아래).
+    }
     const outcome = await issueDistributorSettlement({
       quoteDocumentId: id,
       reason,

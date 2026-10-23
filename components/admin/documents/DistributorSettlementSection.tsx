@@ -1,17 +1,22 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { AlertCircle, ExternalLink, Link2, Loader2, Mail, Trash2 } from "lucide-react"
+import { AlertCircle, Eye, EyeOff, ExternalLink, Link2, Loader2, Mail, Trash2 } from "lucide-react"
 
+import QuoteDocumentPreview from "@/components/portal/quotes/QuoteDocumentPreview"
 import { adminFetchJson } from "@/lib/admin-client"
 import {
+  DISTRIBUTOR_FULFILLMENT_MODES,
   DISTRIBUTOR_ISSUE_REASON_LABELS,
+  DISTRIBUTOR_MODE_LABELS,
   DISTRIBUTOR_STATUS_LABELS,
   DISTRIBUTOR_TRIGGER_LABELS,
   applyPriceTemplate,
+  buildDistributorQuoteDetails,
   computeDistributorTotals,
   getDistributorIssueBlocker,
   getOutstandingAmount,
+  type DistributorFulfillmentMode,
   type DistributorSettlementLine,
   type DistributorSettlementRecord,
   type DistributorSettlementTrigger,
@@ -30,12 +35,14 @@ import {
   todayValue,
 } from "./distributor-ui"
 
-// 견적 상세 · 총판 정산(2026-10-23).
-// C1 물량: 회사가 하드웨어를 원가로 미리 사 두고, 고객은 총액을 총판에게 내고, 총판이 원가를 회사로 입금한다.
-// 원가(하드웨어 + AI Suite)를 미리 정해 두고, 고객 동의 또는 설치 완료(직원이 누름) 때 총판용 견적서를 발행한 뒤
-// 총판 입금을 기록한다. 입금이 확인되면 그 입금분을 매출 원장 입력 큐에 초안으로 올린다(C1 매출 = 입금 확인 시점).
+// 견적 상세 · 총판 정산(2026-10-23). 방식은 견적마다 C/H 중 하나다(docs/hardware-ops/distributor-settlement.md).
+//  - C방식: 회사가 하드웨어를 원가로 미리 사 두고, 고객은 총액을 총판에게 내고, 총판이 원가를 회사로 입금한다.
+//    원가(하드웨어 + AI Suite)를 미리 정해 두고, 고객 동의 또는 설치 완료(직원이 누름) 때 총판용 견적서를 발행한 뒤
+//    총판 입금을 기록한다. 입금이 확인되면 그 입금분을 매출 원장 입력 큐에 초안으로 올린다.
+//  - H방식: 총판이 먼저 사 둔 물량. 총판 견적서·원가 미수 없이, 직원이 설치 완료를 누르면 매출 초안을 올린다.
 
 type Draft = {
+  fulfillmentMode: DistributorFulfillmentMode
   distributorName: string
   distributorContactName: string
   distributorEmail: string
@@ -68,6 +75,7 @@ const LEDGER_STATUS_LABELS: Record<string, string> = {
 function draftFromPayload(payload: DistributorSettlementPayload): Draft {
   const settlement = payload.settlement
   return {
+    fulfillmentMode: settlement?.fulfillmentMode ?? "C",
     distributorName: payload.defaults.distributorName ?? "",
     distributorContactName: payload.defaults.distributorContactName ?? "",
     distributorEmail: payload.defaults.distributorEmail ?? "",
@@ -99,6 +107,7 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
   const [paymentAmount, setPaymentAmount] = useState("")
   const [paymentDate, setPaymentDate] = useState(todayValue())
   const [paymentMemo, setPaymentMemo] = useState("")
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -118,6 +127,7 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
     setEditing(false)
     setDraft(null)
     setMessage(null)
+    setPreviewOpen(false)
     void load()
   }, [load])
 
@@ -127,6 +137,24 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
     () => (draft ? computeDistributorTotals(draft.lines, draft.vatIncluded) : null),
     [draft]
   )
+  // 총판 견적서 미리보기 — 고객 견적서와 같은 승인 양식(QuoteDocumentPreview)으로, 편집 중인 원가를 바로 그린다.
+  const previewDetails = useMemo(() => {
+    if (!previewOpen || !payload?.customerQuoteDetails) return null
+    const source = draft
+      ? {
+          ...draft,
+          distributorContactName: draft.distributorContactName || null,
+          distributorPhone: draft.distributorPhone || null,
+          distributorEmail: draft.distributorEmail || null,
+          notes: draft.notes || null,
+        }
+      : settlement
+    if (!source) return null
+    return buildDistributorQuoteDetails(payload.customerQuoteDetails, source, {
+      issuedAt: settlement?.issuedAt ?? todayValue(),
+      customerName: payload.quote.customerName,
+    })
+  }, [draft, payload, previewOpen, settlement])
 
   function startEditing() {
     if (!payload) return
@@ -192,19 +220,30 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
   }
 
   async function handleIssue(reason: "installation_completed" | "manual") {
-    const confirmText =
-      reason === "installation_completed"
+    const isHMode = settlement?.fulfillmentMode === "H"
+    const confirmText = isHMode
+      ? "설치 완료로 처리할까요? H방식이라 총판 견적서 없이 이 시점으로 매출 원장 초안을 올립니다."
+      : reason === "installation_completed"
         ? "설치 완료로 처리하고 총판 견적서를 발행할까요? 총판 이메일이 있으면 바로 발송됩니다."
         : "지금 총판 견적서를 발행할까요? 총판 이메일이 있으면 바로 발송됩니다."
     if (!window.confirm(confirmText)) return
     const result = await run(
       "issue",
       () =>
-        adminFetchJson<{ settlement: DistributorSettlementRecord; shareUrl: string }>(
+        adminFetchJson<{ settlement: DistributorSettlementRecord; shareUrl?: string; ledger?: { status: string } }>(
           `${DISTRIBUTOR_SETTLEMENT_API(quoteId)}/issue`,
           { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }) }
         )
     )
+    if (result && result.settlement.fulfillmentMode === "H") {
+      setMessage(
+        result.ledger?.status === "created"
+          ? { tone: "success", text: "설치 완료로 처리하고 매출 원장 입력 큐에 초안을 올렸습니다. CNY 금액은 원장에서 입력해 주세요." }
+          : { tone: "error", text: "설치 완료는 기록했지만 매출 원장 초안을 올리지 못했습니다. 매출 원장에 직접 입력해 주세요." }
+      )
+      await load()
+      return
+    }
     if (result) {
       const emailNote =
         result.settlement.emailStatus === "sent"
@@ -321,6 +360,21 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
     </p>
   )
 
+  // 고객 견적서와 같은 승인 양식(웹·PDF 공용)으로 총판용 견적서를 미리 본다.
+  const previewPanel =
+    previewOpen &&
+    (previewDetails ? (
+      <div className="mt-3 overflow-x-auto rounded-lg border border-[#e8e8e4] bg-[#F6F5F4] p-3">
+        <QuoteDocumentPreview
+          quote={previewDetails}
+          documentNumber={`${payload?.quote.quoteNumber ?? ""}-D`}
+          title="총판 견적서"
+        />
+      </div>
+    ) : (
+      <p className="mt-3 text-xs text-[#78736D]">고객 견적 본문이 없어 미리보기를 그릴 수 없습니다.</p>
+    ))
+
   if (state.status === "loading") {
     return (
       <section className="rounded-lg border border-[#e8e8e4] px-4 py-3.5">
@@ -359,6 +413,31 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
     return (
       <section className="rounded-lg border border-[#31302E] px-4 py-4">
         {header}
+        <fieldset className="mb-4">
+          <legend className={LABEL}>방식</legend>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {DISTRIBUTOR_FULFILLMENT_MODES.map((mode) => (
+              <label
+                key={mode}
+                className={`flex cursor-pointer gap-2 rounded-md border px-3 py-2.5 text-[12.5px] ${
+                  draft.fulfillmentMode === mode ? "border-[#084734] bg-[#ECFDF5]" : "border-[#e8e8e4] bg-white"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name={`distributor-mode-${quoteId}`}
+                  checked={draft.fulfillmentMode === mode}
+                  onChange={() => patchDraft({ fulfillmentMode: mode })}
+                  className="mt-0.5 accent-[#084734]"
+                />
+                <span>
+                  <span className="block font-semibold text-[#111110]">{DISTRIBUTOR_MODE_LABELS[mode].title}</span>
+                  <span className="mt-0.5 block text-[11.5px] leading-relaxed text-[#615D59]">{DISTRIBUTOR_MODE_LABELS[mode].summary}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block">
             <span className={LABEL}>총판 이름 *</span>
@@ -378,6 +457,13 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
           </label>
         </div>
 
+        {draft.fulfillmentMode === "H" ? (
+          <p className="mt-4 rounded-md bg-[#F6F5F4] px-3 py-2.5 text-[12px] leading-relaxed text-[#615D59]">
+            H방식은 총판이 먼저 사 둔 물량이라 총판 견적서와 원가 미수가 없습니다. 저장한 뒤 설치가 끝나면
+            &ldquo;설치 완료&rdquo;를 눌러 주세요 — 그 시점으로 매출 원장 입력 큐에 초안이 올라갑니다.
+          </p>
+        ) : (
+        <>
         <fieldset className="mt-4">
           <legend className={LABEL}>발행 시점</legend>
           <div className="flex flex-wrap gap-x-4 gap-y-1.5">
@@ -489,6 +575,14 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
         </label>
 
         {blocker && <p className="mt-2 text-[12px] text-[#7A520F]">발행 전 확인: {blocker}</p>}
+
+        <button type="button" onClick={() => setPreviewOpen((open) => !open)} className={`${GHOST_BUTTON} mt-3`}>
+          {previewOpen ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+          {previewOpen ? "총판 견적서 미리보기 닫기" : "총판 견적서 미리보기"}
+        </button>
+        {previewPanel}
+        </>
+        )}
         {notice}
 
         <div className="mt-3 flex flex-wrap justify-end gap-2">
@@ -497,7 +591,7 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
           </button>
           <button type="button" onClick={() => void handleSave()} className={SOLID_BUTTON} disabled={busy !== null || !draft.distributorName.trim()}>
             {busy === "save" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            원가 저장
+            저장
           </button>
         </div>
       </section>
@@ -511,12 +605,52 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
         <p className="text-xs text-[#615D59]">
           {settlement?.status === "cancelled"
             ? "취소된 총판 정산입니다. 다시 설정하면 발행 전 상태로 돌아갑니다."
-            : "C1 물량은 고객이 총액을 총판에게 내고, 총판이 회사가 미리 사 둔 하드웨어·AI Suite 원가를 회사로 입금합니다. 원가를 정해 두면 고객 동의 또는 설치 완료 때 같은 양식의 총판 견적서를 발행하고, 입금이 확인되면 매출로 잡습니다."}
+            : "하드웨어 물량의 방식을 정합니다. C방식(회사 선매입)은 원가를 정해 두면 고객 동의 또는 설치 완료 때 같은 양식의 총판 견적서를 발행하고 총판 입금 확인 시 매출을 잡습니다. H방식(총판 선매입)은 설치 완료 시 매출을 잡습니다."}
         </p>
         {notice}
         <button type="button" onClick={startEditing} className={`${GHOST_BUTTON} mt-2.5`}>
-          원가 설정
+          방식·원가 설정
         </button>
+      </section>
+    )
+  }
+
+  if (settlement.fulfillmentMode === "H") {
+    const installed = settlement.status === "completed"
+    return (
+      <section className="rounded-lg border border-[#e8e8e4] px-4 py-3.5">
+        {header}
+        <dl className="grid grid-cols-[96px_1fr] gap-x-2.5 gap-y-1.5 text-xs">
+          <dt className="text-[#78736D]">방식</dt>
+          <dd className="text-[#31302E]">{DISTRIBUTOR_MODE_LABELS.H.title}</dd>
+          <dt className="text-[#78736D]">총판</dt>
+          <dd className="text-[#31302E]">{settlement.distributorName}</dd>
+          <dt className="text-[#78736D]">고객 견적 합계</dt>
+          <dd className="tabular-nums text-[#31302E]">{formatWon(settlement.customerTotalAmount || payload.quote.customerTotalAmount)}</dd>
+          <dt className="text-[#78736D]">설치 완료</dt>
+          <dd className="text-[#31302E]">{installed ? formatDateLabel(settlement.installedAt) : "아직 — 설치가 끝나면 아래 버튼을 눌러 주세요"}</dd>
+          {installed && (
+            <>
+              <dt className="text-[#78736D]">매출 원장</dt>
+              <dd className="text-[#31302E]">{LEDGER_STATUS_LABELS[payload.installationLedgerStatus ?? "none"]}</dd>
+            </>
+          )}
+        </dl>
+        {notice}
+        {!installed && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" onClick={startEditing} disabled={busy !== null} className={GHOST_BUTTON}>
+              방식 수정
+            </button>
+            <button type="button" onClick={() => void handleIssue("installation_completed")} disabled={busy !== null} className={SOLID_BUTTON}>
+              {busy === "issue" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              설치 완료 → 매출 잡기
+            </button>
+            <button type="button" onClick={() => void handleCancel()} disabled={busy !== null} className={`${GHOST_BUTTON} text-[#B43E3E]`}>
+              정산 취소
+            </button>
+          </div>
+        )}
       </section>
     )
   }
@@ -631,6 +765,10 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
             <button type="button" onClick={startEditing} disabled={busy !== null} className={GHOST_BUTTON}>
               원가 수정
             </button>
+            <button type="button" onClick={() => setPreviewOpen((open) => !open)} className={GHOST_BUTTON}>
+              {previewOpen ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              미리보기
+            </button>
             {settlement.issueTrigger === "on_install" ? (
               <button type="button" onClick={() => void handleIssue("installation_completed")} disabled={busy !== null} className={SOLID_BUTTON}>
                 {busy === "issue" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
@@ -668,6 +806,7 @@ export default function DistributorSettlementSection({ quoteId }: { quoteId: str
           </button>
         )}
       </div>
+      {!isIssued && previewPanel}
     </section>
   )
 }

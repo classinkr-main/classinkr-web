@@ -19,8 +19,11 @@ describe("distributor settlements migration", () => {
   it("guards one settlement per quote and valid states at the database boundary", () => {
     expect(sql).toMatch(/quote_document_id UUID NOT NULL UNIQUE REFERENCES public\.quote_documents\(id\)/)
     expect(sql).toContain("issue_trigger IN ('on_accept', 'on_install', 'manual')")
-    expect(sql).toContain("status IN ('draft', 'issued', 'partial', 'paid', 'cancelled')")
-    expect(sql).toContain("status IN ('draft', 'cancelled') OR (share_token IS NOT NULL AND issued_at IS NOT NULL)")
+    expect(sql).toContain("status IN ('draft', 'issued', 'partial', 'paid', 'completed', 'cancelled')")
+    expect(sql).toContain("status IN ('draft', 'cancelled', 'completed') OR (share_token IS NOT NULL AND issued_at IS NOT NULL)")
+    expect(sql).toContain("fulfillment_mode IN ('C', 'H')")
+    expect(sql).toContain("status <> 'completed' OR (fulfillment_mode = 'H' AND installed_at IS NOT NULL)")
+    expect(sql).toContain("fulfillment_mode = 'C' OR status IN ('draft', 'completed', 'cancelled')")
     expect(sql).toContain("CHECK (amount > 0)")
   })
 

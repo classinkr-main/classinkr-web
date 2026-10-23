@@ -28,6 +28,7 @@ function supabaseReturning(rows: Array<{ id: string; status: string; metadata: R
   const query = {
     select: () => query,
     eq: () => query,
+    limit: () => query,
     then: (resolve: (value: { data: typeof rows; error: unknown }) => unknown) => resolve({ data: rows, error }),
   }
   return { from: () => query }
@@ -142,5 +143,31 @@ describe("withdrawLedgerDraftForDistributorPayment", () => {
       draftStatus: "applied",
     })
     expect(ctx.deleteBranchSalesLedgerDraft).not.toHaveBeenCalled()
+  })
+})
+
+describe("proposeLedgerDraftForInstallation (H방식)", () => {
+  it("proposes a confirmed draft in the installation month (KST) with the customer total as reference", async () => {
+    const ctx = await loadHandoff({})
+    const result = await ctx.handoff.proposeLedgerDraftForInstallation({
+      settlement: {
+        ...SETTLEMENT,
+        fulfillmentMode: "H",
+        customerTotalAmount: 6_300_000,
+        // UTC 10/31 16:00 = KST 11/01 01:00 → 11월 매출
+        installedAt: "2026-10-31T16:00:00.000Z",
+      } as DistributorSettlementRecord,
+      customerName: "테스트 학원",
+      quoteNumber: "Q-2026-001",
+    })
+    expect(result).toEqual({ status: "created", draftId: "ld_1" })
+    const [input] = ctx.createBranchSalesLedgerDraft.mock.calls[0]
+    expect(input).toMatchObject({
+      month: "2026-11",
+      amount: 0,
+      currency: "CNY",
+      metadata: { operation: "hmode-installation-confirmed", fulfillmentMode: "H", sourceAmount: 6_300_000 },
+    })
+    expect(input.note).toContain("H방식 설치 완료")
   })
 })
