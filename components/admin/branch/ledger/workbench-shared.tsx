@@ -6,6 +6,7 @@
 
 import type { KeyboardEvent as ReactKeyboardEvent, MutableRefObject } from "react"
 import { ArrowDownNarrowWide, ArrowUpNarrowWide, X } from "lucide-react"
+import { normalizedAccountKey } from "@/lib/branch/account-key"
 import { formatMoney } from "@/lib/branch/ledger-format"
 import { ledgerMonthSplit } from "@/lib/branch/computations/revenue-core"
 import { fiscalQuarter } from "@/lib/branch/fiscal"
@@ -20,6 +21,7 @@ import {
   draftConfidenceFromMetadata,
   formatMonthLabel,
   mergedWeeklyFromMetadata,
+  metadataString,
   rowMonthAmount,
   rowMonthConfirmed,
   rowMonthHighConfidence,
@@ -28,6 +30,7 @@ import {
   rowWeeklySplit,
   weeklyConfidenceFromMetadata,
   type DraftOperation,
+  type LedgerDraft,
   type LedgerRevenueRow,
   type RevMonthlyBucket,
   type RevProductCategory,
@@ -64,6 +67,92 @@ interface DealDetail {
 interface DealDetailResponse {
   deal?: DealDetail
   error?: string
+}
+
+// 수정(edit-row) 초안·반영값 → 그 수정이 가리키는 지금의 원본 시트 행 찾기. 시트를 다시 가져오면 시트 행 id
+// (임포트 줄 id)가 새로 만들어지므로 id 만 보면 원본을 못 찾는다. 그래서
+//   1) 같은 id → 2) 같은 시트 행 번호 + 같은 고객 → 3) 같은 고객 + 같은 상품인 행이 딱 하나
+// 순서로 찾고, 셋 다 실패하면 undefined(고르지 않는다 — 잘못 붙이는 것보다 경고가 낫다).
+export interface SheetRowRef {
+  sourceDealId?: string | null
+  sheetRow?: number | null
+  customer: string
+  productVersion?: string | null
+}
+
+export function createSheetRowResolver(sheetRows: LedgerRevenueRow[]): (ref: SheetRowRef) => LedgerRevenueRow | undefined {
+  const byId = new Map(sheetRows.map((row) => [row.id, row]))
+  const byAccount = new Map<string, LedgerRevenueRow[]>()
+  for (const row of sheetRows) {
+    const key = normalizedAccountKey(row.customer)
+    const list = byAccount.get(key)
+    if (list) list.push(row)
+    else byAccount.set(key, [row])
+  }
+  const sameText = (a: string | null | undefined, b: string | null | undefined) => (a ?? "").trim() === (b ?? "").trim()
+  return (ref) => {
+    const exact = ref.sourceDealId ? byId.get(ref.sourceDealId) : undefined
+    if (exact) return exact
+    const sameAccount = byAccount.get(normalizedAccountKey(ref.customer)) ?? []
+    const sameRow = ref.sheetRow != null ? sameAccount.filter((row) => row.sheetRow === ref.sheetRow) : []
+    if (sameRow.length === 1) return sameRow[0]
+    const sameProduct = ref.productVersion ? sameAccount.filter((row) => sameText(row.productVersion, ref.productVersion)) : []
+    return sameProduct.length === 1 ? sameProduct[0] : undefined
+  }
+}
+
+// 적용된 수정 → 대체하는 원본 시트 행의 달. 못 찾은 수정은 unresolved — 원본이 지워졌는지 이름이 바뀌었는지
+// 알 수 없으므로 조용히 넘기지 않고 화면이 경고한다(정정 금액은 별도 행으로 남는다).
+export interface CorrectionTargetResult {
+  /** 원본 시트 행 id → 정정으로 대체된 달 */
+  overrides: Map<string, Set<string>>
+  /** 원본 시트 행을 찾지 못한 정정 행 */
+  unresolved: LedgerRevenueRow[]
+}
+
+export function resolveCorrectionTargets(corrections: LedgerRevenueRow[], sheetRows: LedgerRevenueRow[]): CorrectionTargetResult {
+  const overrides = new Map<string, Set<string>>()
+  const unresolved: LedgerRevenueRow[] = []
+  if (corrections.length === 0) return { overrides, unresolved }
+  const resolve = createSheetRowResolver(sheetRows)
+  for (const correction of corrections) {
+    const month = correction.draftMonth
+    if (!month) continue
+    const target = resolve(correction)
+    if (!target) {
+      unresolved.push(correction)
+      continue
+    }
+    const months = overrides.get(target.id) ?? new Set<string>()
+    months.add(month)
+    overrides.set(target.id, months)
+  }
+  return { overrides, unresolved }
+}
+
+// 열린 수정 초안의 원천 딜 id 를 지금 시트 행 id 로 맞춘다(화면 매칭용 사본 — 저장된 초안은 그대로).
+// 시트를 다시 가져온 뒤에도 그 칸의 대기 표시가 남고, 같은 칸 재편집이 새 수정 초안 대신 그 초안을 고치게
+// 한다(새 초안이 생기면 둘 다 반영될 때 정정이 두 번 더해진다). 고친 초안은 저장 때 새 id 로 갱신된다.
+export function alignOpenDraftsToSheetRows(drafts: LedgerDraft[], sheetRows: LedgerRevenueRow[]): LedgerDraft[] {
+  const ids = new Set(sheetRows.map((row) => row.id))
+  let resolve: ReturnType<typeof createSheetRowResolver> | null = null
+  let changed = false
+  const next = drafts.map((draft) => {
+    if (draft.kind !== "edit-row" || (draft.status !== "draft" && draft.status !== "checked")) return draft
+    const dealId = draft.sourceDealId ?? metadataString(draft.metadata, "sourceDealId")
+    if (dealId && ids.has(dealId)) return draft
+    resolve ??= createSheetRowResolver(sheetRows)
+    const target = resolve({
+      sourceDealId: dealId,
+      sheetRow: draft.sourceSheetRow,
+      customer: draft.customer,
+      productVersion: snapshotText(draft.sourceSnapshot, "productVersion"),
+    })
+    if (!target) return draft
+    changed = true
+    return { ...draft, sourceDealId: target.id }
+  })
+  return changed ? next : drafts
 }
 
 // 적용된 초안(장부 엔트리)의 확도를 행 확도 맵으로 변환. 확도와 무관하게 전액

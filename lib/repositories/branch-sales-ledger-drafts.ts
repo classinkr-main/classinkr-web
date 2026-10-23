@@ -191,8 +191,13 @@ export interface UpdateBranchSalesLedgerDraftOptions {
   expectedUpdatedAt?: string
 }
 
+// 한 번에 내려주는 목록 상한. Supabase(PostgREST) 한 요청의 기본 최대 행 수와 같다.
+export const LEDGER_LIST_MAX = 1000
+
 export interface ListBranchSalesLedgerDraftsOptions {
   status?: BranchSalesLedgerDraftStatus | "all"
+  /** 여러 상태를 한 번에(예: 열린 초안 draft·checked). 주면 status 보다 우선한다. */
+  statuses?: BranchSalesLedgerDraftStatus[]
   limit?: number
 }
 
@@ -437,7 +442,7 @@ function buildUpdate(input: BranchSalesLedgerDraftUpdateInput, actor: string) {
 export async function listBranchSalesLedgerDrafts(
   options: ListBranchSalesLedgerDraftsOptions = {},
 ): Promise<ListBranchSalesLedgerDraftsResult> {
-  const limit = clampInteger(options.limit, 50, 1, 200)
+  const limit = clampInteger(options.limit, 50, 1, LEDGER_LIST_MAX)
   const supabase = createSupabaseAdminClient()
 
   let query = supabase
@@ -446,7 +451,8 @@ export async function listBranchSalesLedgerDrafts(
     .order("updated_at", { ascending: false })
     .limit(limit)
 
-  if (options.status && options.status !== "all") query = query.eq("status", options.status)
+  if (options.statuses && options.statuses.length > 0) query = query.in("status", options.statuses)
+  else if (options.status && options.status !== "all") query = query.eq("status", options.status)
 
   const { data, error } = await query
   if (error) {
@@ -464,7 +470,7 @@ export async function listBranchSalesLedgerDrafts(
 export async function listBranchSalesLedgerEntries(
   options: ListBranchSalesLedgerEntriesOptions = {},
 ): Promise<ListBranchSalesLedgerEntriesResult> {
-  const limit = clampInteger(options.limit, 100, 1, 500)
+  const limit = clampInteger(options.limit, 100, 1, LEDGER_LIST_MAX)
   const supabase = createSupabaseAdminClient()
 
   let query = supabase
