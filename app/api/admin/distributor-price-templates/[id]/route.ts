@@ -9,7 +9,7 @@ import {
 } from "@/lib/repositories/distributor-settlements"
 import { distributorActor, distributorWriteError, readJsonObject } from "@/lib/server/distributor-settlement-api"
 
-// 총판 단가 템플릿 1건 — PUT 수정(200 {template}) · DELETE 보관(200 {ok}). 없거나 보관됐으면 404.
+// 원가 템플릿 1건 — PUT 수정(200 {template}) · DELETE 보관(200 {ok}). 없거나 보관됐으면 404.
 // 이미 발행된 총판 견적서는 발행 시점 금액을 따로 저장하므로 템플릿을 바꿔도 영향받지 않는다.
 
 type RouteParams = { params: Promise<{ id: string }> }
@@ -34,7 +34,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     })
     return NextResponse.json({ template })
   } catch (error) {
-    return distributorWriteError(error, "PUT /api/admin/distributor-price-templates/[id]", "총판 단가 템플릿을 저장하지 못했습니다.")
+    return distributorWriteError(error, "PUT /api/admin/distributor-price-templates/[id]", "원가 템플릿을 저장하지 못했습니다.")
   }
 }
 
@@ -54,6 +54,6 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
     })
     return NextResponse.json({ ok: true })
   } catch (error) {
-    return distributorWriteError(error, "DELETE /api/admin/distributor-price-templates/[id]", "총판 단가 템플릿을 보관하지 못했습니다.")
+    return distributorWriteError(error, "DELETE /api/admin/distributor-price-templates/[id]", "원가 템플릿을 보관하지 못했습니다.")
   }
 }

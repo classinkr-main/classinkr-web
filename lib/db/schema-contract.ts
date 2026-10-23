@@ -184,7 +184,7 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // 미적용이어도 허브만 '미적용' 안내로 강등하고(쓰기 503) 매일 자동 태그 크론이 skipped 로 넘어간다.
   "supabase/migrations/20260925_crm_saved_segments.sql",
   "supabase/migrations/20261021_quote_team_templates.sql",
-  // 총판 정산(2026-10-23) — 총판 단가 템플릿·견적별 총판 정산·입금 기록. 세 표 모두 RLS deny-all.
+  // 총판 정산(2026-10-23) — 원가 템플릿·견적별 총판 정산·입금 기록. 세 표 모두 RLS deny-all.
   "supabase/migrations/20261023_distributor_settlements.sql",
 ] as const
 
@@ -903,7 +903,7 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     ],
     migration: "supabase/migrations/20261023_distributor_settlements.sql",
     severity: "warning",
-    impact: "고객 견적은 유지되지만 총판 금액 설정·총판 견적서 발행·미수금 추적이 503으로 차단된다.",
+    impact: "고객 견적은 유지되지만 원가 설정·총판 견적서 발행·미수금 추적이 503으로 차단된다.",
   },
   {
     kind: "table",
@@ -917,11 +917,11 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
   {
     kind: "table",
     table: "distributor_price_templates",
-    label: "총판 단가 템플릿",
+    label: "원가 템플릿",
     columns: ["id", "name", "rules", "notes", "archived_at", "updated_at"],
     migration: "supabase/migrations/20261023_distributor_settlements.sql",
     severity: "warning",
-    impact: "총판 금액은 직접 입력만 되고 템플릿 저장·적용이 503으로 차단된다.",
+    impact: "원가은 직접 입력만 되고 템플릿 저장·적용이 503으로 차단된다.",
   },
 ]
 

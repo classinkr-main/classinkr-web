@@ -88,7 +88,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       case "skipped":
         return NextResponse.json({ error: outcome.reason }, { status: 422 })
       default:
-        return NextResponse.json({ error: "총판 금액을 먼저 저장해 주세요." }, { status: 404 })
+        return NextResponse.json({ error: "원가을 먼저 저장해 주세요." }, { status: 404 })
     }
   } catch (error) {
     return distributorWriteError(error, "POST distributor-settlement/issue", "총판 견적서를 발행하지 못했습니다.")

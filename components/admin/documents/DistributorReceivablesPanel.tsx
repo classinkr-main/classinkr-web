@@ -30,7 +30,7 @@ import {
 } from "./distributor-ui"
 
 // 견적·문서 › 총판 미수금(2026-10-23).
-// 발행된 총판 견적서의 입금 현황(남은 금액·기한 경과)과 총판 단가 템플릿을 한 화면에서 본다.
+// 발행된 총판 견적서의 입금 현황(남은 금액·기한 경과)과 원가 템플릿을 한 화면에서 본다.
 // 입금 기록·발행은 견적 상세의 총판 정산 영역에서 한다 — 행을 누르면 그 견적으로 이동한다.
 
 type ReceivablesPayload = { available: boolean; warning: string | null; receivables: DistributorReceivableRow[] }
@@ -154,7 +154,7 @@ export default function DistributorReceivablesPanel() {
         }
       )
       setTemplateDraft(null)
-      setTemplateMessage({ tone: "success", text: "총판 단가 템플릿을 저장했습니다." })
+      setTemplateMessage({ tone: "success", text: "원가 템플릿을 저장했습니다." })
       await load()
     } catch (saveError) {
       setTemplateMessage({ tone: "error", text: saveError instanceof Error ? saveError.message : "저장하지 못했습니다." })
@@ -164,7 +164,7 @@ export default function DistributorReceivablesPanel() {
   }
 
   async function archiveTemplate(template: DistributorPriceTemplate) {
-    if (!window.confirm(`'${template.name}' 템플릿을 보관할까요? 이미 저장된 총판 금액은 바뀌지 않습니다.`)) return
+    if (!window.confirm(`'${template.name}' 템플릿을 보관할까요? 이미 저장된 원가은 바뀌지 않습니다.`)) return
     setTemplateBusy(true)
     setTemplateMessage(null)
     try {
@@ -188,7 +188,7 @@ export default function DistributorReceivablesPanel() {
           <div>
             <h2 className="text-[15px] font-bold text-[#111110]">총판 미수금</h2>
             <p className="mt-0.5 text-xs text-[#615D59]">
-              고객 결제는 회사가 한 번에 받고, 하드웨어·AI Suite 물량은 총판이 회사로 입금합니다. 발행된 총판 견적서 기준입니다.
+              C1 물량은 고객이 총액을 총판에게 내고, 총판이 회사가 미리 사 둔 원가를 회사로 입금합니다. 입금이 확인되면 매출 원장에 초안이 올라갑니다.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -302,9 +302,9 @@ export default function DistributorReceivablesPanel() {
         <section className="rounded-lg border border-[#e8e8e4] bg-white px-5 py-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-[15px] font-bold text-[#111110]">총판 단가 템플릿</h2>
+              <h2 className="text-[15px] font-bold text-[#111110]">원가 템플릿</h2>
               <p className="mt-0.5 text-xs text-[#615D59]">
-                품목별·구매 대수별 총판 단가입니다. 견적의 총판 정산에서 고르면 단가가 채워지고, 고객마다 직접 고칠 수 있습니다.
+                품목별·구매 대수별 원가입니다. 견적의 총판 정산에서 고르면 단가가 채워지고, 고객마다 직접 고칠 수 있습니다.
               </p>
             </div>
             {!templateDraft && (
@@ -350,7 +350,7 @@ export default function DistributorReceivablesPanel() {
                 <div className="hidden grid-cols-[1fr_100px_160px_32px] gap-2 text-[11px] font-semibold text-[#78736D] sm:grid">
                   <span>품목</span>
                   <span>최소 대수</span>
-                  <span>총판 단가(원)</span>
+                  <span>원가(원)</span>
                   <span />
                 </div>
                 {templateDraft.rules.map((rule, index) => (
@@ -376,7 +376,7 @@ export default function DistributorReceivablesPanel() {
                       onChange={(e) => patchRule(index, { minQuantity: e.target.value.replace(/[^\d]/g, "") })}
                     />
                     <input
-                      aria-label="총판 단가"
+                      aria-label="원가"
                       inputMode="numeric"
                       className={`${INPUT} text-right tabular-nums`}
                       value={rule.unitPrice}
@@ -426,7 +426,7 @@ export default function DistributorReceivablesPanel() {
               </div>
             </div>
           ) : (templates?.templates.length ?? 0) === 0 ? (
-            <p className="mt-3 text-sm text-[#615D59]">아직 템플릿이 없습니다. 총판 금액은 견적마다 직접 입력할 수도 있습니다.</p>
+            <p className="mt-3 text-sm text-[#615D59]">아직 템플릿이 없습니다. 원가은 견적마다 직접 입력할 수도 있습니다.</p>
           ) : (
             <ul className="mt-3 divide-y divide-[#f0f0ec]">
               {templates?.templates.map((template) => (

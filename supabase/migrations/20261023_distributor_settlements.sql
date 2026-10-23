@@ -1,10 +1,10 @@
 -- 총판 정산(2026-10-23) — 고객 견적과 함께 하드웨어 총판에게 보낼 '총판용 견적서'와 그 미수금.
 --
--- 흐름: 회사가 하드웨어를 먼저 사 두고 고객에게서 결제를 한 번에 받는다. 하드웨어 물량(과 AI Suite)은
--- 총판이 회사로 다시 입금한다. 견적마다 총판 금액을 미리 정해 두고(직접 입력 또는 단가 템플릿),
+-- 흐름(C1 물량): 회사가 하드웨어를 원가로 미리 사 두고, 고객은 총액을 하드웨어 총판에게 내며, 총판이 원가를
+-- 회사로 입금한다. 회사 매출은 총판 입금 확인 시점이다. 견적마다 원가를 미리 정해 두고(직접 입력 또는 템플릿),
 -- 고객 동의 또는 설치 완료 시점에 같은 양식·다른 금액의 총판용 견적서를 발행하고 입금을 추적한다.
 --
---  - distributor_price_templates : 총판 단가 템플릿(품목 코드 × 최소 수량 구간 → 총판 단가).
+--  - distributor_price_templates : 원가 템플릿(품목 코드 × 최소 수량 구간 → 원가).
 --  - distributor_settlements     : 견적 1장당 총판 정산 1건(설정 + 발행 스냅샷 + 미수 상태).
 --  - distributor_settlement_payments : 총판 입금 기록(부분 입금 누적). paid_amount 는 앱이 합계로 다시 쓴다.
 --
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS public.distributor_settlements (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   quote_document_id UUID NOT NULL UNIQUE REFERENCES public.quote_documents(id) ON DELETE CASCADE,
   deal_id UUID REFERENCES public.deals(id) ON DELETE SET NULL,
-  -- 총판 금액을 정할 때 본 고객 견적 버전. 자동 발행 시 현재 버전과 다르면 발행하지 않고 재확인을 요청한다.
+  -- 원가을 정할 때 본 고객 견적 버전. 자동 발행 시 현재 버전과 다르면 발행하지 않고 재확인을 요청한다.
   source_version_id UUID REFERENCES public.quote_document_versions(id) ON DELETE SET NULL,
   issued_version_id UUID REFERENCES public.quote_document_versions(id) ON DELETE SET NULL,
   distributor_name TEXT NOT NULL,

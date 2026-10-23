@@ -3,12 +3,15 @@ import { finalizeStandardQuoteDetails } from "@/lib/standard-quote-template"
 
 // 총판 정산(2026-10-23) — 고객 견적 1장에 붙는 '총판용 견적서'와 미수금의 순수 규칙.
 //
-// 회사가 하드웨어를 먼저 사 두고 고객에게서 결제를 한 번에 받는다. 하드웨어 물량(AI Suite 포함)은
-// 총판이 회사로 다시 입금한다. 그래서 총판용 견적서는 고객 견적과 같은 양식이고 금액(총판 단가)만 다르다.
+// C1 물량: 회사가 하드웨어를 원가(구입가)로 미리 사 둔다. 고객은 총액을 하드웨어 총판에게 내고,
+// 총판이 그중 원가를 회사로 입금한다(예: 고객 630만원 → 총판이 회사로 530~550만원).
+// 그래서 총판용 견적서는 고객 견적과 같은 양식이고 금액(원가 = 총판 입금가)만 다르다.
+// 회사 매출은 설치 시점이 아니라 총판 입금 확인 시점에 잡는다(lib/admin/handoff/distributor-payment-to-ledger-draft.ts).
+// (이전 방식 — 총판이 먼저 사 두고 회사는 받을 돈만 챙기며 설치 즉시 매출 — 은 이 흐름 밖이다.)
 //
 //  - 대상 품목 기본값: itemType=hardware + AI Suite(online-suite-monthly). 설치·소프트웨어 등은 기본 제외(직접 포함 가능).
-//  - 총판 단가: 직접 입력 또는 단가 템플릿(품목 코드 × 최소 수량 구간). 구매 대수·고객마다 달라 견적마다 덮어쓸 수 있다.
-//  - 발행 시점: 고객 동의(on_accept) 또는 설치 완료(on_install). manual 은 사람이 직접 발행.
+//  - 원가(코드상 unitPrice): 직접 입력 또는 원가 템플릿(품목 코드 × 최소 수량 구간). 구매 대수·고객마다 달라 견적마다 덮어쓸 수 있다.
+//  - 발행 시점: 고객 동의(on_accept) 또는 설치 완료(on_install, 직원이 직접 누름). manual 은 사람이 직접 발행.
 //  - 미수: 발행 금액 − 입금 합계. 입금이 합계 이상이면 paid, 일부면 partial.
 //
 // 서버·클라이언트 공용이다(server-only 금지). DB 접근은 lib/repositories/distributor-settlements.ts.
@@ -55,7 +58,7 @@ export interface DistributorSettlementLine {
   quantityUnit?: string
   /** 고객 견적 단가(참고용 스냅샷). 가격 미정 품목은 null. */
   customerUnitPrice: number | null
-  /** 총판 단가. 포함 품목인데 null 이면 아직 금액을 정하지 않은 것이다. */
+  /** 원가. 포함 품목인데 null 이면 아직 금액을 정하지 않은 것이다. */
   unitPrice: number | null
   included: boolean
 }
@@ -80,7 +83,7 @@ export interface DistributorSettlementTotals {
   subtotalAmount: number
   vatAmount: number
   totalAmount: number
-  /** 포함 품목 중 총판 단가가 비어 있는 품목 수. 0 이어야 발행할 수 있다. */
+  /** 포함 품목 중 원가가 비어 있는 품목 수. 0 이어야 발행할 수 있다. */
   missingPriceCount: number
   includedCount: number
 }
@@ -142,7 +145,7 @@ function isBillableCustomerLine(line: PartnerQuoteLineItemInput) {
   return line.itemType !== "note_only" && line.itemType !== "discount"
 }
 
-/** 템플릿에서 품목·수량에 맞는 총판 단가. 맞는 구간이 없으면 null. */
+/** 템플릿에서 품목·수량에 맞는 원가. 맞는 구간이 없으면 null. */
 export function pickTemplateUnitPrice(
   rules: readonly DistributorPriceRule[],
   itemCode: string | undefined,
@@ -160,7 +163,7 @@ export function pickTemplateUnitPrice(
 
 /**
  * 고객 견적 품목 → 총판 정산 줄 초안. 기존 줄이 있으면(같은 품목 번호·품목 코드) 사람이 정한 포함 여부와
- * 총판 단가를 이어받고, 없으면 템플릿 단가를 채운다.
+ * 원가를 이어받고, 없으면 템플릿 단가를 채운다.
  */
 export function buildDistributorLinesFromQuote(
   customerLines: readonly PartnerQuoteLineItemInput[] | undefined,
@@ -193,7 +196,7 @@ function lineKey(lineNumber: number, itemCode?: string) {
   return `${lineNumber}:${itemCode ?? ""}`
 }
 
-/** 템플릿을 다시 적용 — 포함된 품목의 총판 단가를 템플릿 값으로 덮어쓴다(맞는 구간이 없으면 그대로 둔다). */
+/** 템플릿을 다시 적용 — 포함된 품목의 원가를 템플릿 값으로 덮어쓴다(맞는 구간이 없으면 그대로 둔다). */
 export function applyPriceTemplate(
   lines: readonly DistributorSettlementLine[],
   rules: readonly DistributorPriceRule[]
@@ -234,7 +237,7 @@ export function getDistributorIssueBlocker(input: {
   if (!input.distributorName.trim()) return "총판 이름을 입력해 주세요."
   const totals = computeDistributorTotals(input.lines, input.vatIncluded)
   if (totals.includedCount === 0) return "총판에게 청구할 품목을 하나 이상 포함해 주세요."
-  if (totals.missingPriceCount > 0) return `총판 단가가 비어 있는 품목이 ${totals.missingPriceCount}개 있습니다.`
+  if (totals.missingPriceCount > 0) return `원가(총판 입금가)가 비어 있는 품목이 ${totals.missingPriceCount}개 있습니다.`
   if (totals.totalAmount <= 0) return "총판 청구 금액이 0원입니다."
   return null
 }
@@ -242,7 +245,7 @@ export function getDistributorIssueBlocker(input: {
 /* ─── 총판용 견적서 ───────────────────────────────────────── */
 
 /**
- * 고객 견적서와 같은 양식의 총판용 견적서. 수신처만 총판으로 바꾸고, 포함 품목을 총판 단가로 다시 계산한다.
+ * 고객 견적서와 같은 양식의 총판용 견적서. 수신처만 총판으로 바꾸고, 포함 품목을 원가로 다시 계산한다.
  * 참조란에 고객사를 적어 어느 고객 건인지 알 수 있게 한다.
  */
 export function buildDistributorQuoteDetails(
@@ -454,6 +457,6 @@ export function validateDistributorPriceTemplateInput(
   const name = optionalText(body.name, 60)
   if (!name) return { ok: false, error: "템플릿 이름을 입력해 주세요." }
   const rules = normalizeDistributorPriceRules(body.rules)
-  if (!rules) return { ok: false, error: "품목 코드와 총판 단가를 한 줄 이상 입력해 주세요." }
+  if (!rules) return { ok: false, error: "품목 코드와 원가를 한 줄 이상 입력해 주세요." }
   return { ok: true, value: { name, rules, notes: optionalText(body.notes, 500) } }
 }

@@ -64,7 +64,7 @@ const DOCUMENT_TABS: DocumentTabItem[] = [
   {
     key: "receivables",
     label: "총판 미수금",
-    description: "총판용 견적서 발행분의 입금 현황과 총판 단가 템플릿",
+    description: "총판용 견적서 발행분의 입금 현황과 원가 템플릿",
     icon: <Wallet className="h-4 w-4" />,
   },
   // "공유 링크"(links) coming-soon 탭은 제거 — 열람수·발송 상태는 하드웨어 견적 행 단위로 이미 제공된다.

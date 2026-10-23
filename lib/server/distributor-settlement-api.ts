@@ -2,6 +2,7 @@ import "server-only"
 
 import { NextResponse } from "next/server"
 
+import { listLedgerDraftStatusesForSettlement } from "@/lib/admin/handoff/distributor-payment-to-ledger-draft"
 import type { VerifiedAdminContext } from "@/lib/admin-auth"
 import {
   buildDistributorLinesFromQuote,
@@ -11,6 +12,7 @@ import {
   type DistributorSettlementRecord,
 } from "@/lib/distributor-settlements"
 import { getQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
+import type { BranchSalesLedgerDraftStatus } from "@/lib/repositories/branch-sales-ledger-drafts"
 import {
   DistributorSettlementsNotReadyError,
   getDistributorSettlementByQuote,
@@ -56,7 +58,9 @@ export interface DistributorSettlementPayload {
   quote: DistributorSettlementQuoteSummary
   settlement: DistributorSettlementRecord | null
   payments: DistributorSettlementPayment[]
-  /** 발행 전 편집용 줄 — 현재 고객 견적 품목 기준(저장된 포함 여부·총판 단가를 이어받는다). */
+  /** 입금별 매출 원장 초안 상태(paymentId → draft/checked/applied/cancelled). C1 매출 = 총판 입금 확인 시점. */
+  ledgerStatuses: Record<string, BranchSalesLedgerDraftStatus>
+  /** 발행 전 편집용 줄 — 현재 고객 견적 품목 기준(저장된 포함 여부·원가를 이어받는다). */
   draftLines: DistributorSettlementLine[]
   /** 저장 후 고객 견적 버전이 바뀌었는지. true 면 다시 저장해야 발행된다. */
   versionChanged: boolean
@@ -100,6 +104,7 @@ export async function loadDistributorSettlementPayload(
       quote,
       settlement: null,
       payments: [],
+      ledgerStatuses: {},
       draftLines: buildDistributorLinesFromQuote(customerDetails?.lineItems),
       versionChanged: false,
       defaults: { distributorName: null, distributorContactName: null, distributorEmail: null, distributorPhone: null },
@@ -109,10 +114,11 @@ export async function loadDistributorSettlementPayload(
   }
 
   const settlement = read.value
-  const [payments, templates, latest] = await Promise.all([
+  const [payments, templates, latest, ledgerStatuses] = await Promise.all([
     settlement ? listDistributorPayments(settlement.id) : Promise.resolve([]),
     listDistributorPriceTemplates(),
     settlement ? Promise.resolve(null) : getLatestDistributorContact(),
+    settlement ? listLedgerDraftStatusesForSettlement(settlement.id) : Promise.resolve({}),
   ])
 
   return {
@@ -121,6 +127,7 @@ export async function loadDistributorSettlementPayload(
     quote,
     settlement,
     payments,
+    ledgerStatuses,
     draftLines: buildDistributorLinesFromQuote(customerDetails?.lineItems, { previous: settlement?.lines }),
     versionChanged: Boolean(
       settlement && settlement.status === "draft" && settlement.sourceVersionId && settlement.sourceVersionId !== context.version.id

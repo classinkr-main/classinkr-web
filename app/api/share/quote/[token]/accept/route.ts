@@ -246,7 +246,7 @@ export async function POST(
 
     await markDocumentAccepted(document.id, document.status)
 
-    // 정산 설정이 '고객 동의 시 발행'이면 같은 양식·총판 금액의 총판용 견적서를 발행·발송한다.
+    // 정산 설정이 '고객 동의 시 발행'이면 같은 양식·원가의 총판용 견적서를 발행·발송한다.
     // 실패는 삼키고(동의 응답 우선) 재확인 알림으로 넘긴다.
     await issueDistributorSettlementOnAcceptSafely({ quoteDocumentId: document.id, origin: req.nextUrl.origin })
 

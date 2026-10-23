@@ -30,7 +30,7 @@ import { SITE_URL } from "@/lib/seo"
 // 총판용 견적서 발행(2026-10-23).
 //
 //  - 자동(auto): 고객 동의 라우트가 부른다. 정산 설정이 '고객 동의 시 발행'일 때만 발행하고,
-//    고객 견적 버전이 바뀌었거나 총판 단가가 비어 있으면 발행하지 않고 재확인 알림을 남긴다.
+//    고객 견적 버전이 바뀌었거나 원가가 비어 있으면 발행하지 않고 재확인 알림을 남긴다.
 //  - 수동(manual): 어드민이 '설치 완료 → 발행' 또는 '지금 발행'을 누를 때. 트리거 설정과 무관하다.
 //  - 발행 = 조건부 UPDATE(status=draft → issued) + 공유 토큰. 동시 발행이 겹쳐도 한 번만 성공한다.
 //  - 총판 이메일은 발행이 끝난 뒤 보낸다. 실패해도 발행은 되돌리지 않고 email_status=failed 로 남겨
@@ -100,7 +100,7 @@ function notifyReviewRequired(settlement: DistributorSettlementRecord, context: 
     message: [
       `${context.customerName?.trim() || "고객"}님이 견적에 동의했지만 총판 견적서를 자동 발행하지 못했습니다.`,
       `사유: ${reason}`,
-      "견적 화면에서 총판 금액을 확인하고 발행해 주세요.",
+      "견적 화면에서 원가을 확인하고 발행해 주세요.",
     ].join("\n"),
     routeUrl: `/admin/quotes?tab=hardware&quote=${context.document.id}`,
     source: "distributor_settlement",
@@ -225,7 +225,7 @@ export async function issueDistributorSettlement(params: {
 
   if (settlement.sourceVersionId && settlement.sourceVersionId !== context.version.id) {
     return block(
-      `고객 견적이 v${context.version.version_number}로 바뀌었습니다. 총판 금액을 다시 확인하고 저장한 뒤 발행해 주세요.`
+      `고객 견적이 v${context.version.version_number}로 바뀌었습니다. 원가을 다시 확인하고 저장한 뒤 발행해 주세요.`
     )
   }
   const blocker = getDistributorIssueBlocker(settlement)

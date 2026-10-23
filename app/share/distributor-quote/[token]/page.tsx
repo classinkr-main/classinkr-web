@@ -6,7 +6,7 @@ import { getOutstandingAmount } from "@/lib/distributor-settlements"
 import { getDistributorSettlementByToken } from "@/lib/repositories/distributor-settlements"
 import { loadDistributorQuoteView } from "@/lib/server/distributor-settlement-issue"
 
-// 총판용 견적서 공유 페이지(2026-10-23) — 고객 견적서와 같은 양식, 총판 금액만 담는다.
+// 총판용 견적서 공유 페이지(2026-10-23) — 고객 견적서와 같은 양식, 원가만 담는다.
 // 고객 단가·고객 합계는 싣지 않는다(총판 정산 줄만으로 다시 계산한 문서). 취소하면 토큰이 지워져 404 가 된다.
 
 export const dynamic = "force-dynamic"

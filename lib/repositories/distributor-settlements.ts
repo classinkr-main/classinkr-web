@@ -421,7 +421,7 @@ export async function addDistributorPayment(params: {
   memo: string | null
   actor: string
 }) {
-  const { error } = await createSupabaseAdminClient()
+  const { data, error } = await createSupabaseAdminClient()
     .from(PAYMENTS)
     .insert({
       settlement_id: params.settlement.id,
@@ -430,8 +430,11 @@ export async function addDistributorPayment(params: {
       memo: params.memo,
       created_by: params.actor,
     })
+    .select(PAYMENT_COLUMNS)
+    .single()
   if (error) throwDbError(error, "총판 입금을 기록하지 못했습니다.")
-  return syncSettlementPaidAmount(params.settlement, params.actor)
+  const synced = await syncSettlementPaidAmount(params.settlement, params.actor)
+  return { ...synced, payment: toPayment(data as PaymentRow) }
 }
 
 export async function deleteDistributorPayment(params: {
@@ -532,7 +535,7 @@ export async function listDistributorPriceTemplates(): Promise<DistributorRead<D
     if (isDistributorTableMissing(error)) {
       return { available: false, warning: DISTRIBUTOR_SETTLEMENTS_NOT_READY_MESSAGE, value: null }
     }
-    throw new Error(error.message ?? "총판 단가 템플릿을 불러오지 못했습니다.")
+    throw new Error(error.message ?? "원가 템플릿을 불러오지 못했습니다.")
   }
   return { available: true, warning: null, value: ((data ?? []) as TemplateRow[]).map(toTemplate) }
 }
@@ -546,7 +549,7 @@ export async function createDistributorPriceTemplate(
     .insert({ ...input, created_by: actor, updated_by: actor })
     .select(TEMPLATE_COLUMNS)
     .single()
-  if (error) throwDbError(error, "총판 단가 템플릿을 저장하지 못했습니다.")
+  if (error) throwDbError(error, "원가 템플릿을 저장하지 못했습니다.")
   return toTemplate(data as TemplateRow)
 }
 
@@ -562,7 +565,7 @@ export async function updateDistributorPriceTemplate(
     .is("archived_at", null)
     .select(TEMPLATE_COLUMNS)
     .maybeSingle()
-  if (error) throwDbError(error, "총판 단가 템플릿을 저장하지 못했습니다.")
+  if (error) throwDbError(error, "원가 템플릿을 저장하지 못했습니다.")
   return data ? toTemplate(data as TemplateRow) : null
 }
 
@@ -574,6 +577,6 @@ export async function archiveDistributorPriceTemplate(id: string, actor: string)
     .is("archived_at", null)
     .select("id")
     .maybeSingle()
-  if (error) throwDbError(error, "총판 단가 템플릿을 보관하지 못했습니다.")
+  if (error) throwDbError(error, "원가 템플릿을 보관하지 못했습니다.")
   return Boolean(data)
 }

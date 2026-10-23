@@ -9,7 +9,7 @@ import {
 } from "@/lib/repositories/distributor-settlements"
 import { distributorActor, distributorWriteError, readJsonObject } from "@/lib/server/distributor-settlement-api"
 
-// 총판 단가 템플릿(2026-10-23) — 품목 코드 × 최소 대수 구간 → 총판 단가.
+// 원가 템플릿(2026-10-23) — 품목 코드 × 최소 대수 구간 → 원가.
 //
 // GET  — { available, warning, templates[] }. 표 미적용이면 200 available:false.
 // POST {name, rules: [{itemCode, itemName?, minQuantity, unitPrice}], notes?} — 201 {template}. 400 검증 · 503 미적용.
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     )
   } catch (error) {
     console.error("[GET /api/admin/distributor-price-templates]", error instanceof Error ? error.message : error)
-    return NextResponse.json({ error: "총판 단가 템플릿을 불러오지 못했습니다." }, { status: 500 })
+    return NextResponse.json({ error: "원가 템플릿을 불러오지 못했습니다." }, { status: 500 })
   }
 }
 
@@ -48,6 +48,6 @@ export async function POST(req: NextRequest) {
     })
     return NextResponse.json({ template }, { status: 201 })
   } catch (error) {
-    return distributorWriteError(error, "POST /api/admin/distributor-price-templates", "총판 단가 템플릿을 저장하지 못했습니다.")
+    return distributorWriteError(error, "POST /api/admin/distributor-price-templates", "원가 템플릿을 저장하지 못했습니다.")
   }
 }
