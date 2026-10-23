@@ -284,7 +284,7 @@ describe("planWeekWrites — past_week 경계(오늘 KST 기준)", () => {
     expect(oct(4, "2026-11-01")).toEqual({ ok: false, refusal: "past_week" })
   })
 
-  it("한 칸이라도 지난 주차면 전부 거절(색만 바꾸는 경우 포함)", () => {
+  it("이번 달 지난 주는 확도 색만 바꿀 수 있다(결제 뒤 확정 처리)", () => {
     const result = planWeekWrites(input({
       month: "2026-10",
       baselineWeeks: [b(100), k(), k(), b(50), k()],
@@ -292,7 +292,55 @@ describe("planWeekWrites — past_week 경계(오늘 KST 기준)", () => {
       draftConfidence: "confirmed",
       confidenceTouched: true,
     }))
-    expect(result).toEqual({ ok: false, refusal: "past_week" })
+    expect(result).toMatchObject({
+      ok: true,
+      writes: [{ weekIndex: 0, value: null, color: "r" }, { weekIndex: 3, value: null, color: "r" }],
+    })
+  })
+
+  it("이번 달 지난 주라도 금액이 바뀌면 거절", () => {
+    expect(planWeekWrites(input({
+      month: "2026-10",
+      baselineWeeks: [b(100), k(), k(), k(), k()],
+      draftAmount: 120,
+      draftConfidence: "confirmed",
+      confidenceTouched: true,
+    }))).toEqual({ ok: false, refusal: "past_week" })
+    expect(planWeekWrites(input({
+      month: "2026-10",
+      baselineWeeks: [b(100), k(), k(), k(), k()],
+      draftWeekly: [100, 0, 0, 40, 0],
+      draftWeeklyConfidence: ["confirmed", null, null, "expected", null],
+      draftWeeklyConfidenceTouched: [true, false, false, false, false],
+      confidenceTouched: true,
+    }))).toMatchObject({ ok: true, writes: [{ weekIndex: 0, value: null, color: "r" }, { weekIndex: 3, value: 40 }] })
+    expect(planWeekWrites(input({
+      month: "2026-10",
+      baselineWeeks: [b(100), k(), k(), k(), k()],
+      draftWeekly: [90, 0, 0, 0, 0],
+      confidenceTouched: false,
+    }))).toEqual({ ok: false, refusal: "past_week" })
+  })
+
+  it("지난 달 이전 칸은 색만 바꾸는 것도 거절", () => {
+    expect(planWeekWrites(input({
+      month: "2026-09",
+      baselineWeeks: [b(100), k(), k(), k(), k()],
+      draftAmount: 100,
+      draftConfidence: "confirmed",
+      confidenceTouched: true,
+    }))).toEqual({ ok: false, refusal: "past_week" })
+  })
+
+  it("빈 달의 첫 결제 주차가 이미 지났으면 이번 주차에 쓴다", () => {
+    expect(planWeekWrites(input({ month: "2026-10", firstPayment: "2026-10-05", draftAmount: 70 }))).toMatchObject({
+      ok: true,
+      writes: [{ weekIndex: 3, value: 70, color: "k" }],
+    })
+    expect(planWeekWrites(input({ month: "2026-10", firstPayment: "2026-10-30", draftAmount: 70 }))).toMatchObject({
+      ok: true,
+      writes: [{ weekIndex: 4, value: 70 }],
+    })
   })
 })
 

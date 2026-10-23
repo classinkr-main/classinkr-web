@@ -2,7 +2,8 @@
 //
 // 결정(계약서 0절):
 //  - 쓰는 것은 기존 행의 주차 칸 금액·확도 글자색뿐. 칸 비우기·달 삭제는 하지 않는다.
-//  - 지난 주차는 손대지 않는다: 쓰는 칸의 시작일(1·8·15·22·29일)이 이번 주차 시작일보다 앞이면 거절.
+//  - 지난 주차: 쓰는 칸의 시작일(1·8·15·22·29일)이 이번 주차 시작일보다 앞이면 금액은 거절한다. 이번 달의 지난 주는
+//    확도 글자색만 바꿀 수 있다(결제가 들어온 뒤 확정 처리 — 2026-10-23 사용자 결정). 지난 달 이전은 색도 거절.
 //  - 월 칸 수정(주차 없음): 값 있는 주차 1칸 → 그 칸, 0칸 → 첫 결제일 주차 → 이번 달이면 오늘 주차 → w1,
 //    2칸 이상 + 금액 변경 → 거절(week_ambiguous). 확도만 바꾸면 값 있는 칸 전부를 그 색으로.
 //  - 주차 칸 하나를 가리킨 초안(metadata.week "w1".."w5", weekly 없음 — 매트릭스 주차 칸·레일의 주차 고르기):
@@ -122,7 +123,8 @@ function pickEmptyMonthWeek(month: string, weekCount: number, firstPayment: stri
   const clamp = (index: number) => Math.min(index, weekCount - 1)
   if (firstPayment && firstPayment.slice(0, 7) === month) {
     const day = dayOf(firstPayment)
-    if (day != null) return clamp(weekIndexOfDay(day))
+    // 첫 결제 주차가 이미 지났으면 금액을 쓸 수 없으니 이번 주차로 넘긴다.
+    if (day != null && !isPastWeekCell(month, clamp(weekIndexOfDay(day)), weekCount, today)) return clamp(weekIndexOfDay(day))
   }
   if (today.slice(0, 7) === month) {
     const day = dayOf(today)
@@ -219,7 +221,9 @@ export function planWeekWrites(input: PlanWeekWritesInput): PlanWeekWritesResult
     }
   }
 
-  if (writes.some((write) => isPastWeekCell(month, write.weekIndex, weekCount, today))) {
+  // 지난 칸은 이번 달의 색만 바꾸기만 허용한다. 금액이 바뀌는 칸, 지난 달 이전 칸은 하나라도 있으면 전부 거절.
+  const thisMonth = today.slice(0, 7) === month
+  if (writes.some((write) => isPastWeekCell(month, write.weekIndex, weekCount, today) && !(thisMonth && write.value == null))) {
     return { ok: false, refusal: "past_week" }
   }
   return { ok: true, writes, note: noteFor(writes) }

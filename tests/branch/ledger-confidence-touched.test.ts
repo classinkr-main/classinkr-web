@@ -220,9 +220,14 @@ describe("레일·콕핏 — 폼에서 확도 버튼을 누른 칸만 고른 것
     }
     expect(plan({ ...input, confidenceTouched: meta.confidenceTouched, draftWeeklyConfidenceTouched: meta.weeklyConfidenceTouched }))
       .toEqual({ ok: true, writes: [{ weekIndex: 4, value: 2500, color: null }], note: "시트 W5에 씁니다" })
-    // 예전처럼 시드를 고른 것으로 실으면 W2 를 검정으로 바꾸려다 지난 주차라 통째로 막혔다.
+    // 예전처럼 시드를 고른 것으로 실으면, 이번 달 지난 주는 색 쓰기가 허용되므로(2026-10-23 결정) 손대지 않은
+    // W2 빨강(확정)을 검정(예정)으로 다시 칠한다 — 고른 칸만 싣는 이 수정이 그래서 필요하다.
     expect(plan({ ...input, confidenceTouched: true, draftWeeklyConfidenceTouched: [true, true, true, true, true] }))
-      .toEqual({ ok: false, refusal: "past_week" })
+      .toEqual({
+        ok: true,
+        writes: [{ weekIndex: 1, value: null, color: "k" }, { weekIndex: 4, value: 2500, color: "k" }],
+        note: "시트 W2·W5에 씁니다",
+      })
   })
 
   it("주차 확도 한 칸을 누르면 그 주차만, 일괄 버튼은 전 주차를 고른 것으로 표시한다", () => {

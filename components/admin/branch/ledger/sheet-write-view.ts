@@ -366,4 +366,4 @@ export function blocksLedgerDelete(view: SheetWriteView | null | undefined): boo
 export { SHEET_WRITE_HISTORY_DELETE_MESSAGE, SHEET_WRITTEN_REVERSE_MESSAGE }
 
 /** 장부 상단 한 줄 — 켜짐일 때만. */
-export const SHEET_WRITE_ON_NOTICE = "반영하면 '2. REV' 시트에도 씁니다 · 지난 주차는 시트에서 직접"
+export const SHEET_WRITE_ON_NOTICE = "반영하면 '2. REV' 시트에도 씁니다 · 지난 주차 금액은 시트에서 직접(이번 달 지난 주는 확도만)"

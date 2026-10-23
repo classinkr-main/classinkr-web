@@ -42,7 +42,7 @@ export const SHEET_WRITE_MESSAGES: Record<SheetWriteCode, string> = {
   written: "시트에 반영됨",
   already_written: "이미 시트에 같은 값이 있어 장부만 기록",
   conflict: "시트가 바뀌었습니다 — 새로고침 뒤 다시 입력해 주세요",
-  past_week: "지난 주차는 시트에서 직접 고쳐 주세요",
+  past_week: "지난 주차 금액은 시트에서 직접 고쳐 주세요 · 이번 달 지난 주는 확도만 바꿀 수 있습니다",
   week_ambiguous: "주차가 여럿인 달 — ⋯에서 주차별로 고쳐 주세요",
   clear_not_supported: "칸 비우기·달 삭제는 시트에서 직접 해 주세요",
   amount_invalid: "정수 금액만 쓸 수 있습니다",
