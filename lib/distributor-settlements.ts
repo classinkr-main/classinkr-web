@@ -40,12 +40,14 @@ export const DISTRIBUTOR_MODE_LABELS: Record<DistributorFulfillmentMode, { title
 }
 
 /**
- * 하드웨어 총판 기본값 — 퀴드러닝(배철웅 대표). 하드웨어 고객 견적의 표준 공급자와 같은 회사다.
+ * 하드웨어 총판 기본값 — 퀴드러닝. 하드웨어 고객 견적의 표준 공급자(STANDARD_QUOTE_SUPPLIER)와 같은 회사이고,
+ * 견적서에 찍히는 이름은 등록 정보 그대로 쓴다(대표 조혜리 · 담당자 배철웅 — 호칭을 붙이거나 바꾸지 않는다).
+ * 내부에서 '배 대표님'이라고 부르면 이 총판(퀴드러닝)을 뜻한다.
  * 처음 정산을 만들 때만 채우고, 이후에는 마지막에 저장한 총판 정보를 쓴다.
  */
 export const DEFAULT_HARDWARE_DISTRIBUTOR = {
   distributorName: STANDARD_QUOTE_SUPPLIER.businessName,
-  distributorContactName: `${STANDARD_QUOTE_SUPPLIER.contactName} 대표`,
+  distributorContactName: STANDARD_QUOTE_SUPPLIER.contactName,
   distributorEmail: STANDARD_QUOTE_SUPPLIER.contactEmail || null,
   distributorPhone: STANDARD_QUOTE_SUPPLIER.contactPhone,
 } as const

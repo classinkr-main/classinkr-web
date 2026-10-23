@@ -188,10 +188,12 @@ describe("distributor input validation", () => {
 })
 
 describe("hardware distributor defaults", () => {
-  it("defaults to 퀴드러닝 · 배철웅 대표 (the standard hardware supplier)", () => {
+  it("defaults to 퀴드러닝 with its registered names unchanged (the standard hardware supplier)", () => {
     expect(DEFAULT_HARDWARE_DISTRIBUTOR.distributorName).toBe(STANDARD_QUOTE_SUPPLIER.businessName)
     expect(DEFAULT_HARDWARE_DISTRIBUTOR.distributorName).toBe("퀴드러닝")
-    expect(DEFAULT_HARDWARE_DISTRIBUTOR.distributorContactName).toBe("배철웅 대표")
+    // 견적서 이름은 등록 정보 그대로 — '배 대표님'은 내부 호칭일 뿐 문서에 쓰지 않는다.
+    expect(DEFAULT_HARDWARE_DISTRIBUTOR.distributorContactName).toBe("배철웅")
+    expect(STANDARD_QUOTE_SUPPLIER.representativeName).toBe("조혜리")
     expect(DEFAULT_HARDWARE_DISTRIBUTOR.distributorPhone).toBe(STANDARD_QUOTE_SUPPLIER.contactPhone)
   })
 

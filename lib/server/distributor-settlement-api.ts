@@ -146,7 +146,7 @@ export async function loadDistributorSettlementPayload(
     versionChanged: Boolean(
       settlement && settlement.status === "draft" && settlement.sourceVersionId && settlement.sourceVersionId !== context.version.id
     ),
-    // 처음 만드는 정산은 하드웨어 총판(퀴드러닝 · 배철웅 대표)을 기본으로 채운다.
+    // 처음 만드는 정산은 하드웨어 총판(퀴드러닝, 등록 정보 그대로)을 기본으로 채운다.
     defaults: settlement
       ? {
           distributorName: settlement.distributorName,
