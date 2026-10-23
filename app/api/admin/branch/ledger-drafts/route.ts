@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { BRANCH_READ_ADMIN_API_ROLES, CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { isLedgerDraftBodyError, parseLedgerDraftCreateBody } from "@/lib/branch/ledger-draft-body"
+import { currentSheetWriteMode } from "@/lib/branch/sheet-writeback/config"
+import { isSheetWriteCode, SHEET_WRITE_MESSAGES } from "@/lib/branch/sheet-writeback/messages"
 import {
   BRANCH_SALES_LEDGER_DRAFT_STATUSES,
   createBranchSalesLedgerDraft,
@@ -11,8 +13,65 @@ import {
   listBranchSalesLedgerEntries,
   type BranchSalesLedgerDraftStatus,
 } from "@/lib/repositories/branch-sales-ledger-drafts"
+import {
+  isSheetWritesNotReadyError,
+  lastSuccessfulRevSyncStartedAt,
+  latestSheetWritesByDraftIds,
+  type SheetWriteRecord,
+} from "@/lib/repositories/branch-sales-ledger-sheet-writes"
 
 const STATUSES = new Set<string>(BRANCH_SALES_LEDGER_DRAFT_STATUSES)
+
+type SheetWriteView = Pick<SheetWriteRecord, "status" | "code" | "writtenAt" | "rowId"> & { message: string }
+
+const SHEET_WRITE_UNKNOWN_CODE_MESSAGE = "시트 쓰기 상태를 알 수 없습니다 — 관리자 확인 필요"
+const SHEET_WRITES_READ_FAILED_MESSAGE = "시트 쓰기 기록을 읽지 못했습니다 — 시트 반영 상태가 비어 보일 수 있습니다."
+const REV_SYNC_READ_FAILED_MESSAGE = "마지막 REV 동기화 시각을 읽지 못했습니다."
+
+/**
+ * 감사 행 → 화면용 한 줄. "sending" 은 시트에 보내는 중이거나 보낸 뒤 결과를 못 적은 채 끝난 시도라
+ * (감사 행의 code 는 계획한 결과 "written" 이 미리 들어가 있다) 문구를 "결과 모름"으로 보인다 — 반영됐다고
+ * 말하지 않는다. code 는 저장된 값 그대로 둔다.
+ */
+function toSheetWriteView(record: SheetWriteRecord): SheetWriteView {
+  const message =
+    record.status === "sending"
+      ? SHEET_WRITE_MESSAGES.outcome_unknown
+      : isSheetWriteCode(record.code)
+        ? SHEET_WRITE_MESSAGES[record.code]
+        : SHEET_WRITE_UNKNOWN_CODE_MESSAGE
+  return { status: record.status, code: record.code, message, writtenAt: record.writtenAt, rowId: record.rowId }
+}
+
+/**
+ * 목록에 나온 초안 + 장부 항목의 초안 id 마다 가장 최근 시트 쓰기 시도. 감사 표가 아직 없으면(마이그레이션 전)
+ * 시트에 쓴 적이 없으므로 빈 객체가 정상이다. 그 밖의 조회 실패는 장부 화면 전체를 막지 않고 빈 객체 +
+ * health 로 알린다(시트 반영 표시만 비고, 반영 자체는 서버가 다시 읽어 판정한다).
+ */
+async function readSheetWrites(draftIds: string[]): Promise<{
+  sheetWrites: Record<string, SheetWriteView>
+  health: { ok: boolean; message: string | null }
+}> {
+  try {
+    const latest = await latestSheetWritesByDraftIds(draftIds)
+    const sheetWrites: Record<string, SheetWriteView> = {}
+    for (const [draftId, record] of latest) sheetWrites[draftId] = toSheetWriteView(record)
+    return { sheetWrites, health: { ok: true, message: null } }
+  } catch (error) {
+    if (isSheetWritesNotReadyError(error)) return { sheetWrites: {}, health: { ok: true, message: null } }
+    console.error("[GET /api/admin/branch/ledger-drafts] sheet writes", error)
+    return { sheetWrites: {}, health: { ok: false, message: SHEET_WRITES_READ_FAILED_MESSAGE } }
+  }
+}
+
+async function readLastRevSyncStartedAt(): Promise<{ value: string | null; failed: boolean }> {
+  try {
+    return { value: await lastSuccessfulRevSyncStartedAt(), failed: false }
+  } catch (error) {
+    console.error("[GET /api/admin/branch/ledger-drafts] last rev sync", error)
+    return { value: null, failed: true }
+  }
+}
 
 function adminActorName(admin: { name?: string; userId?: string; role: string }) {
   return admin.name?.trim() || admin.userId || admin.role
@@ -47,10 +106,11 @@ export async function GET(req: NextRequest) {
     // "아직 동기화 안 된 신규 적용"으로 오인돼 되살아났다. reversed 항목을 별도(status:"reversed")로
     // 200 한도까지 조회해 draft_id 목록을 함께 내려준다 — active 조회와 합쳐서 하나의 200 한도로
     // 자르면 reversed가 밀려날 수 있어 반드시 별도 조회+별도 한도를 쓴다.
-    const [draftResult, entryResult, reversedEntryResult] = await Promise.all([
+    const [draftResult, entryResult, reversedEntryResult, lastRevSync] = await Promise.all([
       listBranchSalesLedgerDrafts({ status, limit }),
       listBranchSalesLedgerEntries({ limit: 200 }),
       listBranchSalesLedgerEntries({ status: "reversed", limit: 200 }),
+      readLastRevSyncStartedAt(),
     ])
 
     const reversedDraftIds = Array.from(
@@ -61,11 +121,29 @@ export async function GET(req: NextRequest) {
       ),
     )
 
+    // REV 시트 쓰기(ADR-011) — 화면이 칸 아래 힌트·배지·이중 집계 제외(writtenAt < lastRevSyncStartedAt)에 쓴다.
+    // 스위치가 꺼져 있어도 예전에 쓴 기록은 그대로 내려준다(되돌리기 가드·이중 집계 제외는 스위치와 무관).
+    const { sheetWrites, health: sheetWritesHealth } = await readSheetWrites([
+      ...draftResult.drafts.map((draft) => draft.id),
+      ...entryResult.entries.map((entry) => entry.draftId).filter((draftId): draftId is string => Boolean(draftId)),
+    ])
+    const sheetWriteHealth = !sheetWritesHealth.ok
+      ? sheetWritesHealth
+      : lastRevSync.failed
+        ? { ok: false, message: REV_SYNC_READ_FAILED_MESSAGE }
+        : sheetWritesHealth
+
     return adminCachedJson({
       ...draftResult,
       entries: entryResult.entries,
       ledgerHealth: entryResult.health,
       reversedDraftIds,
+      sheetWrite: {
+        mode: currentSheetWriteMode(),
+        lastRevSyncStartedAt: lastRevSync.value,
+        health: sheetWriteHealth,
+      },
+      sheetWrites,
     })
   } catch (error) {
     console.error("[GET /api/admin/branch/ledger-drafts]", error)

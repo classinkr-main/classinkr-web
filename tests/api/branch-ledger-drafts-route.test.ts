@@ -19,6 +19,10 @@ const updateBranchSalesLedgerDraft = vi.fn()
 const applyBranchSalesLedgerDraft = vi.fn()
 const deleteBranchSalesLedgerDraft = vi.fn()
 const reverseBranchSalesLedgerEntryByDraftId = vi.fn()
+// REV 시트 쓰기(ADR-011) — GET 이 시트 쓰기 감사 표를 읽는다. 실제 supabase 에 붙지 않게 목으로 둔다
+// (시트 쓰기 갈래의 실행 검증은 tests/api/branch-ledger-drafts-sheet-write.test.ts).
+const latestSheetWritesByDraftIds = vi.fn(async () => new Map())
+const lastSuccessfulRevSyncStartedAt = vi.fn(async () => null)
 
 // 실제 repository의 문구와 동일해야 route.ts의 에러 번역기(duplicateActiveCorrectionResponse 등)가
 // 인식한다 — 이 파일에서는 repository를 통째로 목하므로 판별 함수도 같은 문구 기준으로 재구현한다.
@@ -47,6 +51,12 @@ vi.mock("@/lib/repositories/branch-sales-ledger-drafts", () => ({
     error instanceof Error && error.message === NON_POSITIVE_AMOUNT_MESSAGE,
   listBranchSalesLedgerDrafts,
   listBranchSalesLedgerEntries,
+}))
+
+vi.mock("@/lib/repositories/branch-sales-ledger-sheet-writes", () => ({
+  latestSheetWritesByDraftIds,
+  lastSuccessfulRevSyncStartedAt,
+  isSheetWritesNotReadyError: () => false,
 }))
 
 const routePath = join(
@@ -83,7 +93,10 @@ describe("branch ledger draft route", () => {
     expect(route).toContain('raw.status === "applied"')
     expect(route).toContain("Use action=apply to apply a checked draft")
     expect(route).toContain('action === "apply"')
-    expect(route).toContain("applyBranchSalesLedgerDraft(id, actor)")
+    // REV 시트 쓰기(ADR-011) — 반영은 서비스(lib/branch/sheet-writeback/apply-service.ts)를 거친다. 라우트가 RPC 를
+    // 직접 부르면 시트 쓰기 스위치·충돌 검사를 건너뛴다(tests/branch/sheet-write-surface.test.ts 래칫과 같은 계약).
+    expect(route).toMatch(/\bapplyLedgerDraftsWithSheetWrite\(\[id\], actor\)/)
+    expect(route).not.toMatch(/\bapplyBranchSalesLedgerDraft\s*\(/)
   })
 
   it("only applies drafts that are already checked", () => {

@@ -12,6 +12,9 @@
 // MONTH_RE를 각자 파일에 다시 선언해 온 것과 같은 방식으로, kind/status 허용값도 이 파일에
 // 로컬로 다시 선언한다. 타입은 import type으로만 가져온다(컴파일 시 완전히 지워지므로 런타임
 // import를 만들지 않는다).
+// sheetBaseline 검증(REV 시트 쓰기, ADR-011)도 순수 모듈(lib/branch/sheet-writeback/baseline.ts — server-only 금지)만
+// 가져온다 — 이 파일의 클라이언트 겸용 규약을 깨지 않는다.
+import { parseSheetBaseline } from "@/lib/branch/sheet-writeback/baseline"
 import type {
   BranchSalesLedgerDraftCreateInput,
   BranchSalesLedgerDraftKind,
@@ -29,6 +32,34 @@ const DRAFT_STATUSES = new Set<string>(["draft", "checked", "applied", "cancelle
 const MONTH_RE = /^\d{4}-\d{2}$/
 
 export type LedgerDraftBodyError = { error: string; status: 400 }
+
+export const SHEET_BASELINE_FORMAT_ERROR = "sheetBaseline 형식 오류"
+export const CONFIDENCE_TOUCHED_FORMAT_ERROR = "metadata.confidenceTouched must be a boolean"
+
+/**
+ * REV 시트 쓰기(ADR-011) 칸 검증 — sourceSnapshot.sheetBaseline 과 metadata.confidenceTouched.
+ *
+ * sheetBaseline: 클라이언트가 초안을 만들 때 본 시트 칸(lib/branch/sheet-writeback/baseline.ts). 반영 직전
+ *   서버가 시트를 다시 읽어 이 값과 비교하므로, 형식이 틀린 값을 저장하면 반영 때 조용히 no_baseline 이 된다 —
+ *   저장 시점에 400 으로 막고, 통과하면 parseSheetBaseline 이 정규화한 객체로 바꿔 저장한다.
+ *   키가 없거나 null 이면 "baseline 없음"(새 행·buildSheetBaseline 이 null 을 낸 행) — 반영 때 서버가 판정한다.
+ * confidenceTouched: 사용자가 확도를 직접 골랐는지. 반영 계획은 `=== true` 만 본다 — 문자열 "true" 같은 값이
+ *   조용히 false 로 읽히지 않게 불리언만 받는다(키가 없으면 그대로 둔다).
+ *
+ * 틀리면 400 오류, 맞으면 저장할 sourceSnapshot(baseline 이 있으면 정규화본으로 바꾼 사본)을 돌려준다.
+ */
+function checkSheetWriteFields(
+  sourceSnapshot: Record<string, unknown> | undefined,
+  metadata: Record<string, unknown> | undefined,
+): LedgerDraftBodyError | { sourceSnapshot: Record<string, unknown> | undefined } {
+  if (metadata && metadata.confidenceTouched !== undefined && typeof metadata.confidenceTouched !== "boolean") {
+    return { error: CONFIDENCE_TOUCHED_FORMAT_ERROR, status: 400 }
+  }
+  if (!sourceSnapshot || sourceSnapshot.sheetBaseline == null) return { sourceSnapshot }
+  const baseline = parseSheetBaseline(sourceSnapshot.sheetBaseline)
+  if (!baseline) return { error: SHEET_BASELINE_FORMAT_ERROR, status: 400 }
+  return { sourceSnapshot: { ...sourceSnapshot, sheetBaseline: baseline } }
+}
 
 export function isLedgerDraftBodyError(value: unknown): value is LedgerDraftBodyError {
   return (
@@ -88,6 +119,8 @@ export function parseLedgerDraftCreateBody(
   if (metadata === null) return { error: "metadata must be an object", status: 400 }
   if (sourceSheetRow === null) return { error: "sourceSheetRow must be a number", status: 400 }
   if (sourceSnapshot === null) return { error: "sourceSnapshot must be an object", status: 400 }
+  const sheetFields = checkSheetWriteFields(sourceSnapshot, metadata)
+  if (isLedgerDraftBodyError(sheetFields)) return sheetFields
 
   // 라운드4 P0-2 — 매트릭스 자가 체크: status를 생략하면 기존과 동일하게 draft로 저장된다
   // (repository buildInsert가 input.status ?? "draft"로 기본값을 채운다). 여기서는 draft|checked
@@ -104,7 +137,7 @@ export function parseLedgerDraftCreateBody(
     kind,
     sourceDealId: optionalString(raw.sourceDealId),
     sourceSheetRow,
-    sourceSnapshot,
+    sourceSnapshot: sheetFields.sourceSnapshot,
     customer,
     manager: optionalString(raw.manager),
     team: optionalString(raw.team),
@@ -213,6 +246,11 @@ export function parseLedgerDraftUpdateBody(
     if (metadata === null) return { error: "metadata must be an object", status: 400 }
     update.metadata = metadata
   }
+
+  // 위에서 null 은 이미 400 이라 둘 다 객체 또는 undefined 다(PATCH 에 안 실린 칸은 검사하지 않는다).
+  const sheetFields = checkSheetWriteFields(update.sourceSnapshot ?? undefined, update.metadata ?? undefined)
+  if (isLedgerDraftBodyError(sheetFields)) return sheetFields
+  if (update.sourceSnapshot) update.sourceSnapshot = sheetFields.sourceSnapshot
 
   return update
 }
