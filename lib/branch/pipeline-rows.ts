@@ -67,8 +67,9 @@ async function assembleBranchPipelineRows(
 
 const getCachedBranchPipelineRows = unstable_cache(
   // 같은 인스턴스의 동시 미스·재검증은 shareInFlightByArgs 로 한 번만 계산한다(unstable_cache 는 인스턴스 안 동시 호출을 합치지 않는다).
-  shareInFlightByArgs("branch-pipeline-rows-v1", assembleBranchPipelineRows),
-  ["branch-pipeline-rows-v1"],
+  // v2(2026-10-23): rows 에 rowId·rowIdIssue·weeklyColors(시트 쓰기, ADR-011)가 더해졌다 — 옛 모양 캐시를 쓰지 않게 키를 올렸다.
+  shareInFlightByArgs("branch-pipeline-rows-v2", assembleBranchPipelineRows),
+  ["branch-pipeline-rows-v2"],
   { revalidate: 60, tags: [SALES_LEDGER_IMPORTS_CACHE_TAG, BRANCH_REV_DEALS_CACHE_TAG] },
 )
 

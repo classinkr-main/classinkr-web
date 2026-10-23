@@ -1,6 +1,6 @@
 import "server-only"
 import { readRangeWithFormat, envSheetId } from "@/lib/branch/google-sheets"
-import { parseRev, REV_RANGE } from "@/lib/branch/parsers/rev"
+import { parseRev, REV_RANGE, revRowIdWarning, summarizeRevRowIds } from "@/lib/branch/parsers/rev"
 import { parseDsh, DSH_RANGE } from "@/lib/branch/parsers/dsh"
 import { parseKpiBlocks, KPI_RANGE } from "@/lib/branch/parsers/kpi"
 import { replaceBranchRevDeals } from "@/lib/repositories/branch-deals"
@@ -34,8 +34,13 @@ export async function syncRev(): Promise<{ rows: number; warning?: string }> {
   await replaceBranchKpiMirror(refFy, parseKpiBlocks(kpiGrid))
   // 범위 상한 도달 = 시트가 범위보다 커져 뒷부분 행이 잘렸을 수 있다는 신호.
   // 동기화 자체는 여전히 성공이므로 에러로 취급하지 않고 경고만 실어 보낸다.
-  const warning = isRangeLikelyTruncated(revGrid.length, REV_RANGE)
-    ? `REV 범위(${REV_RANGE})가 상한에 도달했습니다 — 시트가 더 커졌다면 일부 행이 잘렸을 수 있습니다 (읽은 행 수: ${revGrid.length}).`
-    : undefined
-  return { rows: n, warning }
+  const warnings: string[] = []
+  if (isRangeLikelyTruncated(revGrid.length, REV_RANGE)) {
+    warnings.push(`REV 범위(${REV_RANGE})가 상한에 도달했습니다 — 시트가 더 커졌다면 일부 행이 잘렸을 수 있습니다 (읽은 행 수: ${revGrid.length}).`)
+  }
+  // Row ID(시트 쓰기 행 식별 — ADR-011) 상태도 경고로만 싣는다. 장부 반영의 시트 쓰기가 그 행을 거절할 뿐
+  // 동기화·집계는 Row ID 없이도 그대로다. 화면은 첫 경고만 보이므로 절단 경고를 앞에 둔다.
+  const rowIdWarning = revRowIdWarning(summarizeRevRowIds(revGrid, parsed))
+  if (rowIdWarning) warnings.push(rowIdWarning)
+  return { rows: n, warning: warnings.length > 0 ? warnings.join(" / ") : undefined }
 }
