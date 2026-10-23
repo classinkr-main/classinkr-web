@@ -18,8 +18,37 @@ const LEDGER_ROWS = [
 ]
 let ledgerRows: unknown[] = LEDGER_ROWS
 
+// 배너가 읽는 미러(branch_rev_deals) 행 — synced_at 이 그 행 데이터의 시각이다(이중 집계 제외 기준, absorptionCutoff).
+// 기본은 08:00 동기화가 08:05 에 미러를 바꾼 상태.
+function mirrorRow(syncedAt: string) {
+  return {
+    id: "deal-1",
+    sheet_row: 3,
+    customer_name: "가나학원",
+    branch_contact: null,
+    team: "BD",
+    manager: null,
+    deal_type: null,
+    status: null,
+    first_payment: null,
+    product_version: null,
+    region: null,
+    importance: null,
+    note: null,
+    contract_target: 0,
+    monthly_payments: {},
+    monthly_confirmed: {},
+    monthly_high_conf: {},
+    pending: null,
+    pending_weeks: null,
+    synced_at: syncedAt,
+  }
+}
+let mirrorRows: unknown[] = [mirrorRow("2026-10-23T08:05:00.000Z")]
+
 const recording = createRecordingSupabaseClient((query: RecordedQuery) => {
   if (query.table === "branch_sales_ledger_entries") return { data: ledgerRows }
+  if (query.table === "branch_rev_deals") return { data: mirrorRows }
   return { data: [] }
 })
 
@@ -49,6 +78,7 @@ afterEach(() => {
   vi.clearAllMocks()
   recording.queries.length = 0
   ledgerRows = LEDGER_ROWS
+  mirrorRows = [mirrorRow("2026-10-23T08:05:00.000Z")]
 })
 
 describe("getAdminCrmRevenueSheetWorkspace — 시트에 쓴 정정의 미반영 제외", () => {
@@ -77,6 +107,21 @@ describe("getAdminCrmRevenueSheetWorkspace — 시트에 쓴 정정의 미반영
       latestAppliedAt: "2026-10-21T00:00:00Z",
     })
     expect(result.warnings).toEqual([])
+  })
+
+  it("미러가 그 동기화보다 오래됐으면(재캡처·교체 전) 그 동기화를 기준으로 빼지 않는다 — 미러 시각까지만", async () => {
+    // 07:00 에 쓴 정정은 08:00 동기화가 읽었지만, 이 배너가 읽은 미러는 06:30 데이터라 아직 그 값이 없다.
+    mirrorRows = [mirrorRow("2026-10-23T06:30:00.000Z")]
+    lastSuccessfulRevSyncStartedAt.mockResolvedValue("2026-10-23T08:00:00.000Z")
+    latestSheetWritesByDraftIds.mockResolvedValue(
+      new Map([written("d-absorbed", "2026-10-23T07:00:00.000Z"), written("d-after-sync", "2026-10-23T06:00:00.000Z")]),
+    )
+
+    const result = await workspace()
+
+    // d-absorbed(07:00)는 남고, 06:30 미러보다 먼저 쓴 d-after-sync(06:00)만 빠진다.
+    expect(result.manualLedgerGap.count).toBe(3)
+    expect(result.manualLedgerGap.amount).toBe(1_100_000)
   })
 
   it("성공한 REV 동기화 기록이 없으면 아무것도 빼지 않는다", async () => {

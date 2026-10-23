@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest"
 
 import {
   APPLY_NO_RESPONSE_MESSAGE,
+  blocksLedgerDelete,
   blocksLedgerReverse,
   cellSheetWriteHint,
   excludeSheetAbsorbedRows,
@@ -14,6 +15,7 @@ import {
   parseSheetWriteState,
   sheetAbsorbedDraftIds,
   sheetBaselineForRow,
+  SHEET_WRITE_HISTORY_DELETE_MESSAGE,
   sheetWriteBadge,
   summarizeApplyOutcomes,
   toApplyOutcome,
@@ -97,7 +99,8 @@ describe("오버레이 제외 — sheetAbsorbedDraftIds + excludeSheetAbsorbedRo
     const body = source.slice(start, end)
     expect(body).toMatch(/if \(ledgerEntryRows\.length === 0\) return excludeSheetAbsorbedRows\(appliedDraftFallbackRows, sheetAbsorbedIds\)/)
     expect(body).toMatch(/return excludeSheetAbsorbedRows\(\[\s*\.\.\.ledgerEntryRows,/)
-    expect(source).toMatch(/sheetAbsorbedDraftIds\(sheetWrites, sheetWrite\.lastRevSyncStartedAt\)/)
+    // 기준 시각은 서버 동기화와 이 화면 시트 행의 데이터 시각 중 이른 쪽(absorptionCutoff).
+    expect(source).toMatch(/sheetAbsorbedDraftIds\(sheetWrites, absorptionCutoff\(sheetWrite\.lastRevSyncStartedAt, sheetRowsSyncedAt\)\)/)
     // editRowOverrideMonths 는 appliedDraftRows → replacementAppliedDraftRows 에서만 만든다(제외가 정정 월에도 반영).
     expect(source).toMatch(/return appliedDraftRows\.filter\(\(row\) => row\.draftKind === "edit-row"\)/)
     expect(source).toMatch(/for \(const row of replacementAppliedDraftRows\) \{/)
@@ -286,6 +289,43 @@ describe("큐 행 배지 — sheetWriteBadge", () => {
     expect(sheetWriteBadge(view("written", "db_apply_failed"))).toMatchObject({ label: "실패", tone: "danger" })
     expect(sheetWriteBadge(view("written", "new_row_app_only"))).toMatchObject({ label: "장부에만", tone: "neutral" })
   })
+
+  it("시트에서 바뀐 칸이 없던 반영은 '시트 반영됨'이 아니고, 장부에 못 적은 갈래·못 되돌린 이동은 실패", () => {
+    expect(sheetWriteBadge(view("written", "no_change"))).toMatchObject({ label: "장부에만", tone: "neutral" })
+    expect(sheetWriteBadge(view("written", "draft_changed"))).toMatchObject({ label: "실패", tone: "danger" })
+    expect(sheetWriteBadge(view("failed", "row_shifted_unrestored"))).toMatchObject({ label: "실패", tone: "danger" })
+    expect(sheetWriteBadge(view("refused", "active_correction"))).toMatchObject({ label: "실패", tone: "danger" })
+  })
+})
+
+describe("삭제 가드 — 반영을 시도한 초안은 삭제 대신 취소", () => {
+  const view = (status: SheetWriteView["status"], code: string): SheetWriteView => ({ status, code, message: "m", writtenAt: null, rowId: null })
+
+  it("시트 쓰기 기록이 하나라도 있으면(거절·실패 포함) 막고, 기록이 없으면 기존 동작", () => {
+    expect(blocksLedgerDelete(view("refused", "conflict"))).toBe(true)
+    expect(blocksLedgerDelete(view("failed", "sheet_error"))).toBe(true)
+    expect(blocksLedgerDelete(undefined)).toBe(false)
+    expect(blocksLedgerDelete(null)).toBe(false)
+  })
+
+  it("큐의 삭제 버튼이 이 가드로 꺼지고, 이유는 서버 409 와 같은 상수", () => {
+    const queue = readFileSync(join(process.cwd(), "components/admin/branch/ledger/DraftQueue.tsx"), "utf8")
+    const button = queue.slice(queue.indexOf("onClick={() => setConfirmDeleteDraft(draft)}"), queue.indexOf("<Trash2"))
+    expect(button).toMatch(/isRowBusy\(draft\.id\) \|\|\n\s+sheetBlocksDelete\(draft\.id\)\n/)
+    expect(button).toMatch(/title=\{sheetBlocksDelete\(draft\.id\) \? SHEET_WRITE_HISTORY_DELETE_MESSAGE : "초안 삭제"\}/)
+    expect(queue).toMatch(/const sheetBlocksDelete = \(id: string\) => blocksLedgerDelete\(sheetWrites\?\.\[id\]\)/)
+    expect(SHEET_WRITE_HISTORY_DELETE_MESSAGE).toBe("시트 반영 시도 기록이 있는 초안은 삭제할 수 없습니다 — 취소로 정리해 주세요.")
+  })
+
+  it("훅은 그 409 를 레코드 오류로 다룬다 — 큐 전체를 로컬로 내리지 않는다", () => {
+    const hook = readFileSync(join(process.cwd(), "components/admin/branch/ledger/useLedgerDraftQueue.ts"), "utf8")
+    const body = hook.slice(hook.indexOf("const deleteDraft = useCallback"), hook.indexOf("const reverseEntry = useCallback"))
+    const guard = body.indexOf("error.message === SHEET_WRITE_HISTORY_DELETE_MESSAGE")
+    const downgrade = body.indexOf('setQueueMode("local")')
+    expect(guard).toBeGreaterThan(-1)
+    expect(downgrade).toBeGreaterThan(guard)
+    expect(body.slice(guard, downgrade)).toMatch(/setRecordError\(id, SHEET_WRITE_HISTORY_DELETE_MESSAGE\)\n\s+return\n/)
+  })
 })
 
 describe("되돌리기 가드 — 시트에 쓴 정정은 장부에서만 상쇄하지 않는다", () => {
@@ -296,6 +336,11 @@ describe("되돌리기 가드 — 시트에 쓴 정정은 장부에서만 상쇄
     expect(blocksLedgerReverse(view("sending"))).toBe(true)
     for (const status of ["refused", "failed", "unknown"] as const) expect(blocksLedgerReverse(view(status))).toBe(false)
     expect(blocksLedgerReverse(undefined)).toBe(false)
+  })
+
+  it("시트에서 바뀌는 칸이 없던 반영(no_change)은 막지 않는다 — 시트에 쓴 것이 없다", () => {
+    expect(blocksLedgerReverse({ status: "written", code: "no_change" })).toBe(false)
+    expect(blocksLedgerReverse({ status: "written", code: "already_written" })).toBe(true)
   })
 
   it("큐의 되돌리기 버튼이 이 가드로 꺼지고, 문구는 서버 409 문구와 같다", () => {
@@ -368,28 +413,29 @@ describe("워크벤치 배선 — 켜짐일 때만 힌트·화면에 상태 전�
 describe("초안 빌더 배선 — baseline·confidenceTouched", () => {
   const source = readFileSync(join(process.cwd(), "components/admin/branch/SalesLedgerWorkbench.tsx"), "utf8")
 
-  it("셀 빌더는 시트 행(오버레이 전 미러)에서 baseline 을 잡아 싣고, 첫 결제일·confidenceTouched 를 싣는다", () => {
+  it("셀 빌더는 시트 행(오버레이 전 미러)에서 baseline 을 잡아 싣고, 첫 결제일·확도 선택 표시를 싣는다", () => {
     const body = source.slice(source.indexOf("const buildCellDraftInput = useCallback"), source.indexOf("const cancelDraftRef = useRef"))
     expect(body).toMatch(/sheetBaselineForRow\(sheetRowById\.get\(sourceDealId\), month, new Date\(\)\.toISOString\(\)\)/)
     expect(body).toMatch(/\.\.\.\(sheetBaseline \? \{ sheetBaseline \} : \{\}\)/)
     expect(body).toMatch(/firstPayment: row\.firstPayment \?\? null,/)
-    expect(body).toMatch(/\n\s+confidenceTouched,\n/)
-    expect(body).toMatch(/confidenceTouched = true,/)
+    // 판정 규칙은 tests/branch/ledger-confidence-touched.test.ts — 기본은 "안 고름"(시트 글자색 그대로).
+    expect(body).toMatch(/confidenceTouched: touched\.confidenceTouched,/)
+    expect(body).toMatch(/confidencePicked = false,/)
   })
 
-  it("onCommitCell 이 confidenceTouched 를 빌더로 넘기고(생략 = true), 장부 칸 편집이 그 값을 싣는다", () => {
-    expect(source).toMatch(/buildCellDraftInput\(rowId, month, amount, confidence, week, options\?\.confidenceTouched \?\? true\)/)
+  it("onCommitCell 이 선택 표시를 빌더로 넘기고(생략 = 안 고름), 장부 칸 편집이 그 값을 싣는다", () => {
+    expect(source).toMatch(/buildCellDraftInput\(rowId, month, amount, confidence, week, options\?\.confidenceTouched \?\? false\)/)
     expect(source).toMatch(/onCommitCell\(rowId, month, amount, confidence, undefined, \{ confidenceTouched \}\)/)
   })
 
-  it("레일 빌더는 baseline 을 싣고 confidenceTouched: true(사용자가 확도를 고르는 화면)", () => {
+  it("레일 빌더는 baseline 을 싣고, 확도 선택 표시는 폼에서 버튼을 누른 칸만(시드는 고른 것이 아니다)", () => {
     const body = source.slice(
       source.indexOf("const buildDraftInput = useCallback"),
       source.indexOf("}, [detail, draftForm, lens, period, selectedMonth, selectedRow, sheetRowById, team])"),
     )
     expect(body).toMatch(/sheetBaselineForRow\(sheetRowById\.get\(sourceDealId\), draftForm\.month, new Date\(\)\.toISOString\(\)\)/)
     expect(body).toMatch(/sheetBaseline \? \{ \.\.\.\(snapshot \?\? \{\}\), sheetBaseline \} : snapshot/)
-    expect(body).toMatch(/confidenceTouched: true,/)
+    expect(body).toMatch(/confidenceTouched: touchedMetadata\.confidenceTouched,/)
   })
 
   it("시트 행 조회는 오버레이를 얹기 전 sheetRows 에서 만든다", () => {

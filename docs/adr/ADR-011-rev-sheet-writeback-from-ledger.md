@@ -34,6 +34,11 @@ Date: 2026-10-23
 2. **쓰는 것**: 기존 행(edit-row) 그 달 주차 칸(w1~w5)의 금액(정수, numberValue)과 확도 글자색만 쓴다.
    - 쓰는 색은 정확히 확정 `{1,0,0}`, 고확도 `{0,0,1}`, 예정 `{0,0,0}`이다. foregroundColor와 foregroundColorStyle에 같은 값을 쓴다.
    - 빈 칸에 값을 쓸 때는 색을 늘 명시한다. 숨은 글자색이 확도로 읽히지 않게 덮기 위해서다.
+   - 값 있는 칸의 색은 사용자가 그 칸의 확도를 직접 바꿨을 때만 쓴다(`metadata.confidenceTouched`, 주차 단위 초안은 주차별
+     `metadata.weeklyConfidenceTouched`). 화면이 채운 기본 확도(매트릭스 팝오버의 그 달 우세 확도, 레일의 행 확도 시드, 콕핏
+     리스트 톤)는 고른 것이 아니다 — 시작 전 빨강 주차는 앱에서 '예정'이고, 주차 칸에도 달 전체 확도가 보여 시트 글자색과 다를 수 있다.
+     골랐어도 보이던 확도와 같으면 고르지 않은 것으로 본다. 주차별 표시가 없는 주차 단위 초안은 초안이 가리킨 주차(`metadata.week`)만
+     고른 것으로 본다.
    - 새 행(new-row)은 지금처럼 장부에만 남는다(`new_row_app_only`).
    - 쓰지 않는 것: 속성 칸(A~L), 수식 칸(1행·M Sum·월 합계 12열·H Status), 달 전체 삭제, 칸 비우기(`clear_not_supported`).
    - 수식이 든 주차 칸(상수 산식 포함)은 쓰지 않는다(`formula_cell`).
@@ -49,7 +54,8 @@ Date: 2026-10-23
    - 확도만 바꾸고 금액이 그대로면 값 있는 칸을 전부 그 색으로 바꾼다.
    - 초안이 주차 하나를 가리키면(`metadata.week` `w1`~`w5`, 주차별 값 없음 — 매트릭스 주차 칸·레일의 주차 고르기)
      빈 달은 첫 결제일·오늘 주차보다 그 주차를 먼저 고른다. 장부가 그 주차에 두기 때문이다.
-     값 있는 칸이 다른 주차 1칸이면 장부는 그 달 값을 고른 주차로 옮기므로 시트도 원래 칸을 비워야 한다 → 막는다(`clear_not_supported`).
+     값 있는 칸이 고른 주차 하나가 아니면(다른 주차 1칸·여러 칸) 장부는 그 달 값을 고른 주차로 옮기므로 시트도 원래 칸을 비워야 한다
+     → 금액이 그 달 합계와 같아도 막는다(`clear_not_supported`).
    - 칸이 4개인 달(2월)의 baseline은 시트 칸 수로 자른다. 파이프라인이 주차 값을 늘 5칸으로 채워 보내기 때문이다
      ([baseline.ts](../../lib/branch/sheet-writeback/baseline.ts) `buildSheetBaseline`).
 5. **충돌은 시트 우선**: 초안은 만들 때 본 그 달 주차 칸 값·색(baseline, `sourceSnapshot.sheetBaseline`)을 싣는다.
@@ -72,14 +78,23 @@ Date: 2026-10-23
     - 요청 허용 목록: `updateCells`만, 3행부터, layout이 정한 주차 칸만, fields는 값+색·값·색 세 조합만 쓴다.
       칸 비우기는 행 이동 되돌리기(`restoreRequestsForShift`)에서만 허용한다.
       저장소의 Sheets 쓰기 호출은 허용 목록 파일에만 둔다(`tests/branch/sheet-write-surface.test.ts` 래칫).
+    - 같은 (딜, 월)에 이미 활성 정정 항목이 있으면 장부 반영이 유일성 인덱스(딜·월당 활성 정정 1건)에 걸릴 것이 확실하다 —
+      시트에 쓰기 전에 멈춘다(`active_correction`). 확인 조회가 실패하면 쓰지 않는다.
     - 시트에 보내기 전에 감사 행(`branch_sales_ledger_sheet_writes`, status `sending`)을 먼저 남긴다. 못 남기면 쓰지 않는다.
     - batchUpdate는 한 번만 보낸다. 재시도는 없고, 호출마다 8초 마감이 있다.
       5xx·마감 초과·되읽기 없음은 결과 모름(`outcome_unknown`, 202)으로 남기고 다시 보내지 않는다.
-    - 되읽은 그리드로 확인한다. 행이 움직였으면(`row_shifted`) 한 번 되돌리기를 시도한다. 값·월 합계가 다르면 `verify_mismatch`다.
+    - 되읽은 그리드로 확인한다. 머리 구조가 바뀌었으면(열이 끼거나 빠짐) 되돌리기를 시도하지 않는다(`row_shifted_unrestored`,
+      error `layout_changed`). 행이 움직였으면 한 번 되돌리기를 시도해 되돌렸으면 `row_shifted`, 못 되돌렸으면
+      `row_shifted_unrestored`다(남의 칸에 쓴 값이 남는다 — 감사 행 `cells`로 사람이 복구). 값·월 합계가 다르면 `verify_mismatch`다.
       확인된 것만 장부에 반영한다.
+    - 장부 반영은 시트 쓰기를 계획할 때 본 초안(updated_at)이 그대로일 때만 한다
+      (`apply_branch_sales_ledger_draft_if_unchanged` — 초안을 잠그고 비교한 뒤 기존 apply RPC). 그사이 고쳐졌으면 장부에 적지 않는다
+      (`draft_changed` — 시트에 쓴 것과 다른 금액을 장부에 남기지 않는다).
+    - 시트에서 바뀌는 칸이 없으면 장부만 기록한다(`no_change`).
     - 시트에는 썼는데 장부 반영이 실패하면 감사 행을 written + `db_apply_failed`로 남긴다.
       다시 누르면 `already_written`으로 마무리된다.
-    - 시트에 반영된 초안은 앱에서 되돌리지 않는다(409). 시트에서 직접 되돌리거나 원래 값으로 다시 입력한다.
+    - 시트에 반영된 초안은 앱에서 되돌리지 않는다(409). 시트에서 직접 되돌리거나 원래 값으로 다시 입력한다. `no_change`는 시트에 쓴
+      것이 없어 막지 않는다. 반영을 시도한 적 있는 초안(감사 행 있음)은 삭제 대신 취소로 정리한다(감사 FK — DELETE 409).
     - 한 번에 50건까지 보낸다. 넘는 몫은 400이고, 화면이 나눠 보낸다.
 
 ### ADR-008과의 관계
@@ -88,9 +103,10 @@ Date: 2026-10-23
 - 바뀌는 것: 스위치가 켜지면 edit-row 반영이 시트의 주차 칸도 바꾼다. ADR-008 Consequences의 "without immediately changing
   source revenue totals"는 이 경우 성립하지 않는다. 시트가 바뀌고, 다음 REV 동기화부터 서버 집계가 그 값을 본다.
 - 이중 집계 처리: 시트 쓰기가 written이고 그 뒤 성공한 REV 동기화가 있으면, 장부 화면은 그 초안의 오버레이를 빼고
-  미러 값을 쓴다. 미반영 배너도 그 항목을 미반영에서 뺀다. 두 곳은 같은 함수
-  ([ledger-rules.ts](../../lib/branch/sheet-writeback/ledger-rules.ts) `isSheetWriteAbsorbed`)를 쓴다. 되돌리기 가드
-  (`sheetWriteBlocksReverse` — written·sending이면 409)도 같은 파일이다.
+  미러 값을 쓴다. 미반영 배너도 그 항목을 미반영에서 뺀다. 기준 시각은 그 동기화 시작과 읽는 쪽이 실제로 가진 시트 행의 데이터
+  시각(미러 `synced_at`·액티브 임포트 캡처 시각) 중 이른 쪽이다(`absorptionCutoff`) — 화면 행이 그 동기화보다 오래됐으면 그 행에는
+  쓰기가 아직 없다. 두 곳은 같은 함수([ledger-rules.ts](../../lib/branch/sheet-writeback/ledger-rules.ts) `isSheetWriteAbsorbed`·
+  `absorptionCutoff`)를 쓴다. 되돌리기 가드(`sheetWriteBlocksReverse` — written·sending이면 409, `no_change`는 제외)도 같은 파일이다.
 
 ### Compass를 바꾸지 않는 근거
 
@@ -120,7 +136,8 @@ Compass 저장소 `lib/revenue.ts`(읽기 확인, 2026-10-23)의 동작은 이�
 - **서버 집계는 다음 동기화 때 반영**: KR Team·KPI·매출시트 화면처럼 미러를 읽는 집계는 다음 REV 동기화 뒤에 새 값을 본다.
   장부 화면은 그 사이 초안 오버레이로 같은 값을 보인다. 매출시트 미반영 배지도 다음 동기화 뒤에 그 정정을 뺀다.
 - **반영 직후 같은 달 다시 고치기**: 초안 baseline은 미러 값으로 만든다. 시트에 쓴 뒤 다음 REV 동기화 전에 같은 행·달을
-  다시 고치면 baseline이 옛 값이라 `conflict`로 막힌다(안전 쪽). 동기화를 한 번 돌린 뒤 다시 입력한다.
+  다시 고치면 baseline이 옛 값이라 `conflict`로 막힌다(안전 쪽). 동기화를 한 번 돌린 뒤 다시 입력한다(동기화는 미러 행을 새 딜 id 로
+  다시 만든다). 같은 딜 id 의 활성 정정이 남아 있는 채로 반영하면 시트에 쓰기 전에 `active_correction`으로 멈춘다.
 - **지난 주차·삭제는 시트에서**: 지난 주차, 칸 비우기, 달 전체 삭제, 주차가 여럿인 달의 금액 변경, 수식 칸은 앱으로 못 한다.
   시트에서 직접 고친다.
 - **켜기 전 사본 확인이 필요한 가정**: 아래 두 가지는 원본 시트에 쓰지 않는 원칙 때문에 실측하지 않았다.

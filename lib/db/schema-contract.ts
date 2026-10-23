@@ -907,6 +907,18 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     impact:
       "시트 쓰기 스위치(BRANCH_REV_SHEET_WRITE_ENABLED)가 꺼져 있으면 영향 없다. 켜져 있으면 감사 행을 못 남겨 시트 쓰기가 전부 500으로 막힌다(장부·시트는 그대로).",
   },
+  {
+    kind: "rpc",
+    functionName: "apply_branch_sales_ledger_draft_if_unchanged",
+    label: "시트 쓰기 반영 전용 장부 적용(초안이 그대로일 때만)",
+    // 장부에 쓰는 함수라 실행 프로브를 하지 않는다 — pg_proc/권한만 확인한다.
+    catalogIdentityTypes: "uuid, text, timestamp with time zone",
+    serviceRoleOnly: true,
+    migration: "supabase/migrations/20261023_branch_rev_sheet_writes.sql",
+    severity: "warning",
+    impact:
+      "시트 쓰기 스위치가 켜져 있으면 시트에 쓴 뒤 장부 기록이 전부 실패한다(db_apply_failed) — 켜기 전에 반드시 적용한다. 꺼져 있으면 영향 없다.",
+  },
 ]
 
 export function probeName(probe: SchemaProbe): string {

@@ -63,11 +63,14 @@ npm run check:db --  --strict
 ([ADR-011](../adr/ADR-011-rev-sheet-writeback-from-ledger.md)).
 
 - 기존 표·RPC(`branch_sales_ledger_drafts`·`entries`·`apply_branch_sales_ledger_draft`)는 바꾸지 않는다.
+- 시트 쓰기 반영 전용 RPC `apply_branch_sales_ledger_draft_if_unchanged`를 더한다. 초안을 잠그고 updated_at 이 시트 쓰기를 계획할 때와
+  같을 때만 기존 apply RPC 를 부른다(service_role 전용). 스위치를 켠 채 이 함수가 없으면 시트에 쓴 뒤 장부 기록이 실패한다.
 - RLS는 켜고 정책은 두지 않는다(service role 전용).
 - 트리거가 DELETE·TRUNCATE를 막는다. UPDATE는 상태 칸(status·code·written_at·entry_id·error·updated_at)만 허용한다.
 - 미적용이어도 시트 쓰기 스위치(`BRANCH_REV_SHEET_WRITE_ENABLED`, Production 전용)가 꺼져 있으면 영향이 없다.
   켜져 있으면 감사 행을 못 남겨 시트 쓰기가 전부 500으로 막힌다. 장부·시트는 그대로다.
-- **스위치를 켜기 전에** 적용한다. 확인은 `npm run check:db -- --strict`의 `branch_sales_ledger_sheet_writes` 프로브다.
+- **스위치를 켜기 전에** 적용한다. 확인은 `npm run check:db -- --strict`의 `branch_sales_ledger_sheet_writes` 프로브와
+  `apply_branch_sales_ledger_draft_if_unchanged()` 프로브다.
   warning 등급이라 `--strict` 없이는 미적용이어도 exit 0이다.
 - 켜는 전체 순서는 [REV 시트 쓰기 런북](rev-sheet-writeback-runbook.md) §1을 따른다.
 

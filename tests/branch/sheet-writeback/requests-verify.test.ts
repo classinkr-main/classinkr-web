@@ -146,6 +146,23 @@ describe("verifyWrites", () => {
     expect(verifyWrites(wrongSum, plans, layout())[0]).toMatchObject({ ok: false, code: "verify_mismatch" })
   })
 
+  it("쓰는 사이 열이 끼거나 빠지면(머리 구조가 바뀜) layout_changed — 행 이동으로 보지 않는다(되돌릴 수 없다)", () => {
+    const plans = writePlans()
+    const inserted = buildGrid([{ ...rowA, months: { "2026-10": [{}, {}, {}, { v: 500, fg: RED }, { v: 0 }] } }, rowB])
+    // A~M 사이(F 앞)에 열 하나 — 옛 Row ID 열 번호에는 이제 다른 값이 온다.
+    inserted.header.splice(5, 0, null)
+    for (const row of inserted.rows) row.splice(5, 0, { value: null, formula: null, fg: null, text: null })
+    expect(verifyWrites(inserted, plans, layout())).toEqual([{ draftId: "value", ok: false, code: "layout_changed" }])
+
+    // 월 블록 안에 열이 끼어 머리 해석 자체가 깨져도 같다.
+    const broken = cloneGrid(inserted)
+    broken.header[oct.weekCols[2]] = "메모"
+    expect(verifyWrites(broken, plans, layout())).toEqual([{ draftId: "value", ok: false, code: "layout_changed" }])
+
+    // 머리가 그대로면(행만 움직였으면) 지금처럼 row_shifted.
+    expect(verifyWrites(buildGrid([rowB, rowA]), plans, layout())).toEqual([{ draftId: "value", ok: false, code: "row_shifted" }])
+  })
+
   it("색이 다르면 verify_mismatch(색을 쓴 칸만 본다)", () => {
     const row: RowSpec = { rowId: ROW_A, customer: "가나학원", months: { "2026-11": [{}, {}, {}, {}, {}] } }
     const baseline = baselineFor(ROW_A, "가나학원", "2026-11", [])

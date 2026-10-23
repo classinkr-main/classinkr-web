@@ -32,6 +32,7 @@ interface DraftLike {
   id: string
   kind: "new-row" | "edit-row"
   status: "draft" | "checked" | "applied" | "cancelled"
+  sourceDealId?: string
   sourceSheetRow: number | null
   sourceSnapshot: Record<string, unknown>
   customer: string
@@ -60,9 +61,30 @@ const applyImpl = vi.fn(async (id: string, actor: string) => {
 })
 const NOT_READY = "매출 장부 내부 원본 DB 마이그레이션이 아직 적용되지 않았습니다."
 const DUPLICATE = "이미 이 딜·월에 적용된 정정 항목이 있습니다. 기존 항목을 먼저 반전한 뒤 다시 적용하세요."
+const DRAFT_CHANGED = "반영하는 사이 초안이 바뀌었습니다 — 새로고침 뒤 다시 반영해 주세요."
+// 시트에 쓰는 사이 같은 초안을 고치는 사람 흉내(쓰기 호출 안에서 부른다).
+let editDuringWrite: (() => void) | null = null
+// (딜, 월) 활성 정정 항목(장부 유일성 인덱스 대상).
+let activeEntries: Array<{ id: string; draftId: string | null; sourceDealId: string; month: string }> = []
+let activeEntriesFailure: Error | null = null
 vi.mock("@/lib/repositories/branch-sales-ledger-drafts", () => ({
   applyBranchSalesLedgerDraft: (id: string, actor: string) => applyImpl(id, actor),
-  fetchBranchSalesLedgerDraftById: async (id: string) => drafts.get(id) ?? null,
+  // 실제 RPC 처럼: checked 가 아니면 null, updated_at 이 계획 때와 다르면 던지고, 같으면 기존 apply.
+  applyBranchSalesLedgerDraftIfUnchanged: async (id: string, actor: string, expectedUpdatedAt: string) => {
+    const draft = drafts.get(id)
+    if (draft && draft.status === "checked" && draft.updatedAt !== expectedUpdatedAt) {
+      calls.push(`apply-changed:${id}`)
+      throw new Error(DRAFT_CHANGED)
+    }
+    return applyImpl(id, actor)
+  },
+  findActiveManualEditEntries: async (pairs: Array<{ sourceDealId: string; month: string }>) => {
+    calls.push("entries")
+    if (activeEntriesFailure) throw activeEntriesFailure
+    return activeEntries.filter((entry) => pairs.some((pair) => pair.sourceDealId === entry.sourceDealId && pair.month === entry.month))
+  },
+  isBranchSalesLedgerDraftChangedError: (e: unknown) => e instanceof Error && e.message === DRAFT_CHANGED,
+  fetchBranchSalesLedgerDraftById: async (id: string) => (drafts.get(id) ? { ...drafts.get(id)! } : null),
   isBranchSalesLedgerDraftsNotReadyError: (e: unknown) => e instanceof Error && e.message.includes("매출 장부"),
   isBranchSalesLedgerDuplicateActiveCorrectionError: (e: unknown) => e instanceof Error && e.message === DUPLICATE,
   isBranchSalesLedgerNonPositiveAmountError: () => false,
@@ -163,6 +185,7 @@ function addDraft(partial: Partial<DraftLike> & { id: string }) {
   drafts.set(partial.id, {
     kind: "edit-row",
     status: "checked",
+    sourceDealId: "deal-a",
     sourceSheetRow: 3,
     sourceSnapshot: { sheetBaseline: baselineA },
     customer: "가나학원",
@@ -194,6 +217,9 @@ beforeEach(() => {
   drafts.clear()
   insertFailure = null
   afterTransform = null
+  editDuringWrite = null
+  activeEntries = []
+  activeEntriesFailure = null
   applyImpl.mockClear()
   sheetsGet.mockReset()
   sheetsBatchUpdate.mockReset()
@@ -211,6 +237,7 @@ beforeEach(() => {
     let after = simulate(liveGrid, params.requestBody.requests)
     if (afterTransform) after = afterTransform(after)
     liveGrid = after
+    editDuringWrite?.()
     return { data: { updatedSpreadsheet: toApi(after) } }
   })
 })
@@ -271,6 +298,7 @@ describe("on 모드 — 성공 경로와 순서", () => {
     expect(results).toEqual([expect.objectContaining({ id: "a", ok: true, status: 200, sheet: { code: "written", message: "시트에 반영됨" } })])
     expect(calls).toEqual([
       "sheets.get",
+      "entries",
       "insert:a=sending",
       "sheets.batchUpdate",
       "apply:a",
@@ -449,5 +477,135 @@ describe("on 모드 — 실패는 장부를 건드리지 않는다", () => {
     const retry = await applyLedgerDraftsWithSheetWrite(["a"], "tester")
     expect(retry.results[0]).toMatchObject({ ok: true, sheet: { code: "already_written" } })
     expect(sheetsBatchUpdate).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("on 모드 — 행·열이 움직였는데 되돌리지 못하면 '되돌렸다'고 말하지 않는다", () => {
+  it("대상 행 위에 Row ID 없는 새 행이 끼면 되돌릴 행을 못 찾는다 → row_shifted_unrestored(되돌리기 호출 없음)", async () => {
+    addDraft({ id: "a" })
+    let insertedOnce = false
+    sheetsBatchUpdate.mockImplementation(async (params: { requestBody: { requests: UpdateCells[] } }) => {
+      if (!insertedOnce) {
+        insertedOnce = true
+        liveGrid = buildGrid([{ rowId: null, customer: "새고객" }, rowA, rowB])
+      }
+      liveGrid = simulate(liveGrid, params.requestBody.requests)
+      return { data: { updatedSpreadsheet: toApi(liveGrid) } }
+    })
+    const { results } = await applyLedgerDraftsWithSheetWrite(["a"], "tester")
+    expect(results[0]).toMatchObject({
+      ok: false,
+      status: 409,
+      sheet: { code: "row_shifted_unrestored", message: "쓰는 사이 시트 행·열이 움직였고 되돌리지 못했습니다 — 관리자가 감사 기록으로 복구해야 합니다" },
+    })
+    expect(results[0].sheet.message).not.toContain("되돌렸습니다")
+    expect(sheetsBatchUpdate).toHaveBeenCalledTimes(1) // 되돌릴 칸이 없으니 되돌리기 요청도 없다
+    expect(liveGrid.rows[2][oct.weekCols[3]].value).toBe(500) // 새 행 칸에 남은 값 — 사람이 감사 cells 로 복구
+    expect(applyImpl).not.toHaveBeenCalled()
+    expect(attempts[0]).toMatchObject({ status: "failed", code: "row_shifted_unrestored", error: "restore_not_found" })
+  })
+
+  it("되돌리기 호출이 실패하면 row_shifted_unrestored(restore_failed)", async () => {
+    addDraft({ id: "a" })
+    let call = 0
+    sheetsBatchUpdate.mockImplementation(async (params: { requestBody: { requests: UpdateCells[] } }) => {
+      call += 1
+      if (call === 1) {
+        liveGrid = buildGrid([rowB, rowA])
+        liveGrid = simulate(liveGrid, params.requestBody.requests)
+        return { data: { updatedSpreadsheet: toApi(liveGrid) } }
+      }
+      throw { status: 503 }
+    })
+    const { results } = await applyLedgerDraftsWithSheetWrite(["a"], "tester")
+    expect(results[0]).toMatchObject({ ok: false, status: 409, sheet: { code: "row_shifted_unrestored" } })
+    expect(sheetsBatchUpdate).toHaveBeenCalledTimes(2)
+    expect(attempts[0]).toMatchObject({ status: "failed", code: "row_shifted_unrestored" })
+    expect(attempts[0].error).toMatch(/^restore_failed: /)
+  })
+
+  it("쓰는 사이 열이 끼면(머리 구조가 바뀜) 행 이동으로 보지 않고 되돌리지도 않는다", async () => {
+    addDraft({ id: "a" })
+    // A~M 사이(F 앞)에 열 하나가 들어온 상태로 되읽힌다 — 옛 열 번호로 쓴 칸은 다른 칸에 들어갔다.
+    afterTransform = (grid) => {
+      grid.header.splice(5, 0, null)
+      for (const row of grid.rows) row.splice(5, 0, { value: null, formula: null, fg: null, text: null })
+      return grid
+    }
+    const { results } = await applyLedgerDraftsWithSheetWrite(["a"], "tester")
+    expect(results[0]).toMatchObject({ ok: false, status: 409, sheet: { code: "row_shifted_unrestored" } })
+    expect(sheetsBatchUpdate).toHaveBeenCalledTimes(1)
+    expect(applyImpl).not.toHaveBeenCalled()
+    expect(attempts[0]).toMatchObject({ status: "failed", code: "row_shifted_unrestored", error: "layout_changed" })
+  })
+})
+
+describe("on 모드 — 장부가 막을 것이 확실한 반영은 시트에 쓰기 전에 멈춘다", () => {
+  it("같은 딜·월에 활성 정정이 있으면 active_correction — batchUpdate 0회·장부 반영 0회", async () => {
+    activeEntries = [{ id: "entry-old", draftId: "old-draft", sourceDealId: "deal-a", month: "2026-10" }]
+    addDraft({ id: "a" })
+    const { results } = await applyLedgerDraftsWithSheetWrite(["a"], "tester")
+    expect(results[0]).toMatchObject({
+      ok: false,
+      status: 409,
+      sheet: { code: "active_correction" },
+      error: "이 딜·월에 이미 적용된 정정이 있어 시트에 쓰지 않았습니다 — 새로고침 뒤 다시 입력하거나 기존 항목을 먼저 되돌려 주세요",
+    })
+    expect(sheetsBatchUpdate).not.toHaveBeenCalled()
+    expect(applyImpl).not.toHaveBeenCalled()
+    expect(liveGrid.rows[2][oct.weekCols[3]].value).toBe(300)
+    expect(attempts.map((attempt) => [attempt.status, attempt.code])).toEqual([["refused", "active_correction"]])
+  })
+
+  it("다른 달·자기 자신의 항목은 막지 않는다", async () => {
+    activeEntries = [
+      { id: "entry-nov", draftId: "old-draft", sourceDealId: "deal-a", month: "2026-11" },
+      { id: "entry-self", draftId: "a", sourceDealId: "deal-a", month: "2026-10" },
+    ]
+    addDraft({ id: "a" })
+    const { results } = await applyLedgerDraftsWithSheetWrite(["a"], "tester")
+    expect(results[0]).toMatchObject({ ok: true, sheet: { code: "written" } })
+  })
+
+  it("이미 쓰인(already_written) 재시도도 활성 정정이 있으면 장부에서 실패하기 전에 멈춘다", async () => {
+    liveGrid = buildGrid([{ ...rowA, months: { "2026-10": [{}, {}, {}, { v: 500, fg: RED }, {}] } }, rowB])
+    activeEntries = [{ id: "entry-old", draftId: "old-draft", sourceDealId: "deal-a", month: "2026-10" }]
+    addDraft({ id: "a" })
+    const { results } = await applyLedgerDraftsWithSheetWrite(["a"], "tester")
+    expect(results[0]).toMatchObject({ ok: false, status: 409, sheet: { code: "active_correction" } })
+    expect(applyImpl).not.toHaveBeenCalled()
+  })
+
+  it("활성 정정 확인이 실패하면 시트에 쓰지 않는다(fail closed)", async () => {
+    activeEntriesFailure = new Error("[branch-sales-ledger-entries] 활성 정정 조회 실패: timeout")
+    addDraft({ id: "a" })
+    const { results } = await applyLedgerDraftsWithSheetWrite(["a"], "tester")
+    expect(results[0]).toMatchObject({ ok: false, status: 500, sheet: { code: "not_applied" } })
+    expect(sheetsBatchUpdate).not.toHaveBeenCalled()
+    expect(applyImpl).not.toHaveBeenCalled()
+  })
+})
+
+describe("on 모드 — 시트에 쓴 것과 다른 내용을 장부에 남기지 않는다", () => {
+  it("쓰는 사이 같은 초안이 고쳐지면(PATCH 자가 체크) draft_changed — 장부 반영 0회", async () => {
+    addDraft({ id: "a" })
+    editDuringWrite = () => {
+      const draft = drafts.get("a")!
+      drafts.set("a", { ...draft, amount: 700, updatedAt: "2026-10-23T03:00:05Z" })
+    }
+    const { results } = await applyLedgerDraftsWithSheetWrite(["a"], "tester")
+    expect(results[0]).toMatchObject({ ok: false, status: 409, sheet: { code: "draft_changed" } })
+    expect(calls).toContain("apply-changed:a")
+    expect(applyImpl).not.toHaveBeenCalled()
+    expect(liveGrid.rows[2][oct.weekCols[3]].value).toBe(500) // 시트에는 계획한 값
+    expect(attempts[0]).toMatchObject({ status: "written", code: "draft_changed" })
+  })
+
+  it("바꿀 칸이 없으면 no_change 로 장부만 기록한다(시트 반영됨이 아니다)", async () => {
+    addDraft({ id: "a", amount: 300, metadata: { confidence: "confirmed", confidenceTouched: false } })
+    const { results } = await applyLedgerDraftsWithSheetWrite(["a"], "tester")
+    expect(results[0]).toMatchObject({ ok: true, sheet: { code: "no_change", message: "시트에서 바뀌는 칸이 없어 장부만 기록" } })
+    expect(sheetsBatchUpdate).not.toHaveBeenCalled()
+    expect(attempts[0]).toMatchObject({ status: "written", code: "no_change" })
   })
 })

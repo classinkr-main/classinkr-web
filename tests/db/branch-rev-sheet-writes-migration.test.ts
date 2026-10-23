@@ -88,6 +88,34 @@ describe("20261023 branch rev sheet writes migration", () => {
     expect(sql).toMatch(/CREATE TRIGGER branch_sales_ledger_sheet_writes_updated_at\s+BEFORE UPDATE ON public\.branch_sales_ledger_sheet_writes\s+FOR EACH ROW EXECUTE FUNCTION public\.update_updated_at\(\);/)
   })
 
+  it("시트 쓰기 반영 전용 장부 적용 RPC — 초안을 잠그고 updated_at 이 그대로일 때만 기존 apply 를 부른다", () => {
+    const match = /CREATE OR REPLACE FUNCTION public\.apply_branch_sales_ledger_draft_if_unchanged\(\s*p_draft_id UUID,\s*p_actor TEXT,\s*p_expected_updated_at TIMESTAMPTZ\s*\)\s*RETURNS public\.branch_sales_ledger_drafts\s*LANGUAGE plpgsql\s*SECURITY DEFINER\s*SET search_path = public\s*AS \$\$([\s\S]*?)\$\$;/.exec(sql)
+    expect(match).not.toBeNull()
+    const body = match?.[1] ?? ""
+    // 잠금 → 상태 → 비교 → 적용 순서(비교와 적용 사이에 고쳐질 틈이 없다).
+    const lock = body.search(/FROM public\.branch_sales_ledger_drafts\s+WHERE id = p_draft_id\s+FOR UPDATE;/)
+    const notChecked = body.search(/IF NOT FOUND OR v_draft\.status IS DISTINCT FROM 'checked' THEN\s+RETURN NULL;/)
+    const changed = body.search(/IF p_expected_updated_at IS NULL OR v_draft\.updated_at IS DISTINCT FROM p_expected_updated_at THEN\s+RAISE EXCEPTION 'branch_sales_ledger_draft_changed'/)
+    const apply = body.search(/SELECT \* INTO v_draft FROM public\.apply_branch_sales_ledger_draft\(p_draft_id, p_actor\);/)
+    expect([lock, notChecked, changed, apply].every((index) => index >= 0)).toBe(true)
+    expect(lock).toBeLessThan(notChecked)
+    expect(notChecked).toBeLessThan(changed)
+    expect(changed).toBeLessThan(apply)
+    expect(sql).toMatch(/REVOKE EXECUTE ON FUNCTION public\.apply_branch_sales_ledger_draft_if_unchanged\(UUID, TEXT, TIMESTAMPTZ\)\s+FROM PUBLIC, anon, authenticated;/)
+    expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION public\.apply_branch_sales_ledger_draft_if_unchanged\(UUID, TEXT, TIMESTAMPTZ\)\s+TO service_role;/)
+
+    const probe = SCHEMA_PROBES.find((entry) => entry.kind === "rpc" && entry.functionName === "apply_branch_sales_ledger_draft_if_unchanged")
+    expect(probe).toMatchObject({
+      kind: "rpc",
+      migration: FILE,
+      catalogIdentityTypes: "uuid, text, timestamp with time zone",
+      serviceRoleOnly: true,
+      severity: "warning",
+    })
+    // 실행 프로브 금지(장부에 쓰는 함수) — 카탈로그만 본다.
+    if (probe?.kind === "rpc") expect(probe.args).toBeUndefined()
+  })
+
   it("check:db 계약에 표·칸 프로브가 있다(스위치가 꺼져 있으면 영향 없으므로 warning)", () => {
     expect(SCHEMA_CONTRACT_MIGRATIONS).toContain(FILE)
     const probe = SCHEMA_PROBES.find((entry) => entry.migration === FILE)

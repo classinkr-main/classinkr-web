@@ -9,7 +9,9 @@
 --   unknown  — 5xx·마감 초과 — 시트 반영 여부를 모른다(다시 보내지 않는다)
 -- 앱 코드: lib/repositories/branch-sales-ledger-sheet-writes.ts, lib/branch/sheet-writeback/apply-service.ts
 --
--- 기존 표(branch_sales_ledger_drafts/entries)·RPC(apply_branch_sales_ledger_draft)는 고치지 않는다.
+-- 기존 표(branch_sales_ledger_drafts/entries)·RPC(apply_branch_sales_ledger_draft)는 고치지 않는다. 시트 쓰기 반영은
+-- 그 RPC 를 감싼 apply_branch_sales_ledger_draft_if_unchanged(아래)로 장부에 적는다 — 시트에 쓰는 사이 초안이 고쳐졌으면
+-- 적지 않는다(시트에 쓴 값과 다른 금액을 장부에 남기지 않는다).
 -- 전부 멱등(IF NOT EXISTS / DROP ... IF EXISTS / CREATE OR REPLACE) — 재실행은 무해하다.
 -- 미적용 환경: 스위치가 꺼져 있으면 영향 없음. 켜져 있으면 감사 행을 못 남겨 시트 쓰기가 전부 500 으로 막힌다
 -- (장부·시트 모두 그대로).
@@ -108,3 +110,48 @@ ALTER TABLE public.branch_sales_ledger_sheet_writes ENABLE ROW LEVEL SECURITY;
 
 COMMENT ON TABLE public.branch_sales_ledger_sheet_writes IS
   '매출 장부 반영 때 REV 시트(2. REV) 주차 칸 쓰기 시도 감사 기록. 지우지 않음, 상태 칸만 갱신.';
+
+-- 시트 쓰기 반영 전용 장부 적용 — 시트 쓰기를 계획할 때 본 초안(updated_at)이 그대로일 때만 기존 apply RPC 를 부른다.
+-- 초안 행을 FOR UPDATE 로 잠근 뒤 비교하고 같은 트랜잭션에서 적용하므로, 비교와 적용 사이에 고쳐질 틈이 없다.
+--   checked 가 아니거나 없음 → NULL(기존 apply 와 같다)
+--   updated_at 이 다름     → 예외 'branch_sales_ledger_draft_changed'(앱이 draft_changed 로 번역 — 장부에 적지 않는다)
+CREATE OR REPLACE FUNCTION public.apply_branch_sales_ledger_draft_if_unchanged(
+  p_draft_id UUID,
+  p_actor TEXT,
+  p_expected_updated_at TIMESTAMPTZ
+)
+RETURNS public.branch_sales_ledger_drafts
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_draft public.branch_sales_ledger_drafts%ROWTYPE;
+BEGIN
+  SELECT *
+    INTO v_draft
+    FROM public.branch_sales_ledger_drafts
+   WHERE id = p_draft_id
+   FOR UPDATE;
+
+  IF NOT FOUND OR v_draft.status IS DISTINCT FROM 'checked' THEN
+    RETURN NULL;
+  END IF;
+
+  IF p_expected_updated_at IS NULL OR v_draft.updated_at IS DISTINCT FROM p_expected_updated_at THEN
+    RAISE EXCEPTION 'branch_sales_ledger_draft_changed'
+      USING DETAIL = 'draft ' || p_draft_id::text || ' changed after the sheet write was planned';
+  END IF;
+
+  SELECT * INTO v_draft FROM public.apply_branch_sales_ledger_draft(p_draft_id, p_actor);
+  RETURN v_draft;
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.apply_branch_sales_ledger_draft_if_unchanged(UUID, TEXT, TIMESTAMPTZ)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.apply_branch_sales_ledger_draft_if_unchanged(UUID, TEXT, TIMESTAMPTZ)
+  TO service_role;
+
+COMMENT ON FUNCTION public.apply_branch_sales_ledger_draft_if_unchanged(UUID, TEXT, TIMESTAMPTZ) IS
+  'REV 시트 쓰기 반영 전용: 초안 updated_at 이 기대값과 같을 때만 apply_branch_sales_ledger_draft 를 부른다(다르면 예외).';

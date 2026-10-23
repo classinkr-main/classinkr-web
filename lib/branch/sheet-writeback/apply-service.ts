@@ -8,11 +8,14 @@ import "server-only"
 //   2) new-row → 장부에만(new_row_app_only)
 //   3) edit-row → 시트 다시 읽기(실패하면 아무것도 쓰지 않음) → 계획(planDraftWrites)
 //   4) 거절 → 감사 행 refused · 409 · 초안 checked 그대로
-//   5) 쓸 것·이미 쓰인 것·바꿀 것 없음 → 감사 행 sending 을 먼저 남긴다(못 남기면 쓰지 않는다)
-//   6) batchUpdate 한 번(재시도 없음) — 4xx 면 failed, 5xx·마감·모름이면 unknown(다시 보내지 않음, 장부 그대로)
-//   7) 되읽은 그리드로 확인 — 행이 움직였으면 한 번 되돌리기 시도 후 failed/row_shifted, 값이 다르면 verify_mismatch
-//   8) 확인된 것·이미 쓰인 것·바꿀 것 없음만 장부에 반영 → written. 장부 반영이 실패하면 written + db_apply_failed
-//      (다시 누르면 시트가 이미 의도한 값이라 already_written 경로로 마무리된다)
+//   5) 같은 딜·월에 이미 활성 정정이 있으면(장부 유일성 제약에 걸릴 것이 확실) 시트에 쓰기 전에 거절(active_correction)
+//   6) 쓸 것·이미 쓰인 것·바꿀 것 없음 → 감사 행 sending 을 먼저 남긴다(못 남기면 쓰지 않는다)
+//   7) batchUpdate 한 번(재시도 없음) — 4xx 면 failed, 5xx·마감·모름이면 unknown(다시 보내지 않음, 장부 그대로)
+//   8) 되읽은 그리드로 확인 — 머리 구조가 바뀌었으면 되돌리지 않고 failed/row_shifted_unrestored, 행이 움직였으면 한 번
+//      되돌리기 시도 후 failed/row_shifted(되돌림 확인) 또는 row_shifted_unrestored(못 되돌림), 값이 다르면 verify_mismatch
+//   9) 확인된 것·이미 쓰인 것·바꿀 것 없음(no_change)만 장부에 반영 → written. 계획할 때 본 초안(updated_at)이 그대로일
+//      때만 적는다(그사이 고쳐졌으면 draft_changed — 시트에 쓴 것과 다른 금액을 장부에 남기지 않는다). 장부 반영이 실패하면
+//      written + db_apply_failed(다시 누르면 시트가 이미 의도한 값이라 already_written 경로로 마무리된다)
 // 최악 시간: 읽기 8s + 쓰기 8s + 되돌리기 8s + DB — 라우트 maxDuration 60 안.
 //
 // 항목 오류는 던지지 않고 결과에 담는다(한 건의 실패가 나머지를 막지 않는다). 기존 라우트의 번역과 같은
@@ -22,7 +25,10 @@ import { fyOf } from "@/lib/branch/fiscal"
 import { getBusinessDateParts } from "@/lib/business-time"
 import {
   applyBranchSalesLedgerDraft,
+  applyBranchSalesLedgerDraftIfUnchanged,
   fetchBranchSalesLedgerDraftById,
+  findActiveManualEditEntries,
+  isBranchSalesLedgerDraftChangedError,
   isBranchSalesLedgerDraftsNotReadyError,
   isBranchSalesLedgerDuplicateActiveCorrectionError,
   isBranchSalesLedgerNonPositiveAmountError,
@@ -40,6 +46,7 @@ import {
 
 import { currentSheetWriteMode, REV_WRITE_MAX_DRAFTS, REV_WRITE_TARGET, type SheetWriteMode } from "./config"
 import { SHEET_WRITE_MESSAGES, type SheetWriteCode } from "./messages"
+import type { RevLayout } from "./layout"
 import { planDraftWrites, type DraftForWrite, type DraftPlan, type LiveGrid, type WriteDraftPlan } from "./plan"
 import { buildUpdateCellsRequests } from "./requests"
 import { assertWriteTarget, batchUpdateAndReadBack, classifyGoogleError, readLiveGrid } from "./sheets-client"
@@ -58,6 +65,7 @@ const NOT_CHECKED_MESSAGE = "체크 완료 초안만 적용할 수 있습니다.
 const FALLBACK_APPLY_ERROR = "Failed to update sales ledger draft"
 const TOO_MANY_MESSAGE = `한 번에 ${REV_WRITE_MAX_DRAFTS}건까지 시트에 반영할 수 있습니다 — 나눠서 다시 반영해 주세요.`
 const AUDIT_FAILED_MESSAGE = "시트 쓰기 기록을 남기지 못해 반영하지 않았습니다 — 잠시 뒤 다시 반영해 주세요."
+const ACTIVE_CORRECTION_CHECK_FAILED_MESSAGE = "장부 정정 확인에 실패해 반영하지 않았습니다 — 잠시 뒤 다시 반영해 주세요."
 const LOG_LABEL = "[branch/sheet-writeback/apply]"
 
 function sheet(code: SheetWriteCode) {
@@ -159,6 +167,64 @@ async function updateBestEffort(record: SheetWriteRecord | undefined, patch: Par
   }
 }
 
+type ProceedingPlan = Extract<DraftPlan, { action: "write" | "skip_write" | "noop" }>
+
+/**
+ * 같은 (딜, 월)에 활성 정정(manual-edit) 항목이 이미 있는 초안 — 장부 반영 RPC 가 유일성 인덱스(23505)로 실패할 것이
+ * 확실하다. 자기 자신에게서 나온 항목은 세지 않는다. sourceDealId 가 없는 초안은 인덱스 대상이 아니다.
+ */
+async function draftsWithActiveCorrection(drafts: BranchSalesLedgerDraft[]): Promise<Set<string>> {
+  const candidates = drafts.filter((draft) => Boolean(draft.sourceDealId))
+  if (candidates.length === 0) return new Set()
+  const entries = await findActiveManualEditEntries(
+    candidates.map((draft) => ({ sourceDealId: draft.sourceDealId as string, month: draft.month })),
+  )
+  const blocked = new Set<string>()
+  for (const draft of candidates) {
+    const clash = entries.some(
+      (entry) => entry.sourceDealId === draft.sourceDealId && entry.month === draft.month && entry.draftId !== draft.id,
+    )
+    if (clash) blocked.add(draft.id)
+  }
+  return blocked
+}
+
+/**
+ * 쓰는 사이 행이 움직인 계획마다 되돌리기 한 번 — 계획마다 따로 판정해 되돌린 것("restored")과 못 되돌린 것
+ * ("restore_not_found": 옮겨 온 행에 Row ID 가 없거나 원래 칸이 수식·글자, "restore_failed: …": 되돌리기 호출 실패)을
+ * 나눈다. 되돌릴 수 있는 칸만 한 번의 batchUpdate 로 보낸다(재시도 없음).
+ */
+async function restoreShifted(
+  before: LiveGrid,
+  after: LiveGrid,
+  shifted: WriteDraftPlan[],
+  layout: RevLayout,
+): Promise<Array<{ plan: WriteDraftPlan; note: string }>> {
+  const perPlan = shifted.map((plan) => ({
+    plan,
+    requests: restoreRequestsForShift(before, after, [plan], REV_WRITE_TARGET.sheetId, layout),
+  }))
+  const restorable = perPlan.filter((item) => item.requests.length > 0)
+  let failure: string | null = null
+  if (restorable.length > 0) {
+    try {
+      await batchUpdateAndReadBack(
+        REV_WRITE_TARGET.spreadsheetId,
+        restorable.flatMap((item) => item.requests),
+        layout,
+        undefined,
+        { allowClear: true },
+      )
+    } catch (e) {
+      failure = `restore_failed: ${errorText(e)}`
+    }
+  }
+  return perPlan.map(({ plan, requests }) => ({
+    plan,
+    note: requests.length === 0 ? "restore_not_found" : failure ?? "restored",
+  }))
+}
+
 async function applyWithSheetWrite(ids: string[], actor: string): Promise<ApplyItemResult[]> {
   const unique = [...new Set(ids)]
   const inScope = unique.slice(0, REV_WRITE_MAX_DRAFTS)
@@ -234,11 +300,36 @@ async function applyEditDrafts(drafts: BranchSalesLedgerDraft[], actor: string):
     results.set(plan.draftId, { id: plan.draftId, ok: false, status: 409, error: SHEET_WRITE_MESSAGES[plan.code], sheet: sheet(plan.code) })
   }
 
-  // 시트에 쓰기 전에 감사 행부터 — 못 남기면 아무것도 쓰지 않는다.
-  const proceeding = plans.filter(
-    (plan): plan is Extract<DraftPlan, { action: "write" | "skip_write" | "noop" }> =>
-      plan.action === "write" || plan.action === "skip_write" || plan.action === "noop",
+  let proceeding = plans.filter(
+    (plan): plan is ProceedingPlan => plan.action === "write" || plan.action === "skip_write" || plan.action === "noop",
   )
+
+  // 같은 딜·월에 활성 정정이 이미 있으면 장부 반영은 유일성 제약(딜·월당 활성 정정 1건)에 걸린다 — 시트를 먼저 쓰고
+  // 장부에서 실패하면 시트만 바뀐 채 남으므로, 시트에 쓰기 전에 멈춘다. 확인 자체가 실패하면 쓰지 않는다(fail closed).
+  if (proceeding.length > 0) {
+    let blocked: Set<string>
+    try {
+      blocked = await draftsWithActiveCorrection(proceeding.map((plan) => byId.get(plan.draftId)!))
+    } catch (e) {
+      console.error(LOG_LABEL, "활성 정정 확인 실패 — 시트에 쓰지 않음", e)
+      const translated = isBranchSalesLedgerDraftsNotReadyError(e)
+        ? { status: 503, error: (e as Error).message }
+        : { status: 500, error: ACTIVE_CORRECTION_CHECK_FAILED_MESSAGE }
+      await recordBestEffort(proceeding.map((plan) => attemptRow(byId.get(plan.draftId)!, batchId, actor, "failed", "not_applied", plan, errorText(e))))
+      for (const plan of proceeding) {
+        results.set(plan.draftId, { id: plan.draftId, ok: false, ...translated, sheet: sheet("not_applied") })
+      }
+      return drafts.map((draft) => results.get(draft.id) as ApplyItemResult)
+    }
+    const stopped = proceeding.filter((plan) => blocked.has(plan.draftId))
+    await recordBestEffort(stopped.map((plan) => attemptRow(byId.get(plan.draftId)!, batchId, actor, "refused", "active_correction", plan)))
+    for (const plan of stopped) {
+      results.set(plan.draftId, { id: plan.draftId, ok: false, status: 409, error: SHEET_WRITE_MESSAGES.active_correction, sheet: sheet("active_correction") })
+    }
+    proceeding = proceeding.filter((plan) => !blocked.has(plan.draftId))
+  }
+
+  // 시트에 쓰기 전에 감사 행부터 — 못 남기면 아무것도 쓰지 않는다.
   const attempts = new Map<string, SheetWriteRecord>()
   if (proceeding.length > 0) {
     try {
@@ -258,10 +349,10 @@ async function applyEditDrafts(drafts: BranchSalesLedgerDraft[], actor: string):
     }
   }
 
-  const toApply: Array<{ draftId: string; code: "written" | "already_written" }> = []
+  const toApply: Array<{ draftId: string; code: "written" | "already_written" | "no_change" }> = []
   for (const plan of proceeding) {
     if (plan.action === "skip_write") toApply.push({ draftId: plan.draftId, code: "already_written" })
-    if (plan.action === "noop") toApply.push({ draftId: plan.draftId, code: "written" })
+    if (plan.action === "noop") toApply.push({ draftId: plan.draftId, code: plan.code })
   }
 
   const writePlans = proceeding.filter((plan): plan is WriteDraftPlan => plan.action === "write")
@@ -294,26 +385,32 @@ async function applyEditDrafts(drafts: BranchSalesLedgerDraft[], actor: string):
           shifted.push(plan)
           continue
         }
+        if (outcome.code === "layout_changed") {
+          // 쓰는 사이 열이 끼거나 빠졌다 — 옛 열 번호로 쓴 칸은 다른 칸에 들어갔고, Row ID 열도 어긋나 되돌릴 행을 고를 수
+          // 없다. 되돌리기를 시도하지 않는다(또 다른 칸을 덮는다) — 감사 행 cells 로 사람이 복구한다.
+          console.error(LOG_LABEL, "쓰는 사이 시트 머리 구조가 바뀜 — 되돌리지 않음", plan.draftId)
+          await updateBestEffort(attempts.get(plan.draftId), { status: "failed", code: "row_shifted_unrestored", error: "layout_changed" })
+          results.set(plan.draftId, {
+            id: plan.draftId,
+            ok: false,
+            status: 409,
+            error: SHEET_WRITE_MESSAGES.row_shifted_unrestored,
+            sheet: sheet("row_shifted_unrestored"),
+          })
+          continue
+        }
         console.error(LOG_LABEL, "쓴 값 확인 불일치", plan.draftId)
         await updateBestEffort(attempts.get(plan.draftId), { status: "failed", code: "verify_mismatch" })
         results.set(plan.draftId, { id: plan.draftId, ok: false, status: 502, error: SHEET_WRITE_MESSAGES.verify_mismatch, sheet: sheet("verify_mismatch") })
       }
 
       if (shifted.length > 0) {
-        let restoreNote = "restore_not_found"
-        try {
-          const restore = restoreRequestsForShift(live, after, shifted, REV_WRITE_TARGET.sheetId, layout)
-          if (restore.length > 0) {
-            await batchUpdateAndReadBack(REV_WRITE_TARGET.spreadsheetId, restore, layout, undefined, { allowClear: true })
-            restoreNote = "restored"
-          }
-        } catch (e) {
-          restoreNote = `restore_failed: ${errorText(e)}`
-        }
-        console.error(LOG_LABEL, "쓰는 사이 행이 움직임", shifted.map((plan) => plan.draftId), restoreNote)
-        for (const plan of shifted) {
-          await updateBestEffort(attempts.get(plan.draftId), { status: "failed", code: "row_shifted", error: restoreNote })
-          results.set(plan.draftId, { id: plan.draftId, ok: false, status: 409, error: SHEET_WRITE_MESSAGES.row_shifted, sheet: sheet("row_shifted") })
+        for (const outcome of await restoreShifted(live, after, shifted, layout)) {
+          const { plan, note } = outcome
+          const code: SheetWriteCode = note === "restored" ? "row_shifted" : "row_shifted_unrestored"
+          console.error(LOG_LABEL, "쓰는 사이 행이 움직임", plan.draftId, note)
+          await updateBestEffort(attempts.get(plan.draftId), { status: "failed", code, error: note })
+          results.set(plan.draftId, { id: plan.draftId, ok: false, status: 409, error: SHEET_WRITE_MESSAGES[code], sheet: sheet(code) })
         }
       }
     }
@@ -325,12 +422,12 @@ async function applyEditDrafts(drafts: BranchSalesLedgerDraft[], actor: string):
     }
   }
 
-  // 시트가 의도한 값을 가진 것만 장부에 반영한다.
+  // 시트가 의도한 값을 가진 것만 장부에 반영한다 — 계획할 때 본 초안 그대로일 때만(updated_at 비교, 한 트랜잭션).
   for (const { draftId, code } of toApply) {
     const attempt = attempts.get(draftId)
     const writtenAt = new Date().toISOString()
     try {
-      const applied = await applyBranchSalesLedgerDraft(draftId, actor)
+      const applied = await applyBranchSalesLedgerDraftIfUnchanged(draftId, actor, byId.get(draftId)!.updatedAt)
       if (!applied) {
         await updateBestEffort(attempt, { status: "written", code: "db_apply_failed", writtenAt, error: NOT_CHECKED_MESSAGE })
         results.set(draftId, { id: draftId, ok: false, status: 500, error: SHEET_WRITE_MESSAGES.db_apply_failed, sheet: sheet("db_apply_failed") })
@@ -345,6 +442,12 @@ async function applyEditDrafts(drafts: BranchSalesLedgerDraft[], actor: string):
       await updateBestEffort(attempt, { status: "written", code, writtenAt, entryId })
       results.set(draftId, { id: draftId, ok: true, status: 200, draft: applied, sheet: sheet(code) })
     } catch (e) {
+      if (isBranchSalesLedgerDraftChangedError(e)) {
+        console.error(LOG_LABEL, "시트 쓰기 사이 초안이 바뀜 — 장부에 적지 않음", draftId)
+        await updateBestEffort(attempt, { status: "written", code: "draft_changed", writtenAt, error: errorText(e) })
+        results.set(draftId, { id: draftId, ok: false, status: 409, error: SHEET_WRITE_MESSAGES.draft_changed, sheet: sheet("draft_changed") })
+        continue
+      }
       console.error(LOG_LABEL, "시트 반영 뒤 장부 기록 실패", draftId, e)
       const translated = translateApplyError(e)
       await updateBestEffort(attempt, { status: "written", code: "db_apply_failed", writtenAt, error: errorText(e) })

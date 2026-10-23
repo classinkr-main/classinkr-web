@@ -7,6 +7,7 @@ import { sheetWriteBlocksReverse } from "@/lib/branch/sheet-writeback/ledger-rul
 import { SHEET_WRITTEN_REVERSE_MESSAGE } from "@/lib/branch/sheet-writeback/messages"
 import {
   deleteBranchSalesLedgerDraft,
+  isBranchSalesLedgerDraftHasSheetWritesError,
   isBranchSalesLedgerDraftsNotReadyError,
   isBranchSalesLedgerDuplicateActiveCorrectionError,
   isBranchSalesLedgerNonPositiveAmountError,
@@ -113,7 +114,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       // "sending" 도 막는다 — 장부 항목은 시트 쓰기를 되읽어 확인한 뒤에만 생기므로, 항목이 있는데 시도가 sending 이면
       // 시트에는 쓰였고 감사 행 갱신만 실패한 것이다(항목이 없으면 어차피 상쇄할 것이 없다). 판정 정본은 ledger-rules.ts.
       const sheetWrite = await latestSheetWrite(id)
-      if (sheetWriteBlocksReverse(sheetWrite?.status)) {
+      if (sheetWriteBlocksReverse(sheetWrite?.status, sheetWrite?.code)) {
         return NextResponse.json({ error: SHEET_WRITTEN_REVERSE_MESSAGE, reason: "sheet-written" }, { status: 409 })
       }
 
@@ -199,6 +200,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (!deleted) return NextResponse.json({ error: "Draft not found" }, { status: 404 })
     return NextResponse.json({ ok: true })
   } catch (error) {
+    // 시트 쓰기 감사 행이 있는 초안(반영을 한 번이라도 시도 — 거절·실패 포함)은 감사 기록을 지키려고 하드 삭제를 막는다
+    // (FK ON DELETE RESTRICT). 원인 없는 500 이 아니라 409 + 안내 — 큐는 그 초안을 취소(cancelled)로 정리한다.
+    if (isBranchSalesLedgerDraftHasSheetWritesError(error)) {
+      return NextResponse.json({ error: error.message, reason: "sheet-write-history" }, { status: 409 })
+    }
     console.error(`[DELETE /api/admin/branch/ledger-drafts/${id}]`, error)
     return notReadyResponse(error) ?? NextResponse.json({ error: "Failed to delete sales ledger draft" }, { status: 500 })
   }

@@ -14,7 +14,9 @@ import { useDialogFocus } from "../../use-dialog-focus"
 import { planBulkApply, planBulkCheck } from "./draft-bulk-plan"
 import { isSelfCheckedDraft, SELF_CHECK_BADGE_LABEL, SELF_CHECK_BADGE_TITLE } from "./self-check"
 import {
+  blocksLedgerDelete,
   blocksLedgerReverse,
+  SHEET_WRITE_HISTORY_DELETE_MESSAGE,
   SHEET_WRITTEN_REVERSE_MESSAGE,
   sheetWriteBadge,
   summarizeApplyOutcomes,
@@ -266,6 +268,8 @@ export function DraftQueue({
   const isRowBusy = (id: string) => rowActionBusy?.id === id || applyingId === id || reversingId === id
   // REV 시트 쓰기(ADR-011): 시트에도 쓴 정정은 장부에서만 상쇄하지 않는다(서버가 409 로 막는 조건과 같다).
   const sheetBlocksReverse = (id: string) => blocksLedgerReverse(sheetWrites?.[id])
+  // 반영을 한 번이라도 시도한 초안(감사 행 있음)은 서버가 삭제를 막는다(감사 기록 보존) — 삭제 대신 취소로 정리한다.
+  const sheetBlocksDelete = (id: string) => blocksLedgerDelete(sheetWrites?.[id])
   const runToggle = async (id: string) => {
     setRowActionBusy({ id, action: "toggle" })
     try {
@@ -636,10 +640,16 @@ export function DraftQueue({
               <button
                 type="button"
                 onClick={() => setConfirmDeleteDraft(draft)}
-                disabled={draft.status === "checked" || draft.status === "applied" || draft.status === "cancelled" || isRowBusy(draft.id)}
+                disabled={
+                  draft.status === "checked" ||
+                  draft.status === "applied" ||
+                  draft.status === "cancelled" ||
+                  isRowBusy(draft.id) ||
+                  sheetBlocksDelete(draft.id)
+                }
                 className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] text-[#B43E3E] transition hover:bg-[#FCE9E9] disabled:cursor-not-allowed disabled:opacity-35"
                 aria-label="초안 삭제"
-                title="초안 삭제"
+                title={sheetBlocksDelete(draft.id) ? SHEET_WRITE_HISTORY_DELETE_MESSAGE : "초안 삭제"}
               >
                 {rowActionBusy?.id === draft.id && rowActionBusy.action === "delete" ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />

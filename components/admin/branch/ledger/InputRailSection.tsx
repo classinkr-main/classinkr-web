@@ -9,7 +9,8 @@ import {
   DRAFT_OPERATIONS,
   LOCK_WARNING_TEXT,
   REV_PRODUCT_FILTERS,
-  defaultDraftWeeklyConfidence,
+  draftFormWithConfidence,
+  draftFormWithWeekConfidence,
   dominantWeeklyConfidence,
   draftWeeklyAmounts,
   draftWeeklyTotal,
@@ -433,11 +434,7 @@ export function InputRailSection({
                       <button
                         key={option.id}
                         type="button"
-                        onClick={() => setDraftForm((current) => ({
-                          ...current,
-                          confidence: option.id,
-                          weeklyConfidence: defaultDraftWeeklyConfidence(option.id),
-                        }))}
+                        onClick={() => setDraftForm((current) => draftFormWithConfidence(current, option.id))}
                         aria-pressed={pressed}
                         // 결정 D6(§8.5): 어휘("고확도")는 바꾸지 않고 title/aria-label에 SSOT hint를
                         // 병기해 매핑 비용만 줄인다 — 라벨 텍스트({option.label})는 그대로.
@@ -478,10 +475,7 @@ export function InputRailSection({
                       }))
                     }
                     onConfidenceChange={(index, key) =>
-                      setDraftForm((current) => ({
-                        ...current,
-                        weeklyConfidence: current.weeklyConfidence.map((value, i) => (i === index ? key : value)),
-                      }))
+                      setDraftForm((current) => draftFormWithWeekConfidence(current, index, key))
                     }
                     lockedWeeks={lockedWeeks}
                     variant="rail"

@@ -22,6 +22,7 @@ import {
   LEDGER_DRAFT_APPLY_LIMIT,
   parseSheetWrites,
   parseSheetWriteState,
+  SHEET_WRITE_HISTORY_DELETE_MESSAGE,
   SHEET_WRITE_STATE_OFF,
   toApplyOutcome,
   type ApplySheetOutcome,
@@ -763,6 +764,12 @@ export function useLedgerDraftQueue() {
           // 지워버리면 "왜 없어졌는지" 신호가 사라진다. 배지+새로고침으로 안내하고, 실제 정리는
           // 다음 loadDrafts(서버 목록 재조회)가 자연히 처리한다.
           setRecordError(id)
+          return
+        }
+        // REV 시트 쓰기(ADR-011): 반영을 시도한 적 있는 초안은 감사 기록 때문에 서버가 삭제를 409 로 막는다 — 서버 장애가
+        // 아니므로 큐를 로컬로 내리지 않고 그 행에만 "취소로 정리" 안내를 단다.
+        if (error instanceof Error && error.message === SHEET_WRITE_HISTORY_DELETE_MESSAGE) {
+          setRecordError(id, SHEET_WRITE_HISTORY_DELETE_MESSAGE)
           return
         }
         setQueueMode("local")

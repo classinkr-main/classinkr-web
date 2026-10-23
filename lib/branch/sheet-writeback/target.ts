@@ -9,6 +9,8 @@
 //    빈 달이면 그 주차에 쓴다(장부도 그 주차에 둔다). 값 있는 칸이 다른 주차 1칸이면 장부는 그 달 값을 고른 주차로
 //    옮기므로 시트도 원래 칸을 비워야 한다 → 거절(clear_not_supported).
 //  - 빈 칸에 새로 쓸 때는 색을 반드시 명시한다(빈 칸에도 빨강·파랑이 숨어 있다).
+//  - 값 있는 칸의 색은 사용자가 그 칸(주차 단위면 그 주차)의 확도를 직접 바꿨을 때만 쓴다(confidenceTouched·
+//    weeklyConfidenceTouched). 화면이 채운 시드 확도는 시트 글자색과 다를 수 있다(미래 주차 빨강은 앱에서 '예정').
 // 주차 시작일 규칙은 parsers/rev.ts ledgerCellStart 와 같다(w1 1일 · w2 8일 · w3 15일 · w4 22일 · w5 29일).
 
 import { weekColorForConfidence, type DraftConfidenceLike, type WeekColor } from "./colors"
@@ -42,13 +44,20 @@ export interface PlanWeekWritesInput {
   draftConfidence: DraftConfidenceLike
   draftWeeklyConfidence: Array<DraftConfidenceLike | null> | null
   confidenceTouched: boolean
+  /**
+   * 주차 단위 초안에서 주차별로 확도를 직접 골랐는지(metadata.weeklyConfidenceTouched, 5칸). 주차 단위 초안의 칸 색은
+   * confidenceTouched 이고 그 주차가 여기서 true 일 때만 쓴다. 없으면 초안이 가리킨 주차(draftWeek — 매트릭스 주차 칸)만
+   * 고른 것으로 본다 — 손대지 않은 주차의 글자색을 시드 확도로 덮지 않는다(빈 칸에 새로 쓰는 칸은 예외: 색을 늘 싣는다).
+   */
+  draftWeeklyConfidenceTouched?: boolean[] | null
   /** YYYY-MM-DD */
   firstPayment: string | null
   /** KST YYYY-MM-DD */
   today: string
   /**
    * 초안이 가리킨 주차(metadata.week "w1".."w5" → 0-based). 월 칸 수정이면 null·생략.
-   * weekly 가 있으면(주차 단위 초안) 보지 않는다. 칸이 4개인 달은 마지막 칸으로 자른다.
+   * weekly 가 있으면(주차 단위 초안) 금액 칸 고르기에는 쓰지 않고, 주차별 확도 표시가 없을 때 "확도를 고른 주차"로만 본다.
+   * 칸이 4개인 달은 마지막 칸으로 자른다.
    */
   draftWeek?: number | null
 }
@@ -156,6 +165,16 @@ export function planWeekWrites(input: PlanWeekWritesInput): PlanWeekWritesResult
     for (let index = weekCount; index < weekly.length; index += 1) next[weekCount - 1] += weekly[index] ?? 0
     if (!next.every(isWeekAmount)) return { ok: false, refusal: "amount_invalid" }
 
+    const touchedWeeks = input.draftWeeklyConfidenceTouched ?? null
+    const pickedWeek = pickedWeekIndex(input.draftWeek, weekCount)
+    const touchedAt = (index: number): boolean => {
+      if (!input.confidenceTouched) return false
+      if (!touchedWeeks) return pickedWeek === index
+      if (touchedWeeks[index] === true) return true
+      // 칸이 4개인 달은 w5 가 마지막 칸으로 합쳐진다 — 그 표시도 마지막 칸의 것으로 본다.
+      return index === weekCount - 1 && touchedWeeks.slice(weekCount).some((value) => value === true)
+    }
+
     for (let index = 0; index < weekCount; index += 1) {
       const before = baselineWeeks[index]
       const after = next[index]
@@ -163,7 +182,7 @@ export function planWeekWrites(input: PlanWeekWritesInput): PlanWeekWritesResult
       const valueChanged = after !== before.value
       let color: WeekColor | null = null
       const chosen = input.draftWeeklyConfidence?.[index] ?? null
-      if (input.confidenceTouched && chosen && after > 0) color = weekColorForConfidence(chosen)
+      if (touchedAt(index) && chosen && after > 0) color = weekColorForConfidence(chosen)
       else if (before.value === 0 && after > 0) color = draftColor
       // 색이 이미 그 색이고 값도 그대로면 쓸 것이 없다. 빈 칸에 새로 쓰는 경우는 색을 늘 싣는다.
       if (!valueChanged && (color == null || color === before.color)) continue
@@ -177,6 +196,11 @@ export function planWeekWrites(input: PlanWeekWritesInput): PlanWeekWritesResult
     const pickedWeek = pickedWeekIndex(input.draftWeek, weekCount)
 
     if (input.draftAmount === total) {
+      // 고른 주차가 값 있는 칸 하나와 같지 않으면 장부는 그 달 금액을 고른 주차로 옮긴다 — 시트는 원래 칸을 비워야
+      // 하므로 금액이 같아도 쓰지 않는다(금액이 다른 아래 갈래와 같은 판정).
+      if (pickedWeek != null && !(valued.length === 1 && valued[0] === pickedWeek)) {
+        return { ok: false, refusal: "clear_not_supported" }
+      }
       if (input.confidenceTouched) {
         for (const index of valued) {
           if (baselineWeeks[index].color === draftColor) continue

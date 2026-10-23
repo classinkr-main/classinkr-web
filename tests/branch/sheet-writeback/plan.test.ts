@@ -148,8 +148,32 @@ describe("planDraftWrites — 계획", () => {
     }
   })
 
-  it("바꿀 칸이 없으면 noop", () => {
-    expect(only(plan([baseRow], [editDraft({ amount: 300, baseline: baseBaseline })]))).toEqual({ draftId: "draft-1", action: "noop", code: "written" })
+  it("바꿀 칸이 없으면 noop(code no_change — 시트에 쓴 것이 없다)", () => {
+    expect(only(plan([baseRow], [editDraft({ amount: 300, baseline: baseBaseline })]))).toEqual({ draftId: "draft-1", action: "noop", code: "no_change" })
+  })
+
+  it("주차 단위 초안은 metadata.weeklyConfidenceTouched 로 고른 주차만 색을 쓴다(모양이 틀리면 표시 없음)", () => {
+    const row: RowSpec = { ...baseRow, months: { "2026-10": [{}, {}, {}, { v: 300, fg: RED }, { v: 200, fg: BLUE }] } }
+    const baseline = baselineFor(ROW_A, "가나학원", "2026-10", [
+      { value: 0, color: "k" }, { value: 0, color: "k" }, { value: 0, color: "k" }, { value: 300, color: "r" }, { value: 200, color: "b" },
+    ])
+    const metadata = (weeklyConfidenceTouched: unknown) => ({
+      confidence: "expected",
+      weekly: [0, 0, 0, 300, 250],
+      weeklyConfidence: [null, null, null, "expected", "expected"],
+      confidenceTouched: true,
+      weeklyConfidenceTouched,
+    })
+    const cellsOf = (weeklyConfidenceTouched: unknown) => {
+      const result = only(plan([row], [editDraft({ amount: 550, baseline, metadata: metadata(weeklyConfidenceTouched) })]))
+      return result.action === "write" ? result.cells.map((cell) => [cell.a1, cell.after, cell.writeValue, cell.writeColor]) : result
+    }
+    // W5 만 고름 → W5 값·색, 손대지 않은 W4 빨강은 그대로(쓰지 않는다).
+    expect(cellsOf([false, false, false, false, true])).toEqual([["BC3", { value: 250, color: "k" }, true, true]])
+    // 아무 주차도 안 고름 → W5 값만, 색 그대로.
+    expect(cellsOf([false, false, false, false, false])).toEqual([["BC3", { value: 250, color: "b" }, true, false]])
+    // 모양이 틀린 표시는 "표시 없음"(주차 토큰도 없으니 어느 주차도 고르지 않은 것).
+    expect(cellsOf([true, true])).toEqual([["BC3", { value: 250, color: "b" }, true, false]])
   })
 
   it("planWeekWrites 거절은 그 코드로(지난 주차)", () => {
@@ -189,6 +213,34 @@ describe("planDraftWrites — 계획", () => {
     expect(result.plans).toEqual([
       expect.objectContaining({ draftId: "late", action: "write" }),
       { draftId: "early", action: "refuse", code: "conflict" },
+    ])
+  })
+
+  it("배열 순서와 무관하게 updatedAt 이 늦은 쪽이 쓴다([early, late] 순서)", () => {
+    const early = editDraft({ id: "early", amount: 500, baseline: baseBaseline, updatedAt: "2026-10-23T01:00:00Z" })
+    const late = editDraft({ id: "late", amount: 600, baseline: baseBaseline, updatedAt: "2026-10-23T02:00:00Z" })
+    const result = plan([baseRow], [early, late])
+    expect(result.plans).toEqual([
+      { draftId: "early", action: "refuse", code: "conflict" },
+      expect.objectContaining({ draftId: "late", action: "write" }),
+    ])
+    const written = result.plans.find((candidate) => candidate.action === "write")
+    if (written?.action !== "write") throw new Error("write plan missing")
+    expect(written.cells[0].after.value).toBe(600)
+  })
+
+  it("updatedAt 이 같거나 없으면 배열 뒤쪽(나중에 들어온 것)이 쓴다", () => {
+    const first = editDraft({ id: "first", amount: 500, baseline: baseBaseline, updatedAt: "2026-10-23T02:00:00Z" })
+    const second = editDraft({ id: "second", amount: 600, baseline: baseBaseline, updatedAt: "2026-10-23T02:00:00Z" })
+    expect(plan([baseRow], [first, second]).plans).toEqual([
+      { draftId: "first", action: "refuse", code: "conflict" },
+      expect.objectContaining({ draftId: "second", action: "write" }),
+    ])
+    const a = editDraft({ id: "a", amount: 500, baseline: baseBaseline })
+    const b2 = editDraft({ id: "b", amount: 600, baseline: baseBaseline })
+    expect(plan([baseRow], [a, b2]).plans).toEqual([
+      { draftId: "a", action: "refuse", code: "conflict" },
+      expect.objectContaining({ draftId: "b", action: "write" }),
     ])
   })
 

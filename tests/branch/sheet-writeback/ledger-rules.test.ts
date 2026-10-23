@@ -6,7 +6,9 @@ import { describe, expect, it } from "vitest"
 import * as sheetWriteView from "@/components/admin/branch/ledger/sheet-write-view"
 import { isSheetWriteAbsorbedByMirror } from "@/lib/admin-crm-revenue-sheet"
 import {
+  absorptionCutoff,
   isSheetWriteAbsorbed,
+  oldestSyncedAt,
   SHEET_WRITE_ATTEMPT_STATUSES,
   sheetWriteBlocksReverse,
 } from "@/lib/branch/sheet-writeback/ledger-rules"
@@ -46,6 +48,49 @@ describe("isSheetWriteAbsorbed — 시트에 쓴 정정을 미러가 이미 읽�
   })
 })
 
+describe("absorptionCutoff — 이중 집계 제외 기준은 화면이 가진 행의 시각까지 본다", () => {
+  const OLD_DATA = "2026-10-23T07:00:00.000Z"
+  const FRESH_DATA = "2026-10-23T08:00:30.000Z"
+
+  it("행이 마지막 동기화 뒤의 것이면 동기화 시작 시각", () => {
+    expect(absorptionCutoff(SYNC, FRESH_DATA)).toBe(SYNC)
+  })
+
+  it("행이 마지막 동기화보다 오래됐으면(다른 화면이 동기화·SWR·재캡처 실패) 행 시각", () => {
+    expect(absorptionCutoff(SYNC, OLD_DATA)).toBe(OLD_DATA)
+    // 07:30 에 쓴 정정은 08:00 동기화가 읽었지만, 07:00 행을 든 화면에는 아직 없다 — 빼지 않는다.
+    const sw = { status: "written", writtenAt: "2026-10-23T07:30:00.000Z" }
+    expect(isSheetWriteAbsorbed(sw, SYNC)).toBe(true)
+    expect(isSheetWriteAbsorbed(sw, absorptionCutoff(SYNC, OLD_DATA))).toBe(false)
+    expect(isSheetWriteAbsorbed(sw, absorptionCutoff(SYNC, FRESH_DATA))).toBe(true)
+  })
+
+  it("둘 중 하나라도 모르면 null(빼지 않음)", () => {
+    expect(absorptionCutoff(null, FRESH_DATA)).toBeNull()
+    expect(absorptionCutoff(SYNC, null)).toBeNull()
+    expect(absorptionCutoff("garbage", FRESH_DATA)).toBeNull()
+    expect(absorptionCutoff(SYNC, "garbage")).toBeNull()
+  })
+
+  it("oldestSyncedAt — 가장 오래된 행 시각, 시각 없는 행이 있거나 행이 없으면 null", () => {
+    expect(oldestSyncedAt([{ syncedAt: FRESH_DATA }, { syncedAt: OLD_DATA }, { syncedAt: FRESH_DATA }])).toBe(OLD_DATA)
+    expect(oldestSyncedAt([{ syncedAt: FRESH_DATA }, {}])).toBeNull()
+    expect(oldestSyncedAt([{ syncedAt: "어제" }])).toBeNull()
+    expect(oldestSyncedAt([])).toBeNull()
+  })
+
+  it("화면과 매출시트 배너가 같은 함수 객체를 쓴다", () => {
+    expect(sheetWriteView.absorptionCutoff).toBe(absorptionCutoff)
+    expect(sheetWriteView.oldestSyncedAt).toBe(oldestSyncedAt)
+    const workbench = readFileSync(join(process.cwd(), "components/admin/branch/SalesLedgerWorkbench.tsx"), "utf8")
+    expect(workbench).toMatch(/sheetAbsorbedDraftIds\(sheetWrites, absorptionCutoff\(sheetWrite\.lastRevSyncStartedAt, sheetRowsSyncedAt\)\)/)
+    expect(workbench).toMatch(/const sheetRowsSyncedAt = useMemo\(\(\) => oldestSyncedAt\(sheetRows\), \[sheetRows\]\)/)
+    const banner = readFileSync(join(process.cwd(), "lib/admin-crm-revenue-sheet.ts"), "utf8")
+    expect(banner).toMatch(/const cutoff = absorptionCutoff\(lastRevSyncStartedAt, mirrorSyncedAt\)/)
+    expect(banner).toMatch(/isSheetWriteAbsorbedByMirror\(record, cutoff\)/)
+  })
+})
+
 describe("sheetWriteBlocksReverse — 시트에 쓴 정정은 장부에서만 상쇄하지 않는다", () => {
   it("written·sending 만 막는다", () => {
     expect(sheetWriteBlocksReverse("written")).toBe(true)
@@ -55,16 +100,26 @@ describe("sheetWriteBlocksReverse — 시트에 쓴 정정은 장부에서만 �
     }
   })
 
+  it("시트에서 바뀌는 칸이 없던 반영(no_change)은 막지 않는다 — 시트에 쓴 것이 없다", () => {
+    expect(sheetWriteBlocksReverse("written", "no_change")).toBe(false)
+    expect(sheetWriteBlocksReverse("sending", "no_change")).toBe(false)
+    expect(sheetWriteBlocksReverse("written", "written")).toBe(true)
+    expect(sheetWriteBlocksReverse("written", "already_written")).toBe(true)
+    expect(sheetWriteBlocksReverse("sending", "written")).toBe(true)
+  })
+
   it("라우트와 화면이 같은 판정·같은 문구 상수를 쓴다(사본 없음)", () => {
     const route = readFileSync(join(process.cwd(), "app/api/admin/branch/ledger-drafts/[id]/route.ts"), "utf8")
-    expect(route).toMatch(/\bif \(sheetWriteBlocksReverse\(sheetWrite\?\.status\)\)/)
+    expect(route).toMatch(/\bif \(sheetWriteBlocksReverse\(sheetWrite\?\.status, sheetWrite\?\.code\)\)/)
     expect(route).toMatch(/import \{ SHEET_WRITTEN_REVERSE_MESSAGE \} from "@\/lib\/branch\/sheet-writeback\/messages"/)
     expect(route).not.toContain(`"${SHEET_WRITTEN_REVERSE_MESSAGE}"`)
     const view = readFileSync(join(process.cwd(), "components/admin/branch/ledger/sheet-write-view.ts"), "utf8")
     expect(view).not.toContain(`"${SHEET_WRITTEN_REVERSE_MESSAGE}"`)
     expect(sheetWriteView.SHEET_WRITTEN_REVERSE_MESSAGE).toBe(SHEET_WRITTEN_REVERSE_MESSAGE)
     for (const status of SHEET_WRITE_ATTEMPT_STATUSES) {
-      expect(sheetWriteView.blocksLedgerReverse({ status })).toBe(sheetWriteBlocksReverse(status))
+      for (const code of ["written", "already_written", "no_change", "db_apply_failed"]) {
+        expect(sheetWriteView.blocksLedgerReverse({ status, code })).toBe(sheetWriteBlocksReverse(status, code))
+      }
     }
   })
 })

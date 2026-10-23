@@ -125,6 +125,25 @@ describe("planWeekWrites — 주차 칸을 가리킨 초안(metadata.week, weekl
       .toEqual({ ok: false, refusal: "clear_not_supported" })
   })
 
+  it("금액이 그 달 합계와 같아도 고른 주차가 값 있는 칸 하나와 다르면 clear_not_supported(장부는 금액을 그 주차로 옮긴다)", () => {
+    // 시트 11월 W1=500 빨강. 레일에서 주차 w3·금액 500 으로 저장(주차 옮기기) — 시트는 W1 을 비워야 하므로 쓰지 않는다.
+    expect(planWeekWrites(input({ baselineWeeks: [r(500), k(), k(), k(), k()], draftAmount: 500, draftWeek: 2 })))
+      .toEqual({ ok: false, refusal: "clear_not_supported" })
+    expect(planWeekWrites(input({ baselineWeeks: [r(500), k(), k(), k(), k()], draftAmount: 500, draftWeek: 2, confidenceTouched: true })))
+      .toEqual({ ok: false, refusal: "clear_not_supported" })
+    // 값 있는 칸이 여럿이어도 한 주차로 모이므로 막는다.
+    expect(planWeekWrites(input({ baselineWeeks: [r(200), k(300), k(), k(), k()], draftAmount: 500, draftWeek: 0 })))
+      .toEqual({ ok: false, refusal: "clear_not_supported" })
+    // 고른 주차가 값 있는 그 칸이면 지금처럼(확도 안 고르면 쓸 것 없음, 고르면 색만).
+    expect(planWeekWrites(input({ baselineWeeks: [r(500), k(), k(), k(), k()], draftAmount: 500, draftWeek: 0 })))
+      .toMatchObject({ ok: true, writes: [] })
+    expect(planWeekWrites(input({ baselineWeeks: [r(500), k(), k(), k(), k()], draftAmount: 500, draftWeek: 0, confidenceTouched: true })))
+      .toMatchObject({ ok: true, writes: [{ weekIndex: 0, value: null, color: "k" }] })
+    // 주차 토큰이 없으면(월 칸 수정) 지금처럼.
+    expect(planWeekWrites(input({ baselineWeeks: [r(200), k(300), k(), k(), k()], draftAmount: 500 })))
+      .toMatchObject({ ok: true, writes: [] })
+  })
+
   it("고른 주차가 지난 주차면 past_week", () => {
     expect(planWeekWrites(input({ month: "2026-10", draftWeek: 1 }))).toEqual({ ok: false, refusal: "past_week" })
   })
@@ -155,8 +174,65 @@ describe("planWeekWrites — 주차 단위(weekly 있음)", () => {
       draftWeekly: [100, 80, 0, 0, 0],
       draftWeeklyConfidence: [null, "confirmed", null, null, null],
       confidenceTouched: true,
+      draftWeeklyConfidenceTouched: [false, true, false, false, false],
     }))
     expect(result).toMatchObject({ ok: true, writes: [{ weekIndex: 1, value: 80, color: "r" }] })
+  })
+
+  it("주차별 표시가 없으면 초안이 가리킨 주차(매트릭스 주차 칸)만 고른 것으로 본다", () => {
+    const result = planWeekWrites(input({
+      baselineWeeks: [r(100), b(50), k(), k(), k()],
+      draftWeekly: [100, 80, 0, 0, 0],
+      draftWeeklyConfidence: ["expected", "confirmed", null, null, null],
+      confidenceTouched: true,
+      draftWeek: 1,
+    }))
+    expect(result).toEqual({ ok: true, writes: [{ weekIndex: 1, value: 80, color: "r" }], note: "시트 W2에 씁니다" })
+  })
+
+  it("손대지 않은 주차의 색은 시드 확도로 덮지 않는다 — 레일 주차 모드(전부 '예정' 시드)에서 W5 만 고쳐도 W4 파랑 그대로", () => {
+    // 오늘 10-23(이번 주차 W4 22일). 시트 10월 W4=3000 빨강(이번 주 결제), W5=2000 파랑. 레일은 행 확도 하나로 5칸을
+    // '예정'으로 시드한다 — 사용자는 W5 금액만 2500 으로 고쳤다(확도 버튼은 안 누름).
+    const seeded = {
+      month: "2026-10",
+      baselineWeeks: [k(), k(), k(), r(3000), b(2000)],
+      draftWeekly: [0, 0, 0, 3000, 2500],
+      draftConfidence: "expected" as const,
+      draftWeeklyConfidence: [null, null, null, "expected", "expected"] as Array<"expected" | null>,
+    }
+    expect(planWeekWrites(input({ ...seeded, confidenceTouched: false, draftWeeklyConfidenceTouched: [false, false, false, false, false] })))
+      .toEqual({ ok: true, writes: [{ weekIndex: 4, value: 2500, color: null }], note: "시트 W5에 씁니다" })
+    // 예전 클라이언트처럼 불리언 하나만 true 로 와도(주차별 표시·주차 토큰 없음) 손대지 않은 칸 색은 쓰지 않는다.
+    expect(planWeekWrites(input({ ...seeded, confidenceTouched: true })))
+      .toEqual({ ok: true, writes: [{ weekIndex: 4, value: 2500, color: null }], note: "시트 W5에 씁니다" })
+    // W5 확도를 직접 '예정'으로 골랐을 때만 W5 색을 쓴다 — W4 는 여전히 그대로.
+    expect(planWeekWrites(input({ ...seeded, confidenceTouched: true, draftWeeklyConfidenceTouched: [false, false, false, false, true] })))
+      .toEqual({ ok: true, writes: [{ weekIndex: 4, value: 2500, color: "k" }], note: "시트 W5에 씁니다" })
+  })
+
+  it("확도만 바꾼 주차 칸(값 그대로)은 그 주차를 고른 표시가 있을 때만 색을 쓴다", () => {
+    const base = {
+      baselineWeeks: [r(100), b(50), k(), k(), k()],
+      draftWeekly: [100, 50, 0, 0, 0],
+      draftWeeklyConfidence: ["confirmed", "confirmed", null, null, null] as Array<"confirmed" | null>,
+      confidenceTouched: true,
+    }
+    expect(planWeekWrites(input({ ...base, draftWeeklyConfidenceTouched: [false, true, false, false, false] })))
+      .toEqual({ ok: true, writes: [{ weekIndex: 1, value: null, color: "r" }], note: "값 있는 주차 1칸의 색을 바꿉니다" })
+    expect(planWeekWrites(input({ ...base, draftWeeklyConfidenceTouched: [false, false, false, false, false] })))
+      .toMatchObject({ ok: true, writes: [] })
+  })
+
+  it("4칸 달은 w5 의 선택 표시도 마지막 칸의 것으로 본다", () => {
+    const result = planWeekWrites(input({
+      month: "2027-02",
+      baselineWeeks: [k(), k(), k(), r(30)],
+      draftWeekly: [0, 0, 0, 30, 0],
+      draftWeeklyConfidence: [null, null, null, "high-confidence", null],
+      confidenceTouched: true,
+      draftWeeklyConfidenceTouched: [false, false, false, false, true],
+    }))
+    expect(result).toMatchObject({ ok: true, writes: [{ weekIndex: 3, value: null, color: "b" }] })
   })
 
   it("확도 안 고르면 값만 바꾸고 색 그대로", () => {

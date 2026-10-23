@@ -30,6 +30,10 @@ export const SHEET_WRITE_CODES = [
   "disabled",
   "month_not_in_sheet",
   "not_applied",
+  "row_shifted_unrestored",
+  "no_change",
+  "active_correction",
+  "draft_changed",
 ] as const
 
 export type SheetWriteCode = (typeof SHEET_WRITE_CODES)[number]
@@ -63,6 +67,16 @@ export const SHEET_WRITE_MESSAGES: Record<SheetWriteCode, string> = {
   month_not_in_sheet: "이 달은 시트에 없습니다 — 시트에서 직접 고쳐 주세요",
   // 시트에 손대기 전에 멈춘 경우(체크 완료가 아닌 초안·초안 조회 실패·감사 기록 실패·한 번에 50건 초과).
   not_applied: "장부 반영 안 됨 — 시트는 그대로입니다",
+  // 쓰는 사이 행·열이 움직였는데 되돌리지 못한 경우(옮겨 온 행에 Row ID 가 없음·원래 칸이 수식이나 글자·되돌리기 호출 실패·
+  // 머리 구조가 바뀜). row_shifted("되돌렸습니다")와 나눈다 — 남의 칸에 쓴 값이 남아 있으니 사람이 감사 기록 cells 로 복구한다.
+  row_shifted_unrestored: "쓰는 사이 시트 행·열이 움직였고 되돌리지 못했습니다 — 관리자가 감사 기록으로 복구해야 합니다",
+  // 시트에서 바뀌는 칸이 없었다(금액·색이 이미 그대로) — 시트에 쓴 것이 없으므로 장부 되돌리기를 막지 않는다.
+  no_change: "시트에서 바뀌는 칸이 없어 장부만 기록",
+  // 같은 딜·월에 이미 활성 정정 항목이 있다 — 장부 반영이 유일성 제약에 걸릴 것이 확실하므로 시트에 쓰기 전에 멈춘다.
+  active_correction: "이 딜·월에 이미 적용된 정정이 있어 시트에 쓰지 않았습니다 — 새로고침 뒤 다시 입력하거나 기존 항목을 먼저 되돌려 주세요",
+  // 시트에 쓰는 사이 초안이 고쳐졌다 — 시트에는 고치기 전 초안 값이 남을 수 있고, 장부에는 기록하지 않았다
+  // (시트에 쓴 것과 다른 금액을 장부에 남기지 않는다).
+  draft_changed: "반영하는 사이 초안이 바뀌어 장부에 기록하지 않았습니다 — 시트에는 바뀌기 전 초안 값이 들어갔을 수 있으니 새로고침 뒤 확인해 주세요",
 }
 
 /**
@@ -71,6 +85,13 @@ export const SHEET_WRITE_MESSAGES: Record<SheetWriteCode, string> = {
  */
 export const SHEET_WRITTEN_REVERSE_MESSAGE =
   "시트에 반영된 항목입니다 — 시트에서 직접 되돌리거나 원래 값으로 다시 입력해 주세요"
+
+/**
+ * 시트 쓰기 감사 행이 있는 초안(반영을 한 번이라도 시도 — 거절·실패 포함)의 하드 삭제를 막을 때의 문구. 감사 기록은
+ * 지우지 않으므로(FK ON DELETE RESTRICT) 그 초안은 취소(cancelled)로 정리한다. DELETE 라우트 409 와 큐 화면이 같은 상수를
+ * 쓴다 — 큐는 이 문구로 "레코드 오류"(그 행에만 안내)와 서버 장애(큐 전체 로컬 강등)를 가른다.
+ */
+export const SHEET_WRITE_HISTORY_DELETE_MESSAGE = "시트 반영 시도 기록이 있는 초안은 삭제할 수 없습니다 — 취소로 정리해 주세요."
 
 export function isSheetWriteCode(v: unknown): v is SheetWriteCode {
   return typeof v === "string" && (SHEET_WRITE_CODES as readonly string[]).includes(v)

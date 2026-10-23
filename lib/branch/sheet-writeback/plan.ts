@@ -8,7 +8,7 @@
 //   baseline 과 live 주차 칸이 다름 → (live 가 이미 의도한 결과면 already_written, 아니면 conflict)
 //   planWeekWrites 거절 → 그 코드(주차 토큰 metadata.week 도 넘긴다) / 대상 칸 수식(상수 산식 포함)·글자 → formula_cell
 //   월 합계 수식 불규칙 → month_formula_irregular / 같은 (행 ID, 달) 두 건 → 늦게 고친 것만, 나머지 conflict
-//   바꿀 칸 없음 → noop
+//   바꿀 칸 없음 → noop(code no_change — 시트에 쓴 것이 없으므로 장부 되돌리기를 막지 않는다)
 
 import { REV_WRITE_TARGET } from "./config"
 import {
@@ -69,7 +69,7 @@ export type DraftPlan =
   | { draftId: string; action: "refuse"; code: SheetWriteCode }
   | { draftId: string; action: "skip_write"; code: "already_written"; rowIndex: number; rowId: string; cells: PlannedCell[] }
   | { draftId: string; action: "write"; rowIndex: number; rowId: string; cells: PlannedCell[] }
-  | { draftId: string; action: "noop"; code: "written" }
+  | { draftId: string; action: "noop"; code: "no_change" }
 
 export type WriteDraftPlan = Extract<DraftPlan, { action: "write" }>
 
@@ -126,6 +126,13 @@ function draftWeeklyConfidence(metadata: Record<string, unknown>): Array<DraftCo
   const states = raw.map((value) => (value == null ? null : parseDraftConfidence(value)))
   if (raw.some((value, index) => value != null && states[index] == null)) return null
   return states.some((value) => value != null) ? states : null
+}
+
+/** metadata.weeklyConfidenceTouched — 주차별로 확도를 직접 골랐는지(5칸 불리언). 모양이 틀리면 null(주차 표시 없음). */
+function draftWeeklyConfidenceTouched(metadata: Record<string, unknown>): boolean[] | null {
+  const raw = metadata.weeklyConfidenceTouched
+  if (!Array.isArray(raw) || raw.length !== 5 || !raw.every((value) => typeof value === "boolean")) return null
+  return raw as boolean[]
 }
 
 /** metadata.week 의 주차 토큰("w1".."w5") → 0-based. "month"·없음·그 밖은 null(월 칸 수정). */
@@ -238,6 +245,7 @@ function evaluateEditDraft(
     draftConfidence: confidence,
     draftWeeklyConfidence: draftWeeklyConfidence(draft.metadata),
     confidenceTouched: draft.metadata.confidenceTouched === true,
+    draftWeeklyConfidenceTouched: draftWeeklyConfidenceTouched(draft.metadata),
     firstPayment: draftFirstPayment(draft),
     today,
     draftWeek: draftWeekToken(draft.metadata),
@@ -273,7 +281,7 @@ function evaluateEditDraft(
   // 같다는 것이 확인됐다 — 빈 칸의 숨은 색까지 보이는 live 를 기준으로 계획한다.
   const planned = planWeekWrites({ ...planInput, baselineWeeks: current })
   if (!planned.ok) return refuse(planned.refusal, key)
-  if (planned.writes.length === 0) return { plan: { draftId: draft.id, action: "noop", code: "written" }, key }
+  if (planned.writes.length === 0) return { plan: { draftId: draft.id, action: "noop", code: "no_change" }, key }
 
   for (const write of planned.writes) {
     const cell = liveCell(live, rowIndex, block.weekCols[write.weekIndex])

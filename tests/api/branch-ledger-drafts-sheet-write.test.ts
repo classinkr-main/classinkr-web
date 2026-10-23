@@ -26,6 +26,7 @@ const NOT_READY_MESSAGE = "매출 장부 내부 원본 DB 마이그레이션이 
 const SHEET_WRITES_NOT_READY_MESSAGE = "매출 장부 시트 쓰기 기록 DB 마이그레이션이 아직 적용되지 않았습니다."
 const NON_POSITIVE_AMOUNT_MESSAGE = "금액이 0 이하인 초안은 체크 완료할 수 없습니다. 금액을 입력한 뒤 다시 시도하세요."
 const REVERSE_WRITTEN_MESSAGE = "시트에 반영된 항목입니다 — 시트에서 직접 되돌리거나 원래 값으로 다시 입력해 주세요"
+const SHEET_WRITE_HISTORY_DELETE_MESSAGE = "시트 반영 시도 기록이 있는 초안은 삭제할 수 없습니다 — 취소로 정리해 주세요."
 
 vi.mock("@/lib/admin-auth", () => ({
   BRANCH_READ_ADMIN_API_ROLES: ["ADMIN"],
@@ -46,6 +47,8 @@ vi.mock("@/lib/repositories/branch-sales-ledger-drafts", () => ({
   isBranchSalesLedgerDuplicateActiveCorrectionError: () => false,
   isBranchSalesLedgerNonPositiveAmountError: (error: unknown) =>
     error instanceof Error && error.message === NON_POSITIVE_AMOUNT_MESSAGE,
+  isBranchSalesLedgerDraftHasSheetWritesError: (error: unknown) =>
+    error instanceof Error && error.message === SHEET_WRITE_HISTORY_DELETE_MESSAGE,
 }))
 
 vi.mock("@/lib/branch/sheet-writeback/apply-service", () => ({ applyLedgerDraftsWithSheetWrite }))
@@ -282,6 +285,18 @@ describe("PATCH /api/admin/branch/ledger-drafts/[id] action=reverse — 시트�
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({ entry: { id: "entry-1", entryStatus: "reversed" } })
     expect(reverseBranchSalesLedgerEntryByDraftId).toHaveBeenCalledWith("draft-1", "Tester", "오입력")
+  })
+
+  it("시트에서 바뀌는 칸이 없던 반영(written·no_change)은 막지 않는다 — 시트에 쓴 것이 없다", async () => {
+    mockAdmin()
+    latestSheetWritesByDraftIds.mockResolvedValue(new Map([["draft-1", attempt("draft-1", { code: "no_change" })]]))
+    reverseBranchSalesLedgerEntryByDraftId.mockResolvedValue({ id: "entry-1", entryStatus: "reversed" })
+    const { PATCH } = await import("@/app/api/admin/branch/ledger-drafts/[id]/route")
+
+    const response = await PATCH(patchOne("draft-1", { action: "reverse" }), params("draft-1"))
+
+    expect(response.status).toBe(200)
+    expect(reverseBranchSalesLedgerEntryByDraftId).toHaveBeenCalledWith("draft-1", "Tester", undefined)
   })
 
   it("시트 시도가 없거나 감사 표가 아직 없으면(마이그레이션 전) 기존 동작", async () => {
@@ -572,6 +587,43 @@ describe("GET /api/admin/branch/ledger-drafts — sheetWrite · sheetWrites", ()
   })
 })
 
+describe("DELETE /api/admin/branch/ledger-drafts/[id] — 시트 쓰기 기록이 있는 초안", () => {
+  function deleteOne(id: string) {
+    return new NextRequest(`https://classin.kr/api/admin/branch/ledger-drafts/${id}`, { method: "DELETE" })
+  }
+
+  it("감사 행 FK 로 막힌 삭제는 원인 없는 500 이 아니라 409 + '취소로 정리' 안내", async () => {
+    mockAdmin()
+    deleteBranchSalesLedgerDraft.mockRejectedValue(new Error(SHEET_WRITE_HISTORY_DELETE_MESSAGE))
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const { DELETE } = await import("@/app/api/admin/branch/ledger-drafts/[id]/route")
+
+    const response = await DELETE(deleteOne("draft-1"), params("draft-1"))
+
+    expect(response.status).toBe(409)
+    expect(await response.json()).toEqual({ error: SHEET_WRITE_HISTORY_DELETE_MESSAGE, reason: "sheet-write-history" })
+  })
+
+  it("그 밖의 삭제 실패는 기존 500 고정 문구, 없으면 404, 지워지면 ok", async () => {
+    mockAdmin()
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const { DELETE } = await import("@/app/api/admin/branch/ledger-drafts/[id]/route")
+
+    deleteBranchSalesLedgerDraft.mockRejectedValueOnce(new Error("[branch-sales-ledger-drafts] 삭제 실패: boom"))
+    const failed = await DELETE(deleteOne("draft-1"), params("draft-1"))
+    expect(failed.status).toBe(500)
+    expect((await failed.json()).error).toBe("Failed to delete sales ledger draft")
+
+    deleteBranchSalesLedgerDraft.mockResolvedValueOnce(false)
+    expect((await DELETE(deleteOne("draft-1"), params("draft-1"))).status).toBe(404)
+
+    deleteBranchSalesLedgerDraft.mockResolvedValueOnce(true)
+    const ok = await DELETE(deleteOne("draft-1"), params("draft-1"))
+    expect(ok.status).toBe(200)
+    expect(await ok.json()).toEqual({ ok: true })
+  })
+})
+
 describe("route segment config — maxDuration", () => {
   it("[id]·batch 라우트는 maxDuration 60 을 선언한다(시트 읽기 8s + 쓰기 8s + 되돌리기 8s + DB)", async () => {
     const single = await import("@/app/api/admin/branch/ledger-drafts/[id]/route")
@@ -671,6 +723,33 @@ describe("본문 파서 — sourceSnapshot.sheetBaseline · metadata.confidenceT
       expect(createBranchSalesLedgerDraft).not.toHaveBeenCalled()
     },
   )
+
+  it.each([
+    ["2칸", [true, false]],
+    ["문자열 칸", ["true", false, false, false, false]],
+    ["객체", { 0: true }],
+  ])("metadata.weeklyConfidenceTouched 가 %s 이면 400(5칸 불리언 또는 null 만)", async (_label, weeklyConfidenceTouched) => {
+    mockAdmin()
+    const { POST } = await import("@/app/api/admin/branch/ledger-drafts/route")
+
+    const response = await POST(postOne({ ...validEditBody, metadata: { confidenceTouched: true, weeklyConfidenceTouched } }))
+
+    expect(response.status).toBe(400)
+    expect((await response.json()).error).toBe("metadata.weeklyConfidenceTouched must be null or 5 booleans")
+    expect(createBranchSalesLedgerDraft).not.toHaveBeenCalled()
+  })
+
+  it("metadata.weeklyConfidenceTouched 5칸 불리언·null 은 그대로 저장한다", async () => {
+    mockAdmin()
+    createBranchSalesLedgerDraft.mockResolvedValue({ draft: { id: "draft-1" }, dedupedRecent: false })
+    const { POST } = await import("@/app/api/admin/branch/ledger-drafts/route")
+
+    const touched = [false, false, false, false, true]
+    expect((await POST(postOne({ ...validEditBody, metadata: { confidenceTouched: true, weeklyConfidenceTouched: touched } }))).status).toBe(201)
+    expect((await POST(postOne({ ...validEditBody, metadata: { confidenceTouched: false, weeklyConfidenceTouched: null } }))).status).toBe(201)
+    expect(createBranchSalesLedgerDraft.mock.calls[0][0].metadata.weeklyConfidenceTouched).toEqual(touched)
+    expect(createBranchSalesLedgerDraft.mock.calls[1][0].metadata.weeklyConfidenceTouched).toBeNull()
+  })
 
   it("PATCH update 도 같은 검증 — 틀리면 400, 맞으면 정규화해 넘긴다", async () => {
     mockAdmin()

@@ -6,7 +6,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
 import { getCompassRevenue } from "@/lib/compass/bridge"
 import { nextPendingTransition, pendingMonthAmount } from "@/lib/crm/revenue-sheet-pending"
-import { isSheetWriteAbsorbed } from "@/lib/branch/sheet-writeback/ledger-rules"
+import { absorptionCutoff, isSheetWriteAbsorbed, oldestSyncedAt } from "@/lib/branch/sheet-writeback/ledger-rules"
 import {
   isSheetWritesNotReadyError,
   lastSuccessfulRevSyncStartedAt,
@@ -251,6 +251,7 @@ export const isSheetWriteAbsorbedByMirror: (
 async function readSheetAbsorbedDraftIds(
   rows: BranchSalesLedgerEntryAmountRow[],
   warnings: string[],
+  mirrorSyncedAt: string | null,
 ): Promise<Set<string>> {
   const draftIds = rows
     .filter((row) => row.entry_type === "manual-edit" && row.draft_id)
@@ -262,9 +263,12 @@ async function readSheetAbsorbedDraftIds(
       lastSuccessfulRevSyncStartedAt(),
       latestSheetWritesByDraftIds(draftIds),
     ])
+    // 기준은 마지막 성공 동기화와 이 화면이 읽은 미러 행의 synced_at 중 이른 쪽 — 미러가 그 동기화로 아직 바뀌지 않았으면
+    // 쓰기가 미러에 없다(장부 화면 오버레이와 같은 규칙, ledger-rules.ts absorptionCutoff).
+    const cutoff = absorptionCutoff(lastRevSyncStartedAt, mirrorSyncedAt)
     const absorbed = new Set<string>()
     for (const [draftId, record] of latest) {
-      if (isSheetWriteAbsorbedByMirror(record, lastRevSyncStartedAt)) absorbed.add(draftId)
+      if (isSheetWriteAbsorbedByMirror(record, cutoff)) absorbed.add(draftId)
     }
     return absorbed
   } catch (error) {
@@ -327,7 +331,14 @@ async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSh
   const manualLedgerRows = (manualLedgerResult.data ?? []) as BranchSalesLedgerEntryAmountRow[]
   const manualLedgerGap: AdminCrmRevenueSheetManualLedgerGap = manualLedgerResult.error
     ? { count: 0, amount: 0, latestAppliedAt: null, newCount: 0, newAmount: 0, editCount: 0 }
-    : computeManualLedgerGap(manualLedgerRows, await readSheetAbsorbedDraftIds(manualLedgerRows, warnings))
+    : computeManualLedgerGap(
+        manualLedgerRows,
+        await readSheetAbsorbedDraftIds(
+          manualLedgerRows,
+          warnings,
+          oldestSyncedAt(((sheetResult.data ?? []) as Array<{ synced_at?: string | null }>).map((row) => ({ syncedAt: row.synced_at ?? null }))),
+        ),
+      )
 
   // 상한에 정확히 닿았다면 그 뒤가 잘렸을 수 있다. 형제 모듈(admin-crm-revenue)은 같은 위험을
   // getQueryLimitWarning으로 알리는데 여기만 조용히 잘라, 요약·팀별 집계가 소리 없이 과소 집계된다.

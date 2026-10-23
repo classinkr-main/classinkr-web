@@ -56,7 +56,9 @@ import type { LedgerCellEditApi } from "./ledger/LedgerSimpleEdit"
 // REV 시트 쓰기(ADR-011) — 초안 baseline·칸 아래 힌트·이중 집계 제외의 순수 헬퍼.
 import {
   cellSheetWriteHint,
+  absorptionCutoff,
   excludeSheetAbsorbedRows,
+  oldestSyncedAt,
   sheetAbsorbedDraftIds,
   sheetBaselineForRow,
 } from "./ledger/sheet-write-view"
@@ -154,6 +156,7 @@ import {
   buildMatrixPastePlan,
   buildPasteNewRowInputs,
   buildMatrixPendingByCell,
+  cellDraftConfidenceTouched,
   dominantCellConfidence,
   EMPTY_BUCKET,
   findOpenNewRowDuplicate,
@@ -174,6 +177,7 @@ import {
   resolveDraftEditTargetRow,
   storeMatrixConfidence,
   useMatrixEditor,
+  weeklyConfidenceTouchedFromMetadata,
   weeklyEditLockMask,
   weeklyPaymentsFromDraftMetadata,
   type MatrixCellCoord,
@@ -247,6 +251,7 @@ import {
   DRAFT_DEDUPED_RECENT_NOTICE,
   DRAFT_OPERATIONS,
   DRAFT_STATUS_LABELS,
+  draftFormConfidenceTouchedMetadata,
   draftWeeklySaveContract,
   draftWeeklyTotal,
   emptyDraftWeekly,
@@ -1232,9 +1237,12 @@ export default function SalesLedgerWorkbench({
   // REV 시트 쓰기(ADR-011) — 반영 때 '2. REV' 에도 쓴 정정은, 쓴 뒤에 시작한 REV 동기화가 성공하면 시트 행
   // (미러)이 이미 그 값을 갖는다. 그 초안을 오버레이에 또 얹으면 같은 칸을 시트 값과 정정 값이 함께 맡는다 —
   // 미러가 읽은 초안은 오버레이(그리고 그 초안이 만드는 editRowOverrideMonths)에서 뺀다(시트가 정본).
+  // 기준은 서버의 마지막 동기화가 아니라 "이 화면이 가진 시트 행"의 데이터 시각까지 본 것(absorptionCutoff) —
+  // 다른 화면이 동기화했거나 동기화 직후 옛 미러가 한 번 돌아왔으면 이 화면 행에는 쓰기가 아직 없다.
+  const sheetRowsSyncedAt = useMemo(() => oldestSyncedAt(sheetRows), [sheetRows])
   const sheetAbsorbedIds = useMemo(
-    () => sheetAbsorbedDraftIds(sheetWrites, sheetWrite.lastRevSyncStartedAt),
-    [sheetWrites, sheetWrite.lastRevSyncStartedAt],
+    () => sheetAbsorbedDraftIds(sheetWrites, absorptionCutoff(sheetWrite.lastRevSyncStartedAt, sheetRowsSyncedAt)),
+    [sheetWrites, sheetWrite.lastRevSyncStartedAt, sheetRowsSyncedAt],
   )
   const appliedDraftRows = useMemo<LedgerRevenueRow[]>(() => {
     if (ledgerEntryRows.length === 0) return excludeSheetAbsorbedRows(appliedDraftFallbackRows, sheetAbsorbedIds)
@@ -1925,9 +1933,13 @@ export default function SalesLedgerWorkbench({
   //
   // REV 시트 쓰기(ADR-011): edit-row 면 그 시트 행(미러)의 그 달 주차 칸을 sourceSnapshot.sheetBaseline 으로
   // 싣는다 — 반영 직전에 서버가 시트를 다시 읽어 이 값과 같을 때만 쓴다(시트 우선). confidenceTouched 는
-  // 사용자가 확도를 직접 골랐는지(metadata.confidenceTouched) — 고르지 않았으면 서버가 칸 색을 그대로 둔다.
-  // 모르는 호출부(매트릭스 팝오버·붙여넣기 — 사용자가 확도를 고르는 화면)는 true. 첫 결제일
-  // (row.firstPayment)도 싣는다 — 빈 달 주차 고르기에서 칸 아래 힌트와 서버가 같은 주차를 고른다.
+  // 사용자가 확도를 직접 골랐는지(metadata.confidenceTouched) — 고르지 않았으면 서버가 값 있는 칸의 색을 그대로 둔다.
+  // 기본은 false: 팝오버 기본 확도는 그 달 우세 확도라 시작 전 빨강 주차를 '예정'으로, 주차 칸에도 달 전체 확도를
+  // 보인다 — 그 값을 고른 것으로 실으면 금액만 고쳐도 시트 글자색이 바뀐다. 호출부가 "명시 선택"(팝오버 확도·E/H/C·
+  // 편집 바·붙여넣기 확도 고르기)을 넘기고, 여기서 화면이 보이던 확도와 같으면 고르지 않은 것으로 본다. 같은 칸의
+  // 대기 초안이 앞서 고른 표시는 이어 받는다(PATCH 가 그 선택을 지우지 않게). 주차 병합이면 주차별 표시
+  // (metadata.weeklyConfidenceTouched)를 싣는다 — 편집한 주차만, 나머지는 대기 초안의 표시 그대로.
+  // 첫 결제일(row.firstPayment)도 싣는다 — 빈 달 주차 고르기에서 칸 아래 힌트와 서버가 같은 주차를 고른다.
   const buildCellDraftInput = useCallback(
     (
       rowId: string,
@@ -1935,10 +1947,11 @@ export default function SalesLedgerWorkbench({
       amount: number,
       confidence: DraftConfidence,
       week?: number,
-      confidenceTouched = true,
+      confidencePicked = false,
     ): { input: LedgerDraftInput; existingId: string | null } | null => {
       const row = rowById.get(rowId)
       if (!row) return null
+      const pending = lookupMatrixPending(pendingByCell, { rowId, month, week })
       const sourceDealId = row.sourceDealId ?? (row.ledgerOrigin === "sheet" ? row.id : undefined)
       const kind: DraftKind = sourceDealId ? "edit-row" : "new-row"
       const sheetBaseline = kind === "edit-row" && sourceDealId
@@ -1967,6 +1980,14 @@ export default function SalesLedgerWorkbench({
           return baseStates?.[index] ?? null
         })
       }
+      const touched = cellDraftConfidenceTouched({
+        picked: confidencePicked,
+        confidence,
+        shownConfidence: matrixCellConfidence({ rowId, month, week }),
+        pending,
+        week,
+        mergedWeekly,
+      })
       const productCategory = rowProductCategory(row)
       const input: LedgerDraftInput = {
         kind,
@@ -2014,15 +2035,16 @@ export default function SalesLedgerWorkbench({
           confidence: mergedWeekly && mergedWeeklyConfidence
             ? dominantWeeklyConfidence(mergedWeekly, mergedWeeklyConfidence)
             : confidence,
-          confidenceTouched,
+          confidenceTouched: touched.confidenceTouched,
+          weeklyConfidenceTouched: touched.weeklyConfidenceTouched,
           quantity: null,
           sourceDealId: sourceDealId ?? null,
         },
       }
-      const existingId = lookupMatrixPending(pendingByCell, { rowId, month, week })?.id ?? null
+      const existingId = pending?.id ?? null
       return { input, existingId }
     },
-    [lens, pendingByCell, period, rowById, sheetRowById, team],
+    [lens, matrixCellConfidence, pendingByCell, period, rowById, sheetRowById, team],
   )
 
   // 실행 취소(입력 속도 라운드 4 P1-6) — cancelDraft(useLedgerDraftQueue)는 drafts를 의존성으로 갖고
@@ -2056,7 +2078,7 @@ export default function SalesLedgerWorkbench({
   // buildCellDraftInput — 붙여넣기 배치(confirmMatrixPaste)와 공유한다.
   // 반환값: 서버에 실제로 반영됐으면 true, 로컬 폴백(장부 적용 불가)이면 false — 상위 집계용.
   // options.silent=true면 개별 실패 토스트를 억제한다(상위에서 집계 토스트를 낼 때).
-  // options.confidenceTouched(REV 시트 쓰기): 사용자가 확도를 직접 골랐는지 — 생략하면 true(buildCellDraftInput 주석).
+  // options.confidenceTouched(REV 시트 쓰기): 사용자가 확도를 직접 골랐는지 — 생략하면 false(buildCellDraftInput 주석).
   const onCommitCell = useCallback(
     (
       rowId: string,
@@ -2066,7 +2088,7 @@ export default function SalesLedgerWorkbench({
       week?: number,
       options?: { silent?: boolean; confidenceTouched?: boolean },
     ): Promise<boolean> => {
-      const built = buildCellDraftInput(rowId, month, amount, confidence, week, options?.confidenceTouched ?? true)
+      const built = buildCellDraftInput(rowId, month, amount, confidence, week, options?.confidenceTouched ?? false)
       if (!built) return Promise.resolve(false)
       const persist = built.existingId ? updateDraft(built.existingId, built.input) : createDraft(built.input)
       return persist.then((result) => {
@@ -2143,13 +2165,22 @@ export default function SalesLedgerWorkbench({
     sheetHint: sheetWriteOn
       ? (row, month, amount, confidence, confidenceTouched) => {
           const sourceDealId = row.sourceDealId ?? (row.ledgerOrigin === "sheet" ? row.id : undefined)
+          // 저장(buildCellDraftInput)과 같은 판정 — 보이던 확도와 같으면 고르지 않은 것, 대기 초안의 선택은 이어 받는다.
+          const coord = { rowId: row.id, month }
+          const touched = cellDraftConfidenceTouched({
+            picked: confidenceTouched,
+            confidence,
+            shownConfidence: matrixCellConfidence(coord),
+            pending: lookupMatrixPending(pendingByCell, coord),
+            mergedWeekly: null,
+          }).confidenceTouched
           return cellSheetWriteHint({
             kind: sourceDealId ? "edit-row" : "new-row",
             sheetRow: sourceDealId ? sheetRowById.get(sourceDealId) : null,
             month,
             amount,
             confidence,
-            confidenceTouched,
+            confidenceTouched: touched,
             today: getBusinessDateParts().date,
           })
         }
@@ -2186,6 +2217,12 @@ export default function SalesLedgerWorkbench({
   // ── SL-2: 클립보드 붙여넣기 상태 — 프리뷰 확인 전에는 아무 초안도 만들지 않는다. ─────────
   const [pastePlan, setPastePlan] = useState<MatrixPastePlan | null>(null)
   const [pasteConfidence, setPasteConfidence] = useState<DraftConfidence>("expected")
+  // 붙여넣기 프리뷰에서 확도를 직접 골랐는가(REV 시트 쓰기) — 고르지 않았으면 기억된 기본 확도라 시트 글자색을 쓰지 않는다.
+  const [pasteConfidencePicked, setPasteConfidencePicked] = useState(false)
+  const pickPasteConfidence = useCallback((next: DraftConfidence) => {
+    setPasteConfidence(next)
+    setPasteConfidencePicked(true)
+  }, [])
 
   // 편집 바(UX 감사 §8.3 A안의 대체 — ledger/RevMatrixEditBar.tsx 헤더 주석 참조) 배선.
   // 확도 버튼 클릭: 편집 중이면 팝오버와 같은 setEditConfidence(명시 선택 → localStorage 기억까지 동일),
@@ -2201,7 +2238,7 @@ export default function SalesLedgerWorkbench({
       if (!coord) return
       const value = matrixCellValue(coord)
       if (value > 0 && next !== matrixCellConfidence(coord)) {
-        void onCommitCell(coord.rowId, coord.month, value, next, coord.week)
+        void onCommitCell(coord.rowId, coord.month, value, next, coord.week, { confidenceTouched: true })
       }
     },
     [matrixCellConfidence, matrixCellValue, matrixEditor.actions, matrixEditor.editing, matrixEditor.selected, onCommitCell],
@@ -2245,6 +2282,7 @@ export default function SalesLedgerWorkbench({
         return
       }
       setPasteConfidence(loadStoredMatrixConfidence() ?? "expected")
+      setPasteConfidencePicked(false)
       setPastePlan(plan)
     },
     [matrixEditor.editing, matrixEditor.selected, matrixMonths, pushMatrixToast, visibleDealRows, editRowOverrideMonths],
@@ -2280,7 +2318,7 @@ export default function SalesLedgerWorkbench({
     const items: Array<{ id?: string; input: LedgerDraftInput }> = []
     let missingRows = 0
     for (const cell of applyCells) {
-      const built = buildCellDraftInput(cell.rowId, cell.month, cell.next, pasteConfidence)
+      const built = buildCellDraftInput(cell.rowId, cell.month, cell.next, pasteConfidence, undefined, pasteConfidencePicked)
       if (!built) {
         missingRows += 1
         continue
@@ -2333,7 +2371,7 @@ export default function SalesLedgerWorkbench({
       kind: "error",
       text: `${fmt(committed)}건 저장${newRowNote} · ${fmt(problems)}건 미반영(${detail}) — 미반영 셀은 체크 큐 행 배지를 확인한 뒤 다시 붙여넣으세요.`,
     })
-  }, [buildCellDraftInput, lens, managerFilter, pasteConfidence, pastePlan, period, persistDraftsBatch, pushMatrixToast, team])
+  }, [buildCellDraftInput, lens, managerFilter, pasteConfidence, pasteConfidencePicked, pastePlan, period, persistDraftsBatch, pushMatrixToast, team])
 
   const toggleRevMonth = useCallback((month: string) => {
     setExpandedRevMonths((prev) => {
@@ -2630,6 +2668,9 @@ export default function SalesLedgerWorkbench({
     // amount=주차 합(draftForm.amount 무시)·metadata.weekly=5칸 숫자·metadata.week="month"로 싣는다 —
     // onCommitCell의 주차 병합 초안과 동일한 metadata 키 규약이라 서버 스키마·적용(주차 복원) 경로 호환.
     const weeklyContract = draftWeeklySaveContract(draftForm)
+    // REV 시트 쓰기: 폼에서 확도 버튼을 직접 누른 칸만 "고른 것" — 폼을 연 시드(시트 행은 늘 '예정', 콕핏은 리스트 톤)는
+    // 시트 글자색과 다를 수 있어 고른 것으로 실으면 손대지 않은 칸 색을 덮는다(sheet-writeback/target.ts).
+    const touchedMetadata = draftFormConfidenceTouchedMetadata(draftForm, weeklyContract ? weeklyContract.weeklyConfidence : null)
     return {
       kind,
       sourceDealId,
@@ -2660,8 +2701,8 @@ export default function SalesLedgerWorkbench({
         // 주차 분해 저장의 초안 단위 확도는 우세 확도(금액 합 최대 버킷, 동률은 낮은 확도) 자동 기록 —
         // 큐 배지·매트릭스 pending 등 기존 metadata.confidence 소비자의 의미를 보존한다.
         confidence: weeklyContract ? weeklyContract.dominantConfidence : draftForm.confidence,
-        // REV 시트 쓰기: 레일은 사용자가 확도를 고르는 화면이라 늘 직접 고른 것으로 본다(칸 색도 그 확도로 쓴다).
-        confidenceTouched: true,
+        confidenceTouched: touchedMetadata.confidenceTouched,
+        weeklyConfidenceTouched: touchedMetadata.weeklyConfidenceTouched,
         quantity: draftForm.quantity.trim() ? safeAmount(draftForm.quantity) : null,
       },
     }
@@ -2745,6 +2786,9 @@ export default function SalesLedgerWorkbench({
       weeklyConfidence: weeklyPrefill && storedWeeklyConfidence
         ? storedWeeklyConfidence.map((state) => state ?? draftConfidence)
         : defaultDraftWeeklyConfidence(draftConfidence),
+      // REV 시트 쓰기: 다시 고치는 초안이 앞서 고른 확도 표시를 이어 받는다(다시 저장해도 그 선택이 지워지지 않게).
+      confidenceTouched: draft.metadata?.confidenceTouched === true,
+      weeklyConfidenceTouched: weeklyConfidenceTouchedFromMetadata(draft.metadata) ?? undefined,
     })
   }, [team])
 
@@ -4303,7 +4347,7 @@ export default function SalesLedgerWorkbench({
           <RevMatrixPasteDialog
             plan={pastePlan}
             confidence={pasteConfidence}
-            onPickConfidence={setPasteConfidence}
+            onPickConfidence={pickPasteConfidence}
             onCancel={() => setPastePlan(null)}
             onConfirm={confirmMatrixPaste}
           />

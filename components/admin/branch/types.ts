@@ -188,6 +188,8 @@ export interface BranchPipelineRow {
   rowIdIssue?: string | null
   /** 달별 주차 칸 확도 글자("rk--b"). sheet-writeback/baseline.ts buildSheetBaseline 이 읽는다. */
   weeklyColors?: Record<string, string>
+  /** 이 행 데이터의 시각(미러 synced_at·액티브 임포트 캡처 시각). 이중 집계 제외 기준(absorptionCutoff)에 쓴다. */
+  syncedAt?: string
 }
 
 export interface BranchPipelineResponse {

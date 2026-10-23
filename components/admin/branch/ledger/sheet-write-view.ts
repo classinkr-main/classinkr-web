@@ -12,13 +12,16 @@ import { buildSheetBaseline, type SheetBaselineV1 } from "@/lib/branch/sheet-wri
 import type { DraftConfidenceLike, WeekColor } from "@/lib/branch/sheet-writeback/colors"
 import { REV_WRITE_MAX_DRAFTS, type SheetWriteMode } from "@/lib/branch/sheet-writeback/config"
 import {
+  absorptionCutoff,
   isSheetWriteAbsorbed,
+  oldestSyncedAt,
   SHEET_WRITE_ATTEMPT_STATUSES,
   sheetWriteBlocksReverse,
   type SheetWriteAttemptStatus,
 } from "@/lib/branch/sheet-writeback/ledger-rules"
 import {
   isSheetWriteCode,
+  SHEET_WRITE_HISTORY_DELETE_MESSAGE,
   SHEET_WRITE_MESSAGES,
   SHEET_WRITTEN_REVERSE_MESSAGE,
   type SheetWriteCode,
@@ -103,17 +106,23 @@ export function parseSheetWrites(raw: unknown): Record<string, SheetWriteView> {
 /**
  * 시트에 쓴 정정을 미러가 이미 읽었는가 — 그 초안을 오버레이에 또 얹으면 같은 금액이 시트 행 값과 적용 초안
  * 양쪽에서 읽힌다. 정본은 lib/branch/sheet-writeback/ledger-rules.ts(서버 미반영 배너와 같은 함수)다.
+ * 기준 시각은 absorptionCutoff(서버의 마지막 성공 동기화 ↔ 화면이 가진 시트 행의 데이터 시각 중 이른 쪽)다.
  */
-export { isSheetWriteAbsorbed }
+export { absorptionCutoff, isSheetWriteAbsorbed, oldestSyncedAt }
 
+/**
+ * 오버레이에서 뺄 초안 id. cutoff 는 absorptionCutoff(lastRevSyncStartedAt, 화면 시트 행의 oldestSyncedAt) —
+ * 서버 동기화 시각만 쓰면 화면이 그 동기화 전 행을 들고 있을 때(다른 화면이 동기화·동기화 직후 SWR·재캡처 실패) 정정이
+ * 화면에서 사라진다.
+ */
 export function sheetAbsorbedDraftIds(
   sheetWrites: Readonly<Record<string, SheetWriteView>>,
-  lastRevSyncStartedAt: string | null,
+  cutoff: string | null,
 ): Set<string> {
   const ids = new Set<string>()
-  if (!lastRevSyncStartedAt) return ids
+  if (!cutoff) return ids
   for (const [draftId, sw] of Object.entries(sheetWrites)) {
-    if (isSheetWriteAbsorbed(sw, lastRevSyncStartedAt)) ids.add(draftId)
+    if (isSheetWriteAbsorbed(sw, cutoff)) ids.add(draftId)
   }
   return ids
 }
@@ -267,6 +276,7 @@ export function toApplyOutcome(
 const SUCCESS_LABELS: Partial<Record<SheetWriteCode, string>> = {
   written: "시트에 반영",
   already_written: "장부만 기록(시트에 이미 같은 값)",
+  no_change: "장부만 기록(시트에서 바뀌는 칸 없음)",
   new_row_app_only: "장부에만(새 행)",
   disabled: "장부에만",
 }
@@ -326,20 +336,34 @@ export function sheetWriteBadge(view: SheetWriteView): SheetWriteBadge {
     return { label: "확인 중", tone: "warning", message }
   }
   if (code === "conflict") return { label: "충돌", tone: "danger", message }
-  if (view.status === "written" && code !== "db_apply_failed") return { label: "시트 반영됨", tone: "success", message }
+  // 시트에서 바뀌는 칸이 없었다 — 시트에 쓴 것이 없으니 "시트 반영됨"이라고 말하지 않는다.
+  if (view.status === "written" && code === "no_change") return { label: "장부에만", tone: "neutral", message }
+  // written 이어도 장부 기록이 안 된 갈래(db_apply_failed·draft_changed)는 실패로 보인다.
+  if (view.status === "written" && code !== "db_apply_failed" && code !== "draft_changed") {
+    return { label: "시트 반영됨", tone: "success", message }
+  }
   return { label: "실패", tone: "danger", message }
 }
 
 /**
  * 시트에 쓴 정정은 장부에서만 상쇄하지 않는다 — 서버(PATCH action=reverse)가 409 로 막는 조건과 같은 함수
- * (ledger-rules.ts sheetWriteBlocksReverse). 큐의 되돌리기 버튼을 미리 끄고 이유를 title 로 보인다.
+ * (ledger-rules.ts sheetWriteBlocksReverse — 바뀌는 칸이 없던 no_change 는 막지 않는다). 큐의 되돌리기 버튼을 미리
+ * 끄고 이유를 title 로 보인다.
  */
-export function blocksLedgerReverse(view: Pick<SheetWriteView, "status"> | null | undefined): boolean {
-  return sheetWriteBlocksReverse(view?.status)
+export function blocksLedgerReverse(view: Pick<SheetWriteView, "status" | "code"> | null | undefined): boolean {
+  return sheetWriteBlocksReverse(view?.status, view?.code)
 }
 
-/** 서버 되돌리기 가드 문구 — 라우트와 같은 상수(messages.ts). */
-export { SHEET_WRITTEN_REVERSE_MESSAGE }
+/**
+ * 시트 쓰기 시도 기록이 있는 초안은 하드 삭제할 수 없다(감사 기록 FK — DELETE 라우트가 409). 큐는 삭제 버튼 대신
+ * 취소로 정리하게 한다. 기록이 하나라도 있으면(거절·실패 포함) true.
+ */
+export function blocksLedgerDelete(view: SheetWriteView | null | undefined): boolean {
+  return view != null
+}
+
+/** 서버 되돌리기 가드 문구 — 라우트와 같은 상수(messages.ts). 삭제 가드 문구도 같다. */
+export { SHEET_WRITE_HISTORY_DELETE_MESSAGE, SHEET_WRITTEN_REVERSE_MESSAGE }
 
 /** 장부 상단 한 줄 — 켜짐일 때만. */
 export const SHEET_WRITE_ON_NOTICE = "반영하면 '2. REV' 시트에도 씁니다 · 지난 주차는 시트에서 직접"

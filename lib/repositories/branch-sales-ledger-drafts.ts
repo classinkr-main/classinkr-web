@@ -2,6 +2,7 @@ import "server-only"
 
 import { revalidateTag } from "next/cache"
 
+import { SHEET_WRITE_HISTORY_DELETE_MESSAGE } from "@/lib/branch/sheet-writeback/messages"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 export const BRANCH_SALES_LEDGER_DRAFTS_CACHE_TAG = "branch-sales-ledger-drafts"
@@ -279,6 +280,29 @@ const NON_POSITIVE_AMOUNT_MESSAGE =
 function isNonPositiveAmountCheckError(error: { code?: string; message?: string; details?: string }) {
   const haystack = [error.code, error.message, error.details].filter(Boolean).join(" ").toLowerCase()
   return error.code === "23514" && haystack.includes(NON_POSITIVE_AMOUNT_CHECK)
+}
+
+// REV 시트 쓰기(ADR-011) — 시트에 쓰는 사이 초안이 고쳐졌다(apply_branch_sales_ledger_draft_if_unchanged 가 던진다).
+// 문구에 "매출 장부"를 넣지 않는다 — isBranchSalesLedgerDraftsNotReadyError 가 그 낱말로 판정한다.
+const DRAFT_CHANGED_RPC_MARKER = "branch_sales_ledger_draft_changed"
+const DRAFT_CHANGED_MESSAGE = "반영하는 사이 초안이 바뀌었습니다 — 새로고침 뒤 다시 반영해 주세요."
+
+// 시트 쓰기 감사 행(branch_sales_ledger_sheet_writes.draft_id → drafts, ON DELETE RESTRICT)이 있는 초안의 하드 삭제.
+// 감사 기록은 지우지 않으므로 그 초안은 삭제 대신 취소(cancelled)로 정리한다.
+const SHEET_WRITES_TABLE = "branch_sales_ledger_sheet_writes"
+const DRAFT_HAS_SHEET_WRITES_MESSAGE = SHEET_WRITE_HISTORY_DELETE_MESSAGE
+
+function isSheetWriteHistoryForeignKeyError(error: { code?: string; message?: string; details?: string }) {
+  const haystack = [error.code, error.message, error.details].filter(Boolean).join(" ").toLowerCase()
+  return error.code === "23503" && haystack.includes(SHEET_WRITES_TABLE)
+}
+
+export function isBranchSalesLedgerDraftChangedError(error: unknown): error is Error {
+  return error instanceof Error && error.message === DRAFT_CHANGED_MESSAGE
+}
+
+export function isBranchSalesLedgerDraftHasSheetWritesError(error: unknown): error is Error {
+  return error instanceof Error && error.message === DRAFT_HAS_SHEET_WRITES_MESSAGE
 }
 
 export function isBranchSalesLedgerDraftsNotReadyError(error: unknown): error is Error {
@@ -732,6 +756,82 @@ export async function applyBranchSalesLedgerDraft(
 }
 
 /**
+ * REV 시트 쓰기(ADR-011) 반영 전용 — 시트 쓰기를 계획할 때 본 초안(updated_at)이 그대로일 때만 적용한다.
+ * apply_branch_sales_ledger_draft_if_unchanged 가 한 트랜잭션에서 초안 행을 잠그고 updated_at 을 비교한 뒤 기존
+ * apply RPC 를 부른다 — 시트에 쓰는 사이(최대 십수 초) 같은 초안이 고쳐지면 시트에 쓴 값과 다른 금액을 장부에 남기지
+ * 않고 isBranchSalesLedgerDraftChangedError 로 던진다. checked 가 아니면 null(기존 apply 와 같다).
+ */
+export async function applyBranchSalesLedgerDraftIfUnchanged(
+  id: string,
+  actor: string,
+  expectedUpdatedAt: string,
+): Promise<BranchSalesLedgerDraft | null> {
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase.rpc("apply_branch_sales_ledger_draft_if_unchanged", {
+    p_actor: actor,
+    p_draft_id: id,
+    p_expected_updated_at: expectedUpdatedAt,
+  })
+
+  if (error) {
+    if (isMissingLedgerInfrastructureError(error)) throw new Error(INTERNAL_LEDGER_NOT_READY_MESSAGE)
+    if (isDuplicateActiveCorrectionIndexError(error)) throw new Error(DUPLICATE_ACTIVE_CORRECTION_MESSAGE)
+    if ([error.message, error.details].filter(Boolean).join(" ").includes(DRAFT_CHANGED_RPC_MARKER)) {
+      throw new Error(DRAFT_CHANGED_MESSAGE)
+    }
+    throw new Error(`[branch-sales-ledger-drafts] 적용 실패: ${error.message}`)
+  }
+
+  revalidateTag(BRANCH_SALES_LEDGER_DRAFTS_CACHE_TAG, "max")
+  revalidateTag(BRANCH_SALES_LEDGER_ENTRIES_CACHE_TAG, "max")
+
+  const row = Array.isArray(data) ? data[0] : data
+  return row ? toDraft(row as BranchSalesLedgerDraftRow) : null
+}
+
+export interface ActiveManualEditEntry {
+  id: string
+  draftId: string | null
+  sourceDealId: string
+  month: string
+}
+
+const ACTIVE_ENTRY_DEAL_CHUNK = 100
+
+/**
+ * (딜, 월)마다 활성 정정(manual-edit) 항목 — 장부 유일성 인덱스(branch_sales_ledger_entries_active_manual_edit_unique)가
+ * 막을 반영을 시트에 쓰기 전에 가려낸다(REV 시트 쓰기는 시트를 먼저 쓰고 장부를 나중에 적는다).
+ */
+export async function findActiveManualEditEntries(
+  pairs: Array<{ sourceDealId: string; month: string }>,
+): Promise<ActiveManualEditEntry[]> {
+  const wanted = new Set(pairs.map((pair) => `${pair.sourceDealId}|${pair.month}`))
+  const dealIds = [...new Set(pairs.map((pair) => pair.sourceDealId).filter(Boolean))]
+  if (dealIds.length === 0) return []
+
+  const supabase = createSupabaseAdminClient()
+  const found: ActiveManualEditEntry[] = []
+  for (let start = 0; start < dealIds.length; start += ACTIVE_ENTRY_DEAL_CHUNK) {
+    const chunk = dealIds.slice(start, start + ACTIVE_ENTRY_DEAL_CHUNK)
+    const { data, error } = await supabase
+      .from("branch_sales_ledger_entries")
+      .select("id, draft_id, source_deal_id, ledger_month")
+      .eq("entry_status", "active")
+      .eq("entry_type", "manual-edit")
+      .in("source_deal_id", chunk)
+    if (error) {
+      if (isMissingLedgerInfrastructureError(error)) throw new Error(INTERNAL_LEDGER_NOT_READY_MESSAGE)
+      throw new Error(`[branch-sales-ledger-entries] 활성 정정 조회 실패: ${error.message}`)
+    }
+    for (const row of (data ?? []) as Array<{ id: string; draft_id: string | null; source_deal_id: string | null; ledger_month: string }>) {
+      if (!row.source_deal_id || !wanted.has(`${row.source_deal_id}|${row.ledger_month}`)) continue
+      found.push({ id: row.id, draftId: row.draft_id, sourceDealId: row.source_deal_id, month: row.ledger_month })
+    }
+  }
+  return found
+}
+
+/**
  * 적용된 초안(draft)에 연결된 내부 원장 entry를 상쇄(active -> reversed)한다.
  * draft.status는 절대 바꾸지 않는다 — "이 초안이 X일에 적용됐다"는 사실은 감사 추적으로
  * 반전 이후에도 보존돼야 한다(사용자 확정: 상쇄 방식). draft_id는 entries에서 UNIQUE라
@@ -787,6 +887,7 @@ export async function deleteBranchSalesLedgerDraft(id: string): Promise<boolean>
 
   if (error) {
     if (isMissingDraftsTableError(error)) throw new Error(NOT_READY_MESSAGE)
+    if (isSheetWriteHistoryForeignKeyError(error)) throw new Error(DRAFT_HAS_SHEET_WRITES_MESSAGE)
     throw new Error(`[branch-sales-ledger-drafts] 삭제 실패: ${error.message}`)
   }
 

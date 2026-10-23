@@ -1,22 +1,48 @@
 // 쓴 뒤 되읽은 시트로 확인하고, 행이 움직였으면 되돌릴 요청을 만든다 — 순수 모듈.
 //
 // 읽기와 쓰기 사이에 누가 시트를 정렬하거나 행을 끼우면 같은 행 번호에 다른 고객이 와 있다.
-// 그래서 쓴 행의 Row ID 를 다시 보고(row_shifted), 대상 칸 값·색과 그 달 합계(= 주차 합)를 본다
-// (verify_mismatch). 행이 움직였으면 그 자리에 지금 있는 행의 쓰기 전 값·색을 되써서 덮은 것을 되돌린다.
+// 그래서 먼저 머리 구조가 그대로인지 보고(열이 끼거나 빠졌으면 layout_changed — 되돌릴 수 없다), 쓴 행의 Row ID 를
+// 다시 보고(row_shifted), 대상 칸 값·색과 그 달 합계(= 주차 합)를 본다(verify_mismatch). 행이 움직였으면 그 자리에
+// 지금 있는 행의 쓰기 전 값·색을 되써서 덮은 것을 되돌린다.
 
 import { weekColorOf } from "./colors"
 import { REV_ROW_ID_HEADER } from "./config"
-import { monthBlockOfCol, type RevLayout } from "./layout"
+import { isRevLayoutError, monthBlockOfCol, resolveRevLayout, type RevLayout } from "./layout"
 import { liveCell, liveRowId, type LiveGrid, type WriteDraftPlan } from "./plan"
 import { buildCellUpdateRequest } from "./requests"
 
 export type VerifyResult =
   | { draftId: string; ok: true }
-  | { draftId: string; ok: false; code: "row_shifted" | "verify_mismatch" }
+  | { draftId: string; ok: false; code: "row_shifted" | "verify_mismatch" | "layout_changed" }
 
 const SUM_TOLERANCE = 1e-6
 
+/**
+ * 되읽은 머리가 쓰기 전 머리와 같은 구조인가 — 읽기와 쓰기 사이에 열이 끼거나 빠지면 옛 열 번호로 쓴 칸은 다른 달·
+ * 월 합계 수식·남의 열에 들어갔다. 그 경우 Row ID 열 번호도 어긋나므로 행 이동으로 잘못 분류하고 되돌리기를 시도하면
+ * 또 다른 칸을 덮는다 — 따로 가려 되돌리지 않는다. 회계연도는 쓰기 전 머리의 첫 블록(4월) 해에서 읽는다.
+ */
+export function sameRevLayout(after: LiveGrid, layout: RevLayout): boolean {
+  const refFy = Number(layout.monthBlocks[0]?.ym.slice(0, 4))
+  if (!Number.isInteger(refFy)) return false
+  const resolved = resolveRevLayout(after.header, refFy)
+  if (isRevLayoutError(resolved)) return false
+  if (resolved.rowIdCol !== layout.rowIdCol || resolved.monthBlocks.length !== layout.monthBlocks.length) return false
+  return resolved.monthBlocks.every((block, index) => {
+    const before = layout.monthBlocks[index]
+    return (
+      block.ym === before.ym &&
+      block.totalCol === before.totalCol &&
+      block.weekCols.length === before.weekCols.length &&
+      block.weekCols.every((col, weekIndex) => col === before.weekCols[weekIndex])
+    )
+  })
+}
+
 export function verifyWrites(after: LiveGrid, plans: WriteDraftPlan[], layout: RevLayout): VerifyResult[] {
+  if (!sameRevLayout(after, layout)) {
+    return plans.map((plan): VerifyResult => ({ draftId: plan.draftId, ok: false, code: "layout_changed" }))
+  }
   return plans.map((plan): VerifyResult => {
     if (layout.rowIdCol == null || liveRowId(after, plan.rowIndex, layout.rowIdCol) !== plan.rowId) {
       return { draftId: plan.draftId, ok: false, code: "row_shifted" }

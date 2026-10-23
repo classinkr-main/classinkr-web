@@ -22,7 +22,7 @@
 1. **마이그레이션 적용** — 서울 프로젝트에
    [20261023_branch_rev_sheet_writes.sql](../../supabase/migrations/20261023_branch_rev_sheet_writes.sql)을 적용한다
    ([DB 마이그레이션 런북](db-migration-runbook.md)). 재실행해도 무해하다.
-2. **`npm run check:db -- --strict`** — `branch_sales_ledger_sheet_writes` 프로브가 ok여야 한다. 이 프로브는 warning 등급이다.
+2. **`npm run check:db -- --strict`** — `branch_sales_ledger_sheet_writes`·`apply_branch_sales_ledger_draft_if_unchanged()` 프로브가 ok여야 한다. 두 프로브는 warning 등급이다.
    그래서 `--strict` 없이 돌리면 미적용이어도 exit 0이 나온다.
 3. **배포(꺼진 채)** — 코드를 Production에 올린다. env를 넣지 않았으므로 반영은 지금과 같다.
    이때 바뀌는 것은 REV 동기화가 `A1:CZ1000`까지 읽는다는 점이다. 동기화 경고에
@@ -72,12 +72,13 @@
 | --- | --- | --- |
 | `written` | 시트에 쓰고 확인했고 장부에도 반영됨 | 없음 |
 | `already_written` | 시트가 이미 그 값이라 장부만 기록 | 없음. 결과 모름 뒤 다시 누른 경우가 대부분이다 |
+| `no_change` | 시트에서 바뀌는 칸이 없어 장부만 기록(금액·색이 이미 그대로, 확도를 직접 고르지 않음) | 없음. 시트에 쓴 것이 없으므로 장부 되돌리기도 막지 않는다 |
 | `disabled` | 스위치 꺼짐 — 장부에만 | 없음 |
 | `new_row_app_only` | 새 행 — 장부에만 | 시트에 새 행이 필요하면 사람이 친다 |
 | `conflict` | 초안을 만든 뒤 시트 그 달 주차 칸이 바뀜(방금 시트에 쓴 행·달을 동기화 전에 다시 고친 경우 포함) | 새로고침 뒤 다시 입력. 방금 반영한 행이면 REV 동기화를 한 번 돌린 뒤 다시 입력 |
 | `past_week` | 이번 주차보다 앞 주차 | 시트에서 직접 |
 | `week_ambiguous` | 값 있는 주차가 여럿인 달의 금액 변경 | 주차별로 고치거나 시트에서 직접 |
-| `clear_not_supported` | 칸 비우기·달 삭제, 또는 주차 칸을 가리킨 초안이 값 있는 다른 주차 칸의 금액을 옮기려 함 | 시트에서 직접 |
+| `clear_not_supported` | 칸 비우기·달 삭제, 또는 주차 칸을 가리킨 초안이 값 있는 다른 주차 칸의 금액을 옮기려 함(금액이 그 달 합계와 같아도) | 시트에서 직접 |
 | `amount_invalid` | 정수 금액이 아님(0 이하 포함) | 금액 확인 |
 | `formula_cell` | 대상 주차 칸에 수식(상수 산식 포함) | 시트에서 직접 |
 | `month_formula_irregular` | 그 달 합계 수식이 다른 칸을 더함 | 시트 수식부터 고친다(§1-4) |
@@ -92,12 +93,21 @@
 | `sheet_permission` | 401·403 | 서비스계정 공유 확인. 시트는 그대로다 |
 | `sheet_error` | 그 밖 4xx 또는 다시 읽기 실패 | 시트는 그대로다. 잠시 뒤 다시 |
 | `outcome_unknown` | 5xx·8초 마감·되읽기 없음 — 썼는지 모름(202) | **다시 보내지 않았다.** 잠시 뒤 다시 반영을 누르면 다시 읽어 판정한다(이미 쓰였으면 `already_written`) |
-| `row_shifted` | 쓰는 사이 행이 움직임 — 한 번 되돌리기 시도 | 감사 행 `error`·`cells`로 그 자리 칸을 사람이 확인 |
+| `row_shifted` | 쓰는 사이 행이 움직임 — 그 자리 행의 원래 값·색으로 되돌림(`error` = `restored`) | 감사 행 `cells`로 그 자리 칸이 원래대로인지 확인 |
+| `row_shifted_unrestored` | 쓰는 사이 행·열이 움직였는데 **되돌리지 못함** — 남의 칸에 쓴 값이 남아 있다. `error`: `restore_not_found`(옮겨 온 행에 Row ID 없음·원래 칸이 수식·글자), `restore_failed: …`(되돌리기 호출 실패), `layout_changed`(열이 끼거나 빠짐 — 되돌리기를 시도하지 않음) | 감사 행 `cells`(a1·before·after)로 그 칸을 시트에서 사람이 원래 값·색으로 고친다. 열이 바뀐 경우 `a1`은 쓰기 전 열 기준이다 |
 | `verify_mismatch` | 되읽은 값·색·월 합계가 기대와 다름 — 장부 반영 안 함 | 시트 칸을 직접 본다. 값이 맞으면 다시 반영 → `already_written`. 다르면 시트에서 고친다 |
 | `db_apply_failed` | 시트에는 썼는데 장부 기록 실패 | 다시 반영을 누른다 → `already_written`으로 마무리 |
+| `active_correction` | 같은 딜·월에 이미 활성 정정 항목이 있다 — 장부 유일성(딜·월당 활성 정정 1건)에 걸릴 것이 확실해 **시트에 쓰기 전에** 멈춤 | 새로고침 뒤 다시 입력한다(동기화가 돌면 행이 새 딜 id 로 바뀐다). 기존 항목이 시트에 쓰지 않은 정정이면 큐에서 먼저 되돌린 뒤 다시 반영 |
+| `draft_changed` | 시트에 쓰는 사이 같은 초안이 고쳐짐 — 시트에는 고치기 전 초안 값이 들어갔고 장부에는 적지 않음 | 새로고침해 시트 칸을 본다. 고친 값이 맞으면 다시 반영(시트가 바뀌었으면 `conflict` — 다시 입력) |
 | `not_applied` | 시트에 손대기 전에 멈춤(체크 완료 아님·감사 기록 실패·50건 초과 등) | 문구대로. 시트는 그대로다 |
 
-시트에 반영된 초안은 앱에서 되돌리지 않는다(409). 시트에서 직접 되돌리거나 원래 값으로 다시 입력한다.
+시트에 반영된 초안은 앱에서 되돌리지 않는다(409). 시트에서 직접 되돌리거나 원래 값으로 다시 입력한다(`no_change`는 예외 — 시트에
+쓴 것이 없다). 반영을 한 번이라도 시도한 초안(감사 행 있음 — 거절·실패 포함)은 감사 기록을 지키려고 삭제할 수 없다(409).
+큐에서 취소로 정리한다.
+
+값 있는 칸의 글자색은 사용자가 그 칸(주차 단위면 그 주차)의 확도를 직접 바꿨을 때만 쓴다. 화면이 채운 기본 확도(매트릭스 팝오버의
+그 달 우세 확도, 레일의 행 확도 시드, 콕핏 리스트 톤)는 시트 글자색과 다를 수 있어 고른 것으로 보지 않는다. 빈 칸에 새로 쓰는
+값은 늘 그 확도 색으로 쓴다(숨은 색을 덮는다).
 
 ## 4. 감사 조회 SQL
 
@@ -123,11 +133,17 @@ from public.branch_sales_ledger_sheet_writes
 where status in ('sending', 'unknown')
 order by created_at desc;
 
--- 시트에는 썼는데 장부 기록이 실패한 것
-select id, draft_id, written_at, row_id, ledger_month, error
+-- 시트에는 썼는데 장부 기록이 실패한 것(초안이 바뀐 draft_changed 포함)
+select id, draft_id, written_at, code, row_id, ledger_month, error
 from public.branch_sales_ledger_sheet_writes
-where status = 'written' and code = 'db_apply_failed'
+where status = 'written' and code in ('db_apply_failed', 'draft_changed')
 order by written_at desc;
+
+-- 행·열이 움직였는데 되돌리지 못한 것 — cells 의 a1·before 로 사람이 시트 칸을 고친다
+select id, draft_id, created_at, row_id, ledger_month, cells, error
+from public.branch_sales_ledger_sheet_writes
+where code = 'row_shifted_unrestored'
+order by created_at desc;
 
 -- 한 초안의 시도 이력
 select created_at, batch_id, status, code, sheet_row, row_id, cells, error, written_at, entry_id
@@ -203,6 +219,9 @@ ID는 행 번호와 무관해서 정렬해도 행과 같이 움직인다. 단 �
   장부 화면은 그대로 뜨지만 배지·이중 집계 제외가 비어 있을 수 있다. 서버 로그를 본다.
 - 매출시트 화면(`/admin/crm/deals/rev-sheet`)의 미반영 배지는 시트에 쓴 정정을 **다음 REV 동기화 뒤에** 뺀다.
   쓴 직후부터 동기화 전까지는 미반영으로 센다(정상).
+- 이중 집계 제외의 기준 시각은 마지막 성공 REV 동기화 시작과 그 화면이 가진 시트 행의 데이터 시각(미러 `synced_at`·액티브 임포트
+  캡처 시각) 중 이른 쪽이다. 다른 화면이 동기화했거나 재캡처가 실패해 화면 행이 옛것이면 정정 오버레이를 그대로 둔다 — 새로고침하면
+  넘어간다.
 - §4의 7일 분포를 본다. `conflict`·`unknown`·`failed`가 늘면 원인을 코드표(§3)로 가른다.
 - 동기화 경고의 Row ID 줄이 0이 아니면 §5를 처리한다.
 - 반영 라우트는 `maxDuration` 60초다. 시트 호출은 각각 8초 마감이고, 읽기 + 쓰기(+ 되돌리기) + DB가 그 안에 든다.

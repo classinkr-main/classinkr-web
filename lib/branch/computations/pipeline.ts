@@ -55,6 +55,11 @@ export interface RevRevenueRow {
   rowIdIssue?: string | null
   /** 달별 주차 칸 확도 글자("rk--b": r 빨강·b 파랑·k 그 밖·'-' 값 없음). 키는 raw.weeklyPayments 와 같다. */
   weeklyColors?: Record<string, string>
+  /**
+   * 이 행 데이터의 시각 — 미러 행은 synced_at(동기화가 미러를 바꾼 시각), 액티브 임포트 행은 그 줄의 캡처 시각.
+   * 장부 화면이 "시트에 쓴 정정을 이 행이 이미 담았는가"를 동기화 기록이 아니라 실제로 가진 행으로 판정한다(ADR-011).
+   */
+  syncedAt?: string
 }
 
 const REV_MONTH_ORDER = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3]
@@ -228,6 +233,7 @@ export function listRevRevenue(
       monthlyRed: sparseBooleanMap(d.monthly_red, true),
       weeklyPayments: weeklyPaymentsFromRaw(d),
       ...revRowIdentityFields(d.raw),
+      ...(typeof d.synced_at === "string" && d.synced_at ? { syncedAt: d.synced_at } : {}),
     }))
     .sort((a, b) => b.revenue - a.revenue || a.customer.localeCompare(b.customer))
 }

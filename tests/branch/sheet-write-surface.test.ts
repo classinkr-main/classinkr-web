@@ -9,8 +9,8 @@ import { describe, expect, it } from "vitest"
  * 1) Google Sheets 쓰기 호출은 허용 목록 파일에만 있다 — 원본 '2. REV' 에 쓰는 런타임 경로는
  *    lib/branch/sheet-writeback/sheets-client.ts 하나이고, 일괄 행 ID 부여는 scripts/assign-rev-row-ids.ts 다.
  *    새 파일이 시트에 쓰기 시작하면 여기서 잡는다(허용 목록은 줄이기만 한다).
- * 2) 장부 반영 RPC(applyBranchSalesLedgerDraft)는 반영 서비스(apply-service.ts)만 부른다 — 라우트가 직접
- *    부르면 시트 쓰기 스위치·충돌 검사를 건너뛴다.
+ * 2) 장부 반영 RPC(applyBranchSalesLedgerDraft · 시트 쓰기 전용 applyBranchSalesLedgerDraftIfUnchanged)는 반영
+ *    서비스(apply-service.ts)만 부른다 — 라우트가 직접 부르면 시트 쓰기 스위치·충돌 검사를 건너뛴다.
  * 범위: app·components·lib·scripts·proxy.ts 의 .ts/.tsx/.js/.mjs/.cjs(tests·node_modules·.next 제외), 주석 제외.
  */
 
@@ -29,7 +29,7 @@ const SHEETS_WRITE_ALLOWED = [
   "scripts/assign-rev-row-ids.ts",
 ]
 
-const APPLY_CALL_RE = /\bapplyBranchSalesLedgerDraft\s*\(/
+const APPLY_CALL_RE = /\bapplyBranchSalesLedgerDraft(?:IfUnchanged)?\s*\(/
 const APPLY_CALL_ALLOWED = [
   "lib/branch/sheet-writeback/apply-service.ts",
   "lib/repositories/branch-sales-ledger-drafts.ts", // 정의
@@ -91,7 +91,7 @@ describe("시트 쓰기 표면 래칫", () => {
     }
   })
 
-  it("applyBranchSalesLedgerDraft( 호출은 반영 서비스와 정의 파일에만 — 라우트는 서비스를 거친다", () => {
+  it("applyBranchSalesLedgerDraft(IfUnchanged)( 호출은 반영 서비스와 정의 파일에만 — 라우트는 서비스를 거친다", () => {
     const offenders = matching(APPLY_CALL_RE).filter((file) => !APPLY_CALL_ALLOWED.includes(file))
     expect(offenders).toEqual([])
   })
@@ -103,6 +103,7 @@ describe("시트 쓰기 표면 래칫", () => {
     expect(SHEETS_WRITE_RE.test("api.values.batchUpdate(")).toBe(true)
     expect(SHEETS_WRITE_RE.test("sheets.spreadsheets.values.get({")).toBe(false)
     expect(APPLY_CALL_RE.test("await applyBranchSalesLedgerDraft(id, actor)")).toBe(true)
+    expect(APPLY_CALL_RE.test("await applyBranchSalesLedgerDraftIfUnchanged(id, actor, at)")).toBe(true)
     expect(APPLY_CALL_RE.test("applyBranchSalesLedgerDraftX(")).toBe(false)
   })
 })

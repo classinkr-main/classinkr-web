@@ -35,6 +35,7 @@ export type LedgerDraftBodyError = { error: string; status: 400 }
 
 export const SHEET_BASELINE_FORMAT_ERROR = "sheetBaseline 형식 오류"
 export const CONFIDENCE_TOUCHED_FORMAT_ERROR = "metadata.confidenceTouched must be a boolean"
+export const WEEKLY_CONFIDENCE_TOUCHED_FORMAT_ERROR = "metadata.weeklyConfidenceTouched must be null or 5 booleans"
 
 /**
  * REV 시트 쓰기(ADR-011) 칸 검증 — sourceSnapshot.sheetBaseline 과 metadata.confidenceTouched.
@@ -45,6 +46,8 @@ export const CONFIDENCE_TOUCHED_FORMAT_ERROR = "metadata.confidenceTouched must 
  *   키가 없거나 null 이면 "baseline 없음"(새 행·buildSheetBaseline 이 null 을 낸 행) — 반영 때 서버가 판정한다.
  * confidenceTouched: 사용자가 확도를 직접 골랐는지. 반영 계획은 `=== true` 만 본다 — 문자열 "true" 같은 값이
  *   조용히 false 로 읽히지 않게 불리언만 받는다(키가 없으면 그대로 둔다).
+ * weeklyConfidenceTouched: 주차 단위 초안의 주차별 직접 선택 표시(5칸 불리언) 또는 null. 모양이 틀린 값은 반영 계획이
+ *   "주차 표시 없음"으로 읽어 고른 주차 색을 쓰지 않게 되므로 저장 시점에 막는다.
  *
  * 틀리면 400 오류, 맞으면 저장할 sourceSnapshot(baseline 이 있으면 정규화본으로 바꾼 사본)을 돌려준다.
  */
@@ -54,6 +57,13 @@ function checkSheetWriteFields(
 ): LedgerDraftBodyError | { sourceSnapshot: Record<string, unknown> | undefined } {
   if (metadata && metadata.confidenceTouched !== undefined && typeof metadata.confidenceTouched !== "boolean") {
     return { error: CONFIDENCE_TOUCHED_FORMAT_ERROR, status: 400 }
+  }
+  const weeklyTouched = metadata?.weeklyConfidenceTouched
+  if (
+    weeklyTouched != null &&
+    !(Array.isArray(weeklyTouched) && weeklyTouched.length === 5 && weeklyTouched.every((value) => typeof value === "boolean"))
+  ) {
+    return { error: WEEKLY_CONFIDENCE_TOUCHED_FORMAT_ERROR, status: 400 }
   }
   if (!sourceSnapshot || sourceSnapshot.sheetBaseline == null) return { sourceSnapshot }
   const baseline = parseSheetBaseline(sourceSnapshot.sheetBaseline)
