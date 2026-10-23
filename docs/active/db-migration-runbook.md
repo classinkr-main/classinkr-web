@@ -56,6 +56,21 @@ npm run check:db --  --strict
 유지하고 팀 템플릿 조회는 적용 안내를 표시하며, 저장·수정·보관은 503으로 응답한다.
 테이블은 RLS를 활성화하고 정책을 두지 않아 서버의 관리자 인증을 거친 service role API에서만 접근한다.
 
+### 매출 장부 → REV 시트 쓰기 감사 기록
+
+[20261023_branch_rev_sheet_writes.sql](../../supabase/migrations/20261023_branch_rev_sheet_writes.sql)은
+`branch_sales_ledger_sheet_writes`를 만든다. 장부 반영이 '2. REV' 주차 칸에 쓰려 할 때마다 초안 하나에 한 행씩 남는다
+([ADR-011](../adr/ADR-011-rev-sheet-writeback-from-ledger.md)).
+
+- 기존 표·RPC(`branch_sales_ledger_drafts`·`entries`·`apply_branch_sales_ledger_draft`)는 바꾸지 않는다.
+- RLS는 켜고 정책은 두지 않는다(service role 전용).
+- 트리거가 DELETE·TRUNCATE를 막는다. UPDATE는 상태 칸(status·code·written_at·entry_id·error·updated_at)만 허용한다.
+- 미적용이어도 시트 쓰기 스위치(`BRANCH_REV_SHEET_WRITE_ENABLED`, Production 전용)가 꺼져 있으면 영향이 없다.
+  켜져 있으면 감사 행을 못 남겨 시트 쓰기가 전부 500으로 막힌다. 장부·시트는 그대로다.
+- **스위치를 켜기 전에** 적용한다. 확인은 `npm run check:db -- --strict`의 `branch_sales_ledger_sheet_writes` 프로브다.
+  warning 등급이라 `--strict` 없이는 미적용이어도 exit 0이다.
+- 켜는 전체 순서는 [REV 시트 쓰기 런북](rev-sheet-writeback-runbook.md) §1을 따른다.
+
 ### 공통 적용 기준
 
 **마이그레이션을 먼저 적용하고 코드를 배포한다.** 다만 순서가 뒤집혀도 공개 표면이 죽지 않도록
