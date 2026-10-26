@@ -184,6 +184,9 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // 미적용이어도 허브만 '미적용' 안내로 강등하고(쓰기 503) 매일 자동 태그 크론이 skipped 로 넘어간다.
   "supabase/migrations/20260925_crm_saved_segments.sql",
   "supabase/migrations/20261021_quote_team_templates.sql",
+  // 장부 반영 → REV 시트 쓰기 감사 기록(2026-10-23). 시트 쓰기 스위치(BRANCH_REV_SHEET_WRITE_ENABLED)가 꺼져 있으면
+  // 미적용이어도 영향이 없다 — 켜기 전에 적용한다(warning).
+  "supabase/migrations/20261023_branch_rev_sheet_writes.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -888,6 +891,33 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     migration: "supabase/migrations/20261021_quote_team_templates.sql",
     severity: "warning",
     impact: "기본 견적은 유지되지만 팀 템플릿 저장·수정·보관은 503으로 차단된다.",
+  },
+  // ── 장부 반영 → REV 시트 쓰기 감사 기록(2026-10-23) ─────────────────────
+  // RLS deny-all(정책 없음 — service_role 만). DELETE·TRUNCATE 금지, UPDATE 는 상태 칸만(트리거).
+  {
+    kind: "table",
+    table: "branch_sales_ledger_sheet_writes",
+    label: "매출 장부 → REV 시트 쓰기 감사 기록",
+    columns: [
+      "id", "draft_id", "batch_id", "status", "code", "row_id", "sheet_row", "ledger_month", "cells",
+      "actor", "error", "entry_id", "created_at", "written_at", "updated_at",
+    ],
+    migration: "supabase/migrations/20261023_branch_rev_sheet_writes.sql",
+    severity: "warning",
+    impact:
+      "시트 쓰기 스위치(BRANCH_REV_SHEET_WRITE_ENABLED)가 꺼져 있으면 영향 없다. 켜져 있으면 감사 행을 못 남겨 시트 쓰기가 전부 500으로 막힌다(장부·시트는 그대로).",
+  },
+  {
+    kind: "rpc",
+    functionName: "apply_branch_sales_ledger_draft_if_unchanged",
+    label: "시트 쓰기 반영 전용 장부 적용(초안이 그대로일 때만)",
+    // 장부에 쓰는 함수라 실행 프로브를 하지 않는다 — pg_proc/권한만 확인한다.
+    catalogIdentityTypes: "uuid, text, timestamp with time zone",
+    serviceRoleOnly: true,
+    migration: "supabase/migrations/20261023_branch_rev_sheet_writes.sql",
+    severity: "warning",
+    impact:
+      "시트 쓰기 스위치가 켜져 있으면 시트에 쓴 뒤 장부 기록이 전부 실패한다(db_apply_failed) — 켜기 전에 반드시 적용한다. 꺼져 있으면 영향 없다.",
   },
 ]
 

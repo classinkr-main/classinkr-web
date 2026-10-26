@@ -7,6 +7,7 @@ import { cny, cnyExact } from "@/lib/branch/money-format"
 import { planBulkApply, planBulkCheck } from "./draft-bulk-plan"
 import { productLabel } from "./ledger-simple-logic"
 import type { DraftConfidence, LedgerDraft, LedgerRevenueRow } from "./shared"
+import { summarizeApplyOutcomes, type ApplySheetOutcome, type SheetHint, type SheetWriteMode } from "./sheet-write-view"
 
 // 장부(A안) 입력·수정 — 칸 안에서 바로(금액 + 확도 글자 띠 예·고·확) + 시안 3(확인·반영을 하단 한 줄로).
 // 저장은 워크벤치의 onCommitCell(매트릭스 칸 커밋과 같은 경로: 셀당 초안 1건, 같은 칸 재편집은 PATCH,
@@ -18,7 +19,19 @@ export interface LedgerCellEditApi {
   value: (row: LedgerRevenueRow, month: string) => number
   confidence: (row: LedgerRevenueRow, month: string) => DraftConfidence
   pending: (row: LedgerRevenueRow, month: string) => { amount: number } | null
-  commit: (rowId: string, month: string, amount: number, confidence: DraftConfidence) => Promise<boolean>
+  /** confidenceTouched: 사용자가 확도 키·띠를 눌러 직접 골랐는지(REV 시트 쓰기 — 안 골랐으면 칸 색을 그대로 둔다). */
+  commit: (rowId: string, month: string, amount: number, confidence: DraftConfidence, confidenceTouched: boolean) => Promise<boolean>
+  /**
+   * REV 시트 쓰기가 켜져 있을 때만 — 칸 아래 한 줄(어느 주차에 쓰는지·왜 막히는지). block 이면 저장을 막는다.
+   * 없으면(꺼짐) 힌트 없이 지금과 같다.
+   */
+  sheetHint?: (
+    row: LedgerRevenueRow,
+    month: string,
+    amount: number | null,
+    confidence: DraftConfidence,
+    confidenceTouched: boolean,
+  ) => SheetHint | null
 }
 
 const CONFIDENCE_KEYS: Array<{ id: DraftConfidence; key: string; label: string; keys: string[] }> = [
@@ -41,6 +54,61 @@ export function parseAmountInput(value: string): number | null {
 
 const formatInput = (value: number) => (value > 0 ? value.toLocaleString("en-US") : "")
 
+// ── 칸 편집기 판정(렌더 없이 테스트) — InlineCellEditor 는 키·저장을 이 함수들로만 정한다. ──────────
+
+/** 칸 편집기 입력 상태. confidenceTouched 는 확도 키(E·H·C)나 띠를 눌렀을 때만 true 가 된다. */
+export interface InlineEditorDraft {
+  amount: string
+  confidence: DraftConfidence
+  confidenceTouched: boolean
+}
+
+export function initialInlineEditorDraft(value: number, confidence: DraftConfidence): InlineEditorDraft {
+  return { amount: formatInput(value), confidence, confidenceTouched: false }
+}
+
+/** 사용자가 확도를 직접 골랐다 — 같은 확도를 다시 눌러도 "직접 골랐다"로 본다. */
+export function pickInlineConfidence(draft: InlineEditorDraft, next: DraftConfidence): InlineEditorDraft {
+  return { ...draft, confidence: next, confidenceTouched: true }
+}
+
+export type InlineEditorKeyIntent =
+  | { type: "close" }
+  | { type: "save" }
+  | { type: "confidence"; value: DraftConfidence }
+  | null
+
+/** keydown → 할 일. 확도 키는 금액 입력칸에서만(딜 선택 상자의 글자 찾기를 막지 않는다). */
+export function inlineEditorKeyIntent(event: { key: string; onButton: boolean; onInput: boolean; modifier: boolean }): InlineEditorKeyIntent {
+  if (event.key === "Escape") return { type: "close" }
+  if (event.key === "Enter" && !event.onButton) return { type: "save" }
+  if (!event.onInput || event.modifier) return null
+  const next = confidenceFromKey(event.key)
+  return next ? { type: "confidence", value: next } : null
+}
+
+export type InlineSaveDecision =
+  | { type: "invalid" }
+  | { type: "unchanged" }
+  | { type: "blocked"; text: string }
+  | { type: "commit"; amount: number; confidence: DraftConfidence; confidenceTouched: boolean }
+
+/**
+ * Enter·↵ 저장 판정. 바뀐 것이 없으면 닫기만, 시트 쓰기 힌트가 block 이면 저장하지 않는다 — 그 초안은 켜짐
+ * 상태에서 반영할 수 없다(지난 주차·주차 여럿·행 ID 없음 등). 꺼짐이면 hint 가 null 이라 지금과 같다.
+ */
+export function decideInlineSave(
+  draft: InlineEditorDraft,
+  initial: { value: number; confidence: DraftConfidence },
+  hint: SheetHint | null,
+): InlineSaveDecision {
+  const parsed = parseAmountInput(draft.amount)
+  if (parsed === null) return { type: "invalid" }
+  if (parsed === initial.value && draft.confidence === initial.confidence) return { type: "unchanged" }
+  if (hint?.tone === "block") return { type: "blocked", text: hint.text }
+  return { type: "commit", amount: parsed, confidence: draft.confidence, confidenceTouched: draft.confidenceTouched }
+}
+
 /** 칸 안에서 바로 고치는 입력 — 팝업 없이 금액 칸이 입력칸이 되고, 아래에 확도 세 칸짜리 작은 띠가 붙는다. */
 export function InlineCellEditor({ label, month, candidates, edit, onClose, onMore }: {
   /** 스크린리더용 칸 이름(고객 · 월). */
@@ -56,10 +124,13 @@ export function InlineCellEditor({ label, month, candidates, edit, onClose, onMo
   const [row, setRow] = useState<LedgerRevenueRow>(candidates[0])
   const initialValue = edit.value(row, month)
   const initialConfidence = edit.confidence(row, month)
-  const [amount, setAmount] = useState(() => formatInput(initialValue))
-  const [confidence, setConfidence] = useState<DraftConfidence>(initialConfidence)
+  const [draft, setDraft] = useState<InlineEditorDraft>(() => initialInlineEditorDraft(initialValue, initialConfidence))
   const [saving, setSaving] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const parsedAmount = parseAmountInput(draft.amount)
+  // REV 시트 쓰기 켜짐일 때만 값이 있다 — 입력이 바뀔 때마다 서버 반영과 같은 판정으로 다시 계산한다.
+  const hint = edit.sheetHint ? edit.sheetHint(row, month, parsedAmount, draft.confidence, draft.confidenceTouched) : null
+  const blocked = hint?.tone === "block"
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -70,42 +141,37 @@ export function InlineCellEditor({ label, month, candidates, edit, onClose, onMo
     const next = candidates.find((candidate) => candidate.id === id)
     if (!next) return
     setRow(next)
-    setAmount(formatInput(edit.value(next, month)))
-    setConfidence(edit.confidence(next, month))
+    setDraft(initialInlineEditorDraft(edit.value(next, month), edit.confidence(next, month)))
   }
+
+  const chooseConfidence = (next: DraftConfidence) => setDraft((current) => pickInlineConfidence(current, next))
 
   const save = async () => {
     if (saving) return
-    const parsed = parseAmountInput(amount)
-    if (parsed === null) return
-    if (parsed === initialValue && confidence === initialConfidence) {
+    const decision = decideInlineSave(draft, { value: initialValue, confidence: initialConfidence }, hint)
+    if (decision.type === "invalid" || decision.type === "blocked") return
+    if (decision.type === "unchanged") {
       onClose()
       return
     }
     setSaving(true)
-    const ok = await edit.commit(row.id, month, parsed, confidence)
+    const ok = await edit.commit(row.id, month, decision.amount, decision.confidence, decision.confidenceTouched)
     setSaving(false)
     if (ok) onClose()
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-    if (event.key === "Escape") {
-      event.preventDefault()
-      onClose()
-      return
-    }
-    if (event.key === "Enter" && !(event.target instanceof HTMLButtonElement)) {
-      event.preventDefault()
-      void save()
-      return
-    }
-    // 확도 키는 금액 입력칸에서만 — 딜 선택 상자의 글자 찾기를 막지 않는다.
-    if (!(event.target instanceof HTMLInputElement) || event.metaKey || event.ctrlKey || event.altKey) return
-    const next = confidenceFromKey(event.key)
-    if (next) {
-      event.preventDefault()
-      setConfidence(next)
-    }
+    const intent = inlineEditorKeyIntent({
+      key: event.key,
+      onButton: event.target instanceof HTMLButtonElement,
+      onInput: event.target instanceof HTMLInputElement,
+      modifier: event.metaKey || event.ctrlKey || event.altKey,
+    })
+    if (!intent) return
+    event.preventDefault()
+    if (intent.type === "close") onClose()
+    else if (intent.type === "save") void save()
+    else chooseConfidence(intent.value)
   }
 
   return (
@@ -141,8 +207,11 @@ export function InlineCellEditor({ label, month, candidates, edit, onClose, onMo
           // 입력칸의 기본 폭(약 20자)이 표 자동 배치에서 그 열을 두 배 넘게 밀어낸다 — 폭은 칸이 정하게 최소로 둔다.
           size={1}
           aria-label={`${label} 금액${initialValue > 0 ? ` (지금 ¥${cnyExact(initialValue)})` : ""}`}
-          value={amount}
-          onChange={(event) => setAmount(event.target.value)}
+          value={draft.amount}
+          onChange={(event) => {
+            const amount = event.target.value
+            setDraft((current) => ({ ...current, amount }))
+          }}
           placeholder="0"
           disabled={saving}
           className="w-full min-w-0 bg-transparent text-right text-[13px] font-semibold tabular-nums text-[#111110] outline-none"
@@ -154,14 +223,14 @@ export function InlineCellEditor({ label, month, candidates, edit, onClose, onMo
             <button
               key={item.id}
               type="button"
-              aria-pressed={confidence === item.id}
+              aria-pressed={draft.confidence === item.id}
               aria-label={`${item.label} (${item.key})`}
               title={`${item.label} · ${item.key}`}
               // 누를 때 입력칸 포커스를 뺏지 않는다 — 이어서 숫자·Enter 를 칠 수 있게.
               onMouseDown={(event) => event.preventDefault()}
-              onClick={() => setConfidence(item.id)}
-              className={`grid h-6 min-w-6 place-items-center rounded px-1 text-[11.5px] font-bold transition ${CONFIDENCE_TOKENS[item.id].textStrongClass} ${confidence === item.id ? "ring-1 ring-current" : "opacity-60 hover:opacity-100"}`}
-              style={confidence === item.id ? { backgroundColor: CONFIDENCE_TOKENS[item.id].tintBg } : undefined}
+              onClick={() => chooseConfidence(item.id)}
+              className={`grid h-6 min-w-6 place-items-center rounded px-1 text-[11.5px] font-bold transition ${CONFIDENCE_TOKENS[item.id].textStrongClass} ${draft.confidence === item.id ? "ring-1 ring-current" : "opacity-60 hover:opacity-100"}`}
+              style={draft.confidence === item.id ? { backgroundColor: CONFIDENCE_TOKENS[item.id].tintBg } : undefined}
             >
               {item.label.slice(0, 1)}
             </button>
@@ -182,7 +251,7 @@ export function InlineCellEditor({ label, month, candidates, edit, onClose, onMo
           type="button"
           aria-label="저장"
           title="저장 · Enter"
-          disabled={saving || parseAmountInput(amount) === null}
+          disabled={saving || parsedAmount === null || blocked}
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => void save()}
           className="h-6 rounded bg-[#084734] px-1.5 text-[11px] font-semibold text-white transition hover:bg-[#065c41] disabled:opacity-50"
@@ -190,21 +259,61 @@ export function InlineCellEditor({ label, month, candidates, edit, onClose, onMo
           {saving ? "…" : "↵"}
         </button>
       </div>
+      {hint ? (
+        // 시트 쓰기 힌트(켜짐일 때만) — block 이면 저장이 막힌 이유라 alert 로 읽힌다.
+        <p
+          data-sheet-hint={hint.tone}
+          role={blocked ? "alert" : undefined}
+          className={`max-w-[220px] text-[11px] leading-snug ${blocked ? "font-semibold text-[#8F2C2C]" : "text-[#615D59]"}`}
+        >
+          {hint.text}
+        </p>
+      ) : null}
     </div>
   )
 }
 
+/** 일괄 체크·반영 결과(반영은 항목별 시트 쓰기 결과 sheetResults 를 함께 받는다). */
+export interface ApprovalOutcome {
+  done: number
+  failed: number
+  sheetResults?: ApplySheetOutcome[]
+}
+
+/** 반영 확인 문구 — 시트 쓰기가 켜져 있으면 시트와 장부에 함께 쓴다고 말한다. */
+export function approvalConfirmText(count: number, total: number, sheetWriteMode: SheetWriteMode): string {
+  return sheetWriteMode === "on"
+    ? `${count}건 · ¥${cnyExact(total)}을 시트(2. REV)와 장부에 반영합니다`
+    : `${count}건 · ¥${cnyExact(total)}을 장부에 반영합니다`
+}
+
+/**
+ * 결과 줄. 반영은 시트 쓰기 결과가 있으면 코드별 건수("3건 시트에 반영 · 1건 충돌 — 시트가 바뀌었습니다 · 1건
+ * 장부에만(새 행)"), 꺼짐이면 지금 문구. 실패가 하나라도 있으면 alert(부분 성공을 성공처럼 말하지 않는다).
+ */
+export function approvalResultLine(action: "check" | "apply", outcome: ApprovalOutcome): { text: string; alert: boolean } {
+  const verb = action === "check" ? "확인" : "반영"
+  const sheet = action === "apply" ? summarizeApplyOutcomes(outcome.sheetResults ?? []) : null
+  if (sheet) {
+    return { text: sheet.failed ? `${sheet.text} — 모두 보기에서 사유 확인` : sheet.text, alert: sheet.failed || outcome.failed > 0 }
+  }
+  if (outcome.failed > 0) return { text: `${outcome.done}건 ${verb}, ${outcome.failed}건 실패 — 모두 보기에서 사유 확인`, alert: true }
+  return { text: `${outcome.done}건 ${verb}됨`, alert: false }
+}
+
 /** 시안 3 — 대기 중인 변경을 화면 아래 한 줄(어두운 바)로. 확인·반영은 체크 큐와 같은 일괄 함수, 반영은 한 번 더 묻는다. */
-export function ApprovalBar({ drafts, serverQueue, onCheck, onApply, onShowAll }: {
+export function ApprovalBar({ drafts, serverQueue, sheetWriteMode = "off", onCheck, onApply, onShowAll }: {
   drafts: LedgerDraft[]
   serverQueue: boolean
-  onCheck: (ids: string[]) => Promise<{ done: number; failed: number }>
-  onApply: (ids: string[]) => Promise<{ done: number; failed: number }>
+  /** REV 시트 쓰기 스위치 — on 이면 확인 문구가 시트(2. REV)와 장부에 반영한다고 말한다. */
+  sheetWriteMode?: SheetWriteMode
+  onCheck: (ids: string[]) => Promise<ApprovalOutcome>
+  onApply: (ids: string[]) => Promise<ApprovalOutcome>
   onShowAll: () => void
 }) {
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [result, setResult] = useState<string | null>(null)
+  const [result, setResult] = useState<{ text: string; alert: boolean } | null>(null)
   const checkPlan = planBulkCheck(drafts)
   const applyPlan = planBulkApply(drafts)
   const total = drafts.reduce((sum, draft) => sum + (Number.isFinite(draft.amount) ? draft.amount : 0), 0)
@@ -215,8 +324,7 @@ export function ApprovalBar({ drafts, serverQueue, onCheck, onApply, onShowAll }
     setBusy(true)
     try {
       const outcome = action === "check" ? await onCheck(checkPlan.ids) : await onApply(applyPlan.ids)
-      const verb = action === "check" ? "확인" : "반영"
-      setResult(outcome.failed > 0 ? `${outcome.done}건 ${verb}, ${outcome.failed}건 실패 — 모두 보기에서 사유 확인` : `${outcome.done}건 ${verb}됨`)
+      setResult(approvalResultLine(action, outcome))
     } finally {
       setBusy(false)
       setConfirming(false)
@@ -239,12 +347,16 @@ export function ApprovalBar({ drafts, serverQueue, onCheck, onApply, onShowAll }
           변경 대기 {drafts.length}건 · <span className="font-semibold text-white">¥{cny(total)}</span>
         </span>
       ) : null}
-      {result ? <span role="status" className="text-[12.5px] text-[#BDEFD8]">{result}</span> : null}
+      {result ? (
+        <span role={result.alert ? "alert" : "status"} className={`text-[12.5px] ${result.alert ? "font-semibold text-[#F2B8B8]" : "text-[#BDEFD8]"}`}>
+          {result.text}
+        </span>
+      ) : null}
       {!serverQueue ? <span className="text-[12px] text-[#F3D9A4]">서버 연결이 끊겨 반영할 수 없습니다</span> : null}
       <span className="flex-1" />
       {confirming ? (
         <>
-          <span className="text-[12.5px]">{applyPlan.count}건 · ¥{cnyExact(applyPlan.total)}을 장부에 반영합니다</span>
+          <span className="text-[12.5px]">{approvalConfirmText(applyPlan.count, applyPlan.total, sheetWriteMode)}</span>
           <button type="button" disabled={busy} onClick={() => setConfirming(false)} className="min-h-10 rounded-lg border border-[rgba(255,255,255,0.4)] px-3 text-[13px] font-semibold text-white">취소</button>
           <button type="button" disabled={busy} onClick={() => void run("apply")} className="min-h-10 rounded-lg bg-white px-4 text-[13px] font-semibold text-[#084734] disabled:opacity-50">{busy ? "반영 중…" : "반영"}</button>
         </>
@@ -255,7 +367,9 @@ export function ApprovalBar({ drafts, serverQueue, onCheck, onApply, onShowAll }
             <button type="button" disabled={busy} onClick={() => void run("check")} className="min-h-10 rounded-lg border border-white px-3 text-[13px] font-semibold text-white disabled:opacity-50">{checkPlan.count}건 확인</button>
           ) : null}
           {applyPlan.count > 0 && serverQueue ? (
-            <button type="button" disabled={busy} onClick={() => { setResult(null); setConfirming(true) }} className="min-h-10 rounded-lg bg-white px-4 text-[13px] font-semibold text-[#084734] disabled:opacity-50">{applyPlan.count}건 장부에 반영</button>
+            <button type="button" disabled={busy} onClick={() => { setResult(null); setConfirming(true) }} className="min-h-10 rounded-lg bg-white px-4 text-[13px] font-semibold text-[#084734] disabled:opacity-50">
+              {applyPlan.count}건 {sheetWriteMode === "on" ? "시트·장부에" : "장부에"} 반영
+            </button>
           ) : null}
         </>
       )}

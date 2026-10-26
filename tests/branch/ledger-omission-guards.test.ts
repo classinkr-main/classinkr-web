@@ -8,7 +8,7 @@ import {
   rowCommitKind,
 } from "@/components/admin/branch/ledger/rev-matrix-logic"
 import { capLedgerDrafts, ledgerTruncationNotice } from "@/components/admin/branch/ledger/useLedgerDraftQueue"
-import { alignOpenDraftsToSheetRows, resolveCorrectionTargets } from "@/components/admin/branch/ledger/workbench-shared"
+import { alignOpenDraftsToSheetRows, resolveCorrectionTargets, snapshotSheetRowId } from "@/components/admin/branch/ledger/workbench-shared"
 import type { LedgerDraft, LedgerRevenueRow } from "@/components/admin/branch/ledger/shared"
 
 // 매출 장부 누락·이중 계상 가드 3건(2026-10-23 결함 점검).
@@ -102,6 +102,31 @@ describe("1) 반영한 수정의 원본 시트 행 찾기(resolveCorrectionTarge
   it("원본 행이 시트에서 사라졌으면 unresolved", () => {
     const result = resolveCorrectionTargets([correction()], [sheetRow({ id: "x", customer: "다른 학원" })])
     expect(result.unresolved).toHaveLength(1)
+  })
+})
+
+describe("1-a) 시트 Row ID 가 있으면 그것이 원본 행 찾기 1순위다(ADR-011 숨김 열)", () => {
+  it("행 순서가 섞여 번호·id 가 모두 바뀌고 같은 고객·상품 행이 여럿이어도 Row ID 로 정확히 찾는다", () => {
+    const a = sheetRow({ id: "line-A", sheetRow: 40, rowId: "r_aaaaaaaaaaaa" })
+    const b = sheetRow({ id: "line-B", sheetRow: 41, rowId: "r_bbbbbbbbbbbb" })
+    const result = resolveCorrectionTargets([correction({ draftId: "d-1", sourceDealId: "gone", sheetRow: 12 })], [a, b], () => "r_bbbbbbbbbbbb")
+    expect(result.overrides.get("line-B")).toEqual(new Set(["2026-11"]))
+    expect(result.unresolved).toEqual([])
+  })
+
+  it("Row ID 가 중복·형식 오류로 표시된 행(rowIdIssue)은 Row ID 로 고르지 않는다", () => {
+    const bad = sheetRow({ id: "line-A", sheetRow: 40, rowId: "r_aaaaaaaaaaaa", rowIdIssue: "duplicate" })
+    const other = sheetRow({ id: "line-B", sheetRow: 41, rowId: null })
+    const result = resolveCorrectionTargets([correction({ sourceDealId: "gone", sheetRow: 99 })], [bad, other], () => "r_aaaaaaaaaaaa")
+    expect(result.overrides.size).toBe(0)
+    expect(result.unresolved).toHaveLength(1)
+  })
+
+  it("열린 수정 초안은 sourceSnapshot.sheetBaseline.rowId 로 지금 행에 맞춘다", () => {
+    const reimported = sheetRow({ id: "line-NEW", sheetRow: 77, rowId: "r_cccccccccccc" })
+    const open = draft({ id: "edit-open", sourceDealId: "line-1", sourceSheetRow: 12, sourceSnapshot: { sheetBaseline: { rowId: "r_cccccccccccc" } } })
+    expect(snapshotSheetRowId(open.sourceSnapshot)).toBe("r_cccccccccccc")
+    expect(alignOpenDraftsToSheetRows([open], [reimported, sheetRow({ id: "line-X", sheetRow: 12 })])[0].sourceDealId).toBe("line-NEW")
   })
 })
 

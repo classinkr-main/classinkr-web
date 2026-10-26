@@ -83,3 +83,6 @@ Negative:
 ## Status
 
 proposed
+
+시트 반영 부분은 [ADR-011](ADR-011-rev-sheet-writeback-from-ledger.md)로 일부 갱신됐다(2026-10-23). 스위치가 켜지면 edit-row 반영이
+'2. REV' 주차 칸 금액·글자색도 쓴다. 이 ADR의 결정 절(초안 큐·체크·append-only 장부 항목)은 그대로다.

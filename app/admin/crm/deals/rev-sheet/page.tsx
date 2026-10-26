@@ -204,6 +204,8 @@ function ValueSkeleton({ className = "h-6 w-24" }: { className?: string }) {
 // 라운드 5 S-7: 신규(장부에서 만든 행 — 이 화면에 아예 없는 매출)와 정정(시트 행 대체값 — 이 화면은 정정 전
 // 값을 보임)을 나눠 말한다. 예전엔 정정 대체값까지 금액에 더해 "빠진 매출"이 과대하게 읽혔고, 장부의
 // "장부 가감" 타일(신규만)과 정의가 달랐다. 링크는 장부의 적용 초안 원천만·회계연도 전체로 연다.
+// REV 시트 쓰기(ADR-011): 반영 때 '2. REV' 에도 쓴 정정은 그 뒤 동기화가 돌면 이 화면에 이미 들어와 있어
+// 서버(computeManualLedgerGap)가 미반영 수에서 뺀다 — 배너가 그 사실을 한 문장으로 말한다.
 function ManualLedgerGapBanner({ gap }: { gap: AdminCrmRevenueSheetManualLedgerGap }) {
   const newCount = gap.newCount ?? gap.count
   const editCount = gap.editCount ?? 0
@@ -224,7 +226,7 @@ function ManualLedgerGapBanner({ gap }: { gap: AdminCrmRevenueSheetManualLedgerG
             정정 <strong className="font-bold">{formatNumber(editCount)}건</strong>(이 화면은 정정 전 값)
           </>
         ) : null}
-        {" "}· 최근 적용 {formatDate(gap.latestAppliedAt)}.
+        {" "}· 최근 적용 {formatDate(gap.latestAppliedAt)}. 시트(2. REV)에도 쓴 정정은 다음 동기화 뒤 이 화면에 들어와 이 수에서 빠집니다.
       </span>
       <Link href={LEDGER_MANUAL_ENTRIES_HREF} className="ml-auto inline-flex items-center gap-1 font-semibold underline underline-offset-2 hover:text-amber-900">
         장부에서 확인 <ArrowRight className="h-3.5 w-3.5" />

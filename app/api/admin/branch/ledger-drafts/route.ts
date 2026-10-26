@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { BRANCH_READ_ADMIN_API_ROLES, CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { isLedgerDraftBodyError, parseLedgerDraftCreateBody } from "@/lib/branch/ledger-draft-body"
+import { currentSheetWriteMode } from "@/lib/branch/sheet-writeback/config"
+import { isSheetWriteCode, SHEET_WRITE_MESSAGES } from "@/lib/branch/sheet-writeback/messages"
 import {
   BRANCH_SALES_LEDGER_DRAFT_STATUSES,
   createBranchSalesLedgerDraft,
@@ -12,8 +14,65 @@ import {
   listBranchSalesLedgerEntries,
   type BranchSalesLedgerDraftStatus,
 } from "@/lib/repositories/branch-sales-ledger-drafts"
+import {
+  isSheetWritesNotReadyError,
+  lastSuccessfulRevSyncStartedAt,
+  latestSheetWritesByDraftIds,
+  type SheetWriteRecord,
+} from "@/lib/repositories/branch-sales-ledger-sheet-writes"
 
 const STATUSES = new Set<string>(BRANCH_SALES_LEDGER_DRAFT_STATUSES)
+
+type SheetWriteView = Pick<SheetWriteRecord, "status" | "code" | "writtenAt" | "rowId"> & { message: string }
+
+const SHEET_WRITE_UNKNOWN_CODE_MESSAGE = "시트 쓰기 상태를 알 수 없습니다 — 관리자 확인 필요"
+const SHEET_WRITES_READ_FAILED_MESSAGE = "시트 쓰기 기록을 읽지 못했습니다 — 시트 반영 상태가 비어 보일 수 있습니다."
+const REV_SYNC_READ_FAILED_MESSAGE = "마지막 REV 동기화 시각을 읽지 못했습니다."
+
+/**
+ * 감사 행 → 화면용 한 줄. "sending" 은 시트에 보내는 중이거나 보낸 뒤 결과를 못 적은 채 끝난 시도라
+ * (감사 행의 code 는 계획한 결과 "written" 이 미리 들어가 있다) 문구를 "결과 모름"으로 보인다 — 반영됐다고
+ * 말하지 않는다. code 는 저장된 값 그대로 둔다.
+ */
+function toSheetWriteView(record: SheetWriteRecord): SheetWriteView {
+  const message =
+    record.status === "sending"
+      ? SHEET_WRITE_MESSAGES.outcome_unknown
+      : isSheetWriteCode(record.code)
+        ? SHEET_WRITE_MESSAGES[record.code]
+        : SHEET_WRITE_UNKNOWN_CODE_MESSAGE
+  return { status: record.status, code: record.code, message, writtenAt: record.writtenAt, rowId: record.rowId }
+}
+
+/**
+ * 목록에 나온 초안 + 장부 항목의 초안 id 마다 가장 최근 시트 쓰기 시도. 감사 표가 아직 없으면(마이그레이션 전)
+ * 시트에 쓴 적이 없으므로 빈 객체가 정상이다. 그 밖의 조회 실패는 장부 화면 전체를 막지 않고 빈 객체 +
+ * health 로 알린다(시트 반영 표시만 비고, 반영 자체는 서버가 다시 읽어 판정한다).
+ */
+async function readSheetWrites(draftIds: string[]): Promise<{
+  sheetWrites: Record<string, SheetWriteView>
+  health: { ok: boolean; message: string | null }
+}> {
+  try {
+    const latest = await latestSheetWritesByDraftIds(draftIds)
+    const sheetWrites: Record<string, SheetWriteView> = {}
+    for (const [draftId, record] of latest) sheetWrites[draftId] = toSheetWriteView(record)
+    return { sheetWrites, health: { ok: true, message: null } }
+  } catch (error) {
+    if (isSheetWritesNotReadyError(error)) return { sheetWrites: {}, health: { ok: true, message: null } }
+    console.error("[GET /api/admin/branch/ledger-drafts] sheet writes", error)
+    return { sheetWrites: {}, health: { ok: false, message: SHEET_WRITES_READ_FAILED_MESSAGE } }
+  }
+}
+
+async function readLastRevSyncStartedAt(): Promise<{ value: string | null; failed: boolean }> {
+  try {
+    return { value: await lastSuccessfulRevSyncStartedAt(), failed: false }
+  } catch (error) {
+    console.error("[GET /api/admin/branch/ledger-drafts] last rev sync", error)
+    return { value: null, failed: true }
+  }
+}
 
 function adminActorName(admin: { name?: string; userId?: string; role: string }) {
   return admin.name?.trim() || admin.userId || admin.role
@@ -53,7 +112,7 @@ export async function GET(req: NextRequest) {
     // 자르면 큰 붙여넣기 뒤 열린 초안이 목록에서 빠져 결재 바 건수·같은 칸 재편집(PATCH vs 새 초안) 판정이
     // 틀린다. limit 은 끝난 초안(applied·cancelled) 이력에만 건다. 장부 반영값(entries)도 최근 200건으로
     // 자르면 오래된 반영분이 합계에서 조용히 빠지므로 상한까지 받고, 상한에 닿으면 truncated 로 알린다.
-    const [openDraftResult, closedDraftResult, entryResult, reversedEntryResult] = await Promise.all([
+    const [openDraftResult, closedDraftResult, entryResult, reversedEntryResult, lastRevSync] = await Promise.all([
       status === "all"
         ? listBranchSalesLedgerDrafts({ statuses: ["draft", "checked"], limit: LEDGER_LIST_MAX })
         : listBranchSalesLedgerDrafts({ status, limit }),
@@ -62,12 +121,15 @@ export async function GET(req: NextRequest) {
         : null,
       listBranchSalesLedgerEntries({ limit: LEDGER_LIST_MAX }),
       listBranchSalesLedgerEntries({ status: "reversed", limit: LEDGER_LIST_MAX }),
+      readLastRevSyncStartedAt(),
     ])
     const draftResult = closedDraftResult
       ? {
           generatedAt: openDraftResult.generatedAt,
           health: openDraftResult.health.ok ? closedDraftResult.health : openDraftResult.health,
-          drafts: [...openDraftResult.drafts, ...closedDraftResult.drafts].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+          // 두 조회는 상태로 나뉘어 겹치지 않지만, 혹시 겹쳐도 같은 초안을 두 번 내려주지 않는다.
+          drafts: [...new Map([...openDraftResult.drafts, ...closedDraftResult.drafts].map((draft) => [draft.id, draft])).values()]
+            .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")),
         }
       : openDraftResult
 
@@ -79,6 +141,18 @@ export async function GET(req: NextRequest) {
       ),
     )
 
+    // REV 시트 쓰기(ADR-011) — 화면이 칸 아래 힌트·배지·이중 집계 제외(writtenAt < lastRevSyncStartedAt)에 쓴다.
+    // 스위치가 꺼져 있어도 예전에 쓴 기록은 그대로 내려준다(되돌리기 가드·이중 집계 제외는 스위치와 무관).
+    const { sheetWrites, health: sheetWritesHealth } = await readSheetWrites([
+      ...draftResult.drafts.map((draft) => draft.id),
+      ...entryResult.entries.map((entry) => entry.draftId).filter((draftId): draftId is string => Boolean(draftId)),
+    ])
+    const sheetWriteHealth = !sheetWritesHealth.ok
+      ? sheetWritesHealth
+      : lastRevSync.failed
+        ? { ok: false, message: REV_SYNC_READ_FAILED_MESSAGE }
+        : sheetWritesHealth
+
     return adminCachedJson({
       ...draftResult,
       entries: entryResult.entries,
@@ -88,6 +162,12 @@ export async function GET(req: NextRequest) {
         openDrafts: status === "all" && openDraftResult.drafts.length >= LEDGER_LIST_MAX,
         entries: entryResult.entries.length >= LEDGER_LIST_MAX,
       },
+      sheetWrite: {
+        mode: currentSheetWriteMode(),
+        lastRevSyncStartedAt: lastRevSync.value,
+        health: sheetWriteHealth,
+      },
+      sheetWrites,
     })
   } catch (error) {
     console.error("[GET /api/admin/branch/ledger-drafts]", error)

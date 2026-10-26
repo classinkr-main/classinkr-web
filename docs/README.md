@@ -162,6 +162,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - ADR 작성 규칙과 초기 백로그
 - [adr/ADR-010-operational-failure-containment.md](./adr/ADR-010-operational-failure-containment.md)
   - **Cron 인증·복구 실행·Webhook·외부 의존성의 폭주와 유실 방지 결정.**
+- [adr/ADR-011-rev-sheet-writeback-from-ledger.md](./adr/ADR-011-rev-sheet-writeback-from-ledger.md)
+  - **매출 장부 반영 때 '2. REV' 주차 칸에도 쓰는 결정.** 쓰는 칸·색, 지난 주차 거절, 시트 우선 충돌 판정, 행 ID, Production 전용 스위치, 예전 "역방향 쓰기 비권장" 대체 범위
 
 ## 4. Domains
 
@@ -179,6 +181,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
 
 - [active/supabase-korea-migration-status.md](./active/supabase-korea-migration-status.md)
   - 2026-09-14 한국 리전 이관 결과, 현재 운영 프로젝트, 원본 쓰기 차단 및 후속 배포 주의점.
+- [active/rev-sheet-writeback-runbook.md](./active/rev-sheet-writeback-runbook.md)
+  - **REV 시트 쓰기 런북.** 장부 반영 → '2. REV' 쓰기의 켜기·끄기 순서, 행 ID 스크립트(`npm run rev:row-ids`) 미리보기·적용, 결과 코드 대응, 감사 조회 SQL
 - [active/db-migration-runbook.md](./active/db-migration-runbook.md)
   - **DB 마이그레이션 적용 런북.** 수동 적용 절차, `check:db` 스키마 계약, 서울 프로젝트 기준 미적용 목록(배포 전 필수 표시), 적용 보류 중인 마이그레이션
 - [active/integration-followups-2026-09-21.md](./active/integration-followups-2026-09-21.md)

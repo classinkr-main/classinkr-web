@@ -1,8 +1,13 @@
 import type { FormattedCell } from "@/lib/branch/google-sheets"
 import { isBlueText, isRedBg, isRedText } from "@/lib/branch/google-sheets"
+import { REV_ROW_ID_HEADER } from "@/lib/branch/sheet-writeback/config"
+import { weekColorOf } from "@/lib/branch/sheet-writeback/colors"
+import { isValidRowId } from "@/lib/branch/sheet-writeback/row-id"
 import { getBusinessDateParts } from "@/lib/business-time"
 
-export const REV_RANGE = "'2. REV'!A1:CF1000"
+// 84열(A~CF) 뒤 숨김 "Row ID" 열(CG)까지 읽도록 CZ 로 넓혔다(ADR-011 — 장부 반영 때 시트 쓰기).
+// 월 블록은 머리 글자로 찾으므로 오른쪽 여유 열은 금액에 섞이지 않는다. 행 상한(1000)은 그대로다.
+export const REV_RANGE = "'2. REV'!A1:CZ1000"
 // 실제 '2. REV' 시트 좌측 메타 열 위치 — 원본 raw.row(84칸)로 실측 확정(2026-07-03).
 // City/Scale/Porta 열이 왼쪽에 끼면서 예전 매핑이 우측으로 밀려 team=City, manager=Scale,
 // productVersion=Status로 잘못 읽히고 Product(HW/SW 신호) 열은 아예 안 읽히던 버그를 교정.
@@ -69,6 +74,37 @@ export function resolveRevColumns(headers: FormattedCell[]): Record<RevColKey, n
     }
   }
   return resolved
+}
+
+// '2. REV' 숨김 "Row ID" 열 — 행 번호가 바뀌어도 시트 쓰기가 같은 행을 다시 찾는 열쇠다.
+// 머리는 월 영역(REV_COLS.monthlyStart)부터 찾고, 앞뒤 공백·대소문자만 무시한 정확 일치다 —
+// lib/branch/sheet-writeback/layout.ts resolveRevLayout 과 같은 판정이라 두 쪽이 같은 열을 본다.
+// "Row ID" 는 월("4")·주차("w1") 머리 정규식에 걸리지 않으므로 월 블록에 섞이지 않는다.
+export type RevRowIdIssue = "invalid" | "duplicate"
+
+export interface RevRowIdColumn {
+  /** 머리가 정확히 하나일 때 그 열(0-based). 없거나 둘 이상이면 null — 행 ID 를 읽지 않는다. */
+  col: number | null
+  /** "Row ID" 머리가 붙은 열 전부(진단용 — 둘 이상이면 시트 쓰기도 layout_changed 로 막힌다). */
+  headerCols: number[]
+}
+
+export function resolveRevRowIdColumn(headers: FormattedCell[]): RevRowIdColumn {
+  const target = REV_ROW_ID_HEADER.toLowerCase()
+  const headerCols: number[] = []
+  for (let i = REV_COLS.monthlyStart; i < headers.length; i++) {
+    const v = headers[i]?.value
+    if (v != null && String(v).trim().toLowerCase() === target) headerCols.push(i)
+  }
+  return { col: headerCols.length === 1 ? headerCols[0] : null, headerCols }
+}
+
+// 칸 값의 앞뒤 공백은 지운다 — 쓰기 직전 행 찾기(sheet-writeback/plan.ts liveRowId)도 trim 한 값을 본다.
+function rowIdText(cell: FormattedCell | undefined): string | null {
+  const v = cell?.value
+  if (v == null) return null
+  const s = String(v).trim()
+  return s.length ? s : null
 }
 
 export interface RevDealParsed {
@@ -184,6 +220,18 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number; today
     }
   }
 
+  // Row ID: 한 번 파싱 안에서 같은 ID 가 둘 이상이면 그 행 모두 duplicate 이고 rowId 는 null 이다.
+  // 고객명이 빈 행도 센다 — 쓰기 직전 행 찾기(sheet-writeback/plan.ts)가 3행부터 모든 행을 보므로
+  // 여기서 한 행만 있다고 보면 화면은 쓸 수 있다고 하고 서버는 row_id_duplicate 로 막는다.
+  const rowIdCol = resolveRevRowIdColumn(headers).col
+  const rowIdCounts = new Map<string, number>()
+  if (rowIdCol != null) {
+    for (let r = 2; r < grid.length; r++) {
+      const id = rowIdText(grid[r]?.[rowIdCol])
+      if (id && isValidRowId(id)) rowIdCounts.set(id, (rowIdCounts.get(id) ?? 0) + 1)
+    }
+  }
+
   const out: RevDealParsed[] = []
   for (let r = 2; r < grid.length; r++) {
     const row = grid[r] ?? []
@@ -198,6 +246,9 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number; today
     const monthly_pending: Record<string, number> = {}
     // 예정 칸의 주차 번호(1~5, 월 합계 칸 = 0) — 화면이 "w4 시작 10/22에 확정 전환"을 말하는 근거.
     const pending_weeks: Record<string, number[]> = {}
+    // 그 달 주차 칸 순서의 확도 글자("rk--b"). 값 있는 칸(>0)은 글자색(r 빨강·b 파랑·k 그 밖),
+    // 값 없는 칸은 '-'. 초안 baseline(sheet-writeback/baseline.ts)이 읽는다 — 키는 weekly_payments 와 같다.
+    const weekly_colors: Record<string, string> = {}
     for (const block of monthBlocks) {
       const totalCell = row[block.totalIdx]
       const total = asNumber(totalCell?.value)
@@ -215,11 +266,14 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number; today
       let pending = 0
       let hasPending = false
       const pendingWeekNos: number[] = []
+      let weekMarks = ""
       for (const [weekPos, weekIdx] of block.weekIdxs.entries()) {
         const cell = row[weekIdx]
         const n = cell ? asNumber(cell.value) : null
         const amount = n ?? 0
         weekValues.push(amount)
+        // 글자색만 본다(배경 빨강 호환은 확정 집계에만) — 쓰기 직전 비교(plan.ts liveWeeks)도 글자색만 본다.
+        weekMarks += n != null && n > 0 ? weekColorOf(cell?.fg) : "-"
         if (!cell || n == null) continue
         hasWeekValue = true
         weekSum += n
@@ -233,7 +287,10 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number; today
       const monthTotal = total ?? (hasWeekValue ? weekSum : null)
       if (monthTotal == null) continue
       monthly_payments[block.ym] = monthTotal
-      if (hasWeekValue) weekly_payments[block.ym] = weekValues
+      if (hasWeekValue) {
+        weekly_payments[block.ym] = weekValues
+        weekly_colors[block.ym] = weekMarks
+      }
       // 주차 입력 없이 월 합계 칸에만 적고 색을 칠한 행 호환
       if (!hasWeekValue && total != null && totalCell) {
         if (isRedText(totalCell.fg) || isRedBg(totalCell.bg)) {
@@ -255,6 +312,16 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number; today
       }
       if (hasHighConf) monthly_high_conf[block.ym] = highConf
     }
+    let rowId: string | null = null
+    let rowIdIssue: RevRowIdIssue | null = null
+    if (rowIdCol != null) {
+      const id = rowIdText(row[rowIdCol])
+      if (id) {
+        if (!isValidRowId(id)) rowIdIssue = "invalid"
+        else if ((rowIdCounts.get(id) ?? 0) > 1) rowIdIssue = "duplicate"
+        else rowId = id
+      }
+    }
     out.push({
       sheet_row: r + 1,
       customer_name: customer,
@@ -273,8 +340,52 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number; today
       // weeklyPayments도 raw에 실어 보낸다 — pipeline.ts의 weeklyPaymentsFromRaw가
       // deal.raw.weeklyPayments를 우선 사용하므로, 고정 오프셋 추정 폴백을 타지 않는다.
       // monthlyPending은 표시용 — 확정 집계(rev-confirmed.ts)에서는 예상(expected) 몫으로 남는다.
-      raw: { row: row.map((c) => c?.value ?? null), weeklyPayments: weekly_payments, monthlyPending: monthly_pending, pendingWeeks: pending_weeks },
+      // rowId·rowIdIssue·weeklyColors 는 시트 쓰기(ADR-011)용 — 금액·확도 집계는 읽지 않는다.
+      raw: {
+        row: row.map((c) => c?.value ?? null),
+        weeklyPayments: weekly_payments,
+        monthlyPending: monthly_pending,
+        pendingWeeks: pending_weeks,
+        rowId,
+        rowIdIssue,
+        weeklyColors: weekly_colors,
+      },
     })
   }
   return out
+}
+
+export interface RevRowIdSummary {
+  /** present = "Row ID" 머리 하나 · missing = 없음(행 ID 스크립트 전) · ambiguous = 둘 이상 */
+  column: "present" | "missing" | "ambiguous"
+  /** 고객 행 중 Row ID 칸이 빈 행 수(column=present 일 때만 센다) */
+  missing: number
+  duplicate: number
+  invalid: number
+}
+
+/** parseRev 결과(raw.rowId·raw.rowIdIssue)로 Row ID 상태를 센다 — 동기화 경고용. */
+export function summarizeRevRowIds(grid: FormattedCell[][], parsed: RevDealParsed[]): RevRowIdSummary {
+  const { col, headerCols } = resolveRevRowIdColumn(grid[1] ?? [])
+  const column = col != null ? "present" : headerCols.length > 1 ? "ambiguous" : "missing"
+  const summary: RevRowIdSummary = { column, missing: 0, duplicate: 0, invalid: 0 }
+  if (column !== "present") return summary
+  for (const deal of parsed) {
+    const issue = deal.raw.rowIdIssue
+    if (issue === "duplicate") summary.duplicate += 1
+    else if (issue === "invalid") summary.invalid += 1
+    else if (!isValidRowId(deal.raw.rowId)) summary.missing += 1
+  }
+  return summary
+}
+
+/** 동기화 경고 한 줄. 문제가 없으면 undefined — 동기화 실패로 치지 않는다(경고만). */
+export function revRowIdWarning(summary: RevRowIdSummary): string | undefined {
+  if (summary.column === "missing") return "Row ID 열 없음 — 시트 쓰기 불가(행 ID 스크립트 필요)"
+  if (summary.column === "ambiguous") return "Row ID 열이 여럿 — 시트 쓰기 불가(관리자 확인 필요)"
+  const parts: string[] = []
+  if (summary.missing > 0) parts.push(`없음 ${summary.missing}`)
+  if (summary.duplicate > 0) parts.push(`중복 ${summary.duplicate}`)
+  if (summary.invalid > 0) parts.push(`형식 오류 ${summary.invalid}`)
+  return parts.length > 0 ? `Row ID ${parts.join(" · ")}` : undefined
 }

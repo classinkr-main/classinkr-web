@@ -158,6 +158,48 @@ export interface MatrixPendingDraft {
   /** 주차별 확도(metadata.weeklyConfidence, 라운드 3 P1) — 주차 셀 팝오버 기본값이 슬롯 상태를
       우선하도록 pending 요약에 동봉한다. 없으면 null(초안 단위 confidence 폴백). */
   weeklyConfidence: (DraftConfidence | null)[] | null
+  /** REV 시트 쓰기(ADR-011) — 이 초안에서 사용자가 확도를 직접 골랐는지(metadata.confidenceTouched). 같은 칸을 다시
+      고쳐 PATCH 할 때 앞서 고른 확도 표시를 잃지 않게 동봉한다. 없으면 false. */
+  confidenceTouched?: boolean
+  /** 주차별 확도 직접 선택 표시(metadata.weeklyConfidenceTouched, 5칸). 없으면 null. */
+  weeklyConfidenceTouched?: boolean[] | null
+}
+
+/** metadata.weeklyConfidenceTouched(5칸 불리언) — 모양이 틀리면 null. */
+export function weeklyConfidenceTouchedFromMetadata(metadata: Record<string, unknown> | null | undefined): boolean[] | null {
+  const raw = metadata?.weeklyConfidenceTouched
+  if (!Array.isArray(raw) || raw.length !== 5 || !raw.every((value) => typeof value === "boolean")) return null
+  return raw as boolean[]
+}
+
+/**
+ * 셀 커밋 초안의 확도 선택 표시(REV 시트 쓰기, ADR-011 — metadata.confidenceTouched·weeklyConfidenceTouched).
+ * 서버는 값 있는 시트 칸의 글자색을 이 표시가 있을 때만 쓴다. 그래서
+ *  - picked(호출부의 "명시 선택": 팝오버 확도·E/H/C·편집 바·붙여넣기 확도 고르기)가 아니면 고른 것이 아니다 —
+ *    팝오버 기본값은 그 달 우세 확도라 시작 전 빨강 주차를 '예정'으로, 주차 칸에도 달 전체 확도를 보인다.
+ *  - 골랐어도 화면이 보이던 확도(shownConfidence)와 같으면 바뀐 것이 없다.
+ *  - 같은 칸 대기 초안(pending)이 앞서 고른 표시는 이어 받는다(그 초안을 PATCH 하면서 선택을 지우지 않는다).
+ *  - 주차 병합(mergedWeekly)이면 주차별 5칸: 편집한 주차만 이번 선택, 나머지는 대기 초안의 표시. 금액 0 주차는 false.
+ */
+export function cellDraftConfidenceTouched(input: {
+  picked: boolean
+  confidence: DraftConfidence
+  shownConfidence: DraftConfidence
+  pending: Pick<MatrixPendingDraft, "confidenceTouched" | "weeklyConfidenceTouched"> | null | undefined
+  week?: number
+  mergedWeekly: number[] | null
+}): { confidenceTouched: boolean; weeklyConfidenceTouched: boolean[] | null } {
+  const pickedNow = input.picked && input.confidence !== input.shownConfidence
+  if (!input.mergedWeekly || input.week == null) {
+    return { confidenceTouched: pickedNow || input.pending?.confidenceTouched === true, weeklyConfidenceTouched: null }
+  }
+  const earlier = input.pending?.weeklyConfidenceTouched ?? null
+  const weeklyConfidenceTouched = input.mergedWeekly.map((value, index) => {
+    if (!(value > 0)) return false
+    const before = earlier?.[index] === true
+    return index === input.week ? pickedNow || before : before
+  })
+  return { confidenceTouched: weeklyConfidenceTouched.some(Boolean), weeklyConfidenceTouched }
 }
 
 // pending 요약에서 좌표(coord) 기준 실제 셀 금액을 뽑는다. 주차 좌표 + weekly 병합 배열이 있으면
@@ -239,6 +281,8 @@ export function buildMatrixPendingByCell(
         confidence: draftConfidenceFromMetadata(draft.metadata),
         weekly: mergedWeeklyFromMetadata(draft.metadata),
         weeklyConfidence: weeklyConfidenceFromMetadata(draft.metadata),
+        confidenceTouched: draft.metadata?.confidenceTouched === true,
+        weeklyConfidenceTouched: weeklyConfidenceTouchedFromMetadata(draft.metadata),
       }
       // 비어 있거나, 먼저 들어온 것이 신규 초안인데 이번 것이 수정 초안이면 이번 것으로(수정 우선).
       const claim = (key: string) => {
@@ -679,7 +723,16 @@ export function useMatrixEditor({
   editableCells: MatrixCellCoord[] // 렌더 순서(행 위→아래, 월 좌→우, 확장월은 w1→w5)로 정렬된 편집가능 셀
   cellValue: (coord: MatrixCellCoord) => number // 커밋 기준값(원 단위) — fill-down 소스
   cellConfidence: (coord: MatrixCellCoord) => DraftConfidence // 셀 우세 확도(팝오버 기본값)
-  onCommitCell: (rowId: string, month: string, amount: number, confidence: DraftConfidence, week?: number) => void
+  // options.confidenceTouched(REV 시트 쓰기, ADR-011): 사용자가 이 커밋에서 확도를 직접 골랐는지 — 팝오버 확도 선택·
+  // E/H/C·편집 바로 고른 경우만 true. 기본값으로 흘러간 확도(금액만 고친 Enter·Ctrl+D)는 false 라 시트 글자색을 덮지 않는다.
+  onCommitCell: (
+    rowId: string,
+    month: string,
+    amount: number,
+    confidence: DraftConfidence,
+    week?: number,
+    options?: { confidenceTouched?: boolean },
+  ) => void
   // 음수 입력이 0으로 클램프될 때 호출(커밋 결과와 무관 — 무입력 취급되는 경우도 포함). 항목 3.
   onAmountClamped?: () => void
 }) {
@@ -695,6 +748,9 @@ export function useMatrixEditor({
   // onEditingKeyDown)은 전부 사용자 이벤트 핸들러라, 직전 렌더의 effect가 이미 반영된 뒤 실행돼 stale 없음.
   const bufferRef = useRef(buffer)
   const editConfidenceRef = useRef(editConfidence)
+  // 이번 편집에서 확도를 "명시 선택"했는가(REV 시트 쓰기 — 칸 글자색을 쓸지). beginEdit 가 false 로 되돌리고
+  // pickEditConfidence(팝오버·E/H/C·편집 바)만 true 로 바꾼다. 이벤트 핸들러에서만 읽고 쓴다(렌더 중 접근 없음).
+  const confidencePickedRef = useRef(false)
   useEffect(() => {
     bufferRef.current = buffer
     editConfidenceRef.current = editConfidence
@@ -720,6 +776,7 @@ export function useMatrixEditor({
       // 마지막 명시 선택 확도(localStorage)로 시작한다 — SL-6, A1 확도-분배 로직 회귀 없음.
       const current = cellValue(coord)
       const base = cellConfidence(coord)
+      confidencePickedRef.current = false
       setEditConfidence(current <= 0 && base === "expected" ? (loadStoredMatrixConfidence() ?? base) : base)
       // seed(타이핑 첫 글자)면 그 값으로, 아니면 기존 커밋값(0은 빈칸)으로 시작.
       if (seed != null) {
@@ -741,6 +798,7 @@ export function useMatrixEditor({
   // 한 번의 확정 선택이 이후 빈 셀 입력의 기본값이 된다(SL-6 세션 기억).
   const pickEditConfidence = useCallback((next: DraftConfidence) => {
     storeMatrixConfidence(next)
+    confidencePickedRef.current = true
     setEditConfidence(next)
   }, [])
 
@@ -758,7 +816,7 @@ export function useMatrixEditor({
       // 금액·확도 둘 다 그대로면 저장하지 않는다. (주차 셀도 cellValue/cellConfidence가 주차 기준이라 동일 가드 적용)
       if (amount === previous && confidence === previousConfidence) return false
       if (amount <= 0 && previous <= 0) return false
-      onCommitCell(coord.rowId, coord.month, amount, confidence, coord.week)
+      onCommitCell(coord.rowId, coord.month, amount, confidence, coord.week, { confidenceTouched: confidencePickedRef.current })
       return true
     },
     [cellConfidence, cellValue, onAmountClamped, onCommitCell],
@@ -844,7 +902,8 @@ export function useMatrixEditor({
         for (let i = index - 1; i >= 0; i -= 1) {
           if (matrixSameColumn(editableCells[i], coord)) {
             const value = cellValue(editableCells[i])
-            if (value > 0) onCommitCell(coord.rowId, coord.month, value, cellConfidence(coord), coord.week)
+            // 위 값 채우기는 금액만 옮긴다 — 확도는 그 칸 기본값이라 고른 것이 아니다(시트 글자색 그대로).
+            if (value > 0) onCommitCell(coord.rowId, coord.month, value, cellConfidence(coord), coord.week, { confidenceTouched: false })
             return
           }
         }
@@ -856,7 +915,9 @@ export function useMatrixEditor({
       if (shortcut) {
         event.preventDefault()
         const value = cellValue(coord)
-        if (value > 0 && shortcut !== cellConfidence(coord)) onCommitCell(coord.rowId, coord.month, value, shortcut, coord.week)
+        if (value > 0 && shortcut !== cellConfidence(coord)) {
+          onCommitCell(coord.rowId, coord.month, value, shortcut, coord.week, { confidenceTouched: true })
+        }
         return
       }
       if (event.key === "ArrowRight") {

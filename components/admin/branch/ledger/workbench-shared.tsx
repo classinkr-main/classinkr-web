@@ -71,17 +71,30 @@ interface DealDetailResponse {
 
 // 수정(edit-row) 초안·반영값 → 그 수정이 가리키는 지금의 원본 시트 행 찾기. 시트를 다시 가져오면 시트 행 id
 // (임포트 줄 id)가 새로 만들어지므로 id 만 보면 원본을 못 찾는다. 그래서
-//   1) 같은 id → 2) 같은 시트 행 번호 + 같은 고객 → 3) 같은 고객 + 같은 상품인 행이 딱 하나
-// 순서로 찾고, 셋 다 실패하면 undefined(고르지 않는다 — 잘못 붙이는 것보다 경고가 낫다).
+//   1) 같은 시트 Row ID('2. REV' 숨김 열, ADR-011 — 정렬·행 삽입에도 안 바뀐다) → 2) 같은 id
+//   → 3) 같은 시트 행 번호 + 같은 고객 → 4) 같은 고객 + 같은 상품인 행이 딱 하나
+// 순서로 찾고, 모두 실패하면 undefined(고르지 않는다 — 잘못 붙이는 것보다 경고가 낫다).
 export interface SheetRowRef {
+  /** 초안·반영값이 만들 때 본 시트 Row ID(sourceSnapshot.sheetBaseline.rowId). */
+  sheetRowId?: string | null
   sourceDealId?: string | null
   sheetRow?: number | null
   customer: string
   productVersion?: string | null
 }
 
+/** 초안·반영값 sourceSnapshot 에 실린 시트 Row ID(시트 쓰기 baseline). 없으면 null. */
+export function snapshotSheetRowId(snapshot: Record<string, unknown> | null | undefined): string | null {
+  const baseline = snapshot && isRecord(snapshot.sheetBaseline) ? snapshot.sheetBaseline : null
+  const rowId = baseline?.rowId
+  return typeof rowId === "string" && rowId.trim() ? rowId.trim() : null
+}
+
 export function createSheetRowResolver(sheetRows: LedgerRevenueRow[]): (ref: SheetRowRef) => LedgerRevenueRow | undefined {
   const byId = new Map(sheetRows.map((row) => [row.id, row]))
+  // 형식이 맞고 한 번만 나온 Row ID 만 키로 쓴다(rowIdIssue 가 있으면 그 행은 Row ID 로 찾지 않는다).
+  const byRowId = new Map<string, LedgerRevenueRow>()
+  for (const row of sheetRows) if (row.rowId && !row.rowIdIssue) byRowId.set(row.rowId, row)
   const byAccount = new Map<string, LedgerRevenueRow[]>()
   for (const row of sheetRows) {
     const key = normalizedAccountKey(row.customer)
@@ -91,6 +104,8 @@ export function createSheetRowResolver(sheetRows: LedgerRevenueRow[]): (ref: She
   }
   const sameText = (a: string | null | undefined, b: string | null | undefined) => (a ?? "").trim() === (b ?? "").trim()
   return (ref) => {
+    const stable = ref.sheetRowId ? byRowId.get(ref.sheetRowId) : undefined
+    if (stable) return stable
     const exact = ref.sourceDealId ? byId.get(ref.sourceDealId) : undefined
     if (exact) return exact
     const sameAccount = byAccount.get(normalizedAccountKey(ref.customer)) ?? []
@@ -110,7 +125,12 @@ export interface CorrectionTargetResult {
   unresolved: LedgerRevenueRow[]
 }
 
-export function resolveCorrectionTargets(corrections: LedgerRevenueRow[], sheetRows: LedgerRevenueRow[]): CorrectionTargetResult {
+export function resolveCorrectionTargets(
+  corrections: LedgerRevenueRow[],
+  sheetRows: LedgerRevenueRow[],
+  /** 정정 행 → 만들 때 본 시트 Row ID(반영값 sourceSnapshot). 없으면 Row ID 단계를 건너뛴다. */
+  sheetRowIdOf: (correction: LedgerRevenueRow) => string | null = () => null,
+): CorrectionTargetResult {
   const overrides = new Map<string, Set<string>>()
   const unresolved: LedgerRevenueRow[] = []
   if (corrections.length === 0) return { overrides, unresolved }
@@ -118,7 +138,7 @@ export function resolveCorrectionTargets(corrections: LedgerRevenueRow[], sheetR
   for (const correction of corrections) {
     const month = correction.draftMonth
     if (!month) continue
-    const target = resolve(correction)
+    const target = resolve({ ...correction, sheetRowId: sheetRowIdOf(correction) })
     if (!target) {
       unresolved.push(correction)
       continue
@@ -143,6 +163,7 @@ export function alignOpenDraftsToSheetRows(drafts: LedgerDraft[], sheetRows: Led
     if (dealId && ids.has(dealId)) return draft
     resolve ??= createSheetRowResolver(sheetRows)
     const target = resolve({
+      sheetRowId: snapshotSheetRowId(draft.sourceSnapshot),
       sourceDealId: dealId,
       sheetRow: draft.sourceSheetRow,
       customer: draft.customer,
