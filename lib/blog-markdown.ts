@@ -272,7 +272,7 @@ function renderMarkdownTable(lines: string[], index: number) {
   const headerHtml = header
     .map(
       (cell, cellIndex) =>
-        `<th scope="col" class="whitespace-nowrap border-b border-[#e8e8e4] bg-[#F6F5F4] px-4 py-3 text-[13px] font-semibold text-[#111110] ${tableAlignmentClass(alignments[cellIndex])}">${renderInline(cell)}</th>`
+        `<th scope="col" class="min-w-[6.5rem] border-b border-[#e8e8e4] bg-[#F6F5F4] px-4 py-3 text-[13px] font-semibold text-[#111110] ${tableAlignmentClass(alignments[cellIndex])}">${renderInline(cell)}</th>`
     )
     .join("")
   const bodyHtml = rows
@@ -288,7 +288,7 @@ function renderMarkdownTable(lines: string[], index: number) {
     .join("")
 
   return {
-    html: `<div class="my-8 overflow-x-auto rounded-2xl border border-[#e8e8e4] bg-white"><table class="w-full min-w-[520px] border-collapse"><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`,
+    html: `<div class="my-8 overflow-x-auto rounded-2xl border border-[#e8e8e4] bg-white"><table class="w-full border-collapse"><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`,
     nextIndex: cursor,
   }
 }

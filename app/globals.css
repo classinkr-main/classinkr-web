@@ -814,16 +814,12 @@
 
 .blog-markdown img,
 .blog-markdown video,
-.blog-markdown iframe,
-.blog-markdown table {
+.blog-markdown iframe {
   max-width: 100%;
 }
 
-.blog-markdown table {
-  display: block;
-  overflow-x: auto;
-  white-space: nowrap;
-}
+/* 표는 렌더러가 overflow-x 상자로 감싼다. 칸은 줄바꿈하고, 열마다 최소 폭(th min-w)만 지켜
+   2~3열 표는 휴대폰 폭에 맞고 그보다 넓은 표만 상자 안에서 가로로 넘긴다. */
 
 @media (max-width: 640px) {
   .blog-markdown h2 {
