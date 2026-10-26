@@ -848,9 +848,12 @@
   }
 
   .blog-markdown figure {
-    border-radius: 1rem !important;
     margin-left: -0.25rem !important;
     margin-right: -0.25rem !important;
+  }
+
+  .blog-markdown figure img {
+    border-radius: 1rem !important;
   }
 }
 

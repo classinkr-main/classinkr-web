@@ -194,9 +194,9 @@ function renderImage(line: string) {
       ? ` style="max-width:${width}px;width:100%;margin-left:auto;margin-right:auto"`
       : ""
     figures.push(`
-      <figure class="my-8 overflow-hidden rounded-3xl border border-[#e8e8e4] bg-white"${figureStyle}>
-        <img src="${sanitizePublicImageUrlForHtmlAttribute(url)}" alt="${escapeHtml(alt)}" loading="lazy" decoding="async" class="h-auto w-full object-cover" />
-        ${alt || title ? `<figcaption class="border-t border-[#e8e8e4] px-5 py-3 text-sm text-[#1a1a1a]/45">${escapeHtml(alt || title)}</figcaption>` : ""}
+      <figure class="my-8"${figureStyle}>
+        <img src="${sanitizePublicImageUrlForHtmlAttribute(url)}" alt="${escapeHtml(alt)}" loading="lazy" decoding="async" class="h-auto w-full rounded-2xl border border-[#e8e8e4] object-cover" />
+        ${alt || title ? `<figcaption class="mt-2.5 px-1 text-[13px] leading-5 text-[#1a1a1a]/45">${escapeHtml(alt || title)}</figcaption>` : ""}
       </figure>
     `)
     cursor = matchStart + match[0].length
