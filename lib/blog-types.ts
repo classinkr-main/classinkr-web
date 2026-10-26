@@ -1,5 +1,11 @@
 export type BlogPostStatus = "draft" | "review" | "published" | "archived"
 
+/**
+ * AI 스트림 중간 실패 신호. 스트림은 이미 200 으로 시작돼 상태 코드를 못 바꾸므로, 이 표식 뒤에
+ * 오류 메시지를 붙여 보낸다. 편집기는 표식을 보면 결과를 버리고 오류로 처리한다(본문에 섞지 않는다).
+ */
+export const BLOG_AI_STREAM_ERROR_MARKER = "\u0000[AI_STREAM_ERROR]"
+
 export interface BlogPostCTA {
   eyebrow: string
   title: string

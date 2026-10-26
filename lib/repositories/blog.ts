@@ -20,6 +20,7 @@ export type { BlogPost, BlogPostInput, BlogPostStatus } from "@/lib/blog-types";
 export { CATEGORIES, BLOG_STATUS_OPTIONS, DEFAULT_BLOG_CTA } from "@/lib/blog-types";
 
 import { DEFAULT_BLOG_CTA, normalizeBlogCategory, type BlogPost, type BlogPostInput } from "@/lib/blog-types";
+import { normalizeBlogSlug } from "@/lib/blog-slug-route";
 import {
   buildAdminBlogOverviewSummary,
   type AdminBlogOverviewSourceRow,
@@ -607,18 +608,9 @@ function hashUuidToNumber(uuid: string): number {
 
 const formatDate = formatBlogDisplayDate;
 
-function slugifyTitle(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9가-힣\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .slice(0, 80);
-}
-
 function resolveBlogSlug(slug: string | null | undefined, title: string | null | undefined): string {
   const source = slug?.trim() || title?.trim() || "untitled";
-  return slugifyTitle(source) || "untitled";
+  return normalizeBlogSlug(source) || "untitled";
 }
 
 function normalizeCtaHref(value: string | null | undefined): string | null {

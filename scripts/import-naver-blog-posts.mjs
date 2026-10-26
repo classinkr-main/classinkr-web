@@ -629,7 +629,8 @@ async function fetchTargetPosts() {
         categoryNo: item.categoryNo,
         dateKey,
         createdAt: iso,
-        slug: `naver-${dateKey}-${slugBase}`.slice(0, 112).replace(/-$/g, ""),
+        // 80자 = 편집기·서버 공용 normalizeBlogSlug(lib/blog-slug-route.ts) 상한. 더 길면 첫 저장에 주소가 바뀐다.
+        slug: `naver-${dateKey}-${slugBase}`.slice(0, 80).replace(/[-_]+$/g, ""),
       };
     })
     .filter((post) => post.dateKey >= SINCE_DATE)
@@ -643,10 +644,18 @@ async function run() {
 
   const { data: existingRows, error: existingError } = await supabase
     .from("blog_posts")
-    .select("id, slug");
+    .select("id, slug, status, content_markdown");
   if (existingError) throw new Error(`[db] existing slug query failed: ${existingError.message}`);
-  const slugToId = new Map((existingRows ?? []).map((row) => [row.slug, row.id]));
-  console.log(`[db] existing posts=${slugToId.size}`);
+  const slugToRow = new Map((existingRows ?? []).map((row) => [row.slug, row]));
+  // 2026-10-26 공개 23편은 영문 슬러그로 바뀌어 슬러그로는 못 찾는다(다시 돌리면 naver-* 초안이 중복 생성).
+  // 가져온 글은 본문 끝에 원문 주소(…/classinkorea/<logNo>)가 남아 있으니 그 번호로 먼저 찾는다.
+  const logNoToRow = new Map();
+  for (const row of existingRows ?? []) {
+    for (const match of (row.content_markdown ?? "").matchAll(/blog\.naver\.com\/classinkorea\/(\d+)/g)) {
+      if (!logNoToRow.has(match[1])) logNoToRow.set(match[1], row);
+    }
+  }
+  console.log(`[db] existing posts=${slugToRow.size} naver-linked=${logNoToRow.size}`);
 
   const inserts = [];
   const updates = [];
@@ -654,12 +663,19 @@ async function run() {
   let totalImages = 0;
 
   for (const post of posts) {
-    const existsId = slugToId.get(post.slug);
-    if (existsId && !UPDATE_EXISTING) {
-      console.log(`[skip] ${post.dateKey} ${post.slug}`);
+    const existing = logNoToRow.get(post.logNo) ?? slugToRow.get(post.slug);
+    if (existing && !UPDATE_EXISTING) {
+      console.log(`[skip] ${post.dateKey} ${existing.slug}`);
       skipped += 1;
       continue;
     }
+    // --update 는 아직 초안인 글만 다시 쓴다. 검수·공개 글은 사이트에서 다듬은 본문이라 덮지 않는다.
+    if (existing && String(existing.status).toUpperCase() !== "DRAFT") {
+      console.log(`[skip:${existing.status}] ${post.dateKey} ${existing.slug} — 초안이 아니라 덮어쓰지 않음`);
+      skipped += 1;
+      continue;
+    }
+    const existsId = existing?.id;
 
     console.log(`\n[post] ${post.dateKey} ${post.title}`);
     console.log(`   slug=${post.slug}`);
@@ -669,6 +685,8 @@ async function run() {
     console.log(`   markdown=${record.content_markdown.length} chars images=${parsed.imageCount} read=${record.read_time}`);
 
     if (existsId) {
+      // 초안에서 바꿔 둔 슬러그는 유지한다.
+      record.slug = existing.slug;
       updates.push({ id: existsId, record });
     } else {
       inserts.push(record);

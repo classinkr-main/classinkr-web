@@ -46,6 +46,7 @@ import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import { SafeBlogImage } from "@/components/blog/SafeBlogImage"
 import { type RichMarkdownEditorHandle } from "@/components/admin/RichMarkdownEditor"
 import {
+  BLOG_AI_STREAM_ERROR_MARKER,
   BLOG_STATUS_OPTIONS,
   CATEGORIES,
   DEFAULT_BLOG_CTA,
@@ -56,8 +57,8 @@ import {
 import {
   estimateReadTime,
   extractMarkdownHeadings,
-  slugify,
 } from "@/lib/blog-markdown"
+import { normalizeBlogSlug, sanitizeBlogSlugInput } from "@/lib/blog-slug-route"
 import { leadMagnetOptions } from "@/lib/lead-magnets"
 import { getLeadMagnetGateLabel, getLeadMagnetStatusLabel } from "@/lib/lead-magnets-helpers"
 import { sanitizePublicImageUrl } from "@/lib/safe-public-url"
@@ -512,6 +513,8 @@ export default function BlogPostEditor({
   const [uploadingField, setUploadingField] = useState<"imageUrl" | "heroImageUrl" | null>(null)
   const [notice, setNotice] = useState("")
   const [aiState, setAiState] = useState<AiState | null>(null)
+  // 진행 중인 AI 요청. 창을 닫거나 다시 생성하면 끊는다 — 안 끊으면 닫은 뒤 끝난 결과가 본문을 덮었다.
+  const aiAbortRef = useRef<AbortController | null>(null)
   const [draftInput, setDraftInput] = useState({ topic: "", tone: "전문적", length: "medium", reference: "" })
   const [showPreview, setShowPreview] = useState(false)
   const [showTemplateModal, setShowTemplateModal] = useState(false)
@@ -615,7 +618,7 @@ export default function BlogPostEditor({
       : "bg-[#F6F5F4] text-[#615D59]"
   // 저장 시 서버가 같은 slug를 거절한다(lib/repositories/blog.ts assertBlogSlugAvailable).
   // 발행 창에서 미리 막고 대체 주소를 제안하기 위해 화면에 있는 글 목록으로 먼저 확인한다.
-  const effectiveSlug = form.slug.trim() || form.title.trim() ? slugify(form.slug.trim() || form.title.trim()) : ""
+  const effectiveSlug = form.slug.trim() || form.title.trim() ? normalizeBlogSlug(form.slug.trim() || form.title.trim()) : ""
   const slugConflictPost = effectiveSlug
     ? filteredPosts.find((post) => post.slug === effectiveSlug)
     : undefined
@@ -905,7 +908,7 @@ export default function BlogPostEditor({
     const finalExcerpt = form.excerpt.trim()
     return {
       ...form,
-      slug: slugify(form.slug.trim() || finalTitle),
+      slug: normalizeBlogSlug(form.slug.trim() || finalTitle),
       title: finalTitle,
       excerpt: finalExcerpt,
       tags: parsedTags,
@@ -1028,19 +1031,37 @@ export default function BlogPostEditor({
     handleSubmitRef.current = handleSubmit
   })
 
+  // 편집 화면을 떠나면 진행 중인 AI 요청도 끊는다.
+  useEffect(() => () => aiAbortRef.current?.abort(), [])
+
+  const closeAiPanel = () => {
+    aiAbortRef.current?.abort()
+    aiAbortRef.current = null
+    setAiState(null)
+  }
+
   const handleAiAction = async (action: AiAction, params?: { topic: string; tone: string; length: string; reference?: string }, contentOverride?: string) => {
+    aiAbortRef.current?.abort()
+    const controller = new AbortController()
+    aiAbortRef.current = controller
     setAiState({ action, status: "loading", result: "", ...(params ?? {}) })
-    const sourceContent = contentOverride ?? form.contentMarkdown
+    // 마지막 200ms 타이핑(디바운스 대기분)까지 반영한 본문을 보낸다.
+    editorRef.current?.flush()
+    const current = formRef.current
+    const sourceContent = contentOverride ?? current.contentMarkdown
     const mediaGuard = action === "optimize" ? protectAiMedia(sourceContent) : null
     const requestContent = mediaGuard?.content ?? sourceContent
     const shouldAutoApplyOptimize = action === "optimize" && contentOverride === undefined
+    const failAi = (message: string) =>
+      setAiState({ action, status: "error", result: message, ...(params ?? {}) })
     try {
       const res = await adminFetch("/api/admin/blog/ai", {
         method: "POST",
+        signal: controller.signal,
         body: JSON.stringify(
           action === "draft" && params
-            ? { action, category: form.category, topic: params.topic, tone: params.tone, length: params.length, reference: params.reference ?? "" }
-            : { action, title: form.title, content: requestContent, category: form.category }
+            ? { action, category: current.category, topic: params.topic, tone: params.tone, length: params.length, reference: params.reference ?? "" }
+            : { action, title: current.title, content: requestContent, category: current.category }
         ),
       })
       if (res.status === 401) {
@@ -1070,14 +1091,28 @@ export default function BlogPostEditor({
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-        const chunk = decoder.decode(value, { stream: true })
-        streamedResult += chunk
-        setAiState((prev) => prev ? { ...prev, result: prev.result + chunk } : null)
+        streamedResult += decoder.decode(value, { stream: true })
+        // 오류 표식 앞부분만 보여준다(표식 뒤는 오류 메시지).
+        const visible = streamedResult.split(BLOG_AI_STREAM_ERROR_MARKER)[0]
+        setAiState((prev) => prev ? { ...prev, result: visible } : null)
+      }
+      if (controller.signal.aborted) return
+      const [generated, streamError] = streamedResult.split(BLOG_AI_STREAM_ERROR_MARKER)
+      // 중간에 끊긴 결과는 잘린 글이라 적용하지 않는다(예전엔 "[error: …]"까지 본문에 들어갔다).
+      if (streamError !== undefined) {
+        failAi(`AI 생성이 중간에 끊겼습니다: ${streamError || "알 수 없는 오류"}. 본문은 바꾸지 않았습니다.`)
+        return
+      }
+      if (!generated.trim()) {
+        failAi("AI가 빈 결과를 돌려줬습니다. 다시 생성해 주세요.")
+        return
       }
       const finalResult =
         action === "optimize" && mediaGuard
-          ? restoreAiMedia(normalizeAiMarkdownResult(streamedResult), mediaGuard.replacements)
-          : streamedResult
+          ? restoreAiMedia(normalizeAiMarkdownResult(generated), mediaGuard.replacements)
+          : action === "draft"
+            ? normalizeAiMarkdownResult(generated)
+            : generated
       if (shouldAutoApplyOptimize && finalResult.trim()) {
         updateForm("contentMarkdown", finalResult)
         setNotice(
@@ -1088,12 +1123,11 @@ export default function BlogPostEditor({
       }
       setAiState((prev) => prev ? { ...prev, status: "done", result: finalResult, autoApplied: shouldAutoApplyOptimize } : null)
     } catch {
-      setAiState({
-        action,
-        status: "error",
-        result: "AI 응답 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
-        ...(params ?? {}),
-      })
+      // 창을 닫았거나 다시 생성해서 끊은 요청은 조용히 끝낸다.
+      if (controller.signal.aborted) return
+      failAi("AI 서버에 연결하지 못했습니다. 네트워크를 확인하고 다시 시도해 주세요.")
+    } finally {
+      if (aiAbortRef.current === controller) aiAbortRef.current = null
     }
   }
 
@@ -1596,7 +1630,7 @@ export default function BlogPostEditor({
                 )}
                 <button
                   type="button"
-                  onClick={() => setAiState(null)}
+                  onClick={closeAiPanel}
                   className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#e8e8e4] text-[#1a1a1a]/40 hover:text-[#111110] transition-colors"
                 >
                   <X className="h-4 w-4" />
@@ -1629,7 +1663,7 @@ export default function BlogPostEditor({
                   </div>
                   <div>
                     <p className="text-sm font-medium text-[#111110]">오류가 발생했습니다</p>
-                    <p className="mt-1 text-[13px] text-[#1a1a1a]/45">잠시 후 다시 시도해주세요.</p>
+                    <p className="mt-1 text-[13px] text-[#1a1a1a]/45">{aiState.result || "잠시 후 다시 시도해주세요."}</p>
                   </div>
                 </div>
               )}
@@ -2234,7 +2268,7 @@ export default function BlogPostEditor({
                     ...snapshot.form,
                     title: nextTitle,
                     seoTitle: snapshot.form.seoTitle || nextTitle,
-                    slug: snapshot.slugEdited ? snapshot.form.slug : slugify(nextTitle),
+                    slug: snapshot.slugEdited ? snapshot.form.slug : normalizeBlogSlug(nextTitle),
                   },
                 }))
               }}
@@ -2346,7 +2380,7 @@ export default function BlogPostEditor({
                       updateEditor((snapshot) => ({
                         ...snapshot,
                         slugEdited: true,
-                        form: { ...snapshot.form, slug: slugify(event.target.value) },
+                        form: { ...snapshot.form, slug: sanitizeBlogSlugInput(event.target.value) },
                       }))
                     }}
                     placeholder="제목에서 자동 생성"
@@ -2526,9 +2560,9 @@ export default function BlogPostEditor({
                         onChange={(event) => setDraftInput((prev) => ({ ...prev, length: event.target.value }))}
                         className={`h-10 ${SOFT_SELECT_CLASS}`}
                       >
-                        <option value="short">짧게 (~500자)</option>
-                        <option value="medium">보통 (~1200자)</option>
-                        <option value="long">길게 (~2500자)</option>
+                        <option value="short">짧게 (~1,500자)</option>
+                        <option value="medium">보통 (~3,000자)</option>
+                        <option value="long">길게 (~5,000자)</option>
                       </select>
                     </div>
                     <button
@@ -2631,9 +2665,9 @@ export default function BlogPostEditor({
                           onChange={(event) => setDraftInput((prev) => ({ ...prev, length: event.target.value }))}
                           className={`h-10 ${SOFT_SELECT_CLASS}`}
                         >
-                          <option value="short">짧게 (~500자)</option>
-                          <option value="medium">보통 (~1200자)</option>
-                          <option value="long">길게 (~2500자)</option>
+                          <option value="short">짧게 (~1,500자)</option>
+                          <option value="medium">보통 (~3,000자)</option>
+                          <option value="long">길게 (~5,000자)</option>
                         </select>
                       </div>
                     </div>

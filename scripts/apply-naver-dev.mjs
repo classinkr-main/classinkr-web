@@ -13,6 +13,11 @@
  *
  * Restore (if needed): re-run import with manifest, or write content_markdown back
  * from data/_naver-pull/manifest.json (full original rows are stored there).
+ *
+ * SEALED (2026-10-26): --write is refused. The rows were polished and published on 10-26
+ * (English slugs, new bodies), so data/_naver-dev is now an older draft. Writing it would
+ * silently roll published posts back — this script has no updated_at guard and ignores status.
+ * Edit posts in the admin editor, or use a script that compares updated_at before writing.
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -26,6 +31,13 @@ const pullDir = join(projectRoot, "data", "_naver-pull");
 const devDir = join(projectRoot, "data", "_naver-dev");
 
 const WRITE = process.argv.includes("--write");
+if (WRITE) {
+  console.error(
+    "[sealed] --write 는 막혀 있습니다(2026-10-26). data/_naver-dev 는 10-26 공개 전 원고라, 쓰면 공개 글 본문이 옛 버전으로 돌아갑니다.\n" +
+      "         글 수정은 어드민 편집기나 updated_at 을 비교하는 스크립트로 하세요. 드라이런(--write 없이)은 그대로 됩니다."
+  );
+  process.exit(1);
+}
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
