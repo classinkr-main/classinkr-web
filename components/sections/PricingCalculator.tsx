@@ -511,7 +511,7 @@ export function PricingCalculator({
   )
 
   return (
-    <div className="mx-auto w-full max-w-6xl overflow-hidden rounded-xl border border-black/[0.08] bg-white shadow-[0_18px_52px_rgba(0,0,0,0.05)]">
+    <div className="mx-auto w-full max-w-6xl overflow-clip rounded-xl border border-black/[0.08] bg-white shadow-[0_18px_52px_rgba(0,0,0,0.05)]">
       <div className="border-b border-black/[0.08] bg-white px-5 py-6 sm:px-8 lg:px-10">
         <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr] lg:items-end">
           <div>

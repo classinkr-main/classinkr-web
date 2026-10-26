@@ -361,7 +361,7 @@ export function renderMarkdownToHtml(markdown: string) {
         index += 1
       }
       html.push(
-        `<blockquote class="my-8 rounded-3xl border border-[#BDEFD8] bg-[#ECFDF5]/70 px-6 py-5 text-lg leading-8 text-[#084734]">${quoteLines
+        `<blockquote class="my-8 border-l-2 border-[#084734] py-1 pl-5 text-lg leading-8 text-[#31302E]">${quoteLines
           .map((item) => renderInline(item))
           .join("<br />")}</blockquote>`
       )
