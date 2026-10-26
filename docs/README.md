@@ -109,6 +109,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - **컨택·쇼룸 예약·구매 화면 1차 실행 기준.** /contact 항목 재편, 신설 /showroom 예약(슬롯·스키마·가용성), 가격 SSOT 단일화와 설치비 정합. 구매 화면은 공개하지 않고 /checkout을 디벨롭한다(D3). 결제 활성화 이전 단계까지가 범위
 - [active/contact-showroom-checkout-develop-round2-2026-09-20.md](./active/contact-showroom-checkout-develop-round2-2026-09-20.md)
   - **같은 세 화면의 2차 기획(최신).** 1차가 만든 것을 실측해 쇼룸 진입 경로 부재, 접수 확정 어드민 화면 부재, 퍼널 뒤쪽 리드의 source·귀속·계측 결손을 닫는다. 쇼룸 캘린더 UI/UX 사양과 구매 신청 금액 일관성 사양 포함
+- [active/public-site-audit-motion-plan-2026-10-26.md](./active/public-site-audit-motion-plan-2026-10-26.md)
+  - **공개 사이트 전수 점검 + 모션·디자인 디벨롭 기획.** 홈·셸·제품·콘텐츠·전환·랜딩·쿠키 동의의 P0~P2(운영 재현 표기), 운영자 결정 D1~D8, 모션 토큰·Act별 안무·Phase 0~3, 실행 웨이브 W0~W4
 - [active/docs-center-db-design.md](./active/docs-center-db-design.md)
   - 공개 가이드/매뉴얼/도움말/문제 해결/업데이트 문서센터와 챗봇 지식 베이스 설계
 - [active/docs-center-content-guidelines.md](./active/docs-center-content-guidelines.md)
