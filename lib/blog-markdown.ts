@@ -95,6 +95,13 @@ function renderInline(text: string) {
         )
       }
     )
+    // 리치 에디터는 라벨과 주소가 같은 링크를 <https://…> 자동 링크로 저장한다.
+    .replace(/<(https?:\/\/[^\s<>]+)>/g, (_match, url: string) =>
+      stashInlineToken(
+        tokens,
+        `<a href="${sanitizePublicUrlForHtmlAttribute(url)}" target="_blank" rel="noopener noreferrer" class="font-medium text-[#084734] underline underline-offset-4">${escapeHtml(url)}</a>`
+      )
+    )
 
   let html = escapeHtml(source)
 
@@ -126,17 +133,29 @@ function parseImageTitle(rawTitle: string | undefined) {
   return { title: cleanTitle, width }
 }
 
+// 리치 에디터(tiptap-markdown)는 본문의 < > 를 &lt; &gt; 로 저장한다. 렌더러가 다시 이스케이프하므로
+// 먼저 되돌려야 공개 페이지에 "&lt;" 가 글자로 보이지 않는다.
+function decodeEditorEntities(markdown: string) {
+  return markdown.replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+}
+
 function normalizeMarkdownBlockBoundaries(markdown: string) {
-  return markdown
+  return decodeEditorEntities(markdown)
     .replace(/\r\n/g, "\n")
     .replace(/(\]\([^)]+\))(?=!\[)/g, "$1\n")
     .replace(/(\]\([^)]+\))(?=#{2,3}\s)/g, "$1\n")
+    // 줄 맨 앞 이미지 바로 뒤에 붙은 문단 — 리치 에디터가 이미지 다음 문단을 같은 줄에 이어 쓴 옛 저장본
+    .replace(/^(\s*!\[[^\]]*\]\([^)]+\))(?=[^\s!\\])/gm, "$1\n")
 }
+
+// 줄 끝 역슬래시 = 줄바꿈(CommonMark hard break). 리치 에디터의 Shift+Enter 가 이렇게 저장된다.
+const HARD_BREAK_TOKEN = "\u0000CLASSIN_HARD_BREAK\u0000"
+const stripHardBreak = (line: string) => line.replace(/\\$/, "")
 
 export function extractMarkdownHeadings(markdown: string): BlogHeading[] {
   const uniqueSlug = createUniqueSlugger()
 
-  return markdown
+  return decodeEditorEntities(markdown)
     .split(/\r?\n/)
     .map((line) => {
       const match = line.match(/^(##|###)\s+(.*)$/)
@@ -338,7 +357,7 @@ export function renderMarkdownToHtml(markdown: string) {
     if (/^>\s?/.test(trimmed)) {
       const quoteLines: string[] = []
       while (index < lines.length && /^>\s?/.test(lines[index].trim())) {
-        quoteLines.push(lines[index].trim().replace(/^>\s?/, ""))
+        quoteLines.push(stripHardBreak(lines[index].trim().replace(/^>\s?/, "")))
         index += 1
       }
       html.push(
@@ -352,7 +371,7 @@ export function renderMarkdownToHtml(markdown: string) {
     if (/^(-|\*)\s+/.test(trimmed)) {
       const items: string[] = []
       while (index < lines.length && /^(-|\*)\s+/.test(lines[index].trim())) {
-        items.push(lines[index].trim().replace(/^(-|\*)\s+/, ""))
+        items.push(stripHardBreak(lines[index].trim().replace(/^(-|\*)\s+/, "")))
         index += 1
       }
       html.push(
@@ -366,7 +385,7 @@ export function renderMarkdownToHtml(markdown: string) {
     if (/^\d+\.\s+/.test(trimmed)) {
       const items: string[] = []
       while (index < lines.length && /^\d+\.\s+/.test(lines[index].trim())) {
-        items.push(lines[index].trim().replace(/^\d+\.\s+/, ""))
+        items.push(stripHardBreak(lines[index].trim().replace(/^\d+\.\s+/, "")))
         index += 1
       }
       html.push(
@@ -405,8 +424,13 @@ export function renderMarkdownToHtml(markdown: string) {
       continue
     }
 
+    const paragraph = paragraphLines
+      .map((item, i) =>
+        i < paragraphLines.length - 1 && item.endsWith("\\") ? stripHardBreak(item) + HARD_BREAK_TOKEN : stripHardBreak(item)
+      )
+      .join(" ")
     html.push(
-      `<p class="mt-5 text-[17px] leading-8 text-[#2f2f2b]">${renderInline(paragraphLines.join(" "))}</p>`
+      `<p class="mt-5 text-[17px] leading-8 text-[#2f2f2b]">${renderInline(paragraph).split(HARD_BREAK_TOKEN).join("<br />")}</p>`
     )
   }
 
