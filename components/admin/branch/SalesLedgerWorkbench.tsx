@@ -352,7 +352,8 @@ import {
   fiscalYearLabel,
   handleRovingTabKeyDown,
   isDraftOperation,
-  LENSES,
+  LEDGER_VIEWS,
+  LENS_TABS,
   loadStoredRevDbImport,
   MATRIX_TOAST_MAX,
   metadataNumberString,
@@ -3033,32 +3034,55 @@ export default function SalesLedgerWorkbench({
         <aside className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-1 self-start">
           <div className="inline-flex flex-wrap gap-3 self-start border-b border-[rgba(0,0,0,0.08)]" role="tablist" aria-label="장부 렌즈 전환">
-            {LENSES.map((item, index) => (
+            {LENS_TABS.map((item, index) => {
+              // REV(rev 렌즈)는 장부 탭 안의 "주차 검수" 보기라, 그 보기에서도 장부 탭이 선택돼 보인다.
+              const tabActive = lens === item.id || (item.id === "ledger" && lens === "rev")
+              return (
               <button
                 key={item.id}
                 type="button"
                 id={`sales-ledger-lens-${item.id}`}
                 role="tab"
-                aria-selected={lens === item.id}
+                aria-selected={tabActive}
                 aria-controls="sales-ledger-lens-panel"
                 title={item.description}
-                tabIndex={lens === item.id ? 0 : -1}
+                tabIndex={tabActive ? 0 : -1}
                 ref={(node) => { lensTabRefs.current[index] = node }}
-                onClick={() => selectLens(item.id)}
-                onKeyDown={(event) => handleRovingTabKeyDown(event, index, LENSES, lensTabRefs, (nextItem) => selectLens(nextItem.id))}
+                onClick={() => selectLens(item.id === "ledger" && lens === "rev" ? "rev" : item.id)}
+                onKeyDown={(event) => handleRovingTabKeyDown(event, index, LENS_TABS, lensTabRefs, (nextItem) => selectLens(nextItem.id))}
                 className={`inline-flex min-h-11 items-center gap-2 border-b-2 px-2 py-2 text-[13px] font-semibold transition ${
-                  lens === item.id ? "border-[#084734] text-[#084734]" : "border-transparent text-[#615D59] hover:text-[#111110]"
+                  tabActive ? "border-[#084734] text-[#084734]" : "border-transparent text-[#615D59] hover:text-[#111110]"
                 }`}
               >
                 <span className={`flex h-6 w-6 items-center justify-center rounded-md ${
-                  lens === item.id ? "text-[#084734]" : "text-[#615D59]"
+                  tabActive ? "text-[#084734]" : "text-[#615D59]"
                 }`}>
                   {item.id === "ledger" ? <FileSpreadsheet className="h-3.5 w-3.5" /> : item.id === "dsh" ? <Gauge className="h-3.5 w-3.5" /> : item.id === "rev" ? <Table2 className="h-3.5 w-3.5" /> : item.id === "board" ? <Columns3 className="h-3.5 w-3.5" /> : <LayoutList className="h-3.5 w-3.5" />}
                 </span>
                 {item.label}
               </button>
-            ))}
+              )
+            })}
           </div>
+          {lens === "ledger" || lens === "rev" ? (
+            // 장부·REV 통합(2026-10-26): 탭은 하나, 보기만 바꾼다. 스크롤 이동 없이 렌즈만 바꾼다(selectLens 는 패널로 스크롤).
+            <div role="group" aria-label="장부 보기" className="mt-2 inline-flex self-start rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-0.5">
+              {LEDGER_VIEWS.map((view) => (
+                <button
+                  key={view.id}
+                  type="button"
+                  aria-pressed={lens === view.id}
+                  title={view.description}
+                  onClick={() => setLens(view.id)}
+                  className={`min-h-9 rounded-md px-3.5 text-[12.5px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25 ${
+                    lens === view.id ? "bg-[#111110] text-white" : "text-[#615D59] hover:text-[#111110]"
+                  }`}
+                >
+                  {view.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
           </div>
 
           {lens !== "cockpit" && lens !== "ledger" && (
@@ -3312,7 +3336,7 @@ export default function SalesLedgerWorkbench({
             ref={lensPanelRef}
             id="sales-ledger-lens-panel"
             role="tabpanel"
-            aria-labelledby={`sales-ledger-lens-${lens}`}
+            aria-labelledby={`sales-ledger-lens-${lens === "rev" ? "ledger" : lens}`}
             tabIndex={-1}
             className="scroll-mt-24 space-y-5 focus:outline-none"
           >
@@ -3402,7 +3426,7 @@ export default function SalesLedgerWorkbench({
                     <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#084734]/15 bg-gradient-to-b from-[#F2FAF6] to-[#E6F5ED] text-[#084734] shadow-2xs">
                       <FileSpreadsheet className="h-4 w-4" />
                     </div>
-                    <h2 className="text-[16px] font-bold text-[#111110] tracking-tight">REV 매출 장부</h2>
+                    <h2 className="text-[16px] font-bold text-[#111110] tracking-tight">주차 검수 <span className="text-[12px] font-semibold text-[#615D59]">REV 표</span></h2>
                   </div>
 
                   {/* 우측: 정렬 & 도움말 가이드 팝오버 */}

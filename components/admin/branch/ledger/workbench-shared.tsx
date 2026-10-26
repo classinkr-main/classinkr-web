@@ -245,11 +245,19 @@ const MATRIX_TOAST_MAX = 3
 // 하이라이트를 소비하는 매트릭스 행 메모(RevMatrixGroupRow 등)가 불필요하게 리렌더된다(웨이브 5, 항목 1).
 const EMPTY_MONTH_SET: Set<string> = new Set()
 const LENSES: Array<{ id: LedgerLens; label: string; description: string }> = [
-  { id: "ledger", label: "장부", description: "기본 · 내 담당 확정/고확도/예정 한 화면, 팀·전체는 담당자별 합계" },
+  { id: "ledger", label: "장부", description: "기본 · 월 요약(내 담당 확정/고확도/예정 한 화면, 팀·전체는 담당자별 합계)과 주차 검수(REV 표)를 한 탭에서" },
   { id: "dsh", label: "DSH", description: "수치 상세 · 목표/실적 그리드" },
   { id: "rev", label: "REV", description: "주차·목표 수치 검수와 행 상세" },
   { id: "board", label: "보드", description: "주차 Forecast 칸반 · 확정/고확도/예정 카드 검수" },
   { id: "cockpit", label: "콕핏", description: "내 딜 목록 → 우측 빠른 입력에서 주차별 확도 (콕핏 입력)" },
+]
+// 탭 줄에 보이는 렌즈(2026-10-26 장부·REV 통합). REV 는 탭이 아니라 장부 탭 안의 "주차 검수" 보기다 —
+// 렌즈 값(rev)·?lens=rev 딥링크는 그대로 두고, 탭 줄에서만 장부 탭 하나로 보인다.
+const LENS_TABS = LENSES.filter((item) => item.id !== "rev")
+// 장부 탭 안 보기 전환 — 월 요약(ledger 렌즈) ↔ 주차 검수(rev 렌즈).
+const LEDGER_VIEWS: Array<{ id: "ledger" | "rev"; label: string; description: string }> = [
+  { id: "ledger", label: "월 요약", description: "고객 한 줄 · 월 칸 — 칸을 눌러 바로 고친다" },
+  { id: "rev", label: "주차 검수", description: "딜 행 · 주차 칸 · 잠금·불일치 · 엑셀 붙여넣기(기존 REV 표)" },
 ]
 // role="tablist" 롤빙 tabIndex 키보드 내비 — BranchDashboardClient.tsx의 onTabKeyDown과
 // 동일 패턴(ArrowLeft/Right/Home/End)을 두 탭리스트(렌즈, 빠른 작업 보기)가 공유하도록 일반화.
@@ -823,7 +831,9 @@ export {
   REV_FORECAST_FILTERS,
   MATRIX_TOAST_MAX,
   EMPTY_MONTH_SET,
+  LEDGER_VIEWS,
   LENSES,
+  LENS_TABS,
   handleRovingTabKeyDown,
   relativeTimeFromNow,
   canRunAdminOperationsFromSession,
