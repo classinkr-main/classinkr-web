@@ -63,6 +63,11 @@ export interface BlogPost {
 export type BlogPostInput = Omit<BlogPost, "id">
 
 export const CATEGORIES = [
-  "전체", "인사이트", "제품 업데이트", "성공 사례",
+  "전체", "인사이트", "제품", "성공 사례",
   "교육 트렌드", "데이터 분석", "원장 인터뷰",
 ] as const
+
+// 2026-10-26 "제품 업데이트" → "제품"으로 개명. DB에 남은 옛 값(배포 전 저장분 포함)도 같은 칩에 모은다.
+export function normalizeBlogCategory(category: string | null | undefined): string | null {
+  return category === "제품 업데이트" ? "제품" : category ?? null
+}

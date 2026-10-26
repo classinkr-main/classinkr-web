@@ -19,7 +19,7 @@ import { formatBlogDisplayDate, resolveDisplayDateSource } from "@/lib/blog-disp
 export type { BlogPost, BlogPostInput, BlogPostStatus } from "@/lib/blog-types";
 export { CATEGORIES, BLOG_STATUS_OPTIONS, DEFAULT_BLOG_CTA } from "@/lib/blog-types";
 
-import { DEFAULT_BLOG_CTA, type BlogPost, type BlogPostInput } from "@/lib/blog-types";
+import { DEFAULT_BLOG_CTA, normalizeBlogCategory, type BlogPost, type BlogPostInput } from "@/lib/blog-types";
 import {
   buildAdminBlogOverviewSummary,
   type AdminBlogOverviewSourceRow,
@@ -45,7 +45,7 @@ function supabaseToLegacy(row: SupaBlogPost): BlogPost & { _uuid: string } {
     slug: row.slug,
     title: row.title,
     excerpt: row.excerpt ?? "",
-    category: row.category ?? "전체",
+    category: normalizeBlogCategory(row.category) ?? "전체",
     tags: row.tags ?? [],
     tag: (row.tags ?? [])[0] ?? "",
     date: formatDate(resolveDisplayDateSource(row)),
@@ -180,7 +180,7 @@ export async function getAdminBlogOverviewSummary(): Promise<AdminBlogOverviewSu
       (row): AdminBlogOverviewSourceRow => ({
         id: row.id,
         title: row.title,
-        category: row.category,
+        category: normalizeBlogCategory(row.category),
         authorName: row.author_name,
         status: row.status,
         ctaText: row.cta_text,

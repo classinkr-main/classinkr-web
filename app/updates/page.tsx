@@ -86,11 +86,11 @@ export default async function UpdatesPage() {
     ? getDocsByCategoryFromContent(docsContent, "updates").slice(0, 6)
     : []
 
-  // 릴리즈가 아직 없으면 블로그 '제품 업데이트' 카테고리 글로 폴백 — 빈 페이지 노출 방지
+  // 릴리즈가 아직 없으면 블로그 '제품' 카테고리 글로 폴백 — 빈 페이지 노출 방지
   const fallbackPosts =
     releases.length === 0
       ? (await getPublishedPostsForStaticSitemap().catch(() => []))
-          .filter((post) => post.category === "제품 업데이트")
+          .filter((post) => post.category === "제품")
           .slice(0, 6)
       : []
 
@@ -207,7 +207,7 @@ export default async function UpdatesPage() {
           </section>
         )}
 
-        {/* 릴리즈 없을 때: 블로그 '제품 업데이트' 글 폴백 */}
+        {/* 릴리즈 없을 때: 블로그 '제품' 글 폴백 */}
         {releases.length === 0 && fallbackPosts.length > 0 && (
           <section className="mb-10 space-y-4">
             <p className="text-[13px] text-[#1a1a1a]/45">
@@ -221,7 +221,7 @@ export default async function UpdatesPage() {
               >
                 <div className="mb-2 flex flex-wrap items-center gap-2">
                   <span className="flex items-center gap-1.5 rounded-lg bg-[#f0f7f4] px-2.5 py-1 text-[12px] font-bold text-[#084734]">
-                    <Tag className="h-3 w-3" />제품 업데이트
+                    <Tag className="h-3 w-3" />제품
                   </span>
                   <span className="flex items-center gap-1 text-[12px] text-[#1a1a1a]/35">
                     <Calendar className="h-3 w-3" />{post.date}

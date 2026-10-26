@@ -22,7 +22,7 @@ import {
 const CATEGORY_ICONS: Record<string, LucideIcon> = {
   전체: LayoutGrid,
   인사이트: Lightbulb,
-  "제품 업데이트": Sparkles,
+  제품: Sparkles,
   "성공 사례": Building2,
   "교육 트렌드": TrendingUp,
   "데이터 분석": BarChart3,

@@ -66,7 +66,7 @@ const CATEGORY_MAP = {
   "6": "인사이트",
   "7": "교육 트렌드",
   "9": "인사이트",
-  "10": "제품 업데이트",
+  "10": "제품",
 };
 
 function decodeEntities(value = "") {

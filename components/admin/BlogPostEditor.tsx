@@ -189,7 +189,7 @@ const DEFAULT_TEMPLATES: BlogTemplate[] = [
     name: "기능·제품 소개",
     savedAt: "2024-01-01T00:00:00.000Z",
     data: {
-      category: "제품 업데이트",
+      category: "제품",
       targetReader: "새로운 기능을 도입하려는 학원 담당자",
       benefitItems: [
         "기능의 핵심 가치와 어떤 문제를 해결하는지 명확하게 파악할 수 있습니다.",
