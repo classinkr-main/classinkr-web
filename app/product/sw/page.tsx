@@ -1982,6 +1982,7 @@ export default function ProductPage() {
             <div className="flex flex-wrap justify-center gap-3 bg-white px-4 py-8 text-center md:py-12">
                 <TrackedLink
                     href="/classin-feature-guide.html"
+                    prefetch={false}
                     target="_blank"
                     rel="noopener noreferrer"
                     ctaId="software_feature_guide"
@@ -1993,6 +1994,7 @@ export default function ProductPage() {
                 </TrackedLink>
                 <TrackedLink
                     href="/classin-ai-feature-guide.html"
+                    prefetch={false}
                     target="_blank"
                     rel="noopener noreferrer"
                     ctaId="software_ai_feature_guide"

@@ -317,6 +317,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
               <TrackedLink
                 key={guide.href}
                 href={guide.href}
+                prefetch={false}
                 target="_blank"
                 rel="noopener noreferrer"
                 ctaId={guide.ctaId}
