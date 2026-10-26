@@ -6684,6 +6684,78 @@ const docs: DocArticle[] = [
     productArea: "admin",
     difficulty: "intermediate",
   },
+  {
+    slug: "classin-ai-feature-guide",
+    category: "software",
+    title: "클래스인 AI 기능 소개서",
+    description: "AI 강의 분석·AI 칠판·AI 에이전트의 주요 기능과 사용 방법, 역할별 활용과 활성화 조건을 확인합니다.",
+    audience: "AI 기능 도입을 검토하는 원장·관리자, 수업에 활용하는 강사와 학생",
+    updatedAt: "2026-10-26",
+    readMinutes: 3,
+    tags: ["AI", "기능 소개서", "AI 강의 분석", "AI 칠판", "AI 에이전트"],
+    keywords: ["AI 소개서", "AI 기능", "AgentIn", "AI 채점", "따라 읽기", "받아쓰기", "외워 말하기", "수업 분석", "활성화", "사용 방법"],
+    chatbotSummary: "클래스인 AI 기능 소개서는 AI 강의 분석·AI 칠판·AI 에이전트의 기능과 사용 순서를 제공합니다. AI 칠판과 교실 안 AgentIn은 담당 매니저에게 활성화를 요청하며, AI 칠판은 강사·학생 앱 6.0.9 이상이 필요합니다.",
+    sections: [
+      {
+        heading: "AI 기능을 화면과 함께 살펴보세요",
+        body: "원장·관리자는 도입 전 기능과 제공 조건을 비교하고, 강사·학생은 수업에서 사용할 기능의 순서를 확인할 때 읽는 소개서입니다. 아래 ‘AI 기능 소개서 열기’에서 원본을 열면 기능 검색, 목차 이동, 화면 확대를 사용할 수 있습니다.",
+        steps: [
+          "AI 강의 분석: 녹화 수업의 분석 보고서, 강사별 수업 품질 확인, 맞춤 분석 에이전트 설정을 살펴봅니다.",
+          "AI 칠판: 문항 출제, 학생 답안 확인, AI 채점, 반 전체 진단 순서를 확인합니다.",
+          "AI 에이전트: 따라 읽기·받아쓰기·외워 말하기, 숙제 생성과 채점, 수업 요약과 교실 안 AgentIn을 살펴봅니다.",
+        ],
+      },
+      {
+        heading: "사용 전에 확인하세요",
+        body: "소개서는 ClassIn 6.0.9 기준입니다. 기능 제공 범위는 계약 플랜과 지원 환경에 따라 다를 수 있으므로, 소개서의 지원 환경과 참고 항목을 함께 확인하세요.",
+        steps: [
+          "AI 칠판·교실 안 AgentIn은 담당 매니저에게 활성화를 요청합니다.",
+          "AI 칠판을 사용하기 전에 강사·학생 앱을 모두 6.0.9 이상으로 업데이트합니다.",
+          "AI 강의 분석은 관리자 일반 설정에서 켜고 수업 생성 시 옵션을 선택합니다.",
+          "AI 채점 결과는 강사가 검토하고, 서술형 숙제의 점수·총평 초안은 확인 후 게시합니다.",
+        ],
+      },
+    ],
+    resources: [
+      { label: "AI 기능 소개서 열기", href: "/classin-ai-feature-guide.html", description: "주요 AI 기능과 사용 방법을 실제 화면으로 확인하는 원본 소개서입니다." },
+      { label: "클래스인 전체 기능 소개서", href: "/classin-feature-guide.html", description: "수업·과제·운영 기능도 함께 살펴보세요." },
+    ],
+    relatedSlugs: ["ai-features", "ai-learning-tools", "classin-609-update", "classin-ai-blackboard-609"],
+    status: "published",
+    visibility: "public",
+    docType: "guide",
+    productArea: "software",
+    difficulty: "beginner",
+  },
+  {
+    slug: "classin-ai-feature-guide-published",
+    category: "updates",
+    title: "클래스인 AI 기능 소개서 공개",
+    description: "AI 강의 분석·AI 칠판·AI 에이전트를 모은 소개서를 공개하고, 소프트웨어·가이드·업데이트 화면에 바로가기를 추가했습니다.",
+    audience: "클래스인 AI 기능을 살펴보는 원장·관리자·강사",
+    updatedAt: "2026-10-26",
+    readMinutes: 2,
+    tags: ["가이드 업데이트", "AI", "기능 소개서"],
+    keywords: ["AI 소개서 공개", "AI 강의 분석", "AI 칠판", "AI 에이전트", "사용 가이드"],
+    chatbotSummary: "2026년 10월 26일 클래스인 AI 기능 소개서를 공개했습니다. 소프트웨어 페이지, 가이드와 업데이트에서 열 수 있으며, AI 강의 분석·AI 칠판·AI 에이전트의 주요 기능과 사용 방법을 확인할 수 있습니다.",
+    sections: [
+      {
+        heading: "AI 기능 소개서를 추가했습니다",
+        body: "AI 강의 분석·AI 칠판·AI 에이전트의 기능, 주 사용자, 지원 환경과 사용 순서를 한 문서에 모았습니다. 기존 전체 기능 소개서와 함께 소프트웨어 페이지와 가이드에서 열 수 있습니다.",
+      },
+      {
+        heading: "우리 학원의 사용 조건을 확인하세요",
+        body: "소개서에서 사용하려는 기능을 검색한 뒤 지원 환경과 활성화 순서를 확인하세요. AI 칠판·교실 안 AgentIn의 활성화는 담당 매니저에게 요청하고, AI 칠판은 강사·학생 앱 6.0.9 이상에서 사용합니다.",
+      },
+    ],
+    resources: [{ label: "AI 기능 소개서 보기", href: "/classin-ai-feature-guide.html" }],
+    relatedSlugs: ["classin-ai-feature-guide", "classin-609-update", "classin-ai-blackboard-609"],
+    status: "published",
+    visibility: "public",
+    docType: "release_note",
+    productArea: "software",
+    difficulty: "beginner",
+  },
 ]
 
 function sortDocsByCategoryThenDate(a: DocArticle, b: DocArticle) {
