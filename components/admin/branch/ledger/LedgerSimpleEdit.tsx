@@ -138,6 +138,8 @@ export function InlineCellEditor({ label, month, candidates, edit, onClose, onMo
         <input
           ref={inputRef}
           inputMode="numeric"
+          // 입력칸의 기본 폭(약 20자)이 표 자동 배치에서 그 열을 두 배 넘게 밀어낸다 — 폭은 칸이 정하게 최소로 둔다.
+          size={1}
           aria-label={`${label} 금액${initialValue > 0 ? ` (지금 ¥${cnyExact(initialValue)})` : ""}`}
           value={amount}
           onChange={(event) => setAmount(event.target.value)}
