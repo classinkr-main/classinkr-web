@@ -192,7 +192,8 @@
 }
 
 .route-transition-public {
-  --route-enter-y: 12px;
+  /* 공개 경로는 올라옴 없이 opacity만 */
+  --route-enter-y: 0px;
   --route-enter-duration: 260ms;
 }
 
@@ -211,7 +212,6 @@
 .hero-soft-enter {
   animation: hero-soft-enter var(--hero-enter-duration, 520ms) cubic-bezier(0.22, 1, 0.36, 1) both;
   animation-delay: var(--hero-enter-delay, 0ms);
-  will-change: opacity, transform;
 }
 
 .hero-soft-enter-badge {
@@ -400,7 +400,6 @@
 
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "kern" 1, "liga" 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-size-adjust: 100%;
@@ -664,22 +663,6 @@
   height: 0;
 }
 
-/* ── Hero section styles ──────────────────────────────────────────── */
-@keyframes text-gradient {
-  0% { background-position: 0% center; }
-  100% { background-position: -200% center; }
-}
-
-.animate-text-gradient {
-  background: linear-gradient(to right, #084734, #6EE7B7, #CEF17B, #6EE7B7, #084734);
-  background-size: 200% auto;
-  background-position: center;
-  color: transparent;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
 /* ── Gauge overshoot emphasis (when ring goes past 100%) ──────────── */
 @keyframes gauge-overshoot-glow {
   0%, 100% { filter: drop-shadow(0 0 2px rgba(245,158,11,0.45)) drop-shadow(0 0 5px rgba(245,158,11,0.35)); }
@@ -706,34 +689,6 @@
 @keyframes calculator-glow-fade {
   from { opacity: 0.7; }
   to   { opacity: 0; }
-}
-
-/* ── Final CTA section keyframes ──────────────────────────────────── */
-@keyframes digit-glow-light {
-  0%, 100% { text-shadow: 0 0 20px rgba(224, 80, 36, 0); }
-  50% { text-shadow: 0 0 30px rgba(224, 80, 36, 0.15); }
-}
-
-@keyframes shimmer-sweep {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(400%); }
-}
-
-@keyframes glow-pulse-light {
-  0%, 100% { box-shadow: 0 8px 30px rgba(224, 80, 36, 0.2); }
-  50% { box-shadow: 0 12px 45px rgba(224, 80, 36, 0.35); }
-}
-
-.animate-digit-glow {
-  animation: digit-glow-light 4s ease-in-out infinite;
-}
-
-.animate-shimmer-sweep {
-  animation: shimmer-sweep 0.8s ease-in-out forwards;
-}
-
-.animate-glow-pulse {
-  animation: glow-pulse-light 2s ease-in-out infinite;
 }
 
 .blog-markdown {
