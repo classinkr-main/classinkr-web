@@ -17,7 +17,7 @@ export default async function UnsubscribePage({ searchParams }: Props) {
   const email = typeof raw === "string" ? raw.trim() : ""
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-6" style={{ background: "#FAFAF8" }}>
+    <div className="min-h-screen flex items-center justify-center px-6" style={{ background: "#FAFAF8" }}>
       <div
         className="max-w-md w-full bg-white rounded-2xl p-10 text-center"
         style={{
@@ -75,6 +75,6 @@ export default async function UnsubscribePage({ searchParams }: Props) {
           </div>
         )}
       </div>
-    </main>
+    </div>
   )
 }

@@ -58,7 +58,7 @@ export function NewsletterSubscribe({ variant = "dark", source = "footer_newslet
 
   const isDark = variant === "dark"
   const fieldClassName = isDark
-    ? `${marketingFieldClassName} border-white/10 bg-white/[0.07] text-white placeholder:text-white/40 focus-visible:border-white focus-visible:ring-white/10`
+    ? `${marketingFieldClassName} border-white/10 bg-white/[0.07] text-white placeholder:text-white/40`
     : marketingFieldClassName
 
   if (submitted) {

@@ -55,7 +55,6 @@ export function SlotPicker({
             onClick={() => onChange(slot.time)}
             className={[
               "rounded-lg border px-3 py-2.5 text-left transition-colors",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]",
               booked
                 ? "cursor-not-allowed border-black/[0.08] bg-[#F6F5F4]"
                 : selected

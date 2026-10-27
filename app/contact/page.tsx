@@ -20,7 +20,6 @@ import { CONTACT_TOPICS, EVENT_CONTACT_TOPICS, isContactTopic } from "@/lib/cont
 import type { PublicEvent } from "@/lib/types/public-events"
 
 const PHONE_ALLOWED_INPUT_PATTERN = /^[\d\s-]*$/
-const PHONE_REJECT_ANIMATION_MS = 220
 const PHONE_REQUIRED_MESSAGE = "연락처를 입력해주세요."
 const PHONE_INVALID_CHARACTER_MESSAGE = "숫자와 하이픈만 입력할 수 있어요."
 const PHONE_TOO_LONG_MESSAGE = "전화번호는 최대 11자리까지 입력할 수 있어요."
@@ -65,10 +64,8 @@ export default function ContactPage() {
     const [submitted, setSubmitted] = useState(false)
     const [error, setError] = useState("")
     const [notice, setNotice] = useState("")
-    const [shake, setShake] = useState(false)
     const [phone, setPhone] = useState("")
     const [phoneError, setPhoneError] = useState("")
-    const [phoneRejected, setPhoneRejected] = useState(false)
     const [topic, setTopic] = useState("")
     const [eventSlug, setEventSlug] = useState("")
     const [leadMagnet, setLeadMagnet] = useState("")
@@ -81,8 +78,6 @@ export default function ContactPage() {
     const [events, setEvents] = useState<PublicEvent[]>([])
     const [eventsLoaded, setEventsLoaded] = useState(false)
     const formRef = useRef<HTMLFormElement>(null)
-    const formShakeTimerRef = useRef<number | null>(null)
-    const phoneRejectTimerRef = useRef<number | null>(null)
     const toast = useToast()
     const errorMessageId = error ? "contact-form-error" : undefined
     const phoneErrorMessageId = phoneError ? "contact-phone-error" : undefined
@@ -142,17 +137,6 @@ export default function ContactPage() {
         }
     }, [showEventPicker, eventsLoaded])
 
-    useEffect(() => {
-        return () => {
-            if (formShakeTimerRef.current !== null) {
-                window.clearTimeout(formShakeTimerRef.current)
-            }
-            if (phoneRejectTimerRef.current !== null) {
-                window.clearTimeout(phoneRejectTimerRef.current)
-            }
-        }
-    }, [])
-
     const availableEvents = useMemo(() => {
         const filtered = events.filter((e) => e.status !== "마감" && e.slug)
         if (!eventPickerCategory) return filtered
@@ -165,11 +149,6 @@ export default function ContactPage() {
         setNotice("")
         setPhone("")
         setPhoneError("")
-        setPhoneRejected(false)
-        if (phoneRejectTimerRef.current !== null) {
-            window.clearTimeout(phoneRejectTimerRef.current)
-            phoneRejectTimerRef.current = null
-        }
         setTopic("")
         setEventSlug("")
         setMessage("")
@@ -182,28 +161,7 @@ export default function ContactPage() {
         formRef.current?.reset()
     }
 
-    const triggerShake = () => {
-        if (formShakeTimerRef.current !== null) {
-            window.clearTimeout(formShakeTimerRef.current)
-        }
-        setShake(true)
-        formShakeTimerRef.current = window.setTimeout(() => {
-            setShake(false)
-            formShakeTimerRef.current = null
-        }, 200)
-    }
-
-    const rejectPhoneInput = (message: string) => {
-        if (phoneRejectTimerRef.current !== null) {
-            window.clearTimeout(phoneRejectTimerRef.current)
-        }
-        setPhoneError(message)
-        setPhoneRejected(true)
-        phoneRejectTimerRef.current = window.setTimeout(() => {
-            setPhoneRejected(false)
-            phoneRejectTimerRef.current = null
-        }, PHONE_REJECT_ANIMATION_MS)
-    }
+    const rejectPhoneInput = (message: string) => setPhoneError(message)
 
     const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const nextValue = e.target.value
@@ -246,7 +204,6 @@ export default function ContactPage() {
             if (isEventTopic && !eventsLoaded) {
                 setError("행사 목록을 불러오는 중입니다. 잠시 후 다시 시도해주세요.")
                 setErrorField("topic")
-                triggerShake()
                 focusField("topic")
                 setLoading(false)
                 return
@@ -255,7 +212,6 @@ export default function ContactPage() {
             if (isEventTopic && availableEvents.length > 0 && !eventSlug) {
                 setError("신청하실 행사를 선택해주세요.")
                 setErrorField("event-slug")
-                triggerShake()
                 focusField("event-slug")
                 setLoading(false)
                 return
@@ -271,7 +227,6 @@ export default function ContactPage() {
 
             if (!privacyConsent) {
                 setPrivacyConsentError(PRIVACY_CONSENT_REQUIRED_MESSAGE)
-                triggerShake()
                 focusField("privacy-consent")
                 setLoading(false)
                 return
@@ -323,7 +278,6 @@ export default function ContactPage() {
         } catch (err) {
             const msg = err instanceof Error ? err.message : "상담 요청을 제출하지 못했습니다. 잠시 후 다시 시도해주세요."
             setError(msg)
-            triggerShake()
         } finally {
             setLoading(false)
         }
@@ -341,7 +295,7 @@ export default function ContactPage() {
                             transition={{ duration: 0.6 }}
                             className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#ECFDF5] text-[#084734] text-sm font-semibold border border-[#D1FAE5]"
                         >
-                            <span className="w-2 h-2 rounded-full bg-[#084734] animate-pulse"></span>
+                            <span className="w-2 h-2 rounded-full bg-[#084734]"></span>
                             상담 및 문의
                         </motion.div>
 
@@ -377,9 +331,6 @@ export default function ContactPage() {
                     className="mb-8 md:mb-10"
                 >
                     <div className="relative overflow-hidden rounded-[24px] border border-slate-100 bg-white p-5 shadow-[0_20px_60px_rgba(0,0,0,0.05)] md:rounded-[2rem] md:p-8">
-                        {/* Decorative background elements */}
-                        <div className="absolute top-0 right-0 w-64 h-64 bg-[#ECFDF5] rounded-full blur-[80px] -mr-20 -mt-20 pointer-events-none" />
-                        <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#ECFDF5] rounded-full blur-[80px] -ml-20 -mb-20 pointer-events-none" />
                         
                         <div className="relative z-10 flex flex-col items-center justify-between gap-7 md:flex-row md:gap-10">
                             <div className="flex-1 space-y-4 text-center md:text-left">
@@ -409,7 +360,7 @@ export default function ContactPage() {
                                         className="inline-flex items-center gap-2 text-[#084734] font-bold hover:text-[#065c41] transition-colors group"
                                     >
                                         {kakaoChannelUrl ? "모바일로 바로 열기" : "문의 폼 바로가기"}
-                                        <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                                        <ArrowRight className="w-4 h-4 arrow-nudge" />
                                     </a>
                                 </div>
                             </div>
@@ -451,7 +402,7 @@ export default function ContactPage() {
                                     문의 유형과 현재 상황을 남겨주시면 담당 매니저가 필요한 자료와 확인 순서를 정리해 연락드리겠습니다.
                                 </CardDescription>
                             </CardHeader>
-                            <CardContent id="contact-form" className="flex w-full scroll-mt-28 flex-col items-center space-y-5 px-5 py-5 md:scroll-mt-32 md:px-6 md:py-6">
+                            <CardContent id="contact-form" className="flex w-full flex-col items-center space-y-5 px-5 py-5 md:px-6 md:py-6">
                                 {submitted ? (
                                     <div className="flex flex-col items-center justify-center space-y-4 py-12 text-center">
                                         <CheckCircle2 className="h-14 w-14 text-green-500" />
@@ -472,11 +423,11 @@ export default function ContactPage() {
                                 <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="org-name" className="text-slate-700 font-bold ml-1">학원명 / 기관명 <span className="text-[#084734]">*</span></Label>
-                                        <Input id="org-name" name="org-name" placeholder="예: 무궁화 학원" required autoComplete="organization" aria-invalid={errorField === "org-name"} aria-describedby={errorMessageId} className="w-full bg-white border-slate-200 focus-visible:ring-[#084734] h-11 rounded-xl shadow-sm text-base" />
+                                        <Input id="org-name" name="org-name" placeholder="예: 무궁화 학원" required autoComplete="organization" aria-invalid={errorField === "org-name"} aria-describedby={errorMessageId} className="w-full bg-white border-slate-200 h-11 rounded-xl shadow-sm text-base" />
                                     </div>
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="name" className="text-slate-700 font-bold ml-1">담당자 성함 <span className="text-[#084734]">*</span></Label>
-                                        <Input id="name" name="name" placeholder="홍길동 원장" required autoComplete="name" aria-invalid={errorField === "name"} aria-describedby={errorMessageId} className="w-full bg-white border-slate-200 focus-visible:ring-[#084734] h-11 rounded-xl shadow-sm text-base" />
+                                        <Input id="name" name="name" placeholder="홍길동 원장" required autoComplete="name" aria-invalid={errorField === "name"} aria-describedby={errorMessageId} className="w-full bg-white border-slate-200 h-11 rounded-xl shadow-sm text-base" />
                                     </div>
                                 </div>
                                 <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -498,7 +449,7 @@ export default function ContactPage() {
                                             }}
                                             aria-invalid={!!phoneError}
                                             aria-describedby={phoneErrorMessageId ?? errorMessageId}
-                                            className={`w-full bg-white h-11 rounded-xl shadow-sm text-base transition-colors ${phoneError ? "border-[#B43E3E]/40 text-[#B43E3E] focus-visible:ring-[#B43E3E]" : "border-slate-200 focus-visible:ring-[#084734]"}${phoneError || phoneRejected ? " animate-shake" : ""}`}
+                                            className={`w-full bg-white h-11 rounded-xl shadow-sm text-base transition-colors ${phoneError ? "border-[#B43E3E]/40 text-[#B43E3E]" : "border-slate-200"}`}
                                         />
                                         {phoneError && (
                                             <p id="contact-phone-error" role="alert" aria-live="polite" className="px-1 text-sm font-medium text-[#B43E3E]">
@@ -508,20 +459,20 @@ export default function ContactPage() {
                                     </div>
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="email" className="text-slate-700 font-bold ml-1">이메일 (선택)</Label>
-                                        <Input id="email" name="email" placeholder="example@classin.com" type="email" autoComplete="email" className="w-full bg-white border-slate-200 focus-visible:ring-[#084734] h-11 rounded-xl shadow-sm text-base" />
+                                        <Input id="email" name="email" placeholder="example@classin.com" type="email" autoComplete="email" className="w-full bg-white border-slate-200 h-11 rounded-xl shadow-sm text-base" />
                                     </div>
                                 </div>
                                 <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="role" className="text-[#111110] font-bold ml-1">직책 (선택)</Label>
-                                        <Input id="role" name="role" placeholder="예: 원장, 부원장, 운영실장" autoComplete="organization-title" className="w-full bg-white border-[#E5E5E0] focus-visible:ring-[#084734] h-11 rounded-xl shadow-sm text-base" />
+                                        <Input id="role" name="role" placeholder="예: 원장, 부원장, 운영실장" autoComplete="organization-title" className="w-full bg-white border-[#E5E5E0] h-11 rounded-xl shadow-sm text-base" />
                                     </div>
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="size" className="text-[#111110] font-bold ml-1">학원 규모 (선택)</Label>
                                         <select
                                             id="size"
                                             name="size"
-                                            className="h-11 w-full rounded-xl border border-[#E5E5E0] bg-white px-4 text-base shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#084734]"
+                                            className="h-11 w-full rounded-xl border border-[#E5E5E0] bg-white px-4 text-base shadow-sm transition-colors"
                                         >
                                             <option value="">{ACADEMY_SIZE_PLACEHOLDER}</option>
                                             {ACADEMY_SIZE_OPTIONS.map((option) => (
@@ -540,7 +491,7 @@ export default function ContactPage() {
                                         required
                                         aria-invalid={!!error}
                                         aria-describedby={errorMessageId}
-                                        className={`h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-base shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#084734]${errorField === "topic" ? " animate-shake" : ""}`}
+                                        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-base shadow-sm transition-colors"
                                         value={topic}
                                         onChange={(e) => {
                                             setTopic(e.target.value)
@@ -576,7 +527,7 @@ export default function ContactPage() {
                                                 required
                                                 aria-invalid={!!error}
                                                 aria-describedby={errorMessageId}
-                                                className={`h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-base shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#084734]${errorField === "event-slug" ? " animate-shake" : ""}`}
+                                                className="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-base shadow-sm transition-colors"
                                                 value={eventSlug}
                                                 onChange={(e) => setEventSlug(e.target.value)}
                                             >
@@ -593,7 +544,7 @@ export default function ContactPage() {
                                 <div className="space-y-3 w-full">
                                     <Label htmlFor="message" className="text-slate-700 font-bold ml-1">문의 내용 <span className="font-medium text-slate-400">(선택)</span></Label>
                                     <textarea
-                                        className="w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-4 text-base focus:outline-none focus:ring-2 focus:ring-[#084734] focus:border-transparent transition-all shadow-sm min-h-[110px]"
+                                        className="w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-4 text-base transition-all shadow-sm min-h-[110px]"
                                         placeholder="비워두셔도 됩니다. 현재 상황이나 급한 일정이 있다면 적어주세요."
                                         value={message}
                                         onChange={(e) => setMessage(e.target.value)}
@@ -618,7 +569,7 @@ export default function ContactPage() {
                                         }}
                                         aria-invalid={!!privacyConsentError}
                                         aria-describedby={privacyConsentError ? "contact-privacy-error" : undefined}
-                                        className="mt-0.5 h-4 w-4 shrink-0 accent-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+                                        className="mt-0.5 h-4 w-4 shrink-0 accent-[#084734]"
                                     />
                                     <span className="text-[#44514A]">
                                         상담 진행을 위한 개인정보 수집·이용에 동의합니다.
@@ -646,7 +597,7 @@ export default function ContactPage() {
                                         id="marketing-consent"
                                         name="marketing-consent"
                                         type="checkbox"
-                                        className="mt-0.5 h-4 w-4 shrink-0 accent-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+                                        className="mt-0.5 h-4 w-4 shrink-0 accent-[#084734]"
                                     />
                                     <span>
                                         제품 업데이트와 교육 운영 인사이트를 이메일로 받아보겠습니다.
@@ -654,9 +605,9 @@ export default function ContactPage() {
                                     </span>
                                 </label>
                                 {error && (
-                                    <p id="contact-form-error" role="alert" aria-live="polite" className={`text-center text-sm text-[#B43E3E]${shake ? " animate-shake" : ""}`}>{error}</p>
+                                    <p id="contact-form-error" role="alert" aria-live="polite" className="text-center text-sm text-[#B43E3E]">{error}</p>
                                 )}
-                                <Button type="submit" disabled={loading} className="w-full h-12 text-base font-bold bg-[#084734] hover:bg-[#065c41] text-white rounded-xl shadow-[0_8px_20px_rgba(8,71,52,0.18)] hover:shadow-[0_12px_25px_rgba(8,71,52,0.26)] transition-all hover:-translate-y-0.5 mt-4">
+                                <Button type="submit" disabled={loading} className="w-full h-12 text-base font-bold bg-[#084734] hover:bg-[#065c41] text-white rounded-xl shadow-[0_8px_20px_rgba(8,71,52,0.18)] transition-all mt-4">
                                     {loading ? (
                                         <><Loader2 className="mr-2 h-5 w-5 animate-spin" />상담 요청 접수 중...</>
                                     ) : (
@@ -716,7 +667,7 @@ export default function ContactPage() {
                                         <Link
                                             href="/showroom"
                                             onClick={() => trackEvent("click_cta", { button: "contact_showroom_booking", page: "/contact" })}
-                                            className="mt-2 inline-flex items-center gap-1.5 rounded-[6px] text-sm font-semibold text-[#084734] underline underline-offset-4 transition-colors hover:text-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+                                            className="mt-2 inline-flex items-center gap-1.5 rounded-[6px] text-sm font-semibold text-[#084734] underline underline-offset-4 transition-colors hover:text-[#065c41]"
                                         >
                                             쇼룸 방문 예약하기
                                             <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />

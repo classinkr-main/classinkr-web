@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { CheckCircle2, Loader2, Mail, ArrowRight, Sparkles } from "lucide-react"
+import { CheckCircle2, Loader2, Mail, ArrowRight } from "lucide-react"
 import { trackEvent } from "@/lib/analytics"
 import { collectLeadAttribution } from "@/lib/marketing-attribution"
 import { cn } from "@/lib/utils"
@@ -136,7 +136,6 @@ export function NewsletterModal({
                     : "bg-gradient-to-r from-[#ECFDF5] to-[#D1FAE5]/60 text-[#084734] border border-[#084734]/8 shadow-[0_1px_6px_rgba(8,71,52,0.06)]"
                 )}
               >
-                <Sparkles className="w-3 h-3" />
                 {badge}
               </span>
             )}
@@ -182,8 +181,8 @@ export function NewsletterModal({
                   className={cn(
                     "pl-10 h-11 transition-all",
                     isDark
-                      ? "bg-white/[0.06] border-white/[0.08] text-white placeholder:text-white/40 focus-visible:border-[#6EE7B7]/50 focus-visible:ring-[#6EE7B7]/15"
-                      : "border-black/[0.08] focus-visible:border-[#084734]/50 focus-visible:ring-[#084734]/10"
+                      ? "bg-white/[0.06] border-white/[0.08] text-white placeholder:text-white/40"
+                      : "border-black/[0.08]"
                   )}
                 />
               </div>

@@ -93,7 +93,7 @@ const VISIT_FACTS = [
 
 export default function ShowroomPage() {
   return (
-    <main className="bg-[#FAFAF8]">
+    <div className="bg-[#FAFAF8]">
       <JsonLd
         data={[
           createWebPageJsonLd({
@@ -133,14 +133,14 @@ export default function ShowroomPage() {
               <div className="mt-8 flex flex-wrap items-center gap-3">
                 <a
                   href="#booking"
-                  className="inline-flex h-12 items-center justify-center gap-2 rounded-[6px] bg-[#084734] px-7 text-[15px] font-semibold text-white transition-colors hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2"
+                  className="inline-flex h-12 items-center justify-center gap-2 rounded-[6px] bg-[#084734] px-7 text-[15px] font-semibold text-white transition-colors hover:bg-[#065c41]"
                 >
                   방문 날짜 고르기
                   <ArrowRight className="h-4 w-4" />
                 </a>
                 <Link
                   href="/resources/showroom-demo-readiness-kit"
-                  className="inline-flex h-12 items-center justify-center rounded-[6px] border border-black/[0.08] bg-white px-6 text-[15px] font-semibold text-[#084734] transition-colors hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+                  className="inline-flex h-12 items-center justify-center rounded-[6px] border border-black/[0.08] bg-white px-6 text-[15px] font-semibold text-[#084734] transition-colors hover:bg-[#F6F5F4]"
                 >
                   데모 준비 킷 보기
                 </Link>
@@ -256,7 +256,7 @@ export default function ShowroomPage() {
               </p>
               <Link
                 href="/resources/showroom-demo-readiness-kit"
-                className="mt-4 inline-flex items-center gap-1.5 text-[14px] font-semibold text-[#084734] underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+                className="mt-4 inline-flex items-center gap-1.5 text-[14px] font-semibold text-[#084734] underline underline-offset-4"
               >
                 쇼룸 데모 준비 킷
                 <ArrowRight className="h-3.5 w-3.5" />
@@ -267,7 +267,7 @@ export default function ShowroomPage() {
       </section>
 
       {/* ── 예약 폼 ── */}
-      <section id="booking" className="scroll-mt-24 bg-[#F6F5F4] py-16 md:py-24">
+      <section id="booking" className="bg-[#F6F5F4] py-16 md:py-24">
         <div className="mx-auto max-w-3xl px-6">
           <div className="text-center">
             <h2 className="text-[30px] font-bold leading-tight tracking-[-1px] text-[#111110] md:text-[40px]">
@@ -357,13 +357,13 @@ export default function ShowroomPage() {
           </p>
           <Link
             href="/resources/showroom-demo-readiness-kit"
-            className="mt-7 inline-flex h-12 items-center justify-center gap-2 rounded-[6px] bg-[#084734] px-7 text-[15px] font-semibold text-white transition-colors hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2"
+            className="mt-7 inline-flex h-12 items-center justify-center gap-2 rounded-[6px] bg-[#084734] px-7 text-[15px] font-semibold text-white transition-colors hover:bg-[#065c41]"
           >
             쇼룸 데모 준비 킷 받기
             <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
       </section>
-    </main>
+    </div>
   )
 }

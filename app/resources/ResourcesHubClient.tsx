@@ -26,7 +26,7 @@ export function ResourcesHubClient({ resources }: ResourcesHubClientProps) {
   const rest = resources.slice(1)
 
   return (
-    <main className="min-h-screen bg-[#FAFAF8] pb-20 pt-28 text-[#111110] md:pb-24 md:pt-36">
+    <div className="min-h-screen bg-[#FAFAF8] pb-20 pt-28 text-[#111110] md:pb-24 md:pt-36">
       <section className="container">
         <div className="grid gap-10 border-b border-black/[0.08] pb-12 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-end">
           <div>
@@ -130,6 +130,6 @@ export function ResourcesHubClient({ resources }: ResourcesHubClientProps) {
           </div>
         </section>
       </section>
-    </main>
+    </div>
   )
 }

@@ -47,7 +47,7 @@ const initialForm: DownloadFormState = {
 }
 
 const inputClassName =
-  "h-10 rounded-[6px] border-black/[0.08] bg-white text-[14px] focus-visible:border-[#084734]/50 focus-visible:ring-[#084734]/10"
+  "h-10 rounded-[6px] border-black/[0.08] bg-white text-[14px]"
 
 export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
   const [form, setForm] = useState<DownloadFormState>(initialForm)
@@ -209,7 +209,7 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
   }
 
   return (
-    <div id="download" className="scroll-mt-28 lg:h-full">
+    <div id="download" className="lg:h-full">
       <PublicLoginDialog
         open={loginDialogOpen}
         onOpenChange={setLoginDialogOpen}

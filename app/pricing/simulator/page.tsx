@@ -13,7 +13,7 @@ export const metadata = createPublicMetadata({
 
 export default function PricingSimulatorPage() {
   return (
-    <main className="min-h-screen bg-[#F6F5F4] px-4 pb-20 pt-32 text-[#111110] sm:px-6 lg:pb-24 lg:pt-36">
+    <div className="min-h-screen bg-[#F6F5F4] px-4 pb-20 pt-32 text-[#111110] sm:px-6 lg:pb-24 lg:pt-36">
       <div className="mx-auto max-w-6xl">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <Link
@@ -47,6 +47,6 @@ export default function PricingSimulatorPage() {
           <PricingCalculator />
         </section>
       </div>
-    </main>
+    </div>
   )
 }

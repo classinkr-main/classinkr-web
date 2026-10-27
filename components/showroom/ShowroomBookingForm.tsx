@@ -227,7 +227,7 @@ function validate(form: FormState, selectedDay: ShowroomDayAvailability | null) 
 }
 
 const selectClassName =
-  "h-11 w-full rounded-[6px] border border-[#E5E5E0] bg-white px-4 text-[14px] text-[#111110] transition-colors hover:border-[#D8D8D2] focus-visible:outline-none focus-visible:border-[#084734] focus-visible:ring-2 focus-visible:ring-[#084734]"
+  "h-11 w-full rounded-[6px] border border-[#E5E5E0] bg-white px-4 text-[14px] text-[#111110] transition-colors hover:border-[#D8D8D2]"
 
 /**
  * 목동 쇼룸 방문 예약 폼.
@@ -514,7 +514,7 @@ export function ShowroomBookingForm({ interests }: Props) {
 
         <Link
           href="/resources/showroom-demo-readiness-kit"
-          className="mt-4 inline-flex h-11 items-center justify-center rounded-[6px] border border-black/[0.08] bg-white px-5 text-[14px] font-semibold text-[#084734] transition-colors hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+          className="mt-4 inline-flex h-11 items-center justify-center rounded-[6px] border border-black/[0.08] bg-white px-5 text-[14px] font-semibold text-[#084734] transition-colors hover:bg-[#F6F5F4]"
         >
           데모 준비 킷 먼저 보기
         </Link>
@@ -583,7 +583,7 @@ export function ShowroomBookingForm({ interests }: Props) {
               <button
                 type="button"
                 onClick={() => void reloadAvailability()}
-                className="mt-3 inline-flex min-h-11 items-center justify-center rounded-[6px] border border-[#084734] px-4 text-[13px] font-semibold text-[#084734] transition-colors hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+                className="mt-3 inline-flex min-h-11 items-center justify-center rounded-[6px] border border-[#084734] px-4 text-[13px] font-semibold text-[#084734] transition-colors hover:bg-[#ECFDF5]"
               >
                 다시 불러오기
               </button>
@@ -835,7 +835,7 @@ export function ShowroomBookingForm({ interests }: Props) {
                       value={interest}
                       checked={checked}
                       onChange={() => toggleInterest(interest)}
-                      className="h-4 w-4 shrink-0 accent-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+                      className="h-4 w-4 shrink-0 accent-[#084734]"
                     />
                     <span
                       className={`text-[13px] ${checked ? "font-medium text-[#084734]" : "text-[#111110]"}`}
@@ -877,7 +877,7 @@ export function ShowroomBookingForm({ interests }: Props) {
               checked={form.consent}
               onChange={(event) => update("consent", event.target.checked)}
               aria-invalid={Boolean(errors.consent)}
-              className="mt-0.5 h-4 w-4 shrink-0 accent-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+              className="mt-0.5 h-4 w-4 shrink-0 accent-[#084734]"
             />
             <span className="text-[12px] leading-relaxed text-[#44514A]">
               방문 일정 확인 연락을 위한 개인정보(기관명 · 성함 · 연락처 · 이메일)

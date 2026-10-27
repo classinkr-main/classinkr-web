@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useRef, useState } from "react"
-import { CheckCircle2, Loader2, Sparkles } from "lucide-react"
+import { CheckCircle2, Loader2 } from "lucide-react"
 
 import { trackDemoRequestAdsConversion, trackEvent } from "@/lib/analytics"
 import { submitLead } from "@/lib/submitLead"
@@ -25,7 +25,6 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState("")
     const [warning, setWarning] = useState("")
-    const [shake, setShake] = useState(false)
     const [marketingConsent, setMarketingConsent] = useState(false)
     const formRef = useRef<HTMLFormElement>(null)
     const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -116,14 +115,12 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
         } catch (err) {
             const msg = err instanceof Error ? err.message : "상담 요청을 제출하지 못했습니다. 잠시 후 다시 시도해 주세요."
             setError(msg)
-            setShake(true)
-            setTimeout(() => setShake(false), 200)
         } finally {
             setLoading(false)
         }
     }
 
-    const fieldClassName = `${marketingFieldClassName}${shake ? " animate-shake" : ""}`
+    const fieldClassName = marketingFieldClassName
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -153,7 +150,6 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                     <>
                         <DialogHeader className="border-b border-[#E7ECE5] bg-[linear-gradient(180deg,#F6FBF7_0%,#FBFCF9_100%)] px-8 py-7">
                             <div className="mb-3 inline-flex w-fit items-center gap-2 rounded-full border border-[#DCE9E1] bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#0E7A49]">
-                                <Sparkles className="h-3.5 w-3.5" />
                                 Consultation
                             </div>
                             <DialogTitle className="text-[28px] leading-[1.1] tracking-[-0.04em] text-[#111110]">

@@ -406,11 +406,11 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
                 gate: magnet.gate,
                 destination: link.href,
               }}
-              className="group rounded-[10px] border border-black/[0.08] bg-white p-4 transition-colors hover:border-[#084734]/25"
+              className="group rounded-[10px] border border-black/[0.08] bg-white p-4 transition-colors duration-(--motion-fast) ease-soft hover:border-line-strong"
             >
               <span className="flex items-center justify-between gap-3">
                 <span>
-                  <span className="block text-sm font-bold text-[#111110] group-hover:text-[#084734]">
+                  <span className="block text-sm font-bold text-[#111110]">
                     {link.label}
                   </span>
                   {link.description ? (
@@ -442,9 +442,9 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
                 lead_magnet: magnet.slug,
                 destination: item.slug,
               }}
-              className="group rounded-[10px] border border-black/[0.08] bg-white p-4 transition-colors hover:border-[#084734]/25"
+              className="group rounded-[10px] border border-black/[0.08] bg-white p-4 transition-colors duration-(--motion-fast) ease-soft hover:border-line-strong"
             >
-              <span className="block text-sm font-bold text-[#111110] group-hover:text-[#084734]">
+              <span className="block text-sm font-bold text-[#111110]">
                 {item.title}
               </span>
               <span className="mt-1 block text-[13px] leading-6 text-[#615D59]">
@@ -571,7 +571,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
       {/* ── CENTERPIECE — checklist (white) ─────────────── */}
       <section
         id="resource-checklist"
-        className="scroll-mt-24 border-b border-black/[0.06] bg-white"
+        className="border-b border-black/[0.06] bg-white"
       >
         <div className="mx-auto max-w-[1120px] px-5 py-16 sm:px-8 md:py-20">
           <div className="max-w-2xl">
@@ -654,7 +654,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
                   lead_magnet: magnet.slug,
                   gate: magnet.gate,
                 }}
-                className="mt-8 inline-flex items-center gap-2 rounded-[6px] bg-white px-5 py-3 text-sm font-semibold text-[#111110] transition-transform hover:-translate-y-0.5"
+                className="mt-8 inline-flex items-center gap-2 rounded-[6px] bg-white px-5 py-3 text-sm font-semibold text-[#111110]"
               >
                 무료 상담 신청하기
                 <ArrowRight className="h-4 w-4" />

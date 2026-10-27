@@ -3,7 +3,7 @@ import { TrackedLink } from "@/components/TrackedLink"
 
 export default function PricingPage() {
   return (
-    <main className="min-h-screen bg-[#FAFAF8] px-4 py-24 text-[#111110] sm:px-6 lg:py-28">
+    <div className="min-h-screen bg-[#FAFAF8] px-4 py-24 text-[#111110] sm:px-6 lg:py-28">
       <div className="mx-auto max-w-5xl">
         <div className="max-w-3xl">
           <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[#084734]/70">
@@ -73,6 +73,6 @@ export default function PricingPage() {
           표시되는 가격과 결제 가능 항목은 체크아웃 및 상담 단계에서 최종 확인됩니다.
         </div>
       </div>
-    </main>
+    </div>
   )
 }

@@ -302,7 +302,7 @@ function NumberInput({
           step={step}
           value={value}
           onChange={(event) => onChange(readNumber(event.target.value, min, max))}
-          className="h-12 w-full rounded-lg border border-black/[0.08] bg-white px-3 pr-12 text-[15px] font-semibold text-[#111110] outline-none transition focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
+          className="h-12 w-full rounded-lg border border-black/[0.08] bg-white px-3 pr-12 text-[15px] font-semibold text-[#111110] outline-none transition"
         />
         <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[12px] font-semibold text-[#A39E98]">
           {unit}
@@ -552,7 +552,7 @@ export function PricingCalculator({
                     onMouseEnter={() => setIsStudentHelpOpen(true)}
                     onMouseLeave={() => setIsStudentHelpOpen(false)}
                   >
-                    <summary className="flex cursor-pointer list-none items-center gap-2 text-[13px] font-semibold text-[#31302E] outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/20 [&::-webkit-details-marker]:hidden">
+                    <summary className="flex cursor-pointer list-none items-center gap-2 text-[13px] font-semibold text-[#31302E] outline-none [&::-webkit-details-marker]:hidden">
                       온스테이지 학생 수
                       <Info className="h-4 w-4 text-[#A39E98]" aria-hidden="true" />
                     </summary>
