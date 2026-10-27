@@ -6,6 +6,7 @@ import { Component, useEffect, useState, type ReactNode } from "react"
 
 import { RouteTransition } from "@/components/transitions/RouteTransition"
 import { useConsent } from "@/lib/consent/useConsent"
+import { isInternalPath } from "@/lib/internal-path"
 
 const ConditionalHeader = dynamic(() =>
   import("@/components/sections/ConditionalHeader").then((mod) => mod.ConditionalHeader)
@@ -56,14 +57,6 @@ const ChannelTalkLoader = dynamic(
 )
 
 const PUBLIC_WIDGET_IDLE_TIMEOUT_MS = 2800
-
-function isInternalPath(pathname: string) {
-  return (
-    pathname.startsWith("/admin") ||
-    pathname.startsWith("/checkout") ||
-    pathname.startsWith("/receipt")
-  )
-}
 
 class PublicWidgetBoundary extends Component<
   { children: ReactNode; resetKey: string },
@@ -116,7 +109,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(fallbackTimeout)
   }, [pathname])
 
-  return (
+  const chrome = (
     <>
       {showPublicChrome ? <ConditionalHeader /> : null}
       <main className="min-h-screen bg-background font-sans antialiased selection:bg-primary/20 selection:text-primary">
@@ -159,4 +152,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
       ) : null}
     </>
   )
+
+  // 공개 분기만 .site 스코프로 감싼다(display: contents라 상자 없음). 어드민 DOM은 그대로.
+  return showPublicChrome ? <div className="site contents">{chrome}</div> : chrome
 }

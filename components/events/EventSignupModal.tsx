@@ -113,7 +113,7 @@ export function EventSignupModal({
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>{children}</DialogTrigger>
-            <DialogContent className="sm:max-w-[480px] overflow-hidden border-[#E4E8E2] bg-[#FBFCF9] p-0">
+            <DialogContent className="site sm:max-w-[480px] overflow-hidden border-[#E4E8E2] bg-[#FBFCF9] p-0">
                 {submitted ? (
                     <div className="flex flex-col items-center justify-center space-y-4 px-8 py-12 text-center">
                         <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#ECFDF5]">

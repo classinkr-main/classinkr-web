@@ -1,7 +1,11 @@
 "use client"
 
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
+import { usePathname } from "next/navigation"
 import { AlertCircle, CheckCircle2 } from "lucide-react"
+
+import { isInternalPath } from "@/lib/internal-path"
+import { cn } from "@/lib/utils"
 
 type ToastType = "success" | "error"
 
@@ -40,16 +44,29 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div
-        aria-live="polite"
-        aria-atomic="false"
-        className="fixed top-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none"
-      >
-        {toasts.map((toast) => (
-          <ToastItem key={toast.id} toast={toast} onDismiss={remove} />
-        ))}
-      </div>
+      <ToastViewport toasts={toasts} onDismiss={remove} />
     </ToastContext.Provider>
+  )
+}
+
+// 경로 구독은 뷰포트에만 둔다. Provider 가 이동마다 다시 그려지면 useToast 값이 바뀐다.
+function ToastViewport({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: (id: number) => void }) {
+  const pathname = usePathname()
+
+  return (
+    <div
+      aria-live="polite"
+      aria-atomic="false"
+      className={cn(
+        "fixed top-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none", // 공유 기본값, 불변
+        // 공개 경로만 .site 표지. 위치 변경은 P1.
+        !isInternalPath(pathname) && "site",
+      )}
+    >
+      {toasts.map((toast) => (
+        <ToastItem key={toast.id} toast={toast} onDismiss={onDismiss} />
+      ))}
+    </div>
   )
 }
 

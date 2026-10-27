@@ -115,6 +115,7 @@ export function NewsletterModal({
 
       <DialogContent
         className={cn(
+          "site",
           "sm:max-w-[460px] shadow-2xl border p-0 overflow-hidden",
           isDark
             ? "bg-[#1C1B1A] border-white/[0.08] text-white"
