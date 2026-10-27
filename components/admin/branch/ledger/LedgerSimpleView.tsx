@@ -1,11 +1,11 @@
 "use client"
 
-import { Fragment, useCallback, useMemo, useRef, useState, type ReactNode } from "react"
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { cny, cnyExact } from "@/lib/branch/money-format"
 import { branchManagerLabel } from "@/lib/branch/personal-scope"
-import { ApprovalBar, CellEditPopover, type CellEditTarget, type LedgerCellEditApi } from "./LedgerSimpleEdit"
+import { ApprovalBar, InlineCellEditor, type LedgerCellEditApi } from "./LedgerSimpleEdit"
 import { dominantCellConfidence } from "./rev-matrix-logic"
 import { rowMonthAmount, type DraftConfidence, type LedgerDraft, type LedgerRevenueRow, type RevMonthlyBucket } from "./shared"
 import {
@@ -21,34 +21,65 @@ import {
 } from "./ledger-simple-logic"
 
 // 장부(A안) 기본 화면. 개인 범위면 고객×월 표(A, 묶기 선택 시 A-1), 팀·전체면 담당자별 합계(A-2).
-// 수정은 기존 상세 레일(행 선택)로 넘긴다 — 입력·결재 흐름은 REV 렌즈와 같은 경로를 탄다.
+// 금액 칸은 그 자리에서 고치고(주차·메모는 상세 레일), 입력·결재 흐름은 REV 렌즈와 같은 경로를 탄다.
+// 표 금액은 ¥ 를 칸 왼쪽에 두고 숫자만 오른쪽 정렬, 전액 확정 칸은 확정 틴트 배경으로 구분한다.
 
 const money = (value: number) => `¥${cny(value)}`
 const exact = (value: number) => `¥${cnyExact(value)}`
 const pct = (value: number, goal: number | null) => (goal && goal > 0 ? Math.round((value / goal) * 100) : null)
 
-function Mark({ kind }: { kind: DraftConfidence }) {
-  if (kind === "expected") {
-    return <span aria-hidden className="inline-block h-2.5 w-2.5 shrink-0 border-[1.5px] border-dashed" style={{ borderColor: CONFIDENCE_TOKENS.expected.color }} />
-  }
-  return <span aria-hidden className={`inline-block h-2.5 w-2.5 shrink-0 ${CONFIDENCE_TOKENS[kind].bgClass}`} />
+/** 표 칸 금액 — ¥ 는 칸 왼쪽, 숫자는 오른쪽. 0 이면 "–". */
+function Yen({ value, sign }: { value: number; sign?: string }) {
+  if (!value && !sign) return <span className="block text-right">–</span>
+  return (
+    <span className="flex items-center justify-between gap-2">
+      <span aria-hidden className="text-[11.5px] font-normal text-[#8A857D]">¥</span>
+      <span><span className="sr-only">¥</span>{sign}{cny(value)}</span>
+    </span>
+  )
+}
+
+/** 월 머리 작은 확도 막대 — 그 열 합계의 확정·고확도·예정 비율, 길이는 가장 큰 달 대비. */
+function HeaderBar({ bucket, scale }: { bucket: RevMonthlyBucket; scale: number }) {
+  if (bucket.total <= 0) return null
+  const share = (value: number) => `${(value / bucket.total) * 100}%`
+  return (
+    <div aria-hidden className="ml-auto mt-1.5 flex h-1 bg-[#F1EFEA]" style={{ width: `${Math.max(8, Math.round(Math.min(scale, 1) * 64))}px` }}>
+      <span className={CONFIDENCE_TOKENS.confirmed.bgClass} style={{ width: share(bucket.confirmed) }} />
+      <span className={CONFIDENCE_TOKENS["high-confidence"].bgClass} style={{ width: share(bucket.high) }} />
+      <span className="box-border border border-dashed" style={{ width: share(bucket.open), borderColor: CONFIDENCE_TOKENS.expected.color }} />
+    </div>
+  )
+}
+
+/** 확도는 아이콘 없이 글자색으로 — 확정 초록·고확도 파랑·예정 호박(CONFIDENCE_TOKENS, 예정은 밀도 표용 강조색). */
+const CONF_TEXT: Record<DraftConfidence, string> = {
+  confirmed: CONFIDENCE_TOKENS.confirmed.textStrongClass,
+  "high-confidence": CONFIDENCE_TOKENS["high-confidence"].textStrongClass,
+  expected: CONFIDENCE_TOKENS.expected.textStrongClass,
+}
+
+function ConfText({ kind, children }: { kind: DraftConfidence; children: ReactNode }) {
+  return <span className={`font-semibold ${CONF_TEXT[kind]}`}>{children}</span>
 }
 
 function bucketTitle(bucket: RevMonthlyBucket) {
   return `확정 ${exact(bucket.confirmed)} · 고확도 ${exact(bucket.high)} · 예정 ${exact(bucket.open)}`
 }
 
-function ProgressBar({ bucket, goal, pace, label }: { bucket: RevMonthlyBucket; goal: number | null; pace: number; label: string }) {
+function ProgressBar({ bucket, goal, pace, label, paceLabel }: { bucket: RevMonthlyBucket; goal: number | null; pace: number; label: string; paceLabel?: boolean }) {
   const scale = Math.max(goal ?? 0, bucket.total, 1)
   const width = (value: number) => `${(value / scale) * 100}%`
+  const paceLeft = goal ? `${Math.min(pace * goal, scale) / scale * 100}%` : null
   return (
-    <div className="relative" role="img" aria-label={label}>
+    <div className={`relative ${paceLabel && paceLeft ? "pt-[18px]" : ""}`} role="img" aria-label={label}>
+      {paceLabel && paceLeft ? <span aria-hidden className="absolute top-0 -translate-x-1/2 whitespace-nowrap text-[11px] text-[#37352F]" style={{ left: paceLeft }}>오늘 페이스</span> : null}
       <div className="flex h-3 overflow-hidden rounded-sm bg-[#F1EFEA]">
         <div className={CONFIDENCE_TOKENS.confirmed.bgClass} style={{ width: width(bucket.confirmed) }} />
         <div className={CONFIDENCE_TOKENS["high-confidence"].bgClass} style={{ width: width(bucket.high) }} />
         <div className="box-border border-[1.5px] border-l-0 border-dashed" style={{ width: width(bucket.open), borderColor: CONFIDENCE_TOKENS.expected.color }} />
       </div>
-      {goal ? <span aria-hidden className="absolute -bottom-1 -top-1 border-l-2 border-[#37352F]" style={{ left: `${Math.min(pace * goal, scale) / scale * 100}%` }} /> : null}
+      {paceLeft ? <span aria-hidden className={`absolute -bottom-1 border-l-2 border-[#37352F] ${paceLabel ? "top-[15px]" : "-top-1"}`} style={{ left: paceLeft }} /> : null}
     </div>
   )
 }
@@ -60,13 +91,13 @@ function SummaryBand({ bucket, goal, pace, goalNote }: { bucket: RevMonthlyBucke
   const tiles: Array<{ label: ReactNode; value: string; note: string; tone?: string }> = [
     { label: "FY 목표", value: goal ? money(goal) : "—", note: goal ? `오늘 페이스 ${pacePct}% = ${money(goal * pace)}` : goalNote },
     {
-      label: <><Mark kind="confirmed" />확정</>,
+      label: <><ConfText kind="confirmed">확정</ConfText></>,
       value: money(bucket.confirmed),
       note: cPct === null ? "목표 비교 없음" : `${cPct}% · 페이스보다 ${Math.abs(pacePct - cPct)}%p ${cPct >= pacePct ? "앞" : "뒤"}`,
       tone: CONFIDENCE_TOKENS.confirmed.textClass,
     },
-    { label: <><Mark kind="high-confidence" />고확도</>, value: money(bucket.high), note: goal ? `더하면 ${pct(bucket.confirmed + bucket.high, goal)}%` : "확정 전 단계" },
-    { label: <><Mark kind="expected" />예정</>, value: money(bucket.open), note: goal ? `전부 들어오면 ${pct(bucket.total, goal)}%` : "입금 예정" },
+    { label: <><ConfText kind="high-confidence">고확도</ConfText></>, value: money(bucket.high), note: goal ? `더하면 ${pct(bucket.confirmed + bucket.high, goal)}%` : "확정 전 단계" },
+    { label: <><ConfText kind="expected">예정</ConfText></>, value: money(bucket.open), note: goal ? `전부 들어오면 ${pct(bucket.total, goal)}%` : "입금 예정" },
     { label: "새로 만들어야 할 매출", value: gap === null ? "—" : money(gap), note: "예정까지 다 넣어도 모자란 금액" },
   ]
   return (
@@ -80,7 +111,7 @@ function SummaryBand({ bucket, goal, pace, goalNote }: { bucket: RevMonthlyBucke
           </div>
         ))}
       </div>
-      <ProgressBar bucket={bucket} goal={goal} pace={pace} label={`목표 대비 확정 ${money(bucket.confirmed)}, 고확도 ${money(bucket.high)}, 예정 ${money(bucket.open)}${goal ? `, 오늘 페이스 ${pacePct}%` : ""}`} />
+      <ProgressBar paceLabel bucket={bucket} goal={goal} pace={pace} label={`목표 대비 확정 ${money(bucket.confirmed)}, 고확도 ${money(bucket.high)}, 예정 ${money(bucket.open)}${goal ? `, 오늘 페이스 ${pacePct}%` : ""}`} />
     </section>
   )
 }
@@ -103,38 +134,48 @@ function SegButtons<T extends string>({ label, value, options, onChange }: { lab
   )
 }
 
-function AmountCell({ bucket, current, pendingAmount, label, onEdit }: {
+function AmountCell({ bucket, current, pendingAmount, label, cellKey, onEdit }: {
   bucket: RevMonthlyBucket
   current?: boolean
-  /** 이 칸에 대기 중인 변경이 있으면 그 금액(점선으로 표시). */
+  /** 이 칸에 대기 중인 변경이 있으면 그 금액(점선 + 점으로 표시). */
   pendingAmount?: number | null
   /** 수정 가능한 칸이면 칸 이름(스크린리더용)과 열기 함수. */
   label?: string
-  onEdit?: (anchor: HTMLElement) => void
+  /** 수정을 닫은 뒤 포커스를 돌려줄 칸 키. */
+  cellKey?: string
+  onEdit?: () => void
 }) {
-  const base = `whitespace-nowrap px-1.5 py-1 text-right tabular-nums ${current ? "bg-[#FBFCFB]" : ""}`
   const kind = dominantCellConfidence(bucket)
   const pending = pendingAmount != null
   const shown = pending ? pendingAmount : bucket.total
-  const tone = pending ? "font-semibold text-[#111110]" : bucket.total <= 0 ? "text-[#C5C0B8]" : kind === "confirmed" ? "font-semibold text-[#111110]" : kind === "expected" ? "text-[#615D59]" : "text-[#111110]"
-  const title = pending ? `대기 중 변경 ${exact(shown)} (지금 장부 ${exact(bucket.total)})` : bucket.total > 0 ? bucketTitle(bucket) : undefined
+  // 전액 확정(입금 끝) 칸 — 배경으로 구분한다. 대기 변경이 걸린 칸은 점선이 우선.
+  const settled = !pending && bucket.total > 0 && bucket.confirmed >= bucket.total
+  // 확도 = 숫자 글자색(셀 안 아이콘 없음). 대기 변경은 먹색 굵게 + 점선, 빈 칸은 연회색.
+  const tone = pending ? "font-semibold text-[#111110]" : bucket.total <= 0 ? "text-[#C5C0B8]" : `${kind === "expected" ? "font-medium" : "font-semibold"} ${CONF_TEXT[kind]}`
+  const title = pending ? `대기 중 변경 ${exact(shown)} (지금 장부 ${exact(bucket.total)})` : bucket.total > 0 ? `${settled ? "전액 확정 · " : ""}${bucket.total > 0 ? bucketTitle(bucket) : ""}` : undefined
   const content = shown > 0 || pending
-    ? <span className="inline-flex items-center gap-1.5">{pending ? null : <Mark kind={kind} />}{money(shown)}</span>
-    : "–"
-  const box = `inline-flex min-h-9 w-full items-center justify-end rounded-md px-1.5 ${pending ? "outline-dashed outline-1 outline-[#37352F]" : ""}`
+    ? <Yen value={shown} />
+    : <span className="block text-right">–</span>
+  const box = `relative block min-h-9 w-full rounded-md px-1.5 py-2 ${pending ? "outline-dashed outline-[1.5px] -outline-offset-2 outline-[#37352F]" : ""}`
+  const dot = pending ? <span aria-hidden className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-[#37352F]" /> : null
   return (
-    <td className={`${base} ${tone}`} title={title}>
+    <td
+      className={`min-w-[108px] whitespace-nowrap px-1.5 py-1 tabular-nums ${tone}`}
+      style={settled ? { backgroundColor: CONFIDENCE_TOKENS.confirmed.tintBg } : current ? { backgroundColor: "#FBFCFB" } : undefined}
+      title={title}
+    >
       {onEdit ? (
         <button
           type="button"
+          data-cell-key={cellKey}
           aria-label={`${label} ${pending ? `대기 중 ${money(shown)}` : shown > 0 ? money(shown) : "비어 있음"} — 수정`}
-          onClick={(event) => onEdit(event.currentTarget)}
-          className={`${box} cursor-text hover:bg-[#F3F6F4] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#084734]`}
+          onClick={onEdit}
+          className={`${box} cursor-text text-left hover:bg-[rgba(8,71,52,0.05)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#084734]`}
         >
-          {content}
+          {content}{dot}
         </button>
       ) : (
-        <span className={box}>{content}</span>
+        <span className={box}>{content}{dot}</span>
       )}
     </td>
   )
@@ -157,15 +198,23 @@ function DealTable({ rows, months, currentMonth, monthlyGoals, groupBy, expandPa
   edit: LedgerCellEditApi | null
   onOpenRow: (row: LedgerRevenueRow) => void
 }) {
-  const [target, setTarget] = useState<CellEditTarget | null>(null)
-  const returnFocus = useRef<HTMLElement | null>(null)
-  const closeEditor = useCallback(() => {
-    setTarget(null)
-    returnFocus.current?.focus()
-  }, [])
+  // 지금 칸 안에서 고치는 중인 칸(`행 키:월`). 닫히면 같은 칸 버튼으로 포커스를 돌려준다.
+  const [editing, setEditing] = useState<string | null>(null)
+  const refocus = useRef<string | null>(null)
+  const sectionRef = useRef<HTMLElement>(null)
+  const closeEditor = (returnFocus = true) => {
+    refocus.current = returnFocus ? editing : null
+    setEditing(null)
+  }
+  useEffect(() => {
+    if (editing || !refocus.current) return
+    sectionRef.current?.querySelector<HTMLElement>(`[data-cell-key="${CSS.escape(refocus.current)}"]`)?.focus()
+    refocus.current = null
+  }, [editing])
   const columns = useMemo(() => buildSimpleColumns(months, currentMonth, expandPast), [months, currentMonth, expandPast])
   const ledger = useMemo(() => buildSimpleLedger(rows, columns, groupBy), [rows, columns, groupBy])
   const grouped = groupBy !== "none"
+  const headerScale = Math.max(1, ...ledger.cells.filter((_, index) => ledger.columns[index].months.length === 1).map((bucket) => bucket.total))
   const columnGoal = (months: string[]) => (monthlyGoals ? months.reduce((sum, month) => sum + (monthlyGoals.get(month) ?? 0), 0) : 0)
   const footRows: Array<{ kind: DraftConfidence; label: string; pick: (b: RevMonthlyBucket) => number }> = [
     { kind: "confirmed", label: "확정", pick: (b) => b.confirmed },
@@ -178,9 +227,9 @@ function DealTable({ rows, months, currentMonth, monthlyGoals, groupBy, expandPa
   }
 
   return (
-    <section aria-label="장부 표" className="overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white">
+    <section ref={sectionRef} aria-label="장부 표" className="overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[860px] border-collapse text-[13px]">
+        <table className="w-full min-w-[980px] border-collapse text-[13px]">
           <thead>
             <tr className="border-b border-[rgba(0,0,0,0.08)] text-[12px] text-[#615D59]">
               <th scope="col" className="px-3 py-2.5 pl-5 text-left font-medium">고객</th>
@@ -189,6 +238,7 @@ function DealTable({ rows, months, currentMonth, monthlyGoals, groupBy, expandPa
                 <th key={column.key} scope="col" className={`whitespace-nowrap px-3 py-2.5 text-right align-bottom font-medium ${column.current ? "bg-[#FBFCFB] font-semibold text-[#084734]" : ""}`}>
                   <div>{column.label}{column.current ? " · 이번 달" : ""}</div>
                   <div className="mt-0.5 text-[11px] font-normal tabular-nums text-[#615D59]">{ledger.cells[index].total > 0 ? money(ledger.cells[index].total) : "–"}</div>
+                  <HeaderBar bucket={ledger.cells[index]} scale={column.months.length > 1 ? 1 : ledger.cells[index].total / headerScale} />
                 </th>
               ))}
               <th scope="col" className="px-3 py-2.5 pr-5 text-right font-semibold text-[#111110]">FY 합계</th>
@@ -204,9 +254,9 @@ function DealTable({ rows, months, currentMonth, monthlyGoals, groupBy, expandPa
                       <span className="ml-2 tabular-nums">확정 {money(section.total.confirmed)} · 고확도 {money(section.total.high)} · 예정 {money(section.total.open)}</span>
                     </th>
                     {section.cells.map((bucket, index) => (
-                      <td key={index} className="px-3 py-2 text-right tabular-nums">{bucket.total > 0 ? money(bucket.total) : "–"}</td>
+                      <td key={index} className="px-3 py-2 tabular-nums"><Yen value={bucket.total} /></td>
                     ))}
-                    <td className="px-3 py-2 pr-5 text-right font-bold tabular-nums text-[#111110]">{money(section.total.total)}</td>
+                    <td className="px-3 py-2 pr-5 font-bold tabular-nums text-[#111110]"><Yen value={section.total.total} /></td>
                   </tr>
                 ) : null}
                 {section.lines.map((line) => (
@@ -223,6 +273,24 @@ function DealTable({ rows, months, currentMonth, monthlyGoals, groupBy, expandPa
                       if (!edit || !month) return <AmountCell key={index} bucket={bucket} current={column.current} />
                       const hasPending = line.rows.some((row) => edit.pending(row, month))
                       const candidates = cellCandidates(line.rows, month, edit)
+                      const cellKey = `${line.key}:${month}`
+                      if (editing === cellKey && candidates.length > 0) {
+                        return (
+                          <td key={index} className="min-w-[132px] px-1.5 py-1 align-top">
+                            <InlineCellEditor
+                              label={`${line.label} ${column.label}`}
+                              month={month}
+                              candidates={candidates}
+                              edit={edit}
+                              onClose={closeEditor}
+                              onMore={(row) => {
+                                setEditing(null)
+                                onOpenRow(row)
+                              }}
+                            />
+                          </td>
+                        )
+                      }
                       return (
                         <AmountCell
                           key={index}
@@ -230,14 +298,12 @@ function DealTable({ rows, months, currentMonth, monthlyGoals, groupBy, expandPa
                           current={column.current}
                           pendingAmount={hasPending ? line.rows.reduce((sum, row) => sum + edit.value(row, month), 0) : null}
                           label={`${line.label} ${column.label}`}
-                          onEdit={candidates.length > 0 ? (anchor) => {
-                            returnFocus.current = anchor
-                            setTarget({ customer: line.label, month, monthLabel: column.label, candidates, anchor: anchor.getBoundingClientRect() })
-                          } : undefined}
+                          cellKey={cellKey}
+                          onEdit={candidates.length > 0 ? () => setEditing(cellKey) : undefined}
                         />
                       )
                     })}
-                    <td className="whitespace-nowrap px-3 py-2.5 pr-5 text-right font-semibold tabular-nums" title={bucketTitle(line.total)}>{money(line.total.total)}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 pr-5 font-semibold tabular-nums" title={bucketTitle(line.total)}><Yen value={line.total.total} /></td>
                   </tr>
                 ))}
               </Fragment>
@@ -246,11 +312,11 @@ function DealTable({ rows, months, currentMonth, monthlyGoals, groupBy, expandPa
           <tfoot className="text-[#615D59]">
             {footRows.map((foot, footIndex) => (
               <tr key={foot.kind} className={footIndex === 0 ? "border-t border-[rgba(0,0,0,0.12)]" : ""}>
-                <th scope="row" colSpan={2} className="px-3 py-2 pl-5 text-left font-normal"><span className="inline-flex items-center gap-2"><Mark kind={foot.kind} />{foot.label}</span></th>
+                <th scope="row" colSpan={2} className="px-3 py-2 pl-5 text-left font-normal"><span className="inline-flex items-center gap-2"><ConfText kind={foot.kind}>{foot.label}</ConfText></span></th>
                 {ledger.cells.map((bucket, index) => (
-                  <td key={index} className={`px-3 py-2 text-right tabular-nums ${foot.kind === "confirmed" ? "font-semibold text-[#111110]" : ""}`}>{foot.pick(bucket) > 0 ? money(foot.pick(bucket)) : "–"}</td>
+                  <td key={index} className={`px-3 py-2 tabular-nums ${foot.kind === "confirmed" ? "font-semibold text-[#111110]" : ""}`}><Yen value={foot.pick(bucket)} /></td>
                 ))}
-                <td className={`px-3 py-2 pr-5 text-right font-semibold tabular-nums ${foot.kind === "confirmed" ? CONFIDENCE_TOKENS.confirmed.textClass : "text-[#111110]"}`}>{money(foot.pick(ledger.total))}</td>
+                <td className={`px-3 py-2 pr-5 font-semibold tabular-nums ${foot.kind === "confirmed" ? CONFIDENCE_TOKENS.confirmed.textClass : "text-[#111110]"}`}><Yen value={foot.pick(ledger.total)} /></td>
               </tr>
             ))}
             {monthlyGoals ? (
@@ -259,12 +325,12 @@ function DealTable({ rows, months, currentMonth, monthlyGoals, groupBy, expandPa
                 {ledger.columns.map((column, index) => {
                   const goal = columnGoal(column.months)
                   const diff = ledger.cells[index].total - goal
-                  return <td key={column.key} className={`px-3 py-2.5 text-right tabular-nums ${goal > 0 && diff >= 0 ? `font-semibold ${CONFIDENCE_TOKENS.confirmed.textClass}` : ""}`}>{goal > 0 ? `${diff >= 0 ? "+" : "−"}${money(Math.abs(diff))}` : "–"}</td>
+                  return <td key={column.key} className={`px-3 py-2.5 tabular-nums ${goal > 0 && diff >= 0 ? `font-semibold ${CONFIDENCE_TOKENS.confirmed.textClass}` : ""}`}>{goal > 0 ? <Yen value={Math.abs(diff)} sign={diff >= 0 ? "+" : "−"} /> : <span className="block text-right">–</span>}</td>
                 })}
-                <td className="px-3 py-2.5 pr-5 text-right font-bold tabular-nums">
+                <td className="px-3 py-2.5 pr-5 font-bold tabular-nums">
                   {(() => {
                     const diff = ledger.total.total - columnGoal(months)
-                    return columnGoal(months) > 0 ? `${diff >= 0 ? "+" : "−"}${money(Math.abs(diff))}` : "–"
+                    return columnGoal(months) > 0 ? <Yen value={Math.abs(diff)} sign={diff >= 0 ? "+" : "−"} /> : <span className="block text-right">–</span>
                   })()}
                 </td>
               </tr>
@@ -272,18 +338,6 @@ function DealTable({ rows, months, currentMonth, monthlyGoals, groupBy, expandPa
           </tfoot>
         </table>
       </div>
-      {target && edit ? (
-        <CellEditPopover
-          key={`${target.customer}:${target.month}`}
-          target={target}
-          edit={edit}
-          onClose={closeEditor}
-          onMore={(row) => {
-            setTarget(null)
-            onOpenRow(row)
-          }}
-        />
-      ) : null}
     </section>
   )
 }
@@ -303,10 +357,10 @@ function ManagerTable({ rows, months, currentMonth, managerGoals, pace, onOpenMa
     const behind = cPct !== null && cPct < pacePct - 15
     return (
       <>
-        <td className="px-3 py-3 text-right tabular-nums">{goal ? money(goal) : "—"}</td>
-        <td className={`px-3 py-3 text-right font-semibold tabular-nums ${CONFIDENCE_TOKENS.confirmed.textClass}`} title={exact(bucket.confirmed)}>{money(bucket.confirmed)}</td>
-        <td className="px-3 py-3 text-right tabular-nums" title={exact(bucket.high)}>{money(bucket.high)}</td>
-        <td className="px-3 py-3 text-right tabular-nums text-[#615D59]" title={exact(bucket.open)}>{money(bucket.open)}</td>
+        <td className="min-w-[96px] px-3 py-3 tabular-nums">{goal ? <Yen value={goal} /> : <span className="block text-right">—</span>}</td>
+        <td className={`min-w-[96px] px-3 py-3 font-semibold tabular-nums ${CONFIDENCE_TOKENS.confirmed.textClass}`} title={exact(bucket.confirmed)}><Yen value={bucket.confirmed} /></td>
+        <td className="min-w-[96px] px-3 py-3 tabular-nums" title={exact(bucket.high)}><Yen value={bucket.high} /></td>
+        <td className="min-w-[96px] px-3 py-3 tabular-nums text-[#615D59]" title={exact(bucket.open)}><Yen value={bucket.open} /></td>
         <td className="w-[220px] px-3 py-3">
           <ProgressBar bucket={bucket} goal={goal} pace={pace} label={`${name} 목표 대비 확정 ${money(bucket.confirmed)}, 고확도 ${money(bucket.high)}, 예정 ${money(bucket.open)}`} />
         </td>
@@ -330,9 +384,9 @@ function ManagerTable({ rows, months, currentMonth, managerGoals, pace, onOpenMa
             <tr className="border-b border-[rgba(0,0,0,0.08)] text-[12px] text-[#615D59]">
               <th scope="col" className="px-3 py-2.5 pl-5 text-left font-medium">담당</th>
               <th scope="col" className="px-3 py-2.5 text-right font-medium">FY 목표</th>
-              <th scope="col" className="px-3 py-2.5 text-right font-medium"><span className="inline-flex items-center gap-1.5"><Mark kind="confirmed" />확정</span></th>
-              <th scope="col" className="px-3 py-2.5 text-right font-medium"><span className="inline-flex items-center gap-1.5"><Mark kind="high-confidence" />고확도</span></th>
-              <th scope="col" className="px-3 py-2.5 text-right font-medium"><span className="inline-flex items-center gap-1.5"><Mark kind="expected" />예정</span></th>
+              <th scope="col" className="px-3 py-2.5 text-right font-medium"><span className="inline-flex items-center gap-1.5"><ConfText kind="confirmed">확정</ConfText></span></th>
+              <th scope="col" className="px-3 py-2.5 text-right font-medium"><span className="inline-flex items-center gap-1.5"><ConfText kind="high-confidence">고확도</ConfText></span></th>
+              <th scope="col" className="px-3 py-2.5 text-right font-medium"><span className="inline-flex items-center gap-1.5"><ConfText kind="expected">예정</ConfText></span></th>
               <th scope="col" className="px-3 py-2.5 text-left font-medium">진행 <span className="text-[11px]">(세로선 = 오늘 페이스 {pacePct}%)</span></th>
               <th scope="col" className="px-3 py-2.5 text-right font-medium">확정률</th>
               <th scope="col" className="px-3 py-2.5 text-right font-medium">확정+고확도</th>
@@ -449,9 +503,10 @@ export default function LedgerSimpleView({ rows, months, currentMonth, monthlyGo
           </button>
         ) : null}
         <span className="ml-auto flex items-center gap-3 text-[12px] text-[#615D59]">
-          <span className="inline-flex items-center gap-1.5"><Mark kind="confirmed" />확정</span>
-          <span className="inline-flex items-center gap-1.5"><Mark kind="high-confidence" />고확도</span>
-          <span className="inline-flex items-center gap-1.5"><Mark kind="expected" />예정</span>
+          <span className="inline-flex items-center gap-1.5"><ConfText kind="confirmed">확정</ConfText></span>
+          <span className="inline-flex items-center gap-1.5"><ConfText kind="high-confidence">고확도</ConfText></span>
+          <span className="inline-flex items-center gap-1.5"><ConfText kind="expected">예정</ConfText></span>
+          <span className="inline-flex items-center gap-1.5"><span aria-hidden className="inline-block h-3 w-4 rounded-sm border border-[rgba(0,0,0,0.08)]" style={{ backgroundColor: CONFIDENCE_TOKENS.confirmed.tintBg }} />전액 확정</span>
         </span>
       </div>
       {loading ? (
@@ -464,7 +519,7 @@ export default function LedgerSimpleView({ rows, months, currentMonth, monthlyGo
       <p className="text-[12px] text-[#615D59]">
         {showMembers
           ? "담당자 이름을 누르면 그 사람 장부로 바뀝니다."
-          : "금액 칸을 누르면 바로 고칩니다(E·H·C로 확도, Enter 저장). 지난달 묶음 칸과 전액 확정된 칸은 고칠 수 없습니다. 고객 이름은 상세를 엽니다."}
+          : "금액 칸을 누르면 그 자리에서 고칩니다(E·H·C 확도, Enter 저장, Esc 취소). 배경이 칠해진 전액 확정 칸과 지난달 묶음 칸은 고칠 수 없습니다. 점선 칸은 아직 반영 전, 고객 이름은 상세를 엽니다."}
       </p>
       <ApprovalBar drafts={pendingDrafts} serverQueue={serverQueue} onCheck={onCheckDrafts} onApply={onApplyDrafts} onShowAll={onShowQueue} />
     </div>

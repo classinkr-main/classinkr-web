@@ -109,6 +109,32 @@ export default async function UpdatesPage() {
           </p>
         </div>
 
+        <section className="mb-8 border-y border-black/[0.08] py-6" aria-labelledby="ai-feature-guide-heading">
+          <p className="text-[12px] font-semibold text-[#615D59]">2026년 10월 26일 · 가이드 업데이트</p>
+          <h2 id="ai-feature-guide-heading" className="mt-2 text-[20px] font-bold tracking-[-0.02em] text-[#111110]">
+            클래스인 AI 기능 소개서 공개
+          </h2>
+          <p className="mt-2 text-[14px] leading-6 text-[#615D59]">
+            AI 강의 분석·AI 칠판·AI 에이전트의 주요 기능과 사용 방법, 지원 환경과 활성화 조건을 한곳에 모았습니다.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-3">
+            <a
+              href="/classin-ai-feature-guide.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-11 items-center gap-2 text-[14px] font-semibold text-[#084734] hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#084734]"
+            >
+              AI 기능 소개서 보기
+              <ExternalLink className="h-4 w-4" aria-hidden />
+              <span className="sr-only">(새 탭)</span>
+            </a>
+            <Link href="/docs/software/classin-ai-feature-guide" className="inline-flex min-h-11 items-center gap-2 text-[14px] font-semibold text-[#084734] hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#084734]">
+              가이드 안내 읽기
+              <ArrowRight className="h-4 w-4" aria-hidden />
+            </Link>
+          </div>
+        </section>
+
         {/* ClassIn 6.0.9 & AI 강의평가 하이라이트 배너 */}
         <div className="mb-12 overflow-hidden rounded-3xl border border-[#084734]/20 bg-gradient-to-br from-[#084734] via-[#063c2c] to-[#04281c] p-6 text-white shadow-md sm:p-8">
           <div className="flex flex-wrap items-center gap-2">
