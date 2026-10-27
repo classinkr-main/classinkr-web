@@ -137,7 +137,8 @@
 - `[승인]`: 오더번호 `ORD-YYMM-NNN` 발급 + 견적 줄마다 배송 예정 생성 + 딜 확정 단계 이동. `[반려]`·`[오더 취소]`는 사유 필수. 취소는 아직 배송 예정인 줄만 정리하고, 출고 확정된 줄이 있으면 막는다.
 - 버튼은 `hardware.finalize` 권한자(이왕찬)와 슈퍼 어드민(지사장)에게만 보인다(`viewer.canApprove`, 강제는 서버 게이트). 다른 편집 역할은 목록만 본다.
 - 승인됨 칸(시안 2026-10-26 A안): 오더마다 품목별 진행 바(출고·배송 예정·미등록, 원장에서 같은 오더번호를 센다 — 시트 줄 포함)와 출고 단계(출고 전·일부 출고·출고 완료), 다음 할 일(예정 N대 출고 확정 → 예정 큐로 이동, 미등록 N대 등록)을 보인다. 오더번호 없이 시트에 적힌 같은 고객·품목 출고는 "이 오더일 수 있다" 힌트로, 수량 초과는 빨간 줄로 붙는다. 할 일이 남은 오더가 위로 오고, 하드웨어 없는 자동 승인 오더는 아래에 접는다. 보기 규칙은 `inventory/approved-order-view.ts`.
-- **시트 확인** 칸: 첫 오더 요청일 이후 시트에 적힌 고객 출고 줄 중 오더번호 없음·없는 번호·취소된 오더·오더에 없는 품목·수량 초과인 줄. 읽기 전용, 시트에 승인된 오더번호를 적으면 다음 가져오기 뒤 사라진다([연결 로직](./hardware-order-revenue-link-plan-2026-10-22.md) §4-4).
+- 반려·취소 칸(시안 2026-10-26 B안): 오더마다 "다음 할 일" 카드. 반려됐고 같은 견적으로 다시 올라온 오더가 없으면 "견적을 고쳐 새 버전으로 승인받기" + `[담당에게 알리기]`(반려 알림 `hardware.order.rejected`, 권한자만) · `[견적 수정]`. 취소된 오더번호가 시트에 남아 있으면 "시트에서 지우기" + 시트 확인 칸으로 이동. 같은 견적이 다시 올라왔으면 "해결됨"과 그 오더로 이동. 할 일이 남은 것부터 세운다. 보기 규칙은 `inventory/closed-order-view.ts`.
+- **시트 확인** 칸(시안 A안): 첫 오더 요청일 이후 시트에 적힌 고객 출고 줄 중 오더번호 없음·없는 번호·취소된 오더·오더에 없는 품목·수량 초과인 줄을 종류별로 묶고, 위에 종류별 건수와 고칠 방법 칸을 둔다. 번호 없음·없는 번호·오더에 없는 품목에는 최근 승인 오더에서 찾은 번호 후보("이 번호일 가능성이 높습니다" — 같은 고객·품목, "오타로 보입니다" — 2글자 이내로 다른 번호)와 `[번호 복사]`를 붙인다. 짐작이라 자동으로 적지 않는다. 수량 초과는 오더·시트 대수를 나란히 보인다. 시트에 승인된 오더번호를 적으면 다음 가져오기 뒤 사라진다([연결 로직](./hardware-order-revenue-link-plan-2026-10-22.md) §4-4). 보기 규칙은 `inventory/sheet-check-view.ts`, 후보 규칙은 `lib/orders/sheet-order-check.ts`의 `suggestOrdersForSheetCheck`.
 - `20261022_sales_orders.sql` 미적용이면 "DB 업데이트 적용 후" 안내 한 줄로 내려간다.
 ---
 
@@ -270,9 +271,9 @@ API
 - `PATCH /api/admin/hardware/movements/[id]` — `{action: confirm-planned | void | update}`(confirm은 `confirmQty` 옵션)
 - `POST /api/admin/hardware/import-sheet` — 싱크·백업 후 이관
 - `GET|POST /api/admin/hardware/samples` — 유닛 목록·타임라인 / 등록(`action:"register"`)·이벤트(`action:"event"`, adjust는 `nextStatus`)
-- `GET /api/admin/hardware/orders?status=pending|approved|closed|all` — 오더 목록 + `viewer.canApprove`(§2-9). 승인됨·전체는 `fulfillment`(품목별 주문·출고·예정)를 붙인다. 테이블 미적용이면 503 `available:false`
-- `GET /api/admin/hardware/orders/sheet-check` — 시트 확인 필요 목록(`since`, `checks[]`)
-- `POST /api/admin/hardware/orders/[id]` — `{action: approve | reject | cancel, reason?}`. `hardware.finalize` 필수, 감사 로그 `hardware.order.*`
+- `GET /api/admin/hardware/orders?status=pending|approved|closed|all` — 오더 목록 + `viewer.canApprove`(§2-9). 승인됨·전체는 `fulfillment`(품목별 주문·출고·예정)를, 반려·취소·전체는 `successor`(같은 견적으로 다시 올라온 살아 있는 오더)를 붙인다. 테이블 미적용이면 503 `available:false`
+- `GET /api/admin/hardware/orders/sheet-check` — 시트 확인 필요 목록(`since`, `checks[]` — 고칠 번호 후보 `suggestions` 포함)
+- `POST /api/admin/hardware/orders/[id]` — `{action: approve | reject | cancel | remind, reason?}`(remind = 반려된 오더를 영업 쪽에 다시 알림). `hardware.finalize` 필수, 감사 로그 `hardware.order.*`
 - `GET /api/admin/hardware/crm-orders` — 출고 시 CRM 후보(`productName`·`quantity`·`customer`). `scope=backlog`는 원장에 없는 CRM 오더 목록과 겹침 의심을 돌려준다(§2-8). 고객사가 맞는 후보는 신뢰도를 올려 맨 위로 온다(2026-09-20). 다른 고객사의 후보를 지우지는 않는다 — CRM 표기가 다른 오프라인 건을 숨기면 찾을 길이 없다. 자동 링크·무음 저장은 없다.
 
 ---

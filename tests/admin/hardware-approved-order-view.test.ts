@@ -42,7 +42,7 @@ function order(overrides: Partial<ApprovedOrderInput> & { id?: string } = {}): A
   }
 }
 
-function check(overrides: Partial<SheetOrderCheck> & { row?: Partial<SheetOrderCheck["row"]> }): SheetOrderCheck {
+function check(overrides: Omit<Partial<SheetOrderCheck>, "row"> & { row?: Partial<SheetOrderCheck["row"]> }): SheetOrderCheck {
   const { row, ...rest } = overrides
   return {
     kind: "missing_order_no",

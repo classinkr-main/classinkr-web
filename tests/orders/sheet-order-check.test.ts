@@ -7,7 +7,9 @@ import {
   normalizeOrderNo,
   orderNosWithActualSheetOutbound,
   rawOrderNo,
+  sameCustomerName,
   selectAppRowsReplacedBySheet,
+  suggestOrdersForSheetCheck,
   summarizeOrderFulfillment,
   type SheetOutboundRow,
 } from "@/lib/orders/sheet-order-check"
@@ -138,9 +140,62 @@ describe("classifySheetOrderChecks — 시트 확인 필요", () => {
 
     expect(checks.map((check) => check.kind)).toEqual(["product_not_in_order", "over_order_quantity"])
     expect(checks[1].message).toContain("2대인데 시트에는 3대")
+    expect(checks[1]).toMatchObject({ ordered: 2, sheetTotal: 3 })
   })
 
   it("주문 수량 안이면 아무것도 띄우지 않는다", () => {
     expect(classifySheetOrderChecks([sheetRow({ quantity: 1 }), sheetRow({ id: "r2", quantity: 1 })], [order({})])).toEqual([])
+  })
+})
+
+describe("sameCustomerName", () => {
+  it("공백·덧붙인 이름(학원)까지 같은 곳으로 보고, 한 글자짜리는 묶지 않는다", () => {
+    expect(sameCustomerName("그린 수학", "그린수학학원")).toBe(true)
+    expect(sameCustomerName("해솔학원", "그린수학")).toBe(false)
+    expect(sameCustomerName("A", "A학원")).toBe(false)
+    expect(sameCustomerName(null, "그린수학")).toBe(false)
+  })
+})
+
+describe("suggestOrdersForSheetCheck — 고칠 번호 후보", () => {
+  const approved = [
+    order({ orderNo: "ORD-2610-004", customerName: "해솔학원", lines: [line('86" IFP', 2), line("T1", 2)] }),
+    order({ orderNo: "ORD-2610-005", customerName: "그린수학", lines: [line('86" IFP', 2)] }),
+    order({ orderNo: "ORD-2610-006", customerName: "그린수학", status: "cancelled", lines: [line('86" IFP', 2)] }),
+  ]
+
+  it("번호 없음: 같은 고객·품목의 승인 오더(취소된 오더는 빼고)", () => {
+    const suggestions = suggestOrdersForSheetCheck(
+      { kind: "missing_order_no", orderNo: null, row: sheetRow({ customer: "그린수학학원", orderNoRaw: null }) },
+      approved
+    )
+    expect(suggestions).toEqual([
+      { orderNo: "ORD-2610-005", customerName: "그린수학", products: '86" IFP ×2', reason: "same_customer_product" },
+    ])
+  })
+
+  it("없는 번호: 2글자 이내로 다른 번호를 오타 후보로, 같은 고객을 앞에", () => {
+    const suggestions = suggestOrdersForSheetCheck(
+      { kind: "unknown_order_no", orderNo: "ORD-2610-014", row: sheetRow({ productName: "T1", customer: "해솔학원" }) },
+      approved
+    )
+    expect(suggestions.map((entry) => [entry.orderNo, entry.reason])).toEqual([
+      ["ORD-2610-004", "similar_number"],
+      ["ORD-2610-005", "similar_number"],
+    ])
+  })
+
+  it("없는 번호인데 비슷한 번호가 없으면 같은 고객·품목 오더로 물러난다", () => {
+    const suggestions = suggestOrdersForSheetCheck(
+      { kind: "unknown_order_no", orderNo: "ORD-2699-999", row: sheetRow({ productName: "T1", customer: "해솔학원" }) },
+      approved
+    )
+    expect(suggestions.map((entry) => [entry.orderNo, entry.reason])).toEqual([["ORD-2610-004", "same_customer_product"]])
+  })
+
+  it("취소된 오더·수량 초과는 번호를 바꿀 일이 아니라 후보가 없다", () => {
+    for (const kind of ["order_not_approved", "over_order_quantity"] as const) {
+      expect(suggestOrdersForSheetCheck({ kind, orderNo: "ORD-2610-005", row: sheetRow({ customer: "그린수학" }) }, approved)).toEqual([])
+    }
   })
 })

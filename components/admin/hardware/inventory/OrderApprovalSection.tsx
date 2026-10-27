@@ -12,13 +12,14 @@
 //
 // "승인됨"(시안 2026-10-26 A): 오더마다 품목별 진행 바(출고·배송 예정·미등록)와 다음 할 일, 시트 힌트
 // (번호 없이 적힌 같은 고객·품목 출고, 수량 초과)를 보인다. 할 일이 남은 오더가 위로, 하드웨어 없는 오더는 접는다.
+// "반려·취소"(시안 B): 오더마다 다음 할 일 — 견적 수정(담당에게 알리기), 시트에 남은 취소 번호 지우기, 해결됨.
+// "시트 확인"(시안 A): 종류별로 묶고 고칠 방법과 고칠 번호 후보(번호 복사)를 붙인다.
 import { Fragment, memo, useCallback, useEffect, useState, type ReactNode } from "react"
-import { Check, ChevronDown, ExternalLink, RefreshCw, X } from "lucide-react"
+import { Check, ChevronDown, Copy, ExternalLink, RefreshCw, X } from "lucide-react"
 
 import { adminFetch, adminFetchJson } from "@/lib/admin-client"
 import { summarizeSalesOrderProducts, type SalesOrder } from "@/lib/orders/order-lines"
 import {
-  SHEET_ORDER_CHECK_LABELS,
   type SalesOrderFulfillmentLine,
   type SheetOrderCheck,
 } from "@/lib/orders/sheet-order-check"
@@ -32,10 +33,13 @@ import {
   sortApprovedOrders,
   type ApprovedOrderNextAction,
 } from "./approved-order-view"
+import { closedOrderReason, closedOrderTodo, sortClosedOrders, type ClosedOrderInput } from "./closed-order-view"
+import { SHEET_CHECK_KIND_SUMMARY, groupSheetChecks, sheetCheckFixText } from "./sheet-check-view"
 import { formatCurrency, formatDate, formatNumber } from "./shared"
 
 type OrderFilter = "pending" | "approved" | "closed" | "sheet"
-type OrderView = SalesOrder & { fulfillment?: SalesOrderFulfillmentLine[] }
+type OrderView = SalesOrder & { fulfillment?: SalesOrderFulfillmentLine[]; successor?: ClosedOrderInput["successor"] }
+type OrderAction = "approve" | "reject" | "cancel" | "remind"
 
 interface OrderApprovalSectionProps {
   /** 승인으로 배송 예정이 생기면 부모가 원장을 다시 받는다(HardwareInventoryClient의 refresh). */
@@ -189,7 +193,7 @@ function OrderApprovalSection({ onChanged }: OrderApprovalSectionProps) {
     void loadSheetChecks(false)
   }, [loadSheetChecks])
 
-  const act = async (order: SalesOrder, action: "approve" | "reject" | "cancel", actionReason?: string) => {
+  const act = async (order: SalesOrder, action: OrderAction, actionReason?: string) => {
     setBusyId(order.id)
     setNotice(null)
     setRowErrors((current) => {
@@ -212,14 +216,16 @@ function OrderApprovalSection({ onChanged }: OrderApprovalSectionProps) {
         )
       } else if (action === "reject") {
         setNotice(`${updated.customerName} 오더를 반려했습니다.`)
+      } else if (action === "remind") {
+        setNotice(`${updated.customerName} 반려를 담당에게 알렸습니다.`)
       } else {
         setNotice(`오더 ${updated.orderNo ?? ""}를 취소하고 남은 배송 예정을 정리했습니다.`)
       }
       setReasonFor(null)
       setReason("")
       await load(filter)
-      // 승인은 배송 예정을, 취소는 예정 정리를 원장에 남긴다 — 반려는 원장을 건드리지 않는다.
-      if (action !== "reject") await onChanged()
+      // 승인은 배송 예정을, 취소는 예정 정리를 원장에 남긴다 — 반려·알림은 원장을 건드리지 않는다.
+      if (action === "approve" || action === "cancel") await onChanged()
     } catch (err) {
       setRowErrors((current) => ({ ...current, [order.id]: err instanceof Error ? err.message : String(err) }))
     } finally {
@@ -229,8 +235,13 @@ function OrderApprovalSection({ onChanged }: OrderApprovalSectionProps) {
 
   // 승인됨: 할 일이 남은 오더가 위로, 하드웨어 없는 오더(자동 승인)는 목록 아래에 접는다.
   const noHardwareOrders = filter === "approved" ? orders.filter((order) => isNoHardwareOrder(order)) : []
+  // 반려·취소: 할 일이 남은 것부터(견적 수정 → 시트 정리 → 해결됨 → 할 일 없음).
   const visibleOrders =
-    filter === "approved" ? sortApprovedOrders(orders.filter((order) => !isNoHardwareOrder(order))) : orders
+    filter === "approved"
+      ? sortApprovedOrders(orders.filter((order) => !isNoHardwareOrder(order)))
+      : filter === "closed"
+        ? sortClosedOrders(orders, sheetChecks)
+        : orders
 
   if (unavailable) {
     return (
@@ -313,7 +324,7 @@ function OrderApprovalSection({ onChanged }: OrderApprovalSectionProps) {
             </p>
           ) : null}
           {filter === "sheet" ? (
-            <SheetCheckList checks={sheetChecks} since={sheetSince} loading={loading} hasError={Boolean(listError)} />
+            <SheetCheckGroups checks={sheetChecks} since={sheetSince} loading={loading} hasError={Boolean(listError)} />
           ) : null}
 
           {filter !== "sheet" && loading && orders.length === 0 ? (
@@ -342,7 +353,18 @@ function OrderApprovalSection({ onChanged }: OrderApprovalSectionProps) {
               const rowError = rowErrors[order.id]
               return (
                 <li key={order.id} className="py-3">
-                  {filter === "approved" ? (
+                  {filter === "closed" ? (
+                    <ClosedOrderItem
+                      order={order}
+                      sheetChecks={sheetChecks}
+                      canRemind={canApprove}
+                      busy={busy}
+                      locked={busyId != null}
+                      onRemind={() => void act(order, "remind")}
+                      onShowTab={setFilter}
+                      error={rowError}
+                    />
+                  ) : filter === "approved" ? (
                     <ApprovedOrderItem
                       order={order}
                       sheetChecks={sheetChecks}
@@ -674,7 +696,164 @@ function ApprovedOrderItem({
   )
 }
 
-function SheetCheckList({
+function formatShortDateTime(value: string | null) {
+  if (!value) return ""
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value.slice(5, 16)
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Seoul",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date)
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((entry) => entry.type === type)?.value ?? ""
+  return `${part("month")}/${part("day")} ${part("hour")}:${part("minute")}`
+}
+
+function ClosedOrderItem({
+  order,
+  sheetChecks,
+  canRemind,
+  busy,
+  locked,
+  onRemind,
+  onShowTab,
+  error,
+}: {
+  order: OrderView
+  sheetChecks: SheetOrderCheck[]
+  canRemind: boolean
+  busy: boolean
+  locked: boolean
+  onRemind: () => void
+  onShowTab: (filter: OrderFilter) => void
+  error?: string
+}) {
+  const todo = closedOrderTodo(order, sheetChecks)
+  const reason = closedOrderReason(order)
+  const products = summarizeSalesOrderProducts(order.lines)
+  const cancelled = order.status === "cancelled"
+  const successor = order.successor ?? null
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="flex flex-wrap items-center gap-2 text-[12px] text-[#615D59]">
+          <span
+            className={`rounded-full px-2.5 py-0.5 text-[11.5px] font-bold ${
+              cancelled ? "bg-[#F6F5F4] text-[#615D59]" : "bg-[#FCE9E9] text-[#8F2C2C]"
+            }`}
+          >
+            {cancelled ? "취소" : "반려"}
+          </span>
+          {order.decidedBy ?? "-"} · {formatShortDateTime(order.decidedAt)}
+          {todo.kind === "resolved" ? (
+            <span className="rounded-full bg-[#ECFDF5] px-2.5 py-0.5 text-[11.5px] font-bold text-[#084734]">해결됨</span>
+          ) : null}
+        </p>
+        {order.totalAmount != null ? (
+          <p className="text-[13px] font-bold tabular-nums text-[#111110]">{formatCurrency(order.totalAmount, "KRW")}</p>
+        ) : null}
+      </div>
+
+      <p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[14px] font-bold text-[#111110]">
+        <span>{order.customerName}</span>
+        {cancelled && order.orderNo ? (
+          <span className="font-mono text-[12px] text-[#615D59] line-through" title="취소된 오더번호 — 다시 쓰지 않습니다">
+            {order.orderNo}
+          </span>
+        ) : null}
+        <span className="text-[12px] font-medium text-[#615D59]">
+          견적 {order.quoteNumber ?? "-"}
+          {products.length > 0 ? ` · ${products.map((entry) => `${entry.product} ×${formatNumber(entry.quantity)}`).join(" · ")}` : ""}
+        </span>
+      </p>
+
+      {cancelled ? (
+        <ul className="list-disc space-y-0.5 pl-4 text-[12px] text-[#31302E]">
+          <li>사유 — {reason ?? "-"}</li>
+          {order.plannedMovementIds.length > 0 ? <li>앱 배송 예정 {formatNumber(order.plannedMovementIds.length)}줄 정리됨</li> : null}
+          <li>오더번호는 보관하고 다시 쓰지 않습니다</li>
+        </ul>
+      ) : (
+        <p className="text-[12.5px] text-[#31302E]">사유 — {reason ?? "-"}</p>
+      )}
+
+      {todo.kind === "requote" ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[rgba(0,0,0,0.06)] bg-[#FBFAF9] px-3 py-2.5">
+          <p className="min-w-0 flex-1 text-[12px] leading-relaxed text-[#31302E]">
+            <span className="font-bold">다음 할 일</span> · 담당 영업이 견적을 고쳐 새 버전으로 승인받으면 승인 대기로 다시 올라옵니다. 지금 버전은
+            고객이 다시 눌러도 올라오지 않습니다.
+          </p>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {canRemind ? (
+              <button type="button" onClick={onRemind} disabled={busy || locked} className={GHOST_BUTTON_CLASS}>
+                {busy ? "보내는 중…" : "담당에게 알리기"}
+              </button>
+            ) : null}
+            <a href={`/admin/quotes/${order.quoteDocumentId}/view`} target="_blank" rel="noreferrer" className={PRIMARY_BUTTON_CLASS}>
+              견적 수정
+            </a>
+          </div>
+        </div>
+      ) : null}
+
+      {todo.kind === "clean_sheet" ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-[#FBF1E0] px-3 py-2.5">
+          <p className="min-w-0 flex-1 text-[12px] leading-relaxed text-[#7A520F]">
+            <span className="font-bold">다음 할 일</span> · 시트에 {order.orderNo}로 적힌 줄(
+            {todo.sheetLeftovers
+              .map((check) => `${check.row.productName} ${formatNumber(check.row.quantity)}대${check.row.status ? ` ${check.row.status}` : ""}`)
+              .join(", ")}
+            )이 남아 있습니다. 시트에서 지워 주세요.
+          </p>
+          <button
+            type="button"
+            onClick={() => onShowTab("sheet")}
+            className="inline-flex min-h-9 shrink-0 cursor-pointer items-center rounded-md border border-[#C9A35B] bg-white px-3 text-[12px] font-bold text-[#7A520F] transition hover:bg-[#FBF1E0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A35B]/50"
+          >
+            시트 확인 보기
+          </button>
+        </div>
+      ) : null}
+
+      {todo.kind === "resolved" && successor ? (
+        <p className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-[#31302E]">
+          <span>
+            같은 견적이 {formatShortDateTime(successor.requestedAt)} 다시 올라와{" "}
+            {successor.status === "approved" ? `${successor.orderNo ?? "새 오더"}로 승인됐습니다.` : "승인 대기에 있습니다."}
+          </span>
+          <button
+            type="button"
+            onClick={() => onShowTab(successor.status === "approved" ? "approved" : "pending")}
+            className="cursor-pointer font-bold text-[#084734] underline"
+          >
+            {successor.status === "approved" ? "승인됨에서 보기" : "승인 대기에서 보기"}
+          </button>
+        </p>
+      ) : null}
+
+      {todo.kind === "none" ? (
+        <p className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-[#615D59]">
+          <span>남은 할 일이 없습니다.</span>
+          <a href={`/admin/quotes/${order.quoteDocumentId}/view`} target="_blank" rel="noreferrer" className="font-bold text-[#31302E] underline">
+            견적 보기
+          </a>
+        </p>
+      ) : null}
+
+      {error ? (
+        <p role="alert" className="text-[11.5px] font-semibold text-[#8F2C2C]">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
+function SheetCheckGroups({
   checks,
   since,
   loading,
@@ -685,43 +864,115 @@ function SheetCheckList({
   loading: boolean
   hasError: boolean
 }) {
+  const [copied, setCopied] = useState<string | null>(null)
+  const groups = groupSheetChecks(checks)
+
+  const copy = async (key: string, orderNo: string) => {
+    try {
+      await navigator.clipboard.writeText(orderNo)
+      setCopied(key)
+    } catch {
+      setCopied(null)
+    }
+  }
+
   if (loading && checks.length === 0) {
-    return <p className="mt-3 text-[12px] font-semibold text-[#A39E98]">불러오는 중…</p>
+    return <p className="mt-3 text-[12px] font-semibold text-[#615D59]">불러오는 중…</p>
   }
   if (hasError) return null
+
   return (
-    <div className="mt-2">
-      <p className="text-[11.5px] text-[#615D59]">
+    <div className="mt-2 flex flex-col gap-3.5">
+      <p className="text-[12px] leading-relaxed text-[#615D59]">
         {since
-          ? `${since} 이후 시트 '3.출고 현황'에 적힌 고객 출고 중 오더와 맞지 않는 줄입니다. 오더번호 열(N열 이후)에 승인된 오더번호를 적으면 다음 가져오기에서 사라집니다.`
+          ? `${since} 이후 시트 '3.출고 현황'에 적힌 고객 출고 중 오더와 맞지 않는 줄입니다. 시트를 고치면 다음 가져오기(매시 20분) 뒤 사라집니다.`
           : "아직 만들어진 오더가 없어 확인할 줄이 없습니다. 첫 오더가 생긴 날부터 시트 출고 줄을 대조합니다."}
       </p>
       {since && checks.length === 0 ? (
-        <p className="mt-3 text-[12px] font-semibold text-[#A39E98]">오더와 어긋난 시트 출고 줄이 없습니다.</p>
+        <p className="text-[12px] font-semibold text-[#615D59]">오더와 어긋난 시트 출고 줄이 없습니다.</p>
       ) : null}
-      <ul className="mt-2 divide-y divide-[rgba(0,0,0,0.06)]">
-        {checks.map((check) => (
-          <li key={`${check.kind}:${check.row.id}`} className="flex flex-wrap items-start justify-between gap-2 py-2.5">
-            <div className="min-w-0 flex-1">
-              <p className="flex flex-wrap items-center gap-1.5 text-[12.5px] font-bold text-[#111110]">
-                <span className="truncate">{check.row.customer ?? "고객 미상"}</span>
-                <span className="text-[#A39E98]">·</span>
-                <span className="truncate">{check.row.productName}</span>
-                <span className="tabular-nums text-[#615D59]">{formatNumber(check.row.quantity)}대</span>
-                <span className="rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[10.5px] font-bold text-[#7A520F]">
-                  {SHEET_ORDER_CHECK_LABELS[check.kind]}
-                </span>
-              </p>
-              <p className="mt-0.5 text-[11.5px] text-[#615D59]">
-                {check.row.occurredAt ? formatDate(check.row.occurredAt) : "날짜 없음"}
-                {check.row.status ? ` · ${check.row.status}` : ""}
-                {check.row.orderNoRaw ? ` · 시트 오더번호 ${check.row.orderNoRaw}` : ""}
-              </p>
-              <p className="mt-0.5 text-[11.5px] font-semibold text-[#7A520F]">{check.message}</p>
-            </div>
-          </li>
-        ))}
-      </ul>
+
+      {groups.length > 0 ? (
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-2">
+          {groups.map((group) => (
+            <a
+              key={group.kind}
+              href={`#sheet-check-${group.kind}`}
+              className="block rounded-md border border-[rgba(0,0,0,0.08)] px-3 py-2.5 text-[#111110] transition hover:bg-[#F6F5F4]"
+            >
+              <span className="block text-[20px] font-bold tabular-nums leading-tight">{formatNumber(group.checks.length)}</span>
+              <span className="block text-[12px] font-bold">{SHEET_CHECK_KIND_SUMMARY[group.kind].label}</span>
+              <span className="block text-[11px] text-[#615D59]">{SHEET_CHECK_KIND_SUMMARY[group.kind].fix}</span>
+            </a>
+          ))}
+        </div>
+      ) : null}
+
+      {groups.map((group) => (
+        <div key={group.kind} id={`sheet-check-${group.kind}`} className="scroll-mt-4">
+          <h4 className="mb-1.5 text-[12px] font-bold text-[#615D59]">{SHEET_CHECK_KIND_SUMMARY[group.kind].label}</h4>
+          <ul className="flex flex-col gap-2">
+            {group.checks.map((check) => {
+              const suggestions = check.suggestions ?? []
+              return (
+                <li key={`${check.kind}:${check.row.id}`} className="flex flex-col gap-2 rounded-md border border-[rgba(0,0,0,0.08)] px-3 py-2.5">
+                  <p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[13px] font-bold text-[#111110]">
+                    <span>
+                      {check.row.customer ?? "고객 미상"} · {check.row.productName} {formatNumber(check.row.quantity)}대
+                    </span>
+                    <span className="text-[12px] font-medium text-[#615D59]">
+                      {check.row.occurredAt ? formatDate(check.row.occurredAt) : "날짜 없음"}
+                      {check.row.status ? ` · ${check.row.status}` : ""}
+                      {check.row.orderNoRaw ? (
+                        <>
+                          {" · 시트에 "}
+                          <span className={`font-mono ${check.kind === "unknown_order_no" ? "text-[#8F2C2C]" : ""}`}>{check.row.orderNoRaw}</span>
+                        </>
+                      ) : null}
+                    </span>
+                  </p>
+
+                  {check.kind === "over_order_quantity" ? (
+                    <p className="text-[12px] text-[#31302E]">
+                      오더 <span className="font-bold">{formatNumber(check.ordered ?? 0)}대</span> · 시트{" "}
+                      <span className="font-bold text-[#B43E3E]">{formatNumber(check.sheetTotal ?? 0)}대</span>
+                      <span className="text-[#615D59]"> (같은 오더·품목의 시트 줄 합계, 예정 포함)</span>
+                    </p>
+                  ) : null}
+
+                  {suggestions.map((suggestion) => {
+                    const key = `${check.row.id}:${suggestion.orderNo}`
+                    return (
+                      <div
+                        key={key}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-[#ECFDF5] px-2.5 py-2"
+                      >
+                        <p className="min-w-0 flex-1 text-[12px] text-[#084734]">
+                          {suggestion.reason === "similar_number" ? "오타로 보입니다" : "이 번호일 가능성이 높습니다"} —{" "}
+                          <span className="font-mono font-bold">{suggestion.orderNo}</span> {suggestion.customerName}
+                          {suggestion.products ? ` · ${suggestion.products}` : ""}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => void copy(key, suggestion.orderNo)}
+                          className="inline-flex min-h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-[#084734] bg-white px-2.5 text-[12px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+                        >
+                          {copied === key ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                          {copied === key ? "복사됨" : "번호 복사"}
+                        </button>
+                      </div>
+                    )
+                  })}
+
+                  {suggestions.length === 0 ? (
+                    <p className="text-[12px] font-semibold text-[#7A520F]">{sheetCheckFixText(check)}</p>
+                  ) : null}
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      ))}
     </div>
   )
 }

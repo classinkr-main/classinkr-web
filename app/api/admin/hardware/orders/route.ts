@@ -35,6 +35,8 @@ export async function GET(req: NextRequest) {
       statuses: STATUS_FILTERS[filter],
       limit: 100,
       withFulfillment: filter === "approved" || filter === "all",
+      // 반려·취소 카드가 "다시 올라온 오더"로 할 일을 닫는다.
+      withSuccessor: filter === "closed" || filter === "all",
     })
     return NextResponse.json({
       orders,

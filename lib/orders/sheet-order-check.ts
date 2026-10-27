@@ -131,6 +131,15 @@ export interface SheetOutboundRow {
   orderNoRaw: string | null
 }
 
+/** 시트 줄을 고칠 때 적을 만한 승인 오더 — 같은 고객·품목이거나 번호가 거의 같다. */
+export interface SheetOrderSuggestion {
+  orderNo: string
+  customerName: string
+  /** `86" IFP ×2 · T1 ×2` */
+  products: string
+  reason: "same_customer_product" | "similar_number"
+}
+
 export interface SheetOrderCheck {
   kind: SheetOrderCheckKind
   /** 같은 오더·품목 초과는 묶음 단위라 대표 줄 하나만 싣는다. */
@@ -139,6 +148,11 @@ export interface SheetOrderCheck {
   orderStatus: SalesOrderStatus | null
   orderCustomer: string | null
   message: string
+  /** 수량 초과일 때 — 오더 수량과 같은 오더·품목의 시트 줄 합계. */
+  ordered?: number
+  sheetTotal?: number
+  /** 고칠 번호 후보(목록 API 가 붙인다). */
+  suggestions?: SheetOrderSuggestion[]
 }
 
 export const SHEET_ORDER_CHECK_LABELS: Record<SheetOrderCheckKind, string> = {
@@ -234,7 +248,103 @@ export function classifySheetOrderChecks(
       orderStatus: total.order.status,
       orderCustomer: total.order.customerName,
       message: `${total.orderNo} 오더의 ${productKey(total.row.productName)}는 ${total.ordered}대인데 시트에는 ${total.quantity}대입니다.`,
+      ordered: total.ordered,
+      sheetTotal: total.quantity,
     })
   }
   return checks
+}
+
+// ---------------------------------------------------------------------------
+// 고칠 번호 후보 — 시트 확인 목록이 "이 번호일 가능성이 높습니다"를 띄운다. 짐작이라 자동으로 적지 않는다.
+
+function nameKey(value: string | null | undefined) {
+  return (value ?? "").replace(/\s+/g, "").toLowerCase()
+}
+
+/** 시트 출고처와 오더 고객이 같은 곳인지 — 시트에는 "그린수학학원"처럼 덧붙여 적히기도 해 포함 관계까지 본다. */
+export function sameCustomerName(a: string | null | undefined, b: string | null | undefined): boolean {
+  const left = nameKey(a)
+  const right = nameKey(b)
+  if (left.length < 2 || right.length < 2) return false
+  return left === right || left.includes(right) || right.includes(left)
+}
+
+/** 두 오더번호가 몇 글자 다른지(편집 거리) — 손으로 적다 생긴 오타를 잡는다. */
+function editDistance(a: string, b: string): number {
+  const previous = Array.from({ length: b.length + 1 }, (_, index) => index)
+  for (let i = 1; i <= a.length; i += 1) {
+    let diagonal = previous[0]
+    previous[0] = i
+    for (let j = 1; j <= b.length; j += 1) {
+      const above = previous[j]
+      previous[j] = Math.min(previous[j] + 1, previous[j - 1] + 1, diagonal + (a[i - 1] === b[j - 1] ? 0 : 1))
+      diagonal = above
+    }
+  }
+  return previous[b.length]
+}
+
+function orderProducts(order: Pick<SalesOrder, "lines">) {
+  const totals = new Map<string, number>()
+  for (const line of order.lines) {
+    for (const item of line.hardwareProducts ?? []) {
+      const product = productKey(item.product)
+      totals.set(product, (totals.get(product) ?? 0) + item.quantity)
+    }
+  }
+  return totals
+}
+
+function toSuggestion(
+  order: Pick<SalesOrder, "orderNo" | "customerName" | "lines">,
+  reason: SheetOrderSuggestion["reason"]
+): SheetOrderSuggestion {
+  return {
+    orderNo: normalizeOrderNo(order.orderNo) ?? "",
+    customerName: order.customerName,
+    products: [...orderProducts(order).entries()].map(([product, quantity]) => `${product} ×${quantity}`).join(" · "),
+    reason,
+  }
+}
+
+const MAX_SUGGESTIONS = 2
+
+/**
+ * 시트 확인 한 줄에 붙일 승인 오더 후보.
+ * - 오더번호 없음·오더에 없는 품목: 같은 고객이고 그 품목이 있는 승인 오더
+ * - 없는 번호: 번호가 2글자 이내로 다른 승인 오더(같은 고객이면 앞으로), 없으면 같은 고객·품목 오더
+ * 취소된 오더·수량 초과는 번호를 바꿀 일이 아니라 후보가 없다.
+ */
+export function suggestOrdersForSheetCheck(
+  check: Pick<SheetOrderCheck, "kind" | "row" | "orderNo">,
+  approvedOrders: readonly Pick<SalesOrder, "orderNo" | "status" | "customerName" | "lines">[]
+): SheetOrderSuggestion[] {
+  const candidates = approvedOrders.filter((order) => order.status === "approved" && normalizeOrderNo(order.orderNo))
+  const product = productKey(check.row.productName)
+  const sameCustomerProduct = candidates.filter(
+    (order) =>
+      normalizeOrderNo(order.orderNo) !== check.orderNo &&
+      sameCustomerName(check.row.customer, order.customerName) &&
+      (orderProducts(order).get(product) ?? 0) > 0
+  )
+
+  if (check.kind === "missing_order_no" || check.kind === "product_not_in_order") {
+    return sameCustomerProduct.slice(0, MAX_SUGGESTIONS).map((order) => toSuggestion(order, "same_customer_product"))
+  }
+  if (check.kind === "unknown_order_no" && check.orderNo) {
+    const written = check.orderNo
+    const similar = candidates
+      .map((order) => ({ order, distance: editDistance(written, normalizeOrderNo(order.orderNo) ?? "") }))
+      .filter((entry) => entry.distance <= 2)
+      .sort(
+        (a, b) =>
+          Number(sameCustomerName(check.row.customer, b.order.customerName)) -
+            Number(sameCustomerName(check.row.customer, a.order.customerName)) || a.distance - b.distance
+      )
+      .map((entry) => toSuggestion(entry.order, "similar_number"))
+    if (similar.length > 0) return similar.slice(0, MAX_SUGGESTIONS)
+    return sameCustomerProduct.slice(0, MAX_SUGGESTIONS).map((order) => toSuggestion(order, "same_customer_product"))
+  }
+  return []
 }

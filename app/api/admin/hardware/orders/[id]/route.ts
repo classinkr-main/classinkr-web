@@ -17,10 +17,12 @@ import {
   approveSalesOrder,
   cancelApprovedSalesOrder,
   rejectSalesOrder,
+  remindRejectedSalesOrder,
   SalesOrderError,
 } from "@/lib/repositories/sales-orders"
 
-const ORDER_ACTIONS = ["approve", "reject", "cancel"] as const
+// remind = 반려된 오더를 영업 쪽에 다시 알린다(반려·취소 카드의 "담당에게 알리기").
+const ORDER_ACTIONS = ["approve", "reject", "cancel", "remind"] as const
 
 /**
  * 하드웨어 오더 승인·반려·취소. 하드웨어가 들어간 오더는 hardware.finalize 권한자(지금은 이왕찬 계정,
@@ -45,7 +47,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         ? await approveSalesOrder(id, { actor })
         : action === "reject"
           ? await rejectSalesOrder(id, { actor, reason })
-          : await cancelApprovedSalesOrder(id, { actor, reason })
+          : action === "cancel"
+            ? await cancelApprovedSalesOrder(id, { actor, reason })
+            : await remindRejectedSalesOrder(id, { actor })
 
     await logAdminAudit({
       admin,

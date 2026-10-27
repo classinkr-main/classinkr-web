@@ -1,7 +1,7 @@
 // 승인됨 탭 보기 모델 — 오더마다 품목별 진행 바(출고·배송 예정·미등록), 출고 단계, 다음 할 일, 시트 힌트.
 // 순수 함수라 OrderApprovalSection 과 테스트가 같은 규칙을 쓴다(시안 2026-10-26 "승인됨 A").
 import type { SalesOrder } from "@/lib/orders/order-lines"
-import type { SalesOrderFulfillmentLine, SheetOrderCheck } from "@/lib/orders/sheet-order-check"
+import { sameCustomerName, type SalesOrderFulfillmentLine, type SheetOrderCheck } from "@/lib/orders/sheet-order-check"
 
 export type ApprovedOrderInput = Pick<SalesOrder, "orderNo" | "customerName" | "needsHardwareApproval" | "lines"> & {
   fulfillment?: SalesOrderFulfillmentLine[]
@@ -84,18 +84,6 @@ export function approvedOrderNextActions(order: ApprovedOrderInput): ApprovedOrd
   return actions
 }
 
-function nameKey(value: string | null | undefined) {
-  return (value ?? "").replace(/\s+/g, "").toLowerCase()
-}
-
-/** 시트 출고처와 오더 고객이 같은 곳인지 — 시트에는 "그린수학학원"처럼 덧붙여 적히기도 해 포함 관계까지 본다. */
-function sameCustomer(a: string | null | undefined, b: string | null | undefined) {
-  const left = nameKey(a)
-  const right = nameKey(b)
-  if (left.length < 2 || right.length < 2) return false
-  return left === right || left.includes(right) || right.includes(left)
-}
-
 export interface ApprovedOrderSheetHints {
   /** 오더번호 없이 시트에 적힌 같은 고객·품목 출고 — 이 오더일 수 있다. */
   possibleUnnumbered: SheetOrderCheck[]
@@ -114,7 +102,7 @@ export function approvedOrderSheetHints(order: ApprovedOrderInput, checks: reado
     possibleUnnumbered: checks.filter(
       (check) =>
         check.kind === "missing_order_no" &&
-        sameCustomer(check.row.customer, order.customerName) &&
+        sameCustomerName(check.row.customer, order.customerName) &&
         products.has(check.row.productName.replace(/\s+/g, " ").trim())
     ),
     overQuantity: order.orderNo

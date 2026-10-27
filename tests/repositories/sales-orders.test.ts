@@ -96,6 +96,7 @@ import {
   listSalesOrders,
   listSheetOrderChecks,
   notifyHardwareOrderApprovalRequested,
+  remindRejectedSalesOrder,
   rejectSalesOrder,
   SalesOrderError,
 } from "@/lib/repositories/sales-orders"
@@ -534,6 +535,74 @@ describe("listSheetOrderChecks — 시트 확인 필요", () => {
     expect(calls[1].filters).toContainEqual(["or", "occurred_at.gte.2026-10-22,occurred_at.is.null", null])
     expect(result.checks.map((check) => [check.kind, check.row.id])).toEqual([["missing_order_no", "r1"]])
     expect(calls[2].filters).toContainEqual(["in", "order_no", ["ORD-2610-002"]])
+  })
+})
+
+describe("listSalesOrders — 반려·취소 뒤 다시 올라온 오더", () => {
+  it("같은 견적의 살아 있는 오더를 successor 로 붙이고, 없으면 null", async () => {
+    queue.push({
+      data: [
+        orderRow({ id: "so_rejected", status: "rejected", decision_reason: "단가 확인 필요" }),
+        orderRow({ id: "so_cancelled", status: "cancelled", order_no: "ORD-2610-001", quote_document_id: "qd_9" }),
+      ],
+      error: null,
+    })
+    queue.push({
+      data: [{ id: "so_new", status: "pending_approval", order_no: null, requested_at: "2026-10-26T02:15:00Z", quote_document_id: "qd_1" }],
+      error: null,
+    })
+
+    const orders = await listSalesOrders({ statuses: ["rejected", "cancelled"], withSuccessor: true })
+
+    expect(orders[0].successor).toEqual({ id: "so_new", status: "pending_approval", orderNo: null, requestedAt: "2026-10-26T02:15:00Z" })
+    expect(orders[1].successor).toBeNull()
+    expect(calls[1].filters).toContainEqual(["in", "quote_document_id", ["qd_1", "qd_9"]])
+    expect(calls[1].filters).toContainEqual(["in", "status", ["pending_approval", "approved"]])
+  })
+})
+
+describe("listSheetOrderChecks — 고칠 번호 후보", () => {
+  it("번호 없는 줄에 같은 고객·품목의 승인 오더를 후보로 붙인다", async () => {
+    queue.push({ data: [{ requested_at: "2026-10-20T00:30:00Z" }], error: null })
+    queue.push({
+      data: [{ id: "r1", product_name: '86" IFP', quantity: 2, occurred_at: "2026-10-25", status: "출고", to_location: "한빛학원", raw: {} }],
+      error: null,
+    })
+    queue.push({ data: [orderRow({ status: "approved", order_no: "ORD-2610-002" })], error: null }) // 최근 승인 오더
+
+    const result = await listSheetOrderChecks()
+
+    expect(result.checks[0].suggestions).toEqual([
+      { orderNo: "ORD-2610-002", customerName: "한빛학원", products: '86" IFP ×2', reason: "same_customer_product" },
+    ])
+    expect(calls[2].filters).toContainEqual(["eq", "status", "approved"])
+  })
+})
+
+describe("remindRejectedSalesOrder", () => {
+  it("반려된 오더를 영업 쪽에 다시 알린다 — 사유와 다시 올리는 법을 싣는다", async () => {
+    emitNotificationEvent.mockResolvedValue({ id: "evt" })
+    queue.push({ data: [orderRow({ status: "rejected", decided_by: "이왕찬", decision_reason: "단가 확인 필요" })], error: null })
+
+    const order = await remindRejectedSalesOrder("so_1", { actor: "이왕찬" })
+
+    expect(order.status).toBe("rejected")
+    const call = emitNotificationEvent.mock.calls[0][0]
+    expect(call).toMatchObject({
+      eventType: "hardware.order.rejected",
+      notificationType: "action_required",
+      routeUrl: "/admin/quotes/qd_1/view",
+      sourceId: "so_1",
+    })
+    expect(call.message).toContain("사유: 단가 확인 필요")
+    expect(call.message).toContain("새 버전")
+  })
+
+  it("반려 상태가 아니면 409 — 알림을 보내지 않는다", async () => {
+    queue.push({ data: [orderRow({ status: "approved", order_no: "ORD-2610-002" })], error: null })
+
+    await expect(remindRejectedSalesOrder("so_1", { actor: "이왕찬" })).rejects.toMatchObject({ status: 409 })
+    expect(emitNotificationEvent).not.toHaveBeenCalled()
   })
 })
 

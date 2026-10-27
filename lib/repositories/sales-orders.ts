@@ -21,6 +21,7 @@ import {
   rawOrderNo,
   summarizeOrderFulfillment,
   type SalesOrderFulfillmentLine,
+  suggestOrdersForSheetCheck,
   type SheetOrderCheck,
   type SheetOutboundRow,
 } from "@/lib/orders/sheet-order-check"
@@ -301,17 +302,64 @@ export function notifyHardwareOrderApprovalRequested(order: SalesOrder) {
   })
 }
 
-export type SalesOrderWithFulfillment = SalesOrder & { fulfillment?: SalesOrderFulfillmentLine[] }
+/** 반려·취소된 오더 뒤에 같은 견적으로 다시 올라온 살아 있는 오더(승인 대기·승인됨). */
+export interface SalesOrderSuccessor {
+  id: string
+  status: SalesOrderStatus
+  orderNo: string | null
+  requestedAt: string
+}
+
+export type SalesOrderWithFulfillment = SalesOrder & {
+  fulfillment?: SalesOrderFulfillmentLine[]
+  successor?: SalesOrderSuccessor | null
+}
+
+/**
+ * 반려·취소 오더마다 같은 견적의 살아 있는 오더를 찾는다(견적당 하나뿐 — 유니크 인덱스). 반려 카드가
+ * "새 버전이 다시 올라와 승인 대기에 있습니다"로 할 일을 닫는 데 쓴다. 조회 실패는 null(목록은 그대로).
+ */
+async function attachSuccessors(orders: SalesOrderWithFulfillment[]): Promise<SalesOrderWithFulfillment[]> {
+  const closed = orders.filter((order) => order.status === "rejected" || order.status === "cancelled")
+  const quoteIds = Array.from(new Set(closed.map((order) => order.quoteDocumentId)))
+  if (quoteIds.length === 0) return orders
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("sales_orders")
+    .select("id,status,order_no,requested_at,quote_document_id")
+    .in("quote_document_id", quoteIds)
+    .in("status", ["pending_approval", "approved"])
+  if (error) {
+    console.error("[sales-orders] successor lookup failed:", error.message)
+    return orders
+  }
+  const byQuote = new Map<string, SalesOrderSuccessor>()
+  for (const row of (data ?? []) as Array<{
+    id: string
+    status: SalesOrderStatus
+    order_no: string | null
+    requested_at: string
+    quote_document_id: string
+  }>) {
+    byQuote.set(row.quote_document_id, { id: row.id, status: row.status, orderNo: row.order_no, requestedAt: row.requested_at })
+  }
+  return orders.map((order) =>
+    order.status === "rejected" || order.status === "cancelled"
+      ? { ...order, successor: byQuote.get(order.quoteDocumentId) ?? null }
+      : order
+  )
+}
 
 export async function listSalesOrders(
-  options: { statuses?: SalesOrderStatus[]; limit?: number; withFulfillment?: boolean } = {}
+  options: { statuses?: SalesOrderStatus[]; limit?: number; withFulfillment?: boolean; withSuccessor?: boolean } = {}
 ): Promise<SalesOrderWithFulfillment[]> {
   const sb = createSupabaseAdminClient()
   let query = sb.from("sales_orders").select("*").order("requested_at", { ascending: false }).limit(options.limit ?? 100)
   if (options.statuses?.length) query = query.in("status", options.statuses)
   const { data, error } = await query
   if (error) rethrow(error)
-  const orders = ((data ?? []) as SalesOrderRow[]).map(toSalesOrder)
+  const listed: SalesOrderWithFulfillment[] = ((data ?? []) as SalesOrderRow[]).map(toSalesOrder)
+  const orders = options.withSuccessor ? await attachSuccessors(listed) : listed
   if (!options.withFulfillment) return orders
 
   // 오더 대비 출고 — 원장(시트 줄·앱 예정·앱 확정)에서 같은 오더번호를 센다. 실패해도 목록은 돌려준다.
@@ -403,8 +451,30 @@ export async function listSheetOrderChecks(): Promise<{ since: string | null; ch
     if (error) rethrow(error)
     orders = ((data ?? []) as SalesOrderRow[]).map(toSalesOrder)
   }
-  return { since, checks: classifySheetOrderChecks(rows, orders) }
+  const checks = classifySheetOrderChecks(rows, orders)
+
+  // 고칠 번호 후보 — 번호 없음·없는 번호·오더에 없는 품목만. 최근 승인 오더에서 찾는다(실패해도 목록은 그대로).
+  if (checks.some((check) => SUGGESTION_KINDS.has(check.kind))) {
+    const { data: approved, error: approvedError } = await sb
+      .from("sales_orders")
+      .select("*")
+      .eq("status", "approved")
+      .order("requested_at", { ascending: false })
+      .limit(SUGGESTION_ORDER_LIMIT)
+    if (approvedError) {
+      console.error("[sales-orders] sheet check suggestion lookup failed:", approvedError.message)
+    } else {
+      const approvedOrders = ((approved ?? []) as SalesOrderRow[]).map(toSalesOrder)
+      for (const check of checks) {
+        if (SUGGESTION_KINDS.has(check.kind)) check.suggestions = suggestOrdersForSheetCheck(check, approvedOrders)
+      }
+    }
+  }
+  return { since, checks }
 }
+
+const SUGGESTION_KINDS = new Set<SheetOrderCheck["kind"]>(["missing_order_no", "unknown_order_no", "product_not_in_order"])
+const SUGGESTION_ORDER_LIMIT = 300
 
 function plannedMovementInputs(order: SalesOrderRow, orderNo: string, actor: string | null): CreateHardwareMovementInput[] {
   const lines = Array.isArray(order.lines) ? (order.lines as SalesOrderLine[]) : []
@@ -510,6 +580,52 @@ async function revertApproval(id: string, orderNo: string) {
     .eq("id", id)
     .eq("order_no", orderNo)
   if (error) console.error("[sales-orders] approval revert failed:", error.message)
+}
+
+/**
+ * 반려를 영업 쪽에 알린다 — 반려·취소 카드의 "담당에게 알리기". 견적을 고쳐 새 버전으로 승인받으면 다시
+ * 승인 대기로 올라온다는 안내를 붙인다. 알림 실패는 삼킨다(fire-and-forget).
+ */
+export function notifyHardwareOrderRejected(order: SalesOrder, actor: string | null) {
+  if (order.status !== "rejected") return
+  emitNotificationEvent({
+    eventType: "hardware.order.rejected",
+    notificationType: "action_required",
+    categoryTag: "general",
+    severity: "info",
+    scopeTag: "org_admin",
+    title: `하드웨어 반려 — ${order.customerName} 견적 수정 필요`,
+    message: [
+      `견적 ${order.quoteNumber ?? "-"} · ${order.decidedBy ?? "-"} 반려`,
+      order.decisionReason ? `사유: ${order.decisionReason}` : null,
+      "견적을 고쳐 새 버전으로 승인받으면 하드웨어 승인 대기로 다시 올라옵니다. 같은 버전은 고객이 다시 눌러도 올라오지 않습니다.",
+      actor ? `알림 보낸 사람: ${actor}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    routeUrl: `/admin/quotes/${order.quoteDocumentId}/view`,
+    source: "sales_order",
+    sourceId: order.id,
+    payload: {
+      salesOrderId: order.id,
+      quoteDocumentId: order.quoteDocumentId,
+      quoteNumber: order.quoteNumber,
+      dealId: order.dealId,
+      customerName: order.customerName,
+      reason: order.decisionReason,
+    },
+    channels: ["wecom_webhook"],
+  }).catch(() => {
+    console.error("[sales-orders] rejection notification failed")
+  })
+}
+
+/** 반려된 오더를 영업 쪽에 다시 알린다. 반려 상태가 아니면 409. */
+export async function remindRejectedSalesOrder(id: string, input: { actor: string | null }): Promise<SalesOrder> {
+  const order = toSalesOrder(await getSalesOrderRow(id))
+  if (order.status !== "rejected") throw new SalesOrderError("반려된 오더만 담당에게 알릴 수 있습니다.", 409)
+  notifyHardwareOrderRejected(order, input.actor)
+  return order
 }
 
 export async function rejectSalesOrder(

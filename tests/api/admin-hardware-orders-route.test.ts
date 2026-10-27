@@ -12,6 +12,7 @@ const {
   approveSalesOrder,
   rejectSalesOrder,
   cancelApprovedSalesOrder,
+  remindRejectedSalesOrder,
 } = vi.hoisted(() => ({
   requireVerifiedAdminContext: vi.fn(),
   logAdminAudit: vi.fn(),
@@ -20,6 +21,7 @@ const {
   approveSalesOrder: vi.fn(),
   rejectSalesOrder: vi.fn(),
   cancelApprovedSalesOrder: vi.fn(),
+  remindRejectedSalesOrder: vi.fn(),
 }))
 
 vi.mock("@/lib/admin-auth", async (importOriginal) => ({
@@ -35,7 +37,15 @@ vi.mock("@/lib/repositories/sales-orders", async () => {
       this.status = status
     }
   }
-  return { SalesOrderError, listSalesOrders, listSheetOrderChecks, approveSalesOrder, rejectSalesOrder, cancelApprovedSalesOrder }
+  return {
+    SalesOrderError,
+    listSalesOrders,
+    listSheetOrderChecks,
+    approveSalesOrder,
+    rejectSalesOrder,
+    cancelApprovedSalesOrder,
+    remindRejectedSalesOrder,
+  }
 })
 
 import { GET } from "@/app/api/admin/hardware/orders/route"
@@ -74,16 +84,32 @@ describe("GET /api/admin/hardware/orders", () => {
     const body = await response.json()
 
     expect(response.status).toBe(200)
-    expect(listSalesOrders).toHaveBeenCalledWith({ statuses: ["pending_approval"], limit: 100, withFulfillment: false })
+    expect(listSalesOrders).toHaveBeenCalledWith({
+      statuses: ["pending_approval"],
+      limit: 100,
+      withFulfillment: false,
+      withSuccessor: false,
+    })
     expect(body).toEqual({ orders: [{ id: "so_1" }], viewer: { canApprove: false } })
 
     requireVerifiedAdminContext.mockResolvedValue(FINALIZER)
     expect((await (await GET(listRequest("?status=closed"))).json()).viewer.canApprove).toBe(true)
-    expect(listSalesOrders).toHaveBeenLastCalledWith({ statuses: ["rejected", "cancelled"], limit: 100, withFulfillment: false })
+    // 반려·취소에는 같은 견적으로 다시 올라온 오더를 붙인다.
+    expect(listSalesOrders).toHaveBeenLastCalledWith({
+      statuses: ["rejected", "cancelled"],
+      limit: 100,
+      withFulfillment: false,
+      withSuccessor: true,
+    })
 
     // 승인된 오더에는 출고·예정 대수를 붙인다.
     await GET(listRequest("?status=approved"))
-    expect(listSalesOrders).toHaveBeenLastCalledWith({ statuses: ["approved"], limit: 100, withFulfillment: true })
+    expect(listSalesOrders).toHaveBeenLastCalledWith({
+      statuses: ["approved"],
+      limit: 100,
+      withFulfillment: true,
+      withSuccessor: false,
+    })
   })
 
   it("모르는 status 는 400", async () => {
@@ -143,6 +169,20 @@ describe("POST /api/admin/hardware/orders/[id]", () => {
 
     expect((await POST(actionRequest({ action: "cancel", reason: "고객 취소" }), params)).status).toBe(200)
     expect(cancelApprovedSalesOrder).toHaveBeenCalledWith("so_1", { actor: "지사장", reason: "고객 취소" })
+  })
+
+  it("반려된 오더를 담당에게 다시 알린다(remind) — 권한자만, 감사 로그를 남긴다", async () => {
+    requireVerifiedAdminContext.mockResolvedValue(FINALIZER)
+    remindRejectedSalesOrder.mockResolvedValue({ id: "so_1", orderNo: null, status: "rejected" })
+
+    const response = await POST(actionRequest({ action: "remind" }), params)
+
+    expect(response.status).toBe(200)
+    expect(remindRejectedSalesOrder).toHaveBeenCalledWith("so_1", { actor: "이왕찬" })
+    expect(logAdminAudit).toHaveBeenCalledWith(expect.objectContaining({ action: "hardware.order.remind" }))
+
+    requireVerifiedAdminContext.mockResolvedValue(EDITOR)
+    expect((await POST(actionRequest({ action: "remind" }), params)).status).toBe(403)
   })
 
   it("저장소 규칙 오류는 그 상태 코드로, 모르는 액션은 400", async () => {
