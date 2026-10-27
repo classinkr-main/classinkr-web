@@ -271,7 +271,8 @@ export function notifyHardwareOrderApprovalRequested(order: SalesOrder) {
     .map((entry) => `${entry.product} ×${entry.quantity}`)
     .join(" · ")
   const unmapped = order.lines.filter((line) => line.unmappedHardware).map((line) => line.itemName)
-  emitNotificationEvent({
+  // then 안에서 부른다 — 알림 쪽이 동기로 throw 해도 견적 승인 경로로 번지지 않게.
+  Promise.resolve().then(() => emitNotificationEvent({
     eventType: "hardware.order.approval_requested",
     notificationType: "approval_required",
     categoryTag: "general",
@@ -297,7 +298,7 @@ export function notifyHardwareOrderApprovalRequested(order: SalesOrder) {
       customerName: order.customerName,
     },
     channels: ["wecom_webhook"],
-  }).catch(() => {
+  })).catch(() => {
     console.error("[sales-orders] approval request notification failed")
   })
 }
@@ -583,23 +584,25 @@ async function revertApproval(id: string, orderNo: string) {
 }
 
 /**
- * 반려를 영업 쪽에 알린다 — 반려·취소 카드의 "담당에게 알리기". 견적을 고쳐 새 버전으로 승인받으면 다시
- * 승인 대기로 올라온다는 안내를 붙인다. 알림 실패는 삼킨다(fire-and-forget).
+ * 반려를 영업 쪽에 알린다 — 반려하면 자동으로 한 번, 반려·취소 카드의 "다시 알리기"로 또 보낼 수 있다.
+ * 견적을 고쳐 새 버전으로 승인받으면 다시 승인 대기로 올라온다는 안내를 붙인다. 알림 실패는 삼킨다(fire-and-forget).
  */
-export function notifyHardwareOrderRejected(order: SalesOrder, actor: string | null) {
+export function notifyHardwareOrderRejected(order: SalesOrder, options: { remindedBy?: string | null } = {}) {
   if (order.status !== "rejected") return
-  emitNotificationEvent({
+  const reminder = options.remindedBy !== undefined
+  // then 안에서 부른다 — 알림 쪽이 동기로 throw 해도 반려(이미 커밋됨) 응답으로 번지지 않게.
+  Promise.resolve().then(() => emitNotificationEvent({
     eventType: "hardware.order.rejected",
     notificationType: "action_required",
     categoryTag: "general",
     severity: "info",
     scopeTag: "org_admin",
-    title: `하드웨어 반려 — ${order.customerName} 견적 수정 필요`,
+    title: `하드웨어 반려${reminder ? "(다시 알림)" : ""} — ${order.customerName} 견적 수정 필요`,
     message: [
       `견적 ${order.quoteNumber ?? "-"} · ${order.decidedBy ?? "-"} 반려`,
       order.decisionReason ? `사유: ${order.decisionReason}` : null,
       "견적을 고쳐 새 버전으로 승인받으면 하드웨어 승인 대기로 다시 올라옵니다. 같은 버전은 고객이 다시 눌러도 올라오지 않습니다.",
-      actor ? `알림 보낸 사람: ${actor}` : null,
+      reminder && options.remindedBy ? `다시 알린 사람: ${options.remindedBy}` : null,
     ]
       .filter(Boolean)
       .join("\n"),
@@ -615,16 +618,16 @@ export function notifyHardwareOrderRejected(order: SalesOrder, actor: string | n
       reason: order.decisionReason,
     },
     channels: ["wecom_webhook"],
-  }).catch(() => {
+  })).catch(() => {
     console.error("[sales-orders] rejection notification failed")
   })
 }
 
-/** 반려된 오더를 영업 쪽에 다시 알린다. 반려 상태가 아니면 409. */
+/** 반려된 오더를 영업 쪽에 다시 알린다(반려 때 한 번은 자동으로 나간다). 반려 상태가 아니면 409. */
 export async function remindRejectedSalesOrder(id: string, input: { actor: string | null }): Promise<SalesOrder> {
   const order = toSalesOrder(await getSalesOrderRow(id))
   if (order.status !== "rejected") throw new SalesOrderError("반려된 오더만 담당에게 알릴 수 있습니다.", 409)
-  notifyHardwareOrderRejected(order, input.actor)
+  notifyHardwareOrderRejected(order, { remindedBy: input.actor })
   return order
 }
 
@@ -651,7 +654,10 @@ export async function rejectSalesOrder(
   if (error) rethrow(error)
   const updated = ((data ?? []) as SalesOrderRow[])[0]
   if (!updated) throw new SalesOrderError("이미 처리된 오더입니다.", 409)
-  return toSalesOrder(updated)
+  const order = toSalesOrder(updated)
+  // 반려되면 영업이 견적을 고쳐야 하므로 바로 알린다(운영자 결정 2026-10-27). 알림 실패가 반려를 막지 않는다.
+  notifyHardwareOrderRejected(order)
+  return order
 }
 
 /** 승인된 오더를 취소한다 — 아직 배송 예정인 줄만 취소하고, 이미 출고 확정된 줄이 있으면 막는다. */

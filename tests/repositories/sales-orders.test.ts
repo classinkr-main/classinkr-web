@@ -412,6 +412,42 @@ describe("rejectSalesOrder", () => {
     expect(update?.payload).toMatchObject({ status: "rejected", decision_reason: "재고 부족", decided_by: "이왕찬" })
     expect(update?.filters).toContainEqual(["eq", "status", "pending_approval"])
   })
+
+  it("반려하면 영업 쪽에 바로 알린다 — 사유와 다시 올리는 법을 싣는다(2026-10-27 결정)", async () => {
+    emitNotificationEvent.mockResolvedValue({ id: "evt" })
+    queue.push({ data: [orderRow()], error: null })
+    queue.push({ data: [orderRow({ status: "rejected", decided_by: "이왕찬", decision_reason: "재고 부족" })], error: null })
+
+    await rejectSalesOrder("so_1", { actor: "이왕찬", reason: "재고 부족" })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(emitNotificationEvent).toHaveBeenCalledTimes(1)
+    const call = emitNotificationEvent.mock.calls[0][0]
+    expect(call).toMatchObject({ eventType: "hardware.order.rejected", routeUrl: "/admin/quotes/qd_1/view" })
+    expect(call.title).not.toContain("다시 알림")
+    expect(call.message).toContain("이왕찬 반려")
+    expect(call.message).toContain("사유: 재고 부족")
+    expect(call.message).not.toContain("다시 알린 사람")
+  })
+
+  it("알림이 실패해도 반려는 그대로 성공한다", async () => {
+    emitNotificationEvent.mockRejectedValue(new Error("webhook down"))
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined)
+    queue.push({ data: [orderRow()], error: null })
+    queue.push({ data: [orderRow({ status: "rejected", decision_reason: "재고 부족" })], error: null })
+
+    await expect(rejectSalesOrder("so_1", { actor: "이왕찬", reason: "재고 부족" })).resolves.toMatchObject({ status: "rejected" })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    errorLog.mockRestore()
+  })
+
+  it("이미 처리된 오더는 409 — 알림을 보내지 않는다", async () => {
+    queue.push({ data: [orderRow({ status: "rejected" })], error: null })
+
+    await expect(rejectSalesOrder("so_1", { actor: "이왕찬", reason: "재고 부족" })).rejects.toMatchObject({ status: 409 })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(emitNotificationEvent).not.toHaveBeenCalled()
+  })
 })
 
 describe("cancelApprovedSalesOrder", () => {
@@ -585,6 +621,7 @@ describe("remindRejectedSalesOrder", () => {
     queue.push({ data: [orderRow({ status: "rejected", decided_by: "이왕찬", decision_reason: "단가 확인 필요" })], error: null })
 
     const order = await remindRejectedSalesOrder("so_1", { actor: "이왕찬" })
+    await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(order.status).toBe("rejected")
     const call = emitNotificationEvent.mock.calls[0][0]
@@ -596,12 +633,15 @@ describe("remindRejectedSalesOrder", () => {
     })
     expect(call.message).toContain("사유: 단가 확인 필요")
     expect(call.message).toContain("새 버전")
+    expect(call.title).toContain("다시 알림")
+    expect(call.message).toContain("다시 알린 사람: 이왕찬")
   })
 
   it("반려 상태가 아니면 409 — 알림을 보내지 않는다", async () => {
     queue.push({ data: [orderRow({ status: "approved", order_no: "ORD-2610-002" })], error: null })
 
     await expect(remindRejectedSalesOrder("so_1", { actor: "이왕찬" })).rejects.toMatchObject({ status: 409 })
+    await new Promise((resolve) => setTimeout(resolve, 0))
     expect(emitNotificationEvent).not.toHaveBeenCalled()
   })
 })
@@ -614,6 +654,7 @@ describe("notifyHardwareOrderApprovalRequested", () => {
     order.lines.push({ ...order.lines[0], itemName: "특주 브래킷", hardwareProducts: [], unmappedHardware: true, quoteLineRef: "x" })
 
     notifyHardwareOrderApprovalRequested({ ...order, requestedBy: "영업 담당" })
+    await new Promise((resolve) => setTimeout(resolve, 0)) // 알림은 다음 틱에 나간다(fire-and-forget)
 
     const call = emitNotificationEvent.mock.calls[0][0]
     expect(call).toMatchObject({
@@ -633,6 +674,7 @@ describe("notifyHardwareOrderApprovalRequested", () => {
     const [order] = await listSalesOrders()
 
     notifyHardwareOrderApprovalRequested(order)
+    await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(emitNotificationEvent).not.toHaveBeenCalled()
   })

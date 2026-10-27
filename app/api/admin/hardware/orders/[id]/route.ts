@@ -21,7 +21,7 @@ import {
   SalesOrderError,
 } from "@/lib/repositories/sales-orders"
 
-// remind = 반려된 오더를 영업 쪽에 다시 알린다(반려·취소 카드의 "담당에게 알리기").
+// remind = 반려된 오더를 영업 쪽에 다시 알린다(반려 때 한 번은 자동으로 나간다 — 반려·취소 카드의 "다시 알리기").
 const ORDER_ACTIONS = ["approve", "reject", "cancel", "remind"] as const
 
 /**

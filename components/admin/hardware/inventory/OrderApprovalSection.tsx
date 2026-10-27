@@ -12,7 +12,7 @@
 //
 // "승인됨"(시안 2026-10-26 A): 오더마다 품목별 진행 바(출고·배송 예정·미등록)와 다음 할 일, 시트 힌트
 // (번호 없이 적힌 같은 고객·품목 출고, 수량 초과)를 보인다. 할 일이 남은 오더가 위로, 하드웨어 없는 오더는 접는다.
-// "반려·취소"(시안 B): 오더마다 다음 할 일 — 견적 수정(담당에게 알리기), 시트에 남은 취소 번호 지우기, 해결됨.
+// "반려·취소"(시안 B): 오더마다 다음 할 일 — 견적 수정(반려 알림은 자동, 버튼은 다시 알리기), 시트에 남은 취소 번호 지우기, 해결됨.
 // "시트 확인"(시안 A): 종류별로 묶고 고칠 방법과 고칠 번호 후보(번호 복사)를 붙인다.
 import { Fragment, memo, useCallback, useEffect, useState, type ReactNode } from "react"
 import { Check, ChevronDown, Copy, ExternalLink, RefreshCw, X } from "lucide-react"
@@ -215,9 +215,9 @@ function OrderApprovalSection({ onChanged }: OrderApprovalSectionProps) {
           }`
         )
       } else if (action === "reject") {
-        setNotice(`${updated.customerName} 오더를 반려했습니다.`)
+        setNotice(`${updated.customerName} 오더를 반려하고 담당에게 알렸습니다.`)
       } else if (action === "remind") {
-        setNotice(`${updated.customerName} 반려를 담당에게 알렸습니다.`)
+        setNotice(`${updated.customerName} 반려를 담당에게 다시 알렸습니다.`)
       } else {
         setNotice(`오더 ${updated.orderNo ?? ""}를 취소하고 남은 배송 예정을 정리했습니다.`)
       }
@@ -785,12 +785,12 @@ function ClosedOrderItem({
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[rgba(0,0,0,0.06)] bg-[#FBFAF9] px-3 py-2.5">
           <p className="min-w-0 flex-1 text-[12px] leading-relaxed text-[#31302E]">
             <span className="font-bold">다음 할 일</span> · 담당 영업이 견적을 고쳐 새 버전으로 승인받으면 승인 대기로 다시 올라옵니다. 지금 버전은
-            고객이 다시 눌러도 올라오지 않습니다.
+            고객이 다시 눌러도 올라오지 않습니다. 반려 알림은 반려할 때 자동으로 나갔습니다.
           </p>
           <div className="flex shrink-0 items-center gap-1.5">
             {canRemind ? (
               <button type="button" onClick={onRemind} disabled={busy || locked} className={GHOST_BUTTON_CLASS}>
-                {busy ? "보내는 중…" : "담당에게 알리기"}
+                {busy ? "보내는 중…" : "다시 알리기"}
               </button>
             ) : null}
             <a href={`/admin/quotes/${order.quoteDocumentId}/view`} target="_blank" rel="noreferrer" className={PRIMARY_BUTTON_CLASS}>
