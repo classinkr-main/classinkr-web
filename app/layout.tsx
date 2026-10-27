@@ -58,7 +58,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko" className="scroll-smooth" data-scroll-behavior="smooth">
+    <html lang="ko" className="motion-safe:scroll-smooth" data-scroll-behavior="smooth">
       <head>
         <JsonLd data={[createOrganizationJsonLd(), createWebsiteJsonLd()]} />
         {/* Google Consent Mode v2 — 기본 거부(denied). GTM 로드 전에 실행되어야 함. */}

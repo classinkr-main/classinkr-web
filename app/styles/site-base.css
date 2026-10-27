@@ -1,14 +1,58 @@
 /* app/styles/site-base.css — 공개 셸 규칙(system §3-4). 모든 셀렉터는 :where(.site) 또는 :root:has(.site) 로 시작한다.
-   P0: 지금 DOM 에 걸리는 규칙은 두지 않는다(화면 변화 0). 단 .reveal-anim 은 globals.css 에서 옮겨 온 것이라 끝 상태가 같다.
+   P1: (a) base 규칙과 보증 4개가 공개 화면에 걸린다. .reveal-anim 은 globals.css 에서 옮겨 온 것이라 끝 상태가 같다.
    P0 예외(system §8-1): 동작 줄이기 off 에서 Reveal 상승 18→12px, 마운트 때 이미 보이는 요소는 무장하지 않는다(/docs·/l/test1–3). */
 
 @layer base {
-  /* (a) P1 에서 채운다 — 넣는 순간 공개 화면이 바뀐다.
-     - :root:has(.site) color-scheme·scroll-padding-top, 서브내비 +44px (system·surfaces)
-     - 한글 조판·em·mark·code·::selection (typography·surfaces)
-     - svg.lucide 획 (icons)
-     - 체크박스 20px·accent-color, 본문 링크 a:not([class]) (controls)
-     - forced-colors */
+  /* (a) — system: 앵커 착지(헤더 아래 16px, 휴대폰 서브내비 +44px) */
+  :root:has(.site) { color-scheme: light; scroll-padding-top: calc(var(--header-h) + 16px); }
+  @media (width < 48rem) {
+    :root:has(.site):has([data-subnav]) { scroll-padding-top: calc(var(--header-h) + 16px + 44px); }
+  }
+
+  /* typography — code·kbd·pre·samp 규칙은 preflight 에 져서 넣지 않는다 */
+  :where(.site) {
+    overflow-wrap: break-word;
+    font-synthesis: none;               /* 가짜 굵게·기울임 금지 */
+  }
+  :where(.site) :where(h1, h2, h3, h4) { text-wrap: balance; }
+  :where(.site) :where(.text-article, .text-body-l, .text-quote, figcaption) { text-wrap: pretty; }
+  :where(.site) :where(blockquote) { hanging-punctuation: first; }          /* Safari 만 */
+  :where(.site) :where(em) { font-style: normal; font-weight: 600; }        /* 색은 상속 */
+  :where(.site) :where(mark) {
+    background: none;
+    color: inherit;
+    font-weight: 600;
+    text-decoration: underline 2px var(--fg-accent);
+    text-underline-offset: 0.2em;
+    text-decoration-skip-ink: none;
+  }
+  :where(.site) ::selection { background: #D1FAE5; color: #111110; }      /* 한 줄 유지(가드 notSelection 은 줄 단위) */
+
+  /* icons — 크기와 무관하게 화면상 --stroke-pen */
+  :where(.site) svg.lucide {
+    stroke-width: var(--stroke-pen);
+    flex-shrink: 0;
+  }
+  :where(.site) svg.lucide :where(path, line, polyline, polygon, circle, rect, ellipse) {
+    vector-effect: non-scaling-stroke;
+  }
+
+  /* controls — 체크박스·라디오 20px·accent, 문단 안 클래스 없는 링크 = 본문 링크(X12) */
+  :where(.site) :is(input[type="checkbox"]:not([role="switch"]), input[type="radio"]) {
+    inline-size: 20px;
+    block-size: 20px;
+    margin: 0;
+    flex-shrink: 0;
+    accent-color: var(--fg-accent);
+  }
+  :where(.site) :where(p, li, dd, td, figcaption, blockquote) > a:not([class]) {
+    @apply link-body;
+  }
+
+  /* 동시 노출(system §4-7) — 배너·챗봇·모바일 메뉴가 열리면 플로팅을 숨긴다(포커스도 빠진다) */
+  :where(.site):has([data-consent-banner]) [data-hide-with-banner] { display: none; }
+  :where(.site):has(#classin-chatbot-dialog) [data-hide-with-chat] { display: none; }
+  :where(.site):has([aria-controls="site-mobile-menu"][aria-expanded="true"]) [data-inert-with-menu="hide"] { display: none; }
 }
 
 @layer components {
@@ -145,6 +189,24 @@
 }
 
 /* ── guarantee:start — 무레이어 보증. 닫힌 목록 4개. 이 구간 밖의 무레이어 규칙은 가드가 거부한다 ── */
-/* P1 에서 넣는다(화면이 바뀐다): ① 포커스 outline ② 입력 16px ③ autofill 덮개 ④ reduced 스피너(skeleton-blink) */
+/* ① 포커스 outline */
+:where(.site) :where(a[href], button, input, select, textarea, summary, [role=tab], [tabindex]:not([tabindex="-1"])):not([data-focus-ring=parent]):focus-visible {
+  outline: 2px solid var(--fg-accent);
+  outline-offset: 2px;
+}
+/* ② 입력 16px — iOS 확대 방지 */
+:where(.site) :where(input:not([type=checkbox], [type=radio], [type=range], [type=color], [type=file], [type=submit], [type=button], [type=reset], [type=image], [type=hidden]), select, textarea) {
+  font-size: max(16px, 1em);
+}
+/* ③ autofill 덮개 */
+:where(.site) :where(input, select, textarea):-webkit-autofill {
+  -webkit-box-shadow: inset 0 0 0 1000px var(--surface-sheet);
+  -webkit-text-fill-color: var(--fg-ink);
+  caret-color: var(--fg-ink);
+}
 @keyframes skeleton-blink { 50% { opacity: .4; } }      /* ④ 부속(이름 정의라 4개 집계 밖). X08·animate-skeleton 공용 */
+/* ④ reduced 스피너 — globals.css 전역 reduced !important 를 이겨야 해서 !important */
+@media (prefers-reduced-motion: reduce) {
+  :where(.site) .animate-spin { animation: skeleton-blink 1.6s ease-in-out infinite !important; }
+}
 /* ── guarantee:end ── */
