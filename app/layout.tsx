@@ -1,5 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { color } from "@/lib/design-tokens";
 import { ToastProvider } from "@/components/ui/toast";
 import { AppChrome } from "@/components/AppChrome";
 import { JsonLd } from "@/components/seo/JsonLd";
@@ -16,6 +17,11 @@ import {
 } from "@/lib/seo";
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning";
 
+// 루트라 어드민에도 적용된다. 강제 다크 UA 의 자동 반전을 끄고, iOS 브라우저 크롬을 paper 로 칠한다.
+export const viewport: Viewport = {
+  themeColor: color.paper,
+  colorScheme: "only light",
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

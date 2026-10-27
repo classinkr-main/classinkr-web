@@ -1,4 +1,12 @@
 @import "tailwindcss";
+@import "./styles/tokens.css";
+@import "./styles/utilities.css";
+@import "./styles/site-base.css";
+/* 기획 문서·가드 스크립트에 적힌 클래스 이름이 공용 CSS 로 생성되지 않게 스캔에서 뺀다(system §13-11) */
+@source not "../docs/active/public-site-design-language-2026-10-26";
+@source not "../docs/active/public-site-design-language-2026-10-26.md";
+@source not "../DESIGN.md";
+@source not "../scripts";
 
 @theme inline {
   --color-background: var(--background);
@@ -30,8 +38,6 @@
   --color-warm-gray: #615D59;
   --color-warm-gray-300: #A39E98;
   --color-near-black: #111110;
-
-  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 
   --radius-sm: 4px;   /* 인풋, 작은 기능성 UI */
   --radius-md: 6px;   /* 버튼 */
@@ -85,30 +91,6 @@
     100% {
       transform: translateX(320%);
     }
-  }
-
-  --animate-blob1: blob1 15s infinite ease-in-out;
-  @keyframes blob1 {
-    0% { transform: translate(0px, 0px) scale(1); }
-    33% { transform: translate(80px, -100px) scale(1.1); }
-    66% { transform: translate(-60px, 40px) scale(0.9); }
-    100% { transform: translate(0px, 0px) scale(1); }
-  }
-
-  --animate-blob2: blob2 18s infinite ease-in-out reverse;
-  @keyframes blob2 {
-    0% { transform: translate(0px, 0px) scale(1); }
-    33% { transform: translate(-80px, 100px) scale(1.2); }
-    66% { transform: translate(60px, -40px) scale(0.8); }
-    100% { transform: translate(0px, 0px) scale(1); }
-  }
-
-  --animate-blob3: blob3 22s infinite ease-in-out 3s;
-  @keyframes blob3 {
-    0% { transform: translate(0px, 0px) scale(1); }
-    33% { transform: translate(100px, 100px) scale(0.9); }
-    66% { transform: translate(-80px, -60px) scale(1.1); }
-    100% { transform: translate(0px, 0px) scale(1); }
   }
 }
 
@@ -418,7 +400,6 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
     font-feature-settings: "kern" 1, "liga" 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -473,31 +454,10 @@
     box-shadow: var(--shadow-deep);
   }
 
-  /* ── Scroll reveal (SSR-safe, components/landing/Reveal.tsx) ──
-     Default = visible. Hidden state only applies once JS arms the element
-     (data-reveal="out"); reduced-motion handled by the global block below. */
-  .reveal-anim {
-    transition:
-      opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
-      transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
-    will-change: opacity, transform;
-  }
-  .reveal-anim[data-reveal="out"] {
-    opacity: 0;
-    transform: translateY(18px);
-  }
-  .reveal-anim[data-reveal="in"] {
-    opacity: 1;
-    transform: none;
-  }
+  /* Scroll reveal 모션은 app/styles/site-base.css(no-preference 블록)로 옮겼다 */
 
   /* ── 섹션 배경 교차 ── */
-  .section-white   { background-color: #FFFFFF; }
   .section-warm    { background-color: #F6F5F4; }
-  .section-green   { background-color: #ECFDF5; }
-
-  /* ── Whisper border ── */
-  .border-whisper  { border: 1px solid rgba(0, 0, 0, 0.08); }
 
   /* ── 헤딩 letter-spacing 유틸 ── */
   .tracking-display  { letter-spacing: -0.04em; }   /* 64px hero */
@@ -732,38 +692,6 @@
   box-shadow: 0 0 0 2px rgba(245,158,11,0.18), 0 0 6px rgba(245,158,11,0.45);
 }
 
-.prism-glass {
-  position: relative;
-  overflow: hidden;
-}
-
-.prism-glass::before {
-  content: '';
-  position: absolute;
-  top: -50%; left: -50%; width: 200%; height: 200%;
-  background: conic-gradient(from 180deg at 50% 50%, rgba(206, 241, 123, 0) 0deg, rgba(206, 241, 123, 0.1) 60deg, rgba(8, 204, 255, 0.1) 120deg, rgba(255, 100, 200, 0.1) 180deg, rgba(255, 180, 50, 0.1) 240deg, rgba(206, 241, 123, 0) 360deg);
-  opacity: 0;
-  transition: opacity 0.5s ease;
-  pointer-events: none;
-  transform: rotate(0deg);
-}
-
-.prism-glass:hover::before {
-  opacity: 1;
-  animation: prism-spin 4s linear infinite;
-}
-
-@keyframes prism-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-/* GPU-accelerated blob animations */
-.animate-blob1, .animate-blob2, .animate-blob3 {
-  will-change: transform;
-  contain: layout style;
-}
-
 /* ── Pricing Calculator entrance animation keyframes ──────────────── */
 @keyframes calculator-border-draw {
   from { stroke-dashoffset: var(--border-perimeter); }
@@ -856,16 +784,6 @@
 }
 
 /* ── SW Product page animations ──────────────────────────────────── */
-@keyframes draw-line {
-  from { stroke-dashoffset: 1; }
-  to { stroke-dashoffset: 0; }
-}
-
-@keyframes cursor-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
-}
-
 @keyframes float-tag {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-6px); }
@@ -876,22 +794,14 @@
   50% { opacity: 0.6; transform: scale(1.8); }
 }
 
+/* LogoBar 인라인 style 이 이 이름을 쓴다 — LogoBar 정적 목록(P1) 뒤 삭제 */
 @keyframes marquee {
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }
 }
 
-@keyframes progress-fill {
-  from { stroke-dashoffset: 251; }
-  to { stroke-dashoffset: var(--progress-target, 63); }
-}
-
-.animate-draw-line { animation: draw-line 1.5s ease-out forwards; }
-.animate-cursor-blink { animation: cursor-blink 1.2s ease-in-out infinite; }
 .animate-float-tag { animation: float-tag 3s ease-in-out infinite; }
 .animate-dot-pulse { animation: dot-pulse 3s ease-in-out infinite; }
-.animate-marquee { animation: marquee 30s linear infinite; }
-.animate-progress-fill { animation: progress-fill 1.5s ease-out forwards; }
 
 @media (prefers-reduced-motion: reduce) {
   html {
@@ -909,13 +819,6 @@
 
   video[autoplay] {
     animation: none !important;
-  }
-
-  /* Reveal elements must never stay hidden when motion is reduced. */
-  .reveal-anim,
-  .reveal-anim[data-reveal="out"] {
-    opacity: 1 !important;
-    transform: none !important;
   }
 }
 

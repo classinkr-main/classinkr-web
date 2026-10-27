@@ -1,0 +1,227 @@
+/* app/styles/tokens.css — 디자인 토큰의 유일한 선언처 (system §3).
+   다른 파일에서 --surface-*·--fg-*·--line-* 를 선언하거나 .surface-ink 를 정의하면 가드가 막는다.
+   값 소유는 블록 머리 주석을 따른다. var() 폴백은 금지(global-error 제외).
+   P0: 지금 DOM 에 걸리는 이름은 없다(소비처 0) — 화면 변화 0. */
+
+@layer base {
+  :root {
+    /* ── 면·글자·선 20색 — surfaces 소유 (X01) ── */
+    --surface-paper: #FAFAF8;
+    --surface-sheet: #FFFFFF;
+    --surface-sunken: #F6F5F4;
+    --surface-ink: #111110;
+    --surface-skeleton: #F0F0EC;
+    --surface-scrim: rgb(17 17 16 / .48);
+
+    --fg-ink: #111110;
+    --fg-body: #31302E;
+    --fg-muted: #615D59;
+    --fg-placeholder: #78736D;    /* 입력 바탕이 sheet 일 때만 */
+    --fg-faint: #A39E98;          /* 장식·비활성 전용. 텍스트 금지 (2.54:1) */
+    --fg-accent: #084734;
+    --fg-accent-hover: #065C41;
+    --fg-danger: #B43E3E;
+    --fg-on-accent: #FAFAF8;
+
+    --line-hair: rgb(17 17 16 / .08);
+    --line-strong: rgb(17 17 16 / .16);
+    --line-ink: #111110;
+    --line-control: #8F8A84;
+    --line-link: rgb(8 71 52 / .6);
+
+    /* ── 자간 원값 — typography 소유 (§2-3) ── */
+    --trk-poster: -0.03em;
+    --trk-display: -0.03em;
+    --trk-h1: -0.025em;
+    --trk-h2: -0.02em;
+    --trk-h3: -0.01em;
+    --trk-num: -0.02em;
+    --trk-label: 0.02em;          /* 13px 가독 — 모바일 유지 */
+    --trk-abbr: 0.06em;           /* 13px 이하 라벨 안 라틴 대문자 약어(AI·HW)만 */
+
+    /* ── 모션 — cards_motion 소유 (X13). story·progress·carousel 은 만들지 않는다 ── */
+    --motion-fast: 160ms;
+    --motion-base: 320ms;
+    --motion-slow: 700ms;
+    --motion-rise: 12px;
+    --motion-stagger: 80ms;
+    --ease-soft: cubic-bezier(.22, 1, .36, 1);
+    --ease-drift: cubic-bezier(.45, 0, .55, 1);
+
+    /* ── 선 굵기 — icons 소유 (C11) ── */
+    --stroke-pen: 1.5px;
+    --stroke-accent: 2px;
+
+    /* ── 레이아웃·레이어 — system 소유 (§4) ── */
+    --header-h: 76px;
+    --z-subnav: 30;
+    --z-header: 40;
+    --z-floating: 42;
+    --z-chatbot: 44;
+    --z-consent: 46;
+    /* 50 = Radix Dialog·오버레이 (components/ui/dialog.tsx 공유 기본값, 토큰 아님) */
+    --z-skiplink: 60;
+    /* 9999 = 토스트 (components/ui/toast.tsx 공유 기본값, 토큰 아님) */
+  }
+
+  @media (width < 40rem) {
+    :root { --trk-poster: 0; --trk-display: 0; --trk-h1: 0; --trk-h2: 0; --trk-h3: 0; --trk-num: 0; }
+  }
+  @media (width >= 48rem) {
+    :root { --header-h: 80px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    :root { --motion-rise: 0px; --motion-stagger: 0ms; }
+  }
+  @media (prefers-contrast: more) {
+    :root { --line-hair: rgb(17 17 16 / .32); --line-strong: #8F8A84; }
+  }
+  @media (max-resolution: 1.49dppx) {
+    :root { --stroke-pen: 2px; }      /* V6 기본 켬: DPR1 사용자는 현행 lucide 2px 과 같아 변화 0 */
+  }
+
+  /* ── 먹 지면 — surfaces 소유 (C01). 유일한 정의. .on-ink 는 없다 ── */
+  .surface-ink {
+    --surface-sheet: #111110;          /* 불투명, 바닥과 같은 색. autofill 덮개도 이 값 */
+    --fg-ink: #FAFAF8;
+    --fg-body: rgb(250 250 248 / .72);
+    --fg-muted: rgb(250 250 248 / .56);
+    --fg-placeholder: rgb(250 250 248 / .56);
+    --fg-faint: rgb(250 250 248 / .40);
+    --fg-accent: #6EE7B7;
+    --fg-accent-hover: #6EE7B7;
+    --fg-danger: #E89A94;
+    --line-hair: rgb(250 250 248 / .12);
+    --line-strong: rgb(250 250 248 / .24);
+    --line-ink: rgb(250 250 248 / .72);
+    --line-control: rgb(250 250 248 / .40);
+    --line-link: rgb(110 231 183 / .5);
+    background-color: var(--surface-ink);
+    color: var(--fg-ink);
+    color-scheme: dark;
+
+    @media (prefers-contrast: more) {
+      --line-hair: rgb(250 250 248 / .32);
+      --line-strong: rgb(250 250 248 / .40);
+    }
+  }
+}
+
+@theme inline {
+  /* 색: 유틸 이름 = 변수 이름 (C02). --color-surface-ink 는 매핑하지 않는다(먹은 surface-ink 클래스만). */
+  --color-surface-paper: var(--surface-paper);
+  --color-surface-sheet: var(--surface-sheet);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-surface-skeleton: var(--surface-skeleton);
+  --color-surface-scrim: var(--surface-scrim);
+  --color-fg-ink: var(--fg-ink);
+  --color-fg-body: var(--fg-body);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-placeholder: var(--fg-placeholder);
+  --color-fg-faint: var(--fg-faint);
+  --color-fg-accent: var(--fg-accent);
+  --color-fg-accent-hover: var(--fg-accent-hover);
+  --color-fg-danger: var(--fg-danger);
+  --color-fg-on-accent: var(--fg-on-accent);
+  --color-line-hair: var(--line-hair);
+  --color-line-strong: var(--line-strong);
+  --color-line-ink: var(--line-ink);
+  --color-line-control: var(--line-control);
+  --color-line-link: var(--line-link);
+
+  /* 글자 15종 — typography 소유(§2-2 표). 이름 목록은 lib/utils.ts TEXT_SCALE 과 같다(tests/lib/cn.test.ts).
+     text-ui 에는 --font-weight 를 두지 않는다(탭·내비 500, 버튼 600 은 요소가 정한다). */
+  --text-poster: clamp(3rem, 1.5rem + 6vw, 6.5rem);          /* 48 → 104 · Manifesto 전용 */
+  --text-poster--line-height: 1.05;
+  --text-poster--letter-spacing: var(--trk-poster);
+  --text-poster--font-weight: 700;
+
+  --text-display: clamp(2.5rem, 1.75rem + 3.2vw, 4.5rem);    /* 40 → 72 · Hero H1 전용 */
+  --text-display--line-height: 1.12;
+  --text-display--letter-spacing: var(--trk-display);
+  --text-display--font-weight: 700;
+
+  --text-h1: clamp(2rem, 1.6rem + 1.6vw, 3rem);              /* 32 → 48 */
+  --text-h1--line-height: 1.2;
+  --text-h1--letter-spacing: var(--trk-h1);
+  --text-h1--font-weight: 700;
+
+  --text-h2: clamp(1.75rem, 1.45rem + 1.2vw, 2.5rem);        /* 28 → 40 */
+  --text-h2--line-height: 1.25;
+  --text-h2--letter-spacing: var(--trk-h2);
+  --text-h2--font-weight: 700;
+
+  --text-h3: clamp(1.25rem, 1.15rem + 0.4vw, 1.5rem);        /* 20 → 24 */
+  --text-h3--line-height: 1.4;
+  --text-h3--letter-spacing: var(--trk-h3);
+  --text-h3--font-weight: 600;
+
+  --text-body-l: clamp(1.0625rem, 1rem + 0.25vw, 1.1875rem); /* 17 → 19 */
+  --text-body-l--line-height: 1.75;
+  --text-body-l--font-weight: 400;
+
+  --text-body: 1rem;                                         /* 16 */
+  --text-body--line-height: 1.75;
+  --text-body--font-weight: 400;
+
+  --text-article: 1.0625rem;                                 /* 17 */
+  --text-article--line-height: 1.75;
+  --text-article--font-weight: 400;
+
+  --text-ui: 0.9375rem;                                      /* 15 · 굵기 하위키 없음 */
+  --text-ui--line-height: 1.4;
+
+  --text-caption: 0.875rem;                                  /* 14 */
+  --text-caption--line-height: 1.6;
+  --text-caption--font-weight: 400;
+
+  --text-note: 0.8125rem;                                    /* 13 */
+  --text-note--line-height: 1.5;
+  --text-note--font-weight: 400;
+
+  --text-label: 0.8125rem;                                   /* 13/600 */
+  --text-label--line-height: 1.4;
+  --text-label--letter-spacing: var(--trk-label);
+  --text-label--font-weight: 600;
+
+  --text-folio: 0.8125rem;                                   /* 13/500 + tabular-nums */
+  --text-folio--line-height: 1.4;
+  --text-folio--font-weight: 500;
+
+  --text-numeral: clamp(2.5rem, 1.9rem + 2.4vw, 4rem);       /* 40 → 64 + tabular-nums */
+  --text-numeral--line-height: 1;
+  --text-numeral--letter-spacing: var(--trk-num);
+  --text-numeral--font-weight: 600;
+
+  --text-quote: clamp(1.25rem, 1.1rem + 0.7vw, 1.625rem);    /* 20 → 26 */
+  --text-quote--line-height: 1.6;
+  --text-quote--font-weight: 500;
+
+  --tracking-label: var(--trk-label);
+  --tracking-abbr: var(--trk-abbr);
+
+  /* 측정폭 7종 — tw-merge container 목록과 1:1. measure~quote 는 em(요소 글자 크기 기준) */
+  --container-measure: 38em;
+  --container-deck: 34em;
+  --container-heading: 18em;
+  --container-display: 14em;
+  --container-quote: 24em;
+  --container-page: 1296px;
+  --container-article: 45rem;
+
+  /* 비율 3종 — imagery 소유. aspect-video(16/9)는 Tailwind 기본값 */
+  --aspect-case: 3 / 2;
+  --aspect-screen: 16 / 10;
+  --aspect-portrait: 4 / 5;
+
+  /* :root 의 같은 이름과 리터럴이 같아야 한다 — tests/lib/design-tokens.test.ts 가 대조 */
+  --ease-soft: cubic-bezier(.22, 1, .36, 1);
+  --ease-drift: cubic-bezier(.45, 0, .55, 1);
+
+  --animate-skeleton: skeleton-blink 1.6s ease-in-out infinite;   /* keyframes 는 site-base.css 보증 구간 안(④ 부속, §13-3) */
+  /* --animate-fade-in·--animate-dialog-in 은 controls P2 PR 에서 넣는다(§13-2) */
+
+  /* globals.css @theme inline 에서 그대로 옮긴 현행 값(화면 변화 0).
+     typography §2-1 목표 스택(설치형 Pretendard 제외)은 폰트 PR 에서 바꾼다. */
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+}
