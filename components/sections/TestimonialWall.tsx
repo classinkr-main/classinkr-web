@@ -1,24 +1,11 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { Quote, Star } from "lucide-react"
+import { Quote } from "lucide-react"
 import { TESTIMONIALS } from "@/lib/testimonials"
 
 const featuredTestimonials = TESTIMONIALS.filter((item) => item.highlight)
 const supportingTestimonials = TESTIMONIALS.filter((item) => !item.highlight)
-
-function StarRating({ rating = 5, light = false }: { rating?: number; light?: boolean }) {
-    return (
-        <div className="flex gap-0.5" aria-label={`별점 ${rating}점`}>
-            {Array.from({ length: rating }).map((_, index) => (
-                <Star
-                    key={index}
-                    className={`h-3.5 w-3.5 ${light ? "fill-[#D7B56D] text-[#D7B56D]" : "fill-[#084734] text-[#084734]"}`}
-                />
-            ))}
-        </div>
-    )
-}
 
 export function TestimonialWall() {
     const leadTestimonial = featuredTestimonials[0]
@@ -64,7 +51,6 @@ export function TestimonialWall() {
                                         <span className="inline-flex rounded-full bg-white px-3 py-1 text-[11px] font-bold text-[#084734]">
                                             대표 후기
                                         </span>
-                                        <StarRating rating={leadTestimonial.rating} light />
                                     </div>
 
                                     <Quote className="mt-10 h-9 w-9 fill-[#D7B56D] text-[#D7B56D]" />
@@ -93,7 +79,6 @@ export function TestimonialWall() {
                                                 <span className="rounded-full bg-[#084734] px-2.5 py-1 text-[11px] font-bold text-white">
                                                     {item.badge}
                                                 </span>
-                                                <StarRating rating={item.rating} />
                                             </div>
                                             <blockquote className="mt-6 text-[15px] font-semibold leading-7 text-[#111110] break-keep">
                                                 &ldquo;{item.quote}&rdquo;
@@ -126,7 +111,6 @@ export function TestimonialWall() {
                                     <span className="rounded-full bg-[#F0F1EB] px-2.5 py-1 text-[11px] font-bold text-[#615D59]">
                                         {item.badge}
                                     </span>
-                                    <StarRating rating={item.rating} />
                                 </div>
 
                                 <blockquote className="mt-5 flex-1 text-[14px] leading-7 text-[#31302E] break-keep">

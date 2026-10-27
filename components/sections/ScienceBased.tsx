@@ -6,12 +6,7 @@ import Image from "next/image"
 
 export function ScienceBased() {
     return (
-        <section className="py-16 md:py-24 bg-[#111110] overflow-hidden relative">
-            {/* Background Texture */}
-            <div className="absolute inset-0 bg-[url('/images/noise-texture.svg')] opacity-10 mix-blend-overlay pointer-events-none" />
-            <div className="absolute top-1/4 left-0 w-96 h-96 bg-[#084734]/20 blur-[100px] rounded-full pointer-events-none" />
-            <div className="absolute bottom-1/4 right-0 w-96 h-96 bg-[#084734]/15 blur-[100px] rounded-full pointer-events-none" />
-
+        <section className="py-16 md:py-24 bg-[#111110] overflow-x-clip relative">
             <div className="container mx-auto px-6 max-w-6xl relative z-10">
                 <motion.div
                     initial={{ opacity: 0, y: 30 }}
@@ -89,8 +84,8 @@ export function ScienceBased() {
                             </div>
 
                             <div className="flex gap-3">
-                                <span className="px-4 py-1.5 bg-gradient-to-r from-[#2a2925] to-[#2a2925]/80 border border-white/[0.06] text-white/60 text-[13px] font-semibold rounded-full backdrop-blur-sm shadow-[0_1px_6px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.04)] tracking-[0.01em]">#즉시복습</span>
-                                <span className="px-4 py-1.5 bg-gradient-to-r from-[#2a2925] to-[#2a2925]/80 border border-white/[0.06] text-white/60 text-[13px] font-semibold rounded-full backdrop-blur-sm shadow-[0_1px_6px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.04)] tracking-[0.01em]">#장기기억</span>
+                                <span className="px-4 py-1.5 bg-gradient-to-r from-[#2a2925] to-[#2a2925]/80 border border-white/[0.06] text-white/60 text-[13px] font-semibold rounded-full shadow-[0_1px_6px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.04)] tracking-[0.01em]">#즉시복습</span>
+                                <span className="px-4 py-1.5 bg-gradient-to-r from-[#2a2925] to-[#2a2925]/80 border border-white/[0.06] text-white/60 text-[13px] font-semibold rounded-full shadow-[0_1px_6px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.04)] tracking-[0.01em]">#장기기억</span>
                             </div>
                         </motion.div>
                     </div>
@@ -154,8 +149,8 @@ export function ScienceBased() {
                             </div>
 
                             <div className="flex gap-3">
-                                <span className="px-4 py-1.5 bg-gradient-to-r from-[#2a2925] to-[#2a2925]/80 border border-white/[0.06] text-white/60 text-[13px] font-semibold rounded-full backdrop-blur-sm shadow-[0_1px_6px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.04)] tracking-[0.01em]">#ActiveLearning</span>
-                                <span className="px-4 py-1.5 bg-gradient-to-r from-[#2a2925] to-[#2a2925]/80 border border-white/[0.06] text-white/60 text-[13px] font-semibold rounded-full backdrop-blur-sm shadow-[0_1px_6px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.04)] tracking-[0.01em]">#참여수업</span>
+                                <span className="px-4 py-1.5 bg-gradient-to-r from-[#2a2925] to-[#2a2925]/80 border border-white/[0.06] text-white/60 text-[13px] font-semibold rounded-full shadow-[0_1px_6px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.04)] tracking-[0.01em]">#ActiveLearning</span>
+                                <span className="px-4 py-1.5 bg-gradient-to-r from-[#2a2925] to-[#2a2925]/80 border border-white/[0.06] text-white/60 text-[13px] font-semibold rounded-full shadow-[0_1px_6px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.04)] tracking-[0.01em]">#참여수업</span>
                             </div>
                         </motion.div>
                     </div>

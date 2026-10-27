@@ -69,11 +69,11 @@ export function Outcomes() {
                                     whileInView={{ opacity: 1, y: 0 }}
                                     transition={{ delay: index * 0.1 }}
                                     viewport={{ once: true }}
-                                    className="grid md:grid-cols-2 rounded-2xl overflow-hidden border border-[rgba(0,0,0,0.08)] bg-white transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5"
+                                    className="grid md:grid-cols-2 rounded-2xl overflow-hidden border border-[rgba(0,0,0,0.08)] bg-white transition-all duration-200"
                                     style={{ boxShadow: 'rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px, rgba(0,0,0,0.02) 0px 0.8px 2.9px' }}
                                 >
                                     {/* Before Card */}
-                                    <div className="p-6 md:p-8 flex flex-col justify-center border-b md:border-b-0 md:border-r border-[rgba(0,0,0,0.05)] hover:bg-[#F6F5F4] transition-colors">
+                                    <div className="p-6 md:p-8 flex flex-col justify-center border-b md:border-b-0 md:border-r border-[rgba(0,0,0,0.05)]">
                                         <div className="md:hidden flex items-center gap-2 mb-4">
                                             <X className="w-5 h-5 text-[#B85C33]" />
                                             <span className="font-bold text-lg text-[#A39E98]">Before</span>
@@ -83,7 +83,7 @@ export function Outcomes() {
                                     </div>
 
                                     {/* After Card */}
-                                    <div className="p-6 md:p-8 flex flex-col justify-center relative overflow-hidden bg-gradient-to-br from-[#ECFDF5] to-[#ECFDF5]/30 hover:from-[#ECFDF5] hover:to-[#ECFDF5]/50 transition-colors">
+                                    <div className="p-6 md:p-8 flex flex-col justify-center relative overflow-hidden bg-gradient-to-br from-[#ECFDF5] to-[#ECFDF5]/30">
                                         <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[#084734]" />
                                         <div className="md:hidden flex items-center gap-2 mb-4">
                                             <Check className="w-5 h-5 text-[#084734]" />

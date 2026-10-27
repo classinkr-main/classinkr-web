@@ -286,7 +286,8 @@ const RULES = [
   { id: "site-variant", files: PUBLIC_TSX, allow: BILLING_CHECKOUT, ...warn,
     pattern: jsxOpen("Input|Textarea|TabsList|TabsTrigger|TabsContent"), check: lacks(/\bvariant=["']site["']/),
     message: "공개 Input·Textarea·Tabs 는 variant=\"site\"" },
-  { id: "ink-primary-button", files: PUBLIC_TSX, allow: [], ...warn, // 휴리스틱: surface-ink 가 있는 파일의 <Button>
+  { id: "ink-primary-button", files: PUBLIC_TSX, ...warn, // 휴리스틱: surface-ink 가 있는 파일의 <Button>
+    allow: ["components/sections/Hero.tsx", "components/sections/FinalCTA.tsx", "app/product/sw/page.tsx"], // H02: surface-ink 표지만 먼저 단 파일. 채움 버튼 교체(P3–P5, C14) 때 이 allow 를 지운다
     pattern: jsxOpen("Button"), check: (m, ctx) => ctx.text.includes("surface-ink") && !/\bvariant=["'](?:line|ghost)["']/.test(m[0]),
     message: "먹 지면 위 채움 버튼 0(C14) → variant=\"line\"·\"ghost\"" },
 ];

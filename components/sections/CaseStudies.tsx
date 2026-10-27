@@ -88,17 +88,6 @@ const cases: CaseStudy[] = [
         photo: "/images/case-studies/cheonan-jayscan.jpg",
         photoAlt: "천안 제** 도입 사례 사진",
     },
-    {
-        badge: "12인",
-        name: "12인 에**",
-        meta: "온라인 수업 전문, 참여형 활동 운영",
-        challenge: "비대면 수업에서 학생 참여도와 활동 결과를 한눈에 확인하기 어려웠습니다.",
-        result: "게임형 활동과 수업 기록을 연결해 온라인에서도 학생별 참여 흐름을 더 선명하게 파악했습니다.",
-        quote: "온라인 수업에서도 학생들이 직접 움직이는 느낌이 생겼습니다. 참여 결과가 보여서 피드백도 빨라졌습니다.",
-        attribution: "운영팀",
-        photo: "/images/case-studies/online-12inedu.jpg",
-        photoAlt: "12인 에** 도입 사례 사진",
-    },
 ]
 
 const AUTO_ADVANCE_MS = 8500
@@ -205,7 +194,7 @@ export function CaseStudies() {
                             type="button"
                             aria-label="이전 도입 사례"
                             onClick={() => paginate(-1)}
-                            className="inline-flex h-10 w-10 items-center justify-center text-[#A39E98] transition hover:text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2"
+                            className="inline-flex h-10 w-10 items-center justify-center text-[#A39E98] transition hover:text-[#084734]"
                         >
                             <ChevronLeft className="h-7 w-7" />
                         </button>
@@ -214,7 +203,7 @@ export function CaseStudies() {
                             type="button"
                             aria-label="다음 도입 사례"
                             onClick={() => paginate(1)}
-                            className="inline-flex h-10 w-10 items-center justify-center text-[#A39E98] transition hover:text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2"
+                            className="inline-flex h-10 w-10 items-center justify-center text-[#A39E98] transition hover:text-[#084734]"
                         >
                             <ChevronRight className="h-7 w-7" />
                         </button>

@@ -6,7 +6,7 @@ const cardShadow = "0 24px 60px rgba(17,17,16,0.08), 0 8px 20px rgba(17,17,16,0.
 
 export function SatisfyingClass() {
     return (
-        <section className="py-16 md:py-32 bg-[#F9F8F4] overflow-hidden">
+        <section className="py-16 md:py-32 bg-[#F9F8F4] overflow-x-clip">
             <div className="container mx-auto px-6 max-w-7xl relative">
                 <div className="flex flex-col lg:flex-row items-center justify-between gap-16">
                     {/* Left text area */}
@@ -47,9 +47,6 @@ export function SatisfyingClass() {
                     {/* Right illustrative area (stacked UI cards) */}
                     <div className="w-full lg:w-3/5 h-[460px] sm:h-[520px] md:h-[590px] relative pointer-events-none mt-10 lg:mt-0 flex justify-center items-center">
                         <div className="relative h-full w-full max-w-[44rem]">
-                            <div className="absolute left-[10%] top-[7%] h-44 w-44 rounded-full bg-[#D9F4E7] opacity-70 blur-[76px]" />
-                            <div className="absolute right-[6%] bottom-[10%] h-48 w-48 rounded-full bg-[#EDE7DC] opacity-70 blur-[90px]" />
-
                             <motion.div
                                 initial={{ opacity: 0, scale: 0.94, x: 58, y: -28, rotate: 10 }}
                                 whileInView={{ opacity: 1, scale: 1, x: 0, y: 0, rotate: 5 }}

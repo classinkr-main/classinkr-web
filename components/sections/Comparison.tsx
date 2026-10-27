@@ -60,7 +60,7 @@ export function Comparison() {
                     whileInView={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.6 }}
                     viewport={{ once: true }}
-                    className="max-w-4xl mx-auto overflow-hidden rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5"
+                    className="max-w-4xl mx-auto overflow-hidden rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white transition-all duration-200"
                     style={{ boxShadow: 'rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px, rgba(0,0,0,0.02) 0px 0.8px 2.9px' }}
                 >
                     {/* Table Header */}

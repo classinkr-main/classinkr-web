@@ -26,7 +26,7 @@ function DashboardChartsSkeleton() {
                 <div
                     key={item}
                     className="min-h-[340px] rounded-2xl border border-white/10 p-6"
-                    style={{ background: "rgba(255,255,255,0.05)", backdropFilter: "blur(20px)" }}
+                    style={{ background: "rgba(255,255,255,0.05)" }}
                 >
                     <div className="mb-5 h-3 w-24 rounded-full bg-white/10" />
                     <div className="mb-8 h-5 w-36 rounded-full bg-white/10" />
@@ -99,32 +99,16 @@ export function DashboardPreview() {
     return (
         <section
             id="dashboard"
-            className="relative overflow-hidden py-20 md:py-32"
+            className="relative overflow-x-clip py-20 md:py-32"
             style={{
                 background: "linear-gradient(135deg, #031a12 0%, #052e1e 50%, #084734 100%)",
             }}
         >
-            {/* 배경 장식 오브 */}
-            <div className="pointer-events-none absolute inset-0">
-                <div
-                    className="absolute -top-32 -left-32 h-[500px] w-[500px] rounded-full opacity-20"
-                    style={{ background: "radial-gradient(circle, #084734 0%, transparent 70%)" }}
-                />
-                <div
-                    className="absolute -bottom-40 -right-20 h-[600px] w-[600px] rounded-full opacity-15"
-                    style={{ background: "radial-gradient(circle, #065c41 0%, transparent 70%)" }}
-                />
-                <div
-                    className="absolute top-1/2 left-1/2 h-[400px] w-[400px] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-10"
-                    style={{ background: "radial-gradient(circle, #6EE7B7 0%, transparent 70%)" }}
-                />
-            </div>
-
             <div className="container relative mx-auto px-4">
                 {/* 헤더 */}
                 <div className="mb-14 flex flex-col gap-10 md:flex-row md:items-end md:justify-between">
                     <div className="max-w-xl">
-                        <span className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] backdrop-blur-sm px-4 py-1.5 text-[11px] font-semibold tracking-[0.25em] text-white/40 uppercase shadow-[0_2px_12px_rgba(0,0,0,0.2)]">
+                        <span className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-1.5 text-[11px] font-semibold tracking-[0.25em] text-white/40 uppercase">
                             <span className="w-1 h-1 rounded-full bg-[#6EE7B7]/60" />
                             Analytics
                         </span>
@@ -142,7 +126,7 @@ export function DashboardPreview() {
                             <div
                                 key={kpi.label}
                                 className="rounded-2xl border border-white/10 px-4 py-4 w-24 sm:w-28 md:w-32"
-                                style={{ background: "rgba(255,255,255,0.06)", backdropFilter: "blur(16px)" }}
+                                style={{ background: "rgba(255,255,255,0.06)" }}
                             >
                                 <div className="mb-2 flex items-center gap-1.5 text-white/40">
                                     {kpi.icon}
@@ -166,7 +150,7 @@ export function DashboardPreview() {
                 {/* 하단 미니 지표 스트립 */}
                 <div
                     className="mt-5 grid grid-cols-3 divide-x divide-white/10 rounded-2xl border border-white/10 px-2 py-4"
-                    style={{ background: "rgba(255,255,255,0.04)", backdropFilter: "blur(20px)" }}
+                    style={{ background: "rgba(255,255,255,0.04)" }}
                 >
                     {[
                         { label: "이번 주 수업", value: "142건", sub: "전주 대비 +8건" },

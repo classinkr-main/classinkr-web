@@ -35,7 +35,7 @@ export function DashboardPreviewCharts() {
         <div className="grid gap-5 md:grid-cols-2">
             <div
                 className="rounded-2xl border border-white/10 p-6"
-                style={{ background: "rgba(255,255,255,0.05)", backdropFilter: "blur(20px)" }}
+                style={{ background: "rgba(255,255,255,0.05)" }}
             >
                 <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.25em] text-white/25">Engagement</div>
                 <div className="mb-5 flex items-end justify-between">
@@ -83,7 +83,6 @@ export function DashboardPreviewCharts() {
                                 border: "1px solid rgba(255,255,255,0.12)",
                                 borderRadius: "10px",
                                 boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
-                                backdropFilter: "blur(12px)",
                             }}
                             labelStyle={{ color: "rgba(255,255,255,0.5)", fontSize: 11 }}
                             itemStyle={{ color: "#fff", fontSize: 12 }}
@@ -114,7 +113,7 @@ export function DashboardPreviewCharts() {
 
             <div
                 className="rounded-2xl border border-white/10 p-6"
-                style={{ background: "rgba(255,255,255,0.05)", backdropFilter: "blur(20px)" }}
+                style={{ background: "rgba(255,255,255,0.05)" }}
             >
                 <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.25em] text-white/25">Performance</div>
                 <div className="mb-5 flex items-end justify-between">
@@ -158,7 +157,6 @@ export function DashboardPreviewCharts() {
                                 border: "1px solid rgba(255,255,255,0.12)",
                                 borderRadius: "10px",
                                 boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
-                                backdropFilter: "blur(12px)",
                             }}
                             labelStyle={{ color: "rgba(255,255,255,0.5)", fontSize: 11 }}
                             itemStyle={{ color: "#fff", fontSize: 12 }}

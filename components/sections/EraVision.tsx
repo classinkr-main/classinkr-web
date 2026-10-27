@@ -25,17 +25,7 @@ const shifts = [
 
 export function EraVision() {
     return (
-        <section className="relative py-20 md:py-32 bg-[#FAFAF8] overflow-hidden">
-            {/* Subtle grid */}
-            <div
-                className="absolute inset-0 opacity-[0.025] pointer-events-none"
-                style={{
-                    backgroundImage:
-                        "linear-gradient(rgba(8,71,52,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(8,71,52,0.5) 1px, transparent 1px)",
-                    backgroundSize: "80px 80px",
-                }}
-            />
-
+        <section className="relative py-20 md:py-32 bg-[#FAFAF8] overflow-x-clip">
             <div className="container mx-auto px-4 relative z-10">
                 {/* Top label */}
                 <motion.div
@@ -45,11 +35,9 @@ export function EraVision() {
                     transition={{ duration: 0.6 }}
                     className="flex items-center justify-center gap-3 mb-10"
                 >
-                    <div className="h-px w-10 bg-gradient-to-r from-transparent to-[#084734]/40" />
                     <span className="text-[13px] font-semibold text-[#084734] uppercase tracking-[0.25em]">
                         New Era of Education
                     </span>
-                    <div className="h-px w-10 bg-gradient-to-l from-transparent to-[#084734]/40" />
                 </motion.div>
 
                 {/* Main statement */}

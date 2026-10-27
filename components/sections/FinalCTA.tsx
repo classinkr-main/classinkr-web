@@ -8,16 +8,13 @@ import { ArrowRight, CalendarDays, FileCheck2, MapPin, Newspaper } from "lucide-
 
 export function FinalCTA() {
     return (
-        <section className="py-16 md:py-32 relative overflow-hidden bg-[#111110]">
+        <section className="surface-ink py-16 md:py-32 relative overflow-x-clip bg-[#111110]">
             {/* Background Effects */}
             <div className="absolute inset-0 bg-gradient-to-br from-[#084734] to-[#111110] opacity-90" />
-            <div className="absolute inset-0 bg-[url('/images/noise-texture.svg')] opacity-20 mix-blend-overlay pointer-events-none" />
-            <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-primary/30 rounded-full blur-[120px] pointer-events-none translate-x-1/2 -translate-y-1/2" />
 
             <div className="container mx-auto relative z-10 text-center">
-                <span className="inline-flex items-center gap-2.5 py-2 px-5 rounded-full bg-white/[0.06] text-[#6EE7B7] text-sm font-semibold mb-6 border border-white/[0.08] backdrop-blur-md shadow-[0_2px_20px_rgba(110,231,183,0.08),inset_0_1px_0_rgba(255,255,255,0.06)]">
+                <span className="inline-flex items-center gap-2.5 py-2 px-5 rounded-full bg-white/[0.06] text-[#6EE7B7] text-sm font-semibold mb-6 border border-white/[0.08]">
                     <span className="relative flex h-2 w-2">
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#6EE7B7]/30" />
                         <span className="relative inline-flex h-2 w-2 rounded-full bg-[#6EE7B7]" />
                     </span>
                     <span className="tracking-[0.04em]">대표 수업 1개부터</span>
@@ -34,7 +31,7 @@ export function FinalCTA() {
 
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
                     <DemoModal trackingButton="final_consultation">
-                        <Button size="lg" className="h-16 px-10 text-lg font-bold bg-white text-[#111110] hover:bg-[#F6F5F4] hover:scale-105 active:scale-95 transition-all shadow-xl shadow-white/10 w-full sm:w-auto rounded-full">
+                        <Button size="lg" className="h-16 px-10 text-lg font-bold bg-white text-[#111110] hover:bg-[#F6F5F4] active:scale-95 transition-all shadow-xl shadow-white/10 w-full sm:w-auto rounded-full">
                             1개 교실 파일럿 상담받기
                             <ArrowRight className="ml-2 w-5 h-5" />
                         </Button>
@@ -46,7 +43,7 @@ export function FinalCTA() {
                         href="/showroom"
                         ctaId="final_showroom"
                         tracking={{ source: "home_final_cta" }}
-                        className="inline-flex h-16 w-full items-center justify-center rounded-full border border-white/20 bg-white/5 px-10 text-lg font-semibold text-white shadow-xl backdrop-blur-md transition-all hover:scale-105 hover:bg-white/10 sm:w-auto"
+                        className="inline-flex h-16 w-full items-center justify-center rounded-full border border-white/20 bg-white/5 px-10 text-lg font-semibold text-white shadow-xl transition-all hover:bg-white/10 sm:w-auto"
                     >
                         <MapPin className="mr-2 h-5 w-5" />
                         목동 쇼룸에서 직접 보기

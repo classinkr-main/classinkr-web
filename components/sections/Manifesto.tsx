@@ -4,12 +4,9 @@ import { motion } from "framer-motion"
 
 export function Manifesto() {
     return (
-        <section className="relative py-24 md:py-36 bg-[#111110] overflow-hidden">
-            {/* Green ambient glow */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[#084734]/10 rounded-full blur-[140px] pointer-events-none" />
-
+        <section className="relative py-24 md:py-36 bg-[#111110] overflow-x-clip">
             {/* Full-width — no container constraint */}
-            <div className="relative z-10 px-6 md:px-12 text-center">
+            <div className="relative z-10 px-6 md:px-12 text-center text-white">
 
                 {/* Line 1 */}
                 <motion.div
@@ -19,7 +16,7 @@ export function Manifesto() {
                     transition={{ duration: 0.85, ease: [0.21, 0.47, 0.32, 0.98] }}
                 >
                     <span
-                        className="block font-black text-white leading-[1.05] break-keep"
+                        className="block font-black leading-[1.05] break-keep"
                         style={{ fontSize: 'clamp(3rem, 8.5vw, 8.5rem)', letterSpacing: '-0.05em' }}
                     >
                         학원이 강사의 개인기에
@@ -35,7 +32,7 @@ export function Manifesto() {
                     className="mb-16 md:mb-20"
                 >
                     <span
-                        className="block font-black leading-[1.05] break-keep text-transparent bg-clip-text bg-gradient-to-r from-[#6EE7B7] to-[#D1FAE5]"
+                        className="block font-black leading-[1.05] break-keep"
                         style={{ fontSize: 'clamp(3rem, 8.5vw, 8.5rem)', letterSpacing: '-0.05em' }}
                     >
                         의존해서는 안됩니다.
