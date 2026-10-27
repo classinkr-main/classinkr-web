@@ -95,6 +95,10 @@
   .active mark.hl { background-size: 100% 40%; }
   .step { opacity: 0; transform: translateY(24px); transition: opacity .6s var(--ease), transform .6s var(--ease); }
   .step.on { opacity: 1; transform: none; }
+  .step .reveal > span { transform: translateY(112%); transition: transform 1s var(--ease) .15s; }
+  .step.on .reveal > span { transform: none; }
+  .step mark.hl { background-size: 0% 40%; transition-delay: .9s; }
+  .step.on mark.hl { background-size: 100% 40%; }
   svg .anim { transform-box: fill-box; transform-origin: center; }
   .draw { stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset 1.2s var(--ease); transition-delay: calc(var(--d, 0) * 1s); }
   .active .draw { stroke-dashoffset: 0; }
@@ -440,10 +444,12 @@
     <div class="deco anim" style="--d:1.2"><i class="ring"></i><i class="ring r2"></i><i class="sat" style="--sp:14s"></i><i class="sat rev" style="inset:-130px; --sp:24s; --sc:var(--lime-2)"></i></div>
     <div class="kicker anim">CLASSIN SEMINAR · 2026</div>
     <div class="reveal display" style="--d:.2"><span>AI는 당연해졌습니다.</span></div>
-    <div class="reveal display" style="--d:.55"><span><mark class="hl" style="--d:1.3">학원은요?</mark></span></div>
-    <p class="lead anim" style="--d:1.5; margin-top:40px;">학원을 당장 좋게 만드는 AI 전략 — 강사의 성장과 AI 강의평가</p>
-    <div class="who anim" style="--d:1.8">발표자 이름 · 클래스인 코리아</div>
-    <aside class="notes">인사와 자기소개. "오늘은 AI가 얼마나 대단한지보다, 이미 당연해진 AI를 학원이 어디에 써야 당장 좋아지는지 이야기하겠습니다."</aside>
+    <div class="step" data-step="1">
+      <div class="reveal display"><span><mark class="hl">학원은요?</mark></span></div>
+      <p class="lead" style="margin-top:40px;">학원을 당장 좋게 만드는 AI 전략 — 강사의 성장과 AI 강의평가</p>
+    </div>
+    <div class="who anim" style="--d:.9">문준혁 매니저 · 클래스인 코리아</div>
+    <aside class="notes">시작 파트. 화면에는 "AI는 당연해졌습니다."만 떠 있다. 인사 후 한 번 클릭하면 "학원은요?"와 부제가 나오고, 다음 클릭에서 2번 슬라이드로 넘어간다. "오늘은 AI가 얼마나 대단한지보다, 이미 당연해진 AI를 학원이 어디에 써야 당장 좋아지는지 이야기하겠습니다."</aside>
   </section>
 
   <!-- 02 AI는 공기처럼 -->
