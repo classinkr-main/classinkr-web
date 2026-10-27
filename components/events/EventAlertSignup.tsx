@@ -74,7 +74,7 @@ export function EventAlertSignup({ eventSlug }: EventAlertSignupProps) {
         onChange={(e) => setEmail(e.target.value)}
         placeholder="이메일 주소"
         aria-label="다음 행사 알림 받을 이메일"
-        className="h-11 flex-1 rounded-xl border border-[#e0e0dc] bg-white px-4 text-[14px] shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#084734]"
+        className="h-11 flex-1 rounded-xl border border-[#e0e0dc] bg-white px-4 text-[14px] shadow-sm transition-colors"
       />
       <button
         type="submit"

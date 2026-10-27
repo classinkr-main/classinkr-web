@@ -52,7 +52,7 @@ export default async function SharedContractPage({ params }: PageProps) {
   const isFullySigned = Boolean(contract.partner_signed_at && contract.admin_signed_at)
 
   return (
-    <main className="min-h-screen bg-[#F6F5F4] px-4 py-10 sm:px-6 sm:py-16">
+    <div className="min-h-screen bg-[#F6F5F4] px-4 py-10 sm:px-6 sm:py-16">
       <article className="mx-auto max-w-3xl overflow-hidden rounded-2xl border border-black/8 bg-white shadow-sm">
         <header className="border-b border-black/8 px-6 py-6 sm:px-10 sm:py-8">
           <div className="flex items-center justify-between gap-4">
@@ -113,6 +113,6 @@ export default async function SharedContractPage({ params }: PageProps) {
           이 계약서는 담당자가 발급한 안전한 공유 링크입니다.
         </footer>
       </article>
-    </main>
+    </div>
   )
 }

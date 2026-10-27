@@ -16,7 +16,7 @@ export function LegalArticle({
   children,
 }: LegalArticleProps) {
   return (
-    <main className="min-h-screen bg-[#FAFAF8] pt-24 text-[#111110] md:pt-28">
+    <div className="min-h-screen bg-[#FAFAF8] pt-24 text-[#111110] md:pt-28">
       <section className="border-b border-black/[0.08] bg-white">
         <div className="container mx-auto max-w-4xl px-5 py-12 md:px-6 md:py-16">
           <p className="mb-4 text-sm font-semibold text-[#084734]">{eyebrow}</p>
@@ -31,7 +31,7 @@ export function LegalArticle({
       <article className="container mx-auto max-w-4xl px-5 py-10 md:px-6 md:py-14">
         <div className="space-y-5">{children}</div>
       </article>
-    </main>
+    </div>
   )
 }
 

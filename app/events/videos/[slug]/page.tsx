@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ArrowRight, CalendarDays, CheckCircle2, Clock, LockKeyhole, Sparkles, User } from "lucide-react"
+import { ArrowRight, CalendarDays, CheckCircle2, Clock, LockKeyhole, User } from "lucide-react"
 
 import { JsonLd } from "@/components/seo/JsonLd"
 import { SeminarCard } from "@/components/seminars/SeminarCard"
@@ -83,7 +83,7 @@ export default async function EventVideoPage({ params }: EventVideoPageProps) {
                   : "inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-3 py-1 text-[12px] font-semibold text-[#615D59]"
               }
             >
-              {isMember ? <Sparkles className="h-3.5 w-3.5" /> : <LockKeyhole className="h-3.5 w-3.5" />}
+              {isMember ? null : <LockKeyhole className="h-3.5 w-3.5" />}
               {isMember ? "회원 시청 가능" : "회원 전용 영상"}
             </span>
 
@@ -169,7 +169,7 @@ export default async function EventVideoPage({ params }: EventVideoPageProps) {
               </p>
               <Link
                 href="/contact#contact-form"
-                className="mt-6 inline-flex items-center gap-2 rounded-[6px] bg-white px-5 py-3 text-sm font-semibold text-[#111110] transition-transform hover:-translate-y-0.5"
+                className="mt-6 inline-flex items-center gap-2 rounded-[6px] bg-white px-5 py-3 text-sm font-semibold text-[#111110]"
               >
                 무료 상담 신청하기
                 <ArrowRight className="h-4 w-4" />

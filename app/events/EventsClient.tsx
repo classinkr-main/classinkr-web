@@ -235,7 +235,7 @@ export default function EventsClient({
                     setActiveCategory(cat)
                     setHoveredId(null)
                   }}
-                  className={`min-h-11 shrink-0 rounded-full px-4 py-2 text-[13px] font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8] ${
+                  className={`min-h-11 shrink-0 rounded-full px-4 py-2 text-[13px] font-medium transition-all duration-200 ${
                     isActive
                       ? "bg-[#084734] text-white shadow-[0_6px_16px_rgba(8,71,52,0.14)]"
                       : "text-[#615D59] hover:bg-[#ECFDF5] hover:text-[#084734]"
@@ -254,14 +254,14 @@ export default function EventsClient({
               placeholder="행사명, 지역, 상태 검색"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="min-h-11 w-full rounded-lg border border-black/[0.08] bg-white/60 py-2 pl-9 pr-9 text-[13px] text-[#1a1a1a] transition-colors placeholder:text-[#A39E98] focus:border-[#084734]/45 focus:outline-none focus:ring-2 focus:ring-[#084734]/10 sm:w-64"
+              className="min-h-11 w-full rounded-lg border border-black/[0.08] bg-white/60 py-2 pl-9 pr-9 text-[13px] text-[#1a1a1a] transition-colors placeholder:text-[#A39E98] sm:w-64"
             />
             {searchQuery ? (
               <button
                 type="button"
                 aria-label="행사 검색어 지우기"
                 onClick={() => setSearchQuery("")}
-                className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-[#A39E98] transition-colors hover:bg-[#F6F5F4] hover:text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+                className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-[#A39E98] transition-colors hover:bg-[#F6F5F4] hover:text-[#084734]"
               >
                 <X className="h-3.5 w-3.5" aria-hidden />
               </button>
@@ -395,7 +395,7 @@ export default function EventsClient({
                 <button
                   type="button"
                   onClick={resetFilters}
-                  className="inline-flex h-10 items-center justify-center rounded-[6px] bg-[#084734] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+                  className="inline-flex h-10 items-center justify-center rounded-[6px] bg-[#084734] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#065c41]"
                 >
                   전체 행사 보기
                 </button>
@@ -403,7 +403,7 @@ export default function EventsClient({
               {events.length === 0 ? (
                 <Link
                   href={EVENTS_CONTACT_HREF}
-                  className="inline-flex h-10 items-center justify-center rounded-[6px] border border-black/[0.08] bg-white px-4 text-sm font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+                  className="inline-flex h-10 items-center justify-center rounded-[6px] border border-black/[0.08] bg-white px-4 text-sm font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F4]"
                 >
                   행사 문의하기
                 </Link>

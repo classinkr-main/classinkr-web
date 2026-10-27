@@ -15,7 +15,6 @@ import {
   Heart,
   MapPin,
   Newspaper,
-  Sparkles,
   Telescope,
   Users,
 } from "lucide-react"
@@ -201,7 +200,7 @@ function FadeUp({
 
 export default function AboutPageClient({ offices, press, recentPosts }: Props) {
   return (
-    <main className="bg-[#FAFAF8]">
+    <div className="bg-[#FAFAF8]">
 
       {/* ── Hero ─────────────────────────────────────────────── */}
       <section className="relative overflow-hidden pt-32 pb-28 px-6 bg-[#FAFAF8]">
@@ -238,7 +237,6 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                   "rgba(8,71,52,0.08) 0px 4px 18px, rgba(8,71,52,0.05) 0px 2px 7.8px",
               }}
             >
-              <Sparkles className="w-3 h-3" strokeWidth={2.5} />
               글로벌 EdTech 유니콘 · 160개국
             </motion.span>
           </FadeUp>
@@ -408,7 +406,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                         "rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px, rgba(0,0,0,0.02) 0px 0.8px 2.9px, rgba(0,0,0,0.01) 0px 0.175px 1px",
                     }}
                   >
-                    <span className="pointer-events-none absolute right-6 top-5 select-none text-[84px] font-black leading-none tracking-[-0.08em] text-[#084734]/10 [text-shadow:0_18px_45px_rgba(8,71,52,0.14)] sm:right-7 sm:top-6 sm:text-[96px]">
+                    <span className="pointer-events-none absolute right-6 top-5 select-none text-[84px] font-black leading-none tracking-[-0.08em] text-[#084734]/10 sm:right-7 sm:top-6 sm:text-[96px]">
                       {p.index}
                     </span>
                     <div className="relative z-10 mb-6 flex items-center">
@@ -507,27 +505,24 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                 const isNow = item.year === "현재"
                 return (
                   <FadeUp key={item.year} delay={i * 0.06}>
-                    <div className="group flex gap-5 sm:gap-8">
+                    <div className="flex gap-5 sm:gap-8">
                       <div className="hidden w-10 shrink-0 justify-center pt-7 sm:flex">
                         <span className="relative flex">
                           <span
-                            className={`block h-3.5 w-3.5 rounded-full transition-transform duration-300 group-hover:scale-125 ${
+                            className={`block h-3.5 w-3.5 rounded-full ${
                               isNow
                                 ? "bg-[#084734] ring-4 ring-[#084734]/15"
                                 : "border-2 border-[#084734]/40 bg-white"
                             }`}
                           />
-                          {isNow && (
-                            <span className="absolute inset-0 h-3.5 w-3.5 animate-ping rounded-full bg-[#084734]/40" />
-                          )}
                         </span>
                       </div>
 
                       <div
-                        className={`flex-1 rounded-[18px] border p-5 transition-all duration-300 group-hover:-translate-y-0.5 sm:p-6 ${
+                        className={`flex-1 rounded-[18px] border p-5 sm:p-6 ${
                           isNow
                             ? "border-[#084734]/20 bg-[#ECFDF5]"
-                            : "border-[rgba(0,0,0,0.08)] bg-white group-hover:border-[rgba(8,71,52,0.18)]"
+                            : "border-[rgba(0,0,0,0.08)] bg-white"
                         }`}
                         style={{ boxShadow: "rgba(0,0,0,0.05) 0px 8px 24px, rgba(0,0,0,0.02) 0px 1px 4px" }}
                       >
@@ -728,7 +723,6 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
               <div className="flex flex-col lg:flex-row lg:items-center gap-8 lg:gap-12">
                 <div className="flex-1">
                   <div className="inline-flex items-center gap-1.5 bg-[#ECFDF5] text-[#084734] text-[12px] font-semibold rounded-full px-3 py-1.5 mb-5">
-                    <Sparkles className="w-3 h-3" strokeWidth={2.5} />
                     2026 · 부산
                   </div>
                   <h3 className="text-[26px] sm:text-[30px] font-bold text-[#111110] leading-[1.2] tracking-[-0.6px] mb-3">
@@ -895,9 +889,9 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {press.map((item, i) => {
               const hasUrl = Boolean(item.url)
-              const cardClass = `group h-full bg-white rounded-[14px] border border-[rgba(0,0,0,0.06)] p-6 transition-all ${
+              const cardClass = `h-full bg-white rounded-[14px] border border-[rgba(0,0,0,0.06)] p-6 ${
                 hasUrl
-                  ? "hover:border-[rgba(8,71,52,0.2)] hover:-translate-y-0.5 cursor-pointer block"
+                  ? "transition-colors duration-(--motion-fast) ease-soft hover:border-line-strong cursor-pointer block"
                   : "cursor-default"
               }`
               const cardStyle = {
@@ -921,14 +915,12 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                     {item.headline}
                   </h3>
                   <div
-                    className={`inline-flex items-center gap-1 text-[12px] font-medium transition-colors ${
-                      hasUrl
-                        ? "text-[#084734] group-hover:gap-1.5"
-                        : "text-[#A39E98] group-hover:text-[#084734]"
+                    className={`inline-flex items-center gap-1 text-[12px] font-medium ${
+                      hasUrl ? "text-[#084734]" : "text-[#A39E98]"
                     }`}
                   >
                     기사 보기
-                    <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.2} />
+                    <ArrowUpRight className="arrow-nudge w-3.5 h-3.5" strokeWidth={2.2} />
                   </div>
                 </>
               )
@@ -999,7 +991,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                           alt={post.title}
                           fill
                           sizes="(min-width: 1024px) 380px, (min-width: 640px) 50vw, 100vw"
-                          className="object-cover transition-transform group-hover:scale-[1.03]"
+                          className="object-cover"
                         />
                       ) : (
                         <div className="absolute inset-0 flex items-center justify-center">
@@ -1007,7 +999,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                         </div>
                       )}
                       {post.category && (
-                        <span className="absolute top-3 left-3 text-[11px] font-semibold text-[#084734] bg-white/95 backdrop-blur rounded-full px-2.5 py-1 tracking-wide">
+                        <span className="absolute top-3 left-3 text-[11px] font-semibold text-[#084734] bg-white/95 rounded-full px-2.5 py-1 tracking-wide">
                           {post.category}
                         </span>
                       )}
@@ -1079,6 +1071,6 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
         </div>
       </section>
 
-    </main>
+    </div>
   )
 }

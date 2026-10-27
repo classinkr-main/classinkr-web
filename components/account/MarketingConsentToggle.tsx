@@ -111,7 +111,7 @@ export function MarketingConsentToggle() {
         aria-label="마케팅 정보 수신 동의"
         onClick={handleToggle}
         disabled={disabled}
-        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 disabled:opacity-50 ${
+        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
           checked ? "bg-[#084734]" : "bg-[#D6D3D0]"
         }`}
       >

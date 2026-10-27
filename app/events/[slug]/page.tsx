@@ -300,12 +300,12 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                       <Link
                         key={item.id}
                         href={`/events/${item.slug}`}
-                        className="group rounded-2xl border border-[#e8e8e4] bg-white p-5 transition-all hover:-translate-y-0.5 hover:border-[#084734]/25"
+                        className="rounded-2xl border border-[#e8e8e4] bg-white p-5 transition-colors duration-(--motion-fast) ease-soft hover:border-line-strong"
                       >
                         <span className="inline-flex rounded-full bg-[#f0f7f4] px-2.5 py-1 text-[11px] font-bold text-[#084734]">
                           {item.status}
                         </span>
-                        <p className="mt-3 line-clamp-2 text-[15px] font-bold text-[#111110] transition-colors group-hover:text-[#084734]">
+                        <p className="mt-3 line-clamp-2 text-[15px] font-bold text-[#111110]">
                           {item.title}
                         </p>
                         <p className="mt-2 text-[12px] text-[#1a1a1a]/40">
@@ -336,7 +336,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                   >
                     <button
                       type="button"
-                      className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-[#111110] transition-transform hover:-translate-y-0.5"
+                      className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-[#111110]"
                     >
                       {event.ctaLabel}
                       <ArrowRight className="h-4 w-4" />
@@ -347,7 +347,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                     href={ctaHref}
                     ctaId="event_detail_bottom_cta"
                     tracking={{ event_slug: event.slug, event_id: event.id }}
-                    className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-[#111110] transition-transform hover:-translate-y-0.5"
+                    className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-[#111110]"
                   >
                     {event.ctaLabel}
                     <ArrowRight className="h-4 w-4" />

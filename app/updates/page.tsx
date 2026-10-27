@@ -7,7 +7,7 @@ import {
   getDocsByCategoryFromContent,
   getDocsContent,
 } from "@/lib/docs-content"
-import { ExternalLink, Tag, Calendar, ArrowRight, BookOpen, Sparkles } from "lucide-react"
+import { ExternalLink, Tag, Calendar, ArrowRight, BookOpen } from "lucide-react"
 import { createPublicMetadata } from "@/lib/seo"
 
 export const revalidate = 3600
@@ -137,7 +137,6 @@ export default async function UpdatesPage() {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-[13px] font-bold text-[#084734] shadow-sm transition hover:bg-[#ECFDF5]"
             >
-              <Sparkles className="h-4 w-4 text-[#084734]" />
               비주얼 인터랙티브 가이드 보기
             </a>
             <Link

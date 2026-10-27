@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Image from "next/image"
-import { Download, Smartphone } from "lucide-react"
+import { ArrowRight, Download, Smartphone } from "lucide-react"
 
 import { TrackedLink } from "@/components/TrackedLink"
 import {
@@ -119,7 +119,7 @@ function DownloadButton({
       tracking={{ platform: platform.id, variant: variant.label, version: CLASSIN_VERSION }}
       target="_blank"
       rel="noopener noreferrer"
-      className={`inline-flex items-center justify-center gap-2 whitespace-nowrap font-semibold transition-all duration-200 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 ${sizeClass} ${lookClass}`}
+      className={`inline-flex items-center justify-center gap-2 whitespace-nowrap font-semibold transition-all duration-200 active:scale-[0.98] ${sizeClass} ${lookClass}`}
     >
       {label ?? variant.label}
     </TrackedLink>
@@ -498,16 +498,17 @@ export function DownloadPageClient() {
             <TrackedLink
               href="/contact"
               ctaId="download_help_contact"
-              className="inline-flex items-center justify-center rounded-[6px] bg-[#084734] px-5 py-2.5 text-[14px] font-semibold text-white shadow-sm transition-colors hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2"
+              className="inline-flex items-center justify-center rounded-[6px] bg-[#084734] px-5 py-2.5 text-[14px] font-semibold text-white shadow-sm transition-colors hover:bg-[#065c41]"
             >
               도입 상담 받기
             </TrackedLink>
             <TrackedLink
               href="/faq"
               ctaId="download_help_faq"
-              className="inline-flex items-center justify-center rounded-[6px] px-4 py-2.5 text-[14px] font-semibold text-[#084734] transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2"
+              className="inline-flex items-center justify-center gap-1 rounded-[6px] px-4 py-2.5 text-[14px] font-semibold text-[#084734] transition-colors hover:underline"
             >
-              자주 묻는 질문 →
+              자주 묻는 질문
+              <ArrowRight aria-hidden className="arrow-nudge size-4" />
             </TrackedLink>
           </div>
         </div>

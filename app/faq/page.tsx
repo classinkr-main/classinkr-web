@@ -29,7 +29,7 @@ export default function FAQPage() {
           createFaqJsonLd(getPublicFaqItems()),
         ]}
       />
-      <main className="min-h-screen bg-white pt-24 md:pt-28">
+      <div className="min-h-screen bg-white pt-24 md:pt-28">
         <div className="container mx-auto mb-12 text-center md:mb-16">
           <span className="inline-block py-1 px-3 rounded-full bg-[#ECFDF5] text-[#084734] text-sm font-semibold mb-4">
             FAQ
@@ -53,7 +53,7 @@ export default function FAQPage() {
           </div>
         </div>
         <FAQ />
-      </main>
+      </div>
     </>
   )
 }
