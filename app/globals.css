@@ -555,10 +555,12 @@
 }
 .rich-editor-content strong { font-weight: 700; }
 .rich-editor-content em { font-style: italic; }
+/* 형광펜 ==…== — 공개 페이지(lib/blog-markdown.ts)와 같은 모양 */
 .rich-editor-content mark {
-  background-color: #fef08a;
-  border-radius: 2px;
-  padding: 0 2px;
+  background-color: rgba(209, 250, 229, 0.8);
+  color: #084734;
+  border-radius: 0.25rem;
+  padding: 0 0.25rem;
 }
 .rich-editor-content code {
   font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, monospace;
@@ -650,6 +652,7 @@
   outline: 2px solid rgba(8, 71, 52, 0.5);
   outline-offset: 3px;
 }
+/* 크기 조절 핸들은 이미지를 클릭해 선택했을 때(또는 끄는 중)에만 보인다. 늘 떠 있으면 본문을 가린다. */
 .rich-editor-content [data-resize-handle] {
   z-index: 2;
   width: 14px;
@@ -658,6 +661,25 @@
   border-radius: 999px;
   background: #ffffff;
   box-shadow: 0 2px 8px rgba(8, 71, 52, 0.18);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+.rich-editor-content .ProseMirror-selectednode [data-resize-handle],
+.rich-editor-content [data-resize-state="true"] [data-resize-handle] {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* 선택 전에도 클릭할 수 있는 이미지임을 알린다 */
+.rich-editor-content [data-resize-container] img {
+  cursor: pointer;
+}
+.rich-editor-content [data-resize-container]:not(.ProseMirror-selectednode):hover img {
+  outline: 1px solid rgba(8, 71, 52, 0.25);
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rich-editor-content [data-resize-handle] { transition: none; }
 }
 .rich-editor-content [data-resize-handle*="right"] {
   transform: translate(50%, 50%);
@@ -676,24 +698,10 @@
 .rich-editor-content [data-resize-handle="bottom-left"] {
   transform: translate(-50%, 50%);
 }
-/* {{green:text}} 데코레이션 */
+/* {{green:text}} 브랜드색 마크 — 공개 페이지(lib/blog-markdown.ts)와 같은 색·굵기 */
 .rich-editor-brand-green {
-  color: #059669;
-  font-weight: 600;
-}
-.rich-editor-mark-syntax {
-  background: rgba(209, 250, 229, 0.8);
   color: #084734;
-  border-radius: 0.25rem;
-}
-/* {{green: }} · == 표식 — 커서가 구간 안에 있을 때만 흐리게 보인다 */
-.rich-editor-syntax-marker {
-  color: #a8a29e;
-  font-size: 0.75em;
-  font-weight: 400;
-}
-.rich-editor-syntax-marker.is-hidden {
-  display: none;
+  font-weight: 600;
 }
 /* Placeholder */
 .rich-editor-content p.is-editor-empty:first-child::before {

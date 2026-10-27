@@ -12,9 +12,7 @@ import {
   type DragEvent,
   type KeyboardEvent,
 } from "react"
-import { useEditor, EditorContent, Extension, type Editor } from "@tiptap/react"
-import { Plugin, PluginKey } from "@tiptap/pm/state"
-import { Decoration, DecorationSet } from "@tiptap/pm/view"
+import { useEditor, EditorContent, Mark, type Editor } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
 import Highlight from "@tiptap/extension-highlight"
 import Placeholder from "@tiptap/extension-placeholder"
@@ -41,47 +39,74 @@ import {
 } from "@/lib/admin/public-content-validation"
 import { getAdminToken } from "@/lib/admin-client"
 
-// 공개 렌더러 전용 인라인 문법({{green:…}}, ==…==)을 편집 화면에서 결과처럼 보이게 한다.
-// tiptap-markdown 은 이 문법을 글자 그대로 들고 있으므로, 커서가 구간 밖이면 표식 문자를 숨기고
-// 구간 안에 들어오면 흐리게 드러내 직접 고칠 수 있게 한다. 저장되는 마크다운은 바뀌지 않는다.
-const INLINE_SYNTAX = [
-  { regex: /\{\{green:(.+?)\}\}/g, open: "{{green:".length, close: 2, className: "rich-editor-brand-green" },
-  { regex: /==([^=\n]+)==/g, open: 2, close: 2, className: "rich-editor-mark-syntax" },
-]
+// 공개 렌더러 전용 인라인 문법({{green:…}}, ==…==)을 편집기의 진짜 서식(마크)으로 읽고 쓴다.
+// 예전엔 글자 그대로 들고 표식만 숨겨서, 커서가 들어가면 "{{green:" "}}" 가 드러났고 굵게와 겹치면 숨김이 깨졌다.
+// 저장되는 마크다운은 그대로다 — 마크가 같은 표식으로 직렬화된다(lib/blog-markdown.ts 가 그린다).
+type InlineRuleState = {
+  src: string
+  pos: number
+  posMax: number
+  md: { inline: { tokenize: (state: InlineRuleState) => void } }
+  push: (type: string, tag: string, nesting: number) => unknown
+}
+type MarkdownItLike = {
+  inline: { ruler: { before: (beforeName: string, ruleName: string, rule: (state: InlineRuleState, silent: boolean) => boolean) => void } }
+  renderer: { rules: Record<string, unknown> }
+}
 
-const InlineSyntaxDecoration = Extension.create({
-  name: "inlineSyntaxDecoration",
-  addProseMirrorPlugins() {
-    return [
-      new Plugin({
-        key: new PluginKey("inlineSyntaxDecoration"),
-        props: {
-          decorations(state) {
-            const decorations: Decoration[] = []
-            const { from, to } = state.selection
-            state.doc.descendants((node, pos) => {
-              if (!node.isText || !node.text) return
-              for (const syntax of INLINE_SYNTAX) {
-                syntax.regex.lastIndex = 0
-                let match: RegExpExecArray | null
-                while ((match = syntax.regex.exec(node.text)) !== null) {
-                  const start = pos + match.index
-                  const end = start + match[0].length
-                  const markerClass =
-                    from <= end && to >= start ? "rich-editor-syntax-marker" : "rich-editor-syntax-marker is-hidden"
-                  decorations.push(
-                    Decoration.inline(start, start + syntax.open, { class: markerClass }),
-                    Decoration.inline(start + syntax.open, end - syntax.close, { class: syntax.className }),
-                    Decoration.inline(end - syntax.close, end, { class: markerClass })
-                  )
-                }
-              }
-            })
-            return DecorationSet.create(state.doc, decorations)
+// tiptap-markdown 은 parse 때마다 setup 을 다시 부른다 — 같은 규칙이 쌓이지 않게 한 번만 등록한다.
+const registeredWrapRules = new WeakMap<object, Set<string>>()
+
+/** open…close 를 같은 HTML 로 감싸는 인라인 규칙. 안쪽의 굵게·기울임·링크는 그대로 파싱된다. */
+function registerWrapRule(md: MarkdownItLike, name: string, open: string, close: string, html: [string, string]) {
+  const names = registeredWrapRules.get(md) ?? new Set<string>()
+  if (names.has(name)) return
+  names.add(name)
+  registeredWrapRules.set(md, names)
+
+  md.inline.ruler.before("emphasis", name, (state, silent) => {
+    const start = state.pos
+    if (!state.src.startsWith(open, start)) return false
+    const contentStart = start + open.length
+    // 공개 렌더러와 같은 규칙: 가장 가까운 닫는 표식까지, 비어 있으면 서식이 아니다.
+    const end = state.src.indexOf(close, contentStart)
+    if (end <= contentStart || end + close.length > state.posMax) return false
+    if (!silent) {
+      state.push(`${name}_open`, "", 1)
+      const outerMax = state.posMax
+      state.pos = contentStart
+      state.posMax = end
+      state.md.inline.tokenize(state)
+      state.posMax = outerMax
+      state.push(`${name}_close`, "", -1)
+    }
+    state.pos = end + close.length
+    return true
+  })
+  md.renderer.rules[`${name}_open`] = () => html[0]
+  md.renderer.rules[`${name}_close`] = () => html[1]
+}
+
+// 브랜드색 {{green:…}}. 툴바 '브랜드색'이 굵게처럼 켜고 끈다.
+const BrandGreen = Mark.create({
+  name: "brandGreen",
+  parseHTML() {
+    return [{ tag: "span[data-brand-green]" }]
+  },
+  renderHTML() {
+    return ["span", { "data-brand-green": "", class: "rich-editor-brand-green" }, 0]
+  },
+  addStorage() {
+    return {
+      markdown: {
+        serialize: { open: "{{green:", close: "}}", mixable: true, expelEnclosingWhitespace: true },
+        parse: {
+          setup(md: MarkdownItLike) {
+            registerWrapRule(md, "brand_green", "{{green:", "}}", ['<span data-brand-green="">', "</span>"])
           },
         },
-      }),
-    ]
+      },
+    }
   },
 })
 
@@ -92,7 +117,12 @@ const MarkdownHighlight = Highlight.extend({
     return {
       markdown: {
         serialize: { open: "==", close: "==", mixable: true, expelEnclosingWhitespace: true },
-        parse: {},
+        // 저장된 ==…== 를 다시 형광펜 마크로 읽는다(Highlight 는 <mark> 를 마크로 받는다).
+        parse: {
+          setup(md: MarkdownItLike) {
+            registerWrapRule(md, "classin_mark", "==", "==", ["<mark>", "</mark>"])
+          },
+        },
       },
     }
   },
@@ -649,6 +679,7 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
       extensions: [
         StarterKit.configure({ link: false }),
         MarkdownHighlight.configure({ multicolor: false }),
+        BrandGreen,
         Link.configure({ openOnClick: false }),
         ResizableMarkdownImage.configure({
           allowBase64: false,
@@ -664,7 +695,6 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
         // tiptap-markdown 은 "table" 노드가 있을 때만 표를 마크다운 표로 다시 쓴다.
         TableKit.configure({ table: { resizable: false } }),
         Placeholder.configure({ placeholder }),
-        InlineSyntaxDecoration,
         Markdown.configure({
           html: false,
           // 줄바꿈을 지킨다 — 끄면 인용 상자(여러 줄 > …)가 한 줄로 합쳐져 공개 페이지 줄바꿈이 사라진다.
@@ -741,19 +771,8 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
       toggleBulletList: () => editor?.chain().focus().toggleBulletList().run(),
       toggleOrderedList: () => editor?.chain().focus().toggleOrderedList().run(),
       toggleHighlight: () => editor?.chain().focus().toggleHighlight().run(),
-      wrapBrandColor: () => {
-        if (!editor) return
-        const { from, to } = editor.state.selection
-        const selectedText = editor.state.doc.textBetween(from, to) || "브랜드 텍스트"
-        editor
-          .chain()
-          .focus()
-          .command(({ tr }) => {
-            tr.insertText(`{{green:${selectedText}}}`, from, to)
-            return true
-          })
-          .run()
-      },
+      // 굵게처럼 선택 구간에 켜고 끈다(선택이 없으면 이어서 치는 글자에 적용).
+      wrapBrandColor: () => editor?.chain().focus().toggleMark("brandGreen").run(),
       insertLink: () => {
         if (!editor) return
         const { from, to } = editor.state.selection

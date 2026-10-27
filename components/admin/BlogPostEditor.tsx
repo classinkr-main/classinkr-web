@@ -508,6 +508,14 @@ export default function BlogPostEditor({
 
   const [form, setForm] = useState<BlogPostInput>(initialForm)
   const [tagsInput, setTagsInput] = useState(initialForm.tags.join(", "))
+  // 서버에 마지막으로 저장된 내용. 브라우저 임시 보관(localStorage)과 별개로, 지금 내용이 이것과 다르면
+  // '저장 안 됨'이다 — 헤더 상태와 나가기 경고가 이 값을 본다.
+  const [serverSnapshot, setServerSnapshot] = useState(() =>
+    JSON.stringify({ form: initialForm, tagsInput: initialForm.tags.join(", ") })
+  )
+  // 저장하지 않고 나가려던 앱 안 주소(사이드바·'← 블로그' 등). 값이 있으면 확인 창을 띄운다.
+  const [pendingLeaveHref, setPendingLeaveHref] = useState<string | null>(null)
+  const allowLeaveRef = useRef(false)
   const [draftState, setDraftState] = useState<DraftState>("saved")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadingField, setUploadingField] = useState<"imageUrl" | "heroImageUrl" | null>(null)
@@ -610,6 +618,51 @@ export default function BlogPostEditor({
   ]
   const contentCharacterCount = form.contentMarkdown.trim().length
   const blogStatusLabel = BLOG_STATUS_OPTIONS.find((option) => option.value === form.status)?.label ?? form.status
+  const hasUnsavedChanges = useMemo(
+    () => JSON.stringify({ form, tagsInput }) !== serverSnapshot,
+    [form, tagsInput, serverSnapshot]
+  )
+
+  // 저장하지 않은 변경이 있으면 나가기 전에 묻는다.
+  // - 새로고침·탭 닫기·주소 직접 이동: 브라우저 기본 확인 창(beforeunload)
+  // - 앱 안 링크: Next 가 페이지를 바꿔 beforeunload 가 안 뜨므로, 클릭을 캡처 단계에서 먼저 잡아 확인 창을 띄운다.
+  //   (브라우저 뒤로 가기는 Next 라우터가 막을 방법을 주지 않아 잡지 못한다 — 대신 임시 보관본이 남는다.)
+  useEffect(() => {
+    if (!hasUnsavedChanges) return
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (allowLeaveRef.current) return
+      event.preventDefault()
+      event.returnValue = ""
+    }
+    const onClickCapture = (event: MouseEvent) => {
+      if (allowLeaveRef.current || event.defaultPrevented || event.button !== 0) return
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+      const anchor = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null
+      if (!anchor || anchor.target === "_blank" || anchor.hasAttribute("download")) return
+      // 본문 편집 영역 안의 링크는 이동이 아니라 커서 놓기다.
+      if (anchor.closest('[contenteditable="true"]')) return
+      const url = new URL(anchor.href, window.location.href)
+      if (url.origin !== window.location.origin) return
+      if (url.pathname === window.location.pathname && url.search === window.location.search) return
+      event.preventDefault()
+      event.stopPropagation()
+      setPendingLeaveHref(`${url.pathname}${url.search}${url.hash}`)
+    }
+    window.addEventListener("beforeunload", onBeforeUnload)
+    document.addEventListener("click", onClickCapture, true)
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload)
+      document.removeEventListener("click", onClickCapture, true)
+    }
+  }, [hasUnsavedChanges])
+
+  const leaveWithoutSaving = () => {
+    if (!pendingLeaveHref) return
+    allowLeaveRef.current = true
+    const href = pendingLeaveHref
+    setPendingLeaveHref(null)
+    router.push(href)
+  }
   const blogStatusTone =
     form.status === "published"
       ? "bg-[#ECFDF5] text-[#084734]"
@@ -1012,6 +1065,7 @@ export default function BlogPostEditor({
       undoStackRef.current = []
       redoStackRef.current = []
       localStorage.removeItem(draftStorageKey)
+      setServerSnapshot(JSON.stringify({ form: nextForm, tagsInput: nextForm.tags.join(", ") }))
       setDraftState("saved")
       setLastSavedAt(new Date())
       setNotice(nextStatus === "published" ? "발행까지 완료했습니다." : "저장했습니다.")
@@ -1306,14 +1360,14 @@ export default function BlogPostEditor({
     void handleSubmit("published", { publishNow: true })
   }
 
-  const draftStatusText =
-    draftState === "dirty"
-      ? "수정됨"
-      : draftState === "saving"
-      ? "저장 중…"
-      : lastSavedAt
-      ? `${lastSavedAt.getHours().toString().padStart(2, "0")}:${lastSavedAt.getMinutes().toString().padStart(2, "0")} 임시 저장`
-      : "임시 저장됨"
+  // '임시 저장'(이 브라우저 보관)과 '저장'(서버·사이트 반영)을 헷갈리지 않게, 서버 기준으로 먼저 말한다.
+  // 헤더 폭이 좁아 짧게 쓰고, 임시 보관 시각은 마우스를 올리면 보여준다.
+  const draftStatusText = !hasUnsavedChanges ? (mode === "create" ? "작성 전" : "저장됨") : "저장 안 됨"
+  const draftStatusHint = !hasUnsavedChanges
+    ? "사이트에 저장된 내용과 같습니다."
+    : draftState === "saved" && lastSavedAt
+    ? `저장 버튼을 눌러야 사이트에 반영됩니다. ${lastSavedAt.getHours().toString().padStart(2, "0")}:${lastSavedAt.getMinutes().toString().padStart(2, "0")}에 이 브라우저에 임시 보관했습니다.`
+    : "저장 버튼을 눌러야 사이트에 반영됩니다."
   const showStartPanel =
     mode === "create" && !startPanelDismissed && form.contentMarkdown === EMPTY_DRAFT_MARKDOWN
   const invalid = {
@@ -1328,6 +1382,45 @@ export default function BlogPostEditor({
       className="min-h-screen bg-[#FAFAF8]"
       style={{ ["--editor-header-h" as string]: "64px" }}
     >
+
+      {/* ── 저장하지 않고 나가기 확인 ── */}
+      {pendingLeaveHref && (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setPendingLeaveHref(null)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") setPendingLeaveHref(null)
+          }}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="leave-confirm-title"
+            aria-describedby="leave-confirm-desc"
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-[420px] rounded-2xl border border-[#e8e8e4] bg-white p-6 shadow-2xl"
+          >
+            <h2 id="leave-confirm-title" className="text-[16px] font-semibold text-[#111110]">
+              저장하지 않은 변경사항이 있습니다
+            </h2>
+            <p id="leave-confirm-desc" className="mt-2 text-[14px] leading-6 text-[#615D59]">
+              지금 나가면 수정한 내용이 사이트에 반영되지 않습니다. 작성 중인 내용은 이 브라우저에 임시 보관돼, 이 글을 다시 열면 이어서 쓸 수 있습니다.
+            </p>
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button variant="outline" onClick={leaveWithoutSaving} className="text-[#8F2C2C]">
+                저장하지 않고 나가기
+              </Button>
+              <Button
+                autoFocus
+                onClick={() => setPendingLeaveHref(null)}
+                className="bg-[#084734] text-white hover:bg-[#065c41]"
+              >
+                계속 편집
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Template Modal ── */}
       {showTemplateModal && (
@@ -1921,10 +2014,14 @@ export default function BlogPostEditor({
             <span className={`hidden shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold sm:inline-flex ${blogStatusTone}`}>
               {blogStatusLabel}
             </span>
-            <span className="hidden shrink-0 items-center gap-1.5 text-[12px] sm:inline-flex" role="status">
+            <span
+              className={`hidden shrink-0 items-center gap-1.5 text-[12px] sm:inline-flex ${hasUnsavedChanges ? "font-medium text-[#7A520F]" : ""}`}
+              role="status"
+              title={draftStatusHint}
+            >
               <span
                 aria-hidden="true"
-                className={`h-1.5 w-1.5 rounded-full ${draftState === "saved" ? "bg-[#084734]" : "bg-[#A8741A]"}`}
+                className={`h-1.5 w-1.5 rounded-full ${hasUnsavedChanges ? "bg-[#A8741A]" : "bg-[#084734]"}`}
               />
               {draftStatusText}
             </span>
