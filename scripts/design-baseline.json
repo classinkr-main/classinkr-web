@@ -138,8 +138,9 @@
       "components/showroom/ShowroomBookingForm.tsx": 90,
       "components/showroom/SlotPicker.tsx": 12,
       "components/ui/ChatbotTeaser.tsx": 6,
-      "components/ui/ClassInAIIcon.tsx": 7,
+      "components/ui/ClassInAIIcon.tsx": 2,
       "components/ui/FloatingChatbot.tsx": 125,
+      "components/ui/MobileFloatingCTA.tsx": 3,
       "components/ui/PageHeader.tsx": 3,
       "components/ui/SearchHighlight.tsx": 2,
       "components/ui/card.tsx": 3,
@@ -410,7 +411,7 @@
       "components/showroom/SlotPicker.tsx": 4,
       "components/ui/ChatbotTeaser.tsx": 2,
       "components/ui/FloatingChatbot.tsx": 44,
-      "components/ui/MobileFloatingCTA.tsx": 4,
+      "components/ui/MobileFloatingCTA.tsx": 1,
       "components/ui/button.tsx": 4,
       "components/ui/card.tsx": 2,
       "components/ui/dialog.tsx": 2,
@@ -467,6 +468,7 @@
       "components/seminars/SeminarPlayer.tsx": 1,
       "components/ui/ChatbotTeaser.tsx": 1,
       "components/ui/FloatingChatbot.tsx": 10,
+      "components/ui/MobileFloatingCTA.tsx": 1,
       "components/ui/dialog.tsx": 1
     },
     "noise": {
@@ -701,7 +703,7 @@
       "components/showroom/ShowroomBookingForm.tsx": 1,
       "components/ui/ChatbotTeaser.tsx": 1,
       "components/ui/FloatingChatbot.tsx": 19,
-      "components/ui/MobileFloatingCTA.tsx": 3,
+      "components/ui/MobileFloatingCTA.tsx": 2,
       "components/ui/slider.tsx": 2
     },
     "shadow": {
@@ -1356,7 +1358,7 @@
       "components/seminars/SeminarCard.tsx": 1,
       "components/seminars/SeminarPlayer.tsx": 3,
       "components/ui/FloatingChatbot.tsx": 9,
-      "components/ui/MobileFloatingCTA.tsx": 2,
+      "components/ui/MobileFloatingCTA.tsx": 1,
       "lib/chatbot/motion.ts": 1
     },
     "duration-literal": {
@@ -1455,7 +1457,6 @@
       "components/seminars/SeminarLockedPreview.tsx": 1,
       "components/seminars/SeminarPlayer.tsx": 2,
       "components/ui/FloatingChatbot.tsx": 4,
-      "components/ui/MobileFloatingCTA.tsx": 1,
       "components/ui/accordion.tsx": 1
     },
     "focus-ring": {
@@ -1498,6 +1499,7 @@
       "components/showroom/SlotPicker.tsx": 3,
       "components/ui/ChatbotTeaser.tsx": 6,
       "components/ui/FloatingChatbot.tsx": 29,
+      "components/ui/MobileFloatingCTA.tsx": 3,
       "components/ui/marketing-form.tsx": 3,
       "components/ui/slider.tsx": 5
     },
