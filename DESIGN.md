@@ -251,6 +251,16 @@ REV 매출의 3단 확도(확정/고확도/예정)는 본질 기능이라 서로
 - 본문 16px에서는 letter-spacing normal
 - 뱃지 12px에서만 양수 letter-spacing (가독성)
 
+### 한글 조판 (`:where(.site)`) — `[public] in force`
+정의는 `app/styles/site-base.css` `@layer base` 한 곳이다. 정본: [typography 스펙 §9](docs/active/public-site-design-language-2026-10-26/typography.md).
+- `word-break: keep-all`(body 상속) + `overflow-wrap: break-word` + `font-synthesis: none`. 한글 이탤릭·가짜 굵게 없음.
+- `text-wrap`: `h1`–`h4`는 `balance`, `figcaption`·`.text-article`·`.text-body-l`·`.text-quote`는 `pretty`.
+- `blockquote`: `hanging-punctuation: first`(Safari만).
+- `em`: 정체(기울임 없음) 600, 색은 상속.
+- `mark`: 바탕 없음, 600 + 2px `#084734` 밑줄(offset 0.2em). 파스텔 배경 금지.
+- `::selection`: 바탕 `#D1FAE5`, 글자 `#111110`.
+- 금지: 그라데이션 텍스트(`bg-clip-text`), `drop-shadow` 장식 글자, 글래스 배지(`backdrop-blur` 필).
+
 ---
 
 ## 4. 컴포넌트 스타일 [공통]
@@ -441,6 +451,7 @@ z는 토큰으로만 쌓는다(X09). 지금의 리터럴(`z-40`·`z-50`·`z-[60]
 11. 공개 Radix `*Content`(Dialog·Popover·Select·DropdownMenu·Sheet)에는 `site`를 넣는다.
 12. 화면 수치는 `lib/facts.ts` factId로만 넣는다 `target`.
 13. 표기는 `lib/format.ts`로 한다(§8).
+14. (public) 카드 hover는 경계 hair→strong 160ms와 화살표 2px뿐이다. 들림·확대·그림자·채움·제목 색 변화는 금지한다.
 
 ---
 
