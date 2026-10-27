@@ -6,7 +6,7 @@
     "dev": "next dev --port 3888",
     "prebuild": "npm run check:vercel-crons && npm run check:design-tokens",
     "build": "next build",
-    "postbuild": "npm run check:public-content",
+    "postbuild": "npm run check:public-content && node scripts/check-design-tokens.mjs --budget",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit --incremental false",
