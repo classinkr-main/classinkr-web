@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { usePathname } from "next/navigation"
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion"
-import { MapPin, MessageSquare, X } from "lucide-react"
+import { MapPin, MessageSquare } from "lucide-react"
 import { TrackedLink } from "@/components/TrackedLink"
 
 /**
@@ -32,7 +32,6 @@ export function MobileFloatingCTA() {
     const pathname = usePathname()
     const shouldReduceMotion = useReducedMotion()
     const [visible, setVisible] = useState(false)
-    const [dismissed, setDismissed] = useState(false)
     const visibleRef = useRef(false)
 
     useEffect(() => {
@@ -58,7 +57,7 @@ export function MobileFloatingCTA() {
 
                 if (currentY <= 300) {
                     updateVisible(false)
-                } else if (scrollingUp && !dismissed) {
+                } else if (scrollingUp) {
                     updateVisible(true)
                 } else if (scrollingDown) {
                     updateVisible(false)
@@ -71,7 +70,7 @@ export function MobileFloatingCTA() {
             window.removeEventListener("scroll", handleScroll)
             if (frame) window.cancelAnimationFrame(frame)
         }
-    }, [dismissed])
+    }, [])
 
     if (
         pathname.startsWith("/admin") ||
@@ -91,54 +90,34 @@ export function MobileFloatingCTA() {
     return (
         <div className="md:hidden">
             <AnimatePresence>
-                {visible && !dismissed && (
+                {visible && (
+                    // 챗봇 버튼(오른쪽 12px·하단 1rem·56px)과 겹치지 않게 왼쪽에 글자 폭만큼만 둔다.
+                    // 높이 44px 를 챗봇 버튼 세로 가운데에 맞춘다(하단 1rem + 6px).
                     <motion.div
-                        initial={{ y: 80, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        exit={{ y: 80, opacity: 0 }}
-                        transition={{ type: "spring", stiffness: 320, damping: 28 }}
-                        className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-1/2 z-40 w-[calc(100vw-2rem)] max-w-sm -translate-x-1/2"
+                        initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 12 }}
+                        transition={{ duration: 0.28, ease: "easeOut" }}
+                        className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem+6px)] left-3 z-40 max-w-[calc(100vw-6.5rem)]"
                     >
-                        <div className="relative flex items-center justify-center">
-                            {!shouldReduceMotion ? (
-                                <span className="absolute inset-0 animate-ping rounded-full bg-primary opacity-20" />
-                            ) : null}
-
-                            <motion.div
-                                animate={shouldReduceMotion ? undefined : { y: [0, -4, 0] }}
-                                transition={
-                                    shouldReduceMotion
-                                        ? undefined
-                                        : {
-                                            repeat: Infinity,
-                                            duration: 2.8,
-                                            ease: "easeInOut",
-                                        }
-                                }
-                                className="w-full"
-                            >
-                                <TrackedLink
-                                    href={cta.href}
-                                    ctaId={cta.ctaId}
-                                    className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-bold text-white shadow-[0_8px_24px_rgba(16,185,129,0.35)] transition-all duration-200 hover:bg-primary/90 active:scale-95"
-                                >
-                                    <cta.Icon className="h-4 w-4 shrink-0" />
-                                    {cta.label}
-                                </TrackedLink>
-                            </motion.div>
-
-                            <button
-                                onClick={() => {
-                                    visibleRef.current = false
-                                    setVisible(false)
-                                    setDismissed(true)
-                                }}
-                                className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/20 transition-colors hover:bg-white/30"
-                                aria-label="닫기"
-                            >
-                                <X className="h-4 w-4 text-white" />
-                            </button>
-                        </div>
+                        {/* 은은한 펄스: 알약 테두리에서 바깥으로 옅게 번졌다 사라지는 링, 느린 주기. */}
+                        {!shouldReduceMotion ? (
+                            <motion.span
+                                aria-hidden
+                                className="pointer-events-none absolute inset-0 rounded-full"
+                                initial={{ boxShadow: "0 0 0 0 rgba(8,71,52,0.16)" }}
+                                animate={{ boxShadow: ["0 0 0 0 rgba(8,71,52,0.16)", "0 0 0 10px rgba(8,71,52,0)"] }}
+                                transition={{ duration: 2.4, ease: "easeOut", repeat: Infinity, repeatDelay: 1.8 }}
+                            />
+                        ) : null}
+                        <TrackedLink
+                            href={cta.href}
+                            ctaId={cta.ctaId}
+                            className="relative flex h-11 items-center gap-2 rounded-full border border-[#084734]/15 bg-white/85 px-4 text-sm font-semibold text-[#0e5038] shadow-[0_6px_20px_rgba(43,41,38,0.10)] backdrop-blur-md transition-colors active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+                        >
+                            <cta.Icon className="h-4 w-4 shrink-0" aria-hidden />
+                            <span className="truncate">{cta.label}</span>
+                        </TrackedLink>
                     </motion.div>
                 )}
             </AnimatePresence>
