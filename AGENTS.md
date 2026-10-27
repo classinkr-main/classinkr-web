@@ -135,7 +135,7 @@ npm run build
 
 - 색상: [DESIGN.md](DESIGN.md) 팔레트만 사용
 - 보더: `1px solid rgba(0,0,0,0.08)`
-- 섹션 배경: `#FFFFFF` ↔ `#F6F5F4` ↔ `#ECFDF5`
+- 섹션 배경·레이아웃: [DESIGN.md](DESIGN.md) §2·§5를 따른다(절·토큰 배지 확인)
 - 모바일 우선 반응형 유지
 
 ## 문서 운영 규칙

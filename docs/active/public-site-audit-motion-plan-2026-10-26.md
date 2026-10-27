@@ -251,7 +251,6 @@
 --motion-fast: 160ms;    /* hover·press·색 */
 --motion-base: 320ms;    /* 탭·메뉴·패널 교체 */
 --motion-slow: 700ms;    /* 섹션 리빌(현행 Reveal 값) */
---motion-story: 1200ms;  /* Act 당 1회 서사 모먼트 */
 --motion-rise: 12px;     /* 이동 상한 */
 --motion-stagger: 80ms;  /* 최대 3단 */
 --header-h: 76px;        /* md: 80px — 헤더·히어로·탭·scroll-mt 공용 */
@@ -264,7 +263,7 @@
 ```
 
 - Tailwind 4.1: `ease-soft duration-(--motion-slow)`.
-- TS 미러 `lib/motion.ts`(10줄 이내): `EASE_SOFT`, `DUR`. 기존 `lib/chatbot/motion.ts` 의 같은 값은 여기서 import.
+- `--motion-story`·`--motion-progress`·`--motion-carousel`은 소비처가 0이라 정의하지 않는다.
 - 동작 줄이기 3층: ① CSS 전역 블록 유지 ② framer 를 쓰는 페이지 루트에 `<MotionConfig reducedMotion="user">`(transform 만 끄고 opacity 는 유지). 셸(AppChrome)에는 넣지 않는다 — framer 가 모든 공개 페이지 첫 청크로 끌려온다. ③ JS 모션(카운터·Recharts·자동 전환·`useScroll`)은 `matchMedia` 로 최종 상태를 즉시 렌더.
 
 ### 5-3. 프리미티브 선택
@@ -284,7 +283,7 @@
 | Act | 섹션 | 모먼트 | 메커닉 | 노력 |
 |---|---|---|---|---|
 | 1 선언 | Hero | 기존 진입 유지 + "학원의 시스템으로" 아래 2px 액센트 바가 제목 등장 후 그려짐. 그라데이션 텍스트·ping·hover scale 제거, 영상 화면 밖 정지 + 정지 버튼 | CSS `scaleX 0→1` 700ms, JS 0 | S |
-| 1 | LogoBar | 마키 유지(유일한 상시 앰비언트), 40s 로 감속, hover·focus 정지, 복제 세트 `aria-hidden`, 상하 하드 보더 제거 | CSS | S |
+| 1 | LogoBar | 정적 목록(앞 12곳 + '외 N곳'). 마키·복제 세트 없음, 상하 하드 보더 제거 | — | S |
 | 1~2 | HomeEntitySummary, EraVision | 정지 / Reveal 페이드만. hover 파스텔 채움 → 좌측 2px 바 | 서버 컴포넌트화 | S |
 | 3 공감 | ProblemCost | 카운터 하나만(수치 근거 확보 시). SSR 은 최종값, 50% 보이면 0→목표 1200ms 1회, `tabular-nums`. 글래스·테라코타·ping·shimmer·블롭 제거 | rAF + reduced 시 즉시값 | M |
 | 3 | HomeLeadMagnet | 정지 — 전환 지점은 고요하게 | — | — |
@@ -307,7 +306,7 @@
 2. **SW 다이어트(L, 2,197줄):** 가짜 카운터·파티클·블롭 드리프트·filter blur 애니메이션 제거. `TypographyHookSection`(`sw:720-760`)의 "줄 단위 등장 + 2px 그린 바"는 취향에 맞는 정본 패턴이라 유지하고 Manifesto 에도 쓴다. 26개 동일 아이콘 타일은 대표 4~5개 도구의 마이크로 데모(타이머 링, 랜덤 선택, 퀴즈 막대, 레이저 포인터; 한 번에 하나만 재생)로 대체하고, 쓰지 않던 `LessonToolIcons.tsx` 를 재활용.
 3. **`/pricing` 선택 가이드(M):** 가격 없이 "규모·수업 패턴·하드웨어 유무" 3문항 칩 → 해당 비교 행에 좌측 그린 바, 나머지는 흐리게. CTA 는 `isSoftwareCheckoutEnabled()` 로 분기.
 4. **공용 `ScaleFacts`(S):** 검증된 EEO 수치 3개 + 캡션 상시, SSR 최종값, 진입 1회 카운트업. P0-9 와 SW·HW 수치 불일치를 한 번에 정리.
-5. **셸(각 S):** 헤더 높이 고정 + 배경·보더·그림자 opacity 만 400ms 전환(스크롤 감지는 상단 1px 센티넬 IO), 활성 표시를 파스텔 채움 → 하단 2px 그린 바 `scaleX`(제품 탭은 인디케이터 하나가 `translateX`), 모바일 메뉴 `@starting-style` opacity + 4px 페이드 + 백드롭 + Esc·잠금·`inert`, RouteTransition opacity 전용 200ms + 키를 최상위 세그먼트로, 모바일 CTA bob·ping 제거 후 1회 페이드만, Dialog 에 `dialog-in` 키프레임(opacity + scale .98→1, 220ms) 하나.
+5. **셸(각 S):** 헤더 높이 고정 + 배경·보더·그림자 opacity 만 320ms 전환(스크롤 감지는 상단 1px 센티넬 IO), 활성 표시를 파스텔 채움 → 하단 2px 그린 바 `scaleX`(제품 탭은 인디케이터 하나가 `translateX`), 모바일 메뉴 `@starting-style` opacity + 4px 페이드 + 백드롭 + Esc·잠금·`inert`, RouteTransition opacity 전용 200ms + 키를 최상위 세그먼트로, 모바일 CTA bob·ping 제거 후 1회 페이드만, Dialog 에 `dialog-in` 키프레임(opacity + scale .98→1, 220ms) 하나.
 6. **CTA 마이크로 인터랙션 통일(S):** hover scale 금지. 색 전환 160ms, 화살표 2px 이동, press scale .97(`button.tsx` 에 이미 있음), 포커스 링 `#084734` 2px. CTA 반경 6px 통일(현재 `rounded-2xl`·`rounded-full` 혼재).
 7. **전환 화면(M):** 쇼룸 폼 좌측 진행 레일(01~04, 현재 단계만 그린), 3개 폼 공용 오류 피드백(좌측 2px Danger 바, 흔들기 → 600ms 보더 색 페이드, 첫 오류 필드 포커스), 성공 화면은 접수번호 중심 타이포 + "다음 3단계" 아웃라인 리스트, 쇼룸 날짜 셀에 남은 슬롯 수 1px 틱·막힌 이유 안내.
 8. **콘텐츠(S~M):** 블로그 읽기 진행바를 본문 범위로 + 목차 현재 항목 2px 바, 본문 이미지 `#F0F0EC` 자리표시 + 600~700ms opacity, 목록 hover 를 배경 채움·형제 흐림 대신 2px 바 `scaleY`, 행사 D-day 텍스트 상태 라인(마운트 후 KST 계산), 문서 단계 체크(localStorage, try/catch).
@@ -315,13 +314,13 @@
 
 ### 5-6. 모션 외 디자인 요소
 
-- **타이포 리듬:** 헤딩 3단(Display — Hero·Manifesto 전용 clamp / Section 40·48px 700 / Card 22~26px). 인라인 `letterSpacing` 15곳 이상을 유틸로 교체해 모바일 0 규칙 복구. eyebrow 는 13px/600 `#084734` + 왼쪽 16×2px 바, 공개 화면 pill 은 Hero 배지 1개만.
-- **배경 리듬(하드 보더 없음):** Hero dark → LogoBar warm → Entity white → Era `#FAFAF8` → ProblemCost dark → LeadMagnet white → Manifesto dark → Solution warm → KeyUseCases white → Dashboard dark → ScienceBased white → SatisfyingClass warm → CaseStudies white → GlobalScale `#ECFDF5` → Testimonial warm → Outcomes white → Comparison warm → FinalCTA dark. 다크는 꼭짓점에만. 비토큰 배경(`#F9F8F4`, `#F7F8F5`, `#FDFCF8` 등) 정리.
-- **다이어그램:** 1.5px 선, `#A39E98` 선에 강조 노드만 `#084734`, 채움 없음. 3D·글래스·글로우 금지.
-- **아이콘:** lucide 유지, stroke 1.75, 기본 `#615D59`, 강조만 `#084734`. 그라데이션 아이콘 타일·채움 원 → 타일 없이 또는 whisper 아웃라인.
-- **마케팅 차트:** 강조 시리즈 1개(라이트 `#084734` / 다크 `#6EE7B7`), 나머지 `#A39E98`, 직접 라벨, `tabular-nums`, 목업은 "예시 화면" 필수, 차트 애니메이션은 페이지당 1회.
+- **타이포 리듬:** 헤딩 3단(Display — Hero·Manifesto 전용 clamp / Section 40·48px 700 / Card 22~26px). 인라인 `letterSpacing` 15곳 이상을 유틸로 교체해 모바일 0 규칙 복구. eyebrow 는 13px/600 `#084734` + 왼쪽 16×2px 바. 공개 화면 비상호작용 pill 은 0이다 — Hero 배지는 삭제하고 Kicker 로 대체(V9-A).
+- **배경 리듬(하드 보더 없음):** V4-A 로 확정. 서사 먹은 Manifesto 1곳 + Footer 뿐이고, ProblemCost 는 sheet 위 정성 장부다. 나머지 지면은 교대가 아니라 역할로 배정한다(홈 시퀀스는 [디자인 언어 문서 §6-2](./public-site-design-language-2026-10-26.md)). 비토큰 배경(`#F9F8F4`, `#F7F8F5`, `#FDFCF8` 등) 정리.
+- **다이어그램:** 1.5px 선, `#8F8A84` 선에 강조 노드만 `#084734`, 채움 없음. 3D·글래스·글로우 금지.
+- **아이콘:** lucide 유지, stroke V6-A(1.5px, DPR1 화면 2px), 기본 `#615D59`, 강조만 `#084734`. 그라데이션 아이콘 타일·채움 원 → 타일 없이 또는 whisper 아웃라인.
+- **마케팅 차트:** 강조 시리즈 1개(라이트 `#084734` / 다크 `#6EE7B7`), 나머지 `#8F8A84`, 직접 라벨, `tabular-nums`, 목업은 "예시 화면" 필수, 차트 애니메이션은 페이지당 1회.
 - **사진:** HW 기획서 톤(3200~4000K, 채도 −10%)을 사이트 전체에, radius 16px, 오버레이는 하단 `black/40` 이하 하나.
-- **본문 대비:** 읽는 텍스트는 `#615D59` 이상. `#A39E98` 은 플레이스홀더·캡션·비활성에만.
+- **본문 대비:** 읽는 텍스트는 `#615D59` 이상. `#A39E98` 은 장식·비활성에만(텍스트 금지), 플레이스홀더는 `#78736D`.
 
 ### 5-7. 단계별 계획
 
@@ -337,12 +336,12 @@
 - 새 애니메이션 라이브러리, 스무스 스크롤 하이재킹(iOS 관성 스크롤을 깸).
 - 패럴랙스 남발(스크롤 연동은 Manifesto·BigBackdrop 2곳 상한), 모든 수치 카운트업(홈 1개, EEO 수치는 정적).
 - bounce 스프링, hover scale > 1, 기울임·회전 hover, 3D tilt.
-- 무한 앰비언트(ping, bob, 파티클, 블롭 드리프트, 글로우 펄스). 예외는 정지 가능한 마키와 히어로 영상 둘.
+- 무한 앰비언트(ping, bob, 파티클, 블롭 드리프트, 글로우 펄스). 홈 무한 루프 0(예외 없음).
 - 그라데이션 텍스트, 글래스모피즘, 블러 블롭 장식.
 - `width`·`height`·`padding`·`filter` 애니메이션(opacity·transform, 작은 SVG `stroke-dashoffset` 만).
 - JS 전에 콘텐츠를 숨기는 모션(SSR `opacity:0`).
 - 가짜 라이브 데이터, "예시" 표기 없는 목업 수치.
-- 읽기 시간보다 빠른 자동 전환, 정지 수단 없는 자동 재생.
+- 자동 진행 0, 정지 수단 없는 자동 재생.
 - 한국어 글자·단어 단위 쪼개기 애니메이션(`keep-all` 줄바꿈과 스크린리더를 깸).
 
 ---

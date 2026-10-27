@@ -3,9 +3,13 @@
 Notion의 구조/타이포그래피 철학을 기반으로, Apple의 넉넉한 공백감과
 Classin 브랜드 그린(`#084734`)을 액센트로 오버라이드한 시스템.
 
+> **적용 범위.** 이 문서는 공개 셸(`.site`)과 어드민이 함께 쓴다. 절 제목에 `[public]`·`[admin]`·`[공통]` 배지를 단다. 토큰에는 상태 배지를 단다: `in force`(코드에 있음) · `target`(스펙 확정, 구현 전) · `retired`(새 사용 금지). 공개 셸 기반(레이아웃·레이어·토큰 배선)의 정본은 [system.md](docs/active/public-site-design-language-2026-10-26/system.md)다.
+>
+> 공개 화면의 방향은 「편집 지면 · OS판」이다([디자인 언어 문서](docs/active/public-site-design-language-2026-10-26.md)). 운영자 결정 V1–V9는 2026-10-27에 모두 A로 확정됐다(§9). `target` 토큰은 해당 구현 PR이 머지되면 `in force`로 바꾼다. 컴포넌트·모션 절은 각 구현 PR이 같은 커밋에서 고친다.
+
 ---
 
-## 1. 핵심 철학
+## 1. 핵심 철학 [공통]
 
 - **따뜻한 미니멀리즘**: 차가운 그레이 대신 따뜻한 오프화이트 + 웜 뉴트럴
 - **프리미엄 공백**: Apple처럼 여백이 디자인의 일부. 섹션 간 64–120px
@@ -14,7 +18,9 @@ Classin 브랜드 그린(`#084734`)을 액센트로 오버라이드한 시스템
 
 ---
 
-## 2. 컬러 팔레트
+## 2. 컬러 팔레트 [공통]
+
+공개 화면은 아래 '공개 화면 색 토큰'의 20색을 유틸로 쓴다. 그 위의 팔레트 값은 어드민에서 그대로 유효하다.
 
 ### Primary
 - **Classin Green** (`#084734`): Primary CTA, 링크, 인터랙티브 액센트 — 유일한 포화 컬러
@@ -22,27 +28,93 @@ Classin 브랜드 그린(`#084734`)을 액센트로 오버라이드한 시스템
 - **Page White** (`#FAFAF8`): 페이지 배경 (현재 프로젝트 기존값 유지)
 - **Near Black** (`#111110`): 헤딩, 본문 텍스트 (현재 프로젝트 기존값 유지)
 
-### 그린 서피스 스케일
-- **Green Surface 50** (`#ECFDF5`): 연한 그린 배경, 섹션 교차, 뱃지 배경
-- **Green Surface 100** (`#D1FAE5`): 호버 서피스, 강조 블록 배경
-- **Green Muted** (`#6EE7B7`): 보조 그린 텍스트, 아이콘
+### 그린 서피스 스케일 — `[admin] in force` · `[public] retired`
+- **Green Surface 50** (`#ECFDF5`): 연한 그린 배경, 섹션 교차, 뱃지 배경. 공개 화면에서는 `retired` — 섹션 면·카드·타일·아이콘 원·활성 채움·배지에 쓰지 않는다.
+- **Green Surface 100** (`#D1FAE5`): 호버 서피스, 강조 블록 배경. 공개 화면에서는 `::selection` 바탕(글자 `#111110`, 16.66:1) 하나만 남긴다 `target`.
+- **Green Muted** (`#6EE7B7`): 보조 그린 텍스트, 아이콘. 공개 화면에서는 먹 지면 위 액센트(밑줄·점·포커스·링크)만 쓴다 `target`. 채움에는 쓰지 않는다.
 
 ### 웜 뉴트럴 스케일 (Notion 기반)
-- **Warm White** (`#F6F5F4`): 섹션 교차 배경 — 노란-갈색 언더톤
-- **Warm Dark** (`#31302E`): 다크 서피스 텍스트
+- **Warm White** (`#F6F5F4`): 섹션 교차 배경 — 노란-갈색 언더톤. 공개 화면에서는 sunken 지면(`--surface-sunken`)이다 `target`. '섹션 교차 배경' 용도는 공개 화면 `retired`.
+- **Warm Dark** (`#31302E`): 다크 서피스 텍스트. 공개 화면 본문 글자(`--fg-body`)와 같은 값이다.
 - **Warm Gray 500** (`#615D59`): 보조 텍스트, 설명
-- **Warm Gray 300** (`#A39E98`): 플레이스홀더, 비활성, 캡션
+- **Warm Gray 300** (`#A39E98`): 장식선·비활성 표시 전용. **텍스트 금지**(2.54:1). 플레이스홀더는 `#78736D` `[public] target`. 이전 표기 '플레이스홀더, 비활성, 캡션'은 대비 미달이라 정정했다(2026-10-27).
 - **Pure White** (`#FFFFFF`): 카드 표면, 모달
 - **Skeleton Neutral** (`#F0F0EC`): 로딩 스켈레톤(`animate-pulse`) 전용 배경 — 실사용 다수(어드민 전반)를 공식 토큰으로 편입
 
-### 헤어라인 보더 토큰 (2026-08-18 정리)
+### 공개 화면 색 토큰 [public]
+
+코드: `app/styles/tokens.css`(유일한 선언처). 유틸 이름은 변수 이름과 같다(C02). 이 목록 밖의 색 유틸은 만들지 않는다.
+**상태: 20색 모두 `target`이다.** 값은 P0에서 코드에 들어가고, 화면 적용은 각 구현 PR이 한다. 예외로 `--surface-skeleton`은 같은 값이 이미 쓰이고 있어 `in force`다. 대비는 sheet / paper / sunken 순서다.
+
+**면 6**
+
+| 토큰 | 값 | 유틸 | 쓰는 곳 |
+|---|---|---|---|
+| `--surface-paper` | `#FAFAF8` | `bg-surface-paper` | 기본 바탕. Hero·중간 띠·읽기 면·고정 바 |
+| `--surface-sheet` | `#FFFFFF` | `bg-surface-sheet` | 카드·표·폼·Frame·입력 바탕 |
+| `--surface-sunken` | `#F6F5F4` | `bg-surface-sunken` | 띠·도해·부록·CTA. 연속 배치 금지 |
+| `--surface-ink` | `#111110` | `surface-ink` 클래스만 | 페이지당 서사 1곳 + 푸터. `bg-surface-ink`는 없다 |
+| `--surface-skeleton` | `#F0F0EC` | `bg-surface-skeleton` | 로딩 `in force` |
+| `--surface-scrim` | `rgb(17 17 16 / .48)` | `bg-surface-scrim` | Dialog·메뉴 오버레이(블러 없음) |
+
+**글자 9**
+
+| 토큰 | 값 | 유틸 | 대비 | 쓰는 곳 |
+|---|---|---|---|---|
+| `--fg-ink` | `#111110` | `text-fg-ink` | 18.89 / 18.08 / 17.35 | 제목·강조 |
+| `--fg-body` | `#31302E` | `text-fg-body` | 13.18 / 12.62 / 12.11 | 본문 |
+| `--fg-muted` | `#615D59` | `text-fg-muted` | 6.53 / 6.24 / 5.99 | 보조 글자(13px 이상) |
+| `--fg-placeholder` | `#78736D` | `placeholder:text-fg-placeholder` | 4.70(sheet) | 플레이스홀더. 흰 입력 바탕 위에서만 |
+| `--fg-faint` | `#A39E98` | `text-fg-faint` | 2.66 / 2.54 / 2.44 | 장식 글리프·비활성 표시. **텍스트 금지** |
+| `--fg-accent` | `#084734` | `text-fg-accent`, `bg-fg-accent` | 10.71 / 10.25 / 9.83 | 링크·Kicker·포커스·primary 채움 |
+| `--fg-accent-hover` | `#065C41` | `hover:text-fg-accent-hover`, `hover:bg-fg-accent-hover` | 8.03 / 7.68 / 7.38 | hover |
+| `--fg-danger` | `#B43E3E` | `text-fg-danger` | 5.68 / 5.43 / 5.21 | 오류(공개 화면 오류색 하나) |
+| `--fg-on-accent` | `#FAFAF8` | `text-fg-on-accent` | `#084734` 위 10.25 | 그린 채움 위 글자 |
+
+**선 5**
+
+| 토큰 | 값 | 유틸 | 대비 | 쓰는 곳 |
+|---|---|---|---|---|
+| `--line-hair` | `rgb(17 17 16 / .08)` | `border-line-hair`, `divide-line-hair` | 1.18 | 기본 구분선. 장식이라 정보를 혼자 전달하지 않는다 |
+| `--line-strong` | `rgb(17 17 16 / .16)` | `border-line-strong` | 1.41 | 장식선(표 머리 아래·링크 카드 hover) |
+| `--line-ink` | `#111110` | `border-line-ink` | — | 먹선 1px(Act 머리·표 상단 등 닫힌 목록) |
+| `--line-control` | `#8F8A84` | `border-line-control` | 3.42 / 3.27 / 3.14 | 조작 경계(입력·line 버튼·칩·스위치)·도해 정보선 |
+| `--line-link` | `rgb(8 71 52 / .6)` | `decoration-line-link` | paper 위 3.43 | 링크 밑줄 |
+
+- 고대비(`prefers-contrast: more`)에서는 hair가 `/.32`, strong이 `#8F8A84`로 바뀐다.
+- primary 채움은 `bg-fg-accent text-fg-on-accent hover:bg-fg-accent-hover`다. 먹 위 채움은 0개다(C14).
+
+**먹 지면 재정의** — `.surface-ink` 안에서는 같은 토큰 이름이 밝은 값으로 바뀐다(정의는 tokens.css 한 곳, C01). 그래서 Tailwind 매핑은 `@theme inline`이다.
+
+| 토큰 | 먹 위 값 | 먹 위 대비 |
+|---|---|---|
+| `--surface-sheet` | `#111110`(입력 바탕·autofill 덮개) | — |
+| `--fg-ink` | `#FAFAF8` | 18.08 |
+| `--fg-body` / `--fg-muted` / `--fg-placeholder` | `rgb(250 250 248 / .72)` / `/.56` / `/.56` | 9.61 / 6.14 / 6.14 |
+| `--fg-faint` | `/.40` | 3.70(장식 전용) |
+| `--fg-accent` / `--fg-accent-hover` | `#6EE7B7` | 12.40 |
+| `--fg-danger` | `#E89A94` | 8.53 |
+| `--line-hair` / `--line-strong` / `--line-ink` / `--line-control` | `/.12` / `/.24` / `/.72` / `/.40` | control 3.70 |
+| `--line-link` | `rgb(110 231 183 / .5)` | — |
+
+- 먹 위에서는 `#084734`(1.76:1)와 `#B43E3E`를 쓰지 않는다. 채움 버튼·Frame·표·사진·카드도 두지 않는다.
+- 먹 지면은 `color-scheme: dark`다. 고대비에서는 hair `/.32`, strong `/.40`이다.
+
+**규칙**
+- 토큰은 `app/styles/tokens.css`에만 선언한다. 다른 파일에서 `--surface-*`·`--fg-*`·`--line-*`를 선언하거나 `.surface-ink`를 정의하면 가드가 막는다. `.on-ink`는 없다.
+- CSS 변수를 못 읽는 곳(OG·viewport·global-error)은 손으로 적은 미러 `lib/design-tokens.ts`만 쓴다. 테스트가 두 값을 대조한다.
+- 금지: `bg-paper/sheet/sunken`, `text-(--fg-*)` 임의값, `var()` 폴백, `--color-cta*`·`--color-ink`.
+- 기존 `bg-accent`(shadcn 민트 `#ECFDF5`)와 새 `text-fg-accent`는 다른 유틸이다.
+
+### 헤어라인 보더 토큰 (2026-08-18 정리) — `[admin] in force`
 
 - **기본**: `1px solid rgba(0,0,0,0.08)` — 배경이 비치는 whisper 보더. 새 코드의 기본값.
 - **불투명 등가** (`#E8E8E4`): 같은 명도의 불투명 값. 알파가 누적돼 선이 진해지는 곳(스티키
   헤더·겹침 표면)용이며, 어드민 전반 900여 곳의 실사용을 공식 토큰으로 편입한 것이다.
   두 값은 모두 정본이지만 **같은 화면 안에서 섞어 쓰지 않는다** — 한 화면은 한 값을 고른다.
+- 공개 화면은 위 '선 5'의 `--line-*`를 쓴다. 공개 화면의 `#E8E8E4`는 `retired`다.
 
-### 제3자 채널 식별색 — 어드민 차트 전용 (2026-08-18 등재)
+### 제3자 채널 식별색 — 어드민 차트 전용 (2026-08-18 등재) [admin]
 
 광고 채널 구분(파이 차트·범례·예산표의 채널 점)은 채널의 브랜드 색이 오독을 막는다.
 코드 SSOT는 `lib/types/event-metrics.ts`의 `AD_CHANNEL_COLOR` — 아래 값에 한해
@@ -57,7 +129,7 @@ Classin 브랜드 그린(`#084734`)을 액센트로 오버라이드한 시스템
 | 카카오 | `#FEE500` | 카카오 옐로 — 채널 점·말풍선 미리보기 한정 |
 | YouTube | `#FF0000` | YouTube 레드 |
 
-### 운영 상태 스케일 (Status scale) — 어드민 전용
+### 운영 상태 스케일 (Status scale) — 어드민 전용 [admin]
 
 운영 데이터의 상태(부족/예정/출고/취소 등)는 녹색 단일 액센트만으로 구분되지 않으므로, 어드민 운영 화면(`/admin/hardware` 등)에 한해 아래 신호색을 정식 토큰으로 허용한다. 단 **CTA 액센트는 여전히 Classin Green 하나**이며, 신호색은 상태 표시(뱃지·수치·작은 라벨)에만 쓰고 일반 버튼 채움·주요 액션엔 쓰지 않는다.
 
@@ -72,7 +144,7 @@ Classin 브랜드 그린(`#084734`)을 액센트로 오버라이드한 시스템
 - 한 화면에서 신호색이 경쟁하면 위계가 무너진다 — 행 내 빠른 액션처럼 의미가 약한 곳은 중립(`#31302E`)으로 두고 hover에서만 의도색을 드러낸다.
 - 채움(solid) 버튼의 포화색은 Classin Green(주요)과 Danger(파괴적 확인)만 허용.
 
-### 확도 신호 토큰 (Confidence scale) — 매출 확도 전용
+### 확도 신호 토큰 (Confidence scale) — 매출 확도 전용 [admin]
 
 REV 매출의 3단 확도(확정/고확도/예정)는 본질 기능이라 서로 구분되는 신호색 3개가 필요하다.
 코드 SSOT는 `lib/branch/confidence-tokens.ts`의 `CONFIDENCE_TOKENS` 단일 맵 — 확도 맥락의
@@ -93,7 +165,7 @@ REV 매출의 3단 확도(확정/고확도/예정)는 본질 기능이라 서로
 - 세 색은 항상 3단 체계로 함께 읽힌다 — 한 색만 떼어 단독 강조색으로 차용하지 않는다.
 - 고확도 틴트(`#EFF6FF`/`#BFDBFE`)도 예외 토큰의 일부로, 확도 뱃지·칩 밖에서는 쓰지 않는다.
 
-### Team Identity 색 (BD/MKT/CSM) — 어드민 지사 대시보드 전용
+### Team Identity 색 (BD/MKT/CSM) — 어드민 지사 대시보드 전용 [admin]
 
 지사 대시보드에서 딜·인사이트·KPI를 BD/MKT/CSM 팀별로 색 구분할 때 쓰는 팀 아이덴티티
 색이다. 코드 SSOT는 `lib/branch/team-colors.ts`의 `TEAM_COLORS` 단일 맵 — 소비처는
@@ -113,7 +185,7 @@ REV 매출의 3단 확도(확정/고확도/예정)는 본질 기능이라 서로
 - BD·CSM이 Status 색과 값이 같은 것은 팀 색이 상태 의미를 겸한다는 뜻이 아니다 —
   같은 팔레트에서 고른 결과일 뿐, 두 축은 독립적으로 관리한다.
 
-### 지역 히트맵 램프 (Region heatmap ramp) — BranchRegionHeatmap 전용
+### 지역 히트맵 램프 (Region heatmap ramp) — BranchRegionHeatmap 전용 [admin]
 
 지사 대시보드의 지역별 매출 히트맵(`components/admin/branch/sections/BranchRegionHeatmap.tsx`)은
 연속값(0~1 정규화 지표)을 4단 그라데이션으로 표현해야 해서, 이산 상태/팀 색과는 다른 별도의
@@ -138,18 +210,28 @@ REV 매출의 3단 확도(확정/고확도/예정)는 본질 기능이라 서로
   "정도"를 표현하는 연속값 전용이다.
 
 ### 보더 & 섀도
-- **Whisper Border** (`1px solid rgba(0,0,0,0.08)`): 기본 구분선
-- **Card Shadow**: `rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px, rgba(0,0,0,0.02) 0px 0.8px 2.9px, rgba(0,0,0,0.01) 0px 0.175px 1px`
-- **Deep Shadow**: 5레이어, 최대 opacity 0.05, 52px blur
+- **Whisper Border** (`1px solid rgba(0,0,0,0.08)`): 기본 구분선 `[admin] in force`. 공개 화면은 `--line-hair`.
+- **Card Shadow**: `rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px, rgba(0,0,0,0.02) 0px 0.8px 2.9px, rgba(0,0,0,0.01) 0px 0.175px 1px` — `[admin] in force` · `[public] retired`
+- **Deep Shadow**: 5레이어, 최대 opacity 0.05, 52px blur. 공개 화면에서는 떠 있는 레이어(Dialog·드롭다운·토스트·모바일 메뉴)에만 쓴다 `target`.
+- 공개 화면 지면은 평면이다. 카드·Frame·표·컨트롤·섹션·헤더·하단 플로팅 CTA의 그림자는 0이다(X05) `target`.
 
 ---
 
-## 3. 타이포그래피 (Notion 기반)
+## 3. 타이포그래피 (Notion 기반) [공통]
 
-### 폰트 패밀리
-- `Inter, -apple-system, system-ui, Segoe UI, Helvetica, Arial, sans-serif`
+### 폰트 패밀리 — `in force`
+- **Pretendard Variable**(라틴 글리프는 Inter 기반) + 시스템 폴백. 실제 스택은 `app/styles/tokens.css`의 `--font-sans`다: `"Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif`.
+- 사실 정정(2026-10-27): 이전 표기 `Inter, -apple-system, system-ui, Segoe UI, Helvetica, Arial, sans-serif`는 실제와 달랐다. Inter를 따로 싣지 않는다.
+- `[public] target` 로딩은 자체 호스팅으로 바꾼다(V1-A). 지금은 jsDelivr에서 받는다.
 
-### 계층
+### 공개 화면 글자 토큰 — `[public] target`
+- 15종: `text-poster`·`text-display`·`text-h1`·`text-h2`·`text-h3`·`text-body-l`·`text-body`·`text-article`·`text-ui`·`text-caption`·`text-note`·`text-label`·`text-folio`·`text-numeral`·`text-quote`. 토큰 하나가 크기·행간·자간·굵기를 함께 든다. 값의 정본은 [typography 스펙 §3-1](docs/active/public-site-design-language-2026-10-26/typography.md)이다.
+- `text-display`는 Hero H1, `text-poster`는 Manifesto 전용이다.
+- 모바일(`width < 40rem`)에서는 헤딩·수치 자간이 0이 된다(`--trk-*` 재정의).
+- `cn()`에 넣으려면 `lib/utils.ts`의 tailwind-merge 확장이 필요하다(설정은 그 파일 한 곳).
+- 아래 '계층' 표는 공개 화면에서 `retired`다. 타이포 구현 PR에서 이 절을 교체한다.
+
+### 계층 — `[admin] in force` · `[public] retired`
 
 | 역할 | 크기 | 굵기 | Line Height | Letter Spacing |
 |------|------|------|-------------|----------------|
@@ -171,10 +253,12 @@ REV 매출의 3단 확도(확정/고확도/예정)는 본질 기능이라 서로
 
 ---
 
-## 4. 컴포넌트 스타일
+## 4. 컴포넌트 스타일 [공통]
+
+아래 값은 지금 코드 기준이다. 공개 화면 규격은 각 구현 PR이 이 절을 교체한다(정본: controls·cards_motion·icons·imagery 스펙). 그 전까지 공개 화면에서 바뀌는 항목에는 배지를 단다.
 
 ### 버튼
-**Primary (Green)**
+**Primary (Green)** — `in force`
 - Background: `#084734`
 - Text: `#ffffff`
 - Padding: `8px 20px`
@@ -182,7 +266,7 @@ REV 매출의 3단 확도(확정/고확도/예정)는 본질 기능이라 서로
 - Hover: `#065c41`
 - Active: `scale(0.97)`
 
-**Secondary**
+**Secondary** — `[admin] in force` · 공개 화면은 `line` 변형(투명 + 1px `#8F8A84`) `target`
 - Background: `rgba(0,0,0,0.05)`
 - Text: `#111110`
 - Radius: `6px`
@@ -193,48 +277,117 @@ REV 매출의 3단 확도(확정/고확도/예정)는 본질 기능이라 서로
 - Text: `#084734`
 - Hover: underline
 
-**Pill Badge**
-- 공개/마케팅 화면의 단일 강조에만 사용한다. 밀집된 어드민 목록과 대시보드에서는 아래 단순화 원칙을 우선한다.
+**Pill Badge** — `[admin] in force` · `[public] retired`(V9-A)
+- 공개 화면에서는 쓰지 않는다. 단일 강조는 Kicker, 상태는 점(● ○ –) + 텍스트, 상호작용 필터는 아웃라인 칩으로 한다.
 - Background: `#ECFDF5`
 - Text: `#084734`
 - Radius: `9999px`
 - Padding: `4px 10px`
 - Font: 12px weight 600
 
-### 어드민 라벨 단순화
+### 어드민 라벨 단순화 [admin]
 - 데이터 행과 밀집 대시보드에서 파스텔 채움과 둥근 pill/card 라벨을 기본값으로 쓰지 않는다.
 - 상태와 범주는 텍스트 색, 아이콘, `1–2px` 선 중 한두 가지만 사용해 구분한다.
 - 한 행에 여러 배지를 쌓지 않는다. 정보 순서는 `대상·제목 → 근거·담당·기한 → 상태·보조 행동`을 따른다.
 - 배경 채움은 경고·오류, 주요 CTA, 명시적 선택 상태처럼 면이 꼭 필요한 경우에만 허용한다. 밀집 화면의 선택 상태도 밑줄·선·글자색을 우선한다.
 - 버튼과 입력 등 실제 조작 컨트롤은 클릭 영역과 보더를 유지하되 분류 라벨처럼 보이지 않게 한다.
 
-### 카드
+### 카드 — `[admin] in force` · 공개 화면은 그림자 0·반경 8·12(cards_motion 스펙) `target`
 - Background: `#ffffff`
 - Border: `1px solid rgba(0,0,0,0.08)`
 - Radius: `12px` (표준), `16px` (피처/히어로)
 - Shadow: Card Shadow 참조
 - Hover: 섀도 강도 살짝 증가
 
-### 인풋
+### 인풋 — `[admin] in force` · 공개 화면은 박스형(V8-A, 1px `#8F8A84`, 글자 16px, controls 스펙) `target`
 - Border: `1px solid #E5E5E0`
 - Radius: `6px`
 - Focus: `2px solid #084734` outline
 
 ---
 
-## 5. 레이아웃 원칙
+## 5. 레이아웃 원칙 [공통]
 
-### 간격
+### 5-A. 공개 화면 [public] — `target`
+
+값의 정본은 [system.md §4](docs/active/public-site-design-language-2026-10-26/system.md)다.
+
+**브레이크포인트** — Tailwind 기본값 하나만 쓴다(X02).
+
+| 이름 | 값 | Tailwind | 원시 CSS |
+|---|---|---|---|
+| 모바일 | < 640px | (접두 없음) | `(width < 40rem)` |
+| sm | ≥ 640px | `sm:` | `(width >= 40rem)` |
+| md | ≥ 768px | `md:` | `(width >= 48rem)` |
+| lg | ≥ 1024px | `lg:` | `(width >= 64rem)` |
+| xl | ≥ 1280px | `xl:` | `(width >= 80rem)` |
+
+- 원시 CSS는 범위 문법만 쓴다. `641px`·`767px`·`max-width: 640px`·`width <= 40rem`은 쓰지 않는다.
+
+**거터·컨테이너**
+- 거터: `px-4 sm:px-6 lg:px-12`(16 / 24 / 48). 모바일 측면은 16px, 가로 스크롤은 0.
+- `max-w-page` 1296px: 모든 섹션의 안쪽 컨테이너(거터를 빼면 lg 콘텐츠 1200).
+- `max-w-article` 45rem(720px): 블로그·문서·법무 본문 칼럼.
+- `max-w-measure` 38em: 읽는 문단. 덱 34em · 헤딩 18em · Display 14em · 인용 24em.
+- wide 컨테이너는 없다. 공개 화면에 `.container`(1400px)를 새로 쓰지 않는다.
+
+**간격·섹션 리듬**
+- 새 spacing 토큰은 없다. Tailwind 기본 `--spacing`(0.25rem)의 배수만 쓴다.
+- 세로 리듬 값: 12 · 16 · 20 · 24 · 32 · 40 · 48 · 64 · 80 · 96 · 128px.
+
+| rhythm | 모바일 | ≥48rem | 클래스 | 쓰는 곳 |
+|---|---|---|---|---|
+| `base`(기본) | 64 | 96 | `py-16 md:py-24` | 일반 섹션 |
+| `act` | 80 | 128 | `py-20 md:py-32` | 홈 Act 01–06, 제품 장 머리 |
+| `band` | 40 | 48 | `py-10 md:py-12` | LogoBar, 중간 CTA 띠 |
+| `none` | 0 | 0 | — | Hero 등 |
+
+- 섹션 사이 경계선은 0이다. 카드 그리드 gap은 `gap-4 sm:gap-6`.
+
+**그리드**
+- Hero: ≥64rem에서 12칼럼 7 + 5, `gap-12`. 그 아래는 1열(텍스트 → 도판). 상단 여백은 `calc(var(--header-h) + 48px)`, ≥48rem에서 `+ 80px`.
+- 카드 그리드: 1열 → ≥40rem 2열 → ≥64rem 3열.
+
+**헤더·앵커**
+- `--header-h` 76px, ≥48rem 80px. 스크롤해도 높이는 바뀌지 않는다.
+- ProductTabNav: `sticky top-(--header-h) z-(--z-subnav)`, 높이 44, 모바일만.
+- 앵커: 루트 `scroll-padding-top`이 `header-h + 16px`(서브내비가 있으면 +44)다. Section에 `scroll-mt-*`를 두지 않는다(둘이 합산된다).
+
+### 5-B. 어드민 [admin] — `in force`
+
+#### 간격
 - Base unit: `8px`
 - 섹션 간 수직 간격: `80px–120px` (Apple처럼 넉넉하게)
 - 모바일 섹션 간격: `48px–64px`
 
-### 컨테이너
+#### 컨테이너
 - Max width: `1200px`, 중앙 정렬
 - 히어로: 단일 컬럼, 상단 패딩 `80–120px`
 - 피처: 2–3컬럼 그리드
 
-### 배경 교차 리듬
+### 5-C. 고정 레이어 스택 [public] — `target`
+
+z는 토큰으로만 쌓는다(X09). 지금의 리터럴(`z-40`·`z-50`·`z-[60]`·`z-[120]`)은 P1에서 이 표로 옮긴다.
+
+| z | 토큰 | 레이어 | 모바일(< 48rem) | 데스크톱 |
+|---|---|---|---|---|
+| 30 | `--z-subnav` | ProductTabNav(sticky) | `top: var(--header-h)` | 없음 |
+| 40 | `--z-header` | Header, ReadingProgress | top 0 | top 0 |
+| 42 | `--z-floating` | MobileFloatingCTA(아웃라인) | `left-3`, 하단 safe-area + 16 + 6px | 없음 |
+| 44 | `--z-chatbot` | FloatingChatbot 런처·패널 | `right-3`, 하단 safe-area + 16px | `right-6 bottom-6` |
+| 46 | `--z-consent` | ConsentBanner | `inset-x-3`, 하단 safe-area + 16px | `left-6 bottom-6` |
+| 50 | (공유 기본값) | Radix Dialog·오버레이 | 가운데 | 가운데 |
+| 60 | `--z-skiplink` | 스킵 링크(포커스 시에만) | `left-4 top-4` | 같음 |
+| 9999 | (공유 기본값) | 토스트 | `inset-x-4`, 하단 safe-area + 80px(제안값, 운영자 확인 중) | `right-4`, `top: header-h + 16px` |
+
+- safe-area 공식은 하나다: 하단 고정 레이어는 `bottom: calc(env(safe-area-inset-bottom) + Npx)`를 쓴다. z가 높은 전폭 래퍼는 `pointer-events-none`, 조작 요소만 `pointer-events-auto`.
+- 쿠키 배너가 열려 있으면 MobileFloatingCTA와 챗봇 런처를 숨긴다(언마운트하지 않아 대화는 남는다).
+- 모바일 메뉴가 열리면 `main`·`footer`는 `inert`, 플로팅(42·44)은 `inert` + 숨김이다(`[data-inert-with-menu]`).
+- 챗봇 패널이 열리면 MobileFloatingCTA를 숨긴다(`[data-hide-with-chat]`, Tab 순서에서도 빠진다).
+- Dialog가 열리면 그 아래 전부를 덮는다(쿠키 배너 포함). 쿠키 배너를 Dialog 위로 올리지 않는다.
+
+### 배경 교차 리듬 — `[public] retired`
+공개 화면에서는 새로 쓰지 않는다. surfaces 구현 PR이 이 소절을 지면 배정 규칙(C19: 역할로 배정, 구획은 괘선과 여백)으로 교체한다.
 - 흰 섹션(`#FFFFFF`) ↔ 웜 화이트 섹션(`#F6F5F4`) 교차
 - 가끔 연한 그린 서피스(`#ECFDF5`) 강조 섹션 사용
 - 섹션 간 하드 보더 없음 — 배경색 변화와 간격으로만 분리
@@ -244,28 +397,81 @@ REV 매출의 3단 확도(확정/고확도/예정)는 본질 기능이라 서로
 - `6px`: 버튼
 - `8px`: 작은 카드, 인라인 요소
 - `12px`: 표준 카드
-- `16px`: 히어로 카드, 피처 블록
-- `9999px`: 뱃지, 필 태그
+- `16px`: 히어로 카드, 피처 블록 — `[public] retired`(공개 카드 반경은 8·12)
+- `9999px`: 뱃지, 필 태그 — `[public] retired`(비상호작용 pill 0, V9-A). 공개 화면은 필터 칩·스위치·상태 점만
 
 ---
 
-## 6. 접근성
+## 6. 접근성 [공통]
 
-- 기본 텍스트(`#111110`) on `#FAFAF8`: 대비율 ~17:1 (WCAG AAA)
-- 보조 텍스트(`#615D59`) on white: ~5.5:1 (WCAG AA)
-- Green CTA(`#084734`) on white: ~9.7:1 (WCAG AAA)
+- 기본 텍스트(`#111110`) on `#FAFAF8`: 18.08:1 (WCAG AAA)
+- 보조 텍스트(`#615D59`): 6.53:1(white) / 6.24:1(paper) / 5.99:1(sunken) (WCAG AA)
+- Green CTA(`#084734`) on white: 10.71:1 (WCAG AAA)
+- `#A39E98`은 읽는 글자에 쓰지 않는다(paper 위 2.54:1)
 - 모든 인터랙티브 요소: `2px solid` 포커스 링
+- 사실 정정(2026-10-27): 이전 표기 '~17:1'·'~5.5:1'·'~9.7:1'을 계산값으로 바꿨다(WCAG 2.x 상대 휘도).
+
+### 공개 화면 추가 [public] — `target`
+- **포커스**: 보증 규칙 하나가 그린다. `:where(.site)` 안 `:focus-visible`에 `2px solid var(--fg-accent)`, offset 2px. 먹 지면에서는 자동으로 `#6EE7B7`이다. 공개 화면에 컴포넌트별 `focus:ring`을 새로 쓰지 않는다.
+- **입력 16px**: 보증 규칙 `font-size: max(16px, 1em)`. iOS 확대를 막는다. 공개 Dialog·챗봇 입력·푸터 뉴스레터에도 적용된다.
+- **확대 4상태**: Android 글꼴 최대, iOS Aa 150%, 브라우저 200%, 텍스트 간격 사용자 CSS(1.4.12). 각 상태에서 잘림·겹침·가로 스크롤이 0이어야 한다. 컨트롤은 `height` 대신 `min-height`로 만든다.
+- **스킵 링크·단일 main**: AppChrome 첫 자식으로 '본문 바로가기' 링크(포커스 시에만 보임)를 둔다. `<main id="main">`은 AppChrome 하나뿐이다.
+- **먹 지면**: 글자·포커스는 `.surface-ink` 재정의 값만 쓴다. 먹 위 `#084734`(1.76:1)는 쓰지 않는다.
+- **지원 기준**: iOS Safari 16.4+, 최근 2년 Chrome·Samsung Internet·Whale·Edge, 카카오톡·네이버 인앱. Tailwind 4의 공식 하한과 같다.
+- **점진적 향상**: view-timeline·`text-wrap: pretty`·hanging-punctuation·`@starting-style`·`details name`·`:has`(scroll-padding 전용). 지원하지 않는 브라우저에서는 정적 완성 상태로 보인다.
 
 ---
 
-## 7. AI 에이전트 프롬프트 가이드
+## 7. AI 에이전트 프롬프트 가이드 [공통]
 
 컴포넌트 생성 시 이 룰을 항상 따른다:
 1. 웜 뉴트럴 사용 — 블루-그레이 금지, 노란-갈색 언더톤 그레이 사용
 2. 유일한 포화 컬러 = Classin Green(`#084734`) — 파랑/보라 절대 금지 (예외 둘: 확도 신호 전용 `#1E5DA8`, 제3자 채널 식별색 §2 — 차트·범례 한정)
-3. 헤딩 letter-spacing: 64px → -2.125px, 48px → -1.5px, 26px → -0.625px, 16px → normal
+3. 헤딩 letter-spacing: 64px → -2.125px, 48px → -1.5px, 26px → -0.625px, 16px → normal — `[admin] in force`. 공개 화면은 §3 글자 토큰을 쓴다
 4. 보더는 whisper: `1px solid rgba(0,0,0,0.08)` — 절대 두껍게 하지 않음 (불투명 등가 `#E8E8E4` 허용, §2 헤어라인 보더 토큰 — 한 화면엔 한 값만)
 5. 섀도: 4–5레이어, 개별 opacity 0.01–0.05
-6. 섹션 배경 교차: White ↔ `#F6F5F4` ↔ `#ECFDF5`
-7. 뱃지/필: `9999px` radius, 그린 서피스 배경
+6. 섹션 배경 교차: White ↔ `#F6F5F4` ↔ `#ECFDF5` — `[public] retired`(§5). 구현 PR에서 삭제한다
+7. 뱃지/필: `9999px` radius, 그린 서피스 배경 — `[admin] in force` · `[public] retired`(V9-A). 구현 PR에서 삭제한다
 8. CTA 버튼: 항상 `#084734`, radius `6px`
+
+공개 화면(`.site`) 추가 규칙 [public]:
+
+9. 공개 화면의 색·크기·z·지속시간은 토큰 유틸만 쓴다(가드: `scripts/check-design-tokens.mjs`).
+10. 새 공개 CSS는 `app/styles/*`에만 쓴다. `globals.css`는 금지.
+11. 공개 Radix `*Content`(Dialog·Popover·Select·DropdownMenu·Sheet)에는 `site`를 넣는다.
+12. 화면 수치는 `lib/facts.ts` factId로만 넣는다 `target`.
+13. 표기는 `lib/format.ts`로 한다(§8).
+
+---
+
+## 8. 표기 [공통]
+
+| 종류 | 표기 | 함수 |
+|---|---|---|
+| 수치 | `1,200` | `formatNumber` |
+| 금액(표·가격) | `1,200,000원` | `formatKRW` |
+| 금액(문장·헤드라인) | `1,200만 원` | `formatKRWCompact` |
+| 날짜(바이라인·목록) | `2026.10.26` | `formatDate(d, "meta")` |
+| 날짜(문장) | `10월 26일(월)` | `formatDate(d, "prose")` |
+| 전화 | `02-1234-5678` | `formatPhone` |
+
+- 날짜·시각은 `Asia/Seoul` 기준이다(서버 기본 시간대는 UTC).
+- `lib/format.ts`만 쓴다. `toLocaleString` 직접 호출 금지(가드 경고).
+
+---
+
+## 9. 결정 로그 [public]
+
+운영자 결정을 남긴다. 감사 문서의 결정은 '감사 D#'으로 인용한다(C03). 보드는 시안 캔버스(비공개 artifact)다.
+
+| 결정 | 선택 | 날짜 | 근거 | 보드 스크린샷 경로 |
+|---|---|---|---|---|
+| V1 Pretendard 로딩 | A 자체 호스팅 | 2026-10-27 | 기기 간 글꼴 동일성. iPhone 4G LCP가 나빠지면 B(시스템 우선)로 전환(비용 0) | [시안 캔버스](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
+| V2 인용 세리프 | A 세리프 없음(Pretendard 500) | 2026-10-27 | 추가 0바이트 | [시안 캔버스](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
+| V3 홈 Hero | A 지면 표지(paper, 7/5, 실제 화면 캡처, 영상 없음) | 2026-10-27 | LCP·가독성·모바일 첫 화면 CTA. 도판 출처 확인 전에는 현 도판 유지 | [시안 캔버스](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
+| V4 배경 리듬·공감 Act | A 서사 먹 Manifesto 1곳 + Footer, ProblemCost 정성 장부 | 2026-10-27 | 다크가 하나여야 전환점이 선다 | [시안 캔버스](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
+| V5 FinalCTA | A sunken 띠 + 이중 괘선 + primary 52 + 텍스트 링크 | 2026-10-27 | 먹 위 채움 버튼 0으로 정리 | [시안 캔버스](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
+| V6 아이콘 획 | A 1.5px(DPR1 화면 2px) | 2026-10-27 | Pretendard 한글 획 굵기와 맞춘다. 16px 인라인이 흐리면 B(1.75px) | [시안 캔버스](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
+| V7 카드·배경 애니메이션 | A 항상 정지(링크 카드 hover는 경계 + 화살표 2px) | 2026-10-27 | 테두리 빛은 'AI 분석 중' 클리셰 | [시안 캔버스](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
+| V8 입력 필드 | A 박스형(sheet + 1px `#8F8A84` + r6, 높이 44/48) | 2026-10-27 | '여기에 쓰는 칸'이 가장 분명하다 | [시안 캔버스](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
+| V9 Hero 배지 | A 삭제, Kicker로 대체 | 2026-10-27 | 위계 장치가 하나로 준다. 비상호작용 pill 0 | [시안 캔버스](https://claude.ai/artifact/QShWLdYRgZCZTy957gHtyx) |
