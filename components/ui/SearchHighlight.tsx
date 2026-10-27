@@ -56,7 +56,7 @@ export function SearchHighlight({ text, query, className }: SearchHighlightProps
         return isMatch ? (
           <mark
             key={index}
-            className="bg-[#ECFDF5] text-[#084734] px-0.5 rounded-[2px] font-semibold"
+            className="bg-[#ECFDF5] text-[#084734] px-0.5 rounded-[2px] font-semibold no-underline"
           >
             {part}
           </mark>

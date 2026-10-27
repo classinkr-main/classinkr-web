@@ -54,13 +54,6 @@ interface DocsHomePageProps {
   searchParams?: Promise<{ q?: string }>
 }
 
-const FOCUS_RING =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
-
-/** section-warm(#F6F5F4) 위에서는 ring offset 색을 밴드 배경에 맞춘다. */
-const FOCUS_RING_WARM =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F6F5F4]"
-
 const SECTION_EYEBROW = "text-[12px] font-semibold uppercase tracking-[0.14em] text-[#615D59]"
 
 /** 블록을 카드가 아니라 얇은 구분선으로 나눈다 — 채움 없이 위계를 만드는 방식. */
@@ -131,7 +124,7 @@ function GuideArticleRow({
     <li>
       <Link
         href={article.href}
-        className={`group flex items-start gap-4 border-b border-black/[0.06] py-6 transition-colors ${FOCUS_RING}`}
+        className="group flex items-start gap-4 border-b border-black/[0.06] py-6 transition-colors"
       >
         {index ? (
           <span className="w-6 shrink-0 pt-1 text-[13px] font-semibold tabular-nums text-[#A39E98]">
@@ -200,7 +193,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
           id="docs-search"
           action="/docs"
           method="get"
-          className="hero-soft-enter hero-soft-enter-actions mt-8 flex max-w-2xl items-center gap-3 border-b border-black/[0.08] pb-4 transition-colors focus-within:border-[#084734]/40"
+          className="hero-soft-enter hero-soft-enter-actions mt-8 flex max-w-2xl items-center gap-3 border-b border-black/[0.08] pb-4 transition-colors focus-within:border-[#084734]/40 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-fg-accent"
         >
           <Search className="h-4 w-4 shrink-0 text-[#A39E98]" aria-hidden />
           <input
@@ -208,12 +201,13 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
             defaultValue={q ?? ""}
             aria-label="가이드 전체 검색"
             placeholder="예: 학생 추가, 비밀번호 변경"
+            data-focus-ring="parent"
             className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#A39E98]"
           />
           {/* 면은 없애되 히트 영역은 남긴다 — 여백이 없으면 글자 높이(약 20px)가 곧 터치 영역이 된다. */}
           <button
             type="submit"
-            className={`-mr-2 shrink-0 rounded-[6px] px-2 py-2.5 text-sm font-semibold text-[#084734] ${FOCUS_RING}`}
+            className="-mr-2 shrink-0 rounded-[6px] px-2 py-2.5 text-sm font-semibold text-[#084734]"
           >
             검색
           </button>
@@ -225,7 +219,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
             <Link
               key={chip}
               href={`/docs?q=${encodeURIComponent(chip)}`}
-              className={`text-[13px] font-medium text-[#615D59] underline-offset-4 transition-colors hover:text-[#084734] hover:underline ${FOCUS_RING}`}
+              className="text-[13px] font-medium text-[#615D59] underline-offset-4 transition-colors hover:text-[#084734] hover:underline"
             >
               {chip}
             </Link>
@@ -239,7 +233,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
               <Link
                 key={link.href}
                 href={link.href}
-                className={`text-[13px] font-medium text-[#615D59] underline-offset-4 transition-colors hover:text-[#084734] hover:underline ${FOCUS_RING}`}
+                className="text-[13px] font-medium text-[#615D59] underline-offset-4 transition-colors hover:text-[#084734] hover:underline"
               >
                 {link.label}
               </Link>
@@ -286,7 +280,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
                 <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3">
                   <DocsAskChatbotButton
                     prefill={q}
-                    className={`inline-flex items-center gap-1 text-[14px] font-semibold text-[#084734] ${FOCUS_RING}`}
+                    className="inline-flex items-center gap-1 text-[14px] font-semibold text-[#084734]"
                   >
                     챗봇에게 물어보기
                     <ArrowRight className="h-3.5 w-3.5" aria-hidden />
@@ -294,7 +288,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
                   <TrackedLink
                     href="/contact"
                     ctaId="docs_support_contact"
-                    className={`inline-flex items-center gap-1 text-[14px] font-semibold text-[#084734] ${FOCUS_RING}`}
+                    className="inline-flex items-center gap-1 text-[14px] font-semibold text-[#084734]"
                   >
                     도입·운영 상담
                     <ArrowRight className="h-3.5 w-3.5" aria-hidden />
@@ -319,7 +313,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
                 <p className="mt-3.5 text-[12px] font-medium text-[#615D59]">{card.kicker}</p>
                 <Link
                   href={card.href}
-                  className={`mt-1 block break-keep text-[16px] font-bold text-[#111110] transition-colors hover:text-[#084734] ${FOCUS_RING}`}
+                  className="mt-1 block break-keep text-[16px] font-bold text-[#111110] transition-colors hover:text-[#084734]"
                 >
                   {card.title}
                 </Link>
@@ -330,7 +324,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
                       <Link
                         key={link.href}
                         href={link.href}
-                        className={`block truncate text-[14px] text-[#31302E] transition-colors hover:text-[#084734] ${FOCUS_RING}`}
+                        className="block truncate text-[14px] text-[#31302E] transition-colors hover:text-[#084734]"
                       >
                         {link.title}
                       </Link>
@@ -339,7 +333,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
                 )}
                 <Link
                   href={card.href}
-                  className={`group mt-4 inline-flex items-center gap-1 text-[14px] font-semibold text-[#084734] ${FOCUS_RING}`}
+                  className="group mt-4 inline-flex items-center gap-1 text-[14px] font-semibold text-[#084734]"
                 >
                   전체 보기
                   <ArrowRight
@@ -364,7 +358,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
                 <Link
                   key={tile.categoryId}
                   href={tile.href}
-                  className={`group flex items-center gap-4 py-5 ${FOCUS_RING}`}
+                  className="group flex items-center gap-4 py-5"
                 >
                   <TileIcon className="h-5 w-5 shrink-0 text-[#084734]" aria-hidden />
                   <span className="min-w-0 flex-1">
@@ -439,7 +433,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
                 <TrackedLink
                   href="/download"
                   ctaId="docs_install_download"
-                  className={`inline-flex items-center gap-2 rounded-[6px] bg-[#084734] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#065c41] active:scale-[0.98] ${FOCUS_RING_WARM}`}
+                  className="inline-flex items-center gap-2 rounded-[6px] bg-[#084734] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#065c41] active:scale-[0.98]"
                 >
                   <Download className="h-4 w-4" aria-hidden />
                   Classin 다운로드
@@ -457,7 +451,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
                     <Link
                       key={link.href}
                       href={link.href}
-                      className={`group flex items-center justify-between gap-3 py-3 text-[14px] text-[#31302E] transition-colors hover:text-[#084734] ${FOCUS_RING_WARM}`}
+                      className="group flex items-center justify-between gap-3 py-3 text-[14px] text-[#31302E] transition-colors hover:text-[#084734]"
                     >
                       <span className="truncate">{link.title}</span>
                       <ArrowRight
@@ -483,7 +477,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
               막힌 상황을 적으면 가이드 내용을 바탕으로 답합니다.
             </p>
             <DocsAskChatbotButton
-              className={`mt-4 inline-flex items-center gap-1 text-[14px] font-semibold text-[#084734] ${FOCUS_RING}`}
+              className="mt-4 inline-flex items-center gap-1 text-[14px] font-semibold text-[#084734]"
             >
               바로 물어보기
               <ArrowRight className="h-3.5 w-3.5" aria-hidden />
@@ -499,7 +493,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
             <TrackedLink
               href="/faq"
               ctaId="docs_support_faq"
-              className={`mt-4 inline-flex items-center gap-1 text-[14px] font-semibold text-[#084734] ${FOCUS_RING}`}
+              className="mt-4 inline-flex items-center gap-1 text-[14px] font-semibold text-[#084734]"
             >
               FAQ 보기
               <ArrowRight className="h-3.5 w-3.5" aria-hidden />
@@ -515,7 +509,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
             <TrackedLink
               href="/contact"
               ctaId="docs_support_contact"
-              className={`mt-4 inline-flex items-center gap-1 text-[14px] font-semibold text-[#084734] ${FOCUS_RING}`}
+              className="mt-4 inline-flex items-center gap-1 text-[14px] font-semibold text-[#084734]"
             >
               상담 남기기
               <ArrowRight className="h-3.5 w-3.5" aria-hidden />

@@ -132,7 +132,7 @@ export function DocsArticle({
                     <section
                         key={section.id}
                         id={section.id}
-                        className="scroll-mt-28 border-b border-black/[0.08] pb-8 last:border-b-0"
+                        className="border-b border-black/[0.08] pb-8 last:border-b-0"
                     >
                         {section.eyebrow ? (
                             <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#084734]">

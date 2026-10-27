@@ -22,7 +22,7 @@ export function DocsArticleCard({
         <Link
             href={href}
             className={cn(
-                "group block origin-center border-b border-black/[0.08] py-5 transition-all duration-150 last:border-b-0 hover:border-[#084734]/25 active:scale-[0.98] active:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]",
+                "group block border-b border-black/[0.08] py-5 last:border-b-0 transition-colors duration-(--motion-fast) ease-soft hover:border-line-strong active:border-line-strong active:duration-0",
                 className
             )}
         >
@@ -38,7 +38,7 @@ export function DocsArticleCard({
                         ) : null}
                         {updatedAt ? <span>업데이트 {updatedAt}</span> : null}
                     </div>
-                    <h3 className="mt-2 break-words text-[16px] font-semibold leading-snug tracking-card text-[#111110] transition-colors group-hover:text-[#084734]">
+                    <h3 className="mt-2 break-words text-[16px] font-semibold leading-snug tracking-card text-[#111110]">
                         {title}
                     </h3>
                     <p className="mt-1.5 break-words text-[15px] leading-[26px] text-[#4F4C49]">
@@ -47,7 +47,7 @@ export function DocsArticleCard({
                 </div>
                 <ArrowRight
                     aria-hidden
-                    className="mt-1 h-4 w-4 shrink-0 text-[#A39E98] transition-transform duration-200 group-hover:translate-x-1 group-hover:text-[#084734]"
+                    className="arrow-nudge mt-1 h-4 w-4 shrink-0 text-[#A39E98]"
                 />
             </div>
 

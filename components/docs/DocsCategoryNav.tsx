@@ -38,7 +38,7 @@ export function DocsCategoryNav({ items, className }: DocsCategoryNavProps) {
                   : `${item.label}, ${item.meta}`
               }
               className={cn(
-                "group flex min-w-[132px] flex-col border-b-2 px-0 pb-3 pt-1 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8] md:min-w-0 md:flex-1",
+                "group flex min-w-[132px] flex-col border-b-2 px-0 pb-3 pt-1 text-left transition-colors duration-150 md:min-w-0 md:flex-1",
                 item.isActive
                   ? "border-[#084734] text-[#084734]"
                   : "border-transparent text-[#615D59] hover:border-[#084734]/30 hover:text-[#111110]"

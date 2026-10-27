@@ -361,7 +361,7 @@ export function renderMarkdownToHtml(markdown: string) {
       const { level, text } = headingMatch
       const id = uniqueSlug(text)
       html.push(
-        `<h${level} id="${id}" class="${level === 2 ? "scroll-mt-32 mt-14 text-3xl font-bold tracking-[-0.03em] text-[#111110]" : "scroll-mt-32 mt-10 text-2xl font-semibold tracking-[-0.02em] text-[#111110]"}">${renderInline(text)}</h${level}>`
+        `<h${level} id="${id}" class="${level === 2 ? "mt-14 text-3xl font-bold tracking-[-0.03em] text-[#111110]" : "mt-10 text-2xl font-semibold tracking-[-0.02em] text-[#111110]"}">${renderInline(text)}</h${level}>`
       )
       index += 1
       continue

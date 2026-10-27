@@ -37,7 +37,7 @@ export function DocsSidebar({ groups, title = "가이드", className }: DocsSide
                                     key={link.href}
                                     href={link.href}
                                     className={cn(
-                                        "block origin-left break-words rounded-lg px-3 py-2 text-sm leading-6 transition-all duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]",
+                                        "block origin-left break-words rounded-lg px-3 py-2 text-sm leading-6 transition-all duration-150 active:scale-[0.98]",
                                         link.isActive
                                             ? "bg-[#F6F5F4] font-semibold text-[#111110]"
                                             : "text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#111110]"
@@ -79,7 +79,7 @@ export function DocsTableOfContents({
                     <a
                         key={item.id}
                         href={`#${item.id}`}
-                        className="block origin-left break-words border-l border-transparent py-1.5 pl-3 text-sm leading-5 text-[#615D59] transition-all duration-150 hover:border-[#084734]/25 hover:text-[#111110] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+                        className="block origin-left break-words border-l border-transparent py-1.5 pl-3 text-sm leading-5 text-[#615D59] transition-all duration-150 hover:border-[#084734]/25 hover:text-[#111110] active:scale-[0.98]"
                     >
                         {item.title}
                     </a>
@@ -140,7 +140,7 @@ export function DocsSidebarLayout({
                         </div>
                     </>
                 ) : null}
-                <main className="min-w-0">{children}</main>
+                <div className="min-w-0">{children}</div>
                 {toc ? (
                     <div className="hidden xl:sticky xl:top-24 xl:z-10 xl:block xl:self-start">
                         {toc}

@@ -126,7 +126,7 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                                     key={cat}
                                     aria-pressed={isActive}
                                     onClick={() => selectCategory(cat)}
-                                    className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 border-b-2 text-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8] ${
+                                    className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 border-b-2 text-sm font-medium transition-colors duration-200 ${
                                         isActive
                                             ? "border-[#084734] text-[#111110]"
                                             : "border-transparent text-[#615D59] hover:text-[#111110]"
@@ -152,7 +152,7 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                                 setSearchQuery(e.target.value)
                                 setLimit(PAGE_SIZE)
                             }}
-                            className="min-h-11 w-full rounded-lg border border-black/[0.08] bg-white/60 py-2 pl-9 pr-12 text-sm text-[#1a1a1a] transition-colors placeholder:text-[#615D59] focus:border-[#084734]/45 focus:outline-none focus:ring-2 focus:ring-[#084734]/10"
+                            className="min-h-11 w-full rounded-lg border border-black/[0.08] bg-white/60 py-2 pl-9 pr-12 text-sm text-[#1a1a1a] transition-colors placeholder:text-[#615D59]"
                         />
                         {searchQuery ? (
                             <button
@@ -162,7 +162,7 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                                     setSearchQuery("")
                                     setLimit(PAGE_SIZE)
                                 }}
-                                className="absolute right-0.5 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-[#615D59] transition-colors hover:bg-[#F6F5F4] hover:text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+                                className="absolute right-0.5 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-[#615D59] transition-colors hover:bg-[#F6F5F4] hover:text-[#084734]"
                             >
                                 <X className="h-4 w-4" aria-hidden />
                             </button>
@@ -178,7 +178,7 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                         <button
                             type="button"
                             onClick={resetFilters}
-                            className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-[#084734] transition-colors hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+                            className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-[#084734] transition-colors hover:bg-[#F6F5F4]"
                         >
                             <RotateCcw className="h-3 w-3" aria-hidden />
                             필터 초기화
@@ -198,7 +198,7 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                     >
                         <Link
                             href={`/blog/${featuredPost.slug}`}
-                            className="group grid gap-6 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-4 focus-visible:ring-offset-[#FAFAF8] md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] md:items-center md:gap-12"
+                            className="group grid gap-6 rounded-2xl md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] md:items-center md:gap-12"
                         >
                             <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-[#F0F0EC] ring-1 ring-black/[0.06]">
                                 <BlogThumb
@@ -209,7 +209,7 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                                     priority
                                     sizes="(min-width: 1100px) 580px, (min-width: 768px) 53vw, calc(100vw - 32px)"
                                     // 대표 글은 크게 보이는 만큼 글자 카드 썸네일을 자르지 않고 액자에 통째로 담는다.
-                                    className="object-contain transition-transform duration-700 ease-out group-hover:scale-[1.02] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+                                    className="object-contain"
                                     fallbackIndex={featuredPost.id}
                                 />
                             </div>
@@ -271,7 +271,7 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                         <button
                             type="button"
                             onClick={() => setLimit((current) => current + PAGE_SIZE)}
-                            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-black/[0.12] px-6 text-sm font-semibold text-[#111110] transition-colors hover:border-[#084734]/40 hover:text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+                            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-black/[0.12] px-6 text-sm font-semibold text-[#111110] transition-colors hover:border-[#084734]/40 hover:text-[#084734]"
                         >
                             더 보기
                             <span className="text-xs font-medium tabular-nums text-[#A39E98]">
@@ -309,7 +309,7 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                                 <button
                                     type="button"
                                     onClick={resetFilters}
-                                    className="mt-5 inline-flex h-10 items-center justify-center rounded-[6px] bg-[#084734] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+                                    className="mt-5 inline-flex h-10 items-center justify-center rounded-[6px] bg-[#084734] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#065c41]"
                                 >
                                     전체 글 보기
                                 </button>
@@ -327,9 +327,8 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                     viewport={{ once: true, margin: "-60px" }}
                     transition={{ duration: 0.5 }}
                 >
-                    <div className="relative overflow-hidden rounded-2xl bg-[#111110] p-6 sm:p-10 md:p-14">
-                        <div className="pointer-events-none absolute right-0 top-0 h-72 w-72 rounded-full bg-[#6EE7B7]/[0.08] blur-[100px]" />
-
+                    {/* 먹 표지(H02): 포커스 outline 을 민트로 */}
+                    <div className="surface-ink relative overflow-hidden rounded-2xl p-6 sm:p-10 md:p-14">
                         <div className="relative z-10 max-w-xl">
                             <p className="mb-5 text-xs font-medium uppercase tracking-wide text-white/60">
                                 Newsletter
@@ -348,7 +347,7 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                             {/* RSS 피드는 이미 있는데 그동안 페이지에 입구가 없었다. */}
                             <a
                                 href="/blog/rss.xml"
-                                className="mt-6 inline-flex items-center gap-1.5 text-xs font-medium text-white/60 underline-offset-4 transition-colors hover:text-[#6EE7B7] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6EE7B7] focus-visible:ring-offset-2 focus-visible:ring-offset-[#111110]"
+                                className="mt-6 inline-flex items-center gap-1.5 text-xs font-medium text-white/60 underline-offset-4 transition-colors hover:text-[#6EE7B7] hover:underline"
                             >
                                 <Rss className="h-3.5 w-3.5" aria-hidden />
                                 RSS로 구독하기

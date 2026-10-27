@@ -235,7 +235,7 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="이메일을 입력해주세요"
                   required
-                  className="h-11 rounded-[6px] border-black/[0.08] pl-10 focus-visible:border-[#084734]/50 focus-visible:ring-[#084734]/10"
+                  className="h-11 rounded-[6px] border-black/[0.08] pl-10"
                 />
               </div>
 

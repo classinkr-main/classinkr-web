@@ -30,14 +30,14 @@ export default function BlogError({
           <button
             type="button"
             onClick={reset}
-            className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-[#084734] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FEF8F5]"
+            className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-[#084734] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-[#065c41]"
           >
             <RefreshCw className="h-3.5 w-3.5" aria-hidden />
             다시 시도
           </button>
           <Link
             href="/blog"
-            className="inline-flex h-10 items-center rounded-lg border border-black/10 bg-white px-4 text-[13px] font-semibold text-[#3F3B38] transition-colors hover:border-black/20 hover:text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FEF8F5]"
+            className="inline-flex h-10 items-center rounded-lg border border-black/10 bg-white px-4 text-[13px] font-semibold text-[#3F3B38] transition-colors hover:border-black/20 hover:text-[#084734]"
           >
             블로그 목록
           </Link>

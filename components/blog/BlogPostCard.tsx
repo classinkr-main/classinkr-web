@@ -23,7 +23,7 @@ export function BlogPostCard({ post, sizes }: BlogPostCardProps) {
   return (
     <Link
       href={`/blog/${post.slug}`}
-      className="group block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-4 focus-visible:ring-offset-[#FAFAF8]"
+      className="group block rounded-xl"
     >
       <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-[#F0F0EC] ring-1 ring-black/[0.06]">
         <BlogThumb
@@ -31,7 +31,7 @@ export function BlogPostCard({ post, sizes }: BlogPostCardProps) {
           alt={post.thumbnailAlt || post.title}
           category={post.category}
           sizes={sizes}
-          className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+          className="object-cover"
           fallbackIndex={post.id}
         />
       </div>
