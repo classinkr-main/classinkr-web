@@ -59,8 +59,9 @@ function ToastViewport({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: 
       aria-atomic="false"
       className={cn(
         "fixed top-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none", // 공유 기본값, 불변
-        // 공개 경로만 .site 표지. 위치 변경은 P1.
-        !isInternalPath(pathname) && "site",
+        // 공개 경로만 .site 표지 + 위치(PC 헤더 아래, 휴대폰 하단 가운데)
+        !isInternalPath(pathname) &&
+          "site md:top-[calc(var(--header-h)+16px)] max-md:inset-x-4 max-md:top-auto max-md:items-center max-md:bottom-[calc(env(safe-area-inset-bottom)+80px)]",
       )}
     >
       {toasts.map((toast) => (

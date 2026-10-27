@@ -373,7 +373,7 @@ function ConsultationBridge({
                     onClick={openConsultation}
                     whileHover={shouldReduceMotion ? undefined : { scale: 1.03 }}
                     whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }}
-                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] bg-[#084734] px-3 text-xs font-bold text-white shadow-[0_6px_14px_rgba(8,71,52,0.18)] transition-colors hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] bg-[#084734] px-3 text-xs font-bold text-white shadow-[0_6px_14px_rgba(8,71,52,0.18)] transition-colors hover:bg-[#065c41] focus-visible:outline-none"
                 >
                     <MessageCircle className="h-3.5 w-3.5" />
                     {intentLabel}
@@ -383,7 +383,7 @@ function ConsultationBridge({
                     onClick={() => void copyDraft()}
                     whileHover={shouldReduceMotion ? undefined : { scale: 1.03 }}
                     whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }}
-                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border border-white/70 bg-white/70 px-3 text-xs font-bold text-[#111110] transition-colors hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border border-white/70 bg-white/70 px-3 text-xs font-bold text-[#111110] transition-colors hover:bg-[#ECFDF5] focus-visible:outline-none"
                 >
                     {state === "copied" ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                     요약 복사
@@ -751,7 +751,7 @@ function SourceLinks({ sources }: { sources?: ChatbotSource[] }) {
                         <Link
                             href={source.urlPath}
                             className={cn(
-                                "group block rounded-[12px] border px-3 py-2 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25",
+                                "group block rounded-[12px] border px-3 py-2 text-left transition-all focus-visible:outline-none",
                                 isTopMatch
                                     ? "border-[#084734]/25 bg-[#ECFDF5]/75 shadow-[inset_0_1px_0_rgba(255,255,255,0.70),0_2px_8px_rgba(8,71,52,0.06)] hover:border-[#084734]/40 hover:bg-[#ECFDF5]"
                                     : "border-white/70 bg-white/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.60)] hover:border-[#084734]/25 hover:bg-[#ECFDF5]/90"
@@ -1298,7 +1298,7 @@ export function FloatingChatbot() {
     }
 
     return (
-        <div className="fixed inset-x-0 bottom-0 z-50 flex flex-col items-end px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] md:inset-x-auto md:bottom-6 md:right-6 md:px-0 md:pb-0">
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-(--z-chatbot) flex flex-col items-end px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] md:inset-x-auto md:bottom-6 md:right-6 md:px-0 md:pb-0">
             {/* 모바일 화면 백드롭 딤/블러 오버레이 */}
             <AnimatePresence>
                 {isOpen && (
@@ -1309,7 +1309,7 @@ export function FloatingChatbot() {
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.18 }}
                         onClick={closeChatbot}
-                        className="fixed inset-0 z-0 bg-black/20 backdrop-blur-[2px] md:hidden"
+                        className="pointer-events-auto fixed inset-0 z-0 bg-black/20 backdrop-blur-[2px] md:hidden"
                         aria-hidden="true"
                     />
                 )}
@@ -1327,7 +1327,7 @@ export function FloatingChatbot() {
                         initial="initial"
                         animate="animate"
                         exit="exit"
-                        className="relative z-10 mb-3 flex h-[min(680px,calc(100svh-5.5rem))] w-full max-w-none origin-bottom overflow-hidden rounded-[26px] border border-white/60 bg-[linear-gradient(152deg,rgba(255,255,255,0.88)_0%,rgba(236,253,245,0.76)_50%,rgba(246,245,244,0.82)_100%)] text-[#111110] shadow-[0_34px_80px_rgba(8,71,52,0.18),0_18px_42px_rgba(49,48,46,0.10),0_4px_12px_rgba(0,0,0,0.05),inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-2xl md:mb-4 md:h-[min(640px,calc(100svh-8rem))] md:w-[424px] md:max-w-[424px] md:origin-bottom-right"
+                        className="pointer-events-auto relative z-10 mb-3 flex h-[min(680px,calc(100svh-5.5rem))] w-full max-w-none origin-bottom overflow-hidden rounded-[26px] border border-white/60 bg-[linear-gradient(152deg,rgba(255,255,255,0.88)_0%,rgba(236,253,245,0.76)_50%,rgba(246,245,244,0.82)_100%)] text-[#111110] shadow-[0_34px_80px_rgba(8,71,52,0.18),0_18px_42px_rgba(49,48,46,0.10),0_4px_12px_rgba(0,0,0,0.05),inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-2xl md:mb-4 md:h-[min(640px,calc(100svh-8rem))] md:w-[424px] md:max-w-[424px] md:origin-bottom-right"
                     >
                         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.48)_0%,rgba(255,255,255,0.12)_42%,rgba(8,71,52,0.06)_100%)]" aria-hidden />
                         <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-white/80" aria-hidden />
@@ -1398,7 +1398,7 @@ export function FloatingChatbot() {
                                     <button
                                         type="button"
                                         onClick={toggleMute}
-                                        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/60 bg-white/35 text-[#615D59] shadow-[inset_0_1px_0_rgba(255,255,255,0.60)] transition-colors hover:bg-white/70 hover:text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
+                                        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/60 bg-white/35 text-[#615D59] shadow-[inset_0_1px_0_rgba(255,255,255,0.60)] transition-colors hover:bg-white/70 hover:text-[#084734] focus-visible:outline-none"
                                         aria-label={muted ? "소리 켜기" : "음소거"}
                                     >
                                         {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
@@ -1406,7 +1406,7 @@ export function FloatingChatbot() {
                                     <button
                                         type="button"
                                         onClick={closeChatbot}
-                                        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/60 bg-white/35 text-[#615D59] shadow-[inset_0_1px_0_rgba(255,255,255,0.60)] transition-colors hover:bg-white/70 hover:text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
+                                        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/60 bg-white/35 text-[#615D59] shadow-[inset_0_1px_0_rgba(255,255,255,0.60)] transition-colors hover:bg-white/70 hover:text-[#084734] focus-visible:outline-none"
                                         aria-label="챗봇 닫기"
                                     >
                                         <X className="h-5 w-5" />
@@ -1464,7 +1464,7 @@ export function FloatingChatbot() {
                                                                             type="button"
                                                                             onClick={() => void sendQuestion(message.retryQuestion ?? "")}
                                                                             disabled={isSending}
-                                                                            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border border-[#084734]/20 bg-[#ECFDF5]/80 px-3 text-xs font-bold text-[#084734] transition-colors hover:bg-[#D1FAE5] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
+                                                                            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border border-[#084734]/20 bg-[#ECFDF5]/80 px-3 text-xs font-bold text-[#084734] transition-colors hover:bg-[#D1FAE5] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none"
                                                                         >
                                                                             <RotateCcw className="h-3.5 w-3.5" aria-hidden />
                                                                             다시 시도
@@ -1494,7 +1494,7 @@ export function FloatingChatbot() {
                                                                                         delay: shouldReduceMotion ? 0 : index * 0.06,
                                                                                     }}
                                                                                     whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
-                                                                                    className="group flex w-full items-center justify-between gap-2 whitespace-normal break-keep rounded-[12px] border border-[#084734]/15 bg-white/75 px-3.5 py-2.5 text-left text-[12px] font-semibold leading-5 text-[#084734] shadow-[inset_0_1px_0_rgba(255,255,255,0.70),0_2px_8px_rgba(8,71,52,0.04)] transition-all hover:border-[#084734]/30 hover:bg-[#ECFDF5] hover:shadow-[0_4px_12px_rgba(8,71,52,0.08)] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
+                                                                                    className="group flex w-full items-center justify-between gap-2 whitespace-normal break-keep rounded-[12px] border border-[#084734]/15 bg-white/75 px-3.5 py-2.5 text-left text-[12px] font-semibold leading-5 text-[#084734] shadow-[inset_0_1px_0_rgba(255,255,255,0.70),0_2px_8px_rgba(8,71,52,0.04)] transition-all hover:border-[#084734]/30 hover:bg-[#ECFDF5] hover:shadow-[0_4px_12px_rgba(8,71,52,0.08)] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none"
                                                                                 >
                                                                                     <span>{question}</span>
                                                                                     <ArrowRight className="h-3.5 w-3.5 shrink-0 text-[#084734]/70 transition-transform group-hover:translate-x-0.5" aria-hidden />
@@ -1551,7 +1551,7 @@ export function FloatingChatbot() {
                                             transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
                                         />
                                     )}
-                                    <div className="flex items-end gap-2 rounded-[16px] border border-white/70 bg-white/60 p-1.5 shadow-[0_10px_26px_rgba(49,48,46,0.06),inset_0_1px_0_rgba(255,255,255,0.75)] transition-colors focus-within:border-[#084734]/30 focus-within:bg-white/80">
+                                    <div className="flex items-end gap-2 rounded-[16px] border border-white/70 bg-white/60 p-1.5 shadow-[0_10px_26px_rgba(49,48,46,0.06),inset_0_1px_0_rgba(255,255,255,0.75)] transition-colors focus-within:border-[#084734]/30 focus-within:bg-white/80 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-fg-accent">
                                         <textarea
                                             ref={inputRef}
                                             value={input}
@@ -1566,6 +1566,7 @@ export function FloatingChatbot() {
                                             maxLength={1000}
                                             placeholder="질문을 짧게 입력해 주세요"
                                             aria-label="챗봇 질문 입력"
+                                            data-focus-ring="parent"
                                             className="min-h-11 max-h-28 flex-1 resize-none rounded-[12px] border-0 bg-transparent px-3 py-2.5 text-[15px] leading-6 text-[#111110] placeholder:text-[#A39E98] focus-visible:outline-none transition-[height] duration-150 ease-out"
                                         />
                                         <motion.button
@@ -1578,7 +1579,7 @@ export function FloatingChatbot() {
                                             whileHover={(isSending || !input.trim()) ? undefined : { scale: 1.05 }}
                                             whileTap={(isSending || !input.trim()) ? undefined : { scale: 0.95 }}
                                             transition={m(CHATBOT_MOTION.micro, shouldReduceMotion)}
-                                            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] bg-[#084734] text-white shadow-[0_8px_18px_rgba(8,71,52,0.25),inset_0_1px_0_rgba(255,255,255,0.16)] transition-colors hover:bg-[#065c41] disabled:cursor-not-allowed disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
+                                            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] bg-[#084734] text-white shadow-[0_8px_18px_rgba(8,71,52,0.25),inset_0_1px_0_rgba(255,255,255,0.16)] transition-colors hover:bg-[#065c41] disabled:cursor-not-allowed disabled:shadow-none focus-visible:outline-none"
                                             aria-label="질문 보내기"
                                         >
                                             {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -1617,7 +1618,7 @@ export function FloatingChatbot() {
                     />
                 ) : null}
             </AnimatePresence>
-            <div className="relative flex h-14 w-14 items-center justify-center md:h-16 md:w-16">
+            <div className="pointer-events-auto relative flex h-14 w-14 items-center justify-center md:h-16 md:w-16">
                 {!isOpen && !shouldReduceMotion ? (
                     <motion.span
                         aria-hidden
@@ -1637,7 +1638,7 @@ export function FloatingChatbot() {
                         setIsOpen((current) => !current)
                     }}
                     className={cn(
-                        "relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-[#084734]/25 md:h-16 md:w-16",
+                        "relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full transition-all duration-200 md:h-16 md:w-16",
                         isOpen
                             ? "border border-black/[0.08] bg-white text-[#111110] shadow-[0_12px_28px_rgba(0,0,0,0.12),0_4px_10px_rgba(0,0,0,0.04)] hover:bg-[#F6F5F4]"
                             : "border border-white/20 bg-[linear-gradient(135deg,#084734_0%,#0C5A42_100%)] text-white shadow-[0_16px_36px_rgba(8,71,52,0.30),0_4px_12px_rgba(0,0,0,0.08),inset_0_1px_1px_rgba(255,255,255,0.35)] hover:bg-[linear-gradient(135deg,#063E2D_0%,#0A503A_100%)] hover:shadow-[0_20px_42px_rgba(8,71,52,0.38),0_6px_16px_rgba(0,0,0,0.12)]"

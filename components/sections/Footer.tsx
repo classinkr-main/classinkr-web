@@ -11,7 +11,7 @@ import { CookieSettingsButton } from "@/components/consent/CookieSettingsButton"
 
 export function Footer() {
     return (
-        <footer className="bg-[#111110] py-10 text-sm text-[#A39E98] sm:py-12">
+        <footer data-inert-with-menu className="surface-ink bg-[#111110] py-10 text-sm text-[#A39E98] sm:py-12">
             <div className="container mx-auto">
                 <div className="mb-10 grid grid-cols-1 gap-8 sm:grid-cols-2 md:mb-12 md:grid-cols-4">
                     <div className="sm:col-span-2 md:col-span-1">

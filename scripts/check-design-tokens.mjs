@@ -187,7 +187,8 @@ const RULES = [
   { id: "globals-public-rule", files: only("app/globals.css"), allow: [], ...error,
     pattern: /\.site(?![\w-])|(?<![\w-])--(?:surface|fg|line)-/g,
     message: "app/globals.css 에 새 공개 규칙 금지 → app/styles/{tokens,utilities,site-base}.css" },
-  { id: "radix-content-site", files: PUBLIC_TSX, allow: ["components/ui/"], ...error,
+  // CheckoutRequestForm: /checkout 전용 대화상자라 .site 밖에 둔다(H07)
+  { id: "radix-content-site", files: PUBLIC_TSX, allow: ["components/ui/", "components/checkout/CheckoutRequestForm.tsx"], ...error,
     pattern: jsxOpen("(?:Dialog|Popover|Select|DropdownMenu|Sheet)Content"), check: lacks(hasWord("site")),
     message: "공개 Radix *Content 의 className 에 site 를 넣는다(C17 포털 규칙)" },
   { id: "main-outside-chrome", files: PUBLIC_TSX, allow: ["components/AppChrome.tsx"], ...warn,

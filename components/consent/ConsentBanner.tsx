@@ -102,7 +102,9 @@ export function ConsentBanner() {
     <div
       role="dialog"
       aria-label="쿠키 사용 동의"
-      className="fixed bottom-3 left-3 right-3 z-[120] sm:bottom-6 sm:left-6 sm:right-auto"
+      data-consent-banner
+      data-inert-with-menu="hide"
+      className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+16px)] z-(--z-consent) sm:bottom-6 sm:left-6 sm:right-auto"
     >
       <div className="relative max-h-[calc(100dvh-24px)] w-full max-w-[360px] overflow-y-auto rounded-lg border border-black/[0.08] bg-[#FFFFFF] p-3 pr-10 shadow-[0_12px_34px_rgba(0,0,0,0.10)] sm:max-w-[392px] sm:p-5 sm:pr-12">
         <button
@@ -110,7 +112,7 @@ export function ConsentBanner() {
           onClick={dismiss}
           aria-label="쿠키 배너 닫기"
           title="닫기"
-          className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-md text-[#615D59] transition-colors hover:bg-[#F6F5F4] hover:text-[#111110] focus:outline-none focus:ring-2 focus:ring-[#084734]"
+          className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-md text-[#615D59] transition-colors hover:bg-[#F6F5F4] hover:text-[#111110]"
         >
           <X className="h-4 w-4" aria-hidden="true" />
         </button>

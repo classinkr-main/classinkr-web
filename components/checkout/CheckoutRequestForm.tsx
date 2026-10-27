@@ -416,7 +416,7 @@ export function CheckoutRequestForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="site sm:max-w-[560px]">
+      <DialogContent className="sm:max-w-[560px]">
         {requestId || blockedByHoneypot ? (
           <div className="py-2">
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#ECFDF5]">
