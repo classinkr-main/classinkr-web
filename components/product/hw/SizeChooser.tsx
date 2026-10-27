@@ -2,6 +2,7 @@
 
 import Image from "next/image"
 import { motion, type Variants } from "framer-motion"
+import { ArrowRight } from "lucide-react"
 import { TrackedLink } from "@/components/TrackedLink"
 
 const sizes = [
@@ -73,8 +74,7 @@ export default function SizeChooser() {
               whileInView="visible"
               viewport={{ once: true, margin: "-60px" }}
               variants={fadeUp}
-              className="mx-auto w-full max-w-[470px] bg-[#FAFAF8] rounded-[28px] border border-black/[0.08] relative
-                         hover:shadow-xl hover:-translate-y-1 transition-all duration-200"
+              className="mx-auto w-full max-w-[470px] bg-[#FAFAF8] rounded-[28px] border border-black/[0.08] relative"
             >
               {/* Badge */}
               {size.badge && (
@@ -122,9 +122,10 @@ export default function SizeChooser() {
                   href="/contact#contact-form"
                   ctaId="hw_size_demo"
                   tracking={{ model: size.inches }}
-                  className="mt-7 block w-full rounded-md bg-[#084734] py-3 text-center text-sm font-semibold text-white transition hover:bg-[#065c41]"
+                  className="mt-7 flex w-full items-center justify-center gap-2 rounded-md bg-[#084734] py-3 text-center text-sm font-semibold text-white transition hover:bg-[#065c41]"
                 >
-                  이 사이즈로 데모 신청 →
+                  이 사이즈로 데모 신청
+                  <ArrowRight aria-hidden className="arrow-nudge size-4" />
                 </TrackedLink>
               </div>
             </motion.div>

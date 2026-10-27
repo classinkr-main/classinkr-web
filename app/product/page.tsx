@@ -96,7 +96,7 @@ export default function ProductPage() {
           ]),
         ]}
       />
-      <main className="min-h-screen bg-[#FAFAF8] pt-28">
+      <div className="min-h-screen bg-[#FAFAF8] pt-28">
         <section className="border-b border-black/[0.08] bg-white py-16 md:py-24">
           <div className="container mx-auto px-4">
             <div className="max-w-3xl">
@@ -175,7 +175,7 @@ export default function ProductPage() {
               {productFamily.map((product) => (
                 <div
                   key={product.en}
-                  className="group rounded-lg border border-black/[0.08] bg-white p-6 transition-all hover:-translate-y-0.5 hover:border-[#084734]/20 hover:shadow-[0_14px_34px_rgba(17,17,16,0.07)]"
+                  className="rounded-lg border border-black/[0.08] bg-white p-6"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <Image
@@ -205,7 +205,7 @@ export default function ProductPage() {
             </div>
           </div>
         </section>
-      </main>
+      </div>
     </>
   )
 }

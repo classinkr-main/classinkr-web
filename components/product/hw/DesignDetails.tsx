@@ -96,7 +96,7 @@ export default function DesignDetails() {
               initial="hidden"
               animate={inView ? "visible" : "hidden"}
               transition={transition(0.3 + i * 0.15)}
-              className="bg-[#FAFAF8] rounded-2xl border border-black/[0.08] overflow-hidden flex flex-col transition-all duration-200 hover:shadow-lg hover:-translate-y-1"
+              className="bg-[#FAFAF8] rounded-2xl border border-black/[0.08] overflow-hidden flex flex-col"
             >
               {/* Image area */}
               <div className={`relative aspect-square ${imageBackground}`}>

@@ -5,13 +5,13 @@ import { trackEvent } from "@/lib/analytics"
 import { formatUsd, getSelfServeSoftwarePlan, getSoftwarePlan } from "@/lib/billing/plans"
 import { BROCHURE_URL } from "@/lib/marketing-links"
 import { TESTIMONIALS } from "@/lib/testimonials"
-import { motion, useInView, useMotionValue, useTransform, useScroll, useMotionValueEvent, animate } from "framer-motion"
+import { motion, useInView, useMotionValue, useScroll, useMotionValueEvent, animate } from "framer-motion"
 import {
-    Play, ArrowRight, Sparkles, Monitor, Layers, MousePointerClick,
+    Play, ArrowRight, Monitor, Layers, MousePointerClick,
     Clock, Users, PenTool, Dice1, FileText, Layout, Video,
     Globe, Wifi, BarChart3, BookOpen, Timer,
-    MessageSquare, GraduationCap, CheckCircle2, Zap, Shield,
-    Star, X, Camera, Trophy, Shuffle, FlaskConical, Atom, Ruler, Laptop
+    MessageSquare, GraduationCap, CheckCircle2, Zap,
+    X, Camera, Trophy, Shuffle, FlaskConical, Atom, Ruler, Laptop
 } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
@@ -205,17 +205,6 @@ function createParticles(count: number) {
     }))
 }
 
-/* ── Wave Divider ────────────────────────────────────────────────── */
-function WaveDivider({ flip = false, color = "#ffffff" }: { flip?: boolean; color?: string }) {
-    return (
-        <div className={`w-full overflow-hidden leading-[0] ${flip ? "rotate-180" : ""}`}>
-            <svg viewBox="0 0 1440 60" preserveAspectRatio="none" className="w-full h-[40px] md:h-[60px]">
-                <path d="M0,30 C360,60 720,0 1080,30 C1260,45 1380,20 1440,30 L1440,60 L0,60 Z" fill={color} />
-            </svg>
-        </div>
-    )
-}
-
 /* ── CountUp Hook ────────────────────────────────────────────────── */
 function useCountUp(target: number, trigger: boolean, duration = 2) {
     const [value, setValue] = useState(0)
@@ -329,7 +318,7 @@ function SlotDigit({ digit, delay, trigger, onDone }: { digit: string; delay: nu
                     <span
                         key={`${n}-${index}`}
                         ref={index === 0 ? cellRef : undefined}
-                        className={`flex h-14 w-full flex-none items-center justify-center text-3xl font-sans font-semibold leading-none tabular-nums text-[#084734] sm:h-28 sm:text-6xl md:h-36 md:text-8xl ${done ? "animate-digit-glow" : ""}`}
+                        className="flex h-14 w-full flex-none items-center justify-center text-3xl font-sans font-semibold leading-none tabular-nums text-[#084734] sm:h-28 sm:text-6xl md:h-36 md:text-8xl"
                     >
                         {n}
                     </span>
@@ -340,7 +329,7 @@ function SlotDigit({ digit, delay, trigger, onDone }: { digit: string; delay: nu
 }
 
 /* ── StatCard ────────────────────────────────────────────────────── */
-function StatCard({ value, suffix, label, icon, delay, trigger }: { value: number; suffix: string; label: string; icon: React.ReactNode; delay: number; trigger: boolean }) {
+function StatCard({ value, suffix, label, delay, trigger }: { value: number; suffix: string; label: string; delay: number; trigger: boolean }) {
     const display = useCountUp(value, trigger, 2)
     return (
         <motion.div
@@ -350,7 +339,6 @@ function StatCard({ value, suffix, label, icon, delay, trigger }: { value: numbe
             transition={{ type: "spring", stiffness: 200, damping: 25, delay }}
             style={{ perspective: 800 }}
         >
-            <div className="flex justify-center mb-3 text-[#084734]/70">{icon}</div>
             <div className="text-2xl sm:text-3xl font-sans font-bold tabular-nums text-[#111110] mb-1">
                 {value >= 100 ? display.toLocaleString() : display}{suffix}
             </div>
@@ -406,14 +394,13 @@ type SoftwareTestimonial = {
     name: string
     role: string
     quote: string
-    rating: number
     gradient: string
     dark?: boolean
     delay?: number
     className?: string
 }
 
-// 콘텐츠(이름·인용·평점)는 lib/testimonials.ts 단일 소스에서 가져오고,
+// 콘텐츠(이름·인용)는 lib/testimonials.ts 단일 소스에서 가져오고,
 // 이 페이지는 표현(그래디언트·다크·그리드 배치·등장 딜레이)만 정의한다.
 type TestimonialPresentation = {
     id: string
@@ -439,7 +426,6 @@ const SOFTWARE_TESTIMONIALS: SoftwareTestimonial[] = SOFTWARE_TESTIMONIAL_PRESEN
         name: source.role,
         role: source.badge,
         quote: source.quote,
-        rating: source.rating ?? 5,
         gradient: presentation.gradient,
         dark: presentation.dark,
         delay: presentation.delay,
@@ -452,7 +438,6 @@ function TestimonialCard({
     name,
     role,
     quote,
-    rating,
     gradient,
     dark = false,
     delay = 0,
@@ -467,7 +452,7 @@ function TestimonialCard({
             className={`group relative flex min-h-[190px] flex-col rounded-lg border p-5 transition-all duration-300 after:absolute after:bottom-[-7px] after:h-3.5 after:w-3.5 after:rotate-45 after:rounded-[2px] ${
                 dark
                     ? "border-[#0E3D30] bg-[#101311] text-white shadow-[0_18px_46px_rgba(16,19,17,0.16)] after:left-9 after:border-b after:border-r after:border-[#0E3D30] after:bg-[#101311]"
-                    : "border-[#E8E6DC] bg-white text-[#172018] shadow-[0_12px_30px_rgba(20,24,21,0.04)] hover:-translate-y-0.5 hover:border-[#084734]/25 hover:shadow-[0_18px_44px_rgba(8,71,52,0.07)] after:right-9 after:border-b after:border-r after:border-[#E8E6DC] after:bg-white"
+                    : "border-[#E8E6DC] bg-white text-[#172018] shadow-[0_12px_30px_rgba(20,24,21,0.04)] after:right-9 after:border-b after:border-r after:border-[#E8E6DC] after:bg-white"
             } ${className}`}
         >
             <div className="mb-4 flex items-start justify-between gap-4">
@@ -484,23 +469,6 @@ function TestimonialCard({
             <p className={`flex-1 text-[15px] font-semibold leading-7 break-keep ${dark ? "text-white/86" : "text-[#31302E]"}`}>
                 &ldquo;{quote}&rdquo;
             </p>
-
-            <div className={`mt-5 flex items-center border-t pt-3 ${dark ? "border-white/10" : "border-black/[0.06]"}`}>
-                <div className="flex gap-0.5">
-                    {[...Array(5)].map((_, i) => (
-                        <Star
-                            key={i}
-                            className={`h-3.5 w-3.5 ${
-                                i < rating
-                                    ? dark
-                                        ? "fill-[#F8C35B] text-[#F8C35B]"
-                                        : "fill-[#FFB000] text-[#FFB000]"
-                                    : "text-[#e8e8e4]"
-                            }`}
-                        />
-                    ))}
-                </div>
-            </div>
         </motion.div>
     )
 }
@@ -520,8 +488,6 @@ function FinalCTASection() {
         else if (v >= 0.15 && phase < 1) setPhase(1)
     })
 
-    const glowOpacity = useTransform(scrollYProgress, [0.1, 0.4], [0, 1])
-
     useEffect(() => {
         if (!slotsDone) return
         let interval: ReturnType<typeof setInterval>
@@ -537,12 +503,9 @@ function FinalCTASection() {
     const displayDigits = useMemo(() => (1560000 + liveCount).toString().split(""), [liveCount])
 
     return (
-        <section ref={sectionRef} className="relative py-32 md:py-44 overflow-hidden" style={{ minHeight: "100vh" }}>
+        <section ref={sectionRef} className="relative py-32 md:py-44 overflow-x-clip" style={{ minHeight: "100vh" }}>
             <div className="absolute inset-0 bg-gradient-to-b from-[#F0FDF9] via-[#F0FDF9] to-[#FDFCF8]"></div>
             <div className="absolute top-0 left-0 right-0 h-44 md:h-60 bg-gradient-to-b from-[#FDFCF8] via-[#F0FDF9]/85 to-transparent pointer-events-none"></div>
-            <motion.div className="absolute inset-0 pointer-events-none" style={{ opacity: glowOpacity }}>
-                <motion.div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[700px] bg-gradient-radial from-[#D1FAE5]/30 via-[#ECFDF5]/10 to-transparent rounded-full blur-3xl" animate={{ x: [0, 30, -20, 0], y: [0, -20, 15, 0] }} transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }} />
-            </motion.div>
             <motion.div className="absolute inset-0 pointer-events-none" initial={{ opacity: 0 }} animate={phase >= 1 ? { opacity: 1 } : {}} transition={{ duration: 1 }}>
                 {particlesMounted
                     ? particles.map(({ key, ...rest }) => (
@@ -561,7 +524,6 @@ function FinalCTASection() {
 
                 <motion.p initial={{ opacity: 0, y: 10 }} animate={phase >= 2 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.5 }} className="text-base sm:text-lg text-[#A39E98] font-medium mb-8 max-w-xl mx-auto">200개 기업 고객사가 Classin으로 되찾은 시간</motion.p>
                 <div className="relative">
-                    <motion.div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] bg-gradient-radial from-[#6EE7B7]/25 via-[#D1FAE5]/10 to-transparent rounded-full pointer-events-none" initial={{ scale: 0, opacity: 0 }} animate={phase >= 2 ? { scale: [0, 1.2, 1], opacity: [0, 0.7, 0] } : {}} transition={{ duration: 1.5 }} />
                     <motion.div className="flex justify-center mb-5" initial={{ scale: 0.9, opacity: 0.3, filter: "blur(8px)" }} animate={phase >= 2 ? { scale: 1, opacity: 1, filter: "blur(0px)" } : {}} transition={{ type: "spring", stiffness: 120, damping: 20 }}>
                         <div className="relative flex items-center gap-1 select-none sm:gap-2.5">
                             <SlotDigit digit={displayDigits[0]} delay={0.2} trigger={phase >= 2} />
@@ -573,7 +535,6 @@ function FinalCTASection() {
                             <SlotDigit digit={displayDigits[4]} delay={0.65} trigger={phase >= 2} />
                             <SlotDigit digit={displayDigits[5]} delay={0.75} trigger={phase >= 2} />
                             <SlotDigit digit={displayDigits[6]} delay={0.85} trigger={phase >= 2} onDone={handleLastSlotDone} />
-                            {slotsDone && <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-2xl"><div className="absolute inset-0 animate-shimmer-sweep bg-gradient-to-r from-transparent via-[#6EE7B7]/15 to-transparent w-1/3 h-full" /></div>}
                         </div>
                     </motion.div>
                 </div>
@@ -582,14 +543,14 @@ function FinalCTASection() {
 
                 <motion.div className="w-full max-w-sm mx-auto h-px bg-gradient-to-r from-transparent via-[#6EE7B7]/30 to-transparent mb-14 mt-14" initial={{ scaleX: 0 }} animate={phase >= 3 ? { scaleX: 1 } : {}} transition={{ duration: 0.6 }} style={{ originX: 0.5 }} />
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-14 max-w-3xl mx-auto">
-                    <StatCard value={200} suffix="+" label="기업 고객사" icon={<Monitor className="w-5 h-5" />} delay={0} trigger={phase >= 3} />
-                    <StatCard value={30} suffix="+" label="인터랙티브 수업 도구" icon={<MousePointerClick className="w-5 h-5" />} delay={0.1} trigger={phase >= 3} />
-                    <StatCard value={10} suffix="가지" label={"참여형\n수업 활동"} icon={<Layers className="w-5 h-5" />} delay={0.2} trigger={phase >= 3} />
-                    <StatCard value={98} suffix="%" label={`"과거로 못 돌아간다"\n응답률`} icon={<Sparkles className="w-5 h-5" />} delay={0.3} trigger={phase >= 3} />
+                    <StatCard value={200} suffix="+" label="기업 고객사" delay={0} trigger={phase >= 3} />
+                    <StatCard value={30} suffix="+" label="인터랙티브 수업 도구" delay={0.1} trigger={phase >= 3} />
+                    <StatCard value={10} suffix="가지" label={"참여형\n수업 활동"} delay={0.2} trigger={phase >= 3} />
+                    <StatCard value={98} suffix="%" label={`"과거로 못 돌아간다"\n응답률`} delay={0.3} trigger={phase >= 3} />
                 </div>
                 <motion.p initial={{ opacity: 0, letterSpacing: "0.3em" }} animate={phase >= 3 ? { opacity: 1, letterSpacing: "0.05em" } : {}} transition={{ delay: 0.5, duration: 0.8 }} className="text-lg sm:text-xl font-sans text-[#615D59] font-medium mb-10">수업만을 위해 만든 플랫폼, 다음은 당신의 교실입니다</motion.p>
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={phase >= 3 ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.7, type: "spring", stiffness: 200, damping: 25 }} className="flex flex-col items-center gap-4">
-                    <Button asChild className="h-14 rounded-full bg-[#084734] px-10 text-base font-bold text-white transition-all hover:scale-105 hover:bg-[#065c41] group">
+                    <Button asChild className="h-14 rounded-full bg-[#084734] px-10 text-base font-bold text-white transition-all hover:bg-[#065c41] group">
                         <Link href={CHECKOUT_HREF} onClick={() => trackCheckoutClick("sw_story_checkout")}>{CHECKOUT_CTA_LABEL}<ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" /></Link>
                     </Button>
                     <p className="text-xs sm:text-sm text-[#A39E98] font-medium">{CHECKOUT_SUB_LABEL}</p>
@@ -773,19 +734,15 @@ function TypographyHookSection() {
 
 /* ── 미래 제시 1 섹션 ────────────────────────────────────────── */
 const FUTURE_ITEMS = [
-    { icon: "🌍", title: "국경 없는 교실", desc: "서울의 학생이 핀란드 교사에게 배우고, 부산의 학원이 도쿄와 협업 수업을 합니다." },
-    { icon: "🤖", title: "AI 보조 교사", desc: "AI가 개별 학습 데이터를 분석해 실시간으로 교사에게 학생별 맞춤 피드백을 제안합니다." },
-    { icon: "📡", title: "실시간 학습 진단", desc: "수업 중 학생의 집중도와 이해도를 실시간으로 파악해 교사가 즉각 대응할 수 있습니다." },
-    { icon: "♻️", title: "지식의 재활용", desc: "한 번 만든 수업 콘텐츠가 전 세계 동료 교사들과 공유되고 발전합니다." },
+    { title: "국경 없는 교실", desc: "서울의 학생이 핀란드 교사에게 배우고, 부산의 학원이 도쿄와 협업 수업을 합니다." },
+    { title: "AI 보조 교사", desc: "AI가 개별 학습 데이터를 분석해 실시간으로 교사에게 학생별 맞춤 피드백을 제안합니다." },
+    { title: "실시간 학습 진단", desc: "수업 중 학생의 집중도와 이해도를 실시간으로 파악해 교사가 즉각 대응할 수 있습니다." },
+    { title: "지식의 재활용", desc: "한 번 만든 수업 콘텐츠가 전 세계 동료 교사들과 공유되고 발전합니다." },
 ]
 
 function FutureVision1Section() {
     return (
-        <section className="py-24 md:py-40 bg-[#084734] relative overflow-hidden">
-            <div className="absolute inset-0 pointer-events-none">
-                <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-[#065c41] rounded-full translate-x-[-40%] translate-y-[40%] blur-[100px] opacity-60" />
-                <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-[#6EE7B7]/10 rounded-full translate-x-[30%] translate-y-[-30%] blur-[80px]" />
-            </div>
+        <section className="py-24 md:py-40 bg-[#084734] relative overflow-x-clip">
             <div className="container mx-auto px-4 lg:px-8 max-w-6xl relative">
                 <div className="grid lg:grid-cols-2 gap-16 items-center">
                     <motion.div initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.8 }}>
@@ -808,9 +765,8 @@ function FutureVision1Section() {
                                 whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true }}
                                 transition={{ delay: i * 0.1, duration: 0.6 }}
-                                className="bg-white/[0.06] rounded-2xl p-6 border border-white/[0.08] hover:bg-white/[0.10] transition-colors"
+                                className="bg-white/[0.06] rounded-2xl p-6 border border-white/[0.08]"
                             >
-                                <div className="text-2xl mb-3">{item.icon}</div>
                                 <h3 className="text-sm font-bold text-white mb-2">{item.title}</h3>
                                 <p className="text-xs text-white/40 leading-relaxed">{item.desc}</p>
                             </motion.div>
@@ -918,7 +874,6 @@ function FutureVision2Section() {
 const CYCLE_PHASES = [
     {
         phase: "수업 전",
-        emoji: "📋",
         color: "bg-[#ECFDF5] border-[#D1FAE5]",
         accent: "#084734",
         old: ["교재 따로 인쇄", "판서 자료 USB에 담기", "학생 예습 확인 불가"],
@@ -926,7 +881,6 @@ const CYCLE_PHASES = [
     },
     {
         phase: "수업 중",
-        emoji: "🖊️",
         color: "bg-[#ECFDF5] border-[#D1FAE5]",
         accent: "#084734",
         old: ["교사 혼자 판서", "학생은 영상만 시청", "출석 수동으로 체크"],
@@ -934,7 +888,6 @@ const CYCLE_PHASES = [
     },
     {
         phase: "수업 후",
-        emoji: "📊",
         color: "bg-[#F6F5F4] border-[#e8e8e4]",
         accent: "#31302E",
         old: ["녹화 파일 수동 공유", "숙제 카톡으로 받기", "성적 엑셀로 관리"],
@@ -967,7 +920,6 @@ function LearningCycleSection() {
                             className={`rounded-2xl border p-7 ${p.color}`}
                         >
                             <div className="flex items-center gap-3 mb-6">
-                                <span className="text-2xl">{p.emoji}</span>
                                 <span className="text-lg font-bold text-[#111110]">{p.phase}</span>
                             </div>
 
@@ -1003,10 +955,7 @@ function LearningCycleSection() {
 /* ── [B] 하드웨어 티저 섹션 ──────────────────────────────────── */
 function HardwareTeaserSection() {
     return (
-        <section className="py-24 md:py-32 bg-[#1a1a19] relative overflow-hidden">
-            <div className="absolute inset-0 pointer-events-none opacity-10" style={{
-                backgroundImage: "radial-gradient(circle at 70% 50%, rgba(110,231,183,0.3) 0%, transparent 60%)",
-            }} />
+        <section className="surface-ink py-24 md:py-32 bg-[#1a1a19] relative overflow-x-clip">
             <div className="container mx-auto px-4 sm:px-6 lg:px-[10%] max-w-6xl relative">
                 <div className="grid lg:grid-cols-2 gap-14 items-center">
                     <motion.div initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.7 }}>
@@ -1036,7 +985,7 @@ function HardwareTeaserSection() {
                                 </div>
                             ))}
                         </div>
-                        <Link href="/product/hw" className="inline-flex items-center gap-2 bg-[#6EE7B7] hover:bg-[#D1FAE5] text-[#084734] font-bold text-sm px-6 py-3 rounded-full transition-all hover:scale-105">
+                        <Link href="/product/hw" className="inline-flex items-center gap-2 bg-[#6EE7B7] hover:bg-[#D1FAE5] text-[#084734] font-bold text-sm px-6 py-3 rounded-full transition-all">
                             하드웨어 상세 보기 <ArrowRight className="w-4 h-4" />
                         </Link>
                     </motion.div>
@@ -1065,14 +1014,14 @@ function HardwareTeaserSection() {
 
 /* ── [C] AI 기능 섹션 ────────────────────────────────────────── */
 const AI_FEATURES = [
-    { icon: "✍️", title: "AI 첨삭", desc: "학생 제출 과제를 AI가 즉시 분석·채점. 교사의 채점 시간을 획기적으로 줄입니다." },
-    { icon: "📝", title: "AI 과제 생성", desc: "학습 수준과 목표에 맞는 맞춤형 과제를 자동으로 만들어줍니다." },
-    { icon: "✏️", title: "AI 작문 도우미", desc: "작문 주제와 조건을 입력하면 수준별 예시 답안과 첨삭 가이드를 제공합니다." },
-    { icon: "🔢", title: "AI 수식 풀이", desc: "수학·과학 문제의 정답과 풀이 과정을 AI가 즉시 생성합니다." },
-    { icon: "📄", title: "AI 문서 정리", desc: "수업 자료 자동 요약, 보고서 작성, 학습 노트 정리를 AI가 처리합니다." },
-    { icon: "🎨", title: "AI 이미지 생성", desc: "아이디어를 입력하면 수업에 필요한 시각 자료를 자동으로 생성합니다." },
-    { icon: "📚", title: "AI 교안 자동화", desc: "학습 목표를 입력하면 전체 수업 계획안을 자동으로 작성해줍니다." },
-    { icon: "💬", title: "AI 질의응답", desc: "과목·언어 관계없이 학생 질문에 24시간 즉시 답변. 자기주도 학습을 지원합니다." },
+    { title: "AI 첨삭", desc: "학생 제출 과제를 AI가 즉시 분석·채점. 교사의 채점 시간을 획기적으로 줄입니다." },
+    { title: "AI 과제 생성", desc: "학습 수준과 목표에 맞는 맞춤형 과제를 자동으로 만들어줍니다." },
+    { title: "AI 작문 도우미", desc: "작문 주제와 조건을 입력하면 수준별 예시 답안과 첨삭 가이드를 제공합니다." },
+    { title: "AI 수식 풀이", desc: "수학·과학 문제의 정답과 풀이 과정을 AI가 즉시 생성합니다." },
+    { title: "AI 문서 정리", desc: "수업 자료 자동 요약, 보고서 작성, 학습 노트 정리를 AI가 처리합니다." },
+    { title: "AI 이미지 생성", desc: "아이디어를 입력하면 수업에 필요한 시각 자료를 자동으로 생성합니다." },
+    { title: "AI 교안 자동화", desc: "학습 목표를 입력하면 전체 수업 계획안을 자동으로 작성해줍니다." },
+    { title: "AI 질의응답", desc: "과목·언어 관계없이 학생 질문에 24시간 즉시 답변. 자기주도 학습을 지원합니다." },
 ]
 
 function AIFeaturesSection() {
@@ -1081,7 +1030,7 @@ function AIFeaturesSection() {
             <div className="container mx-auto px-4 lg:px-8 max-w-6xl">
                 <motion.div className="text-center mb-14" {...fadeUp}>
                     <span className="inline-flex items-center gap-1.5 bg-[#084734] text-[#6EE7B7] text-xs font-bold px-3 py-1.5 rounded-full mb-5">
-                        ✦ AI-Powered
+                        AI-Powered
                     </span>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans text-[#1a1a19] leading-tight mb-4">
                         AI가 교사의 시간을<br /><span className="text-[#084734]">돌려드립니다</span>
@@ -1100,10 +1049,8 @@ function AIFeaturesSection() {
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
                             transition={{ delay: i * 0.07 }}
-                            className="bg-white rounded-2xl border border-[rgba(0,0,0,0.06)] p-6 hover:shadow-[0_8px_24px_rgba(8,71,52,0.09)] hover:border-[rgba(8,71,52,0.2)] hover:-translate-y-0.5 transition-all group relative overflow-hidden"
+                            className="bg-white rounded-2xl border border-[rgba(0,0,0,0.06)] p-6 relative overflow-hidden"
                         >
-                            <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-[#084734]/0 via-[#084734]/20 to-[#084734]/0 opacity-0 group-hover:opacity-100 transition-opacity" />
-                            <div className="w-9 h-9 rounded-lg bg-[#ECFDF5] border border-[rgba(8,71,52,0.15)] flex items-center justify-center mb-4 text-lg">{f.icon}</div>
                             <h3 className="text-sm font-bold text-[#111110] mb-1.5 tracking-tight">{f.title}</h3>
                             <p className="text-xs text-[#615D59] leading-relaxed">{f.desc}</p>
                         </motion.div>
@@ -1266,15 +1213,11 @@ function ImpactTextSection() {
 /* ── ② 풀스크린 배경 + 인용구 섹션 ──────────────────────────── */
 function FullscreenQuoteSection() {
     return (
-        <section className="relative py-32 md:py-48 overflow-hidden bg-[#084734]">
+        <section className="relative py-32 md:py-48 overflow-x-clip bg-[#084734]">
             {/* Subtle noise texture overlay */}
             <div className="absolute inset-0 opacity-[0.03]" style={{
                 backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
             }} />
-            {/* Radial glow */}
-            <div className="absolute inset-0 pointer-events-none">
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-[#6EE7B7]/10 rounded-full blur-[120px]" />
-            </div>
 
             <div className="container mx-auto px-4 max-w-4xl relative text-center">
                 <motion.div
@@ -1547,7 +1490,7 @@ function PricingValueSection() {
                             <Link
                                 href={CHECKOUT_HREF}
                                 onClick={() => trackCheckoutClick("sw_pricing_checkout")}
-                                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#084734] px-5 py-2.5 text-sm font-bold text-white transition-all hover:scale-105 hover:bg-[#065c41] whitespace-nowrap"
+                                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#084734] px-5 py-2.5 text-sm font-bold text-white transition-all hover:bg-[#065c41] whitespace-nowrap"
                             >
                                 {CHECKOUT_CTA_LABEL} <ArrowRight className="w-4 h-4" />
                             </Link>
@@ -1589,7 +1532,7 @@ export default function ProductPage() {
             {/* ================================================================
                 HERO — "수업을, 더 수업답게"
             ================================================================ */}
-            <section className="relative min-h-[720px] overflow-hidden bg-[#07110d] text-white sm:min-h-[700px] md:h-[calc(100svh-4rem)] md:min-h-[760px] md:max-h-[840px]">
+            <section className="surface-ink relative min-h-[720px] overflow-hidden bg-[#07110d] text-white sm:min-h-[700px] md:h-[calc(100svh-4rem)] md:min-h-[760px] md:max-h-[840px]">
                 <HeroVideoBackdrop
                     src={HERO_CLASSROOM_VIDEO_SRC}
                     posterSrc="/images/product/sw/two-way-blackboard.webp"
@@ -1605,8 +1548,8 @@ export default function ProductPage() {
                 <div className="container relative z-10 mx-auto flex min-h-[720px] items-center px-4 py-14 sm:min-h-[700px] lg:px-8 md:h-full md:min-h-0 md:py-20">
                     <div className="max-w-4xl mx-auto text-center">
                         <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
-                            <div className="inline-flex items-center gap-2.5 px-5 py-2 rounded-full bg-white/12 border border-white/18 shadow-[0_2px_18px_rgba(0,0,0,0.18)] text-[#6EE7B7] text-xs font-bold mb-8 tracking-widest uppercase backdrop-blur-sm">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#6EE7B7] animate-pulse"></span>
+                            <div className="inline-flex items-center gap-2.5 px-5 py-2 rounded-full bg-white/12 border border-white/18 shadow-[0_2px_18px_rgba(0,0,0,0.18)] text-[#6EE7B7] text-xs font-bold mb-8 tracking-widest uppercase">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#6EE7B7]"></span>
                                 교육 전용 플랫폼
                             </div>
 
@@ -1639,7 +1582,7 @@ export default function ProductPage() {
                             </div>
 
                             <div className="flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center sm:gap-4">
-                                <Button asChild className="h-[3.25rem] rounded-full bg-[#084734] px-7 text-base font-bold text-white shadow-[0_8px_20px_rgba(8,71,52,0.24)] transition-all hover:scale-105 hover:bg-[#065c41] hover:shadow-[0_12px_25px_rgba(8,71,52,0.32)] group sm:h-14 sm:px-8">
+                                <Button asChild className="h-[3.25rem] rounded-full bg-[#084734] px-7 text-base font-bold text-white shadow-[0_8px_20px_rgba(8,71,52,0.24)] transition-all hover:bg-[#065c41] hover:shadow-[0_12px_25px_rgba(8,71,52,0.32)] group sm:h-14 sm:px-8">
                                     <Link
                                         href={CHECKOUT_HREF}
                                         onClick={() => trackCheckoutClick("sw_final_checkout")}
@@ -1648,7 +1591,7 @@ export default function ProductPage() {
                                     <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                                     </Link>
                                 </Button>
-                                <Button asChild variant="outline" className="h-[3.25rem] rounded-full border-white/35 bg-white/8 px-7 text-base font-bold text-white backdrop-blur-sm transition-all hover:scale-105 hover:border-white/55 hover:bg-white/16 sm:h-14 sm:px-8">
+                                <Button asChild variant="outline" className="h-[3.25rem] rounded-full border-white/35 bg-white/8 px-7 text-base font-bold text-white transition-all hover:border-white/55 hover:bg-white/16 sm:h-14 sm:px-8">
                                     <a
                                         href={BROCHURE_URL}
                                         target="_blank"
@@ -1693,8 +1636,6 @@ export default function ProductPage() {
             <KeyUseCases defaultValue="comms" />
 
             <ImpactTextSection />
-
-            <WaveDivider color="#ffffff" />
 
             {/* ================================================================
                 COMPARISON — Zoom vs Classin (staggered rows, visual contrast)
@@ -1770,8 +1711,6 @@ export default function ProductPage() {
 
             <LearningCycleSection />
 
-            <WaveDivider flip color="#FDFCF8" />
-
             {/* ================================================================
                 양방향 블랙보드 (SVG path animation, animated cursors)
             ================================================================ */}
@@ -1794,10 +1733,10 @@ export default function ProductPage() {
                                     { icon: <Layers className="w-5 h-5" />, label: "레이어 기반 교구", detail: "단순 그리기가 아닌, 레이어·도형·수식 편집기를 갖춘 전문 교육 도구." },
                                     { icon: <BookOpen className="w-5 h-5" />, label: "교재 위에 직접 풀기", detail: "PDF, PPT 교재를 올리고 그 위에 바로 필기. 종이 프린트가 필요 없습니다." },
                                 ].map((f, i) => (
-                                    <motion.div key={i} {...stagger(i)} className="flex items-center gap-4 bg-white border border-[rgba(0,0,0,0.06)] rounded-xl p-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_18px_rgba(0,0,0,0.07)] hover:border-[rgba(8,71,52,0.18)] transition-all group">
+                                    <motion.div key={i} {...stagger(i)} className="flex items-center gap-4 bg-white border border-[rgba(0,0,0,0.06)] rounded-xl p-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
                                         <div className="w-11 h-11 rounded-xl bg-[#ECFDF5] border border-[rgba(8,71,52,0.15)] text-[#084734] flex items-center justify-center shrink-0">{f.icon}</div>
                                         <div className="flex-1 min-w-0"><h4 className="font-bold text-[#111110] mb-0.5 text-sm">{f.label}</h4><p className="text-xs text-[#615D59] leading-relaxed">{f.detail}</p></div>
-                                        <ArrowRight className="w-4 h-4 text-[#e8e8e4] group-hover:text-[#084734]/40 shrink-0 transition-colors" />
+                                        <ArrowRight className="w-4 h-4 text-[#e8e8e4] shrink-0" />
                                     </motion.div>
                                 ))}
                             </div>
@@ -1820,7 +1759,7 @@ export default function ProductPage() {
                                         mediaQuery={VIDEO_BACKDROP_MEDIA_QUERY}
                                     />
                                     <div className="absolute inset-0 bg-gradient-to-t from-[#084734]/18 via-transparent to-white/12" />
-                                    <div className="absolute left-5 top-5 rounded-full border border-white/70 bg-white/88 px-3 py-1.5 text-xs font-semibold text-[#084734] shadow-[0_10px_30px_rgba(15,23,42,0.08)] backdrop-blur-sm">
+                                    <div className="absolute left-5 top-5 rounded-full border border-white/70 bg-white/88 px-3 py-1.5 text-xs font-semibold text-[#084734] shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
                                         실제 수업 화면
                                     </div>
                                 </div>
@@ -1833,8 +1772,6 @@ export default function ProductPage() {
                     </div>
                 </div>
             </section>
-
-            <WaveDivider color="#ffffff" />
 
             {/* ================================================================
                 30가지 수업 도구 + 10가지 수업 활동 (categorized, wave anim)
@@ -1875,9 +1812,9 @@ export default function ProductPage() {
                                         whileInView={{ opacity: 1, y: 0, scale: 1 }}
                                         viewport={{ once: true }}
                                         transition={{ delay: i * 0.02 }}
-                                        className="group rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-4 text-center backdrop-blur-sm transition-all hover:-translate-y-1 hover:border-white/20 hover:bg-white/[0.08] hover:shadow-[0_20px_40px_rgba(15,23,42,0.18)]"
+                                        className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-4 text-center"
                                     >
-                                        <div className={`mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${tool.tone} shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] transition-transform group-hover:scale-105`}>
+                                        <div className={`mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${tool.tone} shadow-[inset_0_1px_0_rgba(255,255,255,0.4)]`}>
                                             <tool.icon className="h-5 w-5" />
                                         </div>
                                         <p className={`break-keep text-sm font-semibold leading-snug text-white/90 ${tool.labelClass ?? ""}`}>
@@ -1897,10 +1834,10 @@ export default function ProductPage() {
                                 <motion.div
                                     key={act.label}
                                     {...stagger(i)}
-                                    className={`${act.cardClass} rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_6px_rgba(0,0,0,0.04)] transition-all hover:-translate-y-1 hover:shadow-[0_14px_30px_rgba(8,71,52,0.08)] group ${act.featured ? "p-5 md:p-6" : "p-4 md:p-5"}`}
+                                    className={`${act.cardClass} rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_6px_rgba(0,0,0,0.04)] ${act.featured ? "p-5 md:p-6" : "p-4 md:p-5"}`}
                                 >
                                     <div className={act.featured ? "flex items-start gap-4" : "flex flex-col items-center text-center"}>
-                                        <div className={`relative shrink-0 transition-transform duration-300 group-hover:scale-105 ${act.iconSizeClass}`}>
+                                        <div className={`relative shrink-0 ${act.iconSizeClass}`}>
                                             <Image
                                                 src={`${act.iconSrc}?v=${ACTIVITY_ICON_VERSION}`}
                                                 alt={act.iconAlt}
@@ -1924,8 +1861,6 @@ export default function ProductPage() {
                     </div>
                 </div>
             </section>
-
-            <WaveDivider flip color="#FDFCF8" />
 
             {/* ================================================================
                 다양한 수업 형태 (3D tilt, people visualization)
@@ -1952,8 +1887,7 @@ export default function ProductPage() {
                                 whileInView={{ opacity: 1, y: 0, rotateX: 0 }}
                                 viewport={{ once: true }}
                                 transition={{ delay: i * 0.1, type: "spring", stiffness: 200, damping: 25 }}
-                                whileHover={{ y: -8, boxShadow: "0 20px 40px rgba(0,0,0,0.08)" }}
-                                className={`rounded-2xl border p-6 ${item.color} text-center transition-all cursor-pointer`}
+                                className={`rounded-2xl border p-6 ${item.color} text-center transition-all`}
                                 style={{ perspective: 800 }}
                             >
                                 <div className="w-14 h-14 rounded-2xl bg-white border border-[rgba(0,0,0,0.08)] flex items-center justify-center mx-auto mb-4 shadow-[0_2px_10px_rgba(0,0,0,0.07)]">{item.icon}</div>
@@ -2000,7 +1934,7 @@ export default function ProductPage() {
             {/* ================================================================
                 안정성 & 네트워크 (world map dots, count-up)
             ================================================================ */}
-            <section className="py-24 md:py-32 bg-[#111110] text-white relative overflow-hidden">
+            <section className="py-24 md:py-32 bg-[#111110] text-white relative overflow-x-clip">
                 {/* World map dots background */}
                 <div className="absolute inset-0 pointer-events-none opacity-20">
                     <svg className="w-full h-full" viewBox="0 0 1000 500" fill="none">
@@ -2015,8 +1949,6 @@ export default function ProductPage() {
                     </svg>
                 </div>
 
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#6EE7B7]/5 rounded-full blur-[120px] pointer-events-none" />
-
                 <div className="container mx-auto px-4 lg:px-8 relative" ref={networkRef}>
                     <motion.div className="text-center mb-16" {...fadeUp}>
                         <EyebrowTag dark>GLOBAL NETWORK</EyebrowTag>
@@ -2026,14 +1958,11 @@ export default function ProductPage() {
 
                     <div className="grid sm:grid-cols-3 gap-5 max-w-4xl mx-auto">
                         {[
-                            { icon: <Globe className="w-7 h-7" />, value: `${net150}+`, label: "지원 국가", desc: "글로벌 CDN으로 어디서든 빠르게" },
-                            { icon: <Zap className="w-7 h-7" />, value: "< 100ms", label: "지연 시간", desc: "실시간 상호작용이 가능한 속도" },
-                            { icon: <Shield className="w-7 h-7" />, value: `${net99}.9%`, label: "가동률", desc: "중단 없는 안정적인 수업 환경" },
+                            { value: `${net150}+`, label: "지원 국가", desc: "글로벌 CDN으로 어디서든 빠르게" },
+                            { value: "< 100ms", label: "지연 시간", desc: "실시간 상호작용이 가능한 속도" },
+                            { value: `${net99}.9%`, label: "가동률", desc: "중단 없는 안정적인 수업 환경" },
                         ].map((item, i) => (
-                            <motion.div key={i} {...stagger(i)} className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 text-center hover:bg-white/10 transition-colors relative overflow-hidden group">
-                                {/* Pulse line between cards */}
-                                {i < 2 && <div className="absolute right-0 top-1/2 -translate-y-1/2 w-px h-1/2 bg-gradient-to-b from-transparent via-[#6EE7B7]/20 to-transparent hidden sm:block" />}
-                                <div className="w-14 h-14 rounded-xl bg-white/10 border border-white/15 text-[#6EE7B7] flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]">{item.icon}</div>
+                            <motion.div key={i} {...stagger(i)} className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center relative overflow-hidden">
                                 <div className="text-3xl font-sans font-bold tabular-nums text-white mb-1">{item.value}</div>
                                 <div className="text-sm font-bold text-[#6EE7B7] mb-2">{item.label}</div>
                                 <p className="text-sm text-white/50">{item.desc}</p>
@@ -2061,10 +1990,10 @@ export default function ProductPage() {
                                     { icon: <BarChart3 className="w-5 h-5" />, label: "학습 데이터 리포트", detail: "집중도, 발언 횟수, 참여 시간을 데이터로. 학부모 상담이 객관적으로 바뀝니다." },
                                     { icon: <FileText className="w-5 h-5" />, label: "LMS 올인원", detail: "숙제 제출, 평가, 출결 관리 — 별도 LMS 없이 Classin 안에서 모두 해결." },
                                 ].map((f, i) => (
-                                    <motion.div key={i} {...stagger(i)} className="flex items-center gap-4 bg-white border border-[rgba(0,0,0,0.06)] rounded-xl p-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_18px_rgba(0,0,0,0.07)] hover:border-[rgba(8,71,52,0.15)] transition-all group">
+                                    <motion.div key={i} {...stagger(i)} className="flex items-center gap-4 bg-white border border-[rgba(0,0,0,0.06)] rounded-xl p-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
                                         <div className="w-11 h-11 rounded-xl bg-[#ECFDF5] border border-[rgba(8,71,52,0.15)] text-[#084734] flex items-center justify-center shrink-0">{f.icon}</div>
                                         <div className="flex-1 min-w-0"><h4 className="font-bold text-[#111110] mb-0.5 text-sm">{f.label}</h4><p className="text-xs text-[#615D59] leading-relaxed">{f.detail}</p></div>
-                                        <ArrowRight className="w-4 h-4 text-[#e8e8e4] group-hover:text-[#084734]/40 shrink-0 transition-colors" />
+                                        <ArrowRight className="w-4 h-4 text-[#e8e8e4] shrink-0" />
                                     </motion.div>
                                 ))}
                             </div>
@@ -2145,10 +2074,8 @@ export default function ProductPage() {
 
             <CaseStudiesSection />
 
-            <WaveDivider color="#ffffff" />
-
             {/* ================================================================
-                TESTIMONIALS (avatars, star ratings, marquee option)
+                TESTIMONIALS (avatars, marquee option)
             ================================================================ */}
             <section className="relative overflow-hidden bg-[#F6F7F2] py-20 md:py-24">
                 <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#084734]/20 to-transparent" />

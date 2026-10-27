@@ -80,9 +80,9 @@ export default function ClassroomStudioSection() {
                 initial={{ opacity: 0, y: 40 }}
                 animate={inView ? { opacity: 1, y: 0 } : {}}
                 transition={{ duration: 0.5, delay: i * 0.15 }}
-                className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-8 hover:shadow-lg hover:border-[#084734]/20 transition-all duration-300 group"
+                className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-8"
               >
-                <div className={`w-12 h-12 rounded-xl ${p.accentLight} flex items-center justify-center mb-5 group-hover:scale-105 transition-transform`}>
+                <div className={`w-12 h-12 rounded-xl ${p.accentLight} flex items-center justify-center mb-5`}>
                   <Icon className={`w-6 h-6 ${p.accentText}`} />
                 </div>
                 <div className="text-[10px] font-bold text-[#A39E98] uppercase tracking-[0.15em] mb-3">

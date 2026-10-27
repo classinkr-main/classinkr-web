@@ -10,7 +10,7 @@ import {
     ArrowRight, PenTool, Eye, Share2,
     Monitor, Fingerprint, Users, Layers, Wifi,
     Shield, Maximize, Zap, Hand,
-    GraduationCap, Mic, Camera, Star,
+    GraduationCap, Mic, Camera,
 } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
@@ -442,7 +442,7 @@ function ProductAnatomySection() {
                             <motion.div
                                 key={i}
                                 {...stagger(i)}
-                                className="bg-white rounded-2xl border border-black/[0.08] shadow-sm p-5 hover:shadow-md hover:border-[#084734]/20 transition-all"
+                                className="bg-white rounded-2xl border border-black/[0.08] shadow-sm p-5"
                             >
                                 <div className="text-[10px] font-bold text-[#A39E98] uppercase tracking-widest mb-2">{s.label}</div>
                                 <div className="text-base font-sans font-bold tabular-nums tracking-tight text-[#1a1a19] mb-0.5">{s.value}</div>
@@ -595,7 +595,7 @@ function LessonTimelineSection() {
 }
 
 /* ── Section: Testimonials ───────────────────────────────────────── */
-// 후기 콘텐츠(발화자·인용·평점)는 lib/testimonials.ts — 실사용 고객 후기를 익명화한 단일 소스 — 에서만 가져온다.
+// 후기 콘텐츠(발화자·인용)는 lib/testimonials.ts — 실사용 고객 후기를 익명화한 단일 소스 — 에서만 가져온다.
 // 이 페이지는 노출 순서만 정의한다. 도입 하드웨어 모델은 후기에 기록된 사실이 아니므로 배지로 표기하지 않는다.
 const HW_TESTIMONIAL_IDS = ["imisook-korean-ceo", "olm-eng-director", "yerim-edu"]
 
@@ -606,7 +606,6 @@ const testimonials = HW_TESTIMONIAL_IDS.flatMap((id) => {
         quote: source.quote,
         name: source.role,
         badge: source.badge,
-        rating: source.rating ?? 5,
     }]
 })
 
@@ -630,11 +629,6 @@ function TestimonialSection() {
                             {...stagger(i)}
                             className="bg-[#FDFCF8] rounded-2xl border border-black/[0.08] shadow-sm p-7 flex flex-col"
                         >
-                            <div className="flex gap-0.5 mb-5">
-                                {Array.from({ length: t.rating }).map((_, j) => (
-                                    <Star key={j} className="w-4 h-4 fill-[#084734] text-[#084734]" />
-                                ))}
-                            </div>
                             <p className="text-[#615D59] leading-relaxed text-sm flex-1 mb-6">
                                 &ldquo;{t.quote}&rdquo;
                             </p>
@@ -1343,7 +1337,7 @@ export default function ProductHWPage() {
                         </p>
 
                         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                            <Button asChild className="h-14 rounded-full bg-[#084734] px-10 text-base font-bold text-white shadow-[0_8px_20px_rgba(8,71,52,0.24)] transition-all hover:scale-105 hover:bg-[#065c41] hover:shadow-[0_12px_25px_rgba(8,71,52,0.32)] group">
+                            <Button asChild className="h-14 rounded-full bg-[#084734] px-10 text-base font-bold text-white shadow-[0_8px_20px_rgba(8,71,52,0.24)] transition-all hover:bg-[#065c41] hover:shadow-[0_12px_25px_rgba(8,71,52,0.32)] group">
                                 <Link
                                     href="/contact#contact-form"
                                     onClick={() => trackEvent("click_cta", { button: "hw_final_inquiry", page: "/product/hw" })}

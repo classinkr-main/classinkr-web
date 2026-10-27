@@ -94,12 +94,12 @@ export default function OnboardingRoadmap() {
                                     whileInView={{ opacity: 1, y: 0 }}
                                     viewport={{ once: true }}
                                     transition={{ delay: i * 0.12, duration: 0.5 }}
-                                    className="group flex flex-col items-center text-center"
+                                    className="flex flex-col items-center text-center"
                                 >
                                     <div className="relative mb-5 z-10 shrink-0">
-                                        <div className="w-14 h-14 rounded-full bg-white border border-[#084734]/30 text-[#084734] flex items-center justify-center transition-all duration-200 ease-out group-hover:scale-105 group-hover:bg-[#084734] group-hover:border-[#084734] group-hover:text-white group-hover:shadow-[0_10px_24px_rgba(8,71,52,0.22)]">
+                                        <div className="w-14 h-14 rounded-full bg-white border border-[#084734]/30 text-[#084734] flex items-center justify-center">
                                             <Icon
-                                                className="w-6 h-6 transition-transform duration-200 ease-out group-hover:scale-110"
+                                                className="w-6 h-6"
                                                 strokeWidth={1.75}
                                             />
                                         </div>

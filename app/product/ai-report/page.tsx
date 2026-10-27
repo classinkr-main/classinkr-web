@@ -331,7 +331,7 @@ function HeroSection() {
 ================================================================ */
 function PipelineSection() {
     return (
-        <section id="pipeline" className="py-28 md:py-36 bg-[#F6F5F4] scroll-mt-20">
+        <section id="pipeline" className="py-28 md:py-36 bg-[#F6F5F4]">
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div {...fadeUp} className="max-w-2xl mx-auto text-center mb-20 md:mb-24">
                     <Eyebrow>전체 흐름</Eyebrow>
@@ -379,7 +379,7 @@ function RecordingSection() {
     const prefersReduced = useReducedMotion()
 
     return (
-        <section id="auto-recording" className="py-28 md:py-36 bg-white scroll-mt-20">
+        <section id="auto-recording" className="py-28 md:py-36 bg-white">
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div {...fadeUp} className="max-w-2xl mx-auto text-center mb-20">
                     <Eyebrow>Step 1 — 자동 녹화</Eyebrow>
@@ -586,7 +586,7 @@ function ReportSection() {
                                         <span className="w-2 h-2 rounded-full bg-[#084734]" />
                                         <span className="text-sm font-bold text-[#111110]">AI 수업 리포트</span>
                                     </div>
-                                    <span className="rounded-full bg-[#F6F5F4] px-2.5 py-1 text-[10px] font-semibold text-[#A39E98] tracking-wider uppercase">
+                                    <span className="rounded-sm border border-dashed border-line-control bg-surface-sheet px-2 py-0.5 text-note font-medium text-fg-muted">
                                         예시 화면
                                     </span>
                                 </div>
@@ -893,7 +893,7 @@ function ClosingSection() {
 
 export default function AiReportPage() {
     return (
-        <main className="bg-[#FAFAF8]">
+        <div className="bg-[#FAFAF8]">
             <HeroSection />
             <PipelineSection />
             <RecordingSection />
@@ -902,6 +902,6 @@ export default function AiReportPage() {
             <ScenarioSection />
             <QaSection />
             <ClosingSection />
-        </main>
+        </div>
     )
 }
