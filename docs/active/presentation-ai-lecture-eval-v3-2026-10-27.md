@@ -151,6 +151,7 @@
 | 6 노트 | 「학부모들의 학원선택 인식에 관한 연구」, 2009 조사 — 학원을 바꾼 이유 상위: 자녀가 원해서 → 학부모 본인 판단 → 다른 학부모 권유 ([ScienceON](https://scienceon.kisti.re.kr/srch/selectPORSrchArticle.do?cn=DIKO0012028231&dbt=DIKO)) | 초록 요약만 확인, 비율 미확인 |
 | 8 · 13 | 잡코리아 에듀잡 전국 학원강사 430명 이직 현황 설문 ([이코노미21 잡트렌드](http://www.economy21.co.kr/news/articleView.html?idxno=59693)) | 수치 확인, 조사 연도 확인 필요 |
 | 8 노트 | 강사닷컴 회원 246명 설문 ([이데일리](https://edaily.co.kr/News/Read?mediaCodeNo=257&newsId=01738406609466992)) | 수치 확인, 연도 확인 필요 |
+| 11 | 개리 바이너척 『Twelve and a Half』(2021) — 책 제목의 '반쪽'이 '따뜻한 솔직함(Kind Candor)'. 본인이 가장 부족했던 덕목으로 꼽음 ([Inc.](https://www.inc.com/christine-lagorio-chafkin/gary-vaynerchuk-kind-candor.html)) | 검색 대조로 확인 |
 | 9 | 미래교육연구 24(1), 2011 ([교보 스콜라](https://scholar.kyobobook.co.kr/article/detail/4010023663045)) | v1에서 확인 |
 | 7 노트 | 강사 퇴사와 원생 감소의 인과관계 불인정, 손해배상 기각 ([한국경제 2026.5](https://www.hankyung.com/article/202605021668i)) | v1에서 확인 |
 | 19 · 20 | 국가데이터처·교육부 「2025년 초중고 사교육비조사」 과목별 참여 학생 월평균 ([정책브리핑](https://www.korea.kr/briefing/policyBriefingView.do?newsId=156748552)) | 공식 발표, 원문 표 재확인 |

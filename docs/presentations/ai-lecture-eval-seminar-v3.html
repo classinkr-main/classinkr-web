@@ -342,12 +342,12 @@ aside.notes { display: none; }
 .links path { fill: none; stroke: #A6D81E; stroke-width: 4; stroke-linecap: round; stroke-dasharray: 2 16; }
 
 /* ===== 11 피드백이 어려운 이유 ===== */
-.reasons3 { position: absolute; left: 120px; top: 315px; width: 790px; display: flex; flex-direction: column; gap: 30px; }
-.rz { height: 172px; display: flex; align-items: center; gap: 30px; padding: 0 38px; box-sizing: border-box; }
+.reasons3 { position: absolute; left: 120px; top: 300px; width: 790px; display: flex; flex-direction: column; gap: 22px; }
+.rz { height: 160px; display: flex; align-items: center; gap: 30px; padding: 0 38px; box-sizing: border-box; }
 .rz .no { width: 92px; height: 92px; flex: none; display: grid; place-items: center; font-size: 30px; font-weight: 800; color: var(--em); }
 .rz .tt { font-size: 34px; font-weight: 800; letter-spacing: -.02em; }
 .rz .ss { margin-top: 8px; font-size: 22px; font-weight: 600; color: var(--mute); line-height: 1.45; }
-.ks { position: absolute; left: 1000px; top: 300px; width: 800px; height: 610px; border-radius: 44px; overflow: hidden; }
+.ks { position: absolute; left: 1000px; top: 300px; width: 800px; height: 524px; border-radius: 44px; overflow: hidden; }
 .ks .qd { position: absolute; width: 50%; height: 50%; padding: 36px 40px; box-sizing: border-box; }
 .ks .qd b { display: block; font-size: 30px; font-weight: 800; color: var(--ink-2); }
 .ks .qd span { display: block; margin-top: 8px; font-size: 20px; font-weight: 600; color: var(--mute); }
@@ -358,10 +358,14 @@ aside.notes { display: none; }
 .ks .ax.v { left: 50%; top: 30px; bottom: 30px; width: 2px; }
 .ks .ax.h { top: 50%; left: 30px; right: 30px; height: 2px; }
 .ks .axl { position: absolute; font-size: 19px; font-weight: 800; color: var(--mute); letter-spacing: .02em; }
-.knob { position: absolute; left: 200px; top: 180px; width: 72px; height: 72px; margin: -36px 0 0 -36px; border-radius: 50%; display: grid; place-items: center; }
+.knob { position: absolute; left: 200px; top: 160px; width: 72px; height: 72px; margin: -36px 0 0 -36px; border-radius: 50%; display: grid; place-items: center; }
 .knob .led { width: 26px; height: 26px; }
-.kb { position: absolute; left: 160px; top: 230px; padding: 14px 24px; font-size: 22px; font-weight: 800; white-space: nowrap; color: var(--ink-2); }
+.kb { position: absolute; left: 160px; top: 204px; padding: 14px 24px; font-size: 22px; font-weight: 800; white-space: nowrap; color: var(--ink-2); }
 .kb span { display: block; }
+
+.warm { position: absolute; left: 120px; top: 858px; width: 1680px; height: 96px; display: flex; align-items: center; gap: 18px; padding: 0 40px; box-sizing: border-box; font-size: 30px; font-weight: 700; letter-spacing: -.02em; color: var(--ink-2); }
+.warm b { color: var(--em); font-weight: 800; }
+.warm small { margin-left: auto; font-size: 19px; font-weight: 600; color: var(--mute); white-space: nowrap; }
 
 /* ===== 12 가완디 ===== */
 .qmark { position: absolute; left: 96px; top: 110px; font-family: 'Hahmlet', serif; font-size: 320px; font-weight: 800; line-height: 1; color: var(--bg);
@@ -762,7 +766,7 @@ aside.notes { display: none; }
 </section>
 
 <!-- 11 피드백이 어려운 이유 -->
-<section class="slide s11" data-scene="light" data-enter="candor" data-steps="1" data-time="0:50">
+<section class="slide s11" data-scene="light" data-enter="candor" data-steps="2" data-time="0:50">
   <span class="eyebrow nm in pill r"><i class="led"></i>2막 · 보이지 않는 교실</span>
   <h2 class="h t">학원에서 강사 피드백이 <span class="em">어려운</span> 세 가지 이유</h2>
   <div class="reasons3">
@@ -776,13 +780,14 @@ aside.notes { display: none; }
     <div class="qd q3"><b>고의적 거짓</b><span>아끼지도, 말하지도 않음</span></div>
     <div class="qd q4"><b>불쾌한 공격</b><span>말하지만 아끼지 않음</span></div>
     <i class="ax v"></i><i class="ax h"></i>
-    <span class="axl" style="left:30px;top:316px">↑ 진심으로 아끼기</span>
-    <span class="axl" style="right:30px;top:316px">직접 말하기 →</span>
+    <span class="axl" style="left:30px;top:486px">↑ 진심으로 아끼기</span>
+    <span class="axl" style="right:30px;top:486px">직접 말하기 →</span>
     <div class="knob nm sm"><i class="led"></i></div>
     <div class="kb nm sm pill"><span class="k1">좋은 게 좋은 거…</span></div>
   </div>
-  <p class="src t">킴 스콧 『Radical Candor』(2017, 국역 『실리콘밸리의 팀장들』) — 피드백의 두 축: 진심으로 아끼기 × 직접 말하기</p>
-  <aside class="notes">세 가지 장벽 때문에 많은 원장님이 킴 스콧이 말한 '파괴적 공감'에 머뭅니다 — 강사를 아끼니까 말을 못 합니다. 클릭: 점이 '완전한 솔직함'으로 이동. "아끼면서도 직접 말하려면 근거가 필요합니다. 사람이 아니라 수업에 대해 말할 수 있는 근거." → "그런데 최고의 전문가들은 어떻게 성장할까요?"</aside>
+  <div class="warm nm pill step" data-step="2"><i class="led"></i><span>개리 바이너척은 이것을 <b>‘따뜻한 솔직함(Kind Candor)’</b>이라 부릅니다 — 솔직하게, 그러나 친절하게.</span><small>『Twelve and a Half』(2021)</small></div>
+  <p class="src t">킴 스콧 『Radical Candor』(2017, 국역 『실리콘밸리의 팀장들』) · 개리 바이너척 『Twelve and a Half』(2021)</p>
+  <aside class="notes">세 가지 장벽 때문에 많은 원장님이 킴 스콧이 말한 '파괴적 공감'에 머뭅니다 — 강사를 아끼니까 말을 못 합니다. 클릭: 점이 '완전한 솔직함'으로 이동. "아끼면서도 직접 말하려면 근거가 필요합니다. 사람이 아니라 수업에 대해 말할 수 있는 근거." 클릭 2: 개리 바이너척도 같은 이야기를 합니다 — 그는 이것을 '따뜻한 솔직함(Kind Candor)'이라 부르고, 책 『Twelve and a Half』(2021)에서 스스로 가장 부족했던 '반쪽'으로 꼽았습니다. 커리어의 실수 상당수가 솔직하지 못해서였다고 말합니다. "솔직하게, 그러나 친절하게 — 그러려면 근거가 필요합니다." → "그런데 최고의 전문가들은 어떻게 성장할까요?"</aside>
 </section>
 
 <!-- 12 가완디 -->
@@ -1645,6 +1650,7 @@ aside.notes { display: none; }
     },
 
     candor: function (slide, n, tl, instant) {
+      if (n !== 1) return;
       var knob = $('.knob', slide), kb = $('.kb', slide), k1 = $('.kb .k1', slide);
       tl.to(knob, { x: 400, duration: 1.3, ease: 'expo.inOut' }, 0);
       tl.to(kb, { autoAlpha: 0, duration: .25 }, 0);
