@@ -478,12 +478,10 @@ const CINEMATIC_CASES = [
         quote: "Classin 이전에도 여러 화상 툴을 써봤습니다. 하지만 영업 데모를 할 때 학생과 교사 모두 Classin에 가장 빠르게 반응했어요.",
         person: "Acadsoc 서비스 팀",
         before: { label: "도입 전", items: ["학생 이탈률 높음", "수업 집중도 측정 불가", "다른 플랫폼으로 전전"] },
-        after: { label: "도입 후", items: ["누적 학습자 4,000만+", "영업 데모 1순위 채택", "Series A→C 투자 유치"] },
+        after: { label: "도입 후", items: ["영업 데모 1순위 채택", "학생·교사 반응이 가장 빠름"] },
         accentBg: "bg-[#F6F5F4]",
         accentText: "text-[#31302E]",
         accentBorder: "border-[#e8e8e4]",
-        num: "$63.6M",
-        numLabel: "누적 투자 유치",
     },
     {
         index: "03",
@@ -492,12 +490,10 @@ const CINEMATIC_CASES = [
         quote: "하이브리드 접근 방식은 팬데믹 속 임시 해법이 아닙니다. 이것이 교육의 새로운 표준이 될 것입니다.",
         person: "왕보(王博) 부총장",
         before: { label: "도입 전", items: ["단일 캠퍼스 수업 한계", "해외 학생 접근 불가", "협업 대학 연결 어려움"] },
-        after: { label: "도입 후", items: ["한 학기 287개 하이브리드 수업", "Cornell·ANU·와세다 연결", "글로벌 오픈 코스 프로그램"] },
+        after: { label: "도입 후", items: ["하이브리드 수업 운영", "Cornell·ANU·와세다 연결", "글로벌 오픈 코스 프로그램"] },
         accentBg: "bg-[#ECFDF5]",
         accentText: "text-[#084734]",
         accentBorder: "border-[#D1FAE5]",
-        num: "287",
-        numLabel: "단 한 학기 하이브리드 수업 수",
     },
 ]
 
@@ -527,10 +523,6 @@ function CinematicCasesSection() {
                                 <div>
                                     <span className="text-[11px] font-bold text-white/30 tracking-widest uppercase block mb-3">{c.index} · {c.tag}</span>
                                     <h3 className="text-lg font-bold text-white mb-6">{c.name}</h3>
-                                </div>
-                                <div>
-                                    <div className="text-4xl font-sans font-bold tabular-nums text-[#6EE7B7] mb-1">{c.num}</div>
-                                    <div className="text-xs text-white/30 leading-snug">{c.numLabel}</div>
                                 </div>
                             </div>
 
@@ -678,14 +670,8 @@ function FutureVision1Section() {
     )
 }
 
-/* ── 미래 제시 2 (퀄리티 3배, 리소스 1/3) ─────────────────── */
+/* ── 미래 제시 2 ─────────────────── */
 function FutureVision2Section() {
-    const metricsRef = useRef<HTMLDivElement>(null)
-    const inView = useInView(metricsRef, { once: true, margin: "-80px" })
-
-    const q = useCountUp(3, inView, 1.5)
-    const r = useCountUp(67, inView, 1.5)
-
     return (
         <section className="py-24 md:py-40 bg-[#FDFCF8] overflow-hidden">
             <div className="container mx-auto px-4 lg:px-8 max-w-6xl">
@@ -709,34 +695,6 @@ function FutureVision2Section() {
                         그것이 Classin이 교사에게 드리는 약속입니다.
                     </p>
                 </motion.div>
-
-                {/* 핵심 수치 */}
-                <div ref={metricsRef} className="grid md:grid-cols-2 gap-6 mb-20 max-w-3xl mx-auto">
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={inView ? { opacity: 1, scale: 1 } : {}}
-                        transition={{ duration: 0.7, type: "spring", stiffness: 150 }}
-                        className="bg-[#1a1a19] rounded-3xl p-10 text-center"
-                    >
-                        <div className="text-[72px] md:text-[88px] font-sans font-bold tabular-nums text-[#6EE7B7] leading-none mb-2">
-                            {q}x
-                        </div>
-                        <div className="text-white/80 text-lg font-semibold mb-1">수업 퀄리티</div>
-                        <div className="text-white/30 text-sm">쌍방향 참여 · AI 지원 · 학습 데이터 기반</div>
-                    </motion.div>
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={inView ? { opacity: 1, scale: 1 } : {}}
-                        transition={{ duration: 0.7, delay: 0.15, type: "spring", stiffness: 150 }}
-                        className="bg-[#084734] rounded-3xl p-10 text-center"
-                    >
-                        <div className="text-[72px] md:text-[88px] font-sans font-bold tabular-nums text-[#6EE7B7] leading-none mb-2">
-                            -{r}%
-                        </div>
-                        <div className="text-white/90 text-lg font-semibold mb-1">반복 업무 리소스</div>
-                        <div className="text-white/60 text-sm">채점 · 출결 · 자료 준비 · 보고서 자동화</div>
-                    </motion.div>
-                </div>
 
                 {/* 진정성 텍스트 */}
                 <motion.div
@@ -1176,11 +1134,10 @@ function FullscreenQuoteSection() {
                     whileInView={{ opacity: 1 }}
                     viewport={{ once: true }}
                     transition={{ delay: 0.5, duration: 0.7 }}
-                    className="mx-auto mt-14 grid max-w-2xl grid-cols-1 gap-5 border-t border-white/10 pt-10 sm:mt-16 sm:grid-cols-3 sm:gap-8 sm:pt-12"
+                    className="mx-auto mt-14 grid max-w-md grid-cols-2 gap-5 border-t border-white/10 pt-10 sm:mt-16 sm:gap-8 sm:pt-12"
                 >
                     {[
-                        { value: "287개", label: "하이브리드 수업 (2021 가을학기 단 한 학기)" },
-                        { value: "160+", label: "협력 국가" },
+                        { value: "160+", label: "서비스 국가" },
                         { value: "6만+", label: "교육기관" },
                     ].map((s) => (
                         <div key={s.label} className="text-center">
@@ -1188,6 +1145,7 @@ function FullscreenQuoteSection() {
                             <div className="text-xs text-white/40 leading-relaxed">{s.label}</div>
                         </div>
                     ))}
+                    <p className="col-span-2 text-[11px] text-white/40">전 세계 누적 수치 · EEO 공식 소개 기준</p>
                 </motion.div>
             </div>
         </section>
@@ -1213,12 +1171,12 @@ const CASES = [
     {
         tag: "글로벌 튜터링",
         name: "Acadsoc",
-        headline: "1:1 온라인 튜터링으로 4,000만 학습자",
-        body: "필리핀 튜터와 전 세계 학습자를 연결하는 ESL 플랫폼 Acadsoc는 2017년 Classin을 도입한 이후 Series A → C까지 투자를 유치했습니다. 현재도 영업팀과 강사진이 고객 데모에 Classin을 1순위로 사용할 만큼 수업 경험의 품질이 검증됐습니다.",
+        headline: "1:1 온라인 튜터링을 Classin 위에서",
+        body: "필리핀 튜터와 전 세계 학습자를 연결하는 ESL 플랫폼 Acadsoc는 1:1 수업을 Classin으로 운영합니다. 영업팀과 강사진이 고객 데모에 Classin을 1순위로 쓸 만큼, 학생과 교사 모두 수업 경험에 가장 빠르게 반응했다고 말합니다.",
         results: [
-            { label: "누적 학습자", value: "4,000만+" },
-            { label: "고용 튜터", value: "15,000명" },
-            { label: "누적 투자 유치", value: "$63.6M" },
+            { label: "수업 형태", value: "1:1 온라인" },
+            { label: "튜터 네트워크", value: "필리핀 기반" },
+            { label: "고객 데모", value: "1순위" },
         ],
         color: "bg-[#F6F5F4] border-[#e8e8e4]",
         accent: "text-[#31302E]",
@@ -1452,9 +1410,9 @@ export default function ProductPage() {
 
     const metric30 = useCountUp(30, heroMetricInView)
     const metric10 = useCountUp(10, heroMetricInView)
-    const metric150 = useCountUp(150, heroMetricInView)
+    const metric160 = useCountUp(160, heroMetricInView)
 
-    const net150 = useCountUp(150, networkInView)
+    const net160 = useCountUp(160, networkInView)
 
     return (
         <div className="bg-[#FDFCF8] min-h-screen text-[#111110] font-sans selection:bg-[#D1FAE5] pt-20">
@@ -1495,11 +1453,11 @@ export default function ProductPage() {
                             </p>
 
                             {/* Animated hero metrics */}
-                            <div ref={heroMetricRef} className="flex flex-wrap justify-center gap-6 md:gap-12 mb-12">
+                            <div ref={heroMetricRef} className="flex flex-wrap justify-center gap-6 md:gap-12 mb-3">
                                 {[
                                     { value: metric30, suffix: "+", label: "수업 도구" },
                                     { value: metric10, suffix: "+", label: "수업 활동" },
-                                    { value: metric150, suffix: "+", label: "지원 국가" },
+                                    { value: metric160, suffix: "+", label: "서비스 국가" },
                                 ].map((m, i) => (
                                     <motion.div key={i} initial={{ opacity: 0, y: 15 }} animate={heroMetricInView ? { opacity: 1, y: 0 } : {}} transition={{ delay: i * 0.1 + 0.3 }} className="min-w-[84px] text-center">
                                         <div className="text-2xl md:text-3xl font-sans font-bold tabular-nums text-[#6EE7B7] drop-shadow-[0_2px_12px_rgba(0,0,0,0.35)]">
@@ -1509,6 +1467,7 @@ export default function ProductPage() {
                                     </motion.div>
                                 ))}
                             </div>
+                            <p className="mb-12 text-[11px] font-medium text-white/50">서비스 국가 수 · EEO 공식 소개 기준</p>
 
                             <div className="flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center sm:gap-4">
                                 <Button asChild className="h-[3.25rem] rounded-full bg-[#084734] px-7 text-base font-bold text-white shadow-[0_8px_20px_rgba(8,71,52,0.24)] transition-all hover:scale-105 hover:bg-[#065c41] hover:shadow-[0_12px_25px_rgba(8,71,52,0.32)] group sm:h-14 sm:px-8">
@@ -1911,7 +1870,7 @@ export default function ProductPage() {
 
                     <div className="grid sm:grid-cols-3 gap-5 max-w-4xl mx-auto">
                         {[
-                            { icon: <Globe className="w-7 h-7" />, value: `${net150}+`, label: "지원 국가", desc: "글로벌 CDN으로 어디서든 빠르게" },
+                            { icon: <Globe className="w-7 h-7" />, value: `${net160}+`, label: "서비스 국가", desc: "EEO 공식 소개 기준" },
                             { icon: <Zap className="w-7 h-7" />, value: "실시간", label: "수업 연결", desc: "교실 환경에서 직접 연결 상태를 확인" },
                             { icon: <Shield className="w-7 h-7" />, value: "사전 점검", label: "운영 준비", desc: "기기와 네트워크 조건을 미리 점검" },
                         ].map((item, i) => (
@@ -1972,7 +1931,7 @@ export default function ProductPage() {
                                     <div className="flex justify-between items-end mb-8">
                                         <div>
                                             <div className="text-white/50 text-sm font-medium mb-1">이번 달 종합 성취도</div>
-                                            <div className="text-white text-3xl font-sans font-bold tabular-nums">상위 15%</div>
+                                            <div className="text-white text-3xl font-sans font-bold">꾸준히 상승</div>
                                         </div>
                                     </div>
 
