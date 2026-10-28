@@ -188,6 +188,8 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // 20261022_crm_lead_auto_confirm.sql(정책 값 1줄 UPDATE)은 REST 프로브로 확인할 대상이 없어 계약에 넣지 않는다 —
   // 적용 확인은 docs/active/db-migration-runbook.md 의 2026-10-22 절 확인 쿼리로 한다.
   "supabase/migrations/20261022_sales_orders.sql",
+  // 총판 정산(2026-10-23) — 원가 템플릿·견적별 총판 정산·입금 기록. 세 표 모두 RLS deny-all.
+  "supabase/migrations/20261023_distributor_settlements.sql",
   // 하드웨어 재고관리 프로세스(2026-10-28) — 원장·품목 칸 추가, 정의서 품목 시드, 배송 예정 확정 v4.
   // 미적용이면 대시보드는 새 칸 없이 읽고(42703 폴백), 새 규칙(유형·물류번호 직접 선택 등)의 저장만 실패한다.
   "supabase/migrations/20261028_hardware_inventory_process.sql",
@@ -918,6 +920,38 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     severity: "warning",
     impact:
       "견적 승인은 그대로 되지만 오더가 만들어지지 않아 하드웨어 승인 대기·오더번호·배송 예정 자동 생성이 멈춘다(하드웨어 탭은 '미적용' 안내).",
+  },
+  {
+    kind: "table",
+    table: "distributor_settlements",
+    label: "총판 정산(총판용 견적서·미수금)",
+    columns: [
+      "id", "quote_document_id", "deal_id", "fulfillment_mode", "source_version_id", "issued_version_id", "distributor_name",
+      "distributor_email", "issue_trigger", "auto_email", "lines", "total_amount", "customer_total_amount",
+      "status", "paid_amount", "due_date", "issued_at", "issue_reason", "share_token", "email_status",
+      "review_required_reason", "cancelled_at", "installed_at", "updated_at",
+    ],
+    migration: "supabase/migrations/20261023_distributor_settlements.sql",
+    severity: "warning",
+    impact: "고객 견적은 유지되지만 원가 설정·총판 견적서 발행·미수금 추적이 503으로 차단된다.",
+  },
+  {
+    kind: "table",
+    table: "distributor_settlement_payments",
+    label: "총판 입금 기록",
+    columns: ["id", "settlement_id", "amount", "paid_on", "memo", "created_by", "created_at"],
+    migration: "supabase/migrations/20261023_distributor_settlements.sql",
+    severity: "warning",
+    impact: "총판 입금 기록이 503으로 차단돼 미수금이 줄지 않는다.",
+  },
+  {
+    kind: "table",
+    table: "distributor_price_templates",
+    label: "원가 템플릿",
+    columns: ["id", "name", "rules", "notes", "archived_at", "updated_at"],
+    migration: "supabase/migrations/20261023_distributor_settlements.sql",
+    severity: "warning",
+    impact: "원가은 직접 입력만 되고 템플릿 저장·적용이 503으로 차단된다.",
   },
   {
     kind: "table",

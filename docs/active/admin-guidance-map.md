@@ -81,6 +81,7 @@ SUPER_ADMIN은 설정 › 회원으로 편집한다. 레거시 `deny` 값은 `fo
 | 공개 챗봇·CS 운영 | RAG, 공개 챗봇, 외부 CS 대시보드 | [챗봇 플레이북](playbook/05-chatbot.md), [CS 콘솔 IA](cs-admin-console-ia-2026-07-27.md) |
 | 갈매봇·원격 오더 | 어드민 전역 AI 위젯, `/admin/ai`, 오더 카드·오더 등급 | [갈매봇 위젯·원격 오더 기획](admin-ai-widget-remote-order-plan-2026-09-28.md). 셸 연결은 Admin 코어, 대화는 챗봇/CS, 오더 핸들러는 해당 도메인 |
 | 플랫폼·데이터 | Supabase, migration, cron, 알림, Portal V2 | [플랫폼 플레이북](playbook/06-platform-data.md), [운영 장애·Cron·Webhook 지침](operational-failure-handling-guidelines.md), [ADR-010](../adr/ADR-010-operational-failure-containment.md), [DB 마이그레이션 런북](db-migration-runbook.md), [Supabase 운영 복구·하드닝 계획](supabase-operational-recovery-hardening-plan-2026-09-01.md) |
+| 하드웨어 C/H 방식·총판 정산 | `/admin/quotes` 견적 상세 총판 정산, 총판 미수금 탭, 총판용 견적서, 하드웨어 매출 인식 시점 | [총판 정산 — C방식/H방식](../hardware-ops/distributor-settlement.md) |
 | KR Team·매출 장부 | `/admin/branch`, `/admin/branch/ledger`, 동기화·정합성 | [Classin KR Team 스킬](../../.codex/skills/classin-kr-team/SKILL.md), [월별 목표·채움 차트](revenue-monthly-goal-chart.md). 장부 반영 때 '2. REV' 시트 쓰기는 [ADR-011](../adr/ADR-011-rev-sheet-writeback-from-ledger.md)·[REV 시트 쓰기 런북](rev-sheet-writeback-runbook.md) — 반영은 `lib/branch/sheet-writeback/apply-service.ts` 하나로만 |
 | 하드웨어 재고·입출고 | `/admin/hardware`, 시트 가져오기, 오더·매출 연결 | [하드웨어 SCM 탭 기준](hardware-scm-tab-reference.md), [하드웨어·오더·매출 연결 로직](hardware-order-revenue-link-plan-2026-10-22.md), [재고관리 프로세스 정의서 차이·이어서 할 작업](hardware-inventory-process-gap-2026-10-28.md) |
 

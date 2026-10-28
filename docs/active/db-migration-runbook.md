@@ -74,6 +74,15 @@ npm run check:db --  --strict
   warning 등급이라 `--strict` 없이는 미적용이어도 exit 0이다.
 - 켜는 전체 순서는 [REV 시트 쓰기 런북](rev-sheet-writeback-runbook.md) §1을 따른다.
 
+### 총판 정산
+
+[20261023_distributor_settlements.sql](../../supabase/migrations/20261023_distributor_settlements.sql)은
+견적별 총판 정산(총판용 견적서 금액·발행 스냅샷·미수 상태), 총판 입금 기록, 원가 템플릿을 저장한다.
+운영 적용 여부는 `npm run check:db`의 `distributor_settlements`·`distributor_settlement_payments`·
+`distributor_price_templates` 프로브로 확인한다. 미적용이면 고객 견적 작성·공유·동의는 그대로 동작하고,
+견적 상세의 총판 정산 영역과 총판 미수금 탭은 적용 안내를 표시하며 쓰기는 503으로 응답한다.
+세 표 모두 RLS를 활성화하고 정책을 두지 않는다.
+
 ### 공통 적용 기준
 
 **마이그레이션을 먼저 적용하고 코드를 배포한다.** 다만 순서가 뒤집혀도 공개 표면이 죽지 않도록
@@ -218,6 +227,15 @@ npm run check:db --  --strict
 같은 작업의 `sales_ledger_import_runs` 쪽은 스키마 변경 없이 기존 컬럼·JSON을 쓴다 — `parser_version`에 캡처 버전
 `rev-native:v2`, `metadata.runtime`에 같은 출처. 활성 포인터 전환(`activateRevImportRun`)은 활성 run의
 `parser_version`이 후보보다 높으면 덮지 않는다(라벨 이전 run은 전부 기본값 `sales-ledger-import-v1` = 가장 낮음).
+
+### 2026-10-23 총판 정산 — 서울 프로젝트 적용 확인 필요
+
+[배포 순서 규칙 › 총판 정산](#총판-정산) 절의 마이그레이션이다. 2026-10-22·10-28 파일과 서로 참조하지 않아
+(`quote_documents`·`quote_document_versions`·`deals`만 참조) 10-28 파일 뒤에 적용해도 된다. 전부 멱등(`IF NOT EXISTS`·`DROP ... IF EXISTS`)이라 재실행 무해.
+
+| 파일 | 하는 일 | 미적용 시 | 확인 |
+| --- | --- | --- | --- |
+| `20261023_distributor_settlements.sql` | 원가 템플릿 `distributor_price_templates`, 견적별 총판 정산 `distributor_settlements`(C/H 방식·발행 스냅샷·공유 토큰·미수 상태), 입금 기록 `distributor_settlement_payments`. 세 표 모두 RLS deny-all | 고객 견적 작성·공유·동의와 오더 생성은 그대로 된다. 고객 동의 시 총판 견적서 자동 발행은 조용히 건너뛰고, 견적 상세의 총판 정산 영역·총판 미수금 탭은 적용 안내, 쓰기는 503 | `npm run check:db`의 `distributor_settlements`·`distributor_settlement_payments`·`distributor_price_templates` 프로브(warning) |
 
 ## 적용 보류 중인 마이그레이션
 
