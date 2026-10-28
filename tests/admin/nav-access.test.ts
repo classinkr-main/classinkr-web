@@ -125,26 +125,26 @@ const EVERY_ROLE = ["SUPER_ADMIN", "ADMIN", "BRANCH", "EDITOR", "VIEWER", "PARTN
 const EVERY_LEGACY_PRESET = ["staff", "sales", "marketing", "cs", "lead", "branch", "super"] as const
 
 describe("resolveNavPlacement — 전원 공통 배치", () => {
-  // 시안 스위치 꺼짐(기본, 기획 D13) 기준 — 켜면 AI 올인원이 더해져 9(tests/admin/nav-ai-preview.test.tsx).
-  it("상시 8개는 DEFAULT_PRIMARY_HREFS 그대로다", () => {
+  // 시안 스위치 꺼짐(기본, 기획 D13) 기준 — 켜면 AI 올인원이 더해져 10(tests/admin/nav-ai-preview.test.tsx).
+  it("상시 9개는 DEFAULT_PRIMARY_HREFS 그대로다", () => {
     for (const href of DEFAULT_PRIMARY_HREFS) {
       expect(resolveNavPlacement(href, ctx()), href).toBe("primary")
     }
-    expect(DEFAULT_PRIMARY_HREFS).toHaveLength(8)
+    expect(DEFAULT_PRIMARY_HREFS).toHaveLength(9)
   })
 
-  it("나머지 9개의 자리는 전부 기타다 — 그중 2개는 기본 숨김이라 처음엔 목록에 없다", () => {
+  it("나머지 8개의 자리는 전부 기타다 — 그중 2개는 기본 숨김이라 처음엔 목록에 없다", () => {
     const rest = ADMIN_NAV.map((item) => item.href).filter(
       (href) => !DEFAULT_PRIMARY_HREFS.includes(href)
     )
-    expect(rest).toHaveLength(9)
+    expect(rest).toHaveLength(8)
     // resolveNavPlacement 는 "보일 때 앉는 자리"다 — 기본 숨김 항목도 다시 표시하면 기타로 간다.
     for (const href of rest) {
       expect(resolveNavPlacement(href, ctx()), href).toBe("folded")
     }
     const hiddenByDefault = rest.filter((href) => isNavHidden(href, ctx()))
     expect(hiddenByDefault.sort()).toEqual([...DEFAULT_HIDDEN_HREFS].sort())
-    expect(rest.length - hiddenByDefault.length).toBe(7)
+    expect(rest.length - hiddenByDefault.length).toBe(6)
   })
 
   // 이 테스트가 "모든 매니저가 같은 사이드바를 본다"를 고정한다.
@@ -198,18 +198,19 @@ describe("normalizeNavOverrides — 레거시 deny 처리", () => {
 })
 
 describe("resolveNavAccess", () => {
-  it("상시 8 / 기타 7 / 숨김 2(기본 숨김) 로 나눈다", () => {
+  it("상시 9 / 기타 6 / 숨김 2(기본 숨김) 로 나눈다", () => {
     // 2026-09-25 전까지는 "기타 9"였다 — 마케팅 프로젝트·운영 상태가 기본 숨김으로 빠졌다.
     // 2026-09-29 AI 올인원이 상시에 더해졌지만 시안 스위치가 꺼져 있으면(기본, 기획 D13) 빠진다 —
-    // 상시 8, 세 칸을 합치면 17 전부다. 켜짐(상시 9·18)은 tests/admin/nav-ai-preview.test.tsx.
+    // 2026-10-26 콘텐츠가 기타에서 상시로 올라왔다 — 상시 9, 세 칸을 합치면 17 전부다.
+    // 켜짐(상시 10·18)은 tests/admin/nav-ai-preview.test.tsx.
     const { primary, folded, hidden } = resolveNavAccess(ctx())
-    expect(primary).toHaveLength(8)
-    expect(folded.flatMap((group) => group.items)).toHaveLength(7)
+    expect(primary).toHaveLength(9)
+    expect(folded.flatMap((group) => group.items)).toHaveLength(6)
     expect(hidden.map((item) => item.href)).toEqual([
       "/admin/campaigns/projects",
       "/admin/ops",
     ])
-    expect(primary.length + 7 + hidden.length).toBe(ADMIN_NAV.length)
+    expect(primary.length + 6 + hidden.length).toBe(ADMIN_NAV.length)
   })
 
   it("Overview 가 상시 첫 항목이고 home 이 첫 그룹이다", () => {
@@ -218,10 +219,11 @@ describe("resolveNavAccess", () => {
     expect(access.primaryGroups[0]?.category).toBe("home")
   })
 
-  it("상시를 재정렬 없이 범주로 분할한다 — 홈 + 고객·매출", () => {
+  it("상시를 재정렬 없이 범주로 분할한다 — 홈 + 고객·매출 + 마케팅·분석(콘텐츠)", () => {
     const access = resolveNavAccess(ctx())
     expect(access.primaryGroups.flatMap((group) => group.items)).toEqual(access.primary)
-    expect(access.primaryGroups.map((group) => group.category)).toEqual(["home", "customer"])
+    expect(access.primaryGroups.map((group) => group.category)).toEqual(["home", "customer", "growth"])
+    expect(access.primary.at(-1)?.href).toBe("/admin/blog")
   })
 
   it("기타를 마케팅·분석 → 시스템 순서로 묶는다", () => {
@@ -230,7 +232,7 @@ describe("resolveNavAccess", () => {
     expect(folded.every((group) => group.items.length > 0)).toBe(true)
   })
 
-  it("상시 소제목을 켠다 — 8항목 2범주", () => {
+  it("상시 소제목을 켠다 — 9항목 3범주", () => {
     expect(resolveNavAccess(ctx()).showPrimaryHeaders).toBe(true)
   })
 })
@@ -386,12 +388,15 @@ describe("setNavOverride", () => {
     // 상시 기본 항목을 상시로, 기본 숨김 항목을 숨김으로 — 둘 다 예외가 아니다.
     expect(setNavOverride({ "/admin/crm": "folded" }, "/admin/crm", "primary")).toEqual({})
     expect(setNavOverride({ "/admin/ops": "folded" }, "/admin/ops", "hidden")).toEqual({})
-    expect(setNavOverride({ "/admin/blog": "primary" }, "/admin/blog", "folded")).toEqual({})
+    expect(setNavOverride({ "/admin/analytics": "primary" }, "/admin/analytics", "folded")).toEqual({})
+    // 콘텐츠는 2026-10-26부터 상시 기본이다.
+    expect(setNavOverride({ "/admin/blog": "folded" }, "/admin/blog", "primary")).toEqual({})
   })
 
   it("기본과 다르면 값을 남긴다", () => {
     expect(setNavOverride({}, "/admin/quotes", "hidden")).toEqual({ "/admin/quotes": "hidden" })
-    expect(setNavOverride({}, "/admin/blog", "primary")).toEqual({ "/admin/blog": "primary" })
+    expect(setNavOverride({}, "/admin/analytics", "primary")).toEqual({ "/admin/analytics": "primary" })
+    expect(setNavOverride({}, "/admin/blog", "folded")).toEqual({ "/admin/blog": "folded" })
   })
 
   it("Overview 숨김·모르는 href 는 무시하고, 입력을 변형하지 않는다", () => {

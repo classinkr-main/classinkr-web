@@ -1,5 +1,11 @@
 export type BlogPostStatus = "draft" | "review" | "published" | "archived"
 
+/**
+ * AI 스트림 중간 실패 신호. 스트림은 이미 200 으로 시작돼 상태 코드를 못 바꾸므로, 이 표식 뒤에
+ * 오류 메시지를 붙여 보낸다. 편집기는 표식을 보면 결과를 버리고 오류로 처리한다(본문에 섞지 않는다).
+ */
+export const BLOG_AI_STREAM_ERROR_MARKER = "\u0000[AI_STREAM_ERROR]"
+
 export interface BlogPostCTA {
   eyebrow: string
   title: string
@@ -63,6 +69,11 @@ export interface BlogPost {
 export type BlogPostInput = Omit<BlogPost, "id">
 
 export const CATEGORIES = [
-  "전체", "인사이트", "제품 업데이트", "성공 사례",
+  "전체", "인사이트", "제품", "성공 사례",
   "교육 트렌드", "데이터 분석", "원장 인터뷰",
 ] as const
+
+// 2026-10-26 "제품 업데이트" → "제품"으로 개명. DB에 남은 옛 값(배포 전 저장분 포함)도 같은 칩에 모은다.
+export function normalizeBlogCategory(category: string | null | undefined): string | null {
+  return category === "제품 업데이트" ? "제품" : category ?? null
+}

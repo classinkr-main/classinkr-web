@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai"
 import { NextRequest } from "next/server"
 
 import { verifyAdmin } from "@/lib/admin-auth"
+import { BLOG_AI_STREAM_ERROR_MARKER } from "@/lib/blog-types"
 import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 
 export const runtime = "nodejs"
@@ -18,31 +19,34 @@ type DraftParams = {
   reference?: string
 }
 
+// 키는 편집기 선택지 값(한글) 그대로다. 예전엔 영어 키라 어떤 톤을 골라도 기본 톤으로 떨어졌다.
 const TONE_GUIDE: Record<string, string> = {
-  professional:
-    "Use a polished, evidence-driven voice suitable for an education SaaS brand.",
-  casual:
+  전문적:
+    "Use a polished, trustworthy voice suitable for an education SaaS brand. Do not state numbers, prices, or product capabilities that are not given in the input.",
+  친근한:
     "Use a clear, friendly, approachable voice with plain language and short sentences.",
-  storytelling:
-    "Use a narrative structure with concrete examples and emotional pacing.",
-  persuasive:
-    "Use benefit-led framing, clear problem/solution structure, and a strong CTA.",
-  informative:
+  스토리텔링:
+    "Use a narrative structure with concrete classroom situations and natural pacing.",
+  설득형:
+    "Use benefit-led framing and a clear problem/solution structure, ending with a soft call to action. Do not exaggerate.",
+  정보형:
     "Use an organized, practical, concise tone focused on clarity and utility.",
 }
+const DEFAULT_TONE = "전문적"
 
-const LENGTH_GUIDE: Record<string, { words: string; sections: string }> = {
+// 분량은 편집기 선택지와 같은 단위(한국어 글자 수, 공백 포함)로 지시한다. 예전엔 화면은 '자', 프롬프트는 'words'였다.
+const LENGTH_GUIDE: Record<string, { chars: string; sections: string }> = {
   short: {
-    words: "about 500 words",
+    chars: "about 1,500 Korean characters including spaces",
     sections: "intro + 2 body sections + closing",
   },
   medium: {
-    words: "about 1200 words",
-    sections: "intro + 4 to 5 body sections + closing",
+    chars: "about 3,000 Korean characters including spaces",
+    sections: "intro + 4 body sections + closing",
   },
   long: {
-    words: "about 2500 words",
-    sections: "intro + 7 to 8 body sections + closing + summary",
+    chars: "about 5,000 Korean characters including spaces",
+    sections: "intro + 6 body sections + closing + summary",
   },
 }
 
@@ -113,9 +117,9 @@ function buildDraftPrompt(
   title: string,
   content: string,
   category: string,
-  { topic = "", tone = "professional", length = "medium", reference = "" }: DraftParams
+  { topic = "", tone = DEFAULT_TONE, length = "medium", reference = "" }: DraftParams
 ) {
-  const toneGuide = TONE_GUIDE[tone] ?? TONE_GUIDE.professional
+  const toneGuide = TONE_GUIDE[tone] ?? TONE_GUIDE[DEFAULT_TONE]
   const lengthGuide = LENGTH_GUIDE[length] ?? LENGTH_GUIDE.medium
   const referenceBlock = reference.trim()
     ? `\nReference material to reflect:\n---\n${reference.trim()}\n---\n`
@@ -127,7 +131,7 @@ Write a full markdown draft from scratch.
 
 Requested topic: ${topic || title || "education operations insight"}
 Category: ${category || "insight"}
-Target length: ${lengthGuide.words}
+Target length: ${lengthGuide.chars}
 Recommended structure: ${lengthGuide.sections}
 Tone guide: ${toneGuide}
 
@@ -172,7 +176,7 @@ export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
   const { allowed } = await checkRateLimitDistributed(ip, "admin-blog-ai", AI_RATE_LIMIT)
   if (!allowed) {
-    return new Response(JSON.stringify({ error: "Too many requests." }), {
+    return new Response(JSON.stringify({ error: "AI 요청이 몰렸습니다. 5분쯤 뒤에 다시 시도해 주세요." }), {
       status: 429,
       headers: { "Content-Type": "application/json" },
     })
@@ -180,7 +184,7 @@ export async function POST(req: NextRequest) {
 
   if (!process.env.GEMINI_API_KEY) {
     return new Response(
-      JSON.stringify({ error: "GEMINI_API_KEY is not configured." }),
+      JSON.stringify({ error: "AI 키(GEMINI_API_KEY)가 서버에 설정돼 있지 않습니다." }),
       {
         status: 500,
         headers: { "Content-Type": "application/json" },
@@ -202,7 +206,7 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json()
   } catch {
-    return new Response(JSON.stringify({ error: "Invalid request body" }), {
+    return new Response(JSON.stringify({ error: "요청 형식이 올바르지 않습니다." }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
     })
@@ -218,7 +222,7 @@ export async function POST(req: NextRequest) {
     "draft",
   ]
   if (!action || !validActions.includes(action)) {
-    return new Response(JSON.stringify({ error: "Invalid action" }), {
+    return new Response(JSON.stringify({ error: "지원하지 않는 AI 작업입니다." }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
     })
@@ -246,22 +250,30 @@ export async function POST(req: NextRequest) {
     })
   }
 
+  // 편집기가 창을 닫거나 다시 생성하면 요청을 끊는다. 그때 생성도 멈춰 쿼터를 아낀다.
+  let cancelled = false
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder()
 
       try {
         for await (const chunk of streamResult.stream) {
+          if (cancelled || req.signal.aborted) break
           const text = chunk.text()
           if (text) controller.enqueue(encoder.encode(text))
         }
       } catch (err) {
+        if (cancelled) return
         const message =
-          err instanceof Error ? err.message : "AI generation failed."
-        controller.enqueue(encoder.encode(`\n\n[error: ${message}]`))
+          err instanceof Error ? err.message : "AI 생성이 중간에 실패했습니다."
+        // 본문에 섞이지 않게 표식 뒤에 싣는다(편집기가 표식을 보고 결과를 버린다).
+        controller.enqueue(encoder.encode(`${BLOG_AI_STREAM_ERROR_MARKER}${message}`))
       } finally {
-        controller.close()
+        if (!cancelled) controller.close()
       }
+    },
+    cancel() {
+      cancelled = true
     },
   })
 

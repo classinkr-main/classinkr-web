@@ -46,6 +46,7 @@ import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import { SafeBlogImage } from "@/components/blog/SafeBlogImage"
 import { type RichMarkdownEditorHandle } from "@/components/admin/RichMarkdownEditor"
 import {
+  BLOG_AI_STREAM_ERROR_MARKER,
   BLOG_STATUS_OPTIONS,
   CATEGORIES,
   DEFAULT_BLOG_CTA,
@@ -56,8 +57,8 @@ import {
 import {
   estimateReadTime,
   extractMarkdownHeadings,
-  slugify,
 } from "@/lib/blog-markdown"
+import { normalizeBlogSlug, sanitizeBlogSlugInput } from "@/lib/blog-slug-route"
 import { leadMagnetOptions } from "@/lib/lead-magnets"
 import { getLeadMagnetGateLabel, getLeadMagnetStatusLabel } from "@/lib/lead-magnets-helpers"
 import { sanitizePublicImageUrl } from "@/lib/safe-public-url"
@@ -189,7 +190,7 @@ const DEFAULT_TEMPLATES: BlogTemplate[] = [
     name: "기능·제품 소개",
     savedAt: "2024-01-01T00:00:00.000Z",
     data: {
-      category: "제품 업데이트",
+      category: "제품",
       targetReader: "새로운 기능을 도입하려는 학원 담당자",
       benefitItems: [
         "기능의 핵심 가치와 어떤 문제를 해결하는지 명확하게 파악할 수 있습니다.",
@@ -507,11 +508,21 @@ export default function BlogPostEditor({
 
   const [form, setForm] = useState<BlogPostInput>(initialForm)
   const [tagsInput, setTagsInput] = useState(initialForm.tags.join(", "))
+  // 서버에 마지막으로 저장된 내용. 브라우저 임시 보관(localStorage)과 별개로, 지금 내용이 이것과 다르면
+  // '저장 안 됨'이다 — 헤더 상태와 나가기 경고가 이 값을 본다.
+  const [serverSnapshot, setServerSnapshot] = useState(() =>
+    JSON.stringify({ form: initialForm, tagsInput: initialForm.tags.join(", ") })
+  )
+  // 저장하지 않고 나가려던 앱 안 주소(사이드바·'← 블로그' 등). 값이 있으면 확인 창을 띄운다.
+  const [pendingLeaveHref, setPendingLeaveHref] = useState<string | null>(null)
+  const allowLeaveRef = useRef(false)
   const [draftState, setDraftState] = useState<DraftState>("saved")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadingField, setUploadingField] = useState<"imageUrl" | "heroImageUrl" | null>(null)
   const [notice, setNotice] = useState("")
   const [aiState, setAiState] = useState<AiState | null>(null)
+  // 진행 중인 AI 요청. 창을 닫거나 다시 생성하면 끊는다 — 안 끊으면 닫은 뒤 끝난 결과가 본문을 덮었다.
+  const aiAbortRef = useRef<AbortController | null>(null)
   const [draftInput, setDraftInput] = useState({ topic: "", tone: "전문적", length: "medium", reference: "" })
   const [showPreview, setShowPreview] = useState(false)
   const [showTemplateModal, setShowTemplateModal] = useState(false)
@@ -607,6 +618,51 @@ export default function BlogPostEditor({
   ]
   const contentCharacterCount = form.contentMarkdown.trim().length
   const blogStatusLabel = BLOG_STATUS_OPTIONS.find((option) => option.value === form.status)?.label ?? form.status
+  const hasUnsavedChanges = useMemo(
+    () => JSON.stringify({ form, tagsInput }) !== serverSnapshot,
+    [form, tagsInput, serverSnapshot]
+  )
+
+  // 저장하지 않은 변경이 있으면 나가기 전에 묻는다.
+  // - 새로고침·탭 닫기·주소 직접 이동: 브라우저 기본 확인 창(beforeunload)
+  // - 앱 안 링크: Next 가 페이지를 바꿔 beforeunload 가 안 뜨므로, 클릭을 캡처 단계에서 먼저 잡아 확인 창을 띄운다.
+  //   (브라우저 뒤로 가기는 Next 라우터가 막을 방법을 주지 않아 잡지 못한다 — 대신 임시 보관본이 남는다.)
+  useEffect(() => {
+    if (!hasUnsavedChanges) return
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (allowLeaveRef.current) return
+      event.preventDefault()
+      event.returnValue = ""
+    }
+    const onClickCapture = (event: MouseEvent) => {
+      if (allowLeaveRef.current || event.defaultPrevented || event.button !== 0) return
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+      const anchor = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null
+      if (!anchor || anchor.target === "_blank" || anchor.hasAttribute("download")) return
+      // 본문 편집 영역 안의 링크는 이동이 아니라 커서 놓기다.
+      if (anchor.closest('[contenteditable="true"]')) return
+      const url = new URL(anchor.href, window.location.href)
+      if (url.origin !== window.location.origin) return
+      if (url.pathname === window.location.pathname && url.search === window.location.search) return
+      event.preventDefault()
+      event.stopPropagation()
+      setPendingLeaveHref(`${url.pathname}${url.search}${url.hash}`)
+    }
+    window.addEventListener("beforeunload", onBeforeUnload)
+    document.addEventListener("click", onClickCapture, true)
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload)
+      document.removeEventListener("click", onClickCapture, true)
+    }
+  }, [hasUnsavedChanges])
+
+  const leaveWithoutSaving = () => {
+    if (!pendingLeaveHref) return
+    allowLeaveRef.current = true
+    const href = pendingLeaveHref
+    setPendingLeaveHref(null)
+    router.push(href)
+  }
   const blogStatusTone =
     form.status === "published"
       ? "bg-[#ECFDF5] text-[#084734]"
@@ -615,7 +671,7 @@ export default function BlogPostEditor({
       : "bg-[#F6F5F4] text-[#615D59]"
   // 저장 시 서버가 같은 slug를 거절한다(lib/repositories/blog.ts assertBlogSlugAvailable).
   // 발행 창에서 미리 막고 대체 주소를 제안하기 위해 화면에 있는 글 목록으로 먼저 확인한다.
-  const effectiveSlug = form.slug.trim() || form.title.trim() ? slugify(form.slug.trim() || form.title.trim()) : ""
+  const effectiveSlug = form.slug.trim() || form.title.trim() ? normalizeBlogSlug(form.slug.trim() || form.title.trim()) : ""
   const slugConflictPost = effectiveSlug
     ? filteredPosts.find((post) => post.slug === effectiveSlug)
     : undefined
@@ -905,7 +961,7 @@ export default function BlogPostEditor({
     const finalExcerpt = form.excerpt.trim()
     return {
       ...form,
-      slug: slugify(form.slug.trim() || finalTitle),
+      slug: normalizeBlogSlug(form.slug.trim() || finalTitle),
       title: finalTitle,
       excerpt: finalExcerpt,
       tags: parsedTags,
@@ -1009,6 +1065,7 @@ export default function BlogPostEditor({
       undoStackRef.current = []
       redoStackRef.current = []
       localStorage.removeItem(draftStorageKey)
+      setServerSnapshot(JSON.stringify({ form: nextForm, tagsInput: nextForm.tags.join(", ") }))
       setDraftState("saved")
       setLastSavedAt(new Date())
       setNotice(nextStatus === "published" ? "발행까지 완료했습니다." : "저장했습니다.")
@@ -1028,19 +1085,37 @@ export default function BlogPostEditor({
     handleSubmitRef.current = handleSubmit
   })
 
+  // 편집 화면을 떠나면 진행 중인 AI 요청도 끊는다.
+  useEffect(() => () => aiAbortRef.current?.abort(), [])
+
+  const closeAiPanel = () => {
+    aiAbortRef.current?.abort()
+    aiAbortRef.current = null
+    setAiState(null)
+  }
+
   const handleAiAction = async (action: AiAction, params?: { topic: string; tone: string; length: string; reference?: string }, contentOverride?: string) => {
+    aiAbortRef.current?.abort()
+    const controller = new AbortController()
+    aiAbortRef.current = controller
     setAiState({ action, status: "loading", result: "", ...(params ?? {}) })
-    const sourceContent = contentOverride ?? form.contentMarkdown
+    // 마지막 200ms 타이핑(디바운스 대기분)까지 반영한 본문을 보낸다.
+    editorRef.current?.flush()
+    const current = formRef.current
+    const sourceContent = contentOverride ?? current.contentMarkdown
     const mediaGuard = action === "optimize" ? protectAiMedia(sourceContent) : null
     const requestContent = mediaGuard?.content ?? sourceContent
     const shouldAutoApplyOptimize = action === "optimize" && contentOverride === undefined
+    const failAi = (message: string) =>
+      setAiState({ action, status: "error", result: message, ...(params ?? {}) })
     try {
       const res = await adminFetch("/api/admin/blog/ai", {
         method: "POST",
+        signal: controller.signal,
         body: JSON.stringify(
           action === "draft" && params
-            ? { action, category: form.category, topic: params.topic, tone: params.tone, length: params.length, reference: params.reference ?? "" }
-            : { action, title: form.title, content: requestContent, category: form.category }
+            ? { action, category: current.category, topic: params.topic, tone: params.tone, length: params.length, reference: params.reference ?? "" }
+            : { action, title: current.title, content: requestContent, category: current.category }
         ),
       })
       if (res.status === 401) {
@@ -1070,14 +1145,28 @@ export default function BlogPostEditor({
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-        const chunk = decoder.decode(value, { stream: true })
-        streamedResult += chunk
-        setAiState((prev) => prev ? { ...prev, result: prev.result + chunk } : null)
+        streamedResult += decoder.decode(value, { stream: true })
+        // 오류 표식 앞부분만 보여준다(표식 뒤는 오류 메시지).
+        const visible = streamedResult.split(BLOG_AI_STREAM_ERROR_MARKER)[0]
+        setAiState((prev) => prev ? { ...prev, result: visible } : null)
+      }
+      if (controller.signal.aborted) return
+      const [generated, streamError] = streamedResult.split(BLOG_AI_STREAM_ERROR_MARKER)
+      // 중간에 끊긴 결과는 잘린 글이라 적용하지 않는다(예전엔 "[error: …]"까지 본문에 들어갔다).
+      if (streamError !== undefined) {
+        failAi(`AI 생성이 중간에 끊겼습니다: ${streamError || "알 수 없는 오류"}. 본문은 바꾸지 않았습니다.`)
+        return
+      }
+      if (!generated.trim()) {
+        failAi("AI가 빈 결과를 돌려줬습니다. 다시 생성해 주세요.")
+        return
       }
       const finalResult =
         action === "optimize" && mediaGuard
-          ? restoreAiMedia(normalizeAiMarkdownResult(streamedResult), mediaGuard.replacements)
-          : streamedResult
+          ? restoreAiMedia(normalizeAiMarkdownResult(generated), mediaGuard.replacements)
+          : action === "draft"
+            ? normalizeAiMarkdownResult(generated)
+            : generated
       if (shouldAutoApplyOptimize && finalResult.trim()) {
         updateForm("contentMarkdown", finalResult)
         setNotice(
@@ -1088,12 +1177,11 @@ export default function BlogPostEditor({
       }
       setAiState((prev) => prev ? { ...prev, status: "done", result: finalResult, autoApplied: shouldAutoApplyOptimize } : null)
     } catch {
-      setAiState({
-        action,
-        status: "error",
-        result: "AI 응답 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
-        ...(params ?? {}),
-      })
+      // 창을 닫았거나 다시 생성해서 끊은 요청은 조용히 끝낸다.
+      if (controller.signal.aborted) return
+      failAi("AI 서버에 연결하지 못했습니다. 네트워크를 확인하고 다시 시도해 주세요.")
+    } finally {
+      if (aiAbortRef.current === controller) aiAbortRef.current = null
     }
   }
 
@@ -1272,14 +1360,14 @@ export default function BlogPostEditor({
     void handleSubmit("published", { publishNow: true })
   }
 
-  const draftStatusText =
-    draftState === "dirty"
-      ? "수정됨"
-      : draftState === "saving"
-      ? "저장 중…"
-      : lastSavedAt
-      ? `${lastSavedAt.getHours().toString().padStart(2, "0")}:${lastSavedAt.getMinutes().toString().padStart(2, "0")} 임시 저장`
-      : "임시 저장됨"
+  // '임시 저장'(이 브라우저 보관)과 '저장'(서버·사이트 반영)을 헷갈리지 않게, 서버 기준으로 먼저 말한다.
+  // 헤더 폭이 좁아 짧게 쓰고, 임시 보관 시각은 마우스를 올리면 보여준다.
+  const draftStatusText = !hasUnsavedChanges ? (mode === "create" ? "작성 전" : "저장됨") : "저장 안 됨"
+  const draftStatusHint = !hasUnsavedChanges
+    ? "사이트에 저장된 내용과 같습니다."
+    : draftState === "saved" && lastSavedAt
+    ? `저장 버튼을 눌러야 사이트에 반영됩니다. ${lastSavedAt.getHours().toString().padStart(2, "0")}:${lastSavedAt.getMinutes().toString().padStart(2, "0")}에 이 브라우저에 임시 보관했습니다.`
+    : "저장 버튼을 눌러야 사이트에 반영됩니다."
   const showStartPanel =
     mode === "create" && !startPanelDismissed && form.contentMarkdown === EMPTY_DRAFT_MARKDOWN
   const invalid = {
@@ -1294,6 +1382,45 @@ export default function BlogPostEditor({
       className="min-h-screen bg-[#FAFAF8]"
       style={{ ["--editor-header-h" as string]: "64px" }}
     >
+
+      {/* ── 저장하지 않고 나가기 확인 ── */}
+      {pendingLeaveHref && (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setPendingLeaveHref(null)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") setPendingLeaveHref(null)
+          }}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="leave-confirm-title"
+            aria-describedby="leave-confirm-desc"
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-[420px] rounded-2xl border border-[#e8e8e4] bg-white p-6 shadow-2xl"
+          >
+            <h2 id="leave-confirm-title" className="text-[16px] font-semibold text-[#111110]">
+              저장하지 않은 변경사항이 있습니다
+            </h2>
+            <p id="leave-confirm-desc" className="mt-2 text-[14px] leading-6 text-[#615D59]">
+              지금 나가면 수정한 내용이 사이트에 반영되지 않습니다. 작성 중인 내용은 이 브라우저에 임시 보관돼, 이 글을 다시 열면 이어서 쓸 수 있습니다.
+            </p>
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button variant="outline" onClick={leaveWithoutSaving} className="text-[#8F2C2C]">
+                저장하지 않고 나가기
+              </Button>
+              <Button
+                autoFocus
+                onClick={() => setPendingLeaveHref(null)}
+                className="bg-[#084734] text-white hover:bg-[#065c41]"
+              >
+                계속 편집
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Template Modal ── */}
       {showTemplateModal && (
@@ -1596,7 +1723,7 @@ export default function BlogPostEditor({
                 )}
                 <button
                   type="button"
-                  onClick={() => setAiState(null)}
+                  onClick={closeAiPanel}
                   className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#e8e8e4] text-[#1a1a1a]/40 hover:text-[#111110] transition-colors"
                 >
                   <X className="h-4 w-4" />
@@ -1629,7 +1756,7 @@ export default function BlogPostEditor({
                   </div>
                   <div>
                     <p className="text-sm font-medium text-[#111110]">오류가 발생했습니다</p>
-                    <p className="mt-1 text-[13px] text-[#1a1a1a]/45">잠시 후 다시 시도해주세요.</p>
+                    <p className="mt-1 text-[13px] text-[#1a1a1a]/45">{aiState.result || "잠시 후 다시 시도해주세요."}</p>
                   </div>
                 </div>
               )}
@@ -1887,10 +2014,14 @@ export default function BlogPostEditor({
             <span className={`hidden shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold sm:inline-flex ${blogStatusTone}`}>
               {blogStatusLabel}
             </span>
-            <span className="hidden shrink-0 items-center gap-1.5 text-[12px] sm:inline-flex" role="status">
+            <span
+              className={`hidden shrink-0 items-center gap-1.5 text-[12px] sm:inline-flex ${hasUnsavedChanges ? "font-medium text-[#7A520F]" : ""}`}
+              role="status"
+              title={draftStatusHint}
+            >
               <span
                 aria-hidden="true"
-                className={`h-1.5 w-1.5 rounded-full ${draftState === "saved" ? "bg-[#084734]" : "bg-[#A8741A]"}`}
+                className={`h-1.5 w-1.5 rounded-full ${hasUnsavedChanges ? "bg-[#A8741A]" : "bg-[#084734]"}`}
               />
               {draftStatusText}
             </span>
@@ -2234,7 +2365,7 @@ export default function BlogPostEditor({
                     ...snapshot.form,
                     title: nextTitle,
                     seoTitle: snapshot.form.seoTitle || nextTitle,
-                    slug: snapshot.slugEdited ? snapshot.form.slug : slugify(nextTitle),
+                    slug: snapshot.slugEdited ? snapshot.form.slug : normalizeBlogSlug(nextTitle),
                   },
                 }))
               }}
@@ -2346,7 +2477,7 @@ export default function BlogPostEditor({
                       updateEditor((snapshot) => ({
                         ...snapshot,
                         slugEdited: true,
-                        form: { ...snapshot.form, slug: slugify(event.target.value) },
+                        form: { ...snapshot.form, slug: sanitizeBlogSlugInput(event.target.value) },
                       }))
                     }}
                     placeholder="제목에서 자동 생성"
@@ -2526,9 +2657,9 @@ export default function BlogPostEditor({
                         onChange={(event) => setDraftInput((prev) => ({ ...prev, length: event.target.value }))}
                         className={`h-10 ${SOFT_SELECT_CLASS}`}
                       >
-                        <option value="short">짧게 (~500자)</option>
-                        <option value="medium">보통 (~1200자)</option>
-                        <option value="long">길게 (~2500자)</option>
+                        <option value="short">짧게 (~1,500자)</option>
+                        <option value="medium">보통 (~3,000자)</option>
+                        <option value="long">길게 (~5,000자)</option>
                       </select>
                     </div>
                     <button
@@ -2631,9 +2762,9 @@ export default function BlogPostEditor({
                           onChange={(event) => setDraftInput((prev) => ({ ...prev, length: event.target.value }))}
                           className={`h-10 ${SOFT_SELECT_CLASS}`}
                         >
-                          <option value="short">짧게 (~500자)</option>
-                          <option value="medium">보통 (~1200자)</option>
-                          <option value="long">길게 (~2500자)</option>
+                          <option value="short">짧게 (~1,500자)</option>
+                          <option value="medium">보통 (~3,000자)</option>
+                          <option value="long">길게 (~5,000자)</option>
                         </select>
                       </div>
                     </div>

@@ -306,6 +306,35 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
         </section>
       )}
 
+      {!query && (
+        <section className="container mx-auto mt-12 max-w-[1080px] px-5" aria-labelledby="feature-guides-heading">
+          <h2 id="feature-guides-heading" className={SECTION_EYEBROW}>기능 소개서</h2>
+          <div className="mt-4 grid gap-6 sm:grid-cols-2">
+            {[
+              { title: "클래스인 기능 소개서", description: "수업·과제·운영 기능을 화면과 함께 살펴보세요.", href: "/classin-feature-guide.html", ctaId: "docs_feature_guide" },
+              { title: "클래스인 AI 기능 소개서", description: "AI 강의 분석·AI 칠판·AI 에이전트의 주요 기능과 사용 방법을 확인하세요.", href: "/classin-ai-feature-guide.html", ctaId: "docs_ai_feature_guide" },
+            ].map((guide) => (
+              <TrackedLink
+                key={guide.href}
+                href={guide.href}
+                prefetch={false}
+                target="_blank"
+                rel="noopener noreferrer"
+                ctaId={guide.ctaId}
+                className={`group block border-t border-black/[0.08] pt-5 ${FOCUS_RING}`}
+              >
+                <span className="flex items-center justify-between gap-3 text-[16px] font-semibold text-[#111110] group-hover:text-[#084734]">
+                  {guide.title}
+                  <ArrowRight className="h-4 w-4 shrink-0 text-[#084734]" aria-hidden />
+                </span>
+                <p className="mt-2 text-[14px] leading-6 text-[#615D59]">{guide.description}</p>
+                <span className="sr-only">(새 탭)</span>
+              </TrackedLink>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* 상황별 진입 — 카드에 담지 않고 규칙선 아래로 흐르게 둔다. */}
       <Reveal as="section" className="container mx-auto max-w-[1080px] px-5 mt-16 md:mt-20">
         <p className={`${SECTION_EYEBROW} mb-5`}>어떤 상황이신가요</p>

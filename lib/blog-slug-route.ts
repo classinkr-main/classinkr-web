@@ -28,7 +28,7 @@
 
 const BLOG_PATH_PREFIX = "/blog/"
 
-/** proxy rewrite 전용 토큰 접두사. 슬러그 생성기(slugifyTitle 등)는 `_` 를 남기지 않는다. */
+/** proxy rewrite 전용 토큰 접두사. normalizeBlogSlug 는 앞뒤 `_` 를 떼므로 새 슬러그가 이걸로 시작하지 않는다. */
 export const BLOG_SLUG_TOKEN_PREFIX = "_u8_"
 
 // Node 가 헤더 값으로 받아 주는 인쇄 가능 ASCII(0x20–0x7E)만으로 된 슬러그인지.
@@ -57,6 +57,31 @@ function fromBase64Url(value: string): Uint8Array | null {
   } catch {
     return null
   }
+}
+
+/**
+ * 입력 중인 슬러그 — 허용 문자(글자·숫자·`_`·`-`)만 남기고 공백은 `-` 로.
+ * 끝의 `-` 는 남긴다: 타이핑 중 "abc-" 가 "abc" 로 깎이면 `-` 를 칠 수가 없다.
+ */
+export function sanitizeBlogSlugInput(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^\p{Letter}\p{Number}\p{Mark}_\s-]/gu, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+}
+
+/**
+ * 저장용 슬러그. 편집기·서버·스크립트가 모두 이 함수 하나를 쓴다.
+ * 이미 저장된 슬러그는 그대로 돌려줘야 한다(멱등) — 예전엔 편집기(`_` 삭제)와 서버
+ * (`[a-z0-9가-힣]`, 80자)가 따로 깎아서, `customerstory_skyssam` 같은 공개 글이 한 번 저장만
+ * 해도 주소가 바뀌어 404 가 났다. 2026-10-26 운영 50편 전부 이 함수로 바뀌지 않음을 확인했다.
+ * 앞뒤 `_` 를 떼는 건 proxy 토큰 접두사(`_u8_`)와 겹치지 않게 하려는 것.
+ */
+export function normalizeBlogSlug(value: string) {
+  return sanitizeBlogSlugInput(value.trim())
+    .slice(0, 80)
+    .replace(/^[-_]+|[-_]+$/g, "")
 }
 
 /** 슬러그 → ASCII 토큰 세그먼트(`_u8_…`). proxy rewrite 와 revalidatePath 가 같은 값을 쓴다. */

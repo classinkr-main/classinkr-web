@@ -72,6 +72,14 @@ function stashInlineToken(tokens: InlineToken[], html: string) {
   return token
 }
 
+// CommonMark 역슬래시 이스케이프. 리치 에디터(tiptap-markdown)는 본문의 ~ [ ] * _ 와 줄 첫머리의
+// "1." "#" "-" ">" 앞에 역슬래시를 붙여 저장한다 — 풀지 않으면 공개 페이지에 "10\~20명"이 그대로 보였다.
+const MARKDOWN_ESCAPE_PATTERN = /\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g
+
+function unescapeMarkdown(text: string) {
+  return text.replace(MARKDOWN_ESCAPE_PATTERN, "$1")
+}
+
 function renderInline(text: string) {
   const tokens: InlineToken[] = []
   const source = text
@@ -81,6 +89,8 @@ function renderInline(text: string) {
         `<code class="rounded bg-[#111110] px-1.5 py-0.5 text-[0.92em] text-white">${escapeHtml(code)}</code>`
       )
     )
+    // 이스케이프된 글자는 링크·강조로 읽히지 않게 먼저 토큰으로 빼 둔다(코드 안은 이미 빠져 있어 그대로).
+    .replace(MARKDOWN_ESCAPE_PATTERN, (_match, char: string) => stashInlineToken(tokens, escapeHtml(char)))
     .replace(
       /\[([^\]]+)\]\(([^)]+)\)/g,
       (_match, label: string, url: string) => {
@@ -95,6 +105,13 @@ function renderInline(text: string) {
         )
       }
     )
+    // 리치 에디터는 라벨과 주소가 같은 링크를 <https://…> 자동 링크로 저장한다.
+    .replace(/<(https?:\/\/[^\s<>]+)>/g, (_match, url: string) =>
+      stashInlineToken(
+        tokens,
+        `<a href="${sanitizePublicUrlForHtmlAttribute(url)}" target="_blank" rel="noopener noreferrer" class="font-medium text-[#084734] underline underline-offset-4">${escapeHtml(url)}</a>`
+      )
+    )
 
   let html = escapeHtml(source)
 
@@ -103,7 +120,8 @@ function renderInline(text: string) {
   html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
   html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>")
 
-  for (const token of tokens) {
+  // 뒤에서부터 되돌린다 — 링크 라벨 안의 이스케이프 토큰처럼, 나중 토큰이 앞 토큰을 품을 수 있다.
+  for (const token of [...tokens].reverse()) {
     html = html.split(token.token).join(token.html)
   }
 
@@ -126,24 +144,43 @@ function parseImageTitle(rawTitle: string | undefined) {
   return { title: cleanTitle, width }
 }
 
+// 리치 에디터(tiptap-markdown)는 본문의 < > 를 &lt; &gt; 로 저장한다. 렌더러가 다시 이스케이프하므로
+// 먼저 되돌려야 공개 페이지에 "&lt;" 가 글자로 보이지 않는다.
+function decodeEditorEntities(markdown: string) {
+  return markdown.replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+}
+
 function normalizeMarkdownBlockBoundaries(markdown: string) {
-  return markdown
+  return decodeEditorEntities(markdown)
     .replace(/\r\n/g, "\n")
     .replace(/(\]\([^)]+\))(?=!\[)/g, "$1\n")
     .replace(/(\]\([^)]+\))(?=#{2,3}\s)/g, "$1\n")
+    // 줄 맨 앞 이미지 바로 뒤에 붙은 문단 — 리치 에디터가 이미지 다음 문단을 같은 줄에 이어 쓴 옛 저장본
+    .replace(/^(\s*!\[[^\]]*\]\([^)]+\))(?=[^\s!\\])/gm, "$1\n")
+}
+
+// 줄 끝 역슬래시 = 줄바꿈(CommonMark hard break). 리치 에디터의 Shift+Enter 가 이렇게 저장된다.
+const HARD_BREAK_TOKEN = "\u0000CLASSIN_HARD_BREAK\u0000"
+const stripHardBreak = (line: string) => line.replace(/\\$/, "")
+
+// 본문 제목 단계. 페이지 제목이 이미 H1 이라 본문의 "# " 는 H2 로 내린다(AI 초안이 H1 으로 시작한다).
+// 목차와 앵커 id 는 H2·H3 만 쓴다 — 렌더러와 목차가 같은 함수를 써야 중복 제목의 "-2" 번호가 어긋나지 않는다.
+function matchSectionHeading(line: string): { level: 2 | 3; text: string } | null {
+  const match = line.trim().match(/^(#{1,3})\s+(.*)$/)
+  if (!match) return null
+  return { level: match[1].length === 3 ? 3 : 2, text: unescapeMarkdown(match[2].trim()) }
 }
 
 export function extractMarkdownHeadings(markdown: string): BlogHeading[] {
   const uniqueSlug = createUniqueSlugger()
 
-  return markdown
+  return decodeEditorEntities(markdown)
     .split(/\r?\n/)
     .map((line) => {
-      const match = line.match(/^(##|###)\s+(.*)$/)
+      const match = matchSectionHeading(line)
       if (!match) return null
 
-      const level = match[1].length as 2 | 3
-      const text = match[2].trim()
+      const { level, text } = match
       return {
         id: uniqueSlug(text),
         text,
@@ -167,7 +204,8 @@ function renderImage(line: string) {
     const gap = source.slice(cursor, matchStart)
     if (gap.trim()) return null
 
-    const [, alt, url, rawTitle] = match
+    const [, rawAlt, url, rawTitle] = match
+    const alt = unescapeMarkdown(rawAlt)
     if (!sanitizePublicImageUrl(url, "")) return null
 
     const { title, width } = parseImageTitle(rawTitle)
@@ -175,9 +213,9 @@ function renderImage(line: string) {
       ? ` style="max-width:${width}px;width:100%;margin-left:auto;margin-right:auto"`
       : ""
     figures.push(`
-      <figure class="my-8 overflow-hidden rounded-3xl border border-[#e8e8e4] bg-white"${figureStyle}>
-        <img src="${sanitizePublicImageUrlForHtmlAttribute(url)}" alt="${escapeHtml(alt)}" loading="lazy" decoding="async" class="h-auto w-full object-cover" />
-        ${alt || title ? `<figcaption class="border-t border-[#e8e8e4] px-5 py-3 text-sm text-[#1a1a1a]/45">${escapeHtml(alt || title)}</figcaption>` : ""}
+      <figure class="my-8"${figureStyle}>
+        <img src="${sanitizePublicImageUrlForHtmlAttribute(url)}" alt="${escapeHtml(alt)}" loading="lazy" decoding="async" class="h-auto w-full rounded-2xl border border-[#e8e8e4] object-cover" />
+        ${alt || title ? `<figcaption class="mt-2.5 px-1 text-[13px] leading-5 text-[#1a1a1a]/45">${escapeHtml(alt || title)}</figcaption>` : ""}
       </figure>
     `)
     cursor = matchStart + match[0].length
@@ -193,10 +231,11 @@ function splitMarkdownTableRow(line: string) {
   const trimmed = line.trim()
   if (!trimmed.includes("|")) return null
 
+  // 칸 안의 "\|"(네이버 임포트·에디터가 쓰는 이스케이프된 세로선)는 구분선이 아니다.
   const cells = trimmed
     .replace(/^\|/, "")
-    .replace(/\|$/, "")
-    .split("|")
+    .replace(/(?<!\\)\|$/, "")
+    .split(/(?<!\\)\|/)
     .map((cell) => cell.trim())
 
   return cells.length >= 2 ? cells : null
@@ -253,7 +292,7 @@ function renderMarkdownTable(lines: string[], index: number) {
   const headerHtml = header
     .map(
       (cell, cellIndex) =>
-        `<th scope="col" class="whitespace-nowrap border-b border-[#e8e8e4] bg-[#F6F5F4] px-4 py-3 text-[13px] font-semibold text-[#111110] ${tableAlignmentClass(alignments[cellIndex])}">${renderInline(cell)}</th>`
+        `<th scope="col" class="min-w-[6.5rem] border-b border-[#e8e8e4] bg-[#F6F5F4] px-4 py-3 text-[13px] font-semibold text-[#111110] ${tableAlignmentClass(alignments[cellIndex])}">${renderInline(cell)}</th>`
     )
     .join("")
   const bodyHtml = rows
@@ -269,7 +308,7 @@ function renderMarkdownTable(lines: string[], index: number) {
     .join("")
 
   return {
-    html: `<div class="my-8 overflow-x-auto rounded-2xl border border-[#e8e8e4] bg-white"><table class="w-full min-w-[520px] border-collapse"><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`,
+    html: `<div class="my-8 overflow-x-auto rounded-2xl border border-[#e8e8e4] bg-white"><table class="w-full border-collapse"><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`,
     nextIndex: cursor,
   }
 }
@@ -317,13 +356,22 @@ export function renderMarkdownToHtml(markdown: string) {
       continue
     }
 
-    const headingMatch = trimmed.match(/^(##|###)\s+(.*)$/)
+    const headingMatch = matchSectionHeading(trimmed)
     if (headingMatch) {
-      const level = headingMatch[1].length
-      const text = headingMatch[2].trim()
+      const { level, text } = headingMatch
       const id = uniqueSlug(text)
       html.push(
         `<h${level} id="${id}" class="${level === 2 ? "scroll-mt-32 mt-14 text-3xl font-bold tracking-[-0.03em] text-[#111110]" : "scroll-mt-32 mt-10 text-2xl font-semibold tracking-[-0.02em] text-[#111110]"}">${renderInline(text)}</h${level}>`
+      )
+      index += 1
+      continue
+    }
+
+    // H4 이하는 목차에 넣지 않는 작은 소제목(id 없음). 예전엔 "#### 소제목"이 글자 그대로 문단에 나왔다.
+    const minorHeading = trimmed.match(/^#{4,6}\s+(.*)$/)
+    if (minorHeading) {
+      html.push(
+        `<h4 class="mt-8 text-xl font-semibold tracking-[-0.01em] text-[#111110]">${renderInline(minorHeading[1].trim())}</h4>`
       )
       index += 1
       continue
@@ -338,11 +386,11 @@ export function renderMarkdownToHtml(markdown: string) {
     if (/^>\s?/.test(trimmed)) {
       const quoteLines: string[] = []
       while (index < lines.length && /^>\s?/.test(lines[index].trim())) {
-        quoteLines.push(lines[index].trim().replace(/^>\s?/, ""))
+        quoteLines.push(stripHardBreak(lines[index].trim().replace(/^>\s?/, "")))
         index += 1
       }
       html.push(
-        `<blockquote class="my-8 rounded-3xl border border-[#BDEFD8] bg-[#ECFDF5]/70 px-6 py-5 text-lg leading-8 text-[#084734]">${quoteLines
+        `<blockquote class="my-8 border-l-2 border-[#084734] py-1 pl-5 text-lg leading-8 text-[#31302E]">${quoteLines
           .map((item) => renderInline(item))
           .join("<br />")}</blockquote>`
       )
@@ -352,7 +400,7 @@ export function renderMarkdownToHtml(markdown: string) {
     if (/^(-|\*)\s+/.test(trimmed)) {
       const items: string[] = []
       while (index < lines.length && /^(-|\*)\s+/.test(lines[index].trim())) {
-        items.push(lines[index].trim().replace(/^(-|\*)\s+/, ""))
+        items.push(stripHardBreak(lines[index].trim().replace(/^(-|\*)\s+/, "")))
         index += 1
       }
       html.push(
@@ -366,7 +414,7 @@ export function renderMarkdownToHtml(markdown: string) {
     if (/^\d+\.\s+/.test(trimmed)) {
       const items: string[] = []
       while (index < lines.length && /^\d+\.\s+/.test(lines[index].trim())) {
-        items.push(lines[index].trim().replace(/^\d+\.\s+/, ""))
+        items.push(stripHardBreak(lines[index].trim().replace(/^\d+\.\s+/, "")))
         index += 1
       }
       html.push(
@@ -384,7 +432,7 @@ export function renderMarkdownToHtml(markdown: string) {
         !current ||
         /^```/.test(current) ||
         /^!\[/.test(current) ||
-        /^(##|###)\s+/.test(current) ||
+        /^#{1,6}\s+/.test(current) ||
         current === "---" ||
         isMarkdownTableStart(lines, index) ||
         /^>\s?/.test(current) ||
@@ -405,8 +453,13 @@ export function renderMarkdownToHtml(markdown: string) {
       continue
     }
 
+    const paragraph = paragraphLines
+      .map((item, i) =>
+        i < paragraphLines.length - 1 && item.endsWith("\\") ? stripHardBreak(item) + HARD_BREAK_TOKEN : stripHardBreak(item)
+      )
+      .join(" ")
     html.push(
-      `<p class="mt-5 text-[17px] leading-8 text-[#2f2f2b]">${renderInline(paragraphLines.join(" "))}</p>`
+      `<p class="mt-5 text-[17px] leading-8 text-[#2f2f2b]">${renderInline(paragraph).split(HARD_BREAK_TOKEN).join("<br />")}</p>`
     )
   }
 

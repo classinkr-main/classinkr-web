@@ -14,11 +14,17 @@ interface PageViewsResponse {
 
 function slugFromPath(path: string): string {
   const raw = path.replace(/^\/blog\//, "")
-  try {
-    return decodeURIComponent(raw)
-  } catch {
-    return raw
+  // 긴 한글 경로는 page_view 저장 길이에서 잘려 %XX 중간에 끊긴 채 들어온다 —
+  // 통째 디코딩이 실패하면 뒤에서 한 글자씩 덜어 디코딩되는 가장 긴 앞부분을 보여준다.
+  for (let end = raw.length; end > 0 && raw.length - end <= 12; end -= 1) {
+    try {
+      const decoded = decodeURIComponent(raw.slice(0, end))
+      return end === raw.length ? decoded : `${decoded}…`
+    } catch {
+      // 한 글자 덜고 다시
+    }
   }
+  return raw
 }
 
 /** 최근 30일 블로그 인기글 — client_events page_view 집계 */

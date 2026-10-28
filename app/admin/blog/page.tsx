@@ -30,9 +30,11 @@ import TopViewedPosts from "@/components/admin/blog/TopViewedPosts"
 import { adminFetch, adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import type { BlogPost } from "@/lib/blog-types"
 import AdminErrorBanner from "@/components/admin/ui/AdminErrorBanner"
+import { useUrlState } from "@/lib/use-url-state"
 
 type ContentView = "blog" | "instagram"
-type BlogTab = "all" | "private" | "trash"
+type BlogTab = "all" | "published" | "private" | "trash"
+const BLOG_TABS: readonly BlogTab[] = ["all", "published", "private", "trash"]
 type InstagramDatePreset = "last_7d" | "last_30d" | "last_90d" | "this_month"
 
 interface InstagramDashboard {
@@ -155,7 +157,12 @@ function getInstagramErrorMessage(error: unknown) {
 export default function AdminBlogPage() {
     const router = useRouter()
     const [contentView, setContentView] = useState<ContentView>("blog")
-    const [tab, setTab] = useState<BlogTab>("all")
+    // 상태 탭·검색·카테고리·라벨은 URL 에 둔다 — 글을 편집하고 뒤로 오면 보던 필터 그대로 돌아온다.
+    const [tabParam, setTab] = useUrlState("tab", "all")
+    const tab: BlogTab = BLOG_TABS.includes(tabParam as BlogTab) ? (tabParam as BlogTab) : "all"
+    const [searchQuery, setSearchQuery] = useUrlState("q", "")
+    const [categoryFilter, setCategoryFilter] = useUrlState("cat", "전체")
+    const [labelFilter, setLabelFilter] = useUrlState("label", "")
     const [posts, setPosts] = useState<BlogPost[]>([])
     const [trashedPosts, setTrashedPosts] = useState<BlogPost[]>([])
     const [loading, setLoading] = useState(false)
@@ -164,8 +171,6 @@ export default function AdminBlogPage() {
     const [instagramError, setInstagramError] = useState<string | null>(null)
     const [instagramDatePreset, setInstagramDatePreset] = useState<InstagramDatePreset>("last_30d")
     const [formLoading, setFormLoading] = useState(false)
-    const [searchQuery, setSearchQuery] = useState("")
-    const [categoryFilter, setCategoryFilter] = useState<string>("전체")
 
     const [deleteTarget, setDeleteTarget] = useState<BlogPost | null>(null)
     const [permanentTarget, setPermanentTarget] = useState<BlogPost | null>(null)
@@ -323,36 +328,60 @@ export default function AdminBlogPage() {
             })
         )
 
+    // 상태 탭이 먼저 범위를 정하고, 카테고리·라벨 개수는 그 범위 안에서 센다(공개 탭이면 공개 글 중 몇 편).
+    const tabPosts = useMemo(() => {
+        if (tab === "published") return posts.filter((p) => p.status === "published")
+        if (tab === "private") return posts.filter((p) => p.status !== "published")
+        return posts
+    }, [posts, tab])
+
     const filteredPosts = useMemo(() => {
-        const base =
-            tab === "private" ? posts.filter((p) => p.status !== "published") : posts
-        return base
+        const q = searchQuery.trim().toLowerCase()
+        return tabPosts
             .filter((p) => categoryFilter === "전체" || p.category === categoryFilter)
+            .filter((p) => !labelFilter || p.tags.includes(labelFilter))
             .filter((p) => {
-                if (!searchQuery.trim()) return true
-                const q = searchQuery.toLowerCase()
-                return (
-                    p.title.toLowerCase().includes(q) ||
-                    p.excerpt?.toLowerCase().includes(q) ||
-                    p.author?.toLowerCase().includes(q)
-                )
+                if (!q) return true
+                return [p.title, p.excerpt, p.author, ...p.tags].join(" ").toLowerCase().includes(q)
             })
-    }, [posts, tab, categoryFilter, searchQuery])
+    }, [tabPosts, categoryFilter, labelFilter, searchQuery])
 
     // 목록 단계 렌더(2026-08-18) — 글이 수백 건이 돼도 전량 렌더하지 않는다. 필터가 바뀌면
     // useVisibleCount가 total로 클램프하므로 별도 리셋 이펙트가 필요 없다.
     const postsVisible = useVisibleCount(filteredPosts.length, 30)
 
+    const publishedCount = posts.filter((p) => p.status === "published").length
     const TABS: { key: BlogTab; label: string; count: number }[] = [
         { key: "all", label: "전체", count: posts.length },
-        { key: "private", label: "비공개", count: posts.filter((p) => p.status !== "published").length },
+        { key: "published", label: "공개", count: publishedCount },
+        { key: "private", label: "비공개", count: posts.length - publishedCount },
         { key: "trash", label: "휴지통", count: trashedPosts.length },
     ]
 
-    const usedCategories = useMemo(() => {
-        const cats = Array.from(new Set(posts.map((p) => p.category).filter(Boolean)))
-        return ["전체", ...CATEGORIES.slice(1).filter((c) => cats.includes(c)), ...cats.filter((c) => !CATEGORIES.includes(c as typeof CATEGORIES[number]))]
-    }, [posts])
+    const categoryOptions = useMemo(() => {
+        const counts = new Map<string, number>()
+        for (const p of tabPosts) if (p.category) counts.set(p.category, (counts.get(p.category) ?? 0) + 1)
+        const known = CATEGORIES.slice(1).filter((c) => counts.has(c))
+        const unknown = [...counts.keys()].filter((c) => !CATEGORIES.includes(c as typeof CATEGORIES[number]))
+        return [
+            { value: "전체", count: tabPosts.length },
+            ...[...known, ...unknown].map((value) => ({ value, count: counts.get(value) ?? 0 })),
+        ]
+    }, [tabPosts])
+
+    // 라벨(태그)은 60개가 넘어 칩 대신 많이 쓴 순 드롭다운으로 고른다.
+    const labelOptions = useMemo(() => {
+        const counts = new Map<string, number>()
+        for (const p of tabPosts) for (const t of p.tags) if (t) counts.set(t, (counts.get(t) ?? 0) + 1)
+        return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ko"))
+    }, [tabPosts])
+
+    const hasFilters = categoryFilter !== "전체" || labelFilter !== "" || searchQuery.trim() !== ""
+    const resetFilters = () => {
+        setCategoryFilter("전체")
+        setLabelFilter("")
+        setSearchQuery("")
+    }
 
     return (
         <div className="px-4 pt-8 pb-16 sm:px-6 sm:pt-10 sm:pb-20 lg:px-8">
@@ -388,20 +417,6 @@ export default function AdminBlogPage() {
             </div>
 
             {contentView === "blog" && <TopViewedPosts posts={posts} />}
-
-            {contentView === "blog" && (
-            <div className="mb-4 flex justify-end rounded-2xl border border-[#e8e8e4] bg-white px-4 py-3">
-                <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => router.push("/admin/blog/new")}
-                    title="목록에서는 상태를 보고, 실제 작성과 임시저장 복원은 전용 에디터에서 이어갑니다."
-                    className="w-full md:w-auto"
-                >
-                    에디터 바로 열기
-                </Button>
-            </div>
-            )}
 
             <div className="mb-5 rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-1.5">
                 <div className="admin-scroll-snap-x no-scrollbar flex flex-nowrap gap-1 overflow-x-auto" role="tablist" aria-label="콘텐츠 보기">
@@ -462,43 +477,83 @@ export default function AdminBlogPage() {
                 ))}
             </div>
 
-            {/* 검색 + 카테고리 필터 */}
+            {/* 검색 + 라벨 + 카테고리 필터 */}
             {tab !== "trash" && (
-                <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#1a1a1a]/30" />
-                        <input
-                            type="text"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder="제목, 요약, 작성자 검색"
-                            className="w-full rounded-lg border border-[#e8e8e4] bg-white py-2 pl-9 pr-8 text-[13px] outline-none placeholder:text-[#1a1a1a]/30 focus:border-[#084734]"
-                        />
-                        {searchQuery && (
-                            <button
-                                type="button"
-                                onClick={() => setSearchQuery("")}
-                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#1a1a1a]/30 hover:text-[#1a1a1a]/60"
-                            >
-                                <X className="h-3.5 w-3.5" />
-                            </button>
-                        )}
+                <div className="mb-4 space-y-2.5">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <div className="relative flex-1">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#1a1a1a]/30" />
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="제목, 요약, 작성자, 라벨 검색"
+                                aria-label="글 검색"
+                                className="w-full rounded-lg border border-[#e8e8e4] bg-white py-2 pl-9 pr-8 text-[13px] outline-none placeholder:text-[#1a1a1a]/30 focus:border-[#084734]"
+                            />
+                            {searchQuery && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSearchQuery("")}
+                                    aria-label="검색어 지우기"
+                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#1a1a1a]/30 hover:text-[#1a1a1a]/60"
+                                >
+                                    <X className="h-3.5 w-3.5" />
+                                </button>
+                            )}
+                        </div>
+                        <select
+                            value={labelFilter}
+                            onChange={(e) => setLabelFilter(e.target.value)}
+                            aria-label="라벨 필터"
+                            className={`rounded-lg border bg-white py-2 pl-3 pr-8 text-[13px] outline-none focus:border-[#084734] sm:w-56 ${
+                                labelFilter ? "border-[#084734] text-[#084734]" : "border-[#e8e8e4] text-[#1a1a1a]/60"
+                            }`}
+                        >
+                            <option value="">라벨 전체</option>
+                            {labelFilter && !labelOptions.some(([t]) => t === labelFilter) ? (
+                                <option value={labelFilter}>{labelFilter} (0)</option>
+                            ) : null}
+                            {labelOptions.map(([label, count]) => (
+                                <option key={label} value={label}>
+                                    {label} ({count})
+                                </option>
+                            ))}
+                        </select>
                     </div>
-                    <div className="flex flex-wrap gap-1.5">
-                        {usedCategories.map((cat) => (
-                            <button
-                                key={cat}
-                                type="button"
-                                onClick={() => setCategoryFilter(cat)}
-                                className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
-                                    categoryFilter === cat
-                                        ? "bg-[#084734] text-white"
-                                        : "border border-[#e8e8e4] bg-white text-[#1a1a1a]/50 hover:text-[#1a1a1a] hover:bg-[#f0f0ec]"
-                                }`}
-                            >
-                                {cat}
-                            </button>
-                        ))}
+                    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="카테고리 필터">
+                        {categoryOptions.map(({ value, count }) => {
+                            const active = categoryFilter === value
+                            return (
+                                <button
+                                    key={value}
+                                    type="button"
+                                    aria-pressed={active}
+                                    onClick={() => setCategoryFilter(value)}
+                                    className={`inline-flex shrink-0 items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+                                        active
+                                            ? "border-[#084734] bg-white text-[#084734]"
+                                            : "border-[#e8e8e4] bg-white text-[#1a1a1a]/50 hover:bg-[#f6f5f4] hover:text-[#1a1a1a]"
+                                    }`}
+                                >
+                                    {value}
+                                    <span className={`tabular-nums ${active ? "text-[#084734]/70" : "text-[#1a1a1a]/30"}`}>{count}</span>
+                                </button>
+                            )
+                        })}
+                        {hasFilters ? (
+                            <span className="ml-auto flex items-center gap-2 text-[12px] text-[#1a1a1a]/50">
+                                <span aria-live="polite">{filteredPosts.length}편</span>
+                                <button
+                                    type="button"
+                                    onClick={resetFilters}
+                                    className="inline-flex items-center gap-1 font-semibold text-[#084734] hover:underline"
+                                >
+                                    <RotateCcw className="h-3 w-3" />
+                                    필터 초기화
+                                </button>
+                            </span>
+                        ) : null}
                     </div>
                 </div>
             )}
@@ -562,6 +617,8 @@ export default function AdminBlogPage() {
                         onDuplicate={handleDuplicate}
                         onToggleFeatured={handleToggleFeatured}
                         onTogglePublished={handleTogglePublished}
+                        onLabelClick={setLabelFilter}
+                        emptyMessage={hasFilters ? "조건에 맞는 글이 없습니다." : undefined}
                     />
                 )}
             </div>

@@ -125,15 +125,15 @@ const NAV_PRESET_KEYS: readonly NavPresetKey[] = [
  * 전원 공통 상시 목록 — "자주 쓰는 것만 위로, 나머지는 기타".
  *
  * ADMIN_NAV 선언 순서가 이미 범주 연속 블록(home → customer → growth → system)이라,
- * 이 목록은 앞의 두 범주(홈 + 고객·매출)를 그대로 집어 든 것과 같다. 덕분에 상시 목록도
- * 기타와 똑같이 범주 소제목으로 묶이면서 재정렬이 일어나지 않는다.
+ * 이 목록은 앞의 두 범주(홈 + 고객·매출)에 콘텐츠 하나를 더 집어 든 것이다. 필터는 선언 순서를
+ * 지키므로 상시 목록도 기타와 똑같이 범주 소제목으로 묶이면서 재정렬이 일어나지 않는다.
  *
- * 상시(8): Overview · 캘린더 · KR Team · 매출 장부 · CRM · 견적·문서 · 하드웨어 재고 · CS 콘솔.
+ * 상시(9): Overview · 캘린더 · KR Team · 매출 장부 · CRM · 견적·문서 · 하드웨어 재고 · CS 콘솔 · 콘텐츠.
  *   시안 스위치(NEXT_PUBLIC_ADMIN_AI_PREVIEW=1, lib/admin-ai/preview.ts)를 켜면 Overview 바로 아래
- *   AI 올인원이 더해져 9 — 꺼져 있으면(기본, 기획 D13) ADMIN_NAV 에도 이 목록에도 없다.
- * 기타(9 자리): 마케팅·분석 6(캠페인 3 · 콘텐츠 · 자료 퍼널 · Analytics) + 시스템 3(운영 상태 ·
+ *   AI 올인원이 더해져 10 — 꺼져 있으면(기본, 기획 D13) ADMIN_NAV 에도 이 목록에도 없다.
+ * 기타(8 자리): 마케팅·분석 5(캠페인 3 · 자료 퍼널 · Analytics) + 시스템 3(운영 상태 ·
  *          설정 · 개발 도구). 이 중 마케팅 프로젝트·운영 상태 2개는 기본 숨김
- *          (DEFAULT_HIDDEN_HREFS)이라 처음 보이는 기타는 7개다.
+ *          (DEFAULT_HIDDEN_HREFS)이라 처음 보이는 기타는 6개다.
  *
  * 견적·문서와 CS 콘솔을 상시에 남긴 이유 — 견적은 하드웨어 재고와 한 흐름(견적 산출물 →
  * 재고 검증)이라 떼면 둘 다 나빠지고, CS 콘솔은 가이드 문서·내부 CS 를 품은 **유일한 CS
@@ -149,6 +149,9 @@ export const DEFAULT_PRIMARY_HREFS: readonly string[] = [
   "/admin/quotes",
   "/admin/hardware",
   "/admin/chatbot",
+  // (2026-10-26) 콘텐츠(블로그)를 기타에서 상시로 올렸다 — 블로그 정리·발행이 상시 업무가 됐다.
+  // 선언 순서상 마케팅·분석 블록에 있어 상시 목록 끝에 "마케팅·분석" 소제목으로 붙는다.
+  "/admin/blog",
 ]
 
 export function isNavPresetKey(value: unknown): value is NavPresetKey {

@@ -31,6 +31,20 @@ const staticRoutes: Array<{
   { path: "/about", changeFrequency: "monthly", priority: 0.5, lastModified: "2026-04-01" },
 ]
 
+// 배포 때만 만들어지면 스크립트로 공개한 글이 다음 배포까지 빠진다(2026-10-26: 공개 42편 중 19편만 노출).
+// 1시간마다 다시 만든다. 어드민 저장은 revalidatePath("/sitemap.xml")로 즉시 갱신한다.
+export const revalidate = 3600
+
+// 빌드 중 조회 실패는 빈 목록으로 넘겨 배포를 막지 않는다. 운영에서 다시 만들 때 실패하면 던져서
+// 직전 사이트맵을 계속 내보내게 한다 — 빈 목록이 1시간 동안 굳는 것보다 낫다.
+function fallbackOnlyDuringBuild<T>(label: string, fallback: T) {
+  return (error: unknown): T => {
+    console.error(`[sitemap] failed to load ${label}`, error)
+    if (process.env.NEXT_PHASE === "phase-production-build") return fallback
+    throw error
+  }
+}
+
 function toAbsoluteUrl(path: string) {
   return new URL(path, SITE_URL).toString()
 }
@@ -45,18 +59,9 @@ function latestDate(candidates: Array<string | null | undefined>): Date | null {
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [publishedPosts, docsContent, publicEvents] = await Promise.all([
-    getPublishedPostsForStaticSitemap().catch((error) => {
-      console.error("[sitemap] failed to load published posts", error)
-      return []
-    }),
-    getDocsContent().catch((error) => {
-      console.error("[sitemap] failed to load docs content", error)
-      return null
-    }),
-    listCachedPublicEvents().catch((error) => {
-      console.error("[sitemap] failed to load public events", error)
-      return []
-    }),
+    getPublishedPostsForStaticSitemap().catch(fallbackOnlyDuringBuild("published posts", [])),
+    getDocsContent().catch(fallbackOnlyDuringBuild("docs content", null)),
+    listCachedPublicEvents().catch(fallbackOnlyDuringBuild("public events", [])),
   ])
 
   // 목록 페이지(lastModified)는 하드코딩 날짜 대신 실제 최신 콘텐츠 날짜를 반영

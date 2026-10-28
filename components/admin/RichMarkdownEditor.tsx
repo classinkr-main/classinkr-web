@@ -12,14 +12,13 @@ import {
   type DragEvent,
   type KeyboardEvent,
 } from "react"
-import { useEditor, EditorContent, Extension, type Editor } from "@tiptap/react"
-import { Plugin, PluginKey } from "@tiptap/pm/state"
-import { Decoration, DecorationSet } from "@tiptap/pm/view"
+import { useEditor, EditorContent, Mark, type Editor } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
 import Highlight from "@tiptap/extension-highlight"
 import Placeholder from "@tiptap/extension-placeholder"
 import Link from "@tiptap/extension-link"
 import Image from "@tiptap/extension-image"
+import { TableKit } from "@tiptap/extension-table"
 import { Markdown } from "tiptap-markdown"
 import { Image as ImageIcon, LayoutTemplate, Link2, Loader2, Sparkles, Upload, Wand2, X } from "lucide-react"
 import type { JSONContent, MarkdownParseHelpers, MarkdownParseResult, MarkdownToken } from "@tiptap/core"
@@ -40,35 +39,92 @@ import {
 } from "@/lib/admin/public-content-validation"
 import { getAdminToken } from "@/lib/admin-client"
 
-// ProseMirror 플러그인: {{green:text}} 구문을 에디터에서 초록색으로 시각화
-const GreenTextDecoration = Extension.create({
-  name: "greenTextDecoration",
-  addProseMirrorPlugins() {
-    return [
-      new Plugin({
-        key: new PluginKey("greenTextDecoration"),
-        props: {
-          decorations(state) {
-            const decorations: Decoration[] = []
-            state.doc.descendants((node, pos) => {
-              if (!node.isText || !node.text) return
-              const regex = /\{\{green:.*?\}\}/g
-              let match: RegExpExecArray | null
-              while ((match = regex.exec(node.text)) !== null) {
-                decorations.push(
-                  Decoration.inline(
-                    pos + match.index,
-                    pos + match.index + match[0].length,
-                    { class: "rich-editor-brand-green" }
-                  )
-                )
-              }
-            })
-            return DecorationSet.create(state.doc, decorations)
+// 공개 렌더러 전용 인라인 문법({{green:…}}, ==…==)을 편집기의 진짜 서식(마크)으로 읽고 쓴다.
+// 예전엔 글자 그대로 들고 표식만 숨겨서, 커서가 들어가면 "{{green:" "}}" 가 드러났고 굵게와 겹치면 숨김이 깨졌다.
+// 저장되는 마크다운은 그대로다 — 마크가 같은 표식으로 직렬화된다(lib/blog-markdown.ts 가 그린다).
+type InlineRuleState = {
+  src: string
+  pos: number
+  posMax: number
+  md: { inline: { tokenize: (state: InlineRuleState) => void } }
+  push: (type: string, tag: string, nesting: number) => unknown
+}
+type MarkdownItLike = {
+  inline: { ruler: { before: (beforeName: string, ruleName: string, rule: (state: InlineRuleState, silent: boolean) => boolean) => void } }
+  renderer: { rules: Record<string, unknown> }
+}
+
+// tiptap-markdown 은 parse 때마다 setup 을 다시 부른다 — 같은 규칙이 쌓이지 않게 한 번만 등록한다.
+const registeredWrapRules = new WeakMap<object, Set<string>>()
+
+/** open…close 를 같은 HTML 로 감싸는 인라인 규칙. 안쪽의 굵게·기울임·링크는 그대로 파싱된다. */
+function registerWrapRule(md: MarkdownItLike, name: string, open: string, close: string, html: [string, string]) {
+  const names = registeredWrapRules.get(md) ?? new Set<string>()
+  if (names.has(name)) return
+  names.add(name)
+  registeredWrapRules.set(md, names)
+
+  md.inline.ruler.before("emphasis", name, (state, silent) => {
+    const start = state.pos
+    if (!state.src.startsWith(open, start)) return false
+    const contentStart = start + open.length
+    // 공개 렌더러와 같은 규칙: 가장 가까운 닫는 표식까지, 비어 있으면 서식이 아니다.
+    const end = state.src.indexOf(close, contentStart)
+    if (end <= contentStart || end + close.length > state.posMax) return false
+    if (!silent) {
+      state.push(`${name}_open`, "", 1)
+      const outerMax = state.posMax
+      state.pos = contentStart
+      state.posMax = end
+      state.md.inline.tokenize(state)
+      state.posMax = outerMax
+      state.push(`${name}_close`, "", -1)
+    }
+    state.pos = end + close.length
+    return true
+  })
+  md.renderer.rules[`${name}_open`] = () => html[0]
+  md.renderer.rules[`${name}_close`] = () => html[1]
+}
+
+// 브랜드색 {{green:…}}. 툴바 '브랜드색'이 굵게처럼 켜고 끈다.
+const BrandGreen = Mark.create({
+  name: "brandGreen",
+  parseHTML() {
+    return [{ tag: "span[data-brand-green]" }]
+  },
+  renderHTML() {
+    return ["span", { "data-brand-green": "", class: "rich-editor-brand-green" }, 0]
+  },
+  addStorage() {
+    return {
+      markdown: {
+        serialize: { open: "{{green:", close: "}}", mixable: true, expelEnclosingWhitespace: true },
+        parse: {
+          setup(md: MarkdownItLike) {
+            registerWrapRule(md, "brand_green", "{{green:", "}}", ['<span data-brand-green="">', "</span>"])
           },
         },
-      }),
-    ]
+      },
+    }
+  },
+})
+
+// 툴바 형광펜(Highlight 마크)을 공개 렌더러 문법 ==…== 로 저장한다. tiptap-markdown 기본값은
+// html 모드에서만 <mark> 로 쓰고 html:false 에서는 표식을 버려, 저장하면 형광펜이 사라졌다.
+const MarkdownHighlight = Highlight.extend({
+  addStorage() {
+    return {
+      markdown: {
+        serialize: { open: "==", close: "==", mixable: true, expelEnclosingWhitespace: true },
+        // 저장된 ==…== 를 다시 형광펜 마크로 읽는다(Highlight 는 <mark> 를 마크로 받는다).
+        parse: {
+          setup(md: MarkdownItLike) {
+            registerWrapRule(md, "classin_mark", "==", "==", ["<mark>", "</mark>"])
+          },
+        },
+      },
+    }
   },
 })
 
@@ -204,19 +260,43 @@ const ResizableMarkdownImage = Image.extend({
       ...(width ? { width } : {}),
     })
   },
-  renderMarkdown: (node: JSONContent) => {
-    const attrs = node.attrs ?? {}
-    const src = typeof attrs.src === "string" ? attrs.src : ""
-    const alt = typeof attrs.alt === "string" ? attrs.alt : ""
-    const title = typeof attrs.title === "string" ? attrs.title : ""
-    const width = normalizeImageWidth(node.attrs?.width)
-    const titleParts = [title, width ? `width=${width}` : ""].filter(Boolean)
-
-    return titleParts.length > 0
-      ? `![${escapeMarkdown(alt)}](${src} "${escapeMarkdown(titleParts.join(" | "))}")`
-      : `![${escapeMarkdown(alt)}](${src})`
+  renderMarkdown: (node: JSONContent) => imageToMarkdown(node.attrs ?? {}),
+  // 실제 저장 경로(tiptap-markdown). 이미지는 블록 노드라 closeBlock 이 없으면 다음 문단이
+  // 같은 줄(`![..](..)문단`)에 붙어 공개 페이지에서 원문 그대로 보였다.
+  addStorage() {
+    return {
+      ...this.parent?.(),
+      markdown: {
+        serialize(state: { write: (text: string) => void; closeBlock: (node: unknown) => void }, node: { attrs: Record<string, unknown> }) {
+          state.write(imageToMarkdown(node.attrs))
+          state.closeBlock(node)
+        },
+        parse: {},
+      },
+    }
   },
 })
+
+function imageToMarkdown(attrs: Record<string, unknown>) {
+  const rawSrc = typeof attrs.src === "string" ? attrs.src : ""
+  const alt = typeof attrs.alt === "string" ? attrs.alt : ""
+  // markdown-it 이 퍼센트 인코딩한 한글 경로를 원래 표기로 되돌린다(공백·괄호만 다시 인코딩).
+  let src = rawSrc
+  try {
+    src = decodeURI(rawSrc)
+  } catch {
+    src = rawSrc
+  }
+  src = src.replace(/ /g, "%20").replace(/\(/g, "%28").replace(/\)/g, "%29")
+  // 불러온 글의 width= 는 제목 문자열에 남아 있다 — 리사이즈한 폭이 있으면 그것을, 없으면 원래 값을 쓴다.
+  const parsed = parseImageTitle(attrs.title)
+  const width = normalizeImageWidth(attrs.width) ?? parsed.width
+  const titleParts = [parsed.title ?? "", width ? `width=${width}` : ""].filter(Boolean)
+
+  return titleParts.length > 0
+    ? `![${escapeMarkdown(alt)}](${src} "${escapeMarkdown(titleParts.join(" | "))}")`
+    : `![${escapeMarkdown(alt)}](${src})`
+}
 
 // onChange 트레일링 디바운스(ms): 키 입력마다 마크다운 직렬화 + 부모(수천 줄) 전체 리렌더를 막는다.
 const EMIT_DEBOUNCE_MS = 200
@@ -598,7 +678,8 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
       immediatelyRender: false,
       extensions: [
         StarterKit.configure({ link: false }),
-        Highlight.configure({ multicolor: false }),
+        MarkdownHighlight.configure({ multicolor: false }),
+        BrandGreen,
         Link.configure({ openOnClick: false }),
         ResizableMarkdownImage.configure({
           allowBase64: false,
@@ -610,10 +691,15 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
             alwaysPreserveAspectRatio: true,
           },
         }),
+        // 블로그 본문 표(비교표·요약표)가 편집 탭에서 문단으로 풀려 저장 시 사라지지 않게 한다.
+        // tiptap-markdown 은 "table" 노드가 있을 때만 표를 마크다운 표로 다시 쓴다.
+        TableKit.configure({ table: { resizable: false } }),
         Placeholder.configure({ placeholder }),
-        GreenTextDecoration,
         Markdown.configure({
           html: false,
+          // 줄바꿈을 지킨다 — 끄면 인용 상자(여러 줄 > …)가 한 줄로 합쳐져 공개 페이지 줄바꿈이 사라진다.
+          // 줄 끝 역슬래시로 저장되고 lib/blog-markdown.ts 가 줄바꿈으로 그린다.
+          breaks: true,
           tightLists: true,
           bulletListMarker: "-",
           transformPastedText: true,
@@ -685,19 +771,8 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
       toggleBulletList: () => editor?.chain().focus().toggleBulletList().run(),
       toggleOrderedList: () => editor?.chain().focus().toggleOrderedList().run(),
       toggleHighlight: () => editor?.chain().focus().toggleHighlight().run(),
-      wrapBrandColor: () => {
-        if (!editor) return
-        const { from, to } = editor.state.selection
-        const selectedText = editor.state.doc.textBetween(from, to) || "브랜드 텍스트"
-        editor
-          .chain()
-          .focus()
-          .command(({ tr }) => {
-            tr.insertText(`{{green:${selectedText}}}`, from, to)
-            return true
-          })
-          .run()
-      },
+      // 굵게처럼 선택 구간에 켜고 끈다(선택이 없으면 이어서 치는 글자에 적용).
+      wrapBrandColor: () => editor?.chain().focus().toggleMark("brandGreen").run(),
       insertLink: () => {
         if (!editor) return
         const { from, to } = editor.state.selection

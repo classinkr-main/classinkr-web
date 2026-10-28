@@ -86,11 +86,11 @@ export default async function UpdatesPage() {
     ? getDocsByCategoryFromContent(docsContent, "updates").slice(0, 6)
     : []
 
-  // 릴리즈가 아직 없으면 블로그 '제품 업데이트' 카테고리 글로 폴백 — 빈 페이지 노출 방지
+  // 릴리즈가 아직 없으면 블로그 '제품' 카테고리 글로 폴백 — 빈 페이지 노출 방지
   const fallbackPosts =
     releases.length === 0
       ? (await getPublishedPostsForStaticSitemap().catch(() => []))
-          .filter((post) => post.category === "제품 업데이트")
+          .filter((post) => post.category === "제품")
           .slice(0, 6)
       : []
 
@@ -108,6 +108,32 @@ export default async function UpdatesPage() {
             Classin의 새 기능, 개선 사항, 버그 수정 내역을 확인하세요.
           </p>
         </div>
+
+        <section className="mb-8 border-y border-black/[0.08] py-6" aria-labelledby="ai-feature-guide-heading">
+          <p className="text-[12px] font-semibold text-[#615D59]">2026년 10월 26일 · 가이드 업데이트</p>
+          <h2 id="ai-feature-guide-heading" className="mt-2 text-[20px] font-bold tracking-[-0.02em] text-[#111110]">
+            클래스인 AI 기능 소개서 공개
+          </h2>
+          <p className="mt-2 text-[14px] leading-6 text-[#615D59]">
+            AI 강의 분석·AI 칠판·AI 에이전트의 주요 기능과 사용 방법, 지원 환경과 활성화 조건을 한곳에 모았습니다.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-3">
+            <a
+              href="/classin-ai-feature-guide.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-11 items-center gap-2 text-[14px] font-semibold text-[#084734] hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#084734]"
+            >
+              AI 기능 소개서 보기
+              <ExternalLink className="h-4 w-4" aria-hidden />
+              <span className="sr-only">(새 탭)</span>
+            </a>
+            <Link href="/docs/software/classin-ai-feature-guide" className="inline-flex min-h-11 items-center gap-2 text-[14px] font-semibold text-[#084734] hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#084734]">
+              가이드 안내 읽기
+              <ArrowRight className="h-4 w-4" aria-hidden />
+            </Link>
+          </div>
+        </section>
 
         {/* ClassIn 6.0.9 & AI 강의평가 하이라이트 배너 */}
         <div className="mb-12 overflow-hidden rounded-3xl border border-[#084734]/20 bg-gradient-to-br from-[#084734] via-[#063c2c] to-[#04281c] p-6 text-white shadow-md sm:p-8">
@@ -207,7 +233,7 @@ export default async function UpdatesPage() {
           </section>
         )}
 
-        {/* 릴리즈 없을 때: 블로그 '제품 업데이트' 글 폴백 */}
+        {/* 릴리즈 없을 때: 블로그 '제품' 글 폴백 */}
         {releases.length === 0 && fallbackPosts.length > 0 && (
           <section className="mb-10 space-y-4">
             <p className="text-[13px] text-[#1a1a1a]/45">
@@ -221,7 +247,7 @@ export default async function UpdatesPage() {
               >
                 <div className="mb-2 flex flex-wrap items-center gap-2">
                   <span className="flex items-center gap-1.5 rounded-lg bg-[#f0f7f4] px-2.5 py-1 text-[12px] font-bold text-[#084734]">
-                    <Tag className="h-3 w-3" />제품 업데이트
+                    <Tag className="h-3 w-3" />제품
                   </span>
                   <span className="flex items-center gap-1 text-[12px] text-[#1a1a1a]/35">
                     <Calendar className="h-3 w-3" />{post.date}

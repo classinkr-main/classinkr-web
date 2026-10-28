@@ -111,8 +111,8 @@ const ADMIN_AI_NAV_ITEM: AdminNavItem = { href: ADMIN_AI_HREF, label: "AI 올인
 // ADMIN_NAV_CATEGORY_META 맨 앞에 두고 선언도 배열 맨 앞으로 옮겼다. groupNavByCategory가 범주
 // 선언 순서로 그룹을 내보내므로 Overview의 그룹이 항상 첫 그룹으로 렌더된다.
 // (2026-09-10 전면 공개) 항목별 roles 필드를 제거했다 — 모든 매니저가 같은 목록을 본다.
-// 배치만 남는다: 앞의 두 범주(홈 + 고객·매출) 8개가 상시, 뒤의 두 범주(마케팅·분석 + 시스템)
-// 9개가 "기타" 후보다 — 그중 마케팅 프로젝트·운영 상태 2개는 기본 숨김(2026-09-25, 기타 7 + 숨김 2,
+// 배치만 남는다: 앞의 두 범주(홈 + 고객·매출) 8개 + 콘텐츠(2026-10-26)가 상시, 나머지
+// 8개가 "기타" 후보다 — 그중 마케팅 프로젝트·운영 상태 2개는 기본 숨김(2026-09-25, 기타 6 + 숨김 2,
 // 숨겨도 ⌘K·주소로 열림). 경계는 admin-nav-access.ts의 DEFAULT_PRIMARY_HREFS·DEFAULT_HIDDEN_HREFS가 정본이며,
 // **이 배열의 선언 순서를 바꾸면 그 경계도 함께 흔들린다** — 범주 연속 블록을 깨지 말 것.
 export const ADMIN_NAV: AdminNavItem[] = [
@@ -121,7 +121,7 @@ export const ADMIN_NAV: AdminNavItem[] = [
   // 갈매봇 위젯(components/admin/ai)의 전체 화면판이다. home 범주 블록 안, Overview 바로 아래.
   // 서버 오더 엔진이 붙기 전이라 시안(샘플 데이터)으로 동작한다 — maturity "wip".
   // (2026-10-19 통합 병합) 기획 D13 — 시안 스위치(NEXT_PUBLIC_ADMIN_AI_PREVIEW=1)가 꺼져 있으면(기본)
-  // 이 항목은 배열에 없다(lib/admin-ai/preview.ts). 그때 상시는 8, 전체는 17이다.
+  // 이 항목은 배열에 없다(lib/admin-ai/preview.ts). 그때 상시는 9, 전체는 17이다.
   ...(isAdminAiPreviewEnabled() ? [ADMIN_AI_NAV_ITEM] : []),
 
   { href: "/admin/calendar", label: "캘린더", icon: CalendarDays, section: "sales", category: "customer", keywords: "캘린더 일정 calendar schedule 행사 이벤트 event 웨비나 공개 행사" },
