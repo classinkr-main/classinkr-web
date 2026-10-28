@@ -704,13 +704,16 @@ async function ensureHardwareItems(
     .upsert(rows, { onConflict: "name", ignoreDuplicates: true })
   if (upsertError) throw upsertError
 
-  const { data, error } = await sb
-    .from("hardware_items")
-    .select("*")
-    .in("name", names)
+  // 이름 목록을 in() 필터로 보내지 않는다. postgrest-js 는 값 안의 큰따옴표를 이스케이프하지 않아, 괄호와
+  // 따옴표가 같이 든 이름(시트의 `STDM1(110")`)이 목록 전체를 깨뜨렸다 — 2026-10-28 첫 자동 가져오기에서
+  // 65" IFP·STD1(promoted)·STDM1(110") 시트 행 37건이 품목을 못 찾아 빠졌다. 품목 표는 수십 행이라 통째로 읽는다.
+  const wanted = new Set(names)
+  const { data, error } = await sb.from("hardware_items").select("*")
   if (error) throw error
 
-  return new Map((data ?? []).map((item) => [item.name, item as HardwareItem]))
+  return new Map(
+    ((data ?? []) as HardwareItem[]).filter((item) => wanted.has(item.name)).map((item) => [item.name, item])
+  )
 }
 
 interface CrmDuplicateCandidateRow {
@@ -2748,6 +2751,12 @@ async function readHardwareSheetSource(): Promise<HardwareSheetSource> {
  * 미러는 동기화 때마다 행을 지우고 다시 넣어 id·synced_at 이 늘 바뀌고, id 순서도 매번 달라진다.
  * 그래서 두 열을 빼고 행을 내용 기준으로 정렬한 뒤 해시한다 — 같은 시트면 같은 값이 나온다.
  */
+/**
+ * 가져오기 규칙 판 — 시트가 그대로여도 이 값을 올리면 다음 매시간 자동 가져오기가 다시 싣는다.
+ * 2: 품목 이름 조회 수정(따옴표·괄호가 든 이름 때문에 행이 빠지던 문제, 2026-10-28).
+ */
+export const HARDWARE_SHEET_IMPORT_LOGIC_VERSION = 2
+
 export function checksumHardwareSheetSource(source: {
   inbound: readonly HwInbound[]
   outbound: readonly HwOutbound[]
@@ -2763,6 +2772,7 @@ export function checksumHardwareSheetSource(source: {
       })
       .sort()
   return checksumImportSnapshot({
+    importLogic: HARDWARE_SHEET_IMPORT_LOGIC_VERSION,
     inbound: canonical(source.inbound),
     outbound: canonical(source.outbound),
     stock: canonical(source.stock),
