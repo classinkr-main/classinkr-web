@@ -39,7 +39,7 @@
 
 | 탭 | 정체성 | 구성 |
 | --- | --- | --- |
-| **홈** | 현황 + 예상 출고 워크플로 | 요약 밴드 5칸(창고·가용·예정 대기·부족/주문 검토·시트 이관 신선도) · 이관 경고 · **예상 출고 큐**(등록·부분/전체/선택 일괄 확정) · 품목 카드·현재 재고(lot 칩) · 판매 요약 · 검색 · **사무실·샘플 재고**(2-4) · 샘플 트래커 · 알림 · 스냅샷 복원 |
+| **홈** | 현황 + 예상 출고 워크플로 | 요약 밴드 5칸(창고·가용·예정 대기·부족/주문 검토·시트 이관 신선도) · 이관 경고 · **예상 출고 큐**(등록·부분/전체/선택 일괄 확정) · 품목 카드·현재 재고(lot 칩) · **판매대시보드**(2-10) · 검색 · **사무실·샘플 재고**(2-4) · 샘플 트래커 · 알림 · 스냅샷 복원 |
 | **입출고** | 기록 진입 | 입고 · 물량번호(lot별 입고 목록) / 출고 · 기간 집계. "빠른 기록"은 입고 보기에서 **입고표**(2-3), 출고 보기에서 빠른 기록 시트(2-2)를 연다 |
 | **내역** | 전체 원장 | 유형·제품 칩 필터 · lot/금액 표시 · 행별 수정·취소 |
 
@@ -141,6 +141,20 @@
 - 반려·취소 칸(시안 2026-10-26 B안): 오더마다 "다음 할 일" 카드. 반려됐고 같은 견적으로 다시 올라온 오더가 없으면 "견적을 고쳐 새 버전으로 승인받기" + `[다시 알리기]`(권한자만) · `[견적 수정]`. 반려 알림(`hardware.order.rejected` — 사유와 다시 올리는 법, WeCom)은 반려할 때 자동으로 한 번 나간다(2026-10-27 결정). 버튼은 다시 보낼 때만 쓴다. 취소된 오더번호가 시트에 남아 있으면 "시트에서 지우기" + 시트 확인 칸으로 이동. 같은 견적이 다시 올라왔으면 "해결됨"과 그 오더로 이동. 할 일이 남은 것부터 세운다. 보기 규칙은 `inventory/closed-order-view.ts`.
 - **시트 확인** 칸(시안 A안): 첫 오더 요청일 이후 시트에 적힌 고객 출고 줄 중 오더번호 없음·없는 번호·취소된 오더·오더에 없는 품목·수량 초과인 줄을 종류별로 묶고, 위에 종류별 건수와 고칠 방법 칸을 둔다. 번호 없음·없는 번호·오더에 없는 품목에는 최근 승인 오더에서 찾은 번호 후보("이 번호일 가능성이 높습니다" — 같은 고객·품목, "오타로 보입니다" — 2글자 이내로 다른 번호)와 `[번호 복사]`를 붙인다. 짐작이라 자동으로 적지 않는다. 수량 초과는 오더·시트 대수를 나란히 보인다. 시트에 승인된 오더번호를 적으면 다음 가져오기 뒤 사라진다([연결 로직](./hardware-order-revenue-link-plan-2026-10-22.md) §4-4). 보기 규칙은 `inventory/sheet-check-view.ts`, 후보 규칙은 `lib/orders/sheet-order-check.ts`의 `suggestOrdersForSheetCheck`.
 - `20261022_sales_orders.sql` 미적용이면 "DB 업데이트 적용 후" 안내 한 줄로 내려간다.
+
+### 2-10. 판매대시보드 (`SalesDashboardSection`)
+
+홈 예상 출고 큐 아래(예전 "판매 · 설치" 요약 자리). 정의서의 FY 품목 × 월 표다([정의서 차이](./hardware-inventory-process-gap-2026-10-28.md) §3-4, 결정 §6 D10).
+
+- 숫자는 서버 집계(`GET /api/admin/hardware/sales-dashboard`)만 쓴다. 예전 카드는 브라우저가 최근 2,000건으로 셌다 — 원장이 커지면 FY 합계가 조용히 줄었다.
+- 센다: 세일즈 + 프로모션 출고(`resolveOutboundType`). 유형을 끝까지 모르는 시트 행은 세일즈로 센다. A/S·샘플은 뺀다.
+- 내부 이동은 뺀다: 도착지(회수는 출발지)가 창고·샘플·사무실·수리로 정규화되는 행(§3-7). CRM 고객(`customer_id`)이 붙은 행은 위치 표기와 무관하게 센다.
+- 칸 = `설치 완료 / +배송 예정`(`+0` 은 숨김). 둘 다 `occurred_at` 의 달. 날짜 없는 행은 **현재 FY** 의 "날짜 미정" 칸에만 들어간다(어느 FY 인지 모르는 열린 건이라서).
+- 회수(세일즈·프로모션 출고의 회수)는 판매에서 빼지 않고 칸 아래 "회수 N"으로 따로 보인다.
+- 행은 품목(`hardware_items`) 단위, `report_group` 묶음(전자칠판·카메라·스탠드·액세서리·터치펜, 묶음 없는 품목·품목 목록에 없는 원장 행은 "기타")마다 `sort_order` → 이름 순, 묶음 소계와 합계 줄. 전자칠판·카메라·스탠드의 활성 품목은 0대여도 늘 보이고, 나머지는 기록이 있을 때만 보인다. 수량만(금액 없음).
+- FY(4월 시작, KST 날짜) 선택: 현재·직전 FY와 기록이 있는 이전 FY. 원장이 다시 불려 오면(기록·확정 직후) 같이 다시 받는다. "고객사별 상세 →"는 입출고 탭 "출고 · 기간 집계"로 간다(그 화면은 아직 최근 원장 기준 고객사·매출 펼침).
+- 규칙은 `lib/repositories/hardware-sales-dashboard.ts`(`aggregateHardwareSalesDashboard` 순수 함수), 표시 형식은 `inventory/sales-dashboard-view.ts`.
+
 ---
 
 ## 3. 기능 (Functions)
@@ -169,7 +183,8 @@
 - **확정**: 예정을 실제 출고로 **전환(convert)**한다. 출고일을 고르고, **부분 수량 확정**도 된다(출고 N대 생성 + 잔여는 예정 유지).
 - **선택 일괄 확정(2026-09-14)**
   - 행·딜 체크박스(Shift 범위 선택), 빠른 선택("전체 N건"·"30일+ 미확정"·해제), 하단 작업 바의 공통 확정일로 **순차** 확정한다.
-  - 순차인 이유: 각 확정이 로트 잔량을 바꾸므로 다음 건의 배정이 앞 건을 반영해야 한다. 건별 권한 검사(`hardware.finalize`)와 감사 로그도 그대로 남는다.
+  - 순차인 이유: 각 확정이 로트 잔량을 바꾸므로 다음 건의 배정이 앞 건을 반영해야 한다. 건별 권한 검사와 감사 로그도 그대로 남는다.
+- **재고관리 프로세스(2026-10-28, [갭 문서 §6·§7](./hardware-inventory-process-gap-2026-10-28.md))**: 확정은 본인 건(담당·작성 계정, 이전 기록은 이름) 또는 입고관리 권한자(`hardware.inbound`·`hardware.finalize`·슈퍼 어드민)가 한다. 물류번호 관리 품목은 확정 때 물류번호를 골라야 하고(`lotNo` 또는 나눠서 `lotAllocations`), 고른 번호의 잔여를 넘으면 422 — 아래 FIFO 자동 배정은 품목 칸이 없는 DB(마이그레이션 전)와 요청자가 없는 시스템 경로에만 남는다. 확정 행의 진행 상태는 `설치 완료`, 유형·고객·담당은 예정 행에서 옮긴다(확정 v4).
   - 실패 건은 사유를 행에 남기고 선택에 남겨 재시도한다.
 - **물류번호 고르기(2026-10-28, §3-9)**: 물류번호 관리 품목의 예정에 물류번호가 없으면 확정 때 고른다. 아래 FIFO 자동 배정 규칙은 시트 행·옛 기록의 잔량 계산에만 남는다.
 - **로트가 모자라도 확정을 막지 않는다(운영자 결정 2026-09-14 — 물류번호 관리 품목은 §3-9 가 대신한다).**
@@ -190,8 +205,8 @@
 
 ### 3-5. 기록 수정·취소
 
-- **수정(update)**: `admin_manual`·미전환·미취소 기록만. 내역·예상 큐의 `수정`은 새 기록이 아니라 같은 행을 갱신한다. 버튼 권한은 §3-9 "본인 건 버튼"(배송 예정 = 본인 건 또는 입고관리 권한자, 실현 기록 = 입고관리 권한자).
-- **취소(void)**: 사유와 함께 무효화한다. 시트 이관 기록은 직접 취소할 수 없다(가져오기가 관리).
+- **수정(update)**: `admin_manual`·미전환·미취소 기록만. 내역·예상 큐의 `수정`은 새 기록이 아니라 같은 행을 갱신한다. 배송 예정은 본인 건 또는 입고관리 권한자, 실현된 기록(설치 완료·회수·입고·조정) 수정과 예정 → 실현 전환은 입고관리 권한자만(2026-10-28). 화면 버튼은 §3-9 "본인 건 버튼".
+- **취소(void)**: 사유와 함께 무효화한다. 시트 이관 기록은 직접 취소할 수 없다(가져오기가 관리). 배송 예정 취소는 본인 건 또는 입고관리 권한자, 실현 기록 취소는 입고관리 권한자만.
 
 ### 3-6. 시트 가져오기 · 재고 계산 · 알림
 
@@ -207,6 +222,8 @@
   - **가져오기 뒤 정리(§8-6)**: 시트 행에서 전환된 어드민 확정을 사유와 함께 취소한다(교체 모드만). 결과 문구에 건수가 붙는다.
 - **재고 파생**: 원장에서 위치별 잔량·예상 가용(예정 차감)·30일 출고·주문 시점(리드타임 반영)을 계산한다(`computeHardwareStockRow`).
 - **알림**: 부족·주문 검토·배송 예정·원장 점검 필요(판촉형 음수 등).
+- **일일 WeCom 알림(2026-10-28, [정의서 차이](./hardware-inventory-process-gap-2026-10-28.md) §6 D9)**: 매일 KST 08시에 운영 방으로 한 통 — 배송 예정 30일 경과(예정일, 없으면 등록일 기준)와 샘플 반납 예정일 지남(남은 수량이 있는 샘플 출고)을 담당자별로 묶는다. 규칙 `lib/hardware/process-alerts.ts`, 원장 읽기 `lib/repositories/hardware-process-alerts.ts`(키셋 전량), 발송 `lib/server/hardware-process-alerts.ts`, 크론은 디스패처 고정 슬롯(아래 운영 지침 링크). 줄 20개·본문 1,700바이트 상한, 넘으면 "외 N건". 같은 날 발송 성공 기록이 있으면 다시 보내지 않는다. 미리보기는 `GET /api/cron/dispatch/23?dryRun=true`(Bearer 인증)의 `hardwareAlertsPreview`, 이 알림만 끄기는 env `HARDWARE_PROCESS_ALERTS=off`. 운영 계약은 [운영 장애·Cron·Webhook 지침](./operational-failure-handling-guidelines.md) §1.
+  - 시트 행: 교체 가져오기는 매번 행을 새로 넣어 `created_at` 이 가져오기 시각이 된다. 그래서 **날짜 없는 시트 예정은 등록일 기준으로도 30일이 차지 않는다**(날짜 있는 시트 예정은 예정일로 걸린다). 시트를 끄는 T1·T2 뒤에는 저절로 풀린다.
 
 **시트 → 원장 규칙** (2026-09-14 운영 시트 실측으로 확정) — `buildHardwareSheetImportRows`(순수 함수)·`parseStock`
 
@@ -308,14 +325,22 @@
 
 `hardware_movements` 주요 컬럼: `item_id, product_name, movement_type(inbound|outbound|return|transfer|repair|adjust), quantity, occurred_at, from_location, to_location, owner, status, reference_no, memo, serials[], lot_no, unit_price, amount_usd, amount_cny, storage_location, importer, source(admin_manual|sheet_import), import_run_id, raw, voided_*, converted_from/to_movement_id`.
 
+재고관리 프로세스 칸(2026-10-28, `20261028_hardware_inventory_process.sql`): `outbound_type(sales|promotion|as|sample)`, `is_free`, `return_of_movement_id`, `customer_id`, `owner_user_id`, `created_by_user_id`, `expected_return_at`. `hardware_items` 에 `lot_tracked`, `report_group`, `sort_order`. 진행 상태 새 값은 `배송 예정`·`설치 완료`·`회수`. 규칙 정본은 [`lib/hardware/inventory-process.ts`](../../lib/hardware/inventory-process.ts)(공용)·[`lib/hardware/movement-rules.ts`](../../lib/hardware/movement-rules.ts)(입출고 한 줄).
+
 RPC
-- 확정: `confirm_hardware_planned_movement_v3(uuid,text,date,int,jsonb)` → `_v2` → 레거시 순으로 앱이 폴백한다. v3는 **앱이 계산한 로트 배정을 받아 기록**하고 로트 미지정을 허용한다. v2는 SQL 내부 FIFO라 `lot_no`만 본다.
+- 확정: `confirm_hardware_planned_movement_v4`(v3 호출 + 새 칸 복사 + `설치 완료`) → `_v3(uuid,text,date,int,jsonb)` → `_v2` → 레거시 순으로 앱이 폴백한다. v3는 **앱이 계산한 로트 배정을 받아 기록**하고 로트 미지정을 허용한다. v2는 SQL 내부 FIFO라 `lot_no`만 본다.
 - 가져오기: `replace_hardware_sheet_import`(기본) · `merge_hardware_sheet_import`(플래그 `HARDWARE_SHEET_ADDITIVE_MERGE`) · `restore_hardware_sheet_import_snapshot`
 
 API
 - `GET /api/admin/hardware` — 대시보드(items/stock/movements/recentOutbound/plannedMovements/alerts/totals/importRun/viewer)
 - `POST /api/admin/hardware/movements` — 기록 생성(단건 또는 `{movements:[...]}` 최대 50줄, 줄별 결과 201/207/422). 배치는 **왕복 한 번**이다(2026-09-20, `createHardwareMovementsBatch`): 품목 해결 1회 · CRM 중복 조회 1회 · 품목 원장 읽기 품목당 1회 · INSERT 1회 · 캐시 무효화 1회. 로트 배정은 앞 줄이 만든 행을 원장 뒤에 이어 붙여 같은 해석기로 다시 계산해 줄 단위 저장과 결과가 같다. 한 번에 넣지 못하면 줄 단위 INSERT로 물러나 부분 저장을 지킨다.
-- `PATCH /api/admin/hardware/movements/[id]` — `{action: confirm-planned | void | update}`(confirm은 `confirmQty` 옵션)
+  - 2026-10-28 새 필드: `outboundType` · `customerId` · `isFree` · `returnOfMovementId` · `expectedReturnAt` · `ownerUserId` · `adjustDirection`. 입고·조정이 한 줄이라도 있으면 입고관리 권한자만(아니면 저장 전 403). 고객사로 가는 출고는 출고일·유형 필수, 샘플은 반납 예정일 필수, 물류번호 관리 품목은 물류번호 필수 + 잔여 초과 422(배송 예정 포함). 회수는 원 출고에서 품목·물류번호·고객·유형을 채우고 남은 수량까지만. 입고 물류번호는 기존 번호이거나 다음 C 순번만. 규칙 위반은 줄별 `lineResults[i].error`
+- `PATCH /api/admin/hardware/movements/[id]` — `{action: confirm-planned | void | update}`(confirm은 `confirmQty`·`lotNo`·`lotAllocations:[{lotNo,quantity}]`). 권한은 본인 건 또는 입고관리 권한자(실현 기록은 입고관리 권한자만) — 403 응답에 `requiredCapability: "hardware.inbound"`
+- `GET /api/admin/hardware/lots?itemId=|product=&excludeMovementId=` — `{ itemId, product, lotTracked, lots:[{lotNo, remaining}], nextLotNo }`(잔여는 배송 예정까지 뺀 값)
+- `GET /api/admin/hardware/return-candidates?q=&customerId=` — 회수할 수 있는 실제 출고(`returnable` > 0, 최근순)
+- `GET /api/admin/hardware/customers?q=` — 출고 클라이언트 고르기(CRM `customers`, 최대 20)
+- `PATCH /api/admin/hardware/items/[id]` — 품목 설정(최소재고·리드타임·`lotTracked`·`reportGroup`·`sortOrder` 등). 입고관리 권한자만
+- `GET /api/admin/hardware/sales-dashboard?fy=2026` — 판매대시보드(§2-10). `fy` 생략 = 현재 FY, 4자리 연도가 아니거나 2015 ~ 현재+1 밖이면 400. 브랜치 조회 역할. 응답 `{ fy, currentFy, months[12], groups[{ key, label, rows[{ itemId, name, months[12], undated, total }], subtotal }], grandTotal, availableFys, generatedAt }`, 각 칸 `{ installed, planned, returned }`. 출고·회수 전량을 키셋으로 읽고(raw 는 시트 유형 열 하나만) FY 결과를 `hardware-inventory` 태그로 캐시한다(쓰기가 무효화)
 - `POST /api/admin/hardware/import-sheet` — 싱크·백업 후 이관
 - `GET|POST /api/admin/hardware/samples` — 유닛 목록·타임라인 / 등록(`action:"register"`)·이벤트(`action:"event"`, adjust는 `nextStatus`)
 - `GET /api/admin/hardware/orders?status=pending|approved|closed|all` — 오더 목록 + `viewer.canApprove`(§2-9). 승인됨·전체는 `fulfillment`(품목별 주문·출고·예정)를, 반려·취소·전체는 `successor`(같은 견적으로 다시 올라온 살아 있는 오더)를 붙인다. 테이블 미적용이면 503 `available:false`

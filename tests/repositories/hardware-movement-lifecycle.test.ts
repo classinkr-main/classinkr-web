@@ -32,6 +32,8 @@ let updateRow: FakeResult = { data: null, error: null }
 let rpcQueue: Record<string, FakeResult[]> = {}
 // ensureHardwareItems(품목 미지정 수정 경로)가 참조하는 hardware_items.select().in() 응답.
 let itemsByName: Record<string, { id: string }> = {}
+// 재고관리 프로세스 — hardware_items.select().in("id", ...) 로 읽는 품목 설정(lot_tracked 등).
+let itemsById: Record<string, Record<string, unknown>> = {}
 // allocateOutboundLots 가 fetchAllSupabaseRows 로 읽는 품목 원장 — 확정 전 로트 배정 계산에 쓰인다.
 let ledgerRows: Array<Record<string, unknown>> = []
 
@@ -47,8 +49,11 @@ function tableClient(table: string) {
             },
           }
         },
-        async in(_col: string, names: string[]) {
+        async in(col: string, names: string[]) {
           operations.push({ table, method: "select.in", payload: names })
+          if (col === "id") {
+            return { data: names.filter((id) => itemsById[id]).map((id) => ({ id, ...itemsById[id] })), error: null }
+          }
           return {
             data: names
               .filter((name) => itemsByName[name])
@@ -79,6 +84,16 @@ function tableClient(table: string) {
       return Promise.resolve({ data: null, error: null })
     },
   }
+}
+
+const MISSING_V4: FakeResult = {
+  data: null,
+  error: { code: "PGRST202", message: "Could not find the function public.confirm_hardware_planned_movement_v4" },
+}
+
+/** v4 폴백 호출은 빼고 본 rpc 기록. */
+function rpcOps() {
+  return operations.filter((op) => op.method === "rpc" && !(op.fn === "confirm_hardware_planned_movement_v4" && rpcQueue.confirm_hardware_planned_movement_v4?.[0] === MISSING_V4))
 }
 
 function supabaseClient() {
@@ -123,8 +138,10 @@ beforeEach(() => {
   operations.length = 0
   existingRow = { data: null, error: null }
   updateRow = { data: null, error: null }
-  rpcQueue = {}
+  // 확정 v4(20261028)가 없는 DB 를 기본으로 둔다 — 기존 시나리오는 v3 이하 경로를 그대로 검증한다.
+  rpcQueue = { confirm_hardware_planned_movement_v4: [MISSING_V4] }
   itemsByName = {}
+  itemsById = {}
   ledgerRows = []
   revalidateTagMock.mockReset()
 })
@@ -181,7 +198,7 @@ describe("confirmPlannedHardwareMovement", () => {
     })
 
     expect(result).toMatchObject({ id: "out-1", quantity: 2 })
-    const rpcCalls = operations.filter((op) => op.method === "rpc")
+    const rpcCalls = rpcOps()
     expect(rpcCalls.map((op) => op.fn)).toEqual(["confirm_hardware_planned_movement_v3"])
     expect(rpcCalls[0].args).toEqual({
       planned_id: "m1",
@@ -264,7 +281,7 @@ describe("confirmPlannedHardwareMovement", () => {
     const v3 = operations.find((op) => op.fn === "confirm_hardware_planned_movement_v3")
     expect(v3?.args?.lot_allocations).toEqual([])
     // 진짜 오류는 v2 로 폴백하지 않는다.
-    expect(operations.filter((op) => op.method === "rpc")).toHaveLength(1)
+    expect(rpcOps()).toHaveLength(1)
     expect(revalidateTagMock).not.toHaveBeenCalled()
   })
 
@@ -279,7 +296,7 @@ describe("confirmPlannedHardwareMovement", () => {
     const result = await confirmPlannedHardwareMovement("m1", { actor: "admin" })
 
     expect(result).toMatchObject({ id: "m1", quantity: 2 })
-    expect(operations.filter((op) => op.method === "rpc").map((op) => op.fn)).toEqual([
+    expect(rpcOps().map((op) => op.fn)).toEqual([
       "confirm_hardware_planned_movement_v3",
       "confirm_hardware_planned_movement_v2",
     ])
@@ -314,7 +331,7 @@ describe("confirmPlannedHardwareMovement", () => {
     const result = await confirmPlannedHardwareMovement("m1", {})
 
     expect(result).toMatchObject({ id: "m1", quantity: 5 })
-    expect(operations.filter((op) => op.method === "rpc").map((op) => op.fn)).toEqual([
+    expect(rpcOps().map((op) => op.fn)).toEqual([
       "confirm_hardware_planned_movement_v3",
       "confirm_hardware_planned_movement_v2",
       "confirm_hardware_planned_movement",
@@ -627,5 +644,130 @@ describe("updateHardwareMovement", () => {
       message: "constraint violation",
     })
     expect(revalidateTagMock).not.toHaveBeenCalled()
+  })
+})
+
+// 재고관리 프로세스(갭 문서 §6 D2·D6, §7-2) — 요청자(actorContext)가 있으면 본인 건·입고관리 권한과
+// 물류번호 직접 선택을 적용하고, 확정은 v4 로 새 칸을 옮긴다.
+describe("재고관리 프로세스 — 확정·취소·수정 권한과 물류번호", () => {
+  const OWNER = { userId: "u-owner", name: "김매니저", isInventoryManager: false }
+  const OTHER = { userId: "u-other", name: "박매니저", isInventoryManager: false }
+  const MANAGER = { userId: "u-boss", name: "이왕찬", isInventoryManager: true }
+  const OWNED_PLANNED = { ...PLANNED_ROW, source: "admin_manual", owner_user_id: "u-owner" }
+
+  it("본인 배송 예정을 고른 물류번호로 확정하면 v4 에 배정·계정을 넘긴다", async () => {
+    existingRow = { data: OWNED_PLANNED, error: null }
+    itemsById = { "item-std1": { name: "STD1", lot_tracked: true } }
+    ledgerRows = [ledger("inbound", 4, "H8"), ledger("inbound", 4, "C1")]
+    rpcQueue.confirm_hardware_planned_movement_v4 = [{ data: { id: "out-1", status: "설치 완료" }, error: null }]
+    const { confirmPlannedHardwareMovement } = await loadRepository()
+
+    await confirmPlannedHardwareMovement("m1", {
+      occurredAt: "2026-10-28",
+      actor: "김매니저",
+      confirmQty: 5,
+      actorContext: OWNER,
+      lotAllocations: [{ lotNo: "H8", quantity: 3 }, { lotNo: "C1", quantity: 2 }],
+    })
+
+    const v4 = operations.find((op) => op.fn === "confirm_hardware_planned_movement_v4")
+    expect(v4?.args).toMatchObject({
+      planned_id: "m1",
+      confirm_qty: 5,
+      actor_user_id: "u-owner",
+      lot_allocations: [{ lot_no: "H8", quantity: 3 }, { lot_no: "C1", quantity: 2 }],
+    })
+  })
+
+  it("물류번호 관리 품목은 물류번호 없이 확정할 수 없다(FIFO 자동 배정 없음)", async () => {
+    existingRow = { data: OWNED_PLANNED, error: null }
+    itemsById = { "item-std1": { name: "STD1", lot_tracked: true } }
+    ledgerRows = [ledger("inbound", 9, "C1")]
+    const { confirmPlannedHardwareMovement } = await loadRepository()
+
+    await expect(confirmPlannedHardwareMovement("m1", { actorContext: OWNER })).rejects.toThrow("물류번호를 골라야")
+    expect(operations.some((op) => op.method === "rpc")).toBe(false)
+  })
+
+  it("고른 물류번호의 잔여를 넘으면 막는다(확정되는 예정 행 자신은 뺀다)", async () => {
+    existingRow = { data: OWNED_PLANNED, error: null }
+    itemsById = { "item-std1": { name: "STD1", lot_tracked: true } }
+    ledgerRows = [ledger("inbound", 2, "C1")]
+    const { confirmPlannedHardwareMovement } = await loadRepository()
+
+    await expect(
+      confirmPlannedHardwareMovement("m1", { actorContext: OWNER, confirmQty: 3, lotNo: "C1" })
+    ).rejects.toThrow("C1 잔여는 2대")
+  })
+
+  it("배정 합계가 확정 수량과 다르면 막는다", async () => {
+    existingRow = { data: OWNED_PLANNED, error: null }
+    itemsById = { "item-std1": { name: "STD1", lot_tracked: true } }
+    ledgerRows = [ledger("inbound", 9, "C1")]
+    const { confirmPlannedHardwareMovement } = await loadRepository()
+
+    await expect(
+      confirmPlannedHardwareMovement("m1", { actorContext: OWNER, confirmQty: 4, lotAllocations: [{ lotNo: "C1", quantity: 3 }] })
+    ).rejects.toThrow("확정 수량(4대)")
+  })
+
+  it("수량만 관리하는 품목은 물류번호 없이 한 줄로 확정한다", async () => {
+    existingRow = { data: OWNED_PLANNED, error: null }
+    itemsById = { "item-std1": { name: "OPS", lot_tracked: false } }
+    rpcQueue.confirm_hardware_planned_movement_v4 = [{ data: { id: "out-1" }, error: null }]
+    const { confirmPlannedHardwareMovement } = await loadRepository()
+
+    await confirmPlannedHardwareMovement("m1", { actorContext: OWNER, confirmQty: 2 })
+    const v4 = operations.find((op) => op.fn === "confirm_hardware_planned_movement_v4")
+    expect(v4?.args?.lot_allocations).toEqual([{ lot_no: null, quantity: 2 }])
+  })
+
+  it("남의 배송 예정은 확정할 수 없고, 입고관리 권한자는 할 수 있다", async () => {
+    existingRow = { data: OWNED_PLANNED, error: null }
+    itemsById = { "item-std1": { name: "STD1", lot_tracked: true } }
+    ledgerRows = [ledger("inbound", 9, "C1")]
+    rpcQueue.confirm_hardware_planned_movement_v4 = [{ data: { id: "out-1" }, error: null }]
+    const { confirmPlannedHardwareMovement } = await loadRepository()
+
+    await expect(confirmPlannedHardwareMovement("m1", { actorContext: OTHER, lotNo: "C1" })).rejects.toMatchObject({ status: 403 })
+    await expect(confirmPlannedHardwareMovement("m1", { actorContext: MANAGER, lotNo: "C1" })).resolves.toMatchObject({ id: "out-1" })
+  })
+
+  it("배송 예정 취소는 본인도, 실현 기록 취소는 입고관리 권한자만", async () => {
+    updateRow = { data: { id: "m1" }, error: null }
+    existingRow = { data: { ...OWNED_PLANNED }, error: null }
+    const { voidHardwareMovement } = await loadRepository()
+
+    await expect(voidHardwareMovement("m1", { actorContext: OWNER })).resolves.toMatchObject({ id: "m1" })
+
+    existingRow = { data: { ...OWNED_PLANNED, status: "설치 완료" }, error: null }
+    await expect(voidHardwareMovement("m1", { actorContext: OWNER })).rejects.toMatchObject({ status: 403 })
+    await expect(voidHardwareMovement("m1", { actorContext: MANAGER })).resolves.toMatchObject({ id: "m1" })
+  })
+
+  it("실현 기록 수정은 입고관리 권한자만, 새 칸은 실려 온 것만 바꾼다", async () => {
+    existingRow = {
+      data: { ...OWNED_PLANNED, status: "설치 완료", item_id: "item-1", lot_no: "H9", quantity: 2 },
+      error: null,
+    }
+    updateRow = { data: { id: "m1" }, error: null }
+    const { updateHardwareMovement } = await loadRepository()
+    const input = {
+      itemId: "item-1",
+      productName: "86 IFP",
+      movementType: "outbound" as const,
+      quantity: 2,
+      status: "설치 완료",
+      lotNo: "H9",
+      outboundType: "promotion" as const,
+    }
+
+    await expect(updateHardwareMovement("m1", input, { actor: OWNER })).rejects.toMatchObject({ status: 403 })
+
+    await updateHardwareMovement("m1", input, { actor: MANAGER })
+    const updateOp = operations.filter((op) => op.method === "update").at(-1)
+    expect(updateOp?.payload).toMatchObject({ outbound_type: "promotion", status: "설치 완료" })
+    expect(updateOp?.payload).not.toHaveProperty("customer_id")
+    expect(updateOp?.payload).not.toHaveProperty("expected_return_at")
   })
 })

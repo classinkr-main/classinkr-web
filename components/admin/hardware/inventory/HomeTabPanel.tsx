@@ -16,7 +16,7 @@ import OfficeSamplePoolSection from "./OfficeSamplePoolSection"
 import OrderApprovalSection from "./OrderApprovalSection"
 import PlannedOutboundPanel from "./PlannedOutboundPanel"
 import PlannedOutboundOverview from "./PlannedOutboundOverview"
-import SalesPeriodSummary from "./SalesPeriodSummary"
+import SalesDashboardSection from "./SalesDashboardSection"
 import SampleTrackerSection from "./SampleTrackerSection"
 import SnapshotRestorePanel from "./SnapshotRestorePanel"
 import StockLevelsSection from "./StockLevelsSection"
@@ -32,8 +32,7 @@ interface HomeTabPanelProps {
     cards: ComponentProps<typeof CategoryCardsSection>["categoryCards"]
     etcSummary: ComponentProps<typeof CategoryCardsSection>["etcSummary"]
   }
-  salesPeriodSummary: ComponentProps<typeof SalesPeriodSummary>["summary"]
-  openOutboundDetail: ComponentProps<typeof SalesPeriodSummary>["onOpenDetail"]
+  openOutboundDetail: NonNullable<ComponentProps<typeof SalesDashboardSection>["onOpenDetail"]>
   hardwareSearch: ComponentProps<typeof HardwareSearchPanel>["hardwareSearch"]
   setHardwareSearch: ComponentProps<typeof HardwareSearchPanel>["setHardwareSearch"]
   hardwareSearchResults: ComponentProps<typeof HardwareSearchPanel>["hardwareSearchResults"]
@@ -99,7 +98,6 @@ export default function HomeTabPanel({
   reduceMotion,
   data,
   categoryCards,
-  salesPeriodSummary,
   openOutboundDetail,
   hardwareSearch,
   setHardwareSearch,
@@ -216,7 +214,8 @@ export default function HomeTabPanel({
       onSelectionCountChange={onPlannedSelectionCountChange}
     />
 
-    <SalesPeriodSummary summary={salesPeriodSummary} onOpenDetail={openOutboundDetail} />
+    {/* 판매대시보드(정의서) — 서버 집계. 원장 응답(data)이 바뀌면 같이 다시 받는다. */}
+    <SalesDashboardSection reloadKey={data} onOpenDetail={openOutboundDetail} />
 
     <HardwareSearchPanel
       hardwareSearch={hardwareSearch}
