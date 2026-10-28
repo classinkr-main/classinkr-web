@@ -1,7 +1,9 @@
 import "server-only"
+import type { SyncOutcome } from "@/lib/admin/sync-outcome"
 import { startSyncRun, finishSyncRun, findActiveSyncRun, type SyncTrigger } from "@/lib/repositories/branch-sync"
 import { syncRev } from "./sync-rev"
 import { syncHw } from "./sync-hw"
+import { checkSyncWriteAllowed } from "./write-guard"
 import { recaptureActiveRevImport, type RevImportRecaptureResult } from "@/lib/repositories/sales-ledger-rev-import"
 
 export interface RunAllResult {
@@ -15,9 +17,15 @@ export interface RunAllResult {
   // 재캡처를 시도했지만 실패한 경우의 원인. warnings에도 같은 내용이 사람이 읽는 문장으로 실린다.
   revImportError?: string
   error?: string
-  // 다른 실행이 잠금을 잡고 있어 아무것도 하지 않았다. startedAt은 그 실행의 시작 시각.
+  // 아무것도 하지 않았다 — 다른 실행이 잠금을 잡고 있었거나(이때 startedAt은 그 실행의 시작 시각),
+  // 운영 밖 쓰기 가드가 건너뛰었다(이때 outcome="skipped"·outcomeReason).
   skipped?: boolean
   startedAt?: string
+  // 결과 종류(lib/admin/sync-outcome.ts 계약). 환경 가드가 건너뛴 런은 "skipped"를 명시한다 — 비우면
+  // 화면(describeSyncOutcome)은 skipped=true 를 잠금 충돌("running")로 읽는다. 잠금 충돌은 비워 둔다.
+  outcome?: SyncOutcome
+  // 사람이 읽는 건너뜀 사유 — 화면에 그대로 나간다. 비밀값·URL 금지.
+  outcomeReason?: string
   // 실패로 간주하지 않는 소스별 경고(예: REV 범위 상한 도달 가능성). ok=true여도 있을 수 있다.
   warnings?: string[]
 }
@@ -56,12 +64,22 @@ export function syncRunSourceFor(sources: ReadonlyArray<"rev" | "hw">): "all" | 
 }
 
 export async function runAll(opts: { trigger: SyncTrigger; sources?: Array<"rev"|"hw"> }): Promise<RunAllResult> {
+  // 운영 런타임이 아니면 쓰기 0회로 끝낸다 — 잠금 조회(findActiveSyncRun)·런 기록(startSyncRun)보다 앞에 둔다.
+  // 크론·수동 라우트 모두 이 함수를 타므로 가드는 여기 한 곳이다(규칙·배경: ./write-guard.ts).
+  const guard = checkSyncWriteAllowed()
+  if (!guard.allowed) {
+    console.warn(`[branch-sync] ${opts.trigger} 동기화 건너뜀 — ${guard.outcomeReason}`)
+    return { ok: false, skipped: true, outcome: guard.outcome, outcomeReason: guard.outcomeReason }
+  }
+  // 잠금 충돌은 outcome 을 비운다 — completeBranchSync·describeSyncOutcome 이 skipped=true 를 "running"으로
+  // 읽고, startedAt 으로 "N분 전 시작"을 보여 준다.
   const activeRun = await findActiveSyncRun()
   if (activeRun) return { ok: false, skipped: true, startedAt: activeRun.started_at }
   // 빈 배열은 "전부"로 본다 — 아무것도 돌리지 않은 런이 성공("all")으로 남아 두 원천의 연속 실패를
   // 지우는 일이 없게 한다(수동 동기화 라우트도 빈 배열을 undefined로 넘긴다).
   const sources: Array<"rev" | "hw"> = opts.sources && opts.sources.length > 0 ? opts.sources : ["rev", "hw"]
-  const id = await startSyncRun(syncRunSourceFor(sources), opts.trigger)
+  // 실행 기록에 어느 환경·배포·커밋이 썼는지 남긴다(branch_sync_runs.runtime — 컬럼이 없으면 best-effort).
+  const id = await startSyncRun(syncRunSourceFor(sources), opts.trigger, guard.runtime)
   try {
     let revRows = 0
     let revOk: boolean | undefined

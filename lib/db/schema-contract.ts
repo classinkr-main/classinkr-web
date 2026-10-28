@@ -194,6 +194,9 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // 블로그 글 내용 변경 시각(2026-10-28) — 사이트맵 lastmod·JSON-LD dateModified·RSS 의 기준.
   // 컬럼만 REST 로 확인된다. 트리거(blog_posts_content_updated_at)는 마이그레이션 머리 주석의 pg_trigger 조회로 본다.
   "supabase/migrations/20261028_blog_posts_content_updated_at.sql",
+  // 시트 동기화 실행 기록의 출처 컬럼(2026-10-28) — branch_sync_runs.runtime(환경·배포·커밋·리전).
+  // 미적용이어도 startSyncRun 이 컬럼 없이 다시 기록하므로 동기화는 돌고, 출처만 비어 남는다.
+  "supabase/migrations/20261028_branch_sync_runs_runtime.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -942,6 +945,16 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     severity: "warning",
     impact:
       "사이트맵 lastmod·블로그 JSON-LD dateModified·RSS lastBuildDate 가 계속 updated_at 을 따라, 대표 글·공개 토글만 해도 '수정됨'으로 나간다(화면·저장은 정상).",
+  },
+  {
+    kind: "table",
+    table: "branch_sync_runs",
+    label: "시트 동기화 실행 기록 — 출처 칸(runtime: 환경·배포·커밋·리전)",
+    columns: ["runtime"],
+    migration: "supabase/migrations/20261028_branch_sync_runs_runtime.sql",
+    severity: "warning",
+    impact:
+      "동기화는 그대로 돈다(컬럼 없이 다시 기록). 다만 어느 환경·배포가 쓴 런인지 남지 않아, 운영 밖 쓰기 사고(2026-10-15 활성 임포트 진동)를 사후에 가려낼 수 없다.",
   },
 ]
 

@@ -98,6 +98,24 @@ describe("POST /api/admin/branch/sync — 부분 실패 시 캐시 무효화 (�
     expect(body.startedAt).toBe("2026-10-22T04:00:05Z")
   })
 
+  // 2026-10-28 쓰기 가드(lib/branch/sync/write-guard.ts) — runAll 이 outcome="skipped"를 명시한 결과를
+  // 완료 처리가 다시 계산해 "running"(잠금 충돌)으로 덮으면 화면이 "이미 진행 중"이라고 잘못 말한다.
+  it("운영 밖 쓰기 가드로 건너뛴 결과는 outcome=skipped·사유를 그대로 싣고, 아무 태그도 만료하지 않는다", async () => {
+    verifyAdmin.mockResolvedValue(null)
+    const outcomeReason = "운영 환경이 아니라 동기화 쓰기를 건너뜁니다(환경: preview)."
+    runAll.mockResolvedValue({ ok: false, skipped: true, outcome: "skipped", outcomeReason })
+
+    const { POST } = await import("@/app/api/admin/branch/sync/route")
+    const response = await POST(syncRequest())
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(revalidateTag).not.toHaveBeenCalled()
+    expect(body.outcome).toBe("skipped")
+    expect(body.outcomeReason).toBe(outcomeReason)
+    expect(body.startedAt).toBeUndefined()
+  })
+
   // 2026-10-22: "동기화를 눌러도 화면이 그대로" — revalidateTag(tag, "max")는 오래됨 표시만 해서 바로 다음
   // 조회가 옛 값을 받았다. 이제 동기화가 쓴 원천의 캐시를 즉시 만료한다(설계 2026-09-14 §7.1).
   it("성공하면 오래됨 표시(max)가 아니라 즉시 만료하고, 장부 임포트·실행 기록 캐시도 함께 만료한다", async () => {

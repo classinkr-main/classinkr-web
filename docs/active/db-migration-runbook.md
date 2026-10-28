@@ -71,6 +71,9 @@ npm run check:db --  --strict
 - **새 컬럼 기록은 코어 경로와 분리한다.** 미적용 환경에서 주 기능이 죽지 않도록 별도
   `try/catch`로 best-effort 기록한다. 기준 구현:
   [app/api/admin/email/send/route.ts](../../app/api/admin/email/send/route.ts)의 부분 실패 기록.
+  두 번째 기준: [lib/repositories/branch-sync.ts](../../lib/repositories/branch-sync.ts)의 `startSyncRun` —
+  `runtime` 컬럼이 없으면(42703·PGRST204) 컬럼 없이 다시 기록하고 `console.warn`을 남긴다
+  (`20261028_branch_sync_runs_runtime.sql`).
 
 ## 2026-08-18 스키마 드리프트 감사 결과
 
@@ -182,6 +185,21 @@ npm run check:db --  --strict
 | 파일 | 하는 일 | 미적용 시 | 확인 |
 | --- | --- | --- | --- |
 | `20261028_blog_posts_content_updated_at.sql` | `blog_posts.content_updated_at`(timestamptz, 기존 행은 `coalesce(updated_at, published_at, created_at)`로 백필, 이후 기본값 `now()`) + BEFORE UPDATE 트리거 `blog_posts_content_updated_at` — 제목·슬러그·요약·본문·카테고리·대표 이미지·SEO·"이 글에서 다루는 것"이 실제로 바뀐 UPDATE 에서만 갱신한다. 기존 `blog_posts_updated_at` 트리거(내부용 `updated_at`)는 그대로 둔다 | **배포 전후 무관 — 화면·저장은 정상.** 사이트맵·RSS 조회는 컬럼 없음(42703)을 감지해 `updated_at` 으로 폴백하고(`console.warn`), 상세는 `select *` 라 값이 비면 `updated_at` 을 쓴다. 그동안은 지금처럼 대표 글·공개 토글만 해도 사이트맵 lastmod·JSON-LD dateModified·RSS lastBuildDate 가 바뀐다. 적용 후에는 내용 변경 때만 바뀐다 | `check:db`(warning, 컬럼 프로브). 트리거는 파일 머리 주석의 `pg_trigger` 조회 |
+
+### 2026-10-28 시트 동기화 실행 기록 출처(`branch_sync_runs.runtime`) — 서울 프로젝트 미적용
+
+2026-10-28 읽기 전용 감사(10/15~10/19 운영 크론과 운영 밖 수동 런이 활성 REV 임포트를 번갈아 덮은 진동)의 후속.
+쓰기 가드는 코드([lib/branch/sync/write-guard.ts](../../lib/branch/sync/write-guard.ts) — 운영 아니면 건너뜀,
+`BRANCH_SYNC_ALLOW_NONPROD_WRITE=1`로만 예외)이고, 어느 환경·배포가 썼는지 남기는 쪽이 이 컬럼이다.
+
+| 파일 | 하는 일 | 미적용 시 | 확인 |
+| --- | --- | --- | --- |
+| `20261028_branch_sync_runs_runtime.sql` | `branch_sync_runs`에 `runtime jsonb`(`env`·`deploymentId`·`sha`·`region`·`allowedBy`)를 더한다. 컬럼만 추가(NULL 허용), 멱등 | 동기화는 그대로 돈다 — `startSyncRun`이 42703/PGRST204를 보고 컬럼 없이 다시 기록하고 `console.warn`을 남긴다. 어느 환경·배포가 쓴 런인지는 남지 않는다 | `npm run check:db`의 `branch_sync_runs` 프로브, 또는 `select count(*) from information_schema.columns where table_name = 'branch_sync_runs' and column_name = 'runtime';` → `1` |
+
+코드보다 먼저 적용해도, 나중에 적용해도 된다(폴백이 있다). 운영 배포 전에 적용하면 첫 운영 런부터 출처가 남는다.
+같은 작업의 `sales_ledger_import_runs` 쪽은 스키마 변경 없이 기존 컬럼·JSON을 쓴다 — `parser_version`에 캡처 버전
+`rev-native:v2`, `metadata.runtime`에 같은 출처. 활성 포인터 전환(`activateRevImportRun`)은 활성 run의
+`parser_version`이 후보보다 높으면 덮지 않는다(라벨 이전 run은 전부 기본값 `sales-ledger-import-v1` = 가장 낮음).
 
 ## 적용 보류 중인 마이그레이션
 

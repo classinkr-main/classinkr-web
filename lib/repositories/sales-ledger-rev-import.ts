@@ -6,6 +6,7 @@ import { revalidateTag, unstable_cache } from "next/cache"
 
 import { normalizedAccountKey } from "@/lib/branch/account-key"
 import { splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
+import { describeSyncRuntime } from "@/lib/branch/sync/write-guard"
 import { listBranchRevDealsFresh, type BranchRevDeal } from "@/lib/repositories/branch-deals"
 import { SALES_LEDGER_IMPORTS_CACHE_TAG } from "@/lib/repositories/sales-ledger-imports"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
@@ -23,6 +24,29 @@ const FISCAL_MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 const INSERT_CHUNK = 400
 
+// 캡처 버전 — checksum 프리픽스이자 run 의 parser_version(= 캡처 버전 라벨). 캡처 의미(어떤 값을
+// 엔트리로 남기는가)가 바뀔 때만 올린다. 같은 프리픽스로 같은 checksum 이 나오면 같은 의미의 캡처다
+// (dedupe 의 근거). v2(2026-10-15): 부호 있는 확도 성분과 명시 0원 월을 엔트리로 보존 — v1 run 은 이
+// 값을 잃었을 수 있어 재사용하지 않는다.
+//
+// 이 라벨 이전에 만들어진 run 은 전부 컬럼 기본값 'sales-ledger-import-v1'(v2 데이터로 캡처했어도)이라
+// captureVersionRank 가 1 로 읽는다 — 하위 호환: 그 run 위로는 언제나 활성화할 수 있다.
+export const REV_IMPORT_CAPTURE_VERSION = "rev-native:v2"
+
+/**
+ * 캡처 버전 라벨의 순위. "rev-native:v2" → 2, 컬럼 기본값 "sales-ledger-import-v1" → 1,
+ * 알 수 없는 문자열·NULL → 0(가장 낮음 — 활성화를 막지 않는다).
+ */
+export function captureVersionRank(version: string | null | undefined): number {
+  const match = /v(\d+)$/i.exec((version ?? "").trim())
+  return match ? Number(match[1]) : 0
+}
+
+/** 단조성: 활성 run 의 라벨이 후보보다 엄격히 높을 때만 포인터를 유지한다(같거나 낮으면 덮는다). */
+export function shouldKeepActiveRevImport(activeVersion: string | null | undefined, candidateVersion: string): boolean {
+  return captureVersionRank(activeVersion) > captureVersionRank(candidateVersion)
+}
+
 export interface RevDbImportResult {
   runId: string
   fiscalYear: number
@@ -33,6 +57,10 @@ export interface RevDbImportResult {
   capturedAt: string
   // 동일 checksum의 기존 succeeded run을 재사용했으면 true (새 run 생성 없음)
   deduped: boolean
+  // 이 캡처의 버전 라벨(REV_IMPORT_CAPTURE_VERSION). run 의 parser_version 과 같다.
+  captureVersion: string
+  // activate 를 요청했지만 활성 run 이 더 높은 캡처 버전이라 포인터를 유지한 사유. activated=false 일 때만.
+  keptReason?: string
 }
 
 function toNumber(value: unknown): number {
@@ -92,7 +120,7 @@ function revImportChecksum(deals: BranchRevDeal[]): string {
     .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : a.row - b.row))
   // v2 preserves signed confidence components and explicit zeroes. A v1 run of the same
   // mirror can have lost these values, so it must not be reused after this correction.
-  return createHash("sha256").update(`rev-native:v2:${JSON.stringify(canonical)}`).digest("hex")
+  return createHash("sha256").update(`${REV_IMPORT_CAPTURE_VERSION}:${JSON.stringify(canonical)}`).digest("hex")
 }
 
 // 유니크 인덱스: sales_ledger_import_runs_checksum_idx
@@ -128,21 +156,50 @@ function isChecksumConflictError(error: { code?: string; message?: string }) {
 function dedupedResult(
   existing: { id: string; startedAt: string; rowCounts: Record<string, number> },
   fiscalYear: number,
-  activated: boolean,
+  activation: ActivateRevImportRunResult | null,
 ): RevDbImportResult {
   return {
     runId: existing.id,
     fiscalYear,
     lineCount: toNumber(existing.rowCounts.rev_lines),
     entryCount: toNumber(existing.rowCounts.rev_period_entries),
-    activated,
+    activated: activation?.activated ?? false,
     capturedAt: existing.startedAt,
     deduped: true,
+    // checksum 이 같다 = 이 코드의 캡처 버전으로 만든 run 이다(프리픽스가 checksum 에 들어간다) —
+    // 라벨 이전 run 이라 parser_version 이 기본값이어도 후보 버전은 현재 버전이다.
+    captureVersion: REV_IMPORT_CAPTURE_VERSION,
+    ...(activation?.keptReason ? { keptReason: activation.keptReason } : {}),
   }
 }
 
-export async function activateRevImportRun(runId: string, fiscalYear: number, actor: string | null): Promise<void> {
+export interface ActivateRevImportRunResult {
+  activated: boolean
+  /** 활성 run 이 더 높은 캡처 버전이라 포인터를 유지한 사유 — activated=false 일 때만. 화면에 나간다(비밀값 금지). */
+  keptReason?: string
+}
+
+/**
+ * 활성 포인터(sales_ledger_active_sources) 전환. UPSERT 라 마지막에 쓴 쪽이 이기므로, 캡처 버전
+ * 단조성을 여기서 강제한다 — 활성 run 의 parser_version 이 후보(candidateVersion)보다 높으면 덮지 않는다.
+ * 2026-10-15~19 에 옛 캡처 코드(운영 크론)와 새 캡처 코드(운영 밖 수동 런)가 같은 포인터를 번갈아 덮어
+ * 엔트리 수가 런마다 진동했다. 이 검사는 "앞으로"만 보장한다(검사가 없는 옛 배포는 막지 못한다) —
+ * 옛 코드가 운영 DB에 쓰는 것 자체는 lib/branch/sync/write-guard.ts 가 막는다.
+ */
+export async function activateRevImportRun(
+  runId: string,
+  fiscalYear: number,
+  actor: string | null,
+  candidateVersion: string = REV_IMPORT_CAPTURE_VERSION,
+): Promise<ActivateRevImportRunResult> {
   const supabase = createSupabaseAdminClient()
+  const active = await lookupActiveRevImportStatus(fiscalYear)
+  if (active.active && active.runId !== runId && shouldKeepActiveRevImport(active.captureVersion, candidateVersion)) {
+    const keptReason =
+      `활성 run 의 캡처 버전(${active.captureVersion ?? "알 수 없음"})이 이 캡처(${candidateVersion})보다 높아 활성 포인터를 유지했습니다`
+    console.warn(`[rev-import] ${keptReason} — active=${active.runId} candidate=${runId}`)
+    return { activated: false, keptReason }
+  }
   const { error } = await supabase
     .from("sales_ledger_active_sources")
     .upsert(
@@ -160,6 +217,7 @@ export async function activateRevImportRun(runId: string, fiscalYear: number, ac
   if (error) throw new Error(`[rev-import] active source 전환 실패: ${error.message}`)
   // 액티브 소스 조회는 60초 unstable_cache라 즉시 반영 위해 무효화한다.
   revalidateTag(SALES_LEDGER_IMPORTS_CACHE_TAG, "max")
+  return { activated: true }
 }
 
 export interface ActiveRevImportStatus {
@@ -167,13 +225,15 @@ export interface ActiveRevImportStatus {
   fiscalYear: number
   runId: string | null
   capturedAt: string | null
+  // 활성 run 의 parser_version(캡처 버전 라벨). 라벨 이전 run 은 'sales-ledger-import-v1'.
+  captureVersion: string | null
 }
 
 async function lookupActiveRevImportStatus(fiscalYear: number): Promise<ActiveRevImportStatus> {
   const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase
     .from("sales_ledger_active_sources")
-    .select("import_run_id, sales_ledger_import_runs!inner(status, started_at)")
+    .select("import_run_id, sales_ledger_import_runs!inner(status, started_at, parser_version)")
     .eq("tab_key", "rev")
     .eq("fiscal_year", fiscalYear)
     .eq("sales_ledger_import_runs.status", "succeeded")
@@ -182,15 +242,22 @@ async function lookupActiveRevImportStatus(fiscalYear: number): Promise<ActiveRe
     const haystack = `${error.code ?? ""} ${error.message ?? ""} ${error.details ?? ""}`.toLowerCase()
     if (haystack.includes("42p01") || haystack.includes("does not exist") || haystack.includes("schema cache")) {
       // 마이그레이션 미적용 = DB-native 기능 자체가 없음 → 비활성으로 취급.
-      return { active: false, fiscalYear, runId: null, capturedAt: null }
+      return { active: false, fiscalYear, runId: null, capturedAt: null, captureVersion: null }
     }
     throw new Error(`[rev-import] active source 상태 조회 실패: ${error.message}`)
   }
   const runId = (data?.import_run_id as string | undefined) ?? null
   // M2O inner join은 객체로 오지만, 타입 미탐지 시 배열로 직렬화될 수 있어 양쪽 다 수용한다.
-  const joined = data?.sales_ledger_import_runs as { started_at?: string } | Array<{ started_at?: string }> | null | undefined
-  const startedAt = Array.isArray(joined) ? joined[0]?.started_at : joined?.started_at
-  return { active: Boolean(runId), fiscalYear, runId, capturedAt: startedAt ?? null }
+  type JoinedRun = { started_at?: string; parser_version?: string | null }
+  const joined = data?.sales_ledger_import_runs as JoinedRun | JoinedRun[] | null | undefined
+  const run = Array.isArray(joined) ? joined[0] : joined
+  return {
+    active: Boolean(runId),
+    fiscalYear,
+    runId,
+    capturedAt: run?.started_at ?? null,
+    captureVersion: typeof run?.parser_version === "string" ? run.parser_version : null,
+  }
 }
 
 // GET db-import 캐시(60초 TTL, SALES_LEDGER_IMPORTS_CACHE_TAG — R5 항목 4: 10초→60초,
@@ -237,8 +304,8 @@ export async function captureRevDbImport(actor: string, options?: { activate?: b
   const checksum = revImportChecksum(deals)
   const existing = await findExistingRevImportRun(supabase, fiscalYear, checksum)
   if (existing) {
-    if (activate) await activateRevImportRun(existing.id, fiscalYear, actor)
-    return dedupedResult(existing, fiscalYear, activate)
+    const activation = activate ? await activateRevImportRun(existing.id, fiscalYear, actor, REV_IMPORT_CAPTURE_VERSION) : null
+    return dedupedResult(existing, fiscalYear, activation)
   }
 
   const { data: runRow, error: runError } = await supabase
@@ -248,9 +315,17 @@ export async function captureRevDbImport(actor: string, options?: { activate?: b
       source_kind: "manual",
       source_name: `rev db-native ${now.toISOString().slice(0, 16).replace("T", " ")}`,
       status: "running",
+      // 캡처 버전 라벨 — 활성 포인터 단조성(activateRevImportRun)이 이 값을 읽는다.
+      parser_version: REV_IMPORT_CAPTURE_VERSION,
       source_checksum: checksum,
       imported_by: actor,
-      metadata: { purpose: "rev-native", dataSource: "branch_rev_deals" },
+      // runtime: 어느 환경·배포·커밋이 이 run 을 썼는가(2026-10-28 감사 — 운영 밖 캡처를 사후에 가려내기 위해).
+      metadata: {
+        purpose: "rev-native",
+        dataSource: "branch_rev_deals",
+        captureVersion: REV_IMPORT_CAPTURE_VERSION,
+        runtime: describeSyncRuntime(),
+      },
     })
     .select("id,started_at")
     .single()
@@ -343,23 +418,25 @@ export async function captureRevDbImport(actor: string, options?: { activate?: b
           .eq("id", runId)
         const winner = await findExistingRevImportRun(supabase, fiscalYear, checksum)
         if (winner) {
-          if (activate) await activateRevImportRun(winner.id, fiscalYear, actor)
-          return dedupedResult(winner, fiscalYear, activate)
+          const activation = activate ? await activateRevImportRun(winner.id, fiscalYear, actor, REV_IMPORT_CAPTURE_VERSION) : null
+          return dedupedResult(winner, fiscalYear, activation)
         }
       }
       throw new Error(`[rev-import] run 완료 처리 실패: ${doneError.message}`)
     }
 
-    if (activate) await activateRevImportRun(runId, fiscalYear, actor)
+    const activation = activate ? await activateRevImportRun(runId, fiscalYear, actor, REV_IMPORT_CAPTURE_VERSION) : null
 
     return {
       runId,
       fiscalYear,
       lineCount: lineRows.length,
       entryCount: entryRows.length,
-      activated: activate,
+      activated: activation?.activated ?? false,
       capturedAt: runRow.started_at as string,
       deduped: false,
+      captureVersion: REV_IMPORT_CAPTURE_VERSION,
+      ...(activation?.keptReason ? { keptReason: activation.keptReason } : {}),
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
@@ -374,6 +451,9 @@ export async function captureRevDbImport(actor: string, options?: { activate?: b
 export type RevImportRecaptureResult =
   | { status: "inactive" }
   | { status: "captured" | "unchanged"; runId: string; capturedAt: string; lineCount: number }
+  // 캡처는 했지만(capturedRunId) 활성 run 이 더 높은 캡처 버전이라 포인터를 유지했다 — runId/capturedAt 은
+  // 화면이 계속 읽는 활성 run 이다.
+  | { status: "kept"; runId: string; capturedAt: string; lineCount: number; reason: string; capturedRunId: string }
 
 // 시트 동기화 성공 직후 호출하는 자동 재캡처(P0, 2026-09-11). 액티브 REV 임포트가 있을 때만
 // 캡처한다 — 없으면(시트 미러 모드) 아무것도 하지 않는다. 여기서 새로 활성화하면 시트 모드로
@@ -381,8 +461,18 @@ export type RevImportRecaptureResult =
 // 캡처 실패는 던진다 — 호출부(runAll)가 동기화 성공은 유지한 채 경고로 싣는다.
 export async function recaptureActiveRevImport(actor: string): Promise<RevImportRecaptureResult> {
   const status = await lookupActiveRevImportStatus(fiscalYearOf(new Date()))
-  if (!status.active) return { status: "inactive" }
+  if (!status.active || !status.runId) return { status: "inactive" }
   const result = await captureRevDbImport(actor)
+  if (!result.activated) {
+    return {
+      status: "kept",
+      runId: status.runId,
+      capturedAt: status.capturedAt ?? "",
+      lineCount: result.lineCount,
+      reason: result.keptReason ?? "활성 run 이 더 높은 캡처 버전이라 포인터를 유지했습니다",
+      capturedRunId: result.runId,
+    }
+  }
   return {
     status: result.deduped && result.runId === status.runId ? "unchanged" : "captured",
     runId: result.runId,

@@ -410,6 +410,7 @@ export type { LedgerPipelinePrefetch, PeriodComparisonChip, RevManagerSummary } 
 // 마운트 후 클라이언트 페치로만 채워진다.
 // POST /api/admin/branch/sync 응답 중 이 화면이 읽는 부분 — 결과 계약(outcome) + 장부 임포트 재캡처 결과.
 // 서버가 동기화 직후 REV 장부 임포트를 재캡처하고 그 결과를 싣는다(액티브 임포트가 없으면 inactive).
+// 재캡처 결과 유니온(captured·unchanged·kept·inactive)은 공용 타입(./client-api BranchSyncResponseBody) 한 곳에 둔다.
 type BranchSyncResponse = BranchSyncResponseBody
 
 function lensFromParam(value: string | null): LedgerLens {
@@ -757,7 +758,9 @@ export default function SalesLedgerWorkbench({
     setDbImportNotice(
       revImport.status === "captured"
         ? `새 run 캡처됨 · 행 ${revImport.lineCount.toLocaleString("ko-KR")}건`
-        : "시트 변경 없음 — run 유지",
+        : revImport.status === "kept"
+          ? `활성 run 유지 — ${revImport.reason}`
+          : "시트 변경 없음 — run 유지",
     )
   }, [])
 
