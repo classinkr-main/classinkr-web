@@ -303,6 +303,56 @@ describe("createHardwareMovementsBatch", () => {
       expect(results[1]).toMatchObject({ ok: false, error: expect.stringContaining("C3 잔여는 2대") })
     })
 
+    it("CRM 오더 한 줄을 물류번호 둘로 나누면 행 둘, 둘째 행 참조에 접미사를 단다", async () => {
+      itemsById = { "item-t1": { name: "T1", lot_tracked: true } }
+      ledgerQueue = [[inboundLot("C1", 2), inboundLot("H8", 5)]]
+      const { createHardwareMovementsBatch } = await loadRepository()
+
+      const results = await createHardwareMovementsBatch([
+        {
+          itemId: "item-t1",
+          productName: "T1",
+          movementType: "outbound",
+          quantity: 3,
+          referenceNo: "deal:42",
+          toLocation: "대치학원",
+          occurredAt: "2026-10-30",
+          outboundType: "sales",
+          status: "배송 예정",
+          lotAllocations: [{ lotNo: "C1", quantity: 2 }, { lotNo: "H8", quantity: 1 }],
+        },
+      ], { actor: MANAGER })
+
+      expect(results[0].ok).toBe(true)
+      expect(insertedBatches[0].map((row) => [row.lot_no, row.quantity, row.reference_no, row.status])).toEqual([
+        ["C1", 2, "deal:42", "배송 예정"],
+        ["H8", 1, "deal:42:lot:H8", "배송 예정"],
+      ])
+    })
+
+    it("나눈 물류번호 중 하나라도 잔여를 넘으면 그 줄 전체가 실패한다", async () => {
+      itemsById = { "item-t1": { name: "T1", lot_tracked: true } }
+      ledgerQueue = [[inboundLot("C1", 1), inboundLot("H8", 5)]]
+      const { createHardwareMovementsBatch } = await loadRepository()
+
+      const results = await createHardwareMovementsBatch([
+        {
+          itemId: "item-t1",
+          productName: "T1",
+          movementType: "outbound",
+          quantity: 3,
+          toLocation: "대치학원",
+          occurredAt: "2026-10-30",
+          outboundType: "sales",
+          status: "설치 완료",
+          lotAllocations: [{ lotNo: "C1", quantity: 2 }, { lotNo: "H8", quantity: 1 }],
+        },
+      ], { actor: MANAGER })
+
+      expect(results[0]).toMatchObject({ ok: false, error: expect.stringContaining("C1 잔여는 1대") })
+      expect(insertedBatches).toHaveLength(0)
+    })
+
     it("새 물류번호를 건너뛰면 그 입고 줄이 실패한다", async () => {
       itemsById = { "item-t1": { name: "T1", lot_tracked: true } }
       ledgerQueue = [[inboundLot("C1", 5)]]

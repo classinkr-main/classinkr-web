@@ -90,6 +90,16 @@ describe("고객사 출고", () => {
     expect(prepareProcessLine(outbound({ status: "출고" }), ctx()).input.status).toBe("설치 완료")
   })
 
+  it("물류번호를 나눠 고르면 합계가 수량과 같아야 하고 lotNo 는 비운다", () => {
+    const split = prepareProcessLine(
+      outbound({ quantity: 3, lotNo: null, lotAllocations: [{ lotNo: " C1 ", quantity: 2 }, { lotNo: "H8", quantity: 1 }] }),
+      ctx()
+    )
+    expect(split.strictLot).toBe(true)
+    expect(split.input).toMatchObject({ lotNo: null, lotAllocations: [{ lotNo: "C1", quantity: 2 }, { lotNo: "H8", quantity: 1 }] })
+    expect(() => prepareProcessLine(outbound({ quantity: 4, lotAllocations: [{ lotNo: "C1", quantity: 3 }] }), ctx())).toThrow("합계(3대)")
+  })
+
   it("출고일·유형·물류번호가 필요하다", () => {
     expect(() => prepareProcessLine(outbound({ occurredAt: null }), ctx())).toThrow("출고일")
     expect(() => prepareProcessLine(outbound({ outboundType: null }), ctx())).toThrow("출고 유형")

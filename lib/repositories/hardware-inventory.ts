@@ -182,6 +182,8 @@ export interface CreateHardwareMovementInput {
   createdByUserId?: string | null
   expectedReturnAt?: string | null
   adjustDirection?: HardwareAdjustDirection | null
+  /** 고객사 출고 한 줄을 여러 물류번호로 나눌 때(요청자 경로, 물류번호 관리 품목). */
+  lotAllocations?: ReadonlyArray<{ lotNo: string; quantity: number }> | null
 }
 
 /** 쓰기 요청자. 없으면 시스템 경로(오더 승인 배송 예정 등) — 프로세스 규칙 검사를 하지 않는다. */
@@ -968,9 +970,19 @@ function withAutoLotRaw(
   }
 }
 
-function allocationReferenceNo(input: CreateHardwareMovementInput, index: number, allocationCount: number, lotNo: string | null) {
+function allocationReferenceNo(
+  input: CreateHardwareMovementInput,
+  index: number,
+  allocationCount: number,
+  lotNo: string | null,
+  options: { suffixPlanned?: boolean } = {}
+) {
   const referenceNo = cleanString(input.referenceNo)
-  if (!referenceNo || allocationCount <= 1 || index === 0 || isPlannedStatus(input.status)) return referenceNo
+  if (!referenceNo || allocationCount <= 1 || index === 0) return referenceNo
+  // 배송 예정은 예전에 나눠 만들 일이 없어 참조를 그대로 뒀다. 물류번호를 나눠 고른 예정(suffixPlanned)은
+  // 실제 출고와 같이 둘째 줄부터 접미사를 단다 — 같은 CRM 참조 행이 둘이면 중복 차단과 확정 함수의 "이미
+  // 실제 출고로 반영" 검사가 형제 행을 같은 오더로 본다.
+  if (isPlannedStatus(input.status) && !options.suffixPlanned) return referenceNo
   const lotSuffix = cleanString(lotNo)?.replace(/[^\p{L}\p{N}_-]+/gu, "-") || `split-${index + 1}`
   return `${referenceNo}:lot:${lotSuffix}`
 }
@@ -1169,7 +1181,7 @@ function buildMovementInsertRowsFromAllocations(
   itemId: string,
   productName: string,
   allocations: Array<{ lotNo: string | null; quantity: number; autoAssigned: boolean }>,
-  options: { convertedFromMovementId?: string } = {}
+  options: { convertedFromMovementId?: string; suffixPlanned?: boolean } = {}
 ): HardwareMovementInsertRow[] {
   const serials = input.serials ?? []
 
@@ -1186,7 +1198,9 @@ function buildMovementInsertRowsFromAllocations(
       quantity: allocation.quantity,
       lotNo: allocation.lotNo,
       serials: allocationSerials,
-      referenceNo: allocationReferenceNo(input, allocationIndex, allocations.length, allocation.lotNo),
+      referenceNo: allocationReferenceNo(input, allocationIndex, allocations.length, allocation.lotNo, {
+        suffixPlanned: options.suffixPlanned,
+      }),
       raw: withAutoLotRaw(input.raw, allocation, input.quantity, allocations.length),
       convertedFromMovementId: options.convertedFromMovementId,
     })
@@ -1208,8 +1222,8 @@ async function buildMovementInsertRows(
       input,
       itemId,
       productName,
-      strictLotAllocation(lots, { productName, quantity: input.quantity, lotNo: input.lotNo }),
-      options
+      strictLotAllocation(lots, { productName, quantity: input.quantity, lotNo: input.lotNo, lotAllocations: input.lotAllocations }),
+      { ...options, suffixPlanned: true }
     )
   }
 
@@ -1388,6 +1402,7 @@ function toProcessLineInput(input: CreateHardwareMovementInput): ProcessLineInpu
     createdByUserId: input.createdByUserId,
     expectedReturnAt: input.expectedReturnAt,
     adjustDirection: input.adjustDirection,
+    lotAllocations: input.lotAllocations,
   }
 }
 
@@ -1413,11 +1428,26 @@ function applyProcessRules(
   return { input: { ...input, ...prepared.input }, strictLot: prepared.strictLot }
 }
 
-/** 물류번호 직접 선택 줄의 배정 — 고른 번호의 잔여(배송 예정까지 뺀 값)를 넘으면 막는다. FIFO 없음. */
+/**
+ * 물류번호 직접 선택 줄의 배정 — 고른 번호의 잔여(배송 예정까지 뺀 값)를 넘으면 막는다. FIFO 없음.
+ * lotAllocations 로 나눠 골랐으면 번호별로 합쳐 잔여를 보고 번호마다 한 줄을 만든다.
+ */
 function strictLotAllocation(
   lots: ReadonlyArray<{ lotNo: string; quantity: number }>,
-  input: { productName: string; quantity: number; lotNo?: string | null }
+  input: {
+    productName: string
+    quantity: number
+    lotNo?: string | null
+    lotAllocations?: ReadonlyArray<{ lotNo: string; quantity: number }> | null
+  }
 ): Array<{ lotNo: string | null; quantity: number; autoAssigned: boolean }> {
+  if (input.lotAllocations && input.lotAllocations.length > 0) {
+    const byLot = new Map<string, number>()
+    for (const allocation of input.lotAllocations) {
+      byLot.set(allocation.lotNo, (byLot.get(allocation.lotNo) ?? 0) + allocation.quantity)
+    }
+    return Array.from(byLot, ([lotNo, quantity]) => strictLotAllocation(lots, { productName: input.productName, quantity, lotNo })[0])
+  }
   const lotNo = assertLotSelectable({
     productName: input.productName,
     lotTracked: true,
@@ -1643,7 +1673,12 @@ export async function createHardwareMovementsBatch(
         }
         const lots = resolveHardwareLotBalances([...ledger, ...(pendingByItem.get(itemId) ?? [])]).lots
           .map((lot) => ({ lotNo: lot.lot, quantity: lot.quantity }))
-        allocations = strictLotAllocation(lots, { productName, quantity: input.quantity, lotNo: input.lotNo })
+        allocations = strictLotAllocation(lots, {
+          productName,
+          quantity: input.quantity,
+          lotNo: input.lotNo,
+          lotAllocations: input.lotAllocations,
+        })
       } else if (movementNeedsLotAllocation(input)) {
         let ledger = ledgerByItem.get(itemId)
         if (!ledger) {
@@ -1661,7 +1696,7 @@ export async function createHardwareMovementsBatch(
         allocations = [{ lotNo: cleanString(input.lotNo), quantity: input.quantity, autoAssigned: false }]
       }
 
-      const rows = buildMovementInsertRowsFromAllocations(input, itemId, productName, allocations)
+      const rows = buildMovementInsertRowsFromAllocations(input, itemId, productName, allocations, { suffixPlanned: strictLot })
 
       // 앞 줄이 만든 행을 뒤 줄의 잔량·중복 판정에 반영한다 — 줄 단위 저장에서 먼저 INSERT 된 행이
       // 다음 줄 조회에 보이던 것과 같다.
@@ -2113,7 +2148,7 @@ export async function updateHardwareMovement(
 export interface HardwareLotChoices {
   itemId: string
   product: string
-  /** 물류번호 관리 품목인가. 칸이 없는 DB 는 true(예전처럼 물류번호를 보여 준다). */
+  /** 물류번호를 골라야 하는 품목인가. 칸이 없는 DB(마이그레이션 전)는 false — 서버가 요구하지 않는다. */
   lotTracked: boolean
   /** 잔여 1대 이상인 물류번호(배송 예정까지 뺀 잔여), 먼저 소진할 순서. */
   lots: Array<{ lotNo: string; remaining: number }>
@@ -2151,7 +2186,8 @@ export async function getHardwareLotChoices(input: {
   return {
     itemId: item.id,
     product: item.name,
-    lotTracked: itemLotTracked(item) ?? true,
+    // 칸이 없는 DB(마이그레이션 전)는 false — 서버가 물류번호를 요구하지 않으니(예전 FIFO) 화면도 묻지 않는다.
+    lotTracked: itemLotTracked(item) ?? false,
     lots,
     nextLotNo: nextLotNo(Array.from(knownLots)),
   }

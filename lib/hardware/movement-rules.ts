@@ -51,6 +51,8 @@ export interface ProcessLineInput {
   owner?: string | null
   status?: string | null
   lotNo?: string | null
+  /** 한 줄을 여러 물류번호로 나눌 때(고객사 출고, 물류번호 관리 품목). 합계 = quantity. */
+  lotAllocations?: ReadonlyArray<{ lotNo: string; quantity: number }> | null
   memo?: string | null
   outboundType?: HardwareOutboundType | null
   isFree?: boolean | null
@@ -221,12 +223,28 @@ function prepareOutbound(input: ProcessLineInput, ctx: ProcessLineContext, actor
   next.status = isPlannedProgressStatus(input.status) ? HARDWARE_PROGRESS_STATUS.planned : HARDWARE_PROGRESS_STATUS.installed
 
   if (ctx.lotTracked === true) {
+    const allocations = input.lotAllocations ?? []
+    if (allocations.length > 0) {
+      // 나눠 고른 경우 — 번호·수량 모양과 합계만 본다. 번호별 잔여는 저장소가 막는다.
+      const total = allocations.reduce((sum, allocation) => sum + allocation.quantity, 0)
+      if (allocations.some((allocation) => !clean(allocation.lotNo) || !Number.isInteger(allocation.quantity) || allocation.quantity <= 0)) {
+        throw new MovementRuleError(`${input.productName}: 물류번호별 수량이 올바르지 않습니다.`)
+      }
+      if (total !== input.quantity) {
+        throw new MovementRuleError(`${input.productName}: 물류번호별 수량 합계(${total}대)가 출고 수량(${input.quantity}대)과 같아야 합니다.`)
+      }
+      next.lotNo = null
+      next.lotAllocations = allocations.map((allocation) => ({ lotNo: clean(allocation.lotNo) as string, quantity: allocation.quantity }))
+      return { input: next, strictLot: true, newLotNo: null }
+    }
     if (!clean(input.lotNo)) {
       throw new MovementRuleError(`${input.productName}은(는) 물류번호를 골라야 합니다.`)
     }
     next.lotNo = clean(input.lotNo)
+    next.lotAllocations = null
     return { input: next, strictLot: true, newLotNo: null }
   }
+  next.lotAllocations = null
   if (ctx.lotTracked === false) next.lotNo = null
   return { input: next, strictLot: false, newLotNo: null }
 }
@@ -299,6 +317,7 @@ export function prepareProcessLine(input: ProcessLineInput, ctx: ProcessLineCont
       prepared = { input: { ...input }, strictLot: false, newLotNo: null }
   }
   if (input.movementType !== "inbound") prepared.input.isFree = null
+  if (input.movementType !== "outbound") prepared.input.lotAllocations = null
   if (input.movementType !== "outbound" && input.movementType !== "return") {
     prepared.input.outboundType = null
     prepared.input.expectedReturnAt = null

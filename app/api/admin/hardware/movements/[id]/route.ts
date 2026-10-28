@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import {
-  HardwareApiValidationError,
+  readLotAllocations,
   readOptionalBoolean,
   readOptionalDate,
   readOptionalEnum,
@@ -29,29 +29,9 @@ import {
   HARDWARE_MOVEMENT_TYPES,
   updateHardwareMovement,
   voidHardwareMovement,
-  type ConfirmLotAllocationInput,
 } from "@/lib/repositories/hardware-inventory"
 
 const HARDWARE_MOVEMENT_ACTIONS = ["confirm-planned", "void", "update"] as const
-
-/** 확정 물류번호 배정 — [{ lotNo, quantity }]. 없으면 undefined. */
-function readLotAllocations(body: Record<string, unknown>): ConfirmLotAllocationInput[] | undefined {
-  const value = body.lotAllocations
-  if (value == null) return undefined
-  if (!Array.isArray(value) || value.length === 0 || value.length > 20) {
-    throw new HardwareApiValidationError("물류번호 배정은 1~20개 배열이어야 합니다.")
-  }
-  return value.map((entry, index) => {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-      throw new HardwareApiValidationError(`물류번호 배정 ${index + 1}번째 항목이 올바르지 않습니다.`)
-    }
-    const record = entry as Record<string, unknown>
-    return {
-      lotNo: readRequiredString(record, "lotNo", "물류번호"),
-      quantity: readRequiredPositiveInt(record, "quantity", "물류번호별 수량"),
-    }
-  })
-}
 
 export async function PATCH(
   req: NextRequest,

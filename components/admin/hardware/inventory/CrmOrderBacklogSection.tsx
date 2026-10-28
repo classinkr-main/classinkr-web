@@ -148,20 +148,16 @@ function CrmOrderBacklogSection({ canWrite, onRegistered }: CrmOrderBacklogSecti
         },
       }
       const lines: LotAllocation[] = normalizeAllocations(allocations.get(entry.id) ?? [])
-      if (lines.length <= 1) {
-        await adminFetchJson("/api/admin/hardware/movements", {
-          method: "POST",
-          body: JSON.stringify({ ...base, quantity: entry.quantity, lotNo: lines[0]?.lotNo ?? "" }),
-        })
-      } else {
-        // 물류번호를 나누면 한 줄씩 — 같은 오더 연결을 줄마다 싣는다.
-        const result = await adminFetchJson<{ lineResults?: Array<{ ok: boolean; error?: string }> }>("/api/admin/hardware/movements", {
-          method: "POST",
-          body: JSON.stringify({ movements: lines.map((line) => ({ ...base, quantity: line.quantity, lotNo: line.lotNo })) }),
-        })
-        const failed = (result.lineResults ?? []).filter((line) => !line.ok)
-        if (failed.length > 0) throw new Error(failed.map((line) => line.error ?? "저장 실패").join(" · "))
-      }
+      // 물류번호를 나눠 골라도 한 줄로 보낸다(lotAllocations) — 서버가 번호마다 행을 만들고 둘째 줄부터 참조에
+      // 접미사를 단다. 줄마다 따로 보내면 같은 CRM 오더의 둘째 줄이 중복으로 막혔다.
+      await adminFetchJson("/api/admin/hardware/movements", {
+        method: "POST",
+        body: JSON.stringify(
+          lines.length <= 1
+            ? { ...base, quantity: entry.quantity, lotNo: lines[0]?.lotNo ?? "" }
+            : { ...base, quantity: entry.quantity, lotAllocations: lines.map((line) => ({ lotNo: line.lotNo, quantity: line.quantity })) }
+        ),
+      })
       setEntries((current) => current.filter((row) => row.id !== entry.id))
       setOverlapAcknowledged((current) => {
         const next = new Set(current)

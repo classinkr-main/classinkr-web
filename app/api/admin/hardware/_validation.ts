@@ -234,3 +234,22 @@ export function readOptionalUuid(body: JsonObject, key: string, label: string): 
 export function isUuid(value: string | null | undefined): value is string {
   return typeof value === "string" && UUID_REGEX.test(value)
 }
+
+/** 물류번호 배정 — [{ lotNo, quantity }](1~20개). 없으면 undefined. 확정·출고 등록이 같이 쓴다. */
+export function readLotAllocations(body: JsonObject): Array<{ lotNo: string; quantity: number }> | undefined {
+  const value = body.lotAllocations
+  if (value == null) return undefined
+  if (!Array.isArray(value) || value.length === 0 || value.length > 20) {
+    throw new HardwareApiValidationError("물류번호 배정은 1~20개 배열이어야 합니다.")
+  }
+  return value.map((entry, index) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      throw new HardwareApiValidationError(`물류번호 배정 ${index + 1}번째 항목이 올바르지 않습니다.`)
+    }
+    const record = entry as JsonObject
+    return {
+      lotNo: readRequiredString(record, "lotNo", "물류번호"),
+      quantity: readRequiredPositiveInt(record, "quantity", "물류번호별 수량"),
+    }
+  })
+}

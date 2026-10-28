@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 import {
   HardwareApiValidationError,
+  readLotAllocations,
   readOptionalBoolean,
   readOptionalDate,
   readOptionalEnum,
@@ -69,6 +70,7 @@ function readMovementInput(body: Record<string, unknown>, createdBy: string | nu
     ownerUserId: readOptionalUuid(body, "ownerUserId", "담당자 계정"),
     expectedReturnAt: readOptionalDate(body, "expectedReturnAt", "반납 예정일"),
     adjustDirection: readOptionalEnum(body, "adjustDirection", "조정 방향", HARDWARE_ADJUST_DIRECTIONS),
+    lotAllocations: readLotAllocations(body),
   }
 }
 
