@@ -23,6 +23,8 @@ let outboundSheetRows: Row[] = []
 // 오더번호 연결(연결 로직 §4-4)은 자체 테스트(tests/orders/sheet-order-sync.test.ts)가 있어 여기선 호출만 본다.
 const linkSheetOutboundToOrders = vi.fn(async (..._args: unknown[]) => ({ appRowsReplaced: 0, dealsAdvanced: 0, error: null as string | null }))
 
+let upsertedItemNames: string[] = []
+
 function movementsTable() {
   return {
     select(columns: string) {
@@ -82,9 +84,18 @@ function otherTable(table: string) {
     update() {
       return { eq: async () => ({ data: null, error: null }) }
     },
-    upsert: () => Promise.resolve({ data: null, error: null }),
+    upsert: (payload: unknown) => {
+      // ensureHardwareItems 는 upsert 뒤 품목 표를 통째로 읽는다 — 방금 넣은 이름을 그 응답으로 돌려준다.
+      upsertedItemNames = Array.isArray(payload) ? payload.map((row) => String((row as { name: string }).name)) : []
+      return Promise.resolve({ data: null, error: null })
+    },
     select() {
       return {
+        then: (resolve: (value: { data: unknown; error: null }) => unknown) =>
+          Promise.resolve({
+            data: upsertedItemNames.map((name, index) => ({ id: `item-${index + 1}`, name })),
+            error: null,
+          }).then(resolve),
         in: async (_column: string, names: string[]) => ({
           data: names.map((name, index) => ({ id: `item-${index + 1}`, name })),
           error: null,

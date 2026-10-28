@@ -41,6 +41,14 @@ function tableClient(table: string) {
   return {
     select() {
       return {
+        // ensureHardwareItems 는 품목 표를 통째로 읽는다(select("*") 를 바로 await).
+        then(resolve: (value: { data: unknown; error: null }) => unknown) {
+          operations.push({ table, method: "select.all" })
+          return Promise.resolve({
+            data: Object.entries(itemsByName).map(([name, item]) => ({ id: item.id, name })),
+            error: null,
+          }).then(resolve)
+        },
         eq() {
           return {
             async maybeSingle() {
@@ -598,6 +606,22 @@ describe("updateHardwareMovement", () => {
     expect(result).toMatchObject({ id: "m1" })
     const updateOp = operations.find((op) => op.method === "update" && op.table === "hardware_movements")
     expect(updateOp?.payload).toMatchObject({ item_id: "resolved-item-1" })
+  })
+
+  // 2026-10-28 운영: 품목 이름을 in() 필터로 보냈더니 `STDM1(110")`(괄호 + 따옴표) 한 이름이 목록을 깨뜨려
+  // 65" IFP·STD1(promoted) 시트 행이 가져오기에서 빠졌다. 이름 조회는 표 전체를 읽고 코드에서 고른다.
+  it("품목 이름을 in() 필터로 보내지 않는다 — 따옴표·괄호가 든 이름도 찾는다", async () => {
+    existingRow = { data: { id: "m1", source: "admin_manual", movement_type: "outbound", status: "출고", voided_at: null }, error: null }
+    itemsByName = { 'STDM1(110")': { id: "item-stdm1" }, '65" IFP': { id: "item-65" } }
+    updateRow = { data: { id: "m1", item_id: "item-stdm1" }, error: null }
+    const { updateHardwareMovement } = await loadRepository()
+
+    await updateHardwareMovement("m1", { ...validInput, itemId: undefined, productName: 'STDM1(110")' })
+
+    const updateOp = operations.find((op) => op.method === "update" && op.table === "hardware_movements")
+    expect(updateOp?.payload).toMatchObject({ item_id: "item-stdm1", product_name: 'STDM1(110")' })
+    expect(operations.some((op) => op.table === "hardware_items" && op.method === "select.all")).toBe(true)
+    expect(operations.some((op) => op.table === "hardware_items" && op.method === "select.in")).toBe(false)
   })
 
   it("maps every editable field onto the update payload, normalizing product name and locations", async () => {
