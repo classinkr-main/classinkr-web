@@ -5,7 +5,8 @@ import { BOARD_MODEL_NAMES, BOARD_SPEC_MODELS } from "@/lib/hardware/board-specs
 
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://classin.co.kr").replace(/\/$/, "")
 export const SITE_NAME = "Classin"
-export const DEFAULT_SITE_TITLE = "Classin — 학원 운영의 새로운 기준"
+// 홈 <title>·루트 기본 제목·공유 카드 기본 제목. 2026-10-28 진단 추천안을 채택해 구매자가 검색하는 범주어를 병기한다.
+export const DEFAULT_SITE_TITLE = "클래스인 Classin | 학원 전자칠판·수업 녹화·운영 플랫폼"
 export const DEFAULT_OG_IMAGE_PATH = "/opengraph-image"
 export const DEFAULT_TWITTER_IMAGE_PATH = "/twitter-image"
 
@@ -254,6 +255,7 @@ export function createArticleJsonLd({
   datePublished,
   dateModified,
   authorName,
+  type = "Article",
 }: {
   path: string
   title: string
@@ -262,12 +264,14 @@ export function createArticleJsonLd({
   datePublished?: string
   dateModified?: string
   authorName?: string
+  /** 블로그 상세는 BlogPosting(Article 의 하위 유형), 문서 상세는 기본값 Article. */
+  type?: "Article" | "BlogPosting"
 }): JsonLdNode {
   const normalizedAuthorName = authorName?.trim()
 
   return {
     "@context": "https://schema.org",
-    "@type": "Article",
+    "@type": type,
     "@id": `${toAbsoluteUrl(path)}#article`,
     mainEntityOfPage: toAbsoluteUrl(path),
     headline: title,

@@ -153,6 +153,7 @@
   - B(범주어 유지) `클래스인 Classin | 학원 전자칠판·수업 녹화·수업 시스템 OS` (38자)
   - description(진단안, 79자) `전자칠판, 수업 녹화, 교안, LMS와 관리자 데이터를 연결하는 클래스인. 학원 규모와 운영 방식에 맞는 도입 방법과 요금 상담을 확인하세요.` — "요금 상담" 이 가격 비단정 원칙과 맞는지 영업 승인 필요
 - 바꿀 때 손댈 곳: `app/page.tsx`(absoluteTitle), `lib/classin-positioning.ts:11-12`(description 은 layout·page·WebPage JSON-LD 공용), `app/page.tsx:43` WebPage name, `app/opengraph-image.tsx` 문구, `lib/seo.ts:7` DEFAULT_SITE_TITLE, `public/llms.txt`.
+- **결정(2026-10-28): A안 채택·적용.** `lib/seo.ts` `DEFAULT_SITE_TITLE`(홈 `<title>`·루트 기본·공유 카드 기본 제목)과 `lib/classin-positioning.ts` `metadataDescription` 을 진단안으로 바꿨고, 홈 WebPage JSON-LD name·OG 이미지 문구·키워드를 같이 맞췄다. 본문·히어로·FAQ·챗봇의 카테고리명은 "수업 시스템 OS" 그대로이며, 예외 규칙은 [포지셔닝 가이드](./classin-korea-positioning-guidelines.md) §11 에 적었다. `public/llms.txt` 는 도메인 결정(D12) 뒤에 손본다.
 - 변경 뒤 Search Console 에서 검색어별 노출·CTR 을 4주 이상 비교한다.
 
 ### 4-3. 구조화 데이터
@@ -331,6 +332,8 @@ FAQ 추가·보강 초안 — 근거가 코드·문서에 있는 문장만 썼�
 
 ### 8-4. 운영자 콘솔 체크리스트(코드 밖)
 
+단계별 실행 순서·값·검증 시나리오는 [검색·분석 콘솔 실행 런북](./seo-analytics-console-runbook-2026-10-28.md)에 있다. 아래는 요약이다.
+
 | 도구 | 할 일 |
 |---|---|
 | Vercel | `NEXT_PUBLIC_GA4_MEASUREMENT_ID`, `NEXT_PUBLIC_GTM_ID`, `NEXT_PUBLIC_NAVER_WCS_ID`, `NEXT_PUBLIC_NAVER_LEAD_CONVERSION_TYPE`, `NEXT_PUBLIC_GOOGLE_ADS_DEMO_CONVERSION_LABEL`, (신규) `GOOGLE_SITE_VERIFICATION`, `NAVER_SITE_VERIFICATION` 확인 뒤 **재빌드**. 확인: 네트워크 탭 `gtm.js?id=`, `g/collect?…tid=G-`, `wcslog.js` |
@@ -348,7 +351,7 @@ FAQ 추가·보강 초안 — 근거가 코드·문서에 있는 문장만 썼�
 
 | # | 결정 | 누가 | 무엇을 |
 |---|---|---|---|
-| D1 | 홈 title 방향(A 진단안 / B 범주어 유지)과 description "요금 상담" 문구 | SEO 담당 + 브랜드 오너 + 영업 | §4-2. 결정 뒤 가이드 §11 에 "클래스인 Classin" 병기 허용 한 줄 추가 |
+| D1 | ~~홈 title 방향~~ **결정됨(2026-10-28): A 진단안 적용** | — | §4-2. 가이드 §11 에 예외 규칙 추가 완료 |
 | D2 | 정율 사례 50% vs 3주→3일, "원장 김O준" vs 곽정율, 실명·인용 동의 | 해당 고객 담당 영업/CS | §1-1 |
 | D3 | Zoom 비교 기준일·요금제별 기능, 비교광고 법무 검토 | 마케팅 + 법무 | §2 |
 | D4 | 성능 수치(100ms·99.9%) SLA 근거, 국가·언어 수, 2,400+·200+·98%·1,560,000·Acadsoc·287 | EEO 본사 기술팀, CRM·마케팅 데이터 소유자 | §1-2. 없으면 삭제 |
@@ -356,8 +359,8 @@ FAQ 추가·보강 초안 — 근거가 코드·문서에 있는 문장만 썼�
 | D6 | 자료실 상세(`/resources/[slug]`) 색인 여부와 PDF 직접 접근(현재 `storagePath` 전부 빈값이라 정적 PDF 가 열림) | 마케팅 | §6 끝 |
 | D7 | 문서 `unlisted` 색인 정책, `value-and-cost-framing` 공개 전환 | 콘텐츠 | §7 |
 | D8 | GA4 로더 단일화(gtag 직접 vs GTM 단독), 동의 모드 기본/고급(10-26 D1) | 마케팅 + 개발 | §8-2 |
-| D9 | 서버 MP generate_lead 유지 여부(브라우저와 이중 집계) | 마케팅 + 개발 | `lib/server/lead-capture.ts:687-711` |
-| D10 | 블로그 `content_updated_at` 컬럼(옵션 A) vs 트리거 조건(옵션 B), 문서 `last_reviewed_at` 갱신 규칙 | 플랫폼 + 콘텐츠 | §7 |
+| D9 | 서버 MP generate_lead 유지 여부(브라우저와 이중 집계) | 마케팅 + 개발 | 당분간 브라우저 이벤트만 — Vercel 에서 `GA4_MEASUREMENT_ID`·`GA4_API_SECRET` 을 비워 둔다([런북](./seo-analytics-console-runbook-2026-10-28.md) §5-6). 서버 전송이 필요해지면 이벤트 이름 분리 코드 변경 선행 |
+| D10 | ~~블로그 lastmod 옵션~~ **결정됨(2026-10-28): 옵션 A `content_updated_at`** — 마이그레이션·코드 반영(§11-4), 운영 DB 적용은 [DB 마이그레이션 런북](./db-migration-runbook.md) 순서대로. 문서 `last_reviewed_at` 갱신 규칙은 미결 | 플랫폼 + 콘텐츠 | §7 |
 | D11 | 홈 ProblemCost·Outcomes·SatisfyingClass 수치 출처, LogoBar 34개 기관 동의, 후기 별점 근거, ScienceBased 인용, "유니콘" 실증자료 | 마케팅(최초 반입 `fb5f79f` 작성자), 영업·CS, 법무 | §1-3 |
 | D12 | 정본 도메인(`classin.co.kr` vs `llms.txt`·데이터 삭제 안내의 `classin.ai.kr`), JSON-LD `sameAs` 공식 URL 목록, `foundingDate` 표기 | 인프라·마케팅·경영지원 | §4 |
 | D13 | 하이브리드 수업 가이드 1편 신규 작성 여부(의도 2 의 유일한 공백) | 콘텐츠 + 제품 | §5-2 |
@@ -385,7 +388,7 @@ select slug, title, lead_magnet_slug from blog_posts
 | 기간 | 작업 | 담당 | 완료 기준 |
 |---|---|---|---|
 | 이번 커밋 | §11 기술 항목(허브 canonical·noindex, 저자 유형, 사이트맵·RSS·robots, Organization 보강, 소유확인 env 슬롯, 내부 링크, generate_lead·보조 이벤트·URL 정화) | 개발 | typecheck·eslint·vitest 통과, 운영 배포 뒤 `view-source` 로 canonical·JSON-LD 확인 |
-| 1주 | Vercel env·재빌드, GSC DNS TXT, 서치어드바이저 등록·태그 env 배포, sitemap·RSS 제출, GA4 설정(§8-4) | 마케팅 + 개발 | 두 콘솔에서 사이트맵 "성공", DebugView 에서 generate_lead 1회 |
+| 1주 | [콘솔 런북](./seo-analytics-console-runbook-2026-10-28.md) §1~§7: 기존 계정 조사, Vercel env·재빌드, GSC DNS TXT, 서치어드바이저 등록·태그 env 배포, sitemap·RSS 제출, GA4·GTM·Ads 설정. `20261028_blog_posts_content_updated_at.sql` 운영 적용 | 마케팅 + 개발 | 두 콘솔에서 사이트맵 "성공", 런북 §8 시나리오 전부 기대값, `npm run check:db` ok |
 | 1~2주 | D2·D3·D4·D5 확인 → `/product/sw` 수치·Zoom·가격·CTA·연동·녹화 문구 수정, 홈 수치 정리 | 제품·영업·법무 + 콘텐츠 + 개발 | 상업 페이지에 근거 없는 수치 0건, 가격 캡션·기준일 노출 |
 | 3~4주 | D1 결정 → 홈 title·description·OG 이미지·llms.txt, WebPage name; FAQ Q1~Q6 게시(§6 초안, 검토일 포함); `/pricing` 조건 블록; contact topics 추가 | 브랜드·콘텐츠 + 개발 | 홈 첫 화면에서 대상·기능·적용 범위가 읽힘, `/faq` JSON-LD 에 6개 반영 |
 | 2개월 | 허브 5개 정비(`/product/sw`·`/pricing`·`/faq`·`/docs/start`·`/resources`): 의도별 링크 묶음(§5-2), 중복 쌍 정본 지정, 블로그 `lead_magnet_slug` 연결, Zoom 글 2편 범위 한정 + 검토일, 하이브리드 가이드 1편(D13) | 콘텐츠 | 5개 페이지에 같은 답변 형식·검토일 적용 |
@@ -452,6 +455,21 @@ select slug, title, lead_magnet_slug from blog_posts
 남은 위험(코드 밖 또는 범위 밖): 서버 MP generate_lead 와 이중 집계(D9), 허용 파라미터가 아닌 쿼리만 바뀔 때(`?category`, `?q`) page_view 가 나가지 않음, Meta·네이버·카카오 픽셀은 `location.href` 를 스스로 읽음, 서버 측 Referer·CAPI `event_source_url` 은 전체 URL, gtag.js 는 로드 뒤 제외 경로로 소프트 이동해도 남음(향상된 측정 OFF 필요). 제품 페이지 소개서 클릭(`download_materials`)이 Meta `Lead` 로 가는 기존 매핑은 유지했다(운영 결정).
 
 ---
+
+### 11-4. 운영자 결정 반영(3차 커밋 — 제목·설명·런북)
+
+| 파일 | 변경 |
+|---|---|
+| `lib/seo.ts` | `DEFAULT_SITE_TITLE` → `클래스인 Classin \| 학원 전자칠판·수업 녹화·운영 플랫폼`(D1 A안). 홈 `<title>`·루트 기본 제목·공유 카드 기본 제목이 한 상수를 쓴다. `createArticleJsonLd` 에 `type` 옵션(기본 Article, 블로그는 BlogPosting — 4차 커밋에서 호출) |
+| `lib/classin-positioning.ts` | `metadataDescription` → 진단안 설명(홈·루트 기본 description·WebPage JSON-LD 공용). `oneLine`·hero 등 본문 카피는 그대로 |
+| `app/page.tsx` | `absoluteTitle`·WebPage name 을 `DEFAULT_SITE_TITLE` 로, 키워드에 "클래스인"·"학원 전자칠판"·"수업 녹화" 추가 |
+| `app/opengraph-image.tsx` | 공유 카드 문구를 새 제목·설명과 정렬("학원 운영의 새로운 기준"·"학원 관리 플랫폼… 행정 자동화" 제거), `alt` 추가 |
+| `docs/active/classin-korea-positioning-guidelines.md` §11 | 검색 제목·설명 예외 규칙과 "클래스인" 병기 허용 명시 |
+| `docs/active/seo-analytics-console-runbook-2026-10-28.md`(신규) | 운영자 콘솔 실행 런북 — 기존 계정 조사, Vercel 환경변수·재빌드, GSC 도메인 속성, 서치어드바이저, GA4(향상된 측정 OFF 3종·데이터 수정·맞춤 측정기준 6개·주요 이벤트 1개·MP 중복 결정), GTM 점검, Google Ads, 배포 뒤 검증 시나리오 13개, 기준선 지표 |
+
+### 11-5. 블로그 `content_updated_at`(4차 커밋)
+
+(4차 커밋 시 채운다)
 
 ## 12. 조사 방법과 한계
 
