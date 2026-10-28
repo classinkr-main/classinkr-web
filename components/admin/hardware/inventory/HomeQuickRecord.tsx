@@ -14,19 +14,22 @@ interface Props {
   customers: string[]
   disabled: boolean
   onReview: (draft: HomeRecordDraft) => void
+  /** 입고는 입고관리 권한자만(정의서 §권한). 생략(구응답) = 연다. */
+  canInbound?: boolean
 }
 
 const MODES = [{ key: "inbound", label: "입고" }, { key: "sale", label: "출고" }, { key: "planned", label: "예정" }] as const
 const FIELD = "h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110]"
 
-export default function HomeQuickRecord({ data, draft, setDraft, customers, disabled, onReview }: Props) {
+export default function HomeQuickRecord({ data, draft, setDraft, customers, disabled, onReview, canInbound = true }: Props) {
+  const modes = canInbound ? MODES : MODES.filter(mode => mode.key !== "inbound")
   const item = data?.items.find(item => item.id === draft.itemId)
   const row = data?.stock.find(row => row.itemId === draft.itemId)
   const quantity = Number(draft.quantity)
   const preview = row ? previewHomeRecord(row, draft.preset, quantity) : null
-  const mode = MODES.find(mode => mode.key === draft.preset)!
+  const mode = modes.find(mode => mode.key === draft.preset) ?? modes[0]
   const party = draft.preset === "inbound" ? draft.source ?? "" : draft.customer
-  const valid = Boolean(item && preview && draft.date && (draft.preset === "inbound" || draft.customer.trim()))
+  const valid = Boolean(item && preview && draft.date && (canInbound || draft.preset !== "inbound") && (draft.preset === "inbound" || draft.customer.trim()))
   const update = (patch: Partial<HomeRecordDraft>) => setDraft(current => ({ ...current, ...patch }))
 
   return (
@@ -39,7 +42,7 @@ export default function HomeQuickRecord({ data, draft, setDraft, customers, disa
         <fieldset disabled={disabled} className="grid gap-2 disabled:opacity-50">
           <legend className="sr-only">입출고 내용</legend>
           <div className="flex border-b border-[rgba(0,0,0,0.08)]" role="group" aria-label="빠른 기록 유형">
-            {MODES.map(mode => <button key={mode.key} type="button" aria-pressed={draft.preset === mode.key} onClick={() => update({ preset: mode.key })} className={`flex-1 border-b-2 py-1.5 text-[13px] font-semibold ${draft.preset === mode.key ? "border-[#084734] text-[#084734]" : "border-transparent text-[#615D59]"}`}>{mode.label}</button>)}
+            {modes.map(mode => <button key={mode.key} type="button" aria-pressed={draft.preset === mode.key} onClick={() => update({ preset: mode.key })} className={`flex-1 border-b-2 py-1.5 text-[13px] font-semibold ${draft.preset === mode.key ? "border-[#084734] text-[#084734]" : "border-transparent text-[#615D59]"}`}>{mode.label}</button>)}
           </div>
           <div className="grid grid-cols-[48px_minmax(0,1fr)] items-center gap-2"><p className="text-[12px] font-semibold text-[#615D59]">제품</p><div className="[&_button]:h-10 [&_button]:min-h-11 md:[&_button]:min-h-10"><ProductPicker items={data?.items ?? []} value={draft.itemId} onChange={itemId => update({ itemId })} ariaLabel="빠른 기록 제품" disabled={disabled} /></div></div>
           <div className="grid grid-cols-[48px_minmax(0,1fr)] items-center gap-2">

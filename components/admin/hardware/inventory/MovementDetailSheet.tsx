@@ -4,10 +4,12 @@ import { memo } from "react"
 import type { Dispatch, Ref, SetStateAction } from "react"
 import Link from "next/link"
 import { AnimatePresence, motion } from "framer-motion"
-import { Clock3, Settings2, Users, X } from "lucide-react"
+import { CheckCheck, Clock3, Settings2, Users, X } from "lucide-react"
 
 import { CopyButton } from "@/components/admin/crm/leads/shared"
 
+import type { MovementButtonState } from "./movement-permissions"
+import { CrmCustomerLink, movementOutboundType, OutboundTypeBadge, SampleReturnBadge } from "./OutboundMetaBadges"
 import {
   formatLotLabel,
   formatNumber,
@@ -31,11 +33,17 @@ interface MovementDetailSheetProps {
   detailLotLabel: string | null
   detailFacts: Array<{ label: string; value: string }>
   detailCrm: { label: string; reference: string | null; href: string | null } | null
+  // 원장 어드민 기록이고 취소·전환되지 않았는가 — 버튼 줄을 그릴지(권한과 별개).
   detailCanEdit: boolean
-  // hardware.finalize 표시용 — 취소 버튼 비활성 판단(강제는 서버 게이트).
-  canFinalize: boolean
+  // 버튼 권한(정의서 §권한·D2) — 배송 예정은 본인 건 또는 입고관리 권한자, 실현 기록은 입고관리 권한자.
+  editState: MovementButtonState
+  voidState: MovementButtonState
+  // 배송 예정만 — 확정(물류번호 없으면 고르기 대화상자를 거친다).
+  confirmState: MovementButtonState | null
+  confirmBusy: boolean
   editMovement: (movement: HardwareMovement) => void
   voidMovement: (movement: HardwareMovement) => void
+  confirmMovement: (movement: HardwareMovement) => void
 }
 
 function MovementDetailSheet({
@@ -47,9 +55,13 @@ function MovementDetailSheet({
   detailFacts,
   detailCrm,
   detailCanEdit,
-  canFinalize,
+  editState,
+  voidState,
+  confirmState,
+  confirmBusy,
   editMovement,
   voidMovement,
+  confirmMovement,
 }: MovementDetailSheetProps) {
   return (
     <AnimatePresence>
@@ -95,6 +107,9 @@ function MovementDetailSheet({
                   {detailMovement.voided_at ? (
                     <span className="inline-flex rounded-full bg-[#F6F5F4] px-2 py-0.5 text-[11px] font-bold text-[#615D59]">취소됨</span>
                   ) : null}
+                  <OutboundTypeBadge type={movementOutboundType(detailMovement)} />
+                  <SampleReturnBadge movement={detailMovement} />
+                  <CrmCustomerLink movement={detailMovement} />
                 </div>
                 <p className="mt-2 text-[16px] font-bold tracking-[-0.01em] text-[#111110]">{detailMovement.product_name}</p>
                 <p className="mt-0.5 text-[12px] text-[#615D59]">
@@ -184,6 +199,19 @@ function MovementDetailSheet({
                 </div>
               )}
 
+              {detailCanEdit && confirmState ? (
+                <button
+                  type="button"
+                  onClick={() => confirmMovement(detailMovement)}
+                  disabled={!confirmState.allowed || confirmBusy}
+                  title={confirmState.title}
+                  className="inline-flex h-10 w-full cursor-pointer items-center justify-center gap-1.5 rounded-md bg-[#084734] text-[13px] font-bold text-white transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <CheckCheck className="h-4 w-4" />
+                  {confirmBusy ? "확정 중" : "설치 완료로 확정"}
+                </button>
+              ) : null}
+
               {detailCanEdit ? (
                 <div className="flex gap-2">
                   <button
@@ -194,7 +222,9 @@ function MovementDetailSheet({
                       setDetailId(null)
                       editMovement(target)
                     }}
-                    className="inline-flex h-10 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white text-[13px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100"
+                    disabled={!editState.allowed}
+                    title={editState.title}
+                    className="inline-flex h-10 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white text-[13px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Settings2 className="h-4 w-4" />
                     수정
@@ -207,8 +237,8 @@ function MovementDetailSheet({
                       setDetailId(null)
                       voidMovement(target)
                     }}
-                    disabled={!canFinalize}
-                    title={canFinalize ? undefined : "기록 취소에는 확정 권한(hardware.finalize)이 필요합니다"}
+                    disabled={!voidState.allowed}
+                    title={voidState.title}
                     className="inline-flex h-10 flex-1 cursor-pointer items-center justify-center rounded-md border border-[#F2B8B8] bg-white text-[13px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B43E3E]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     기록 취소
