@@ -192,9 +192,14 @@
 
 ### 7-4. 작업 나눔
 
+W1 구현 메모(2026-10-28):
+- 규칙은 요청자가 있는 쓰기에만 적용된다. 오더 승인처럼 시스템이 만드는 기록은 검사 없이 새 칸만 싣는다.
+- 사무실·샘플 풀·수리로 가는 이동과 거기서 돌아오는 반납은 예전 흐름 그대로다(유형·고객·물류번호 선택 없음, 실제 출고는 FIFO).
+- 마이그레이션 전 DB에서는 품목 `lot_tracked` 칸이 없다. 이때는 물류번호 규칙을 건너뛰고, 새 칸은 빼고 저장한다. 앱을 먼저 배포해도 지금 동작이 깨지지 않는다.
+
 | 작업 | 범위 | 주 파일 |
 | --- | --- | --- |
-| W1 서버 규칙 | 7-2·7-3(대시보드 제외), 오더 승인 배송 예정 칸 채우기, 확정 v4 | `lib/repositories/hardware-inventory.ts`(입출고 쓰기·확정·취소·로트), `app/api/admin/hardware/movements/**`·`lots`·`return-candidates`·`customers`·`items`, `lib/repositories/sales-orders.ts` |
+| W1 서버 규칙 ✅ | 7-2·7-3(대시보드 제외), 오더 승인 배송 예정 칸 채우기, 확정 v4 | `lib/repositories/hardware-inventory.ts`(입출고 쓰기·확정·취소·로트), `app/api/admin/hardware/movements/**`·`lots`·`return-candidates`·`customers`·`items`, `lib/repositories/sales-orders.ts` |
 | W2 판매대시보드 | 서버 집계 + 화면, 클라이언트 2,000건 집계·개요 타일 정리 | 새 `lib/repositories/hardware-sales-dashboard.ts`·`sales-dashboard` 라우트·`SalesDashboardSection` |
 | W3 출고·회수·확정 화면 | 출고 등록 v2(유형·상태·CRM 고객·담당·물류번호 선택), 회수 등록, 확정 때 물류번호 선택, 본인 건 버튼 | `QuickRecordSheet`·`PlannedOutboundPanel`·`MovementDetailSheet`·`CrmConfirmModal`·`HardwareSearchPanel`·새 출고/회수 폼 |
 | W4 입고·조정·재고 알림 화면 | 입고 v2(무상·물류번호 순번·수량만 품목·메모·직배송), 재고 조정(사유 필수), 가용 < 최소재고·가용 음수 알림, 최소재고·품목 설정 화면 | `InboundSheet`·`inbound-sheet-model`·`StockLevelsSection`·`AlertsOutboundSections`·새 조정 시트, 재고 알림 계산 |

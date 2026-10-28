@@ -44,7 +44,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const order =
       action === "approve"
-        ? await approveSalesOrder(id, { actor })
+        ? await approveSalesOrder(id, { actor, actorUserId: admin.userId ?? null })
         : action === "reject"
           ? await rejectSalesOrder(id, { actor, reason })
           : action === "cancel"

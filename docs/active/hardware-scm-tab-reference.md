@@ -168,7 +168,8 @@
 - **확정**: 예정을 실제 출고로 **전환(convert)**한다. 출고일을 고르고, **부분 수량 확정**도 된다(출고 N대 생성 + 잔여는 예정 유지).
 - **선택 일괄 확정(2026-09-14)**
   - 행·딜 체크박스(Shift 범위 선택), 빠른 선택("전체 N건"·"30일+ 미확정"·해제), 하단 작업 바의 공통 확정일로 **순차** 확정한다.
-  - 순차인 이유: 각 확정이 로트 잔량을 바꾸므로 다음 건의 배정이 앞 건을 반영해야 한다. 건별 권한 검사(`hardware.finalize`)와 감사 로그도 그대로 남는다.
+  - 순차인 이유: 각 확정이 로트 잔량을 바꾸므로 다음 건의 배정이 앞 건을 반영해야 한다. 건별 권한 검사와 감사 로그도 그대로 남는다.
+- **재고관리 프로세스(2026-10-28, [갭 문서 §6·§7](./hardware-inventory-process-gap-2026-10-28.md))**: 확정은 본인 건(담당·작성 계정, 이전 기록은 이름) 또는 입고관리 권한자(`hardware.inbound`·`hardware.finalize`·슈퍼 어드민)가 한다. 물류번호 관리 품목은 확정 때 물류번호를 골라야 하고(`lotNo` 또는 나눠서 `lotAllocations`), 고른 번호의 잔여를 넘으면 422 — 아래 FIFO 자동 배정은 품목 칸이 없는 DB(마이그레이션 전)와 요청자가 없는 시스템 경로에만 남는다. 확정 행의 진행 상태는 `설치 완료`, 유형·고객·담당은 예정 행에서 옮긴다(확정 v4).
   - 실패 건은 사유를 행에 남기고 선택에 남겨 재시도한다.
 - **로트가 모자라도 확정을 막지 않는다(운영자 결정 2026-09-14).**
   - 해석 가능한 만큼 FIFO로 배정하고, 나머지는 로트 미지정(`lot_no` NULL) 한 줄로 기록한다.
@@ -188,8 +189,8 @@
 
 ### 3-5. 기록 수정·취소
 
-- **수정(update)**: `admin_manual`·미전환·미취소 기록만. 내역·예상 큐의 `수정`은 새 기록이 아니라 같은 행을 갱신한다. 실현된 기록 수정은 `hardware.finalize` 권한이 필요하다.
-- **취소(void)**: 사유와 함께 무효화한다. 시트 이관 기록은 직접 취소할 수 없다(가져오기가 관리).
+- **수정(update)**: `admin_manual`·미전환·미취소 기록만. 내역·예상 큐의 `수정`은 새 기록이 아니라 같은 행을 갱신한다. 배송 예정은 본인 건 또는 입고관리 권한자, 실현된 기록(설치 완료·회수·입고·조정) 수정과 예정 → 실현 전환은 입고관리 권한자만(2026-10-28).
+- **취소(void)**: 사유와 함께 무효화한다. 시트 이관 기록은 직접 취소할 수 없다(가져오기가 관리). 배송 예정 취소는 본인 건 또는 입고관리 권한자, 실현 기록 취소는 입고관리 권한자만.
 
 ### 3-6. 시트 가져오기 · 재고 계산 · 알림
 
@@ -261,14 +262,21 @@
 
 `hardware_movements` 주요 컬럼: `item_id, product_name, movement_type(inbound|outbound|return|transfer|repair|adjust), quantity, occurred_at, from_location, to_location, owner, status, reference_no, memo, serials[], lot_no, unit_price, amount_usd, amount_cny, storage_location, importer, source(admin_manual|sheet_import), import_run_id, raw, voided_*, converted_from/to_movement_id`.
 
+재고관리 프로세스 칸(2026-10-28, `20261028_hardware_inventory_process.sql`): `outbound_type(sales|promotion|as|sample)`, `is_free`, `return_of_movement_id`, `customer_id`, `owner_user_id`, `created_by_user_id`, `expected_return_at`. `hardware_items` 에 `lot_tracked`, `report_group`, `sort_order`. 진행 상태 새 값은 `배송 예정`·`설치 완료`·`회수`. 규칙 정본은 [`lib/hardware/inventory-process.ts`](../../lib/hardware/inventory-process.ts)(공용)·[`lib/hardware/movement-rules.ts`](../../lib/hardware/movement-rules.ts)(입출고 한 줄).
+
 RPC
-- 확정: `confirm_hardware_planned_movement_v3(uuid,text,date,int,jsonb)` → `_v2` → 레거시 순으로 앱이 폴백한다. v3는 **앱이 계산한 로트 배정을 받아 기록**하고 로트 미지정을 허용한다. v2는 SQL 내부 FIFO라 `lot_no`만 본다.
+- 확정: `confirm_hardware_planned_movement_v4`(v3 호출 + 새 칸 복사 + `설치 완료`) → `_v3(uuid,text,date,int,jsonb)` → `_v2` → 레거시 순으로 앱이 폴백한다. v3는 **앱이 계산한 로트 배정을 받아 기록**하고 로트 미지정을 허용한다. v2는 SQL 내부 FIFO라 `lot_no`만 본다.
 - 가져오기: `replace_hardware_sheet_import`(기본) · `merge_hardware_sheet_import`(플래그 `HARDWARE_SHEET_ADDITIVE_MERGE`) · `restore_hardware_sheet_import_snapshot`
 
 API
 - `GET /api/admin/hardware` — 대시보드(items/stock/movements/recentOutbound/plannedMovements/alerts/totals/importRun/viewer)
 - `POST /api/admin/hardware/movements` — 기록 생성(단건 또는 `{movements:[...]}` 최대 50줄, 줄별 결과 201/207/422). 배치는 **왕복 한 번**이다(2026-09-20, `createHardwareMovementsBatch`): 품목 해결 1회 · CRM 중복 조회 1회 · 품목 원장 읽기 품목당 1회 · INSERT 1회 · 캐시 무효화 1회. 로트 배정은 앞 줄이 만든 행을 원장 뒤에 이어 붙여 같은 해석기로 다시 계산해 줄 단위 저장과 결과가 같다. 한 번에 넣지 못하면 줄 단위 INSERT로 물러나 부분 저장을 지킨다.
-- `PATCH /api/admin/hardware/movements/[id]` — `{action: confirm-planned | void | update}`(confirm은 `confirmQty` 옵션)
+  - 2026-10-28 새 필드: `outboundType` · `customerId` · `isFree` · `returnOfMovementId` · `expectedReturnAt` · `ownerUserId` · `adjustDirection`. 입고·조정이 한 줄이라도 있으면 입고관리 권한자만(아니면 저장 전 403). 고객사로 가는 출고는 출고일·유형 필수, 샘플은 반납 예정일 필수, 물류번호 관리 품목은 물류번호 필수 + 잔여 초과 422(배송 예정 포함). 회수는 원 출고에서 품목·물류번호·고객·유형을 채우고 남은 수량까지만. 입고 물류번호는 기존 번호이거나 다음 C 순번만. 규칙 위반은 줄별 `lineResults[i].error`
+- `PATCH /api/admin/hardware/movements/[id]` — `{action: confirm-planned | void | update}`(confirm은 `confirmQty`·`lotNo`·`lotAllocations:[{lotNo,quantity}]`). 권한은 본인 건 또는 입고관리 권한자(실현 기록은 입고관리 권한자만) — 403 응답에 `requiredCapability: "hardware.inbound"`
+- `GET /api/admin/hardware/lots?itemId=|product=&excludeMovementId=` — `{ itemId, product, lotTracked, lots:[{lotNo, remaining}], nextLotNo }`(잔여는 배송 예정까지 뺀 값)
+- `GET /api/admin/hardware/return-candidates?q=&customerId=` — 회수할 수 있는 실제 출고(`returnable` > 0, 최근순)
+- `GET /api/admin/hardware/customers?q=` — 출고 클라이언트 고르기(CRM `customers`, 최대 20)
+- `PATCH /api/admin/hardware/items/[id]` — 품목 설정(최소재고·리드타임·`lotTracked`·`reportGroup`·`sortOrder` 등). 입고관리 권한자만
 - `POST /api/admin/hardware/import-sheet` — 싱크·백업 후 이관
 - `GET|POST /api/admin/hardware/samples` — 유닛 목록·타임라인 / 등록(`action:"register"`)·이벤트(`action:"event"`, adjust는 `nextStatus`)
 - `GET /api/admin/hardware/orders?status=pending|approved|closed|all` — 오더 목록 + `viewer.canApprove`(§2-9). 승인됨·전체는 `fulfillment`(품목별 주문·출고·예정)를, 반려·취소·전체는 `successor`(같은 견적으로 다시 올라온 살아 있는 오더)를 붙인다. 테이블 미적용이면 503 `available:false`

@@ -329,10 +329,34 @@ describe("approveSalesOrder", () => {
       referenceNo: "portal-quote:qd_1:line:a",
       createdBy: "이왕찬",
       raw: { order_no: "ORD-2610-002", sales_order_id: "so_1", quote_document_id: "qd_1" },
+      // 재고관리 프로세스(§6 D5): 유형 세일즈 · 오더 고객 · 담당 = 딜 담당(없으면 요청자 이름, 계정 id 없음).
+      outboundType: "sales",
+      customerId: "cust_1",
+      ownerUserId: null,
+      createdByUserId: null,
     })
     expect(inputs[0].memo).toContain("ORD-2610-002")
     expect(revalidateTag).toHaveBeenCalledWith("hardware-inventory", "max")
     expect(updateDeal).toHaveBeenCalledWith("deal_1", { current_stage: "confirmed" })
+  })
+
+  it("딜 담당자가 있으면 배송 예정 담당을 그 계정·이름으로 채운다", async () => {
+    getDeal.mockResolvedValue({ id: "deal_1", current_stage: "quote", owner_id: "user-owner" })
+    queue.push({ data: [orderRow()], error: null }) // 현재 오더
+    queue.push({ data: [], error: null }) // 이번 달 번호
+    queue.push({ data: [orderRow({ status: "approved", order_no: "ORD-2610-001" })], error: null }) // claim
+    queue.push({ data: [{ display_name: "김매니저" }], error: null }) // 담당 표시 이름
+    queue.push({ data: [orderRow({ status: "approved", order_no: "ORD-2610-001", planned_movement_ids: ["mv_1"] })], error: null })
+    createHardwareMovements.mockResolvedValue([{ id: "mv_1" }])
+
+    await approveSalesOrder("so_1", { actor: "이왕찬", actorUserId: "user-approver", now: NOW })
+
+    expect(createHardwareMovements.mock.calls[0][0][0]).toMatchObject({
+      owner: "김매니저",
+      ownerUserId: "user-owner",
+      createdByUserId: "user-approver",
+      outboundType: "sales",
+    })
   })
 
   it("딜이 이미 확정 이후 단계면 되돌리지 않고, 딜 갱신이 실패해도 승인은 유지한다", async () => {
