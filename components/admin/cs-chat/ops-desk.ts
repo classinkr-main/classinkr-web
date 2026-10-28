@@ -15,6 +15,34 @@ interface DocsGapsBacklogLike {
   zeroResultSearches?: unknown[] | null
 }
 
+// 검토 드로어의 고객 전달 경계 — AI 초안(content)은 내부 분석이고, 고객에게 나가는 문안은
+// 담당자가 따로 쓴 corrected_content 뿐이다.
+interface ReviewMessageLike {
+  content: string
+  corrected_content?: string | null
+}
+
+// 최종 답변 칸 초기값: 이미 확정된 교정본만 복원하고, AI 내부 분석으로는 미리 채우지 않는다.
+export function initialCustomerDraft(message: ReviewMessageLike | null | undefined) {
+  return message?.corrected_content?.trim() || ""
+}
+
+// 저장할 교정본: 승인은 작성된 문안 그대로(비면 undefined → 승인 차단), 수정 요청은 원본과
+// 공백 정규화 후 같으면 undefined — 손대지 않은 모델 초안이 회귀 기준 답안으로 채택되지 않게 한다.
+export function correctedContentForReview(input: {
+  decision: "approved" | "changes_requested"
+  draft: string
+  original: string
+}) {
+  const draft = input.draft.trim()
+  if (!draft) return undefined
+  if (input.decision === "approved") return draft
+
+  const normalizedDraft = draft.replace(/\s+/g, " ")
+  const normalizedOriginal = input.original.replace(/\s+/g, " ").trim()
+  return normalizedDraft === normalizedOriginal ? undefined : draft
+}
+
 // GET /api/admin/docs/gaps 는 최대 30개 클러스터를 돌려준다 — 그 이상은 "30+"로 표기한다.
 const DOCS_GAPS_FETCH_CAP = 30
 

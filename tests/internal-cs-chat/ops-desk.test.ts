@@ -3,10 +3,48 @@ import { describe, expect, it } from "vitest"
 // 운영 데스크(운영 도구 탭 개편)의 순수 로직 — 스탯 스트립 집계와 회귀 판정 메타.
 // UI 마크업은 게이트(eslint·build)와 시각 확인으로 검증하고, 여기서는 데이터 계약을 고정한다.
 import {
+  correctedContentForReview,
+  initialCustomerDraft,
   REGRESSION_JUDGE_ACTIONS,
   regressionOutcomeChip,
   summarizeDocsGaps,
 } from "@/components/admin/cs-chat/ops-desk"
+
+describe("customer-delivery review boundary", () => {
+  it("does not prefill the customer draft with an unreviewed internal analysis", () => {
+    expect(initialCustomerDraft({ content: "internal analysis", corrected_content: null })).toBe("")
+    expect(
+      initialCustomerDraft({ content: "internal analysis", corrected_content: "human customer reply" })
+    ).toBe("human customer reply")
+  })
+
+  it("does not persist an unchanged internal analysis as a changes-requested correction", () => {
+    expect(
+      correctedContentForReview({
+        decision: "changes_requested",
+        draft: "  internal   analysis ",
+        original: "internal analysis",
+      })
+    ).toBeUndefined()
+    expect(
+      correctedContentForReview({
+        decision: "changes_requested",
+        draft: "human corrected reply",
+        original: "internal analysis",
+      })
+    ).toBe("human corrected reply")
+  })
+
+  it("requires the explicit customer draft when approving", () => {
+    expect(
+      correctedContentForReview({
+        decision: "approved",
+        draft: " customer-ready reply ",
+        original: "internal analysis",
+      })
+    ).toBe("customer-ready reply")
+  })
+})
 
 describe("summarizeDocsGaps", () => {
   it("splits clusters by source and counts zero-result searches", () => {
