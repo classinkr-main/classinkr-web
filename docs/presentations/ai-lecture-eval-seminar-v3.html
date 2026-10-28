@@ -2102,7 +2102,9 @@ aside.notes { display: none; }
     tl.call(function () { if (from && from !== slides[cur]) from.classList.remove('leaving'); }, null, iris ? 1.2 : fade ? .55 : .02);
     tl.timeScale(.85);
     if (reduce) tl.progress(1);
-    if (back) for (var n = 1; n <= stepsOf(to); n++) revealStep(to, n, true);
+    // 뒤로 돌아올 때는 단계를 모두 연 상태로 보여 주되, 마지막 단계가 앞 문장을 덮어쓰는 클로징은 인용문이 보이도록 한 단계 앞에서 멈춘다
+    var upto = to.dataset.enter === 'closing' ? stepsOf(to) - 1 : stepsOf(to);
+    if (back) for (var n = 1; n <= upto; n++) revealStep(to, n, true);
     updateUI();
     if (history.replaceState) history.replaceState(null, '', '#' + (i + 1));
     if (i > 0 && !startedAt) startedAt = Date.now();
