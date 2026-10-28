@@ -1139,13 +1139,13 @@ aside.notes { display: none; }
   </div>
   <h2 class="h t">다음 한 걸음</h2>
   <div class="cta">
-    <div class="ctac nm card r"><div class="no nm in circle"><i class="led"></i></div><div><b>무료 체험 시작</b><span>계정당 누적 50회 · 녹화와 AI 강의 분석 포함</span></div><span class="arr">→</span></div>
-    <div class="ctac nm card r"><div class="no nm in circle"><i class="led"></i></div><div><b>90일 파일럿 상담</b><span>몇 명을 지키면 본전인지, 우리 학원 숫자로 계산</span></div><span class="arr">→</span></div>
+    <div class="ctac nm card r"><div class="no nm in circle"><i class="led"></i></div><div><b>무료 상담</b><span>몇 명을 지키면 본전인지, 우리 학원 숫자로 계산</span></div><span class="arr">→</span></div>
+    <div class="ctac nm card r"><div class="no nm in circle"><i class="led"></i></div><div><b>프로모션 참여</b><span>세미나 참석 학원 대상 · 혜택 조건은 현장 안내</span></div><span class="arr">→</span></div>
     <div class="ctac nm card r"><div class="no nm in circle"><i class="led"></i></div><div><b>목동 쇼룸 방문</b><span>우리 학원 대표 수업 자료를 가져오세요</span></div><span class="arr">→</span></div>
     <div class="qrrow r"><div class="qr nm in">QR</div><p>상담 링크 · 리소스 절감 계산 워크시트<small>QR 자리 — 발표 전 실제 링크로 교체</small></p></div>
   </div>
   <p class="src t">빌려온 생각 · 갤럽 · 킴 스콧 · 아툴 가완디 · 사이먼 시넥 · Demszky et al.(스탠퍼드)</p>
-  <aside class="notes">질의응답. 다음 단계 세 가지: 무료 체험(계정당 누적 50회, 6.0.9 기준 — 제품팀 확인 후 언급), 90일 파일럿 상담(손익분기 학생 수를 우리 학원 숫자로), 목동 쇼룸(대표 수업 자료 지참). 예상 질문: 강사 근로자성·3.3% 계약 → 계약 명칭이 아니라 실질(지휘·감독, 시간 구속, 고정급)로 판단된다는 정도로만 답하고 노무 상담으로 연결.</aside>
+  <aside class="notes">질의응답. 다음 단계 세 가지: 무료 상담(손익분기 학생 수를 우리 학원 숫자로 계산), 프로모션 참여(세미나 참석 학원 대상 — 혜택 조건은 발표 전 확정해 현장 안내, 무료 50회 언급 시 6.0.9 기준 제품팀 확인), 목동 쇼룸(대표 수업 자료 지참). 예상 질문: 강사 근로자성·3.3% 계약 → 계약 명칭이 아니라 실질(지휘·감독, 시간 구속, 고정급)로 판단된다는 정도로만 답하고 노무 상담으로 연결.</aside>
 </section>
 
 <div id="chap" aria-hidden="true"><div class="cc nm"><div class="cn nm in circle"></div><div><div class="ck"></div><div class="ct"></div><div class="cs"></div><div class="cl"><i class="led off"></i><i class="led off"></i><i class="led off"></i><i class="led off"></i></div></div></div></div>
@@ -1865,7 +1865,7 @@ aside.notes { display: none; }
     cn.textContent = c[0]; $('.ck', chap).textContent = c[1]; $('.ct', chap).textContent = c[2]; $('.cs', chap).textContent = c[3];
     var leds = $$('.cl .led', chap);
     leds.forEach(function (l) { l.classList.add('off'); });
-    lockUntil = Date.now() + 2300;
+    lockUntil = Date.now() + 2400;
     var tl = gsap.timeline();
     tl.set(chap, { autoAlpha: 0 }).set(cc, { autoAlpha: 1 });
     tl.to(chap, { autoAlpha: 1, duration: .45, ease: 'power2.out' }, .12);
@@ -1874,9 +1874,9 @@ aside.notes { display: none; }
     tl.fromTo([$('.ck', chap), $('.ct', chap), $('.cs', chap)], { autoAlpha: 0, y: 20, filter: 'blur(8px)' },
       { autoAlpha: 1, y: 0, filter: 'blur(0px)', duration: .8, ease: 'expo.out', stagger: .08 }, .5);
     leds.forEach(function (l, i) { if (i < k) tl.call(function () { l.classList.remove('off'); }, null, .75 + i * .13); });
-    tl.call(done, null, 1.6);
-    tl.to(cc, { '--rise': 0, y: -24, scale: .97, autoAlpha: 0, duration: .5, ease: 'power2.in' }, 1.65);
-    tl.to(chap, { autoAlpha: 0, duration: .6, ease: 'power2.inOut' }, 1.85);
+    tl.to(cc, { '--rise': 0, y: -24, scale: .97, autoAlpha: 0, duration: .5, ease: 'power2.in' }, 1.6);
+    tl.call(done, null, 1.95);
+    tl.to(chap, { autoAlpha: 0, duration: .55, ease: 'power2.out' }, 1.95);
   }
 
   /* ---------- 내비게이션 ---------- */
@@ -1884,6 +1884,8 @@ aside.notes { display: none; }
 
   function prepare(slide) {
     gsap.killTweensOf($$('*', slide));
+    gsap.killTweensOf(slide);
+    gsap.set(slide, { clearProps: 'opacity,visibility,clipPath' });
     $$('.step', slide).forEach(function (el) { gsap.set(el, { autoAlpha: 0 }); });
     slide._step = 0;
     if (slide._stl && slide._stl.kill) slide._stl.kill();
@@ -1904,13 +1906,16 @@ aside.notes { display: none; }
     cur = i;
     var tl = gsap.timeline();
     tl.call(function () { stage.classList.toggle('dark', to.dataset.scene === 'dark'); }, null, iris ? .5 : 0);
-    if (iris) tl.fromTo(to, { clipPath: 'circle(0% at 50% 50%)' }, { clipPath: 'circle(75% at 50% 50%)', duration: 1.0, ease: 'expo.inOut', clearProps: 'clipPath' }, 0);
-    var start = iris ? .42 : .05;
+    if (iris) tl.fromTo(to, { clipPath: 'circle(2% at 50% 50%)' }, { clipPath: 'circle(75% at 50% 50%)', duration: 1.15, ease: 'power3.inOut', clearProps: 'clipPath' }, 0);
+    // 일반 전환: 새 장면을 이전 장면 위로 디졸브해 빈 화면 없이 이어지게 한다
+    var fade = from && from !== to && !iris;
+    if (fade) tl.fromTo(to, { opacity: 0 }, { opacity: 1, duration: .5, ease: 'power1.inOut', clearProps: 'opacity' }, 0);
+    var start = iris ? .45 : .05;
     riseIn(entranceEls(to), tl, start, GAP, false);
     $$('.roll', to).forEach(function (r) { if (!r._played && !r.closest('.step')) { r._played = true; playRoll(r, tl, start + .4); } });
     var hook = ENTER[to.dataset.enter];
     if (hook) hook(to, tl, start, back);
-    tl.call(function () { if (from && from !== slides[cur]) from.classList.remove('leaving'); }, null, iris ? 1.05 : .02);
+    tl.call(function () { if (from && from !== slides[cur]) from.classList.remove('leaving'); }, null, iris ? 1.2 : fade ? .55 : .02);
     tl.timeScale(.85);
     if (reduce) tl.progress(1);
     if (back) for (var n = 1; n <= stepsOf(to); n++) revealStep(to, n, true);
@@ -1930,9 +1935,9 @@ aside.notes { display: none; }
     killLive();
     var chapter = !!to.dataset.chapter && !back && !!from && !reduce;
     var iris = !!from && from.dataset.scene !== to.dataset.scene && !chapter && !reduce;
-    if (from) exitAnim(from);
+    if (from && !iris) exitAnim(from);
     if (chapter) { chapterWipe(to, function () { if (token === navToken) enterSlide(i, back, from, false); }); return; }
-    var wait = from && !reduce ? (iris ? .16 : .3) : 0;
+    var wait = from && !reduce && !iris ? .08 : 0;
     if (!wait) { enterSlide(i, back, from, iris); return; }
     gsap.delayedCall(wait, function () { if (token === navToken) enterSlide(i, back, from, iris); });
   }
