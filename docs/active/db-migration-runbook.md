@@ -158,6 +158,26 @@ npm run check:db --  --strict
 `CRON_SECRET`)의 `segmentsPreview`. NEO 동기화가 오래됐으면 NEO 조건 세그먼트는 `skipped_neo_stale` 로 멈추는 것이
 의도된 동작이다.
 
+### 2026-10-22 하드웨어·오더·매출 연결 S1·S2·S3 — 서울 프로젝트 적용 완료(2026-10-28)
+
+[연결 로직](./hardware-order-revenue-link-plan-2026-10-22.md) 1~3단계. 앞의 둘은 스키마를 늘리지 않아 `check:db` 프로브로는 확인할 수 없다. 아래 조회로 확인한다(읽기 전용). 세 번째(`sales_orders`)는 `check:db` 테이블 프로브가 있다(미적용이면 경고).
+
+| 파일 | 하는 일 | 미적용 시 | 확인 |
+| --- | --- | --- | --- |
+| `20261022_hw_rev_matches_exclude_planned.sql` | 출고↔REV 대사 뷰 `v_hardware_rev_matches`가 배송 예정·예약·대기를 실출고에서 뺀다(`CREATE OR REPLACE`, 열 구성 같음) | 날짜가 있는 배송 예정이 실출고로 잡혀 대사에 "출고 있음"으로 나온다. 다른 화면 영향 없음 | `select pg_get_viewdef('public.v_hardware_rev_matches'::regclass) ilike '%예정%';` → `true` |
+| `20261022_crm_lead_auto_confirm.sql` | `crm_source_priorities`의 `lead` 자동 확정을 켠다(임계값 0.92·0.15 그대로) | 매시간 리드 자동 연결(`/api/cron/link-hourly`)이 후보만 만들고 확정은 하지 않는다 — 매칭함에서 사람이 확정 | `select auto_confirm_enabled from public.crm_source_priorities where source_system = 'lead';` → `true` |
+| `20261022_sales_orders.sql` | 오더 테이블 `sales_orders`(견적 승인 → 하드웨어 승인 → 오더번호·배송 예정)와 원장 `raw->>'order_no'` 인덱스를 만든다. RLS deny-all(service_role 만). 전부 `IF NOT EXISTS`라 재실행 무해 | 견적 승인은 그대로 되지만 오더가 만들어지지 않는다. 하드웨어 탭의 '하드웨어 승인 대기'는 "미적용" 안내로 내려가고, 승인·반려 API는 503 | `npm run check:db`의 `sales_orders` 프로브, 또는 `select to_regclass('public.sales_orders') is not null;` → `true` |
+
+### 2026-10-28 하드웨어 재고관리 프로세스 — 서울 프로젝트 적용 완료(2026-10-28)
+
+[프로세스 정의서 차이](./hardware-inventory-process-gap-2026-10-28.md) §5 의 2단계(스키마) + 확정 v4.
+
+| 파일 | 하는 일 | 미적용 시 | 확인 |
+| --- | --- | --- | --- |
+| `20261028_hardware_inventory_process.sql` | `hardware_movements` 에 출고 유형·무상 여부·회수 원 출고·CRM 고객·담당/작성 계정·반납 예정일 칸, `hardware_items` 에 물류번호 관리 여부·보고 묶음·정렬 칸을 더하고 정의서 품목 18개를 시드(없는 이름만)한다. 배송 예정 확정 `confirm_hardware_planned_movement_v4`(v3 호출 + 새 칸 복사 + 상태 `설치 완료`). 전부 멱등 | 대시보드는 새 칸 없이 읽는다(폴백). 출고 유형·회수 연결·물류번호 직접 선택 저장이 실패하고, 확정은 v3 로 떨어져 확정 행에 유형·고객·담당이 빠진다 | `npm run check:db` 의 `hardware_movements`·`hardware_items` 프로브, 또는 `select to_regprocedure('public.confirm_hardware_planned_movement_v4(uuid,text,date,int,jsonb,uuid,text)') is not null;` → `true` |
+
+2026-10-28 적용 기록: 위 두 절의 네 파일(10-22 셋 + 10-28)을 서울 프로젝트에 파일명 순서로 적용했다(Management API query). 적용 전 확인: 품목 18개 이름이 모두 이미 있어 10-28 시드는 새 품목을 만들지 않고 묶음·물류번호 관리 표시만 붙였다. 적용 후 확인: 대사 뷰 `예정` 포함 `true`, `lead` 자동 확정 `true`, `sales_orders` 있음(RLS 켜짐), 확정 v4 있음(anon 실행 권한 없음), 묶음이 붙은 품목 18 · 수량만 관리 9. `check:db` 에 남은 경고는 `compass_meta_submissions_v`(Compass 브리지 뷰, 이 작업과 무관)뿐이다.
+
 ## 적용 보류 중인 마이그레이션
 
 `check:db`에 걸리지 않는(프로브가 없는) 파일이라도, 아래 파일은 **파일명 순서대로 일괄 적용하지 않는다.**

@@ -17,6 +17,8 @@ const listFreshHwOutbound = vi.fn()
 const listFreshHwStock = vi.fn()
 let previousSheetMovements: Array<Record<string, unknown>> = []
 let snapshotInsertError: { message: string } | null = null
+// hardware_import_runs 최근 기록(최신순) — 매시간 자동 가져오기의 "변경 없음" 판정이 읽는다.
+let importRunRows: Array<Record<string, unknown>> = []
 
 function tableClient(table: string) {
   return {
@@ -87,11 +89,13 @@ function tableClient(table: string) {
           const result =
             table === "hardware_movements" && column === "source" && value === "sheet_import"
               ? { data: previousSheetMovements, error: null }
-              : { data: [], error: null }
+              : table === "hardware_import_runs" && column === "source" && value === "branch_hw_sheet"
+                ? { data: importRunRows, error: null }
+                : { data: [], error: null }
           const chain: Record<string, unknown> = {
             then: (resolve: (value: typeof result) => unknown) => Promise.resolve(result).then(resolve),
           }
-          for (const method of ["is", "not", "in", "eq", "order", "limit"]) {
+          for (const method of ["is", "not", "in", "eq", "order", "limit", "gte"]) {
             chain[method] = () => chain
           }
           return chain
@@ -164,6 +168,7 @@ describe("importHardwareFromBranchSheets", () => {
     ]
     snapshotInsertError = null
     mockRpcResponseData = null
+    importRunRows = []
     const inboundRows = [
       {
         id: "inbound-1",
@@ -564,6 +569,119 @@ describe("importHardwareFromBranchSheets", () => {
       if (prev === undefined) delete process.env.HARDWARE_SHEET_ADDITIVE_MERGE
       else process.env.HARDWARE_SHEET_ADDITIVE_MERGE = prev
     }
+  })
+
+  // 2026-10-22 매시간 자동 가져오기 — 시트가 그대로면 원장을 건드리지 않는다.
+  it("records the sheet source checksum and trigger on a successful import", async () => {
+    const { importHardwareFromBranchSheets, checksumHardwareSheetSource } = await loadRepository()
+
+    await importHardwareFromBranchSheets({ actor: "admin@example.com" })
+
+    const finish = operations.find(
+      (op) => op.table === "hardware_import_runs" && op.method === "update" && (op.payload as { status?: string }).status === "success"
+    )
+    const raw = (finish?.payload as { raw: Record<string, unknown> }).raw
+    expect(raw.trigger).toBe("manual")
+    expect(raw.source_checksum).toBe(
+      checksumHardwareSheetSource({
+        inbound: await listFreshHwInbound(),
+        outbound: await listFreshHwOutbound(),
+        stock: await listFreshHwStock(),
+      })
+    )
+  })
+
+  it("source checksum ignores mirror ids, synced_at and row order", async () => {
+    const { checksumHardwareSheetSource } = await loadRepository()
+    const row = (id: string, product: string, quantity: number) => ({
+      id, logistics_no: "C3", inbound_date: "2026-10-18", product, quantity, unit_price: null, amount: null,
+      serials: [], storage: "창고", importer: null, remarks: null, raw: {}, synced_at: `2026-10-22T0${quantity}:00:00Z`,
+    })
+    const a = checksumHardwareSheetSource({ inbound: [row("a", "86 IFP", 1), row("b", "T1", 2)], outbound: [], stock: [] })
+    const b = checksumHardwareSheetSource({ inbound: [row("z", "T1", 2), row("y", "86 IFP", 1)], outbound: [], stock: [] })
+    const changed = checksumHardwareSheetSource({ inbound: [row("a", "86 IFP", 1), row("b", "T1", 3)], outbound: [], stock: [] })
+
+    expect(a).toBe(b)
+    expect(changed).not.toBe(a)
+  })
+
+  it("skips the import and only stamps last_checked_at when the sheet matches the last successful import", async () => {
+    const { importHardwareFromBranchSheetsIfChanged, checksumHardwareSheetSource } = await loadRepository()
+    const checksum = checksumHardwareSheetSource({
+      inbound: await listFreshHwInbound(),
+      outbound: await listFreshHwOutbound(),
+      stock: await listFreshHwStock(),
+    })
+    importRunRows = [{ id: "run-prev", status: "success", rows_imported: 7, rows_skipped: 1, raw: { source_checksum: checksum, mode: "replace" } }]
+
+    const outcome = await importHardwareFromBranchSheetsIfChanged({ actor: "자동" })
+
+    expect(outcome).toMatchObject({ status: "unchanged", runId: "run-prev", sourceChecksum: checksum })
+    expect(operations.some((op) => op.method === "rpc")).toBe(false)
+    expect(operations.some((op) => op.table === "hardware_sheet_import_snapshots")).toBe(false)
+    const stamp = operations.find((op) => op.table === "hardware_import_runs" && op.method === "update")
+    expect((stamp?.payload as { raw: Record<string, unknown> }).raw).toMatchObject({
+      source_checksum: checksum,
+      mode: "replace",
+      last_checked_at: expect.any(String),
+    })
+  })
+
+  it("leaves a fresh 'unchanged' success row when the latest run failed but the sheet matches the last success", async () => {
+    const { importHardwareFromBranchSheetsIfChanged, checksumHardwareSheetSource } = await loadRepository()
+    const checksum = checksumHardwareSheetSource({
+      inbound: await listFreshHwInbound(),
+      outbound: await listFreshHwOutbound(),
+      stock: await listFreshHwStock(),
+    })
+    importRunRows = [
+      { id: "run-failed", status: "failed", rows_imported: null, rows_skipped: null, raw: { stage: "sheet_sync" } },
+      { id: "run-prev", status: "success", rows_imported: 7, rows_skipped: 1, raw: { source_checksum: checksum } },
+    ]
+
+    const outcome = await importHardwareFromBranchSheetsIfChanged({ actor: "자동" })
+
+    expect(outcome.status).toBe("unchanged")
+    expect(operations.some((op) => op.method === "rpc")).toBe(false)
+    const inserted = operations.find((op) => op.table === "hardware_import_runs" && op.method === "insert")
+    expect(inserted?.payload).toMatchObject({
+      status: "success",
+      rows_imported: 7,
+      rows_skipped: 1,
+      raw: { mode: "unchanged", trigger: "auto", source_checksum: checksum, matched_run_id: "run-prev" },
+    })
+  })
+
+  it("imports with trigger 'auto' when the sheet changed since the last successful import", async () => {
+    const { importHardwareFromBranchSheetsIfChanged } = await loadRepository()
+    importRunRows = [{ id: "run-prev", status: "success", rows_imported: 7, rows_skipped: 1, raw: { source_checksum: "older" } }]
+
+    const outcome = await importHardwareFromBranchSheetsIfChanged({ actor: "자동" })
+
+    expect(outcome.status).toBe("imported")
+    expect(operations.some((op) => op.method === "rpc" && op.fn === "replace_hardware_sheet_import")).toBe(true)
+    const finish = operations.find(
+      (op) => op.table === "hardware_import_runs" && op.method === "update" && (op.payload as { status?: string }).status === "success"
+    )
+    expect((finish?.payload as { raw: Record<string, unknown> }).raw.trigger).toBe("auto")
+    // 미러는 한 번만 읽는다(변경 판정에 쓴 행을 그대로 가져오기에 넘긴다).
+    expect(listFreshHwInbound).toHaveBeenCalledTimes(1)
+  })
+
+  it("carries the sheet order number into the change digest only when present", async () => {
+    const { buildHardwareSheetImportRows, sheetRowOrderNo } = await loadRepository()
+    const items = new Map([["86 IFP", { id: "item-86" }]])
+    const outbound = (raw: Record<string, unknown>) => ({
+      id: "out-1", logistics_no: "C3", outbound_date: "2026-10-23", owner: "Minji", product: "86 IFP", quantity: 3,
+      revenue: 5850, destination: "성남여자고등학교", serials: [], progress: "배송 예정", type: "Sales", remarks: null,
+      raw, synced_at: "2026-10-22T00:00:00Z",
+    })
+    const plain = buildHardwareSheetImportRows({ inbound: [], outbound: [outbound({})], stock: [] }, items).rows[0]
+    const withOrder = buildHardwareSheetImportRows({ inbound: [], outbound: [outbound({ order_no: "ORD-2610-014" })], stock: [] }, items).rows[0]
+
+    expect(sheetRowOrderNo(withOrder.raw)).toBe("ORD-2610-014")
+    expect(sheetRowOrderNo(plain.raw)).toBeNull()
+    expect(withOrder.source_digest).not.toBe(plain.source_digest)
   })
 })
 

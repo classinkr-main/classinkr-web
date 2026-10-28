@@ -9,6 +9,7 @@ import {
   type LeadDailySchedule,
 } from "@/lib/notifications/schedule"
 import { CRM_SEGMENT_DAILY_UTC_SLOT, segmentDailyTimeBudgetMs } from "@/lib/crm/saved-segments"
+import { HARDWARE_PROCESS_ALERT_UTC_SLOT } from "@/lib/hardware/process-alerts"
 import { getResolvedSettings } from "@/lib/repositories/settings"
 import { previewLeadMorningBrief, sendLeadMorningBrief } from "@/lib/server/lead-morning-brief"
 
@@ -38,9 +39,18 @@ export const maxDuration = 60
  *    dryRun 도 같다(알림 미리보기가 실패해도 segmentsPreview 는 싣는다).
  *  - 시간 예산: 세그먼트 잡에는 요청 시작 기준 남은 시간(segmentDailyTimeBudgetMs — 앞선 아침 카드 시간을 뺀다)을
  *    넘겨, 같은 슬롯의 앞 잡이 오래 걸려도 maxDuration(60초) 안에서 뒤쪽 쓰기(일별 기록·last_*)까지 끝나게 한다.
+ *
+ * 고정 슬롯 잡 둘째: UTC 23(= KST 08시)에 하드웨어 일일 알림(hardwareProcessAlerts — 배송 예정 30일 경과·샘플 반납
+ * 예정일 지남, 담당자별 한 통, docs/active/hardware-inventory-process-gap-2026-10-28.md §6 D9). 세그먼트 잡과 같은
+ * 격리 규칙(설정 실패와 묶지 않음·동적 import·dryRun 은 hardwareAlertsPreview)을 따른다. 같은 날 두 번 보내지 않는다
+ * (lib/server/hardware-process-alerts.ts — 그날 발송 성공 기록이 있으면 already_sent).
  */
 
-type DispatchJobKey = NotificationScheduleJobKey | "crmSegmentsDaily" | "notificationSettings"
+type DispatchJobKey =
+  | NotificationScheduleJobKey
+  | "crmSegmentsDaily"
+  | "hardwareProcessAlerts"
+  | "notificationSettings"
 
 const SETTINGS_UNAVAILABLE_ERROR = "Notification settings unavailable."
 const PREVIEW_UNAVAILABLE_ERROR = "Report preview unavailable."
@@ -113,6 +123,21 @@ async function runCrmSegmentsDailyJob(dryRun: boolean, requestStartedAt: number)
   }
 }
 
+/**
+ * 하드웨어 일일 알림. 보낼 건이 없으면 empty, 그날 이미 나갔으면 already_sent(둘 다 실패 아님).
+ * 응답에는 건수·담당자별 건수만 싣는다(dryRun 은 보낼 메시지 미리보기 포함). 오류는 이름만 로그로 남긴다.
+ */
+async function runHardwareProcessAlertsJob(dryRun: boolean): Promise<JobRunResult> {
+  try {
+    const { runHardwareProcessAlerts } = await import("@/lib/server/hardware-process-alerts")
+    const report = await runHardwareProcessAlerts({ dryRun })
+    return { job: "hardwareProcessAlerts", status: report.status, detail: report }
+  } catch (error) {
+    console.error("[cron/dispatch] hardwareProcessAlerts failed:", error instanceof Error ? error.name : "Error")
+    return { job: "hardwareProcessAlerts", status: "failed", error: "Hardware process alerts failed." }
+  }
+}
+
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ slot: string }> }
@@ -142,6 +167,9 @@ export async function GET(
 
   const kstHour = utcSlotToKstHour(slot)
   const runsSegments = slot === CRM_SEGMENT_DAILY_UTC_SLOT
+  const runsHardwareAlerts = slot === HARDWARE_PROCESS_ALERT_UTC_SLOT
+  // 고정 슬롯 잡이 있는 슬롯 — 알림 설정이 없어도 고정 잡은 돈다.
+  const runsFixedJobs = runsSegments || runsHardwareAlerts
 
   // 알림 설정 — 알림 잡만 쓴다. 고정 슬롯 잡(세그먼트)은 설정과 무관하므로 설정 실패에 묶지 않는다.
   let notificationSchedule: NotificationSchedule | null = null
@@ -150,7 +178,7 @@ export async function GET(
   } catch {
     notificationSchedule = null
   }
-  if (!notificationSchedule && !runsSegments) {
+  if (!notificationSchedule && !runsFixedJobs) {
     return NextResponse.json({ ok: false, error: SETTINGS_UNAVAILABLE_ERROR }, { status: 503 })
   }
 
@@ -169,12 +197,13 @@ export async function GET(
         previewError = PREVIEW_UNAVAILABLE_ERROR
       }
     }
-    if (previewError && !runsSegments) {
+    if (previewError && !runsFixedJobs) {
       return NextResponse.json({ ok: false, error: previewError }, { status: 503 })
     }
     // 세그먼트 자동 태그 미리보기(쓰기 0) — 서로 막지 않는다: 알림 미리보기가 실패해도 싣고, 세그먼트 미리보기
     // 실패는 잡 결과에 failed 로만.
     const segmentsPreview = runsSegments ? await runCrmSegmentsDailyJob(true, requestStartedAt) : undefined
+    const hardwareAlertsPreview = runsHardwareAlerts ? await runHardwareProcessAlertsJob(true) : undefined
     return NextResponse.json(
       {
         ok: !previewError,
@@ -185,6 +214,7 @@ export async function GET(
         preview,
         ...(previewError ? { error: previewError } : {}),
         ...(segmentsPreview ? { segmentsPreview } : {}),
+        ...(hardwareAlertsPreview ? { hardwareAlertsPreview } : {}),
         ran: [],
       },
       { status: previewError ? 503 : 200 }
@@ -199,11 +229,12 @@ export async function GET(
       ran.push(await JOB_RUNNERS[job](schedule[job]))
     }
   } else {
-    // 슬롯 21 에서만 여기 온다 — 알림 잡은 어떤 게 오늘 차례인지 몰라 건너뛰고 실패로 남긴다(응답 500).
+    // 고정 잡 슬롯(21·23)에서만 여기 온다 — 알림 잡은 어떤 게 오늘 차례인지 몰라 건너뛰고 실패로 남긴다(응답 500).
     ran.push({ job: "notificationSettings", status: "failed", error: SETTINGS_UNAVAILABLE_ERROR })
   }
   // 고정 슬롯 잡 — 알림 잡 뒤에(각자 try/catch 로 격리). 예산은 요청 시작 기준 남은 시간.
   if (runsSegments) ran.push(await runCrmSegmentsDailyJob(false, requestStartedAt))
+  if (runsHardwareAlerts) ran.push(await runHardwareProcessAlertsJob(false))
 
   const ok = ran.every((result) => result.status !== "failed")
 

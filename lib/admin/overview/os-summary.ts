@@ -22,7 +22,8 @@ const EVENTS_TARGET = 12
 const HW_BOARD_PATTERN = /86|IFP/i
 
 // 진척(HW) 불변식: boards86은 "실제 판매 출고"만 집계한다 — 배송예정(planned)과
-// Sample/Promotion/A-S 출고를 섞으면 타일이 부풀려진다. 아래 규칙은 재고 원장과 동일
+// Sample/A-S 출고를 섞으면 타일이 부풀려진다. 프로모션은 판매대시보드와 같이 판매로 센다
+// (세일즈 + 프로모션, docs/active/hardware-inventory-process-gap-2026-10-28.md §6 D10). 아래 규칙은 재고 원장과 동일
 // 규약의 사본이다(새 정규식 발명 금지):
 //  - planned: lib/repositories/hardware-inventory.ts isPlannedStatus(:244-247)
 //  - 샘플성 텍스트: 같은 파일 isSampleLikeText(:226-228, 시트 임포트가 type/remarks/
@@ -57,7 +58,7 @@ function isPlannedOutbound(row: HwOutbound) {
 
 function isSalesOutbound(row: HwOutbound) {
   const token = (row.type ?? "").trim().toLowerCase()
-  if (token === "sample" || token === "promotion" || token === "a/s" || token === "as") return false
+  if (token === "sample" || token === "a/s" || token === "as") return false
   if ([row.type, row.remarks, row.destination, row.progress].some((value) => HW_SAMPLE_LIKE_PATTERN.test(value ?? ""))) {
     return false
   }
@@ -147,7 +148,7 @@ async function computeOsSummary() {
       : { total: null, linked: null, needsReview: null, coveragePct: null }
 
   // boards86 = 실판매(비-planned) 수량 합, plannedBoards86 = 배송예정 판매 수량 합.
-  // 샘플/프로모션/A-S 행은 둘 다에서 제외한다.
+  // 샘플/A-S 행은 둘 다에서 제외한다(프로모션은 판매대시보드 규칙대로 포함).
   const boardSalesRows =
     hwOk
       ? hwResult.value.filter((row) => HW_BOARD_PATTERN.test(row.product ?? "") && isSalesOutbound(row))

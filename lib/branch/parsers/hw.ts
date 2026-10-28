@@ -1,5 +1,6 @@
 import type { CellFormat, FormattedCell } from "@/lib/branch/google-sheets"
 import { FISCAL_MONTH_ORDER } from "@/lib/branch/fiscal"
+import { normalizeOrderNo } from "@/lib/orders/sheet-order-check"
 
 // 입고·출고 탭은 행 끝을 열어 둔다 — 고정 500행이면 시트가 넘치는 순간 가장 최근 행부터 에러 없이
 // 잘린다(2026-09-14 실측: 출고 409행, 37일에 94행 증가 → 약 한 달 뒤 500행 도달).
@@ -43,6 +44,33 @@ const isPlannedOutboundBg = (bg: CellFormat | null | undefined): boolean => {
   return red >= 0.8 && green < 0.75 && blue < 0.85
 }
 
+// '3.출고 현황'의 기존 열(A~M: 물류No·일자·담당·품목·수량·단가·매출 USD·CNY·고객사·시리얼·진행·유형·비고)은
+// 위치로 읽는다. 오더번호 열(2026-10-22 추가, docs/active/hardware-order-revenue-link-plan-2026-10-22.md §4-4)은
+// 헤더 이름으로 찾는다. 이 열이 기존 열 사이에 끼면 뒤쪽 값이 한 칸씩 밀려 고객사·진행 상태가 조용히
+// 틀어지므로, 그때는 잘못된 값을 싣지 않고 동기화를 멈춘다.
+const OUTBOUND_FIXED_COLUMN_COUNT = 13
+const ORDER_NO_HEADER = /^(오더번호|오더no\.?|orderno\.?|ordernumber)$/i
+
+function columnLetter(index: number): string {
+  let n = index + 1
+  let letters = ""
+  while (n > 0) {
+    const rem = (n - 1) % 26
+    letters = String.fromCharCode(65 + rem) + letters
+    n = Math.floor((n - 1) / 26)
+  }
+  return letters
+}
+
+/** 출고 탭 첫 행(헤더)에서 오더번호 열 위치를 찾는다. 없으면 null — 열을 추가하기 전 시트도 그대로 읽는다. */
+export function findOutboundOrderNoColumn(header: readonly FormattedCell[]): number | null {
+  for (let col = 0; col < header.length; col++) {
+    const label = s(header[col]?.value)?.replace(/\s+/g, "")
+    if (label && ORDER_NO_HEADER.test(label)) return col
+  }
+  return null
+}
+
 export interface HwInboundParsed { logistics_no: string|null; inbound_date: string|null; product: string; quantity: number; unit_price: number|null; amount: number|null; serials: string[]; storage: string|null; importer: string|null; remarks: string|null; raw: unknown }
 export interface HwOutboundParsed { logistics_no: string|null; outbound_date: string|null; owner: string|null; product: string; quantity: number; revenue: number|null; destination: string|null; serials: string[]; progress: string|null; type: string|null; remarks: string|null; raw: unknown }
 export interface HwStockParsed { product: string; category: string|null; quantity: number; raw: unknown }
@@ -75,6 +103,13 @@ export function parseInbound(grid: FormattedCell[][]): HwInboundParsed[] {
 
 export function parseOutbound(grid: FormattedCell[][]): HwOutboundParsed[] {
   const out: HwOutboundParsed[] = []
+  const orderNoCol = findOutboundOrderNoColumn(grid[0] ?? [])
+  if (orderNoCol != null && orderNoCol < OUTBOUND_FIXED_COLUMN_COUNT) {
+    throw new Error(
+      `'3.출고 현황'의 오더번호 열이 ${columnLetter(orderNoCol)}열에 있습니다. 기존 열(A~${columnLetter(OUTBOUND_FIXED_COLUMN_COUNT - 1)}) 사이에 끼우면 ` +
+        `고객사·진행 상태 값이 한 칸씩 밀리므로, 비고 열 오른쪽(${columnLetter(OUTBOUND_FIXED_COLUMN_COUNT)}열 이후)으로 옮겨 주세요.`
+    )
+  }
   let lastDestination: string | null = null
   for (let r = 1; r < grid.length; r++) {
     const row = grid[r] ?? []
@@ -88,6 +123,8 @@ export function parseOutbound(grid: FormattedCell[][]): HwOutboundParsed[] {
     if (explicitDestination) lastDestination = explicitDestination
     const plannedByColor = isPlannedOutboundBg(row[10]?.bg)
     const progress = s(row[10]?.value) ?? (plannedByColor ? "배송 예정" : null)
+    // 손으로 적는 칸이라 대소문자·공백을 정리해 둔다(`ord - 2610-002` → `ORD-2610-002`) — 원장에서 오더와 그대로 맞춘다.
+    const orderNo = orderNoCol == null ? null : normalizeOrderNo(s(row[orderNoCol]?.value))
     out.push({
       logistics_no: s(row[0]?.value), outbound_date: date(row[1]?.value),
       owner: s(row[2]?.value), product, quantity: n(row[4]?.value) ?? 0,
@@ -105,6 +142,9 @@ export function parseOutbound(grid: FormattedCell[][]): HwOutboundParsed[] {
         amount_usd: n(row[6]?.value),
         amount_cny: n(row[7]?.value),
         unit_price: n(row[5]?.value),
+        // 오더번호는 값이 있을 때만 싣는다 — 열이 없는 시트·빈 칸은 raw가 예전과 같게 남는다.
+        // raw는 가져오기 RPC가 원장(hardware_movements.raw)까지 그대로 옮긴다.
+        ...(orderNo ? { order_no: orderNo } : {}),
       },
     })
   }

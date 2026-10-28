@@ -401,9 +401,14 @@ describe("목록·내보내기 URL — 기본값은 싣지 않는다(담당만 �
   })
 
   it("NEO '휴면' 플래그는 동기화 시각이 아니라 최근 수업일로 본다", () => {
-    const stale = row({ updatedAt: ago(90), lastClassAt: ago(2) })
-    expect(rowToFlags(stale)).not.toContain("dormant")
-    expect(rowToFlags(row({ updatedAt: ago(1), lastClassAt: ago(60) }))).toContain("dormant")
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.parse(GENERATED_AT))
+    try {
+      const stale = row({ updatedAt: ago(90), lastClassAt: ago(2) })
+      expect(rowToFlags(stale)).not.toContain("dormant")
+      expect(rowToFlags(row({ updatedAt: ago(1), lastClassAt: ago(60) }))).toContain("dormant")
+    } finally {
+      clock.mockRestore()
+    }
   })
 })
 
