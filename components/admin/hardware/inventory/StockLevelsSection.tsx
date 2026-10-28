@@ -2,10 +2,17 @@
 
 import { memo, useMemo, useState } from "react"
 import type { Dispatch, SetStateAction } from "react"
-import { Download, Filter } from "lucide-react"
+import dynamic from "next/dynamic"
+import { Download, Filter, Scale, Settings2 } from "lucide-react"
 
 import { paginateAdminList, type AdminListPaginationResult } from "@/lib/admin-list-pagination"
 import StockAvailabilityGauge from "./StockAvailabilityGauge"
+
+// 입고관리 권한자만 여는 시트 — 첫 화면 번들에서 뺀다.
+const AdjustmentSheet = dynamic(() => import("./AdjustmentSheet"), { loading: () => null })
+const ItemSettingsSheet = dynamic(() => import("./ItemSettingsSheet"), { loading: () => null })
+
+const LOT_CHIP_LIMIT = 5
 import { buildHardwareStockCsv, filterHomeStock } from "./home-record-model"
 import {
   formatAvg,
@@ -34,6 +41,8 @@ interface StockLevelsSectionProps {
   stockPagination: AdminListPaginationResult<HardwareStockRow>
   setStockPage: Dispatch<SetStateAction<number>>
   prepareQuickEntry: (itemId: string, presetKey: string) => void
+  // 재고 조정·품목 설정을 저장한 뒤 대시보드를 다시 받는다. 없으면 두 진입점을 숨긴다.
+  onStockChanged?: () => void | Promise<void>
 }
 
 function StockLevelsSection({
@@ -46,13 +55,32 @@ function StockLevelsSection({
   stockPagination: basePagination,
   setStockPage,
   prepareQuickEntry,
+  onStockChanged,
 }: StockLevelsSectionProps) {
+  // 입고·재고 조정·품목 설정은 입고관리 권한자만(§7-2). 구응답(undefined)은 입고 버튼만 열어 두고 서버 게이트를 믿는다.
+  const canManageInventory = data?.viewer?.canManageInventory
+  const canAdminister = canManageInventory === true && Boolean(onStockChanged)
+  const showInbound = canManageInventory !== false
+  const [adjustTarget, setAdjustTarget] = useState<{ itemId: string | null } | null>(null)
+  const [settingsItemId, setSettingsItemId] = useState<string | null>(null)
+  const [expandedLots, setExpandedLots] = useState<ReadonlySet<string>>(() => new Set())
+  const [adminNotice, setAdminNotice] = useState<string | null>(null)
+  const activeItems = useMemo(() => {
+    const active = new Set((data?.stock ?? []).map((row) => row.itemId))
+    return (data?.items ?? []).filter((item) => active.has(item.id))
+  }, [data?.items, data?.stock])
+  const settingsItem = settingsItemId ? (data?.items ?? []).find((item) => item.id === settingsItemId) ?? null : null
+  const afterAdminSave = (message: string) => {
+    setAdminNotice(message)
+    void onStockChanged?.()
+  }
   const [query, setQuery] = useState("")
   const [needsAttention, setNeedsAttention] = useState(false)
   const [plannedOnly, setPlannedOnly] = useState(false)
   const filteredRows = useMemo(() => filterHomeStock(data?.stock ?? [], query, needsAttention, plannedOnly), [data?.stock, query, needsAttention, plannedOnly])
   const stockPagination = compact ? paginateAdminList(filteredRows, { currentPage: basePagination.currentPage, pageSize: basePagination.pageSize }) : basePagination
   const filterCount = Number(needsAttention) + Number(plannedOnly)
+  const lotTrackedById = useMemo(() => new Map((data?.items ?? []).map((item) => [item.id, item.lot_tracked !== false])), [data?.items])
   const exportStock = () => {
     const url = URL.createObjectURL(new Blob([buildHardwareStockCsv(filteredRows)], { type: "text/csv;charset=utf-8" }))
     const link = document.createElement("a")
@@ -95,7 +123,11 @@ function StockLevelsSection({
           </div>
         </details>
         <button type="button" onClick={exportStock} disabled={!filteredRows.length} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] px-3 text-[12px] font-semibold disabled:opacity-40"><Download className="h-3.5 w-3.5" />CSV 내보내기</button>
+        {canAdminister ? <button type="button" onClick={() => setAdjustTarget({ itemId: null })} className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] px-3 text-[12px] font-semibold text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"><Scale className="h-3.5 w-3.5" />재고 조정</button> : null}
+      </div> : canAdminister ? <div className="flex justify-end border-b border-[rgba(0,0,0,0.08)] px-4 py-2.5">
+        <button type="button" onClick={() => setAdjustTarget({ itemId: null })} className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] px-3 text-[12px] font-semibold text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"><Scale className="h-3.5 w-3.5" />재고 조정</button>
       </div> : null}
+      {adminNotice ? <p role="status" className="border-b border-[rgba(0,0,0,0.08)] bg-[#ECFDF5] px-4 py-2 text-[12px] font-semibold text-[#084734]">{adminNotice}</p> : null}
       {openSections.stock && (
         <>
           <div className="overflow-x-auto">
@@ -124,28 +156,63 @@ function StockLevelsSection({
                     <tr key={row.itemId} className={`align-top transition-colors ${selectedItemId === row.itemId ? "bg-[#ECFDF5]" : "hover:bg-[#FAFAF8]"}`}>
                       <td className="px-5 py-3.5">
                         <p className="text-[13px] font-bold text-[#111110]">{onSelectItem ? <button type="button" onClick={() => onSelectItem(row.itemId)} aria-pressed={selectedItemId === row.itemId} className="text-left hover:text-[#084734]">{row.product}</button> : row.product}</p>
-                        <p className="mt-1 text-[11px] text-[#615D59]">
-                          {row.category ?? "미분류"} · 최소 {row.reorderPoint}대 · 리드타임 {row.leadTimeDays}일
+                        <p className="mt-1 flex flex-wrap items-center gap-x-1 text-[11px] text-[#615D59]">
+                          <span>{row.category ?? "미분류"} · 최소 {row.reorderPoint}대 · 리드타임 {row.leadTimeDays}일</span>
+                          {lotTrackedById.get(row.itemId) === false ? <span>· 수량만 관리</span> : null}
+                          {canAdminister ? (
+                            <button
+                              type="button"
+                              onClick={() => setSettingsItemId(row.itemId)}
+                              aria-label={`${row.product} 품목 설정(최소재고·물류번호 관리)`}
+                              title="품목 설정 — 최소재고·리드타임·물류번호 관리·보고 묶음·정렬"
+                              className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded text-[#A39E98] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+                            >
+                              <Settings2 className="h-3.5 w-3.5" aria-hidden />
+                            </button>
+                          ) : null}
                         </p>
                         {row.lotBalances.length > 0 && (
-                          // 라벨 프리픽스("로트")로 창고/가용 숫자 옆 이 칩들이 무엇인지 즉시
-                          // 알 수 있게 한다(요청사항 ③.4 — H8·C1처럼 실물과 맞는 lot이 내려오기
-                          // 시작한 지금, 라벨 없이 뜬 칩만으로는 처음 보는 사람이 의미를 추측해야 했다).
+                          // 물류번호별 잔여 — 서버 resolveHardwareLotBalances(출고·확정이 쓰는 같은 해석기)가 낸 값이다.
+                          // 화면에서 따로 합산하지 않는다. 합이 창고와 다를 수 있다(로트 없는 증가분은 귀속되지 않는다).
                           <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                            <span className="text-[10px] font-bold uppercase tracking-[0.05em] text-[#A39E98]">로트</span>
-                            {row.lotBalances.slice(0, 5).map((lot) => (
-                              <span key={lot.lot} className={`rounded bg-[#F6F5F4] px-1.5 py-0.5 text-[11px] font-semibold text-[#31302E] ${MONO_META_CLASS}`}>
-                                {formatLotLabel(lot.lot) ?? lot.lot} {formatNumber(lot.quantity)}
+                            <span className="text-[10px] font-bold tracking-[0.05em] text-[#A39E98]">물류번호 잔여</span>
+                            {(expandedLots.has(row.itemId) ? row.lotBalances : row.lotBalances.slice(0, LOT_CHIP_LIMIT)).map((lot) => (
+                              <span
+                                key={lot.lot}
+                                title={`${lot.lot} 잔여 ${formatNumber(lot.quantity)}대`}
+                                className={`rounded bg-[#F6F5F4] px-1.5 py-0.5 text-[11px] font-semibold text-[#31302E] ${MONO_META_CLASS}`}
+                              >
+                                {formatLotLabel(lot.lot) ?? lot.lot} <span className="tabular-nums">{formatNumber(lot.quantity)}대</span>
                               </span>
                             ))}
-                            {row.lotBalances.length > 5 && (
-                              <span className="rounded bg-[#ECFDF5] px-1.5 py-0.5 text-[11px] font-semibold text-[#084734]">
-                                +{row.lotBalances.length - 5}
-                              </span>
+                            {row.lotBalances.length > LOT_CHIP_LIMIT && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExpandedLots((current) => {
+                                    const next = new Set(current)
+                                    if (next.has(row.itemId)) next.delete(row.itemId)
+                                    else next.add(row.itemId)
+                                    return next
+                                  })
+                                }
+                                aria-expanded={expandedLots.has(row.itemId)}
+                                className="cursor-pointer rounded bg-[#ECFDF5] px-1.5 py-0.5 text-[11px] font-semibold text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+                              >
+                                {expandedLots.has(row.itemId) ? "접기" : `+${row.lotBalances.length - LOT_CHIP_LIMIT}`}
+                              </button>
                             )}
+                            {(() => {
+                              const lotTotal = row.lotBalances.reduce((total, lot) => total + lot.quantity, 0)
+                              return lotTotal !== row.availableStock ? (
+                                <span className="text-[10.5px] text-[#A39E98]" title="물류번호 잔여 합계는 배송 예정까지 뺀 값입니다. 물류번호 없이 기록된 증가분은 어느 번호에도 들어가지 않습니다.">
+                                  합 {formatNumber(lotTotal)}대
+                                </span>
+                              ) : null
+                            })()}
                           </div>
                         )}
-                        {compact ? <details className="mt-2 text-[11px] text-[#615D59]"><summary className="cursor-pointer">최근 출고·빠른 처리</summary><p className="mt-2">30일 {formatNumber(row.outbound30d)}대 · 주 {formatAvg(row.weeklyOutboundAvg)}대</p><div className="mt-2 flex gap-2"><QuickMoveButton kind="sale" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "sale")} /><QuickMoveButton kind="planned" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "planned")} /><QuickMoveButton kind="inbound" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "inbound")} /></div></details> : null}
+                        {compact ? <details className="mt-2 text-[11px] text-[#615D59]"><summary className="cursor-pointer">최근 출고·빠른 처리</summary><p className="mt-2">30일 {formatNumber(row.outbound30d)}대 · 주 {formatAvg(row.weeklyOutboundAvg)}대</p><div className="mt-2 flex gap-2"><QuickMoveButton kind="sale" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "sale")} /><QuickMoveButton kind="planned" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "planned")} />{showInbound ? <QuickMoveButton kind="inbound" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "inbound")} /> : null}{canAdminister ? <button type="button" onClick={() => setAdjustTarget({ itemId: row.itemId })} className="inline-flex cursor-pointer items-center gap-1 rounded px-1.5 text-[11px] font-semibold text-[#615D59] hover:text-[#111110]"><Scale className="h-3 w-3" aria-hidden />조정</button> : null}</div></details> : null}
                       </td>
                       {/* 음수 = 원장 이상 신호 — 카테고리 카드와 같은 규칙으로 Danger 텍스트만 적용(값 소스 불변). */}
                       <td className={`px-4 py-3.5 text-right text-[14px] font-bold tabular-nums ${row.warehouseStock < 0 ? "text-[#B43E3E]" : "text-[#111110]"}`}>
@@ -166,7 +233,18 @@ function StockLevelsSection({
                         <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5">
                           <QuickMoveButton kind="sale" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "sale")} />
                           <QuickMoveButton kind="planned" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "planned")} />
-                          <QuickMoveButton kind="inbound" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "inbound")} />
+                          {showInbound ? <QuickMoveButton kind="inbound" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "inbound")} /> : null}
+                          {canAdminister ? (
+                            <button
+                              type="button"
+                              onClick={() => setAdjustTarget({ itemId: row.itemId })}
+                              aria-label={`${row.product} 재고 조정`}
+                              title="재고 조정"
+                              className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded text-[#615D59] transition hover:bg-white hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+                            >
+                              <Scale className="h-3.5 w-3.5" aria-hidden />
+                            </button>
+                          ) : null}
                         </div>
                       </td> : null}
                       <td className="px-5 py-3.5 text-right">
@@ -186,6 +264,17 @@ function StockLevelsSection({
           <PaginationControls pagination={stockPagination} label="품목" onPageChange={setStockPage} />
         </>
       )}
+      {adjustTarget ? (
+        <AdjustmentSheet
+          initialItemId={adjustTarget.itemId}
+          items={activeItems}
+          stock={data?.stock ?? []}
+          owner={data?.viewer?.name ?? null}
+          onClose={() => setAdjustTarget(null)}
+          onSaved={afterAdminSave}
+        />
+      ) : null}
+      {settingsItem ? <ItemSettingsSheet item={settingsItem} onClose={() => setSettingsItemId(null)} onSaved={afterAdminSave} /> : null}
     </section>
   )
 }

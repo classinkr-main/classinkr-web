@@ -3739,6 +3739,7 @@ export default function HardwareInventoryClient({
           lotStaleNote={inboundLotStaleNote}
           // VIEWER 는 저장 시 서버가 403 으로 막는다 — 대시보드에 편집 권한 플래그가 없어 입력 UI 는 열어 둔다(빠른 기록과 같은 관례).
           canWrite={canWriteHardware}
+          canManageInventory={data?.viewer?.canManageInventory}
           owner={owner.trim() || data?.viewer?.name || null}
           onSaved={(result) => {
             const sampleNote =

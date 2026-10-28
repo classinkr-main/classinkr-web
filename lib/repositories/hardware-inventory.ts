@@ -213,8 +213,19 @@ export interface HardwareStockRow {
   lotBalances: Array<{ lot: string; quantity: number }>
 }
 
+/**
+ * 재고 알림 종류(정의서 §재고현황 — 갭 문서 §3-3).
+ * - ledger_check: 창고 음수(원장 이상)
+ * - negative_available: 가용 음수(창고는 0 이상인데 배송 예정이 창고를 넘음)
+ * - low: 가용 < 최소재고(같으면 알리지 않는다)
+ * - order: 30일 추세 기준 주문 검토
+ * - planned: 배송 예정이 가용에서 빠지는 중(안내)
+ */
+export type HardwareAlertKind = "ledger_check" | "negative_available" | "low" | "order" | "planned"
+
 export interface HardwareAlert {
   id: string
+  kind?: HardwareAlertKind
   severity: "critical" | "warning" | "info"
   // 알림이 가리키는 품목의 id — 알림 카드의 원탭 조치(QuickMoveButton)가 prepareQuickEntry로
   // 바로 시트를 여는 데 쓴다. id(`${prefix}-${itemId}`)에서 역파싱하지 않고 필드로 직접 싣는다.
@@ -2668,11 +2679,91 @@ export function computeHardwareStockRow(input: HardwareStockRowComputeInput): Ha
     daysUntilStockout,
     // 판촉(promoted) 라인엔 재주문 개념이 없다 — 부족/주문검토 축에서 제외하고,
     // 음수·이상치는 알림 빌더의 "원장 점검 필요"로 따로 올린다(운영 결정 2026-08-19).
-    low: !isPromotedProduct(item.name) && availableStock <= item.reorder_point,
+    // 정의서: "가용 < 최소재고"면 부족 — 최소재고와 같으면 아직 부족이 아니다(2026-10-28, 예전 ≤).
+    low: !isPromotedProduct(item.name) && availableStock < item.reorder_point,
     orderRecommended: !isPromotedProduct(item.name) && availableStock <= trendOrderPoint,
     locationBalances: locationRows,
     lotBalances: lotRows,
   }
+}
+
+/**
+ * 재고 행 → 알림. 행마다 재고 신호는 하나만 올린다(급한 순: 창고 음수 → 가용 음수 → 부족 → 주문 검토),
+ * 배송 예정 안내는 따로 붙는다. 실신호가 캡에 밀리지 않게 muted(미가동 품목 소음)와 나눠 각각 12건까지 싣는다.
+ *
+ * - 창고 음수 = 부족이 아니라 원장 이상 — 재주문 경보 대신 점검 신호(실사례: STD1(promoted) −16).
+ * - 가용 음수 = 배송 예정이 창고를 넘었다. 판촉(promoted) 라인도 알린다 — 재주문 축과 무관한 실신호다.
+ * - 부족 = 가용 < 최소재고(computeHardwareStockRow 의 low). 판촉 라인은 low 가 꺼져 있다.
+ */
+export function buildHardwareStockAlerts(rows: readonly HardwareStockRow[]): HardwareAlert[] {
+  const alerts: HardwareAlert[] = []
+  for (const row of rows) {
+    if (row.warehouseStock < 0) {
+      alerts.push({
+        id: `check-${row.itemId}`,
+        kind: "ledger_check",
+        severity: "critical",
+        itemId: row.itemId,
+        product: row.product,
+        title: "원본 점검 필요",
+        detail: `창고 ${row.warehouseStock}대 · 가용 ${row.availableStock}대 — ${
+          isPromotedProduct(row.product) ? "promoted 판정 또는 시트 수치 정리 필요" : "원본 유형·시트 수치 정리 필요"
+        }`,
+      })
+    } else if (row.availableStock < 0) {
+      alerts.push({
+        id: `negative-${row.itemId}`,
+        kind: "negative_available",
+        severity: "critical",
+        itemId: row.itemId,
+        product: row.product,
+        title: "가용 재고 음수",
+        detail: `창고 ${row.warehouseStock}대 − 배송 예정 ${row.plannedOut}대 = 가용 ${row.availableStock}대 — 입고하거나 예정을 정리하세요.`,
+      })
+    } else if (row.low) {
+      alerts.push({
+        id: `low-${row.itemId}`,
+        kind: "low",
+        severity: "critical",
+        itemId: row.itemId,
+        product: row.product,
+        title: "최소재고 미만",
+        detail: `가용 ${row.availableStock}대 < 최소 ${row.reorderPoint}대`,
+        ...(isDormantStockRow(row) ? { muted: true } : {}),
+      })
+    } else if (row.orderRecommended) {
+      alerts.push({
+        id: `order-${row.itemId}`,
+        kind: "order",
+        severity: "warning",
+        itemId: row.itemId,
+        product: row.product,
+        title: "주문 검토 시점",
+        detail: `최근 30일 출고 ${row.outbound30d}대, 권장 주문 기준 ${row.trendOrderPoint}대`,
+      })
+    }
+    if (row.plannedOut > 0) {
+      alerts.push({
+        id: `planned-${row.itemId}`,
+        kind: "planned",
+        severity: "info",
+        itemId: row.itemId,
+        product: row.product,
+        title: "배송 예정 반영",
+        detail: `배송 예정 ${row.plannedOut}대가 가용 재고에서 차감됩니다.`,
+      })
+    }
+  }
+
+  // 원장 점검(창고 음수)·가용 음수는 가장 급한 실신호 — 재고행 정렬과 무관하게 목록 최상단에 둔다.
+  const urgent = alerts.filter((alert) => alert.kind === "ledger_check" || alert.kind === "negative_available")
+  const activeAlerts = [
+    ...urgent.filter((alert) => alert.kind === "ledger_check"),
+    ...urgent.filter((alert) => alert.kind === "negative_available"),
+    ...alerts.filter((alert) => !alert.muted && !urgent.includes(alert)),
+  ].slice(0, 12)
+  const mutedAlerts = alerts.filter((alert) => alert.muted).slice(0, 12)
+  return [...activeAlerts, ...mutedAlerts]
 }
 
 async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
@@ -2725,68 +2816,14 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
   const sortedActiveMovements = activeMovements.slice().sort((a, b) => movementDate(b) - movementDate(a))
   const movementRows = sortedActiveMovements.slice(0, HARDWARE_MOVEMENTS_DEFAULT_LIMIT).map(toMovementView)
 
-  const alerts: HardwareAlert[] = []
-  for (const row of rows) {
-    // 음수 창고 = 부족이 아니라 원장 이상 — 재주문 경보 대신 점검 신호로 올린다.
-    // (현재 실사례: STD1(promoted) −16. 판촉 라인은 low 자체가 꺼져 있어 이 분기가 유일한 경보.)
-    if (row.warehouseStock < 0) {
-      alerts.push({
-        id: `check-${row.itemId}`,
-        severity: "critical",
-        itemId: row.itemId,
-        product: row.product,
-        title: "원본 점검 필요",
-        detail: `창고 ${row.warehouseStock}대 · 가용 ${row.availableStock}대 — ${
-          isPromotedProduct(row.product) ? "promoted 판정 또는 시트 수치 정리 필요" : "원본 유형·시트 수치 정리 필요"
-        }`,
-      })
-    } else if (row.low) {
-      alerts.push({
-        id: `low-${row.itemId}`,
-        severity: "critical",
-        itemId: row.itemId,
-        product: row.product,
-        title: "최소재고 미만",
-        detail: `가용 ${row.availableStock}대 / 최소 ${row.reorderPoint}대`,
-        ...(isDormantStockRow(row) ? { muted: true } : {}),
-      })
-    } else if (row.orderRecommended) {
-      alerts.push({
-        id: `order-${row.itemId}`,
-        severity: "warning",
-        itemId: row.itemId,
-        product: row.product,
-        title: "주문 검토 시점",
-        detail: `최근 30일 출고 ${row.outbound30d}대, 권장 주문 기준 ${row.trendOrderPoint}대`,
-      })
-    }
-    if (row.plannedOut > 0) {
-      alerts.push({
-        id: `planned-${row.itemId}`,
-        severity: "info",
-        itemId: row.itemId,
-        product: row.product,
-        title: "배송 예정 반영",
-        detail: `배송 예정 ${row.plannedOut}대가 가용 재고에서 차감됩니다.`,
-      })
-    }
-  }
-
-  // 실신호가 캡에 밀리지 않게 muted(미가동 품목 소음)와 분리해 각각 캡을 적용한다.
-  // 원장 점검(음수 재고)은 가장 급한 실신호 — 재고행 정렬과 무관하게 목록 최상단에 둔다.
-  const checkAlerts = alerts.filter((alert) => alert.id.startsWith("check-"))
-  const activeAlerts = [
-    ...checkAlerts,
-    ...alerts.filter((alert) => !alert.muted && !alert.id.startsWith("check-")),
-  ].slice(0, 12)
-  const mutedAlerts = alerts.filter((alert) => alert.muted).slice(0, 12)
+  const alerts = buildHardwareStockAlerts(rows)
 
   return {
     items: items.map(toItemView),
     stock: rows,
     movements: movementRows,
     movementsTotal: sortedActiveMovements.length,
-    alerts: [...activeAlerts, ...mutedAlerts],
+    alerts,
     totals: {
       warehouseStock: rows.reduce((sum, row) => sum + row.warehouseStock, 0),
       availableStock: rows.reduce((sum, row) => sum + row.availableStock, 0),
@@ -2808,7 +2845,8 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
 const getHardwareDashboardCached = unstable_cache(
   () => getHardwareDashboardUncached(),
   // v3(2026-09-15): 위치 정규화 변경("클래스인"→사무실, 수리 오탐 제거) — 옛 규칙 결과를 SWR 로 먼저 주지 않게 키를 올린다.
-  ["hardware-dashboard-v3"],
+  // v4(2026-10-28): 부족 판정 ≤ → <, 가용 음수 알림 추가.
+  ["hardware-dashboard-v4"],
   { tags: [HARDWARE_INVENTORY_CACHE_TAG], revalidate: 120 }
 )
 

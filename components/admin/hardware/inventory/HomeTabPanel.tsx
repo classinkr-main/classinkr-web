@@ -175,6 +175,7 @@ export default function HomeTabPanel({
         stockPagination={stockPagination}
         setStockPage={setStockPage}
         prepareQuickEntry={prepareQuickEntry}
+        onStockChanged={refresh}
         selectedItemId={homeQuickRecord.draft.itemId}
         onSelectItem={itemId => homeQuickRecord.setDraft(current => ({ ...current, itemId }))}
       />
@@ -269,6 +270,7 @@ export default function HomeTabPanel({
       setOutboundPage={setOutboundPage}
       prepareQuickEntry={prepareQuickEntry}
       setDetailId={setDetailId}
+      canManageInventory={data?.viewer?.canManageInventory}
     />
 
     {/* 되돌리기는 사고 대응용 안전망이라 일상 확인 흐름(요약·예정 출고·재고) 아래, 맨 끝에 접어 둔다(#4). */}

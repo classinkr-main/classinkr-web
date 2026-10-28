@@ -111,6 +111,8 @@ export interface HardwareStockRow {
 
 export interface HardwareAlert {
   id: string
+  // 서버 buildHardwareStockAlerts 의 종류 — 구응답에는 없다(id 접두어 check-·low-·order-·planned-).
+  kind?: "ledger_check" | "negative_available" | "low" | "order" | "planned"
   severity: "critical" | "warning" | "info"
   // 알림이 가리키는 품목의 id — 알림 카드의 QuickMoveButton이 prepareQuickEntry(itemId, presetKey)로
   // 바로 빠른 기록 시트를 여는 데 쓴다.
@@ -700,13 +702,15 @@ export function formatAvg(value: number) {
 }
 
 export function statusCopy(row: HardwareStockRow) {
+  // 가용 음수는 판촉 라인(low 꺼짐)에서도 실신호다 — 서버 negative_available 알림과 같은 판정.
+  if (row.availableStock < 0) return "가용 음수"
   if (row.low) return "부족"
   if (row.orderRecommended) return "주문 검토"
   return "정상"
 }
 
 export function statusClass(row: HardwareStockRow) {
-  if (row.low) return "bg-[#FCE9E9] text-[#B43E3E]"
+  if (row.availableStock < 0 || row.low) return "bg-[#FCE9E9] text-[#B43E3E]"
   if (row.orderRecommended) return "bg-[#FBF1E0] text-[#A8741A]"
   return "bg-[#ECFDF5] text-[#084734]"
 }
