@@ -671,19 +671,29 @@ aside.notes { display: none; }
 .roof .out b { font-size: 28px; font-weight: 800; letter-spacing: -.03em; }
 .roof .out span { font-size: 19px; font-weight: 600; color: var(--mute); }
 .pils { position: absolute; left: 120px; top: 480px; width: 1680px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; }
-.pil { height: 280px; box-sizing: border-box; padding: 40px 44px 36px; display: flex; flex-direction: column; }
+.pil { height: 250px; box-sizing: border-box; padding: 40px 44px 36px; display: flex; flex-direction: column; }
 .pil b { font-size: 58px; font-weight: 800; letter-spacing: -.045em; line-height: 1; }
 .pil > span { margin-top: 16px; font-size: 24px; font-weight: 600; line-height: 1.45; color: var(--ink-2); }
-.pil .cx { margin-top: auto; display: flex; align-items: center; gap: 10px; font-style: normal; font-size: 21px; font-weight: 800; color: var(--em); letter-spacing: -.02em; }
-.pil .cx .led { width: 12px; height: 12px; }
-.slot, .s-pil .base { position: absolute; left: 120px; top: 800px; width: 1680px; height: 130px; box-sizing: border-box; }
+.slot { position: absolute; left: 120px; top: 770px; width: 1680px; height: 130px; box-sizing: border-box; }
 .slot { display: grid; place-items: center; }
 .slot .ask { margin: 0; font-size: 32px; font-weight: 700; color: var(--ink-2); letter-spacing: -.02em; }
-.s-pil .base { display: flex; align-items: center; gap: 20px; padding: 0 52px 0 46px; }
-.s-pil .base .led { width: 18px; height: 18px; }
-.s-pil .base b { font-size: 38px; margin-right: 8px; font-weight: 800; letter-spacing: -.03em; }
-.s-pil .base > span { font-size: 24px; font-weight: 600; color: var(--ink-2); }
-.s-pil .base strong { margin-left: auto; font-size: 40px; font-weight: 800; letter-spacing: -.035em; }
+
+/* ===== 15 정답은 인프라 (흩어진 곳 → 한 곳에) ===== */
+.s-infra .lead { position: absolute; left: 120px; top: 262px; }
+.scat { position: absolute; left: 120px; top: 390px; width: 500px; display: flex; flex-direction: column; gap: 20px; }
+.scat .k { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; font-size: 22px; font-weight: 800; color: var(--mute); }
+.scat .sp { height: 84px; display: flex; align-items: center; padding: 0 34px; font-size: 26px; font-weight: 700; color: var(--ink-2); letter-spacing: -.02em; }
+.s-infra .flow { position: absolute; left: 660px; top: 600px; width: 92px; height: 92px; display: grid; place-items: center; font-size: 38px; font-weight: 800; color: var(--mute); }
+.hub { position: absolute; left: 800px; top: 370px; width: 1000px; height: 560px; box-sizing: border-box; padding: 44px 48px 40px; display: flex; flex-direction: column; gap: 18px; }
+.hub .hd { display: flex; align-items: baseline; gap: 18px; margin-bottom: 8px; }
+.hub .hd .led { align-self: center; width: 18px; height: 18px; }
+.hub .hd strong { font-size: 52px; font-weight: 800; letter-spacing: -.04em; line-height: 1; }
+.hub .hd span { font-size: 22px; font-weight: 700; color: var(--mute); }
+.hub .row { height: 92px; display: flex; align-items: center; gap: 20px; padding: 0 34px; }
+.hub .row b { width: 130px; flex: none; font-size: 30px; font-weight: 800; letter-spacing: -.03em; }
+.hub .row span { font-size: 24px; font-weight: 600; color: var(--ink-2); }
+.hub .row .led { width: 14px; height: 14px; }
+.hub .ft { margin-top: auto; font-size: 26px; font-weight: 800; color: var(--ink-2); letter-spacing: -.02em; }
 </style>
 </head>
 <body>
@@ -853,7 +863,7 @@ aside.notes { display: none; }
   </div>
   <div class="s8-cap"><span class="cap1">돈이 1순위인 건 맞습니다. 그런데 돈만이 아닙니다.</span><span class="cap2">이 세 가지는 <span class="em">원장님이 바꿀 수 있는</span> 이유입니다.</span><span class="cap3">사람 때문이라면 동료·학생보다 <span class="em">원장과의 관계</span>였습니다.<br>탓이 아니라, 원장님 손에 열쇠가 있다는 뜻입니다.</span></div>
   <p class="src t">출처 · 잡코리아 에듀잡, 전국 학원강사 430명 이직 현황 설문(복수 응답) · 이코노미21 [잡트렌드]</p>
-  <aside class="notes">시작: 이직할 때 가장 힘든 점 1위는 '정든 학생들과 헤어지는 것'(65.0%). "강사도 떠나고 싶어서 떠나는 게 아닙니다." 클릭 1: 그런데도 떠난 이유 — 급여 문제 33.7%가 1위. "돈이 1순위인 건 맞습니다. 그런데 돈만이 아닙니다." 클릭 2: 강의 스케줄(27.7%), 강의 외 부가 업무(23.7%), 원장과의 관계(18.6%)가 켜집니다. "이 세 가지는 원장님이 바꿀 수 있는 이유입니다." — 원장 이야기를 꺼내기 전에 '바꿀 수 있다'를 먼저 말해 객석의 방어심을 낮춥니다. 부가 업무는 15장에서 되받습니다. 클릭 3: 사람 때문이라면 원장 18.6%, 동료 8.4%, 학생 3.5%. "원장님 탓을 하려는 숫자가 아닙니다. 열쇠가 원장님 손에 있다는 숫자입니다." 조사 시점이 오래됐다는 점, 이후 학원강사만 따로 물은 공개 조사를 찾지 못했다는 점을 밝힙니다(※ 원문에서 조사 연도 확인 후 언급). 이직 주기는 6개월~1년 미만이 40.0%로 가장 많았습니다. → "그 열쇠가 얼마나 큰지, 직장 연구에서 가장 유명한 숫자가 있습니다."</aside>
+  <aside class="notes">시작: 이직할 때 가장 힘든 점 1위는 '정든 학생들과 헤어지는 것'(65.0%). "강사도 떠나고 싶어서 떠나는 게 아닙니다." 클릭 1: 그런데도 떠난 이유 — 급여 문제 33.7%가 1위. "돈이 1순위인 건 맞습니다. 그런데 돈만이 아닙니다." 클릭 2: 강의 스케줄(27.7%), 강의 외 부가 업무(23.7%), 원장과의 관계(18.6%)가 켜집니다. "이 세 가지는 원장님이 바꿀 수 있는 이유입니다." — 원장 이야기를 꺼내기 전에 '바꿀 수 있다'를 먼저 말해 객석의 방어심을 낮춥니다. 부가 업무는 16장에서 되받습니다. 클릭 3: 사람 때문이라면 원장 18.6%, 동료 8.4%, 학생 3.5%. "원장님 탓을 하려는 숫자가 아닙니다. 열쇠가 원장님 손에 있다는 숫자입니다." 조사 시점이 오래됐다는 점, 이후 학원강사만 따로 물은 공개 조사를 찾지 못했다는 점을 밝힙니다(※ 원문에서 조사 연도 확인 후 언급). 이직 주기는 6개월~1년 미만이 40.0%로 가장 많았습니다. → "그 열쇠가 얼마나 큰지, 직장 연구에서 가장 유명한 숫자가 있습니다."</aside>
 </section>
 
 <!-- 9 관리자 70% -->
@@ -949,11 +959,11 @@ aside.notes { display: none; }
     <div class="nx"><b>다음 수업 하나만</b>질문을 뒷줄부터 고르게 나누기</div>
   </div>
   <div class="qfinal nm pill step" data-step="1"><i class="led"></i>강사에게도 코치가 필요합니다.<span class="em">매 수업 옆에 둘 수 없을 뿐.</span></div>
-  <aside class="notes">최고의 전문가도 관찰과 피드백으로 성장합니다. 가완디는 실력이 정체됐다고 느끼고 은퇴한 스승을 수술실에 불렀습니다. 오른쪽은 학원 수업에 옮긴 관찰 노트 예시입니다 — 잘한 것(✓)과 고칠 것(!)이 시각과 함께 적히고, 아래에 개념·발화·호응·질문 같은 분석 요약이 붙고(예시 수치), 마지막에 "다음 수업 하나만"이 남습니다. 18장 면담의 '질문 분배'와 같은 내용입니다. 클릭: "강사에게도 코치가 필요합니다. 문제는 원장님이 모든 수업 옆에 앉아 있을 수 없다는 것." → "그렇다면 AI 시대에 성장하는 학원은 무엇을 갖추고 있을까요?"</aside>
+  <aside class="notes">최고의 전문가도 관찰과 피드백으로 성장합니다. 가완디는 실력이 정체됐다고 느끼고 은퇴한 스승을 수술실에 불렀습니다. 오른쪽은 학원 수업에 옮긴 관찰 노트 예시입니다 — 잘한 것(✓)과 고칠 것(!)이 시각과 함께 적히고, 아래에 개념·발화·호응·질문 같은 분석 요약이 붙고(예시 수치), 마지막에 "다음 수업 하나만"이 남습니다. 19장 면담의 '질문 분배'와 같은 내용입니다. 클릭: "강사에게도 코치가 필요합니다. 문제는 원장님이 모든 수업 옆에 앉아 있을 수 없다는 것." → "그렇다면 AI 시대에 성장하는 학원은 무엇을 갖추고 있을까요?"</aside>
 </section>
 
 <!-- 14 AI 시대, 성장하는 학원의 세 가지 -->
-<section class="slide s-pil" data-scene="light" data-chapter="3" data-enter="pillars" data-steps="2" data-time="1:00">
+<section class="slide s-pil" data-scene="light" data-chapter="3" data-enter="pillars" data-steps="1" data-time="0:50">
   <span class="eyebrow nm in pill r"><i class="led"></i>3막 · 교실이 보이면</span>
   <h2 class="h t">AI 시대, 성장하는 학원은 <span class="em">세 가지</span>를 쌓습니다</h2>
   <div class="roof nm card r" data-at="1.7">
@@ -963,13 +973,35 @@ aside.notes { display: none; }
     <div class="out nm in pill"><i class="led"></i><b>속도 &amp; 양</b><span>더 빨리, 더 많이</span></div>
   </div>
   <div class="pils">
-    <div class="pil nm card r" data-at=".55"><b>표준화</b><span>누가 가르쳐도<br>같은 기준으로</span><em class="cx step" data-step="2"><i class="led"></i>5개 기준 AI 강의평가</em></div>
-    <div class="pil nm card r" data-at=".8"><b>자동화</b><span>반복되는 일은<br>시스템이</span><em class="cx step" data-step="2"><i class="led"></i>녹화 · 분석 · 리포트 자동</em></div>
-    <div class="pil nm card r" data-at="1.05"><b>데이터화</b><span>모든 수업이<br>기록으로</span><em class="cx step" data-step="2"><i class="led"></i>수업마다 쌓이는 기록</em></div>
+    <div class="pil nm card r" data-at=".55"><b>표준화</b><span>누가 가르쳐도<br>같은 기준으로</span></div>
+    <div class="pil nm card r" data-at=".8"><b>자동화</b><span>반복되는 일은<br>시스템이</span></div>
+    <div class="pil nm card r" data-at="1.05"><b>데이터화</b><span>모든 수업이<br>기록으로</span></div>
   </div>
   <div class="slot nm in card r" data-at="2.5"><p class="ask step" data-step="1">그런데, 이 셋을 <span class="em">어디에</span> 모으죠?</p></div>
-  <div class="base nm card step" data-step="2"><i class="led"></i><b>정답은 <span class="em">인프라</span></b><span>AI가 읽을 수 있는 곳에 수업을 모읍니다</span><strong>ClassIn</strong></div>
-  <aside class="notes">13장의 "매 수업 옆에 코치를 둘 수 없다"를 받습니다. "AI 시대에 성장하는 학원을 보면 공통점이 세 가지 있습니다." 표준화 — 누가 가르쳐도 같은 기준. 자동화 — 반복되는 일은 사람이 아니라 시스템이. 데이터화 — 모든 수업이 기록으로 남는다. "이 셋이 쌓여 있어야 AI가 올라탑니다. 그러면 학생마다 다르게(개인화), 더 빨리 더 많이(속도와 양) 할 수 있습니다. AI는 쌓여 있는 것만 읽으니까요." 클릭 1: "그런데 이 셋, 어디에 모으죠? 엑셀? 단톡방? 원장님 머릿속?" (잠시 멈춤) 클릭 2: "정답은 인프라입니다. AI가 읽을 수 있는 곳에 모여야 AI가 일을 합니다." 클래스인에서는 수업이 녹화돼 기록이 쌓이고(데이터화), 녹화·분석·리포트가 저절로 돌고(자동화), 모든 수업을 같은 5개 기준으로 읽습니다(표준화). → "그러면 이런 루프가 매 수업 돕니다."</aside>
+  <aside class="notes">13장의 "매 수업 옆에 코치를 둘 수 없다"를 받습니다. "AI 시대에 성장하는 학원을 보면 공통점이 세 가지 있습니다." 표준화 — 누가 가르쳐도 같은 기준. 자동화 — 반복되는 일은 사람이 아니라 시스템이. 데이터화 — 모든 수업이 기록으로 남는다. "이 셋이 쌓여 있어야 AI가 올라탑니다. 그러면 학생마다 다르게(개인화), 더 빨리 더 많이(속도와 양) 할 수 있습니다. AI는 쌓여 있는 것만 읽으니까요." 클릭 1: "그런데 이 셋, 어디에 모으죠? 엑셀? 단톡방? 원장님 머릿속?" (잠시 멈춤) → 다음 장에서 답합니다.</aside>
+</section>
+
+<!-- 15 정답은 인프라 -->
+<section class="slide s-infra" data-scene="light" data-enter="infra" data-steps="1" data-time="0:50">
+  <span class="eyebrow nm in pill r"><i class="led"></i>3막 · 교실이 보이면</span>
+  <h2 class="h t">정답은, <span class="em">인프라</span>입니다</h2>
+  <p class="lead t">AI가 읽을 수 있는 곳에 수업이 모여야, AI가 일을 합니다.</p>
+  <div class="scat r" data-at=".7">
+    <div class="k"><i class="led off"></i>지금은 흩어져 있습니다</div>
+    <div class="sp nm in pill">엑셀 출석부 · 성적표</div>
+    <div class="sp nm in pill">학부모 단톡방</div>
+    <div class="sp nm in pill">강사 개인 노트</div>
+    <div class="sp nm in pill">원장님 기억</div>
+  </div>
+  <div class="flow nm circle r" data-at="1.1"><span>→</span></div>
+  <div class="hub nm card r" data-at="1.3">
+    <div class="hd"><i class="led off"></i><strong>ClassIn</strong><span>AI가 읽을 수 있는 수업 인프라</span></div>
+    <div class="row nm in sm pill"><i class="led off"></i><b>표준화</b><span>같은 5개 기준으로 모든 수업을 읽습니다</span></div>
+    <div class="row nm in sm pill"><i class="led off"></i><b>자동화</b><span>녹화 · 분석 · 리포트가 저절로 돕니다</span></div>
+    <div class="row nm in sm pill"><i class="led off"></i><b>데이터화</b><span>수업마다 기록이 쌓입니다</span></div>
+    <div class="ft">AI가 읽으면 → <span class="em">개인화</span> · <span class="em">속도 &amp; 양</span></div>
+  </div>
+  <aside class="notes">14장의 질문에 답합니다. "정답은 인프라입니다. AI는 쌓여 있는 것만 읽습니다. 엑셀, 단톡방, 강사 노트, 원장님 기억에 흩어져 있으면 AI가 읽을 수 없습니다." 클릭: 흩어진 것들이 한 곳으로 모이고 클래스인의 세 줄이 켜집니다. "클래스인에서는 모든 수업을 같은 5개 기준으로 읽고(표준화), 녹화·분석·리포트가 저절로 돌고(자동화), 수업마다 기록이 쌓입니다(데이터화). 그래서 AI가 학생마다 다르게, 더 빨리 더 많이 일할 수 있습니다." → "그러면 이런 루프가 매 수업 돕니다."</aside>
 </section>
 
 <!-- 13 피드백 루프 -->
@@ -986,7 +1018,7 @@ aside.notes { display: none; }
   <div class="node n4 nm sm pill r" data-o="7"><i class="led off"></i><div><b>개선</b><span>원장님과의 면담</span></div></div>
   <div class="side past nm in card r" data-o="3"><div class="k"><i class="led off"></i>지금까지</div><div class="tx">참관할 때만<br>가끔 도는 루프</div><div class="ss">한 학기에 몇 번</div></div>
   <div class="side now nm card r" data-o="8"><div class="k"><i class="led"></i>이제</div><div class="tx">녹화된 <span class="em">모든 수업</span>에서<br>도는 루프</div><div class="ss">녹화도 분석도 자동 —<br>강사 일을 늘리지 않습니다</div></div>
-  <aside class="notes">교실 창이 맑아지는 장면. 14장의 세 가지가 인프라에 모이면 이 루프가 매 수업 돕니다. 수업 → 기록 → 피드백 → 개선. 클래스인에서는 녹화가 기록을, AI 강의평가가 피드백을, 원장님의 면담이 개선을 맡습니다. 이 루프가 가끔이 아니라 매 수업 돌 수 있다면 강사는 훨씬 빨리 성장합니다. 녹화도 분석도 자동이라 강사 일을 늘리지 않습니다 — 9장에서 본 '부가 업무 과다 23.7%'를 되받습니다. → "정말 효과가 있을까요?"</aside>
+  <aside class="notes">교실 창이 맑아지는 장면. 14·15장의 세 가지가 인프라에 모이면 이 루프가 매 수업 돕니다. 수업 → 기록 → 피드백 → 개선. 클래스인에서는 녹화가 기록을, AI 강의평가가 피드백을, 원장님의 면담이 개선을 맡습니다. 이 루프가 가끔이 아니라 매 수업 돌 수 있다면 강사는 훨씬 빨리 성장합니다. 녹화도 분석도 자동이라 강사 일을 늘리지 않습니다 — 9장에서 본 '부가 업무 과다 23.7%'를 되받습니다. → "정말 효과가 있을까요?"</aside>
 </section>
 
 <!-- 14 연구 근거 -->
@@ -1004,7 +1036,7 @@ aside.notes { display: none; }
     <div class="res"><div class="num">+<span class="roll" data-v="20"></span><small>%</small></div><div class="c">학생의 생각을<br>끌어내는 질문</div><div class="cs">사람 코치 없이, 자동 피드백만으로</div></div>
   </div>
   <p class="src t">출처 · Demszky et al., Educational Evaluation and Policy Analysis (2023) · Demszky et al., Computers &amp; Education (2024)</p>
-  <aside class="notes">핵심은 처벌이 아니라 '거울'. 교사들이 피드백 메일을 절반 정도만 열어봤는데도 효과가 났습니다. (화면에서는 뺐으니 말로만 짧게) 같은 연구에서 교사들은 정확도·프라이버시·시간을 걱정했습니다 — 24장에서 답합니다(리포트는 강사 먼저, 열람 권한은 좁게). → "클래스인은 수업을 이렇게 읽습니다."</aside>
+  <aside class="notes">핵심은 처벌이 아니라 '거울'. 교사들이 피드백 메일을 절반 정도만 열어봤는데도 효과가 났습니다. (화면에서는 뺐으니 말로만 짧게) 같은 연구에서 교사들은 정확도·프라이버시·시간을 걱정했습니다 — 25장에서 답합니다(리포트는 강사 먼저, 열람 권한은 좁게). → "클래스인은 수업을 이렇게 읽습니다."</aside>
 </section>
 
 <!-- 15 지표 · 튜닝 -->
@@ -1124,7 +1156,7 @@ aside.notes { display: none; }
     <div class="disp nm in"><span class="num roll" data-v="324"></span><span class="u">만 원</span></div>
   </div>
   <p class="src t">출처 · Gallup, “This Fixable Problem Costs U.S. Businesses $1 Trillion”(2019) — 미국 직장인 대상</p>
-  <aside class="notes">갤럽: 스스로 떠난 직원의 52%는 관리자나 회사가 막을 수 있었다고 답했고, 51%는 떠나기 전 3개월 동안 누구와도 일과 미래에 대해 이야기하지 않았습니다(미국 직장인 대상). 막는 방법은 대화, 대화의 근거는 수업 데이터 — 18장의 면담. 클릭: 기준 단위 "학생 한 명만 지켜도 1년에 324만 원." 가격은 말하지 않습니다. "몇 명을 지키면 본전인지, 상담에서 우리 학원 숫자로 계산해 드립니다"(리소스 절감 계산 워크시트). → "그리고 막지 못한 이탈이 생겨도, 대비할 수 있습니다."</aside>
+  <aside class="notes">갤럽: 스스로 떠난 직원의 52%는 관리자나 회사가 막을 수 있었다고 답했고, 51%는 떠나기 전 3개월 동안 누구와도 일과 미래에 대해 이야기하지 않았습니다(미국 직장인 대상). 막는 방법은 대화, 대화의 근거는 수업 데이터 — 19장의 면담. 클릭: 기준 단위 "학생 한 명만 지켜도 1년에 324만 원." 가격은 말하지 않습니다. "몇 명을 지키면 본전인지, 상담에서 우리 학원 숫자로 계산해 드립니다"(리소스 절감 계산 워크시트). → "그리고 막지 못한 이탈이 생겨도, 대비할 수 있습니다."</aside>
 </section>
 
 <!-- 21 강사가 바뀌는 날 -->
@@ -1162,7 +1194,7 @@ aside.notes { display: none; }
   </div>
   <p class="take t">한 달 뒤, <span class="em">우리 학원 수업</span>으로 직접 판단하시면 됩니다.</p>
   <p class="src t">무료 혜택은 ClassIn 6.0.9 업데이트 가이드 기준 · 조건은 상담 시 확인</p>
-  <aside class="notes">길게 설명하지 않습니다. 시작 허들이 낮다는 것만 전합니다. ① 비용: 계정당 누적 50회 무료 수업에 녹화와 AI 강의 분석이 포함됩니다(6.0.9 기준, 발표 전 제품팀 확인). ② 범위: 반 하나로 시작합니다 — 평소처럼 수업하고 체크 하나만 하면 됩니다. ③ 강사: 리포트는 강사가 먼저 보고, 원장은 정해진 사람만 봅니다 — 16장에서 말한 교사들의 걱정(정확도·프라이버시·시간)에 대한 답입니다. "한 달 뒤, 우리 학원 수업으로 직접 판단하시면 됩니다." → "왜 이렇게까지 강사부터 생각해야 할까요?"</aside>
+  <aside class="notes">길게 설명하지 않습니다. 시작 허들이 낮다는 것만 전합니다. ① 비용: 계정당 누적 50회 무료 수업에 녹화와 AI 강의 분석이 포함됩니다(6.0.9 기준, 발표 전 제품팀 확인). ② 범위: 반 하나로 시작합니다 — 평소처럼 수업하고 체크 하나만 하면 됩니다. ③ 강사: 리포트는 강사가 먼저 보고, 원장은 정해진 사람만 봅니다 — 17장에서 말한 교사들의 걱정(정확도·프라이버시·시간)에 대한 답입니다. "한 달 뒤, 우리 학원 수업으로 직접 판단하시면 됩니다." → "왜 이렇게까지 강사부터 생각해야 할까요?"</aside>
 </section>
 
 <!-- 24 클로징 -->
@@ -1673,6 +1705,16 @@ aside.notes { display: none; }
       tl.fromTo($$('.roof .out', slide), { autoAlpha: 0, x: -14 }, { autoAlpha: 1, x: 0, duration: .9, ease: 'power3.out', stagger: .22 }, s + 2.2);
     },
 
+    infra: function (slide, tl, s) {
+      // 인프라는 아직 비어 있다: 표시등은 꺼지고 세 줄은 흐리게
+      $$('.hub .led', slide).forEach(function (l) { l.classList.add('off'); });
+      gsap.set($$('.hub .row', slide), { opacity: .45 });
+      gsap.set($('.hub .ft', slide), { opacity: .35 });
+      gsap.set($$('.scat .sp', slide), { x: 0, opacity: 1 });
+      gsap.set($('.scat .k', slide), { opacity: 1 });
+      gsap.set($('.s-infra .flow span', slide), { x: 0, color: '' });
+    },
+
     loop: function (slide, tl, s) {
       var w = $('.window', slide), pulse = $('.orb-pulse', slide), nodes = $$('.node .led', slide);
       setWindow(w, 'fog');
@@ -1872,8 +1914,18 @@ aside.notes { display: none; }
       tl.to($('.window', slide), { y: -392, scale: .9, duration: 1.2, ease: 'expo.inOut' }, .1);
     },
 
-    pillars: function (slide, n, tl) {
-      if (n === 2) tl.to($('.slot .ask', slide), { autoAlpha: 0, y: -10, duration: .45, ease: 'power2.in' }, 0);
+    infra: function (slide, n, tl, instant) {
+      // 흩어진 곳들이 오른쪽 인프라로 모이고, 세 줄이 차례로 켜진다
+      var sp = $$('.scat .sp', slide), rows = $$('.hub .row', slide);
+      tl.to(sp, { x: 30, opacity: .28, duration: .9, ease: 'power2.inOut', stagger: .12 }, 0);
+      tl.to($('.scat .k', slide), { opacity: .4, duration: .6 }, .2);
+      tl.to($('.s-infra .flow span', slide), { x: 8, color: '#3D7A04', duration: .6, ease: 'power2.out' }, .5);
+      tl.call(function () { $('.hub .hd .led', slide).classList.remove('off'); }, null, .8);
+      rows.forEach(function (r, k) {
+        tl.call(function () { $('.led', r).classList.remove('off'); }, null, 1.0 + k * .3);
+        tl.fromTo(r, { opacity: .45 }, { opacity: 1, duration: .6, ease: 'power2.out' }, 1.0 + k * .3);
+      });
+      tl.fromTo($('.hub .ft', slide), { opacity: .35 }, { opacity: 1, duration: .8, ease: 'power2.out' }, 2.0);
     },
 
     candor: function (slide, n, tl, instant) {
