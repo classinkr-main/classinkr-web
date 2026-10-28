@@ -207,7 +207,7 @@ aside.notes { display: none; }
 .center-col { position: absolute; left: 0; right: 0; text-align: center; }
 
 /* ===== 3 반전 질문 ===== */
-.s3 .q { top: 270px; font-size: 64px; font-weight: 700; line-height: 1.45; letter-spacing: -.03em; color: var(--ink-2); }
+.s3 .q { top: 375px; font-size: 76px; font-weight: 700; line-height: 1.45; letter-spacing: -.03em; color: var(--ink); }
 .s3 .q > span { display: block; }
 .s3 .a { top: 640px; font-size: 100px; font-weight: 800; letter-spacing: -.05em; line-height: 1.2; }
 
@@ -266,7 +266,7 @@ aside.notes { display: none; }
 .ch-disc .c2 { margin-top: 6px; font-size: 30px; font-weight: 800; }
 
 /* ===== 6 학생이 떠나는 순간 ===== */
-.s6 .badge { position: absolute; right: 120px; top: 168px; }
+.s6 .badge { position: absolute; right: 120px; top: 262px; }
 .tl { position: absolute; left: 120px; right: 120px; top: 360px; height: 110px; border-radius: 999px; }
 .tl .lane { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; }
 .tl .sd { position: absolute; top: 33px; left: 0; width: 44px; height: 44px; border-radius: 50%; background: radial-gradient(circle, #B5E22E 0 11px, var(--bg) 11.5px); }
@@ -719,6 +719,10 @@ aside.notes { display: none; }
 .g3 .no { flex: none; width: 76px; height: 76px; display: grid; place-items: center; font-size: 30px; font-weight: 800; color: var(--em); }
 .g3 b { display: block; font-size: 30px; font-weight: 800; letter-spacing: -.03em; }
 .g3 span { display: block; margin-top: 8px; font-size: 21px; font-weight: 600; color: var(--mute); }
+
+/* ===== 7·8장 우측 상단 IN / OUT 음각 글자 ===== */
+.wm { position: absolute; right: 110px; top: 34px; font-size: 250px; font-weight: 900; line-height: 1; letter-spacing: -.04em; color: var(--bg);
+  text-shadow: 8px 8px 18px var(--lo), -8px -8px 18px var(--hi); pointer-events: none; z-index: 0; }
 </style>
 </head>
 <body>
@@ -770,11 +774,10 @@ aside.notes { display: none; }
 </section>
 
 <!-- 3 반전 질문 -->
-<section class="slide s3 dark" data-scene="dark" data-enter="question" data-steps="1" data-time="0:40">
+<section class="slide s3 dark" data-scene="dark" data-enter="question" data-time="0:30">
   <div class="dust"></div>
   <div class="center-col q"><span class="t">AI가 당연해진 지금,</span><span class="t">학원에서 가장 먼저 좋아져야 할 것은</span><span class="t">무엇일까요?</span></div>
-  <div class="center-col a step slow" data-step="1"><span class="t"><span class="em">수업</span>, 그리고</span><br><span class="t"><span class="em">수업을 만드는 사람.</span></span></div>
-  <aside class="notes">질문을 던지고 잠시 멈춥니다(클릭 전). "AI 문제은행, AI 교재, 다 좋습니다. 그런데 학원이 파는 건 결국 수업이고, 수업을 만드는 건 강사입니다." 클릭해서 답 공개. → "왜 사람인지, 학원이 지금 무엇을 잃고 있는지부터 보겠습니다."</aside>
+  <aside class="notes">질문만 화면에 두고 잠시 멈춥니다. "AI 문제은행, AI 교재, 다 좋습니다. 그런데 학원이 파는 건 결국 수업이고, 수업을 만드는 건 강사입니다." (답은 화면에 띄우지 않고 말로 합니다.) → "왜 사람인지, 학원이 지금 무엇을 잃고 있는지부터 보겠습니다."</aside>
 </section>
 
 <!-- 4 시장 -->
@@ -825,6 +828,7 @@ aside.notes { display: none; }
 <!-- 6 학부모는 강사를 보고 고른다 -->
 <section class="slide s5" data-scene="light" data-enter="choose" data-time="0:50">
   <span class="eyebrow nm in pill r"><i class="led"></i>1막 · 두 개의 이탈</span>
+  <div class="wm r" data-o="1" aria-hidden="true">IN</div>
   <h2 class="h t">학부모는 <span class="em">강사</span>를 보고 고릅니다</h2>
   <div class="ch-bars">
     <div class="ch-row top r"><div class="lab"><i class="led"></i>강사진의 역량</div><div class="track nm in"><i class="fill lime" style="--w:80.9"></i><span class="sheen"><i></i></span></div><div class="v"><span class="roll" data-v="80.9"></span>%</div></div>
@@ -843,6 +847,7 @@ aside.notes { display: none; }
 <!-- 6 학생이 떠나는 순간 -->
 <section class="slide s6" data-scene="light" data-enter="leave" data-steps="2" data-time="0:50">
   <span class="eyebrow nm in pill r"><i class="led"></i>1막 · 두 개의 이탈</span>
+  <div class="wm r" data-o="1" aria-hidden="true">OUT</div>
   <h2 class="h t">학생은 <span class="em">이럴 때</span> 떠납니다</h2>
   <span class="badge nm in pill r"><i class="led off"></i>현장 패턴 · 공개 통계 없음</span>
   <div class="tl nm in r"><i class="tick" style="left:18%"></i><i class="tick" style="left:50%"></i><i class="tick" style="left:82%"></i></div>
