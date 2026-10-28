@@ -269,10 +269,10 @@ aside.notes { display: none; }
 .s6 .badge { position: absolute; right: 120px; top: 168px; }
 .tl { position: absolute; left: 120px; right: 120px; top: 360px; height: 110px; border-radius: 999px; }
 .tl .lane { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; }
-.tl .sd { position: absolute; top: 33px; left: 0; width: 44px; height: 44px; border-radius: 50%; background: #B5E22E; }
-.tl .sd::before { box-shadow: none; }
-.leaver { position: absolute; top: 393px; width: 44px; height: 44px; margin-left: -22px; border-radius: 50%; visibility: hidden; background: #B5E22E; }
-.leaver b { position: absolute; inset: 0; border-radius: 50%; background: #17181B; opacity: 0; }
+.tl .sd { position: absolute; top: 33px; left: 0; width: 44px; height: 44px; border-radius: 50%; background: radial-gradient(circle, #B5E22E 0 11px, var(--bg) 11.5px); }
+.leaver { position: absolute; top: 393px; width: 44px; height: 44px; margin-left: -22px; border-radius: 50%; visibility: hidden;
+  background: radial-gradient(circle, #B5E22E 0 11px, var(--bg) 11.5px); box-shadow: 6px 6px 14px var(--lo), -6px -6px 14px var(--hi); }
+.leaver b { position: absolute; inset: 11px; border-radius: 50%; background: #C3C7CD; opacity: 0; }
 .tl .tick { position: absolute; top: -26px; width: 2px; height: 162px; margin-left: -1px; background: repeating-linear-gradient(180deg, var(--line) 0 8px, transparent 8px 14px); }
 .mkc { position: absolute; top: 530px; width: 470px; height: 150px; margin-left: -235px; padding: 0 34px; box-sizing: border-box; display: flex; align-items: center; gap: 22px; }
 .mkc .no { width: 64px; height: 64px; flex: none; display: grid; place-items: center; font-size: 26px; font-weight: 800; color: var(--em); }
@@ -463,20 +463,24 @@ aside.notes { display: none; }
 .rad svg { position: absolute; inset: 30px; overflow: visible; }
 .rad text { font-family: 'Pretendard', sans-serif; }
 .s15 > .badge { position: absolute; left: 140px; top: 280px; }
-.dom { position: absolute; left: 880px; top: 300px; width: 920px; display: flex; flex-direction: column; gap: 22px; }
-.dr { height: 142px; display: grid; grid-template-columns: 330px 60px 1fr; align-items: center; padding: 0 36px; box-sizing: border-box; }
-.dr b { display: block; font-size: 30px; font-weight: 800; }
+.dom { position: absolute; left: 880px; top: 296px; width: 920px; display: flex; flex-direction: column; gap: 18px; }
+.dr { height: 112px; display: grid; grid-template-columns: 380px 1fr 96px; gap: 22px; align-items: center; padding: 0 34px; box-sizing: border-box; }
+.dr .track { height: 26px; }
+.dr .fill { background: #B5E22E; }
+.dr .fill.warn { background: #E08A2E; }
+.dr .pct { text-align: right; font-size: 32px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.dr b { display: block; font-size: 27px; font-weight: 800; letter-spacing: -.02em; }
 .dr span { display: block; margin-top: 6px; font-size: 18px; font-weight: 600; color: var(--mute); }
 .dr i { font-style: normal; font-size: 28px; color: var(--mute); text-align: center; }
-.dr em { font-style: normal; font-size: 30px; font-weight: 800; color: var(--em); letter-spacing: -.02em; }
+.dr em { display: block; margin-top: 4px; font-style: normal; font-size: 19px; font-weight: 700; color: var(--em); letter-spacing: -.02em; }
 .tune { position: absolute; left: 880px; top: 300px; width: 920px; }
 .seg { position: relative; height: 92px; }
 .seg .thumb { position: absolute; left: 9px; top: 9px; width: 446px; height: 74px; }
 .seg .lb { position: absolute; top: 0; width: 50%; height: 92px; display: grid; place-items: center; font-size: 25px; font-weight: 800; color: var(--mute); transition: color .4s; }
 .seg .lb.l2 { left: 50%; }
 .seg .lb.sel { color: var(--ink); }
-.knobs { margin-top: 40px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; text-align: center; }
-.kn .dial { position: relative; width: 136px; height: 136px; margin: 0 auto; border-radius: 50%; }
+.knobs { margin-top: 40px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; text-align: center; }
+.kn .dial { position: relative; width: 136px; height: 136px; transform: scale(.88); margin: 0 auto; border-radius: 50%; }
 .kn .dial .ind { position: absolute; left: 50%; top: 14px; width: 8px; height: 40px; margin-left: -4px; border-radius: 4px; background: #B5E22E; box-shadow: none; transform-origin: 4px 54px; }
 .kn .dial .cap { position: absolute; inset: 40px; border-radius: 50%; }
 .kn .l { margin-top: 18px; font-size: 21px; font-weight: 800; color: var(--ink-2); }
@@ -951,23 +955,25 @@ aside.notes { display: none; }
 <!-- 15 지표 · 튜닝 -->
 <section class="slide s15" data-scene="light" data-enter="radar" data-steps="1" data-time="1:00">
   <span class="eyebrow nm in pill r"><i class="led"></i>3막 · 교실이 보이면</span>
-  <h2 class="h t">11개 지표로 읽고, 기준은 <span class="em">우리 학원</span>이 정합니다</h2>
+  <h2 class="h t">5개 기준으로 읽고, 기준은 <span class="em">우리 학원</span>이 정합니다</h2>
   <div class="rad nm r"><div class="in nm in"></div><svg id="radar" viewBox="0 0 600 600" width="600" height="600"></svg></div>
   <span class="badge nm sm pill r" data-o="3"><i class="led off"></i>예시 화면</span>
   <div class="dom">
-    <div class="dr nm sm card r"><div><b>수업 전달</b><span>효과성 · 흥미·몰입도 · 스캐폴딩</span></div><i>→</i><em>잘 가르치는가</em></div>
-    <div class="dr nm sm card r"><div><b>수업 분위기</b><span>적극적 참여 · 협업 · 정서적 안전감</span></div><i>→</i><em>아이들이 편하게 말하는가</em></div>
-    <div class="dr nm sm card r"><div><b>상호작용</b><span>공평성 · 반응성·평등성 · 자율성</span></div><i>→</i><em>골고루 챙기는가</em></div>
-    <div class="dr nm sm card r"><div><b>언어 표현</b><span>명료성·유창성 · 표현력·전달력</span></div><i>→</i><em>말이 명확한가</em></div>
+    <div class="dr nm sm card r"><div><b>지식 설명 품질</b><em>제대로 설명하는가</em></div><div class="track nm in"><i class="fill" style="--w:87"></i></div><span class="pct">87%</span></div>
+    <div class="dr nm sm card r"><div><b>사고 수준 및 방법 정리</b><em>생각하는 법까지 가르치는가</em></div><div class="track nm in"><i class="fill" style="--w:88"></i></div><span class="pct">88%</span></div>
+    <div class="dr nm sm card r"><div><b>학생 학습 품질</b><em>학생이 실제로 배우는가</em></div><div class="track nm in"><i class="fill warn" style="--w:75"></i></div><span class="pct">75%</span></div>
+    <div class="dr nm sm card r"><div><b>수업 구조 및 효율</b><em>시간을 알차게 쓰는가</em></div><div class="track nm in"><i class="fill" style="--w:80"></i></div><span class="pct">80%</span></div>
+    <div class="dr nm sm card r"><div><b>수업 분위기 및 리스크 통제</b><em>수업이 안정적으로 굴러가는가</em></div><div class="track nm in"><i class="fill" style="--w:80"></i></div><span class="pct">80%</span></div>
   </div>
   <div class="tune step" data-step="1">
     <span class="badge nm sm pill"><i class="led off"></i>개념도</span>
     <div class="seg nm in pill r"><div class="thumb nm sm pill"></div><div class="lb l1 sel">A · 입시 수학학원</div><div class="lb l2">B · 초등 영어학원</div></div>
     <div class="knobs">
-      <div class="kn r"><div class="dial nm circle"><i class="ind"></i><i class="cap nm in circle"></i></div><div class="l">수업 전달</div><div class="v">40%</div></div>
-      <div class="kn r"><div class="dial nm circle"><i class="ind"></i><i class="cap nm in circle"></i></div><div class="l">수업 분위기</div><div class="v">15%</div></div>
-      <div class="kn r"><div class="dial nm circle"><i class="ind"></i><i class="cap nm in circle"></i></div><div class="l">상호작용</div><div class="v">25%</div></div>
-      <div class="kn r"><div class="dial nm circle"><i class="ind"></i><i class="cap nm in circle"></i></div><div class="l">언어 표현</div><div class="v">20%</div></div>
+      <div class="kn r"><div class="dial nm circle"><i class="ind"></i><i class="cap nm in circle"></i></div><div class="l">지식 설명</div><div class="v">0%</div></div>
+      <div class="kn r"><div class="dial nm circle"><i class="ind"></i><i class="cap nm in circle"></i></div><div class="l">사고·방법</div><div class="v">0%</div></div>
+      <div class="kn r"><div class="dial nm circle"><i class="ind"></i><i class="cap nm in circle"></i></div><div class="l">학생 학습</div><div class="v">0%</div></div>
+      <div class="kn r"><div class="dial nm circle"><i class="ind"></i><i class="cap nm in circle"></i></div><div class="l">구조·효율</div><div class="v">0%</div></div>
+      <div class="kn r"><div class="dial nm circle"><i class="ind"></i><i class="cap nm in circle"></i></div><div class="l">분위기·통제</div><div class="v">0%</div></div>
     </div>
     <div class="rules">
       <div class="nm in pill r"><i class="led"></i><span>개념 → 예제 → 변형 문제 순서</span></div>
@@ -975,7 +981,7 @@ aside.notes { display: none; }
       <div class="nm in pill r"><i class="led"></i><span>판서는 단계별로 남기기</span></div>
     </div>
   </div>
-  <aside class="notes">ClassIn 6.0.9(2026.9.21 배포)의 AI 강의 분석. 라이브 수업 녹화본을 분석해 4대 영역 11개 지표로 수업을 읽습니다. 원장 언어로: 잘 가르치는가 / 아이들이 편하게 말하는가 / 골고루 챙기는가 / 말이 명확한가. 레이더 값은 예시. 클릭: 같은 '좋은 수업'이라도 입시 수학학원과 초등 영어학원의 기준은 다릅니다 — 학원의 교육 철학이 매 수업의 기준이 됩니다. ※ 다이얼·가중치는 개념도. 실제 튜닝 범위는 제품팀 확인 후 데모에서만 보여줍니다. → "기준과 근거가 생기면, 면담이 달라집니다."</aside>
+  <aside class="notes">AI 강의 분석 리포트는 수업을 5개 기준으로 읽습니다 — 지식 설명 품질 · 사고 수준 및 방법 정리 · 학생 학습 품질 · 수업 구조 및 효율 · 수업 분위기 및 리스크 통제. 원장 언어로: 제대로 설명하는가 / 생각하는 법까지 가르치는가 / 학생이 실제로 배우는가 / 시간을 알차게 쓰는가 / 수업이 안정적으로 굴러가는가. 점수는 실제 리포트 화면 예시(87·88·75·80·80)이고, 낮은 항목(학생 학습 품질 75%)은 주황으로 표시됩니다. 클릭: 같은 '좋은 수업'이라도 입시 수학학원과 초등 영어학원의 기준은 다릅니다 — 학원의 교육 철학이 매 수업의 기준이 됩니다(맞춤 분석 에이전트로 학원 평가표의 항목·배점 반영). ※ 다이얼·가중치는 개념도. 실제 설정 범위는 데모에서만 보여줍니다. → "기준과 근거가 생기면, 면담이 달라집니다."</aside>
 </section>
 
 <!-- 16 면담 -->
@@ -1340,16 +1346,17 @@ aside.notes { display: none; }
   }
 
   /* ---------- 레이더 ---------- */
-  var IND = ['효과성', '흥미·몰입도', '스캐폴딩', '적극적 참여', '협업', '정서적 안전감', '공평성', '반응성·평등성', '자율성', '명료성·유창성', '표현력·전달력'];
-  var BASE = [.82, .70, .60, .75, .55, .85, .62, .78, .58, .88, .80];
+  // AI 강의 분석 리포트의 5개 기준 (점수는 리포트 화면 예시)
+  var IND = [['지식 설명 품질'], ['사고 수준 및', '방법 정리'], ['학생 학습 품질'], ['수업 구조 및', '효율'], ['수업 분위기 및', '리스크 통제']];
+  var BASE = [.87, .88, .75, .80, .80];
   var PRESETS = [
-    { w: [40, 15, 25, 20], v: [.92, .62, .95, .55, .40, .62, .70, .76, .50, .90, .70],
+    { w: [30, 30, 15, 15, 10], v: [.92, .90, .72, .86, .74],
       rules: ['개념 → 예제 → 변형 문제 순서', '오답의 원인을 학생이 말하게 하기', '판서는 단계별로 남기기'] },
-    { w: [20, 35, 30, 15], v: [.62, .92, .60, .94, .86, .96, .90, .86, .76, .68, .82],
+    { w: [15, 10, 30, 15, 30], v: [.76, .70, .91, .80, .93],
       rules: ['학생 발화 시간을 늘리기', '틀려도 칭찬이 먼저', '모든 학생 한 번 이상 지명하기'] }
   ];
   var radar = (function () {
-    var svg = document.getElementById('radar'), n = IND.length, R = 180, cx = 300, cy = 300;
+    var svg = document.getElementById('radar'), n = IND.length, R = 190, cx = 300, cy = 300;
     function pt(i, r) { var a = -Math.PI / 2 + i * 2 * Math.PI / n; return [cx + Math.cos(a) * r, cy + Math.sin(a) * r]; }
     [.25, .5, .75, 1].forEach(function (f) {
       svgEl('polygon', { points: IND.map(function (_, i) { return pt(i, R * f).join(','); }).join(' '), fill: 'none', stroke: 'var(--line)', 'stroke-width': 2 }, svg);
@@ -1357,14 +1364,17 @@ aside.notes { display: none; }
     IND.forEach(function (label, i) {
       var p = pt(i, R);
       svgEl('line', { x1: cx, y1: cy, x2: p[0], y2: p[1], stroke: 'var(--line)', 'stroke-width': 2 }, svg);
-      var lp = pt(i, R + 30), anchor = Math.abs(lp[0] - cx) < 16 ? 'middle' : (lp[0] > cx ? 'start' : 'end');
-      var t = svgEl('text', { x: lp[0], y: lp[1] + 7, 'text-anchor': anchor, 'font-size': 18, 'font-weight': 700, fill: 'var(--ink-2)' }, svg);
-      t.textContent = label;
+      var lp = pt(i, R + 34), anchor = Math.abs(lp[0] - cx) < 16 ? 'middle' : (lp[0] > cx ? 'start' : 'end');
+      var y0 = lp[1] + 8 - (label.length - 1) * 13 + (i === 0 ? -6 : 0);
+      label.forEach(function (line, k) {
+        var t = svgEl('text', { x: lp[0], y: y0 + k * 26, 'text-anchor': anchor, 'font-size': 21, 'font-weight': 800, fill: 'var(--ink-2)' }, svg);
+        t.textContent = line;
+      });
     });
     var sweep = svgEl('g', {}, svg), a = 40 * Math.PI / 180;
     svgEl('path', { d: 'M' + cx + ',' + cy + ' L' + cx + ',' + (cy - R) + ' A' + R + ',' + R + ' 0 0,1 ' + (cx + Math.sin(a) * R) + ',' + (cy - Math.cos(a) * R) + ' Z', fill: 'rgba(184,232,44,.22)' }, sweep);
     var shape = svgEl('polygon', { fill: 'rgba(184,232,44,.42)', stroke: '#7FB30E', 'stroke-width': 4, 'stroke-linejoin': 'round' }, svg);
-    var dots = IND.map(function () { return svgEl('circle', { r: 7, fill: '#7FB30E', stroke: '#fff', 'stroke-width': 3 }, svg); });
+    var dots = IND.map(function () { return svgEl('circle', { r: 9, fill: '#7FB30E', stroke: '#fff', 'stroke-width': 3 }, svg); });
     var state = { v: IND.map(function () { return 0; }) };
     function draw(vals) {
       shape.setAttribute('points', vals.map(function (v, i) { return pt(i, R * v).join(','); }).join(' '));
@@ -1506,10 +1516,9 @@ aside.notes { display: none; }
           var lv = d._lv, ink = lv.firstChild, xe = 1680 * MARK[f] - 22, te = (xe - START) / V, dx = i % 2 ? 54 : -46;
           t.set(lv, { autoAlpha: 0, x: 0, y: 0, scale: 1 }, 0).set(ink, { opacity: 0 }, 0);
           t.to(d, { x: xe, duration: te, ease: 'none' }, 0);
-          t.set(d, { autoAlpha: 0 }, te).set(lv, { autoAlpha: 1, boxShadow: 'none' }, te);
+          t.set(d, { autoAlpha: 0 }, te).set(lv, { autoAlpha: 1 }, te);
           t.to(lv, { y: -38, scale: 1.08, duration: .38, ease: 'power2.out' }, te);
           t.to(ink, { opacity: 1, duration: .5, ease: 'power1.inOut' }, te + .12);
-          t.to(lv, { boxShadow: 'none', duration: .5 }, te + .12);
           t.to(lv, { y: -190, x: dx, scale: .58, duration: 1.5, ease: 'power2.in' }, te + .5);
           t.to(lv, { autoAlpha: 0, duration: .55, ease: 'power1.in' }, te + 1.3);
           t.to({}, { duration: .001 }, CYCLE - .001);
@@ -1634,6 +1643,7 @@ aside.notes { display: none; }
 
     radar: function (slide, tl, s) {
       gsap.set($('.dom', slide), { autoAlpha: 1, x: 0 });
+      tl.fromTo($$('.dom .fill', slide), { scaleX: 0 }, { scaleX: 1, duration: 1.4, ease: 'expo.out', stagger: .12 }, s + .9);
       radar.set(IND.map(function () { return 0; }));
       radar.to(BASE, 1.4, tl, s + .6);
       loop(gsap.to(radar.sweep, { rotation: 360, svgOrigin: '300 300', duration: 6, ease: 'none', repeat: -1 }));
