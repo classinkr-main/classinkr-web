@@ -678,22 +678,10 @@ aside.notes { display: none; }
 .slot { display: grid; place-items: center; }
 .slot .ask { margin: 0; font-size: 32px; font-weight: 700; color: var(--ink-2); letter-spacing: -.02em; }
 
-/* ===== 15 정답은 인프라 (흩어진 곳 → 한 곳에) ===== */
-.s-infra .lead { position: absolute; left: 120px; top: 262px; }
-.scat { position: absolute; left: 120px; top: 390px; width: 500px; display: flex; flex-direction: column; gap: 20px; }
-.scat .k { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; font-size: 22px; font-weight: 800; color: var(--mute); }
-.scat .sp { height: 84px; display: flex; align-items: center; padding: 0 34px; font-size: 26px; font-weight: 700; color: var(--ink-2); letter-spacing: -.02em; }
-.s-infra .flow { position: absolute; left: 660px; top: 600px; width: 92px; height: 92px; display: grid; place-items: center; font-size: 38px; font-weight: 800; color: var(--mute); }
-.hub { position: absolute; left: 800px; top: 370px; width: 1000px; height: 560px; box-sizing: border-box; padding: 44px 48px 40px; display: flex; flex-direction: column; gap: 18px; }
-.hub .hd { display: flex; align-items: baseline; gap: 18px; margin-bottom: 8px; }
-.hub .hd .led { align-self: center; width: 18px; height: 18px; }
-.hub .hd strong { font-size: 52px; font-weight: 800; letter-spacing: -.04em; line-height: 1; }
-.hub .hd span { font-size: 22px; font-weight: 700; color: var(--mute); }
-.hub .row { height: 92px; display: flex; align-items: center; gap: 20px; padding: 0 34px; }
-.hub .row b { width: 130px; flex: none; font-size: 30px; font-weight: 800; letter-spacing: -.03em; }
-.hub .row span { font-size: 24px; font-weight: 600; color: var(--ink-2); }
-.hub .row .led { width: 14px; height: 14px; }
-.hub .ft { margin-top: auto; font-size: 26px; font-weight: 800; color: var(--ink-2); letter-spacing: -.02em; }
+/* ===== 16 정답은 인프라 — 큰 타이틀 + ClassIn ===== */
+.s-infra .ih { position: absolute; left: 0; right: 0; top: 290px; margin: 0; text-align: center; font-size: 110px; font-weight: 800; line-height: 1.15; letter-spacing: -.045em; }
+.s-infra .ih .em { background: linear-gradient(transparent 62%, rgba(184, 232, 44, .72) 62%) no-repeat 0 0 / var(--hlw, 100%) 100%; padding: 0 .04em; }
+.ibrand { position: absolute; left: 50%; top: 520px; width: 760px; height: 260px; margin-left: -380px; border-radius: 64px; display: grid; place-items: center; font-size: 150px; font-weight: 800; letter-spacing: -.05em; }
 
 /* ===== 2 후킹 — 고민 1순위 슬롯 ===== */
 .s-hook .hq { position: absolute; left: 0; right: 0; top: 270px; margin: 0; text-align: center; font-size: 64px; font-weight: 800; letter-spacing: -.035em; color: var(--ink-2); }
@@ -1000,26 +988,11 @@ aside.notes { display: none; }
 </section>
 
 <!-- 15 정답은 인프라 -->
-<section class="slide s-infra" data-scene="light" data-enter="infra" data-steps="1" data-time="0:50">
+<section class="slide s-infra" data-scene="light" data-enter="infra" data-time="0:40">
   <span class="eyebrow nm in pill r"><i class="led"></i>3막 · 교실이 보이면</span>
-  <h2 class="h t">정답은, <span class="em">인프라</span>입니다</h2>
-  <p class="lead t">AI가 읽을 수 있는 곳에 수업이 모여야, AI가 일을 합니다.</p>
-  <div class="scat r" data-at=".7">
-    <div class="k"><i class="led off"></i>지금은 흩어져 있습니다</div>
-    <div class="sp nm in pill">엑셀 출석부 · 성적표</div>
-    <div class="sp nm in pill">학부모 단톡방</div>
-    <div class="sp nm in pill">강사 개인 노트</div>
-    <div class="sp nm in pill">원장님 기억</div>
-  </div>
-  <div class="flow nm circle r" data-at="1.1"><span>→</span></div>
-  <div class="hub nm card r" data-at="1.3">
-    <div class="hd"><i class="led off"></i><strong>ClassIn</strong><span>AI가 읽을 수 있는 수업 인프라</span></div>
-    <div class="row nm in sm pill"><i class="led off"></i><b>표준화</b><span>같은 5개 기준으로 모든 수업을 읽습니다</span></div>
-    <div class="row nm in sm pill"><i class="led off"></i><b>자동화</b><span>녹화 · 분석 · 리포트가 저절로 돕니다</span></div>
-    <div class="row nm in sm pill"><i class="led off"></i><b>데이터화</b><span>수업마다 기록이 쌓입니다</span></div>
-    <div class="ft">AI가 읽으면 → <span class="em">개인화</span> · <span class="em">속도 &amp; 양</span></div>
-  </div>
-  <aside class="notes">15장의 질문에 답합니다. "정답은 인프라입니다. AI는 쌓여 있는 것만 읽습니다. 엑셀, 단톡방, 강사 노트, 원장님 기억에 흩어져 있으면 AI가 읽을 수 없습니다." 클릭: 흩어진 것들이 한 곳으로 모이고 클래스인의 세 줄이 켜집니다. "클래스인에서는 모든 수업을 같은 5개 기준으로 읽고(표준화), 녹화·분석·리포트가 저절로 돌고(자동화), 수업마다 기록이 쌓입니다(데이터화). 그래서 AI가 학생마다 다르게, 더 빨리 더 많이 일할 수 있습니다." → "그러면 이런 루프가 매 수업 돕니다."</aside>
+  <h2 class="ih t">정답은, <span class="em">인프라</span>입니다</h2>
+  <div class="ibrand nm card r" data-at="1.2">ClassIn</div>
+  <aside class="notes">15장의 질문에 답합니다. "정답은 인프라입니다. AI는 쌓여 있는 것만 읽습니다. 엑셀, 단톡방, 강사 노트, 원장님 기억에 흩어져 있으면 AI가 읽을 수 없습니다." "클래스인에서는 모든 수업을 같은 5개 기준으로 읽고(표준화), 녹화·분석·리포트가 저절로 돌고(자동화), 수업마다 기록이 쌓입니다(데이터화). 그래서 AI가 학생마다 다르게, 더 빨리 더 많이 일할 수 있습니다." → "그러면 이런 루프가 매 수업 돕니다."</aside>
 </section>
 
 <!-- 13 피드백 루프 -->
@@ -1732,13 +1705,7 @@ aside.notes { display: none; }
     },
 
     infra: function (slide, tl, s) {
-      // 인프라는 아직 비어 있다: 표시등은 꺼지고 세 줄은 흐리게
-      $$('.hub .led', slide).forEach(function (l) { l.classList.add('off'); });
-      gsap.set($$('.hub .row', slide), { opacity: .45 });
-      gsap.set($('.hub .ft', slide), { opacity: .35 });
-      gsap.set($$('.scat .sp', slide), { x: 0, opacity: 1 });
-      gsap.set($('.scat .k', slide), { opacity: 1 });
-      gsap.set($('.s-infra .flow span', slide), { x: 0, color: '' });
+      tl.fromTo($('.s-infra .ih .em', slide), { '--hlw': '0%' }, { '--hlw': '100%', duration: .9, ease: 'power3.inOut' }, s + .8);
     },
 
     loop: function (slide, tl, s) {
@@ -1936,20 +1903,6 @@ aside.notes { display: none; }
     invisible: function (slide, n, tl) {
       tl.to($('.q10', slide), { autoAlpha: 0, y: -40, duration: .6, ease: 'power2.in' }, 0);
       tl.to($('.window', slide), { y: -392, scale: .9, duration: 1.2, ease: 'expo.inOut' }, .1);
-    },
-
-    infra: function (slide, n, tl, instant) {
-      // 흩어진 곳들이 오른쪽 인프라로 모이고, 세 줄이 차례로 켜진다
-      var sp = $$('.scat .sp', slide), rows = $$('.hub .row', slide);
-      tl.to(sp, { x: 30, opacity: .28, duration: .9, ease: 'power2.inOut', stagger: .12 }, 0);
-      tl.to($('.scat .k', slide), { opacity: .4, duration: .6 }, .2);
-      tl.to($('.s-infra .flow span', slide), { x: 8, color: '#3D7A04', duration: .6, ease: 'power2.out' }, .5);
-      tl.call(function () { $('.hub .hd .led', slide).classList.remove('off'); }, null, .8);
-      rows.forEach(function (r, k) {
-        tl.call(function () { $('.led', r).classList.remove('off'); }, null, 1.0 + k * .3);
-        tl.fromTo(r, { opacity: .45 }, { opacity: 1, duration: .6, ease: 'power2.out' }, 1.0 + k * .3);
-      });
-      tl.fromTo($('.hub .ft', slide), { opacity: .35 }, { opacity: 1, duration: .8, ease: 'power2.out' }, 2.0);
     },
 
     candor: function (slide, n, tl, instant) {
