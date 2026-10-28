@@ -24,6 +24,8 @@ import {
 } from "lucide-react"
 
 import { adminFetch, adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
+import { describeSyncOutcome } from "@/lib/admin/sync-outcome"
+import { postBranchSync } from "@/components/admin/branch/client-api"
 import { StatTile } from "@/components/admin/viz"
 // 확도(예상·시트 확정/임박/예상) 색은 확도 신호 토큰 SSOT — 색 리터럴 재정의 금지(DESIGN.md 확도 신호 토큰 절).
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
@@ -465,11 +467,13 @@ export default function AdminCrmRevenuePage() {
     setSyncing(true)
     setError(null)
     try {
-      await adminFetchJson(`/api/admin/branch/sync`, {
-        method: "POST",
-        body: JSON.stringify({ sources: ["rev"] }),
-      })
+      // 결과 계약으로 읽는다 — 잠금에 걸려 건너뛴 200 { skipped }·부분 실패(500)를 "완료"처럼 넘기지 않는다.
+      const { status, body } = await postBranchSync(["rev"])
+      const outcome = describeSyncOutcome(body, { httpStatus: status })
+      // load()가 시작할 때 알림을 지우므로 다시 불러온 뒤에 결과를 띄운다.
       await load({ force: true })
+      if (outcome.tone === "error") setError(outcome.message)
+      else setSyncNotice(outcome.message)
     } catch (err) {
       setError(err instanceof Error ? err.message : "시트 동기화에 실패했습니다.")
     } finally {

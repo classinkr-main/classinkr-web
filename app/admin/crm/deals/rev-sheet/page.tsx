@@ -454,8 +454,8 @@ export default function AdminCrmRevenueSheetPage() {
           <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/45">
             동기화본 기준 운영 — 매칭·통계·CRM 연결 안정화 후 자체 원본으로 승격 예정
           </p>
-          {/* 기준 시각(S-6) — 이 화면의 모든 숫자는 REV 시트 동기화본 기준이다. 하루 한 번 크론이라 26시간을
-              넘기면 "어제 크론도 실패했다"는 뜻 — 경고 톤으로 보인다(행마다 반복되던 동기화 시각의 요약). */}
+          {/* 기준 시각(S-6) — 이 화면의 모든 숫자는 REV 시트 동기화본 기준이다. 크론은 하루 3번이라 26시간을
+              넘기면 "하루치 크론이 모두 실패했다"는 뜻 — 경고 톤으로 보인다(행마다 반복되던 동기화 시각의 요약). */}
           {data ? (
             <p
               className={`mt-1.5 text-[12px] ${

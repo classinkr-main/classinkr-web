@@ -9,13 +9,13 @@ const syncHw = vi.fn()
 const recaptureActiveRevImport = vi.fn()
 const startSyncRun = vi.fn(async () => "run-1")
 const finishSyncRun = vi.fn(async () => undefined)
-const isAnyRunning = vi.fn(async () => false)
+const findActiveSyncRun = vi.fn(async (): Promise<{ id: string; started_at: string } | null> => null)
 
 vi.mock("server-only", () => ({}))
 vi.mock("@/lib/branch/sync/sync-rev", () => ({ syncRev }))
 vi.mock("@/lib/branch/sync/sync-hw", () => ({ syncHw }))
 vi.mock("@/lib/repositories/sales-ledger-rev-import", () => ({ recaptureActiveRevImport }))
-vi.mock("@/lib/repositories/branch-sync", () => ({ startSyncRun, finishSyncRun, isAnyRunning }))
+vi.mock("@/lib/repositories/branch-sync", () => ({ startSyncRun, finishSyncRun, findActiveSyncRun }))
 
 const HW = { inbound: 1, outbound: 2, stock: 3, sales: 4 }
 
@@ -90,6 +90,17 @@ describe("runAll — REV 장부 임포트 자동 재캡처", () => {
 
     expect(syncRev).toHaveBeenCalledTimes(1)
     expect(syncHw).toHaveBeenCalledTimes(1)
+  })
+
+  it("다른 실행이 잠금을 잡고 있으면 아무것도 하지 않고 그 실행의 시작 시각을 싣는다", async () => {
+    findActiveSyncRun.mockResolvedValueOnce({ id: "run-locked", started_at: "2026-10-22T04:00:05Z" })
+    const { runAll } = await import("@/lib/branch/sync/run-all")
+
+    const result = await runAll({ trigger: "manual", sources: ["rev"] })
+
+    expect(result).toEqual({ ok: false, skipped: true, startedAt: "2026-10-22T04:00:05Z" })
+    expect(startSyncRun).not.toHaveBeenCalled()
+    expect(syncRev).not.toHaveBeenCalled()
   })
 
   it("hw만 동기화하면 재캡처하지 않는다", async () => {

@@ -35,7 +35,8 @@ import {
   Users,
   X,
 } from "lucide-react"
-import { adminFetchJson, clearBranchRequestCache, useBranchJson, type BranchJsonState } from "./client-api"
+import { adminFetchJson, clearBranchRequestCache, postBranchSync, useBranchJson, type BranchJsonState, type BranchSyncResponseBody } from "./client-api"
+import { describeSyncOutcome } from "@/lib/admin/sync-outcome"
 import { useVisibleInterval } from "./use-visible-interval"
 // 서버 입력 큐 훅(초안 CRUD·적용·되돌리기·로컬 폴백·낙관적 잠금)은 ledger/useLedgerDraftQueue로
 // 물리 이동(웨이브 7 2단 F5 — 기계적 분할, 로직 무변경).
@@ -407,14 +408,9 @@ export type { LedgerPipelinePrefetch, PeriodComparisonChip, RevManagerSummary } 
 
 // initialPipeline이 없으면(비인증·역할 부족·프리페치 실패) 이 화면은 지금까지와 100% 동일하게
 // 마운트 후 클라이언트 페치로만 채워진다.
-// POST /api/admin/branch/sync 응답 중 이 화면이 읽는 부분 — lib/branch/sync/run-all.ts RunAllResult 미러.
+// POST /api/admin/branch/sync 응답 중 이 화면이 읽는 부분 — 결과 계약(outcome) + 장부 임포트 재캡처 결과.
 // 서버가 동기화 직후 REV 장부 임포트를 재캡처하고 그 결과를 싣는다(액티브 임포트가 없으면 inactive).
-type BranchSyncResponse = {
-  revImport?:
-    | { status: "inactive" }
-    | { status: "captured" | "unchanged"; runId: string; capturedAt: string; lineCount: number }
-  revImportError?: string
-}
+type BranchSyncResponse = BranchSyncResponseBody
 
 function lensFromParam(value: string | null): LedgerLens {
   return value === "dsh" || value === "rev" || value === "board" || value === "cockpit" ? value : "ledger"
@@ -2527,11 +2523,15 @@ export default function SalesLedgerWorkbench({
     setRefreshing(true)
     try {
       if (canRunAdminOperations) {
-        const result = await adminFetchJson<BranchSyncResponse>("/api/admin/branch/sync", {
-          method: "POST",
-          body: JSON.stringify({ sources: ["rev"] }),
-        })
-        applySyncRevImport(result)
+        // 응답을 결과 계약으로 읽는다 — 예전엔 다른 동기화가 잠금을 잡아 건너뛴 200 { skipped }도
+        // 아무 말 없이 새로고침만 해서 "눌렀는데 그대로"로 보였고, 부분 실패(500)는 본문을 버렸다.
+        const { status, body } = await postBranchSync(["rev"])
+        applySyncRevImport(body)
+        const outcome = describeSyncOutcome(body, { httpStatus: status })
+        if (outcome.tone === "error") setSyncError(outcome.message)
+        else if (outcome.tone !== "success") {
+          pushMatrixToast({ kind: "info", text: outcome.message, key: "branch-sync-outcome", ttlMs: 10_000 })
+        }
       }
     } catch (error) {
       setSyncError(error instanceof Error ? error.message : String(error))
@@ -2540,7 +2540,7 @@ export default function SalesLedgerWorkbench({
       setRefreshKey((value) => value + 1)
       setRefreshing(false)
     }
-  }, [applySyncRevImport, canRunAdminOperations])
+  }, [applySyncRevImport, canRunAdminOperations, pushMatrixToast])
 
   const buildDraftInput = useCallback((kind: DraftKind, base?: LedgerDraft | null): LedgerDraftInput => {
     const sourceSnapshot = kind === "edit-row" && selectedRow ? {
