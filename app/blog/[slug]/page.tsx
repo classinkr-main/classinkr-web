@@ -20,6 +20,7 @@ import {
 } from "@/lib/repositories/blog"
 import { getLeadMagnetBySlugFromStore } from "@/lib/repositories/lead-magnets"
 import { extractMarkdownHeadings } from "@/lib/blog-markdown"
+import { resolveBlogContentModifiedAt, resolveBlogPublishedAt } from "@/lib/blog-types"
 import { getBlogSlugRedirect, getCanonicalBlogSlug } from "@/lib/blog-slug-redirects"
 import { getBlogPostPath, resolveBlogRouteSlug } from "@/lib/blog-slug-route"
 import { sanitizePublicImageUrl, sanitizePublicUrl } from "@/lib/safe-public-url"
@@ -146,12 +147,15 @@ export default async function BlogDetailPage({
       <JsonLd
         data={[
           createArticleJsonLd({
+            type: "BlogPosting",
             path: getBlogPostPath(post.slug),
             title: post.title,
             description: post.excerpt,
             imageUrl: post.heroImageUrl || post.imageUrl || undefined,
-            datePublished: post.publishedAt,
-            dateModified: post.updatedAt,
+            // 화면 날짜(published_at ?? created_at)와 같은 규칙.
+            datePublished: resolveBlogPublishedAt(post),
+            // updated_at 은 대표 글·공개 토글에도 바뀐다 — 글 내용이 바뀐 시각을 쓴다(사이트맵 lastmod 와 같은 값).
+            dateModified: resolveBlogContentModifiedAt(post),
             authorName: post.author,
           }),
           createBreadcrumbJsonLd([

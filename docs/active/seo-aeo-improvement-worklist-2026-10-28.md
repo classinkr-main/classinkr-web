@@ -467,9 +467,21 @@ select slug, title, lead_magnet_slug from blog_posts
 | `docs/active/classin-korea-positioning-guidelines.md` §11 | 검색 제목·설명 예외 규칙과 "클래스인" 병기 허용 명시 |
 | `docs/active/seo-analytics-console-runbook-2026-10-28.md`(신규) | 운영자 콘솔 실행 런북 — 기존 계정 조사, Vercel 환경변수·재빌드, GSC 도메인 속성, 서치어드바이저, GA4(향상된 측정 OFF 3종·데이터 수정·맞춤 측정기준 6개·주요 이벤트 1개·MP 중복 결정), GTM 점검, Google Ads, 배포 뒤 검증 시나리오 13개, 기준선 지표 |
 
-### 11-5. 블로그 `content_updated_at`(4차 커밋)
+### 11-5. 블로그 `content_updated_at`(4차 커밋 — D10 옵션 A)
 
-(4차 커밋 시 채운다)
+| 파일 | 변경 |
+|---|---|
+| `supabase/migrations/20261028_blog_posts_content_updated_at.sql`(신규, **운영 미적용**) | 컬럼 추가 → 백필(`coalesce(updated_at, published_at, created_at)`) → 기본값 `now()` 순서. BEFORE UPDATE 트리거는 title·slug·excerpt·content_markdown·content_html·category·image_url·hero_image_url·seo_title·seo_description·benefit_items·target_reader 가 `is distinct from` 으로 바뀔 때만 갱신. status·featured·published_at·deleted_at·tags·cta_*·author_* 등 메타는 보지 않는다. 기존 `updated_at` 트리거 유지. 멱등 |
+| `lib/db/schema-contract.ts`, `docs/active/db-migration-runbook.md` | `blog_posts.content_updated_at` 프로브(warning), 런북에 "2026-10-28 블로그 글 내용 변경 시각 — 서울 프로젝트 미적용" 추가 |
+| `lib/supabase/database.types.ts`, `lib/blog-types.ts` | Row 에 `content_updated_at`, Insert 는 선택. `contentUpdatedAt?` 와 순수 함수 `resolveBlogContentModifiedAt`(`contentUpdatedAt ?? updatedAt ?? publishedAt ?? createdAt` 과 `publishedAt` 중 늦은 쪽 — 수정일이 발행일보다 앞서는 모순 방지), `resolveBlogPublishedAt`(`publishedAt ?? createdAt`, 화면 날짜와 동일 규칙) |
+| `lib/repositories/blog.ts` | 매퍼에 `contentUpdatedAt`. 사이트맵·RSS 전용 조회만 `content_updated_at` 을 select 하고 42703(컬럼 없음)이면 경고 뒤 기존 컬럼으로 재조회(마이그레이션 전 배포 안전). 공개·어드민 목록 쿼리는 변경 없음 |
+| `app/sitemap.ts`, `app/blog/[slug]/page.tsx`, `app/blog/rss.xml/route.ts` | 블로그 lastmod·`/blog` 허브 lastmod·JSON-LD dateModified·RSS lastBuildDate 가 같은 함수를 쓴다. 블로그 상세 JSON-LD `@type` 을 `BlogPosting` 으로(문서 상세는 Article 유지), datePublished 는 `publishedAt ?? createdAt` |
+| `app/blog/BlogPageClient.tsx` | 목록 아래 "더 찾아보기" 링크 줄: `/faq`(`blog_hub_faq`), `/resources`(`blog_hub_resources`) |
+| `tests/blog/content-modified-date.test.ts`, `tests/seo/blog-content-modified-seo.test.ts`, `tests/repositories/blog-sitemap-content-updated-at.test.ts`, `tests/db/blog-posts-content-updated-at-migration.test.ts` | 날짜 우선순위, 42703 폴백, 트리거 비교 열 집합, 적용 순서 |
+
+적용 순서: 코드가 먼저 배포돼도 동작은 지금과 같다(폴백). 운영 반영은 [DB 마이그레이션 런북](./db-migration-runbook.md) 대로 서울 프로젝트에 SQL 을 적용하고 `npm run check:db` 와 파일 머리의 `pg_trigger` 조회로 확인한다. 적용 전까지는 토글이 lastmod 를 계속 바꾼다.
+
+남은 결정: 초안→공개를 다시 하면 `updatePost` 가 `published_at` 을 now 로 다시 써서 datePublished 와 lastmod 가 따라 바뀐다. 재발행 때 원래 발행일을 유지할지는 콘텐츠 운영 판단이다(D10 후속).
 
 ## 12. 조사 방법과 한계
 

@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next"
 
+import { resolveBlogContentModifiedAt } from "@/lib/blog-types"
 import { getDocCategoryPath, getDocPath, type DocArticle } from "@/lib/docs"
 import { getDocsContent, listListedDocsFromContent } from "@/lib/docs-content"
 import { getPublishedPostsForStaticSitemap } from "@/lib/repositories/blog"
@@ -95,10 +96,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const listedDocs = docsContent ? listListedDocsFromContent(docsContent) : []
 
-  // 목록 페이지(lastModified)는 하드코딩 날짜 대신 실제 최신 콘텐츠 날짜를 반영
-  const latestBlogDate = latestDate(
-    publishedPosts.flatMap((post) => [post.updatedAt, post.publishedAt])
-  )
+  // 목록 페이지(lastModified)는 하드코딩 날짜 대신 실제 최신 콘텐츠 날짜를 반영.
+  // 블로그는 updated_at(대표 글·공개 토글에도 바뀐다)이 아니라 글 내용이 바뀐 시각을 쓴다.
+  const latestBlogDate = latestDate(publishedPosts.map(resolveBlogContentModifiedAt))
   const latestEventDate = latestDate(publicEvents.map((event) => event.updatedAt))
   const latestDocsDate = latestDate(listedDocs.map((doc) => doc.updatedAt))
 
@@ -121,9 +121,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }
   })
 
+  // lastmod = contentUpdatedAt → (마이그레이션 미적용 폴백) updatedAt → publishedAt → createdAt,
+  // 발행 시각보다 앞서지 않게 맞춘 값(lib/blog-types.ts). 블로그 상세 JSON-LD dateModified 와 같은 값이다.
   const blogEntries: MetadataRoute.Sitemap = publishedPosts.map((post) => ({
     url: toAbsoluteUrl(`/blog/${post.slug}`),
-    lastModified: post.updatedAt ?? post.publishedAt ?? undefined,
+    lastModified: resolveBlogContentModifiedAt(post),
     changeFrequency: "weekly",
     priority: post.featured ? 0.8 : 0.7,
   }))

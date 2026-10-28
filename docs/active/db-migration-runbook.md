@@ -158,6 +158,12 @@ npm run check:db --  --strict
 `CRON_SECRET`)의 `segmentsPreview`. NEO 동기화가 오래됐으면 NEO 조건 세그먼트는 `skipped_neo_stale` 로 멈추는 것이
 의도된 동작이다.
 
+### 2026-10-28 블로그 글 내용 변경 시각 — 서울 프로젝트 미적용
+
+| 파일 | 하는 일 | 미적용 시 | 확인 |
+| --- | --- | --- | --- |
+| `20261028_blog_posts_content_updated_at.sql` | `blog_posts.content_updated_at`(timestamptz, 기존 행은 `coalesce(updated_at, published_at, created_at)`로 백필, 이후 기본값 `now()`) + BEFORE UPDATE 트리거 `blog_posts_content_updated_at` — 제목·슬러그·요약·본문·카테고리·대표 이미지·SEO·"이 글에서 다루는 것"이 실제로 바뀐 UPDATE 에서만 갱신한다. 기존 `blog_posts_updated_at` 트리거(내부용 `updated_at`)는 그대로 둔다 | **배포 전후 무관 — 화면·저장은 정상.** 사이트맵·RSS 조회는 컬럼 없음(42703)을 감지해 `updated_at` 으로 폴백하고(`console.warn`), 상세는 `select *` 라 값이 비면 `updated_at` 을 쓴다. 그동안은 지금처럼 대표 글·공개 토글만 해도 사이트맵 lastmod·JSON-LD dateModified·RSS lastBuildDate 가 바뀐다. 적용 후에는 내용 변경 때만 바뀐다 | `check:db`(warning, 컬럼 프로브). 트리거는 파일 머리 주석의 `pg_trigger` 조회 |
+
 ## 적용 보류 중인 마이그레이션
 
 `check:db`에 걸리지 않는(프로브가 없는) 파일이라도, 아래 파일은 **파일명 순서대로 일괄 적용하지 않는다.**

@@ -184,6 +184,9 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // 미적용이어도 허브만 '미적용' 안내로 강등하고(쓰기 503) 매일 자동 태그 크론이 skipped 로 넘어간다.
   "supabase/migrations/20260925_crm_saved_segments.sql",
   "supabase/migrations/20261021_quote_team_templates.sql",
+  // 블로그 글 내용 변경 시각(2026-10-28) — 사이트맵 lastmod·JSON-LD dateModified·RSS 의 기준.
+  // 컬럼만 REST 로 확인된다. 트리거(blog_posts_content_updated_at)는 마이그레이션 머리 주석의 pg_trigger 조회로 본다.
+  "supabase/migrations/20261028_blog_posts_content_updated_at.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -888,6 +891,17 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     migration: "supabase/migrations/20261021_quote_team_templates.sql",
     severity: "warning",
     impact: "기본 견적은 유지되지만 팀 템플릿 저장·수정·보관은 503으로 차단된다.",
+  },
+  {
+    kind: "table",
+    table: "blog_posts",
+    label: "블로그 글 내용 변경 시각(content_updated_at)",
+    columns: ["id", "content_updated_at"],
+    migration: "supabase/migrations/20261028_blog_posts_content_updated_at.sql",
+    // 사이트맵·RSS 조회는 컬럼 없음(42703)을 감지해 updated_at 으로 폴백한다 — 공개 화면은 죽지 않는다.
+    severity: "warning",
+    impact:
+      "사이트맵 lastmod·블로그 JSON-LD dateModified·RSS lastBuildDate 가 계속 updated_at 을 따라, 대표 글·공개 토글만 해도 '수정됨'으로 나간다(화면·저장은 정상).",
   },
 ]
 

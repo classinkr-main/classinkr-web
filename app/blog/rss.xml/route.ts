@@ -1,3 +1,4 @@
+import { resolveBlogContentModifiedAt } from "@/lib/blog-types"
 import { getPublishedPostsForStaticSitemap } from "@/lib/repositories/blog"
 import { SITE_NAME, SITE_URL, toAbsoluteUrl } from "@/lib/seo"
 
@@ -39,8 +40,10 @@ export async function GET() {
 
   const feedPosts = posts.slice(0, 50)
   // 채널 lastBuildDate 는 실린 글들의 가장 최근 변경 시각이다. 글이 없으면(조회 실패 포함) 지어내지 않고 뺀다.
+  // 글별 변경 시각은 contentUpdatedAt 우선(대표 글·공개 토글로 바뀌는 updated_at 은 마이그레이션 미적용 폴백일 때만) —
+  // 사이트맵 lastmod·JSON-LD dateModified 와 같은 규칙(lib/blog-types.ts resolveBlogContentModifiedAt).
   const lastBuildTime = latestTime(
-    feedPosts.flatMap((post) => [post.updatedAt, post.publishedAt, post.createdAt])
+    feedPosts.flatMap((post) => [resolveBlogContentModifiedAt(post), post.publishedAt, post.createdAt])
   )
   const lastBuildDate = lastBuildTime === undefined ? undefined : new Date(lastBuildTime).toUTCString()
 
