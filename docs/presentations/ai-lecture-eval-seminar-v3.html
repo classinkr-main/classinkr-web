@@ -692,6 +692,33 @@ aside.notes { display: none; }
 .slotw .reel .win { color: var(--em); }
 .s-hook .hs { position: absolute; left: 0; right: 0; top: 700px; margin: 0; text-align: center; font-size: 36px; font-weight: 700; letter-spacing: -.02em; color: var(--ink-2); }
 .s-hook .hs .em { display: block; margin-top: 14px; font-weight: 800; }
+
+/* ===== 22 누수 막고 상향 평준화 ===== */
+.qp { position: absolute; left: 120px; top: 290px; width: 1000px; height: 580px; box-sizing: border-box; border-radius: 44px; }
+.qcap { position: absolute; left: 48px; top: 34px; display: flex; align-items: center; gap: 12px; font-size: 21px; font-weight: 700; color: var(--mute); }
+.qbars { position: absolute; left: 56px; right: 150px; top: 110px; height: 400px; display: flex; align-items: flex-end; gap: 24px; }
+.qb { position: relative; flex: 1; height: 100%; display: flex; align-items: flex-end; }
+.qf { display: block; width: 100%; height: 0; border-radius: 18px 18px 8px 8px; background: #B5E22E; }
+.qt { position: absolute; left: 50%; top: -6px; transform: translateX(-50%); white-space: nowrap; padding: 6px 14px; border-radius: 999px; font-size: 18px; font-weight: 800; opacity: 0; }
+.qt.leak { background: #E08A2E; color: #fff; }
+.qt.good { background: var(--bg); color: var(--em); box-shadow: var(--sh-r-s); }
+.qline { position: absolute; left: 36px; right: 130px; top: 275px; height: 0; border-top: 3px dashed var(--mute); opacity: .7; z-index: 1; }
+.qline span { position: absolute; left: calc(100% + 14px); top: -26px; width: 90px; font-size: 18px; font-weight: 800; line-height: 1.3; color: var(--mute); }
+.lk { position: absolute; left: 1170px; width: 630px; height: 270px; box-sizing: border-box; padding: 40px 46px; }
+.lk.la { top: 290px; } .lk.lb { top: 600px; }
+.lk .k { display: flex; align-items: center; gap: 12px; font-size: 22px; font-weight: 800; color: var(--em); }
+.lk .tt { margin-top: 18px; font-size: 38px; font-weight: 800; line-height: 1.3; letter-spacing: -.035em; }
+.lk .ss { margin-top: 14px; font-size: 22px; font-weight: 600; color: var(--mute); line-height: 1.45; }
+
+/* ===== 24 돈으로만 움직이지 않는다 ===== */
+.s-grow .gq { position: absolute; left: 120px; top: 270px; margin: 0; font-size: 100px; font-weight: 800; line-height: 1.22; letter-spacing: -.05em; }
+.s-grow .gs { position: absolute; left: 120px; top: 640px; margin: 0; font-size: 34px; font-weight: 600; line-height: 1.55; color: var(--ink-2); letter-spacing: -.02em; }
+.s-grow .gs b { font-weight: 800; color: var(--em); }
+.gl { position: absolute; left: 1090px; top: 270px; width: 710px; display: flex; flex-direction: column; gap: 34px; }
+.g3 { display: flex; align-items: center; gap: 28px; height: 170px; padding: 0 40px; box-sizing: border-box; }
+.g3 .no { flex: none; width: 76px; height: 76px; display: grid; place-items: center; font-size: 30px; font-weight: 800; color: var(--em); }
+.g3 b { display: block; font-size: 30px; font-weight: 800; letter-spacing: -.03em; }
+.g3 span { display: block; margin-top: 8px; font-size: 21px; font-weight: 600; color: var(--mute); }
 </style>
 </head>
 <body>
@@ -1028,7 +1055,7 @@ aside.notes { display: none; }
     <div class="res"><div class="num">+<span class="roll" data-v="20"></span><small>%</small></div><div class="c">학생의 생각을<br>끌어내는 질문</div><div class="cs">사람 코치 없이, 자동 피드백만으로</div></div>
   </div>
   <p class="src t">출처 · Demszky et al., Educational Evaluation and Policy Analysis (2023) · Demszky et al., Computers &amp; Education (2024)</p>
-  <aside class="notes">핵심은 처벌이 아니라 '거울'. 교사들이 피드백 메일을 절반 정도만 열어봤는데도 효과가 났습니다. (화면에서는 뺐으니 말로만 짧게) 같은 연구에서 교사들은 정확도·프라이버시·시간을 걱정했습니다 — 26장에서 답합니다(리포트는 강사 먼저, 열람 권한은 좁게). → "클래스인은 수업을 이렇게 읽습니다."</aside>
+  <aside class="notes">핵심은 처벌이 아니라 '거울'. 교사들이 피드백 메일을 절반 정도만 열어봤는데도 효과가 났습니다. (화면에서는 뺐으니 말로만 짧게) 같은 연구에서 교사들은 정확도·프라이버시·시간을 걱정했습니다 — 28장에서 답합니다(리포트는 강사 먼저, 열람 권한은 좁게). → "클래스인은 수업을 이렇게 읽습니다."</aside>
 </section>
 
 <!-- 15 지표 · 튜닝 -->
@@ -1098,6 +1125,31 @@ aside.notes { display: none; }
   <aside class="notes">데모 5분. ① 수업 생성에서 녹화·AI 강의 분석 옵션 ② 리포트 종합 화면 → 세부 지표 1~2개(상호작용 공평성·발화 분포가 원장에게 가장 와닿음) ③ 학습 관리 > 교사 개발 옵션에서 강사별 추이, PDF ④ 기준 튜닝(제품팀 확인된 범위만) ⑤ AI 튜터 질문 — 자료 밖 질문은 틀릴 수 있다는 한계도 함께. 실패 대비 캡처 백업 준비. → "좋습니다. 그래서 이게 우리 학원에 얼마나 이득일까요?"</aside>
 </section>
 
+<!-- 22 누수 막고 상향 평준화 -->
+<section class="slide s-leak" data-scene="light" data-enter="leak" data-steps="2" data-time="1:00">
+  <span class="eyebrow nm in pill r"><i class="led"></i>3막 · 교실이 보이면</span>
+  <h2 class="h t"><span class="em">누수</span>는 막고, 좋은 수업은 <span class="em">퍼뜨립니다</span></h2>
+  <div class="qp nm in card r" data-at=".5">
+    <span class="qcap"><i class="led off"></i>이번 달 수업 10개 · 5개 기준 종합 점수 (예시)</span>
+    <div class="qline"><span>우리 학원<br>기준선</span></div>
+    <div class="qbars">
+      <div class="qb" data-v="92"><b class="qt good">좋은 수업</b><i class="qf"></i></div>
+      <div class="qb" data-v="48" data-to="72"><b class="qt leak">누수</b><i class="qf"></i></div>
+      <div class="qb" data-v="85"><i class="qf"></i></div>
+      <div class="qb" data-v="40" data-to="70"><b class="qt leak">누수</b><i class="qf"></i></div>
+      <div class="qb" data-v="78"><i class="qf"></i></div>
+      <div class="qb" data-v="88"><i class="qf"></i></div>
+      <div class="qb" data-v="52" data-to="74"><b class="qt leak">누수</b><i class="qf"></i></div>
+      <div class="qb" data-v="81"><i class="qf"></i></div>
+      <div class="qb" data-v="90"><i class="qf"></i></div>
+      <div class="qb" data-v="44" data-to="71"><b class="qt leak">누수</b><i class="qf"></i></div>
+    </div>
+  </div>
+  <div class="lk la nm card step" data-step="1"><div class="k"><i class="led"></i>누수 막기</div><div class="tt">부족한 수업과 리스크를<br>일찍 발견합니다</div><div class="ss">기준선 아래로 내려간 수업만 먼저 확인합니다</div></div>
+  <div class="lk lb nm card step" data-step="2"><div class="k"><i class="led"></i>상향 평준화</div><div class="tt">좋은 수업의 방식을<br>피드백으로 나눕니다</div><div class="ss">잘한 수업을 기준 삼아, 전체 수준을 끌어올립니다</div></div>
+  <aside class="notes">AI 강의평가는 '평가'가 아니라 '관리의 두 가지 일'을 합니다. 막대 하나가 수업 하나, 점선이 우리 학원 기준선입니다(예시 화면). 클릭 1 — 누수 막기: 기준선 아래로 내려간 수업(부족한 수업, 분위기·리스크 신호)이 먼저 보입니다. 원장님이 전부 참관하지 않아도 어느 수업을 먼저 봐야 하는지 알 수 있습니다. 클릭 2 — 상향 평준화: 잘한 수업의 방식(질문 분배, 단계별 판서 등)을 피드백으로 나누면 낮은 수업이 기준선 위로 올라옵니다. 점수는 사람을 줄 세우려는 것이 아니라 수업을 끌어올리는 출발점입니다. (예시 수치 — 실제 학원 데이터 아님) → "그러면 세 사람이 각자 무엇을 얻을까요?"</aside>
+</section>
+
 <!-- 18 세 사람의 이득 -->
 <section class="slide s18" data-scene="light" data-chapter="4" data-enter="gains" data-time="1:00">
   <span class="eyebrow nm in pill r"><i class="led"></i>4막 · 결국, 이득입니다</span>
@@ -1109,6 +1161,20 @@ aside.notes { display: none; }
   <div class="who w2 nm card r" data-o="4"><div class="hd"><span class="ib nm in circle"><svg><use href="#i-head"/></svg></span>원장<span class="eyeb on"><svg><use href="#i-eye"/></svg></span></div><div class="tx">참관하지 않아도<br>모든 수업을 같은 기준으로</div><div class="gain nm sm pill"><i class="led"></i>줄어드는 시간</div></div>
   <div class="who w3 nm card r" data-o="5"><div class="hd"><span class="ib nm in circle"><svg><use href="#i-teacher"/></svg></span>강사<span class="eyeb on"><svg><use href="#i-eye"/></svg></span></div><div class="tx">자기 수업과 성장이 보입니다<br>그래서, 남습니다</div><div class="gain nm sm pill"><i class="led"></i>지키는 매출</div></div>
   <aside class="notes">12장의 세 사람이 다시 나옵니다 — 이번에는 모두 수업이 보입니다. 원장은 참관·면담 준비 시간이 줄고, 강사는 자기 성장이 보여 남고, 학부모·학생은 다시보기와 AI 튜터로 수업을 이어가고 상담에서 관리 방식을 근거로 듣습니다. 가운데 학원에는 강사가 바뀌어도 기준과 기록이 남습니다(9장 되받기). → "이 중 가장 큰 이득부터 숫자로 보겠습니다. 9장의 그 학원으로 돌아가 볼까요?"</aside>
+</section>
+
+<!-- 24 돈으로만 움직이지 않는다 -->
+<section class="slide s-grow" data-scene="light" data-enter="grow" data-time="0:40">
+  <span class="eyebrow nm in pill r"><i class="led"></i>4막 · 결국, 이득입니다</span>
+  <p class="gq t">강사는 <span class="em">돈으로만</span><br>움직이지 않습니다.</p>
+  <p class="gs t">어제보다 나아지고 있다는 감각.<br>그 근거가 <b>자기 수업 분석</b>에서 나옵니다.</p>
+  <div class="gl">
+    <div class="g3 nm card r"><div class="no nm in circle">1</div><div><b>내 수업 리포트</b><span>5개 기준 점수와 강점 · 개선점</span></div></div>
+    <div class="g3 nm card r"><div class="no nm in circle">2</div><div><b>다음 수업에서 하나만 바꾸기</b><span>질문을 뒷줄부터 고르게 나누기</span></div></div>
+    <div class="g3 nm card r"><div class="no nm in circle">3</div><div><b>달라진 점수로 확인</b><span>성장 기록이 쌓입니다</span></div></div>
+  </div>
+  <p class="src t">출처 · 잡코리아 에듀잡, 학원강사 430명 이직 현황 설문 — 급여(33.7%) 외에 스케줄·부가 업무·원장과의 관계도 이직 이유</p>
+  <aside class="notes">8장에서 급여가 1순위인 건 맞다고 했습니다. 그런데 돈만이 아니었습니다. "강사는 돈으로만 움직이지 않습니다." 강사가 남는 이유 중 하나는 어제보다 나아지고 있다는 감각, 곧 자기 발전입니다. 그 근거가 강의 분석입니다 — 내 수업 리포트에서 강점과 개선점을 보고, 다음 수업에서 하나만 바꾸고, 달라진 점수로 확인합니다. 감시가 아니라 성장 기록으로 쓰이면 강사에게도 이득입니다. (성장 기회가 이직·잔류에 영향을 준다는 수치는 이 자료에서 확인하지 못해 숫자는 말하지 않습니다.) → "이제 원장님 입장의 숫자를 보겠습니다."</aside>
 </section>
 
 <!-- 19 사라진 매출 -->
@@ -1211,11 +1277,11 @@ aside.notes { display: none; }
   <div class="cta">
     <div class="ctac nm card r"><div class="no nm in circle"><i class="led"></i></div><div><b>무료 상담</b><span>몇 명을 지키면 본전인지, 우리 학원 숫자로 계산</span></div><span class="arr">→</span></div>
     <div class="ctac nm card r"><div class="no nm in circle"><i class="led"></i></div><div><b>프로모션 참여</b><span>세미나 참석 학원 대상 · 혜택 조건은 현장 안내</span></div><span class="arr">→</span></div>
-    <div class="ctac nm card r"><div class="no nm in circle"><i class="led"></i></div><div><b>목동 쇼룸 방문</b><span>우리 학원 대표 수업 자료를 가져오세요</span></div><span class="arr">→</span></div>
+    <div class="ctac nm card r"><div class="no nm in circle"><i class="led"></i></div><div><b>목동 쇼룸 방문</b><span>실제 ClassIn을 직접 체험해 보세요</span></div><span class="arr">→</span></div>
     <div class="qrrow r"><div class="qr nm in">QR</div><p>상담 링크 · 리소스 절감 계산 워크시트<small>QR 자리 — 발표 전 실제 링크로 교체</small></p></div>
   </div>
   <p class="src t">빌려온 생각 · 갤럽 · 킴 스콧 · 아툴 가완디 · 사이먼 시넥 · Demszky et al.(스탠퍼드)</p>
-  <aside class="notes">질의응답. 다음 단계 세 가지: 무료 상담(손익분기 학생 수를 우리 학원 숫자로 계산), 프로모션 참여(세미나 참석 학원 대상 — 혜택 조건은 발표 전 확정해 현장 안내, 무료 50회 언급 시 6.0.9 기준 제품팀 확인), 목동 쇼룸(대표 수업 자료 지참). 예상 질문: 강사 근로자성·3.3% 계약 → 계약 명칭이 아니라 실질(지휘·감독, 시간 구속, 고정급)로 판단된다는 정도로만 답하고 노무 상담으로 연결.</aside>
+  <aside class="notes">질의응답. 다음 단계 세 가지: 무료 상담(손익분기 학생 수를 우리 학원 숫자로 계산), 프로모션 참여(세미나 참석 학원 대상 — 혜택 조건은 발표 전 확정해 현장 안내, 무료 50회 언급 시 6.0.9 기준 제품팀 확인), 목동 쇼룸(실제 ClassIn 직접 체험 — 원하시면 대표 수업 자료를 가져오시면 그 수업으로). 예상 질문: 강사 근로자성·3.3% 계약 → 계약 명칭이 아니라 실질(지휘·감독, 시간 구속, 고정급)로 판단된다는 정도로만 답하고 노무 상담으로 연결.</aside>
 </section>
 
 <div id="chap" aria-hidden="true"><div class="cc nm"><div class="cn nm in circle"></div><div><div class="ck"></div><div class="ct"></div><div class="cs"></div><div class="cl"><i class="led off"></i><i class="led off"></i><i class="led off"></i><i class="led off"></i></div></div></div></div>
@@ -1710,6 +1776,21 @@ aside.notes { display: none; }
       tl.fromTo($('.s-infra .ih .em', slide), { '--hlw': '0%' }, { '--hlw': '100%', duration: .9, ease: 'power3.inOut' }, s + .8);
     },
 
+    leak: function (slide, tl, s) {
+      // 수업 10개가 막대로 자란다
+      var bars = $$('.qb', slide);
+      bars.forEach(function (b) {
+        var f = $('.qf', b);
+        gsap.set(f, { height: 0, backgroundColor: '#B5E22E' });
+        gsap.set($$('.qt', b), { opacity: 0, y: 6 });
+        tl.to(f, { height: +b.dataset.v * 3.8, duration: 1.3, ease: 'power3.out' }, s + .9 + bars.indexOf(b) * .09);
+      });
+    },
+
+    grow: function (slide, tl, s) {
+      tl.fromTo($$('.g3 .no', slide), { scale: .8 }, { scale: 1, duration: .7, ease: 'back.out(1.8)', stagger: .15 }, s + 1.0);
+    },
+
     loop: function (slide, tl, s) {
       var w = $('.window', slide), pulse = $('.orb-pulse', slide), nodes = $$('.node .led', slide);
       setWindow(w, 'fog');
@@ -1905,6 +1986,22 @@ aside.notes { display: none; }
     invisible: function (slide, n, tl) {
       tl.to($('.q10', slide), { autoAlpha: 0, y: -40, duration: .6, ease: 'power2.in' }, 0);
       tl.to($('.window', slide), { y: -392, scale: .9, duration: 1.2, ease: 'expo.inOut' }, .1);
+    },
+
+    leak: function (slide, n, tl, instant) {
+      var bars = $$('.qb', slide), lows = bars.filter(function (b) { return b.dataset.to; });
+      if (n === 1) {
+        lows.forEach(function (b) {
+          tl.to($('.qf', b), { backgroundColor: '#E08A2E', duration: .6 }, .1);
+          tl.to($('.qt.leak', b), { opacity: 1, y: 0, duration: .5, ease: 'power2.out' }, .3);
+        });
+      } else {
+        lows.forEach(function (b, i) {
+          tl.to($('.qf', b), { height: +b.dataset.to * 3.8, backgroundColor: '#B5E22E', duration: 1.6, ease: 'power2.inOut' }, .5 + i * .18);
+          tl.to($('.qt.leak', b), { opacity: 0, duration: .4 }, .3);
+        });
+        tl.to($('.qb .qt.good', slide), { opacity: 1, y: 0, duration: .6, ease: 'power2.out' }, .2);
+      }
     },
 
     candor: function (slide, n, tl, instant) {
