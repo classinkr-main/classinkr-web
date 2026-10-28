@@ -60,6 +60,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - **하드웨어·오더·매출 연결 로직.** 리드→고객→견적→오더→출고→매출을 앱 데이터로 묶는 과도기 로직과, 하드웨어·매출 구글 시트를 어드민으로 편입하는 순서(T0~T4)
 - [active/hardware-inventory-process-gap-2026-10-28.md](./active/hardware-inventory-process-gap-2026-10-28.md)
   - 하드웨어 재고관리 프로세스 정의서(2026-10-27)와 현재 구현의 차이, 결정 대기 질문, 만드는 순서
+- [hardware-ops/distributor-settlement.md](./hardware-ops/distributor-settlement.md)
+  - **하드웨어 C방식/H방식 총판 정산.** 총판용 견적서 발행(고객 동의·설치 완료·직접), 원가 미수금, 방식별 매출 원장 초안 시점
 - [active/erp-blueprint-2026-06-22.md](./active/erp-blueprint-2026-06-22.md)
   - 어드민 → 지사 운영 OS(ERP) 청사진 & 실행 로드맵(Account 360 스파인·귀속·노션 캘린더 라이브 연동·거버넌스 결정)
 - [active/marketing-tab-dashboard-restructure-2026-09-14.md](./active/marketing-tab-dashboard-restructure-2026-09-14.md)

@@ -25,6 +25,7 @@
 7. [상태 흐름과 전이 규칙](./state-flow.md)
 8. [운영 건 상세 화면](./operation-case-workspace.md)
 9. [열린 질문과 다음 결정](./open-questions.md)
+10. [하드웨어 C방식/H방식 — 총판 정산과 매출 순서](./distributor-settlement.md)
 
 ## 4. 기존 문서와 연결
 

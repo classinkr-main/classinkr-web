@@ -56,6 +56,15 @@ npm run check:db --  --strict
 유지하고 팀 템플릿 조회는 적용 안내를 표시하며, 저장·수정·보관은 503으로 응답한다.
 테이블은 RLS를 활성화하고 정책을 두지 않아 서버의 관리자 인증을 거친 service role API에서만 접근한다.
 
+### 총판 정산
+
+[20261023_distributor_settlements.sql](../../supabase/migrations/20261023_distributor_settlements.sql)은
+견적별 총판 정산(총판용 견적서 금액·발행 스냅샷·미수 상태), 총판 입금 기록, 원가 템플릿을 저장한다.
+운영 적용 여부는 `npm run check:db`의 `distributor_settlements`·`distributor_settlement_payments`·
+`distributor_price_templates` 프로브로 확인한다. 미적용이면 고객 견적 작성·공유·동의는 그대로 동작하고,
+견적 상세의 총판 정산 영역과 총판 미수금 탭은 적용 안내를 표시하며 쓰기는 503으로 응답한다.
+세 표 모두 RLS를 활성화하고 정책을 두지 않는다.
+
 ### 공통 적용 기준
 
 **마이그레이션을 먼저 적용하고 코드를 배포한다.** 다만 순서가 뒤집혀도 공개 표면이 죽지 않도록
@@ -182,6 +191,15 @@ npm run check:db --  --strict
 | 파일 | 하는 일 | 미적용 시 | 확인 |
 | --- | --- | --- | --- |
 | `20261028_blog_posts_content_updated_at.sql` | `blog_posts.content_updated_at`(timestamptz, 기존 행은 `coalesce(updated_at, published_at, created_at)`로 백필, 이후 기본값 `now()`) + BEFORE UPDATE 트리거 `blog_posts_content_updated_at` — 제목·슬러그·요약·본문·카테고리·대표 이미지·SEO·"이 글에서 다루는 것"이 실제로 바뀐 UPDATE 에서만 갱신한다. 기존 `blog_posts_updated_at` 트리거(내부용 `updated_at`)는 그대로 둔다 | **배포 전후 무관 — 화면·저장은 정상.** 사이트맵·RSS 조회는 컬럼 없음(42703)을 감지해 `updated_at` 으로 폴백하고(`console.warn`), 상세는 `select *` 라 값이 비면 `updated_at` 을 쓴다. 그동안은 지금처럼 대표 글·공개 토글만 해도 사이트맵 lastmod·JSON-LD dateModified·RSS lastBuildDate 가 바뀐다. 적용 후에는 내용 변경 때만 바뀐다 | `check:db`(warning, 컬럼 프로브). 트리거는 파일 머리 주석의 `pg_trigger` 조회 |
+
+### 2026-10-23 총판 정산 — 서울 프로젝트 적용 확인 필요
+
+[배포 순서 규칙 › 총판 정산](#총판-정산) 절의 마이그레이션이다. 2026-10-22·10-28 파일과 서로 참조하지 않아
+(`quote_documents`·`quote_document_versions`·`deals`만 참조) 10-28 파일 뒤에 적용해도 된다. 전부 멱등(`IF NOT EXISTS`·`DROP ... IF EXISTS`)이라 재실행 무해.
+
+| 파일 | 하는 일 | 미적용 시 | 확인 |
+| --- | --- | --- | --- |
+| `20261023_distributor_settlements.sql` | 원가 템플릿 `distributor_price_templates`, 견적별 총판 정산 `distributor_settlements`(C/H 방식·발행 스냅샷·공유 토큰·미수 상태), 입금 기록 `distributor_settlement_payments`. 세 표 모두 RLS deny-all | 고객 견적 작성·공유·동의와 오더 생성은 그대로 된다. 고객 동의 시 총판 견적서 자동 발행은 조용히 건너뛰고, 견적 상세의 총판 정산 영역·총판 미수금 탭은 적용 안내, 쓰기는 503 | `npm run check:db`의 `distributor_settlements`·`distributor_settlement_payments`·`distributor_price_templates` 프로브(warning) |
 
 ## 적용 보류 중인 마이그레이션
 
