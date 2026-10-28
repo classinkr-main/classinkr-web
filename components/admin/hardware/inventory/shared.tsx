@@ -219,6 +219,14 @@ export interface HardwareMovementDraft {
   // UI 판별 전용 — 출고 라인이 실제(false)/예정(true)인지. 서버 전송 직전 deriveStatus로
   // status에 반영하고 payload에서는 제외한다(서버 status 규약은 status 문자열만 본다).
   isPlanned?: boolean
+  // 재고관리 프로세스 칸(계약 §7-3) — 어떤 칸을 싣는지는 outbound-v2-model processDraftFields 가 정한다.
+  // 옛 바구니(보관된 초안)에는 없다.
+  outboundType?: HardwareOutboundType
+  customerId?: string
+  expectedReturnAt?: string
+  ownerUserId?: string
+  isFree?: boolean
+  adjustDirection?: "increase" | "decrease"
 }
 
 export type HardwareTab = "home" | "entry" | "history"
@@ -267,7 +275,8 @@ export const ENTRY_PRESETS: Array<{
   // 샘플 모델(사용자 확정): 샘플 총량 = 사무실(남은 샘플) + 샘플(나간 샘플).
   //   샘플 배정(창고→사무실)으로 판매 재고를 샘플 재고로 전환 → 샘플 대여(사무실→샘플, 없으면 창고→샘플)로 내보냄 →
   //   샘플 반환(샘플→사무실)으로 회수. return은 repository에서 from −qty / to +qty라 위치 조합만으로 표현된다.
-  { key: "sale", movementType: "outbound", label: "판매 출고", description: "고객 판매 완료", icon: ArrowUpFromLine, from: "창고", to: "", status: "출고" },
+  // 고객 출고 진행 상태는 정의서 고정값(배송 예정 | 설치 완료) — 저장 직전 deriveStatus 도 같은 값을 만든다.
+  { key: "sale", movementType: "outbound", label: "판매 출고", description: "고객 설치 완료", icon: ArrowUpFromLine, from: "창고", to: "", status: "설치 완료" },
   { key: "planned", movementType: "outbound", label: "배송 예정", description: "가용에서 미리 차감", icon: Clock3, from: "창고", to: "", status: "배송 예정" },
   { key: "sample", movementType: "outbound", label: "샘플 대여", description: "사무실 샘플을 대여·데모로 반출", icon: ArrowUpFromLine, from: "사무실", to: "샘플", status: "샘플/대여" },
   { key: "sampleReturn", movementType: "return", label: "샘플 반환", description: "대여 샘플을 사무실로 회수", icon: RotateCcw, from: "샘플", to: "사무실", status: "샘플 반환" },
@@ -333,6 +342,10 @@ export function quickCartLineKey(draft: HardwareMovementDraft) {
     draft.storageLocation,
     draft.importer,
     draft.serials.join(""),
+    draft.outboundType ?? "",
+    draft.customerId ?? "",
+    draft.expectedReturnAt ?? "",
+    draft.ownerUserId ?? "",
   ].join(" ")
 }
 
@@ -375,6 +388,9 @@ export const SALE_TYPE_META: Record<OutboundSaleType, { label: string; tone: str
 
 export function outboundSaleType(movement: HardwareMovement): OutboundSaleType | null {
   if (movement.movement_type !== "outbound") return null
+  // 서버가 정한 유형(칸 → 시트 유형 열·메모 추정)이 있으면 그것이 정본이다(resolveOutboundType).
+  const resolved = movement.outbound_type_resolved ?? movement.outbound_type
+  if (resolved) return resolved
   const token = (movement.memo ?? "").split("·")[0].trim().toLowerCase()
   if (token === "a/s" || token === "as") return "as"
   if (token === "promotion") return "promotion"

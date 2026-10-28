@@ -13,6 +13,10 @@ import { memo, useCallback, useState } from "react"
 import { ChevronDown, ExternalLink, Plus, RefreshCw } from "lucide-react"
 
 import { adminFetchJson } from "@/lib/admin-client"
+import { HARDWARE_PROGRESS_STATUS } from "@/lib/hardware/inventory-process"
+
+import LotAllocationDialog, { LotAllocationPreparing, useLotAllocationPrompt } from "./LotAllocationDialog"
+import { normalizeAllocations, type LotAllocation } from "./lot-allocation-model"
 import { formatNumber, todayKey } from "./shared"
 
 interface BacklogOverlap {
@@ -59,6 +63,8 @@ function CrmOrderBacklogSection({ canWrite, onRegistered }: CrmOrderBacklogSecti
   const [rowResults, setRowResults] = useState<Record<string, { ok: boolean; message: string }>>({})
   // 겹침 의심 줄은 한 번 더 누르게 한다 — 첫 클릭은 경고만 띄운다.
   const [overlapAcknowledged, setOverlapAcknowledged] = useState<ReadonlySet<string>>(() => new Set())
+  // 물류번호 관리 품목이면 등록 전에 물류번호를 고른다(결정 D6 — 새 배송 예정도 물류번호 필수).
+  const lotPrompt = useLotAllocationPrompt(undefined)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -109,28 +115,53 @@ function CrmOrderBacklogSection({ canWrite, onRegistered }: CrmOrderBacklogSecti
       return next
     })
     try {
-      await adminFetchJson("/api/admin/hardware/movements", {
-        method: "POST",
-        body: JSON.stringify({
+      const allocations = await lotPrompt.request([
+        {
+          key: entry.id,
+          itemId: null,
           productName: entry.productName,
-          movementType: "outbound",
+          destination: entry.customerName,
+          lotNo: null,
           quantity: entry.quantity,
-          occurredAt: todayKey(),
-          fromLocation: "창고",
-          toLocation: entry.customerName ?? "",
-          status: "배송 예정",
+        },
+      ])
+      if (!allocations) return
+      const productName = entry.productName
+      const base = {
+        productName,
+        movementType: "outbound",
+        occurredAt: todayKey(),
+        fromLocation: "창고",
+        // CRM 오더는 판매다(결정 D5). 고객 id 는 대사 응답에 없어 이름만 싣는다.
+        outboundType: "sales",
+        toLocation: entry.customerName ?? "",
+        status: HARDWARE_PROGRESS_STATUS.planned,
+        referenceNo: entry.referenceNo,
+        memo: `CRM 연동: ${entry.sourceLabel} · ${entry.title}`,
+        crmLink: {
+          id: entry.id,
+          source: entry.source,
+          sourceLabel: entry.sourceLabel,
           referenceNo: entry.referenceNo,
-          memo: `CRM 연동: ${entry.sourceLabel} · ${entry.title}`,
-          crmLink: {
-            id: entry.id,
-            source: entry.source,
-            sourceLabel: entry.sourceLabel,
-            referenceNo: entry.referenceNo,
-            title: entry.title,
-            href: entry.href,
-          },
-        }),
-      })
+          title: entry.title,
+          href: entry.href,
+        },
+      }
+      const lines: LotAllocation[] = normalizeAllocations(allocations.get(entry.id) ?? [])
+      if (lines.length <= 1) {
+        await adminFetchJson("/api/admin/hardware/movements", {
+          method: "POST",
+          body: JSON.stringify({ ...base, quantity: entry.quantity, lotNo: lines[0]?.lotNo ?? "" }),
+        })
+      } else {
+        // 물류번호를 나누면 한 줄씩 — 같은 오더 연결을 줄마다 싣는다.
+        const result = await adminFetchJson<{ lineResults?: Array<{ ok: boolean; error?: string }> }>("/api/admin/hardware/movements", {
+          method: "POST",
+          body: JSON.stringify({ movements: lines.map((line) => ({ ...base, quantity: line.quantity, lotNo: line.lotNo })) }),
+        })
+        const failed = (result.lineResults ?? []).filter((line) => !line.ok)
+        if (failed.length > 0) throw new Error(failed.map((line) => line.error ?? "저장 실패").join(" · "))
+      }
       setEntries((current) => current.filter((row) => row.id !== entry.id))
       setOverlapAcknowledged((current) => {
         const next = new Set(current)
@@ -271,6 +302,8 @@ function CrmOrderBacklogSection({ canWrite, onRegistered }: CrmOrderBacklogSecti
           </ul>
         </div>
       ) : null}
+      <LotAllocationDialog state={lotPrompt.dialog} />
+      <LotAllocationPreparing preparing={lotPrompt.preparing} />
     </section>
   )
 }

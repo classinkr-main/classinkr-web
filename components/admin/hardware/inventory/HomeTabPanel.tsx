@@ -46,7 +46,9 @@ interface HomeTabPanelProps {
   setMovementsPage: ComponentProps<typeof HardwareSearchPanel>["setMovementsPage"]
   confirmPlannedMovement: ComponentProps<typeof HardwareSearchPanel>["confirmPlannedMovement"]
   plannedConfirmLocked: ComponentProps<typeof HardwareSearchPanel>["plannedConfirmLocked"]
-  canFinalize: ComponentProps<typeof HardwareSearchPanel>["canFinalize"]
+  // 스냅샷 복원은 hardware.finalize 그대로(정의서 §권한 밖).
+  canFinalize: ComponentProps<typeof SnapshotRestorePanel>["canFinalize"]
+  movementButtonState: ComponentProps<typeof PlannedOutboundPanel>["movementButtonState"]
   setCustomerDetail: ComponentProps<typeof HardwareSearchPanel>["setCustomerDetail"]
   plannedMovementQuantity: ComponentProps<typeof PlannedOutboundPanel>["plannedMovementQuantity"]
   plannedStaleGroupCount: ComponentProps<typeof PlannedOutboundPanel>["plannedStaleGroupCount"]
@@ -111,6 +113,7 @@ export default function HomeTabPanel({
   confirmPlannedMovement,
   plannedConfirmLocked,
   canFinalize,
+  movementButtonState,
   setCustomerDetail,
   plannedMovementQuantity,
   plannedStaleGroupCount,
@@ -192,7 +195,7 @@ export default function HomeTabPanel({
       data={data}
       plannedMovementQuantity={plannedMovementQuantity}
       plannedStaleGroupCount={plannedStaleGroupCount}
-      canFinalize={canFinalize}
+      movementButtonState={movementButtonState}
       startPlannedEntry={startPlannedEntry}
       plannedConfirmLocked={plannedConfirmLocked}
       plannedPagination={plannedPagination}
@@ -229,7 +232,7 @@ export default function HomeTabPanel({
       setMovementsPage={setMovementsPage}
       confirmPlannedMovement={confirmPlannedMovement}
       plannedConfirmLocked={plannedConfirmLocked}
-      canFinalize={canFinalize}
+      movementButtonState={movementButtonState}
       setCustomerDetail={setCustomerDetail}
     />
 
