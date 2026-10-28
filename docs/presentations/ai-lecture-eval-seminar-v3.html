@@ -807,7 +807,7 @@ aside.notes { display: none; }
 </section>
 
 <!-- 6 학생이 떠나는 순간 -->
-<section class="slide s6" data-scene="light" data-enter="leave" data-steps="1" data-time="0:50">
+<section class="slide s6" data-scene="light" data-enter="leave" data-steps="2" data-time="0:50">
   <span class="eyebrow nm in pill r"><i class="led"></i>1막 · 두 개의 이탈</span>
   <h2 class="h t">학생은 <span class="em">이럴 때</span> 떠납니다</h2>
   <span class="badge nm in pill r"><i class="led off"></i>현장 패턴 · 공개 통계 없음</span>
@@ -822,7 +822,7 @@ aside.notes { display: none; }
       <div class="flip r"><div class="inner"><div class="face front nm in"><i>겉</i>“스케줄이 안 맞아서요”</div><div class="face back nm"><i>속</i>관리가 안 되는 것 같아서</div></div></div>
     </div>
   </div>
-  <aside class="notes">퇴원 사유를 집계한 공개 통계는 찾지 못했습니다 — 그래서 숫자 없이 '현장 패턴'으로 보여드립니다. 원장님들은 이 장면을 다 아십니다. 클릭: 학부모가 남기는 말과 그 뒤의 이유. (참고: 2009년 학부모 설문 연구에서 학원을 바꾼 이유 상위는 '자녀가 원해서 → 학부모 본인 판단 → 다른 학부모 권유' 순.) → "이 중 원장님을 가장 아프게 하는 건 두 번째, 강사가 바뀔 때입니다."</aside>
+  <aside class="notes">퇴원 사유를 집계한 공개 통계는 찾지 못했습니다 — 그래서 숫자 없이 '현장 패턴'으로 보여드립니다. 원장님들은 이 장면을 다 아십니다. 클릭 1: 학부모가 학원에 남기는 말(겉). 클릭 2: 그 뒤의 진짜 이유(속)로 뒤집힙니다. (참고: 2009년 학부모 설문 연구에서 학원을 바꾼 이유 상위는 '자녀가 원해서 → 학부모 본인 판단 → 다른 학부모 권유' 순.) → "이 중 원장님을 가장 아프게 하는 건 두 번째, 강사가 바뀔 때입니다."</aside>
 </section>
 
 <!-- 7 70명 중 8명 -->
@@ -1864,13 +1864,11 @@ aside.notes { display: none; }
     question: function (slide, n, tl) { tl.to($$('.q > span', slide), { opacity: .32, duration: 1.6, ease: 'power2.inOut' }, 0); },
 
     leave: function (slide, n, tl, instant) {
+      // 클릭 1: 겉(학원에 남기는 말) · 클릭 2: 속(그 뒤의 이유)으로 뒤집혀 그대로 머문다
+      if (n !== 2) return;
       var inners = $$('.flip .inner', slide);
       if (instant || reduce) { gsap.set(inners, { rotationX: 180 }); return; }
-      tl.to(inners, { rotationX: 180, duration: 1.0, ease: 'power3.inOut', stagger: .25 }, 1.0);
-      tl.call(function () {
-        loop(gsap.timeline({ repeat: -1, yoyo: true, repeatDelay: 2.4, delay: 2.4 })
-          .to(inners, { rotationX: 0, duration: .9, ease: 'power3.inOut', stagger: .2 }));
-      }, null, 2.3);
+      tl.to(inners, { rotationX: 180, duration: 1.0, ease: 'power3.inOut', stagger: .25 }, .1);
     },
 
     heart: function (slide, n, tl, instant) {
