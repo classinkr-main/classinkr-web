@@ -434,7 +434,22 @@ select slug, title, lead_magnet_slug from blog_posts
 
 ### 11-3. 그로스 파트(2차 커밋)
 
-(2차 커밋 시 추가)
+| 파일 | 변경 |
+|---|---|
+| `lib/tracking-paths.ts`(신규) | 추적 경계 정본. `isTrackingExcludedPath`(`/admin` 느슨 매칭 + `/share` `/unsubscribe` `/account` `/auth` `/login` `/signup` `/forgot-password` `/receipt` 경로 경계 매칭, `/checkout` 은 결제 전환 때문에 제외하지 않음), `sanitizeTrackingUrl`/`sanitizeTrackingPath`(허용 파라미터 `utm_*` `gclid` `gbraid` `wbraid` `fbclid` `msclkid` `n_*` 만, 값이 이메일이면 버림), `sanitizeTrackingTarget`(`tel:`·`mailto:` 는 스킴만), `stashContactPrefill`/`takeContactPrefill`(sessionStorage, 30분) |
+| `components/AppChrome.tsx`, `GoogleAdsScript.tsx`, `GTMScript.tsx`, `MetaPixelScript.tsx`, `NaverAnalyticsScript.tsx`, `AnalyticsProviders.tsx` | 제외 경로를 한 함수로 통일. gtag 는 config 앞에 `gtag('set', {page_location, page_referrer})` 로 정화 주소를 고정(config 파라미터는 소프트 내비의 `set` 을 덮으므로 쓰지 않음). 마케팅 동의 게이트는 그대로 |
+| `components/PageViewTracker.tsx` | 중복 키에서 동의 플래그 제거(동의 변경 시 GA4 page_view 재발화 금지, 내부 적재만 재전송). 내비마다 `gtag('set', …)` 뒤 `page_title`·`page_location`·`page_referrer` 명시. `path` 는 정화값 |
+| `lib/analytics.ts` | `trackLeadSubmitted({formType, source, dedupeKey, stored})` — `stored === false` 면 미전송, `classinkr.leadTracked.<key>` 로 1회(sessionStorage 불가 시 메모리). Ads 전환도 같은 중복 방지 안. `trackFormStart`(form_type 별 탭 세션 1회). GA4 로 가는 파라미터를 allowlist 로 선별(`lead_id`·`stored`·`title`·`referrer` 등 제외), generate_lead 에 `form_type`·`lead_source`. `submit_newsletter` form_type 은 없으면 source 로 추론. `trackEvent` 3번째 인자 `{skipMarketingPixels}`. 내부 적재 fetch `referrer` 정화 |
+| `app/api/track/event/route.ts` | ALLOWED_EVENTS 에 `contact_start` `showroom_start` `click_to_call` `click_email` `pricing_view`, 파라미터 키에 `form_type` `lead_source` `link_location` `pricing_surface` `page_path` |
+| `app/contact/page.tsx`, `components/sections/DemoModal.tsx`, `components/events/EventSignupModal.tsx`, `components/showroom/ShowroomBookingForm.tsx`, `components/checkout/CheckoutRequestForm.tsx` | 리드 성공 발화를 `trackLeadSubmitted` 로(form_type contact / demo / event / showroom / checkout_request, dedupeKey conversionEventId·leadId·bookingId·requestId). contact·쇼룸은 첫 포커스에 `contact_start`/`showroom_start`, DemoModal 은 자동 포커스 때문에 첫 입력·포인터로 |
+| `app/contact/page.tsx` 추가 | prefill 을 sessionStorage 우선, 구 `?prefill=` 도 읽은 뒤 `history.replaceState` 로 제거. 전화번호를 `tel:` 링크로(`data-track-location="contact_page"`) |
+| `components/ui/FloatingChatbot.tsx` | `/contact?prefill=` 대신 `stashContactPrefill` |
+| `components/ContactLinkTracker.tsx`(신규) | 문서 단위 캡처 클릭으로 `tel:`/`mailto:` → `click_to_call`/`click_email`(`link_location`, `page_path` 만, 번호·주소 미전송) |
+| `components/PricingViewTracker.tsx`(신규), `app/pricing/layout.tsx` | `pricing_view`(`pricing_surface` = pricing / pricing_simulator / pricing_simulator_krw) |
+| `app/resources/[slug]/ResourceDownloadForm.tsx`, `components/blog/LeadMagnetGate.tsx` | 실제 다운로드 시작 직후 `download_materials{asset_id, lead_magnet, gate, source, page_path}`(픽셀 미전송 — Meta `Lead` 이중 방지). `submit_newsletter` 에 form_type, `stored === false` 면 미전송 |
+| `tests/lib/tracking-paths.test.ts`, `tests/lib/analytics-lead-tracking.test.ts`, `tests/lib/tracking-surfaces.test.ts`, `tests/api/track-event.test.ts`, `tests/admin/admin-gtag-scope.test.ts` | 신규·갱신 |
+
+남은 위험(코드 밖 또는 범위 밖): 서버 MP generate_lead 와 이중 집계(D9), 허용 파라미터가 아닌 쿼리만 바뀔 때(`?category`, `?q`) page_view 가 나가지 않음, Meta·네이버·카카오 픽셀은 `location.href` 를 스스로 읽음, 서버 측 Referer·CAPI `event_source_url` 은 전체 URL, gtag.js 는 로드 뒤 제외 경로로 소프트 이동해도 남음(향상된 측정 OFF 필요). 제품 페이지 소개서 클릭(`download_materials`)이 Meta `Lead` 로 가는 기존 매핑은 유지했다(운영 결정).
 
 ---
 

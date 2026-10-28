@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 
+import { isTrackingExcludedPath } from "@/lib/tracking-paths"
+
 /**
  * 어드민에서 광고/분석 픽셀이 발화하지 않아야 한다는 계약을 소스 텍스트로 고정한다.
  *
@@ -41,19 +43,34 @@ describe("어드민 gtag/GTM 차단 — 루트 레이아웃 우회 재발 방지
     expect(layoutSource).toContain("gtag('consent','default'")
   })
 
-  it("GoogleAdsScript는 /admin 경로에서 렌더를 멈추는 가드를 유지한다", () => {
-    const source = read("components/GoogleAdsScript.tsx")
-
-    // 루트 레이아웃의 중복 로더가 사라진 지금, 이 가드가 어드민 차단의 유일한 경계다 —
-    // 이 가드마저 지워지면 다시 전 어드민 페이지에 gtag가 발화한다.
-    expect(source).toContain('pathname.startsWith("/admin")')
-    expect(source).toMatch(/if\s*\(\s*pathname\.startsWith\("\/admin"\)\s*\)\s*return null/)
+  it("추적 제외 경계(isTrackingExcludedPath)는 /admin 전체를 덮는다", () => {
+    // 경계 정본이 lib/tracking-paths.ts 로 옮겨졌다. 예전 가드(startsWith("/admin"))와 같은
+    // 범위를 유지해야 한다 — 경계 없이 접두만 맞춘다.
+    expect(isTrackingExcludedPath("/admin")).toBe(true)
+    expect(isTrackingExcludedPath("/admin/crm/customers/leads")).toBe(true)
+    expect(isTrackingExcludedPath("/admin-preview")).toBe(true)
   })
 
-  it("GTMScript도 /admin 경로에서 렌더를 멈추는 가드를 유지한다", () => {
+  it("GoogleAdsScript는 추적 제외 경로(/admin 포함)에서 렌더를 멈추는 가드를 유지한다", () => {
+    const source = read("components/GoogleAdsScript.tsx")
+
+    // 루트 레이아웃의 중복 로더가 사라진 지금, 이 가드가 어드민 차단의 경계다 —
+    // 이 가드마저 지워지면 다시 전 어드민 페이지에 gtag가 발화한다.
+    expect(source).toMatch(/if\s*\(\s*isTrackingExcludedPath\(pathname\)\s*\)\s*return null/)
+  })
+
+  it("AppChrome도 추적 제외 경로에서 GoogleAdsScript를 마운트하지 않는다", () => {
+    const source = read("components/AppChrome.tsx")
+
+    expect(source).toContain("isTrackingExcludedPath(pathname)")
+    expect(source).toMatch(/\{showGoogleTag \? <GoogleAdsScript \/> : null\}/)
+  })
+
+  it("GTMScript도 추적 제외 경로(/admin 포함)에서 렌더를 멈추는 가드를 유지한다", () => {
     const source = read("components/GTMScript.tsx")
 
-    expect(source).toContain('pathname.startsWith("/admin")')
+    expect(source).toContain("isTrackingExcludedPath(pathname)")
+    expect(source).toMatch(/if\s*\(\s*isInternal\s*\|\|\s*!GTM_ID\s*\)\s*return null/)
   })
 
   it("lib/analytics-config.ts는 죽은 GA4_ID export를 되살리지 않는다", () => {

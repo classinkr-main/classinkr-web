@@ -32,6 +32,7 @@ import {
 } from "@/lib/channel-talk"
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 import { trackEvent } from "@/lib/analytics"
+import { stashContactPrefill } from "@/lib/tracking-paths"
 import { resolvePageContext, mergeStarters } from "@/lib/chatbot/page-context"
 import {
     CHATBOT_OPEN_EVENT,
@@ -301,10 +302,11 @@ function ConsultationBridge({
     const intentLabel = message.handoffIntent === "support" ? "실시간 상담 연결" : "도입 상담 남기기"
     const draftLineCount = draft.split("\n").length
     const topic = getHandoffTopic(message.handoffIntent)
+    // 대화 요약(draft)은 쿼리로 싣지 않는다 — 주소창·리퍼러·분석 URL 로 새어 나간다.
+    // 링크를 누를 때 sessionStorage 로 건네고 문의 페이지가 읽자마자 지운다.
     const contactHref = `/contact?${new URLSearchParams({
         source: "chatbot",
         topic,
-        prefill: draft,
     }).toString()}`
 
     function openConsultation() {
@@ -390,6 +392,7 @@ function ConsultationBridge({
                 </motion.button>
                 <Link
                     href={contactHref}
+                    onClick={() => stashContactPrefill(draft)}
                     className="inline-flex h-9 items-center justify-center rounded-[8px] px-2 text-xs font-bold text-[#615D59] transition-colors hover:bg-white/70 hover:text-[#084734]"
                 >
                     문의폼으로 이어서 남기기

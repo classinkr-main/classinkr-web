@@ -10,7 +10,8 @@ import Image from "next/image"
 import { motion } from "framer-motion"
 import Link from "next/link"
 import { submitLead } from "@/lib/submitLead"
-import { trackDemoRequestAdsConversion, trackEvent } from "@/lib/analytics"
+import { trackEvent, trackFormStart, trackLeadSubmitted } from "@/lib/analytics"
+import { takeContactPrefill } from "@/lib/tracking-paths"
 import { useToast } from "@/components/ui/toast"
 import {
     ACADEMY_SIZE_OPTIONS,
@@ -82,6 +83,7 @@ export default function ContactPage() {
     const [eventsLoaded, setEventsLoaded] = useState(false)
     const formRef = useRef<HTMLFormElement>(null)
     const formShakeTimerRef = useRef<number | null>(null)
+    const formStartTrackedRef = useRef(false)
     const phoneRejectTimerRef = useRef<number | null>(null)
     const toast = useToast()
     const errorMessageId = error ? "contact-form-error" : undefined
@@ -114,8 +116,21 @@ export default function ContactPage() {
             setTopic(topicParam)
         }
 
-        if (prefillParam) {
-            setMessage(prefillParam)
+        // 미리채움은 sessionStorage(챗봇 핸드오프)가 우선이다. `?prefill=` 쿼리는 예전 링크
+        // 하위 호환으로만 읽고 곧바로 주소에서 지운다 — 대화 요약이 주소창·리퍼러·분석 URL 로
+        // 새지 않게.
+        const prefill = takeContactPrefill() ?? prefillParam
+        if (prefill) {
+            setMessage(prefill)
+        }
+        if (params.has("prefill")) {
+            params.delete("prefill")
+            const cleanedSearch = params.toString()
+            window.history.replaceState(
+                window.history.state,
+                "",
+                `${window.location.pathname}${cleanedSearch ? `?${cleanedSearch}` : ""}${window.location.hash}`
+            )
         }
         if (leadMagnetParam && LEAD_MAGNET_PATTERN.test(leadMagnetParam)) {
             setLeadMagnet(leadMagnetParam)
@@ -304,19 +319,21 @@ export default function ContactPage() {
             if (Array.isArray(data.warnings) && data.warnings.length > 0) {
                 setNotice("상담 요청은 접수되었지만 일부 내부 알림 연동이 지연되었습니다. 기록은 정상 등록되었습니다.")
             }
-            trackEvent("submit_demo_request", {
+            // generate_lead(form_type=contact) + Google Ads 전환. 서버가 저장하지 않은 제출
+            // (허니팟·60초 중복 → stored:false)은 보내지 않고, 같은 접수는 탭 안에서 1회만 센다.
+            trackLeadSubmitted({
+                formType: "contact",
                 source: "contact_page",
-                lead_id: data.leadId,
                 stored: data.stored,
-                event_slug: selectedEvent?.slug,
-                lead_magnet: leadMagnet || undefined,
-                event_id: data.conversionEventId,
-            })
-            // Google Ads 전환: 도입문의 제출 (전환 라벨이 설정된 경우에만 발화)
-            trackDemoRequestAdsConversion({
-                leadId: data.leadId,
+                dedupeKey: data.conversionEventId ?? data.leadId,
                 eventId: data.conversionEventId,
-                eventSlug: selectedEvent?.slug,
+                transactionId: data.leadId,
+                params: {
+                    lead_id: data.leadId,
+                    stored: data.stored,
+                    event_slug: selectedEvent?.slug,
+                    lead_magnet: leadMagnet || undefined,
+                },
             })
             toast.success("상담 요청이 접수되었어요")
             setSubmitted(true)
@@ -463,7 +480,16 @@ export default function ContactPage() {
                                         </Button>
                                     </div>
                                 ) : (
-                                <form ref={formRef} onSubmit={handleSubmit} className="w-full space-y-6 md:space-y-8">
+                                <form
+                                    ref={formRef}
+                                    onSubmit={handleSubmit}
+                                    onFocusCapture={() => {
+                                        if (formStartTrackedRef.current) return
+                                        formStartTrackedRef.current = true
+                                        trackFormStart("contact_start", "contact")
+                                    }}
+                                    className="w-full space-y-6 md:space-y-8"
+                                >
                                 {/* 스팸 봇 honeypot — 사용자에게 보이지 않으며 값이 채워지면 서버가 무시 */}
                                 <div aria-hidden="true" className="absolute -left-[9999px] top-0 h-px w-px overflow-hidden">
                                     <label htmlFor="contact-website">Website</label>
@@ -686,7 +712,13 @@ export default function ContactPage() {
                                     </div>
                                     <div>
                                         <h4 className="font-bold text-slate-900 mb-0.5 text-sm">지사 전화</h4>
-                                        <p className="text-slate-600 font-medium">02-6958-8566</p>
+                                        <a
+                                            href="tel:02-6958-8566"
+                                            data-track-location="contact_page"
+                                            className="text-slate-600 font-medium hover:text-[#084734] transition-colors"
+                                        >
+                                            02-6958-8566
+                                        </a>
                                         <p className="text-sm text-slate-500 mt-1">평일 09:00~18:00 (점심시간 12:00~13:00)</p>
                                     </div>
                                 </div>
@@ -697,7 +729,7 @@ export default function ContactPage() {
                                     </div>
                                     <div>
                                         <h4 className="font-bold text-slate-900 mb-0.5 text-sm">이메일 문의</h4>
-                                        <a href="mailto:classinkr@classin.com" className="text-slate-600 font-medium hover:text-[#084734] transition-colors">classinkr@classin.com</a>
+                                        <a href="mailto:classinkr@classin.com" data-track-location="contact_page" className="text-slate-600 font-medium hover:text-[#084734] transition-colors">classinkr@classin.com</a>
                                         <p className="text-sm text-slate-500 mt-1">답변 평균 대기 시간: 2시간 이내</p>
                                     </div>
                                 </div>

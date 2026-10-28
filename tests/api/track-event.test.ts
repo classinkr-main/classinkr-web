@@ -116,6 +116,121 @@ describe("track event route", () => {
     )
   })
 
+  it("keeps form_type on lead submissions so contact and event signups stay separable", async () => {
+    const response = await POST(
+      trackRequest({
+        event: "submit_demo_request",
+        page: "/events/sample-event",
+        params: {
+          source: "contact_page",
+          form_type: "event",
+          event_slug: "sample-event",
+          lead_id: "lead-1",
+          stored: true,
+          event_id: "lead:lead-1",
+          ignored: "drop-me",
+        },
+      })
+    )
+
+    expect(response.status).toBe(200)
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_name: "submit_demo_request",
+        params: {
+          source: "contact_page",
+          form_type: "event",
+          event_slug: "sample-event",
+          lead_id: "lead-1",
+          stored: true,
+          event_id: "lead:lead-1",
+        },
+      })
+    )
+  })
+
+  it("keeps form_type on newsletter submissions", async () => {
+    const response = await POST(
+      trackRequest({
+        event: "submit_newsletter",
+        page: "/resources/academy-system-checklist",
+        params: { source: "resource_pdf_download", form_type: "resource", lead_magnet: "academy-system-checklist" },
+      })
+    )
+
+    expect(response.status).toBe(200)
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: { source: "resource_pdf_download", form_type: "resource", lead_magnet: "academy-system-checklist" },
+      })
+    )
+  })
+
+  it("accepts material downloads with the page path", async () => {
+    const response = await POST(
+      trackRequest({
+        event: "download_materials",
+        page: "/blog/post",
+        params: {
+          asset_id: "academy-system-checklist",
+          lead_magnet: "academy-system-checklist",
+          gate: "email",
+          source: "blog_lead_magnet",
+          post_slug: "post",
+          page_path: "/blog/post",
+          url: "https://storage.example.com/signed?token=secret",
+        },
+      })
+    )
+
+    expect(response.status).toBe(200)
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_name: "download_materials",
+        params: {
+          asset_id: "academy-system-checklist",
+          lead_magnet: "academy-system-checklist",
+          gate: "email",
+          source: "blog_lead_magnet",
+          post_slug: "post",
+          page_path: "/blog/post",
+        },
+      })
+    )
+  })
+
+  const funnelCases: Array<[string, Record<string, string>]> = [
+    ["contact_start", { form_type: "contact", page_path: "/contact" }],
+    ["showroom_start", { form_type: "showroom", page_path: "/showroom" }],
+    ["click_to_call", { link_location: "contact_page", page_path: "/contact" }],
+    ["click_email", { link_location: "footer", page_path: "/" }],
+    ["pricing_view", { pricing_surface: "pricing_simulator_krw", page_path: "/pricing/simulator/krw" }],
+  ]
+
+  it.each(funnelCases)("accepts the %s funnel event and drops anything else", async (event, params) => {
+    const response = await POST(
+      trackRequest({
+        event,
+        page: params.page_path,
+        params: { ...params, phone: "02-6958-8566", href: "mailto:classinkr@classin.com" },
+      })
+    )
+
+    expect(response.status).toBe(200)
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_name: event,
+        params,
+      })
+    )
+  })
+
+  it("rejects events outside the allowlist", async () => {
+    const response = await POST(trackRequest({ event: "form_start", params: {} }))
+    expect(response.status).toBe(400)
+    expect(insert).not.toHaveBeenCalled()
+  })
+
   it("accepts internal page exit engagement events", async () => {
     const response = await POST(
       trackRequest({

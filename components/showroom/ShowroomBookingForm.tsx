@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { trackDemoRequestAdsConversion, trackEvent } from "@/lib/analytics"
+import { trackFormStart, trackLeadSubmitted } from "@/lib/analytics"
 import {
   toDisabledIsoDates,
   type ShowroomDayAvailability,
@@ -253,6 +253,7 @@ export function ShowroomBookingForm({ interests }: Props) {
   const [submitted, setSubmitted] = useState<{ bookingId: string | null } | null>(null)
   // 더블 클릭·엔터 연타가 두 건으로 나가지 않게 상태 갱신 전에 잠근다.
   const submitLock = useRef(false)
+  const formStartTrackedRef = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
 
   /**
@@ -416,21 +417,25 @@ export function ShowroomBookingForm({ interests }: Props) {
 
       if (response.ok && payload && payload.ok) {
         setSubmitted({ bookingId: payload.bookingId })
-        trackEvent("submit_demo_request", {
-          source: "showroom_booking",
-          page: "/showroom",
-          visit_date: form.visitDate,
-          visit_time: form.visitTime,
-          visitor_count: visitorCount,
-          interest_count: form.interests.length,
-          academy_size: form.academySize || undefined,
-        })
-        // Google Ads 전환. 지금까지 문의·데모·행사만 이걸 불러서, 가장 값비싼 전환이
-        // 광고 최적화 신호로 돌아가지 않았다. 실제 발화 여부는 Consent Mode v2(ad_storage)가
-        // 정하므로 동의 없는 방문자에게는 나가지 않는다.
+        // generate_lead(form_type=showroom) + Google Ads 전환. 실제 발화 여부는 Consent Mode
+        // v2(ad_storage)가 정하므로 동의 없는 방문자에게는 나가지 않는다.
         // 리드 id 는 서버가 응답 후에 미러링하며 만들어 클라이언트가 모른다 — 접수번호를
-        // 전환의 transaction_id 로 쓴다(중복 제거 키로 충분하다).
-        trackDemoRequestAdsConversion({ leadId: payload.bookingId })
+        // 전환의 transaction_id 겸 중복 방지 키로 쓴다. 서버는 더블 클릭·재시도에 같은
+        // bookingId 를 돌려주므로 같은 접수가 두 번 세지지 않는다(응답에 stored 는 없다).
+        trackLeadSubmitted({
+          formType: "showroom",
+          source: "showroom_booking",
+          dedupeKey: payload.bookingId,
+          transactionId: payload.bookingId,
+          params: {
+            page: "/showroom",
+            visit_date: form.visitDate,
+            visit_time: form.visitTime,
+            visitor_count: visitorCount,
+            interest_count: form.interests.length,
+            academy_size: form.academySize || undefined,
+          },
+        })
         return
       }
 
@@ -530,6 +535,11 @@ export function ShowroomBookingForm({ interests }: Props) {
         onSubmit={(event) => {
           event.preventDefault()
           void handleSubmit()
+        }}
+        onFocusCapture={() => {
+          if (formStartTrackedRef.current) return
+          formStartTrackedRef.current = true
+          trackFormStart("showroom_start", "showroom")
         }}
       >
         {/* honeypot — 사람에게는 보이지 않는다. */}

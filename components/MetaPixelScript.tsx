@@ -4,6 +4,7 @@ import { usePathname, useSearchParams } from "next/navigation"
 import Script from "next/script"
 import { useEffect } from "react"
 import { META_PIXEL_ID } from "@/lib/analytics-config"
+import { isTrackingExcludedPath, sanitizeTrackingPath } from "@/lib/tracking-paths"
 
 let lastMetaPageViewPath: string | null = null
 
@@ -11,15 +12,13 @@ export function MetaPixelScript() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const search = searchParams.toString()
-  const isInternal =
-    pathname.startsWith("/admin") ||
-    pathname.startsWith("/checkout") ||
-    pathname.startsWith("/receipt")
+  const isInternal = isTrackingExcludedPath(pathname) || pathname.startsWith("/checkout")
 
   useEffect(() => {
     if (isInternal || !META_PIXEL_ID) return
 
-    const path = `${pathname}${search ? `?${search}` : ""}`
+    // 픽셀에 싣는 path 도 광고 귀속 파라미터만 남긴다(prefill·토큰 쿼리 차단).
+    const path = sanitizeTrackingPath(`${pathname}${search ? `?${search}` : ""}`)
     if (lastMetaPageViewPath === path) return
 
     let timeout: ReturnType<typeof setTimeout> | null = null

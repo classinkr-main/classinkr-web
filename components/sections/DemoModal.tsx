@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { CheckCircle2, Loader2, Sparkles } from "lucide-react"
 
-import { trackDemoRequestAdsConversion, trackEvent } from "@/lib/analytics"
+import { trackEvent, trackFormStart, trackLeadSubmitted } from "@/lib/analytics"
 import { submitLead } from "@/lib/submitLead"
 import { useToast } from "@/components/ui/toast"
 import { Button } from "@/components/ui/button"
@@ -29,6 +29,7 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
     const [marketingConsent, setMarketingConsent] = useState(false)
     const formRef = useRef<HTMLFormElement>(null)
     const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const formStartTrackedRef = useRef(false)
     const toast = useToast()
 
     const resetFormState = () => {
@@ -101,15 +102,18 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                     ? "상담 요청은 접수되었지만 일부 알림 연동이 지연 중입니다. 내부 기록은 저장되었고 담당자가 확인합니다."
                     : ""
             )
-            trackEvent("submit_demo_request", {
+            // stored:false(허니팟·60초 중복)는 보내지 않고, 같은 접수는 탭 안에서 1회만 센다.
+            trackLeadSubmitted({
+                formType: "demo",
                 source: "demo_modal",
-                lead_id: data.leadId,
                 stored: data.stored,
-                event_id: data.conversionEventId,
-            })
-            trackDemoRequestAdsConversion({
-                leadId: data.leadId,
+                dedupeKey: data.conversionEventId ?? data.leadId,
                 eventId: data.conversionEventId,
+                transactionId: data.leadId,
+                params: {
+                    lead_id: data.leadId,
+                    stored: data.stored,
+                },
             })
             toast.success("상담 요청이 접수되었어요")
             setSubmitted(true)
@@ -121,6 +125,14 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
         } finally {
             setLoading(false)
         }
+    }
+
+    // contact_start — 실제 입력·클릭에서만 센다. 포커스로 세면 모달이 열릴 때 Radix 가 첫 입력칸에
+    // 자동 포커스를 주는 것까지 "작성 시작"으로 잡혀 click_cta(모달 열기)와 같은 숫자가 된다.
+    const markFormStart = () => {
+        if (formStartTrackedRef.current) return
+        formStartTrackedRef.current = true
+        trackFormStart("contact_start", "demo")
     }
 
     const fieldClassName = `${marketingFieldClassName}${shake ? " animate-shake" : ""}`
@@ -163,7 +175,13 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                                 기관 규모, 현재 고민, 희망 도입 시점을 남겨주시면 제품 소개보다 더 실무적인 순서로 안내드릴게요.
                             </DialogDescription>
                         </DialogHeader>
-                        <form ref={formRef} onSubmit={handleSubmit} className="grid gap-5 px-8 py-7">
+                        <form
+                            ref={formRef}
+                            onSubmit={handleSubmit}
+                            onInputCapture={markFormStart}
+                            onPointerDownCapture={markFormStart}
+                            className="grid gap-5 px-8 py-7"
+                        >
                             {/* 스팸 봇 honeypot — 사용자에게 보이지 않으며 값이 채워지면 서버가 무시 */}
                             <div aria-hidden="true" className="absolute -left-[9999px] top-0 h-px w-px overflow-hidden">
                                 <label htmlFor="demo-website">Website</label>
