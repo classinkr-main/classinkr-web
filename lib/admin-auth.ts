@@ -94,6 +94,7 @@ export const HARDWARE_EDITOR_ADMIN_API_ROLES: readonly AdminApiRole[] = [
 ]
 
 export const HARDWARE_FINALIZE_CAPABILITY: AdminCapability = "hardware.finalize"
+export const HARDWARE_INBOUND_CAPABILITY: AdminCapability = "hardware.inbound"
 
 export function isLegacyAdminAuthEnabled() {
   return process.env.NODE_ENV !== "production"
@@ -654,6 +655,37 @@ export function hasAdminCapability(
   capability: string
 ) {
   return normalizeAdminApiRole(admin.role) === "SUPER_ADMIN" || admin.capabilities?.includes(capability) === true
+}
+
+/**
+ * 하드웨어 입고관리 권한자 — hardware.inbound 또는 hardware.finalize 보유, 또는 슈퍼 어드민.
+ * 입고·재고 조정 등록, 남의 출고 수정·확정, 실현 기록 수정·취소를 한다(재고관리 프로세스 정의서 §권한).
+ */
+export function isHardwareInventoryManager(admin: Pick<VerifiedAdminContext, "role" | "capabilities">) {
+  return (
+    hasAdminCapability(admin, HARDWARE_INBOUND_CAPABILITY) ||
+    hasAdminCapability(admin, HARDWARE_FINALIZE_CAPABILITY)
+  )
+}
+
+/** 입고관리 권한이 없으면 403. requiredCapability 는 hardware.inbound 로 알린다. */
+export function requireHardwareInventoryManager(
+  admin: Pick<VerifiedAdminContext, "role" | "capabilities">
+): NextResponse | undefined {
+  if (isHardwareInventoryManager(admin)) return undefined
+  return NextResponse.json(
+    { error: "입고관리 권한(hardware.inbound)이 필요합니다.", requiredCapability: HARDWARE_INBOUND_CAPABILITY },
+    { status: 403 }
+  )
+}
+
+/** 하드웨어 저장소 규칙(lib/hardware/inventory-process.ts)에 넘기는 요청자. */
+export function toHardwareActor(admin: Pick<VerifiedAdminContext, "role" | "capabilities" | "userId" | "name">) {
+  return {
+    userId: admin.userId ?? null,
+    name: admin.name?.trim() || null,
+    isInventoryManager: isHardwareInventoryManager(admin),
+  }
 }
 
 export function requireAdminCapability(

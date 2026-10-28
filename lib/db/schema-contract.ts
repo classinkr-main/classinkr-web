@@ -184,6 +184,13 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // 미적용이어도 허브만 '미적용' 안내로 강등하고(쓰기 503) 매일 자동 태그 크론이 skipped 로 넘어간다.
   "supabase/migrations/20260925_crm_saved_segments.sql",
   "supabase/migrations/20261021_quote_team_templates.sql",
+  // 하드웨어·오더·매출 연결(2026-10-22). 같은 날의 20261022_hw_rev_matches_exclude_planned.sql(뷰 정의 교체)과
+  // 20261022_crm_lead_auto_confirm.sql(정책 값 1줄 UPDATE)은 REST 프로브로 확인할 대상이 없어 계약에 넣지 않는다 —
+  // 적용 확인은 docs/active/db-migration-runbook.md 의 2026-10-22 절 확인 쿼리로 한다.
+  "supabase/migrations/20261022_sales_orders.sql",
+  // 하드웨어 재고관리 프로세스(2026-10-28) — 원장·품목 칸 추가, 정의서 품목 시드, 배송 예정 확정 v4.
+  // 미적용이면 대시보드는 새 칸 없이 읽고(42703 폴백), 새 규칙(유형·물류번호 직접 선택 등)의 저장만 실패한다.
+  "supabase/migrations/20261028_hardware_inventory_process.sql",
   // 블로그 글 내용 변경 시각(2026-10-28) — 사이트맵 lastmod·JSON-LD dateModified·RSS 의 기준.
   // 컬럼만 REST 로 확인된다. 트리거(blog_posts_content_updated_at)는 마이그레이션 머리 주석의 pg_trigger 조회로 본다.
   "supabase/migrations/20261028_blog_posts_content_updated_at.sql",
@@ -894,6 +901,39 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
   },
   {
     kind: "table",
+    table: "sales_orders",
+    label: "오더(견적 승인 → 하드웨어 승인 → 오더번호·배송 예정)",
+    columns: [
+      "id", "order_no", "status", "needs_hardware_approval", "quote_document_id", "quote_version_id", "quote_number",
+      "deal_id", "customer_id", "customer_name", "lines", "total_amount", "currency", "accepted_via",
+      "requested_by", "requested_at", "decided_by", "decided_at", "decision_reason", "planned_movement_ids",
+    ],
+    migration: "supabase/migrations/20261022_sales_orders.sql",
+    severity: "warning",
+    impact:
+      "견적 승인은 그대로 되지만 오더가 만들어지지 않아 하드웨어 승인 대기·오더번호·배송 예정 자동 생성이 멈춘다(하드웨어 탭은 '미적용' 안내).",
+  },
+  {
+    kind: "table",
+    table: "hardware_movements",
+    label: "하드웨어 원장 — 재고관리 프로세스 칸(유형·무상·회수 연결·CRM 고객·담당 계정·반납 예정일)",
+    columns: [
+      "outbound_type", "is_free", "return_of_movement_id", "customer_id", "owner_user_id", "created_by_user_id",
+      "expected_return_at",
+    ],
+    migration: "supabase/migrations/20261028_hardware_inventory_process.sql",
+    severity: "warning",
+    impact:
+      "하드웨어 대시보드는 그대로 보이지만 출고 유형·회수 연결·본인 건 판정·물류번호 직접 선택 저장이 실패하고 판매대시보드가 유형을 추정으로만 센다.",
+  },
+  {
+    kind: "table",
+    table: "hardware_items",
+    label: "하드웨어 품목 — 물류번호 관리 여부·판매대시보드 묶음",
+    columns: ["lot_tracked", "report_group", "sort_order"],
+    migration: "supabase/migrations/20261028_hardware_inventory_process.sql",
+    severity: "warning",
+    impact: "모든 품목을 물류번호 관리 품목으로 보고(액세서리·터치펜도 물류번호 요구) 판매대시보드 고정 행이 비어 보인다.",
     table: "blog_posts",
     label: "블로그 글 내용 변경 시각(content_updated_at)",
     columns: ["id", "content_updated_at"],

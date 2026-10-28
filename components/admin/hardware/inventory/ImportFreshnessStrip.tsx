@@ -18,6 +18,15 @@ function kstDateKey(value: string | null): string | null {
   return getBusinessDateParts(parsed).date
 }
 
+// "10/22 14:20" — KST 기준 짧은 표기. 잘못된 값은 빈 문자열.
+function formatCheckedAt(value: string): string {
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return ""
+  const parts = getBusinessDateParts(parsed)
+  const time = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false }).format(parsed)
+  return `${parts.date.slice(5).replace("-", "/")} ${time}`
+}
+
 function daysBetweenKeys(from: string, to: string): number {
   const start = Date.parse(`${from}T00:00:00Z`)
   const end = Date.parse(`${to}T00:00:00Z`)
@@ -43,7 +52,9 @@ export interface ImportFreshnessJudgement {
 export function judgeImportFreshness(importRun: HardwareDashboard["importRun"]): ImportFreshnessJudgement {
   if (!importRun) return { level: "none", failed: false, finishedKey: null, daysAgo: null }
   const failed = importRun.status !== "success"
-  const finishedKey = kstDateKey(importRun.finished_at ?? importRun.started_at)
+  // 매시간 자동 가져오기는 시트가 그대로면 원장을 다시 싣지 않고 확인 시각만 남긴다. 그 확인도 "지금 시트와
+  // 원장이 같다"는 근거이므로, 마지막 반영일 대신 마지막 확인일로 신선도를 본다(실패 기록에는 쓰지 않는다).
+  const finishedKey = kstDateKey((!failed ? importRun.last_checked_at : null) ?? importRun.finished_at ?? importRun.started_at)
   const todayKst = getBusinessDateParts().date
   const daysAgo = finishedKey ? daysBetweenKeys(finishedKey, todayKst) : null
   const level: ImportFreshnessLevel =
@@ -78,6 +89,7 @@ function ImportFreshnessStrip({ importRun, importCosting }: ImportFreshnessStrip
             <p className="mt-1 leading-relaxed text-[#615D59]">{failed ? importRun?.error ?? "최신화 메뉴에서 다시 시도하세요." : sourceIssue ? "시트 최신화 메뉴에서 동기화·백업 후 반영할 수 있습니다." : "원천 갱신이 정상 범위입니다."}</p>
           </div>
           {importRun ? <p className="text-[11px] tabular-nums text-[#615D59]">{finishedKey ?? "일자 미확인"} · {formatNumber(importRun.rows_imported ?? 0)}행 반영 · {formatNumber(importRun.rows_skipped ?? 0)}행 건너뜀</p> : null}
+          {importRun && !failed && importRun.last_checked_at ? <p className="text-[11px] tabular-nums text-[#615D59]">매시간 자동 확인 · 마지막 확인 {formatCheckedAt(importRun.last_checked_at)} · 시트 변경 없음</p> : null}
           {recovered > 0 ? <div data-testid="hardware-import-costing-recovery" className="border-t border-[rgba(0,0,0,0.08)] pt-3"><p className="font-semibold text-[#A8741A]">금액 원본 확인 필요</p><p className="mt-1 leading-relaxed text-[#615D59]">{formatNumber(recovered)}건은 백업 금액을 사용 중입니다. 원본 금액 저장 상태를 확인해야 합니다.</p></div> : null}
         </div>
       </details>

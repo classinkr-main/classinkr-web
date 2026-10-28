@@ -4,6 +4,8 @@ import { memo } from "react"
 import type { Dispatch, SetStateAction } from "react"
 import { Search } from "lucide-react"
 
+import type { MovementButton, MovementButtonState } from "./movement-permissions"
+import { movementOutboundType, OutboundTypeBadge } from "./OutboundMetaBadges"
 import {
   formatDate,
   formatLotLabel,
@@ -38,8 +40,8 @@ interface HardwareSearchPanelProps {
   setMovementsPage: Dispatch<SetStateAction<number>>
   confirmPlannedMovement: (movement: HardwareMovement, override?: { quantity?: number; occurredAt?: string }) => Promise<void>
   plannedConfirmLocked: boolean
-  // hardware.finalize 표시용 — 없으면 검색 결과의 원탭 확정을 비활성한다(강제는 서버 게이트).
-  canFinalize: boolean
+  // 버튼 권한 — 배송 예정 확정은 본인 건 또는 입고관리 권한자(정의서 §권한). 강제는 서버 게이트.
+  movementButtonState: (button: MovementButton, movement: HardwareMovement) => MovementButtonState
   setCustomerDetail: Dispatch<SetStateAction<string | null>>
 }
 
@@ -57,7 +59,7 @@ function HardwareSearchPanel({
   setMovementsPage,
   confirmPlannedMovement,
   plannedConfirmLocked,
-  canFinalize,
+  movementButtonState,
   setCustomerDetail,
 }: HardwareSearchPanelProps) {
   return (
@@ -160,9 +162,14 @@ function HardwareSearchPanel({
             <div className="mt-2 space-y-2">
               {hardwareSearchResults.planned.length === 0 ? (
                 <p className="text-[11px] text-[#A39E98]">결과 없음</p>
-              ) : hardwareSearchResults.planned.map((movement) => (
+              ) : hardwareSearchResults.planned.map((movement) => {
+                const confirmState = movementButtonState("confirm", movement)
+                return (
                 <div key={movement.id} className="rounded-md bg-white px-2.5 py-2">
-                  <p className="truncate text-[12px] font-bold text-[#111110]">{movement.to_location ?? "도착지 미정"}</p>
+                  <p className="flex items-center gap-1.5 text-[12px] font-bold text-[#111110]">
+                    <span className="min-w-0 truncate">{movement.to_location ?? "도착지 미정"}</span>
+                    <OutboundTypeBadge type={movementOutboundType(movement)} size="xs" />
+                  </p>
                   <p className="mt-0.5 truncate text-[11px] font-semibold text-[#615D59]">
                     {movement.product_name} · {formatNumber(movement.quantity)}대 · {formatDate(movement.occurred_at)}
                   </p>
@@ -172,14 +179,15 @@ function HardwareSearchPanel({
                       quantity: movement.quantity,
                       occurredAt: todayKey(),
                     })}
-                    disabled={plannedConfirmLocked || !canFinalize}
-                    title={canFinalize ? undefined : "출고 확정에는 확정 권한(hardware.finalize)이 필요합니다"}
+                    disabled={plannedConfirmLocked || !confirmState.allowed}
+                    title={confirmState.title}
                     className="mt-1.5 cursor-pointer rounded-md border border-[#084734] bg-white px-2 py-1 text-[10.5px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     출고 확정
                   </button>
                 </div>
-              ))}
+                )
+              })}
             </div>
           </div>
 

@@ -32,6 +32,10 @@
       "schedule": "30 9 * * *"
     },
     {
+      "path": "/api/cron/link-hourly",
+      "schedule": "20 * * * *"
+    },
+    {
       "path": "/api/cron/sync-external-crm",
       "schedule": "0 1 * * *"
     },

@@ -10,6 +10,10 @@ let dealLineItems: Row[] = []
 let deals: Row[] = []
 let customers: Row[] = []
 let ledgerRows: Row[] = []
+let quoteDocuments: Row[] | null = null
+let quoteVersions: Row[] = []
+let salesOrders: Row[] | "missing" | "error" = []
+let portalLineItems: Row[] = []
 
 function selectChain(rows: Row[]) {
   const result = { data: rows, error: null }
@@ -27,6 +31,19 @@ function tableClient(table: string) {
   if (table === "deals") return { select: () => selectChain(deals) }
   if (table === "customers") return { select: () => selectChain(customers) }
   if (table === "hardware_movements") return { select: () => selectChain(ledgerRows) }
+  if (table === "quote_documents" && quoteDocuments) return { select: () => selectChain(quoteDocuments ?? []) }
+  if (table === "quote_document_versions") return { select: () => selectChain(quoteVersions) }
+  if (table === "sales_orders") {
+    if (salesOrders === "missing" || salesOrders === "error") {
+      const error = salesOrders === "missing" ? { code: "PGRST205", message: "missing" } : { code: "57014", message: "timeout" }
+      const chain: Record<string, unknown> = {
+        then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data: null, error }).then(resolve),
+      }
+      chain.in = () => chain
+      return { select: () => chain }
+    }
+    return { select: () => selectChain(salesOrders as Row[]) }
+  }
   return {
     select: () => {
       throw new Error(`${table} unavailable in test`)
@@ -40,7 +57,7 @@ async function loadRepository() {
     createSupabaseAdminClient: vi.fn(() => ({ from: vi.fn((table: string) => tableClient(table)) })),
   }))
   vi.doMock("@/lib/portal/quote-details", () => ({
-    normalizeQuoteDetailsFromStructuredJson: vi.fn(() => ({ lineItems: [] })),
+    normalizeQuoteDetailsFromStructuredJson: vi.fn(() => ({ lineItems: portalLineItems })),
   }))
   vi.doMock("@/lib/repositories/branch-hw", () => ({
     fetchAllSupabaseRows: vi.fn(async () => ledgerRows),
@@ -63,6 +80,10 @@ describe("listHardwareCrmOrderBacklog", () => {
       { id: "cust-2", name: "갈무리국어", contact_name: null, campus_name: null },
     ]
     ledgerRows = []
+    quoteDocuments = null
+    quoteVersions = []
+    salesOrders = []
+    portalLineItems = []
   })
 
   afterEach(() => {
@@ -163,6 +184,50 @@ describe("listHardwareCrmOrderBacklog", () => {
 
     // T1 주문은 DT1 출고와 무관하다.
     expect(result.entries.find((entry) => entry.productName === "T1")?.ledgerOverlap).toBeNull()
+  })
+
+  describe("포털 견적 줄 — 오더가 잡은 견적은 '하드웨어 승인 대기'가 맡는다(2026-10-22)", () => {
+    beforeEach(() => {
+      dealLineItems = []
+      quoteDocuments = [
+        { id: "qd-ordered", deal_id: "deal-1", quote_number: "Q-1", current_version_id: "qv-1", status: "accepted", updated_at: "2026-10-22" },
+        { id: "qd-free", deal_id: "deal-2", quote_number: "Q-2", current_version_id: "qv-2", status: "shared", updated_at: "2026-10-21" },
+      ]
+      quoteVersions = [
+        { id: "qv-1", quote_document_id: "qd-ordered", version_number: 1, title: "남명 견적", structured_json: {}, total_amount: 0, valid_until: null, created_at: "2026-10-22" },
+        { id: "qv-2", quote_document_id: "qd-free", version_number: 1, title: "갈무리 견적", structured_json: {}, total_amount: 0, valid_until: null, created_at: "2026-10-21" },
+      ]
+      portalLineItems = [{ id: "l1", itemType: "hardware", itemName: '86" IFP', quantity: 2, lineSupplyAmount: 100 }]
+    })
+
+    it("오더가 있는 견적의 줄은 빼고, 오더가 없는 견적의 줄만 올린다 — 승인을 건너뛰는 등록을 막는다", async () => {
+      salesOrders = [{ quote_document_id: "qd-ordered" }]
+      const { listHardwareCrmOrderBacklog } = await loadRepository()
+
+      const result = await listHardwareCrmOrderBacklog()
+
+      expect(result.entries.map((entry) => entry.referenceNo)).toEqual(["portal-quote:qd-free:line:l1"])
+    })
+
+    it("오더 테이블이 아직 없으면 예전처럼 모두 올린다", async () => {
+      salesOrders = "missing"
+      const { listHardwareCrmOrderBacklog } = await loadRepository()
+
+      const result = await listHardwareCrmOrderBacklog()
+
+      expect(result.entries).toHaveLength(2)
+      expect(result.warnings).not.toContain("오더 확인에 실패해 포털 견적 줄을 잠시 숨겼습니다.")
+    })
+
+    it("오더 확인이 실패하면 포털 견적 줄을 숨기고 경고를 남긴다", async () => {
+      salesOrders = "error"
+      const { listHardwareCrmOrderBacklog } = await loadRepository()
+
+      const result = await listHardwareCrmOrderBacklog()
+
+      expect(result.entries).toEqual([])
+      expect(result.warnings).toContain("오더 확인에 실패해 포털 견적 줄을 잠시 숨겼습니다.")
+    })
   })
 
   it("품목·수량이 없는 후보(외부 CRM 오더)는 등록 후보로 올리지 않는다", async () => {

@@ -6,6 +6,7 @@
 
 import type { HardwareItem, HardwareMovement, HardwareMovementDraft } from "./shared"
 import { shouldSubmitComposerOnKeyDown } from "@/components/admin/cs-chat/composer-keyboard"
+import { HARDWARE_PROGRESS_STATUS, NEW_LOT_PATTERN, nextLotNo, type HardwareOutboundType } from "@/lib/hardware/inventory-process"
 import { isCoreIfpProduct, isPromotedProduct } from "@/lib/hardware/product"
 
 // ---------------------------------------------------------------------------
@@ -17,13 +18,18 @@ export const INBOUND_MAX_LINES = 50
 export const SAMPLE_REGISTER_MAX_UNITS = 60
 
 export const OFFICE_STORAGE_LABEL = "클래스인 사무실"
+// 고객사 직배송의 입고·출고 위치 — 입고와 출고를 같은 위치로 한 번에 기록해 창고에 영향이 없다(갭 문서 §6 D3).
 export const CUSTOMER_STORAGE_LABEL = "고객사 직송"
 // 보관처가 비었을 때 서버로 보내는 안전값. 비워 보내면 to_location 이 null 이 돼 재고 어디에도 잡히지 않는다.
 export const FALLBACK_STORAGE_LABEL = "창고"
 
-// 운영 보관처(2026-09 확인): 오산 창고, 인천 더조은(FPL 창고), 클래스인 본사 사무실, 고객사 직송.
-export const DEFAULT_STORAGE_CHOICES: readonly string[] = ["오산 창고", "인천 더조은", OFFICE_STORAGE_LABEL, CUSTOMER_STORAGE_LABEL]
+// 보관 장소는 고정 3종(정의서). 인천 더조은은 창고로 잡힌다(§6 D3). 직접 입력은 받지 않는다.
+// 고객사 직송은 보관 장소가 아니라 직배송 흐름(InboundDelivery "direct")으로만 고른다.
+export const INBOUND_STORAGE_CHOICES: readonly string[] = ["오산 창고", "인천 더조은", OFFICE_STORAGE_LABEL]
 export const DEFAULT_IMPORTER_CHOICES: readonly string[] = ["클래스인", "헥토", "Learnways"]
+
+// 직배송 출고 유형 — 샘플은 반납 예정일이 필수라(§6 D4) 직배송에서는 고르지 않는다.
+export const DIRECT_SHIP_OUTBOUND_TYPES: readonly HardwareOutboundType[] = ["sales", "promotion", "as"]
 
 // ---------------------------------------------------------------------------
 // 타입
@@ -57,9 +63,16 @@ export interface InboundLotChoice {
 
 export interface InboundDraftRow {
   key: string
-  // 없으면 새 품목 — 서버가 이름으로 품목을 만든다.
+  // 품목 목록의 id. 없으면 저장하지 않는다 — 입고는 목록에서 고른 품목만 받는다(새 품목을 이름으로 만들지 않는다).
   itemId?: string
   productName: string
+  // 물류번호 관리 품목인가(HardwareItem.lot_tracked, 없으면 true). false(액세서리·터치펜)면 물류번호 없이 수량만 보낸다.
+  lotTracked: boolean
+  // null 이면 표의 유상·무상을 따른다.
+  isFree: boolean | null
+  memo: string
+  // 직배송 줄의 입고는 저장됐고 출고만 실패한 상태 — 다시 저장할 때 출고 줄만 보낸다(입고 중복 방지).
+  inboundSaved?: boolean
   // 입력 원문. 빈 문자열이면 저장 대상이 아니다.
   quantity: string
   unitPrice: string
@@ -73,19 +86,39 @@ export interface InboundDraftRow {
   pinned: boolean
 }
 
+export type InboundDelivery = "storage" | "direct"
+
+export interface InboundDirectCustomer {
+  id: string
+  name: string
+}
+
 export interface InboundDraft {
+  // 물류번호 관리 품목 줄에만 실린다. 화면이 checkInboundLot 으로 정본 표기(기존 번호의 표기, C 번호 대문자)로 맞춰 넣는다.
   lot: string
   occurredAt: string
   importer: string
   defaultStorage: string
+  // 유상(false)·무상(true). null 이면 아직 안 골랐다 — 줄마다 덮어쓰지 않은 줄이 있으면 저장을 막는다.
+  isFree: boolean | null
+  // storage = 보관 장소로 입고, direct = 고객사 직배송(입고 + 같은 배치의 설치 완료 출고).
+  delivery?: InboundDelivery
+  directCustomer?: InboundDirectCustomer | null
+  directOutboundType?: HardwareOutboundType
   owner?: string
   rows: InboundDraftRow[]
+}
+
+/** 물류번호 검사에 쓰는 문맥 — 알려진 기존 번호와 다음 신규 번호(nextLotNo). */
+export interface InboundLotContext {
+  knownLots: readonly string[]
+  nextLot: string
 }
 
 export interface InboundDraftValidation {
   headerErrors: string[]
   rowErrors: Record<string, string>
-  // 저장은 막지 않는 안내(새 품목 생성, 재고 위치로 인식되지 않는 보관처).
+  // 저장은 막지 않는 안내(무상인데 단가가 있는 줄 등).
   rowWarnings: Record<string, string>
 }
 
@@ -98,13 +131,27 @@ export interface InboundDraftSummary {
   officeUnits: number
 }
 
-// 서버 입력(readMovementInput)과 같은 모양 — HardwareInventoryClient toServerDraft 의 출력 형식과 동일하다.
-export type InboundMovementPayload = Omit<HardwareMovementDraft, "isPlanned"> & { movementType: "inbound" }
+// 서버 입력(readMovementInput)과 같은 모양. 물류번호 관리 안 하는 품목은 lotNo 를 싣지 않는다.
+export type InboundMovementPayload = Omit<HardwareMovementDraft, "isPlanned" | "lotNo"> & {
+  movementType: "inbound"
+  lotNo?: string
+  isFree: boolean
+}
+
+// 직배송 출고 줄 — 같은 배치에서 앞의 입고 줄 바로 뒤에 온다(서버가 배치 안의 앞 입고를 잔여로 센다).
+export type InboundDirectOutboundPayload = Omit<HardwareMovementDraft, "isPlanned" | "lotNo"> & {
+  movementType: "outbound"
+  lotNo?: string
+  customerId: string
+  outboundType: HardwareOutboundType
+}
+
+export type InboundSubmissionLine = InboundMovementPayload | InboundDirectOutboundPayload
 
 export interface InboundSubmission {
-  // movements[i] 가 어느 행에서 왔는지 — 서버 lineResults[].index 를 행으로 되돌리는 데 쓴다.
+  // movements[i] 가 어느 행에서 왔는지 — 서버 lineResults[].index 를 행으로 되돌리는 데 쓴다. 직배송 행은 두 줄이 같은 키다.
   rowKeys: string[]
-  movements: InboundMovementPayload[]
+  movements: InboundSubmissionLine[]
 }
 
 export interface InboundPasteRow {
@@ -161,9 +208,13 @@ export interface InboundSavedLine {
 }
 
 export interface InboundSaveOutcome {
+  // 행의 줄이 전부 저장된 행.
   savedLines: InboundSavedLine[]
   failedErrors: Record<string, string>
+  // 이번 요청에서 저장된 입고 대수.
   savedUnits: number
+  // 입고는 저장됐는데 직배송 출고가 실패한 행 — 화면이 inboundSaved 로 표시하고 다시 저장 때 출고만 보낸다.
+  inboundOnlyRowKeys: string[]
 }
 
 export interface SampleRegisterPayload {
@@ -295,44 +346,49 @@ export function buildInboundLotChoices(movements: readonly InboundHistoryMovemen
   return Number.isFinite(limit) && limit > 0 ? choices.slice(0, Math.floor(limit)) : choices
 }
 
-const SERIAL_LOT_PATTERN = /^([A-Za-z]+)(\d+)$/
-const LOT_CODE_PATTERN = /^([A-Za-z]+)(\d+)/
+// 물류번호 규칙(정의서·§6 D6): 기존 번호에 추가 입고하거나, 다음 신규 번호(nextLotNo — 전역 C 순번)만 새로 쓴다.
+// 번호를 건너뛰면 서버가 422 로 막는다. 화면은 같은 판정을 먼저 해 저장 전에 알려 준다.
 
-// 날짜가 가장 최근인 "영문+숫자" 물량의 번호를 올린다(C2 → C3, H8 → H9).
-// "H7(과사람)"·"FY24-25"·"Sample" 은 올리기 기준에서 빠지지만, "H7(과사람)" 의 H7 처럼 앞 코드가 이미 쓰인 번호는
-// 건너뛴다 — 추천한 번호가 기존 물량과 겹치면 다른 물량에 조용히 섞인다.
-export function suggestNextLot(choices: ReadonlyArray<Pick<InboundLotChoice, "lot" | "firstDate" | "lastDate">>): string | null {
-  const taken = new Set<string>()
-  let latest: { prefix: string; digits: number; number: number; firstDate: string | null; lastDate: string | null } | null = null
-  for (const choice of choices) {
-    const lot = choice.lot.trim()
-    const code = LOT_CODE_PATTERN.exec(lot)
-    if (code) taken.add(`${code[1].toUpperCase()}${Number(code[2])}`)
-    const match = SERIAL_LOT_PATTERN.exec(lot)
-    if (!match) continue
-    const candidate = {
-      prefix: match[1],
-      digits: match[2].length,
-      number: Number(match[2]),
-      firstDate: choice.firstDate,
-      lastDate: choice.lastDate,
+function compactLotKey(value: string): string {
+  return value.replace(/\s+/g, "").toUpperCase()
+}
+
+/** 품목이 물류번호 관리 품목인가 — 칸이 없는 구응답은 관리 품목으로 본다(서버 기본값 true). */
+export function isLotTrackedItem(item: Pick<HardwareItem, "lot_tracked"> | null | undefined): boolean {
+  return item?.lot_tracked !== false
+}
+
+/**
+ * 다음 신규 물류번호. 서버(/lots 응답의 nextLotNo)가 원장 전체를 보고 낸 값과 화면이 아는 번호(대시보드 이력 +
+ * 이번에 저장한 번호) 중 큰 쪽을 쓴다 — 서버 값이 늦게 오거나 없을 때도 공용 nextLotNo 로 같은 규칙을 지킨다.
+ */
+export function resolveInboundNextLot(knownLots: readonly string[], serverNextLot?: string | null): string {
+  const extra: string[] = []
+  const match = NEW_LOT_PATTERN.exec((serverNextLot ?? "").trim())
+  if (match && Number(match[1]) > 1) extra.push(`C${Number(match[1]) - 1}`)
+  return nextLotNo([...knownLots, ...extra])
+}
+
+export type InboundLotCheck = { ok: true; kind: "existing" | "new"; lot: string } | { ok: false; error: string }
+
+export function checkInboundLot(value: string, context: InboundLotContext): InboundLotCheck {
+  const text = value.trim()
+  if (!text) return { ok: false, error: "물류번호를 고르세요." }
+  const key = compactLotKey(text)
+  const known = context.knownLots.find((lot) => compactLotKey(lot) === key)
+  if (known) return { ok: true, kind: "existing", lot: known.trim() }
+  const next = context.nextLot
+  const match = NEW_LOT_PATTERN.exec(text.replace(/\s+/g, ""))
+  if (match) {
+    const lot = `C${Number(match[1])}`
+    if (lot === next) return { ok: true, kind: "new", lot }
+    const nextNumber = Number(NEW_LOT_PATTERN.exec(next)?.[1] ?? 0)
+    if (Number(match[1]) > nextNumber) {
+      return { ok: false, error: `${lot}은(는) 번호를 건너뜁니다. 다음 신규 물류번호는 ${next}입니다.` }
     }
-    if (
-      !latest ||
-      (compareDateDesc(candidate.firstDate, latest.firstDate) ||
-        compareDateDesc(candidate.lastDate, latest.lastDate) ||
-        latest.number - candidate.number) < 0
-    ) {
-      latest = candidate
-    }
+    return { ok: false, error: `${lot}은(는) 원장에 없는 번호입니다. 기존 번호를 고르거나 다음 신규 번호 ${next}을(를) 쓰세요.` }
   }
-  if (!latest) return null
-  for (let next = latest.number + 1, guard = 0; guard < 1000; next += 1, guard += 1) {
-    if (!taken.has(`${latest.prefix.toUpperCase()}${next}`)) {
-      return `${latest.prefix}${String(next).padStart(latest.digits, "0")}`
-    }
-  }
-  return null
+  return { ok: false, error: `새 물류번호는 다음 순번 ${next}만 쓸 수 있습니다. 기존 번호는 목록에서 고르세요.` }
 }
 
 // ---------------------------------------------------------------------------
@@ -423,8 +479,16 @@ function storageHistoryLabel(movement: InboundHistoryMovement): string | null {
   return canonicalStorageLabel(movement.storage_location) ?? canonicalStorageLabel(movement.to_location)
 }
 
-export function buildStorageChoices(movements: readonly InboundHistoryMovement[]): string[] {
-  return mergeChoices(DEFAULT_STORAGE_CHOICES, rankHistoryValues(movements, storageHistoryLabel))
+// 보관 장소는 고정 목록이다 — 이력에 남은 옛 표기·직접 입력 값은 후보로 되살리지 않는다.
+export function buildStorageChoices(): string[] {
+  return [...INBOUND_STORAGE_CHOICES]
+}
+
+/** 고정 보관 장소 목록의 표기로 맞춘다. 목록에 없으면 null. */
+export function canonicalInboundStorage(label: string | null | undefined): string | null {
+  const key = compactKey((label ?? "").trim())
+  if (!key) return null
+  return INBOUND_STORAGE_CHOICES.find((choice) => compactKey(choice) === key) ?? null
 }
 
 export function buildImporterChoices(movements: readonly InboundHistoryMovement[]): string[] {
@@ -439,7 +503,12 @@ export function recentInboundImporter(movements: readonly InboundHistoryMovement
 // 새 입고표의 기본 보관처 — 보관처를 명시해 저장한 최근 입고(storage_location)만 본다. 도착 위치 "창고" 로는
 // 오산·인천을 가를 수 없어서다. 이력이 없으면 "" (사용자가 한 번 고른다).
 export function recentInboundStorage(movements: readonly InboundHistoryMovement[]): string {
-  return rankHistoryValues(movements, (movement) => canonicalStorageLabel(movement.storage_location))[0] ?? ""
+  const ranked = rankHistoryValues(movements, (movement) => canonicalStorageLabel(movement.storage_location))
+  for (const label of ranked) {
+    const fixed = canonicalInboundStorage(label)
+    if (fixed) return fixed
+  }
+  return ""
 }
 
 // ---------------------------------------------------------------------------
@@ -677,6 +746,7 @@ export function createInboundRow(input: {
   key: string
   itemId?: string
   productName: string
+  lotTracked?: boolean
   lastPrices?: Readonly<Record<string, number>>
   pinned?: boolean
 }): InboundDraftRow {
@@ -685,6 +755,9 @@ export function createInboundRow(input: {
     key: input.key,
     ...(input.itemId ? { itemId: input.itemId } : {}),
     productName: input.productName,
+    lotTracked: input.lotTracked ?? true,
+    isFree: null,
+    memo: "",
     quantity: "",
     unitPrice: suggested != null ? String(suggested) : "",
     unitPriceSuggested: suggested != null,
@@ -704,7 +777,16 @@ export function buildFeaturedInboundRows(
   FEATURED_INBOUND_RULES.forEach((rule) => {
     const item = items.find((candidate) => (!active || active.has(candidate.id)) && rule(candidate.name))
     if (!item || rows.some((row) => row.itemId === item.id)) return
-    rows.push(createInboundRow({ key: `featured:${item.id}`, itemId: item.id, productName: item.name, lastPrices: options.lastPrices, pinned: true }))
+    rows.push(
+      createInboundRow({
+        key: `featured:${item.id}`,
+        itemId: item.id,
+        productName: item.name,
+        lotTracked: isLotTrackedItem(item),
+        lastPrices: options.lastPrices,
+        pinned: true,
+      })
+    )
   })
   return rows
 }
@@ -731,7 +813,9 @@ export function applyLinesToRows(
     const productName = item?.name ?? normalizeInboundProductName(line.productName)
     if (!productName) continue
     const target = next.find((row) => !claimed.has(row.key) && sameProduct(row, itemId, productName))
-    const row = target ?? createInboundRow({ key: options.makeKey(), itemId, productName, lastPrices: options.lastPrices })
+    const row =
+      target ??
+      createInboundRow({ key: options.makeKey(), itemId, productName, lotTracked: isLotTrackedItem(item), lastPrices: options.lastPrices })
     if (!target) next.push(row)
     claimed.add(row.key)
     row.quantity = String(line.quantity)
@@ -739,7 +823,7 @@ export function applyLinesToRows(
       row.unitPrice = String(line.unitPrice)
       row.unitPriceSuggested = false
     }
-    if (line.storage !== undefined) row.storage = line.storage
+    if (line.storage !== undefined) row.storage = canonicalInboundStorage(line.storage) ?? ""
   }
   return next
 }
@@ -751,30 +835,73 @@ export function effectiveInboundStorage(row: Pick<InboundDraftRow, "storage">, d
   return row.storage.trim() || defaultStorage.trim()
 }
 
+export function inboundDelivery(draft: Pick<InboundDraft, "delivery">): InboundDelivery {
+  return draft.delivery === "direct" ? "direct" : "storage"
+}
+
+/** 행의 입고 위치 — 직배송이면 고객사 직송, 아니면 행 보관처(없으면 표 기본 보관처). */
+export function inboundRowDestination(row: Pick<InboundDraftRow, "storage">, draft: Pick<InboundDraft, "delivery" | "defaultStorage">): string {
+  return inboundDelivery(draft) === "direct" ? CUSTOMER_STORAGE_LABEL : effectiveInboundStorage(row, draft.defaultStorage)
+}
+
+export function effectiveInboundIsFree(row: Pick<InboundDraftRow, "isFree">, draft: Pick<InboundDraft, "isFree">): boolean | null {
+  return row.isFree ?? draft.isFree ?? null
+}
+
 function activeRows(draft: InboundDraft): InboundDraftRow[] {
   return draft.rows.filter((row) => row.quantity.trim() !== "")
 }
 
-export function validateInboundDraft(draft: InboundDraft): InboundDraftValidation {
+/** 수량을 적은 줄 중 물류번호 관리 품목이 있는가 — 없으면 물류번호를 묻지 않는다. */
+export function inboundDraftNeedsLot(draft: InboundDraft): boolean {
+  return activeRows(draft).some((row) => row.lotTracked)
+}
+
+export const INBOUND_UNLISTED_PRODUCT_MESSAGE =
+  "품목 목록에 없는 품목입니다. 목록에서 고르세요 — 새 품목은 입고관리 권한자가 품목을 먼저 등록해야 합니다."
+
+export function validateInboundDraft(draft: InboundDraft, lotContext: InboundLotContext): InboundDraftValidation {
   const headerErrors: string[] = []
   const rowErrors: Record<string, string> = {}
   const rowWarnings: Record<string, string> = {}
-
-  if (!draft.lot.trim()) headerErrors.push("물량번호를 정하세요.")
-  if (!isValidDateKey(draft.occurredAt)) headerErrors.push("입고일을 YYYY-MM-DD 형식으로 입력하세요.")
+  const direct = inboundDelivery(draft) === "direct"
 
   const lines = activeRows(draft)
+  if (lines.some((row) => row.lotTracked && !row.inboundSaved)) {
+    const lotCheck = checkInboundLot(draft.lot, lotContext)
+    if (!lotCheck.ok) headerErrors.push(lotCheck.error)
+  }
+  if (!isValidDateKey(draft.occurredAt)) headerErrors.push("입고일을 YYYY-MM-DD 형식으로 입력하세요.")
+
   if (lines.length === 0) headerErrors.push("수량을 입력한 품목이 없습니다.")
-  if (lines.length > INBOUND_MAX_LINES) headerErrors.push(`한 번에 최대 ${INBOUND_MAX_LINES}줄까지 저장할 수 있습니다.`)
+  const lineCount = lines.reduce((total, row) => total + (direct ? (row.inboundSaved ? 1 : 2) : 1), 0)
+  if (lineCount > INBOUND_MAX_LINES) {
+    headerErrors.push(
+      direct
+        ? `직배송은 줄마다 입고·출고 두 줄이 저장돼 한 번에 최대 ${Math.floor(INBOUND_MAX_LINES / 2)}품목까지 저장할 수 있습니다.`
+        : `한 번에 최대 ${INBOUND_MAX_LINES}줄까지 저장할 수 있습니다.`
+    )
+  }
+
+  if (direct) {
+    if (!draft.directCustomer?.id || !draft.directCustomer.name.trim()) headerErrors.push("직배송 받을 고객사를 CRM 고객 목록에서 고르세요.")
+    if (!draft.directOutboundType || !DIRECT_SHIP_OUTBOUND_TYPES.includes(draft.directOutboundType)) {
+      headerErrors.push("직배송 출고 유형을 고르세요.")
+    }
+  }
 
   let missingStorage = false
+  let missingFree = false
   for (const row of lines) {
     const quantity = parseInboundQuantity(row.quantity)
-    if (!normalizeInboundProductName(row.productName)) {
+    const price = row.unitPrice.trim() ? parseInboundPrice(row.unitPrice) : null
+    if (!row.itemId) {
+      rowErrors[row.key] = INBOUND_UNLISTED_PRODUCT_MESSAGE
+    } else if (!normalizeInboundProductName(row.productName)) {
       rowErrors[row.key] = "품목 이름이 비어 있습니다."
     } else if (quantity == null) {
       rowErrors[row.key] = "수량은 1 이상 정수로 입력하세요."
-    } else if (row.unitPrice.trim() && parseInboundPrice(row.unitPrice) == null) {
+    } else if (row.unitPrice.trim() && price == null) {
       rowErrors[row.key] = "단가는 0 이상 숫자로 입력하세요."
     } else {
       const serialCount = splitInboundSerials(row.serials).length
@@ -783,14 +910,22 @@ export function validateInboundDraft(draft: InboundDraft): InboundDraftValidatio
       }
     }
 
-    const storage = effectiveInboundStorage(row, draft.defaultStorage)
-    if (!storage) {
-      missingStorage = true
-    } else if (inboundStorageKind(storage) === "other") {
-      rowWarnings[row.key] = `"${storage}"은(는) 창고·사무실·고객사로 인식되지 않아 창고 재고에 잡히지 않습니다.`
+    const isFree = effectiveInboundIsFree(row, draft)
+    if (isFree == null) missingFree = true
+    else if (isFree && price != null && price > 0 && !rowWarnings[row.key]) {
+      rowWarnings[row.key] = "무상 입고인데 단가가 있습니다 — 단가는 원가 기록으로만 남습니다."
     }
-    if (!row.itemId && !rowWarnings[row.key]) rowWarnings[row.key] = "새 품목 — 저장하면 품목이 새로 만들어집니다."
+
+    if (!direct) {
+      const storage = effectiveInboundStorage(row, draft.defaultStorage)
+      if (!storage) {
+        missingStorage = true
+      } else if (!canonicalInboundStorage(storage) && !rowErrors[row.key]) {
+        rowErrors[row.key] = `보관 장소는 ${INBOUND_STORAGE_CHOICES.join("·")} 중에서 고르세요.`
+      }
+    }
   }
+  if (missingFree) headerErrors.push("유상·무상을 고르세요(표 전체 또는 줄마다).")
   if (missingStorage) headerErrors.push("기본 보관처를 고르거나 행마다 보관처를 정하세요.")
 
   return { headerErrors, rowErrors, rowWarnings }
@@ -814,7 +949,7 @@ export function summarizeInboundDraft(draft: InboundDraft): InboundDraftSummary 
       totalUsd += roundUsd(quantity * price)
       pricedLines += 1
     }
-    if (isOfficeStorage(effectiveInboundStorage(row, draft.defaultStorage))) officeUnits += quantity
+    if (isOfficeStorage(inboundRowDestination(row, draft))) officeUnits += quantity
   }
   return { productCount: products.size, lineCount, units, totalUsd: roundUsd(totalUsd), pricedLines, officeUnits }
 }
@@ -826,73 +961,136 @@ export function inboundRowAmount(row: Pick<InboundDraftRow, "quantity" | "unitPr
 }
 
 // 수기 입고는 toLocation 이 재고 위치를 정하고 storageLocation 은 라벨로 남는다 — 보관처 라벨을 양쪽에 싣는다.
+// 직배송은 입고(→ 고객사 직송) 바로 뒤에 같은 날짜·같은 물류번호의 설치 완료 출고(고객사 직송 → 고객)를 붙인다.
+// 유효성 검사를 통과한 초안만 넘긴다(isFree 가 끝내 비면 유상으로 보내지 않고 그 줄을 뺀다).
 export function buildInboundSubmission(draft: InboundDraft): InboundSubmission {
   const rowKeys: string[] = []
-  const movements: InboundMovementPayload[] = []
+  const movements: InboundSubmissionLine[] = []
   const lot = draft.lot.trim()
   const importer = draft.importer.trim()
   const owner = (draft.owner ?? "").trim()
+  const direct = inboundDelivery(draft) === "direct"
+  const customer = draft.directCustomer
   for (const row of activeRows(draft)) {
     const quantity = parseInboundQuantity(row.quantity)
     const productName = normalizeInboundProductName(row.productName)
-    if (quantity == null || !productName) continue
+    const isFree = effectiveInboundIsFree(row, draft)
+    if (quantity == null || !productName || isFree == null) continue
+    if (direct && !customer?.id) continue
     const unitPrice = row.unitPrice.trim() ? parseInboundPrice(row.unitPrice) : null
-    const storage = effectiveInboundStorage(row, draft.defaultStorage) || FALLBACK_STORAGE_LABEL
-    rowKeys.push(row.key)
-    movements.push({
-      ...(row.itemId ? { itemId: row.itemId } : {}),
-      productName,
-      movementType: "inbound",
-      quantity,
-      occurredAt: draft.occurredAt,
-      fromLocation: "",
-      toLocation: storage,
-      owner,
-      status: "입고",
-      referenceNo: "",
-      memo: "",
-      lotNo: lot,
-      unitPrice,
-      amountUsd: unitPrice != null ? roundUsd(quantity * unitPrice) : null,
-      amountCny: null,
-      storageLocation: storage,
-      importer,
-      serials: splitInboundSerials(row.serials),
-    })
+    const storage = inboundRowDestination(row, draft) || FALLBACK_STORAGE_LABEL
+    const lotField = row.lotTracked && lot ? { lotNo: lot } : {}
+    const serials = splitInboundSerials(row.serials)
+    const memo = row.memo.trim()
+    if (!row.inboundSaved) {
+      rowKeys.push(row.key)
+      movements.push({
+        ...(row.itemId ? { itemId: row.itemId } : {}),
+        productName,
+        movementType: "inbound",
+        quantity,
+        occurredAt: draft.occurredAt,
+        fromLocation: "",
+        toLocation: storage,
+        owner,
+        status: "입고",
+        referenceNo: "",
+        memo,
+        ...lotField,
+        isFree,
+        unitPrice,
+        amountUsd: unitPrice != null ? roundUsd(quantity * unitPrice) : null,
+        amountCny: null,
+        storageLocation: storage,
+        importer,
+        serials,
+      })
+    }
+    if (direct && customer) {
+      rowKeys.push(row.key)
+      movements.push({
+        ...(row.itemId ? { itemId: row.itemId } : {}),
+        productName,
+        movementType: "outbound",
+        quantity,
+        occurredAt: draft.occurredAt,
+        fromLocation: CUSTOMER_STORAGE_LABEL,
+        toLocation: customer.name.trim(),
+        customerId: customer.id,
+        outboundType: draft.directOutboundType ?? "sales",
+        owner,
+        status: HARDWARE_PROGRESS_STATUS.installed,
+        referenceNo: "",
+        memo,
+        ...lotField,
+        unitPrice: null,
+        amountUsd: null,
+        amountCny: null,
+        storageLocation: "",
+        importer: "",
+        serials,
+      })
+    }
   }
   return { rowKeys, movements }
 }
 
-export function buildInboundMovements(draft: InboundDraft): InboundMovementPayload[] {
+export function buildInboundMovements(draft: InboundDraft): InboundSubmissionLine[] {
   return buildInboundSubmission(draft).movements
 }
 
 // 서버 lineResults(index 기준)를 행으로 되돌린다. 결과가 빠진 줄은 실패로 본다(성공으로 숨기지 않는다).
+// 직배송 행은 입고·출고가 모두 저장돼야 저장된 행이다. 입고만 저장되면 inboundOnlyRowKeys 로 돌려준다.
 export function resolveInboundSaveOutcome(submission: InboundSubmission, lineResults: readonly InboundLineResult[]): InboundSaveOutcome {
   const byIndex = new Map(lineResults.map((line) => [line.index, line]))
-  const savedLines: InboundSavedLine[] = []
-  const failedErrors: Record<string, string> = {}
-  let savedUnits = 0
+  const perRow = new Map<string, { inbound?: { ok: boolean; result?: InboundLineResult; line: InboundSubmissionLine }; outbound?: { ok: boolean; result?: InboundLineResult; line: InboundSubmissionLine } }>()
+  const order: string[] = []
   submission.movements.forEach((movement, index) => {
     const rowKey = submission.rowKeys[index]
     const result = byIndex.get(index)
-    if (!result?.ok) {
-      failedErrors[rowKey] = result?.error?.trim() || (result ? "저장에 실패했습니다." : "서버 응답에 이 줄의 결과가 없습니다.")
-      return
+    if (!perRow.has(rowKey)) {
+      perRow.set(rowKey, {})
+      order.push(rowKey)
     }
-    savedUnits += movement.quantity
-    const itemId = result.movement?.item_id ?? movement.itemId
-    const movementId = result.movement?.id ?? undefined
+    const entry = perRow.get(rowKey)!
+    if (movement.movementType === "inbound") entry.inbound = { ok: Boolean(result?.ok), result, line: movement }
+    else entry.outbound = { ok: Boolean(result?.ok), result, line: movement }
+  })
+
+  const failure = (result: InboundLineResult | undefined) =>
+    result?.error?.trim() || (result ? "저장에 실패했습니다." : "서버 응답에 이 줄의 결과가 없습니다.")
+
+  const savedLines: InboundSavedLine[] = []
+  const failedErrors: Record<string, string> = {}
+  const inboundOnlyRowKeys: string[] = []
+  let savedUnits = 0
+  for (const rowKey of order) {
+    const entry = perRow.get(rowKey)!
+    if (entry.inbound && !entry.inbound.ok) {
+      failedErrors[rowKey] = failure(entry.inbound.result)
+      continue
+    }
+    if (entry.inbound?.ok) savedUnits += entry.inbound.line.quantity
+    if (entry.outbound && !entry.outbound.ok) {
+      failedErrors[rowKey] = `입고는 저장했고 직배송 출고가 실패했습니다: ${failure(entry.outbound.result)} — 다시 저장하면 출고만 보냅니다.`
+      if (entry.inbound?.ok) inboundOnlyRowKeys.push(rowKey)
+      continue
+    }
+    // 입고가 이전 요청에서 이미 저장된 직배송 행은 출고 줄만 왔다 — 출고가 저장되면 그 행도 끝난 것이다.
+    const line = entry.inbound?.line ?? entry.outbound?.line
+    if (!line) continue
+    const itemId = entry.inbound?.result?.movement?.item_id ?? line.itemId
+    const movementId = entry.inbound?.result?.movement?.id ?? undefined
     savedLines.push({
       rowKey,
       ...(itemId ? { itemId } : {}),
-      productName: movement.productName,
-      quantity: movement.quantity,
-      storage: movement.storageLocation,
+      productName: line.productName,
+      quantity: line.quantity,
+      storage: line.movementType === "inbound" ? line.storageLocation : CUSTOMER_STORAGE_LABEL,
       ...(movementId ? { movementId } : {}),
     })
-  })
-  return { savedLines, failedErrors, savedUnits }
+  }
+  return { savedLines, failedErrors, savedUnits, inboundOnlyRowKeys }
 }
 
 // 사무실 보관으로 저장된 줄을 샘플 유닛 등록 요청으로 바꾼다(줄마다, 서버 상한 60대씩 나눔).
