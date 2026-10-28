@@ -121,6 +121,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - **SEO·AEO 개선 워크리스트.** 외부 예비 진단(2026-10-27)을 코드와 대조해 수치·Zoom 비교·요금 조건·홈 메타·허브 링크·답변형 FAQ·canonical/lastmod·GA4 계측을 항목별로 "반영 / 코드 가능 / 사람 확인 / 콘솔"로 분류. 결정 대기 D1~D13, 운영자 콘솔 체크리스트, 90일 실행 순서
 - [active/seo-analytics-console-runbook-2026-10-28.md](./active/seo-analytics-console-runbook-2026-10-28.md)
   - **검색·분석 콘솔 실행 런북.** GSC 도메인 속성·네이버 서치어드바이저·GA4(향상된 측정 OFF·데이터 수정·맞춤 측정기준·주요 이벤트·MP 중복 결정)·GTM 점검·Google Ads·Vercel 환경변수를 순서·값·검증 시나리오와 함께 정리
+- [active/integration-followups-2026-10-28.md](./active/integration-followups-2026-10-28.md)
+  - **2026-10-28 통합 병합 기록.** main + 열린 PR 7건(#34·#38~#42·#44) + 10-28 핫픽스를 한 브랜치로 합치며 내린 결정(정본 선택·순서·모듈 통합), 운영 적용 대기 마이그레이션 4건, 병합 중 드러난 후속 과제 F1~F10
 - [active/docs-center-db-design.md](./active/docs-center-db-design.md)
   - 공개 가이드/매뉴얼/도움말/문제 해결/업데이트 문서센터와 챗봇 지식 베이스 설계
 - [active/docs-center-content-guidelines.md](./active/docs-center-content-guidelines.md)
