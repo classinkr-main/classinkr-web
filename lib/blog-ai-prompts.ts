@@ -1,8 +1,14 @@
 // 블로그 편집기 AI 도구(초안·다듬기·카드뉴스·릴스)의 프롬프트와 초안 결과 해석.
 // 라우트·편집기·품질 점검 스크립트(tmp/blog-ai-eval-*)가 같이 쓴다.
 // 표기 규칙은 2026-10 공개 글 40편의 실제 형식(H1 없음, `---` 구분, 섹션별 {{green:}} 한 줄, 인용·표)에 맞췄다.
+// 브랜드 문구는 lib/classin-positioning.ts 를 그대로 쓰고, 문서에만 있는 것(보이스 헌장 §1·§3·§4·§5, company-facts §3)은
+// 아래 상수에 옮겨 적었다. 그 문서를 고치면 여기도 같이 고친다.
 
-import { CLASSIN_POSITIONING, getClassinPositioningContext } from "@/lib/classin-positioning"
+import {
+  CLASSIN_CHATBOT_REFERENCE,
+  CLASSIN_POSITIONING,
+  getClassinPositioningContext,
+} from "@/lib/classin-positioning"
 
 export type BlogAiAction = "card-news" | "reels" | "optimize" | "draft"
 
@@ -47,6 +53,38 @@ const BANNED_CLAIMS = [
   "확인되지 않은 기관 수·보드 수·모델 스펙·가격·고객사 이름",
 ]
 
+// 보이스 헌장 §1 코어 보이스(전 표면 공통). 다듬기·카드뉴스·릴스·초안이 모두 쓴다.
+const CORE_VOICE = [
+  "기능명보다 수업 전·중·후 운영 흐름과 줄어드는 업무로 설명한다.",
+  "과장하지 않는다. 결제·오프라인 출석·고급 리포트는 '연동·별도·확인 범위'로 분리해 말한다.",
+  "불안으로 끝내지 않고 다음 행동을 알려 준다.",
+]
+
+// 보이스 헌장 §3 블로그 줄 + §5 권장어. 초안만 쓴다.
+const BLOG_VOICE = [
+  "독자가 품을 반론 하나를 꺼내 정면으로 답한다(예: \"줌이면 충분하지 않나?\", \"전자칠판은 다 비슷하지 않나?\"). 관점을 바꿔 주는 글이 목표다.",
+  "가치는 운영비, 강사 리소스, 수업 품질 표준화 관점으로 설명한다.",
+  "문제를 직시해 긴장을 만들어도 되지만, 허위 공포나 보장하는 말은 쓰지 않는다.",
+  `제품 범주는 '${CLASSIN_POSITIONING.categoryName}'로 부른다. 권장어(수업 운영 흐름, 강사 리소스 절감, 수업 품질 표준화, 감이 아니라 기준으로) 가운데 맞는 것을 1~2번 자연스럽게 쓴다. 억지로 끼우지 않는다.`,
+]
+
+// company-facts.md §3 ✅ 수치만. 투자·유니콘은 같은 문서가 '노출 전 법무 검토'를 걸어 둬서 뺐다.
+const COMPANY_SCALE =
+  "교육자·학습자 5,000만+, 160+개국, 교육기관 6만+, 월 3,000만+ 수업, 누적 2억+ 수업"
+const COMPANY_SCALE_SOURCE = "전 세계 누적 · EEO 공식 소개 기준"
+
+function bullets(lines: readonly string[]) {
+  return lines.map((line) => `- ${line}`).join("\n")
+}
+
+/** 다듬기·카드뉴스·릴스에 붙는 짧은 브랜드 기준. */
+function brandCoreBlock() {
+  return `[브랜드 기준]
+- 클래스인: ${CLASSIN_POSITIONING.oneLine}
+${bullets(CORE_VOICE)}
+- 쓰지 않을 표현: ${BANNED_CLAIMS.join("; ")}.`
+}
+
 const META_OPEN = "<!--meta"
 const META_CLOSE = "-->"
 
@@ -71,6 +109,9 @@ Output format:
 
 Keep each slide focused on one idea and write all copy in Korean.
 Use only facts, numbers, and product capabilities that appear in the post. Do not invent statistics, prices, or social handles — write [계정] where the account tag goes.
+If the post has no clear CTA, use one of: ${CLASSIN_POSITIONING.primaryCtas.join(" / ")}.
+Follow this brand guide in the Korean copy, and leave out any line of the post that breaks it:
+${brandCoreBlock()}
 `.trim()
 }
 
@@ -95,6 +136,9 @@ Output format:
 
 Keep lines spoken naturally and concise.
 Use only facts, numbers, and product capabilities that appear in the post. Do not invent statistics or prices.
+If the post has no clear CTA, use one of: ${CLASSIN_POSITIONING.primaryCtas.join(" / ")}.
+Follow this brand guide in the Korean script, and leave out any line of the post that breaks it:
+${brandCoreBlock()}
 `.trim()
 }
 
@@ -117,6 +161,9 @@ ${content}
 - 이 블로그의 표기는 그대로 살린다: \`{{green:문장}}\`(브랜드색 한 줄), \`==구절==\`(형광펜), \`---\`(구분선), \`> \`(인용). 감싼 기호를 지우거나 **굵게**로 바꾸지 않는다. 안의 문장만 다듬을 수 있다.
 - 원문의 사실·수치·제품명·고객 사례·CTA 방향을 바꾸지 않는다. 원문에 없는 수치나 기능을 더하지 않는다.
 - 맞춤법·문장 흐름·문단 호흡·소제목을 다듬는다. 문체는 합니다체, 제품명은 '클래스인'.
+- 아래 브랜드 기준에 맞게 말투를 고른다. 원문 문장이 '쓰지 않을 표현'에 해당하면 지우거나 바꾸지 말고 그 문장 끝에 [확인 필요]를 붙인다.
+
+${brandCoreBlock()}
 `.trim()
 }
 
@@ -145,12 +192,28 @@ function buildDraftPrompt(
 - 톤: ${toneGuide}${keywordText ? `\n- 자연스럽게 녹일 검색어: ${keywordText}` : ""}${title.trim() && title.trim() !== topic.trim() ? `\n- 지금 제목(참고): ${title.trim()}` : ""}${content.trim() ? `\n- 지금 본문(참고, 살릴 내용만):\n${content.trim()}` : ""}
 
 [근거 — 가장 중요]
-${referenceText ? `- 아래 참고 자료가 이 글의 1차 근거다. 사실·수치·사례·기능은 참고 자료와 [브랜드 사실]에서만 가져온다.\n참고 자료:\n---\n${referenceText}\n---` : "- 참고 자료가 없다. 사실·기능은 [브랜드 사실]에 있는 것만 쓴다."}
+${referenceText ? `- 아래 참고 자료가 이 글의 1차 근거다. 사실·수치·사례·기능은 참고 자료와 [브랜드 사실]·[제품 맥락]·[회사 수치]에서만 가져온다.\n참고 자료:\n---\n${referenceText}\n---` : "- 참고 자료가 없다. 사실·기능·수치는 [브랜드 사실]·[제품 맥락]·[회사 수치]에 있는 것만 쓴다."}
 - 근거에 없는 수치·통계·가격·고객사·학원 이름·기능은 만들지 않는다. 꼭 필요하면 그 문장 끝에 [확인 필요]를 붙인다.
 - 쓰지 않을 표현: ${BANNED_CLAIMS.join("; ")}.
 
+[관점 — 이 블로그의 목소리]
+${bullets([...CORE_VOICE, ...BLOG_VOICE])}
+
 [브랜드 사실]
 ${getClassinPositioningContext()}
+강점:
+${bullets(CLASSIN_POSITIONING.strengths)}
+비교할 때:
+${bullets(CLASSIN_POSITIONING.comparisonPoints.map((item) => `${item.label}: ${item.point}`))}
+
+[제품 맥락 — 기능을 말할 때 이 범위 안에서]
+${bullets(CLASSIN_CHATBOT_REFERENCE.softwareContext)}
+${bullets(CLASSIN_CHATBOT_REFERENCE.hardwareContext)}
+
+[회사 수치 — 글의 논지에 회사 규모가 필요할 때만 한 번]
+- 쓸 수 있는 값: ${COMPANY_SCALE}.
+- 쓸 때는 같은 문장에 "(${COMPANY_SCALE_SOURCE})"을 붙인다. 한국 실적처럼 쓰지 않는다.
+- 국내 도입 기관·보드 수, 투자·기업 가치, 위에 없는 회사 수치(언어 수·파트너 수 등)는 쓰지 않는다.
 
 [형식 — 이 블로그의 표기 규칙]
 - 첫 줄은 \`# 제목\` 한 줄(40자 안팎, 독자가 검색할 말 포함). 본문에는 다른 \`#\` 제목을 쓰지 않는다.

@@ -3,7 +3,7 @@
 기준일: 2026-06-29
 문서 목적: 표면(홈/제품/블로그/문서센터/이벤트/이메일/챗봇)마다 톤이 따로 노는 것을 막는다. **하나의 코어 보이스 + 표면별 허용 톤 레인지**를 고정해, 홈의 긴장·손실 프레이밍과 문서센터의 안심·행동 안내가 *사고가 아니라 의도된 설계*임을 명문화한다.
 
-> 관련: [README.md](./README.md) · 코어 보이스 원천 = [lib/classin-positioning.ts](../../../lib/classin-positioning.ts) `CLASSIN_CHATBOT_REFERENCE.brandVoice` · 문서센터 톤 = [../docs-center-content-guidelines.md](../docs-center-content-guidelines.md)
+> 관련: [README.md](./README.md) · 코어 보이스 원천 = [lib/classin-positioning.ts](../../../lib/classin-positioning.ts) `CLASSIN_CHATBOT_REFERENCE.brandVoice` · 문서센터 톤 = [../docs-center-content-guidelines.md](../docs-center-content-guidelines.md) · 블로그 AI 프롬프트 사본(§1·§3 블로그·§4·§5) = [lib/blog-ai-prompts.ts](../../../lib/blog-ai-prompts.ts), 여기를 고치면 같이 고친다
 
 ## 1. 코어 보이스 (전 표면 공통)
 Classin은 차가운 SaaS가 아니라 **수업 품질을 안정적으로 표준화하도록 돕는 프리미엄 운영 파트너**처럼 말한다.

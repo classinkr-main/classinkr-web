@@ -59,6 +59,28 @@ describe("buildBlogAiPrompt", () => {
     expect(prompt).toContain("<!--meta")
   })
 
+  it("초안: 블로그 관점·권장어·제품 맥락·회사 수치 출처 규칙을 넣고 투자 수치는 뺀다", () => {
+    const prompt = buildBlogAiPrompt("draft", "", "", "인사이트", { topic: "결석 보강" })
+    expect(prompt).toContain("줌이면 충분하지 않나?") // 반론 대응
+    expect(prompt).toContain("감이 아니라 기준으로") // 권장어
+    expect(prompt).toContain("수업 시스템 OS")
+    expect(prompt).toContain("OMR 카드") // 소프트웨어 맥락
+    expect(prompt).toContain("S98 Pro") // 하드웨어 맥락
+    expect(prompt).toContain("5,000만+")
+    expect(prompt).toContain("(전 세계 누적 · EEO 공식 소개 기준)")
+    expect(prompt).not.toMatch(/유니콘|5억 달러|\$500M/)
+  })
+
+  it("다듬기·카드뉴스·릴스에도 브랜드 기준과 금지 표현이 들어간다", () => {
+    for (const action of ["optimize", "card-news", "reels"] as const) {
+      const prompt = buildBlogAiPrompt(action, "t", "본문", "제품", {})
+      expect(prompt).toContain("[브랜드 기준]")
+      expect(prompt).toContain("수업 시스템 OS")
+      expect(prompt).toContain("결제·오프라인 출석까지 해결한다는 말")
+    }
+    expect(buildBlogAiPrompt("reels", "t", "본문", "제품", {})).toContain("목동 쇼룸")
+  })
+
   it("다듬기: 블로그 표기를 지키게 하고, 선택 구간이면 제목을 만들지 않게 한다", () => {
     const whole = buildBlogAiPrompt("optimize", "t", "본문", "제품", {})
     expect(whole).toContain("{{green:문장}}")
