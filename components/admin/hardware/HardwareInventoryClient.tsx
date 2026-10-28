@@ -3408,6 +3408,7 @@ export default function HardwareInventoryClient({
     productName: customProduct.trim() || selectedItem?.name || "",
     movementType,
     fromLocation,
+    toLocation: activePresetKey === "sample" ? "샘플" : toLocation,
   }
   useEnsureProcessLots({ lots: hardwareLots, enabled: sheetOpen, form: processFormKey, excludeMovementId: editingId, quickCart })
   const processLotEntry = lotEntryForDraft(hardwareLots, processFormKey, editingId)

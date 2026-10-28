@@ -88,6 +88,10 @@ describe("출고 등록 v2 검증", () => {
     expect(validateOutboundV2(base({ fromLocation: "사무실", lotNo: "" }))).toBeNull()
   })
 
+  it("창고에서 내부 위치로 가는 출고는 물류번호를 묻지 않는다 — 서버가 FIFO 로 배정한다(W1 계약)", () => {
+    expect(validateOutboundV2(base({ toLocation: "샘플", outboundType: "", customerId: null, lotNo: "" }))).toBeNull()
+  })
+
   it("내부 이동(사무실 샘플 풀)은 유형·고객·출고일을 묻지 않는다", () => {
     const internal = base({ toLocation: "샘플", fromLocation: "사무실", outboundType: "", customerId: null, occurredAt: "", lotNo: "" })
     expect(outboundV2Issues(internal)).toEqual([])

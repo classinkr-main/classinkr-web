@@ -22,13 +22,19 @@ function itemFor(items: readonly HardwareItem[] | undefined, draft: Pick<Hardwar
 }
 
 /** 이 드래프트가 창고 로트에서 빠지는 출고인가 — 물류번호 조회·고르기 대상. */
-export function draftNeedsLotLookup(draft: Pick<HardwareMovementDraft, "movementType" | "fromLocation" | "productName">): boolean {
-  return draft.movementType === "outbound" && isWarehouseSource(draft.fromLocation) && draft.productName.trim() !== ""
+export function draftNeedsLotLookup(draft: Pick<HardwareMovementDraft, "movementType" | "fromLocation" | "productName"> & { toLocation?: string }): boolean {
+  return (
+    draft.movementType === "outbound" &&
+    isWarehouseSource(draft.fromLocation) &&
+    draft.productName.trim() !== "" &&
+    // 내부 이동은 서버가 FIFO 로 배정한다 — 고객사로 나가는 출고만 물류번호를 고른다.
+    (draft.toLocation === undefined || isCustomerOutbound({ movementType: draft.movementType, toLocation: draft.toLocation }))
+  )
 }
 
 export function lotEntryForDraft(
   lots: HardwareLotsCache,
-  draft: Pick<HardwareMovementDraft, "itemId" | "productName" | "movementType" | "fromLocation">,
+  draft: Pick<HardwareMovementDraft, "itemId" | "productName" | "movementType" | "fromLocation"> & { toLocation?: string },
   excludeMovementId?: string | null
 ): LotLookupEntry | undefined {
   if (!draftNeedsLotLookup(draft)) return undefined
@@ -89,7 +95,7 @@ export function validateQuickCartProcess(
 export function useEnsureProcessLots(input: {
   lots: HardwareLotsCache
   enabled: boolean
-  form: Pick<HardwareMovementDraft, "itemId" | "productName" | "movementType" | "fromLocation">
+  form: Pick<HardwareMovementDraft, "itemId" | "productName" | "movementType" | "fromLocation"> & { toLocation?: string }
   excludeMovementId: string | null
   quickCart: readonly HardwareMovementDraft[]
 }) {

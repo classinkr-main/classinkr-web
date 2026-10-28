@@ -107,8 +107,9 @@ export function outboundV2Issues(input: OutboundV2Input): OutboundV2Issue[] {
     }
   }
 
-  // 물류번호 관리 품목이 창고 로트에서 빠질 때만 물류번호를 고른다(사무실 샘플 반출은 로트가 없다).
-  if (input.lot.lotTracked && isWarehouseSource(input.fromLocation)) {
+  // 물류번호 관리 품목이 창고 로트에서 고객사로 나갈 때만 고른다. 내부 이동(사무실·샘플 풀·수리)은 서버가
+  // 예전처럼 FIFO 로 배정한다(W1 계약) — 사무실 샘플 반출은 로트 자체가 없다.
+  if (customer && input.lot.lotTracked && isWarehouseSource(input.fromLocation)) {
     try {
       if (input.lot.lots) {
         assertLotSelectable({

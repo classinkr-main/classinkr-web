@@ -61,6 +61,7 @@ describe("빠른 기록 시트 ↔ 프로세스 규칙", () => {
     expect(draftNeedsLotLookup(draft())).toBe(true)
     expect(draftNeedsLotLookup(draft({ fromLocation: "사무실" }))).toBe(false)
     expect(draftNeedsLotLookup(draft({ movementType: "inbound" }))).toBe(false)
+    expect(draftNeedsLotLookup(draft({ toLocation: "샘플" }))).toBe(false)
     expect(lotEntryForDraft(lots, draft())?.status).toBe("ready")
     expect(lotEntryForDraft(lots, draft({ fromLocation: "사무실" }))).toBeUndefined()
   })
