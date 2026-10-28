@@ -34,6 +34,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - Classin Home 공개 사이트의 현재 기준 PRD
 - [active/brand-canon/README.md](./active/brand-canon/README.md)
   - **브랜드·콘텐츠 단일 기준 인덱스.** 정체성·카피·보이스·세그먼트·회사 팩트의 SSOT 계층(카테고리명 "수업 시스템 OS", 보이스 헌장, EEO 회사 팩트). 브랜드/마케팅 카피 작업의 진입점.
+- [active/content-hook-lab/README.md](./active/content-hook-lab/README.md)
+  - **콘텐츠 후킹 루프 랩.** 새벽 예약 작업이 블로그·리드마그넷·카피·후킹을 TOFU·MOFU·BOFU별로 20개 생성 → 테스트 → 랭킹 → Top3 루프로 다듬는 절차, 단계별 원장(실측 피드백·명예의 전당), 실행 보고서 위치
 - [active/classin-korea-positioning-guidelines.md](./active/classin-korea-positioning-guidelines.md)
   - 한국 학원 시장용 Classin 메시지·CTA·비교 프레임 **규칙**(literal 카피 값은 lib/classin-positioning.ts)
 - [active/classin-pre-adoption-question-matrix-2026-06-18.md](./active/classin-pre-adoption-question-matrix-2026-06-18.md)
