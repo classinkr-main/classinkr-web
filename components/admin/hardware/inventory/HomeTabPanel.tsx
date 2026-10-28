@@ -184,7 +184,7 @@ export default function HomeTabPanel({
     <details className="border-t border-[rgba(0,0,0,0.08)] pt-3"><summary className="cursor-pointer text-[13px] font-semibold text-[#615D59]">출고 예정 요약 · {plannedPagination.totalItems}묶음</summary><div className="mt-3 max-w-xl"><PlannedOutboundOverview plannedPagination={plannedPagination} startPlannedEntry={startPlannedEntry} plannedConfirmLocked={plannedConfirmLocked} /></div></details>
 
     {/* 견적이 승인된 하드웨어 오더 — 승인하면 오더번호와 배송 예정이 생긴다(2026-10-22 연결 로직 S3). */}
-    <OrderApprovalSection onChanged={refresh} />
+    <OrderApprovalSection onChanged={refresh} stockRows={data?.stock} />
 
     {/* 예정 큐 바로 위 — 등록할 것을 먼저 보고, 그 아래에서 확정한다(입력 가속 P2-1). */}
     <CrmOrderBacklogSection canWrite={canWriteHardware} onRegistered={refresh} />

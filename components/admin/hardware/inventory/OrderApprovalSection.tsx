@@ -12,10 +12,11 @@
 //
 // "승인됨"(시안 2026-10-26 A): 오더마다 품목별 진행 바(출고·배송 예정·미등록)와 다음 할 일, 시트 힌트
 // (번호 없이 적힌 같은 고객·품목 출고, 수량 초과)를 보인다. 할 일이 남은 오더가 위로, 하드웨어 없는 오더는 접는다.
+// "승인 대기"(시안 A): 오더마다 재고 영향(주문 · 지금 가용 · 승인 후, 다른 대기 합산)과 기다린 시간. 오래 기다린 것부터.
 // "반려·취소"(시안 B): 오더마다 다음 할 일 — 견적 수정(반려 알림은 자동, 버튼은 다시 알리기), 시트에 남은 취소 번호 지우기, 해결됨.
 // "시트 확인"(시안 A): 종류별로 묶고 고칠 방법과 고칠 번호 후보(번호 복사)를 붙인다.
 import { Fragment, memo, useCallback, useEffect, useState, type ReactNode } from "react"
-import { Check, ChevronDown, Copy, ExternalLink, RefreshCw, X } from "lucide-react"
+import { AlertTriangle, Check, ChevronDown, Clock, Copy, ExternalLink, RefreshCw, X } from "lucide-react"
 
 import { adminFetch, adminFetchJson } from "@/lib/admin-client"
 import { summarizeSalesOrderProducts, type SalesOrder } from "@/lib/orders/order-lines"
@@ -34,6 +35,14 @@ import {
   type ApprovedOrderNextAction,
 } from "./approved-order-view"
 import { closedOrderReason, closedOrderTodo, sortClosedOrders, type ClosedOrderInput } from "./closed-order-view"
+import {
+  isLongWait,
+  pendingStockImpact,
+  sortPendingOrders,
+  waitingLabel,
+  type PendingStockImpactRow,
+  type StockAvailability,
+} from "./pending-order-view"
 import { SHEET_CHECK_KIND_SUMMARY, groupSheetChecks, sheetCheckFixText } from "./sheet-check-view"
 import { formatCurrency, formatDate, formatNumber } from "./shared"
 
@@ -44,6 +53,8 @@ type OrderAction = "approve" | "reject" | "cancel" | "remind"
 interface OrderApprovalSectionProps {
   /** 승인으로 배송 예정이 생기면 부모가 원장을 다시 받는다(HardwareInventoryClient의 refresh). */
   onChanged: () => void | Promise<void>
+  /** 재고현황의 품목별 가용 — 승인 대기 카드의 재고 영향 표가 쓴다. 대시보드를 아직 못 받았으면 비어 있다. */
+  stockRows?: readonly StockAvailability[]
 }
 
 const FILTERS: Array<{ key: OrderFilter; label: string }> = [
@@ -91,14 +102,7 @@ function nextActionText(action: ApprovedOrderNextAction) {
     : `미등록 ${formatNumber(action.quantity)}대 — 배송 예정을 등록하거나 시트에 오더번호와 함께 적기`
 }
 
-function statusLabel(order: SalesOrder) {
-  if (order.status === "pending_approval") return "승인 대기"
-  if (order.status === "approved") return order.needsHardwareApproval ? "승인됨" : "자동 승인(하드웨어 없음)"
-  if (order.status === "rejected") return "반려"
-  return "취소"
-}
-
-function OrderApprovalSection({ onChanged }: OrderApprovalSectionProps) {
+function OrderApprovalSection({ onChanged, stockRows }: OrderApprovalSectionProps) {
   const [expanded, setExpanded] = useState(true)
   const [filter, setFilter] = useState<OrderFilter>("pending")
   const [orders, setOrders] = useState<OrderView[]>([])
@@ -116,6 +120,8 @@ function OrderApprovalSection({ onChanged }: OrderApprovalSectionProps) {
   // 반려·취소는 사유가 필수다 — 누르면 그 줄에 사유 칸이 열린다.
   const [reasonFor, setReasonFor] = useState<{ id: string; action: "reject" | "cancel" } | null>(null)
   const [reason, setReason] = useState("")
+  // 기다린 시간 기준 시각 — 렌더 중에 시계를 읽지 않도록 목록을 받을 때 정한다.
+  const [now, setNow] = useState(() => new Date())
 
   const loadSheetChecks = useCallback(async (showLoading: boolean) => {
     if (showLoading) {
@@ -172,6 +178,7 @@ function OrderApprovalSection({ onChanged }: OrderApprovalSectionProps) {
         throw new Error(body?.error ?? `${response.status} ${response.statusText}`.trim())
       }
       setUnavailable(null)
+      setNow(new Date())
       const nextOrders = body?.orders ?? []
       setOrders(nextOrders)
       setCanApprove(body?.viewer?.canApprove === true)
@@ -236,12 +243,15 @@ function OrderApprovalSection({ onChanged }: OrderApprovalSectionProps) {
   // 승인됨: 할 일이 남은 오더가 위로, 하드웨어 없는 오더(자동 승인)는 목록 아래에 접는다.
   const noHardwareOrders = filter === "approved" ? orders.filter((order) => isNoHardwareOrder(order)) : []
   // 반려·취소: 할 일이 남은 것부터(견적 수정 → 시트 정리 → 해결됨 → 할 일 없음).
+  // 승인 대기: 오래 기다린 것부터.
   const visibleOrders =
     filter === "approved"
       ? sortApprovedOrders(orders.filter((order) => !isNoHardwareOrder(order)))
       : filter === "closed"
         ? sortClosedOrders(orders, sheetChecks)
-        : orders
+        : filter === "pending"
+          ? sortPendingOrders(orders)
+          : orders
 
   if (unavailable) {
     return (
@@ -336,6 +346,13 @@ function OrderApprovalSection({ onChanged }: OrderApprovalSectionProps) {
             </p>
           ) : null}
 
+          {filter === "pending" && visibleOrders.length > 0 ? (
+            <p className="mt-2 flex items-center gap-1.5 text-[12px] text-[#615D59]">
+              <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+              가장 오래 기다린 오더 {waitingLabel(visibleOrders[0].requestedAt, now)} · 승인하면 오더번호와 배송 예정이 바로 생깁니다.
+            </p>
+          ) : null}
+
           {filter === "approved" && visibleOrders.length > 0 ? (
             <p className="mt-2 flex flex-wrap gap-3 text-[11.5px] text-[#615D59]">
               <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="h-2.5 w-2.5 rounded-sm bg-[#084734]" />출고</span>
@@ -346,14 +363,29 @@ function OrderApprovalSection({ onChanged }: OrderApprovalSectionProps) {
 
           <ul className={`mt-2 divide-y divide-[rgba(0,0,0,0.06)] ${filter === "sheet" ? "hidden" : ""}`}>
             {visibleOrders.map((order) => {
-              const products = summarizeSalesOrderProducts(order.lines)
-              const unmapped = order.lines.filter((line) => line.unmappedHardware)
               const busy = busyId === order.id
               const askingReason = reasonFor?.id === order.id ? reasonFor.action : null
               const rowError = rowErrors[order.id]
               return (
                 <li key={order.id} className="py-3">
-                  {filter === "closed" ? (
+                  {filter === "pending" ? (
+                    <PendingOrderItem
+                      order={order}
+                      impact={stockRows?.length ? pendingStockImpact(order, stockRows, orders) : null}
+                      waiting={waitingLabel(order.requestedAt, now)}
+                      longWait={isLongWait(order.requestedAt, now)}
+                      canApprove={canApprove}
+                      busy={busy}
+                      locked={busyId != null}
+                      asking={askingReason === "reject"}
+                      onApprove={() => void act(order, "approve")}
+                      onReject={() => {
+                        setReasonFor({ id: order.id, action: "reject" })
+                        setReason("")
+                      }}
+                      error={rowError}
+                    />
+                  ) : filter === "closed" ? (
                     <ClosedOrderItem
                       order={order}
                       sheetChecks={sheetChecks}
@@ -378,115 +410,7 @@ function OrderApprovalSection({ onChanged }: OrderApprovalSectionProps) {
                       onShowSheet={() => setFilter("sheet")}
                       error={rowError}
                     />
-                  ) : (
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="flex flex-wrap items-center gap-1.5 text-[12.5px] font-bold text-[#111110]">
-                          <span className="truncate">{order.customerName}</span>
-                          {order.orderNo ? (
-                            <span className="rounded-full bg-[#ECFDF5] px-2 py-0.5 font-mono text-[11px] font-bold text-[#084734]">
-                              {order.orderNo}
-                            </span>
-                          ) : null}
-                          <span className="rounded-full bg-[#F6F5F4] px-2 py-0.5 text-[10.5px] font-bold text-[#615D59]">
-                            {statusLabel(order)}
-                          </span>
-                        </p>
-                        <p className="mt-0.5 text-[11.5px] text-[#615D59]">
-                          견적 {order.quoteNumber ?? "-"} · {order.acceptedVia === "customer_link" ? "고객이 링크에서 승인" : "담당자가 승인 처리"} ·{" "}
-                          {formatDateTime(order.requestedAt)}
-                          {order.totalAmount != null ? ` · ${formatCurrency(order.totalAmount, "KRW")}` : ""}
-                        </p>
-                        <p className="mt-1.5 flex flex-wrap gap-1.5">
-                          {products.map((entry) => (
-                            <span
-                              key={entry.product}
-                              className="rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FBFAF9] px-2 py-0.5 text-[11.5px] font-bold text-[#31302E]"
-                            >
-                              {entry.product} <span className="tabular-nums">×{formatNumber(entry.quantity)}</span>
-                            </span>
-                          ))}
-                          {unmapped.map((line) => (
-                            <span
-                              key={line.quoteLineRef}
-                              className="rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[11.5px] font-bold text-[#7A520F]"
-                              title="재고 품목을 못 찾아 배송 예정에 들어가지 않습니다. 승인 뒤 직접 등록하세요."
-                            >
-                              품목 확인 필요: {line.itemName} ×{formatNumber(line.quantity)}
-                            </span>
-                          ))}
-                        </p>
-                        {order.fulfillment?.length ? (
-                          <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11.5px] text-[#615D59]">
-                            {order.fulfillment.map((line) => (
-                              <span key={line.product} className="tabular-nums">
-                                <span className="font-bold text-[#31302E]">{line.product}</span> 출고 {formatNumber(line.shipped)}/
-                                {formatNumber(line.ordered)}
-                                {line.planned > 0 ? ` · 예정 ${formatNumber(line.planned)}` : ""}
-                              </span>
-                            ))}
-                          </p>
-                        ) : null}
-                        {order.decidedBy || order.decisionReason ? (
-                          <p className="mt-1 text-[11.5px] text-[#615D59]">
-                            {order.decidedBy ? `${order.decidedBy} · ${formatDateTime(order.decidedAt)}` : ""}
-                            {order.decisionReason ? ` · ${order.decisionReason}` : ""}
-                          </p>
-                        ) : null}
-                        {rowError ? (
-                          <p role="alert" className="mt-1 text-[11.5px] font-semibold text-[#8F2C2C]">
-                            {rowError}
-                          </p>
-                        ) : null}
-                      </div>
-
-                      <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-                        <a href={`/admin/quotes/${order.quoteDocumentId}/view`} className={GHOST_BUTTON_CLASS} target="_blank" rel="noreferrer">
-                          <ExternalLink className="h-3.5 w-3.5" />
-                          견적
-                        </a>
-                        {canApprove && order.status === "pending_approval" ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => void act(order, "approve")}
-                              disabled={busy || busyId != null}
-                              className={PRIMARY_BUTTON_CLASS}
-                            >
-                              <Check className="h-3.5 w-3.5" />
-                              {busy && !askingReason ? "승인 중…" : "승인"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setReasonFor({ id: order.id, action: "reject" })
-                                setReason("")
-                              }}
-                              disabled={busy || busyId != null}
-                              className={DANGER_BUTTON_CLASS}
-                            >
-                              <X className="h-3.5 w-3.5" />
-                              반려
-                            </button>
-                          </>
-                        ) : null}
-                        {canApprove && order.status === "approved" && order.needsHardwareApproval ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setReasonFor({ id: order.id, action: "cancel" })
-                              setReason("")
-                            }}
-                            disabled={busy || busyId != null}
-                            className={DANGER_BUTTON_CLASS}
-                          >
-                            <X className="h-3.5 w-3.5" />
-                            오더 취소
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                  )}
+                  ) : null}
                   {askingReason ? (
                     <form
                       className="mt-2 flex flex-wrap items-center gap-1.5"
@@ -710,6 +634,171 @@ function formatShortDateTime(value: string | null) {
   }).formatToParts(date)
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((entry) => entry.type === type)?.value ?? ""
   return `${part("month")}/${part("day")} ${part("hour")}:${part("minute")}`
+}
+
+function PendingOrderItem({
+  order,
+  impact,
+  waiting,
+  longWait,
+  canApprove,
+  busy,
+  locked,
+  asking,
+  onApprove,
+  onReject,
+  error,
+}: {
+  order: OrderView
+  /** 재고현황을 아직 못 받았으면 null — 품목 칩으로 물러난다. */
+  impact: PendingStockImpactRow[] | null
+  waiting: string
+  longWait: boolean
+  canApprove: boolean
+  busy: boolean
+  locked: boolean
+  asking: boolean
+  onApprove: () => void
+  onReject: () => void
+  error?: string
+}) {
+  const unmapped = order.lines.filter((line) => line.unmappedHardware)
+  const shortages = (impact ?? []).filter((row) => row.shortage > 0)
+  const pendingSqueeze = (impact ?? []).filter((row) => row.shortage === 0 && row.afterAllPending != null && row.afterAllPending < 0)
+  const products = summarizeSalesOrderProducts(order.lines)
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[15px] font-bold text-[#111110]">{order.customerName}</p>
+          <p className="mt-0.5 text-[12px] text-[#615D59]">
+            견적 {order.quoteNumber ?? "-"} · {order.acceptedVia === "customer_link" ? "고객이 링크에서 승인" : "담당자가 승인 처리"} ·{" "}
+            {formatDateTime(order.requestedAt)} ·{" "}
+            <span className={longWait ? "font-bold text-[#7A520F]" : ""}>{waiting} 대기</span>
+          </p>
+        </div>
+        {order.totalAmount != null ? (
+          <p className="whitespace-nowrap text-[17px] font-bold tabular-nums text-[#111110]">{formatCurrency(order.totalAmount, "KRW")}</p>
+        ) : null}
+      </div>
+
+      {impact ? (
+        <div role="table" aria-label={`${order.customerName} 재고 영향`} className="overflow-hidden rounded-md border border-[rgba(0,0,0,0.08)] text-[12.5px]">
+          <div role="row" className="grid grid-cols-4 bg-[#FBFAF9] px-3 py-2 text-[11.5px] font-bold text-[#615D59]">
+            <span role="columnheader">재고 품목</span>
+            <span role="columnheader" className="text-right">주문</span>
+            <span role="columnheader" className="text-right">지금 가용</span>
+            <span role="columnheader" className="text-right">승인 후</span>
+          </div>
+          {impact.map((row) => (
+            <div
+              key={row.product}
+              role="row"
+              className={`grid grid-cols-4 border-t border-[rgba(0,0,0,0.06)] px-3 py-2 tabular-nums ${row.shortage > 0 ? "bg-[#FCF6F6]" : ""}`}
+            >
+              <span role="cell" className="font-bold text-[#111110]">
+                {row.product}
+              </span>
+              <span role="cell" className="text-right">
+                {formatNumber(row.ordered)}
+              </span>
+              <span role="cell" className="text-right">
+                {formatNumber(row.available)}
+                {row.noStockRecord ? <span className="text-[11px] text-[#615D59]"> · 기록 없음</span> : null}
+              </span>
+              <span role="cell" className={`text-right font-bold ${row.shortage > 0 ? "text-[#B43E3E]" : "text-[#111110]"}`}>
+                {formatNumber(row.after)}
+                {row.shortage > 0 ? ` · ${formatNumber(row.shortage)}대 부족` : ""}
+                {row.shortage === 0 && row.afterAllPending != null ? (
+                  <span className="font-medium text-[#615D59]"> · 대기 합산 {formatNumber(row.afterAllPending)}</span>
+                ) : null}
+              </span>
+            </div>
+          ))}
+          {unmapped.map((line) => (
+            <div
+              key={line.quoteLineRef}
+              role="row"
+              className="grid grid-cols-4 border-t border-[rgba(0,0,0,0.06)] bg-[#FBF1E0] px-3 py-2 text-[#7A520F]"
+            >
+              <span role="cell" className="font-bold">
+                {line.itemName}
+              </span>
+              <span role="cell" className="text-right tabular-nums">
+                {formatNumber(line.quantity)}
+              </span>
+              <span role="cell" className="col-span-2 text-right font-bold">
+                재고 품목 없음 — 배송 예정에 안 들어감
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="flex flex-wrap gap-1.5">
+          {products.map((entry) => (
+            <span
+              key={entry.product}
+              className="rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FBFAF9] px-2 py-0.5 text-[11.5px] font-bold text-[#31302E]"
+            >
+              {entry.product} <span className="tabular-nums">×{formatNumber(entry.quantity)}</span>
+            </span>
+          ))}
+          {unmapped.map((line) => (
+            <span
+              key={line.quoteLineRef}
+              className="rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[11.5px] font-bold text-[#7A520F]"
+            >
+              품목 확인 필요: {line.itemName} ×{formatNumber(line.quantity)}
+            </span>
+          ))}
+        </p>
+      )}
+
+      {shortages.length > 0 ? (
+        <p className="flex items-start gap-2 rounded-md bg-[#FBF1E0] px-3 py-2.5 text-[12px] leading-relaxed text-[#7A520F]">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>
+            {shortages.map((row) => `${row.product} ${formatNumber(row.shortage)}대`).join(", ")}가 모자랍니다. 승인하면 배송 예정은
+            만들어지지만, 다음 입고 전에는 모자란 만큼 출고할 수 없습니다.
+          </span>
+        </p>
+      ) : null}
+      {pendingSqueeze.length > 0 ? (
+        <p className="text-[12px] leading-relaxed text-[#615D59]">
+          {pendingSqueeze.map((row) => row.product).join(", ")}은(는) 다른 승인 대기 오더까지 모두 승인하면 가용이 모자랍니다.
+        </p>
+      ) : null}
+      {unmapped.length > 0 && impact ? (
+        <p className="text-[12px] text-[#615D59]">재고 품목을 못 찾은 줄은 승인 뒤 배송 예정을 직접 등록하세요.</p>
+      ) : null}
+
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <a href={`/admin/quotes/${order.quoteDocumentId}/view`} className={`${GHOST_BUTTON_CLASS} min-h-11`} target="_blank" rel="noreferrer">
+          <ExternalLink className="h-3.5 w-3.5" />
+          견적 보기
+        </a>
+        {canApprove ? (
+          <>
+            <button type="button" onClick={onReject} disabled={busy || locked || asking} className={`${DANGER_BUTTON_CLASS} min-h-11 px-4`}>
+              <X className="h-3.5 w-3.5" />
+              반려
+            </button>
+            <button type="button" onClick={onApprove} disabled={busy || locked} className={`${PRIMARY_BUTTON_CLASS} min-h-11 px-4`}>
+              <Check className="h-3.5 w-3.5" />
+              {busy && !asking ? "승인 중…" : "승인하고 오더번호 발급"}
+            </button>
+          </>
+        ) : null}
+      </div>
+
+      {error ? (
+        <p role="alert" className="text-[11.5px] font-semibold text-[#8F2C2C]">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  )
 }
 
 function ClosedOrderItem({
