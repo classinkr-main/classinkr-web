@@ -168,9 +168,10 @@ describe("품목 설정 폼", () => {
     expect(result.errors).toEqual({
       reorderPoint: "최소재고는 0 이상 정수로 입력하세요.",
       leadTimeDays: "리드타임은 0 이상 정수(일)로 입력하세요.",
-      sortOrder: "정렬은 정수로 입력하세요(작을수록 앞).",
+      sortOrder: "정렬은 0 이상 정수로 입력하세요(작을수록 앞).",
     })
-    expect(validateItemSettings({ ...itemSettingsDraftFrom(BOARD), sortOrder: "-3" }, BOARD).patch).toEqual({ sortOrder: -3 })
+    expect(validateItemSettings({ ...itemSettingsDraftFrom(BOARD), sortOrder: "3" }, BOARD).patch).toEqual({ sortOrder: 3 })
+    expect(validateItemSettings({ ...itemSettingsDraftFrom(BOARD), sortOrder: "-3" }, BOARD).errors.sortOrder).toBeDefined()
   })
 
   it("items/[id] 에 PATCH 한다", async () => {
@@ -183,9 +184,16 @@ describe("품목 설정 폼", () => {
     })
   })
 
-  it("items 라우트는 최소재고(reorderPoint)를 이미 받는다", () => {
+  it("items 라우트는 폼이 보내는 칸을 모두 받는다", () => {
     const route = readFileSync(join(process.cwd(), "app/api/admin/hardware/items/[id]/route.ts"), "utf8")
-    expect(route).toContain('body, "reorderPoint"')
+    for (const key of ["reorderPoint", "leadTimeDays", "lotTracked", "reportGroup", "sortOrder"]) {
+      expect(route).toContain(`body, "${key}"`)
+    }
+  })
+
+  it("movements 라우트는 조정 방향을 받는다", () => {
+    const route = readFileSync(join(process.cwd(), "app/api/admin/hardware/movements/route.ts"), "utf8")
+    expect(route).toContain('body, "adjustDirection"')
   })
 })
 

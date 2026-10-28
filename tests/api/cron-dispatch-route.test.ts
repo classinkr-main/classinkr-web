@@ -6,7 +6,7 @@ import { mergeNotificationSchedule } from "@/lib/notifications/schedule"
 async function loadRoute(
   leadDaily?: Record<string, unknown>,
   segmentsReport?: Record<string, unknown> | Error,
-  options: { settingsError?: Error } = {}
+  options: { settingsError?: Error; hardwareReport?: Record<string, unknown> | Error } = {}
 ) {
   vi.resetModules()
 
@@ -33,6 +33,29 @@ async function loadRoute(
     return { runCrmSegmentDaily }
   })
 
+  // 하드웨어 일일 알림(KST 08시 = UTC 슬롯 23) — 같은 동적 import 격리.
+  const hardwareModuleLoaded = vi.fn()
+  const runHardwareProcessAlerts = vi.fn(async (runOptions: { dryRun?: boolean }) => {
+    if (options.hardwareReport instanceof Error) throw options.hardwareReport
+    return {
+      status: runOptions.dryRun ? "preview" : "sent",
+      dryRun: runOptions.dryRun === true,
+      dateKey: "2026-10-28",
+      stalePlannedCount: 2,
+      overdueSampleCount: 1,
+      ownerCount: 2,
+      shownItems: 3,
+      omittedItems: 0,
+      sampleCheckAvailable: true,
+      owners: [],
+      ...(options.hardwareReport ?? {}),
+    }
+  })
+  vi.doMock("@/lib/server/hardware-process-alerts", () => {
+    hardwareModuleLoaded()
+    return { runHardwareProcessAlerts }
+  })
+
   const sendLeadMorningBrief = vi
     .fn()
     .mockResolvedValue({ status: "sent", eventId: "event-daily", totalLeads: 4 })
@@ -50,7 +73,15 @@ async function loadRoute(
   }))
 
   const { GET } = await import("@/app/api/cron/dispatch/[slot]/route")
-  return { GET, sendLeadMorningBrief, previewLeadMorningBrief, runCrmSegmentDaily, segmentsModuleLoaded }
+  return {
+    GET,
+    sendLeadMorningBrief,
+    previewLeadMorningBrief,
+    runCrmSegmentDaily,
+    segmentsModuleLoaded,
+    runHardwareProcessAlerts,
+    hardwareModuleLoaded,
+  }
 }
 
 function request(slot: string, secret = "test-cron-secret") {
@@ -353,5 +384,120 @@ describe("고정 슬롯 잡 — 저장 세그먼트 매일 평가·자동 태그
     } finally {
       nowSpy.mockRestore()
     }
+  })
+})
+
+describe("고정 슬롯 잡 — 하드웨어 일일 알림(UTC 23 = KST 08시)", () => {
+  const previousCronSecret = process.env.CRON_SECRET
+
+  afterEach(() => {
+    if (previousCronSecret === undefined) delete process.env.CRON_SECRET
+    else process.env.CRON_SECRET = previousCronSecret
+    vi.restoreAllMocks()
+    vi.resetModules()
+  })
+
+  it("슬롯 23 에서 hardwareProcessAlerts 가 돈다(발송)", async () => {
+    process.env.CRON_SECRET = "test-cron-secret"
+    const { GET, runHardwareProcessAlerts, sendLeadMorningBrief } = await loadRoute()
+
+    const response = await GET(request("23"), context("23"))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(runHardwareProcessAlerts).toHaveBeenCalledWith({ dryRun: false })
+    expect(sendLeadMorningBrief).not.toHaveBeenCalled()
+    expect(body).toMatchObject({ ok: true, slot: 23, kstHour: 8 })
+    expect(body.ran).toEqual([
+      expect.objectContaining({ job: "hardwareProcessAlerts", status: "sent", detail: expect.objectContaining({ stalePlannedCount: 2 }) }),
+    ])
+  })
+
+  it("Bearer 가 틀리면 401 — 알림 모듈을 불러오지 않는다", async () => {
+    process.env.CRON_SECRET = "test-cron-secret"
+    const { GET, hardwareModuleLoaded } = await loadRoute()
+
+    const response = await GET(request("23", "wrong"), context("23"))
+
+    expect(response.status).toBe(401)
+    expect(hardwareModuleLoaded).not.toHaveBeenCalled()
+  })
+
+  it("다른 슬롯에서는 하드웨어 알림 모듈을 불러오지도 않는다", async () => {
+    process.env.CRON_SECRET = "test-cron-secret"
+    const { GET, hardwareModuleLoaded } = await loadRoute()
+
+    await GET(request("02"), context("02"))
+    await GET(request("21"), context("21"))
+
+    expect(hardwareModuleLoaded).not.toHaveBeenCalled()
+  })
+
+  it("아침 카드를 08시로 옮기면 같은 슬롯에서 알림 잡 뒤에 순차로 돈다", async () => {
+    process.env.CRON_SECRET = "test-cron-secret"
+    const { GET } = await loadRoute({ deliveryHourKst: 8 })
+
+    const body = await (await GET(request("23"), context("23"))).json()
+
+    expect(body.ran.map((result: { job: string }) => result.job)).toEqual(["leadDaily", "hardwareProcessAlerts"])
+  })
+
+  it("empty·already_sent·disabled 는 실패가 아니다", async () => {
+    process.env.CRON_SECRET = "test-cron-secret"
+    for (const status of ["empty", "already_sent", "disabled"]) {
+      const { GET } = await loadRoute(undefined, undefined, { hardwareReport: { status } })
+      const response = await GET(request("23"), context("23"))
+      expect(response.status).toBe(200)
+      expect((await response.json()).ran[0]).toMatchObject({ job: "hardwareProcessAlerts", status })
+    }
+  })
+
+  it("잡이 던져도 격리 — failed(500), 오류 원문은 노출하지 않는다", async () => {
+    process.env.CRON_SECRET = "test-cron-secret"
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const { GET } = await loadRoute(undefined, undefined, {
+      hardwareReport: new Error("wecom: HTTP 500 https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=secret"),
+    })
+
+    const response = await GET(request("23"), context("23"))
+    const body = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(body.ran[0]).toEqual({ job: "hardwareProcessAlerts", status: "failed", error: "Hardware process alerts failed." })
+    expect(JSON.stringify(body)).not.toContain("qyapi")
+  })
+
+  it("알림 설정 읽기가 실패해도 하드웨어 알림은 돈다 — 알림 잡만 failed", async () => {
+    process.env.CRON_SECRET = "test-cron-secret"
+    const { GET, runHardwareProcessAlerts } = await loadRoute(undefined, undefined, {
+      settingsError: new Error("settings down"),
+    })
+
+    const response = await GET(request("23"), context("23"))
+    const body = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(runHardwareProcessAlerts).toHaveBeenCalledOnce()
+    expect(body.ran).toEqual([
+      { job: "notificationSettings", status: "failed", error: "Notification settings unavailable." },
+      expect.objectContaining({ job: "hardwareProcessAlerts", status: "sent" }),
+    ])
+  })
+
+  it("dryRun 은 hardwareAlertsPreview 로 미리보기만 싣는다", async () => {
+    process.env.CRON_SECRET = "test-cron-secret"
+    const { GET, runHardwareProcessAlerts } = await loadRoute()
+
+    const response = await GET(request("23?dryRun=true"), context("23"))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(runHardwareProcessAlerts).toHaveBeenCalledWith({ dryRun: true })
+    expect(body).toMatchObject({
+      ok: true,
+      dryRun: true,
+      ran: [],
+      hardwareAlertsPreview: { job: "hardwareProcessAlerts", status: "preview", detail: { dryRun: true } },
+    })
   })
 })

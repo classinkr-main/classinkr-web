@@ -190,8 +190,8 @@ function defaultEntryItemId(items: HardwareItem[]): string {
 
 // 출고 기간 집계 버킷 키/라벨 — shared.periodKey로 이동(분기·연간 회계연도 SSOT, 테스트 포함).
 
-// 확정 판매·설치 출고만 남긴다(무효·예정·샘플·수리 제외) — 기간별 출고 집계(outboundBuckets)와
-// 홈 판매·설치 요약(salesPeriodSummary)이 같은 모수를 쓰도록 필터를 SSOT로 뽑아둔다.
+// 확정 판매·설치 출고만 남긴다(무효·예정·샘플·수리 제외) — 입출고 탭 기간별 출고 집계(outboundBuckets,
+// 고객사·매출 펼침용 최근 원장 기준). FY 판매 수치는 서버 판매대시보드(SalesDashboardSection)가 정본이다.
 function confirmedSalesMovements(movements: HardwareMovement[]): HardwareMovement[] {
   return movements.filter(
     (movement) =>
@@ -1834,66 +1834,7 @@ export default function HardwareInventoryClient({
     }))
   }, [data?.movements, outPeriod])
 
-  // 홈 탭 판매·설치 요약 — 이번 달/이번 분기(회계)/올해를 한 줄에 같이 본다. 모수·매출 규약은
-  // 기간별 출고 집계와 동일: 대수는 확정 출고 전체(샘플·수리 제외), 매출은 실판매(sales) USD만.
-  const salesPeriodSummary = useMemo(() => {
-    const sales = confirmedSalesMovements(data?.movements ?? [])
-    const today = todayKey()
-    // 직전 기간 앵커 날짜 — 월초로 고정한 뒤 월/분기(3개월)/연 단위로 되돌린다.
-    // (fiscal 분기는 월 경계라 3개월 전 날짜가 항상 직전 분기에 떨어진다.)
-    const prevAnchor = (granularity: PeriodGranularity): string => {
-      const anchor = new Date(`${today.slice(0, 7)}-01T00:00:00Z`)
-      if (granularity === "month") anchor.setUTCMonth(anchor.getUTCMonth() - 1)
-      if (granularity === "quarter") anchor.setUTCMonth(anchor.getUTCMonth() - 3)
-      if (granularity === "year") anchor.setUTCFullYear(anchor.getUTCFullYear() - 1)
-      return anchor.toISOString().slice(0, 10)
-    }
-    const TITLES: Record<PeriodGranularity, { title: string; prevTitle: string }> = {
-      month: { title: "이번 달", prevTitle: "지난 달" },
-      quarter: { title: "이번 분기", prevTitle: "지난 분기" },
-      year: { title: "연간", prevTitle: "지난해" },
-    }
-    return (["month", "quarter", "year"] as const).map((granularity) => {
-      const current = periodKey(today, granularity)
-      const previous = periodKey(prevAnchor(granularity), granularity)
-      let qty = 0
-      let revenue = 0
-      let hasRevenue = false
-      let prevQty = 0
-      const byProduct = new Map<string, number>()
-      for (const movement of sales) {
-        const date = movement.occurred_at?.slice(0, 10) ?? movement.created_at.slice(0, 10)
-        const key = periodKey(date, granularity).key
-        if (key === previous.key) {
-          prevQty += movement.quantity
-          continue
-        }
-        if (key !== current.key) continue
-        qty += movement.quantity
-        const saleType = outboundSaleType(movement) ?? "sales"
-        if (saleType === "sales" && movement.amount_usd != null) {
-          revenue += movement.amount_usd
-          hasRevenue = true
-        }
-        byProduct.set(movement.product_name, (byProduct.get(movement.product_name) ?? 0) + movement.quantity)
-      }
-      return {
-        granularity,
-        ...TITLES[granularity],
-        label: current.label,
-        qty,
-        revenue,
-        hasRevenue,
-        prevQty,
-        chips: Array.from(byProduct.entries())
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 3)
-          .map(([product, chipQty]) => ({ product: shortProductName(product), qty: chipQty })),
-      }
-    })
-  }, [data?.movements])
-
-  // 홈 요약 → 입출고 탭 "출고 · 기간 집계" 딥링크(버킷 전체·고객사 펼침은 그쪽이 담당).
+  // 홈 판매대시보드 → 입출고 탭 "출고 · 기간 집계" 딥링크(버킷 전체·고객사 펼침은 그쪽이 담당).
   const openOutboundDetail = useCallback(() => {
     setActiveTab("entry")
     setEntrySub("outbound")
@@ -3455,7 +3396,6 @@ export default function HardwareInventoryClient({
                 onReview: reviewHomeRecord,
               }}
               categoryCards={categoryCards}
-              salesPeriodSummary={salesPeriodSummary}
               openOutboundDetail={openOutboundDetail}
               hardwareSearch={hardwareSearch}
               setHardwareSearch={setHardwareSearch}

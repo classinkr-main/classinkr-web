@@ -72,8 +72,8 @@
 | 진행 상태 3종 고정 | ⚠️ | 자유 텍스트, "예정/예약/대기" 정규식으로 예정 판정. 확정하면 '출고'로 적힌다(설치 완료 아님) |
 | 유형 4종 | ❌ | 칸 없음. 시트 유형은 메모 앞머리로만 남고, 어드민 출고는 유형을 고를 수 없다 |
 | 회수 = 원 출고 건에 연결된 새 기록, 초과 회수 차단 | ❌ | 회수(return)는 따로 기록되지만 원 출고 연결·수량 상한이 없다 |
-| 배송 예정 30일 경과 → 담당 알림 | 🟡 | 화면 배지("30일+ 미확정")만. 날짜 없는 예정은 0일로 세서 안 걸린다. 알림 없음 |
-| 샘플 출고 시 반납 예정일 필수 | ❌ | 원장 샘플 출고에는 없다(샘플 유닛 대여에는 선택 칸이 있다) |
+| 배송 예정 30일 경과 → 담당 알림 | ✅ | 매일 KST 08시 WeCom 운영 방 한 통, 담당자별 묶음(예정일, 없으면 등록일 기준 — `lib/hardware/process-alerts.ts`, [운영 지침](./operational-failure-handling-guidelines.md) §1). 남은 것: 화면 배지("30일+ 미확정")는 아직 예정일만 본다(날짜 없는 예정 0일). 날짜 없는 시트 예정은 가져오기마다 등록일이 새로 찍혀 알림에도 안 걸린다. 담당자 개인 멘션 없음 |
+| 샘플 출고 시 반납 예정일 필수 | ❌ | 원장 샘플 출고에는 없다(샘플 유닛 대여에는 선택 칸이 있다). 반납 예정일이 지난 미반납 샘플 출고 알림은 위 일일 알림에 실린다(✅ W5) — 입력 필수화는 W1·W3 |
 
 ### 3-3. 재고현황
 
@@ -94,10 +94,10 @@
 | 정의서 | 상태 | 지금 |
 | --- | --- | --- |
 | FY 4월 시작 | ✅ | `lib/branch/fiscal.ts` |
-| 월별 설치 완료 / 배송 예정 구분, "9 / +3" | ❌ | 하드웨어 탭 판매 요약은 확정 출고만 센다. 시트 판매대시보드 미러(`branch_hw_sales_monthly`)는 받아 두지만 쓰는 화면이 없다 |
-| 세일즈 + 프로모션만(A/S·샘플 제외) | ⚠️ | 하드웨어 탭은 샘플·사무실·수리 외 확정 출고 전부(A/S·액세서리 포함). 개요 타일은 세일즈만 |
-| 전자칠판·카메라·스탠드 고정 행(0대 포함) | ❌ | 가장 가까운 묶음은 카드 분류(86·75·카메라·스탠드·기타) — 65"·110"은 기타 |
-| (위험) | ⚠️ | 클라이언트가 최근 2,000건만 받아 집계한다 — 원장이 커지면 FY 합계가 조용히 줄어든다. 서버 집계가 필요하다 |
+| 월별 설치 완료 / 배송 예정 구분, "9 / +3" | ✅ | 홈 판매대시보드(FY 품목 × 월, 날짜 없는 행은 "날짜 미정" 칸, 회수는 따로) — [SCM 탭 기준](./hardware-scm-tab-reference.md) §2-10. 시트 미러 `branch_hw_sales_monthly` 는 그대로 안 쓴다(T4) |
+| 세일즈 + 프로모션만(A/S·샘플 제외) | ✅ | 판매대시보드는 `resolveOutboundType` 으로 세일즈 + 프로모션(유형 모름 = 세일즈), 내부 이동 제외. 개요 "86보드 실판매 출고" 타일도 프로모션을 판매로 센다(시트 미러 기준·누적은 그대로) |
+| 전자칠판·카메라·스탠드 고정 행(0대 포함) | ✅ | `hardware_items.report_group` 묶음, 고정 묶음 활성 품목은 0대도 행. 액세서리·터치펜·기타는 기록이 있을 때만 |
+| (위험) | ✅ | 서버 집계(`GET /api/admin/hardware/sales-dashboard`, 키셋 전량 읽기)로 바꿨고 홈 "판매 · 설치" 카드(2,000건 집계)는 없앴다. 입출고 탭 "출고 · 기간 집계"(고객사·매출 펼침)는 아직 최근 원장 기준이다 |
 
 ### 3-5. 권한
 
@@ -187,14 +187,19 @@
 | `GET /api/admin/hardware/return-candidates?q=&customerId=` | 회수 가능한 실제 출고 `{ id, productName, lotNo, quantity, returned, returnable, occurredAt, toLocation, customerId, outboundType, owner }` |
 | `GET /api/admin/hardware/customers?q=` | CRM 고객 고르기 `{ customers: [{ id, name, campusName, regionLabel }] }` (최대 20) |
 | `PATCH /api/admin/hardware/items/[id]` | `lotTracked` · `reportGroup` · `sortOrder` 추가(입고관리 권한자) |
-| `GET /api/admin/hardware/sales-dashboard?fy=` | FY 품목 × 월 집계(§3-4) — 판매대시보드 작업에서 만든다 |
+| `GET /api/admin/hardware/sales-dashboard?fy=` | FY 품목 × 월 집계(§3-4) ✅ — 응답 형식은 [SCM 탭 기준](./hardware-scm-tab-reference.md) §4 |
 | 담당자 고르기 | 기존 `GET /api/admin/crm/owners` |
 
 ### 7-4. 작업 나눔
 
+W1 구현 메모(2026-10-28):
+- 규칙은 요청자가 있는 쓰기에만 적용된다. 오더 승인처럼 시스템이 만드는 기록은 검사 없이 새 칸만 싣는다.
+- 사무실·샘플 풀·수리로 가는 이동과 거기서 돌아오는 반납은 예전 흐름 그대로다(유형·고객·물류번호 선택 없음, 실제 출고는 FIFO).
+- 마이그레이션 전 DB에서는 품목 `lot_tracked` 칸이 없다. 이때는 물류번호 규칙을 건너뛰고, 새 칸은 빼고 저장한다. 앱을 먼저 배포해도 지금 동작이 깨지지 않는다.
+
 | 작업 | 범위 | 주 파일 |
 | --- | --- | --- |
-| W1 서버 규칙 | 7-2·7-3(대시보드 제외), 오더 승인 배송 예정 칸 채우기, 확정 v4 | `lib/repositories/hardware-inventory.ts`(입출고 쓰기·확정·취소·로트), `app/api/admin/hardware/movements/**`·`lots`·`return-candidates`·`customers`·`items`, `lib/repositories/sales-orders.ts` |
+| W1 서버 규칙 ✅ | 7-2·7-3(대시보드 제외), 오더 승인 배송 예정 칸 채우기, 확정 v4 | `lib/repositories/hardware-inventory.ts`(입출고 쓰기·확정·취소·로트), `app/api/admin/hardware/movements/**`·`lots`·`return-candidates`·`customers`·`items`, `lib/repositories/sales-orders.ts` |
 | W2 판매대시보드 | 서버 집계 + 화면, 클라이언트 2,000건 집계·개요 타일 정리 | 새 `lib/repositories/hardware-sales-dashboard.ts`·`sales-dashboard` 라우트·`SalesDashboardSection` |
 | W3 출고·회수·확정 화면 | 출고 등록 v2(유형·상태·CRM 고객·담당·물류번호 선택), 회수 등록, 확정 때 물류번호 선택, 본인 건 버튼 | `QuickRecordSheet`·`PlannedOutboundPanel`·`MovementDetailSheet`·`CrmConfirmModal`·`HardwareSearchPanel`·새 출고/회수 폼 |
 | W4 입고·조정·재고 알림 화면 | 입고 v2(무상·물류번호 순번·수량만 품목·메모·직배송), 재고 조정(사유 필수), 가용 < 최소재고·가용 음수 알림, 최소재고·품목 설정 화면 | `InboundSheet`·`inbound-sheet-model`·`StockLevelsSection`·`AlertsOutboundSections`·새 조정 시트, 재고 알림 계산 |

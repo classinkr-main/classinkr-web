@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { LotRuleError } from "@/lib/hardware/inventory-process"
+import { MovementRuleError } from "@/lib/hardware/movement-rules"
+
 type JsonObject = Record<string, unknown>
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/
@@ -173,6 +176,16 @@ export function toErrorResponse(error: unknown, fallbackMessage: string) {
   if (error instanceof HardwareApiValidationError) {
     return NextResponse.json({ error: error.message }, { status: error.status })
   }
+  // 재고관리 프로세스 규칙(lib/hardware/movement-rules.ts) — 권한 403 은 필요한 권한을 같이 알린다.
+  if (error instanceof MovementRuleError) {
+    return NextResponse.json(
+      error.requiredCapability ? { error: error.message, requiredCapability: error.requiredCapability } : { error: error.message },
+      { status: error.status }
+    )
+  }
+  if (error instanceof LotRuleError) {
+    return NextResponse.json({ error: error.message }, { status: 422 })
+  }
 
   const message = describeUnknownError(error) ?? fallbackMessage
   const status =
@@ -187,4 +200,37 @@ export function toErrorResponse(error: unknown, fallbackMessage: string) {
   return NextResponse.json({
     error: message,
   }, { status })
+}
+
+/** 값이 있으면 허용 목록 안이어야 한다. 없으면 undefined(빈 문자열은 null). */
+export function readOptionalEnum<T extends string>(
+  body: JsonObject,
+  key: string,
+  label: string,
+  allowed: readonly T[]
+): T | null | undefined {
+  if (!(key in body) || body[key] === undefined) return undefined
+  const value = body[key]
+  if (value === null || value === "") return null
+  if (typeof value !== "string" || !allowed.includes(value as T)) {
+    throw new HardwareApiValidationError(`${label} 값이 올바르지 않습니다.`)
+  }
+  return value as T
+}
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** 값이 있으면 UUID 여야 한다. 없으면 undefined(빈 문자열·null 은 null). */
+export function readOptionalUuid(body: JsonObject, key: string, label: string): string | null | undefined {
+  if (!(key in body) || body[key] === undefined) return undefined
+  const value = body[key]
+  if (value === null || value === "") return null
+  if (typeof value !== "string" || !UUID_REGEX.test(value.trim())) {
+    throw new HardwareApiValidationError(`${label} 형식이 올바르지 않습니다.`)
+  }
+  return value.trim()
+}
+
+export function isUuid(value: string | null | undefined): value is string {
+  return typeof value === "string" && UUID_REGEX.test(value)
 }

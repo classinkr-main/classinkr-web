@@ -219,8 +219,9 @@ export function validateItemSettings(draft: ItemSettingsDraft, item: ItemSetting
   const sortText = draft.sortOrder.trim()
   if (!sortText) {
     if (item.sort_order != null) patch.sortOrder = null
-  } else if (!/^-?\d+$/.test(sortText) || !Number.isSafeInteger(Number(sortText))) {
-    errors.sortOrder = "정렬은 정수로 입력하세요(작을수록 앞)."
+  } else if (!/^\d+$/.test(sortText) || !Number.isSafeInteger(Number(sortText))) {
+    // 서버(items/[id] PATCH)는 0 이상 정수만 받는다.
+    errors.sortOrder = "정렬은 0 이상 정수로 입력하세요(작을수록 앞)."
   } else if (Number(sortText) !== item.sort_order) {
     patch.sortOrder = Number(sortText)
   }

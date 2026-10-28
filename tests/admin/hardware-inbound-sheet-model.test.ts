@@ -660,7 +660,7 @@ describe("전송 형식", () => {
     "toLocation",
     "unitPrice",
   ]
-  // 재고관리 프로세스 계약(갭 문서 §7-3)에서 새로 받는 키 — W1 이 route 에 더한다.
+  // 재고관리 프로세스 계약(갭 문서 §7-3)에서 새로 받는 키.
   const PROCESS_KEYS = ["customerId", "isFree", "outboundType"]
 
   function inboundBase(overrides: Record<string, unknown> = {}) {
@@ -794,16 +794,12 @@ describe("전송 형식", () => {
     expect(payload.storageLocation).toBe("창고")
   })
 
-  it("전송 키는 movements API 가 읽는 필드와 계약 문서(§7-3)의 새 필드다", () => {
+  it("전송 키는 movements API 가 읽는 필드다(§7-3 새 필드 포함)", () => {
     const [payload] = buildInboundMovements(draft({ rows: [row({ key: "a", quantity: "1" })] }))
     expect(Object.keys(payload).sort()).toEqual([...LEGACY_KEYS, "isFree"].sort())
     const route = readFileSync(join(process.cwd(), "app/api/admin/hardware/movements/route.ts"), "utf8")
-    for (const key of LEGACY_KEYS) {
+    for (const key of [...LEGACY_KEYS, ...PROCESS_KEYS]) {
       expect(route).toContain(`body, "${key}"`)
-    }
-    const contract = readFileSync(join(process.cwd(), "docs/active/hardware-inventory-process-gap-2026-10-28.md"), "utf8")
-    for (const key of PROCESS_KEYS) {
-      expect(contract).toContain(`\`${key}\``)
     }
   })
 })

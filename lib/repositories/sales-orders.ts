@@ -477,7 +477,44 @@ export async function listSheetOrderChecks(): Promise<{ since: string | null; ch
 const SUGGESTION_KINDS = new Set<SheetOrderCheck["kind"]>(["missing_order_no", "unknown_order_no", "product_not_in_order"])
 const SUGGESTION_ORDER_LIMIT = 300
 
-function plannedMovementInputs(order: SalesOrderRow, orderNo: string, actor: string | null): CreateHardwareMovementInput[] {
+interface PlannedOwner {
+  userId: string | null
+  name: string | null
+}
+
+/**
+ * 오더 배송 예정의 담당(갭 문서 §6 D5) — 딜 담당자(deals.owner_id → 표시 이름), 없으면 승인 요청자 이름.
+ * 담당을 못 찾아도 승인은 막지 않는다(이름만 남기고 계정 id 는 비운다 — 본인 건 판정이 이름으로 간다).
+ */
+async function resolvePlannedOwner(order: SalesOrderRow): Promise<PlannedOwner> {
+  const fallback: PlannedOwner = { userId: null, name: order.requested_by?.trim() || null }
+  if (!order.deal_id) return fallback
+  try {
+    const deal = await getDeal(order.deal_id)
+    const ownerId = (deal as { owner_id?: string | null } | null)?.owner_id ?? null
+    if (!ownerId) return fallback
+    const sb = createSupabaseAdminClient()
+    const { data: profile, error: profileError } = await sb
+      .from("admin_profiles")
+      .select("display_name")
+      .eq("user_id", ownerId)
+      .limit(1)
+    if (profileError) throw profileError
+    const displayName = ((profile ?? []) as Array<{ display_name: string | null }>)[0]?.display_name?.trim()
+    return { userId: ownerId, name: displayName || fallback.name }
+  } catch (error) {
+    console.error("[sales-orders] planned owner lookup failed:", error instanceof Error ? error.message : error)
+    return fallback
+  }
+}
+
+function plannedMovementInputs(
+  order: SalesOrderRow,
+  orderNo: string,
+  actor: string | null,
+  owner: PlannedOwner = { userId: null, name: null },
+  actorUserId: string | null = null
+): CreateHardwareMovementInput[] {
   const lines = Array.isArray(order.lines) ? (order.lines as SalesOrderLine[]) : []
   const inputs: CreateHardwareMovementInput[] = []
   // 견적 줄 × 재고 품목마다 한 줄 — reference_no 가 견적 줄 참조라 CRM 오더 대사에서 그 줄이 사라진다.
@@ -495,6 +532,13 @@ function plannedMovementInputs(order: SalesOrderRow, orderNo: string, actor: str
         referenceNo: line.quoteLineRef,
         memo: `오더 ${orderNo}${order.quote_number ? ` · 견적 ${order.quote_number}` : ""} · ${line.itemName}`,
         createdBy: actor,
+        // 재고관리 프로세스 칸(§6 D5) — 예정일·물류번호는 담당 매니저가 채운다(확정 때 물류번호 필수).
+        owner: owner.name,
+        ownerUserId: owner.userId,
+        // 담당 계정을 모르면 작성자 계정도 비운다 — 둘 다 비어야 본인 건 판정이 이름(담당·요청자)으로 간다.
+        createdByUserId: owner.userId ? actorUserId : null,
+        outboundType: "sales",
+        customerId: order.customer_id,
         raw: {
           order_no: orderNo,
           sales_order_id: order.id,
@@ -511,7 +555,10 @@ function plannedMovementInputs(order: SalesOrderRow, orderNo: string, actor: str
  * 하드웨어 승인 — 오더번호를 먼저 잡고(상태 전이), 배송 예정을 만든다. 배송 예정 생성이 실패하면
  * 오더를 승인 대기로 되돌린다. 같은 오더를 두 사람이 동시에 승인해도 한 번만 통과한다.
  */
-export async function approveSalesOrder(id: string, input: { actor: string | null; now?: Date }): Promise<SalesOrder> {
+export async function approveSalesOrder(
+  id: string,
+  input: { actor: string | null; actorUserId?: string | null; now?: Date }
+): Promise<SalesOrder> {
   const row = await getSalesOrderRow(id)
   if (row.status !== "pending_approval") throw new SalesOrderError("이미 처리된 오더입니다.", 409)
   const now = input.now ?? new Date()
@@ -536,7 +583,8 @@ export async function approveSalesOrder(id: string, input: { actor: string | nul
   }
   if (!claimed?.order_no) throw new SalesOrderError("오더번호를 발급하지 못했습니다. 잠시 뒤 다시 시도해 주세요.", 409)
 
-  const inputs = plannedMovementInputs(claimed, claimed.order_no, input.actor)
+  const owner = await resolvePlannedOwner(claimed)
+  const inputs = plannedMovementInputs(claimed, claimed.order_no, input.actor, owner, input.actorUserId ?? null)
   if (inputs.length > 50) {
     await revertApproval(id, claimed.order_no)
     throw new SalesOrderError("한 오더의 배송 예정은 50줄까지입니다. 견적을 나눠 주세요.", 422)

@@ -148,7 +148,7 @@ describe("POST /api/admin/hardware/orders/[id]", () => {
     const response = await POST(actionRequest({ action: "approve" }), params)
 
     expect(response.status).toBe(200)
-    expect(approveSalesOrder).toHaveBeenCalledWith("so_1", { actor: "이왕찬" })
+    expect(approveSalesOrder).toHaveBeenCalledWith("so_1", { actor: "이왕찬", actorUserId: "admin-2" })
     expect(logAdminAudit).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "hardware.order.approve",

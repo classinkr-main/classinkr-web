@@ -11,6 +11,8 @@ interface FakeRow {
 
 const insertedBatches: FakeRow[][] = []
 let itemsByName: Record<string, { id: string }> = {}
+// 재고관리 프로세스 — select().in("id", ...) 로 읽는 품목 설정(lot_tracked).
+let itemsById: Record<string, FakeRow> = {}
 // 품목별 원장 — loadItemLotLedgerRows(fetchAllSupabaseRows) 호출 순서대로 꺼내 쓴다.
 let ledgerQueue: FakeRow[][] = []
 let ledgerCallCount = 0
@@ -57,7 +59,10 @@ function itemsTableClient() {
     },
     select() {
       return {
-        async in(_column: string, names: string[]) {
+        async in(column: string, names: string[]) {
+          if (column === "id") {
+            return { data: names.filter((id) => itemsById[id]).map((id) => ({ id, ...itemsById[id] })), error: null }
+          }
           return {
             data: names.filter((name) => itemsByName[name]).map((name) => ({ id: itemsByName[name].id, name })),
             error: null,
@@ -118,6 +123,7 @@ describe("createHardwareMovementsBatch", () => {
   beforeEach(() => {
     insertedBatches.length = 0
     itemsByName = {}
+    itemsById = {}
     ledgerQueue = []
     ledgerCallCount = 0
     crmDuplicateRows = []
@@ -244,5 +250,71 @@ describe("createHardwareMovementsBatch", () => {
     expect(results[0]).toMatchObject({ ok: false })
     expect(results[0].error).toContain("bulk insert rejected")
     expect(revalidateTagMock).not.toHaveBeenCalled()
+  })
+
+  // 재고관리 프로세스(갭 문서 §6 D3·D6) — 고객사 직배송: 같은 저장에서 새 물류번호로 입고하고 바로 출고한다.
+  // 뒤 줄(출고)의 잔여 검사는 앞 줄(입고)을 센다. FIFO 자동 배정 없이 고른 번호만 쓴다.
+  describe("재고관리 프로세스 — 요청자 규칙", () => {
+    const MANAGER = { userId: "u-boss", name: "이왕찬", isInventoryManager: true }
+    const directShip = (outboundQty: number) => [
+      { itemId: "item-t1", productName: "T1", movementType: "inbound" as const, quantity: 2, lotNo: "c3", isFree: false, toLocation: "고객사 직송" },
+      {
+        itemId: "item-t1",
+        productName: "T1",
+        movementType: "outbound" as const,
+        quantity: outboundQty,
+        lotNo: "C3",
+        fromLocation: "고객사 직송",
+        toLocation: "대치학원",
+        occurredAt: "2026-10-28",
+        outboundType: "sales" as const,
+        status: "설치 완료",
+      },
+    ]
+
+    it("새 물류번호 입고 뒤 같은 번호 출고를 한 번에 저장하고 새 칸을 싣는다", async () => {
+      itemsById = { "item-t1": { name: "T1", lot_tracked: true } }
+      ledgerQueue = [[inboundLot("C1", 5), inboundLot("C2", 5)], []] // ① 기존 물류번호 ② T1 원장
+      const { createHardwareMovementsBatch } = await loadRepository()
+
+      const results = await createHardwareMovementsBatch(directShip(2), { actor: MANAGER })
+
+      expect(results.map((result) => result.ok)).toEqual([true, true])
+      const [inbound, outbound] = insertedBatches[0]
+      expect(inbound).toMatchObject({ lot_no: "C3", is_free: false, created_by_user_id: "u-boss" })
+      expect(outbound).toMatchObject({
+        lot_no: "C3",
+        outbound_type: "sales",
+        owner_user_id: "u-boss",
+        owner: "이왕찬",
+        status: "설치 완료",
+      })
+      expect(outbound).not.toHaveProperty("raw.autoLot")
+    })
+
+    it("고른 물류번호 잔여를 넘는 출고 줄만 실패한다", async () => {
+      itemsById = { "item-t1": { name: "T1", lot_tracked: true } }
+      ledgerQueue = [[inboundLot("C1", 5), inboundLot("C2", 5)], []]
+      const { createHardwareMovementsBatch } = await loadRepository()
+
+      const results = await createHardwareMovementsBatch(directShip(3), { actor: MANAGER })
+
+      expect(results[0].ok).toBe(true)
+      expect(results[1]).toMatchObject({ ok: false, error: expect.stringContaining("C3 잔여는 2대") })
+    })
+
+    it("새 물류번호를 건너뛰면 그 입고 줄이 실패한다", async () => {
+      itemsById = { "item-t1": { name: "T1", lot_tracked: true } }
+      ledgerQueue = [[inboundLot("C1", 5)]]
+      const { createHardwareMovementsBatch } = await loadRepository()
+
+      const results = await createHardwareMovementsBatch(
+        [{ itemId: "item-t1", productName: "T1", movementType: "inbound", quantity: 1, lotNo: "C4", isFree: true }],
+        { actor: MANAGER }
+      )
+
+      expect(results[0]).toMatchObject({ ok: false, error: expect.stringContaining("C2 차례") })
+      expect(insertedBatches).toHaveLength(0)
+    })
   })
 })
