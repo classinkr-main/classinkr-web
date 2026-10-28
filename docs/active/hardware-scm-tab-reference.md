@@ -149,7 +149,7 @@
 - 승인됨 칸(시안 2026-10-26 A안): 오더마다 품목별 진행 바(출고·배송 예정·미등록, 원장에서 같은 오더번호를 센다 — 시트 줄 포함)와 출고 단계(출고 전·일부 출고·출고 완료), 다음 할 일(예정 N대 출고 확정 → 예정 큐로 이동, 미등록 N대 등록)을 보인다. 오더번호 없이 시트에 적힌 같은 고객·품목 출고는 "이 오더일 수 있다" 힌트로, 수량 초과는 빨간 줄로 붙는다. 할 일이 남은 오더가 위로 오고, 하드웨어 없는 자동 승인 오더는 아래에 접는다. 보기 규칙은 `inventory/approved-order-view.ts`.
 - 반려·취소 칸(시안 2026-10-26 B안): 오더마다 "다음 할 일" 카드. 반려됐고 같은 견적으로 다시 올라온 오더가 없으면 "견적을 고쳐 새 버전으로 승인받기" + `[다시 알리기]`(권한자만) · `[견적 수정]`. 반려 알림(`hardware.order.rejected` — 사유와 다시 올리는 법, WeCom)은 반려할 때 자동으로 한 번 나간다(2026-10-27 결정). 버튼은 다시 보낼 때만 쓴다. 취소된 오더번호가 시트에 남아 있으면 "시트에서 지우기" + 시트 확인 칸으로 이동. 같은 견적이 다시 올라왔으면 "해결됨"과 그 오더로 이동. 할 일이 남은 것부터 세운다. 보기 규칙은 `inventory/closed-order-view.ts`.
 - **시트 확인** 칸(시안 A안): 첫 오더 요청일 이후 시트에 적힌 고객 출고 줄 중 오더번호 없음·없는 번호·취소된 오더·오더에 없는 품목·수량 초과인 줄을 종류별로 묶고, 위에 종류별 건수와 고칠 방법 칸을 둔다. 번호 없음·없는 번호·오더에 없는 품목에는 최근 승인 오더에서 찾은 번호 후보("이 번호일 가능성이 높습니다" — 같은 고객·품목, "오타로 보입니다" — 2글자 이내로 다른 번호)와 `[번호 복사]`를 붙인다. 짐작이라 자동으로 적지 않는다. 수량 초과는 오더·시트 대수를 나란히 보인다. 시트에 승인된 오더번호를 적으면 다음 가져오기 뒤 사라진다([연결 로직](./hardware-order-revenue-link-plan-2026-10-22.md) §4-4). 보기 규칙은 `inventory/sheet-check-view.ts`, 후보 규칙은 `lib/orders/sheet-order-check.ts`의 `suggestOrdersForSheetCheck`.
-- `20261022_sales_orders.sql` 미적용이면 "DB 업데이트 적용 후" 안내 한 줄로 내려간다.
+- `20261022_sales_orders.sql` 미적용이면 "DB 업데이트 적용 후" 안내 한 줄로 내려간다(서울 프로젝트는 2026-10-28 적용).
 
 ### 2-10. 판매대시보드 (`SalesDashboardSection`)
 
@@ -388,6 +388,7 @@ API
 
 - `20260626_*_ledger` · `20260626_*_workflow_guards` · `20260627_*_snapshots` · `20260628_*_lot` · `20260628_*_costing` · `20260629_*_partial_confirm` · `20260630_hardware_sheet_import_merge`(추가형 머지 RPC, 플래그 off) · `20260727_hardware_sample_tracking`
 - `20260914_hardware_confirm_planned_v3.sql` (2026-09-14)
+- `20261022_hw_rev_matches_exclude_planned.sql` · `20261022_sales_orders.sql` · `20261028_hardware_inventory_process.sql` (2026-10-28, 서울 프로젝트)
   - v3 확정 함수를 **추가만** 했다(v2·레거시 유지, 데이터 변경 없음). 운영 프로젝트(서울, [이관 현황](./supabase-korea-migration-status.md))에 적용하고 PostgREST 스키마를 다시 읽혔다.
   - 검증: 권한은 service_role만. 앱 경로가 v3에 도달해 존재하지 않는 예정 번호를 표준 문구("배송 예정 기록을 찾을 수 없습니다.")로 거절했다. 호출 전후 원장 385건·admin_manual 0건으로 변화 없음.
   - `check:db` 카탈로그 프로브로 등록했다(2026-09-15 통과).
@@ -402,8 +403,6 @@ API
 | `20260630_hardware_sheet_import_merge_costing.sql` | 머지 가져오기도 금액을 넣게 한다 | 플래그 off라 현재 경로가 아니다 |
 | `20260701_hardware_restore_snapshot_guard.sql` | 빈 스냅샷으로 복원하면 거부하는 가드. 같은 파일 Item 2는 `crm_neo_customer_snapshots` 권한 정리 | 빈 스냅샷 1건(2026-06-27)이 있다. 복원 목록 기본 10개 밖이라 화면에서는 안 보인다. `crm_neo_customer_snapshots`는 anon·authenticated에 전 권한이 남아 있지만 RLS(`is_active_admin()`)로 막혀 있다 |
 | `20260915_hardware_sample_showroom_status.sql` | 샘플 유닛 status에 `showroom`, 이벤트에 `showcase`·`store`를 더한다(값 집합만 넓힘, 데이터 변경 없음) | "전시로"·"사무실 보관으로"(수리→보관 포함)·"상태 정정 → 전시"가 "전시 상태는 DB 업데이트 적용 후 사용할 수 있습니다."로 막힌다. 롤백 절차는 파일 머리 주석에 있다 |
-| `20261022_hw_rev_matches_exclude_planned.sql` | 출고↔REV 대사 뷰 `v_hardware_rev_matches`가 배송 예정·예약·대기 상태를 실출고에서 뺀다(열 구성 같음, `CREATE OR REPLACE`) | 날짜가 있는 배송 예정이 실출고로 잡혀, 예정만 있는 고객·월이 대사에 "출고 있음"으로 나온다 |
-| `20261022_sales_orders.sql` | 오더 테이블 `sales_orders`와 원장 `raw->>'order_no'` 인덱스(§2-9) | 견적 승인은 되지만 오더가 안 생겨 하드웨어 승인 대기·오더번호·배송 예정 자동 생성이 멈춘다. `check:db` 프로브가 경고로 알린다 |
 
 - 대사 뷰 수리 적용 확인(읽기 전용). 결과에 `예정`이 보이면 적용된 것이다.
 
