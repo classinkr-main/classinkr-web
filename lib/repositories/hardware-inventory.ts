@@ -361,7 +361,7 @@ const OFFICE_LOCATION_PATTERN = /사무실|office|클래스인|class\s*in/i
 const REPAIR_LOCATION_PATTERN =
   /repair|a\/s|(?:^|[^a-z])as(?:\s*센터)?(?:$|[^a-z])|수리(?!\s*(?:학원|논술|영역|수학|과학|탐구|교육|아카데미))/i
 
-function normalizeLocationName(value: unknown): string | null {
+export function normalizeLocationName(value: unknown): string | null {
   const text = cleanString(value)
   if (!text) return null
   if (/샘플|대여|데모|demo|sample/i.test(text)) return DEFAULT_SAMPLE_LOCATION
@@ -375,7 +375,7 @@ function normalizeLocationName(value: unknown): string | null {
   return text
 }
 
-function classifyDestination(value: unknown): "warehouse" | "sample" | "office" | "repair" | "customer" | "other" {
+export function classifyDestination(value: unknown): "warehouse" | "sample" | "office" | "repair" | "customer" | "other" {
   const location = normalizeLocationName(value)
   if (!location) return "other"
   if (location === DEFAULT_STOCK_LOCATION) return "warehouse"
