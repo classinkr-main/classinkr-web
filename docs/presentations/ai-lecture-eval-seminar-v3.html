@@ -247,7 +247,8 @@ aside.notes { display: none; }
 .tl .lane { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; }
 .tl .sd { position: absolute; top: 33px; left: 0; width: 44px; height: 44px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #F7FFD0 0, #BEEB34 45%, #7FB30E 100%); }
 .tl .sd::before { box-shadow: 0 0 12px rgba(184, 232, 44, .8), 4px 4px 10px var(--lo); }
-.leaver { position: absolute; top: 393px; width: 44px; height: 44px; margin-left: -22px; border-radius: 50%; visibility: hidden; background: #17181B; }
+.leaver { position: absolute; top: 393px; width: 44px; height: 44px; margin-left: -22px; border-radius: 50%; visibility: hidden; background: radial-gradient(circle at 35% 30%, #F7FFD0 0, #BEEB34 45%, #7FB30E 100%); }
+.leaver b { position: absolute; inset: 0; border-radius: 50%; background: #17181B; opacity: 0; }
 .tl .tick { position: absolute; top: -26px; width: 2px; height: 162px; margin-left: -1px; background: repeating-linear-gradient(180deg, var(--line) 0 8px, transparent 8px 14px); }
 .mkc { position: absolute; top: 530px; width: 470px; height: 150px; margin-left: -235px; padding: 0 34px; box-sizing: border-box; display: flex; align-items: center; gap: 22px; }
 .mkc .no { width: 64px; height: 64px; flex: none; display: grid; place-items: center; font-size: 26px; font-weight: 800; color: var(--em); }
@@ -1356,27 +1357,36 @@ aside.notes { display: none; }
     },
 
     leave: function (slide, tl, s) {
+      // 컨베이어의 연두 학생 점이 세 지점 중 하나에 닿으면, 그 점이 직접 홈을 빠져나가며 검게 바뀐다
+      var MARK = [0, .18, .50, .82], FATE = [0, 1, 0, 0, 2, 0, 3, 0, 0, 1, 0, 2, 0, 0, 3, 0];
+      var CYCLE = 18, START = -60, END = 1700, V = (END - START) / CYCLE;
       var lane = $('.tl .lane', slide);
       if (!lane) {
         lane = document.createElement('div'); lane.className = 'lane'; $('.tl', slide).appendChild(lane);
-        for (var k = 0; k < 16; k++) { var d = document.createElement('i'); d.className = 'sd nm sm'; lane.appendChild(d); }
-        [18, 50, 82].forEach(function (pct) {
-          for (var j = 0; j < 2; j++) { var lv = document.createElement('i'); lv.className = 'leaver'; lv.style.left = (120 + 16.8 * pct) + 'px'; slide.appendChild(lv); }
+        FATE.forEach(function (f) {
+          var d = document.createElement('i'); d.className = 'sd nm sm'; lane.appendChild(d);
+          if (f) { var lv = document.createElement('i'); lv.className = 'leaver'; lv.innerHTML = '<b></b>'; lv.style.left = (120 + 1680 * MARK[f]) + 'px'; slide.appendChild(lv); d._lv = lv; }
         });
       }
       $$('.sd', lane).forEach(function (d, i) {
-        var t = gsap.fromTo(d, { x: -60 }, { x: 1700, duration: 18, ease: 'none', repeat: -1 });
-        if (t.progress) t.progress(i / 16);
+        var f = FATE[i], t = gsap.timeline({ repeat: -1 });
+        t.set(d, { x: START, autoAlpha: 1 }, 0);
+        if (!f) {
+          t.to(d, { x: END, duration: CYCLE, ease: 'none' }, 0);
+        } else {
+          var lv = d._lv, ink = lv.firstChild, xe = 1680 * MARK[f] - 22, te = (xe - START) / V, dx = i % 2 ? 54 : -46;
+          t.set(lv, { autoAlpha: 0, x: 0, y: 0, scale: 1 }, 0).set(ink, { opacity: 0 }, 0);
+          t.to(d, { x: xe, duration: te, ease: 'none' }, 0);
+          t.set(d, { autoAlpha: 0 }, te).set(lv, { autoAlpha: 1, boxShadow: '0 0 14px rgba(184, 232, 44, .9)' }, te);
+          t.to(lv, { y: -38, scale: 1.08, duration: .38, ease: 'power2.out' }, te);
+          t.to(ink, { opacity: 1, duration: .5, ease: 'power1.inOut' }, te + .12);
+          t.to(lv, { boxShadow: '0 0 0px rgba(184, 232, 44, 0)', duration: .5 }, te + .12);
+          t.to(lv, { y: -190, x: dx, scale: .58, duration: 1.5, ease: 'power2.in' }, te + .5);
+          t.to(lv, { autoAlpha: 0, duration: .55, ease: 'power1.in' }, te + 1.3);
+          t.to({}, { duration: .001 }, CYCLE - .001);
+        }
+        if (t.progress) t.progress(i / FATE.length);
         loop(t);
-      });
-      $$('.leaver', slide).forEach(function (lv, i) {
-        var m = Math.floor(i / 2), j = i % 2, dx = j ? 46 : -38;
-        gsap.set(lv, { autoAlpha: 0, x: 0, y: 0 });
-        loop(gsap.timeline({ repeat: -1, repeatDelay: 1.8, delay: 2.0 + m * .9 + j * 1.3 })
-          .fromTo(lv, { autoAlpha: 0, x: 0, y: 0, scale: .4 }, { autoAlpha: 1, scale: 1, duration: .4, ease: 'back.out(2.2)' })
-          .to(lv, { y: -34, duration: .35, ease: 'power2.out' })
-          .to(lv, { y: -240, x: dx, scale: .55, duration: 1.5, ease: 'power2.in' })
-          .to(lv, { autoAlpha: 0, duration: .6, ease: 'power1.in' }, '-=.75'));
       });
       gsap.set($$('.flip .inner', slide), { rotationX: 0 });
     },
