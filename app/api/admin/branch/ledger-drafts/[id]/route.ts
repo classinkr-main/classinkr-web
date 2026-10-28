@@ -2,15 +2,27 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { isLedgerDraftBodyError, parseLedgerDraftUpdateBody } from "@/lib/branch/ledger-draft-body"
+import { applyLedgerDraftsWithSheetWrite } from "@/lib/branch/sheet-writeback/apply-service"
+import { sheetWriteBlocksReverse } from "@/lib/branch/sheet-writeback/ledger-rules"
+import { SHEET_WRITTEN_REVERSE_MESSAGE } from "@/lib/branch/sheet-writeback/messages"
 import {
-  applyBranchSalesLedgerDraft,
   deleteBranchSalesLedgerDraft,
+  isBranchSalesLedgerDraftHasSheetWritesError,
   isBranchSalesLedgerDraftsNotReadyError,
   isBranchSalesLedgerDuplicateActiveCorrectionError,
   isBranchSalesLedgerNonPositiveAmountError,
   reverseBranchSalesLedgerEntryByDraftId,
   updateBranchSalesLedgerDraft,
 } from "@/lib/repositories/branch-sales-ledger-drafts"
+import {
+  isSheetWritesNotReadyError,
+  latestSheetWritesByDraftIds,
+  type SheetWriteRecord,
+} from "@/lib/repositories/branch-sales-ledger-sheet-writes"
+
+// REV 시트 쓰기(ADR-011) — action=apply 는 시트 다시 읽기(8s) + 쓰기·되읽기(8s) + 되돌리기(8s) + DB 를 한 요청에서
+// 돈다(lib/branch/sheet-writeback/apply-service.ts). 그 최악 합이 이 상한 안에 든다.
+export const maxDuration = 60
 
 function adminActorName(admin: { name?: string; userId?: string; role: string }) {
   return admin.name?.trim() || admin.userId || admin.role
@@ -42,6 +54,20 @@ function nonPositiveAmountResponse(error: unknown) {
   return null
 }
 
+/**
+ * 되돌리기 가드용 — 이 초안의 가장 최근 시트 쓰기 시도. 감사 표가 아직 없으면(마이그레이션 전) 시트에 쓴 적도
+ * 없으므로 null(기존 동작). 그 밖의 조회 실패는 던진다 — 시트에 쓴 항목인지 모르는 채 장부만 상쇄하면 시트와
+ * 장부가 갈라지므로 fail closed(바깥 catch 가 500).
+ */
+async function latestSheetWrite(draftId: string): Promise<SheetWriteRecord | null> {
+  try {
+    return (await latestSheetWritesByDraftIds([draftId])).get(draftId) ?? null
+  } catch (error) {
+    if (isSheetWritesNotReadyError(error)) return null
+    throw error
+  }
+}
+
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
   if (admin instanceof NextResponse) return admin
@@ -57,17 +83,40 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const action = typeof raw.action === "string" ? raw.action : "update"
 
     if (action === "apply") {
-      const draft = await applyBranchSalesLedgerDraft(id, actor)
-      if (!draft) {
-        return NextResponse.json({ error: "체크 완료 초안만 적용할 수 있습니다." }, { status: 409 })
+      // 반영의 유일한 진입점(tests/branch/sheet-write-surface.test.ts 래칫) — 스위치가 꺼져 있으면 지금처럼 장부에만,
+      // 켜져 있으면 '2. REV' 에도 쓴다. 서비스는 항목 오류를 던지지 않고 결과(status·error·sheet)에 담는다
+      // (마이그레이션 미적용 503·활성 정정 중복 409·0 이하 금액 400·체크 완료 아님 409 — 기존 번역과 같은 문구).
+      // 202 는 "시트 반영 여부 모름"(ok:false) — 장부는 반영하지 않았고 다시 보내지도 않았다.
+      const { results } = await applyLedgerDraftsWithSheetWrite([id], actor)
+      const result = results.find((item) => item.id === id)
+      if (!result) throw new Error("apply-service returned no result for the requested draft")
+      if (result.ok && result.draft) {
+        return NextResponse.json({ draft: result.draft, sheet: result.sheet })
       }
-      return NextResponse.json({ draft })
+      return NextResponse.json(
+        {
+          ok: false,
+          error: result.error ?? result.sheet.message,
+          sheet: result.sheet,
+          ...(result.draft ? { draft: result.draft } : {}),
+        },
+        { status: result.ok ? 500 : result.status },
+      )
     }
     if (action === "reverse") {
       // id는 draft id다(기존 apply와 동일 계약) — draft_id로 연결된 내부 원장 entry를 찾아
       // active->reversed로 상쇄한다. draft.status 자체는 건드리지 않는다(감사 추적 보존).
       const reason = optionalString(raw.reason)
       if (reason === null) return NextResponse.json({ error: "reason must be a string" }, { status: 400 })
+
+      // REV 시트 쓰기(ADR-011) — 시트에 쓴 정정을 장부에서만 상쇄하면 시트에는 새 값이 남아 화면(미러)이 되돌린
+      // 줄 모르게 된다. 시트가 정본이므로 되돌리기는 시트에서 직접 하거나 원래 값으로 다시 입력해 반영한다.
+      // "sending" 도 막는다 — 장부 항목은 시트 쓰기를 되읽어 확인한 뒤에만 생기므로, 항목이 있는데 시도가 sending 이면
+      // 시트에는 쓰였고 감사 행 갱신만 실패한 것이다(항목이 없으면 어차피 상쇄할 것이 없다). 판정 정본은 ledger-rules.ts.
+      const sheetWrite = await latestSheetWrite(id)
+      if (sheetWriteBlocksReverse(sheetWrite?.status, sheetWrite?.code)) {
+        return NextResponse.json({ error: SHEET_WRITTEN_REVERSE_MESSAGE, reason: "sheet-written" }, { status: 409 })
+      }
 
       const entry = await reverseBranchSalesLedgerEntryByDraftId(id, actor, reason)
       if (!entry) {
@@ -151,6 +200,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (!deleted) return NextResponse.json({ error: "Draft not found" }, { status: 404 })
     return NextResponse.json({ ok: true })
   } catch (error) {
+    // 시트 쓰기 감사 행이 있는 초안(반영을 한 번이라도 시도 — 거절·실패 포함)은 감사 기록을 지키려고 하드 삭제를 막는다
+    // (FK ON DELETE RESTRICT). 원인 없는 500 이 아니라 409 + 안내 — 큐는 그 초안을 취소(cancelled)로 정리한다.
+    if (isBranchSalesLedgerDraftHasSheetWritesError(error)) {
+      return NextResponse.json({ error: error.message, reason: "sheet-write-history" }, { status: 409 })
+    }
     console.error(`[DELETE /api/admin/branch/ledger-drafts/${id}]`, error)
     return notReadyResponse(error) ?? NextResponse.json({ error: "Failed to delete sales ledger draft" }, { status: 500 })
   }

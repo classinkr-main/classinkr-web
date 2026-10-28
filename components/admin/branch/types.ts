@@ -181,6 +181,15 @@ export interface BranchPipelineRow {
   monthlyHighConfidence?: Record<string, number>
   monthlyRed?: Record<string, boolean>
   weeklyPayments?: Record<string, number[]>
+  // 시트 쓰기(ADR-011) — lib/branch/computations/pipeline.ts RevRevenueRow 미러. 없으면 키가 없다.
+  /** '2. REV' 숨김 "Row ID" 열 값(형식 맞고 한 번만 나온 것). 없으면 그 행은 시트 쓰기 거절(no_row_id). */
+  rowId?: string | null
+  /** "invalid"(형식 오류) | "duplicate"(같은 ID 가 여러 행). */
+  rowIdIssue?: string | null
+  /** 달별 주차 칸 확도 글자("rk--b"). sheet-writeback/baseline.ts buildSheetBaseline 이 읽는다. */
+  weeklyColors?: Record<string, string>
+  /** 이 행 데이터의 시각(미러 synced_at·액티브 임포트 캡처 시각). 이중 집계 제외 기준(absorptionCutoff)에 쓴다. */
+  syncedAt?: string
 }
 
 export interface BranchPipelineResponse {

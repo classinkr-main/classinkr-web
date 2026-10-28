@@ -197,6 +197,9 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // 시트 동기화 실행 기록의 출처 컬럼(2026-10-28) — branch_sync_runs.runtime(환경·배포·커밋·리전).
   // 미적용이어도 startSyncRun 이 컬럼 없이 다시 기록하므로 동기화는 돌고, 출처만 비어 남는다.
   "supabase/migrations/20261028_branch_sync_runs_runtime.sql",
+  // 장부 반영 → REV 시트 쓰기 감사 기록(2026-10-23). 시트 쓰기 스위치(BRANCH_REV_SHEET_WRITE_ENABLED)가 꺼져 있으면
+  // 미적용이어도 영향이 없다 — 켜기 전에 적용한다(warning).
+  "supabase/migrations/20261023_branch_rev_sheet_writes.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -937,6 +940,9 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     migration: "supabase/migrations/20261028_hardware_inventory_process.sql",
     severity: "warning",
     impact: "모든 품목을 물류번호 관리 품목으로 보고(액세서리·터치펜도 물류번호 요구) 판매대시보드 고정 행이 비어 보인다.",
+  },
+  {
+    kind: "table",
     table: "blog_posts",
     label: "블로그 글 내용 변경 시각(content_updated_at)",
     columns: ["id", "content_updated_at"],
@@ -955,6 +961,33 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     severity: "warning",
     impact:
       "동기화는 그대로 돈다(컬럼 없이 다시 기록). 다만 어느 환경·배포가 쓴 런인지 남지 않아, 운영 밖 쓰기 사고(2026-10-15 활성 임포트 진동)를 사후에 가려낼 수 없다.",
+  },
+  // ── 장부 반영 → REV 시트 쓰기 감사 기록(2026-10-23) ─────────────────────
+  // RLS deny-all(정책 없음 — service_role 만). DELETE·TRUNCATE 금지, UPDATE 는 상태 칸만(트리거).
+  {
+    kind: "table",
+    table: "branch_sales_ledger_sheet_writes",
+    label: "매출 장부 → REV 시트 쓰기 감사 기록",
+    columns: [
+      "id", "draft_id", "batch_id", "status", "code", "row_id", "sheet_row", "ledger_month", "cells",
+      "actor", "error", "entry_id", "created_at", "written_at", "updated_at",
+    ],
+    migration: "supabase/migrations/20261023_branch_rev_sheet_writes.sql",
+    severity: "warning",
+    impact:
+      "시트 쓰기 스위치(BRANCH_REV_SHEET_WRITE_ENABLED)가 꺼져 있으면 영향 없다. 켜져 있으면 감사 행을 못 남겨 시트 쓰기가 전부 500으로 막힌다(장부·시트는 그대로).",
+  },
+  {
+    kind: "rpc",
+    functionName: "apply_branch_sales_ledger_draft_if_unchanged",
+    label: "시트 쓰기 반영 전용 장부 적용(초안이 그대로일 때만)",
+    // 장부에 쓰는 함수라 실행 프로브를 하지 않는다 — pg_proc/권한만 확인한다.
+    catalogIdentityTypes: "uuid, text, timestamp with time zone",
+    serviceRoleOnly: true,
+    migration: "supabase/migrations/20261023_branch_rev_sheet_writes.sql",
+    severity: "warning",
+    impact:
+      "시트 쓰기 스위치가 켜져 있으면 시트에 쓴 뒤 장부 기록이 전부 실패한다(db_apply_failed) — 켜기 전에 반드시 적용한다. 꺼져 있으면 영향 없다.",
   },
 ]
 

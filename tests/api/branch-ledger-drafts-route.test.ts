@@ -19,6 +19,10 @@ const updateBranchSalesLedgerDraft = vi.fn()
 const applyBranchSalesLedgerDraft = vi.fn()
 const deleteBranchSalesLedgerDraft = vi.fn()
 const reverseBranchSalesLedgerEntryByDraftId = vi.fn()
+// REV 시트 쓰기(ADR-011) — GET 이 시트 쓰기 감사 표를 읽는다. 실제 supabase 에 붙지 않게 목으로 둔다
+// (시트 쓰기 갈래의 실행 검증은 tests/api/branch-ledger-drafts-sheet-write.test.ts).
+const latestSheetWritesByDraftIds = vi.fn(async () => new Map())
+const lastSuccessfulRevSyncStartedAt = vi.fn(async () => null)
 
 // 실제 repository의 문구와 동일해야 route.ts의 에러 번역기(duplicateActiveCorrectionResponse 등)가
 // 인식한다 — 이 파일에서는 repository를 통째로 목하므로 판별 함수도 같은 문구 기준으로 재구현한다.
@@ -45,8 +49,15 @@ vi.mock("@/lib/repositories/branch-sales-ledger-drafts", () => ({
     error instanceof Error && error.message === DUPLICATE_ACTIVE_CORRECTION_MESSAGE,
   isBranchSalesLedgerNonPositiveAmountError: (error: unknown) =>
     error instanceof Error && error.message === NON_POSITIVE_AMOUNT_MESSAGE,
+  LEDGER_LIST_MAX: 1000,
   listBranchSalesLedgerDrafts,
   listBranchSalesLedgerEntries,
+}))
+
+vi.mock("@/lib/repositories/branch-sales-ledger-sheet-writes", () => ({
+  latestSheetWritesByDraftIds,
+  lastSuccessfulRevSyncStartedAt,
+  isSheetWritesNotReadyError: () => false,
 }))
 
 const routePath = join(
@@ -83,7 +94,10 @@ describe("branch ledger draft route", () => {
     expect(route).toContain('raw.status === "applied"')
     expect(route).toContain("Use action=apply to apply a checked draft")
     expect(route).toContain('action === "apply"')
-    expect(route).toContain("applyBranchSalesLedgerDraft(id, actor)")
+    // REV 시트 쓰기(ADR-011) — 반영은 서비스(lib/branch/sheet-writeback/apply-service.ts)를 거친다. 라우트가 RPC 를
+    // 직접 부르면 시트 쓰기 스위치·충돌 검사를 건너뛴다(tests/branch/sheet-write-surface.test.ts 래칫과 같은 계약).
+    expect(route).toMatch(/\bapplyLedgerDraftsWithSheetWrite\(\[id\], actor\)/)
+    expect(route).not.toMatch(/\bapplyBranchSalesLedgerDraft\s*\(/)
   })
 
   it("only applies drafts that are already checked", () => {
@@ -202,10 +216,10 @@ describe("GET /api/admin/branch/ledger-drafts — reversedDraftIds (P0 되돌리
     expect(response.status).toBe(200)
     expect(json.entries).toEqual([{ id: "entry-1", draftId: "draft-1", entryStatus: "active" }])
     expect(json.reversedDraftIds).toEqual(["draft-2"])
-    // active 조회(limit 200)와 reversed 조회(limit 200)를 하나로 합쳐 200으로 자르면 reversed가
-    // active 항목들에 밀려 잘릴 수 있다 — 반드시 별도 호출 + 별도 한도여야 한다(항목 1 설계 의도).
-    expect(listBranchSalesLedgerEntries).toHaveBeenCalledWith({ limit: 200 })
-    expect(listBranchSalesLedgerEntries).toHaveBeenCalledWith({ status: "reversed", limit: 200 })
+    // active 조회와 reversed 조회를 하나로 합쳐 한도로 자르면 reversed가 active 항목들에 밀려
+    // 잘릴 수 있다 — 반드시 별도 호출 + 별도 한도여야 한다(항목 1 설계 의도). 한도는 목록 상한(1000).
+    expect(listBranchSalesLedgerEntries).toHaveBeenCalledWith({ limit: 1000 })
+    expect(listBranchSalesLedgerEntries).toHaveBeenCalledWith({ status: "reversed", limit: 1000 })
   })
 
   it("reversed entry에 draftId가 없거나 중복돼도(방어적) 정제된 유일 목록만 내려준다", async () => {
@@ -447,5 +461,65 @@ describe("PATCH /api/admin/branch/ledger-drafts/[id] — 서버 금액 검증(I5
 
     expect(response.status).toBe(400)
     expect(json.error).toBe(NON_POSITIVE_AMOUNT_MESSAGE)
+  })
+})
+
+describe("GET /api/admin/branch/ledger-drafts — 열린 초안·반영값 누락 방지", () => {
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  const draft = (id: string, status: string, updatedAt: string) => ({ id, status, updatedAt })
+
+  it("status=all이면 열린 초안(draft·checked)은 상한까지 전부, 끝난 초안만 limit으로 받아 최신순으로 합친다", async () => {
+    mockAdmin()
+    listBranchSalesLedgerDrafts.mockImplementation(async (options: { statuses?: string[] } = {}) => ({
+      generatedAt: "x",
+      health: { ok: true, message: null },
+      drafts: options.statuses?.includes("draft")
+        ? [draft("open-1", "draft", "2026-10-20T00:00:00Z"), draft("open-2", "checked", "2026-10-01T00:00:00Z")]
+        : [draft("done-1", "applied", "2026-10-10T00:00:00Z")],
+    }))
+    listBranchSalesLedgerEntries.mockResolvedValue({ generatedAt: "x", health: { ok: true, message: null }, entries: [] })
+
+    const { GET } = await import("@/app/api/admin/branch/ledger-drafts/route")
+    const json = await (await GET(ledgerDraftsRequest("?status=all&limit=50"))).json()
+
+    expect(listBranchSalesLedgerDrafts).toHaveBeenCalledWith({ statuses: ["draft", "checked"], limit: 1000 })
+    expect(listBranchSalesLedgerDrafts).toHaveBeenCalledWith({ statuses: ["applied", "cancelled"], limit: 50 })
+    expect(json.drafts.map((item: { id: string }) => item.id)).toEqual(["open-1", "done-1", "open-2"])
+    expect(json.truncated).toEqual({ openDrafts: false, entries: false })
+  })
+
+  it("열린 초안이나 반영값이 상한에 닿으면 truncated로 알린다", async () => {
+    mockAdmin()
+    const many = Array.from({ length: 1000 }, (_, index) => draft(`open-${index}`, "draft", "2026-10-20T00:00:00Z"))
+    listBranchSalesLedgerDrafts.mockImplementation(async (options: { statuses?: string[] } = {}) => ({
+      generatedAt: "x",
+      health: { ok: true, message: null },
+      drafts: options.statuses?.includes("draft") ? many : [],
+    }))
+    listBranchSalesLedgerEntries.mockImplementation(async (options: { status?: string } = {}) => ({
+      generatedAt: "x",
+      health: { ok: true, message: null },
+      entries: options.status === "reversed" ? [] : Array.from({ length: 1000 }, (_, index) => ({ id: `entry-${index}` })),
+    }))
+
+    const { GET } = await import("@/app/api/admin/branch/ledger-drafts/route")
+    const json = await (await GET(ledgerDraftsRequest("?status=all"))).json()
+
+    expect(json.truncated).toEqual({ openDrafts: true, entries: true })
+  })
+
+  it("특정 status 조회는 기존처럼 그 상태만 limit으로 받는다", async () => {
+    mockAdmin()
+    listBranchSalesLedgerDrafts.mockResolvedValue({ generatedAt: "x", health: { ok: true, message: null }, drafts: [] })
+    listBranchSalesLedgerEntries.mockResolvedValue({ generatedAt: "x", health: { ok: true, message: null }, entries: [] })
+
+    const { GET } = await import("@/app/api/admin/branch/ledger-drafts/route")
+    await GET(ledgerDraftsRequest("?status=applied&limit=20"))
+
+    expect(listBranchSalesLedgerDrafts).toHaveBeenCalledTimes(1)
+    expect(listBranchSalesLedgerDrafts).toHaveBeenCalledWith({ status: "applied", limit: 20 })
   })
 })

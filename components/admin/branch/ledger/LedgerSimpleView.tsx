@@ -5,7 +5,8 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { cny, cnyExact } from "@/lib/branch/money-format"
 import { branchManagerLabel } from "@/lib/branch/personal-scope"
-import { ApprovalBar, InlineCellEditor, type LedgerCellEditApi } from "./LedgerSimpleEdit"
+import { ApprovalBar, InlineCellEditor, type ApprovalOutcome, type LedgerCellEditApi } from "./LedgerSimpleEdit"
+import { SHEET_WRITE_ON_NOTICE, type SheetWriteMode } from "./sheet-write-view"
 import { dominantCellConfidence } from "./rev-matrix-logic"
 import { rowMonthAmount, type DraftConfidence, type LedgerDraft, type LedgerRevenueRow, type RevMonthlyBucket } from "./shared"
 import {
@@ -422,6 +423,8 @@ function ManagerTable({ rows, months, currentMonth, managerGoals, pace, onOpenMa
 }
 
 export interface LedgerSimpleViewProps {
+  /** 숫자가 틀리거나 빠질 수 있는 상황(큐 오류·목록 상한·원본을 못 찾은 정정) — 표 위에 그대로 보여 준다. */
+  notices?: string[]
   /** 범위·검색 필터가 반영된 장부 행(워크벤치 filteredRows). */
   rows: LedgerRevenueRow[]
   /** 회계연도 12개월(YYYY-MM). */
@@ -441,14 +444,18 @@ export interface LedgerSimpleViewProps {
   /** 이 범위의 대기 변경(초안·확인됨). */
   pendingDrafts: LedgerDraft[]
   serverQueue: boolean
-  onCheckDrafts: (ids: string[]) => Promise<{ done: number; failed: number }>
-  onApplyDrafts: (ids: string[]) => Promise<{ done: number; failed: number }>
+  /** REV 시트 쓰기 스위치(GET sheetWrite.mode). on 이면 상단 안내 한 줄·반영 확인 문구가 바뀐다. 생략 = off. */
+  sheetWriteMode?: SheetWriteMode
+  /** 시트 쓰기 기록·동기화 시각을 읽지 못했을 때 서버 문구(배지·이중 집계 제외가 비어 보일 수 있다). */
+  sheetWriteHealthMessage?: string | null
+  onCheckDrafts: (ids: string[]) => Promise<ApprovalOutcome>
+  onApplyDrafts: (ids: string[]) => Promise<ApprovalOutcome>
   onShowQueue: () => void
   onOpenRow: (row: LedgerRevenueRow) => void
   onOpenManager: (manager: string) => void
 }
 
-export default function LedgerSimpleView({ rows, months, currentMonth, monthlyGoals, personal, managerGoals, loading, edit, pendingDrafts, serverQueue, onCheckDrafts, onApplyDrafts, onShowQueue, onOpenRow, onOpenManager }: LedgerSimpleViewProps) {
+export default function LedgerSimpleView({ notices = [], rows, months, currentMonth, monthlyGoals, personal, managerGoals, loading, edit, pendingDrafts, serverQueue, sheetWriteMode = "off", sheetWriteHealthMessage = null, onCheckDrafts, onApplyDrafts, onShowQueue, onOpenRow, onOpenManager }: LedgerSimpleViewProps) {
   const [groupBy, setGroupBy] = useState<SimpleGroupBy>("none")
   const [teamView, setTeamView] = useState<"members" | "deals">("members")
   const [chips, setChips] = useState<Set<string>>(() => new Set())
@@ -469,6 +476,11 @@ export default function LedgerSimpleView({ rows, months, currentMonth, monthlyGo
 
   return (
     <div className="space-y-4">
+      {notices.length > 0 ? (
+        <div role="status" className="space-y-1 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-4 py-2.5 text-[12.5px] font-semibold text-[#7A520F]">
+          {notices.map((notice) => <p key={notice}>⚠ {notice}</p>)}
+        </div>
+      ) : null}
       <SummaryBand bucket={total} goal={fyGoal > 0 ? fyGoal : null} pace={pace} goalNote={loading ? "불러오는 중" : goals ? "목표 미등록" : "필터 중 — 목표 비교 생략"} />
       <div className="flex flex-wrap items-center gap-2">
         {!personal ? <SegButtons label="표 형태" value={teamView} options={[{ id: "members", label: "담당자별" }, { id: "deals", label: "딜 전체" }]} onChange={setTeamView} /> : null}
@@ -502,7 +514,14 @@ export default function LedgerSimpleView({ rows, months, currentMonth, monthlyGo
             {expandPast ? "지난달 접기" : "지난달 펼치기"}
           </button>
         ) : null}
-        <span className="ml-auto flex items-center gap-3 text-[12px] text-[#615D59]">
+        <span className="ml-auto flex flex-wrap items-center gap-3 text-[12px] text-[#615D59]">
+          {/* REV 시트 쓰기 켜짐일 때만 — 반영이 '2. REV' 에도 쓴다는 사실을 상태 줄에 늘 둔다. */}
+          {sheetWriteMode === "on" ? (
+            <span data-sheet-write-notice className="font-semibold text-[#084734]">{SHEET_WRITE_ON_NOTICE}</span>
+          ) : null}
+          {sheetWriteHealthMessage ? (
+            <span role="status" data-sheet-write-health className="font-semibold text-[#7A520F]">{sheetWriteHealthMessage}</span>
+          ) : null}
           <span className="inline-flex items-center gap-1.5"><ConfText kind="confirmed">확정</ConfText></span>
           <span className="inline-flex items-center gap-1.5"><ConfText kind="high-confidence">고확도</ConfText></span>
           <span className="inline-flex items-center gap-1.5"><ConfText kind="expected">예정</ConfText></span>
@@ -521,7 +540,7 @@ export default function LedgerSimpleView({ rows, months, currentMonth, monthlyGo
           ? "담당자 이름을 누르면 그 사람 장부로 바뀝니다."
           : "금액 칸을 누르면 그 자리에서 고칩니다(E·H·C 확도, Enter 저장, Esc 취소). 배경이 칠해진 전액 확정 칸과 지난달 묶음 칸은 고칠 수 없습니다. 점선 칸은 아직 반영 전, 고객 이름은 상세를 엽니다."}
       </p>
-      <ApprovalBar drafts={pendingDrafts} serverQueue={serverQueue} onCheck={onCheckDrafts} onApply={onApplyDrafts} onShowAll={onShowQueue} />
+      <ApprovalBar drafts={pendingDrafts} serverQueue={serverQueue} sheetWriteMode={sheetWriteMode} onCheck={onCheckDrafts} onApply={onApplyDrafts} onShowAll={onShowQueue} />
     </div>
   )
 }

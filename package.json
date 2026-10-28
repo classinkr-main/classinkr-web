@@ -29,7 +29,8 @@
     "check:admin-rbac": "npx tsx scripts/check-admin-rbac-readiness.ts",
     "sync:channel-docs": "npx tsx scripts/sync-channel-documents.ts",
     "measure:admin": "node scripts/measure-admin-api.mjs",
-    "check:team-calendar": "node scripts/check-team-calendar-access.mjs"
+    "check:team-calendar": "node scripts/check-team-calendar-access.mjs",
+    "rev:row-ids": "npx tsx scripts/assign-rev-row-ids.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

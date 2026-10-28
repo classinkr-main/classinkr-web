@@ -265,6 +265,50 @@ export interface DraftForm {
   /** 라운드 3(P1): W1~W5 주차별 확도 버퍼 5칸(weekly와 병렬, 빈 칸 없음 — 항상 3단 중 하나).
       저장 시에는 금액>0 주차만 이 값이 실리고 나머지는 null로 정규화된다(draftWeeklySaveContract). */
   weeklyConfidence: DraftConfidence[]
+  /** REV 시트 쓰기(ADR-011): 사용자가 이 폼에서 확도 버튼을 직접 눌렀는지. 폼을 여는 시드(행 확도·콕핏 톤)는 고른 것이
+      아니다 — 시드는 시트 글자색과 다를 수 있어(시트 행은 늘 '예정'으로 시드) 그대로 실으면 손대지 않은 칸 색을 덮는다.
+      저장 때 metadata.confidenceTouched 로 실린다. 없으면 false. */
+  confidenceTouched?: boolean
+  /** 주차별 확도 직접 선택 표시 5칸(weeklyConfidence 와 병렬). 주차 분해 저장 때 metadata.weeklyConfidenceTouched 로
+      실린다(금액>0 주차만). 없으면 전부 false. */
+  weeklyConfidenceTouched?: boolean[]
+}
+
+/** 확도 일괄 버튼 — 단일 확도와 주차 5칸을 모두 직접 고른 것으로 표시한다. */
+export function draftFormWithConfidence(form: DraftForm, confidence: DraftConfidence): DraftForm {
+  return {
+    ...form,
+    confidence,
+    weeklyConfidence: defaultDraftWeeklyConfidence(confidence),
+    confidenceTouched: true,
+    weeklyConfidenceTouched: [true, true, true, true, true],
+  }
+}
+
+/** 주차 확도 한 칸 — 그 주차만 직접 고른 것으로 표시한다. */
+export function draftFormWithWeekConfidence(form: DraftForm, index: number, confidence: DraftConfidence): DraftForm {
+  const touched = Array.from({ length: 5 }, (_, i) => form.weeklyConfidenceTouched?.[i] === true)
+  touched[index] = true
+  return {
+    ...form,
+    weeklyConfidence: form.weeklyConfidence.map((value, i) => (i === index ? confidence : value)),
+    weeklyConfidenceTouched: touched,
+  }
+}
+
+/**
+ * 저장 metadata 의 확도 선택 표시(REV 시트 쓰기). 주차 분해 저장이면 금액>0 주차 중 직접 고른 칸만 true 인 5칸과 그
+ * 합(하나라도 고름), 단일 금액 저장이면 폼의 단일 표시와 null.
+ */
+export function draftFormConfidenceTouchedMetadata(
+  form: Pick<DraftForm, "confidenceTouched" | "weeklyConfidenceTouched">,
+  weeklyConfidence: Array<DraftConfidence | null> | null,
+): { confidenceTouched: boolean; weeklyConfidenceTouched: boolean[] | null } {
+  if (!weeklyConfidence) return { confidenceTouched: form.confidenceTouched === true, weeklyConfidenceTouched: null }
+  const weeklyConfidenceTouched = weeklyConfidence.map(
+    (state, index) => state != null && form.weeklyConfidenceTouched?.[index] === true,
+  )
+  return { confidenceTouched: weeklyConfidenceTouched.some(Boolean), weeklyConfidenceTouched }
 }
 
 // 결정 D6(입력 속도 라운드 2026-09-20 §8.5): 확도 어휘("고확도")는 바꾸지 않고, 대신 버튼

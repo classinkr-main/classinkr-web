@@ -56,7 +56,8 @@ FY26-27 Korea sales ledger를 Google Sheet 기반 시각화에서 벗어나 Clas
 
 - `SEG`, 지역 매출, 채널 정산, 목표 전략, BD Q1 Review 등 4번째 이후 탭.
 - HW sheet, 캠페인, 공개 이벤트, Gemini/AI insights의 전면 통합.
-- Google Sheet write-back.
+- Google Sheet write-back. 단, 장부 반영 때 '2. REV' 기존 행의 주차 칸 금액·글자색 쓰기는
+  [ADR-011](../adr/ADR-011-rev-sheet-writeback-from-ledger.md)(2026-10-23)로 범위 안이 됐다. 그 밖의 시트 쓰기는 여전히 범위 밖이다.
 - NEO/Xiaoshouyi가 최종 recognized revenue book-of-record가 되는 작업.
 - Account 360 materialized model.
 - 새 top-level nav 추가.
