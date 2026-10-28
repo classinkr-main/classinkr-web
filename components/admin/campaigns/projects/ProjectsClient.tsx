@@ -1,20 +1,19 @@
 "use client"
 
 // components/admin/campaigns/projects/ProjectsClient.tsx
-// 마케팅 프로젝트 — 리스트 + 생성 드로어(D3-3). 카드 클릭 → 상세 패널(페이싱 + 롤업 + 멤버 캠페인 + 배정 피커).
-// 기본 보기는 갤러리(1b): 상태 탭(전체/진행/일시중지/계획/완료) 필터 + 상태별 묶음 + 페이싱 카드.
-// 리스트 보기는 기존 한 줄 카드(ProjectCard)를 그대로 쓴다 — 보기 선택은 브라우저에만 기억한다.
+// 마케팅 프로젝트 — 갤러리형(1b): 상태 탭(필터) + 상태별 묶음 + 기간 경과 대비 예산 소진(페이싱).
+// 카드 클릭 → 상세 패널(페이싱 + 롤업 + 멤버 캠페인 + 배정 피커). 보기 토글로 리스트(행 카드) 전환.
 // 편집은 상세 패널이 ProjectFormDrawer 를 재사용하므로 여기선 "새 프로젝트"(생성)만 드로어로 연다.
 // 마운트 시 adminFetchJson 으로 목록 조회. 마이그레이션 미적용이면 API 가 500 →
 // 크래시/화이트스크린 없이 에러 카드 + 재시도로 그레이스풀 강등(필수).
 // DESIGN.md 팔레트만 사용.
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { AlertCircle, ArrowLeft, LayoutGrid, List, Plus, RefreshCw } from "lucide-react"
 
 import { adminFetchJson } from "@/lib/admin-client"
-import { formatDotDate, startOfToday } from "@/lib/marketing/project-pacing"
+import { getBusinessDateParts } from "@/lib/business-time"
 import { useToast } from "@/components/ui/toast"
 import {
   CAMPAIGN_STATUS_LABEL,
@@ -23,28 +22,31 @@ import {
 } from "@/lib/types/marketing-campaign"
 
 import {
+  PROJECT_STATUS_ORDER,
   ProjectBudgetCaveat,
   ProjectCard,
   ProjectGalleryCard,
+  ProjectStatusGroupHeading,
   ProjectsEmpty,
-  STATUS_GROUP_ORDER,
-  StatusGroupHeading,
 } from "./ProjectCard"
 import { ProjectFormDrawer } from "./ProjectFormDrawer"
 import ProjectDetailPanel from "./ProjectDetailPanel"
 
-type StatusFilter = "all" | ProjectStatus
-type ViewMode = "grid" | "list"
+type StatusFilter = ProjectStatus | "all"
+type ViewMode = "gallery" | "list"
 
-const VIEW_STORAGE_KEY = "admin.marketingProjects.view"
+const STATUS_TABS: { id: StatusFilter; label: string }[] = [
+  { id: "all", label: "전체" },
+  ...PROJECT_STATUS_ORDER.map((status) => ({ id: status, label: CAMPAIGN_STATUS_LABEL[status] })),
+]
 
-function readStoredView(): ViewMode {
-  try {
-    return window.localStorage.getItem(VIEW_STORAGE_KEY) === "list" ? "list" : "grid"
-  } catch {
-    return "grid"
-  }
-}
+const VIEW_OPTIONS: { id: ViewMode; label: string; Icon: typeof List }[] = [
+  { id: "list", label: "리스트 보기", Icon: List },
+  { id: "gallery", label: "갤러리 보기", Icon: LayoutGrid },
+]
+
+// 카드 최소 폭 360px — 좁은 화면에선 100% 로 줄어 가로 스크롤이 생기지 않는다.
+const GALLERY_GRID = "grid grid-cols-[repeat(auto-fill,minmax(min(360px,100%),1fr))] gap-3"
 
 export default function ProjectsClient() {
   const toast = useToast()
@@ -52,36 +54,23 @@ export default function ProjectsClient() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
+  const [view, setView] = useState<ViewMode>("gallery")
+  // 페이싱 기준일(KST YYYY-MM-DD) — 목록을 읽은 날로 고정해 한 화면의 경과율이 서로 어긋나지 않게 한다.
+  const [today, setToday] = useState("")
   // 상세 패널이 여는 프로젝트(리스트 요약). null = 닫힘. onClose 는 memoized(상세의 load deps 안정).
   const [detail, setDetail] = useState<ProjectWithRollup | null>(null)
   const closeDetail = useCallback(() => setDetail(null), [])
-  const [filter, setFilter] = useState<StatusFilter>("all")
-  const [view, setView] = useState<ViewMode>("grid")
-  // 페이싱 기준일 — 렌더마다 new Date() 하지 않도록 목록을 불러올 때 한 번 정한다.
-  const [today, setToday] = useState(() => startOfToday())
-
-  useEffect(() => {
-    setView(readStoredView())
-  }, [])
-
-  const changeView = useCallback((next: ViewMode) => {
-    setView(next)
-    try {
-      window.localStorage.setItem(VIEW_STORAGE_KEY, next)
-    } catch {
-      // 사생활 보호 모드 등 — 기억만 못 할 뿐 보기 전환은 동작한다.
-    }
-  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
-    setToday(startOfToday())
     try {
       const data = await adminFetchJson<{ projects: ProjectWithRollup[] }>(
         "/api/admin/marketing-projects",
       )
       setProjects(data.projects ?? [])
+      setToday(getBusinessDateParts().date)
     } catch (e) {
       setError(e instanceof Error ? e.message : "프로젝트 목록을 불러오지 못했습니다.")
     } finally {
@@ -93,28 +82,6 @@ export default function ProjectsClient() {
     void load()
   }, [load])
 
-  // 탭 개수는 필터와 무관하게 전체 기준. 그룹은 진행 → 일시중지 → 계획 → 완료 순서.
-  const counts = useMemo(() => {
-    const byStatus = { planned: 0, active: 0, paused: 0, done: 0 } as Record<ProjectStatus, number>
-    for (const p of projects) byStatus[p.status] += 1
-    return byStatus
-  }, [projects])
-  const groups = useMemo(
-    () =>
-      STATUS_GROUP_ORDER.filter((status) => filter === "all" || filter === status)
-        .map((status) => ({ status, items: projects.filter((p) => p.status === status) }))
-        .filter((g) => g.items.length > 0),
-    [projects, filter],
-  )
-  const tabs: { id: StatusFilter; label: string; count: number }[] = [
-    { id: "all", label: "전체", count: projects.length },
-    ...STATUS_GROUP_ORDER.map((status) => ({
-      id: status,
-      label: CAMPAIGN_STATUS_LABEL[status],
-      count: counts[status],
-    })),
-  ]
-
   const handleCreateSuccess = useCallback(
     async (message: string) => {
       setCreating(false)
@@ -123,6 +90,16 @@ export default function ProjectsClient() {
     },
     [load, toast],
   )
+
+  const countOf = (filter: StatusFilter) =>
+    filter === "all" ? projects.length : projects.filter((p) => p.status === filter).length
+
+  // 상태별 묶음 — 묶음 안은 API 순서(최근 생성순)를 그대로 둔다. 빈 묶음은 그리지 않는다.
+  const groups = PROJECT_STATUS_ORDER.filter(
+    (status) => statusFilter === "all" || statusFilter === status,
+  )
+    .map((status) => ({ status, items: projects.filter((p) => p.status === status) }))
+    .filter((group) => group.items.length > 0)
 
   return (
     <div className="pb-24">
@@ -187,14 +164,19 @@ export default function ProjectsClient() {
 
       {/* 본문 */}
       <div className="px-4 pt-5 sm:px-6 lg:px-9">
-        {loading ? (
-          <div
-            className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,360px),1fr))] gap-3 pt-5"
-            aria-busy="true"
-          >
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="h-[188px] animate-pulse rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#f0f0ec]" />
-            ))}
+        {loading && projects.length === 0 ? (
+          <div className="pt-5" aria-busy="true">
+            <div className="mb-2.5 h-4 w-20 animate-pulse rounded bg-[#f0f0ec]" />
+            <div className={view === "gallery" ? GALLERY_GRID : "space-y-1.5"}>
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  className={`animate-pulse rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#f0f0ec] ${
+                    view === "gallery" ? "h-48" : "h-[76px]"
+                  }`}
+                />
+              ))}
+            </div>
           </div>
         ) : error ? (
           <div className="rounded-2xl border border-[#F2B8B8] bg-[#FCE9E9] px-5 py-6">
@@ -221,59 +203,59 @@ export default function ProjectsClient() {
           <ProjectsEmpty onCreate={() => setCreating(true)} />
         ) : (
           <>
-            {/* 툴바 — 상태 탭(필터) | 정직 캐비앗(섹션당 1회) · 보기 전환 */}
-            <div className="mb-2 flex flex-col-reverse gap-2 border-b border-[rgba(0,0,0,0.08)] lg:flex-row lg:items-end lg:justify-between lg:gap-4">
-              <div role="tablist" aria-label="프로젝트 상태" className="-mb-px flex gap-5 overflow-x-auto">
-                {tabs.map((tab) => {
-                  const active = filter === tab.id
+            {/* 툴바 — 상태 탭(밑줄 = 선택) | 정직 캐비앗 + 보기 토글.
+                기준선은 inset 섀도라 탭의 2px 밑줄이 그 위를 덮는다. 좁은 화면에선 탭 줄만
+                기준선을 갖고(가로 스크롤), 캐비앗·토글은 그 아래 줄로 내려간다. */}
+            <div className="mb-2 leading-tight lg:flex lg:items-end lg:justify-between lg:gap-4 lg:shadow-[inset_0_-1px_0_rgba(0,0,0,0.08)]">
+              <div
+                role="group"
+                aria-label="상태 필터"
+                className="flex gap-5 overflow-x-auto shadow-[inset_0_-1px_0_rgba(0,0,0,0.08)] lg:shadow-none"
+              >
+                {STATUS_TABS.map((tab) => {
+                  const active = statusFilter === tab.id
                   return (
                     <button
                       key={tab.id}
                       type="button"
-                      role="tab"
-                      aria-selected={active}
-                      onClick={() => setFilter(tab.id)}
-                      className={`flex shrink-0 items-baseline gap-1.5 border-b-2 pb-2.5 text-[13px] transition-colors hover:text-[#111110] ${
+                      onClick={() => setStatusFilter(tab.id)}
+                      aria-pressed={active}
+                      className={`flex shrink-0 items-baseline gap-[5px] border-b-2 pb-2.5 text-[13px] transition-colors hover:text-[#111110] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734] ${
                         active
                           ? "border-[#111110] font-bold text-[#111110]"
                           : "border-transparent font-medium text-[#615D59]"
                       }`}
                     >
                       <span>{tab.label}</span>
-                      <span className="text-[11.5px] font-medium tabular-nums text-[#A39E98]">
-                        {tab.count}
+                      <span className="text-[11.5px] tabular-nums text-[#A39E98]">
+                        {countOf(tab.id)}
                       </span>
                     </button>
                   )
                 })}
               </div>
-              <div className="flex items-center justify-between gap-3.5 lg:justify-end lg:pb-2">
-                <ProjectBudgetCaveat todayLabel={formatDotDate(today)} />
+              <div className="flex items-center justify-between gap-3.5 pt-2.5 lg:justify-end lg:pb-2 lg:pt-0">
+                <ProjectBudgetCaveat today={today} />
                 <div
                   role="group"
                   aria-label="보기 방식"
                   className="flex shrink-0 rounded-md border border-[rgba(0,0,0,0.08)] bg-white p-0.5"
                 >
-                  {(
-                    [
-                      { id: "list", label: "리스트 보기", Icon: List },
-                      { id: "grid", label: "갤러리 보기", Icon: LayoutGrid },
-                    ] as const
-                  ).map(({ id, label, Icon }) => (
+                  {VIEW_OPTIONS.map(({ id, label, Icon }) => (
                     <button
                       key={id}
                       type="button"
-                      onClick={() => changeView(id)}
+                      onClick={() => setView(id)}
                       aria-pressed={view === id}
                       aria-label={label}
                       title={label}
-                      className={`flex rounded px-1.5 py-1 transition-colors ${
+                      className={`flex rounded px-1.5 py-1 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] ${
                         view === id
                           ? "bg-[#F6F5F4] text-[#111110]"
-                          : "text-[#A39E98] hover:text-[#111110]"
+                          : "text-[#A39E98] hover:text-[#615D59]"
                       }`}
                     >
-                      <Icon className="h-3.5 w-3.5" />
+                      <Icon className="h-3.5 w-3.5" aria-hidden />
                     </button>
                   ))}
                 </div>
@@ -281,17 +263,15 @@ export default function ProjectsClient() {
             </div>
 
             {groups.length === 0 ? (
-              <p className="mt-5 rounded-xl border border-dashed border-[rgba(0,0,0,0.08)] bg-[#fafaf8] px-4 py-8 text-center text-[12px] text-[#615D59]">
-                {filter === "all"
-                  ? "프로젝트가 없습니다."
-                  : `${CAMPAIGN_STATUS_LABEL[filter]} 상태인 프로젝트가 없습니다.`}
+              <p className="mt-5 rounded-xl border border-dashed border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] py-8 text-center text-[12.5px] text-[#A39E98]">
+                이 상태의 프로젝트가 없습니다.
               </p>
             ) : (
               groups.map((group) => (
                 <section key={group.status} className="pt-5">
-                  <StatusGroupHeading status={group.status} count={group.items.length} />
-                  {view === "grid" ? (
-                    <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,360px),1fr))] gap-3">
+                  <ProjectStatusGroupHeading status={group.status} count={group.items.length} />
+                  {view === "gallery" ? (
+                    <div className={GALLERY_GRID}>
                       {group.items.map((project) => (
                         <ProjectGalleryCard
                           key={project.id}
@@ -328,9 +308,14 @@ export default function ProjectsClient() {
         />
       )}
 
-      {/* 상세 패널 — 행 클릭 시. 롤업 + 멤버 캠페인 + 배정 피커 + 편집(폼 드로어 재사용). */}
+      {/* 상세 패널 — 카드 클릭 시. 페이싱 + 롤업 + 멤버 캠페인 + 배정 피커 + 편집(폼 드로어 재사용). */}
       {detail && (
-        <ProjectDetailPanel project={detail} onClose={closeDetail} onListChanged={load} />
+        <ProjectDetailPanel
+          project={detail}
+          today={today}
+          onClose={closeDetail}
+          onListChanged={load}
+        />
       )}
     </div>
   )

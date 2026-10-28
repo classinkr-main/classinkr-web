@@ -57,7 +57,7 @@ export function formatBudget(budget: number | null): string {
 }
 
 // "YYYY-MM-DD"(또는 ISO) → "YYYY.MM.DD". 형식이 아니면 원문 그대로(정직).
-function toDot(value: string): string {
+export function formatDotDate(value: string): string {
   const head = value.slice(0, 10)
   return /^\d{4}-\d{2}-\d{2}$/.test(head) ? head.replace(/-/g, ".") : value
 }
@@ -65,9 +65,9 @@ function toDot(value: string): string {
 // 기간: 양쪽 null → "기간 미정", 한쪽만 있으면 열린 구간으로 표기.
 export function formatCampaignPeriod(startsAt: string | null, endsAt: string | null): string {
   if (!startsAt && !endsAt) return "기간 미정"
-  if (startsAt && !endsAt) return `${toDot(startsAt)} ~`
-  if (!startsAt && endsAt) return `~ ${toDot(endsAt)}`
-  return `${toDot(startsAt as string)} ~ ${toDot(endsAt as string)}`
+  if (startsAt && !endsAt) return `${formatDotDate(startsAt)} ~`
+  if (!startsAt && endsAt) return `~ ${formatDotDate(endsAt)}`
+  return `${formatDotDate(startsAt as string)} ~ ${formatDotDate(endsAt as string)}`
 }
 
 // 선언 채널(정보성)의 표시 라벨 — 알려진 키만 매핑, 그 외는 원문 유지(폴백).
@@ -116,7 +116,8 @@ export function CampaignStatusChip({ status }: { status: CampaignStatus }) {
 
 // "지금 살아있는 것"을 스캔하기 위한 위계 — 색 채움 카드가 아니라 헤어라인 레일 + 대비 차이.
 // 진행 = 그린 레일(액센트), 일시중지 = 웜 경고 틴트 레일, 계획·완료 = 레일 없음.
-const STATUS_RAIL: Record<CampaignStatus, string | null> = {
+// 프로젝트 상세의 멤버 캠페인 행도 같은 위계를 쓴다(SSOT).
+export const CAMPAIGN_STATUS_RAIL: Record<CampaignStatus, string | null> = {
   active: "bg-[#084734]",
   paused: "bg-[#ECD29C]",
   planned: null,
@@ -263,7 +264,7 @@ export function CampaignRow({
   const linkCount = campaign.links.length
   // rollup 은 optional(경량 모드 ?rollup=0 이면 없다) — 없으면 지표를 지어내지 않는다.
   const metrics = campaign.rollup ? buildCampaignRowMetrics(campaign.rollup) : []
-  const rail = STATUS_RAIL[campaign.status]
+  const rail = CAMPAIGN_STATUS_RAIL[campaign.status]
   const dim = campaign.status === "done"
 
   return (

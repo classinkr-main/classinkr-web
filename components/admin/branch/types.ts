@@ -47,7 +47,7 @@ export interface BranchDealMixSlice {
   prev_actual?: number | null
   // 이번 주/전주(월요일 시작, UTC) REV 딜 first_payment 기준 확정 금액 — 서버 MixSlice의
   // week_actual/prev_week_actual 미러. meta.weekly_available=false면 축 전체가 null.
-  // 소비처: 장부 DSH 지표 밴드 주간 뷰(ledger/dsh-derive.ts deriveDshWeeklyFromDealMix).
+  // 소비처: 장부 DSH 진도 개요 히어로의 주 보기(ledger/dsh-derive.ts deriveDshWeeklyFromDealMix).
   week_actual?: number | null
   prev_week_actual?: number | null
 }

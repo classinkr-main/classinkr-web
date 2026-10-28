@@ -85,11 +85,15 @@ const DshNumericGrid = dynamic(() => import("./ledger/DshNumericGrid").then((m) 
   ssr: false,
   loading: () => <LoadingPanel label="DSH 수치 그리드를 불러오는 중" />,
 })
-// DSH 렌즈 디벨롭(2026-07-27) 신규 카드 3종 — 지표 밴드·월별 페이스·팀 그리드도 수치
-// 그리드와 동일 관례(ssr:false + LoadingPanel)로 지연 로드해 첫 로드 번들에서 제외한다.
-const DshMetricsBand = dynamic(() => import("./ledger/DshMetricsBand").then((m) => m.DshMetricsBand), {
+// DSH 렌즈 카드들 — 진도 개요(시안 1a, 지표 밴드 대체)·상세 표 접이식 묶음·월별 페이스·팀 그리드도
+// 수치 그리드와 동일 관례(ssr:false + LoadingPanel)로 지연 로드해 첫 로드 번들에서 제외한다.
+const DshProgressOverview = dynamic(() => import("./ledger/DshProgressOverview").then((m) => m.DshProgressOverview), {
   ssr: false,
-  loading: () => <LoadingPanel label="DSH 핵심 지표를 불러오는 중" />,
+  loading: () => <LoadingPanel label="DSH 진도를 불러오는 중" />,
+})
+const DshDetailFolds = dynamic(() => import("./ledger/DshDetailFolds").then((m) => m.DshDetailFolds), {
+  ssr: false,
+  loading: () => <LoadingPanel label="DSH 상세 표를 불러오는 중" />,
 })
 const DshMonthlyPace = dynamic(() => import("./ledger/DshMonthlyPace").then((m) => m.DshMonthlyPace), {
   ssr: false,
@@ -3338,50 +3342,61 @@ export default function SalesLedgerWorkbench({
 
             {lens === "dsh" && (
               <div className="space-y-5">
-                {/* DSH 렌즈 배치(2026-07-27 디벨롭): 지표 밴드 → 수치 그리드 → 월별 페이스 →
-                    팀·멤버 그리드 → 주간 마감. 밴드/페이스는 dsh_breakdown 클라이언트 파생,
-                    팀 그리드만 dsh_rows(같은 ?breakdown=1 opt-in) 신규 필드를 소비한다. */}
-                <DshMetricsBand
+                {/* DSH 렌즈 배치(시안 "매출시트 DSH 1a", 2026-10): 진도 개요(히어로 → 월별 막대·기간
+                    카드 → 구성별·팀/멤버 달성) → 상세 표 접이식 묶음(수치 그리드·월별 페이스·
+                    팀·멤버 수치·주간 스냅샷, 기본 접힘). 개요·수치 그리드·페이스는 dsh_breakdown
+                    클라이언트 파생, 팀 쪽은 dsh_rows(같은 ?breakdown=1 opt-in)를 소비한다. */}
+                <DshProgressOverview
                   breakdown={summary.data?.dsh_breakdown ?? []}
-                  loading={summary.loading && !summary.data}
-                  dataSource={summary.data?.data_sources?.dsh ?? null}
-                  // 주간 뷰 원천 — deal_mix(week_actual)는 summary 팀 필터를 따르므로 team도
-                  // 함께 넘겨 밴드 캡션이 스코프를 정직하게 표기하게 한다(M/Q/Y는 전사 고정).
-                  dealMix={summary.data?.deal_mix ?? null}
-                  team={team}
-                />
-
-                <DshNumericGrid
-                  breakdown={summary.data?.dsh_breakdown ?? []}
-                  view={dshGridView}
-                  onViewChange={setDshGridView}
-                  loading={summary.loading && !summary.data}
-                />
-
-                <DshMonthlyPace
-                  breakdown={summary.data?.dsh_breakdown ?? []}
-                  loading={summary.loading && !summary.data}
-                />
-
-                <DshTeamGrid
-                  personalManager={scopedManager || undefined}
                   rows={summary.data?.dsh_rows ?? []}
                   loading={summary.loading && !summary.data}
+                  dataSource={summary.data?.data_sources?.dsh ?? null}
+                  // 히어로 "주" 원천 — deal_mix(week_actual)는 summary 팀 필터를 따르므로 team도
+                  // 함께 넘겨 캡션이 스코프를 정직하게 표기하게 한다(M/Q/Y는 시트 기준).
+                  dealMix={summary.data?.deal_mix ?? null}
+                  team={team}
+                  personalManager={scopedManager || undefined}
                 />
 
-                <WeeklyCloseSection
-                  selectedMonth={selectedMonth}
-                  captureWeeklySnapshot={captureWeeklySnapshot}
-                  wcSnapshotting={wcSnapshotting}
-                  wcNotice={wcNotice}
-                  wcError={wcError}
-                  wcRuns={wcRuns}
-                  wcBase={wcBase}
-                  setWcBase={setWcBase}
-                  wcHead={wcHead}
-                  setWcHead={setWcHead}
-                  wcLoading={wcLoading}
-                  wcDiff={wcDiff}
+                <DshDetailFolds
+                  numericGrid={
+                    <DshNumericGrid
+                      breakdown={summary.data?.dsh_breakdown ?? []}
+                      view={dshGridView}
+                      onViewChange={setDshGridView}
+                      loading={summary.loading && !summary.data}
+                    />
+                  }
+                  monthlyPace={
+                    <DshMonthlyPace
+                      breakdown={summary.data?.dsh_breakdown ?? []}
+                      loading={summary.loading && !summary.data}
+                    />
+                  }
+                  teamGrid={
+                    <DshTeamGrid
+                      personalManager={scopedManager || undefined}
+                      rows={summary.data?.dsh_rows ?? []}
+                      loading={summary.loading && !summary.data}
+                    />
+                  }
+                  weeklySnapshot={
+                    <WeeklyCloseSection
+                      selectedMonth={selectedMonth}
+                      captureWeeklySnapshot={captureWeeklySnapshot}
+                      wcSnapshotting={wcSnapshotting}
+                      wcNotice={wcNotice}
+                      wcError={wcError}
+                      wcRuns={wcRuns}
+                      wcBase={wcBase}
+                      setWcBase={setWcBase}
+                      wcHead={wcHead}
+                      setWcHead={setWcHead}
+                      wcLoading={wcLoading}
+                      wcDiff={wcDiff}
+                    />
+                  }
+                  weeklyState={{ runs: wcRuns, base: wcBase, head: wcHead, diff: wcDiff, loading: wcLoading, error: wcError }}
                 />
               </div>
             )}
