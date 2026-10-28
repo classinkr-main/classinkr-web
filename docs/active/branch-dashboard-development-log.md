@@ -239,6 +239,11 @@ POST /api/admin/branch/sync   (Authorization: Bearer ADMIN_PW)
 npx tsx --conditions=react-server scripts/run-branch-sync.ts
 ```
 
+- 2026-10-28부터 동기화 쓰기는 `VERCEL_ENV=production`에서만 돈다. 로컬·Preview에서 위 라우트를 부르면 DB를 건드리지 않고
+  `skipped`("운영 환경이 아니라 동기화 쓰기를 건너뜁니다")로 끝난다 — 정말 운영 DB에 써야 하면 그 세션에서만
+  `BRANCH_SYNC_ALLOW_NONPROD_WRITE=1`을 준다(`lib/branch/sync/write-guard.ts`). 어느 환경·배포가 쓴 런인지는
+  `branch_sync_runs.runtime`(`20261028_branch_sync_runs_runtime.sql`)과 `sales_ledger_import_runs.metadata.runtime`에 남는다.
+
 ### 시트 변경 시 체크리스트
 
 1. 탭 추가/삭제 → `lib/branch/parsers/*.ts` 의 RANGE 상수 갱신

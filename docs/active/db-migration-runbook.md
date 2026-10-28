@@ -71,6 +71,9 @@ npm run check:db --  --strict
 - **새 컬럼 기록은 코어 경로와 분리한다.** 미적용 환경에서 주 기능이 죽지 않도록 별도
   `try/catch`로 best-effort 기록한다. 기준 구현:
   [app/api/admin/email/send/route.ts](../../app/api/admin/email/send/route.ts)의 부분 실패 기록.
+  두 번째 기준: [lib/repositories/branch-sync.ts](../../lib/repositories/branch-sync.ts)의 `startSyncRun` —
+  `runtime` 컬럼이 없으면(42703·PGRST204) 컬럼 없이 다시 기록하고 `console.warn`을 남긴다
+  (`20261028_branch_sync_runs_runtime.sql`).
 
 ## 2026-08-18 스키마 드리프트 감사 결과
 
@@ -177,6 +180,21 @@ npm run check:db --  --strict
 | `20261028_hardware_inventory_process.sql` | `hardware_movements` 에 출고 유형·무상 여부·회수 원 출고·CRM 고객·담당/작성 계정·반납 예정일 칸, `hardware_items` 에 물류번호 관리 여부·보고 묶음·정렬 칸을 더하고 정의서 품목 18개를 시드(없는 이름만)한다. 배송 예정 확정 `confirm_hardware_planned_movement_v4`(v3 호출 + 새 칸 복사 + 상태 `설치 완료`). 전부 멱등 | 대시보드는 새 칸 없이 읽는다(폴백). 출고 유형·회수 연결·물류번호 직접 선택 저장이 실패하고, 확정은 v3 로 떨어져 확정 행에 유형·고객·담당이 빠진다 | `npm run check:db` 의 `hardware_movements`·`hardware_items` 프로브, 또는 `select to_regprocedure('public.confirm_hardware_planned_movement_v4(uuid,text,date,int,jsonb,uuid,text)') is not null;` → `true` |
 
 2026-10-28 적용 기록: 위 두 절의 네 파일(10-22 셋 + 10-28)을 서울 프로젝트에 파일명 순서로 적용했다(Management API query). 적용 전 확인: 품목 18개 이름이 모두 이미 있어 10-28 시드는 새 품목을 만들지 않고 묶음·물류번호 관리 표시만 붙였다. 적용 후 확인: 대사 뷰 `예정` 포함 `true`, `lead` 자동 확정 `true`, `sales_orders` 있음(RLS 켜짐), 확정 v4 있음(anon 실행 권한 없음), 묶음이 붙은 품목 18 · 수량만 관리 9. `check:db` 에 남은 경고는 `compass_meta_submissions_v`(Compass 브리지 뷰, 이 작업과 무관)뿐이다.
+
+### 2026-10-28 시트 동기화 실행 기록 출처(`branch_sync_runs.runtime`) — 서울 프로젝트 미적용
+
+2026-10-28 읽기 전용 감사(10/15~10/19 운영 크론과 운영 밖 수동 런이 활성 REV 임포트를 번갈아 덮은 진동)의 후속.
+쓰기 가드는 코드([lib/branch/sync/write-guard.ts](../../lib/branch/sync/write-guard.ts) — 운영 아니면 건너뜀,
+`BRANCH_SYNC_ALLOW_NONPROD_WRITE=1`로만 예외)이고, 어느 환경·배포가 썼는지 남기는 쪽이 이 컬럼이다.
+
+| 파일 | 하는 일 | 미적용 시 | 확인 |
+| --- | --- | --- | --- |
+| `20261028_branch_sync_runs_runtime.sql` | `branch_sync_runs`에 `runtime jsonb`(`env`·`deploymentId`·`sha`·`region`·`allowedBy`)를 더한다. 컬럼만 추가(NULL 허용), 멱등 | 동기화는 그대로 돈다 — `startSyncRun`이 42703/PGRST204를 보고 컬럼 없이 다시 기록하고 `console.warn`을 남긴다. 어느 환경·배포가 쓴 런인지는 남지 않는다 | `npm run check:db`의 `branch_sync_runs` 프로브, 또는 `select count(*) from information_schema.columns where table_name = 'branch_sync_runs' and column_name = 'runtime';` → `1` |
+
+코드보다 먼저 적용해도, 나중에 적용해도 된다(폴백이 있다). 운영 배포 전에 적용하면 첫 운영 런부터 출처가 남는다.
+같은 작업의 `sales_ledger_import_runs` 쪽은 스키마 변경 없이 기존 컬럼·JSON을 쓴다 — `parser_version`에 캡처 버전
+`rev-native:v2`, `metadata.runtime`에 같은 출처. 활성 포인터 전환(`activateRevImportRun`)은 활성 run의
+`parser_version`이 후보보다 높으면 덮지 않는다(라벨 이전 run은 전부 기본값 `sales-ledger-import-v1` = 가장 낮음).
 
 ## 적용 보류 중인 마이그레이션
 

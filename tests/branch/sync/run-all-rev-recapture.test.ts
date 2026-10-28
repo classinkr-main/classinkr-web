@@ -21,11 +21,15 @@ const HW = { inbound: 1, outbound: 2, stock: 3, sales: 4 }
 
 describe("runAll — REV 장부 임포트 자동 재캡처", () => {
   beforeEach(() => {
+    // 2026-10-28 쓰기 가드(./write-guard) — 운영 런타임이 아니면 runAll 은 아무것도 돌리지 않는다.
+    // 이 파일은 재캡처 동작이 주제라 운영으로 고정한다(가드 자체는 run-all-write-guard.test.ts).
+    vi.stubEnv("VERCEL_ENV", "production")
     syncRev.mockResolvedValue({ rows: 385 })
     syncHw.mockResolvedValue(HW)
   })
   afterEach(() => {
     vi.clearAllMocks()
+    vi.unstubAllEnvs()
   })
 
   it("REV 동기화가 성공하면 트리거 이름으로 재캡처하고 결과를 싣는다", async () => {
@@ -80,7 +84,7 @@ describe("runAll — REV 장부 임포트 자동 재캡처", () => {
 
     await runAll({ trigger: "manual", sources })
 
-    expect(startSyncRun).toHaveBeenCalledWith(recorded, "manual")
+    expect(startSyncRun).toHaveBeenCalledWith(recorded, "manual", expect.objectContaining({ env: "production" }))
   })
 
   it("빈 sources 는 전부로 본다 — 아무것도 안 돌린 런이 성공으로 남지 않는다", async () => {

@@ -13,6 +13,14 @@ for (const line of envText.split(/\r?\n/)) {
 }
 
 async function main() {
+  // 이 스크립트는 .env.local(= 서울 운영 프로젝트 키)로 미러를 직접 교체한다 — 앱의 runAll 과 같은 쓰기 가드를 탄다.
+  // 로컬에서는 BRANCH_SYNC_ALLOW_NONPROD_WRITE=1 을 그 세션에서만 주고 돌린다(AGENTS.md 인프라 현황).
+  const { checkSyncWriteAllowed } = await import("../lib/branch/sync/write-guard.ts" as string)
+  const guard = checkSyncWriteAllowed()
+  if (!guard.allowed) {
+    console.error(`[run-branch-sync] ${guard.outcomeReason}`)
+    process.exit(2)
+  }
   const { google } = await import("googleapis")
   const auth = new google.auth.GoogleAuth({
     credentials: {

@@ -1,29 +1,57 @@
 import "server-only"
 import { revalidateTag, unstable_cache } from "next/cache"
+import type { SyncRuntimeInfo } from "@/lib/branch/sync/write-guard"
+import { isMissingColumnMessage } from "@/lib/db/schema-contract"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 export type SyncSource = "rev" | "hw" | "all" | "insights"
 export type SyncTrigger = "cron" | "manual"
 export type SyncStatus = "running" | "success" | "failed"
 
+/** branch_sync_runs.runtime(20261028_branch_sync_runs_runtime.sql) — 이 런을 쓴 환경·배포·커밋·리전. */
+export type SyncRunRuntime = SyncRuntimeInfo
+
 export interface SyncRun {
   id: string; started_at: string; finished_at: string | null
   source: SyncSource; trigger: SyncTrigger; status: SyncStatus
   rows_affected: number | null; error: string | null
+  // 컬럼이 없는(마이그레이션 미적용) 환경이나 그 이전 런은 undefined/null.
+  runtime?: SyncRunRuntime | null
 }
 
 export const BRANCH_SYNC_RUNS_CACHE_TAG = "branch-sync-runs"
+export const BRANCH_SYNC_RUNS_RUNTIME_MIGRATION = "supabase/migrations/20261028_branch_sync_runs_runtime.sql"
 
-export async function startSyncRun(source: SyncSource, trigger: SyncTrigger): Promise<string> {
+// PostgREST 가 컬럼 부재로 돌려주는 신호 — insert 는 42703 대신 PGRST204("Could not find the 'runtime'
+// column … in the schema cache")로 올 수 있다. 테이블 부재(42P01)는 여기서 삼키지 않는다.
+function isMissingColumnError(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false
+  if (error.code === "42703" || error.code === "PGRST204") return true
+  return typeof error.message === "string" && isMissingColumnMessage(error.message)
+}
+
+/**
+ * 런 시작 기록. runtime(어느 환경·배포가 쓰는가)은 best-effort 다 — 컬럼이 아직 없는 환경에서는
+ * 컬럼 없이 한 번 더 insert 해서 동기화 자체가 죽지 않게 한다(런북 "새 컬럼 기록은 코어 경로와 분리").
+ * 강등은 무음이 아니라 console.warn 으로 남긴다.
+ */
+export async function startSyncRun(source: SyncSource, trigger: SyncTrigger, runtime?: SyncRunRuntime | null): Promise<string> {
   const sb = createSupabaseAdminClient()
-  const { data, error } = await sb.from("branch_sync_runs")
-    .insert({ source, trigger, status: "running" }).select("id").single()
-  if (error) throw error
+  const base = { source, trigger, status: "running" as const }
+  const insert = (row: Record<string, unknown>) => sb.from("branch_sync_runs").insert(row).select("id").single()
+  let result = await insert(runtime ? { ...base, runtime } : base)
+  if (result.error && runtime && isMissingColumnError(result.error)) {
+    console.warn(
+      `[branch-sync] branch_sync_runs.runtime 컬럼이 없어 출처 없이 기록합니다 — ${BRANCH_SYNC_RUNS_RUNTIME_MIGRATION} 을 적용하세요.`,
+    )
+    result = await insert(base)
+  }
+  if (result.error) throw result.error
   // "지금 동기화가 도는 중"이라는 상태 변화도 getRecentSyncRuns가 즉시 반영해야 한다
   // (summary의 lastSync/lastError가 runs[0] 기준이라, 캐시가 남아 있으면 방금 시작한
   // 런이 아니라 그 이전 완료 런을 계속 보여준다).
   revalidateTag(BRANCH_SYNC_RUNS_CACHE_TAG, "max")
-  return data.id
+  return result.data.id
 }
 export async function finishSyncRun(id: string, patch: { status: SyncStatus; rows_affected?: number; error?: string }): Promise<void> {
   const sb = createSupabaseAdminClient()

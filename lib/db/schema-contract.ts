@@ -191,6 +191,9 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // 하드웨어 재고관리 프로세스(2026-10-28) — 원장·품목 칸 추가, 정의서 품목 시드, 배송 예정 확정 v4.
   // 미적용이면 대시보드는 새 칸 없이 읽고(42703 폴백), 새 규칙(유형·물류번호 직접 선택 등)의 저장만 실패한다.
   "supabase/migrations/20261028_hardware_inventory_process.sql",
+  // 시트 동기화 실행 기록의 출처 컬럼(2026-10-28) — branch_sync_runs.runtime(환경·배포·커밋·리전).
+  // 미적용이어도 startSyncRun 이 컬럼 없이 다시 기록하므로 동기화는 돌고, 출처만 비어 남는다.
+  "supabase/migrations/20261028_branch_sync_runs_runtime.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -931,6 +934,16 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     migration: "supabase/migrations/20261028_hardware_inventory_process.sql",
     severity: "warning",
     impact: "모든 품목을 물류번호 관리 품목으로 보고(액세서리·터치펜도 물류번호 요구) 판매대시보드 고정 행이 비어 보인다.",
+  },
+  {
+    kind: "table",
+    table: "branch_sync_runs",
+    label: "시트 동기화 실행 기록 — 출처 칸(runtime: 환경·배포·커밋·리전)",
+    columns: ["runtime"],
+    migration: "supabase/migrations/20261028_branch_sync_runs_runtime.sql",
+    severity: "warning",
+    impact:
+      "동기화는 그대로 돈다(컬럼 없이 다시 기록). 다만 어느 환경·배포가 쓴 런인지 남지 않아, 운영 밖 쓰기 사고(2026-10-15 활성 임포트 진동)를 사후에 가려낼 수 없다.",
   },
 ]
 

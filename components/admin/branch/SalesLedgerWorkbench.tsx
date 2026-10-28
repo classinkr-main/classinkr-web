@@ -413,6 +413,8 @@ type BranchSyncResponse = {
   revImport?:
     | { status: "inactive" }
     | { status: "captured" | "unchanged"; runId: string; capturedAt: string; lineCount: number }
+    // 캡처는 했지만 활성 run 이 더 높은 캡처 버전이라 포인터를 유지 — runId/capturedAt 은 활성 run.
+    | { status: "kept"; runId: string; capturedAt: string; lineCount: number; reason: string }
   revImportError?: string
 }
 
@@ -761,7 +763,9 @@ export default function SalesLedgerWorkbench({
     setDbImportNotice(
       revImport.status === "captured"
         ? `새 run 캡처됨 · 행 ${revImport.lineCount.toLocaleString("ko-KR")}건`
-        : "시트 변경 없음 — run 유지",
+        : revImport.status === "kept"
+          ? `활성 run 유지 — ${revImport.reason}`
+          : "시트 변경 없음 — run 유지",
     )
   }, [])
 
