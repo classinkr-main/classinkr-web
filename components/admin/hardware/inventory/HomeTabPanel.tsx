@@ -13,9 +13,10 @@ import CrmOrderBacklogSection from "./CrmOrderBacklogSection"
 import HardwareSearchPanel from "./HardwareSearchPanel"
 import HomeQuickRecord from "./HomeQuickRecord"
 import OfficeSamplePoolSection from "./OfficeSamplePoolSection"
+import OrderApprovalSection from "./OrderApprovalSection"
 import PlannedOutboundPanel from "./PlannedOutboundPanel"
 import PlannedOutboundOverview from "./PlannedOutboundOverview"
-import SalesPeriodSummary from "./SalesPeriodSummary"
+import SalesDashboardSection from "./SalesDashboardSection"
 import SampleTrackerSection from "./SampleTrackerSection"
 import SnapshotRestorePanel from "./SnapshotRestorePanel"
 import StockLevelsSection from "./StockLevelsSection"
@@ -31,8 +32,7 @@ interface HomeTabPanelProps {
     cards: ComponentProps<typeof CategoryCardsSection>["categoryCards"]
     etcSummary: ComponentProps<typeof CategoryCardsSection>["etcSummary"]
   }
-  salesPeriodSummary: ComponentProps<typeof SalesPeriodSummary>["summary"]
-  openOutboundDetail: ComponentProps<typeof SalesPeriodSummary>["onOpenDetail"]
+  openOutboundDetail: NonNullable<ComponentProps<typeof SalesDashboardSection>["onOpenDetail"]>
   hardwareSearch: ComponentProps<typeof HardwareSearchPanel>["hardwareSearch"]
   setHardwareSearch: ComponentProps<typeof HardwareSearchPanel>["setHardwareSearch"]
   hardwareSearchResults: ComponentProps<typeof HardwareSearchPanel>["hardwareSearchResults"]
@@ -46,7 +46,9 @@ interface HomeTabPanelProps {
   setMovementsPage: ComponentProps<typeof HardwareSearchPanel>["setMovementsPage"]
   confirmPlannedMovement: ComponentProps<typeof HardwareSearchPanel>["confirmPlannedMovement"]
   plannedConfirmLocked: ComponentProps<typeof HardwareSearchPanel>["plannedConfirmLocked"]
-  canFinalize: ComponentProps<typeof HardwareSearchPanel>["canFinalize"]
+  // 스냅샷 복원은 hardware.finalize 그대로(정의서 §권한 밖).
+  canFinalize: ComponentProps<typeof SnapshotRestorePanel>["canFinalize"]
+  movementButtonState: ComponentProps<typeof PlannedOutboundPanel>["movementButtonState"]
   setCustomerDetail: ComponentProps<typeof HardwareSearchPanel>["setCustomerDetail"]
   plannedMovementQuantity: ComponentProps<typeof PlannedOutboundPanel>["plannedMovementQuantity"]
   plannedStaleGroupCount: ComponentProps<typeof PlannedOutboundPanel>["plannedStaleGroupCount"]
@@ -96,7 +98,6 @@ export default function HomeTabPanel({
   reduceMotion,
   data,
   categoryCards,
-  salesPeriodSummary,
   openOutboundDetail,
   hardwareSearch,
   setHardwareSearch,
@@ -112,6 +113,7 @@ export default function HomeTabPanel({
   confirmPlannedMovement,
   plannedConfirmLocked,
   canFinalize,
+  movementButtonState,
   setCustomerDetail,
   plannedMovementQuantity,
   plannedStaleGroupCount,
@@ -174,6 +176,7 @@ export default function HomeTabPanel({
         stockPagination={stockPagination}
         setStockPage={setStockPage}
         prepareQuickEntry={prepareQuickEntry}
+        onStockChanged={refresh}
         selectedItemId={homeQuickRecord.draft.itemId}
         onSelectItem={itemId => homeQuickRecord.setDraft(current => ({ ...current, itemId }))}
       />
@@ -182,6 +185,9 @@ export default function HomeTabPanel({
 
     <details className="border-t border-[rgba(0,0,0,0.08)] pt-3"><summary className="cursor-pointer text-[13px] font-semibold text-[#615D59]">출고 예정 요약 · {plannedPagination.totalItems}묶음</summary><div className="mt-3 max-w-xl"><PlannedOutboundOverview plannedPagination={plannedPagination} startPlannedEntry={startPlannedEntry} plannedConfirmLocked={plannedConfirmLocked} /></div></details>
 
+    {/* 견적이 승인된 하드웨어 오더 — 승인하면 오더번호와 배송 예정이 생긴다(2026-10-22 연결 로직 S3). */}
+    <OrderApprovalSection onChanged={refresh} stockRows={data?.stock} />
+
     {/* 예정 큐 바로 위 — 등록할 것을 먼저 보고, 그 아래에서 확정한다(입력 가속 P2-1). */}
     <CrmOrderBacklogSection canWrite={canWriteHardware} onRegistered={refresh} />
 
@@ -189,7 +195,7 @@ export default function HomeTabPanel({
       data={data}
       plannedMovementQuantity={plannedMovementQuantity}
       plannedStaleGroupCount={plannedStaleGroupCount}
-      canFinalize={canFinalize}
+      movementButtonState={movementButtonState}
       startPlannedEntry={startPlannedEntry}
       plannedConfirmLocked={plannedConfirmLocked}
       plannedPagination={plannedPagination}
@@ -209,7 +215,8 @@ export default function HomeTabPanel({
       onSelectionCountChange={onPlannedSelectionCountChange}
     />
 
-    <SalesPeriodSummary summary={salesPeriodSummary} onOpenDetail={openOutboundDetail} />
+    {/* 판매대시보드(정의서) — 서버 집계. 원장 응답(data)이 바뀌면 같이 다시 받는다. */}
+    <SalesDashboardSection reloadKey={data} onOpenDetail={openOutboundDetail} />
 
     <HardwareSearchPanel
       hardwareSearch={hardwareSearch}
@@ -225,7 +232,7 @@ export default function HomeTabPanel({
       setMovementsPage={setMovementsPage}
       confirmPlannedMovement={confirmPlannedMovement}
       plannedConfirmLocked={plannedConfirmLocked}
-      canFinalize={canFinalize}
+      movementButtonState={movementButtonState}
       setCustomerDetail={setCustomerDetail}
     />
 
@@ -265,6 +272,7 @@ export default function HomeTabPanel({
       setOutboundPage={setOutboundPage}
       prepareQuickEntry={prepareQuickEntry}
       setDetailId={setDetailId}
+      canManageInventory={data?.viewer?.canManageInventory}
     />
 
     {/* 되돌리기는 사고 대응용 안전망이라 일상 확인 흐름(요약·예정 출고·재고) 아래, 맨 끝에 접어 둔다(#4). */}

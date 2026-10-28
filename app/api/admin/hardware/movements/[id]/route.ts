@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import {
+  readLotAllocations,
+  readOptionalBoolean,
   readOptionalDate,
+  readOptionalEnum,
   readOptionalNonNegativeInt,
   readOptionalNonNegativeNumber,
   readOptionalString,
+  readOptionalUuid,
   readRequestBody,
   readRequiredEnum,
   readRequiredPositiveInt,
@@ -14,11 +18,12 @@ import {
 } from "@/app/api/admin/hardware/_validation"
 import {
   HARDWARE_EDITOR_ADMIN_API_ROLES,
-  HARDWARE_FINALIZE_CAPABILITY,
-  requireAdminCapability,
   requireVerifiedAdminContext,
+  toHardwareActor,
 } from "@/lib/admin-auth"
 import { logAdminAudit } from "@/lib/auth/audit"
+import { HARDWARE_OUTBOUND_TYPES } from "@/lib/hardware/inventory-process"
+import { advanceDealForShippedMovementSafely } from "@/lib/orders/deal-stage"
 import {
   confirmPlannedHardwareMovement,
   HARDWARE_MOVEMENT_TYPES,
@@ -40,15 +45,21 @@ export async function PATCH(
     const body = await readRequestBody(req)
     const action = readRequiredEnum(body, "action", "원본 액션", HARDWARE_MOVEMENT_ACTIONS)
 
-    if (action === "confirm-planned") {
-      const capabilityError = requireAdminCapability(admin, HARDWARE_FINALIZE_CAPABILITY)
-      if (capabilityError) return capabilityError
+    // 권한(갭 문서 §7-2)은 저장소가 기록을 읽고 판정한다 — 배송 예정은 본인 건 또는 입고관리 권한자,
+    // 실현 기록 수정·취소는 입고관리 권한자. 오더 승인·스냅샷 복원만 hardware.finalize 로 남는다.
+    const actorContext = toHardwareActor(admin)
 
+    if (action === "confirm-planned") {
       const movement = await confirmPlannedHardwareMovement(id, {
         occurredAt: readOptionalDate(body, "occurredAt", "출고일"),
         confirmQty: readOptionalNonNegativeInt(body, "confirmQty", "확정 수량"),
         actor: admin.name ?? admin.userId ?? admin.role,
+        actorContext,
+        lotNo: readOptionalString(body, "lotNo", "물류번호"),
+        lotAllocations: readLotAllocations(body),
       })
+      // 오더로 만든 배송 예정이면 그 딜을 설치 단계로 올린다(전진만, 실패해도 확정은 그대로).
+      await advanceDealForShippedMovementSafely(movement)
       await logAdminAudit({
         admin,
         action: "hardware.movement.finalize",
@@ -56,14 +67,13 @@ export async function PATCH(
         targetId: id,
         payload: {
           confirmQty: typeof body.confirmQty === "number" ? body.confirmQty : null,
+          lotNo: movement.lot_no ?? null,
         },
       })
       return NextResponse.json({ movement })
     }
 
     if (action === "update") {
-      // 예정 행 편집은 에디터 업무 — 실현 기록 수정·예정→실현 전환만 finalize 요구(리포에서 판정).
-      const canFinalize = !requireAdminCapability(admin, HARDWARE_FINALIZE_CAPABILITY)
       const movement = await updateHardwareMovement(id, {
         itemId: readOptionalString(body, "itemId", "품목 ID"),
         productName: readRequiredString(body, "productName", "제품명"),
@@ -84,7 +94,12 @@ export async function PATCH(
         importer: readOptionalString(body, "importer", "수입자"),
         serials: readStringArray(body, "serials", "시리얼 번호"),
         createdBy: admin.name ?? admin.userId ?? admin.role,
-      }, { canFinalize })
+        outboundType: readOptionalEnum(body, "outboundType", "출고 유형", HARDWARE_OUTBOUND_TYPES),
+        isFree: readOptionalBoolean(body, "isFree", "무상 여부"),
+        customerId: readOptionalUuid(body, "customerId", "CRM 고객"),
+        ownerUserId: readOptionalUuid(body, "ownerUserId", "담당자 계정"),
+        expectedReturnAt: readOptionalDate(body, "expectedReturnAt", "반납 예정일"),
+      }, { actor: actorContext })
       // 원장 재작성도 확정·취소와 같은 감사 대상 — 무엇이 어떻게 바뀌었는지 최소 페이로드를 남긴다.
       await logAdminAudit({
         admin,
@@ -102,12 +117,10 @@ export async function PATCH(
       return NextResponse.json({ movement })
     }
 
-    const capabilityError = requireAdminCapability(admin, HARDWARE_FINALIZE_CAPABILITY)
-    if (capabilityError) return capabilityError
-
     const movement = await voidHardwareMovement(id, {
       reason: readOptionalString(body, "reason", "취소 사유"),
       actor: admin.name ?? admin.userId ?? admin.role,
+      actorContext,
     })
     await logAdminAudit({
       admin,

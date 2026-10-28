@@ -178,6 +178,7 @@ describe("POST /api/share/quote/[token]/accept — 담당자 알림", () => {
   async function loadRoute(options: {
     emitNotificationEvent?: ReturnType<typeof vi.fn>
     alreadyAcceptedAt?: string | null
+    order?: { status: "pending_approval" | "approved" } | null
   }) {
     vi.resetModules()
 
@@ -215,9 +216,13 @@ describe("POST /api/share/quote/[token]/accept — 담당자 알림", () => {
       createCrmTask: vi.fn().mockResolvedValue({ id: "task_1" }),
       listActiveTasksForDealByType: vi.fn().mockResolvedValue([]),
     }))
+    const ensureSalesOrderForAcceptedQuoteSafely = vi
+      .fn()
+      .mockResolvedValue(options.order ? { order: options.order, created: true } : null)
+    vi.doMock("@/lib/repositories/sales-orders", () => ({ ensureSalesOrderForAcceptedQuoteSafely }))
 
     const route = await import("@/app/api/share/quote/[token]/accept/route")
-    return { route, emitNotificationEvent, ensureQuoteInteractionLog }
+    return { route, emitNotificationEvent, ensureQuoteInteractionLog, ensureSalesOrderForAcceptedQuoteSafely }
   }
 
   it("최초 수락이면 어드민에게 action_required 알림을 보낸다", async () => {
@@ -263,5 +268,38 @@ describe("POST /api/share/quote/[token]/accept — 담당자 알림", () => {
     expect(body.acceptedAt).toBe("2026-08-06T09:05:00.000Z")
 
     await new Promise((resolve) => setTimeout(resolve, 0))
+  })
+
+  it("수락하면 고객 링크 경로로 오더를 만들고, 하드웨어 승인 대기면 알림에 안내를 붙인다", async () => {
+    const { route, emitNotificationEvent, ensureSalesOrderForAcceptedQuoteSafely } = await loadRoute({
+      order: { status: "pending_approval" },
+    })
+
+    const response = await route.POST(buildRequest(), { params: Promise.resolve({ token: "tok123" }) })
+    expect(response.status).toBe(200)
+    expect(ensureSalesOrderForAcceptedQuoteSafely).toHaveBeenCalledWith({
+      quoteDocumentId: DOCUMENT.id,
+      acceptedVia: "customer_link",
+    })
+    expect(emitNotificationEvent.mock.calls[0][0].message).toContain("하드웨어 승인 대기")
+  })
+
+  it("하드웨어가 없어 바로 오더번호가 붙으면 승인 안내를 붙이지 않는다", async () => {
+    const { route, emitNotificationEvent } = await loadRoute({ order: { status: "approved" } })
+
+    await route.POST(buildRequest(), { params: Promise.resolve({ token: "tok123" }) })
+    expect(emitNotificationEvent.mock.calls[0][0].message).not.toContain("하드웨어 승인 대기")
+  })
+
+  it("이미 수락된 견적도 오더를 다시 보장한다(멱등)", async () => {
+    const { route, ensureSalesOrderForAcceptedQuoteSafely } = await loadRoute({
+      alreadyAcceptedAt: "2026-08-05T00:00:00.000Z",
+    })
+
+    await route.POST(buildRequest(), { params: Promise.resolve({ token: "tok123" }) })
+    expect(ensureSalesOrderForAcceptedQuoteSafely).toHaveBeenCalledWith({
+      quoteDocumentId: DOCUMENT.id,
+      acceptedVia: "customer_link",
+    })
   })
 })

@@ -20,6 +20,7 @@ import {
 } from "lucide-react"
 
 import type { AdminListPaginationResult } from "@/lib/admin-list-pagination"
+import type { HardwareOutboundType, HardwareReportGroup } from "@/lib/hardware/inventory-process"
 import { fiscalQuarter } from "@/lib/branch/fiscal"
 // 아래 "export { ... } from" 재수출과 별개로, 이 파일 자체(PRODUCT_FILTER_OPTIONS)가 로컬에서
 // 써야 해서 일반 import도 함께 둔다 — re-export만으로는 이 모듈 스코프에 바인딩이 생기지 않는다.
@@ -36,6 +37,10 @@ export interface HardwareItem {
   reorder_point: number
   lead_time_days: number
   source_aliases: string[]
+  // 재고관리 프로세스 칸 — 구응답에는 없다(lot_tracked 없음 = 물류번호 관리 품목으로 본다).
+  lot_tracked?: boolean
+  report_group?: HardwareReportGroup | null
+  sort_order?: number | null
 }
 
 export interface HardwareMovement {
@@ -72,6 +77,17 @@ export interface HardwareMovement {
   void_reason?: string | null
   converted_from_movement_id: string | null
   converted_to_movement_id: string | null
+  // 재고관리 프로세스 칸(20261028_hardware_inventory_process.sql) — 마이그레이션 전 응답에는 없다.
+  // 계약: docs/active/hardware-inventory-process-gap-2026-10-28.md §7.
+  outbound_type?: HardwareOutboundType | null
+  /** 서버가 outbound_type → 시트 유형·메모 순으로 정한 유형(resolveOutboundType). */
+  outbound_type_resolved?: HardwareOutboundType | null
+  is_free?: boolean | null
+  return_of_movement_id?: string | null
+  customer_id?: string | null
+  owner_user_id?: string | null
+  created_by_user_id?: string | null
+  expected_return_at?: string | null
 }
 
 export interface HardwareStockRow {
@@ -95,6 +111,8 @@ export interface HardwareStockRow {
 
 export interface HardwareAlert {
   id: string
+  // 서버 buildHardwareStockAlerts 의 종류 — 구응답에는 없다(id 접두어 check-·low-·order-·planned-).
+  kind?: "ledger_check" | "negative_available" | "low" | "order" | "planned"
   severity: "critical" | "warning" | "info"
   // 알림이 가리키는 품목의 id — 알림 카드의 QuickMoveButton이 prepareQuickEntry(itemId, presetKey)로
   // 바로 빠른 기록 시트를 여는 데 쓴다.
@@ -133,6 +151,8 @@ export interface HardwareDashboard {
     rows_imported: number | null
     rows_skipped: number | null
     error: string | null
+    /** 매시간 자동 가져오기가 시트 변경 없음을 마지막으로 확인한 시각. optional은 구버전 응답 호환. */
+    last_checked_at?: string | null
   } | null
   // 감사(2026-09-07 #1) — 시트 이관 RPC가 구버전(20260630 마이그레이션 미적용)이면 금액 컬럼이
   // raw JSON 백업에서 복구된다. recoveredFromRawCount > 0이면 그 상태가 지금도 살아 있다는 뜻.
@@ -150,6 +170,11 @@ export interface HardwareDashboard {
     // 비교하는 정본. 세션에 이름이 없으면(레거시 세션 등) null — 그 경우 "내 담당"은 아무 것도
     // 매칭하지 않는다(담당자 배정된 모든 건을 보여주던 예전 버그로 되돌아가지 않기 위함).
     name: string | null
+    // 입고관리 권한자(hardware.inbound | finalize | 슈퍼 어드민) — 입고·조정, 남의 출고·실현 기록 수정·취소.
+    // 구응답에는 없다(undefined = 서버 게이트만 믿고 열어 둔다). lib/hardware/hardware-viewer.ts 가 정본.
+    canManageInventory?: boolean
+    // 로그인 계정 id — 본인 건 판정(isOwnMovement). 레거시 세션은 null.
+    userId?: string | null
   }
 }
 
@@ -194,6 +219,14 @@ export interface HardwareMovementDraft {
   // UI 판별 전용 — 출고 라인이 실제(false)/예정(true)인지. 서버 전송 직전 deriveStatus로
   // status에 반영하고 payload에서는 제외한다(서버 status 규약은 status 문자열만 본다).
   isPlanned?: boolean
+  // 재고관리 프로세스 칸(계약 §7-3) — 어떤 칸을 싣는지는 outbound-v2-model processDraftFields 가 정한다.
+  // 옛 바구니(보관된 초안)에는 없다.
+  outboundType?: HardwareOutboundType
+  customerId?: string
+  expectedReturnAt?: string
+  ownerUserId?: string
+  isFree?: boolean
+  adjustDirection?: "increase" | "decrease"
 }
 
 export type HardwareTab = "home" | "entry" | "history"
@@ -242,7 +275,8 @@ export const ENTRY_PRESETS: Array<{
   // 샘플 모델(사용자 확정): 샘플 총량 = 사무실(남은 샘플) + 샘플(나간 샘플).
   //   샘플 배정(창고→사무실)으로 판매 재고를 샘플 재고로 전환 → 샘플 대여(사무실→샘플, 없으면 창고→샘플)로 내보냄 →
   //   샘플 반환(샘플→사무실)으로 회수. return은 repository에서 from −qty / to +qty라 위치 조합만으로 표현된다.
-  { key: "sale", movementType: "outbound", label: "판매 출고", description: "고객 판매 완료", icon: ArrowUpFromLine, from: "창고", to: "", status: "출고" },
+  // 고객 출고 진행 상태는 정의서 고정값(배송 예정 | 설치 완료) — 저장 직전 deriveStatus 도 같은 값을 만든다.
+  { key: "sale", movementType: "outbound", label: "판매 출고", description: "고객 설치 완료", icon: ArrowUpFromLine, from: "창고", to: "", status: "설치 완료" },
   { key: "planned", movementType: "outbound", label: "배송 예정", description: "가용에서 미리 차감", icon: Clock3, from: "창고", to: "", status: "배송 예정" },
   { key: "sample", movementType: "outbound", label: "샘플 대여", description: "사무실 샘플을 대여·데모로 반출", icon: ArrowUpFromLine, from: "사무실", to: "샘플", status: "샘플/대여" },
   { key: "sampleReturn", movementType: "return", label: "샘플 반환", description: "대여 샘플을 사무실로 회수", icon: RotateCcw, from: "샘플", to: "사무실", status: "샘플 반환" },
@@ -308,6 +342,10 @@ export function quickCartLineKey(draft: HardwareMovementDraft) {
     draft.storageLocation,
     draft.importer,
     draft.serials.join(""),
+    draft.outboundType ?? "",
+    draft.customerId ?? "",
+    draft.expectedReturnAt ?? "",
+    draft.ownerUserId ?? "",
   ].join(" ")
 }
 
@@ -350,6 +388,9 @@ export const SALE_TYPE_META: Record<OutboundSaleType, { label: string; tone: str
 
 export function outboundSaleType(movement: HardwareMovement): OutboundSaleType | null {
   if (movement.movement_type !== "outbound") return null
+  // 서버가 정한 유형(칸 → 시트 유형 열·메모 추정)이 있으면 그것이 정본이다(resolveOutboundType).
+  const resolved = movement.outbound_type_resolved ?? movement.outbound_type
+  if (resolved) return resolved
   const token = (movement.memo ?? "").split("·")[0].trim().toLowerCase()
   if (token === "a/s" || token === "as") return "as"
   if (token === "promotion") return "promotion"
@@ -677,13 +718,15 @@ export function formatAvg(value: number) {
 }
 
 export function statusCopy(row: HardwareStockRow) {
+  // 가용 음수는 판촉 라인(low 꺼짐)에서도 실신호다 — 서버 negative_available 알림과 같은 판정.
+  if (row.availableStock < 0) return "가용 음수"
   if (row.low) return "부족"
   if (row.orderRecommended) return "주문 검토"
   return "정상"
 }
 
 export function statusClass(row: HardwareStockRow) {
-  if (row.low) return "bg-[#FCE9E9] text-[#B43E3E]"
+  if (row.availableStock < 0 || row.low) return "bg-[#FCE9E9] text-[#B43E3E]"
   if (row.orderRecommended) return "bg-[#FBF1E0] text-[#A8741A]"
   return "bg-[#ECFDF5] text-[#084734]"
 }

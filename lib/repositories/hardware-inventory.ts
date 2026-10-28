@@ -3,6 +3,26 @@ import "server-only"
 import { createHash } from "crypto"
 import { revalidateTag, unstable_cache } from "next/cache"
 
+import {
+  assertLotSelectable,
+  canActOnMovement,
+  isHardwareOutboundType,
+  nextLotNo,
+  resolveOutboundType,
+  returnableQuantity,
+  type HardwareActor,
+  type HardwareOutboundType,
+  type HardwareReportGroup,
+} from "@/lib/hardware/inventory-process"
+import {
+  lotCompareKey,
+  MovementRuleError,
+  prepareProcessLine,
+  type HardwareAdjustDirection,
+  type HardwareLocationKind,
+  type ProcessLineInput,
+  type ReturnOriginal,
+} from "@/lib/hardware/movement-rules"
 import { isPromotedProduct } from "@/lib/hardware/product"
 import { normalizedAccountKey } from "@/lib/branch/account-key"
 import {
@@ -14,6 +34,7 @@ import {
   type HwOutbound,
   type HwStock,
 } from "@/lib/repositories/branch-hw"
+import { linkSheetOutboundToOrders, type SheetOrderLinkResult } from "@/lib/orders/sheet-order-sync"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 export const HARDWARE_INVENTORY_CACHE_TAG = "hardware-inventory"
@@ -40,6 +61,12 @@ export interface HardwareItem {
   source_aliases: string[]
   created_at: string
   updated_at: string
+  // 20261028_hardware_inventory_process.sql — 적용 전 DB 에는 없다(undefined).
+  /** 물류번호로 관리하는 품목인가. 액세서리·터치펜은 false(수량만). 칸이 없으면 true 로 본다. */
+  lot_tracked?: boolean
+  /** 판매대시보드 묶음(board·camera·stand·accessory·pen). */
+  report_group?: HardwareReportGroup | null
+  sort_order?: number | null
 }
 
 export interface HardwareMovement {
@@ -74,6 +101,21 @@ export interface HardwareMovement {
   void_reason: string | null
   converted_from_movement_id: string | null
   converted_to_movement_id: string | null
+  // 20261028_hardware_inventory_process.sql — 적용 전 DB 에는 없다(undefined). 계약: 갭 문서 §7.
+  /** 출고 유형(출고·회수). 시트 행은 비어 있다 — resolveOutboundType 으로 추정한다. */
+  outbound_type?: HardwareOutboundType | null
+  /** 입고 무상 여부. */
+  is_free?: boolean | null
+  /** 회수가 가리키는 원 출고 건. */
+  return_of_movement_id?: string | null
+  /** 출고 클라이언트(CRM customers.id). to_location 에는 표시 이름. */
+  customer_id?: string | null
+  /** 담당자 계정 — 본인 건 판정. */
+  owner_user_id?: string | null
+  /** 기록을 만든 계정. */
+  created_by_user_id?: string | null
+  /** 샘플 반납 예정일(YYYY-MM-DD). */
+  expected_return_at?: string | null
 }
 
 // 대시보드 원장 읽기 컬럼(T5-A, docs/active/supabase-optimization-execution-plan-2026-09-02.md).
@@ -81,6 +123,11 @@ export interface HardwareMovement {
 // select에서 제외한다. raw는 서버 recoverMoneyFromRaw용으로 읽되 응답 직전 { crmLink }로 축소한다.
 export const HARDWARE_MOVEMENT_LEDGER_COLUMNS =
   "id,item_id,product_name,movement_type,quantity,occurred_at,from_location,to_location,owner,status,reference_no,memo,serials,lot_no,unit_price,amount_usd,amount_cny,storage_location,importer,source,raw,created_at,voided_at,converted_from_movement_id,converted_to_movement_id"
+
+// 재고관리 프로세스 칸(20261028_hardware_inventory_process.sql). 마이그레이션 전 DB 에서는 이 칸을 고르면
+// 42703 으로 대시보드 전체가 죽는다 — 읽기는 먼저 이 목록으로 시도하고, 칸이 없으면 위 목록으로 다시 읽는다.
+export const HARDWARE_MOVEMENT_PROCESS_COLUMNS =
+  "outbound_type,is_free,return_of_movement_id,customer_id,owner_user_id,created_by_user_id,expected_return_at"
 
 export type HardwareMovementLedgerRow = Omit<
   HardwareMovement,
@@ -91,13 +138,19 @@ export type HardwareMovementLedgerRow = Omit<
 export type HardwareMovementView = Omit<HardwareMovementLedgerRow, "raw"> & {
   raw: { crmLink: Record<string, unknown> } | null
   planned: boolean
+  /** outbound_type 이 비면 시트 유형·메모로 추정한 값(resolveOutboundType). 출고·회수 외에는 null. */
+  outbound_type_resolved: HardwareOutboundType | null
 }
 
 // 대시보드 응답용 item — 클라이언트 미사용 sku/active/created_at/updated_at 제외.
 export type HardwareItemView = Pick<
   HardwareItem,
   "id" | "name" | "category" | "reorder_point" | "lead_time_days" | "source_aliases"
->
+> & {
+  lot_tracked: boolean
+  report_group: HardwareReportGroup | null
+  sort_order: number | null
+}
 
 export interface CreateHardwareMovementInput {
   itemId?: string
@@ -120,9 +173,35 @@ export interface CreateHardwareMovementInput {
   importer?: string | null
   createdBy?: string | null
   raw?: Record<string, unknown>
+  // 재고관리 프로세스(갭 문서 §7-3). 요청자 규칙은 lib/hardware/movement-rules.ts.
+  outboundType?: HardwareOutboundType | null
+  isFree?: boolean | null
+  returnOfMovementId?: string | null
+  customerId?: string | null
+  ownerUserId?: string | null
+  createdByUserId?: string | null
+  expectedReturnAt?: string | null
+  adjustDirection?: HardwareAdjustDirection | null
+  /** 고객사 출고 한 줄을 여러 물류번호로 나눌 때(요청자 경로, 물류번호 관리 품목). */
+  lotAllocations?: ReadonlyArray<{ lotNo: string; quantity: number }> | null
 }
 
-type HardwareMovementInsertRow = {
+/** 쓰기 요청자. 없으면 시스템 경로(오더 승인 배송 예정 등) — 프로세스 규칙 검사를 하지 않는다. */
+export interface HardwareWriteOptions {
+  actor?: HardwareActor | null
+}
+
+type HardwareMovementProcessInsertFields = {
+  outbound_type?: HardwareOutboundType
+  is_free?: boolean
+  return_of_movement_id?: string
+  customer_id?: string
+  owner_user_id?: string
+  created_by_user_id?: string
+  expected_return_at?: string
+}
+
+type HardwareMovementInsertRow = HardwareMovementProcessInsertFields & {
   item_id: string
   product_name: string
   movement_type: HardwareMovementType
@@ -154,6 +233,10 @@ export interface UpdateHardwareItemInput {
   sku?: string | null
   sourceAliases?: string[]
   active?: boolean
+  // 재고관리 프로세스 품목 설정(20261028).
+  lotTracked?: boolean
+  reportGroup?: HardwareReportGroup | null
+  sortOrder?: number | null
 }
 
 export interface HardwareStockRow {
@@ -175,8 +258,19 @@ export interface HardwareStockRow {
   lotBalances: Array<{ lot: string; quantity: number }>
 }
 
+/**
+ * 재고 알림 종류(정의서 §재고현황 — 갭 문서 §3-3).
+ * - ledger_check: 창고 음수(원장 이상)
+ * - negative_available: 가용 음수(창고는 0 이상인데 배송 예정이 창고를 넘음)
+ * - low: 가용 < 최소재고(같으면 알리지 않는다)
+ * - order: 30일 추세 기준 주문 검토
+ * - planned: 배송 예정이 가용에서 빠지는 중(안내)
+ */
+export type HardwareAlertKind = "ledger_check" | "negative_available" | "low" | "order" | "planned"
+
 export interface HardwareAlert {
   id: string
+  kind?: HardwareAlertKind
   severity: "critical" | "warning" | "info"
   // 알림이 가리키는 품목의 id — 알림 카드의 원탭 조치(QuickMoveButton)가 prepareQuickEntry로
   // 바로 시트를 여는 데 쓴다. id(`${prefix}-${itemId}`)에서 역파싱하지 않고 필드로 직접 싣는다.
@@ -221,6 +315,8 @@ export interface HardwareDashboard {
     rows_imported: number | null
     rows_skipped: number | null
     error: string | null
+    /** 매시간 자동 가져오기가 시트 변경 없음을 마지막으로 확인한 시각. 확인 기록이 없으면 null/없음. */
+    last_checked_at?: string | null
   } | null
   // 감사(2026-09-07 #1): replace_hardware_sheet_import RPC가 구버전(20260630 마이그레이션 미적용)이면
   // amount_usd/amount_cny/unit_price/importer 컬럼을 못 채우고 recoverMoneyFromRaw가 raw JSON에서
@@ -244,6 +340,8 @@ export interface HardwareSheetImportResult {
   sheetWinsKept: number
   /** 정리 자체가 실패했을 때의 문구. 가져오기는 이미 성공했다. */
   sheetWinsError: string | null
+  /** 오더번호가 적힌 시트 출고 줄 ↔ 오더 연결(연결 로직 §4-4) — 대체된 앱 기록 수·설치 단계로 올린 딜 수. */
+  orderLink?: SheetOrderLinkResult
 }
 
 const DEFAULT_STOCK_LOCATION = "창고"
@@ -276,7 +374,7 @@ const OFFICE_LOCATION_PATTERN = /사무실|office|클래스인|class\s*in/i
 const REPAIR_LOCATION_PATTERN =
   /repair|a\/s|(?:^|[^a-z])as(?:\s*센터)?(?:$|[^a-z])|수리(?!\s*(?:학원|논술|영역|수학|과학|탐구|교육|아카데미))/i
 
-function normalizeLocationName(value: unknown): string | null {
+export function normalizeLocationName(value: unknown): string | null {
   const text = cleanString(value)
   if (!text) return null
   if (/샘플|대여|데모|demo|sample/i.test(text)) return DEFAULT_SAMPLE_LOCATION
@@ -290,7 +388,7 @@ function normalizeLocationName(value: unknown): string | null {
   return text
 }
 
-function classifyDestination(value: unknown): "warehouse" | "sample" | "office" | "repair" | "customer" | "other" {
+export function classifyDestination(value: unknown): "warehouse" | "sample" | "office" | "repair" | "customer" | "other" {
   const location = normalizeLocationName(value)
   if (!location) return "other"
   if (location === DEFAULT_STOCK_LOCATION) return "warehouse"
@@ -469,12 +567,37 @@ function isMoneyRecoveredFromRaw(
   )
 }
 
+export function isMissingColumnError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false
+  const { code, message } = error as { code?: unknown; message?: unknown }
+  if (code === "42703" || code === "PGRST204") return true
+  return typeof message === "string" && /column .* does not exist|could not find the .* column/i.test(message)
+}
+
+let processColumnsMissing = false
+
+async function listLedgerRowsWithProcessColumns(): Promise<HardwareMovementLedgerRow[]> {
+  if (!processColumnsMissing) {
+    try {
+      return await listAll<HardwareMovementLedgerRow>(
+        "hardware_movements",
+        `${HARDWARE_MOVEMENT_LEDGER_COLUMNS},${HARDWARE_MOVEMENT_PROCESS_COLUMNS}`
+      )
+    } catch (error) {
+      if (!isMissingColumnError(error)) throw error
+      // 마이그레이션 전 — 이 프로세스에서는 다시 시도하지 않는다(적용 후 재배포·재시작이면 다시 읽는다).
+      processColumnsMissing = true
+    }
+  }
+  return listAll<HardwareMovementLedgerRow>("hardware_movements", HARDWARE_MOVEMENT_LEDGER_COLUMNS)
+}
+
 // 시트 임포트 경로는 listCurrentSheetImportMovements가 따로 전량(select "*")을 읽으므로 무관하다.
 async function listAllHardwareMovements(): Promise<{
   rows: HardwareMovementLedgerRow[]
   moneyRecoveredFromRawCount: number
 }> {
-  const rows = await listAll<HardwareMovementLedgerRow>("hardware_movements", HARDWARE_MOVEMENT_LEDGER_COLUMNS)
+  const rows = await listLedgerRowsWithProcessColumns()
   // recoveredFromRawCount는 병합 전(raw 컬럼 원본) 기준으로 세야 한다 — recoverMoneyFromRaw가
   // 이미 병합한 뒤에는 "컬럼이 비어 있었는지"를 되돌릴 수 없다(값이 있으면 원래 컬럼인지 복구인지
   // 구분 불가).
@@ -547,7 +670,8 @@ async function getLatestImportRun(): Promise<HardwareDashboard["importRun"]> {
   const sb = createSupabaseAdminClient()
   const { data, error } = await sb
     .from("hardware_import_runs")
-    .select("id,status,started_at,finished_at,rows_imported,rows_skipped,error")
+    // last_checked_at: 매시간 자동 가져오기가 "시트 변경 없음"을 확인한 마지막 시각(raw에만 있다).
+    .select("id,status,started_at,finished_at,rows_imported,rows_skipped,error,last_checked_at:raw->>last_checked_at")
     .eq("source", "branch_hw_sheet")
     .order("started_at", { ascending: false })
     .limit(1)
@@ -846,9 +970,19 @@ function withAutoLotRaw(
   }
 }
 
-function allocationReferenceNo(input: CreateHardwareMovementInput, index: number, allocationCount: number, lotNo: string | null) {
+function allocationReferenceNo(
+  input: CreateHardwareMovementInput,
+  index: number,
+  allocationCount: number,
+  lotNo: string | null,
+  options: { suffixPlanned?: boolean } = {}
+) {
   const referenceNo = cleanString(input.referenceNo)
-  if (!referenceNo || allocationCount <= 1 || index === 0 || isPlannedStatus(input.status)) return referenceNo
+  if (!referenceNo || allocationCount <= 1 || index === 0) return referenceNo
+  // 배송 예정은 예전에 나눠 만들 일이 없어 참조를 그대로 뒀다. 물류번호를 나눠 고른 예정(suffixPlanned)은
+  // 실제 출고와 같이 둘째 줄부터 접미사를 단다 — 같은 CRM 참조 행이 둘이면 중복 차단과 확정 함수의 "이미
+  // 실제 출고로 반영" 검사가 형제 행을 같은 오더로 본다.
+  if (isPlannedStatus(input.status) && !options.suffixPlanned) return referenceNo
   const lotSuffix = cleanString(lotNo)?.replace(/[^\p{L}\p{N}_-]+/gu, "-") || `split-${index + 1}`
   return `${referenceNo}:lot:${lotSuffix}`
 }
@@ -891,7 +1025,45 @@ function buildMovementInsertRow(
     ...(options.convertedFromMovementId
       ? { converted_from_movement_id: options.convertedFromMovementId }
       : {}),
+    ...processInsertFields(input),
   }
+}
+
+/**
+ * 재고관리 프로세스 칸 — 값이 있는 칸만 싣는다. 마이그레이션 전 DB 에 빈 칸을 보내 저장 전체가
+ * 실패하지 않게 하기 위해서다(값이 있는데 칸이 없으면 insertHardwareMovementRows 가 칸을 빼고 다시 쓴다).
+ */
+function processInsertFields(input: CreateHardwareMovementInput): HardwareMovementProcessInsertFields {
+  const fields: HardwareMovementProcessInsertFields = {}
+  if (isHardwareOutboundType(input.outboundType)) fields.outbound_type = input.outboundType
+  if (typeof input.isFree === "boolean") fields.is_free = input.isFree
+  const returnOf = cleanString(input.returnOfMovementId)
+  if (returnOf) fields.return_of_movement_id = returnOf
+  const customerId = cleanString(input.customerId)
+  if (customerId) fields.customer_id = customerId
+  const ownerUserId = cleanString(input.ownerUserId)
+  if (ownerUserId) fields.owner_user_id = ownerUserId
+  const createdByUserId = cleanString(input.createdByUserId)
+  if (createdByUserId) fields.created_by_user_id = createdByUserId
+  const expectedReturnAt = cleanString(input.expectedReturnAt)
+  if (expectedReturnAt) fields.expected_return_at = expectedReturnAt
+  return fields
+}
+
+const PROCESS_INSERT_KEYS = [
+  "outbound_type",
+  "is_free",
+  "return_of_movement_id",
+  "customer_id",
+  "owner_user_id",
+  "created_by_user_id",
+  "expected_return_at",
+] as const
+
+function withoutProcessFields<T extends Record<string, unknown>>(row: T): T {
+  const copy = { ...row }
+  for (const key of PROCESS_INSERT_KEYS) delete (copy as Record<string, unknown>)[key]
+  return copy
 }
 
 async function insertHardwareMovementRows(rows: HardwareMovementInsertRow[]): Promise<HardwareMovement[]> {
@@ -902,7 +1074,16 @@ async function insertHardwareMovementRows(rows: HardwareMovementInsertRow[]): Pr
     .from("hardware_movements")
     .insert(rows)
     .select("*")
-  if (error) throw error
+  if (error) {
+    // 마이그레이션(20261028) 전 DB — 새 칸만 빼고 다시 쓴다. 기록 자체를 못 남기는 것보다 낫다.
+    if (!isMissingColumnError(error)) throw error
+    const retry = await sb
+      .from("hardware_movements")
+      .insert(rows.map(withoutProcessFields))
+      .select("*")
+    if (retry.error) throw retry.error
+    return (retry.data ?? []) as HardwareMovement[]
+  }
 
   return (data ?? []) as HardwareMovement[]
 }
@@ -1000,7 +1181,7 @@ function buildMovementInsertRowsFromAllocations(
   itemId: string,
   productName: string,
   allocations: Array<{ lotNo: string | null; quantity: number; autoAssigned: boolean }>,
-  options: { convertedFromMovementId?: string } = {}
+  options: { convertedFromMovementId?: string; suffixPlanned?: boolean } = {}
 ): HardwareMovementInsertRow[] {
   const serials = input.serials ?? []
 
@@ -1017,7 +1198,9 @@ function buildMovementInsertRowsFromAllocations(
       quantity: allocation.quantity,
       lotNo: allocation.lotNo,
       serials: allocationSerials,
-      referenceNo: allocationReferenceNo(input, allocationIndex, allocations.length, allocation.lotNo),
+      referenceNo: allocationReferenceNo(input, allocationIndex, allocations.length, allocation.lotNo, {
+        suffixPlanned: options.suffixPlanned,
+      }),
       raw: withAutoLotRaw(input.raw, allocation, input.quantity, allocations.length),
       convertedFromMovementId: options.convertedFromMovementId,
     })
@@ -1028,8 +1211,22 @@ async function buildMovementInsertRows(
   input: CreateHardwareMovementInput,
   itemId: string,
   productName: string,
-  options: { excludeMovementIds?: string[]; convertedFromMovementId?: string } = {}
+  options: { excludeMovementIds?: string[]; convertedFromMovementId?: string; strictLot?: boolean } = {}
 ): Promise<HardwareMovementInsertRow[]> {
+  if (options.strictLot) {
+    const excluded = new Set(options.excludeMovementIds ?? [])
+    const ledger = await loadItemLotLedgerRows(itemId)
+    const lots = resolveHardwareLotBalances(ledger.filter((movement) => !excluded.has(movement.id))).lots
+      .map((lot) => ({ lotNo: lot.lot, quantity: lot.quantity }))
+    return buildMovementInsertRowsFromAllocations(
+      input,
+      itemId,
+      productName,
+      strictLotAllocation(lots, { productName, quantity: input.quantity, lotNo: input.lotNo, lotAllocations: input.lotAllocations }),
+      { ...options, suffixPlanned: true }
+    )
+  }
+
   const allocations = movementNeedsLotAllocation(input)
     ? await allocateOutboundLots({
         itemId,
@@ -1063,15 +1260,225 @@ async function resolveHardwareMovementTarget(input: CreateHardwareMovementInput)
   return { itemId, productName }
 }
 
-export async function createHardwareMovements(inputs: CreateHardwareMovementInput[]): Promise<HardwareMovement[]> {
-  if (inputs.length === 0) return []
-  if (inputs.length > 50) throw new Error("한 번에 저장할 수 있는 하드웨어 기록은 최대 50건입니다.")
+
+// ── 재고관리 프로세스 규칙 적용(갭 문서 §7) ───────────────────────────────────────
+// 규칙 자체는 lib/hardware/movement-rules.ts(순수). 여기서는 규칙이 볼 맥락을 한 번에 읽어 넘기고,
+// 물류번호 잔여 초과(strictLot)를 해석기 잔여로 막는다.
+
+interface ProcessLookups {
+  customerNames: Map<string, string>
+  returnOriginals: Map<string, ReturnOriginal>
+  /** 지금까지 쓰인 물류번호(비교 키). 입고 물류번호 순번 검사가 필요할 때만 읽는다. */
+  knownLots: Set<string> | null
+}
+
+async function loadHardwareItemsByIds(ids: readonly string[]): Promise<Map<string, HardwareItem>> {
+  const unique = Array.from(new Set(ids.filter(Boolean)))
+  if (unique.length === 0) return new Map()
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb.from("hardware_items").select("*").in("id", unique)
+  if (error) throw error
+  return new Map(((data ?? []) as HardwareItem[]).map((item) => [item.id, item]))
+}
+
+/** 품목의 물류번호 관리 여부. 칸이 없는 DB(마이그레이션 전)는 null — 예전 동작을 유지한다. */
+function itemLotTracked(item: HardwareItem | undefined): boolean | null {
+  if (!item || typeof item.lot_tracked !== "boolean") return null
+  return item.lot_tracked
+}
+
+async function loadCustomerNames(ids: readonly string[]): Promise<Map<string, string>> {
+  const unique = Array.from(new Set(ids.filter(Boolean)))
+  if (unique.length === 0) return new Map()
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb.from("customers").select("id,name").in("id", unique)
+  if (error) throw error
+  return new Map(((data ?? []) as Array<{ id: string; name: string | null }>)
+    .filter((row) => cleanString(row.name))
+    .map((row) => [row.id, cleanString(row.name) as string]))
+}
+
+/** 회수 원 출고와 이미 회수된 수량. */
+async function loadReturnOriginals(ids: readonly string[]): Promise<Map<string, ReturnOriginal>> {
+  const unique = Array.from(new Set(ids.filter(Boolean)))
+  if (unique.length === 0) return new Map()
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb.from("hardware_movements").select("*").in("id", unique)
+  if (error) throw error
+  const { data: returns, error: returnsError } = await sb
+    .from("hardware_movements")
+    .select("return_of_movement_id,quantity")
+    .in("return_of_movement_id", unique)
+    .is("voided_at", null)
+  if (returnsError) throw returnsError
+
+  const returnedById = new Map<string, number[]>()
+  for (const row of (returns ?? []) as Array<{ return_of_movement_id: string | null; quantity: number }>) {
+    if (!row.return_of_movement_id) continue
+    const bucket = returnedById.get(row.return_of_movement_id) ?? []
+    bucket.push(Number(row.quantity) || 0)
+    returnedById.set(row.return_of_movement_id, bucket)
+  }
+
+  return new Map(((data ?? []) as HardwareMovement[]).map((row) => [row.id, {
+    id: row.id,
+    item_id: row.item_id,
+    product_name: row.product_name,
+    movement_type: row.movement_type,
+    quantity: row.quantity,
+    status: row.status,
+    voided_at: row.voided_at,
+    to_location: row.to_location,
+    lotKey: movementLotKey(row),
+    customer_id: row.customer_id ?? null,
+    outboundType: resolveOutboundType(row),
+    returnedQuantities: returnedById.get(row.id) ?? [],
+  }]))
+}
+
+/** 지금까지 쓰인 물류번호(입고 기준, 취소 제외) — 비교 키(대문자·공백 제거). */
+async function loadKnownLotKeys(): Promise<Set<string>> {
+  const sb = createSupabaseAdminClient()
+  const rows = await fetchAllSupabaseRows<Pick<HardwareMovement, "id" | "lot_no" | "source" | "reference_no">>((afterId, limit) => {
+    let query = sb
+      .from("hardware_movements")
+      .select("id,lot_no,source,reference_no")
+      .eq("movement_type", "inbound")
+      .is("voided_at", null)
+      .order("id", { ascending: true })
+      .limit(limit)
+    if (afterId) query = query.gt("id", afterId)
+    return query
+  })
+  const keys = new Set<string>()
+  for (const row of rows) {
+    const key = lotCompareKey(movementLotKey(row))
+    if (key) keys.add(key)
+  }
+  return keys
+}
+
+async function loadProcessLookups(
+  inputs: readonly CreateHardwareMovementInput[],
+  actor: HardwareActor | null
+): Promise<ProcessLookups> {
+  const customerIds = inputs.map((input) => cleanString(input.customerId)).filter((id): id is string => Boolean(id))
+  const returnIds = inputs.map((input) => cleanString(input.returnOfMovementId)).filter((id): id is string => Boolean(id))
+  const needLots = Boolean(actor) && inputs.some((input) => input.movementType === "inbound")
+  const [customerNames, returnOriginals, knownLots] = await Promise.all([
+    loadCustomerNames(customerIds),
+    loadReturnOriginals(returnIds),
+    needLots ? loadKnownLotKeys() : Promise.resolve(null),
+  ])
+  return { customerNames, returnOriginals, knownLots }
+}
+
+/** 회수 줄은 품목을 원 출고에서 가져온다 — 품목 해석 전에 이름·id 를 맞춘다. */
+function seedFromReturnOriginal(input: CreateHardwareMovementInput, lookups: ProcessLookups): CreateHardwareMovementInput {
+  if (input.movementType !== "return") return input
+  const original = lookups.returnOriginals.get(cleanString(input.returnOfMovementId) ?? "")
+  if (!original) return input
+  return { ...input, itemId: original.item_id, productName: original.product_name }
+}
+
+function toProcessLineInput(input: CreateHardwareMovementInput): ProcessLineInput {
+  return {
+    itemId: input.itemId,
+    productName: input.productName,
+    movementType: input.movementType,
+    quantity: input.quantity,
+    occurredAt: input.occurredAt,
+    fromLocation: input.fromLocation,
+    toLocation: input.toLocation,
+    owner: input.owner,
+    status: input.status,
+    lotNo: input.lotNo,
+    memo: input.memo,
+    outboundType: input.outboundType,
+    isFree: input.isFree,
+    returnOfMovementId: input.returnOfMovementId,
+    customerId: input.customerId,
+    ownerUserId: input.ownerUserId,
+    createdByUserId: input.createdByUserId,
+    expectedReturnAt: input.expectedReturnAt,
+    adjustDirection: input.adjustDirection,
+    lotAllocations: input.lotAllocations,
+  }
+}
+
+/** 한 줄에 프로세스 규칙을 적용한다. 신규 물류번호는 knownLots 에 더해 같은 저장의 다음 줄이 기존 번호로 본다. */
+function applyProcessRules(
+  input: CreateHardwareMovementInput,
+  item: HardwareItem | undefined,
+  lookups: ProcessLookups,
+  actor: HardwareActor | null
+): { input: CreateHardwareMovementInput; strictLot: boolean } {
+  const customerId = cleanString(input.customerId)
+  const returnOf = cleanString(input.returnOfMovementId)
+  const prepared = prepareProcessLine(toProcessLineInput(input), {
+    actor,
+    lotTracked: itemLotTracked(item),
+    destination: classifyDestination(input.toLocation) as HardwareLocationKind,
+    origin: classifyDestination(input.fromLocation) as HardwareLocationKind,
+    customerName: customerId ? lookups.customerNames.get(customerId) ?? null : undefined,
+    returnOriginal: returnOf ? lookups.returnOriginals.get(returnOf) ?? null : undefined,
+    knownLots: lookups.knownLots ?? undefined,
+  })
+  if (prepared.newLotNo && lookups.knownLots) lookups.knownLots.add(prepared.newLotNo)
+  return { input: { ...input, ...prepared.input }, strictLot: prepared.strictLot }
+}
+
+/**
+ * 물류번호 직접 선택 줄의 배정 — 고른 번호의 잔여(배송 예정까지 뺀 값)를 넘으면 막는다. FIFO 없음.
+ * lotAllocations 로 나눠 골랐으면 번호별로 합쳐 잔여를 보고 번호마다 한 줄을 만든다.
+ */
+function strictLotAllocation(
+  lots: ReadonlyArray<{ lotNo: string; quantity: number }>,
+  input: {
+    productName: string
+    quantity: number
+    lotNo?: string | null
+    lotAllocations?: ReadonlyArray<{ lotNo: string; quantity: number }> | null
+  }
+): Array<{ lotNo: string | null; quantity: number; autoAssigned: boolean }> {
+  if (input.lotAllocations && input.lotAllocations.length > 0) {
+    const byLot = new Map<string, number>()
+    for (const allocation of input.lotAllocations) {
+      byLot.set(allocation.lotNo, (byLot.get(allocation.lotNo) ?? 0) + allocation.quantity)
+    }
+    return Array.from(byLot, ([lotNo, quantity]) => strictLotAllocation(lots, { productName: input.productName, quantity, lotNo })[0])
+  }
+  const lotNo = assertLotSelectable({
+    productName: input.productName,
+    lotTracked: true,
+    lotNo: input.lotNo,
+    quantity: input.quantity,
+    lots: lots.map((lot) => ({ lotNo: lot.lotNo, remaining: lot.quantity })),
+  })
+  return [{ lotNo, quantity: input.quantity, autoAssigned: false }]
+}
+
+export async function createHardwareMovements(
+  rawInputs: CreateHardwareMovementInput[],
+  options: HardwareWriteOptions = {}
+): Promise<HardwareMovement[]> {
+  if (rawInputs.length === 0) return []
+  if (rawInputs.length > 50) throw new Error("한 번에 저장할 수 있는 하드웨어 기록은 최대 50건입니다.")
+
+  const actor = options.actor ?? null
+  const lookups = await loadProcessLookups(rawInputs, actor)
+  const inputs = rawInputs.map((input) => seedFromReturnOriginal(input, lookups))
+
+  const targets = []
+  for (const input of inputs) targets.push(await resolveHardwareMovementTarget(input))
+  const itemsById = await loadHardwareItemsByIds(targets.map((target) => target.itemId))
 
   const rows: HardwareMovementInsertRow[] = []
   const batchCrmKeys = new Set<string>()
 
-  for (const input of inputs) {
-    const { itemId, productName } = await resolveHardwareMovementTarget(input)
+  for (const [index, rawInput] of inputs.entries()) {
+    const { itemId, productName } = targets[index]
+    const { input, strictLot } = applyProcessRules(rawInput, itemsById.get(itemId), lookups, actor)
     const referenceNo = cleanString(input.referenceNo)
     if (referenceNo && isCrmReference(referenceNo)) {
       const key = `${referenceNo}\u0000${productName}\u0000${isPlannedStatus(input.status) ? "planned" : "actual"}`
@@ -1087,7 +1494,7 @@ export async function createHardwareMovements(inputs: CreateHardwareMovementInpu
       status: input.status,
     })
 
-    rows.push(...await buildMovementInsertRows(input, itemId, productName))
+    rows.push(...await buildMovementInsertRows(input, itemId, productName, { strictLot }))
   }
 
   const inserted = await insertHardwareMovementRows(rows)
@@ -1097,8 +1504,11 @@ export async function createHardwareMovements(inputs: CreateHardwareMovementInpu
   return inserted
 }
 
-export async function createHardwareMovementRows(input: CreateHardwareMovementInput): Promise<HardwareMovement[]> {
-  const inserted = await createHardwareMovements([input])
+export async function createHardwareMovementRows(
+  input: CreateHardwareMovementInput,
+  options: HardwareWriteOptions = {}
+): Promise<HardwareMovement[]> {
+  const inserted = await createHardwareMovements([input], options)
   if (inserted.length === 0) throw new Error("하드웨어 입출고 기록을 만들 수 없습니다.")
   return inserted
 }
@@ -1160,10 +1570,16 @@ function insertRowAsLotLedgerMovement(
  * 말하는 편이 낫다(호출부는 그 오류 문구를 그대로 보여 주고 입력은 그대로 남는다).
  */
 export async function createHardwareMovementsBatch(
-  inputs: CreateHardwareMovementInput[]
+  rawInputs: CreateHardwareMovementInput[],
+  options: HardwareWriteOptions = {}
 ): Promise<HardwareMovementBatchLineResult[]> {
-  if (inputs.length === 0) return []
-  if (inputs.length > 50) throw new Error("한 번에 저장할 수 있는 하드웨어 기록은 최대 50건입니다.")
+  if (rawInputs.length === 0) return []
+  if (rawInputs.length > 50) throw new Error("한 번에 저장할 수 있는 하드웨어 기록은 최대 50건입니다.")
+
+  // 프로세스 규칙이 볼 맥락(CRM 고객 이름·회수 원 출고·기존 물류번호)을 한 번에 읽는다.
+  const actor = options.actor ?? null
+  const lookups = await loadProcessLookups(rawInputs, actor)
+  const inputs = rawInputs.map((input) => seedFromReturnOriginal(input, lookups))
 
   const results: HardwareMovementBatchLineResult[] = inputs.map(() => ({ ok: false, movements: [], error: null }))
 
@@ -1217,6 +1633,12 @@ export async function createHardwareMovementsBatch(
   ))
   const crmRowsByKey = await loadAdminCrmMovementRows(references)
 
+  // 2-1) 품목 설정(물류번호 관리 여부) — itemId 로 온 줄과 이름으로 만든 줄 모두.
+  const itemsById = await loadHardwareItemsByIds([
+    ...inputs.map((input) => input.itemId ?? "").filter(Boolean),
+    ...Array.from(items.values(), (item) => item.id),
+  ])
+
   // 3) 품목 원장 — 자동 배정이 필요한 품목만, 품목당 한 번.
   const ledgerByItem = new Map<string, HardwareLotLedgerMovement[]>()
   const pendingByItem = new Map<string, HardwareLotLedgerMovement[]>()
@@ -1225,7 +1647,7 @@ export async function createHardwareMovementsBatch(
   const rowsToInsert: HardwareMovementInsertRow[] = []
   const spans: Array<{ index: number; start: number; count: number }> = []
 
-  for (const [index, input] of inputs.entries()) {
+  for (const [index, rawLine] of inputs.entries()) {
     const line = prepared[index]
     if (!line.ok) {
       results[index] = { ok: false, movements: [], error: line.error }
@@ -1234,15 +1656,30 @@ export async function createHardwareMovementsBatch(
 
     try {
       const productName = line.productName
-      const itemId = input.itemId ?? items.get(productName)?.id
+      const itemId = rawLine.itemId ?? items.get(productName)?.id
       if (!itemId) throw new Error(unresolvableNames.get(productName) ?? "하드웨어 품목을 만들 수 없습니다.")
+      const { input, strictLot } = applyProcessRules(rawLine, itemsById.get(itemId), lookups, actor)
 
       const referenceNo = cleanString(input.referenceNo)
       const crmKey = referenceNo && isCrmReference(referenceNo) ? crmDuplicateKey(referenceNo, productName) : null
       if (crmKey) assertNoDuplicateCrmMovement(crmRowsByKey.get(crmKey) ?? [], input.status)
 
       let allocations: Array<{ lotNo: string | null; quantity: number; autoAssigned: boolean }>
-      if (movementNeedsLotAllocation(input)) {
+      if (strictLot) {
+        let ledger = ledgerByItem.get(itemId)
+        if (!ledger) {
+          ledger = await loadItemLotLedgerRows(itemId)
+          ledgerByItem.set(itemId, ledger)
+        }
+        const lots = resolveHardwareLotBalances([...ledger, ...(pendingByItem.get(itemId) ?? [])]).lots
+          .map((lot) => ({ lotNo: lot.lot, quantity: lot.quantity }))
+        allocations = strictLotAllocation(lots, {
+          productName,
+          quantity: input.quantity,
+          lotNo: input.lotNo,
+          lotAllocations: input.lotAllocations,
+        })
+      } else if (movementNeedsLotAllocation(input)) {
         let ledger = ledgerByItem.get(itemId)
         if (!ledger) {
           ledger = await loadItemLotLedgerRows(itemId)
@@ -1259,7 +1696,7 @@ export async function createHardwareMovementsBatch(
         allocations = [{ lotNo: cleanString(input.lotNo), quantity: input.quantity, autoAssigned: false }]
       }
 
-      const rows = buildMovementInsertRowsFromAllocations(input, itemId, productName, allocations)
+      const rows = buildMovementInsertRowsFromAllocations(input, itemId, productName, allocations, { suffixPlanned: strictLot })
 
       // 앞 줄이 만든 행을 뒤 줄의 잔량·중복 판정에 반영한다 — 줄 단위 저장에서 먼저 INSERT 된 행이
       // 다음 줄 조회에 보이던 것과 같다.
@@ -1369,9 +1806,84 @@ async function planConfirmLotAllocations(
   return allocations.map(({ lotNo, quantity }) => ({ lotNo, quantity }))
 }
 
+export interface ConfirmLotAllocationInput {
+  lotNo: string
+  quantity: number
+}
+
+/**
+ * 재고관리 프로세스 확정(갭 문서 §6 D2·D6) — 권한(본인 건 또는 입고관리 권한자)을 보고, 물류번호 관리
+ * 품목이면 고른 물류번호(요청 → 예정 행 순)로만 배정한다. FIFO 자동 배정은 하지 않는다.
+ * 물류번호 관리 여부를 모르는 DB(마이그레이션 전)는 null 을 돌려 예전 배정(planConfirmLotAllocations)을 쓴다.
+ */
+async function planProcessConfirm(
+  id: string,
+  input: { confirmQty: number | null; actor: HardwareActor; lotNo?: string | null; lotAllocations?: ConfirmLotAllocationInput[] | null }
+): Promise<Array<{ lotNo: string | null; quantity: number }> | null> {
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb.from("hardware_movements").select("*").eq("id", id).maybeSingle()
+  if (error) throw error
+  const planned = data as HardwareMovement | null
+  if (!planned) throw new MovementRuleError("배송 예정 기록을 찾을 수 없습니다.", 404)
+  if (planned.voided_at || planned.movement_type !== "outbound" || !isPlannedStatus(planned.status)) {
+    // 상태 오류 문구는 RPC 가 표준으로 낸다 — 여기서 중복하지 않는다.
+    return []
+  }
+  if (!canActOnMovement("confirm", planned, input.actor)) {
+    throw new MovementRuleError("다른 사람의 배송 예정은 담당자나 입고관리 권한자만 확정할 수 있습니다.", 403, "hardware.inbound")
+  }
+
+  const effectiveQty = Math.min(input.confirmQty ?? planned.quantity, planned.quantity)
+  if (!Number.isFinite(effectiveQty) || effectiveQty <= 0) return []
+
+  const item = (await loadHardwareItemsByIds([planned.item_id])).get(planned.item_id)
+  const lotTracked = itemLotTracked(item)
+  if (lotTracked === null) return null
+  if (lotTracked === false) return [{ lotNo: null, quantity: effectiveQty }]
+
+  const requested: ConfirmLotAllocationInput[] | null =
+    input.lotAllocations && input.lotAllocations.length > 0
+      ? input.lotAllocations
+      : cleanString(input.lotNo)
+        ? [{ lotNo: cleanString(input.lotNo) as string, quantity: effectiveQty }]
+        : cleanString(planned.lot_no)
+          ? [{ lotNo: cleanString(planned.lot_no) as string, quantity: effectiveQty }]
+          : null
+  if (!requested) {
+    throw new MovementRuleError(`${planned.product_name}은(는) 확정할 때 물류번호를 골라야 합니다.`)
+  }
+  const total = requested.reduce((sum, allocation) => sum + allocation.quantity, 0)
+  if (requested.some((allocation) => !Number.isInteger(allocation.quantity) || allocation.quantity <= 0) || total !== effectiveQty) {
+    throw new MovementRuleError(`물류번호별 수량 합계(${total}대)가 확정 수량(${effectiveQty}대)과 같아야 합니다.`)
+  }
+
+  // 확정되는 예정 행 자신은 잔여 계산에서 뺀다(자기가 잡아 둔 물량을 자기가 쓴다).
+  const ledger = await loadItemLotLedgerRows(planned.item_id)
+  const lots = resolveHardwareLotBalances(ledger.filter((movement) => movement.id !== planned.id)).lots
+    .map((lot) => ({ lotNo: lot.lot, quantity: lot.quantity }))
+  const byLot = new Map<string, number>()
+  for (const allocation of requested) {
+    const lotNo = cleanString(allocation.lotNo)
+    if (!lotNo) throw new MovementRuleError(`${planned.product_name}은(는) 확정할 때 물류번호를 골라야 합니다.`)
+    byLot.set(lotNo, (byLot.get(lotNo) ?? 0) + allocation.quantity)
+  }
+  for (const [lotNo, quantity] of byLot) {
+    strictLotAllocation(lots, { productName: planned.product_name, quantity, lotNo })
+  }
+  return Array.from(byLot, ([lotNo, quantity]) => ({ lotNo, quantity }))
+}
+
 export async function confirmPlannedHardwareMovement(
   id: string,
-  input: { occurredAt?: string | null; actor?: string | null; confirmQty?: number | null }
+  input: {
+    occurredAt?: string | null
+    actor?: string | null
+    confirmQty?: number | null
+    /** 요청자 — 있으면 재고관리 프로세스 권한·물류번호 규칙을 적용한다. */
+    actorContext?: HardwareActor | null
+    lotNo?: string | null
+    lotAllocations?: ConfirmLotAllocationInput[] | null
+  }
 ): Promise<HardwareMovement> {
   const sb = createSupabaseAdminClient()
   const args = {
@@ -1381,11 +1893,35 @@ export async function confirmPlannedHardwareMovement(
     confirm_qty: input.confirmQty ?? null,
   }
 
+  const processAllocations = input.actorContext
+    ? await planProcessConfirm(id, {
+        confirmQty: input.confirmQty ?? null,
+        actor: input.actorContext,
+        lotNo: input.lotNo,
+        lotAllocations: input.lotAllocations,
+      })
+    : null
+
   // v3: 로트 배정은 앱이 계산해 넘기고, 로트가 모자라면 나머지를 로트 미지정으로 기록한다.
-  const lotAllocations = await planConfirmLotAllocations(id, input.confirmQty ?? null)
+  // 재고관리 프로세스 경로는 고른 물류번호만 넘긴다(위 planProcessConfirm).
+  const lotAllocations = processAllocations ?? await planConfirmLotAllocations(id, input.confirmQty ?? null)
+  const rpcLotAllocations = lotAllocations.map((allocation) => ({ lot_no: allocation.lotNo, quantity: allocation.quantity }))
+
+  // v4: v3 + 새 칸(유형·고객·담당) 복사 + 진행 상태 '설치 완료'(20261028_hardware_inventory_process.sql).
+  const v4 = await sb.rpc("confirm_hardware_planned_movement_v4", {
+    ...args,
+    lot_allocations: rpcLotAllocations,
+    actor_user_id: input.actorContext?.userId ?? null,
+  })
+  if (!v4.error) {
+    revalidateTag(HARDWARE_INVENTORY_CACHE_TAG, "max")
+    return v4.data as HardwareMovement
+  }
+  if (!isMissingRpcError(v4.error, "confirm_hardware_planned_movement_v4")) throw v4.error
+
   const v3 = await sb.rpc("confirm_hardware_planned_movement_v3", {
     ...args,
-    lot_allocations: lotAllocations.map((allocation) => ({ lot_no: allocation.lotNo, quantity: allocation.quantity })),
+    lot_allocations: rpcLotAllocations,
   })
   if (!v3.error) {
     revalidateTag(HARDWARE_INVENTORY_CACHE_TAG, "max")
@@ -1421,18 +1957,31 @@ export async function confirmPlannedHardwareMovement(
 
 export async function voidHardwareMovement(
   id: string,
-  input: { reason?: string | null; actor?: string | null }
+  input: { reason?: string | null; actor?: string | null; actorContext?: HardwareActor | null }
 ): Promise<HardwareMovement> {
   const reason = cleanString(input.reason) ?? "관리자 취소"
   const sb = createSupabaseAdminClient()
   const { data: existing, error: existingError } = await sb
     .from("hardware_movements")
-    .select("id,source,voided_at")
+    .select("*")
     .eq("id", id)
     .maybeSingle()
   if (existingError) throw existingError
   if (!existing) throw new Error("원본 기록을 찾을 수 없습니다.")
-  const row = existing as { id: string; source: string; voided_at: string | null }
+  const row = existing as HardwareMovement
+  if (input.actorContext) {
+    // 배송 예정 취소는 본인 건 또는 입고관리 권한자, 실현 기록 취소는 입고관리 권한자(갭 문서 §7-2).
+    const planned = row.movement_type === "outbound" && isPlannedStatus(row.status)
+    if (!canActOnMovement(planned ? "void_planned" : "void_actual", row, input.actorContext)) {
+      throw new MovementRuleError(
+        planned
+          ? "다른 사람의 배송 예정은 담당자나 입고관리 권한자만 취소할 수 있습니다."
+          : "실제 반영된 기록 취소는 입고관리 권한자만 할 수 있습니다.",
+        403,
+        "hardware.inbound"
+      )
+    }
+  }
   if (row.source !== "admin_manual") {
     throw new Error("시트 이관 기록은 직접 취소할 수 없습니다. 수기 조정으로 보정하세요.")
   }
@@ -1459,7 +2008,7 @@ export async function voidHardwareMovement(
 export async function updateHardwareMovement(
   id: string,
   input: CreateHardwareMovementInput,
-  options?: { canFinalize?: boolean }
+  options?: { canFinalize?: boolean; actor?: HardwareActor | null }
 ): Promise<HardwareMovement> {
   const productName = normalizeProductName(input.productName)
   if (!productName) throw new Error("제품명은 필수입니다.")
@@ -1473,19 +2022,12 @@ export async function updateHardwareMovement(
   const sb = createSupabaseAdminClient()
   const { data: existing, error: existingError } = await sb
     .from("hardware_movements")
-    .select("id,source,movement_type,status,voided_at,converted_from_movement_id,converted_to_movement_id")
+    .select("*")
     .eq("id", id)
     .maybeSingle()
   if (existingError) throw existingError
   if (!existing) throw new Error("원본 기록을 찾을 수 없습니다.")
-  const row = existing as {
-    source: string
-    movement_type: string
-    status: string | null
-    voided_at: string | null
-    converted_from_movement_id: string | null
-    converted_to_movement_id: string | null
-  }
+  const row = existing as HardwareMovement
   if (row.source !== "admin_manual") {
     throw new Error("시트 이관 기록은 수정할 수 없습니다. 수기 조정으로 보정하세요.")
   }
@@ -1498,12 +2040,30 @@ export async function updateHardwareMovement(
   // 권한 정렬: 확정·취소가 hardware.finalize인데 update는 무제한이면 실현 원장을 우회 재작성할 수
   // 있다. 예정(planned) 행 편집은 에디터 업무라 열어두고, (1) 실현 기록 수정과 (2) 예정→실현
   // 상태 전환(확정 우회)만 finalize를 요구한다.
-  if (options?.canFinalize === false) {
-    const wasPlanned = row.movement_type === "outbound" && isPlannedStatus(row.status)
+  const wasPlanned = row.movement_type === "outbound" && isPlannedStatus(row.status)
+  const staysPlanned = input.movementType === "outbound" && isPlannedStatus(cleanString(input.status))
+  const actor = options?.actor ?? null
+  if (actor) {
+    // 재고관리 프로세스 권한(갭 문서 §7-2): 배송 예정은 본인 건 또는 입고관리 권한자, 실현 기록 수정과
+    // 예정 → 실현 전환(확정 우회)은 입고관리 권한자.
+    const action = wasPlanned && staysPlanned ? "edit_planned" : "edit_actual"
+    if (!canActOnMovement(action, row, actor)) {
+      throw new MovementRuleError(
+        action === "edit_planned"
+          ? "다른 사람의 배송 예정은 담당자나 입고관리 권한자만 고칠 수 있습니다."
+          : "실제 반영된 기록 수정은 입고관리 권한자만 할 수 있습니다.",
+        403,
+        "hardware.inbound"
+      )
+    }
+    const requestedOwner = cleanString(input.ownerUserId)
+    if (requestedOwner && requestedOwner !== (row.owner_user_id ?? null) && requestedOwner !== actor.userId && !actor.isInventoryManager) {
+      throw new MovementRuleError("다른 담당자로 바꾸려면 입고관리 권한이 필요합니다.", 403, "hardware.inbound")
+    }
+  } else if (options?.canFinalize === false) {
     if (!wasPlanned) {
       throw new Error("실제 반영된 기록 수정은 확정 권한(hardware.finalize)이 필요합니다.")
     }
-    const staysPlanned = input.movementType === "outbound" && isPlannedStatus(cleanString(input.status))
     if (!staysPlanned) {
       throw new Error("예정을 실제 출고로 바꾸는 확정은 확정 권한(hardware.finalize)이 필요합니다.")
     }
@@ -1516,35 +2076,284 @@ export async function updateHardwareMovement(
   }
   if (!itemId) throw new Error("하드웨어 품목을 만들 수 없습니다.")
 
-  const { data, error } = await sb
-    .from("hardware_movements")
-    .update({
-      item_id: itemId,
-      product_name: productName,
-      movement_type: input.movementType,
-      quantity: input.quantity,
-      occurred_at: input.occurredAt || null,
-      from_location: normalizeLocationName(input.fromLocation),
-      to_location: normalizeLocationName(input.toLocation),
-      owner: cleanString(input.owner),
-      status: cleanString(input.status),
-      reference_no: cleanString(input.referenceNo),
-      memo: cleanString(input.memo),
-      serials: input.serials ?? [],
-      lot_no: cleanString(input.lotNo),
-      unit_price: input.unitPrice ?? null,
-      amount_usd: input.amountUsd ?? null,
-      amount_cny: input.amountCny ?? null,
-      storage_location: cleanString(input.storageLocation),
-      importer: cleanString(input.importer),
-    })
-    .eq("id", id)
-    .select("*")
-    .single()
+  // 고른 물류번호가 바뀌었거나 수량이 늘었으면 잔여를 다시 본다(자기 자신은 뺀다) — 물류번호 관리 품목만.
+  const requestedLotNo = cleanString(input.lotNo)
+  if (actor && requestedLotNo && input.movementType === "outbound") {
+    const item = (await loadHardwareItemsByIds([itemId])).get(itemId)
+    const lotChanged = requestedLotNo !== cleanString(row.lot_no) || input.quantity > row.quantity || itemId !== row.item_id
+    if (itemLotTracked(item) === true && lotChanged) {
+      const ledger = await loadItemLotLedgerRows(itemId)
+      const lots = resolveHardwareLotBalances(ledger.filter((movement) => movement.id !== id)).lots
+        .map((lot) => ({ lotNo: lot.lot, quantity: lot.quantity }))
+      strictLotAllocation(lots, { productName, quantity: input.quantity, lotNo: requestedLotNo })
+    }
+  }
+
+  const customerId = input.customerId === undefined ? undefined : cleanString(input.customerId)
+  let customerName: string | null = null
+  if (customerId) {
+    customerName = (await loadCustomerNames([customerId])).get(customerId) ?? null
+    if (!customerName) throw new MovementRuleError("CRM 고객을 찾을 수 없습니다.", 404)
+  }
+  if (input.outboundType != null && !isHardwareOutboundType(input.outboundType)) {
+    throw new MovementRuleError("출고 유형이 올바르지 않습니다.")
+  }
+
+  // 새 칸은 요청에 실려 온 것만 바꾼다(undefined = 그대로).
+  const processPatch: Record<string, unknown> = {}
+  if (input.outboundType !== undefined) processPatch.outbound_type = input.outboundType ?? null
+  if (input.isFree !== undefined) processPatch.is_free = input.isFree
+  if (customerId !== undefined) processPatch.customer_id = customerId
+  if (input.ownerUserId !== undefined) processPatch.owner_user_id = cleanString(input.ownerUserId)
+  if (input.expectedReturnAt !== undefined) processPatch.expected_return_at = cleanString(input.expectedReturnAt)
+
+  const basePatch: Record<string, unknown> = {
+    item_id: itemId,
+    product_name: productName,
+    movement_type: input.movementType,
+    quantity: input.quantity,
+    occurred_at: input.occurredAt || null,
+    from_location: normalizeLocationName(input.fromLocation),
+    to_location: normalizeLocationName(input.toLocation),
+    owner: cleanString(input.owner),
+    status: cleanString(input.status),
+    reference_no: cleanString(input.referenceNo),
+    memo: cleanString(input.memo),
+    serials: input.serials ?? [],
+    lot_no: cleanString(input.lotNo),
+    unit_price: input.unitPrice ?? null,
+    amount_usd: input.amountUsd ?? null,
+    amount_cny: input.amountCny ?? null,
+    storage_location: cleanString(input.storageLocation),
+    importer: cleanString(input.importer),
+  }
+  if (customerName && !cleanString(input.toLocation)) basePatch.to_location = normalizeLocationName(customerName)
+
+  const update = (patch: Record<string, unknown>) =>
+    sb.from("hardware_movements").update(patch).eq("id", id).select("*").single()
+  let { data, error } = await update({ ...basePatch, ...processPatch })
+  if (error && Object.keys(processPatch).length > 0 && isMissingColumnError(error)) {
+    // 마이그레이션 전 DB — 새 칸만 빼고 고친다.
+    ;({ data, error } = await update(basePatch))
+  }
   if (error) throw error
 
   revalidateTag(HARDWARE_INVENTORY_CACHE_TAG, "max")
   return data as HardwareMovement
+}
+
+
+// ── 재고관리 프로세스 읽기(갭 문서 §7-3) ────────────────────────────────────────
+
+export interface HardwareLotChoices {
+  itemId: string
+  product: string
+  /** 물류번호를 골라야 하는 품목인가. 칸이 없는 DB(마이그레이션 전)는 false — 서버가 요구하지 않는다. */
+  lotTracked: boolean
+  /** 잔여 1대 이상인 물류번호(배송 예정까지 뺀 잔여), 먼저 소진할 순서. */
+  lots: Array<{ lotNo: string; remaining: number }>
+  /** 다음 신규 물류번호(전 품목 공통 C 순번). */
+  nextLotNo: string
+}
+
+/** 출고·확정·입고 화면의 물류번호 고르기. excludeMovementId 는 확정·수정 중인 예정 행 자신. */
+export async function getHardwareLotChoices(input: {
+  itemId?: string | null
+  product?: string | null
+  excludeMovementId?: string | null
+}): Promise<HardwareLotChoices> {
+  const sb = createSupabaseAdminClient()
+  let item: HardwareItem | undefined
+  const itemId = cleanString(input.itemId)
+  if (itemId) {
+    item = (await loadHardwareItemsByIds([itemId])).get(itemId)
+  } else {
+    const product = normalizeProductName(input.product ?? "")
+    if (product) {
+      const { data, error } = await sb.from("hardware_items").select("*").eq("name", product).maybeSingle()
+      if (error) throw error
+      item = (data as HardwareItem | null) ?? undefined
+    }
+  }
+  if (!item) throw new MovementRuleError("품목을 찾을 수 없습니다.", 404)
+
+  const excluded = cleanString(input.excludeMovementId)
+  const [ledger, knownLots] = await Promise.all([loadItemLotLedgerRows(item.id), loadKnownLotKeys()])
+  const lots = resolveHardwareLotBalances(ledger.filter((movement) => movement.id !== excluded)).lots
+    .filter((lot) => lot.quantity >= 1)
+    .map((lot) => ({ lotNo: lot.lot, remaining: lot.quantity }))
+
+  return {
+    itemId: item.id,
+    product: item.name,
+    // 칸이 없는 DB(마이그레이션 전)는 false — 서버가 물류번호를 요구하지 않으니(예전 FIFO) 화면도 묻지 않는다.
+    lotTracked: itemLotTracked(item) ?? false,
+    lots,
+    nextLotNo: nextLotNo(Array.from(knownLots)),
+  }
+}
+
+export interface HardwareReturnCandidate {
+  id: string
+  productName: string
+  lotNo: string | null
+  quantity: number
+  returned: number
+  returnable: number
+  occurredAt: string | null
+  toLocation: string | null
+  customerId: string | null
+  outboundType: HardwareOutboundType | null
+  owner: string | null
+}
+
+export type ReturnCandidateRow = Pick<
+  HardwareMovement,
+  "id" | "product_name" | "quantity" | "occurred_at" | "created_at" | "to_location" | "owner" | "status" | "lot_no" | "source" | "reference_no" | "memo"
+> & { outbound_type?: HardwareOutboundType | null; customer_id?: string | null }
+
+const RETURN_CANDIDATE_COLUMNS = "id,product_name,quantity,occurred_at,created_at,to_location,owner,status,lot_no,source,reference_no,memo"
+
+async function listRealizedCustomerOutbounds(): Promise<ReturnCandidateRow[]> {
+  const sb = createSupabaseAdminClient()
+  const read = (columns: string) => fetchAllSupabaseRows<ReturnCandidateRow>((afterId, limit) => {
+    let query = sb
+      .from("hardware_movements")
+      .select(columns)
+      .eq("movement_type", "outbound")
+      .is("voided_at", null)
+      .order("id", { ascending: true })
+      .limit(limit)
+    if (afterId) query = query.gt("id", afterId)
+    return query
+  })
+  try {
+    return await read(`${RETURN_CANDIDATE_COLUMNS},outbound_type,customer_id`)
+  } catch (error) {
+    if (!isMissingColumnError(error)) throw error
+    return read(RETURN_CANDIDATE_COLUMNS)
+  }
+}
+
+function compactText(value: string | null | undefined) {
+  return (value ?? "").replace(/\s+/g, "").toLowerCase()
+}
+
+/** 회수 후보 거르기(순수) — 실제 출고 · 고객사 도착 · 고객/검색어 일치, 최근 출고부터. */
+export function filterReturnCandidateRows<T extends ReturnCandidateRow>(
+  rows: readonly T[],
+  input: { q?: string | null; customerId?: string | null; customerName?: string | null }
+): T[] {
+  const q = compactText(input.q)
+  const customerId = cleanString(input.customerId)
+  const customerName = cleanString(input.customerName)
+  return rows
+    .filter((row) => {
+      if (isPlannedStatus(row.status)) return false
+      const kind = classifyDestination(row.to_location)
+      if (kind !== "customer" && kind !== "other" && !row.customer_id) return false
+      if (customerId) {
+        const sameCustomer = row.customer_id
+          ? row.customer_id === customerId
+          : Boolean(customerName) && compactText(row.to_location) === compactText(customerName)
+        if (!sameCustomer) return false
+      }
+      if (q) {
+        const haystack = [row.product_name, row.to_location, row.owner, movementLotKey(row), row.reference_no, row.memo]
+          .map(compactText)
+          .join(" ")
+        if (!haystack.includes(q)) return false
+      }
+      return true
+    })
+    .sort((a, b) => movementDate(b) - movementDate(a) || (a.id < b.id ? -1 : 1))
+}
+
+/** 후보 + 회수된 수량 → 남은 수량이 있는 것만 limit 개(순수). */
+export function toReturnCandidates(
+  rows: readonly ReturnCandidateRow[],
+  returnedById: ReadonlyMap<string, number>,
+  limit: number
+): HardwareReturnCandidate[] {
+  const candidates: HardwareReturnCandidate[] = []
+  for (const row of rows) {
+    const returned = returnedById.get(row.id) ?? 0
+    const returnable = returnableQuantity(row, [returned])
+    if (returnable <= 0) continue
+    candidates.push({
+      id: row.id,
+      productName: row.product_name,
+      lotNo: movementLotKey(row),
+      quantity: row.quantity,
+      returned,
+      returnable,
+      occurredAt: row.occurred_at,
+      toLocation: row.to_location,
+      customerId: row.customer_id ?? null,
+      outboundType: resolveOutboundType({ ...row, movement_type: "outbound" }),
+      owner: row.owner,
+    })
+    if (candidates.length >= limit) break
+  }
+  return candidates
+}
+
+/** 회수 등록 — 고객사로 실제 출고된 건 중 아직 회수할 수량이 남은 것(최근 출고부터). */
+export async function listHardwareReturnCandidates(input: {
+  q?: string | null
+  customerId?: string | null
+  limit?: number
+}): Promise<HardwareReturnCandidate[]> {
+  const limit = Math.min(Math.max(Math.floor(input.limit ?? 30), 1), 100)
+  const customerId = cleanString(input.customerId)
+  const customerName = customerId ? (await loadCustomerNames([customerId])).get(customerId) ?? null : null
+  const rows = filterReturnCandidateRows(await listRealizedCustomerOutbounds(), { q: input.q, customerId, customerName })
+
+  // 회수 수량은 후보 일부에 대해서만 읽는다 — 다 회수된 건이 섞여도 limit 을 채우도록 넉넉히 본다.
+  const window = rows.slice(0, limit * 3)
+  const returnedById = new Map<string, number>()
+  if (window.length > 0) {
+    const sb = createSupabaseAdminClient()
+    const { data, error } = await sb
+      .from("hardware_movements")
+      .select("return_of_movement_id,quantity")
+      .in("return_of_movement_id", window.map((row) => row.id))
+      .is("voided_at", null)
+    if (error && !isMissingColumnError(error)) throw error
+    for (const row of (data ?? []) as Array<{ return_of_movement_id: string | null; quantity: number }>) {
+      if (!row.return_of_movement_id) continue
+      returnedById.set(row.return_of_movement_id, (returnedById.get(row.return_of_movement_id) ?? 0) + (Number(row.quantity) || 0))
+    }
+  }
+  return toReturnCandidates(window, returnedById, limit)
+}
+
+export interface HardwareCustomerChoice {
+  id: string
+  name: string
+  campusName: string | null
+  regionLabel: string | null
+}
+
+/** 출고 클라이언트 고르기 — CRM 고객(customers) 이름 검색. 검색어가 없으면 최근 고객. */
+export async function searchHardwareCustomers(q: string | null | undefined, limit = 20): Promise<HardwareCustomerChoice[]> {
+  const sb = createSupabaseAdminClient()
+  // PostgREST or() 문법 문자와 LIKE 와일드카드는 지운다(고객 이름에는 쓰이지 않는다).
+  const text = cleanString((q ?? "").replace(/[%_,()"'\\*]/g, " "))
+  let query = sb.from("customers").select("id,name,campus_name,region_label")
+  if (text) {
+    query = query.or(`name.ilike.%${text}%,campus_name.ilike.%${text}%`).order("name", { ascending: true })
+  } else {
+    query = query.order("updated_at", { ascending: false })
+  }
+  const { data, error } = await query.limit(Math.min(Math.max(limit, 1), 50))
+  if (error) throw error
+  return ((data ?? []) as Array<{ id: string; name: string; campus_name: string | null; region_label: string | null }>).map((row) => ({
+    id: row.id,
+    name: row.name,
+    campusName: row.campus_name ?? null,
+    regionLabel: row.region_label ?? null,
+  }))
 }
 
 export async function updateHardwareItem(
@@ -1558,6 +2367,9 @@ export async function updateHardwareItem(
   if (input.sku !== undefined) patch.sku = cleanString(input.sku)
   if (input.sourceAliases !== undefined) patch.source_aliases = normalizeAliases(input.sourceAliases)
   if (input.active != null) patch.active = input.active
+  if (input.lotTracked != null) patch.lot_tracked = input.lotTracked
+  if (input.reportGroup !== undefined) patch.report_group = input.reportGroup
+  if (input.sortOrder !== undefined) patch.sort_order = input.sortOrder
 
   if (Object.keys(patch).length === 0) {
     throw new Error("변경할 값이 없습니다.")
@@ -1642,6 +2454,12 @@ interface ImportMovementRow {
 // lines get distinct keys that survive reorder; source_digest = content hash so the
 // additive merge can tell an edited row from an unchanged one. Stock-reconciliation
 // (adjust) rows are keyed product-only (one official figure per product).
+/** 시트 출고 줄에 적힌 오더번호(파서가 raw.order_no에 싣는다). 없으면 null. */
+export function sheetRowOrderNo(raw: unknown): string | null {
+  if (!isRecord(raw)) return null
+  return cleanString(typeof raw.order_no === "string" ? raw.order_no : null)
+}
+
 function sheetIdentityTiebreak(row: ImportMovementRow): string {
   return JSON.stringify([(row.serials ?? []).join("|"), row.memo ?? "", row.quantity, JSON.stringify(row.raw ?? {})])
 }
@@ -1663,10 +2481,14 @@ function assignSheetImportIdentity(rows: ImportMovementRow[]) {
     })
     bucket.forEach((row, ordinal) => {
       row.source_key = hashSourceKey([row.source_table, row.product_name, row.occurred_at ?? "", row.reference_no ?? "", ordinal])
+      // 오더번호(시트 '3.출고 현황'의 오더번호 열)는 값이 있을 때만 더한다 — 열이 없던 행의 digest가
+      // 바뀌면 추가형 머지가 전 행을 "수정됨"으로 잘못 본다.
+      const orderNo = sheetRowOrderNo(row.raw)
       row.source_digest = hashSourceKey([
         row.quantity, row.status ?? "", row.from_location ?? "", row.to_location ?? "",
         row.owner ?? "", (row.serials ?? []).join("|"), row.memo ?? "", row.reference_no ?? "",
         String(row.unit_price ?? ""), String(row.amount_usd ?? ""),
+        ...(orderNo ? [orderNo] : []),
       ])
     })
   }
@@ -1902,17 +2724,177 @@ async function createHardwareSheetImportSnapshot(input: {
   return data as HardwareSheetImportSnapshot
 }
 
+/** 가져오기를 누가 시작했는지 — 사람(버튼·파일)인지 매시간 자동 가져오기인지. 실행 기록 raw.trigger에 남는다. */
+export type HardwareSheetImportTrigger = "manual" | "auto"
+
+interface HardwareSheetSource {
+  inbound: HwInbound[]
+  outbound: HwOutbound[]
+  stock: HwStock[]
+}
+
+async function readHardwareSheetSource(): Promise<HardwareSheetSource> {
+  const [inbound, outbound, stock] = await Promise.all([
+    listFreshHwInbound(),
+    listFreshHwOutbound(),
+    listFreshHwStock(),
+  ])
+  return { inbound, outbound, stock }
+}
+
+/**
+ * 시트 미러(입고·출고·재고현황) 내용의 지문. 매시간 자동 가져오기가 "시트가 바뀌었는가"를 이걸로 본다.
+ *
+ * 미러는 동기화 때마다 행을 지우고 다시 넣어 id·synced_at 이 늘 바뀌고, id 순서도 매번 달라진다.
+ * 그래서 두 열을 빼고 행을 내용 기준으로 정렬한 뒤 해시한다 — 같은 시트면 같은 값이 나온다.
+ */
+export function checksumHardwareSheetSource(source: {
+  inbound: readonly HwInbound[]
+  outbound: readonly HwOutbound[]
+  stock: readonly HwStock[]
+}): string {
+  const canonical = (rows: readonly object[]) =>
+    rows
+      .map((row) => {
+        const content: Record<string, unknown> = { ...(row as Record<string, unknown>) }
+        delete content.id
+        delete content.synced_at
+        return safeStringify(content)
+      })
+      .sort()
+  return checksumImportSnapshot({
+    inbound: canonical(source.inbound),
+    outbound: canonical(source.outbound),
+    stock: canonical(source.stock),
+  })
+}
+
 export async function importHardwareFromBranchSheets(
+  options: { actor?: string | null; trigger?: HardwareSheetImportTrigger } = {}
+): Promise<HardwareSheetImportResult> {
+  return runHardwareSheetImport(options, null)
+}
+
+export type HardwareSheetImportIfChangedResult =
+  | { status: "unchanged"; runId: string; sourceChecksum: string; checkedAt: string }
+  | { status: "imported"; sourceChecksum: string; result: HardwareSheetImportResult }
+
+interface HardwareImportRunState {
+  id: string
+  status: string
+  rows_imported: number | null
+  rows_skipped: number | null
+  raw: unknown
+}
+
+function importRunSourceChecksum(run: HardwareImportRunState): string | null {
+  return isRecord(run.raw) && typeof run.raw.source_checksum === "string" ? run.raw.source_checksum : null
+}
+
+/**
+ * 매시간 자동 가져오기용 — 시트가 마지막 성공 가져오기 때와 같으면 원장을 건드리지 않는다.
+ *
+ * 왜 건너뛰나: 교체 가져오기는 시트 이관분을 통째로 다시 싣고 §8-6(시트가 이긴다) 정리까지 돈다. 시트가
+ * 그대로인데 매시간 다시 실으면 스냅샷만 쌓이고, 그사이 사람이 한 확정이 의미 없이 다시 정리된다.
+ * 바뀐 게 없을 때는 "확인했다"는 시각만 남긴다 — 신선도 표시(ImportFreshnessStrip)가 그 시각을 쓴다.
+ */
+export async function importHardwareFromBranchSheetsIfChanged(
   options: { actor?: string | null } = {}
+): Promise<HardwareSheetImportIfChangedResult> {
+  const source = await readHardwareSheetSource()
+  const sourceChecksum = checksumHardwareSheetSource(source)
+
+  const sb = createSupabaseAdminClient()
+  const { data: runData, error: runError } = await sb
+    .from("hardware_import_runs")
+    .select("id,status,rows_imported,rows_skipped,raw")
+    .eq("source", "branch_hw_sheet")
+    .order("started_at", { ascending: false })
+    .limit(20)
+  if (runError) throw runError
+  const runs = (runData ?? []) as HardwareImportRunState[]
+  const latest = runs[0] ?? null
+  const lastSuccess = runs.find((run) => run.status === "success") ?? null
+
+  if (lastSuccess && importRunSourceChecksum(lastSuccess) === sourceChecksum) {
+    const checkedAt = new Date().toISOString()
+    if (latest?.id === lastSuccess.id) {
+      const { error } = await sb
+        .from("hardware_import_runs")
+        .update({ raw: { ...(isRecord(lastSuccess.raw) ? lastSuccess.raw : {}), last_checked_at: checkedAt } })
+        .eq("id", lastSuccess.id)
+      if (error) throw error
+      return { status: "unchanged", runId: lastSuccess.id, sourceChecksum, checkedAt }
+    }
+    // 마지막 기록이 실패(시트 읽기 일시 오류 등)라면, 원장은 여전히 그 전 성공 가져오기 상태다. 실패가
+    // 화면 맨 위에 계속 남지 않게 "변경 없음 확인" 성공 행을 하나 남긴다(행 수는 그 성공 가져오기 값).
+    const { data, error } = await sb
+      .from("hardware_import_runs")
+      .insert({
+        source: "branch_hw_sheet",
+        status: "success",
+        started_at: checkedAt,
+        finished_at: checkedAt,
+        rows_imported: lastSuccess.rows_imported,
+        rows_skipped: lastSuccess.rows_skipped,
+        raw: {
+          mode: "unchanged",
+          trigger: "auto",
+          source_checksum: sourceChecksum,
+          matched_run_id: lastSuccess.id,
+          last_checked_at: checkedAt,
+        },
+      })
+      .select("id")
+      .single()
+    if (error) throw error
+    return { status: "unchanged", runId: String(data.id), sourceChecksum, checkedAt }
+  }
+
+  const result = await runHardwareSheetImport({ actor: options.actor, trigger: "auto" }, source)
+  return { status: "imported", sourceChecksum, result }
+}
+
+// 버튼 가져오기가 도는 중이면 자동 가져오기는 이번 회차를 건너뛴다. 중간에 죽은 실행이 "running"으로
+// 남아도 영원히 막지 않게 최근 15분 안의 것만 본다(branch_sync_runs의 isAnyRunning과 같은 방식).
+const HARDWARE_IMPORT_RUNNING_WINDOW_MS = 15 * 60_000
+
+export async function isHardwareSheetImportRunning(now: number = Date.now()): Promise<boolean> {
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("hardware_import_runs")
+    .select("id")
+    .eq("source", "branch_hw_sheet")
+    .eq("status", "running")
+    .gte("started_at", new Date(now - HARDWARE_IMPORT_RUNNING_WINDOW_MS).toISOString())
+    .limit(1)
+  if (error) throw error
+  return (data ?? []).length > 0
+}
+
+/** 시트 읽기(미러 동기화) 단계에서 실패한 자동 가져오기를 기록한다 — 하드웨어 화면의 신선도 표시가 실패를 보여 준다. */
+export async function recordHardwareSheetImportFailure(
+  message: string,
+  options: { trigger?: HardwareSheetImportTrigger } = {}
+): Promise<string> {
+  const runId = await startImportRun()
+  await finishImportRun(runId, {
+    status: "failed",
+    error: message,
+    raw: { trigger: options.trigger ?? "manual", stage: "sheet_sync" },
+  })
+  return runId
+}
+
+async function runHardwareSheetImport(
+  options: { actor?: string | null; trigger?: HardwareSheetImportTrigger },
+  preloaded: HardwareSheetSource | null
 ): Promise<HardwareSheetImportResult> {
   const runId = await startImportRun()
 
   try {
-    const [inbound, outbound, stock] = await Promise.all([
-      listFreshHwInbound(),
-      listFreshHwOutbound(),
-      listFreshHwStock(),
-    ])
+    const { inbound, outbound, stock } = preloaded ?? (await readHardwareSheetSource())
+    const sourceChecksum = checksumHardwareSheetSource({ inbound, outbound, stock })
     const outboundOrInboundProducts = new Set<string>()
     const productInputs: Array<{ name: string; category?: string | null }> = []
 
@@ -1987,12 +2969,19 @@ export async function importHardwareFromBranchSheets(
       sheetWinsError = getErrorMessage(cleanupError)
     }
 
+    // 오더번호가 적힌 시트 출고 줄을 오더에 묶는다 — 같은 오더·품목의 앱 예정·출고 대체 + 딜 설치 단계.
+    // 실패는 결과에 문구로만 남긴다(교체는 이미 커밋됐다).
+    const orderLink = await linkSheetOutboundToOrders(rows, { actor: options.actor })
+
     await finishImportRun(runId, {
       status: "success",
       rowsImported: imported,
       rowsSkipped: skipped,
       raw: {
         mode: additiveMerge ? "additive_merge" : "replace",
+        trigger: options.trigger ?? "manual",
+        // 다음 자동 가져오기가 "시트가 그대로인가"를 이 값과 비교한다.
+        source_checksum: sourceChecksum,
         merge: mergeCounts,
         snapshot_id: snapshot.id,
         snapshot_checksum: snapshot.checksum,
@@ -2000,6 +2989,11 @@ export async function importHardwareFromBranchSheets(
         sheet_wins_voided: sheetWinsVoided,
         sheet_wins_kept: sheetWinsKeptRows.length,
         sheet_wins_error: sheetWinsError,
+        order_link: {
+          app_rows_replaced: orderLink.appRowsReplaced,
+          deals_advanced: orderLink.dealsAdvanced,
+          error: orderLink.error,
+        },
       },
     })
     revalidateTag(HARDWARE_INVENTORY_CACHE_TAG, "max")
@@ -2013,6 +3007,7 @@ export async function importHardwareFromBranchSheets(
       sheetWinsVoided,
       sheetWinsKept: sheetWinsKeptRows.length,
       sheetWinsError,
+      orderLink,
     }
   } catch (error) {
     await finishImportRun(runId, {
@@ -2281,7 +3276,13 @@ function extractRawCrmLink(raw: unknown): HardwareMovementView["raw"] {
 
 function toMovementView(movement: HardwareMovementLedgerRow): HardwareMovementView {
   const { raw, ...rest } = movement
-  return { ...rest, raw: extractRawCrmLink(raw), planned: isPlannedStatus(movement.status) }
+  return {
+    ...rest,
+    raw: extractRawCrmLink(raw),
+    planned: isPlannedStatus(movement.status),
+    // 추정에는 시트 원본 행(raw.values)이 필요하다 — raw 를 버리기 전에 서버에서 계산해 싣는다.
+    outbound_type_resolved: resolveOutboundType(movement),
+  }
 }
 
 function toItemView(item: HardwareItem): HardwareItemView {
@@ -2292,6 +3293,9 @@ function toItemView(item: HardwareItem): HardwareItemView {
     reorder_point: item.reorder_point,
     lead_time_days: item.lead_time_days,
     source_aliases: item.source_aliases,
+    lot_tracked: item.lot_tracked ?? true,
+    report_group: item.report_group ?? null,
+    sort_order: item.sort_order ?? null,
   }
 }
 
@@ -2408,11 +3412,91 @@ export function computeHardwareStockRow(input: HardwareStockRowComputeInput): Ha
     daysUntilStockout,
     // 판촉(promoted) 라인엔 재주문 개념이 없다 — 부족/주문검토 축에서 제외하고,
     // 음수·이상치는 알림 빌더의 "원장 점검 필요"로 따로 올린다(운영 결정 2026-08-19).
-    low: !isPromotedProduct(item.name) && availableStock <= item.reorder_point,
+    // 정의서: "가용 < 최소재고"면 부족 — 최소재고와 같으면 아직 부족이 아니다(2026-10-28, 예전 ≤).
+    low: !isPromotedProduct(item.name) && availableStock < item.reorder_point,
     orderRecommended: !isPromotedProduct(item.name) && availableStock <= trendOrderPoint,
     locationBalances: locationRows,
     lotBalances: lotRows,
   }
+}
+
+/**
+ * 재고 행 → 알림. 행마다 재고 신호는 하나만 올린다(급한 순: 창고 음수 → 가용 음수 → 부족 → 주문 검토),
+ * 배송 예정 안내는 따로 붙는다. 실신호가 캡에 밀리지 않게 muted(미가동 품목 소음)와 나눠 각각 12건까지 싣는다.
+ *
+ * - 창고 음수 = 부족이 아니라 원장 이상 — 재주문 경보 대신 점검 신호(실사례: STD1(promoted) −16).
+ * - 가용 음수 = 배송 예정이 창고를 넘었다. 판촉(promoted) 라인도 알린다 — 재주문 축과 무관한 실신호다.
+ * - 부족 = 가용 < 최소재고(computeHardwareStockRow 의 low). 판촉 라인은 low 가 꺼져 있다.
+ */
+export function buildHardwareStockAlerts(rows: readonly HardwareStockRow[]): HardwareAlert[] {
+  const alerts: HardwareAlert[] = []
+  for (const row of rows) {
+    if (row.warehouseStock < 0) {
+      alerts.push({
+        id: `check-${row.itemId}`,
+        kind: "ledger_check",
+        severity: "critical",
+        itemId: row.itemId,
+        product: row.product,
+        title: "원본 점검 필요",
+        detail: `창고 ${row.warehouseStock}대 · 가용 ${row.availableStock}대 — ${
+          isPromotedProduct(row.product) ? "promoted 판정 또는 시트 수치 정리 필요" : "원본 유형·시트 수치 정리 필요"
+        }`,
+      })
+    } else if (row.availableStock < 0) {
+      alerts.push({
+        id: `negative-${row.itemId}`,
+        kind: "negative_available",
+        severity: "critical",
+        itemId: row.itemId,
+        product: row.product,
+        title: "가용 재고 음수",
+        detail: `창고 ${row.warehouseStock}대 − 배송 예정 ${row.plannedOut}대 = 가용 ${row.availableStock}대 — 입고하거나 예정을 정리하세요.`,
+      })
+    } else if (row.low) {
+      alerts.push({
+        id: `low-${row.itemId}`,
+        kind: "low",
+        severity: "critical",
+        itemId: row.itemId,
+        product: row.product,
+        title: "최소재고 미만",
+        detail: `가용 ${row.availableStock}대 < 최소 ${row.reorderPoint}대`,
+        ...(isDormantStockRow(row) ? { muted: true } : {}),
+      })
+    } else if (row.orderRecommended) {
+      alerts.push({
+        id: `order-${row.itemId}`,
+        kind: "order",
+        severity: "warning",
+        itemId: row.itemId,
+        product: row.product,
+        title: "주문 검토 시점",
+        detail: `최근 30일 출고 ${row.outbound30d}대, 권장 주문 기준 ${row.trendOrderPoint}대`,
+      })
+    }
+    if (row.plannedOut > 0) {
+      alerts.push({
+        id: `planned-${row.itemId}`,
+        kind: "planned",
+        severity: "info",
+        itemId: row.itemId,
+        product: row.product,
+        title: "배송 예정 반영",
+        detail: `배송 예정 ${row.plannedOut}대가 가용 재고에서 차감됩니다.`,
+      })
+    }
+  }
+
+  // 원장 점검(창고 음수)·가용 음수는 가장 급한 실신호 — 재고행 정렬과 무관하게 목록 최상단에 둔다.
+  const urgent = alerts.filter((alert) => alert.kind === "ledger_check" || alert.kind === "negative_available")
+  const activeAlerts = [
+    ...urgent.filter((alert) => alert.kind === "ledger_check"),
+    ...urgent.filter((alert) => alert.kind === "negative_available"),
+    ...alerts.filter((alert) => !alert.muted && !urgent.includes(alert)),
+  ].slice(0, 12)
+  const mutedAlerts = alerts.filter((alert) => alert.muted).slice(0, 12)
+  return [...activeAlerts, ...mutedAlerts]
 }
 
 async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
@@ -2465,68 +3549,14 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
   const sortedActiveMovements = activeMovements.slice().sort((a, b) => movementDate(b) - movementDate(a))
   const movementRows = sortedActiveMovements.slice(0, HARDWARE_MOVEMENTS_DEFAULT_LIMIT).map(toMovementView)
 
-  const alerts: HardwareAlert[] = []
-  for (const row of rows) {
-    // 음수 창고 = 부족이 아니라 원장 이상 — 재주문 경보 대신 점검 신호로 올린다.
-    // (현재 실사례: STD1(promoted) −16. 판촉 라인은 low 자체가 꺼져 있어 이 분기가 유일한 경보.)
-    if (row.warehouseStock < 0) {
-      alerts.push({
-        id: `check-${row.itemId}`,
-        severity: "critical",
-        itemId: row.itemId,
-        product: row.product,
-        title: "원본 점검 필요",
-        detail: `창고 ${row.warehouseStock}대 · 가용 ${row.availableStock}대 — ${
-          isPromotedProduct(row.product) ? "promoted 판정 또는 시트 수치 정리 필요" : "원본 유형·시트 수치 정리 필요"
-        }`,
-      })
-    } else if (row.low) {
-      alerts.push({
-        id: `low-${row.itemId}`,
-        severity: "critical",
-        itemId: row.itemId,
-        product: row.product,
-        title: "최소재고 미만",
-        detail: `가용 ${row.availableStock}대 / 최소 ${row.reorderPoint}대`,
-        ...(isDormantStockRow(row) ? { muted: true } : {}),
-      })
-    } else if (row.orderRecommended) {
-      alerts.push({
-        id: `order-${row.itemId}`,
-        severity: "warning",
-        itemId: row.itemId,
-        product: row.product,
-        title: "주문 검토 시점",
-        detail: `최근 30일 출고 ${row.outbound30d}대, 권장 주문 기준 ${row.trendOrderPoint}대`,
-      })
-    }
-    if (row.plannedOut > 0) {
-      alerts.push({
-        id: `planned-${row.itemId}`,
-        severity: "info",
-        itemId: row.itemId,
-        product: row.product,
-        title: "배송 예정 반영",
-        detail: `배송 예정 ${row.plannedOut}대가 가용 재고에서 차감됩니다.`,
-      })
-    }
-  }
-
-  // 실신호가 캡에 밀리지 않게 muted(미가동 품목 소음)와 분리해 각각 캡을 적용한다.
-  // 원장 점검(음수 재고)은 가장 급한 실신호 — 재고행 정렬과 무관하게 목록 최상단에 둔다.
-  const checkAlerts = alerts.filter((alert) => alert.id.startsWith("check-"))
-  const activeAlerts = [
-    ...checkAlerts,
-    ...alerts.filter((alert) => !alert.muted && !alert.id.startsWith("check-")),
-  ].slice(0, 12)
-  const mutedAlerts = alerts.filter((alert) => alert.muted).slice(0, 12)
+  const alerts = buildHardwareStockAlerts(rows)
 
   return {
     items: items.map(toItemView),
     stock: rows,
     movements: movementRows,
     movementsTotal: sortedActiveMovements.length,
-    alerts: [...activeAlerts, ...mutedAlerts],
+    alerts,
     totals: {
       warehouseStock: rows.reduce((sum, row) => sum + row.warehouseStock, 0),
       availableStock: rows.reduce((sum, row) => sum + row.availableStock, 0),
@@ -2548,7 +3578,8 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
 const getHardwareDashboardCached = unstable_cache(
   () => getHardwareDashboardUncached(),
   // v3(2026-09-15): 위치 정규화 변경("클래스인"→사무실, 수리 오탐 제거) — 옛 규칙 결과를 SWR 로 먼저 주지 않게 키를 올린다.
-  ["hardware-dashboard-v3"],
+  // v4(2026-10-28): 부족 판정 ≤ → <, 가용 음수 알림 추가.
+  ["hardware-dashboard-v4"],
   { tags: [HARDWARE_INVENTORY_CACHE_TAG], revalidate: 120 }
 )
 
