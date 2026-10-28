@@ -1,9 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
 
+import { CampaignGalleryCard } from "@/components/admin/campaigns/manage/CampaignGalleryCard"
 import {
   buildCampaignRowMetrics,
   CampaignManageEmpty,
+  CampaignProjectTag,
   CampaignRow,
   CampaignStatusChip,
   formatCampaignPeriod,
@@ -256,5 +258,83 @@ describe("CampaignManageEmpty", () => {
     expect(html).toContain("채널 실행을 하나로 묶는 우산")
     expect(html).toContain("실행(이메일·행사·광고)을 링크")
     expect(html).toContain("실제 가용한 값만 롤업")
+  })
+})
+
+describe("소속 프로젝트 표기(2026-10 캠페인·프로젝트 통합)", () => {
+  it("리스트 행은 소속 프로젝트 이름을 보여주고, 미배정이면 아무것도 덧붙이지 않는다", () => {
+    const withProject = renderToStaticMarkup(
+      <CampaignRow campaign={makeCampaign({ projectId: "prj-1" })} projectName="2026 가을 박람회" />,
+    )
+    expect(withProject).toContain("2026 가을 박람회")
+
+    const without = renderToStaticMarkup(<CampaignRow campaign={makeCampaign()} />)
+    expect(without).not.toContain("프로젝트 미배정")
+  })
+
+  it("CampaignProjectTag 는 showUnassigned 일 때만 미배정을 흐린 글자로 말한다", () => {
+    expect(renderToStaticMarkup(<CampaignProjectTag name={null} />)).toBe("")
+    const unassigned = renderToStaticMarkup(<CampaignProjectTag name={null} showUnassigned />)
+    expect(unassigned).toContain("프로젝트 미배정")
+    expect(unassigned).toContain("text-[#A39E98]")
+    // 라벨 칩(파스텔 채움)이 아니라 글자색 + 아이콘만(어드민 라벨 단순화).
+    expect(unassigned).not.toContain("rounded-full")
+  })
+})
+
+describe("CampaignGalleryCard", () => {
+  const TODAY = "2026-08-01"
+
+  it("기간 경과와 D-day, 배정 예산, 채널·연결 수, 성과 스트립을 한 카드에 담는다", () => {
+    const html = renderToStaticMarkup(
+      <CampaignGalleryCard
+        campaign={makeCampaign({ rollup: makeRollup() })}
+        projectName="2026 여름 프로젝트"
+        today={TODAY}
+      />,
+    )
+    // 2026-07-01 ~ 2026-08-31: 61일 중 31일 → 51%, 종료까지 30일.
+    expect(html).toContain("기간 경과")
+    expect(html).toContain("51%")
+    expect(html).toContain("D-30")
+    expect(html).toContain("2026 여름 프로젝트")
+    expect(html).toContain("₩3,000,000")
+    expect(html).toContain("연결 2")
+    expect(html).toContain("수신")
+  })
+
+  it("소진 원천이 없으니 예산 소진 미터·페이싱 판정을 지어내지 않는다", () => {
+    const html = renderToStaticMarkup(
+      <CampaignGalleryCard campaign={makeCampaign({ rollup: makeRollup() })} projectName={null} today={TODAY} />,
+    )
+    expect(html).not.toContain("예산 소진")
+    expect(html).not.toContain("소진")
+    expect(html).not.toContain("일정")
+    // 미배정도 같은 자리에 흐리게 적어 카드 높이를 맞춘다.
+    expect(html).toContain("프로젝트 미배정")
+  })
+
+  it("기간이 없으면 트랙을 그리지 않고 '—' 와 '종료일 미정'을 쓴다(거짓 0% 금지)", () => {
+    const html = renderToStaticMarkup(
+      <CampaignGalleryCard
+        campaign={makeCampaign({ startsAt: null, endsAt: null, budget: null, links: [], rollup: undefined })}
+        projectName={null}
+        today={TODAY}
+      />,
+    )
+    expect(html).toContain("—")
+    expect(html).toContain("종료일 미정")
+    expect(html).toContain("예산 미정")
+    expect(html).toContain("연결 없음")
+    expect(html).not.toContain("bg-[#E5E5E0]")
+  })
+
+  it("완료 캠페인은 서피스를 낮추고 카운트다운을 멈춘다", () => {
+    const html = renderToStaticMarkup(
+      <CampaignGalleryCard campaign={makeCampaign({ status: "done" })} projectName={null} today={TODAY} />,
+    )
+    expect(html).toContain("bg-[#FAFAF8]")
+    expect(html).toContain("종료")
+    expect(html).not.toContain("D-30")
   })
 })

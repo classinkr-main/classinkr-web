@@ -4,6 +4,7 @@ import {
   DDAY_SOON_DAYS,
   PACE_TOLERANCE_PP,
   computeProjectPacing,
+  computeScheduleProgress,
   type ProjectPacingInput,
 } from "@/lib/marketing/project-pacing"
 
@@ -142,5 +143,30 @@ describe("computeProjectPacing — 경계", () => {
     expect(p.todayInRange).toBe(false)
     expect(p.dday).toEqual({ label: "—", tone: "muted" })
     expect(p.pace).toEqual({ label: "—", tone: "muted" })
+  })
+})
+
+describe("computeScheduleProgress — 캠페인 카드가 쓰는 기간 진행(페이싱과 같은 계산)", () => {
+  it("경과율·오늘 위치·D-day 를 프로젝트 페이싱과 똑같이 낸다", () => {
+    const input = { status: "active" as const, startsAt: "2026-10-01", endsAt: "2027-02-28" }
+    const schedule = computeScheduleProgress(input, TODAY)
+    const full = pacing({ ...input, spentPct: 41 })
+    expect(schedule).toEqual({ elapsedPct: full.elapsedPct, todayInRange: full.todayInRange, dday: full.dday })
+  })
+
+  it("기간이 열려 있으면 경과율을 만들지 않는다", () => {
+    expect(computeScheduleProgress({ status: "active", startsAt: "2026-10-01", endsAt: null }, TODAY)).toEqual({
+      elapsedPct: null,
+      todayInRange: false,
+      dday: { label: "종료일 미정", tone: "muted" },
+    })
+  })
+
+  it("기준일이 형식에 안 맞으면 추측하지 않는다", () => {
+    expect(computeScheduleProgress({ status: "active", startsAt: "2026-10-01", endsAt: "2026-10-31" }, "")).toEqual({
+      elapsedPct: null,
+      todayInRange: false,
+      dday: { label: "—", tone: "muted" },
+    })
   })
 })
