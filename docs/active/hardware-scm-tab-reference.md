@@ -220,6 +220,8 @@
   - **가져오기 뒤 정리(§8-6)**: 시트 행에서 전환된 어드민 확정을 사유와 함께 취소한다(교체 모드만). 결과 문구에 건수가 붙는다.
 - **재고 파생**: 원장에서 위치별 잔량·예상 가용(예정 차감)·30일 출고·주문 시점(리드타임 반영)을 계산한다(`computeHardwareStockRow`).
 - **알림**: 부족·주문 검토·배송 예정·원장 점검 필요(판촉형 음수 등).
+- **일일 WeCom 알림(2026-10-28, [정의서 차이](./hardware-inventory-process-gap-2026-10-28.md) §6 D9)**: 매일 KST 08시에 운영 방으로 한 통 — 배송 예정 30일 경과(예정일, 없으면 등록일 기준)와 샘플 반납 예정일 지남(남은 수량이 있는 샘플 출고)을 담당자별로 묶는다. 규칙 `lib/hardware/process-alerts.ts`, 원장 읽기 `lib/repositories/hardware-process-alerts.ts`(키셋 전량), 발송 `lib/server/hardware-process-alerts.ts`, 크론은 디스패처 고정 슬롯(아래 운영 지침 링크). 줄 20개·본문 1,700바이트 상한, 넘으면 "외 N건". 같은 날 발송 성공 기록이 있으면 다시 보내지 않는다. 미리보기는 `GET /api/cron/dispatch/23?dryRun=true`(Bearer 인증)의 `hardwareAlertsPreview`, 이 알림만 끄기는 env `HARDWARE_PROCESS_ALERTS=off`. 운영 계약은 [운영 장애·Cron·Webhook 지침](./operational-failure-handling-guidelines.md) §1.
+  - 시트 행: 교체 가져오기는 매번 행을 새로 넣어 `created_at` 이 가져오기 시각이 된다. 그래서 **날짜 없는 시트 예정은 등록일 기준으로도 30일이 차지 않는다**(날짜 있는 시트 예정은 예정일로 걸린다). 시트를 끄는 T1·T2 뒤에는 저절로 풀린다.
 
 **시트 → 원장 규칙** (2026-09-14 운영 시트 실측으로 확정) — `buildHardwareSheetImportRows`(순수 함수)·`parseStock`
 
