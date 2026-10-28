@@ -1,20 +1,20 @@
 # 컨택 · 쇼룸 예약 · 구매 화면 디벨롭 실행 기획
 
 기준 시점: 2026-08-29
-후속 문서: [컨택 · 쇼룸 예약 · 구매 신청 디벨롭 2차 기획(2026-09-20)](./contact-showroom-checkout-develop-round2-2026-09-20.md) — 이 문서 적용 이후를 실측해 남은 결손과 다음 실행 순서를 정한다. 현재 상태 판단은 2차 문서를 먼저 본다.
+후속 문서: [컨택 · 쇼룸 예약 · 구매 신청 디벨롭 2차 기획(2026-09-20)](../active/contact-showroom-checkout-develop-round2-2026-09-20.md) — 이 문서 적용 이후를 실측해 남은 결손과 다음 실행 순서를 정한다. 현재 상태 판단은 2차 문서를 먼저 본다.
 문서 목적: 공개 사이트의 **문의(`/contact`) · 쇼룸 상담 예약 · 전자칠판/소프트웨어 구매** 세 화면을 하나의 전환 퍼널로 재정렬하기 위한 현황 진단과 실행 기준을 확정한다. 결제 활성화는 이 문서의 범위 밖이며, "결제 이전 단계"까지를 대상으로 한다.
 
 관련 문서
 
-- [prd.md](./prd.md) — §8-3 제품 페이지, §8-7 리드 수집, §11 CTA 수용 기준
-- [classin-korea-positioning-guidelines.md](./classin-korea-positioning-guidelines.md) — §9 CTA 운영 기준(쇼룸 = 최강 CTA)
-- [classin-operating-canon-2026-07-02.md](./classin-operating-canon-2026-07-02.md) — 세일즈 6단계 중 4단계 쇼룸 검증
-- [team-operations-playbook-2026-07-03.md](./team-operations-playbook-2026-07-03.md) — 플레이 3 목동 쇼룸 초대, 쇼룸 예약 슬롯 요구
-- [software-checkout-revamp-plan.md](./software-checkout-revamp-plan.md) — `/checkout` 구독형/충전형 확정 결정
-- [classin-pre-adoption-question-matrix-2026-06-18.md](./classin-pre-adoption-question-matrix-2026-06-18.md) — 도입 전 22질문, 상담 6단계
-- [classin-software-feature-inventory.md](./classin-software-feature-inventory.md) — 하드웨어 스펙·모델 라인업 SSOT
-- [brand-canon/voice-charter.md](./brand-canon/voice-charter.md) — 표면별 톤 레인지
-- [playbook/01-home-front.md](./playbook/01-home-front.md) — 홈/랜딩 파트 소유권
+- [prd.md](../active/prd.md) — §8-3 제품 페이지, §8-7 리드 수집, §11 CTA 수용 기준
+- [classin-korea-positioning-guidelines.md](../active/classin-korea-positioning-guidelines.md) — §9 CTA 운영 기준(쇼룸 = 최강 CTA)
+- [classin-operating-canon-2026-07-02.md](../active/classin-operating-canon-2026-07-02.md) — 세일즈 6단계 중 4단계 쇼룸 검증
+- [team-operations-playbook-2026-07-03.md](../active/team-operations-playbook-2026-07-03.md) — 플레이 3 목동 쇼룸 초대, 쇼룸 예약 슬롯 요구
+- [software-checkout-revamp-plan.md](../active/software-checkout-revamp-plan.md) — `/checkout` 구독형/충전형 확정 결정
+- [classin-pre-adoption-question-matrix-2026-06-18.md](../active/classin-pre-adoption-question-matrix-2026-06-18.md) — 도입 전 22질문, 상담 6단계
+- [classin-software-feature-inventory.md](../active/classin-software-feature-inventory.md) — 하드웨어 스펙·모델 라인업 SSOT
+- [brand-canon/voice-charter.md](../active/brand-canon/voice-charter.md) — 표면별 톤 레인지
+- [playbook/01-home-front.md](../active/playbook/01-home-front.md) — 홈/랜딩 파트 소유권
 - [../../DESIGN.md](../../DESIGN.md) — UI 정본
 
 ---
@@ -96,7 +96,7 @@
 
 ### P2 (구조 · 운영)
 
-9. **폼 스키마가 화면마다 독립 구현이다.** contact / DemoModal / EventSignupModal / ResourceDownloadForm / CheckoutRequestForm / meets-july 등 6곳이 각자 필드를 정의한다. [prd.md](./prd.md) §8-7의 "문의 폼과 데모 모달은 공통 스키마를 사용해야 한다"에 위배되며, 예약·구매 화면이 추가되면 8곳이 된다.
+9. **폼 스키마가 화면마다 독립 구현이다.** contact / DemoModal / EventSignupModal / ResourceDownloadForm / CheckoutRequestForm / meets-july 등 6곳이 각자 필드를 정의한다. [prd.md](../active/prd.md) §8-7의 "문의 폼과 데모 모달은 공통 스키마를 사용해야 한다"에 위배되며, 예약·구매 화면이 추가되면 8곳이 된다.
 10. **`checkout_requests`에 어드민 조회 화면이 없다.** 신청 건이 `leads` 미러링으로만 발견된다. 쇼룸 예약을 같은 방식으로 만들면 같은 함정에 빠진다.
 11. **`/contact`가 DESIGN.md를 위반한다.** `slate-*` 블루-그레이 전면 사용(§7-1 정면 위반), `font-serif`, `text-red-600`, 페이지 배경 `#EDF7F2`, `rounded-[24px]`/`[2rem]`. [scripts/check-design-tokens.mjs](../../scripts/check-design-tokens.mjs)는 `components/admin/branch/`만 스캔해 공개 화면에는 자동 가드가 없다.
 12. **`/contact` 테스트 0건.** 폼 필드 계약(`org-name`↔`org` 매핑, 전화 포맷터, topic 분기, honeypot)이 회귀 테스트 없이 방치돼 있다.
@@ -167,7 +167,7 @@
 
 구성: 히어로 → 쇼룸에서 확인하는 것(EDB 교안 → 판서 → 녹화 → 복습/LMS 한 흐름) → 준비물 안내(대표 수업 자료 1개) → **예약 폼** → 오시는 길(지도) → [데모 준비 킷](../../data/lead-magnets.json) 링크.
 
-카피는 [lib/classin-positioning.ts](../../lib/classin-positioning.ts)의 `primaryCtas[0]` "목동 쇼룸에서 실제 수업 흐름 보기"와 [classin-korea-positioning-guidelines.md](./classin-korea-positioning-guidelines.md) §9의 "단순 문의보다 '우리 학원 대표 수업 자료를 가져와 EDB·판서·녹화 흐름을 확인한다'는 맥락"을 따른다.
+카피는 [lib/classin-positioning.ts](../../lib/classin-positioning.ts)의 `primaryCtas[0]` "목동 쇼룸에서 실제 수업 흐름 보기"와 [classin-korea-positioning-guidelines.md](../active/classin-korea-positioning-guidelines.md) §9의 "단순 문의보다 '우리 학원 대표 수업 자료를 가져와 EDB·판서·녹화 흐름을 확인한다'는 맥락"을 따른다.
 
 **슬롯 설계**
 
@@ -268,7 +268,7 @@ created_at / updated_at timestamptz
 | 6 | **부가세 표기 기준** — 소프트웨어는 VAT 언급 자체가 없고 하드웨어는 "부가세 별도" 한 줄뿐이다 | P2 |
 | 7 | **`checkout_requests` 어드민 조회 화면** — 신청 건이 리드 미러링으로만 발견된다 | P2 |
 
-카피는 [brand-canon/voice-charter.md](./brand-canon/voice-charter.md)의 제품 표면 톤("자신감 있는 차별화 / 운영 흐름 중심 / 스펙 나열만 금지")을 따른다.
+카피는 [brand-canon/voice-charter.md](../active/brand-canon/voice-charter.md)의 제품 표면 톤("자신감 있는 차별화 / 운영 흐름 중심 / 스펙 나열만 금지")을 따른다.
 
 ### Phase 3 — 문의 페이지 항목 정리
 
@@ -293,7 +293,7 @@ created_at / updated_at timestamptz
 | 정산 | 결제·영수증·계약 | — | CS |
 | 행사 | 행사 신청 / 세미나 신청 | 행사 선택(현행) | 마케팅 |
 
-`message` placeholder는 [classin-pre-adoption-question-matrix-2026-06-18.md](./classin-pre-adoption-question-matrix-2026-06-18.md)의 상담 요청 문장 템플릿을 참고해 구체화한다.
+`message` placeholder는 [classin-pre-adoption-question-matrix-2026-06-18.md](../active/classin-pre-adoption-question-matrix-2026-06-18.md)의 상담 요청 문장 템플릿을 참고해 구체화한다.
 
 **추가 작업**
 
@@ -369,5 +369,5 @@ npm run build
 
 - 신규 공개 라우트는 `createPublicMetadata`(canonical) + [app/sitemap.ts](../../app/sitemap.ts) 등록 둘 다
 - 신규 컨택형 화면은 [components/ui/MobileFloatingCTA.tsx](../../components/ui/MobileFloatingCTA.tsx)의 제외 경로에 추가(CTA 중복 방지)
-- 신규 CTA는 `TrackedLink` 또는 `trackEvent` 계측([prd.md](./prd.md) §11: 트래킹만 되고 동작 없는 버튼 금지)
+- 신규 CTA는 `TrackedLink` 또는 `trackEvent` 계측([prd.md](../active/prd.md) §11: 트래킹만 되고 동작 없는 버튼 금지)
 - 공개 화면 팔레트는 자동 가드가 없으므로 수동 검토 필수

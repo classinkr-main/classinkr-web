@@ -1,6 +1,6 @@
 # Docs Index
 
-기준 시점: 2026-09-25
+기준 시점: 2026-10-28
 문서 목적: 현재 저장소에서 무엇을 먼저 읽어야 하는지, 어떤 문서를 믿어야 하는지, 어떤 문서가 역사 기록인지 빠르게 구분한다.
 
 ## Admin OS 정본 우선순위
@@ -42,8 +42,6 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - 파트너 포털/Portal V2/견적 문서 기능을 어드민·하드웨어 운영·공개 공유 링크·제한형 파트너 액션 포털로 재분배하는 최신 기획안
 - [active/quote-feature-agent-audit-2026-06-26.md](./active/quote-feature-agent-audit-2026-06-26.md)
   - 견적 작성/저장/발송/기록/응답/열람 기능축별 에이전트 점검 결과와 P0/P1 구현 큐
-- [active/partner-portal-master-spec.md](./active/partner-portal-master-spec.md)
-  - 파트너 포털 도메인 모델과 거래건 중심 UX 상세 근거. 제품 면 재배치 판단은 redistribution plan 우선
 - [active/architecture-schema-erd.md](./active/architecture-schema-erd.md)
   - 현재 아키텍처/스키마 입구
 - [active/chatbot-knowledgebase-faq-analytics-plan.md](./active/chatbot-knowledgebase-faq-analytics-plan.md)
@@ -87,8 +85,6 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - 홈페이지, CTA, 리드 수집, 콘텐츠 운영 기준
 - [active/partner-portal-redistribution-plan-2026-06-26.md](./active/partner-portal-redistribution-plan-2026-06-26.md)
   - 파트너 포털 기능 재배치, 견적 문서 라이프사이클, Admin Hardware 편입 기준
-- [active/partner-portal-master-spec.md](./active/partner-portal-master-spec.md)
-  - 파트너 포털 도메인 모델과 거래건 중심 UX 상세 근거
 - [active/admin-ai-widget-remote-order-plan-2026-09-28.md](./active/admin-ai-widget-remote-order-plan-2026-09-28.md)
   - **갈매봇(어드민 전역 AI 위젯)·AI 올인원 탭·원격 오더 기획.** 오더 등급(R0~R4), 오더 카드 사양, 안전 설계, 프론트 구현 현황과 서버 연결 지점
 - [active/admin-ai-structure-worklist-2026-09-29.md](./active/admin-ai-structure-worklist-2026-09-29.md)
@@ -97,16 +93,12 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - 내부 동료가 매일 쓰는 자체 CRM의 기록 입력, 회의록/녹음 모으기, 고객 360, 다음 액션 운영 기준
 - [active/admin-3-revenue-sheet-workspace-plan-2026-06-29.md](./active/admin-3-revenue-sheet-workspace-plan-2026-06-29.md)
   - 매출시트 별도 탭, REV 동기화본 운영화, 매칭 커버리지, app-owned revenue ledger 전환 기준
-- [active/partner-portal-implementation-roadmap.md](./active/partner-portal-implementation-roadmap.md)
-  - 파트너 포털 구현 순서. 현재 경로명과 구현 상태는 실제 코드로 재확인
 - [active/quote-lifecycle-execution-plan.md](./active/quote-lifecycle-execution-plan.md)
   - 견적 문서 라이프사이클 실행 기준
 - [active/quote-feature-agent-audit-2026-06-26.md](./active/quote-feature-agent-audit-2026-06-26.md)
   - 견적 작성/저장/발송/기록/응답/열람 기능축별 결손과 구현 우선순위
 - [active/software-checkout-revamp-plan.md](./active/software-checkout-revamp-plan.md)
   - /checkout 구독형/충전형 재정렬 실행안
-- [active/contact-showroom-store-develop-plan-2026-08-29.md](./active/contact-showroom-store-develop-plan-2026-08-29.md)
-  - **컨택·쇼룸 예약·구매 화면 1차 실행 기준.** /contact 항목 재편, 신설 /showroom 예약(슬롯·스키마·가용성), 가격 SSOT 단일화와 설치비 정합. 구매 화면은 공개하지 않고 /checkout을 디벨롭한다(D3). 결제 활성화 이전 단계까지가 범위
 - [active/contact-showroom-checkout-develop-round2-2026-09-20.md](./active/contact-showroom-checkout-develop-round2-2026-09-20.md)
   - **같은 세 화면의 2차 기획(최신).** 1차가 만든 것을 실측해 쇼룸 진입 경로 부재, 접수 확정 어드민 화면 부재, 퍼널 뒤쪽 리드의 source·귀속·계측 결손을 닫는다. 쇼룸 캘린더 UI/UX 사양과 구매 신청 금액 일관성 사양 포함
 - [active/public-site-audit-motion-plan-2026-10-26.md](./active/public-site-audit-motion-plan-2026-10-26.md)
@@ -156,8 +148,6 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - 웹훅 활성 스위치·일일 보고 발송 시간·DB 적용 순서와 발송 없는 검증 기준
 - [active/notification-architecture-plan.md](./active/notification-architecture-plan.md)
   - 알림 아키텍처 계획
-- [active/partner-portal-front-back-contract.md](./active/partner-portal-front-back-contract.md)
-  - 파트너 포털 BFF/API 계약 문서
 - [active/chatbot-knowledgebase-faq-analytics-plan.md](./active/chatbot-knowledgebase-faq-analytics-plan.md)
   - 챗봇 지식베이스, 질문 이벤트, FAQ 통계 스키마와 API 설계
 - [adr/README.md](./adr/README.md)
@@ -169,13 +159,6 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
 
 - [hardware-ops/README.md](./hardware-ops/README.md)
   - 하드웨어 운영 문서 모음
-- [active/partner-portal-document-hub-guidelines.md](./active/partner-portal-document-hub-guidelines.md)
-  - 문서 허브 세부 운영 규칙
-- [active/partner-portal-document-hub-wireframes.md](./active/partner-portal-document-hub-wireframes.md)
-  - 문서 허브 화면 설계
-- [active/MARKETING_EMAIL_SYSTEM.md](./active/MARKETING_EMAIL_SYSTEM.md)
-  - 마케팅 이메일 시스템 구현 메모
-  - 현재 제품 기준 문서가 아니라 역사적 구현 스냅샷으로 읽는다
 
 ## 5. Runbooks And Incidents
 
@@ -192,6 +175,10 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - **Supabase 운영 복구·하드닝 현재 실행 계획.** 2026-09-01 Admin 접속 장애의 인과관계, 즉시 복구, 실패 의미·캐시·권한·토큰 키·CRM 성능 개선의 독립 배포 순서와 종료 조건.
 - [active/cs-ops-standard-runbook-2026-08.md](./active/cs-ops-standard-runbook-2026-08.md)
   - CS 운영 데스크, 문서 보강 큐, 회귀 검수와 채널톡 실제 원인 검토 절차
+- 2026-10-28 보관 이동(역사 기록, 현재 기준으로 쓰지 않는다)
+  - 파트너 포털(`/partner` UI 제거됨): [master-spec](./archive/partner-portal-master-spec.md), [implementation-roadmap](./archive/partner-portal-implementation-roadmap.md), [front-back-contract](./archive/partner-portal-front-back-contract.md), [document-hub-guidelines](./archive/partner-portal-document-hub-guidelines.md), [document-hub-wireframes](./archive/partner-portal-document-hub-wireframes.md). 기능 재배치 판단은 [재분배 기획](./active/partner-portal-redistribution-plan-2026-06-26.md)이 남아 있다.
+  - [마케팅 이메일 시스템 구현 스냅샷](./archive/MARKETING_EMAIL_SYSTEM.md)
+  - [컨택·쇼룸·구매 1차 기획(2026-08-29)](./archive/contact-showroom-store-develop-plan-2026-08-29.md) — 현재 기준은 [2차 기획](./active/contact-showroom-checkout-develop-round2-2026-09-20.md)
 - [archive/repository-status-2026-06-08.md](./archive/repository-status-2026-06-08.md)
   - 2026-06-08 시점의 저장소 상태 스냅샷. 현재 상태 판단에는 사용하지 않는다.
 - [archive/repository-audit-2026-04-15.md](./archive/repository-audit-2026-04-15.md)

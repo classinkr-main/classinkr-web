@@ -20,6 +20,7 @@ description: 공개 마케팅 사이트(홈·제품·가격·컨택·FAQ·자료
 ## 검증 (플레이북 §8)
 
 ```bash
+npm run typecheck
 npx eslint app components lib --max-warnings=0
 npm run build
 ```

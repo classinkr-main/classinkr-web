@@ -18,8 +18,6 @@
 - Admin 작업: [docs/active/admin-guidance-map.md](docs/active/admin-guidance-map.md)
 - [DESIGN.md](DESIGN.md)
 
-2026-04-15 저장소 감사 문서는 당시 상태를 남긴 역사 기록이다. 현재 상태 판단에는 `docs/README.md`가 지정한 최신 정본과 실제 코드를 사용한다.
-
 ## 인프라 현황 (서버 위치)
 
 정본은 [Supabase 한국 리전 이관 결과](docs/active/supabase-korea-migration-status.md)다. 아래는 작업 전에 알아야 할 요약이다.
@@ -133,9 +131,7 @@ npm run build
 
 ## UI 작업 시 필수 체크
 
-- 색상: [DESIGN.md](DESIGN.md) 팔레트만 사용
-- 보더: `1px solid rgba(0,0,0,0.08)`
-- 섹션 배경: `#FFFFFF` ↔ `#F6F5F4` ↔ `#ECFDF5`
+- 색·보더·배경·모서리·모션 값은 [DESIGN.md](DESIGN.md)만 따른다. 이 파일에는 값을 복제하지 않는다.
 - 모바일 우선 반응형 유지
 
 ## 문서 운영 규칙

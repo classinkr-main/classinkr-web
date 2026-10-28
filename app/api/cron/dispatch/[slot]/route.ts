@@ -19,8 +19,9 @@ export const maxDuration = 60
  * (`/api/cron/dispatch/02` = `0 2 * * *`). 어떤 잡을 실제로 돌릴지는 여기서
  * site_settings 의 스케줄을 읽어 정한다. 그래서 발송 시각을 바꿀 때 배포가 필요없다.
  *
- * Vercel Hobby 는 크론 경로당 하루 1회만 허용하고 트리거 정확도가 ±59분이다.
- * 그래서 슬롯이 "시" 단위이고, 분은 예약할 수 없다.
+ * 이 구조는 Vercel Hobby(크론 경로당 하루 1회, 트리거 ±59분) 시절 설계라 슬롯이 "시" 단위다.
+ * 2026-09-14 Pro 전환 뒤에는 분 단위 정시 실행이 되므로 슬롯 통합을 재검토할 대상이다
+ * (docs/superpowers/specs/2026-09-14-vercel-pro-cron-freshness-design.md).
  *
  * 인증은 `Authorization: Bearer ${CRON_SECRET}` 하나뿐이다 — Vercel 이 크론에
  * 붙이는 게 그 헤더이지 x-vercel-cron 이 아니다(AGENTS.md 배포/Cron 안전 규칙).

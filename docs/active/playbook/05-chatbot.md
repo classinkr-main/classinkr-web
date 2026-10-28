@@ -9,11 +9,11 @@
 - 공개 API: `app/api/chatbot/*`
 - 공개 UI: `components/ui/FloatingChatbot.tsx`, `ChatbotTeaser.tsx`, `useChatbotTeaser.ts`
 - 엔진: `lib/chatbot/*`, `data/chatbot-golden-set.json`
-- 어드민 화면: `app/admin/chatbot`, `app/admin/cs-chatbot`, 상담 Inbox인 `app/admin/channel-talk`
+- 어드민 화면: `app/admin/chatbot`, `app/admin/cs-inquiries`, `app/admin/cs-chatbot`, 상담 Inbox인 `app/admin/channel-talk`
 - 어드민 API: `app/api/admin/chatbot/*`, `app/api/admin/cs-chat/*`, 상담 대화용 `app/api/admin/channel-talk/*`
 - 데이터 구현: 챗봇 평가·질문·내부 CS·상담 대화 repository와 관련 테스트
 
-`/admin/chatbot`은 redirect stub이 아니다. `ExternalChatbotOpsDashboard`와 `CsConsoleNav`를 렌더하는 현재 CS 운영 대시보드다. 문서 본문·문서 CRUD·채널톡 도움말 문서 동기화는 Content 소유이며, 챗봇/CS는 그 결과를 검색·평가·상담에 사용한다.
+`/admin/chatbot`과 `/admin/cs-inquiries`는 redirect stub이 아니다. 둘 다 `CsConsoleNav` 아래에 `CsInquiryDashboard`(CS 문의 통합 대시보드)를 렌더한다. 옛 `ExternalChatbotOpsDashboard`는 더 이상 렌더하지 않는다. 문서 본문·문서 CRUD·채널톡 도움말 문서 동기화는 Content 소유이며, 챗봇/CS는 그 결과를 검색·평가·상담에 사용한다.
 
 ## 2. 핵심 파일
 
@@ -22,7 +22,7 @@
 - `lib/chatbot/classification.ts`: intent와 handoff 분류
 - `lib/chatbot/page-context.ts`, `teaser-policy.ts`, `pricing-policy.ts`: 공개 UX와 민감 정책
 - `lib/chatbot/channel-handoff.ts`, `doc-gaps.ts`, `eval.ts`, `alpha-readiness.ts`, `alpha-db-contract.ts`
-- `components/admin/chatbot/ExternalChatbotOpsDashboard.tsx`, `components/admin/cs/CsConsoleNav.tsx`
+- `components/admin/cs/CsInquiryDashboard.tsx`, `components/admin/cs/CsConsoleNav.tsx`
 
 모델명, thinking 설정, 유사도 하한, 임베딩 차원과 teaser 대상 페이지는 코드와 테스트를 정본으로 확인한다. 시점별 운영 수치나 활성화 건수는 이 플레이북에 복제하지 않는다.
 
@@ -46,9 +46,9 @@
 
 ### 어드민과 CS
 
-- `/admin/chatbot`은 외부 공개 챗봇 운영 지표 대시보드다. 상세 문서 보강·품질 검수는 `CsConsoleNav`가 연결하는 docs 탭과 역할을 나눠 가진다.
+- `/admin/chatbot`(=`/admin/cs-inquiries`)은 CS 문의 통합 대시보드다. 상세 문서 보강·품질 검수는 `CsConsoleNav`가 연결하는 docs 탭과 역할을 나눠 가진다.
 - `/admin/cs-chatbot`은 내부 CS 작업면, `/admin/channel-talk`은 상담 Inbox다.
-- 내비의 표시 여부나 `nav_preset`은 보안 경계가 아니다. 각 admin API가 role/capability를 강제한다.
+- 내비 표시 여부나 사이드바 배치(`nav_overrides`·숨김)는 보안 경계가 아니다. 각 admin API가 role/capability를 강제한다.
 - AI 초안은 자동 게시·자동 발송하지 않는다.
 
 ## 4. 크로스컷

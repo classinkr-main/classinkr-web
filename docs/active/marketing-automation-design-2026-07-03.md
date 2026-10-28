@@ -5,7 +5,7 @@
 파트: 마케팅/그로스/CRM (Growth). 상위 청사진: [erp-blueprint-2026-06-22.md](erp-blueprint-2026-06-22.md)
 
 관련 기존 문서:
-- [MARKETING_EMAIL_SYSTEM.md](MARKETING_EMAIL_SYSTEM.md) — 이메일/구독자 시스템(선행)
+- [MARKETING_EMAIL_SYSTEM.md](../archive/MARKETING_EMAIL_SYSTEM.md) — 이메일/구독자 시스템(선행)
 - [messaging-solapi-setup-2026-07-03.md](messaging-solapi-setup-2026-07-03.md) — 발송 레이어(solapi) 백엔드 운영
 
 ---

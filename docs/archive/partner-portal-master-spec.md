@@ -7,26 +7,26 @@
 
 2026-06-26 운영 메모:
 
-- 기능 배치와 제품 면 재분배 판단은 [partner-portal-redistribution-plan-2026-06-26.md](./partner-portal-redistribution-plan-2026-06-26.md)를 우선한다.
+- 기능 배치와 제품 면 재분배 판단은 [partner-portal-redistribution-plan-2026-06-26.md](../active/partner-portal-redistribution-plan-2026-06-26.md)를 우선한다.
 - 이 문서는 `partner_accounts -> customers -> deals` 도메인 모델, 거래건 중심 UX, 문서/설치/수납 원칙의 상세 근거로 유지한다.
 - 현재 구현 경로는 주로 `app/api/portal`, `lib/portal`, `components/portal`, `app/share`이며, 구 `app/partner`, `app/api/partner`, `lib/partner-portal` 표현은 현재 코드와 대조해 읽는다.
 
 보조 문서:
 
-- [partner-portal-redistribution-plan-2026-06-26.md](./partner-portal-redistribution-plan-2026-06-26.md)
+- [partner-portal-redistribution-plan-2026-06-26.md](../active/partner-portal-redistribution-plan-2026-06-26.md)
 - [partner-portal-document-hub-guidelines.md](./partner-portal-document-hub-guidelines.md)
 - [partner-portal-document-hub-wireframes.md](./partner-portal-document-hub-wireframes.md)
 - [partner-portal-front-back-contract.md](./partner-portal-front-back-contract.md)
 - [partner-portal-implementation-roadmap.md](./partner-portal-implementation-roadmap.md)
-- [partner-portal-document-hub-execution-plan.md](./partner-portal-document-hub-execution-plan.md)
-- [partner-portal-future-features.md](./partner-portal-future-features.md) — 실험성 기능 목록 (낮은 우선순위)
+- [partner-portal-document-hub-execution-plan.md](../active/partner-portal-document-hub-execution-plan.md)
+- [partner-portal-future-features.md](../active/partner-portal-future-features.md) — 실험성 기능 목록 (낮은 우선순위)
 
 아카이브된 보조 문서 (2026-04-23 통합·이동):
 
-- [partner-portal-guidelines.md](../archive/partner-portal-guidelines.md)
-- [partner-portal-product-plan.md](../archive/partner-portal-product-plan.md)
-- [partner-portal-screen-layout.md](../archive/partner-portal-screen-layout.md)
-- [partner-portal-worklog.md](../archive/partner-portal-worklog.md)
+- [partner-portal-guidelines.md](partner-portal-guidelines.md)
+- [partner-portal-product-plan.md](partner-portal-product-plan.md)
+- [partner-portal-screen-layout.md](partner-portal-screen-layout.md)
+- [partner-portal-worklog.md](partner-portal-worklog.md)
 
 문서 우선순위:
 
@@ -39,7 +39,7 @@
 ## 1. 제품 한 줄 정의
 
 아래 정의는 거래건 중심 도메인 원칙을 설명하기 위한 기존 full-workspace 관점이다.
-제품 면 재배치 판단은 [partner-portal-redistribution-plan-2026-06-26.md](./partner-portal-redistribution-plan-2026-06-26.md)를 우선한다.
+제품 면 재배치 판단은 [partner-portal-redistribution-plan-2026-06-26.md](../active/partner-portal-redistribution-plan-2026-06-26.md)를 우선한다.
 
 파트너 포털은 `파트너사 대표와 ClassIn 팀을 위한 거래 운영 워크스페이스`다.
 

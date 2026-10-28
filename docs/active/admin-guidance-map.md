@@ -33,14 +33,14 @@
 | 관리자 API 응답 | `lib/admin-api-response.ts` |
 | 관리자 계정 조회 | `lib/repositories/admin-users.ts` |
 
-사이드바는 2026-09-10부터 **전원 동일**하다. 모든 관리자가 같은 18개 탭에 도달하고, 배치만
-정해진다 — 상시 9개(홈 2개 Overview·AI 올인원 + 고객·매출, `DEFAULT_PRIMARY_HREFS` — AI 올인원은
-2026-09-29 갈매봇 위젯과 함께 상시에 추가), 접힌 "기타" 7개(마케팅·분석 + 시스템), 기본 숨김 2개
-(마케팅 프로젝트·운영 상태, `DEFAULT_HIDDEN_HREFS`, 2026-09-25). 역할로
-항목을 거르지 않으며 "차단(deny)" 배치는 타입에서 제거됐다.
+사이드바는 2026-09-10부터 **전원 동일**하다. 모든 관리자가 같은 탭에 도달하고, 배치만 정해진다 —
+상시 목록은 `components/admin/admin-nav-access.ts`의 `DEFAULT_PRIMARY_HREFS`, 전원 기본 숨김은
+`DEFAULT_HIDDEN_HREFS`, 나머지는 접힌 "기타"다. 개수는 이 문서에 적지 않는다 — 상수 위 주석이 정본이다.
+AI 올인원(`/admin/ai`)은 시안 스위치(`NEXT_PUBLIC_ADMIN_AI_PREVIEW=1`, `lib/admin-ai/preview.ts`)를 켰을 때만
+메뉴와 라우트에 생긴다(기본 꺼짐). 역할로 항목을 거르지 않으며 "차단(deny)" 배치는 타입에서 제거됐다.
 
 **배치는 두 자리(상시·기타) + 개인 숨김이다. 숨김은 도달성을 바꾸지 않는다** — 숨긴 탭도 ⌘K·주소로
-열리고, `getAccessibleAdminNavItems`는 항상 18개 전체를 돌려준다(⌘K·active 판정·모바일 헤더가 의존).
+열리고, `getAccessibleAdminNavItems`는 항상 전체를 돌려준다(⌘K·active 판정·모바일 헤더가 의존).
 Overview는 로그인·`/admin` 착지 화면이라 숨길 수 없다(`UNHIDEABLE_NAV_HREFS`).
 
 `admin_profiles.nav_overrides`(`primary`·`folded`·`hidden`)는 그 자리를 사람별로 바꾸는 취향 설정이다.
@@ -77,7 +77,7 @@ SUPER_ADMIN은 설정 › 회원으로 편집한다. 레거시 `deny` 값은 `fo
 | CRM·그로스 | CRM, 캠페인(마케팅 허브), 리드, Branch, 캘린더 | [그로스 플레이북](playbook/04-growth-crm.md), 마케팅 허브는 [마케팅 탭 재구성 기획](marketing-tab-dashboard-restructure-2026-09-14.md) |
 | 외부 네오CRM 되밀기 | 리드 등록, 콜·데모·방문·메모 쓰기, 승인 큐 | [네오CRM 되밀기 지침](neocrm-writeback-guide-2026-09-07.md) |
 | 공개 챗봇·CS 운영 | RAG, 공개 챗봇, 외부 CS 대시보드 | [챗봇 플레이북](playbook/05-chatbot.md), [CS 콘솔 IA](cs-admin-console-ia-2026-07-27.md) |
-| 갈매봇·원격 오더 | 어드민 전역 AI 위젯, `/admin/ai`, 오더 카드·오더 등급 | [갈매봇 위젯·원격 오더 기획](admin-ai-widget-remote-order-plan-2026-09-28.md). 셸 연결은 Admin 코어, 대화는 챗봇/CS, 오더 핸들러는 해당 도메인 |
+| 갈매봇·원격 오더 | 어드민 전역 AI 위젯, `/admin/ai`(시안 스위치, 기본 꺼짐), 오더 카드·오더 등급 | [갈매봇 위젯·원격 오더 기획](admin-ai-widget-remote-order-plan-2026-09-28.md). 셸 연결은 Admin 코어, 대화는 챗봇/CS, 오더 핸들러는 해당 도메인 |
 | 플랫폼·데이터 | Supabase, migration, cron, 알림, Portal V2 | [플랫폼 플레이북](playbook/06-platform-data.md), [운영 장애·Cron·Webhook 지침](operational-failure-handling-guidelines.md), [ADR-010](../adr/ADR-010-operational-failure-containment.md), [DB 마이그레이션 런북](db-migration-runbook.md), [Supabase 운영 복구·하드닝 계획](supabase-operational-recovery-hardening-plan-2026-09-01.md) |
 | KR Team·매출 장부 | `/admin/branch`, `/admin/branch/ledger`, 동기화·정합성 | [Classin KR Team 스킬](../../.codex/skills/classin-kr-team/SKILL.md), [월별 목표·채움 차트](revenue-monthly-goal-chart.md) |
 
@@ -91,9 +91,9 @@ Admin 코어는 `app/api/admin/*`, `components/admin/*`, `lib/repositories/*` �
 - 사이드바, 커맨드 팔레트, 회원별 미리보기는 같은 nav access 해석 함수를 사용한다.
 - `/admin/traffic`은 현재 독립 화면으로 유지되며, 사이드바 최상위 항목에서만 내려간 상태다.
   Analytics는 해당 화면으로 연결한다.
-- `/admin/chatbot`은 외부 공개 챗봇의 CS 운영 대시보드다. 문서 보강과 품질 검수는
-  `/admin/docs`의 해당 탭에서 수행한다.
-- `/admin/ai`(AI 올인원)는 갈매봇 위젯의 전체 화면판이다. 기존 AI 기능(CS 코파일럿, 블로그·마케팅
+- `/admin/chatbot`(=`/admin/cs-inquiries`)은 CS 문의 통합 대시보드(`CsInquiryDashboard`)다. 문서 보강과
+  품질 검수는 `/admin/docs`의 해당 탭에서 수행한다.
+- `/admin/ai`(AI 올인원)는 갈매봇 위젯의 전체 화면판이다(시안 스위치를 켰을 때만 존재). 기존 AI 기능(CS 코파일럿, 블로그·마케팅
   보조, 인사이트)은 이 탭으로 옮기지 않고 바로가기만 둔다 — 각 화면이 계속 정본이다.
 - 갈매봇은 오더 티켓을 작성만 한다. 쓰기는 사람이 확인 버튼을 눌러야 실행되고, 오더 등급(R0~R4)은
   코드에 고정한다.

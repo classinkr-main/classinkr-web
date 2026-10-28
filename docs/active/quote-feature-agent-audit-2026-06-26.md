@@ -9,7 +9,7 @@
 - [partner-portal-redistribution-plan-2026-06-26.md](./partner-portal-redistribution-plan-2026-06-26.md)
 - [quote-lifecycle-execution-plan.md](./quote-lifecycle-execution-plan.md)
 - [quick-quote-builder-plan.md](./quick-quote-builder-plan.md)
-- [partner-portal-master-spec.md](./partner-portal-master-spec.md)
+- [partner-portal-master-spec.md](../archive/partner-portal-master-spec.md)
 
 관련 구현:
 

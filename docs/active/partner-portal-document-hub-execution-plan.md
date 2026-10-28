@@ -13,9 +13,9 @@
 
 관련 기준 문서:
 
-- [partner-portal-implementation-roadmap.md](./partner-portal-implementation-roadmap.md)
-- [partner-portal-front-back-contract.md](./partner-portal-front-back-contract.md)
-- [partner-portal-master-spec.md](./partner-portal-master-spec.md)
+- [partner-portal-implementation-roadmap.md](../archive/partner-portal-implementation-roadmap.md)
+- [partner-portal-front-back-contract.md](../archive/partner-portal-front-back-contract.md)
+- [partner-portal-master-spec.md](../archive/partner-portal-master-spec.md)
 - [docs/admin-partners-supabase-schema.sql](../admin-partners-supabase-schema.sql)
 - [app/partner/(portal)/documents/page.tsx](../../app/partner/(portal)/documents/page.tsx)
 - [components/partner-portal/crud/QuoteEditor.tsx](../../components/partner-portal/crud/QuoteEditor.tsx)

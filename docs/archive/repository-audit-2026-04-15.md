@@ -33,7 +33,7 @@
 지금 기준으로 먼저 봐야 하는 문서는 아래다.
 
 - 공개 사이트 제품 기준: [prd.md](../active/prd.md)
-- 파트너 포털 제품 기준: [partner-portal-master-spec.md](../active/partner-portal-master-spec.md)
+- 파트너 포털 제품 기준: [partner-portal-master-spec.md](partner-portal-master-spec.md)
 - 아키텍처 입구: [architecture-schema-erd.md](../active/architecture-schema-erd.md)
 - 하드웨어 운영 허브: [../hardware-ops/README.md](../hardware-ops/README.md)
 - ADR 규칙: [../adr/README.md](../adr/README.md)
@@ -77,7 +77,7 @@ npm run build
 ### 현재 기준으로 유지
 
 - [prd.md](../active/prd.md)
-- [partner-portal-master-spec.md](../active/partner-portal-master-spec.md)
+- [partner-portal-master-spec.md](partner-portal-master-spec.md)
 - [architecture-schema-erd.md](../active/architecture-schema-erd.md)
 - [notification-architecture-plan.md](../active/notification-architecture-plan.md)
 - [../hardware-ops/README.md](../hardware-ops/README.md)
@@ -86,8 +86,8 @@ npm run build
 
 활성 유지:
 
-- [partner-portal-front-back-contract.md](../active/partner-portal-front-back-contract.md)
-- [partner-portal-implementation-roadmap.md](../active/partner-portal-implementation-roadmap.md)
+- [partner-portal-front-back-contract.md](partner-portal-front-back-contract.md)
+- [partner-portal-implementation-roadmap.md](partner-portal-implementation-roadmap.md)
 
 2026-04-23 아카이브 (중복 제거):
 
@@ -103,7 +103,7 @@ npm run build
 
 ### 역사적 구현 스냅샷으로 읽어야 하는 문서
 
-- [MARKETING_EMAIL_SYSTEM.md](../active/MARKETING_EMAIL_SYSTEM.md)
+- [MARKETING_EMAIL_SYSTEM.md](MARKETING_EMAIL_SYSTEM.md)
 - [supabase-backend-masterplan.md](../active/supabase-backend-masterplan.md)
 - [../archive/error-fix-notes.md](../archive/error-fix-notes.md)
 - [../archive/error_handle.md](../archive/error_handle.md)

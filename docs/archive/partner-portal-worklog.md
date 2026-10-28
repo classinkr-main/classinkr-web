@@ -7,11 +7,11 @@
 
 관련 문서:
 
-- [partner-portal-master-spec.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-master-spec.md)
+- [partner-portal-master-spec.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/archive/partner-portal-master-spec.md)
 - [partner-portal-guidelines.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-guidelines.md)
 - [partner-portal-product-plan.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-product-plan.md)
 - [partner-portal-screen-layout.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-screen-layout.md)
-- [partner-portal-implementation-roadmap.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-implementation-roadmap.md)
+- [partner-portal-implementation-roadmap.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/archive/partner-portal-implementation-roadmap.md)
 
 ## 1. 이번 라운드에서 정리한 핵심 판단
 
@@ -28,7 +28,7 @@
 
 ### A. 기준 문서
 
-- [partner-portal-master-spec.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-master-spec.md)
+- [partner-portal-master-spec.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/archive/partner-portal-master-spec.md)
   - 단일 진입 문서
   - 제품 정의, IA, 화면 구조, 상태 전환, 구현 순서 요약
 
@@ -47,15 +47,15 @@
 
 ### D. 구현 문서
 
-- [partner-portal-implementation-roadmap.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-implementation-roadmap.md)
+- [partner-portal-implementation-roadmap.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/archive/partner-portal-implementation-roadmap.md)
 
 ## 3. 이번에 추가한 실물 산출물
 
 ### 문서
 
-- [partner-portal-master-spec.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-master-spec.md)
+- [partner-portal-master-spec.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/archive/partner-portal-master-spec.md)
 - [partner-portal-screen-layout.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-screen-layout.md)
-- [partner-portal-implementation-roadmap.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-implementation-roadmap.md)
+- [partner-portal-implementation-roadmap.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/archive/partner-portal-implementation-roadmap.md)
 - [partner-portal-worklog.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-worklog.md)
 
 ### 도메인 초안
