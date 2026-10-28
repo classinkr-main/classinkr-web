@@ -5,6 +5,8 @@
 /* 기획 문서·가드 스크립트에 적힌 클래스 이름이 공용 CSS 로 생성되지 않게 스캔에서 뺀다(system §13-11) */
 @source not "../docs/active/public-site-design-language-2026-10-26";
 @source not "../docs/active/public-site-design-language-2026-10-26.md";
+@source not "../docs/active/public-site-premium-elevation-2026-10-28.md";
+@source not "../docs/active/public-site-audit-motion-plan-2026-10-26.md";
 @source not "../DESIGN.md";
 @source not "../scripts";
 
