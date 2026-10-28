@@ -297,12 +297,82 @@ export async function readDshFromActiveImport(fiscalYear: number, knownRunId?: s
   return readCachedDshContentForImportRun(importRunId)
 }
 
+const REV_LINE_COLUMNS =
+  "id,source_row,source_record_key,account_name,branch_contact,location,scale,importance,team,manager,status,deal_type,product,first_payment,remark,total_amount,raw,created_at"
+const REV_PERIOD_ENTRY_COLUMNS = "rev_line_id,period_month,amount,confidence,source_week"
+
+// 임포트 라인 1건 + 그 라인의 월별 엔트리를 BranchRevDeal(시트 미러 shape)로 복원한다.
+// 전량 읽기(readRevDealsForImportRun)와 단건 상세(readRevDealFromActiveImportById)가 같은
+// 함수를 거쳐야 두 경로의 응답 shape·확도 의미가 갈라지지 않는다.
+function mapRevLineToDeal(line: RevLineDbRow, entries: RevPeriodEntryDbRow[]): BranchRevDeal {
+  const monthlyPayments: Record<string, number> = {}
+  const monthlyConfirmed: Record<string, number> = {}
+  const monthlyHighConfidence: Record<string, number> = {}
+  const monthlyRed: Record<string, boolean> = {}
+  const weeklyPayments: Record<string, number[]> = {}
+  const hasExplicitConfidence = entries.some((entry) => entry.confidence !== "format_unavailable")
+
+  for (const entry of entries) {
+    const amount = toNumber(entry.amount)
+    addToNumberMap(monthlyPayments, entry.period_month, amount)
+    addWeeklyPayment(weeklyPayments, entry.period_month, entry.source_week, amount)
+
+    if (entry.confidence === "confirmed") {
+      addToNumberMap(monthlyConfirmed, entry.period_month, amount)
+      // monthly_red는 미러(parseRev)와 같은 의미여야 한다 — 실제 확정액이 있는 달만 true.
+      // 캡처(rev-native:v2)는 ADR-0062의 "빨간 칸이 전부 예정이면 확정 0을 명시"를
+      // confidence='confirmed', amount=0 엔트리로 저장한다(의도된 동작). 이를 금액과 무관하게
+      // red=true로 복원하면 아직 오지 않은 주차의 예정 칸이 isMatrixCellLocked에서 확정 잠금·
+      // "확정" 칩으로 보인다(2026-10-28 감사: 활성 run에서 114셀). 명시 0은 확정액 맵에만 남긴다.
+      if (amount !== 0) monthlyRed[entry.period_month] = true
+      else if (monthlyRed[entry.period_month] !== true) monthlyRed[entry.period_month] = false
+    } else if (entry.confidence === "high_confidence") {
+      addToNumberMap(monthlyHighConfidence, entry.period_month, amount)
+      if (monthlyRed[entry.period_month] !== true) monthlyRed[entry.period_month] = false
+    } else if (entry.confidence === "expected" || entry.confidence === "format_unavailable" || hasExplicitConfidence) {
+      if (monthlyRed[entry.period_month] !== true) monthlyRed[entry.period_month] = false
+    }
+  }
+
+  return {
+    id: line.id,
+    sheet_row: line.source_row,
+    customer_name: line.account_name,
+    branch_contact: line.branch_contact,
+    team: line.team,
+    manager: normalizeBranchMemberName(line.manager),
+    deal_type: line.deal_type,
+    status: line.status,
+    first_payment: line.first_payment,
+    product_version: line.product,
+    region: line.location,
+    importance: line.importance,
+    note: line.remark,
+    contract_target: toNumber(line.total_amount),
+    monthly_payments: monthlyPayments,
+    monthly_red: monthlyRed,
+    monthly_confirmed: monthlyConfirmed,
+    monthly_high_conf: monthlyHighConfidence,
+    raw: {
+      ...(line.raw ?? {}),
+      source_record_key: line.source_record_key,
+      scale: line.scale,
+      // Native captures carry the parser's exact week-column projection in raw. Monthly
+      // entries have no source_week and must not erase it with an empty reconstruction.
+      ...(Object.keys(weeklyPayments).length > 0 ? {
+        weeklyPayments: { ...((line.raw?.weeklyPayments ?? {}) as Record<string, unknown>), ...weeklyPayments },
+      } : {}),
+    },
+    synced_at: line.created_at,
+  }
+}
+
 async function readRevDealsForImportRun(importRunId: string, team: string): Promise<BranchRevDeal[] | null> {
   const supabase = createSupabaseAdminClient()
   const { rows: lines, error: lineError } = await fetchAllRows<RevLineDbRow>((from, to) => {
     let lineQuery = supabase
       .from("branch_rev_lines")
-      .select("id,source_row,source_record_key,account_name,branch_contact,location,scale,importance,team,manager,status,deal_type,product,first_payment,remark,total_amount,raw,created_at")
+      .select(REV_LINE_COLUMNS)
       .eq("import_run_id", importRunId)
     if (team !== "ALL") lineQuery = lineQuery.eq("team", team)
     return lineQuery.order("source_row").range(from, to)
@@ -317,7 +387,7 @@ async function readRevDealsForImportRun(importRunId: string, team: string): Prom
   const { rows: entryData, error: entryError } = await fetchAllRows<RevPeriodEntryDbRow>((from, to) =>
     supabase
       .from("branch_rev_period_entries")
-      .select("rev_line_id,period_month,amount,confidence,source_week")
+      .select(REV_PERIOD_ENTRY_COLUMNS)
       .eq("import_run_id", importRunId)
       .order("id")
       .range(from, to),
@@ -335,63 +405,7 @@ async function readRevDealsForImportRun(importRunId: string, team: string): Prom
     entriesByLineId.set(entry.rev_line_id, entries)
   }
 
-  return lines.map((line) => {
-    const entries = entriesByLineId.get(line.id) ?? []
-    const monthlyPayments: Record<string, number> = {}
-    const monthlyConfirmed: Record<string, number> = {}
-    const monthlyHighConfidence: Record<string, number> = {}
-    const monthlyRed: Record<string, boolean> = {}
-    const weeklyPayments: Record<string, number[]> = {}
-    const hasExplicitConfidence = entries.some((entry) => entry.confidence !== "format_unavailable")
-
-    for (const entry of entries) {
-      const amount = toNumber(entry.amount)
-      addToNumberMap(monthlyPayments, entry.period_month, amount)
-      addWeeklyPayment(weeklyPayments, entry.period_month, entry.source_week, amount)
-
-      if (entry.confidence === "confirmed") {
-        addToNumberMap(monthlyConfirmed, entry.period_month, amount)
-        monthlyRed[entry.period_month] = true
-      } else if (entry.confidence === "high_confidence") {
-        addToNumberMap(monthlyHighConfidence, entry.period_month, amount)
-        if (monthlyRed[entry.period_month] !== true) monthlyRed[entry.period_month] = false
-      } else if (entry.confidence === "expected" || entry.confidence === "format_unavailable" || hasExplicitConfidence) {
-        if (monthlyRed[entry.period_month] !== true) monthlyRed[entry.period_month] = false
-      }
-    }
-
-    return {
-      id: line.id,
-      sheet_row: line.source_row,
-      customer_name: line.account_name,
-      branch_contact: line.branch_contact,
-      team: line.team,
-      manager: normalizeBranchMemberName(line.manager),
-      deal_type: line.deal_type,
-      status: line.status,
-      first_payment: line.first_payment,
-      product_version: line.product,
-      region: line.location,
-      importance: line.importance,
-      note: line.remark,
-      contract_target: toNumber(line.total_amount),
-      monthly_payments: monthlyPayments,
-      monthly_red: monthlyRed,
-      monthly_confirmed: monthlyConfirmed,
-      monthly_high_conf: monthlyHighConfidence,
-      raw: {
-        ...(line.raw ?? {}),
-        source_record_key: line.source_record_key,
-        scale: line.scale,
-        // Native captures carry the parser's exact week-column projection in raw. Monthly
-        // entries have no source_week and must not erase it with an empty reconstruction.
-        ...(Object.keys(weeklyPayments).length > 0 ? {
-          weeklyPayments: { ...((line.raw?.weeklyPayments ?? {}) as Record<string, unknown>), ...weeklyPayments },
-        } : {}),
-      },
-      synced_at: line.created_at,
-    }
-  })
+  return lines.map((line) => mapRevLineToDeal(line, entriesByLineId.get(line.id) ?? []))
 }
 
 // 워크벤치는 REV 화면에서 summary/heatmap/ledger를 동시에 조회해 같은 액티브 런 전량
@@ -417,6 +431,51 @@ export async function readRevDealsFromActiveImport(
   if (!importRunId) return null
   const team = filter?.team && filter.team !== "ALL" ? filter.team : "ALL"
   return readCachedRevDealsForImportRun(importRunId, team)
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// 행 상세(GET /api/admin/branch/deals/[id]) 단건 복원. 액티브 임포트 모드의 장부 행은
+// branch_rev_lines.id로 내려가므로(pipeline-rows → readRevDealsFromActiveImport) 미러
+// (branch_rev_deals.id)만 보는 getBranchRevDeal로는 임포트 모드에서 전부 404였다
+// (2026-10-28 감사: 활성 run 451라인 중 미러 id 일치 0). 라인 1건을 id로 찾고, 그 라인이 속한
+// run이 해당 회계연도의 활성 run일 때만 같은 run의 period entries로 월·확도를 복원한다 — 스테일
+// run의 라인은 null(→ 404 "재동기화로 원천이 바뀌었을 수 있어요"가 실제 상황이 된다). 전량 캐시
+// (readCachedRevDealsForImportRun)를 타지 않고 라인·엔트리만 좁게 읽어, 상세 1건 때문에 콜드
+// 인스턴스가 run 전량(수천 엔트리)을 페이징하지 않게 한다.
+export async function readRevDealFromActiveImportById(id: string): Promise<BranchRevDeal | null> {
+  // branch_rev_lines.id는 UUID — 다른 형식(초안 키 등)은 PostgREST가 22P02로 거절하므로 왕복 없이 "없음".
+  if (!UUID_RE.test(id)) return null
+  const supabase = createSupabaseAdminClient()
+  const { data, error: lineError } = await supabase
+    .from("branch_rev_lines")
+    .select(`${REV_LINE_COLUMNS},import_run_id,fiscal_year`)
+    .eq("id", id)
+    .maybeSingle()
+  if (lineError) {
+    if (isMissingSalesLedgerImportTableError(lineError)) return null
+    throw new Error(`[sales-ledger-imports] REV line lookup failed: ${lineError.message}`)
+  }
+  if (!data) return null
+  const line = data as unknown as RevLineDbRow & { import_run_id: string; fiscal_year: number }
+
+  const runInfo = await getActiveImportRunInfo("rev", line.fiscal_year)
+  if (!runInfo || runInfo.runId !== line.import_run_id) return null
+
+  const { rows: entries, error: entryError } = await fetchAllRows<RevPeriodEntryDbRow>((from, to) =>
+    supabase
+      .from("branch_rev_period_entries")
+      .select(REV_PERIOD_ENTRY_COLUMNS)
+      .eq("import_run_id", line.import_run_id)
+      .eq("rev_line_id", line.id)
+      .order("id")
+      .range(from, to),
+  )
+  if (entryError) {
+    if (isMissingSalesLedgerImportTableError(entryError)) return null
+    throw new Error(`[sales-ledger-imports] REV period import read failed: ${entryError.message}`)
+  }
+  return mapRevLineToDeal(line, entries)
 }
 
 const KPI_DB_METRIC_BY_APP_METRIC: Record<KpiMetric, string> = {

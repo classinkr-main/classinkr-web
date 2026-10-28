@@ -1,7 +1,11 @@
 import "server-only"
 
-import { listBranchRevDeals, type BranchRevDeal } from "@/lib/repositories/branch-deals"
-import { getActiveImportRunInfo, readRevDealsFromActiveImport } from "@/lib/repositories/sales-ledger-imports"
+import { getBranchRevDeal, listBranchRevDeals, type BranchRevDeal } from "@/lib/repositories/branch-deals"
+import {
+  getActiveImportRunInfo,
+  readRevDealFromActiveImportById,
+  readRevDealsFromActiveImport,
+} from "@/lib/repositories/sales-ledger-imports"
 
 // REV 데이터셋 단일 규약: DB-native 액티브 임포트 우선, 없으면 시트 미러(branch_rev_deals)
 // 폴백. summary/heatmap 등 branch 탭이 전부 이 헬퍼를 거쳐야 DB-native 전환 이후에도
@@ -43,4 +47,16 @@ export async function readRevDealsPreferActiveWithSource(
   // null로 남기고 라우트가 그 값을 대입한다(같은 값을 다시 조회하는 왕복을 만들지 않는다).
   const mirrorDeals = await listBranchRevDeals(filter)
   return { deals: mirrorDeals, source: { kind: "mirror", asOf: null } }
+}
+
+// 행 상세(GET /api/admin/branch/deals/[id])의 id 사다리. 장부 행 id는 원천에 따라 두 공간에
+// 산다 — 시트 미러면 branch_rev_deals.id, 액티브 임포트면 branch_rev_lines.id(pipeline-rows가
+// readRevDealsFromActiveImport ?? listBranchRevDeals로 내려보낸 그대로). 미러만 보던 상세는
+// 임포트 모드에서 전부 404였고(2026-10-28 감사), 화면 문구("재동기화로 원천이 바뀌었을 수 있어요")는
+// 일시 경합으로 오인하게 했다. 먼저 미러 id, 없으면 활성 run의 라인 id로 푼다 — 둘 다 UUID라
+// 충돌하지 않고, 응답 shape(BranchRevDeal)는 양쪽이 같다.
+export async function readRevDealById(id: string): Promise<BranchRevDeal | null> {
+  const mirror = await getBranchRevDeal(id)
+  if (mirror) return mirror
+  return readRevDealFromActiveImportById(id)
 }
