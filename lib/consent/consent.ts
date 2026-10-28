@@ -87,9 +87,9 @@ export function hasDecision(): boolean {
 /** Google Consent Mode v2 update 신호 전송 (gtag는 layout 부트스트랩에서 정의됨). */
 export function applyConsentMode(choice: ConsentChoice) {
   if (!isBrowser()) return
-  const w = window as unknown as { gtag?: (...args: unknown[]) => void }
-  if (typeof w.gtag !== "function") return
-  w.gtag("consent", "update", {
+  const w = window as unknown as { gtag?: (...args: unknown[]) => void; fbq?: (...args: unknown[]) => void }
+  w.fbq?.("consent", choice.marketing ? "grant" : "revoke")
+  w.gtag?.("consent", "update", {
     ad_storage: choice.marketing ? "granted" : "denied",
     ad_user_data: choice.marketing ? "granted" : "denied",
     ad_personalization: choice.marketing ? "granted" : "denied",

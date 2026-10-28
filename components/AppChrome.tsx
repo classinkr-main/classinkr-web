@@ -6,6 +6,7 @@ import { Component, useEffect, useState, type ReactNode } from "react"
 
 import { RouteTransition } from "@/components/transitions/RouteTransition"
 import { useConsent } from "@/lib/consent/useConsent"
+import { isSensitiveTrackingPath } from "@/lib/analytics-path"
 
 const ConditionalHeader = dynamic(() =>
   import("@/components/sections/ConditionalHeader").then((mod) => mod.ConditionalHeader)
@@ -92,7 +93,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
   const [readyPath, setReadyPath] = useState<string | null>(null)
   const { choice: consentChoice } = useConsent()
   const showPublicChrome = !isInternalPath(pathname)
-  const showAnalytics = showPublicChrome
+  const showAnalytics = showPublicChrome && !isSensitiveTrackingPath(pathname)
   const showMobileFloatingCta = showPublicChrome && !pathname.startsWith("/l/")
 
   useEffect(() => {
@@ -127,7 +128,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
         )}
       </main>
       {showPublicChrome ? <ConditionalFooter /> : null}
-      <GoogleAdsScript />
+      {showAnalytics ? <GoogleAdsScript /> : null}
       {showAnalytics ? (
         <>
           <GTMScript />

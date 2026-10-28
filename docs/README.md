@@ -103,6 +103,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - **같은 세 화면의 2차 기획(최신).** 1차가 만든 것을 실측해 쇼룸 진입 경로 부재, 접수 확정 어드민 화면 부재, 퍼널 뒤쪽 리드의 source·귀속·계측 결손을 닫는다. 쇼룸 캘린더 UI/UX 사양과 구매 신청 금액 일관성 사양 포함
 - [active/public-site-audit-motion-plan-2026-10-26.md](./active/public-site-audit-motion-plan-2026-10-26.md)
   - **공개 사이트 전수 점검 + 모션·디자인 디벨롭 기획.** 홈·셸·제품·콘텐츠·전환·랜딩·쿠키 동의의 P0~P2(운영 재현 표기), 운영자 결정 D1~D8, 모션 토큰·Act별 안무·Phase 0~3, 실행 웨이브 W0~W4
+- [active/public-site-design-language-2026-10-26.md](./active/public-site-design-language-2026-10-26.md)
+  - **공개 사이트 디자인 언어 「편집 지면 · OS판」(승인 대기).** 폰트·색·표면·카드 모션·아이콘·이미지·컨트롤·레이아웃의 방향과 운영자 결정 V1~V9, 정본 규칙 C01~C28·X01~X16, 구현 단계 P0~P5와 되돌림 기준. 상세 스펙 7종은 같은 이름 폴더
 - [active/docs-center-db-design.md](./active/docs-center-db-design.md)
   - 공개 가이드/매뉴얼/도움말/문제 해결/업데이트 문서센터와 챗봇 지식 베이스 설계
 - [active/docs-center-content-guidelines.md](./active/docs-center-content-guidelines.md)

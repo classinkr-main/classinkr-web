@@ -17,6 +17,7 @@ import {
     ACADEMY_SIZE_PLACEHOLDER,
 } from "@/lib/contact/academy-size"
 import { CONTACT_TOPICS, EVENT_CONTACT_TOPICS, isContactTopic } from "@/lib/contact/topics"
+import { consumeContactDraft, stripContactPrefill } from "@/lib/contact/draft"
 import type { PublicEvent } from "@/lib/types/public-events"
 
 const PHONE_ALLOWED_INPUT_PATTERN = /^[\d\s-]*$/
@@ -104,7 +105,18 @@ export default function ContactPage() {
         const eventParam = params.get("event")?.trim()
         const sourceParam = params.get("source")?.trim()
         const topicParam = params.get("topic")?.trim()
-        const prefillParam = params.get("prefill")?.trim()
+        let prefillParam = params.get("prefill")?.trim()
+        if (sourceParam === "chatbot") {
+            try {
+                const stored = consumeContactDraft(window.sessionStorage)
+                prefillParam = prefillParam || stored || undefined
+            } catch {
+                // Reading sessionStorage itself can throw in restricted browsers.
+            }
+        }
+        if (params.has("prefill")) {
+            window.history.replaceState(window.history.state, "", stripContactPrefill(window.location.href))
+        }
         const leadMagnetParam = params.get("lead_magnet")?.trim()
 
         if (eventParam) {
@@ -736,7 +748,7 @@ export default function ContactPage() {
                                         style={{ border: 0 }}
                                         allowFullScreen={false}
                                         loading="lazy"
-                                        referrerPolicy="no-referrer-when-downgrade"
+                                        referrerPolicy="no-referrer"
                                         className="filter grayscale-[0.2] contrast-[1.05] opacity-90 hover:grayscale-0 hover:opacity-100 transition-all duration-500"
                                     ></iframe>
                                 </div>

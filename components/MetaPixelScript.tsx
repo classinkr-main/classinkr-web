@@ -1,6 +1,6 @@
 "use client"
 
-import { usePathname, useSearchParams } from "next/navigation"
+import { usePathname } from "next/navigation"
 import Script from "next/script"
 import { useEffect } from "react"
 import { META_PIXEL_ID } from "@/lib/analytics-config"
@@ -9,8 +9,6 @@ let lastMetaPageViewPath: string | null = null
 
 export function MetaPixelScript() {
   const pathname = usePathname()
-  const searchParams = useSearchParams()
-  const search = searchParams.toString()
   const isInternal =
     pathname.startsWith("/admin") ||
     pathname.startsWith("/checkout") ||
@@ -19,7 +17,7 @@ export function MetaPixelScript() {
   useEffect(() => {
     if (isInternal || !META_PIXEL_ID) return
 
-    const path = `${pathname}${search ? `?${search}` : ""}`
+    const path = pathname
     if (lastMetaPageViewPath === path) return
 
     let timeout: ReturnType<typeof setTimeout> | null = null
@@ -43,7 +41,7 @@ export function MetaPixelScript() {
     return () => {
       if (timeout) clearTimeout(timeout)
     }
-  }, [isInternal, pathname, search])
+  }, [isInternal, pathname])
 
   if (isInternal || !META_PIXEL_ID) return null
 
@@ -53,7 +51,7 @@ export function MetaPixelScript() {
         id="meta-pixel"
         strategy="afterInteractive"
         dangerouslySetInnerHTML={{
-          __html: `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init','${META_PIXEL_ID}');`,
+          __html: `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq.disablePushState=true;fbq('consent','grant');fbq('init','${META_PIXEL_ID}');`,
         }}
       />
       <noscript>

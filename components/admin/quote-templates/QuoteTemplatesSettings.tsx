@@ -1,8 +1,12 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { Eye, EyeOff, Search, Trash2 } from "lucide-react"
 
 import { adminFetchJson } from "@/lib/admin-client"
+import { QUOTE_WORKSPACE_PREVIEW_LIMIT } from "@/lib/quote-workspace-preferences"
+import QuoteDisplaySettings from "@/components/portal/quotes/QuoteDisplaySettings"
+import { useQuoteWorkspacePreferences } from "./useQuoteWorkspacePreferences"
 import {
   DEFAULT_QUOTE_TEMPLATE_DEFAULTS,
   QUOTE_TEMPLATE_CATALOG,
@@ -87,6 +91,9 @@ const selectClass =
   "h-9 rounded-md border border-[#E8E8E4] bg-white px-2.5 text-[13px] text-[#111110] focus:border-[#084734] focus:outline-none disabled:bg-[#FAFAF8] disabled:text-[#78736D]"
 
 export default function QuoteTemplatesSettings() {
+  const { preferences, updatePreferences, storageError } = useQuoteWorkspacePreferences()
+  const [search, setSearch] = useState("")
+  const [expandedGroups, setExpandedGroups] = useState({ base: false, team: false })
   const [catalog, setCatalog] = useState<QuoteTemplateCatalogResponse | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -176,14 +183,15 @@ export default function QuoteTemplatesSettings() {
   }
 
   const archive = async () => {
-    if (!draft?.id || !window.confirm(`'${draft.name}' 템플릿을 보관할까요? 작성 화면 목록에서 빠집니다.`)) return
+    if (!draft?.id || saving || !window.confirm(`'${draft.name}' 템플릿을 삭제할까요? 이미 만든 견적서는 그대로 유지됩니다.`)) return
     setSaving(true)
     try {
       await adminFetchJson(`${API}/${draft.id}`, { method: "DELETE" })
+      updatePreferences({ hiddenTemplateIds: preferences.hiddenTemplateIds.filter((id) => id !== draft.id) })
       await load(null)
-      setMessage({ tone: "ok", text: "보관했습니다." })
+      setMessage({ tone: "ok", text: "템플릿을 삭제했습니다. 기존 견적서는 유지됩니다." })
     } catch (error) {
-      setMessage({ tone: "error", text: error instanceof Error ? error.message : "보관하지 못했습니다." })
+      setMessage({ tone: "error", text: error instanceof Error ? error.message : "삭제하지 못했습니다." })
     } finally {
       setSaving(false)
     }
@@ -197,8 +205,8 @@ export default function QuoteTemplatesSettings() {
     : []
 
   const groups: Array<{ key: "base" | "team"; label: string; hint: string; items: QuoteTemplateView[] }> = [
-    { key: "base", label: "기본 템플릿", hint: "코드에 정의된 표준 구성 · 정가 고정", items: catalog?.base ?? [] },
     { key: "team", label: "팀 템플릿", hint: "영업팀이 저장한 구성 · 단가 조정 가능", items: catalog?.team ?? [] },
+    { key: "base", label: "기본 템플릿", hint: "기본 제공 구성 · 내 작성 목록에서 숨길 수 있습니다", items: catalog?.base ?? [] },
   ]
 
   return (
@@ -222,6 +230,13 @@ export default function QuoteTemplatesSettings() {
       </header>
 
       <main className="px-4 pb-12 pt-5 sm:px-6">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <label className="relative block w-full sm:max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A39E98]" />
+            <input type="search" aria-label="템플릿 검색" placeholder="이름이나 품목으로 검색" value={search} onChange={(event) => setSearch(event.target.value)} className="h-10 w-full rounded-md border border-[#E8E8E4] bg-white pl-9 pr-3 text-[13px] outline-none focus:border-[#084734]" />
+          </label>
+          <div className="w-full sm:w-72"><QuoteDisplaySettings preferences={preferences} onChange={updatePreferences} storageError={storageError} /></div>
+        </div>
         {catalog?.warning && (
           <p role="status" className="mb-3 rounded-lg border border-[#ECD29C] bg-white px-4 py-2.5 text-[12.5px] text-[#7A520F]">
             {catalog.warning}
@@ -235,7 +250,10 @@ export default function QuoteTemplatesSettings() {
 
         <div className="flex flex-wrap overflow-hidden rounded-[10px] border border-[#E8E8E4] bg-white">
           <aside aria-label="템플릿 목록" className="min-w-0 flex-[1_1_340px] border-r border-[#E8E8E4]">
-            {groups.map((group) => (
+            {groups.map((group) => {
+              const filtered = group.items.filter((view) => `${view.name} ${summaryOf(view)}`.toLowerCase().includes(search.trim().toLowerCase()))
+              const displayed = search.trim() || expandedGroups[group.key] ? filtered : filtered.slice(0, QUOTE_WORKSPACE_PREVIEW_LIMIT)
+              return (
               <section key={group.key} className="border-b border-[#F0F0EC] pb-1.5">
                 <h2 className="px-4 pb-0.5 pt-3.5 text-[11.5px] font-semibold text-[#31302E]">
                   {group.label} <span className="font-normal text-[#78736D]">{group.items.length}</span>
@@ -246,16 +264,18 @@ export default function QuoteTemplatesSettings() {
                     {teamReady ? "아직 없습니다. 기본 템플릿을 복제하거나 + 새 템플릿으로 만드세요." : "표 적용 전이라 기본 템플릿만 보입니다."}
                   </p>
                 )}
-                {group.items.map((view) => {
+                {search.trim() && filtered.length === 0 && <p className="mx-4 mb-2 text-[12px] text-[#615D59]">검색 결과가 없습니다.</p>}
+                {displayed.map((view) => {
                   const on = view.id === selectedId
-                  const flag = view.hasDiscount ? "할인 단가" : view.showInMenu ? "메뉴 표시" : ""
+                  const hidden = preferences.hiddenTemplateIds.includes(view.id)
+                  const flag = hidden ? "내 목록에서 숨김" : view.hasDiscount ? "할인 단가" : view.showInMenu ? "메뉴 표시" : ""
                   return (
+                    <div key={view.id} className={`flex items-center ${on ? "bg-[#F6F5F4] shadow-[inset_2px_0_0_#084734]" : ""}`}>
                     <button
-                      key={view.id}
                       type="button"
                       onClick={() => pick(view)}
                       aria-pressed={on}
-                      className={`block w-full py-2.5 pl-[18px] pr-4 text-left hover:bg-[#FCFCFA] ${on ? "bg-[#F6F5F2] shadow-[inset_2px_0_0_#084734]" : ""}`}
+                      className="block min-w-0 flex-1 py-2.5 pl-[18px] pr-2 text-left hover:bg-[#F6F5F4]"
                     >
                       <span className="flex items-baseline justify-between gap-2.5">
                         <span className="truncate font-semibold">{view.name}</span>
@@ -268,10 +288,20 @@ export default function QuoteTemplatesSettings() {
                         <span className={`whitespace-nowrap ${view.hasDiscount ? "font-semibold text-[#7A520F]" : ""}`}>{flag}</span>
                       </span>
                     </button>
+                      <button type="button" aria-label={`${view.name} ${hidden ? "다시 표시" : "숨기기"}`} title={hidden ? "내 작성 목록에 다시 표시" : "내 작성 목록에서 숨기기"} onClick={() => updatePreferences({ hiddenTemplateIds: hidden ? preferences.hiddenTemplateIds.filter((id) => id !== view.id) : [...preferences.hiddenTemplateIds, view.id] })} className="mr-2 shrink-0 rounded-md p-2.5 text-[#615D59] hover:bg-[#ECFDF5] hover:text-[#084734]">
+                        {hidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                      </button>
+                    </div>
                   )
                 })}
+                {!search.trim() && filtered.length > QUOTE_WORKSPACE_PREVIEW_LIMIT && (
+                  <button type="button" onClick={() => setExpandedGroups((current) => ({ ...current, [group.key]: !current[group.key] }))} className="mx-4 mb-2 mt-1 py-1 text-[12px] text-[#084734]">
+                    {expandedGroups[group.key] ? "접기" : `${group.label} ${filtered.length}개 모두 보기`}
+                  </button>
+                )}
               </section>
-            ))}
+              )
+            })}
           </aside>
 
           {draft ? (
@@ -594,9 +624,10 @@ export default function QuoteTemplatesSettings() {
                     type="button"
                     onClick={archive}
                     disabled={saving}
-                    className="h-9 rounded-md border border-[#E8E8E4] bg-white px-3 text-[12.5px] font-semibold text-[#615D59]"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[#E8E8E4] bg-white px-3 text-[12.5px] font-semibold text-[#B43E3E] hover:bg-[#FCE9E9] disabled:opacity-50"
                   >
-                    보관
+                    <Trash2 className="h-3.5 w-3.5" />
+                    템플릿 삭제
                   </button>
                 )}
                 {!locked && (

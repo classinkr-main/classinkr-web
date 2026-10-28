@@ -7,7 +7,7 @@ import { BROCHURE_URL } from "@/lib/marketing-links"
 import { TESTIMONIALS } from "@/lib/testimonials"
 import { motion, useInView, useMotionValue, useTransform, useScroll, useMotionValueEvent, animate } from "framer-motion"
 import {
-    Play, ArrowRight, Sparkles, Monitor, Layers, MousePointerClick,
+    Play, ArrowRight, Monitor, Layers, MousePointerClick,
     Clock, Users, PenTool, Dice1, FileText, Layout, Video,
     Globe, Wifi, BarChart3, BookOpen, Timer,
     MessageSquare, GraduationCap, CheckCircle2, Zap, Shield,
@@ -16,7 +16,7 @@ import {
 import Link from "next/link"
 import Image from "next/image"
 import nextDynamic from "next/dynamic"
-import { useRef, useEffect, useState, useMemo, useCallback, useSyncExternalStore } from "react"
+import { useRef, useEffect, useState, useMemo, useSyncExternalStore } from "react"
 
 import { HeroVideoBackdrop } from "@/components/media/HeroVideoBackdrop"
 import { KeyUseCases } from "@/components/sections/KeyUseCases"
@@ -229,116 +229,6 @@ function useCountUp(target: number, trigger: boolean, duration = 2) {
     return value
 }
 
-/* ── SlotDigit ───────────────────────────────────────────────────── */
-function SlotDigit({ digit, delay, trigger, onDone }: { digit: string; delay: number; trigger: boolean; onDone?: () => void }) {
-    const num = Number.parseInt(digit, 10)
-    const [done, setDone] = useState(false)
-    const cellRef = useRef<HTMLSpanElement>(null)
-    const [cellH, setCellH] = useState(0)
-    const [displayIndex, setDisplayIndex] = useState(0)
-    const [spinTransition, setSpinTransition] = useState<{ duration: number; delay?: number; ease?: [number, number, number, number] }>({ duration: 0 })
-    const hasTriggeredRef = useRef(false)
-    const pendingNormalizeRef = useRef(false)
-    const previousDigitRef = useRef(num)
-    const stripDigits = useMemo(() => Array.from({ length: 40 }, (_, i) => i % 10), [])
-
-    useEffect(() => {
-        function measure() {
-            const nextHeight = cellRef.current?.offsetHeight ?? 0
-            if (nextHeight > 0) setCellH(nextHeight)
-        }
-
-        measure()
-        const frame = window.requestAnimationFrame(measure)
-
-        let observer: ResizeObserver | undefined
-        if (typeof ResizeObserver !== "undefined" && cellRef.current) {
-            observer = new ResizeObserver(measure)
-            observer.observe(cellRef.current)
-        }
-
-        void document.fonts?.ready.then(measure)
-        window.addEventListener("resize", measure)
-
-        return () => {
-            window.cancelAnimationFrame(frame)
-            observer?.disconnect()
-            window.removeEventListener("resize", measure)
-        }
-    }, [])
-
-    useEffect(() => {
-        if (!trigger || cellH === 0 || Number.isNaN(num)) return
-
-        const isFirstSpin = !hasTriggeredRef.current
-        let frame = 0
-        if (isFirstSpin) {
-            hasTriggeredRef.current = true
-            previousDigitRef.current = num
-            pendingNormalizeRef.current = true
-            frame = window.requestAnimationFrame(() => {
-                setSpinTransition({
-                    duration: 1.35,
-                    delay,
-                    ease: [0.16, 1, 0.3, 1],
-                })
-                setDisplayIndex(30 + num)
-            })
-            return () => window.cancelAnimationFrame(frame)
-        }
-
-        const previous = previousDigitRef.current
-        if (previous === num) return
-
-        const currentIndex = 10 + previous
-        const delta = (num - previous + 10) % 10
-
-        previousDigitRef.current = num
-        pendingNormalizeRef.current = true
-        frame = window.requestAnimationFrame(() => {
-            setSpinTransition({
-                duration: 0.95,
-                ease: [0.22, 1, 0.36, 1],
-            })
-            setDisplayIndex(currentIndex + 10 + delta)
-        })
-
-        return () => window.cancelAnimationFrame(frame)
-    }, [cellH, delay, num, trigger])
-
-    return (
-        <div className="relative h-14 w-9 overflow-hidden rounded-lg border border-[rgba(8,71,52,0.12)] bg-white shadow-[0_4px_24px_rgba(0,0,0,0.06)] sm:h-28 sm:w-20 sm:rounded-xl md:h-36 md:w-28 md:rounded-2xl">
-            <div className="absolute inset-0 bg-gradient-to-b from-[#FAFAF8]/80 to-transparent h-1/2 pointer-events-none z-10"></div>
-            <motion.div
-                className="absolute left-0 top-0 flex w-full flex-col items-center"
-                initial={{ y: 0 }}
-                animate={trigger && cellH > 0 ? { y: -(displayIndex * cellH) } : { y: 0 }}
-                transition={spinTransition}
-                onAnimationComplete={() => {
-                    if (!pendingNormalizeRef.current) return
-                    pendingNormalizeRef.current = false
-                    setSpinTransition({ duration: 0 })
-                    setDisplayIndex(10 + previousDigitRef.current)
-                    if (!done) {
-                        setDone(true)
-                        onDone?.()
-                    }
-                }}
-            >
-                {stripDigits.map((n, index) => (
-                    <span
-                        key={`${n}-${index}`}
-                        ref={index === 0 ? cellRef : undefined}
-                        className={`flex h-14 w-full flex-none items-center justify-center text-3xl font-sans font-semibold leading-none tabular-nums text-[#084734] sm:h-28 sm:text-6xl md:h-36 md:text-8xl ${done ? "animate-digit-glow" : ""}`}
-                    >
-                        {n}
-                    </span>
-                ))}
-            </motion.div>
-        </div>
-    )
-}
-
 /* ── StatCard ────────────────────────────────────────────────────── */
 function StatCard({ value, suffix, label, icon, delay, trigger }: { value: number; suffix: string; label: string; icon: React.ReactNode; delay: number; trigger: boolean }) {
     const display = useCountUp(value, trigger, 2)
@@ -510,8 +400,6 @@ function FinalCTASection() {
     const sectionRef = useRef<HTMLElement>(null)
     const { scrollYProgress } = useScroll({ target: sectionRef, offset: ["start end", "end start"] })
     const [phase, setPhase] = useState(0)
-    const [slotsDone, setSlotsDone] = useState(false)
-    const [liveCount, setLiveCount] = useState(0)
     const particlesMounted = useIsClient()
 
     useMotionValueEvent(scrollYProgress, "change", (v) => {
@@ -522,19 +410,8 @@ function FinalCTASection() {
 
     const glowOpacity = useTransform(scrollYProgress, [0.1, 0.4], [0, 1])
 
-    useEffect(() => {
-        if (!slotsDone) return
-        let interval: ReturnType<typeof setInterval>
-        const timeout = setTimeout(() => {
-            interval = setInterval(() => setLiveCount((p) => p + 1), 4200)
-        }, 3000)
-        return () => { clearTimeout(timeout); clearInterval(interval) }
-    }, [slotsDone])
-
     const particles = useMemo(() => createParticles(15), [])
 
-    const handleLastSlotDone = useCallback(() => setSlotsDone(true), [])
-    const displayDigits = useMemo(() => (1560000 + liveCount).toString().split(""), [liveCount])
 
     return (
         <section ref={sectionRef} className="relative py-32 md:py-44 overflow-hidden" style={{ minHeight: "100vh" }}>
@@ -559,33 +436,12 @@ function FinalCTASection() {
                     <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#ECFDF5] border border-[#BDEFD8]/60 text-sm font-medium text-[#084734]"><Clock className="w-3.5 h-3.5" />되찾은 수업 시간</div>
                 </motion.div>
 
-                <motion.p initial={{ opacity: 0, y: 10 }} animate={phase >= 2 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.5 }} className="text-base sm:text-lg text-[#A39E98] font-medium mb-8 max-w-xl mx-auto">200개 기업 고객사가 Classin으로 되찾은 시간</motion.p>
-                <div className="relative">
-                    <motion.div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] bg-gradient-radial from-[#6EE7B7]/25 via-[#D1FAE5]/10 to-transparent rounded-full pointer-events-none" initial={{ scale: 0, opacity: 0 }} animate={phase >= 2 ? { scale: [0, 1.2, 1], opacity: [0, 0.7, 0] } : {}} transition={{ duration: 1.5 }} />
-                    <motion.div className="flex justify-center mb-5" initial={{ scale: 0.9, opacity: 0.3, filter: "blur(8px)" }} animate={phase >= 2 ? { scale: 1, opacity: 1, filter: "blur(0px)" } : {}} transition={{ type: "spring", stiffness: 120, damping: 20 }}>
-                        <div className="relative flex items-center gap-1 select-none sm:gap-2.5">
-                            <SlotDigit digit={displayDigits[0]} delay={0.2} trigger={phase >= 2} />
-                            <span className="text-3xl font-sans font-semibold tabular-nums text-[#A39E98] sm:text-6xl md:text-8xl">,</span>
-                            <SlotDigit digit={displayDigits[1]} delay={0.35} trigger={phase >= 2} />
-                            <SlotDigit digit={displayDigits[2]} delay={0.45} trigger={phase >= 2} />
-                            <SlotDigit digit={displayDigits[3]} delay={0.55} trigger={phase >= 2} />
-                            <span className="text-3xl font-sans font-semibold tabular-nums text-[#A39E98] sm:text-6xl md:text-8xl">,</span>
-                            <SlotDigit digit={displayDigits[4]} delay={0.65} trigger={phase >= 2} />
-                            <SlotDigit digit={displayDigits[5]} delay={0.75} trigger={phase >= 2} />
-                            <SlotDigit digit={displayDigits[6]} delay={0.85} trigger={phase >= 2} onDone={handleLastSlotDone} />
-                            {slotsDone && <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-2xl"><div className="absolute inset-0 animate-shimmer-sweep bg-gradient-to-r from-transparent via-[#6EE7B7]/15 to-transparent w-1/3 h-full" /></div>}
-                        </div>
-                    </motion.div>
-                </div>
-                <motion.p initial={{ opacity: 0 }} animate={phase >= 2 ? { opacity: 1 } : {}} transition={{ delay: 0.5 }} className="mb-3 text-2xl font-semibold tracking-tight text-[#31302E] sm:text-4xl md:text-5xl">시간</motion.p>
-                <motion.p initial={{ opacity: 0, y: 10 }} animate={phase >= 2 ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.7 }} className="text-sm sm:text-base text-[#A39E98] font-medium mb-6">지금 이 순간에도 수업이 진행되고 있습니다</motion.p>
+                <p className="mx-auto mb-8 max-w-xl text-base leading-relaxed text-[#615D59]">수업 도구, 녹화, 과제와 복습을 한 흐름으로 살펴보세요.</p>
 
                 <motion.div className="w-full max-w-sm mx-auto h-px bg-gradient-to-r from-transparent via-[#6EE7B7]/30 to-transparent mb-14 mt-14" initial={{ scaleX: 0 }} animate={phase >= 3 ? { scaleX: 1 } : {}} transition={{ duration: 0.6 }} style={{ originX: 0.5 }} />
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-14 max-w-3xl mx-auto">
-                    <StatCard value={200} suffix="+" label="기업 고객사" icon={<Monitor className="w-5 h-5" />} delay={0} trigger={phase >= 3} />
+                <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-14 max-w-xl mx-auto">
                     <StatCard value={30} suffix="+" label="인터랙티브 수업 도구" icon={<MousePointerClick className="w-5 h-5" />} delay={0.1} trigger={phase >= 3} />
                     <StatCard value={10} suffix="가지" label={"참여형\n수업 활동"} icon={<Layers className="w-5 h-5" />} delay={0.2} trigger={phase >= 3} />
-                    <StatCard value={98} suffix="%" label={`"과거로 못 돌아간다"\n응답률`} icon={<Sparkles className="w-5 h-5" />} delay={0.3} trigger={phase >= 3} />
                 </div>
                 <motion.p initial={{ opacity: 0, letterSpacing: "0.3em" }} animate={phase >= 3 ? { opacity: 1, letterSpacing: "0.05em" } : {}} transition={{ delay: 0.5, duration: 0.8 }} className="text-lg sm:text-xl font-sans text-[#615D59] font-medium mb-10">수업만을 위해 만든 플랫폼, 다음은 당신의 교실입니다</motion.p>
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={phase >= 3 ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.7, type: "spring", stiffness: 200, damping: 25 }} className="flex flex-col items-center gap-4">
@@ -607,13 +463,13 @@ const CINEMATIC_CASES = [
         name: "부천 정율사관학원",
         quote: "강사가 바뀌어도 수업 품질이 흔들리지 않게 됐습니다. 수업 콘티를 저장하고 공유하는 것만으로 노하우가 시스템이 됐어요.",
         person: "원장 김O준",
-        before: { label: "도입 전", items: ["강사 의존도 높음", "타지역 학생 모집 불가", "신규 강사 적응 3주"] },
-        after: { label: "도입 후", items: ["하이브리드로 전국 모집", "피어러닝으로 참여도 상승", "강사 온보딩 3일로 단축"] },
+        before: { label: "도입 전", items: ["강사 의존도 높음", "타지역 학생 모집 불가", "신규 강사의 수업 준비 필요"] },
+        after: { label: "도입 후", items: ["하이브리드로 전국 모집", "피어러닝으로 참여도 상승", "수업 콘티 공유로 온보딩 지원"] },
         accentBg: "bg-[#ECFDF5]",
         accentText: "text-[#084734]",
         accentBorder: "border-[#D1FAE5]",
-        num: "50%",
-        numLabel: "강사 온보딩 시간 단축",
+        num: "교안 공유",
+        numLabel: "강사 온보딩 지원",
     },
     {
         index: "02",
@@ -1152,7 +1008,7 @@ const FAQS = [
     },
     {
         q: "인터넷 속도가 느린 환경에서도 괜찮나요?",
-        a: "자체 네트워크 최적화 기술로 일반 화상 회의보다 낮은 대역폭에서도 안정적으로 작동합니다. 글로벌 CDN을 통해 전 세계 어디서든 100ms 이하의 지연 시간을 보장합니다.",
+        a: "수업 환경의 네트워크 상태와 기기 사양에 따라 연결 품질이 달라질 수 있습니다. 도입 전 실제 교실 환경에서 확인해 주세요.",
     },
     {
         q: "수업 녹화본의 저작권은 누가 갖나요?",
@@ -1329,7 +1185,7 @@ const CASES = [
         results: [
             { label: "타지역 학생 유치", value: "가능" },
             { label: "학생 참여도", value: "급상승" },
-            { label: "강사 온보딩 시간", value: "50% 단축" },
+            { label: "강사 온보딩", value: "수업 자료 공유" },
         ],
         color: "bg-[#ECFDF5] border-[#D1FAE5]",
         accent: "text-[#084734]",
@@ -1578,10 +1434,8 @@ export default function ProductPage() {
     const metric30 = useCountUp(30, heroMetricInView)
     const metric10 = useCountUp(10, heroMetricInView)
     const metric150 = useCountUp(150, heroMetricInView)
-    const metric2400 = useCountUp(2400, heroMetricInView)
 
     const net150 = useCountUp(150, networkInView)
-    const net99 = useCountUp(99, networkInView)
 
     return (
         <div className="bg-[#FDFCF8] min-h-screen text-[#111110] font-sans selection:bg-[#D1FAE5] pt-20">
@@ -1627,11 +1481,10 @@ export default function ProductPage() {
                                     { value: metric30, suffix: "+", label: "수업 도구" },
                                     { value: metric10, suffix: "+", label: "수업 활동" },
                                     { value: metric150, suffix: "+", label: "지원 국가" },
-                                    { value: metric2400.toLocaleString(), suffix: "+", label: "도입 학원", raw: true },
                                 ].map((m, i) => (
                                     <motion.div key={i} initial={{ opacity: 0, y: 15 }} animate={heroMetricInView ? { opacity: 1, y: 0 } : {}} transition={{ delay: i * 0.1 + 0.3 }} className="min-w-[84px] text-center">
                                         <div className="text-2xl md:text-3xl font-sans font-bold tabular-nums text-[#6EE7B7] drop-shadow-[0_2px_12px_rgba(0,0,0,0.35)]">
-                                            {m.raw ? m.value : m.value}{m.suffix}
+                                            {m.value}{m.suffix}
                                         </div>
                                         <div className="text-[11px] md:text-xs text-white/62 mt-0.5 font-semibold">{m.label}</div>
                                     </motion.div>
@@ -2034,14 +1887,14 @@ export default function ProductPage() {
                     <motion.div className="text-center mb-16" {...fadeUp}>
                         <EyebrowTag dark>GLOBAL NETWORK</EyebrowTag>
                         <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans leading-tight">전 세계 어디서든,<br /><span className="text-[#6EE7B7]">끊김 없이</span></h2>
-                        <p className="text-lg text-white/50 mt-6 max-w-2xl mx-auto">자체 네트워크 기술로 낮은 지연 시간과 고화질 수업을 보장합니다.</p>
+                        <p className="text-lg text-white/50 mt-6 max-w-2xl mx-auto">수업에 앞서 교실의 네트워크와 기기 환경을 확인하세요.</p>
                     </motion.div>
 
                     <div className="grid sm:grid-cols-3 gap-5 max-w-4xl mx-auto">
                         {[
                             { icon: <Globe className="w-7 h-7" />, value: `${net150}+`, label: "지원 국가", desc: "글로벌 CDN으로 어디서든 빠르게" },
-                            { icon: <Zap className="w-7 h-7" />, value: "< 100ms", label: "지연 시간", desc: "실시간 상호작용이 가능한 속도" },
-                            { icon: <Shield className="w-7 h-7" />, value: `${net99}.9%`, label: "가동률", desc: "중단 없는 안정적인 수업 환경" },
+                            { icon: <Zap className="w-7 h-7" />, value: "실시간", label: "수업 연결", desc: "교실 환경에서 직접 연결 상태를 확인" },
+                            { icon: <Shield className="w-7 h-7" />, value: "사전 점검", label: "운영 준비", desc: "기기와 네트워크 조건을 미리 점검" },
                         ].map((item, i) => (
                             <motion.div key={i} {...stagger(i)} className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 text-center hover:bg-white/10 transition-colors relative overflow-hidden group">
                                 {/* Pulse line between cards */}

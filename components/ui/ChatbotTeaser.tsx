@@ -22,7 +22,7 @@ export function ChatbotTeaser({
             animate={m({ opacity: 1, y: 0 }, shouldReduceMotion)}
             exit={m({ opacity: 0, y: 6 }, shouldReduceMotion)}
             transition={m(CHATBOT_MOTION.micro, shouldReduceMotion)}
-            className="mb-3 flex max-w-[244px] items-center gap-2 rounded-[14px] border border-black/[0.08] bg-white/90 px-3 py-2.5 shadow-[0_10px_24px_rgba(49,48,46,0.10)] backdrop-blur-xl"
+            className="pointer-events-auto mb-3 flex max-w-[244px] items-center gap-2 rounded-[14px] border border-black/[0.08] bg-white/90 px-3 py-2.5 shadow-[0_10px_24px_rgba(49,48,46,0.10)] backdrop-blur-xl"
         >
             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#084734]" aria-hidden />
             <button

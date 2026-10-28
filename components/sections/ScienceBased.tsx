@@ -25,7 +25,7 @@ export function ScienceBased() {
                         학습 솔루션
                     </h2>
                     <p className="text-xl text-[#A39E98] font-medium break-keep">
-                        단순히 편리한 도구가 아닙니다. 학습 효율을 극대화하는 검증된 교육 공학입니다.
+                        학습과 수업 참여에 관한 연구를 살펴보고, 현장에 맞는 수업 방식을 고민합니다.
                     </p>
                 </motion.div>
 
@@ -76,15 +76,16 @@ export function ScienceBased() {
                             </div>
 
                             <blockquote className="border-l-4 border-[#6EE7B7]/40 pl-6 py-2 text-xl text-white/70 italic font-medium leading-relaxed bg-gradient-to-r from-[#084734]/10 to-transparent break-keep">
-                                &ldquo;학습 후 20분이 지나면 기억의 42%가 사라지고, 하루가 지나면 67%를 잊어버린다.&rdquo;
+                                망각 곡선 연구는 시간이 지나며 학습한 내용을 다시 익히는 데 드는 노력이 달라지는 과정을 살펴봅니다. 실험 조건을 모든 수업에 그대로 적용할 수는 없습니다.
                             </blockquote>
+                            <a href="https://doi.org/10.1371/journal.pone.0120644" target="_blank" rel="noopener noreferrer" className="inline-block text-sm text-[#6EE7B7] underline underline-offset-4">망각 곡선 재현 연구 보기</a>
 
                             <div className="space-y-4">
                                 <h4 className="font-bold text-lg text-white break-keep">
-                                    Classin의 솔루션: <span className="text-[#6EE7B7]">골든타임 복습</span>
+                                    Classin 활용: <span className="text-[#6EE7B7]">수업 녹화와 복습</span>
                                 </h4>
                                 <p className="text-[#A39E98] leading-relaxed text-lg break-keep">
-                                    우리는 학습 직후 가장 중요한 &apos;골든타임&apos;을 놓치지 않습니다. 수업 종료 즉시 AI가 생성한 핵심 요약 퀴즈가 학생의 스마트폰으로 전송됩니다. 망각이 시작되기 전에 기억을 장기 저장소로 옮기는 연결 고리를 만듭니다.
+                                    수업 녹화와 자료를 활용해 학생이 놓친 내용을 다시 살펴볼 수 있습니다. 녹화와 공유 가능 범위는 계정과 수업 설정에 따라 확인해 주세요.
                                 </p>
                             </div>
 
@@ -141,15 +142,16 @@ export function ScienceBased() {
                             </div>
 
                             <blockquote className="border-l-4 border-[#084734]/50 pl-6 py-2 text-xl text-white/70 italic font-medium leading-relaxed bg-gradient-to-r from-[#084734]/5 to-transparent break-keep">
-                                &ldquo;전통적인 강의식 수업보다 능동적 학습(Active Learning)에 참여한 학생들의 성취도가 1.5배 더 높으며, 낙제율은 55% 감소한다.&rdquo;
+                                대학 과학·기술·공학·수학 수업 연구를 종합한 결과, 전통 강의의 낙제 위험은 능동 학습 수업보다 약 1.5배 높았습니다. 이 연구는 Classin 자체의 효과를 측정한 것은 아닙니다.
                             </blockquote>
+                            <a href="https://doi.org/10.1073/pnas.1319030111" target="_blank" rel="noopener noreferrer" className="inline-block text-sm text-[#6EE7B7] underline underline-offset-4">Freeman 등 연구 원문 보기</a>
 
                             <div className="space-y-4">
                                 <h4 className="font-bold text-lg text-white break-keep">
                                     Classin의 솔루션: <span className="text-[#6EE7B7]">참여형 인터랙티브 클래스</span>
                                 </h4>
                                 <p className="text-[#A39E98] leading-relaxed text-lg break-keep">
-                                    듣기만 하는 수업은 끝났습니다. Classin의 &apos;랜덤 발표&apos;, &apos;실시간 투표&apos;, &apos;화이트보드 공유&apos; 기능은 모든 학생이 매 순간 수업에 참여하게 만듭니다. 고구조화된 수업 설계로 누구도 소외되지 않는 교실을 만듭니다.
+                                    발표와 판서 공유 등 수업 도구를 활용해 학생의 참여 기회를 마련할 수 있습니다. 실제 학습 효과는 수업 방식과 환경에 따라 달라집니다.
                                 </p>
                             </div>
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { usePathname, useSearchParams } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { useEffect, useRef } from "react"
 
 import { trackEvent } from "@/lib/analytics"
@@ -9,11 +9,9 @@ import { collectLeadAttribution } from "@/lib/marketing-attribution"
 
 export function PageViewTracker() {
   const pathname = usePathname()
-  const searchParams = useSearchParams()
-  const search = searchParams.toString()
   const { choice } = useConsent()
   const lastTrackedKeyRef = useRef<string | null>(null)
-  const path = `${pathname}${search ? `?${search}` : ""}`
+  const path = pathname
 
   useEffect(() => {
     const key = `${path}::analytics=${choice.analytics ? "1" : "0"}`
@@ -24,7 +22,7 @@ export function PageViewTracker() {
     trackEvent("page_view", {
       path,
       title: document.title,
-      referrer: document.referrer || undefined,
+      referrer: document.referrer ? new URL(document.referrer).origin : undefined,
     })
   }, [choice.analytics, path])
 

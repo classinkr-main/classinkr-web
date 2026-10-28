@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 
 import { useCrmOwners } from "@/components/admin/crm/useCrmOwners"
+import { useQuoteWorkspacePreferences } from "@/components/admin/quote-templates/useQuoteWorkspacePreferences"
 import QuickQuoteComposer, {
   type QuickQuoteCreatedPayload,
   type QuickQuoteManagerOption,
@@ -367,6 +368,7 @@ export default function HardwareQuotesPanel({
   onQuickActionConsumed,
   prefill = null,
 }: HardwareQuotesPanelProps) {
+  const { preferences, updatePreferences, storageError } = useQuoteWorkspacePreferences()
   const [composerOpen, setComposerOpen] = useState(false)
   const [composerTemplateId, setComposerTemplateId] = useState<StandardQuoteTemplateId>(
     DEFAULT_HARDWARE_QUOTE_TEMPLATE_ID
@@ -445,7 +447,7 @@ export default function HardwareQuotesPanel({
       setTeamTemplates(
         (catalog?.team ?? []).flatMap((view) => {
           const details = teamTemplateViewToQuoteDetails(view, today)
-          return details ? [{ id: view.id, label: view.name, details }] : []
+          return details ? [{ id: view.id, label: view.name, details, canDelete: view.canEdit }] : []
         })
       )
     } catch (error) {
@@ -468,9 +470,15 @@ export default function HardwareQuotesPanel({
     await loadTeamTemplates()
   }
 
+  async function handleDeleteTemplate(id: string) {
+    await adminFetchJson(`${QUOTE_TEMPLATES_API}/${id}`, { method: "DELETE" })
+    setTeamTemplates((current) => current.filter((template) => template.id !== id))
+    updatePreferences({ hiddenTemplateIds: preferences.hiddenTemplateIds.filter((hiddenId) => hiddenId !== id) })
+  }
+
   const recentQuotes = useMemo(
     () =>
-      quotes.slice(0, 5).map((quote) => ({
+      [...quotes].sort((left, right) => (Date.parse(right.updatedAt) || 0) - (Date.parse(left.updatedAt) || 0)).slice(0, 10).map((quote) => ({
         id: quote.id,
         title: quote.title,
         customerName: quote.customerName,
@@ -1087,6 +1095,8 @@ export default function HardwareQuotesPanel({
         supplierManagerOptions={supplierManagerOptions}
         teamTemplates={teamTemplates}
         onSaveTemplate={handleSaveTemplate}
+        onDeleteTemplate={handleDeleteTemplate}
+        displaySettings={{ preferences, onChange: updatePreferences, storageError }}
         prefill={prefill}
         onCreated={handleCreated}
       />

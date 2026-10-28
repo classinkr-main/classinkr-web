@@ -89,6 +89,24 @@ describe("POST /api/lead — 문의 유형 게이트", () => {
     expect(submitLeadCapture).not.toHaveBeenCalled()
   })
 
+  it.each([
+    "landing_segment:enterprise",
+    "landing_segment:managed",
+    "landing_segment:kids",
+    "landing_segment:online",
+    "omo1_diagnosis",
+  ])("실제 랜딩 출처 %s 는 접수한다", async (sourceDetail) => {
+    const res = await POST(makeRequest({ ...baseBody, sourceDetail }))
+    expect(res.status).toBe(200)
+    expect(submitLeadCapture).toHaveBeenCalledOnce()
+  })
+
+  it("등록되지 않은 랜딩 식별자는 차단한다", async () => {
+    const res = await POST(makeRequest({ ...baseBody, sourceDetail: "landing_segment:unknown" }))
+    expect(res.status).toBe(400)
+    expect(submitLeadCapture).not.toHaveBeenCalled()
+  })
+
   it("유형이 비어 있으면 통과시킨다 — 메타데이터 때문에 실제 상담 요청을 떨어뜨리지 않는다", async () => {
     const res = await POST(makeRequest({ ...baseBody, sourceDetail: "   " }))
 

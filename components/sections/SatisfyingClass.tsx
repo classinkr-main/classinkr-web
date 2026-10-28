@@ -29,7 +29,7 @@ export function SatisfyingClass() {
                             transition={{ delay: 0.1 }}
                             className="text-lg text-[#615D59] font-medium leading-relaxed mb-6 break-keep"
                         >
-                            Classin은 강사들의 에너지를 서류나 채점에 낭비하지 않도록 돕습니다. AI 채점 요약, 성취도 분석, 자동 녹화와 학부모 리포트까지 수업 전후 운영을 하나의 흐름으로 연결하고, 필요한 인터랙티브 자료는 한 번의 클릭으로 바로 세팅합니다.
+                            Classin은 수업 자료와 판서, 녹화와 복습을 수업 흐름에 맞춰 활용하도록 돕습니다. 기능과 사용 조건은 계정과 설정에 따라 확인해 주세요.
                         </motion.p>
 
                         <motion.div
@@ -40,12 +40,13 @@ export function SatisfyingClass() {
                             className="flex flex-col gap-1"
                         >
                             <span className="font-extrabold text-[#111110] break-keep">핵심 목표:</span>
-                            <span className="text-[#615D59] font-semibold break-keep">강사의 행정 시간 70% 단축, 온전한 티칭 몰입.</span>
+                            <span className="text-[#615D59] font-semibold break-keep">반복 업무를 살펴보고 수업과 학생에게 더 집중할 수 있도록 돕습니다.</span>
                         </motion.div>
+                        <p className="mt-5 text-sm text-[#615D59]">오른쪽 이미지는 이해를 돕기 위한 예시로, 실제 제공 화면과 다를 수 있습니다.</p>
                     </div>
 
                     {/* Right illustrative area (stacked UI cards) */}
-                    <div className="w-full lg:w-3/5 h-[460px] sm:h-[520px] md:h-[590px] relative pointer-events-none mt-10 lg:mt-0 flex justify-center items-center">
+                    <div className="w-full lg:w-3/5 h-[460px] sm:h-[520px] md:h-[590px] relative pointer-events-none mt-10 lg:mt-0 flex justify-center items-center" aria-label="수업 활용 예시 이미지">
                         <div className="relative h-full w-full max-w-[44rem]">
                             <div className="absolute left-[10%] top-[7%] h-44 w-44 rounded-full bg-[#D9F4E7] opacity-70 blur-[76px]" />
                             <div className="absolute right-[6%] bottom-[10%] h-48 w-48 rounded-full bg-[#EDE7DC] opacity-70 blur-[90px]" />
@@ -126,8 +127,8 @@ export function SatisfyingClass() {
                                 style={{ boxShadow: cardShadow }}
                             >
                                 <div className="mb-4 flex items-center justify-between gap-3">
-                                    <span className="text-sm font-black text-[#084734] md:text-base">주간 리포트 자동 발송</span>
-                                    <span className="rounded-full bg-white/85 px-2.5 py-1 text-[10px] font-extrabold text-[#084734]">매주 금</span>
+                                    <span className="text-sm font-black text-[#084734] md:text-base">수업 기록 정리 예시</span>
+                                    <span className="rounded-full bg-white/85 px-2.5 py-1 text-[10px] font-extrabold text-[#084734]">예시</span>
                                 </div>
                                 <div className="mb-4 flex flex-wrap gap-2">
                                     <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-[#084734]">출결</span>
@@ -153,9 +154,9 @@ export function SatisfyingClass() {
                                     <span className="h-2.5 w-2.5 rounded-full bg-[#E05024]" />
                                     Auto Recording
                                 </div>
-                                <div className="text-base font-black leading-tight text-[#111110] md:text-lg">자동 녹화 수업</div>
+                                <div className="text-base font-black leading-tight text-[#111110] md:text-lg">수업 녹화</div>
                                 <p className="mt-2 text-sm font-medium leading-relaxed text-[#615D59]">
-                                    수업 종료 후 클라우드 저장, 다시보기 링크까지 자동 정리
+                                    수업 녹화와 다시보기 활용
                                 </p>
                                 <div className="mt-4 flex flex-wrap gap-2">
                                     <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-[#615D59]">복습 링크</span>
@@ -179,10 +180,10 @@ export function SatisfyingClass() {
                                 <div className="text-white">
                                     <span className="mb-2.5 block text-[12px] font-bold uppercase tracking-[0.3em] text-[#ECFDF5]/70">Interactive Canvas</span>
                                     <h3 className="text-2xl font-bold leading-snug md:text-3xl">
-                                        One-Click <br />화이트보드 실행
+                                        수업 자료와 <br />화이트보드
                                     </h3>
                                     <p className="mt-4 max-w-xs text-sm font-medium leading-relaxed text-white/58 md:text-[15px]">
-                                        판서, 퀴즈, 자료 공유까지 수업 시작 전에 한 번에 준비
+                                        판서와 자료를 활용한 수업 준비
                                     </p>
                                     <div className="mt-8 flex gap-4">
                                         <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/5 bg-white/10">

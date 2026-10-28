@@ -132,7 +132,7 @@ export function DashboardPreview() {
                             데이터 기반 의사결정,<br />즉시 확인하세요
                         </h2>
                         <p className="mt-4 text-base text-white/50 break-keep leading-relaxed">
-                            추측은 그만. 실시간 분석으로 반, 강사, 학생의 성과를 파악하세요.
+                            수업과 운영 기록을 확인할 수 있습니다. 아래는 설명을 위한 예시 화면이며 실제 제공 항목은 권한과 설정에 따라 다릅니다.
                         </p>
                     </div>
 

@@ -21,7 +21,7 @@ export function GoogleAdsScript() {
         strategy="afterInteractive"
       />
       <Script id="gtag-ads-init" strategy="afterInteractive">
-        {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config',${JSON.stringify(GOOGLE_ADS_ID)});${ga4Config}`}
+        {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config',${JSON.stringify(GOOGLE_ADS_ID)},{send_page_view:false});${ga4Config}`}
       </Script>
     </>
   )

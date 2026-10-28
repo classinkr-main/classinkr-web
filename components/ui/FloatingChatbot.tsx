@@ -32,6 +32,7 @@ import {
 } from "@/lib/channel-talk"
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 import { trackEvent } from "@/lib/analytics"
+import { saveContactDraft } from "@/lib/contact/draft"
 import { resolvePageContext, mergeStarters } from "@/lib/chatbot/page-context"
 import {
     CHATBOT_OPEN_EVENT,
@@ -304,7 +305,6 @@ function ConsultationBridge({
     const contactHref = `/contact?${new URLSearchParams({
         source: "chatbot",
         topic,
-        prefill: draft,
     }).toString()}`
 
     function openConsultation() {
@@ -390,6 +390,15 @@ function ConsultationBridge({
                 </motion.button>
                 <Link
                     href={contactHref}
+                    onClick={(event) => {
+                        try {
+                            if (saveContactDraft(window.sessionStorage, draft)) return
+                        } catch {
+                            // sessionStorage can be disabled by the browser.
+                        }
+                        event.preventDefault()
+                        setToast({ type: "error", text: "요약을 보관하지 못했어요. 요약을 복사한 뒤 문의폼에 붙여 넣어 주세요." })
+                    }}
                     className="inline-flex h-9 items-center justify-center rounded-[8px] px-2 text-xs font-bold text-[#615D59] transition-colors hover:bg-white/70 hover:text-[#084734]"
                 >
                     문의폼으로 이어서 남기기
@@ -1298,7 +1307,7 @@ export function FloatingChatbot() {
     }
 
     return (
-        <div className="fixed inset-x-0 bottom-0 z-50 flex flex-col items-end px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] md:inset-x-auto md:bottom-6 md:right-6 md:px-0 md:pb-0">
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex flex-col items-end px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] md:inset-x-auto md:bottom-6 md:right-6 md:px-0 md:pb-0">
             {/* 모바일 화면 백드롭 딤/블러 오버레이 */}
             <AnimatePresence>
                 {isOpen && (
@@ -1309,7 +1318,7 @@ export function FloatingChatbot() {
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.18 }}
                         onClick={closeChatbot}
-                        className="fixed inset-0 z-0 bg-black/20 backdrop-blur-[2px] md:hidden"
+                        className="pointer-events-auto fixed inset-0 z-0 bg-black/20 backdrop-blur-[2px] md:hidden"
                         aria-hidden="true"
                     />
                 )}
@@ -1327,7 +1336,7 @@ export function FloatingChatbot() {
                         initial="initial"
                         animate="animate"
                         exit="exit"
-                        className="relative z-10 mb-3 flex h-[min(680px,calc(100svh-5.5rem))] w-full max-w-none origin-bottom overflow-hidden rounded-[26px] border border-white/60 bg-[linear-gradient(152deg,rgba(255,255,255,0.88)_0%,rgba(236,253,245,0.76)_50%,rgba(246,245,244,0.82)_100%)] text-[#111110] shadow-[0_34px_80px_rgba(8,71,52,0.18),0_18px_42px_rgba(49,48,46,0.10),0_4px_12px_rgba(0,0,0,0.05),inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-2xl md:mb-4 md:h-[min(640px,calc(100svh-8rem))] md:w-[424px] md:max-w-[424px] md:origin-bottom-right"
+                        className="pointer-events-auto relative z-10 mb-3 flex h-[min(680px,calc(100svh-5.5rem))] w-full max-w-none origin-bottom overflow-hidden rounded-[26px] border border-white/60 bg-[linear-gradient(152deg,rgba(255,255,255,0.88)_0%,rgba(236,253,245,0.76)_50%,rgba(246,245,244,0.82)_100%)] text-[#111110] shadow-[0_34px_80px_rgba(8,71,52,0.18),0_18px_42px_rgba(49,48,46,0.10),0_4px_12px_rgba(0,0,0,0.05),inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-2xl md:mb-4 md:h-[min(640px,calc(100svh-8rem))] md:w-[424px] md:max-w-[424px] md:origin-bottom-right"
                     >
                         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.48)_0%,rgba(255,255,255,0.12)_42%,rgba(8,71,52,0.06)_100%)]" aria-hidden />
                         <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-white/80" aria-hidden />
@@ -1617,7 +1626,7 @@ export function FloatingChatbot() {
                     />
                 ) : null}
             </AnimatePresence>
-            <div className="relative flex h-14 w-14 items-center justify-center md:h-16 md:w-16">
+            <div className="pointer-events-auto relative flex h-14 w-14 items-center justify-center md:h-16 md:w-16">
                 {!isOpen && !shouldReduceMotion ? (
                     <motion.span
                         aria-hidden

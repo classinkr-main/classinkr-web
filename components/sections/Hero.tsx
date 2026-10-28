@@ -7,6 +7,7 @@ import { trackEvent } from "@/lib/analytics"
 import Image from "next/image"
 import { HeroVideoBackdrop } from "@/components/media/HeroVideoBackdrop"
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
+import { HomeAudiencePaths } from "./HomeAudiencePaths"
 
 const HERO_VIDEO_MEDIA_QUERY = "(min-width: 1024px) and (prefers-reduced-motion: no-preference)"
 
@@ -81,6 +82,8 @@ export function Hero() {
                     </div>
                 </div>
             </section>
+
+            <HomeAudiencePaths />
 
             <section
                 className="relative z-20 isolate overflow-hidden rounded-tl-[1.75rem] rounded-tr-[1.75rem] bg-[#FAFAF8] pt-20 pb-20 shadow-[0_-18px_50px_rgba(0,0,0,0.16),0_-1px_0_rgba(255,255,255,0.8)] md:rounded-tl-[2rem] md:rounded-tr-[2rem] md:pt-28 md:pb-32"

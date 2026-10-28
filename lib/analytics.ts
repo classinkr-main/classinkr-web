@@ -6,6 +6,7 @@ import {
   NAVER_WCS_ID,
 } from "@/lib/analytics-config"
 import { currentChoice, getAnonymousId } from "@/lib/consent/consent"
+import { isSensitiveTrackingPath } from "@/lib/analytics-path"
 
 export type EventNames =
   | "page_view"
@@ -207,6 +208,7 @@ function getMetaEvent(eventName: EventNames) {
 
 export const trackEvent = (eventName: EventNames, params?: AnalyticsParams) => {
   if (typeof window === "undefined") return
+  if (isSensitiveTrackingPath(window.location.pathname)) return
 
   const consent = currentChoice()
   const eventParams = normalizeEventParams(eventName, params)
