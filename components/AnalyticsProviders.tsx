@@ -6,12 +6,12 @@ import { useEffect, useState } from "react"
 
 import type {} from "@/lib/analytics"
 import { KAKAO_PIXEL_ID } from "@/lib/analytics-config"
-import { isTrackingExcludedPath } from "@/lib/tracking-paths"
+import { isAnalyticsTagExcludedPath } from "@/lib/tracking-paths"
 
 export function AnalyticsProviders() {
   const pathname = usePathname()
   const [isKakaoReady, setIsKakaoReady] = useState(false)
-  const isInternal = isTrackingExcludedPath(pathname) || pathname.startsWith("/checkout")
+  const isInternal = isAnalyticsTagExcludedPath(pathname)
 
   useEffect(() => {
     if (!KAKAO_PIXEL_ID || isInternal || !isKakaoReady) return

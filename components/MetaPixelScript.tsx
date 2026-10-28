@@ -4,7 +4,7 @@ import { usePathname, useSearchParams } from "next/navigation"
 import Script from "next/script"
 import { useEffect } from "react"
 import { META_PIXEL_ID } from "@/lib/analytics-config"
-import { isTrackingExcludedPath, sanitizeTrackingPath } from "@/lib/tracking-paths"
+import { isAnalyticsTagExcludedPath, sanitizeTrackingPath } from "@/lib/tracking-paths"
 
 let lastMetaPageViewPath: string | null = null
 
@@ -12,7 +12,7 @@ export function MetaPixelScript() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const search = searchParams.toString()
-  const isInternal = isTrackingExcludedPath(pathname) || pathname.startsWith("/checkout")
+  const isInternal = isAnalyticsTagExcludedPath(pathname)
 
   useEffect(() => {
     if (isInternal || !META_PIXEL_ID) return

@@ -1,6 +1,6 @@
 /**
- * 추적 경계의 정본 — 어떤 경로에서 분석·광고 스크립트를 띄우지 않는지, 그리고 외부
- * (GA4·Google Ads·픽셀)로 나가는 URL 에서 무엇을 지우는지.
+ * 추적 경계의 정본 — 어떤 경로에서 공개 크롬과 분석·광고 스크립트를 띄우지 않는지, 그리고
+ * 외부(GA4·Google Ads·픽셀)로 나가는 URL 에서 무엇을 지우는지.
  *
  * 왜 따로 두나: gtag 는 page_location 을 지정하지 않으면 `location.href` 를 그대로 보낸다.
  * 그래서 `/contact?prefill=<챗봇 대화 요약>`, `/unsubscribe?email=`, `/checkout/success?
@@ -12,8 +12,8 @@
  * 추적 스크립트를 아예 띄우지 않는 경로. 고객 키·토큰·계정 화면이 URL 에 실리는 곳이다.
  *
  * `/checkout` 은 일부러 빠져 있다 — 결제 전환(purchase)을 Google Ads/GA4 로 보내야 해서
- * gtag 로더는 유지하고, 대신 아래 정화로 토큰 쿼리가 나가지 않게 한다. GTM·Meta·네이버·카카오의
- * 기존 `/checkout` 제외는 AppChrome(showPublicChrome)과 각 컴포넌트 가드가 그대로 맡는다.
+ * gtag 로더는 유지하고, 대신 아래 정화로 토큰 쿼리가 나가지 않게 한다. GTM·페이지뷰·Meta·네이버·
+ * 카카오의 `/checkout` 제외는 아래 `isAnalyticsTagExcludedPath` 가 맡는다.
  */
 const SEGMENT_EXCLUDED_PREFIXES = [
   "/share",
@@ -37,6 +37,43 @@ export function isTrackingExcludedPath(pathname: string | null | undefined): boo
   return SEGMENT_EXCLUDED_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
   )
+}
+
+/* ── 경로별 크롬·태그 범위 ─────────────────────────────────────────────────
+ * 크롬과 태그는 범위가 다르다. 한때 AppChrome·GTM·Meta·네이버·카카오가 경로 목록을 각자
+ * 복사해 들고 있어(`startsWith("/checkout")` 등) 한쪽 판정이 바뀌면 다른 쪽만 조용히 어긋났다.
+ * 판정은 여기 세 함수뿐이고, 새 계측 스크립트도 이 중 하나를 쓴다.
+ *
+ *   경로                      | 공개 크롬 | gtag(Ads·GA4) | GTM·페이지뷰·연락처 링크·픽셀(Meta·네이버·카카오)
+ *   공개 화면                 | O         | O             | O (픽셀은 마케팅 동의 후에만 마운트)
+ *   /checkout                 | X         | O (URL 정화)  | X
+ *   isTrackingExcludedPath    | 경로별    | X             | X
+ *
+ * `/checkout` 은 두 결정이 겹친다. round2 D11(2026-09-22)은 GTM·페이지뷰·픽셀·동의 배너까지
+ * 되살렸고, 추적 경계 정리(2026-10-28)는 gtag 만 남기고 URL 을 정화하며 나머지의 기존 제외를
+ * 유지했다. 통합 병합에서 10-28 쪽을 따른다 — 결제 전환(begin_checkout·purchase)은 gtag 와
+ * 서버 전환(app/api/billing/checkout/prepare·confirm 의 MP·CAPI)으로 나간다
+ * (docs/active/contact-showroom-checkout-develop-round2-2026-09-20.md §8 D11).
+ */
+
+/**
+ * 헤더·푸터·챗봇·플로팅 CTA·채널톡·동의 배너를 걷어내는 경로 — 결제·신청 터널과 내부 화면.
+ * 예전 AppChrome 가드(`startsWith`)와 같은 느슨한 접두 매칭을 유지한다.
+ */
+const CHROME_HIDDEN_PREFIXES = ["/admin", "/checkout", "/receipt"] as const
+
+export function hidesPublicChrome(pathname: string | null | undefined): boolean {
+  if (!pathname) return false
+  return CHROME_HIDDEN_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+}
+
+/**
+ * GTM·PageViewTracker·ContactLinkTracker·동의 게이트 픽셀(Meta·네이버·카카오)을 띄우지 않는 경로.
+ * 공개 크롬이 없는 화면(`/checkout` 포함) 전부 + 추적 제외 경로. gtag 만 `/checkout` 에서 남는다.
+ * AppChrome 의 `showAnalytics`(= showPublicChrome && !trackingExcluded)와 같은 집합이다.
+ */
+export function isAnalyticsTagExcludedPath(pathname: string | null | undefined): boolean {
+  return hidesPublicChrome(pathname) || isTrackingExcludedPath(pathname)
 }
 
 /** 광고 귀속에 필요한 쿼리만 남긴다. 나머지(prefill·email·token·검색어 등)는 모두 버린다. */
