@@ -34,6 +34,7 @@ Classin은 차가운 SaaS가 아니라 **수업 품질을 안정적으로 표준
 - "AI가 학생 상태를 자동으로 완벽하게 파악합니다."
 - "가장 싸다", "무조건 절감된다" 같은 보장형 문구
 - 확인되지 않은 기관 수·보드 수·모델 스펙·가격 (→ [company-facts.md](./company-facts.md) 등급 준수)
+- "감시", "강사 점수표", 학생 집중도·시선·정서를 AI가 측정한다는 표현. AI 강의 분석은 강사 자기 점검 → 코칭 근거 → 관리자 비교 순서로만 (positioning §5 관리자 데이터)
 
 ## 5. 카테고리명·핵심어
 - 카테고리명 = **수업 시스템 OS** (literal SSOT = [lib/classin-positioning.ts](../../../lib/classin-positioning.ts)).
