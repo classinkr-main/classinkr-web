@@ -2046,8 +2046,11 @@ aside.notes { display: none; }
     cn.textContent = c[0]; $('.ck', chap).textContent = c[1]; $('.ct', chap).textContent = c[2]; $('.cs', chap).textContent = c[3];
     var leds = $$('.cl .led', chap);
     leds.forEach(function (l) { l.classList.add('off'); });
-    lockUntil = Date.now() + 2400;
+    // 1막(두 개의 이탈) 뒤 2막으로 넘어가는 전환은 호흡을 15% 더 길게 둔다
+    var slow = k === 2 ? 1.15 : 1;
+    lockUntil = Date.now() + 2400 * slow;
     var tl = gsap.timeline();
+    tl.timeScale(1 / slow);
     tl.set(chap, { autoAlpha: 0 }).set(cc, { autoAlpha: 1 });
     tl.to(chap, { autoAlpha: 1, duration: .45, ease: 'power2.out' }, .12);
     tl.fromTo(cc, { '--rise': 0, y: 40, scale: .94 }, { '--rise': 1, y: 0, scale: 1, duration: 1, ease: 'expo.out' }, .3);
