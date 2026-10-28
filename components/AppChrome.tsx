@@ -6,7 +6,7 @@ import { Component, useEffect, useState, type ReactNode } from "react"
 
 import { RouteTransition } from "@/components/transitions/RouteTransition"
 import { useConsent } from "@/lib/consent/useConsent"
-import { isTrackingExcludedPath } from "@/lib/tracking-paths"
+import { hidesPublicChrome, isTrackingExcludedPath } from "@/lib/tracking-paths"
 
 const ConditionalHeader = dynamic(() =>
   import("@/components/sections/ConditionalHeader").then((mod) => mod.ConditionalHeader)
@@ -62,14 +62,6 @@ const ChannelTalkLoader = dynamic(
 
 const PUBLIC_WIDGET_IDLE_TIMEOUT_MS = 2800
 
-function isInternalPath(pathname: string) {
-  return (
-    pathname.startsWith("/admin") ||
-    pathname.startsWith("/checkout") ||
-    pathname.startsWith("/receipt")
-  )
-}
-
 class PublicWidgetBoundary extends Component<
   { children: ReactNode; resetKey: string },
   { hasError: boolean }
@@ -96,12 +88,14 @@ export function AppChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const [readyPath, setReadyPath] = useState<string | null>(null)
   const { choice: consentChoice } = useConsent()
-  const showPublicChrome = !isInternalPath(pathname)
-  // 추적 제외 경계는 lib/tracking-paths.ts 가 정본이다(/admin·/share·/unsubscribe·계정·인증·/receipt).
+  // 크롬·태그 경로 판정은 lib/tracking-paths.ts 한 곳이 정본이다(경로별 표는 그 파일 주석).
+  const showPublicChrome = !hidesPublicChrome(pathname)
+  // 추적 제외 경계(/admin·/share·/unsubscribe·계정·인증·/receipt).
   // gtag(Google Ads·GA4)는 결제 전환 때문에 /checkout 에서도 띄우고, URL 은 정화해서 보낸다.
   const trackingExcluded = isTrackingExcludedPath(pathname)
   const showGoogleTag = !trackingExcluded
-  // GTM·페이지뷰·픽셀은 기존대로 /checkout 도 뺀다(showPublicChrome) — 그 위에 제외 경로를 더한다.
+  // GTM·페이지뷰·픽셀은 /checkout 도 뺀다(showPublicChrome) — 그 위에 제외 경로를 더한다.
+  // = !isAnalyticsTagExcludedPath(pathname). 컴포넌트 단독 가드가 같은 함수를 쓴다.
   const showAnalytics = showPublicChrome && !trackingExcluded
   const showMobileFloatingCta = showPublicChrome && !pathname.startsWith("/l/")
 

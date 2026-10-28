@@ -17,7 +17,22 @@ import path from "node:path";
 // 허용된 파일에 같은 패턴이 새로 추가돼도 이 스크립트는 못 잡는다 — 그런 파일은
 // 소유 에이전트가 정리할 때 ALLOWLIST에서 빼는 것으로 좁혀나간다.
 
-const SCAN_ROOT = "components/admin/branch";
+// 스캔 범위. 어드민 지사 대시보드 하나뿐이던 시절에는 공개 화면이 통째로 무검사였고,
+// 실제로 /contact 에 블루-그레이(slate-*)가 45줄 남아 있었다 — 자동 가드가 못 잡으니
+// 리뷰가 놓치면 그대로 굳었다. 공개 전환 퍼널 세 화면을 함께 지킨다.
+//
+// 나머지 공개 화면(components/sections/*, app/product/* 등)은 아직 범위 밖이다.
+// 한 번에 넓히면 이번 작업과 무관한 기존 위반이 쏟아져 게이트가 무력화된다 —
+// 화면을 정리하는 웨이브마다 여기에 경로를 더해 좁혀 나간다.
+const SCAN_ROOTS = [
+  "components/admin/branch",
+  "app/contact",
+  "components/contact",
+  "app/showroom",
+  "app/checkout",
+  "components/showroom",
+  "components/checkout",
+];
 const FILE_EXTS = new Set([".ts", ".tsx"]);
 
 const PATTERNS = {
@@ -32,6 +47,15 @@ const PATTERNS = {
   "7B8B36": {
     label: "팀 아이덴티티 올리브(#7B8B36) — lib/branch/team-colors.ts 밖 리터럴",
     test: (line) => /#7B8B36/i.test(line),
+  },
+  slate: {
+    label:
+      "블루-그레이(slate-*) — DESIGN.md §7-1 정면 위반. 웜 뉴트럴(#111110/#44514A/#615D59/#A39E98)로 치환",
+    test: (line) => /\bslate-\d/.test(line),
+  },
+  "font-serif": {
+    label: "세리프 폰트(font-serif) — DESIGN.md §3 타이포는 sans 단일 스택",
+    test: (line) => /\bfont-serif\b/.test(line),
   },
 };
 
@@ -70,11 +94,12 @@ function stripComments(source) {
 }
 
 function main() {
-  const files = listSourceFiles(SCAN_ROOT);
+  // 루트가 여러 개라 허용 키는 저장소 기준 상대경로를 쓴다.
+  const files = SCAN_ROOTS.flatMap((root) => listSourceFiles(root));
   const violations = [];
 
   for (const file of files) {
-    const relPath = path.relative(SCAN_ROOT, file);
+    const relPath = file;
     const code = stripComments(readFileSync(file, "utf8"));
     const lines = code.split("\n");
 
@@ -96,7 +121,7 @@ function main() {
   }
 
   if (violations.length > 0) {
-    console.error("Design token guard failed — new violations in components/admin/branch/:");
+    console.error(`Design token guard failed — new violations in ${SCAN_ROOTS.join(", ")}:`);
     for (const v of violations) {
       console.error(`- ${v.file}:${v.lineNumber} [${v.patternKey}] ${v.label}`);
     }
@@ -109,8 +134,8 @@ function main() {
   }
 
   console.log(
-    `Design token guard passed (${files.length} files scanned in ${SCAN_ROOT}/, ` +
-      `${ALLOWLIST.size} grandfathered allowlist entries).`
+    `Design token guard passed (${files.length} files scanned in ` +
+      `${SCAN_ROOTS.length} roots, ${ALLOWLIST.size} grandfathered allowlist entries).`
   );
 }
 

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 
-import { isTrackingExcludedPath } from "@/lib/tracking-paths"
+import { isAnalyticsTagExcludedPath, isTrackingExcludedPath } from "@/lib/tracking-paths"
 
 /**
  * 어드민에서 광고/분석 픽셀이 발화하지 않아야 한다는 계약을 소스 텍스트로 고정한다.
@@ -69,8 +69,13 @@ describe("어드민 gtag/GTM 차단 — 루트 레이아웃 우회 재발 방지
   it("GTMScript도 추적 제외 경로(/admin 포함)에서 렌더를 멈추는 가드를 유지한다", () => {
     const source = read("components/GTMScript.tsx")
 
-    expect(source).toContain("isTrackingExcludedPath(pathname)")
+    // GTM 은 gtag 보다 넓게(/checkout 까지) 막는다 — 그 판정은 isAnalyticsTagExcludedPath 이고,
+    // 추적 제외 경로(/admin 포함)를 그대로 품는다.
+    expect(source).toContain("isAnalyticsTagExcludedPath(pathname)")
     expect(source).toMatch(/if\s*\(\s*isInternal\s*\|\|\s*!GTM_ID\s*\)\s*return null/)
+    for (const path of ["/admin", "/admin/crm/customers/leads", "/admin-preview"]) {
+      expect(isAnalyticsTagExcludedPath(path), path).toBe(true)
+    }
   })
 
   it("lib/analytics-config.ts는 죽은 GA4_ID export를 되살리지 않는다", () => {

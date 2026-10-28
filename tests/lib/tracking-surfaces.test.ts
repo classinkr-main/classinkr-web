@@ -89,8 +89,11 @@ describe("URL hygiene wiring", () => {
   })
 
   it("the contact page phone number is a tracked tel: link", () => {
-    const source = read("app/contact/page.tsx")
+    // 직접 연락 블록은 components/contact/ContactDirectChannels.tsx 로 떼어냈다(Phase D5).
+    expect(read("app/contact/page.tsx")).toContain("<ContactDirectChannels />")
+    const source = read("components/contact/ContactDirectChannels.tsx")
     expect(source).toMatch(/href="tel:02-6958-8566"\s+data-track-location="contact_page"/)
+    expect(source).toMatch(/href="mailto:classinkr@classin\.com"\s+data-track-location="contact_page"/)
   })
 
   it("PageViewTracker dedupes on the sanitized path only (no consent flag)", () => {
