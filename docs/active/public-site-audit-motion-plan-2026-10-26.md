@@ -204,7 +204,7 @@
 
 - 미사용 코드·자산: `NewsletterModal.tsx`(315줄), `components/product/sw/LessonToolIcons.tsx`(287줄)와 PNG 28개, HW 원본 이미지 약 20MB, `globals.css` 의 blob·prism·calculator·glow·draw-line·cursor-blink·marquee·progress-fill 키프레임, 아무 데도 안 쓰는 `.dark` 토큰.
 - 중첩 `<main>`(AppChrome + 페이지 7곳 이상), h2→h4 건너뜀, 표 `th` scope 없음, 장식 이미지 alt 중복.
-- 헤더·내비·토스트·404·에러 페이지의 파스텔 활성 상태 → 아웃라인·좌측 바(§5).
+- 헤더·내비·토스트·404·에러 페이지의 파스텔 활성 상태 → 아웃라인·index-tab 막대(§5. 좌측 2px 바는 C21 세 곳만, 토스트 상태선 없음 — 2026-10-28).
 - `/receipt/[orderId]` noindex·`Cache-Control: private` 없음, 링크를 Host 헤더로 생성.
 - `/data-deletion` 에 Meta 대시보드용 운영자 지시문과 다른 도메인(`classin.ai.kr`) 노출, 내부 테이블명 노출.
 - 정적 랜딩 푸터에 내부 식별자("landing_bigs segment landing" 등) 노출, `/privacy`·사업자 정보 없음.
@@ -225,11 +225,13 @@
 | D5 | 응답속도 공식 표기 | 0.03초 vs 2ms(측정 정의) | 측정 정의 하나 + 각주, 경쟁사 행 삭제 |
 | D6 | 결제 플래그 OFF 일 때 SW USD 단가 | 노출 vs 숨김 | 숨김(가격 단정 금지 원칙) |
 | D7 | 정적 랜딩 동의 블록·개인정보처리방침 개정·가입 동의 UI | — | 법무 확인 후 contact 동의 블록 이식 |
-| D8 | 홈 섹션 18 → 12~13 통합 | 유지 vs 통합 | §5-3 순서안으로 통합(시안 먼저) |
+| D8 | 홈 섹션 18 → 12~13 통합 | 유지 vs 통합 | §5-3 순서안으로 통합(시안 먼저). → V10-A 11지면으로 확정(2026-10-28, §5-4) |
 
 ---
 
 ## 5. 모션·디자인 디벨롭 기획
+
+> (2026-10-28 고급화 V10–V18 A 반영) §5-1 '방향' 문장과 §5-2–§5-8의 목표 값을 [디자인 언어 문서](./public-site-design-language-2026-10-26.md) §6·§9와 상세 스펙에 맞췄다. §0–§4 점검 결과와 §5-1 진단 항목은 그대로다. 값이 다르면 디자인 언어 문서와 상세 스펙이 이긴다.
 
 ### 5-1. 현황 진단
 
@@ -240,24 +242,26 @@
 - **취향과 정면충돌.** bounce 스프링 24곳, hover scale 1.03~1.05·표 들림·기울임, `animate-ping` 6곳, 모바일 CTA 상하 bob(모바일에서 가장 자주 보이는 모션), 파티클·블롭·글로우, 그라데이션 텍스트, 글래스 카드, 파스텔 hover 채움.
 - **위계 없음.** 모든 섹션이 같은 fade-up 이라 이야기의 꼭짓점(전환점·증거·결정)이 구분되지 않고, 덜 중요한 곳(ProblemCost 장식, SatisfyingClass 콜라주, SW FinalCTA)이 가장 시끄럽다.
 
-방향: 대부분은 **빼기와 기존 도구로 수렴**이고, 새로 만드는 것은 Act 별 서사 모먼트 5~6개뿐이다.
+방향: 대부분은 **빼기와 기존 도구로 수렴**이고, 새로 만드는 것은 홈 서사 모먼트 4개(상한 6)뿐이다.
 
 ### 5-2. 원칙과 토큰
 
-운영자 취향 "은은·길게·바깥 투명도"를 이렇게 읽는다: 투명도가 주인공, 이동은 12px 이하, 700ms 안팎의 긴 ease-out, 가장자리에서 서서히 사라지는 처리.
+운영자 취향 "은은·길게·바깥 투명도"를 이렇게 읽는다: 투명도가 주인공, 이동은 12px 이하, 긴 곡선(900ms `--ease-fade`)은 서사 모먼트에만, 조작 응답은 진입 160·이탈 320ms(V17-A), 가장자리에서 서서히 사라지는 처리.
 
 ```css
 /* app/globals.css :root */
---motion-fast: 160ms;    /* hover·press·색 */
---motion-base: 320ms;    /* 탭·메뉴·패널 교체 */
---motion-slow: 700ms;    /* 섹션 리빌(현행 Reveal 값) */
+--motion-fast: 160ms;    /* hover·focus 진입, 오버레이 닫힘 */
+--motion-base: 320ms;    /* hover 이탈·뗌, 탭 패널 교체, 입력 오류 테두리 */
+--motion-slow: 900ms;    /* 서사 모먼트·Reveal·잉크 밑줄·도판 현상(V17-A, 700ms에서) */
+--motion-beat: 240ms;    /* 지연·순차 박자: calc(var(--seq,0) * var(--motion-beat)) */
 --motion-rise: 12px;     /* 이동 상한 */
---motion-stagger: 80ms;  /* 최대 3단 */
+--motion-stagger: 80ms;  /* ●점등 노드 간격 전용 */
 --header-h: 76px;        /* md: 80px — 헤더·히어로·탭·scroll-mt 공용 */
 
 /* @theme inline */
---ease-soft: cubic-bezier(0.22, 1, 0.36, 1);   /* 정본 */
---ease-drift: cubic-bezier(0.45, 0, 0.55, 1);  /* 스크럽 전용 */
+--ease-soft: cubic-bezier(0.22, 1, 0.36, 1);   /* 변위(Reveal 상승)·조작 전환 */
+--ease-fade: cubic-bezier(0.33, 1, 0.68, 1);   /* opacity·색 모먼트·도판 현상(V17-A) */
+--ease-drift: cubic-bezier(0.45, 0, 0.55, 1);  /* 로딩 스켈레톤 숨쉬기. Manifesto 스크럽은 linear */
 
 @media (prefers-reduced-motion: reduce) { :root { --motion-rise: 0px; --motion-stagger: 0ms; } }
 ```
@@ -272,73 +276,74 @@
 |---|---|---|
 | `Reveal`(IO + CSS) | 기본 프리미티브 | SSR 에서 보이고 동작 줄이기 처리 완료, 1KB 미만. 보강: 이미 뷰포트 안이면 무장하지 않기, `will-change` 제거, 토큰 적용 |
 | CSS `animation-timeline: view()` | 1~2곳 한정 점진적 향상 | Chrome 115+, Safari 26(iOS 26, 실기기 확인 권장). 스크롤에 묶여 되감기므로 '스크럽'에만. `@supports` + `no-preference` 로 감싸고 대체는 정적 완전 표시 |
-| View Transitions | 지금은 보류, Phase 3 실험 | Next 16 `experimental.viewTransition` 은 실험 API. 현행 RouteTransition 을 opacity 전용 200ms 로 단순화하면 충분 |
-| framer-motion(설치됨) | 상태 있는 곳만 유지 | exit 애니메이션(챗봇·모바일 CTA), CaseStudies 위치 계산. 순수 리빌은 빼서 섹션을 서버 컴포넌트로 |
+| View Transitions | 쓰지 않음 | Next 16 `experimental.viewTransition` 은 실험 API. 공개 셸의 페이지 이동 모션은 0이다(RouteTransition 래퍼 제거, 느린 이동은 300ms 뒤 숨쉬는 스켈레톤) |
+| framer-motion(설치됨) | 상태 있는 곳만 유지 | exit 애니메이션(챗봇·모바일 CTA). 홈 사례는 정적 3건이라 CaseStudies 위치 계산은 없어진다. 순수 리빌은 빼서 섹션을 서버 컴포넌트로 |
 | GSAP·Lottie·Lenis | 추가 금지 | 위 조합으로 전부 해결 |
 
 ### 5-4. 홈 6-Act 안무
 
-원칙: 서사 모먼트 6개 이하. 나머지는 Reveal 페이드(섹션당 3개 이하)이거나 정지.
+원칙: 서사 모먼트 6개 이하이고 홈은 4개다(① Hero 잉크 밑줄 ② Manifesto 스크럽 ③ OS 지도 ○→● ⑤ Comparison 행 액센트, `[data-moment]` 게이트 = 4). 나머지는 Reveal 페이드(섹션당 1개)이거나 정지. Act 이름은 V10-A 11지면 목차를 따른다.
 
 | Act | 섹션 | 모먼트 | 메커닉 | 노력 |
 |---|---|---|---|---|
-| 1 선언 | Hero | 기존 진입 유지 + "학원의 시스템으로" 아래 2px 액센트 바가 제목 등장 후 그려짐. 그라데이션 텍스트·ping·hover scale 제거, 영상 화면 밖 정지 + 정지 버튼 | CSS `scaleX 0→1` 700ms, JS 0 | S |
-| 1 | LogoBar | 정적 목록(앞 12곳 + '외 N곳'). 마키·복제 세트 없음, 상하 하드 보더 제거 | — | S |
-| 1~2 | HomeEntitySummary, EraVision | 정지 / Reveal 페이드만. hover 파스텔 채움 → 좌측 2px 바 | 서버 컴포넌트화 | S |
-| 3 공감 | ProblemCost | 카운터 하나만(수치 근거 확보 시). SSR 은 최종값, 50% 보이면 0→목표 1200ms 1회, `tabular-nums`. 글래스·테라코타·ping·shimmer·블롭 제거 | rAF + reduced 시 즉시값 | M |
-| 3 | HomeLeadMagnet | 정지 — 전환 지점은 고요하게 | — | — |
-| 3' 전환점 | Manifesto | 스크롤 스크럽 타이포: 두 줄이 화면 중앙을 지나며 opacity .18→1, 둘째 줄 아래 2px 바가 그려짐. `h2` 승격, 800px 블러 글로우 제거 | CSS `view()` + 정적 대체 | S~M |
-| 4 솔루션 | SolutionOverview | 자동 전환을 "보이는 타이머"로: 활성 단계 아래 2px 바가 6초 동안 차오르고 다음 단계로. hover·focus·화면 밖에서 정지, 패널은 320ms 크로스페이드 | CSS `scaleX` + `animationend`. **함정:** 전역 동작 줄이기가 duration 을 0.001ms 로 만들어 `animationend` 가 즉시 발화 → reduced 시 자동 전환 핸들러를 붙이지 않는다 | M |
-| 4 | KeyUseCases | 정지(탭 패널 페이드만), 기울임 스프링·블롭 제거 | — | S |
-| 5 증거 | DashboardPreview | 데이터가 그려진다: 선 1200ms, 막대 900ms, 40% 보일 때. backdrop-filter → 단색, "예시 화면" 캡션, 툴팁 `#111110` | Recharts `animationDuration`, reduced 시 `isAnimationActive={false}` | M |
-| 5 | ScienceBased·SatisfyingClass·GlobalScale·TestimonialWall·Outcomes | 정지 또는 Reveal 페이드. GlobalScale 의 EEO 공식 수치는 정적(카운트업 금지) | — | S |
-| 5 | CaseStudies | 조작 위주. 자동 전환은 hover·focus·화면 밖·reduced 에서 정지, 스프링 → `ease-soft` 480ms, 비활성 슬라이드는 `inert` | — | M |
-| 6 확신 | Comparison | 행 액센트: 표가 들어올 때 Classin 열 셀의 2px 좌측 바가 위→아래로(행당 80ms). 표 들림 제거, `text-green-500` → `#084734` | `::before scaleY` | S |
-| 6 | FinalCTA | 정지. 화살표 hover 2px 이동만, 블롭 → `radial-gradient` | — | S |
+| 표지 | Hero | 진입 애니메이션 0(V17-A). ① 240ms 뒤 "학원의 시스템으로" 잉크 밑줄 색만 900ms. 무도판 비대칭 표지(V11-A, 영상 없음, LCP = H1). 그라데이션 텍스트·ping·hover scale 제거 | CSS `ink-fade`(`text-decoration-color`, `--motion-slow` `--ease-fade`, 지연 `--motion-beat`), JS 0 | S |
+| 띠 | LogoBar | 정적 목록: 숫자 없이 공개 동의를 받은 이름만 가나다순, 6곳 미만이면 렌더하지 않음(X16 개정). 마키·복제 세트 없음, paper 띠 + 위아래 hair | — | S |
+| 01 선언 | HomeEntitySummary (EraVision은 홈에서 빠짐) | 정지 / Reveal 페이드만, masthead 정적. hover 파스텔 채움 제거(좌측 바 아님, C21) | 서버 컴포넌트화 | S |
+| 02 공감 | ProblemCost | 정성 장부 6행(수치·카운터 0), paper. 행 이름·순서는 03 OS 지도 6노드와 같다. 글래스·테라코타·ping·shimmer·블롭 제거 | 정지 | M |
+| 부록 | HomeLeadMagnet(진단표) | 정지, sunken 부록 — 전환 지점은 고요하게 | — | — |
+| 전환점 | Manifesto | ② 스크롤 스크럽 타이포: 두 줄이 화면 중앙을 지나며 opacity .18→1, 둘째 줄 잉크 밑줄 색 스크럽. 먹 지면 1곳, `h2` 승격(`text-poster`), 800px 블러 글로우 제거 | CSS `view()`(linear) + `@supports`·no-preference·`(height >= 500px)`, 정적 대체 | S~M |
+| 03 흐름 | SolutionOverview(OS 지도) | 탭은 수동, 자동 진행 0. ③ 6노드 상태 점 ○→● 색 전이(border-color·background-color, 80ms 간격, 1회). 노드 r0·윤곽 1.5px `--line-control`, sunken 도해 | `Reveal bare` + CSS 전이(`--motion-slow` `--ease-fade`), reduced·no-JS 는 ● 6개 완성 | M |
+| — | KeyUseCases | 홈에서 빠져 SW 페이지로 옮김(V10-A). 탭 패널 페이드만, 기울임 스프링·블롭 제거 | — | S |
+| — | DashboardPreview | 홈에서 빠짐(V10-A), ④ 차트 모먼트는 홈에서 0. 차트 문법은 SW·ai-report 에: 서버 SVG(Recharts 0), `[data-seq]` opacity 순차(비교 0 → 강조 1박자 → 라벨 2박자), "예시 화면" = Frame 안 점선 태그, 툴팁 없음(직접 라벨) | `<Reveal bare threshold={0.4}>`, 박자 `--motion-beat`, 각 `--motion-slow` `--ease-fade` | M |
+| 04 화면 | (새) 영역 캡처 | 영역 캡처 1장 + 매트 Frame(V16-A), Section 안 마지막 요소로 확인 CTA 띠 | 정지 | S |
+| — | ScienceBased·SatisfyingClass | 홈에서 빠짐(ScienceBased → 각주 단 블로그 글) | — | S |
+| 05 기록 | CaseStudies + TestimonialWall + GlobalScale + Outcomes | 한 지면으로 합침. 사례 3건 정적 배치(64rem 이상 3열, 모바일 세로), 캐러셀·자동 진행 0, 인용 4개 이하. EEO 수치 한 줄은 정적 SSR 값 + 각주(카운트업 0) | 정지 | M |
+| 06 확신 | Comparison | ⑤ 행 액센트: 표가 들어올 때 Classin 열 셀의 2px 좌측 바(`.row-accent::before`)가 opacity 0→1(전 행 동시, 1회). 표 들림 제거, 머리·행 Check 아이콘(`green-400/500`) 삭제, 행 글자 `text-fg-muted`. 끝의 `comparison_demo` 결정 CTA 유지 | `Reveal bare`(.12), `--motion-slow` `--ease-fade`, 지연 `--motion-beat` | S |
+| 끝 | FinalCTA | 정지. sunken 띠 + 이중 괘선 + primary 52 + 텍스트 링크(V5-A). 화살표 hover 2px 이동만, 블롭 삭제(그라데이션 0) | — | S |
 
-전환 보강: `KeyUseCases` 뒤와 `TestimonialWall` 뒤에 헤어라인 CTA 띠(쇼룸, `TrackedLink` ctaId `home_mid_showroom`).
+전환 보강: 04 화면 Section 안 마지막 요소로 확인 CTA 띠 1개(쇼룸 line cta, ctaId `home_mid_showroom`, 위아래 hair, 별도 Section·`data-surface` 없음). 결정 CTA는 Hero·Comparison·FinalCTA·헤더·모바일 플로팅 5곳 그대로이고 뷰포트당 1개다.
 
-섹션 통합안(D8, 시안 먼저): Hero → LogoBar + 정의 띠 → Manifesto(+시대 3칩) → ProblemCost(정성) → HomeLeadMagnet → SolutionOverview → KeyUseCases(+역할별 Before/After) → DashboardPreview(예시) → Voices(CaseStudies+Testimonial)+GlobalScale → Comparison → FinalCTA. ProblemCost 직후 HomeLeadMagnet 흐름과 Comparison 의 "한계와 연동" 행은 유지한다.
+섹션 통합(감사 D8 → V10-A 11지면 확정): Hero → LogoBar 띠 → 01 선언 → 02 공감(정성 장부) → 부록 진단표(sunken) → Manifesto(먹) → 03 흐름(OS 지도, sunken) → 04 화면(영역 캡처 + 매트 Frame + CTA 띠) → 05 기록 → 06 확신(비교표) → FinalCTA(sunken) + Footer(먹). 빠짐: EraVision · KeyUseCases(→SW) · DashboardPreview · ScienceBased(→각주 단 블로그 글) · SatisfyingClass. 지금 18섹션(+ 띠 2) + 푸터, 지면 바뀜 약 17 → `[data-surface]` 11 + 푸터, 지면 바뀜 6, 1440 약 11,400px(게이트 ≤11,500). ProblemCost 직후 진단표 흐름과 Comparison 의 "한계와 연동" 행은 유지한다.
 
 ### 5-5. 제품 페이지·셸
 
-1. **HW 히어로 SSR 가시화(S, 최우선):** `hw/page.tsx:791-845` 의 framer `initial/animate` 를 `hero-soft-enter` 로. HW 서사 모먼트는 LatencyProof 의 펜 획 SVG 그리기 하나(수치 확정 D5 뒤). `AllInOneStatement`+`BigBackdropImage` 를 "보드→OPS→카메라→소프트웨어" sticky 스테이지 하나로 합치는 안은 Phase 3(1024px 미만·reduced 는 정적 스택).
-2. **SW 다이어트(L, 2,197줄):** 가짜 카운터·파티클·블롭 드리프트·filter blur 애니메이션 제거. `TypographyHookSection`(`sw:720-760`)의 "줄 단위 등장 + 2px 그린 바"는 취향에 맞는 정본 패턴이라 유지하고 Manifesto 에도 쓴다. 26개 동일 아이콘 타일은 대표 4~5개 도구의 마이크로 데모(타이머 링, 랜덤 선택, 퀴즈 막대, 레이저 포인터; 한 번에 하나만 재생)로 대체하고, 쓰지 않던 `LessonToolIcons.tsx` 를 재활용.
-3. **`/pricing` 선택 가이드(M):** 가격 없이 "규모·수업 패턴·하드웨어 유무" 3문항 칩 → 해당 비교 행에 좌측 그린 바, 나머지는 흐리게. CTA 는 `isSoftwareCheckoutEnabled()` 로 분기.
-4. **공용 `ScaleFacts`(S):** 검증된 EEO 수치 3개 + 캡션 상시, SSR 최종값, 진입 1회 카운트업. P0-9 와 SW·HW 수치 불일치를 한 번에 정리.
-5. **셸(각 S):** 헤더 높이 고정 + 배경·보더·그림자 opacity 만 320ms 전환(스크롤 감지는 상단 1px 센티넬 IO), 활성 표시를 파스텔 채움 → 하단 2px 그린 바 `scaleX`(제품 탭은 인디케이터 하나가 `translateX`), 모바일 메뉴 `@starting-style` opacity + 4px 페이드 + 백드롭 + Esc·잠금·`inert`, RouteTransition opacity 전용 200ms + 키를 최상위 세그먼트로, 모바일 CTA bob·ping 제거 후 1회 페이드만, Dialog 에 `dialog-in` 키프레임(opacity + scale .98→1, 220ms) 하나.
-6. **CTA 마이크로 인터랙션 통일(S):** hover scale 금지. 색 전환 160ms, 화살표 2px 이동, press scale .97(`button.tsx` 에 이미 있음), 포커스 링 `#084734` 2px. CTA 반경 6px 통일(현재 `rounded-2xl`·`rounded-full` 혼재).
-7. **전환 화면(M):** 쇼룸 폼 좌측 진행 레일(01~04, 현재 단계만 그린), 3개 폼 공용 오류 피드백(좌측 2px Danger 바, 흔들기 → 600ms 보더 색 페이드, 첫 오류 필드 포커스), 성공 화면은 접수번호 중심 타이포 + "다음 3단계" 아웃라인 리스트, 쇼룸 날짜 셀에 남은 슬롯 수 1px 틱·막힌 이유 안내.
-8. **콘텐츠(S~M):** 블로그 읽기 진행바를 본문 범위로 + 목차 현재 항목 2px 바, 본문 이미지 `#F0F0EC` 자리표시 + 600~700ms opacity, 목록 hover 를 배경 채움·형제 흐림 대신 2px 바 `scaleY`, 행사 D-day 텍스트 상태 라인(마운트 후 KST 계산), 문서 단계 체크(localStorage, try/catch).
-9. **쿠키 배너(S):** 900ms 뒤 `hero-soft-enter` 로 떠오름, 상세 설정을 회색 박스 → 1px 구분선 + 스위치, "필수만 사용"과 "모두 허용"을 같은 크기·같은 줄(거부는 그린 아웃라인), 저장 후 1.6초 확인 문구("언제든 푸터 '쿠키 설정'에서 바꿀 수 있어요").
+1. **HW 히어로 SSR 가시화(S, 최우선):** `hw/page.tsx:791-845` 의 framer `initial/animate` 를 지우고 첫 프레임부터 정지 상태로 렌더한다(진입 애니메이션 0, `hero-soft-enter` 도 쓰지 않음, V17-A). HW 서사 모먼트는 LatencyProof 차트의 opacity 순차 등장 하나(감사 D5 뒤, stroke-dashoffset 은 사이트 전체 0). `BigBackdrop`·`FullWidthPointSection` 풀블리드는 폐기하고 콘텐츠 폭 plate(정지)로 바꾼다. HW 먹 장은 `AllInOneStatement` 하나이고 ValueAnchor 는 paper 로 옮긴다.
+2. **SW 다이어트(L, 2,197줄):** 가짜 카운터·파티클·블롭 드리프트·filter blur 애니메이션 제거. `TypographyHookSection`(`sw:720-760`)의 2px 그린 바는 이 페이지의 잉크 밑줄 1개(Reveal + 색 페이드, C25)로 바꾼다. 26개 동일 아이콘 타일은 정지 목차 행으로 바꾸고, 대표 4~5개 도구의 마이크로 데모(타이머 링, 랜덤 선택, 퀴즈 막대, 레이저 포인터; 한 번에 하나만 재생)는 아이콘과 별개 띠로 페이지 모먼트 예산 안에서만 둔다. `LessonToolIcons.tsx` 는 글리프로 이관한 뒤 삭제한다. 홈에서 옮겨 온 KeyUseCases(탭 + 영역 캡처 Frame 1)가 여기 들어온다.
+3. **`/pricing` 선택 가이드(M):** 가격 없이 "규모·수업 패턴·하드웨어 유무" 3문항 `FilterChip` → 해당 비교 행에 좌측 그린 바(C21 ②), 나머지 행은 `--fg-muted`. CTA 는 `isSoftwareCheckoutEnabled()` 로 분기.
+4. **공용 `ScaleFacts`(S):** `lib/facts.ts` 에 등록한 EEO 수치만(홈은 160+개국·5,000만+ 교육자·학습자·월 3,000만+ 수업, 6만+ 기관·2억+ 누적은 About) + 같은 뷰포트 13px 각주, SSR 정적 값(카운트업 0). P0-9 와 SW·HW 수치 불일치를 한 번에 정리.
+5. **셸(각 S):** 헤더 높이 고정 + 하단 hair opacity만 320ms 전환(C27, 스크롤 감지는 상단 1px 센티넬 IO), 활성 표시를 파스텔 채움 → 탭별 2px 막대 opacity 160ms(`index-tab`, 움직이는 인디케이터·측정 JS 0), 모바일 메뉴 `@starting-style` opacity만 + 백드롭 + Esc·잠금·`inert`(`#main` + `[data-inert-with-menu]`), 공개 셸 페이지 이동 모션 0(RouteTransition 래퍼 제거, 느린 이동은 300ms 뒤 숨쉬는 스켈레톤), 모바일 CTA bob·ping 제거 후 opacity 1회 진입만, Dialog 에 `dialog-in` 키프레임(opacity + scale .98→1, 160ms) 하나 + 닫힘 160ms 페이드.
+6. **CTA 마이크로 인터랙션 통일(S):** hover scale 금지. 색 전환 진입 160·이탈 320ms, 화살표 2px 이동, press scale .98(누름 0ms·뗌 320ms, V17-A. 지금 `button.tsx` 는 .97), 포커스는 `.site` 보증 outline(2px `--fg-accent`, offset `var(--focus-offset)`). CTA 반경 6px 통일(현재 `rounded-2xl`·`rounded-full` 혼재): Button size md/cta, className 덮어쓰기 금지, 먹 위 컨트롤 0(C14 개정), 라벨은 `lib/cta.ts`.
+7. **전환 화면(M):** 쇼룸 폼 좌측 진행 레일(01~04, 레일은 1px hair, 현재 단계는 `--fg-accent` 글자 + `aria-current="step"`), 3개 폼 공용 오류 피드백(테두리 `#B43E3E` + 14px 오류 문구 + 서버 오류 상태줄, 좌측 바 없음(C21). 흔들기 → `--motion-base` 320ms 테두리 색 페이드, 첫 오류 필드 포커스), 성공 화면은 `.success-panel`(접수번호 중심 타이포, 제목 포커스, ● 1개 점등, 다음 순서 ●○○), 쇼룸 날짜 셀에 남은 슬롯 수 1px 틱·막힌 이유 안내.
+8. **콘텐츠(S~M):** 긴 글 읽기 진행은 헤더 하단 hair 위 1px 읽기 괘선 하나(CSS 스크롤 타임라인, 지원 브라우저만. ReadingProgress 3px JS 막대 삭제) + 세로 목차 현재 항목 2px 바(C21 ③), 본문 이미지 `--surface-skeleton`(`#EFEEE9`) 자리표시 + decode 전 이미지만 `--motion-slow` opacity, 목록 hover 는 배경 채움·형제 흐림 대신 경계 hair→strong + 화살표 2px(진입 160·이탈 320ms, C13), 행사 D-day 텍스트 상태 라인(마운트 후 KST 계산), 문서 단계 체크(localStorage, try/catch).
+9. **쿠키 배너(S):** 진입은 opacity 1회(`hero-soft-enter` 는 쓰지 않음), 상세 설정을 회색 박스 → hair 구분선 + 스위치 행, "필수만 사용"(line md, `#8A857F` 테두리, C23)과 "모두 허용"(default md)을 같은 크기·같은 줄, 저장 후 1.6초 확인 문구("언제든 푸터 '쿠키 설정'에서 바꿀 수 있어요").
 
 ### 5-6. 모션 외 디자인 요소
 
-- **타이포 리듬:** 헤딩 3단(Display — Hero·Manifesto 전용 clamp / Section 40·48px 700 / Card 22~26px). 인라인 `letterSpacing` 15곳 이상을 유틸로 교체해 모바일 0 규칙 복구. eyebrow 는 13px/600 `#084734` + 왼쪽 16×2px 바. 공개 화면 비상호작용 pill 은 0이다 — Hero 배지는 삭제하고 Kicker 로 대체(V9-A).
-- **배경 리듬(하드 보더 없음):** V4-A 로 확정. 서사 먹은 Manifesto 1곳 + Footer 뿐이고, ProblemCost 는 sheet 위 정성 장부다. 나머지 지면은 교대가 아니라 역할로 배정한다(홈 시퀀스는 [디자인 언어 문서 §6-2](./public-site-design-language-2026-10-26.md)). 비토큰 배경(`#F9F8F4`, `#F7F8F5`, `#FDFCF8` 등) 정리.
-- **다이어그램:** 1.5px 선, `#8F8A84` 선에 강조 노드만 `#084734`, 채움 없음. 3D·글래스·글로우 금지.
-- **아이콘:** lucide 유지, stroke V6-A(1.5px, DPR1 화면 2px), 기본 `#615D59`, 강조만 `#084734`. 그라데이션 아이콘 타일·채움 원 → 타일 없이 또는 whisper 아웃라인.
-- **마케팅 차트:** 강조 시리즈 1개(라이트 `#084734` / 다크 `#6EE7B7`), 나머지 `#8F8A84`, 직접 라벨, `tabular-nums`, 목업은 "예시 화면" 필수, 차트 애니메이션은 페이지당 1회.
-- **사진:** HW 기획서 톤(3200~4000K, 채도 −10%)을 사이트 전체에, radius 16px, 오버레이는 하단 `black/40` 이하 하나.
+- **타이포 리듬:** 헤딩 위계(V13-A): Display — Hero H1 전용 40→72px/600 · Poster — Manifesto 전용 48→104px/700 · Section h2 28→40px/600 · Card h3 20→24px/600. 인라인 `letterSpacing` 15곳 이상을 자간 토큰으로 교체한다(typography 자간 표가 정본: 데스크톱·모바일 모두 줄인 음수, 표 밖 값 금지). 섹션 머리는 eyebrow 대신 Kicker(V12-A): 1px 먹 masthead 아래 레일에 폴리오 13/500 `#615D59` + 라벨 13/600 `#111110`, 바·그린 0, Act 머리 전용. 공개 화면 비상호작용 pill 은 0이다 — Hero 배지는 삭제하고 Kicker 로 대체(V9-A).
+- **배경 리듬(하드 보더 없음):** V4-A·V10-A 로 확정. 서사 먹은 Manifesto 1곳 + Footer 뿐이고, ProblemCost 는 paper 위 정성 장부다(sheet 는 섹션 지면이 아니다). sunken 은 도해(페이지당 1)·부록·FinalCTA 3역할만, 연속 금지. 나머지는 paper 이고 교대가 아니라 역할로 배정한다(홈 11지면 시퀀스는 [디자인 언어 문서 §6-2](./public-site-design-language-2026-10-26.md), 인접 지면 바뀜 6회 이하). 비토큰 배경(`#F9F8F4`, `#F7F8F5`, `#FDFCF8` 등) 정리.
+- **다이어그램:** `--stroke-pen`(1.5px, DPR1 2px) `--line-control` `#8A857F` 선, 강조 경로 1개만 2px `#084734`, 화살촉 대신 단자 점, 채움 없음. 노드는 r0 + 윤곽 1.5px `--line-control`(정보 경계, C23), 글자 13px 이상. 3D·글래스·글로우 금지.
+- **아이콘:** lucide 유지, stroke V6-A(1.5px, DPR1 화면 2px), 기본색은 글자 상속·단독 아이콘 `--fg-muted`(`#615D59`), 그린은 활성 IconFrame·추천 요금제 Check·완료 표지에만. 그라데이션 아이콘 타일·채움 원 → 타일 없음 또는 IconFrame 40/48(r0, 투명 바탕, 1px hair).
+- **마케팅 차트:** 강조 시리즈 1개(라이트 `#084734` / 먹 위 세이지 `#8FC4AC`), 비교 계열 `--line-control` `#8A857F`(라벨 `#615D59`), 끝값 직접 라벨, 13px `tabular-nums`, 면 채움 0, 막대 r0, 목업은 Frame 안 점선 "예시 화면" 태그 필수, 서버 SVG, 차트 등장은 페이지당 1회 opacity 순차.
+- **사진:** 사진별 중립 패치 WB 뒤 공통 그레이드(흰점 = `--surface-paper` `#F9F8F5`·블랙 +3%·채도 −10%)를 에셋 단계에서 굽는다(런타임 filter 금지). 도판 radius 0(V14-A), 스크림은 큰 글자가 있을 때만 `--surface-scrim`(.48) 한 겹. 공개 도판 평균 휘도 100/255 이상(HW 먹 장 1장 예외).
 - **본문 대비:** 읽는 텍스트는 `#615D59` 이상. `#A39E98` 은 장식·비활성에만(텍스트 금지), 플레이스홀더는 `#78736D`.
 
 ### 5-7. 단계별 계획
 
 | Phase | 내용 | 완료 기준 | 시안 |
 |---|---|---|---|
-| 0 토큰·정리 (화면 변화 0) | 토큰 추가, 미사용 CSS 삭제(삭제 직전 grep 0건 재확인), LogoBar 인라인 keyframes 정리, `lib/motion.ts`, Reveal 보강, 페이지 루트 `MotionConfig`, 카운터 SSR 최종값, `DESIGN.md` 에 "모션" 절 추가 | typecheck·eslint 통과, 375×812·1440×900 전후 스크린샷 동일, reduced 에뮬레이션에서 transform 이동 0 | 불필요 |
-| 1 고효과·저위험 (대부분 빼기) | HW 히어로 SSR 가시화, 홈 리빌 framer → Reveal(서버 컴포넌트화), ping·hover scale·들림·shimmer·bob·bounce 제거, SolutionOverview·CaseStudies 자동 전환 교정, 헤더 높이 고정, ProblemCost `width`→`scaleX`, 영상 화면 밖 정지·정지 버튼·재인코딩, backdrop-filter 제거, RouteTransition opacity 전용, 인라인 자간 → 유틸 | 모바일 Lighthouse(3회 중앙값) 홈·hw·sw 악화 0·hw LCP 개선, CLS ≤ 0.05, 탭 INP < 200ms, reduced 에서 이동·자동 전환·무한 루프 0, JS 끈 상태에서 홈 전 섹션 텍스트 보임, iPhone Safari 스크롤 프레임 저하 없음 | Hero 그라데이션 텍스트 제거·액센트 바, 모바일 CTA 정적화(전후 비교). SW 가짜 카운터 제거는 D3 |
-| 2 서사 모먼트 (모먼트 1개 = 커밋 1개) | Manifesto 스크럽, ProblemCost 단일 카운터 + 재디자인, SolutionOverview 진행 바, DashboardPreview 그리기 + 예시 캡션, Comparison 행 액센트, 타이포 3단·eyebrow·배경 리듬 | 각 모먼트의 정적 대체를 Firefox·iOS 18 Safari·reduced 에서 캡처, iOS 26 실기기 스크럽 확인, 스크롤 중 long task 증가 0, 모먼트로 인한 CLS 0 | 전부 필수 |
-| 3 제품·선택 | HW 스테이지·LatencyProof SVG, SW 다이어트·도구 마이크로 데모, `/pricing` 선택 가이드, AI 리포트 무한 펄스 in-view 한정, (실험) 제품 탭 View Transitions, (선택) 공개 컴포넌트에 `bounce:`·`repeat: Infinity`·`hover:scale-1xx`·`animate-ping` 신규 유입 가드 | 위와 동일 | SW FinalCTA 재구성, HW 영상 컷 |
+| 0 토큰·정리 (화면 변화 0) | 토큰 추가, 미사용 CSS 삭제(삭제 직전 grep 0건 재확인), LogoBar 인라인 keyframes 정리, Reveal 보강, 페이지 루트 `MotionConfig`, 카운터 SSR 최종값, `DESIGN.md` 에 "모션" 절 추가 | typecheck·eslint 통과, 375×812·1440×900 전후 스크린샷 동일, reduced 에뮬레이션에서 transform 이동 0 | 불필요 |
+| 1 고효과·저위험 (대부분 빼기) | HW 히어로 SSR 가시화, 홈 리빌 framer → Reveal(서버 컴포넌트화), ping·hover scale·들림·shimmer·bob·bounce 제거, SolutionOverview·CaseStudies 자동 진행 제거(자동 진행 0), 헤더 높이 고정, ProblemCost `width`→`scaleX`, 영상 화면 밖 정지·정지 버튼·재인코딩, backdrop-filter 제거, 공개 셸 RouteTransition 래퍼 제거, 인라인 자간 → 유틸 | 모바일 Lighthouse(3회 중앙값) 홈·hw·sw 악화 0·hw LCP 개선, CLS ≤ 0.05, 탭 INP < 200ms, reduced 에서 이동 0, 홈 자동 진행·무한 루프 0, JS 끈 상태에서 홈 전 섹션 텍스트 보임, iPhone Safari 스크롤 프레임 저하 없음 | Hero 그라데이션 텍스트 제거·잉크 밑줄, 모바일 CTA 정적화(전후 비교). SW 가짜 카운터 제거는 D3 |
+| 2 서사 모먼트 (모먼트 1개 = 커밋 1개) | 홈 모먼트 4개(① Hero 잉크 밑줄 ② Manifesto 스크럽 ③ OS 지도 ○→● ⑤ Comparison 행 액센트, `[data-moment]` = 4), ProblemCost 정성 장부 6행(수치 0), 홈 11지면 통합(V10-A), 타이포 위계·Kicker·지면 배정 | 각 모먼트의 정적 대체를 Firefox·iOS 18 Safari·reduced 에서 캡처, iOS 26 실기기 스크럽 확인, 스크롤 중 long task 증가 0, 모먼트로 인한 CLS 0 | 전부 필수 |
+| 3 제품·선택 | HW plate 전환(BigBackdrop·FullWidthPointSection)·LatencyProof 차트 opacity 순차, SW 다이어트·도구 마이크로 데모, `/pricing` 선택 가이드, AI 리포트 무한 펄스 → 정적 상태 점(C26), (선택) 공개 컴포넌트에 `bounce:`·`repeat: Infinity`·`hover:scale-1xx`·`animate-ping` 신규 유입 가드 | 위와 동일 | SW FinalCTA 재구성, HW 영상 컷 |
 
 ### 5-8. 하지 말 것
 
 - 새 애니메이션 라이브러리, 스무스 스크롤 하이재킹(iOS 관성 스크롤을 깸).
-- 패럴랙스 남발(스크롤 연동은 Manifesto·BigBackdrop 2곳 상한), 모든 수치 카운트업(홈 1개, EEO 수치는 정적).
+- 패럴랙스 남발(스크롤 연동은 Manifesto 스크럽과 긴 글 1px 읽기 괘선뿐, 이미지 스크롤 연동 0 — BigBackdrop 은 콘텐츠 폭 plate 로 정지), 수치 카운트업(사이트 전체 0).
 - bounce 스프링, hover scale > 1, 기울임·회전 hover, 3D tilt.
 - 무한 앰비언트(ping, bob, 파티클, 블롭 드리프트, 글로우 펄스). 홈 무한 루프 0(예외 없음).
 - 그라데이션 텍스트, 글래스모피즘, 블러 블롭 장식.
-- `width`·`height`·`padding`·`filter` 애니메이션(opacity·transform, 작은 SVG `stroke-dashoffset` 만).
+- `width`·`height`·`padding`·`filter` 애니메이션(opacity·transform 만, 색 예외는 cards_motion 목록뿐. `stroke-dashoffset` 은 사이트 전체 0).
 - JS 전에 콘텐츠를 숨기는 모션(SSR `opacity:0`).
 - 가짜 라이브 데이터, "예시" 표기 없는 목업 수치.
 - 자동 진행 0, 정지 수단 없는 자동 재생.
@@ -353,7 +358,7 @@
 | W0 핫픽스 | P0-1 랜딩 가드 예외 + 테스트 · P0-2 챗봇 래퍼 pointer-events · P0-3 `body { overflow-x: clip }` + 히어로 커버 화면 확인 · P0-4 omo1 태그 삭제 · P0-5 추적 제외 경로 + pathname 만 · P0-6 Meta `disablePushState`·consent revoke · sitemap `revalidate` + 재배포 · docs `q` 배열·소문자 · CSP YouTube · P0-7 카카오 합성 이메일 · `sanitizeNextPath` origin 비교 · P0-8 자료 폼 동의 분리 · 정적 랜딩 `addBaseTag` 제거 · meets-july 마감 | growth-crm(리드·동의·추적·랜딩) · chatbot(래퍼) · home-front(CSS·sitemap) · content-pub(docs) · platform-data(OAuth·CSP) | 각 수 줄 |
 | W1 콘텐츠·컴플라이언스 | P0-9 수치·보장 문구 정리(D3) · HW/SW 스펙 정합(D5) · 사례 동의(D4) · 개인정보처리방침 개정 · 랜딩 동의 블록 · 수신거부 경로 · 가입 동의 UI · 결제 USD 노출(D6) · JSON-LD offers | home-front · growth-crm · 법무 | 결정 대기 |
 | W2 모션 Phase 0+1 | §5-7 Phase 0·1 + 셸(헤더 높이·메뉴·Dialog·모바일 CTA) | home-front | M |
-| W3 모션 Phase 2 | 서사 모먼트 5개(시안 승인 뒤 1개씩) + 홈 섹션 통합(D8) | home-front | M~L |
+| W3 모션 Phase 2 | 홈 서사 모먼트 4개(시안 승인 뒤 1개씩) + 홈 11지면 통합(D8 → V10-A, 2026-10-28) | home-front | M~L |
 | W4 제품·선택 | Phase 3 + 콘텐츠·전환 화면 디벨롭(§5-5 7~9) | home-front · content-pub · growth-crm | L |
 
 W0 는 서로 다른 파일을 건드리므로 병렬로 나눌 수 있다. 머지 뒤에는 기본 게이트(`npm run typecheck` → `npx eslint app components lib --max-warnings=0` → `npm run build`)와 `npx vitest run`, 그리고 운영 Promote 후 라이브 재확인(랜딩 제출, 모바일 CTA 탭, sticky, omo1 쿠키)을 한다.
