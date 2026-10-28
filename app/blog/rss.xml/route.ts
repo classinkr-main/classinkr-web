@@ -12,6 +12,21 @@ function escapeXml(value: string): string {
     .replace(/'/g, "&apos;")
 }
 
+// RFC 822 날짜(toUTCString). 해석할 수 없는 값은 Invalid Date 문자열을 피해 undefined 로 돌려보낸다.
+function toRfc822(value: string | null | undefined): string | undefined {
+  if (!value) return undefined
+  const time = new Date(value).getTime()
+  return Number.isFinite(time) ? new Date(time).toUTCString() : undefined
+}
+
+function latestTime(values: Array<string | null | undefined>): number | undefined {
+  const times = values
+    .filter((value): value is string => Boolean(value))
+    .map((value) => new Date(value).getTime())
+    .filter((time) => Number.isFinite(time))
+  return times.length > 0 ? Math.max(...times) : undefined
+}
+
 export async function GET() {
   let posts: Awaited<ReturnType<typeof getPublishedPostsForStaticSitemap>> = []
   let loadFailed = false
@@ -22,9 +37,17 @@ export async function GET() {
     console.error("[blog/rss] failed to load posts:", error)
   }
 
-  const items = posts.slice(0, 50).map((post) => {
+  const feedPosts = posts.slice(0, 50)
+  // 채널 lastBuildDate 는 실린 글들의 가장 최근 변경 시각이다. 글이 없으면(조회 실패 포함) 지어내지 않고 뺀다.
+  const lastBuildTime = latestTime(
+    feedPosts.flatMap((post) => [post.updatedAt, post.publishedAt, post.createdAt])
+  )
+  const lastBuildDate = lastBuildTime === undefined ? undefined : new Date(lastBuildTime).toUTCString()
+
+  const items = feedPosts.map((post) => {
     const url = toAbsoluteUrl(`/blog/${post.slug}`)
-    const pubDate = post.publishedAt ? new Date(post.publishedAt).toUTCString() : undefined
+    // publishedAt 이 없는 레거시 글은 작성 시각으로 폴백한다 — pubDate 가 없으면 리더가 항목 순서를 못 잡는다.
+    const pubDate = toRfc822(post.publishedAt) ?? toRfc822(post.createdAt)
     return [
       "    <item>",
       `      <title>${escapeXml(post.title)}</title>`,
@@ -47,11 +70,15 @@ export async function GET() {
     `    <link>${escapeXml(toAbsoluteUrl("/blog"))}</link>`,
     `    <description>${escapeXml("학원 운영 노하우, 제품 업데이트, 성공 사례를 전합니다.")}</description>`,
     "    <language>ko-KR</language>",
+    lastBuildDate ? `    <lastBuildDate>${lastBuildDate}</lastBuildDate>` : undefined,
+    "    <ttl>60</ttl>",
     `    <atom:link href="${escapeXml(`${SITE_URL}/blog/rss.xml`)}" rel="self" type="application/rss+xml"/>`,
     ...items,
     "  </channel>",
     "</rss>",
-  ].join("\n")
+  ]
+    .filter((line): line is string => line !== undefined)
+    .join("\n")
 
   return new Response(xml, {
     headers: {

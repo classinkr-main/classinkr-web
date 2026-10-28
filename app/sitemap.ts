@@ -1,16 +1,18 @@
 import type { MetadataRoute } from "next"
 
-import { getDocCategoryPath, getDocPath } from "@/lib/docs"
+import { getDocCategoryPath, getDocPath, type DocArticle } from "@/lib/docs"
 import { getDocsContent, listListedDocsFromContent } from "@/lib/docs-content"
 import { getPublishedPostsForStaticSitemap } from "@/lib/repositories/blog"
 import { listCachedPublicEvents } from "@/lib/repositories/public-events"
+import { getPublishedSeminars } from "@/lib/seminars/catalog"
 import { SITE_URL } from "@/lib/seo"
 
 const staticRoutes: Array<{
   path: string
   changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"]
   priority: number
-  lastModified: string
+  // 근거가 되는 날짜가 없는 경로는 생략한다(임의 날짜를 만들어 넣지 않는다).
+  lastModified?: string
 }> = [
   { path: "/", changeFrequency: "weekly", priority: 1, lastModified: "2026-05-20" },
   { path: "/docs", changeFrequency: "weekly", priority: 1, lastModified: "2026-05-20" },
@@ -26,6 +28,8 @@ const staticRoutes: Array<{
   { path: "/data-deletion", changeFrequency: "yearly", priority: 0.5, lastModified: "2026-04-01" },
   { path: "/blog", changeFrequency: "daily", priority: 0.8, lastModified: "2026-04-01" },
   { path: "/events", changeFrequency: "weekly", priority: 0.7, lastModified: "2026-04-01" },
+  { path: "/resources", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/download", changeFrequency: "weekly", priority: 0.8 },
   { path: "/updates", changeFrequency: "weekly", priority: 0.7, lastModified: "2026-04-01" },
   { path: "/faq", changeFrequency: "monthly", priority: 0.7, lastModified: "2026-05-20" },
   { path: "/about", changeFrequency: "monthly", priority: 0.5, lastModified: "2026-04-01" },
@@ -57,6 +61,31 @@ function latestDate(candidates: Array<string | null | undefined>): Date | null {
   return times.length > 0 ? new Date(Math.max(...times)) : null
 }
 
+// 문서가 정식 주소(canonicalPath)를 따로 가진 경우 사이트맵에도 그 주소를 올린다.
+// 다른 호스트를 가리키거나 해석할 수 없는 값이면 문서 자신의 경로로 되돌린다(사이트맵은 같은 호스트만 허용).
+function resolveDocSitemapUrl(doc: Pick<DocArticle, "category" | "slug" | "canonicalPath">): string {
+  const ownUrl = toAbsoluteUrl(getDocPath(doc))
+  const canonicalPath = doc.canonicalPath?.trim()
+  if (!canonicalPath) return ownUrl
+
+  try {
+    const canonicalUrl = toAbsoluteUrl(canonicalPath)
+    return new URL(canonicalUrl).origin === new URL(SITE_URL).origin ? canonicalUrl : ownUrl
+  } catch {
+    return ownUrl
+  }
+}
+
+// 같은 URL 이 두 번 실리지 않게 먼저 나온 항목만 남긴다(canonicalPath 가 다른 문서·허브와 겹칠 수 있다).
+function dedupeByUrl(entries: MetadataRoute.Sitemap): MetadataRoute.Sitemap {
+  const seen = new Set<string>()
+  return entries.filter((entry) => {
+    if (seen.has(entry.url)) return false
+    seen.add(entry.url)
+    return true
+  })
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [publishedPosts, docsContent, publicEvents] = await Promise.all([
     getPublishedPostsForStaticSitemap().catch(fallbackOnlyDuringBuild("published posts", [])),
@@ -64,23 +93,33 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     listCachedPublicEvents().catch(fallbackOnlyDuringBuild("public events", [])),
   ])
 
+  const listedDocs = docsContent ? listListedDocsFromContent(docsContent) : []
+
   // 목록 페이지(lastModified)는 하드코딩 날짜 대신 실제 최신 콘텐츠 날짜를 반영
   const latestBlogDate = latestDate(
     publishedPosts.flatMap((post) => [post.updatedAt, post.publishedAt])
   )
   const latestEventDate = latestDate(publicEvents.map((event) => event.updatedAt))
+  const latestDocsDate = latestDate(listedDocs.map((doc) => doc.updatedAt))
 
-  const staticEntries: MetadataRoute.Sitemap = staticRoutes.map((route) => ({
-    url: toAbsoluteUrl(route.path),
-    lastModified:
+  const staticEntries: MetadataRoute.Sitemap = staticRoutes.map((route) => {
+    const staticDate = route.lastModified ? new Date(route.lastModified) : undefined
+    const lastModified =
       route.path === "/blog"
-        ? latestBlogDate ?? new Date(route.lastModified)
+        ? latestBlogDate ?? staticDate
         : route.path === "/events"
-          ? latestEventDate ?? new Date(route.lastModified)
-          : new Date(route.lastModified),
-    changeFrequency: route.changeFrequency,
-    priority: route.priority,
-  }))
+          ? latestEventDate ?? staticDate
+          : route.path === "/docs"
+            ? latestDocsDate ?? staticDate
+            : staticDate
+
+    return {
+      url: toAbsoluteUrl(route.path),
+      ...(lastModified ? { lastModified } : {}),
+      changeFrequency: route.changeFrequency,
+      priority: route.priority,
+    }
+  })
 
   const blogEntries: MetadataRoute.Sitemap = publishedPosts.map((post) => ({
     url: toAbsoluteUrl(`/blog/${post.slug}`),
@@ -98,24 +137,42 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.6,
     }))
 
+  // 행사 영상 상세는 색인 대상이다(페이지 metadata 에 robots 제한이 없고, 비회원에게는 잠금 미리보기가 열린다).
+  // SeminarVideo 에는 noindex 개념이 없고, 비공개(isPublished: false) 영상은 getPublishedSeminars 가 이미 거른다.
+  const seminarEntries: MetadataRoute.Sitemap = getPublishedSeminars().map((seminar) => ({
+    url: toAbsoluteUrl(`/events/videos/${seminar.slug}`),
+    lastModified: latestDate([seminar.publishedAt]) ?? undefined,
+    changeFrequency: "monthly",
+    priority: 0.5,
+  }))
+
   if (!docsContent) {
-    return [...staticEntries, ...blogEntries, ...eventEntries]
+    return dedupeByUrl([...staticEntries, ...blogEntries, ...eventEntries, ...seminarEntries])
   }
 
-  const listedDocs = listListedDocsFromContent(docsContent)
   const docsCategoryEntries: MetadataRoute.Sitemap = docsContent.categories.map((category) => ({
     url: toAbsoluteUrl(getDocCategoryPath(category.id)),
-    lastModified: new Date("2026-05-20"),
+    lastModified:
+      latestDate(
+        listedDocs.filter((doc) => doc.category === category.id).map((doc) => doc.updatedAt)
+      ) ?? undefined,
     changeFrequency: "monthly",
     priority: 0.75,
   }))
 
   const docsArticleEntries: MetadataRoute.Sitemap = listedDocs.map((doc) => ({
-    url: toAbsoluteUrl(getDocPath(doc)),
+    url: resolveDocSitemapUrl(doc),
     lastModified: new Date(doc.updatedAt),
     changeFrequency: "monthly",
     priority: doc.featured ? 0.8 : 0.65,
   }))
 
-  return [...staticEntries, ...blogEntries, ...eventEntries, ...docsCategoryEntries, ...docsArticleEntries]
+  return dedupeByUrl([
+    ...staticEntries,
+    ...blogEntries,
+    ...eventEntries,
+    ...seminarEntries,
+    ...docsCategoryEntries,
+    ...docsArticleEntries,
+  ])
 }

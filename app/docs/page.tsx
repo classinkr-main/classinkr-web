@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 
 import { getDocsContent } from "@/lib/docs-content"
+import { createPublicMetadata } from "@/lib/seo"
 import { Reveal } from "@/components/landing/Reveal"
 import { TrackedLink } from "@/components/TrackedLink"
 import type { DocsArticleSummary } from "@/components/docs"
@@ -34,24 +35,31 @@ import {
   getGuideIntentCards,
   getGuideProductTiles,
   getInstallGuideLinks,
+  readQuery,
   scoreDocsArticle,
+  withSearchNoIndex,
+  type DocsSearchParams,
 } from "./_utils"
 
 const PAGE_DESCRIPTION =
   "클래스인 설치와 가입부터 코스 개설, 수업 진행, 전자칠판 사용법까지 원장·강사·학생이 각자 찾아보는 공식 가이드입니다."
 
-export const metadata: Metadata = {
-  title: "Classin 가이드",
-  description: PAGE_DESCRIPTION,
-  openGraph: {
-    title: "Classin 가이드",
-    description: PAGE_DESCRIPTION,
-    type: "website",
-  },
+interface DocsHomePageProps {
+  searchParams?: Promise<DocsSearchParams>
 }
 
-interface DocsHomePageProps {
-  searchParams?: Promise<{ q?: string }>
+// canonical 은 쿼리 없는 /docs 로 고정한다. 검색어가 붙은 URL 은 색인에서 뺀다(/docs/search 와 같은 정책).
+export async function generateMetadata({ searchParams }: DocsHomePageProps): Promise<Metadata> {
+  const { q } = await (searchParams ?? Promise.resolve<DocsSearchParams>({}))
+
+  return withSearchNoIndex(
+    createPublicMetadata({
+      title: "Classin 가이드",
+      description: PAGE_DESCRIPTION,
+      path: "/docs",
+    }),
+    readQuery(q)
+  )
 }
 
 const FOCUS_RING =
@@ -112,10 +120,6 @@ const PRODUCT_TILE_ICONS: Partial<Record<string, LucideIcon>> = {
   updates: History,
 }
 
-function normalizeQuery(value?: string) {
-  return value?.trim().toLowerCase() ?? ""
-}
-
 function GuideArticleRow({
   article,
   query,
@@ -157,10 +161,11 @@ function GuideArticleRow({
 }
 
 export default async function DocsHomePage({ searchParams }: DocsHomePageProps) {
-  const { q } = await (searchParams ?? Promise.resolve<{ q?: string }>({}))
+  const { q: rawQ } = await (searchParams ?? Promise.resolve<DocsSearchParams>({}))
+  const q = readQuery(rawQ)
   const docsContent = await getDocsContent()
   const allDocs = getAllDocsSummaries(docsContent)
-  const query = normalizeQuery(q)
+  const query = q.toLowerCase()
   const searchResults = query
     ? allDocs
         .map((doc) => ({ doc, score: scoreDocsArticle(doc, query) }))
@@ -205,7 +210,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
           <Search className="h-4 w-4 shrink-0 text-[#A39E98]" aria-hidden />
           <input
             name="q"
-            defaultValue={q ?? ""}
+            defaultValue={q}
             aria-label="가이드 전체 검색"
             placeholder="예: 학생 추가, 비밀번호 변경"
             className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#A39E98]"

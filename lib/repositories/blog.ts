@@ -512,7 +512,11 @@ export async function getPublishedPostsForStaticSitemap(): Promise<BlogPost[]> {
       .abortSignal(timeout.signal);
 
     if (error) throw new Error(`[blog] sitemap query failed: ${error.message}`);
-    return (data as unknown as SupaBlogPost[]).map(supabaseToLegacy);
+    // createdAt 은 이 경로(사이트맵·RSS)에만 싣는다 — 공개 목록 페이로드에는 불필요하다.
+    return (data as unknown as SupaBlogPost[]).map((row) => ({
+      ...supabaseToLegacy(row),
+      createdAt: row.created_at ?? undefined,
+    }));
   } finally {
     timeout.clear();
   }

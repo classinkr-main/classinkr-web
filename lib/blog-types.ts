@@ -41,6 +41,8 @@ export interface BlogPost {
   date: string
   publishedAt?: string
   updatedAt?: string
+  /** 사이트맵·RSS 조회 경로(getPublishedPostsForStaticSitemap)에서만 채운다. publishedAt 이 없는 레거시 글의 pubDate 폴백용. */
+  createdAt?: string
   author: string
   authorRole: string
   authorBio: string

@@ -12,15 +12,13 @@ import { JsonLd } from "@/components/seo/JsonLd"
 import { createBreadcrumbJsonLd, createPublicMetadata, createWebPageJsonLd } from "@/lib/seo"
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 
-export const metadata: Metadata = {
-  ...createPublicMetadata({
-    title: "수업 시스템 OS",
-    description: CLASSIN_POSITIONING.metadataDescription,
-    path: "/",
-    keywords: ["수업 시스템 OS", "학원 수업 운영", "전자칠판", "EDB", "Classin"],
-  }),
-  title: { absolute: "Classin | 수업 시스템 OS" },
-}
+export const metadata: Metadata = createPublicMetadata({
+  // <title> 과 og:title · twitter:title 이 같은 문자열이 되도록 absoluteTitle 로 한 번만 지정한다.
+  absoluteTitle: "Classin | 수업 시스템 OS",
+  description: CLASSIN_POSITIONING.metadataDescription,
+  path: "/",
+  keywords: ["수업 시스템 OS", "학원 수업 운영", "전자칠판", "EDB", "Classin"],
+})
 
 const Outcomes = dynamic(() => import("@/components/sections/Outcomes").then(m => ({ default: m.Outcomes })))
 const SolutionOverview = dynamic(() => import("@/components/sections/SolutionOverview").then(m => ({ default: m.SolutionOverview })))

@@ -149,6 +149,15 @@ export const docsCategories: DocCategory[] = [
       "전자칠판을 들여놓는 학원의 IT 담당자와 설치 엔지니어가 보는 곳입니다. 배송 뒤 설치와 카메라 연결 순서를 다룹니다.",
     order: 7,
   },
+  // 제목·설명·순서는 DB 시드(supabase/migrations/20260421_docs_center.sql)의 `updates` 행과 같다.
+  // 정적 목록에 없으면 Supabase 폴백 때 /docs/updates/* 가 카테고리를 못 찾아 404 가 된다.
+  // (DB 쪽 행은 20260514 마이그레이션이 숨겼고, 숨김 행은 getDocsContent 가 읽지 않는다.)
+  {
+    id: "updates",
+    title: "업데이트",
+    description: "학원 운영에 영향을 주는 제품 변경 사항과 권장 조치입니다.",
+    order: 60,
+  },
 ]
 
 const CLASSIN_607_MEDIA_BASE = "/docs/files/classin-607-update"

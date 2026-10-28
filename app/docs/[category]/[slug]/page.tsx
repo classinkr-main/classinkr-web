@@ -21,7 +21,13 @@ import {
   resolveDocsRedirect,
 } from "@/lib/docs-content"
 import { JsonLd } from "@/components/seo/JsonLd"
-import { createArticleJsonLd, createBreadcrumbJsonLd, toAbsoluteUrl } from "@/lib/seo"
+import {
+  DEFAULT_OG_IMAGE_PATH,
+  DEFAULT_TWITTER_IMAGE_PATH,
+  createArticleJsonLd,
+  createBreadcrumbJsonLd,
+  toAbsoluteUrl,
+} from "@/lib/seo"
 
 import {
   formatDocDate,
@@ -60,22 +66,26 @@ export async function generateMetadata({
   const metaTitle = doc.seoTitle?.trim() || `${doc.title} | Classin 가이드`
   const metaDescription = doc.seoDescription?.trim() || doc.description
   const canonicalPath = doc.canonicalPath?.trim() || getDocPath(doc)
+  const canonicalUrl = toAbsoluteUrl(canonicalPath)
 
   return {
     title: metaTitle,
     description: metaDescription,
     keywords: doc.keywords,
-    alternates: { canonical: toAbsoluteUrl(canonicalPath) },
+    alternates: { canonical: canonicalUrl },
     robots: shouldIndex ? undefined : { index: false, follow: true },
     openGraph: {
       title: metaTitle,
       description: metaDescription,
+      url: canonicalUrl,
       type: "article",
+      images: [{ url: toAbsoluteUrl(DEFAULT_OG_IMAGE_PATH) }],
     },
     twitter: {
       card: "summary_large_image",
       title: metaTitle,
       description: metaDescription,
+      images: [toAbsoluteUrl(DEFAULT_TWITTER_IMAGE_PATH)],
     },
   }
 }
