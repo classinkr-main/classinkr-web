@@ -347,9 +347,9 @@ aside.notes { display: none; }
 .who { position: absolute; top: 640px; width: 520px; height: 330px; padding: 38px 42px; box-sizing: border-box; }
 .who .hd { display: flex; align-items: center; gap: 16px; font-size: 30px; font-weight: 800; }
 .ib { width: 78px; height: 78px; flex: none; display: grid; place-items: center; color: var(--ink); }
-.ib svg { width: 58px; height: 58px; }
+.ib svg { width: 50px; height: 50px; }
 .eyeb { margin-left: auto; display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; color: var(--mute); }
-.eyeb svg { width: 40px; height: 40px; }
+.eyeb svg { width: 34px; height: 34px; }
 .eyeb.off { background: rgba(128, 133, 141, .14); }
 .eyeb.on { background: rgba(181, 226, 46, .22); color: var(--ink); }
 .dark .eyeb.off { background: rgba(255, 255, 255, .06); }
@@ -398,7 +398,7 @@ aside.notes { display: none; }
 .kb { position: absolute; left: 160px; top: 204px; padding: 14px 24px; font-size: 22px; font-weight: 800; white-space: nowrap; color: var(--ink-2); }
 .kb span { display: block; }
 
-.warm { position: absolute; left: 120px; top: 858px; width: 1680px; height: 96px; display: flex; align-items: center; gap: 18px; padding: 0 40px; box-sizing: border-box; font-size: 30px; font-weight: 700; letter-spacing: -.02em; color: var(--ink-2); }
+.warm { position: absolute; left: 120px; top: 858px; width: 1680px; height: 96px; display: flex; align-items: center; gap: 18px; padding: 0; box-sizing: border-box; font-size: 30px; font-weight: 700; letter-spacing: -.02em; color: var(--ink-2); }
 .warm b { color: var(--em); font-weight: 800; }
 .warm small { margin-left: auto; font-size: 19px; font-weight: 600; color: var(--mute); white-space: nowrap; }
 
@@ -572,7 +572,7 @@ aside.notes { display: none; }
 .tch { position: absolute; top: 100px; width: 330px; height: 124px; display: flex; align-items: center; gap: 18px; padding: 0 28px; box-sizing: border-box; }
 .tch.ta { left: 44px; } .tch.tb { left: 426px; }
 .tch .ib { width: 66px; height: 66px; }
-.tch .ib svg { width: 42px; height: 42px; }
+.tch .ib svg { width: 36px; height: 36px; }
 .tch b { display: block; font-size: 26px; font-weight: 800; }
 .tch span { display: block; margin-top: 4px; font-size: 19px; font-weight: 600; color: var(--mute); }
 .tch > .led { margin-left: auto; width: 14px; height: 14px; }
@@ -682,7 +682,7 @@ aside.notes { display: none; }
 /* ===== 16 정답은 인프라 — 큰 타이틀 + ClassIn ===== */
 .s-infra .ih { position: absolute; left: 0; right: 0; top: 290px; margin: 0; text-align: center; font-size: 110px; font-weight: 800; line-height: 1.15; letter-spacing: -.045em; }
 .s-infra .ih .em { background: linear-gradient(transparent 62%, rgba(184, 232, 44, .72) 62%) no-repeat 0 0 / var(--hlw, 100%) 100%; padding: 0 .04em; }
-.ibrand { position: absolute; left: 50%; top: 520px; width: 760px; height: 260px; margin-left: -380px; border-radius: 64px; display: grid; place-items: center; font-size: 150px; font-weight: 800; letter-spacing: -.05em; }
+.ibrand { --shr: 16px 16px 36px var(--lo), -16px -16px 36px var(--hi), 0 24px 90px rgba(181, 226, 46, .42); position: absolute; left: 50%; top: 520px; width: 760px; height: 260px; margin-left: -380px; border-radius: 64px; display: grid; place-items: center; font-size: 150px; font-weight: 800; letter-spacing: -.05em; }
 
 /* ===== 2 후킹 — 고민 1순위 슬롯 ===== */
 .s-hook .hq { position: absolute; left: 0; right: 0; top: 270px; margin: 0; text-align: center; font-size: 64px; font-weight: 800; letter-spacing: -.035em; color: var(--ink-2); }
@@ -699,9 +699,9 @@ aside.notes { display: none; }
 .qbars { position: absolute; left: 56px; right: 150px; top: 110px; height: 400px; display: flex; align-items: flex-end; gap: 24px; }
 .qb { position: relative; flex: 1; height: 100%; display: flex; align-items: flex-end; }
 .qf { display: block; width: 100%; height: 0; border-radius: 18px 18px 8px 8px; background: #B5E22E; }
-.qt { position: absolute; left: 50%; top: -6px; transform: translateX(-50%); white-space: nowrap; padding: 6px 14px; border-radius: 999px; font-size: 18px; font-weight: 800; opacity: 0; }
-.qt.leak { background: #E08A2E; color: #fff; }
-.qt.good { background: var(--bg); color: var(--em); box-shadow: var(--sh-r-s); }
+.qtag { position: absolute; left: 50%; top: -6px; transform: translateX(-50%); white-space: nowrap; padding: 6px 14px; border-radius: 999px; font-size: 18px; font-weight: 800; opacity: 0; }
+.qtag.leak { background: #E08A2E; color: #fff; }
+.qtag.good { background: var(--bg); color: var(--em); box-shadow: var(--sh-r-s); }
 .qline { position: absolute; left: 36px; right: 130px; top: 275px; height: 0; border-top: 3px dashed var(--mute); opacity: .7; z-index: 1; }
 .qline span { position: absolute; left: calc(100% + 14px); top: -26px; width: 90px; font-size: 18px; font-weight: 800; line-height: 1.3; color: var(--mute); }
 .lk { position: absolute; left: 1170px; width: 630px; height: 270px; box-sizing: border-box; padding: 40px 46px; }
@@ -724,11 +724,11 @@ aside.notes { display: none; }
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
-    <symbol id="i-parent" viewBox="0 0 64 64"><circle cx="23" cy="17" r="8" fill="none" stroke="currentColor" stroke-width="3.4"/><path d="M8 52v-6c0-9 6.6-15 15-15s15 6 15 15v6" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/><circle cx="45" cy="29" r="6" fill="#B5E22E"/><path d="M35 52v-3c0-6.4 4.4-11 10-11s10 4.6 10 11v3z" fill="#B5E22E"/><path d="M33 44c1.5 1.4 3 1.6 4.5.6" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></symbol>
-    <symbol id="i-head" viewBox="0 0 64 64"><circle cx="25" cy="16" r="8.5" fill="none" stroke="currentColor" stroke-width="3.4"/><path d="M8 54v-6c0-10 7.6-17 17-17s17 7 17 17v6" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/><path d="M25 31l-3.4 5 3.4 11 3.4-11z" fill="#B5E22E"/><rect x="40" y="30" width="18" height="24" rx="4" fill="#B5E22E"/><path d="M45 36h8M45 41h8" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><path d="M44.5 47.5l2.5 2.5 5-5" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-    <symbol id="i-teacher" viewBox="0 0 64 64"><rect x="4" y="6" width="34" height="24" rx="4" fill="none" stroke="currentColor" stroke-width="3.4"/><path d="M10 23l7-7 5 4 9-8" fill="none" stroke="#B5E22E" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="46" cy="24" r="7.5" fill="none" stroke="currentColor" stroke-width="3.4"/><path d="M31 58v-5c0-8.6 6.7-15 15-15s15 6.4 15 15v5" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/><path d="M38 41l-8-9" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/></symbol>
-    <symbol id="i-eyeoff" viewBox="0 0 64 64"><path d="M6 32s9.5-15 26-15 26 15 26 15-9.5 15-26 15S6 32 6 32z" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linejoin="round"/><circle cx="32" cy="32" r="7" fill="currentColor" opacity=".35"/><path d="M12 52 52 12" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/></symbol>
-    <symbol id="i-eye" viewBox="0 0 64 64"><path d="M6 32s9.5-15 26-15 26 15 26 15-9.5 15-26 15S6 32 6 32z" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linejoin="round"/><circle cx="32" cy="32" r="9" fill="#B5E22E"/><circle cx="32" cy="32" r="3.6" fill="currentColor"/></symbol>
+    <symbol id="i-parent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="8" r="5"/><path d="M18 21a8 8 0 0 0-16 0"/><path stroke="#B5E22E" stroke-width="2.2" d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/></symbol>
+    <symbol id="i-head" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m18 10 3.447 1.724a1 1 0 0 1 .553.894V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-7.382a1 1 0 0 1 .553-.894L6 10"/><path d="M18 5v17"/><path d="m4 6 7.106-3.553a2 2 0 0 1 1.788 0L20 6"/><path d="M6 5v17"/><circle stroke="#B5E22E" stroke-width="2.2" cx="12" cy="9" r="2"/><path stroke="#B5E22E" stroke-width="2.2" d="M14 22v-4a2 2 0 1 0-4 0v4"/></symbol>
+    <symbol id="i-teacher" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h20"/><path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3"/><path d="m7 21 5-5 5 5"/><path stroke="#B5E22E" stroke-width="2.2" d="m7 12 3-3 3 2.5 4-4.5"/></symbol>
+    <symbol id="i-eyeoff" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3" fill="#B5E22E" stroke="#B5E22E"/></symbol>
   </defs>
 </svg>
 
@@ -963,7 +963,7 @@ aside.notes { display: none; }
     <span class="axl" style="left:30px;top:486px">↑ 진심으로 아끼기</span>
     <span class="axl" style="right:30px;top:486px">직접 말하기 →</span>
   </div>
-  <div class="warm nm pill step" data-step="2"><i class="led"></i><span>개리 바이너척은 이것을 <b>‘따뜻한 솔직함(Kind Candor)’</b>이라 부릅니다 — 솔직하게, 그러나 친절하게.</span><small>『Twelve and a Half』(2021)</small></div>
+  <div class="warm step" data-step="2"><span>개리 바이너척은 이것을 <b>‘따뜻한 솔직함(Kind Candor)’</b>이라 부릅니다 — 솔직하게, 그러나 친절하게.</span><small>『Twelve and a Half』(2021)</small></div>
   <p class="src t">킴 스콧 『Radical Candor』(2017, 국역 『실리콘밸리의 팀장들』) · 개리 바이너척 『Twelve and a Half』(2021)</p>
   <aside class="notes">세 가지 장벽 때문에 많은 원장님이 킴 스콧이 말한 '파괴적 공감'에 머뭅니다 — 강사를 아끼니까 말을 못 합니다. 클릭: '파괴적 공감' 칸의 빨강이 빠지고 '완전한 솔직함' 칸이 초록으로 채워집니다. "아끼면서도 직접 말하려면 근거가 필요합니다. 사람이 아니라 수업에 대해 말할 수 있는 근거." 클릭 2: 개리 바이너척도 같은 이야기를 합니다 — 그는 이것을 '따뜻한 솔직함(Kind Candor)'이라 부르고, 책 『Twelve and a Half』(2021)에서 스스로 가장 부족했던 '반쪽'으로 꼽았습니다. 커리어의 실수 상당수가 솔직하지 못해서였다고 말합니다. "솔직하게, 그러나 친절하게 — 그러려면 근거가 필요합니다." → "그런데 최고의 전문가들은 어떻게 성장할까요?"</aside>
 </section>
@@ -1133,16 +1133,16 @@ aside.notes { display: none; }
     <span class="qcap"><i class="led off"></i>이번 달 수업 10개 · 5개 기준 종합 점수 (예시)</span>
     <div class="qline"><span>우리 학원<br>기준선</span></div>
     <div class="qbars">
-      <div class="qb" data-v="92"><b class="qt good">좋은 수업</b><i class="qf"></i></div>
-      <div class="qb" data-v="48" data-to="72"><b class="qt leak">누수</b><i class="qf"></i></div>
+      <div class="qb" data-v="92"><b class="qtag good">좋은 수업</b><i class="qf"></i></div>
+      <div class="qb" data-v="48" data-to="72"><b class="qtag leak">누수</b><i class="qf"></i></div>
       <div class="qb" data-v="85"><i class="qf"></i></div>
-      <div class="qb" data-v="40" data-to="70"><b class="qt leak">누수</b><i class="qf"></i></div>
+      <div class="qb" data-v="40" data-to="70"><b class="qtag leak">누수</b><i class="qf"></i></div>
       <div class="qb" data-v="78"><i class="qf"></i></div>
       <div class="qb" data-v="88"><i class="qf"></i></div>
-      <div class="qb" data-v="52" data-to="74"><b class="qt leak">누수</b><i class="qf"></i></div>
+      <div class="qb" data-v="52" data-to="74"><b class="qtag leak">누수</b><i class="qf"></i></div>
       <div class="qb" data-v="81"><i class="qf"></i></div>
       <div class="qb" data-v="90"><i class="qf"></i></div>
-      <div class="qb" data-v="44" data-to="71"><b class="qt leak">누수</b><i class="qf"></i></div>
+      <div class="qb" data-v="44" data-to="71"><b class="qtag leak">누수</b><i class="qf"></i></div>
     </div>
   </div>
   <div class="lk la nm card step" data-step="1"><div class="k"><i class="led"></i>누수 막기</div><div class="tt">부족한 수업과 리스크를<br>일찍 발견합니다</div><div class="ss">기준선 아래로 내려간 수업만 먼저 확인합니다</div></div>
@@ -1245,7 +1245,7 @@ aside.notes { display: none; }
 <!-- 23 허들 낮추기 -->
 <section class="slide s-easy" data-scene="light" data-enter="easy" data-time="0:40">
   <span class="eyebrow nm in pill r"><i class="led"></i>4막 · 결국, 이득입니다</span>
-  <h2 class="h t">시작은, <span class="em">생각보다 가볍습니다</span></h2>
+  <h2 class="h t"><span class="em">가볍게</span> 시작해보세요</h2>
   <div class="easy">
     <div class="ez nm card r"><div class="big">0<small>원</small></div><b>비용 부담 없이</b><span>계정당 누적 50회 무료 수업에<br>녹화와 AI 강의 분석 포함</span></div>
     <div class="ez nm card r"><div class="big">1<small>개 반</small></div><b>반 하나로 먼저</b><span>평소처럼 수업하고<br>[AI 강의 분석] 체크 하나</span></div>
@@ -1782,7 +1782,7 @@ aside.notes { display: none; }
       bars.forEach(function (b) {
         var f = $('.qf', b);
         gsap.set(f, { height: 0, backgroundColor: '#B5E22E' });
-        gsap.set($$('.qt', b), { opacity: 0, y: 6 });
+        gsap.set($$('.qtag', b), { opacity: 0, y: 6 });
         tl.to(f, { height: +b.dataset.v * 3.8, duration: 1.3, ease: 'power3.out' }, s + .9 + bars.indexOf(b) * .09);
       });
     },
@@ -1993,14 +1993,14 @@ aside.notes { display: none; }
       if (n === 1) {
         lows.forEach(function (b) {
           tl.to($('.qf', b), { backgroundColor: '#E08A2E', duration: .6 }, .1);
-          tl.to($('.qt.leak', b), { opacity: 1, y: 0, duration: .5, ease: 'power2.out' }, .3);
+          tl.to($('.qtag.leak', b), { opacity: 1, y: 0, duration: .5, ease: 'power2.out' }, .3);
         });
       } else {
         lows.forEach(function (b, i) {
           tl.to($('.qf', b), { height: +b.dataset.to * 3.8, backgroundColor: '#B5E22E', duration: 1.6, ease: 'power2.inOut' }, .5 + i * .18);
-          tl.to($('.qt.leak', b), { opacity: 0, duration: .4 }, .3);
+          tl.to($('.qtag.leak', b), { opacity: 0, duration: .4 }, .3);
         });
-        tl.to($('.qb .qt.good', slide), { opacity: 1, y: 0, duration: .6, ease: 'power2.out' }, .2);
+        tl.to($('.qb .qtag.good', slide), { opacity: 1, y: 0, duration: .6, ease: 'power2.out' }, .2);
       }
     },
 
