@@ -94,10 +94,10 @@
 | 정의서 | 상태 | 지금 |
 | --- | --- | --- |
 | FY 4월 시작 | ✅ | `lib/branch/fiscal.ts` |
-| 월별 설치 완료 / 배송 예정 구분, "9 / +3" | ❌ | 하드웨어 탭 판매 요약은 확정 출고만 센다. 시트 판매대시보드 미러(`branch_hw_sales_monthly`)는 받아 두지만 쓰는 화면이 없다 |
-| 세일즈 + 프로모션만(A/S·샘플 제외) | ⚠️ | 하드웨어 탭은 샘플·사무실·수리 외 확정 출고 전부(A/S·액세서리 포함). 개요 타일은 세일즈만 |
-| 전자칠판·카메라·스탠드 고정 행(0대 포함) | ❌ | 가장 가까운 묶음은 카드 분류(86·75·카메라·스탠드·기타) — 65"·110"은 기타 |
-| (위험) | ⚠️ | 클라이언트가 최근 2,000건만 받아 집계한다 — 원장이 커지면 FY 합계가 조용히 줄어든다. 서버 집계가 필요하다 |
+| 월별 설치 완료 / 배송 예정 구분, "9 / +3" | ✅ | 홈 판매대시보드(FY 품목 × 월, 날짜 없는 행은 "날짜 미정" 칸, 회수는 따로) — [SCM 탭 기준](./hardware-scm-tab-reference.md) §2-10. 시트 미러 `branch_hw_sales_monthly` 는 그대로 안 쓴다(T4) |
+| 세일즈 + 프로모션만(A/S·샘플 제외) | ✅ | 판매대시보드는 `resolveOutboundType` 으로 세일즈 + 프로모션(유형 모름 = 세일즈), 내부 이동 제외. 개요 "86보드 실판매 출고" 타일도 프로모션을 판매로 센다(시트 미러 기준·누적은 그대로) |
+| 전자칠판·카메라·스탠드 고정 행(0대 포함) | ✅ | `hardware_items.report_group` 묶음, 고정 묶음 활성 품목은 0대도 행. 액세서리·터치펜·기타는 기록이 있을 때만 |
+| (위험) | ✅ | 서버 집계(`GET /api/admin/hardware/sales-dashboard`, 키셋 전량 읽기)로 바꿨고 홈 "판매 · 설치" 카드(2,000건 집계)는 없앴다. 입출고 탭 "출고 · 기간 집계"(고객사·매출 펼침)는 아직 최근 원장 기준이다 |
 
 ### 3-5. 권한
 
@@ -187,7 +187,7 @@
 | `GET /api/admin/hardware/return-candidates?q=&customerId=` | 회수 가능한 실제 출고 `{ id, productName, lotNo, quantity, returned, returnable, occurredAt, toLocation, customerId, outboundType, owner }` |
 | `GET /api/admin/hardware/customers?q=` | CRM 고객 고르기 `{ customers: [{ id, name, campusName, regionLabel }] }` (최대 20) |
 | `PATCH /api/admin/hardware/items/[id]` | `lotTracked` · `reportGroup` · `sortOrder` 추가(입고관리 권한자) |
-| `GET /api/admin/hardware/sales-dashboard?fy=` | FY 품목 × 월 집계(§3-4) — 판매대시보드 작업에서 만든다 |
+| `GET /api/admin/hardware/sales-dashboard?fy=` | FY 품목 × 월 집계(§3-4) ✅ — 응답 형식은 [SCM 탭 기준](./hardware-scm-tab-reference.md) §4 |
 | 담당자 고르기 | 기존 `GET /api/admin/crm/owners` |
 
 ### 7-4. 작업 나눔
