@@ -742,8 +742,7 @@ aside.notes { display: none; }
 .lp-a { left: 200px; } .lp-b { left: 1200px; }
 .lp svg { position: absolute; inset: 0; width: 520px; height: 520px; overflow: visible; }
 .lp .seg { fill: none; stroke: #B9BEC6; stroke-width: 7; stroke-linecap: round; }
-.lp .seg.brk { stroke-dasharray: 34 100; }
-.lp .seg.faint { stroke-dasharray: 2 16; stroke-width: 6; opacity: .8; }
+.lp .seg.faint { stroke: #CDD1D7; stroke-dasharray: 1 15; stroke-width: 6; }
 .lp .full { fill: none; stroke: #B5E22E; stroke-width: 9; }
 .lp-pulse { position: absolute; inset: 0; pointer-events: none; }
 .lp-pulse i { position: absolute; left: 248px; top: 48px; width: 24px; height: 24px; border-radius: 50%; background: #9AA0A8; }
@@ -753,8 +752,10 @@ aside.notes { display: none; }
 .lpn span { display: block; margin-top: 2px; font-size: 16px; font-weight: 700; color: var(--mute); white-space: nowrap; }
 .lpn .led { width: 13px; height: 13px; }
 .lpn.n1 { left: 260px; top: 60px; } .lpn.n2 { left: 460px; top: 260px; } .lpn.n3 { left: 260px; top: 460px; } .lpn.n4 { left: 60px; top: 260px; }
-.lp-a .lpn.n2, .lp-a .lpn.n3, .lp-a .lpn.n4 { opacity: .62; }
-.brk-tag { position: absolute; left: 410px; top: 400px; padding: 6px 16px; font-size: 17px; font-weight: 800; color: #C46A1E; z-index: 2; }
+.lp-a .lpn.n2 { opacity: .8; }
+.brk-x { position: absolute; left: 375px; top: 387px; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: #E08A2E; color: #fff; font-size: 28px; font-weight: 800; line-height: 1; z-index: 3; box-shadow: 0 0 0 8px var(--bg); }
+.brk-tag { position: absolute; left: 430px; top: 440px; font-size: 18px; font-weight: 800; color: #C46A1E; white-space: nowrap; z-index: 3; }
+.lp-a .lpn.n3, .lp-a .lpn.n4 { opacity: .45; filter: grayscale(1); }
 .lp-tag { position: absolute; left: 50%; top: -56px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 10px; padding: 9px 22px; font-size: 20px; font-weight: 800; color: var(--ink-2); white-space: nowrap; }
 .lp-b .lp-tag { color: var(--em); }
 .lp-cap { position: absolute; left: -60px; right: -60px; top: 528px; margin: 0; text-align: center; font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
@@ -1072,7 +1073,7 @@ aside.notes { display: none; }
   <h2 class="h t">성장은 <span class="em">피드백 루프</span>에서 나옵니다</h2>
   <div class="lp lp-a r" data-at=".5">
     <span class="lp-tag nm in pill"><i class="led off"></i>지금까지</span>
-    <svg viewBox="0 0 520 520"><path class="seg" d="M260 60 A200 200 0 0 1 460 260"/><path class="seg brk" pathLength="100" d="M460 260 A200 200 0 0 1 260 460"/><path class="seg faint" d="M260 460 A200 200 0 0 1 60 260"/><path class="seg faint" d="M60 260 A200 200 0 0 1 260 60"/></svg><div class="lp-pulse"><i></i></div><span class="brk-tag nm in pill">끊김</span><div class="lpn n1 nm sm pill"><i class="led off"></i><div><b>수업</b></div></div><div class="lpn n2 nm sm pill"><i class="led off"></i><div><b>기록</b><span>참관할 때만</span></div></div><div class="lpn n3 nm sm pill"><i class="led off"></i><div><b>피드백</b><span>전해 들은 말</span></div></div><div class="lpn n4 nm sm pill"><i class="led off"></i><div><b>개선</b><span>다음 학기에?</span></div></div>
+    <svg viewBox="0 0 520 520"><path class="seg" d="M260 60 A200 200 0 0 1 460 260"/><path class="seg" d="M460 260 A200 200 0 0 1 423.8 374.7"/><path class="seg faint" d="M360 433.2 A200 200 0 0 1 260 460"/><path class="seg faint" d="M260 460 A200 200 0 0 1 60 260"/><path class="seg faint" d="M60 260 A200 200 0 0 1 260 60"/></svg><div class="lp-pulse"><i></i></div><span class="brk-x">×</span><span class="brk-tag">여기서 끊깁니다</span><div class="lpn n1 nm sm pill"><i class="led off"></i><div><b>수업</b></div></div><div class="lpn n2 nm sm pill"><i class="led off"></i><div><b>기록</b><span>참관할 때만</span></div></div><div class="lpn n3 nm sm pill"><i class="led off"></i><div><b>피드백</b><span>전해 들은 말</span></div></div><div class="lpn n4 nm sm pill"><i class="led off"></i><div><b>개선</b><span>다음 학기에?</span></div></div>
     <p class="lp-cap">참관할 때만 가끔 도는 루프<small>한 학기에 몇 번, 중간에 끊깁니다</small></p>
   </div>
   <div class="lp-arrow r" data-at=".9">→</div>
@@ -1081,7 +1082,7 @@ aside.notes { display: none; }
     <svg viewBox="0 0 520 520"><circle class="full" cx="260" cy="260" r="200"/></svg><div class="lp-pulse"><i></i></div><div class="lpn n1 nm sm pill"><i class="led"></i><div><b>수업</b></div></div><div class="lpn n2 nm sm pill"><i class="led"></i><div><b>기록</b><span>수업 녹화</span></div></div><div class="lpn n3 nm sm pill"><i class="led"></i><div><b>피드백</b><span>AI 강의평가</span></div></div><div class="lpn n4 nm sm pill"><i class="led"></i><div><b>개선</b><span>원장님 면담</span></div></div>
     <p class="lp-cap"><span class="em">모든 수업</span>에서 도는 루프<small>녹화도 분석도 자동 — 강사 일을 늘리지 않습니다</small></p>
   </div>
-  <aside class="notes">15·16장의 세 가지가 인프라에 모이면 이 루프가 매 수업 돕니다. 수업 → 기록 → 피드백 → 개선. 왼쪽(지금까지): 참관할 때만 기록이 생기고, 피드백은 전해 들은 말, 개선은 "다음 학기에"로 미뤄집니다 — 루프가 돌다가 끊깁니다. 클릭: 오른쪽(이제) — 클래스인에서는 녹화가 기록을, AI 강의평가가 피드백을, 원장님의 면담이 개선을 맡아 루프가 매 수업 끊김 없이 돕니다. 녹화도 분석도 자동이라 강사 일을 늘리지 않습니다 — 10장에서 본 '부가 업무 과다 23.7%'를 되받습니다. → "정말 효과가 있을까요?"</aside>
+  <aside class="notes">15·16장의 세 가지가 인프라에 모이면 이 루프가 매 수업 돕니다. 수업 → 기록 → 피드백 → 개선. 왼쪽(지금까지): 참관할 때만 기록이 생기고, 피드백은 전해 들은 말, 개선은 "다음 학기에"로 미뤄집니다 — 점이 수업에서 출발해 기록까지 가다가 피드백 앞에서 걸려 멈추고 사라집니다. 그 뒤는 한 번도 돌지 않은 점선입니다. 클릭: 오른쪽(이제) — 클래스인에서는 녹화가 기록을, AI 강의평가가 피드백을, 원장님의 면담이 개선을 맡아 루프가 매 수업 끊김 없이 돕니다. 녹화도 분석도 자동이라 강사 일을 늘리지 않습니다 — 10장에서 본 '부가 업무 과다 23.7%'를 되받습니다. → "정말 효과가 있을까요?"</aside>
 </section>
 
 <!-- 14 연구 근거 -->
@@ -1839,11 +1840,15 @@ aside.notes { display: none; }
       gsap.set([pa, pb], { rotation: 0, transformOrigin: '50% 50%' });
       gsap.set($('i', pa), { opacity: 0 });
       tl.call(function () {
-        loop(gsap.timeline({ repeat: -1, repeatDelay: .9 })
-          .set($('i', pa), { opacity: 1 })
-          .fromTo(pa, { rotation: 0 }, { rotation: 118, duration: 2.0, ease: 'power1.inOut' })
-          .to($('i', pa), { opacity: 0, scale: .4, duration: .45, ease: 'power2.in' }, '-=.25')
-          .set($('i', pa), { scale: 1 }));
+        var x = $('.lp-a .brk-x', slide);
+        loop(gsap.timeline({ repeat: -1, repeatDelay: 1.1 })
+          .set($('i', pa), { opacity: 1, scale: 1 })
+          .fromTo(pa, { rotation: 0 }, { rotation: 119, duration: 2.2, ease: 'power1.inOut' })
+          .to(pa, { rotation: 114, duration: .12, ease: 'power1.out' })
+          .to(pa, { rotation: 119, duration: .12, ease: 'power1.in' })
+          .to(pa, { rotation: 116, duration: .1, ease: 'power1.out' })
+          .to(x, { scale: 1.25, duration: .18, ease: 'power2.out', yoyo: true, repeat: 1 }, '<-.2')
+          .to($('i', pa), { opacity: 0, scale: .5, duration: .6, ease: 'power2.in' }, '+=.35'));
         loop(gsap.to(pb, { rotation: 360, duration: 4.2, ease: 'none', repeat: -1 }));
       }, null, s + 1.2);
     },
