@@ -1,8 +1,9 @@
 "use client"
 
 // components/admin/campaigns/projects/ProjectDetailPanel.tsx
-// 마케팅 프로젝트 상세(D3-3) — 우측 슬라이드오버. 롤업 카드(멤버 캠페인 롤업 + 예산 소진 바 + 정직 캡션)
-// + 멤버 캠페인 목록(각 "제외") + "캠페인 추가" 피커. GET /[id] 로 프로젝트 + 롤업 + 멤버 캠페인을 조회한다.
+// 마케팅 프로젝트 상세(D3-3, 1b) — 우측 슬라이드오버. 헤더(기간·담당·D-day) + 예산 페이싱(기간 경과 vs 소진,
+// 오늘 세로선, 소진·배정·잔여/초과, 정직 캡션) + 프로젝트 요약(롤업 수치) + 상태별로 묶은 멤버 캠페인
+// (각 채널·기간·예산·"제외") + "캠페인 추가" 피커. GET /[id] 로 프로젝트 + 롤업 + 멤버 캠페인을 조회한다.
 // 마이그 미적용이면 API 가 500/404 → 크래시 없이 에러 카드/자동 닫힘으로 강등(그레이스풀).
 // "편집"은 ProjectFormDrawer 를 재사용한다(리빌드 금지).
 // 정직 규칙: 예산 소진은 행사 KRW 광고비만(Meta USD·이메일·문자 제외) — 요약 카드가 ProjectBudgetCaveat 로 1회 명시.
@@ -16,10 +17,17 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  User,
   X,
 } from "lucide-react"
 
 import { adminFetch, adminFetchJson } from "@/lib/admin-client"
+import {
+  computeProjectPacing,
+  formatDotDate,
+  parseLocalDate,
+  startOfToday,
+} from "@/lib/marketing/project-pacing"
 import { useToast } from "@/components/ui/toast"
 import { useDialogFocus } from "@/components/admin/use-dialog-focus"
 import type {
@@ -29,13 +37,19 @@ import type {
   ProjectWithRollup,
 } from "@/lib/types/marketing-campaign"
 
-import { channelLabel } from "../manage/CampaignRow"
+import { channelLabel, formatBudget, formatCampaignPeriod } from "../manage/CampaignRow"
 import { ProjectFormDrawer } from "./ProjectFormDrawer"
 import {
-  ProjectBudgetBlock,
+  DDAY_TONE_CLASS,
+  PACE_TONE_CLASS,
   ProjectBudgetCaveat,
+  ProjectPacingBars,
   ProjectRollupStats,
   ProjectStatusChip,
+  STATUS_GROUP_ORDER,
+  STATUS_RAIL_CLASS,
+  StatusGroupHeading,
+  formatWon,
 } from "./ProjectCard"
 
 type DetailResponse = {
@@ -61,34 +75,56 @@ function MemberCampaignRow({
   removing: boolean
   onRemove: () => void
 }) {
+  const done = campaign.status === "done"
   return (
-    <div className="flex items-start justify-between gap-2 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#fafaf8] px-2.5 py-2">
+    <div className="relative flex items-start justify-between gap-2 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#fafaf8] py-2 pl-3 pr-2.5">
+      {/* 상태 레일 — 진행(그린)·일시중지(앰버)만 칠한다. 계획·완료는 비워 둔다. */}
+      <span
+        aria-hidden
+        className={`absolute bottom-2 left-0 top-2 w-[3px] rounded-r-full ${STATUS_RAIL_CLASS[campaign.status]}`}
+      />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="truncate text-[12px] font-semibold text-[#111110]">{campaign.name}</span>
+          <span
+            className={`truncate text-[12px] font-semibold ${done ? "text-[#615D59]" : "text-[#111110]"}`}
+          >
+            {campaign.name}
+          </span>
           <ProjectStatusChip status={campaign.status} />
         </div>
-        {campaign.channels.length > 0 && (
-          <div className="mt-1 flex flex-wrap items-center gap-1">
-            {campaign.channels.map((channel) => (
-              <span
-                key={channel}
-                className="inline-flex items-center rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-1.5 py-0.5 text-[10px] font-medium text-[#615D59]"
-              >
-                {channelLabel(channel)}
-              </span>
-            ))}
-          </div>
-        )}
+        <div className="mt-1 flex flex-wrap items-center gap-1">
+          {campaign.channels.map((channel) => (
+            <span
+              key={channel}
+              className="inline-flex items-center rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-1.5 py-0.5 text-[10px] font-medium text-[#615D59]"
+            >
+              {channelLabel(channel)}
+            </span>
+          ))}
+          <span
+            className={`text-[10.5px] tabular-nums text-[#A39E98] ${campaign.channels.length > 0 ? "pl-1" : ""}`}
+          >
+            {formatCampaignPeriod(campaign.startsAt, campaign.endsAt)}
+          </span>
+        </div>
       </div>
-      <button
-        type="button"
-        onClick={onRemove}
-        disabled={removing}
-        className="shrink-0 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 py-1 text-[11px] font-medium text-[#615D59] transition hover:border-[#F2B8B8] hover:bg-[#FCE9E9] hover:text-[#B43E3E] disabled:opacity-50"
-      >
-        {removing ? "제외 중..." : "제외"}
-      </button>
+      <div className="flex shrink-0 items-center gap-2">
+        <span
+          className={`text-[11.5px] font-semibold tabular-nums ${
+            campaign.budget == null ? "text-[#A39E98]" : "text-[#31302E]"
+          }`}
+        >
+          {formatBudget(campaign.budget)}
+        </span>
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={removing}
+          className="rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 py-1 text-[11px] font-medium text-[#615D59] transition hover:border-[#F2B8B8] hover:bg-[#FCE9E9] hover:text-[#B43E3E] disabled:opacity-50"
+        >
+          {removing ? "제외 중..." : "제외"}
+        </button>
+      </div>
     </div>
   )
 }
@@ -332,6 +368,18 @@ export default function ProjectDetailPanel({
   }
 
   const memberCount = campaigns.length
+  // 상태별 묶음 — 진행 → 일시중지 → 계획 → 완료. 빈 그룹은 그리지 않는다.
+  const memberGroups = STATUS_GROUP_ORDER.map((status) => ({
+    status,
+    items: campaigns.filter((c) => c.status === status),
+  })).filter((g) => g.items.length > 0)
+
+  // 페이싱 기준일은 패널을 열 때 한 번 — 렌더마다 바뀌지 않게.
+  const [today] = useState(() => startOfToday())
+  const pacing = computeProjectPacing(head, rollup, today)
+  const startDate = parseLocalDate(head.startsAt)
+  const endDate = parseLocalDate(head.endsAt)
+  const remain = rollup.budgetAllocated == null ? null : rollup.budgetAllocated - rollup.budgetSpent
 
   return (
     <>
@@ -359,6 +407,26 @@ export default function ProjectDetailPanel({
                   <ProjectStatusChip status={head.status} />
                 </div>
                 {head.objective && <p className="mt-1 text-[12px] text-[#615D59]">{head.objective}</p>}
+                <div className="mt-2 flex flex-wrap items-center gap-1 text-[11px] tabular-nums text-[#615D59]">
+                  <span>{formatCampaignPeriod(head.startsAt, head.endsAt)}</span>
+                  {head.owner && (
+                    <>
+                      <span className="text-[#A39E98]" aria-hidden>
+                        ·
+                      </span>
+                      <span className="inline-flex items-center gap-0.5">
+                        <User className="h-2.5 w-2.5 text-[#A39E98]" aria-hidden />
+                        {head.owner}
+                      </span>
+                    </>
+                  )}
+                  <span className="text-[#A39E98]" aria-hidden>
+                    ·
+                  </span>
+                  <span className={`font-semibold ${DDAY_TONE_CLASS[pacing.ddayTone]}`}>
+                    {pacing.ddayLabel}
+                  </span>
+                </div>
               </div>
               <button
                 ref={closeButtonRef}
@@ -422,19 +490,65 @@ export default function ProjectDetailPanel({
               </div>
             ) : (
               <>
-                {/* 롤업 카드 — 멤버 캠페인 롤업 + 예산 소진 바 + 정직 캡션 */}
+                {/* 예산 페이싱 — 기간 경과 vs 예산 소진 + 소진·배정·잔여 + 정직 캡션(이 패널에서 1회) */}
+                <section className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-4 sm:p-5">
+                  <div className="mb-4 flex items-center justify-between gap-2">
+                    <h3 className="text-[13px] font-bold text-[#111110]">예산 페이싱</h3>
+                    <span className={`text-[11px] font-semibold ${PACE_TONE_CLASS[pacing.paceTone]}`}>
+                      {pacing.paceLabel}
+                    </span>
+                  </div>
+                  <ProjectPacingBars
+                    rollup={rollup}
+                    pacing={pacing}
+                    size="md"
+                    startLabel={startDate ? formatDotDate(startDate) : "시작일 미정"}
+                    endLabel={endDate ? formatDotDate(endDate) : "종료일 미정"}
+                  />
+                  <dl className="mt-[18px] grid grid-cols-3 border-t border-[rgba(0,0,0,0.08)] pt-3.5">
+                    <div className="flex flex-col gap-1">
+                      <dt className="text-[10.5px] text-[#A39E98]">소진</dt>
+                      <dd className="text-[15px] font-bold tabular-nums text-[#111110]">
+                        {formatWon(rollup.budgetSpent)}
+                      </dd>
+                    </div>
+                    <div className="flex flex-col gap-1 border-l border-[rgba(0,0,0,0.08)] pl-3.5">
+                      <dt className="text-[10.5px] text-[#A39E98]">배정</dt>
+                      <dd
+                        className={`text-[15px] font-bold tabular-nums ${
+                          rollup.budgetAllocated == null ? "text-[#A39E98]" : "text-[#31302E]"
+                        }`}
+                      >
+                        {formatBudget(rollup.budgetAllocated)}
+                      </dd>
+                    </div>
+                    <div className="flex flex-col gap-1 border-l border-[rgba(0,0,0,0.08)] pl-3.5">
+                      <dt className="text-[10.5px] text-[#A39E98]">
+                        {remain != null && remain < 0 ? "초과" : "잔여"}
+                      </dt>
+                      <dd
+                        className={`text-[15px] font-bold tabular-nums ${
+                          remain == null
+                            ? "text-[#A39E98]"
+                            : remain < 0
+                              ? "text-[#A8741A]"
+                              : "text-[#111110]"
+                        }`}
+                      >
+                        {remain == null ? "—" : formatWon(Math.abs(remain))}
+                      </dd>
+                    </div>
+                  </dl>
+                  <ProjectBudgetCaveat className="mt-3" todayLabel={formatDotDate(today)} />
+                </section>
+
+                {/* 프로젝트 요약 — 멤버 캠페인 롤업 수치 */}
                 <section className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-4 sm:p-5">
                   <div className="mb-3 flex items-center justify-between gap-2">
                     <h3 className="text-[13px] font-bold text-[#111110]">프로젝트 요약</h3>
                     <span className="text-[11px] text-[#615D59]">읽기 시점 롤업</span>
                   </div>
                   <ProjectRollupStats rollup={rollup} />
-                  <div className="mt-3 flex items-baseline justify-between gap-3 border-t border-[rgba(0,0,0,0.08)] pt-3">
-                    <span className="text-[11.5px] text-[#615D59]">배정 대비 소진</span>
-                    <ProjectBudgetBlock rollup={rollup} meterClassName="w-20" />
-                  </div>
-                  {/* 정직 캐비앗 — 이 패널은 프로젝트 1개짜리라 여기서 1회만 나온다. */}
-                  <ProjectBudgetCaveat className="mt-2" />
                 </section>
 
                 {/* 멤버 캠페인 */}
@@ -471,14 +585,21 @@ export default function ProjectDetailPanel({
                       아직 소속된 캠페인이 없습니다. “캠페인 추가”로 캠페인을 이 프로젝트에 묶어보세요.
                     </p>
                   ) : (
-                    <div className="space-y-1.5">
-                      {campaigns.map((c) => (
-                        <MemberCampaignRow
-                          key={c.id}
-                          campaign={c}
-                          removing={removingId === c.id}
-                          onRemove={() => void handleRemove(c.id)}
-                        />
+                    <div className="space-y-3.5">
+                      {memberGroups.map((group) => (
+                        <div key={group.status}>
+                          <StatusGroupHeading status={group.status} count={group.items.length} size="sm" />
+                          <div className="space-y-1.5">
+                            {group.items.map((c) => (
+                              <MemberCampaignRow
+                                key={c.id}
+                                campaign={c}
+                                removing={removingId === c.id}
+                                onRemove={() => void handleRemove(c.id)}
+                              />
+                            ))}
+                          </div>
+                        </div>
                       ))}
                     </div>
                   )}

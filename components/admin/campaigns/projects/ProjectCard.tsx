@@ -19,7 +19,18 @@
 
 import { FolderKanban, Info, User } from "lucide-react"
 
-import type { ProjectRollup, ProjectWithRollup } from "@/lib/types/marketing-campaign"
+import {
+  computeProjectPacing,
+  startOfToday,
+  type PaceTone,
+  type ProjectPacing,
+} from "@/lib/marketing/project-pacing"
+import {
+  CAMPAIGN_STATUS_LABEL,
+  type ProjectRollup,
+  type ProjectStatus,
+  type ProjectWithRollup,
+} from "@/lib/types/marketing-campaign"
 
 import { CampaignStatusChip, formatBudget, formatCampaignPeriod } from "../manage/CampaignRow"
 
@@ -47,21 +58,103 @@ export const BUDGET_CAVEAT = "소진은 행사 KRW 광고비 기준 · Meta(USD)
  * 정직 캐비앗 — **섹션당 한 번만** 렌더한다(리스트 헤더의 소진 열 주석 / 상세 요약 카드).
  * 카드 안에서는 절대 쓰지 않는다: 프로젝트 N개면 N번 반복돼 문구가 배경으로 죽는다.
  */
-export function ProjectBudgetCaveat({ className = "" }: { className?: string }) {
+export function ProjectBudgetCaveat({
+  className = "",
+  todayLabel,
+}: {
+  className?: string
+  // 페이싱(기간 경과)을 함께 보여주는 화면이면 기준일을 덧붙인다 — "기간 경과는 오늘(2026.10.21) 기준".
+  todayLabel?: string
+}) {
   return (
     <p
       className={`inline-flex items-center gap-1 text-[11px] leading-tight text-[#A39E98] ${className}`}
     >
       <Info className="h-3 w-3 shrink-0" aria-hidden />
       {BUDGET_CAVEAT}
+      {todayLabel && ` · 기간 경과는 오늘(${todayLabel}) 기준`}
     </p>
+  )
+}
+
+/* ── 상태 묶음·페이싱 토큰(순수·모듈 스코프) ─────────────────── */
+
+// 갤러리·상세의 상태 묶음 순서 — 지금 손이 가는 것(진행)부터 끝난 것(완료)까지.
+// CAMPAIGN_STATUSES(계획 먼저)와 순서가 다르다: 이건 저장 순서가 아니라 읽기 우선순위다.
+export const STATUS_GROUP_ORDER: ProjectStatus[] = ["active", "paused", "planned", "done"]
+
+// 그룹 헤더 점·멤버 행 레일. 완료는 점만 더 흐리게 — 운영 상태 스케일 밖 색을 새로 만들지 않는다.
+export const STATUS_DOT_CLASS: Record<ProjectStatus, string> = {
+  active: "bg-[#084734]",
+  paused: "bg-[#A8741A]",
+  planned: "bg-[#A39E98]",
+  done: "bg-[#A39E98] opacity-50",
+}
+export const STATUS_RAIL_CLASS: Record<ProjectStatus, string> = {
+  active: "bg-[#084734]",
+  paused: "bg-[#ECD29C]",
+  planned: "bg-transparent",
+  done: "bg-transparent",
+}
+
+export const PACE_TONE_CLASS: Record<PaceTone, string> = {
+  muted: "text-[#A39E98]",
+  neutral: "text-[#615D59]",
+  good: "text-[#084734]",
+  warn: "text-[#A8741A]",
+}
+export const DDAY_TONE_CLASS: Record<ProjectPacing["ddayTone"], string> = {
+  muted: "text-[#A39E98]",
+  neutral: "text-[#615D59]",
+  strong: "text-[#31302E]",
+  warn: "text-[#A8741A]",
+}
+
+/** 상태 그룹 헤더 — 점 · 라벨 · 개수. 리스트(13px)와 상세 멤버 목록(11.5px)이 크기만 달리 쓴다. */
+export function StatusGroupHeading({
+  status,
+  count,
+  size = "md",
+}: {
+  status: ProjectStatus
+  count: number
+  size?: "md" | "sm"
+}) {
+  return (
+    <div className={`flex items-center ${size === "md" ? "mb-2.5 gap-2" : "mb-1.5 gap-1.5"}`}>
+      <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT_CLASS[status]}`} />
+      <h3
+        className={
+          size === "md"
+            ? "text-[13px] font-bold text-[#111110]"
+            : "text-[11.5px] font-bold text-[#31302E]"
+        }
+      >
+        {CAMPAIGN_STATUS_LABEL[status]}
+      </h3>
+      <span
+        className={`tabular-nums text-[#A39E98] ${size === "md" ? "text-[12px]" : "text-[11px]"}`}
+      >
+        {count}
+      </span>
+    </div>
   )
 }
 
 /* ── 롤업 통계 스트립(순수) ───────────────────────────────────── */
 
 // 숫자가 주역, 라벨은 조역. 0 은 "값"이라기보단 부재라 흐리게 둔다(굵은 0 의 나열 방지).
-function StatItem({ label, value, divide }: { label: string; value: number; divide: boolean }) {
+function StatItem({
+  label,
+  value,
+  divide,
+  size,
+}: {
+  label: string
+  value: number
+  divide: boolean
+  size: "md" | "sm"
+}) {
   return (
     <span
       className={`inline-flex items-baseline gap-1 ${
@@ -69,7 +162,7 @@ function StatItem({ label, value, divide }: { label: string; value: number; divi
       }`}
     >
       <b
-        className={`text-[14px] font-bold leading-4 tabular-nums ${
+        className={`${size === "md" ? "text-[14px] leading-4" : "text-[13px]"} font-bold tabular-nums ${
           value === 0 ? "text-[#A39E98]" : "text-[#111110]"
         }`}
       >
@@ -81,7 +174,13 @@ function StatItem({ label, value, divide }: { label: string; value: number; divi
 }
 
 // 멤버 캠페인 롤업 요약 — 캠페인/채널/행사 수. 리스트 카드와 상세 카드가 공유.
-export function ProjectRollupStats({ rollup }: { rollup: ProjectRollup }) {
+export function ProjectRollupStats({
+  rollup,
+  size = "md",
+}: {
+  rollup: ProjectRollup
+  size?: "md" | "sm"
+}) {
   const items = [
     { label: "캠페인", value: rollup.campaignCount },
     { label: "채널", value: rollup.channelCount },
@@ -90,7 +189,13 @@ export function ProjectRollupStats({ rollup }: { rollup: ProjectRollup }) {
   return (
     <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
       {items.map((item, i) => (
-        <StatItem key={item.label} label={item.label} value={item.value} divide={i > 0} />
+        <StatItem
+          key={item.label}
+          label={item.label}
+          value={item.value}
+          divide={i > 0}
+          size={size}
+        />
       ))}
     </div>
   )
@@ -219,6 +324,176 @@ export function ProjectCard({
                 <User className="h-2.5 w-2.5 text-[#A39E98]" aria-hidden />
                 {project.owner}
               </span>
+            </>
+          )}
+        </span>
+      </div>
+    </button>
+  )
+}
+
+/* ── 페이싱 바(순수) ──────────────────────────────────────────── */
+
+/**
+ * 기간 경과 · 예산 소진 두 줄을 같은 축에 겹쳐 놓는다 — 두 막대 끝의 어긋남이 곧 판정이다.
+ * 갤러리 카드(sm, 3px)와 상세의 예산 페이싱(md, 4px + 시작/종료 눈금 + 오늘 세로선)이 공유한다.
+ * 막대는 장식(aria-hidden) — 값은 오른쪽 퍼센트 텍스트가 말한다.
+ * 예산 미배정이면 소진 트랙을 투명으로 둔다(빈 트랙은 0% 로 오독된다) — 퍼센트 칸은 "—".
+ */
+export function ProjectPacingBars({
+  rollup,
+  pacing,
+  size = "sm",
+  startLabel,
+  endLabel,
+}: {
+  rollup: ProjectRollup
+  pacing: ProjectPacing
+  size?: "sm" | "md"
+  startLabel?: string
+  endLabel?: string
+}) {
+  const { spentPct } = rollup
+  const hasBudget = spentPct != null
+  const overspent = hasBudget && spentPct > 100
+  const barPct = hasBudget ? Math.min(100, Math.max(0, spentPct)) : 0
+  const elapsed = pacing.elapsedPct
+  const md = size === "md"
+  const bar = md ? "h-1" : "h-[3px]"
+  const label = md ? "text-[11px] text-[#615D59]" : "text-[10.5px] text-[#A39E98]"
+  const value = md ? "text-[13px]" : "text-[12px]"
+
+  return (
+    <div
+      className={`grid items-center ${
+        md
+          ? "grid-cols-[60px_minmax(0,1fr)_48px] gap-3"
+          : "grid-cols-[56px_minmax(0,1fr)_52px] gap-x-2.5 gap-y-1.5"
+      }`}
+    >
+      {md && (
+        <>
+          <span />
+          <div className="flex justify-between text-[10.5px] tabular-nums text-[#A39E98]">
+            <span>{startLabel}</span>
+            <span>{endLabel}</span>
+          </div>
+          <span />
+        </>
+      )}
+
+      <span className={label}>기간 경과</span>
+      <div aria-hidden className={`relative ${bar} rounded-full bg-[#E5E5E0]`}>
+        <div className="h-full rounded-full bg-[#A39E98]" style={{ width: `${elapsed ?? 0}%` }} />
+        {/* 오늘 세로선 — 소진 막대까지 내려 그어 두 막대를 같은 시점에서 비교하게 한다. */}
+        {md && pacing.inProgress && elapsed != null && (
+          <span
+            className="absolute -top-1.5 -bottom-[34px] w-px bg-[#111110] opacity-35"
+            style={{ left: `${elapsed}%` }}
+          />
+        )}
+      </div>
+      <span className={`text-right font-semibold tabular-nums text-[#615D59] ${value}`}>
+        {elapsed == null ? "—" : `${elapsed}%`}
+      </span>
+
+      <span className={label}>예산 소진</span>
+      <div
+        aria-hidden
+        className={`${bar} overflow-hidden rounded-full ${hasBudget ? "bg-[#E5E5E0]" : "bg-transparent"}`}
+      >
+        <div
+          className={`h-full rounded-full ${overspent ? "bg-[#A8741A]" : "bg-[#084734]"}`}
+          style={{ width: `${barPct}%` }}
+        />
+      </div>
+      <span
+        className={`text-right font-bold tabular-nums ${value} ${
+          overspent ? "text-[#A8741A]" : hasBudget ? "text-[#111110]" : "text-[#A39E98]"
+        }`}
+      >
+        {hasBudget ? `${spentPct}%` : "—"}
+      </span>
+    </div>
+  )
+}
+
+/* ── 갤러리 카드(순수) — 1b: 상태별 묶음 + 페이싱 ─────────────── */
+
+/**
+ * 갤러리형 프로젝트 카드. 상태는 그룹 헤더가 말하므로 카드엔 상태칩이 없다.
+ * 위계: 이름·목표 | D-day → 페이싱 두 줄 → 판정 | 소진/배정 → 롤업 수치 | 기간·담당.
+ * 완료 프로젝트는 표면·제목을 한 단계 가라앉힌다(목록에 남되 시선을 빼앗지 않게).
+ * today 는 부모가 한 번 계산해 내려준다(카드마다 new Date() 하면 자정 경계에서 어긋난다).
+ */
+export function ProjectGalleryCard({
+  project,
+  today = startOfToday(),
+  onOpen,
+}: {
+  project: ProjectWithRollup
+  today?: Date
+  onOpen?: () => void
+}) {
+  const { rollup } = project
+  const pacing = computeProjectPacing(project, rollup, today)
+  const done = project.status === "done"
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={`flex w-full flex-col gap-3.5 rounded-xl border border-[rgba(0,0,0,0.08)] px-[18px] py-4 text-left transition hover:border-[#084734]/25 hover:shadow-[rgba(0,0,0,0.04)_0px_4px_18px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] ${
+        done ? "bg-[#FAFAF8]" : "bg-white"
+      }`}
+    >
+      <div className="flex w-full items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h4
+            className={`truncate text-[14px] font-bold leading-5 ${
+              done ? "text-[#615D59]" : "text-[#111110]"
+            }`}
+          >
+            {project.name}
+          </h4>
+          {project.objective && (
+            <p className="mt-0.5 truncate text-[11.5px] leading-4 text-[#615D59]">
+              {project.objective}
+            </p>
+          )}
+        </div>
+        <span
+          className={`shrink-0 text-[11px] font-semibold tabular-nums ${DDAY_TONE_CLASS[pacing.ddayTone]}`}
+        >
+          {pacing.ddayLabel}
+        </span>
+      </div>
+
+      <div className="w-full">
+        <ProjectPacingBars rollup={rollup} pacing={pacing} />
+      </div>
+
+      <div className="flex w-full items-center justify-between gap-2">
+        <span className={`text-[11px] font-semibold ${PACE_TONE_CLASS[pacing.paceTone]}`}>
+          {pacing.paceLabel}
+        </span>
+        <span className="text-[11.5px] tabular-nums text-[#615D59]">
+          <b className="font-semibold text-[#31302E]">{formatWon(rollup.budgetSpent)}</b>
+          <span className="px-1 text-[#A39E98]">/</span>
+          {formatBudget(rollup.budgetAllocated)}
+        </span>
+      </div>
+
+      <div className="flex w-full flex-wrap items-baseline justify-between gap-2 border-t border-[rgba(0,0,0,0.06)] pt-3">
+        <ProjectRollupStats rollup={rollup} size="sm" />
+        <span className="text-[11px] tabular-nums text-[#615D59]">
+          {formatCampaignPeriod(project.startsAt, project.endsAt)}
+          {project.owner && (
+            <>
+              <span className="px-1 text-[#A39E98]" aria-hidden>
+                ·
+              </span>
+              {project.owner}
             </>
           )}
         </span>

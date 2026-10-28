@@ -5,6 +5,7 @@ import {
   BUDGET_CAVEAT,
   ProjectBudgetCaveat,
   ProjectCard,
+  ProjectGalleryCard,
   ProjectsEmpty,
 } from "@/components/admin/campaigns/projects/ProjectCard"
 import type { ProjectRollup, ProjectWithRollup } from "@/lib/types/marketing-campaign"
@@ -116,6 +117,56 @@ describe("ProjectCard", () => {
     const html = renderToStaticMarkup(<ProjectCard project={makeProject()} />)
     expect(html).not.toContain("ROAS")
     expect(html).not.toContain("roas")
+  })
+})
+
+describe("ProjectGalleryCard", () => {
+  const TODAY = new Date(2026, 9, 21)
+
+  it("shows elapsed and spent side by side with a pacing verdict and D-day", () => {
+    const html = renderToStaticMarkup(<ProjectGalleryCard project={makeProject()} today={TODAY} />)
+    expect(html).toContain("기간 경과")
+    expect(html).toContain("예산 소진")
+    expect(html).toContain("61%") // 2026-07-01 ~ 2026-12-31 중 10-21
+    expect(html).toContain("71%")
+    expect(html).toContain("일정에 맞는 소진")
+    expect(html).toContain("D-71")
+    expect(html).toContain("₩7,100,000")
+  })
+
+  it("does not repeat the caveat or a status chip per card (그룹 헤더·툴바가 말한다)", () => {
+    const html = renderToStaticMarkup(<ProjectGalleryCard project={makeProject()} today={TODAY} />)
+    expect(html).not.toContain(BUDGET_CAVEAT)
+    expect(html).not.toContain(">진행<")
+  })
+
+  it("renders '—' and no verdict when the budget is unallocated", () => {
+    const html = renderToStaticMarkup(
+      <ProjectGalleryCard
+        project={makeProject({
+          budget: null,
+          rollup: { budgetAllocated: null, budgetSpent: 0, spentPct: null },
+        })}
+        today={TODAY}
+      />,
+    )
+    expect(html).toContain("—")
+    expect(html).toContain("예산 미배정 · 페이싱 없음")
+    expect(html).toContain("예산 미정")
+  })
+
+  it("flags over-budget with the warning token and clamps the bar", () => {
+    const html = renderToStaticMarkup(
+      <ProjectGalleryCard
+        project={makeProject({
+          rollup: { budgetAllocated: 10_000_000, budgetSpent: 12_800_000, spentPct: 128 },
+        })}
+        today={TODAY}
+      />,
+    )
+    expect(html).toContain("배정 예산 초과")
+    expect(html).toContain("#A8741A")
+    expect(html).toContain('style="width:100%"')
   })
 })
 
