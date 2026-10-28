@@ -582,6 +582,15 @@ aside.notes { display: none; }
 .hc b { display: block; font-size: 29px; font-weight: 800; letter-spacing: -.02em; line-height: 1.35; }
 .hc span { display: block; margin-top: 10px; font-size: 21px; font-weight: 600; color: var(--mute); line-height: 1.45; }
 
+/* ===== 23 허들 낮추기 ===== */
+.easy { position: absolute; left: 120px; right: 120px; top: 310px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 50px; }
+.ez { height: 470px; padding: 50px 46px; box-sizing: border-box; display: flex; flex-direction: column; }
+.ez .big { font-size: 120px; font-weight: 800; letter-spacing: -.05em; line-height: 1; color: var(--em); }
+.ez .big small { font-size: 44px; letter-spacing: -.02em; margin-left: 4px; color: var(--ink-2); }
+.ez b { margin-top: auto; font-size: 34px; font-weight: 800; letter-spacing: -.02em; }
+.ez span { margin-top: 14px; font-size: 23px; font-weight: 600; line-height: 1.5; color: var(--mute); }
+.s-easy .take { top: 850px; font-size: 34px; font-weight: 800; }
+
 /* ===== 22 90일 ===== */
 .zero { position: absolute; left: 120px; top: 300px; width: 520px; height: 566px; padding: 46px 48px; box-sizing: border-box; }
 .zero .k { display: flex; align-items: center; gap: 12px; font-size: 26px; font-weight: 800; color: var(--em); }
@@ -936,7 +945,7 @@ aside.notes { display: none; }
   </div>
   <p class="take t">교사들의 걱정도 있었습니다 — 정확도 · 프라이버시 · 시간. <span class="em">끝에서 답하겠습니다.</span></p>
   <p class="src t">출처 · Demszky et al., Educational Evaluation and Policy Analysis (2023) · Demszky et al., Computers &amp; Education (2024)</p>
-  <aside class="notes">핵심은 처벌이 아니라 '거울'. 교사들이 피드백 메일을 절반 정도만 열어봤는데도 효과가 났습니다. 같은 연구에서 교사들은 정확도·프라이버시·시간을 걱정했습니다 — 23장 90일 시작 순서에서 답합니다. → "클래스인은 수업을 이렇게 읽습니다."</aside>
+  <aside class="notes">핵심은 처벌이 아니라 '거울'. 교사들이 피드백 메일을 절반 정도만 열어봤는데도 효과가 났습니다. 같은 연구에서 교사들은 정확도·프라이버시·시간을 걱정했습니다 — 23장에서 답합니다(리포트는 강사 먼저, 열람 권한은 좁게). → "클래스인은 수업을 이렇게 읽습니다."</aside>
 </section>
 
 <!-- 15 지표 · 튜닝 -->
@@ -1081,41 +1090,30 @@ aside.notes { display: none; }
   <aside class="notes">8장의 공포를 직접 풉니다. 모든 이탈을 막을 수는 없습니다. 강사가 떠나는 날, 지금까지는 진도와 판서가 강사 머릿속에 있었고, 새 강사는 처음부터 시작했고, 학부모에게는 "잘 하실 거예요"밖에 할 말이 없었습니다. 클래스인에서는 수업 녹화와 판서·교안(EDB)이 학원에 남아 새 강사가 지난 수업을 보고 이어갑니다. 떠난 강사의 AI 강의평가 추이는 새 강사 온보딩의 기준이 됩니다. 학부모 상담에서는 이어지는 진도와 수업 기록으로 설명하고, 민원이 오면 그날 수업 녹화로 사실부터 확인합니다(원장의 일상 업무와 연결). 화면은 예시 장면. 원생 점이 이번에는 검게 꺼지지 않는다는 점을 가리킵니다. → "그럼 위험 없이 확인하는 방법을 말씀드리겠습니다."</aside>
 </section>
 
-<!-- 22 90일 -->
-<section class="slide s21" data-scene="light" data-enter="ninety" data-time="1:00">
+<!-- 23 허들 낮추기 -->
+<section class="slide s-easy" data-scene="light" data-enter="easy" data-time="0:40">
   <span class="eyebrow nm in pill r"><i class="led"></i>4막 · 결국, 이득입니다</span>
-  <h2 class="h t">무료로 시작해서, <span class="em">90일</span> 안에 숫자로 확인하세요</h2>
-  <div class="zero nm card r">
-    <div class="k"><i class="led"></i>0원으로 시작</div>
-    <div class="disp nm in"><span class="num roll" data-v="0"></span><span class="u">원</span></div>
-    <ul><li><i class="led"></i>계정당 누적 50회 무료 수업</li><li><i class="led"></i>수업 녹화 · AI 강의 분석 포함</li><li><i class="led"></i>월별 초기화 없음</li></ul>
-    <div class="fine">ClassIn 6.0.9 기준 · 조건은 상담 시 확인</div>
+  <h2 class="h t">시작은, <span class="em">생각보다 가볍습니다</span></h2>
+  <div class="easy">
+    <div class="ez nm card r"><div class="big">0<small>원</small></div><b>비용 부담 없이</b><span>계정당 누적 50회 무료 수업에<br>녹화와 AI 강의 분석 포함</span></div>
+    <div class="ez nm card r"><div class="big">1<small>개 반</small></div><b>반 하나로 먼저</b><span>평소처럼 수업하고<br>[AI 강의 분석] 체크 하나</span></div>
+    <div class="ez nm card r"><div class="big">강사<small> 먼저</small></div><b>감시가 아니라 성장으로</b><span>리포트는 강사가 먼저 보고,<br>열람 권한은 좁게</span></div>
   </div>
-  <div class="plan">
-    <div class="groove nm in pill r"><i class="gf"></i><span class="gs"><i></i></span>
-      <div class="mile m1 nm sm"><i class="led off"></i></div><div class="mile m2 nm sm"><i class="led off"></i></div><div class="mile m3 nm sm"><i class="led off"></i></div>
-    </div>
-    <div class="pcards">
-      <div class="pc nm card r" data-at="1.3"><div class="d">30일</div><ul><li>강사에게 <b>WHY 먼저</b> 공유</li><li>1~2개 반으로 시작</li><li>강사가 <b>먼저</b> 본인 리포트 확인</li></ul></div>
-      <div class="pc nm card r" data-at="2.15"><div class="d">60일</div><ul><li><b>강점 먼저</b> 1:1 면담</li><li>점수가 아니라 <b>추이</b>로</li><li>개선점은 한 번에 하나</li></ul></div>
-      <div class="pc nm card r" data-at="2.95"><div class="d">90일</div><ul><li>우리 학원 숫자 확인: <b>퇴원 수 · 재등록 · 면담 횟수 · 준비 시간</b></li><li>확대 여부 결정</li></ul></div>
-    </div>
-  </div>
-  <div class="guard nm in pill r" data-at="3.4"><i class="led"></i>열람 권한은 좁게 · 점수는 코칭용 — 감시가 아니라 성장으로 시작하는 순서</div>
-  <aside class="notes">비용 걱정: 계정당 누적 50회 무료 수업에 녹화와 AI 강의 분석이 포함됩니다(6.0.9 기준, 발표 전 제품팀 확인). 강사 반발 걱정: 순서로 지웁니다. 30일 — 도입 전에 강사에게 목적과 범위를 먼저 공유하고, 1~2개 반으로 시작하고, 강사가 먼저 본인 리포트를 봅니다. 60일 — 강점부터 1:1 면담, 점수가 아니라 추이로. 90일 — 퇴원 수·재등록·면담 횟수·보강/상담 준비 시간을 우리 학원 숫자로 확인하고 확대를 결정합니다. 15장에서 말한 교사들의 걱정(정확도·프라이버시·시간)에 대한 답이 이 순서입니다. → "왜 이렇게까지 강사부터 생각해야 할까요?"</aside>
+  <p class="take t">한 달 뒤, <span class="em">우리 학원 수업</span>으로 직접 판단하시면 됩니다.</p>
+  <p class="src t">무료 혜택은 ClassIn 6.0.9 업데이트 가이드 기준 · 조건은 상담 시 확인</p>
+  <aside class="notes">길게 설명하지 않습니다. 시작 허들이 낮다는 것만 전합니다. ① 비용: 계정당 누적 50회 무료 수업에 녹화와 AI 강의 분석이 포함됩니다(6.0.9 기준, 발표 전 제품팀 확인). ② 범위: 반 하나로 시작합니다 — 평소처럼 수업하고 체크 하나만 하면 됩니다. ③ 강사: 리포트는 강사가 먼저 보고, 원장은 정해진 사람만 봅니다 — 15장에서 말한 교사들의 걱정(정확도·프라이버시·시간)에 대한 답입니다. "한 달 뒤, 우리 학원 수업으로 직접 판단하시면 됩니다." → "왜 이렇게까지 강사부터 생각해야 할까요?"</aside>
 </section>
 
-<!-- 22 클로징 -->
+<!-- 24 클로징 -->
 <section class="slide s22 dark" data-scene="dark" data-enter="closing" data-steps="2" data-time="1:00">
   <div class="dust"></div>
   <div class="center-col cq"><div class="qt"><span class="t">“직원이 먼저 회사를 사랑하지 않으면,</span><span class="t">고객은 결코 그 회사를 사랑하지 않는다.”</span></div><div class="cite t">사이먼 시넥 · Entrepreneur 인터뷰</div></div>
   <div class="center-col cq2 step" data-step="1"><span class="t"><span class="em">강사</span>가 먼저 학원을 사랑해야, <span class="em">학부모</span>도 학원을 사랑합니다.</span></div>
   <div class="center-col fin step" data-step="2"><span class="t">좋은 수업이 남으면,</span><span class="t">학생이 남고, <span class="em">매출</span>이 남습니다.</span></div>
-  <div class="band"></div>
-  <aside class="notes">시넥의 말을 학원 버전으로. 클릭 1: 강사가 먼저 학원을 사랑해야, 학부모도 학원을 사랑합니다. 클릭 2: 마지막 문장 — 학생 점들이 빠져나가지 않고 켜진 채 남습니다. "AI는 당연해졌습니다. 남은 질문은 우리 학원이 AI로 무엇을 지키고 키울 것인가입니다. 저희의 답은 사람, 그리고 수업입니다."</aside>
+  <aside class="notes">시넥의 말을 학원 버전으로. 클릭 1: 강사가 먼저 학원을 사랑해야, 학부모도 학원을 사랑합니다. 클릭 2: 마지막 문장. "AI는 당연해졌습니다. 남은 질문은 우리 학원이 AI로 무엇을 지키고 키울 것인가입니다. 저희의 답은 사람, 그리고 수업입니다."</aside>
 </section>
 
-<!-- 23 Q&A -->
+<!-- 25 Q&A -->
 <section class="slide s23" data-scene="light" data-enter="qa" data-time="—">
   <span class="eyebrow nm in pill r"><i class="led"></i>Thank you</span>
   <div class="ty nm r">
@@ -1735,25 +1733,13 @@ aside.notes { display: none; }
       gsap.set($('.take', slide), { autoAlpha: 1, y: 0 });
     },
 
-    ninety: function (slide, tl, s) {
-      var gf = $('.gf', slide), leds = $$('.mile .led', slide), fr = [165 / 1060, 530 / 1060, 895 / 1060];
-      gsap.set(gf, { scaleX: 0 });
-      leds.forEach(function (l) { l.classList.add('off'); });
-      tl.to(gf, { scaleX: 1, duration: 2.4, ease: 'none' }, s + .9);
-      fr.forEach(function (f, k) {
-        tl.call(function () { leds[k].classList.remove('off'); }, null, s + .9 + 2.4 * f);
-        tl.fromTo($$('.mile', slide)[k], { scale: 1 }, { scale: 1.18, duration: .18, yoyo: true, repeat: 1, ease: 'power2.out' }, s + .9 + 2.4 * f);
-      });
-      loop(gsap.fromTo($('.groove .gs i', slide), { x: 0 }, { x: 1260, duration: 1.8, ease: 'power2.inOut', repeat: -1, repeatDelay: 1.4, delay: 3.6 }));
+    easy: function (slide, tl, s) {
+      tl.fromTo($$('.ez .big', slide), { autoAlpha: 0, y: 20 }, { autoAlpha: 1, y: 0, duration: 1, ease: 'power3.out', stagger: .3 }, s + .7);
     },
 
     closing: function (slide, tl, s) {
       dust(slide);
-      var band = $('.band', slide);
-      if (!band.children.length) { for (var k = 0; k < 70; k++) { var d = document.createElement('i'); d.className = 'nm in sm'; band.appendChild(d); } }
-      $$('i', band).forEach(function (d) { d.classList.remove('lit'); gsap.set(d, { scale: 1, opacity: 1 }); });
       gsap.set([$('.cq', slide)], { autoAlpha: 1, y: 0 });
-      tl.fromTo($$('i', band), { autoAlpha: 0 }, { autoAlpha: 1, duration: .6, stagger: { each: .008, from: 'center' } }, s + .8);
     },
 
     qa: function (slide) {
@@ -1843,16 +1829,7 @@ aside.notes { display: none; }
 
     closing: function (slide, n, tl, instant) {
       if (n !== 2) return;
-      var band = $('.band', slide), dots = $$('i', band);
       tl.to([$('.cq', slide), $('.cq2', slide)], { autoAlpha: 0, y: -30, duration: .6, ease: 'power2.in' }, 0);
-      dots.forEach(function (d, k) {
-        var col = k % 35, dist = Math.abs(col - 17);
-        tl.call(function () { d.classList.add('lit'); }, null, .8 + dist * .045);
-        tl.fromTo(d, { scale: .6 }, { scale: 1, duration: .5, ease: 'back.out(3)' }, .8 + dist * .045);
-      });
-      if (!instant) tl.call(function () {
-        dots.forEach(function (d) { loop(gsap.to(d, { opacity: .6, duration: rand(1, 2.2), yoyo: true, repeat: -1, ease: 'sine.inOut', delay: rand(0, 1) })); });
-      }, null, 2.4);
     }
   };
 
