@@ -346,8 +346,13 @@ aside.notes { display: none; }
 .s10 .window, .s18 .window { --ws: 330px; left: 795px; top: 640px; }
 .who { position: absolute; top: 640px; width: 520px; height: 330px; padding: 38px 42px; box-sizing: border-box; }
 .who .hd { display: flex; align-items: center; gap: 16px; font-size: 30px; font-weight: 800; }
-.who .hd svg { width: 54px; height: 54px; flex: none; }
-.who .hd .eye { margin-left: auto; width: 44px; height: 44px; opacity: .8; }
+.ib { width: 78px; height: 78px; flex: none; display: grid; place-items: center; color: var(--ink); }
+.ib svg { width: 58px; height: 58px; }
+.eyeb { margin-left: auto; display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; color: var(--mute); }
+.eyeb svg { width: 40px; height: 40px; }
+.eyeb.off { background: rgba(128, 133, 141, .14); }
+.eyeb.on { background: rgba(181, 226, 46, .22); color: var(--ink); }
+.dark .eyeb.off { background: rgba(255, 255, 255, .06); }
 .who .tx { margin-top: 22px; font-size: 30px; font-weight: 700; line-height: 1.42; letter-spacing: -.02em; }
 .who .mini { margin-top: 22px; display: flex; flex-direction: column; gap: 12px; }
 .who .mini .r2 { display: grid; grid-template-columns: 110px 1fr 86px; gap: 16px; align-items: center; font-size: 19px; font-weight: 700; color: var(--mute); }
@@ -517,7 +522,7 @@ aside.notes { display: none; }
 .meter .eq span { padding: 12px 22px; }
 .meter .eq i { font-style: normal; color: var(--mute); }
 .meter .disp { position: absolute; left: 46px; right: 46px; bottom: 40px; height: 180px; border-radius: 32px; display: flex; align-items: center; justify-content: flex-end; padding: 0 44px; gap: 14px; }
-.meter .disp .num { font-size: 130px; color: var(--em); }
+.meter .disp .num { font-size: 130px; color: #B34A3C; }
 .meter .disp .u { font-size: 40px; font-weight: 800; color: var(--ink-2); }
 .minic { position: absolute; top: 670px; width: 420px; height: 180px; padding: 30px 34px; box-sizing: border-box; }
 .minic.c1 { left: 930px; } .minic.c2 { left: 1380px; }
@@ -556,7 +561,8 @@ aside.notes { display: none; }
 .hand .hk .led { width: 12px; height: 12px; }
 .tch { position: absolute; top: 100px; width: 330px; height: 124px; display: flex; align-items: center; gap: 18px; padding: 0 28px; box-sizing: border-box; }
 .tch.ta { left: 44px; } .tch.tb { left: 426px; }
-.tch svg { width: 54px; height: 54px; flex: none; color: var(--ink-2); }
+.tch .ib { width: 66px; height: 66px; }
+.tch .ib svg { width: 42px; height: 42px; }
 .tch b { display: block; font-size: 26px; font-weight: 800; }
 .tch span { display: block; margin-top: 4px; font-size: 19px; font-weight: 600; color: var(--mute); }
 .tch > .led { margin-left: auto; width: 14px; height: 14px; }
@@ -640,11 +646,11 @@ aside.notes { display: none; }
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
-    <symbol id="i-parent" viewBox="0 0 54 54"><g fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"><circle cx="20" cy="15" r="7.5"/><path d="M5 46c0-10 6.5-17 15-17s15 7 15 17"/><circle cx="39" cy="25" r="5.5"/><path d="M30 46c0-7 4-12 9-12s9 5 9 12"/></g></symbol>
-    <symbol id="i-head" viewBox="0 0 54 54"><g fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="15" r="8"/><path d="M8 47c0-10.5 7-18 16-18s16 7.5 16 18"/><rect x="36" y="27" width="13" height="17" rx="2.5"/><path d="M39.5 33h6M39.5 38h6"/></g></symbol>
-    <symbol id="i-teacher" viewBox="0 0 54 54"><g fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="26" height="18" rx="2.5"/><path d="M10 13h14M10 18h9"/><circle cx="38" cy="22" r="7"/><path d="M24 48c0-9 6.3-15 14-15s14 6 14 15"/></g></symbol>
-    <symbol id="i-eyeoff" viewBox="0 0 54 54"><g fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"><path d="M5 27s8-13 22-13 22 13 22 13-8 13-22 13S5 27 5 27z"/><circle cx="27" cy="27" r="6"/><path d="M9 45 45 9"/></g></symbol>
-    <symbol id="i-eye" viewBox="0 0 54 54"><g fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"><path d="M5 27s8-13 22-13 22 13 22 13-8 13-22 13S5 27 5 27z"/><circle cx="27" cy="27" r="6"/></g></symbol>
+    <symbol id="i-parent" viewBox="0 0 64 64"><circle cx="23" cy="17" r="8" fill="none" stroke="currentColor" stroke-width="3.4"/><path d="M8 52v-6c0-9 6.6-15 15-15s15 6 15 15v6" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/><circle cx="45" cy="29" r="6" fill="#B5E22E"/><path d="M35 52v-3c0-6.4 4.4-11 10-11s10 4.6 10 11v3z" fill="#B5E22E"/><path d="M33 44c1.5 1.4 3 1.6 4.5.6" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></symbol>
+    <symbol id="i-head" viewBox="0 0 64 64"><circle cx="25" cy="16" r="8.5" fill="none" stroke="currentColor" stroke-width="3.4"/><path d="M8 54v-6c0-10 7.6-17 17-17s17 7 17 17v6" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/><path d="M25 31l-3.4 5 3.4 11 3.4-11z" fill="#B5E22E"/><rect x="40" y="30" width="18" height="24" rx="4" fill="#B5E22E"/><path d="M45 36h8M45 41h8" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><path d="M44.5 47.5l2.5 2.5 5-5" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-teacher" viewBox="0 0 64 64"><rect x="4" y="6" width="34" height="24" rx="4" fill="none" stroke="currentColor" stroke-width="3.4"/><path d="M10 23l7-7 5 4 9-8" fill="none" stroke="#B5E22E" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="46" cy="24" r="7.5" fill="none" stroke="currentColor" stroke-width="3.4"/><path d="M31 58v-5c0-8.6 6.7-15 15-15s15 6.4 15 15v5" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/><path d="M38 41l-8-9" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-eyeoff" viewBox="0 0 64 64"><path d="M6 32s9.5-15 26-15 26 15 26 15-9.5 15-26 15S6 32 6 32z" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linejoin="round"/><circle cx="32" cy="32" r="7" fill="currentColor" opacity=".35"/><path d="M12 52 52 12" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 64 64"><path d="M6 32s9.5-15 26-15 26 15 26 15-9.5 15-26 15S6 32 6 32z" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linejoin="round"/><circle cx="32" cy="32" r="9" fill="#B5E22E"/><circle cx="32" cy="32" r="3.6" fill="currentColor"/></symbol>
   </defs>
 </svg>
 
@@ -832,7 +838,7 @@ aside.notes { display: none; }
   <div class="step" data-step="1">
     <h2 class="h t">수업은, <span class="em">아무에게도</span> 보이지 않습니다</h2>
     <div class="who w1 nm card r">
-      <div class="hd"><svg><use href="#i-parent"/></svg>학부모<svg class="eye"><use href="#i-eyeoff"/></svg></div>
+      <div class="hd"><span class="ib nm in circle"><svg><use href="#i-parent"/></svg></span>학부모<span class="eyeb off"><svg><use href="#i-eyeoff"/></svg></span></div>
       <div class="tx">상담으로만 확인합니다</div>
       <div class="mini">
         <div class="r2">방문 상담<div class="track nm in"><i class="fill lime" style="--w:74.2"></i></div><b>74.2%</b></div>
@@ -840,11 +846,11 @@ aside.notes { display: none; }
       </div>
     </div>
     <div class="who w2 nm card r">
-      <div class="hd"><svg><use href="#i-head"/></svg>원장<svg class="eye"><use href="#i-eyeoff"/></svg></div>
+      <div class="hd"><span class="ib nm in circle"><svg><use href="#i-head"/></svg></span>원장<span class="eyeb off"><svg><use href="#i-eyeoff"/></svg></span></div>
       <div class="tx">참관은 가끔,<br>나머지는 전언과 인상</div>
     </div>
     <div class="who w3 nm card r">
-      <div class="hd"><svg><use href="#i-teacher"/></svg>강사<svg class="eye"><use href="#i-eyeoff"/></svg></div>
+      <div class="hd"><span class="ib nm in circle"><svg><use href="#i-teacher"/></svg></span>강사<span class="eyeb off"><svg><use href="#i-eyeoff"/></svg></span></div>
       <div class="tx">자기 수업을<br>밖에서 본 적이 없습니다</div>
     </div>
     <p class="src t">학부모의 학원 평가 방법 · 에듀베이션 학부모 1,550명 설문(2024.6, 복수 응답)</p>
@@ -1004,9 +1010,9 @@ aside.notes { display: none; }
   <svg class="links" viewBox="0 0 1920 1080"><path d="M850 520 C700 600 420 600 380 668"/><path d="M960 640 L960 668"/><path d="M1070 520 C1220 600 1500 600 1540 668"/></svg>
   <div class="window clear r" data-o="1"></div>
   <div class="win-lab nm in pill r" data-o="2"><i class="led"></i>학원 — 강사가 바뀌어도 기준과 기록은 남습니다</div>
-  <div class="who w1 nm card r" data-o="3"><div class="hd"><svg><use href="#i-parent"/></svg>학부모 · 학생<svg class="eye"><use href="#i-eye"/></svg></div><div class="tx">녹화 다시보기와 수업 기반 AI 튜터,<br>상담에서는 관리 방식을 근거로</div><div class="gain nm sm pill"><i class="led"></i>늘어나는 등록</div></div>
-  <div class="who w2 nm card r" data-o="4"><div class="hd"><svg><use href="#i-head"/></svg>원장<svg class="eye"><use href="#i-eye"/></svg></div><div class="tx">참관하지 않아도<br>모든 수업을 같은 기준으로</div><div class="gain nm sm pill"><i class="led"></i>줄어드는 시간</div></div>
-  <div class="who w3 nm card r" data-o="5"><div class="hd"><svg><use href="#i-teacher"/></svg>강사<svg class="eye"><use href="#i-eye"/></svg></div><div class="tx">자기 수업과 성장이 보입니다<br>그래서, 남습니다</div><div class="gain nm sm pill"><i class="led"></i>지키는 매출</div></div>
+  <div class="who w1 nm card r" data-o="3"><div class="hd"><span class="ib nm in circle"><svg><use href="#i-parent"/></svg></span>학부모 · 학생<span class="eyeb on"><svg><use href="#i-eye"/></svg></span></div><div class="tx">녹화 다시보기와 수업 기반 AI 튜터,<br>상담에서는 관리 방식을 근거로</div><div class="gain nm sm pill"><i class="led"></i>늘어나는 등록</div></div>
+  <div class="who w2 nm card r" data-o="4"><div class="hd"><span class="ib nm in circle"><svg><use href="#i-head"/></svg></span>원장<span class="eyeb on"><svg><use href="#i-eye"/></svg></span></div><div class="tx">참관하지 않아도<br>모든 수업을 같은 기준으로</div><div class="gain nm sm pill"><i class="led"></i>줄어드는 시간</div></div>
+  <div class="who w3 nm card r" data-o="5"><div class="hd"><span class="ib nm in circle"><svg><use href="#i-teacher"/></svg></span>강사<span class="eyeb on"><svg><use href="#i-eye"/></svg></span></div><div class="tx">자기 수업과 성장이 보입니다<br>그래서, 남습니다</div><div class="gain nm sm pill"><i class="led"></i>지키는 매출</div></div>
   <aside class="notes">11장의 세 사람이 다시 나옵니다 — 이번에는 모두 수업이 보입니다. 원장은 참관·면담 준비 시간이 줄고, 강사는 자기 성장이 보여 남고, 학부모·학생은 다시보기와 AI 튜터로 수업을 이어가고 상담에서 관리 방식을 근거로 듣습니다. 가운데 학원에는 강사가 바뀌어도 기준과 기록이 남습니다(8장 되받기). → "이 중 가장 큰 이득부터 숫자로 보겠습니다. 8장의 그 학원으로 돌아가 볼까요?"</aside>
 </section>
 
@@ -1031,7 +1037,7 @@ aside.notes { display: none; }
 <!-- 20 막을 수 있는 이탈 -->
 <section class="slide s20" data-scene="light" data-enter="prevent" data-steps="1" data-time="0:50">
   <span class="eyebrow nm in pill r"><i class="led"></i>4막 · 결국, 이득입니다</span>
-  <h2 class="h t">그리고 그 이탈의 절반은, <span class="em">막을 수 있었습니다</span></h2>
+  <h2 class="h t">절반은, <span class="em">막을 수 있었습니다</span></h2>
   <div class="gc a nm card r">
     <div class="ring"><svg viewBox="0 0 240 240"><circle cx="120" cy="120" r="98" fill="none" stroke="var(--track)" stroke-width="22"/><circle class="arc" data-p="52" cx="120" cy="120" r="98" fill="none" stroke="#A6D81E" stroke-width="22" stroke-linecap="round" transform="rotate(-90 120 120)" pathLength="100" stroke-dasharray="0 100" style="filter:drop-shadow()"/></svg><div class="c"><div class="num"><span class="roll" data-v="52"></span><small>%</small></div></div></div>
     <div class="tx">스스로 떠난 직원의 52%는<br><b>“관리자나 회사가 막을 수 있었다”</b>고 답했습니다</div>
@@ -1058,8 +1064,8 @@ aside.notes { display: none; }
   <span class="badge nm in pill r"><i class="led off"></i>예시 장면</span>
   <div class="hand nm card r">
     <div class="hk"><i class="led"></i>강사가 바뀌는 날</div>
-    <div class="tch ta nm sm card"><svg><use href="#i-teacher"/></svg><div><b>떠나는 강사</b><span>중3 수학반</span></div><i class="led"></i><em class="out">퇴사</em></div>
-    <div class="tch tb nm sm card"><svg><use href="#i-teacher"/></svg><div><b>새 강사</b><span>첫 주</span></div><i class="led off"></i></div>
+    <div class="tch ta nm sm card"><span class="ib nm in circle"><svg><use href="#i-teacher"/></svg></span><div><b>떠나는 강사</b><span>중3 수학반</span></div><i class="led"></i><em class="out">퇴사</em></div>
+    <div class="tch tb nm sm card"><span class="ib nm in circle"><svg><use href="#i-teacher"/></svg></span><div><b>새 강사</b><span>첫 주</span></div><i class="led off"></i></div>
     <div class="pipe nm in pill"><span class="arrow">→</span></div>
     <div class="tok nm sm pill"><i class="led"></i>수업 녹화</div>
     <div class="tok nm sm pill"><i class="led"></i>판서 · 교안</div>
@@ -1668,24 +1674,23 @@ aside.notes { display: none; }
     },
 
     money: function (slide, tl, s) {
-      var b = buildDots(slide, true), box = $('.coins', slide), disp = $('.meter .disp', slide), mc = $('.mcount', slide);
+      // 떠난 원생 점이 하나씩 꺼질 때마다 금액이 마이너스로 내려간다
+      var b = buildDots(slide, false), disp = $('.meter .disp', slide), mc = $('.mcount', slide);
       mc.textContent = '0';
-      box.innerHTML = '';
+      $('.coins', slide).innerHTML = '';
       tl.fromTo(b.dots, { autoAlpha: 0 }, { autoAlpha: 1, duration: .5, stagger: { each: .006, from: 'random' } }, s + .3);
-      var dp = pos(disp, slide), tx = dp[0] + disp.offsetWidth * .62, ty = dp[1] + disp.offsetHeight / 2;
-      var gone = b.dots.filter(function (_, i) { return b.keep.indexOf(i) === -1; });
-      var t0 = s + 1.5, gap = .034;
+      var gone = b.dots.filter(function (_, i) { return b.keep.indexOf(i) === -1; }).sort(function () { return Math.random() - .5; });
+      var t0 = s + 1.6, gap = .045;
       gone.forEach(function (d, j) {
-        var p = pos(d, slide), sx = p[0] + d.offsetWidth / 2, sy = p[1] + d.offsetHeight / 2;
-        var c = document.createElement('i'); c.className = 'coin'; box.appendChild(c);
         var at = t0 + j * gap;
-        tl.fromTo(c, { x: sx, y: sy, scale: .3, autoAlpha: 0 }, { autoAlpha: 1, scale: 1, y: sy - 26, duration: .22, ease: 'power2.out' }, at);
-        tl.to(c, { x: tx, y: ty, scale: .45, duration: .78, ease: 'power2.in' }, at + .22);
-        tl.to(c, { autoAlpha: 0, duration: .1 }, at + 1.0);
+        tl.to(d, { '--rise': 0, scale: .5, duration: .6, ease: 'power3.inOut' }, at);
+        tl.to(d.firstChild, { opacity: 1, duration: .45, ease: 'power2.out' }, at);
       });
       var o = { v: 0 };
-      tl.to(o, { v: 1674, duration: gone.length * gap + .2, ease: 'none', onUpdate: function () { mc.textContent = Math.round(o.v).toLocaleString('ko-KR'); } }, t0 + 1.0);
-      tl.fromTo(disp, { scale: 1 }, { scale: 1.035, duration: .22, yoyo: true, repeat: 1, ease: 'power2.out' }, t0 + 1.2 + gone.length * gap);
+      tl.to(o, { v: 1674, duration: gone.length * gap + .3, ease: 'none', onUpdate: function () {
+        var n = Math.round(o.v); mc.textContent = n ? '−' + n.toLocaleString('ko-KR') : '0';
+      } }, t0 + .1);
+      tl.fromTo(disp, { scale: 1 }, { scale: 1.03, duration: .25, yoyo: true, repeat: 1, ease: 'power2.out' }, t0 + .5 + gone.length * gap);
       loop(gsap.to($('.meter .led', slide), { opacity: .35, duration: .8, yoyo: true, repeat: -1, ease: 'sine.inOut' }));
     },
 
@@ -1834,7 +1839,7 @@ aside.notes { display: none; }
       }, null, .5);
     },
 
-    prevent: function (slide, n, tl) { tl.to($('.take', slide), { autoAlpha: 0, y: -12, duration: .4 }, 0); },
+    prevent: function (slide, n, tl) { tl.to($('.take', slide), { autoAlpha: 0, y: -10, duration: .9, ease: 'power2.inOut' }, 0); },
 
     closing: function (slide, n, tl, instant) {
       if (n !== 2) return;
@@ -1944,13 +1949,16 @@ aside.notes { display: none; }
     var tl = gsap.timeline();
     slide._stl = tl;
     $$('.step[data-step="' + n + '"]', slide).forEach(function (g) {
-      tl.set(g, { autoAlpha: 1 }, 0);
+      if (!g.classList.contains('nm')) tl.set(g, { autoAlpha: 1 }, 0);
       var inner = $$('.r, .t', g).filter(function (el) { return !nested(el, g); });
-      if (g.classList.contains('nm')) tl.fromTo(g, { y: 30, '--rise': 0 }, { y: 0, '--rise': 1, duration: 1.05, ease: 'expo.out' }, 0);
+      if (g.classList.contains('nm')) {
+        tl.fromTo(g, { autoAlpha: 0 }, { autoAlpha: 1, duration: 1.1, ease: 'power2.out' }, .15);
+        tl.fromTo(g, { y: 46, '--rise': 0 }, { y: 0, '--rise': 1, duration: 1.7, ease: 'power3.out' }, .15);
+      }
       else if (!inner.length) tl.fromTo(g, { y: 26, opacity: 0 }, { y: 0, opacity: 1, duration: .95, ease: 'expo.out' }, 0);
       var slow = g.classList.contains('slow');
       riseIn(inner, tl, slow ? .25 : .05, slow ? .75 : GAP, true, slow ? 1.9 : 1);
-      $$('.roll', g).forEach(function (r) { if (!r._played) { r._played = true; playRoll(r, tl, .35, instant); } });
+      $$('.roll', g).forEach(function (r) { if (!r._played) { r._played = true; playRoll(r, tl, .8, instant); } });
     });
     var h = STEP[slide.dataset.enter];
     if (h) h(slide, n, tl, instant);
