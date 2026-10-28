@@ -168,6 +168,14 @@ npm run check:db --  --strict
 | `20261022_crm_lead_auto_confirm.sql` | `crm_source_priorities`의 `lead` 자동 확정을 켠다(임계값 0.92·0.15 그대로) | 매시간 리드 자동 연결(`/api/cron/link-hourly`)이 후보만 만들고 확정은 하지 않는다 — 매칭함에서 사람이 확정 | `select auto_confirm_enabled from public.crm_source_priorities where source_system = 'lead';` → `true` |
 | `20261022_sales_orders.sql` | 오더 테이블 `sales_orders`(견적 승인 → 하드웨어 승인 → 오더번호·배송 예정)와 원장 `raw->>'order_no'` 인덱스를 만든다. RLS deny-all(service_role 만). 전부 `IF NOT EXISTS`라 재실행 무해 | 견적 승인은 그대로 되지만 오더가 만들어지지 않는다. 하드웨어 탭의 '하드웨어 승인 대기'는 "미적용" 안내로 내려가고, 승인·반려 API는 503 | `npm run check:db`의 `sales_orders` 프로브, 또는 `select to_regclass('public.sales_orders') is not null;` → `true` |
 
+### 2026-10-28 하드웨어 재고관리 프로세스 — 서울 프로젝트 미적용
+
+[프로세스 정의서 차이](./hardware-inventory-process-gap-2026-10-28.md) §5 의 2단계(스키마) + 확정 v4.
+
+| 파일 | 하는 일 | 미적용 시 | 확인 |
+| --- | --- | --- | --- |
+| `20261028_hardware_inventory_process.sql` | `hardware_movements` 에 출고 유형·무상 여부·회수 원 출고·CRM 고객·담당/작성 계정·반납 예정일 칸, `hardware_items` 에 물류번호 관리 여부·보고 묶음·정렬 칸을 더하고 정의서 품목 18개를 시드(없는 이름만)한다. 배송 예정 확정 `confirm_hardware_planned_movement_v4`(v3 호출 + 새 칸 복사 + 상태 `설치 완료`). 전부 멱등 | 대시보드는 새 칸 없이 읽는다(폴백). 출고 유형·회수 연결·물류번호 직접 선택 저장이 실패하고, 확정은 v3 로 떨어져 확정 행에 유형·고객·담당이 빠진다 | `npm run check:db` 의 `hardware_movements`·`hardware_items` 프로브, 또는 `select to_regprocedure('public.confirm_hardware_planned_movement_v4(uuid,text,date,int,jsonb,uuid,text)') is not null;` → `true` |
+
 ## 적용 보류 중인 마이그레이션
 
 `check:db`에 걸리지 않는(프로브가 없는) 파일이라도, 아래 파일은 **파일명 순서대로 일괄 적용하지 않는다.**

@@ -3,6 +3,11 @@ import "server-only"
 import { createHash } from "crypto"
 import { revalidateTag, unstable_cache } from "next/cache"
 
+import {
+  resolveOutboundType,
+  type HardwareOutboundType,
+  type HardwareReportGroup,
+} from "@/lib/hardware/inventory-process"
 import { isPromotedProduct } from "@/lib/hardware/product"
 import { normalizedAccountKey } from "@/lib/branch/account-key"
 import {
@@ -41,6 +46,12 @@ export interface HardwareItem {
   source_aliases: string[]
   created_at: string
   updated_at: string
+  // 20261028_hardware_inventory_process.sql — 적용 전 DB 에는 없다(undefined).
+  /** 물류번호로 관리하는 품목인가. 액세서리·터치펜은 false(수량만). 칸이 없으면 true 로 본다. */
+  lot_tracked?: boolean
+  /** 판매대시보드 묶음(board·camera·stand·accessory·pen). */
+  report_group?: HardwareReportGroup | null
+  sort_order?: number | null
 }
 
 export interface HardwareMovement {
@@ -75,6 +86,21 @@ export interface HardwareMovement {
   void_reason: string | null
   converted_from_movement_id: string | null
   converted_to_movement_id: string | null
+  // 20261028_hardware_inventory_process.sql — 적용 전 DB 에는 없다(undefined). 계약: 갭 문서 §7.
+  /** 출고 유형(출고·회수). 시트 행은 비어 있다 — resolveOutboundType 으로 추정한다. */
+  outbound_type?: HardwareOutboundType | null
+  /** 입고 무상 여부. */
+  is_free?: boolean | null
+  /** 회수가 가리키는 원 출고 건. */
+  return_of_movement_id?: string | null
+  /** 출고 클라이언트(CRM customers.id). to_location 에는 표시 이름. */
+  customer_id?: string | null
+  /** 담당자 계정 — 본인 건 판정. */
+  owner_user_id?: string | null
+  /** 기록을 만든 계정. */
+  created_by_user_id?: string | null
+  /** 샘플 반납 예정일(YYYY-MM-DD). */
+  expected_return_at?: string | null
 }
 
 // 대시보드 원장 읽기 컬럼(T5-A, docs/active/supabase-optimization-execution-plan-2026-09-02.md).
@@ -82,6 +108,11 @@ export interface HardwareMovement {
 // select에서 제외한다. raw는 서버 recoverMoneyFromRaw용으로 읽되 응답 직전 { crmLink }로 축소한다.
 export const HARDWARE_MOVEMENT_LEDGER_COLUMNS =
   "id,item_id,product_name,movement_type,quantity,occurred_at,from_location,to_location,owner,status,reference_no,memo,serials,lot_no,unit_price,amount_usd,amount_cny,storage_location,importer,source,raw,created_at,voided_at,converted_from_movement_id,converted_to_movement_id"
+
+// 재고관리 프로세스 칸(20261028_hardware_inventory_process.sql). 마이그레이션 전 DB 에서는 이 칸을 고르면
+// 42703 으로 대시보드 전체가 죽는다 — 읽기는 먼저 이 목록으로 시도하고, 칸이 없으면 위 목록으로 다시 읽는다.
+export const HARDWARE_MOVEMENT_PROCESS_COLUMNS =
+  "outbound_type,is_free,return_of_movement_id,customer_id,owner_user_id,created_by_user_id,expected_return_at"
 
 export type HardwareMovementLedgerRow = Omit<
   HardwareMovement,
@@ -92,13 +123,19 @@ export type HardwareMovementLedgerRow = Omit<
 export type HardwareMovementView = Omit<HardwareMovementLedgerRow, "raw"> & {
   raw: { crmLink: Record<string, unknown> } | null
   planned: boolean
+  /** outbound_type 이 비면 시트 유형·메모로 추정한 값(resolveOutboundType). 출고·회수 외에는 null. */
+  outbound_type_resolved: HardwareOutboundType | null
 }
 
 // 대시보드 응답용 item — 클라이언트 미사용 sku/active/created_at/updated_at 제외.
 export type HardwareItemView = Pick<
   HardwareItem,
   "id" | "name" | "category" | "reorder_point" | "lead_time_days" | "source_aliases"
->
+> & {
+  lot_tracked: boolean
+  report_group: HardwareReportGroup | null
+  sort_order: number | null
+}
 
 export interface CreateHardwareMovementInput {
   itemId?: string
@@ -474,12 +511,37 @@ function isMoneyRecoveredFromRaw(
   )
 }
 
+export function isMissingColumnError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false
+  const { code, message } = error as { code?: unknown; message?: unknown }
+  if (code === "42703" || code === "PGRST204") return true
+  return typeof message === "string" && /column .* does not exist|could not find the .* column/i.test(message)
+}
+
+let processColumnsMissing = false
+
+async function listLedgerRowsWithProcessColumns(): Promise<HardwareMovementLedgerRow[]> {
+  if (!processColumnsMissing) {
+    try {
+      return await listAll<HardwareMovementLedgerRow>(
+        "hardware_movements",
+        `${HARDWARE_MOVEMENT_LEDGER_COLUMNS},${HARDWARE_MOVEMENT_PROCESS_COLUMNS}`
+      )
+    } catch (error) {
+      if (!isMissingColumnError(error)) throw error
+      // 마이그레이션 전 — 이 프로세스에서는 다시 시도하지 않는다(적용 후 재배포·재시작이면 다시 읽는다).
+      processColumnsMissing = true
+    }
+  }
+  return listAll<HardwareMovementLedgerRow>("hardware_movements", HARDWARE_MOVEMENT_LEDGER_COLUMNS)
+}
+
 // 시트 임포트 경로는 listCurrentSheetImportMovements가 따로 전량(select "*")을 읽으므로 무관하다.
 async function listAllHardwareMovements(): Promise<{
   rows: HardwareMovementLedgerRow[]
   moneyRecoveredFromRawCount: number
 }> {
-  const rows = await listAll<HardwareMovementLedgerRow>("hardware_movements", HARDWARE_MOVEMENT_LEDGER_COLUMNS)
+  const rows = await listLedgerRowsWithProcessColumns()
   // recoveredFromRawCount는 병합 전(raw 컬럼 원본) 기준으로 세야 한다 — recoverMoneyFromRaw가
   // 이미 병합한 뒤에는 "컬럼이 비어 있었는지"를 되돌릴 수 없다(값이 있으면 원래 컬럼인지 복구인지
   // 구분 불가).
@@ -2470,7 +2532,13 @@ function extractRawCrmLink(raw: unknown): HardwareMovementView["raw"] {
 
 function toMovementView(movement: HardwareMovementLedgerRow): HardwareMovementView {
   const { raw, ...rest } = movement
-  return { ...rest, raw: extractRawCrmLink(raw), planned: isPlannedStatus(movement.status) }
+  return {
+    ...rest,
+    raw: extractRawCrmLink(raw),
+    planned: isPlannedStatus(movement.status),
+    // 추정에는 시트 원본 행(raw.values)이 필요하다 — raw 를 버리기 전에 서버에서 계산해 싣는다.
+    outbound_type_resolved: resolveOutboundType(movement),
+  }
 }
 
 function toItemView(item: HardwareItem): HardwareItemView {
@@ -2481,6 +2549,9 @@ function toItemView(item: HardwareItem): HardwareItemView {
     reorder_point: item.reorder_point,
     lead_time_days: item.lead_time_days,
     source_aliases: item.source_aliases,
+    lot_tracked: item.lot_tracked ?? true,
+    report_group: item.report_group ?? null,
+    sort_order: item.sort_order ?? null,
   }
 }
 

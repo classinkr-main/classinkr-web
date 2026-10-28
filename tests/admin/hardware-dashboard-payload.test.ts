@@ -148,7 +148,18 @@ describe("getHardwareDashboard payload (T5-A)", () => {
     expect(dashboard.movementsTotal).toBe(dashboard.movements.length)
 
     expect(dashboard.items).toEqual([
-      { id: "item-1", name: "86\" IFP", category: "전자칠판", reorder_point: 2, lead_time_days: 14, source_aliases: ["86 IFP"] },
+      {
+        id: "item-1",
+        name: "86\" IFP",
+        category: "전자칠판",
+        reorder_point: 2,
+        lead_time_days: 14,
+        source_aliases: ["86 IFP"],
+        // 재고관리 프로세스 칸 — 마이그레이션 전 행(칸 없음)은 물류번호 관리 품목·묶음 없음으로 싣는다.
+        lot_tracked: true,
+        report_group: null,
+        sort_order: null,
+      },
     ])
   })
 
@@ -189,11 +200,12 @@ describe("getHardwareDashboard payload (T5-A)", () => {
   })
 
   it("selects explicit ledger columns without the six unread fields", async () => {
-    const { getHardwareDashboard, HARDWARE_MOVEMENT_LEDGER_COLUMNS } = await loadRepository()
+    const { getHardwareDashboard, HARDWARE_MOVEMENT_LEDGER_COLUMNS, HARDWARE_MOVEMENT_PROCESS_COLUMNS } = await loadRepository()
     await getHardwareDashboard()
 
     const columns = selectedColumns.hardware_movements
-    expect(columns).toEqual(HARDWARE_MOVEMENT_LEDGER_COLUMNS.split(","))
+    // 재고관리 프로세스 칸까지 먼저 고른다(마이그레이션 전이면 42703 → 기본 목록으로 다시 읽는다).
+    expect(columns).toEqual([...HARDWARE_MOVEMENT_LEDGER_COLUMNS.split(","), ...HARDWARE_MOVEMENT_PROCESS_COLUMNS.split(",")])
     expect(columns).toContain("id")
     expect(columns).toContain("raw")
     for (const dropped of ["source_table", "source_key", "import_run_id", "created_by", "voided_by", "void_reason"]) {

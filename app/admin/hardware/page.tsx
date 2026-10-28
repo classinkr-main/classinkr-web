@@ -6,13 +6,8 @@ import HardwareInventoryClient, {
 } from "@/components/admin/hardware/HardwareInventoryClient"
 import { getVerifiedAdminContextForPage } from "@/lib/admin/page-auth"
 import { openPrefetchLane } from "@/lib/admin/prefetch-budget"
-import {
-  BRANCH_READ_ADMIN_API_ROLES,
-  HARDWARE_EDITOR_ADMIN_API_ROLES,
-  HARDWARE_FINALIZE_CAPABILITY,
-  hasAdminApiRole,
-  hasAdminCapability,
-} from "@/lib/admin-auth"
+import { BRANCH_READ_ADMIN_API_ROLES, hasAdminApiRole } from "@/lib/admin-auth"
+import { buildHardwareViewer } from "@/lib/hardware/hardware-viewer"
 import { getHardwareDashboard } from "@/lib/repositories/hardware-inventory"
 
 export const dynamic = "force-dynamic"
@@ -40,11 +35,7 @@ async function prefetchHardwareDashboard(): Promise<HardwareDashboardResponse | 
   // 반드시 같은 admin.name 그대로(trim만) 내려야 두 경로 응답이 갈라지지 않는다.
   return {
     ...dashboard,
-    viewer: {
-      canFinalize: hasAdminCapability(admin, HARDWARE_FINALIZE_CAPABILITY),
-      canWrite: hasAdminApiRole(admin.role, HARDWARE_EDITOR_ADMIN_API_ROLES),
-      name: admin.name?.trim() || null,
-    },
+    viewer: buildHardwareViewer(admin),
   }
 }
 

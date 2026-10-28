@@ -20,6 +20,7 @@ import {
 } from "lucide-react"
 
 import type { AdminListPaginationResult } from "@/lib/admin-list-pagination"
+import type { HardwareOutboundType, HardwareReportGroup } from "@/lib/hardware/inventory-process"
 import { fiscalQuarter } from "@/lib/branch/fiscal"
 // 아래 "export { ... } from" 재수출과 별개로, 이 파일 자체(PRODUCT_FILTER_OPTIONS)가 로컬에서
 // 써야 해서 일반 import도 함께 둔다 — re-export만으로는 이 모듈 스코프에 바인딩이 생기지 않는다.
@@ -36,6 +37,10 @@ export interface HardwareItem {
   reorder_point: number
   lead_time_days: number
   source_aliases: string[]
+  // 재고관리 프로세스 칸 — 구응답에는 없다(lot_tracked 없음 = 물류번호 관리 품목으로 본다).
+  lot_tracked?: boolean
+  report_group?: HardwareReportGroup | null
+  sort_order?: number | null
 }
 
 export interface HardwareMovement {
@@ -72,6 +77,17 @@ export interface HardwareMovement {
   void_reason?: string | null
   converted_from_movement_id: string | null
   converted_to_movement_id: string | null
+  // 재고관리 프로세스 칸(20261028_hardware_inventory_process.sql) — 마이그레이션 전 응답에는 없다.
+  // 계약: docs/active/hardware-inventory-process-gap-2026-10-28.md §7.
+  outbound_type?: HardwareOutboundType | null
+  /** 서버가 outbound_type → 시트 유형·메모 순으로 정한 유형(resolveOutboundType). */
+  outbound_type_resolved?: HardwareOutboundType | null
+  is_free?: boolean | null
+  return_of_movement_id?: string | null
+  customer_id?: string | null
+  owner_user_id?: string | null
+  created_by_user_id?: string | null
+  expected_return_at?: string | null
 }
 
 export interface HardwareStockRow {
@@ -152,6 +168,11 @@ export interface HardwareDashboard {
     // 비교하는 정본. 세션에 이름이 없으면(레거시 세션 등) null — 그 경우 "내 담당"은 아무 것도
     // 매칭하지 않는다(담당자 배정된 모든 건을 보여주던 예전 버그로 되돌아가지 않기 위함).
     name: string | null
+    // 입고관리 권한자(hardware.inbound | finalize | 슈퍼 어드민) — 입고·조정, 남의 출고·실현 기록 수정·취소.
+    // 구응답에는 없다(undefined = 서버 게이트만 믿고 열어 둔다). lib/hardware/hardware-viewer.ts 가 정본.
+    canManageInventory?: boolean
+    // 로그인 계정 id — 본인 건 판정(isOwnMovement). 레거시 세션은 null.
+    userId?: string | null
   }
 }
 
