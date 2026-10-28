@@ -724,6 +724,30 @@ aside.notes { display: none; }
 /* ===== 7·8장 우측 상단 IN / OUT 음각 글자 ===== */
 .wm { position: absolute; right: 110px; top: 34px; font-size: 250px; font-weight: 900; line-height: 1; letter-spacing: -.04em; color: var(--bg);
   text-shadow: 8px 8px 18px var(--lo), -8px -8px 18px var(--hi); pointer-events: none; z-index: 0; }
+
+/* ===== 17 피드백 루프 — 끊기는 루프 vs 도는 루프 ===== */
+.lp { position: absolute; top: 345px; width: 520px; height: 520px; }
+.lp-a { left: 200px; } .lp-b { left: 1200px; }
+.lp svg { position: absolute; inset: 0; width: 520px; height: 520px; overflow: visible; }
+.lp .seg { fill: none; stroke: #B9BEC6; stroke-width: 7; stroke-linecap: round; }
+.lp .seg.brk { stroke-dasharray: 34 100; }
+.lp .seg.faint { stroke-dasharray: 2 16; stroke-width: 6; opacity: .8; }
+.lp .full { fill: none; stroke: #B5E22E; stroke-width: 9; }
+.lp-pulse { position: absolute; inset: 0; pointer-events: none; }
+.lp-pulse i { position: absolute; left: 248px; top: 48px; width: 24px; height: 24px; border-radius: 50%; background: #9AA0A8; }
+.lp-b .lp-pulse i { background: #3D7A04; box-shadow: 0 0 0 7px rgba(181, 226, 46, .35); }
+.lpn { position: absolute; width: 196px; height: 78px; margin: -39px 0 0 -98px; box-sizing: border-box; padding: 0 22px; display: flex; align-items: center; gap: 14px; z-index: 2; }
+.lpn b { display: block; font-size: 24px; font-weight: 800; letter-spacing: -.02em; }
+.lpn span { display: block; margin-top: 2px; font-size: 16px; font-weight: 700; color: var(--mute); white-space: nowrap; }
+.lpn .led { width: 13px; height: 13px; }
+.lpn.n1 { left: 260px; top: 60px; } .lpn.n2 { left: 460px; top: 260px; } .lpn.n3 { left: 260px; top: 460px; } .lpn.n4 { left: 60px; top: 260px; }
+.lp-a .lpn.n2, .lp-a .lpn.n3, .lp-a .lpn.n4 { opacity: .62; }
+.brk-tag { position: absolute; left: 410px; top: 400px; padding: 6px 16px; font-size: 17px; font-weight: 800; color: #C46A1E; z-index: 2; }
+.lp-tag { position: absolute; left: 50%; top: -56px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 10px; padding: 9px 22px; font-size: 20px; font-weight: 800; color: var(--ink-2); white-space: nowrap; }
+.lp-b .lp-tag { color: var(--em); }
+.lp-cap { position: absolute; left: -60px; right: -60px; top: 528px; margin: 0; text-align: center; font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
+.lp-cap small { display: block; margin-top: 8px; font-size: 20px; font-weight: 600; color: var(--mute); }
+.lp-arrow { position: absolute; left: 905px; top: 568px; width: 110px; text-align: center; font-size: 64px; font-weight: 300; color: var(--mute); }
 </style>
 </head>
 <body>
@@ -1031,20 +1055,21 @@ aside.notes { display: none; }
 </section>
 
 <!-- 13 피드백 루프 -->
-<section class="slide s13" data-scene="light" data-enter="loop" data-time="0:45">
+<section class="slide s13" data-scene="light" data-enter="loop" data-steps="1" data-time="0:45">
   <span class="eyebrow nm in pill r"><i class="led"></i>3막 · 교실이 보이면</span>
   <h2 class="h t">성장은 <span class="em">피드백 루프</span>에서 나옵니다</h2>
-  <div class="orb-out nm in circle r" data-o="1"></div>
-  <div class="orb-in nm sm circle r" data-o="2"></div>
-  <div class="window fog r" data-o="2"></div>
-  <div class="orb-pulse"><i class="led"></i></div>
-  <div class="node n1 nm sm pill r" data-o="4"><i class="led off"></i><div><b>수업</b></div></div>
-  <div class="node n2 nm sm pill r" data-o="5"><i class="led off"></i><div><b>기록</b><span>수업 녹화</span></div></div>
-  <div class="node n3 nm sm pill r" data-o="6"><i class="led off"></i><div><b>피드백</b><span>AI 강의평가</span></div></div>
-  <div class="node n4 nm sm pill r" data-o="7"><i class="led off"></i><div><b>개선</b><span>원장님과의 면담</span></div></div>
-  <div class="side past nm in card r" data-o="3"><div class="k"><i class="led off"></i>지금까지</div><div class="tx">참관할 때만<br>가끔 도는 루프</div><div class="ss">한 학기에 몇 번</div></div>
-  <div class="side now nm card r" data-o="8"><div class="k"><i class="led"></i>이제</div><div class="tx">녹화된 <span class="em">모든 수업</span>에서<br>도는 루프</div><div class="ss">녹화도 분석도 자동 —<br>강사 일을 늘리지 않습니다</div></div>
-  <aside class="notes">교실 창이 맑아지는 장면. 15·16장의 세 가지가 인프라에 모이면 이 루프가 매 수업 돕니다. 수업 → 기록 → 피드백 → 개선. 클래스인에서는 녹화가 기록을, AI 강의평가가 피드백을, 원장님의 면담이 개선을 맡습니다. 이 루프가 가끔이 아니라 매 수업 돌 수 있다면 강사는 훨씬 빨리 성장합니다. 녹화도 분석도 자동이라 강사 일을 늘리지 않습니다 — 10장에서 본 '부가 업무 과다 23.7%'를 되받습니다. → "정말 효과가 있을까요?"</aside>
+  <div class="lp lp-a r" data-at=".5">
+    <span class="lp-tag nm in pill"><i class="led off"></i>지금까지</span>
+    <svg viewBox="0 0 520 520"><path class="seg" d="M260 60 A200 200 0 0 1 460 260"/><path class="seg brk" pathLength="100" d="M460 260 A200 200 0 0 1 260 460"/><path class="seg faint" d="M260 460 A200 200 0 0 1 60 260"/><path class="seg faint" d="M60 260 A200 200 0 0 1 260 60"/></svg><div class="lp-pulse"><i></i></div><span class="brk-tag nm in pill">끊김</span><div class="lpn n1 nm sm pill"><i class="led off"></i><div><b>수업</b></div></div><div class="lpn n2 nm sm pill"><i class="led off"></i><div><b>기록</b><span>참관할 때만</span></div></div><div class="lpn n3 nm sm pill"><i class="led off"></i><div><b>피드백</b><span>전해 들은 말</span></div></div><div class="lpn n4 nm sm pill"><i class="led off"></i><div><b>개선</b><span>다음 학기에?</span></div></div>
+    <p class="lp-cap">참관할 때만 가끔 도는 루프<small>한 학기에 몇 번, 중간에 끊깁니다</small></p>
+  </div>
+  <div class="lp-arrow r" data-at=".9">→</div>
+  <div class="lp lp-b step" data-step="1">
+    <span class="lp-tag nm pill"><i class="led"></i>이제</span>
+    <svg viewBox="0 0 520 520"><circle class="full" cx="260" cy="260" r="200"/></svg><div class="lp-pulse"><i></i></div><div class="lpn n1 nm sm pill"><i class="led"></i><div><b>수업</b></div></div><div class="lpn n2 nm sm pill"><i class="led"></i><div><b>기록</b><span>수업 녹화</span></div></div><div class="lpn n3 nm sm pill"><i class="led"></i><div><b>피드백</b><span>AI 강의평가</span></div></div><div class="lpn n4 nm sm pill"><i class="led"></i><div><b>개선</b><span>원장님 면담</span></div></div>
+    <p class="lp-cap"><span class="em">모든 수업</span>에서 도는 루프<small>녹화도 분석도 자동 — 강사 일을 늘리지 않습니다</small></p>
+  </div>
+  <aside class="notes">15·16장의 세 가지가 인프라에 모이면 이 루프가 매 수업 돕니다. 수업 → 기록 → 피드백 → 개선. 왼쪽(지금까지): 참관할 때만 기록이 생기고, 피드백은 전해 들은 말, 개선은 "다음 학기에"로 미뤄집니다 — 루프가 돌다가 끊깁니다. 클릭: 오른쪽(이제) — 클래스인에서는 녹화가 기록을, AI 강의평가가 피드백을, 원장님의 면담이 개선을 맡아 루프가 매 수업 끊김 없이 돕니다. 녹화도 분석도 자동이라 강사 일을 늘리지 않습니다 — 10장에서 본 '부가 업무 과다 23.7%'를 되받습니다. → "정말 효과가 있을까요?"</aside>
 </section>
 
 <!-- 14 연구 근거 -->
@@ -1795,23 +1820,18 @@ aside.notes { display: none; }
     },
 
     loop: function (slide, tl, s) {
-      var w = $('.window', slide), pulse = $('.orb-pulse', slide), nodes = $$('.node .led', slide);
-      setWindow(w, 'fog');
-      nodes.forEach(function (n) { n.classList.add('off'); });
-      gsap.set(pulse, { autoAlpha: 0, rotation: 0 });
-      tl.to(w, { '--blur': '0px', '--frost': 0, duration: 1.8, ease: 'power2.inOut' }, s + 1.0);
-      tl.call(function () { w.classList.remove('fog'); w.classList.add('clear'); }, null, s + 1.9);
-      tl.to(w, { '--glow': 1, duration: .9, ease: 'power2.out' }, s + 2.2);
-      tl.to(pulse, { autoAlpha: 1, duration: .5 }, s + 2.4);
-      windowLoops(w);
-      function on(k) { nodes[k].classList.remove('off'); }
-      function off(k) { nodes[k].classList.add('off'); }
+      // 왼쪽 루프는 돌다가 끊긴 지점에서 사라지고, 오른쪽 루프는 끊김 없이 계속 돈다
+      var pa = $('.lp-a .lp-pulse', slide), pb = $('.lp-b .lp-pulse', slide);
+      gsap.set([pa, pb], { rotation: 0, transformOrigin: '50% 50%' });
+      gsap.set($('i', pa), { opacity: 0 });
       tl.call(function () {
-        var t = gsap.timeline({ repeat: -1 });
-        t.to(pulse, { rotation: 360, duration: 6, ease: 'none' }, 0);
-        [0, 1.5, 3, 4.5].forEach(function (at, k) { t.call(on, [k], at); t.call(off, [k], at + 1.1); });
-        loop(t);
-      }, null, s + 2.4);
+        loop(gsap.timeline({ repeat: -1, repeatDelay: .9 })
+          .set($('i', pa), { opacity: 1 })
+          .fromTo(pa, { rotation: 0 }, { rotation: 118, duration: 2.0, ease: 'power1.inOut' })
+          .to($('i', pa), { opacity: 0, scale: .4, duration: .45, ease: 'power2.in' }, '-=.25')
+          .set($('i', pa), { scale: 1 }));
+        loop(gsap.to(pb, { rotation: 360, duration: 4.2, ease: 'none', repeat: -1 }));
+      }, null, s + 1.2);
     },
 
     research: function (slide, tl, s) {
