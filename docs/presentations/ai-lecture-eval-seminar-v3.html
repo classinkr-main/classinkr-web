@@ -1074,7 +1074,7 @@ aside.notes { display: none; }
         fromTo: function (t, a, b) { apply(t, b); return o; },
         set: function (t, v) { apply(t, v); return o; },
         call: function (f, args) { f.apply(null, args || []); return o; },
-        kill: function () {}, progress: function () { return o; }, play: function () { return o; }
+        kill: function () {}, progress: function () { return o; }, play: function () { return o; }, timeScale: function () { return o; }
       };
       return o;
     }
