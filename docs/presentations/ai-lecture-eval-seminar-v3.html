@@ -73,8 +73,8 @@ aside.notes { display: none; }
 
 .led {
   display: inline-block; flex: none; width: 16px; height: 16px; border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #F7FFD0 0, #BEEB34 45%, #7FB30E 100%);
-  box-shadow: 0 0 10px rgba(184, 232, 44, .9), 0 0 30px rgba(184, 232, 44, .45);
+  background: #B5E22E;
+  box-shadow: none;
 }
 .led.off { background: var(--bg); box-shadow: var(--sh-i-s); }
 
@@ -83,8 +83,8 @@ aside.notes { display: none; }
 .em { color: var(--em); }
 /* 제목 강조어에는 연두 형광펜이 그어진다 */
 .h .em { background: linear-gradient(transparent 62%, rgba(184, 232, 44, .72) 62%) no-repeat 0 0 / var(--hlw, 100%) 100%; padding: 0 .04em; }
-.dark .h .em { background-image: linear-gradient(transparent 62%, rgba(184, 232, 44, .26) 62%); text-shadow: 0 0 24px rgba(184, 232, 44, .45); }
-.dark .em { text-shadow: 0 0 22px rgba(184, 232, 44, .4); }
+.dark .h .em { background-image: linear-gradient(transparent 62%, rgba(184, 232, 44, .26) 62%); }
+.dark .em { }
 .lead { font-size: 32px; font-weight: 500; line-height: 1.55; color: var(--ink-2); margin: 0; letter-spacing: -.02em; }
 .num { font-weight: 800; letter-spacing: -.045em; font-variant-numeric: tabular-nums; line-height: 1; }
 .serif { font-family: 'Hahmlet', 'Pretendard', serif; }
@@ -121,13 +121,13 @@ aside.notes { display: none; }
 }
 .dark .window .w-frost { background: radial-gradient(circle at 35% 30%, rgba(70, 74, 80, .75), rgba(37, 39, 43, .92) 65%); }
 .window .w-glow { position: absolute; inset: 11.5%; border-radius: 50%; opacity: var(--glow); pointer-events: none;
-  box-shadow: 0 0 0 4px rgba(184, 232, 44, .95), 0 0 46px rgba(184, 232, 44, .6), inset 0 0 40px rgba(184, 232, 44, .25); }
+  box-shadow: 0, inset; }
 .window .w-orbit { position: absolute; inset: 0; border-radius: 50%; }
 .window .w-orbit .led { position: absolute; left: 50%; top: 8.75%; width: 18px; height: 18px; margin: -9px 0 0 -9px; transition: opacity .6s; }
 .window.fog .w-orbit .led { opacity: .3; }
 .window .w-st.hot, .window .w-teacher { transition: background .8s; }
-.window.clear .w-st.hot { background: radial-gradient(circle at 35% 30%, #F7FFD0 0, #BEEB34 45%, #7FB30E 100%); }
-.window.clear .w-teacher { background: linear-gradient(180deg, #E8FF94, #A6D81E); }
+.window.clear .w-st.hot { background: #B5E22E; }
+.window.clear .w-teacher { background: #B5E22E; }
 
 /* ===== 공통 막대 ===== */
 .track { position: relative; height: 34px; border-radius: 999px; }
@@ -136,9 +136,9 @@ aside.notes { display: none; }
   background: linear-gradient(180deg, #F0F2F5, #CDD1D7); box-shadow: 3px 3px 8px var(--lo), -2px -2px 6px var(--hi);
   transform-origin: left center;
 }
-.track .fill.lime { background: linear-gradient(180deg, #E8FF94, #A6D81E); box-shadow: 0 0 18px rgba(184, 232, 44, .65), 3px 3px 8px var(--lo); }
+.track .fill.lime { background: #B5E22E; box-shadow: none; }
 .dark .track .fill { background: linear-gradient(180deg, #4A4E54, #34373C); }
-.dark .track .fill.lime { background: linear-gradient(180deg, #E8FF94, #A6D81E); }
+.dark .track .fill.lime { background: #B5E22E; }
 .track .sheen { position: absolute; inset: 6px; border-radius: 999px; overflow: hidden; pointer-events: none; }
 .track .sheen i { position: absolute; top: 0; bottom: 0; width: 120px; left: -140px;
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .75), transparent); }
@@ -150,7 +150,7 @@ aside.notes { display: none; }
 #counter { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: .04em; }
 #ptrack { width: 220px; height: 12px; border-radius: 999px; }
 #pfill { position: absolute; left: 3px; top: 3px; bottom: 3px; width: 0; border-radius: 999px;
-  background: linear-gradient(90deg, #A6D81E, #DDF78B); box-shadow: 0 0 10px rgba(184, 232, 44, .7); transition: width .6s cubic-bezier(.2, .8, .2, 1); }
+  background: #B5E22E; box-shadow: none; transition: width .6s cubic-bezier(.2, .8, .2, 1); }
 #help { position: absolute; left: 50%; bottom: 46px; transform: translateX(-50%); z-index: 6; padding: 12px 26px;
   font-size: 18px; color: var(--mute); transition: opacity .8s; }
 
@@ -185,7 +185,7 @@ aside.notes { display: none; }
 .key.on { color: var(--ink); }
 .key.acad { align-items: center; justify-content: center; gap: 2px; color: var(--ink-2); }
 .key.acad b { font-size: 32px; font-weight: 800; }
-.key.acad .qq { font-size: 72px; font-weight: 800; line-height: 1; color: var(--em); text-shadow: 0 0 24px rgba(184, 232, 44, .55); }
+.key.acad .qq { font-size: 72px; font-weight: 800; line-height: 1; color: var(--em); }
 
 /* ===== 2 AI는 공기처럼 ===== */
 .chips { position: absolute; left: 0; right: 0; top: 285px; height: 250px; }
@@ -203,7 +203,7 @@ aside.notes { display: none; }
 /* ===== 어두운 장면 공통 ===== */
 .dust { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 .dust i { position: absolute; border-radius: 50%; background: rgba(255, 255, 255, .22); }
-.dust i.g { background: #BEEB34; box-shadow: 0 0 10px rgba(184, 232, 44, .8); }
+.dust i.g { background: #BEEB34; box-shadow: none; }
 .center-col { position: absolute; left: 0; right: 0; text-align: center; }
 
 /* ===== 3 반전 질문 ===== */
@@ -220,7 +220,7 @@ aside.notes { display: none; }
 .bcol .bv { font-size: 40px; font-weight: 800; letter-spacing: -.03em; }
 .bcol .bv small { font-size: 24px; margin-left: 2px; }
 .bcol .bar { width: 150px; height: calc(var(--h) * 2.5px); border-radius: 26px 26px 14px 14px; transform-origin: bottom center; }
-.bcol .bar.lime { background: linear-gradient(180deg, #E8FF94, #A6D81E); box-shadow: 0 0 26px rgba(184, 232, 44, .55); }
+.bcol .bar.lime { background: #B5E22E; box-shadow: none; }
 .bcol .by { font-size: 21px; font-weight: 700; color: var(--mute); }
 .mk-side { position: absolute; left: 1060px; top: 300px; width: 740px; display: flex; flex-direction: column; gap: 30px; }
 .mk-row { height: 166px; border-radius: 34px; display: flex; align-items: center; gap: 32px; padding: 0 36px; box-sizing: border-box; }
@@ -269,9 +269,9 @@ aside.notes { display: none; }
 .s6 .badge { position: absolute; right: 120px; top: 168px; }
 .tl { position: absolute; left: 120px; right: 120px; top: 360px; height: 110px; border-radius: 999px; }
 .tl .lane { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; }
-.tl .sd { position: absolute; top: 33px; left: 0; width: 44px; height: 44px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #F7FFD0 0, #BEEB34 45%, #7FB30E 100%); }
-.tl .sd::before { box-shadow: 0 0 12px rgba(184, 232, 44, .8), 4px 4px 10px var(--lo); }
-.leaver { position: absolute; top: 393px; width: 44px; height: 44px; margin-left: -22px; border-radius: 50%; visibility: hidden; background: radial-gradient(circle at 35% 30%, #F7FFD0 0, #BEEB34 45%, #7FB30E 100%); }
+.tl .sd { position: absolute; top: 33px; left: 0; width: 44px; height: 44px; border-radius: 50%; background: #B5E22E; }
+.tl .sd::before { box-shadow: none; }
+.leaver { position: absolute; top: 393px; width: 44px; height: 44px; margin-left: -22px; border-radius: 50%; visibility: hidden; background: #B5E22E; }
 .leaver b { position: absolute; inset: 0; border-radius: 50%; background: #17181B; opacity: 0; }
 .tl .tick { position: absolute; top: -26px; width: 2px; height: 162px; margin-left: -1px; background: repeating-linear-gradient(180deg, var(--line) 0 8px, transparent 8px 14px); }
 .mkc { position: absolute; top: 530px; width: 470px; height: 150px; margin-left: -235px; padding: 0 34px; box-sizing: border-box; display: flex; align-items: center; gap: 22px; }
@@ -293,8 +293,8 @@ aside.notes { display: none; }
 /* ===== 7 · 19 원생 점 ===== */
 .dots-panel { position: absolute; left: 120px; top: 320px; width: 820px; height: 600px; padding: 54px; box-sizing: border-box; border-radius: 44px; }
 .dgrid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 22px 0; justify-items: center; }
-.dot { position: relative; width: 50px; height: 50px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #F7FFD0 0, #BEEB34 45%, #7FB30E 100%); }
-.dot::before { box-shadow: 0 0 12px rgba(184, 232, 44, .85), 0 0 28px rgba(184, 232, 44, .35), 5px 5px 12px var(--lo); }
+.dot { position: relative; width: 50px; height: 50px; border-radius: 50%; background: #B5E22E; }
+.dot::before { box-shadow: none; }
 .dot b { position: absolute; inset: 0; border-radius: 50%; background: #17181B; opacity: 0; }
 .s7-r { position: absolute; left: 1030px; top: 320px; width: 770px; }
 .cwell { height: 200px; border-radius: 40px; display: flex; align-items: center; justify-content: space-between; padding: 0 48px; }
@@ -304,7 +304,7 @@ aside.notes { display: none; }
 .s7-r .lead { margin-top: 44px; }
 .s7-r .lead b { color: var(--ink); }
 .owe { margin-top: 52px; height: 118px; display: flex; align-items: center; gap: 26px; padding: 0 44px; font-size: 34px; font-weight: 800; }
-.owe .q { margin-left: auto; font-size: 72px; color: var(--em); text-shadow: 0 0 22px rgba(184, 232, 44, .55); }
+.owe .q { margin-left: auto; font-size: 72px; color: var(--em); }
 
 /* ===== 8 강사도 떠나고 싶지 않았다 ===== */
 .s8-left { position: absolute; left: 660px; top: 285px; width: 600px; text-align: center; }
@@ -407,8 +407,16 @@ aside.notes { display: none; }
 .qfinal .em { margin-left: 6px; }
 .nb { position: absolute; left: 1230px; top: 250px; width: 570px; height: 660px; padding: 54px 56px; box-sizing: border-box; border-radius: 44px; }
 .nb .hd { display: flex; align-items: center; gap: 14px; font-size: 24px; font-weight: 800; color: var(--ink-2); }
-.nb svg { margin-top: 30px; }
-.nb text { font-family: 'Pretendard', sans-serif; font-weight: 700; }
+.nb .hd .meta { margin-left: auto; font-size: 18px; font-weight: 700; color: var(--mute); }
+.obs { list-style: none; margin: 30px 0 0; padding: 0; }
+.obs li { position: relative; display: flex; align-items: baseline; gap: 16px; padding: 17px 0 17px; border-bottom: 2px solid var(--line); }
+.obs .tm { flex: none; width: 58px; font-size: 18px; font-weight: 800; color: var(--mute); font-variant-numeric: tabular-nums; }
+.obs .tx { flex: 1; font-size: 21px; font-weight: 700; line-height: 1.4; color: var(--ink); letter-spacing: -.02em; }
+.obs .mk { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 17px; font-weight: 900; color: #fff; align-self: center; }
+.obs .mk.ok { background: #8CC21A; }
+.obs .mk.ng { background: #D9822B; }
+.nb .nx { margin-top: 26px; padding: 18px 22px; border-radius: 20px; background: rgba(184, 232, 44, .2); font-size: 21px; font-weight: 700; color: var(--ink); }
+.nb .nx b { display: block; margin-bottom: 4px; font-size: 17px; font-weight: 800; color: var(--em); }
 
 /* ===== 13 피드백 루프 ===== */
 .orb-out { position: absolute; left: 660px; top: 320px; width: 600px; height: 600px; border-radius: 50%; }
@@ -436,7 +444,7 @@ aside.notes { display: none; }
 .rc .bx { position: absolute; left: 50px; bottom: 50px; width: 300px; height: 340px; border-radius: 30px; display: flex; align-items: flex-end; justify-content: space-around; padding: 0 20px 22px; box-sizing: border-box; }
 .rc .bx .col { display: flex; flex-direction: column; align-items: center; gap: 12px; }
 .rc .bx .bar { width: 92px; height: calc(var(--h) * 2.1px); border-radius: 22px 22px 12px 12px; transform-origin: bottom; }
-.rc .bx .bar.lime { background: linear-gradient(180deg, #E8FF94, #A6D81E); box-shadow: 0 0 22px rgba(184, 232, 44, .55); }
+.rc .bx .bar.lime { background: #B5E22E; box-shadow: none; }
 .rc .bx .bl { font-size: 18px; font-weight: 700; color: var(--mute); }
 .rc .res { position: absolute; left: 400px; right: 50px; bottom: 60px; }
 .rc .res .num { font-size: 150px; color: var(--em); }
@@ -464,7 +472,7 @@ aside.notes { display: none; }
 .seg .lb.sel { color: var(--ink); }
 .knobs { margin-top: 40px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; text-align: center; }
 .kn .dial { position: relative; width: 136px; height: 136px; margin: 0 auto; border-radius: 50%; }
-.kn .dial .ind { position: absolute; left: 50%; top: 14px; width: 8px; height: 40px; margin-left: -4px; border-radius: 4px; background: linear-gradient(180deg, #E8FF94, #A6D81E); box-shadow: 0 0 12px rgba(184, 232, 44, .8); transform-origin: 4px 54px; }
+.kn .dial .ind { position: absolute; left: 50%; top: 14px; width: 8px; height: 40px; margin-left: -4px; border-radius: 4px; background: #B5E22E; box-shadow: none; transform-origin: 4px 54px; }
 .kn .dial .cap { position: absolute; inset: 40px; border-radius: 50%; }
 .kn .l { margin-top: 18px; font-size: 21px; font-weight: 800; color: var(--ink-2); }
 .kn .v { margin-top: 4px; font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -491,7 +499,7 @@ aside.notes { display: none; }
 .demo-disc svg { position: absolute; inset: 0; }
 .demo-disc text { font-family: 'Pretendard', sans-serif; font-weight: 800; letter-spacing: 6px; }
 .play { position: absolute; left: 190px; top: 190px; width: 220px; height: 220px; border-radius: 50%; display: grid; place-items: center; }
-.play i { width: 0; height: 0; margin-left: 14px; border-style: solid; border-width: 40px 0 40px 66px; border-color: transparent transparent transparent #BEEB34; filter: drop-shadow(0 0 16px rgba(184, 232, 44, .8)); }
+.play i { width: 0; height: 0; margin-left: 14px; border-style: solid; border-width: 40px 0 40px 66px; border-color: transparent transparent transparent #BEEB34; filter: drop-shadow(); }
 .s17 .h { left: 880px; width: 920px; }
 .demo-list { position: absolute; left: 880px; top: 290px; width: 920px; display: flex; flex-direction: column; gap: 20px; }
 .dl { height: 116px; display: flex; align-items: center; gap: 28px; padding: 0 34px; box-sizing: border-box; }
@@ -520,7 +528,7 @@ aside.notes { display: none; }
 .assume { position: absolute; left: 930px; top: 878px; width: 870px; margin: 0; font-size: 18px; font-weight: 600; line-height: 1.5; color: var(--mute); }
 .coins { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
 .coin { position: absolute; left: 0; top: 0; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; visibility: hidden;
-  background: radial-gradient(circle at 35% 30%, #F7FFD0 0, #BEEB34 45%, #7FB30E 100%); box-shadow: 0 0 14px rgba(184, 232, 44, .9); }
+  background: #B5E22E; box-shadow: none; }
 
 /* ===== 20 막을 수 있는 이탈 ===== */
 .gc { position: absolute; top: 300px; width: 810px; height: 330px; padding: 40px 44px; box-sizing: border-box; display: flex; align-items: center; gap: 40px; }
@@ -581,7 +589,7 @@ aside.notes { display: none; }
 .plan { position: absolute; left: 740px; top: 300px; width: 1060px; }
 .groove { position: relative; height: 34px; border-radius: 999px; }
 .groove .gf { position: absolute; left: 6px; top: 6px; bottom: 6px; width: calc(100% - 12px); border-radius: 999px; transform-origin: left; transform: scaleX(0);
-  background: linear-gradient(90deg, #A6D81E, #E2F99A); box-shadow: 0 0 18px rgba(184, 232, 44, .7); }
+  background: #B5E22E; box-shadow: none; }
 .groove .gs { position: absolute; inset: 6px; border-radius: 999px; overflow: hidden; }
 .groove .gs i { position: absolute; top: 0; bottom: 0; width: 160px; left: -180px; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .85), transparent); }
 .mile { position: absolute; top: -23px; width: 80px; height: 80px; margin-left: -40px; border-radius: 50%; display: grid; place-items: center; }
@@ -607,8 +615,8 @@ aside.notes { display: none; }
 .s22 .fin > span { display: block; }
 .band { position: absolute; left: 166px; top: 812px; width: 1588px; display: grid; grid-template-columns: repeat(35, 24px); gap: 22px; }
 .band i { width: 24px; height: 24px; border-radius: 50%; }
-.band i.lit { background: radial-gradient(circle at 35% 30%, #F7FFD0 0, #BEEB34 45%, #7FB30E 100%); }
-.band i.lit::before { box-shadow: 0 0 12px rgba(184, 232, 44, .85), 0 0 26px rgba(184, 232, 44, .4); }
+.band i.lit { background: #B5E22E; }
+.band i.lit::before { box-shadow: none; }
 .band i.lit { --rise: 1; --dip: 0; }
 
 /* ===== 23 Q&A ===== */
@@ -778,7 +786,7 @@ aside.notes { display: none; }
   <h2 class="h t">강사도, <span class="em">떠나고 싶지 않았습니다</span></h2>
   <div class="s8-left">
     <div class="heart nm r">
-      <svg viewBox="0 0 500 500"><circle cx="250" cy="250" r="214" fill="none" stroke="var(--track)" stroke-width="26"/><circle class="arc" cx="250" cy="250" r="214" fill="none" stroke="#A6D81E" stroke-width="26" stroke-linecap="round" transform="rotate(-90 250 250)" pathLength="100" stroke-dasharray="0 100" style="filter:drop-shadow(0 0 10px rgba(184,232,44,.7))"/></svg>
+      <svg viewBox="0 0 500 500"><circle cx="250" cy="250" r="214" fill="none" stroke="var(--track)" stroke-width="26"/><circle class="arc" cx="250" cy="250" r="214" fill="none" stroke="#A6D81E" stroke-width="26" stroke-linecap="round" transform="rotate(-90 250 250)" pathLength="100" stroke-dasharray="0 100" style="filter:drop-shadow()"/></svg>
       <div class="in nm in"><div class="num"><span class="roll" data-v="65.0"></span><small>%</small></div><div class="c2">정든 학생들과<br>헤어지는 것</div></div>
     </div>
     <div class="c1 t">이직할 때 가장 힘든 점 1위</div>
@@ -804,7 +812,7 @@ aside.notes { display: none; }
   <span class="eyebrow nm in pill r"><i class="led"></i>1막 · 두 개의 이탈</span>
   <h2 class="h t">팀 몰입도 차이의 <span class="em">70%</span>는 관리자에게서 나옵니다</h2>
   <div class="g-disc nm r">
-    <svg viewBox="0 0 560 560"><circle cx="280" cy="280" r="226" fill="none" stroke="var(--track)" stroke-width="30"/><circle class="arc" cx="280" cy="280" r="226" fill="none" stroke="#A6D81E" stroke-width="30" stroke-linecap="round" transform="rotate(-90 280 280)" pathLength="100" stroke-dasharray="0 100" style="filter:drop-shadow(0 0 12px rgba(184,232,44,.7))"/><circle class="glint" cx="280" cy="54" r="9" fill="#fff" opacity=".0"/></svg>
+    <svg viewBox="0 0 560 560"><circle cx="280" cy="280" r="226" fill="none" stroke="var(--track)" stroke-width="30"/><circle class="arc" cx="280" cy="280" r="226" fill="none" stroke="#A6D81E" stroke-width="30" stroke-linecap="round" transform="rotate(-90 280 280)" pathLength="100" stroke-dasharray="0 100" style="filter:drop-shadow()"/><circle class="glint" cx="280" cy="54" r="9" fill="#fff" opacity=".0"/></svg>
     <div class="c"><div class="num"><span class="roll" data-v="70"></span><small>%</small></div><div class="k">팀 몰입도 차이 중</div></div>
   </div>
   <div class="g-text">
@@ -875,24 +883,18 @@ aside.notes { display: none; }
   <p class="lead t">외과의사 아툴 가완디는 은퇴한 스승을 수술실에 불러 자신의 수술을 지켜보게 했습니다. 스승은 팔꿈치 각도와 서는 위치까지 적은 노트를 건넸습니다.</p>
   <p class="cite t">Atul Gawande · 「Personal Best」, The New Yorker (2011)</p>
   <div class="nb nm r" data-o="3">
-    <div class="hd"><i class="led off"></i>관찰 노트</div>
-    <svg width="458" height="480" viewBox="0 0 458 480">
-      <g fill="none" stroke="var(--line)" stroke-width="2"><path d="M0 70H458M0 160H458M0 250H458M0 340H458M0 430H458"/></g>
-      <g class="ink" fill="none" stroke="var(--ink-2)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
-        <path pathLength="1" d="M10 50c40-14 70 10 110-4s56-8 86 2"/>
-        <path pathLength="1" d="M10 140c30-10 64 8 100-2s52-10 90 0"/>
-        <path pathLength="1" d="M10 230c44-12 80 10 120-2s56-6 96 2 70 8 120-4 60-6 90 2"/>
-        <path pathLength="1" d="M10 320c36-10 60 8 96-2s48-8 84 0 54 6 90-2"/>
-      </g>
-      <g class="chk" fill="none" stroke="#8CC21A" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
-        <path pathLength="1" d="M390 40l16 16 30-34"/><path pathLength="1" d="M390 130l16 16 30-34"/>
-      </g>
-      <text x="250" y="58" font-size="26" fill="var(--mute)">팔꿈치 각도</text>
-      <text x="250" y="148" font-size="26" fill="var(--mute)">서는 위치</text>
-    </svg>
+    <div class="hd"><i class="led off"></i>수업 관찰 노트<span class="meta">중2 수학 · 일차함수 · 50분</span></div>
+    <ul class="obs">
+      <li><span class="tm">00:03</span><span class="tx">지난 시간 오답 2문제로 시작</span><i class="mk ok">✓</i></li>
+      <li><span class="tm">00:12</span><span class="tx">개념 설명 18분 — 판서는 단계별로 깔끔</span><i class="mk ok">✓</i></li>
+      <li><span class="tm">00:24</span><span class="tx">질문 7번 중 5번이 앞줄 학생에게</span><i class="mk ng">!</i></li>
+      <li><span class="tm">00:31</span><span class="tx">"이해됐지?" 뒤 대기 시간 1초 남짓</span><i class="mk ng">!</i></li>
+      <li><span class="tm">00:47</span><span class="tx">숙제 안내가 종료 직전에 몰림</span><i class="mk ng">!</i></li>
+    </ul>
+    <div class="nx"><b>다음 수업 하나만</b>질문을 뒷줄부터 고르게 나누기</div>
   </div>
   <div class="qfinal nm pill step" data-step="1"><i class="led"></i>강사에게도 코치가 필요합니다.<span class="em">매 수업 옆에 둘 수 없을 뿐.</span></div>
-  <aside class="notes">최고의 전문가도 관찰과 피드백으로 성장합니다. 가완디는 실력이 정체됐다고 느끼고 은퇴한 스승을 수술실에 불렀습니다. 클릭: "강사에게도 코치가 필요합니다. 문제는 원장님이 모든 수업 옆에 앉아 있을 수 없다는 것." → "여기서 클래스인이 들어옵니다."</aside>
+  <aside class="notes">최고의 전문가도 관찰과 피드백으로 성장합니다. 가완디는 실력이 정체됐다고 느끼고 은퇴한 스승을 수술실에 불렀습니다. 오른쪽은 학원 수업에 옮긴 관찰 노트 예시입니다 — 잘한 것(✓)과 고칠 것(!)이 시각과 함께 적히고, 마지막에 "다음 수업 하나만"이 남습니다. 17장 면담의 '질문 분배'와 같은 내용입니다. 클릭: "강사에게도 코치가 필요합니다. 문제는 원장님이 모든 수업 옆에 앉아 있을 수 없다는 것." → "여기서 클래스인이 들어옵니다."</aside>
 </section>
 
 <!-- 13 피드백 루프 -->
@@ -1031,11 +1033,11 @@ aside.notes { display: none; }
   <span class="eyebrow nm in pill r"><i class="led"></i>4막 · 결국, 이득입니다</span>
   <h2 class="h t">그리고 그 이탈의 절반은, <span class="em">막을 수 있었습니다</span></h2>
   <div class="gc a nm card r">
-    <div class="ring"><svg viewBox="0 0 240 240"><circle cx="120" cy="120" r="98" fill="none" stroke="var(--track)" stroke-width="22"/><circle class="arc" data-p="52" cx="120" cy="120" r="98" fill="none" stroke="#A6D81E" stroke-width="22" stroke-linecap="round" transform="rotate(-90 120 120)" pathLength="100" stroke-dasharray="0 100" style="filter:drop-shadow(0 0 8px rgba(184,232,44,.7))"/></svg><div class="c"><div class="num"><span class="roll" data-v="52"></span><small>%</small></div></div></div>
+    <div class="ring"><svg viewBox="0 0 240 240"><circle cx="120" cy="120" r="98" fill="none" stroke="var(--track)" stroke-width="22"/><circle class="arc" data-p="52" cx="120" cy="120" r="98" fill="none" stroke="#A6D81E" stroke-width="22" stroke-linecap="round" transform="rotate(-90 120 120)" pathLength="100" stroke-dasharray="0 100" style="filter:drop-shadow()"/></svg><div class="c"><div class="num"><span class="roll" data-v="52"></span><small>%</small></div></div></div>
     <div class="tx">스스로 떠난 직원의 52%는<br><b>“관리자나 회사가 막을 수 있었다”</b>고 답했습니다</div>
   </div>
   <div class="gc b nm card r">
-    <div class="ring"><svg viewBox="0 0 240 240"><circle cx="120" cy="120" r="98" fill="none" stroke="var(--track)" stroke-width="22"/><circle class="arc" data-p="51" cx="120" cy="120" r="98" fill="none" stroke="#A6D81E" stroke-width="22" stroke-linecap="round" transform="rotate(-90 120 120)" pathLength="100" stroke-dasharray="0 100" style="filter:drop-shadow(0 0 8px rgba(184,232,44,.7))"/></svg><div class="c"><div class="num"><span class="roll" data-v="51"></span><small>%</small></div></div></div>
+    <div class="ring"><svg viewBox="0 0 240 240"><circle cx="120" cy="120" r="98" fill="none" stroke="var(--track)" stroke-width="22"/><circle class="arc" data-p="51" cx="120" cy="120" r="98" fill="none" stroke="#A6D81E" stroke-width="22" stroke-linecap="round" transform="rotate(-90 120 120)" pathLength="100" stroke-dasharray="0 100" style="filter:drop-shadow()"/></svg><div class="c"><div class="num"><span class="roll" data-v="51"></span><small>%</small></div></div></div>
     <div class="tx">떠나기 전 3개월 동안,<br><b>누구와도 일과 미래를 이야기하지 않았습니다</b></div>
   </div>
   <p class="take t">막는 방법은 대화, 대화의 근거는 <span class="em">수업 데이터</span>입니다.</p>
@@ -1500,10 +1502,10 @@ aside.notes { display: none; }
           var lv = d._lv, ink = lv.firstChild, xe = 1680 * MARK[f] - 22, te = (xe - START) / V, dx = i % 2 ? 54 : -46;
           t.set(lv, { autoAlpha: 0, x: 0, y: 0, scale: 1 }, 0).set(ink, { opacity: 0 }, 0);
           t.to(d, { x: xe, duration: te, ease: 'none' }, 0);
-          t.set(d, { autoAlpha: 0 }, te).set(lv, { autoAlpha: 1, boxShadow: '0 0 14px rgba(184, 232, 44, .9)' }, te);
+          t.set(d, { autoAlpha: 0 }, te).set(lv, { autoAlpha: 1, boxShadow: 'none' }, te);
           t.to(lv, { y: -38, scale: 1.08, duration: .38, ease: 'power2.out' }, te);
           t.to(ink, { opacity: 1, duration: .5, ease: 'power1.inOut' }, te + .12);
-          t.to(lv, { boxShadow: '0 0 0px rgba(184, 232, 44, 0)', duration: .5 }, te + .12);
+          t.to(lv, { boxShadow: 'none', duration: .5 }, te + .12);
           t.to(lv, { y: -190, x: dx, scale: .58, duration: 1.5, ease: 'power2.in' }, te + .5);
           t.to(lv, { autoAlpha: 0, duration: .55, ease: 'power1.in' }, te + 1.3);
           t.to({}, { duration: .001 }, CYCLE - .001);
@@ -1588,12 +1590,14 @@ aside.notes { display: none; }
     },
 
     coach: function (slide, tl, s) {
-      var ink = $$('.ink path', slide), chk = $$('.chk path', slide), tx = $$('.nb text', slide);
-      gsap.set(ink.concat(chk), { attr: { 'stroke-dasharray': '1 1', 'stroke-dashoffset': 1 } });
-      tl.to(ink, { attr: { 'stroke-dashoffset': 0 }, duration: .9, ease: 'power2.inOut', stagger: .32 }, s + .9);
-      tl.fromTo(tx, { autoAlpha: 0, x: -10 }, { autoAlpha: 1, x: 0, duration: .6, ease: 'expo.out', stagger: .32 }, s + 1.3);
-      tl.to(chk, { attr: { 'stroke-dashoffset': 0 }, duration: .45, ease: 'power3.out', stagger: .32 }, s + 1.6);
-      loop(gsap.to($('.qmark', slide), { y: -10, duration: 2.6, yoyo: true, repeat: -1, ease: 'sine.inOut' }));
+      // 관찰 노트가 한 줄씩 써지고, 줄 끝에 표시가 찍힌다
+      $$('.obs li', slide).forEach(function (li, k) {
+        var at = s + 1.0 + k * .55;
+        tl.fromTo($('.tm', li), { autoAlpha: 0 }, { autoAlpha: 1, duration: .3 }, at);
+        tl.fromTo($('.tx', li), { clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0% 0 0)', duration: .6, ease: 'power1.inOut', clearProps: 'clipPath' }, at + .05);
+        tl.fromTo($('.mk', li), { scale: 0, autoAlpha: 0 }, { scale: 1, autoAlpha: 1, duration: .4, ease: 'back.out(3)' }, at + .55);
+      });
+      tl.fromTo($('.nb .nx', slide), { autoAlpha: 0, y: 12 }, { autoAlpha: 1, y: 0, duration: .7, ease: 'expo.out' }, s + 1.0 + 5 * .55 + .3);
     },
 
     loop: function (slide, tl, s) {
