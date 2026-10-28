@@ -712,13 +712,24 @@ aside.notes { display: none; }
 .lk .ss { margin-top: 14px; font-size: 22px; font-weight: 600; color: var(--mute); line-height: 1.45; }
 
 /* ===== 24 돈으로만 움직이지 않는다 ===== */
-.s-grow .gq { position: absolute; left: 120px; top: 270px; margin: 0; font-size: 100px; font-weight: 800; line-height: 1.22; letter-spacing: -.05em; }
-.s-grow .gs { position: absolute; left: 120px; top: 640px; margin: 0; font-size: 34px; font-weight: 600; line-height: 1.55; color: var(--ink-2); letter-spacing: -.02em; }
+.s-grow .gq { position: absolute; left: 120px; top: 228px; margin: 0; font-size: 92px; font-weight: 800; line-height: 1.22; letter-spacing: -.05em; }
+.s-grow .gs { position: absolute; left: 120px; top: 488px; width: 900px; margin: 0; font-size: 28px; font-weight: 600; line-height: 1.6; color: var(--ink-2); letter-spacing: -.02em; }
 .s-grow .gs b { font-weight: 800; color: var(--em); }
-.gl { position: absolute; left: 1090px; top: 270px; width: 710px; display: flex; flex-direction: column; gap: 34px; }
-.g3 { display: flex; align-items: center; gap: 28px; height: 170px; padding: 0 40px; box-sizing: border-box; }
+.gstat { position: absolute; left: 120px; top: 640px; width: 880px; height: 200px; box-sizing: border-box; padding: 0 48px; display: flex; align-items: center; gap: 40px; border-radius: 40px; }
+.gstat .num { flex: none; font-size: 112px; font-weight: 800; letter-spacing: -.05em; line-height: 1; color: var(--em); }
+.gstat .num small { font-size: 46px; margin-left: 4px; }
+.gstat p { margin: 0; font-size: 26px; font-weight: 600; line-height: 1.5; color: var(--ink-2); letter-spacing: -.02em; }
+.gstat p b { color: var(--ink); font-weight: 800; }
+.gl { position: absolute; left: 1090px; top: 228px; width: 710px; display: flex; flex-direction: column; gap: 24px; }
+.g3 { display: flex; align-items: center; gap: 28px; height: 148px; padding: 0 40px; box-sizing: border-box; }
 .g3 .no { flex: none; width: 76px; height: 76px; display: grid; place-items: center; font-size: 30px; font-weight: 800; color: var(--em); }
 .g3 b { display: block; font-size: 30px; font-weight: 800; letter-spacing: -.03em; }
+.gtrick { position: absolute; left: 1090px; top: 752px; width: 710px; }
+.gtrick .k { display: flex; align-items: center; gap: 12px; font-size: 21px; font-weight: 800; color: var(--em); }
+.gtrick .k .led { width: 12px; height: 12px; }
+.gtrick .chain { margin-top: 16px; display: flex; align-items: center; gap: 14px; flex-wrap: nowrap; }
+.gtrick .chain b { font-size: 25px; font-weight: 800; letter-spacing: -.03em; white-space: nowrap; }
+.gtrick .chain i { font-style: normal; font-size: 26px; color: var(--mute); }
 .g3 span { display: block; margin-top: 8px; font-size: 21px; font-weight: 600; color: var(--mute); }
 
 /* ===== 7·8장 우측 상단 IN / OUT 음각 글자 ===== */
@@ -1196,17 +1207,19 @@ aside.notes { display: none; }
 </section>
 
 <!-- 24 돈으로만 움직이지 않는다 -->
-<section class="slide s-grow" data-scene="light" data-enter="grow" data-time="0:40">
+<section class="slide s-grow" data-scene="light" data-enter="grow" data-time="0:50">
   <span class="eyebrow nm in pill r"><i class="led"></i>4막 · 결국, 이득입니다</span>
   <p class="gq t">강사는 <span class="em">돈으로만</span><br>움직이지 않습니다.</p>
-  <p class="gs t">어제보다 나아지고 있다는 감각.<br>그 근거가 <b>자기 수업 분석</b>에서 나옵니다.</p>
+  <p class="gs t">어제보다 나아지고 있다는 감각이 학원을 아끼는 마음이 됩니다.<br>그 근거가 <b>자기 수업 분석</b>에서 나옵니다.</p>
+  <div class="gstat nm in card r" data-at="1.1"><span class="num"><span class="roll" data-v="94"></span><small>%</small></span><p>직장인의 94%가 <b>“회사가 내 성장에 투자하면<br>더 오래 머물겠다”</b>고 답했습니다</p></div>
   <div class="gl">
     <div class="g3 nm card r"><div class="no nm in circle">1</div><div><b>내 수업 리포트</b><span>5개 기준 점수와 강점 · 개선점</span></div></div>
     <div class="g3 nm card r"><div class="no nm in circle">2</div><div><b>다음 수업에서 하나만 바꾸기</b><span>질문을 뒷줄부터 고르게 나누기</span></div></div>
-    <div class="g3 nm card r"><div class="no nm in circle">3</div><div><b>달라진 점수로 확인</b><span>성장 기록이 쌓입니다</span></div></div>
+    <div class="g3 nm card r"><div class="no nm in circle">3</div><div><b>달라진 점수로 확인</b><span>작은 진전이 기록으로 쌓입니다</span></div></div>
   </div>
-  <p class="src t">출처 · 잡코리아 에듀잡, 학원강사 430명 이직 현황 설문 — 급여(33.7%) 외에 스케줄·부가 업무·원장과의 관계도 이직 이유</p>
-  <aside class="notes">8장에서 급여가 1순위인 건 맞다고 했습니다. 그런데 돈만이 아니었습니다. "강사는 돈으로만 움직이지 않습니다." 강사가 남는 이유 중 하나는 어제보다 나아지고 있다는 감각, 곧 자기 발전입니다. 그 근거가 강의 분석입니다 — 내 수업 리포트에서 강점과 개선점을 보고, 다음 수업에서 하나만 바꾸고, 달라진 점수로 확인합니다. 감시가 아니라 성장 기록으로 쓰이면 강사에게도 이득입니다. (성장 기회가 이직·잔류에 영향을 준다는 수치는 이 자료에서 확인하지 못해 숫자는 말하지 않습니다.) → "이제 원장님 입장의 숫자를 보겠습니다."</aside>
+  <div class="gtrick r" data-at="1.6"><span class="k"><i class="led"></i>그리고 번집니다</span><div class="chain"><b>한 강사의 성장</b><i>→</i><b>옆 강사의 자극</b><i>→</i><b class="em">학원 전체의 몰입</b></div></div>
+  <p class="src t">출처 · LinkedIn 「2018 Workplace Learning Report」 · 잡코리아 에듀잡 학원강사 430명 이직 설문(급여 33.7% 외에 스케줄·부가 업무·원장과의 관계도 이직 이유)</p>
+  <aside class="notes">10장에서 급여가 1순위인 건 맞다고 했습니다. 그런데 돈만이 아니었습니다. "강사는 돈으로만 움직이지 않습니다." ① 성장 → 애정: 하버드 경영대학원 테레사 아마빌레가 직장인 238명의 일기 약 1만 2천 건을 분석했더니, 하루를 가장 좋게 만든 건 보상이 아니라 '의미 있는 일에서 조금씩 나아지고 있다는 감각(작은 진전)'이었습니다. 자기결정성이론으로 보면 '내가 유능해지고 있다'는 감각(유능감)이 채워질 때 그 환경에 애착이 생기고, 조직지원인식 연구에 따르면 직원은 성장 기회를 '회사가 나에게 주는 투자'로 받아들여 정서적 몰입으로 보답합니다. 숫자로는 LinkedIn 2018 조사에서 직장인 94%가 "회사가 내 성장에 투자하면 더 오래 머물겠다"고 답했습니다(학원강사 대상 조사는 아님). ② 그 근거가 강의 분석입니다 — 내 수업 리포트 → 다음 수업에서 하나만 바꾸기 → 달라진 점수로 확인. 감시가 아니라 성장 기록으로 쓰일 때 효과가 납니다. ③ 그리고 번집니다: 감정과 태도는 전염되고(정서적 전염), 리더의 몰입은 팀으로 흘러내립니다(낙수효과) — 11장 갤럽 '몰입도 차이의 70%는 관리자'와 같은 이야기입니다. 한 강사의 성장이 옆 강사의 자극이 되고, 학원 전체의 몰입이 됩니다. → "이제 원장님 입장의 숫자를 보겠습니다."</aside>
 </section>
 
 <!-- 19 사라진 매출 -->
