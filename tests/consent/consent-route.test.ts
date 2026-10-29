@@ -75,6 +75,38 @@ describe("POST /api/consent", () => {
     expect(from).not.toHaveBeenCalled()
   })
 
+  it.each([
+    null,
+    [],
+    "true",
+    0,
+    {},
+    { ...grantAll, analytics: "false" },
+    { ...grantAll, marketing: "false" },
+    { ...grantAll, analytics: 1 },
+    { ...grantAll, marketing: null },
+    { analytics: true, policy_version: CONSENT_POLICY_VERSION },
+    { marketing: false, policy_version: CONSENT_POLICY_VERSION },
+  ])("객체와 두 boolean 선택이 아닌 입력(%j)은 400으로 거부한다", async (body) => {
+    const res = await POST(consentRequest(body))
+    expect(res.status).toBe(400)
+    expect(readSetCookie(res, "cln_consent")).toBeNull()
+    expect(readSetCookie(res, "cln_aid")).toBeNull()
+    expect(from).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { analytics: false, marketing: false },
+    { analytics: false, marketing: true },
+    { analytics: true, marketing: false },
+    { analytics: true, marketing: true },
+  ])("명시적인 boolean 선택은 기록에 그대로 반영한다: %j", async (choice) => {
+    const res = await POST(consentRequest({ ...choice, policy_version: CONSENT_POLICY_VERSION }))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ ok: true, record: choice })
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ categories: { necessary: true, ...choice } }))
+  })
+
   it("레이트리밋에 걸리면 저장과 쿠키 발급을 거부한다", async () => {
     checkRateLimitDistributed.mockResolvedValue({ allowed: false, remaining: 0, resetAt: 0 })
 
@@ -134,6 +166,18 @@ describe("POST /api/consent", () => {
     expect(parseConsent(readSetCookie(res, "cln_consent")!.value)).toMatchObject({ analytics: false, marketing: false, s: 0 })
     expect(readSetCookie(res, "cln_aid")?.attributes).toContain("max-age=0")
   })
+
+  it.each([null, [], {}, { analytics: "false", marketing: false }, { analytics: false, marketing: null }])(
+    "구버전의 잘못된 입력(%j)은 400과 거절 쿠키를 반환한다",
+    async (body) => {
+      const res = await POST(consentRequest(body, "https://classin.co.kr", false))
+      expect(res.status).toBe(400)
+      expect(await res.json()).toMatchObject({ ok: false })
+      expect(parseConsent(readSetCookie(res, "cln_consent")!.value)).toMatchObject({ analytics: false, marketing: false, s: 0 })
+      expect(readSetCookie(res, "cln_aid")?.attributes).toContain("max-age=0")
+      expect(from).not.toHaveBeenCalled()
+    },
+  )
 
   it("cross-origin 요청은 계속 차단한다", async () => {
     const res = await POST(consentRequest(grantAll, "https://evil.example"))
