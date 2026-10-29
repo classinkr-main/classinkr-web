@@ -202,7 +202,7 @@ describe("K-1·K-2 레일·콕핏 저장 — 화면 밖 딜의 이중 계상 판
     const body = sliceBetween(
       workbenchSource(),
       "const buildDraftInput = useCallback",
-      "}, [detail, draftForm, lens, period, selectedMonth, selectedRow, team])",
+      "}, [detail, draftForm, lens, period, selectedMonth, selectedRow, sheetRowById, team])",
     )
     expect(body).toContain("const snapshot = base ? (base.sourceSnapshot ?? undefined) :")
     expect(body).toContain("base.sourceDealId ?? metadataString(base.metadata, \"sourceDealId\")")
@@ -264,8 +264,8 @@ describe("R-4 페이지 복원 — 필터가 실제로 바뀔 때만 1페이지"
   it("복원 effect가 기준 시그니처를 적고, 리셋 effect는 urlReady 전에는 돌지 않는다", () => {
     const source = workbenchSource()
     expect(source).toContain("revPageResetBaselineRef.current = revPageResetSignature({")
-    const reset = sliceBetween(source, "// 필터·정렬·기간이 실제로 바뀌면 1페이지로", "const editingDraft = useMemo")
+    const reset = sliceBetween(source, "if (!urlReady) return\n    const signature = revPageResetSignature", "const editingDraft = useMemo")
     expect(reset).toContain("if (!urlReady) return")
-    expect(reset).toContain("if (revPageResetBaselineRef.current === signature) return")
+    expect(reset).toContain("revPageResetBaselineRef.current !== signature) setRevPage(1)")
   })
 })

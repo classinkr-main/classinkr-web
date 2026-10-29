@@ -167,13 +167,13 @@ describe("useMatrixEditor 배선 — 0 커밋 차단(R-12)·Ctrl+C(B1)", () => {
     const workbench = read("components/admin/branch/SalesLedgerWorkbench.tsx")
     const onCommit = sliceBetween(workbench, "const onCommitCell = useCallback(", "const persist = built.existingId")
     expect(onCommit).toContain("if (!(built.input.amount > 0)) {")
-    expect(onCommit).toContain('key: "matrix-zero-blocked"')
+    expect(onCommit).toContain("초안 취소 또는 적용 되돌리기")
   })
 
   it("Ctrl/Cmd+C는 물리 키(KeyC)로 판정하고, 드래그로 고른 텍스트가 있으면 브라우저 기본 복사를 둔다", () => {
     const keydown = sliceBetween(logic, "const onSelectedKeyDown = useCallback(", "// 셀 핸들러가 호출하는 액션들")
     expect(keydown).toContain('event.code === "KeyC"')
-    expect(keydown).toContain("window.getSelection?.()?.toString()")
+    expect(keydown).toContain("window.getSelection()?.toString()")
     expect(keydown).toContain("onCopyCell(coord)")
     expect(keydown.indexOf('event.code === "KeyC"')).toBeLessThan(keydown.indexOf('event.key === "d"'))
   })
@@ -192,7 +192,7 @@ describe("워크벤치 배선 — CSV 버튼·셀 복사·0 차단 안내", () =
 
   it("셀 복사는 칸에 보이는 값(matrixDisplayedCellAmount), 0 차단은 큐 취소·되돌리기로 안내", () => {
     const copy = sliceBetween(workbench, "const copyMatrixCell = useCallback(", "const matrixEditor = useMatrixEditor(")
-    expect(copy).toContain("matrixDisplayedCellAmount(row, coord, copySourceRef.current.pendingByCell)")
+    expect(copy).toContain("matrixDisplayedCellAmount(row, coord, pendingByCell)")
     expect(copy).toContain("copyTextToClipboard(String(value))")
     expect(workbench).not.toContain("onZeroCommitBlocked")
     expect(workbench).toContain("onCopyCell: copyMatrixCell")
@@ -204,15 +204,15 @@ describe("RevMatrix 표시 — 대기 초안 값이 칸에 보인다(R-2)·원 �
 
   it("월 칸은 대기 초안 금액을 보이고, title은 장부 → 대기 초안(적용 전) 원 단위", () => {
     // 기존 딜 행에 고객명으로 걸린 신규 초안은 더해질 값이라 칸 값을 대신하지 않는다(리뷰 보강).
-    expect(matrix).toContain("const replacingPending = pending && !pendingAdditive ? pending : null")
-    expect(matrix).toContain("const shownTotal = replacingPending ? replacingPending.amount : bucket.total")
-    expect(matrix).toContain("{formatWeekAmount(shownTotal)}")
-    expect(matrix).toContain("→ 대기 초안 ${formatExactMoney(pending.amount)}")
+    expect(matrix).toContain("const shownAmount = pending && pendingReplaces ? pending.amount : bucket.total")
+    expect(matrix).toContain("pendingMatchesKind(pending, rowCommitKind(row))")
+    expect(matrix).toContain("{formatWeekAmount(shownAmount)}")
+    expect(matrix).toContain("formatExactMoney(pending.amount)")
   })
 
   it("주차 칸은 pendingWeekDisplay로 고른 값, 행 주차 입력은 matrixWeekInputs 한 곳에서", () => {
     expect(matrix).toContain("weekPendingOf: (month, week, display) => pendingWeekDisplay(pendingByCell, row.id, month, week, display, rowCommitKind(row))")
-    expect(matrix).toContain("const inputs = matrixWeekInputs(row, month)")
-    expect(matrix).toContain("{shownDisplay > 0 ? formatWeekAmount(shownDisplay) : \"·\"}")
+    expect(matrix).toContain("const split = rowWeeklySplit(row, month)")
+    expect(matrix).toContain("{formatWeekAmount(shownDisplay)}")
   })
 })

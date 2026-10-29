@@ -110,14 +110,16 @@ describe("워크벤치 배선 — 보드·콕핏", () => {
 
   it("보드 카드 = 빠른 입력 직행, 대기 초안은 화면 전체 행 기준 맵", () => {
     expect(source).toContain("onOpenRow={(row) => void openQuickInputForRow(row)}")
-    expect(source).toContain('lens === "board" || lens === "cockpit" ? buildMatrixPendingByCell(drafts, filteredRows) : null')
+    expect(source).toContain('buildMatrixPendingByCell(pendingMatchDrafts, filteredRows)')
     expect(source.match(/pendingByCell=\{lensPendingByCell\}/g)).toHaveLength(2)
   })
 
   it("보드·콕핏은 REV 필터 칩과 초기화를 같은 줄에, 로딩·오류는 REV와 같은 패널로", () => {
-    expect(source).toContain('(lens === "board" || lens === "cockpit") && revRowFilterCount > 0')
-    expect(source.match(/\{revFilterTags\}/g)).toHaveLength(2)
+    expect(source).toContain('(lens === "board" || lens === "cockpit") && revControlsDirty')
+    expect(source).toContain('aria-label="적용된 REV 필터"')
+    expect(source).toContain('onClick={resetRevFilters}')
     expect(source).toContain("<RevLoadErrorPanel framed")
-    expect(source).toContain('(lens === "board" || lens === "cockpit") && !pipeline.data && (pipeline.loading || pipeline.error)')
+    expect(source).toContain('(lens === "board" || lens === "cockpit") && !pipeline.data && pipeline.loading')
+    expect(source).toContain('(lens === "board" || lens === "cockpit") && !pipeline.data && !pipeline.loading && pipeline.error')
   })
 })

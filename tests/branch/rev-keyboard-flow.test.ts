@@ -77,12 +77,11 @@ describe("배선", () => {
 
   it("잠긴 칸 Enter·F2·더블클릭 → activateLocked(월·주차 칸 모두)(R-14)", () => {
     expect(matrix.match(/actions!\.activateLocked\(/g)?.length).toBe(4)
-    expect(logic).toContain("activateLocked,")
+    expect(logic).toContain("activateLocked: (coord: MatrixCellCoord) => onLockedCellActivate?.(coord)")
     expect(workbench).toContain("onLockedCellActivate: onMatrixLockedCellActivate,")
-    const impl = sliceBetween(workbench, "const activateLockedMatrixCell = useCallback(", "lockedCellActivateRef.current = activateLockedMatrixCell")
+    const impl = sliceBetween(workbench, "lockedCellActivateRef.current = (coord) => {", "}, [loadDealDetail, pushMatrixToast, rowById])")
     expect(impl).toContain("void loadDealDetail(row, { month: coord.month })")
-    expect(impl).toContain("체크 큐에서 그 초안을 되돌리기(상쇄)")
-    expect(impl).toContain("원본 시트에서 고친 뒤 동기화하세요")
+    expect(impl).toContain("확정된 값은 잠겨 있습니다")
   })
 
   it("잠금 안내 문구가 실제 경로를 말한다 — 레일은 잠긴 달 수정 초안을 막으므로 '정정 초안'을 약속하지 않는다", () => {

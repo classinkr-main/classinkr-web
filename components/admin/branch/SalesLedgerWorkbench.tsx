@@ -556,9 +556,10 @@ export default function SalesLedgerWorkbench({
         if (current.some((toast) => (toast.key ?? toast.text) === dedupeKey)) return current
         const stacked = [...current, { id, ...next }]
         if (stacked.length <= MATRIX_TOAST_MAX) return stacked
-        const dropIndex = stacked.findIndex((toast) => toast.kind === "info")
+        const dropIndex = current.findIndex((toast) => toast.kind === "info")
         return stacked.filter((_, index) => index !== (dropIndex !== -1 ? dropIndex : 0))
       })
+      if (next.kind === "error" && next.ttlMs == null) return
       window.setTimeout(() => {
         setMatrixToasts((current) => current.filter((toast) => toast.id !== id))
       }, next.ttlMs ?? 7000)
@@ -1082,6 +1083,8 @@ export default function SalesLedgerWorkbench({
     `/api/admin/branch/summary?team=${team}&period=${period}${monthQuery}${lens === "dsh" ? "&breakdown=1" : ""}${managerQuery}`,
     refreshKey, { enabled: urlReady, keepPreviousData: true }
   )
+  const dshBreakdownLoading = summary.loading && summary.data?.dsh_breakdown == null
+  const dshRowsLoading = summary.loading && summary.data?.dsh_rows == null
   // KPI 응답은 이 화면에서 우측 레일 "행 상세"의 담당자 KPI 박스(selectedMember)에만 쓰인다 —
   // 마운트 즉시 fetch하면 접힌 레일만 보다 떠나는 세션에도 항상 요청이 나간다(코덱스 감사).
   // 레일 열림 + detail 보기 + 행 선택일 때만 시작한다(콕핏은 detail 레일을 렌더하지 않으므로 제외).
@@ -2462,9 +2465,11 @@ export default function SalesLedgerWorkbench({
     const newRowNote = newRowsCommitted > 0
       ? ` · 새 행 초안 ${fmt(newRowsCommitted)}건(체크 큐에서 체크 → 적용)`
       : ""
+    const openQueueAction = { label: "큐 열기", onClick: () => { setRailView("queue"); setSidePanelCollapsed(false) } }
     if (problems === 0) {
       pushMatrixToast({
         kind: "info",
+        action: openQueueAction,
         text: `자가 체크 초안 ${fmt(committed - newRowsCommitted)}건 저장${newRowNote} — 체크 큐에서 적용하면 장부에 반영됩니다.`,
       })
       return
@@ -2479,6 +2484,7 @@ export default function SalesLedgerWorkbench({
       .join(" · ")
     pushMatrixToast({
       kind: "error",
+      action: openQueueAction,
       text: `${fmt(committed)}건 저장${newRowNote} · ${fmt(problems)}건 미반영(${detail}) — 미반영 셀은 체크 큐 행 배지를 확인한 뒤 다시 붙여넣으세요.`,
     })
   }, [buildCellDraftInput, lens, managerFilter, pasteConfidence, pasteConfidencePicked, pastePlan, period, persistDraftsBatch, pushMatrixToast, team])
@@ -3653,6 +3659,7 @@ export default function SalesLedgerWorkbench({
             ref={lensPanelRef}
             id="sales-ledger-lens-panel"
             role="tabpanel"
+            aria-busy={summary.previous || pipeline.previous ? true : undefined}
             aria-labelledby={`sales-ledger-lens-${lens === "rev" ? "ledger" : lens}`}
             tabIndex={-1}
             className="scroll-mt-24 space-y-5 focus:outline-none"
@@ -3696,7 +3703,7 @@ export default function SalesLedgerWorkbench({
                 <DshProgressOverview
                   breakdown={summary.data?.dsh_breakdown ?? []}
                   rows={summary.data?.dsh_rows ?? []}
-                  loading={summary.loading && !summary.data}
+                  loading={dshBreakdownLoading}
                   dataSource={summary.data?.data_sources?.dsh ?? null}
                   // 히어로 "주" 원천 — deal_mix(week_actual)는 summary 팀 필터를 따르므로 team도
                   // 함께 넘겨 캡션이 스코프를 정직하게 표기하게 한다(M/Q/Y는 시트 기준).
@@ -3712,14 +3719,14 @@ export default function SalesLedgerWorkbench({
                       dataSource={summary.data?.data_sources?.dsh ?? null}
                       view={dshGridView}
                       onViewChange={setDshGridView}
-                      loading={summary.loading && !summary.data}
+                      loading={dshBreakdownLoading}
                     />
                   }
                   monthlyPace={
                     <DshMonthlyPace
                       breakdown={summary.data?.dsh_breakdown ?? []}
                       dataSource={summary.data?.data_sources?.dsh ?? null}
-                      loading={summary.loading && !summary.data}
+                      loading={dshBreakdownLoading}
                     />
                   }
                   teamGrid={
@@ -3727,7 +3734,7 @@ export default function SalesLedgerWorkbench({
                       personalManager={scopedManager || undefined}
                       rows={summary.data?.dsh_rows ?? []}
                       dataSource={summary.data?.data_sources?.dsh ?? null}
-                      loading={summary.loading && !summary.data}
+                      loading={dshRowsLoading}
                     />
                   }
                   weeklySnapshot={
@@ -4533,6 +4540,19 @@ export default function SalesLedgerWorkbench({
             {/* 주차 Forecast 보드(Board-1b 이식) — REV와 같은 filteredRows 모집단(검색·담당자·지역·
                 상품 필터 반영)을 주차 칸반으로 재배열. 카드 클릭은 기존 빠른 작업 레일(행 상세)로
                 연결된다 — 보드 전용 편집 경로를 만들지 않는다. */}
+            {(lens === "board" || lens === "cockpit") && revControlsDirty && (
+              <div className="mb-3 flex flex-wrap items-center gap-1.5" aria-label="적용된 REV 필터">
+                {query.trim() && <FilterTag label={`검색 ${query.trim()}`} onClear={() => setQuery("")} />}
+                {Array.from(managerFilter).map((name) => <FilterTag key={`mgr-${name}`} label={`담당자 ${branchManagerLabel(name)}`} onClear={() => setManagerFilter((current) => { const next = new Set(current); next.delete(name); return next })} />)}
+                {Array.from(regionFilter).map((name) => <FilterTag key={`region-${name}`} label={`지역 ${name}`} onClear={() => setRegionFilter((current) => { const next = new Set(current); next.delete(name); return next })} />)}
+                {productFilter !== "all" && <FilterTag label={`상품 ${productCategoryMeta(productFilter).label}`} onClear={() => setProductFilter("all")} />}
+                {revStatusFilter !== "ALL" && <FilterTag label={`상태 ${revStatusFilter}`} onClear={() => setRevStatusFilter("ALL")} />}
+                {revDealTypeFilter !== "ALL" && <FilterTag label={`유형 ${revDealTypeFilter}`} onClear={() => setRevDealTypeFilter("ALL")} />}
+                {revOriginFilter !== "all" && <FilterTag label={REV_ORIGIN_FILTERS.find((item) => item.id === revOriginFilter)?.label ?? "원천"} onClear={() => setRevOriginFilter("all")} />}
+                {revForecastFilter !== "all" && <FilterTag label={REV_FORECAST_FILTERS.find((item) => item.id === revForecastFilter)?.label ?? "검수"} onClear={() => setRevForecastFilter("all")} />}
+                <button type="button" onClick={resetRevFilters} className="rounded border px-2 py-1 text-[11px] font-bold">필터 초기화</button>
+              </div>
+            )}
             {(lens === "board" || lens === "cockpit") && !pipeline.data && pipeline.loading && <LoadingPanel label="REV 데이터를 불러오는 중" />}
             {(lens === "board" || lens === "cockpit") && !pipeline.data && !pipeline.loading && pipeline.error && (
               <RevLoadErrorPanel framed error={pipeline.error} onRetry={() => setRefreshKey((key) => key + 1)} />
@@ -4642,7 +4662,7 @@ export default function SalesLedgerWorkbench({
         )}
 
         {matrixToasts.length > 0 && (
-          <div className="fixed bottom-20 left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-col gap-2">
+          <div className={`fixed left-1/2 z-[55] flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-col gap-2 ${!sidePanelCollapsed ? "top-3 sm:top-auto sm:bottom-20" : "bottom-20"}`}>
             {matrixToasts.map((toast) => {
               // 지역 변수로 좁혀서 아래 action.onClick/label 접근에 non-null 단언 없이 타입이 좁혀지게 한다.
               const action = toast.action
@@ -4650,7 +4670,7 @@ export default function SalesLedgerWorkbench({
               return (
                 <div
                   key={toast.id}
-                  role="alert"
+                  role={toast.kind === "error" ? "alert" : "status"}
                   className={`flex items-start gap-2 rounded-lg border px-4 py-2.5 text-[12px] font-bold shadow-[0_18px_48px_rgba(17,17,16,0.18)] ${
                     toast.kind === "error"
                       ? "border-[#F2B8B8] bg-[#FCE9E9] text-[#B43E3E]"

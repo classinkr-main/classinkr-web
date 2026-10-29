@@ -119,9 +119,9 @@ describe("워크벤치 배선", () => {
   })
 
   it("#2 서버 시드 뒤 첫 새로고침에도 마지막으로 보인 행을 '갱신 중'으로 유지한다", () => {
-    expect(workbench).toContain("if (pipelineResolved.data != null && pipelineResolved.data !== lastPipelineData) setLastPipelineData(pipelineResolved.data)")
-    expect(workbench).toContain("pipelineResolved.data == null && pipelineResolved.loading && !pipelineResolved.error && lastPipelineData != null")
-    expect(workbench).toContain("{ ...pipelineResolved, data: lastPipelineData, previous: true }")
+    expect(workbench).toContain("pipelineResolved.data != null && !pipelineResolved.previous")
+    expect(workbench).toContain("pipelineResolved.data == null && pipelineResolved.loading && lastPipelineRef.current?.url === pipelineUrl")
+    expect(workbench).toContain("{ ...pipelineResolved, data: lastPipelineRef.current.data, previous: true }")
   })
 
   it("#3 콕핏 자동 재로드·편집기 월 선택은 열린 큐를 닫지 않는다(keepRail)", () => {
@@ -130,20 +130,19 @@ describe("워크벤치 배선", () => {
   })
 
   it("#4 대상 해제·초안 편집·새 딜은 진행 중인 상세 응답이 폼을 되채우지 못하게 폼을 가져온다", () => {
-    const clear = sliceBetween(workbench, "const clearRailTarget = useCallback(", "}, [defaultDraftForm])")
+    const clear = sliceBetween(workbench, "const clearRailTarget = () => {", "setDraftForm(defaultDraftForm)")
     expect(clear).toContain("detailRequestSeqRef.current += 1")
-    expect(clear).toContain("draftFormOwnerRef.current += 1")
     expect(clear).toContain("setDetailLoading(false)")
-    expect(sliceBetween(workbench, "const editDraft = useCallback(", "setEditingDraftId(draft.id)")).toContain("draftFormOwnerRef.current += 1")
-    expect(sliceBetween(workbench, "onNewDeal={() => {", "setEditingDraftId(null)")).toContain("draftFormOwnerRef.current += 1")
+    expect(sliceBetween(workbench, "const editDraft = useCallback(", "setEditingDraftId(draft.id)")).toContain("detailRequestSeqRef.current += 1")
+    expect(sliceBetween(workbench, "onNewDeal={() => {", "setEditingDraftId(null)")).toContain("detailRequestSeqRef.current += 1")
     const load = sliceBetween(workbench, "const loadDealDetail = useCallback", "}, [selectedMonth, team])")
-    expect(load).toContain("const formOwner = ++draftFormOwnerRef.current")
-    expect(load).toContain("if (data.deal && draftFormOwnerRef.current === formOwner) {")
+    expect(load).toContain("if (requestSeq !== detailRequestSeqRef.current) return")
+    expect(load).toContain("if (current !== seededForm) return current")
   })
 
   it("#5 한 칸 붙여넣기는 선택 칸이 지금도 편집 가능할 때만 편집으로 들어간다", () => {
     const paste = sliceBetween(workbench, "const handleMatrixPaste = useCallback(", "const confirmMatrixPaste = useCallback(")
-    expect(paste).toContain("editableCells.some((cell) => matrixCoordKey(cell) === anchorKey)")
+    expect(paste).toContain("editableCells.some((cell) => matrixCoordKey(cell) === matrixCoordKey(anchor))")
   })
 
   it("#6 콕핏 선택 딜에서 '새 딜' 저장은 편집기가 새로 마운트되므로 결과를 토스트로 말한다", () => {
