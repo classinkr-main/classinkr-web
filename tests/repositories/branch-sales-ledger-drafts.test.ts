@@ -870,3 +870,299 @@ describe("updateBranchSalesLedgerDraft — 자가 체크 재편집(라운드4 P0
     expect(client.updateCalls).toHaveLength(1)
   })
 })
+
+// ── P2-9 "적용된 값을 한 번에 바꾸기" — supersedeBranchSalesLedgerEntry / probeSupersedeAvailable ──
+describe("supersedeBranchSalesLedgerEntry — 원자 대체 RPC 성공 매핑", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.resetModules()
+  })
+
+  it("RPC에 4개 파라미터(reason 포함)를 넘기고 반환된 새 초안을 매핑한다", async () => {
+    const appliedDraft = draftRow({ id: "new-draft", status: "applied", applied_by: "tester" })
+    const { repository, client } = await loadRepository({
+      rpc: {
+        supersede_branch_sales_ledger_entry: () => ({ data: appliedDraft, error: null }),
+      },
+    })
+
+    const draft = await repository.supersedeBranchSalesLedgerEntry(
+      "old-draft",
+      "new-draft",
+      "tester",
+      "  더 정확한 금액으로 정정  ",
+    )
+
+    expect(draft?.id).toBe("new-draft")
+    expect(draft?.status).toBe("applied")
+    expect(client.rpcCalls).toEqual([
+      {
+        fn: "supersede_branch_sales_ledger_entry",
+        params: {
+          p_old_draft_id: "old-draft",
+          p_new_draft_id: "new-draft",
+          p_actor: "tester",
+          p_reason: "더 정확한 금액으로 정정",
+        },
+      },
+    ])
+  })
+
+  it("reason을 생략하면 p_reason 없이 3개 파라미터만 보낸다", async () => {
+    const appliedDraft = draftRow({ id: "new-draft", status: "applied" })
+    const { repository, client } = await loadRepository({
+      rpc: {
+        supersede_branch_sales_ledger_entry: () => ({ data: appliedDraft, error: null }),
+      },
+    })
+
+    await repository.supersedeBranchSalesLedgerEntry("old-draft", "new-draft", "tester")
+
+    expect(client.rpcCalls).toEqual([
+      {
+        fn: "supersede_branch_sales_ledger_entry",
+        params: { p_old_draft_id: "old-draft", p_new_draft_id: "new-draft", p_actor: "tester" },
+      },
+    ])
+  })
+
+  it("성공 시 drafts·entries 두 캐시 태그를 모두 revalidate한다", async () => {
+    vi.resetModules()
+    const client = makeClient({
+      rpc: {
+        supersede_branch_sales_ledger_entry: () => ({
+          data: draftRow({ id: "new-draft", status: "applied" }),
+          error: null,
+        }),
+      },
+    })
+    const revalidateTag = vi.fn()
+    vi.doMock("@/lib/supabase/admin", () => ({ createSupabaseAdminClient: vi.fn(() => client) }))
+    vi.doMock("next/cache", () => ({ revalidateTag }))
+
+    const repository = await import("@/lib/repositories/branch-sales-ledger-drafts")
+    await repository.supersedeBranchSalesLedgerEntry("old-draft", "new-draft", "tester")
+
+    expect(revalidateTag).toHaveBeenCalledWith("branch-sales-ledger-drafts", "max")
+    expect(revalidateTag).toHaveBeenCalledWith("branch-sales-ledger-entries", "max")
+  })
+})
+
+describe("supersedeBranchSalesLedgerEntry — fail-closed 에러 번역(폴백 절대 금지)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.resetModules()
+  })
+
+  it("RPC 부재는 unavailable 메시지로 던지고, reverse/apply RPC는 절대 호출하지 않는다", async () => {
+    const { repository, client } = await loadRepository({
+      rpc: {
+        supersede_branch_sales_ledger_entry: () => ({
+          data: null,
+          error: { code: "PGRST202", message: "Could not find the function public.supersede_branch_sales_ledger_entry(uuid,uuid,text,text) in the schema cache" },
+        }),
+      },
+    })
+
+    await expect(
+      repository.supersedeBranchSalesLedgerEntry("old-draft", "new-draft", "tester"),
+    ).rejects.toThrow(
+      "운영 DB에 '적용값 한 번에 바꾸기' 마이그레이션이 아직 적용되지 않았습니다 — 체크 큐에서 되돌리기 후 새 값을 적용하세요.",
+    )
+
+    try {
+      await repository.supersedeBranchSalesLedgerEntry("old-draft", "new-draft", "tester")
+      expect.unreachable()
+    } catch (error) {
+      expect(repository.isBranchSalesLedgerSupersedeUnavailableError(error)).toBe(true)
+    }
+
+    // 폴백 금지 — 이 RPC 하나만 호출되고 reverse_branch_sales_ledger_entry/
+    // apply_branch_sales_ledger_draft는 fixture에 handler조차 없다(호출되면 makeClient의
+    // rpc mock이 즉시 던져 이 테스트가 실패한다).
+    expect(client.rpcCalls.every((call) => call.fn === "supersede_branch_sales_ledger_entry")).toBe(true)
+    expect(client.rpcCalls.length).toBeGreaterThan(0)
+  })
+
+  it("42883(함수 없음)도 unavailable로 판정한다", async () => {
+    const { repository } = await loadRepository({
+      rpc: {
+        supersede_branch_sales_ledger_entry: () => ({
+          data: null,
+          error: { code: "42883", message: "function public.supersede_branch_sales_ledger_entry(uuid, uuid, text, text) does not exist" },
+        }),
+      },
+    })
+
+    await expect(
+      repository.supersedeBranchSalesLedgerEntry("old-draft", "new-draft", "tester"),
+    ).rejects.toThrow(/마이그레이션이 아직 적용되지 않았습니다/)
+  })
+
+  it("P0002는 '대체 대상을 찾을 수 없습니다' 문구로 번역한다(옛 entry·새 초안 공통)", async () => {
+    const { repository } = await loadRepository({
+      rpc: {
+        supersede_branch_sales_ledger_entry: () => ({
+          data: null,
+          error: { code: "P0002", message: "supersede: old draft has no applied entry (old_draft_id=old-draft)" },
+        }),
+      },
+    })
+
+    await expect(
+      repository.supersedeBranchSalesLedgerEntry("old-draft", "new-draft", "tester"),
+    ).rejects.toThrow("대체 대상을 찾을 수 없습니다 — 기존 적용 항목 또는 새 초안이 존재하지 않습니다.")
+
+    try {
+      await repository.supersedeBranchSalesLedgerEntry("old-draft", "new-draft", "tester")
+      expect.unreachable()
+    } catch (error) {
+      expect(repository.isBranchSalesLedgerSupersedeNotFoundError(error)).toBe(true)
+    }
+  })
+
+  it("P0001 + 'must be checked'는 '체크 상태가 아닙니다' 문구로 번역한다", async () => {
+    const { repository } = await loadRepository({
+      rpc: {
+        supersede_branch_sales_ledger_entry: () => ({
+          data: null,
+          error: { code: "P0001", message: "supersede: new draft must be checked (new_draft_id=new-draft, status=draft)" },
+        }),
+      },
+    })
+
+    await expect(
+      repository.supersedeBranchSalesLedgerEntry("old-draft", "new-draft", "tester"),
+    ).rejects.toThrow("새 값 초안이 체크 상태가 아닙니다.")
+
+    try {
+      await repository.supersedeBranchSalesLedgerEntry("old-draft", "new-draft", "tester")
+      expect.unreachable()
+    } catch (error) {
+      expect(repository.isBranchSalesLedgerSupersedeNotCheckedError(error)).toBe(true)
+    }
+  })
+
+  it("P0001 + 'target mismatch'는 '다른 딜·월입니다' 문구로 번역한다", async () => {
+    const { repository } = await loadRepository({
+      rpc: {
+        supersede_branch_sales_ledger_entry: () => ({
+          data: null,
+          error: { code: "P0001", message: "supersede: target mismatch (ledger_month 2026-08 <> 2026-09)" },
+        }),
+      },
+    })
+
+    await expect(
+      repository.supersedeBranchSalesLedgerEntry("old-draft", "new-draft", "tester"),
+    ).rejects.toThrow("대체 대상이 새 값 초안과 다른 딜·월입니다.")
+
+    try {
+      await repository.supersedeBranchSalesLedgerEntry("old-draft", "new-draft", "tester")
+      expect.unreachable()
+    } catch (error) {
+      expect(repository.isBranchSalesLedgerSupersedeTargetMismatchError(error)).toBe(true)
+    }
+  })
+
+  it("23505(활성 정정 유일성 위반)는 기존 중복 정정 문구로 번역한다", async () => {
+    const { repository } = await loadRepository({
+      rpc: {
+        supersede_branch_sales_ledger_entry: () => ({
+          data: null,
+          error: {
+            code: "23505",
+            message:
+              'duplicate key value violates unique constraint "branch_sales_ledger_entries_active_manual_edit_unique"',
+          },
+        }),
+      },
+    })
+
+    await expect(
+      repository.supersedeBranchSalesLedgerEntry("old-draft", "new-draft", "tester"),
+    ).rejects.toThrow("이미 이 딜·월에 적용된 정정 항목이 있습니다. 기존 항목을 먼저 반전한 뒤 다시 적용하세요.")
+
+    try {
+      await repository.supersedeBranchSalesLedgerEntry("old-draft", "new-draft", "tester")
+      expect.unreachable()
+    } catch (error) {
+      expect(repository.isBranchSalesLedgerDuplicateActiveCorrectionError(error)).toBe(true)
+    }
+  })
+})
+
+describe("probeSupersedeAvailable — 함수의 에러 없는 프로브 경로(두 id NULL)로 존재만 확인", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.resetModules()
+    vi.useRealTimers()
+  })
+
+  it("두 id를 NULL로 넘겨 프로브 경로를 부르고, 에러가 없으면 사용 가능(true)", async () => {
+    const { repository, client } = await loadRepository({
+      rpc: {
+        supersede_branch_sales_ledger_entry: () => ({ data: null, error: null }),
+      },
+    })
+
+    await expect(repository.probeSupersedeAvailable()).resolves.toBe(true)
+    expect(client.rpcCalls).toHaveLength(1)
+    expect(client.rpcCalls[0].fn).toBe("supersede_branch_sales_ledger_entry")
+    expect(client.rpcCalls[0].params).toMatchObject({ p_old_draft_id: null, p_new_draft_id: null })
+  })
+
+  it("RPC 부재 에러면 false로 판단한다", async () => {
+    const { repository } = await loadRepository({
+      rpc: {
+        supersede_branch_sales_ledger_entry: () => ({
+          data: null,
+          error: { code: "PGRST202", message: "Could not find the function public.supersede_branch_sales_ledger_entry in the schema cache" },
+        }),
+      },
+    })
+
+    await expect(repository.probeSupersedeAvailable()).resolves.toBe(false)
+  })
+
+  it("그 외 에러(권한·P0002 등 예상 밖 응답)도 false로 보수적으로 판단한다(fail-closed)", async () => {
+    for (const error of [
+      { code: "28000", message: "permission denied for function supersede_branch_sales_ledger_entry" },
+      { code: "P0002", message: "supersede: old draft has no applied entry" },
+    ]) {
+      vi.resetModules()
+      const { repository } = await loadRepository({
+        rpc: { supersede_branch_sales_ledger_entry: () => ({ data: null, error }) },
+      })
+      await expect(repository.probeSupersedeAvailable()).resolves.toBe(false)
+    }
+  })
+
+  it("60초 TTL 안에서는 캐시된 결과를 반환하고 RPC를 재호출하지 않는다", async () => {
+    vi.useFakeTimers()
+    const { repository, client } = await loadRepository({
+      rpc: {
+        supersede_branch_sales_ledger_entry: () => ({ data: null, error: null }),
+      },
+    })
+
+    await expect(repository.probeSupersedeAvailable()).resolves.toBe(true)
+    await expect(repository.probeSupersedeAvailable()).resolves.toBe(true)
+    expect(client.rpcCalls).toHaveLength(1)
+  })
+
+  it("60초가 지나면 다시 실제 호출한다(음성 결과를 오래 들고 있지 않음)", async () => {
+    vi.useFakeTimers()
+    const { repository, client } = await loadRepository({
+      rpc: {
+        supersede_branch_sales_ledger_entry: () => ({ data: null, error: null }),
+      },
+    })
+
+    await repository.probeSupersedeAvailable()
+    vi.advanceTimersByTime(60_001)
+    await repository.probeSupersedeAvailable()
+
+    expect(client.rpcCalls).toHaveLength(2)
+  })
+})

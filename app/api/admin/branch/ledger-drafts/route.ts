@@ -123,6 +123,8 @@ export async function GET(req: NextRequest) {
       listBranchSalesLedgerEntries({ status: "reversed", limit: LEDGER_LIST_MAX }),
       readLastRevSyncStartedAt(),
     ])
+    // 원장 DB와 REV 시트에 대한 원자적 정합성 보장이 검증되기 전까지는 RPC가 있어도 끈다.
+    const supersedeAvailable = false
     const draftResult = closedDraftResult
       ? {
           generatedAt: openDraftResult.generatedAt,
@@ -168,6 +170,7 @@ export async function GET(req: NextRequest) {
         health: sheetWriteHealth,
       },
       sheetWrites,
+      capabilities: { supersede: supersedeAvailable },
     })
   } catch (error) {
     console.error("[GET /api/admin/branch/ledger-drafts]", error)

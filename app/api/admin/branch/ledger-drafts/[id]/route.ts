@@ -11,7 +11,12 @@ import {
   isBranchSalesLedgerDraftsNotReadyError,
   isBranchSalesLedgerDuplicateActiveCorrectionError,
   isBranchSalesLedgerNonPositiveAmountError,
+  isBranchSalesLedgerSupersedeNotCheckedError,
+  isBranchSalesLedgerSupersedeNotFoundError,
+  isBranchSalesLedgerSupersedeTargetMismatchError,
+  isBranchSalesLedgerSupersedeUnavailableError,
   reverseBranchSalesLedgerEntryByDraftId,
+  supersedeBranchSalesLedgerEntry,
   updateBranchSalesLedgerDraft,
 } from "@/lib/repositories/branch-sales-ledger-drafts"
 import {
@@ -23,6 +28,13 @@ import {
 // REV 시트 쓰기(ADR-011) — action=apply 는 시트 다시 읽기(8s) + 쓰기·되읽기(8s) + 되돌리기(8s) + DB 를 한 요청에서
 // 돈다(lib/branch/sheet-writeback/apply-service.ts). 그 최악 합이 이 상한 안에 든다.
 export const maxDuration = 60
+
+// P2-9 — action=supersede의 newDraftId 형식 검증. draft id는 gen_random_uuid()(v4) 산출물이지만
+// 형식 검증 자체는 버전 무관 표준 UUID 8-4-4-4-12만 확인한다(과도한 제약 금지).
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// REV 시트와 DB를 함께 안전하게 갱신하는 경로가 검증되기 전까지 변경하지 않는다.
+function supersedeEnabled(): boolean { return false }
 
 function adminActorName(admin: { name?: string; userId?: string; role: string }) {
   return admin.name?.trim() || admin.userId || admin.role
@@ -68,11 +80,46 @@ async function latestSheetWrite(draftId: string): Promise<SheetWriteRecord | nul
   }
 }
 
+// P2-9 — supersede RPC가 운영 DB에 없으면(fail-closed) 503 + reason으로 명시한다. 훅이 이
+// reason만 보고 폴백 없이 즉시 기능을 끄고(capabilities 재확인), 절대 reverse/apply를 순차
+// 호출하지 않는다.
+function supersedeUnavailableResponse(error: unknown) {
+  if (isBranchSalesLedgerSupersedeUnavailableError(error)) {
+    return NextResponse.json(
+      { error: (error as Error).message, reason: "supersede-unavailable" },
+      { status: 503 },
+    )
+  }
+  return null
+}
+
+function supersedeNotFoundResponse(error: unknown) {
+  if (isBranchSalesLedgerSupersedeNotFoundError(error)) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 404 })
+  }
+  return null
+}
+
+function supersedeNotCheckedResponse(error: unknown) {
+  if (isBranchSalesLedgerSupersedeNotCheckedError(error)) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 409 })
+  }
+  return null
+}
+
+function supersedeTargetMismatchResponse(error: unknown) {
+  if (isBranchSalesLedgerSupersedeTargetMismatchError(error)) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 400 })
+  }
+  return null
+}
+
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
   if (admin instanceof NextResponse) return admin
   const actor = adminActorName(admin)
   const { id } = await params
+  let action = "update"
 
   try {
     const body = await req.json().catch(() => null)
@@ -80,7 +127,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
     }
     const raw = body as Record<string, unknown>
-    const action = typeof raw.action === "string" ? raw.action : "update"
+    action = typeof raw.action === "string" ? raw.action : "update"
 
     if (action === "apply") {
       // 반영의 유일한 진입점(tests/branch/sheet-write-surface.test.ts 래칫) — 스위치가 꺼져 있으면 지금처럼 장부에만,
@@ -123,6 +170,32 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         return NextResponse.json({ error: "해당 초안에 연결된 적용 항목을 찾을 수 없습니다." }, { status: 404 })
       }
       return NextResponse.json({ entry })
+    }
+    if (action === "supersede") {
+      // 이 RPC는 DB 안에서는 원자적이지만 REV 시트 쓰기·감사 경로와 원자적으로 묶이지 않는다.
+      // 시트 기록이 있거나 동시 쓰기가 진행 중일 때 DB만 바뀌는 일을 막기 위해 서버에서 차단한다.
+      // RPC 적용 여부나 클라이언트 값으로 이 가드를 우회하지 않는다.
+      if (!supersedeEnabled()) {
+        return NextResponse.json(
+          { error: "REV 시트 정합성 검증 전에는 적용값 대체를 사용할 수 없습니다.", reason: "supersede-unavailable" },
+          { status: 503 },
+        )
+      }
+      // P2-9 "적용된 값을 한 번에 바꾸기" — id는 옛(대체될) 초안 id, body.newDraftId는 이미
+      // checked로 만들어 둔 새 값 초안 id다. 두 동작(반전+적용)을 RPC 한 번(=DB 한 트랜잭션)
+      // 으로 묶어 원자적으로 처리한다 — 서버는 절대 reverse/apply를 순차 호출하지 않는다.
+      const newDraftId = raw.newDraftId
+      if (typeof newDraftId !== "string" || !UUID_RE.test(newDraftId)) {
+        return NextResponse.json({ error: "newDraftId must be a UUID string" }, { status: 400 })
+      }
+      const reason = optionalString(raw.reason)
+      if (reason === null) return NextResponse.json({ error: "reason must be a string" }, { status: 400 })
+
+      const draft = await supersedeBranchSalesLedgerEntry(id, newDraftId, actor, reason)
+      if (!draft) {
+        return NextResponse.json({ error: "적용값 대체에 실패했습니다." }, { status: 500 })
+      }
+      return NextResponse.json({ draft })
     }
     if (action !== "update") return NextResponse.json({ error: `Unsupported action: ${action}` }, { status: 400 })
 
@@ -185,6 +258,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       notReadyResponse(error) ??
       duplicateActiveCorrectionResponse(error) ??
       nonPositiveAmountResponse(error) ??
+      (action === "supersede" ? supersedeUnavailableResponse(error) : null) ??
+      (action === "supersede" ? supersedeNotFoundResponse(error) : null) ??
+      (action === "supersede" ? supersedeNotCheckedResponse(error) : null) ??
+      (action === "supersede" ? supersedeTargetMismatchResponse(error) : null) ??
       NextResponse.json({ error: "Failed to update sales ledger draft" }, { status: 500 })
     )
   }
