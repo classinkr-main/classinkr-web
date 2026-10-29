@@ -71,3 +71,40 @@ describe("public FAQ CS Figma usage entries", () => {
     }
   })
 })
+
+describe("public FAQ claim boundaries", () => {
+  it("does not promise security, integrations, installation, or A/S without verification", () => {
+    const items = getPublicFaqItems()
+    const byQuestion = (question: string) =>
+      items.find((item) => item.question === question)?.answer ?? ""
+
+    expect(byQuestion("기존 시스템과 연동되나요?")).toContain("확인한 뒤")
+    expect(byQuestion("기존 시스템과 연동되나요?")).not.toMatch(/^가능합니다/)
+
+    expect(byQuestion("학원의 콘텐츠와 학생 데이터는 안전한가요?")).toContain(
+      "개인정보 처리방침"
+    )
+    expect(byQuestion("학원의 콘텐츠와 학생 데이터는 안전한가요?")).not.toMatch(
+      /모든 정보.*암호화|안전하게 보호/
+    )
+
+    expect(byQuestion("기존 칠판이나 빔프로젝터를 쓰던 교실에도 설치할 수 있나요?")).toContain(
+      "현장 확인 전 확정할 수 없습니다"
+    )
+    expect(byQuestion("도입 후 A/S와 운영 지원은 어떻게 진행되나요?")).toContain(
+      "계약에 따라"
+    )
+    expect(byQuestion("도입 후 A/S와 운영 지원은 어떻게 진행되나요?")).not.toContain(
+      "출장 A/S까지 연결합니다"
+    )
+  })
+
+  it("keeps pricing composition aligned with the public pricing policy", () => {
+    const pricing = getPublicFaqItems().find(
+      (item) => item.question === "요금 체계는 어떻게 되나요?"
+    )?.answer
+
+    expect(pricing).toContain("최신 견적과 계약")
+    expect(pricing).not.toMatch(/전자칠판\s*\+\s*OPS|OPS와 기본 스펙/)
+  })
+})

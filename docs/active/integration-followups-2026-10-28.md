@@ -92,3 +92,10 @@ PR #34·#38·#39·#40·#41·#42·#44 의 내용은 모두 이 통합 브랜치�
 | `npm run build` | 컴파일만 별도 확인(`next build`). `postbuild` 는 운영 DB 필요 — Vercel Preview 에서 확인 |
 
 병합 과정에서 고친 결함(병합 자체가 만들었거나 드러낸 것): `lib/hardware/sheet-auto-import.ts` 의 `isAnyRunning` import 깨짐 복구, `lib/branch/sync/complete.ts` 가 가드 `skipped` 를 `running` 으로 덮던 자동 병합 결함, `lib/db/schema-contract.ts` 프로브 객체 경계 누락(두 프로브가 하나로 붙음), `tests/crm/unified-segment-ui` 시한폭탄 테스트.
+
+## 7. CRM 배치·챗봇 민감 답변 통합 시 결정(2026-10-30)
+
+- 확인된 SLA 리드가 24시간 넘게 미응답이면 임박한 계약보다 먼저 배치한다. 단, 우선순위 엔진이 정한 게이트·장기 미응답 감쇠와 고위험 만료 직후 고객의 골든타임은 유지한다. 동률은 기존 엔진 순서다. 연락 기록이 있는 리드는 원천 상태가 아직 `new`여도 응대 대기가 아닌 후속 확인으로 표기한다.
+- 고객 360 모달 진입 모션과 모바일 선택 강조를 현재 분리된 고객 목록에 적용한다. `prefers-reduced-motion`에서는 모션을 끈다.
+- 보안·개인정보, 설치 기간, A/S, 연동 가능 범위, S65 단일 상세 사양은 고정된 확인 필요 답변을 제공한다. 여러 모델 간 비교는 기존 공식 사양 가이드 검색을 유지한다. FAQ의 요금·설치·연동·지원 범위는 최신 견적과 실제 조건 확인을 전제로 한다.
+- 내부 CS 전송 리댁션과 담당자 검토본 요구는 현재 구현을 유지한다. 과거 `20260719123000_internal_cs_consultation_rpc_no_overload.sql`은 도입하지 않는다. 같은 RPC의 단일 서명은 기존 `20260828_channel_match_rpc_single_overload.sql`과 운영 런북을 정본으로 사용한다. 이 판단은 DB 적용 상태를 확인하거나 마이그레이션을 실행했다는 의미가 아니다.

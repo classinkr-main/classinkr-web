@@ -32,7 +32,7 @@ describe("chatbot query route timeout fallback", () => {
       new NextRequest("https://classin.ai.kr/api/chatbot/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: "도입 상담이 궁금해요" }),
+        body: JSON.stringify({ message: "로그인이 자꾸 안 됩니다" }),
       })
     )
 
@@ -43,7 +43,11 @@ describe("chatbot query route timeout fallback", () => {
 
     expect(response.status).toBe(200)
     expect(data.answerMode).toBe("fallback")
-    expect(data.answer).toContain("Classin")
+    expect(data.answer).toContain("지원 상담")
+    expect(data.detectedCategory).toBe("troubleshooting")
+    expect(data.detectedIntent).toBe("troubleshooting")
+    expect(data.handoffIntent).toBe("support")
+    expect(data.needsHandoff).toBe(true)
     expect(data.sources).toEqual([])
     expect(warnSpy).toHaveBeenCalledWith(
       "[POST /api/chatbot/query] timed out; returning deterministic fallback."
