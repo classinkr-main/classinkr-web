@@ -30,6 +30,11 @@ export function PageViewTracker() {
   // 지우는 것 같은 쿼리 정리는 새 페이지뷰가 되지 않는다.
   const path = sanitizeTrackingPath(`${pathname}${search ? `?${search}` : ""}`)
 
+  // 마케팅 동의가 바뀌면 귀속 저장을 다시 평가하되 페이지뷰는 중복 발화하지 않는다.
+  useEffect(() => {
+    collectLeadAttribution()
+  }, [choice.marketing, path])
+
   useEffect(() => {
     // 동의 플래그는 키에 넣지 않는다 — 넣으면 배너에서 동의하는 순간 같은 페이지의
     // GA4 page_view 가 한 번 더 나간다. 동의 변경은 아래 effect 가 내부 적재로만 다룬다.
@@ -43,7 +48,6 @@ export function PageViewTracker() {
     const pageReferrer = previousTrackedLocation ?? documentReferrer
     const pageTitle = document.title
 
-    collectLeadAttribution()
     setGooglePageContext({
       page_location: pageLocation,
       page_referrer: pageReferrer ?? "",

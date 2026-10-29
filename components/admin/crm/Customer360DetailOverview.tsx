@@ -235,7 +235,8 @@ export default function Customer360DetailOverview({ data }: { data: Customer360 
           />
           <StatTile
             icon={<CalendarClock className="h-4 w-4" />}
-            label="최근 업데이트"
+            // updatedAt은 NEO 레코드 편집 시각이지 고객 활동이 아니다 — 라벨로 출처를 밝힌다.
+            label="NEO 레코드 갱신"
             value={formatDay(header?.updatedAt)}
             hint={header?.createdAt ? `생성 ${formatDay(header.createdAt)}` : undefined}
             tone="neutral"

@@ -45,6 +45,8 @@ function row(partial: Partial<CrmUnifiedCustomerRow> & Pick<CrmUnifiedCustomerRo
     ownerKeys: ["박담당"],
     lifecycle: "active_lead",
     statusLabel: "접촉 중",
+    stage: null, stageLabel: null, subjectLabel: null, categoryLabel: null,
+    tier: null, trust: null, moneyBand: null,
     nextActionLabel: "팔로업",
     priorityReason: "-",
     score: 10,

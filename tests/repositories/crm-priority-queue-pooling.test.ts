@@ -29,6 +29,12 @@ function item(
     dueAt: "2026-08-26T00:00:00.000Z",
     updatedAt: null,
     sourceKey: "meta_lead_ads",
+    // 티어 체계(lib/crm/priority) 필수 필드 — 픽스처는 p0/신뢰 高를 기본으로 둔다.
+    tier: "p0",
+    tierLabel: "오늘 필수",
+    moneyBand: "unknown",
+    moneyLabel: null,
+    trust: "high",
     ...overrides,
   }
 }
