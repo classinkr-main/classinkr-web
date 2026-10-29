@@ -17,7 +17,8 @@ import { CONSENT_OBSERVATION_HEADER, CONSENT_OBSERVATION_VERSION } from "@/lib/c
 const attribution = { utmSource: "search", utmCampaign: "campaign", gclid: "click-secret", fbclid: "fb-secret",
   msclkid: "ms-secret", ttclid: "tt-secret", landingPage: "https://classin.kr/?gclid=click-secret",
   currentPage: "https://classin.kr/news?q=secret", referrer: "https://search.example/?q=secret", naverAd: { n_media: "123", n_query: "secret" } }
-function request(options: { observation?: boolean; cookie?: boolean; marketing?: boolean; analytics?: boolean; sync?: number; staleMarketing?: boolean; staleAnalytics?: boolean } = {}) {
+type RequestOptions = { observation?: boolean; cookie?: boolean; marketing?: boolean; analytics?: boolean; sync?: number; staleMarketing?: boolean; staleAnalytics?: boolean }
+function request(options: RequestOptions = {}) {
   const record = { v: CONSENT_POLICY_VERSION, s: options.sync ?? 1, analytics: options.analytics ?? true,
     marketing: options.marketing ?? true, ackAnalytics: "a", ackMarketing: "m" }
   const cookie = `cln_consent=${encodeURIComponent(JSON.stringify(record))}; cln_revoke_a=${options.staleAnalytics ? "new-a" : "a"}; cln_revoke_m=${options.staleMarketing ? "new-m" : "m"}; cln_aid=anon-secret; _ga=GA1.1.123.456; _fbp=fb-secret`
@@ -36,7 +37,7 @@ describe("뉴스레터 구독 귀속 동의 경계", () => {
     stitch.mockResolvedValue({ ok: true })
   })
 
-  it.each([
+  it.each<[string, RequestOptions]>([
     ["구형 탭이나 직접 요청", { observation: false }],
     ["동의 쿠키 없음", { cookie: false }],
     ["마케팅 거절", { marketing: false }],
