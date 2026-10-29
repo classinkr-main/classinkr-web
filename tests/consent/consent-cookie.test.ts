@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
+  CONSENT_COOKIE,
   CONSENT_POLICY_VERSION,
   CONSENT_SIGNAL_KEY,
   DENIED_CHOICE,
@@ -18,6 +19,7 @@ import {
 function installBrowser() {
   const jar = new Map<string, string>()
   const storage = new Map<string, string>()
+  const observedAtSignal: Array<ConsentRecord | null> = []
   const tails = new Map<string, Promise<void>>()
   const document = {
     get cookie() { return [...jar].map(([name, value]) => `${name}=${value}`).join("; ") },
@@ -32,7 +34,13 @@ function installBrowser() {
   }
   const localStorage = {
     getItem: (key: string) => storage.get(key) ?? null,
-    setItem: (key: string, value: string) => { storage.set(key, value) },
+    setItem: (key: string, value: string) => {
+      storage.set(key, value)
+      if (key === CONSENT_SIGNAL_KEY) {
+        const cookie = jar.get(CONSENT_COOKIE)
+        observedAtSignal.push(cookie ? parseConsent(decodeURIComponent(cookie)) : null)
+      }
+    },
     removeItem: (key: string) => { storage.delete(key) },
   }
   const locks = {
@@ -51,13 +59,14 @@ function installBrowser() {
   vi.stubGlobal("window", { document, localStorage, dispatchEvent: vi.fn(), location: { protocol: "https:" } })
   vi.stubGlobal("navigator", { locks })
   vi.stubGlobal("CustomEvent", class { constructor(public type: string, public init?: unknown) {} })
-  return { jar, storage, locks }
+  return { jar, storage, locks, observedAtSignal }
 }
 
 const legacy: ConsentRecord = { v: CONSENT_POLICY_VERSION, analytics: true, marketing: true, ts: 1 }
 
 describe("동의 쿠키", () => {
-  beforeEach(() => { installBrowser() })
+  let browser: ReturnType<typeof installBrowser>
+  beforeEach(() => { browser = installBrowser() })
   afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
   it("정책 버전이 다른 쿠키는 거부하고 기존 쿠키는 읽는다", () => {
@@ -80,6 +89,8 @@ describe("동의 쿠키", () => {
     const saving = saveConsent(GRANTED_CHOICE)
     await vi.waitFor(() => expect(release).toBeDefined())
     expect(readConsent()).toMatchObject({ ...GRANTED_CHOICE, s: 0 })
+    // 다른 탭이 신호를 받는 순간 이미 새 쿠키를 읽을 수 있어야 한다.
+    expect(browser.observedAtSignal.at(-1)).toMatchObject({ ...GRANTED_CHOICE, s: 0 })
     expect(currentChoice()).toEqual(DENIED_CHOICE)
     release(); await saving
     expect(currentChoice()).toEqual(DENIED_CHOICE)
@@ -133,6 +144,18 @@ describe("동의 쿠키", () => {
     await expect(saveConsent(GRANTED_CHOICE)).rejects.toThrow("안전하게 저장")
     expect(currentChoice()).toEqual(DENIED_CHOICE)
     await expect(saveConsent(DENIED_CHOICE)).resolves.toMatchObject(DENIED_CHOICE)
+  })
+
+  it("공유 저장소가 중간에 실패해도 허용 쿠키를 남기지 않는다", async () => {
+    writeConsentCookie(legacy)
+    const original = window.localStorage.setItem.bind(window.localStorage)
+    vi.spyOn(window.localStorage, "setItem").mockImplementation((key, value) => {
+      if (key === CONSENT_SIGNAL_KEY) throw new Error("storage unavailable")
+      original(key, value)
+    })
+    await expect(saveConsent(GRANTED_CHOICE)).rejects.toThrow("storage unavailable")
+    expect(readConsent()).toMatchObject({ ...DENIED_CHOICE, s: 0 })
+    expect(currentChoice()).toEqual(DENIED_CHOICE)
   })
 
   it("미동기화 선택을 재시도하며 선택 식별자가 유지된다", async () => {

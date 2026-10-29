@@ -54,6 +54,15 @@ function subscribe(onChange: () => void): () => void {
   const onStorage = (event: StorageEvent) => {
     if (event.key === CONSENT_SIGNAL_KEY) onExternalChange()
   }
+  let channel: BroadcastChannel | null = null
+  try {
+    if (typeof window.BroadcastChannel === "function") {
+      channel = new window.BroadcastChannel(CONSENT_SIGNAL_KEY)
+      channel.addEventListener("message", onExternalChange)
+    }
+  } catch {
+    // storage/cookieStore/focus 구독이 남아 있다.
+  }
   window.addEventListener(CONSENT_CHANGE_EVENT, onChange)
   window.addEventListener("focus", onExternalChange)
   window.addEventListener("storage", onStorage)
@@ -66,6 +75,8 @@ function subscribe(onChange: () => void): () => void {
     window.removeEventListener("storage", onStorage)
     document.removeEventListener("visibilitychange", onExternalChange)
     cookieStore?.removeEventListener("change", onExternalChange)
+    channel?.removeEventListener("message", onExternalChange)
+    channel?.close()
   }
 }
 

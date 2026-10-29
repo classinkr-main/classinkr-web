@@ -169,9 +169,19 @@ function readLatestDecision(): ConsentRecord | null {
 
 /** 잠금 안에서 쿠키와 탭 공유 정본을 함께 갱신한다. */
 function publishDecision(record: ConsentRecord) {
-  window.localStorage.setItem(CONSENT_SIGNAL_KEY, JSON.stringify(record))
   writeConsentCookie(record)
   if (!record.analytics) writeAnonymousId(null)
+  try {
+    // 다른 탭이 storage 이벤트를 받았을 때 반드시 새 쿠키를 읽어야 한다.
+    window.localStorage.setItem(CONSENT_SIGNAL_KEY, JSON.stringify(record))
+  } catch (error) {
+    // 저장소가 중간에 차단되면 탭 간 순서를 확인할 수 없으므로 허용을 남기지 않는다.
+    const denied: ConsentRecord = { ...record, ...DENIED_CHOICE, s: 0 }
+    writeConsentCookie(denied)
+    writeAnonymousId(null)
+    notifyConsentChange(denied)
+    throw error
+  }
   notifyConsentChange(record)
 }
 
@@ -179,6 +189,16 @@ function notifyConsentChange(record: ConsentRecord) {
   applyConsentMode(record.s === 0 ? DENIED_CHOICE : record)
   if (isBrowser()) {
     window.dispatchEvent(new CustomEvent(CONSENT_CHANGE_EVENT, { detail: record }))
+    // 저장소 접근이 실행 중 차단되더라도 다른 탭이 철회를 인지할 수 있게 보조 신호를 보낸다.
+    try {
+      if (typeof window.BroadcastChannel === "function") {
+        const channel = new window.BroadcastChannel(CONSENT_SIGNAL_KEY)
+        channel.postMessage("changed")
+        channel.close()
+      }
+    } catch {
+      // storage/cookieStore/focus 구독이 남아 있다.
+    }
   }
 }
 
