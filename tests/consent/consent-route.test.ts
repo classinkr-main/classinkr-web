@@ -122,6 +122,8 @@ describe("POST /api/consent", () => {
     expect(res.headers.get("x-consent-client-commit")).toBe("1")
     expect(readSetCookie(res, "cln_consent")).toBeNull()
     expect(readSetCookie(res, "cln_aid")).toBeNull()
+    expect(readSetCookie(res, "cln_revoke_a")).toBeNull()
+    expect(readSetCookie(res, "cln_revoke_m")).toBeNull()
     expect(await res.json()).toMatchObject({ ok: true, stored: true, record: { v: CONSENT_POLICY_VERSION, analytics: true, marketing: true } })
   })
 
@@ -155,6 +157,14 @@ describe("POST /api/consent", () => {
     expect(await res.json()).toMatchObject({ ok: true, record: { analytics: false, marketing: false }, message: expect.stringContaining("새로고침") })
     expect(parseConsent(readSetCookie(res, "cln_consent")!.value)).toMatchObject({ analytics: false, marketing: false, s: 0 })
     expect(readSetCookie(res, "cln_aid")?.attributes).toContain("max-age=0")
+    for (const name of ["cln_revoke_a", "cln_revoke_m"]) {
+      const marker = readSetCookie(res, name)
+      expect(marker?.value).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+      expect(marker?.attributes).toContain("path=/")
+      expect(marker?.attributes).toContain("samesite=lax")
+      expect(marker?.attributes).toContain("secure")
+      expect(marker?.attributes).toContain("max-age=33782400")
+    }
     expect(from).not.toHaveBeenCalled()
   })
 
@@ -167,6 +177,16 @@ describe("POST /api/consent", () => {
     expect(readSetCookie(res, "cln_aid")?.attributes).toContain("max-age=0")
   })
 
+  it("구버전 거절 응답마다 두 철회 마커가 모두 바뀐다", async () => {
+    const body = { analytics: false, marketing: false }
+    const first = await POST(consentRequest(body, "https://classin.co.kr", false))
+    const second = await POST(consentRequest(body, "https://classin.co.kr", false))
+    for (const name of ["cln_revoke_a", "cln_revoke_m"]) {
+      expect(readSetCookie(first, name)?.value).toBeTruthy()
+      expect(readSetCookie(second, name)?.value).not.toBe(readSetCookie(first, name)?.value)
+    }
+  })
+
   it.each([null, [], {}, { analytics: "false", marketing: false }, { analytics: false, marketing: null }])(
     "구버전의 잘못된 입력(%j)은 400과 거절 쿠키를 반환한다",
     async (body) => {
@@ -175,6 +195,8 @@ describe("POST /api/consent", () => {
       expect(await res.json()).toMatchObject({ ok: false })
       expect(parseConsent(readSetCookie(res, "cln_consent")!.value)).toMatchObject({ analytics: false, marketing: false, s: 0 })
       expect(readSetCookie(res, "cln_aid")?.attributes).toContain("max-age=0")
+      expect(readSetCookie(res, "cln_revoke_a")?.value).toBeTruthy()
+      expect(readSetCookie(res, "cln_revoke_m")?.value).toBeTruthy()
       expect(from).not.toHaveBeenCalled()
     },
   )

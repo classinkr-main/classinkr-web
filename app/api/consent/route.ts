@@ -56,6 +56,10 @@ function createLegacyDeniedResponse(req: NextRequest, isDenial: boolean, invalid
   const options = { httpOnly: false, path: "/", sameSite: "lax" as const, secure: isSecureRequest(req) }
   response.cookies.set(CONSENT_COOKIE, JSON.stringify(record), { ...options, maxAge: CONSENT_COOKIE_MAX_AGE })
   response.cookies.set(ANONYMOUS_ID_COOKIE, "", { ...options, maxAge: 0 })
+  // 구버전의 거절 응답도 다른 탭에 진행 중인 신형 허용보다 우선해야 한다.
+  // 매 응답마다 새 값을 발급해 늦은 허용 응답의 오래된 철회 상태를 식별할 수 있다.
+  response.cookies.set("cln_revoke_a", randomUUID(), { ...options, maxAge: CONSENT_COOKIE_MAX_AGE })
+  response.cookies.set("cln_revoke_m", randomUUID(), { ...options, maxAge: CONSENT_COOKIE_MAX_AGE })
   return response
 }
 
