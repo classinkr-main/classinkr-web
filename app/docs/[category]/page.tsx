@@ -14,6 +14,13 @@ import {
   getDocsContent,
   resolveDocsRedirect,
 } from "@/lib/docs-content"
+import {
+  DOC_LIST_KIND_LABELS,
+  DOC_LIST_KIND_ORDER,
+  groupCategoryItems,
+  isDocListKind,
+  type DocListKind,
+} from "@/lib/docs-list-meta"
 import { createPublicMetadata } from "@/lib/seo"
 
 import {
@@ -25,10 +32,13 @@ import {
   type DocsSearchParams,
 } from "../_utils"
 import { DocsCategoryNav } from "@/components/docs"
-import { SearchHighlight } from "@/components/ui/SearchHighlight"
+import { DocsListRow } from "@/components/docs/DocsListRow"
 import { DocsSearchLogger } from "@/components/docs/DocsSearchLogger"
 
 const DOCS_CONTACT_HREF = `/contact?topic=${encodeURIComponent("계정/접속/기술 지원")}&prefill=${encodeURIComponent("가이드에서 찾지 못한 내용을 문의하고 싶습니다.")}#contact-form`
+
+const FOCUS_RING =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
 
 function formatCategoryHeading(title: string): string {
   const bracketMatch = title.match(/^\[(.+?)\]/)
@@ -38,9 +48,12 @@ function formatCategoryHeading(title: string): string {
   return title
 }
 
+/** 주제 페이지는 검색어(q)와 문서 유형 필터(type)를 받는다. */
+type DocsCategorySearchParams = DocsSearchParams & { type?: string | string[] }
+
 interface DocsCategoryPageProps {
   params: Promise<{ category: string }>
-  searchParams?: Promise<DocsSearchParams>
+  searchParams?: Promise<DocsCategorySearchParams>
 }
 
 export function generateStaticParams() {
@@ -54,7 +67,7 @@ export async function generateMetadata({
   searchParams,
 }: DocsCategoryPageProps): Promise<Metadata> {
   const { category: categoryParam } = await params
-  const { q } = await (searchParams ?? Promise.resolve<DocsSearchParams>({}))
+  const { q, type } = await (searchParams ?? Promise.resolve<DocsCategorySearchParams>({}))
   const docsContent = await getDocsContent()
   const category = getDocCategoryFromContent(docsContent, categoryParam)
 
@@ -66,14 +79,14 @@ export async function generateMetadata({
   }
 
   // title 에 사이트 접미사를 넣지 않는다 — 루트 템플릿(`%s | Classin`)과 createPublicMetadata 의 OG 제목이
-  // 이미 "| Classin" 을 붙인다. canonical 은 쿼리 없는 카테고리 경로, 검색어가 붙은 URL 은 색인에서 뺀다.
+  // 이미 "| Classin" 을 붙인다. canonical 은 쿼리 없는 카테고리 경로, 검색어·유형 필터가 붙은 URL 은 색인에서 뺀다.
   return withSearchNoIndex(
     createPublicMetadata({
       title: category.title,
       description: category.description,
       path: getDocCategoryPath(category.id),
     }),
-    readQuery(q)
+    readQuery(q) || readQuery(type)
   )
 }
 
@@ -82,7 +95,8 @@ export default async function DocsCategoryPage({
   searchParams,
 }: DocsCategoryPageProps) {
   const { category: categoryParam } = await params
-  const { q: rawQ } = await (searchParams ?? Promise.resolve<DocsSearchParams>({}))
+  const { q: rawQ, type: rawType } = await (searchParams ??
+    Promise.resolve<DocsCategorySearchParams>({}))
   const q = readQuery(rawQ)
   const docsContent = await getDocsContent()
 
@@ -121,6 +135,33 @@ export default async function DocsCategoryPage({
     : articleSummaries
   const searchFallbackHref = q ? `/docs/search?q=${encodeURIComponent(q)}` : "/docs/search"
   const categoryTabs = getDocsCategoryNavItems(docsContent, categoryParam)
+  const categoryPath = getDocCategoryPath(categoryParam)
+
+  // 유형 필터는 이 주제에 실제로 있는 유형이 두 가지 이상일 때만 보인다. 없는 유형을 주소로 고르면 전체를 보여 준다.
+  const kindCounts = DOC_LIST_KIND_ORDER.map((kind) => ({
+    kind,
+    count: articleSummaries.filter((article) => article.kind === kind).length,
+  })).filter((item) => item.count > 0)
+  const requestedKind = readQuery(rawType)
+  const activeKind: DocListKind | null =
+    !query && isDocListKind(requestedKind) && kindCounts.some((item) => item.kind === requestedKind)
+      ? requestedKind
+      : null
+  const showKindFilter = !query && kindCounts.length > 1
+
+  const listedDocs = query
+    ? filteredDocs
+    : activeKind
+      ? articleSummaries.filter((article) => article.kind === activeKind)
+      : articleSummaries
+  // 검색 결과는 관련도 순서를 지키고, 그 밖에는 소제목 묶음으로 나눠 훑기 쉽게 한다.
+  const groups = query
+    ? [{ id: "all", label: "", items: listedDocs }]
+    : groupCategoryItems(categoryParam, listedDocs)
+  const isGrouped = groups.length > 1
+  const rowMeta = activeKind
+    ? (["readTime", "images", "updatedAt"] as const)
+    : (["kind", "readTime", "images", "updatedAt"] as const)
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] pt-28 pb-24 text-[#111110] md:pt-36">
@@ -128,9 +169,9 @@ export default async function DocsCategoryPage({
       <section className="container mx-auto max-w-[1080px] px-5">
         <Link
           href="/docs"
-          className="inline-flex origin-left items-center gap-2 text-sm font-medium text-[#1a1a1a]/45 transition-all duration-150 hover:text-[#084734] active:scale-[0.98]"
+          className={`inline-flex items-center gap-2 rounded-[6px] text-sm font-medium text-[#615D59] transition-colors duration-150 hover:text-[#084734] ${FOCUS_RING}`}
         >
-          <ArrowRight className="h-4 w-4 rotate-180" />
+          <ArrowRight className="h-4 w-4 rotate-180" aria-hidden />
           가이드 홈으로 돌아가기
         </Link>
 
@@ -146,18 +187,22 @@ export default async function DocsCategoryPage({
           </p>
         </div>
 
-        <form action={`/docs/${categoryParam}`} method="get" className="mt-10 flex max-w-2xl items-center gap-3 border-b border-black/[0.08] pb-4 transition-colors focus-within:border-[#084734]/40">
+        <form
+          action={categoryPath}
+          method="get"
+          className="mt-10 flex max-w-2xl items-center gap-3 border-b border-black/[0.08] pb-4 transition-colors focus-within:border-[#084734]/40"
+        >
           <Search className="h-4 w-4 shrink-0 text-[#A39E98]" aria-hidden />
           <input
             name="q"
             defaultValue={q}
             aria-label={`${category.title} 검색`}
             placeholder="이 주제 안에서 검색"
-            className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#A39E98]"
+            className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#78736D]"
           />
           <button
             type="submit"
-            className="-mr-2 shrink-0 rounded-[6px] px-2 py-2.5 text-sm font-semibold text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+            className={`-mr-2 shrink-0 rounded-[6px] px-2 py-2.5 text-sm font-semibold text-[#084734] ${FOCUS_RING}`}
           >
             검색
           </button>
@@ -167,43 +212,107 @@ export default async function DocsCategoryPage({
           {query ? (
             <>
               “{q}” 검색 결과 {filteredDocs.length}개
+              <Link
+                href={categoryPath}
+                className={`ml-3 font-semibold text-[#084734] underline-offset-4 hover:underline ${FOCUS_RING}`}
+              >
+                검색 지우기
+              </Link>
             </>
           ) : (
-            <>
-              이 주제의 가이드 {articleSummaries.length}개
-            </>
+            <>이 주제의 가이드 {articleSummaries.length}개</>
           )}
         </p>
 
         <DocsCategoryNav items={categoryTabs} className="mt-8" />
       </section>
 
-      <section className="container mx-auto max-w-[1080px] px-5 mt-12">
-        <div className="border-t border-black/[0.08] pt-4">
-          <ul className="divide-y divide-black/[0.06]">
-            {(query ? filteredDocs : articleSummaries).map((article) => (
-              <li key={article.href} className="py-5">
-                <Link href={article.href} className="group block origin-center transition-all duration-150 active:scale-[0.98] active:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="break-words text-[16px] font-semibold text-[#111110] group-hover:text-[#084734]">
-                        <SearchHighlight text={article.title} query={q} />
-                      </p>
-                      <p className="mt-1.5 max-w-3xl break-words text-[15px] leading-[26px] text-[#4F4C49]">
-                        <SearchHighlight text={article.description} query={q} />
-                      </p>
-                      <p className="mt-2.5 text-[13px] text-[#615D59]">
-                        {article.readTime} · {article.updatedAt}
-                        {article.tags?.length ? ` · ${article.tags.join(" / ")}` : ""}
-                      </p>
-                    </div>
-                    <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-[#A39E98]" />
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
-          {(query ? filteredDocs : articleSummaries).length === 0 && (
+      <section
+        className="container mx-auto max-w-[1080px] px-5 mt-10"
+        aria-label={query ? "검색 결과" : "가이드 목록"}
+      >
+        <div className="max-w-[880px]">
+          {showKindFilter ? (
+            // 유형 고르기는 주소(?type=)로 남긴다 — 자바스크립트 없이도 동작하고, 뒤로 가기로 되돌릴 수 있다.
+            <nav aria-label="문서 유형" className="flex flex-wrap items-center gap-x-5 gap-y-2">
+              {[
+                { kind: null, label: "전체", count: articleSummaries.length },
+                ...kindCounts.map((item) => ({
+                  kind: item.kind,
+                  label: DOC_LIST_KIND_LABELS[item.kind],
+                  count: item.count,
+                })),
+              ].map((item) => {
+                const isActive = item.kind === activeKind
+                const href = item.kind ? `${categoryPath}?type=${item.kind}` : categoryPath
+
+                return (
+                  <Link
+                    key={item.kind ?? "all"}
+                    href={href}
+                    scroll={false}
+                    aria-current={isActive ? "true" : undefined}
+                    className={`group inline-flex min-h-9 items-center gap-1.5 rounded-[6px] text-[14px] transition-colors duration-150 ${FOCUS_RING} ${
+                      isActive
+                        ? "font-semibold text-[#111110]"
+                        : "text-[#615D59] hover:text-[#111110]"
+                    }`}
+                  >
+                    <span
+                      aria-hidden
+                      className={`text-[10px] leading-none ${isActive ? "text-[#084734]" : "text-[#A39E98]"}`}
+                    >
+                      {isActive ? "●" : "○"}
+                    </span>
+                    {item.label}
+                    <span className="tabular-nums text-[13px] font-normal text-[#615D59]">
+                      {item.count}
+                    </span>
+                  </Link>
+                )
+              })}
+            </nav>
+          ) : null}
+
+          <div className={showKindFilter ? "mt-4" : undefined}>
+            {listedDocs.length > 0 && groups.map((group, groupIndex) => {
+              const headingId = `docs-group-${group.id}`
+
+              return (
+                <section
+                  key={group.id}
+                  aria-labelledby={isGrouped ? headingId : undefined}
+                  className={isGrouped && groupIndex > 0 ? "mt-12" : undefined}
+                >
+                  {isGrouped ? (
+                    <h2
+                      id={headingId}
+                      className="flex items-baseline gap-2 border-b border-black/[0.08] pb-3 pt-6 text-[17px] font-bold text-[#111110]"
+                    >
+                      {group.label}
+                      <span className="text-[13px] font-normal tabular-nums text-[#615D59]">
+                        {group.items.length}
+                      </span>
+                    </h2>
+                  ) : (
+                    <div className="border-t border-black/[0.08]" aria-hidden />
+                  )}
+                  <ul>
+                    {group.items.map((article) => (
+                      <DocsListRow
+                        key={article.href}
+                        article={article}
+                        query={q}
+                        meta={rowMeta}
+                      />
+                    ))}
+                  </ul>
+                </section>
+              )
+            })}
+          </div>
+
+          {listedDocs.length === 0 && (
             <div className="my-6 rounded-lg border border-black/[0.08] bg-white p-5">
               <p className="text-[15px] font-semibold text-[#111110]">
                 이 주제에는 맞는 가이드가 없습니다.
@@ -215,14 +324,14 @@ export default async function DocsCategoryPage({
               <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                 <Link
                   href={searchFallbackHref}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-[6px] bg-[#084734] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+                  className={`inline-flex h-10 items-center justify-center gap-2 rounded-[6px] bg-[#084734] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#065c41] ${FOCUS_RING}`}
                 >
                   전체 가이드에서 다시 검색
                   <ArrowRight className="h-4 w-4" aria-hidden />
                 </Link>
                 <Link
                   href={DOCS_CONTACT_HREF}
-                  className="inline-flex h-10 items-center justify-center rounded-[6px] border border-black/[0.08] bg-white px-4 text-sm font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+                  className={`inline-flex h-10 items-center justify-center rounded-[6px] border border-black/[0.08] bg-white px-4 text-sm font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F4] ${FOCUS_RING}`}
                 >
                   상담 남기기
                 </Link>

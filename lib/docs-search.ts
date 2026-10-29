@@ -1,5 +1,5 @@
 import type { DocArticle, DocArticleDocType } from "@/lib/docs"
-import { DOC_LIST_KIND_LABELS, getDocListKind, type DocListKind } from "@/lib/docs-list-meta"
+import { getDocListKind, type DocListKind } from "@/lib/docs-list-meta"
 
 /**
  * 가이드 검색 — 질의 정규화·동의어·점수.
@@ -65,11 +65,6 @@ export function buildDocsSearchIndex(doc: DocArticle): DocsSearchIndex {
   }
 }
 
-/** 결과 목록에 붙일 유형 이름(사용법·문제 해결·FAQ·업데이트). */
-export function getDocsSearchKindLabel(doc: DocsSearchable): string {
-  return DOC_LIST_KIND_LABELS[doc.searchIndex?.kind ?? "howto"]
-}
-
 // ---------------------------------------------------------------------------
 // 정규화
 
@@ -99,6 +94,7 @@ function escapeRegExp(value: string) {
  * - 비번·로긴·인증번호·튕김·이디비: 실제 문서 keywords(lib/docs.ts·문제 해결 문서)에 고객 표현으로 들어 있다.
  * - 녹화본/다시보기/리플레이: 채널톡 원인 분류(lib/channel-talk-root-causes.ts)의 증상 패턴.
  * - 숙제/과제, 전자칠판/보드/IFP, 캠/카메라, 마이크/소리/음성: 상담과 문서에서 같은 뜻으로 섞어 쓴다.
+ * - 학생 초대/추가/등록: 같은 일을 교사 문서는 "구성원 초대", 관리자 문서는 "학생 추가·일괄 등록"이라 부른다.
  * 묶음 안의 다른 말로 맞으면 원래 말보다 낮게(ALT_WEIGHT) 친다.
  */
 const SYNONYM_GROUPS: readonly (readonly string[])[] = [
@@ -114,11 +110,15 @@ const SYNONYM_GROUPS: readonly (readonly string[])[] = [
   ["휴대폰", "핸드폰", "스마트폰"],
   ["끊김", "끊겨", "끊기", "끊길", "튕김", "튕겨", "튕기", "튕길"],
   ["선생님", "강사", "교사"],
+  ["초대", "추가", "등록"],
+  ["입장", "들어가"],
   ["edb", "이디비"],
+  ["맥", "mac", "macos", "맥북"],
+  ["윈도우", "윈도", "windows"],
 ]
 
 /** 짧아서 다른 낱말 속에 잘 숨는 말 — 낱말 첫머리에서만 맞춘다(대시보드·키보드의 "보드" 제외). */
-const WORD_START_FORMS = new Set(["보드", "캠"])
+const WORD_START_FORMS = new Set(["보드", "캠", "맥"])
 
 /** 증상 표지 — 질의에 있으면 문제 해결 문서를 올리고, 문서 쪽 "안 될 때" 같은 표현과 맞춘다. */
 const SYMPTOM_FORMS = ["안됨", "안돼", "안되", "안될", "안됐", "오류", "에러", "실패"]
@@ -189,6 +189,8 @@ export interface DocsQueryAnalysis {
   requiredCount: number
   /** 필수 검색어 기본형을 이어 붙인 구절("비밀번호변경") */
   phrase: string
+  /** "녹화 안 돼요" → 제목의 "녹화가 안 될 때"처럼 낱말 바로 뒤에 증상이 붙은 꼴 */
+  symptomPhrases: RegExp[]
   symptom: boolean
 }
 
@@ -259,14 +261,18 @@ function buildTerm(token: string, nextToken?: string): QueryTerm | null {
     return { surface: token, base: token, primary: uniqueForms(["않"]), alt: [], soft: true }
   }
 
-  // 안 보여요 → "안보여요": 문서의 "안 보이거나·안 보일 때"와 앞 두 글자("안보")로 맞춘다.
+  // 안 보여요 → "안보여요": 문서의 "안 보이거나·안 보일 때"와 앞 두 글자("안보")로,
+  // 못 들어가요 → "들어가지지 않을 때"·"입장이 안 될 때"와 부정어를 뗀 말·동의어로 맞춘다.
   if (/^[안못][가-힣]/.test(token) && !NEGATION_NOUN.test(token)) {
     const stem = stripSuffix(token, VERB_ENDINGS)
+    const verbVariants = tokenVariants(token.slice(1)).filter((variant) => variant.length >= 2)
+    const primary = uniqueForms([token, stem, token.slice(0, 2), ...verbVariants])
+    const group = findSynonymGroup(verbVariants)
     return {
       surface: token,
       base: stem,
-      primary: uniqueForms([token, stem, token.slice(0, 2)]),
-      alt: [],
+      primary,
+      alt: group ? uniqueForms(group, new Set(primary.map((form) => form.text))) : [],
       soft: true,
     }
   }
@@ -281,7 +287,7 @@ function buildTerm(token: string, nextToken?: string): QueryTerm | null {
   const primary = uniqueForms(variants)
   const alt = group ? uniqueForms(group, new Set(primary.map((form) => form.text))) : []
 
-  const withoutYo = token.endsWith("요") && token.length >= 3 ? token.slice(0, -1) : ""
+  const withoutYo = token.endsWith("요") && token.length >= 2 ? token.slice(0, -1) : ""
   const verbish = Boolean(withoutYo) && VERBISH_LAST.has(withoutYo.slice(-1))
   const beforeNot = Boolean(nextToken && NOT_TOKEN.test(nextToken) && token.endsWith("지"))
   const soft = !group && (verbish || beforeNot)
@@ -289,13 +295,17 @@ function buildTerm(token: string, nextToken?: string): QueryTerm | null {
   return { surface: token, base, primary, alt, soft }
 }
 
+const GLUED_NEGATION =
+  /([가-힣]{2,})(?=[안못](?:돼|되|됨|될|됐|보|떠|뜨|나|와|들|켜|열|올|잡|써|해|하|받|찾|가)[가-힣]*(?:\s|$))/g
 const MAX_QUERY_LENGTH = 120
 const MAX_TERMS = 12
 
 export function analyzeDocsQuery(query: string): DocsQueryAnalysis {
   const normalized = normalizeSearchText(query.slice(0, MAX_QUERY_LENGTH))
+  // "로그인안돼요" → "로그인 안돼요": 붙여 쓴 증상 표현을 앞 낱말과 떼어 낸다.
+  const separated = normalized.replace(GLUED_NEGATION, "$1 ")
   // "안 돼요"·"못 들어가요" → 부정어를 뒤 낱말에 붙여 한 덩어리로 본다.
-  const joined = normalized.replace(/(^|\s)([안못])\s+(?=[가-힣])/g, "$1$2")
+  const joined = separated.replace(/(^|\s)([안못])\s+(?=[가-힣])/g, "$1$2")
   const tokens = joined.split(" ").filter(Boolean).slice(0, MAX_TERMS)
 
   let terms = tokens
@@ -325,8 +335,33 @@ export function analyzeDocsQuery(query: string): DocsQueryAnalysis {
     terms,
     requiredCount: required.length,
     phrase: compact(required.map((term) => term.base).join("")),
+    symptomPhrases: buildSymptomPhrases(terms),
     symptom: SYMPTOM_HINT.test(normalized),
   }
+}
+
+const PHRASE_PARTICLE = "(?:이|가|은|는|을|를|도|에서|이랑)?"
+
+/** 필수 낱말 바로 뒤에 증상(선택 검색어)이 오는 쌍을 정규식으로 만든다. */
+function buildSymptomPhrases(terms: readonly QueryTerm[]) {
+  const phrases: RegExp[] = []
+  for (let index = 0; index < terms.length - 1; index += 1) {
+    const subject = terms[index]
+    const predicate = terms[index + 1]
+    if (subject.soft || !predicate.soft) continue
+
+    const subjectForms = [...subject.primary, ...subject.alt].map((form) => escapeRegExp(form.text))
+    const predicateForms = predicate.primary
+      .map((form) => form.text)
+      .filter((text) => /^[안못않]/.test(text))
+      .map(escapeRegExp)
+    if (subjectForms.length === 0 || predicateForms.length === 0) continue
+
+    phrases.push(
+      new RegExp(`(?:${subjectForms.join("|")})${PHRASE_PARTICLE}(?:${predicateForms.join("|")})`)
+    )
+  }
+  return phrases
 }
 
 const analysisCache = new Map<string, DocsQueryAnalysis>()
@@ -423,9 +458,14 @@ const WEIGHT = {
 } as const
 const ALT_WEIGHT = 0.7
 const SOFT_WEIGHT = 0.35
+/** 여러 낱말이 다 맞으면 더한다 — 본문에만 스친 문서가 덕 보지 않게 그 문서 점수만큼까지만. */
 const ALL_TERMS_BONUS = 300
 const PHRASE_BONUS = { exactTitle: 150, title: 150, heading: 80, keyword: 60 } as const
-const SYMPTOM_BOOST = { factor: 1.3, add: 150 } as const
+const SYMPTOM_PHRASE_BONUS = { title: 120, heading: 60 } as const
+/** 증상형 질의에서 문제 해결 문서에 곱한다. 맞은 정도에 비례해야 약하게 걸린 문서가 튀지 않는다. */
+const SYMPTOM_BOOST = 1.6
+/** 결과 화면에서는 1위 점수의 이 비율보다 낮은(본문에만 스친) 문서를 뺀다. */
+const MIN_RELATIVE_SCORE = 0.08
 
 function formMatches(field: Field, form: Form) {
   return form.re ? form.re.test(field.norm) : field.compact.includes(form.text)
@@ -530,7 +570,8 @@ function evaluate(
   if (analysis.terms.length === 0) return EMPTY_EVALUATION
 
   const prepared = prepare(doc)
-  let total = 0
+  let requiredScore = 0
+  let softScore = 0
   let matchedRequired = 0
   const effective: QueryTerm[] = []
 
@@ -544,8 +585,12 @@ function evaluate(
     }
 
     if (!result) continue
-    total += term.soft ? result.score * SOFT_WEIGHT : result.score
-    if (!term.soft) matchedRequired += 1
+    if (term.soft) {
+      softScore += result.score * SOFT_WEIGHT
+    } else {
+      requiredScore += result.score
+      matchedRequired += 1
+    }
     effective.push(...result.matchedTerms.map((matched) => ({ ...matched, soft: term.soft })))
   }
 
@@ -555,8 +600,9 @@ function evaluate(
   // 여러 낱말 중 절반도 안 맞으면 뺀다. 다 맞으면 확실히 위로 올린다.
   const coverage = matchedRequired / required
   if (coverage < 0.5) return EMPTY_EVALUATION
-  total *= coverage
-  if (required > 1 && coverage === 1) total += ALL_TERMS_BONUS
+  // "안 돼요" 같은 선택 검색어는 필수 검색어가 맞은 만큼까지만 보탠다.
+  let total = (requiredScore + Math.min(softScore, requiredScore)) * coverage
+  if (required > 1 && coverage === 1) total += Math.min(ALL_TERMS_BONUS, total)
 
   const phrase = analysis.phrase
   if (phrase.length >= 2) {
@@ -570,9 +616,15 @@ function evaluate(
     }
   }
 
-  if (analysis.symptom && prepared.kind === "troubleshooting") {
-    total = total * SYMPTOM_BOOST.factor + SYMPTOM_BOOST.add
+  for (const pattern of analysis.symptomPhrases) {
+    if (pattern.test(prepared.title.compact)) {
+      total += SYMPTOM_PHRASE_BONUS.title
+    } else if (prepared.sections.some((section) => pattern.test(section.heading.compact))) {
+      total += SYMPTOM_PHRASE_BONUS.heading
+    }
   }
+
+  if (analysis.symptom && prepared.kind === "troubleshooting") total *= SYMPTOM_BOOST
 
   const score = Math.round(total)
   if (!withDetails) return { score, sections: [], highlight: "" }
@@ -629,7 +681,10 @@ function buildHighlight(texts: readonly string[], terms: readonly QueryTerm[]) {
       const pattern = new RegExp(`${head}${chars}`, "giu")
       for (const text of texts) {
         for (const match of text.normalize("NFC").matchAll(pattern)) {
-          for (const piece of match[0].split(/\s+/)) {
+          // 한 글자 조각("안 될"의 "안")은 엉뚱한 곳까지 칠해서 뺀다. 한 글자 동의어(맥·캠)만 예외.
+          const whole = match[0]
+          if (form.re && whole === form.text) pieces.add(whole.toLowerCase())
+          for (const piece of whole.split(/\s+/)) {
             if (piece.length >= 2) pieces.add(piece.toLowerCase())
           }
         }
@@ -652,7 +707,10 @@ export interface DocsSearchResult<T extends DocsSearchable> extends DocsSearchEv
   doc: T
 }
 
-/** 점수순 결과 — 같은 점수면 원래 목록 순서를 지킨다. */
+/**
+ * 점수순 결과 — 같은 점수면 원래 목록 순서를 지킨다.
+ * 1위보다 훨씬 약한(본문에만 스친) 문서는 뺀다. 홈·주제 페이지도 이 함수를 쓰면 같은 결과가 나온다.
+ */
 export function searchDocs<T extends DocsSearchable>(
   docs: readonly T[],
   query: string,
@@ -661,10 +719,14 @@ export function searchDocs<T extends DocsSearchable>(
   const analysis = getAnalysis(query)
   if (analysis.terms.length === 0) return []
 
-  return docs
+  const scored = docs
     .map((doc, index) => ({ doc, index, ...evaluate(doc, analysis, true, options.sectionLimit) }))
     .filter((result) => result.score > 0)
     .sort((a, b) => b.score - a.score || a.index - b.index)
+  const minScore = (scored[0]?.score ?? 0) * MIN_RELATIVE_SCORE
+
+  return scored
+    .filter((result) => result.score >= minScore)
     .map(({ doc, score, sections, highlight }) => ({ doc, score, sections, highlight }))
 }
 

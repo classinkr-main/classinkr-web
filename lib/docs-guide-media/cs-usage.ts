@@ -434,8 +434,9 @@ export const CS_USAGE_GUIDE_MEDIA: GuideMediaMap = {
       },
     ],
   },
+  // "순서대로 따라 하기"에는 전체 순서 한 장이 붙어 있으므로, 단계 화면은 템플릿·게시 안내 섹션에 나눠 붙인다.
   "teacher/cs-bulk-exam-upload": {
-    "순서대로 따라 하기": [
+    "템플릿을 쓸 때": [
       {
         type: "image",
         src: `${BULK_EXAM}/01-bulk-add-button.webp`,
@@ -452,11 +453,13 @@ export const CS_USAGE_GUIDE_MEDIA: GuideMediaMap = {
         width: 1078,
         height: 272,
       },
+    ],
+    "게시하기 전에": [
       {
         type: "image",
         src: `${BULK_EXAM}/03-recognition-confirm.webp`,
         alt: "시험 문제 편집 단계. 오른쪽에 문제 번호 동그라미와 인식 성공·실패 표시가 있고, 아래쪽 내 문제 은행에도 저장하기와 확인 버튼에 빨간 상자가 있다",
-        caption: "인식 실패한 문제를 고치고, 필요하면 [내 문제 은행]에도 저장하기를 체크한 뒤 [확인]을 누릅니다.",
+        caption: "초록 동그라미는 인식 성공, 빨간 동그라미는 실패입니다. 실패한 문제를 고치고, 필요하면 [내 문제 은행]에도 저장하기를 체크한 뒤 [확인]을 누릅니다.",
         width: 1078,
         height: 717,
       },
@@ -464,7 +467,7 @@ export const CS_USAGE_GUIDE_MEDIA: GuideMediaMap = {
         type: "image",
         src: `${BULK_EXAM}/04-publish-exam.webp`,
         alt: "문제가 들어간 새 시험 추가 화면. 오른쪽에 시간, 점수, 게시 설정이 있고 오른쪽 아래 게시 버튼에 빨간 상자가 있다",
-        caption: "점수와 게시 설정을 확인하고 [게시]를 누릅니다.",
+        caption: "문제 수·만점과 게시 설정을 확인하고 [게시]를 누릅니다. 바로 공개하지 않으려면 [초안 저장]을 누릅니다.",
         width: 1060,
         height: 700,
       },

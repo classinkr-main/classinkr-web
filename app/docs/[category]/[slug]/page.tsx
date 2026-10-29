@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound, permanentRedirect, redirect } from "next/navigation"
-import { ArrowRight, Calendar, Clock } from "lucide-react"
+import { ArrowLeft, ArrowRight, Calendar, Clock, Wrench } from "lucide-react"
 
 import {
   DocsArticle,
@@ -12,6 +12,10 @@ import {
   DocsSidebarLayout,
   DocsTableOfContents,
 } from "@/components/docs"
+import { DocsMediaLightbox } from "@/components/docs/DocsMediaLightbox"
+import { DocsPrevNext, findPrevNextDocs } from "@/components/docs/DocsPrevNext"
+import { DocsInlineToc } from "@/components/docs/DocsTableOfContents"
+import { DocsTroubleshootingHelp } from "@/components/docs/DocsTroubleshootingHelp"
 import { getDocCategoryPath, getDocPath, isDocCategoryId, listDocs } from "@/lib/docs"
 import {
   getDocCategoryFromContent,
@@ -150,14 +154,12 @@ export default async function DocsArticlePage({
   const activePath = getDocPath(doc)
   const relatedDocs = getRelatedDocsFromContent(docsContent, doc, 3)
 
-  // 같은 카테고리 내 이전/다음 문서 (설치 → 가입처럼 순서가 있는 가이드의 연속 동선)
-  const categoryDocs = docsContent.docs.filter(
-    (item) => item.category === doc.category && (item.visibility ?? "public") === "public"
-  )
-  const docIndex = categoryDocs.findIndex((item) => item.slug === doc.slug)
-  const prevDoc = docIndex > 0 ? categoryDocs[docIndex - 1] : null
-  const nextDoc =
-    docIndex >= 0 && docIndex < categoryDocs.length - 1 ? categoryDocs[docIndex + 1] : null
+  // 사이드바와 같은 목록(공개·색인 문서)·같은 순서로 같은 분류 안의 이전/다음 문서를 고른다.
+  // (설치 → 가입처럼 순서가 있는 가이드의 연속 동선)
+  const navGroups = getDocsNavGroups(activePath, docsContent)
+  const prevNext = findPrevNextDocs(navGroups)
+  const tocItems = toTocItems(doc)
+  const isTroubleshooting = doc.docType === "troubleshooting"
 
   // 카테고리가 board(하드웨어)면 하드웨어 상담, 그 외는 기술 지원 상담으로 연결
   const contactTopic = doc.category === "board" ? "하드웨어/설치/AS" : "계정/접속/기술 지원"
@@ -165,8 +167,26 @@ export default async function DocsArticlePage({
 
   return (
     <DocsSidebarLayout
-      sidebar={<DocsSidebar groups={getDocsNavGroups(activePath, docsContent)} />}
-      toc={<DocsTableOfContents items={toTocItems(doc)} />}
+      sidebar={<DocsSidebar groups={navGroups} />}
+      toc={
+        <DocsTableOfContents
+          items={tocItems}
+          title="이 문서의 순서"
+          footer={<DocsPrintButton variant="ghost" />}
+        />
+      }
+      topBar={
+        <Link
+          href={getDocCategoryPath(doc.category)}
+          className="group inline-flex min-h-11 origin-left items-center gap-2 text-sm font-medium text-[#615D59] transition-colors duration-150 hover:text-[#084734] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+        >
+          <ArrowLeft
+            className="h-4 w-4 shrink-0 transition-transform duration-150 group-hover:-translate-x-0.5"
+            aria-hidden
+          />
+          <span className="min-w-0 truncate">{category.title}로 돌아가기</span>
+        </Link>
+      }
     >
       {/* Article(문제 해결 문서는 TechArticle)·BreadcrumbList, 공개·색인 문서에는 HowTo 또는 FAQPage 를 더한다. */}
       <JsonLd
@@ -176,49 +196,48 @@ export default async function DocsArticlePage({
           categoryPath: getDocCategoryPath(doc.category),
         })}
       />
-      <Link
-        href={getDocCategoryPath(doc.category)}
-        className="mb-6 inline-flex origin-left items-center gap-2 text-sm font-medium text-[#1a1a1a]/45 transition-all duration-150 hover:text-[#084734] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
-      >
-        <ArrowRight className="h-4 w-4 rotate-180" />
-        {category.title}로 돌아가기
-      </Link>
+      {/* 본문 사진을 눌렀을 때 여는 크게 보기 창(ESC·←/→·포커스 가두기) */}
+      <DocsMediaLightbox />
 
       <DocsArticle
         className="print-only-article"
         eyebrow={category.title}
+        badge={
+          isTroubleshooting ? (
+            <span className="inline-flex items-center gap-1.5 rounded-[6px] border border-[#084734]/30 px-2 py-0.5 text-xs font-bold text-[#084734]">
+              <Wrench className="h-3.5 w-3.5" aria-hidden />
+              문제 해결
+            </span>
+          ) : undefined
+        }
         title={doc.title}
         description={doc.description}
         meta={
-          <div className="flex flex-wrap items-center gap-4">
-            <span className="inline-flex items-center gap-1.5">
-              <Clock className="h-4 w-4" />
-              {doc.readMinutes}분 읽기
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <Calendar className="h-4 w-4" />
-              {formatDocDate(doc.updatedAt)} 업데이트
-            </span>
-            <span>대상: {doc.audience}</span>
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <span className="inline-flex items-center gap-1.5">
+                <Clock className="h-4 w-4" aria-hidden />
+                {doc.readMinutes}분 읽기
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Calendar className="h-4 w-4" aria-hidden />
+                {formatDocDate(doc.updatedAt)} 업데이트
+              </span>
+              <span>대상: {doc.audience}</span>
+            </div>
+            {/* 강사·학생에게 보내거나 교실에 붙여 둘 때 — 인쇄하면 본문만 나온다.
+                1280px 이상에서는 오른쪽 목차 아래에 같은 버튼이 있다. */}
+            <DocsPrintButton variant="ghost" className="xl:hidden" />
           </div>
         }
+        beforeSections={<DocsInlineToc items={tocItems} className="xl:hidden" />}
         sections={toArticleSections(doc)}
+        sectionLinks
         footer={
           <div className="space-y-10">
-            <section className="border-t border-black/[0.08] pt-8 print:hidden">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
-                저장 / 인쇄
-              </p>
-              <h2 className="mt-2 text-xl font-black tracking-card text-[#111110]">
-                저장해 두고 보기
-              </h2>
-              <p className="mt-3 max-w-3xl text-[15px] leading-7 text-[#615D59]">
-                강사나 학생에게 보내거나 교실에 붙여 둘 거라면 PDF로 저장하거나 인쇄하세요.
-              </p>
-              <div className="mt-4">
-                <DocsPrintButton />
-              </div>
-            </section>
+            {isTroubleshooting ? (
+              <DocsTroubleshootingHelp docTitle={doc.title} contactHref={contactHref} />
+            ) : null}
 
             {doc.resources && doc.resources.length > 0 && (
               <section className="border-t border-black/[0.08] pt-8">
@@ -250,34 +269,6 @@ export default async function DocsArticlePage({
               </section>
             )}
 
-            <div className="print:hidden">
-              <DocsArticleFeedback
-                articlePath={activePath}
-                articleSlug={doc.slug}
-                category={doc.category}
-                title={doc.title}
-              />
-            </div>
-
-            <section className="border-t border-black/[0.08] pt-8 print:hidden">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
-                추가 지원
-              </p>
-              <h2 className="mt-2 text-xl font-black tracking-card text-[#111110]">
-                문서로 해결되지 않았나요?
-              </h2>
-              <p className="mt-3 max-w-3xl text-[15px] leading-7 text-[#615D59]">
-                어느 화면에서 무엇이 안 되는지 적어 주시면 담당 매니저가 확인하고 연락드립니다.
-              </p>
-              <Link
-                href={contactHref}
-                className="mt-4 inline-flex origin-left items-center gap-2 rounded-[6px] bg-[#084734] px-5 py-2.5 text-sm font-bold text-white transition-all duration-150 hover:bg-[#065c41] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
-              >
-                상담 남기기
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </section>
-
             <section className="border-t border-black/[0.08] pt-8">
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
                 요약
@@ -289,6 +280,39 @@ export default async function DocsArticlePage({
                 {doc.chatbotSummary}
               </p>
             </section>
+
+            <DocsPrevNext links={prevNext} />
+
+            <div className="print:hidden">
+              <DocsArticleFeedback
+                articlePath={activePath}
+                articleSlug={doc.slug}
+                category={doc.category}
+                title={doc.title}
+              />
+            </div>
+
+            {/* 문제 해결 문서는 본문 바로 뒤 "그래도 안 되면" 안내가 같은 역할을 한다. */}
+            {!isTroubleshooting ? (
+              <section className="border-t border-black/[0.08] pt-8 print:hidden">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
+                  추가 지원
+                </p>
+                <h2 className="mt-2 text-xl font-black tracking-card text-[#111110]">
+                  문서로 해결되지 않았나요?
+                </h2>
+                <p className="mt-3 max-w-3xl text-[15px] leading-7 text-[#615D59]">
+                  어느 화면에서 무엇이 안 되는지 적어 주시면 담당 매니저가 확인하고 연락드립니다.
+                </p>
+                <Link
+                  href={contactHref}
+                  className="mt-4 inline-flex origin-left items-center gap-2 rounded-[6px] bg-[#084734] px-5 py-2.5 text-sm font-bold text-white transition-colors duration-150 hover:bg-[#065c41] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+                >
+                  상담 남기기
+                  <ArrowRight className="h-4 w-4" aria-hidden />
+                </Link>
+              </section>
+            ) : null}
 
             {doc.category !== "start" && (
               <section className="border-t border-black/[0.08] pt-8 print:hidden">
@@ -305,42 +329,6 @@ export default async function DocsArticlePage({
                   클래스인 시작하기 보기 →
                 </Link>
               </section>
-            )}
-
-            {(prevDoc || nextDoc) && (
-              <nav
-                aria-label="이전/다음 문서"
-                className="grid gap-3 border-t border-black/[0.08] pt-8 sm:grid-cols-2 print:hidden"
-              >
-                {prevDoc ? (
-                  <Link
-                    href={getDocPath(prevDoc)}
-                    className="group rounded-2xl border border-black/[0.08] bg-white px-5 py-4 transition-colors hover:border-[#084734]/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
-                  >
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#1a1a1a]/35">
-                      ← 이전 문서
-                    </p>
-                    <p className="mt-1.5 text-[15px] font-bold text-[#111110] transition-colors group-hover:text-[#084734]">
-                      {prevDoc.title}
-                    </p>
-                  </Link>
-                ) : (
-                  <span aria-hidden="true" className="hidden sm:block" />
-                )}
-                {nextDoc ? (
-                  <Link
-                    href={getDocPath(nextDoc)}
-                    className="group rounded-2xl border border-black/[0.08] bg-white px-5 py-4 text-right transition-colors hover:border-[#084734]/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
-                  >
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#1a1a1a]/35">
-                      다음 문서 →
-                    </p>
-                    <p className="mt-1.5 text-[15px] font-bold text-[#111110] transition-colors group-hover:text-[#084734]">
-                      {nextDoc.title}
-                    </p>
-                  </Link>
-                ) : null}
-              </nav>
             )}
 
             {relatedDocs.length > 0 && (
