@@ -234,6 +234,8 @@ function getTitlePrefix(title: string) {
 export interface DocListGroup<T> {
   id: string
   label: string
+  /** 유형으로 모은 묶음이면 그 유형 — 행마다 같은 유형 라벨을 되풀이하지 않게 한다. */
+  kind?: DocListKind
   items: T[]
 }
 
@@ -271,7 +273,12 @@ export function groupCategoryItems<T extends DocListItemLike>(
   }
 
   const groups: DocListGroup<T>[] = rules
-    .map((rule) => ({ id: rule.id, label: rule.label, items: buckets.get(rule.id) ?? [] }))
+    .map((rule) => ({
+      id: rule.id,
+      label: rule.label,
+      kind: rule.kind,
+      items: buckets.get(rule.id) ?? [],
+    }))
     .filter((group) => group.items.length > 0)
 
   if (rest.length > 0) groups.push({ id: "rest", label: "그 밖의 가이드", items: rest })

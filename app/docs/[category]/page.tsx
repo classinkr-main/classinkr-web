@@ -19,6 +19,7 @@ import {
   DOC_LIST_KIND_ORDER,
   groupCategoryItems,
   isDocListKind,
+  type DocListGroup,
   type DocListKind,
 } from "@/lib/docs-list-meta"
 import { createPublicMetadata } from "@/lib/seo"
@@ -31,7 +32,7 @@ import {
   withSearchNoIndex,
   type DocsSearchParams,
 } from "../_utils"
-import { DocsCategoryNav } from "@/components/docs"
+import { DocsCategoryNav, type DocsArticleSummary } from "@/components/docs"
 import { DocsListRow } from "@/components/docs/DocsListRow"
 import { DocsSearchLogger } from "@/components/docs/DocsSearchLogger"
 
@@ -155,13 +156,13 @@ export default async function DocsCategoryPage({
       ? articleSummaries.filter((article) => article.kind === activeKind)
       : articleSummaries
   // 검색 결과는 관련도 순서를 지키고, 그 밖에는 소제목 묶음으로 나눠 훑기 쉽게 한다.
-  const groups = query
+  const groups: DocListGroup<DocsArticleSummary>[] = query
     ? [{ id: "all", label: "", items: listedDocs }]
     : groupCategoryItems(categoryParam, listedDocs)
   const isGrouped = groups.length > 1
-  const rowMeta = activeKind
-    ? (["readTime", "images", "updatedAt"] as const)
-    : (["kind", "readTime", "images", "updatedAt"] as const)
+  // 유형을 이미 골랐거나 유형으로 모은 묶음 안에서는 행마다 같은 유형 라벨을 되풀이하지 않는다.
+  const rowMetaWithKind = ["kind", "readTime", "images", "updatedAt"] as const
+  const rowMetaWithoutKind = ["readTime", "images", "updatedAt"] as const
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] pt-28 pb-24 text-[#111110] md:pt-36">
@@ -277,6 +278,8 @@ export default async function DocsCategoryPage({
           <div className={showKindFilter ? "mt-4" : undefined}>
             {listedDocs.length > 0 && groups.map((group, groupIndex) => {
               const headingId = `docs-group-${group.id}`
+              const rowMeta =
+                activeKind || group.kind ? rowMetaWithoutKind : rowMetaWithKind
 
               return (
                 <section

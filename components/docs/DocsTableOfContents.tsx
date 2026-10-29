@@ -49,7 +49,9 @@ function useActiveSection(ids: string[]) {
         }
       }
 
-      setActiveId((previous) => (previous === next ? previous : next))
+      // 아직 첫 섹션에 닿기 전(머리말을 읽는 중)에는 첫 항목을 강조해 둔다.
+      const resolved = next ?? sectionIds[0]
+      setActiveId((previous) => (previous === resolved ? previous : resolved))
     }
 
     const schedule = () => {

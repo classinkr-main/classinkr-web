@@ -561,6 +561,19 @@ export interface DocsSearchEvaluation {
 
 const EMPTY_EVALUATION: DocsSearchEvaluation = { score: 0, sections: [], highlight: "" }
 
+/**
+ * 이 문서에서 맞은 검색어 하나. 붙여 쓴 말은 통째로 맞은 꼴과 나눈 조각 꼴을 함께 들고 있다가
+ * 섹션·강조를 고를 때 어느 쪽이든 맞으면 맞은 것으로 본다("비밀번호변경" ↔ "비밀번호를 변경").
+ */
+interface MatchUnit {
+  soft: boolean
+  options: QueryTerm[][]
+}
+
+function canSplit(term: QueryTerm) {
+  return !term.soft && term.alt.length === 0
+}
+
 function evaluate(
   doc: DocsSearchable,
   analysis: DocsQueryAnalysis,
@@ -573,25 +586,27 @@ function evaluate(
   let requiredScore = 0
   let softScore = 0
   let matchedRequired = 0
-  const effective: QueryTerm[] = []
+  const units: MatchUnit[] = []
 
   for (const term of analysis.terms) {
-    let result: TermResult | null = null
     const direct = scoreTerm(prepared, term)
-    if (direct > 0) {
-      result = { score: direct, matchedTerms: [term] }
-    } else if (!term.soft && term.alt.length === 0) {
-      result = scoreSplit(prepared, term.surface, 1)
-    }
+    const split = canSplit(term) && (direct === 0 || withDetails)
+      ? scoreSplit(prepared, term.surface, 1)
+      : null
+    const score = direct > 0 ? direct : (split?.score ?? 0)
+    if (score <= 0) continue
 
-    if (!result) continue
     if (term.soft) {
-      softScore += result.score * SOFT_WEIGHT
+      softScore += score * SOFT_WEIGHT
     } else {
-      requiredScore += result.score
+      requiredScore += score
       matchedRequired += 1
     }
-    effective.push(...result.matchedTerms.map((matched) => ({ ...matched, soft: term.soft })))
+
+    const options: QueryTerm[][] = []
+    if (direct > 0) options.push([term])
+    if (split) options.push(split.matchedTerms)
+    units.push({ soft: term.soft, options })
   }
 
   const required = analysis.requiredCount
@@ -631,15 +646,31 @@ function evaluate(
 
   return {
     score,
-    sections: matchSections(prepared, effective, sectionLimit),
-    highlight: buildHighlight([doc.title, doc.description], effective),
+    sections: matchSections(prepared, units, sectionLimit),
+    highlight: buildHighlight(
+      [doc.title, doc.description],
+      units.flatMap((unit) => unit.options.flat())
+    ),
   }
 }
 
+/** 한 꼴(option)의 낱말이 모두 이 칸들 중 어딘가에 있을 때의 맞은 정도(가장 약한 낱말 기준). */
+function unitLevel(unit: MatchUnit, fields: readonly Field[]) {
+  let best = 0
+  for (const option of unit.options) {
+    let level = 1
+    for (const term of option) {
+      level = Math.min(level, Math.max(...fields.map((field) => matchLevel(field, term))))
+      if (level === 0) break
+    }
+    best = Math.max(best, level)
+  }
+  return best
+}
+
 /** 결과 아래 "이 부분에 있어요"로 보여 줄 섹션 — 섹션 제목에 맞은 것을 먼저, 본문만 맞은 것은 모든 필수어가 있을 때만. */
-function matchSections(doc: PreparedDoc, terms: readonly QueryTerm[], limit: number) {
-  const required = terms.filter((term) => !term.soft)
-  if (required.length === 0 || limit <= 0) return []
+function matchSections(doc: PreparedDoc, units: readonly MatchUnit[], limit: number) {
+  if (limit <= 0 || !units.some((unit) => !unit.soft)) return []
 
   const scored: Array<{ section: PreparedSection; score: number; index: number }> = []
   doc.sections.forEach((section, index) => {
@@ -648,15 +679,15 @@ function matchSections(doc: PreparedDoc, terms: readonly QueryTerm[], limit: num
     let requiredInHeading = false
     let requiredEverywhere = true
 
-    for (const term of terms) {
-      const weight = term.soft ? SOFT_WEIGHT : 1
-      const inHeading = matchLevel(section.heading, term)
-      const inText = matchLevel(section.text, term)
+    for (const unit of units) {
+      const weight = unit.soft ? SOFT_WEIGHT : 1
+      const inHeading = unitLevel(unit, [section.heading])
+      const inText = unitLevel(unit, [section.text])
       headingScore += inHeading * weight
       textScore += inText * weight
-      if (!term.soft) {
+      if (!unit.soft) {
         if (inHeading > 0) requiredInHeading = true
-        if (inHeading === 0 && inText === 0) requiredEverywhere = false
+        if (unitLevel(unit, [section.heading, section.text]) === 0) requiredEverywhere = false
       }
     }
 
