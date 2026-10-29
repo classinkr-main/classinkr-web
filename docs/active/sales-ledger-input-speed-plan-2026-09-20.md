@@ -1,6 +1,6 @@
 # 매출 장부 입력 속도·편의 기획 (라운드 4)
 
-상태: 1단계 P0·P1-5·P1-6·P2-7 + UI·UX 10건 구현 완료(2026-09-21), P1-4·P2-8~10·보드 카드 인라인 편집 실행 대기
+상태: 1단계 P0·P1-4·P1-5·P1-6·P2-7·P2-8·P2-10 및 UI·UX 개선을 통합했다. 후속 사용성 평가는 [라운드 5 기획](sales-ledger-view-ux-round5-plan-2026-09-23.md)을 참고한다. P2-9 원자 대체는 DB RPC만으로 REV 시트·감사 기록과의 정합성을 보장하지 못하므로 **서버와 UI에서 기본 비활성(fail-closed)**이다. 외부 시트 동시성·멱등성·실패 복구 재설계와 DB 통합 검증 전에는 마이그레이션을 운영에 적용하거나 기능을 활성화하지 않는다.
 범위: `/admin/branch/ledger`의 입력 경로 — REV 매트릭스 셀 편집, 빠른 작업 레일(입력/수정), 체크 큐
 목표: **1단계** 구글 시트를 원천으로 유지한 채 어드민 입력의 클릭·왕복·오타를 줄인다 →
 **2단계** 어드민을 매출 입력 정본으로 올리고 시트 입력을 중단한다.
@@ -94,11 +94,23 @@
 모바일은 읽기 전용 [RevMobileList](../../components/admin/branch/ledger/RevMobileList.tsx)를 본다.
 빠른 작업 레일 자체는 모바일에서도 뜨지만, 행을 고르고 월·금액을 직접 다시 채워야 한다.
 
-### 2.7 감액은 입력 경로 밖
+### 2.7 이미 적용된 값을 다시 바꾸는 동선 (2026-09-22 실측으로 정정)
 
-API가 `amount <= 0`을 거부한다
-([route.ts:128](../../app/api/admin/branch/ledger-drafts/route.ts)). 감액은 "적용 되돌리기 → 재적용"
-2단계다. 설계 의도(감사 추적)는 옳지만, 실무에서 잦은 하향 조정이 가장 긴 동선을 탄다.
+처음엔 "감액은 되돌리기 → 재적용 2단계"라고 적었으나, SQL·코드 실측 결과 문제는 **감액 일반이 아니라
+"이미 장부에 적용된 값을 다시 바꾸는 모든 경우"**(증액·감액 동일)다.
+
+| 경우 | 실제 동선 | 비고 |
+| --- | --- | --- |
+| 정정된 적 없는 셀을 낮춤 | 셀 편집(자가 체크) → 적용 = 2요청 | 되돌리기 관여 없음 — 보통 편집과 같다 |
+| 정정된 적 없는 셀을 0으로(해지·드랍) | **표현 불가** | 초안 API·DB CHECK가 amount>0 강제. 시트 대체 2단계(§5 C2)의 몫 |
+| 적용된 new-row 행 값을 바꿈 | 되돌리기 → 레일 생성 → 체크 → 적용 = 4요청, 큐 2회 방문 | 셀이 잠겨 매트릭스에서 못 친다 |
+| 적용된 edit-row 정정을 다시 바꿈 | 되돌리기 → 새 초안 → (체크) → 적용 = 3~4요청 | 되돌리면 "0"이 아니라 원본 시트 값이 되살아난다 |
+
+그리고 더 큰 문제는 **원자성**이다. 되돌리기는 트리거로 강제된 단방향(active → reversed, 되돌릴 수
+없음)이고, 되돌리기와 재적용은 별개 HTTP 요청이다. 활성 정정 유일성 인덱스
+(`branch_sales_ledger_entries_active_manual_edit_unique`) 때문에 "새 정정 먼저 적용"은 DB가 막으므로
+유일한 순서가 "먼저 되돌리기"인데, 그 뒤 재적용이 실패하면 **장부가 경고 없이 원본 값으로 돌아간다.**
+→ P2-9에서 DB 원자 대체 RPC를 제안했지만, 외부 시트까지 원자성을 보장하지 못해 운영 적용과 활성화를 보류한다.
 
 ---
 
@@ -126,11 +138,13 @@ API가 `amount <= 0`을 거부한다
 | P0-1 초안 배치 API | **완료** | `app/api/admin/branch/ledger-drafts/batch/route.ts`, `lib/branch/ledger-draft-body.ts`(단건·배치 공용 파서), `components/admin/branch/ledger/useLedgerDraftQueue.ts`(`checkDrafts`/`applyDrafts`/`persistDraftsBatch`, 200건 청크) | `tests/api/branch-ledger-drafts-batch-route.test.ts`, `tests/branch/ledger-draft-batch.test.ts` |
 | P0-2 자가 체크 | **완료 — 결정 D1(a) 채택** | 저장소 `buildInsert`(status=checked → `checked_by`/`checked_at`), `updateBranchSalesLedgerDraft`(자가 체크 재편집: 잠금 해제→갱신→재체크, 남의 체크는 409 `checked-by-other`), 워크벤치 `buildCellDraftInput`(매트릭스 셀 커밋만 `status:"checked"`), `ledger/self-check.ts` + 큐 배지 | `tests/repositories/branch-sales-ledger-drafts.test.ts`(자가 체크 5건), `tests/branch/ledger-self-check.test.ts` |
 | P0-3 고객/계정 자동완성 | **완료** | `components/admin/branch/ledger/customer-suggest.ts`, `InputRailSection.tsx`(datalist + 표기 흔들림 경고·원클릭 맞추기) | `tests/branch/customer-suggest.test.ts` |
-| P1-5 붙여넣기 이름 매칭 | **완료** | `rev-matrix-logic.ts`(`buildMatrixPastePlan` by-name 모드·`buildPasteNewRowInputs`), `RevMatrix.tsx`(프리뷰: 모드 배지·건너뜀 안내·"시트에 없는 고객" 체크리스트), 워크벤치 `confirmMatrixPaste` | `tests/branch/matrix-paste-name-match.test.ts` |
+| P1-5 붙여넣기 이름 매칭 | **완료**(주차 칸 앵커 붙여넣기는 미구현 — 라운드 5 §3.3 R-16) | `rev-matrix-logic.ts`(`buildMatrixPastePlan` by-name 모드·`buildPasteNewRowInputs`), `RevMatrix.tsx`(프리뷰: 모드 배지·건너뜀 안내·"시트에 없는 고객" 체크리스트), 워크벤치 `confirmMatrixPaste` | `tests/branch/matrix-paste-name-match.test.ts` |
 | P1-6 실행 취소 토스트 | **완료** | 워크벤치 토스트 `key/action/ttlMs`, `undoCellDraft`(latest-ref), 훅 `cancelDraft` 성공 여부 반환 | `tests/branch/ledger-undo-toast.test.ts` |
-| P1-4 인라인 신규 행 | 대기 — 설계 보강 필요 | 미적용 초안 행을 매트릭스에 임시 행으로 보여주는 파생(`visibleDealRows`)이 먼저 필요하다. 지금은 적용 전 new-row 초안이 큐에만 보여, 인라인으로 만들어도 저장 직후 사라진다 | — |
+| P1-4 인라인 신규 행 | **완료** | `ledger/pending-draft-rows.ts`(`buildPendingDraftRows`·`matchesRevRowFilters`), 매트릭스 머리 아래 "적용 대기 새 행" 섹션(`RevMatrixPendingRow`, 합계·그룹·보드·요약 파이프라인과 **분리**) + 섹션 맨 아래 "+ 새 행 추가" 인라인 입력(`buildNewRowDraftInput`, 3단 유지), 모바일 적용 대기 카드 | `pending-draft-rows`·`pending-section-wiring`·`inline-new-row` |
 | P2-7 모바일 입력 진입 | **완료** | `RevMobileList.tsx`(금액 44px 버튼 → `openQuickInputForRow`: 행 선택·프리필 후 레일 입력 탭) | `tests/branch/ledger-entry-paths.test.ts` |
-| P2-8 ~ P2-10 | 대기 | — | — |
+| P2-8 키보드 보강 | **완료** | `rev-matrix-logic.ts`(`computeMatrixRange`·anchor/range·`onCommitRangeConfidence`), `RevMatrix.tsx`(range 배경), 워크벤치(`/` 검색 포커스·Ctrl+Z·범위 확도 배치 저장) | `tests/branch/matrix-keyboard-range.test.ts` |
+| P2-9 적용값 한 번에 바꾸기 | **구현 보류 — 서버·UI 비활성** | DB 트랜잭션만으로 REV 시트 쓰기 및 감사 기록과의 정합성을 보장하지 못한다. 시트 동시 쓰기·멱등성·실패 복구 재설계 및 DB 통합 검증 전에는 마이그레이션을 운영에 적용하거나 기능을 켜지 않는다. | 서버 직접 호출 503·capability false, 시트 쓰기 경로 회귀 테스트 |
+| P2-10 매출시트 → 장부 딥링크 | **완료** | `lib/crm/revenue-sheet-view.ts`(`buildLedgerEntryHref`), `app/admin/crm/deals/rev-sheet/page.tsx`(행·배너 링크, `lens=rev&q=<고객>&team=`) | `tests/crm/revenue-sheet-view.test.ts`, `tests/crm/rev-sheet-ledger-link.test.ts` |
 
 구현하며 확정된 세부 규약:
 
@@ -209,11 +223,28 @@ API가 `amount <= 0`을 거부한다
 - `Shift+방향키` — 셀 범위 선택, 선택 범위에 `E/H/C` 일괄 확도 적용(배치 API 1회 호출)
 - `Ctrl+Z` — P1-6의 실행 취소와 같은 동작을 키로
 
-### P2-9. 감액 1액션화
+### P2-9. 적용된 값을 한 번에 바꾸기 (원자적 대체)
 
-API 계약(양수 전용)은 **바꾸지 않는다.** 대신 셀 컨텍스트에 "감액" 액션을 두고, 내부적으로
-"되돌리기 → 새 금액 재적용"을 배치 API 한 번으로 묶어 사용자에게는 한 동작으로 보이게 한다.
-(음수 허용으로 갈지는 **D3**.)
+§2.7 정정에 따라 범위를 "감액"에서 **"적용된 값 대체"**로 넓히고, 클라이언트 두 요청 묶음이 아니라
+**DB 한 트랜잭션**을 제안한다. 이 방식은 외부 REV 시트까지 원자적으로 갱신하지 못하므로 현재 비활성이다.
+
+- 신규 RPC `supersede_branch_sales_ledger_entry(옛 초안, 새 checked 초안, actor, 사유)`: 옛 entry와 새
+  초안을 잠그고 → 대상 일치 검증(같은 종류·같은 월·같은 딜/고객) → 기존 `reverse_...` 호출 → 기존
+  `apply_...` 호출, 적용이 `NULL`이면 예외로 **DB 반전까지 전부 롤백**한다. 멱등 분기는 두 상태가 같은
+  요청의 결과인지 증명하지 못하므로 재설계가 필요하다. 기존 `apply_branch_sales_ledger_draft`는 건드리지 않는다.
+- **fail-closed**: RPC 존재 여부나 시트 스위치에 관계없이 capability는 false이며 직접 요청도 503이다.
+  시트 쓰기·감사 기록·동시성 안전성을 검증하기 전에는 순차 호출 폴백도 제공하지 않는다.
+- 클라이언트: 새 값 초안을 자가 체크로 만든 뒤 대체 요청 1건. 두 요청 사이에서 실패하면 "새 초안이
+  큐에 남고 장부는 옛 값" 상태로만 끝난다 — 장부가 틀린 값으로 남는 경로가 없다.
+- 진입점: 1차는 레일의 잠금 배너("이미 적용된 값 ¥X → 이 금액으로 한 번에 바꾸기"). 편집 바·셀 메뉴는
+  다음 단계.
+- 0으로 만들기: 정정/추가분이 이미 있는 셀은 기존 되돌리기 단독으로 충분(new-row는 정확히 0, edit-row는
+  원본 복원 — 문구로 구분). 정정 이력 없는 시트 셀의 해지·드랍은 amount>0 CHECK 때문에 구조적으로
+  불가능 — §5 C2(시트 대체) 범위로 명시적으로 미룬다.
+- **운영 전 과제**: 시트 쓰기 중·쓰기 완료·실패 결과 불명 상태의 대체 및 복구를 설계하고 테스트한다.
+  RPC의 멱등 분기는 기존 entry의 reversed와 새 초안의 applied 상태만으로 같은 요청의 재시도인지
+  판별하므로, 서로 다른 작업에서 생긴 상태가 성공으로 오인되지 않게 연관 관계도 검증해야 한다.
+  검증이 끝나기 전에는 `20260922_branch_sales_ledger_supersede_entry.sql`을 운영에 적용하지 않는다.
 
 ### P2-10. 매출시트 → 장부 딥링크
 
@@ -265,10 +296,11 @@ API 계약(양수 전용)은 **바꾸지 않는다.** 대신 셀 컨텍스트에
 | --- | --- | --- | --- |
 | D1 | 자가 체크 범위 | (a) 매트릭스 기본 (b) 사람별 토글 (c) 도입 안 함 | **(a)** — 매트릭스 셀은 이미 시트 행을 보며 치는 동작이라 별도 검수 이득이 작다. 레일 입력은 3단 유지 |
 | D2 | 배치 상한 | 100 / 200 / 600 | **200** — 붙여넣기 상한 600은 3청크로 나눠 전송 |
-| D3 | 감액 표현 | (a) 되돌리기+재적용을 1액션으로 포장 (b) 음수 초안 허용 | **(a)** — 감사 추적과 기존 계약을 지키면서 체감만 개선. (b)는 2-2에서 재검토 |
+| D3 | 감액 표현 | (a) 되돌리기+재적용을 1액션으로 포장 (b) 음수 초안 허용 | **(a) 설계 보류** — DB RPC만으로 외부 REV 시트와의 원자성·멱등성을 보장하지 못한다. 클라이언트 두 요청 포장도 실패 창 때문에 기각. (b)는 2-2에서 재검토 |
 | D4 | 모바일 범위 | (a) 레일 프리필까지 (b) 그리드 이식 | **(a)** |
 | D5 | 시트 역방향 export | 필요 / 불필요 | **확인 필요** — 시트를 읽는 사람이 KR Team 밖에 있는지 운영 확인 후 결정 |
 | D6 | 확도 중간 단계 어휘 | "고확도" 유지 / "일반"으로 변경 | **유지(적용됨)** — §8.5 근거. `DRAFT_CONFIDENCE_OPTIONS.hint`로 툴팁에 "90%+ 마감 임박(시트 파랑)" 병기(2026-09-21) |
+| D7 | 셀 재편집이 같은 이름의 new-row 대기 초안을 갱신할지 | (a) 같은 종류(edit-row)만 갱신 / (b) 현행 | **(a)** — §8.7 근거. 추가분 초안이 대체 정정으로 바뀌는 의미 전환 차단 |
 
 ---
 
@@ -356,7 +388,7 @@ npm run build
 | 레일 확도 블록을 금액 뒤로 + autoFocus | 中 | 小 | 낮음 | 다음 | **완료**(2026-09-21) |
 | 큐 적용/체크 버튼 라벨+확대 | 中 | 小 | 낮음 | 다음 | **완료**(2026-09-21) |
 | 레일 420px 겹침 보정 | 中 | 中 | 中 | 다음 | **완료**(2026-09-21) — xl 이상에서 `<main>` 우측 여백 440px(aside 게이트와 동일 조건) |
-| 보드 카드 인라인 편집 | 中 | 中~大 | 中 | 다음 | 대기 |
+| 보드 카드 인라인 편집 | 中 | 中~大 | 中 | 다음 | 부분 완료(2026-09-22) — 카드 클릭이 입력 탭으로 직행. 카드 안 인라인 편집기는 여전히 대기 |
 | 모바일 금액 탭 → 입력 직행(P2-7) | 中 | 小 | 낮음 | 다음 | **완료**(2026-09-21) |
 | 레일 tabpanel + 포커스 이동 | 低~中 | 小 | 낮음 | 다음 | **완료**(2026-09-21) — tabpanel 연결; 포커스는 입력 패널 마운트 자동 포커스가 담당 |
 
@@ -369,6 +401,35 @@ npm run build
 - 매트릭스 인라인 편집 골격 재설계, 2단 게이트 폐기, 그리드 모바일 이식, 새 색·토큰 — 전부 §1·§9 결정 유지.
 
 ---
+
+### 8.7 구현 중 발견 — new-row 초안의 표시 규약 (2026-09-22 정정·수리)
+
+**처음 기록(정정됨)**: `buildMatrixPendingByCell`이 new-row 초안을 기존 행에 붙일 때 고객명 정확 일치를
+써서 "OO 학원" 초안이 "OO학원" 행에 앰버 점으로 안 보이니, 그 함수를 `normalizedAccountKey`로 넓히자.
+
+**정정**: 그 수리는 틀리다. `pendingByCell`은 점 표시만이 아니라 **셀 재편집의 갱신 대상**(`onCommitCell` →
+`buildCellDraftInput` → `lookupMatrixPending` → `updateDraft`)도 정한다. 매칭을 퍼지로 넓히면 "OO 학원
+추가분"으로 만든 new-row 초안이 "OO학원" 행 셀을 고칠 때 edit-row로 PATCH되어 **대체 정정**으로 바뀔
+수 있다. 오늘 사각지대의 실체는 "표기가 다른 new-row 초안은 적용 전까지 매트릭스 어디에도 안 보인다"이고,
+이는 새 고객 초안이 안 보이는 P1-4 문제와 같은 부류다.
+
+**수리(완료)**: P1-4 임시 행 파생(`ledger/pending-draft-rows.ts`)의 제외 규칙을 `buildMatrixPendingByCell`과
+**같은 술어(고객명 trim 정확 일치)**로 맞췄다. 점이 찍히는 초안은 임시 행을 만들지 않고, 점이 안 찍히는
+(표기가 다른) 초안은 임시 행으로 보인다 — 매트릭스 고객 그룹핑이 정규화 키라 같은 고객 그룹 안에 붙는다.
+테스트: `tests/branch/pending-draft-rows.test.ts` 규칙 4(trim 일치 제외, 표기 차이는 임시 행).
+
+**남은 잠재 결함 — 결정 D7 필요**: 표기가 **같은** 경우에도 위 PATCH 경로는 이미 존재한다. 시트 행 "OO학원"의
+10월 셀에 같은 이름의 new-row 초안(10월 +50만, 추가분 의도)이 점으로 붙어 있을 때 그 셀을 고치면, 그 new-row
+초안이 edit-row로 바뀌어 시트 값을 대체하는 정정이 된다 — 추가분 의도가 사라지고 셀 편집 시작값도 시트
+값이 아니라 초안 금액(50만)으로 뜬다.
+
+| 선택지 | 내용 | 영향 |
+| --- | --- | --- |
+| (a) 종류가 같은 초안만 갱신 대상 | 셀 커밋(edit-row)은 같은 딜·월의 **edit-row** 대기 초안만 PATCH, new-row 초안은 점 표시만 하고 건드리지 않는다 | 추가분 의도 보존. 셀 편집 시작값도 시트 값. 이중 계상 가드(P0)의 대상은 원래 edit-row끼리라 유지된다 |
+| (b) 현행 유지 | 같은 이름의 new-row 초안이 있는 셀은 그 초안을 고치는 것으로 본다 | 동작 변화 없음. 위 의미 전환이 계속 가능 |
+
+제안: **(a)**. P0 셀 dedup 회귀 테스트(`ledger-cell-dedup`)를 먼저 확장해 new-row/edit-row 분리를 고정한 뒤
+`buildCellDraftInput`의 `existingId` 판정만 바꾼다.
 
 ## 9. 하지 않기로 한 것
 

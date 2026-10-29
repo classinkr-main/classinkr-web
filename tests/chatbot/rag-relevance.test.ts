@@ -80,7 +80,7 @@ describe("chatbot RAG source relevance", () => {
         urlPath: "/docs/start/academy-system-os-positioning",
       })
       expect(result.sources).toHaveLength(1)
-      expect(result.answer).toContain("수업 운영 솔루션")
+      expect(result.answer).toContain("수업 시스템 OS")
       expect(result.answer).not.toContain("문서에서 바로 맞는 답을 찾지 못했습니다")
     }
   })

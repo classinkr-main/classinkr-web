@@ -249,7 +249,10 @@ function validateBuyerIdentity(body: Record<string, unknown>) {
 
 // ─── Subscription order ──────────────────────────────────
 
-export async function createSubscriptionCheckoutOrder(raw: unknown): Promise<SubscriptionOrderCreated> {
+export async function createSubscriptionCheckoutOrder(
+  raw: unknown,
+  options: { marketingConsent?: boolean } = {}
+): Promise<SubscriptionOrderCreated> {
   if (!raw || typeof raw !== "object") {
     throw new Error("Invalid checkout request body.")
   }
@@ -259,7 +262,7 @@ export async function createSubscriptionCheckoutOrder(raw: unknown): Promise<Sub
   const billingCycle = parseBillingCycle(body.billingCycle)
   const accountCount = parseAccountCount(body.accountCount)
   const identity = validateBuyerIdentity(body)
-  const attribution = sanitizeAttribution(body.attribution)
+  const attribution = options.marketingConsent === true ? sanitizeAttribution(body.attribution) : null
 
   const plan = getSelfServeSoftwarePlan(planId)
   const price = billingCycle === "monthly" ? plan.monthly : plan.yearly
@@ -326,14 +329,17 @@ export const createSoftwareCheckoutOrder = createSubscriptionCheckoutOrder
 
 // ─── Business order ──────────────────────────────────────
 
-export async function createBusinessRechargeOrder(raw: unknown): Promise<BusinessOrderCreated> {
+export async function createBusinessRechargeOrder(
+  raw: unknown,
+  options: { marketingConsent?: boolean } = {}
+): Promise<BusinessOrderCreated> {
   if (!raw || typeof raw !== "object") {
     throw new Error("Invalid checkout request body.")
   }
 
   const body = raw as Record<string, unknown>
   const identity = validateBuyerIdentity(body)
-  const attribution = sanitizeAttribution(body.attribution)
+  const attribution = options.marketingConsent === true ? sanitizeAttribution(body.attribution) : null
 
   const quoteCodeInput = normalizeString(body.quoteCode)
   const promoCodeInput = normalizeString(body.promoCode)

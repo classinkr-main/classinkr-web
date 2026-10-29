@@ -1,5 +1,8 @@
 "use client"
 
+import { consentObservationHeaders } from "@/lib/consent/observation-client"
+
+
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { ArrowRight, CheckCircle2, Download, Loader2, LockKeyhole, Mail } from "lucide-react"
 
@@ -163,7 +166,7 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
       const attribution = collectLeadAttribution()
       const leadResponse = await fetch("/api/lead", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...consentObservationHeaders() },
         body: JSON.stringify({
           ...attribution,
           source: "newsletter",

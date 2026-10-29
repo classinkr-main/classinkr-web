@@ -30,6 +30,25 @@ const LANDING_SOURCE_DETAILS = new Set([
   "omo1_diagnosis",
 ])
 
+// 공개 요청은 클라이언트가 동의 없이 직접 귀속값을 넣을 수도 있다.
+// 실제 신청 내용은 유지하면서 해당 쿠키 카테고리가 확인되지 않은 값만 제거한다.
+const MARKETING_ATTRIBUTION_FIELDS = [
+  "utmSource", "utm_source", "utmMedium", "utm_medium", "utmCampaign", "utm_campaign",
+  "utmTerm", "utm_term", "utmContent", "utm_content", "gclid", "fbclid", "msclkid", "ttclid",
+  "landingPage", "landing_page", "currentPage", "current_page", "referrer", "naverAd", "naver_ad",
+] as const
+const ANALYTICS_ID_FIELDS = ["anonymousId", "anonymous_id"] as const
+
+function filterUnconsentedAttribution(body: unknown, consent: { analytics: boolean; marketing: boolean } | undefined, anonymousId: string | null): unknown {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return body
+  const filtered = { ...(body as Record<string, unknown>) }
+  if (!consent?.marketing) for (const field of MARKETING_ATTRIBUTION_FIELDS) delete filtered[field]
+  // 본문의 ID는 타인의 ID를 주장할 수 있다. 분석 동의가 있어도 같은 요청 쿠키만 사용한다.
+  for (const field of ANALYTICS_ID_FIELDS) delete filtered[field]
+  if (consent?.analytics && anonymousId) filtered.anonymousId = anonymousId
+  return filtered
+}
+
 function getInvalidContactTopic(body: unknown): string | null {
   if (!body || typeof body !== "object") return null
   const record = body as Record<string, unknown>
@@ -73,8 +92,10 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const bodyObject = body && typeof body === "object" ? (body as Record<string, unknown>) : {}
-    const result = await submitLeadCapture(body, {
+    const consentMeta = getMarketingRequestMeta(req)
+    const safeBody = filterUnconsentedAttribution(body, consentMeta.consent, consentMeta.anonymousId)
+    const bodyObject = safeBody && typeof safeBody === "object" ? (safeBody as Record<string, unknown>) : {}
+    const result = await submitLeadCapture(safeBody, {
       deferTask: (task) => after(task),
       requestMeta: getMarketingRequestMeta(req, {
         sourceUrl:

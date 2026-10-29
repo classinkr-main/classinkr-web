@@ -46,6 +46,8 @@ function row(partial: Partial<CrmUnifiedCustomerRow>): CrmUnifiedCustomerRow {
     ownerKeys: ["박담당"],
     lifecycle: "account_risk",
     statusLabel: "관리 필요",
+    stage: null, stageLabel: null, subjectLabel: null, categoryLabel: null,
+    tier: null, trust: null, moneyBand: null,
     nextActionLabel: "연장 제안",
     priorityReason: "10일 내 만료",
     score: 90,

@@ -9,6 +9,9 @@
 
 "use client"
 
+import { consentObservationHeaders } from "@/lib/consent/observation-client"
+
+
 import { useState } from "react"
 import {
   Dialog,
@@ -74,7 +77,7 @@ export function NewsletterModal({
     try {
       const res = await fetch("/api/newsletter/subscribe", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...consentObservationHeaders() },
         body: JSON.stringify({ email, source, attribution: collectLeadAttribution() }),
       })
 

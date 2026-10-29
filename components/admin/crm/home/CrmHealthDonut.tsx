@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { ExternalLink } from "lucide-react"
-import { adminFetchJsonCached } from "@/lib/admin-client"
+import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { CRM_CACHE_SWR_MS, CRM_CACHE_TTL_MS } from "@/lib/crm/client-cache"
 import { formatNumber } from "./shared"
 
@@ -18,20 +18,28 @@ interface CrmHealthDist {
   risk: number
 }
 
-export default function CrmHealthDonut() {
+export default function CrmHealthDonut({ scope = "all" }: { scope?: "all" | "personal" }) {
+  // 범위가 바뀌면 이전 집계 상태를 새 사용자 화면에 잠깐이라도 재사용하지 않는다.
+  return <CrmHealthDonutContent key={scope} scope={scope} />
+}
+
+function CrmHealthDonutContent({ scope }: { scope: "all" | "personal" }) {
   const [dist, setDist] = useState<CrmHealthDist | null>(null)
   const [loading, setLoading] = useState(true)
+  const [failed, setFailed] = useState(false)
+  const url = scope === "personal" ? "/api/admin/crm/health-distribution?owner=__me" : "/api/admin/crm/health-distribution"
 
   useEffect(() => {
     let alive = true
-    adminFetchJsonCached<{ distribution: CrmHealthDist }>("/api/admin/crm/health-distribution", undefined, {
-      cacheKey: "/api/admin/crm/health-distribution",
+    const request = scope === "personal" ? adminFetchJson<{ distribution: CrmHealthDist }>(url, { cache: "no-store" }) : adminFetchJsonCached<{ distribution: CrmHealthDist }>(url, undefined, {
+      cacheKey: url,
       ttlMs: CRM_CACHE_TTL_MS,
       staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
       onRevalidated: ({ data: fresh }) => {
         if (alive && fresh) setDist(fresh.distribution)
       },
     })
+    request
       .then((res) => {
         if (alive) {
           setDist(res.distribution)
@@ -39,15 +47,18 @@ export default function CrmHealthDonut() {
         }
       })
       .catch(() => {
-        if (alive) setLoading(false)
+        if (alive) { setFailed(true); setLoading(false) }
       })
     return () => {
       alive = false
     }
-  }, [])
+  }, [url, scope])
 
   if (loading) return <div className="h-24 animate-pulse rounded-2xl bg-[#f0f0ec]" />
-  if (!dist || dist.total === 0) return null
+  if (!dist || dist.total === 0) {
+    if (scope === "all") return null
+    return <p role="status" className="rounded-2xl border border-[#e8e8e4] bg-white p-4 text-sm text-[#615D59]">{failed ? "담당 고객 건강도를 불러오지 못했습니다." : "담당 고객 건강도 데이터가 없습니다."}</p>
+  }
 
   const pct = (value: number) => Math.round((value / dist.total) * 100)
   const safePct = pct(dist.safe)
@@ -63,7 +74,7 @@ export default function CrmHealthDonut() {
     <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
       <div className="mb-3">
         <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#1a1a1a]/40">고객 건강도</p>
-        <p className="text-[10px] text-[#1a1a1a]/35">활성 고객 {formatNumber(dist.total)} · 규칙 기반</p>
+        <p className="text-[10px] text-[#1a1a1a]/35">{scope === "personal" ? "내 담당 " : ""}활성 고객 {formatNumber(dist.total)} · 규칙 기반</p>
       </div>
       <div className="flex items-center gap-4">
         <div className="relative h-24 w-24 shrink-0 rounded-full" style={{ background: gradient }}>
@@ -89,7 +100,7 @@ export default function CrmHealthDonut() {
       </div>
       {dist.risk > 0 ? (
         <Link
-          href="/admin/crm/customers/unified?view=needs_care"
+          href={scope === "personal" ? "/admin/crm/customers/unified?view=needs_care&owner=__me" : "/admin/crm/customers/unified?view=needs_care"}
           className="mt-3 flex items-center justify-center gap-1.5 rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] py-2 text-[12px] font-semibold text-[#B85C33] transition-colors hover:bg-[#FCE9E0]"
         >
           위험 고객 {formatNumber(dist.risk)}곳 보기

@@ -6,10 +6,12 @@
 // 경로는 전부 기존 draft/apply(InputRailSection)를 재사용하고 여기서 새로 만들지 않는다.
 // 금액·확도 산식은 매트릭스·보드와 동일한 shared 헬퍼(rowMonth*)만 쓴다(별도 집계 금지).
 
-import { useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react"
 import { AlertTriangle, ChevronLeft, ChevronRight, Plus, Search, UserRound } from "lucide-react"
 import { CONFIDENCE_TOKENS, type ConfidenceKey } from "@/lib/branch/confidence-tokens"
 import { branchMemberSearchHaystack } from "@/lib/branch/member-names"
+import { formatExactMoney } from "@/lib/branch/ledger-format"
+import { pendingMatchesKind, rowCommitKind, type MatrixPendingDraft } from "./rev-matrix-logic"
 import {
   formatMonthLabel,
   formatMoney,
@@ -50,10 +52,14 @@ interface CockpitDealListProps {
   selectedRowId: string | null
   onSelectDeal: (row: LedgerRevenueRow) => void
   onNewDeal: () => void
+  pendingByCell?: Map<string, MatrixPendingDraft> | null
+  onVisibleRowIdsChange?: (rowIds: string[]) => void
 }
 
 export function CockpitDealList({
   rows,
+  pendingByCell = null,
+  onVisibleRowIdsChange,
   selectedMonth,
   monthOptions,
   onSelectMonth,
@@ -133,6 +139,10 @@ export function CockpitDealList({
       // 선택월 금액 있는 행 먼저(내림차순), 동액은 이름순.
       .sort((a, b) => b.amount - a.amount || a.row.customer.localeCompare(b.row.customer, "ko"))
   }, [rows, selectedMonth, term, confidenceFilters, productFilters])
+
+  useEffect(() => {
+    onVisibleRowIdsChange?.(items.map(({ row }) => row.id))
+  }, [items, onVisibleRowIdsChange])
 
   const monthTotal = useMemo(() => items.reduce((sum, item) => sum + item.amount, 0), [items])
   const filtersActive = term.trim() !== "" || confidenceFilters.size > 0 || productFilters.size > 0
@@ -306,6 +316,8 @@ export function CockpitDealList({
               const token = CONFIDENCE_TOKENS[tone]
               const selected = row.id === selectedRowId
               const hasAmount = amount > 0
+              const pending = pendingByCell?.get(`${row.id}::${selectedMonth}`) ?? null
+              const additive = Boolean(pending && !pendingMatchesKind(pending, rowCommitKind(row)))
               return (
                 <li key={row.id}>
                   <button
@@ -334,6 +346,7 @@ export function CockpitDealList({
                         {formatMoney(amount)}
                       </span>
                     </div>
+                    {pending && <span className="mt-1 block text-right text-[10px] font-bold" style={{ color: CONFIDENCE_TOKENS[pending.confidence].color }} title={`${additive ? "신규 초안 +" : "대기 초안 "}${formatExactMoney(pending.amount)}(${CONFIDENCE_TOKENS[pending.confidence].label}) — 적용 전, 체크 큐에서 확인`}>{additive ? "신규 +" : "대기 "}{formatMoney(pending.amount)}</span>}
                     <div className="mt-2 flex items-center justify-between gap-2">
                       <div className="flex min-w-0 items-center gap-1.5">
                         <span className="shrink-0 rounded border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-1.5 py-0.5 text-[10px] font-semibold text-[#615D59]">

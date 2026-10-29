@@ -1,0 +1,406 @@
+{
+  "shots": [
+    {
+      "out": "/docs/files/guides/login-troubleshooting/01-pc-country-code-default.webp",
+      "source": "public/docs/files/cs-figma/image-68.png",
+      "crop": {
+        "x": 0.69,
+        "y": 0.17,
+        "w": 0.295,
+        "h": 0.35
+      },
+      "maxWidth": 660
+    },
+    {
+      "out": "/docs/files/guides/login-troubleshooting/02-pc-phone-format.webp",
+      "source": "public/docs/files/cs-figma/image-69.png",
+      "crop": {
+        "x": 0.69,
+        "y": 0.17,
+        "w": 0.295,
+        "h": 0.35
+      },
+      "masks": [
+        {
+          "x": 0.31,
+          "y": 0.17,
+          "w": 0.22,
+          "h": 0.13,
+          "style": "blur",
+          "reason": "휴대폰 번호"
+        }
+      ],
+      "maxWidth": 660
+    },
+    {
+      "out": "/docs/files/guides/login-troubleshooting/03-mobile-login-terms.webp",
+      "source": "public/docs/files/classin-signup-mobile.pdf#2",
+      "crop": {
+        "x": 0.14,
+        "y": 0.248,
+        "w": 0.235,
+        "h": 0.435
+      },
+      "maxWidth": 560
+    },
+    {
+      "out": "/docs/files/guides/login-troubleshooting/04-pc-password-change-link.webp",
+      "source": "public/docs/files/cs-figma/image-69.png",
+      "crop": {
+        "x": 0.69,
+        "y": 0.55,
+        "w": 0.295,
+        "h": 0.43
+      },
+      "maxWidth": 660
+    },
+    {
+      "out": "/docs/files/guides/camera-mic-troubleshooting/01-pc-quick-device-menu.webp",
+      "source": "public/docs/files/cs-figma/클래스인-교실-내-카메라-마이크-설정-확인-pc.png",
+      "crop": {
+        "x": 0.3,
+        "y": 0.045,
+        "w": 0.255,
+        "h": 0.055
+      },
+      "maxWidth": 640
+    },
+    {
+      "out": "/docs/files/guides/camera-mic-troubleshooting/02-pc-settings-microphone.webp",
+      "source": "public/docs/files/cs-figma/클래스인-교실-내-카메라-마이크-설정-확인-pc.png",
+      "crop": {
+        "x": 0.043,
+        "y": 0.262,
+        "w": 0.523,
+        "h": 0.09
+      },
+      "maxWidth": 1100
+    },
+    {
+      "out": "/docs/files/guides/camera-mic-troubleshooting/03-pc-settings-camera.webp",
+      "source": "public/docs/files/cs-figma/클래스인-교실-내-카메라-마이크-설정-확인-pc.png",
+      "crop": {
+        "x": 0.043,
+        "y": 0.4935,
+        "w": 0.523,
+        "h": 0.2275
+      },
+      "masks": [
+        {
+          "x": 0.47,
+          "y": 0.14,
+          "w": 0.22,
+          "h": 0.35,
+          "style": "blur",
+          "reason": "카메라 미리보기 속 인물"
+        }
+      ],
+      "maxWidth": 1000
+    },
+    {
+      "out": "/docs/files/guides/camera-mic-troubleshooting/04-mic-off-alert.webp",
+      "source": "public/docs/files/cs-figma/학원b-현장-녹화-마이크-on-off.png",
+      "crop": {
+        "x": 0.06,
+        "y": 0.345,
+        "w": 0.52,
+        "h": 0.04
+      },
+      "maxWidth": 1100
+    },
+    {
+      "out": "/docs/files/guides/camera-mic-troubleshooting/05-settings-mic-not-used.webp",
+      "source": "public/docs/files/cs-figma/학원b-현장-녹화-마이크-on-off.png",
+      "crop": {
+        "x": 0.0629,
+        "y": 0.4065,
+        "w": 0.5117,
+        "h": 0.1408
+      },
+      "maxWidth": 1100
+    },
+    {
+      "out": "/docs/files/guides/camera-mic-troubleshooting/06-pc-settings-speaker.webp",
+      "source": "public/docs/files/cs-figma/클래스인-교실-내-카메라-마이크-설정-확인-pc.png",
+      "crop": {
+        "x": 0.043,
+        "y": 0.35,
+        "w": 0.523,
+        "h": 0.11
+      },
+      "maxWidth": 1100
+    },
+    {
+      "out": "/docs/files/guides/camera-mic-troubleshooting/07-board-dock-mic-camera.webp",
+      "source": "public/docs/files/cs-figma/학원b-현장-녹화-마이크-on-off.png",
+      "crop": {
+        "x": 0.0629,
+        "y": 0.6183,
+        "w": 0.5117,
+        "h": 0.0718
+      },
+      "maxWidth": 1100
+    },
+    {
+      "out": "/docs/files/guides/camera-mic-troubleshooting/08-board-device-cards.webp",
+      "source": "public/docs/files/cs-figma/클래스인-마이크-활성화-비활성화-전자칠판.png",
+      "crop": {
+        "x": 0.038,
+        "y": 0.066,
+        "w": 0.496,
+        "h": 0.166
+      },
+      "masks": [
+        {
+          "x": 0.04,
+          "y": 0.06,
+          "w": 0.23,
+          "h": 0.11,
+          "style": "blur",
+          "reason": "코스명·코스 ID"
+        }
+      ],
+      "maxWidth": 1100
+    },
+    {
+      "out": "/docs/files/guides/app-update-cache-reinstall/01-pc-software-info-upgrade.webp",
+      "source": "public/docs/files/cs-figma/클래스인-캐시-삭제-업데이트-pc.png",
+      "crop": {
+        "x": 0.13,
+        "y": 0.45,
+        "w": 0.71,
+        "h": 0.31
+      },
+      "masks": [
+        {
+          "x": 0.015,
+          "y": 0.905,
+          "w": 0.08,
+          "h": 0.06,
+          "style": "blur",
+          "reason": "프로필 계정명"
+        },
+        {
+          "x": 0.183,
+          "y": 0.37,
+          "w": 0.036,
+          "h": 0.09,
+          "style": "blur",
+          "reason": "코스 카드 강사명"
+        },
+        {
+          "x": 0.183,
+          "y": 0.645,
+          "w": 0.036,
+          "h": 0.095,
+          "style": "blur",
+          "reason": "코스 카드 강사명"
+        }
+      ],
+      "maxWidth": 1100
+    },
+    {
+      "out": "/docs/files/guides/app-update-cache-reinstall/02-pc-cache-delete.webp",
+      "source": "public/docs/files/cs-figma/클래스인-캐시-삭제-업데이트-pc.png",
+      "crop": {
+        "x": 0.17,
+        "y": 0.06,
+        "w": 0.66,
+        "h": 0.275
+      },
+      "masks": [
+        {
+          "x": 0.02,
+          "y": 0.925,
+          "w": 0.068,
+          "h": 0.04,
+          "style": "blur",
+          "reason": "프로필 이름"
+        },
+        {
+          "x": 0.205,
+          "y": 0.805,
+          "w": 0.43,
+          "h": 0.045,
+          "style": "blur",
+          "reason": "코스명·강사명"
+        }
+      ],
+      "maxWidth": 1000
+    },
+    {
+      "out": "/docs/files/guides/app-update-cache-reinstall/03-android-play-store-update.webp",
+      "source": "public/docs/files/cs-figma/모바일-기기-업데이트.png",
+      "crop": {
+        "x": 0.1,
+        "y": 0.095,
+        "w": 0.8,
+        "h": 0.28
+      },
+      "maxWidth": 1152
+    },
+    {
+      "out": "/docs/files/guides/app-update-cache-reinstall/04-ios-app-store-update.webp",
+      "source": "public/docs/files/cs-figma/모바일-기기-업데이트.png",
+      "crop": {
+        "x": 0.12,
+        "y": 0.52,
+        "w": 0.76,
+        "h": 0.29
+      },
+      "maxWidth": 1100
+    },
+    {
+      "out": "/docs/files/guides/app-update-cache-reinstall/05-mobile-software-info.webp",
+      "source": "public/docs/files/cs-figma/안드로이드-기기-업데이트-확인.png",
+      "crop": {
+        "x": 0.4,
+        "y": 0.525,
+        "w": 0.484,
+        "h": 0.29
+      },
+      "masks": [
+        {
+          "x": 0.04,
+          "y": 0.105,
+          "w": 0.09,
+          "h": 0.06,
+          "style": "blur",
+          "reason": "계정 이름"
+        }
+      ],
+      "maxWidth": 700
+    },
+    {
+      "out": "/docs/files/guides/app-update-cache-reinstall/06-mobile-cache-delete.webp",
+      "source": "public/docs/files/cs-figma/클래스인-캐시-삭제-업데이트-mobile.png",
+      "crop": {
+        "x": 0.07,
+        "y": 0.595,
+        "w": 0.86,
+        "h": 0.295
+      },
+      "maxWidth": 1238
+    },
+    {
+      "out": "/docs/files/guides/app-update-cache-reinstall/07-board-settings-more.webp",
+      "source": "public/docs/files/cs-figma/클래스인-업데이트-가이드-pc-전자칠판.png",
+      "crop": {
+        "x": 0.07,
+        "y": 0.362,
+        "w": 0.48,
+        "h": 0.288
+      },
+      "maxWidth": 700
+    },
+    {
+      "out": "/docs/files/guides/app-update-cache-reinstall/08-board-software-info-upgrade.webp",
+      "source": "public/docs/files/cs-figma/클래스인-업데이트-가이드-pc-전자칠판.png",
+      "crop": {
+        "x": 0.07,
+        "y": 0.665,
+        "w": 0.48,
+        "h": 0.3
+      },
+      "maxWidth": 700
+    },
+    {
+      "out": "/docs/files/guides/app-update-cache-reinstall/09-board-uninstall-local-data.webp",
+      "source": "public/docs/files/cs-figma/클래스인x-삭제-재설치-전자칠판.png",
+      "crop": {
+        "x": 0.33,
+        "y": 0.392,
+        "w": 0.37,
+        "h": 0.033
+      },
+      "maxWidth": 640
+    },
+    {
+      "out": "/docs/files/guides/app-update-cache-reinstall/10-board-classin-x-download.webp",
+      "source": "public/docs/files/cs-figma/클래스인x-삭제-재설치-전자칠판.png",
+      "crop": {
+        "x": 0.2,
+        "y": 0.609,
+        "w": 0.295,
+        "h": 0.036
+      },
+      "maxWidth": 640
+    },
+    {
+      "out": "/docs/files/guides/pc-install-troubleshooting/01-browser-download-list.webp",
+      "source": "public/docs/files/cs-figma/image-63.png",
+      "crop": {
+        "x": 0.3,
+        "y": 0.0,
+        "w": 0.7,
+        "h": 0.33
+      },
+      "maxWidth": 1200
+    },
+    {
+      "out": "/docs/files/guides/pc-install-troubleshooting/02-save-as-dialog.webp",
+      "source": "public/docs/files/cs-figma/image-62.png",
+      "crop": {
+        "x": 0.0,
+        "y": 0.0,
+        "w": 0.79,
+        "h": 0.63
+      },
+      "masks": [
+        {
+          "x": 0.19,
+          "y": 0.38,
+          "w": 0.6,
+          "h": 0.22,
+          "style": "blur",
+          "reason": "바탕 화면의 다른 파일 이름"
+        }
+      ],
+      "maxWidth": 1200
+    },
+    {
+      "out": "/docs/files/guides/pc-install-troubleshooting/03-installer-language.webp",
+      "source": "public/docs/files/cs-figma/image-64.png",
+      "crop": {
+        "x": 0.02,
+        "y": 0.25,
+        "w": 0.62,
+        "h": 0.41
+      },
+      "maxWidth": 1100
+    },
+    {
+      "out": "/docs/files/guides/pc-install-troubleshooting/04-installer-install-button.webp",
+      "source": "public/docs/files/cs-figma/image-65.png",
+      "crop": {
+        "x": 0.249,
+        "y": 0.25,
+        "w": 0.488,
+        "h": 0.53
+      },
+      "maxWidth": 1000
+    },
+    {
+      "out": "/docs/files/guides/pc-install-troubleshooting/05-installer-progress.webp",
+      "source": "public/docs/files/cs-figma/image-66.png",
+      "crop": {
+        "x": 0.249,
+        "y": 0.25,
+        "w": 0.488,
+        "h": 0.54
+      },
+      "maxWidth": 1000
+    },
+    {
+      "out": "/docs/files/guides/pc-install-troubleshooting/06-installer-start.webp",
+      "source": "public/docs/files/cs-figma/image-67.png",
+      "crop": {
+        "x": 0.249,
+        "y": 0.25,
+        "w": 0.488,
+        "h": 0.53
+      },
+      "maxWidth": 1000
+    }
+  ]
+}

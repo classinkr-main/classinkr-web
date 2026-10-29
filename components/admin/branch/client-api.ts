@@ -27,14 +27,27 @@ export interface BranchJsonState<T> {
   stale: boolean
   /** stale이 true일 때, 그 캐시 항목이 저장된 시각(ms epoch). */
   staleSince: number | null
+  /** Same query's previous result while an explicit refresh is in progress. */
+  previous?: boolean
 }
 
 interface UseBranchJsonOptions {
   /** false면 네트워크 요청을 만들지 않는다. 탭·렌즈가 실제로 소비하는 동안에만 켠다. */
   enabled?: boolean
+  /** 사용자별 데이터를 공용 클라이언트 캐시에 저장하지 않는다. */
+  noStore?: boolean
+  /** 같은 URL을 갱신하는 동안 이전 결과를 표시한다. */
+  keepPreviousData?: boolean
 }
 
 const EMPTY_STATE = { data: null, error: null, loading: true, stale: false, staleSince: null } as const
+
+export function previousBranchState<T>(state: BranchJsonState<T>, stateKey: string, url: string): BranchJsonState<T> | null {
+  const oldUrl = state.key.slice(state.key.indexOf(":") + 1)
+  return state.data != null && oldUrl === url
+    ? { key: stateKey, data: state.data, error: null, loading: true, stale: false, staleSince: null, previous: true }
+    : null
+}
 
 // branch 새로고침·재동기화가 무효화해야 하는 캐시 스코프 — branch API 키 전체에 매칭된다.
 const BRANCH_API_CACHE_PREFIX = "/api/admin/branch"
@@ -75,6 +88,7 @@ function loadBranchJson<T>(url: string, force: boolean) {
 
 export function useBranchJson<T>(url: string, refreshKey: number, options: UseBranchJsonOptions = {}): BranchJsonState<T> {
   const enabled = options.enabled ?? true
+  const noStore = options.noStore ?? false
   // 상태 키는 기존 그대로 `${refreshKey}:${url}` — refreshKey 증가·URL 변경 시 로딩 상태로
   // 리셋되는 소비자 가시 동작(스켈레톤)을 유지한다. 네트워크 캐시 키(정규화 URL)와는 분리.
   const stateKey = `${refreshKey}:${url}`
@@ -93,7 +107,10 @@ export function useBranchJson<T>(url: string, refreshKey: number, options: UseBr
     const force =
       lastFetchedRefreshKeyRef.current !== null && lastFetchedRefreshKeyRef.current !== refreshKey
     lastFetchedRefreshKeyRef.current = refreshKey
-    void loadBranchJson<T>(url, force)
+    const request = noStore
+      ? sharedAdminFetchJson<T>(url, { adminTimeoutMs: BRANCH_READ_TIMEOUT_MS, cache: "no-store" }).then((data) => ({ data, staleReason: null, staleSince: null }))
+      : loadBranchJson<T>(url, force)
+    void request
       .then((result) => {
         if (!active) return
         // staleReason: "revalidate"(정상 SWR 고속 경로)는 실패 신호가 아니므로 stale로 노출하지 않는다.
@@ -121,13 +138,17 @@ export function useBranchJson<T>(url: string, refreshKey: number, options: UseBr
       })
 
     return () => { active = false }
-  }, [stateKey, enabled, url, refreshKey])
+  }, [stateKey, enabled, noStore, url, refreshKey])
 
   if (!enabled) {
     return { key: stateKey, data: null, error: null, loading: false, stale: false, staleSince: null }
   }
 
   if (state.key !== stateKey) {
+    // Retain data only for a refresh of the same URL. A different team, period or
+    // manager must never be presented under the new filter's labels.
+    const previous = options.keepPreviousData ? previousBranchState(state, stateKey, url) : null
+    if (previous) return previous
     return { key: stateKey, ...EMPTY_STATE }
   }
 

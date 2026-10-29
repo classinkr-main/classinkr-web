@@ -446,6 +446,19 @@ export function serializeMultiFilterParam(values: Set<string>): string | null {
   return Array.from(values).sort((a, b) => a.localeCompare(b, "ko")).join(",")
 }
 
+/** 필터·정렬의 실제 값만 서명해 동일 Set 재생성이나 URL 복원으로 페이지가 초기화되지 않게 한다. */
+export function revPageResetSignature(input: {
+  managerFilter: ReadonlySet<string>; regionFilter: ReadonlySet<string>; period: string; team: string; query: string;
+  productFilter: string; revStatusFilter: string; revDealTypeFilter: string; revOriginFilter: string;
+  revForecastFilter: string; revSortKey: string; revSortDirection: string; revPageSize: number; selectedMonth: string
+}): string {
+  return JSON.stringify([
+    serializeMultiFilterParam(new Set(input.managerFilter)) ?? "", serializeMultiFilterParam(new Set(input.regionFilter)) ?? "",
+    input.period, input.team, input.query.trim(), input.productFilter, input.revStatusFilter, input.revDealTypeFilter,
+    input.revOriginFilter, input.revForecastFilter, input.revSortKey, input.revSortDirection, input.revPageSize, input.selectedMonth,
+  ])
+}
+
 // URL 복원이 반응형(딥링크마다 재실행)이 된 뒤로는 내용이 같은 Set을 새 참조로 갈아끼우면
 // 필터 memo 체인이 헛돌므로, 동치일 때 기존 참조를 유지한다.
 function replaceEquivalentSet(current: Set<string>, next: Set<string>): Set<string> {
@@ -887,4 +900,19 @@ export {
   revSortAriaValue,
   RevSortHeader,
   SelectedWeekBars,
+}
+export function RefreshingBadge({ label = "갱신 중 — 직전 값 표시" }: { label?: string }) {
+  return <span role="status" className="inline-flex rounded-full border bg-[#FAFAF8] px-2 py-0.5 text-[10px] font-bold text-[#615D59]">{label}</span>
+}
+
+export function RevLoadErrorPanel({ error, onRetry, framed = false }: { error: string; onRetry: () => void; framed?: boolean }) {
+  return (
+    <div className={framed ? "rounded-lg border bg-white p-6" : "p-6"}>
+      <div role="alert" className="mx-auto max-w-md rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-center">
+        <p className="font-bold text-[#B43E3E]">REV 데이터를 불러오지 못했습니다</p>
+        {error && <p className="mt-1 break-all text-[11px]">{error}</p>}
+        <button type="button" onClick={onRetry} className="mt-3 rounded-md border bg-white px-3 py-1.5 text-[11px] font-bold">다시 불러오기</button>
+      </div>
+    </div>
+  )
 }

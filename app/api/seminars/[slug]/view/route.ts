@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 
 import { getPublicUserContext } from "@/lib/auth/public-user"
 import { ANONYMOUS_ID_COOKIE } from "@/lib/consent/consent"
+import { getMarketingRequestMeta } from "@/lib/marketing/server-conversions"
 import { getSeminarBySlug } from "@/lib/seminars/catalog"
 import { recordSeminarView } from "@/lib/seminars/record-view"
 import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     slug,
     userId: userContext.user.id,
     leadId: userContext.profile.lead_id,
-    anonymousId: req.cookies.get(ANONYMOUS_ID_COOKIE)?.value ?? null,
+    anonymousId: getMarketingRequestMeta(req).consent.analytics ? req.cookies.get(ANONYMOUS_ID_COOKIE)?.value ?? null : null,
   })
 
   return NextResponse.json({ ok: true })

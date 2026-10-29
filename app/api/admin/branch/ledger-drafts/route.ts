@@ -12,6 +12,7 @@ import {
   LEDGER_LIST_MAX,
   listBranchSalesLedgerDrafts,
   listBranchSalesLedgerEntries,
+  mergeRecentAndOpenDraftRows,
   type BranchSalesLedgerDraftStatus,
 } from "@/lib/repositories/branch-sales-ledger-drafts"
 import {
@@ -123,13 +124,14 @@ export async function GET(req: NextRequest) {
       listBranchSalesLedgerEntries({ status: "reversed", limit: LEDGER_LIST_MAX }),
       readLastRevSyncStartedAt(),
     ])
+    // 원장 DB와 REV 시트에 대한 원자적 정합성 보장이 검증되기 전까지는 RPC가 있어도 끈다.
+    const supersedeAvailable = false
     const draftResult = closedDraftResult
       ? {
           generatedAt: openDraftResult.generatedAt,
           health: openDraftResult.health.ok ? closedDraftResult.health : openDraftResult.health,
           // 두 조회는 상태로 나뉘어 겹치지 않지만, 혹시 겹쳐도 같은 초안을 두 번 내려주지 않는다.
-          drafts: [...new Map([...openDraftResult.drafts, ...closedDraftResult.drafts].map((draft) => [draft.id, draft])).values()]
-            .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")),
+          drafts: mergeRecentAndOpenDraftRows(closedDraftResult.drafts, openDraftResult.drafts),
         }
       : openDraftResult
 
@@ -168,6 +170,7 @@ export async function GET(req: NextRequest) {
         health: sheetWriteHealth,
       },
       sheetWrites,
+      capabilities: { supersede: supersedeAvailable },
     })
   } catch (error) {
     console.error("[GET /api/admin/branch/ledger-drafts]", error)

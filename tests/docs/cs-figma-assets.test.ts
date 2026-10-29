@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs"
+import { join } from "node:path"
+
 import { describe, expect, it } from "vitest"
 
 import {
@@ -13,6 +16,12 @@ import {
 import { CS_FIGMA_GUIDES } from "@/lib/cs-figma-guides"
 
 describe("CS Figma asset resolver", () => {
+  it("does not expose the internal PC log capture as a direct public asset", () => {
+    const path = "/docs/files/cs-figma/pc-데이터-로그-보고.png"
+    expect(CS_FIGMA_ASSET_PATHS).not.toContain(path)
+    expect(existsSync(join(process.cwd(), "public", path))).toBe(false)
+  })
+
   it("matches Figma source filenames to safe public image paths", () => {
     const guide = CS_FIGMA_GUIDES.find((item) => item.docSlug === "cs-field-recording-camera-setup")
     expect(guide).toBeTruthy()
@@ -209,8 +218,9 @@ describe("CS Figma asset resolver", () => {
     const missing = findMissingCsFigmaAssetLabels(CS_FIGMA_GUIDES)
     const requirements = getCsFigmaAssetRequirements(CS_FIGMA_GUIDES)
 
-    expect(CS_FIGMA_ASSET_PATHS.length).toBe(112)
-    expect(requirements).toHaveLength(99)
+    // 사내 전용 로그·결제·VPN·관리자 화면 등은 공개 폴더에서 뺐다.
+    expect(CS_FIGMA_ASSET_PATHS.length).toBe(98)
+    expect(requirements).toHaveLength(98)
     expect(missing).toEqual([])
   })
 })

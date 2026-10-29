@@ -8,15 +8,32 @@ vi.mock("@/lib/supabase/admin", () => ({
   createSupabaseAdminClient: vi.fn(() => ({ from })),
 }))
 
+import { CONSENT_POLICY_VERSION } from "@/lib/consent/consent"
+import { CONSENT_OBSERVATION_HEADER, CONSENT_OBSERVATION_VERSION } from "@/lib/consent/observation-contract"
 import { POST } from "@/app/api/track/event/route"
 
-function trackRequest(body: unknown) {
+/** 라우트가 서버측에서 분석 동의를 검증하므로 동의 쿠키를 실어 보낸다. */
+const CONSENT_COOKIE_HEADER = `cln_consent=${encodeURIComponent(
+  JSON.stringify({
+    v: CONSENT_POLICY_VERSION,
+    analytics: true,
+    marketing: true,
+    ts: 1,
+    s: 1,
+    ackAnalytics: "confirmed-a",
+    ackMarketing: "confirmed-m",
+  })
+)}; cln_revoke_a=confirmed-a; cln_revoke_m=confirmed-m; cln_aid=anon-track-test`
+
+function trackRequest(body: unknown, cookie: string | null = CONSENT_COOKIE_HEADER, observation = true) {
   return new NextRequest("https://classin.kr/api/track/event", {
     method: "POST",
     headers: {
       "content-type": "application/json",
       origin: "https://classin.kr",
       "x-forwarded-for": "track-event-test",
+      ...(observation ? { [CONSENT_OBSERVATION_HEADER]: CONSENT_OBSERVATION_VERSION } : {}),
+      ...(cookie ? { cookie } : {}),
     },
     body: JSON.stringify(body),
   })
@@ -27,6 +44,26 @@ describe("track event route", () => {
     from.mockClear()
     insert.mockReset()
     insert.mockResolvedValue({ error: null })
+  })
+
+  it.each([
+    null, 123, "page_view", [], {},
+    { event: 123 }, { event: null }, { event: [] },
+    { event: "page_view", params: "not-an-object" },
+    { event: "page_view", params: [] },
+    { event: "page_view", page: 123 },
+  ])("rejects malformed JSON values with 400: %j", async (body) => {
+    const response = await POST(trackRequest(body))
+    expect(response.status).toBe(400)
+    expect(from).not.toHaveBeenCalled()
+  })
+
+  it("rejects invalid JSON with 400 even without consent", async () => {
+    const request = new NextRequest("https://classin.kr/api/track/event", {
+      method: "POST", headers: { origin: "https://classin.kr" }, body: "{"
+    })
+    expect((await POST(request)).status).toBe(400)
+    expect(from).not.toHaveBeenCalled()
   })
 
   it("keeps blog and event CTA attribution while dropping unknown params", async () => {
@@ -258,6 +295,85 @@ describe("track event route", () => {
           exit_type: "pagehide",
         },
       })
+    )
+  })
+})
+
+describe("track event route — 서버측 동의 게이트", () => {
+  it("허용된 키에도 객체·배열이 들어오면 제거하고 유효 이벤트는 처리한다", async () => {
+    const response = await POST(trackRequest({ event: "page_view", params: { path: { toString: null, valueOf: null }, title: ["unexpected"] } }))
+    expect(response.status).toBe(200)
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ params: {} }))
+  })
+  it("현재 탭의 관찰 능력이 확인되지 않으면 허용 쿠키가 있어도 적재하지 않는다", async () => {
+    const response = await POST(trackRequest({ event: "page_view", page: "/" }, CONSENT_COOKIE_HEADER, false))
+    expect(await response.json()).toMatchObject({ stored: false, reason: "no_consent" })
+    expect(insert).not.toHaveBeenCalled()
+  })
+
+  beforeEach(() => {
+    from.mockClear()
+    insert.mockReset()
+    insert.mockResolvedValue({ error: null })
+  })
+
+  it("동의 쿠키가 없으면 적재하지 않는다", async () => {
+    const response = await POST(trackRequest({ event: "page_view", page: "/" }, null))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ ok: true, stored: false, reason: "no_consent" })
+    expect(insert).not.toHaveBeenCalled()
+  })
+
+  it("분석을 거부한 사용자는 적재하지 않는다", async () => {
+    const denied = `cln_consent=${encodeURIComponent(
+      JSON.stringify({ v: CONSENT_POLICY_VERSION, analytics: false, marketing: true, ts: 1, s: 1 })
+    )}`
+
+    const response = await POST(trackRequest({ event: "page_view", page: "/" }, denied))
+
+    expect(await response.json()).toMatchObject({ stored: false, reason: "no_consent" })
+    expect(insert).not.toHaveBeenCalled()
+  })
+
+  it("선택은 허용이어도 서버 확인 전인 s:0 쿠키는 적재하지 않는다", async () => {
+    const pending = `cln_consent=${encodeURIComponent(
+      JSON.stringify({ v: CONSENT_POLICY_VERSION, analytics: true, marketing: true, ts: 1, s: 0 })
+    )}`
+    const response = await POST(trackRequest({ event: "page_view", page: "/" }, pending))
+    expect(await response.json()).toMatchObject({ stored: false, reason: "no_consent" })
+    expect(insert).not.toHaveBeenCalled()
+  })
+
+  it("늦은 허용 쿠키가 새로운 분석 철회 표식을 확인하지 못했으면 적재하지 않는다", async () => {
+    const staleGrant = `cln_consent=${encodeURIComponent(
+      JSON.stringify({ v: CONSENT_POLICY_VERSION, analytics: true, marketing: true, ts: 1, s: 1 })
+    )}; cln_revoke_a=revoked-after-grant`
+    const response = await POST(trackRequest({ event: "page_view", page: "/" }, staleGrant))
+    expect(await response.json()).toMatchObject({ stored: false, reason: "no_consent" })
+    expect(insert).not.toHaveBeenCalled()
+  })
+
+  it("정책 버전이 지난 동의 쿠키는 무효로 본다", async () => {
+    const stale = `cln_consent=${encodeURIComponent(
+      JSON.stringify({ v: "2000-01-01", analytics: true, marketing: true, ts: 1, s: 1 })
+    )}`
+
+    const response = await POST(trackRequest({ event: "page_view", page: "/" }, stale))
+
+    expect(await response.json()).toMatchObject({ stored: false, reason: "no_consent" })
+    expect(insert).not.toHaveBeenCalled()
+  })
+
+  it("익명 식별자는 본문이 아니라 cln_aid 쿠키에서만 읽는다", async () => {
+    // 회귀 방지: 본문 값을 신뢰하면 남의 cln_aid 로 타인 리드에 이벤트를 귀속시킬 수 있다.
+    const response = await POST(
+      trackRequest({ event: "page_view", page: "/", anonymousId: "victim-anonymous-id" })
+    )
+
+    expect(response.status).toBe(200)
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({ anonymous_id: "anon-track-test" })
     )
   })
 })

@@ -1,5 +1,8 @@
 "use client"
 
+import { consentObservationHeaders } from "@/lib/consent/observation-client"
+
+
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { ANONYMOUS, loadTossPayments, type TossPaymentsWidgets } from "@tosspayments/tosspayments-sdk"
@@ -247,7 +250,7 @@ export function SubscriptionCheckoutPanel() {
     try {
       const response = await fetch("/api/billing/checkout/prepare", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...consentObservationHeaders() },
         body: JSON.stringify({
           mode: "subscription",
           planId,

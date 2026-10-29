@@ -1,5 +1,8 @@
 "use client"
 
+import { consentObservationHeaders } from "@/lib/consent/observation-client"
+
+
 import { useState } from "react"
 import { ArrowRight, CheckCircle2, Loader2, Mail } from "lucide-react"
 
@@ -34,7 +37,7 @@ export function NewsletterSubscribe({ variant = "dark", source = "footer_newslet
     try {
       const res = await fetch("/api/newsletter/subscribe", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...consentObservationHeaders() },
         body: JSON.stringify({ email, source, attribution: collectLeadAttribution() }),
       })
 

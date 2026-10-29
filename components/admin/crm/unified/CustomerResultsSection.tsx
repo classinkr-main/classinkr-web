@@ -11,6 +11,7 @@
 
 import Link from "next/link"
 import { customerDetailHref } from "@/lib/crm/customer-navigation"
+import { CRM_PRIORITY_TIER_LABELS } from "@/lib/crm/priority"
 import { type MouseEvent, type ReactNode } from "react"
 import { ChevronLeft, ChevronRight, ExternalLink, MapPin, PhoneCall, UserPlus } from "lucide-react"
 import type { CrmUnifiedCustomerRow } from "@/lib/repositories/crm-unified-customers"
@@ -24,6 +25,19 @@ import { SECONDARY_TEXT_CLASS } from "../home/shared"
 
 // 돈흐름 열 통화 안내 — 외부 CRM(¥잔액·$오더)과 전환 고객(₩계약·미수)이 같은 열에 놓인다.
 export const MONEY_COLUMN_CURRENCY_HINT = "외부 CRM: ¥잔액·$오더 / 전환 고객: ₩계약·미수"
+
+/** 오래된 우선순위 큐의 티어·신뢰·영업 단계는 현재 통합 목록에서 함께 보여 준다. */
+function PriorityAndStage({ row }: { row: CrmUnifiedCustomerRow }) {
+  const inferred = [row.subjectLabel, row.categoryLabel].filter(Boolean).join(" · ")
+  if (!row.tier && !row.stageLabel && !inferred) return null
+  return (
+    <p className="mt-1 text-[11px] text-[#615D59]">
+      {[row.tier ? CRM_PRIORITY_TIER_LABELS[row.tier] : null, row.stageLabel,
+        row.trust === "low" ? "추정 신호" : null, inferred ? `분류 추정: ${inferred}` : null]
+        .filter(Boolean).join(" · ")}
+    </p>
+  )
+}
 
 // 데스크톱 표 열 폭(%) — 고객·상태·다음 액션·돈흐름·담당·마지막 연락·최근 업데이트(합 100). 2026-10-13 고정 열
 // 폭(table-fixed) 위에 2026-09-25 마지막 연락 열을 더해 7열로 나눴다.
@@ -122,7 +136,7 @@ export default function CustomerResultsSection({
           정렬 ·{" "}
           {sort
             ? `${SORT_LABELS[sort.key]} ${sort.direction === "asc" ? "오름차순" : "내림차순"} · ${scopeCaption}`
-            : "추천순 (기본)"}
+            : "추천순 (기본) · 티어 → 돈 → 마감"}
         </p>
         <div className="flex flex-wrap items-center gap-1.5">
           <button
@@ -306,6 +320,7 @@ export default function CustomerResultsSection({
                 </td>
                 <td className="px-4 py-3">
                   <p className="text-[12px] font-semibold text-[#111110]">{row.nextActionLabel}</p>
+                  <PriorityAndStage row={row} />
                   <p className="mt-0.5 max-w-[220px] truncate text-[11px] text-[#1a1a1a]/40">{row.priorityReason}</p>
                   {/* A안 — 응대·기록은 Compass 에서. 셀 안 새 탭 링크(행 더블클릭은 a 위에서 무시된다). */}
                   <UnifiedCompassLink row={row} neoRegisteredLeadIds={neoRegisteredLeadIds} className="mt-1" />
@@ -343,7 +358,7 @@ export default function CustomerResultsSection({
             ))
           : null}
         {rows.map((row) => (
-          <div key={row.key} className="relative transition-colors hover:bg-[#fafaf8]">
+          <div key={row.key} className={`relative transition-colors ${selectedKey === row.key ? "bg-[#ECFDF5]" : "hover:bg-[#fafaf8]"}`}>
             {selectable ? (
               // 카드 전체가 상세 열기 버튼이라 체크박스는 그 위(z-20)에 따로 둔다.
               <label className="absolute right-3 top-3 z-20 inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center">
@@ -407,6 +422,7 @@ export default function CustomerResultsSection({
                 </div>
               </div>
               <NeoSignalLine row={row} />
+              <PriorityAndStage row={row} />
               <p className="mt-2 text-[12px] text-[#1a1a1a]/45">{row.priorityReason}</p>
             </div>
           </div>

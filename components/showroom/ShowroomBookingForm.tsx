@@ -12,6 +12,7 @@ import { formatDesiredDateLabel } from "@/components/checkout/request-date"
 import { SlotPicker } from "@/components/showroom/SlotPicker"
 import { ACADEMY_SIZE_OPTIONS } from "@/lib/contact/academy-size"
 import { getAnonymousId } from "@/lib/consent/consent"
+import { consentObservationHeaders } from "@/lib/consent/observation-client"
 import { collectLeadAttribution } from "@/lib/marketing-attribution"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -445,7 +446,7 @@ export function ShowroomBookingForm({ interests }: Props) {
       const response = await fetch("/api/showroom/bookings", {
         method: "POST",
         signal: controller.signal,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...consentObservationHeaders() },
         body: JSON.stringify({
           visitDate: form.visitDate,
           visitTime: form.visitTime,

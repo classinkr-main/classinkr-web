@@ -13,6 +13,7 @@ import { matchesTokens, tokenize } from "../search-tokens"
 import { useDialogFocus } from "../../use-dialog-focus"
 import { planBulkApply, planBulkCheck } from "./draft-bulk-plan"
 import { isSelfCheckedDraft, SELF_CHECK_BADGE_LABEL, SELF_CHECK_BADGE_TITLE } from "./self-check"
+import { draftAuthorLine, draftDeleteDisabledReason, draftEditDisabledReason } from "./draft-card-meta"
 import {
   blocksLedgerDelete,
   blocksLedgerReverse,
@@ -548,6 +549,7 @@ export function DraftQueue({
           {/* 본문: 고객명 + 메타데이터 */}
           <div className="mt-1.5 min-w-0">
             <p className="truncate text-[12.5px] font-bold text-[#111110]">{draft.customer || "고객명 미입력"}</p>
+            <p className="mt-0.5 text-[10px] text-[#615D59]">{draftAuthorLine(draft)}</p>
             <p className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-[#615D59]">
               <span className="font-semibold text-[#111110]">{formatMonthLabel(draft.month)}</span>
               <span className="text-[#DDD9D3]">·</span>
@@ -601,8 +603,8 @@ export function DraftQueue({
                 onClick={() => onEdit(draft)}
                 disabled={draft.status === "checked" || draft.status === "applied" || draft.status === "cancelled"}
                 className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-35"
-                aria-label={`${draft.customer || "초안"} 편집`}
-                title="초안 편집"
+                aria-label={`${draft.customer || "초안"} 편집${draftEditDisabledReason(draft) ? ` — ${draftEditDisabledReason(draft)}` : ""}`}
+                title={draftEditDisabledReason(draft) ?? "초안 편집"}
               >
                 <Pencil className="h-3.5 w-3.5" />
               </button>
@@ -649,7 +651,7 @@ export function DraftQueue({
                 }
                 className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] text-[#B43E3E] transition hover:bg-[#FCE9E9] disabled:cursor-not-allowed disabled:opacity-35"
                 aria-label="초안 삭제"
-                title={sheetBlocksDelete(draft.id) ? SHEET_WRITE_HISTORY_DELETE_MESSAGE : "초안 삭제"}
+                title={sheetBlocksDelete(draft.id) ? SHEET_WRITE_HISTORY_DELETE_MESSAGE : draftDeleteDisabledReason(draft) ?? "초안 삭제"}
               >
                 {rowActionBusy?.id === draft.id && rowActionBusy.action === "delete" ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -725,7 +727,7 @@ export function DraftQueue({
             </p>
           </div>
           <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#FBF1E0] px-4 py-3 text-[11.5px] font-semibold leading-relaxed text-[#7A520F]">
-            적용하면 장부 원본에 기록됩니다 — 초안 1건. 이 작업은 되돌릴 수 없습니다.
+            적용하면 장부 원본에 기록됩니다 — 초안 1건. 이후 가능한 경우 &lsquo;되돌리기&rsquo;(상쇄 기록)를 사용할 수 있습니다. 시트에 쓴 정정은 별도 확인이 필요합니다.
           </div>
           <div className="flex items-center justify-end gap-2 bg-[#FAFAF8] px-4 py-3">
             <button

@@ -65,7 +65,39 @@ export default function RootLayout({
         <JsonLd data={[createOrganizationJsonLd(), createWebsiteJsonLd()]} />
         {/* Google Consent Mode v2 — 기본 거부(denied). GTM 로드 전에 실행되어야 함. */}
         <Script id="consent-default" strategy="beforeInteractive">
-          {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('consent','default',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',analytics_storage:'denied',functionality_storage:'granted',security_storage:'granted',wait_for_update:500});gtag('set','url_passthrough',true);gtag('set','ads_data_redaction',true);try{var m=document.cookie.match(/(?:^|; )cln_consent=([^;]*)/);if(m){var c=JSON.parse(decodeURIComponent(m[1]));if(c&&c.v==='${CONSENT_POLICY_VERSION}'){gtag('consent','update',{ad_storage:c.marketing?'granted':'denied',ad_user_data:c.marketing?'granted':'denied',ad_personalization:c.marketing?'granted':'denied',analytics_storage:c.analytics?'granted':'denied'});}}}catch(e){}`}
+          {`
+window.dataLayer=window.dataLayer||[];
+function gtag(){dataLayer.push(arguments);}
+gtag('consent','default',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',analytics_storage:'denied',functionality_storage:'granted',security_storage:'granted',wait_for_update:500});
+gtag('set','url_passthrough',true);gtag('set','ads_data_redaction',true);
+try {
+  var store=window.cookieStore;
+  var capable=store&&typeof store.addEventListener==='function'&&typeof store.removeEventListener==='function'&&navigator.locks&&window.crypto&&typeof window.crypto.randomUUID==='function';
+  if(capable){
+    var key='classin.consent.latest.v1.probe';window.localStorage.setItem(key,'1');window.localStorage.removeItem(key);
+    var lastA=null,lastM=null;
+    var updateConsent=function(){
+      var ag=false,mg=false;
+      try {
+        if(!navigator.locks||!window.crypto||typeof window.crypto.randomUUID!=='function')throw new Error('unavailable');
+        window.localStorage.setItem(key,'1');window.localStorage.removeItem(key);
+        var m=document.cookie.match(/(?:^|; )cln_consent=([^;]*)/);
+        var c=m?JSON.parse(decodeURIComponent(m[1])):null;
+        if(c&&c.v==='${CONSENT_POLICY_VERSION}'&&(c.s===undefined||c.s===1)){
+          var a=document.cookie.match(/(?:^|; )cln_revoke_a=([^;]*)/),b=document.cookie.match(/(?:^|; )cln_revoke_m=([^;]*)/);
+          var av=a?decodeURIComponent(a[1]):null,bv=b?decodeURIComponent(b[1]):null;
+          ag=c.analytics===true&&av!==null&&av!==''&&av!=='uncoordinated'&&c.ackAnalytics===av;
+          mg=c.marketing===true&&bv!==null&&bv!==''&&bv!=='uncoordinated'&&c.ackMarketing===bv;
+        }
+      }catch(e){ag=false;mg=false;}
+      if(ag===lastA&&mg===lastM)return;lastA=ag;lastM=mg;
+      gtag('consent','update',{ad_storage:mg?'granted':'denied',ad_user_data:mg?'granted':'denied',ad_personalization:mg?'granted':'denied',analytics_storage:ag?'granted':'denied'});
+      if(typeof window.fbq==='function')window.fbq('consent',mg?'grant':'revoke');
+    };
+    store.addEventListener('change',updateConsent);window.__classinConsentObservedStore=store;window.__classinConsentObserverReady=true;updateConsent();
+  }
+}catch(e){}
+`}
         </Script>
         {/*
           Google Ads(gtag.js) 로더는 여기 두지 않는다. 이 파일(RootLayout)은 서버 컴포넌트라

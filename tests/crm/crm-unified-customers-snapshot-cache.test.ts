@@ -111,6 +111,9 @@ const CACHED_SNAPSHOT_WITH_UNCONFIRMED = {
 }
 
 function mockRealSourcesEmpty() {
+  vi.doMock("@/lib/repositories/crm-tasks", () => ({
+    listCrmTasks: vi.fn().mockResolvedValue({ health: { ok: true }, rows: [] }),
+  }))
   // getCrmUnifiedCustomers가 요청마다 붙이는 수기 라벨 — 여기서는 관심 밖이라 빈 맵.
   vi.doMock("@/lib/repositories/crm-customer-tags", () => ({
     getAllCustomerTagsMap: vi.fn().mockResolvedValue({}),
@@ -173,10 +176,15 @@ describe("crm-unified-customers 소스 스냅샷 캐시 배선", () => {
   it("unstable_cache(60초, admin-crm-unified-snapshot 태그)로 감싼다", async () => {
     await loadRepository()
 
-    expect(mocks.unstableCache).toHaveBeenCalledTimes(1)
-    const [fn, keyParts, options] = mocks.unstableCache.mock.calls[0]
+    // 이 모듈의 감싸기만 검증한다 — 모듈 그래프에 unstable_cache를 쓰는 다른 저장소가
+    // 들어와도(예: crm-tasks → admin-users 디렉터리 캐시) 호출 총량으로 깨지지 않게 태그로 고른다.
+    const call = mocks.unstableCache.mock.calls.find(
+      ([, keys]) => Array.isArray(keys) && keys.includes("admin-crm-unified-snapshot")
+    )
+    expect(call).toBeDefined()
+    const [fn, keyParts, options] = call!
     expect(typeof fn).toBe("function")
-    expect(keyParts).toEqual(["admin-crm-unified-snapshot"])
+    expect(keyParts).toEqual(["admin-crm-unified-snapshot", "v2"])
     expect(options).toEqual({ revalidate: 60, tags: ["admin-crm-unified-snapshot"] })
   })
 
@@ -212,8 +220,11 @@ describe("crm-unified-customers 소스 스냅샷 캐시 배선", () => {
       await getCrmUnifiedCustomers({ includeUnconfirmed: true })
 
       // 모듈 로드 시 1회 감싸고, 이후 호출은 같은 캐시 함수를 재사용한다(토글별 키 분기 없음).
-      expect(mocks.unstableCache).toHaveBeenCalledTimes(1)
-      expect(mocks.unstableCache.mock.calls[0][1]).toEqual(["admin-crm-unified-snapshot"])
+      const calls = mocks.unstableCache.mock.calls.filter(
+        ([, keys]) => Array.isArray(keys) && keys.includes("admin-crm-unified-snapshot")
+      )
+      expect(calls).toHaveLength(1)
+      expect(calls[0][1]).toEqual(["admin-crm-unified-snapshot", "v2"])
     })
 
     it("기본(토글 off): 미확인 리드는 숨기고 summary.hiddenUnconfirmedCount로 건수만 내려준다", async () => {

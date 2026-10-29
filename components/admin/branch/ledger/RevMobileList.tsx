@@ -6,11 +6,13 @@ import {
   WeekNumbersCell,
   WeeklySourceBadge,
   formatMoney,
+  formatMonthLabel,
   formatWeekAmount,
   type LedgerRevenueRow,
   type RevCustomerGroup,
   type RevRowView,
 } from "./shared"
+import type { PendingDraftRow } from "./pending-draft-rows"
 
 interface RevMobileListProps {
   filteredRows: LedgerRevenueRow[]
@@ -25,6 +27,11 @@ interface RevMobileListProps {
   // 입력 속도 라운드(2026-09-20) §4 P2-7 — 카드의 금액을 눌렀을 때 상세가 아니라 레일
   // "입력/수정"으로 직행시키는 콜백. 고객명·"상세" 클릭은 그대로 loadDealDetail(상세)로 둔다.
   onQuickInput: (row: LedgerRevenueRow) => void | Promise<void>
+  // 입력 속도 라운드(2026-09-20) §4 P1-4 — 데스크톱 매트릭스의 "적용 대기" 섹션과 같은 데이터
+  // (SalesLedgerWorkbench의 visiblePendingDraftRows)를 모바일에서도 보여주는 선택 prop. 둘 다
+  // 넘기지 않으면(다른 소비처가 있을 경우 대비) 기존처럼 카드 묶음을 렌더하지 않는다.
+  pendingRows?: PendingDraftRow[]
+  onOpenQueue?: () => void
 }
 
 export function RevMobileList({
@@ -38,9 +45,43 @@ export function RevMobileList({
   selectedRow,
   loadDealDetail,
   onQuickInput,
+  pendingRows,
+  onOpenQueue,
 }: RevMobileListProps) {
   return (
     <div className="space-y-2 p-3 md:hidden">
+                  {pendingRows && pendingRows.length > 0 && onOpenQueue && (
+                    <button
+                      type="button"
+                      onClick={onOpenQueue}
+                      className="flex min-h-11 w-full flex-col gap-1.5 rounded-lg border border-dashed border-[#ECD29C] bg-[#FFFCF5] px-3 py-2.5 text-left"
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="text-[12.5px] font-bold text-[#7A520F]">적용 대기 새 행 {pendingRows.length}건</span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-[#7A520F]" />
+                      </span>
+                      <span className="flex flex-col gap-1">
+                        {pendingRows.slice(0, 3).map((row) => {
+                          const monthSummary = Object.entries(row.monthlyPayments ?? {})
+                            .sort(([a], [b]) => a.localeCompare(b))
+                            .map(([month, amount]) => `${formatMonthLabel(month)} ${formatMoney(amount)}`)
+                            .join(" · ")
+                          return (
+                            <span key={row.id} className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold text-[#615D59]">
+                              <span className="min-w-0 flex-1 truncate">{row.customer}</span>
+                              <span className="shrink-0 rounded-full border border-[#ECD29C] bg-white px-1.5 py-0.5 text-[9px] font-bold text-[#7A520F]">
+                                미적용
+                              </span>
+                              <span className="shrink-0 truncate tabular-nums text-[#111110]">{monthSummary || formatMoney(row.revenue)}</span>
+                            </span>
+                          )
+                        })}
+                        {pendingRows.length > 3 && (
+                          <span className="text-[10.5px] font-semibold text-[#A39E98]">외 {pendingRows.length - 3}건</span>
+                        )}
+                      </span>
+                    </button>
+                  )}
                   {filteredRows.length === 0 && (
                     <div className="rounded-lg border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-6 text-center text-[12px] text-[#615D59]">
                       <p>조건에 맞는 REV 행이 없습니다 · 필터/검색을 초기화해 보세요</p>
@@ -127,9 +168,11 @@ export function RevMobileList({
                                       type="button"
                                       onClick={() => void onQuickInput(row)}
                                       className="flex min-h-11 w-full items-center justify-end text-[13px] font-bold tabular-nums text-[#111110]"
-                                      aria-label={`${row.customer} 금액 입력 열기`}
+                                      aria-label={`${row.customer} ${monthAmount > 0 ? formatMoney(monthAmount) : "금액 없음"} — 금액 입력 열기`}
                                     >
-                                      {formatMoney(monthAmount || row.revenue)}
+                                      {/* 라운드 5 Q-2 — 이 줄은 선택 월 금액이다. 빈 달에 기간 합계(row.revenue)를
+                                          대신 보이면 그 값이 입력 폼 프리필로 이어져 틀린 금액이 저장될 수 있었다. */}
+                                      {monthAmount > 0 ? formatMoney(monthAmount) : <span className="text-[#A39E98]">—</span>}
                                     </button>
                                     <button
                                       type="button"

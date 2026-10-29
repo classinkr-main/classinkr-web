@@ -53,21 +53,32 @@ function Stat({
   unit,
   hint,
   accent = false,
+  loading = false,
 }: {
   label: string
   value: string
   unit?: string
   hint?: string
   accent?: boolean
+  loading?: boolean
 }) {
   return (
     <div className="min-w-0">
       <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-[#1a1a1a]/40">{label}</p>
-      <p className={`mt-0.5 truncate text-[19px] font-bold tabular-nums tracking-[-0.02em] ${accent ? "text-[#084734]" : "text-[#111110]"}`}>
-        {value}
-        {unit && <span className="ml-0.5 text-[11px] font-semibold text-[#1a1a1a]/40">{unit}</span>}
-      </p>
-      {hint && <p className="mt-0.5 truncate text-[10.5px] text-[#1a1a1a]/40">{hint}</p>}
+      {loading ? (
+        <>
+          <span className="sr-only">불러오는 중</span>
+          <div className="mt-1 h-6 w-20 animate-pulse rounded bg-[#f0f0ec] motion-reduce:animate-none" aria-hidden="true" />
+        </>
+      ) : (
+        <>
+          <p className={`mt-0.5 truncate text-[19px] font-bold tabular-nums tracking-[-0.02em] ${accent ? "text-[#084734]" : "text-[#111110]"}`}>
+            {value}
+            {unit && <span className="ml-0.5 text-[11px] font-semibold text-[#1a1a1a]/40">{unit}</span>}
+          </p>
+          {hint && <p className="mt-0.5 truncate text-[10.5px] text-[#1a1a1a]/40">{hint}</p>}
+        </>
+      )}
     </div>
   )
 }
@@ -90,6 +101,7 @@ export default function SendCenterHeader({
   onScrollToTest,
 }: SendCenterHeaderProps) {
   const point = messagingStatus?.balance?.point
+  const initialLoading = refreshing && lastSyncedAt === null
   const balanceValue = !messagingStatusLoaded
     ? "확인 중"
     : point == null
@@ -109,14 +121,15 @@ export default function SendCenterHeader({
 
         {/* 스탯 — lg에서는 좌측 보더로 구분, 미만은 그리드 스택 */}
         <div className="grid flex-1 grid-cols-2 gap-x-4 gap-y-3 border-[#e8e8e4] sm:grid-cols-4 lg:border-l lg:pl-6">
-          <Stat label="대상" value={String(activeCount)} unit="명" hint={`전체 ${totalSubscribers} · 수신거부 ${unsubscribedCount} 제외`} />
-          <Stat label="도달 채널" value={`${emailReach} · ${phoneReach}`} hint="이메일 · 휴대폰 보유" />
+          <Stat label="대상" value={String(activeCount)} unit="명" hint={`전체 ${totalSubscribers} · 수신거부 ${unsubscribedCount} 제외`} loading={initialLoading} />
+          <Stat label="도달 채널" value={`${emailReach} · ${phoneReach}`} hint="이메일 · 휴대폰 보유" loading={initialLoading} />
           {composeActive ? (
             <Stat
               label="예상 비용"
               value="0원"
               accent
               hint={`이메일 ${selectedAudience}명 기준 · 예상`}
+              loading={initialLoading}
             />
           ) : (
             <Stat label="발송 채널" value="이메일" hint="알림톡 테스트 · 문자 보류" />
@@ -157,7 +170,7 @@ export default function SendCenterHeader({
             title="Supabase subscribers 테이블 연동됨"
           >
             <Database className="h-3.5 w-3.5 text-[#084734]" />
-            구독자 {totalSubscribers}명
+            {initialLoading ? "구독자 불러오는 중" : `구독자 ${totalSubscribers}명`}
           </span>
           <span className="inline-flex items-center gap-1.5 font-medium text-[#084734]">
             <span className="h-1.5 w-1.5 rounded-full bg-[#084734]" />

@@ -7,15 +7,25 @@ import { ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG } from "@/lib/admin/crm/cache-tags
 import { DIRECT_INBOUND_LEAD_SOURCES } from "@/lib/lead-types"
 import {
   CRM_PRIORITY_BUCKET_LABELS,
+  CRM_PRIORITY_TIER_LABELS,
   buildLeadPriorityItem,
   buildNeoAccountPriorityItem,
+  daysFromNow,
   sortPriorityItems,
+  buildAccountOpenTaskDueMap,
   type CrmPriorityItem,
 } from "@/lib/crm/priority"
+import { listCrmTasks } from "@/lib/repositories/crm-tasks"
 import { classifyLeadOrigin } from "@/lib/crm/capture/origin"
 import { hasAdClickId, isTestLead } from "@/lib/crm/lead-attribution"
-import { buildCompassDemoIndex, hydrateCompassDemoSource } from "@/lib/crm/compass-demo-signal"
-import { deriveLeadRegionLabel } from "@/lib/crm/lead-message"
+import { buildCompassDemoIndex, findCompassDemoSignal, hydrateCompassDemoSource } from "@/lib/crm/compass-demo-signal"
+import { deriveLeadLabels } from "@/lib/crm/lead-labels"
+import {
+  SALES_STAGE_LABELS,
+  deriveAccountSalesStage,
+  deriveLeadSalesStage,
+  derivePortalSalesStage,
+} from "@/lib/crm/sales-stage"
 import { deriveCustomerRegion, REGION_UNSPECIFIED } from "@/lib/crm/region-label"
 import {
   rowHiddenByUnconfirmedGate,
@@ -374,6 +384,9 @@ const NON_LEAD_ROW_DEFAULTS = {
   slaTarget: false,
   firstResponseAt: null,
   createdAt: null,
+  // 과목·유형은 리드 상호명·폼 응답에서만 파생된다(lib/crm/lead-labels) — 비리드는 항상 null.
+  subjectLabel: null,
+  categoryLabel: null,
 } as const
 
 // 응답 SLA 대상 소스 — 고객이 직접 남긴 유입 채널만(수기 등록·동기화 소스 제외).
@@ -389,6 +402,8 @@ function buildPortalCustomerRow(item: CustomerListItem, lastContactAt: string | 
   const contractedLabel = formatKRW(contracted)
   const outstandingLabel = formatKRW(outstanding)
   const region = deriveCustomerRegion([customer.region_label, customer.address])
+  // 전환 고객 단계 — 딜 진행 여부만으로 판정(수동 stage 원천은 이 lite 목록에 조인되지 않는다).
+  const stage = derivePortalSalesStage({ activeDealCount: activeDeals })
   return {
     key: `customer:${customer.id}`,
     tags: [],
@@ -401,6 +416,8 @@ function buildPortalCustomerRow(item: CustomerListItem, lastContactAt: string | 
     ownerKeys: [],
     lifecycle: "active_account",
     statusLabel: activeDeals > 0 ? "거래 진행 중" : "전환 고객",
+    stage,
+    stageLabel: SALES_STAGE_LABELS[stage],
     nextActionLabel: outstanding > 0 ? "미수 확인" : activeDeals > 0 ? "딜 진행" : "관계 유지",
     priorityReason:
       outstanding > 0
@@ -409,8 +426,11 @@ function buildPortalCustomerRow(item: CustomerListItem, lastContactAt: string | 
           ? `진행 중 거래 ${activeDeals}건`
           : "리드 전환으로 생성된 앱 고객",
     score: outstanding > 0 ? 46 : activeDeals > 0 ? 34 : 14,
-    // 우선순위 엔진 미적용 소스 — 엔진 버킷이 없으므로 null(정렬 시 watch 취급).
+    // 우선순위 엔진 미적용 소스 — 엔진 버킷·티어가 없으므로 null(정렬 시 watch·p3 취급).
     bucket: null,
+    tier: null,
+    trust: null,
+    moneyBand: null,
     moneyLabel:
       contractedLabel && outstandingLabel
         ? `계약 ${contractedLabel} · 미수 ${outstandingLabel}`
@@ -470,7 +490,18 @@ function uniqueOwnerKeys(values: Array<string | null | undefined>) {
 
 function includesQuery(row: CrmUnifiedCustomerRow, query: string) {
   if (!query) return true
-  const haystack = [row.name, row.contact, row.regionLabel, row.ownerName, row.statusLabel, row.priorityReason]
+  // 단계·과목·유형 라벨도 검색 대상 — "부산 수학"처럼 지역·과목 조합 검색이 빠른 필터를 대신한다.
+  const haystack = [
+    row.name,
+    row.contact,
+    row.regionLabel,
+    row.ownerName,
+    row.statusLabel,
+    row.stageLabel,
+    row.subjectLabel,
+    row.categoryLabel,
+    row.priorityReason,
+  ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase()
@@ -627,7 +658,8 @@ const getCachedSourceSnapshot = unstable_cache(
     if (!snapshot.complete) throw new IncompleteCrmUnifiedSnapshotError(snapshot)
     return snapshot
   },
-  [ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG],
+  // v2: 티어·영업 단계·라벨이 없는 기존 Data Cache 행을 재사용하지 않는다.
+  [ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, "v2"],
   { revalidate: 60, tags: [ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG] }
 )
 
@@ -714,6 +746,7 @@ async function loadCompassRefsByPhoneKey(phoneKeys: readonly string[]): Promise<
 // 이 시점의 now로 계산되어 캐시 TTL 동안(≤60초) 고정된다 — 뷰 매칭·건강도 등
 // now 민감 판정은 getCrmUnifiedCustomers가 요청 시각으로 다시 수행한다.
 async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> {
+  const nowMs = now.getTime()
   const warnings: string[] = []
   let portalCustomersOk = true
   let rows: CrmUnifiedCustomerRow[] = []
@@ -722,7 +755,7 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
   // 원본 스냅샷(getCrmCoreSourceSnapshot)에서 가져온다(2026-09-07 감사 #7) — 이 넷을 독립
   // Promise.allSettled로 모으던 걸 걷어냈다. 이 화면만 필요한 나머지 소스(전환 고객·전환
   // 링크·NEO 등록 링크·컨택 맵·연락 세부)는 그대로 이 자리에서 병렬 수집한다.
-  const [coreResult, portalCustomersResult, convertedLinksResult, neoLinksResult, contactMapsResult, homeContactResult] =
+  const [coreResult, portalCustomersResult, convertedLinksResult, neoLinksResult, contactMapsResult, homeContactResult, tasksResult] =
     await Promise.allSettled([
       getCrmCoreSourceSnapshot(),
       listAllCustomerListItemsLite(),
@@ -730,6 +763,7 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
       listConfirmedLeadNeoLinkLeadIds(),
       getCrmCustomerContactMaps(),
       loadHomeContactIndex(),
+      listCrmTasks({ status: "active", limit: 200 }),
     ])
 
   const core = coreResult.status === "fulfilled" ? coreResult.value : EMPTY_CORE_SNAPSHOT
@@ -775,15 +809,27 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
     if (key) phoneKeyByRowKey.set(rowKey, key)
   }
 
+  const accountTaskDueMap = tasksResult.status === "fulfilled" && tasksResult.value.health.ok
+    ? buildAccountOpenTaskDueMap(tasksResult.value.rows)
+    : new Map<string, string>()
+
   if (leadsOk) {
     for (const lead of core.leads) {
+      const firstResponseAt = firstResponseMap.get(lead.id) ?? null
       const priority = buildLeadPriorityItem(lead, now, {
         engagement: engagements?.[lead.id] ?? null,
         demoIndex,
+        firstResponseAt,
       })
       const adClickId = hasAdClickId(lead)
       const key = `lead:${lead.id}`
       rememberPhone(key, lead.phone)
+      const leadLabels = deriveLeadLabels(lead)
+      const stage = deriveLeadSalesStage({
+        status: lead.status,
+        hasContactLog: Boolean(firstResponseMap.get(lead.id) ?? latestContactMap.get(contactTargetKey("lead", lead.id))),
+        hasDemoSignal: Boolean(compassJoinPhoneKey(lead.phone) && findCompassDemoSignal(demoIndex, lead.phone)),
+      })
       rows.push({
         key,
         tags: [],
@@ -791,18 +837,26 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
         sourceLabel: leadSourceLabel(lead),
         name: leadName(lead),
         contact: lead.phone ?? lead.email ?? lead.source,
-        regionLabel: deriveLeadRegionLabel(lead),
+        // deriveLeadLabels가 같은 지역 SSOT(deriveLeadRegionLabel)를 이미 호출한다 — 재파싱 방지.
+        regionLabel: leadLabels.region,
         ownerName: lead.assigned_to ?? null,
         ownerKeys: uniqueOwnerKeys([lead.assigned_to]),
         lifecycle: leadLifecycle(lead),
         statusLabel: leadStatusLabel(lead),
         // 기록 위치 판정 입력(UnifiedCompassLink) — statusLabel 문자열로 상태를 되짚지 않게 원값을 싣는다.
         leadStatus: lead.status,
+        stage,
+        stageLabel: SALES_STAGE_LABELS[stage],
+        subjectLabel: leadLabels.subjectLabel,
+        categoryLabel: leadLabels.categoryLabel,
         nextActionLabel: priority?.actionLabel ?? defaultLeadAction(lead),
         priorityReason: priority?.reason ?? "리드 상태 확인",
         score: priority?.score ?? (lead.status === "new" ? 40 : 20),
         // 엔진 버킷 그대로 — 게이트 탈락(전환·종료·테스트·미확인 저의도) 리드는 null.
         bucket: priority?.bucket ?? null,
+        tier: priority?.tier ?? null,
+        trust: priority?.trust ?? null,
+        moneyBand: priority?.moneyBand ?? null,
         moneyLabel: null,
         moneyState: "none",
         href: `/admin/crm/customers/leads?lead=${encodeURIComponent(lead.id)}`,
@@ -817,7 +871,7 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
           lead.status === "new" &&
           SLA_TARGET_LEAD_SOURCES.has(lead.source) &&
           !isTestLead(lead),
-        firstResponseAt: firstResponseMap.get(lead.id) ?? null,
+        firstResponseAt,
         createdAt: lead.timestamp, // timestamp는 leads.created_at 매핑 (lib/repositories/leads.ts 참고)
         ...contactFields(homeContactFact("lead", lead.id)),
         activeDealCount: 0,
@@ -829,11 +883,23 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
 
   if (neoAccountsOk) {
     for (const account of core.neoRows) {
-      const priority = buildNeoAccountPriorityItem(account, now, { demoIndex })
+      const lastContactAt = latestContactMap.get(contactTargetKey("neo_account", account.accountId)) ?? null
+      const priority = buildNeoAccountPriorityItem(account, now, {
+        demoIndex,
+        ownSignals: { lastContactAt, openTaskDueAt: accountTaskDueMap.get(account.accountId) ?? null },
+      })
       const balanceLabel = formatCNY(account.balance)
       const orderLabel = formatUSD(account.orderAmount)
       const key = `neo:${account.accountId}`
       const lifecycle = accountLifecycle(priority)
+      const lastContactMs = lastContactAt ? new Date(lastContactAt).getTime() : Number.NaN
+      const stage = deriveAccountSalesStage({
+        expiryDays: daysFromNow(account.expireAt, nowMs),
+        hasBalance: account.balance == null ? null : Number(account.balance) > 0,
+        depleted: Boolean(account.riskReasons?.some((reason) => reason.code === "depleted_balance")) ||
+          (account.balance != null && Number(account.balance) <= 0),
+        ownContactDays: Number.isNaN(lastContactMs) ? null : Math.floor((nowMs - lastContactMs) / 86_400_000),
+      })
       rememberPhone(key, account.phone)
       rows.push({
         key,
@@ -847,11 +913,17 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
         ownerKeys: uniqueOwnerKeys([account.ownerName, account.ownerId]),
         lifecycle,
         statusLabel: accountStatusLabel(priority, lifecycle),
+        stage,
+        stageLabel: SALES_STAGE_LABELS[stage],
         nextActionLabel: priority?.actionLabel ?? "관계 유지",
         priorityReason: priority?.reason ?? "최근 고객 상태 정상",
         score: priority?.score ?? 10,
         // 엔진 버킷 그대로 — 엔진이 액션 없음(null)으로 판단한 정상 계정은 null.
         bucket: priority?.bucket ?? null,
+        // 엔진 티어·머니 밴드·신뢰 그대로 저장(정상 계정은 null).
+        tier: priority?.tier ?? null,
+        trust: priority?.trust ?? null,
+        moneyBand: priority?.moneyBand ?? null,
         moneyLabel:
           balanceLabel && orderLabel
             ? `잔액 ${balanceLabel} · 오더 ${orderLabel}`
@@ -1276,9 +1348,11 @@ async function computeUnifiedList(options: CrmUnifiedCustomersOptions): Promise<
   }
 
   const sortedKeys = new Map(sortPriorityItems(filtered.map((row) => {
-    // 행 생성 시 저장한 엔진 버킷을 그대로 쓴다. 버킷 없는 행(전환 고객·정상 계정·게이트
-    // 탈락 리드)은 관찰(watch)로 정렬 — 엔진이 오늘 처리로 지정한 것만 위로 올라온다.
+    // 행 생성 시 저장한 엔진 판단을 그대로 쓴다. 엔진 미적용 행(전환 고객·정상 계정·게이트
+    // 탈락 리드)은 최하 취급(tier p3 · money unknown · bucket watch) — 정렬 캐논은
+    // 티어 → 머니 밴드 → 마감 → 점수(sortPriorityItems)다.
     const bucket = row.bucket ?? "watch"
+    const tier = row.tier ?? "p3"
     return {
       id: row.key,
       // 전환 고객은 우선순위 엔진 소스 타입 밖 — 정렬 목적으로 계정 계열로 취급.
@@ -1301,6 +1375,11 @@ async function computeUnifiedList(options: CrmUnifiedCustomersOptions): Promise<
       dueAt: row.updatedAt,
       updatedAt: row.updatedAt,
       sourceKey: null,
+      tier,
+      tierLabel: CRM_PRIORITY_TIER_LABELS[tier],
+      moneyBand: row.moneyBand ?? "unknown",
+      moneyLabel: row.moneyLabel,
+      trust: row.trust ?? "high",
     }
   })).map((item, index) => [item.id, index]))
 
@@ -1404,7 +1483,7 @@ export async function getCrmUnifiedCustomers(
       leadCount: sorted.filter((row) => row.source === "lead").length,
       accountCount: sorted.filter((row) => row.source === "neo_account").length,
       customerCount: sorted.filter((row) => row.source === "customer").length,
-      highPriorityCount: sorted.filter((row) => row.score >= 68).length,
+      highPriorityCount: sorted.filter((row) => row.tier === "p0" || row.tier === "p1").length,
       ownerCount: owners.length,
       viewCounts: computed.viewCounts,
       availableTags: computed.availableTags,
@@ -1576,12 +1655,19 @@ export async function evaluateCrmSegmentFilters(
 // sortPriorityItems 전량 정렬·오너 집계)는 전부 건너뛴다. 카운트 산식은
 // collectHealthDistribution을 그대로 재사용해 상위 4개 키가 getCrmUnifiedCustomers().healthDistribution과
 // 동일한 값을 내고, 같은 순회에서 모은 담당별 분포(byOwner)를 덧붙인다(T2).
+// ownerKeys가 지정되면 공용 원천 스냅샷에서 개인 행만 거른 뒤 같은 집계 함수를 사용한다.
 export async function getCrmUnifiedHealthDistribution(
-  options: { now?: Date; bypassCache?: boolean } = {}
+  options: { now?: Date; bypassCache?: boolean; ownerKeys?: string[] } = {}
 ): Promise<CrmHealthDistributionWithOwners> {
   const now = options.now ?? new Date()
   const bypassCache = options.bypassCache === true
   const snapshot = await getSourceSnapshot(now, options.now != null || bypassCache)
   if (bypassCache) revalidateTag(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, { expire: 0 })
-  return collectHealthDistribution(snapshot.rows, now.getTime())
+  // undefined은 기존 전체 집계, 빈 배열은 접근 가능한 담당자가 없다는 뜻이다.
+  // 빈 Set을 rowMatchesOwner에 넘기면 전체를 뜻하므로 명시적으로 빈 결과로 처리한다.
+  const ownerKeys = options.ownerKeys === undefined ? null : new Set(uniqueOwnerKeys(options.ownerKeys))
+  const rows = ownerKeys === null
+    ? snapshot.rows
+    : ownerKeys.size === 0 ? [] : snapshot.rows.filter((row) => rowMatchesOwner(row, ownerKeys))
+  return collectHealthDistribution(rows, now.getTime())
 }

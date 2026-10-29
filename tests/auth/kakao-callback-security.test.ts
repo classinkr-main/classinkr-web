@@ -43,7 +43,7 @@ function callback(verified: boolean) {
     .mockResolvedValueOnce(Response.json({ access_token: "test" }))
     .mockResolvedValueOnce(Response.json({ id: 123, kakao_account: { email: "victim@example.com", is_email_verified: verified, is_email_valid: verified } })))
   return new NextRequest("http://localhost:3000/api/auth/kakao/callback?code=test&state=valid", {
-    headers: { cookie: "cln_kakao_oauth_state=valid" },
+    headers: { cookie: "cln_kakao_oauth_state=valid; cln_aid=stale-id" },
   })
 }
 
@@ -60,6 +60,7 @@ describe("Kakao identity isolation", () => {
     const response = await GET(callback(true))
     expect(response.headers.get("location")).not.toContain("auth_error")
     expect(mocks.generateLink).toHaveBeenCalledWith({ type: "magiclink", email: "victim@example.com" })
+    expect(mocks.stitch).toHaveBeenCalledWith(expect.objectContaining({ anonymousId: null, userId: "new-user", emailVerified: true }))
   })
 
   it("rejects a session for a different account than the existing provider link", async () => {

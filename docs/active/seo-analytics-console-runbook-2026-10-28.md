@@ -179,7 +179,14 @@ prefill, email, token, checkoutToken, paymentKey, orderId, q
 
 ### 5-5. 주요 이벤트(key event)
 
-관리 → 이벤트 → `generate_lead` 를 주요 이벤트로 지정한다. **이것 하나만** 지정한다. `contact_start`, `showroom_start`, `click_to_call`, `click_email`, `pricing_view`, `file_download` 는 퍼널 분석용 보조 이벤트로 두고 주요 이벤트로 올리지 않는다(버튼 클릭을 성과로 세지 않기 위해).
+`generate_lead` 는 상담뿐 아니라 뉴스레터·자료 신청에도 발화한다. 전체를 상담 전환으로 지정하면 상담 건수가 부풀므로 **GA4 에서 상담용 파생 이벤트를 따로 만든다**. 기존 이벤트명과 광고 발화 코드는 이 작업으로 바꾸지 않는다.
+
+1. 먼저 `form_type` 별 접수와 실제 문의 건수를 대조하고, 영업이 상담으로 셀 유형을 확정한다. 시작 기준은 `contact`, `demo`, `showroom`, `checkout_request` 다. `event` 는 행사 신청, `newsletter`·`resource`·`lead_magnet`·`event_alert` 는 구독·자료 신청이므로 별도로 본다.
+2. GA4 관리 → 이벤트 → 이벤트 만들기에서 `sales_lead` 를 생성한다. 조건은 `event_name` 이 `generate_lead` 와 정확히 일치하고, `form_type` 이 정규식 `^(contact|demo|showroom|checkout_request)$` 에 일치하는 것이다. 원본 매개변수를 복사하도록 설정한다. 최종 유형이 달라지면 조건도 함께 수정한다.
+3. DebugView에서 상담과 쇼룸 예약 각각에 `generate_lead` 및 `sales_lead` 가 1회씩 나타나고, 뉴스레터·자료·행사 신청에는 `sales_lead` 가 없는지 확인한다. 파생 이벤트는 설정 이후의 이벤트에만 적용된다.
+4. Google Ads 가져오기·기존 입찰 목표와 현재 주요 이벤트 설정을 먼저 조사한다. 확인 후 `sales_lead` 를 주요 이벤트로 지정하고 `generate_lead` 전체를 상담 주요 이벤트에서 제외한다. 기존 광고 전환을 바꾸면 입찰에 영향을 줄 수 있으므로 담당자가 전환 설정과 중복을 함께 검토한다.
+
+`contact_start`, `showroom_start`, `click_to_call`, `click_email`, `pricing_view`, `file_download` 는 퍼널 분석용 보조 이벤트로 둔다. `form_type` 이 없는 접수는 `sales_lead` 에 포함되지 않으므로 누락 사례를 점검한다.
 
 ### 5-6. 서버 Measurement Protocol — 지금은 끈 상태를 유지
 
@@ -213,9 +220,10 @@ prefill, email, token, checkoutToken, paymentKey, orderId, q
 
 ---
 
-## 7. Google Ads
+## 7. 광고 전환 — Google Ads·네이버
 
-- 기본 전환은 하나만: gtag 전환 라벨(`NEXT_PUBLIC_GOOGLE_ADS_DEMO_CONVERSION_LABEL`)로 들어오는 전환과 "GA4 에서 가져온 generate_lead" 를 둘 다 기본 전환으로 두면 입찰에 두 번 반영된다. 라벨 전환을 기본으로, GA4 가져오기는 보조(관찰)로 둔다.
+- 기본 전환 중복 점검: gtag 전환 라벨(`NEXT_PUBLIC_GOOGLE_ADS_DEMO_CONVERSION_LABEL`)과 GA4 가져오기 전환을 모두 기본 전환으로 두면 같은 접수가 입찰에 두 번 반영될 수 있다. 각 액션의 범위·가져오기 상태·입찰 사용 여부를 조사하고, 광고 담당자가 중복 없이 기준을 정한 뒤 변경한다. §5-5의 `sales_lead` 는 GA4에서 생성하는 이벤트이며 Google Ads 전환 설정까지 자동으로 바꾸지 않는다.
+- 네이버 전환은 현재 코드에서 `submit_demo_request` 와 `submit_newsletter` 모두 발화한다. 뉴스레터·자료 신청이 광고 전환에 포함되는 것이 의도인지 네이버 설정과 함께 확인한다. 의미를 정하기 전에는 유형이나 발화 조건을 임의로 바꾸지 않는다.
 - 라벨 발급·검증 절차는 [활성화 런북](ad-channel-activation-runbook-2026-09-14.md) §3 을 따른다.
 
 ---
@@ -234,6 +242,7 @@ GA4 → 관리 → DebugView(또는 브라우저 확장 GA Debugger)와 Network 
 | 정상 문의 접수 | `generate_lead{form_type:"contact", lead_source:…}` 1회. 새로고침해도 재발화 없음 |
 | 같은 연락처로 60초 안에 재제출 | 서버가 `stored:false` → `generate_lead` 없음 |
 | 쇼룸 예약 접수 | `generate_lead{form_type:"showroom"}` 1회 |
+| GA4 파생 이벤트 설정 후 상담·쇼룸 접수 | 각각 `sales_lead` 1회. 뉴스레터·자료·행사 신청에는 `sales_lead` 없음 |
 | 푸터 전화번호 클릭 | `click_to_call{link_location:"footer"}` — 번호 값은 어디에도 없음 |
 | 자료실에서 PDF 받기 | `generate_lead{form_type:"resource"}` 1회 + `file_download{file_name:<slug>}` 1회 |
 | `/contact?prefill=테스트` 로 직접 진입 | 주소창에서 쿼리가 즉시 사라지고, GA4 `page_location` 에 `prefill` 없음 |
@@ -255,7 +264,7 @@ GA4 숫자와 실제 접수 건수는 광고 차단기·동의 거절 때문에 
 | 색인 | 주요 URL 5개 색인 여부, 제외 사유 | GSC·서치어드바이저 |
 | 검색 수요 | 브랜드·기능·비교·구매 묶음별 노출·클릭·CTR | GSC 실적, 서치어드바이저 |
 | 콘텐츠 | 검색 유입 방문 페이지 → 제품·요금·문의로 이동한 비율 | GA4 탐색(경로) |
-| 전환 | `generate_lead` 를 `form_type` 별로, `pricing_view` → `generate_lead` 전환율 | GA4 보고서(맞춤 측정기준 적용) |
+| 전환 | `generate_lead` 를 `form_type` 별로, `pricing_view` → `sales_lead` 전환율. 상담과 뉴스레터·자료·행사 신청은 분리 | GA4 보고서(맞춤 측정기준 적용) |
 | 영업 | 유효 문의·상담·계약 건수와 채널 | CRM |
 | AEO | 같은 질문 3개("학원 결석생에게 녹화 수업을 제공하려면?", "클래스인과 Zoom 의 차이는?", "학원 전자칠판 도입 시 확인할 점은?")를 ChatGPT 등에 월 1회 넣고 브랜드 언급·출처 링크·정확성 기록 | 수기 표 |
 | 속도 | 모바일 LCP·INP·CLS | PageSpeed Insights, GSC Core Web Vitals |
@@ -266,3 +275,17 @@ GA4 숫자와 실제 접수 건수는 광고 차단기·동의 거절 때문에 
 
 - 개인정보처리방침(`/privacy`, 최종 2026-06-14)에 쿠키 목록과 제3자(Google Analytics·Google Ads·네이버·Meta CAPI 의 해시 연락처·Solapi·WeCom), 위탁·국외이전, 보호책임자를 보강한다([공개 사이트 점검](public-site-audit-motion-plan-2026-10-26.md) §2-1).
 - 자료 다운로드 폼의 묶음 동의(같은 문서 P0-8)와 Meta 철회 처리(P0-6)는 이 런북 범위 밖이며 코드 작업이 따로 필요하다.
+
+### 동의 저장 프로토콜 전환과 운영 검증
+
+- 새 클라이언트는 선택을 먼저 기록하고 서버 확인 전(`s:0`)에는 선택 쿠키를 사용하지 않는다. 감사 로그 저장까지 확인된 선택(`s:1`)만 분석·마케팅에 적용하며, 실패·시간초과 시 보류 상태를 다음 방문에 재시도한다. 거절은 네트워크 응답을 기다리지 않고 반영한다.
+- 같은 브라우저의 새 탭들은 Web Locks와 공유 저장소로 선택 순서를 조정한다. 새 API 응답은 Set-Cookie를 내보내지 않고, 클라이언트가 최신 선택 식별자를 확인한 경우에만 결과를 반영한다. 탭 간 쿠키 변경을 구독하는 Cookie Store, Web Locks, 공유 저장소 또는 안전한 난수를 쓸 수 없으면 기존 허용도 복원하지 않고 필수 쿠키만 유지한다. 서버 전환 역시 해당 클라이언트의 관찰 가능 신호가 필요하다.
+- 거절 시 분석·마케팅 각각의 철회 식별자를 별도 쿠키에 먼저 남긴다. 확인된 허용 기록이 그 철회를 관측한 경우에만 해당 카테고리를 다시 켠다. 따라서 한 탭에서 잠금·공유 저장소가 실패해도 이전에 시작된 다른 탭의 허용 응답은 새 철회를 덮어 유효한 허용으로 바꿀 수 없다. 서버 추적과 최초 Consent Mode 복원도 같은 표식을 확인한다.
+- 거절 탭에서 철회 쿠키를 쓸 수 없으면 다른 탭의 즉시 철회는 보장할 수 없다. 탭 간 메시지가 전달되더라도 수신 탭은 이전 쿠키를 읽을 수 있기 때문이다. 해당 탭은 거절로 전환하고 오류를 표시한다. 사용자는 브라우저 쿠키 설정과 다른 탭을 확인해야 한다. 거절 이전에 이미 전송된 추적 요청이나 이전 서버에서 이미 출발한 응답도 회수할 수 없다.
+- Cookie Store 변경 알림은 비동기다. 다른 탭이 알림을 처리하기 전 진행된 브라우저 태그 요청은 회수할 수 없으므로 모든 탭이 철회 순간 원자적으로 중단한다고 보장하지 않는다. 서버는 요청의 철회 표식을 별도로 확인한다.
+- 같은 이름·경로 쿠키를 교체할 때 변경 알림이 오는지는 브라우저별 확인이 필요하다. 실험한 Chromium에서는 다른 탭의 교체 알림이 도착했지만 이를 모든 브라우저에서 보장하지 않는다. 관찰 capability 헤더는 정직한 클라이언트가 보내는 신호이며 위조할 수 있는 비인증 값이다.
+- Cookie Store는 Chrome 87+, Firefox 140+, Safari 및 iOS Safari 18.4+에서 제공된다([MDN 호환성 데이터](https://github.com/mdn/browser-compat-data/blob/main/api/CookieStore.json)). 각 브라우저의 Web Locks, 저장소 정책과 확장 프로그램도 실제 사용 가능 여부에 영향을 준다. 접속 통계가 없어 차단되는 사용자의 비율은 아직 모른다. 이 환경의 광고·분석 허용과 서버 전환 계측이 감소할 수 있으므로 배포 전 사용 브라우저별 비율과 전환 감소를 확인한다.
+- 철회 표식이 없는 기존 허용 쿠키는 재선택이 필요하다. 배너 표시 시 빈 표식을 미리 준비하지만 표시 전 선택하거나 준비가 경쟁으로 무효화되면 다시 선택해야 한다. 필수 쿠키만 사용은 계속 가능하다.
+- 호환 우선 대안은 Cookie Store 미지원 브라우저에도 과거 허용을 복원하고 탭 간 storage/BroadcastChannel 신호로 철회를 알리는 방식이다. 그러나 철회 탭의 두 기능이 차단되면 다른 탭에서 이미 켜진 태그를 즉시 끄지 못하고 지연 응답이 허용을 되살릴 수 있다. 이는 지원 범위를 넓히는 대신 철회 우선 보장을 포기하는 제품 선택이다.
+- 새 서버에 접근한 구버전 탭의 요청에는 성공 형태의 거절 기록과 거절 쿠키만 반환한다. 구버전 코드가 메모리의 Google Consent Mode도 거절로 갱신하도록 하기 위해서다. 허용을 선택한 사용자는 구버전 UI에서 허용된 것으로 오인할 수 있고, 새로고침 안내를 담은 응답 본문·헤더를 해당 UI가 표시하지 않는다. 배포 후 동의 설정이 저장되지 않는 사용자에게 페이지 새로고침을 안내한다.
+- 배포 전에 이미 처리된 이전 서버의 Set-Cookie 응답이나 장기간 유지된 구버전 캐시까지 새 서버가 회수할 수는 없다. 운영 배포 후 구버전 탭·새 탭을 함께 열어 허용/철회, 지연된 응답, 오프라인, 타임아웃, 미지원 브라우저를 확인하고 캐시 갱신 상태를 점검한다. 서버 감사 기록은 끊긴 요청이 늦게 완료될 수 있어 기록 순서만으로 최종 사용자 선택을 추정하지 않는다.

@@ -96,7 +96,7 @@ export function WeeklyAmountGrid({
           <span
             className="block"
             // 잠금 사유 툴팁은 감싸는 요소에 둔다 — title은 자손(인풋)에 hover해도 그대로 뜬다.
-            title={locked ? `W${index + 1} 확정 값이라 잠금(실수 방지) — 수정은 REV 렌즈 정정 초안으로` : undefined}
+            title={locked ? `W${index + 1} 확정 값이라 잠금(실수 방지) — 바꾸려면 시트 확정은 원본 시트에서, 장부 반영은 체크 큐 되돌리기(상쇄)로` : undefined}
           >
             <AdminMoneyInput
               value={parseMoneyInput(weekly[index] ?? "")}

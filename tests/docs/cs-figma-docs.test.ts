@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { CS_FIGMA_GUIDES, sanitizeGuideStep } from "@/lib/cs-figma-guides"
+import { CS_FIGMA_DIGEST_GUIDES } from "@/lib/cs-figma-guides.generated"
 import { getCsFigmaEnrichment } from "@/lib/cs-figma-enrichments"
 import { buildCsFigmaDocArticle, getDocBySlug } from "@/lib/docs"
 
@@ -62,11 +63,17 @@ describe("CS Figma docs", () => {
     expect(doc?.sections.flatMap((section) => section.media ?? [])).toEqual([])
   })
 
-  it("attaches matched capture images with consumer-tone alt text and no source filenames", () => {
-    const guide = CS_FIGMA_GUIDES.find((item) => item.docSlug === "cs-field-recording-camera-setup")
-    expect(guide).toBeTruthy()
+  // 단계별로 가린 사진이 있는 가이드는 원본 합성 캡처를 붙이지 않으므로, 합성 캡처 첨부 규칙은
+  // 사진 매핑이 없는 slug 로 바꾼 가이드로 확인한다.
+  const fieldRecordingGuide = CS_FIGMA_GUIDES.find((item) => item.docSlug === "cs-field-recording-camera-setup")
+  const unmappedGuide = fieldRecordingGuide
+    ? { ...fieldRecordingGuide, docSlug: "cs-test-without-step-photos" }
+    : undefined
 
-    const doc = buildCsFigmaDocArticle(guide!, [
+  it("attaches matched capture images with consumer-tone alt text and no source filenames", () => {
+    expect(unmappedGuide).toBeTruthy()
+
+    const doc = buildCsFigmaDocArticle(unmappedGuide!, [
       "/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-pc.png",
       "/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-ifp.png",
     ])
@@ -87,36 +94,30 @@ describe("CS Figma docs", () => {
     ])
   })
 
-  it("uses the imported asset manifest when resolving live guide documents", () => {
-    const fieldRecordingDoc = getDocBySlug("cs-field-recording-camera-setup", "teacher")
-    const webLiveDoc = getDocBySlug("cs-web-live-create", "teacher")
-    const bulkExamDoc = getDocBySlug("cs-bulk-exam-upload", "teacher")
+  it("replaces raw captures with masked step photos when the guide has them", () => {
+    for (const [slug, category] of [
+      ["cs-field-recording-camera-setup", "teacher"],
+      ["cs-web-live-create", "teacher"],
+      ["cs-bulk-exam-upload", "teacher"],
+      ["cs-recording-download-share", "admin"],
+      ["cs-ai-disable-admin", "admin"],
+    ] as const) {
+      const srcs = getDocBySlug(slug, category)?.sections.flatMap((section) => section.media ?? []).map((item) => item.src) ?? []
+      expect(srcs.length, slug).toBeGreaterThan(0)
+      expect(srcs.every((src) => src.startsWith("/docs/files/guides/")), slug).toBe(true)
+    }
 
-    expect(fieldRecordingDoc?.sections[0]?.media?.map((item) => item.src)).toEqual(
-      expect.arrayContaining([
-        "/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-pc.png",
-        "/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-ifp.png",
-      ])
-    )
-    expect(webLiveDoc?.sections[0]?.media?.map((item) => item.src)).toEqual(
-      expect.arrayContaining([
-        "/docs/files/cs-figma/웹-라이브-생성-방법-앱.png",
-        "/docs/files/cs-figma/웹-라이브-생성-방법-대시보드.png",
-      ])
-    )
-    expect(bulkExamDoc?.sections[0]?.media?.map((item) => item.src)).toEqual([
-      "/docs/files/cs-figma/문제-은행-가이드.png",
-    ])
+    // 사진만 바뀌고 단계 본문은 그대로다.
+    const bulkExamDoc = getDocBySlug("cs-bulk-exam-upload", "teacher")
     expect(bulkExamDoc?.sections[0]?.steps).toContain(
       "코스 화면에서 [새로 만들기]를 누르고 [시험]을 선택합니다."
     )
   })
 
   it("attaches only the linked images and never leaks source filenames into copy", () => {
-    const guide = CS_FIGMA_GUIDES.find((item) => item.docSlug === "cs-field-recording-camera-setup")
-    expect(guide).toBeTruthy()
+    expect(unmappedGuide).toBeTruthy()
 
-    const fullyLinkedDoc = buildCsFigmaDocArticle(guide!, [
+    const fullyLinkedDoc = buildCsFigmaDocArticle(unmappedGuide!, [
       "/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-pc.png",
       "/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-ifp.png",
     ])
@@ -129,7 +130,7 @@ describe("CS Figma docs", () => {
       expect(step).not.toMatch(/Figma|원본 캡처|\.png/i)
     }
 
-    const partiallyLinkedDoc = buildCsFigmaDocArticle(guide!, [
+    const partiallyLinkedDoc = buildCsFigmaDocArticle(unmappedGuide!, [
       "/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-pc.png",
     ])
     expect(partiallyLinkedDoc.sections[0]?.media?.map((item) => item.src)).toEqual([
@@ -138,9 +139,10 @@ describe("CS Figma docs", () => {
   })
 
   it("keeps staff-only captures and internal identifiers out of public CS docs and chatbot guides", () => {
-    const staffOnly = ["cs-figma-digest-881", "cs-figma-digest-1402", "cs-figma-digest-1960", "cs-figma-digest-2017"]
+    const staffOnly = ["cs-figma-digest-881", "cs-figma-digest-1402", "cs-figma-digest-1427", "cs-figma-digest-1960", "cs-figma-digest-2017"]
     const guideSlugs = CS_FIGMA_GUIDES.map((guide) => guide.docSlug)
     for (const slug of staffOnly) expect(guideSlugs).not.toContain(slug)
+    expect(getDocBySlug("cs-figma-digest-1427", "teacher")).toBeUndefined()
 
     const leak =
       /EEO[-_ ]?TEST|EEO\d{4,}|Minjae|zhangsan|Classin_Hope|Wayne\s+Kim|학원[A-Z](?![A-Za-z])|CS\s*주의사항|내부 비밀번호 재설정|\p{Script=Han}/u
@@ -158,6 +160,19 @@ describe("CS Figma docs", () => {
       expect(visible, doc.slug).not.toMatch(leak)
       expect(doc.audience, doc.slug).not.toMatch(/(?<![A-Za-z])CS(?![A-Za-z])/)
       expect(doc.keywords.filter((keyword) => /\.(?:png|jpe?g|webp)$/i.test(keyword)), doc.slug).toEqual([])
+    }
+  })
+
+  it("keeps internal digest entries redacted when generated guides are rebuilt", () => {
+    const internalIds = [689, 757, 881, 1385, 1402, 1427, 1492, 1895, 1914, 1936, 1960, 1988, 2017, 2256]
+    for (const id of internalIds) {
+      const guide = CS_FIGMA_DIGEST_GUIDES.find((item) => item.docSlug === `cs-figma-digest-${id}`)
+      expect(guide?.title).toBe(`내부 전용 항목 ${id} (내용 비공개)`)
+      expect(guide?.sourceImageFiles).toEqual([guide?.title])
+      expect(guide?.steps).toEqual([
+        `${guide?.title} 원본 화면을 확인합니다.`,
+        "Figma CS 캡처의 화면 구조와 주석을 기준으로 안내합니다.",
+      ])
     }
   })
 })

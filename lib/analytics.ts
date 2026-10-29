@@ -1,3 +1,4 @@
+import { consentObservationHeaders } from "@/lib/consent/observation-client"
 import {
   GOOGLE_ADS_DEMO_CONVERSION_LABEL,
   GOOGLE_ADS_ID,
@@ -83,12 +84,10 @@ interface KakaoPixelClient {
 declare global {
   interface Window {
     gtag?: GtagFunction
-    fbq?: (
-      command: "track" | "trackCustom",
-      eventName: string,
-      params?: AnalyticsParams,
-      options?: MetaPixelOptions
-    ) => void
+    fbq?: {
+      (command: "track" | "trackCustom", eventName: string, params?: AnalyticsParams, options?: MetaPixelOptions): void
+      (command: "consent", action: "grant" | "revoke"): void
+    }
     kakaoPixel?: (pixelId: string) => KakaoPixelClient
     dataLayer?: Array<Record<string, unknown>>
     /** 네이버 프리미엄 로그분석(wcslog.js). trans 는 신 스크립트의 전환 발화다. */
@@ -119,7 +118,7 @@ const sendInternalTracking = (eventName: EventNames, params?: AnalyticsParams) =
     const referrer = sanitizeTrackingUrl(window.location.href)
     fetch("/api/track/event", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...consentObservationHeaders() },
       body: payload,
       keepalive: true,
       referrer,

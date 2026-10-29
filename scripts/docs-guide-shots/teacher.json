@@ -1,0 +1,1186 @@
+{
+  "shots": [
+    {
+      "out": "/docs/files/guides/teacher-profile/01-pc-profile-button.webp",
+      "source": "public/docs/files/cs-figma/학원b-닉네임-동기화.png",
+      "crop": {
+        "x": 0.0799,
+        "y": 0.8259,
+        "w": 0.4097,
+        "h": 0.1042
+      },
+      "masks": [
+        {
+          "x": 0.539,
+          "y": 0.4429,
+          "w": 0.1322,
+          "h": 0.06,
+          "style": "blur",
+          "reason": "계정 표시 이름"
+        },
+        {
+          "x": 0.0136,
+          "y": 0.8686,
+          "w": 0.1017,
+          "h": 0.0771,
+          "style": "blur",
+          "reason": "프로필 사진과 이름"
+        },
+        {
+          "x": 0.7831,
+          "y": 0.1257,
+          "w": 0.2017,
+          "h": 0.8343,
+          "style": "blur",
+          "reason": "할 일 목록(코스·사람 이름)"
+        }
+      ],
+      "maxWidth": 600
+    },
+    {
+      "out": "/docs/files/guides/teacher-profile/02-pc-personal-info.webp",
+      "source": "public/docs/files/cs-figma/학원b-닉네임-동기화.png",
+      "crop": {
+        "x": 0.516,
+        "y": 0.8259,
+        "w": 0.4062,
+        "h": 0.1042
+      },
+      "masks": [
+        {
+          "x": 0.3829,
+          "y": 0.2114,
+          "w": 0.0547,
+          "h": 0.0914,
+          "style": "blur",
+          "reason": "프로필 사진"
+        },
+        {
+          "x": 0.8034,
+          "y": 0.1143,
+          "w": 0.1966,
+          "h": 0.8457,
+          "style": "blur",
+          "reason": "할 일 목록(사람 이름)"
+        },
+        {
+          "x": 0.0137,
+          "y": 0.8686,
+          "w": 0.106,
+          "h": 0.0771,
+          "style": "blur",
+          "reason": "계정 이름"
+        }
+      ],
+      "maxWidth": 600
+    },
+    {
+      "out": "/docs/files/guides/teacher-profile/03-mobile-nickname.webp",
+      "source": "public/docs/files/cs-figma/학원b-닉네임-동기화.png",
+      "crop": {
+        "x": 0.0993,
+        "y": 0.6137,
+        "w": 0.8167,
+        "h": 0.1601
+      },
+      "masks": [
+        {
+          "x": 0.0068,
+          "y": 0.0632,
+          "w": 0.0238,
+          "h": 0.0669,
+          "style": "blur",
+          "reason": "프로필 사진"
+        },
+        {
+          "x": 0.2806,
+          "y": 0.1338,
+          "w": 0.1156,
+          "h": 0.0818,
+          "style": "blur",
+          "reason": "프로필 사진과 닉네임"
+        },
+        {
+          "x": 0.6565,
+          "y": 0.197,
+          "w": 0.0748,
+          "h": 0.0446,
+          "style": "blur",
+          "reason": "닉네임"
+        },
+        {
+          "x": 0.7075,
+          "y": 0.1264,
+          "w": 0.0238,
+          "h": 0.0446,
+          "style": "blur",
+          "reason": "프로필 사진"
+        },
+        {
+          "x": 0.8061,
+          "y": 0.1375,
+          "w": 0.0612,
+          "h": 0.0409,
+          "style": "blur",
+          "reason": "닉네임"
+        }
+      ],
+      "maxWidth": 1176
+    },
+    {
+      "out": "/docs/files/guides/teacher-profile/04-course-nickname.webp",
+      "source": "public/docs/files/cs-figma/frame-2.png",
+      "crop": {
+        "x": 0.3454,
+        "y": 0.0577,
+        "w": 0.3074,
+        "h": 0.6821
+      },
+      "masks": [
+        {
+          "x": 0.2183,
+          "y": 0.1335,
+          "w": 0.4076,
+          "h": 0.1001,
+          "style": "blur",
+          "reason": "코스·계정 이름"
+        },
+        {
+          "x": 0.0509,
+          "y": 0.3782,
+          "w": 0.2693,
+          "h": 0.089,
+          "style": "blur",
+          "reason": "구성원 프로필 사진"
+        }
+      ],
+      "maxWidth": 560
+    },
+    {
+      "out": "/docs/files/guides/teacher-profile/05-allow-student-nickname.webp",
+      "source": "public/docs/files/cs-figma/코스-내-닉네임-변경-옵션-활성-비활성화.png",
+      "crop": {
+        "x": 0.3889,
+        "y": 0.4824,
+        "w": 0.2222,
+        "h": 0.1774
+      },
+      "masks": [],
+      "maxWidth": 320
+    },
+    {
+      "out": "/docs/files/guides/teacher-profile/06-student-nickname-before-after.webp",
+      "source": "public/docs/files/cs-figma/코스-내-닉네임-변경-옵션-활성-비활성화.png",
+      "crop": {
+        "x": 0.1736,
+        "y": 0.7237,
+        "w": 0.6458,
+        "h": 0.2199
+      },
+      "masks": [
+        {
+          "x": 0.0817,
+          "y": 0.1355,
+          "w": 0.172,
+          "h": 0.0677,
+          "style": "blur",
+          "reason": "학원·코스 이름"
+        },
+        {
+          "x": 0.028,
+          "y": 0.2839,
+          "w": 0.2581,
+          "h": 0.0516,
+          "style": "blur",
+          "reason": "구성원 이름 첫 글자"
+        },
+        {
+          "x": 0.2129,
+          "y": 0.4419,
+          "w": 0.0817,
+          "h": 0.029,
+          "style": "blur",
+          "reason": "닉네임"
+        },
+        {
+          "x": 0.7495,
+          "y": 0.1355,
+          "w": 0.172,
+          "h": 0.0677,
+          "style": "blur",
+          "reason": "학원·코스 이름"
+        },
+        {
+          "x": 0.6957,
+          "y": 0.2839,
+          "w": 0.2581,
+          "h": 0.0516,
+          "style": "blur",
+          "reason": "구성원 이름 첫 글자"
+        },
+        {
+          "x": 0.8731,
+          "y": 0.4419,
+          "w": 0.071,
+          "h": 0.029,
+          "style": "blur",
+          "reason": "닉네임"
+        }
+      ],
+      "maxWidth": 930
+    },
+    {
+      "out": "/docs/files/guides/drive-materials/01-drive-new-menu.webp",
+      "source": "public/docs/files/cs-figma/edx-파일-생성-사용법.png",
+      "crop": {
+        "x": 0.1333,
+        "y": 0.0601,
+        "w": 0.7333,
+        "h": 0.2299
+      },
+      "masks": [
+        {
+          "x": 0.0057,
+          "y": 0.9035,
+          "w": 0.0739,
+          "h": 0.0789,
+          "style": "blur",
+          "reason": "계정 이름"
+        },
+        {
+          "x": 0.732,
+          "y": 0.2123,
+          "w": 0.1288,
+          "h": 0.1281,
+          "style": "blur",
+          "reason": "영상 썸네일"
+        }
+      ],
+      "maxWidth": 1056
+    },
+    {
+      "out": "/docs/files/guides/drive-materials/02-board-menu.webp",
+      "source": "public/docs/files/cs-figma/판서-생성-불러오기.png",
+      "crop": {
+        "x": 0.1132,
+        "y": 0.0357,
+        "w": 0.7729,
+        "h": 0.1482
+      },
+      "masks": [
+        {
+          "x": 0.0252,
+          "y": 0.901,
+          "w": 0.0305,
+          "h": 0.0509,
+          "style": "blur",
+          "reason": "프로필 사진"
+        }
+      ],
+      "maxWidth": 1000
+    },
+    {
+      "out": "/docs/files/guides/drive-materials/03-board-open-file.webp",
+      "source": "public/docs/files/cs-figma/판서-생성-불러오기.png",
+      "crop": {
+        "x": 0.0951,
+        "y": 0.627,
+        "w": 0.8097,
+        "h": 0.1335
+      },
+      "masks": [],
+      "maxWidth": 1000
+    },
+    {
+      "out": "/docs/files/guides/drive-materials/04-board-save-share.webp",
+      "source": "public/docs/files/cs-figma/판서-생성-불러오기.png",
+      "crop": {
+        "x": 0.0951,
+        "y": 0.8212,
+        "w": 0.8097,
+        "h": 0.1333
+      },
+      "masks": [
+        {
+          "x": 0.6175,
+          "y": 0.5275,
+          "w": 0.0729,
+          "h": 0.133,
+          "style": "fill",
+          "reason": "이미지 저장용 QR 코드"
+        },
+        {
+          "x": 0.0901,
+          "y": 0.0688,
+          "w": 0.1998,
+          "h": 0.8869,
+          "style": "blur",
+          "reason": "수업 교안 본문"
+        },
+        {
+          "x": 0.283,
+          "y": 0.711,
+          "w": 0.1372,
+          "h": 0.2446,
+          "style": "blur",
+          "reason": "수업 교안 본문"
+        },
+        {
+          "x": 0.283,
+          "y": 0.0688,
+          "w": 0.1372,
+          "h": 0.2446,
+          "style": "blur",
+          "reason": "수업 교안 본문"
+        }
+      ],
+      "maxWidth": 1000
+    },
+    {
+      "out": "/docs/files/guides/drive-materials/05-edx-create.webp",
+      "source": "public/docs/files/cs-figma/edx-파일-생성-사용법.png",
+      "crop": {
+        "x": 0.1333,
+        "y": 0.3663,
+        "w": 0.7333,
+        "h": 0.2299
+      },
+      "masks": [
+        {
+          "x": 0.0057,
+          "y": 0.9035,
+          "w": 0.0739,
+          "h": 0.0789,
+          "style": "blur",
+          "reason": "계정 이름"
+        },
+        {
+          "x": 0.732,
+          "y": 0.2123,
+          "w": 0.1288,
+          "h": 0.1281,
+          "style": "blur",
+          "reason": "영상 썸네일"
+        }
+      ],
+      "maxWidth": 1056
+    },
+    {
+      "out": "/docs/files/guides/course-create/01-home-create-course.webp",
+      "source": "public/docs/files/cs-figma/웹-라이브-사용-방법-안내-앱.png",
+      "crop": {
+        "x": 0.1528,
+        "y": 0.0199,
+        "w": 0.7076,
+        "h": 0.0672
+      },
+      "masks": [
+        {
+          "x": 0.0059,
+          "y": 0.9199,
+          "w": 0.0726,
+          "h": 0.0546,
+          "style": "blur",
+          "reason": "계정 이름과 프로필 사진"
+        },
+        {
+          "x": 0.8391,
+          "y": 0.0619,
+          "w": 0.1609,
+          "h": 0.9308,
+          "style": "blur",
+          "reason": "할 일 목록(사람·코스 이름)"
+        }
+      ],
+      "maxWidth": 1019
+    },
+    {
+      "out": "/docs/files/guides/course-create/02-course-settings-pc.webp",
+      "source": "public/docs/files/cs-figma/frame-5.png",
+      "crop": {
+        "x": 0.403,
+        "y": 0.0881,
+        "w": 0.2643,
+        "h": 0.8778
+      },
+      "masks": [
+        {
+          "x": 0.0413,
+          "y": 0.1954,
+          "w": 0.6098,
+          "h": 0.0549,
+          "style": "blur",
+          "reason": "구성원 프로필 사진"
+        }
+      ],
+      "maxWidth": 400
+    },
+    {
+      "out": "/docs/files/guides/course-create/03-course-settings-mobile.webp",
+      "source": "public/docs/files/cs-figma/4-1.png",
+      "crop": {
+        "x": 0.3406,
+        "y": 0.0,
+        "w": 0.6594,
+        "h": 1.0
+      },
+      "masks": [
+        {
+          "x": 0.1,
+          "y": 0.1332,
+          "w": 0.1666,
+          "h": 0.0226,
+          "style": "blur",
+          "reason": "기관 이름"
+        },
+        {
+          "x": 0.0926,
+          "y": 0.8179,
+          "w": 0.0341,
+          "h": 0.0218,
+          "style": "blur",
+          "reason": "강사 이름"
+        },
+        {
+          "x": 0.625,
+          "y": 0.1478,
+          "w": 0.1844,
+          "h": 0.0266,
+          "style": "blur",
+          "reason": "기관 이름"
+        },
+        {
+          "x": 0.6161,
+          "y": 0.2584,
+          "w": 0.0496,
+          "h": 0.0549,
+          "style": "blur",
+          "reason": "구성원 프로필 사진"
+        },
+        {
+          "x": 0.9056,
+          "y": 0.5079,
+          "w": 0.0459,
+          "h": 0.0266,
+          "style": "blur",
+          "reason": "닉네임"
+        }
+      ],
+      "maxWidth": 1200
+    },
+    {
+      "out": "/docs/files/guides/course-members/01-qr-scan-menu.webp",
+      "source": "public/docs/files/cs-figma/frame-24.png",
+      "crop": {
+        "x": 0.2292,
+        "y": 0.0458,
+        "w": 0.5069,
+        "h": 0.1202
+      },
+      "masks": [
+        {
+          "x": 0.0603,
+          "y": 0.0184,
+          "w": 0.0986,
+          "h": 0.0947,
+          "style": "blur",
+          "reason": "프로필 사진"
+        },
+        {
+          "x": 0.0795,
+          "y": 0.7868,
+          "w": 0.3041,
+          "h": 0.0447,
+          "style": "blur",
+          "reason": "기관 이름"
+        },
+        {
+          "x": 0.5425,
+          "y": 0.7868,
+          "w": 0.3014,
+          "h": 0.0447,
+          "style": "blur",
+          "reason": "기관 이름"
+        }
+      ],
+      "maxWidth": 520
+    },
+    {
+      "out": "/docs/files/guides/course-members/02-join-course-button.webp",
+      "source": "public/docs/files/cs-figma/frame-24.png",
+      "crop": {
+        "x": 0.2292,
+        "y": 0.3447,
+        "w": 0.5069,
+        "h": 0.2182
+      },
+      "masks": [
+        {
+          "x": 0.2301,
+          "y": 0.1348,
+          "w": 0.389,
+          "h": 0.0333,
+          "style": "blur",
+          "reason": "기관 이름"
+        },
+        {
+          "x": 0.0548,
+          "y": 0.3877,
+          "w": 0.4822,
+          "h": 0.3659,
+          "style": "blur",
+          "reason": "구성원 이름과 프로필 사진"
+        }
+      ],
+      "maxWidth": 520
+    },
+    {
+      "out": "/docs/files/guides/course-members/03-remove-member-mobile.webp",
+      "source": "public/docs/files/cs-figma/group-3.png",
+      "crop": {
+        "x": 0.5,
+        "y": 0.0,
+        "w": 0.5,
+        "h": 1.0
+      },
+      "masks": [
+        {
+          "x": 0.1123,
+          "y": 0.1582,
+          "w": 0.1904,
+          "h": 0.0275,
+          "style": "blur",
+          "reason": "기관 이름"
+        },
+        {
+          "x": 0.0273,
+          "y": 0.278,
+          "w": 0.0469,
+          "h": 0.0516,
+          "style": "blur",
+          "reason": "강사 이니셜"
+        },
+        {
+          "x": 0.1025,
+          "y": 0.2758,
+          "w": 0.0518,
+          "h": 0.0571,
+          "style": "blur",
+          "reason": "구성원 프로필 사진"
+        },
+        {
+          "x": 0.4053,
+          "y": 0.5418,
+          "w": 0.0459,
+          "h": 0.0275,
+          "style": "blur",
+          "reason": "닉네임"
+        },
+        {
+          "x": 0.5273,
+          "y": 0.3066,
+          "w": 0.042,
+          "h": 0.0473,
+          "style": "blur",
+          "reason": "강사 이니셜"
+        },
+        {
+          "x": 0.582,
+          "y": 0.3165,
+          "w": 0.0527,
+          "h": 0.0297,
+          "style": "blur",
+          "reason": "강사 이름"
+        },
+        {
+          "x": 0.5244,
+          "y": 0.4495,
+          "w": 0.0479,
+          "h": 0.0527,
+          "style": "blur",
+          "reason": "학생 프로필 사진"
+        },
+        {
+          "x": 0.582,
+          "y": 0.4604,
+          "w": 0.0566,
+          "h": 0.0297,
+          "style": "blur",
+          "reason": "학생 이름"
+        }
+      ],
+      "maxWidth": 1200
+    },
+    {
+      "out": "/docs/files/guides/course-members/04-allow-join.webp",
+      "source": "public/docs/files/cs-figma/코스-내-닉네임-변경-옵션-활성-비활성화.png",
+      "crop": {
+        "x": 0.3889,
+        "y": 0.4824,
+        "w": 0.2222,
+        "h": 0.0482
+      },
+      "masks": [],
+      "maxWidth": 320
+    },
+    {
+      "out": "/docs/files/guides/course-units/01-new-activity-button.webp",
+      "source": "public/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-pc.png",
+      "crop": {
+        "x": 0.529,
+        "y": 0.067,
+        "w": 0.3851,
+        "h": 0.181
+      },
+      "masks": [
+        {
+          "x": 0.067,
+          "y": 0.1276,
+          "w": 0.1236,
+          "h": 0.0268,
+          "style": "blur",
+          "reason": "계정 이름"
+        },
+        {
+          "x": 0.7654,
+          "y": 0.126,
+          "w": 0.0366,
+          "h": 0.0567,
+          "style": "blur",
+          "reason": "프로필 사진"
+        }
+      ],
+      "maxWidth": 955
+    },
+    {
+      "out": "/docs/files/guides/course-units/02-activity-type-lesson.webp",
+      "source": "public/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-pc.png",
+      "crop": {
+        "x": 0.0758,
+        "y": 0.2711,
+        "w": 0.3851,
+        "h": 0.179
+      },
+      "masks": [],
+      "maxWidth": 955
+    },
+    {
+      "out": "/docs/files/guides/course-units/03-new-lesson-form.webp",
+      "source": "public/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-pc.png",
+      "crop": {
+        "x": 0.529,
+        "y": 0.2711,
+        "w": 0.3931,
+        "h": 0.179
+      },
+      "masks": [
+        {
+          "x": 0.7672,
+          "y": 0.1274,
+          "w": 0.0369,
+          "h": 0.0573,
+          "style": "blur",
+          "reason": "프로필 사진"
+        },
+        {
+          "x": 0.6174,
+          "y": 0.3997,
+          "w": 0.0349,
+          "h": 0.0557,
+          "style": "blur",
+          "reason": "교사 프로필 사진"
+        },
+        {
+          "x": 0.7672,
+          "y": 0.4904,
+          "w": 0.0821,
+          "h": 0.0414,
+          "style": "blur",
+          "reason": "교사 이름"
+        }
+      ],
+      "maxWidth": 975
+    },
+    {
+      "out": "/docs/files/guides/classroom-basic-setup/01-enter-classroom.webp",
+      "source": "public/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-pc.png",
+      "crop": {
+        "x": 0.0758,
+        "y": 0.4809,
+        "w": 0.3851,
+        "h": 0.179
+      },
+      "masks": [
+        {
+          "x": 0.7634,
+          "y": 0.1258,
+          "w": 0.0377,
+          "h": 0.0573,
+          "style": "blur",
+          "reason": "프로필 사진"
+        }
+      ],
+      "maxWidth": 955
+    },
+    {
+      "out": "/docs/files/guides/classroom-basic-setup/02-device-test.webp",
+      "source": "public/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-pc.png",
+      "crop": {
+        "x": 0.5565,
+        "y": 0.4846,
+        "w": 0.246,
+        "h": 0.0998
+      },
+      "masks": [],
+      "maxWidth": 610
+    },
+    {
+      "out": "/docs/files/guides/classroom-basic-setup/03-onsite-recording-camera.webp",
+      "source": "public/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-pc.png",
+      "crop": {
+        "x": 0.5371,
+        "y": 0.7221,
+        "w": 0.3899,
+        "h": 0.2149
+      },
+      "masks": [],
+      "maxWidth": 967
+    },
+    {
+      "out": "/docs/files/guides/classroom-basic-setup/04-mic-dropdown.webp",
+      "source": "public/docs/files/cs-figma/클래스인-교실-내-카메라-마이크-설정-확인-pc.png",
+      "crop": {
+        "x": 0.3004,
+        "y": 0.0551,
+        "w": 0.2532,
+        "h": 0.0524
+      },
+      "masks": [],
+      "maxWidth": 590
+    },
+    {
+      "out": "/docs/files/guides/classroom-basic-setup/05-mic-settings.webp",
+      "source": "public/docs/files/cs-figma/클래스인-교실-내-카메라-마이크-설정-확인-pc.png",
+      "crop": {
+        "x": 0.0429,
+        "y": 0.2586,
+        "w": 0.5193,
+        "h": 0.1997
+      },
+      "masks": [],
+      "maxWidth": 800
+    },
+    {
+      "out": "/docs/files/guides/classroom-basic-setup/06-settings-camera.webp",
+      "source": "public/docs/files/cs-figma/클래스인-교실-내-카메라-마이크-설정-확인-pc.png",
+      "crop": {
+        "x": 0.0554,
+        "y": 0.4924,
+        "w": 0.5069,
+        "h": 0.2275
+      },
+      "masks": [
+        {
+          "x": 0.254,
+          "y": 0.1071,
+          "w": 0.6901,
+          "h": 0.3862,
+          "style": "blur",
+          "reason": "카메라 화면 속 얼굴"
+        }
+      ],
+      "maxWidth": 800
+    },
+    {
+      "out": "/docs/files/guides/lesson-web-live/01-new-activity-lesson.webp",
+      "source": "public/docs/files/cs-figma/웹-라이브-사용-방법-안내-앱.png",
+      "crop": {
+        "x": 0.3931,
+        "y": 0.126,
+        "w": 0.284,
+        "h": 0.0467
+      },
+      "masks": [],
+      "maxWidth": 409
+    },
+    {
+      "out": "/docs/files/guides/lesson-web-live/02-recording-live-option.webp",
+      "source": "public/docs/files/cs-figma/웹-라이브-사용-방법-안내-앱.png",
+      "crop": {
+        "x": 0.25,
+        "y": 0.208,
+        "w": 0.5208,
+        "h": 0.0612
+      },
+      "masks": [
+        {
+          "x": 0.4933,
+          "y": 0.352,
+          "w": 0.1013,
+          "h": 0.124,
+          "style": "blur",
+          "reason": "교사·조교 이름"
+        },
+        {
+          "x": 0.34,
+          "y": 0.49,
+          "w": 0.2267,
+          "h": 0.058,
+          "style": "blur",
+          "reason": "학생 이름과 프로필 사진"
+        },
+        {
+          "x": 0.4733,
+          "y": 0.56,
+          "w": 0.1213,
+          "h": 0.12,
+          "style": "blur",
+          "reason": "과정·단원 이름"
+        }
+      ],
+      "maxWidth": 750
+    },
+    {
+      "out": "/docs/files/guides/lesson-web-live/03-live-links.webp",
+      "source": "public/docs/files/cs-figma/웹-라이브-사용-방법-안내-앱.png",
+      "crop": {
+        "x": 0.0938,
+        "y": 0.3823,
+        "w": 0.7847,
+        "h": 0.0734
+      },
+      "masks": [
+        {
+          "x": 0.2088,
+          "y": 0.05,
+          "w": 0.0566,
+          "h": 0.37,
+          "style": "blur",
+          "reason": "강사 이름"
+        },
+        {
+          "x": 0.6796,
+          "y": 0.15,
+          "w": 0.3044,
+          "h": 0.2867,
+          "style": "blur",
+          "reason": "학생 이름과 프로필 사진"
+        },
+        {
+          "x": 0.1965,
+          "y": 0.6967,
+          "w": 0.4265,
+          "h": 0.1233,
+          "style": "blur",
+          "reason": "웹 라이브·다시보기 링크 주소"
+        }
+      ],
+      "maxWidth": 1130
+    },
+    {
+      "out": "/docs/files/guides/lesson-web-live/04-web-viewer.webp",
+      "source": "public/docs/files/cs-figma/웹-라이브-사용-방법-안내-앱.png",
+      "crop": {
+        "x": 0.1111,
+        "y": 0.5688,
+        "w": 0.8194,
+        "h": 0.0722
+      },
+      "masks": [
+        {
+          "x": 0.1169,
+          "y": 0.061,
+          "w": 0.0797,
+          "h": 0.0339,
+          "style": "blur",
+          "reason": "진행자 이름"
+        },
+        {
+          "x": 0.3542,
+          "y": 0.1322,
+          "w": 0.1051,
+          "h": 0.1203,
+          "style": "fill",
+          "reason": "강사 얼굴"
+        },
+        {
+          "x": 0.9119,
+          "y": 0.1627,
+          "w": 0.0644,
+          "h": 0.0407,
+          "style": "blur",
+          "reason": "채팅 참여자 이름"
+        }
+      ],
+      "maxWidth": 1180
+    },
+    {
+      "out": "/docs/files/guides/lesson-web-live/05-live-chat-tool.webp",
+      "source": "public/docs/files/cs-figma/웹-라이브-사용-방법-안내-앱.png",
+      "crop": {
+        "x": 0.1076,
+        "y": 0.6599,
+        "w": 0.7882,
+        "h": 0.0697
+      },
+      "masks": [
+        {
+          "x": 0.43,
+          "y": 0.014,
+          "w": 0.141,
+          "h": 0.1333,
+          "style": "fill",
+          "reason": "강사 얼굴"
+        },
+        {
+          "x": 0.3877,
+          "y": 0.5509,
+          "w": 0.0925,
+          "h": 0.0316,
+          "style": "blur",
+          "reason": "채팅 참여자 이름"
+        }
+      ],
+      "maxWidth": 1135
+    },
+    {
+      "out": "/docs/files/guides/course-activities/01-copy-activity-menu.webp",
+      "source": "public/docs/files/cs-figma/학원d-코스-학습-활동-다른-코스-과정에-복사하기.png",
+      "crop": {
+        "x": 0.2604,
+        "y": 0.0967,
+        "w": 0.4965,
+        "h": 0.0376
+      },
+      "masks": [
+        {
+          "x": 0.1706,
+          "y": 0.1293,
+          "w": 0.0434,
+          "h": 0.1088,
+          "style": "blur",
+          "reason": "강사 이름"
+        },
+        {
+          "x": 0.1538,
+          "y": 0.3673,
+          "w": 0.042,
+          "h": 0.1088,
+          "style": "blur",
+          "reason": "강사 이름"
+        },
+        {
+          "x": 0.1986,
+          "y": 0.6054,
+          "w": 0.0434,
+          "h": 0.1088,
+          "style": "blur",
+          "reason": "강사 이름"
+        },
+        {
+          "x": 0.2056,
+          "y": 0.8367,
+          "w": 0.0434,
+          "h": 0.1088,
+          "style": "blur",
+          "reason": "강사 이름"
+        }
+      ],
+      "maxWidth": 715
+    },
+    {
+      "out": "/docs/files/guides/course-activities/02-copy-activity-course.webp",
+      "source": "public/docs/files/cs-figma/학원d-코스-학습-활동-다른-코스-과정에-복사하기.png",
+      "crop": {
+        "x": 0.1979,
+        "y": 0.2276,
+        "w": 0.6181,
+        "h": 0.1503
+      },
+      "masks": [
+        {
+          "x": 0.0539,
+          "y": 0.4218,
+          "w": 0.0809,
+          "h": 0.0748,
+          "style": "blur",
+          "reason": "영상 썸네일 속 강사"
+        }
+      ],
+      "maxWidth": 890
+    },
+    {
+      "out": "/docs/files/guides/course-activities/03-copy-activity-select.webp",
+      "source": "public/docs/files/cs-figma/학원d-코스-학습-활동-다른-코스-과정에-복사하기.png",
+      "crop": {
+        "x": 0.1979,
+        "y": 0.4283,
+        "w": 0.5972,
+        "h": 0.1516
+      },
+      "masks": [
+        {
+          "x": 0.5907,
+          "y": 0.3373,
+          "w": 0.0442,
+          "h": 0.2395,
+          "style": "blur",
+          "reason": "구성원 프로필 사진"
+        },
+        {
+          "x": 0.1302,
+          "y": 0.43,
+          "w": 0.0465,
+          "h": 0.0624,
+          "style": "blur",
+          "reason": "영상 파일 이름"
+        },
+        {
+          "x": 0.0465,
+          "y": 0.4283,
+          "w": 0.0814,
+          "h": 0.0708,
+          "style": "blur",
+          "reason": "영상 썸네일 속 강사"
+        }
+      ],
+      "maxWidth": 860
+    },
+    {
+      "out": "/docs/files/guides/course-activities/04-recorded-lesson-new.webp",
+      "source": "public/docs/files/cs-figma/학원d-코스-학습-활동-다른-코스-과정에-복사하기.png",
+      "crop": {
+        "x": 0.2007,
+        "y": 0.6185,
+        "w": 0.6111,
+        "h": 0.148
+      },
+      "masks": [
+        {
+          "x": 0.05,
+          "y": 0.4197,
+          "w": 0.0818,
+          "h": 0.0777,
+          "style": "blur",
+          "reason": "영상 썸네일 속 강사"
+        }
+      ],
+      "maxWidth": 880
+    },
+    {
+      "out": "/docs/files/guides/course-activities/05-exam-new.webp",
+      "source": "public/docs/files/cs-figma/문제-은행-가이드.png",
+      "crop": {
+        "x": 0.1319,
+        "y": 0.1696,
+        "w": 0.7361,
+        "h": 0.1301
+      },
+      "masks": [
+        {
+          "x": 0.9009,
+          "y": 0.7536,
+          "w": 0.0594,
+          "h": 0.043,
+          "style": "blur",
+          "reason": "교사 이름"
+        }
+      ],
+      "maxWidth": 1060
+    },
+    {
+      "out": "/docs/files/guides/course-activities/06-exam-bulk-upload.webp",
+      "source": "public/docs/files/cs-figma/문제-은행-가이드.png",
+      "crop": {
+        "x": 0.125,
+        "y": 0.3298,
+        "w": 0.75,
+        "h": 0.1317
+      },
+      "masks": [],
+      "maxWidth": 1080
+    },
+    {
+      "out": "/docs/files/guides/course-activities/07-exam-bulk-review.webp",
+      "source": "public/docs/files/cs-figma/문제-은행-가이드.png",
+      "crop": {
+        "x": 0.125,
+        "y": 0.6652,
+        "w": 0.75,
+        "h": 0.1315
+      },
+      "masks": [],
+      "maxWidth": 1080
+    },
+    {
+      "out": "/docs/files/guides/course-create/04-course-screen.webp",
+      "source": "public/docs/files/cs-figma/frame-1.png",
+      "crop": {
+        "x": 0.0,
+        "y": 0.0,
+        "w": 1.0,
+        "h": 1.0
+      },
+      "masks": [
+        {
+          "x": 0.0573,
+          "y": 0.0744,
+          "w": 0.1074,
+          "h": 0.0744,
+          "style": "blur",
+          "reason": "계정 이름"
+        },
+        {
+          "x": 0.7955,
+          "y": 0.1259,
+          "w": 0.06,
+          "h": 0.0425,
+          "style": "blur",
+          "reason": "구성원 프로필 사진"
+        }
+      ],
+      "maxWidth": 1200
+    },
+    {
+      "out": "/docs/files/guides/lesson-option-concepts/01-lesson-options-panel.webp",
+      "source": "public/docs/files/cs-figma/웹-라이브-사용-방법-안내-앱.png",
+      "crop": {
+        "x": 0.5799,
+        "y": 0.2159,
+        "w": 0.191,
+        "h": 0.0361
+      },
+      "masks": [],
+      "maxWidth": 275
+    },
+    {
+      "out": "/docs/files/guides/lesson-option-concepts/02-lesson-edit-stage.webp",
+      "source": "public/docs/files/cs-figma/코스-내-수업-온스테이지-옵션-변경.png",
+      "crop": {
+        "x": 0.3576,
+        "y": 0.7199,
+        "w": 0.2951,
+        "h": 0.1253
+      },
+      "masks": [
+        {
+          "x": 0.2071,
+          "y": 0.1349,
+          "w": 0.2988,
+          "h": 0.0506,
+          "style": "blur",
+          "reason": "수업 이름(강사 이름 포함)"
+        },
+        {
+          "x": 0.2071,
+          "y": 0.3855,
+          "w": 0.1341,
+          "h": 0.053,
+          "style": "blur",
+          "reason": "수업 교사 이름"
+        }
+      ],
+      "maxWidth": 425
+    }
+  ]
+}

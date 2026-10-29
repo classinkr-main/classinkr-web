@@ -1,6 +1,4 @@
-"use client"
-
-import { motion } from "framer-motion"
+import { Reveal } from "@/components/motion/Reveal"
 import { AlertTriangle, Clock, TrendingDown } from "lucide-react"
 
 const pains = [
@@ -40,7 +38,7 @@ export function ProblemCost() {
 
             <div className="container mx-auto relative z-10">
                 {/* Title */}
-                <motion.div
+                <Reveal
                     initial={{ opacity: 0, y: 40 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
@@ -61,12 +59,12 @@ export function ProblemCost() {
                     <p className="text-lg text-[#A39E98] break-keep">
                         수업 자료와 운영 기준이 개인에게만 남아 있다면, 강사 교체나 반 이동 때 이어가기 어려울 수 있습니다.
                     </p>
-                </motion.div>
+                </Reveal>
 
                 {/* Cards */}
                 <div className="grid md:grid-cols-3 gap-6 md:gap-8">
                     {pains.map((pain, index) => (
-                        <motion.div
+                        <Reveal
                             key={index}
                             initial={{ opacity: 0, y: 50, scale: 0.95 }}
                             whileInView={{ opacity: 1, y: 0, scale: 1 }}
@@ -101,7 +99,7 @@ export function ProblemCost() {
                                     </div>
                                 </div>
                             </div>
-                        </motion.div>
+                        </Reveal>
                     ))}
                 </div>
 

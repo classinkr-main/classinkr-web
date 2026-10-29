@@ -34,6 +34,10 @@ import { branchDraftTeamOptions, branchTeamLabel } from "@/lib/branch/current-or
 
 interface InputRailSectionProps {
   editingDraft: LedgerDraft | null
+  // 라운드 5 Q-3 — 지금 저장하면 고치게 될 행(수정 초안 대상). null이면 신규 입력. onClearTarget은 대상을 풀고
+  // 빈 신규 입력으로 돌린다.
+  targetRow?: { customer: string; sheetRow: number | null; origin: "sheet" | "draft" } | null
+  onClearTarget?: () => void
   queueMode: DraftQueueMode
   draftForm: DraftForm
   setDraftForm: Dispatch<SetStateAction<DraftForm>>
@@ -59,6 +63,16 @@ interface InputRailSectionProps {
   // Task B(2026-07-23): 확정으로 잠긴 달의 explicit 주차 중 값이 있는 칸(5칸 boolean) — WeeklyAmountGrid에
   // 그대로 넘겨 그 주차만 읽기전용(🔒)으로 만든다(확정 주차 덮어쓰기 방지, 빈 칸에만 추가 허용).
   lockedWeeks?: boolean[]
+  // P2-9 "적용된 값을 한 번에 바꾸기" — targetCellLocked인 (딜, 월) 셀에 이미 적용된 옛
+  // draftId·금액이 있으면 워크벤치가 채워준다. null/undefined면 이 잠금이 애초에 적용된
+  // entry에서 온 게 아니라는 뜻이라(예: 다른 사유로 잠긴 시트 셀) 배너에 아무 것도 더 붙이지
+  // 않는다. available=false면 RPC 마이그레이션 미적용(fail-closed) — 작은 안내만 덧붙인다.
+  supersedeTarget?: { oldDraftId: string; oldAmount: number; available: boolean } | null
+  // 클릭 시 호출 — 성공/검증거부/충돌 등 일반 케이스는 기존 DraftSaveResult로(resultToDraftFeedback
+  // 재사용), RPC 미적용(fail-closed)만 별도로 { unavailable: true }를 돌려준다. 실제 구현(새 값
+  // 초안 생성 → PATCH action=supersede)은 워크벤치가 훅의 supersedeEntry를 감싸 제공한다 — 이
+  // 컴포넌트는 아직 배선되지 않아도(prop 생략) 컴파일·동작해야 한다(optional).
+  onSupersede?: () => Promise<DraftSaveResult | { unavailable?: boolean }>
   // DraftSaveResult.persisted: 서버에 실제로 저장됐으면 true, 로컬 폴백(장부 적용 불가)이면 false.
   // DraftSaveResult.deduped: 이중계상 가드(품질 웨이브 3, 항목 3)가 새 초안 대신 이미 열린 초안을
   // 갱신했으면 true. DraftSaveResult.duplicateWarning(품질 웨이브 4, 항목 2): new-row 저장인데 같은
@@ -71,6 +85,8 @@ interface InputRailSectionProps {
 
 export function InputRailSection({
   editingDraft,
+  targetRow = null,
+  onClearTarget,
   queueMode,
   draftForm,
   setDraftForm,
@@ -86,6 +102,8 @@ export function InputRailSection({
   canCreateEditDraft,
   targetCellLocked,
   lockedWeeks,
+  supersedeTarget,
+  onSupersede,
   saveEditedDraft,
   cancelDraftEdit,
   saveDraft,
@@ -138,6 +156,42 @@ export function InputRailSection({
     // (웨이브 7 2단 I4의 6분기: conflict → validationMessage → !persisted → dedupedRecent → deduped
     //  → duplicateWarning → 성공을 그대로 담는다).
     setFeedback(resultToDraftFeedback(result))
+  }
+
+  // P2-9 "적용된 값을 한 번에 바꾸기" — 저장 버튼(runSave/saveDraft·saveEditedDraft)과는 별도
+  // 경로다: 잠금 사전검사(blockedByLock)를 거치지 않고 곧장 onSupersede를 부른다(이 CTA
+  // 자체가 "잠긴 셀"에서만 뜨므로 그 사전검사를 다시 태울 이유가 없다). in-flight 상태는 이
+  // 버튼 전용이라 draftSaving(저장 버튼)과 별개로 둔다 — 두 액션을 같은 폼에서 동시에 눌러도
+  // 서로의 로딩 표시를 침범하지 않는다.
+  const [supersedeInFlight, setSupersedeInFlight] = useState(false)
+  // 이 동작은 체크 큐를 거치지 않고 곧바로 장부 값을 대체한다 — 큐의 "적용"(확인 다이얼로그)·
+  // "일괄 적용"(인라인 확인)과 같은 규약으로 한 번 더 확인받는다(옛 값 → 새 값을 보여준 뒤 적용).
+  const [supersedeConfirm, setSupersedeConfirm] = useState(false)
+  const handleSupersedeClick = async () => {
+    if (!onSupersede || supersedeInFlight) return
+    setFeedback(null)
+    setSupersedeInFlight(true)
+    setSupersedeConfirm(false)
+    try {
+      const result = await onSupersede()
+      if ("unavailable" in result && result.unavailable) {
+        setFeedback({
+          kind: "warning",
+          text: "REV 시트 정합성 검증 전까지 한 번에 바꾸기를 사용할 수 없습니다. 시트 반영 상태를 확인하세요.",
+        })
+        return
+      }
+      // unavailable이 아니면 나머지는 전부 기존 DraftSaveResult 계약. 단 성공 문구는 공용 문구
+      // ("체크 큐에서 체크 → 적용 후 반영")를 쓰면 틀린다 — 대체는 이미 장부에 적용된 상태다.
+      const saveResult = result as DraftSaveResult
+      if (saveResult.persisted && !saveResult.conflict && !saveResult.validationMessage) {
+        setFeedback({ kind: "success", text: "장부 값을 대체했습니다 — 옛 값은 되돌리기 기록으로 남고 매트릭스에 바로 반영됩니다." })
+        return
+      }
+      setFeedback(resultToDraftFeedback(saveResult))
+    } finally {
+      setSupersedeInFlight(false)
+    }
   }
 
   // 편집 중이 아닐 때 Enter로 제출될 "기본" 저장 종류 — 선택된 행이 있어 수정 초안이 가능하면
@@ -204,6 +258,37 @@ export function InputRailSection({
               </div>
             </div>
             <form onSubmit={handleFormSubmit} className="space-y-3 p-4">
+              {/* 라운드 5 Q-3 — 대상 행을 폼 맨 위에. 예전엔 어느 행을 고치는지 입력 탭에서 보이지 않았다. */}
+              {!editingDraft &&
+                (targetRow ? (
+                  <div className="flex items-center justify-between gap-2 rounded-md border border-[#BDEFD8] bg-[#ECFDF5] px-3 py-2 text-[11px]">
+                    <p className="min-w-0 truncate font-semibold text-[#084734]">
+                      <span className="font-bold">대상</span> {targetRow.customer || "(무제목)"}
+                      {targetRow.sheetRow != null ? ` · 시트 ${targetRow.sheetRow}행` : targetRow.origin === "draft" ? " · 장부 입력 행" : ""}
+                      {` · ${formatMonthLabel(draftForm.month)}`}
+                    </p>
+                    {onClearTarget && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClearTarget()
+                          setFeedback(null)
+                          customerInputRef.current?.focus()
+                        }}
+                        aria-label="대상 행 풀고 신규 입력으로"
+                        title="대상 행을 풀고 빈 신규 입력으로 바꿉니다"
+                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-[#084734] opacity-70 transition hover:bg-white hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+                      >
+                        <X className="h-3.5 w-3.5" aria-hidden />
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <p className="rounded-md border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] px-3 py-2 text-[11px] leading-relaxed text-[#615D59]">
+                    <span className="font-bold text-[#111110]">신규 입력</span> — 장부에 없는 고객·딜을 새 행으로 남깁니다. 기존 행을
+                    고치려면 REV에서 행이나 셀을 고르세요.
+                  </p>
+                ))}
               <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2">
                 <p className="mb-2 text-[11px] font-bold text-[#615D59]">작업 유형</p>
                 <div className="grid grid-cols-2 gap-1.5">
@@ -541,11 +626,59 @@ export function InputRailSection({
                 </p>
               )}
               {/* 품질 웨이브 7 — 항목 1: 제출을 시도하기 전에도 잠금 사실을 미리 보여준다(사전검사가
-                  버튼 disabled로만 조용히 막으면 왜 막혔는지 알기 어렵다) — 인라인 경고 + 차단. */}
+                  버튼 disabled로만 조용히 막으면 왜 막혔는지 알기 어렵다) — 인라인 경고 + 차단.
+                  P2-9: 이 잠금이 이미 적용된 entry에서 온 것이면(supersedeTarget) 되돌리기→재적용
+                  수동 2~3단계 대신 "한 번에 바꾸기" CTA를 배너 안에 덧붙인다 — 저장 버튼 활성
+                  조건·이 사전검사 로직 자체는 무변경(별도 경로). */}
               {blockedByLock && (
-                <p className="rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2 text-[11px] font-semibold leading-relaxed text-[#7A520F]" role="alert">
-                  {LOCK_WARNING_TEXT}
-                </p>
+                <div className="rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2 text-[11px] font-semibold leading-relaxed text-[#7A520F]" role="alert">
+                  <p>{LOCK_WARNING_TEXT}</p>
+                  {supersedeTarget?.available && !supersedeConfirm && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span>이미 적용된 값 {formatMoney(supersedeTarget.oldAmount)}</span>
+                      <span aria-hidden="true">→</span>
+                      <button
+                        type="button"
+                        onClick={() => setSupersedeConfirm(true)}
+                        disabled={draftSaving || supersedeInFlight || draftFormInvalid}
+                        className="min-h-11 md:min-h-9 inline-flex shrink-0 items-center gap-1.5 rounded-md bg-[#084734] px-3 text-[11px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        {supersedeInFlight && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                        이 금액으로 한 번에 바꾸기
+                      </button>
+                    </div>
+                  )}
+                  {supersedeTarget?.available && supersedeConfirm && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2" role="group" aria-label="장부 값 대체 확인">
+                      <span>
+                        {formatMoney(supersedeTarget.oldAmount)} → {formatMoney(weeklySplitActive ? weeklySum : safeAmount(draftForm.amount))}로
+                        장부에 바로 대체합니다 — 옛 값은 되돌리기 기록으로 남습니다.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void handleSupersedeClick()}
+                        disabled={draftSaving || supersedeInFlight || draftFormInvalid}
+                        className="min-h-11 md:min-h-9 inline-flex shrink-0 items-center gap-1.5 rounded-md bg-[#084734] px-3 text-[11px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        {supersedeInFlight && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                        대체 적용
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSupersedeConfirm(false)}
+                        disabled={supersedeInFlight}
+                        className="min-h-11 md:min-h-9 inline-flex shrink-0 items-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[11px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4]"
+                      >
+                        취소
+                      </button>
+                    </div>
+                  )}
+                  {supersedeTarget && !supersedeTarget.available && (
+                    <p className="mt-1 text-[10.5px] font-semibold text-[#7A520F]">
+                      REV 시트 정합성 검증 전까지 한 번에 바꾸기를 사용할 수 없습니다.
+                    </p>
+                  )}
+                </div>
               )}
               {feedback && (
                 <p

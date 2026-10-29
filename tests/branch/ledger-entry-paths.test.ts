@@ -28,7 +28,8 @@ describe("RevMobileList — 금액 탭이 레일 '입력/수정'으로 직행(§
 
   it("금액이 <button type=\"button\">으로 렌더되고 44px 터치 타깃·전용 aria-label을 가진다", () => {
     const source = read(mobileListPath)
-    const labelMarker = "aria-label={`${row.customer} 금액 입력 열기`}"
+    // 라운드 5 Q-2: aria-label이 금액(없으면 "금액 없음")까지 읽는다 — 마커는 공통 접미사로 찾는다.
+    const labelMarker = "— 금액 입력 열기`}"
     const labelIndex = source.indexOf(labelMarker)
     expect(labelIndex, "금액 입력 버튼 aria-label 누락").toBeGreaterThan(-1)
 
@@ -44,7 +45,9 @@ describe("RevMobileList — 금액 탭이 레일 '입력/수정'으로 직행(§
     const buttonBlock = source.slice(openButtonIndex, closeButtonIndex)
     expect(buttonBlock).toContain('type="button"')
     expect(buttonBlock).toContain("min-h-11")
-    expect(buttonBlock).toContain("{formatMoney(monthAmount || row.revenue)}")
+    // 라운드 5 Q-2 — 선택 월 금액만 보인다. 빈 달에 기간 합계(row.revenue)로 떨어지지 않는다.
+    expect(buttonBlock).toContain("monthAmount > 0 ? formatMoney(monthAmount)")
+    expect(buttonBlock).not.toContain("|| row.revenue")
     expect(buttonBlock).toContain("onClick={() => void onQuickInput(row)}")
     // 기존 텍스트 스타일 유지(새 색 없음) — 감사가 지적한 원래 <p> 스타일 그대로.
     expect(buttonBlock).toContain("text-[13px] font-bold tabular-nums text-[#111110]")

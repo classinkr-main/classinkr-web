@@ -135,7 +135,7 @@ describe("SalesLedgerWorkbench — 보드 렌즈 배선 규약(소스 스캔)", 
   })
 
   it("board 렌즈 패널은 REV와 같은 filteredRows 모집단으로 ForecastBoard를 렌더한다", () => {
-    expect(workbenchSource).toContain('{lens === "board" && (')
+    expect(workbenchSource).toContain('{lens === "board" && pipeline.data && (')
     expect(workbenchSource).toMatch(/<ForecastBoard[\s\S]*?rows=\{filteredRows\}/)
   })
 

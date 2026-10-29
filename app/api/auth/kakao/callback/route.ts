@@ -3,7 +3,6 @@ import type { User } from "@supabase/supabase-js"
 import { NextRequest, NextResponse } from "next/server"
 
 import { upsertPublicUserProfile } from "@/lib/auth/public-user"
-import { ANONYMOUS_ID_COOKIE } from "@/lib/consent/consent"
 import { stitchIdentity } from "@/lib/identity/stitch"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { getSupabaseBrowserEnv } from "@/lib/supabase/public-env"
@@ -238,7 +237,8 @@ export async function GET(req: NextRequest) {
     if (userId && user.id !== userId) throw new Error("Kakao account identity mismatch")
     const publicProfile = await upsertPublicUserProfile(user)
     await stitchIdentity({
-      anonymousId: req.cookies.get(ANONYMOUS_ID_COOKIE)?.value ?? null,
+      // Redirects cannot carry the current tab's consent-observation signal.
+      anonymousId: null,
       userId: user.id,
       leadId: publicProfile.lead_id,
       email: user.email ?? publicProfile.email,

@@ -139,6 +139,18 @@ describe("sitemap", () => {
     expect(entries.some((entry) => entry.url.startsWith(`${SITE_URL}/events/videos/`))).toBe(true)
   })
 
+  it("omits lastModified when static pages or empty content hubs have no reliable modification date", async () => {
+    mocks.getDocsContent.mockResolvedValue(null)
+
+    const entries = await loadSitemap()
+    const byUrl = new Map(entries.map((entry) => [entry.url, entry]))
+    for (const path of ["/", "/product/sw", "/pricing", "/faq", "/blog", "/docs", "/events"]) {
+      const entry = byUrl.get(`${SITE_URL}${path === "/" ? "/" : path}`)
+      expect(entry).toBeDefined()
+      expect(entry?.lastModified).toBeUndefined()
+    }
+  })
+
   it("derives docs hub and category lastModified from listed docs, and honors a same-origin canonicalPath", async () => {
     mocks.getDocsContent.mockResolvedValue({
       categories: [

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
 import { checkCronAuth } from "@/lib/server/cron-auth"
 
@@ -41,11 +41,16 @@ describe("checkCronAuth", () => {
   })
 
   it("CRON_SECRET이 설정되지 않았으면 missing_secret — 헤더 값과 무관", () => {
-    expect(checkCronAuth(reqWithAuth("Bearer cron-secret-123"), undefined)).toBe(
-      "missing_secret"
-    )
-    expect(checkCronAuth(reqWithAuth(null), undefined)).toBe("missing_secret")
-    expect(checkCronAuth(reqWithAuth(null), "")).toBe("missing_secret")
+    vi.stubEnv("CRON_SECRET", undefined)
+    try {
+      expect(checkCronAuth(reqWithAuth("Bearer cron-secret-123"), undefined)).toBe(
+        "missing_secret"
+      )
+      expect(checkCronAuth(reqWithAuth(null), undefined)).toBe("missing_secret")
+      expect(checkCronAuth(reqWithAuth(null), "")).toBe("missing_secret")
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it("Authorization 헤더가 없으면 unauthorized", () => {

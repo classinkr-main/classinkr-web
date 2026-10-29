@@ -202,6 +202,9 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // 장부 반영 → REV 시트 쓰기 감사 기록(2026-10-23). 시트 쓰기 스위치(BRANCH_REV_SHEET_WRITE_ENABLED)가 꺼져 있으면
   // 미적용이어도 영향이 없다 — 켜기 전에 적용한다(warning).
   "supabase/migrations/20261023_branch_rev_sheet_writes.sql",
+  // P2-9 파일 추적용 등록이다. 운영 적용을 권고하는 목록이 아니다 — REV 시트 동시성·멱등성
+  // 재설계와 격리 DB 통합 검증이 끝나기 전까지 운영 적용 금지(기능은 서버에서 차단).
+  "supabase/migrations/20260922_branch_sales_ledger_supersede_entry.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -1022,6 +1025,19 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     severity: "warning",
     impact:
       "시트 쓰기 스위치가 켜져 있으면 시트에 쓴 뒤 장부 기록이 전부 실패한다(db_apply_failed) — 켜기 전에 반드시 적용한다. 꺼져 있으면 영향 없다.",
+  },
+  // ── 매출 장부 "적용된 값을 한 번에 바꾸기"(P2-9, 2026-09-22) ────────────────────────────
+  // 옛 entry를 FOR UPDATE로 잠그고 반전+적용을 한 트랜잭션으로 묶는 쓰기 함수라 실행 프로브를
+  // 금지하고 pg_proc·권한만 카탈로그로 확인한다(하드웨어 v3 RPC와 동일 관례).
+  {
+    kind: "rpc",
+    functionName: "supersede_branch_sales_ledger_entry",
+    label: "매출 장부 적용값 원자 대체 RPC",
+    catalogIdentityTypes: "uuid, uuid, text, text",
+    serviceRoleOnly: true,
+    migration: "supabase/migrations/20260922_branch_sales_ledger_supersede_entry.sql",
+    severity: "warning",
+    impact: "운영 적용 금지: REV 시트 동시성·멱등성 재설계 및 격리 DB 통합 검증 전까지 기능은 서버에서 비활성이다. 미적용은 정상이며 기존 경로는 유지된다.",
   },
 ]
 

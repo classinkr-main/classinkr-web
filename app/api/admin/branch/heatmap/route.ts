@@ -40,6 +40,7 @@ export async function GET(req: NextRequest) {
     const sourceDeals = await readRevDealsPreferActive(fyOf(periodDate), { team: manager ? "ALL" : team })
     const deals = manager ? sourceDeals.filter((deal) => branchManagerMatches(deal.manager, manager)) : sourceDeals
     const rows = computeHeatmap(deals, period, periodDate, manager ? "ALL" : team)
+    if (url.searchParams.get("manager") === "__me") return NextResponse.json({ rows }, { headers: { "Cache-Control": "private, no-store" } })
     return adminCachedJson({ rows })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
