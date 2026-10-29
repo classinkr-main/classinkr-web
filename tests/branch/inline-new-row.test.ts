@@ -133,6 +133,7 @@ describe("buildPasteNewRowInputs — buildNewRowDraftInput을 내부적으로 �
       outOfRangeCount: 0,
       matchedRowCount: 0,
       ambiguousNames: [],
+      outOfViewNames: [],
       unmatched: [{ name: "신규 고객", cells: [{ month: "2026-07", amount: 300_000 }] }],
     }
     const context = {
