@@ -187,6 +187,19 @@ describe("POST /api/consent", () => {
     }
   })
 
+  it.each([
+    { analytics: false, marketing: false },
+    { analytics: false, marketing: true },
+    { analytics: true, marketing: false },
+    { analytics: true, marketing: true },
+  ])("구버전의 선택 %j는 새 프로토콜 확인 전 두 카테고리를 모두 거절한다", async (choice) => {
+    const res = await POST(consentRequest({ ...choice, policy_version: CONSENT_POLICY_VERSION }, "https://classin.co.kr", false))
+    expect(res.status).toBe(200)
+    expect(parseConsent(readSetCookie(res, "cln_consent")!.value)).toMatchObject({ analytics: false, marketing: false, s: 0 })
+    expect(readSetCookie(res, "cln_revoke_a")?.value).toBeTruthy()
+    expect(readSetCookie(res, "cln_revoke_m")?.value).toBeTruthy()
+  })
+
   it.each([null, [], {}, { analytics: "false", marketing: false }, { analytics: false, marketing: null }])(
     "구버전의 잘못된 입력(%j)은 400과 거절 쿠키를 반환한다",
     async (body) => {

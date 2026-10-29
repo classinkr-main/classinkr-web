@@ -4,15 +4,19 @@ import { CONSENT_POLICY_VERSION, type ConsentRecord } from "@/lib/consent/consen
 import { collectLeadAttribution } from "@/lib/marketing-attribution"
 
 const ATTRIBUTION_STORAGE_KEY = "classinkr.leadAttribution.v1"
+const cookieStore = { addEventListener: () => {}, removeEventListener: () => {} }
+const coordinated = { cookieStore, __classinConsentObserverReady: true, __classinConsentObservedStore: cookieStore }
 
 function installBrowser(consent: ConsentRecord | null, url: string) {
   const store = new Map<string, string>()
   const cookie = consent
-    ? `cln_consent=${encodeURIComponent(JSON.stringify(consent))}`
+    ? `cln_consent=${encodeURIComponent(JSON.stringify(consent))}; cln_revoke_a=confirmed-a; cln_revoke_m=confirmed-m`
     : ""
 
   vi.stubGlobal("document", { cookie, referrer: "https://search.example/q" })
+  vi.stubGlobal("navigator", { locks: {} })
   vi.stubGlobal("window", {
+    ...coordinated,
     location: { href: url },
     localStorage: {
       getItem: (key: string) => store.get(key) ?? null,
@@ -29,6 +33,8 @@ const granted: ConsentRecord = {
   marketing: true,
   ts: 1,
   s: 1,
+  ackAnalytics: "confirmed-a",
+  ackMarketing: "confirmed-m",
 }
 const marketingDenied: ConsentRecord = { ...granted, marketing: false }
 
@@ -97,8 +103,10 @@ describe("리드 어트리뷰션 — 마케팅 동의 게이트", () => {
     collectLeadAttribution()
 
     vi.unstubAllGlobals()
-    vi.stubGlobal("document", { cookie: `cln_consent=${encodeURIComponent(JSON.stringify(granted))}`, referrer: "" })
+    vi.stubGlobal("document", { cookie: `cln_consent=${encodeURIComponent(JSON.stringify(granted))}; cln_revoke_a=confirmed-a; cln_revoke_m=confirmed-m`, referrer: "" })
+    vi.stubGlobal("navigator", { locks: {} })
     vi.stubGlobal("window", {
+      ...coordinated,
       location: { href: "https://classin.co.kr/pricing" },
       localStorage: {
         getItem: (key: string) => store.get(key) ?? null,

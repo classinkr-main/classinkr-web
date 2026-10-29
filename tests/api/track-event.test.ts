@@ -19,8 +19,10 @@ const CONSENT_COOKIE_HEADER = `cln_consent=${encodeURIComponent(
     marketing: true,
     ts: 1,
     s: 1,
+    ackAnalytics: "confirmed-a",
+    ackMarketing: "confirmed-m",
   })
-)}; cln_aid=anon-track-test`
+)}; cln_revoke_a=confirmed-a; cln_revoke_m=confirmed-m; cln_aid=anon-track-test`
 
 function trackRequest(body: unknown, cookie: string | null = CONSENT_COOKIE_HEADER) {
   return new NextRequest("https://classin.kr/api/track/event", {
@@ -306,6 +308,15 @@ describe("track event route — 서버측 동의 게이트", () => {
       JSON.stringify({ v: CONSENT_POLICY_VERSION, analytics: true, marketing: true, ts: 1, s: 0 })
     )}`
     const response = await POST(trackRequest({ event: "page_view", page: "/" }, pending))
+    expect(await response.json()).toMatchObject({ stored: false, reason: "no_consent" })
+    expect(insert).not.toHaveBeenCalled()
+  })
+
+  it("늦은 허용 쿠키가 새로운 분석 철회 표식을 확인하지 못했으면 적재하지 않는다", async () => {
+    const staleGrant = `cln_consent=${encodeURIComponent(
+      JSON.stringify({ v: CONSENT_POLICY_VERSION, analytics: true, marketing: true, ts: 1, s: 1 })
+    )}; cln_revoke_a=revoked-after-grant`
+    const response = await POST(trackRequest({ event: "page_view", page: "/" }, staleGrant))
     expect(await response.json()).toMatchObject({ stored: false, reason: "no_consent" })
     expect(insert).not.toHaveBeenCalled()
   })

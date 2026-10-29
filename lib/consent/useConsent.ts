@@ -4,13 +4,19 @@ import { useCallback, useMemo, useSyncExternalStore } from "react"
 
 import {
   CONSENT_CHANGE_EVENT,
+  CONSENT_PULSE_KEY,
+  DENIED_CHOICE,
   CONSENT_SIGNAL_KEY,
   applyConsentMode,
+  currentChoice,
   effectiveConsentChoice,
+  hasValidDecision,
   type ConsentChoice,
   type ConsentRecord,
   parseConsent,
   readConsentRaw,
+  readConsentRevocations,
+  supportsConsentCoordination,
   saveConsent,
 } from "@/lib/consent/consent"
 
@@ -46,13 +52,12 @@ function subscribe(onChange: () => void): () => void {
 
   const cookieStore = getCookieStore()
   const onExternalChange = () => {
-    const record = parseConsent(readConsentRaw() || null)
-    applyConsentMode(effectiveConsentChoice(record))
+    applyConsentMode(currentChoice())
     // PixelConsentSync 등 같은 탭의 다른 구독자도 철회를 즉시 반영해야 한다.
     window.dispatchEvent(new CustomEvent(CONSENT_CHANGE_EVENT))
   }
   const onStorage = (event: StorageEvent) => {
-    if (event.key === CONSENT_SIGNAL_KEY) onExternalChange()
+    if (event.key === CONSENT_SIGNAL_KEY || event.key === CONSENT_PULSE_KEY) onExternalChange()
   }
   let channel: BroadcastChannel | null = null
   try {
@@ -86,11 +91,12 @@ function subscribe(onChange: () => void): () => void {
  * 참조 안정성(원문 문자열 스냅샷)을 확보한다. 서버 스냅샷은 항상 "미결정".
  */
 export function useConsent(): UseConsentResult {
-  const raw = useSyncExternalStore(
+  const snapshot = useSyncExternalStore(
     subscribe,
-    readConsentRaw,
-    () => "" // 서버: 쿠키 없음 → 미결정
+    () => JSON.stringify([readConsentRaw(), readConsentRevocations()]),
+    () => '["",{"analytics":null,"marketing":null}]' // 서버: 쿠키 없음 → 미결정
   )
+  const [raw, revocations] = useMemo(() => JSON.parse(snapshot) as [string, { analytics: string | null; marketing: string | null }], [snapshot])
   const record = useMemo(() => parseConsent(raw || null), [raw])
 
   const save = useCallback((choice: ConsentChoice) => {
@@ -99,8 +105,8 @@ export function useConsent(): UseConsentResult {
 
   return {
     record,
-    choice: effectiveConsentChoice(record),
-    decided: record !== null,
+    choice: supportsConsentCoordination() ? effectiveConsentChoice(record, revocations) : DENIED_CHOICE,
+    decided: hasValidDecision(record, revocations) && (supportsConsentCoordination() || (!record?.analytics && !record?.marketing)),
     save,
   }
 }

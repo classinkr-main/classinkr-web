@@ -2,7 +2,9 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import {
   ANONYMOUS_ID_COOKIE,
+  ANALYTICS_REVOCATION_COOKIE,
   CONSENT_COOKIE,
+  MARKETING_REVOCATION_COOKIE,
   effectiveConsentChoice,
   parseConsent,
 } from "@/lib/consent/consent"
@@ -168,7 +170,11 @@ export async function POST(req: NextRequest) {
   // 같은 방식으로 서버에서 동의를 확인하므로 그 패턴을 그대로 따른다.
   // 추적 실패는 사용자 경험을 막지 않는다는 이 라우트의 계약대로 200을 유지한다.
   const consent = parseConsent(req.cookies.get(CONSENT_COOKIE)?.value ?? null)
-  if (!effectiveConsentChoice(consent).analytics) {
+  const revocations = {
+    analytics: req.cookies.get(ANALYTICS_REVOCATION_COOKIE)?.value ?? null,
+    marketing: req.cookies.get(MARKETING_REVOCATION_COOKIE)?.value ?? null,
+  }
+  if (!effectiveConsentChoice(consent, revocations).analytics) {
     return NextResponse.json({ ok: true, stored: false, reason: "no_consent" })
   }
 

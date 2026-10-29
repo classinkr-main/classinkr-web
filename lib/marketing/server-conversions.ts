@@ -5,7 +5,9 @@ import type { NextRequest } from "next/server"
 
 import {
   ANONYMOUS_ID_COOKIE,
+  ANALYTICS_REVOCATION_COOKIE,
   CONSENT_COOKIE,
+  MARKETING_REVOCATION_COOKIE,
   effectiveConsentChoice,
   parseConsent,
 } from "@/lib/consent/consent"
@@ -127,7 +129,10 @@ export function getMarketingRequestMeta(
     gaClientId,
     fbp: req.cookies.get("_fbp")?.value?.trim() || null,
     fbc,
-    consent: effectiveConsentChoice(consent),
+    consent: effectiveConsentChoice(consent, {
+      analytics: req.cookies.get(ANALYTICS_REVOCATION_COOKIE)?.value ?? null,
+      marketing: req.cookies.get(MARKETING_REVOCATION_COOKIE)?.value ?? null,
+    }),
   }
 }
 
