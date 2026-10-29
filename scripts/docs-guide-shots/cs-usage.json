@@ -1270,6 +1270,17 @@
     }
    ],
    "maxWidth": 1060
+  },
+  {
+   "out": "/docs/files/guides/cs-course-member-management/04-allow-course-join.webp",
+   "source": "public/docs/files/cs-figma/코스-내-닉네임-변경-옵션-활성-비활성화.png",
+   "crop": {
+    "x": 0.40625,
+    "y": 0.48882,
+    "w": 0.1875,
+    "h": 0.04115
+   },
+   "maxWidth": 640
   }
  ]
 }

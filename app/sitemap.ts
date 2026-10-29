@@ -3,6 +3,7 @@ import type { MetadataRoute } from "next"
 import { resolveBlogContentModifiedAt } from "@/lib/blog-types"
 import { getDocCategoryPath, getDocPath, type DocArticle } from "@/lib/docs"
 import { getDocsContent, listListedDocsFromContent } from "@/lib/docs-content"
+import { getDocSitemapImages } from "@/lib/docs-structured-data"
 import { getPublishedPostsForStaticSitemap } from "@/lib/repositories/blog"
 import { listCachedPublicEvents } from "@/lib/repositories/public-events"
 import { getPublishedSeminars } from "@/lib/seminars/catalog"
@@ -162,12 +163,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.75,
   }))
 
-  const docsArticleEntries: MetadataRoute.Sitemap = listedDocs.map((doc) => ({
-    url: resolveDocSitemapUrl(doc),
-    lastModified: new Date(doc.updatedAt),
-    changeFrequency: "monthly",
-    priority: doc.featured ? 0.8 : 0.65,
-  }))
+  // 이미지 사이트맵: 공개·색인 문서의 화면 사진(문서당 최대 5장). 정식 주소가 다른 문서를 가리키는 문서는
+  // getDocSitemapImages 가 빈 배열을 돌려준다(그 사진은 정식 주소 페이지에 없을 수 있다).
+  const docsArticleEntries: MetadataRoute.Sitemap = listedDocs.map((doc) => {
+    const images = getDocSitemapImages(doc)
+    return {
+      url: resolveDocSitemapUrl(doc),
+      lastModified: new Date(doc.updatedAt),
+      changeFrequency: "monthly",
+      priority: doc.featured ? 0.8 : 0.65,
+      ...(images.length > 0 ? { images } : {}),
+    }
+  })
 
   return dedupeByUrl([
     ...staticEntries,

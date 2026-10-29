@@ -13,6 +13,10 @@ const RECORDING_SHARE = "/docs/files/guides/cs-recording-download-share"
 const AI_DISABLE = "/docs/files/guides/cs-ai-disable-admin"
 const CACHE_UPDATE = "/docs/files/guides/cs-cache-update-pc"
 const HOMEWORK_MOBILE = "/docs/files/guides/cs-homework-upload-mobile"
+const FIELD_RECORDING = "/docs/files/guides/cs-field-recording-camera-setup"
+const WEB_LIVE = "/docs/files/guides/cs-web-live-create"
+const MIC_CAMERA = "/docs/files/guides/cs-microphone-camera-check"
+const BULK_EXAM = "/docs/files/guides/cs-bulk-exam-upload"
 
 export const CS_USAGE_GUIDE_MEDIA: GuideMediaMap = {
   "admin/cs-figma-digest-523": {
@@ -168,6 +172,16 @@ export const CS_USAGE_GUIDE_MEDIA: GuideMediaMap = {
         height: 995,
       },
     ],
+    "초대 링크로 들어오게 할 때": [
+      {
+        type: "image",
+        src: `${MEMBERS}/04-allow-course-join.webp`,
+        alt: "PC 앱 코스 관리 창 맨 위의 코스 가입 허용 토글이 켜져 있다",
+        caption: "코스 설정 → [코스 관리] 맨 위 [코스 가입 허용]이 켜져 있어야 링크와 QR 코드로 들어올 수 있습니다.",
+        width: 270,
+        height: 116,
+      },
+    ],
   },
   "admin/cs-course-create-and-close": {
     "순서대로 따라 하기": [
@@ -299,6 +313,160 @@ export const CS_USAGE_GUIDE_MEDIA: GuideMediaMap = {
         caption: "아래 사진 아이콘으로 사진을 붙이고 [숙제 제출]을 누릅니다.",
         width: 312,
         height: 677,
+      },
+    ],
+  },
+  "teacher/cs-field-recording-camera-setup": {
+    "순서대로 따라 하기": [
+      {
+        type: "image",
+        src: `${FIELD_RECORDING}/01-lesson-options.webp`,
+        alt: "클래스인 PC 앱의 수업 새로 만들기 창. 시작 시각과 진행 시간, 온스테이지 인원수 1V0, 현장 녹화 토글에 빨간 상자가 있다",
+        caption: "수업 시간을 정하고 온스테이지 인원수를 1V0으로, [현장 녹화]를 켠 뒤 [등록]을 누릅니다.",
+        width: 972,
+        height: 618,
+      },
+      {
+        type: "image",
+        src: `${FIELD_RECORDING}/02-enter-classroom.webp`,
+        alt: "코스 화면의 수업 행에 있는 교실 입장 버튼과 오른쪽 아래 수업 알림의 수업 입장 버튼에 빨간 상자가 있다",
+        caption: "수업 행의 [교실 입장]이나 수업 알림의 [수업 입장]을 누릅니다.",
+        width: 948,
+        height: 620,
+      },
+      {
+        type: "image",
+        src: `${FIELD_RECORDING}/03-recording-notice.webp`,
+        alt: "교실 화면 가운데 뜬 현장 녹화 알림 창. 아래쪽 확인 버튼에 빨간 상자가 있다",
+        caption: "현장 녹화 알림이 뜨면 [확인]을 누릅니다.",
+        width: 953,
+        height: 547,
+      },
+      {
+        type: "image",
+        src: `${FIELD_RECORDING}/04-camera-record-now.webp`,
+        alt: "현장 녹화 창 위쪽 톱니바퀴, 설정 창의 카메라 목록, 바로 녹화하기 버튼, 화면 오른쪽 위 초록색 녹화 아이콘에 빨간 상자가 있다",
+        caption: "톱니바퀴에서 녹화할 카메라를 고르고 [바로 녹화하기]를 누르면 오른쪽 위에 초록색 녹화 아이콘이 뜹니다.",
+        width: 955,
+        height: 750,
+      },
+      {
+        type: "image",
+        src: `${FIELD_RECORDING}/05-board-recording-icon.webp`,
+        alt: "전자칠판 화면 아래쪽 독. 녹화 아이콘을 누르면 현장 녹화 진행 중 안내가 뜬다",
+        caption: "전자칠판에서는 화면 아래쪽 독에서 녹화 상태를 봅니다.",
+        width: 467,
+        height: 300,
+      },
+    ],
+  },
+  "teacher/cs-web-live-create": {
+    "순서대로 따라 하기": [
+      {
+        type: "image",
+        src: `${WEB_LIVE}/01-new-lesson.webp`,
+        alt: "코스 화면 오른쪽 위 새로 만들기 버튼과, 열린 활동 게시하기 창의 수업 항목에 빨간 상자가 있다",
+        caption: "코스 오른쪽 위 [새로 만들기] → [수업]을 누릅니다.",
+        width: 1021,
+        height: 547,
+      },
+      {
+        type: "image",
+        src: `${WEB_LIVE}/02-recording-live-option.webp`,
+        alt: "수업 새로 만들기 창 오른쪽 옵션. Classin 수업 녹화가 켜져 있고 그 아래 라이브가 선택돼 있다",
+        caption: "녹화 옵션을 하나 이상 켜고 [라이브]를 고른 뒤 [등록]을 누릅니다.",
+        width: 730,
+        height: 483,
+      },
+      {
+        type: "image",
+        src: `${WEB_LIVE}/03-live-replay-links.webp`,
+        alt: "수업 목록 행의 점 세 개 버튼과, 수업 상세의 생방송 리플레이·코스 다시보기 링크와 복사 버튼에 빨간 상자가 있다",
+        caption: "수업의 점 세 개를 누르면 [생방송 리플레이]와 [코스 다시보기] 링크가 나옵니다. 오른쪽 복사 버튼으로 복사합니다.",
+        width: 1120,
+        height: 580,
+      },
+      {
+        type: "image",
+        src: `${WEB_LIVE}/04-live-chat-tool.webp`,
+        alt: "교실 화면에서 수업 도구 창을 열고 실시간 채팅 창을 띄운 모습",
+        caption: "수업 중 [수업 도구] → [실시간 채팅]에서 시청자 채팅을 봅니다.",
+        width: 1118,
+        height: 555,
+      },
+    ],
+    "링크가 안 보이거나 시청을 제한하려면": [
+      {
+        type: "image",
+        src: `${WEB_LIVE}/05-dashboard-live-settings.webp`,
+        alt: "관리자 대시보드 웹 라이브/플레이백 화면의 웹 라이브 설정 탭. 계정 로그인 필요, 비밀번호 입력 후 시청, 비로그인 사용자 채팅·좋아요 허용, 보기 권한 설정이 보인다",
+        caption: "[웹 라이브 설정] 탭에서 로그인·비밀번호·채팅 권한을 바꾸고, 오른쪽 위 [웹 라이브/플레이백 주소]에서 링크를 찾습니다.",
+        width: 1125,
+        height: 270,
+      },
+    ],
+  },
+  "teacher/cs-microphone-camera-check": {
+    "순서대로 따라 하기": [
+      {
+        type: "image",
+        src: `${MIC_CAMERA}/01-classroom-device-menu.webp`,
+        alt: "교실 화면 오른쪽 위 마이크 아이콘 메뉴. 마이크 선택, 스피커 선택 목록 아래 설정 항목에 빨간 상자가 있다",
+        caption: "오른쪽 위 마이크 아이콘 옆 화살표를 눌러 장치를 고르거나 맨 아래 [설정]을 누릅니다.",
+        width: 625,
+        height: 357,
+      },
+      {
+        type: "image",
+        src: `${MIC_CAMERA}/02-camera-settings.webp`,
+        alt: "설정 창의 카메라 탭. 카메라 미리 보기 아래 카메라 목록이 펼쳐져 있다",
+        caption: "[카메라]에서 미리 보기를 보며 쓸 카메라를 고릅니다.",
+        width: 800,
+        height: 802,
+      },
+      {
+        type: "image",
+        src: `${MIC_CAMERA}/03-microphone-settings.webp`,
+        alt: "설정 창의 마이크 탭. 마이크 선택 상자와 그 아래 초록색 소리 막대에 빨간 상자가 있다",
+        caption: "[마이크]에서 쓸 마이크를 고르고, 말할 때 소리 막대가 초록색으로 움직이는지 봅니다.",
+        width: 800,
+        height: 685,
+      },
+    ],
+  },
+  "teacher/cs-bulk-exam-upload": {
+    "순서대로 따라 하기": [
+      {
+        type: "image",
+        src: `${BULK_EXAM}/01-bulk-add-button.webp`,
+        alt: "새 시험 추가 화면. 시험 문제 대량 추가 버튼에 빨간 상자와 화살표가 있다",
+        caption: "[시험 문제 대량 추가]를 누릅니다.",
+        width: 1060,
+        height: 698,
+      },
+      {
+        type: "image",
+        src: `${BULK_EXAM}/02-template-download-upload.webp`,
+        alt: "시험 문제 대량 추가 창. 템플릿 다운로드 메뉴의 워드 템플릿 다운로드와 오른쪽 템플릿 업로드 버튼에 빨간 상자가 있다",
+        caption: "[템플릿 다운로드]로 템플릿을 받고, 문제를 적은 뒤 [템플릿 업로드]를 누릅니다.",
+        width: 1078,
+        height: 272,
+      },
+      {
+        type: "image",
+        src: `${BULK_EXAM}/03-recognition-confirm.webp`,
+        alt: "시험 문제 편집 단계. 오른쪽에 문제 번호 동그라미와 인식 성공·실패 표시가 있고, 아래쪽 내 문제 은행에도 저장하기와 확인 버튼에 빨간 상자가 있다",
+        caption: "인식 실패한 문제를 고치고, 필요하면 [내 문제 은행]에도 저장하기를 체크한 뒤 [확인]을 누릅니다.",
+        width: 1078,
+        height: 717,
+      },
+      {
+        type: "image",
+        src: `${BULK_EXAM}/04-publish-exam.webp`,
+        alt: "문제가 들어간 새 시험 추가 화면. 오른쪽에 시간, 점수, 게시 설정이 있고 오른쪽 아래 게시 버튼에 빨간 상자가 있다",
+        caption: "점수와 게시 설정을 확인하고 [게시]를 누릅니다.",
+        width: 1060,
+        height: 700,
       },
     ],
   },
