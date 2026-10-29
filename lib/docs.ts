@@ -2,6 +2,8 @@ import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 import { buildCsFigmaMediaForGuide } from "@/lib/cs-figma-assets"
 import { CS_FIGMA_GUIDES, sanitizeGuideStep, type CsFigmaGuide } from "@/lib/cs-figma-guides"
 import { getCsFigmaEnrichment } from "@/lib/cs-figma-enrichments"
+import { applyGuideMedia } from "@/lib/docs-guide-media"
+import { TROUBLESHOOTING_DOCS } from "@/lib/docs-troubleshooting"
 
 export const DOC_CATEGORY_IDS = [
   "quick-start",
@@ -353,7 +355,7 @@ export function buildCsFigmaDocArticle(
 
 const csFigmaDocs: DocArticle[] = CS_FIGMA_GUIDES.map((guide) => buildCsFigmaDocArticle(guide))
 
-const docs: DocArticle[] = [
+const baseDocs: DocArticle[] = [
   ...csFigmaDocs,
   {
     slug: "academy-system-os-positioning",
@@ -6772,6 +6774,9 @@ const docs: DocArticle[] = [
     difficulty: "beginner",
   },
 ]
+
+// 문제 해결 문서는 lib/docs-troubleshooting.ts, 섹션별 화면 사진은 lib/docs-guide-media.ts 에 따로 둔다.
+const docs: DocArticle[] = applyGuideMedia([...baseDocs, ...TROUBLESHOOTING_DOCS])
 
 function sortDocsByCategoryThenDate(a: DocArticle, b: DocArticle) {
   const categoryOrderA = docsCategories.find((category) => category.id === a.category)?.order ?? 99
