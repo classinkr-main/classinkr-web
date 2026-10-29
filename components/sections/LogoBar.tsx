@@ -1,5 +1,3 @@
-"use client"
-
 const academies = [
     "부천 정율사관",
     "부산 과사람",

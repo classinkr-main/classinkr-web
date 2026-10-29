@@ -1,9 +1,9 @@
-"use client"
-
-import * as React from "react"
+// 서버 컴포넌트 (파일명은 2.29x 릴리스 라인과의 충돌 회피를 위해 유지)
+// 클라이언트 조각은 FadeUp/Reveal/TrackedLink 경계로만 존재한다.
 import Link from "next/link"
 import Image from "next/image"
-import { motion, useInView } from "framer-motion"
+import { FadeUp } from "@/components/about/FadeUp"
+import { Reveal } from "@/components/motion/Reveal"
 import { TrackedLink } from "@/components/TrackedLink"
 import {
   ArrowRight,
@@ -173,30 +173,6 @@ const PRODUCT_LOGOS = [
 
 /* ─── 애니메이션 헬퍼 ────────────────────────────────────────── */
 
-function FadeUp({
-  children,
-  delay = 0,
-  className,
-}: {
-  children: React.ReactNode
-  delay?: number
-  className?: string
-}) {
-  const ref = React.useRef<HTMLDivElement>(null)
-  const inView = useInView(ref, { once: true, margin: "-60px" })
-  return (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, y: 24 }}
-      animate={inView ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  )
-}
-
 /* ─── 페이지 ─────────────────────────────────────────────────── */
 
 export default function AboutPageClient({ offices, press, recentPosts }: Props) {
@@ -228,7 +204,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
 
         <div className="relative max-w-[940px] mx-auto text-center">
           <FadeUp>
-            <motion.span
+            <Reveal as="span"
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
@@ -240,7 +216,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
             >
               <Sparkles className="w-3 h-3" strokeWidth={2.5} />
               글로벌 EdTech 유니콘 · 160개국
-            </motion.span>
+            </Reveal>
           </FadeUp>
 
           <FadeUp delay={0.08}>

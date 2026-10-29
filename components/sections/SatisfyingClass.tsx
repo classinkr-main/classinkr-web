@@ -1,6 +1,4 @@
-"use client"
-
-import { motion } from "framer-motion"
+import { Reveal } from "@/components/motion/Reveal"
 
 const cardShadow = "0 24px 60px rgba(17,17,16,0.08), 0 8px 20px rgba(17,17,16,0.05)"
 
@@ -11,7 +9,7 @@ export function SatisfyingClass() {
                 <div className="flex flex-col lg:flex-row items-center justify-between gap-16">
                     {/* Left text area */}
                     <div className="w-full lg:w-2/5 z-10">
-                        <motion.h2
+                        <Reveal as="h2"
                             initial={{ opacity: 0, x: -20 }}
                             whileInView={{ opacity: 1, x: 0 }}
                             viewport={{ once: true }}
@@ -20,9 +18,9 @@ export function SatisfyingClass() {
                         >
                             더 수월하게, <br />
                             더 만족감 있는 수업
-                        </motion.h2>
+                        </Reveal>
 
-                        <motion.p
+                        <Reveal as="p"
                             initial={{ opacity: 0, x: -20 }}
                             whileInView={{ opacity: 1, x: 0 }}
                             viewport={{ once: true }}
@@ -30,9 +28,9 @@ export function SatisfyingClass() {
                             className="text-lg text-[#615D59] font-medium leading-relaxed mb-6 break-keep"
                         >
                             Classin은 수업 자료와 판서, 녹화와 복습을 수업 흐름에 맞춰 활용하도록 돕습니다. 기능과 사용 조건은 계정과 설정에 따라 확인해 주세요.
-                        </motion.p>
+                        </Reveal>
 
-                        <motion.div
+                        <Reveal
                             initial={{ opacity: 0, x: -20 }}
                             whileInView={{ opacity: 1, x: 0 }}
                             viewport={{ once: true }}
@@ -41,7 +39,7 @@ export function SatisfyingClass() {
                         >
                             <span className="font-extrabold text-[#111110] break-keep">핵심 목표:</span>
                             <span className="text-[#615D59] font-semibold break-keep">반복 업무를 살펴보고 수업과 학생에게 더 집중할 수 있도록 돕습니다.</span>
-                        </motion.div>
+                        </Reveal>
                         <p className="mt-5 text-sm text-[#615D59]">오른쪽 이미지는 이해를 돕기 위한 예시로, 실제 제공 화면과 다를 수 있습니다.</p>
                     </div>
 
@@ -51,7 +49,7 @@ export function SatisfyingClass() {
                             <div className="absolute left-[10%] top-[7%] h-44 w-44 rounded-full bg-[#D9F4E7] opacity-70 blur-[76px]" />
                             <div className="absolute right-[6%] bottom-[10%] h-48 w-48 rounded-full bg-[#EDE7DC] opacity-70 blur-[90px]" />
 
-                            <motion.div
+                            <Reveal
                                 initial={{ opacity: 0, scale: 0.94, x: 58, y: -28, rotate: 10 }}
                                 whileInView={{ opacity: 1, scale: 1, x: 0, y: 0, rotate: 5 }}
                                 viewport={{ once: true }}
@@ -92,9 +90,9 @@ export function SatisfyingClass() {
                                         </div>
                                     </div>
                                 </div>
-                            </motion.div>
+                            </Reveal>
 
-                            <motion.div
+                            <Reveal
                                 initial={{ opacity: 0, scale: 0.95, x: -64, y: -24, rotate: -16 }}
                                 whileInView={{ opacity: 1, scale: 1, x: 0, y: 0, rotate: -10 }}
                                 viewport={{ once: true }}
@@ -116,9 +114,9 @@ export function SatisfyingClass() {
                                     <span>서술</span>
                                     <span>복습</span>
                                 </div>
-                            </motion.div>
+                            </Reveal>
 
-                            <motion.div
+                            <Reveal
                                 initial={{ opacity: 0, scale: 0.94, x: -34, y: 52, rotate: -2 }}
                                 whileInView={{ opacity: 1, scale: 1, x: 0, y: 0, rotate: 4 }}
                                 viewport={{ once: true }}
@@ -140,9 +138,9 @@ export function SatisfyingClass() {
                                     <div className="h-2 w-[82%] rounded-full bg-white/80" />
                                     <div className="h-2 w-[60%] rounded-full bg-white/80" />
                                 </div>
-                            </motion.div>
+                            </Reveal>
 
-                            <motion.div
+                            <Reveal
                                 initial={{ opacity: 0, scale: 0.94, x: 56, y: 30, rotate: 14 }}
                                 whileInView={{ opacity: 1, scale: 1, x: 0, y: 0, rotate: 8 }}
                                 viewport={{ once: true }}
@@ -162,9 +160,9 @@ export function SatisfyingClass() {
                                     <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-[#615D59]">복습 링크</span>
                                     <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-[#615D59]">결석생 공유</span>
                                 </div>
-                            </motion.div>
+                            </Reveal>
 
-                            <motion.div
+                            <Reveal
                                 initial={{ opacity: 0, scale: 0.96, x: 28, y: 86, rotate: 3 }}
                                 whileInView={{ opacity: 1, scale: 1, x: 0, y: 0, rotate: -2 }}
                                 viewport={{ once: true }}
@@ -197,7 +195,7 @@ export function SatisfyingClass() {
                                         </div>
                                     </div>
                                 </div>
-                            </motion.div>
+                            </Reveal>
                         </div>
                     </div>
                 </div>

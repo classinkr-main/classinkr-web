@@ -1,7 +1,6 @@
-"use client"
-
-import { motion } from "framer-motion"
 import { GraduationCap, Users, Building2, Globe2 } from "lucide-react"
+
+import { Reveal } from "@/components/motion/Reveal"
 
 const SCALE = [
   { value: "3,000만+", label: "월간 수업", icon: GraduationCap },
@@ -14,7 +13,7 @@ export function GlobalScale() {
   return (
     <section className="border-y border-[rgba(0,0,0,0.06)] bg-[#ECFDF5] py-20 md:py-28">
       <div className="container mx-auto px-4">
-        <motion.div
+        <Reveal
           initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: "-80px" }}
@@ -30,13 +29,13 @@ export function GlobalScale() {
           <p className="mt-4 text-base leading-7 text-[#4A6B5C]">
             클래스인은 글로벌 에듀테크 유니콘 EEO(Empower Education Online)가 만든 교육 플랫폼입니다.
           </p>
-        </motion.div>
+        </Reveal>
 
         <div className="mx-auto grid max-w-4xl grid-cols-2 gap-px overflow-hidden rounded-[20px] border border-[rgba(8,71,52,0.10)] bg-[rgba(8,71,52,0.10)] lg:grid-cols-4">
           {SCALE.map((s, i) => {
             const Icon = s.icon
             return (
-              <motion.div
+              <Reveal
                 key={s.label}
                 initial={{ opacity: 0, y: 16 }}
                 whileInView={{ opacity: 1, y: 0 }}
@@ -51,7 +50,7 @@ export function GlobalScale() {
                   {s.value}
                 </div>
                 <div className="mt-2.5 text-[13px] font-medium text-[#615D59]">{s.label}</div>
-              </motion.div>
+              </Reveal>
             )
           })}
         </div>
