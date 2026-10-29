@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react"
 import { BookOpen, Check, Copy, Search } from "lucide-react"
 
-import { CURATED_CS_FIGMA_GUIDES, type CsFigmaGuide } from "@/lib/cs-figma-guides"
+import { CURATED_CS_FIGMA_GUIDES } from "@/lib/cs-figma-curated-guides"
+import type { CsFigmaGuide } from "@/lib/cs-figma-guides"
 
 interface FigmaKnowledgeSupporterProps {
   contextText?: string

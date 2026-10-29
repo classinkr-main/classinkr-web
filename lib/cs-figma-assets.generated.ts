@@ -99,6 +99,5 @@ export const CS_FIGMA_ASSET_PATHS = [
   "/docs/files/cs-figma/image-74.png",
   "/docs/files/cs-figma/image-75.png",
   "/docs/files/cs-figma/image-76.png",
-  "/docs/files/cs-figma/pc-데이터-로그-보고.png",
   "/docs/files/cs-figma/pdf-다운로드.png"
 ] satisfies string[]
