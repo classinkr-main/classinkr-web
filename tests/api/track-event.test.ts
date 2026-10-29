@@ -300,6 +300,11 @@ describe("track event route", () => {
 })
 
 describe("track event route — 서버측 동의 게이트", () => {
+  it("허용된 키에도 객체·배열이 들어오면 제거하고 유효 이벤트는 처리한다", async () => {
+    const response = await POST(trackRequest({ event: "page_view", params: { path: { toString: null, valueOf: null }, title: ["unexpected"] } }))
+    expect(response.status).toBe(200)
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ params: {} }))
+  })
   it("현재 탭의 관찰 능력이 확인되지 않으면 허용 쿠키가 있어도 적재하지 않는다", async () => {
     const response = await POST(trackRequest({ event: "page_view", page: "/" }, CONSENT_COOKIE_HEADER, false))
     expect(await response.json()).toMatchObject({ stored: false, reason: "no_consent" })

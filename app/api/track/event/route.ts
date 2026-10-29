@@ -244,12 +244,12 @@ function sanitizeParams(eventName: string, params: Record<string, unknown>) {
 
   return Object.fromEntries(
     Object.entries(params)
-      .filter(([key]) => allowedKeys.has(key))
+      .filter(([key, value]) => allowedKeys.has(key) && (value === null || ["string", "number", "boolean"].includes(typeof value)))
       .map(([key, value]) => {
         if (typeof value === "string") return [key, redactPii(value).slice(0, 500)]
         if (typeof value === "number" && Number.isFinite(value)) return [key, value]
         if (typeof value === "boolean" || value == null) return [key, value]
-        return [key, redactPii(String(value)).slice(0, 500)]
+        return [key, null]
       })
   )
 }

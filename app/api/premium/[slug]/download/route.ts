@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 
 import { ANONYMOUS_ID_COOKIE } from "@/lib/consent/consent"
+import { getMarketingRequestMeta } from "@/lib/marketing/server-conversions"
 import { recordPremiumAccessEvent } from "@/lib/premium/access-log"
 import { authorizePremiumContentAccess } from "@/lib/premium/authorize"
 import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   const page = `/premium/${encodeURIComponent(slug)}`
   const referrer = req.headers.get("referer") ?? null
   const userAgent = req.headers.get("user-agent") ?? null
-  const anonymousId = req.cookies.get(ANONYMOUS_ID_COOKIE)?.value ?? null
+  const anonymousId = getMarketingRequestMeta(req).consent.analytics ? req.cookies.get(ANONYMOUS_ID_COOKIE)?.value ?? null : null
 
   const access = await authorizePremiumContentAccess(slug, {
     anonymous_id: anonymousId,

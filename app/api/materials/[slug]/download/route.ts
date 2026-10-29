@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getPublicUserContext } from "@/lib/auth/public-user"
 import { ANONYMOUS_ID_COOKIE } from "@/lib/consent/consent"
 import { resolveLeadIdForAnonymousId } from "@/lib/identity/stitch"
+import { getMarketingRequestMeta } from "@/lib/marketing/server-conversions"
 import { prepareMaterialDownload } from "@/lib/materials"
 import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import { isCrossOriginRequest } from "@/lib/server/same-origin"
@@ -32,6 +33,7 @@ async function parseBody(req: NextRequest): Promise<DownloadBody> {
 }
 
 function readAnonymousId(req: NextRequest, body: DownloadBody) {
+  if (!getMarketingRequestMeta(req).consent.analytics) return null
   return req.cookies.get(ANONYMOUS_ID_COOKIE)?.value ?? body.anonymousId ?? null
 }
 
@@ -152,7 +154,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
     )
   }
 
-  const anonymousId = req.cookies.get(ANONYMOUS_ID_COOKIE)?.value ?? null
+  const anonymousId = readAnonymousId(req, {})
   const result = await prepareMaterialDownload({
     slug,
     email: userContext?.user.email ?? null,

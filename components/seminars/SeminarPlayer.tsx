@@ -4,6 +4,7 @@ import { useCallback, useState } from "react"
 import { Play } from "lucide-react"
 
 import { trackEvent } from "@/lib/analytics"
+import { consentObservationHeaders } from "@/lib/consent/observation-client"
 
 interface SeminarPlayerProps {
   slug: string
@@ -21,7 +22,7 @@ export function SeminarPlayer({ slug, youtubeId, title, isPlaceholder }: Seminar
     trackEvent("view_demo_video", { source: "seminar", seminar: slug })
     fetch(`/api/seminars/${encodeURIComponent(slug)}/view`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...consentObservationHeaders() },
       keepalive: true,
     }).catch(() => {})
   }, [slug])
