@@ -314,7 +314,8 @@ describe("CS Figma guide source", () => {
       urlPath: "/docs/admin/cs-figma-digest-1195",
     })
     expect(result.answer).toContain("1. 화면 좌측 상단의 코스 이름을 클릭해 주세요")
-    expect(result.answer).toContain("3단계 주의사항과 안내 화면")
+    expect(result.answer).toContain("코스 가입 허용")
+    expect(result.answer).not.toContain("원본 캡처")
     expect(result.sources[0]?.title).toBe("코스 내 초대 활성화(QR, Link 등)")
   })
 
@@ -369,14 +370,15 @@ describe("CS Figma guide source", () => {
         expect(step, guide.slug).toBeTruthy()
       }
 
-      const expectedNumberedSteps = enrichment?.stages.length ?? guide.steps.length
-      for (let index = 0; index < expectedNumberedSteps; index += 1) {
-        expect(answer, guide.slug).toContain(`${index + 1}. `)
-      }
+      const numberedSteps = [...answer.matchAll(/(?:^|\n)(\d+)\.\s/g)].map((match) => Number(match[1]))
+      expect(numberedSteps, guide.slug).toEqual(numberedSteps.map((_, index) => index + 1))
+      if (enrichment) expect(numberedSteps, guide.slug).toHaveLength(enrichment.stages.length)
+      else expect(numberedSteps.length, guide.slug).toBeLessThanOrEqual(guide.steps.length)
 
       expect(answer, guide.slug).not.toMatch(/https?:\/\//i)
       expect(answer, guide.slug).not.toMatch(/\[[^\]]+\]\(https?:\/\/[^)]+\)/i)
       expect(answer, guide.slug).not.toContain("원본 캡처:")
+      expect(answer, guide.slug).not.toMatch(/원본\s*(?:이미지|캡처|화면|파일)|회색\s*(?:빈\s*)?(?:플레이스홀더|박스|영역)|플레이스홀더|export(?:되지|에서|\s*상태)|스크린샷\s*(?:자리|영역|상태)|스텝\s*\d+\s*스크린샷|\d+\s*단계\s*스크린샷|프로필\s*\(\s*블러|실제\s*화면\s*캡처|캡션만|이미지\s*(?:없음|누락)|source\s*digest|cs\s*주의사항/i)
       for (const sourceImageFile of guide.sourceImageFiles) {
         expect(answer, guide.slug).not.toContain(sourceImageFile)
       }

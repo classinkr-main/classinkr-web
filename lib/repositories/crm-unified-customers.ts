@@ -14,6 +14,7 @@ import {
 } from "@/lib/crm/priority"
 import { classifyLeadOrigin } from "@/lib/crm/capture/origin"
 import { hasAdClickId, isTestLead } from "@/lib/crm/lead-attribution"
+import { getDefaultCustomerPlacement } from "@/lib/crm/customer-placement"
 import { buildCompassDemoIndex, hydrateCompassDemoSource } from "@/lib/crm/compass-demo-signal"
 import { deriveLeadRegionLabel } from "@/lib/crm/lead-message"
 import { deriveCustomerRegion, REGION_UNSPECIFIED } from "@/lib/crm/region-label"
@@ -781,6 +782,9 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
         engagement: engagements?.[lead.id] ?? null,
         demoIndex,
       })
+      const firstResponseAt = firstResponseMap.get(lead.id) ?? null
+      // 연락 기록이 있지만 원천 상태가 아직 new인 경우 응대 대기 신호를 해제한다.
+      const responseCompleted = priority?.action === "respond_lead" && Boolean(firstResponseAt)
       const adClickId = hasAdClickId(lead)
       const key = `lead:${lead.id}`
       rememberPhone(key, lead.phone)
@@ -798,11 +802,11 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
         statusLabel: leadStatusLabel(lead),
         // 기록 위치 판정 입력(UnifiedCompassLink) — statusLabel 문자열로 상태를 되짚지 않게 원값을 싣는다.
         leadStatus: lead.status,
-        nextActionLabel: priority?.actionLabel ?? defaultLeadAction(lead),
-        priorityReason: priority?.reason ?? "리드 상태 확인",
-        score: priority?.score ?? (lead.status === "new" ? 40 : 20),
+        nextActionLabel: responseCompleted ? "후속 확인" : priority?.actionLabel ?? defaultLeadAction(lead),
+        priorityReason: responseCompleted ? "첫 응답 완료 · 다음 단계 확인" : priority?.reason ?? "리드 상태 확인",
+        score: responseCompleted ? Math.min(priority?.score ?? 36, 36) : priority?.score ?? (lead.status === "new" ? 40 : 20),
         // 엔진 버킷 그대로 — 게이트 탈락(전환·종료·테스트·미확인 저의도) 리드는 null.
-        bucket: priority?.bucket ?? null,
+        bucket: responseCompleted ? "watch" : priority?.bucket ?? null,
         moneyLabel: null,
         moneyState: "none",
         href: `/admin/crm/customers/leads?lead=${encodeURIComponent(lead.id)}`,
@@ -817,7 +821,7 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
           lead.status === "new" &&
           SLA_TARGET_LEAD_SOURCES.has(lead.source) &&
           !isTestLead(lead),
-        firstResponseAt: firstResponseMap.get(lead.id) ?? null,
+        firstResponseAt,
         createdAt: lead.timestamp, // timestamp는 leads.created_at 매핑 (lib/repositories/leads.ts 참고)
         ...contactFields(homeContactFact("lead", lead.id)),
         activeDealCount: 0,
@@ -1304,7 +1308,16 @@ async function computeUnifiedList(options: CrmUnifiedCustomersOptions): Promise<
     }
   })).map((item, index) => [item.id, index]))
 
+  // 엔진의 골든타임 계정 → 확인된 SLA 미응답 → 나머지 순서로 범주를 나누고,
+  // 같은 범주 내 기존 점수순을 유지한다. 숫자 키를 쓰면 정렬 비교가 순환하지 않는다.
+  const placementTier = (row: CrmUnifiedCustomerRow) => {
+    if (row.source !== "lead" && row.bucket === "today" && row.score >= 85 && row.expireAt !== null && new Date(row.expireAt).getTime() < nowMs) return 0
+    if (row.bucket === "today" && getDefaultCustomerPlacement(row, nowMs).band === "response_overdue") return 1
+    return 2
+  }
   const recommended = [...filtered].sort((a, b) => {
+    const tierDifference = placementTier(a) - placementTier(b)
+    if (tierDifference !== 0) return tierDifference
     const aIndex = sortedKeys.get(a.key) ?? Number.MAX_SAFE_INTEGER
     const bIndex = sortedKeys.get(b.key) ?? Number.MAX_SAFE_INTEGER
     return aIndex - bIndex

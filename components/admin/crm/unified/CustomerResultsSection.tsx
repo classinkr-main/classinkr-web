@@ -343,7 +343,7 @@ export default function CustomerResultsSection({
             ))
           : null}
         {rows.map((row) => (
-          <div key={row.key} className="relative transition-colors hover:bg-[#fafaf8]">
+          <div key={row.key} className={`relative transition-colors ${selectedKey === row.key ? "bg-[#ECFDF5]" : "hover:bg-[#fafaf8]"}`}>
             {selectable ? (
               // 카드 전체가 상세 열기 버튼이라 체크박스는 그 위(z-20)에 따로 둔다.
               <label className="absolute right-3 top-3 z-20 inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center">

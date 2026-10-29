@@ -28,8 +28,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "질문이 잠시 많이 들어왔습니다. 잠깐 후 다시 시도해 주세요." }, { status: 429 })
   }
 
+  let body: unknown
   try {
-    const body: unknown = await req.json()
+    body = await req.json()
     if (!body || typeof body !== "object" || Array.isArray(body)) {
       throw new ChatbotInputError("요청 형식이 올바르지 않습니다.")
     }
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest) {
     const timeoutPromise = new Promise<ChatbotRouteResult>((resolve) => {
       timeoutId = setTimeout(() => {
         console.warn("[POST /api/chatbot/query] timed out; returning deterministic fallback.")
-        resolve(buildChatbotRouteFallback())
+        resolve(buildChatbotRouteFallback(body))
       }, getChatbotRouteTimeoutMs())
     })
     const result = await Promise.race<ChatbotRouteResult>([
@@ -62,6 +63,6 @@ export async function POST(req: NextRequest) {
     }
 
     console.error("[POST /api/chatbot/query] error:", error)
-    return NextResponse.json(buildChatbotRouteFallback())
+    return NextResponse.json(buildChatbotRouteFallback(body))
   }
 }
