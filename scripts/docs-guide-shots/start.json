@@ -1,1 +1,196 @@
-{ "shots": [] }
+{
+  "shots": [
+    {
+      "out": "/docs/files/guides/pc-install/01-download-page.webp",
+      "source": "public/docs/files/classin-signup-pc.pdf#1",
+      "crop": {
+        "x": 0.095,
+        "y": 0.432,
+        "w": 0.392,
+        "h": 0.358
+      },
+      "maxWidth": 1000
+    },
+    {
+      "out": "/docs/files/guides/pc-install/02-browser-downloads.webp",
+      "source": "public/docs/files/cs-figma/image-63.png",
+      "crop": {
+        "x": 0.55,
+        "y": 0.0,
+        "w": 0.45,
+        "h": 0.29
+      },
+      "maxWidth": 1000
+    },
+    {
+      "out": "/docs/files/guides/pc-install/03-installer-install.webp",
+      "source": "public/docs/files/cs-figma/image-65.png",
+      "crop": {
+        "x": 0.2535,
+        "y": 0.262,
+        "w": 0.481,
+        "h": 0.512
+      },
+      "maxWidth": 1000
+    },
+    {
+      "out": "/docs/files/guides/pc-install/04-installer-start.webp",
+      "source": "public/docs/files/cs-figma/image-67.png",
+      "crop": {
+        "x": 0.2525,
+        "y": 0.258,
+        "w": 0.482,
+        "h": 0.514
+      },
+      "maxWidth": 1000
+    },
+    {
+      "out": "/docs/files/guides/pc-install/05-login-window.webp",
+      "source": "public/docs/files/cs-figma/image-68.png",
+      "crop": {
+        "x": 0.672,
+        "y": 0.04,
+        "w": 0.328,
+        "h": 0.94
+      },
+      "maxWidth": 600
+    },
+    {
+      "out": "/docs/files/guides/mobile-install/01-play-store.webp",
+      "source": "public/docs/files/classin-signup-mobile.pdf#1",
+      "crop": {
+        "x": 0.215,
+        "y": 0.413,
+        "w": 0.578,
+        "h": 0.2
+      },
+      "masks": [
+        {
+          "x": 0.24,
+          "y": 0.0,
+          "w": 0.13,
+          "h": 0.13,
+          "style": "blur",
+          "reason": "스토어 포인트·알림 수"
+        },
+        {
+          "x": 0.82,
+          "y": 0.0,
+          "w": 0.13,
+          "h": 0.13,
+          "style": "blur",
+          "reason": "스토어 포인트·알림 수"
+        }
+      ],
+      "maxWidth": 1000
+    },
+    {
+      "out": "/docs/files/guides/mobile-install/02-app-store.webp",
+      "source": "public/docs/files/cs-figma/모바일-기기-업데이트.png",
+      "crop": {
+        "x": 0.708,
+        "y": 0.531,
+        "w": 0.15,
+        "h": 0.285
+      },
+      "maxWidth": 520
+    },
+    {
+      "out": "/docs/files/guides/signup/01-mobile-login.webp",
+      "source": "public/docs/files/classin-signup-mobile.pdf#2",
+      "crop": {
+        "x": 0.143,
+        "y": 0.25,
+        "w": 0.23,
+        "h": 0.43
+      },
+      "maxWidth": 560
+    },
+    {
+      "out": "/docs/files/guides/signup/02-pc-login.webp",
+      "source": "public/docs/files/classin-signup-pc.pdf#2",
+      "crop": {
+        "x": 0.616,
+        "y": 0.175,
+        "w": 0.184,
+        "h": 0.355
+      },
+      "maxWidth": 560
+    },
+    {
+      "out": "/docs/files/guides/signup/03-mobile-email-phone.webp",
+      "source": "public/docs/files/classin-signup-mobile.pdf#2",
+      "crop": {
+        "x": 0.385,
+        "y": 0.25,
+        "w": 0.475,
+        "h": 0.43
+      },
+      "maxWidth": 1000
+    },
+    {
+      "out": "/docs/files/guides/signup/04-pc-phone-number.webp",
+      "source": "public/docs/files/classin-signup-pc.pdf#3",
+      "crop": {
+        "x": 0.472,
+        "y": 0.14,
+        "w": 0.276,
+        "h": 0.45
+      },
+      "maxWidth": 600
+    },
+    {
+      "out": "/docs/files/guides/password-change-pc/01-country-code.webp",
+      "source": "public/docs/files/cs-figma/image-68.png",
+      "crop": {
+        "x": 0.69,
+        "y": 0.2,
+        "w": 0.295,
+        "h": 0.17
+      },
+      "maxWidth": 700
+    },
+    {
+      "out": "/docs/files/guides/password-change-mobile/01-forgot-password-link.webp",
+      "source": "public/docs/files/classin-signup-mobile.pdf#2",
+      "crop": {
+        "x": 0.143,
+        "y": 0.335,
+        "w": 0.23,
+        "h": 0.22
+      },
+      "maxWidth": 640,
+      "masks": [
+        {
+          "x": 0.655,
+          "y": 0.0,
+          "w": 0.06,
+          "h": 0.024,
+          "style": "fill",
+          "color": "#FFFFFF",
+          "reason": "원본 화살표 끝"
+        },
+        {
+          "x": 0.655,
+          "y": 0.0085,
+          "w": 0.06,
+          "h": 0.0025,
+          "style": "fill",
+          "color": "#2B2B2B",
+          "reason": "입력칸 테두리 복원"
+        }
+      ]
+    },
+    {
+      "out": "/docs/files/guides/cs-classin-account-delete/01-settings-account-security.webp",
+      "source": "public/docs/files/cs-figma/클래스인-캐시-삭제-업데이트-mobile.png",
+      "crop": {
+        "x": 0.362,
+        "y": 0.604,
+        "w": 0.246,
+        "h": 0.096
+      },
+      "maxWidth": 520
+    }
+  ]
+}

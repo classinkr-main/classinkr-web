@@ -544,10 +544,11 @@ export const CURATED_CS_FIGMA_GUIDES: CsFigmaGuide[] = [
     steps: [
       "PC에서는 클래스인 공식 홈페이지의 다운로드 페이지를 엽니다.",
       "Windows는 Windows용 [다운로드]를 눌러 설치 파일을 받은 뒤 실행합니다. 받은 파일은 브라우저 오른쪽 위 다운로드 목록에서 열 수 있습니다.",
+      "Windows 설치 창이 열리면 약관 동의 항목에 체크돼 있는지 보고 [설치하기]를 누릅니다. 설치가 끝나면 [시작하기]를 눌러 실행합니다.",
       "Mac은 칩에 맞는 설치 파일을 받습니다. 인텔 칩이면 인텔 프로세서 버전, M1·M2·M3 같은 Apple 칩이면 Apple Silicon 버전입니다. 칩 종류는 화면 왼쪽 위 사과 메뉴에서 확인합니다.",
       "Mac에서 설치 창이 열리면 [Classin]을 [Applications] 폴더로 끌어다 놓아야 설치됩니다.",
-      "Android 휴대폰과 태블릿은 Play 스토어에서 ClassIn을 검색해 [설치]를 누릅니다.",
-      "iPhone과 iPad는 App Store에서 ClassIn을 검색해 설치합니다.",
+      "Android 휴대폰과 태블릿은 Play 스토어에서 ClassIn을 검색하고, 개발사가 EEO Education Ltd.인지 확인한 뒤 [설치]를 누릅니다.",
+      "iPhone과 iPad는 App Store에서 ClassIn을 검색하고, 개발사가 EEO Education Ltd.인지 확인한 뒤 [받기]를 누릅니다.",
       "설치가 끝나면 앱을 열고 로그인합니다. 계정이 없으면 [회원 가입]부터 합니다.",
     ],
     deepDive: [
@@ -571,7 +572,7 @@ export const CURATED_CS_FIGMA_GUIDES: CsFigmaGuide[] = [
     ],
     sourceImageFiles: [],
     sourceDigestLineHint: "docs/active/cs-figma-board-update-2026-08-05.md",
-    updatedAt: "2026-09-24",
+    updatedAt: "2026-10-29",
   },
   {
     slug: "classin-account-signup",
@@ -607,7 +608,7 @@ export const CURATED_CS_FIGMA_GUIDES: CsFigmaGuide[] = [
     steps: [
       "클래스인 앱을 열고 첫 화면에서 [회원 가입]을 누릅니다. 휴대폰 앱은 오른쪽 위에 있습니다.",
       "가입에 쓸 방식을 고릅니다. 휴대폰 앱은 이메일 입력 화면이 먼저 열리고, 휴대폰 번호로 가입하려면 아래 [전화 번호로 등록하기]를 누릅니다. 이메일로 돌아가려면 [이메일로 등록하기]를 누릅니다.",
-      "이메일 주소나 휴대폰 번호를 입력합니다. 휴대폰 번호는 국가 번호를 +82로 고르고, 010의 맨 앞 0을 빼고 10부터 입력합니다.",
+      "이메일 주소나 휴대폰 번호를 입력합니다. 휴대폰 번호는 국가 번호를 +82로 고르고, 010의 맨 앞 0을 빼고 10부터 입력합니다. 휴대폰 번호 화면은 국가 번호가 +1로 먼저 잡혀 있을 수 있으니 눌러서 바꿉니다.",
       "입력칸 아래 약관 동의에 체크하고 [인증코드 받기]를 누릅니다. 약관에 체크해야 버튼이 눌립니다.",
       "받은 인증 코드를 입력합니다. 휴대폰으로 받은 코드는 4자리입니다.",
       "비밀번호를 정해 가입을 마칩니다. 비밀번호는 6~20자로 영문과 숫자를 모두 넣어야 하고, 특수문자, 한글, 공백은 쓸 수 없습니다.",
@@ -638,7 +639,7 @@ export const CURATED_CS_FIGMA_GUIDES: CsFigmaGuide[] = [
     ],
     sourceImageFiles: [],
     sourceDigestLineHint: "docs/active/cs-figma-board-update-2026-08-05.md",
-    updatedAt: "2026-09-24",
+    updatedAt: "2026-10-29",
   },
   {
     slug: "classin-account-delete",
@@ -665,7 +666,7 @@ export const CURATED_CS_FIGMA_GUIDES: CsFigmaGuide[] = [
       "관리자 계정 탈퇴",
     ],
     steps: [
-      "휴대폰이나 태블릿의 모바일 앱에 로그인하고 왼쪽 위 프로필 이미지를 누릅니다.",
+      "휴대폰이나 태블릿의 모바일 앱에 로그인하고 왼쪽 위 프로필 이미지를 누릅니다. 설정 화면이 열립니다.",
       "[계정 및 보안]을 누릅니다.",
       "[계정 삭제]를 누르고 삭제 안내와 주의사항을 끝까지 읽습니다.",
       "삭제에 동의한다는 항목에 체크하고 [다음]을 누릅니다.",
@@ -694,7 +695,7 @@ export const CURATED_CS_FIGMA_GUIDES: CsFigmaGuide[] = [
     ],
     sourceImageFiles: [],
     sourceDigestLineHint: "docs/active/cs-figma-board-update-2026-08-05.md",
-    updatedAt: "2026-09-24",
+    updatedAt: "2026-10-29",
   },
   {
     slug: "transfer-student-registration",
@@ -738,7 +739,7 @@ export const CURATED_CS_FIGMA_GUIDES: CsFigmaGuide[] = [
       {
         level: "3단계",
         title: "아직 가입하지 않은 학생이라면",
-        body: "클래스인에 가입하지 않은 번호나 이메일로는 학생을 바로 추가할 수 없습니다. 이럴 때는 학생 대리 등록으로 계정을 먼저 만듭니다. 대리 등록 메뉴는 기관 인증을 마친 뒤에 보입니다. 대리 등록을 하면 학생이 휴대폰 번호 아이디면 문자로, 이메일 아이디면 메일로 초기 비밀번호를 받습니다. 통신사 설정이나 해외 발신 문자 차단 서비스 때문에 문자가 가지 않을 수 있으니, 학생이 받지 못했다면 스팸함을 먼저 보고 그래도 없으면 상담 채널로 문의해 주세요. 학생에게는 홈페이지가 아니라 앱에서 로그인하라고 함께 알려 주세요.",
+        body: "클래스인에 가입하지 않은 번호나 이메일로는 학생을 바로 추가할 수 없습니다. 이럴 때는 학생 대리 등록으로 계정을 먼저 만듭니다. 코스 상세의 [구성원]에서 [코스 내 학생을 설정하기] → [학생 추가]를 누르고, 아래쪽 [학생 대리 등록]을 체크한 뒤 학생의 휴대폰 번호나 이메일과 이름을 입력합니다. 대리 등록 메뉴는 기관 인증을 마친 뒤에 보입니다. 대리 등록을 하면 학생이 휴대폰 번호 아이디면 문자로, 이메일 아이디면 메일로 초기 비밀번호를 받습니다. 통신사 설정이나 해외 발신 문자 차단 서비스 때문에 문자가 가지 않을 수 있으니, 학생이 받지 못했다면 스팸함을 먼저 보고 그래도 없으면 상담 채널로 문의해 주세요. 학생에게는 홈페이지가 아니라 앱에서 로그인하라고 함께 알려 주세요.",
         checks: [
           "대리 등록 메뉴가 안 보이면 기관 인증이 끝났는지 확인합니다.",
           "학생이 초기 비밀번호를 받았는지 확인합니다.",
@@ -747,7 +748,7 @@ export const CURATED_CS_FIGMA_GUIDES: CsFigmaGuide[] = [
     ],
     sourceImageFiles: [],
     sourceDigestLineHint: "docs/active/cs-figma-board-update-2026-08-05.md",
-    updatedAt: "2026-09-24",
+    updatedAt: "2026-10-29",
   },
   {
     slug: "course-member-management",
@@ -772,11 +773,11 @@ export const CURATED_CS_FIGMA_GUIDES: CsFigmaGuide[] = [
       "어떤 계정으로 수강",
     ],
     steps: [
-      "코스에 들어가 코스 이름이나 코스 정보 영역을 눌러 코스 설정을 엽니다.",
-      "[코스 관리] 또는 [코스 구성원 및 그룹 구성]을 선택합니다.",
-      "직접 넣을 때는 [추가]를 누르고 사용자와 역할을 확인한 뒤 저장합니다.",
-      "구성원이 직접 들어오게 하려면 코스 QR 코드나 초대 링크를 보냅니다.",
-      "뺄 때는 구성원 목록에서 그 사람의 더보기 메뉴를 열고 [멤버 삭제]를 누릅니다.",
+      "코스에 들어가 코스 설정을 엽니다. PC 앱은 왼쪽 위 코스 이름을, 모바일 앱은 코스 화면 위쪽 코스 이름 옆 [>]를 누릅니다.",
+      "[코스 구성원 및 그룹 구성]을 누릅니다. 모바일 앱에서는 [코스 멤버]입니다.",
+      "직접 넣을 때는 구성원 사진 옆 추가(+) 버튼을 누르고, 넣을 사람과 역할을 확인한 뒤 저장합니다.",
+      "구성원이 직접 들어오게 하려면 코스 설정의 [코스 QR 코드 및 링크]에서 QR 코드나 초대 링크를 보냅니다.",
+      "뺄 때는 구성원 목록에서 그 사람 오른쪽의 더보기(···)를 누르고 [멤버 삭제]를 고릅니다. 같은 메뉴에 [교사로 설정]과 [채팅 금지]도 있으니 잘 보고 누르세요.",
       "추가하거나 삭제한 뒤 구성원 수와 역할이 맞는지 확인합니다.",
     ],
     deepDive: [
@@ -804,7 +805,7 @@ export const CURATED_CS_FIGMA_GUIDES: CsFigmaGuide[] = [
     ],
     sourceImageFiles: [],
     sourceDigestLineHint: "docs/active/cs-figma-board-update-2026-08-05.md",
-    updatedAt: "2026-09-24",
+    updatedAt: "2026-10-29",
   },
   {
     slug: "course-wide-chat-control",
@@ -871,10 +872,10 @@ export const CURATED_CS_FIGMA_GUIDES: CsFigmaGuide[] = [
       "수업 목록 숨기기",
     ],
     steps: [
-      "앱 홈의 코스 목록에서 [코스 만들기]를 누릅니다.",
+      "앱 [홈] 화면 위쪽의 [코스 만들기]를 누릅니다.",
       "코스 이름과 기간 등 화면에 나오는 필수 정보를 입력하고 코스를 만듭니다.",
-      "만든 코스에 들어가 코스 이름을 누르면 코스 설정과 코스 관리 메뉴가 열립니다.",
-      "운영이 끝난 코스는 코스 설정 아래쪽의 [코스 종료]를 누릅니다.",
+      "만든 코스에 들어가 코스 설정을 엽니다. PC 앱은 왼쪽 위 코스 이름을, 모바일 앱은 코스 화면 위쪽 코스 이름 옆 [>]를 누릅니다.",
+      "운영이 끝난 코스는 코스 설정 맨 아래의 빨간 글씨 [코스 종료]를 누릅니다.",
       "종료 안내를 읽고, 종료 뒤에도 학생이 자료를 볼 수 있게 할지 같은 옵션을 정합니다.",
       "확인란에 코스 이름을 그대로 입력하거나 [자동 입력]을 누른 뒤 [확인]을 누릅니다.",
       "코스 목록에서 상태가 종료됨으로 바뀌었는지 확인합니다.",
@@ -901,7 +902,7 @@ export const CURATED_CS_FIGMA_GUIDES: CsFigmaGuide[] = [
     ],
     sourceImageFiles: [],
     sourceDigestLineHint: "docs/active/cs-figma-board-update-2026-08-05.md",
-    updatedAt: "2026-09-24",
+    updatedAt: "2026-10-29",
   },
 ]
 
