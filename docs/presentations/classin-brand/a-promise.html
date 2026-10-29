@@ -1,0 +1,752 @@
+<title>수업은 그대로</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,500..900&family=Noto+Sans+KR:wght@400;500;700;900&display=swap">
+<style>
+/* Layout: 키노트 무대. 한 장에 한 생각, 거대한 헤드라인과 사진 한 장, ■ ● ▲는 막 표시로만. */
+:root {
+  color-scheme: dark;
+  --frame: #000;
+  --bg: #000;            /* 무대 */
+  --fg: #F5F5F7;         /* 헤드라인 */
+  --mute: #8C9199;       /* 보조 문장 */
+  --line: #26282C;       /* 가는 선·칸 */
+  --accent: #2FD98E;     /* 클래스인 초록: 키커·숫자·켜짐 */
+  --red: #FF5638;        /* 바우하우스 빨강: 불편 단어에만 */
+  --paper: #F2F3F5;      /* 밝은 설명 장 */
+  --ink: #0C0D0F;
+  --ink-mute: #666B73;
+  --font-body: "Noto Sans KR", "Apple SD Gothic Neo", system-ui, sans-serif;
+  --font-latin: "Archivo", "Noto Sans KR", system-ui, sans-serif;
+}
+/* ── 덱 엔진: 1920×1080 무대를 화면에 맞춰 축소·확대 ── */
+html, body { height: 100%; }
+body {
+  margin: 0; overflow: hidden; background: var(--frame); color: var(--fg);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0;
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  word-break: keep-all;
+}
+body.fs { padding-left: 0; padding-right: 0; }
+.deck *, .deck *::before, .deck *::after { box-sizing: border-box; }
+.viewport { position: relative; width: 100%; height: 100%; overflow: hidden; cursor: default; }
+.deck { position: absolute; left: 50%; top: 50%; width: 1920px; height: 1080px; transform-origin: 50% 50%; }
+.slide {
+  position: absolute; inset: 0; overflow: hidden;
+  background: var(--s-bg, var(--bg)); color: var(--s-fg, var(--fg));
+  opacity: 0; visibility: hidden; transition: opacity .55s ease, visibility 0s linear .55s;
+}
+.slide.on { opacity: 1; visibility: visible; transition: opacity .55s ease, visibility 0s; }
+[data-step] { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s cubic-bezier(.2,.7,.2,1); }
+[data-step].shown { opacity: 1; transform: none; }
+.interactive { cursor: auto; }
+
+/* 발표자 노트 */
+.notes {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  padding: 14px max(20px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px));
+  background: rgba(10,10,12,.92); color: #EDEDED; font: 15px/1.6 var(--font-body);
+  border-top: 1px solid rgba(255,255,255,.12);
+  max-height: 42%; overflow: auto;
+}
+.notes b { color: #fff; }
+.notes .meta { font: 600 12px/1 var(--font-body); letter-spacing: .08em; color: #9a9a9a; margin-bottom: 8px; display: flex; gap: 16px; flex-wrap: wrap; }
+.hint {
+  position: fixed; right: max(20px, env(safe-area-inset-right, 0px)); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 19;
+  font: 500 12px/1 var(--font-body); color: #9a9a9a; background: rgba(0,0,0,.55); padding: 8px 12px; border-radius: 999px;
+  transition: opacity .6s ease; pointer-events: none;
+}
+.hint.gone { opacity: 0; }
+
+/* 계산기 공통 */
+.calc button {
+  font: 600 40px/1 var(--font-body); width: 76px; height: 76px; border-radius: 50%;
+  border: 2px solid currentColor; background: transparent; color: inherit; cursor: pointer;
+  display: grid; place-items: center; padding: 0; touch-action: manipulation;
+}
+.calc button:focus-visible, .notes:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.calc output { font-variant-numeric: tabular-nums; }
+.count { font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  .slide, .slide.on, [data-step] { transition: none !important; }
+  * { animation: none !important; }
+}
+
+
+/* ── 타이포 위계: 키커 → 헤드라인 → 보조 한 줄 ── */
+.k { font: 700 38px/1.2 var(--font-body); color: var(--accent); letter-spacing: -0.01em; margin: 0 0 28px; }
+.h { font: 900 148px/1.08 var(--font-body); letter-spacing: -0.05em; margin: 0; text-wrap: balance; }
+.h.xl { font-size: 200px; }
+.h.m { font-size: 112px; }
+.h.s { font-size: 88px; }
+.sub { font: 400 34px/1.55 var(--font-body); color: var(--mute); margin: 40px 0 0; max-width: 1000px; text-wrap: pretty; }
+.cap { font: 500 20px/1.5 var(--font-body); color: var(--mute); letter-spacing: 0.01em; }
+.latin { font-family: var(--font-latin); font-stretch: 112%; }
+.red { color: var(--red); }
+.green { color: var(--accent); }
+
+/* 배치 */
+.center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; justify-items: center; }
+.left { position: absolute; inset: 0; padding: 150px 160px; display: flex; flex-direction: column; justify-content: center; }
+.split { position: absolute; inset: 0; display: grid; grid-template-columns: 860px 1fr; }
+.split .txt { padding: 0 60px 0 160px; display: flex; flex-direction: column; justify-content: center; }
+.split .pic { position: relative; overflow: hidden; }
+.split .pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.split .pic::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, var(--bg) 0%, transparent 22%); }
+
+/* ■ ● ▲ */
+.sh { display: inline-block; width: 1em; height: 1em; flex: none; }
+.sh.sq { background: currentColor; }
+.sh.ci { background: currentColor; border-radius: 50%; }
+.sh.tr { background: currentColor; clip-path: polygon(50% 4%, 100% 96%, 0 96%); }
+.mark { display: flex; align-items: center; gap: 18px; font: 700 34px/1 var(--font-body); color: var(--accent); margin-bottom: 30px; }
+.mark .sh { width: 34px; height: 34px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 44px; max-width: 760px; }
+.chips span { font: 500 24px/1 var(--font-body); padding: 14px 22px; border: 1.5px solid var(--line); border-radius: 999px; color: var(--fg); }
+
+/* 1 히어로 */
+.hero .word { font: 800 380px/0.9 var(--font-latin); font-stretch: 118%; letter-spacing: -0.045em; margin: 0; }
+.hero .k { margin-bottom: 10px; font-size: 44px; }
+.hero .top { position: absolute; left: 0; right: 0; top: 250px; text-align: center; }
+.hero img { position: absolute; left: 50%; bottom: -300px; width: 1240px; transform: translateX(-38%) rotate(-7deg); filter: drop-shadow(0 40px 80px rgba(0,0,0,.8)); }
+.slide.on.hero img { animation: rise 1.4s cubic-bezier(.2,.7,.1,1) both; }
+@keyframes rise { from { transform: translateX(-38%) translateY(160px) rotate(-7deg); opacity: 0; } }
+.brand { position: absolute; left: 80px; bottom: 60px; font: 600 24px/1 var(--font-latin); color: var(--fg); letter-spacing: -0.01em; }
+
+/* 2 약속 */
+.promise { margin-top: 70px; font: 500 36px/1.5 var(--font-body); color: var(--fg); padding-top: 40px; border-top: 1.5px solid var(--line); max-width: 1200px; }
+.promise b { color: var(--accent); font-weight: 700; }
+
+/* 3 BEFORE */
+.before { position: absolute; inset: 0; display: grid; grid-template-columns: 900px 1fr; align-items: center; }
+.before .txt { padding-left: 160px; }
+.pains { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.pains li { display: flex; align-items: center; gap: 34px; font: 900 132px/1.12 var(--font-body); letter-spacing: -0.05em; }
+.pains .sh { width: 56px; height: 56px; color: var(--red); }
+.before .photos { display: grid; gap: 22px; padding-right: 120px; }
+.before .photos figure { margin: 0; position: relative; }
+.before .photos img { display: block; width: 100%; height: 380px; object-fit: cover; filter: grayscale(.35) contrast(1.05); border-radius: 6px; }
+.before .photos figcaption { position: absolute; left: 18px; bottom: 14px; font: 700 18px/1 var(--font-latin); letter-spacing: .14em; color: #fff; background: rgba(0,0,0,.55); padding: 8px 12px; }
+
+/* 4 곱셈 */
+.mult { display: flex; align-items: flex-start; gap: 46px; margin: 10px 0 46px; }
+.mult .n { display: grid; justify-items: center; gap: 14px; }
+.mult .n b { font: 800 210px/0.9 var(--font-latin); font-stretch: 110%; letter-spacing: -0.04em; }
+.mult .n span { font: 500 28px/1 var(--font-body); color: var(--mute); }
+.mult .x { font: 300 140px/1.1 var(--font-latin); color: var(--accent); }
+
+/* 5 빈칸 */
+.qline { position: absolute; left: 160px; right: 160px; bottom: 120px; display: flex; align-items: center; justify-content: space-between; border-top: 1.5px solid var(--line); padding-top: 36px; font: 500 34px/1.4 var(--font-body); color: var(--mute); }
+.qbox { width: 120px; height: 120px; display: grid; place-items: center; background: var(--red); color: #000; font: 800 88px/1 var(--font-latin); }
+
+/* 6 하나로 */
+.trio { display: flex; gap: 160px; transition: gap 1.1s cubic-bezier(.6,0,.2,1) .35s; margin-bottom: 70px; }
+.slide.on .trio { gap: 0; }
+.trio .sh { width: 150px; height: 150px; }
+.trio .sh.sq { color: var(--fg); }
+.trio .sh.ci { color: var(--accent); }
+.trio .sh.tr { color: var(--fg); }
+.trio-l { display: flex; gap: 46px; font: 500 30px/1 var(--font-body); color: var(--mute); margin-top: 34px; }
+
+/* 9 흐름 */
+.flow { position: absolute; left: 160px; right: 160px; bottom: 120px; }
+.flow .was { font: 500 22px/1 var(--font-body); color: #5a5e66; margin-bottom: 26px; display: flex; gap: 18px; align-items: center; }
+.flow .was s { text-decoration-thickness: 2px; }
+.flow ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, 1fr); position: relative; }
+.flow ol::before { content: ""; position: absolute; left: 14px; right: 14px; top: 13px; height: 2px; background: var(--line); }
+.flow li { position: relative; padding-top: 52px; font: 700 30px/1.3 var(--font-body); }
+.flow li::before { content: ""; position: absolute; left: 0; top: 0; width: 28px; height: 28px; border-radius: 50%; background: var(--bg); border: 2px solid var(--accent); }
+.flow li.end::before { background: var(--accent); }
+.flow li small { display: block; font: 400 22px/1.4 var(--font-body); color: var(--mute); margin-top: 8px; }
+.phones { position: absolute; right: 150px; top: 110px; width: 560px; border-radius: 22px; }
+
+/* 데모 장 */
+.demo .tag { font: 700 22px/1 var(--font-latin); letter-spacing: .2em; color: var(--accent); border: 1.5px solid var(--accent); padding: 12px 18px; border-radius: 999px; margin-bottom: 56px; }
+.demo .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--red); margin-right: 12px; vertical-align: 1px; animation: blink 1.4s ease-in-out infinite; }
+@keyframes blink { 50% { opacity: .2; } }
+
+/* 11 AFTER */
+.after { position: absolute; inset: 0; display: grid; grid-template-columns: 620px 1fr; gap: 60px; padding: 110px 110px 110px 160px; }
+.after .txt { display: flex; flex-direction: column; justify-content: center; }
+.same { display: grid; gap: 16px; margin-top: 54px; }
+.same span { display: flex; align-items: center; gap: 16px; font: 500 28px/1 var(--font-body); color: var(--fg); }
+.same span::before { content: "그대로"; font: 700 18px/1 var(--font-body); color: #000; background: var(--accent); padding: 8px 10px; border-radius: 4px; }
+.mosaic { display: grid; grid-template-columns: 1fr 1fr 0.72fr; grid-template-rows: 1fr 1fr; gap: 16px; }
+.mosaic figure { margin: 0; position: relative; overflow: hidden; border-radius: 6px; }
+.mosaic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mosaic .a { grid-column: 1 / 3; }
+.mosaic .d { grid-column: 3; grid-row: 1 / 3; }
+.mosaic figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 40px 20px 16px; font: 700 22px/1 var(--font-body); background: linear-gradient(transparent, rgba(0,0,0,.75)); }
+
+/* 14 하이브리드 */
+.full { position: absolute; inset: 0; }
+.full img { width: 100%; height: 100%; object-fit: cover; }
+.full::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(0,0,0,.92) 0%, rgba(0,0,0,.7) 38%, rgba(0,0,0,0) 70%); }
+.over { position: absolute; inset: 0; padding: 0 160px; display: flex; flex-direction: column; justify-content: center; }
+
+/* 15 밝은 장 */
+.light { --s-bg: var(--paper); --s-fg: var(--ink); }
+.light .sub, .light .cap { color: var(--ink-mute); }
+.light .k { color: #0C9E62; }
+.rows { position: absolute; right: 160px; top: 50%; transform: translateY(-50%); width: 760px; list-style: none; margin: 0; padding: 0; }
+.rows li { display: grid; grid-template-columns: 56px 1fr; align-items: center; padding: 30px 0; border-bottom: 1.5px solid #D9DBDF; font: 700 34px/1.3 var(--font-body); }
+.rows li:first-child { border-top: 1.5px solid #D9DBDF; }
+.rows .sh { width: 24px; height: 24px; color: var(--ink); }
+.rows small { display: block; font: 400 22px/1.4 var(--font-body); color: var(--ink-mute); margin-top: 6px; }
+.asset { position: absolute; left: 160px; bottom: 110px; font: 700 34px/1.4 var(--font-body); color: var(--ink); max-width: 820px; }
+.asset b { color: #0C9E62; }
+
+/* 16 숫자 */
+.nums { display: grid; grid-template-columns: repeat(3, auto); gap: 90px; margin: 10px 0 30px; text-align: left; }
+.nums b { display: block; white-space: nowrap; font: 800 170px/0.95 var(--font-latin); font-stretch: 110%; letter-spacing: -0.045em; }
+.nums b em { font-style: normal; color: var(--accent); }
+.nums b small { font: 800 0.5em/1 var(--font-body); margin-left: 6px; }
+.nums > div > span { font: 500 30px/1 var(--font-body); color: var(--mute); }
+.kr { position: absolute; left: 160px; right: 160px; bottom: 96px; border-top: 1.5px solid var(--line); padding-top: 30px; display: grid; grid-template-columns: 380px 1fr; gap: 40px; font: 400 24px/1.6 var(--font-body); color: var(--mute); text-align: left; }
+.kr b { color: var(--fg); font-weight: 700; }
+
+/* 17 계단 */
+.stairs { position: absolute; right: 150px; bottom: 120px; display: flex; align-items: flex-end; gap: 14px; }
+.stairs div { width: 230px; padding: 26px 24px; display: flex; flex-direction: column; justify-content: space-between; font: 700 28px/1.3 var(--font-body); color: var(--ink); background: var(--fg); }
+.stairs div i { font: 800 64px/1 var(--font-latin); font-style: normal; }
+.stairs div:nth-child(1) { height: 220px; background: var(--accent); }
+.stairs div:nth-child(2) { height: 330px; }
+.stairs div:nth-child(3) { height: 440px; }
+.stairs div:nth-child(4) { height: 550px; background: transparent; color: var(--fg); border: 2px dashed #555a62; }
+
+/* 18 스위치 */
+.sw { position: absolute; right: 160px; top: 50%; transform: translateY(-50%); width: 860px; list-style: none; margin: 0; padding: 0; }
+.sw li { display: grid; grid-template-columns: 1fr 116px; align-items: center; gap: 30px; padding: 30px 0; border-bottom: 1.5px solid var(--line); }
+.sw b { display: block; font: 700 38px/1.2 var(--font-body); }
+.sw small { display: block; font: 400 24px/1.4 var(--font-body); color: var(--mute); margin-top: 8px; }
+.tg { width: 116px; height: 64px; border-radius: 999px; background: #2A2D31; position: relative; transition: background .4s ease; }
+.tg::after { content: ""; position: absolute; left: 6px; top: 6px; width: 52px; height: 52px; border-radius: 50%; background: #8C9199; transition: transform .4s cubic-bezier(.3,.7,.2,1), background .4s; }
+.sw li.shown .tg { background: var(--accent); }
+.sw li.shown .tg::after { transform: translateX(52px); background: #fff; }
+.sw li[data-step] { opacity: 1; transform: none; }
+.sw li[data-step] b, .sw li[data-step] small { opacity: .45; transition: opacity .4s; }
+.sw li.shown b, .sw li.shown small { opacity: 1; }
+
+/* 19~20 돈 */
+.eq { display: flex; align-items: baseline; flex-wrap: wrap; gap: 18px 28px; margin-top: 60px; font: 500 40px/1.2 var(--font-body); color: var(--mute); }
+.eq b { font: 800 64px/1 var(--font-latin); color: var(--fg); font-stretch: 105%; }
+.eq .op { color: var(--accent); font: 400 50px/1 var(--font-latin); }
+.res { margin-top: 50px; display: flex; align-items: baseline; gap: 24px; }
+.res .count, .res .big { font: 800 230px/0.9 var(--font-latin); font-stretch: 108%; letter-spacing: -0.04em; color: var(--accent); }
+.res span { font: 700 64px/1 var(--font-body); }
+.set { margin-top: 60px; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; max-width: 1600px; }
+.set div { padding: 30px 34px; border: 1.5px solid var(--line); border-radius: 8px; font: 400 26px/1.6 var(--font-body); color: var(--mute); }
+.set div b { display: block; font: 700 28px/1.3 var(--font-body); color: var(--fg); margin-bottom: 10px; }
+.set div:last-child { border-color: var(--accent); }
+
+/* 21 계산기 */
+.calc { position: absolute; right: 140px; top: 120px; bottom: 120px; width: 900px; display: grid; grid-template-rows: auto 1fr; gap: 26px; color: var(--fg); }
+.fields { display: grid; gap: 4px; }
+.fields > div { display: grid; grid-template-columns: 1fr 76px 220px 76px; align-items: center; gap: 18px; padding: 12px 0; border-bottom: 1.5px solid var(--line); }
+.fields label { font: 500 27px/1.3 var(--font-body); }
+.fields output { font: 800 46px/1 var(--font-latin); text-align: center; }
+.fields em { font-style: normal; font: 500 22px/1 var(--font-body); color: var(--mute); margin-left: 6px; }
+.calc button { color: var(--fg); }
+.calc button:active { background: var(--accent); color: #000; border-color: var(--accent); }
+.outs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; align-content: end; }
+.outs div { font: 500 22px/1.4 var(--font-body); color: var(--mute); }
+.outs b { display: block; font: 800 46px/1.1 var(--font-latin); color: var(--fg); margin-top: 8px; }
+.outs .tot { grid-column: 1 / -1; border-top: 2px solid var(--accent); padding-top: 22px; display: flex; justify-content: space-between; align-items: baseline; color: var(--fg); font: 700 30px/1 var(--font-body); }
+.outs .tot b { font-size: 110px; color: var(--accent); margin: 0; letter-spacing: -0.03em; }
+
+/* 23 다음 단계 */
+.next { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; margin-top: 80px; width: 1600px; text-align: left; }
+.next div { border-top: 3px solid var(--fg); padding-top: 26px; font: 400 26px/1.55 var(--font-body); color: var(--mute); }
+.next div b { display: block; font: 700 36px/1.3 var(--font-body); color: var(--fg); margin-bottom: 10px; }
+.next div:first-child { border-color: var(--accent); }
+</style>
+
+<div class="viewport">
+<div class="deck">
+
+<!-- 1 -->
+<section class="slide hero on" data-time="0:20" data-label="여는 장">
+  <div class="top"><p class="k">수업은 그대로.</p><h1 class="word">ClassIn</h1></div>
+  <img src="assets/board-front-cut.webp" alt="Classin Board 전자칠판 정면">
+  <div class="brand">eeo classin</div>
+  <template class="note"><b>말</b> "오늘은 수업을 바꾸자는 이야기가 아닙니다. 지금 보고 계신 이 화면도 클래스인 칠판입니다."</template>
+</section>
+
+<!-- 2 -->
+<section class="slide" data-time="0:25" data-label="약속">
+  <div class="left">
+    <p class="k">원장님 수업은</p>
+    <h2 class="h xl">이미 좋습니다.</h2>
+    <p class="promise" data-step="1">오늘 가져오신 수업 하나가 <b>15분 뒤, 원장님 휴대폰에 도착</b>해 있을 겁니다.</p>
+  </div>
+  <template class="note"><b>말</b> "강사님들 수업도, 커리큘럼도 이미 좋습니다. 그동안 손이 갔던 건 수업 밖이었죠." → 클릭 → "<b>약속</b> 하나 드리겠습니다. 오늘 가져오신 수업이 15분 뒤 원장님 휴대폰에 도착해 있을 겁니다."<br><b>준비</b> 원장님 대표 수업 자료(PDF·PPT)가 드라이브에 올라가 있는지 확인.</template>
+</section>
+
+<!-- 3 -->
+<section class="slide" data-time="0:35" data-label="1 · 불편">
+  <div class="before">
+    <div class="txt">
+      <p class="k">어느 학원이나 그랬습니다.</p>
+      <ul class="pains">
+        <li><i class="sh sq"></i>가림.</li>
+        <li><i class="sh ci"></i>케이블.</li>
+        <li><i class="sh tr"></i>흩어짐.</li>
+      </ul>
+    </div>
+    <div class="photos">
+      <figure><img src="assets/before-1.jpg" alt="빔프로젝터 화면을 강사 몸이 가리는 교실"><figcaption>BEFORE</figcaption></figure>
+      <figure><img src="assets/before-2.jpg" alt="노트북과 케이블로 띄운 자료 화면"><figcaption>BEFORE</figcaption></figure>
+    </div>
+  </div>
+  <template class="note"><b>말</b> "빔 앞에 서면 화면이 가려지고, 수업마다 노트북·HDMI를 꽂고, 자료와 기록은 강사님 컴퓨터마다 흩어져 있었습니다. 원장님 탓이 아니라 그럴 수밖에 없는 구조였습니다."<br><b>질문</b> "지금 학원은 빔이세요, 전자칠판이세요?"</template>
+</section>
+
+<!-- 4 -->
+<section class="slide" data-time="0:35" data-label="1 · 곱셈">
+  <div class="left">
+    <p class="k">학원이 커질수록</p>
+    <div class="mult">
+      <div class="n"><b>20</b><span>강사</span></div><div class="x">×</div>
+      <div class="n"><b>60</b><span>반</span></div><div class="x">×</div>
+      <div class="n"><b>12</b><span>교실</span></div>
+    </div>
+    <h2 class="h m">불편도 곱해집니다.</h2>
+    <p class="sub">녹화 올리기, 보강 잡기, 자료 찾기, 온라인 학생 연결. 매주, 반마다 반복됩니다.</p>
+    <p class="cap" style="margin-top:18px">예시 규모</p>
+  </div>
+  <template class="note"><b>말</b> "학원이 작을 때는 에이스 한 분이면 됐는데, 강사·반·교실이 늘면 같은 일이 곱하기로 늘어납니다."<br><b>질문</b> "원장님 학원은 강사님이 몇 분, 반이 몇 개세요?" → <b>답을 메모해 두고 21장 계산기에 넣는다.</b></template>
+</section>
+
+<!-- 5 -->
+<section class="slide" data-time="0:30" data-label="1 · 복선">
+  <div class="left">
+    <p class="k">수업이 끝나면</p>
+    <h2 class="h xl">지워집니다.</h2>
+    <p class="sub">결석한 학생은 같은 수업을 다시 듣지 못하고, 강사님이 떠나면 자료도 함께 떠납니다.</p>
+  </div>
+  <div class="qline" data-step="1"><span>그동안 이 사이를 사람 손으로 잇는 데, 매달 드는 돈</span><span class="qbox">?</span></div>
+  <template class="note"><b>말</b> "판서를 지우면 수업도 지워집니다. 녹화를 해도 강사 PC에 남아 올리다 빠지고요." → 클릭 → "이 빈칸은 마지막에 원장님 숫자로 채워 보겠습니다." <b>(복선 — 19~21장에서 회수)</b></template>
+</section>
+
+<!-- 6 -->
+<section class="slide" data-time="0:20" data-label="2 · 하나로">
+  <div class="center">
+    <div class="trio"><i class="sh sq"></i><i class="sh ci"></i><i class="sh tr"></i></div>
+    <p class="k">클래스인은 세 가지를 맞춥니다.</p>
+    <h2 class="h xl">하나로.</h2>
+    <div class="trio-l"><span>■ 환경</span><span>● 콘텐츠</span><span>▲ 데이터</span></div>
+  </div>
+  <template class="note"><b>말</b> "가림·케이블은 환경, 흩어진 자료는 콘텐츠, 지워지는 수업은 데이터. 이 세 가지를 한 플랫폼에서 맞춥니다. 첫째, 교실입니다."</template>
+</section>
+
+<!-- 7 -->
+<section class="slide" data-time="0:30" data-label="2 · 환경">
+  <div class="split">
+    <div class="txt">
+      <div class="mark"><i class="sh sq"></i>환경</div>
+      <h2 class="h">켜면,<br>시작.</h2>
+      <p class="sub">윈도우 PC가 칠판 안에 들어 있어 노트북도 HDMI도 없이 수업이 시작됩니다.</p>
+      <div class="chips"><span>4K 화면</span><span>무선 미러링</span><span>추적 카메라</span><span>천장 마이크</span></div>
+    </div>
+    <div class="pic"><img src="assets/board-pen.jpg" alt="칠판 하단 펜 트레이에서 펜을 집는 손"></div>
+  </div>
+  <template class="note"><b>말</b> "지금 이 화면 뒤에 노트북이 꽂혀 있지 않죠? OPS 내장 PC입니다. 카메라와 천장 마이크까지 붙이면 교실이 그대로 온라인 수업이 됩니다."<br><b>사실</b> 4K·60Hz(모델별), AG 방현·AF 지문방지 코팅. 가격은 말하지 않는다.</template>
+</section>
+
+<!-- 8 -->
+<section class="slide" data-time="0:30" data-label="2 · 콘텐츠">
+  <div class="split">
+    <div class="txt">
+      <div class="mark"><i class="sh ci"></i>콘텐츠</div>
+      <h2 class="h">노트북 없이,<br>출근.</h2>
+      <p class="sub">수업 자료는 학원 공유 드라이브에. PDF·PPT는 칠판에서 바로 열고, 지난 판서는 EDB 파일로 그대로 불러옵니다.</p>
+      <div class="chips"><span>공유 드라이브</span><span>EDB 판서 파일 · 최대 50쪽</span><span>문제 은행</span><span>수업 일괄 생성</span></div>
+    </div>
+    <div class="pic"><img src="assets/ui-drive-board.jpg" alt="칠판에서 연 클래스인 드라이브 화면"></div>
+  </div>
+  <template class="note"><b>말</b> "자료는 칠판이 기억합니다. 강사님이 바뀌어도 학원 드라이브에 남습니다. 반이 많으면 수업을 2~50개씩 한 번에 만들 수 있습니다."<br><b>주의</b> 문제 은행 제공 범위는 기관 설정·계약에 따라 다름.</template>
+</section>
+
+<!-- 9 -->
+<section class="slide" data-time="0:35" data-label="2 · 데이터">
+  <div class="left" style="justify-content:flex-start;padding-top:130px">
+    <div class="mark"><i class="sh tr"></i>데이터</div>
+    <h2 class="h">끝나면,<br>학생 손에.</h2>
+  </div>
+  <img class="phones" src="assets/ui-lms-phones.jpg" alt="학생 휴대폰의 다시보기와 숙제 화면">
+  <div class="flow">
+    <div class="was"><span>이전</span><s>강사 PC 녹화 → 수동 업로드 → 누락</s></div>
+    <ol>
+      <li>수업 종료</li>
+      <li>자동 녹화<small>칠판·카메라 화면 함께</small></li>
+      <li>앱 다시보기<small>결석·복습</small></li>
+      <li>숙제 · 시험<small>한 과정 안에서</small></li>
+      <li class="end">관리자 화면<small>반별로 한눈에</small></li>
+    </ol>
+  </div>
+  <template class="note"><b>말</b> "수업을 끝내는 순간 녹화가 클라우드에 올라가고, 학생 앱에 다시보기로 갑니다. 숙제·시험도 같은 과정 안에 붙습니다. 말로는 감이 안 오시죠. 직접 해 보시죠."</template>
+</section>
+
+<!-- 10 DEMO 1 -->
+<section class="slide demo" data-time="2:30" data-label="데모 1">
+  <div class="center">
+    <span class="tag"><i class="dot"></i>DEMO 1</span>
+    <h2 class="h xl">직접 써 보세요.</h2>
+    <p class="sub">가져오신 수업 자료로 판서하고, 수업을 마쳐 보세요.</p>
+  </div>
+  <template class="note"><b>데모 1 순서 (2:30)</b><br>① 클래스인 앱 → 수업 시작(녹화 켜짐 확인)<br>② 드라이브에서 원장님 자료 열기 → PDF 위에 원장님이 직접 판서<br>③ 도구 두 개만: 타이머 · 랜덤 선택<br>④ 판서 저장(EDB) → <b>수업 종료</b><br>⑤ "이 수업은 마지막에 원장님 휴대폰으로 확인하겠습니다."<br><b>예비</b> 자료가 없으면 과목 샘플 EDB.</template>
+</section>
+
+<!-- 11 AFTER -->
+<section class="slide" data-time="0:30" data-label="2 · AFTER">
+  <div class="after">
+    <div class="txt">
+      <p class="k">같은 교실.</p>
+      <h2 class="h s">칠판만<br>바뀌었습니다.</h2>
+      <div class="same"><span>교재</span><span>판서 방식</span><span>책상 배치 · 시간표</span></div>
+    </div>
+    <div class="mosaic">
+      <figure class="a"><img src="assets/after-gwasaram.jpg" alt="과사람학원 교실의 두 대 칠판"><figcaption>부산 · 과사람</figcaption></figure>
+      <figure><img src="assets/after-jysk.jpg" alt="정율사관학원 교실"><figcaption>경기 · 정율사관</figcaption></figure>
+      <figure><img src="assets/after-yerim.jpg" alt="예림학원 강사가 칠판 앞에서 설명"><figcaption>예림학원</figcaption></figure>
+      <figure class="d"><img src="assets/after-imisuk.jpg" alt="이미숙국어 교실의 스탠드형 칠판"><figcaption>청주 · 이미숙국어</figcaption></figure>
+    </div>
+  </div>
+  <template class="note"><b>말</b> "이 학원들도 칠판 하나 바꾸는 것으로 시작했습니다. 교재도, 판서 방식도, 책상도 그대로입니다."<br><b>확인</b> 고객사 이름·사진 사용 동의.</template>
+</section>
+
+<!-- 12 -->
+<section class="slide" data-time="0:20" data-label="3 · 참여">
+  <div class="split">
+    <div class="txt">
+      <p class="k">보는 수업에서</p>
+      <h2 class="h m">참여하는<br>수업으로.</h2>
+      <p class="sub">강사와 학생이 같은 칠판에 쓰고, 학생 개인 칠판의 풀이를 한 화면에서 봅니다.</p>
+      <div class="chips"><span>30여 가지 수업 도구</span><span>객관식 · 선착순 퀴즈</span><span>랜덤 선택</span></div>
+    </div>
+    <div class="pic"><img src="assets/personal-board.jpg" alt="학생 개인 칠판 풀이가 칠판 한 화면에 모인 수업"></div>
+  </div>
+  <template class="note"><b>말</b> "회의용이 아니라 수업용으로 만들었습니다. 원장님 휴대폰을 학생 자리라고 생각해 보세요."</template>
+</section>
+
+<!-- 13 DEMO 2 -->
+<section class="slide demo" data-time="1:00" data-label="데모 2">
+  <div class="center">
+    <span class="tag"><i class="dot"></i>DEMO 2</span>
+    <h2 class="h xl">풀어 보세요.</h2>
+    <p class="sub">원장님 휴대폰이 학생 자리입니다.</p>
+  </div>
+  <template class="note"><b>데모 2 순서 (1:00)</b><br>① 원장님 휴대폰 = 데모 학생 계정(미리 로그인)<br>② 칠판에서 개인 칠판 문제 보내기<br>③ 원장님이 손으로 풀기 → 칠판에 학생별 풀이가 모임<br>④ 하나 골라 크게 보여 주고 상점 주기</template>
+</section>
+
+<!-- 14 -->
+<section class="slide" data-time="0:30" data-label="3 · 온·오프라인">
+  <div class="full"><img src="assets/hybrid-class.jpg" alt="교실 학생과 화면 속 온라인 학생이 함께하는 수업"></div>
+  <div class="over">
+    <p class="k">온라인과 오프라인,</p>
+    <h2 class="h">한 교실.</h2>
+    <p class="sub" style="color:#c9ccd2">추적 카메라와 천장 마이크가 교실을 그대로 담고, 온라인 학생은 같은 칠판으로 들어옵니다. 지점과 온라인 반도 같은 수업을 받습니다.</p>
+  </div>
+  <template class="note"><b>말</b> "규모 있는 학원이 결국 고민하시는 게 지점과 온라인 반입니다. 교실 수업을 따로 찍어 올리는 게 아니라, 같은 수업에 온라인 학생이 들어옵니다."</template>
+</section>
+
+<!-- 15 -->
+<section class="slide light" data-time="0:35" data-label="3 · 관리·자산">
+  <div class="left" style="justify-content:flex-start;padding-top:170px">
+    <p class="k">원장님은</p>
+    <h2 class="h m">전화보다<br>먼저 압니다.</h2>
+    <p class="sub" style="max-width:780px">원장 · 실장 · 강사 · 지점별로 볼 수 있는 범위를 나눠 권한대로 확인합니다.</p>
+  </div>
+  <ul class="rows">
+    <li><i class="sh sq"></i><div>수업 시간 · 진행 상태</div></li>
+    <li><i class="sh ci"></i><div>출결 · 참여<small>반별로, 지점별로</small></div></li>
+    <li><i class="sh tr"></i><div>녹화 · 다시보기 제공 상태<small>시청 횟수 · 열람 기간 · 워터마크</small></div></li>
+    <li><i class="sh sq"></i><div>숙제 · 시험</div></li>
+  </ul>
+  <p class="asset" data-step="1">그리고 강사님이 바뀌어도, <b>교안과 녹화는 학원에 남습니다.</b></p>
+  <template class="note"><b>말</b> "반이 60개면 원장님이 다 들어가 보실 수 없죠. 학부모 전화가 오기 전에 화면에서 먼저 봅니다." → 클릭 → "에이스 강사님의 판서와 녹화가 다음 강사님의 교안이 됩니다."<br><b>표현 주의</b> '감시'·'점수표'라고 말하지 않는다. 권한 기반 운영 데이터.</template>
+</section>
+
+<!-- 16 -->
+<section class="slide" data-time="0:25" data-label="3 · 신뢰">
+  <div class="center" style="padding-bottom:160px">
+    <p class="k">세계 교실에서 먼저.</p>
+    <div class="nums">
+      <div><b><span class="count" data-to="160">0</span><em>+</em></b><span>국가</span></div>
+      <div><b><span class="count" data-to="6">0</span><small>만</small><em>+</em></b><span>교육 기관</span></div>
+      <div><b><span class="count" data-to="5000">0</span><small>만</small><em>+</em></b><span>교육자 · 학습자</span></div>
+    </div>
+    <p class="cap">전 세계 누적 · EEO 공식 소개 기준</p>
+  </div>
+  <div class="kr"><b>한국 · 2022년 법인 설립<br>서울 목동 쇼룸</b><span>강남 세정학원 · 부산 과사람학원 · 경기 정율사관학원 · 인천 동인천 종로엠, KASTLE · 대구 학문당, 손쌤에듀 · 청주 이미숙국어 · 대전 양영학원 · 제주 더솔루션</span></div>
+  <template class="note"><b>말</b> "한국에는 2022년에 법인을 세웠고, 이 쇼룸이 거점입니다. 지역마다 먼저 시작한 학원들이 있습니다."<br><b>쓰지 않음</b> 밸류 금액, 국내 기관·보드 수.</template>
+</section>
+
+<!-- 17 -->
+<section class="slide" data-time="0:25" data-label="4 · 작게 시작">
+  <div class="left" style="justify-content:flex-start;padding-top:150px">
+    <p class="k">전부 바꾸지 않습니다.</p>
+    <h2 class="h m">교실 하나부터.</h2>
+    <p class="sub" style="max-width:760px">판서는 하시던 그대로. 보통 3~4개월, 규모가 크면 6개월 이상 단계적으로 넓힙니다.</p>
+  </div>
+  <div class="stairs">
+    <div><i>1</i>칠판 + 녹화</div>
+    <div><i>2</i>다시보기 · 숙제</div>
+    <div><i>3</i>관리자 데이터</div>
+    <div><i>4</i>지점 · 온라인 · AI</div>
+  </div>
+  <template class="note"><b>말</b> "선생님들이 새로 배우실 건 생각보다 적습니다. 첫 달은 칠판과 녹화만 쓰셔도 됩니다."<br><b>질문</b> "어느 교실이 첫 교실이 되면 좋을까요?"</template>
+</section>
+
+<!-- 18 -->
+<section class="slide" data-time="0:30" data-label="4 · 준비">
+  <div class="left" style="justify-content:flex-start;padding-top:170px">
+    <p class="k">다음 교육은</p>
+    <h2 class="h m">이미<br>들어 있습니다.</h2>
+    <p class="sub" style="max-width:640px">지금 다 켜실 필요 없습니다. 필요해지는 날, 켜기만 하세요.</p>
+  </div>
+  <ul class="sw">
+    <li data-step="1"><div><b>AI 칠판</b><small>학생이 먼저 풀고, AI가 채점과 피드백</small></div><i class="tg"></i></li>
+    <li data-step="2"><div><b>AI 강의 분석</b><small>강사가 자기 수업을 먼저 봅니다</small></div><i class="tg"></i></li>
+    <li data-step="3"><div><b>AI 어학</b><small>따라 읽기 · 받아쓰기 채점</small></div><i class="tg"></i></li>
+    <li data-step="4"><div><b>API 연동</b><small>학원 시스템과 수업 데이터 연결</small></div><i class="tg"></i></li>
+  </ul>
+  <template class="note"><b>말</b> 클릭마다 스위치 하나씩. "AI는 답을 대신 주는 게 아니라, 학생이 먼저 풀면 채점하고 선생님이 확인합니다."<br><b>조건</b> AI 칠판·AgentIn은 별도 활성화. 무료 50회에 AI 포함 여부는 말하지 않는다.</template>
+</section>
+
+<!-- 19 -->
+<section class="slide" data-time="0:35" data-label="5 · 돈">
+  <div class="left">
+    <p class="k">사람이 잇던 시간은</p>
+    <h2 class="h m">매달 나가던 돈입니다.</h2>
+    <div class="eq">
+      <span><b>20</b> 명</span><span class="op">×</span>
+      <span>주 <b>3</b> 시간</span><span class="op">×</span>
+      <span><b>2.5</b>만 원</span><span class="op">×</span>
+      <span><b>4.3</b> 주</span><span class="op">=</span>
+    </div>
+    <div class="res"><span>월</span><b class="count" data-to="6450000" data-fmt="won">0</b><span>원</span></div>
+    <p class="cap" style="margin-top:26px">예시 · 강사 한 명이 녹화 올리기, 보강, 자료 찾기, 숙제 걷기에 쓰는 시간. 잠시 뒤 원장님 숫자로 바꿉니다.</p>
+  </div>
+  <template class="note"><b>복선 회수</b> 5장의 '?'. "강사님 스무 분이 일주일에 세 시간씩만 써도 한 달에 이 정도입니다. 1년이면 7,740만 원입니다."<br>예시 가정임을 꼭 말한다.</template>
+</section>
+
+<!-- 20 -->
+<section class="slide" data-time="0:40" data-label="5 · 학생">
+  <div class="left">
+    <p class="k">학생 한 명이 남으면</p>
+    <div class="res" style="margin-top:0"><span>1년</span><b class="big"><span class="count" data-to="324">0</span>만</b><span>원</span></div>
+    <p class="cap" style="margin-top:20px">2025 사교육비조사 수학 참여 학생 월평균 27.0만 원 × 12개월</p>
+    <div class="set" data-step="1">
+      <div><b>지금</b>칠판 · 노트북 · 녹화 프로그램 · 숙제 앱 · 단톡방, 그리고 그 사이를 잇는 사람 손</div>
+      <div><b>클래스인 한 세트</b>칠판 · 내장 PC · 카메라 · 마이크 · 설치 · 소프트웨어 · 온보딩</div>
+    </div>
+  </div>
+  <template class="note"><b>말</b> "다시보기와 숙제 기록으로 관리가 보이면 상담에서 할 말이 생깁니다." (이탈이 줄어든다고 약속하지 않는다) → 클릭 → "그래서 가격은 칠판 한 대가 아니라, 지금 쓰시는 도구 전체와 비교해 주세요."</template>
+</section>
+
+<!-- 21 계산기 -->
+<section class="slide" data-time="1:00" data-label="5 · 계산">
+  <div class="left" style="justify-content:flex-start;padding-top:170px;width:860px">
+    <p class="k">원장님 학원은</p>
+    <h2 class="h m">얼마<br>입니까?</h2>
+    <p class="sub" style="max-width:600px">처음 값은 예시입니다. 말씀해 주신 숫자로 바꿔 보세요. 본전은 견적과 함께 계산해 드립니다.</p>
+  </div>
+  <div class="calc interactive">
+    <div class="fields">
+      <div data-field="t" data-value="20" data-stepv="1" data-min="1" data-max="300"><label>강사 수</label><button data-d="-1" aria-label="강사 수 줄이기">−</button><output>20</output><button data-d="1" aria-label="강사 수 늘리기">+</button></div>
+      <div data-field="h" data-value="3" data-stepv="0.5" data-min="0" data-max="20"><label>한 명당 주간 반복 업무 <em>시간</em></label><button data-d="-1" aria-label="시간 줄이기">−</button><output>3</output><button data-d="1" aria-label="시간 늘리기">+</button></div>
+      <div data-field="c" data-value="25000" data-stepv="5000" data-min="10000" data-max="100000" data-unit="원"><label>시간당 비용 <em>원</em></label><button data-d="-1" aria-label="시간당 비용 줄이기">−</button><output>2.5만</output><button data-d="1" aria-label="시간당 비용 늘리기">+</button></div>
+      <div data-field="s" data-value="10" data-stepv="1" data-min="0" data-max="500"><label>1년 더 남는 학생 <em>명</em></label><button data-d="-1" aria-label="학생 수 줄이기">−</button><output>10</output><button data-d="1" aria-label="학생 수 늘리기">+</button></div>
+      <div data-field="f" data-value="270000" data-stepv="10000" data-min="50000" data-max="2000000" data-unit="원"><label>학생 월 수강료 <em>원</em></label><button data-d="-1" aria-label="수강료 줄이기">−</button><output>27만</output><button data-d="1" aria-label="수강료 늘리기">+</button></div>
+    </div>
+    <div class="outs">
+      <div>매달 사람 손 비용<b><span data-out="month">645만</span> 원</b></div>
+      <div>1년 시간 비용<b><span data-out="yTime">7,740만</span> 원</b></div>
+      <div>남는 학생 1년<b><span data-out="yStu">3,240만</span> 원</b></div>
+      <div class="tot">1년 합계<b><span data-out="total">1억 980만</span> 원</b></div>
+    </div>
+  </div>
+  <template class="note"><b>계산기</b> 4장에서 들은 강사 수, 원장님이 꼽은 반복 업무 시간을 넣는다. 칠판을 직접 눌러 바꿀 수 있다. 주소 뒤에 <code>?t=30&amp;h=4&amp;s=15</code>를 붙이면 미리 채워진다(파일로 열 때).<br>"이 숫자를 견적서 옆에 놓고 보시면 됩니다."</template>
+</section>
+
+<!-- 22 DEMO 3 -->
+<section class="slide demo" data-time="0:50" data-label="데모 3 · 약속 회수">
+  <div class="center">
+    <span class="tag"><i class="dot"></i>DEMO 3</span>
+    <p class="k">15분 전 그 수업,</p>
+    <h2 class="h">지금 원장님 손에<br>있습니다.</h2>
+  </div>
+  <template class="note"><b>약속 회수 (0:50)</b><br>① 원장님 휴대폰 ClassIn 앱 → 해당 과정 → 다시보기<br>② 원장님이 쓴 판서가 그대로 재생되는 것 확인<br>③ "결석한 학생은 오늘 밤 이걸로 봅니다. 강사님이 따로 올리신 건 없습니다."<br><b>예비</b> 녹화 처리가 늦으면 미리 녹화한 같은 형식 수업으로.</template>
+</section>
+
+<!-- 23 -->
+<section class="slide" data-time="0:30" data-label="마무리">
+  <div class="center">
+    <p class="k">수업은 그대로.</p>
+    <h2 class="h">손은 덜 가고,<br>학원에는 남습니다.</h2>
+    <div class="next" data-step="1">
+      <div><b>무료로 시작</b>계정당 누적 50회 수업과 녹화</div>
+      <div><b>교실 하나, 90일</b>첫 교실과 범위를 함께 정합니다</div>
+      <div><b>우리 학원 견적</b>교실 수와 구성에 맞춰 드립니다</div>
+    </div>
+  </div>
+  <template class="note"><b>말</b> "어느 교실부터 시작해 볼까요?" → 클릭 → 다음 단계 세 가지. 첫 교실·날짜를 그 자리에서 정한다.</template>
+</section>
+
+<!-- 24 -->
+<section class="slide" data-time="0:15" data-label="감사">
+  <div class="center">
+    <p class="k latin" style="font-size:46px">Empowering Education</p>
+    <h2 class="h xl latin" style="letter-spacing:-0.04em">Thank you.</h2>
+    <p class="cap" style="margin-top:40px">EEO ClassIn Korea · 서울 목동 쇼룸</p>
+  </div>
+  <template class="note">질의응답.</template>
+</section>
+
+</div>
+</div>
+<aside class="notes" id="notes" tabindex="-1" hidden></aside>
+<div class="hint" id="hint">N 발표자 노트 · F 전체 화면 · ← → 또는 화면 터치로 넘기기</div>
+<script>
+(() => {
+  const vp = document.querySelector('.viewport');
+  const deck = document.querySelector('.deck');
+  const slides = [...deck.querySelectorAll('.slide')];
+  const notes = document.getElementById('notes');
+  const hint = document.getElementById('hint');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let i = 0, k = 0;
+
+  const stepsOf = s => Math.max(0, ...[...s.querySelectorAll('[data-step]')].map(e => +e.dataset.step || 0));
+
+  function fit() {
+    const w = vp.clientWidth, h = vp.clientHeight;
+    const sc = Math.min(w / 1920, h / 1080);
+    deck.style.transform = `translate(-50%, -50%) scale(${sc})`;
+  }
+
+  /* 숫자 굴리기 */
+  const won = v => {
+    const man = v / 10000;
+    if (man >= 10000) { const r = Math.round(man), e = Math.floor(r / 10000), m = r % 10000; return e + '억' + (m ? ' ' + m.toLocaleString('ko-KR') + '만' : ''); }
+    const d = man < 100 ? 1 : 0;
+    return man.toLocaleString('ko-KR', { maximumFractionDigits: d }) + '만';
+  };
+  const fmt = (el, v) => {
+    const f = el.dataset.fmt;
+    if (f === 'won') return won(v);
+    const d = +(el.dataset.dec || 0);
+    return v.toLocaleString('ko-KR', { minimumFractionDigits: d, maximumFractionDigits: d });
+  };
+  function roll(el) {
+    const to = +el.dataset.to;
+    if (reduce) { el.textContent = fmt(el, to); return; }
+    const t0 = performance.now(), dur = +(el.dataset.dur || 1400);
+    const tick = t => {
+      const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+      el.textContent = fmt(el, to * e);
+      if (p < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+  function wake(scope) {
+    scope.querySelectorAll('.count').forEach(el => {
+      const host = el.closest('[data-step]');
+      if (!host || host.classList.contains('shown')) { if (!el._done) { el._done = true; roll(el); } }
+    });
+  }
+
+  function render(dir) {
+    slides.forEach((s, n) => s.classList.toggle('on', n === i));
+    const s = slides[i];
+    s.querySelectorAll('[data-step]').forEach(e => e.classList.toggle('shown', +e.dataset.step <= k));
+    if (dir !== 0) s.querySelectorAll('.count').forEach(el => { el._done = false; });
+    wake(s);
+    s.dispatchEvent(new CustomEvent('stage', { detail: { k } }));
+    if (notes && !notes.hidden) showNotes();
+    try { history.replaceState(null, '', '#s' + (i + 1)); } catch (e) {}
+  }
+  function go(n, step) {
+    const d = n - i;
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    k = step === 'end' ? stepsOf(slides[i]) : (step || 0);
+    render(d);
+  }
+  const next = () => (k < stepsOf(slides[i]) ? (k++, render(0)) : i < slides.length - 1 && go(i + 1));
+  const prev = () => (k > 0 ? (k--, render(0)) : i > 0 && go(i - 1, 'end'));
+
+  function showNotes() {
+    const s = slides[i];
+    notes.innerHTML = `<div class="meta"><span>${i + 1} / ${slides.length}</span><span>${s.dataset.time || ''}</span><span>${s.dataset.label || ''}</span><span>N 노트 · F 전체 화면 · ← → 넘기기</span></div>` + (s.querySelector('template.note')?.innerHTML || '');
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.target.closest('input, textarea') || (e.target.closest('button') && (e.key === ' ' || e.key === 'Enter'))) return;
+    const key = e.key;
+    if (['ArrowRight', 'PageDown', ' ', 'Enter', 'ArrowDown'].includes(key)) { e.preventDefault(); next(); }
+    else if (['ArrowLeft', 'PageUp', 'Backspace', 'ArrowUp'].includes(key)) { e.preventDefault(); prev(); }
+    else if (key === 'Home') go(0);
+    else if (key === 'End') go(slides.length - 1);
+    else if (key === 'n' || key === 'N') { notes.hidden = !notes.hidden; if (!notes.hidden) showNotes(); }
+    else if (key === 'f' || key === 'F') toggleFs();
+  });
+  vp.addEventListener('click', e => {
+    if (e.target.closest('.interactive, button, a, input')) return;
+    const r = vp.getBoundingClientRect();
+    (e.clientX - r.left) < r.width * 0.3 ? prev() : next();
+  });
+  function toggleFs() {
+    try {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {});
+      else document.exitFullscreen?.();
+    } catch (e) {}
+  }
+  document.addEventListener('fullscreenchange', () => { document.body.classList.toggle('fs', !!document.fullscreenElement); fit(); });
+
+  /* 계산기: data-field 증감, data-out 결과 */
+  document.querySelectorAll('.calc').forEach(calc => {
+    const val = {};
+    let qs = null; try { qs = new URLSearchParams(location.search); } catch (e) {}
+    calc.querySelectorAll('[data-field]').forEach(f => {
+      const key = f.dataset.field;
+      let v = +f.dataset.value;
+      if (qs && qs.has(key) && !isNaN(+qs.get(key))) v = +qs.get(key);
+      val[key] = v;
+    });
+    const draw = () => {
+      calc.querySelectorAll('[data-field]').forEach(f => {
+        const key = f.dataset.field, o = f.querySelector('output');
+        const unit = f.dataset.unit || '';
+        o.textContent = (unit === '원' ? won(val[key]) : val[key].toLocaleString('ko-KR')) ;
+      });
+      const month = val.t * val.h * val.c * 4.3;
+      const yTime = month * 12, yStu = val.s * val.f * 12;
+      const out = { month, yTime, yStu, total: yTime + yStu };
+      calc.querySelectorAll('[data-out]').forEach(el => { el.textContent = won(out[el.dataset.out]); });
+    };
+    calc.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      e.stopPropagation();
+      const f = b.closest('[data-field]'), key = f.dataset.field;
+      const st = +f.dataset.stepv, mn = +f.dataset.min, mx = +f.dataset.max;
+      val[key] = Math.min(mx, Math.max(mn, +(val[key] + st * (+b.dataset.d)).toFixed(2)));
+      draw();
+    });
+    draw();
+  });
+
+  addEventListener('resize', fit);
+  fit();
+  const m = /^#s(\d+)$/.exec(location.hash);
+  go(m ? Math.min(slides.length, +m[1]) - 1 : 0);
+  setTimeout(() => hint && hint.classList.add('gone'), 3500);
+})();
+
+</script>
