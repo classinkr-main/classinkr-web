@@ -121,6 +121,20 @@ describe("재동의 시 픽셀 복구", () => {
     env = installBrowser()
   })
 
+  function allowMarketing() {
+    const cookieStore = { addEventListener: vi.fn(), removeEventListener: vi.fn() }
+    Object.assign(window, {
+      cookieStore,
+      __classinConsentObserverReady: true,
+      __classinConsentObservedStore: cookieStore,
+      localStorage: { setItem: vi.fn(), removeItem: vi.fn() },
+    })
+    vi.stubGlobal("navigator", { locks: {} })
+    env.jar.set("cln_revoke_a", "analytics-marker")
+    env.jar.set("cln_revoke_m", "marketing-marker")
+    env.jar.set("cln_consent", encodeURIComponent(JSON.stringify({ v: CONSENT_POLICY_VERSION, analytics: true, marketing: true, ts: 1, s: 1, ackAnalytics: "analytics-marker", ackMarketing: "marketing-marker" })))
+  }
+
   it("Meta 픽셀 전송을 다시 허용한다", () => {
     grantMarketingPixels()
     expect(env.fbq).toHaveBeenCalledWith("consent", "grant")
@@ -157,17 +171,7 @@ describe("재동의 시 픽셀 복구", () => {
 
   it("재동의 후 SDK 로드가 끝나면 준비 이벤트를 보낸다", () => {
     revokeMarketingPixels()
-    const cookieStore = { addEventListener: vi.fn(), removeEventListener: vi.fn() }
-    Object.assign(window, {
-      cookieStore,
-      __classinConsentObserverReady: true,
-      __classinConsentObservedStore: cookieStore,
-      localStorage: { setItem: vi.fn(), removeItem: vi.fn() },
-    })
-    vi.stubGlobal("navigator", { locks: {} })
-    env.jar.set("cln_revoke_a", "analytics-marker")
-    env.jar.set("cln_revoke_m", "marketing-marker")
-    env.jar.set("cln_consent", encodeURIComponent(JSON.stringify({ v: CONSENT_POLICY_VERSION, analytics: true, marketing: true, ts: 1, s: 1, ackAnalytics: "analytics-marker", ackMarketing: "marketing-marker" })))
+    allowMarketing()
     grantMarketingPixels()
     env.appended[0]?.onload?.()
     expect(env.dispatchEvent).toHaveBeenCalledWith(expect.objectContaining({ type: KAKAO_PIXEL_READY_EVENT }))
@@ -175,7 +179,9 @@ describe("재동의 시 픽셀 복구", () => {
 
   it("SDK 다운로드 중 동의를 철회하면 늦은 로드를 폐기한다", () => {
     revokeMarketingPixels()
+    allowMarketing()
     grantMarketingPixels()
+    env.jar.set("cln_revoke_m", "new-revocation-marker")
     window.kakaoPixel = vi.fn()
     env.appended[0]?.onload?.()
     expect(window.kakaoPixel).toBeUndefined()
