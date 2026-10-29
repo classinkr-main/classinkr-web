@@ -683,6 +683,9 @@ export default function HardwareInventoryClient({
   // 내역 탭 보조 필터 축 — 상태(완료/배송 예정/취소 포함), 판매유형(출고 전용), 기간(occurred_at 기준).
   const [historyStatus, setHistoryStatus] = useState<"all" | "done" | "planned">("all")
   const [includeVoided, setIncludeVoided] = useState(false)
+  const [voidedMovements, setVoidedMovements] = useState<HardwareMovement[]>([])
+  const [voidedState, setVoidedState] = useState<{ loading: boolean; error: string | null; limit: number | null }>({ loading: false, error: null, limit: null })
+  const voidedRequestSeq = useRef(0)
   const [saleTypeFilter, setSaleTypeFilter] = useState<OutboundSaleType | "">("")
   const [historyDateFrom, setHistoryDateFrom] = useState("")
   const [historyDateTo, setHistoryDateTo] = useState("")
@@ -885,6 +888,26 @@ export default function HardwareInventoryClient({
       if (seq === loadSeqRef.current) setLoading(false)
     }
   }, [])
+
+  const loadVoidedMovements = useCallback(async () => {
+    const seq = ++voidedRequestSeq.current
+    setVoidedState((current) => ({ ...current, loading: true, error: null }))
+    try {
+      const result = await adminFetchJson<{ movements: HardwareMovement[]; limit: number }>("/api/admin/hardware?scope=voided")
+      if (seq !== voidedRequestSeq.current) return
+      setVoidedMovements(result.movements)
+      setVoidedState({ loading: false, error: null, limit: result.limit })
+    } catch (err) {
+      if (seq !== voidedRequestSeq.current) return
+      setVoidedMovements([])
+      setVoidedState({ loading: false, error: err instanceof Error ? err.message : String(err), limit: null })
+    }
+  }, [])
+  useEffect(() => {
+    if (!includeVoided) return
+    void loadVoidedMovements()
+    return () => { voidedRequestSeq.current += 1 }
+  }, [includeVoided, loadVoidedMovements, data?.movements])
 
   // 서버 프리페치가 첫 화면을 이미 채웠고 *또한* 아직 신선할 때만 마운트 1회 왕복을
   // 건너뛴다(T3) — staleTimes.dynamic(180초)로 재사용된 RSC 프리페치는 initialData가
@@ -1113,6 +1136,10 @@ export default function HardwareInventoryClient({
   const filteredMovements = useMemo(() => {
     let rows = data?.movements ?? []
     if (!includeVoided) rows = rows.filter((movement) => !movement.voided_at)
+    else {
+      const seen = new Set(rows.map((movement) => movement.id))
+      rows = [...rows, ...voidedMovements.filter((movement) => !seen.has(movement.id))]
+    }
     if (historyType === "sample") {
       // 샘플: 출고 중 판매유형이 샘플(대여/데모)로 분류된 건만.
       rows = rows.filter((movement) => outboundSaleType(movement) === "sample")
@@ -1172,6 +1199,7 @@ export default function HardwareInventoryClient({
   }, [
     data?.movements,
     includeVoided,
+    voidedMovements,
     historyType,
     historyStatus,
     saleTypeFilter,
@@ -1739,10 +1767,10 @@ export default function HardwareInventoryClient({
   // 새 물량번호 추천은 원장 입고 이력으로 만든다 — 시트 이관이 밀려 있으면 그 뒤에 들어온 물량(예: 9/8 C2)이 원장에 없어
   // 이미 쓰인 번호를 추천한다(2026-09-15 실측). 신선도 판정은 홈 스트립과 같은 함수(judgeImportFreshness)를 쓴다.
   const inboundLotStaleNote = useMemo(() => {
-    const freshness = judgeImportFreshness(data?.importRun ?? null)
+    const freshness = judgeImportFreshness(data?.importRun ?? null, { lastSuccess: data?.importRunLastSuccess })
     if (freshness.level === "ok" || freshness.level === "none" || freshness.daysAgo == null) return null
     return `시트 이관이 ${formatNumber(freshness.daysAgo)}일 전이라 그 뒤에 들어온 물량번호가 추천에 빠져 있을 수 있어요. 시트의 최신 번호를 확인하세요.`
-  }, [data?.importRun])
+  }, [data?.importRun, data?.importRunLastSuccess])
 
   const inboundLots = useMemo(() => {
     const inbound = (data?.movements ?? []).filter((movement) => movement.movement_type === "inbound" && !movement.voided_at)
@@ -1918,8 +1946,8 @@ export default function HardwareInventoryClient({
   }, [data?.movements])
 
   const detailMovement = useMemo(
-    () => (data?.movements ?? []).find((movement) => movement.id === detailId) ?? null,
-    [data?.movements, detailId]
+    () => (data?.movements ?? []).find((movement) => movement.id === detailId) ?? voidedMovements.find((movement) => movement.id === detailId) ?? null,
+    [data?.movements, voidedMovements, detailId]
   )
 
   const customerHistory = useMemo(() => {
@@ -3435,7 +3463,7 @@ export default function HardwareInventoryClient({
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-start gap-3 lg:max-w-[640px] lg:justify-end">
-            <ImportFreshnessStrip importRun={data?.importRun ?? null} importCosting={data?.importCosting} />
+            <ImportFreshnessStrip importRun={data?.importRun ?? null} lastSuccess={data?.importRunLastSuccess} mirror={data?.mirror} importCosting={data?.importCosting} />
             <SheetSyncMenu
               busy={busy != null}
               loading={loading}
@@ -3774,6 +3802,8 @@ export default function HardwareInventoryClient({
               historyStatus={historyStatus}
               setHistoryStatus={setHistoryStatus}
               includeVoided={includeVoided}
+              voidedState={{ ...voidedState, count: voidedMovements.length }}
+              retryVoided={() => void loadVoidedMovements()}
               setIncludeVoided={setIncludeVoided}
               saleTypeFilter={saleTypeFilter}
               setSaleTypeFilter={setSaleTypeFilter}

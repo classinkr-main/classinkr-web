@@ -27,14 +27,24 @@ export interface BranchJsonState<T> {
   stale: boolean
   /** stale이 true일 때, 그 캐시 항목이 저장된 시각(ms epoch). */
   staleSince: number | null
+  /** Same query's previous result while an explicit refresh is in progress. */
+  previous?: boolean
 }
 
 interface UseBranchJsonOptions {
   /** false면 네트워크 요청을 만들지 않는다. 탭·렌즈가 실제로 소비하는 동안에만 켠다. */
   enabled?: boolean
+  keepPreviousData?: boolean
 }
 
 const EMPTY_STATE = { data: null, error: null, loading: true, stale: false, staleSince: null } as const
+
+export function previousBranchState<T>(state: BranchJsonState<T>, stateKey: string, url: string): BranchJsonState<T> | null {
+  const oldUrl = state.key.slice(state.key.indexOf(":") + 1)
+  return state.data != null && oldUrl === url
+    ? { key: stateKey, data: state.data, error: null, loading: true, stale: false, staleSince: null, previous: true }
+    : null
+}
 
 // branch 새로고침·재동기화가 무효화해야 하는 캐시 스코프 — branch API 키 전체에 매칭된다.
 const BRANCH_API_CACHE_PREFIX = "/api/admin/branch"
@@ -128,6 +138,10 @@ export function useBranchJson<T>(url: string, refreshKey: number, options: UseBr
   }
 
   if (state.key !== stateKey) {
+    // Retain data only for a refresh of the same URL. A different team, period or
+    // manager must never be presented under the new filter's labels.
+    const previous = options.keepPreviousData ? previousBranchState(state, stateKey, url) : null
+    if (previous) return previous
     return { key: stateKey, ...EMPTY_STATE }
   }
 

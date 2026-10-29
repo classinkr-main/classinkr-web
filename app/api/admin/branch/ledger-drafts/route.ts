@@ -12,6 +12,7 @@ import {
   LEDGER_LIST_MAX,
   listBranchSalesLedgerDrafts,
   listBranchSalesLedgerEntries,
+  mergeRecentAndOpenDraftRows,
   type BranchSalesLedgerDraftStatus,
 } from "@/lib/repositories/branch-sales-ledger-drafts"
 import {
@@ -128,8 +129,7 @@ export async function GET(req: NextRequest) {
           generatedAt: openDraftResult.generatedAt,
           health: openDraftResult.health.ok ? closedDraftResult.health : openDraftResult.health,
           // 두 조회는 상태로 나뉘어 겹치지 않지만, 혹시 겹쳐도 같은 초안을 두 번 내려주지 않는다.
-          drafts: [...new Map([...openDraftResult.drafts, ...closedDraftResult.drafts].map((draft) => [draft.id, draft])).values()]
-            .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")),
+          drafts: mergeRecentAndOpenDraftRows(closedDraftResult.drafts, openDraftResult.drafts),
         }
       : openDraftResult
 

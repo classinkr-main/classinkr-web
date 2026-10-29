@@ -8,8 +8,8 @@
 // (draftWeekly*·dominantWeeklyConfidence·saveDraft/saveEditedDraft) — 비즈니스 로직 중복 없음.
 // 참고: New/Renew(상태)·Direct/Channel(타입)·지역·규모는 매출 드래프트 모델에 없다(딜 속성, CRM에서 편집).
 
-import { useState, type Dispatch, type FormEvent, type SetStateAction } from "react"
-import { ArrowRight, Loader2, Lock, Plus, Save, X } from "lucide-react"
+import { useEffect, useRef, useState, type Dispatch, type FormEvent, type KeyboardEvent, type SetStateAction } from "react"
+import { ArrowDown, ArrowRight, Loader2, Lock, Plus, RotateCcw, Save, X } from "lucide-react"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import {
   DRAFT_CONFIDENCE_OPTIONS,
@@ -22,6 +22,7 @@ import {
   draftWeeklyAmounts,
   draftWeeklyTotal,
   formatMoney,
+  formatMonthLabel,
   operationSupportsWeeklySplit,
   productCategoryMeta,
   resultToDraftFeedback,
@@ -68,6 +69,13 @@ interface CockpitEditorProps {
   saveDraft: (kind: DraftKind) => Promise<DraftSaveResult>
   // M6: 특수 작업(기간 이동/수량 변경) 초안은 콕핏에서 편집 불가 — REV 렌즈로 전환해 편집하도록 콜백.
   onSwitchToRev: () => void
+  listMonth?: string
+  onMonthChange?: (month: string) => void
+  onReloadForListMonth?: () => void
+  nextDealName?: string | null
+  onSavedGoNext?: (info: { deduped: boolean }) => void
+  autoFocusWeekly?: boolean
+  onAutoFocused?: () => void
 }
 
 export function CockpitEditor({
@@ -87,12 +95,25 @@ export function CockpitEditor({
   cancelDraftEdit,
   saveDraft,
   onSwitchToRev,
+  listMonth,
+  onMonthChange,
+  onReloadForListMonth,
+  nextDealName = null,
+  onSavedGoNext,
+  autoFocusWeekly = false,
+  onAutoFocused,
 }: CockpitEditorProps) {
   // 저장 인라인 피드백 — 다른 초안 편집으로 넘어가면 초기화(렌더 중 상태 조정, InputRailSection과 동일 패턴).
   const [feedback, setFeedback] = useState<{ kind: "success" | "error" | "warning"; text: string } | null>(null)
   const [feedbackForDraftId, setFeedbackForDraftId] = useState<string | null>(editingDraft?.id ?? null)
   // M1(a): "전액을 [Wn] 주에 넣기"의 대상 주차 인덱스(0~4) — 사용자 액션 전용 로컬 상태.
   const [prefillWeekIndex, setPrefillWeekIndex] = useState(0)
+  const weeklyRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!autoFocusWeekly) return
+    weeklyRef.current?.querySelector<HTMLInputElement>("input:not([readonly]):not([disabled])")?.focus()
+    onAutoFocused?.()
+  }, [autoFocusWeekly, onAutoFocused])
   if (feedbackForDraftId !== (editingDraft?.id ?? null)) {
     setFeedbackForDraftId(editingDraft?.id ?? null)
     setFeedback(null)
@@ -183,13 +204,41 @@ export function CockpitEditor({
     else void runSave(() => saveDraft(primaryDraftKind))
   }
 
+  const canSaveAndNext = !editingDraft && canCreateEditDraft && Boolean(onSavedGoNext)
+  const saveAndNext = async () => {
+    if (!canSaveAndNext || draftSaving || draftFormInvalid) return
+    if (blockedByLock) {
+      setFeedback({ kind: "warning", text: LOCK_WARNING_TEXT })
+      return
+    }
+    setFeedback(null)
+    const result = await saveDraft("edit-row")
+    const next = resultToDraftFeedback(result)
+    if (next.kind === "success") onSavedGoNext?.({ deduped: result.deduped })
+    else setFeedback(next)
+  }
+  const onFormKeyDown = (event: KeyboardEvent<HTMLFormElement>) => {
+    if (event.key !== "Enter" || !(event.ctrlKey || event.metaKey) || !canSaveAndNext) return
+    event.preventDefault()
+    void saveAndNext()
+  }
+  const monthMismatch = Boolean(listMonth && onReloadForListMonth && listMonth !== draftForm.month)
+
   const fieldLabel = "block text-[11px] font-bold text-[#615D59]"
   const fieldControl =
     "mt-1 h-9 w-full rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2.5 text-[12px] font-semibold text-[#111110] outline-none transition focus:border-[#084734] focus:bg-white"
 
   return (
     <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
-      <form onSubmit={handleSubmit} className="space-y-4 p-4 sm:p-5">
+      <form onSubmit={handleSubmit} onKeyDown={onFormKeyDown} className="space-y-4 p-4 sm:p-5">
+        {monthMismatch && listMonth && (
+          <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2.5 text-[11.5px] font-semibold text-[#7A520F]">
+            <span>목록은 {formatMonthLabel(listMonth)}, 편집기는 {formatMonthLabel(draftForm.month)}입니다 — 저장하면 {formatMonthLabel(draftForm.month)}에 들어갑니다.</span>
+            <button type="button" onClick={onReloadForListMonth} className="inline-flex items-center gap-1 rounded-md border border-[#ECD29C] bg-white px-2.5 py-1 text-[11px] font-bold">
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden />{formatMonthLabel(listMonth)} 값으로 다시 불러오기
+            </button>
+          </div>
+        )}
         {/* 고객명 타이틀 */}
         <div>
           <input
@@ -264,7 +313,10 @@ export function CockpitEditor({
             월
             <select
               value={draftForm.month}
-              onChange={(event) => setDraftForm((current) => ({ ...current, month: event.target.value }))}
+              onChange={(event) => {
+                if (onMonthChange) onMonthChange(event.target.value)
+                else setDraftForm((current) => ({ ...current, month: event.target.value }))
+              }}
               className={fieldControl}
             >
               {monthOptions.map((option) => (
@@ -346,7 +398,7 @@ export function CockpitEditor({
         )}
 
         {/* 주차별 입력 · W1~W5 */}
-        <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-3.5">
+        <div ref={weeklyRef} className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-3.5">
           <div className="mb-2.5 flex items-baseline justify-between gap-2">
             <p className="text-[11px] font-bold text-[#615D59]">주차별 입력</p>
             <p className="text-[10.5px] font-medium text-[#A39E98]">금액을 넣으면 월 합계 자동 계산</p>
@@ -438,7 +490,8 @@ export function CockpitEditor({
             </button>
           </div>
         ) : canCreateEditDraft ? (
-          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 pt-1">
+          <>
+          <div className={`grid gap-2 pt-1 ${canSaveAndNext ? "grid-cols-[minmax(0,1fr)_auto_auto]" : "grid-cols-[minmax(0,1fr)_auto]"}`}>
             <button
               type="submit"
               disabled={draftSaving || draftFormInvalid || blockedByLock}
@@ -447,6 +500,14 @@ export function CockpitEditor({
               {draftSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               이 딜 저장
             </button>
+            {canSaveAndNext && (
+              <button type="button" onClick={() => void saveAndNext()} disabled={draftSaving || draftFormInvalid || blockedByLock}
+                title={`이 딜을 저장하고 다음 딜${nextDealName ? `(${nextDealName})` : ""}로 이동 — Ctrl+Enter`}
+                aria-keyshortcuts="Control+Enter Meta+Enter"
+                className="inline-flex h-10.5 items-center gap-1.5 rounded-lg border border-[#084734]/20 bg-[#ECFDF5] px-3 text-[13px] font-bold text-[#084734] disabled:opacity-45">
+                <ArrowDown className="h-4 w-4" aria-hidden />저장 후 다음
+              </button>
+            )}
             <button
               type="button"
               onClick={() => void runSave(() => saveDraft("new-row"))}
@@ -457,6 +518,8 @@ export function CockpitEditor({
               새 딜
             </button>
           </div>
+          {canSaveAndNext && <p className="text-right text-[10.5px] font-semibold text-[#A39E98]">Enter 이 딜 저장 · Ctrl+Enter 저장 후 다음{nextDealName ? ` (${nextDealName})` : ""}</p>}
+          </>
         ) : (
           <div className="pt-1">
             <button

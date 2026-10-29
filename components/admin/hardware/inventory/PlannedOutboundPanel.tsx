@@ -2,11 +2,13 @@
 
 import { memo, useCallback, useMemo, useState, useEffect } from "react"
 import type { Dispatch, SetStateAction } from "react"
-import { CheckCheck, Clock3 } from "lucide-react"
+import { CheckCheck, ChevronDown, Clock3 } from "lucide-react"
 
 import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
 import type { AdminListPaginationResult } from "@/lib/admin-list-pagination"
 import type { MovementButton, MovementButtonState } from "./movement-permissions"
+import { formatConfirmDateShort, summarizePlannedPeek } from "./planned-confirm-model"
+import { useTodayKey } from "./use-today-key"
 import { CrmCustomerLink, movementOutboundType, OutboundTypeBadge, SampleReturnBadge } from "./OutboundMetaBadges"
 import {
   collectStalePlannedMovementIds,
@@ -182,6 +184,25 @@ function PlannedOutboundPanel({
   }, [selectedMovements, confirmQtys, confirmPlannedSelection, bulkConfirmDate])
 
   const hasPlanned = (data?.plannedMovements.length ?? 0) > 0
+  const [expanded, setExpanded] = useState(false)
+  const today = useTodayKey()
+  const peek = useMemo(() => summarizePlannedPeek(allPlanned, today), [allPlanned, today])
+  const bodyId = "hardware-planned-body"
+  useEffect(() => {
+    const openFromSummary = (event: MouseEvent) => {
+      if ((event.target as Element | null)?.closest?.('a[href="#hardware-section-planned"]')) setExpanded(true)
+    }
+    document.addEventListener("click", openFromSummary)
+    return () => document.removeEventListener("click", openFromSummary)
+  }, [])
+
+  const toggleExpanded = () => {
+    if (expanded) {
+      clearSelection()
+      setBulkConfirmOpen(false)
+    }
+    setExpanded((value) => !value)
+  }
 
   // 여러 건 확정은 모두 내 권한 안일 때만 연다 — 하나라도 막히면 그 품목을 사유에 적는다.
   const confirmAllState = useCallback(
@@ -228,6 +249,13 @@ function PlannedOutboundPanel({
           <span className="text-[11px] font-semibold text-[#615D59]">
             {formatNumber(data?.plannedMovements.length ?? 0)}건 · {formatNumber(plannedMovementQuantity)}대
           </span>
+          {hasPlanned && (
+            <button type="button" onClick={toggleExpanded} disabled={plannedConfirmLocked}
+              aria-expanded={expanded} aria-controls={bodyId}
+              className="inline-flex items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-2 text-[12px] font-bold text-[#31302E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 disabled:opacity-50">
+              {expanded ? "접기" : "펼치기"}<ChevronDown aria-hidden className={`h-3.5 w-3.5 ${expanded ? "rotate-180" : ""}`} />
+            </button>
+          )}
           <button
             type="button"
             onClick={startPlannedEntry}
@@ -239,7 +267,25 @@ function PlannedOutboundPanel({
           </button>
         </div>
       </div>
-      {hasPlanned && (
+      {hasPlanned && !expanded && (
+        <div className="px-5 py-3">
+          <ul className="divide-y divide-[rgba(0,0,0,0.05)] rounded-lg border border-[rgba(0,0,0,0.06)] bg-[#FAFAF8]">
+            {peek.deals.map((deal) => (
+              <li key={deal.key} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                <span className="min-w-0"><span className="block truncate text-[12.5px] font-bold">{deal.customer}</span>
+                  <span className="text-[11px] text-[#615D59]">{deal.date ? formatConfirmDateShort(deal.date) : "일자 미정"} · {formatNumber(deal.items)}품목</span></span>
+                <span className="text-[12px] font-bold text-[#7A520F]">{deal.elapsedDays != null && deal.elapsedDays >= PLANNED_AGING_WARN_DAYS ? `${formatNumber(deal.elapsedDays)}일 경과 · ` : ""}{formatNumber(deal.quantity)}대</span>
+              </li>
+            ))}
+          </ul>
+          <button type="button" onClick={toggleExpanded} disabled={plannedConfirmLocked} aria-expanded={false} aria-controls={bodyId}
+            className="mt-2 rounded-md px-1 py-1 text-[12px] font-bold text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 disabled:opacity-50">
+            전체 {formatNumber(allPlanned.length)}건 펼쳐서 확정하기
+          </button>
+        </div>
+      )}
+      <div id={bodyId} hidden={hasPlanned && !expanded}>
+      {hasPlanned && expanded && (
         // 일괄 체크 퀵 액션 — 딜 여러 개를 가로질러 골라 한 번에 확정하기 위한 진입점(요청사항 ①.2).
         // 항상 노출하고 대상이 없을 때만 개별적으로 비활성화한다(레이아웃이 선택 여부에 따라
         // 들쭉날쭉하지 않게).
@@ -500,6 +546,7 @@ function PlannedOutboundPanel({
           )}
         </>
       )}
+      </div>
       {/* 되돌리기 어려운 동작 확인 — window.confirm 대신 저장소 공용 다이얼로그(일반화된
           DeleteConfirmDialog)를 쓴다(요청사항 ①.6). destructive=false: 삭제가 아니라 정상
           업무 흐름(출고 확정)이라 Danger 빨강이 아니라 Classin Green 주 버튼으로 그린다. */}

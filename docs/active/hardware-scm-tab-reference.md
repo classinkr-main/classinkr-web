@@ -1,5 +1,9 @@
 # 하드웨어 SCM 탭 — 정체성 · UI · 기능 (reference)
 
+> **2026-10-30 안전 조치:** 시트 이관 스냅샷 복원은 UI와 직접 API 및 저장소 호출에서 중단한다. 과거 복원은 시트 원장 복원과 시트 우선 취소된 어드민 출고 부활을 별도 DB 호출로 처리하며, 최신 오더 연결·동시 이관·과거 감사 기록과 원자성이 검증되지 않았다. 재개 전에는 시트 원장·취소된 어드민 출고·오더를 한 트랜잭션으로 대사하고, 다른 이관과 잠금 경합·취소 ID 누락·부분 실패를 운영과 분리된 DB에서 검증해야 한다. 백업 목록 조회는 유지한다.
+
+> **원본 파일 업로드 반영 중단:** 네 미러 교체와 원장 이관이 각각 별도 DB 호출이어서 실패나 동시 실행 시 일부만 반영될 수 있다. UI 및 직접 API 쓰기를 차단하며 읽기 전용 dry-run은 유지한다. 재개 전에는 미러와 이관을 공통 잠금 하 단일 트랜잭션 RPC로 묶고, 실패 롤백·동시 시트 싱크·원장 및 미러 대사를 격리 DB에서 검증해야 한다.
+
 기준 시점: 2026-09-15
 대상: `/admin/hardware` → [components/admin/hardware/HardwareInventoryClient.tsx](../../components/admin/hardware/HardwareInventoryClient.tsx)
 관련: [UX 계획·작업내역](./hardware-admin-ux-plan.md) · [입력 가속 기획](./hardware-input-speed-plan-2026-09-20.md) · [오더·매출 연결 로직](./hardware-order-revenue-link-plan-2026-10-22.md) · [재고관리 프로세스 정의서 차이·이어서 할 작업](./hardware-inventory-process-gap-2026-10-28.md) · [hardware-ops 개념 문서](../hardware-ops/README.md) · [시트 해석](../hardware-ops/sheet-interpretation.md) · [DESIGN.md](../../DESIGN.md) · [DB 마이그레이션 런북](./db-migration-runbook.md)

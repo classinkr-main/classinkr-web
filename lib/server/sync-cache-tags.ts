@@ -26,6 +26,8 @@ export const BRANCH_SEG_CACHE_TAG = "branch-seg"
 export const SYNC_CACHE_TAG_BUNDLES = {
   /** 동기화를 시도한 런이면(성공·실패 무관) 바뀌는 것 — 실행 기록과 SEG. */
   branchSyncRun: [BRANCH_SEG_CACHE_TAG, BRANCH_SYNC_RUNS_CACHE_TAG],
+  /** 구형 호출 계약의 상태 묶음 — 동기화 기록 갱신만 있었을 때 사용한다. */
+  branchSyncStatus: [BRANCH_SEG_CACHE_TAG, BRANCH_SYNC_RUNS_CACHE_TAG],
   /** REV 시트(REV·DSH·KPI 미러)와 그 미러를 읽는 장부 임포트·CRM 매출 조립. */
   branchRev: [
     BRANCH_SEG_CACHE_TAG,
@@ -41,6 +43,8 @@ export const SYNC_CACHE_TAG_BUNDLES = {
   branchRevLinks: [ADMIN_CRM_REVENUE_CACHE_TAG, ADMIN_CRM_REVENUE_SHEET_CACHE_TAG],
   /** HW 시트 미러(branch_hw_*)와 그것을 함께 읽는 하드웨어 조립. */
   branchHw: [BRANCH_SEG_CACHE_TAG, BRANCH_HW_CACHE_TAG, HARDWARE_INVENTORY_CACHE_TAG, BRANCH_SYNC_RUNS_CACHE_TAG],
+  /** 원장 가져오기·복원 뒤 미러와 재고 대시보드를 함께 무효화한다. */
+  hardwareImport: [HARDWARE_INVENTORY_CACHE_TAG, BRANCH_HW_CACHE_TAG],
 } as const
 
 export type SyncCacheTagBundle = keyof typeof SYNC_CACHE_TAG_BUNDLES

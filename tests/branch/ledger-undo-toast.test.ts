@@ -43,7 +43,9 @@ describe("pushMatrixToast — key 기반 dedupe + ttlMs(라운드 4 P1-6)", () =
   it("스택 상한(MATRIX_TOAST_MAX)·info 우선 드롭 정책은 그대로다", () => {
     const fn = body()
     expect(fn).toContain("if (stacked.length <= MATRIX_TOAST_MAX) return stacked")
-    expect(fn).toContain('const dropIndex = stacked.findIndex((toast) => toast.kind === "info")')
+    // 라운드 5 리뷰: 드롭 후보는 "기존" 토스트 중에서만 고른다 — 오류가 닫을 때까지 남는 뒤로, 방금 넣은 info(실행 취소 등)가
+    // 곧바로 밀려나지 않게.
+    expect(fn).toContain('const dropIndex = current.findIndex((toast) => toast.kind === "info")')
   })
 })
 

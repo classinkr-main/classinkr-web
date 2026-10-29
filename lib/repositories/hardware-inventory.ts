@@ -1,5 +1,7 @@
 import "server-only"
 
+import { HARDWARE_SNAPSHOT_RESTORE_ENABLED, HARDWARE_SNAPSHOT_RESTORE_UNAVAILABLE } from "@/lib/hardware/snapshot-restore-policy"
+
 import { createHash } from "crypto"
 import { revalidateTag, unstable_cache } from "next/cache"
 
@@ -288,6 +290,9 @@ export function isDormantStockRow(row: Pick<HardwareStockRow, "warehouseStock" |
   return row.warehouseStock === 0 && row.plannedOut === 0 && row.outbound30d === 0
 }
 
+export interface HardwareMirrorRowCounts { inbound: number; outbound: number; stock: number }
+export interface HardwareMirrorState { syncedAt: string | null; rows: HardwareMirrorRowCounts }
+
 export interface HardwareDashboard {
   items: HardwareItemView[]
   stock: HardwareStockRow[]
@@ -317,7 +322,11 @@ export interface HardwareDashboard {
     error: string | null
     /** 매시간 자동 가져오기가 시트 변경 없음을 마지막으로 확인한 시각. 확인 기록이 없으면 null/없음. */
     last_checked_at?: string | null
+    mirror_rows?: HardwareMirrorRowCounts | null
+    origin?: string | null
   } | null
+  importRunLastSuccess: HardwareDashboard["importRun"]
+  mirror: HardwareMirrorState | null
   // 감사(2026-09-07 #1): replace_hardware_sheet_import RPC가 구버전(20260630 마이그레이션 미적용)이면
   // amount_usd/amount_cny/unit_price/importer 컬럼을 못 채우고 recoverMoneyFromRaw가 raw JSON에서
   // 조용히 복구한다. recoveredFromRawCount > 0이면 그 상태가 지금도 살아 있다는 뜻 — 화면에 노출해
@@ -340,6 +349,8 @@ export interface HardwareSheetImportResult {
   sheetWinsKept: number
   /** 정리 자체가 실패했을 때의 문구. 가져오기는 이미 성공했다. */
   sheetWinsError: string | null
+  /** 원장은 반영됐으나 이관 기록 갱신에 실패한 경우. */
+  runRecordError?: string | null
   /** 오더번호가 적힌 시트 출고 줄 ↔ 오더 연결(연결 로직 §4-4) — 대체된 앱 기록 수·설치 단계로 올린 딜 수. */
   orderLink?: SheetOrderLinkResult
 }
@@ -671,13 +682,49 @@ async function getLatestImportRun(): Promise<HardwareDashboard["importRun"]> {
   const { data, error } = await sb
     .from("hardware_import_runs")
     // last_checked_at: 매시간 자동 가져오기가 "시트 변경 없음"을 확인한 마지막 시각(raw에만 있다).
-    .select("id,status,started_at,finished_at,rows_imported,rows_skipped,error,last_checked_at:raw->>last_checked_at")
+    .select("id,status,started_at,finished_at,rows_imported,rows_skipped,error,last_checked_at:raw->>last_checked_at,mirror_rows:raw->mirror_rows,origin:raw->>origin")
     .eq("source", "branch_hw_sheet")
     .order("started_at", { ascending: false })
     .limit(1)
     .maybeSingle()
   if (error) throw error
   return data as HardwareDashboard["importRun"]
+}
+
+async function getLastSuccessfulImportRun(): Promise<HardwareDashboard["importRun"]> {
+  try {
+    const { data, error } = await createSupabaseAdminClient().from("hardware_import_runs")
+      .select("id,status,started_at,finished_at,rows_imported,rows_skipped,error,last_checked_at:raw->>last_checked_at,mirror_rows:raw->mirror_rows,origin:raw->>origin")
+      .eq("source", "branch_hw_sheet").eq("status", "success")
+      .order("started_at", { ascending: false }).limit(1).maybeSingle()
+    if (error) throw error
+    return data as HardwareDashboard["importRun"]
+  } catch (error) {
+    console.warn("[hardware] failed to read last successful import", error)
+    return null
+  }
+}
+
+/** 건수 비교는 값 변경을 감지하지 못하므로 일치해도 데이터 동일성을 뜻하지 않는다. */
+async function getHwMirrorState(): Promise<HardwareMirrorState | null> {
+  try {
+    const sb = createSupabaseAdminClient()
+    const count = async (table: string) => {
+      const result = await sb.from(table).select("id", { count: "exact", head: true })
+      if (result.error) throw result.error
+      return result.count ?? 0
+    }
+    const [inbound, outbound, stock, latest] = await Promise.all([
+      count("branch_hw_inbound"), count("branch_hw_outbound"), count("branch_hw_stock"),
+      sb.from("branch_hw_outbound").select("synced_at").order("synced_at", { ascending: false }).limit(1).maybeSingle(),
+    ])
+    if (latest.error) throw latest.error
+    const syncedAt = (latest.data as { synced_at?: string | null } | null)?.synced_at ?? null
+    return { syncedAt, rows: { inbound, outbound, stock } }
+  } catch (error) {
+    console.warn("[hardware] failed to read mirror state", error)
+    return null
+  }
 }
 
 async function ensureHardwareItems(
@@ -853,6 +900,45 @@ export type HardwareLotLedgerMovement = Pick<
   | "occurred_at"
   | "created_at"
 >
+
+type PlannedLotLedgerMovement = HardwareLotLedgerMovement & Pick<HardwareMovement, "id" | "item_id" | "status">
+export interface PlannedLotAvailability {
+  lots: Array<{ lot: string; quantity: number }>
+  tracked: boolean
+}
+
+/** 미리보기는 선택한 예정 행의 예약만 제외하고 다른 예약은 그대로 반영한다. */
+export function buildPlannedLotAvailability(
+  movements: readonly PlannedLotLedgerMovement[],
+  onlyMovementId?: string
+): Record<string, PlannedLotAvailability> {
+  const byItem = new Map<string, PlannedLotLedgerMovement[]>()
+  for (const movement of movements) {
+    if (!movement.item_id) continue
+    const bucket = byItem.get(movement.item_id) ?? []
+    bucket.push(movement)
+    byItem.set(movement.item_id, bucket)
+  }
+  const result: Record<string, PlannedLotAvailability> = {}
+  for (const itemMovements of byItem.values()) {
+    const tracked = itemMovements.some((movement) => movementLotKey(movement) != null && lotDeltaOf(movement) !== 0)
+    const unlottedMemo = new Map<number, PlannedLotAvailability>()
+    for (const row of itemMovements) {
+      if (row.movement_type !== "outbound" || !isPlannedStatus(row.status) || (onlyMovementId && row.id !== onlyMovementId)) continue
+      const unlotted = movementLotKey(row) == null
+      const delta = lotDeltaOf(row)
+      const memoed = unlotted ? unlottedMemo.get(delta) : undefined
+      if (memoed) { result[row.id] = memoed; continue }
+      const lots = resolveHardwareLotBalances(itemMovements.filter((movement) => movement.id !== row.id)).lots.map(
+        ({ lot, quantity }) => ({ lot, quantity })
+      )
+      const availability = { lots, tracked }
+      if (unlotted) unlottedMemo.set(delta, availability)
+      result[row.id] = availability
+    }
+  }
+  return result
+}
 
 export interface ResolvedHardwareLot {
   lot: string
@@ -2182,7 +2268,8 @@ export async function getHardwareLotChoices(input: {
 
   const excluded = cleanString(input.excludeMovementId)
   const [ledger, knownLots] = await Promise.all([loadItemLotLedgerRows(item.id), loadKnownLotKeys()])
-  const lots = resolveHardwareLotBalances(ledger.filter((movement) => movement.id !== excluded)).lots
+  const plannedPreview = excluded ? buildPlannedLotAvailability(ledger, excluded)[excluded] : undefined
+  const lots = (plannedPreview?.lots ?? resolveHardwareLotBalances(ledger.filter((movement) => movement.id !== excluded)).lots)
     .filter((lot) => lot.quantity >= 1)
     .map((lot) => ({ lotNo: lot.lot, remaining: lot.quantity }))
 
@@ -2780,7 +2867,7 @@ export function checksumHardwareSheetSource(source: {
 }
 
 export async function importHardwareFromBranchSheets(
-  options: { actor?: string | null; trigger?: HardwareSheetImportTrigger } = {}
+  options: { actor?: string | null; trigger?: HardwareSheetImportTrigger; origin?: "sheet" | "ledger_file"; fileName?: string | null } = {}
 ): Promise<HardwareSheetImportResult> {
   return runHardwareSheetImport(options, null)
 }
@@ -2882,6 +2969,17 @@ export async function isHardwareSheetImportRunning(now: number = Date.now()): Pr
   return (data ?? []).length > 0
 }
 
+/** 최근 실행 중인 가져오기 — UI의 중복 실행 안내에 사용한다. 조회는 원자적 잠금이 아니다. */
+export async function findRunningHardwareImportRun(now: number = Date.now()): Promise<{ id: string; started_at: string } | null> {
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb.from("hardware_import_runs")
+    .select("id,started_at").eq("source", "branch_hw_sheet").eq("status", "running")
+    .gte("started_at", new Date(now - HARDWARE_IMPORT_RUNNING_WINDOW_MS).toISOString())
+    .order("started_at", { ascending: false }).limit(1).maybeSingle()
+  if (error) throw error
+  return data as { id: string; started_at: string } | null
+}
+
 /** 시트 읽기(미러 동기화) 단계에서 실패한 자동 가져오기를 기록한다 — 하드웨어 화면의 신선도 표시가 실패를 보여 준다. */
 export async function recordHardwareSheetImportFailure(
   message: string,
@@ -2897,7 +2995,7 @@ export async function recordHardwareSheetImportFailure(
 }
 
 async function runHardwareSheetImport(
-  options: { actor?: string | null; trigger?: HardwareSheetImportTrigger },
+  options: { actor?: string | null; trigger?: HardwareSheetImportTrigger; origin?: "sheet" | "ledger_file"; fileName?: string | null },
   preloaded: HardwareSheetSource | null
 ): Promise<HardwareSheetImportResult> {
   const runId = await startImportRun()
@@ -2983,6 +3081,8 @@ async function runHardwareSheetImport(
     // 실패는 결과에 문구로만 남긴다(교체는 이미 커밋됐다).
     const orderLink = await linkSheetOutboundToOrders(rows, { actor: options.actor })
 
+    let runRecordError: string | null = null
+    try {
     await finishImportRun(runId, {
       status: "success",
       rowsImported: imported,
@@ -2990,6 +3090,8 @@ async function runHardwareSheetImport(
       raw: {
         mode: additiveMerge ? "additive_merge" : "replace",
         trigger: options.trigger ?? "manual",
+        origin: options.origin ?? "sheet",
+        ...(options.fileName ? { file_name: options.fileName } : {}),
         // 다음 자동 가져오기가 "시트가 그대로인가"를 이 값과 비교한다.
         source_checksum: sourceChecksum,
         merge: mergeCounts,
@@ -2997,8 +3099,10 @@ async function runHardwareSheetImport(
         snapshot_checksum: snapshot.checksum,
         snapshot_created_at: snapshot.created_at,
         sheet_wins_voided: sheetWinsVoided,
+        ...(!sheetWinsError && sheetWinsVoided === sheetWinsTargets.length ? { sheet_wins_voided_ids: sheetWinsTargets.map((row) => row.id) } : {}),
         sheet_wins_kept: sheetWinsKeptRows.length,
         sheet_wins_error: sheetWinsError,
+        mirror_rows: { inbound: inbound.length, outbound: outbound.length, stock: stock.length },
         order_link: {
           app_rows_replaced: orderLink.appRowsReplaced,
           deals_advanced: orderLink.dealsAdvanced,
@@ -3006,6 +3110,9 @@ async function runHardwareSheetImport(
         },
       },
     })
+    } catch (error) {
+      runRecordError = getErrorMessage(error)
+    }
     revalidateTag(HARDWARE_INVENTORY_CACHE_TAG, "max")
     return {
       imported,
@@ -3017,6 +3124,7 @@ async function runHardwareSheetImport(
       sheetWinsVoided,
       sheetWinsKept: sheetWinsKeptRows.length,
       sheetWinsError,
+      runRecordError,
       orderLink,
     }
   } catch (error) {
@@ -3241,6 +3349,64 @@ export async function listHardwareSheetImportSnapshots(limit = 10): Promise<Hard
 
 export interface HardwareSheetImportRestoreResult {
   restoredCount: number
+  // 되돌린 가져오기(들)가 시트 우선 정책(§8-6)으로 취소했던 어드민 확정 중 다시 살린 건수(하드웨어 라운드 2 S-11).
+  sheetWinsRevived?: number
+  // 원장 복원은 끝났는데 취소 되살리기가 실패한 경우의 원인 — 복원 자체를 실패로 적지 않는다.
+  sheetWinsReviveError?: string | null
+}
+
+/**
+ * 복원으로 되돌린 가져오기들이 시트 우선 정책으로 취소한 어드민 확정 id — 복원 **전에** 모은다.
+ *
+ * 스냅샷 N은 가져오기 N 직전의 시트 이관분이다. 그 스냅샷으로 복원하면 가져오기 N(과 그 뒤 가져오기들)이
+ * 없었던 상태로 돌아가야 하는데, RPC 는 시트 이관분만 되돌린다. 가져오기가 취소한 어드민 확정은 취소된 채
+ * 남고, 되살아난 시트 행은 "전환됨(취소)" 상태라 **같은 출하가 원장에서 통째로 사라진다**. 그래서 스냅샷의
+ * 가져오기 시작 시각 이후 이관 기록(raw.sheet_wins_voided_ids, 2026-09-23 이후 이관만 기록)의 id를 모은다.
+ */
+async function listSheetWinsVoidIdsSinceSnapshot(snapshotId: string): Promise<string[]> {
+  const sb = createSupabaseAdminClient()
+  const { data: snapshot, error: snapshotError } = await sb
+    .from("hardware_sheet_import_snapshots")
+    .select("import_run_id")
+    .eq("id", snapshotId)
+    .maybeSingle()
+  if (snapshotError) throw snapshotError
+  const runId = (snapshot as { import_run_id?: string | null } | null)?.import_run_id
+  if (!runId) return []
+  const { data: run, error: runError } = await sb
+    .from("hardware_import_runs")
+    .select("started_at")
+    .eq("id", runId)
+    .maybeSingle()
+  if (runError) throw runError
+  const since = (run as { started_at?: string | null } | null)?.started_at
+  if (!since) return []
+  const { data: runs, error: runsError } = await sb
+    .from("hardware_import_runs")
+    .select("id,voided_ids:raw->sheet_wins_voided_ids")
+    .eq("source", "branch_hw_sheet")
+    .gte("started_at", since)
+  if (runsError) throw runsError
+  const ids = new Set<string>()
+  for (const row of (runs ?? []) as Array<{ voided_ids?: unknown }>) {
+    if (!Array.isArray(row.voided_ids)) continue
+    for (const id of row.voided_ids) if (typeof id === "string" && id) ids.add(id)
+  }
+  return Array.from(ids)
+}
+
+// 사유가 여전히 시트 우선 정책인 취소만 되살린다 — 그 사이 사람이 다른 사유로 다시 취소했거나 이미 살린 행은 건드리지 않는다.
+async function reviveSheetWinsVoidedMovements(ids: readonly string[]): Promise<number> {
+  if (ids.length === 0) return 0
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("hardware_movements")
+    .update({ voided_at: null, voided_by: null, void_reason: null })
+    .in("id", ids as string[])
+    .eq("void_reason", SHEET_WINS_VOID_REASON)
+    .select("id")
+  if (error) throw error
+  return Array.isArray(data) ? data.length : 0
 }
 
 // 실행하면 되돌릴 수 없다 — 현재 sheet_import 원장을 전부 지우고 스냅샷 시점으로 교체한다
@@ -3251,6 +3417,16 @@ export async function restoreHardwareSheetImportSnapshot(
   snapshotId: string,
   actor: string | null
 ): Promise<HardwareSheetImportRestoreResult> {
+  if (!HARDWARE_SNAPSHOT_RESTORE_ENABLED) throw new Error(HARDWARE_SNAPSHOT_RESTORE_UNAVAILABLE)
+  // 되살릴 취소 id 는 복원 전에 모은다(조회 실패는 복원을 막지 않는다 — 결과에 경고로 남긴다).
+  let reviveIds: string[] = []
+  let sheetWinsReviveError: string | null = null
+  try {
+    reviveIds = await listSheetWinsVoidIdsSinceSnapshot(snapshotId)
+  } catch (collectError) {
+    sheetWinsReviveError = getErrorMessage(collectError)
+  }
+
   const sb = createSupabaseAdminClient()
   const { data, error } = await sb.rpc("restore_hardware_sheet_import_snapshot", {
     snapshot_id: snapshotId,
@@ -3258,8 +3434,17 @@ export async function restoreHardwareSheetImportSnapshot(
   })
   if (error) throw error
 
+  let sheetWinsRevived = 0
+  if (!sheetWinsReviveError) {
+    try {
+      sheetWinsRevived = await reviveSheetWinsVoidedMovements(reviveIds)
+    } catch (reviveError) {
+      sheetWinsReviveError = getErrorMessage(reviveError)
+    }
+  }
+
   revalidateTag(HARDWARE_INVENTORY_CACHE_TAG, "max")
-  return { restoredCount: typeof data === "number" ? data : 0 }
+  return { restoredCount: typeof data === "number" ? data : 0, sheetWinsRevived, sheetWinsReviveError }
 }
 
 function applyLocationDelta(map: Map<string, number>, location: string | null | undefined, delta: number) {
@@ -3282,6 +3467,20 @@ function extractRawCrmLink(raw: unknown): HardwareMovementView["raw"] {
   if (!isRecord(raw)) return null
   const crmLink = raw.crmLink
   return isRecord(crmLink) ? { crmLink } : null
+}
+
+/** 대시보드에서 제외한 취소 내역은 요청 시에만 읽는다. */
+export async function listVoidedHardwareMovements(limit = 500): Promise<{
+  movements: Array<HardwareMovementView & { voided_by: string | null; void_reason: string | null }>
+  limit: number
+}> {
+  const safeLimit = Math.max(1, Math.min(500, Math.floor(limit) || 500))
+  const { data, error } = await createSupabaseAdminClient().from("hardware_movements")
+    .select(`${HARDWARE_MOVEMENT_LEDGER_COLUMNS},voided_by,void_reason`)
+    .not("voided_at", "is", null).order("voided_at", { ascending: false }).limit(safeLimit)
+  if (error) throw error
+  const rows = (data ?? []) as Array<HardwareMovementLedgerRow & { voided_by: string | null; void_reason: string | null }>
+  return { movements: rows.map((row) => ({ ...toMovementView(row), voided_by: row.voided_by ?? null, void_reason: row.void_reason ?? null })), limit: safeLimit }
 }
 
 function toMovementView(movement: HardwareMovementLedgerRow): HardwareMovementView {
@@ -3510,11 +3709,13 @@ export function buildHardwareStockAlerts(rows: readonly HardwareStockRow[]): Har
 }
 
 async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
-  const [items, movementsResult, importRun] = await Promise.all([
+  const [items, movementsResult, importRun, mirror] = await Promise.all([
     listHardwareItems(),
     listAllHardwareMovements(),
     getLatestImportRun(),
+    getHwMirrorState(),
   ])
+  const importRunLastSuccess = importRun && importRun.status !== "success" ? await getLastSuccessfulImportRun() : null
   const { rows: movements, moneyRecoveredFromRawCount } = movementsResult
   const activeMovements = movements.filter((movement) => !movement.voided_at)
   const cutoff30d = Date.now() - TREND_WINDOW_DAYS * 24 * 60 * 60 * 1000
@@ -3576,6 +3777,8 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
       orderRecommended: rows.filter((row) => row.orderRecommended).length,
     },
     importRun,
+    importRunLastSuccess,
+    mirror,
     importCosting: { recoveredFromRawCount: moneyRecoveredFromRawCount },
   }
 }
@@ -3589,7 +3792,7 @@ const getHardwareDashboardCached = unstable_cache(
   () => getHardwareDashboardUncached(),
   // v3(2026-09-15): 위치 정규화 변경("클래스인"→사무실, 수리 오탐 제거) — 옛 규칙 결과를 SWR 로 먼저 주지 않게 키를 올린다.
   // v4(2026-10-28): 부족 판정 ≤ → <, 가용 음수 알림 추가.
-  ["hardware-dashboard-v4"],
+  ["hardware-dashboard-v6"],
   { tags: [HARDWARE_INVENTORY_CACHE_TAG], revalidate: 120 }
 )
 

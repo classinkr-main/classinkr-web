@@ -195,6 +195,19 @@ export interface UpdateBranchSalesLedgerDraftOptions {
 // 한 번에 내려주는 목록 상한. Supabase(PostgREST) 한 요청의 기본 최대 행 수와 같다.
 export const LEDGER_LIST_MAX = 1000
 
+/** 열린 초안과 종료 이력을 합칠 때 같은 id는 최신 기록을 남기고 수정일 내림차순으로 정렬한다. */
+export function mergeRecentAndOpenDraftRows<T extends { id: string; updatedAt?: string | null; updated_at?: string | null }>(
+  recent: readonly T[], open: readonly T[],
+): T[] {
+  const merged = new Map<string, T>()
+  const updated = (row: T) => row.updatedAt ?? row.updated_at ?? ""
+  for (const row of [...recent, ...open]) {
+    const previous = merged.get(row.id)
+    if (!previous || updated(row) > updated(previous)) merged.set(row.id, row)
+  }
+  return [...merged.values()].sort((a, b) => updated(b).localeCompare(updated(a)))
+}
+
 export interface ListBranchSalesLedgerDraftsOptions {
   status?: BranchSalesLedgerDraftStatus | "all"
   /** 여러 상태를 한 번에(예: 열린 초안 draft·checked). 주면 status 보다 우선한다. */

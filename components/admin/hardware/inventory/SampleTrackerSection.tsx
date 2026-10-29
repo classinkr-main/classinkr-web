@@ -5,11 +5,13 @@ import { ChevronDown, ChevronRight, PackagePlus } from "lucide-react"
 
 import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
 import { adminFetchJson } from "@/lib/admin-client"
+import { useTodayKey } from "./use-today-key"
 import {
   formatNumber,
   loanElapsedDays,
   MONO_META_CLASS,
   SAMPLE_STATUS_META,
+  todayKey,
   type HardwareSampleEvent,
   type HardwareSampleUnit,
   type HardwareStockRow,
@@ -62,6 +64,7 @@ function locationQuantity(row: HardwareStockRow, location: string): number {
 }
 
 function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOpenUnit, onChanged }: SampleTrackerSectionProps) {
+  const today = useTodayKey()
   const [filter, setFilter] = useState<StatusFilter>("all")
   const [agingMinDays, setAgingMinDays] = useState<number | null>(null)
   const [showAllRows, setShowAllRows] = useState(false)
@@ -318,6 +321,9 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
                     {elapsed != null && (
                       <span className="text-[11px] font-semibold tabular-nums text-[#615D59]">{formatNumber(elapsed)}일째</span>
                     )}
+                    {unit.status === "loaned" && unit.expected_return_at && (
+                      <span className="text-[11px] font-semibold tabular-nums text-[#615D59]">{describeReturnDue(unit.expected_return_at, today)}</span>
+                    )}
                   </span>
                   {latestMemo && (
                     <span className="mt-0.5 block truncate text-[11.5px] text-[#615D59]">{latestMemo}</span>
@@ -347,3 +353,12 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
 }
 
 export default memo(SampleTrackerSection)
+
+export function describeReturnDue(expectedReturnAt: string, today: string = todayKey()): string {
+  const due = Date.parse(`${expectedReturnAt.slice(0, 10)}T00:00:00Z`)
+  const base = Date.parse(`${today}T00:00:00Z`)
+  if (!Number.isFinite(due) || !Number.isFinite(base)) return `회수 예정 ${expectedReturnAt.slice(0, 10)}`
+  const days = Math.round((due - base) / 86400000)
+  if (days === 0) return "회수 오늘"
+  return days > 0 ? `회수 D-${formatNumber(days)}` : `회수 ${formatNumber(-days)}일 지남`
+}

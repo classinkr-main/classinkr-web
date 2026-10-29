@@ -31,7 +31,7 @@ describe("describeSyncHealth", () => {
       NOW,
     )
     expect(copy?.tone).toBe("warning")
-    expect(copy?.action).toBe("새로고침으로 다시 동기화해 보세요.")
+    expect(copy?.action).toBe("동기화 버튼으로 다시 시도해 보세요.")
   })
 
   it("marks truncated history and a missing last success", () => {

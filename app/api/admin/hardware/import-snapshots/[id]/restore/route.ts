@@ -9,6 +9,8 @@ import {
 } from "@/lib/admin-auth"
 import { logAdminAudit } from "@/lib/auth/audit"
 import { restoreHardwareSheetImportSnapshot } from "@/lib/repositories/hardware-inventory"
+import { expireSyncCacheTags } from "@/lib/server/sync-cache-tags"
+import { HARDWARE_SNAPSHOT_RESTORE_ENABLED, HARDWARE_SNAPSHOT_RESTORE_UNAVAILABLE } from "@/lib/hardware/snapshot-restore-policy"
 
 // 감사(2026-09-07 #4) — 스냅샷 복원 노출. 실행하면 현재 시트 이관 원장을 전부 지우고 스냅샷
 // 시점으로 되돌리는 비가역 동작이라, 확정·취소와 같은 3중 방어를 그대로 적용한다:
@@ -27,17 +29,24 @@ export async function POST(
   const capabilityError = requireAdminCapability(admin, HARDWARE_FINALIZE_CAPABILITY)
   if (capabilityError) return capabilityError
 
+  // 권한이 있어도 검증 전 복원을 직접 호출할 수 없다.
+  if (!HARDWARE_SNAPSHOT_RESTORE_ENABLED) {
+    return NextResponse.json({ error: HARDWARE_SNAPSHOT_RESTORE_UNAVAILABLE, reason: "restore-unavailable" }, { status: 503 })
+  }
+
   try {
     const { id } = await params
     const actor = admin.name ?? admin.userId ?? admin.role
     const result = await restoreHardwareSheetImportSnapshot(id, actor)
+    // 복원은 원장을 되돌린다 — 다음 조회가 옛(복원 전) 대시보드를 받지 않게 즉시 만료(하드웨어 라운드 2 S-2).
+    expireSyncCacheTags("hardwareImport")
 
     await logAdminAudit({
       admin,
       action: "hardware.import.restore_snapshot",
       targetType: "hardware_sheet_import_snapshot",
       targetId: id,
-      payload: { restoredCount: result.restoredCount },
+      payload: { restoredCount: result.restoredCount, sheetWinsRevived: result.sheetWinsRevived ?? 0 },
     })
 
     return NextResponse.json({ restore: result })

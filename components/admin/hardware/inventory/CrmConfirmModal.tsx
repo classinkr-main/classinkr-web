@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, type Dispatch, type SetStateAction } from "react"
+import { useEffect, useRef, useState, type Dispatch, type KeyboardEvent as ReactKeyboardEvent, type SetStateAction } from "react"
 import Link from "next/link"
 import { ExternalLink, Link2, Save, X } from "lucide-react"
 
@@ -63,16 +63,45 @@ export default function CrmConfirmModal({
   })()
   const draftForSave: HardwareMovementDraft = { ...pendingMovement, amountUsd: parsedAmountUsd }
 
+  // 키보드로 닿게 한다(하드웨어 라운드 2 Q-6) — 모달은 시트 밖에 그려지는데 포커스는 시트에 남아 있었고, 시트의
+  // Tab 가두기가 포커스를 시트 안에만 돌렸다. 열리면 주 버튼(없으면 닫기)으로 옮기고, 모달 안에서 Tab 을 가둔다.
+  const dialogRef = useRef<HTMLElement>(null)
+  const primaryRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    const primary = primaryRef.current
+    if (primary && !primary.disabled) primary.focus()
+    else dialogRef.current?.querySelector<HTMLElement>("button:not([disabled])")?.focus()
+  }, [])
+  const trapTab = (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (event.key !== "Tab") return
+    const items = dialogRef.current?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )
+    if (!items || items.length === 0) return
+    const first = items[0]
+    const last = items[items.length - 1]
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+  const saving = busy === "movement"
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 px-3 py-4 backdrop-blur-[2px] sm:items-center"
       onClick={closeCrmConfirmation}
     >
       <section
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="CRM 실제 오더 확인"
         onClick={(event) => event.stopPropagation()}
+        onKeyDown={trapTab}
         className="max-h-[92vh] w-full max-w-3xl overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_12px_32px_rgba(0,0,0,0.12)]"
       >
         <div className="flex items-start justify-between gap-4 border-b border-[rgba(0,0,0,0.08)] px-5 py-4">
@@ -252,19 +281,20 @@ export default function CrmConfirmModal({
           <button
             type="button"
             onClick={() => void createMovementFromDraft(draftForSave, null)}
-            disabled={busy === "movement"}
+            disabled={saving}
             className="inline-flex h-10 cursor-pointer items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-4 text-[13px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
           >
-            연동 없이 기록
+            {saving ? "저장 중" : "연동 없이 기록"}
           </button>
           <button
+            ref={primaryRef}
             type="button"
             onClick={() => void createMovementFromDraft(draftForSave, crmAutoReflect ? selectedCrmCandidate : null)}
-            disabled={busy === "movement" || crmLoading || (crmAutoReflect && !selectedCrmCandidate)}
+            disabled={saving || crmLoading || (crmAutoReflect && !selectedCrmCandidate)}
             className="inline-flex h-10 items-center justify-center gap-2 cursor-pointer rounded-md bg-[#084734] px-4 text-[13px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Save className="h-4 w-4" />
-            {crmAutoReflect ? "CRM 연동 후 기록" : "기록 저장"}
+            {saving ? "저장 중" : crmAutoReflect ? "CRM 연동 후 기록" : "기록 저장"}
           </button>
         </div>
       </section>
