@@ -1,9 +1,6 @@
-"use client"
-
 import { Button } from "@/components/ui/button"
-import Link from "next/link"
+import { TrackedLink } from "@/components/TrackedLink"
 import { DemoModal } from "./DemoModal"
-import { trackEvent } from "@/lib/analytics"
 import Image from "next/image"
 import { HeroVideoBackdrop } from "@/components/media/HeroVideoBackdrop"
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
@@ -73,9 +70,9 @@ export function Hero() {
                                     </Button>
                                 </DemoModal>
                                 <Button asChild variant="outline" className="h-12 px-7 text-base font-semibold bg-white/82 hover:bg-white text-[#111110] hover:text-[#111110] border border-white/60 rounded-2xl w-full sm:w-auto transition-all duration-300 shadow-[0_10px_26px_rgba(0,0,0,0.18)]">
-                                    <Link href="/resources/academy-system-checklist#download" onClick={() => trackEvent("click_cta", { button: "hero_lead_magnet", lead_magnet: "academy-system-checklist" })}>
+                                    <TrackedLink href="/resources/academy-system-checklist#download" ctaId="hero_lead_magnet" tracking={{ lead_magnet: "academy-system-checklist" }}>
                                         <span className="relative z-10">34문항 운영 누수 진단</span>
-                                    </Link>
+                                    </TrackedLink>
                                 </Button>
                             </div>
                         </div>

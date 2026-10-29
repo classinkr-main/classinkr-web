@@ -1,9 +1,8 @@
-"use client"
-
-import { motion } from "framer-motion"
 import { Check, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DemoModal } from "./DemoModal"
+
+import { Reveal } from "@/components/motion/Reveal"
 
 const rows = [
     {
@@ -55,7 +54,7 @@ export function Comparison() {
                     </p>
                 </div>
 
-                <motion.div
+                <Reveal
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.6 }}
@@ -78,7 +77,7 @@ export function Comparison() {
 
                     {/* Table Rows */}
                     {rows.map((row, index) => (
-                        <motion.div
+                        <Reveal
                             key={index}
                             initial={{ opacity: 0, x: -10 }}
                             whileInView={{ opacity: 1, x: 0 }}
@@ -97,9 +96,9 @@ export function Comparison() {
                                 <Check className="w-3.5 h-3.5 text-green-500 mt-0.5 shrink-0" />
                                 {row.eduscale}
                             </div>
-                        </motion.div>
+                        </Reveal>
                     ))}
-                </motion.div>
+                </Reveal>
 
                 {/* Soft CTA */}
                 <div className="text-center mt-10">
