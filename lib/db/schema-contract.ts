@@ -202,8 +202,8 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // 장부 반영 → REV 시트 쓰기 감사 기록(2026-10-23). 시트 쓰기 스위치(BRANCH_REV_SHEET_WRITE_ENABLED)가 꺼져 있으면
   // 미적용이어도 영향이 없다 — 켜기 전에 적용한다(warning).
   "supabase/migrations/20261023_branch_rev_sheet_writes.sql",
-  // 매출 장부 "적용된 값을 한 번에 바꾸기"(P2-9, 2026-09-22) — 옛 entry 반전 + 새 checked
-  // 초안 적용을 한 트랜잭션으로 묶는 원자 대체 RPC. 잠금/쓰기 함수라 카탈로그로만 확인한다.
+  // P2-9 파일 추적용 등록이다. 운영 적용을 권고하는 목록이 아니다 — REV 시트 동시성·멱등성
+  // 재설계와 격리 DB 통합 검증이 끝나기 전까지 운영 적용 금지(기능은 서버에서 차단).
   "supabase/migrations/20260922_branch_sales_ledger_supersede_entry.sql",
 ] as const
 
@@ -1037,7 +1037,7 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     serviceRoleOnly: true,
     migration: "supabase/migrations/20260922_branch_sales_ledger_supersede_entry.sql",
     severity: "warning",
-    impact: "원자 대체 기능은 REV 시트 정합성 검증 전까지 기본 비활성이다. 기존 되돌리기 → 재적용 경로는 그대로 동작한다.",
+    impact: "운영 적용 금지: REV 시트 동시성·멱등성 재설계 및 격리 DB 통합 검증 전까지 기능은 서버에서 비활성이다. 미적용은 정상이며 기존 경로는 유지된다.",
   },
 ]
 
