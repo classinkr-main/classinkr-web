@@ -46,6 +46,26 @@ describe("track event route", () => {
     insert.mockResolvedValue({ error: null })
   })
 
+  it.each([
+    null, 123, "page_view", [], {},
+    { event: 123 }, { event: null }, { event: [] },
+    { event: "page_view", params: "not-an-object" },
+    { event: "page_view", params: [] },
+    { event: "page_view", page: 123 },
+  ])("rejects malformed JSON values with 400: %j", async (body) => {
+    const response = await POST(trackRequest(body))
+    expect(response.status).toBe(400)
+    expect(from).not.toHaveBeenCalled()
+  })
+
+  it("rejects invalid JSON with 400 even without consent", async () => {
+    const request = new NextRequest("https://classin.kr/api/track/event", {
+      method: "POST", headers: { origin: "https://classin.kr" }, body: "{"
+    })
+    expect((await POST(request)).status).toBe(400)
+    expect(from).not.toHaveBeenCalled()
+  })
+
   it("keeps blog and event CTA attribution while dropping unknown params", async () => {
     const response = await POST(
       trackRequest({

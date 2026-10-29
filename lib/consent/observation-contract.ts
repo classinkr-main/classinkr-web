@@ -1,4 +1,7 @@
-/** 서버 전환/분석은 현재 탭이 동의 쿠키 변경을 관찰할 수 있을 때만 허용한다. */
+/**
+ * 정직한 클라이언트가 현재 탭의 동의 변경 관찰 기능을 알리는 신호다.
+ * 헤더는 임의로 위조할 수 있으므로 인증 또는 관찰 증명으로 취급하지 않는다.
+ */
 export const CONSENT_OBSERVATION_HEADER = "X-Classin-Consent-Observation"
 export const CONSENT_OBSERVATION_VERSION = "cookie-store-v1"
 
