@@ -196,7 +196,7 @@ function TabButton({
       aria-controls="marketing-hub-tabpanel"
       tabIndex={active ? 0 : -1}
       onClick={onClick}
-      className={`group flex min-w-[164px] flex-1 items-center gap-2 rounded-xl border px-3 py-3 text-left transition-all sm:min-w-0 sm:gap-3 sm:rounded-2xl sm:px-4 sm:py-4 ${
+      className={`group flex min-w-[164px] flex-1 items-center gap-2 rounded-xl border px-3 py-3 text-left transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-1 sm:min-w-0 sm:gap-3 sm:rounded-2xl sm:px-4 sm:py-4 ${
         active
           ? "border-[#111110] bg-[#111110] text-white shadow-sm"
           : "border-[#e8e8e4] bg-white text-[#1a1a1a]/65 hover:border-[#c8c8c4] hover:bg-[#fafaf8] hover:text-[#111110]"
@@ -1437,8 +1437,10 @@ export default function MarketingHub({
                     {(["all", "active", "unsubscribed"] as const).map((value) => (
                       <button
                         key={value}
+                        type="button"
                         onClick={() => setStatusFilter(value)}
-                        className={`rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors whitespace-nowrap ${
+                        aria-pressed={statusFilter === value}
+                        className={`rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-1 ${
                           statusFilter === value
                             ? "border-[#111110] bg-[#111110] text-white"
                             : "border-[#e8e8e4] bg-white text-[#1a1a1a]/55 hover:border-[#c8c8c4] hover:text-[#111110]"
@@ -1452,8 +1454,10 @@ export default function MarketingHub({
                     {(["all", "demo_modal", "contact_page", "newsletter", "meta_lead_ads", "manual"] as const).map((value) => (
                       <button
                         key={value}
+                        type="button"
                         onClick={() => setSourceFilter(value)}
-                        className={`rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors whitespace-nowrap ${
+                        aria-pressed={sourceFilter === value}
+                        className={`rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-1 ${
                           sourceFilter === value
                             ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
                             : "border-[#e8e8e4] bg-white text-[#1a1a1a]/55 hover:border-[#c8c8c4] hover:text-[#111110]"
