@@ -12,9 +12,11 @@
  */
 
 import { KAKAO_PIXEL_ID } from "@/lib/analytics-config"
+import { currentChoice } from "@/lib/consent/consent"
 import { isAnalyticsTagExcludedPath } from "@/lib/tracking-paths"
 
 const KAKAO_PIXEL_SRC = "https://t1.daumcdn.net/adfit/static/kp.js"
+export const KAKAO_PIXEL_READY_EVENT = "classin:kakao-pixel-ready"
 /** fbevents.js가 심는 1st-party 광고 식별 쿠키. */
 const META_COOKIES = ["_fbp", "_fbc"]
 
@@ -105,6 +107,15 @@ export function restoreKakaoPixel(): void {
   const script = document.createElement("script")
   script.src = KAKAO_PIXEL_SRC
   script.async = true
+  script.onload = () => {
+    // 다운로드 중 철회되면 SDK가 늦게 전역을 다시 만들어도 사용하지 않는다.
+    if (!currentChoice().marketing || isAnalyticsTagExcludedPath(window.location.pathname)) {
+      delete window.kakaoPixel
+      script.remove()
+      return
+    }
+    window.dispatchEvent(new Event(KAKAO_PIXEL_READY_EVENT))
+  }
   document.body.appendChild(script)
 }
 

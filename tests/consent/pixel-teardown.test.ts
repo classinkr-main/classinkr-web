@@ -5,9 +5,11 @@ vi.mock("@/lib/analytics-config", () => ({ KAKAO_PIXEL_ID: "test-pixel" }))
 import {
   getLastMetaPageViewPath,
   grantMarketingPixels,
+  KAKAO_PIXEL_READY_EVENT,
   revokeMarketingPixels,
   setLastMetaPageViewPath,
 } from "@/lib/pixels/teardown"
+import { CONSENT_POLICY_VERSION } from "@/lib/consent/consent"
 
 const KAKAO_PIXEL_SRC = "https://t1.daumcdn.net/adfit/static/kp.js"
 
@@ -15,8 +17,9 @@ const KAKAO_PIXEL_SRC = "https://t1.daumcdn.net/adfit/static/kp.js"
 function installBrowser() {
   const jar = new Map<string, string>()
   const scripts: { src: string; removed: boolean }[] = []
-  const appended: { src: string; async: boolean }[] = []
+  const appended: { src: string; async: boolean; onload?: () => void; remove: () => void }[] = []
   const fbq = vi.fn()
+  const dispatchEvent = vi.fn()
 
   const document = {
     get cookie() {
@@ -48,9 +51,9 @@ function installBrowser() {
       const match = /script\[src="(.+)"\]/.exec(selector)
       return scripts.find((s) => !s.removed && s.src === match?.[1]) ?? null
     },
-    createElement: () => ({ src: "", async: false }),
+    createElement: () => ({ src: "", async: false, remove: vi.fn() }),
     body: {
-      appendChild: (node: { src: string; async: boolean }) => {
+      appendChild: (node: { src: string; async: boolean; onload?: () => void; remove: () => void }) => {
         appended.push(node)
         scripts.push({ src: node.src, removed: false })
       },
@@ -61,11 +64,12 @@ function installBrowser() {
   vi.stubGlobal("window", {
     document,
     location: { hostname: "classin.co.kr", protocol: "https:", pathname: "/" },
+    dispatchEvent,
     fbq,
     kakaoPixel: (() => undefined) as unknown,
   })
 
-  return { jar, scripts, appended, fbq }
+  return { jar, scripts, appended, fbq, dispatchEvent }
 }
 
 afterEach(() => {
@@ -149,5 +153,23 @@ describe("재동의 시 픽셀 복구", () => {
     window.location.pathname = "/admin"
     grantMarketingPixels()
     expect(env.appended).toHaveLength(0)
+  })
+
+  it("재동의 후 SDK 로드가 끝나면 준비 이벤트를 보낸다", () => {
+    revokeMarketingPixels()
+    env.jar.set("cln_consent", encodeURIComponent(JSON.stringify({ v: CONSENT_POLICY_VERSION, analytics: true, marketing: true, ts: 1, s: 1 })))
+    grantMarketingPixels()
+    env.appended[0]?.onload?.()
+    expect(env.dispatchEvent).toHaveBeenCalledWith(expect.objectContaining({ type: KAKAO_PIXEL_READY_EVENT }))
+  })
+
+  it("SDK 다운로드 중 동의를 철회하면 늦은 로드를 폐기한다", () => {
+    revokeMarketingPixels()
+    grantMarketingPixels()
+    window.kakaoPixel = vi.fn()
+    env.appended[0]?.onload?.()
+    expect(window.kakaoPixel).toBeUndefined()
+    expect(env.appended[0]?.remove).toHaveBeenCalled()
+    expect(env.dispatchEvent).not.toHaveBeenCalled()
   })
 })
