@@ -1,9 +1,11 @@
 // 라운드 5 R-7·R-13·R-14 — REV 키보드 흐름: 검색 → 첫 칸, 한 칸 붙여넣기 = 편집 진입, 잠긴 칸 Enter → 상세·고치는 길.
 import { readFileSync } from "fs"
 import { join } from "path"
-import { describe, expect, it } from "vitest"
+import { createElement } from "react"
+import { renderToStaticMarkup } from "react-dom/server"
+import { describe, expect, it, vi } from "vitest"
 
-import { firstMatrixCellForMonth, parseSinglePastedAmount, type MatrixCellCoord } from "@/components/admin/branch/ledger/rev-matrix-logic"
+import { firstMatrixCellForMonth, parseSinglePastedAmount, useMatrixEditor, type MatrixCellCoord } from "@/components/admin/branch/ledger/rev-matrix-logic"
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8")
 
@@ -58,7 +60,6 @@ describe("firstMatrixCellForMonth — 검색 뒤 Enter·↓(R-7)", () => {
 describe("배선", () => {
   const workbench = read("components/admin/branch/SalesLedgerWorkbench.tsx")
   const matrix = read("components/admin/branch/ledger/RevMatrix.tsx")
-  const logic = read("components/admin/branch/ledger/rev-matrix-logic.ts")
 
   it("붙여넣기: 한 칸 숫자는 주차 칸 차단보다 먼저 편집 진입으로(R-13)", () => {
     const paste = sliceBetween(workbench, "const handleMatrixPaste = useCallback(", "const confirmMatrixPaste = useCallback(")
@@ -77,7 +78,23 @@ describe("배선", () => {
 
   it("잠긴 칸 Enter·F2·더블클릭 → activateLocked(월·주차 칸 모두)(R-14)", () => {
     expect(matrix.match(/actions!\.activateLocked\(/g)?.length).toBe(4)
-    expect(logic).toContain("activateLocked: (coord: MatrixCellCoord) => onLockedCellActivate?.(coord)")
+    const activate = vi.fn()
+    const capture = vi.fn<(editor: ReturnType<typeof useMatrixEditor>) => void>()
+    function Probe() {
+      capture(useMatrixEditor({
+        editableCells: [], cellValue: () => 0, cellConfidence: () => "expected",
+        onCommitCell: vi.fn(), onLockedCellActivate: activate,
+      }))
+      return null
+    }
+    renderToStaticMarkup(createElement(Probe))
+    const editor = capture.mock.calls[0][0]
+    const month = { rowId: "row-1", month: "2026-09" }
+    const week = { ...month, week: 2 }
+    editor.actions.activateLocked(month)
+    editor.actions.activateLocked(week)
+    expect(activate).toHaveBeenNthCalledWith(1, month)
+    expect(activate).toHaveBeenNthCalledWith(2, week)
     expect(workbench).toContain("onLockedCellActivate: onMatrixLockedCellActivate,")
     const impl = sliceBetween(workbench, "lockedCellActivateRef.current = (coord) => {", "}, [loadDealDetail, pushMatrixToast, rowById])")
     expect(impl).toContain("void loadDealDetail(row, { month: coord.month })")

@@ -2,13 +2,16 @@
 // 순수 함수는 직접 구동하고, 워크벤치·에디터 배선은 이 저장소 관례대로 소스 스캔으로 확인한다(렌더 하네스 없음).
 import { readFileSync } from "fs"
 import { join } from "path"
-import { describe, expect, it } from "vitest"
+import { createElement } from "react"
+import { renderToStaticMarkup } from "react-dom/server"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { buildRevMatrixCsvRows, withCaptionRow } from "@/components/admin/branch/ledger/ledger-export"
 import {
   matrixDisplayedCellAmount,
   matrixWeekInputs,
   pendingWeekDisplay,
+  useMatrixEditor,
   type MatrixPendingDraft,
 } from "@/components/admin/branch/ledger/rev-matrix-logic"
 import type { LedgerRevenueRow, RevMonthlyBucket } from "@/components/admin/branch/ledger/shared"
@@ -158,6 +161,7 @@ describe("matrixDisplayedCellAmount — Ctrl+C는 칸에 보이는 값을 복사
 
 describe("useMatrixEditor 배선 — 0 커밋 차단(R-12)·Ctrl+C(B1)", () => {
   const logic = read("components/admin/branch/ledger/rev-matrix-logic.ts")
+  afterEach(() => vi.unstubAllGlobals())
 
   it("0 커밋은 에디터가 아니라 onCommitCell이 '만들어질 초안 금액'으로 막는다 — 주차 병합 행의 한 주 0은 저장된다(리뷰 보강)", () => {
     const commit = sliceBetween(logic, "const commitBuffer = useCallback(", "const moveSelection = useCallback(")
@@ -171,11 +175,34 @@ describe("useMatrixEditor 배선 — 0 커밋 차단(R-12)·Ctrl+C(B1)", () => {
   })
 
   it("Ctrl/Cmd+C는 물리 키(KeyC)로 판정하고, 드래그로 고른 텍스트가 있으면 브라우저 기본 복사를 둔다", () => {
-    const keydown = sliceBetween(logic, "const onSelectedKeyDown = useCallback(", "// 셀 핸들러가 호출하는 액션들")
-    expect(keydown).toContain('event.code === "KeyC"')
-    expect(keydown).toContain("window.getSelection()?.toString()")
-    expect(keydown).toContain("onCopyCell(coord)")
-    expect(keydown.indexOf('event.code === "KeyC"')).toBeLessThan(keydown.indexOf('event.key === "d"'))
+    const copy = vi.fn()
+    const capture = vi.fn<(editor: ReturnType<typeof useMatrixEditor>) => void>()
+    const coord = { rowId: "row-1", month: "2026-09" }
+    function Probe() {
+      capture(useMatrixEditor({
+        editableCells: [coord], cellValue: () => 100, cellConfidence: () => "expected",
+        onCommitCell: vi.fn(), onCopyCell: copy,
+      }))
+      return null
+    }
+    renderToStaticMarkup(createElement(Probe))
+    const editor = capture.mock.calls[0][0]
+    const preventDefault = vi.fn()
+    const event = { ctrlKey: true, metaKey: false, code: "KeyC", key: "c", nativeEvent: { isComposing: false }, preventDefault } as unknown as React.KeyboardEvent<HTMLTableCellElement>
+
+    vi.stubGlobal("window", { getSelection: () => ({ toString: () => "선택 텍스트" }) })
+    editor.actions.onSelectedKeyDown(event, coord)
+    expect(copy).not.toHaveBeenCalled()
+    expect(preventDefault).not.toHaveBeenCalled()
+
+    vi.stubGlobal("window", { getSelection: () => ({ toString: () => "" }) })
+    editor.actions.onSelectedKeyDown(event, coord)
+    expect(copy).toHaveBeenCalledWith(coord)
+    expect(preventDefault).toHaveBeenCalledOnce()
+
+    vi.stubGlobal("window", {})
+    editor.actions.onSelectedKeyDown(event, coord)
+    expect(copy).toHaveBeenCalledTimes(2)
   })
 })
 
