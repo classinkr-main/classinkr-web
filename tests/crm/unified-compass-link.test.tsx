@@ -57,6 +57,8 @@ function row(partial: Partial<CrmUnifiedCustomerRow>): CrmUnifiedCustomerRow {
     ownerKeys: ["박담당"],
     lifecycle: "active_lead",
     statusLabel: "접촉 중",
+    stage: null, stageLabel: null, subjectLabel: null, categoryLabel: null,
+    tier: null, trust: null, moneyBand: null,
     nextActionLabel: "첫 연락",
     priorityReason: "-",
     score: 10,

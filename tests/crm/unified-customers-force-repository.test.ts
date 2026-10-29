@@ -68,6 +68,9 @@ const CACHED_SENTINEL_SNAPSHOT = {
 }
 
 function mockRealSourcesEmpty() {
+  vi.doMock("@/lib/repositories/crm-tasks", () => ({
+    listCrmTasks: vi.fn().mockResolvedValue({ health: { ok: true }, rows: [] }),
+  }))
   vi.doMock("@/lib/repositories/leads", () => ({ getLeads: vi.fn().mockResolvedValue([]) }))
   vi.doMock("@/lib/repositories/lead-activity", () => ({
     getLeadsActivitySummary: vi.fn().mockResolvedValue({}),

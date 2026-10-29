@@ -55,6 +55,10 @@ const ContactLinkTracker = dynamic(
   () => import("@/components/ContactLinkTracker").then((mod) => mod.ContactLinkTracker),
   { ssr: false }
 )
+const PixelConsentSync = dynamic(
+  () => import("@/components/PixelConsentSync").then((mod) => mod.PixelConsentSync),
+  { ssr: false }
+)
 const ChannelTalkLoader = dynamic(
   () => import("@/components/ui/ChannelTalkLoader").then((mod) => mod.ChannelTalkLoader),
   { ssr: false }
@@ -132,6 +136,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
       </main>
       {showPublicChrome ? <ConditionalFooter /> : null}
       {showGoogleTag ? <GoogleAdsScript /> : null}
+      {showPublicChrome ? <PixelConsentSync /> : null}
       {showAnalytics ? (
         <>
           <GTMScript />

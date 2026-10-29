@@ -12,6 +12,7 @@ import {
   CRM_PRIORITY_BUCKET_LABELS,
   CRM_PRIORITY_LANE_LABELS,
   sortPriorityItems,
+  buildAccountOpenTaskDueMap,
   type CrmPriorityBucket,
   type CrmPriorityItem,
   type CrmPriorityLane,
@@ -22,6 +23,7 @@ import { onLeadsMutated, type LeadRecord } from "@/lib/repositories/leads"
 import { listCrmTasks, onCrmTasksMutated, type CrmTaskRecord } from "@/lib/repositories/crm-tasks"
 import { onContactLogsMutated } from "@/lib/repositories/contact-logs"
 import type { LeadActivityBadge } from "@/lib/repositories/lead-activity"
+import { crmContactTargetKey, getCrmCustomerContactMaps } from "@/lib/repositories/crm-events"
 import {
   buildCompassDemoIndex,
   hydrateCompassDemoSource,
@@ -265,6 +267,8 @@ interface CrmPrioritySourceSnapshot {
   tasks: CrmTaskRecord[]
   tasksOk: boolean
   engagements: Record<string, LeadActivityBadge> | null
+  /** 자체 컨택 기록의 대상별 최근 시각. Data Cache(JSON) 경계라 Map 대신 평문 객체. */
+  latestContactByTarget: Record<string, string>
   /** Data Cache(JSON) 경계라 Map 대신 엔트리 배열 형태 — 읽는 쪽이 hydrateCompassDemoSource로 되돌린다. */
   demoSource: CompassDemoSourceJson
   /**
@@ -294,8 +298,8 @@ const getCachedSourceSnapshot = unstable_cache(
     if (!snapshot.complete) throw new IncompleteCrmPrioritySnapshotError(snapshot)
     return snapshot
   },
-  // "json-v2": demoSource가 Map이던 엔트리(`{}`로 깨진 채 저장됨)를 건너뛰기 위한 키 버전.
-  [ADMIN_CRM_PRIORITY_QUEUE_SNAPSHOT_CACHE_TAG, "json-v2"],
+  // json-v3: 자체 연락 시각 지도 추가 — 이전 캐시에는 필드가 없어 읽을 때 오류가 날 수 있다.
+  [ADMIN_CRM_PRIORITY_QUEUE_SNAPSHOT_CACHE_TAG, "json-v3"],
   { revalidate: 60, tags: [ADMIN_CRM_PRIORITY_QUEUE_SNAPSHOT_CACHE_TAG] }
 )
 
@@ -343,11 +347,12 @@ async function loadSourceSnapshot(options: { bypassTaskCache?: boolean } = {}): 
   // leads·NEO 고객·참여 신호·Compass 데모는 통합 고객DB(crm-unified-customers.ts)와 공유하는
   // 원본 스냅샷(getCrmCoreSourceSnapshot)에서 가져온다(2026-09-07 감사 #7) — 이 넷을 독립
   // Promise.allSettled로 모으던 걸 걷어냈다. 이 큐만 필요한 할 일(tasks)은 그대로 별도 수집.
-  const [coreResult, taskResult] = await Promise.allSettled([
+  const [coreResult, taskResult, contactMapsResult] = await Promise.allSettled([
     getCrmCoreSourceSnapshot(),
     listCrmTasks(
       options.bypassTaskCache ? { status: "active", limit: 200, bypassCache: true } : { status: "active", limit: 200 }
     ),
+    getCrmCustomerContactMaps(),
   ])
 
   const core = coreResult.status === "fulfilled" ? coreResult.value : EMPTY_CORE_SNAPSHOT
@@ -373,6 +378,9 @@ async function loadSourceSnapshot(options: { bypassTaskCache?: boolean } = {}): 
     tasks,
     tasksOk,
     engagements,
+    latestContactByTarget: contactMapsResult.status === "fulfilled"
+      ? Object.fromEntries(contactMapsResult.value.latestContactByTarget)
+      : {},
     // core가 이미 JSON 안전 형태(CompassDemoSourceJson)로 반환한다 — 여기서 다시 접지 않는다.
     // unstable_cache는 JSON으로 저장한다 — Map을 그대로 넣으면 적중 뒤 `.get`이 터진다(2026-09-04 500 사고).
     demoSource: core.demoSource,
@@ -436,8 +444,19 @@ export async function getCrmPriorityCandidatePool(
     if (item) items.push(item)
   }
 
+  // 계정 열린 할 일 — 이미 로드한 활성 할 일 배열에서 계정별 가장 이른 due를 뽑는다.
+  const accountTaskDueMap = buildAccountOpenTaskDueMap(snapshot.tasks)
+
   for (const account of snapshot.neoRows) {
-    const item = buildNeoAccountPriorityItem(account, now, { demoIndex })
+    const item = buildNeoAccountPriorityItem(account, now, {
+      demoIndex,
+      ownSignals: {
+        lastContactAt:
+          snapshot.latestContactByTarget[crmContactTargetKey("neo_account", account.accountId)] ??
+          null,
+        openTaskDueAt: accountTaskDueMap.get(account.accountId) ?? null,
+      },
+    })
     if (item) items.push(item)
   }
 

@@ -6,6 +6,7 @@ import {
   type LeadAttributionPayload,
 } from "@/lib/lead-attribution-payload"
 import { collectLeadAttribution, type LeadAttribution } from "@/lib/marketing-attribution"
+import { CONSENT_POLICY_VERSION } from "@/lib/consent/consent"
 
 /**
  * 미러링 경로(도입신청·쇼룸 예약)의 귀속 정규화.
@@ -164,7 +165,7 @@ describe("collectLeadAttribution → 폼 본문 → sanitizeLeadAttribution 왕�
   const STORAGE_KEY = "classinkr.leadAttribution.v1"
 
   /** 수집기가 보는 브라우저 표면만 흉내 낸다(vitest 환경은 node). */
-  function stubBrowser(href: string, referrer: string, stored?: LeadAttribution) {
+  function stubBrowser(href: string, referrer: string, stored?: LeadAttribution, marketing = true) {
     const store = new Map<string, string>()
     if (stored) store.set(STORAGE_KEY, JSON.stringify(stored))
     vi.stubGlobal("window", {
@@ -172,9 +173,12 @@ describe("collectLeadAttribution → 폼 본문 → sanitizeLeadAttribution 왕�
       localStorage: {
         getItem: (key: string) => store.get(key) ?? null,
         setItem: (key: string, value: string) => void store.set(key, value),
+        removeItem: (key: string) => void store.delete(key),
       },
     })
-    vi.stubGlobal("document", { referrer })
+    const consent = { v: CONSENT_POLICY_VERSION, analytics: true, marketing, ts: 1, s: 1 }
+    vi.stubGlobal("document", { referrer, cookie: `cln_consent=${encodeURIComponent(JSON.stringify(consent))}` })
+    return store
   }
 
   /** CheckoutRequestForm 본문 모양 — 귀속은 폼 필드 뒤에 평평하게 한 번 펼친다. */
@@ -282,6 +286,20 @@ describe("collectLeadAttribution → 폼 본문 → sanitizeLeadAttribution 왕�
     for (const build of [checkoutBody, showroomBody]) {
       expect(sanitizeLeadAttribution(overTheWire(build(collected)))).toEqual(collected)
     }
+  })
+
+  it("마케팅 동의가 없으면 이전에 저장된 네이버 광고 귀속을 사용하지 않는다", () => {
+    const store = stubBrowser("https://classin.co.kr/showroom", "", {
+      utmSource: "naver",
+      naverAd: { n_ad: "nad-old" },
+      landingPage: "https://classin.co.kr/l/omo1?n_ad=nad-old",
+    }, false)
+
+    const collected = collectLeadAttribution()
+    expect(collected.naverAd).toBeUndefined()
+    expect(collected.utmSource).toBeUndefined()
+    expect(collected.landingPage).toBe("https://classin.co.kr/showroom")
+    expect(store.has(STORAGE_KEY)).toBe(false)
   })
 
   it("수집기 타입의 모든 필드를 서버가 받는다 — 한쪽에만 필드를 더하면 여기서 깨진다", () => {

@@ -5,8 +5,7 @@ import Script from "next/script"
 import { useEffect } from "react"
 import { META_PIXEL_ID } from "@/lib/analytics-config"
 import { isAnalyticsTagExcludedPath, sanitizeTrackingPath } from "@/lib/tracking-paths"
-
-let lastMetaPageViewPath: string | null = null
+import { getLastMetaPageViewPath, setLastMetaPageViewPath } from "@/lib/pixels/teardown"
 
 export function MetaPixelScript() {
   const pathname = usePathname()
@@ -19,7 +18,7 @@ export function MetaPixelScript() {
 
     // 픽셀에 싣는 path 도 광고 귀속 파라미터만 남긴다(prefill·토큰 쿼리 차단).
     const path = sanitizeTrackingPath(`${pathname}${search ? `?${search}` : ""}`)
-    if (lastMetaPageViewPath === path) return
+    if (getLastMetaPageViewPath() === path) return
 
     let timeout: ReturnType<typeof setTimeout> | null = null
     let attempts = 0
@@ -27,7 +26,7 @@ export function MetaPixelScript() {
     const trackPageView = () => {
       if (window.fbq) {
         window.fbq("track", "PageView", { path })
-        lastMetaPageViewPath = path
+        setLastMetaPageViewPath(path)
         return
       }
 

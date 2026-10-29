@@ -13,6 +13,7 @@ import { createCustomer } from "@/lib/portal/repositories/customers"
 import { logActivity } from "@/lib/portal/repositories/activity"
 import type { Customer, Deal } from "@/lib/portal/types"
 import { getLeadById, updateLead, type LeadRecord } from "@/lib/repositories/leads"
+import { deriveLeadRegionLabel } from "@/lib/crm/lead-message"
 import {
   findConfirmedLeadConversionLink,
   upsertConfirmedLeadCustomerLink,
@@ -283,7 +284,9 @@ export async function convertLeadToCrm(
       address: null,
       business_number: null,
       campus_name: null,
-      region_label: lead.branch?.trim() || null,
+      // 원문("전주시", "Cheongju")이 아니라 표준 시도 라벨을 저장한다 — customers.region_label
+      // 오염의 유일한 유입구였다. 표준화 실패 시에만 원문 폴백.
+      region_label: deriveLeadRegionLabel({ branch: lead.branch, message: lead.message }) ?? lead.branch?.trim() ?? null,
       notes: conversionNotes,
       created_by: actor.userId ?? null,
     })
