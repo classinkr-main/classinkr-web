@@ -159,7 +159,7 @@ export function DocsListRow({
           <span className="block break-keep text-[16px] font-semibold leading-snug text-[#111110] transition-colors duration-150 group-hover:text-[#084734]">
             <SearchHighlight text={article.title} query={query} />
           </span>
-          <span className="mt-1.5 line-clamp-2 block break-words text-[15px] leading-[26px] text-[#4F4C49]">
+          <span className="mt-1.5 line-clamp-2 break-words text-[15px] leading-[26px] text-[#4F4C49]">
             <SearchHighlight text={article.description} query={query} />
           </span>
           <MetaLine parts={metaParts} className="mt-2.5" />
@@ -201,7 +201,9 @@ export function DocsCompactRow({ article }: { article: DocsArticleSummary }) {
           FOCUS_RING
         )}
       >
-        <span className="w-[52px] shrink-0 text-[13px] tabular-nums text-[#615D59]">{date}</span>
+        <span className="w-[64px] shrink-0 whitespace-nowrap text-[13px] tabular-nums text-[#615D59]">
+          {date}
+        </span>
         <span className="block min-w-0 flex-1">
           <span className="block break-keep text-[15px] font-semibold leading-snug text-[#111110] transition-colors duration-150 group-hover:text-[#084734]">
             {article.title}

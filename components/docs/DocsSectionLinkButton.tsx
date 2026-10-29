@@ -78,7 +78,7 @@ export function DocsSectionLinkButton({
       <span
         role="status"
         className={cn(
-          "pointer-events-none absolute left-full top-1/2 ml-1 -translate-y-1/2 whitespace-nowrap rounded-[6px] bg-[#111110] px-2 py-1 text-xs font-semibold text-white transition-opacity duration-150",
+          "pointer-events-none absolute right-0 top-full z-10 mt-1 whitespace-nowrap rounded-[6px] bg-[#111110] px-2 py-1 text-xs font-semibold text-white transition-opacity duration-150",
           status === "idle" ? "opacity-0" : "opacity-100"
         )}
       >
