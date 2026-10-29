@@ -3,9 +3,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { getCrmUnifiedHealthDistribution } from "@/lib/repositories/crm-unified-customers"
+import { dataOwnerFromRequest } from "@/lib/admin/data-owner"
 
 // 활성 고객(neo_account) 건강도 분포(안전/주의/위험) — 코크핏 도넛 + 인사이트 담당별 스택바(T2)용.
-// computeCustomerHealth(SSOT)로 매핑한 실집계 · 전역(검색/담당 필터 무관).
+// computeCustomerHealth(SSOT)로 매핑한 실집계. 기존 무인자 요청은 전역이며,
+// Overview의 owner=__me 요청은 검증된 계정의 담당 키로만 좁히고 캐시하지 않는다.
 // getCrmUnifiedCustomers({limit:1}) 대신 소스 스냅샷 → 카운트 집계만 타는 경량 경로를
 // 쓴다 — 도넛 숫자에 쓰이지 않는 필터/정렬/오너 집계까지 매번 태우지 않기 위함.
 // 응답: { distribution: { total, safe, watch, risk, byOwner[] }, generatedAt } — 상위 4개 키는
@@ -15,7 +17,11 @@ export async function GET(req: NextRequest) {
   if (admin instanceof NextResponse) return admin
 
   try {
-    const distribution = await getCrmUnifiedHealthDistribution()
+    const personal = new URL(req.url).searchParams.get("owner") === "__me"
+    const distribution = personal
+      ? await getCrmUnifiedHealthDistribution({ ownerKeys: (await dataOwnerFromRequest(new URL(req.url), admin)) ?? [] })
+      : await getCrmUnifiedHealthDistribution()
+    if (personal) return NextResponse.json({ distribution, generatedAt: new Date().toISOString() }, { headers: { "Cache-Control": "private, no-store" } })
     return adminCachedJson({ distribution, generatedAt: new Date().toISOString() })
   } catch (error) {
     console.error("[GET /api/admin/crm/health-distribution]", error)

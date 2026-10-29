@@ -1576,12 +1576,19 @@ export async function evaluateCrmSegmentFilters(
 // sortPriorityItems 전량 정렬·오너 집계)는 전부 건너뛴다. 카운트 산식은
 // collectHealthDistribution을 그대로 재사용해 상위 4개 키가 getCrmUnifiedCustomers().healthDistribution과
 // 동일한 값을 내고, 같은 순회에서 모은 담당별 분포(byOwner)를 덧붙인다(T2).
+// ownerKeys가 지정되면 공용 원천 스냅샷에서 개인 행만 거른 뒤 같은 집계 함수를 사용한다.
 export async function getCrmUnifiedHealthDistribution(
-  options: { now?: Date; bypassCache?: boolean } = {}
+  options: { now?: Date; bypassCache?: boolean; ownerKeys?: string[] } = {}
 ): Promise<CrmHealthDistributionWithOwners> {
   const now = options.now ?? new Date()
   const bypassCache = options.bypassCache === true
   const snapshot = await getSourceSnapshot(now, options.now != null || bypassCache)
   if (bypassCache) revalidateTag(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, { expire: 0 })
-  return collectHealthDistribution(snapshot.rows, now.getTime())
+  // undefined은 기존 전체 집계, 빈 배열은 접근 가능한 담당자가 없다는 뜻이다.
+  // 빈 Set을 rowMatchesOwner에 넘기면 전체를 뜻하므로 명시적으로 빈 결과로 처리한다.
+  const ownerKeys = options.ownerKeys === undefined ? null : new Set(uniqueOwnerKeys(options.ownerKeys))
+  const rows = ownerKeys === null
+    ? snapshot.rows
+    : ownerKeys.size === 0 ? [] : snapshot.rows.filter((row) => rowMatchesOwner(row, ownerKeys))
+  return collectHealthDistribution(rows, now.getTime())
 }
