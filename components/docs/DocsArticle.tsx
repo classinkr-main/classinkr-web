@@ -2,6 +2,8 @@ import Link from "next/link"
 import type { ReactNode } from "react"
 import { ChevronRight, Info, TriangleAlert } from "lucide-react"
 
+import { sanitizePublicUrl } from "@/lib/safe-public-url"
+
 import { DocsSectionLinkButton } from "./DocsSectionLinkButton"
 import type { DocsArticleSection, DocsChecklistItem } from "./types"
 import { cn } from "./utils"
@@ -38,7 +40,8 @@ function formatDashTitle(title: ReactNode) {
 
 // 단계 문장 안의 마크다운 링크 `[글](/docs/...)` 와 굵게 `**글**` 만 살린다.
 // `[업그레이드]` 처럼 괄호 주소가 없는 대괄호는 화면 버튼 이름이라 그대로 둔다.
-const INLINE_MARKDOWN_PATTERN = /\[([^\]]+)\]\(((?:\/|#|https?:\/\/|mailto:)[^)\s]*)\)|\*\*([^*]+)\*\*/g
+// 주소는 본문 렌더러와 같은 규칙(sanitizePublicUrl: /경로·#앵커·http(s))만 링크로 만들고, 나머지는 글자 그대로 둔다.
+const INLINE_MARKDOWN_PATTERN = /\[([^\]]+)\]\(([^)\s]+)\)|\*\*([^*]+)\*\*/g
 
 const INLINE_LINK_CLASS =
     "font-semibold text-[#084734] underline decoration-[#084734]/30 underline-offset-4 transition-colors duration-150 hover:decoration-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
@@ -51,7 +54,8 @@ function renderInlineMarkdown(text: string): ReactNode {
         const start = match.index ?? 0
         if (start > lastIndex) parts.push(text.slice(lastIndex, start))
 
-        const [whole, linkText, href, boldText] = match
+        const [whole, linkText, rawHref, boldText] = match
+        const href = rawHref ? (rawHref.startsWith("#") ? rawHref : sanitizePublicUrl(rawHref, "")) : ""
         if (linkText && href) {
             const isInternal = href.startsWith("/") || href.startsWith("#")
             parts.push(

@@ -89,6 +89,7 @@ export function getDocListPreview(doc: Pick<DocArticle, "sections">): {
 export interface DocListItemLike {
   title: string
   href: string
+  category?: string
   kind?: DocListKind
   updatedAtIso?: string
 }
@@ -97,7 +98,10 @@ function getSlugFromHref(href: string) {
   return href.split(/[?#]/)[0].split("/").filter(Boolean).pop() ?? ""
 }
 
-/** 최근에 고친 순서로 고른다. 같은 날짜는 원래 순서를 지킨다. */
+/**
+ * 최근에 고친 순서로 고른다. 같은 날짜에 여러 문서를 함께 고친 날이 많아, 같은 날짜 안에서는
+ * 주제(category)를 번갈아 골라 한 주제가 목록을 다 차지하지 않게 한다. 주제 안 순서는 원래 순서를 지킨다.
+ */
 export function pickRecentlyUpdated<T extends DocListItemLike>(
   items: readonly T[],
   { limit = 6, excludeHrefs, excludeKinds = [] }: {
@@ -106,17 +110,42 @@ export function pickRecentlyUpdated<T extends DocListItemLike>(
     excludeKinds?: readonly DocListKind[]
   } = {}
 ): T[] {
-  return items
-    .map((item, index) => ({ item, index }))
-    .filter(
-      ({ item }) =>
-        Boolean(item.updatedAtIso) &&
-        !excludeHrefs?.has(item.href) &&
-        !(item.kind && excludeKinds.includes(item.kind))
-    )
-    .sort((a, b) => (b.item.updatedAtIso ?? "").localeCompare(a.item.updatedAtIso ?? "") || a.index - b.index)
-    .slice(0, limit)
-    .map(({ item }) => item)
+  const byDate = new Map<string, T[]>()
+  for (const item of items) {
+    if (!item.updatedAtIso || excludeHrefs?.has(item.href)) continue
+    if (item.kind && excludeKinds.includes(item.kind)) continue
+
+    const date = item.updatedAtIso.slice(0, 10)
+    const bucket = byDate.get(date) ?? []
+    bucket.push(item)
+    byDate.set(date, bucket)
+  }
+
+  const picked: T[] = []
+  for (const date of [...byDate.keys()].sort((a, b) => b.localeCompare(a))) {
+    const queues = new Map<string, T[]>()
+    for (const item of byDate.get(date) ?? []) {
+      const key = item.category ?? ""
+      const queue = queues.get(key) ?? []
+      queue.push(item)
+      queues.set(key, queue)
+    }
+
+    let progressed = true
+    while (progressed && picked.length < limit) {
+      progressed = false
+      for (const queue of queues.values()) {
+        const next = queue.shift()
+        if (!next) continue
+        picked.push(next)
+        progressed = true
+        if (picked.length >= limit) break
+      }
+    }
+    if (picked.length >= limit) break
+  }
+
+  return picked
 }
 
 interface DocListGroupRule {

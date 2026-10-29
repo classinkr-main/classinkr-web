@@ -228,7 +228,7 @@ export function DocsMediaLightbox({
       aria-describedby={description ? "docs-lightbox-caption" : undefined}
       onClose={handleClose}
       onKeyDown={handleKeyDown}
-      className="fixed inset-0 m-0 h-full max-h-none w-full max-w-none overflow-hidden border-0 bg-[#111110]/95 p-0 text-white backdrop:bg-transparent open:flex open:flex-col print:hidden"
+      className="fixed inset-0 m-0 h-full max-h-none w-full max-w-none overflow-hidden border-0 bg-[#111110]/[0.97] p-0 text-white backdrop:bg-transparent open:flex open:flex-col print:hidden"
     >
       {isOpen && current ? (
         <>

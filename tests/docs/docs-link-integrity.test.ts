@@ -161,6 +161,7 @@ function linkedDoc(href: string) {
 
 const MARKDOWN_IMAGE_RE = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+["'][^"']*["'])?\)/g
 const MARKDOWN_LINK_RE = /(?<!!)\[([^\]]+)\]\(([^)]+)\)/g
+// 본문은 lib/blog-markdown.ts, 단계는 components/docs/DocsArticle.tsx renderInlineMarkdown 이 링크로 그린다.
 // 링크 문법 밖에 맨글자로 적힌 /docs/... 경로(렌더러가 링크로 만들지 않지만 독자가 따라 칠 수 있다).
 const BARE_DOCS_PATH_RE = /(?<![\w/.(\]-])\/docs(?:\/[\w%.~-]+)+\/?/g
 
@@ -237,10 +238,16 @@ describe("docs link integrity — 정적 문서 기준", () => {
     expect(problems).toEqual([])
   })
 
-  it("단계(steps)에는 마크다운 링크를 쓰지 않는다 — 단계 목록은 글자 그대로 그려진다", () => {
-    // components/docs/DocsArticle.tsx StepList 는 마크다운을 해석하지 않아 "[이름](/주소)" 가 그대로 보인다.
+  it("단계(steps)에서 주소처럼 적은 [이름](주소) 는 실제로 링크가 되는 형식이다", () => {
+    // components/docs/DocsArticle.tsx renderInlineMarkdown 은 주소가 / # http(s):// mailto: 로 시작할 때만 링크로 그린다.
+    // "[단색](색상값과 투명도 입력)" 같은 버튼 이름 + 덧붙임 설명은 글자 그대로 두는 것이 맞으므로,
+    // 주소처럼 생겼는데(앞의 / 나 https:// 가 빠진 경로·도메인) 링크가 되지 않는 것만 잡는다.
+    const rendersAsLink = /^(?:\/|#|https?:\/\/|mailto:)[^)\s]*$/
+    const looksLikeAddress =
+      /^(?:www\.\S+|[\w-]+(?:\.[\w-]+)*\.(?:com|kr|net|io|html?)(?:\/\S*)?|[\w-]+(?:\/[\w.%~-]+)+\/?)$/i
     const problems = textLinks
       .filter((link) => link.markdown && !link.place.endsWith("본문"))
+      .filter((link) => !rendersAsLink.test(link.href) && looksLikeAddress.test(link.href))
       .map((link) => `${where(link.doc)} → ${link.place} → [${link.label}](${link.href})`)
     expect(problems).toEqual([])
   })

@@ -251,7 +251,8 @@ function isStopword(token: string) {
  * `nextToken` 은 "보이지 않아요"처럼 뒤 낱말이 부정이면 앞 낱말을 선택 검색어로 돌리는 데 쓴다.
  */
 function buildTerm(token: string, nextToken?: string): QueryTerm | null {
-  if (!token || isStopword(token)) return null
+  // ㅠㅠ·ㅋㅋ 같은 자모만 있는 말은 뜻이 없다.
+  if (!token || isStopword(token) || /^[ㄱ-ㅎㅏ-ㅣ]+$/.test(token)) return null
 
   // 증상 표지(안 돼요·오류): 문서의 "안 될 때"와 맞추되 필수는 아니다.
   if (SYMPTOM_TOKEN.test(token)) {
@@ -265,7 +266,10 @@ function buildTerm(token: string, nextToken?: string): QueryTerm | null {
   // 못 들어가요 → "들어가지지 않을 때"·"입장이 안 될 때"와 부정어를 뗀 말·동의어로 맞춘다.
   if (/^[안못][가-힣]/.test(token) && !NEGATION_NOUN.test(token)) {
     const stem = stripSuffix(token, VERB_ENDINGS)
-    const verbVariants = tokenVariants(token.slice(1)).filter((variant) => variant.length >= 2)
+    // "나요"·"와요"처럼 어미만 남는 꼴은 아무 문장에나 걸려서 뺀다.
+    const verbVariants = tokenVariants(token.slice(1)).filter(
+      (variant) => variant.length >= 2 && !variant.endsWith("요")
+    )
     const primary = uniqueForms([token, stem, token.slice(0, 2), ...verbVariants])
     const group = findSynonymGroup(verbVariants)
     return {
@@ -400,6 +404,7 @@ interface PreparedDoc {
   category: Field
   keywords: Field[]
   sections: PreparedSection[]
+  headings: Field[]
   body: Field
   kind?: DocListKind
 }
@@ -409,39 +414,72 @@ function toField(value: string): Field {
   return { norm, compact: compact(norm) }
 }
 
-const preparedCache = new WeakMap<DocsSearchable, PreparedDoc>()
+function joinFields(fields: readonly Field[]): Field {
+  return {
+    norm: fields.map((field) => field.norm).join(" "),
+    compact: fields.map((field) => field.compact).join(""),
+  }
+}
+
+const preparedByObject = new WeakMap<DocsSearchable, PreparedDoc>()
+/**
+ * 요약 객체는 요청마다 새로 만들어지므로 내용으로도 캐시한다. searchText 는 같은 문서에서
+ * 함께 만들어지는 전체 본문이라, 문서가 바뀌면 키도 바뀐다.
+ */
+const preparedByContent = new Map<string, PreparedDoc>()
+const MAX_PREPARED = 1000
+
+function contentKey(doc: DocsSearchable) {
+  if (!doc.searchText) return null
+  return [doc.searchIndex ? doc.searchIndex.kind : "-", doc.category ?? "", doc.searchText].join("\u0000")
+}
+
+function buildPrepared(doc: DocsSearchable): PreparedDoc {
+  const index = doc.searchIndex
+  const base = {
+    title: toField(doc.title),
+    description: toField(doc.description),
+    category: toField(doc.category ?? ""),
+  }
+
+  if (!index) {
+    // 색인이 없는 요약(외부에서 만든 목록)은 예전처럼 searchText 전체를 본문으로 본다.
+    return { ...base, keywords: (doc.tags ?? []).map(toField), sections: [], headings: [], body: toField(doc.searchText ?? "") }
+  }
+
+  const sections = index.sections.map((section) => ({
+    id: section.id,
+    title: section.heading,
+    heading: toField(section.heading),
+    text: toField(section.text),
+  }))
+  return {
+    ...base,
+    keywords: index.keywords.map(toField),
+    sections,
+    headings: sections.map((section) => section.heading),
+    body: joinFields([...sections.map((section) => section.text), toField(index.extra)]),
+    kind: index.kind,
+  }
+}
 
 function prepare(doc: DocsSearchable): PreparedDoc {
-  const cached = preparedCache.get(doc)
+  const cached = preparedByObject.get(doc)
   if (cached) return cached
 
-  const index = doc.searchIndex
-  const prepared: PreparedDoc = index
-    ? {
-        title: toField(doc.title),
-        description: toField(doc.description),
-        category: toField(doc.category ?? ""),
-        keywords: index.keywords.map(toField),
-        sections: index.sections.map((section) => ({
-          id: section.id,
-          title: section.heading,
-          heading: toField(section.heading),
-          text: toField(section.text),
-        })),
-        body: toField([...index.sections.map((section) => section.text), index.extra].join(" ")),
-        kind: index.kind,
+  const key = contentKey(doc)
+  let prepared = key ? preparedByContent.get(key) : undefined
+  if (!prepared) {
+    prepared = buildPrepared(doc)
+    if (key) {
+      if (preparedByContent.size >= MAX_PREPARED) {
+        const oldest = preparedByContent.keys().next().value
+        if (oldest !== undefined) preparedByContent.delete(oldest)
       }
-    : {
-        // 색인이 없는 요약(외부에서 만든 목록)은 예전처럼 searchText 전체를 본문으로 본다.
-        title: toField(doc.title),
-        description: toField(doc.description),
-        category: toField(doc.category ?? ""),
-        keywords: (doc.tags ?? []).map(toField),
-        sections: [],
-        body: toField(doc.searchText ?? ""),
-      }
-
-  preparedCache.set(doc, prepared)
+      preparedByContent.set(key, prepared)
+    }
+  }
+  preparedByObject.set(doc, prepared)
   return prepared
 }
 
@@ -492,7 +530,7 @@ function bestLevel(fields: readonly Field[], term: QueryTerm) {
 function scoreTerm(doc: PreparedDoc, term: QueryTerm) {
   const score =
     WEIGHT.title * matchLevel(doc.title, term) +
-    WEIGHT.heading * bestLevel(doc.sections.map((section) => section.heading), term) +
+    WEIGHT.heading * bestLevel(doc.headings, term) +
     WEIGHT.keyword * bestLevel(doc.keywords, term) +
     WEIGHT.description * matchLevel(doc.description, term) +
     WEIGHT.category * matchLevel(doc.category, term) +
@@ -510,7 +548,26 @@ interface TermResult {
  * 붙여 쓴 말("비밀번호변경", "학생초대")이 통째로는 없을 때 두 조각으로 나눠 둘 다 있는지 본다.
  * 조각마다 다시 조사·동의어를 적용하고, 한 번 더 나눌 수 있다(세 조각까지).
  */
-function scoreSplit(doc: PreparedDoc, surface: string, depth: number): TermResult | null {
+const termCache = new Map<string, QueryTerm | null>()
+
+/** 조각 낱말은 질의마다 되풀이되므로 만들어 둔 것을 다시 쓴다. */
+function buildTermCached(token: string) {
+  if (termCache.has(token)) return termCache.get(token) ?? null
+  const term = buildTerm(token)
+  if (termCache.size >= 2000) termCache.clear()
+  termCache.set(token, term)
+  return term
+}
+
+/** 한 문서 안에서 같은 조각 점수를 여러 번 계산하지 않게 한다. */
+type SplitMemo = Map<string, number>
+
+function scoreSplit(
+  doc: PreparedDoc,
+  surface: string,
+  depth: number,
+  memo: SplitMemo = new Map()
+): TermResult | null {
   if (depth > 2 || surface.length < 4 || surface.length > 16 || !HANGUL_SYLLABLE.test(surface)) {
     return null
   }
@@ -523,15 +580,19 @@ function scoreSplit(doc: PreparedDoc, surface: string, depth: number): TermResul
     let ok = true
 
     for (const part of parts) {
-      const term = buildTerm(part)
+      const term = buildTermCached(part)
       if (!term) continue
-      const direct = scoreTerm(doc, term)
+      let direct = memo.get(part)
+      if (direct === undefined) {
+        direct = scoreTerm(doc, term)
+        memo.set(part, direct)
+      }
       if (direct > 0) {
         total += direct
         matched.push(term)
         continue
       }
-      const nested = scoreSplit(doc, part, depth + 1)
+      const nested = scoreSplit(doc, part, depth + 1, memo)
       if (!nested) {
         ok = false
         break
@@ -583,6 +644,7 @@ function evaluate(
   if (analysis.terms.length === 0) return EMPTY_EVALUATION
 
   const prepared = prepare(doc)
+  const memo: SplitMemo = new Map()
   let requiredScore = 0
   let softScore = 0
   let matchedRequired = 0
@@ -591,7 +653,7 @@ function evaluate(
   for (const term of analysis.terms) {
     const direct = scoreTerm(prepared, term)
     const split = canSplit(term) && (direct === 0 || withDetails)
-      ? scoreSplit(prepared, term.surface, 1)
+      ? scoreSplit(prepared, term.surface, 1, memo)
       : null
     const score = direct > 0 ? direct : (split?.score ?? 0)
     if (score <= 0) continue
@@ -647,9 +709,10 @@ function evaluate(
   return {
     score,
     sections: matchSections(prepared, units, sectionLimit),
+    // 강조는 필수 낱말만 — "안 보여요"의 "보여"까지 칠하면 설명 곳곳이 얼룩진다.
     highlight: buildHighlight(
       [doc.title, doc.description],
-      units.flatMap((unit) => unit.options.flat())
+      units.filter((unit) => !unit.soft).flatMap((unit) => unit.options.flat())
     ),
   }
 }
@@ -723,7 +786,11 @@ function buildHighlight(texts: readonly string[], terms: readonly QueryTerm[]) {
     }
   }
 
-  return [...pieces].join(" ")
+  // "비밀번호"가 있으면 나눠 맞춘 "비밀"·"번호"는 빼서 다른 낱말("전화번호") 속까지 칠하지 않게 한다.
+  const list = [...pieces]
+  return list
+    .filter((piece) => !list.some((other) => other !== piece && other.includes(piece)))
+    .join(" ")
 }
 
 // ---------------------------------------------------------------------------
@@ -745,20 +812,31 @@ export interface DocsSearchResult<T extends DocsSearchable> extends DocsSearchEv
 export function searchDocs<T extends DocsSearchable>(
   docs: readonly T[],
   query: string,
-  options: { sectionLimit?: number } = {}
+  options: {
+    /** 결과마다 보여 줄 섹션 수(기본 2) */
+    sectionLimit?: number
+    /** false 면 섹션·강조어를 계산하지 않는다(결과 수만 필요할 때). */
+    details?: boolean
+  } = {}
 ): DocsSearchResult<T>[] {
   const analysis = getAnalysis(query)
   if (analysis.terms.length === 0) return []
 
   const scored = docs
-    .map((doc, index) => ({ doc, index, ...evaluate(doc, analysis, true, options.sectionLimit) }))
+    .map((doc, index) => ({ doc, index, score: evaluate(doc, analysis, false).score }))
     .filter((result) => result.score > 0)
     .sort((a, b) => b.score - a.score || a.index - b.index)
   const minScore = (scored[0]?.score ?? 0) * MIN_RELATIVE_SCORE
+  const withDetails = options.details ?? true
 
+  // 섹션·강조어는 남는 결과에만 계산한다(붙여 쓴 말 나누기가 문서마다 돌지 않게).
   return scored
     .filter((result) => result.score >= minScore)
-    .map(({ doc, score, sections, highlight }) => ({ doc, score, sections, highlight }))
+    .map(({ doc, score }) => {
+      if (!withDetails) return { doc, score, sections: [], highlight: "" }
+      const detail = evaluate(doc, analysis, true, options.sectionLimit)
+      return { doc, score, sections: detail.sections, highlight: detail.highlight }
+    })
 }
 
 /** 결과가 없을 때와 빈 검색 화면에 보여 줄 자주 찾는 주제(상담 상위 주제 순). */
@@ -917,7 +995,7 @@ export function suggestDocsQueries(
   const push = (candidate: string) => {
     const key = compact(normalizeSearchText(candidate))
     if (!key || seen.has(key) || suggestions.length >= limit) return
-    if (searchDocs(docs, candidate, { sectionLimit: 0 }).length === 0) return
+    if (searchDocs(docs, candidate, { details: false }).length === 0) return
     seen.add(key)
     suggestions.push(candidate)
   }

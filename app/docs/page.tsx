@@ -185,10 +185,16 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
     return doc ? [{ ...doc, title: step.title, description: step.description }] : []
   })
 
-  // 문제 해결 문서는 위 묶음에 따로 있으니 최근 목록에서는 빼고, 추천은 화면에 이미 나온 문서를 건너뛴다.
-  const recentDocs = pickRecentlyUpdated(allDocs, { limit: 6, excludeKinds: ["troubleshooting"] })
+  // 처음 단계와 문제 해결 문서는 위 묶음에 따로 있으니 최근 목록에서 빼고,
+  // 추천은 화면에 이미 나온 문서를 건너뛰고 다음 문서로 채운다.
+  const startHrefs = new Set(startSteps.map((step) => step.href))
+  const recentDocs = pickRecentlyUpdated(allDocs, {
+    limit: 6,
+    excludeHrefs: startHrefs,
+    excludeKinds: ["troubleshooting"],
+  })
   const shownHrefs = new Set([
-    ...startSteps.map((step) => step.href),
+    ...startHrefs,
     ...troubleshootingLinks.map((link) => link.href),
     ...recentDocs.map((doc) => doc.href),
   ])
@@ -422,6 +428,16 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
               학생과 강사는 앱이나 PC 프로그램에서 가입하고 로그인합니다. 웹 브라우저로 여는 관리자
               페이지는 학원 관리자용입니다.
             </p>
+            <Link
+              href="/docs/first-week"
+              className={`group mt-3 inline-flex items-center gap-1 text-[14px] font-semibold text-[#084734] ${FOCUS_RING}`}
+            >
+              학원에서 첫 수업을 준비한다면: 첫 7일 순서 보기
+              <ArrowRight
+                className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
+                aria-hidden
+              />
+            </Link>
           </div>
         </section>
       )}

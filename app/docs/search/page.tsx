@@ -112,7 +112,7 @@ function TopicLinks({ label, topics }: { label: string; topics: readonly string[
         <Link
           key={topic}
           href={searchHref(topic)}
-          className={`rounded-[4px] text-[13px] font-medium text-[#615D59] underline-offset-4 transition-colors hover:text-[#084734] hover:underline ${FOCUS_RING}`}
+          className={`-my-1 rounded-[4px] py-1 text-[13px] font-medium text-[#615D59] underline-offset-4 transition-colors hover:text-[#084734] hover:underline ${FOCUS_RING}`}
         >
           {topic}
         </Link>
@@ -147,7 +147,7 @@ export default async function DocsSearchPage({ searchParams }: DocsSearchPagePro
   // 자주 찾는 주제는 지금 문서로 결과가 나오는 것만 보인다(운영 DB 문서가 바뀌어도 빈 검색이 없게).
   const popularTopics =
     !query || results.length === 0
-      ? DOCS_POPULAR_SEARCHES.filter((topic) => searchDocs(allDocs, topic, { sectionLimit: 0 }).length > 0)
+      ? DOCS_POPULAR_SEARCHES.filter((topic) => searchDocs(allDocs, topic, { details: false }).length > 0)
       : []
 
   return (

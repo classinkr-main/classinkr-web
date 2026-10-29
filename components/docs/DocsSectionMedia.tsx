@@ -10,38 +10,43 @@ import { cn } from "./utils"
  *
  * 사진은 크기에 따라 네 가지로 나눠 배치한다.
  * - phone: 세로로 긴 휴대폰 화면. 적당한 폭으로 줄이고, 이어 나오면 나란히 놓는다.
- * - compact: 폭이 좁은 대화상자·작은 화면. 원래 크기보다 키우지 않고, 이어 나오면 두 칸으로 놓는다.
- * - long: 폭이 넓고 아래로 긴 전체 화면. 위쪽만 보여 주고 눌러서 전체를 본다.
+ * - compact: 폭이 좁은 대화상자·작은 화면, 조금 세로로 긴 화면. 원래 크기보다 키우지 않고
+ *   높이가 너무 길지 않게 폭을 줄이며, 이어 나오면 두 칸으로 놓는다.
+ * - long: 폭이 넓고 아래로 아주 긴 전체 페이지 화면. 위쪽만 보여 주고 눌러서 전체를 본다.
  * - wide: 그 밖의 가로 화면. 본문 폭에 맞춘다.
  *
  * 사진은 `a[data-docs-zoom]` 으로 감싼다. JS 가 없으면 원본 파일을 열고,
  * 있으면 DocsMediaLightbox 가 가로채 크게 보기 창을 띄운다.
  */
 
-type MediaKind = "phone" | "compact" | "long" | "wide" | "video"
+export type DocsMediaKind = "phone" | "compact" | "long" | "wide" | "video"
+type MediaKind = DocsMediaKind
 
-/** 세로 사진을 이 높이 안에 들어오는 폭으로 줄인다(px). */
-const PORTRAIT_MAX_HEIGHT = 560
-/** 이 비율(높이/폭) 이상이면 휴대폰 세로 화면으로 본다. */
+/** 휴대폰 화면은 이 높이 안에 들어오는 폭으로 줄인다(px). */
+const PHONE_MAX_HEIGHT = 560
+/** 그 밖의 세로 사진은 이 높이 안에 들어오는 폭으로 줄인다(px). */
+const PORTRAIT_MAX_HEIGHT = 720
+/** 이 비율(높이/폭) 이상이고 폭이 좁으면 휴대폰 세로 화면으로 본다. */
 const PHONE_RATIO = 1.5
 /** 이 비율 이상이면 세로 사진으로 본다. */
 const PORTRAIT_RATIO = 1.15
-/** 이 폭 이상인 세로 사진은 전체 화면 캡처(긴 화면)로 본다. */
-const LONG_MIN_WIDTH = 900
+/** 이 비율 이상이고 폭이 넓으면 전체 페이지 화면(긴 화면)으로 본다. */
+const LONG_RATIO = 1.6
+const WIDE_MIN_WIDTH = 900
 /** 이 폭보다 좁은 가로 사진은 원래 크기 이상으로 키우지 않는다. */
 const COMPACT_MAX_WIDTH = 720
 
 const FALLBACK_WIDTH = 1440
 const FALLBACK_HEIGHT = 900
 
-function getMediaKind(item: DocMedia): MediaKind {
+export function getDocsMediaKind(item: DocMedia): MediaKind {
   if (item.type === "video") return "video"
   const { width, height } = item
   if (!width || !height) return "wide"
 
   const ratio = height / width
-  if (ratio >= PORTRAIT_RATIO && width >= LONG_MIN_WIDTH) return "long"
-  if (ratio >= PHONE_RATIO) return "phone"
+  if (ratio >= LONG_RATIO && width >= WIDE_MIN_WIDTH) return "long"
+  if (ratio >= PHONE_RATIO && width < WIDE_MIN_WIDTH) return "phone"
   if (ratio >= PORTRAIT_RATIO || width < COMPACT_MAX_WIDTH) return "compact"
   return "wide"
 }
@@ -52,7 +57,8 @@ function getDisplayWidth(item: DocMedia) {
   if (!width || !height) return undefined
   const ratio = height / width
   if (ratio <= 1) return width
-  return Math.round(Math.min(width, PORTRAIT_MAX_HEIGHT / ratio))
+  const maxHeight = getDocsMediaKind(item) === "phone" ? PHONE_MAX_HEIGHT : PORTRAIT_MAX_HEIGHT
+  return Math.round(Math.min(width, maxHeight / ratio))
 }
 
 interface MediaGroup {
@@ -65,7 +71,7 @@ function groupMedia(media: DocMedia[]): MediaGroup[] {
   const groups: MediaGroup[] = []
 
   for (const item of media) {
-    const kind = getMediaKind(item)
+    const kind = getDocsMediaKind(item)
     const last = groups[groups.length - 1]
 
     if ((kind === "phone" || kind === "compact") && last?.kind === kind) {

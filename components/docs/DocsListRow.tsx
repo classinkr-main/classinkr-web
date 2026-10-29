@@ -189,8 +189,17 @@ function formatMonthDay(iso?: string) {
 }
 
 /** 날짜·제목 한 줄짜리 행 — "최근 업데이트된 가이드"처럼 설명 없이 훑는 목록. */
-export function DocsCompactRow({ article }: { article: DocsArticleSummary }) {
-  const date = formatMonthDay(article.updatedAtIso)
+export function DocsCompactRow({
+  article,
+  showDate = true,
+  meta = ["kind", "category", "images"],
+}: {
+  article: DocsArticleSummary
+  /** 왼쪽 날짜 칸("10월 29일"). 순서 안내처럼 날짜가 의미 없는 목록에서는 끈다. */
+  showDate?: boolean
+  meta?: readonly DocsListRowMeta[]
+}) {
+  const date = showDate ? formatMonthDay(article.updatedAtIso) : ""
 
   return (
     <li>
@@ -201,17 +210,16 @@ export function DocsCompactRow({ article }: { article: DocsArticleSummary }) {
           FOCUS_RING
         )}
       >
-        <span className="w-[64px] shrink-0 whitespace-nowrap text-[13px] tabular-nums text-[#615D59]">
-          {date}
-        </span>
+        {showDate ? (
+          <span className="w-[64px] shrink-0 whitespace-nowrap text-[13px] tabular-nums text-[#615D59]">
+            {date}
+          </span>
+        ) : null}
         <span className="block min-w-0 flex-1">
           <span className="block break-keep text-[15px] font-semibold leading-snug text-[#111110] transition-colors duration-150 group-hover:text-[#084734]">
             {article.title}
           </span>
-          <MetaLine
-            parts={buildMeta(article, ["kind", "category", "images"])}
-            className="mt-1"
-          />
+          <MetaLine parts={buildMeta(article, meta)} className="mt-1" />
         </span>
         <ArrowRight
           aria-hidden
