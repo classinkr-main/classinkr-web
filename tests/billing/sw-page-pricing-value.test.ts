@@ -72,12 +72,11 @@ describe("PricingValueSection ↔ lib/billing/plans (SSOT)", () => {
     expect(SECTION).toContain("맞춤 견적")
   })
 
-  it("주변 문구·레이아웃은 그대로다 (값의 출처만 바뀐다)", () => {
-    // 리팩터 범위가 "가격 값의 출처"로만 한정된다는 요구사항(A)을 고정한다 — 문구가 바뀌면
-    // 여기서 먼저 깨져야 한다.
+  it("표시 가격의 통화와 월 단위를 설명하고 최종 조건 확인을 안내한다", () => {
     expect(SECTION).toContain("이 가격에,")
     expect(SECTION).toContain("Classin 하나로")
-    expect(SECTION).toContain("연 결제 시 약 2개월 절감")
+    expect(SECTION).toContain("USD 기준 계정당 월 결제 가격")
+    expect(SECTION).toContain("최종 결제 조건은 체크아웃에서 확인")
     expect(SECTION).toContain("/계정/월")
   })
 })

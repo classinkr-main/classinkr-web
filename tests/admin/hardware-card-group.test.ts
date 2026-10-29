@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
 import {
   elapsedDaysSince,
@@ -77,8 +77,15 @@ describe("elapsedDaysSince", () => {
   })
 
   it("counts whole days from a past date key", () => {
-    // 날짜 키는 KST 기준이어야 한다 — UTC 로 자르면 KST 00~09시에 하루가 어긋나 41로 계산된다.
-    const past = new Date(Date.now() + 9 * 3600000 - 40 * 86400000).toISOString().slice(0, 10)
-    expect(elapsedDaysSince(past)).toBe(40)
+    // UTC와 KST 날짜가 다른 새벽에 브라우저 로컬 날짜 기준으로 계산한다.
+    vi.stubEnv("TZ", "Asia/Seoul")
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-10-01T16:00:00Z"))
+    try {
+      expect(elapsedDaysSince("2026-08-23")).toBe(40)
+    } finally {
+      vi.useRealTimers()
+      vi.unstubAllEnvs()
+    }
   })
 })

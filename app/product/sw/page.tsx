@@ -11,7 +11,7 @@ import {
     Clock, Users, PenTool, Dice1, FileText, Layout, Video,
     Globe, Wifi, BarChart3, BookOpen, Timer,
     MessageSquare, GraduationCap, CheckCircle2, Zap, Shield,
-    Star, X, Camera, Trophy, Shuffle, FlaskConical, Atom, Ruler, Laptop
+    Star, Camera, Trophy, Shuffle, FlaskConical, Atom, Ruler, Laptop
 } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
@@ -974,15 +974,15 @@ function AIFeaturesSection() {
                     className="mt-10 bg-[#084734] rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-white"
                 >
                     <div>
-                        <p className="font-bold text-base mb-0.5">AI 기능 모두 기본 포함</p>
-                        <p className="text-white/50 text-sm">별도 AI 툴 구독 없이 Classin 하나로 사용 가능합니다.</p>
+                        <p className="font-bold text-base mb-0.5">AI 기능 도입 안내</p>
+                        <p className="text-white/50 text-sm">AI 기능의 제공 범위와 이용 조건은 도입 상담에서 확인하세요.</p>
                     </div>
                     <Link
                         href="/contact#contact-form"
                         onClick={() => trackEvent("click_cta", { button: "sw_ai_freetrial", page: "/product/sw" })}
                         className="shrink-0 inline-flex items-center gap-2 bg-white text-[#084734] font-bold text-sm px-5 py-2.5 rounded-full hover:bg-white/90 transition-colors"
                     >
-                        무료 체험 시작 <ArrowRight className="w-4 h-4" />
+                        AI 기능 도입 문의 <ArrowRight className="w-4 h-4" />
                     </Link>
                 </motion.div>
             </div>
@@ -996,7 +996,7 @@ function AIFeaturesSection() {
 const FAQS = [
     {
         q: "Zoom과 비교해서 실제로 어떻게 다른가요?",
-        a: "Zoom은 비즈니스 회의를 위해 설계됐습니다. 학생이 화면 안에서 직접 참여(판서, 문제 풀기, 퀴즈 대결)하는 기능이 없습니다. Classin은 수업 전용으로 설계돼 30가지 교육 도구, LMS, 자동 녹화까지 하나로 통합되어 있습니다.",
+        a: "Zoom에서도 화이트보드, 녹화와 참여 기록을 사용할 수 있으며 기능은 요금제와 설정에 따라 달라집니다. Classin은 수업용 교구와 교안, 녹화, 학습 관리 기능을 수업 흐름에 연결하는 데 초점을 둡니다. 실제 도입 전 필요한 기능과 요금제 조건을 비교해 보세요.",
     },
     {
         q: "기존 학원 시스템과 연동이 가능한가요?",
@@ -1357,11 +1357,11 @@ function PricingValueSection() {
                         className="space-y-5"
                     >
                         {[
-                            { label: "일반 화상 도구", note: "Zoom · Teams 등", scope: "화상 수업만", line: true },
-                            { label: "+ LMS 별도 구독", note: "Canvas · Classting Pro 등", scope: "출결 · 과제 · 평가만", line: true },
-                            { label: "+ 녹화 · 클라우드 스토리지", note: "별도 저장소 + 관리", scope: "영상 보관만", line: true },
-                            { label: "+ AI 기능 별도 구독", note: "ChatGPT Team · AI 첨삭 도구 등", scope: "AI 도구만", line: true },
-                            { label: "Classin 하나로", note: "도구마다 다른 계약 · 다른 로그인 없이", scope: "전부 한 번에", line: false, highlight: true },
+                            { label: "일반 화상 도구", note: "Zoom · Teams 등", scope: "화상 수업 · 회의", line: true },
+                            { label: "+ LMS 별도 구독", note: "Canvas · Classting Pro 등", scope: "출결 · 과제 · 평가", line: true },
+                            { label: "+ 녹화 · 클라우드 스토리지", note: "별도 저장소 + 관리", scope: "녹화 · 영상 보관", line: true },
+                            { label: "+ AI 기능 별도 구독", note: "ChatGPT Team · AI 첨삭 도구 등", scope: "AI 활용", line: true },
+                            { label: "Classin 하나로", note: "수업에 필요한 기능을 한 흐름으로", scope: "수업 운영", line: false, highlight: true },
                         ].map((row) => (
                             <div key={row.label} className={`flex items-center justify-between ${row.line ? "pb-4 border-b border-black/[0.06]" : ""} ${row.highlight ? "bg-[#F0FDF9] border border-[#084734]/15 rounded-2xl px-6 py-6 -mx-4 mt-2" : ""}`}>
                                 <div>
@@ -1387,8 +1387,7 @@ function PricingValueSection() {
                         <div className="text-center lg:text-left lg:shrink-0">
                             <p className="text-white/70 text-sm font-bold uppercase tracking-[0.18em] mb-1.5">Classin 하나로</p>
                             <p className="font-sans font-bold text-white leading-tight">
-                                <span className="text-2xl md:text-3xl">이 모든 기능</span>
-                                <span className="text-sm md:text-base font-medium text-white/70 ml-2 align-middle">+ AI 기능까지</span>
+                                <span className="text-2xl md:text-3xl">수업 운영을 한 흐름으로</span>
                             </p>
                         </div>
 
@@ -1414,7 +1413,7 @@ function PricingValueSection() {
                                     <p className="text-lg font-bold text-white whitespace-nowrap">맞춤 견적</p>
                                 </div>
                             </div>
-                            <p className="text-[#6EE7B7] text-xs font-medium">연 결제 시 약 2개월 절감</p>
+                            <p className="text-white/70 text-xs text-center">표시 금액은 USD 기준 계정당 월 결제 가격입니다. 플랜별 기능과 최종 결제 조건은 체크아웃에서 확인하세요.</p>
                         </div>
 
                         {/* CTAs */}
@@ -1576,9 +1575,9 @@ export default function ProductPage() {
                     <motion.div className="text-center mb-16" {...fadeUp}>
                         <EyebrowTag>Why Classin</EyebrowTag>
                         <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans text-[#1a1a19] leading-tight">
-                            회의용 도구로 수업하던 시대는
+                            수업 방식에 맞는 도구를
                             <br className="hidden sm:block" />{" "}
-                            <span className="text-[#084734]">끝났습니다</span>
+                            <span className="text-[#084734]">비교해 보세요</span>
                         </h2>
                     </motion.div>
 
@@ -1600,14 +1599,10 @@ export default function ProductPage() {
                                     </thead>
                                     <tbody>
                                         {[
-                                            { label: "주요 목적", zoom: "비즈니스 회의 · 정보 전달", classin: "실시간 상호작용 수업 · 교육" },
-                                            { label: "판서 기능", zoom: "기본적인 그리기 위주", classin: "레이어 기반 전문 교구 활용" },
-                                            { label: "학생 참여", zoom: "채팅 또는 음소거 해제", classin: "교재 직접 조작 · 능동 참여" },
-                                            { label: "수업 도구", zoom: "화면 공유 + 기본 그리기", classin: "30여 가지 인터랙티브 도구" },
-                                            { label: "수업 활동", zoom: "없음 (별도 앱 필요)", classin: "10가지 참여형 수업 활동" },
-                                            { label: "학습 관리", zoom: "별도 LMS 필요", classin: "자체 LMS 기능 탑재" },
-                                            { label: "수업 형태", zoom: "화상 회의 1가지", classin: "1:1 ~ 수백 명 대형 강의" },
-                                            { label: "녹화 · 복습", zoom: "파일 수동 관리", classin: "클라우드 자동 녹화& 업로드" },
+                                            { label: "주요 목적", zoom: "화상 회의와 온라인 협업", classin: "실시간 수업과 교육 운영" },
+                                            { label: "판서와 참여", zoom: "화이트보드와 주석 기능 제공", classin: "수업용 교구와 교재 위 판서" },
+                                            { label: "녹화 · 복습", zoom: "녹화 기능 제공; 방식은 요금제에 따라 다름", classin: "수업 기록과 복습 흐름을 연결" },
+                                            { label: "학습 관리", zoom: "수업 운영 방식에 따라 별도 도구 연계 검토", classin: "수업과 학습 관리 기능 연계" },
                                         ].map((row, i) => (
                                             <motion.tr
                                                 key={i}
@@ -1620,7 +1615,6 @@ export default function ProductPage() {
                                                 <td className="py-4 px-6 font-medium text-[#31302E]">{row.label}</td>
                                                 <td className="py-4 px-6 text-left text-[#A39E98]">
                                                     <span className="flex w-full items-start gap-2 leading-relaxed">
-                                                        <X className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#A39E98]" />
                                                         <span>{row.zoom}</span>
                                                     </span>
                                                 </td>
@@ -1636,6 +1630,10 @@ export default function ProductPage() {
                                 </table>
                             </div>
                         </div>
+                        <p className="mt-4 text-sm text-[#615D59] leading-relaxed">
+                            기능 제공 여부와 이용 조건은 제품의 요금제와 설정에 따라 달라집니다.{' '}
+                            <Link href="/blog/zoom-vs-classin-for-academies" className="underline underline-offset-4">Zoom과 Classin 비교 자세히 보기</Link>
+                        </p>
                     </div>
                 </div>
             </section>

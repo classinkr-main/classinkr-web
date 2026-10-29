@@ -1698,7 +1698,7 @@ const baseDocs: DocArticle[] = [
         ],
       },
     ],
-    relatedSlugs: ["cam-t1-s1", "mic-dt2-pro", "board-install-readiness", "webcam-cms-setup-t1-panorama", "board-overview"],
+    relatedSlugs: ["cam-t1-s1", "mic-dt2-pro", "board-install-readiness", "board-overview"],
   },
   {
     slug: "board-install-readiness",
@@ -1809,7 +1809,7 @@ const baseDocs: DocArticle[] = [
         ],
       },
     ],
-    relatedSlugs: ["board-s-series-safe-use", "board-lineup-specs", "board-ai-camera-mic", "webcam-cms-setup-t1-panorama"],
+    relatedSlugs: ["board-s-series-safe-use", "board-lineup-specs", "board-ai-camera-mic"],
   },
   {
     slug: "electronic-whiteboard-classroom-checklist",
@@ -2179,7 +2179,7 @@ const baseDocs: DocArticle[] = [
         description: "보드 라인업과 카메라·마이크 구성, 도입 흐름이 있는 제품 소개 페이지입니다.",
       },
     ],
-    relatedSlugs: ["board-ai-camera-mic", "board-install-readiness", "webcam-cms-setup-t1-panorama", "cs-microphone-camera-check"],
+    relatedSlugs: ["board-ai-camera-mic", "board-install-readiness"],
   },
   {
     slug: "cam-t1-s1",
@@ -2290,7 +2290,7 @@ const baseDocs: DocArticle[] = [
         description: "보드 라인업과 카메라·마이크 구성, 도입 흐름이 있는 제품 소개 페이지입니다.",
       },
     ],
-    relatedSlugs: ["board-ai-camera-mic", "webcam-cms-setup-t1-panorama", "board-install-readiness", "mic-dt2-pro", "cs-microphone-camera-check"],
+    relatedSlugs: ["board-ai-camera-mic", "board-install-readiness", "mic-dt2-pro"],
   },
   {
     slug: "classin-607-update",
@@ -6173,7 +6173,7 @@ const baseDocs: DocArticle[] = [
       { label: "Zoom·전자칠판·LMS 비교 도입 워크시트", href: "/resources/academy-software-selection-worksheet", description: "줌·전자칠판·LMS와 클래스인을 기능 이름이 아니라 운영 흐름으로 비교합니다." },
       { label: "목동 쇼룸 방문 예약", href: "/showroom", description: "우리 학원 수업 한 편을 기준으로 도구가 얼마나 흩어져 있는지, 어디까지 도입할지 함께 봅니다." }
     ],
-    relatedSlugs: ["academy-system-os-positioning","customer-stories","value-and-cost-framing","software-overview","board-overview"],
+    relatedSlugs: ["academy-system-os-positioning","customer-stories","software-overview","board-overview"],
     status: "published",
     visibility: "public",
     docType: "guide",
@@ -6438,7 +6438,7 @@ const baseDocs: DocArticle[] = [
         description: "확인이 필요한 계약·정책 항목은 상담에서 최신 기준으로 답을 드립니다.",
       },
     ],
-    relatedSlugs: ["admin-monitoring-analytics","storage-management","signup","board-basic-operation","board-ai-camera-mic","value-and-cost-framing"],
+    relatedSlugs: ["admin-monitoring-analytics","storage-management","signup","board-basic-operation","board-ai-camera-mic"],
     status: "published",
     visibility: "public",
     docType: "faq",
