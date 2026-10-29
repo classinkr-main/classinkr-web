@@ -20,6 +20,7 @@ import {
   type DocMedia,
 } from "@/lib/docs"
 import type { DocsContent } from "@/lib/docs-content"
+import { getDocListKind, getDocListPreview } from "@/lib/docs-list-meta"
 
 const staticDocsContent: DocsContent = {
   categories: docsCategories,
@@ -141,6 +142,7 @@ export function toArticleSummary(
   categories = docsCategories
 ): DocsArticleSummary {
   const category = categories.find((item) => item.id === doc.category)
+  const preview = getDocListPreview(doc)
 
   return {
     title: doc.title,
@@ -151,6 +153,10 @@ export function toArticleSummary(
     updatedAt: formatDocDate(doc.updatedAt),
     tags: doc.tags,
     searchText: getDocSearchText(doc),
+    kind: getDocListKind(doc),
+    thumbnail: preview.thumbnail,
+    imageCount: preview.imageCount,
+    updatedAtIso: doc.updatedAt,
   }
 }
 
@@ -249,6 +255,8 @@ export function getAllDocsSummaries(content = staticDocsContent) {
 
 export interface TroubleshootingLink {
   label: string
+  /** 히어로 한 줄 바로가기용 짧은 증상 이름. 지정이 없으면 제목에서 괄호 설명을 뗀 것. */
+  shortLabel: string
   href: string
   summary: DocsArticleSummary
 }
@@ -256,10 +264,12 @@ export interface TroubleshootingLink {
 /**
  * 공개 목록에 있는 문제 해결 문서(docType "troubleshooting")를 모은다.
  * 짧은 이름은 문서 제목을 그대로 쓰되, 앞쪽 순서는 실제 문의가 많은 증상 순으로 고정한다.
+ * shortLabels 는 href → 짧은 증상 이름(예: "로그인"). 새 문서는 제목에서 자동으로 만든다.
  */
 export function getTroubleshootingLinks(
   content = staticDocsContent,
-  preferredOrder: readonly string[] = []
+  preferredOrder: readonly string[] = [],
+  shortLabels: Readonly<Record<string, string>> = {}
 ): TroubleshootingLink[] {
   const rank = (href: string) => {
     const index = preferredOrder.indexOf(href)
@@ -270,11 +280,16 @@ export function getTroubleshootingLinks(
     .filter((doc) => isListedDoc(doc) && doc.docType === "troubleshooting")
     .map((doc, index) => ({ doc, index, href: getDocPath(doc) }))
     .sort((a, b) => rank(a.href) - rank(b.href) || a.index - b.index)
-    .map(({ doc, href }) => ({
-      label: doc.title.replace(/\s*[—-]\s.*$/, ""),
-      href,
-      summary: toArticleSummary(doc, content.categories),
-    }))
+    .map(({ doc, href }) => {
+      const label = doc.title.replace(/\s*[—-]\s.*$/, "")
+
+      return {
+        label,
+        shortLabel: shortLabels[href] ?? label.replace(/\s*\(.*\)\s*$/, ""),
+        href,
+        summary: toArticleSummary(doc, content.categories),
+      }
+    })
 }
 
 export function getDocsCategoryNavItems(
@@ -427,11 +442,15 @@ export function getGuideProductTiles(content = staticDocsContent): GuideProductT
 
 export function getCuratedFeaturedSummaries(
   content = staticDocsContent,
-  limit = 6
+  limit = 6,
+  /** 같은 화면의 다른 묶음에 이미 나온 문서는 건너뛰고 다음 문서로 채운다. */
+  excludeHrefs?: ReadonlySet<string>
 ): DocsArticleSummary[] {
   const pools = new Map<DocCategoryId, { featured: DocArticle[]; rest: DocArticle[] }>()
   for (const categoryId of CURATED_FEATURED_ORDER) {
-    const listed = getListedDocsByCategory(content, categoryId)
+    const listed = getListedDocsByCategory(content, categoryId).filter(
+      (doc) => !excludeHrefs?.has(getDocPath(doc))
+    )
     pools.set(categoryId, {
       featured: listed.filter((doc) => doc.featured),
       rest: listed.filter((doc) => !doc.featured),

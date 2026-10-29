@@ -1,1 +1,905 @@
-{ "shots": [] }
+{
+ "shots": [
+  {
+   "out": "/docs/files/guides/cs-figma-digest-523/01-google-search.webp",
+   "source": "public/docs/files/cs-figma/하위계정-녹화본-다운로드.png",
+   "crop": {
+    "x": 0.02126,
+    "y": 0.0291,
+    "w": 0.47429,
+    "h": 0.18499
+   },
+   "masks": [
+    {
+     "x": 0.95,
+     "y": 0.02,
+     "w": 0.045,
+     "h": 0.11,
+     "style": "blur",
+     "reason": "검색 계정 프로필"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-523/02-homepage-login.webp",
+   "source": "public/docs/files/cs-figma/하위계정-녹화본-다운로드.png",
+   "crop": {
+    "x": 0.50618,
+    "y": 0.0291,
+    "w": 0.47429,
+    "h": 0.17917
+   },
+   "masks": [
+    {
+     "x": 0.44,
+     "y": 0.41,
+     "w": 0.195,
+     "h": 0.4,
+     "style": "blur",
+     "reason": "화상 수업 화면 속 인물 얼굴"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-523/03-login-form.webp",
+   "source": "public/docs/files/cs-figma/하위계정-녹화본-다운로드.png",
+   "crop": {
+    "x": 0.02126,
+    "y": 0.35436,
+    "w": 0.47429,
+    "h": 0.20796
+   },
+   "masks": [
+    {
+     "x": 0.565,
+     "y": 0.57,
+     "w": 0.14,
+     "h": 0.07,
+     "style": "blur",
+     "reason": "로그인 아이디"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-523/04-lesson-recording-menu.webp",
+   "source": "public/docs/files/cs-figma/하위계정-녹화본-다운로드.png",
+   "crop": {
+    "x": 0.50618,
+    "y": 0.35436,
+    "w": 0.47182,
+    "h": 0.29005
+   },
+   "masks": [
+    {
+     "x": 0.795,
+     "y": 0,
+     "w": 0.165,
+     "h": 0.042,
+     "style": "blur",
+     "reason": "기관명·계정명"
+    },
+    {
+     "x": 0.13,
+     "y": 0.33,
+     "w": 0.17,
+     "h": 0.24,
+     "style": "blur",
+     "reason": "수업·코스 이름"
+    },
+    {
+     "x": 0.66,
+     "y": 0.33,
+     "w": 0.08,
+     "h": 0.24,
+     "style": "blur",
+     "reason": "교사 이름·전화번호"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-523/05-recording-download.webp",
+   "source": "public/docs/files/cs-figma/하위계정-녹화본-다운로드.png",
+   "crop": {
+    "x": 0.02373,
+    "y": 0.68606,
+    "w": 0.47182,
+    "h": 0.13048
+   },
+   "masks": [
+    {
+     "x": 0.795,
+     "y": 0,
+     "w": 0.165,
+     "h": 0.093,
+     "style": "blur",
+     "reason": "기관명·계정명"
+    },
+    {
+     "x": 0.046,
+     "y": 0.25,
+     "w": 0.125,
+     "h": 0.1,
+     "style": "blur",
+     "reason": "수업 이름"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-523/06-player-more-menu.webp",
+   "source": "public/docs/files/cs-figma/하위계정-녹화본-다운로드.png",
+   "crop": {
+    "x": 0.57687,
+    "y": 0.84564,
+    "w": 0.3396,
+    "h": 0.10138
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1054/01-admin-dashboard-button.webp",
+   "source": "public/docs/files/cs-figma/새로-들어온-학생도-수업-다시보기-시청.png",
+   "crop": {
+    "x": 0.13681,
+    "y": 0.03649,
+    "w": 0.64931,
+    "h": 0.21044
+   },
+   "masks": [
+    {
+     "x": 0.445,
+     "y": 0.21,
+     "w": 0.115,
+     "h": 0.06,
+     "style": "blur",
+     "reason": "계정명"
+    },
+    {
+     "x": 0.415,
+     "y": 0.345,
+     "w": 0.215,
+     "h": 0.05,
+     "style": "blur",
+     "reason": "계정 잔액·사용량"
+    },
+    {
+     "x": 0.04,
+     "y": 0.915,
+     "w": 0.055,
+     "h": 0.04,
+     "style": "blur",
+     "reason": "계정명"
+    },
+    {
+     "x": 0.145,
+     "y": 0.38,
+     "w": 0.095,
+     "h": 0.4,
+     "style": "blur",
+     "reason": "코스 이름·기관명·사람 이름"
+    },
+    {
+     "x": 0.82,
+     "y": 0.12,
+     "w": 0.17,
+     "h": 0.87,
+     "style": "blur",
+     "reason": "할 일 목록의 사람 이름"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1054/02-general-settings-menu.webp",
+   "source": "public/docs/files/cs-figma/새로-들어온-학생도-수업-다시보기-시청.png",
+   "crop": {
+    "x": 0.08264,
+    "y": 0.31778,
+    "w": 0.78681,
+    "h": 0.22826
+   },
+   "masks": [
+    {
+     "x": 0.78,
+     "y": 0,
+     "w": 0.18,
+     "h": 0.04,
+     "style": "blur",
+     "reason": "관리자 계정명"
+    },
+    {
+     "x": 0.075,
+     "y": 0.105,
+     "w": 0.06,
+     "h": 0.065,
+     "style": "blur",
+     "reason": "계정 잔액"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-1054/03-replay-tab-options.webp",
+   "source": "public/docs/files/cs-figma/새로-들어온-학생도-수업-다시보기-시청.png",
+   "crop": {
+    "x": 0.08264,
+    "y": 0.61731,
+    "w": 0.78681,
+    "h": 0.12558
+   },
+   "masks": [
+    {
+     "x": 0.78,
+     "y": 0,
+     "w": 0.18,
+     "h": 0.073,
+     "style": "blur",
+     "reason": "관리자 계정명"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-transfer-student-registration/01-course-list.webp",
+   "source": "public/docs/files/cs-figma/대시보드에서-교사-변경.png",
+   "crop": {
+    "x": 0.138,
+    "y": 0.041,
+    "w": 0.772,
+    "h": 0.258
+   },
+   "masks": [
+    {
+     "x": 0.78,
+     "y": 0,
+     "w": 0.2,
+     "h": 0.055,
+     "style": "blur",
+     "reason": "관리자 계정명"
+    },
+    {
+     "x": 0.115,
+     "y": 0.39,
+     "w": 0.085,
+     "h": 0.555,
+     "style": "blur",
+     "reason": "코스 이름(사람 이름 포함)"
+    },
+    {
+     "x": 0.815,
+     "y": 0.32,
+     "w": 0.1,
+     "h": 0.625,
+     "style": "blur",
+     "reason": "생성한 사람 이름"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-transfer-student-registration/02-replay-option.webp",
+   "source": "public/docs/files/cs-figma/새로-들어온-학생도-수업-다시보기-시청.png",
+   "crop": {
+    "x": 0.08264,
+    "y": 0.61731,
+    "w": 0.78681,
+    "h": 0.12558
+   },
+   "masks": [
+    {
+     "x": 0.78,
+     "y": 0,
+     "w": 0.18,
+     "h": 0.073,
+     "style": "blur",
+     "reason": "관리자 계정명"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-transfer-student-registration/03-proxy-registration.webp",
+   "source": "public/docs/files/cs-figma/클래스인-학생-대리등록-코스-입장.png",
+   "crop": {
+    "x": 0.2948,
+    "y": 0.3547,
+    "w": 0.414,
+    "h": 0.0975
+   },
+   "masks": [
+    {
+     "x": 0.03,
+     "y": 0.3,
+     "w": 0.13,
+     "h": 0.585,
+     "style": "blur",
+     "reason": "학생 이름 목록"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-course-member-management/01-pc-course-settings.webp",
+   "source": "public/docs/files/cs-figma/frame-5.png",
+   "crop": {
+    "x": 0.398,
+    "y": 0.083,
+    "w": 0.274,
+    "h": 0.887
+   },
+   "masks": [
+    {
+     "x": 0.03,
+     "y": 0.06,
+     "w": 0.6,
+     "h": 0.05,
+     "style": "blur",
+     "reason": "코스 정보"
+    },
+    {
+     "x": 0.04,
+     "y": 0.2,
+     "w": 0.74,
+     "h": 0.05,
+     "style": "blur",
+     "reason": "구성원 프로필 사진"
+    }
+   ],
+   "maxWidth": 640
+  },
+  {
+   "out": "/docs/files/guides/cs-course-member-management/02-mobile-course-members.webp",
+   "source": "public/docs/files/cs-figma/group-3.png",
+   "crop": {
+    "x": 0.25,
+    "y": 0,
+    "w": 0.5,
+    "h": 1
+   },
+   "masks": [
+    {
+     "x": 0.095,
+     "y": 0.135,
+     "w": 0.175,
+     "h": 0.035,
+     "style": "blur",
+     "reason": "기관 계정명"
+    },
+    {
+     "x": 0.61,
+     "y": 0.155,
+     "w": 0.195,
+     "h": 0.035,
+     "style": "blur",
+     "reason": "기관 계정명"
+    },
+    {
+     "x": 0.088,
+     "y": 0.825,
+     "w": 0.045,
+     "h": 0.03,
+     "style": "blur",
+     "reason": "교사 이름"
+    },
+    {
+     "x": 0.9,
+     "y": 0.54,
+     "w": 0.05,
+     "h": 0.03,
+     "style": "blur",
+     "reason": "교사 이름"
+    },
+    {
+     "x": 0.603,
+     "y": 0.272,
+     "w": 0.068,
+     "h": 0.062,
+     "style": "blur",
+     "reason": "프로필 사진"
+    }
+   ],
+   "maxWidth": 1000
+  },
+  {
+   "out": "/docs/files/guides/cs-course-member-management/03-mobile-remove-member.webp",
+   "source": "public/docs/files/cs-figma/group-3.png",
+   "crop": {
+    "x": 0.75,
+    "y": 0,
+    "w": 0.25,
+    "h": 1
+   },
+   "masks": [
+    {
+     "x": 0.165,
+     "y": 0.31,
+     "w": 0.105,
+     "h": 0.04,
+     "style": "blur",
+     "reason": "교사 이름"
+    },
+    {
+     "x": 0.05,
+     "y": 0.45,
+     "w": 0.235,
+     "h": 0.055,
+     "style": "blur",
+     "reason": "학생 이름·프로필 사진"
+    }
+   ],
+   "maxWidth": 560
+  },
+  {
+   "out": "/docs/files/guides/cs-course-create-and-close/01-mobile-create-course.webp",
+   "source": "public/docs/files/cs-figma/4-1.png",
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 0.335,
+    "h": 0.226
+   },
+   "maxWidth": 640
+  },
+  {
+   "out": "/docs/files/guides/cs-course-create-and-close/02-mobile-close-course.webp",
+   "source": "public/docs/files/cs-figma/4-1.png",
+   "crop": {
+    "x": 0.34,
+    "y": 0,
+    "w": 0.66,
+    "h": 1
+   },
+   "masks": [
+    {
+     "x": 0.1,
+     "y": 0.13,
+     "w": 0.18,
+     "h": 0.03,
+     "style": "blur",
+     "reason": "기관 계정명"
+    },
+    {
+     "x": 0.62,
+     "y": 0.148,
+     "w": 0.195,
+     "h": 0.03,
+     "style": "blur",
+     "reason": "기관 계정명"
+    },
+    {
+     "x": 0.093,
+     "y": 0.81,
+     "w": 0.05,
+     "h": 0.028,
+     "style": "blur",
+     "reason": "교사 이름"
+    },
+    {
+     "x": 0.905,
+     "y": 0.505,
+     "w": 0.055,
+     "h": 0.03,
+     "style": "blur",
+     "reason": "교사 이름"
+    },
+    {
+     "x": 0.613,
+     "y": 0.258,
+     "w": 0.055,
+     "h": 0.055,
+     "style": "blur",
+     "reason": "프로필 사진"
+    }
+   ],
+   "maxWidth": 1000
+  },
+  {
+   "out": "/docs/files/guides/cs-course-create-and-close/03-pc-course-settings.webp",
+   "source": "public/docs/files/cs-figma/frame-5.png",
+   "crop": {
+    "x": 0.398,
+    "y": 0.083,
+    "w": 0.274,
+    "h": 0.887
+   },
+   "masks": [
+    {
+     "x": 0.03,
+     "y": 0.06,
+     "w": 0.6,
+     "h": 0.05,
+     "style": "blur",
+     "reason": "코스 정보"
+    },
+    {
+     "x": 0.04,
+     "y": 0.2,
+     "w": 0.74,
+     "h": 0.05,
+     "style": "blur",
+     "reason": "구성원 프로필 사진"
+    }
+   ],
+   "maxWidth": 640
+  },
+  {
+   "out": "/docs/files/guides/cs-recording-download-share/01-lesson-resources.webp",
+   "source": "public/docs/files/cs-figma/대시보드-수업-내용-다운로드-및-공유.png",
+   "crop": {
+    "x": 0.125,
+    "y": 0.0195,
+    "w": 0.74931,
+    "h": 0.2555
+   },
+   "masks": [
+    {
+     "x": 0.755,
+     "y": 0,
+     "w": 0.2,
+     "h": 0.045,
+     "style": "blur",
+     "reason": "관리자 계정명"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-recording-download-share/02-recording-download.webp",
+   "source": "public/docs/files/cs-figma/대시보드-수업-내용-다운로드-및-공유.png",
+   "crop": {
+    "x": 0.125,
+    "y": 0.3405,
+    "w": 0.74931,
+    "h": 0.1075
+   },
+   "masks": [
+    {
+     "x": 0.755,
+     "y": 0,
+     "w": 0.2,
+     "h": 0.107,
+     "style": "blur",
+     "reason": "관리자 계정명"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-recording-download-share/03-player-download-link.webp",
+   "source": "public/docs/files/cs-figma/대시보드-수업-내용-다운로드-및-공유.png",
+   "crop": {
+    "x": 0.125,
+    "y": 0.668,
+    "w": 0.74931,
+    "h": 0.277
+   },
+   "masks": [
+    {
+     "x": 0.075,
+     "y": 0.008,
+     "w": 0.29,
+     "h": 0.032,
+     "style": "blur",
+     "reason": "재생 링크 주소"
+    },
+    {
+     "x": 0.83,
+     "y": 0,
+     "w": 0.15,
+     "h": 0.045,
+     "style": "blur",
+     "reason": "브라우저 프로필·확장 프로그램"
+    },
+    {
+     "x": 0.375,
+     "y": 0.075,
+     "w": 0.25,
+     "h": 0.145,
+     "style": "blur",
+     "reason": "화면 속 인물"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-ai-disable-admin/01-dashboard-general-settings.webp",
+   "source": "public/docs/files/cs-figma/classin-ai-비활성화-안내.png",
+   "crop": {
+    "x": 0.14792,
+    "y": 0.0735,
+    "w": 0.70625,
+    "h": 0.241
+   },
+   "masks": [
+    {
+     "x": 0.755,
+     "y": 0,
+     "w": 0.2,
+     "h": 0.045,
+     "style": "blur",
+     "reason": "관리자 계정명"
+    },
+    {
+     "x": 0.725,
+     "y": 0.39,
+     "w": 0.12,
+     "h": 0.055,
+     "style": "blur",
+     "reason": "계정명·프로필 사진"
+    },
+    {
+     "x": 0.725,
+     "y": 0.485,
+     "w": 0.14,
+     "h": 0.04,
+     "style": "blur",
+     "reason": "계정 잔액·사용량"
+    },
+    {
+     "x": 0.557,
+     "y": 0.836,
+     "w": 0.042,
+     "h": 0.022,
+     "style": "blur",
+     "reason": "계정명"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-ai-disable-admin/02-ai-agent-toggles.webp",
+   "source": "public/docs/files/cs-figma/classin-ai-비활성화-안내.png",
+   "crop": {
+    "x": 0.14792,
+    "y": 0.715,
+    "w": 0.70625,
+    "h": 0.0965
+   },
+   "masks": [
+    {
+     "x": 0.755,
+     "y": 0,
+     "w": 0.2,
+     "h": 0.11,
+     "style": "blur",
+     "reason": "관리자 계정명"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-cache-update-pc/01-file-transfer-cache.webp",
+   "source": "public/docs/files/cs-figma/클래스인-캐시-삭제-업데이트-pc.png",
+   "crop": {
+    "x": 0.17153,
+    "y": 0.079,
+    "w": 0.65625,
+    "h": 0.255
+   },
+   "masks": [
+    {
+     "x": 0.015,
+     "y": 0.928,
+     "w": 0.065,
+     "h": 0.04,
+     "style": "blur",
+     "reason": "계정명·프로필 사진"
+    },
+    {
+     "x": 0.2,
+     "y": 0.775,
+     "w": 0.42,
+     "h": 0.06,
+     "style": "blur",
+     "reason": "코스 이름·계정명"
+    },
+    {
+     "x": 0.74,
+     "y": 0.335,
+     "w": 0.07,
+     "h": 0.025,
+     "style": "blur",
+     "reason": "코스 이름"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-cache-update-pc/02-software-upgrade.webp",
+   "source": "public/docs/files/cs-figma/클래스인-캐시-삭제-업데이트-pc.png",
+   "crop": {
+    "x": 0.13611,
+    "y": 0.4565,
+    "w": 0.69722,
+    "h": 0.2975
+   },
+   "masks": [
+    {
+     "x": 0.012,
+     "y": 0.93,
+     "w": 0.065,
+     "h": 0.04,
+     "style": "blur",
+     "reason": "계정명·프로필 사진"
+    },
+    {
+     "x": 0.185,
+     "y": 0.37,
+     "w": 0.028,
+     "h": 0.08,
+     "style": "blur",
+     "reason": "코스 이름"
+    },
+    {
+     "x": 0.185,
+     "y": 0.67,
+     "w": 0.028,
+     "h": 0.08,
+     "style": "blur",
+     "reason": "코스 이름"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-homework-upload-mobile/01-select-course.webp",
+   "source": "public/docs/files/cs-figma/숙제-업로드-모바일.png",
+   "crop": {
+    "x": 0.13542,
+    "y": 0.05167,
+    "w": 0.21667,
+    "h": 0.34296
+   },
+   "masks": [
+    {
+     "x": 0.06,
+     "y": 0.07,
+     "w": 0.1,
+     "h": 0.05,
+     "style": "blur",
+     "reason": "프로필 사진"
+    },
+    {
+     "x": 0.07,
+     "y": 0.291,
+     "w": 0.38,
+     "h": 0.024,
+     "style": "blur",
+     "reason": "기관 계정명"
+    },
+    {
+     "x": 0.07,
+     "y": 0.522,
+     "w": 0.38,
+     "h": 0.024,
+     "style": "blur",
+     "reason": "기관 계정명"
+    },
+    {
+     "x": 0.54,
+     "y": 0.54,
+     "w": 0.38,
+     "h": 0.024,
+     "style": "blur",
+     "reason": "기관 계정명"
+    },
+    {
+     "x": 0.07,
+     "y": 0.796,
+     "w": 0.38,
+     "h": 0.024,
+     "style": "blur",
+     "reason": "기관 계정명"
+    },
+    {
+     "x": 0.54,
+     "y": 0.775,
+     "w": 0.38,
+     "h": 0.024,
+     "style": "blur",
+     "reason": "기관 계정명"
+    }
+   ],
+   "maxWidth": 640
+  },
+  {
+   "out": "/docs/files/guides/cs-homework-upload-mobile/02-homework-submit-button.webp",
+   "source": "public/docs/files/cs-figma/숙제-업로드-모바일.png",
+   "crop": {
+    "x": 0.60208,
+    "y": 0.05674,
+    "w": 0.21667,
+    "h": 0.34296
+   },
+   "masks": [
+    {
+     "x": 0.13,
+     "y": 0.156,
+     "w": 0.2,
+     "h": 0.026,
+     "style": "blur",
+     "reason": "교사 이름"
+    },
+    {
+     "x": 0.13,
+     "y": 0.346,
+     "w": 0.2,
+     "h": 0.026,
+     "style": "blur",
+     "reason": "교사 이름"
+    },
+    {
+     "x": 0.13,
+     "y": 0.536,
+     "w": 0.2,
+     "h": 0.026,
+     "style": "blur",
+     "reason": "교사 이름"
+    },
+    {
+     "x": 0.13,
+     "y": 0.726,
+     "w": 0.2,
+     "h": 0.026,
+     "style": "blur",
+     "reason": "교사 이름"
+    }
+   ],
+   "maxWidth": 640
+  },
+  {
+   "out": "/docs/files/guides/cs-homework-upload-mobile/03-my-homework-submit.webp",
+   "source": "public/docs/files/cs-figma/숙제-업로드-모바일.png",
+   "crop": {
+    "x": 0.13542,
+    "y": 0.51672,
+    "w": 0.21667,
+    "h": 0.34296
+   },
+   "masks": [
+    {
+     "x": 0.08,
+     "y": 0.15,
+     "w": 0.15,
+     "h": 0.03,
+     "style": "blur",
+     "reason": "교사 이름"
+    },
+    {
+     "x": 0.03,
+     "y": 0.57,
+     "w": 0.42,
+     "h": 0.25,
+     "style": "blur",
+     "reason": "학생 이름·프로필 사진"
+    }
+   ],
+   "maxWidth": 640
+  },
+  {
+   "out": "/docs/files/guides/cs-homework-upload-mobile/04-attach-photo.webp",
+   "source": "public/docs/files/cs-figma/숙제-업로드-모바일.png",
+   "crop": {
+    "x": 0.60278,
+    "y": 0.51115,
+    "w": 0.21667,
+    "h": 0.34296
+   },
+   "masks": [
+    {
+     "x": 0.08,
+     "y": 0.135,
+     "w": 0.15,
+     "h": 0.035,
+     "style": "blur",
+     "reason": "교사 이름"
+    }
+   ],
+   "maxWidth": 640
+  }
+ ]
+}
