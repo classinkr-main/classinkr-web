@@ -1111,7 +1111,7 @@ export function useMatrixEditor({
   // 셀렉트(비편집) keydown. 방향키=이동, Enter/F2/숫자=편집 진입, Ctrl/Cmd+D=위 값 채우기.
   const onSelectedKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTableCellElement>, coord: MatrixCellCoord) => {
-      if ((event.ctrlKey || event.metaKey) && event.code === "KeyC" && onCopyCell && !window.getSelection()?.toString()) {
+      if ((event.ctrlKey || event.metaKey) && event.code === "KeyC" && onCopyCell && !window.getSelection?.()?.toString()) {
         event.preventDefault()
         onCopyCell(coord)
         return
