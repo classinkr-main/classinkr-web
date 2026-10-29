@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { CS_FIGMA_GUIDES, sanitizeGuideStep } from "@/lib/cs-figma-guides"
+import { CS_FIGMA_DIGEST_GUIDES } from "@/lib/cs-figma-guides.generated"
 import { getCsFigmaEnrichment } from "@/lib/cs-figma-enrichments"
 import { buildCsFigmaDocArticle, getDocBySlug } from "@/lib/docs"
 
@@ -138,9 +139,10 @@ describe("CS Figma docs", () => {
   })
 
   it("keeps staff-only captures and internal identifiers out of public CS docs and chatbot guides", () => {
-    const staffOnly = ["cs-figma-digest-881", "cs-figma-digest-1402", "cs-figma-digest-1960", "cs-figma-digest-2017"]
+    const staffOnly = ["cs-figma-digest-881", "cs-figma-digest-1402", "cs-figma-digest-1427", "cs-figma-digest-1960", "cs-figma-digest-2017"]
     const guideSlugs = CS_FIGMA_GUIDES.map((guide) => guide.docSlug)
     for (const slug of staffOnly) expect(guideSlugs).not.toContain(slug)
+    expect(getDocBySlug("cs-figma-digest-1427", "teacher")).toBeUndefined()
 
     const leak =
       /EEO[-_ ]?TEST|EEO\d{4,}|Minjae|zhangsan|Classin_Hope|Wayne\s+Kim|학원[A-Z](?![A-Za-z])|CS\s*주의사항|내부 비밀번호 재설정|\p{Script=Han}/u
@@ -158,6 +160,19 @@ describe("CS Figma docs", () => {
       expect(visible, doc.slug).not.toMatch(leak)
       expect(doc.audience, doc.slug).not.toMatch(/(?<![A-Za-z])CS(?![A-Za-z])/)
       expect(doc.keywords.filter((keyword) => /\.(?:png|jpe?g|webp)$/i.test(keyword)), doc.slug).toEqual([])
+    }
+  })
+
+  it("keeps internal digest entries redacted when generated guides are rebuilt", () => {
+    const internalIds = [689, 757, 881, 1385, 1402, 1427, 1492, 1895, 1914, 1936, 1960, 1988, 2017, 2256]
+    for (const id of internalIds) {
+      const guide = CS_FIGMA_DIGEST_GUIDES.find((item) => item.docSlug === `cs-figma-digest-${id}`)
+      expect(guide?.title).toBe(`내부 전용 항목 ${id} (내용 비공개)`)
+      expect(guide?.sourceImageFiles).toEqual([guide?.title])
+      expect(guide?.steps).toEqual([
+        `${guide?.title} 원본 화면을 확인합니다.`,
+        "Figma CS 캡처의 화면 구조와 주석을 기준으로 안내합니다.",
+      ])
     }
   })
 })
