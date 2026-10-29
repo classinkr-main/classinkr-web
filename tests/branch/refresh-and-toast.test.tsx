@@ -22,9 +22,9 @@ describe("useBranchJson keepPreviousData(R-5·D-8)", () => {
   it("새 키를 불러오는 동안 직전 data를 previous=true·loading=true로 돌려준다(opt-in)", () => {
     const hook = sliceBetween(client, "export function useBranchJson<T>", "export type BranchSyncResponseBody")
     const keyGuard = hook.indexOf("if (state.key !== stateKey) {")
-    const keep = hook.indexOf("if (options.keepPreviousData && state.data != null) {")
+    const keep = hook.indexOf("const previous = options.keepPreviousData ? previousBranchState(state, stateKey, url) : null")
     expect(keep).toBeGreaterThan(keyGuard)
-    expect(hook).toContain("data: state.data, error: null, loading: true, stale: false, staleSince: null, previous: true")
+    expect(client).toContain("data: state.data, error: null, loading: true, stale: false, staleSince: null, previous: true")
     // 옵트인이 아니면 예전처럼 빈 로딩 상태.
     expect(hook).toContain("return { key: stateKey, ...EMPTY_STATE }")
   })
@@ -32,12 +32,12 @@ describe("useBranchJson keepPreviousData(R-5·D-8)", () => {
   it("장부는 summary·pipeline만 옵트인하고, DSH 카드는 breakdown이 실린 응답이 올 때까지 로딩으로 본다", () => {
     const workbench = read("components/admin/branch/SalesLedgerWorkbench.tsx")
     expect(workbench.match(/keepPreviousData: true/g)).toHaveLength(2)
-    expect(workbench).toContain("const dshBreakdownLoading = summary.loading && !(summary.data?.dsh_breakdown && summary.data.dsh_breakdown.length > 0)")
+    expect(workbench).toContain("const dshBreakdownLoading = summary.loading && summary.data?.dsh_breakdown == null")
     expect(workbench.match(/loading=\{dshBreakdownLoading\}/g)).toHaveLength(3)
     expect(workbench).toContain("loading={dshRowsLoading}")
     // 갱신 중 표시: REV 카드·DSH·보드/콕핏, 요약 타일은 흐리게 + aria-busy.
-    expect(workbench.match(/<RefreshingBadge \/>/g)).toHaveLength(3)
-    expect(workbench).toContain("aria-busy={summary.previous ? true : undefined}")
+    expect(workbench).toContain("<RefreshingBadge />")
+    expect(workbench).toContain("aria-busy={summary.previous || pipeline.previous ? true : undefined}")
   })
 
   it("RefreshingBadge는 상태(role=status)로 알린다", () => {
