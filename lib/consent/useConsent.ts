@@ -5,8 +5,8 @@ import { useCallback, useMemo, useSyncExternalStore } from "react"
 import {
   CONSENT_CHANGE_EVENT,
   CONSENT_SIGNAL_KEY,
-  DENIED_CHOICE,
   applyConsentMode,
+  effectiveConsentChoice,
   type ConsentChoice,
   type ConsentRecord,
   parseConsent,
@@ -47,7 +47,7 @@ function subscribe(onChange: () => void): () => void {
   const cookieStore = getCookieStore()
   const onExternalChange = () => {
     const record = parseConsent(readConsentRaw() || null)
-    applyConsentMode(record && record.s !== 0 ? record : DENIED_CHOICE)
+    applyConsentMode(effectiveConsentChoice(record))
     // PixelConsentSync 등 같은 탭의 다른 구독자도 철회를 즉시 반영해야 한다.
     window.dispatchEvent(new CustomEvent(CONSENT_CHANGE_EVENT))
   }
@@ -99,7 +99,7 @@ export function useConsent(): UseConsentResult {
 
   return {
     record,
-    choice: record && record.s !== 0 ? { analytics: record.analytics, marketing: record.marketing } : DENIED_CHOICE,
+    choice: effectiveConsentChoice(record),
     decided: record !== null,
     save,
   }

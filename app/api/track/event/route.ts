@@ -3,6 +3,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import {
   ANONYMOUS_ID_COOKIE,
   CONSENT_COOKIE,
+  effectiveConsentChoice,
   parseConsent,
 } from "@/lib/consent/consent"
 import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
@@ -167,7 +168,7 @@ export async function POST(req: NextRequest) {
   // 같은 방식으로 서버에서 동의를 확인하므로 그 패턴을 그대로 따른다.
   // 추적 실패는 사용자 경험을 막지 않는다는 이 라우트의 계약대로 200을 유지한다.
   const consent = parseConsent(req.cookies.get(CONSENT_COOKIE)?.value ?? null)
-  if (!consent?.analytics) {
+  if (!effectiveConsentChoice(consent).analytics) {
     return NextResponse.json({ ok: true, stored: false, reason: "no_consent" })
   }
 

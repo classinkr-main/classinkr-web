@@ -99,11 +99,15 @@ export function readConsent(): ConsentRecord | null {
   return parseConsent(readConsentRaw() || null)
 }
 
-/** 현재 유효한 동의 선택 (미결정 시 모두 거부). */
-export function currentChoice(): ConsentChoice {
-  const record = readConsent()
+/** 정책·감사 확인 전의 선택은 브라우저와 서버 모두 거부로 취급한다. */
+export function effectiveConsentChoice(record: ConsentRecord | null): ConsentChoice {
   // 서버의 정책 검증과 감사 저장이 완료되기 전에는 옵트인 태그를 켜지 않는다.
   return record && record.s !== 0 ? { analytics: record.analytics, marketing: record.marketing } : DENIED_CHOICE
+}
+
+/** 현재 유효한 동의 선택 (미결정 시 모두 거부). */
+export function currentChoice(): ConsentChoice {
+  return effectiveConsentChoice(readConsent())
 }
 
 export function hasDecision(): boolean {
@@ -186,7 +190,7 @@ function publishDecision(record: ConsentRecord) {
 }
 
 function notifyConsentChange(record: ConsentRecord) {
-  applyConsentMode(record.s === 0 ? DENIED_CHOICE : record)
+  applyConsentMode(effectiveConsentChoice(record))
   if (isBrowser()) {
     window.dispatchEvent(new CustomEvent(CONSENT_CHANGE_EVENT, { detail: record }))
     // 저장소 접근이 실행 중 차단되더라도 다른 탭이 철회를 인지할 수 있게 보조 신호를 보낸다.

@@ -301,6 +301,15 @@ describe("track event route — 서버측 동의 게이트", () => {
     expect(insert).not.toHaveBeenCalled()
   })
 
+  it("선택은 허용이어도 서버 확인 전인 s:0 쿠키는 적재하지 않는다", async () => {
+    const pending = `cln_consent=${encodeURIComponent(
+      JSON.stringify({ v: CONSENT_POLICY_VERSION, analytics: true, marketing: true, ts: 1, s: 0 })
+    )}`
+    const response = await POST(trackRequest({ event: "page_view", page: "/" }, pending))
+    expect(await response.json()).toMatchObject({ stored: false, reason: "no_consent" })
+    expect(insert).not.toHaveBeenCalled()
+  })
+
   it("정책 버전이 지난 동의 쿠키는 무효로 본다", async () => {
     const stale = `cln_consent=${encodeURIComponent(
       JSON.stringify({ v: "2000-01-01", analytics: true, marketing: true, ts: 1, s: 1 })
