@@ -39,11 +39,13 @@ const MARKETING_ATTRIBUTION_FIELDS = [
 ] as const
 const ANALYTICS_ID_FIELDS = ["anonymousId", "anonymous_id"] as const
 
-function filterUnconsentedAttribution(body: unknown, consent: { analytics: boolean; marketing: boolean } | undefined): unknown {
+function filterUnconsentedAttribution(body: unknown, consent: { analytics: boolean; marketing: boolean } | undefined, anonymousId: string | null): unknown {
   if (!body || typeof body !== "object" || Array.isArray(body)) return body
   const filtered = { ...(body as Record<string, unknown>) }
   if (!consent?.marketing) for (const field of MARKETING_ATTRIBUTION_FIELDS) delete filtered[field]
-  if (!consent?.analytics) for (const field of ANALYTICS_ID_FIELDS) delete filtered[field]
+  // 본문의 ID는 타인의 ID를 주장할 수 있다. 분석 동의가 있어도 같은 요청 쿠키만 사용한다.
+  for (const field of ANALYTICS_ID_FIELDS) delete filtered[field]
+  if (consent?.analytics && anonymousId) filtered.anonymousId = anonymousId
   return filtered
 }
 
@@ -91,7 +93,7 @@ export async function POST(req: NextRequest) {
     }
 
     const consentMeta = getMarketingRequestMeta(req)
-    const safeBody = filterUnconsentedAttribution(body, consentMeta.consent)
+    const safeBody = filterUnconsentedAttribution(body, consentMeta.consent, consentMeta.anonymousId)
     const bodyObject = safeBody && typeof safeBody === "object" ? (safeBody as Record<string, unknown>) : {}
     const result = await submitLeadCapture(safeBody, {
       deferTask: (task) => after(task),

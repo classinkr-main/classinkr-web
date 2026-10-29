@@ -20,7 +20,7 @@ const lead = { source: "contact_page", org: "학원", name: "홍길동", phone: 
 function request(analytics: boolean, marketing: boolean, observe = true, marker = "a") {
   const record = { v: CONSENT_POLICY_VERSION, s: 1, ts: 1, analytics, marketing, ackAnalytics: "a", ackMarketing: "m" }
   return new NextRequest("https://classin.co.kr/api/lead", { method: "POST", headers: {
-    "content-type": "application/json", cookie: `cln_consent=${encodeURIComponent(JSON.stringify(record))}; cln_revoke_a=${marker}; cln_revoke_m=m`,
+    "content-type": "application/json", cookie: `cln_consent=${encodeURIComponent(JSON.stringify(record))}; cln_revoke_a=${marker}; cln_revoke_m=m; cln_aid=own-id`,
     ...(observe ? { [CONSENT_OBSERVATION_HEADER]: CONSENT_OBSERVATION_VERSION } : {}),
   }, body: JSON.stringify(lead) })
 }
@@ -37,7 +37,8 @@ describe("공개 문의의 서버 귀속 동의", () => {
   })
   it("유효한 양쪽 동의가 있으면 정상 귀속을 보존한다", async () => {
     expect((await POST(request(true, true))).status).toBe(200)
-    expect(capture.mock.calls[0][0]).toEqual(lead)
+    expect(capture.mock.calls[0][0]).toMatchObject({ gclid: "click", utmSource: "source", anonymousId: "own-id" })
+    expect(capture.mock.calls[0][0]).not.toHaveProperty("anonymous_id")
   })
   it("마케팅만 허용하면 광고 귀속은 보존하고 분석 ID는 제거한다", async () => {
     await POST(request(false, true))
@@ -46,7 +47,7 @@ describe("공개 문의의 서버 귀속 동의", () => {
   })
   it("분석만 허용하면 익명 ID는 보존하고 광고 귀속과 URL은 제거한다", async () => {
     await POST(request(true, false))
-    expect(capture.mock.calls[0][0]).toMatchObject({ anonymous_id: "anon" })
+    expect(capture.mock.calls[0][0]).toMatchObject({ anonymousId: "own-id" })
     expect(capture.mock.calls[0][0]).not.toHaveProperty("gclid")
     expect(capture.mock.calls[0][0]).not.toHaveProperty("currentPage")
   })

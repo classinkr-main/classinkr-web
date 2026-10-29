@@ -40,6 +40,15 @@ describe("자료 및 활동 익명 식별자 동의 경계", () => {
     expect(res.status).toBe(200)
     expect(mocks.material).toHaveBeenCalledWith(expect.objectContaining({ anonymousId: observe ? "anonymous-cookie" : null, leadId: "lead" }))
   })
+  it("자료 POST는 동의가 있어도 본문의 임의 ID로 타인의 활동을 연결하지 않는다", async () => {
+    const consent = encodeURIComponent(JSON.stringify({ v: CONSENT_POLICY_VERSION, s: 1, analytics: true, marketing: false, ackAnalytics: "a", ts: 1 }))
+    const req = new NextRequest("https://classin.co.kr/api/materials/test/download", { method: "POST", headers: {
+      cookie: `cln_consent=${consent}; cln_revoke_a=a`, "content-type": "application/json",
+      [CONSENT_OBSERVATION_HEADER]: CONSENT_OBSERVATION_VERSION,
+    }, body: JSON.stringify({ anonymousId: "victim-id" }) })
+    expect((await materialPost(req, context)).status).toBe(200)
+    expect(mocks.material).toHaveBeenCalledWith(expect.objectContaining({ anonymousId: null, leadId: "lead" }))
+  })
   it("구형 직접 GET 요청은 쿠키 ID를 연결하지 않으면서 다운로드를 유지한다", async () => {
     const res = await materialGet(request("/api/materials/test/download", "GET", false), context)
     expect(res.status).toBe(307)

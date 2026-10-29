@@ -14,7 +14,6 @@ interface RouteContext {
 
 interface DownloadBody {
   email?: string
-  anonymousId?: string
   source?: string
   postSlug?: string
 }
@@ -32,9 +31,9 @@ async function parseBody(req: NextRequest): Promise<DownloadBody> {
   return (await req.json().catch(() => ({}))) as DownloadBody
 }
 
-function readAnonymousId(req: NextRequest, body: DownloadBody) {
+function readAnonymousId(req: NextRequest) {
   if (!getMarketingRequestMeta(req).consent.analytics) return null
-  return req.cookies.get(ANONYMOUS_ID_COOKIE)?.value ?? body.anonymousId ?? null
+  return req.cookies.get(ANONYMOUS_ID_COOKIE)?.value ?? null
 }
 
 function normalizeEmail(value: string | null | undefined) {
@@ -100,7 +99,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   }
 
   try {
-    const anonymousId = readAnonymousId(req, body)
+    const anonymousId = readAnonymousId(req)
     const result = await prepareMaterialDownload({
       slug,
       email: requestEmail ?? userEmail,
@@ -154,7 +153,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
     )
   }
 
-  const anonymousId = readAnonymousId(req, {})
+  const anonymousId = readAnonymousId(req)
   const result = await prepareMaterialDownload({
     slug,
     email: userContext?.user.email ?? null,

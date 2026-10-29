@@ -1,6 +1,5 @@
 "use client"
 
-import { getAnonymousId } from "@/lib/consent/consent"
 import { consentObservationHeaders } from "@/lib/consent/observation-client"
 
 export interface MaterialDownloadClientInput {
@@ -37,7 +36,6 @@ export async function requestMaterialDownload(input: MaterialDownloadClientInput
       email: input.email,
       source: input.source,
       postSlug: input.postSlug,
-      anonymousId: getAnonymousId(),
     }),
   })
 
