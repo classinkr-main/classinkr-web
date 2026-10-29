@@ -19,6 +19,7 @@ const updateBranchSalesLedgerDraft = vi.fn()
 const applyBranchSalesLedgerDraft = vi.fn()
 const deleteBranchSalesLedgerDraft = vi.fn()
 const reverseBranchSalesLedgerEntryByDraftId = vi.fn()
+const supersedeBranchSalesLedgerEntry = vi.fn()
 // REV 시트 쓰기(ADR-011) — GET 이 시트 쓰기 감사 표를 읽는다. 실제 supabase 에 붙지 않게 목으로 둔다
 // (시트 쓰기 갈래의 실행 검증은 tests/api/branch-ledger-drafts-sheet-write.test.ts).
 const latestSheetWritesByDraftIds = vi.fn(async () => new Map())
@@ -44,6 +45,11 @@ vi.mock("@/lib/repositories/branch-sales-ledger-drafts", () => ({
   applyBranchSalesLedgerDraft,
   deleteBranchSalesLedgerDraft,
   reverseBranchSalesLedgerEntryByDraftId,
+  supersedeBranchSalesLedgerEntry,
+  isBranchSalesLedgerSupersedeUnavailableError: () => false,
+  isBranchSalesLedgerSupersedeNotFoundError: () => false,
+  isBranchSalesLedgerSupersedeNotCheckedError: () => false,
+  isBranchSalesLedgerSupersedeTargetMismatchError: () => false,
   isBranchSalesLedgerDraftsNotReadyError: () => false,
   isBranchSalesLedgerDuplicateActiveCorrectionError: (error: unknown) =>
     error instanceof Error && error.message === DUPLICATE_ACTIVE_CORRECTION_MESSAGE,
@@ -521,5 +527,37 @@ describe("GET /api/admin/branch/ledger-drafts — 열린 초안·반영값 누�
 
     expect(listBranchSalesLedgerDrafts).toHaveBeenCalledTimes(1)
     expect(listBranchSalesLedgerDrafts).toHaveBeenCalledWith({ status: "applied", limit: 20 })
+  })
+})
+
+describe("원자 대체는 REV 시트 정합성 검증 전까지 비활성", () => {
+  afterEach(() => {
+    vi.clearAllMocks()
+    vi.unstubAllEnvs()
+  })
+
+  it.each(["0", "1"])("시트 쓰기 스위치 %s에서 직접 대체 요청을 RPC 실행 전 차단한다", async (switchValue) => {
+    vi.stubEnv("VERCEL_ENV", "production")
+    vi.stubEnv("BRANCH_REV_SHEET_WRITE_ENABLED", switchValue)
+    mockAdmin()
+    const { PATCH } = await import("@/app/api/admin/branch/ledger-drafts/[id]/route")
+    const response = await PATCH(patchDraftRequest("old", {
+      action: "supersede",
+      newDraftId: "00000000-0000-0000-0000-000000000001",
+    }), { params: Promise.resolve({ id: "old" }) })
+    expect(response.status).toBe(503)
+    expect((await response.json()).reason).toBe("supersede-unavailable")
+    expect(supersedeBranchSalesLedgerEntry).not.toHaveBeenCalled()
+    expect(reverseBranchSalesLedgerEntryByDraftId).not.toHaveBeenCalled()
+  })
+
+  it("RPC 존재와 무관하게 목록의 대체 capability를 false로 보낸다", async () => {
+    mockAdmin()
+    listBranchSalesLedgerDrafts.mockResolvedValue({ generatedAt: "x", health: { ok: true }, drafts: [] })
+    listBranchSalesLedgerEntries.mockResolvedValue({ generatedAt: "x", health: { ok: true }, entries: [] })
+    const { GET } = await import("@/app/api/admin/branch/ledger-drafts/route")
+    const response = await GET(ledgerDraftsRequest())
+    expect(response.status).toBe(200)
+    expect((await response.json()).capabilities).toEqual({ supersede: false })
   })
 })
