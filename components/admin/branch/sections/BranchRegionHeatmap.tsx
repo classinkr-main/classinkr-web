@@ -659,18 +659,19 @@ function RegionMapSourcePanel({
   )
 }
 
-export default function BranchRegionHeatmap({ team, period, selectedMonth, refreshKey, manager }: { manager?: string; team: Team; period: Period; selectedMonth: string; refreshKey: number }) {
+export default function BranchRegionHeatmap({ team, period, selectedMonth, refreshKey, manager, includeMapSource = true, syncSelectionToUrl = true, noStore = false }: { manager?: string; team: Team; period: Period; selectedMonth: string; refreshKey: number; includeMapSource?: boolean; syncSelectionToUrl?: boolean; noStore?: boolean }) {
   const searchParams = useSearchParams()
   const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
   // 로컬 재시도 넛지 — 상위 refreshKey(전역 새로고침, 강제 스크롤 동반)에 기대지 않고
   // 이 섹션만 useBranchJson의 기존 캐시키 재계산 경로(refreshKey:url)를 재사용해 다시 요청한다.
   const [localRetry, setLocalRetry] = useState(0)
   const requestKey = refreshKey + localRetry
-  const heatmap = useBranchJson<{ rows?: Row[] }>(`/api/admin/branch/heatmap?team=${team}&period=${period}${monthQuery}${manager ? `&manager=${encodeURIComponent(manager)}` : ""}`, requestKey)
+  const heatmap = useBranchJson<{ rows?: Row[] }>(`/api/admin/branch/heatmap?team=${team}&period=${period}${monthQuery}${manager ? `&manager=${encodeURIComponent(manager)}` : ""}`, requestKey, { noStore })
   // REV와 독립 요청으로 시작한다. 지도 199곳 전체 매칭이 느려도 히트맵 본체는 먼저 렌더된다.
   const mapSourceRequest = useBranchJson<HeatmapMapSource>(
     "/api/admin/branch/heatmap/map-source",
-    requestKey
+    requestKey,
+    { enabled: includeMapSource }
   )
   const rows = heatmap.loading ? null : (heatmap.data?.rows ?? EMPTY_ROWS)
   const mapSource = mapSourceRequest.data ?? (mapSourceRequest.error ? {
@@ -682,7 +683,7 @@ export default function BranchRegionHeatmap({ team, period, selectedMonth, refre
   } : null)
   const error = heatmap.error
   const [selectedLabel, setSelectedLabel] = useState<string | null>(() =>
-    canonicalRegion(searchParams.get("region") ?? "")
+    syncSelectionToUrl ? canonicalRegion(searchParams.get("region") ?? "") : null
   )
   // Default to revenue — magnitude tells the operator where the money is,
   // which is more actionable than achievement %.
@@ -704,10 +705,11 @@ export default function BranchRegionHeatmap({ team, period, selectedMonth, refre
   const selected = mappedRows.find((r) => r.label === selectedLabel) ?? mappedRows[0] ?? null
   const selectRegion = useCallback((label: string) => {
     setSelectedLabel(label)
+    if (!syncSelectionToUrl) return
     const url = new URL(window.location.href)
     url.searchParams.set("region", label)
     window.history.replaceState(null, "", url.toString())
-  }, [])
+  }, [syncSelectionToUrl])
   const mapSourceHref = selected
     ? `/admin/crm/customers/map?region=${encodeURIComponent(selected.label)}`
     : "/admin/crm/customers/map"
@@ -759,7 +761,7 @@ export default function BranchRegionHeatmap({ team, period, selectedMonth, refre
         </div>
       </div>
 
-      <MapSourceStrip source={mapSource} href={mapSourceHref} loading={mapSourceRequest.loading} />
+      {includeMapSource && <MapSourceStrip source={mapSource} href={mapSourceHref} loading={mapSourceRequest.loading} />}
 
       <div className="grid w-full gap-6 p-5 lg:grid-cols-[minmax(520px,1fr)_minmax(280px,360px)]">
         <HeatMap rows={mappedRows} selectedLabel={selected?.label ?? null}
@@ -767,7 +769,7 @@ export default function BranchRegionHeatmap({ team, period, selectedMonth, refre
 
         <div className="flex w-full max-w-[360px] flex-col gap-4 lg:ml-auto">
           <DetailPanel row={selected} metric={metric} />
-          <RegionMapSourcePanel region={selected?.label ?? null} source={mapSource} href={mapSourceHref} />
+          {includeMapSource && <RegionMapSourcePanel region={selected?.label ?? null} source={mapSource} href={mapSourceHref} />}
 
           <div>
             <p className="mb-2 px-1 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-[#615D59]">

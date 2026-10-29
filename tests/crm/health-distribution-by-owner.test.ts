@@ -8,7 +8,7 @@
  * 모킹 패턴은 tests/crm/unified-customers-force-repository.test.ts를 따른다.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { NextRequest } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 
 const NOW = new Date("2026-09-18T09:00:00.000Z")
 
@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
 const routeMocks = vi.hoisted(() => ({
   requireVerifiedAdminContext: vi.fn(),
   getCrmUnifiedHealthDistribution: vi.fn(),
+  dataOwnerFromRequest: vi.fn(),
 }))
 
 vi.mock("next/cache", () => ({
@@ -185,6 +186,15 @@ describe("getCrmUnifiedHealthDistribution byOwner (T2)", () => {
     })
   })
 
+  it("담당 키로 개인 분포만 반환하며 빈 담당 키는 전체를 노출하지 않는다", async () => {
+    const { getCrmUnifiedHealthDistribution } = await loadRepository()
+    const personal = await getCrmUnifiedHealthDistribution({ ownerKeys: ["owner-kim"] })
+    expect(personal).toMatchObject({ total: 3, safe: 1, watch: 1, risk: 1 })
+    expect(personal.byOwner.map((row) => row.ownerName)).toEqual(["김담당"])
+    expect(await getCrmUnifiedHealthDistribution({ ownerKeys: [] })).toEqual({ total: 0, safe: 0, watch: 0, risk: 0, byOwner: [] })
+    expect(await getCrmUnifiedHealthDistribution({ ownerKeys: ["unknown-owner"] })).toEqual({ total: 0, safe: 0, watch: 0, risk: 0, byOwner: [] })
+  })
+
   it("getCrmUnifiedCustomers().healthDistribution은 기존 4개 키 형태를 유지한다(응답 불변)", async () => {
     const { getCrmUnifiedCustomers, getCrmUnifiedHealthDistribution } = await loadRepository()
 
@@ -206,11 +216,13 @@ describe("GET /api/admin/crm/health-distribution 응답 형태 (T2)", () => {
     vi.doMock("@/lib/repositories/crm-unified-customers", () => ({
       getCrmUnifiedHealthDistribution: routeMocks.getCrmUnifiedHealthDistribution,
     }))
+    vi.doMock("@/lib/admin/data-owner", () => ({ dataOwnerFromRequest: routeMocks.dataOwnerFromRequest }))
     return import("@/app/api/admin/crm/health-distribution/route")
   }
 
   beforeEach(() => {
     routeMocks.requireVerifiedAdminContext.mockReset().mockResolvedValue({ userId: "admin-1", role: "ADMIN" })
+    routeMocks.dataOwnerFromRequest.mockReset().mockResolvedValue(["owner-kim"])
     routeMocks.getCrmUnifiedHealthDistribution.mockReset().mockResolvedValue({
       total: 3,
       safe: 1,
@@ -234,5 +246,23 @@ describe("GET /api/admin/crm/health-distribution 응답 형태 (T2)", () => {
     expect(typeof body.generatedAt).toBe("string")
     expect(new Date(body.generatedAt).toISOString()).toBe(body.generatedAt)
     expect(response.headers.get("Cache-Control")).toBe("private, max-age=30, stale-while-revalidate=120")
+  })
+
+  it("개인 요청은 검증된 사용자에서 담당 키를 해석해 전달한다", async () => {
+    const { GET } = await loadRoute()
+    const response = await GET(new NextRequest("https://classin.kr/api/admin/crm/health-distribution?owner=__me"))
+    expect(response.status).toBe(200)
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store")
+    expect(routeMocks.dataOwnerFromRequest).toHaveBeenCalledOnce()
+    expect(routeMocks.getCrmUnifiedHealthDistribution).toHaveBeenCalledWith({ ownerKeys: ["owner-kim"] })
+  })
+
+  it("권한이 없으면 개인 담당자와 고객 분포를 조회하지 않는다", async () => {
+    routeMocks.requireVerifiedAdminContext.mockResolvedValue(NextResponse.json({ error: "forbidden" }, { status: 403 }))
+    const { GET } = await loadRoute()
+    const response = await GET(new NextRequest("https://classin.kr/api/admin/crm/health-distribution?owner=__me"))
+    expect(response.status).toBe(403)
+    expect(routeMocks.dataOwnerFromRequest).not.toHaveBeenCalled()
+    expect(routeMocks.getCrmUnifiedHealthDistribution).not.toHaveBeenCalled()
   })
 })

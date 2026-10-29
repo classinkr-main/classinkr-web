@@ -73,6 +73,7 @@ import type { BugReport } from "@/lib/bugs-data"
 import type { PatchNote } from "@/lib/patch-notes-data"
 import { OverviewBriefing, OverviewOperationsPanels, OverviewScorecard, type OverviewMetric } from "@/components/admin/overview/OverviewWorkspace"
 import type { OverviewOperationsSummary } from "@/lib/admin/overview/operations-summary"
+import OverviewCrmWorkspace from "./OverviewCrmWorkspace"
 
 const OVERVIEW_FETCH_TIMEOUT_MS = 12_000
 
@@ -979,6 +980,8 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
           ))}
         </div>
       </div>
+
+      <OverviewCrmWorkspace />
 
       {failedSourceLabels.length > 0 ? (
         <div
