@@ -7,9 +7,11 @@
 // (ledger-entry-paths.test.ts·weekly-confidence.test.ts와 동일 관례).
 import { readFileSync } from "fs"
 import { join } from "path"
-import { describe, expect, it } from "vitest"
+import { createElement } from "react"
+import { renderToStaticMarkup } from "react-dom/server"
+import { describe, expect, it, vi } from "vitest"
 
-import { computeMatrixRange, EMPTY_MATRIX_RANGE, type MatrixCellCoord } from "@/components/admin/branch/ledger/rev-matrix-logic"
+import { computeMatrixRange, EMPTY_MATRIX_RANGE, useMatrixEditor, type MatrixCellCoord } from "@/components/admin/branch/ledger/rev-matrix-logic"
 
 const logicPath = join(process.cwd(), "components/admin/branch/ledger/rev-matrix-logic.ts")
 const workbenchPath = join(process.cwd(), "components/admin/branch/SalesLedgerWorkbench.tsx")
@@ -170,10 +172,22 @@ describe("onSelectedKeyDown — Shift+방향키 범위 선택과 range 일괄 �
 describe("useMatrixEditor — 기존 반환 필드·actions 키는 그대로, range/anchor만 추가된다", () => {
   const logic = read(logicPath)
 
-  it("actions 객체의 키·순서는 문자 그대로 유지된다(memo 안정성 주석과 함께)", () => {
-    expect(logic).toContain(
-      "[setBuffer, pickEditConfidence, selectCell, beginEdit, cancelEdit, commitBuffer, onEditingKeyDown, onSelectedKeyDown]",
-    )
+  it("기존 셀 액션과 잠긴 셀 열기 액션을 함께 제공한다", () => {
+    const capture = vi.fn<(editor: ReturnType<typeof useMatrixEditor>) => void>()
+    function Probe() {
+      capture(useMatrixEditor({
+        editableCells: EDITABLE_CELLS,
+        cellValue: () => 100,
+        cellConfidence: () => "expected",
+        onCommitCell: vi.fn(),
+      }))
+      return null
+    }
+    renderToStaticMarkup(createElement(Probe))
+    expect(Object.keys(capture.mock.calls[0][0].actions)).toEqual([
+      "setBuffer", "setEditConfidence", "selectCell", "beginEdit", "cancelEdit", "commitBuffer",
+      "onEditingKeyDown", "onSelectedKeyDown", "activateLocked",
+    ])
   })
 
   it("훅 반환값에 anchor·range가 selected/editing/buffer/editConfidence/actions와 함께 추가된다", () => {
@@ -294,7 +308,9 @@ describe("SalesLedgerWorkbench — 매트릭스 컨테이너 keydown: '/' 검색
     const source = read(workbenchPath)
     const inputIndex = source.indexOf("ref={revSearchInputRef}")
     expect(inputIndex).toBeGreaterThan(-1)
-    expect(source.slice(inputIndex, inputIndex + 220)).toContain('placeholder="고객·담당자·지역 검색"')
+    const tagEnd = source.indexOf("/>", inputIndex)
+    expect(tagEnd).toBeGreaterThan(inputIndex)
+    expect(source.slice(inputIndex, tagEnd)).toContain('placeholder="고객·담당자·지역 검색"')
   })
 
   it("매트릭스 스크롤 컨테이너(onPaste가 붙은 div)에 onKeyDown={handleMatrixContainerKeyDown}이 함께 연결된다", () => {

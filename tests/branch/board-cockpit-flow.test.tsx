@@ -109,7 +109,14 @@ describe("워크벤치 배선 — 보드·콕핏", () => {
   const source = readFileSync(join(process.cwd(), "components/admin/branch/SalesLedgerWorkbench.tsx"), "utf8")
 
   it("보드 카드 = 빠른 입력 직행, 대기 초안은 화면 전체 행 기준 맵", () => {
-    expect(source).toContain("onOpenRow={(row) => void openQuickInputForRow(row)}")
+    expect(source).toContain("onOpenRow={openQuickInputForRow}")
+    const quickInputStart = source.indexOf("const openQuickInputForRow = useCallback")
+    const quickInputEnd = source.indexOf("}, [loadDealDetail])", quickInputStart)
+    expect(quickInputStart).toBeGreaterThan(-1)
+    expect(quickInputEnd).toBeGreaterThan(quickInputStart)
+    const quickInput = source.slice(quickInputStart, quickInputEnd)
+    expect(quickInput).toContain("await loadDealDetail(row)")
+    expect(quickInput).toContain('setRailView("input")')
     expect(source).toContain('buildMatrixPendingByCell(pendingMatchDrafts, filteredRows)')
     expect(source.match(/pendingByCell=\{lensPendingByCell\}/g)).toHaveLength(2)
   })
