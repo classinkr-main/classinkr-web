@@ -8734,20 +8734,7 @@ function clientScript(segment) {
         marketingConsent: Boolean(form.querySelector('[name="marketingConsent"]')?.checked),
         website: field('website'),
         landingPage: window.location.origin + '/l/${segment.slug}',
-        currentPage: window.location.href,
-        referrer: document.referrer || undefined,
-        utmSource: getUrlParam('utm_source'),
-        utmMedium: getUrlParam('utm_medium'),
-        utmCampaign: getUrlParam('utm_campaign'),
-        utmTerm: getUrlParam('utm_term'),
-        utmContent: getUrlParam('utm_content'),
-        gclid: getUrlParam('gclid'),
-        fbclid: getUrlParam('fbclid'),
-        msclkid: getUrlParam('msclkid'),
-        ttclid: getUrlParam('ttclid'),
-        // 네이버는 클릭ID 한 값이 아니라 n_* 묶음이라 공용 스크립트가 모아 준다
-        // (키 목록 정본: lib/naver-ad-params.ts). 값이 없으면 null.
-        naverAd: window.classinNaverAd ? window.classinNaverAd() : null,
+        currentPage: window.location.origin + window.location.pathname,
       };
 
       try {
@@ -8759,7 +8746,7 @@ function clientScript(segment) {
 
         const response = await fetch('/api/lead', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(window.classinConsentObservationHeaders ? window.classinConsentObservationHeaders() : {}) },
           body: JSON.stringify(payload),
         });
         const result = await response.json().catch(() => null);

@@ -2,6 +2,7 @@ import "server-only"
 
 import { createHash, createHmac } from "node:crypto"
 import type { NextRequest } from "next/server"
+import { hasConsentObservation } from "@/lib/consent/observation-contract"
 
 import {
   ANONYMOUS_ID_COOKIE,
@@ -129,10 +130,10 @@ export function getMarketingRequestMeta(
     gaClientId,
     fbp: req.cookies.get("_fbp")?.value?.trim() || null,
     fbc,
-    consent: effectiveConsentChoice(consent, {
+    consent: hasConsentObservation(req.headers) ? effectiveConsentChoice(consent, {
       analytics: req.cookies.get(ANALYTICS_REVOCATION_COOKIE)?.value ?? null,
       marketing: req.cookies.get(MARKETING_REVOCATION_COOKIE)?.value ?? null,
-    }),
+    }) : { analytics: false, marketing: false },
   }
 }
 

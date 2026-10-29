@@ -4,15 +4,20 @@ import { describe, expect, it, vi } from "vitest"
 vi.mock("server-only", () => ({}))
 
 import { CONSENT_POLICY_VERSION } from "@/lib/consent/consent"
+import { CONSENT_OBSERVATION_HEADER, CONSENT_OBSERVATION_VERSION } from "@/lib/consent/observation-contract"
 import { getMarketingRequestMeta } from "@/lib/marketing/server-conversions"
 
-function requestFor(record: Record<string, unknown>, extraCookies = "") {
+function requestFor(record: Record<string, unknown>, extraCookies = "", observation = true) {
   const cookie = `cln_consent=${encodeURIComponent(JSON.stringify(record))}${extraCookies}`
-  return new NextRequest("https://classin.co.kr/contact", { headers: { cookie } })
+  return new NextRequest("https://classin.co.kr/contact", { headers: { cookie, ...(observation ? { [CONSENT_OBSERVATION_HEADER]: CONSENT_OBSERVATION_VERSION } : {}) } })
 }
 
 describe("서버 광고 전환 동의 경계", () => {
   const base = { v: CONSENT_POLICY_VERSION, analytics: true, marketing: true, ts: 1 }
+
+  it("관찰 능력이 확인되지 않으면 허용 쿠키가 있어도 서버 전환은 거부한다", () => {
+    expect(getMarketingRequestMeta(requestFor({ ...base, s: 1, ackAnalytics: "a", ackMarketing: "m" }, "; cln_revoke_a=a; cln_revoke_m=m", false)).consent).toEqual({ analytics: false, marketing: false })
+  })
 
   it("서버 확인 전 선택은 GA4 및 Meta 전환에 쓰지 않는다", () => {
     expect(getMarketingRequestMeta(requestFor({ ...base, s: 0 })).consent).toEqual({ analytics: false, marketing: false })

@@ -1,3 +1,4 @@
+import { consentObservationHeaders } from "@/lib/consent/observation-client"
 import {
   GOOGLE_ADS_DEMO_CONVERSION_LABEL,
   GOOGLE_ADS_ID,
@@ -117,7 +118,7 @@ const sendInternalTracking = (eventName: EventNames, params?: AnalyticsParams) =
     const referrer = sanitizeTrackingUrl(window.location.href)
     fetch("/api/track/event", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...consentObservationHeaders() },
       body: payload,
       keepalive: true,
       referrer,

@@ -9,6 +9,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 }))
 
 import { CONSENT_POLICY_VERSION } from "@/lib/consent/consent"
+import { CONSENT_OBSERVATION_HEADER, CONSENT_OBSERVATION_VERSION } from "@/lib/consent/observation-contract"
 import { POST } from "@/app/api/track/event/route"
 
 /** 라우트가 서버측에서 분석 동의를 검증하므로 동의 쿠키를 실어 보낸다. */
@@ -24,13 +25,14 @@ const CONSENT_COOKIE_HEADER = `cln_consent=${encodeURIComponent(
   })
 )}; cln_revoke_a=confirmed-a; cln_revoke_m=confirmed-m; cln_aid=anon-track-test`
 
-function trackRequest(body: unknown, cookie: string | null = CONSENT_COOKIE_HEADER) {
+function trackRequest(body: unknown, cookie: string | null = CONSENT_COOKIE_HEADER, observation = true) {
   return new NextRequest("https://classin.kr/api/track/event", {
     method: "POST",
     headers: {
       "content-type": "application/json",
       origin: "https://classin.kr",
       "x-forwarded-for": "track-event-test",
+      ...(observation ? { [CONSENT_OBSERVATION_HEADER]: CONSENT_OBSERVATION_VERSION } : {}),
       ...(cookie ? { cookie } : {}),
     },
     body: JSON.stringify(body),
@@ -278,6 +280,12 @@ describe("track event route", () => {
 })
 
 describe("track event route — 서버측 동의 게이트", () => {
+  it("현재 탭의 관찰 능력이 확인되지 않으면 허용 쿠키가 있어도 적재하지 않는다", async () => {
+    const response = await POST(trackRequest({ event: "page_view", page: "/" }, CONSENT_COOKIE_HEADER, false))
+    expect(await response.json()).toMatchObject({ stored: false, reason: "no_consent" })
+    expect(insert).not.toHaveBeenCalled()
+  })
+
   beforeEach(() => {
     from.mockClear()
     insert.mockReset()

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { hasConsentObservation } from "@/lib/consent/observation-contract"
 import {
   ANONYMOUS_ID_COOKIE,
   ANALYTICS_REVOCATION_COOKIE,
@@ -174,7 +175,7 @@ export async function POST(req: NextRequest) {
     analytics: req.cookies.get(ANALYTICS_REVOCATION_COOKIE)?.value ?? null,
     marketing: req.cookies.get(MARKETING_REVOCATION_COOKIE)?.value ?? null,
   }
-  if (!effectiveConsentChoice(consent, revocations).analytics) {
+  if (!hasConsentObservation(req.headers) || !effectiveConsentChoice(consent, revocations).analytics) {
     return NextResponse.json({ ok: true, stored: false, reason: "no_consent" })
   }
 

@@ -8,6 +8,9 @@
 
 "use client"
 
+import { consentObservationHeaders } from "@/lib/consent/observation-client"
+
+
 import { useCallback, useEffect, useRef, useState } from "react"
 import { ArrowRight, CheckCircle2, Download, FileText, Loader2, Mail } from "lucide-react"
 import { PublicLoginDialog } from "@/components/auth/PublicLoginDialog"
@@ -65,7 +68,7 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
     try {
       const res = await fetch("/api/newsletter/subscribe", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...consentObservationHeaders() },
         body: JSON.stringify({
           email,
           source,

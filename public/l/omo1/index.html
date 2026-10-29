@@ -2,13 +2,15 @@
 <html lang="ko">
 <head>
 <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=AW-18252550128"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
+  gtag('consent', 'default', {analytics_storage:'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});
+  gtag('set', 'ads_data_redaction', true);
   gtag('js', new Date());
-  gtag('config', 'AW-18252550128');
+  gtag('config', 'AW-18252550128', {send_page_view:false});
 </script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=AW-18252550128"></script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Classin Education OS — 교육의 운영 체제.</title>
@@ -1562,18 +1564,7 @@
         message,
         marketingConsent: false,
         landingPage: window.location.origin + '/l/omo1',
-        currentPage: window.location.href,
-        referrer: document.referrer || undefined,
-        utmSource: getUrlParam('utm_source'),
-        utmMedium: getUrlParam('utm_medium'),
-        utmCampaign: getUrlParam('utm_campaign'),
-        utmTerm: getUrlParam('utm_term'),
-        utmContent: getUrlParam('utm_content'),
-        gclid: getUrlParam('gclid'),
-        fbclid: getUrlParam('fbclid'),
-        // 네이버는 클릭ID 한 값이 아니라 n_* 묶음이라 공용 스크립트가 모아 준다
-        // (키 목록 정본: lib/naver-ad-params.ts). 값이 없으면 null.
-        naverAd: window.classinNaverAd ? window.classinNaverAd() : null,
+        currentPage: window.location.origin + window.location.pathname,
       };
 
       try {
@@ -1585,7 +1576,7 @@
 
         const response = await fetch('/api/lead', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(window.classinConsentObservationHeaders ? window.classinConsentObservationHeaders() : {}) },
           body: JSON.stringify(payload),
         });
         const result = await response.json().catch(() => null);
