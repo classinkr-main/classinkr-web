@@ -2,7 +2,7 @@ import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 import { buildCsFigmaMediaForGuide } from "@/lib/cs-figma-assets"
 import { CS_FIGMA_GUIDES, sanitizeGuideStep, type CsFigmaGuide } from "@/lib/cs-figma-guides"
 import { getCsFigmaEnrichment } from "@/lib/cs-figma-enrichments"
-import { applyGuideMedia } from "@/lib/docs-guide-media"
+import { applyGuideMedia, DOC_GUIDE_MEDIA } from "@/lib/docs-guide-media"
 import { TROUBLESHOOTING_DOCS } from "@/lib/docs-troubleshooting"
 
 export const DOC_CATEGORY_IDS = [
@@ -235,6 +235,9 @@ export function buildCsFigmaDocArticle(
   assetPaths?: readonly string[]
 ): DocArticle {
   const enrichment = getCsFigmaEnrichment(guide.docSlug)
+  // 개인정보를 가린 단계별 화면(lib/docs-guide-media)이 있는 문서는 원본 합성 캡처를 붙이지 않는다.
+  // 원본에는 계정명·연락처·재생 링크 같은 고객 정보가 그대로 남아 있을 수 있다.
+  const hasMaskedStepPhotos = Boolean(DOC_GUIDE_MEDIA[`${guide.docCategory}/${guide.docSlug}`])
   const baseTags = ["사용 가이드", "사용법", guide.category]
   const baseKeywords = scrubCsFigmaKeywords([
     guide.title,
@@ -284,7 +287,7 @@ export function buildCsFigmaDocArticle(
     }))
 
     const sections: DocSection[] = []
-    if (enrichment.heroImage) {
+    if (enrichment.heroImage && !hasMaskedStepPhotos) {
       sections.push({
         heading: "전체 순서를 한 장으로",
         body: "누를 곳을 한 장에 모아 표시했습니다. 단계마다 무엇을 하는지는 아래에 있습니다.",
@@ -325,7 +328,7 @@ export function buildCsFigmaDocArticle(
   }
 
   // 보강이 없는 문서: 피그마/캡처 표현을 제거한 기본 구성으로 자동 정리한다.
-  const media = buildCsFigmaMediaForGuide(guide, assetPaths)
+  const media = hasMaskedStepPhotos ? [] : buildCsFigmaMediaForGuide(guide, assetPaths)
   const sections: DocSection[] = [
     {
       heading: "순서대로 따라 하기",

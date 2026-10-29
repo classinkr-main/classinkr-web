@@ -908,7 +908,8 @@ export const CURATED_CS_FIGMA_GUIDES: CsFigmaGuide[] = [
 
 // 생성 가이드(캡처 판독본) 중 사내 전용 화면(직원 계정 비밀번호 재설정, 사용자 수업 이력·품질 진단), 번역 작업 화면,
 // 충전·결제 금액과 계정 잔액이 찍힌 캡처, 예시 학원명이 제목인 대응 메모, 빈 캡처는 공개 문서와 챗봇 답변 어디에도 내보내지 않는다.
-// (생성 파일은 스크립트가 다시 만들므로 여기서 거른다.)
+// (생성 파일은 스크립트가 다시 만들므로 여기서 거른다.) 이 가이드들의 원본 캡처 파일은 URL 로도 열리지 않도록
+// public/docs/files/cs-figma/ 에서 뺐다(2026-10-29). 다시 내보낼 때도 이 화면들은 공개 폴더에 넣지 않는다.
 const INTERNAL_ONLY_CS_FIGMA_DOC_SLUGS = new Set([
   "cs-figma-digest-881",
   "cs-figma-digest-1385",
