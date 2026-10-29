@@ -21,11 +21,11 @@ import {
   resolveDocsRedirect,
 } from "@/lib/docs-content"
 import { JsonLd } from "@/components/seo/JsonLd"
+import { createDocStructuredData, pickDocShareImage } from "@/lib/docs-structured-data"
 import {
   DEFAULT_OG_IMAGE_PATH,
   DEFAULT_TWITTER_IMAGE_PATH,
-  createArticleJsonLd,
-  createBreadcrumbJsonLd,
+  SITE_NAME,
   toAbsoluteUrl,
 } from "@/lib/seo"
 
@@ -63,29 +63,52 @@ export async function generateMetadata({
   }
 
   const shouldIndex = !doc.noindex
-  const metaTitle = doc.seoTitle?.trim() || `${doc.title} | Classin 가이드`
+  // 관리자가 적은 검색 제목(seoTitle)은 루트 템플릿(`%s | Classin`)을 그대로 탄다. 기본 제목은 "문서명 | Classin 가이드" 에서
+  // 끝내고 템플릿을 건너뛴다(그렇지 않으면 "… | Classin 가이드 | Classin" 으로 접미사가 겹친다). 공유 카드 제목도 같은 값이다.
+  const seoTitle = doc.seoTitle?.trim()
+  const defaultTitle = `${doc.title} | Classin 가이드`
+  const socialTitle = seoTitle || defaultTitle
   const metaDescription = doc.seoDescription?.trim() || doc.description
   const canonicalPath = doc.canonicalPath?.trim() || getDocPath(doc)
   const canonicalUrl = toAbsoluteUrl(canonicalPath)
+  // 문서에 실린 화면 사진 가운데 공유 카드 비율에 맞는 첫 장. 없으면 기본 브랜드 이미지.
+  const shareImage = pickDocShareImage(doc)
 
   return {
-    title: metaTitle,
+    title: seoTitle || { absolute: defaultTitle },
     description: metaDescription,
     keywords: doc.keywords,
     alternates: { canonical: canonicalUrl },
     robots: shouldIndex ? undefined : { index: false, follow: true },
     openGraph: {
-      title: metaTitle,
+      title: socialTitle,
       description: metaDescription,
       url: canonicalUrl,
+      siteName: SITE_NAME,
+      locale: "ko_KR",
       type: "article",
-      images: [{ url: toAbsoluteUrl(DEFAULT_OG_IMAGE_PATH) }],
+      modifiedTime: doc.updatedAt,
+      images: [
+        shareImage
+          ? {
+              url: shareImage.url,
+              ...(shareImage.width && shareImage.height
+                ? { width: shareImage.width, height: shareImage.height }
+                : {}),
+              ...(shareImage.alt ? { alt: shareImage.alt } : {}),
+            }
+          : { url: toAbsoluteUrl(DEFAULT_OG_IMAGE_PATH) },
+      ],
     },
     twitter: {
       card: "summary_large_image",
-      title: metaTitle,
+      title: socialTitle,
       description: metaDescription,
-      images: [toAbsoluteUrl(DEFAULT_TWITTER_IMAGE_PATH)],
+      images: [
+        shareImage
+          ? { url: shareImage.url, ...(shareImage.alt ? { alt: shareImage.alt } : {}) }
+          : toAbsoluteUrl(DEFAULT_TWITTER_IMAGE_PATH),
+      ],
     },
   }
 }
@@ -145,21 +168,13 @@ export default async function DocsArticlePage({
       sidebar={<DocsSidebar groups={getDocsNavGroups(activePath, docsContent)} />}
       toc={<DocsTableOfContents items={toTocItems(doc)} />}
     >
+      {/* Article(문제 해결 문서는 TechArticle)·BreadcrumbList, 공개·색인 문서에는 HowTo 또는 FAQPage 를 더한다. */}
       <JsonLd
-        data={[
-          createArticleJsonLd({
-            path: activePath,
-            title: doc.title,
-            description: doc.description,
-            dateModified: doc.updatedAt,
-          }),
-          createBreadcrumbJsonLd([
-            { name: "홈", path: "/" },
-            { name: "가이드", path: "/docs" },
-            { name: category.title, path: getDocCategoryPath(doc.category) },
-            { name: doc.title, path: activePath },
-          ]),
-        ]}
+        data={createDocStructuredData({
+          doc,
+          categoryTitle: category.title,
+          categoryPath: getDocCategoryPath(doc.category),
+        })}
       />
       <Link
         href={getDocCategoryPath(doc.category)}

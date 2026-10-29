@@ -4,6 +4,7 @@ import Link from "next/link"
 import type { LucideIcon } from "lucide-react"
 import {
   ArrowRight,
+  ArrowUpRight,
   CircleHelp,
   Download,
   Headset,
@@ -15,13 +16,13 @@ import {
 } from "lucide-react"
 
 import { getDocsContent } from "@/lib/docs-content"
+import { pickRecentlyUpdated } from "@/lib/docs-list-meta"
 import { createPublicMetadata } from "@/lib/seo"
-import { Reveal } from "@/components/landing/Reveal"
 import { TrackedLink } from "@/components/TrackedLink"
 import type { DocsArticleSummary } from "@/components/docs"
-import { SearchHighlight } from "@/components/ui/SearchHighlight"
 import { DocsSearchLogger } from "@/components/docs/DocsSearchLogger"
 import { DocsAskChatbotButton } from "@/components/docs/DocsAskChatbotButton"
+import { DocsCompactRow, DocsListRow } from "@/components/docs/DocsListRow"
 import {
   GuideJoinIcon,
   GuideOpsIcon,
@@ -83,12 +84,27 @@ const SEARCH_CHIPS = ["설치", "로그인", "비밀번호", "녹화", "EDB"]
 const TROUBLESHOOTING_ORDER = [
   "/docs/start/login-troubleshooting",
   "/docs/start/class-connection-troubleshooting",
+  "/docs/start/camera-mic-troubleshooting",
+  "/docs/start/app-update-cache-reinstall",
 ]
+// 히어로 한 줄 바로가기는 짧은 증상 이름으로 보인다. 없는 문서는 제목에서 괄호 설명을 떼어 쓴다.
+const TROUBLESHOOTING_SHORT_LABELS: Record<string, string> = {
+  "/docs/start/login-troubleshooting": "로그인",
+  "/docs/start/class-connection-troubleshooting": "수업 끊김",
+  "/docs/start/camera-mic-troubleshooting": "카메라·마이크",
+  "/docs/start/app-update-cache-reinstall": "앱 멈춤",
+  "/docs/start/pc-install-troubleshooting": "PC 설치",
+  "/docs/teacher/recording-troubleshooting": "수업 녹화",
+  "/docs/admin/recording-file-troubleshooting": "녹화본 내려받기",
+  "/docs/admin/replay-troubleshooting": "다시보기",
+  "/docs/student/homework-submit-troubleshooting": "숙제 제출",
+}
 // 히어로 아래 한 줄 바로가기에는 앞에서부터 이만큼만 보인다. 전체 목록은 아래 "문제가 생겼을 때" 묶음에 있다.
 const HERO_TROUBLESHOOTING_LIMIT = 4
 
 // 처음 쓰는 학생·강사가 가장 많이 막히는 순서(설치 → 가입 → 코스 참여). 실제 공개 문서만 가리킨다.
-const START_STEPS: DocsArticleSummary[] = [
+// 제목·설명은 이 순서에 맞게 다시 쓰고, 유형·사진 미리보기는 실제 문서에서 가져온다.
+const START_STEPS: Array<Pick<DocsArticleSummary, "title" | "description" | "href">> = [
   {
     title: "클래스인 설치하기",
     description:

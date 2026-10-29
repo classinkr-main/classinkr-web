@@ -900,6 +900,376 @@
     }
    ],
    "maxWidth": 640
+  },
+  {
+   "out": "/docs/files/guides/cs-field-recording-camera-setup/01-lesson-options.webp",
+   "source": "public/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-pc.png",
+   "crop": {
+    "x": 0.53024,
+    "y": 0.27138,
+    "w": 0.39194,
+    "h": 0.17617
+   },
+   "masks": [
+    {
+     "x": 0.765,
+     "y": 0.495,
+     "w": 0.1,
+     "h": 0.035,
+     "style": "blur",
+     "reason": "교사 이름"
+    },
+    {
+     "x": 0.768,
+     "y": 0.128,
+     "w": 0.034,
+     "h": 0.05,
+     "style": "blur",
+     "reason": "프로필 사진"
+    },
+    {
+     "x": 0.618,
+     "y": 0.41,
+     "w": 0.03,
+     "h": 0.045,
+     "style": "blur",
+     "reason": "프로필 사진"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-field-recording-camera-setup/02-enter-classroom.webp",
+   "source": "public/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-pc.png",
+   "crop": {
+    "x": 0.07661,
+    "y": 0.48176,
+    "w": 0.38226,
+    "h": 0.17674
+   },
+   "masks": [
+    {
+     "x": 0.77,
+     "y": 0.123,
+     "w": 0.032,
+     "h": 0.046,
+     "style": "blur",
+     "reason": "프로필 사진"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-field-recording-camera-setup/03-recording-notice.webp",
+   "source": "public/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-pc.png",
+   "crop": {
+    "x": 0.07339,
+    "y": 0.72064,
+    "w": 0.38427,
+    "h": 0.15593
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-field-recording-camera-setup/04-camera-record-now.webp",
+   "source": "public/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-pc.png",
+   "crop": {
+    "x": 0.5383,
+    "y": 0.72406,
+    "w": 0.38508,
+    "h": 0.2138
+   },
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-field-recording-camera-setup/05-board-recording-icon.webp",
+   "source": "public/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-ifp.png",
+   "crop": {
+    "x": 0.7875,
+    "y": 0.84008,
+    "w": 0.18831,
+    "h": 0.08552
+   },
+   "masks": [
+    {
+     "x": 0,
+     "y": 0,
+     "w": 0.172,
+     "h": 0.345,
+     "style": "fill",
+     "reason": "다른 화면 조각",
+     "color": "#FFFFFF"
+    },
+    {
+     "x": 0.0,
+     "y": 0.79,
+     "w": 0.1,
+     "h": 0.21,
+     "style": "blur",
+     "reason": "프로필 사진"
+    }
+   ],
+   "maxWidth": 800
+  },
+  {
+   "out": "/docs/files/guides/cs-web-live-create/01-new-lesson.webp",
+   "source": "public/docs/files/cs-figma/웹-라이브-생성-방법-앱.png",
+   "crop": {
+    "x": 0.15208,
+    "y": 0.11266,
+    "w": 0.70903,
+    "h": 0.06691
+   },
+   "masks": [
+    {
+     "x": 0.035,
+     "y": 0.05,
+     "w": 0.105,
+     "h": 0.055,
+     "style": "blur",
+     "reason": "코스·기관 계정명"
+    },
+    {
+     "x": 0.857,
+     "y": 0.03,
+     "w": 0.143,
+     "h": 0.97,
+     "style": "blur",
+     "reason": "구성원 사진·교사 이름"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-web-live-create/02-recording-live-option.webp",
+   "source": "public/docs/files/cs-figma/웹-라이브-생성-방법-앱.png",
+   "crop": {
+    "x": 0.25347,
+    "y": 0.20942,
+    "w": 0.50694,
+    "h": 0.05908
+   },
+   "masks": [
+    {
+     "x": 0.53,
+     "y": 0.48,
+     "w": 0.06,
+     "h": 0.05,
+     "style": "blur",
+     "reason": "학생 프로필 사진"
+    }
+   ],
+   "maxWidth": 900
+  },
+  {
+   "out": "/docs/files/guides/cs-web-live-create/03-live-replay-links.webp",
+   "source": "public/docs/files/cs-figma/웹-라이브-생성-방법-앱.png",
+   "crop": {
+    "x": 0.09722,
+    "y": 0.38349,
+    "w": 0.77778,
+    "h": 0.07095
+   },
+   "masks": [
+    {
+     "x": 0.036,
+     "y": 0.017,
+     "w": 0.37,
+     "h": 0.4,
+     "style": "blur",
+     "reason": "수업 이름·교사 이름"
+    },
+    {
+     "x": 0.677,
+     "y": 0.135,
+     "w": 0.145,
+     "h": 0.3,
+     "style": "blur",
+     "reason": "학생 이름·프로필 사진"
+    },
+    {
+     "x": 0.196,
+     "y": 0.68,
+     "w": 0.338,
+     "h": 0.085,
+     "style": "blur",
+     "reason": "수업 링크 주소"
+    },
+    {
+     "x": 0.196,
+     "y": 0.765,
+     "w": 0.372,
+     "h": 0.06,
+     "style": "blur",
+     "reason": "코스 다시보기 링크 주소"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-web-live-create/04-live-chat-tool.webp",
+   "source": "public/docs/files/cs-figma/웹-라이브-생성-방법-앱.png",
+   "crop": {
+    "x": 0.1125,
+    "y": 0.66116,
+    "w": 0.77639,
+    "h": 0.06789
+   },
+   "masks": [
+    {
+     "x": 0.43,
+     "y": 0,
+     "w": 0.142,
+     "h": 0.135,
+     "style": "blur",
+     "reason": "화면 속 인물"
+    },
+    {
+     "x": 0.387,
+     "y": 0.545,
+     "w": 0.075,
+     "h": 0.03,
+     "style": "blur",
+     "reason": "채팅한 사람 이름"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-web-live-create/05-dashboard-live-settings.webp",
+   "source": "public/docs/files/cs-figma/웹-라이브-생성-방법-대시보드.png",
+   "crop": {
+    "x": 0.11667,
+    "y": 0.83957,
+    "w": 0.78125,
+    "h": 0.05745
+   },
+   "masks": [
+    {
+     "x": 0.77,
+     "y": 0,
+     "w": 0.12,
+     "h": 0.075,
+     "style": "blur",
+     "reason": "관리자 계정명"
+    },
+    {
+     "x": 0.058,
+     "y": 0.225,
+     "w": 0.1,
+     "h": 0.06,
+     "style": "blur",
+     "reason": "수업 이름"
+    }
+   ],
+   "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-microphone-camera-check/01-classroom-device-menu.webp",
+   "source": "public/docs/files/cs-figma/클래스인-마이크-설정.png",
+   "crop": {
+    "x": 0.28112,
+    "y": 0.05525,
+    "w": 0.26824,
+    "h": 0.06848
+   },
+   "maxWidth": 640
+  },
+  {
+   "out": "/docs/files/guides/cs-microphone-camera-check/02-camera-settings.webp",
+   "source": "public/docs/files/cs-figma/클래스인-마이크-설정.png",
+   "crop": {
+    "x": 0.05622,
+    "y": 0.49319,
+    "w": 0.50644,
+    "h": 0.22693
+   },
+   "masks": [
+    {
+     "x": 0.49,
+     "y": 0.265,
+     "w": 0.155,
+     "h": 0.225,
+     "style": "blur",
+     "reason": "화면 속 인물"
+    }
+   ],
+   "maxWidth": 800
+  },
+  {
+   "out": "/docs/files/guides/cs-microphone-camera-check/03-microphone-settings.webp",
+   "source": "public/docs/files/cs-figma/클래스인-마이크-설정.png",
+   "crop": {
+    "x": 0.04335,
+    "y": 0.25916,
+    "w": 0.52146,
+    "h": 0.1995
+   },
+   "maxWidth": 800
+  },
+  {
+   "out": "/docs/files/guides/cs-bulk-exam-upload/01-bulk-add-button.webp",
+   "source": "public/docs/files/cs-figma/문제-은행-가이드.png",
+   "crop": {
+    "x": 0.13194,
+    "y": 0.16956,
+    "w": 0.73611,
+    "h": 0.13005
+   },
+   "masks": [
+    {
+     "x": 0.906,
+     "y": 0.755,
+     "w": 0.055,
+     "h": 0.032,
+     "style": "blur",
+     "reason": "교사 이름"
+    }
+   ],
+   "maxWidth": 1060
+  },
+  {
+   "out": "/docs/files/guides/cs-bulk-exam-upload/02-template-download-upload.webp",
+   "source": "public/docs/files/cs-figma/문제-은행-가이드.png",
+   "crop": {
+    "x": 0.12639,
+    "y": 0.32756,
+    "w": 0.74861,
+    "h": 0.05068
+   },
+   "maxWidth": 1078
+  },
+  {
+   "out": "/docs/files/guides/cs-bulk-exam-upload/03-recognition-confirm.webp",
+   "source": "public/docs/files/cs-figma/문제-은행-가이드.png",
+   "crop": {
+    "x": 0.12639,
+    "y": 0.66294,
+    "w": 0.74861,
+    "h": 0.13359
+   },
+   "maxWidth": 1078
+  },
+  {
+   "out": "/docs/files/guides/cs-bulk-exam-upload/04-publish-exam.webp",
+   "source": "public/docs/files/cs-figma/문제-은행-가이드.png",
+   "crop": {
+    "x": 0.13194,
+    "y": 0.83138,
+    "w": 0.73611,
+    "h": 0.13043
+   },
+   "masks": [
+    {
+     "x": 0.906,
+     "y": 0.755,
+     "w": 0.055,
+     "h": 0.032,
+     "style": "blur",
+     "reason": "교사 이름"
+    }
+   ],
+   "maxWidth": 1060
   }
  ]
 }

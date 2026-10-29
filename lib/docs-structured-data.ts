@@ -147,6 +147,19 @@ function listSectionImages(section: DocSection): DocImage[] {
     .filter((image): image is DocImage => image !== null)
 }
 
+/**
+ * 앱·관리자 화면을 찍은 사진인지. 사이트 공용 이미지(/images/…: 제품 사진·도식)는 화면 사진이 아니다.
+ * 문서 사진은 /docs/files/… 정적 파일이거나 운영 저장소의 외부 주소다.
+ */
+export function isScreenPhoto(image: Pick<DocImage, "url">): boolean {
+  try {
+    const url = new URL(image.url)
+    return !(url.origin === new URL(toAbsoluteUrl("/")).origin && url.pathname.startsWith("/images/"))
+  } catch {
+    return false
+  }
+}
+
 /** 문서에 실린 사진을 본문 순서대로(같은 주소는 한 번만) 모은다. */
 export function listDocImages(doc: Pick<DocArticle, "sections">): DocImage[] {
   const seen = new Set<string>()
@@ -233,11 +246,12 @@ const NON_PROCEDURE_HEADING = /^(?:관련 문서|다음에 볼 문서|함께 (?:
 const HOW_TO_DOC_TYPES = new Set<DocArticle["docType"]>([undefined, "guide", "manual"])
 const HOW_TO_MIN_STEPS = 2
 
-// 단계 목록이 사양·특징 나열이 아니라 화면 조작 순서인지 가리는 동작 표현. 섹션 단계의 절반 이상이 이런 문장이거나
-// 제목이 "…하기"처럼 할 일을 말하면 절차 섹션으로 본다(사양 문서·소개 문서가 HowTo 로 잡히지 않게 한다).
+// 단계 목록이 사양·특징 나열이 아니라 화면 조작 순서인지 가리는 표현: 화면 버튼 이름([회원 가입]), "경로:", 조작 동사.
+// 섹션 단계의 절반 이상이 이런 문장이거나 제목이 "…하기·만들기"처럼 할 일을 말하면 절차 섹션으로 본다.
+// (사양·소개 문서도 "확인합니다"처럼 끝나는 문장이 많아서, 조작이 아닌 동사는 넣지 않는다.)
 const ACTION_STEP =
-  /(?:경로\s*:|누릅니다|누르고|누르면|눌러|클릭|탭합니다|터치합니다|고릅니다|고르고|골라|선택합니다|선택하고|입력합니다|입력하고|넣습니다|엽니다|열고|열어|들어갑니다|들어가|켭니다|켜고|끕니다|끄고|바꿉니다|바꾸고|정합니다|정하고|추가합니다|추가하고|올립니다|올리고|내려받|저장합니다|저장하고|체크합니다|체크하고|실행합니다|실행하고|설치합니다|만듭니다|만들고|확인합니다|보냅니다|붙입니다|드래그|끌어)/
-const PROCEDURE_HEADING = /(?:하기|순서|방법|따라 하기)$/
+  /(?:\[[^\]\n]{1,40}\]|경로\s*:|누릅니다|누르고|누르면|눌러|클릭|탭합니다|탭하고|터치합니다|터치하고|고릅니다|고르고|골라|선택합니다|선택하고|입력합니다|입력하고|체크합니다|체크하고|드래그|켭니다|켜고|끕니다|끄고|내려받|업로드합니다|업로드하고|설치합니다|실행합니다)/
+const PROCEDURE_HEADING = /(?:기|순서|방법)$/
 
 function isProcedureSection(section: DocSection, steps: string[]): boolean {
   if (steps.length === 0) return false
@@ -324,15 +338,16 @@ function buildHowToSteps(section: DocSection): { steps: HowToStepNode[]; section
 }
 
 /**
- * 사용법 문서의 HowTo. 공개·색인 문서이고, 사용법 유형이며, 단계가 2개 이상이고, 화면 사진이 1장 이상일 때만 만든다.
+ * 사용법 문서의 HowTo. 공개·색인 문서이고, 사용법 유형이며, 화면 사진이 1장 이상이고, 화면 조작 단계가 2개 이상일 때만 만든다.
  * 섹션마다 단계 묶음(HowToSection)을 두고, 단계가 있는 섹션이 하나뿐이면 단계를 바로 싣는다.
  */
 export function createDocHowToJsonLd(doc: DocArticle): JsonLdNode | null {
   if (!isDocIndexable(doc)) return null
   if (!HOW_TO_DOC_TYPES.has(doc.docType)) return null
 
-  const docImages = listDocImages(doc)
-  if (docImages.length === 0) return null
+  // 화면 사진이 한 장도 없으면(제품 사진·도식만 있으면) 사용법 문서로 보지 않는다.
+  const screenPhotos = listDocImages(doc).filter(isScreenPhoto)
+  if (screenPhotos.length === 0) return null
 
   const sections = doc.sections
     .filter((section) => !NON_PROCEDURE_HEADING.test(section.heading.trim()))
@@ -371,7 +386,7 @@ export function createDocHowToJsonLd(doc: DocArticle): JsonLdNode | null {
     description: docMarkdownToPlainText(doc.description),
     inLanguage: "ko-KR",
     mainEntityOfPage: url,
-    image: docImages[0].url,
+    image: screenPhotos[0].url,
     step,
   }
 }
