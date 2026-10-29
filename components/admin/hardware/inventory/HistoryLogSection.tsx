@@ -5,6 +5,8 @@ import type { Dispatch, ReactNode, SetStateAction } from "react"
 import { ChevronDown, ChevronRight, Clock3, X } from "lucide-react"
 
 import type { AdminListPaginationResult } from "@/lib/admin-list-pagination"
+import ExportActions from "./ExportActions"
+import { buildHistoryExportRows } from "./hardware-export"
 import {
   formatDate,
   formatNumber,
@@ -47,6 +49,13 @@ interface HistoryLogSectionProps {
   // 이 컴포넌트가 직접 받는 필터 신호가 필요하다(HistoryTabPanel이 이미 소유한 hasHistoryFilter 전달).
   hasActiveFilter?: boolean
   onResetFilters?: () => void
+  // 기본 응답(최신 2,000건) 밖에 이력이 더 있으면 — 0건일 때 "범위 밖일 수 있다"와 더 불러오기를 빈 상태에 둔다(L-20),
+  // CSV 머리에 "불러온 M건 기준"을 적는다(L-9).
+  hasMoreHistory?: boolean
+  loadedCount?: number
+  totalCount?: number
+  onLoadMore?: () => void
+  loadingMore?: boolean
 }
 
 function HistoryLogSection({
@@ -63,6 +72,11 @@ function HistoryLogSection({
   setMovementsPage,
   hasActiveFilter = false,
   onResetFilters,
+  hasMoreHistory = false,
+  loadedCount,
+  totalCount,
+  onLoadMore,
+  loadingMore = false,
 }: HistoryLogSectionProps) {
   return (
     <section className="overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
@@ -71,8 +85,20 @@ function HistoryLogSection({
           <p className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">상세 내역 (로그)</p>
           <p className="mt-1 text-[12px] text-[#615D59]">고객사·날짜(배송 건)로 묶었습니다. 여러 건은 헤더를 클릭하면 하위 품목이 펼쳐지고, 단일 건·하위 행은 클릭하면 상세와 CRM 연계가 열립니다.</p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="text-[11px] font-semibold text-[#615D59]">{formatNumber(filteredMovements.length)}건 · {formatNumber(logGroups.length)}묶음</span>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <span className="text-[11px] font-semibold tabular-nums text-[#615D59]">{formatNumber(filteredMovements.length)}건 · {formatNumber(logGroups.length)}묶음</span>
+          {/* 필터 결과 전체(페이지 무관)를 가져간다(하드웨어 라운드 2 L-9). */}
+          <ExportActions
+            subject="내역"
+            fileBaseName="하드웨어_내역"
+            rowCount={filteredMovements.length}
+            buildRows={() => buildHistoryExportRows(filteredMovements)}
+            csvPreamble={
+              hasMoreHistory && loadedCount != null && totalCount != null
+                ? [`# 불러온 최근 ${loadedCount}건(전체 ${totalCount}건) 안의 필터 결과입니다 — 더 오래된 이력은 내역 탭에서 더 불러온 뒤 받으세요.`]
+                : undefined
+            }
+          />
           {pageLogGroupKeys.length > 0 ? (
             <button
               type="button"
@@ -175,6 +201,19 @@ function HistoryLogSection({
               <p className="text-[13px] text-[#615D59]">
                 {hasActiveFilter ? "검색·필터 조건에 맞는 입출고 기록이 없습니다." : "입출고 기록이 없습니다."}
               </p>
+              {hasMoreHistory && onLoadMore ? (
+                <p className="text-[12px] text-[#615D59]">
+                  불러온 최근 이력 안에서 찾은 결과입니다 — 찾는 기록이 더 오래됐을 수 있습니다.{" "}
+                  <button
+                    type="button"
+                    onClick={onLoadMore}
+                    disabled={loadingMore}
+                    className="cursor-pointer font-bold text-[#084734] underline underline-offset-2 disabled:opacity-60"
+                  >
+                    {loadingMore ? "불러오는 중…" : "이전 이력 더 불러오기"}
+                  </button>
+                </p>
+              ) : null}
               {hasActiveFilter && onResetFilters ? (
                 <button
                   type="button"

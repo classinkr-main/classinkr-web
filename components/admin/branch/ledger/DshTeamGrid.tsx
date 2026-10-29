@@ -11,7 +11,7 @@
 import { ArrowLeftRight, ChevronDown, ChevronRight } from "lucide-react"
 import Link from "next/link"
 import { useMemo, useState } from "react"
-import { TEAMS, type BranchDshRow } from "../types"
+import { TEAMS, type BranchDataSourceInfo, type BranchDshRow } from "../types"
 import { branchTeamLabel } from "@/lib/branch/current-organization"
 import {
   buildDshTeamGrid,
@@ -26,9 +26,14 @@ import {
   subtractDshNumbers,
   type DshNumbers,
   type DshTeamGridMember,
+  type DshTeamGridData,
   type DshTeamGridTeam,
 } from "./dsh-derive"
-import type { DshGridView } from "./DshNumericGrid"
+import { dshSourceLabel, type DshGridView } from "./DshNumericGrid"
+import { CopyTableButton } from "./CopyTableButton"
+import { buildDshTeamTsvRows, dshCopyCaption, DSH_COPY_VIEW_LABEL } from "./dsh-export"
+import { withCaptionRow } from "./ledger-export"
+import { toTsv } from "@/lib/export/delimited"
 import { LoadingPanel } from "./shared"
 
 const VIEW_OPTIONS: Array<{ id: DshGridView; label: string }> = [
@@ -60,6 +65,17 @@ function RevLensLink({ team }: { team: string }) {
       REV에서 보기 ↗
     </Link>
   )
+}
+
+export function dshMemberRevHref(team: string, member: string): string {
+  const params = new URLSearchParams({ lens: "rev", mgr: member })
+  if (team !== "ALL" && (TEAMS as string[]).includes(team)) params.set("team", team)
+  return `/admin/branch/ledger?${params.toString()}`
+}
+
+export function buildVisibleDshTeamTsvRows(grid: DshTeamGridData, view: DshGridView, personal: boolean) {
+  const table = buildDshTeamTsvRows(grid, view)
+  return personal ? table.filter((row, index) => index === 0 || row[1] !== null) : table
 }
 
 // 뷰별 수치 묶음 — goal/status는 해당 kind가 시트에 없으면 null(전부 "–"),
@@ -142,9 +158,10 @@ interface DshTeamGridProps {
   personalManager?: string
   rows: BranchDshRow[]
   loading?: boolean
+  dataSource?: BranchDataSourceInfo | null
 }
 
-export function DshTeamGrid({ rows, loading = false, personalManager }: DshTeamGridProps) {
+export function DshTeamGrid({ rows, loading = false, personalManager, dataSource = null }: DshTeamGridProps) {
   // 기본 뷰는 Status — 상시 달성률(연간) 열이 목표 대비 판정을 이미 깔고 있어,
   // 팀별 검수에서 먼저 확인하는 건 실적 절대치다(Goal은 토글 한 번).
   const [view, setView] = useState<DshGridView>("status")
@@ -153,6 +170,17 @@ export function DshTeamGrid({ rows, loading = false, personalManager }: DshTeamG
 
   const grid = useMemo(() => buildDshTeamGrid(rows), [rows])
   const { monthKeys, teams } = grid
+  const copyText = () => {
+    // 개인 보기는 멤버 행만 보여 주므로 복사에도 팀 집계를 포함하지 않는다.
+    const visibleTable = buildVisibleDshTeamTsvRows(grid, view, Boolean(personalManager))
+    const caption = dshCopyCaption([
+      personalManager ? "DSH 개인 수치" : "DSH 팀·멤버 수치",
+      DSH_COPY_VIEW_LABEL[view],
+      view === "rate" ? "달성률 %" : "단위 ¥(시트 원값)",
+      dataSource ? `원천 ${dshSourceLabel(dataSource)}` : null,
+    ])
+    return toTsv(withCaptionRow(caption, visibleTable))
+  }
 
   const toggleTeam = (team: string) => {
     setExpandedTeams((current) => {
@@ -168,9 +196,11 @@ export function DshTeamGrid({ rows, loading = false, personalManager }: DshTeamG
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-4 py-3">
         <div>
           <p className="text-[13px] font-bold text-[#111110]">
-            {personalManager ? "개인 DSH 수치" : "팀 · 멤버 수치"} <span className="font-semibold text-[#615D59]">(단위: 천 · 달성률 %)</span>
+            {personalManager ? "개인 DSH 수치" : "팀 · 멤버 수치"} <span className="font-semibold text-[#615D59]">(단위: ¥천 · 달성률 %)</span>
           </p>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+        <CopyTableButton getText={copyText} disabled={teams.length === 0} ariaLabel={`팀·멤버 수치 ${DSH_COPY_VIEW_LABEL[view]} 표 복사`} title="현재 범위의 팀·멤버 수치를 시트 원값으로 복사합니다" />
         <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]" role="group" aria-label="팀 그리드 Goal/Status/Gap/Rate 보기 전환">
           {VIEW_OPTIONS.map((option) => (
             <button
@@ -187,6 +217,7 @@ export function DshTeamGrid({ rows, loading = false, personalManager }: DshTeamG
               {option.label}
             </button>
           ))}
+        </div>
         </div>
       </div>
 
@@ -231,7 +262,7 @@ export function DshTeamGrid({ rows, loading = false, personalManager }: DshTeamG
                 </tr>
               </thead>
               <tbody>
-                {personalManager ? teams.flatMap(team => team.members).map(member => <MemberRow key={member.member} member={member} view={view} monthKeys={monthKeys} />) : teams.map((team) => (
+                {personalManager ? teams.flatMap(team => team.members.map(member => ({ team: team.team, member }))).map(({ team, member }) => <MemberRow key={`${team}:${member.member}`} team={team} member={member} view={view} monthKeys={monthKeys} />) : teams.map((team) => (
                   <TeamRows
                     key={team.team}
                     team={team}
@@ -306,17 +337,19 @@ function TeamRows({
       </tr>
       {expanded &&
         team.members.map((member) => (
-          <MemberRow key={member.member} member={member} view={view} monthKeys={monthKeys} />
+          <MemberRow key={member.member} team={team.team} member={member} view={view} monthKeys={monthKeys} />
         ))}
     </>
   )
 }
 
 function MemberRow({
+  team,
   member,
   view,
   monthKeys,
 }: {
+  team: string
   member: DshTeamGridMember
   view: DshGridView
   monthKeys: string[]
@@ -329,6 +362,7 @@ function MemberRow({
     <tr>
       <td className={`${DSH_CELL} sticky left-0 z-[1] bg-[#FAFAF8] text-left`}>
         <span className="pl-5 text-[11px] font-semibold text-[#615D59]">{member.member}</span>
+        <Link href={dshMemberRevHref(team, member.member)} prefetch={false} aria-label={`${member.member} 담당 딜을 REV에서 보기`} className="ml-2 text-[10px] font-bold text-[#084734] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30">REV에서 보기 ↗</Link>
       </td>
       {annualRateCell(member, "bg-[#FAFAF8]")}
       {cells}

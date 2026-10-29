@@ -109,9 +109,11 @@ describe("RevMatrixEditBar — 렌더 규칙(좌측 상태 텍스트·우측 힌
     expect(source).toContain('{context.weekLabel ? ` ${context.weekLabel}` : ""}')
   })
 
-  it("현재값→입력값 표기는 formatMoney(currentAmount)와 빈 버퍼 폴백 문구를 쓴다", () => {
-    expect(source).toContain("formatMoney(context.currentAmount)")
-    expect(source).toContain('buffer === "" ? "빈 칸" : formatMoney(Number(buffer))')
+  it("현재값→입력값 표기는 원 단위(formatExactMoney)와 빈 버퍼 폴백 문구를 쓴다(라운드 5 R-8)", () => {
+    expect(source).toContain("formatExactMoney(context.currentAmount)")
+    expect(source).toContain('bufferAmount == null ? "빈 칸" : formatExactMoney(bufferAmount)')
+    // 선택만 된 상태도 수식 입력줄처럼 고객·월·정확한 금액을 보인다.
+    expect(source).toContain('context.currentAmount > 0 ? formatExactMoney(context.currentAmount) : "빈 칸"')
   })
 
   it("selected만 있을 때·둘 다 없을 때의 안내 문구가 스펙과 일치한다", () => {
@@ -121,7 +123,8 @@ describe("RevMatrixEditBar — 렌더 규칙(좌측 상태 텍스트·우측 힌
 
   it("우측 단축키 힌트는 hidden lg:inline이고 스펙 문구와 일치한다", () => {
     expect(source).toContain("hidden shrink-0 whitespace-nowrap text-[10.5px] font-semibold text-[#A39E98] lg:inline")
-    expect(source).toContain("Enter 저장 · Tab 다음 칸 · Esc 취소 · Ctrl+D 아래 복사 · Ctrl+V 붙여넣기")
+    // 라운드 5: Ctrl+D는 "위 칸 값으로 채우기"라 문구를 바로잡고, 선택 셀 Ctrl+C 복사(B1)를 더했다.
+    expect(source).toContain("Enter 저장 · Tab 다음 칸 · Esc 취소 · Ctrl+D 위 값 채우기 · Ctrl+C 복사 · Ctrl+V 붙여넣기")
   })
 
   it("확도 버튼은 라벨 + 단축키(E/H/C) kbd를 병기한다", () => {

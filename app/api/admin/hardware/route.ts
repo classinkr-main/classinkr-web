@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { BRANCH_READ_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { buildHardwareViewer } from "@/lib/hardware/hardware-viewer"
-import { getHardwareCustomerLinks, getHardwareDashboard, getHardwareMovementsPage } from "@/lib/repositories/hardware-inventory"
+import { getHardwareCustomerLinks, getHardwareDashboard, getHardwareMovementsPage, listVoidedHardwareMovements } from "@/lib/repositories/hardware-inventory"
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message
@@ -19,6 +19,9 @@ export async function GET(req: NextRequest) {
   if (admin instanceof NextResponse) return admin
 
   try {
+    if (req.nextUrl.searchParams.get("scope") === "voided") {
+      return NextResponse.json(await listVoidedHardwareMovements(), { headers: { "Cache-Control": "private, no-store" } })
+    }
     if (req.nextUrl.searchParams.get("scope") === "customer-links") {
       return adminCachedJson({ customers: await getHardwareCustomerLinks() })
     }

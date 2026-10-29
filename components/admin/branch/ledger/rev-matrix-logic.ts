@@ -31,6 +31,7 @@ import {
   mergedWeeklyFromMetadata,
   metadataString,
   rowMonthAmount,
+  rowWeeklySplit,
   rowProductCategory,
   weeklyConfidenceFromMetadata,
   type DraftConfidence,
@@ -169,6 +170,27 @@ export interface MatrixPendingDraft {
   confidenceTouched?: boolean
   /** 주차별 확도 직접 선택 표시(metadata.weeklyConfidenceTouched, 5칸). 없으면 null. */
   weeklyConfidenceTouched?: boolean[] | null
+}
+
+/** 같은 달의 대기 초안을 기준으로 주차를 갱신해 앞서 입력한 주차를 보존한다. */
+export function mergeWeeklyCellEdit(input: {
+  rowWeeks: readonly number[]
+  pendingWeekly: readonly number[] | null | undefined
+  week: number
+  amount: number
+  confidence: DraftConfidence
+  baseWeeklyConfidence: ReadonlyArray<DraftConfidence | null> | null | undefined
+}): { weeks: number[]; total: number; weeklyConfidence: Array<DraftConfidence | null> } {
+  const base = input.pendingWeekly?.length ? input.pendingWeekly : input.rowWeeks
+  const weeks = Array.from({ length: 5 }, (_, index) => {
+    const value = Number(base[index] ?? 0)
+    return Number.isFinite(value) ? Math.max(value, 0) : 0
+  })
+  if (input.week >= 0 && input.week < 5) weeks[input.week] = Number.isFinite(input.amount) ? Math.max(input.amount, 0) : 0
+  const weeklyConfidence = weeks.map((value, index) =>
+    value <= 0 ? null : index === input.week ? input.confidence : input.baseWeeklyConfidence?.[index] ?? null,
+  )
+  return { weeks, total: weeks.reduce((sum, value) => sum + value, 0), weeklyConfidence }
 }
 
 /** metadata.weeklyConfidenceTouched(5칸 불리언) — 모양이 틀리면 null. */
@@ -323,6 +345,58 @@ export function parseMatrixAmount(value: string): number {
   return parseMatrixAmountResult(value).amount
 }
 
+export function previewMatrixAmount(buffer: string): number | null {
+  return /\d/.test(buffer) ? parseMatrixAmountResult(buffer).amount : null
+}
+
+export function parseSinglePastedAmount(text: string): number | null {
+  const single = text.replace(/\r?\n$/, "")
+  if (/[\t\r\n]/.test(single) || !isNumericMatrixToken(single)) return null
+  const { amount, clamped } = parseMatrixAmountResult(single)
+  return !clamped && amount > 0 ? amount : null
+}
+
+export function firstMatrixCellForMonth(editableCells: readonly MatrixCellCoord[], month: string): MatrixCellCoord | null {
+  if (editableCells.length === 0) return null
+  const firstRowId = editableCells[0].rowId
+  return editableCells.find((cell) => cell.rowId === firstRowId && cell.month === month && (cell.week ?? 0) === 0)
+    ?? editableCells.find((cell) => cell.month === month && (cell.week ?? 0) === 0)
+    ?? editableCells[0]
+}
+
+export function pendingWeekDisplay(
+  pendingByCell: Map<string, MatrixPendingDraft> | null | undefined,
+  rowId: string, month: string, week: number, display: number, commitKind: DraftKind = "edit-row",
+): { pending: MatrixPendingDraft; amount: number; additive: boolean } | null {
+  if (!pendingByCell) return null
+  const exact = pendingByCell.get(matrixCoordKey({ rowId, month, week }))
+  if (exact) return pendingMatchesKind(exact, commitKind)
+    ? { pending: exact, amount: pendingCellAmount(exact, week), additive: false }
+    : { pending: exact, amount: display, additive: true }
+  const monthPending = pendingByCell.get(matrixCoordKey({ rowId, month }))
+  if (!monthPending?.weekly) return null
+  const amount = Math.max(Number(monthPending.weekly[week] ?? 0) || 0, 0)
+  if (!pendingMatchesKind(monthPending, commitKind)) return amount > 0 ? { pending: monthPending, amount: display, additive: true } : null
+  return amount === Math.round(display) ? null : { pending: monthPending, amount, additive: false }
+}
+
+export function matrixWeekInputs(row: LedgerRevenueRow, month: string): { weeks: number[]; inferred: boolean; monthOnlyAmount: number } | null {
+  const split = rowWeeklySplit(row, month)
+  if (split.source === "empty") return null
+  return { weeks: split.source === "explicit" || split.source === "inferred" ? split.weeks : [0, 0, 0, 0, 0], inferred: split.source === "inferred", monthOnlyAmount: split.source === "month-only" ? split.total : 0 }
+}
+
+export function matrixDisplayedCellAmount(row: LedgerRevenueRow | null | undefined, coord: MatrixCellCoord, pendingByCell: Map<string, MatrixPendingDraft> | null | undefined): number {
+  const commitKind = row ? rowCommitKind(row) : "edit-row"
+  if (coord.week == null) {
+    const pending = pendingByCell?.get(matrixCoordKey({ rowId: coord.rowId, month: coord.month }))
+    return pending && pendingMatchesKind(pending, commitKind) ? pending.amount : row ? rowMonthAmount(row, coord.month) : 0
+  }
+  const inputs = row ? matrixWeekInputs(row, coord.month) : null
+  const display = inputs ? (computeWeekCellStates(inputs.weeks, inputs.monthOnlyAmount, false)[coord.week]?.display ?? 0) : 0
+  return pendingWeekDisplay(pendingByCell, coord.rowId, coord.month, coord.week, display, commitKind)?.amount ?? display
+}
+
 // 딜행 × 월 셀이 확정 잠금(편집 불가)인지. monthlyRed 플래그 또는 확정액이 그 달 금액을 덮으면 잠금.
 // 적용된 초안(ledgerOrigin==="draft")은 확도와 무관하게 잠금 — 셀 편집이 만드는 새 초안은 sourceDealId
 // 기준이라 장부 반영분과 겹치면 이중계상이 되므로, 적용분 수정·취소는 입력 큐에서만 한다.
@@ -425,6 +499,8 @@ export interface MatrixPastePlan {
   // 같은 정규화 키의 딜 행이 2개 이상(같은 고객의 상품군별 행 등)이라 어느 행인지 정할 수 없어
   // 셀을 만들지 않고 건너뛴 이름들 — 프리뷰가 "매트릭스에서 직접 입력" 안내로 노출한다.
   ambiguousNames: string[]
+  // 장부에는 있지만 필터·접힘 때문에 현재 보이지 않는 고객. 새 행으로 만들지 않는다.
+  outOfViewNames: string[]
   // 매칭되는 딜 행이 0개인 이름과 그 금액 칸 — 프리뷰의 "새 행으로 생성" 체크 대상(승인제).
   unmatched: MatrixPasteUnmatchedRow[]
 }
@@ -468,6 +544,7 @@ export function buildMatrixPastePlan(
   // 품질 웨이브 4 — 항목 1: 정정 적용으로 재잠긴 (딜, 월) 칸을 붙여넣기 계획에서도 locked로
   // 판정하기 위한 dealId → 대체된 월 집합(editRowOverrideMonths).
   overrideMonthsByRow: Map<string, Set<string>>,
+  allRows: LedgerRevenueRow[] = dealRows,
 ): MatrixPastePlan | null {
   const grid = parseTsvGrid(text)
   if (grid.length === 0) return null
@@ -487,6 +564,7 @@ export function buildMatrixPastePlan(
     outOfRangeCount: 0,
     matchedRowCount: 0,
     ambiguousNames: [],
+    outOfViewNames: [],
     unmatched: [],
   }
   let cellBudget = MATRIX_PASTE_MAX_CELLS
@@ -502,6 +580,15 @@ export function buildMatrixPastePlan(
       else rowsByKey.set(key, [dealRow])
     }
     const seenAmbiguous = new Set<string>()
+    const allRowsByKey = new Map<string, Set<string>>()
+    for (const row of allRows) {
+      const key = normalizedAccountKey(row.customer)
+      if (!key) continue
+      const ids = allRowsByKey.get(key) ?? new Set<string>()
+      ids.add(row.id)
+      allRowsByKey.set(key, ids)
+    }
+    const seenOutOfView = new Set<string>()
     for (let r = 0; r < grid.length; r += 1) {
       const name = (grid[r][0] ?? "").trim()
       if (!name) continue // 이름 없는 행(빈 칸) — 엑셀 부분 범위 복사 관용과 동일 취급
@@ -510,12 +597,20 @@ export function buildMatrixPastePlan(
       // 키가 없으면 매칭을 시도하지 않고 곧장 미매칭으로 본다.
       const key = normalizedAccountKey(name)
       const matches = key ? (rowsByKey.get(key) ?? []) : []
-      if (matches.length > 1) {
+      const allMatches = key ? (allRowsByKey.get(key)?.size ?? 0) : 0
+      if (matches.length > 1 || (matches.length > 0 && allMatches > 1)) {
         if (!seenAmbiguous.has(name)) {
           seenAmbiguous.add(name)
           plan.ambiguousNames.push(name)
         }
         continue // 스펙: 어느 행인지 정할 수 없으므로 셀을 만들지 않는다
+      }
+      if (matches.length === 0 && allMatches > 0) {
+        if (!seenOutOfView.has(name)) {
+          seenOutOfView.add(name)
+          plan.outOfViewNames.push(name)
+        }
+        continue
       }
       const matchedRow = matches[0] ?? null
       if (matchedRow) plan.matchedRowCount += 1
@@ -620,6 +715,7 @@ export function buildMatrixPastePlan(
     plan.nonNumericCount === 0 &&
     plan.outOfRangeCount === 0 &&
     plan.unmatched.length === 0 &&
+    plan.outOfViewNames.length === 0 &&
     plan.ambiguousNames.length === 0
   ) {
     return null
@@ -773,6 +869,8 @@ export function computeMatrixRange(
 // next/dynamic 대상이 될 수 없다. RevMatrix.tsx의 행/셀 컴포넌트가 이 훅의 반환값(actions 등)을
 // prop으로 받아 렌더만 한다.
 export function useMatrixEditor({
+  onCopyCell,
+  onLockedCellActivate,
   editableCells,
   cellValue,
   cellConfidence,
@@ -798,6 +896,8 @@ export function useMatrixEditor({
   // 라운드 4 P2-8 — range(2칸 이상)에서 E/H/C를 누르면 호출. 없으면(하위호환) range 크기와 무관하게
   // 항상 기존 단일 셀(selected) 경로로 폴백한다 — 그래서 선택적 인자다.
   onCommitRangeConfidence?: (coords: MatrixCellCoord[], confidence: DraftConfidence) => void
+  onCopyCell?: (coord: MatrixCellCoord) => void
+  onLockedCellActivate?: (coord: MatrixCellCoord) => void
 }) {
   const [selected, setSelected] = useState<MatrixCellCoord | null>(null)
   const [editing, setEditing] = useState<MatrixCellCoord | null>(null)
@@ -1011,6 +1111,11 @@ export function useMatrixEditor({
   // 셀렉트(비편집) keydown. 방향키=이동, Enter/F2/숫자=편집 진입, Ctrl/Cmd+D=위 값 채우기.
   const onSelectedKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTableCellElement>, coord: MatrixCellCoord) => {
+      if ((event.ctrlKey || event.metaKey) && event.code === "KeyC" && onCopyCell && !window.getSelection()?.toString()) {
+        event.preventDefault()
+        onCopyCell(coord)
+        return
+      }
       if ((event.ctrlKey || event.metaKey) && (event.key === "d" || event.key === "D")) {
         event.preventDefault()
         // 위 셀 = 같은 세로 열(같은 월·같은 주차)에서 index 앞쪽 첫 번째 셀의 커밋값.
@@ -1101,9 +1206,15 @@ export function useMatrixEditor({
       indexByKey,
       moveSelection,
       moveWithinRowOrNext,
+      onCopyCell,
       onCommitCell,
       onCommitRangeConfidence,
     ],
+  )
+
+  const activateLocked = useCallback(
+    (coord: MatrixCellCoord) => onLockedCellActivate?.(coord),
+    [onLockedCellActivate],
   )
 
   // 셀 핸들러가 호출하는 액션들 — 전부 identity 안정(콜백 deps가 데이터/펼침에만 반응).
@@ -1121,8 +1232,9 @@ export function useMatrixEditor({
       commitBuffer,
       onEditingKeyDown,
       onSelectedKeyDown,
+      activateLocked,
     }),
-    [setBuffer, pickEditConfidence, selectCell, beginEdit, cancelEdit, commitBuffer, onEditingKeyDown, onSelectedKeyDown],
+    [setBuffer, pickEditConfidence, selectCell, beginEdit, cancelEdit, commitBuffer, onEditingKeyDown, onSelectedKeyDown, activateLocked],
   )
 
   return {

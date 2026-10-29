@@ -10,6 +10,8 @@ import { CalendarRange } from "lucide-react"
 import { CONFIDENCE_TOKENS, type ConfidenceKey } from "@/lib/branch/confidence-tokens"
 import { MonthlyGoalBowlChart } from "../MonthlyGoalBowlChart"
 import type { MonthlyGoalPlan } from "@/lib/branch/monthly-goal-chart"
+import { formatExactMoney } from "@/lib/branch/ledger-format"
+import { pendingMatchesKind, rowCommitKind, type MatrixPendingDraft } from "./rev-matrix-logic"
 import {
   ConfidenceStackBar,
   FORECAST_WEEK_RANGE_LABELS,
@@ -184,6 +186,7 @@ interface ForecastBoardProps {
   goalNote?: string
   chartLoading?: boolean
   chartError?: string | null
+  pendingByCell?: Map<string, MatrixPendingDraft> | null
 }
 
 export function ForecastBoard({
@@ -198,6 +201,7 @@ export function ForecastBoard({
   goalNote,
   chartLoading = false,
   chartError = null,
+  pendingByCell = null,
 }: ForecastBoardProps) {
   const model = useMemo(() => buildForecastBoardModel(rows, selectedMonth), [rows, selectedMonth])
   const rowById = useMemo(() => new Map(rows.map((row) => [row.id, row])), [rows])
@@ -220,7 +224,7 @@ export function ForecastBoard({
               </span>
             </p>
             <p className="mt-0.5 text-[11px] leading-relaxed text-[#615D59]">
-              선택월 금액을 주차 칸반으로 검수합니다 — 카드를 누르면 우측 빠른 작업에서 상세·주차 입력이 열립니다.
+              선택월 금액을 주차 칸반으로 검수합니다 — 카드를 누르면 우측 빠른 입력이 그 행·그 달로 바로 열립니다.
             </p>
           </div>
           <p className="text-right">
@@ -343,6 +347,8 @@ export function ForecastBoard({
                           const token = CONFIDENCE_TOKENS[card.confidence]
                           const partial = card.confidence !== "confirmed" && card.confirmedRatio > 0
                           const meta = productCategoryMeta(card.productCategory)
+                          const pending = pendingByCell?.get(`${card.rowId}::${selectedMonth}`) ?? null
+                          const additive = Boolean(pending && row && !pendingMatchesKind(pending, rowCommitKind(row)))
                           return (
                             <button
                               key={`${card.rowId}-${cardIndex}`}
@@ -354,14 +360,17 @@ export function ForecastBoard({
                                 card.inferred ? "주차 미입력 — firstPayment 일자로 추정 배치" : null,
                                 partial ? `확정 ${Math.round(card.confirmedRatio * 100)}% 포함` : null,
                                 card.draft ? "장부 입력(적용 초안) 행" : null,
+                                "누르면 빠른 입력",
+                                pending ? `${additive ? "신규 초안 +" : "대기 초안 "}${formatExactMoney(pending.amount)}(${CONFIDENCE_TOKENS[pending.confidence].label}) — 적용 전, 체크 큐에서 확인` : null,
                               ]
                                 .filter(Boolean)
                                 .join(" · ")}
-                              className={`rounded-md px-2 py-1.5 text-left transition hover:brightness-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 ${CARD_TONE_CLASS[card.confidence]} ${
+                              className={`relative rounded-md px-2 py-1.5 text-left transition hover:brightness-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 ${CARD_TONE_CLASS[card.confidence]} ${
                                 selectedRowId === card.rowId ? "ring-2 ring-[#084734]/30" : ""
                               }`}
                               style={card.confidence === "expected" ? undefined : { borderLeftColor: token.color }}
                             >
+                              {pending && <><span aria-hidden data-pending-dot className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full" style={{ backgroundColor: CONFIDENCE_TOKENS[pending.confidence].color }} /><span className="sr-only">대기 초안 있음</span></>}
                               <span className="block truncate text-[11px] font-bold leading-tight text-[#111110]">
                                 {card.customer}
                               </span>

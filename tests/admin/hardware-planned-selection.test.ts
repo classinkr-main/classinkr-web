@@ -122,19 +122,27 @@ describe("resolvePlannedFifoPreview", () => {
   it("reports full FIFO coverage with zero unassigned quantity when lots cover the request", () => {
     const row = stockRow({ lotBalances: [{ lot: "H8", quantity: 32 }, { lot: "C1", quantity: 12 }] })
     const result = resolvePlannedFifoPreview({ lot_no: null }, row, 5)
-    expect(result).toEqual({ kind: "fifo", matchedText: "H8 5대", unassignedQty: 0 })
+    expect(result).toEqual({ kind: "fifo", matchedText: "H8 5대", unassignedQty: 0, plan: [{ lot: "H8", quantity: 5 }] })
   })
 
   it("신정책: 로트 부족분을 '부족'이 아니라 unassignedQty로 표현해 확정을 막지 않는다", () => {
     const row = stockRow({ lotBalances: [{ lot: "H8", quantity: 2 }] })
     const result = resolvePlannedFifoPreview({ lot_no: null }, row, 5)
-    expect(result).toEqual({ kind: "fifo", matchedText: "H8 2대", unassignedQty: 3 })
+    expect(result).toEqual({ kind: "fifo", matchedText: "H8 2대", unassignedQty: 3, plan: [{ lot: "H8", quantity: 2 }] })
   })
 })
 
 describe("judgeImportFreshness", () => {
   it("returns level 'none' when there has never been an import run", () => {
-    expect(judgeImportFreshness(null)).toEqual({ level: "none", failed: false, finishedKey: null, daysAgo: null })
+    expect(judgeImportFreshness(null)).toEqual({
+      level: "none",
+      failed: false,
+      finishedKey: null,
+      daysAgo: null,
+      state: "none",
+      runningMinutes: null,
+      basisKey: null,
+    })
   })
 
   it("returns 'danger' for a failed run regardless of how recent it was", () => {

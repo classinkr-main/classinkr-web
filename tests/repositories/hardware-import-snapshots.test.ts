@@ -13,8 +13,16 @@ let selectResult: { data: unknown; error: unknown } = { data: [], error: null }
 let rpcResult: { data: unknown; error: unknown } = { data: 0, error: null }
 const revalidateTagMock = vi.fn()
 
+// 복원의 시트 우선 취소 되살리기(하드웨어 라운드 2 S-11)가 읽는 행 — 스냅샷 → 이관 기록 → 이후 이관들의 취소 id.
+let snapshotRunRow: unknown = null
+let importRunRow: unknown = null
+let importRunsSince: unknown[] = []
+let revivedRows: unknown[] = []
+let restoreEnabled = true
+
 function tableClient(table: string) {
   const builder: Record<string, unknown> = {}
+  let isUpdate = false
   builder.select = (columns: string) => {
     operations.push({ method: "select", table, args: { columns } })
     return builder
@@ -27,11 +35,46 @@ function tableClient(table: string) {
     operations.push({ method: "limit", table, args: { limit } })
     return Promise.resolve(selectResult)
   }
+  builder.eq = (column: string, value: unknown) => {
+    operations.push({ method: "eq", table, args: { column, value } })
+    return builder
+  }
+  builder.gte = (column: string, value: unknown) => {
+    operations.push({ method: "gte", table, args: { column, value } })
+    return builder
+  }
+  builder.in = (column: string, values: unknown) => {
+    operations.push({ method: "in", table, args: { column, values } })
+    return builder
+  }
+  builder.update = (payload: unknown) => {
+    isUpdate = true
+    operations.push({ method: "update", table, args: { payload } })
+    return builder
+  }
+  builder.maybeSingle = () => {
+    if (table === "hardware_sheet_import_snapshots") return Promise.resolve({ data: snapshotRunRow, error: null })
+    if (table === "hardware_import_runs") return Promise.resolve({ data: importRunRow, error: null })
+    return Promise.resolve({ data: null, error: null })
+  }
+  builder.then = (resolve: (value: { data: unknown; error: unknown }) => unknown) => {
+    const result =
+      table === "hardware_import_runs"
+        ? { data: importRunsSince, error: null }
+        : table === "hardware_movements" && isUpdate
+          ? { data: revivedRows, error: null }
+          : { data: [], error: null }
+    return Promise.resolve(result).then(resolve)
+  }
   return builder
 }
 
 async function loadRepository() {
   vi.resetModules()
+  vi.doMock("@/lib/hardware/snapshot-restore-policy", () => ({
+    HARDWARE_SNAPSHOT_RESTORE_ENABLED: restoreEnabled,
+    HARDWARE_SNAPSHOT_RESTORE_UNAVAILABLE: "복원 검증 전 중단",
+  }))
   const client = {
     from: vi.fn((table: string) => tableClient(table)),
     rpc: vi.fn(async (fn: string, args: Record<string, unknown>) => {
@@ -57,6 +100,11 @@ async function loadRepository() {
 
 beforeEach(() => {
   operations.length = 0
+  snapshotRunRow = null
+  importRunRow = null
+  importRunsSince = []
+  revivedRows = []
+  restoreEnabled = true
   selectResult = { data: [], error: null }
   rpcResult = { data: 0, error: null }
   revalidateTagMock.mockReset()
@@ -140,13 +188,20 @@ describe("listHardwareSheetImportSnapshots", () => {
 })
 
 describe("restoreHardwareSheetImportSnapshot", () => {
+  it("안전성 검증 전에는 저장소 직접 호출도 복원 RPC를 실행하지 않는다", async () => {
+    restoreEnabled = false
+    const { restoreHardwareSheetImportSnapshot } = await loadRepository()
+    await expect(restoreHardwareSheetImportSnapshot("snap-1", "admin")).rejects.toThrow("복원 검증 전 중단")
+    expect(operations.some((op) => op.method === "rpc" || op.method === "update")).toBe(false)
+  })
+
   it("calls the restore RPC with snapshot_id/actor and revalidates the inventory cache tag", async () => {
     rpcResult = { data: 42, error: null }
     const { restoreHardwareSheetImportSnapshot } = await loadRepository()
 
     const result = await restoreHardwareSheetImportSnapshot("snap-1", "admin@example.com")
 
-    expect(result).toEqual({ restoredCount: 42 })
+    expect(result).toEqual({ restoredCount: 42, sheetWinsRevived: 0, sheetWinsReviveError: null })
     const rpcOp = operations.find((op) => op.method === "rpc")
     expect(rpcOp?.args).toMatchObject({
       fn: "restore_hardware_sheet_import_snapshot",
@@ -154,6 +209,43 @@ describe("restoreHardwareSheetImportSnapshot", () => {
       actor: "admin@example.com",
     })
     expect(revalidateTagMock).toHaveBeenCalledWith("hardware-inventory", "max")
+  })
+
+  it("revives admin confirmations that the undone imports voided under the sheet-wins policy", async () => {
+    rpcResult = { data: 10, error: null }
+    snapshotRunRow = { import_run_id: "run-5" }
+    importRunRow = { started_at: "2026-09-22T00:00:00.000Z" }
+    importRunsSince = [{ id: "run-5", voided_ids: ["adm-1", "adm-2"] }, { id: "run-6", voided_ids: ["adm-2", "adm-3"] }, { id: "run-7", voided_ids: null }]
+    revivedRows = [{ id: "adm-1" }, { id: "adm-3" }]
+    const { restoreHardwareSheetImportSnapshot } = await loadRepository()
+
+    const result = await restoreHardwareSheetImportSnapshot("snap-5", "admin")
+
+    expect(result).toEqual({ restoredCount: 10, sheetWinsRevived: 2, sheetWinsReviveError: null })
+    // 이후 이관 기록은 스냅샷 이관의 시작 시각 이상만 본다.
+    expect(operations).toContainEqual({ method: "gte", table: "hardware_import_runs", args: { column: "started_at", value: "2026-09-22T00:00:00.000Z" } })
+    // 되살리기는 모은 id 전체를, 사유가 여전히 시트 우선인 행에만 한다.
+    const reviveIn = operations.find((op) => op.method === "in" && op.table === "hardware_movements")
+    expect(reviveIn?.args).toEqual({ column: "id", values: ["adm-1", "adm-2", "adm-3"] })
+    const reviveReason = operations.find((op) => op.method === "eq" && op.table === "hardware_movements")
+    expect(reviveReason?.args?.column).toBe("void_reason")
+    // 되살리기는 복원 RPC 뒤에 한다.
+    const rpcIndex = operations.findIndex((op) => op.method === "rpc")
+    const updateIndex = operations.findIndex((op) => op.method === "update" && op.table === "hardware_movements")
+    expect(rpcIndex).toBeLessThan(updateIndex)
+  })
+
+  it("does not touch movements when the restored snapshot's imports voided nothing", async () => {
+    rpcResult = { data: 3, error: null }
+    snapshotRunRow = { import_run_id: "run-1" }
+    importRunRow = { started_at: "2026-09-01T00:00:00.000Z" }
+    importRunsSince = [{ id: "run-1", voided_ids: [] }]
+    const { restoreHardwareSheetImportSnapshot } = await loadRepository()
+
+    const result = await restoreHardwareSheetImportSnapshot("snap-1", "admin")
+
+    expect(result.sheetWinsRevived).toBe(0)
+    expect(operations.some((op) => op.method === "update")).toBe(false)
   })
 
   it("defaults actor to null when not provided", async () => {

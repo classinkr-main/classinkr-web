@@ -35,6 +35,6 @@ export function describeSyncHealth(health: SyncHealthInput | undefined, now: Dat
     detail,
     action: health.permissionDenied
       ? "시트 공유가 끊겼습니다 — 시트를 서비스 계정에 뷰어로 다시 공유해야 풀립니다."
-      : "새로고침으로 다시 동기화해 보세요.",
+      : "동기화 버튼으로 다시 시도해 보세요.",
   }
 }

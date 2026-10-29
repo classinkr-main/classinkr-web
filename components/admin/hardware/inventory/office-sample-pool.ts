@@ -342,3 +342,82 @@ export function buildOfficeSamplePool({ stockRows, sampleUnits, todayKey }: Buil
 
   return { rows, totals, promotedTotals: hasPromoted ? promotedTotals : null, gapRowCount }
 }
+
+/**
+ * 샘플 유닛 ↔ 품목 매칭 정본(하드웨어 라운드 3 P-5). 풀(buildOfficeSamplePool)·샘플 트래커 정합 대조·빠른 기록의 유닛 목록이
+ * 같은 규칙을 쓴다. 예전엔 셋이 달라(풀은 item_id → 이름, 나머지는 이름 완전일치) 이름이 바뀐 품목의 유닛이 풀에는 있는데
+ * 빠른 기록 목록에는 없었다 — 풀에서 고른 유닛을 빠른 기록으로 넘기면(P-8) 조용히 빠졌을 것이다.
+ * - 유닛과 대상 모두 item_id 가 있으면 id 로 본다.
+ * - 아니면 정규화한 품목명(공백 접기·소문자)으로 본다.
+ * - knownItemIds(재고 행 id)를 주면 거기 없는 item_id(비활성·삭제 품목)는 없는 것으로 보고 이름으로 잇는다 — 풀과 같은 규칙.
+ */
+export function sampleUnitMatchesItem(
+  unit: Pick<HardwareSampleUnit, "item_id" | "product_name">,
+  target: { itemId: string | null | undefined; productName: string },
+  knownItemIds?: ReadonlySet<string>
+): boolean {
+  const unitItemId = unit.item_id && (!knownItemIds || knownItemIds.has(unit.item_id)) ? unit.item_id : null
+  if (unitItemId && target.itemId) return unitItemId === target.itemId
+  return normalizeProductKey(unit.product_name) === normalizeProductKey(target.productName)
+}
+
+export interface OfficePoolGapChip {
+  location: "office" | "sample"
+  // 원장 − 유닛(부호 있음). 양수 = 원장이 많음(유닛 미등록·시트 반출 미기록), 음수 = 유닛이 많음.
+  value: number
+  // 행 칩 — "사무실 원장 +2"
+  chip: string
+  // 펼친 설명 — "사무실: 원장 6 · 유닛 4(보관 2 + 전시 2) → 원장이 2대 많음"
+  detail: string
+}
+
+function signedCount(value: number): string {
+  // 빼기는 U+2212 — 하이픈보다 숫자 폭에 맞고 스크린리더가 "마이너스"로 읽는다.
+  return value > 0 ? `+${value.toLocaleString("ko-KR")}` : `−${Math.abs(value).toLocaleString("ko-KR")}`
+}
+
+function gapDirection(value: number): string {
+  return value > 0 ? `원장이 ${value.toLocaleString("ko-KR")}대 많음` : `유닛이 ${Math.abs(value).toLocaleString("ko-KR")}대 많음`
+}
+
+/**
+ * 원장 교차 확인 칩(하드웨어 라운드 3 P-6). 예전 "원장과 N대 차이"는 두 위치의 절댓값 합이라 +2 와 −2 가 "4대 차이"로
+ * 뭉쳐 어느 쪽을 고쳐야 하는지 알 수 없었다. 위치별로, 부호를 붙여 따로 말한다.
+ */
+export function officePoolGapChips(
+  counts: Pick<OfficePoolCounts, "gaps" | "ledger" | "office" | "loaned">
+): OfficePoolGapChip[] {
+  const chips: OfficePoolGapChip[] = []
+  if (counts.gaps.office !== 0) {
+    chips.push({
+      location: "office",
+      value: counts.gaps.office,
+      chip: `사무실 원장 ${signedCount(counts.gaps.office)}`,
+      detail: `사무실: 원장 ${counts.ledger.office.toLocaleString("ko-KR")} · 유닛 ${counts.office.held.toLocaleString("ko-KR")}(보관 ${counts.office.available.toLocaleString("ko-KR")} + 전시 ${counts.office.showroom.toLocaleString("ko-KR")}) → ${gapDirection(counts.gaps.office)}`,
+    })
+  }
+  if (counts.gaps.sample !== 0) {
+    chips.push({
+      location: "sample",
+      value: counts.gaps.sample,
+      chip: `샘플 원장 ${signedCount(counts.gaps.sample)}`,
+      detail: `샘플: 원장 ${counts.ledger.sample.toLocaleString("ko-KR")} · 대여 유닛 ${counts.loaned.count.toLocaleString("ko-KR")} → ${gapDirection(counts.gaps.sample)}`,
+    })
+  }
+  return chips
+}
+
+// 풀 선택 → 빠른 기록(하드웨어 라운드 3 P-8). 대여는 사무실 보관 유닛만, 반납은 대여중 유닛만 넘긴다 — 서버 전이 규칙
+// (loan: office → loaned, return: loaned → office)과 같다. 나머지 상태는 이동·정정 버튼의 몫이다.
+export function splitPoolSelectionForQuickRecord(units: readonly Pick<HardwareSampleUnit, "id" | "status">[]): {
+  loanIds: string[]
+  returnIds: string[]
+} {
+  return {
+    loanIds: units.filter((unit) => unit.status === "office").map((unit) => unit.id),
+    returnIds: units.filter((unit) => unit.status === "loaned").map((unit) => unit.id),
+  }
+}
+
+// 상태 정정 중 한 번 더 확인하는 대상(하드웨어 라운드 3 P-13) — 풀·대여 목록에서 빠지는 끝 상태.
+export const OFFICE_POOL_CONFIRM_CORRECTION_TARGETS: ReadonlySet<SampleUnitStatus> = new Set(["retired", "converted"])

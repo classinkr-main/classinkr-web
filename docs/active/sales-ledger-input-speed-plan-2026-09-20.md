@@ -1,6 +1,6 @@
 # 매출 장부 입력 속도·편의 기획 (라운드 4)
 
-상태: P1-4·P2-8·P2-10을 통합했다. P2-9 원자 대체는 DB RPC만으로는 REV 시트·감사 기록과의 정합성을 보장하지 못하므로 **서버와 UI에서 기본 비활성(fail-closed)**이다. 마이그레이션 적용만으로 활성화하지 않으며, 시트 쓰기와 동시성·실패 복구 설계 및 검증이 선행되어야 한다. 아래 2026-09-22 P2-9 운영 적용·활성화 안내보다 이 상태가 우선한다.
+상태: 1단계 P0·P1-4·P1-5·P1-6·P2-7·P2-8·P2-10 및 UI·UX 개선을 통합했다. 후속 사용성 평가는 [라운드 5 기획](sales-ledger-view-ux-round5-plan-2026-09-23.md)을 참고한다. P2-9 원자 대체는 DB RPC만으로 REV 시트·감사 기록과의 정합성을 보장하지 못하므로 **서버와 UI에서 기본 비활성(fail-closed)**이다. 외부 시트 동시성·멱등성·실패 복구 재설계와 DB 통합 검증 전에는 마이그레이션을 운영에 적용하거나 기능을 활성화하지 않는다.
 범위: `/admin/branch/ledger`의 입력 경로 — REV 매트릭스 셀 편집, 빠른 작업 레일(입력/수정), 체크 큐
 목표: **1단계** 구글 시트를 원천으로 유지한 채 어드민 입력의 클릭·왕복·오타를 줄인다 →
 **2단계** 어드민을 매출 입력 정본으로 올리고 시트 입력을 중단한다.
@@ -138,13 +138,13 @@
 | P0-1 초안 배치 API | **완료** | `app/api/admin/branch/ledger-drafts/batch/route.ts`, `lib/branch/ledger-draft-body.ts`(단건·배치 공용 파서), `components/admin/branch/ledger/useLedgerDraftQueue.ts`(`checkDrafts`/`applyDrafts`/`persistDraftsBatch`, 200건 청크) | `tests/api/branch-ledger-drafts-batch-route.test.ts`, `tests/branch/ledger-draft-batch.test.ts` |
 | P0-2 자가 체크 | **완료 — 결정 D1(a) 채택** | 저장소 `buildInsert`(status=checked → `checked_by`/`checked_at`), `updateBranchSalesLedgerDraft`(자가 체크 재편집: 잠금 해제→갱신→재체크, 남의 체크는 409 `checked-by-other`), 워크벤치 `buildCellDraftInput`(매트릭스 셀 커밋만 `status:"checked"`), `ledger/self-check.ts` + 큐 배지 | `tests/repositories/branch-sales-ledger-drafts.test.ts`(자가 체크 5건), `tests/branch/ledger-self-check.test.ts` |
 | P0-3 고객/계정 자동완성 | **완료** | `components/admin/branch/ledger/customer-suggest.ts`, `InputRailSection.tsx`(datalist + 표기 흔들림 경고·원클릭 맞추기) | `tests/branch/customer-suggest.test.ts` |
-| P1-5 붙여넣기 이름 매칭 | **완료** | `rev-matrix-logic.ts`(`buildMatrixPastePlan` by-name 모드·`buildPasteNewRowInputs`), `RevMatrix.tsx`(프리뷰: 모드 배지·건너뜀 안내·"시트에 없는 고객" 체크리스트), 워크벤치 `confirmMatrixPaste` | `tests/branch/matrix-paste-name-match.test.ts` |
+| P1-5 붙여넣기 이름 매칭 | **완료**(주차 칸 앵커 붙여넣기는 미구현 — 라운드 5 §3.3 R-16) | `rev-matrix-logic.ts`(`buildMatrixPastePlan` by-name 모드·`buildPasteNewRowInputs`), `RevMatrix.tsx`(프리뷰: 모드 배지·건너뜀 안내·"시트에 없는 고객" 체크리스트), 워크벤치 `confirmMatrixPaste` | `tests/branch/matrix-paste-name-match.test.ts` |
 | P1-6 실행 취소 토스트 | **완료** | 워크벤치 토스트 `key/action/ttlMs`, `undoCellDraft`(latest-ref), 훅 `cancelDraft` 성공 여부 반환 | `tests/branch/ledger-undo-toast.test.ts` |
 | P1-4 인라인 신규 행 | **완료** | `ledger/pending-draft-rows.ts`(`buildPendingDraftRows`·`matchesRevRowFilters`), 매트릭스 머리 아래 "적용 대기 새 행" 섹션(`RevMatrixPendingRow`, 합계·그룹·보드·요약 파이프라인과 **분리**) + 섹션 맨 아래 "+ 새 행 추가" 인라인 입력(`buildNewRowDraftInput`, 3단 유지), 모바일 적용 대기 카드 | `pending-draft-rows`·`pending-section-wiring`·`inline-new-row` |
 | P2-7 모바일 입력 진입 | **완료** | `RevMobileList.tsx`(금액 44px 버튼 → `openQuickInputForRow`: 행 선택·프리필 후 레일 입력 탭) | `tests/branch/ledger-entry-paths.test.ts` |
 | P2-8 키보드 보강 | **완료** | `rev-matrix-logic.ts`(`computeMatrixRange`·anchor/range·`onCommitRangeConfidence`), `RevMatrix.tsx`(range 배경), 워크벤치(`/` 검색 포커스·Ctrl+Z·범위 확도 배치 저장) | `tests/branch/matrix-keyboard-range.test.ts` |
-| P2-9 적용값 한 번에 바꾸기 | **구현 보류 — 서버·UI 비활성** | DB 트랜잭션만으로 REV 시트 쓰기 및 감사 기록과의 정합성을 보장하지 못한다. 시트 동시 쓰기·실패 복구 검증 전에는 마이그레이션을 적용하거나 기능을 켜지 않는다. | 서버 직접 호출 503·capability false, 시트 쓰기 경로 회귀 테스트 |
-| P2-10 매출시트 → 장부 딥링크 | **완료** | `app/admin/crm/deals/rev-sheet/page.tsx`(행·배너 링크, `lens=rev&q=<고객>&team=`) | `tests/crm/rev-sheet-ledger-link.test.ts` |
+| P2-9 적용값 한 번에 바꾸기 | **구현 보류 — 서버·UI 비활성** | DB 트랜잭션만으로 REV 시트 쓰기 및 감사 기록과의 정합성을 보장하지 못한다. 시트 동시 쓰기·멱등성·실패 복구 재설계 및 DB 통합 검증 전에는 마이그레이션을 운영에 적용하거나 기능을 켜지 않는다. | 서버 직접 호출 503·capability false, 시트 쓰기 경로 회귀 테스트 |
+| P2-10 매출시트 → 장부 딥링크 | **완료** | `lib/crm/revenue-sheet-view.ts`(`buildLedgerEntryHref`), `app/admin/crm/deals/rev-sheet/page.tsx`(행·배너 링크, `lens=rev&q=<고객>&team=`) | `tests/crm/revenue-sheet-view.test.ts`, `tests/crm/rev-sheet-ledger-link.test.ts` |
 
 구현하며 확정된 세부 규약:
 

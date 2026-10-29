@@ -4,6 +4,7 @@ import { memo, useCallback, useState } from "react"
 import { ChevronDown, RotateCcw } from "lucide-react"
 
 import { adminFetchJson } from "@/lib/admin-client"
+import { HARDWARE_SNAPSHOT_RESTORE_ENABLED, HARDWARE_SNAPSHOT_RESTORE_UNAVAILABLE } from "@/lib/hardware/snapshot-restore-policy"
 import { formatDate, formatNumber } from "./shared"
 
 // 감사(2026-09-07 #4): restore_hardware_sheet_import_snapshot RPC(20260701_hardware_restore_
@@ -98,7 +99,7 @@ function SnapshotRestorePanel({ canFinalize, onRestored }: SnapshotRestorePanelP
             시트 이관 백업 · 되돌리기
           </span>
           <span className="mt-0.5 block text-[11px] text-[#615D59]">
-            매 시트 이관 직전 자동 저장된 백업 — 잘못된 이관을 이전 상태로 되돌립니다. 되돌리기는 취소할 수 없습니다.
+            매 시트 이관 직전 저장된 백업입니다. 현재 복원은 안전성 검증을 위해 중단되어 있습니다.
           </span>
         </span>
         <ChevronDown className={`h-4 w-4 shrink-0 text-[#A39E98] transition-transform ${expanded ? "rotate-180" : ""}`} />
@@ -143,8 +144,8 @@ function SnapshotRestorePanel({ canFinalize, onRestored }: SnapshotRestorePanelP
                   <button
                     type="button"
                     onClick={() => setConfirmTarget(snapshot)}
-                    disabled={!canFinalize || restoringId != null}
-                    title={!canFinalize ? "확정 권한(hardware.finalize)이 필요합니다" : undefined}
+                    disabled={!HARDWARE_SNAPSHOT_RESTORE_ENABLED || !canFinalize || restoringId != null}
+                    title={!HARDWARE_SNAPSHOT_RESTORE_ENABLED ? HARDWARE_SNAPSHOT_RESTORE_UNAVAILABLE : !canFinalize ? "확정 권한(hardware.finalize)이 필요합니다" : undefined}
                     className="inline-flex h-9 shrink-0 cursor-pointer items-center justify-center rounded-md border border-[#B43E3E] px-3 text-[11.5px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B43E3E]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     이 시점으로 되돌리기
