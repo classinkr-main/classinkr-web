@@ -181,7 +181,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false }, { status: 400 })
   }
 
-  // 분석 동의와 실제 동의 변경 관찰이 확인되지 않으면 이벤트를 저장하지 않는다.
+  // 분석 동의 또는 클라이언트 관찰 신호가 없으면 이벤트를 저장하지 않는다.
+  // 관찰 신호는 위조 가능한 비인증 값이다.
   const consent = parseConsent(req.cookies.get(CONSENT_COOKIE)?.value ?? null)
   const revocations = {
     analytics: req.cookies.get(ANALYTICS_REVOCATION_COOKIE)?.value ?? null,

@@ -115,25 +115,26 @@ export function getMarketingRequestMeta(
   options: { sourceUrl?: string | null; fbclid?: string | null } = {}
 ): MarketingRequestMeta {
   const consent = parseConsent(req.cookies.get(CONSENT_COOKIE)?.value ?? null)
-  const anonymousId = req.cookies.get(ANONYMOUS_ID_COOKIE)?.value?.trim() || null
+  const choice = hasConsentObservation(req.headers) ? effectiveConsentChoice(consent, {
+    analytics: req.cookies.get(ANALYTICS_REVOCATION_COOKIE)?.value ?? null,
+    marketing: req.cookies.get(MARKETING_REVOCATION_COOKIE)?.value ?? null,
+  }) : { analytics: false, marketing: false }
+  const anonymousId = choice.analytics ? req.cookies.get(ANONYMOUS_ID_COOKIE)?.value?.trim() || null : null
   const gaClientId = parseGaClientId(req.cookies.get("_ga")?.value) ?? anonymousId
   const fbc = req.cookies.get("_fbc")?.value?.trim() || buildFbc(options.fbclid)
 
   return {
-    clientIp: getClientIp(req),
-    userAgent: req.headers.get("user-agent")?.slice(0, 500) || null,
-    sourceUrl:
+    clientIp: choice.marketing ? getClientIp(req) : null,
+    userAgent: choice.marketing ? req.headers.get("user-agent")?.slice(0, 500) || null : null,
+    sourceUrl: choice.marketing ? (
       options.sourceUrl?.trim() ||
       req.headers.get("referer")?.slice(0, 500) ||
-      req.nextUrl.origin,
+      req.nextUrl.origin) : null,
     anonymousId,
-    gaClientId,
-    fbp: req.cookies.get("_fbp")?.value?.trim() || null,
-    fbc,
-    consent: hasConsentObservation(req.headers) ? effectiveConsentChoice(consent, {
-      analytics: req.cookies.get(ANALYTICS_REVOCATION_COOKIE)?.value ?? null,
-      marketing: req.cookies.get(MARKETING_REVOCATION_COOKIE)?.value ?? null,
-    }) : { analytics: false, marketing: false },
+    gaClientId: choice.analytics ? gaClientId : null,
+    fbp: choice.marketing ? req.cookies.get("_fbp")?.value?.trim() || null : null,
+    fbc: choice.marketing ? fbc : null,
+    consent: choice,
   }
 }
 
