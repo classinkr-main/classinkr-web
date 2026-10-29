@@ -247,6 +247,36 @@ export function getAllDocsSummaries(content = staticDocsContent) {
     .map((doc) => toArticleSummary(doc, content.categories))
 }
 
+export interface TroubleshootingLink {
+  label: string
+  href: string
+  summary: DocsArticleSummary
+}
+
+/**
+ * 공개 목록에 있는 문제 해결 문서(docType "troubleshooting")를 모은다.
+ * 짧은 이름은 문서 제목을 그대로 쓰되, 앞쪽 순서는 실제 문의가 많은 증상 순으로 고정한다.
+ */
+export function getTroubleshootingLinks(
+  content = staticDocsContent,
+  preferredOrder: readonly string[] = []
+): TroubleshootingLink[] {
+  const rank = (href: string) => {
+    const index = preferredOrder.indexOf(href)
+    return index === -1 ? preferredOrder.length : index
+  }
+
+  return content.docs
+    .filter((doc) => isListedDoc(doc) && doc.docType === "troubleshooting")
+    .map((doc, index) => ({ doc, index, href: getDocPath(doc) }))
+    .sort((a, b) => rank(a.href) - rank(b.href) || a.index - b.index)
+    .map(({ doc, href }) => ({
+      label: doc.title.replace(/\s*[—-]\s.*$/, ""),
+      href,
+      summary: toArticleSummary(doc, content.categories),
+    }))
+}
+
 export function getDocsCategoryNavItems(
   content = staticDocsContent,
   activeCategoryId?: DocCategoryId

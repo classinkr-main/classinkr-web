@@ -35,6 +35,7 @@ import {
   getGuideIntentCards,
   getGuideProductTiles,
   getInstallGuideLinks,
+  getTroubleshootingLinks,
   readQuery,
   scoreDocsArticle,
   withSearchNoIndex,
@@ -77,11 +78,14 @@ const RULE_BLOCK = "border-t border-black/[0.08] pt-5"
 // 채널톡 상담·가이드 검색 상위 주제(2026-09 기준): 비밀번호·로그인(번호 형식)·설치·녹화·EDB.
 const SEARCH_CHIPS = ["설치", "로그인", "비밀번호", "녹화", "EDB"]
 
-// 문제 해결 문서 바로가기 — 해당 문서가 공개 목록에 있을 때만 노출한다(발행 전 404 방지).
-const TROUBLESHOOTING_LINKS = [
-  { label: "로그인이 안 될 때", href: "/docs/start/login-troubleshooting" },
-  { label: "수업 중 끊기거나 튕길 때", href: "/docs/start/class-connection-troubleshooting" },
+// 문제 해결 문서는 docType "troubleshooting" 인 공개 문서를 자동으로 모은다(발행 전 문서는 빠진다).
+// 앞쪽 순서만 실제 문의가 많은 증상 순으로 고정하고, 나머지는 문서 순서를 따른다.
+const TROUBLESHOOTING_ORDER = [
+  "/docs/start/login-troubleshooting",
+  "/docs/start/class-connection-troubleshooting",
 ]
+// 히어로 아래 한 줄 바로가기에는 앞에서부터 이만큼만 보인다. 전체 목록은 아래 "문제가 생겼을 때" 묶음에 있다.
+const HERO_TROUBLESHOOTING_LIMIT = 4
 
 // 처음 쓰는 학생·강사가 가장 많이 막히는 순서(설치 → 가입 → 코스 참여). 실제 공개 문서만 가리킨다.
 const START_STEPS: DocsArticleSummary[] = [
@@ -178,8 +182,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
   const productTiles = getGuideProductTiles(docsContent)
   const featuredArticles = getCuratedFeaturedSummaries(docsContent)
   const installLinks = getInstallGuideLinks(docsContent)
-  const listedHrefs = new Set(allDocs.map((doc) => doc.href))
-  const troubleshootingLinks = TROUBLESHOOTING_LINKS.filter((link) => listedHrefs.has(link.href))
+  const troubleshootingLinks = getTroubleshootingLinks(docsContent, TROUBLESHOOTING_ORDER)
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] pb-20 pt-28 text-[#111110] md:pb-24 md:pt-36">
@@ -240,7 +243,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
         {troubleshootingLinks.length > 0 && (
           <div className="hero-soft-enter hero-soft-enter-actions mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
             <span className="text-xs text-[#615D59]">문제가 생겼다면</span>
-            {troubleshootingLinks.map((link) => (
+            {troubleshootingLinks.slice(0, HERO_TROUBLESHOOTING_LIMIT).map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
@@ -249,6 +252,14 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
                 {link.label}
               </Link>
             ))}
+            {troubleshootingLinks.length > HERO_TROUBLESHOOTING_LIMIT && (
+              <Link
+                href="#troubleshooting"
+                className={`text-[13px] font-semibold text-[#084734] underline-offset-4 hover:underline ${FOCUS_RING}`}
+              >
+                전체 {troubleshootingLinks.length}개 보기
+              </Link>
+            )}
           </div>
         )}
 
@@ -440,6 +451,23 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
               학생과 강사는 앱이나 PC 프로그램에서 가입하고 로그인합니다. 웹 브라우저로 여는 관리자
               페이지는 학원 관리자용입니다.
             </p>
+          </div>
+        </Reveal>
+      )}
+
+      {!query && troubleshootingLinks.length > 0 && (
+        <Reveal as="section" className="container mx-auto max-w-[1080px] px-5 mt-16 md:mt-24">
+          <div id="troubleshooting" className="scroll-mt-28 border-t border-black/[0.08] pt-4">
+            <h2 className={SECTION_EYEBROW}>문제가 생겼을 때</h2>
+            <p className="mt-2 max-w-[880px] text-[14px] leading-[22px] text-[#31302E]">
+              증상별로 먼저 해 볼 것과 화면을 순서대로 담았습니다. 그래도 해결되지 않으면 아래 상담 창구로
+              알려 주세요.
+            </p>
+            <ul className="mt-2 grid gap-x-12 md:grid-cols-2">
+              {troubleshootingLinks.map((link) => (
+                <GuideArticleRow key={link.href} article={link.summary} />
+              ))}
+            </ul>
           </div>
         </Reveal>
       )}

@@ -9,6 +9,7 @@ import {
   isDocCategoryId,
   listDocs as listStaticDocs,
   type DocArticle,
+  type DocArticleDocType,
   type DocCategory,
   type DocCategoryId,
   type DocMedia,
@@ -41,6 +42,7 @@ interface DocsArticleRow {
   chatbot_summary: string | null
   content_markdown: string | null
   content_json: unknown
+  doc_type: string | null
   featured: boolean
   visibility: "public" | "unlisted" | "internal"
   noindex: boolean
@@ -64,6 +66,20 @@ const staticDocsContent: DocsContent = {
 }
 
 const PUBLISHED_DOC_STATUS_VALUES = ["published", "PUBLISHED"]
+
+const DOC_ARTICLE_DOC_TYPES: readonly DocArticleDocType[] = [
+  "guide",
+  "manual",
+  "faq",
+  "troubleshooting",
+  "release_note",
+  "reference",
+]
+
+// 문서 유형은 홈의 "문제가 생겼을 때" 묶음처럼 화면 구성에 쓰여, DB에서 읽을 때도 정적 문서와 같은 값을 유지한다.
+function isDocArticleDocType(value: string | null): value is DocArticleDocType {
+  return value !== null && (DOC_ARTICLE_DOC_TYPES as readonly string[]).includes(value)
+}
 
 function shouldUseSupabaseDocs() {
   const mode = process.env.USE_SUPABASE_DOCS?.trim().toLowerCase()
@@ -222,7 +238,7 @@ async function fetchDocsContentFromSupabase(): Promise<DocsContent> {
       supabase
         .from("docs_articles")
         .select(
-          "id, category_id, slug, title, description, audience, tags, keywords, chatbot_summary, content_markdown, content_json, featured, visibility, noindex, seo_title, seo_description, canonical_path, last_reviewed_at, published_at, updated_at"
+          "id, category_id, slug, title, description, audience, tags, keywords, chatbot_summary, content_markdown, content_json, doc_type, featured, visibility, noindex, seo_title, seo_description, canonical_path, last_reviewed_at, published_at, updated_at"
         )
         .in("status", PUBLISHED_DOC_STATUS_VALUES)
         .in("visibility", ["public", "unlisted"])
@@ -293,6 +309,7 @@ async function fetchDocsContentFromSupabase(): Promise<DocsContent> {
       sections: getSections(contentJson, row.content_markdown ?? row.description),
       resources: getResources(contentJson),
       relatedSlugs: relationsByArticleId.get(row.id),
+      ...(isDocArticleDocType(row.doc_type) ? { docType: row.doc_type } : {}),
     } satisfies DocArticle
   })
 
