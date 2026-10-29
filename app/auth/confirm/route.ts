@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server"
 import type { EmailOtpType, User } from "@supabase/supabase-js"
 
 import { upsertPublicUserProfile } from "@/lib/auth/public-user"
-import { ANONYMOUS_ID_COOKIE } from "@/lib/consent/consent"
 import { stitchIdentity } from "@/lib/identity/stitch"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
 
@@ -52,7 +51,8 @@ export async function GET(req: NextRequest) {
   try {
     const profile = await upsertPublicUserProfile(user)
     await stitchIdentity({
-      anonymousId: req.cookies.get(ANONYMOUS_ID_COOKIE)?.value ?? null,
+      // Redirects cannot carry the current tab's consent-observation signal.
+      anonymousId: null,
       userId: user.id,
       leadId: profile.lead_id,
       email: user.email ?? profile.email,

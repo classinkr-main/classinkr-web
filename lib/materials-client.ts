@@ -1,6 +1,7 @@
 "use client"
 
 import { getAnonymousId } from "@/lib/consent/consent"
+import { consentObservationHeaders } from "@/lib/consent/observation-client"
 
 export interface MaterialDownloadClientInput {
   slug: string
@@ -31,7 +32,7 @@ export class MaterialDownloadError extends Error {
 export async function requestMaterialDownload(input: MaterialDownloadClientInput) {
   const response = await fetch(`/api/materials/${encodeURIComponent(input.slug)}/download`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...consentObservationHeaders() },
     body: JSON.stringify({
       email: input.email,
       source: input.source,

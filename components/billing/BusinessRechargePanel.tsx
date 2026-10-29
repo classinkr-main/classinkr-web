@@ -1,5 +1,8 @@
 "use client"
 
+import { consentObservationHeaders } from "@/lib/consent/observation-client"
+
+
 import { useEffect, useMemo, useRef, useState } from "react"
 import { ANONYMOUS, loadTossPayments, type TossPaymentsWidgets } from "@tosspayments/tosspayments-sdk"
 import { AlertCircle } from "lucide-react"
@@ -475,7 +478,7 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
     try {
       const response = await fetch("/api/billing/checkout/prepare", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...consentObservationHeaders() },
         body: JSON.stringify({
           mode: "business",
           amountKrw: effectiveBaseAmountKrw,

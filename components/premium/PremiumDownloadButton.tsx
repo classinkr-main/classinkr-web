@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Download, Loader2 } from "lucide-react"
+import { consentObservationHeaders } from "@/lib/consent/observation-client"
 
 interface PremiumDownloadButtonProps {
   slug: string
@@ -26,6 +27,7 @@ export function PremiumDownloadButton({ slug, label = "프리미엄 파일 내�
       const res = await fetch(`/api/premium/${encodeURIComponent(slug)}/download`, {
         method: "POST",
         credentials: "same-origin",
+        headers: consentObservationHeaders(),
       })
       const data = (await res.json().catch(() => null)) as DownloadResponse | null
 

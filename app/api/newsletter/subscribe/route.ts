@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server"
-import { ANONYMOUS_ID_COOKIE } from "@/lib/consent/consent"
 import { stitchIdentity } from "@/lib/identity/stitch"
 import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import { getMarketingRequestMeta } from "@/lib/marketing/server-conversions"
@@ -51,7 +50,10 @@ export async function POST(req: NextRequest) {
     const body: NewsletterSubscribeRequest = await req.json()
     const source = normalizeNewsletterSource(body.source)
     const email = body.email?.trim().toLowerCase()
-    const attribution = body.attribution
+    // 뉴스레터 이메일 수신 동의와 광고·분석 쿠키 동의는 별개다.
+    // 이전 클라이언트나 직접 호출의 귀속 본문을 그대로 신뢰하지 않는다.
+    const consent = getMarketingRequestMeta(req).consent
+    const attribution = consent.marketing ? body.attribution : undefined
 
     if (!email) {
       return NextResponse.json({ error: "이메일은 필수입니다." }, { status: 400 })
@@ -63,6 +65,20 @@ export async function POST(req: NextRequest) {
         { error: "올바른 이메일 형식이 아닙니다." },
         { status: 400 }
       )
+    }
+
+    const requestMeta = getMarketingRequestMeta(req, {
+      sourceUrl: getAttributionValue(attribution, "currentPage"),
+      fbclid: getAttributionValue(attribution, "fbclid"),
+    })
+    if (!consent.marketing) {
+      requestMeta.sourceUrl = req.nextUrl.origin
+      requestMeta.fbp = null
+      requestMeta.fbc = null
+    }
+    if (!consent.analytics) {
+      requestMeta.anonymousId = null
+      requestMeta.gaClientId = null
     }
 
     const result = await submitLeadCapture({
@@ -87,15 +103,12 @@ export async function POST(req: NextRequest) {
       // getAttributionValue 는 문자열 전용이라 객체인 n_* 묶음은 여기서 따로 정규화한다.
       naverAd: parseNaverAd(attribution?.naverAd) ?? undefined,
     }, {
-      requestMeta: getMarketingRequestMeta(req, {
-        sourceUrl: getAttributionValue(attribution, "currentPage"),
-        fbclid: getAttributionValue(attribution, "fbclid"),
-      }),
+      requestMeta,
     })
 
-    if (result.body.ok && result.body.leadId) {
+    if (result.body.ok && result.body.leadId && consent.analytics && requestMeta.anonymousId) {
       void stitchIdentity({
-        anonymousId: req.cookies.get(ANONYMOUS_ID_COOKIE)?.value ?? null,
+        anonymousId: requestMeta.anonymousId,
         leadId: result.body.leadId,
         email,
         // 비인증 경로(이메일 게이트) — 이미 아는 leadId만 쓰고 이메일로 자동연결하지 않는다(D4).

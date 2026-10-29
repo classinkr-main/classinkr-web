@@ -1,3 +1,4 @@
+import { consentObservationHeaders } from "@/lib/consent/observation-client"
 import { getAnonymousId } from "@/lib/consent/consent"
 import type { LeadPayload } from "@/lib/lead-types"
 import { collectLeadAttribution } from "@/lib/marketing-attribution"
@@ -8,7 +9,7 @@ export { collectLeadAttribution } from "@/lib/marketing-attribution"
 export async function submitLead(data: Omit<LeadPayload, "timestamp"> & { website?: string }) {
   const res = await fetch("/api/lead", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...consentObservationHeaders() },
     body: JSON.stringify({
       ...data,
       ...collectLeadAttribution(),

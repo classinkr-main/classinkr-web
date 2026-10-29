@@ -168,7 +168,12 @@ describe("collectLeadAttribution → 폼 본문 → sanitizeLeadAttribution 왕�
   function stubBrowser(href: string, referrer: string, stored?: LeadAttribution, marketing = true) {
     const store = new Map<string, string>()
     if (stored) store.set(STORAGE_KEY, JSON.stringify(stored))
+    const cookieStore = { addEventListener: () => {}, removeEventListener: () => {} }
+    vi.stubGlobal("navigator", { locks: {} })
     vi.stubGlobal("window", {
+      cookieStore,
+      __classinConsentObserverReady: true,
+      __classinConsentObservedStore: cookieStore,
       location: { href },
       localStorage: {
         getItem: (key: string) => store.get(key) ?? null,
@@ -176,8 +181,8 @@ describe("collectLeadAttribution → 폼 본문 → sanitizeLeadAttribution 왕�
         removeItem: (key: string) => void store.delete(key),
       },
     })
-    const consent = { v: CONSENT_POLICY_VERSION, analytics: true, marketing, ts: 1, s: 1 }
-    vi.stubGlobal("document", { referrer, cookie: `cln_consent=${encodeURIComponent(JSON.stringify(consent))}` })
+    const consent = { v: CONSENT_POLICY_VERSION, analytics: true, marketing, ts: 1, s: 1, ackAnalytics: "confirmed-a", ackMarketing: "confirmed-m" }
+    vi.stubGlobal("document", { referrer, cookie: `cln_consent=${encodeURIComponent(JSON.stringify(consent))}; cln_revoke_a=confirmed-a; cln_revoke_m=confirmed-m` })
     return store
   }
 

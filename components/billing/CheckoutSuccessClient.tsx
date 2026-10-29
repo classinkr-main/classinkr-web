@@ -1,5 +1,8 @@
 "use client"
 
+import { consentObservationHeaders } from "@/lib/consent/observation-client"
+
+
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
@@ -57,6 +60,7 @@ export function CheckoutSuccessClient() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            ...consentObservationHeaders(),
           },
           body: JSON.stringify({
             paymentKey,

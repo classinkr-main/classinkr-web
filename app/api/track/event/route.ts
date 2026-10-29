@@ -1,8 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { hasConsentObservation } from "@/lib/consent/observation-contract"
 import {
   ANONYMOUS_ID_COOKIE,
+  ANALYTICS_REVOCATION_COOKIE,
   CONSENT_COOKIE,
+  MARKETING_REVOCATION_COOKIE,
   effectiveConsentChoice,
   parseConsent,
 } from "@/lib/consent/consent"
@@ -139,13 +142,6 @@ const PII_PATTERNS = [
   /\b\d{2,3}[-.\s]?\d{3,4}[-.\s]?\d{4}\b/g,
 ]
 
-interface TrackEventBody {
-  event?: string
-  page?: string
-  /** 클라이언트가 여전히 보내지만 **서버는 무시한다** — cln_aid 쿠키만 신뢰한다. */
-  anonymousId?: string | null
-  params?: Record<string, string | number | boolean | null | undefined>
-}
 
 export async function POST(req: NextRequest) {
   if (isCrossOriginRequest(req)) {
@@ -162,29 +158,41 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false }, { status: 429 })
   }
 
-  // 서버측 분석 동의 검증. 지금까지는 lib/analytics.ts의 클라이언트 게이트가 유일한
-  // 방어였는데 브라우저 코드라 우회가 자명하고, Origin 헤더가 없는 비브라우저 요청은
-  // isCrossOriginRequest 도 통과한다. lib/marketing/server-conversions.ts 가 이미
-  // 같은 방식으로 서버에서 동의를 확인하므로 그 패턴을 그대로 따른다.
-  // 추적 실패는 사용자 경험을 막지 않는다는 이 라우트의 계약대로 200을 유지한다.
-  const consent = parseConsent(req.cookies.get(CONSENT_COOKIE)?.value ?? null)
-  if (!effectiveConsentChoice(consent).analytics) {
-    return NextResponse.json({ ok: true, stored: false, reason: "no_consent" })
-  }
-
-  let body: TrackEventBody
+  // 네트워크 입력을 신뢰하지 않는다. JSON 원시값과 잘못된 필드는 400으로 거부한다.
+  let input: unknown
   try {
-    body = await req.json()
+    input = await req.json()
   } catch {
     return NextResponse.json({ ok: false }, { status: 400 })
   }
-
-  const eventName = body.event?.trim()
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return NextResponse.json({ ok: false }, { status: 400 })
+  }
+  const body = input as Record<string, unknown>
+  if (
+    typeof body.event !== "string" ||
+    (body.page != null && typeof body.page !== "string") ||
+    (body.params != null && (typeof body.params !== "object" || Array.isArray(body.params)))
+  ) {
+    return NextResponse.json({ ok: false }, { status: 400 })
+  }
+  const eventName = body.event.trim()
   if (!eventName || !ALLOWED_EVENTS.has(eventName)) {
     return NextResponse.json({ ok: false }, { status: 400 })
   }
 
-  const params = sanitizeParams(eventName, body.params ?? {})
+  // 분석 동의 또는 클라이언트 관찰 신호가 없으면 이벤트를 저장하지 않는다.
+  // 관찰 신호는 위조 가능한 비인증 값이다.
+  const consent = parseConsent(req.cookies.get(CONSENT_COOKIE)?.value ?? null)
+  const revocations = {
+    analytics: req.cookies.get(ANALYTICS_REVOCATION_COOKIE)?.value ?? null,
+    marketing: req.cookies.get(MARKETING_REVOCATION_COOKIE)?.value ?? null,
+  }
+  if (!hasConsentObservation(req.headers) || !effectiveConsentChoice(consent, revocations).analytics) {
+    return NextResponse.json({ ok: true, stored: false, reason: "no_consent" })
+  }
+
+  const params = sanitizeParams(eventName, (body.params ?? {}) as Record<string, unknown>)
   const buttonRaw = params.button
   const button = typeof buttonRaw === "string" ? buttonRaw.slice(0, 80) : null
   const page = typeof body.page === "string" ? redactPii(body.page).slice(0, 200) : null
@@ -236,12 +244,12 @@ function sanitizeParams(eventName: string, params: Record<string, unknown>) {
 
   return Object.fromEntries(
     Object.entries(params)
-      .filter(([key]) => allowedKeys.has(key))
+      .filter(([key, value]) => allowedKeys.has(key) && (value === null || ["string", "number", "boolean"].includes(typeof value)))
       .map(([key, value]) => {
         if (typeof value === "string") return [key, redactPii(value).slice(0, 500)]
         if (typeof value === "number" && Number.isFinite(value)) return [key, value]
         if (typeof value === "boolean" || value == null) return [key, value]
-        return [key, redactPii(String(value)).slice(0, 500)]
+        return [key, null]
       })
   )
 }

@@ -34,6 +34,7 @@ import {
 } from "@/components/checkout/request-date"
 import { ACADEMY_SIZE_OPTIONS, ACADEMY_SIZE_PLACEHOLDER } from "@/lib/contact/academy-size"
 import { getAnonymousId } from "@/lib/consent/consent"
+import { consentObservationHeaders } from "@/lib/consent/observation-client"
 import { collectLeadAttribution } from "@/lib/marketing-attribution"
 import type { CheckoutRequestItem } from "@/lib/billing/hardware-catalog"
 import { trackLeadSubmitted } from "@/lib/analytics"
@@ -327,7 +328,7 @@ export function CheckoutRequestForm({
       const response = await fetch("/api/checkout/request", {
         method: "POST",
         signal: controller.signal,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...consentObservationHeaders() },
         body: JSON.stringify({
           kind,
           items: submitItems,

@@ -10,6 +10,7 @@ import {
   DENIED_CHOICE,
   GRANTED_CHOICE,
   OPEN_CONSENT_EVENT,
+  prepareConsentMarkers,
   resyncPendingConsent,
   type ConsentChoice,
   type ConsentRecord,
@@ -136,6 +137,7 @@ export function ConsentBanner() {
 
   // 이전 방문에서 서버 감사 로그가 누락된 동의(s:0)를 조용히 재시도한다.
   useEffect(() => {
+    prepareConsentMarkers()
     void resyncPendingConsent()
   }, [])
 
@@ -171,7 +173,9 @@ export function ConsentBanner() {
     } catch (error) {
       console.warn("[consent] failed to save consent:", error)
       setForceOpen(true)
-      setSaveError("이 브라우저에서 선택 쿠키를 안전하게 저장하지 못했습니다. 필수 쿠키만 사용 중입니다.")
+      setSaveError(error instanceof Error && error.message === "동의 설정을 준비했습니다. 다시 선택해 주세요."
+        ? error.message
+        : "이 브라우저에서 선택 쿠키를 안전하게 저장하지 못했습니다. 필수 쿠키만 사용 중입니다.")
     } finally {
       setSaving(false)
     }

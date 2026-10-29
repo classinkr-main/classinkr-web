@@ -19,6 +19,12 @@ interface ConsentBody {
   anonymous_id?: string | null
 }
 
+function isConsentBody(value: unknown): value is ConsentBody & { analytics: boolean; marketing: boolean } {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false
+  const body = value as Record<string, unknown>
+  return typeof body.analytics === "boolean" && typeof body.marketing === "boolean"
+}
+
 function sanitizeAnonymousId(value: unknown) {
   if (typeof value !== "string") return null
   const trimmed = value.trim().slice(0, 100)
@@ -30,7 +36,7 @@ function isSecureRequest(req: NextRequest) {
 }
 
 /** 구버전 탭의 응답은 늦게 도착해도 허용 쿠키를 만들 수 없다. */
-function createLegacyDeniedResponse(req: NextRequest, isDenial: boolean) {
+function createLegacyDeniedResponse(req: NextRequest, isDenial: boolean, invalid = false) {
   const record: ConsentRecord = {
     v: CONSENT_POLICY_VERSION,
     analytics: false,
@@ -39,15 +45,21 @@ function createLegacyDeniedResponse(req: NextRequest, isDenial: boolean) {
     s: 0,
   }
   const response = NextResponse.json(
-    isDenial
+    invalid
+      ? { ok: false, error: "올바른 쿠키 선택을 보내 주세요." }
+      : isDenial
       ? { ok: true, stored: false, record, anonymous_id: null }
       : { ok: true, stored: false, record, anonymous_id: null, message: "페이지를 새로고침한 후 쿠키 설정을 다시 선택해 주세요." },
-    { status: 200 },
+    { status: invalid ? 400 : 200 },
   )
   response.headers.set("x-consent-refresh-required", "1")
   const options = { httpOnly: false, path: "/", sameSite: "lax" as const, secure: isSecureRequest(req) }
   response.cookies.set(CONSENT_COOKIE, JSON.stringify(record), { ...options, maxAge: CONSENT_COOKIE_MAX_AGE })
   response.cookies.set(ANONYMOUS_ID_COOKIE, "", { ...options, maxAge: 0 })
+  // 구버전의 거절 응답도 다른 탭에 진행 중인 신형 허용보다 우선해야 한다.
+  // 매 응답마다 새 값을 발급해 늦은 허용 응답의 오래된 철회 상태를 식별할 수 있다.
+  response.cookies.set("cln_revoke_a", randomUUID(), { ...options, maxAge: CONSENT_COOKIE_MAX_AGE })
+  response.cookies.set("cln_revoke_m", randomUUID(), { ...options, maxAge: CONSENT_COOKIE_MAX_AGE })
   return response
 }
 
@@ -116,8 +128,9 @@ export async function POST(req: NextRequest) {
   // 허용 요청을 구버전 UI는 성공으로 오인할 수 있으므로 새로고침 안내 헤더·본문을 싣는다.
   // 구버전의 명시적 거절은 제한·감사 저장 실패와 무관하게 즉시 거절 쿠키를 발급한다.
   if (req.headers.get("x-consent-client-commit") !== "1") {
-    const body = (await req.json().catch(() => null)) as ConsentBody | null
-    const isDenial = body?.analytics === false && body?.marketing === false
+    const body: unknown = await req.json().catch(() => null)
+    if (!isConsentBody(body)) return createLegacyDeniedResponse(req, false, true)
+    const isDenial = body.analytics === false && body.marketing === false
     return createLegacyDeniedResponse(req, isDenial)
   }
 
@@ -127,12 +140,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false }, { status: 429 })
   }
 
-  let body: ConsentBody
+  let rawBody: unknown
   try {
-    body = await req.json()
+    rawBody = await req.json()
   } catch {
     return NextResponse.json({ ok: false }, { status: 400 })
   }
+
+  // 동의는 명시적인 boolean 선택만 받는다. Boolean("false")는 true가 되며,
+  // null/배열도 유효한 동의 객체가 아니므로 감사 기록이나 쿠키를 만들면 안 된다.
+  if (!isConsentBody(rawBody)) {
+    return NextResponse.json({ ok: false }, { status: 400 })
+  }
+  const body = rawBody
 
   const policyVersion =
     typeof body.policy_version === "string" ? body.policy_version.slice(0, 40) : null
@@ -140,8 +160,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false }, { status: 400 })
   }
 
-  const analytics = Boolean(body.analytics)
-  const marketing = Boolean(body.marketing)
+  const analytics = body.analytics
+  const marketing = body.marketing
   const anonymousId = analytics
     ? sanitizeAnonymousId(body.anonymous_id) ??
       sanitizeAnonymousId(req.cookies.get(ANONYMOUS_ID_COOKIE)?.value) ??

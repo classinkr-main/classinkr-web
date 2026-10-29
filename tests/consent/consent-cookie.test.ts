@@ -4,11 +4,15 @@ import {
   CONSENT_COOKIE,
   CONSENT_POLICY_VERSION,
   CONSENT_SIGNAL_KEY,
+  ANALYTICS_REVOCATION_COOKIE,
+  MARKETING_REVOCATION_COOKIE,
   DENIED_CHOICE,
   GRANTED_CHOICE,
   currentChoice,
   parseConsent,
+  prepareConsentMarkers,
   readConsent,
+  readConsentRevocations,
   resyncPendingConsent,
   saveConsent,
   writeConsentCookie,
@@ -55,8 +59,9 @@ function installBrowser() {
       return result
     },
   }
+  const cookieStore = { addEventListener: vi.fn(), removeEventListener: vi.fn() }
   vi.stubGlobal("document", document)
-  vi.stubGlobal("window", { document, localStorage, dispatchEvent: vi.fn(), location: { protocol: "https:" } })
+  vi.stubGlobal("window", { document, localStorage, cookieStore, __classinConsentObserverReady: true, __classinConsentObservedStore: cookieStore, dispatchEvent: vi.fn(), location: { protocol: "https:" } })
   vi.stubGlobal("navigator", { locks })
   vi.stubGlobal("CustomEvent", class { constructor(public type: string, public init?: unknown) {} })
   return { jar, storage, locks, observedAtSignal }
@@ -66,18 +71,32 @@ const legacy: ConsentRecord = { v: CONSENT_POLICY_VERSION, analytics: true, mark
 
 describe("동의 쿠키", () => {
   let browser: ReturnType<typeof installBrowser>
-  beforeEach(() => { browser = installBrowser() })
+  beforeEach(() => { browser = installBrowser(); prepareConsentMarkers() })
   afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
-  it("정책 버전이 다른 쿠키는 거부하고 기존 쿠키는 읽는다", () => {
+  it("정책 버전이 다른 쿠키는 거부하고 표식 없는 기존 허용은 재선택을 요구한다", () => {
     expect(parseConsent(JSON.stringify({ ...legacy, v: "1999-01-01" }))).toBeNull()
     writeConsentCookie(legacy)
     expect(readConsent()).toMatchObject(legacy)
-    expect(currentChoice()).toEqual(GRANTED_CHOICE)
+    expect(currentChoice()).toEqual(DENIED_CHOICE)
   })
 
   it("문자열 false 등 잘못된 동의 값을 허용으로 해석하지 않는다", () => {
     expect(parseConsent(JSON.stringify({ ...legacy, analytics: "false", marketing: "false" }))).toMatchObject(DENIED_CHOICE)
+    expect(parseConsent(JSON.stringify({ ...legacy, s: "0" }))?.s).toBe(0)
+    expect(parseConsent(JSON.stringify({ ...legacy, s: null }))?.s).toBe(0)
+  })
+
+  it("허용을 선택한 시점에 표식이 없으면 표식만 준비하고 재선택 전까지 거절한다", async () => {
+    browser.jar.delete(ANALYTICS_REVOCATION_COOKIE)
+    browser.jar.delete(MARKETING_REVOCATION_COOKIE)
+    const fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+    await expect(saveConsent(GRANTED_CHOICE)).rejects.toThrow("다시 선택")
+    expect(currentChoice()).toEqual(DENIED_CHOICE)
+    expect(browser.jar.has(ANALYTICS_REVOCATION_COOKIE)).toBe(true)
+    expect(browser.jar.has(MARKETING_REVOCATION_COOKIE)).toBe(true)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it("새 프로토콜에서 서버 검증 전 선택은 기록하지만 추적은 거부한다", async () => {
@@ -132,6 +151,47 @@ describe("동의 쿠키", () => {
     expect(tab2.readConsent()).toMatchObject({ ...DENIED_CHOICE, s: 1 })
   })
 
+  it("한 탭에서 잠금과 공유 저장소가 실패해도 이전 허용 응답이 거절을 덮지 못하고 새 허용은 가능하다", async () => {
+    const pending: Array<{ finish: () => void; body: { analytics: boolean; marketing: boolean } }> = []
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, options: { body: string }) => {
+      const body = JSON.parse(options.body)
+      await new Promise<void>(resolve => pending.push({ finish: resolve, body }))
+      return new Response(JSON.stringify({ ok: true, stored: true, record: { v: CONSENT_POLICY_VERSION, analytics: body.analytics, marketing: body.marketing, ts: 1 } }), { headers: { "x-consent-client-commit": "1" } })
+    }))
+    const oldGrant = saveConsent(GRANTED_CHOICE)
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    vi.stubGlobal("navigator", {})
+    await saveConsent(DENIED_CHOICE)
+    expect(currentChoice()).toEqual(DENIED_CHOICE)
+    vi.stubGlobal("navigator", { locks: browser.locks })
+    pending[0].finish(); await oldGrant
+    expect(currentChoice()).toEqual(DENIED_CHOICE)
+    await vi.waitFor(() => expect(pending).toHaveLength(2))
+    expect(pending[1].body).toMatchObject(DENIED_CHOICE)
+    pending[1].finish()
+    await vi.waitFor(() => expect(readConsent()).toMatchObject({ ...DENIED_CHOICE, s: 1 }))
+    const newGrant = saveConsent(GRANTED_CHOICE)
+    await vi.waitFor(() => expect(pending).toHaveLength(3))
+    pending[2].finish(); await newGrant
+    expect(currentChoice()).toEqual(GRANTED_CHOICE)
+  })
+
+  it("허용 요청이 상태 잠금을 기다리는 사이 새 철회가 생겨도 허용하지 않는다", async () => {
+    let release!: () => void
+    const held = browser.locks.request("classin-consent-state-v1", () => new Promise<void>(resolve => { release = resolve }))
+    await vi.waitFor(() => expect(release).toBeDefined())
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, options: { body: string }) => {
+      const body = JSON.parse(options.body)
+      return new Response(JSON.stringify({ ok: true, stored: true, record: { v: CONSENT_POLICY_VERSION, analytics: body.analytics, marketing: body.marketing, ts: 1 } }), { headers: { "x-consent-client-commit": "1" } })
+    }))
+    const grant = saveConsent(GRANTED_CHOICE)
+    vi.stubGlobal("navigator", {})
+    await saveConsent(DENIED_CHOICE)
+    vi.stubGlobal("navigator", { locks: browser.locks })
+    release(); await held; await grant
+    expect(currentChoice()).toEqual(DENIED_CHOICE)
+  })
+
   it("정책 불일치·오래된 서버·네트워크 실패는 허용으로 전환하지 않는다", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ok: true, stored: true, record: legacy }))))
     await saveConsent(GRANTED_CHOICE)
@@ -159,7 +219,8 @@ describe("동의 쿠키", () => {
   })
 
   it("미동기화 선택을 재시도하며 선택 식별자가 유지된다", async () => {
-    const record: ConsentRecord = { ...legacy, s: 0, rid: "decision-one" }
+    const markers = readConsentRevocations()
+    const record: ConsentRecord = { ...legacy, s: 0, rid: "decision-one", ackAnalytics: markers.analytics!, ackMarketing: markers.marketing! }
     writeConsentCookie(record)
     window.localStorage.setItem(CONSENT_SIGNAL_KEY, JSON.stringify(record))
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ok: true, stored: true, record: legacy }), { headers: { "x-consent-client-commit": "1" } })))
@@ -185,7 +246,8 @@ describe("동의 쿠키", () => {
   }, 12_000)
 
   it("이전 동의의 재동기화 응답은 이후의 거절을 덮지 못한다", async () => {
-    const record: ConsentRecord = { ...legacy, s: 0, rid: "old-decision" }
+    const markers = readConsentRevocations()
+    const record: ConsentRecord = { ...legacy, s: 0, rid: "old-decision", ackAnalytics: markers.analytics!, ackMarketing: markers.marketing! }
     writeConsentCookie(record)
     window.localStorage.setItem(CONSENT_SIGNAL_KEY, JSON.stringify(record))
     const pending: Array<() => void> = []

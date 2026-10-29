@@ -118,7 +118,10 @@ export async function POST(req: NextRequest) {
 
     const marketingConsent = body.marketingConsent === true
 
-    const attribution = {
+    // 광고 귀속은 명시적인 마케팅 쿠키 동의와 클라이언트 관찰 신호가 모두 있는
+    // 경우에만 수집한다. 구형 랜딩과 직접 요청의 본문은 신뢰하지 않는다.
+    const requestConsent = getMarketingRequestMeta(req).consent
+    const attribution = requestConsent.marketing ? {
       utmSource: optionalString(body.utmSource, FIELD_LIMITS.utm),
       utmMedium: optionalString(body.utmMedium, FIELD_LIMITS.utm),
       utmCampaign: optionalString(body.utmCampaign, FIELD_LIMITS.utm),
@@ -131,6 +134,24 @@ export async function POST(req: NextRequest) {
       // 네이버 n_* 묶음 — 목록 밖 키 제거·길이 제한은 parseNaverAd 가 한다(다른 필드의
       // optionalString 과 같은 역할). 값이 하나도 없으면 null.
       naverAd: parseNaverAd(body.naverAd ?? body.naver_ad),
+    } : {
+      utmSource: undefined, utmMedium: undefined, utmCampaign: undefined,
+      utmTerm: undefined, utmContent: undefined, gclid: undefined, fbclid: undefined,
+      landingPage: undefined, referrer: undefined, naverAd: null,
+    }
+    const requestMeta = getMarketingRequestMeta(req, {
+      sourceUrl: attribution.landingPage ?? null,
+      fbclid: attribution.fbclid ?? null,
+    })
+    // 비동의 referrer와 쿠키 식별자가 CRM 후속 처리에 섞이지 않도록 경계에서 제거한다.
+    if (!requestConsent.marketing) {
+      requestMeta.sourceUrl = req.nextUrl.origin
+      requestMeta.fbp = null
+      requestMeta.fbc = null
+    }
+    if (!requestConsent.analytics) {
+      requestMeta.anonymousId = null
+      requestMeta.gaClientId = null
     }
 
     const submittedAt = new Date()
@@ -201,10 +222,7 @@ export async function POST(req: NextRequest) {
         },
         {
           deferTask: (task) => after(task),
-          requestMeta: getMarketingRequestMeta(req, {
-            sourceUrl: attribution.landingPage ?? null,
-            fbclid: attribution.fbclid ?? null,
-          }),
+          requestMeta,
         }
       )
 

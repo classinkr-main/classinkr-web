@@ -11,6 +11,8 @@
 import { after, type NextRequest, NextResponse } from "next/server"
 
 import { submitCheckoutRequest } from "@/lib/checkout-requests"
+import { filterPublicAttribution } from "@/lib/consent/filter-public-attribution"
+import { getMarketingRequestMeta } from "@/lib/marketing/server-conversions"
 import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import { isCrossOriginRequest } from "@/lib/server/same-origin"
 
@@ -50,7 +52,13 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const body = await req.json().catch(() => null)
+    const input: unknown = await req.json().catch(() => null)
+    const meta = getMarketingRequestMeta(req)
+    const body = filterPublicAttribution(input, {
+      ...meta.consent,
+      anonymousId: meta.anonymousId,
+      origin: req.nextUrl.origin,
+    })
     // 리드 미러링·ops 알림은 응답 이후로 미룬다 — 신청 행이 남는 즉시 성공을 돌려준다.
     const result = await submitCheckoutRequest(body, { deferTask: (task) => after(task) })
 
