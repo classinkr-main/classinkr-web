@@ -8,6 +8,7 @@ import { DraftQueue } from "@/components/admin/branch/ledger/DraftQueue"
 import { draftAuthorLine, draftDeleteDisabledReason, draftEditDisabledReason } from "@/components/admin/branch/ledger/draft-card-meta"
 import { InputRailSection } from "@/components/admin/branch/ledger/InputRailSection"
 import { DRAFT_OPERATIONS, defaultDraftWeeklyConfidence, type DraftForm, type LedgerDraft } from "@/components/admin/branch/ledger/shared"
+import { SHEET_WRITE_HISTORY_DELETE_MESSAGE, type SheetWriteView } from "@/components/admin/branch/ledger/sheet-write-view"
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8")
 
@@ -59,7 +60,7 @@ describe("비활성 사유(Q-8)", () => {
 })
 
 describe("DraftQueue 카드 — 입력자 줄·막힌 이유(SSR)", () => {
-  function queue(drafts: LedgerDraft[]) {
+  function queue(drafts: LedgerDraft[], sheetWrites?: Record<string, SheetWriteView>) {
     return renderToStaticMarkup(
       <DraftQueue
         drafts={drafts}
@@ -68,6 +69,7 @@ describe("DraftQueue 카드 — 입력자 줄·막힌 이유(SSR)", () => {
         error={null}
         reversedDraftIds={new Set()}
         recordErrors={new Map()}
+        sheetWrites={sheetWrites}
         onReload={() => {}}
         onEdit={() => {}}
         onToggle={() => {}}
@@ -90,6 +92,15 @@ describe("DraftQueue 카드 — 입력자 줄·막힌 이유(SSR)", () => {
     const html = queue([draft()])
     expect(html).toContain('title="초안 편집"')
     expect(html).not.toContain("체크까지 끝난 초안")
+  })
+
+  it("시트 기록이 있으면 초안 상태와 무관하게 삭제를 막고 그 사유를 우선 표시한다", () => {
+    const sheetWrites: Record<string, SheetWriteView> = { "d-1": { status: "refused", code: "conflict", message: "m", writtenAt: null, rowId: null } }
+    const html = queue([draft({ status: "checked" })], sheetWrites)
+    const deleteButton = html.match(/<button[^>]*aria-label="초안 삭제"[^>]*>/)?.[0]
+    expect(deleteButton).toContain("disabled")
+    expect(deleteButton).toContain(SHEET_WRITE_HISTORY_DELETE_MESSAGE)
+    expect(deleteButton).not.toContain("체크된 초안은 삭제할 수 없습니다")
   })
 
   it("단건 적용 확인은 '되돌릴 수 없음'이 아니라 되돌리기(상쇄) 경로를 말한다(Q-11)", () => {

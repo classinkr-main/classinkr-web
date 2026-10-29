@@ -313,7 +313,7 @@ describe("삭제 가드 — 반영을 시도한 초안은 삭제 대신 취소",
     const queue = readFileSync(join(process.cwd(), "components/admin/branch/ledger/DraftQueue.tsx"), "utf8")
     const button = queue.slice(queue.indexOf("onClick={() => setConfirmDeleteDraft(draft)}"), queue.indexOf("<Trash2"))
     expect(button).toMatch(/isRowBusy\(draft\.id\) \|\|\n\s+sheetBlocksDelete\(draft\.id\)\n/)
-    expect(button).toMatch(/title=\{sheetBlocksDelete\(draft\.id\) \? SHEET_WRITE_HISTORY_DELETE_MESSAGE : "초안 삭제"\}/)
+    expect(button).toMatch(/title=\{sheetBlocksDelete\(draft\.id\) \? SHEET_WRITE_HISTORY_DELETE_MESSAGE : draftDeleteDisabledReason\(draft\) \?\? "초안 삭제"\}/)
     expect(queue).toMatch(/const sheetBlocksDelete = \(id: string\) => blocksLedgerDelete\(sheetWrites\?\.\[id\]\)/)
     expect(SHEET_WRITE_HISTORY_DELETE_MESSAGE).toBe("시트 반영 시도 기록이 있는 초안은 삭제할 수 없습니다 — 취소로 정리해 주세요.")
   })
