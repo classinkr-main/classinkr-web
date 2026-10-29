@@ -4,6 +4,9 @@ import { checkCronAuth } from "@/lib/server/cron-auth"
 import { runAll } from "@/lib/branch/sync/run-all"
 import { completeBranchSync } from "@/lib/branch/sync/complete"
 
+// 수동 동기화 라우트와 같은 작업(시트 읽기 + 미러 교체 + 재캡처 + 링크 유지보수)이다.
+export const maxDuration = 300
+
 export async function GET(req: NextRequest) {
   // 인증은 아래 CRON_SECRET Bearer 하나뿐이다. 예전에 그 앞에 x-vercel-cron 헤더를
   // 필수로 요구하는 게이트가 있었는데, Vercel 이 크론 요청에 실제로 붙이는 건
@@ -18,7 +21,8 @@ export async function GET(req: NextRequest) {
   }
   const result = await runAll({ trigger: "cron" })
   const completed = await completeBranchSync(result)
-  // 연속 실패 알림은 하루 1회 도는 이 크론에서만 판정한다(수동 재시도마다 판정하면 같은 날 중복 발송).
+  // 연속 실패 알림은 이 크론에서만 판정한다(수동 재시도마다 판정하면 같은 날 중복 발송). 크론은 하루 3번
+  // 돌므로 판정 함수가 원천별 "그날 첫 크론 실패"일 때만 알린다(failure-alert.ts).
   // 알림 경로의 오류가 동기화 응답을 500으로 바꾸지 않게 가둔다.
   let failureAlerts: Awaited<ReturnType<typeof notifyBranchSyncFailureStreaks>> | undefined
   if (!result.ok && !result.skipped) {

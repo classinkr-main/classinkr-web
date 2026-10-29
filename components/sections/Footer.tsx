@@ -36,6 +36,11 @@ export function Footer() {
                             <li><Link href="/product/sw" className="hover:text-white transition-colors">소프트웨어</Link></li>
                             <li><Link href="/product/hw" className="hover:text-white transition-colors">하드웨어</Link></li>
                             <li>
+                                <TrackedLink href="/pricing" ctaId="footer_pricing" className="hover:text-white transition-colors">
+                                    요금 안내
+                                </TrackedLink>
+                            </li>
+                            <li>
                                 <TrackedLink href="/showroom" ctaId="footer_showroom" className="hover:text-white transition-colors">
                                     목동 쇼룸 방문 예약
                                 </TrackedLink>
@@ -52,6 +57,11 @@ export function Footer() {
                         <ul className="space-y-2">
                             <li><Link href="/docs" className="hover:text-white transition-colors">가이드와 도움말</Link></li>
                             <li><Link href="/docs/start" className="hover:text-white transition-colors">클래스인 시작하기</Link></li>
+                            <li>
+                                <TrackedLink href="/resources" ctaId="footer_resources" className="hover:text-white transition-colors">
+                                    자료실
+                                </TrackedLink>
+                            </li>
                             <li><Link href="/blog" className="hover:text-white transition-colors">블로그</Link></li>
                             <li><Link href="/events" className="hover:text-white transition-colors">행사·세미나</Link></li>
                             <li><Link href="/faq" className="hover:text-white transition-colors">자주 묻는 질문</Link></li>

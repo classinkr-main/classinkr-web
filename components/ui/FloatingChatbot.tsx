@@ -32,7 +32,7 @@ import {
 } from "@/lib/channel-talk"
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 import { trackEvent } from "@/lib/analytics"
-import { saveContactDraft } from "@/lib/contact/draft"
+import { stashContactPrefill } from "@/lib/tracking-paths"
 import { resolvePageContext, mergeStarters } from "@/lib/chatbot/page-context"
 import {
     CHATBOT_OPEN_EVENT,
@@ -302,6 +302,8 @@ function ConsultationBridge({
     const intentLabel = message.handoffIntent === "support" ? "실시간 상담 연결" : "도입 상담 남기기"
     const draftLineCount = draft.split("\n").length
     const topic = getHandoffTopic(message.handoffIntent)
+    // 대화 요약(draft)은 쿼리로 싣지 않는다 — 주소창·리퍼러·분석 URL 로 새어 나간다.
+    // 링크를 누를 때 sessionStorage 로 건네고 문의 페이지가 읽자마자 지운다.
     const contactHref = `/contact?${new URLSearchParams({
         source: "chatbot",
         topic,
@@ -391,11 +393,9 @@ function ConsultationBridge({
                 <Link
                     href={contactHref}
                     onClick={(event) => {
-                        try {
-                            if (saveContactDraft(window.sessionStorage, draft)) return
-                        } catch {
-                            // sessionStorage can be disabled by the browser.
-                        }
+                        // 요약은 주소가 아니라 sessionStorage 로 넘긴다. 저장이 막히면 조용히 빈 폼으로
+                        // 보내지 않고 복사해서 붙여 넣도록 안내한다.
+                        if (stashContactPrefill(draft)) return
                         event.preventDefault()
                         setToast({ type: "error", text: "요약을 보관하지 못했어요. 요약을 복사한 뒤 문의폼에 붙여 넣어 주세요." })
                     }}

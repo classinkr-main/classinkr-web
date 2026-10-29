@@ -1,15 +1,22 @@
 import type { Metadata } from "next"
 
+import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 import { BOARD_MODEL_NAMES, BOARD_SPEC_MODELS } from "@/lib/hardware/board-specs"
 
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://classin.co.kr").replace(/\/$/, "")
 export const SITE_NAME = "Classin"
-export const DEFAULT_SITE_TITLE = "Classin — 학원 운영의 새로운 기준"
+// 홈 <title>·루트 기본 제목·공유 카드 기본 제목. 2026-10-28 진단 추천안을 채택해 구매자가 검색하는 범주어를 병기한다.
+export const DEFAULT_SITE_TITLE = "클래스인 Classin | 학원 전자칠판·수업 녹화·운영 플랫폼"
 export const DEFAULT_OG_IMAGE_PATH = "/opengraph-image"
 export const DEFAULT_TWITTER_IMAGE_PATH = "/twitter-image"
 
 interface PublicMetadataOptions {
   title?: string
+  /**
+   * 레이아웃의 `%s | Classin` 템플릿을 건너뛰고 `<title>` 에 그대로 쓸 문자열.
+   * 지정하면 og:title · twitter:title 도 같은 문자열로 맞춘다(탭 제목과 공유 카드 제목의 어순 불일치 방지).
+   */
+  absoluteTitle?: string
   description: string
   path?: string
   keywords?: string[]
@@ -17,6 +24,15 @@ interface PublicMetadataOptions {
   /** 페이지 고유 OG/트위터 이미지 (절대 URL 또는 사이트 상대 경로). 없으면 기본 브랜드 이미지 사용 */
   image?: string
 }
+
+// 법인명·주소 정본은 components/sections/Footer.tsx 에 공개된 사업자 정보다. 우편번호는 근거가 없어 싣지 않는다.
+export const COMPANY_LEGAL_NAME = "이이오클래스인코리아 유한회사"
+const COMPANY_ADDRESS = {
+  streetAddress: "목동동로 233-1, 8층 806호 (목동, 드림타워)",
+  addressLocality: "양천구",
+  addressRegion: "서울특별시",
+  addressCountry: "KR",
+} as const
 
 export const ORGANIZATION_ID = `${SITE_URL}/#organization`
 export const WEBSITE_ID = `${SITE_URL}/#website`
@@ -32,6 +48,7 @@ export function toAbsoluteUrl(path: string) {
 
 export function createPublicMetadata({
   title,
+  absoluteTitle,
   description,
   path = "/",
   keywords,
@@ -39,12 +56,12 @@ export function createPublicMetadata({
   image,
 }: PublicMetadataOptions): Metadata {
   const canonical = toAbsoluteUrl(path)
-  const socialTitle = title ? `${title} | ${SITE_NAME}` : DEFAULT_SITE_TITLE
+  const socialTitle = absoluteTitle || (title ? `${title} | ${SITE_NAME}` : DEFAULT_SITE_TITLE)
   const ogImage = toAbsoluteUrl(image ?? DEFAULT_OG_IMAGE_PATH)
   const twitterImage = toAbsoluteUrl(image ?? DEFAULT_TWITTER_IMAGE_PATH)
 
   return {
-    title,
+    title: absoluteTitle ? { absolute: absoluteTitle } : title,
     description,
     ...(keywords ? { keywords } : {}),
     alternates: {
@@ -76,14 +93,43 @@ export function createPublicMetadata({
   }
 }
 
+/**
+ * 검색엔진 소유확인 메타태그(`metadata.verification`)를 만든다.
+ * 검색 콘솔(Google Search Console, 네이버 서치어드바이저)이 발급한 값만 받으며 비밀 값이 아니다.
+ * 값이 비어 있으면 해당 키를 아예 넣지 않고, 둘 다 비면 undefined 를 돌려준다.
+ */
+export function createSiteVerification({
+  google,
+  naver,
+}: {
+  google?: string | null
+  naver?: string | null
+}): Metadata["verification"] | undefined {
+  const googleCode = google?.trim()
+  const naverCode = naver?.trim()
+  if (!googleCode && !naverCode) return undefined
+
+  return {
+    ...(googleCode ? { google: googleCode } : {}),
+    ...(naverCode ? { other: { "naver-site-verification": naverCode } } : {}),
+  }
+}
+
 export function createOrganizationJsonLd(): JsonLdNode {
   return {
     "@context": "https://schema.org",
     "@type": "Organization",
     "@id": ORGANIZATION_ID,
     name: SITE_NAME,
+    alternateName: ["클래스인", "ClassIn"],
+    legalName: COMPANY_LEGAL_NAME,
+    description: CLASSIN_POSITIONING.oneLine,
     url: SITE_URL,
     logo: toAbsoluteUrl("/images/logo.png"),
+    address: {
+      "@type": "PostalAddress",
+      ...COMPANY_ADDRESS,
+    },
     brand: {
       "@type": "Brand",
       "@id": BRAND_ID,
@@ -108,15 +154,17 @@ export function createWebsiteJsonLd(): JsonLdNode {
     "@type": "WebSite",
     "@id": WEBSITE_ID,
     name: SITE_NAME,
+    alternateName: "클래스인",
     url: SITE_URL,
     inLanguage: "ko-KR",
     publisher: { "@id": ORGANIZATION_ID },
-    // 사이트 내 검색(Sitelinks Search Box)은 /docs 가이드 검색이 실체다.
+    // 사이트 내 검색(Sitelinks Search Box)은 /docs 가이드 검색이 실체다. 색인 대상인 /docs 가 아니라
+    // 결과 페이지(/docs/search, noindex 이며 q 를 처리한다)를 가리켜야 검색 결과가 색인에 섞이지 않는다.
     potentialAction: {
       "@type": "SearchAction",
       target: {
         "@type": "EntryPoint",
-        urlTemplate: `${SITE_URL}/docs?q={search_term_string}`,
+        urlTemplate: `${SITE_URL}/docs/search?q={search_term_string}`,
       },
       "query-input": "required name=search_term_string",
     },
@@ -176,6 +224,29 @@ export function createFaqJsonLd(items: Array<{ question: string; answer: string 
   }
 }
 
+// 블로그 저자 칸은 자유 텍스트라 개인명("박지현")과 팀·브랜드명("ClassIn 팀", "Classin", "ClassIn Korea")이 섞여 있다.
+// 팀명을 Person 으로 내보내면 구조화 데이터가 사실과 달라지므로 이름 모양으로 Organization 을 가려낸다.
+const ORGANIZATION_AUTHOR_PATTERNS: readonly RegExp[] = [
+  // 끝이 "팀"/"Team" — "ClassIn 팀", "Classin 팀", "ClassIn Korea 팀", "Marketing Team"
+  /(?:팀|\bteam)$/i,
+  // 브랜드명만 — "ClassIn", "Classin Korea", "클래스인", "클래스인 코리아"
+  /^(?:class\s?in|클래스\s?인)(?:\s*(?:korea|코리아))?$/i,
+  // 법인명 — "이이오클래스인코리아 유한회사"
+  /(?:유한회사|주식회사)$/,
+]
+
+export function isOrganizationAuthor(name: string | null | undefined): boolean {
+  const normalized = (name ?? "").replace(/\s+/g, " ").trim()
+  if (!normalized) return false
+  return ORGANIZATION_AUTHOR_PATTERNS.some((pattern) => pattern.test(normalized))
+}
+
+function createArticleAuthorJsonLd(authorName: string): JsonLdNode {
+  return isOrganizationAuthor(authorName)
+    ? { "@type": "Organization", name: authorName, url: SITE_URL }
+    : { "@type": "Person", name: authorName }
+}
+
 export function createArticleJsonLd({
   path,
   title,
@@ -184,6 +255,7 @@ export function createArticleJsonLd({
   datePublished,
   dateModified,
   authorName,
+  type = "Article",
 }: {
   path: string
   title: string
@@ -192,10 +264,14 @@ export function createArticleJsonLd({
   datePublished?: string
   dateModified?: string
   authorName?: string
+  /** 블로그 상세는 BlogPosting(Article 의 하위 유형), 문서 상세는 기본값 Article. */
+  type?: "Article" | "BlogPosting"
 }): JsonLdNode {
+  const normalizedAuthorName = authorName?.trim()
+
   return {
     "@context": "https://schema.org",
-    "@type": "Article",
+    "@type": type,
     "@id": `${toAbsoluteUrl(path)}#article`,
     mainEntityOfPage: toAbsoluteUrl(path),
     headline: title,
@@ -204,7 +280,7 @@ export function createArticleJsonLd({
     ...(imageUrl ? { image: toAbsoluteUrl(imageUrl) } : {}),
     ...(datePublished ? { datePublished } : {}),
     ...(dateModified ? { dateModified } : {}),
-    ...(authorName ? { author: { "@type": "Person", name: authorName } } : {}),
+    ...(normalizedAuthorName ? { author: createArticleAuthorJsonLd(normalizedAuthorName) } : {}),
     publisher: { "@id": ORGANIZATION_ID },
   }
 }

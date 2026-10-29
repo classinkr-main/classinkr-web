@@ -58,6 +58,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - **하드웨어·오더·매출 연결 로직.** 리드→고객→견적→오더→출고→매출을 앱 데이터로 묶는 과도기 로직과, 하드웨어·매출 구글 시트를 어드민으로 편입하는 순서(T0~T4)
 - [active/hardware-inventory-process-gap-2026-10-28.md](./active/hardware-inventory-process-gap-2026-10-28.md)
   - 하드웨어 재고관리 프로세스 정의서(2026-10-27)와 현재 구현의 차이, 결정 대기 질문, 만드는 순서
+- [hardware-ops/distributor-settlement.md](./hardware-ops/distributor-settlement.md)
+  - **하드웨어 C방식/H방식 총판 정산.** 총판용 견적서 발행(고객 동의·설치 완료·직접), 원가 미수금, 방식별 매출 원장 초안 시점
 - [active/erp-blueprint-2026-06-22.md](./active/erp-blueprint-2026-06-22.md)
   - 어드민 → 지사 운영 OS(ERP) 청사진 & 실행 로드맵(Account 360 스파인·귀속·노션 캘린더 라이브 연동·거버넌스 결정)
 - [active/marketing-tab-dashboard-restructure-2026-09-14.md](./active/marketing-tab-dashboard-restructure-2026-09-14.md)
@@ -109,6 +111,12 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - **공개 사이트 전수 점검 + 모션·디자인 디벨롭 기획.** 홈·셸·제품·콘텐츠·전환·랜딩·쿠키 동의의 P0~P2(운영 재현 표기), 운영자 결정 D1~D8, 모션 토큰·Act별 안무·Phase 0~3, 실행 웨이브 W0~W4
 - [active/public-site-design-language-2026-10-26.md](./active/public-site-design-language-2026-10-26.md)
   - **공개 사이트 디자인 언어 「편집 지면 · OS판」(승인 대기).** 폰트·색·표면·카드 모션·아이콘·이미지·컨트롤·레이아웃의 방향과 운영자 결정 V1~V9, 정본 규칙 C01~C28·X01~X16, 구현 단계 P0~P5와 되돌림 기준. 상세 스펙 7종은 같은 이름 폴더
+- [active/seo-aeo-improvement-worklist-2026-10-28.md](./active/seo-aeo-improvement-worklist-2026-10-28.md)
+  - **SEO·AEO 개선 워크리스트.** 외부 예비 진단(2026-10-27)을 코드와 대조해 수치·Zoom 비교·요금 조건·홈 메타·허브 링크·답변형 FAQ·canonical/lastmod·GA4 계측을 항목별로 "반영 / 코드 가능 / 사람 확인 / 콘솔"로 분류. 결정 대기 D1~D13, 운영자 콘솔 체크리스트, 90일 실행 순서
+- [active/seo-analytics-console-runbook-2026-10-28.md](./active/seo-analytics-console-runbook-2026-10-28.md)
+  - **검색·분석 콘솔 실행 런북.** GSC 도메인 속성·네이버 서치어드바이저·GA4(향상된 측정 OFF·데이터 수정·맞춤 측정기준·주요 이벤트·MP 중복 결정)·GTM 점검·Google Ads·Vercel 환경변수를 순서·값·검증 시나리오와 함께 정리
+- [active/integration-followups-2026-10-28.md](./active/integration-followups-2026-10-28.md)
+  - **2026-10-28 통합 병합 기록.** main + 열린 PR 7건(#34·#38~#42·#44) + 10-28 핫픽스를 한 브랜치로 합치며 내린 결정(정본 선택·순서·모듈 통합), 운영 적용 대기 마이그레이션 4건, 병합 중 드러난 후속 과제 F1~F10
 - [active/docs-center-db-design.md](./active/docs-center-db-design.md)
   - 공개 가이드/매뉴얼/도움말/문제 해결/업데이트 문서센터와 챗봇 지식 베이스 설계
 - [active/docs-center-content-guidelines.md](./active/docs-center-content-guidelines.md)
@@ -160,6 +168,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - ADR 작성 규칙과 초기 백로그
 - [adr/ADR-010-operational-failure-containment.md](./adr/ADR-010-operational-failure-containment.md)
   - **Cron 인증·복구 실행·Webhook·외부 의존성의 폭주와 유실 방지 결정.**
+- [adr/ADR-011-rev-sheet-writeback-from-ledger.md](./adr/ADR-011-rev-sheet-writeback-from-ledger.md)
+  - **매출 장부 반영 때 '2. REV' 주차 칸에도 쓰는 결정.** 쓰는 칸·색, 지난 주차 거절, 시트 우선 충돌 판정, 행 ID, Production 전용 스위치, 예전 "역방향 쓰기 비권장" 대체 범위
 
 ## 4. Domains
 
@@ -170,6 +180,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
 
 - [active/supabase-korea-migration-status.md](./active/supabase-korea-migration-status.md)
   - 2026-09-14 한국 리전 이관 결과, 현재 운영 프로젝트, 원본 쓰기 차단 및 후속 배포 주의점.
+- [active/rev-sheet-writeback-runbook.md](./active/rev-sheet-writeback-runbook.md)
+  - **REV 시트 쓰기 런북.** 장부 반영 → '2. REV' 쓰기의 켜기·끄기 순서, 행 ID 스크립트(`npm run rev:row-ids`) 미리보기·적용, 결과 코드 대응, 감사 조회 SQL
 - [active/db-migration-runbook.md](./active/db-migration-runbook.md)
   - **DB 마이그레이션 적용 런북.** 수동 적용 절차, `check:db` 스키마 계약, 서울 프로젝트 기준 미적용 목록(배포 전 필수 표시), 적용 보류 중인 마이그레이션
 - [active/integration-followups-2026-09-21.md](./active/integration-followups-2026-09-21.md)

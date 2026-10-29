@@ -76,13 +76,17 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
       const data = await res.json()
 
       if (res.ok && data.ok) {
-        trackEvent("submit_newsletter", {
-          source: "blog_lead_magnet",
-          lead_magnet: leadMagnet.slug,
-          post_slug: postSlug,
-          gate: leadMagnet.gate,
-          event_id: data.conversionEventId,
-        })
+        // 60초 내 같은 이메일 재제출은 서버가 stored:false 로 돌려준다 — 구독 전환으로 다시 세지 않는다.
+        if (data.stored !== false) {
+          trackEvent("submit_newsletter", {
+            source: "blog_lead_magnet",
+            form_type: "lead_magnet",
+            lead_magnet: leadMagnet.slug,
+            post_slug: postSlug,
+            gate: leadMagnet.gate,
+            event_id: data.conversionEventId,
+          })
+        }
         setSubmitted(true)
       } else {
         setError(data.error || "신청에 실패했습니다. 잠시 후 다시 시도해주세요.")
@@ -106,6 +110,20 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
         source: "blog_lead_magnet",
         postSlug,
       })
+      // 실제 다운로드 시작 직후 1회. 서명 URL·이메일은 싣지 않는다. 픽셀은 건너뛴다 —
+      // Meta 에서 download_materials 가 Lead 로 매핑돼 구독(CompleteRegistration)과 이중으로 잡힌다.
+      trackEvent(
+        "download_materials",
+        {
+          asset_id: leadMagnet.slug,
+          lead_magnet: leadMagnet.slug,
+          gate: leadMagnet.gate,
+          source: "blog_lead_magnet",
+          post_slug: postSlug,
+          page_path: window.location.pathname,
+        },
+        { skipMarketingPixels: true }
+      )
       window.location.assign(result.url)
     } catch (downloadError) {
       if (
@@ -124,7 +142,7 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
     } finally {
       setDownloading(false)
     }
-  }, [downloading, leadMagnet.published, leadMagnet.slug, submitted, email, postSlug])
+  }, [downloading, leadMagnet.gate, leadMagnet.published, leadMagnet.slug, submitted, email, postSlug])
 
   useEffect(() => {
     if (resumedRef.current) return

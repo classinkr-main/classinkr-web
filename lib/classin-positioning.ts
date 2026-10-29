@@ -8,8 +8,10 @@ export const CLASSIN_POSITIONING = {
   categoryName: "수업 시스템 OS",
   oneLine:
     "Classin은 전자칠판, 수업 녹화, EDB 교안, LMS, 학생 관리, 관리자 데이터를 한 흐름으로 묶는 수업 시스템 OS입니다.",
+  // 홈·루트 기본 meta description. 2026-10-28 SEO·AEO 진단 추천안을 채택 — 검색 범주어(전자칠판·수업 녹화)와
+  // 다음 행동(도입 방법·요금 상담)을 앞에 둔다. 카테고리명 "수업 시스템 OS"는 본문(oneLine·hero)에서 유지한다.
   metadataDescription:
-    "Classin은 전자칠판, 녹화, EDB 교안, LMS, 학생 관리, 관리자 데이터를 하나로 연결해 학원 수업 품질을 표준화하는 수업 시스템 OS입니다.",
+    "전자칠판, 수업 녹화, 교안, LMS와 관리자 데이터를 연결하는 클래스인. 학원 규모와 운영 방식에 맞는 도입 방법과 요금 상담을 확인하세요.",
   heroEyebrow: "학원 수업 운영을 하나로, 수업 시스템 OS",
   heroHeadline: "좋은 수업을, 강사의 개인기에서 학원의 시스템으로",
   heroBody:

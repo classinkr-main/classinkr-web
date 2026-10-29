@@ -122,7 +122,7 @@ describe("runDataQuality", () => {
     expect(out.filter((issue) => issue.id === "DQ-7")).toEqual([])
   })
 
-  // REV_RANGE 상한(현재 '2. REV'!A1:CF1000 → 1000행) 사용률 규칙(DQ-15).
+  // REV_RANGE 상한(현재 '2. REV'!A1:CZ1000 → 1000행) 사용률 규칙(DQ-15).
   describe("DQ-15 REV range usage", () => {
     it("does not fire below the 90% warn threshold", () => {
       const out = runDataQuality({

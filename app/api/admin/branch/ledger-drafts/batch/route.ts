@@ -7,8 +7,9 @@ import {
   parseLedgerDraftCreateBody,
   parseLedgerDraftUpdateBody,
 } from "@/lib/branch/ledger-draft-body"
+import { applyLedgerDraftsWithSheetWrite, type ApplyItemResult } from "@/lib/branch/sheet-writeback/apply-service"
+import type { SheetWriteCode } from "@/lib/branch/sheet-writeback/messages"
 import {
-  applyBranchSalesLedgerDraft,
   createBranchSalesLedgerDraft,
   isBranchSalesLedgerDraftsNotReadyError,
   isBranchSalesLedgerDuplicateActiveCorrectionError,
@@ -32,6 +33,11 @@ function adminActorName(admin: { name?: string; userId?: string; role: string })
   return admin.name?.trim() || admin.userId || admin.role
 }
 
+// REV 시트 쓰기(ADR-011) — action=apply 는 반영 서비스 한 번(시트 다시 읽기 8s + 쓰기·되읽기 8s + 되돌리기 8s +
+// DB)으로 끝난다. 그 최악 합이 이 상한 안에 든다. 서비스는 켜짐일 때 한 번에 50건(REV_WRITE_MAX_DRAFTS)까지만
+// 시트로 보내고 나머지는 항목별 400 으로 돌려준다 — 클라이언트가 나눠 보낸다.
+export const maxDuration = 60
+
 // 요청 항목 shape(문서화용 — 실제 검증은 processBatchWriteItem이 런타임에 수행한다):
 //   | { op: "create"; input: Record<string, unknown> }
 //   | { op: "update"; id: string; input: Record<string, unknown>; expectedUpdatedAt?: string }
@@ -49,6 +55,12 @@ type BatchWriteResult =
 type BatchActionResult =
   | { id: string; ok: true; status: 200; draft: BranchSalesLedgerDraft }
   | { id: string; ok: false; status: 400 | 404 | 409 | 503 | 500; error: string; draft?: BranchSalesLedgerDraft }
+
+// action=apply 항목 — 시트 쓰기 결과(sheet: 코드 + 고정 문구)를 늘 싣는다. status 는 서비스의 HTTP 상태 그대로
+// (202 = 시트 반영 여부 모름 · ok:false, 409 거절·충돌, 502 시트 호출 실패 등).
+type BatchApplyResult =
+  | { id: string; ok: true; status: 200; draft: BranchSalesLedgerDraft; sheet: ApplyItemResult["sheet"] }
+  | { id: string; ok: false; status: number; error: string; draft?: BranchSalesLedgerDraft; sheet: ApplyItemResult["sheet"] }
 
 /**
  * 항목 단위 예외 번역 — 단건 라우트들의 카탈로그·문구를 그대로 재사용한다(notReady->503,
@@ -78,6 +90,13 @@ function translateWriteError(
 function summarize(results: ReadonlyArray<{ ok: boolean }>) {
   const succeeded = results.filter((result) => result.ok).length
   return { total: results.length, succeeded, failed: results.length - succeeded }
+}
+
+/** 시트 쓰기 코드별 건수(요청 항목 기준 — 같은 id 가 두 번 오면 두 번 센다). */
+function countSheetCodes(results: ReadonlyArray<{ sheet: { code: SheetWriteCode } }>) {
+  const counts: Partial<Record<SheetWriteCode, number>> = {}
+  for (const result of results) counts[result.sheet.code] = (counts[result.sheet.code] ?? 0) + 1
+  return counts
 }
 
 async function processCreateItem(input: Record<string, unknown>, index: number, actor: string): Promise<BatchWriteResult> {
@@ -269,22 +288,20 @@ async function processCheckId(id: string, actor: string): Promise<BatchActionRes
   }
 }
 
-async function processApplyId(id: string, actor: string): Promise<BatchActionResult> {
-  try {
-    const draft = await applyBranchSalesLedgerDraft(id, actor)
-    if (!draft) {
-      return { id, ok: false, status: 409, error: "체크 완료 초안만 적용할 수 있습니다." }
-    }
-    return { id, ok: true, status: 200, draft }
-  } catch (error) {
-    return {
-      id,
-      ...translateWriteError(
-        "[PATCH /api/admin/branch/ledger-drafts/batch:apply]",
-        error,
-        "Failed to update sales ledger draft",
-      ),
-    }
+/**
+ * 반영 서비스 결과 → 배치 항목. 서비스는 항목 오류를 던지지 않고 결과에 담는다(마이그레이션 미적용 503·활성 정정
+ * 중복 409·0 이하 금액 400·체크 완료 아님 409 — 이 파일 translateWriteError 와 같은 상태·문구). 성공인데
+ * draft 가 없는 결과는 성공으로 숨기지 않는다.
+ */
+function toBatchApplyResult(item: ApplyItemResult): BatchApplyResult {
+  if (item.ok && item.draft) return { id: item.id, ok: true, status: 200, draft: item.draft, sheet: item.sheet }
+  return {
+    id: item.id,
+    ok: false,
+    status: item.ok ? 500 : item.status,
+    error: item.error ?? item.sheet.message,
+    ...(item.draft ? { draft: item.draft } : {}),
+    sheet: item.sheet,
   }
 }
 
@@ -316,11 +333,27 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "ids must be non-empty strings" }, { status: 400 })
     }
 
-    // 중복 id는 그대로(멱등) 처리한다 — updateBranchSalesLedgerDraft/applyBranchSalesLedgerDraft가
-    // 이미 멱등이라 같은 id를 두 번 처리해도 결과가 안전하다.
+    if (action === "apply") {
+      // 반영의 유일한 진입점(tests/branch/sheet-write-surface.test.ts 래칫) — 묶음 전체를 서비스에 한 번 넘긴다
+      // (켜짐이면 시트를 한 번 읽고 batchUpdate 도 한 번). 결과는 요청 ids 순서 그대로다.
+      const { mode, results: applied } = await applyLedgerDraftsWithSheetWrite(ids as string[], actor)
+      const results = (ids as string[]).map((id, index) => {
+        const item = applied[index]?.id === id ? applied[index] : applied.find((entry) => entry.id === id)
+        if (!item) throw new Error(`apply-service returned no result for draft ${id}`)
+        return toBatchApplyResult(item)
+      })
+      return NextResponse.json({
+        results,
+        summary: { ...summarize(results), sheet: countSheetCodes(results) },
+        sheetWrite: { mode },
+      })
+    }
+
+    // 중복 id는 그대로(멱등) 처리한다 — updateBranchSalesLedgerDraft가 이미 멱등이라 같은 id를 두 번
+    // 처리해도 결과가 안전하다.
     const results: BatchActionResult[] = []
     for (const id of ids as string[]) {
-      results.push(action === "check" ? await processCheckId(id, actor) : await processApplyId(id, actor))
+      results.push(await processCheckId(id, actor))
     }
 
     return NextResponse.json({ results, summary: summarize(results) })

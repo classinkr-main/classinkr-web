@@ -1,19 +1,25 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { isSensitiveTrackingPath } from "@/lib/analytics-path"
 import { applyConsentMode } from "@/lib/consent/consent"
 import { trackEvent } from "@/lib/analytics"
+import { isAnalyticsTagExcludedPath, isTrackingExcludedPath } from "@/lib/tracking-paths"
 
 afterEach(() => vi.unstubAllGlobals())
 
 describe("tracking privacy boundaries", () => {
-  it.each(["/share/quote/token", "/share/contract/token", "/receipt/order", "/checkout/success", "/unsubscribe", "/admin", "/account", "/auth/callback", "/login"])("excludes %s", (path) => {
-    expect(isSensitiveTrackingPath(path)).toBe(true)
+  it.each(["/share/quote/token", "/share/contract/token", "/receipt/order", "/unsubscribe", "/admin", "/account", "/auth/callback", "/login"])("excludes %s", (path) => {
+    expect(isTrackingExcludedPath(path)).toBe(true)
+    expect(isAnalyticsTagExcludedPath(path)).toBe(true)
+  })
+
+  it("keeps only gtag on checkout so payment conversions still arrive (URL is sanitized)", () => {
+    expect(isTrackingExcludedPath("/checkout/success")).toBe(false)
+    expect(isAnalyticsTagExcludedPath("/checkout/success")).toBe(true)
   })
 
   it("does not mistake unrelated path prefixes for sensitive routes", () => {
-    expect(isSensitiveTrackingPath("/shared-resources")).toBe(false)
-    expect(isSensitiveTrackingPath("/resources")).toBe(false)
+    expect(isTrackingExcludedPath("/shared-resources")).toBe(false)
+    expect(isTrackingExcludedPath("/resources")).toBe(false)
   })
 
   it("does not send application events while a sensitive page is open", () => {

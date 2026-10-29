@@ -38,6 +38,8 @@
 `DEFAULT_HIDDEN_HREFS`, 나머지는 접힌 "기타"다. 개수는 이 문서에 적지 않는다 — 상수 위 주석이 정본이다.
 AI 올인원(`/admin/ai`)은 시안 스위치(`NEXT_PUBLIC_ADMIN_AI_PREVIEW=1`, `lib/admin-ai/preview.ts`)를 켰을 때만
 메뉴와 라우트에 생긴다(기본 꺼짐). 역할로 항목을 거르지 않으며 "차단(deny)" 배치는 타입에서 제거됐다.
+마케팅 프로젝트는 2026-10 캠페인 관리(`/admin/campaigns/manage`)의 "프로젝트" 탭으로 합쳐져 사이드바 항목에서
+빠졌다(옛 주소 `/admin/campaigns/projects`는 `?view=projects`로 넘기는 스텁, ⌘K는 마케팅 허브 자식 명령).
 
 **배치는 두 자리(상시·기타) + 개인 숨김이다. 숨김은 도달성을 바꾸지 않는다** — 숨긴 탭도 ⌘K·주소로
 열리고, `getAccessibleAdminNavItems`는 항상 전체를 돌려준다(⌘K·active 판정·모바일 헤더가 의존).
@@ -79,7 +81,8 @@ SUPER_ADMIN은 설정 › 회원으로 편집한다. 레거시 `deny` 값은 `fo
 | 공개 챗봇·CS 운영 | RAG, 공개 챗봇, 외부 CS 대시보드 | [챗봇 플레이북](playbook/05-chatbot.md), [CS 콘솔 IA](cs-admin-console-ia-2026-07-27.md) |
 | 갈매봇·원격 오더 | 어드민 전역 AI 위젯, `/admin/ai`(시안 스위치, 기본 꺼짐), 오더 카드·오더 등급 | [갈매봇 위젯·원격 오더 기획](admin-ai-widget-remote-order-plan-2026-09-28.md). 셸 연결은 Admin 코어, 대화는 챗봇/CS, 오더 핸들러는 해당 도메인 |
 | 플랫폼·데이터 | Supabase, migration, cron, 알림, Portal V2 | [플랫폼 플레이북](playbook/06-platform-data.md), [운영 장애·Cron·Webhook 지침](operational-failure-handling-guidelines.md), [ADR-010](../adr/ADR-010-operational-failure-containment.md), [DB 마이그레이션 런북](db-migration-runbook.md), [Supabase 운영 복구·하드닝 계획](supabase-operational-recovery-hardening-plan-2026-09-01.md) |
-| KR Team·매출 장부 | `/admin/branch`, `/admin/branch/ledger`, 동기화·정합성 | [Classin KR Team 스킬](../../.codex/skills/classin-kr-team/SKILL.md), [월별 목표·채움 차트](revenue-monthly-goal-chart.md) |
+| 하드웨어 C/H 방식·총판 정산 | `/admin/quotes` 견적 상세 총판 정산, 총판 미수금 탭, 총판용 견적서, 하드웨어 매출 인식 시점 | [총판 정산 — C방식/H방식](../hardware-ops/distributor-settlement.md) |
+| KR Team·매출 장부 | `/admin/branch`, `/admin/branch/ledger`, 동기화·정합성 | [Classin KR Team 스킬](../../.codex/skills/classin-kr-team/SKILL.md), [월별 목표·채움 차트](revenue-monthly-goal-chart.md). 장부 반영 때 '2. REV' 시트 쓰기는 [ADR-011](../adr/ADR-011-rev-sheet-writeback-from-ledger.md)·[REV 시트 쓰기 런북](rev-sheet-writeback-runbook.md) — 반영은 `lib/branch/sheet-writeback/apply-service.ts` 하나로만 |
 | 하드웨어 재고·입출고 | `/admin/hardware`, 시트 가져오기, 오더·매출 연결 | [하드웨어 SCM 탭 기준](hardware-scm-tab-reference.md), [하드웨어·오더·매출 연결 로직](hardware-order-revenue-link-plan-2026-10-22.md), [재고관리 프로세스 정의서 차이·이어서 할 작업](hardware-inventory-process-gap-2026-10-28.md) |
 
 Admin 코어는 `app/api/admin/*`, `components/admin/*`, `lib/repositories/*` 전체를 소유하지 않는다.

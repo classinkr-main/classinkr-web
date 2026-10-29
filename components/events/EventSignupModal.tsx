@@ -3,7 +3,7 @@
 import React, { useRef, useState } from "react"
 import { CheckCircle2, Loader2 } from "lucide-react"
 
-import { trackDemoRequestAdsConversion, trackEvent } from "@/lib/analytics"
+import { trackEvent, trackLeadSubmitted } from "@/lib/analytics"
 import { submitLead } from "@/lib/submitLead"
 import { useToast } from "@/components/ui/toast"
 import { Button } from "@/components/ui/button"
@@ -85,17 +85,19 @@ export function EventSignupModal({
                 eventSlug,
                 website: (formData.get("website") as string) || undefined,
             })
-            trackEvent("submit_demo_request", {
+            // 내부 source 는 서버 경로와 같은 contact_page 그대로, GA4 갈래는 form_type=event.
+            trackLeadSubmitted({
+                formType: "event",
                 source: "contact_page",
-                lead_id: data.leadId,
                 stored: data.stored,
-                event_slug: eventSlug,
-                event_id: data.conversionEventId,
-            })
-            trackDemoRequestAdsConversion({
-                leadId: data.leadId,
+                dedupeKey: data.conversionEventId ?? data.leadId,
                 eventId: data.conversionEventId,
-                eventSlug,
+                transactionId: data.leadId,
+                params: {
+                    lead_id: data.leadId,
+                    stored: data.stored,
+                    event_slug: eventSlug,
+                },
             })
             toast.success("행사 신청이 접수되었어요")
             setSubmitted(true)

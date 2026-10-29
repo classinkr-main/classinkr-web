@@ -8,6 +8,8 @@ import type { InternalCsMessage, ReviewChecks } from "../types"
 // 양보가 대화 패널에만 걸려 있으므로 워크스페이스는 이 드로어를 대화 탭에만 붙인다
 // (정본: docs/active/cs-admin-console-ia-2026-07-27.md §9 "검토 드로어의 기준과 범위").
 // 승인은 최종 답변을 고정하고 클립보드에 복사할 뿐, 자동 외부 전송은 하지 않는다(하단 경계 문구).
+// 최종 답변 칸은 AI 내부 분석으로 미리 채우지 않는다 — 승인에는 담당자가 별도로 쓴 고객 전달 문안이
+// 필수다(워크스페이스 submitReview + PATCH messages/[messageId] 라우트가 같은 규칙으로 막는다).
 export default function ReviewDrawer({
   reviewChecks,
   finalDraft,
@@ -92,8 +94,8 @@ export default function ReviewDrawer({
 
           <div className="px-5 py-5">
             <div className="flex items-center justify-between gap-3">
-              <label htmlFor="internal-cs-final-answer" className="text-[13px] font-semibold">최종 답변</label>
-              <span className="text-[10px] text-[#A39E98]">외부 전달용</span>
+              <label htmlFor="internal-cs-final-answer" className="text-[13px] font-semibold">고객 전달용 최종 답변</label>
+              <span className="text-[10px] text-[#A39E98]">내부 분석과 별도 작성</span>
             </div>
             <textarea
               id="internal-cs-final-answer"
@@ -101,7 +103,7 @@ export default function ReviewDrawer({
               onChange={(event) => onFinalDraftChange(event.target.value)}
               rows={12}
               className="mt-3 w-full resize-y rounded-md border border-black/[0.16] bg-white px-3 py-3 text-[12px] leading-5 text-[#31302E] outline-none focus:border-[#084734]/50 focus:ring-2 focus:ring-[#084734]/10"
-              placeholder="AI 초안을 검토하고 최종 답변으로 다듬어 주세요."
+              placeholder="위 내부 분석을 그대로 복사하지 말고, 확인된 사실만으로 고객 전달 문안을 작성해 주세요."
             />
             <div className="mt-4">
               <label htmlFor="internal-cs-review-note" className="text-[12px] font-semibold text-[#31302E]">검토 메모</label>

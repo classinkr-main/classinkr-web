@@ -179,6 +179,8 @@ describe("POST /api/share/quote/[token]/accept — 담당자 알림", () => {
     emitNotificationEvent?: ReturnType<typeof vi.fn>
     alreadyAcceptedAt?: string | null
     order?: { status: "pending_approval" | "approved" } | null
+    /** 총판 견적서 자동 발행 결과. null = Safely 래퍼가 실패를 삼킨 경우. */
+    distributor?: { status: string } | null
   }) {
     vi.resetModules()
 
@@ -220,10 +222,30 @@ describe("POST /api/share/quote/[token]/accept — 담당자 알림", () => {
       .fn()
       .mockResolvedValue(options.order ? { order: options.order, created: true } : null)
     vi.doMock("@/lib/repositories/sales-orders", () => ({ ensureSalesOrderForAcceptedQuoteSafely }))
+    const issueDistributorSettlementOnAcceptSafely = vi
+      .fn()
+      .mockResolvedValue(options.distributor === undefined ? { status: "not_configured" } : options.distributor)
+    vi.doMock("@/lib/server/distributor-settlement-issue", () => ({ issueDistributorSettlementOnAcceptSafely }))
 
     const route = await import("@/app/api/share/quote/[token]/accept/route")
-    return { route, emitNotificationEvent, ensureQuoteInteractionLog, ensureSalesOrderForAcceptedQuoteSafely }
+    return {
+      route,
+      emitNotificationEvent,
+      ensureQuoteInteractionLog,
+      ensureSalesOrderForAcceptedQuoteSafely,
+      issueDistributorSettlementOnAcceptSafely,
+    }
   }
+
+  it("수락하면 총판 견적서 자동 발행을 시도한다(정산 설정이 없으면 서비스가 건너뛴다)", async () => {
+    const { route, issueDistributorSettlementOnAcceptSafely } = await loadRoute({})
+
+    const response = await route.POST(buildRequest(), { params: Promise.resolve({ token: "tok123" }) })
+
+    expect(response.status).toBe(200)
+    expect(issueDistributorSettlementOnAcceptSafely).toHaveBeenCalledTimes(1)
+    expect(issueDistributorSettlementOnAcceptSafely.mock.calls[0][0]).toMatchObject({ quoteDocumentId: DOCUMENT.id })
+  })
 
   it("최초 수락이면 어드민에게 action_required 알림을 보낸다", async () => {
     const { route, emitNotificationEvent } = await loadRoute({})
@@ -301,5 +323,60 @@ describe("POST /api/share/quote/[token]/accept — 담당자 알림", () => {
       quoteDocumentId: DOCUMENT.id,
       acceptedVia: "customer_link",
     })
+  })
+
+  // 오더(2026-10-22)와 총판 견적서 자동 발행(2026-10-23)이 같은 수락 핸들러에서 함께 돈다.
+  it("최초 수락이면 오더 → 총판 견적서 → 담당자 알림 순서로 모두 실행한다", async () => {
+    const {
+      route,
+      emitNotificationEvent,
+      ensureSalesOrderForAcceptedQuoteSafely,
+      issueDistributorSettlementOnAcceptSafely,
+    } = await loadRoute({ order: { status: "pending_approval" } })
+
+    const response = await route.POST(buildRequest(), { params: Promise.resolve({ token: "tok123" }) })
+
+    expect(response.status).toBe(200)
+    const orderAt = ensureSalesOrderForAcceptedQuoteSafely.mock.invocationCallOrder[0]
+    const distributorAt = issueDistributorSettlementOnAcceptSafely.mock.invocationCallOrder[0]
+    const notifyAt = emitNotificationEvent.mock.invocationCallOrder[0]
+    expect(orderAt).toBeLessThan(distributorAt)
+    expect(distributorAt).toBeLessThan(notifyAt)
+  })
+
+  it("오더 생성이 실패해도(null) 총판 견적서 발행과 담당자 알림은 그대로 진행한다", async () => {
+    const { route, emitNotificationEvent, issueDistributorSettlementOnAcceptSafely } = await loadRoute({ order: null })
+
+    const response = await route.POST(buildRequest(), { params: Promise.resolve({ token: "tok123" }) })
+
+    expect(response.status).toBe(200)
+    expect(issueDistributorSettlementOnAcceptSafely).toHaveBeenCalledTimes(1)
+    expect(emitNotificationEvent).toHaveBeenCalledTimes(1)
+    expect(emitNotificationEvent.mock.calls[0][0].message).not.toContain("하드웨어 승인 대기")
+  })
+
+  it("총판 견적서 발행이 실패해도(null) 오더와 하드웨어 승인 안내는 그대로 남는다", async () => {
+    const { route, emitNotificationEvent, ensureSalesOrderForAcceptedQuoteSafely } = await loadRoute({
+      order: { status: "pending_approval" },
+      distributor: null,
+    })
+
+    const response = await route.POST(buildRequest(), { params: Promise.resolve({ token: "tok123" }) })
+
+    expect(response.status).toBe(200)
+    expect(ensureSalesOrderForAcceptedQuoteSafely).toHaveBeenCalledTimes(1)
+    expect(emitNotificationEvent.mock.calls[0][0].message).toContain("하드웨어 승인 대기")
+  })
+
+  it("이미 수락된 견적이면 오더와 총판 견적서 발행을 둘 다 다시 보장한다", async () => {
+    const { route, ensureSalesOrderForAcceptedQuoteSafely, issueDistributorSettlementOnAcceptSafely } =
+      await loadRoute({ alreadyAcceptedAt: "2026-08-05T00:00:00.000Z", order: null })
+
+    const response = await route.POST(buildRequest(), { params: Promise.resolve({ token: "tok123" }) })
+
+    expect(response.status).toBe(200)
+    expect(ensureSalesOrderForAcceptedQuoteSafely).toHaveBeenCalledTimes(1)
+    expect(issueDistributorSettlementOnAcceptSafely).toHaveBeenCalledTimes(1)
+    expect(issueDistributorSettlementOnAcceptSafely.mock.calls[0][0]).toMatchObject({ quoteDocumentId: DOCUMENT.id })
   })
 })

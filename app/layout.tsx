@@ -10,12 +10,19 @@ import {
   DEFAULT_SITE_TITLE,
   DEFAULT_TWITTER_IMAGE_PATH,
   createOrganizationJsonLd,
+  createSiteVerification,
   createWebsiteJsonLd,
   SITE_NAME,
   SITE_URL,
 } from "@/lib/seo";
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning";
 
+// 검색엔진 소유확인 메타태그. 검색 콘솔(Google Search Console, 네이버 서치어드바이저)에서 발급한 값을
+// 환경변수로 넣는다. 비밀 값이 아니며(페이지 소스에 그대로 노출된다), 비어 있으면 태그 자체를 내보내지 않는다.
+const verification = createSiteVerification({
+  google: process.env.GOOGLE_SITE_VERIFICATION,
+  naver: process.env.NAVER_SITE_VERIFICATION,
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -44,6 +51,7 @@ export const metadata: Metadata = {
     images: [DEFAULT_TWITTER_IMAGE_PATH],
   },
   robots: { index: true, follow: true },
+  ...(verification ? { verification } : {}),
 };
 
 export default function RootLayout({

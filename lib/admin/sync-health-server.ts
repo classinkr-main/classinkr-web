@@ -31,7 +31,7 @@ import {
 import { listRecentSyncRunsFresh } from "@/lib/repositories/branch-sync"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
-/** 하루 1회 크론 + 수동 재시도를 두 달가량 덮는 창 — 크론 알림(failure-alert.ts)과 같은 값. */
+/** 하루 3회 크론 + 수동 재시도를 약 3주 덮는 창 — 크론 알림(failure-alert.ts)과 같은 값. 넘치면 truncated로 드러난다. */
 export const SYNC_HEALTH_RUN_WINDOW = 60
 
 const NEO_RUN_COLUMNS = "object_api_key, status, trigger, started_at, finished_at, error"

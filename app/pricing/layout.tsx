@@ -1,3 +1,4 @@
+import { PricingViewTracker } from "@/components/PricingViewTracker"
 import { createPublicMetadata } from "@/lib/seo"
 
 export const metadata = createPublicMetadata({
@@ -8,5 +9,11 @@ export const metadata = createPublicMetadata({
 })
 
 export default function PricingLayout({ children }: { children: React.ReactNode }) {
-  return <>{children}</>
+  return (
+    <>
+      {/* /pricing·/pricing/simulator·/pricing/simulator/krw 공통 — 화면별 pricing_view 1회 */}
+      <PricingViewTracker />
+      {children}
+    </>
+  )
 }

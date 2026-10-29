@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import Image from "next/image"
 
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
@@ -104,6 +105,27 @@ function getDocSearchText(doc: DocArticle) {
       ...(section.media?.flatMap((media) => [media.alt, media.caption ?? "", media.src]) ?? []),
     ]),
   ].join(" ")
+}
+
+/** 문서 허브·카테고리·검색 라우트가 받는 searchParams. `?q=a&q=b` 는 배열로 들어온다. */
+export type DocsSearchParams = { q?: string | string[] }
+
+/**
+ * `q` 쿼리를 문자열 하나로 정규화한다 — 배열이면 첫 값, 앞뒤 공백 제거, 없으면 "".
+ * 본문과 generateMetadata 가 같은 값을 보도록 세 라우트가 모두 이 함수를 거친다.
+ * (배열 `q` 에 `.trim()` 을 바로 부르면 TypeError 로 500 이 난다.)
+ */
+export function readQuery(value: string | string[] | undefined): string {
+  const first = Array.isArray(value) ? value[0] : value
+  return typeof first === "string" ? first.trim() : ""
+}
+
+/**
+ * 검색어가 붙은 허브 URL 은 얕은 중복 페이지라 색인에서 뺀다(/docs/search 와 같은 정책).
+ * canonical 은 호출한 쪽이 이미 쿼리 없는 정적 경로로 만들어 둔다.
+ */
+export function withSearchNoIndex(metadata: Metadata, query: string): Metadata {
+  return query ? { ...metadata, robots: { index: false, follow: true } } : metadata
 }
 
 export function formatDocDate(date: string) {

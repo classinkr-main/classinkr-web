@@ -188,9 +188,20 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   // 20261022_crm_lead_auto_confirm.sql(정책 값 1줄 UPDATE)은 REST 프로브로 확인할 대상이 없어 계약에 넣지 않는다 —
   // 적용 확인은 docs/active/db-migration-runbook.md 의 2026-10-22 절 확인 쿼리로 한다.
   "supabase/migrations/20261022_sales_orders.sql",
+  // 총판 정산(2026-10-23) — 원가 템플릿·견적별 총판 정산·입금 기록. 세 표 모두 RLS deny-all.
+  "supabase/migrations/20261023_distributor_settlements.sql",
   // 하드웨어 재고관리 프로세스(2026-10-28) — 원장·품목 칸 추가, 정의서 품목 시드, 배송 예정 확정 v4.
   // 미적용이면 대시보드는 새 칸 없이 읽고(42703 폴백), 새 규칙(유형·물류번호 직접 선택 등)의 저장만 실패한다.
   "supabase/migrations/20261028_hardware_inventory_process.sql",
+  // 블로그 글 내용 변경 시각(2026-10-28) — 사이트맵 lastmod·JSON-LD dateModified·RSS 의 기준.
+  // 컬럼만 REST 로 확인된다. 트리거(blog_posts_content_updated_at)는 마이그레이션 머리 주석의 pg_trigger 조회로 본다.
+  "supabase/migrations/20261028_blog_posts_content_updated_at.sql",
+  // 시트 동기화 실행 기록의 출처 컬럼(2026-10-28) — branch_sync_runs.runtime(환경·배포·커밋·리전).
+  // 미적용이어도 startSyncRun 이 컬럼 없이 다시 기록하므로 동기화는 돌고, 출처만 비어 남는다.
+  "supabase/migrations/20261028_branch_sync_runs_runtime.sql",
+  // 장부 반영 → REV 시트 쓰기 감사 기록(2026-10-23). 시트 쓰기 스위치(BRANCH_REV_SHEET_WRITE_ENABLED)가 꺼져 있으면
+  // 미적용이어도 영향이 없다 — 켜기 전에 적용한다(warning).
+  "supabase/migrations/20261023_branch_rev_sheet_writes.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -645,7 +656,7 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     columns: ["role", "academy_size"],
     migration: "supabase/migrations/20260921_checkout_requests_lead_qualifiers.sql",
     impact:
-      "신청 저장이 42703 으로 실패한다. 컬럼이 없으면 리드 스코어의 규모 배점도 계속 비어 가장 비싼 신청이 단순 문의보다 낮게 깔린다.",
+      "어드민 접수 큐(lib/repositories/checkout-requests-admin.ts)가 두 컬럼을 select 해 목록·상세 조회가 42703 으로 실패한다. 공개 신청은 두 컬럼을 빼고 다시 저장되지만(lib/checkout-requests.ts 폴백) 직책·학원 규모는 리드 쪽(leads.role·leads.size)에만 남는다.",
   },
   {
     kind: "anon",
@@ -912,6 +923,38 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
   },
   {
     kind: "table",
+    table: "distributor_settlements",
+    label: "총판 정산(총판용 견적서·미수금)",
+    columns: [
+      "id", "quote_document_id", "deal_id", "fulfillment_mode", "source_version_id", "issued_version_id", "distributor_name",
+      "distributor_email", "issue_trigger", "auto_email", "lines", "total_amount", "customer_total_amount",
+      "status", "paid_amount", "due_date", "issued_at", "issue_reason", "share_token", "email_status",
+      "review_required_reason", "cancelled_at", "installed_at", "updated_at",
+    ],
+    migration: "supabase/migrations/20261023_distributor_settlements.sql",
+    severity: "warning",
+    impact: "고객 견적은 유지되지만 원가 설정·총판 견적서 발행·미수금 추적이 503으로 차단된다.",
+  },
+  {
+    kind: "table",
+    table: "distributor_settlement_payments",
+    label: "총판 입금 기록",
+    columns: ["id", "settlement_id", "amount", "paid_on", "memo", "created_by", "created_at"],
+    migration: "supabase/migrations/20261023_distributor_settlements.sql",
+    severity: "warning",
+    impact: "총판 입금 기록이 503으로 차단돼 미수금이 줄지 않는다.",
+  },
+  {
+    kind: "table",
+    table: "distributor_price_templates",
+    label: "원가 템플릿",
+    columns: ["id", "name", "rules", "notes", "archived_at", "updated_at"],
+    migration: "supabase/migrations/20261023_distributor_settlements.sql",
+    severity: "warning",
+    impact: "원가은 직접 입력만 되고 템플릿 저장·적용이 503으로 차단된다.",
+  },
+  {
+    kind: "table",
     table: "hardware_movements",
     label: "하드웨어 원장 — 재고관리 프로세스 칸(유형·무상·회수 연결·CRM 고객·담당 계정·반납 예정일)",
     columns: [
@@ -931,6 +974,54 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     migration: "supabase/migrations/20261028_hardware_inventory_process.sql",
     severity: "warning",
     impact: "모든 품목을 물류번호 관리 품목으로 보고(액세서리·터치펜도 물류번호 요구) 판매대시보드 고정 행이 비어 보인다.",
+  },
+  {
+    kind: "table",
+    table: "blog_posts",
+    label: "블로그 글 내용 변경 시각(content_updated_at)",
+    columns: ["id", "content_updated_at"],
+    migration: "supabase/migrations/20261028_blog_posts_content_updated_at.sql",
+    // 사이트맵·RSS 조회는 컬럼 없음(42703)을 감지해 updated_at 으로 폴백한다 — 공개 화면은 죽지 않는다.
+    severity: "warning",
+    impact:
+      "사이트맵 lastmod·블로그 JSON-LD dateModified·RSS lastBuildDate 가 계속 updated_at 을 따라, 대표 글·공개 토글만 해도 '수정됨'으로 나간다(화면·저장은 정상).",
+  },
+  {
+    kind: "table",
+    table: "branch_sync_runs",
+    label: "시트 동기화 실행 기록 — 출처 칸(runtime: 환경·배포·커밋·리전)",
+    columns: ["runtime"],
+    migration: "supabase/migrations/20261028_branch_sync_runs_runtime.sql",
+    severity: "warning",
+    impact:
+      "동기화는 그대로 돈다(컬럼 없이 다시 기록). 다만 어느 환경·배포가 쓴 런인지 남지 않아, 운영 밖 쓰기 사고(2026-10-15 활성 임포트 진동)를 사후에 가려낼 수 없다.",
+  },
+  // ── 장부 반영 → REV 시트 쓰기 감사 기록(2026-10-23) ─────────────────────
+  // RLS deny-all(정책 없음 — service_role 만). DELETE·TRUNCATE 금지, UPDATE 는 상태 칸만(트리거).
+  {
+    kind: "table",
+    table: "branch_sales_ledger_sheet_writes",
+    label: "매출 장부 → REV 시트 쓰기 감사 기록",
+    columns: [
+      "id", "draft_id", "batch_id", "status", "code", "row_id", "sheet_row", "ledger_month", "cells",
+      "actor", "error", "entry_id", "created_at", "written_at", "updated_at",
+    ],
+    migration: "supabase/migrations/20261023_branch_rev_sheet_writes.sql",
+    severity: "warning",
+    impact:
+      "시트 쓰기 스위치(BRANCH_REV_SHEET_WRITE_ENABLED)가 꺼져 있으면 영향 없다. 켜져 있으면 감사 행을 못 남겨 시트 쓰기가 전부 500으로 막힌다(장부·시트는 그대로).",
+  },
+  {
+    kind: "rpc",
+    functionName: "apply_branch_sales_ledger_draft_if_unchanged",
+    label: "시트 쓰기 반영 전용 장부 적용(초안이 그대로일 때만)",
+    // 장부에 쓰는 함수라 실행 프로브를 하지 않는다 — pg_proc/권한만 확인한다.
+    catalogIdentityTypes: "uuid, text, timestamp with time zone",
+    serviceRoleOnly: true,
+    migration: "supabase/migrations/20261023_branch_rev_sheet_writes.sql",
+    severity: "warning",
+    impact:
+      "시트 쓰기 스위치가 켜져 있으면 시트에 쓴 뒤 장부 기록이 전부 실패한다(db_apply_failed) — 켜기 전에 반드시 적용한다. 꺼져 있으면 영향 없다.",
   },
 ]
 

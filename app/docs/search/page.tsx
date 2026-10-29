@@ -4,7 +4,7 @@ import { ArrowRight, Search } from "lucide-react"
 import { getDocsContent } from "@/lib/docs-content"
 import { SearchHighlight } from "@/components/ui/SearchHighlight"
 import { DocsSearchLogger } from "@/components/docs/DocsSearchLogger"
-import { getAllDocsSummaries, scoreDocsArticle } from "../_utils"
+import { getAllDocsSummaries, readQuery, scoreDocsArticle, type DocsSearchParams } from "../_utils"
 
 const DOCS_CONTACT_HREF = `/contact?topic=${encodeURIComponent("계정/접속/기술 지원")}&prefill=${encodeURIComponent("가이드에서 찾지 못한 내용을 문의하고 싶습니다.")}#contact-form`
 
@@ -16,12 +16,12 @@ export const metadata: Metadata = {
 }
 
 interface DocsSearchPageProps {
-  searchParams?: Promise<{ q?: string }>
+  searchParams?: Promise<DocsSearchParams>
 }
 
 export default async function DocsSearchPage({ searchParams }: DocsSearchPageProps) {
-  const { q } = await (searchParams ?? Promise.resolve<{ q?: string }>({}))
-  const query = (q ?? "").trim()
+  const { q } = await (searchParams ?? Promise.resolve<DocsSearchParams>({}))
+  const query = readQuery(q)
 
   const docsContent = await getDocsContent()
   const allDocs = getAllDocsSummaries(docsContent)

@@ -1068,6 +1068,25 @@ function FAQSection() {
                         </motion.div>
                     ))}
                 </div>
+
+                <div className="mt-8 flex flex-col items-center justify-center gap-1 sm:flex-row sm:gap-8">
+                    <TrackedLink
+                        href="/faq"
+                        ctaId="sw_faq_more"
+                        className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#084734] transition-colors hover:text-[#065c41] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#084734]"
+                    >
+                        전체 FAQ 보기
+                        <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </TrackedLink>
+                    <TrackedLink
+                        href="/pricing"
+                        ctaId="sw_pricing_link"
+                        className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#084734] transition-colors hover:text-[#065c41] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#084734]"
+                    >
+                        요금 안내
+                        <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </TrackedLink>
+                </div>
             </div>
         </section>
     )

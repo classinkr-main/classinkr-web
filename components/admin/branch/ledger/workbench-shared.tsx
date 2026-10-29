@@ -6,6 +6,7 @@
 
 import type { KeyboardEvent as ReactKeyboardEvent, MutableRefObject } from "react"
 import { ArrowDownNarrowWide, ArrowUpNarrowWide, X } from "lucide-react"
+import { normalizedAccountKey } from "@/lib/branch/account-key"
 import { formatMoney } from "@/lib/branch/ledger-format"
 import { ledgerMonthSplit } from "@/lib/branch/computations/revenue-core"
 import { fiscalQuarter } from "@/lib/branch/fiscal"
@@ -20,6 +21,7 @@ import {
   draftConfidenceFromMetadata,
   formatMonthLabel,
   mergedWeeklyFromMetadata,
+  metadataString,
   rowMonthAmount,
   rowMonthConfirmed,
   rowMonthHighConfidence,
@@ -28,6 +30,7 @@ import {
   rowWeeklySplit,
   weeklyConfidenceFromMetadata,
   type DraftOperation,
+  type LedgerDraft,
   type LedgerRevenueRow,
   type RevMonthlyBucket,
   type RevProductCategory,
@@ -64,6 +67,113 @@ interface DealDetail {
 interface DealDetailResponse {
   deal?: DealDetail
   error?: string
+}
+
+// 수정(edit-row) 초안·반영값 → 그 수정이 가리키는 지금의 원본 시트 행 찾기. 시트를 다시 가져오면 시트 행 id
+// (임포트 줄 id)가 새로 만들어지므로 id 만 보면 원본을 못 찾는다. 그래서
+//   1) 같은 시트 Row ID('2. REV' 숨김 열, ADR-011 — 정렬·행 삽입에도 안 바뀐다) → 2) 같은 id
+//   → 3) 같은 시트 행 번호 + 같은 고객 → 4) 같은 고객 + 같은 상품인 행이 딱 하나
+// 순서로 찾고, 모두 실패하면 undefined(고르지 않는다 — 잘못 붙이는 것보다 경고가 낫다).
+export interface SheetRowRef {
+  /** 초안·반영값이 만들 때 본 시트 Row ID(sourceSnapshot.sheetBaseline.rowId). */
+  sheetRowId?: string | null
+  sourceDealId?: string | null
+  sheetRow?: number | null
+  customer: string
+  productVersion?: string | null
+}
+
+/** 초안·반영값 sourceSnapshot 에 실린 시트 Row ID(시트 쓰기 baseline). 없으면 null. */
+export function snapshotSheetRowId(snapshot: Record<string, unknown> | null | undefined): string | null {
+  const baseline = snapshot && isRecord(snapshot.sheetBaseline) ? snapshot.sheetBaseline : null
+  const rowId = baseline?.rowId
+  return typeof rowId === "string" && rowId.trim() ? rowId.trim() : null
+}
+
+export function createSheetRowResolver(sheetRows: LedgerRevenueRow[]): (ref: SheetRowRef) => LedgerRevenueRow | undefined {
+  const byId = new Map(sheetRows.map((row) => [row.id, row]))
+  // 형식이 맞고 한 번만 나온 Row ID 만 키로 쓴다(rowIdIssue 가 있으면 그 행은 Row ID 로 찾지 않는다).
+  const byRowId = new Map<string, LedgerRevenueRow>()
+  for (const row of sheetRows) if (row.rowId && !row.rowIdIssue) byRowId.set(row.rowId, row)
+  const byAccount = new Map<string, LedgerRevenueRow[]>()
+  for (const row of sheetRows) {
+    const key = normalizedAccountKey(row.customer)
+    const list = byAccount.get(key)
+    if (list) list.push(row)
+    else byAccount.set(key, [row])
+  }
+  const sameText = (a: string | null | undefined, b: string | null | undefined) => (a ?? "").trim() === (b ?? "").trim()
+  return (ref) => {
+    const stable = ref.sheetRowId ? byRowId.get(ref.sheetRowId) : undefined
+    if (stable) return stable
+    const exact = ref.sourceDealId ? byId.get(ref.sourceDealId) : undefined
+    if (exact) return exact
+    const sameAccount = byAccount.get(normalizedAccountKey(ref.customer)) ?? []
+    const sameRow = ref.sheetRow != null ? sameAccount.filter((row) => row.sheetRow === ref.sheetRow) : []
+    if (sameRow.length === 1) return sameRow[0]
+    const sameProduct = ref.productVersion ? sameAccount.filter((row) => sameText(row.productVersion, ref.productVersion)) : []
+    return sameProduct.length === 1 ? sameProduct[0] : undefined
+  }
+}
+
+// 적용된 수정 → 대체하는 원본 시트 행의 달. 못 찾은 수정은 unresolved — 원본이 지워졌는지 이름이 바뀌었는지
+// 알 수 없으므로 조용히 넘기지 않고 화면이 경고한다(정정 금액은 별도 행으로 남는다).
+export interface CorrectionTargetResult {
+  /** 원본 시트 행 id → 정정으로 대체된 달 */
+  overrides: Map<string, Set<string>>
+  /** 원본 시트 행을 찾지 못한 정정 행 */
+  unresolved: LedgerRevenueRow[]
+}
+
+export function resolveCorrectionTargets(
+  corrections: LedgerRevenueRow[],
+  sheetRows: LedgerRevenueRow[],
+  /** 정정 행 → 만들 때 본 시트 Row ID(반영값 sourceSnapshot). 없으면 Row ID 단계를 건너뛴다. */
+  sheetRowIdOf: (correction: LedgerRevenueRow) => string | null = () => null,
+): CorrectionTargetResult {
+  const overrides = new Map<string, Set<string>>()
+  const unresolved: LedgerRevenueRow[] = []
+  if (corrections.length === 0) return { overrides, unresolved }
+  const resolve = createSheetRowResolver(sheetRows)
+  for (const correction of corrections) {
+    const month = correction.draftMonth
+    if (!month) continue
+    const target = resolve({ ...correction, sheetRowId: sheetRowIdOf(correction) })
+    if (!target) {
+      unresolved.push(correction)
+      continue
+    }
+    const months = overrides.get(target.id) ?? new Set<string>()
+    months.add(month)
+    overrides.set(target.id, months)
+  }
+  return { overrides, unresolved }
+}
+
+// 열린 수정 초안의 원천 딜 id 를 지금 시트 행 id 로 맞춘다(화면 매칭용 사본 — 저장된 초안은 그대로).
+// 시트를 다시 가져온 뒤에도 그 칸의 대기 표시가 남고, 같은 칸 재편집이 새 수정 초안 대신 그 초안을 고치게
+// 한다(새 초안이 생기면 둘 다 반영될 때 정정이 두 번 더해진다). 고친 초안은 저장 때 새 id 로 갱신된다.
+export function alignOpenDraftsToSheetRows(drafts: LedgerDraft[], sheetRows: LedgerRevenueRow[]): LedgerDraft[] {
+  const ids = new Set(sheetRows.map((row) => row.id))
+  let resolve: ReturnType<typeof createSheetRowResolver> | null = null
+  let changed = false
+  const next = drafts.map((draft) => {
+    if (draft.kind !== "edit-row" || (draft.status !== "draft" && draft.status !== "checked")) return draft
+    const dealId = draft.sourceDealId ?? metadataString(draft.metadata, "sourceDealId")
+    if (dealId && ids.has(dealId)) return draft
+    resolve ??= createSheetRowResolver(sheetRows)
+    const target = resolve({
+      sheetRowId: snapshotSheetRowId(draft.sourceSnapshot),
+      sourceDealId: dealId,
+      sheetRow: draft.sourceSheetRow,
+      customer: draft.customer,
+      productVersion: snapshotText(draft.sourceSnapshot, "productVersion"),
+    })
+    if (!target) return draft
+    changed = true
+    return { ...draft, sourceDealId: target.id }
+  })
+  return changed ? next : drafts
 }
 
 // 적용된 초안(장부 엔트리)의 확도를 행 확도 맵으로 변환. 확도와 무관하게 전액
@@ -156,11 +266,19 @@ const MATRIX_TOAST_MAX = 3
 // 하이라이트를 소비하는 매트릭스 행 메모(RevMatrixGroupRow 등)가 불필요하게 리렌더된다(웨이브 5, 항목 1).
 const EMPTY_MONTH_SET: Set<string> = new Set()
 const LENSES: Array<{ id: LedgerLens; label: string; description: string }> = [
-  { id: "ledger", label: "장부", description: "기본 · 내 담당 확정/고확도/예정 한 화면, 팀·전체는 담당자별 합계" },
+  { id: "ledger", label: "장부", description: "기본 · 월 요약(내 담당 확정/고확도/예정 한 화면, 팀·전체는 담당자별 합계)과 주차 검수(REV 표)를 한 탭에서" },
   { id: "dsh", label: "DSH", description: "수치 상세 · 목표/실적 그리드" },
   { id: "rev", label: "REV", description: "주차·목표 수치 검수와 행 상세" },
   { id: "board", label: "보드", description: "주차 Forecast 칸반 · 확정/고확도/예정 카드 검수" },
   { id: "cockpit", label: "콕핏", description: "내 딜 목록 → 우측 빠른 입력에서 주차별 확도 (콕핏 입력)" },
+]
+// 탭 줄에 보이는 렌즈(2026-10-26 장부·REV 통합). REV 는 탭이 아니라 장부 탭 안의 "주차 검수" 보기다 —
+// 렌즈 값(rev)·?lens=rev 딥링크는 그대로 두고, 탭 줄에서만 장부 탭 하나로 보인다.
+const LENS_TABS = LENSES.filter((item) => item.id !== "rev")
+// 장부 탭 안 보기 전환 — 월 요약(ledger 렌즈) ↔ 주차 검수(rev 렌즈).
+const LEDGER_VIEWS: Array<{ id: "ledger" | "rev"; label: string; description: string }> = [
+  { id: "ledger", label: "월 요약", description: "고객 한 줄 · 월 칸 — 칸을 눌러 바로 고친다" },
+  { id: "rev", label: "주차 검수", description: "딜 행 · 주차 칸 · 잠금·불일치 · 엑셀 붙여넣기(기존 REV 표)" },
 ]
 // role="tablist" 롤빙 tabIndex 키보드 내비 — BranchDashboardClient.tsx의 onTabKeyDown과
 // 동일 패턴(ArrowLeft/Right/Home/End)을 두 탭리스트(렌즈, 빠른 작업 보기)가 공유하도록 일반화.
@@ -734,7 +852,9 @@ export {
   REV_FORECAST_FILTERS,
   MATRIX_TOAST_MAX,
   EMPTY_MONTH_SET,
+  LEDGER_VIEWS,
   LENSES,
+  LENS_TABS,
   handleRovingTabKeyDown,
   relativeTimeFromNow,
   canRunAdminOperationsFromSession,

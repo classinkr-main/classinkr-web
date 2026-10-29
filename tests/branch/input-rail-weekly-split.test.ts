@@ -183,7 +183,7 @@ describe("SalesLedgerWorkbench — 주차 분해 배선 규약(소스 스캔)", 
     const body = sliceBetween(
       source,
       "const buildDraftInput = useCallback",
-      "}, [detail, draftForm, lens, period, selectedMonth, selectedRow, team])",
+      "}, [detail, draftForm, lens, period, selectedMonth, selectedRow, sheetRowById, team])",
     )
     expect(body).toContain("const weeklyContract = draftWeeklySaveContract(draftForm)")
     expect(body).toContain("amount: weeklyContract ? weeklyContract.amount : safeAmount(draftForm.amount)")

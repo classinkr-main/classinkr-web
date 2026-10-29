@@ -10,6 +10,10 @@ vi.mock("@/lib/admin-crm-revenue", () => ({ ADMIN_CRM_REVENUE_CACHE_TAG: "admin-
 vi.mock("@/lib/admin-crm-revenue-sheet", () => ({ ADMIN_CRM_REVENUE_SHEET_CACHE_TAG: "admin-crm-revenue-sheet" }))
 vi.mock("@/lib/repositories/branch-hw", () => ({ BRANCH_HW_CACHE_TAG: "branch-hw" }))
 vi.mock("@/lib/repositories/branch-deals", () => ({ BRANCH_REV_DEALS_CACHE_TAG: "branch-rev-deals" }))
+vi.mock("@/lib/repositories/branch-dsh-kpi-mirror", () => ({ BRANCH_DSH_CACHE_TAG: "branch-dsh", BRANCH_KPI_CACHE_TAG: "branch-kpi" }))
+vi.mock("@/lib/repositories/branch-sync", () => ({ BRANCH_SYNC_RUNS_CACHE_TAG: "branch-sync-runs" }))
+vi.mock("@/lib/repositories/sales-ledger-imports", () => ({ SALES_LEDGER_IMPORTS_CACHE_TAG: "sales-ledger-imports" }))
+vi.mock("@/lib/repositories/hardware-inventory", () => ({ HARDWARE_INVENTORY_CACHE_TAG: "hardware-inventory" }))
 vi.mock("@/lib/branch/sync/run-all", () => ({ runAll }))
 vi.mock("@/lib/repositories/crm-source-links", () => ({ runBranchRevLinkMaintenance }))
 
@@ -65,6 +69,7 @@ describe("sync-branch cron", () => {
       ok: true,
       revRows: 3,
       crmLinks: { reattach: 1, candidates: 2 },
+      outcome: "done",
     })
     expect(runAll).toHaveBeenCalledWith({ trigger: "cron" })
   })
@@ -75,7 +80,7 @@ describe("sync-branch cron", () => {
     const response = await GET(cronRequest("Bearer cron-test-secret"))
 
     expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toEqual({ ok: false, skipped: true })
+    await expect(response.json()).resolves.toEqual({ ok: false, skipped: true, outcome: "running" })
     expect(runBranchRevLinkMaintenance).not.toHaveBeenCalled()
     expect(revalidateTag).not.toHaveBeenCalled()
   })
@@ -85,7 +90,7 @@ describe("sync-branch cron", () => {
     runBranchRevLinkMaintenance.mockResolvedValue({ reattach: 1 })
     const response = await GET(cronRequest("Bearer cron-test-secret"))
     expect((await response.json()).crmLinks).toEqual({ reattach: 1 })
-    expect(revalidateTag).toHaveBeenCalledWith("admin-crm-revenue-sheet", "max")
-    expect(revalidateTag).not.toHaveBeenCalledWith("branch-hw", "max")
+    expect(revalidateTag).toHaveBeenCalledWith("admin-crm-revenue-sheet", { expire: 0 })
+    expect(revalidateTag).not.toHaveBeenCalledWith("branch-hw", { expire: 0 })
   })
 })

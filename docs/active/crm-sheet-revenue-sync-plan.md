@@ -92,7 +92,7 @@ last_updated: 2026-06-10
 | 확정 전환 대기 리스크 | **즉시 가능** | 과거 월의 비확정 예정액을 risks 배열에 합류 |
 | 시트 고객 ↔ 앱 파트너/딜 매칭 | **매핑 테이블 필요** | 시트는 `customer_name` 문자열, 앱은 uuid. 이름 정규화 자동 후보 + 수동 확정 필요 |
 | 예상(시트) vs 실적(앱 수납) 갭 분석 | **매칭 후 가능** | 매칭률에 비례해 커버리지 증가 |
-| 시트 ↔ 앱 양방향 쓰기 | **비권장(현 단계)** | 기존 원칙 유지: "앱 DB가 기준, 시트는 보조 소스" — full-replace 싱크 구조상 역방향 쓰기는 충돌 위험 |
+| 시트 ↔ 앱 양방향 쓰기 | **비권장(현 단계)** — **[ADR-011](../adr/ADR-011-rev-sheet-writeback-from-ledger.md)로 일부 대체(2026-10-23)** | 기존 원칙 유지: "앱 DB가 기준, 시트는 보조 소스" — full-replace 싱크 구조상 역방향 쓰기는 충돌 위험. 대체 범위: 장부 반영 때 '2. REV' 기존 행 주차 칸의 금액·확도 글자색만, 시트 우선 조건부 쓰기(기본 꺼짐) |
 
 핵심 정책 (기존 코드 주석의 원칙 유지):
 - **앱 DB = source of truth, 시트 = 운영팀 입력/검수 보조 소스.**
@@ -142,6 +142,9 @@ last_updated: 2026-06-10
 - `/api/admin/crm/external-sync` 수동 sync와 `/api/cron/sync-external-crm` cron endpoint가 준비됐다.
 - credential이 없으면 `skipped` sync run만 남기고 외부 호출은 하지 않는다.
 - 시트 역방향 쓰기(앱 → 시트)는 full-replace 싱크와 충돌하므로 도입하지 않음. 필요 시 별도 export 탭으로 분리.
+  - **[ADR-011](../adr/ADR-011-rev-sheet-writeback-from-ledger.md)로 대체(2026-10-23)**: 장부 반영 때 '2. REV' 기존 행의 주차 칸(w1~w5) 금액·확도 글자색만 쓴다.
+    쓰기 직전에 다시 읽어 초안이 본 값과 같을 때만 쓰고(시트 우선), 다음 동기화가 그 값을 다시 읽는다.
+    그 밖의 앱 → 시트 쓰기는 여전히 하지 않는다. 절차는 [REV 시트 쓰기 런북](rev-sheet-writeback-runbook.md).
 
 ---
 

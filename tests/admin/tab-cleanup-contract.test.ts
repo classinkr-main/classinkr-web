@@ -87,13 +87,18 @@ describe("미사용·테스트 표면 삭제", () => {
   })
 })
 
-describe("캠페인 관리 → 마케팅 프로젝트 역링크", () => {
-  it("campaign manage header links to marketing projects (projects header links back)", () => {
+describe("캠페인 관리 ↔ 마케팅 프로젝트 — 한 화면의 두 탭(2026-10 통합)", () => {
+  it("campaign manage carries both tabs and the old projects route only redirects there", () => {
     const manage = read("components/admin/campaigns/manage/CampaignManageClient.tsx")
-    const projects = read("components/admin/campaigns/projects/ProjectsClient.tsx")
+    const projectsRoute = read("app/admin/campaigns/projects/page.tsx")
 
-    expect(manage).toContain('href="/admin/campaigns/projects"')
-    expect(manage).toContain("마케팅 프로젝트 →")
-    expect(projects).toContain('href="/admin/campaigns/manage"')
+    // 예전 역링크 두 개("마케팅 프로젝트 →" / "캠페인 관리 →") 대신 같은 화면의 탭이다.
+    expect(manage).toContain('role="tablist"')
+    expect(manage).toContain("<ProjectsPane")
+    expect(manage).toContain("<CampaignsPane")
+    expect(existsSync(join(process.cwd(), "components/admin/campaigns/projects/ProjectsClient.tsx"))).toBe(false)
+    // 북마크·외부 링크 보호 — 옛 주소는 화면 없이 프로젝트 탭으로 넘긴다.
+    expect(projectsRoute).toContain("redirect(MANAGE_PROJECTS_HREF)")
+    expect(projectsRoute).not.toContain("ProjectsClient")
   })
 })
