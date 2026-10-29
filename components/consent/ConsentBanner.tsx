@@ -12,6 +12,7 @@ import {
   OPEN_CONSENT_EVENT,
   resyncPendingConsent,
   type ConsentChoice,
+  type ConsentRecord,
 } from "@/lib/consent/consent"
 import { useConsent } from "@/lib/consent/useConsent"
 
@@ -43,6 +44,28 @@ const primaryBtn =
   "inline-flex h-8 min-w-0 items-center justify-center rounded-md bg-[#084734] px-2 text-[12px] font-bold text-white transition-colors hover:bg-[#065c41] sm:h-9 sm:px-4 sm:text-[13px]"
 const ghostBtn =
   "inline-flex h-8 min-w-0 items-center justify-center rounded-md border border-black/[0.08] bg-white px-2 text-[12px] font-semibold text-[#3f4a44] transition-colors hover:bg-[#F6F5F4] sm:h-9 sm:px-4 sm:text-[13px]"
+
+/** 거절은 즉시 닫고, 허용은 서버 확인과 최신 선택 일치 후에만 완료한다. */
+export async function completeConsentChoice(
+  choice: ConsentChoice,
+  save: (choice: ConsentChoice) => Promise<ConsentRecord>,
+  onComplete: () => void,
+  onUnconfirmed: () => void,
+) {
+  if (!choice.analytics && !choice.marketing) {
+    const pending = save(choice)
+    onComplete()
+    await pending
+    return
+  }
+
+  const record = await save(choice)
+  if (record.s === 0 || record.analytics !== choice.analytics || record.marketing !== choice.marketing) {
+    onUnconfirmed()
+    return
+  }
+  onComplete()
+}
 
 function ConsentRow({
   label,
@@ -138,9 +161,13 @@ export function ConsentBanner() {
     if (saving) return
     setSaving(true)
     setSaveError(null)
+    // 저장 중 s:0 쿠키가 기록되면 decided가 true로 바뀌므로 허용 요청은 배너를 유지한다.
+    if (nextChoice.analytics || nextChoice.marketing) setForceOpen(true)
     try {
-      await save(nextChoice)
-      dismiss()
+      await completeConsentChoice(nextChoice, save, dismiss, () => {
+        setForceOpen(true)
+        setSaveError("선택이 적용되지 않았습니다. 현재 설정을 확인하고 다시 시도해 주세요.")
+      })
     } catch (error) {
       console.warn("[consent] failed to save consent:", error)
       setForceOpen(true)
