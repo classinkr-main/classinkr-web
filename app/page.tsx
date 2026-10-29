@@ -9,18 +9,19 @@ import { Manifesto } from "@/components/sections/Manifesto"
 import { GlobalScale } from "@/components/sections/GlobalScale"
 import dynamic from "next/dynamic"
 import { JsonLd } from "@/components/seo/JsonLd"
-import { createBreadcrumbJsonLd, createPublicMetadata, createWebPageJsonLd } from "@/lib/seo"
+import { createBreadcrumbJsonLd, createPublicMetadata, createWebPageJsonLd, DEFAULT_SITE_TITLE } from "@/lib/seo"
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 
-export const metadata: Metadata = {
-  ...createPublicMetadata({
-    title: "수업 시스템 OS",
-    description: CLASSIN_POSITIONING.metadataDescription,
-    path: "/",
-    keywords: ["수업 시스템 OS", "학원 수업 운영", "전자칠판", "EDB", "Classin"],
-  }),
-  title: { absolute: "Classin | 수업 시스템 OS" },
-}
+export const metadata: Metadata = createPublicMetadata({
+  // <title> 과 og:title · twitter:title 이 같은 문자열이 되도록 absoluteTitle 로 한 번만 지정한다.
+  // 제목·설명은 2026-10-28 SEO·AEO 진단 추천안(검색 범주어 병기)을 운영자가 채택한 값이다 —
+  // 문자열 정본은 lib/seo.ts(DEFAULT_SITE_TITLE)·lib/classin-positioning.ts(metadataDescription).
+  // 본문 카테고리명은 그대로 "수업 시스템 OS"다(docs/active/classin-korea-positioning-guidelines.md §11).
+  absoluteTitle: DEFAULT_SITE_TITLE,
+  description: CLASSIN_POSITIONING.metadataDescription,
+  path: "/",
+  keywords: ["클래스인", "Classin", "학원 전자칠판", "수업 녹화", "학원 수업 운영", "수업 시스템 OS", "EDB"],
+})
 
 const Outcomes = dynamic(() => import("@/components/sections/Outcomes").then(m => ({ default: m.Outcomes })))
 const SolutionOverview = dynamic(() => import("@/components/sections/SolutionOverview").then(m => ({ default: m.SolutionOverview })))
@@ -40,7 +41,7 @@ export default function LandingPage() {
         data={[
           createWebPageJsonLd({
             path: "/",
-            name: "Classin 수업 시스템 OS",
+            name: DEFAULT_SITE_TITLE,
             description: CLASSIN_POSITIONING.metadataDescription,
           }),
           createBreadcrumbJsonLd([{ name: "홈", path: "/" }]),

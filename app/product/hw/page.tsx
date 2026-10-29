@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { trackEvent } from "@/lib/analytics"
 import { BROCHURE_URL } from "@/lib/marketing-links"
+import { TrackedLink } from "@/components/TrackedLink"
 import { TESTIMONIALS } from "@/lib/testimonials"
 import { BOARD_SPEC_GROUPS } from "@/lib/hardware/board-specs"
 import { motion, useInView } from "framer-motion"
@@ -16,6 +17,10 @@ import Image from "next/image"
 import Link from "next/link"
 import dynamic from "next/dynamic"
 import { Fragment, useRef, useState } from "react"
+
+// 이 페이지는 클라이언트 컴포넌트라 lib/docs.ts(수천 줄짜리 문서 데이터)를 번들에 끌어오지 않도록 경로를 직접 적는다.
+// 문서 slug/카테고리가 바뀌면 tests/seo/internal-doc-links.test.ts 가 잡는다.
+const HW_SPEC_FAQ_DOC_HREF = "/docs/hardware/hardware-spec-installation-faq"
 
 // below-the-fold 섹션은 dynamic import로 메인 번들에서 분리 (SSR은 유지되어 초기 HTML 동일)
 const OpeningStatement = dynamic(() => import("@/components/product/hw/OpeningStatement"))
@@ -1362,6 +1367,25 @@ export default function ProductHWPage() {
                                 서비스 소개서 보기
                                 </a>
                             </Button>
+                        </div>
+
+                        <div className="mt-8 flex flex-col items-center justify-center gap-1 sm:flex-row sm:gap-8">
+                            <TrackedLink
+                                href={HW_SPEC_FAQ_DOC_HREF}
+                                ctaId="hw_spec_faq_doc"
+                                className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#084734] transition-colors hover:text-[#065c41] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#084734]"
+                            >
+                                사양·설치 환경 FAQ 보기
+                                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                            </TrackedLink>
+                            <TrackedLink
+                                href="/faq"
+                                ctaId="hw_faq_more"
+                                className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#084734] transition-colors hover:text-[#065c41] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#084734]"
+                            >
+                                전체 FAQ 보기
+                                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                            </TrackedLink>
                         </div>
                     </motion.div>
                 </div>

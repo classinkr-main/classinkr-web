@@ -562,10 +562,23 @@ describe("message review PATCH gap ingestion hook", () => {
   it("does not ingest when the decision is not changes_requested", async () => {
     mocks.reviewInternalCsMessage.mockResolvedValue(reviewedMessage("approved"))
 
-    const response = await runPatch({ decision: "approved" })
+    const response = await runPatch({
+      decision: "approved",
+      correctedContent: "고객 전달용으로 검토한 답변",
+    })
     expect(response.status).toBe(200)
 
     expect(mocks.upsertQuestionCluster).not.toHaveBeenCalled()
+  })
+
+  it("rejects approval without a separately reviewed customer answer", async () => {
+    const response = await runPatch({ decision: "approved", correctedContent: "   " })
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({
+      error: "Approved messages require a customer-ready correctedContent",
+    })
+    expect(mocks.reviewInternalCsMessage).not.toHaveBeenCalled()
   })
 
   it("keeps the review response successful when the conversation lookup for ingestion fails", async () => {

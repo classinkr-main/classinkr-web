@@ -81,7 +81,7 @@ const VISIT_FACTS = [
     icon: CalendarClock,
     label: "운영 시간",
     value: SHOWROOM_SLOT_TIMES.join(" · "),
-    note: "평일만 운영하며 점심시간은 비워둡니다",
+    note: "평일만 운영하고 공휴일은 쉽니다. 점심시간은 비워둡니다",
   },
   {
     icon: Users,

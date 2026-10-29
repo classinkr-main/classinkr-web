@@ -287,7 +287,7 @@ describe("SalesLedgerWorkbench — weeklyConfidence 배선 규약(소스 스캔)
     const body = sliceBetween(
       source,
       "const buildDraftInput = useCallback",
-      "}, [detail, draftForm, lens, period, selectedMonth, selectedRow, team])",
+      "}, [detail, draftForm, lens, period, selectedMonth, selectedRow, sheetRowById, team])",
     )
     expect(body).toContain("weeklyConfidence: weeklyContract ? weeklyContract.weeklyConfidence : null")
     expect(body).toContain("confidence: weeklyContract ? weeklyContract.dominantConfidence : draftForm.confidence")
@@ -339,7 +339,8 @@ describe("InputRailSection — 주차별 확도 seg UI 규약(소스 스캔)", (
   })
 
   it("weeklyMode의 기존 확도 블록은 전체 일괄 적용(5칸 세트) + 우세 버킷 캡션이다", () => {
-    expect(source).toContain("weeklyConfidence: defaultDraftWeeklyConfidence(option.id)")
+    // 일괄 버튼은 draftFormWithConfidence(5칸 세트 + 직접 고른 표시 — shared.tsx, 행동은 tests/branch/ledger-confidence-touched.test.ts).
+    expect(source).toContain("setDraftForm((current) => draftFormWithConfidence(current, option.id))")
     expect(source).toContain("전체 일괄 적용 — 주차별로 개별 변경 가능 · 저장 확도는 우세 버킷 자동")
   })
 
@@ -387,6 +388,8 @@ describe("matrixCellConfidence — 주차 슬롯 우선(소스 스캔)", () => {
 
   it("워크벤치 pendingByCell은 인라인 사본 없이 순수 함수를 소비한다(드리프트 차단)", () => {
     const workbench = read("components/admin/branch/SalesLedgerWorkbench.tsx")
-    expect(workbench).toContain("useMemo(() => buildMatrixPendingByCell(drafts, cellLookupRows), [drafts, cellLookupRows])")
+    // 2026-10-23: 다시 가져온 시트 행에 열린 수정 초안을 맞춘 사본(alignOpenDraftsToSheetRows)을 넘긴다 — 여전히 순수 함수 소비.
+    expect(workbench).toContain("useMemo(() => alignOpenDraftsToSheetRows(drafts, sheetRows), [drafts, sheetRows])")
+    expect(workbench).toContain("useMemo(() => buildMatrixPendingByCell(pendingMatchDrafts, cellLookupRows), [pendingMatchDrafts, cellLookupRows])")
   })
 })

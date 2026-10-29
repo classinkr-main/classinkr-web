@@ -62,23 +62,10 @@ export function isRedBg(bg: CellFormat | null): boolean {
   return (bg.red ?? 0) >= 0.85 && (bg.green ?? 0) < 0.5 && (bg.blue ?? 0) < 0.5
 }
 
-// REV 시트 운영 규칙: 금액의 글자색 빨강 = 확정 매출.
-// 실측 색상은 #FF0000, #EB4336 계열. 고객명 칸의 갈색(#B45F06, r0.71/g0.37)은 제외해야 하므로
-// green 상한을 0.3으로 둔다.
-export function isRedText(fg: CellFormat | null | undefined): boolean {
-  if (!fg) return false
-  return (fg.red ?? 0) >= 0.75 && (fg.green ?? 0) <= 0.3 && (fg.blue ?? 0) <= 0.3
-}
-
-// 글자색 파랑 = 클로징 임박(90%+ 확정 예상). 기본 파랑(#0000FF)과
-// 구글 기본 블루(#1155CC, #4A86E8) 계열을 잡고 검정·빨강·초록은 제외한다.
-export function isBlueText(fg: CellFormat | null | undefined): boolean {
-  if (!fg) return false
-  const red = fg.red ?? 0
-  const green = fg.green ?? 0
-  const blue = fg.blue ?? 0
-  return blue >= 0.5 && blue - red >= 0.25 && blue - green >= 0.15
-}
+// REV 시트 운영 규칙: 금액의 글자색 빨강 = 확정 매출(실측 #FF0000·#EB4336 계열, 고객명 칸 갈색 #B45F06 제외),
+// 파랑 = 클로징 임박(90%+, #0000FF·#1155CC·#4A86E8 계열). 판정식의 정본은 클라이언트 겸용 순수 모듈
+// lib/branch/sheet-writeback/colors.ts 다 — 시트 쓰기(장부 반영)가 같은 임계로 색을 읽고 쓰도록 사본 없이 재수출한다.
+export { isBlueText, isRedText } from "@/lib/branch/sheet-writeback/colors"
 
 // Drive API gives us the sheet's last-edited timestamp without re-reading any
 // values. We surface this in the dashboard so the user can tell whether the

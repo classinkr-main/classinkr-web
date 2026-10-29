@@ -11,6 +11,8 @@ export interface SyncRunLike {
   status: "running" | "success" | "failed"
   error: string | null
   source?: string
+  /** branch_sync_runs.trigger — "cron"·"manual". 알림 판정(그날 첫 크론 실패)에만 쓴다. */
+  trigger?: string
 }
 
 export interface SyncFailureStreak {
@@ -99,10 +101,29 @@ export function computeSyncFailureStreak(runs: SyncRunLike[], source: SyncSource
   }
 }
 
-// 2일째에 처음 알리고 이후 3일마다 다시 알린다(2, 5, 8, …). 크론이 하루 한 번만 판정하므로
-// 같은 날 중복 발송은 없다. 매일 알리면 운영방이 무뎌지고, 한 번만 알리면 이번처럼 묻힌다.
+// 2일째에 처음 알리고 이후 3일마다 다시 알린다(2, 5, 8, …). 같은 날 중복 발송은
+// isFirstCronFailureOfKstDay가 막는다. 매일 알리면 운영방이 무뎌지고, 한 번만 알리면 이번처럼 묻힌다.
 export function shouldAlertSyncFailureStreak(failedDays: number): boolean {
   return failedDays >= 2 && (failedDays - 2) % 3 === 0
+}
+
+/**
+ * 방금 끝난 크론 실행이 이 원천의 "KST 오늘 첫 크론 실패"인가 — 알림은 이때만 판정한다.
+ *
+ * 크론이 하루 3번(KST 09·13·17시) 돌면서 같은 날 실패가 여러 번 쌓인다. 실패할 때마다 판정하면
+ * "2일째 실패" 알림이 하루 세 번 나간다(2026-09-14 설계 §6). 수동 재시도 실패는 세지 않는다 —
+ * 아침에 누가 수동으로 눌러 실패했다고 그날 크론 알림이 빠지면 안 된다.
+ * runs에는 방금 끝난 실행이 들어 있어야 한다(listRecentSyncRunsFresh).
+ */
+export function isFirstCronFailureOfKstDay(runs: SyncRunLike[], source: SyncSourceKey, now: Date): boolean {
+  const today = getBusinessDateParts(now).date
+  const cronFailuresToday = runs.filter(
+    (run) =>
+      run.trigger === "cron" &&
+      getBusinessDateParts(new Date(run.started_at)).date === today &&
+      outcomeFor(run, source).kind === "failed",
+  )
+  return cronFailuresToday.length === 1
 }
 
 // 권한·공유 끊김 계열(재시도·재동기화로 안 풀리고 사람이 시트를 다시 공유해야 하는 오류).

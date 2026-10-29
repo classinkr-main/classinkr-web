@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og"
 
+export const alt = "클래스인 Classin — 학원 전자칠판·수업 녹화·운영 플랫폼"
 export const size = { width: 1200, height: 630 }
 export const contentType = "image/png"
 
@@ -77,9 +78,9 @@ export default function OGImage() {
             maxWidth: 820,
           }}
         >
-          학원 운영의
+          학원 전자칠판·수업 녹화
           <br />
-          새로운 기준
+          운영 플랫폼, 클래스인
         </h1>
 
         {/* Sub text */}
@@ -93,9 +94,9 @@ export default function OGImage() {
             maxWidth: 640,
           }}
         >
-          데이터 기반의 학원 관리 플랫폼으로 교육 품질을 표준화하고
+          전자칠판, 수업 녹화, 교안, LMS와 관리자 데이터를
           <br />
-          행정 업무를 자동화하세요.
+          한 흐름으로 연결하는 클래스인
         </p>
 
         {/* Bottom right accent */}

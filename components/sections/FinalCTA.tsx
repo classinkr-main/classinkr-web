@@ -4,7 +4,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { DemoModal } from "./DemoModal"
 import { TrackedLink } from "@/components/TrackedLink"
-import { ArrowRight, CalendarDays, FileCheck2, MapPin, Newspaper } from "lucide-react"
+import { ArrowRight, CalendarDays, CircleHelp, FileCheck2, MapPin, Newspaper, Receipt } from "lucide-react"
 
 export function FinalCTA() {
     return (
@@ -58,7 +58,7 @@ export function FinalCTA() {
                 </p>
 
                 {/* 아직 상담이 이르다면 — 콘텐츠 탐색 경로 */}
-                <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-8">
+                <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row sm:flex-wrap sm:gap-x-8 sm:gap-y-3">
                     <TrackedLink
                         href="/resources/academy-system-checklist#download"
                         ctaId="final_lead_magnet"
@@ -67,6 +67,26 @@ export function FinalCTA() {
                     >
                         <FileCheck2 className="h-4 w-4" />
                         먼저 운영 누수 진단하기
+                    </TrackedLink>
+                    <TrackedLink
+                        href="/pricing"
+                        prefetch={false}
+                        ctaId="final_pricing"
+                        tracking={{ source: "home_final_cta" }}
+                        className="inline-flex items-center gap-1.5 text-sm font-semibold text-white/50 transition-colors hover:text-[#6EE7B7]"
+                    >
+                        <Receipt className="h-4 w-4" aria-hidden="true" />
+                        요금 안내
+                    </TrackedLink>
+                    <TrackedLink
+                        href="/faq"
+                        prefetch={false}
+                        ctaId="final_faq"
+                        tracking={{ source: "home_final_cta" }}
+                        className="inline-flex items-center gap-1.5 text-sm font-semibold text-white/50 transition-colors hover:text-[#6EE7B7]"
+                    >
+                        <CircleHelp className="h-4 w-4" aria-hidden="true" />
+                        자주 묻는 질문
                     </TrackedLink>
                     <Link
                         href="/events"

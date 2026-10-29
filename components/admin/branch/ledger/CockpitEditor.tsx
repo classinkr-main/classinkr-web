@@ -16,7 +16,8 @@ import {
   FORECAST_WEEK_RANGE_LABELS,
   LOCK_WARNING_TEXT,
   REV_PRODUCT_FILTERS,
-  defaultDraftWeeklyConfidence,
+  draftFormWithConfidence,
+  draftFormWithWeekConfidence,
   dominantWeeklyConfidence,
   draftWeeklyAmounts,
   draftWeeklyTotal,
@@ -288,11 +289,7 @@ export function CockpitEditor({
                   type="button"
                   aria-pressed={pressed}
                   onClick={() =>
-                    setDraftForm((current) => ({
-                      ...current,
-                      confidence: option.id,
-                      weeklyConfidence: defaultDraftWeeklyConfidence(option.id),
-                    }))
+                    setDraftForm((current) => draftFormWithConfidence(current, option.id))
                   }
                   className={`min-h-11 md:min-h-9 rounded-md text-[12px] font-bold transition ${
                     pressed
@@ -364,10 +361,7 @@ export function CockpitEditor({
               }))
             }
             onConfidenceChange={(index, key) =>
-              setDraftForm((current) => ({
-                ...current,
-                weeklyConfidence: current.weeklyConfidence.map((value, i) => (i === index ? key : value)),
-              }))
+              setDraftForm((current) => draftFormWithWeekConfidence(current, index, key))
             }
             lockedWeeks={lockedWeeks}
             variant="cockpit"

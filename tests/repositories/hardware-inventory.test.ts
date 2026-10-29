@@ -20,6 +20,8 @@ let snapshotInsertError: { message: string } | null = null
 // hardware_import_runs 최근 기록(최신순) — 매시간 자동 가져오기의 "변경 없음" 판정이 읽는다.
 let importRunRows: Array<Record<string, unknown>> = []
 
+let upsertedItemNames: string[] = []
+
 function tableClient(table: string) {
   return {
     insert(payload: unknown) {
@@ -62,10 +64,27 @@ function tableClient(table: string) {
     },
     upsert(payload: unknown) {
       operations.push({ table, method: "upsert", payload })
+      // ensureHardwareItems 는 upsert 뒤 품목 표를 통째로 읽는다 — 방금 넣은 이름을 그 응답으로 돌려준다.
+      upsertedItemNames = Array.isArray(payload) ? payload.map((row) => String((row as { name: string }).name)) : []
       return Promise.resolve({ data: null, error: null })
     },
     select() {
+      const itemsFor = (names: string[]) => names.map((name, index) => ({
+        id: `item-${index + 1}`,
+        name,
+        sku: null,
+        category: null,
+        reorder_point: 2,
+        lead_time_days: 14,
+        active: true,
+        source_aliases: [name],
+        created_at: "2026-06-27T00:00:00.000Z",
+        updated_at: "2026-06-27T00:00:00.000Z",
+      }))
       return {
+        then(resolve: (value: { data: unknown; error: null }) => unknown) {
+          return Promise.resolve({ data: itemsFor(upsertedItemNames), error: null }).then(resolve)
+        },
         async in(_column: string, names: string[]) {
           return {
             data: names.map((name, index) => ({
@@ -589,6 +608,16 @@ describe("importHardwareFromBranchSheets", () => {
         stock: await listFreshHwStock(),
       })
     )
+  })
+
+  it("가져오기 규칙 판이 바뀌면 같은 시트라도 체크섬이 달라진다(다음 자동 가져오기가 다시 싣는다)", async () => {
+    const { checksumHardwareSheetSource, HARDWARE_SHEET_IMPORT_LOGIC_VERSION } = await loadRepository()
+    expect(HARDWARE_SHEET_IMPORT_LOGIC_VERSION).toBeGreaterThanOrEqual(2)
+    const empty = checksumHardwareSheetSource({ inbound: [], outbound: [], stock: [] })
+    // 판 1(판 없이 계산하던 때)의 빈 시트 체크섬과 달라야 한다.
+    const { createHash } = await import("crypto")
+    const legacy = createHash("sha256").update(JSON.stringify({ inbound: [], outbound: [], stock: [] })).digest("hex")
+    expect(empty).not.toBe(legacy)
   })
 
   it("source checksum ignores mirror ids, synced_at and row order", async () => {

@@ -21,6 +21,12 @@ const ALLOWED_EVENTS = new Set([
   "chatbot_teaser_dismissed",
   "chatbot_opened",
   "chatbot_first_question",
+  // 퍼널 보조 이벤트(lib/analytics.ts EventNames 와 함께 갱신)
+  "contact_start",
+  "showroom_start",
+  "click_to_call",
+  "click_email",
+  "pricing_view",
 ])
 
 const ALLOWED_PARAM_KEYS: Record<string, Set<string>> = {
@@ -43,6 +49,10 @@ const ALLOWED_PARAM_KEYS: Record<string, Set<string>> = {
   submit_demo_request: new Set([
     "event_id",
     "source",
+    // 폼 갈래(contact·demo·event·showroom·checkout_request) — 같은 source(contact_page)를
+    // 쓰는 문의 페이지와 행사 신청 모달을 가르는 유일한 값이다.
+    "form_type",
+    "lead_source",
     "lead_id",
     "stored",
     "event_slug",
@@ -60,8 +70,25 @@ const ALLOWED_PARAM_KEYS: Record<string, Set<string>> = {
     "value",
     "currency",
   ]),
-  submit_newsletter: new Set(["event_id", "source", "lead_magnet", "post_slug", "gate"]),
-  download_materials: new Set(["event_id", "asset_id", "page", "source", "lead_magnet", "post_slug", "gate"]),
+  submit_newsletter: new Set([
+    "event_id",
+    "source",
+    "form_type",
+    "lead_source",
+    "lead_magnet",
+    "post_slug",
+    "gate",
+  ]),
+  download_materials: new Set([
+    "event_id",
+    "asset_id",
+    "page",
+    "page_path",
+    "source",
+    "lead_magnet",
+    "post_slug",
+    "gate",
+  ]),
   view_resource_card: new Set(["event_id", "source", "lead_magnet", "gate", "tier", "category"]),
   view_resource: new Set(["event_id", "source", "lead_magnet", "gate", "tier", "category"]),
   view_demo_video: new Set(["event_id", "button", "page", "source", "seminar"]),
@@ -92,6 +119,12 @@ const ALLOWED_PARAM_KEYS: Record<string, Set<string>> = {
   chatbot_teaser_dismissed: new Set(["event_id", "path"]),
   chatbot_opened: new Set(["event_id", "source"]),
   chatbot_first_question: new Set(["event_id", "path"]),
+  contact_start: new Set(["event_id", "form_type", "page_path"]),
+  showroom_start: new Set(["event_id", "form_type", "page_path"]),
+  // 전화번호·메일 주소 값은 받지 않는다 — 위치 라벨과 경로만.
+  click_to_call: new Set(["event_id", "link_location", "page_path"]),
+  click_email: new Set(["event_id", "link_location", "page_path"]),
+  pricing_view: new Set(["event_id", "pricing_surface", "page_path"]),
 }
 
 const PII_PATTERNS = [

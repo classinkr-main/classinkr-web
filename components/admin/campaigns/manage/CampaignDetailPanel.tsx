@@ -20,6 +20,7 @@ import { metaObjectiveLabel } from "@/lib/marketing/campaign-labels"
 import {
   AlertCircle,
   CalendarDays,
+  FolderKanban,
   Link2,
   Mail,
   MessageSquare,
@@ -194,12 +195,18 @@ interface CampaignDetailPanelProps {
   campaign: CampaignWithLinks // 리스트 요약 — 즉시 헤더 + 폴백 링크. 상세는 GET /[id] 로 새로 조회.
   onClose: () => void // 부모에서 memoized(안정) — load 의 deps 로 안전하게 쓰인다.
   onListChanged: () => void | Promise<void> // 부모 리스트 리페치(연결 수·필드 변경 반영).
+  // 캠페인 관리 통합 화면(2026-10)에서만 넘어온다 — 소속 프로젝트 이름 해석 + 프로젝트 상세로 넘어가기.
+  // 없으면(단독 사용) 소속 줄을 그리지 않는다.
+  projectNameOf?: (projectId: string) => string | null
+  onOpenProject?: (projectId: string) => void
 }
 
 export default function CampaignDetailPanel({
   campaign,
   onClose,
   onListChanged,
+  projectNameOf,
+  onOpenProject,
 }: CampaignDetailPanelProps) {
   const toast = useToast()
   const [data, setData] = useState<DetailResponse | null>(null)
@@ -357,6 +364,29 @@ export default function CampaignDetailPanel({
                 </>
               )}
             </div>
+
+            {/* 소속 프로젝트 — 배정·제외는 프로젝트 상세(멤버 캠페인)가 맡는다. 여기선 어디에 묶였는지와 그리로 가는 길만. */}
+            {projectNameOf && (
+              <div className="mt-1.5 text-[11px]">
+                {head.projectId ? (
+                  <button
+                    type="button"
+                    onClick={() => head.projectId && onOpenProject?.(head.projectId)}
+                    disabled={!onOpenProject}
+                    className="inline-flex max-w-full items-center gap-1 font-medium text-[#615D59] underline-offset-2 transition-colors hover:text-[#084734] hover:underline disabled:no-underline"
+                  >
+                    <FolderKanban className="h-3 w-3 shrink-0 text-[#A39E98]" aria-hidden />
+                    <span className="truncate">{projectNameOf(head.projectId) ?? "소속 프로젝트"}</span>
+                    {onOpenProject && <span aria-hidden>→</span>}
+                  </button>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[#A39E98]">
+                    <FolderKanban className="h-3 w-3 shrink-0" aria-hidden />
+                    프로젝트 미배정 — 프로젝트 상세의 “캠페인 추가”로 묶을 수 있습니다
+                  </span>
+                )}
+              </div>
+            )}
 
             <div className="mt-3 flex items-center gap-2">
               <button

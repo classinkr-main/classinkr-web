@@ -1,87 +1,80 @@
 "use client"
 
 // components/admin/campaigns/manage/CampaignManageClient.tsx
-// 캠페인 관리 — 리스트 + 생성 드로어(D1-5). 행 클릭 → 상세 패널(D1-6, 롤업 + 링크 피커).
-// 편집은 상세 패널이 CampaignFormDrawer 를 재사용하므로 여기선 "새 캠페인"(생성)만 드로어로 연다.
-// 마운트 시 adminFetchJson 으로 목록 조회. 마이그레이션 미적용이면 API 가 500 →
-// 크래시/화이트스크린 없이 에러 카드 + 재시도로 그레이스풀 강등(필수).
+// 캠페인 관리 — 캠페인과 마케팅 프로젝트를 한 화면에서 관리한다(2026-10 통합).
+// 이전에는 두 메뉴(/admin/campaigns/manage · /admin/campaigns/projects)였다. 지금은 헤더 아래
+// 탭 두 개(캠페인 · 프로젝트)이고, 두 탭이 갤러리형 1b 시안의 같은 문법(상태 탭 + 상태별 묶음 +
+// 갤러리/리스트 토글)을 쓴다. 예전 프로젝트 주소는 ?view=projects 로 넘어온다.
+//
+// 이 컴포넌트가 드는 것: 두 목록의 데이터, 탭(URL 동기화), 생성 드로어, 두 상세 패널, 동기화.
+// 상세 패널을 여기서 들어야 프로젝트 상세 ↔ 캠페인 상세를 바로 오갈 수 있다.
+// 목록 표시는 CampaignsPane / ProjectsPane 이 맡는다.
+//
+// 마이그레이션 미적용이면 각 API 가 500 → 크래시/화이트스크린 없이 탭별 에러 카드 + 재시도로
+// 그레이스풀 강등(필수). 한쪽 목록이 실패해도 다른 탭은 그대로 쓴다.
 // DESIGN.md 팔레트만 사용.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-
-import ShowMore, { useVisibleCount } from "@/components/admin/ui/ShowMore"
-
-const CAMPAIGN_LIST_STEP = 20
+import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { Activity, AlertCircle, ArrowLeft, Link2, Plus, RefreshCw, X } from "lucide-react"
+import { Activity, ArrowLeft, FolderKanban, Layers, Link2, Plus, RefreshCw, type LucideIcon } from "lucide-react"
 
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
+import { getBusinessDateParts } from "@/lib/business-time"
+import { manageViewSearch, type ManageView } from "@/lib/marketing/manage-view"
 import { useToast } from "@/components/ui/toast"
-import {
-  CAMPAIGN_STATUS_LABEL,
-  type CampaignStatus,
-  type CampaignWithLinks,
-} from "@/lib/types/marketing-campaign"
+import type { CampaignWithLinks, ProjectWithRollup } from "@/lib/types/marketing-campaign"
 
-import { CampaignManageEmpty, CampaignRow } from "./CampaignRow"
+import { ProjectFormDrawer } from "../projects/ProjectFormDrawer"
+import ProjectDetailPanel from "../projects/ProjectDetailPanel"
+import ProjectsPane from "../projects/ProjectsPane"
 import { CampaignFormDrawer } from "./CampaignFormDrawer"
 import CampaignDetailPanel from "./CampaignDetailPanel"
+import CampaignsPane, { type CampaignProjectFilter } from "./CampaignsPane"
+import {
+  AD_SYNC_CHANNEL_LABEL,
+  AdSyncBanner,
+  MetaSyncBanner,
+  type AdSyncResult,
+  type MetaSyncResult,
+} from "./SyncResultBanners"
 
-// 목록 상단 상태 요약의 표시 순서 — 라이브 먼저(진행 → 계획 → 일시중지 → 완료).
-const STATUS_SUMMARY_ORDER: CampaignStatus[] = ["active", "planned", "paused", "done"]
+const VIEW_TABS: { id: ManageView; label: string; Icon: LucideIcon }[] = [
+  { id: "campaigns", label: "캠페인", Icon: Layers },
+  { id: "projects", label: "프로젝트", Icon: FolderKanban },
+]
 
-// POST /api/admin/marketing-campaigns/meta-sync 응답 — 결과 배너가 그대로 보여준다.
-interface MetaSyncResult {
-  created: Array<{ campaignId: string; metaId: string; name: string }>
-  updated: Array<{ campaignId: string; name: string; changes: string[] }>
-  failed: Array<{ name: string; error: string }>
-  unchangedMirrorCount: number
-  crossChannelLinkedCount: number
-  unresolvedMirrorCount: number
-  skipped: Array<{ metaId: string; name: string; reason: string }>
-}
+const SECONDARY_BUTTON =
+  "inline-flex items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-1.5 text-[12px] font-bold text-[#111110] transition hover:bg-[#F6F5F4] disabled:opacity-60"
 
-// POST /api/admin/marketing-campaigns/ad-sync 응답 — Google·네이버 캠페인을 동명 우산에 붙인다.
-// meta-sync 와 달리 우산을 만들지 않는다(붙일 데가 없으면 skipped 로 보고). 그래서 배너에서
-// 정작 읽을 값은 linked 가 아니라 **skipped 의 이유**다 — 사람이 뭘 해야 하는지가 거기 있다.
-interface AdSyncResult {
-  linked: Array<{ channel: string; label: string; umbrellaName: string }>
-  failed: Array<{ label: string; umbrellaName: string; error: string }>
-  alreadyLinked: Array<{ label: string }>
-  skipped: Array<{ label: string; reason: string; detail: string }>
-  candidateCount: number
-  sources: Array<{ channel: string; ok: boolean; rowCount: number; error: string | null }>
-  lookbackDays: number
-}
-
-// 스냅샷을 못 읽은 채널을 배너에 이름으로 적는다 — "0건"과 "못 읽었다"는 다른 사실이다.
-const AD_SYNC_CHANNEL_LABEL: Record<string, string> = {
-  google: "Google",
-  naver: "네이버",
-}
-
-// 변경 필드 → 사람이 읽는 라벨(결과 배너의 갱신 행).
-const SYNC_CHANGE_LABEL: Record<string, string> = {
-  name: "이름",
-  status: "상태",
-  startsAt: "시작일",
-  endsAt: "종료일",
-}
-
-export default function CampaignManageClient() {
+export default function CampaignManageClient({
+  initialView = "campaigns",
+}: {
+  initialView?: ManageView
+}) {
   const toast = useToast()
+  const [view, setView] = useState<ManageView>(initialView)
+  // 기간 경과·D-day 기준일(KST YYYY-MM-DD) — 목록을 읽은 날로 고정해 한 화면의 판정이 어긋나지 않게 한다.
+  const [today, setToday] = useState("")
+
   const [campaigns, setCampaigns] = useState<CampaignWithLinks[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  // "새 캠페인"(생성) 드로어만 여기서 연다 — 편집은 상세 패널이 CampaignFormDrawer 를 재사용한다.
-  const [creating, setCreating] = useState(false)
-  // 상태 필터 — 18건+ 목록에서 "진행만" 추리는 용도. 요약 카운트 칩이 토글이다.
-  const [statusFilter, setStatusFilter] = useState<CampaignStatus | "all">("all")
-  // 이름 검색(2026-08-18) — Meta 동기화가 상위 50 미러를 만들면 목록이 곧 50+행이 된다.
-  const [query, setQuery] = useState("")
-  // 상세 패널이 여는 캠페인(리스트 요약). null = 닫힘. onClose 는 memoized(상세의 load deps 안정).
-  const [detail, setDetail] = useState<CampaignWithLinks | null>(null)
-  const closeDetail = useCallback(() => setDetail(null), [])
+  const [campaignsLoading, setCampaignsLoading] = useState(true)
+  const [campaignsError, setCampaignsError] = useState<string | null>(null)
+
+  const [projects, setProjects] = useState<ProjectWithRollup[]>([])
+  const [projectsLoading, setProjectsLoading] = useState(true)
+  const [projectsError, setProjectsError] = useState<string | null>(null)
+
+  // 캠페인 탭의 프로젝트 필터 — 프로젝트 상세의 "캠페인 탭에서 보기"가 바깥에서 바꾼다.
+  const [projectFilter, setProjectFilter] = useState<CampaignProjectFilter>("all")
+  // 생성 드로어 — 어느 탭의 "새 …"인지. 편집은 각 상세 패널이 폼 드로어를 재사용한다.
+  const [creating, setCreating] = useState<ManageView | null>(null)
+  // 상세 패널 — 한 번에 하나만 연다(프로젝트 ↔ 캠페인으로 넘어갈 때 앞의 것을 닫는다).
+  // onClose 는 memoized(상세의 load deps 안정).
+  const [campaignDetail, setCampaignDetail] = useState<CampaignWithLinks | null>(null)
+  const [projectDetail, setProjectDetail] = useState<ProjectWithRollup | null>(null)
+  const closeCampaignDetail = useCallback(() => setCampaignDetail(null), [])
+  const closeProjectDetail = useCallback(() => setProjectDetail(null), [])
+
   // Meta 동기화 — 실행 중 여부 + 마지막 결과 배너(닫기 전까지 유지).
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<MetaSyncResult | null>(null)
@@ -92,11 +85,11 @@ export default function CampaignManageClient() {
   const [adSyncResult, setAdSyncResult] = useState<AdSyncResult | null>(null)
   const adSyncingRef = useRef(false)
 
-  // 목록 라우트는 롤업 포함이라 서버가 Meta Graph 를 부른다 — 30초 캐시로 마운트·재방문
+  // 캠페인 목록 라우트는 롤업 포함이라 서버가 Meta Graph 를 부른다 — 30초 캐시로 마운트·재방문
   // 재조회를 흡수하고, 생성·수정·동기화 직후에만 force 로 우회한다.
-  const load = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
-    setLoading(true)
-    setError(null)
+  const loadCampaigns = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
+    setCampaignsLoading(true)
+    setCampaignsError(null)
     try {
       const data = await adminFetchJsonCached<{ campaigns: CampaignWithLinks[] }>(
         "/api/admin/marketing-campaigns",
@@ -104,61 +97,99 @@ export default function CampaignManageClient() {
         { ttlMs: 30_000, force, staleIfError: !force },
       )
       setCampaigns(data.campaigns ?? [])
+      setToday(getBusinessDateParts().date)
     } catch (e) {
-      setError(e instanceof Error ? e.message : "캠페인 목록을 불러오지 못했습니다.")
+      setCampaignsError(e instanceof Error ? e.message : "캠페인 목록을 불러오지 못했습니다.")
     } finally {
-      setLoading(false)
+      setCampaignsLoading(false)
     }
   }, [])
 
+  const loadProjects = useCallback(async () => {
+    setProjectsLoading(true)
+    setProjectsError(null)
+    try {
+      const data = await adminFetchJson<{ projects: ProjectWithRollup[] }>("/api/admin/marketing-projects")
+      setProjects(data.projects ?? [])
+      setToday(getBusinessDateParts().date)
+    } catch (e) {
+      setProjectsError(e instanceof Error ? e.message : "프로젝트 목록을 불러오지 못했습니다.")
+    } finally {
+      setProjectsLoading(false)
+    }
+  }, [])
+
+  // 한쪽 변경이 다른 쪽에 번진다 — 캠페인 링크는 프로젝트 롤업(행사·채널·소진)을, 프로젝트 배정은
+  // 캠페인의 소속을 바꾼다. 그래서 상세 패널의 변경 뒤에는 두 목록을 함께(병렬로) 다시 읽는다.
+  const reloadAll = useCallback(async () => {
+    await Promise.all([loadCampaigns({ force: true }), loadProjects()])
+  }, [loadCampaigns, loadProjects])
+
   useEffect(() => {
-    void load()
-  }, [load])
+    void loadCampaigns()
+    void loadProjects()
+  }, [loadCampaigns, loadProjects])
 
-  // 상태 분포 — "지금 진행 중인 게 몇 개인지"를 목록 위에서 먼저 읽게 한다(행의 상태 레일과 같은 축).
-  // 표시 순서는 생명주기(CAMPAIGN_STATUSES)가 아니라 "라이브 먼저" — 이 줄의 용도가 그것이다.
-  const statusCounts = useMemo(() => {
-    const acc: Record<CampaignStatus, number> = { planned: 0, active: 0, paused: 0, done: 0 }
-    for (const c of campaigns) acc[c.status] += 1
-    return acc
-  }, [campaigns])
+  // 탭 전환 — state 를 즉시 바꾸고 주소는 history.replaceState 로 뒤따른다(서버 재조회 없음,
+  // Next App Router 가 가로채 useSearchParams 와 동기화한다). 새로고침·공유해도 같은 탭이 열린다.
+  const selectView = useCallback((next: ManageView) => {
+    setView(next)
+    const { pathname, hash } = window.location
+    window.history.replaceState(null, "", `${pathname}${manageViewSearch(next)}${hash}`)
+  }, [])
 
-  const visibleCampaigns = useMemo(
-    () => {
-      const base = statusFilter === "all" ? campaigns : campaigns.filter((c) => c.status === statusFilter)
-      const q = query.trim().toLowerCase()
-      return q ? base.filter((c) => c.name.toLowerCase().includes(q)) : base
-    },
-    [campaigns, statusFilter, query],
-  )
-  // 단계 렌더(2026-08-18) — 필터·검색이 total을 줄이면 훅이 스스로 클램프한다.
-  const listVisible = useVisibleCount(visibleCampaigns.length, CAMPAIGN_LIST_STEP)
-
-  const handleSuccess = useCallback(
+  const handleCampaignCreated = useCallback(
     async (message: string) => {
-      setCreating(false)
-      await load({ force: true })
+      setCreating(null)
+      await loadCampaigns({ force: true })
       toast.success(message)
     },
-    [load, toast],
+    [loadCampaigns, toast],
   )
 
-  // 상세 패널(링크 추가·해제 등)이 부르는 목록 갱신 — 변경 직후이므로 캐시 우회.
-  const reloadAfterChange = useCallback(() => load({ force: true }), [load])
+  const handleProjectCreated = useCallback(
+    async (message: string) => {
+      setCreating(null)
+      await loadProjects()
+      toast.success(message)
+    },
+    [loadProjects, toast],
+  )
 
-  // 건너뛴 후보를 **이유 문장으로** 묶는다. 같은 이유(예: "이름이 같은 우산이 없다")는 문장이
-  // 글자 그대로 같아서 한 줄로 접히고, 우산 이름이 박힌 문장은 따로 남는다 — 이유 코드를
-  // 다시 라벨로 번역하지 않고도 목록이 짧아진다(번역표를 두면 서버 문장과 둘로 갈린다).
-  const adSkipGroups = useMemo(() => {
-    if (!adSyncResult) return []
-    const groups = new Map<string, string[]>()
-    for (const item of adSyncResult.skipped) {
-      const labels = groups.get(item.detail)
-      if (labels) labels.push(item.label)
-      else groups.set(item.detail, [item.label])
-    }
-    return [...groups].sort((a, b) => b[1].length - a[1].length)
-  }, [adSyncResult])
+  // 프로젝트 상세의 멤버 캠페인 이름 → 캠페인 상세.
+  const openCampaignFromProject = useCallback((campaign: CampaignWithLinks) => {
+    setProjectDetail(null)
+    setCampaignDetail(campaign)
+  }, [])
+
+  // 캠페인 상세의 소속 프로젝트 → 프로젝트 상세. 목록에 없으면(다른 곳에서 삭제 등) 지어내지 않는다.
+  const openProjectFromCampaign = useCallback(
+    (projectId: string) => {
+      const project = projects.find((p) => p.id === projectId)
+      if (!project) {
+        toast.error("프로젝트를 찾지 못했습니다. 새로고침 후 다시 시도해 주세요.")
+        return
+      }
+      setCampaignDetail(null)
+      setProjectDetail(project)
+    },
+    [projects, toast],
+  )
+
+  const projectNameOf = useCallback(
+    (projectId: string) => projects.find((p) => p.id === projectId)?.name ?? null,
+    [projects],
+  )
+
+  // 프로젝트 상세의 "캠페인 탭에서 보기" — 그 프로젝트로 좁힌 캠페인 탭.
+  const showProjectCampaigns = useCallback(
+    (projectId: string) => {
+      setProjectDetail(null)
+      setProjectFilter(projectId)
+      selectView("campaigns")
+    },
+    [selectView],
+  )
 
   // Meta 동기화 — 미링크 Meta 캠페인을 미러로 가져오고, 미러의 이름·상태·기간을 Meta 에 맞춘다.
   // 서버가 플랜·적용을 모두 담당하므로 여기서는 1콜 + 결과 배너 + 목록 리로드만 한다.
@@ -167,10 +198,9 @@ export default function CampaignManageClient() {
     syncingRef.current = true
     setSyncing(true)
     try {
-      const result = await adminFetchJson<MetaSyncResult>(
-        "/api/admin/marketing-campaigns/meta-sync",
-        { method: "POST" },
-      )
+      const result = await adminFetchJson<MetaSyncResult>("/api/admin/marketing-campaigns/meta-sync", {
+        method: "POST",
+      })
       setSyncResult(result)
       const changedCount = result.created.length + result.updated.length
       if (result.failed.length > 0) {
@@ -180,14 +210,14 @@ export default function CampaignManageClient() {
       } else {
         toast.success("Meta 동기화 완료 — 변경 사항 없음")
       }
-      await load({ force: true })
+      await loadCampaigns({ force: true })
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Meta 동기화에 실패했습니다.")
     } finally {
       syncingRef.current = false
       setSyncing(false)
     }
-  }, [load, toast])
+  }, [loadCampaigns, toast])
 
   // Google·네이버 링크 — 스냅샷에 잡힌 광고 캠페인을 **이름이 같은 우산에 붙이기만** 한다.
   // 우산을 만들지 않으므로 되돌릴 일이 적다(붙은 링크는 상세 패널에서 해제 가능).
@@ -196,10 +226,9 @@ export default function CampaignManageClient() {
     adSyncingRef.current = true
     setAdSyncing(true)
     try {
-      const result = await adminFetchJson<AdSyncResult>(
-        "/api/admin/marketing-campaigns/ad-sync",
-        { method: "POST" },
-      )
+      const result = await adminFetchJson<AdSyncResult>("/api/admin/marketing-campaigns/ad-sync", {
+        method: "POST",
+      })
       setAdSyncResult(result)
       const unreadable = result.sources.filter((source) => !source.ok)
       if (result.failed.length > 0) {
@@ -214,20 +243,27 @@ export default function CampaignManageClient() {
       } else {
         toast.success("광고 링크 완료 — 새로 연결할 캠페인이 없음")
       }
-      await load({ force: true })
+      await loadCampaigns({ force: true })
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "광고 캠페인 링크에 실패했습니다.")
     } finally {
       adSyncingRef.current = false
       setAdSyncing(false)
     }
-  }, [load, toast])
+  }, [loadCampaigns, toast])
+
+  // 탭 머리의 건수 — 첫 로딩 중이거나 못 읽었으면 숫자를 지어내지 않는다(빈칸).
+  const tabCount: Record<ManageView, number | null> = {
+    campaigns: campaignsError || (campaignsLoading && campaigns.length === 0) ? null : campaigns.length,
+    projects: projectsError || (projectsLoading && projects.length === 0) ? null : projects.length,
+  }
+  const anyLoading = campaignsLoading || projectsLoading
 
   return (
     <div className="pb-24">
-      {/* 헤더 — 캠페인 허브와 동일한 TopBar 패턴 */}
-      <header className="border-b border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 pb-5 pt-6 sm:px-6 lg:px-9 lg:pt-8">
-        <div className="flex items-start justify-between gap-4">
+      {/* 헤더 — 캠페인 허브와 동일한 TopBar 패턴 + 아래 가장자리에 붙은 탭(캠페인 · 프로젝트) */}
+      <header className="border-b border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 pt-6 sm:px-6 lg:px-9 lg:pt-8">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-[#615D59]">
               <span>ADMIN</span>
@@ -242,54 +278,57 @@ export default function CampaignManageClient() {
               캠페인 관리
             </h1>
             <p className="mt-1.5 text-[13px] text-[#615D59]">
-              이메일·문자·행사·Meta를 묶는 크로스채널 캠페인
+              캠페인으로 이메일·문자·행사·광고 실행을 묶고, 프로젝트로 캠페인을 묶어 예산 소진까지 한 화면에서 봅니다.
             </p>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
+          {/* 동작은 지금 탭의 것만 — 동기화는 캠페인을 다루고, "새 …"는 탭의 대상을 만든다. */}
+          <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
+            {view === "campaigns" && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void handleMetaSync()}
+                  disabled={syncing || campaignsLoading}
+                  title="미링크 Meta 캠페인을 가져오고, Meta와 1:1로 연결된 캠페인의 이름·상태·기간을 Meta 기준으로 맞춥니다."
+                  className={SECONDARY_BUTTON}
+                >
+                  <Activity className={`h-3.5 w-3.5 ${syncing ? "animate-pulse" : ""}`} />
+                  {syncing ? "동기화 중…" : "Meta 동기화"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleAdSync()}
+                  disabled={adSyncing || campaignsLoading}
+                  title="최근 90일 집행이 잡힌 Google·네이버 캠페인을 이름이 같은 캠페인에 연결합니다. 캠페인을 새로 만들지는 않습니다."
+                  className={SECONDARY_BUTTON}
+                >
+                  <Link2 className={`h-3.5 w-3.5 ${adSyncing ? "animate-pulse" : ""}`} />
+                  {adSyncing ? "연결 중…" : "Google·네이버 링크"}
+                </button>
+              </>
+            )}
             <button
               type="button"
-              onClick={() => void handleMetaSync()}
-              disabled={syncing || loading}
-              title="미링크 Meta 캠페인을 가져오고, Meta와 1:1로 연결된 캠페인의 이름·상태·기간을 Meta 기준으로 맞춥니다."
-              className="inline-flex items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-1.5 text-[12px] font-bold text-[#111110] transition hover:bg-[#F6F5F4] disabled:opacity-60"
+              onClick={() => void reloadAll()}
+              disabled={anyLoading}
+              className={SECONDARY_BUTTON}
             >
-              <Activity className={`h-3.5 w-3.5 ${syncing ? "animate-pulse" : ""}`} />
-              {syncing ? "동기화 중…" : "Meta 동기화"}
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleAdSync()}
-              disabled={adSyncing || loading}
-              title="최근 90일 집행이 잡힌 Google·네이버 캠페인을 이름이 같은 캠페인에 연결합니다. 캠페인을 새로 만들지는 않습니다."
-              className="inline-flex items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-1.5 text-[12px] font-bold text-[#111110] transition hover:bg-[#F6F5F4] disabled:opacity-60"
-            >
-              <Link2 className={`h-3.5 w-3.5 ${adSyncing ? "animate-pulse" : ""}`} />
-              {adSyncing ? "연결 중…" : "Google·네이버 링크"}
-            </button>
-            <button
-              type="button"
-              onClick={() => void load({ force: true })}
-              disabled={loading}
-              className="inline-flex items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-1.5 text-[12px] font-bold text-[#111110] transition hover:bg-[#F6F5F4] disabled:opacity-60"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-3.5 w-3.5 ${anyLoading ? "animate-spin" : ""}`} />
               새로고침
             </button>
             <button
               type="button"
-              onClick={() => setCreating(true)}
+              onClick={() => setCreating(view)}
               className="inline-flex items-center gap-1.5 rounded-md bg-[#084734] px-3 py-1.5 text-[12px] font-bold text-white transition hover:bg-[#065c41]"
             >
               <Plus className="h-3.5 w-3.5" />
-              새 캠페인
+              {view === "campaigns" ? "새 캠페인" : "새 프로젝트"}
             </button>
           </div>
         </div>
 
-        {/* 마케팅 프로젝트는 사이드바 기본 숨김이라(admin-nav-access DEFAULT_HIDDEN_HREFS) 이 보조 링크가
-            ⌘K 와 함께 화면 쪽 도달 경로다. 프로젝트 화면 헤더의 "캠페인 관리 →"와 짝을 이룬다. */}
-        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1">
+        <div className="mt-4">
           <Link
             href="/admin/campaigns"
             className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#615D59] transition-colors hover:text-[#111110]"
@@ -297,305 +336,118 @@ export default function CampaignManageClient() {
             <ArrowLeft className="h-3.5 w-3.5" />
             캠페인 허브로
           </Link>
-          <Link
-            href="/admin/campaigns/projects"
-            className="text-[12px] font-medium text-[#615D59] transition-colors hover:text-[#111110]"
-          >
-            마케팅 프로젝트 →
-          </Link>
+        </div>
+
+        {/* 관리 대상 탭 — 헤더 아래 가장자리에 붙는다(-mb-px 로 헤더 보더 위에 밑줄을 겹친다).
+            본문의 상태 탭(작은 글씨·검정 밑줄)과 위계를 나누려 큰 글씨·그린 밑줄을 쓴다. */}
+        <div role="tablist" aria-label="관리 대상" className="mt-3 flex gap-1 overflow-x-auto">
+          {VIEW_TABS.map(({ id, label, Icon }) => {
+            const active = view === id
+            const count = tabCount[id]
+            return (
+              <button
+                key={id}
+                id={`campaign-manage-tab-${id}`}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                aria-controls={`campaign-manage-panel-${id}`}
+                onClick={() => selectView(id)}
+                className={`-mb-px inline-flex min-h-11 shrink-0 items-center gap-1.5 border-b-2 px-3 text-[14px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734] ${
+                  active
+                    ? "border-[#084734] text-[#111110]"
+                    : "border-transparent text-[#615D59] hover:text-[#111110]"
+                }`}
+              >
+                <Icon className={`h-4 w-4 ${active ? "text-[#084734]" : "text-[#A39E98]"}`} aria-hidden />
+                {label}
+                {count != null && (
+                  <span className="text-[12px] font-medium tabular-nums text-[#A39E98]">{count}</span>
+                )}
+              </button>
+            )
+          })}
         </div>
       </header>
 
-      {/* 본문 */}
-      <div className="px-4 pt-6 sm:px-6 lg:px-9">
-        {/* Meta 동기화 결과 배너 — 무엇이 생기고 바뀌었는지 이름 단위로 남긴다(닫기 전까지 유지). */}
-        {syncResult && (
-          <div
-            className={`mb-4 rounded-2xl border px-4 py-3.5 ${
-              syncResult.failed.length > 0
-                ? "border-[#ECD29C] bg-[#FBF1E0]"
-                : "border-[#BDEFD8] bg-[#ECFDF5]"
-            }`}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 text-[12px] leading-relaxed">
-                <p
-                  className={`font-bold ${
-                    syncResult.failed.length > 0 ? "text-[#A8741A]" : "text-[#084734]"
-                  }`}
-                >
-                  Meta 동기화 — 가져옴 {syncResult.created.length} · 갱신 {syncResult.updated.length}
-                  {syncResult.unchangedMirrorCount > 0 ? ` · 변화 없음 ${syncResult.unchangedMirrorCount}` : ""}
-                  {syncResult.failed.length > 0 ? ` · 실패 ${syncResult.failed.length}` : ""}
-                </p>
-                {syncResult.created.length > 0 && (
-                  <p className="mt-1 text-[#084734]/80">
-                    새 캠페인: {syncResult.created.slice(0, 5).map((c) => c.name).join(", ")}
-                    {syncResult.created.length > 5 ? ` 외 ${syncResult.created.length - 5}건` : ""}
-                  </p>
-                )}
-                {syncResult.updated.length > 0 && (
-                  <p className="mt-0.5 text-[#084734]/80">
-                    갱신:{" "}
-                    {syncResult.updated
-                      .slice(0, 5)
-                      .map(
-                        (u) =>
-                          `${u.name} (${u.changes.map((ch) => SYNC_CHANGE_LABEL[ch] ?? ch).join("·")})`,
-                      )
-                      .join(", ")}
-                    {syncResult.updated.length > 5 ? ` 외 ${syncResult.updated.length - 5}건` : ""}
-                  </p>
-                )}
-                {syncResult.failed.length > 0 && (
-                  <p className="mt-0.5 text-[#A8741A]">
-                    실패: {syncResult.failed.map((f) => f.name).join(", ")} — {syncResult.failed[0].error}
-                  </p>
-                )}
-                {(syncResult.crossChannelLinkedCount > 0 ||
-                  syncResult.skipped.length > 0 ||
-                  syncResult.unresolvedMirrorCount > 0) && (
-                  <p className="mt-0.5 text-[11px] text-[#615D59]">
-                    {[
-                      syncResult.crossChannelLinkedCount > 0
-                        ? `크로스채널 연결 ${syncResult.crossChannelLinkedCount}건은 손대지 않음`
-                        : null,
-                      syncResult.skipped.length > 0
-                        ? `보관된 Meta 캠페인 ${syncResult.skipped.length}건 제외`
-                        : null,
-                      syncResult.unresolvedMirrorCount > 0
-                        ? `조회 범위 밖 미러 ${syncResult.unresolvedMirrorCount}건 유지`
-                        : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => setSyncResult(null)}
-                aria-label="동기화 결과 닫기"
-                className="shrink-0 rounded-md p-1 text-[#615D59] transition hover:text-[#111110]"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Google·네이버 링크 결과 — 붙은 것보다 **안 붙은 이유**가 이 배너의 본문이다. */}
-        {adSyncResult && (() => {
-          const unreadable = adSyncResult.sources.filter((source) => !source.ok)
-          const warn = adSyncResult.failed.length > 0 || unreadable.length > 0
-          return (
-            <div
-              className={`mb-4 rounded-2xl border px-4 py-3.5 ${
-                warn ? "border-[#ECD29C] bg-[#FBF1E0]" : "border-[#BDEFD8] bg-[#ECFDF5]"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 text-[12px] leading-relaxed">
-                  <p className={`font-bold ${warn ? "text-[#A8741A]" : "text-[#084734]"}`}>
-                    Google·네이버 링크 — 연결 {adSyncResult.linked.length}
-                    {adSyncResult.alreadyLinked.length > 0
-                      ? ` · 이미 연결됨 ${adSyncResult.alreadyLinked.length}`
-                      : ""}
-                    {adSyncResult.skipped.length > 0 ? ` · 건너뜀 ${adSyncResult.skipped.length}` : ""}
-                    {adSyncResult.failed.length > 0 ? ` · 실패 ${adSyncResult.failed.length}` : ""}
-                  </p>
-                  {adSyncResult.linked.length > 0 && (
-                    <p className="mt-1 text-[#084734]/80">
-                      {adSyncResult.linked
-                        .slice(0, 5)
-                        .map((item) => `${item.label} → ${item.umbrellaName}`)
-                        .join(", ")}
-                      {adSyncResult.linked.length > 5
-                        ? ` 외 ${adSyncResult.linked.length - 5}건`
-                        : ""}
-                    </p>
-                  )}
-                  {/* 못 읽은 채널은 0 건이 아니라 미측정이다 — 이름을 적어 둔다. */}
-                  {unreadable.map((source) => (
-                    <p key={source.channel} className="mt-0.5 break-words text-[#A8741A]">
-                      {AD_SYNC_CHANNEL_LABEL[source.channel] ?? source.channel} 스냅샷을 읽지
-                      못했습니다 — {source.error ?? "원인 불명"}
-                    </p>
-                  ))}
-                  {adSyncResult.failed.length > 0 && (
-                    <p className="mt-0.5 break-words text-[#A8741A]">
-                      실패: {adSyncResult.failed.map((f) => f.label).join(", ")} —{" "}
-                      {adSyncResult.failed[0].error}
-                    </p>
-                  )}
-                  {adSkipGroups.length > 0 && (
-                    <ul className="mt-1.5 space-y-0.5 text-[11px] text-[#615D59]">
-                      {adSkipGroups.slice(0, 4).map(([detail, labels]) => (
-                        <li key={detail}>
-                          <span className="font-medium text-[#111110]">
-                            {labels.slice(0, 3).join(", ")}
-                            {labels.length > 3 ? ` 외 ${labels.length - 3}건` : ""}
-                          </span>{" "}
-                          — {detail}
-                        </li>
-                      ))}
-                      {adSkipGroups.length > 4 && (
-                        <li className="text-[#A39E98]">
-                          다른 이유 {adSkipGroups.length - 4}가지 더 있습니다.
-                        </li>
-                      )}
-                    </ul>
-                  )}
-                  <p className="mt-1 text-[11px] text-[#A39E98]">
-                    최근 {adSyncResult.lookbackDays}일 스냅샷에서 후보{" "}
-                    {adSyncResult.candidateCount}건을 검토했습니다. 캠페인을 새로 만들지는 않습니다 —
-                    붙일 우산이 없으면 건너뜁니다.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setAdSyncResult(null)}
-                  aria-label="광고 링크 결과 닫기"
-                  className="shrink-0 rounded-md p-1 text-[#615D59] transition hover:text-[#111110]"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
-          )
-        })()}
-
-        {loading ? (
-          <div className="space-y-1.5" aria-busy="true">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="h-[78px] animate-pulse rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#f0f0ec]" />
-            ))}
-          </div>
-        ) : error ? (
-          <div className="rounded-2xl border border-[#F2B8B8] bg-[#FCE9E9] px-5 py-6">
-            <div className="flex items-start gap-2.5">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#B43E3E]" />
-              <div className="min-w-0">
-                <p className="text-[13px] font-semibold text-[#8F2C2C]">캠페인 목록을 불러오지 못했습니다</p>
-                <p className="mt-1 break-words text-[12px] text-[#B43E3E]">{error}</p>
-                <p className="mt-1.5 text-[11px] text-[#B43E3E]/80">
-                  마이그레이션(marketing_campaigns)이 아직 적용되지 않았을 수 있습니다.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => void load()}
-                  className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-[#F2B8B8] bg-white px-3 py-1.5 text-[12px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9]"
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                  다시 시도
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : campaigns.length === 0 ? (
-          <CampaignManageEmpty onCreate={() => setCreating(true)} />
-        ) : (
-          <div className="space-y-1.5">
-            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 pb-0.5">
-              <p className="text-[12px] text-[#615D59]">
-                캠페인 <span className="font-semibold tabular-nums text-[#111110]">{campaigns.length}</span>개
-                {query.trim() && (
-                  <>
-                    {" · 검색 "}
-                    <span className="font-semibold tabular-nums text-[#111110]">{visibleCampaigns.length}</span>건
-                  </>
-                )}
-                {statusFilter !== "all" && (
-                  <>
-                    {" · "}
-                    <button
-                      type="button"
-                      onClick={() => setStatusFilter("all")}
-                      className="font-medium text-[#084734] hover:underline"
-                    >
-                      필터 해제
-                    </button>
-                  </>
-                )}
-              </p>
-              {/* 상태 카운트 = 필터 칩 — 숫자를 읽는 자리에서 바로 그 집합으로 좁힌다. */}
-              <div className="flex flex-wrap items-center gap-1.5">
-                <input
-                  type="search"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="캠페인 이름 검색"
-                  aria-label="캠페인 이름 검색"
-                  className="h-7 w-40 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[12px] text-[#111110] placeholder:text-[#A39E98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
-                />
-              <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="상태 필터">
-                {STATUS_SUMMARY_ORDER.filter((s) => statusCounts[s] > 0).map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => setStatusFilter((prev) => (prev === s ? "all" : s))}
-                    aria-pressed={statusFilter === s}
-                    className={`inline-flex items-baseline gap-1 rounded-full border px-2 py-0.5 text-[11px] transition ${
-                      statusFilter === s
-                        ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
-                        : "border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:border-[#c8c8c4]"
-                    }`}
-                  >
-                    {CAMPAIGN_STATUS_LABEL[s]}
-                    <b
-                      className={`font-semibold tabular-nums ${
-                        s === "active" || statusFilter === s ? "text-[#084734]" : "text-[#111110]"
-                      }`}
-                    >
-                      {statusCounts[s]}
-                    </b>
-                  </button>
-                ))}
-              </div>
-              </div>
-            </div>
-            {visibleCampaigns.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] py-8 text-center text-[12.5px] text-[#A39E98]">
-                {query.trim() ? "검색과 일치하는 캠페인이 없습니다." : "이 상태의 캠페인이 없습니다."}
-              </p>
-            ) : (
-              <>
-                {visibleCampaigns.slice(0, listVisible.visible).map((campaign) => (
-                  <CampaignRow
-                    key={campaign.id}
-                    campaign={campaign}
-                    onOpen={() => setDetail(campaign)}
-                  />
-                ))}
-                {(listVisible.canMore || listVisible.canCollapse) && (
-                  <div className="flex justify-center pt-1.5">
-                    <ShowMore
-                      visible={listVisible.visible}
-                      total={visibleCampaigns.length}
-                      step={CAMPAIGN_LIST_STEP}
-                      onMore={listVisible.showMore}
-                      onCollapse={listVisible.canCollapse ? listVisible.collapse : undefined}
-                    />
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        )}
+      {/* 본문 — 두 탭을 모두 마운트해 두고 hidden 으로 가린다: 탭을 오가도 필터·검색·더보기가 유지된다. */}
+      <div className="px-4 pt-5 sm:px-6 lg:px-9">
+        <div
+          role="tabpanel"
+          id="campaign-manage-panel-campaigns"
+          aria-labelledby="campaign-manage-tab-campaigns"
+          hidden={view !== "campaigns"}
+        >
+          {syncResult && <MetaSyncBanner result={syncResult} onClose={() => setSyncResult(null)} />}
+          {adSyncResult && <AdSyncBanner result={adSyncResult} onClose={() => setAdSyncResult(null)} />}
+          <CampaignsPane
+            campaigns={campaigns}
+            projects={projectsError ? [] : projects}
+            loading={campaignsLoading}
+            error={campaignsError}
+            today={today}
+            projectFilter={projectFilter}
+            onProjectFilterChange={setProjectFilter}
+            onRetry={() => void loadCampaigns()}
+            onCreate={() => setCreating("campaigns")}
+            onOpen={setCampaignDetail}
+          />
+        </div>
+        <div
+          role="tabpanel"
+          id="campaign-manage-panel-projects"
+          aria-labelledby="campaign-manage-tab-projects"
+          hidden={view !== "projects"}
+        >
+          <ProjectsPane
+            projects={projects}
+            loading={projectsLoading}
+            error={projectsError}
+            today={today}
+            onRetry={() => void loadProjects()}
+            onCreate={() => setCreating("projects")}
+            onOpen={setProjectDetail}
+          />
+        </div>
       </div>
 
-      {/* 생성 드로어 — "새 캠페인" 전용(편집은 상세 패널이 담당). */}
-      {creating && (
+      {/* 생성 드로어 — 탭의 "새 …" 전용(편집은 각 상세 패널이 담당). */}
+      {creating === "campaigns" && (
         <CampaignFormDrawer
           initial={null}
-          onClose={() => setCreating(false)}
-          onSuccess={handleSuccess}
+          onClose={() => setCreating(null)}
+          onSuccess={handleCampaignCreated}
+        />
+      )}
+      {creating === "projects" && (
+        <ProjectFormDrawer
+          initial={null}
+          onClose={() => setCreating(null)}
+          onSuccess={handleProjectCreated}
         />
       )}
 
-      {/* 상세 패널 — 행 클릭 시. 롤업 + 연결된 실행 + 링크 피커 + 편집(폼 드로어 재사용). */}
-      {detail && (
-        <CampaignDetailPanel campaign={detail} onClose={closeDetail} onListChanged={reloadAfterChange} />
+      {/* 캠페인 상세 — 롤업 + 연결된 실행 + 링크 피커 + 편집 + 소속 프로젝트로 가는 길. */}
+      {campaignDetail && (
+        <CampaignDetailPanel
+          campaign={campaignDetail}
+          onClose={closeCampaignDetail}
+          onListChanged={reloadAll}
+          projectNameOf={projectNameOf}
+          onOpenProject={openProjectFromCampaign}
+        />
+      )}
+
+      {/* 프로젝트 상세 — 페이싱 + 롤업 + 멤버 캠페인(이름 → 캠페인 상세) + 배정 피커 + 편집. */}
+      {projectDetail && (
+        <ProjectDetailPanel
+          project={projectDetail}
+          today={today}
+          onClose={closeProjectDetail}
+          onListChanged={reloadAll}
+          onOpenCampaign={openCampaignFromProject}
+          onShowCampaigns={() => showProjectCampaigns(projectDetail.id)}
+        />
       )}
     </div>
   )

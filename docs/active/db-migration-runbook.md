@@ -56,6 +56,33 @@ npm run check:db --  --strict
 유지하고 팀 템플릿 조회는 적용 안내를 표시하며, 저장·수정·보관은 503으로 응답한다.
 테이블은 RLS를 활성화하고 정책을 두지 않아 서버의 관리자 인증을 거친 service role API에서만 접근한다.
 
+### 매출 장부 → REV 시트 쓰기 감사 기록
+
+[20261023_branch_rev_sheet_writes.sql](../../supabase/migrations/20261023_branch_rev_sheet_writes.sql)은
+`branch_sales_ledger_sheet_writes`를 만든다. 장부 반영이 '2. REV' 주차 칸에 쓰려 할 때마다 초안 하나에 한 행씩 남는다
+([ADR-011](../adr/ADR-011-rev-sheet-writeback-from-ledger.md)).
+
+- 기존 표·RPC(`branch_sales_ledger_drafts`·`entries`·`apply_branch_sales_ledger_draft`)는 바꾸지 않는다.
+- 시트 쓰기 반영 전용 RPC `apply_branch_sales_ledger_draft_if_unchanged`를 더한다. 초안을 잠그고 updated_at 이 시트 쓰기를 계획할 때와
+  같을 때만 기존 apply RPC 를 부른다(service_role 전용). 스위치를 켠 채 이 함수가 없으면 시트에 쓴 뒤 장부 기록이 실패한다.
+- RLS는 켜고 정책은 두지 않는다(service role 전용).
+- 트리거가 DELETE·TRUNCATE를 막는다. UPDATE는 상태 칸(status·code·written_at·entry_id·error·updated_at)만 허용한다.
+- 미적용이어도 시트 쓰기 스위치(`BRANCH_REV_SHEET_WRITE_ENABLED`, Production 전용)가 꺼져 있으면 영향이 없다.
+  켜져 있으면 감사 행을 못 남겨 시트 쓰기가 전부 500으로 막힌다. 장부·시트는 그대로다.
+- **스위치를 켜기 전에** 적용한다. 확인은 `npm run check:db -- --strict`의 `branch_sales_ledger_sheet_writes` 프로브와
+  `apply_branch_sales_ledger_draft_if_unchanged()` 프로브다.
+  warning 등급이라 `--strict` 없이는 미적용이어도 exit 0이다.
+- 켜는 전체 순서는 [REV 시트 쓰기 런북](rev-sheet-writeback-runbook.md) §1을 따른다.
+
+### 총판 정산
+
+[20261023_distributor_settlements.sql](../../supabase/migrations/20261023_distributor_settlements.sql)은
+견적별 총판 정산(총판용 견적서 금액·발행 스냅샷·미수 상태), 총판 입금 기록, 원가 템플릿을 저장한다.
+운영 적용 여부는 `npm run check:db`의 `distributor_settlements`·`distributor_settlement_payments`·
+`distributor_price_templates` 프로브로 확인한다. 미적용이면 고객 견적 작성·공유·동의는 그대로 동작하고,
+견적 상세의 총판 정산 영역과 총판 미수금 탭은 적용 안내를 표시하며 쓰기는 503으로 응답한다.
+세 표 모두 RLS를 활성화하고 정책을 두지 않는다.
+
 ### 공통 적용 기준
 
 **마이그레이션을 먼저 적용하고 코드를 배포한다.** 다만 순서가 뒤집혀도 공개 표면이 죽지 않도록
@@ -71,6 +98,9 @@ npm run check:db --  --strict
 - **새 컬럼 기록은 코어 경로와 분리한다.** 미적용 환경에서 주 기능이 죽지 않도록 별도
   `try/catch`로 best-effort 기록한다. 기준 구현:
   [app/api/admin/email/send/route.ts](../../app/api/admin/email/send/route.ts)의 부분 실패 기록.
+  두 번째 기준: [lib/repositories/branch-sync.ts](../../lib/repositories/branch-sync.ts)의 `startSyncRun` —
+  `runtime` 컬럼이 없으면(42703·PGRST204) 컬럼 없이 다시 기록하고 `console.warn`을 남긴다
+  (`20261028_branch_sync_runs_runtime.sql`).
 
 ## 2026-08-18 스키마 드리프트 감사 결과
 
@@ -131,7 +161,7 @@ npm run check:db --  --strict
 | `20260914_leads_naver_attribution.sql` | `leads.naver_ad`(jsonb) | 저장·조회 모두 없는 컬럼만 빼고 계속 동작한다(선택 컬럼 폴백 — 조회 쪽은 2026-09-21에 추가, 그 전에는 마케팅 허브 리드 집계가 42703으로 실패했다). 다만 **미적용 기간의 네이버 유입 귀속은 저장되지 않아 소급 복구할 수 없다** — 네이버 광고를 켜기 전에 적용한다 | `check:db` |
 | `20260914_compass_integration_bridge.sql` | `norm_phone_key()` + Compass 링크/연락/역브리지 뷰 | 적용 순서·재실행 조건은 [Compass 연동 2차](./compass-integration-2026-09-14.md) | `check:db`(warning) |
 | `20260914_leads_phone_key.sql` | `leads.phone_key` 생성 컬럼(= `norm_phone_key(phone)`) + 인덱스 | 재유입 병합이 원문·숫자만 비교 폴백으로 돌아 서식이 다른 같은 번호를 놓친다. **위 bridge 파일 뒤에** 적용(함수가 없으면 가드가 멈춘다) | `check:db`(warning) |
-| `20260921_checkout_requests_lead_qualifiers.sql` | `checkout_requests.role`·`academy_size` | **배포 전 필수** — 도입 신청 insert가 두 컬럼을 무조건 실어 42703으로 실패한다(신청 500) | `check:db` |
+| `20260921_checkout_requests_lead_qualifiers.sql` | `checkout_requests.role`·`academy_size` | **배포 전 필수** — 어드민 접수 큐 조회가 두 컬럼을 select해 42703으로 실패한다. 공개 도입 신청 insert는 2026-09-22부터 두 컬럼이 없으면 빼고 다시 저장한다([lib/checkout-requests.ts](../../lib/checkout-requests.ts)). 그 전 코드는 신청이 500으로 실패했다 | `check:db` |
 | `20260921_lead_source_intake_split.sql` | 과거 리드의 `source`를 `showroom_booking`·`checkout_request`로 백필(멱등) | 과거 쇼룸·도입 신청 리드가 계속 `contact_page`로 집계된다 | `schema-contract.ts` 주석의 조회 |
 
 하드웨어 계열은 아래 "하드웨어 마이그레이션" 절의 문서가 정본이다.
@@ -177,6 +207,35 @@ npm run check:db --  --strict
 | `20261028_hardware_inventory_process.sql` | `hardware_movements` 에 출고 유형·무상 여부·회수 원 출고·CRM 고객·담당/작성 계정·반납 예정일 칸, `hardware_items` 에 물류번호 관리 여부·보고 묶음·정렬 칸을 더하고 정의서 품목 18개를 시드(없는 이름만)한다. 배송 예정 확정 `confirm_hardware_planned_movement_v4`(v3 호출 + 새 칸 복사 + 상태 `설치 완료`). 전부 멱등 | 대시보드는 새 칸 없이 읽는다(폴백). 출고 유형·회수 연결·물류번호 직접 선택 저장이 실패하고, 확정은 v3 로 떨어져 확정 행에 유형·고객·담당이 빠진다 | `npm run check:db` 의 `hardware_movements`·`hardware_items` 프로브, 또는 `select to_regprocedure('public.confirm_hardware_planned_movement_v4(uuid,text,date,int,jsonb,uuid,text)') is not null;` → `true` |
 
 2026-10-28 적용 기록: 위 두 절의 네 파일(10-22 셋 + 10-28)을 서울 프로젝트에 파일명 순서로 적용했다(Management API query). 적용 전 확인: 품목 18개 이름이 모두 이미 있어 10-28 시드는 새 품목을 만들지 않고 묶음·물류번호 관리 표시만 붙였다. 적용 후 확인: 대사 뷰 `예정` 포함 `true`, `lead` 자동 확정 `true`, `sales_orders` 있음(RLS 켜짐), 확정 v4 있음(anon 실행 권한 없음), 묶음이 붙은 품목 18 · 수량만 관리 9. `check:db` 에 남은 경고는 `compass_meta_submissions_v`(Compass 브리지 뷰, 이 작업과 무관)뿐이다.
+### 2026-10-28 블로그 글 내용 변경 시각 — 서울 프로젝트 미적용
+
+| 파일 | 하는 일 | 미적용 시 | 확인 |
+| --- | --- | --- | --- |
+| `20261028_blog_posts_content_updated_at.sql` | `blog_posts.content_updated_at`(timestamptz, 기존 행은 `coalesce(updated_at, published_at, created_at)`로 백필, 이후 기본값 `now()`) + BEFORE UPDATE 트리거 `blog_posts_content_updated_at` — 제목·슬러그·요약·본문·카테고리·대표 이미지·SEO·"이 글에서 다루는 것"이 실제로 바뀐 UPDATE 에서만 갱신한다. 기존 `blog_posts_updated_at` 트리거(내부용 `updated_at`)는 그대로 둔다 | **배포 전후 무관 — 화면·저장은 정상.** 사이트맵·RSS 조회는 컬럼 없음(42703)을 감지해 `updated_at` 으로 폴백하고(`console.warn`), 상세는 `select *` 라 값이 비면 `updated_at` 을 쓴다. 그동안은 지금처럼 대표 글·공개 토글만 해도 사이트맵 lastmod·JSON-LD dateModified·RSS lastBuildDate 가 바뀐다. 적용 후에는 내용 변경 때만 바뀐다 | `check:db`(warning, 컬럼 프로브). 트리거는 파일 머리 주석의 `pg_trigger` 조회 |
+
+### 2026-10-28 시트 동기화 실행 기록 출처(`branch_sync_runs.runtime`) — 서울 프로젝트 미적용
+
+2026-10-28 읽기 전용 감사(10/15~10/19 운영 크론과 운영 밖 수동 런이 활성 REV 임포트를 번갈아 덮은 진동)의 후속.
+쓰기 가드는 코드([lib/branch/sync/write-guard.ts](../../lib/branch/sync/write-guard.ts) — 운영 아니면 건너뜀,
+`BRANCH_SYNC_ALLOW_NONPROD_WRITE=1`로만 예외)이고, 어느 환경·배포가 썼는지 남기는 쪽이 이 컬럼이다.
+
+| 파일 | 하는 일 | 미적용 시 | 확인 |
+| --- | --- | --- | --- |
+| `20261028_branch_sync_runs_runtime.sql` | `branch_sync_runs`에 `runtime jsonb`(`env`·`deploymentId`·`sha`·`region`·`allowedBy`)를 더한다. 컬럼만 추가(NULL 허용), 멱등 | 동기화는 그대로 돈다 — `startSyncRun`이 42703/PGRST204를 보고 컬럼 없이 다시 기록하고 `console.warn`을 남긴다. 어느 환경·배포가 쓴 런인지는 남지 않는다 | `npm run check:db`의 `branch_sync_runs` 프로브, 또는 `select count(*) from information_schema.columns where table_name = 'branch_sync_runs' and column_name = 'runtime';` → `1` |
+
+코드보다 먼저 적용해도, 나중에 적용해도 된다(폴백이 있다). 운영 배포 전에 적용하면 첫 운영 런부터 출처가 남는다.
+같은 작업의 `sales_ledger_import_runs` 쪽은 스키마 변경 없이 기존 컬럼·JSON을 쓴다 — `parser_version`에 캡처 버전
+`rev-native:v2`, `metadata.runtime`에 같은 출처. 활성 포인터 전환(`activateRevImportRun`)은 활성 run의
+`parser_version`이 후보보다 높으면 덮지 않는다(라벨 이전 run은 전부 기본값 `sales-ledger-import-v1` = 가장 낮음).
+
+### 2026-10-23 총판 정산 — 서울 프로젝트 적용 확인 필요
+
+[배포 순서 규칙 › 총판 정산](#총판-정산) 절의 마이그레이션이다. 2026-10-22·10-28 파일과 서로 참조하지 않아
+(`quote_documents`·`quote_document_versions`·`deals`만 참조) 10-28 파일 뒤에 적용해도 된다. 전부 멱등(`IF NOT EXISTS`·`DROP ... IF EXISTS`)이라 재실행 무해.
+
+| 파일 | 하는 일 | 미적용 시 | 확인 |
+| --- | --- | --- | --- |
+| `20261023_distributor_settlements.sql` | 원가 템플릿 `distributor_price_templates`, 견적별 총판 정산 `distributor_settlements`(C/H 방식·발행 스냅샷·공유 토큰·미수 상태), 입금 기록 `distributor_settlement_payments`. 세 표 모두 RLS deny-all | 고객 견적 작성·공유·동의와 오더 생성은 그대로 된다. 고객 동의 시 총판 견적서 자동 발행은 조용히 건너뛰고, 견적 상세의 총판 정산 영역·총판 미수금 탭은 적용 안내, 쓰기는 503 | `npm run check:db`의 `distributor_settlements`·`distributor_settlement_payments`·`distributor_price_templates` 프로브(warning) |
 
 ## 적용 보류 중인 마이그레이션
 

@@ -51,10 +51,11 @@ function compactAssetList(value: unknown, limit = 12) {
 }
 
 export function buildInternalCsAssetEvidence(assets: InternalCsAssetRow[]) {
-  // 검토 대기 분석도 근거로 싣는다(방금 올린 캡처로 바로 초안을 만드는 흐름) — 대신 검토 상태를 밝혀
-  // 모델이 미확인 근거로 다루게 한다. 승인된 분석만 싣는 규칙은 승인 흐름 변경과 함께 따로 결정한다.
   const usable = assets
-    .filter((asset) => Boolean(asset.corrected_analysis?.trim() || asset.analysis_summary?.trim()))
+    .filter((asset) => (
+      asset.review_state === "approved" &&
+      Boolean(asset.corrected_analysis?.trim() || asset.analysis_summary?.trim())
+    ))
     .slice(-5)
 
   return {
@@ -75,7 +76,7 @@ export function buildInternalCsAssetEvidence(assets: InternalCsAssetRow[]) {
       const summary = redactInternalCsText(correctedAnalysis || asset.analysis_summary)
       return [
         `[Attached image ${index + 1}: ${fileName}]`,
-        `Review state: ${asset.review_state} (treat as unverified unless approved)`,
+        "Review state: approved",
         `Analysis summary: ${summary}`,
         extractedText.length ? `Visible text: ${extractedText.join(" | ")}` : "",
         observations.length ? `Visible observations: ${observations.join(" | ")}` : "",
@@ -86,7 +87,7 @@ export function buildInternalCsAssetEvidence(assets: InternalCsAssetRow[]) {
       id: `internal-cs-asset:${asset.id}`,
       label: `Attached image: ${redactInternalCsText(asset.original_file_name)}`,
       kind: "internal_asset" as const,
-      reviewState: asset.review_state,
+      reviewState: "approved" as const,
     })),
     count: usable.length,
   }

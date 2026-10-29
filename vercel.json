@@ -25,7 +25,7 @@
     },
     {
       "path": "/api/cron/sync-branch",
-      "schedule": "0 8 * * *"
+      "schedule": "0 0,4,8 * * *"
     },
     {
       "path": "/api/cron/sync-branch-insights",

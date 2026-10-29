@@ -31,6 +31,7 @@
 | 블로그·이벤트·이메일 보이스 | [voice-charter.md](./voice-charter.md) | 🟡 소속만 지정, 실카피 감사 전 |
 | 리드마그넷 데이터 | [data/lead-magnets.json](../../../data/lead-magnets.json) | ✅ 13종(PDF 실존) |
 | 콘텐츠 로드맵 | [content-roadmap-blog-events-docs-2026-06-10.md](../content-roadmap-blog-events-docs-2026-06-10.md) | (기존) |
+| 블로그·리드마그넷·카피 후킹 루프 | [content-hook-lab/README.md](../content-hook-lab/README.md) — 새벽 예약 작업, 단계별 원장 | ✅ 2026-10-28 |
 | 챗봇 지식 원천 | [lib/docs.ts](../../../lib/docs.ts) `DocArticle[]` (+ kb-audit) | ✅ |
 
 ### ④ 기타 참고 — 제품·세그먼트·도입

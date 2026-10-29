@@ -66,12 +66,13 @@ describe("사이드바 CRM 평탄화", () => {
   })
 
   it("접힌 기타에도 항목 수와 함께 토글이 렌더된다", () => {
-    // 기타 자리 8개(마케팅·분석 5 + 시스템 3 — 콘텐츠는 2026-10-26 상시로 올라감) 중 마케팅 프로젝트·
-    // 운영 상태 2개는 기본 숨김이라(2026-09-25) 기타 토글에는 6개가 뜨고, 나머지 2개는 "숨긴 탭 2"로 묶인다.
+    // 기타 자리 7개(마케팅·분석 4 + 시스템 3 — 콘텐츠는 2026-10-26 상시로 올라감) 중 운영 상태 1개는
+    // 기본 숨김이라(2026-09-25) 기타 토글에는 6개가 뜨고, 나머지 1개는 그 아래 "숨긴 탭 1"로 묶인다
+    // (2026-10 마케팅 프로젝트는 캠페인 관리 탭이 됐다).
     const html = render("/admin/crm")
     expect(html).toContain("기타")
     expect(html).toContain(">6<")
-    expect(hiddenCount(html)).toBe(2)
+    expect(hiddenCount(html)).toBe(1)
   })
 
   it("'전체 메뉴' 복귀 버튼이 더는 없다", () => {
@@ -132,7 +133,7 @@ describe("사이드바 CRM 평탄화", () => {
 
     // 모바일 하단 바로가기(MOBILE_PRIMARY_NAV)는 고정 목록이라 견적이 남는다 —
     // 여기서 확인하는 것은 사이드바 상시/기타 배치가 오버라이드를 반영하는지다.
-    // 기본 기타 6(기본 숨김 2 제외) + 내려온 견적 1 = 7.
+    // 기본 기타 6(기본 숨김 1 제외) + 내려온 견적 1 = 7.
     expect(html).toContain(">7<")
   })
 
@@ -141,14 +142,14 @@ describe("사이드바 CRM 평탄화", () => {
       const html = render("/admin/calendar", { navOverrides: { "/admin/hardware": "hidden" } })
 
       expect(navHrefs(html)).not.toContain("/admin/hardware")
-      // 기본 숨김 2 + 하드웨어 1.
-      expect(hiddenCount(html)).toBe(3)
+      // 기본 숨김 1 + 하드웨어 1.
+      expect(hiddenCount(html)).toBe(2)
       expect(html).toContain("보기")
     })
 
     it("아무것도 숨기지 않았으면 숨긴 탭 묶음이 없다", () => {
       const html = render("/admin/calendar", {
-        navOverrides: { "/admin/campaigns/projects": "folded", "/admin/ops": "folded" },
+        navOverrides: { "/admin/ops": "folded" },
       })
       expect(hiddenCount(html)).toBeNull()
       expect(html).not.toContain("다시 표시")
@@ -187,7 +188,7 @@ describe("사이드바 CRM 평탄화", () => {
     it("Overview 를 숨긴 값이 들어와도 목록에 남는다", () => {
       const html = render("/admin/calendar", { navOverrides: { "/admin/overview": "hidden" } })
       expect(navHrefs(html)).toContain("/admin/overview")
-      expect(hiddenCount(html)).toBe(2)
+      expect(hiddenCount(html)).toBe(1)
     })
   })
 

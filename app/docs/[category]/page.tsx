@@ -5,6 +5,7 @@ import { ArrowRight, Search } from "lucide-react"
 
 import {
   docsCategories,
+  getDocCategoryPath,
   isDocCategoryId,
 } from "@/lib/docs"
 import {
@@ -13,8 +14,16 @@ import {
   getDocsContent,
   resolveDocsRedirect,
 } from "@/lib/docs-content"
+import { createPublicMetadata } from "@/lib/seo"
 
-import { getDocsCategoryNavItems, toArticleSummary, scoreDocsArticle } from "../_utils"
+import {
+  getDocsCategoryNavItems,
+  readQuery,
+  scoreDocsArticle,
+  toArticleSummary,
+  withSearchNoIndex,
+  type DocsSearchParams,
+} from "../_utils"
 import { DocsCategoryNav } from "@/components/docs"
 import { SearchHighlight } from "@/components/ui/SearchHighlight"
 import { DocsSearchLogger } from "@/components/docs/DocsSearchLogger"
@@ -31,7 +40,7 @@ function formatCategoryHeading(title: string): string {
 
 interface DocsCategoryPageProps {
   params: Promise<{ category: string }>
-  searchParams?: Promise<{ q?: string }>
+  searchParams?: Promise<DocsSearchParams>
 }
 
 export function generateStaticParams() {
@@ -42,8 +51,10 @@ export function generateStaticParams() {
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: DocsCategoryPageProps): Promise<Metadata> {
   const { category: categoryParam } = await params
+  const { q } = await (searchParams ?? Promise.resolve<DocsSearchParams>({}))
   const docsContent = await getDocsContent()
   const category = getDocCategoryFromContent(docsContent, categoryParam)
 
@@ -54,15 +65,16 @@ export async function generateMetadata({
     }
   }
 
-  return {
-    title: `${category.title} | Classin 가이드`,
-    description: category.description,
-    openGraph: {
-      title: `${category.title} | Classin 가이드`,
+  // title 에 사이트 접미사를 넣지 않는다 — 루트 템플릿(`%s | Classin`)과 createPublicMetadata 의 OG 제목이
+  // 이미 "| Classin" 을 붙인다. canonical 은 쿼리 없는 카테고리 경로, 검색어가 붙은 URL 은 색인에서 뺀다.
+  return withSearchNoIndex(
+    createPublicMetadata({
+      title: category.title,
       description: category.description,
-      type: "website",
-    },
-  }
+      path: getDocCategoryPath(category.id),
+    }),
+    readQuery(q)
+  )
 }
 
 export default async function DocsCategoryPage({
@@ -70,7 +82,8 @@ export default async function DocsCategoryPage({
   searchParams,
 }: DocsCategoryPageProps) {
   const { category: categoryParam } = await params
-  const { q } = await (searchParams ?? Promise.resolve<{ q?: string }>({}))
+  const { q: rawQ } = await (searchParams ?? Promise.resolve<DocsSearchParams>({}))
+  const q = readQuery(rawQ)
   const docsContent = await getDocsContent()
 
   if (!isDocCategoryId(categoryParam)) {
@@ -98,7 +111,7 @@ export default async function DocsCategoryPage({
 
   const docs = getDocsByCategoryFromContent(docsContent, categoryParam)
   const articleSummaries = docs.map((doc) => toArticleSummary(doc, docsContent.categories))
-  const query = q?.trim().toLowerCase() ?? ""
+  const query = q.toLowerCase()
   const filteredDocs = query
     ? articleSummaries
         .map((doc) => ({ doc, score: scoreDocsArticle(doc, query) }))
@@ -106,9 +119,7 @@ export default async function DocsCategoryPage({
         .sort((a, b) => b.score - a.score)
         .map((item) => item.doc)
     : articleSummaries
-  const searchFallbackHref = q?.trim()
-    ? `/docs/search?q=${encodeURIComponent(q.trim())}`
-    : "/docs/search"
+  const searchFallbackHref = q ? `/docs/search?q=${encodeURIComponent(q)}` : "/docs/search"
   const categoryTabs = getDocsCategoryNavItems(docsContent, categoryParam)
 
   return (
@@ -139,7 +150,7 @@ export default async function DocsCategoryPage({
           <Search className="h-4 w-4 shrink-0 text-[#A39E98]" aria-hidden />
           <input
             name="q"
-            defaultValue={q ?? ""}
+            defaultValue={q}
             aria-label={`${category.title} 검색`}
             placeholder="이 주제 안에서 검색"
             className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#A39E98]"
