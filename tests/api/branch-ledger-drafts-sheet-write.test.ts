@@ -34,7 +34,8 @@ vi.mock("@/lib/admin-auth", () => ({
   requireVerifiedAdminContext,
 }))
 
-vi.mock("@/lib/repositories/branch-sales-ledger-drafts", () => ({
+vi.mock("@/lib/repositories/branch-sales-ledger-drafts", async (importOriginal) => ({
+  mergeRecentAndOpenDraftRows: (await importOriginal<typeof import("@/lib/repositories/branch-sales-ledger-drafts")>()).mergeRecentAndOpenDraftRows,
   BRANCH_SALES_LEDGER_DRAFT_STATUSES: ["draft", "checked", "applied", "cancelled"],
   createBranchSalesLedgerDraft,
   updateBranchSalesLedgerDraft,
