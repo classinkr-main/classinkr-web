@@ -17,12 +17,13 @@
 //
 // 필드 매핑·필터는 SalesLedgerWorkbench.tsx의 ledgerEntryRows/appliedDraftFallbackRows
 // (초안 → LedgerRevenueRow 매핑의 기존 규약)를 그대로 따른다 — 새 규약을 만들지 않는다.
-// 유일한 구조적 차이는 "고객 1명 = 행 1개"로 합치는 것(아래 buildPendingDraftRows) — 적용 전
+// 유일한 구조적 차이는 "고객·담당자·팀 범위 = 행 1개"로 합치는 것(아래 buildPendingDraftRows) — 적용 전
 // 임시 행은 "이 고객이 곧 생긴다"는 하나의 사실이라, 워크벤치처럼 달마다 행을 늘리면(월 1건=행
 // 1개 규약) 매트릭스가 안 읽힌다.
 
 import { normalizedAccountKey } from "@/lib/branch/account-key"
 import { branchManagerMatches } from "@/lib/branch/personal-scope"
+import { pendingCustomerScope } from "./pending-customer-scope"
 import { matchesTokens } from "../search-tokens"
 import { appliedDraftConfidenceMaps, snapshotField, snapshotText, type RevOriginFilter } from "./workbench-shared"
 import { weeklyPaymentsFromDraftMetadata } from "./rev-matrix-logic"
@@ -65,7 +66,7 @@ function isEligibleDraft(draft: LedgerDraft, monthSet: Set<string>, team: string
   return true
 }
 
-// 그룹(같은 정규화 고객키) 내부 정렬 — (월 → 초안 id) 오름차순으로 고정한다. 대표 필드(고객명
+// 그룹(같은 고객키·담당자·팀) 내부 정렬 — (월 → 초안 id) 오름차순으로 고정한다. 대표 필드(고객명
 // 표기·담당자·팀·지역 등 — buildRowForGroup의 primary)와 pendingDraftIds 순서가 입력 배열의
 // 원래 순서에 흔들리지 않게 하기 위함이다 — 규칙 6(id 안정성)은 id 문자열뿐 아니라 행 전체가
 // 같은 입력에 대해 항상 같은 결과여야 한다는 뜻이라, 대표 선택도 결정적이어야 한다.
@@ -135,7 +136,7 @@ function buildRowForGroup(key: string, groupDrafts: LedgerDraft[]): PendingDraft
   const pendingLocalOnly = pendingDraftIds.some((id) => id.startsWith("local-"))
 
   return {
-    id: `pending-${key}`,
+    id: `pending-${encodeURIComponent(key)}`,
     customer: primary.customer || "고객명 미입력",
     manager: primary.manager || null,
     team: primary.team || null,
@@ -176,19 +177,28 @@ export function buildPendingDraftRows(options: PendingDraftRowsOptions): Pending
   // 표기가 다른 초안은 매트릭스 고객 그룹에 섞이지 않고 "적용 대기" 섹션에 별도 임시 행으로
   // 보인다 — 그 섹션이 findCustomerSpellingMatch로 기존 표기 힌트(예: 기존 "OO학원"과 표기
   // 다름)를 붙여, 사용자가 스스로 표기를 맞출지 새 고객으로 둘지 판단하게 한다(RevMatrixPendingRow).
-  const existingNames = new Set(existingRows.map((row) => row.customer.trim()))
+  const existingScopes = new Set(
+    existingRows
+      .map((row) => pendingCustomerScope(row.customer, row.manager, row.team, false))
+      .filter((key): key is string => key !== null),
+  )
 
-  // 규칙 5 — 같은 정규화 고객키의 초안을 한 그룹으로 모은다. Map은 첫 발견 순서를 보존하지만
+  // 규칙 5 — 같은 정규화 고객키·담당자·팀의 초안을 한 그룹으로 모은다. Map은 첫 발견 순서를 보존하지만
   // 그 순서는 최종 결과에 영향을 주지 않는다(그룹 내부는 sortGroupDrafts로, 행 순서는 마지막에
   // 고객명 정렬로 각각 고정한다).
   const groups = new Map<string, LedgerDraft[]>()
   for (const draft of drafts) {
     if (!isEligibleDraft(draft, monthSet, team)) continue
-    const key = normalizedAccountKey(draft.customer)
+    const customerKey = normalizedAccountKey(draft.customer)
     // 빈 이름 가드: 정규화 키가 없으면(고객명 미입력) 서로 무관한 초안들이 한 행으로 잘못 합쳐질
-    // 수 있어 제외한다. 규칙 4: 같은 이름(trim 일치)의 행이 이미 있으면 그 행의 셀에 pending 점으로
+    // 수 있어 제외한다. 규칙 4: 같은 이름(trim 일치)·담당자·팀의 행이 있으면 그 행의 셀에 pending 점으로
     // 이미 표시되므로(buildMatrixPendingByCell) 임시 행을 또 만들지 않는다(이중 표시 방지).
-    if (!key || existingNames.has(draft.customer.trim())) continue
+    if (!customerKey) continue
+    const existingScope = pendingCustomerScope(draft.customer, draft.manager, draft.team, false)
+    if (existingScope && existingScopes.has(existingScope)) continue
+    // 식별에 필요한 담당자·팀이 없으면 다른 초안과 합치지 않는다.
+    const key = pendingCustomerScope(draft.customer, draft.manager, draft.team, true)
+      ?? JSON.stringify(["unidentified", draft.id])
     const bucket = groups.get(key)
     if (bucket) bucket.push(draft)
     else groups.set(key, [draft])

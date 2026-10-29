@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { normalizedAccountKey } from "@/lib/branch/account-key"
 
 import { confidenceFromShortcut } from "./confidence-shortcuts"
+import { pendingCustomerScope } from "./pending-customer-scope"
 // 라운드 4 P1-5 — buildPasteNewRowInputs가 만드는 초안의 타입. 이 파일은 순수 로직만 담아
 // useLedgerDraftQueue(훅)를 값으로 import하지 않으므로 type-only만 가져온다(순환 없음 —
 // useLedgerDraftQueue.ts는 rev-matrix-logic을 import하지 않는다).
@@ -96,7 +97,7 @@ export function rowCommitKind(row: Pick<LedgerRevenueRow, "sourceDealId" | "ledg
   return (row.sourceDealId ?? (row.ledgerOrigin === "sheet" ? row.id : undefined)) ? "edit-row" : "new-row"
 }
 
-// 대기 초안이 이 종류 커밋의 "편집 대상"이 될 수 있는가. 신규 초안은 고객명으로 기존 시트 행 칸에도 걸리지만
+// 대기 초안이 이 종류 커밋의 "편집 대상"이 될 수 있는가. 신규 초안은 고객명·담당자·팀이 같은 기존 시트 행 칸에도 걸리지만
 // 적용되면 별도 행으로 더해지는 값이다 — 기존 딜 칸 재편집(수정 초안)이 그 신규 초안을 PATCH 하면 신규가 수정으로
 // 바뀌거나 금액이 섞인다. kind 가 없는 요약(과거 호출부·테스트)은 수정으로 본다.
 export function pendingMatchesKind(pending: Pick<MatrixPendingDraft, "kind">, kind: DraftKind): boolean {
@@ -276,9 +277,11 @@ export function buildMatrixPendingByCell(
   const pending = drafts.filter((draft) => draft.status === "draft" || draft.status === "checked")
   for (const row of visibleDealRows) {
     const dealKey = row.sourceDealId ?? row.id
+    const rowScope = pendingCustomerScope(row.customer, row.manager, row.team, false)
     for (const draft of pending) {
       const draftDealId = draft.sourceDealId ?? metadataString(draft.metadata, "sourceDealId")
-      if (draft.kind === "edit-row" ? draftDealId !== dealKey : draft.customer.trim() !== row.customer.trim()) continue
+      const draftScope = pendingCustomerScope(draft.customer, draft.manager, draft.team, false)
+      if (draft.kind === "edit-row" ? draftDealId !== dealKey : !rowScope || draftScope !== rowScope) continue
       const summary: MatrixPendingDraft = {
         id: draft.id,
         kind: draft.kind,

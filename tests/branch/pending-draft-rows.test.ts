@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { normalizedAccountKey } from "@/lib/branch/account-key"
 import { buildPendingDraftRows, matchesRevRowFilters } from "@/components/admin/branch/ledger/pending-draft-rows"
+import { buildMatrixPendingByCell, matrixCoordKey } from "@/components/admin/branch/ledger/rev-matrix-logic"
 import type { LedgerDraft, LedgerRevenueRow } from "@/components/admin/branch/ledger/shared"
 
 // 매출 장부 입력 속도 라운드 — P1-4 준비 단계. buildPendingDraftRows(미적용 new-row 초안 →
@@ -116,13 +117,13 @@ describe("규칙 3 — 표시 월/팀 스코프", () => {
 })
 
 // 규칙 4 제외 판정은 buildMatrixPendingByCell(rev-matrix-logic.ts)의 new-row 매칭과 **같은 술어**여야
-// 한다: 고객명 trim 정확 일치. 그 함수가 점을 찍는 행이면 임시 행을 만들지 않고, 점을 못 찍는(표기가
+// 한다: 고객명 trim 정확 일치와 담당자·팀 일치. 그 함수가 점을 찍는 행이면 임시 행을 만들지 않고, 점을 못 찍는(표기가
 // 다른) 초안은 임시 행으로 보여야 "어디에도 안 보이는 초안"이 생기지 않는다. 정규화 키로 넓히면
 // 반대로 사각지대가 생긴다(점도 없고 임시 행도 없음) — 그 회귀를 아래 두 번째 케이스가 고정한다.
-describe("규칙 4 — buildMatrixPendingByCell과 같은 술어(고객명 trim 정확 일치)로 제외한다", () => {
+describe("규칙 4 — 고객명·담당자·팀이 같은 기존 행에만 표시한다", () => {
   it("정확히 같은 고객명이 이미 매트릭스에 있으면 제외한다", () => {
     const existing: LedgerRevenueRow = {
-      id: "row-1", customer: "기존 고객", manager: null, team: "BD", region: null,
+      id: "row-1", customer: "기존 고객", manager: "김지사", team: "BD", region: null,
       revenue: 0, ledgerOrigin: "sheet",
     }
     const drafts: LedgerDraft[] = [makeDraft({ id: "d-1", customer: "기존 고객" })]
@@ -131,7 +132,7 @@ describe("규칙 4 — buildMatrixPendingByCell과 같은 술어(고객명 trim 
 
   it("앞뒤 공백만 다른 고객명은 같은 고객으로 보고 제외한다(trim 일치)", () => {
     const existing: LedgerRevenueRow = {
-      id: "row-1", customer: "기존 고객", manager: null, team: "BD", region: null,
+      id: "row-1", customer: "기존 고객", manager: "김지사", team: "BD", region: null,
       revenue: 0, ledgerOrigin: "sheet",
     }
     const drafts: LedgerDraft[] = [makeDraft({ id: "d-1", customer: "  기존 고객 " })]
@@ -162,9 +163,64 @@ describe("규칙 4 — buildMatrixPendingByCell과 같은 술어(고객명 trim 
     const rows = run(drafts, { existingRows: [existing] })
     expect(rows.map((row) => row.customer)).toEqual(["새 고객"])
   })
+
+  it("동명이름이더라도 담당자나 팀이 다르면 대기 행을 숨기거나 기존 행에 점을 찍지 않는다", () => {
+    const existing: LedgerRevenueRow = {
+      id: "row-1", customer: "같은 학원", manager: "김지사", team: "BD", region: null,
+      revenue: 0, ledgerOrigin: "sheet",
+    }
+    const drafts = [
+      makeDraft({ id: "other-manager", customer: "같은 학원", manager: "박지사", team: "BD" }),
+      makeDraft({ id: "other-team", customer: "같은 학원", manager: "김지사", team: "MKT" }),
+    ]
+    expect(run(drafts, { existingRows: [existing] })).toHaveLength(2)
+    expect(buildMatrixPendingByCell(drafts, [existing]).size).toBe(0)
+  })
+
+  it("일치하는 담당자 별칭은 기존 행에 표시한다", () => {
+    const existing: LedgerRevenueRow = {
+      id: "row-1", customer: "같은 학원", manager: "문준혁", team: "BD", region: null,
+      revenue: 0, ledgerOrigin: "sheet",
+    }
+    const draft = makeDraft({ id: "matched", customer: "같은 학원", manager: "Junhyuk", team: "BD" })
+    expect(run([draft], { existingRows: [existing] })).toEqual([])
+    expect(buildMatrixPendingByCell([draft], [existing]).get(matrixCoordKey({ rowId: "row-1", month: "2026-07" }))?.id).toBe("matched")
+  })
+
+  it("기존 행의 담당자가 없으면 일치한다고 추정하지 않는다", () => {
+    const existing: LedgerRevenueRow = {
+      id: "row-1", customer: "같은 학원", manager: null, team: "BD", region: null,
+      revenue: 0, ledgerOrigin: "sheet",
+    }
+    const draft = makeDraft({ id: "new", customer: "같은 학원" })
+    expect(run([draft], { existingRows: [existing] })).toHaveLength(1)
+    expect(buildMatrixPendingByCell([draft], [existing]).size).toBe(0)
+  })
 })
 
 describe("규칙 5 — 같은 고객의 초안을 행 하나로 합친다", () => {
+  it("같은 이름이어도 다른 담당자·팀의 금액은 합치지 않고 각 담당 필터에서 볼 수 있다", () => {
+    const drafts = [
+      makeDraft({ id: "a", customer: "같은 학원", manager: "김지사", team: "BD", amount: 100 }),
+      makeDraft({ id: "b", customer: "같은 학원", manager: "박지사", team: "BD", amount: 200 }),
+      makeDraft({ id: "c", customer: "같은 학원", manager: "김지사", team: "MKT", amount: 300 }),
+    ]
+    const rows = run(drafts)
+    expect(rows).toHaveLength(3)
+    expect(rows.map((row) => row.revenue).sort((a, b) => a - b)).toEqual([100, 200, 300])
+    expect(new Set(rows.map((row) => row.id)).size).toBe(3)
+    const filters = { managerFilter: new Set(["박지사"]), regionFilter: new Set<string>(), productFilter: "all" as const, revStatusFilter: "ALL", revDealTypeFilter: "ALL", revOriginFilter: "all" as const }
+    expect(rows.filter((row) => matchesRevRowFilters(row, filters, [])).map((row) => row.revenue)).toEqual([200])
+  })
+
+  it("담당자나 팀이 없는 초안은 서로 다른 거래를 하나로 추정하지 않는다", () => {
+    const drafts = [
+      makeDraft({ id: "a", customer: "같은 학원", manager: "" }),
+      makeDraft({ id: "b", customer: "같은 학원", manager: "" }),
+    ]
+    expect(run(drafts)).toHaveLength(2)
+  })
+
   it("여러 달에 걸친 초안은 행 하나로 합치고 monthlyPayments에 달별로 싣는다(월 합산)", () => {
     const drafts: LedgerDraft[] = [
       makeDraft({ id: "d-1", customer: "새 고객", month: "2026-04", amount: 1_000_000 }),
@@ -221,7 +277,7 @@ describe("규칙 5 — 같은 고객의 초안을 행 하나로 합친다", () =
   })
 })
 
-describe("규칙 6 — id는 pending-{정규화키} 접두어로 안정적이다", () => {
+describe("규칙 6 — id는 고객·담당자·팀 범위별로 안정적이다", () => {
   it("같은 입력으로 두 번 호출해도 id·행 전체가 동일하다", () => {
     const buildDrafts = (): LedgerDraft[] => [
       makeDraft({ id: "d-1", customer: "새 고객", month: "2026-04", amount: 1_000_000 }),
@@ -229,7 +285,7 @@ describe("규칙 6 — id는 pending-{정규화키} 접두어로 안정적이다
     ]
     const first = run(buildDrafts())
     const second = run(buildDrafts())
-    expect(first[0].id).toBe(`pending-${normalizedAccountKey("새 고객")}`)
+    expect(first[0].id).toMatch(/^pending-/)
     expect(first).toEqual(second)
   })
 })
