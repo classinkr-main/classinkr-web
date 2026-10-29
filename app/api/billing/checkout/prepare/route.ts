@@ -92,9 +92,11 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const mode = typeof body?.mode === "string" ? body.mode : "subscription"
+    // 구매 처리와 별개로 귀속 정보는 서버가 확인한 마케팅 동의가 있어야 보관한다.
+    const options = { marketingConsent: getMarketingRequestMeta(req).consent.marketing }
 
     if (mode === "subscription") {
-      const order = await createSubscriptionCheckoutOrder(body)
+      const order = await createSubscriptionCheckoutOrder(body, options)
       return NextResponse.json(
         {
           mode: "subscription",
@@ -115,7 +117,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (mode === "business") {
-      const order = await createBusinessRechargeOrder(body)
+      const order = await createBusinessRechargeOrder(body, options)
       return NextResponse.json(
         {
           mode: "business",
