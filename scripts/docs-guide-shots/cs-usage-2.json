@@ -553,6 +553,18 @@
    },
    "masks": [],
    "maxWidth": 1200
+  },
+  {
+   "out": "/docs/files/guides/cs-figma-digest-2103/02-teacher-homework-pc.webp",
+   "source": "public/docs/files/cs-figma/frame-27.png",
+   "crop": {
+    "x": 0.112,
+    "y": 0.648,
+    "w": 0.776,
+    "h": 0.262
+   },
+   "masks": [],
+   "maxWidth": 1200
   }
  ]
 }
