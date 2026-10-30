@@ -79,17 +79,12 @@ export function KeyUseCases({ defaultValue = "classes" }: { defaultValue?: UseCa
                                     "수업 및 숙제 관리, 일괄 생성",
                                 ]}
                                 imageColor="bg-[#ECFDF5]"
-                                imageSrc="/images/use-cases/generated/admin-dashboard-source-1.png"
-                                imageAlt="관리자 출결 대시보드 화면"
-                                imageObjectPosition="48% 42%"
-                                overlayImageSrc="/images/use-cases/generated/admin-dashboard-source-2.webp"
-                                overlayImageAlt="관리자 상세 분석 화면"
-                                overlayImageClassName="w-[40%] min-w-[8rem] right-[-2%] top-[4%] md:w-[42%] md:right-[-2%] md:top-[2%] rotate-[4deg]"
-                                overlayImageObjectPosition="50% 50%"
-                                overlayImageFramed
-                                secondaryOverlayImageSrc="/images/use-cases/admin.png"
-                                secondaryOverlayImageAlt="관리 테마 보조 오브젝트"
-                                secondaryOverlayImageClassName="w-[28%] min-w-[6rem] right-[2%] bottom-[-2%] md:w-[30%] md:right-[1%] md:bottom-[-5%]"
+                                imageSrc="/images/use-cases/generated/comms-source.png"
+                                imageAlt="Classin 반별 수업 기록과 출석·제출 현황 화면"
+                                imageObjectPosition="40% 50%"
+                                overlayImageSrc="/images/use-cases/admin.png"
+                                overlayImageAlt="관리 테마 보조 오브젝트"
+                                overlayImageClassName="w-[32%] min-w-[7rem] right-[2%] bottom-[-4%] md:w-[36%] md:right-[1%] md:bottom-[-7%]"
                             />
                         </TabsContent>
                         <TabsContent value="comms">

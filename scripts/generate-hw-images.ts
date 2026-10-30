@@ -116,17 +116,6 @@ Matte anti-glare surface texture visible. Shallow depth of field.
 Dramatic warm side lighting. Macro photography style.`,
         priority: 1,
     },
-    {
-        folder: "writing",
-        filename: "writing-multitouch.jpg",
-        prompt: `${KOREAN_PEOPLE}
-Bird's eye view looking down at a large ClassIn smart board with WHITE MATTE bezels.
-Multiple hands (4-5 Korean students) simultaneously drawing colorful mind maps and diagrams.
-Each person's strokes in different colors — orange, blue, green, purple.
-The board has WHITE bezels visible at the edges. Bright, energetic atmosphere.
-Creative overhead photography. Modern Korean academy/hagwon setting.`,
-        priority: 1,
-    },
 
     // ── DISPLAY QUALITY ─────────────────────────────────────────
     {

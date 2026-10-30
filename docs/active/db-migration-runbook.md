@@ -73,6 +73,7 @@ npm run check:db --  --strict
   `apply_branch_sales_ledger_draft_if_unchanged()` 프로브다.
   warning 등급이라 `--strict` 없이는 미적용이어도 exit 0이다.
 - 켜는 전체 순서는 [REV 시트 쓰기 런북](rev-sheet-writeback-runbook.md) §1을 따른다.
+- 서울 프로젝트 적용 확인(2026-10-30): `check:db` 의 두 프로브 모두 ✓. 스위치는 여전히 꺼져 있다.
 
 ### 총판 정산
 
@@ -207,13 +208,13 @@ npm run check:db --  --strict
 | `20261028_hardware_inventory_process.sql` | `hardware_movements` 에 출고 유형·무상 여부·회수 원 출고·CRM 고객·담당/작성 계정·반납 예정일 칸, `hardware_items` 에 물류번호 관리 여부·보고 묶음·정렬 칸을 더하고 정의서 품목 18개를 시드(없는 이름만)한다. 배송 예정 확정 `confirm_hardware_planned_movement_v4`(v3 호출 + 새 칸 복사 + 상태 `설치 완료`). 전부 멱등 | 대시보드는 새 칸 없이 읽는다(폴백). 출고 유형·회수 연결·물류번호 직접 선택 저장이 실패하고, 확정은 v3 로 떨어져 확정 행에 유형·고객·담당이 빠진다 | `npm run check:db` 의 `hardware_movements`·`hardware_items` 프로브, 또는 `select to_regprocedure('public.confirm_hardware_planned_movement_v4(uuid,text,date,int,jsonb,uuid,text)') is not null;` → `true` |
 
 2026-10-28 적용 기록: 위 두 절의 네 파일(10-22 셋 + 10-28)을 서울 프로젝트에 파일명 순서로 적용했다(Management API query). 적용 전 확인: 품목 18개 이름이 모두 이미 있어 10-28 시드는 새 품목을 만들지 않고 묶음·물류번호 관리 표시만 붙였다. 적용 후 확인: 대사 뷰 `예정` 포함 `true`, `lead` 자동 확정 `true`, `sales_orders` 있음(RLS 켜짐), 확정 v4 있음(anon 실행 권한 없음), 묶음이 붙은 품목 18 · 수량만 관리 9. `check:db` 에 남은 경고는 `compass_meta_submissions_v`(Compass 브리지 뷰, 이 작업과 무관)뿐이다.
-### 2026-10-28 블로그 글 내용 변경 시각 — 서울 프로젝트 미적용
+### 2026-10-28 블로그 글 내용 변경 시각 — 서울 프로젝트 적용 완료(2026-10-30)
 
 | 파일 | 하는 일 | 미적용 시 | 확인 |
 | --- | --- | --- | --- |
 | `20261028_blog_posts_content_updated_at.sql` | `blog_posts.content_updated_at`(timestamptz, 기존 행은 `coalesce(updated_at, published_at, created_at)`로 백필, 이후 기본값 `now()`) + BEFORE UPDATE 트리거 `blog_posts_content_updated_at` — 제목·슬러그·요약·본문·카테고리·대표 이미지·SEO·"이 글에서 다루는 것"이 실제로 바뀐 UPDATE 에서만 갱신한다. 기존 `blog_posts_updated_at` 트리거(내부용 `updated_at`)는 그대로 둔다 | **배포 전후 무관 — 화면·저장은 정상.** 사이트맵·RSS 조회는 컬럼 없음(42703)을 감지해 `updated_at` 으로 폴백하고(`console.warn`), 상세는 `select *` 라 값이 비면 `updated_at` 을 쓴다. 그동안은 지금처럼 대표 글·공개 토글만 해도 사이트맵 lastmod·JSON-LD dateModified·RSS lastBuildDate 가 바뀐다. 적용 후에는 내용 변경 때만 바뀐다 | `check:db`(warning, 컬럼 프로브). 트리거는 파일 머리 주석의 `pg_trigger` 조회 |
 
-### 2026-10-28 시트 동기화 실행 기록 출처(`branch_sync_runs.runtime`) — 서울 프로젝트 미적용
+### 2026-10-28 시트 동기화 실행 기록 출처(`branch_sync_runs.runtime`) — 서울 프로젝트 적용 완료(2026-10-30)
 
 2026-10-28 읽기 전용 감사(10/15~10/19 운영 크론과 운영 밖 수동 런이 활성 REV 임포트를 번갈아 덮은 진동)의 후속.
 쓰기 가드는 코드([lib/branch/sync/write-guard.ts](../../lib/branch/sync/write-guard.ts) — 운영 아니면 건너뜀,
@@ -228,7 +229,7 @@ npm run check:db --  --strict
 `rev-native:v2`, `metadata.runtime`에 같은 출처. 활성 포인터 전환(`activateRevImportRun`)은 활성 run의
 `parser_version`이 후보보다 높으면 덮지 않는다(라벨 이전 run은 전부 기본값 `sales-ledger-import-v1` = 가장 낮음).
 
-### 2026-10-23 총판 정산 — 서울 프로젝트 적용 확인 필요
+### 2026-10-23 총판 정산 — 서울 프로젝트 적용 완료(2026-10-30)
 
 [배포 순서 규칙 › 총판 정산](#총판-정산) 절의 마이그레이션이다. 2026-10-22·10-28 파일과 서로 참조하지 않아
 (`quote_documents`·`quote_document_versions`·`deals`만 참조) 10-28 파일 뒤에 적용해도 된다. 전부 멱등(`IF NOT EXISTS`·`DROP ... IF EXISTS`)이라 재실행 무해.
@@ -236,6 +237,8 @@ npm run check:db --  --strict
 | 파일 | 하는 일 | 미적용 시 | 확인 |
 | --- | --- | --- | --- |
 | `20261023_distributor_settlements.sql` | 원가 템플릿 `distributor_price_templates`, 견적별 총판 정산 `distributor_settlements`(C/H 방식·발행 스냅샷·공유 토큰·미수 상태), 입금 기록 `distributor_settlement_payments`. 세 표 모두 RLS deny-all | 고객 견적 작성·공유·동의와 오더 생성은 그대로 된다. 고객 동의 시 총판 견적서 자동 발행은 조용히 건너뛰고, 견적 상세의 총판 정산 영역·총판 미수금 탭은 적용 안내, 쓰기는 503 | `npm run check:db`의 `distributor_settlements`·`distributor_settlement_payments`·`distributor_price_templates` 프로브(warning) |
+
+2026-10-30 적용 기록: `20261028_branch_sync_runs_runtime.sql` → `20261023_distributor_settlements.sql` → `20261028_blog_posts_content_updated_at.sql` 순서로 서울 프로젝트에 적용했다(Management API query, 모두 HTTP 201). 블로그 파일은 운영 배포 직전에 적용했다 — 백필 UPDATE 가 기존 `blog_posts_updated_at` 트리거로 모든 글의 `updated_at` 을 적용 시각으로 미는데, 옛 코드는 사이트맵·RSS 에 `updated_at` 을 쓰기 때문이다(새 코드는 `content_updated_at`). 적용 후 확인: 총판 세 표 RLS 켜짐·정책 0(service_role 전용), `branch_sync_runs.runtime` 있음, `blog_posts.content_updated_at` 있음·트리거 두 개(`blog_posts_content_updated_at`·`blog_posts_updated_at`)·NULL 0/50. `20261023_branch_rev_sheet_writes.sql` 은 이미 적용돼 있었다. `check:db` 에 남은 경고는 `compass_meta_submissions_v`(Compass 쪽 표가 먼저 있어야 하는 브리지 뷰)뿐이다.
 
 ## 적용 보류 중인 마이그레이션
 

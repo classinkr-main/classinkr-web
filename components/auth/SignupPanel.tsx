@@ -110,7 +110,7 @@ export function SignupPanel({ nextPath = "/account" }: SignupPanelProps) {
           </Link>
         </>
       }
-      legal="가입하면 서비스 약관과 개인정보 처리방침에 동의하는 것으로 간주됩니다."
+      legal="가입 시 서비스 약관과 개인정보 처리방침이 적용됩니다."
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
         <input
